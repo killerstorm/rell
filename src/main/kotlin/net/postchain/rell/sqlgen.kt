@@ -15,14 +15,13 @@ fun getSQLType(t: RType): DataType<*> {
     }
 }
 
-val sys = """
+val rowid_sql = """
     CREATE TABLE rowid_gen( last_value bigint not null);
     INSERT INTO rowid_gen (last_value) VALUES (0);
-    CREATE FUNCTION make_rowid() RETURNS BIGINT AS $$
-    BEGIN
-      UPDATE rowid_gen SET last_value = last_value + 1;
-    END;
-    $$ language plpgsql;
+    CREATE FUNCTION make_rowid() RETURNS BIGINT AS
+    'UPDATE rowid_gen SET last_value = last_value + 1 RETURNING last_value'
+    LANGUAGE SQL;
+
     """
 
 fun genclass(classDefinition: RClass): String {
@@ -55,42 +54,82 @@ fun genAtExpr(r: RAtExpr): String {
     return "(SELECT rowid FROM ${r.rel.name} WHERE ${r.rel.name}.${r.attr.name} = _${r.varRef._var.name})"
 }
 
+fun genBinOpExpr(r: RBinOpExpr): String {
+    val left = genExpr(r.left)
+    val right = genExpr(r.right)
+    val op = when (r.op) {
+        "=", "==" -> "="
+        "+" -> "+"
+        "-" -> "-"
+        "!=" -> "<>"
+        else -> throw Exception("Op ${r.op} not supported")
+    }
+    return "(${left} ${op} ${right})"
+}
+
+fun genRequire(s: RCallStatement): String {
+    return """
+    IF NOT ${genExpr(s.args[0])} THEN
+        RAISE EXCEPTION ${genExpr(s.args[1])};
+    END IF;
+    """;
+}
+
+val specialOps = mapOf(
+        "require" to ::genRequire
+)
+
 fun genstatement(s: RStatement): String {
     return when (s) {
         is RCreateStatement -> {
             val attrNames = "rowid, " + (s.attrs.map { it.attr.name }.joinToString())
             val attrValues = "make_rowid(), " + s.attrs.map {
-                val expr = it.expr
-                when (expr) {
-                    is RVarRef -> "_" + expr._var.name
-                    is RAtExpr -> genAtExpr(expr)
-                }
+                genExpr(it.expr)
             }.joinToString()
-            "INSERT INTO ${s.rclass.name} (${attrNames}) VALUES (${attrValues})"
+            "INSERT INTO ${s.rclass.name} (${attrNames}) VALUES (${attrValues});"
+        }
+        is RCallStatement -> {
+            if (s.fname in specialOps)
+                return specialOps[s.fname]!!(s)
+            else {
+                throw Exception("Cannot call")
+            }
         }
         else -> throw Exception("Statement not supported")
     }
 }
 
+fun genExpr(expr: RExpr): String {
+    return when (expr) {
+        is RVarRef -> "_" + expr._var.name
+        is RAtExpr -> genAtExpr(expr)
+        is RBinOpExpr -> genBinOpExpr(expr)
+        is RStringLiteral -> "'${expr.literal}'" // TODO: esscape
+        is RByteALiteral -> "E'\\x${expr.literal.toHex()}'"
+        else -> throw Exception("Expression type not supported")
+    }
+}
 
 fun genop(opDefinition: ROperation): String {
     val args = opDefinition.params.map {
         val typename = getSQLType(it.type).getTypeName(ctx.configuration())
         "_${it.name} ${typename}"
     }.joinToString()
-    val statements = opDefinition.statements.map(::genstatement).joinToString(";\n")
+    val statements = opDefinition.statements.map(::genstatement).joinToString("\n")
 
     return """
         CREATE FUNCTION ${opDefinition.name} (ctx gtx_ctx, ${args}) RETURNS BOOLEAN AS $$
+        BEGIN
         ${statements}
         RETURN TRUE;
+        END;
         $$ LANGUAGE plpgsql;
         SELECT gtx_define_operation('${opDefinition.name}');
 """
 }
 
 fun gensql(model: RModule): String {
-    var s = ""
+    var s = rowid_sql;
     for (rel in model.relations) {
         when (rel) {
             is RClass -> s += genclass(rel)

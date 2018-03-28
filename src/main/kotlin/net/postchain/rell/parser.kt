@@ -15,12 +15,14 @@ class S_Index(val attrNames: List<String>)
 sealed class S_Expression
 class S_VarRef(val varname: String): S_Expression()
 class S_StringLiteral(val literal: String): S_Expression()
+class S_ByteALiteral(val bytes: ByteArray): S_Expression()
 class S_BinOp(val op: String, val left: S_Expression, val right: S_Expression): S_Expression()
 class S_AtExpr(val clasname: String, val where: List<S_BinOp>): S_Expression()
 
 sealed class S_Statement
 class S_BindStatement(val varname: String, val expr: S_Expression): S_Statement()
 class S_CreateStatement(val classname: String, val attrs: List<S_Expression>): S_Statement()
+class S_CallStatement(val fname: String, val args: List<S_Expression>): S_Statement()
 
 sealed class S_RelClause
 class S_AttributeClause(val attr: S_Attribute): S_RelClause()
@@ -35,8 +37,51 @@ class S_ClassDefinition (identifier: String, attributes: List<S_Attribute>,
     : S_RelDefinition(identifier, attributes, keys, indices)
 
 class S_OpDefinition(identifier: String, var args: List<S_Attribute>, val statements: List<S_Statement>): S_Definition(identifier)
+class S_QueryDefinition(identifier: String, var args: List<S_Attribute>, val statements: List<S_Statement>): S_Definition(identifier)
 
 class S_ModuleDefinition(val definitions: List<S_Definition>)
+
+
+private val HEX_CHARS = "0123456789abcdef"
+
+fun String.hexStringToByteArray() : ByteArray {
+
+    val result = ByteArray(length / 2)
+
+    for (i in 0 until length step 2) {
+        val firstIndex = HEX_CHARS.indexOf(this[i])
+        if (firstIndex == -1) {
+            throw ArrayIndexOutOfBoundsException("Char ${this[i]} is not a hex digit")
+        }
+        val secondIndex = HEX_CHARS.indexOf(this[i + 1])
+        if (secondIndex == -1) {
+            throw ArrayIndexOutOfBoundsException("Char ${this[i]} is not a hex digit")
+        }
+
+        val octet = firstIndex.shl(4).or(secondIndex)
+        result.set(i.shr(1), octet.toByte())
+    }
+
+    return result
+}
+
+
+private val HEX_CHARARRAY = HEX_CHARS.toCharArray()
+
+fun ByteArray.toHex() : String{
+    val result = StringBuffer()
+
+    forEach {
+        val octet = it.toInt()
+        val firstIndex = (octet and 0xF0).ushr(4)
+        val secondIndex = octet and 0x0F
+        result.append(HEX_CHARARRAY[firstIndex])
+        result.append(HEX_CHARARRAY[secondIndex])
+    }
+
+    return result.toString()
+}
+
 
 fun relFromClauses(identifier: String, clauses: List<S_RelClause>): S_RelDefinition {
     val attributes = mutableMapOf<String, String>()
@@ -80,11 +125,13 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val COLON by token(":")
     private val SEMI by token(";")
     private val COMMA by token(",")
-    private val EQLS by token("=")
+
 
     private val A_OPERATOR by token("[\\+\\-\\*/%]")
     private val C_OPERATOR by token("==|!=|[<>]=?")
     private val L_OPERATOR by token("or|and|not")
+
+    private val EQLS by token("=")
 
     val CREATE by token("create\\b")
     val SELECT by token("select\\b")
@@ -95,10 +142,12 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     val KEY by token("key\\b")
     val INDEX by token("index\\b")
     val OPER by token("operation\\b")
+    val QUERY by token("query\\b")
     val VAL by token("val\\b")
-    val IDT by token("\\w+")
     private val NUMBER by token("\\d+")
+    val HEXLIT by token("x\"[0123456789abcdefABCDEF]*\"")
     val STRINGLIT by token("\".*?\"")
+    val IDT by token("\\w+")
     val id by (IDT) use { text }
 
     val relAutoAttribute by (id) map { S_Attribute(it, it) }
@@ -123,34 +172,46 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         (identifier, clauses) -> relFromClauses(identifier, clauses)
     }
 
-    val selectExpr by (-SELECT * -LCURL * separatedTerms(id, COMMA) * -WHERE)
     val varExpr by (id map { S_VarRef(it) })
-    var literalExpr = (STRINGLIT map { S_StringLiteral(it.text) })
+    val stringLiteral = (STRINGLIT map { S_StringLiteral(it.text.removeSurrounding("\"", "\"")) })
+    val hexLiteral = (HEXLIT map { S_ByteALiteral(
+            it.text.removeSurrounding("x\"", "\"").hexStringToByteArray())})
+    val literalExpr = (stringLiteral or hexLiteral)
+
     val operator = (A_OPERATOR or L_OPERATOR or C_OPERATOR) map { it.text }
     val binExpr : Parser<S_BinOp> = (-LPAR * parser(this::anyExpr) * operator * parser(this::anyExpr) * -RPAR) map {
         (lexpr, oper, rexpr) -> S_BinOp(oper, lexpr, rexpr)
     }
-
-    val anyExpr by (binExpr or varExpr or literalExpr)
-    val bindStatement = (-VAL * id * -EQLS * anyExpr * -SEMI ) map { (varname, expr) -> S_BindStatement(varname, expr)  }
-    val whereExpr by (id * -EQLS * id) map {
-        (what, where) -> S_BinOp("=", S_VarRef(what), S_VarRef(where))
+    val whereExpr: Parser<S_BinOp> = (id * -EQLS * parser(this::anyExpr)) map {
+        (key, value) -> S_BinOp("=", S_VarRef(key), value)
     }
     val atExpr by (id * -AT * -LCURL * separatedTerms(whereExpr, COMMA) * -RCURL) map {
         (relname, where) -> S_AtExpr(relname, where)
     }
-    val sqlExpr = (atExpr or varExpr)
-    val createStatement = (-CREATE * id * -LPAR * separatedTerms(sqlExpr, COMMA, true) * -RPAR * -SEMI ) map {
+
+    val anyExpr by (binExpr or literalExpr or atExpr or varExpr)
+
+    val bindStatement by (-VAL * id * -EQLS * anyExpr * -SEMI ) map { (varname, expr) -> S_BindStatement(varname, expr)  }
+
+    val callStatement by ( id * -LPAR * separatedTerms(anyExpr, COMMA, false) * -RPAR * -SEMI) map {
+        (fname, args) -> S_CallStatement(fname, args)
+    }
+
+    val createStatement = (-CREATE * id * -LPAR * separatedTerms(anyExpr, COMMA, true) * -RPAR * -SEMI ) map {
         (classname, values) -> S_CreateStatement(classname, values)
     }
-    val statement = (bindStatement or createStatement)
+    val statement by (bindStatement or createStatement or callStatement)
 
     val opDefinition by (-OPER * id * -LPAR * separatedTerms(relAttribute, COMMA, true) * -RPAR
             * -LCURL * oneOrMore(statement) * -RCURL) map {
         (identifier, args, statements) -> S_OpDefinition(identifier, args, statements)
     }
+    val queryDefinition by (-QUERY * id * -LPAR * separatedTerms(relAttribute, COMMA, true) * -RPAR
+            * -LCURL * oneOrMore(statement) * -RCURL) map {
+        (identifier, args, statements) -> S_QueryDefinition(identifier, args, statements)
+    }
 
-    val anyDef by (classDef or relDef or opDefinition)
+    val anyDef by (classDef or relDef or opDefinition or queryDefinition)
 
     override val rootParser by oneOrMore(anyDef) map { S_ModuleDefinition(it) }
 
@@ -223,6 +284,11 @@ val ast = S_Grammar.parseToEnd("""
         metadata: text;
     }
 
+    operation add_issuer (admin_pubkey: signer, pubkey, name) {
+        require((admin_pubkey == x"deadbeaf"), "Admin pubkey doesnt match");
+        create issuer (pubkey, name);
+    }
+
     operation add_reporter (issuer_pubkey: signer, name, pubkey) {
         create reporter (issuer@{pubkey=issuer_pubkey}, name, pubkey);
     }
@@ -237,14 +303,15 @@ val ast = S_Grammar.parseToEnd("""
 
     operation add_bond (issuer_pubkey: signer, ISIN: text, pool_name: text, framework_name: text, issue_date: date, maturity_date: date, value: integer, shares: integer)
     {
-        create bond (ISIN,
+        create bond (
+            ISIN,
             issuer@{pubkey=issuer_pubkey},
             pool@{name=pool_name},
             framework@{name=framework_name},
             issue_date,
             maturity_date,
-            value, shares);
+            value, shares
+        );
     }
-
 
 """)

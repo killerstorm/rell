@@ -30,16 +30,20 @@ class RClass (name: String, keys: Array<RKey>, indexes: Array<RIndex>, attribute
 sealed class RExpr
 class RVarRef(val _var: RAttrib): RExpr()
 class RAtExpr(val rel: RRel, val attr: RAttrib, val varRef: RVarRef): RExpr()
-
+class RBinOpExpr(val op: String, val left: RExpr, val right: RExpr): RExpr()
+class RStringLiteral(val literal: String): RExpr()
+class RByteALiteral(val literal: ByteArray): RExpr()
 class RAttrExpr(val attr: RAttrib, val expr: RExpr)
 
 sealed class RStatement
 class RCreateStatement(val rclass: RClass, val attrs: Array<RAttrExpr>): RStatement()
+class RCallStatement(val fname: String, val args: Array<RExpr>): RStatement()
 
 class ROperation(val name: String, val params: Array<RAttrib>, val statements: Array<RStatement>)
 
 class RModule(val relations: Array<RRel>, val operations: Array<ROperation>)
 
+typealias EnvMap = Map<String, RAttrib>
 typealias TypeMap = Map<String, RType>
 
 fun makeRAttrib(a: S_Attribute, types: TypeMap): RAttrib {
@@ -72,7 +76,17 @@ fun makeAtExpr(s: S_AtExpr, types: TypeMap): RAtExpr {
         throw Exception("Undefined type ${s.clasname}")
 }
 
-fun makeCreateStatmenet(s: S_CreateStatement, types: TypeMap): RCreateStatement {
+fun makeExpr(e: S_Expression, types: TypeMap, env: EnvMap): RExpr {
+    return when (e) {
+        is S_AtExpr -> makeAtExpr(e, types)
+        is S_VarRef -> RVarRef(env[e.varname]!!)
+        is S_BinOp -> RBinOpExpr(e.op, makeExpr(e.left, types, env), makeExpr(e.right, types, env))
+        is S_StringLiteral -> RStringLiteral(e.literal)
+        is S_ByteALiteral -> RByteALiteral(e.bytes)
+    }
+}
+
+fun makeCreateStatmenet(s: S_CreateStatement, types: TypeMap, env: EnvMap): RCreateStatement {
     val type = types[s.classname]
     if ((type != null) && (type is RInstanceRefType)) {
         return RCreateStatement(type.rclass, s.attrs.map {
@@ -80,12 +94,18 @@ fun makeCreateStatmenet(s: S_CreateStatement, types: TypeMap): RCreateStatement 
             when (s_attr) {
                 is S_AtExpr -> {
                     val atExpr = makeAtExpr(s_attr, types)
-                    RAttrExpr(atExpr.attr, atExpr)
+                    val relName = atExpr.rel.name
+                    val attr = RAttrib(relName, types[relName]!!)
+                    RAttrExpr(
+                            attr,
+                            atExpr
+                    )
                 }
                 is S_VarRef -> {
                     val varName = s_attr.varname
-                    val attr = type.rclass.attributes.first { it.name == varName}
-                    RAttrExpr(attr, RVarRef(attr))
+                    val class_attr = type.rclass.attributes.first { it.name == varName}
+                    val env_attr = env[varName]!! // TODO: check compat
+                    RAttrExpr(class_attr, RVarRef(class_attr))
                 }
                 else -> throw Exception("Not supported")
             }
@@ -95,13 +115,23 @@ fun makeCreateStatmenet(s: S_CreateStatement, types: TypeMap): RCreateStatement 
         throw Exception("Undefined type ${s.classname}")
 }
 
+fun makeCallStatement(s: S_CallStatement, types: TypeMap, env: EnvMap): RStatement {
+    return RCallStatement(
+            s.fname,
+            s.args.map { makeExpr(it, types, env)  }.toTypedArray()
+    )
+}
+
 fun makeROperation(opDef: S_OpDefinition, types: TypeMap): ROperation {
+    val args = opDef.args.map { makeRAttrib(it, types) }
+    val env = args.associate { it.name to it }
     return ROperation(opDef.identifier,
-            opDef.args.map { makeRAttrib(it, types) }.toTypedArray(),
+            args.toTypedArray(),
             opDef.statements.map {
                 when (it) {
-                    is S_CreateStatement -> makeCreateStatmenet(it, types)
-                    else -> throw Exception("Only create statement works so far")
+                    is S_CreateStatement -> makeCreateStatmenet(it, types, env)
+                    is S_CallStatement -> makeCallStatement(it, types, env)
+                    else -> throw Exception("Statement not supported (yet)")
                 }
             }.toTypedArray()
     )
