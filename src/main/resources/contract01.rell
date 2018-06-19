@@ -1,0 +1,88 @@
+class issuer {
+    pubkey;
+    key name;
+}
+
+class reporter {
+    index issuer;
+    key name;
+    index pubkey;
+}
+
+class framework {
+    index issuer;
+    key name;
+}
+
+class pool {  index issuer; key name; }
+
+class bond {
+    key ISIN: text;
+    index issuer;
+    index pool;
+    index framework;
+    issue_date: date;
+    maturity_date: date;
+    value: integer;
+    shares: integer;
+}
+
+class project {
+    index issuer;
+    index pool;
+    index framework;
+    started: date;
+    key name;
+    description: text;
+}
+
+class project_report_category {
+    index project;
+    reporter;
+    key project, name;
+    created: date;
+}
+
+class document {
+    key hash: byte_array;
+    contents: byte_array;
+}
+
+class project_report {
+    index project_report_category;
+    date;
+    reporter;
+    document;
+    value: text;
+    metadata: text;
+}
+
+operation add_issuer (admin_pubkey: signer, pubkey, name) {
+    require((admin_pubkey == x"deadbeaf"), "Admin pubkey doesnt match");
+    create issuer (pubkey, name);
+}
+
+operation add_reporter (issuer_pubkey: signer, name, pubkey) {
+    create reporter (issuer@{pubkey=issuer_pubkey}, name, pubkey);
+}
+
+operation add_framework (issuer_pubkey: signer, name) {
+    create framework (issuer@{pubkey=issuer_pubkey}, name);
+}
+
+operation add_pool (issuer_pubkey: signer, name) {
+    create pool (issuer@{pubkey=issuer_pubkey}, name);
+}
+
+operation add_bond (issuer_pubkey: signer, ISIN: text, pool_name: text, framework_name: text, issue_date: date, maturity_date: date, value: integer, shares: integer)
+{
+    create bond (
+        ISIN,
+        issuer@{pubkey=issuer_pubkey},
+        pool@{name=pool_name},
+        framework@{name=framework_name},
+        issue_date,
+        maturity_date,
+        value, shares
+    );
+}
