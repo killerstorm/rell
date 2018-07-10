@@ -4,16 +4,17 @@ import org.jooq.DataType
 import org.jooq.SQLDialect
 import org.jooq.impl.DefaultDataType
 import org.jooq.impl.SQLDataType
+import org.jooq.util.postgres.PostgresDataType
 
 sealed class RType(val name: String)
 
 open class RPrimitiveType(name: String,
                           val sqlType: DataType<*>): RType(name)
 
-class RTextType: RPrimitiveType("text", SQLDataType.VARCHAR)
+class RTextType: RPrimitiveType("text", PostgresDataType.TEXT)
 class RIntegerType: RPrimitiveType("integer", SQLDataType.BIGINT)
-class RByteArrayType: RPrimitiveType("byte_array", SQLDataType.BINARY)
-class RDateType: RPrimitiveType("date", SQLDataType.DATE)
+class RByteArrayType: RPrimitiveType("byte_array", PostgresDataType.BYTEA)
+class RTimestampType: RPrimitiveType("timestamp", SQLDataType.TIMESTAMP)
 val gtxSignerSQLDataType = DefaultDataType(null as SQLDialect?, ByteArray::class.java, "gtx_signer")
 class RSignerType: RPrimitiveType("signer", gtxSignerSQLDataType)
 
@@ -38,6 +39,7 @@ class RAttrExpr(val attr: RAttrib, val expr: RExpr)
 sealed class RStatement
 class RCreateStatement(val rclass: RClass, val attrs: Array<RAttrExpr>): RStatement()
 class RCallStatement(val fname: String, val args: Array<RExpr>): RStatement()
+class RFromStatement(val atExpr: RAttrExpr, val attrs: Array<RAttrib>): RStatement()
 
 class ROperation(val name: String, val params: Array<RAttrib>, val statements: Array<RStatement>)
 
@@ -90,21 +92,22 @@ fun makeCreateStatmenet(s: S_CreateStatement, types: TypeMap, env: EnvMap): RCre
     val type = types[s.classname]
     if ((type != null) && (type is RInstanceRefType)) {
         return RCreateStatement(type.rclass, s.attrs.map {
-            s_attr ->
-            when (s_attr) {
+            s_attr_expr ->
+            when (s_attr_expr.expr) {
                 is S_AtExpr -> {
-                    val atExpr = makeAtExpr(s_attr, types)
+                    val atExpr = makeAtExpr(s_attr_expr.expr, types)
                     val relName = atExpr.rel.name
-                    val attr = RAttrib(relName, types[relName]!!)
+                    val attrname = s_attr_expr.name
+                    val class_attr = type.rclass.attributes.first { it.name == attrname}
                     RAttrExpr(
-                            attr,
+                            class_attr,
                             atExpr
                     )
                 }
                 is S_VarRef -> {
-                    val varName = s_attr.varname
-                    val class_attr = type.rclass.attributes.first { it.name == varName}
-                    val env_attr = env[varName]!! // TODO: check compat
+                    val attrname = s_attr_expr.name
+                    val class_attr = type.rclass.attributes.first { it.name == attrname}
+                    val env_attr = env[s_attr_expr.expr.varname]!! // TODO: check compat
                     RAttrExpr(class_attr, RVarRef(class_attr))
                 }
                 else -> throw Exception("Not supported")
@@ -144,7 +147,7 @@ fun makeModule(md: S_ModuleDefinition): RModule {
             "integer" to RIntegerType(),
             "pubkey" to RByteArrayType(),
             "name" to RTextType(),
-            "date" to RDateType(),
+            "timestamp" to RTimestampType(),
             "signer" to RSignerType()
     )
     val relations = mutableListOf<RRel>()

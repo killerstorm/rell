@@ -19,10 +19,13 @@ class S_ByteALiteral(val bytes: ByteArray): S_Expression()
 class S_BinOp(val op: String, val left: S_Expression, val right: S_Expression): S_Expression()
 class S_AtExpr(val clasname: String, val where: List<S_BinOp>): S_Expression()
 
+class S_AttrExpr(val name: String, val expr: S_Expression)
+
 sealed class S_Statement
 class S_BindStatement(val varname: String, val expr: S_Expression): S_Statement()
-class S_CreateStatement(val classname: String, val attrs: List<S_Expression>): S_Statement()
+class S_CreateStatement(val classname: String, val attrs: List<S_AttrExpr>): S_Statement()
 class S_CallStatement(val fname: String, val args: List<S_Expression>): S_Statement()
+class S_FromStatement(val from: S_AtExpr, val attrs: List<String>): S_Statement()
 
 sealed class S_RelClause
 class S_AttributeClause(val attr: S_Attribute): S_RelClause()
@@ -40,48 +43,6 @@ class S_OpDefinition(identifier: String, var args: List<S_Attribute>, val statem
 class S_QueryDefinition(identifier: String, var args: List<S_Attribute>, val statements: List<S_Statement>): S_Definition(identifier)
 
 class S_ModuleDefinition(val definitions: List<S_Definition>)
-
-
-private val HEX_CHARS = "0123456789abcdef"
-
-fun String.hexStringToByteArray() : ByteArray {
-
-    val result = ByteArray(length / 2)
-
-    for (i in 0 until length step 2) {
-        val firstIndex = HEX_CHARS.indexOf(this[i])
-        if (firstIndex == -1) {
-            throw ArrayIndexOutOfBoundsException("Char ${this[i]} is not a hex digit")
-        }
-        val secondIndex = HEX_CHARS.indexOf(this[i + 1])
-        if (secondIndex == -1) {
-            throw ArrayIndexOutOfBoundsException("Char ${this[i]} is not a hex digit")
-        }
-
-        val octet = firstIndex.shl(4).or(secondIndex)
-        result.set(i.shr(1), octet.toByte())
-    }
-
-    return result
-}
-
-
-private val HEX_CHARARRAY = HEX_CHARS.toCharArray()
-
-fun ByteArray.toHex() : String{
-    val result = StringBuffer()
-
-    forEach {
-        val octet = it.toInt()
-        val firstIndex = (octet and 0xF0).ushr(4)
-        val secondIndex = octet and 0x0F
-        result.append(HEX_CHARARRAY[firstIndex])
-        result.append(HEX_CHARARRAY[secondIndex])
-    }
-
-    return result.toString()
-}
-
 
 fun relFromClauses(identifier: String, clauses: List<S_RelClause>): S_RelDefinition {
     val attributes = mutableMapOf<String, String>()
@@ -115,6 +76,15 @@ fun relFromClauses(identifier: String, clauses: List<S_RelClause>): S_RelDefinit
     )
 }
 
+
+private fun inferName(e: S_Expression): String {
+    return when (e) {
+        is S_AtExpr -> e.clasname
+        is S_VarRef -> e.varname
+        else -> throw Exception("Cannot automatically infer name of expression")
+    }
+}
+
 object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val ws by token("\\s+", ignore = true)
     private val LPAR by token("\\(")
@@ -129,13 +99,13 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     private val A_OPERATOR by token("[\\+\\-\\*/%]")
     private val C_OPERATOR by token("==|!=|[<>]=?")
-    private val L_OPERATOR by token("or|and|not")
+    private val L_OPERATOR by token("or\\b|and\\b|not\\b")
 
     private val EQLS by token("=")
 
     val CREATE by token("create\\b")
-    val SELECT by token("select\\b")
     val FROM by token("from\\b")
+    val SELECT by token("select\\b")
     val WHERE by token("where\\b")
     val CLASS by token("class\\b")
     val REL by token("rel\\b")
@@ -197,9 +167,21 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         (fname, args) -> S_CallStatement(fname, args)
     }
 
-    val createStatement = (-CREATE * id * -LPAR * separatedTerms(anyExpr, COMMA, true) * -RPAR * -SEMI ) map {
+    val attrExpr_expl = (id * -EQLS * anyExpr) map { (i, e) -> S_AttrExpr(i, e)}
+    val attrExpr_impl = (anyExpr) map { e ->
+        S_AttrExpr(inferName(e), e)
+    }
+    val anyAttrExpr by (attrExpr_expl or attrExpr_impl)
+
+    val createStatement by (-CREATE * id * -LPAR * separatedTerms(anyAttrExpr, COMMA, true) * -RPAR * -SEMI ) map {
         (classname, values) -> S_CreateStatement(classname, values)
     }
+
+    val fromStatement by (-FROM * atExpr * -SELECT * separatedTerms(id, COMMA, false)) map {
+        (_atExpr, identifers) ->
+        S_FromStatement(_atExpr, identifers)
+    }
+
     val statement by (bindStatement or createStatement or callStatement)
 
     val opDefinition by (-OPER * id * -LPAR * separatedTerms(relAttribute, COMMA, true) * -RPAR
@@ -224,138 +206,34 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     override val rootParser by leftAssociative(andChain, or) { l, _, r -> Or(l, r) }*/
 }
 
-val ast2 = S_Grammar.parseToEnd("""
-     class user {
-        key pubkey;
-        index username: text;
-        firstName: text;
-        lastName: text;
-        email: text;
+/*
 
-    }
-    class location {
-        index longitude: integer;
-        index latitude: integer;
-        key name: text;
-        creator: user;
-    }
-    class company {
-        name: text;
-        key vat: integer;
-        index location;
-    }
-    class employee {
-        index pubkey;
-        index company;
-        start_date: date;
-    }
-    class ooorder {
-        user;
-        company;
-        description: text;
-        delivery_location: location;
-    }
-    operation add_user (admin_pubkey: signer, pubkey, username: text, firstName: text, lastName: text, email: text) {
-        require((admin_pubkey == x"026a7825fdfdd00d87e8d590d1cdc73f563c0d8eb9ca5e2f6239b71b5e014a37f3"), "Admin pubkey does not match");
-        create user (pubkey, username, firstName, lastName, email);
-    }
-    operation add_location (user_pubkey: signer, longitude: integer, latitude: integer, name) {
-        create location (
-            longitude,
-            latitude,
-            name,
-            creator@{pubkey=user_pubkey}
-        );
-    }
-    """);
-val ast = S_Grammar.parseToEnd("""
-    class issuer {
-        pubkey;
-        key name;
-    }
+    company JOIN user ON user.company_id = company.id
 
-    class reporter {
-        index issuer;
-        key name;
-        index pubkey;
-    }
 
-    class framework {
-        index issuer;
-        key name;
-    }
+    company JOIN user
+        WHERE user.company_id = company.id
 
-    class pool {  index issuer; key name; }
 
-    class bond {
-        key ISIN: text;
-        index issuer;
-        index pool;
-        index framework;
-        issue_date: date;
-        maturity_date: date;
-        value: integer;
-        shares: integer;
-    }
+ issuer@{name='Bob'}
 
-    class project {
-        index issuer;
-        index pool;
-        index framework;
-        started: date;
-        key name;
-        description: text;
-    }
 
-    class project_report_category {
-        index project;
-        reporter;
-        key project, name;
-        created: date;
-    }
+from {company, user, city }@{ user.company_id = company_id, city.id =user.city_id}
+from (company, user, city)@{ user.company_id = company_id, city.id =user.city_id}
+from(company, user, city)@{ user.company_id = company_id, city.id =user.city_id}
+from user select name;
+from (user, fdldskfjsd, as)@{name='Bob'} select name
 
-    class document {
-        key hash: byte_array;
-        contents: byte_array;
-    }
 
-    class project_report {
-        index project_report_category;
-        date;
-        reporter;
-        document;
-        value: text;
-        metadata: text;
-    }
+from (user as u, company as c)@{
+    u.company_id = c.id
+} select (foo, bar);
 
-    operation add_issuer (admin_pubkey: signer, pubkey, name) {
-        require((admin_pubkey == x"deadbeaf"), "Admin pubkey doesnt match");
-        create issuer (pubkey, name);
-    }
 
-    operation add_reporter (issuer_pubkey: signer, name, pubkey) {
-        create reporter (issuer@{pubkey=issuer_pubkey}, name, pubkey);
-    }
+  (a + (b + c))
 
-    operation add_framework (issuer_pubkey: signer, name) {
-        create framework (issuer@{pubkey=issuer_pubkey}, name);
-    }
+  a + b + c
 
-    operation add_pool (issuer_pubkey: signer, name) {
-        create pool (issuer@{pubkey=issuer_pubkey}, name);
-    }
 
-    operation add_bond (issuer_pubkey: signer, ISIN: text, pool_name: text, framework_name: text, issue_date: date, maturity_date: date, value: integer, shares: integer)
-    {
-        create bond (
-            ISIN,
-            issuer@{pubkey=issuer_pubkey},
-            pool@{name=pool_name},
-            framework@{name=framework_name},
-            issue_date,
-            maturity_date,
-            value, shares
-        );
-    }
-
-""")
+SELECT FROM
+        */
