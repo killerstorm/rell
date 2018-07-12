@@ -14,7 +14,8 @@ open class RPrimitiveType(name: String,
 class RTextType: RPrimitiveType("text", PostgresDataType.TEXT)
 class RIntegerType: RPrimitiveType("integer", SQLDataType.BIGINT)
 class RByteArrayType: RPrimitiveType("byte_array", PostgresDataType.BYTEA)
-class RTimestampType: RPrimitiveType("timestamp", SQLDataType.TIMESTAMP)
+class RTimestampType: RPrimitiveType("timestamp", SQLDataType.BIGINT)
+class RGUIDType: RPrimitiveType("guid", PostgresDataType.BYTEA)
 val gtxSignerSQLDataType = DefaultDataType(null as SQLDialect?, ByteArray::class.java, "gtx_signer")
 class RSignerType: RPrimitiveType("signer", gtxSignerSQLDataType)
 
@@ -30,7 +31,7 @@ class RClass (name: String, keys: Array<RKey>, indexes: Array<RIndex>, attribute
 
 sealed class RExpr
 class RVarRef(val _var: RAttrib): RExpr()
-class RAtExpr(val rel: RRel, val attr: RAttrib, val varRef: RVarRef): RExpr()
+class RAtExpr(val rel: RRel, val attrConditions: List<Pair<RAttrib, RExpr>>): RExpr()
 class RBinOpExpr(val op: String, val left: RExpr, val right: RExpr): RExpr()
 class RStringLiteral(val literal: String): RExpr()
 class RByteALiteral(val literal: ByteArray): RExpr()
@@ -63,24 +64,25 @@ fun makeRClass(sClass: S_ClassDefinition, types: TypeMap): RClass {
     return RClass(sClass.identifier, keys.toTypedArray(), indexes.toTypedArray(), attrs.toTypedArray())
 }
 
-fun makeAtExpr(s: S_AtExpr, types: TypeMap): RAtExpr {
+fun makeAtExpr(s: S_AtExpr, types: TypeMap, env: EnvMap): RAtExpr {
     val type = types[s.clasname]
     if ((type != null) && (type is RInstanceRefType)) {
-        val where = s.where[0]
-        val attrname = (where.left as S_VarRef).varname
-        val varname = (where.right as S_VarRef).varname
-        val attr = type.rclass.attributes.first { it.name == attrname }
-        return RAtExpr(type.rclass,
-                type.rclass.attributes.first { it.name == attrname},
-                RVarRef(RAttrib(varname, attr.type))
-                )
+        val conditions = s.where.map {
+            if (it.op != "=") throw Exception("Only = is supported in AtExpr")
+            if (! (it.left is S_VarRef)) throw Exception("AtExpr: LHS must be varrref")
+            val expr = makeExpr(it.right, types, env)
+            val attrname = it.left.varname
+            val attr = type.rclass.attributes.first { it.name == attrname}
+            Pair(attr, expr)
+        }
+        return RAtExpr(type.rclass, conditions)
     } else
         throw Exception("Undefined type ${s.clasname}")
 }
 
 fun makeExpr(e: S_Expression, types: TypeMap, env: EnvMap): RExpr {
     return when (e) {
-        is S_AtExpr -> makeAtExpr(e, types)
+        is S_AtExpr -> makeAtExpr(e, types, env)
         is S_VarRef -> RVarRef(env[e.varname]!!)
         is S_BinOp -> RBinOpExpr(e.op, makeExpr(e.left, types, env), makeExpr(e.right, types, env))
         is S_StringLiteral -> RStringLiteral(e.literal)
@@ -95,7 +97,7 @@ fun makeCreateStatmenet(s: S_CreateStatement, types: TypeMap, env: EnvMap): RCre
             s_attr_expr ->
             when (s_attr_expr.expr) {
                 is S_AtExpr -> {
-                    val atExpr = makeAtExpr(s_attr_expr.expr, types)
+                    val atExpr = makeAtExpr(s_attr_expr.expr, types, env)
                     val relName = atExpr.rel.name
                     val attrname = s_attr_expr.name
                     val class_attr = type.rclass.attributes.first { it.name == attrname}
@@ -108,7 +110,7 @@ fun makeCreateStatmenet(s: S_CreateStatement, types: TypeMap, env: EnvMap): RCre
                     val attrname = s_attr_expr.name
                     val class_attr = type.rclass.attributes.first { it.name == attrname}
                     val env_attr = env[s_attr_expr.expr.varname]!! // TODO: check compat
-                    RAttrExpr(class_attr, RVarRef(class_attr))
+                    RAttrExpr(class_attr, RVarRef(env_attr))
                 }
                 else -> throw Exception("Not supported")
             }
@@ -148,7 +150,8 @@ fun makeModule(md: S_ModuleDefinition): RModule {
             "pubkey" to RByteArrayType(),
             "name" to RTextType(),
             "timestamp" to RTimestampType(),
-            "signer" to RSignerType()
+            "signer" to RSignerType(),
+            "guid" to RGUIDType()
     )
     val relations = mutableListOf<RRel>()
     val operations = mutableListOf<ROperation>()

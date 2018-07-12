@@ -1,0 +1,51 @@
+class issuer {
+    key pubkey;
+    index createdby: pubkey;
+    key name;
+}
+
+class framework {
+    index issuer;
+    key name;
+    description: text;
+}
+
+class framework_commitment {
+    index framework;
+    commitment: text;
+}
+
+class framework_categories {
+    index framework;
+    category: text;
+}
+
+class file {
+    filehash: byte_array;
+}
+
+class framework_file {
+    index framework, file;
+}
+
+
+operation add_issuer (admin_pubkey: signer, pubkey, name) {
+        require((admin_pubkey == x"0373599a61cc6b3bc02a78c34313e1737ae9cfd56b9bb24360b437d469efdf3b15"),
+              "Admin pubkey doesnt match");
+        create issuer (createdby = admin_pubkey, pubkey, name);
+}
+
+operation add_framework (issuer_pubkey: signer, name, description: text) {
+        create framework (issuer@{pubkey=issuer_pubkey}, name, description);
+}
+
+operation add_framework_commitment (issuer_pubkey: signer,
+                                    framework_name: text,
+                                    commitment: text)
+{
+    create framework_commitment (
+        framework@{issuer=issuer@{pubkey=issuer_pubkey},
+                   name=framework_name},
+        commitment);
+}
+

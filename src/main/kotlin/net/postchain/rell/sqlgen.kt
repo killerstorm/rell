@@ -51,7 +51,11 @@ fun genclass(classDefinition: RClass): String {
 }
 
 fun genAtExpr(r: RAtExpr): String {
-    return "(SELECT rowid FROM ${r.rel.name} WHERE ${r.rel.name}.${r.attr.name} = _${r.varRef._var.name})"
+    val conditions = r.attrConditions.map {
+        val expr = genExpr(it.second)
+        "(${r.rel.name}.${it.first.name} = ${expr})"
+    }.joinToString(" AND ")
+    return "(SELECT rowid FROM ${r.rel.name} WHERE ${conditions})"
 }
 
 fun genBinOpExpr(r: RBinOpExpr): String {
@@ -105,7 +109,7 @@ fun genExpr(expr: RExpr): String {
         is RAtExpr -> genAtExpr(expr)
         is RBinOpExpr -> genBinOpExpr(expr)
         is RStringLiteral -> "'${expr.literal}'" // TODO: esscape
-        is RByteALiteral -> "E'\\x${expr.literal.toHex()}'"
+        is RByteALiteral -> "E'\\\\x${expr.literal.toHex()}'"
         else -> throw Exception("Expression type not supported")
     }
 }
