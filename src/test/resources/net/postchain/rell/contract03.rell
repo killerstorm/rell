@@ -1,0 +1,13 @@
+
+class balance {
+    guid;
+    value: integer;
+}
+
+operation delete_balance (guid) {
+    delete balance@{guid};
+}
+
+operation pomp_eet (guid) {
+    require( balance@{guid} );
+}

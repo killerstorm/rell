@@ -76,9 +76,20 @@ fun genBinOpExpr(r: RBinOpExpr): String {
 }
 
 fun genRequire(s: RCallStatement): String {
+    if (s.args.size == 0 || s.args.size > 2) throw Exception("Too many (or too little) arguments to require")
+    val message = if (s.args.size == 2) genExpr(s.args[1]) else "'Require failed'"
+
+    val condition = s.args[0]
+    val condSQL : String
+    if (condition.type is RBooleanType)
+        condSQL = "NOT ${genExpr(condition)}"
+    else if (condition.type is RInstanceRefType)
+        condSQL = "NOT EXISTS ${genExpr(condition)}"
+    else throw Exception("Cannot handle type in require")
+
     return """
-    IF NOT ${genExpr(s.args[0])} THEN
-        RAISE EXCEPTION ${genExpr(s.args[1])};
+    IF ${condSQL} THEN
+        RAISE EXCEPTION ${message};
     END IF;
     """;
 }
@@ -128,6 +139,7 @@ fun genExpr(expr: RExpr): String {
         is RAtExpr -> genAtExpr(expr)
         is RBinOpExpr -> genBinOpExpr(expr)
         is RStringLiteral -> "'${expr.literal}'" // TODO: esscape
+        is RIntegerLiteral -> expr.literal.toString()
         is RByteALiteral -> "E'\\\\x${expr.literal.toHex()}'"
         else -> throw Exception("Expression type not supported")
     }

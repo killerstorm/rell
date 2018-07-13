@@ -14,18 +14,9 @@ class SQLGenTest {
 
 
     @Test
-    fun contract01() { testresource("contract01.rell")   }
-
+    fun contract03() { testresource("contract03.rell")   }
+/*
     @Test
     fun contract02() { testresource("contract02.rell")   }
-
-
-    /*
-
-    operation update_project_description(issuer_pubkey: signer, name, description) {
-        update project@{ issuer@{pubkey=issuer_pubkey}, name = name}
-        ( description );
-    }
-     */
-
+  */
 }

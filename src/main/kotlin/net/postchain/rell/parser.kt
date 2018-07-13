@@ -7,6 +7,7 @@ import com.github.h0tk3y.betterParse.combinators.*
 import com.github.h0tk3y.betterParse.grammar.parser
 import net.postchain.rell.S_Grammar.getValue
 import net.postchain.rell.S_Grammar.provideDelegate
+import java.lang.Long.parseLong
 
 class S_Attribute(val name: String, val type: String)
 class S_Key(val attrNames: List<String>)
@@ -16,6 +17,7 @@ sealed class S_Expression
 class S_VarRef(val varname: String): S_Expression()
 class S_StringLiteral(val literal: String): S_Expression()
 class S_ByteALiteral(val bytes: ByteArray): S_Expression()
+class S_IntLiteral(val value: Long): S_Expression()
 class S_BinOp(val op: String, val left: S_Expression, val right: S_Expression): S_Expression()
 class S_AtExpr(val clasname: String, val where: List<S_BinOp>): S_Expression()
 
@@ -147,20 +149,33 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     }
 
     val varExpr by (id map { S_VarRef(it) })
+    val integerLiteral = (NUMBER map { S_IntLiteral(it.text.toLong())})
     val stringLiteral = (STRINGLIT map { S_StringLiteral(it.text.removeSurrounding("\"", "\"")) })
     val hexLiteral = (HEXLIT map { S_ByteALiteral(
             it.text.removeSurrounding("x\"", "\"").hexStringToByteArray())})
-    val literalExpr = (stringLiteral or hexLiteral)
+    val literalExpr = (stringLiteral or hexLiteral or integerLiteral)
 
     val operator = (A_OPERATOR or L_OPERATOR or C_OPERATOR) map { it.text }
     val binExpr : Parser<S_BinOp> = (-LPAR * parser(this::anyExpr) * operator * parser(this::anyExpr) * -RPAR) map {
         (lexpr, oper, rexpr) -> S_BinOp(oper, lexpr, rexpr)
     }
-    val whereExpr: Parser<S_BinOp> = (id * -EQLS * parser(this::anyExpr)) map {
+
+    val whereExpr_expl: Parser<S_BinOp> by (id * -EQLS * parser(this::anyExpr)) map {
         (key, value) -> S_BinOp("=", S_VarRef(key), value)
     }
-    val atExpr by (id * -AT * -LCURL * separatedTerms(whereExpr, COMMA) * -RCURL) map {
-        (relname, where) -> S_AtExpr(relname, where)
+
+    val whereExpr_C: Parser<S_BinOp> by (id * C_OPERATOR * parser(this::anyExpr)) map {
+        (key, op, value) -> S_BinOp(op.text, S_VarRef(key), value)
+    }
+
+    val whereExpr_impl : Parser<S_BinOp> by (parser(this::anyExpr)) map { e ->
+        S_BinOp("=", S_VarRef(inferName(e)), e)
+    }
+
+    val whereExpr = (whereExpr_expl or whereExpr_C or whereExpr_impl)
+
+    val atExpr : Parser<S_AtExpr> by (id * -AT * -LCURL * separatedTerms(whereExpr, COMMA, false) * -RCURL) map {
+        (relname, attrs) -> S_AtExpr(relname, attrs)
     }
 
     val anyExpr by (binExpr or literalExpr or atExpr or varExpr)

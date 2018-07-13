@@ -91,8 +91,7 @@
 
 
 operation update_project_description(issuer_pubkey: signer, name, description: text) {
-        update project@{ issuer = issuer@{pubkey=issuer_pubkey},
-                         name = name}
+        update project@{ issuer@{pubkey=issuer_pubkey}, name}
         ( description );
 }
 
