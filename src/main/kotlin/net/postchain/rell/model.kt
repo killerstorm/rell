@@ -78,6 +78,7 @@ fun makeAtExpr(s: S_AtExpr, types: TypeMap, env: EnvMap): RAtExpr {
             val expr = makeExpr(it.right, types, env)
             val attrname = it.left.varname
             val attr = type.rclass.attributes.first { it.name == attrname}
+            if (attr == null) throw Exception("${type.rclass.name} does not have attribute ${attrname}")
             Pair(attr, expr)
         }
         return RAtExpr(type, type.rclass, conditions)
