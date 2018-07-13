@@ -77,7 +77,7 @@ fun makeAtExpr(s: S_AtExpr, types: TypeMap, env: EnvMap): RAtExpr {
             if (! (it.left is S_VarRef)) throw Exception("AtExpr: LHS must be varrref")
             val expr = makeExpr(it.right, types, env)
             val attrname = it.left.varname
-            val attr = type.rclass.attributes.first { it.name == attrname}
+            val attr = type.rclass.attributes.find { it.name == attrname}
             if (attr == null) throw Exception("${type.rclass.name} does not have attribute ${attrname}")
             Pair(attr, expr)
         }
