@@ -50,11 +50,15 @@ fun genclass(classDefinition: RClass): String {
     return ddl
 }
 
-fun genAtExpr(r: RAtExpr): String {
-    val conditions = r.attrConditions.map {
+fun genAtConditions(r: RAtExpr): String {
+    return r.attrConditions.map {
         val expr = genExpr(it.second)
         "(${r.rel.name}.${it.first.name} = ${expr})"
     }.joinToString(" AND ")
+}
+
+fun genAtExpr(r: RAtExpr): String {
+    val conditions = genAtConditions(r)
     return "(SELECT rowid FROM ${r.rel.name} WHERE ${conditions})"
 }
 
@@ -83,6 +87,16 @@ val specialOps = mapOf(
         "require" to ::genRequire
 )
 
+fun genUpdateStatement(s: RUpdateStatement): String {
+    val conditions = genAtConditions(s.atExpr)
+    val setAttrs = s.setAttrs.map {
+        "${it.attr.name} = ${genExpr(it.expr)}"
+    }.joinToString()
+    return "UPDATE ${s.atExpr.rel.name} " +
+            " SET " + setAttrs +
+            " WHERE ${conditions})"
+}
+
 fun genstatement(s: RStatement): String {
     return when (s) {
         is RCreateStatement -> {
@@ -91,6 +105,11 @@ fun genstatement(s: RStatement): String {
                 genExpr(it.expr)
             }.joinToString()
             "INSERT INTO ${s.rclass.name} (${attrNames}) VALUES (${attrValues});"
+        }
+        is RUpdateStatement -> genUpdateStatement(s)
+        is RDeleteStatement -> {
+            val conditions = genAtConditions(s.atExpr)
+            "DELETE FROM ${s.atExpr.rel.name} WHERE ${conditions}"
         }
         is RCallStatement -> {
             if (s.fname in specialOps)

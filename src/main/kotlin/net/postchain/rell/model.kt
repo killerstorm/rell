@@ -39,6 +39,8 @@ class RAttrExpr(val attr: RAttrib, val expr: RExpr)
 
 sealed class RStatement
 class RCreateStatement(val rclass: RClass, val attrs: Array<RAttrExpr>): RStatement()
+class RUpdateStatement(val atExpr: RAtExpr, val setAttrs: Array<RAttrExpr>): RStatement()
+class RDeleteStatement(val atExpr: RAtExpr): RStatement()
 class RCallStatement(val fname: String, val args: Array<RExpr>): RStatement()
 class RFromStatement(val atExpr: RAttrExpr, val attrs: Array<RAttrib>): RStatement()
 
@@ -90,34 +92,57 @@ fun makeExpr(e: S_Expression, types: TypeMap, env: EnvMap): RExpr {
     }
 }
 
+fun makeAttrExpr(s_attr_expr: S_AttrExpr, rclass: RClass, types: TypeMap, env: EnvMap): RAttrExpr {
+    return when (s_attr_expr.expr) {
+        is S_AtExpr -> {
+            val atExpr = makeAtExpr(s_attr_expr.expr, types, env)
+            val relName = atExpr.rel.name
+            val attrname = s_attr_expr.name
+            val class_attr = rclass.attributes.first { it.name == attrname}
+            RAttrExpr(
+                    class_attr,
+                    atExpr
+            )
+        }
+        is S_VarRef -> {
+            val attrname = s_attr_expr.name
+            val class_attr = rclass.attributes.first { it.name == attrname}
+            val env_attr = env[s_attr_expr.expr.varname]!! // TODO: check compat
+            RAttrExpr(class_attr, RVarRef(env_attr))
+        }
+        else -> throw Exception("Not supported")
+    }
+}
+
 fun makeCreateStatmenet(s: S_CreateStatement, types: TypeMap, env: EnvMap): RCreateStatement {
     val type = types[s.classname]
     if ((type != null) && (type is RInstanceRefType)) {
         return RCreateStatement(type.rclass, s.attrs.map {
-            s_attr_expr ->
-            when (s_attr_expr.expr) {
-                is S_AtExpr -> {
-                    val atExpr = makeAtExpr(s_attr_expr.expr, types, env)
-                    val relName = atExpr.rel.name
-                    val attrname = s_attr_expr.name
-                    val class_attr = type.rclass.attributes.first { it.name == attrname}
-                    RAttrExpr(
-                            class_attr,
-                            atExpr
-                    )
-                }
-                is S_VarRef -> {
-                    val attrname = s_attr_expr.name
-                    val class_attr = type.rclass.attributes.first { it.name == attrname}
-                    val env_attr = env[s_attr_expr.expr.varname]!! // TODO: check compat
-                    RAttrExpr(class_attr, RVarRef(env_attr))
-                }
-                else -> throw Exception("Not supported")
-            }
-        }.toTypedArray()
-        )
+            makeAttrExpr(it, type.rclass, types, env)
+        }.toTypedArray())
     } else
         throw Exception("Undefined type ${s.classname}")
+}
+
+fun makeUpdateStatement(s: S_UpdateStatement, types: TypeMap, env: EnvMap): RUpdateStatement {
+    val type = types[s.what.clasname]
+    if ((type != null) && (type is RInstanceRefType)) {
+        return RUpdateStatement(
+                makeAtExpr(s.what, types, env),
+                s.attrs.map {
+                    makeAttrExpr(it, type.rclass, types, env)
+                }.toTypedArray()
+        )
+    } else
+        throw Exception("Undefined type ${s.what.clasname}")
+}
+
+fun makeDeleteStatement(s: S_DeleteStatement, types: TypeMap, env: EnvMap): RDeleteStatement {
+    val type = types[s.what.clasname]
+    if ((type != null) && (type is RInstanceRefType)) {
+        return RDeleteStatement(makeAtExpr(s.what, types, env))
+    } else
+        throw Exception("Undefined type ${s.what.clasname}")
 }
 
 fun makeCallStatement(s: S_CallStatement, types: TypeMap, env: EnvMap): RStatement {
@@ -136,6 +161,8 @@ fun makeROperation(opDef: S_OpDefinition, types: TypeMap): ROperation {
                 when (it) {
                     is S_CreateStatement -> makeCreateStatmenet(it, types, env)
                     is S_CallStatement -> makeCallStatement(it, types, env)
+                    is S_DeleteStatement -> makeDeleteStatement(it, types, env)
+                    is S_UpdateStatement -> makeUpdateStatement(it, types, env)
                     else -> throw Exception("Statement not supported (yet)")
                 }
             }.toTypedArray()

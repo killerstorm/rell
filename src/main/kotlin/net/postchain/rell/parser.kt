@@ -26,6 +26,8 @@ class S_BindStatement(val varname: String, val expr: S_Expression): S_Statement(
 class S_CreateStatement(val classname: String, val attrs: List<S_AttrExpr>): S_Statement()
 class S_CallStatement(val fname: String, val args: List<S_Expression>): S_Statement()
 class S_FromStatement(val from: S_AtExpr, val attrs: List<String>): S_Statement()
+class S_UpdateStatement(val what: S_AtExpr, val attrs: List<S_AttrExpr>): S_Statement()
+class S_DeleteStatement(val what: S_AtExpr): S_Statement()
 
 sealed class S_RelClause
 class S_AttributeClause(val attr: S_Attribute): S_RelClause()
@@ -104,6 +106,8 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val EQLS by token("=")
 
     val CREATE by token("create\\b")
+    val UPDATE by token("update\\b")
+    val DELETE by token("delete\\b")
     val FROM by token("from\\b")
     val SELECT by token("select\\b")
     val WHERE by token("where\\b")
@@ -177,12 +181,20 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         (classname, values) -> S_CreateStatement(classname, values)
     }
 
+    val updateStatement by (-UPDATE * atExpr * -LPAR * separatedTerms(anyAttrExpr, COMMA, false) * -RPAR * -SEMI) map {
+        (atExpr, values) -> S_UpdateStatement(atExpr, values)
+    }
+
+    val deleteStatement by (-DELETE * atExpr * -SEMI) map {
+        S_DeleteStatement(it)
+    }
+
     val fromStatement by (-FROM * atExpr * -SELECT * separatedTerms(id, COMMA, false)) map {
         (_atExpr, identifers) ->
         S_FromStatement(_atExpr, identifers)
     }
 
-    val statement by (bindStatement or createStatement or callStatement)
+    val statement by (bindStatement or createStatement or callStatement or updateStatement or deleteStatement)
 
     val opDefinition by (-OPER * id * -LPAR * separatedTerms(relAttribute, COMMA, true) * -RPAR
             * -LCURL * oneOrMore(statement) * -RCURL) map {
