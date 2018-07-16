@@ -15,8 +15,7 @@ class SQLGenTest {
 
     @Test
     fun contract03() { testresource("contract03.rell")   }
-/*
+
     @Test
-    fun contract02() { testresource("contract02.rell")   }
-  */
+    fun contract01() { testresource("contract01.rell")   }
 }

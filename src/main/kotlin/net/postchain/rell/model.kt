@@ -79,6 +79,9 @@ fun makeAtExpr(s: S_AtExpr, types: TypeMap, env: EnvMap): RAtExpr {
             val attrname = it.left.varname
             val attr = type.rclass.attributes.find { it.name == attrname}
             if (attr == null) throw Exception("${type.rclass.name} does not have attribute ${attrname}")
+            if (expr.type != attr.type) {
+                println("Warning: type mismatch")
+            }
             Pair(attr, expr)
         }
         return RAtExpr(type, type.rclass, conditions)
@@ -106,7 +109,12 @@ fun makeExpr(e: S_Expression, types: TypeMap, env: EnvMap): RExpr {
 fun makeAttrExpr(s_attr_expr: S_AttrExpr, rclass: RClass, types: TypeMap, env: EnvMap): RAttrExpr {
     val expr = makeExpr(s_attr_expr.expr, types, env)
     val attrname = s_attr_expr.name
-    val class_attr = rclass.attributes.first { it.name == attrname }
+    val class_attr = rclass.attributes.find { it.name == attrname }
+    if (class_attr == null)
+        throw Exception("${rclass.name} does not have attribute ${attrname}")
+    if (expr.type != class_attr.type) {
+        println("Warning: type mismatch")
+    }
     return RAttrExpr(class_attr, expr)
 }
 
