@@ -182,7 +182,8 @@ fun makeModule(md: S_ModuleDefinition): RModule {
             "name" to RTextType,
             "timestamp" to RTimestampType,
             "signer" to RSignerType,
-            "guid" to RGUIDType
+            "guid" to RGUIDType,
+            "tuid" to RTextType
     )
     val relations = mutableListOf<RRel>()
     val operations = mutableListOf<ROperation>()
