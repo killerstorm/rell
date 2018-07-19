@@ -103,9 +103,7 @@ fun genUpdateStatement(s: RUpdateStatement): String {
     val setAttrs = s.setAttrs.map {
         "${it.attr.name} = ${genExpr(it.expr)}"
     }.joinToString()
-    return "UPDATE ${s.atExpr.rel.name} " +
-            " SET " + setAttrs +
-            " WHERE ${conditions})"
+    return "UPDATE ${s.atExpr.rel.name} SET ${setAttrs} WHERE ${conditions};"
 }
 
 fun genstatement(s: RStatement): String {
