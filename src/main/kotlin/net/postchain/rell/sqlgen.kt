@@ -118,7 +118,7 @@ fun genstatement(s: RStatement): String {
         is RUpdateStatement -> genUpdateStatement(s)
         is RDeleteStatement -> {
             val conditions = genAtConditions(s.atExpr)
-            "DELETE FROM ${s.atExpr.rel.name} WHERE ${conditions}"
+            "DELETE FROM ${s.atExpr.rel.name} WHERE ${conditions};"
         }
         is RCallStatement -> {
             if (s.fname in specialOps)
