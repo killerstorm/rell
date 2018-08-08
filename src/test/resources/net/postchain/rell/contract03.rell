@@ -11,3 +11,4 @@ operation delete_balance (guid) {
 operation pomp_eet (guid) {
     require( balance@{guid} );
 }
+

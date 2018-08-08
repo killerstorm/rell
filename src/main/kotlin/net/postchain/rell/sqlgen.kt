@@ -3,6 +3,7 @@ package net.postchain.rell
 import org.jooq.*
 import org.jooq.impl.DSL
 import org.jooq.impl.DSL.constraint
+import org.jooq.impl.DSL.exp
 import org.jooq.impl.SQLDataType
 
 val ctx = DSL.using(SQLDialect.POSTGRES);
@@ -28,12 +29,17 @@ fun genclass(classDefinition: RClass): String {
     val t = ctx.createTable(classDefinition.name)
     var q = t.column("rowid", SQLDataType.BIGINT.nullable(false))
     val constraints = mutableListOf<Constraint>(constraint("PK_" + classDefinition.name).primaryKey("rowid"))
+
+    val jsonAttribSet = mutableSetOf<String>()
+
     for (attr in classDefinition.attributes) {
         if (attr.type is RInstanceRefType) {
             constraints.add(
                     constraint("${classDefinition.name}_${attr.name}_FK")
                             .foreignKey(attr.name).references(attr.type.name, "rowid")
             )
+        } else if (attr.type is RJSONType) {
+            jsonAttribSet.add(attr.name)
         }
         q = q.column(attr.name, getSQLType(attr.type).nullable(false))
     }
@@ -43,8 +49,14 @@ fun genclass(classDefinition: RClass): String {
     var ddl = q.constraints(*constraints.toTypedArray()).toString() + ";\n"
 
     for ((iidx, index) in classDefinition.indexes.withIndex()) {
-        val index_sql = ctx.createIndex("IDX_${classDefinition.name}_${iidx}").on(classDefinition.name, *index.attribs);
-        ddl += index_sql.toString() + ";\n";
+        val index_sql : String;
+        if (index.attribs.size == 1 && jsonAttribSet.contains(index.attribs[0])) {
+            val attrName = index.attribs[0]
+            index_sql = "CREATE INDEX \"IDX_${classDefinition.name}_${iidx}\" ON \"${classDefinition.name}\" USING gin (\"${attrName}\" jsonb_path_ops)"
+        } else {
+            index_sql = (ctx.createIndex("IDX_${classDefinition.name}_${iidx}").on(classDefinition.name, *index.attribs)).toString();
+        }
+        ddl += index_sql + ";\n";
     }
 
     return ddl
@@ -98,6 +110,16 @@ val specialOps = mapOf(
         "require" to ::genRequire
 )
 
+fun genJSON(s: RFunCallExpr): String {
+    if (s.args.size != 1) throw Exception("Wrong number of parameters to json function")
+    val arg = genExpr(s.args[0])
+    return " (${arg}::jsonb) "
+}
+
+val specialFuns = mapOf(
+    "json" to ::genJSON
+)
+
 fun genUpdateStatement(s: RUpdateStatement): String {
     val conditions = genAtConditions(s.atExpr)
     val setAttrs = s.setAttrs.map {
@@ -139,6 +161,10 @@ fun genExpr(expr: RExpr): String {
         is RStringLiteral -> "'${expr.literal}'" // TODO: esscape
         is RIntegerLiteral -> expr.literal.toString()
         is RByteALiteral -> "E'\\\\x${expr.literal.toHex()}'"
+        is RFunCallExpr -> (
+                if (expr.fname == "json")
+                    genJSON(expr)
+                else throw Exception("unknown funcall"))
         else -> throw Exception("Expression type not supported")
     }
 }

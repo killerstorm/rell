@@ -20,7 +20,7 @@ class S_ByteALiteral(val bytes: ByteArray): S_Expression()
 class S_IntLiteral(val value: Long): S_Expression()
 class S_BinOp(val op: String, val left: S_Expression, val right: S_Expression): S_Expression()
 class S_AtExpr(val clasname: String, val where: List<S_BinOp>): S_Expression()
-
+class S_FunCallExpr(val fname: String, val args: List<S_Expression>): S_Expression()
 class S_AttrExpr(val name: String, val expr: S_Expression)
 
 sealed class S_Statement
@@ -178,7 +178,11 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         (relname, attrs) -> S_AtExpr(relname, attrs)
     }
 
-    val anyExpr by (binExpr or literalExpr or atExpr or varExpr)
+    val funcallExpr : Parser<S_FunCallExpr> by (id * -LPAR * separatedTerms(parser(this::anyExpr), COMMA, true) * -RPAR) map {
+        (fname, args) -> S_FunCallExpr(fname, args)
+    }
+
+    val anyExpr by (funcallExpr or binExpr or literalExpr or atExpr or varExpr )
 
     val bindStatement by (-VAL * id * -EQLS * anyExpr * -SEMI ) map { (varname, expr) -> S_BindStatement(varname, expr)  }
 

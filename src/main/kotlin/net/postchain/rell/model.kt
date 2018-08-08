@@ -19,6 +19,8 @@ object RTimestampType: RPrimitiveType("timestamp", SQLDataType.BIGINT)
 object RGUIDType: RPrimitiveType("guid", PostgresDataType.BYTEA)
 val gtxSignerSQLDataType = DefaultDataType(null as SQLDialect?, ByteArray::class.java, "gtx_signer")
 object RSignerType: RPrimitiveType("signer", gtxSignerSQLDataType)
+val jsonSQLDataType = DefaultDataType(null as SQLDialect?, String::class.java, "jsonb")
+object RJSONType: RPrimitiveType("json", jsonSQLDataType)
 
 class RInstanceRefType (className: String, val rclass: RClass): RType(className)
 
@@ -37,6 +39,7 @@ class RBinOpExpr(type: RType, val op: String, val left: RExpr, val right: RExpr)
 class RStringLiteral(type: RType, val literal: String): RExpr(type)
 class RByteALiteral(type: RType, val literal: ByteArray): RExpr(type)
 class RIntegerLiteral(type: RType, val literal: Long): RExpr(type)
+class RFunCallExpr(type: RType, val fname: String, val args: List<RExpr>): RExpr(type)
 
 class RAttrExpr(val attr: RAttrib, val expr: RExpr)
 
@@ -95,6 +98,10 @@ fun makeExpr(e: S_Expression, types: TypeMap, env: EnvMap): RExpr {
         is S_VarRef -> {
             val attr = env[e.varname]!!
             RVarRef(attr.type, attr)
+        }
+        is S_FunCallExpr -> {
+            val fun_ret_type = types["retval ${e.fname}"]!! // TODO: hackish
+            RFunCallExpr(fun_ret_type, e.fname, e.args.map {makeExpr(it, types, env) })
         }
         is S_BinOp -> {
             // TODO: actual type
@@ -183,7 +190,9 @@ fun makeModule(md: S_ModuleDefinition): RModule {
             "timestamp" to RTimestampType,
             "signer" to RSignerType,
             "guid" to RGUIDType,
-            "tuid" to RTextType
+            "tuid" to RTextType,
+            "json" to RJSONType,
+            "retval json" to RJSONType
     )
     val relations = mutableListOf<RRel>()
     val operations = mutableListOf<ROperation>()

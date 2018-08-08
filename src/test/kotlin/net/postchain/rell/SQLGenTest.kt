@@ -18,4 +18,7 @@ class SQLGenTest {
 
     @Test
     fun contract01() { testresource("contract01.rell")   }
+
+    @Test
+    fun jsoncontract() { testresource("json.rell")   }
 }

@@ -1,0 +1,8 @@
+class myclass {
+    index foo: json;
+    key name;
+}
+
+operation add_myclass(foo: text, bar: text) {
+    create myclass (foo=json(foo), name=bar);
+}
