@@ -1,58 +1,6 @@
-package net.postchain.rell
+package net.postchain.rell.model
 
-import org.jooq.DataType
-import org.jooq.SQLDialect
-import org.jooq.impl.DefaultDataType
-import org.jooq.impl.SQLDataType
-import org.jooq.util.postgres.PostgresDataType
-
-sealed class RType(val name: String)
-
-open class RPrimitiveType(name: String,
-                          val sqlType: DataType<*>): RType(name)
-
-object RBooleanType: RPrimitiveType("boolean", SQLDataType.BOOLEAN)
-object RTextType: RPrimitiveType("text", PostgresDataType.TEXT)
-object RIntegerType: RPrimitiveType("integer", SQLDataType.BIGINT)
-object RByteArrayType: RPrimitiveType("byte_array", PostgresDataType.BYTEA)
-object RTimestampType: RPrimitiveType("timestamp", SQLDataType.BIGINT)
-object RGUIDType: RPrimitiveType("guid", PostgresDataType.BYTEA)
-val gtxSignerSQLDataType = DefaultDataType(null as SQLDialect?, ByteArray::class.java, "gtx_signer")
-object RSignerType: RPrimitiveType("signer", gtxSignerSQLDataType)
-val jsonSQLDataType = DefaultDataType(null as SQLDialect?, String::class.java, "jsonb")
-object RJSONType: RPrimitiveType("json", jsonSQLDataType)
-
-class RInstanceRefType (className: String, val rclass: RClass): RType(className)
-
-class RKey(val attribs: Array<String>)
-class RIndex(val attribs: Array<String>)
-class RAttrib(val name: String, val type: RType)
-open class RRel (val name: String, val keys: Array<RKey>, val indexes: Array<RIndex>, val attributes: Array<RAttrib>)
-
-class RClass (name: String, keys: Array<RKey>, indexes: Array<RIndex>, attributes: Array<RAttrib>)
-    :RRel(name, keys, indexes, attributes)
-
-sealed class RExpr(val type: RType)
-class RVarRef(type: RType, val _var: RAttrib): RExpr(type)
-class RAtExpr(type: RType, val rel: RRel, val attrConditions: List<Pair<RAttrib, RExpr>>): RExpr(type)
-class RBinOpExpr(type: RType, val op: String, val left: RExpr, val right: RExpr): RExpr(type)
-class RStringLiteral(type: RType, val literal: String): RExpr(type)
-class RByteALiteral(type: RType, val literal: ByteArray): RExpr(type)
-class RIntegerLiteral(type: RType, val literal: Long): RExpr(type)
-class RFunCallExpr(type: RType, val fname: String, val args: List<RExpr>): RExpr(type)
-
-class RAttrExpr(val attr: RAttrib, val expr: RExpr)
-
-sealed class RStatement
-class RCreateStatement(val rclass: RClass, val attrs: Array<RAttrExpr>): RStatement()
-class RUpdateStatement(val atExpr: RAtExpr, val setAttrs: Array<RAttrExpr>): RStatement()
-class RDeleteStatement(val atExpr: RAtExpr): RStatement()
-class RCallStatement(val fname: String, val args: Array<RExpr>): RStatement()
-class RFromStatement(val atExpr: RAttrExpr, val attrs: Array<RAttrib>): RStatement()
-
-class ROperation(val name: String, val params: Array<RAttrib>, val statements: Array<RStatement>)
-
-class RModule(val relations: Array<RRel>, val operations: Array<ROperation>)
+import net.postchain.rell.parser.*
 
 typealias EnvMap = Map<String, RAttrib>
 typealias TypeMap = Map<String, RType>
@@ -101,7 +49,7 @@ fun makeExpr(e: S_Expression, types: TypeMap, env: EnvMap): RExpr {
         }
         is S_FunCallExpr -> {
             val fun_ret_type = types["retval ${e.fname}"]!! // TODO: hackish
-            RFunCallExpr(fun_ret_type, e.fname, e.args.map {makeExpr(it, types, env) })
+            RFunCallExpr(fun_ret_type, e.fname, e.args.map { makeExpr(it, types, env) })
         }
         is S_BinOp -> {
             // TODO: actual type
@@ -157,10 +105,9 @@ fun makeDeleteStatement(s: S_DeleteStatement, types: TypeMap, env: EnvMap): RDel
 }
 
 fun makeCallStatement(s: S_CallStatement, types: TypeMap, env: EnvMap): RStatement {
-    return RCallStatement(
-            s.fname,
-            s.args.map { makeExpr(it, types, env)  }.toTypedArray()
-    )
+    val fun_ret_type = types["retval ${s.fname}"]!! // TODO: hackish
+    val expr = RFunCallExpr(fun_ret_type, s.fname, s.args.map { makeExpr(it, types, env) })
+    return RCallStatement(expr)
 }
 
 fun makeROperation(opDef: S_OpDefinition, types: TypeMap): ROperation {
@@ -192,7 +139,8 @@ fun makeModule(md: S_ModuleDefinition): RModule {
             "guid" to RGUIDType,
             "tuid" to RTextType,
             "json" to RJSONType,
-            "retval json" to RJSONType
+            "retval json" to RJSONType,
+            "retval require" to RUnitType
     )
     val relations = mutableListOf<RRel>()
     val operations = mutableListOf<ROperation>()

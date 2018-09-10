@@ -1,12 +1,14 @@
 package net.postchain.rell
 
-import com.github.h0tk3y.betterParse.grammar.parseToEnd
+import net.postchain.rell.model.makeModule
+import net.postchain.rell.parser.parseRellCode
+import net.postchain.rell.sqlgen.gensql
 import java.io.File
 
 fun main(args: Array<String>) {
     val text = File(args[0]).readText(Charsets.UTF_8)
 
-    val compiled = gensql(makeModule(S_Grammar.parseToEnd(text)))
+    val compiled = gensql(makeModule(parseRellCode(text)))
 
     var path = args[0] + ".sql"
     if (args.size > 1) {

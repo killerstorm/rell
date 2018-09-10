@@ -1,9 +1,10 @@
-package net.postchain.rell
+package net.postchain.rell.sqlgen
 
+import net.postchain.rell.model.*
+import net.postchain.rell.toHex
 import org.jooq.*
 import org.jooq.impl.DSL
 import org.jooq.impl.DSL.constraint
-import org.jooq.impl.DSL.exp
 import org.jooq.impl.SQLDataType
 
 val ctx = DSL.using(SQLDialect.POSTGRES);
@@ -87,7 +88,7 @@ fun genBinOpExpr(r: RBinOpExpr): String {
     return "(${left} ${op} ${right})"
 }
 
-fun genRequire(s: RCallStatement): String {
+fun genRequire(s: RFunCallExpr): String {
     if (s.args.size == 0 || s.args.size > 2) throw Exception("Too many (or too little) arguments to require")
     val message = if (s.args.size == 2) genExpr(s.args[1]) else "'Require failed'"
 
@@ -143,8 +144,8 @@ fun genstatement(s: RStatement): String {
             "DELETE FROM ${s.atExpr.rel.name} WHERE ${conditions};"
         }
         is RCallStatement -> {
-            if (s.fname in specialOps)
-                return specialOps[s.fname]!!(s)
+            if (s.expr.fname in specialOps)
+                return specialOps[s.expr.fname]!!(s.expr)
             else {
                 throw Exception("Cannot call")
             }

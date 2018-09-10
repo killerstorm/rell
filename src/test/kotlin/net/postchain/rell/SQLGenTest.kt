@@ -1,6 +1,9 @@
 package net.postchain.rell
 
 import com.github.h0tk3y.betterParse.grammar.parseToEnd
+import net.postchain.rell.model.makeModule
+import net.postchain.rell.parser.S_Grammar
+import net.postchain.rell.sqlgen.gensql
 import org.junit.Test
 
 class SQLGenTest {
