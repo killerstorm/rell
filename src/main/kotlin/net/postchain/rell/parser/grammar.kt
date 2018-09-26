@@ -17,6 +17,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val COLON by token(":")
     private val SEMI by token(";")
     private val COMMA by token(",")
+    private val DOT by token("\\.")
 
     private val EQ by token("=")
     private val EQEQ by token("==")
@@ -45,7 +46,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     val REL by token("rel\\b")
     val KEY by token("key\\b")
     val INDEX by token("index\\b")
-    val OPER by token("operation\\b")
+    val OPERATION by token("operation\\b")
     val QUERY by token("query\\b")
     val VAL by token("val\\b")
     val RETURN by token("return\\b")
@@ -73,122 +74,109 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         S_ClassDefinition(identifier, rel.attributes, rel.keys, rel.indices)
     }
 
-    val varExpr by (id map { S_VarRef(it) })
-    val integerLiteral = (NUMBER map { S_IntLiteral(it.text.toLong()) })
-    val stringLiteral = (STRINGLIT map { S_StringLiteral(it.text.removeSurrounding("\"", "\"")) })
-    val hexLiteral = (HEXLIT map {
-        S_ByteALiteral(
-                it.text.removeSurrounding("x\"", "\"").hexStringToByteArray())
-    })
-    val literalExpr = (stringLiteral or hexLiteral or integerLiteral)
-
-    val arithOperator = (
-            PLUS
-            or MINUS
-            or DIV
-            or MOD
-    ) map { it.text }
-
-    val comparisonOperator = (
-            EQEQ
+    val binaryOperator = (
+            EQ
+            or EQEQ
             or NE
             or LT
             or GT
             or LE
             or GE
+
+            or PLUS
+            or MINUS
+            or DIV
+            or MOD
+
+            or AND
+            or OR
     ) map { it.text }
 
-    val logicOperator = (
-            AND
-            or OR
+    val unaryOperator = (
+            PLUS
+            or MINUS
             or NOT
     ) map { it.text }
 
-    val operator = (
-            arithOperator
-            or logicOperator
-            or comparisonOperator
-    ) map { it }
+    val nameExpr by id map { S_NameExpr(it) }
+    val intExpr by NUMBER map { S_IntLiteral(it.text.toLong()) }
+    val stringExpr = STRINGLIT map { S_StringLiteral(it.text.removeSurrounding("\"", "\"")) }
+    val bytesExpr = HEXLIT map { S_ByteALiteral(it.text.removeSurrounding("x\"", "\"").hexStringToByteArray()) }
 
-    val binExpr: Parser<S_BinOp> = (-LPAR * parser(this::anyExpr) * operator * parser(this::anyExpr) * -RPAR) map {
-        (lexpr, oper, rexpr) ->
-        S_BinOp(oper, lexpr, rexpr)
+    val parenthesesExpr by ( -LPAR * parser(this::expression) * -RPAR )
+
+    val baseExprHead by ( nameExpr or intExpr or stringExpr or bytesExpr or parenthesesExpr )
+
+    val baseExprTailAttribute by ( -DOT * id ) map { name -> S_BaseExprTailAttribute(name) }
+    val baseAttrTailCall by ( -LPAR * separatedTerms(parser(this::expression), COMMA, true)  * -RPAR ) map { args ->
+        S_BaseExprTailCall(args)
     }
 
-    val whereExpr_expl: Parser<S_BinOp> by (id * -EQ * parser(this::anyExpr)) map {
-        (key, value) ->
-        S_BinOp("=", S_VarRef(key), value)
+    val baseExprTail by ( baseExprTailAttribute or baseAttrTailCall )
+
+    val baseExpr: Parser<S_Expression> by ( baseExprHead * zeroOrMore(baseExprTail) ) map {
+        ( head, tail ) -> S_BaseExpr(head, tail)
     }
 
-    val whereExpr_C: Parser<S_BinOp> by (id * comparisonOperator * parser(this::anyExpr)) map {
-        (key, op, value) ->
-        S_BinOp(op, S_VarRef(key), value)
+    val selectExpr by ( id * -AT * -LCURL * zeroOrMore(parser(this::expression)) * -RCURL ) map {
+        ( className, exprs ) ->
+        S_SelectExpr(className, exprs)
     }
 
-    val whereExpr_impl : Parser<S_BinOp> by (parser(this::anyExpr)) map { e ->
-        S_BinOp("=", S_VarRef(inferName(e)), e)
+//    val nameExpr: Parser<S_Expression> by ( id * zeroOrMore(baseExprTail) ) map {
+//        ( name, tail ) -> S_BaseExpr(S_NameExpr(name), tail)
+//    }
+
+    val operandExpr: Parser<S_Expression> by ( selectExpr or baseExpr /*or selectExpr or nameExpr*/ )
+
+    val unaryExprSub by ( unaryOperator * operandExpr ) map { (op, expr) -> S_UnaryExpr(op, expr) }
+
+    val unaryExpr: Parser<S_Expression> by ( operandExpr or unaryExprSub )
+
+    val binaryExprOperand by ( binaryOperator * unaryExpr ) map { ( op, expr ) -> S_BinaryExprRight(op, expr) }
+
+    val binaryExpr by ( unaryExpr * zeroOrMore(binaryExprOperand) ) map { ( left, rights ) ->
+        S_BinaryExpr(left, rights)
     }
 
-    val whereExpr = (whereExpr_expl or whereExpr_C or whereExpr_impl)
+    val expression: Parser<S_Expression> by binaryExpr
 
-    val atExpr by (id * -AT * -LCURL * separatedTerms(whereExpr, COMMA, false) * -RCURL) map {
-        (relname, attrs) ->
-        S_AtExpr(relname, attrs)
-    }
+    val valStatement by (-VAL * id * -EQ * expression * -SEMI) map { (name, expr) -> S_ValStatement(name, expr) }
 
-    val funcallExpr : Parser<S_FunCallExpr> by (id * -LPAR * separatedTerms(parser(this::anyExpr), COMMA, true) * -RPAR) map {
-        (fname, args) ->
-        S_FunCallExpr(fname, args)
-    }
+//    val attrExpr_expl = (id * -EQ * anyExpr) map { (i, e) -> S_AttrExpr(i, e) }
+//    val attrExpr_impl = (anyExpr) map { e ->
+//        S_AttrExpr(inferName(e), e)
+//    }
+//    val anyAttrExpr by (attrExpr_expl or attrExpr_impl)
+//
+//    val createStatement by (-CREATE * id * -LPAR * separatedTerms(anyAttrExpr, COMMA, true) * -RPAR * -SEMI) map {
+//        (classname, values) ->
+//        S_CreateStatement(classname, values)
+//    }
+//
+//    val updateStatement by (-UPDATE * atExpr * -LPAR * separatedTerms(anyAttrExpr, COMMA, false) * -RPAR * -SEMI) map {
+//        (atExpr, values) ->
+//        S_UpdateStatement(atExpr, values)
+//    }
+//
+//    val deleteStatement by (-DELETE * atExpr * -SEMI) map {
+//        S_DeleteStatement(it)
+//    }
 
-    val anyExpr by (funcallExpr or binExpr or literalExpr or atExpr or varExpr)
-
-    val valStatement by (-VAL * id * -EQ * anyExpr * -SEMI) map { (varname, expr) -> S_ValStatement(varname, expr) }
-
-    val callStatement by ( id * -LPAR * separatedTerms(anyExpr, COMMA, false) * -RPAR * -SEMI) map {
-        (fname, args) ->
-        S_CallStatement(fname, args)
-    }
-
-    val attrExpr_expl = (id * -EQ * anyExpr) map { (i, e) -> S_AttrExpr(i, e) }
-    val attrExpr_impl = (anyExpr) map { e ->
-        S_AttrExpr(inferName(e), e)
-    }
-    val anyAttrExpr by (attrExpr_expl or attrExpr_impl)
-
-    val createStatement by (-CREATE * id * -LPAR * separatedTerms(anyAttrExpr, COMMA, true) * -RPAR * -SEMI) map {
-        (classname, values) ->
-        S_CreateStatement(classname, values)
-    }
-
-    val updateStatement by (-UPDATE * atExpr * -LPAR * separatedTerms(anyAttrExpr, COMMA, false) * -RPAR * -SEMI) map {
-        (atExpr, values) ->
-        S_UpdateStatement(atExpr, values)
-    }
-
-    val deleteStatement by (-DELETE * atExpr * -SEMI) map {
-        S_DeleteStatement(it)
-    }
-
-    val fromStatement by (-FROM * atExpr * -SELECT * separatedTerms(id, COMMA, false)) map {
-        (_atExpr, identifers) ->
-        S_FromStatement(_atExpr, identifers)
-    }
-
-    val returnStatement by (-RETURN * anyExpr * -SEMI) map {
+    val returnStatement by (-RETURN * expression * -SEMI) map {
         expr ->
         S_ReturnStatement(expr)
     }
 
-    val statement by (valStatement or createStatement or callStatement or updateStatement or deleteStatement or returnStatement)
+    val statement by (valStatement or returnStatement)
 
-    val opDefinition by (-OPER * id * -LPAR * separatedTerms(relAttribute, COMMA, true) * -RPAR
+    val opDefinition by (-OPERATION * id * -LPAR * separatedTerms(relAttribute, COMMA, true) * -RPAR
             * -LCURL * oneOrMore(statement) * -RCURL) map {
         (identifier, args, statements) ->
         S_OpDefinition(identifier, args, statements)
     }
 
-    val queryBodyShort by (-EQ * anyExpr * -SEMI) map {
+    val queryBodyShort by (-EQ * expression * -SEMI) map {
         expr ->
         S_QueryBodyShort(expr)
     }
@@ -250,14 +238,6 @@ private fun classFromClauses(identifier: String, clauses: List<S_RelClause>): S_
             keys,
             indices
     )
-}
-
-private fun inferName(e: S_Expression): String {
-    return when (e) {
-        is S_AtExpr -> e.className
-        is S_VarRef -> e.name
-        else -> throw Exception("Cannot automatically infer name of expression")
-    }
 }
 
 fun parseRellCode(s: String): S_ModuleDefinition {
