@@ -156,7 +156,7 @@ fun genstatement(s: RStatement): String {
 
 fun genExpr(expr: RExpr): String {
     return when (expr) {
-        is RVarRef -> "_" + expr._var.name
+        is RVarRef -> "_" + expr.attr.name
         is RAtExpr -> genAtExpr(expr)
         is RBinOpExpr -> genBinOpExpr(expr)
         is RStringLiteral -> "'${expr.literal}'" // TODO: esscape

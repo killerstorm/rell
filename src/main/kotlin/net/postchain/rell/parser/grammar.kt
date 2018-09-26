@@ -18,7 +18,6 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val SEMI by token(";")
     private val COMMA by token(",")
 
-
     private val A_OPERATOR by token("[\\+\\-\\*/%]")
     private val C_OPERATOR by token("==|!=|[<>]=?")
     private val L_OPERATOR by token("or\\b|and\\b|not\\b")
@@ -59,13 +58,8 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     val classDef by (-CLASS * id * -LCURL * relClauses * -RCURL) map {
         (identifier, clauses) ->
-        val rel = relFromClauses(identifier, clauses)
+        val rel = classFromClauses(identifier, clauses)
         S_ClassDefinition(identifier, rel.attributes, rel.keys, rel.indices)
-    }
-
-    val relDef by (-REL * id * -LCURL * relClauses * -RCURL) map {
-        (identifier, clauses) ->
-        relFromClauses(identifier, clauses)
     }
 
     val varExpr by (id map { S_VarRef(it) })
@@ -78,7 +72,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     val literalExpr = (stringLiteral or hexLiteral or integerLiteral)
 
     val operator = (A_OPERATOR or L_OPERATOR or C_OPERATOR) map { it.text }
-    val binExpr : Parser<S_BinOp> = (-LPAR * parser(this::anyExpr) * operator * parser(this::anyExpr) * -RPAR) map {
+    val binExpr: Parser<S_BinOp> = (-LPAR * parser(this::anyExpr) * operator * parser(this::anyExpr) * -RPAR) map {
         (lexpr, oper, rexpr) ->
         S_BinOp(oper, lexpr, rexpr)
     }
@@ -99,7 +93,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     val whereExpr = (whereExpr_expl or whereExpr_C or whereExpr_impl)
 
-    val atExpr : Parser<S_AtExpr> by (id * -AT * -LCURL * separatedTerms(whereExpr, COMMA, false) * -RCURL) map {
+    val atExpr by (id * -AT * -LCURL * separatedTerms(whereExpr, COMMA, false) * -RCURL) map {
         (relname, attrs) ->
         S_AtExpr(relname, attrs)
     }
@@ -111,7 +105,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     val anyExpr by (funcallExpr or binExpr or literalExpr or atExpr or varExpr)
 
-    val valStatement by (-VAL * id * -EQLS * anyExpr * -SEMI) map { (varname, expr) -> S_BindStatement(varname, expr) }
+    val valStatement by (-VAL * id * -EQLS * anyExpr * -SEMI) map { (varname, expr) -> S_ValStatement(varname, expr) }
 
     val callStatement by ( id * -LPAR * separatedTerms(anyExpr, COMMA, false) * -RPAR * -SEMI) map {
         (fname, args) ->
@@ -172,7 +166,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         S_QueryDefinition(identifier, args, body)
     }
 
-    val anyDef by (classDef or relDef or opDefinition or queryDefinition)
+    val anyDef by (classDef or opDefinition or queryDefinition)
 
     override val rootParser by oneOrMore(anyDef) map { S_ModuleDefinition(it) }
 
@@ -185,7 +179,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     override val rootParser by leftAssociative(andChain, or) { l, _, r -> Or(l, r) }*/
 }
 
-private fun relFromClauses(identifier: String, clauses: List<S_RelClause>): S_RelDefinition {
+private fun classFromClauses(identifier: String, clauses: List<S_RelClause>): S_ClassDefinition {
     val attributes = mutableMapOf<String, String>()
     val keys = mutableListOf<S_Key>()
     val indices = mutableListOf<S_Index>()
@@ -211,26 +205,26 @@ private fun relFromClauses(identifier: String, clauses: List<S_RelClause>): S_Re
             }
         }.let {} // ensure exhaustiveness
     }
-    return S_RelDefinition(identifier,
+
+    return S_ClassDefinition(
+            identifier,
             attributes.entries.map { S_Attribute(it.key, it.value) },
-            keys, indices
+            keys,
+            indices
     )
 }
 
-
 private fun inferName(e: S_Expression): String {
     return when (e) {
-        is S_AtExpr -> e.clasname
-        is S_VarRef -> e.varname
+        is S_AtExpr -> e.className
+        is S_VarRef -> e.name
         else -> throw Exception("Cannot automatically infer name of expression")
     }
 }
 
-
 fun parseRellCode(s: String): S_ModuleDefinition {
     return S_Grammar.parseToEnd(s)
 }
-
 
 /*
 

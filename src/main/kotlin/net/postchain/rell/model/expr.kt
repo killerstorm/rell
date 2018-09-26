@@ -1,7 +1,7 @@
 package net.postchain.rell.model
 
 sealed class RExpr(val type: RType)
-class RVarRef(type: RType, val _var: RAttrib): RExpr(type)
+class RVarRef(type: RType, val offset: Int, val attr: RAttrib): RExpr(type)
 class RAtExpr(type: RType, val rel: RRel, val attrConditions: List<Pair<RAttrib, RExpr>>): RExpr(type)
 class RBinOpExpr(type: RType, val op: String, val left: RExpr, val right: RExpr): RExpr(type)
 class RStringLiteral(type: RType, val literal: String): RExpr(type)
