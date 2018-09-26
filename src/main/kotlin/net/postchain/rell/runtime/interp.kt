@@ -50,7 +50,7 @@ fun make_long_fun(em: EnvMap, exp: RExpr): RTF<Long> {
     return when (exp) {
         is RBinOpExpr -> make_long_bin_op(em, exp)
         is RVarRef -> make_var_ref(em, exp.attr.name)
-        is RIntegerLiteral -> { _ -> exp.literal }
+        is RIntegerLiteral -> { _ -> exp.value.value }
         is RFuncall -> make_funcall(em, exp) as RTF<Long>
         else -> throw Exception("Cannot handle expresssion type")
     }

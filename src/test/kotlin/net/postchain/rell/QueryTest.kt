@@ -4,15 +4,20 @@ import com.github.h0tk3y.betterParse.grammar.parseToEnd
 import com.github.h0tk3y.betterParse.parser.AlternativesFailure
 import com.github.h0tk3y.betterParse.parser.ErrorResult
 import com.github.h0tk3y.betterParse.parser.ParseException
+import net.postchain.rell.model.RModule
 import net.postchain.rell.model.makeModule
 import net.postchain.rell.parser.S_Grammar
 import net.postchain.rell.parser.S_ModuleDefinition
+import net.postchain.rell.runtime.RtIntValue
+import net.postchain.rell.runtime.RtTextValue
+import net.postchain.rell.runtime.RtValue
 import org.apache.commons.lang3.builder.RecursiveToStringStyle
 import org.apache.commons.lang3.builder.ToStringBuilder
 import org.apache.commons.lang3.builder.ToStringStyle
 import org.jooq.impl.ParserException
 import org.junit.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 
 class QueryTest {
     @Test fun testResultIntegerLiteral() {
@@ -24,10 +29,10 @@ class QueryTest {
     }
 
     @Test fun testResultParameter() {
-        check("query q(a: integer) = a;", "int[12345]")
-        check("query q(a: text) = a;", "text[Hello]")
-        check("query q(a: integer, b: text) = a;", "int[12345]")
-        check("query q(a: integer, b: text) = a;", "text[Hello]")
+        check("query q(a: integer) = a;", arrayOf(RtIntValue(12345)), "int[12345]")
+        check("query q(a: text) = a;", arrayOf(RtTextValue("Hello")), "text[Hello]")
+        check("query q(a: integer, b: text) = a;", arrayOf(RtIntValue(12345), RtTextValue("Hello")), "int[12345]")
+        check("query q(a: integer, b: text) = b;", arrayOf(RtIntValue(12345), RtTextValue("Hello")), "text[Hello]")
     }
 
     @Test fun testReturnLiteral() {
@@ -35,30 +40,32 @@ class QueryTest {
         check("query q() { return \"Hello\"; }", "text[Hello]")
     }
 
-    @Test fun testReturnVariableLiteral() {
+    @Test fun testReturnValLiteral() {
         check("query q() { val x = 12345; return x; }", "int[12345]")
         check("query q() { val x = \"Hello\"; return x; }", "text[Hello]")
     }
 
     @Test fun testReturnSelectNoObjects() {
-        check("query q() = user @ { name = \"Bob\" } ;", "list<user>[]")
+        check("class user { name: text; } query q() = user @ { name = \"Bob\" } ;", "list<user>[]")
     }
 
     @Test fun testReturnSelectOneObject() {
-        check("query q() = user @ { name = \"Bob\" } ;", "list<user>[user[33]]")
+        check("class user { name: text; } query q() = user @ { name = \"Bob\" } ;", "list<user>[user[33]]")
     }
 
     @Test fun testReturnSelectManyObjects() {
-        check("query q() = user @ { name = \"Bob\" } ;", "list<user>[user[33],user[77],user[111]]")
+        check("class user { name: text; } query q() = user @ { name = \"Bob\" } ;", "list<user>[user[33],user[77],user[111]]")
     }
 
     private fun check(code: String, expectedResult: String) {
-        val ast = parse(code)
-        val model = makeModule(ast)
+        check(code, arrayOf(), expectedResult)
+    }
 
-        println(ToStringBuilder.reflectionToString(model, StrStyle()))
-        //val actualResult = execute(code)
-        //assertEquals(expectedResult, actualResult)
+    private fun check(code: String, args: Array<RtValue>, expectedResult: String) {
+        val ast = parse(code)
+        val module = makeModule(ast)
+        val actualResult = execute(module, args)
+        assertEquals(expectedResult, actualResult)
     }
 
     private fun parse(code: String): S_ModuleDefinition {
@@ -83,14 +90,11 @@ class QueryTest {
         }
     }
 
-    private fun execute(code: String): String {
-        return "123"
-    }
-
-    private class StrStyle : RecursiveToStringStyle {
-        constructor() {
-            setUseShortClassName(true)
-            setUseIdentityHashCode(false)
-        }
+    private fun execute(module: RModule, args: Array<RtValue>): String {
+        val query = module.queries.find { it.name == "q" }
+        assertNotNull(query, "Query not found")
+        val res = query?.execute(args)
+        val str = res.toString()
+        return str
     }
 }

@@ -66,13 +66,13 @@ fun genclass(classDefinition: RClass): String {
 fun genAtConditions(r: RAtExpr): String {
     return r.attrConditions.map {
         val expr = genExpr(it.second)
-        "(${r.rel.name}.${it.first.name} = ${expr})"
+        "(${r.cls.name}.${it.first.name} = ${expr})"
     }.joinToString(" AND ")
 }
 
 fun genAtExpr(r: RAtExpr): String {
     val conditions = genAtConditions(r)
-    return "(SELECT rowid FROM ${r.rel.name} WHERE ${conditions})"
+    return "(SELECT rowid FROM ${r.cls.name} WHERE ${conditions})"
 }
 
 fun genBinOpExpr(r: RBinOpExpr): String {
@@ -126,7 +126,7 @@ fun genUpdateStatement(s: RUpdateStatement): String {
     val setAttrs = s.setAttrs.map {
         "${it.attr.name} = ${genExpr(it.expr)}"
     }.joinToString()
-    return "UPDATE ${s.atExpr.rel.name} SET ${setAttrs} WHERE ${conditions};"
+    return "UPDATE ${s.atExpr.cls.name} SET ${setAttrs} WHERE ${conditions};"
 }
 
 fun genstatement(s: RStatement): String {
@@ -141,7 +141,7 @@ fun genstatement(s: RStatement): String {
         is RUpdateStatement -> genUpdateStatement(s)
         is RDeleteStatement -> {
             val conditions = genAtConditions(s.atExpr)
-            "DELETE FROM ${s.atExpr.rel.name} WHERE ${conditions};"
+            "DELETE FROM ${s.atExpr.cls.name} WHERE ${conditions};"
         }
         is RCallStatement -> {
             if (s.expr.fname in specialOps)
@@ -159,8 +159,8 @@ fun genExpr(expr: RExpr): String {
         is RVarRef -> "_" + expr.attr.name
         is RAtExpr -> genAtExpr(expr)
         is RBinOpExpr -> genBinOpExpr(expr)
-        is RStringLiteral -> "'${expr.literal}'" // TODO: esscape
-        is RIntegerLiteral -> expr.literal.toString()
+        is RStringLiteral -> "'${expr.value}'" // TODO: esscape
+        is RIntegerLiteral -> expr.value.toString()
         is RByteALiteral -> "E'\\\\x${expr.literal.toHex()}'"
         is RFunCallExpr -> (
                 if (expr.fname == "json")
@@ -190,10 +190,8 @@ fun genop(opDefinition: ROperation): String {
 
 fun gensql(model: RModule): String {
     var s = rowid_sql;
-    for (rel in model.relations) {
-        when (rel) {
-            is RClass -> s += genclass(rel)
-        }
+    for (cls in model.classes) {
+        s += genclass(cls)
     }
     for (op in model.operations) {
         s += genop(op)

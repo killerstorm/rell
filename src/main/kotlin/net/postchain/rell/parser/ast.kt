@@ -17,9 +17,30 @@ class S_Attribute(val name: String, val type: String) {
 class S_Key(val attrNames: List<String>)
 class S_Index(val attrNames: List<String>)
 
+internal class ModuleCompilationContext {
+    val typeMap = mutableMapOf<String, RType>(
+            "text" to RTextType,
+            "byte_array" to RByteArrayType,
+            "integer" to RIntegerType,
+            "pubkey" to RByteArrayType,
+            "name" to RTextType,
+            "timestamp" to RTimestampType,
+            "signer" to RSignerType,
+            "guid" to RGUIDType,
+            "tuid" to RTextType,
+            "json" to RJSONType,
+            "retval json" to RJSONType,
+            "retval require" to RUnitType
+    )
+
+    val classes = mutableMapOf<String, RClass>()
+    val operations = mutableListOf<ROperation>()
+    val queries = mutableMapOf<String, RQuery>()
+}
+
 internal class CompilationScopeEntry(val attr: RAttrib, val offset: Int)
 
-internal class ExprCompilationContext(val parent: ExprCompilationContext?) {
+internal class ExprCompilationContext(val modCtx: ModuleCompilationContext, val parent: ExprCompilationContext?) {
     val startOffset: Int = if (parent == null) 0 else parent.startOffset + parent.locals.size
     val locals = mutableMapOf<String, CompilationScopeEntry>()
 
@@ -89,6 +110,9 @@ class S_UnaryExpr(val op: String, val expr: S_Expression): S_Expression() {
 
 class S_SelectExpr(val className: String, val exprs: List<S_Expression>): S_Expression() {
     internal override fun compile(ctx: ExprCompilationContext): RExpr {
+        val cls = ctx.modCtx.classes[className]
+        Preconditions.checkState(cls != null, "Unknown class: [%s]", className)
+
         TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
     }
 }
@@ -157,33 +181,16 @@ class S_AttributeClause(val attr: S_Attribute): S_RelClause()
 class S_KeyClause(val attrs: List<S_Attribute>): S_RelClause()
 class S_IndexClause(val attrs: List<S_Attribute>): S_RelClause()
 
-internal class ModuleCompilationContext {
-    val typeMap = mutableMapOf<String, RType>(
-            "text" to RTextType,
-            "byte_array" to RByteArrayType,
-            "integer" to RIntegerType,
-            "pubkey" to RByteArrayType,
-            "name" to RTextType,
-            "timestamp" to RTimestampType,
-            "signer" to RSignerType,
-            "guid" to RGUIDType,
-            "tuid" to RTextType,
-            "json" to RJSONType,
-            "retval json" to RJSONType,
-            "retval require" to RUnitType
-    )
-
-    val relations = mutableListOf<RRel>()
-    val operations = mutableListOf<ROperation>()
-    val queries = mutableMapOf<String, RQuery>()
-}
-
 sealed class S_Definition(val identifier: String) {
     internal abstract fun compile(ctx: ModuleCompilationContext)
 }
 
-abstract class S_RelDefinition (identifier: String, val attributes: List<S_Attribute>,
-                            val keys: List<S_Key>, val indices: List<S_Index>): S_Definition(identifier)
+sealed class S_RelDefinition (
+        identifier: String,
+        val attributes: List<S_Attribute>,
+        val keys: List<S_Key>,
+        val indices: List<S_Index>
+): S_Definition(identifier)
 
 class S_ClassDefinition(
         identifier: String,
@@ -193,10 +200,15 @@ class S_ClassDefinition(
 ) : S_RelDefinition(identifier, attributes, keys, indices)
 {
     internal override fun compile(ctx: ModuleCompilationContext) {
-//        val rclass = makeRClass(def, typeMap)
-//        relations.add(rclass)
-//        typeMap[rclass.name] = RInstanceRefType(rclass.name, rclass)
-        TODO("Not implemented")
+        Preconditions.checkState(!(identifier in ctx.typeMap), "Duplicated type name: [%s]", identifier)
+
+        val rAttrs = compileAttrs(ctx.typeMap, attributes)
+        val rKeys = keys.map { RKey(it.attrNames.toTypedArray()) }
+        val rIndexes = indices.map { RIndex(it.attrNames.toTypedArray()) }
+        val rClass = RClass(identifier, rKeys.toTypedArray(), rIndexes.toTypedArray(), rAttrs.toTypedArray())
+
+        ctx.classes[rClass.name] = rClass
+        ctx.typeMap[rClass.name] = RInstanceRefType(rClass.name, rClass)
     }
 }
 
@@ -238,16 +250,19 @@ class S_QueryDefinition(
     internal override fun compile(ctx: ModuleCompilationContext) {
         Preconditions.checkState(!ctx.queries.containsKey(identifier), "Duplicated query name: [%s]", identifier)
 
-        val rArgs = compileArgs(ctx.typeMap, args)
+        val rArgs = compileAttrs(ctx.typeMap, args)
 
-        val exprCtx = ExprCompilationContext(null)
+        val exprCtx = ExprCompilationContext(ctx, null)
+        val rParams = mutableListOf<Int>()
         for (rArg in rArgs) {
-            exprCtx.add(rArg)
+            val entry = exprCtx.add(rArg)
+            rParams.add(entry.offset)
         }
 
         val statements = body.compile(exprCtx)
 
-        ctx.queries.put(identifier, RQuery(identifier, rArgs.toTypedArray(), statements))
+        val rQuery = RQuery(identifier, rParams.toTypedArray(), statements)
+        ctx.queries.put(identifier, rQuery)
     }
 }
 
@@ -259,11 +274,11 @@ class S_ModuleDefinition(val definitions: List<S_Definition>) {
             def.compile(ctx)
         }
 
-        return RModule(ctx.relations.toTypedArray(), ctx.operations.toTypedArray(), ctx.queries.values.toTypedArray())
+        return RModule(ctx.classes.values.toTypedArray(), ctx.operations.toTypedArray(), ctx.queries.values.toTypedArray())
     }
 }
 
-internal fun compileArgs(types: TypeMap, args: List<S_Attribute>): List<RAttrib> {
+private fun compileAttrs(types: TypeMap, args: List<S_Attribute>): List<RAttrib> {
     val names = mutableSetOf<String>()
     val res = mutableListOf<RAttrib>()
     for (arg in args) {
