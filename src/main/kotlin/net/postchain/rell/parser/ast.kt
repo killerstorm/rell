@@ -12,6 +12,7 @@ class S_BinOp(val op: String, val left: S_Expression, val right: S_Expression): 
 class S_AtExpr(val clasname: String, val where: List<S_BinOp>): S_Expression()
 class S_FunCallExpr(val fname: String, val args: List<S_Expression>): S_Expression()
 class S_AttrExpr(val name: String, val expr: S_Expression)
+
 sealed class S_Statement
 class S_BindStatement(val varname: String, val expr: S_Expression): S_Statement()
 class S_CreateStatement(val classname: String, val attrs: List<S_AttrExpr>): S_Statement()
@@ -19,6 +20,8 @@ class S_CallStatement(val fname: String, val args: List<S_Expression>): S_Statem
 class S_FromStatement(val from: S_AtExpr, val attrs: List<String>): S_Statement()
 class S_UpdateStatement(val what: S_AtExpr, val attrs: List<S_AttrExpr>): S_Statement()
 class S_DeleteStatement(val what: S_AtExpr): S_Statement()
+class S_ReturnStatement(val expr: S_Expression): S_Statement()
+
 sealed class S_RelClause
 class S_AttributeClause(val attr: S_Attribute): S_RelClause()
 class S_KeyClause(val attrs: List<S_Attribute>): S_RelClause()
@@ -32,5 +35,10 @@ class S_ClassDefinition (identifier: String, attributes: List<S_Attribute>,
     : S_RelDefinition(identifier, attributes, keys, indices)
 
 class S_OpDefinition(identifier: String, var args: List<S_Attribute>, val statements: List<S_Statement>): S_Definition(identifier)
-class S_QueryDefinition(identifier: String, var args: List<S_Attribute>, val statements: List<S_Statement>): S_Definition(identifier)
+
+sealed class S_QueryBody
+class S_QueryBodyShort(val expression: S_Expression): S_QueryBody()
+class S_QueryBodyFull(val statements: List<S_Statement>): S_QueryBody()
+class S_QueryDefinition(identifier: String, var args: List<S_Attribute>, val body: S_QueryBody): S_Definition(identifier)
+
 class S_ModuleDefinition(val definitions: List<S_Definition>)

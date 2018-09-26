@@ -38,6 +38,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     val OPER by token("operation\\b")
     val QUERY by token("query\\b")
     val VAL by token("val\\b")
+    val RETURN by token("return\\b")
     private val NUMBER by token("\\d+")
     val HEXLIT by token("x\"[0123456789abcdefABCDEF]*\"")
     val STRINGLIT by token("\".*?\"")
@@ -110,7 +111,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     val anyExpr by (funcallExpr or binExpr or literalExpr or atExpr or varExpr)
 
-    val bindStatement by (-VAL * id * -EQLS * anyExpr * -SEMI) map { (varname, expr) -> S_BindStatement(varname, expr) }
+    val valStatement by (-VAL * id * -EQLS * anyExpr * -SEMI) map { (varname, expr) -> S_BindStatement(varname, expr) }
 
     val callStatement by ( id * -LPAR * separatedTerms(anyExpr, COMMA, false) * -RPAR * -SEMI) map {
         (fname, args) ->
@@ -142,17 +143,33 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         S_FromStatement(_atExpr, identifers)
     }
 
-    val statement by (bindStatement or createStatement or callStatement or updateStatement or deleteStatement)
+    val returnStatement by (-RETURN * anyExpr * -SEMI) map {
+        expr ->
+        S_ReturnStatement(expr)
+    }
+
+    val statement by (valStatement or createStatement or callStatement or updateStatement or deleteStatement or returnStatement)
 
     val opDefinition by (-OPER * id * -LPAR * separatedTerms(relAttribute, COMMA, true) * -RPAR
             * -LCURL * oneOrMore(statement) * -RCURL) map {
         (identifier, args, statements) ->
         S_OpDefinition(identifier, args, statements)
     }
+
+    val queryBodyShort by (-EQLS * anyExpr * -SEMI) map {
+        expr ->
+        S_QueryBodyShort(expr)
+    }
+
+    val queryBodyFull by (-LCURL * oneOrMore(statement) * -RCURL) map {
+        statements ->
+        S_QueryBodyFull(statements)
+    }
+
     val queryDefinition by (-QUERY * id * -LPAR * separatedTerms(relAttribute, COMMA, true) * -RPAR
-            * -LCURL * oneOrMore(statement) * -RCURL) map {
-        (identifier, args, statements) ->
-        S_QueryDefinition(identifier, args, statements)
+            * (queryBodyShort or queryBodyFull)) map {
+        (identifier, args, body) ->
+        S_QueryDefinition(identifier, args, body)
     }
 
     val anyDef by (classDef or relDef or opDefinition or queryDefinition)
