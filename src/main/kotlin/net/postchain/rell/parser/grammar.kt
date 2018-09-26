@@ -18,11 +18,22 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val SEMI by token(";")
     private val COMMA by token(",")
 
-    private val A_OPERATOR by token("[\\+\\-\\*/%]")
-    private val C_OPERATOR by token("==|!=|[<>]=?")
-    private val L_OPERATOR by token("or\\b|and\\b|not\\b")
+    private val EQ by token("=")
+    private val EQEQ by token("==")
+    private val NE by token("!=")
+    private val LT by token("<")
+    private val GT by token(">")
+    private val LE by token("<=")
+    private val GE by token(">=")
 
-    private val EQLS by token("=")
+    private val PLUS by token("\\+")
+    private val MINUS by token("-")
+    private val DIV by token("/")
+    private val MOD by token("%")
+
+    val AND by token("and\\b")
+    val OR by token("or\\b")
+    val NOT by token("not\\b")
 
     val CREATE by token("create\\b")
     val UPDATE by token("update\\b")
@@ -71,20 +82,47 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     })
     val literalExpr = (stringLiteral or hexLiteral or integerLiteral)
 
-    val operator = (A_OPERATOR or L_OPERATOR or C_OPERATOR) map { it.text }
+    val arithOperator = (
+            PLUS
+            or MINUS
+            or DIV
+            or MOD
+    ) map { it.text }
+
+    val comparisonOperator = (
+            EQEQ
+            or NE
+            or LT
+            or GT
+            or LE
+            or GE
+    ) map { it.text }
+
+    val logicOperator = (
+            AND
+            or OR
+            or NOT
+    ) map { it.text }
+
+    val operator = (
+            arithOperator
+            or logicOperator
+            or comparisonOperator
+    ) map { it }
+
     val binExpr: Parser<S_BinOp> = (-LPAR * parser(this::anyExpr) * operator * parser(this::anyExpr) * -RPAR) map {
         (lexpr, oper, rexpr) ->
         S_BinOp(oper, lexpr, rexpr)
     }
 
-    val whereExpr_expl: Parser<S_BinOp> by (id * -EQLS * parser(this::anyExpr)) map {
+    val whereExpr_expl: Parser<S_BinOp> by (id * -EQ * parser(this::anyExpr)) map {
         (key, value) ->
         S_BinOp("=", S_VarRef(key), value)
     }
 
-    val whereExpr_C: Parser<S_BinOp> by (id * C_OPERATOR * parser(this::anyExpr)) map {
+    val whereExpr_C: Parser<S_BinOp> by (id * comparisonOperator * parser(this::anyExpr)) map {
         (key, op, value) ->
-        S_BinOp(op.text, S_VarRef(key), value)
+        S_BinOp(op, S_VarRef(key), value)
     }
 
     val whereExpr_impl : Parser<S_BinOp> by (parser(this::anyExpr)) map { e ->
@@ -105,14 +143,14 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     val anyExpr by (funcallExpr or binExpr or literalExpr or atExpr or varExpr)
 
-    val valStatement by (-VAL * id * -EQLS * anyExpr * -SEMI) map { (varname, expr) -> S_ValStatement(varname, expr) }
+    val valStatement by (-VAL * id * -EQ * anyExpr * -SEMI) map { (varname, expr) -> S_ValStatement(varname, expr) }
 
     val callStatement by ( id * -LPAR * separatedTerms(anyExpr, COMMA, false) * -RPAR * -SEMI) map {
         (fname, args) ->
         S_CallStatement(fname, args)
     }
 
-    val attrExpr_expl = (id * -EQLS * anyExpr) map { (i, e) -> S_AttrExpr(i, e) }
+    val attrExpr_expl = (id * -EQ * anyExpr) map { (i, e) -> S_AttrExpr(i, e) }
     val attrExpr_impl = (anyExpr) map { e ->
         S_AttrExpr(inferName(e), e)
     }
@@ -150,7 +188,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         S_OpDefinition(identifier, args, statements)
     }
 
-    val queryBodyShort by (-EQLS * anyExpr * -SEMI) map {
+    val queryBodyShort by (-EQ * anyExpr * -SEMI) map {
         expr ->
         S_QueryBodyShort(expr)
     }
