@@ -115,7 +115,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     val baseExprTail by ( baseExprTailAttribute or baseAttrTailCall )
 
     val baseExpr: Parser<S_Expression> by ( baseExprHead * zeroOrMore(baseExprTail) ) map {
-        ( head, tail ) -> S_BaseExpr(head, tail)
+        ( head, tail ) -> if (tail.isEmpty()) head else S_BaseExpr(head, tail)
     }
 
     val selectExpr by ( id * -AT * -LCURL * zeroOrMore(parser(this::expression)) * -RCURL ) map {
@@ -123,20 +123,16 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         S_SelectExpr(className, exprs)
     }
 
-//    val nameExpr: Parser<S_Expression> by ( id * zeroOrMore(baseExprTail) ) map {
-//        ( name, tail ) -> S_BaseExpr(S_NameExpr(name), tail)
-//    }
+    val operandExpr: Parser<S_Expression> by ( selectExpr or baseExpr )
 
-    val operandExpr: Parser<S_Expression> by ( selectExpr or baseExpr /*or selectExpr or nameExpr*/ )
-
-    val unaryExprSub by ( unaryOperator * operandExpr ) map { (op, expr) -> S_UnaryExpr(op, expr) }
-
-    val unaryExpr: Parser<S_Expression> by ( operandExpr or unaryExprSub )
+    val unaryExpr by ( optional(unaryOperator) * operandExpr ) map { (op, expr) ->
+        if (op == null) expr else S_UnaryExpr(op, expr)
+    }
 
     val binaryExprOperand by ( binaryOperator * unaryExpr ) map { ( op, expr ) -> S_BinaryExprRight(op, expr) }
 
     val binaryExpr by ( unaryExpr * zeroOrMore(binaryExprOperand) ) map { ( left, rights ) ->
-        S_BinaryExpr(left, rights)
+        if (rights.isEmpty()) left else S_BinaryExpr(left, rights)
     }
 
     val expression: Parser<S_Expression> by binaryExpr
