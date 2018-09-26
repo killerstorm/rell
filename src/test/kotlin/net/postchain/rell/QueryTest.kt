@@ -4,6 +4,7 @@ import com.github.h0tk3y.betterParse.grammar.parseToEnd
 import com.github.h0tk3y.betterParse.parser.AlternativesFailure
 import com.github.h0tk3y.betterParse.parser.ErrorResult
 import com.github.h0tk3y.betterParse.parser.ParseException
+import net.postchain.rell.model.makeModule
 import net.postchain.rell.parser.S_Grammar
 import net.postchain.rell.parser.S_ModuleDefinition
 import org.apache.commons.lang3.builder.RecursiveToStringStyle
@@ -53,8 +54,9 @@ class QueryTest {
 
     private fun check(code: String, expectedResult: String) {
         val ast = parse(code)
+        val model = makeModule(ast)
 
-        println(ToStringBuilder.reflectionToString(ast, StrStyle()))
+        println(ToStringBuilder.reflectionToString(model, StrStyle()))
         //val actualResult = execute(code)
         //assertEquals(expectedResult, actualResult)
     }
