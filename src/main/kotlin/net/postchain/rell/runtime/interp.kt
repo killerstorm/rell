@@ -2,9 +2,9 @@ package net.postchain.rell.runtime
 
 import net.postchain.rell.model.*
 
-typealias RTEnv = Array<Any>
+typealias RTEnv = Array<*>
 typealias RTF<T> = (RTEnv) -> T
-typealias EnvMap = (n: String) -> Int
+typealias EnvMap = (n: String) -> List<Int>
 
 fun r_add_long(a: RTF<Long>, b: RTF<Long>): RTF<Long> {
     return { a(it) + b(it) }
@@ -17,15 +17,38 @@ fun make_long_bin_op(em: EnvMap, exp: RBinOpExpr): RTF<Long> {
     }
 }
 
-fun <T>make_var_ref(idx: Int): RTF<T> {
-    return { env -> (env[idx] as T)}
+fun <T>make_var_ref(em: EnvMap, name: String): RTF<T> {
+    val indexes = em(name)
+    return when (indexes.size) {
+        1 -> {
+            val idx = indexes[0]
+            { env -> env[idx] as T}
+        }
+        2 -> {
+            val idx1 = indexes[0]
+            val idx2 = indexes[1]
+            { env ->
+                val env2 = env[idx1] as RTEnv
+                env2[idx2] as T
+            }
+        }
+        else -> {
+            env ->
+            var x : Any? = env
+            for (i in 0 until indexes.size) {
+                x = (x as RTEnv)[i]
+            }
+            x as T
+        }
+    }
 }
 
 fun make_long_fun(em: EnvMap, exp: RExpr): RTF<Long> {
     return when (exp) {
         is RBinOpExpr -> make_long_bin_op(em, exp)
-        is RVarRef -> make_var_ref(em(exp._var.name))
+        is RVarRef -> make_var_ref(em, exp._var.name)
         is RIntegerLiteral -> { _ -> exp.literal }
+        is RFuncall -> make_funcall(em, exp) as RTF<Long>
         else -> throw Exception("Cannot handle expresssion type")
     }
 }
@@ -79,6 +102,7 @@ fun make_fun(em: EnvMap, exp: RExpr): RTF<Any> {
         is RIntegerType -> make_long_fun(em, exp)
         is RUnitType -> make_unit_fun(em, exp)
         is RBooleanType -> make_boolean_fun(em, exp)
+        is RClosureType -> make_closure(em, exp as RLambda)
         else -> throw Exception("Cannot handle expresssion type")
     }
 }
@@ -109,7 +133,7 @@ fun buildEnvMap(op: ROperation): EnvMap {
     for (p in op.params) add(p.name)
     for (s in op.statements) {
     }
-    return { name -> m[name]!!}
+    return { name -> listOf(m[name]!!)}
 }
 
 fun make_operation(op: ROperation): RTF<Unit> {
