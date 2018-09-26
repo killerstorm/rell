@@ -6,10 +6,11 @@ import net.postchain.rell.model.RLambda
 class RTClosure (val parentEnv: RTEnv, val argCount: Int, val rtf: RTF<Any>) {
     fun call(args: List<Any?>): Any {
         assert(args.size == argCount)
-        val env = arrayOfNulls<Any>(argCount + 1)
-        env[0] = parentEnv
+        val env = arrayOfNulls<Any>(argCount + 2)
+        env[0] = parentEnv[0] // copy GlobalContext
+        env[1] = parentEnv
         for (i in 0 until argCount) {
-            env[1 + i] = args[i]
+            env[i + 2] = args[i]
         }
         return rtf(env)
     }
@@ -17,7 +18,8 @@ class RTClosure (val parentEnv: RTEnv, val argCount: Int, val rtf: RTF<Any>) {
 
 fun make_closure(parentEM: EnvMap, lambda: RLambda): RTF<RTClosure> {
     val closureOwnEM = mutableMapOf<String, Int>()
-    closureOwnEM["*parent-env*"] = 0
+    closureOwnEM["*global*"] = 0
+    closureOwnEM["*parentEnv*"] = 1
     lambda.args.forEach( { closureOwnEM[it.name] = closureOwnEM.size })
     val closureEM = {
         name: String ->

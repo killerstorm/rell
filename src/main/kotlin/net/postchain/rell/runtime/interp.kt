@@ -6,6 +6,9 @@ typealias RTEnv = Array<*>
 typealias RTF<T> = (RTEnv) -> T
 typealias EnvMap = (n: String) -> List<Int>
 
+class RTGlobalContext (val conn: java.sql.Connection?)
+
+
 fun r_add_long(a: RTF<Long>, b: RTF<Long>): RTF<Long> {
     return { a(it) + b(it) }
 }
@@ -124,21 +127,46 @@ fun make_statement(em: EnvMap, s: RStatement): RTF<Unit> {
     }
 }
 
-fun buildEnvMap(op: ROperation): EnvMap {
+fun buildEnvMap(op: ROperation): Pair<EnvMap, Int> {
     val m = mutableMapOf<String, Int>()
-    //m["*conn*"] = 0
+    m["*global*"] = 0
     fun add(n: String) {
         m[n] = m.size
     }
     for (p in op.params) add(p.name)
+    // TODO: collect variable bindings
     for (s in op.statements) {
     }
-    return { name -> listOf(m[name]!!)}
+    return Pair({ name -> listOf(m[name]!!)}, m.size)
 }
 
-fun make_operation(op: ROperation): RTF<Unit> {
-    val em = buildEnvMap(op)
+fun make_operation_rtf(em: EnvMap, op: ROperation): RTF<Unit> {
     val stmts = op.statements.map { make_statement(em, it) }
     return make_seq(stmts)
 }
 
+class RTOperation(val opModel: ROperation,
+                  val envSize: Int,
+                  val nArgs: Int,
+                  val rtf: RTF<Unit>) {
+    fun call(context: RTGlobalContext, args: Array<Any?>) {
+        val env = arrayOfNulls<Any>(envSize)
+        env[0] = context
+        assert(nArgs == args.size)
+        for (i in 0 until nArgs) {
+            env[1 + i] = args[i]
+        }
+        rtf(env)
+    }
+}
+
+fun make_operation(op: ROperation): RTOperation {
+    val envMap = buildEnvMap(op)
+    val rtf = make_operation_rtf(envMap.first, op)
+    return RTOperation(
+            op,
+            envMap.second,
+            op.params.size,
+            rtf
+    )
+}

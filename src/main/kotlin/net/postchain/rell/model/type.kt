@@ -27,4 +27,5 @@ val jsonSQLDataType = DefaultDataType(null as SQLDialect?, String::class.java, "
 object RJSONType: RPrimitiveType("json", jsonSQLDataType)
 class RInstanceRefType (className: String, val rclass: RClass): RType(className)
 
+// TODO: make this more elaborate
 class RClosureType(name: String): RType(name)

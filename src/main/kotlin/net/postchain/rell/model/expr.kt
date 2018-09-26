@@ -11,4 +11,6 @@ class RFunCallExpr(type: RType, val fname: String, val args: List<RExpr>): RExpr
 class RAttrExpr(val attr: RAttrib, val expr: RExpr)
 
 class RLambda(type: RType, val args: List<RAttrib>, val expr: RExpr): RExpr(type)
+
+// TODO: RFuncall is probably unnecessary
 class RFuncall(type: RType, val lambdaExpr: RLambda, val args: List<RExpr>): RExpr(type)
