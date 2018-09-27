@@ -29,6 +29,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     private val PLUS by token("\\+")
     private val MINUS by token("-")
+    private val MUL by token("\\*")
     private val DIV by token("/")
     private val MOD by token("%")
 
@@ -51,7 +52,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val VAL by token("val\\b")
     private val RETURN by token("return\\b")
     private val NUMBER by token("\\d+")
-     private val HEXLIT by token("x\"[0123456789abcdefABCDEF]*\"")
+    private val HEXLIT by token("x\"[0123456789abcdefABCDEF]*\"")
     private val STRINGLIT by token("\".*?\"")
     private val IDT by token("\\w+")
     private val id by (IDT) use { text }
@@ -75,22 +76,23 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     }
 
     private val binaryOperator = (
-            EQ
-            or EQEQ
-            or NE
-            or LT
-            or GT
-            or LE
-            or GE
+            ( EQ map { S_BinaryOperatorEq } )
+            or ( EQEQ map { S_BinaryOperatorEq } )
+            or ( NE map { S_BinaryOperatorNe } )
+            or ( LT map { S_BinaryOperatorLt } )
+            or ( GT map { S_BinaryOperatorGt } )
+            or ( LE map { S_BinaryOperatorLe } )
+            or ( GE map { S_BinaryOperatorGe } )
 
-            or PLUS
-            or MINUS
-            or DIV
-            or MOD
+            or ( PLUS map { S_BinaryOperatorPlus } )
+            or ( MINUS map { S_BinaryOperatorMinus } )
+            or ( MUL map { S_BinaryOperatorMul } )
+            or ( DIV map { S_BinaryOperatorDiv } )
+            or ( MOD map { S_BinaryOperatorMod } )
 
-            or AND
-            or OR
-    ) map { it.text }
+            or ( AND map { S_BinaryOperatorAnd } )
+            or ( OR map { S_BinaryOperatorOr } )
+    )
 
     private val unaryOperator = (
             PLUS
@@ -256,7 +258,7 @@ private class BaseExprTailCall(val args: List<S_Expression>): BaseExprTail() {
     override fun toExpr(base: S_Expression): S_Expression = S_CallExpr(base, args)
 }
 
-private class BinaryExprTail(val op: String, val expr: S_Expression)
+private class BinaryExprTail(val op: S_BinaryOperator, val expr: S_Expression)
 
 fun parseRellCode(s: String): S_ModuleDefinition {
     return S_Grammar.parseToEnd(s)
