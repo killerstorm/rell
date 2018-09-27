@@ -11,10 +11,9 @@ import net.postchain.rell.parser.S_ModuleDefinition
 import net.postchain.rell.runtime.RtIntValue
 import net.postchain.rell.runtime.RtTextValue
 import net.postchain.rell.runtime.RtValue
-import org.apache.commons.lang3.builder.RecursiveToStringStyle
-import org.apache.commons.lang3.builder.ToStringBuilder
-import org.apache.commons.lang3.builder.ToStringStyle
-import org.jooq.impl.ParserException
+import net.postchain.rell.sql.SqlConnector
+import net.postchain.rell.sql.SqlExecutor
+import net.postchain.rell.sql.genclass
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -29,10 +28,10 @@ class QueryTest {
     }
 
     @Test fun testResultParameter() {
-        check("query q(a: integer) = a;", arrayOf(RtIntValue(12345)), "int[12345]")
-        check("query q(a: text) = a;", arrayOf(RtTextValue("Hello")), "text[Hello]")
-        check("query q(a: integer, b: text) = a;", arrayOf(RtIntValue(12345), RtTextValue("Hello")), "int[12345]")
-        check("query q(a: integer, b: text) = b;", arrayOf(RtIntValue(12345), RtTextValue("Hello")), "text[Hello]")
+        check("query q(a: integer) = a;", null, arrayOf(RtIntValue(12345)), "int[12345]")
+        check("query q(a: text) = a;", null, arrayOf(RtTextValue("Hello")), "text[Hello]")
+        check("query q(a: integer, b: text) = a;", null, arrayOf(RtIntValue(12345), RtTextValue("Hello")), "int[12345]")
+        check("query q(a: integer, b: text) = b;", null, arrayOf(RtIntValue(12345), RtTextValue("Hello")), "text[Hello]")
     }
 
     @Test fun testReturnLiteral() {
@@ -46,26 +45,57 @@ class QueryTest {
     }
 
     @Test fun testReturnSelectNoObjects() {
-        check("class user { name: text; } query q() = user @ { name = \"Bob\" } ;", "list<user>[]")
+        val inserts = """INSERT INTO "user"("rowid", "name") VALUES (11, 'Alice');"""
+        check("class user { name: text; } query q() = user @ { name = \"Bob\" } ;", inserts, "list<user>[]")
     }
 
     @Test fun testReturnSelectOneObject() {
-        check("class user { name: text; } query q() = user @ { name = \"Bob\" } ;", "list<user>[user[33]]")
+        val inserts = """
+            INSERT INTO "user"("rowid", "name") VALUES (11, 'Alice');
+            INSERT INTO "user"("rowid", "name") VALUES (33, 'Bob');
+        """
+        check("class user { name: text; } query q() = user @ { name = \"Bob\" } ;", inserts, "list<user>[user[33]]")
     }
 
     @Test fun testReturnSelectManyObjects() {
-        check("class user { name: text; } query q() = user @ { name = \"Bob\" } ;", "list<user>[user[33],user[77],user[111]]")
+        val inserts = """
+            INSERT INTO "user"("rowid", "name") VALUES (11, 'Alice');
+            INSERT INTO "user"("rowid", "name") VALUES (33, 'Bob');
+            INSERT INTO "user"("rowid", "name") VALUES (55, 'James');
+            INSERT INTO "user"("rowid", "name") VALUES (77, 'Bob');
+            INSERT INTO "user"("rowid", "name") VALUES (99, 'Victor');
+            INSERT INTO "user"("rowid", "name") VALUES (111, 'Bob');
+        """
+        check("class user { name: text; } query q() = user @ { name = \"Bob\" } ;", inserts, "list<user>[user[33],user[77],user[111]]")
     }
 
     private fun check(code: String, expectedResult: String) {
-        check(code, arrayOf(), expectedResult)
+        check(code, null, arrayOf(), expectedResult)
     }
 
-    private fun check(code: String, args: Array<RtValue>, expectedResult: String) {
+    private fun check(code: String, inserts: String, expectedResult: String) {
+        check(code, inserts, arrayOf(), expectedResult)
+    }
+
+    private fun check(code: String, inserts: String?, args: Array<RtValue>, expectedResult: String) {
         val ast = parse(code)
         val module = makeModule(ast)
-        val actualResult = execute(module, args)
-        assertEquals(expectedResult, actualResult)
+
+        SqlConnector.connect { sqlExec ->
+            for (classDef in module.classes) {
+                val sql = genclass(classDef)
+                sqlExec.execute(sql)
+                println(sql)
+                sqlExec.execute("SELECT * FROM \"user\";")
+            }
+
+            if (inserts != null) {
+                sqlExec.execute(inserts)
+            }
+
+            val actualResult = execute(module, sqlExec, args)
+            assertEquals(expectedResult, actualResult)
+        }
     }
 
     private fun parse(code: String): S_ModuleDefinition {
@@ -90,11 +120,11 @@ class QueryTest {
         }
     }
 
-    private fun execute(module: RModule, args: Array<RtValue>): String {
+    private fun execute(module: RModule, sqlExec: SqlExecutor, args: Array<RtValue>): String {
         val query = module.queries.find { it.name == "q" }
         assertNotNull(query, "Query not found")
-        val res = query?.execute(args)
-        val str = res.toString()
+        val res = query?.execute(sqlExec, args)
+        val str = if (res == null) "null" else res.toStrictString()
         return str
     }
 }

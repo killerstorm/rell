@@ -1,9 +1,8 @@
 package net.postchain.rell.model
 
-import net.postchain.rell.runtime.RtEnv
-import net.postchain.rell.runtime.RtIntValue
-import net.postchain.rell.runtime.RtTextValue
-import net.postchain.rell.runtime.RtValue
+import com.google.common.base.Preconditions
+import net.postchain.rell.runtime.*
+import java.sql.ResultSet
 
 sealed class RExpr(val type: RType) {
     abstract fun evaluate(env: RtEnv): RtValue
@@ -53,29 +52,35 @@ class RSelectClass(val rClass: RClass, val index: Int) {
     fun alias(): String = String.format("A%02d", index) //TODO do properly
 }
 
-class RSelectExpr(type: RType, val cls: RSelectClass, val where: DbExpr): RExpr(type) {
+class RSelectExpr(type: RType, val cls: RSelectClass, val where: DbExpr?): RExpr(type) {
     override fun evaluate(env: RtEnv): RtValue {
         val builder = RtSqlBuilder()
 
         //TODO specify correct columns
         //TODO do not hardcode rowid
-        builder.append("SELECT rowid FROM ")
+        builder.append("SELECT ")
+        builder.append(cls.alias())
+        builder.append(".\"rowid\"")
+        builder.append(" FROM \"")
         builder.append(cls.rClass.name)
-        builder.append(" ")
+        builder.append("\" ")
         builder.append(cls.alias())
 
-        val whereBuilder = RtSqlBuilder()
-        where.toSql(whereBuilder)
-
-        if (!whereBuilder.isEmpty()) {
+        if (where != null) {
             builder.append(" WHERE ")
-            builder.append(whereBuilder)
+            where.toSql(builder)
         }
 
-        val select = RtSelect(builder.build())
-        select.execute(env)
+        val clsType = RInstanceRefType(cls.rClass)
+        val select = RtSelect(builder.build(), listOf(clsType))
+        val resultList = select.execute(env)
 
-        TODO("TODO")
+        val result = resultList.map {
+            Preconditions.checkState(it.size == 1)
+            it[0]
+        }
+
+        return RtListValue(type, result)
     }
 }
 
@@ -118,8 +123,9 @@ class ClassDbExpr(type: RType, val cls: RSelectClass): DbExpr(type) {
 class AttributeDbExpr(type: RType, val base: DbExpr, val attrIndex: Int, val attrName: String): DbExpr(type) {
     override fun toSql(bld: RtSqlBuilder) {
         base.toSql(bld)
-        bld.append(".")
+        bld.append(".\"")
         bld.append(attrName)
+        bld.append("\"")
     }
 }
 
@@ -160,9 +166,31 @@ internal class RtSqlBuilder {
 
 internal class RtSql(val sql: String, val params: List<RExpr>)
 
-private class RtSelect(val rtSql: RtSql) {
-    fun execute(env: RtEnv) {
-        println("SQL: " + rtSql.sql)
-        TODO("TODO")
+private class RtSelect(val rtSql: RtSql, val resultTypes: List<RType>) {
+    fun execute(env: RtEnv): List<Array<RtValue>> {
+        val args = rtSql.params.map { it.evaluate(env) }
+
+        val result = mutableListOf<Array<RtValue>>()
+
+        env.sqlExec.executeQuery(rtSql.sql,
+                { stmt ->
+                    for (i in args.indices) {
+                        val expr = rtSql.params[i]
+                        val arg = args[i]
+                        expr.type.toSql(stmt, i + 1, arg)
+                    }
+                },
+                { rs ->
+                    val list = mutableListOf<RtValue>()
+                    for (i in resultTypes.indices) {
+                        val type = resultTypes[i]
+                        val value = type.fromSql(rs, i + 1)
+                        list.add(value)
+                    }
+                    result.add(list.toTypedArray())
+                }
+        )
+
+        return result
     }
 }

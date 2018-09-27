@@ -112,7 +112,7 @@ class S_NameExpr(val name: String): S_Expression() {
         Preconditions.checkState(clsAttr != null || localAttr != null, "Unknown name: [%s]", name)
 
         if (clsAttr != null) {
-            val clsType = RInstanceRefType(clsAttr.cls.rClass.name, clsAttr.cls.rClass)
+            val clsType = RInstanceRefType(clsAttr.cls.rClass)
             val clsExpr = ClassDbExpr(clsType, clsAttr.cls)
             return AttributeDbExpr(clsAttr.type, clsExpr, clsAttr.index, name)
         } else {
@@ -213,11 +213,12 @@ class S_SelectExpr(val className: String, val exprs: List<S_Expression>): S_Expr
         val compiledExprs = exprs.map { it.compileDb(dbCtx) }
         val where = makeWhere(compiledExprs)
 
-        val resType = RInstanceRefType(cls.name, cls)
-        return RSelectExpr(resType, selClass, where)
+        val clsType = RInstanceRefType(cls)
+        val listType = RListType(clsType)
+        return RSelectExpr(listType, selClass, where)
     }
 
-    private fun makeWhere(compiledExprs: List<DbExpr>): DbExpr {
+    private fun makeWhere(compiledExprs: List<DbExpr>): DbExpr? {
         val dbExprs = compiledExprs.filter { !(it is InterpretedDbExpr) }
         val rExprs = compiledExprs.filter { it is InterpretedDbExpr }.map { (it as InterpretedDbExpr).expr }
 
@@ -231,7 +232,7 @@ class S_SelectExpr(val className: String, val exprs: List<S_Expression>): S_Expr
         } else if (rTree != null) {
             return InterpretedDbExpr(rTree)
         } else {
-            throw IllegalStateException("Impossible")
+            return null
         }
     }
 
@@ -343,7 +344,7 @@ class S_ClassDefinition(
         val rClass = RClass(identifier, rKeys.toTypedArray(), rIndexes.toTypedArray(), rAttrs.toTypedArray())
 
         ctx.classes[rClass.name] = rClass
-        ctx.typeMap[rClass.name] = RInstanceRefType(rClass.name, rClass)
+        ctx.typeMap[rClass.name] = RInstanceRefType(rClass)
     }
 }
 

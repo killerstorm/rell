@@ -1,4 +1,4 @@
-package net.postchain.rell.sqlgen
+package net.postchain.rell.sql
 
 import net.postchain.rell.model.*
 import net.postchain.rell.toHex

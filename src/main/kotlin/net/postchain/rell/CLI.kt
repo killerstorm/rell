@@ -2,7 +2,7 @@ package net.postchain.rell
 
 import net.postchain.rell.model.makeModule
 import net.postchain.rell.parser.parseRellCode
-import net.postchain.rell.sqlgen.gensql
+import net.postchain.rell.sql.gensql
 import java.io.File
 
 fun main(args: Array<String>) {
