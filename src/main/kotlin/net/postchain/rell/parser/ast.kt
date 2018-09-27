@@ -88,19 +88,9 @@ class S_IntLiteral(val value: Long): S_Expression() {
     internal override fun compile(ctx: ExprCompilationContext): RExpr = RIntegerLiteral(RIntegerType, value)
 }
 
-class S_AttributeExpr(val base: S_Expression, val name: String): S_Expression() {
-    internal override fun compile(ctx: ExprCompilationContext): RExpr = TODO("TODO")
-}
-
 class S_BinaryExprRight(val op: String, val expr: S_Expression)
 
-class S_BinOp(val op: String, val left: S_Expression, val right: S_Expression): S_Expression() {
-    internal override fun compile(ctx: ExprCompilationContext): RExpr {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-    }
-}
-
-class S_BinaryExpr(val left: S_Expression, val right: List<S_BinaryExprRight>): S_Expression() {
+class S_BinaryExpr(val left: S_Expression, val right: S_Expression, val op: String): S_Expression() {
     internal override fun compile(ctx: ExprCompilationContext): RExpr = TODO("TODO")
 }
 
@@ -117,21 +107,15 @@ class S_SelectExpr(val className: String, val exprs: List<S_Expression>): S_Expr
     }
 }
 
-class S_CallExpr(val base: S_Expression, val args: List<S_Expression>): S_Expression() {
-    internal override fun compile(ctx: ExprCompilationContext): RExpr {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-    }
-}
-
-class S_AttrExpr(val name: String, val expr: S_Expression)
-
-sealed class S_BaseExprTail
-class S_BaseExprTailAttribute(val name: String): S_BaseExprTail()
-class S_BaseExprTailCall(val args: List<S_Expression>): S_BaseExprTail()
-
-class S_BaseExpr(val head: S_Expression, val tail: List<S_BaseExprTail>): S_Expression() {
+class S_AttributeExpr(val base: S_Expression, val name: String): S_Expression() {
     internal override fun compile(ctx: ExprCompilationContext): RExpr = TODO("TODO")
 }
+
+class S_CallExpr(val base: S_Expression, val args: List<S_Expression>): S_Expression() {
+    internal override fun compile(ctx: ExprCompilationContext): RExpr = TODO("TODO")
+}
+
+class S_AttrValue(val name: String, val expr: S_Expression)
 
 abstract class S_Statement {
     internal abstract fun compile(ctx: ExprCompilationContext): RStatement
@@ -145,19 +129,13 @@ class S_ValStatement(val name: String, val expr: S_Expression): S_Statement() {
     }
 }
 
-class S_CreateStatement(val classname: String, val attrs: List<S_AttrExpr>): S_Statement() {
+class S_CreateStatement(val classname: String, val attrs: List<S_AttrValue>): S_Statement() {
     internal override fun compile(ctx: ExprCompilationContext): RStatement {
         TODO("not implemented")
     }
 }
 
-class S_CallStatement(val expr: S_CallExpr): S_Statement() {
-    internal override fun compile(ctx: ExprCompilationContext): RStatement {
-        TODO("not implemented")
-    }
-}
-
-class S_UpdateStatement(val attrs: List<S_AttrExpr>): S_Statement() {
+class S_UpdateStatement(val attrs: List<S_AttrValue>): S_Statement() {
     internal override fun compile(ctx: ExprCompilationContext): RStatement {
         TODO("not implemented")
     }
