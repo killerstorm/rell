@@ -1,7 +1,7 @@
 package net.postchain.rell.runtime
 
 import net.postchain.rell.model.RFuncall
-import net.postchain.rell.model.RLambda
+import net.postchain.rell.model.RLambdaExpr
 
 class RTClosure (val parentEnv: RTEnv, val argCount: Int, val rtf: RTF<Any>) {
     fun call(args: List<Any?>): Any {
@@ -16,7 +16,7 @@ class RTClosure (val parentEnv: RTEnv, val argCount: Int, val rtf: RTF<Any>) {
     }
 }
 
-fun make_closure(parentEM: EnvMap, lambda: RLambda): RTF<RTClosure> {
+fun make_closure(parentEM: EnvMap, lambda: RLambdaExpr): RTF<RTClosure> {
     val closureOwnEM = mutableMapOf<String, Int>()
     closureOwnEM["*global*"] = 0
     closureOwnEM["*parentEnv*"] = 1

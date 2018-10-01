@@ -1,4 +1,4 @@
-package net.postchain.rell.sqlgen
+package net.postchain.rell.sql
 
 import net.postchain.rell.model.*
 import net.postchain.rell.toHex
@@ -63,18 +63,6 @@ fun genclass(classDefinition: RClass): String {
     return ddl
 }
 
-fun genAtConditions(r: RAtExpr): String {
-    return r.attrConditions.map {
-        val expr = genExpr(it.second)
-        "(${r.rel.name}.${it.first.name} = ${expr})"
-    }.joinToString(" AND ")
-}
-
-fun genAtExpr(r: RAtExpr): String {
-    val conditions = genAtConditions(r)
-    return "(SELECT rowid FROM ${r.rel.name} WHERE ${conditions})"
-}
-
 fun genBinOpExpr(r: RBinOpExpr): String {
     val left = genExpr(r.left)
     val right = genExpr(r.right)
@@ -121,14 +109,6 @@ val specialFuns = mapOf(
     "json" to ::genJSON
 )
 
-fun genUpdateStatement(s: RUpdateStatement): String {
-    val conditions = genAtConditions(s.atExpr)
-    val setAttrs = s.setAttrs.map {
-        "${it.attr.name} = ${genExpr(it.expr)}"
-    }.joinToString()
-    return "UPDATE ${s.atExpr.rel.name} SET ${setAttrs} WHERE ${conditions};"
-}
-
 fun genstatement(s: RStatement): String {
     return when (s) {
         is RCreateStatement -> {
@@ -137,11 +117,6 @@ fun genstatement(s: RStatement): String {
                 genExpr(it.expr)
             }.joinToString()
             "INSERT INTO ${s.rclass.name} (${attrNames}) VALUES (${attrValues});"
-        }
-        is RUpdateStatement -> genUpdateStatement(s)
-        is RDeleteStatement -> {
-            val conditions = genAtConditions(s.atExpr)
-            "DELETE FROM ${s.atExpr.rel.name} WHERE ${conditions};"
         }
         is RCallStatement -> {
             if (s.expr.fname in specialOps)
@@ -156,12 +131,12 @@ fun genstatement(s: RStatement): String {
 
 fun genExpr(expr: RExpr): String {
     return when (expr) {
-        is RVarRef -> "_" + expr._var.name
-        is RAtExpr -> genAtExpr(expr)
+        is RVarExpr -> "_" + expr.attr.name
+        is RAtExpr -> TODO()
         is RBinOpExpr -> genBinOpExpr(expr)
-        is RStringLiteral -> "'${expr.literal}'" // TODO: esscape
-        is RIntegerLiteral -> expr.literal.toString()
-        is RByteALiteral -> "E'\\\\x${expr.literal.toHex()}'"
+        is RStringLiteralExpr -> "'${expr.value}'" // TODO: esscape
+        is RIntegerLiteralExpr -> expr.value.toString()
+        is RByteArrayLiteralExpr -> "E'\\\\x${expr.literal.toHex()}'"
         is RFunCallExpr -> (
                 if (expr.fname == "json")
                     genJSON(expr)
@@ -190,10 +165,8 @@ fun genop(opDefinition: ROperation): String {
 
 fun gensql(model: RModule): String {
     var s = rowid_sql;
-    for (rel in model.relations) {
-        when (rel) {
-            is RClass -> s += genclass(rel)
-        }
+    for (cls in model.classes) {
+        s += genclass(cls)
     }
     for (op in model.operations) {
         s += genop(op)

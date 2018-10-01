@@ -49,8 +49,8 @@ fun <T>make_var_ref(em: EnvMap, name: String): RTF<T> {
 fun make_long_fun(em: EnvMap, exp: RExpr): RTF<Long> {
     return when (exp) {
         is RBinOpExpr -> make_long_bin_op(em, exp)
-        is RVarRef -> make_var_ref(em, exp._var.name)
-        is RIntegerLiteral -> { _ -> exp.literal }
+        is RVarExpr -> make_var_ref(em, exp.attr.name)
+        is RIntegerLiteralExpr -> { _ -> exp.value.value }
         is RFuncall -> make_funcall(em, exp) as RTF<Long>
         else -> throw Exception("Cannot handle expresssion type")
     }
@@ -105,7 +105,7 @@ fun make_fun(em: EnvMap, exp: RExpr): RTF<Any> {
         is RIntegerType -> make_long_fun(em, exp)
         is RUnitType -> make_unit_fun(em, exp)
         is RBooleanType -> make_boolean_fun(em, exp)
-        is RClosureType -> make_closure(em, exp as RLambda)
+        is RClosureType -> make_closure(em, exp as RLambdaExpr)
         else -> throw Exception("Cannot handle expresssion type")
     }
 }
