@@ -29,19 +29,5 @@ fun make_closure(parentEM: EnvMap, lambda: RLambdaExpr): RTF<RTClosure> {
             listOf(0) + parentEM(name)
         }
     }
-    val expr = make_fun(closureEM, lambda.expr)
-    return {
-        env -> RTClosure(env, lambda.args.size, expr)
-    }
-}
-
-fun make_funcall(em: EnvMap, funcall: RFuncall): RTF<Any> {
-    val closureRTF = make_closure(em, funcall.lambdaExpr)
-    val argsRTFs = funcall.args.map { make_fun(em, it) }
-    return {
-        env ->
-        val closure = closureRTF(env)
-        val evaluatedArgs = argsRTFs.map { it(env) }
-        closure.call(evaluatedArgs)
-    }
+    TODO()
 }

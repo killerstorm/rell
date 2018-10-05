@@ -28,8 +28,8 @@ val rowid_sql = """
 
 fun genclass(classDefinition: RClass): String {
     val t = ctx.createTable(classDefinition.name)
-    var q = t.column("rowid", SQLDataType.BIGINT.nullable(false))
-    val constraints = mutableListOf<Constraint>(constraint("PK_" + classDefinition.name).primaryKey("rowid"))
+    var q = t.column(ROWID_COLUMN, SQLDataType.BIGINT.nullable(false))
+    val constraints = mutableListOf<Constraint>(constraint("PK_" + classDefinition.name).primaryKey(ROWID_COLUMN))
 
     val jsonAttribSet = mutableSetOf<String>()
 
@@ -37,7 +37,7 @@ fun genclass(classDefinition: RClass): String {
         if (attr.type is RInstanceRefType) {
             constraints.add(
                     constraint("${classDefinition.name}_${attr.name}_FK")
-                            .foreignKey(attr.name).references(attr.type.name, "rowid")
+                            .foreignKey(attr.name).references(attr.type.name, ROWID_COLUMN)
             )
         } else if (attr.type is RJSONType) {
             jsonAttribSet.add(attr.name)
@@ -45,7 +45,7 @@ fun genclass(classDefinition: RClass): String {
         q = q.column(attr.name, getSQLType(attr.type).nullable(false))
     }
     for ((kidx, key) in classDefinition.keys.withIndex()) {
-        constraints.add(constraint("K_${classDefinition.name}_${kidx}").unique(*key.attribs))
+        constraints.add(constraint("K_${classDefinition.name}_${kidx}").unique(*key.attribs.toTypedArray()))
     }
     var ddl = q.constraints(*constraints.toTypedArray()).toString() + ";\n"
 
@@ -55,25 +55,12 @@ fun genclass(classDefinition: RClass): String {
             val attrName = index.attribs[0]
             index_sql = "CREATE INDEX \"IDX_${classDefinition.name}_${iidx}\" ON \"${classDefinition.name}\" USING gin (\"${attrName}\" jsonb_path_ops)"
         } else {
-            index_sql = (ctx.createIndex("IDX_${classDefinition.name}_${iidx}").on(classDefinition.name, *index.attribs)).toString();
+            index_sql = (ctx.createIndex("IDX_${classDefinition.name}_${iidx}").on(classDefinition.name, *index.attribs.toTypedArray())).toString();
         }
         ddl += index_sql + ";\n";
     }
 
     return ddl
-}
-
-fun genBinOpExpr(r: RBinOpExpr): String {
-    val left = genExpr(r.left)
-    val right = genExpr(r.right)
-    val op = when (r.op) {
-        "=", "==" -> "="
-        "+" -> "+"
-        "-" -> "-"
-        "!=" -> "<>"
-        else -> throw Exception("Op ${r.op} not supported")
-    }
-    return "(${left} ${op} ${right})"
 }
 
 fun genRequire(s: RFunCallExpr): String {
@@ -110,30 +97,14 @@ val specialFuns = mapOf(
 )
 
 fun genstatement(s: RStatement): String {
-    return when (s) {
-        is RCreateStatement -> {
-            val attrNames = "rowid, " + (s.attrs.map { it.attr.name }.joinToString())
-            val attrValues = "make_rowid(), " + s.attrs.map {
-                genExpr(it.expr)
-            }.joinToString()
-            "INSERT INTO ${s.rclass.name} (${attrNames}) VALUES (${attrValues});"
-        }
-        is RCallStatement -> {
-            if (s.expr.fname in specialOps)
-                return specialOps[s.expr.fname]!!(s.expr)
-            else {
-                throw Exception("Cannot call")
-            }
-        }
-        else -> throw Exception("Statement not supported")
-    }
+    TODO()
 }
 
 fun genExpr(expr: RExpr): String {
     return when (expr) {
         is RVarExpr -> "_" + expr.attr.name
         is RAtExpr -> TODO()
-        is RBinOpExpr -> genBinOpExpr(expr)
+        is RBinaryExpr -> TODO()
         is RStringLiteralExpr -> "'${expr.value}'" // TODO: esscape
         is RIntegerLiteralExpr -> expr.value.toString()
         is RByteArrayLiteralExpr -> "E'\\\\x${expr.literal.toHex()}'"

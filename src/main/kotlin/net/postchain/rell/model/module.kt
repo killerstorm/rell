@@ -1,8 +1,7 @@
 package net.postchain.rell.model
 
 import net.postchain.rell.runtime.RtEnv
-import net.postchain.rell.runtime.RtErrWrongArgumentType
-import net.postchain.rell.runtime.RtErrWrongNumberOfArguments
+import net.postchain.rell.runtime.RtError
 import net.postchain.rell.runtime.RtValue
 import net.postchain.rell.sql.SqlExecutor
 import java.lang.IllegalStateException
@@ -16,7 +15,7 @@ class ROperation(val name: String, val params: Array<RAttrib>, val statements: A
 class RQuery(val name: String, val params: Array<RExternalParam>, val statements: Array<RStatement>) {
     fun execute(sqlExec: SqlExecutor, args: Array<RtValue>): RtValue {
         if (args.size != params.size) {
-            throw RtErrWrongNumberOfArguments(
+            throw RtError("query_wrong_arg_count:$name:${params.size}:${args.size}",
                     "Wrong number of arguments for query $name: ${args.size} instead of ${params.size}")
         }
 
@@ -26,7 +25,8 @@ class RQuery(val name: String, val params: Array<RExternalParam>, val statements
             val arg = args[i]
             val argType = arg.type()
             if (argType != param.type) {
-                throw RtErrWrongArgumentType("Wrong type of argument ${param.name} for query $name: " +
+                throw RtError("query_wrong_arg_type:$name:${param.type.toStrictString()}:${argType.toStrictString()}",
+                        "Wrong type of argument ${param.name} for query $name: " +
                         "${argType.toStrictString()} instead of ${param.type.toStrictString()}")
             }
             env.set(param.offset, arg)
@@ -44,7 +44,7 @@ class RQuery(val name: String, val params: Array<RExternalParam>, val statements
 }
 
 class RModule(
-        val classes: Array<RClass>,
-        val operations: Array<ROperation>,
-        val queries: Array<RQuery>
+        val classes: List<RClass>,
+        val operations: List<ROperation>,
+        val queries: List<RQuery>
 )

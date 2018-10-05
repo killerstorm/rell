@@ -81,9 +81,10 @@ object RJSONType: RPrimitiveType("json", jsonSQLDataType) {
 }
 
 class RInstanceRefType(val rclass: RClass): RType(rclass.name) {
-    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = TODO("TODO")
+    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = stmt.setLong(idx, value.asObjectId())
     override fun fromSql(rs: ResultSet, idx: Int): RtValue = RtObjectValue(this, rs.getLong(idx))
     override fun toStrictString(): String = name
+    override fun equals(other: Any?): Boolean = other is RInstanceRefType && other.rclass == rclass
 }
 
 // TODO: make this more elaborate
@@ -99,5 +100,8 @@ class RListType(val elementType: RType): RType("list<${elementType.toStrictStrin
     override fun toStrictString(): String = name
 }
 
-sealed class SqlType
-class ClassSqlType(cls: RClass): SqlType()
+class RTupleType(val elementTypes: List<RType>): RType("(${elementTypes.joinToString(",") { it.toStrictString() }})") {
+    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = TODO()
+    override fun fromSql(rs: ResultSet, idx: Int): RtValue = TODO()
+    override fun toStrictString(): String = name
+}

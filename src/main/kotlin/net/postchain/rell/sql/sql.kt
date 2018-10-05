@@ -5,6 +5,8 @@ import java.sql.DriverManager
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 
+val ROWID_COLUMN = "rowid"
+
 object SqlConnector {
     fun <T> connect(block: (SqlExecutor) -> T): T {
         DriverManager.getConnection("jdbc:h2:mem:test;MODE=PostgreSQL").use { con ->

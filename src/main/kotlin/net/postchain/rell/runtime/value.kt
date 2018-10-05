@@ -9,6 +9,7 @@ sealed class RtValue {
     open fun asBoolean(): Boolean = throw IllegalStateException("$javaClass")
     open fun asInteger(): Long = throw IllegalStateException("$javaClass")
     open fun asString(): String = throw IllegalStateException("$javaClass")
+    open fun asObjectId(): Long = throw IllegalStateException("$javaClass")
 
     abstract fun toStrictString(): String
 }
@@ -36,6 +37,7 @@ class RtTextValue(val value: String): RtValue() {
 
 class RtObjectValue(val type: RInstanceRefType, val rowid: Long): RtValue() {
     override fun type(): RType = type
+    override fun asObjectId(): Long = rowid
     override fun toStrictString(): String = "${type.name}[$rowid]"
     override fun toString(): String = toStrictString()
 }
@@ -43,6 +45,12 @@ class RtObjectValue(val type: RInstanceRefType, val rowid: Long): RtValue() {
 class RtListValue(val type: RType, val elements: List<RtValue>): RtValue() {
     override fun type(): RType = type
     override fun toStrictString(): String = "${type.toStrictString()}[${elements.joinToString(",") { it.toStrictString() }}]"
+    override fun toString(): String = elements.toString()
+}
+
+class RtTupleValue(val type: RTupleType, val elements: List<RtValue>): RtValue() {
+    override fun type(): RType = type
+    override fun toStrictString(): String = "(${elements.joinToString(",") { it.toStrictString() }})"
     override fun toString(): String = elements.toString()
 }
 

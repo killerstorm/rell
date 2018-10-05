@@ -40,25 +40,24 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val CREATE by token("create\\b")
     private val UPDATE by token("update\\b")
     private val DELETE by token("delete\\b")
-    private val FROM by token("from\\b")
-    private val SELECT by token("select\\b")
-    private val WHERE by token("where\\b")
     private val CLASS by token("class\\b")
-    private val REL by token("rel\\b")
     private val KEY by token("key\\b")
     private val INDEX by token("index\\b")
     private val OPERATION by token("operation\\b")
     private val QUERY by token("query\\b")
     private val VAL by token("val\\b")
     private val RETURN by token("return\\b")
+    private val ALL by token("all\\b")
+
     private val NUMBER by token("\\d+")
-    private val HEXLIT by token("x\"[0123456789abcdefABCDEF]*\"")
-    private val STRINGLIT by token("\".*?\"")
-    private val IDT by token("\\w+")
+    private val HEXLIT by token("x\"[0-9A-Fa-f]*\"")
+    private val STRINGLIT_SINGLE by token("'.*?'")
+    private val STRINGLIT_DOUBLE by token("\".*?\"")
+    private val IDT by token("[A-Za-z_][A-Za-z_0-9]*")
     private val id by (IDT) use { text }
 
-    private val relAutoAttribute by (id) map { S_Attribute(it, it) }
-    private val relNamedAttribute by (id * -COLON * id) map { (name, type) -> S_Attribute(name, type) }
+    private val relAutoAttribute by (id) map { S_NameType(it, it) }
+    private val relNamedAttribute by (id * -COLON * id) map { (name, type) -> S_NameType(name, type) }
     private val relAttribute by (relNamedAttribute or relAutoAttribute)
     private val relAttributes by separatedTerms(relAttribute, COMMA, false)
 
@@ -70,9 +69,8 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val relClauses by zeroOrMore(anyRelClause * -SEMI)
 
     private val classDef by (-CLASS * id * -LCURL * relClauses * -RCURL) map {
-        (identifier, clauses) ->
-        val rel = classFromClauses(identifier, clauses)
-        S_ClassDefinition(identifier, rel.attributes, rel.keys, rel.indices)
+        (name, clauses) ->
+        S_ClassDefinition(name, clauses)
     }
 
     private val binaryOperator = (
@@ -101,8 +99,12 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     ) map { it.text }
 
     private val nameExpr by id map { S_NameExpr(it) }
+
     private val intExpr by NUMBER map { S_IntLiteralExpr(it.text.toLong()) }
-    private val stringExpr = STRINGLIT map { S_StringLiteralExpr(it.text.removeSurrounding("\"", "\"")) }
+
+    private val stringExpr = ( STRINGLIT_SINGLE map { S_StringLiteralExpr(it.text.removeSurrounding("'", "'")) } ) or
+            ( STRINGLIT_DOUBLE map { S_StringLiteralExpr(it.text.removeSurrounding("\"", "\"")) } )
+
     private val bytesExpr = HEXLIT map { S_ByteALiteralExpr(it.text.removeSurrounding("x\"", "\"").hexStringToByteArray()) }
 
     private val parenthesesExpr by ( -LPAR * parser(this::expression) * -RPAR )
@@ -124,12 +126,24 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         expr
     }
 
-    private val selectExpr by ( id * -AT * -LCURL * zeroOrMore(parser(this::expression)) * -RCURL ) map {
-        ( className, exprs ) ->
-        S_AtExpr(className, exprs)
+    private val atClassListSingle by id map { listOf(Pair(null, it)) }
+
+    private val atClassListItem by ( optional( id * -COLON ) * id ) map {
+        ( alias, className ) -> Pair( alias, className )
     }
 
-    private val operandExpr: Parser<S_Expression> by ( selectExpr or baseExpr )
+    private val atClassListMulti by ( -LPAR * separatedTerms( atClassListItem, COMMA, false ) * -RPAR )
+
+    private val atClassList by ( atClassListSingle or atClassListMulti ) ;
+
+    private val atExpr by ( optional(ALL) * atClassList * -AT * -LCURL *
+            separatedTerms(parser(this::expression), COMMA, true) * -RCURL ) map
+    {
+        ( all, classNames, exprs ) ->
+        S_AtExpr(classNames, exprs, all != null)
+    }
+
+    private val operandExpr: Parser<S_Expression> by ( atExpr or baseExpr )
 
     private val unaryExpr by ( optional(unaryOperator) * operandExpr ) map { (op, expr) ->
         if (op == null) expr else S_UnaryExpr(op, expr)
@@ -201,49 +215,6 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val anyDef by (classDef or opDefinition or queryDefinition)
 
     override val rootParser by oneOrMore(anyDef) map { S_ModuleDefinition(it) }
-
-    /*val term by
-    (id use { Variable(text) }) or
-            (-not * parser(this::term) map { (Not(it) }) or
-            (-lpar * parser(this::rootParser) * -rpar)
-
-    val andChain by leftAssociative(term, and) { l, _, r -> And(l, r) }
-    override val rootParser by leftAssociative(andChain, or) { l, _, r -> Or(l, r) }*/
-}
-
-private fun classFromClauses(identifier: String, clauses: List<S_RelClause>): S_ClassDefinition {
-    val attributes = mutableMapOf<String, String>()
-    val keys = mutableListOf<S_Key>()
-    val indices = mutableListOf<S_Index>()
-
-    fun addAttr(a: S_Attribute) {
-        if (a.name in attributes) {
-            if (a.type != attributes[a.name])
-                throw Exception("Conflicting attribute type")
-        } else
-            attributes[a.name] = a.type
-    }
-
-    for (clause in clauses) {
-        when (clause) {
-            is S_AttributeClause -> addAttr(clause.attr)
-            is S_KeyClause -> {
-                keys.add(S_Key(clause.attrs.map { it.name }))
-                clause.attrs.forEach { addAttr(it) }
-            }
-            is S_IndexClause -> {
-                indices.add(S_Index(clause.attrs.map { it.name }))
-                clause.attrs.forEach { addAttr(it) }
-            }
-        }.let {} // ensure exhaustiveness
-    }
-
-    return S_ClassDefinition(
-            identifier,
-            attributes.entries.map { S_Attribute(it.key, it.value) },
-            keys,
-            indices
-    )
 }
 
 private sealed class BaseExprTail {
@@ -263,35 +234,3 @@ private class BinaryExprTail(val op: S_BinaryOperator, val expr: S_Expression)
 fun parseRellCode(s: String): S_ModuleDefinition {
     return S_Grammar.parseToEnd(s)
 }
-
-/*
-
-    company JOIN user ON user.company_id = company.id
-
-
-    company JOIN user
-        WHERE user.company_id = company.id
-
-
- issuer@{name='Bob'}
-
-
-from {company, user, city }@{ user.company_id = company_id, city.id =user.city_id}
-from (company, user, city)@{ user.company_id = company_id, city.id =user.city_id}
-from(company, user, city)@{ user.company_id = company_id, city.id =user.city_id}
-from user select name;
-from (user, fdldskfjsd, as)@{name='Bob'} select name
-
-
-from (user as u, company as c)@{
-    u.company_id = c.id
-} select (foo, bar);
-
-
-  (a + (b + c))
-
-  a + b + c
-
-
-SELECT FROM
-        */
