@@ -2,8 +2,9 @@ package net.postchain.rell.model
 
 import net.postchain.rell.runtime.RtEnv
 import net.postchain.rell.runtime.RtValue
+import net.postchain.rell.sql.ROWID_COLUMN
 
-sealed class RStatement {
+abstract class RStatement {
     abstract fun execute(env: RtEnv): RtValue?
 }
 
@@ -26,14 +27,14 @@ class RReturnStatement(val expr: RExpr): RStatement() {
     }
 }
 
-class RCreateStatement(val rclass: RClass, val attrs: Array<RAttrExprPair>): RStatement() {
-    override fun execute(env: RtEnv): RtValue? = TODO("TODO")
-}
-
-class RUpdateStatement(val setAttrs: Array<RAttrExprPair>): RStatement() {
-    override fun execute(env: RtEnv): RtValue? = TODO("TODO")
-}
-
-class RDeleteStatement(): RStatement() {
-    override fun execute(env: RtEnv): RtValue? = TODO("TODO")
+class RBlockStatement(val stmts: List<RStatement>): RStatement() {
+    override fun execute(env: RtEnv): RtValue? {
+        for (stmt in stmts) {
+            val res = stmt.execute(env)
+            if (res != null) {
+                return res
+            }
+        }
+        return null
+    }
 }

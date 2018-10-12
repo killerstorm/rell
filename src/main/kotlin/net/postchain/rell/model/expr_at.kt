@@ -18,26 +18,36 @@ object RAtExprRowTypeSimple: RAtExprRowType() {
 
 class RAtExprRowTypeTuple(val type: RTupleType): RAtExprRowType() {
     override fun decode(row: Array<RtValue>): RtValue {
-        check(row.size == type.elementTypes.size) { "row.size == ${row.size}, not ${type.elementTypes.size}" }
+        check(row.size == type.fields.size) { "row.size == ${row.size}, not ${type.fields.size}" }
         return RtTupleValue(type, row.toList())
     }
 }
 
 class RAtExpr(
         type: RType,
-        val classes: List<RAtClass>,
+        val from: List<RAtClass>,
+        val what: List<DbExpr>,
         val where: DbExpr?,
         val all: Boolean,
         val rowType: RAtExprRowType
 ): RExpr(type)
 {
     init {
-        for (i in classes.indices) {
-            check(classes[i].index == i)
-        }
+        from.withIndex().forEach { check(it.index == it.value.index) }
     }
 
     override fun evaluate(env: RtEnv): RtValue {
+        val rtSql = buildSql()
+
+        val resultTypes = what.map { it.type }
+        val select = RtSelect(rtSql, resultTypes)
+        val records = select.execute(env)
+
+        val result = decodeResult(records)
+        return result
+    }
+
+    private fun buildSql(): RtSql {
         val builder = RtSqlBuilder()
 
         val fromInfo = buildFromInfo()
@@ -45,8 +55,8 @@ class RAtExpr(
 
         builder.append("SELECT ")
 
-        builder.append(fromInfo.classes, ", ") {
-            builder.appendName(it.alias, ROWID_COLUMN)
+        builder.append(what, ", ") {
+            it.toSql(ctx, builder)
         }
 
         appendFrom(builder, fromInfo)
@@ -58,39 +68,27 @@ class RAtExpr(
 
         builder.append(" ORDER BY ")
         builder.append(fromInfo.classes, ", ") {
-            builder.appendName(it.alias, ROWID_COLUMN)
+            builder.appendColumn(it.alias, ROWID_COLUMN)
         }
 
-        val resultTypes = classes.map { RInstanceRefType(it.rClass) }
-        val select = RtSelect(builder.build(), resultTypes)
-        val records = select.execute(env)
-
-        val result = decodeResult(records)
-        return result
+        return builder.build()
     }
 
     private fun buildFromInfo(): SqlFromInfo {
-        val aliasGen = SqlAliasGenerator()
-        val builders = classes.map { SqlFromClassBuilder(aliasGen) }
-
+        val exprs = mutableListOf<DbExpr>()
+        exprs.addAll(what)
         if (where != null) {
-            where.visit {
-                if (it is PathDbExpr) {
-                    val builder = builders[it.cls.index]
-                    builder.addPath(it.path)
-                }
-            }
+            exprs.add(where)
         }
 
-        val fromClasses = builders.map { it.build() }
-        return SqlFromInfo(fromClasses)
+        return SqlFromInfo.create(from, exprs)
     }
 
     private fun appendFrom(builder: RtSqlBuilder, fromInfo: SqlFromInfo) {
         builder.append(" FROM ")
 
-        builder.append(classes.indices.toList(), ", ") {
-            builder.appendName(classes[it].rClass.name)
+        builder.append(from.indices.toList(), ", ") {
+            builder.appendName(from[it].rClass.name)
             builder.append(" ")
             builder.append(fromInfo.classes[it].alias)
 
@@ -98,11 +96,11 @@ class RAtExpr(
                 builder.append(" INNER JOIN ")
                 builder.appendName(join.cls.name)
                 builder.append(" ")
-                builder.appendName(join.alias)
+                builder.append(join.alias)
                 builder.append(" ON ")
-                builder.appendName(join.baseAlias, join.attr)
+                builder.appendColumn(join.baseAlias, join.attr)
                 builder.append(" = ")
-                builder.appendName(join.alias, ROWID_COLUMN)
+                builder.appendColumn(join.alias, ROWID_COLUMN)
             }
         }
     }
@@ -125,7 +123,31 @@ class RAtExpr(
     }
 }
 
-class SqlFromInfo(val classes: List<SqlFromClass>)
+class SqlFromInfo(val classes: List<SqlFromClass>) {
+    companion object {
+        fun create(from: List<RAtClass>, exprs: List<DbExpr>): SqlFromInfo {
+            val aliasGen = SqlAliasGenerator()
+            val builders = from.map { SqlFromClassBuilder(aliasGen) }
+
+            for (expr in exprs) {
+                collectFromInfo(builders, expr)
+            }
+
+            val fromClasses = builders.map { it.build() }
+            return SqlFromInfo(fromClasses)
+        }
+
+        private fun collectFromInfo(builders: List<SqlFromClassBuilder>, expr: DbExpr) {
+            expr.visit {
+                if (it is PathDbExpr) {
+                    val builder = builders[it.cls.index]
+                    builder.addPath(it.path)
+                }
+            }
+        }
+    }
+}
+
 class SqlFromClass(val alias: String, val joins: List<SqlFromJoin>, val pathAliases: Map<List<String>, SqlFromPathAlias>)
 class SqlFromJoin(val baseAlias: String, val cls: RClass, val alias: String, val attr: String)
 class SqlFromPathAlias(val alias: String, val path: List<PathDbExprStep>)

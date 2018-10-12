@@ -1,37 +1,81 @@
 package net.postchain.rell.sql
 
-import java.sql.Connection
-import java.sql.DriverManager
-import java.sql.PreparedStatement
-import java.sql.ResultSet
+import java.io.Closeable
+import java.lang.UnsupportedOperationException
+import java.sql.*
 
 val ROWID_COLUMN = "rowid"
+val MAKE_ROWID_FUNCTION = "make_rowid"
 
-object SqlConnector {
-    fun <T> connect(block: (SqlExecutor) -> T): T {
-        DriverManager.getConnection("jdbc:h2:mem:test;MODE=PostgreSQL").use { con ->
-            val executor = SqlExecutor(con)
-            return block(executor)
+sealed class SqlExecutor {
+    abstract fun execute(sql: String)
+    abstract fun execute(sql: String, preparator: (PreparedStatement) -> Unit)
+    abstract fun executeQuery(sql: String, preparator: (PreparedStatement) -> Unit, consumer: (ResultSet) -> Unit)
+}
+
+class DefaultSqlExecutor(private val con: Connection): SqlExecutor(), Closeable {
+    override fun execute(sql: String) {
+        execute0(sql) {
+            con.createStatement().use { stmt ->
+                stmt.execute(sql)
+            }
+        }
+    }
+
+    override fun execute(sql: String, preparator: (PreparedStatement) -> Unit) {
+        execute0(sql) {
+            con.prepareStatement(sql).use { stmt ->
+                preparator(stmt)
+                stmt.execute()
+            }
+        }
+    }
+
+    override fun executeQuery(sql: String, preparator: (PreparedStatement) -> Unit, consumer: (ResultSet) -> Unit) {
+        execute0(sql) {
+            con.prepareStatement(sql).use { stmt ->
+                preparator(stmt)
+                stmt.executeQuery().use { rs ->
+                    while (rs.next()) {
+                        consumer(rs)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun <T> execute0(sql: String, code: () -> T): T {
+        try {
+            return code()
+        } catch (e: SQLException) {
+            System.err.println("SQL FAILED: $sql")
+            throw e
+        }
+    }
+
+    override fun close() {
+        con.close()
+    }
+
+    companion object {
+        fun connect(url: String): DefaultSqlExecutor {
+            val con = DriverManager.getConnection(url)
+            return DefaultSqlExecutor(con)
         }
     }
 }
 
-class SqlExecutor(private val con: Connection) {
-    fun execute(sql: String) {
-        con.createStatement().use { stmt ->
-            stmt.execute(sql)
-        }
+object NullSqlExecutor: SqlExecutor() {
+    override fun execute(sql: String) {
+        throw UnsupportedOperationException()
     }
 
-    fun executeQuery(sql: String, preparator: (PreparedStatement) -> Unit, consumer: (ResultSet) -> Unit) {
-        con.prepareStatement(sql).use { stmt ->
-            preparator(stmt)
-            stmt.executeQuery().use { rs ->
-                while (rs.next()) {
-                    consumer(rs)
-                }
-            }
-        }
+    override fun execute(sql: String, preparator: (PreparedStatement) -> Unit) {
+        throw UnsupportedOperationException()
+    }
+
+    override fun executeQuery(sql: String, preparator: (PreparedStatement) -> Unit, consumer: (ResultSet) -> Unit) {
+        throw UnsupportedOperationException()
     }
 }
 

@@ -13,25 +13,6 @@ class RVarExpr(val attr: RAttrib, val offset: Int): RExpr(attr.type) {
     }
 }
 
-sealed class RBinaryOp(val code: String) {
-    abstract fun evaluate(left: RtValue, right: RtValue): RtValue
-}
-
-sealed class RBinaryOp_Eq: RBinaryOp("==")
-
-object RBinaryOp_Eq_Text: RBinaryOp_Eq() {
-    override fun evaluate(left: RtValue, right: RtValue): RtValue = RtBooleanValue(left.asString() == right.asString())
-}
-
-class RBinaryExpr(type: RType, val op: RBinaryOp, val left: RExpr, val right: RExpr): RExpr(type) {
-    override fun evaluate(env: RtEnv): RtValue {
-        val leftValue = left.evaluate(env)
-        val rightValue = right.evaluate(env)
-        val resValue = op.evaluate(leftValue, rightValue)
-        return resValue
-    }
-}
-
 class RStringLiteralExpr(type: RType, literal: String): RExpr(type) {
     val value = RtTextValue(literal)
     override fun evaluate(env: RtEnv): RtValue = value
@@ -46,11 +27,21 @@ class RIntegerLiteralExpr(type: RType, literal: Long): RExpr(type) {
     override fun evaluate(env: RtEnv): RtValue = value
 }
 
-class RFunCallExpr(type: RType, val fname: String, val args: List<RExpr>): RExpr(type) {
-    override fun evaluate(env: RtEnv): RtValue = TODO("TODO")
+class RBooleanLiteralExpr(literal: Boolean): RExpr(RBooleanType) {
+    val value = RtBooleanValue(literal)
+    override fun evaluate(env: RtEnv): RtValue = value
 }
 
-class RAttrExprPair(val attr: RAttrib, val expr: RExpr) {
+class RTupleFieldExpr(type: RType, val baseExpr: RExpr, val fieldIndex: Int): RExpr(type) {
+    override fun evaluate(env: RtEnv): RtValue {
+        val baseValue = baseExpr.evaluate(env)
+        val tupleValue = baseValue as RtTupleValue
+        return tupleValue.elements[fieldIndex]
+    }
+}
+
+class RFunCallExpr(type: RType, val fname: String, val args: List<RExpr>): RExpr(type) {
+    override fun evaluate(env: RtEnv): RtValue = TODO("TODO")
 }
 
 class RLambdaExpr(type: RType, val args: List<RAttrib>, val expr: RExpr): RExpr(type) {

@@ -1,55 +1,85 @@
 package net.postchain.rell.parser
 
 import net.postchain.rell.model.*
-import net.postchain.rell.runtime.RtTupleValue
 
-class S_AtExpr(
-        val atClasses: List<Pair<String?, String>>,
-        val exprs: List<S_Expression>,
-        val all: Boolean
-): S_Expression()
-{
-    override fun compile(ctx: ExprCompilationContext): RExpr {
-        val rAtClasses = compileAtClasses(ctx)
-        val dbCtx = DbCompilationContext(null, ctx, rAtClasses)
-        val compiledExprs = exprs.indices.map { compileWhereExpr(dbCtx, it, exprs[it]) }
-        val where = makeWhere(compiledExprs)
+class S_AtExprFrom(val alias: String?, val className: String)
 
-        val resType = calcResultType(rAtClasses)
-        val type = if (all) RListType(resType.type) else resType.type
-        return RAtExpr(type, rAtClasses, where, all, resType.rowDecoder)
+sealed class S_AtExprWhat {
+    internal abstract fun compile(ctx: DbCompilationContext): List<Pair<String?, DbExpr>>
+}
+
+class S_AtExprWhatDefault: S_AtExprWhat() {
+    override fun compile(ctx: DbCompilationContext): List<Pair<String?, DbExpr>> {
+        return ctx.classes.map {
+            val name = if (ctx.classes.size == 1) null else it.alias
+            val expr = PathDbExpr(RInstanceRefType(it.rClass), it, listOf(), null)
+            Pair(name, expr)
+        }
     }
+}
 
-    private fun compileAtClasses(ctx: ExprCompilationContext): List<RAtClass> {
-        val rAtClasses = atClasses.indices.map { compileAtClass(ctx, it, atClasses[it]) }
+class S_AtExprWhatSimple(val path: List<String>): S_AtExprWhat() {
+    override fun compile(ctx: DbCompilationContext): List<Pair<String?, DbExpr>> {
+        val dbExpr = compileDbPathExpr(ctx, path, false)
+        return listOf(Pair(null, dbExpr))
+    }
+}
+
+class S_AtExprWhatComplexField(val name: String?, val expr: S_Expression)
+
+class S_AtExprWhatComplex(val fields: List<S_AtExprWhatComplexField>): S_AtExprWhat() {
+    override fun compile(ctx: DbCompilationContext): List<Pair<String?, DbExpr>> {
+        checkExplicitNames()
+
+        val dbExprs = fields.map { it.expr.compileDb(ctx) }
+
+        val implicitNames = fields.withIndex().map { (idx, field) ->
+            if (field.name != null) null else dbExprs[idx].implicitName()
+        }
+
         val names = mutableSetOf<String>()
-        for (cls in rAtClasses) {
-            if (!names.add(cls.alias)) {
-                throw CtError("at_dup_alias:${cls.alias}", "Duplicated class alias: ${cls.alias}")
+        names.addAll(fields.filter { it.name != null }.map { it.name!! })
+
+        val dupNames = mutableSetOf<String>()
+
+        for (name in implicitNames) {
+            if (name != null && !names.add(name)) {
+                dupNames.add(name)
             }
         }
-        return rAtClasses
-    }
 
-    private fun compileAtClass(ctx: ExprCompilationContext, idx: Int, pair: Pair<String?, String>): RAtClass {
-        val name = pair.second
-        val alias = if (pair.first != null) pair.first!! else name
-        val cls = ctx.modCtx.getClass(name)
-        return RAtClass(cls, alias, idx)
-    }
+        return fields.withIndex().map { (idx, field) ->
+            val name = if (field.name != null) {
+                field.name
+            } else {
+                val impName = implicitNames[idx]
+                if (impName != null && !dupNames.contains(impName) && fields.size > 1) {
+                    impName
+                } else {
+                    null
+                }
+            }
 
-    private fun calcResultType(rAtClasses: List<RAtClass>): AtResultType {
-        if (rAtClasses.size == 1) {
-            val type = RInstanceRefType(rAtClasses[0].rClass)
-            return AtResultType(type, RAtExprRowTypeSimple)
-        } else {
-            val elementTypes = rAtClasses.map { RInstanceRefType(it.rClass) }
-            val type = RTupleType(elementTypes)
-            return AtResultType(type, RAtExprRowTypeTuple(type))
+            Pair(name, dbExprs[idx])
         }
     }
 
-    override fun compileDb(ctx: DbCompilationContext): DbExpr = TODO()
+    private fun checkExplicitNames() {
+        val names = mutableSetOf<String>()
+        for (field in fields) {
+            if (field.name != null && !names.add(field.name)) {
+                throw CtError("ct_err:at_dup_what_name:${field.name}", "Duplicated field name: ${field.name}")
+            }
+        }
+    }
+}
+
+class S_AtExprWhere(val exprs: List<S_Expression>) {
+    internal fun compile(ctx: DbCompilationContext): DbExpr? {
+        val dbWhereExprs = exprs.withIndex().map { (idx, expr) -> compileWhereExpr(ctx, idx, expr) }
+        val dbWhere = makeWhere(dbWhereExprs)
+        return dbWhere
+    }
 
     private fun compileWhereExpr(ctx: DbCompilationContext, idx: Int, expr: S_Expression): DbExpr {
         val dbExpr = expr.compileDbWhere(ctx, idx)
@@ -69,7 +99,7 @@ class S_AtExpr(
 
         val attr = attrs[0]
         val attrExpr = PathDbExpr(attr.type, attr.cls, listOf(), attr.name)
-        return BinaryDbExpr(RBooleanType, attrExpr, dbExpr, DbBinaryOpEq)
+        return BinaryDbExpr(RBooleanType, DbBinaryOp_Eq, attrExpr, dbExpr)
     }
 
     private fun makeWhere(compiledExprs: List<DbExpr>): DbExpr? {
@@ -87,7 +117,7 @@ class S_AtExpr(
         val rTree = exprsToTree(rExprs)
 
         if (dbTree != null && rTree != null) {
-            return BinaryDbExpr(RBooleanType, dbTree, InterpretedDbExpr(rTree), DbBinaryOpAnd)
+            return BinaryDbExpr(RBooleanType, DbBinaryOp_And, dbTree, InterpretedDbExpr(rTree))
         } else if (dbTree != null) {
             return dbTree
         } else if (rTree != null) {
@@ -104,7 +134,7 @@ class S_AtExpr(
 
         var left = exprs[0]
         for (right in exprs.subList(1, exprs.size)) {
-            left = BinaryDbExpr(RBooleanType, left, right, DbBinaryOpAnd)
+            left = BinaryDbExpr(RBooleanType, DbBinaryOp_And, left, right)
         }
         return left
     }
@@ -120,6 +150,62 @@ class S_AtExpr(
         }
         return left
     }
+}
+
+class S_AtExpr(
+        val from: List<S_AtExprFrom>,
+        val what: S_AtExprWhat,
+        val where: S_AtExprWhere,
+        val all: Boolean
+): S_Expression()
+{
+    override fun compile(ctx: ExprCompilationContext): RExpr {
+        val rFrom = compileFrom(ctx, from)
+        val dbCtx = DbCompilationContext(null, ctx, rFrom)
+
+        val dbWhere = where.compile(dbCtx)
+
+        val whatPairs = what.compile(dbCtx)
+        val resType = calcResultType(whatPairs)
+        val type = if (all) RListType(resType.type) else resType.type
+
+        val dbWhatExprs = whatPairs.map { it.second }
+
+        return RAtExpr(type, rFrom, dbWhatExprs, dbWhere, all, resType.rowDecoder)
+    }
+
+    private fun calcResultType(dbWhat: List<Pair<String?, DbExpr>>): AtResultType {
+        if (dbWhat.size == 1 && dbWhat[0].first == null) {
+            val type = dbWhat[0].second.type
+            return AtResultType(type, RAtExprRowTypeSimple)
+        } else {
+            val fields = dbWhat.map { RTupleField(it.first, it.second.type) }
+            val type = RTupleType(fields)
+            return AtResultType(type, RAtExprRowTypeTuple(type))
+        }
+    }
+
+    override fun compileDb(ctx: DbCompilationContext): DbExpr = delegateCompileDb(ctx)
 
     private class AtResultType(val type: RType, val rowDecoder: RAtExprRowType)
+
+    companion object {
+        internal fun compileFrom(ctx: ExprCompilationContext, from: List<S_AtExprFrom>): List<RAtClass> {
+            val rFrom = from.indices.map { compileFromClass(ctx, it, from[it]) }
+            val names = mutableSetOf<String>()
+            for (cls in rFrom) {
+                if (!names.add(cls.alias)) {
+                    throw CtError("at_dup_alias:${cls.alias}", "Duplicated class alias: ${cls.alias}")
+                }
+            }
+            return rFrom
+        }
+
+        private fun compileFromClass(ctx: ExprCompilationContext, idx: Int, from: S_AtExprFrom): RAtClass {
+            val name = from.className
+            val alias = if (from.alias != null) from.alias else name
+            val cls = ctx.modCtx.getClass(name)
+            return RAtClass(cls, alias, idx)
+        }
+    }
 }

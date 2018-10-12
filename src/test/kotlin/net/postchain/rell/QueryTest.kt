@@ -58,17 +58,17 @@ class QueryTest {
     @Test fun testWrongNumberOfArguments() {
         val query = TestUtils.compileQuery("""query q(x: integer, y: text) = x;""")
         assertEquals("int[12345]", TestUtils.invokeQuery(query, RtIntValue(12345), RtTextValue("abc")))
-        assertEquals("rt_err:query_wrong_arg_count:q:2:0", TestUtils.invokeQuery(query))
-        assertEquals("rt_err:query_wrong_arg_count:q:2:1", TestUtils.invokeQuery(query, RtIntValue(12345)))
-        assertEquals("rt_err:query_wrong_arg_count:q:2:3",
+        assertEquals("rt_err:fn_wrong_arg_count:q:2:0", TestUtils.invokeQuery(query))
+        assertEquals("rt_err:fn_wrong_arg_count:q:2:1", TestUtils.invokeQuery(query, RtIntValue(12345)))
+        assertEquals("rt_err:fn_wrong_arg_count:q:2:3",
                 TestUtils.invokeQuery(query, RtIntValue(12345), RtTextValue("abc"), RtBooleanValue(true)))
     }
 
     @Test fun testWrongArgumentType() {
         val query = TestUtils.compileQuery("""query q(x: integer) = x;""")
         assertEquals("int[12345]", TestUtils.invokeQuery(query, RtIntValue(12345)))
-        assertEquals("rt_err:query_wrong_arg_type:q:integer:text", TestUtils.invokeQuery(query, RtTextValue("Hello")))
-        assertEquals("rt_err:query_wrong_arg_type:q:integer:boolean", TestUtils.invokeQuery(query, RtBooleanValue(true)))
+        assertEquals("rt_err:fn_wrong_arg_type:q:integer:text", TestUtils.invokeQuery(query, RtTextValue("Hello")))
+        assertEquals("rt_err:fn_wrong_arg_type:q:integer:boolean", TestUtils.invokeQuery(query, RtBooleanValue(true)))
     }
 
     private fun check(code: String, expectedResult: String) {
@@ -80,7 +80,7 @@ class QueryTest {
     }
 
     private fun check(code: String, inserts: Array<String>, args: Array<RtValue>, expectedResult: String) {
-        val actualResult = TestUtils.invoke(code, inserts, args)
+        val actualResult = TestUtils.invokeWithSql(code, inserts, args)
         assertEquals(expectedResult, actualResult)
     }
 

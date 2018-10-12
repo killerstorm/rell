@@ -17,13 +17,12 @@ fun getSQLType(t: RType): DataType<*> {
     }
 }
 
-val rowid_sql = """
+private val ROWID_SQL = """
     CREATE TABLE rowid_gen( last_value bigint not null);
     INSERT INTO rowid_gen (last_value) VALUES (0);
-    CREATE FUNCTION make_rowid() RETURNS BIGINT AS
+    CREATE FUNCTION $MAKE_ROWID_FUNCTION() RETURNS BIGINT AS
     'UPDATE rowid_gen SET last_value = last_value + 1 RETURNING last_value'
     LANGUAGE SQL;
-
     """
 
 fun genclass(classDefinition: RClass): String {
@@ -33,7 +32,7 @@ fun genclass(classDefinition: RClass): String {
 
     val jsonAttribSet = mutableSetOf<String>()
 
-    for (attr in classDefinition.attributes) {
+    for (attr in classDefinition.attributes.values) {
         if (attr.type is RInstanceRefType) {
             constraints.add(
                     constraint("${classDefinition.name}_${attr.name}_FK")
@@ -121,12 +120,12 @@ fun genop(opDefinition: ROperation): String {
         val typename = getSQLType(it.type).getTypeName(ctx.configuration())
         "_${it.name} ${typename}"
     }.joinToString()
-    val statements = opDefinition.statements.map(::genstatement).joinToString("\n")
+    val body = genstatement(opDefinition.body)
 
     return """
         CREATE FUNCTION ${opDefinition.name} (ctx gtx_ctx, ${args}) RETURNS BOOLEAN AS $$
         BEGIN
-        ${statements}
+        ${body}
         RETURN TRUE;
         END;
         $$ LANGUAGE plpgsql;
@@ -134,13 +133,16 @@ fun genop(opDefinition: ROperation): String {
 """
 }
 
-fun gensql(model: RModule): String {
-    var s = rowid_sql;
+fun gensql(model: RModule, ops: Boolean): String {
+    var s = ""
+    s += ROWID_SQL
     for (cls in model.classes) {
         s += genclass(cls)
     }
-    for (op in model.operations) {
-        s += genop(op)
+    if (ops) {
+        for (op in model.operations) {
+            s += genop(op)
+        }
     }
     return s
 }

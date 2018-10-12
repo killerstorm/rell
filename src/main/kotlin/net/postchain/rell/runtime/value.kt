@@ -11,47 +11,59 @@ sealed class RtValue {
     open fun asString(): String = throw IllegalStateException("$javaClass")
     open fun asObjectId(): Long = throw IllegalStateException("$javaClass")
 
-    abstract fun toStrictString(): String
+    abstract fun toStrictString(showTupleFieldNames: Boolean = true): String
 }
 
 class RtBooleanValue(val value: Boolean): RtValue() {
     override fun type(): RType = RBooleanType
     override fun asBoolean(): Boolean = value
-    override fun toStrictString(): String = "boolean[$value]"
+    override fun toStrictString(showTupleFieldNames: Boolean): String = "boolean[$value]"
     override fun toString(): String = "" + value
 }
 
 class RtIntValue(val value: Long): RtValue() {
     override fun type(): RType = RIntegerType
     override fun asInteger(): Long = value
-    override fun toStrictString(): String = "int[$value]"
+    override fun toStrictString(showTupleFieldNames: Boolean): String = "int[$value]"
     override fun toString(): String = "" + value
 }
 
 class RtTextValue(val value: String): RtValue() {
     override fun type(): RType = RTextType
     override fun asString(): String = value
-    override fun toStrictString(): String = "text[$value]"
+    override fun toStrictString(showTupleFieldNames: Boolean): String = "text[$value]"
     override fun toString(): String = value
 }
 
 class RtObjectValue(val type: RInstanceRefType, val rowid: Long): RtValue() {
     override fun type(): RType = type
     override fun asObjectId(): Long = rowid
-    override fun toStrictString(): String = "${type.name}[$rowid]"
+    override fun toStrictString(showTupleFieldNames: Boolean): String = "${type.name}[$rowid]"
     override fun toString(): String = toStrictString()
 }
 
 class RtListValue(val type: RType, val elements: List<RtValue>): RtValue() {
     override fun type(): RType = type
-    override fun toStrictString(): String = "${type.toStrictString()}[${elements.joinToString(",") { it.toStrictString() }}]"
-    override fun toString(): String = elements.toString()
+    override fun toString(): String = toStrictString()
+
+    override fun toStrictString(showTupleFieldNames: Boolean): String =
+            "${type.toStrictString()}[${elements.joinToString(",") { it.toStrictString(false) }}]"
 }
 
 class RtTupleValue(val type: RTupleType, val elements: List<RtValue>): RtValue() {
     override fun type(): RType = type
-    override fun toStrictString(): String = "(${elements.joinToString(",") { it.toStrictString() }})"
-    override fun toString(): String = elements.toString()
+    override fun toString(): String = toStrictString()
+
+    override fun toStrictString(showTupleFieldNames: Boolean): String {
+        return "(${elements.indices.joinToString(",") { elementToString(showTupleFieldNames, it) }})"
+    }
+
+    private fun elementToString(showTupleFieldNames: Boolean, idx: Int): String {
+        val name = type.fields[idx].name
+        val value = elements[idx]
+        val valueStr = value.toStrictString()
+        return if (name == null || !showTupleFieldNames) valueStr else "$name:$valueStr"
+    }
 }
 
 class RtEnv(val sqlExec: SqlExecutor) {

@@ -6,7 +6,6 @@ import org.jooq.SQLDialect
 import org.jooq.impl.DefaultDataType
 import org.jooq.impl.SQLDataType
 import org.jooq.util.postgres.PostgresDataType
-import java.lang.IllegalStateException
 import java.lang.UnsupportedOperationException
 import java.sql.PreparedStatement
 import java.sql.ResultSet
@@ -100,7 +99,15 @@ class RListType(val elementType: RType): RType("list<${elementType.toStrictStrin
     override fun toStrictString(): String = name
 }
 
-class RTupleType(val elementTypes: List<RType>): RType("(${elementTypes.joinToString(",") { it.toStrictString() }})") {
+class RTupleField(val name: String?, val type: RType) {
+    fun toStrictString(): String {
+        return if (name != null) "${name}:${type.toStrictString()}" else type.toStrictString()
+    }
+
+    override fun toString(): String = toStrictString()
+}
+
+class RTupleType(val fields: List<RTupleField>): RType("(${fields.joinToString(",") { it.toStrictString() }})") {
     override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = TODO()
     override fun fromSql(rs: ResultSet, idx: Int): RtValue = TODO()
     override fun toStrictString(): String = name

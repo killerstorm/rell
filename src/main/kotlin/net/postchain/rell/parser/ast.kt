@@ -6,7 +6,7 @@ internal typealias TypeMap = Map<String, RType>
 
 class CtError(val code: String, msg: String): Exception(msg)
 
-class S_NameType(val name: String, val type: String) {
+class S_NameTypePair(val name: String, val type: String) {
     internal fun compile(ctx: ModuleCompilationContext): RAttrib {
         val rType = ctx.getType(type)
         return RAttrib(name, rType)
@@ -15,6 +15,7 @@ class S_NameType(val name: String, val type: String) {
 
 internal class ModuleCompilationContext {
     private val typeMap = mutableMapOf<String, RType>(
+            "boolean" to RBooleanType,
             "text" to RTextType,
             "byte_array" to RByteArrayType,
             "integer" to RIntegerType,
@@ -30,12 +31,11 @@ internal class ModuleCompilationContext {
     )
 
     private val classes = mutableMapOf<String, RClass>()
-    private val operations = mutableListOf<ROperation>()
+    private val operations = mutableMapOf<String, ROperation>()
     private val queries = mutableMapOf<String, RQuery>()
 
     fun typeExists(name: String): Boolean = name in typeMap
-    fun classExists(name: String): Boolean = name in classes
-    fun queryExists(name: String): Boolean = name in queries
+    fun functionExists(name: String): Boolean = name in queries || name in operations
 
     fun getType(name: String): RType {
         val type = typeMap[name]
@@ -62,11 +62,18 @@ internal class ModuleCompilationContext {
 
     fun addQuery(query: RQuery) {
         check(!(query.name in queries))
+        check(!(query.name in operations))
         queries[query.name] = query
     }
 
+    fun addOperation(operation: ROperation) {
+        check(!(operation.name in queries))
+        check(!(operation.name in operations))
+        operations[operation.name] = operation
+    }
+
     fun createModule(): RModule {
-        return RModule(classes.values.toList(), operations.toList(), queries.values.toList())
+        return RModule(classes.values.toList(), operations.values.toList(), queries.values.toList())
     }
 }
 
@@ -111,56 +118,17 @@ internal class ExprCompilationContext(val modCtx: ModuleCompilationContext, val 
     }
 }
 
-class S_AttrValue(val name: String, val expr: S_Expression)
-
-abstract class S_Statement {
-    internal abstract fun compile(ctx: ExprCompilationContext): RStatement
-}
-
-class S_ValStatement(val name: String, val expr: S_Expression): S_Statement() {
-    override fun compile(ctx: ExprCompilationContext): RStatement {
-        val rExpr = expr.compile(ctx)
-        val entry = ctx.add(RAttrib(name, rExpr.type))
-        return RValStatement(entry.offset, entry.attr, rExpr)
-    }
-}
-
-class S_CreateStatement(val classname: String, val attrs: List<S_AttrValue>): S_Statement() {
-    override fun compile(ctx: ExprCompilationContext): RStatement {
-        TODO("not implemented")
-    }
-}
-
-class S_UpdateStatement(val attrs: List<S_AttrValue>): S_Statement() {
-    override fun compile(ctx: ExprCompilationContext): RStatement {
-        TODO("not implemented")
-    }
-}
-
-class S_DeleteStatement(): S_Statement() {
-    override fun compile(ctx: ExprCompilationContext): RStatement {
-        TODO("not implemented")
-    }
-}
-
-class S_ReturnStatement(val expr: S_Expression): S_Statement() {
-    override fun compile(ctx: ExprCompilationContext): RStatement {
-        val rExpr = expr.compile(ctx)
-        return RReturnStatement(rExpr)
-    }
-}
-
 sealed class S_RelClause {
     internal abstract fun compile(ctx: ClassCompilationContext)
 }
 
-class S_AttributeClause(val attr: S_NameType): S_RelClause() {
+class S_AttributeClause(val attr: S_NameTypePair): S_RelClause() {
     override fun compile(ctx: ClassCompilationContext) {
         ctx.addAttribute(attr.name, attr.type)
     }
 }
 
-class S_KeyClause(val attrs: List<S_NameType>): S_RelClause() {
+class S_KeyClause(val attrs: List<S_NameTypePair>): S_RelClause() {
     override fun compile(ctx: ClassCompilationContext) {
         for (attr in attrs) {
             ctx.addAttribute(attr.name, attr.type)
@@ -169,7 +137,7 @@ class S_KeyClause(val attrs: List<S_NameType>): S_RelClause() {
     }
 }
 
-class S_IndexClause(val attrs: List<S_NameType>): S_RelClause() {
+class S_IndexClause(val attrs: List<S_NameTypePair>): S_RelClause() {
     override fun compile(ctx: ClassCompilationContext) {
         for (attr in attrs) {
             ctx.addAttribute(attr.name, attr.type)
@@ -205,7 +173,7 @@ internal class ClassCompilationContext(private val ctx: ModuleCompilationContext
     }
 
     fun createClass(name: String): RClass {
-        return RClass(name, keys.toList(), indices.toList(), attributes.values.toList())
+        return RClass(name, keys.toList(), indices.toList(), attributes.toMap())
     }
 }
 
@@ -227,56 +195,56 @@ class S_ClassDefinition(name: String, val clauses: List<S_RelClause>): S_Definit
 
 class S_OpDefinition(
         name: String,
-        val args: List<S_NameType>,
-        val statements: List<S_Statement>
+        val params: List<S_NameTypePair>,
+        val body: S_Statement
 ): S_Definition(name)
 {
     override fun compile(ctx: ModuleCompilationContext) {
-//        operations.add(makeROperation(def, typeMap))
-        TODO("Not implemented")
+        if (ctx.functionExists(name)) {
+            throw CtError("dup_operation_name:$name", "Duplicated operation name: $name")
+        }
+
+        val exprCtx = ExprCompilationContext(ctx, null)
+        val rParams = compileExternalParams(ctx, exprCtx, params)
+        val rBody = body.compile(exprCtx)
+
+        val rOperation = ROperation(name, rParams, rBody)
+        ctx.addOperation(rOperation)
     }
 }
 
 abstract class S_QueryBody {
-    internal abstract fun compile(ctx: ExprCompilationContext): Array<RStatement>
+    internal abstract fun compile(ctx: ExprCompilationContext): RStatement
 }
 
 class S_QueryBodyShort(val expr: S_Expression): S_QueryBody() {
-    override fun compile(ctx: ExprCompilationContext): Array<RStatement> {
+    override fun compile(ctx: ExprCompilationContext): RStatement {
         val rExpr = expr.compile(ctx)
-        val rStmt = RReturnStatement(rExpr)
-        return arrayOf(rStmt)
+        return RReturnStatement(rExpr)
     }
 }
 
-class S_QueryBodyFull(val statements: List<S_Statement>): S_QueryBody() {
-    override fun compile(ctx: ExprCompilationContext): Array<RStatement> {
-        return statements.map { it.compile(ctx) }.toTypedArray()
+class S_QueryBodyFull(val body: S_Statement): S_QueryBody() {
+    override fun compile(ctx: ExprCompilationContext): RStatement {
+        return body.compile(ctx)
     }
 }
 
 class S_QueryDefinition(
         name: String,
-        val args: List<S_NameType>,
+        val params: List<S_NameTypePair>,
         val body: S_QueryBody
 ): S_Definition(name) {
     override fun compile(ctx: ModuleCompilationContext) {
-        if (ctx.queryExists(name)) {
+        if (ctx.functionExists(name)) {
             throw CtError("dup_query_name:$name", "Duplicated query name: $name")
         }
 
-        val rArgs = compileParams(ctx, args)
-
         val exprCtx = ExprCompilationContext(ctx, null)
-        val rParams = mutableListOf<RExternalParam>()
-        for (rArg in rArgs) {
-            val entry = exprCtx.add(rArg)
-            rParams.add(RExternalParam(rArg.name, rArg.type, entry.offset))
-        }
+        val rParams = compileExternalParams(ctx, exprCtx, params)
+        val rBody = body.compile(exprCtx)
 
-        val statements = body.compile(exprCtx)
-
-        val rQuery = RQuery(name, rParams.toTypedArray(), statements)
+        val rQuery = RQuery(name, rParams, rBody)
         ctx.addQuery(rQuery)
     }
 }
@@ -293,7 +261,24 @@ class S_ModuleDefinition(val definitions: List<S_Definition>) {
     }
 }
 
-private fun compileParams(ctx: ModuleCompilationContext, params: List<S_NameType>): List<RAttrib> {
+private fun compileExternalParams(
+        ctx: ModuleCompilationContext,
+        exprCtx: ExprCompilationContext,
+        params: List<S_NameTypePair>
+) : List<RExternalParam>
+{
+    val rParams = compileParams(ctx, params)
+
+    val rExtParams = mutableListOf<RExternalParam>()
+    for (rArg in rParams) {
+        val entry = exprCtx.add(rArg)
+        rExtParams.add(RExternalParam(rArg.name, rArg.type, entry.offset))
+    }
+
+    return rExtParams.toList()
+}
+
+private fun compileParams(ctx: ModuleCompilationContext, params: List<S_NameTypePair>): List<RAttrib> {
     val names = mutableSetOf<String>()
     val res = mutableListOf<RAttrib>()
     for (param in params) {

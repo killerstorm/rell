@@ -9,7 +9,7 @@ class S_NameExpr(val name: String): S_Expression() {
     }
 
     override fun compileDb(ctx: DbCompilationContext): DbExpr {
-        val dbExpr = compilePathExpr(ctx, listOf(name))
+        val dbExpr = compileDbPathExprOpt(ctx, listOf(name), true)
         if (dbExpr != null) {
             return dbExpr
         }
@@ -30,7 +30,7 @@ class S_NameExpr(val name: String): S_Expression() {
         // There is a class attribute and a local variable with such name -> implicit where condition.
 
         val argType = localAttr.attr.type
-        val clsAttrsByType = clsAttrs.filter { S_BinaryOperatorEqNe.checkTypes(it.type, argType) }
+        val clsAttrsByType = clsAttrs.filter { S_BinaryOp_EqNe.checkTypes(it.type, argType) }
 
         if (clsAttrsByType.isEmpty()) {
             val typeStr = argType.toStrictString()
@@ -43,14 +43,14 @@ class S_NameExpr(val name: String): S_Expression() {
 
         val clsAttr = clsAttrsByType[0]
         val attrType = clsAttr.type
-        if (!S_BinaryOperatorEqNe.checkTypes(attrType, argType)) {
+        if (!S_BinaryOp_EqNe.checkTypes(attrType, argType)) {
             throw CtError("at_param_attr_type_missmatch:$name:$attrType:$argType",
                     "Parameter type does not match attribute type for '$name': $argType instead of $attrType")
         }
 
         val clsAttrExpr = PathDbExpr(clsAttr.type, clsAttr.cls, listOf(), clsAttr.name)
         val localAttrExpr = localAttr.toVarExpr()
-        return BinaryDbExpr(RBooleanType, clsAttrExpr, InterpretedDbExpr(localAttrExpr), DbBinaryOpEq)
+        return BinaryDbExpr(RBooleanType, DbBinaryOp_Eq, clsAttrExpr, InterpretedDbExpr(localAttrExpr))
     }
 
     override fun iteratePathExpr(path: MutableList<String>): Boolean {
@@ -62,7 +62,17 @@ class S_NameExpr(val name: String): S_Expression() {
 class S_AttributeExpr(val base: S_Expression, val name: String): S_Expression() {
     override fun compile(ctx: ExprCompilationContext): RExpr {
         val rBase = base.compile(ctx)
-        TODO()
+        val type = rBase.type
+
+        if (type is RTupleType) {
+            val idx = type.fields.indexOfFirst { it.name == name }
+            if (idx == -1) {
+                throw CtError("unknown_member:$name", "Unknown member: $name")
+            }
+            return RTupleFieldExpr(type.fields[idx].type, rBase, idx)
+        } else {
+            TODO(type.toStrictString())
+        }
     }
 
     override fun compileDb(ctx: DbCompilationContext): DbExpr {
@@ -71,7 +81,7 @@ class S_AttributeExpr(val base: S_Expression, val name: String): S_Expression() 
         if (iteratePathExpr(mutPath)) {
             mutPath.reverse()
 
-            val dbExpr = compilePathExpr(ctx, mutPath.toList())
+            val dbExpr = compileDbPathExprOpt(ctx, mutPath.toList(), true)
             if (dbExpr != null) {
                 return dbExpr
             }
@@ -86,10 +96,18 @@ class S_AttributeExpr(val base: S_Expression, val name: String): S_Expression() 
     }
 }
 
-private fun compilePathExpr(ctx: DbCompilationContext, path: List<String>): DbExpr? {
+internal fun compileDbPathExpr(ctx: DbCompilationContext, path: List<String>, classAliasAllowed: Boolean): DbExpr {
+    val dbExpr = compileDbPathExprOpt(ctx, path, classAliasAllowed)
+    if (dbExpr == null) {
+        throw errBadPath(path, path.size)
+    }
+    return dbExpr
+}
+
+private fun compileDbPathExprOpt(ctx: DbCompilationContext, path: List<String>, classAliasAllowed: Boolean): DbExpr? {
     val head = path[0]
 
-    val cls = ctx.findClassByAlias(head)
+    val cls = if (classAliasAllowed) ctx.findClassByAlias(head) else null
     val attrs = ctx.findAttributesByName(head)
 
     if (cls == null && attrs.isEmpty()) {
@@ -146,15 +164,14 @@ private fun compilePathExpr0(baseCls: RAtClass, path: List<String>, startOfs: In
     }
 
     if (ofs < path.size) {
-        val pathStr = path.subList(0, errOfs).joinToString(".")
-        throw CtError("bad_path_expr:$pathStr", "Inavlid path expression: '$pathStr'")
+        throw errBadPath(path, errOfs)
     }
 
     return PathDbExpr(resType, baseCls, steps, attr)
 }
 
 private fun resolvePathEntry(cls: RClass, name: String): PathEntry? {
-    val attr = cls.attributes.find { it.name == name }
+    val attr = cls.attributes[name]
     if (attr == null) {
         return null
     }
@@ -162,6 +179,11 @@ private fun resolvePathEntry(cls: RClass, name: String): PathEntry? {
     val resultType = attr.type
     val resultClass = if (resultType is RInstanceRefType) resultType.rclass else null
     return PathEntry(name, resultType, resultClass)
+}
+
+private fun errBadPath(path: List<String>, errOfs: Int): CtError {
+    val pathStr = path.subList(0, errOfs).joinToString(".")
+    return CtError("bad_path_expr:$pathStr", "Inavlid path expression: '$pathStr'")
 }
 
 private class PathEntry(val name: String, val resultType: RType, val resultClass: RClass?)

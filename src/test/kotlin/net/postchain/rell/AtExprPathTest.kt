@@ -1,5 +1,6 @@
 package net.postchain.rell
 
+import org.junit.After
 import org.junit.Test
 
 class AtExprPathTest {
@@ -66,6 +67,13 @@ class AtExprPathTest {
             Ins.person(610, "Andrew", 302, 504),
             Ins.person(611, "Bill", 300, 506)
     )
+
+    private val sqlCtx by lazy { SqlTestCtx(classDefs.joinToString("\n")) }
+
+    @After
+    fun after() {
+        sqlCtx.destroy()
+    }
 
     @Test fun testSimpleAttr() {
         check("all person @ { city.name = 'San Francisco' }", "list<person>[person[607],person[611]]")
@@ -144,11 +152,18 @@ class AtExprPathTest {
 
     @Test fun testMultiClass() {
         check("all (p1: person, p2: person) @ { p1.city.name = 'San Francisco', p2.department.company.name = 'Amazon' }",
-                "list<(person,person)>[(person[607],person[607]),(person[607],person[610]),(person[611],person[607]),(person[611],person[610])]")
+                "list<(p1:person,p2:person)>[" +
+                        "(person[607],person[607])," +
+                        "(person[607],person[610])," +
+                        "(person[611],person[607])," +
+                        "(person[611],person[610])" +
+                        "]")
+
         check("all (p1: person, p2: person) @ { p1.city.name = 'Munich', p2.department.company.name = 'Mercedes' }",
-                "list<(person,person)>[(person[604],person[603])]")
+                "list<(p1:person,p2:person)>[(person[604],person[603])]")
+
         check("all (p1: person, p2: person) @ { p1.city.name = 'Las Vegas', p2.department.company.name = 'Twitter' }",
-                "list<(person,person)>[(person[601],person[606]),(person[608],person[606])]")
+                "list<(p1:person,p2:person)>[(person[601],person[606]),(person[608],person[606])]")
     }
 
     @Test fun testInvalidPath() {
@@ -169,7 +184,7 @@ class AtExprPathTest {
     }
 
     private fun checkEx(code: String, expectedResult: String) {
-        AtExprTest.checkEx(classDefs, inserts, code, expectedResult)
+        AtExprTest.checkEx(sqlCtx, classDefs, inserts, code, expectedResult)
     }
 
     private object Ins {

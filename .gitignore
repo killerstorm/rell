@@ -2,4 +2,6 @@
 *.iml
 .DS_Store
 META-INF
-target
+/target
+/tests.properties
+

@@ -50,8 +50,6 @@ fun buildEnvMap(op: ROperation): Pair<EnvMap, Int> {
     }
     for (p in op.params) add(p.name)
     // TODO: collect variable bindings
-    for (s in op.statements) {
-    }
     return Pair({ name -> listOf(m[name]!!)}, m.size)
 }
 

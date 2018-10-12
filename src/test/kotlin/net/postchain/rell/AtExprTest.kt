@@ -1,6 +1,6 @@
 package net.postchain.rell
 
-import net.postchain.rell.sql.ROWID_COLUMN
+import org.junit.After
 import org.junit.Test
 import kotlin.test.assertEquals
 
@@ -22,12 +22,19 @@ class AtExprTest {
             Ins.user(21, 200, "Steve", "Wozniak"),
             Ins.user(30, 300, "Jeff", "Bezos"),
             Ins.user(40, 400, "Bill", "Gates"),
-            Ins.user(41, 400, "Paul", "Allan"),
+            Ins.user(41, 400, "Paul", "Allen"),
             Ins.user(50, 500, "Sergey", "Brin"),
             Ins.user(51, 500, "Larry", "Page")
     )
 
     private var testDataBaseCode = ""
+
+    private val sqlCtx by lazy { SqlTestCtx(testDataClassDefs.joinToString("\n")) }
+
+    @After
+    fun after() {
+        sqlCtx.destroy()
+    }
 
     @Test fun testEmptyWhere() {
         check("all user @ {}", "list<user>[user[10],user[20],user[21],user[30],user[40],user[41],user[50],user[51]]")
@@ -48,7 +55,7 @@ class AtExprTest {
 
     @Test fun testFindUserWithSameName() {
         check("all (u1: user, u2: user) @ { u1.firstName = u2.firstName, u1 != u2 }",
-                "list<(user,user)>[(user[20],user[21]),(user[21],user[20])]")
+                "list<(u1:user,u2:user)>[(user[20],user[21]),(user[21],user[20])]")
     }
 
     @Test fun testAttributeByVariableName() {
@@ -94,13 +101,13 @@ class AtExprTest {
         checkEx("val garbage = bar1; return all (foo_owner, bar_owner) @ { garbage };", "ct_err:at_attr_type_ambig:0:bar:3")
 
         checkEx("val stuff = foo1; return all (foo_owner, bar_owner) @ { stuff };",
-                "list<(foo_owner,bar_owner)>[(foo_owner[4],bar_owner[6]),(foo_owner[4],bar_owner[7])]")
+                "list<(foo_owner:foo_owner,bar_owner:bar_owner)>[(foo_owner[4],bar_owner[6]),(foo_owner[4],bar_owner[7])]")
         checkEx("val stuff = foo2; return all (foo_owner, bar_owner) @ { stuff };",
-                "list<(foo_owner,bar_owner)>[(foo_owner[5],bar_owner[6]),(foo_owner[5],bar_owner[7])]")
+                "list<(foo_owner:foo_owner,bar_owner:bar_owner)>[(foo_owner[5],bar_owner[6]),(foo_owner[5],bar_owner[7])]")
         checkEx("val stuff = bar1; return all (foo_owner, bar_owner) @ { stuff };",
-                "list<(foo_owner,bar_owner)>[(foo_owner[4],bar_owner[6]),(foo_owner[5],bar_owner[6])]")
+                "list<(foo_owner:foo_owner,bar_owner:bar_owner)>[(foo_owner[4],bar_owner[6]),(foo_owner[5],bar_owner[6])]")
         checkEx("val stuff = bar2; return all (foo_owner, bar_owner) @ { stuff };",
-                "list<(foo_owner,bar_owner)>[(foo_owner[4],bar_owner[7]),(foo_owner[5],bar_owner[7])]")
+                "list<(foo_owner:foo_owner,bar_owner:bar_owner)>[(foo_owner[4],bar_owner[7]),(foo_owner[5],bar_owner[7])]")
     }
 
     @Test fun testSingleClassAlias() {
@@ -116,15 +123,16 @@ class AtExprTest {
     }
 
     @Test fun testMultipleClassesSimple() {
-        check("(user, company) @ { user.firstName = 'Mark', company.name = 'Microsoft' }", "(user[10],company[400])")
+        check("(user, company) @ { user.firstName = 'Mark', company.name = 'Microsoft' }",
+                "(user:user[10],company:company[400])")
 
-        check("(u: user, c: company) @ { u.firstName = 'Mark', c.name = 'Microsoft' }", "(user[10],company[400])")
+        check("(u: user, c: company) @ { u.firstName = 'Mark', c.name = 'Microsoft' }", "(u:user[10],c:company[400])")
 
         check("(company: user, user: company) @ { company.firstName = 'Mark', user.name = 'Microsoft' }",
-                "(user[10],company[400])")
+                "(company:user[10],user:company[400])")
 
         check("(u1: user, u2: user, user) @ { u1.firstName = 'Mark', u2.lastName = 'Gates', user.firstName = 'Sergey' }",
-                "(user[10],user[40],user[50])")
+                "(u1:user[10],u2:user[40],user:user[50])")
     }
 
     @Test fun testNameResolutionClassVsAlias() {
@@ -168,7 +176,7 @@ class AtExprTest {
         check("(user, company) @ { name = 'Bob' }", "ct_err:at_attr_name_ambig:name:2")
         check("(user, company) @ { name = 'Xerox' }", "ct_err:at_attr_name_ambig:name:2")
         check("(u: user, c: company) @ { name = 'Xerox' }", "ct_err:at_attr_name_ambig:name:2")
-        check("(user, company) @ { user.name = 'Bob', company.name = 'Xerox' }", "(user[0],company[2])")
+        check("(user, company) @ { user.name = 'Bob', company.name = 'Xerox' }", "(user:user[0],company:company[2])")
         check("(u1: user, u2: user) @ { name = 'Bob' }", "ct_err:at_attr_name_ambig:name:2")
         check("(c1: company, c2: company) @ { name = 'Bob' }", "ct_err:at_attr_name_ambig:name:2")
     }
@@ -209,7 +217,7 @@ class AtExprTest {
         check("(s1: single, s2: single) @ { tgt1 }", "ct_err:at_attr_type_ambig:0:target:2")
         check("(s1: single, s2: single) @ { tgt1, tgt2 }", "ct_err:at_attr_type_ambig:0:target:2")
         check("(s1: single, s2: single) @ { s1.t = tgt1, tgt2 }", "ct_err:at_attr_type_ambig:1:target:2")
-        check("(s1: single, s2: single) @ { s1.t = tgt1, s2.t = tgt2 }", "(single[0],single[1])")
+        check("(s1: single, s2: single) @ { s1.t = tgt1, s2.t = tgt2 }", "(s1:single[0],s2:single[1])")
     }
 
     @Test fun testMultipleClassesCrossReference() {
@@ -233,7 +241,7 @@ class AtExprTest {
         )
 
         check("all (person, city, country) @ { city.name = person.cityName, country.name = city.countryName }",
-                "list<(person,city,country)>[" +
+                "list<(person:person,city:city,country:country)>[" +
                 "(person[100],city[200],country[302])," +
                 "(person[101],city[202],country[300])," +
                 "(person[102],city[201],country[301])]")
@@ -297,7 +305,7 @@ class AtExprTest {
         check("all proxy @ { ref.f2 = 107 }", "list<proxy>[proxy[1]]")
     }
 
-    /*@Test*/ fun testNestedAtExpression() {
+    @Test fun testNestedAtExpression() {
         check("all user @ { company = company @ { name = 'Facebook' } }", "list<user>[user[10]]")
         check("all user @ { company = company @ { name = 'Apple' } }", "list<user>[user[20],user[21]]")
         check("all user @ { company = company @ { name = 'Amazon' } }", "list<user>[user[30]]")
@@ -310,23 +318,59 @@ class AtExprTest {
         check("all user @ { company @ { name = 'Google' } }", "list<user>[user[50],user[51]]")
     }
 
-    // TODO Later:
+    @Test fun testFieldSelectionSimple() {
+        check("user @ { firstName = 'Bill' }.lastName", "text[Gates]")
+        check("user @ { firstName = 'Mark' }.lastName", "text[Zuckerberg]")
+        check("user @ { firstName = 'Bill' }.company.name", "text[Microsoft]")
+        check("user @ { firstName = 'Mark' }.company.name", "text[Facebook]")
+        check("user @ { firstName = 'Mark' }.user.lastName", "ct_err:bad_path_expr:user.lastName")
+        check("(u: user) @ { firstName = 'Mark' }.user.lastName", "ct_err:bad_path_expr:user.lastName")
+        check("(u: user) @ { firstName = 'Mark' }.u.lastName", "ct_err:bad_path_expr:u.lastName")
+    }
 
-    // user @ { firstName = "Bill" or lastName = "Brin" }
+    @Test fun testFieldSelectionComplex() {
+        check("user @ { firstName = 'Bill' } ( lastName )", "text[Gates]")
+        check("(u: user) @ { firstName = 'Bill' } ( u.lastName )", "text[Gates]")
+        check("(u1: user, u2: user) @ { u1.firstName = 'Bill', u2.firstName = 'Mark' } ( lastName )",
+                "ct_err:at_attr_name_ambig:lastName:2")
 
-    // query companyByUser(user): company = user.company
+        check("(u1: user, u2: user) @ { u1.firstName = 'Bill', u2.firstName = 'Mark' } ( u1.lastName, u2.lastName )",
+                "(text[Gates],text[Zuckerberg])")
+        check("(u1: user, u2: user) @ { u1.firstName = 'Bill', u2.firstName = 'Mark' } ( u1.company.name, u2.company.name )",
+                "(text[Microsoft],text[Facebook])")
+    }
 
-    // query usersByAge(yearsOld: integer): list<user> = user @ { currentYear() - yearOfBirth >= yearsOld }
+    @Test fun testFieldSelectionNaming() {
+        check("user @ { firstName = 'Bill' } ( lastName )", "text[Gates]")
+        check("user @ { firstName = 'Bill' } ( x = lastName )", "(x:text[Gates])")
+        check("user @ { firstName = 'Bill' } ( lastName = lastName )", "(lastName:text[Gates])")
 
-    // query userFirstName(lastName: string): string = user @ { lastName } . firstName
-    // query userPhoneAndEmail(lastName: string): (string, string) = user @ { lastName } . ( phone, eMail )
-    // query userAge(lastName: string): integer = user @ { lastName } . ( currentYear() - yearOfBirth )
-    // query userFirstName(user): string = user . firstName
-    // query userPhoneAndEmail(user): (string, string) = user . ( phone, eMail )
-    // query userAge(user): integer = user . ( currentYear() - yearOfBirth )
+        check("user @ { firstName = 'Bill' } ( firstName, lastName, company.name )",
+                "(firstName:text[Bill],lastName:text[Gates],text[Microsoft])")
+        check("user @ { firstName = 'Bill' } ( user.firstName, user.lastName, user.company.name )",
+                "(firstName:text[Bill],lastName:text[Gates],text[Microsoft])")
+        check("(u: user) @ { firstName = 'Bill' } ( u.firstName, u.lastName, u.company.name )",
+                "(firstName:text[Bill],lastName:text[Gates],text[Microsoft])")
+        check("user @ { firstName = 'Bill' } ( firstName, lastName, companyName = company.name )",
+                "(firstName:text[Bill],lastName:text[Gates],companyName:text[Microsoft])")
 
-    // query userAndCompany(lastName: string): (user, company) = (user, company) @ { user.lastName = lastName, user.company_id = company.company_id }
-    // query userAndCompanyNames(user_code: integer): (string, string, string) = (u: user, c:company) @ { u.code = user_code, u.company_id = c.company_id } . ( u.firstName, u.lastName, c.name )
+        check("(user, company) @ { user.firstName = 'Bill', company.name = 'Facebook' }",
+                "(user:user[40],company:company[100])")
+        check("(u: user, c: company) @ { u.firstName = 'Bill', c.name = 'Facebook' }", "(u:user[40],c:company[100])")
+        check("(u: user, company) @ { u.firstName = 'Bill', company.name = 'Facebook' }",
+                "(u:user[40],company:company[100])")
+
+        check("user @ { firstName = 'Bill' } ( x = firstName, x = lastName )", "ct_err:ct_err:at_dup_what_name:x")
+        check("user @ { firstName = 'Bill' } ( x = firstName, y = lastName )", "(x:text[Bill],y:text[Gates])")
+    }
+
+    @Test fun testTupleFieldAccess() {
+        testDataBaseCode = "val t = user @ { firstName = 'Bill' } ( firstName, lastName, companyName = company.name );"
+        check("t.firstName", "text[Bill]")
+        check("t.lastName", "text[Gates]")
+        check("t.companyName", "text[Microsoft]")
+        check("t.foo", "ct_err:unknown_member:foo")
+    }
 
     private fun check(code: String, expectedResult: String) {
         val queryCode = "return " + code + ";";
@@ -334,19 +378,19 @@ class AtExprTest {
     }
 
     private fun checkEx(code: String, expectedResult: String) {
-        checkEx(testDataClassDefs, testDataInserts, testDataBaseCode + code, expectedResult)
+        checkEx(sqlCtx, testDataClassDefs, testDataInserts, testDataBaseCode + code, expectedResult)
     }
 
     companion object {
-        fun checkEx(classDefs: Array<String>, inserts: Array<String>, code: String, expectedResult: String) {
-            val classDefsCode = classDefs.joinToString(" ")
-            val fullCode = classDefsCode + " query q() { " + code + " }"
-            checkFull(fullCode, inserts, expectedResult)
+        fun checkEx(sqlCtx: SqlTestCtx, classDefs: Array<String>, inserts: Array<String>, code: String, expectedResult: String) {
+            val actualResult = calc(sqlCtx, classDefs, inserts, code)
+            assertEquals(expectedResult, actualResult)
         }
 
-        private fun checkFull(fullCode: String, inserts: Array<String>, expectedResult: String) {
-            val actualResult = TestUtils.invoke(fullCode, inserts, arrayOf())
-            assertEquals(expectedResult, actualResult)
+        fun calc(sqlCtx: SqlTestCtx, classDefs: Array<String>, inserts: Array<String>, code: String): String {
+            val classDefsCode = classDefs.joinToString(" ")
+            val fullCode = classDefsCode + " query q() { " + code + " }"
+            return TestUtils.invokeWithSql(sqlCtx, fullCode, inserts, arrayOf())
         }
 
         val mkins = TestUtils::mkins

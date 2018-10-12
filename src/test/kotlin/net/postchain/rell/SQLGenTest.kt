@@ -1,7 +1,6 @@
 package net.postchain.rell
 
 import com.github.h0tk3y.betterParse.grammar.parseToEnd
-import net.postchain.rell.model.makeModule
 import net.postchain.rell.parser.S_Grammar
 import net.postchain.rell.sql.gensql
 import org.junit.Test
@@ -11,8 +10,8 @@ class SQLGenTest {
     fun testresource(f: String) {
         val contractText = javaClass.getResource(f).readText()
         val ast = S_Grammar.parseToEnd(contractText)
-        val model = makeModule(ast)
-        println(gensql(model))
+        val model = ast.compile()
+        println(gensql(model, true))
     }
 
 
