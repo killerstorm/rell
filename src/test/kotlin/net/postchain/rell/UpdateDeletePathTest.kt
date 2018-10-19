@@ -2,106 +2,102 @@ package net.postchain.rell
 
 import org.junit.After
 import org.junit.Test
-import kotlin.test.assertEquals
 
 // Purpose: make sure that complex combinations of path expressions work (i. e. translated into proper JOINs).
 
-class UpdatePathTest {
-    private val classDefs = """
-        class country { name: text; }
-        class city { name: text; country; }
-        class person { name: text; homeCity: city; workCity: city; score: integer; }
-    """.trimIndent()
+class UpdateDeletePathTest {
+    private val classDefs = listOf(
+            "class country { name: text; }",
+            "class city { name: text; country; }",
+            "class person { name: text; homeCity: city; workCity: city; mutable score: integer; }"
+    )
 
-    private val ctx = SqlTestCtx(classDefs)
+    private val tst = RellSqlTester(classDefs = classDefs)
 
-    @After
-    fun after() {
-        ctx.destroy()
-    }
+    @After fun after() = tst.destroy()
 
     @Test fun testSimplePathUpdate() {
         createObjects()
 
         execute("update person @ { homeCity.name = 'New York' } ( score = 999 );")
-        check("person(7,John,4,5,999)", "person(8,Mike,5,6,200)", "person(9,Hans,6,4,300)")
+        chk("person(7,John,4,5,999)", "person(8,Mike,5,6,200)", "person(9,Hans,6,4,300)")
 
         execute("update person @ { workCity.name = 'Berlin' } ( score = 777 );")
-        check("person(7,John,4,5,999)", "person(8,Mike,5,6,777)", "person(9,Hans,6,4,300)")
+        chk("person(7,John,4,5,999)", "person(8,Mike,5,6,777)", "person(9,Hans,6,4,300)")
     }
 
     @Test fun testSimplePathDelete() {
         createObjects()
 
         execute("delete person @ { homeCity.name = 'New York' };")
-        check("person(8,Mike,5,6,200)", "person(9,Hans,6,4,300)")
+        chk("person(8,Mike,5,6,200)", "person(9,Hans,6,4,300)")
 
         execute("delete person @ { workCity.name = 'Berlin' };")
-        check("person(9,Hans,6,4,300)")
+        chk("person(9,Hans,6,4,300)")
     }
 
     @Test fun testLongerPathUpdate() {
         createObjects()
 
         execute("update person @ { homeCity.country.name = 'USA' } ( score = 999 );")
-        check("person(7,John,4,5,999)", "person(8,Mike,5,6,200)", "person(9,Hans,6,4,300)")
+        chk("person(7,John,4,5,999)", "person(8,Mike,5,6,200)", "person(9,Hans,6,4,300)")
 
         execute("update person @ { workCity.country.name = 'Germany' } ( score = 777 );")
-        check("person(7,John,4,5,999)", "person(8,Mike,5,6,777)", "person(9,Hans,6,4,300)")
+        chk("person(7,John,4,5,999)", "person(8,Mike,5,6,777)", "person(9,Hans,6,4,300)")
     }
 
     @Test fun testLongerPathDelete() {
         createObjects()
 
         execute("delete person @ { homeCity.country.name = 'USA' };")
-        check("person(8,Mike,5,6,200)", "person(9,Hans,6,4,300)")
+        chk("person(8,Mike,5,6,200)", "person(9,Hans,6,4,300)")
 
         execute("delete person @ { workCity.country.name = 'Germany' };")
-        check("person(9,Hans,6,4,300)")
+        chk("person(9,Hans,6,4,300)")
     }
 
     @Test fun testMultiplePathsUpdate() {
         createObjects()
 
         execute("update person @ { homeCity.name = 'New York', workCity.name = 'Berlin' } ( score = 999 );") // None
-        check("person(7,John,4,5,100)", "person(8,Mike,5,6,200)", "person(9,Hans,6,4,300)")
+        chk("person(7,John,4,5,100)", "person(8,Mike,5,6,200)", "person(9,Hans,6,4,300)")
 
         execute("update person @ { homeCity.name = 'Berlin', workCity.name = 'New York' } ( score = 999 );")
-        check("person(7,John,4,5,100)", "person(8,Mike,5,6,200)", "person(9,Hans,6,4,999)")
+        chk("person(7,John,4,5,100)", "person(8,Mike,5,6,200)", "person(9,Hans,6,4,999)")
 
         execute("update person @ { homeCity.name = 'London', workCity.country.name = 'USA' } ( score = 999 );") // None
-        check("person(7,John,4,5,100)", "person(8,Mike,5,6,200)", "person(9,Hans,6,4,999)")
+        chk("person(7,John,4,5,100)", "person(8,Mike,5,6,200)", "person(9,Hans,6,4,999)")
 
         execute("update person @ { homeCity.name = 'London', workCity.country.name = 'Germany' } ( score = 777 );")
-        check("person(7,John,4,5,100)", "person(8,Mike,5,6,777)", "person(9,Hans,6,4,999)")
+        chk("person(7,John,4,5,100)", "person(8,Mike,5,6,777)", "person(9,Hans,6,4,999)")
 
         execute("update person @ { homeCity.country.name = 'USA', workCity.country.name = 'Germany' } ( score = 333 );") // None
-        check("person(7,John,4,5,100)", "person(8,Mike,5,6,777)", "person(9,Hans,6,4,999)")
+        chk("person(7,John,4,5,100)", "person(8,Mike,5,6,777)", "person(9,Hans,6,4,999)")
 
         execute("update person @ { homeCity.country.name = 'USA', workCity.country.name = 'England' } ( score = 333 );")
-        check("person(7,John,4,5,333)", "person(8,Mike,5,6,777)", "person(9,Hans,6,4,999)")
+        chk("person(7,John,4,5,333)", "person(8,Mike,5,6,777)", "person(9,Hans,6,4,999)")
     }
 
     @Test fun testMultiplePathsDelete() {
         createObjects()
 
         execute("delete person @ { homeCity.name = 'New York', workCity.name = 'Berlin' };") // None
-        check("person(7,John,4,5,100)", "person(8,Mike,5,6,200)", "person(9,Hans,6,4,300)")
+        chk("person(7,John,4,5,100)", "person(8,Mike,5,6,200)", "person(9,Hans,6,4,300)")
 
         execute("delete person @ { homeCity.name = 'Berlin', workCity.name = 'New York' };")
-        check("person(7,John,4,5,100)", "person(8,Mike,5,6,200)")
+        chk("person(7,John,4,5,100)", "person(8,Mike,5,6,200)")
 
         execute("delete person @ { homeCity.name = 'London', workCity.country.name = 'USA' };") // None
-        check("person(7,John,4,5,100)", "person(8,Mike,5,6,200)")
+        chk("person(7,John,4,5,100)", "person(8,Mike,5,6,200)")
 
         execute("delete person @ { homeCity.name = 'London', workCity.country.name = 'Germany' };")
-        check("person(7,John,4,5,100)")
+        chk("person(7,John,4,5,100)")
 
         execute("delete person @ { homeCity.country.name = 'USA', workCity.country.name = 'Germany' };") // None
-        check("person(7,John,4,5,100)")
+        chk("person(7,John,4,5,100)")
 
         execute("delete person @ { homeCity.country.name = 'USA', workCity.country.name = 'England' };")
-        check()
+        chk()
     }
 
     @Test fun testExtraClassesUpdate() {
@@ -116,7 +112,7 @@ class UpdatePathTest {
             } ( score = 999 );
         """) // None
 
-        check("person(7,John,4,5,100)", "person(8,Mike,5,6,200)", "person(9,Hans,6,4,300)")
+        chk("person(7,John,4,5,100)", "person(8,Mike,5,6,200)", "person(9,Hans,6,4,300)")
 
         execute("""
             update p: person (c1: city, c2: city) @ {
@@ -127,7 +123,7 @@ class UpdatePathTest {
             } ( score = 999 );
         """) // None
 
-        check("person(7,John,4,5,100)", "person(8,Mike,5,6,200)", "person(9,Hans,6,4,999)")
+        chk("person(7,John,4,5,100)", "person(8,Mike,5,6,200)", "person(9,Hans,6,4,999)")
     }
 
     @Test fun testExtraClassesDelete() {
@@ -142,7 +138,7 @@ class UpdatePathTest {
             };
         """) // None
 
-        check("person(7,John,4,5,100)", "person(8,Mike,5,6,200)", "person(9,Hans,6,4,300)")
+        chk("person(7,John,4,5,100)", "person(8,Mike,5,6,200)", "person(9,Hans,6,4,300)")
 
         execute("""
             delete p: person (c1: city, c2: city) @ {
@@ -153,13 +149,13 @@ class UpdatePathTest {
             };
         """) // None
 
-        check("person(7,John,4,5,100)", "person(8,Mike,5,6,200)")
+        chk("person(7,John,4,5,100)", "person(8,Mike,5,6,200)")
     }
 
     @Test fun testExtraClassesMixUpdate() {
         createObjects()
         execute("update p1: person (p2: person) @ { p1.homeCity = p2.workCity } ( score = p1.score * 3 + p2.score );")
-        check("person(7,John,4,5,600)", "person(8,Mike,5,6,700)", "person(9,Hans,6,4,1100)")
+        chk("person(7,John,4,5,600)", "person(8,Mike,5,6,700)", "person(9,Hans,6,4,1100)")
     }
 
     private fun createObjects() {
@@ -173,14 +169,12 @@ class UpdatePathTest {
         execute("create person('Mike', homeCity = city @ { 'London' }, workCity = city @ { 'Berlin' }, score = 200);")
         execute("create person('Hans', homeCity = city @ { 'Berlin' }, workCity = city @ { 'New York' }, score = 300);")
 
-        check("person(7,John,4,5,100)", "person(8,Mike,5,6,200)", "person(9,Hans,6,4,300)")
+        chk("person(7,John,4,5,100)", "person(8,Mike,5,6,200)", "person(9,Hans,6,4,300)")
     }
 
-    private fun execute(code: String) {
-        ctx.executeOperation(code)
-    }
+    private fun execute(code: String) = tst.execOp(code)
 
-    private fun check(vararg expectedArray: String) {
+    private fun chk(vararg expectedArray: String) {
         val implicitlyExpected = arrayOf(
                 "country(1,USA)",
                 "country(2,England)",
@@ -190,7 +184,6 @@ class UpdatePathTest {
                 "city(6,Berlin,3)"
         )
         val expected = (implicitlyExpected + expectedArray).toList()
-        val actual = ctx.dumpDatabase()
-        assertEquals(expected, actual)
+        tst.chkData(*expected.toTypedArray())
     }
 }

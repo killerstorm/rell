@@ -1,7 +1,6 @@
 package net.postchain.rell.sql
 
 import net.postchain.rell.model.*
-import net.postchain.rell.toHex
 import org.jooq.*
 import org.jooq.impl.DSL
 import org.jooq.impl.DSL.constraint
@@ -62,7 +61,7 @@ fun genclass(classDefinition: RClass): String {
     return ddl
 }
 
-fun genRequire(s: RFunCallExpr): String {
+fun genRequire(s: RCallExpr): String {
     if (s.args.size == 0 || s.args.size > 2) throw Exception("Too many (or too little) arguments to require")
     val message = if (s.args.size == 2) genExpr(s.args[1]) else "'Require failed'"
 
@@ -85,7 +84,7 @@ val specialOps = mapOf(
         "require" to ::genRequire
 )
 
-fun genJSON(s: RFunCallExpr): String {
+fun genJSON(s: RCallExpr): String {
     if (s.args.size != 1) throw Exception("Wrong number of parameters to json function")
     val arg = genExpr(s.args[0])
     return " (${arg}::jsonb) "
@@ -101,16 +100,16 @@ fun genstatement(s: RStatement): String {
 
 fun genExpr(expr: RExpr): String {
     return when (expr) {
-        is RVarExpr -> "_" + expr.attr.name
+        is RVarExpr -> TODO() //"_" + expr.name
         is RAtExpr -> TODO()
         is RBinaryExpr -> TODO()
         is RStringLiteralExpr -> "'${expr.value}'" // TODO: esscape
         is RIntegerLiteralExpr -> expr.value.toString()
-        is RByteArrayLiteralExpr -> "E'\\\\x${expr.literal.toHex()}'"
-        is RFunCallExpr -> (
-                if (expr.fname == "json")
-                    genJSON(expr)
-                else throw Exception("unknown funcall"))
+        is RByteArrayLiteralExpr -> TODO()//"E'\\\\x${expr.literal.toHex()}'"
+        is RCallExpr -> TODO() // (
+                //if (expr.fname == "json")
+                //    genJSON(expr)
+                //else throw Exception("unknown funcall"))
         else -> throw Exception("Expression type not supported")
     }
 }

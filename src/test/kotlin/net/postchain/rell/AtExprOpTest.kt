@@ -4,20 +4,21 @@ import org.junit.After
 import kotlin.test.assertEquals
 
 class AtExprOpTest: AbstractOpTest() {
-    private val classDefs = arrayOf(
+    private val classDefs = listOf(
             "class company { name: text; }",
             "class user { name: text; company; }",
-            """ class optest {
+            """class optest {
                     b1: boolean; b2: boolean;
                     i1: integer; i2: integer;
                     t1: text; t2: text;
+                    ba1: byte_array; ba2: byte_array;
+                    j1: json; j2: json;
                     user1: user; user2: user;
                     company1: company; company2: company;
-                }
-            """.trimMargin()
+            }""".trimMargin()
     )
 
-    private val inserts = arrayOf(
+    private val inserts = listOf(
             Ins.company(100, "Microsoft"),
             Ins.company(200, "Apple"),
 
@@ -32,6 +33,10 @@ class AtExprOpTest: AbstractOpTest() {
             "i2" to "0",
             "t1" to "''",
             "t2" to "''",
+            "ba1" to "''",
+            "ba2" to "''",
+            "j1" to "'{}'",
+            "j2" to "'{}'",
             "user1" to "1000",
             "user2" to "2000",
             "company1" to "100",
@@ -42,124 +47,101 @@ class AtExprOpTest: AbstractOpTest() {
             "boolean" to "b",
             "integer" to "i",
             "text" to "t",
+            "byte_array" to "ba",
+            "json" to "j",
             "user" to "user",
             "company" to "company"
     )
 
-    private val sqlCtx by lazy { SqlTestCtx(classDefs.joinToString("\n")) }
+    private val tst = RellSqlTester(classDefs = classDefs, inserts = inserts)
 
-    @After
-    fun after() {
-        sqlCtx.destroy()
+    @After fun after() = tst.destroy()
+
+    override fun chkExpr(expr: String, args: List<TstVal>, expected: Boolean) {
+        val (expr2, values) = transformExpr(expr, args)
+
+        val expectedWhereStr = if (expected) "list<optest>[optest[5]]" else "list<optest>[]"
+        val actualWhereStr = calcExprWhere(expr2, values)
+        assertEquals(expectedWhereStr, actualWhereStr)
+
+        val expectedWhatStr = "boolean[$expected]"
+        val actualWhatStr = calcExprWhat(expr2, values)
+        assertEquals(expectedWhatStr, actualWhatStr)
     }
 
-    override fun checkOpBool(op: String, left: TstVal, right: TstVal, expected: Boolean) {
-        left as AtTstVal
-        right as AtTstVal
-        checkOpWhere(op, left.leftField, right.rightField, left.sql(), right.sql(), expected)
-        checkOp(op, left, right, "boolean[$expected]")
+    override fun calcExpr(expr: String, args: List<TstVal>): String {
+        val (expr2, values) = transformExpr(expr, args)
+        return calcExprWhat(expr2, values)
     }
 
-    override fun checkOpBool(op: String, right: TstVal, expected: Boolean) {
-        right as AtTstVal
-        checkOpWhere(op, right.rightField, right.sql(), expected)
-        checkOp(op, right, "boolean[$expected]")
+    private fun transformExpr(expr: String, args: List<TstVal>): Pair<String, List<Pair<String, String>>> {
+        val args2 = args.map { it as AtTstVal }
+        val fields = args2.withIndex().map { (idx, arg) -> arg.field(idx) }
+        val expr2 = replaceParams(expr, fields)
+        val values = args2.withIndex().map { (idx, arg) -> Pair(arg.field(idx), arg.sql()) }
+        return Pair(expr2, values)
     }
 
-    override fun checkOp(op: String, left: TstVal, right: TstVal, expected: String) {
-        left as AtTstVal
-        right as AtTstVal
-        val actual = calcOpWhat(op, left.leftField, right.rightField, left.sql(), right.sql())
-        assertEquals(expected, actual)
+    override fun compileExpr(expr: String, types: List<String>): String {
+        val params = types.withIndex().map { (idx, type) ->
+            val field = typeToField.getValue(type)
+            "$field${idx+1}"
+        }
+        val expr2 = replaceParams(expr, params)
+        return tst.compileModule("query q() = optest @ { $expr2 };")
     }
 
-    override fun checkOp(op: String, right: TstVal, expected: String) {
-        right as AtTstVal
-        val actual = calcOpWhat(op, right.rightField, right.sql())
-        assertEquals(expected, actual)
+    private fun replaceParams(expr: String, params: List<String>): String {
+        var s = expr
+        for ((idx, param) in params.withIndex()) {
+            s = s.replace("#$idx", param)
+        }
+        return s
     }
 
-    override fun checkOpErr(op: String, left: String, right: String) {
-        val expected = "ct_err:binop_operand_type:$op:$left:$right"
-        val leftField = typeToField[left] + "1"
-        val rightField = typeToField[right] + "2"
-        val actual = calcOpWhere(op, leftField, rightField, null, null)
-        assertEquals(expected, actual)
+    private fun calcExprWhere(expr: String, args: List<Pair<String, String>>): String {
+        val values = makeValues(args)
+        return calc(values, "= all optest @ { $expr };")
     }
 
-    override fun checkOpErr(op: String, right: String) {
-        val expected = "ct_err:unop_operand_type:$op:$right"
-        val rightField = typeToField[right] + "2"
-        val actual = calcOpWhere(op, rightField, null)
-        assertEquals(expected, actual)
+    private fun calcExprWhat(expr: String, args: List<Pair<String, String>>): String {
+        val values = makeValues(args)
+        return calc(values, "= optest @ {} ( $expr );")
     }
 
-    private fun checkOpWhere(op: String, left: String, right: String, leftValue: String, rightValue: String, expected: Boolean) {
-        val expectedStr = if (expected) "list<optest>[optest[5]]" else "list<optest>[]"
-        val actualStr = calcOpWhere(op, left, right, leftValue, rightValue)
-        assertEquals(expectedStr, actualStr)
+    private fun calc(values: Map<String, String>, code: String): String {
+        tst.inserts = makeInserts(values)
+        return tst.callQuery("query q() $code", listOf())
     }
 
-    private fun checkOpWhere(op: String, right: String, rightValue: String, expected: Boolean) {
-        val expectedStr = if (expected) "list<optest>[optest[5]]" else "list<optest>[]"
-        val actualStr = calcOpWhere(op, right, rightValue)
-        assertEquals(expectedStr, actualStr)
-    }
-
-    private fun calcOpWhere(op: String, left: String, right: String, leftValue: String?, rightValue: String?): String {
-        val values = makeValues(left, right, leftValue, rightValue)
-        val inserts = makeInserts(values)
-        val code = "return all optest @ { $left $op $right };"
-        return AtExprTest.calc(sqlCtx, classDefs, inserts, code)
-    }
-
-    private fun calcOpWhere(op: String, right: String, rightValue: String?): String {
-        val values = makeValues("", right, null, rightValue)
-        val inserts = makeInserts(values)
-        val code = "return all optest @ { $op $right };"
-        return AtExprTest.calc(sqlCtx, classDefs, inserts, code)
-    }
-
-    private fun calcOpWhat(op: String, left: String, right: String, leftValue: String?, rightValue: String?): String {
-        val values = makeValues(left, right, leftValue, rightValue)
-        val inserts = makeInserts(values)
-        val code = "return optest @ {} ( $left $op $right );"
-        return AtExprTest.calc(sqlCtx, classDefs, inserts, code)
-    }
-
-    private fun calcOpWhat(op: String, right: String, rightValue: String?): String {
-        val values = makeValues("", right, null, rightValue)
-        val inserts = makeInserts(values)
-        val code = "return optest @ {} ( $op $right );"
-        return AtExprTest.calc(sqlCtx, classDefs, inserts, code)
-    }
-
-    private fun makeValues(left: String, right: String, leftValue: String?, rightValue: String?): Map<String, String> {
+    private fun makeValues(args: List<Pair<String, String>>): Map<String, String> {
         val values = mutableMapOf<String, String>()
         values.putAll(defaultValues)
-        if (leftValue != null) values.put(left, leftValue)
-        if (rightValue != null) values.put(right, rightValue)
+        for ((name, value) in args) {
+            values.put(name, value)
+        }
         return values
     }
 
-    private fun makeInserts(values: Map<String, String>): Array<String> {
+    private fun makeInserts(values: Map<String, String>): List<String> {
         val columns = values.keys.toList()
         val insColumns = columns.joinToString(",")
         val insValues = "5," + columns.map{ values[it] }.joinToString(",")
-        val insert = TestUtils.mkins("optest", insColumns, insValues)
+        val insert = SqlTestUtils.mkins("optest", insColumns, insValues)
         return this.inserts + insert
     }
 
     override fun vBool(v: Boolean): TstVal = AtTstVal.Bool(v)
     override fun vInt(v: Long): TstVal = AtTstVal.Integer(v)
     override fun vText(v: String): TstVal = AtTstVal.Text(v)
+    override fun vBytes(v: String): TstVal = AtTstVal.Bytes(v)
+    override fun vJson(v: String): TstVal = AtTstVal.Json(v)
     override fun vObj(cls: String, id: Long): TstVal = AtTstVal.Obj(cls, id)
 
-    private sealed class AtTstVal(field: String): TstVal() {
-        val leftField = field + "1"
-        val rightField = field + "2"
-
+    private sealed class AtTstVal(val field: String): TstVal() {
         abstract fun sql(): String
+
+        fun field(idx: Int): String = field + (idx + 1)
 
         class Bool(val v: Boolean): AtTstVal("b") {
             override fun sql(): String = "$v"
@@ -173,6 +155,15 @@ class AtExprOpTest: AbstractOpTest() {
             override fun sql(): String = "'$v'"
         }
 
+        class Bytes(str: String): AtTstVal("ba") {
+            private val v = str.hexStringToByteArray()
+            override fun sql(): String = "'\\x${v.toHex()}'"
+        }
+
+        class Json(val v: String): AtTstVal("j") {
+            override fun sql(): String = "'$v'"
+        }
+
         class Obj(cls: String, val id: Long): AtTstVal(cls) {
             override fun sql(): String = "$id"
         }
@@ -181,6 +172,6 @@ class AtExprOpTest: AbstractOpTest() {
     private object Ins {
         fun company(id: Int, name: String): String = mkins("company", "name", "$id, '$name'")
         fun user(id: Int, name: String, company: Int): String = mkins("user", "name,company", "$id, '$name', $company")
-        val mkins = TestUtils::mkins
+        val mkins = SqlTestUtils::mkins
     }
 }

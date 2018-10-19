@@ -29,7 +29,7 @@ class InterpTest
 //        val funcall = RFuncall(RIntegerType,
 //                lambda, listOf(RVarExpr(RAttrib("b", RIntegerType), 0)))
 //        val condition = RBinaryExpr(RBooleanType, "==", funcall, RIntegerLiteralExpr(RIntegerType, 3))
-//        val require = RCallStatement(RFunCallExpr(RUnitType, "require", listOf(condition)))
+//        val require = RCallStatement(RCallExpr(RUnitType, "require", listOf(condition)))
 //        val op = ROperation("hello", arrayOf(RAttrib("b", RIntegerType)), arrayOf(require))
     }
 }

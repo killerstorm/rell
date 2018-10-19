@@ -5,41 +5,6 @@ import net.postchain.rell.runtime.RtValue
 import net.postchain.rell.sql.MAKE_ROWID_FUNCTION
 import net.postchain.rell.sql.ROWID_COLUMN
 
-class RCreateStatementAttr(val attr: RAttrib, val expr: RExpr)
-
-class RCreateStatement(val rClass: RClass, val attrs: List<RCreateStatementAttr>): RStatement() {
-    override fun execute(env: RtEnv): RtValue? {
-        val rtSql = buildSql()
-        val rtUpdate = RtUpdate(rtSql)
-        rtUpdate.execute(env)
-        return null
-    }
-
-    private fun buildSql(): RtSql {
-        val builder = RtSqlBuilder()
-
-        builder.append("INSERT INTO ")
-        builder.appendName(rClass.name)
-
-        builder.append("(")
-        builder.appendName(ROWID_COLUMN)
-        builder.append(", ")
-        builder.append(attrs, ", ") { attr ->
-            builder.appendName(attr.attr.name)
-        }
-        builder.append(")")
-
-        builder.append(" VALUES (")
-        builder.append("$MAKE_ROWID_FUNCTION(), ")
-        builder.append(attrs, ", ") { attr ->
-            builder.append(attr.expr)
-        }
-        builder.append(")")
-
-        return builder.build()
-    }
-}
-
 class RUpdateStatementAttr(val attr: RAttrib, val expr: DbExpr)
 
 class RUpdateStatement(
@@ -54,7 +19,8 @@ class RUpdateStatement(
         extraClasses.withIndex().forEach { check(it.index + 1 == it.value.index) }
     }
 
-    override fun execute(env: RtEnv): RtValue? {
+    override fun execute(env: RtEnv): RStatementResult? {
+        env.checkDbUpdateAllowed()
         val rtSql = buildSql()
         val rtUpdate = RtUpdate(rtSql)
         rtUpdate.execute(env)
@@ -106,7 +72,8 @@ class RDeleteStatement(val cls: RAtClass, val extraClasses: List<RAtClass>, val 
         extraClasses.withIndex().forEach { check(it.index + 1 == it.value.index) }
     }
 
-    override fun execute(env: RtEnv): RtValue? {
+    override fun execute(env: RtEnv): RStatementResult? {
+        env.checkDbUpdateAllowed()
         val rtSql = buildSql()
         val rtUpdate = RtUpdate(rtSql)
         rtUpdate.execute(env)

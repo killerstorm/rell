@@ -8,7 +8,9 @@ typealias EnvMap = (n: String) -> List<Int>
 
 class RTGlobalContext (val conn: java.sql.Connection?)
 
-class RtError(val code: String, msg: String): Exception(msg)
+sealed class RtBaseError(msg: String): Exception(msg)
+class RtError(val code: String, msg: String): RtBaseError(msg)
+class RtRequireError(msg: String): RtBaseError(msg)
 
 fun <T>make_var_ref(em: EnvMap, name: String): RTF<T> {
     val indexes = em(name)

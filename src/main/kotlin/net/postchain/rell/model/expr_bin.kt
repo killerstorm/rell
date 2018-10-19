@@ -1,6 +1,7 @@
 package net.postchain.rell.model
 
 import net.postchain.rell.runtime.*
+import kotlin.experimental.and
 
 sealed class RCmpOp(val code: String, val checker: (Int) -> Boolean) {
     fun check(cmp: Int): Boolean = checker(cmp)
@@ -38,6 +39,30 @@ object RCmpType_Text: RCmpType() {
         val l = left.asString()
         val r = right.asString()
         return l.compareTo(r)
+    }
+}
+
+object RCmpType_ByteArray: RCmpType() {
+    override fun compare(left: RtValue, right: RtValue): Int {
+        val l = left.asByteArray()
+        val r = right.asByteArray()
+
+        val ln = l.size
+        val rn = r.size
+        val n = Math.min(ln, rn)
+
+        var i = 0
+        while (i < n) {
+            val lb = l[i].toInt()
+            val rb = r[i].toInt()
+            val d = Integer.compareUnsigned(lb, rb)
+            if (d != 0) {
+                return d
+            }
+            ++i
+        }
+
+        return Integer.compare(ln, rn)
     }
 }
 
@@ -143,18 +168,32 @@ object RBinaryOp_Mul: RBinaryOp_Arith("*") {
 }
 
 object RBinaryOp_Div: RBinaryOp_Arith("/") {
-    override fun evaluate(left: Long, right: Long): Long = left / right
+    override fun evaluate(left: Long, right: Long): Long {
+        if (right == 0L) {
+            throw RtError("expr_div_by_zero", "Division by zero")
+        }
+        return left / right
+    }
 }
 
 object RBinaryOp_Mod: RBinaryOp_Arith("%") {
     override fun evaluate(left: Long, right: Long): Long = left % right
 }
 
-object RBinaryOp_Concat: RBinaryOp("+") {
+object RBinaryOp_Concat_Text: RBinaryOp("+") {
     override fun evaluate(left: RtValue, right: RtValue): RtValue {
         val leftVal = left.asString()
         val rightVal = right.asString()
         val resVal = leftVal + rightVal
         return RtTextValue(resVal)
+    }
+}
+
+object RBinaryOp_Concat_ByteArray: RBinaryOp("+") {
+    override fun evaluate(left: RtValue, right: RtValue): RtValue {
+        val leftVal = left.asByteArray()
+        val rightVal = right.asByteArray()
+        val resVal = leftVal + rightVal
+        return RtByteArrayValue(resVal)
     }
 }

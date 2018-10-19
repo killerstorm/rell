@@ -29,7 +29,7 @@ class S_NameExpr(val name: String): S_Expression() {
 
         // There is a class attribute and a local variable with such name -> implicit where condition.
 
-        val argType = localAttr.attr.type
+        val argType = localAttr.type
         val clsAttrsByType = clsAttrs.filter { S_BinaryOp_EqNe.checkTypes(it.type, argType) }
 
         if (clsAttrsByType.isEmpty()) {
@@ -51,6 +51,16 @@ class S_NameExpr(val name: String): S_Expression() {
         val clsAttrExpr = PathDbExpr(clsAttr.type, clsAttr.cls, listOf(), clsAttr.name)
         val localAttrExpr = localAttr.toVarExpr()
         return BinaryDbExpr(RBooleanType, DbBinaryOp_Eq, clsAttrExpr, InterpretedDbExpr(localAttrExpr))
+    }
+
+    override fun compileCall(ctx: ExprCompilationContext, args: List<RExpr>): RExpr {
+        val fn = ctx.modCtx.getFunction(name)
+        return fn.compileCall(args)
+    }
+
+    override fun compileCallDb(ctx: DbCompilationContext, args: List<DbExpr>): DbExpr {
+        val fn = ctx.exprCtx.modCtx.getFunction(name)
+        return fn.compileCallDb(args)
     }
 
     override fun iteratePathExpr(path: MutableList<String>): Boolean {
@@ -88,6 +98,31 @@ class S_AttributeExpr(val base: S_Expression, val name: String): S_Expression() 
         }
 
         return delegateCompileDb(ctx)
+    }
+
+    override fun compileCall(ctx: ExprCompilationContext, args: List<RExpr>): RExpr {
+        val rBase = base.compile(ctx)
+        return compileCall0(rBase, args)
+    }
+
+    override fun compileCallDb(ctx: DbCompilationContext, args: List<DbExpr>): DbExpr {
+        val dbBase = base.compileDb(ctx)
+
+        if (dbBase is InterpretedDbExpr) {
+            val rArgs = args.filter { it is InterpretedDbExpr }.map { (it as InterpretedDbExpr).expr }
+            if (rArgs.size == args.size) {
+                val rExpr = compileCall0(dbBase.expr, rArgs)
+                return InterpretedDbExpr(rExpr)
+            }
+        }
+
+        val fn = S_SysMemberFunctions.getMemberFunction(dbBase.type, name)
+        return fn.compileMemberCallDb(dbBase, args)
+    }
+
+    private fun compileCall0(rBase: RExpr, args: List<RExpr>): RExpr {
+        val fn = S_SysMemberFunctions.getMemberFunction(rBase.type, name)
+        return fn.compileMemberCall(rBase, args)
     }
 
     override fun iteratePathExpr(path: MutableList<String>): Boolean {

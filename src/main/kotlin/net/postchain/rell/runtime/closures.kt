@@ -1,6 +1,5 @@
 package net.postchain.rell.runtime
 
-import net.postchain.rell.model.RFuncall
 import net.postchain.rell.model.RLambdaExpr
 
 class RTClosure (val parentEnv: RTEnv, val argCount: Int, val rtf: RTF<Any>) {

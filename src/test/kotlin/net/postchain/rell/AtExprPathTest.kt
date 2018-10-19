@@ -4,7 +4,7 @@ import org.junit.After
 import org.junit.Test
 
 class AtExprPathTest {
-    private val classDefs = arrayOf(
+    private val classDefs = listOf(
             "class country { name: text; }",
             "class state { name: text; country; }",
             "class city { name: text; state; }",
@@ -13,7 +13,7 @@ class AtExprPathTest {
             "class person { name: text; city; department; }"
     )
 
-    private val inserts = arrayOf(
+    private val inserts = listOf(
             Ins.country(100, "USA"),
             Ins.country(101, "Germany"),
 
@@ -68,90 +68,87 @@ class AtExprPathTest {
             Ins.person(611, "Bill", 300, 506)
     )
 
-    private val sqlCtx by lazy { SqlTestCtx(classDefs.joinToString("\n")) }
+    private val tst = RellSqlTester(classDefs = classDefs, inserts = inserts)
 
-    @After
-    fun after() {
-        sqlCtx.destroy()
-    }
+    @After fun after() = tst.destroy()
 
     @Test fun testSimpleAttr() {
-        check("all person @ { city.name = 'San Francisco' }", "list<person>[person[607],person[611]]")
-        check("all person @ { city.name = 'Las Vegas' }", "list<person>[person[601],person[608]]")
-        check("all person @ { city.name = 'Munich' }", "list<person>[person[604]]")
+        chk("all person @ { city.name = 'San Francisco' }", "list<person>[person[607],person[611]]")
+        chk("all person @ { city.name = 'Las Vegas' }", "list<person>[person[601],person[608]]")
+        chk("all person @ { city.name = 'Munich' }", "list<person>[person[604]]")
 
-        check("all person @ { city.state.name = 'CA' }", "list<person>[person[605],person[607],person[611]]")
-        check("all person @ { city.state.name = 'WA' }", "list<person>[person[606],person[610]]")
-        check("all person @ { city.state.name = 'NRW' }", "list<person>[person[600],person[603]]")
+        chk("all person @ { city.state.name = 'CA' }", "list<person>[person[605],person[607],person[611]]")
+        chk("all person @ { city.state.name = 'WA' }", "list<person>[person[606],person[610]]")
+        chk("all person @ { city.state.name = 'NRW' }", "list<person>[person[600],person[603]]")
 
-        check("all person @ { city.state.country.name = 'USA' }",
+        chk("all person @ { city.state.country.name = 'USA' }",
                 "list<person>[person[601],person[605],person[606],person[607],person[608],person[610],person[611]]")
-        check("all person @ { city.state.country.name = 'Germany' }",
+        chk("all person @ { city.state.country.name = 'Germany' }",
                 "list<person>[person[600],person[602],person[603],person[604],person[609]]")
 
-        check("all company @ { hq.state.country.name = 'USA' }",
+        chk("all company @ { hq.state.country.name = 'USA' }",
                 "list<company>[company[400],company[401],company[402],company[403],company[404]]")
-        check("all company @ { hq.state.country.name = 'Germany' }",
+        chk("all company @ { hq.state.country.name = 'Germany' }",
                 "list<company>[company[405],company[406],company[407],company[408]]")
     }
 
     @Test fun testSimpleReference() {
-        checkEx("val x = city @ { name = 'Seattle' }; return all person @ { city = x };",
+        chkEx("val x = city @ { name = 'Seattle' }; return all person @ { city = x };",
                 "list<person>[person[606],person[610]]")
-        checkEx("val x = city @ { name = 'Cologne' }; return all person @ { city = x };",
+        chkEx("val x = city @ { name = 'Cologne' }; return all person @ { city = x };",
                 "list<person>[person[603]]")
-        checkEx("val x = city @ { name = 'Stuttgart' }; return all person @ { city = x };",
+        chkEx("val x = city @ { name = 'Stuttgart' }; return all person @ { city = x };",
                 "list<person>[person[602],person[609]]")
 
-        checkEx("val x = state @ { name = 'NV' }; return all person @ { city.state = x };",
+        chkEx("val x = state @ { name = 'NV' }; return all person @ { city.state = x };",
                 "list<person>[person[601],person[608]]")
-        checkEx("val x = state @ { name = 'BY' }; return all person @ { city.state = x };",
+        chkEx("val x = state @ { name = 'BY' }; return all person @ { city.state = x };",
                 "list<person>[person[604]]")
-        checkEx("val x = state @ { name = 'CA' }; return all person @ { city.state = x };",
+        chkEx("val x = state @ { name = 'CA' }; return all person @ { city.state = x };",
                 "list<person>[person[605],person[607],person[611]]")
 
-        checkEx("val x = country @ { name = 'USA' }; return all person @ { city.state.country = x };",
+        chkEx("val x = country @ { name = 'USA' }; return all person @ { city.state.country = x };",
                 "list<person>[person[601],person[605],person[606],person[607],person[608],person[610],person[611]]")
-        checkEx("val x = country @ { name = 'Germany' }; return all person @ { city.state.country = x };",
+        chkEx("val x = country @ { name = 'Germany' }; return all person @ { city.state.country = x };",
                 "list<person>[person[600],person[602],person[603],person[604],person[609]]")
     }
 
     @Test fun testCompanyLocation() {
-        check("all person @ { department.company.hq.name = 'Seattle' }", "list<person>[person[607],person[610]]")
-        check("all person @ { department.company.hq.name = 'Dusseldorf' }", "list<person>[person[608]]")
-        check("all person @ { department.company.hq.name = 'Los Angeles' }", "list<person>[person[600]]")
+        chk("all person @ { department.company.hq.name = 'Seattle' }", "list<person>[person[607],person[610]]")
+        chk("all person @ { department.company.hq.name = 'Dusseldorf' }", "list<person>[person[608]]")
+        chk("all person @ { department.company.hq.name = 'Los Angeles' }", "list<person>[person[600]]")
 
-        check("all person @ { department.company.hq.state.country.name = 'USA' }",
+        chk("all person @ { department.company.hq.state.country.name = 'USA' }",
                 "list<person>[person[600],person[604],person[605],person[606],person[607],person[609],person[610]]")
-        check("all person @ { department.company.hq.state.country.name = 'Germany' }",
+        chk("all person @ { department.company.hq.state.country.name = 'Germany' }",
                 "list<person>[person[601],person[602],person[603],person[608],person[611]]")
     }
 
     @Test fun testHomeAndCompanyLocation() {
-        check("all person @ { city.name = 'Las Vegas', department.company.hq.name = 'Cologne' }",
+        chk("all person @ { city.name = 'Las Vegas', department.company.hq.name = 'Cologne' }",
                 "list<person>[person[601]]")
-        check("all person @ { city.name = 'Stuttgart', department.company.hq.name = 'Las Vegas' }",
+        chk("all person @ { city.name = 'Stuttgart', department.company.hq.name = 'Las Vegas' }",
                 "list<person>[person[609]]")
-        check("all person @ { city.name = 'Seattle', department.company.hq.name = 'San Francisco' }",
+        chk("all person @ { city.name = 'Seattle', department.company.hq.name = 'San Francisco' }",
                 "list<person>[person[606]]")
 
-        check("all person @ { city.state.name = 'CA', department.company.hq.state.name = 'NRW' }",
+        chk("all person @ { city.state.name = 'CA', department.company.hq.state.name = 'NRW' }",
                 "list<person>[person[611]]")
-        check("all person @ { city.state.name = 'BY', department.company.hq.state.name = 'CA' }",
+        chk("all person @ { city.state.name = 'BY', department.company.hq.state.name = 'CA' }",
                 "list<person>[]")
-        check("all person @ { city.state.name = 'NV', department.company.hq.state.name = 'NRW' }",
+        chk("all person @ { city.state.name = 'NV', department.company.hq.state.name = 'NRW' }",
                 "list<person>[person[601],person[608]]")
     }
 
     @Test fun testHomeCompanyCrossReference() {
-        check("all person @ { city = department.company.hq }", "list<person>[person[610]]")
-        check("all person @ { city.state = department.company.hq.state }", "list<person>[person[605],person[610]]")
-        check("all person @ { city.state.country = department.company.hq.state.country }",
+        chk("all person @ { city = department.company.hq }", "list<person>[person[610]]")
+        chk("all person @ { city.state = department.company.hq.state }", "list<person>[person[605],person[610]]")
+        chk("all person @ { city.state.country = department.company.hq.state.country }",
                 "list<person>[person[602],person[603],person[605],person[606],person[607],person[610]]")
     }
 
     @Test fun testMultiClass() {
-        check("all (p1: person, p2: person) @ { p1.city.name = 'San Francisco', p2.department.company.name = 'Amazon' }",
+        chk("all (p1: person, p2: person) @ { p1.city.name = 'San Francisco', p2.department.company.name = 'Amazon' }",
                 "list<(p1:person,p2:person)>[" +
                         "(person[607],person[607])," +
                         "(person[607],person[610])," +
@@ -159,32 +156,32 @@ class AtExprPathTest {
                         "(person[611],person[610])" +
                         "]")
 
-        check("all (p1: person, p2: person) @ { p1.city.name = 'Munich', p2.department.company.name = 'Mercedes' }",
+        chk("all (p1: person, p2: person) @ { p1.city.name = 'Munich', p2.department.company.name = 'Mercedes' }",
                 "list<(p1:person,p2:person)>[(person[604],person[603])]")
 
-        check("all (p1: person, p2: person) @ { p1.city.name = 'Las Vegas', p2.department.company.name = 'Twitter' }",
+        chk("all (p1: person, p2: person) @ { p1.city.name = 'Las Vegas', p2.department.company.name = 'Twitter' }",
                 "list<(p1:person,p2:person)>[(person[601],person[606]),(person[608],person[606])]")
     }
 
     @Test fun testInvalidPath() {
-        check("person @ { foo }", "ct_err:unknown_name:foo")
-        check("(p: person) @ { p.foo = 123 }", "ct_err:bad_path_expr:p.foo")
-        check("(p: person) @ { p.city.foo = 123 }", "ct_err:bad_path_expr:p.city.foo")
-        check("(p: person) @ { p.city.foo.bar = 123 }", "ct_err:bad_path_expr:p.city.foo")
-        check("(p: person) @ { p.city.state.foo = 123 }", "ct_err:bad_path_expr:p.city.state.foo")
-        check("(p: person) @ { p.city.state.country.foo = 123 }", "ct_err:bad_path_expr:p.city.state.country.foo")
-        check("(p: person) @ { p.city.state.country.foo.bar = 123 }", "ct_err:bad_path_expr:p.city.state.country.foo")
-        check("person @ { city.state.country.foo.bar = 123 }", "ct_err:bad_path_expr:city.state.country.foo")
-        check("person @ { person.city.state.country.foo.bar = 123 }", "ct_err:bad_path_expr:person.city.state.country.foo")
+        chk("person @ { foo }", "ct_err:unknown_name:foo")
+        chk("(p: person) @ { p.foo = 123 }", "ct_err:bad_path_expr:p.foo")
+        chk("(p: person) @ { p.city.foo = 123 }", "ct_err:bad_path_expr:p.city.foo")
+        chk("(p: person) @ { p.city.foo.bar = 123 }", "ct_err:bad_path_expr:p.city.foo")
+        chk("(p: person) @ { p.city.state.foo = 123 }", "ct_err:bad_path_expr:p.city.state.foo")
+        chk("(p: person) @ { p.city.state.country.foo = 123 }", "ct_err:bad_path_expr:p.city.state.country.foo")
+        chk("(p: person) @ { p.city.state.country.foo.bar = 123 }", "ct_err:bad_path_expr:p.city.state.country.foo")
+        chk("person @ { city.state.country.foo.bar = 123 }", "ct_err:bad_path_expr:city.state.country.foo")
+        chk("person @ { person.city.state.country.foo.bar = 123 }", "ct_err:bad_path_expr:person.city.state.country.foo")
     }
 
-    private fun check(code: String, expectedResult: String) {
+    private fun chk(code: String, expected: String) {
         val queryCode = "return " + code + ";";
-        checkEx(queryCode, expectedResult)
+        chkEx(queryCode, expected)
     }
 
-    private fun checkEx(code: String, expectedResult: String) {
-        AtExprTest.checkEx(sqlCtx, classDefs, inserts, code, expectedResult)
+    private fun chkEx(code: String, expected: String) {
+        tst.chkQuery("{ $code }", expected)
     }
 
     private object Ins {
@@ -199,6 +196,6 @@ class AtExprPathTest {
         fun person(id: Int, name: String, city: Int, department: Int): String =
                 mkins("person", "name,city,department", "$id, '$name', $city, $department")
 
-        val mkins = TestUtils::mkins
+        val mkins = SqlTestUtils::mkins
     }
 }

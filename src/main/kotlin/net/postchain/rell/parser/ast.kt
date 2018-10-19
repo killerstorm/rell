@@ -6,12 +6,7 @@ internal typealias TypeMap = Map<String, RType>
 
 class CtError(val code: String, msg: String): Exception(msg)
 
-class S_NameTypePair(val name: String, val type: String) {
-    internal fun compile(ctx: ModuleCompilationContext): RAttrib {
-        val rType = ctx.getType(type)
-        return RAttrib(name, rType)
-    }
-}
+class S_NameTypePair(val name: String, val type: String)
 
 internal class ModuleCompilationContext {
     private val typeMap = mutableMapOf<String, RType>(
@@ -30,9 +25,18 @@ internal class ModuleCompilationContext {
             "retval require" to RUnitType
     )
 
+    private val functionMap = mutableMapOf<String, S_SysFunction>()
+
     private val classes = mutableMapOf<String, RClass>()
     private val operations = mutableMapOf<String, ROperation>()
     private val queries = mutableMapOf<String, RQuery>()
+
+    init {
+        for (fn in S_SYS_FUNCTIONS) {
+            check(!(fn.name in functionMap))
+            functionMap[fn.name] = fn
+        }
+    }
 
     fun typeExists(name: String): Boolean = name in typeMap
     fun functionExists(name: String): Boolean = name in queries || name in operations
@@ -51,6 +55,14 @@ internal class ModuleCompilationContext {
             throw CtError("unknown_class:$name", "Unknown class: $name")
         }
         return cls
+    }
+
+    fun getFunction(name: String): S_SysFunction {
+        val fn = functionMap[name]
+        if (fn == null) {
+            throw CtError("unknown_function:$name", "Unknown function: '$name'")
+        }
+        return fn
     }
 
     fun addClass(cls: RClass) {
@@ -77,22 +89,26 @@ internal class ModuleCompilationContext {
     }
 }
 
-internal class CompilationScopeEntry(val attr: RAttrib, val offset: Int) {
-    fun toVarExpr(): RVarExpr = RVarExpr(attr, offset)
+internal class CompilationScopeEntry(val type: RType, val modifiable: Boolean, val offset: Int) {
+    fun toVarExpr(): RVarExpr = RVarExpr(type, offset)
 }
 
-internal class ExprCompilationContext(val modCtx: ModuleCompilationContext, val parent: ExprCompilationContext?) {
+internal class ExprCompilationContext(
+        val modCtx: ModuleCompilationContext,
+        private val parent: ExprCompilationContext?,
+        val dbUpdateAllowed: Boolean,
+        val insideLoop: Boolean
+){
     val startOffset: Int = if (parent == null) 0 else parent.startOffset + parent.locals.size
     val locals = mutableMapOf<String, CompilationScopeEntry>()
 
-    fun add(rAttr: RAttrib): CompilationScopeEntry {
-        val name = rAttr.name
+    fun add(name: String, type: RType, modifiable: Boolean): CompilationScopeEntry {
         if (name in locals) {
-            throw CtError("dup_var_name:$name", "Duplicated variable name: $name")
+            throw CtError("var_dupname:$name", "Duplicated variable name: $name")
         }
 
         val ofs = startOffset + locals.size
-        val entry = CompilationScopeEntry(rAttr, ofs)
+        val entry = CompilationScopeEntry(type, modifiable, ofs)
         locals.put(name, entry)
         return entry
     }
@@ -116,22 +132,28 @@ internal class ExprCompilationContext(val modCtx: ModuleCompilationContext, val 
         }
         return null
     }
+
+    fun checkDbUpdateAllowed() {
+        if (!dbUpdateAllowed) {
+            throw CtError("no_db_update", "Database modifications are not allowed in this context")
+        }
+    }
 }
 
 sealed class S_RelClause {
     internal abstract fun compile(ctx: ClassCompilationContext)
 }
 
-class S_AttributeClause(val attr: S_NameTypePair): S_RelClause() {
+class S_AttributeClause(val attr: S_NameTypePair, val mutable: Boolean, val expr: S_Expression?): S_RelClause() {
     override fun compile(ctx: ClassCompilationContext) {
-        ctx.addAttribute(attr.name, attr.type)
+        ctx.addAttribute(attr.name, attr.type, mutable, expr)
     }
 }
 
 class S_KeyClause(val attrs: List<S_NameTypePair>): S_RelClause() {
     override fun compile(ctx: ClassCompilationContext) {
         for (attr in attrs) {
-            ctx.addAttribute(attr.name, attr.type)
+            ctx.addAttribute(attr.name, attr.type, false, null)
         }
         ctx.addKey(attrs.map { it.name })
     }
@@ -140,7 +162,7 @@ class S_KeyClause(val attrs: List<S_NameTypePair>): S_RelClause() {
 class S_IndexClause(val attrs: List<S_NameTypePair>): S_RelClause() {
     override fun compile(ctx: ClassCompilationContext) {
         for (attr in attrs) {
-            ctx.addAttribute(attr.name, attr.type)
+            ctx.addAttribute(attr.name, attr.type, false, null)
         }
         ctx.addIndex(attrs.map { it.name })
     }
@@ -155,13 +177,24 @@ internal class ClassCompilationContext(private val ctx: ModuleCompilationContext
     private val keys = mutableListOf<RKey>()
     private val indices = mutableListOf<RIndex>()
 
-    fun addAttribute(name: String, type: String) {
+    fun addAttribute(name: String, type: String, mutable: Boolean, expr: S_Expression?) {
         if (name in attributes) {
             throw CtError("dup_attr:$name", "Duplicated attribute name: $name")
         }
 
         val rType = ctx.getType(type)
-        attributes[name] = RAttrib(name, rType)
+
+        val rExpr = if (expr == null) null else {
+            val exprCtx = ExprCompilationContext(ctx, null, false, false)
+            val rExpr = expr.compile(exprCtx)
+            if (!rType.accepts(rExpr.type)) {
+                throw CtError("attr_type:$name:${rType.toStrictString()}:${rExpr.type.toStrictString()}",
+                        "Default value type missmatch for '$name': ${rExpr.type.toStrictString()} instead of ${rType.toStrictString()}")
+            }
+            rExpr
+        }
+
+        attributes[name] = RAttrib(name, rType, mutable, rExpr)
     }
 
     fun addKey(attrs: List<String>) {
@@ -204,7 +237,7 @@ class S_OpDefinition(
             throw CtError("dup_operation_name:$name", "Duplicated operation name: $name")
         }
 
-        val exprCtx = ExprCompilationContext(ctx, null)
+        val exprCtx = ExprCompilationContext(ctx, null, true, false)
         val rParams = compileExternalParams(ctx, exprCtx, params)
         val rBody = body.compile(exprCtx)
 
@@ -240,7 +273,7 @@ class S_QueryDefinition(
             throw CtError("dup_query_name:$name", "Duplicated query name: $name")
         }
 
-        val exprCtx = ExprCompilationContext(ctx, null)
+        val exprCtx = ExprCompilationContext(ctx, null, false, false)
         val rParams = compileExternalParams(ctx, exprCtx, params)
         val rBody = body.compile(exprCtx)
 
@@ -271,22 +304,23 @@ private fun compileExternalParams(
 
     val rExtParams = mutableListOf<RExternalParam>()
     for (rArg in rParams) {
-        val entry = exprCtx.add(rArg)
+        val entry = exprCtx.add(rArg.name, rArg.type, false)
         rExtParams.add(RExternalParam(rArg.name, rArg.type, entry.offset))
     }
 
     return rExtParams.toList()
 }
 
-private fun compileParams(ctx: ModuleCompilationContext, params: List<S_NameTypePair>): List<RAttrib> {
+private fun compileParams(ctx: ModuleCompilationContext, params: List<S_NameTypePair>): List<RVariable> {
     val names = mutableSetOf<String>()
-    val res = mutableListOf<RAttrib>()
+    val res = mutableListOf<RVariable>()
     for (param in params) {
         val name = param.name
         if (!names.add(name)) {
             throw CtError("dup_param_name:$name", "Duplicated parameter name: $name")
         }
-        val rAttr = param.compile(ctx)
+        val rType = ctx.getType(param.type)
+        val rAttr = RVariable(param.name, rType)
         res.add(rAttr)
     }
     return res

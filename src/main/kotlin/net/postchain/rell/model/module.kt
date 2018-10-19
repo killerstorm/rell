@@ -6,13 +6,13 @@ import net.postchain.rell.runtime.RtValue
 import net.postchain.rell.sql.SqlExecutor
 import java.lang.IllegalStateException
 
-class RAttrib(val name: String, val type: RType)
+class RAttrib(val name: String, val type: RType, val mutable: Boolean, val expr: RExpr?)
 
 class RExternalParam(val name: String, val type: RType, val offset: Int)
 
 class ROperation(val name: String, val params: List<RExternalParam>, val body: RStatement) {
-    fun execute(sqlExec: SqlExecutor, args: Array<RtValue>) {
-        val env = RtEnv(sqlExec)
+    fun execute(sqlExec: SqlExecutor, args: List<RtValue>) {
+        val env = RtEnv(sqlExec, true)
         processArgs(name, params, args, env)
 
         val res = body.execute(env)
@@ -21,24 +21,26 @@ class ROperation(val name: String, val params: List<RExternalParam>, val body: R
 }
 
 class RQuery(val name: String, val params: List<RExternalParam>, val body: RStatement) {
-    fun execute(sqlExec: SqlExecutor, args: Array<RtValue>): RtValue {
-        val env = RtEnv(sqlExec)
+    fun execute(sqlExec: SqlExecutor, args: List<RtValue>): RtValue {
+        val env = RtEnv(sqlExec, false)
         processArgs(name, params, args, env)
 
         val res = body.execute(env)
-        checkNotNull(res)
+        if (res == null || !(res is RStatementResult_Return)) {
+            throw IllegalStateException("No return value")
+        }
 
-        return res!!
+        return res.value
     }
 }
 
-private fun processArgs(name: String, params: List<RExternalParam>, args: Array<RtValue>, env: RtEnv) {
+private fun processArgs(name: String, params: List<RExternalParam>, args: List<RtValue>, env: RtEnv) {
     if (args.size != params.size) {
         throw RtError("fn_wrong_arg_count:$name:${params.size}:${args.size}",
                 "Wrong number of arguments for '$name': ${args.size} instead of ${params.size}")
     }
 
-    for (i in 0 .. params.size - 1) {
+    for (i in params.indices) {
         val param = params[i]
         val arg = args[i]
         val argType = arg.type()

@@ -23,28 +23,17 @@ class RAtExprRowTypeTuple(val type: RTupleType): RAtExprRowType() {
     }
 }
 
-class RAtExpr(
-        type: RType,
-        val from: List<RAtClass>,
-        val what: List<DbExpr>,
-        val where: DbExpr?,
-        val all: Boolean,
-        val rowType: RAtExprRowType
-): RExpr(type)
-{
+class RAtExprBase(val from: List<RAtClass>, val what: List<DbExpr>, val where: DbExpr?, val all: Boolean) {
     init {
         from.withIndex().forEach { check(it.index == it.value.index) }
     }
 
-    override fun evaluate(env: RtEnv): RtValue {
+    fun execute(env: RtEnv): List<Array<RtValue>> {
         val rtSql = buildSql()
-
         val resultTypes = what.map { it.type }
         val select = RtSelect(rtSql, resultTypes)
         val records = select.execute(env)
-
-        val result = decodeResult(records)
-        return result
+        return records
     }
 
     private fun buildSql(): RtSql {
@@ -104,11 +93,18 @@ class RAtExpr(
             }
         }
     }
+}
+
+class RAtExpr(type: RType, val base: RAtExprBase, val rowType: RAtExprRowType): RExpr(type) {
+    override fun evaluate(env: RtEnv): RtValue {
+        val records = base.execute(env)
+        return decodeResult(records)
+    }
 
     private fun decodeResult(records: List<Array<RtValue>>): RtValue {
         val values = records.map { rowType.decode(it) }
 
-        if (all) {
+        if (base.all) {
             return RtListValue(type, values)
         }
 
@@ -120,6 +116,19 @@ class RAtExpr(
         } else {
             return values[0]
         }
+    }
+}
+
+class RBooleanAtExpr(val base: RAtExprBase): RExpr(RBooleanType) {
+    override fun evaluate(env: RtEnv): RtValue {
+        val records = base.execute(env)
+
+        val count = records.size
+        if (!base.all && count > 1) {
+            throw RtError("at:wrong_count:$count", "Multiple records found: $count")
+        }
+
+        return RtBooleanValue(count > 0)
     }
 }
 

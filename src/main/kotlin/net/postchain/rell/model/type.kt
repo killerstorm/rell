@@ -6,6 +6,7 @@ import org.jooq.SQLDialect
 import org.jooq.impl.DefaultDataType
 import org.jooq.impl.SQLDataType
 import org.jooq.util.postgres.PostgresDataType
+import org.postgresql.util.PGobject
 import java.lang.UnsupportedOperationException
 import java.sql.PreparedStatement
 import java.sql.ResultSet
@@ -14,7 +15,11 @@ sealed class RType(val name: String) {
     abstract fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue)
     abstract fun fromSql(rs: ResultSet, idx: Int): RtValue
     abstract fun toStrictString(): String
-    open override fun toString(): String = toStrictString()
+    override fun toString(): String = toStrictString()
+
+    fun accepts(valueType: RType): Boolean {
+        return valueType == this //TODO allow subtypes
+    }
 }
 
 sealed class RPrimitiveType(name: String, val sqlType: DataType<*>): RType(name) {
@@ -51,8 +56,8 @@ object RIntegerType: RPrimitiveType("integer", SQLDataType.BIGINT) {
 }
 
 object RByteArrayType: RPrimitiveType("byte_array", PostgresDataType.BYTEA) {
-    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = TODO("TODO")
-    override fun fromSql(rs: ResultSet, idx: Int): RtValue = TODO("TODO")
+    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = stmt.setBytes(idx, value.asByteArray())
+    override fun fromSql(rs: ResultSet, idx: Int): RtValue = RtByteArrayValue(rs.getBytes(idx))
 }
 
 object RTimestampType: RPrimitiveType("timestamp", SQLDataType.BIGINT) {
@@ -75,8 +80,18 @@ object RSignerType: RPrimitiveType("signer", gtxSignerSQLDataType) {
 val jsonSQLDataType = DefaultDataType(null as SQLDialect?, String::class.java, "jsonb")
 
 object RJSONType: RPrimitiveType("json", jsonSQLDataType) {
-    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = TODO("TODO")
-    override fun fromSql(rs: ResultSet, idx: Int): RtValue = TODO("TODO")
+    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) {
+        val str = value.asJsonString()
+        val obj = PGobject()
+        obj.type = "json"
+        obj.value = str
+        stmt.setObject(idx, obj)
+    }
+
+    override fun fromSql(rs: ResultSet, idx: Int): RtValue {
+        val str = rs.getString(idx)
+        return RtJsonValue.parse(str)
+    }
 }
 
 class RInstanceRefType(val rclass: RClass): RType(rclass.name) {

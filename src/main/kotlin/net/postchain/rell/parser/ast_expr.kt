@@ -56,10 +56,16 @@ internal class DbCompilationContext(
     }
 }
 
+class S_NameExprPair(val name: String?, val expr: S_Expression)
+
 abstract class S_Expression {
     internal abstract fun compile(ctx: ExprCompilationContext): RExpr
-    internal abstract fun compileDb(ctx: DbCompilationContext): DbExpr;
-    internal open fun compileDbWhere(ctx: DbCompilationContext, idx: Int): DbExpr = compileDb(ctx);
+    internal abstract fun compileDb(ctx: DbCompilationContext): DbExpr
+    internal open fun compileDbWhere(ctx: DbCompilationContext, idx: Int): DbExpr = compileDb(ctx)
+    internal open fun compileCall(ctx: ExprCompilationContext, args: List<RExpr>): RExpr = TODO()
+    internal open fun compileCallDb(ctx: DbCompilationContext, args: List<DbExpr>): DbExpr = TODO()
+    internal open fun compileAsBoolean(ctx: ExprCompilationContext): RExpr = compile(ctx)
+
     internal open fun iteratePathExpr(path: MutableList<String>): Boolean = false
 
     internal fun delegateCompileDb(ctx: DbCompilationContext): DbExpr = InterpretedDbExpr(compile(ctx.exprCtx))
@@ -86,6 +92,73 @@ class S_BooleanLiteralExpr(val value: Boolean): S_Expression() {
 }
 
 class S_CallExpr(val base: S_Expression, val args: List<S_Expression>): S_Expression() {
-    override fun compile(ctx: ExprCompilationContext): RExpr = TODO("TODO")
-    override fun compileDb(ctx: DbCompilationContext): DbExpr = TODO("TODO")
+    override fun compile(ctx: ExprCompilationContext): RExpr {
+        val rArgs = args.map { it.compile(ctx) }
+        return base.compileCall(ctx, rArgs)
+    }
+
+    override fun compileDb(ctx: DbCompilationContext): DbExpr {
+        val dbArgs = args.map { it.compileDb(ctx) }
+        return base.compileCallDb(ctx, dbArgs)
+    }
+}
+
+class S_LookupExpr(val base: S_Expression, val expr: S_Expression): S_Expression() {
+    override fun compile(ctx: ExprCompilationContext): RExpr {
+        val rBase = base.compile(ctx)
+        val rExpr = expr.compile(ctx)
+
+        val baseType = rBase.type
+        if (!(baseType is RListType)) {
+            throw CtError("expr_lookup_base:${baseType.toStrictString()}",
+                    "Operator '[]' undefined for type ${baseType.toStrictString()}")
+        }
+
+        if (!RIntegerType.accepts(rExpr.type)) {
+            throw CtError("expr_lookup_keytype:${baseType.toStrictString()}:${rExpr.type.toStrictString()}",
+                    "Invalid lookup key type: ${rExpr.type.toStrictString()}")
+        }
+
+        return RLookupExpr(baseType.elementType, rBase, rExpr)
+    }
+
+    override fun compileDb(ctx: DbCompilationContext): DbExpr {
+        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+    }
+}
+
+class S_CreateExpr(val className: String, val exprs: List<S_NameExprPair>): S_Expression() {
+    override fun compileDb(ctx: DbCompilationContext): DbExpr = delegateCompileDb(ctx)
+
+    override fun compile(ctx: ExprCompilationContext): RExpr {
+        ctx.checkDbUpdateAllowed()
+
+        val cls = ctx.modCtx.getClass(className)
+        val rExprs = exprs.map { it.expr.compile(ctx) }
+
+        val types = rExprs.map { it.type }
+        val attrs = S_UpdateExprMatcher.matchExpressions(cls, exprs, types, false)
+        val attrExprs = attrs.withIndex().map { (idx, attr) -> RCreateExprAttr(attr, rExprs[idx]) }
+
+        val attrExprsDef = attrExprs + matchDefaultExpressions(cls, attrExprs)
+        checkMissingAttrs(cls, attrExprsDef)
+
+        val type = RInstanceRefType(cls)
+        return RCreateExpr(type, cls, attrExprsDef)
+    }
+
+    private fun matchDefaultExpressions(cls: RClass, attrExprs: List<RCreateExprAttr>): List<RCreateExprAttr> {
+        val provided = attrExprs.map { it.attr.name }.toSet()
+        return cls.attributes.values.filter { it.expr != null && !(it.name in provided) }.map { RCreateExprAttr(it, it.expr!!) }
+    }
+
+    private fun checkMissingAttrs(cls: RClass, attrs: List<RCreateExprAttr>) {
+        val names = attrs.map { it.attr.name }.toSet()
+
+        val missing = (cls.attributes.keys - names).sorted().toList()
+        if (!missing.isEmpty()) {
+            throw CtError("attr_missing:${missing.joinToString(",")}",
+                    "Attributes not specified: ${missing.joinToString()}")
+        }
+    }
 }

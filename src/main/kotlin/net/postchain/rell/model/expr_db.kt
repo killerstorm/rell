@@ -109,6 +109,43 @@ class PathDbExpr(type: RType, val cls: RAtClass, val path: List<PathDbExprStep>,
     }
 }
 
+sealed class DbSysFunction(val name: String) {
+    internal abstract fun toSql(ctx: SqlGenContext, bld: RtSqlBuilder, args: List<DbExpr>)
+}
+
+sealed class DbSysFunction_Simple(name: String, val sql: String): DbSysFunction(name) {
+    override fun toSql(ctx: SqlGenContext, bld: RtSqlBuilder, args: List<DbExpr>) {
+        bld.append(sql)
+        bld.append("(")
+        bld.append(args, ", ") {
+            it.toSql(ctx, bld)
+        }
+        bld.append(")")
+    }
+}
+
+sealed class DbSysFunction_Cast(name: String, val type: String): DbSysFunction(name) {
+    override fun toSql(ctx: SqlGenContext, bld: RtSqlBuilder, args: List<DbExpr>) {
+        check(args.size == 1)
+        bld.append("((")
+        args[0].toSql(ctx, bld)
+        bld.append(")::$type)")
+    }
+}
+
+object DbSysFunction_Int_Str: DbSysFunction_Cast("int.str", "TEXT")
+object DbSysFunction_Abs: DbSysFunction_Simple("abs", "ABS")
+object DbSysFunction_Min: DbSysFunction_Simple("min", "LEAST")
+object DbSysFunction_Max: DbSysFunction_Simple("max", "GREATEST")
+object DbSysFunction_Text_Len: DbSysFunction_Simple("text.len", "LENGTH")
+object DbSysFunction_ByteArray_Len: DbSysFunction_Simple("byte_array.len", "LENGTH")
+object DbSysFunction_Json: DbSysFunction_Cast("json", "JSONB")
+object DbSysFunction_Json_Str: DbSysFunction_Cast("json.str", "TEXT")
+
+class CallDbExpr(type: RType, val fn: DbSysFunction, val args: List<DbExpr>): DbExpr(type) {
+    override fun toSql(ctx: SqlGenContext, bld: RtSqlBuilder) = fn.toSql(ctx, bld, args)
+}
+
 internal class RtSqlBuilder {
     private val sqlBuf = StringBuilder()
     private val paramsBuf = mutableListOf<RExpr>()

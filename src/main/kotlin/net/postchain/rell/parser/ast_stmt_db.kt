@@ -2,38 +2,14 @@ package net.postchain.rell.parser
 
 import net.postchain.rell.model.*
 
-class S_NameExprPair(val name: String?, val expr: S_Expression)
-
-class S_CreateStatement(val className: String, val exprs: List<S_NameExprPair>): S_Statement() {
-    override fun compile(ctx: ExprCompilationContext): RStatement {
-        val cls = ctx.modCtx.getClass(className)
-        val rExprs = exprs.map { it.expr.compile(ctx) }
-
-        val types = rExprs.map { it.type }
-        val attrs = matchExpressions(cls, exprs, types)
-        checkMissingAttrs(cls, attrs)
-
-        val attrExprs = attrs.withIndex().map { (idx, attr) -> RCreateStatementAttr(attr, rExprs[idx]) }
-        return RCreateStatement(cls, attrExprs)
-    }
-
-    private fun checkMissingAttrs(cls: RClass, attrs: List<RAttrib>) {
-        val names = attrs.map { it.name }.toSet()
-
-        val missing = (cls.attributes.keys - names).sorted().toList()
-        if (!missing.isEmpty()) {
-            throw CtError("attr_missing:${missing.joinToString(",")}",
-                    "Attributes not specified: ${missing.joinToString()}")
-        }
-    }
-}
-
 class S_UpdateStatement(
         val from: List<S_AtExprFrom>,
         val where: S_AtExprWhere,
         val what: List<S_NameExprPair>): S_Statement()
 {
     override fun compile(ctx: ExprCompilationContext): RStatement {
+        ctx.checkDbUpdateAllowed()
+
         val rFrom = S_AtExpr.compileFrom(ctx, from)
         val cls = rFrom[0]
         val extraClasses = rFrom.subList(1, rFrom.size)
@@ -48,7 +24,7 @@ class S_UpdateStatement(
     private fun compileWhat(cls: RClass, dbCtx: DbCompilationContext): List<RUpdateStatementAttr> {
         val dbWhat = what.map { it.expr.compileDb(dbCtx) }
         val types = dbWhat.map { it.type }
-        val attrs = matchExpressions(cls, what, types)
+        val attrs = S_UpdateExprMatcher.matchExpressions(cls, what, types, true)
         val updAttrs = attrs.withIndex().map { (idx, attr) -> RUpdateStatementAttr(attr, dbWhat[idx]) }
         return updAttrs
     }
@@ -56,6 +32,8 @@ class S_UpdateStatement(
 
 class S_DeleteStatement(val from: List<S_AtExprFrom>, val where: S_AtExprWhere): S_Statement() {
     override fun compile(ctx: ExprCompilationContext): RStatement {
+        ctx.checkDbUpdateAllowed()
+
         val rFrom = S_AtExpr.compileFrom(ctx, from)
         val cls = rFrom[0]
         val extraClasses = rFrom.subList(1, rFrom.size)
@@ -67,126 +45,134 @@ class S_DeleteStatement(val from: List<S_AtExprFrom>, val where: S_AtExprWhere):
     }
 }
 
-private fun matchExpressions(cls: RClass, exprs: List<S_NameExprPair>, types: List<RType>)
-        : List<RAttrib>
-{
-    val explicitExprs = matchExplicitExprs(cls, exprs, types)
-    val implicitExprs = matchImplicitExprs(cls, exprs, types)
+object S_UpdateExprMatcher {
+    fun matchExpressions(cls: RClass, exprs: List<S_NameExprPair>, types: List<RType>, mutableOnly: Boolean)
+            : List<RAttrib>
+    {
+        val explicitExprs = matchExplicitExprs(cls, exprs, types, mutableOnly)
+        val implicitExprs = matchImplicitExprs(cls, exprs, types, mutableOnly)
 
-    checkImplicitExprsConflicts1(explicitExprs, implicitExprs)
-    checkImplicitExprsConflicts2(implicitExprs)
+        checkImplicitExprsConflicts1(explicitExprs, implicitExprs)
+        checkImplicitExprsConflicts2(implicitExprs)
 
-    val combinedExprs = (explicitExprs + implicitExprs).sortedBy { it.index }.toList()
-    combinedExprs.withIndex().forEach { check(it.index == it.value.index ) }
+        val combinedExprs = (explicitExprs + implicitExprs).sortedBy { it.index }.toList()
+        combinedExprs.withIndex().forEach { check(it.index == it.value.index ) }
 
-    val result = combinedExprs.map { (idx, attr) -> attr }.toList()
-    return result
-}
+        val result = combinedExprs.map { (idx, attr) -> attr }.toList()
+        return result
+    }
 
-private fun matchExplicitExprs(cls: RClass, exprs: List<S_NameExprPair>, types: List<RType>)
-        : List<IndexedValue<RAttrib>>
-{
-    val explicitNames = mutableSetOf<String>()
-    val explicitExprs = mutableListOf<IndexedValue<RAttrib>>()
+    private fun matchExplicitExprs(cls: RClass, exprs: List<S_NameExprPair>, types: List<RType>, mutableOnly: Boolean)
+            : List<IndexedValue<RAttrib>>
+    {
+        val explicitNames = mutableSetOf<String>()
+        val explicitExprs = mutableListOf<IndexedValue<RAttrib>>()
 
-    for ((idx, pair) in exprs.withIndex()) {
-        if (pair.name != null) {
-            val attr = cls.attributes[pair.name]
-            if (attr == null) {
-                throw CtError("attr_unknown_name:${pair.name}", "Unknown attribute: ${pair.name}")
-            } else if (!explicitNames.add(pair.name)) {
-                throw CtError("attr_dup_name:${pair.name}", "Attribute already specified: ${pair.name}")
+        for ((idx, pair) in exprs.withIndex()) {
+            if (pair.name != null) {
+                val name = pair.name
+                val attr = cls.attributes[name]
+                if (attr == null) {
+                    throw CtError("attr_unknown_name:${name}", "Unknown attribute: ${name}")
+                } else if (!explicitNames.add(name)) {
+                    throw CtError("attr_dup_name:${name}", "Attribute already specified: ${name}")
+                } else if (mutableOnly && !attr.mutable) {
+                    throw CtError("update_attr_not_mutable:${name}", "Attribute is not mutable: '${name}'")
+                }
+                val type = types[idx]
+                typeCheck(idx, attr, type)
+                explicitExprs.add(IndexedValue(idx, attr))
             }
-            val type = types[idx]
-            typeCheck(idx, attr, type)
-            explicitExprs.add(IndexedValue(idx, attr))
+        }
+
+        return explicitExprs.toList()
+    }
+
+    private fun matchImplicitExprs(cls: RClass, exprs: List<S_NameExprPair>, types: List<RType>, mutableOnly: Boolean)
+            : List<IndexedValue<RAttrib>>
+    {
+        val result = mutableListOf<IndexedValue<RAttrib>>()
+
+        for ((idx, pair) in exprs.withIndex()) {
+            if (pair.name == null) {
+                val type = types[idx]
+                val attr = implicitMatch(cls, idx, pair.expr, type, mutableOnly)
+                result.add(IndexedValue(idx, attr))
+            }
+        }
+
+        return result.toList()
+    }
+
+    private fun checkImplicitExprsConflicts1(
+            explicitExprs: List<IndexedValue<RAttrib>>,
+            implicitExprs: List<IndexedValue<RAttrib>>)
+    {
+        val explicitNames = explicitExprs.map { ( idx, attr ) -> attr.name }.toSet()
+
+        for ((idx, attr) in implicitExprs) {
+            val name = attr.name
+            if (name in explicitNames) {
+                throw CtError("attr_implic_explic:$idx:$name",
+                        "Expression #${idx + 1} matches attribute '$name', but it is specified explicitly")
+            }
         }
     }
 
-    return explicitExprs.toList()
-}
+    private fun checkImplicitExprsConflicts2(implicitExprs: List<IndexedValue<RAttrib>>) {
+        val implicitConflicts = mutableMapOf<String, MutableList<Int>>()
+        for ((idx, attr) in implicitExprs) {
+            implicitConflicts[attr.name] = mutableListOf()
+        }
 
-private fun matchImplicitExprs(cls: RClass, exprs: List<S_NameExprPair>, types: List<RType>)
-        : List<IndexedValue<RAttrib>>
-{
-    val result = mutableListOf<IndexedValue<RAttrib>>()
+        for ((idx, attr) in implicitExprs) {
+            implicitConflicts[attr.name]!!.add(idx)
+        }
 
-    for ((idx, pair) in exprs.withIndex()) {
-        if (pair.name == null) {
-            val type = types[idx]
-            val attr = implicitMatch(cls, idx, pair.expr, type)
-            result.add(IndexedValue(idx, attr))
+        for ((name, list) in implicitConflicts) {
+            if (list.size > 1) {
+                throw CtError("attr_implic_multi:$name:${list.joinToString(",")}",
+                        "Multiple expressions match attribute '$name': ${list.joinToString { "" + (it + 1) }}")
+            }
         }
     }
 
-    return result.toList()
-}
-
-private fun checkImplicitExprsConflicts1(
-        explicitExprs: List<IndexedValue<RAttrib>>,
-        implicitExprs: List<IndexedValue<RAttrib>>)
-{
-    val explicitNames = explicitExprs.map { ( idx, attr ) -> attr.name }.toSet()
-
-    for ((idx, attr) in implicitExprs) {
-        val name = attr.name
-        if (name in explicitNames) {
-            throw CtError("attr_implic_explic:$idx:$name",
-                    "Expression #${idx + 1} matches attribute '$name', but it is specified explicitly")
+    private fun implicitMatch(cls: RClass, idx: Int, expr: S_Expression, type: RType, mutableOnly: Boolean): RAttrib {
+        val byName = implicitMatchByName(cls, expr)
+        if (byName != null) {
+            typeCheck(idx, byName, type)
+            if (mutableOnly && !byName.mutable) {
+                throw CtError("update_attr_not_mutable:${byName.name}", "Attribute is not mutable: '${byName.name}'")
+            }
+            return byName
         }
-    }
-}
 
-private fun checkImplicitExprsConflicts2(implicitExprs: List<IndexedValue<RAttrib>>) {
-    val implicitConflicts = mutableMapOf<String, MutableList<Int>>()
-    for ((idx, attr) in implicitExprs) {
-        implicitConflicts[attr.name] = mutableListOf()
-    }
-
-    for ((idx, attr) in implicitExprs) {
-        implicitConflicts[attr.name]!!.add(idx)
-    }
-
-    for ((name, list) in implicitConflicts) {
-        if (list.size > 1) {
-            throw CtError("attr_implic_multi:$name:${list.joinToString(",")}",
-                    "Multiple expressions match attribute '$name': ${list.joinToString { "" + (it + 1) }}")
+        val byType = implicitMatchByType(cls, type, mutableOnly)
+        if (byType.size == 1) {
+            return byType[0]
+        } else if (byType.size > 1) {
+            throw CtError("attr_implic_multi:$idx:${byType.joinToString(","){it.name}}",
+                    "Multiple attributes match expression #${idx + 1}: ${byType.joinToString(", ")}")
         }
-    }
-}
 
-private fun implicitMatch(cls: RClass, idx: Int, expr: S_Expression, type: RType): RAttrib {
-    val byName = implicitMatchByName(cls, expr)
-    if (byName != null) {
-        typeCheck(idx, byName, type)
-        return byName
+        throw CtError("attr_implic_unknown:$idx", "Cannot find attribute for expression #${idx + 1}")
     }
 
-    val byType = implicitMatchByType(cls, type)
-    if (byType.size == 1) {
-        return byType[0]
-    } else if (byType.size > 1) {
-        throw CtError("attr_implic_multi:$idx:${byType.joinToString(",")}",
-                "Multiple attributes match expression #${idx + 1}: ${byType.joinToString(", ")}")
+    private fun implicitMatchByName(cls: RClass, expr: S_Expression): RAttrib? {
+        if (!(expr is S_NameExpr)) { //TODO consider not using "is"
+            return null
+        }
+        return cls.attributes[expr.name]
     }
 
-    throw CtError("attr_implic_unknown:$idx", "Cannot find attribute for expression #${idx + 1}")
-}
-
-private fun implicitMatchByName(cls: RClass, expr: S_Expression): RAttrib? {
-    if (!(expr is S_NameExpr)) { //TODO consider not using "is"
-        return null
+    private fun implicitMatchByType(cls: RClass, type: RType, mutableOnly: Boolean): List<RAttrib> {
+        return cls.attributes.values.filter{ it.type == type && (!mutableOnly || it.mutable) }.toList()
     }
-    return cls.attributes[expr.name]
-}
 
-private fun implicitMatchByType(cls: RClass, type: RType): List<RAttrib> {
-    return cls.attributes.values.filter{ it.type == type }.toList()
-}
-
-private fun typeCheck(idx: Int, attr: RAttrib, exprType: RType) {
-    if (!S_BinaryOp_EqNe.checkTypes(attr.type, exprType)) {
-        throw CtError("attr_bad_type:$idx:${attr.name}:${attr.type.toStrictString()}:${exprType.toStrictString()}",
-                "Attribute type missmatch for '${attr.name}': ${exprType} instead of ${attr.type}")
+    private fun typeCheck(idx: Int, attr: RAttrib, exprType: RType) {
+        if (!attr.type.accepts(exprType)) {
+            throw CtError("attr_bad_type:$idx:${attr.name}:${attr.type.toStrictString()}:${exprType.toStrictString()}",
+                    "Attribute type missmatch for '${attr.name}': ${exprType} instead of ${attr.type}")
+        }
     }
 }

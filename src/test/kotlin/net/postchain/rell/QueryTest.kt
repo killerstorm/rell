@@ -1,10 +1,16 @@
 package net.postchain.rell
 
 import net.postchain.rell.runtime.*
+import net.postchain.rell.sql.NullSqlExecutor
+import org.junit.After
 import org.junit.Test
 import kotlin.test.assertEquals
 
 class QueryTest {
+    private val tst = RellSqlTester()
+
+    @After fun after() = tst.destroy()
+
     @Test fun testResultIntegerLiteral() {
         check("query q() = 12345;", "int[12345]")
     }
@@ -14,10 +20,10 @@ class QueryTest {
     }
 
     @Test fun testResultParameter() {
-        check("query q(a: integer) = a;", arrayOf(), arrayOf(RtIntValue(12345)), "int[12345]")
-        check("query q(a: text) = a;", arrayOf(), arrayOf(RtTextValue("Hello")), "text[Hello]")
-        check("query q(a: integer, b: text) = a;", arrayOf(), arrayOf(RtIntValue(12345), RtTextValue("Hello")), "int[12345]")
-        check("query q(a: integer, b: text) = b;", arrayOf(), arrayOf(RtIntValue(12345), RtTextValue("Hello")), "text[Hello]")
+        check("query q(a: integer) = a;", listOf(RtIntValue(12345)), "int[12345]")
+        check("query q(a: text) = a;", listOf(RtTextValue("Hello")), "text[Hello]")
+        check("query q(a: integer, b: text) = a;", listOf(RtIntValue(12345), RtTextValue("Hello")), "int[12345]")
+        check("query q(a: integer, b: text) = b;", listOf(RtIntValue(12345), RtTextValue("Hello")), "text[Hello]")
     }
 
     @Test fun testReturnLiteral() {
@@ -31,20 +37,23 @@ class QueryTest {
     }
 
     @Test fun testReturnSelectAllNoObjects() {
-        val inserts = arrayOf(mkins("user", "name", "11, 'Alice'"))
-        check("class user { name: text; } query q() = all user @ { name = \"Bob\" } ;", inserts, "list<user>[]")
+        tst.classDefs = listOf("class user { name: text; }")
+        tst.inserts = listOf(mkins("user", "name", "11, 'Alice'"))
+        check("query q() = all user @ { name = \"Bob\" } ;", "list<user>[]")
     }
 
     @Test fun testReturnSelectAllOneObject() {
-        val inserts = arrayOf(
+        tst.classDefs = listOf("class user { name: text; }")
+        tst.inserts = listOf(
                 mkins("user", "name", "11,'Alice'"),
                 mkins("user", "name", "33,'Bob'")
         )
-        check("class user { name: text; } query q() = all user @ { name = \"Bob\" } ;", inserts, "list<user>[user[33]]")
+        check("query q() = all user @ { name = \"Bob\" } ;", "list<user>[user[33]]")
     }
 
     @Test fun testReturnSelectAllManyObjects() {
-        val inserts = arrayOf(
+        tst.classDefs = listOf("class user { name: text; }")
+        tst.inserts = listOf(
                 mkins("user", "name", "11,'Alice'"),
                 mkins("user", "name", "33,'Bob'"),
                 mkins("user", "name", "55,'James'"),
@@ -52,37 +61,36 @@ class QueryTest {
                 mkins("user", "name", "99,'Victor'"),
                 mkins("user", "name", "111,'Bob'")
         )
-        check("class user { name: text; } query q() = all user @ { name = \"Bob\" } ;", inserts, "list<user>[user[33],user[77],user[111]]")
+        check("query q() = all user @ { name = \"Bob\" } ;", "list<user>[user[33],user[77],user[111]]")
     }
 
     @Test fun testWrongNumberOfArguments() {
-        val query = TestUtils.compileQuery("""query q(x: integer, y: text) = x;""")
-        assertEquals("int[12345]", TestUtils.invokeQuery(query, RtIntValue(12345), RtTextValue("abc")))
-        assertEquals("rt_err:fn_wrong_arg_count:q:2:0", TestUtils.invokeQuery(query))
-        assertEquals("rt_err:fn_wrong_arg_count:q:2:1", TestUtils.invokeQuery(query, RtIntValue(12345)))
-        assertEquals("rt_err:fn_wrong_arg_count:q:2:3",
-                TestUtils.invokeQuery(query, RtIntValue(12345), RtTextValue("abc"), RtBooleanValue(true)))
+        val code = "query q(x: integer, y: text) = x;"
+        check(code, listOf(RtIntValue(12345), RtTextValue("abc")), "int[12345]")
+        check(code, listOf(), "rt_err:fn_wrong_arg_count:q:2:0")
+        check(code, listOf(RtIntValue(12345)), "rt_err:fn_wrong_arg_count:q:2:1")
+        check(code, listOf(RtIntValue(12345), RtTextValue("abc"), RtBooleanValue(true)), "rt_err:fn_wrong_arg_count:q:2:3")
     }
 
     @Test fun testWrongArgumentType() {
-        val query = TestUtils.compileQuery("""query q(x: integer) = x;""")
-        assertEquals("int[12345]", TestUtils.invokeQuery(query, RtIntValue(12345)))
-        assertEquals("rt_err:fn_wrong_arg_type:q:integer:text", TestUtils.invokeQuery(query, RtTextValue("Hello")))
-        assertEquals("rt_err:fn_wrong_arg_type:q:integer:boolean", TestUtils.invokeQuery(query, RtBooleanValue(true)))
+        val code = "query q(x: integer) = x;"
+        check(code, listOf(RtIntValue(12345)), "int[12345]")
+        check(code, listOf(RtTextValue("Hello")), "rt_err:fn_wrong_arg_type:q:integer:text")
+        check(code, listOf(RtBooleanValue(true)), "rt_err:fn_wrong_arg_type:q:integer:boolean")
     }
 
-    private fun check(code: String, expectedResult: String) {
-        check(code, arrayOf(), arrayOf(), expectedResult)
+    @Test fun testCreateUpdateDelete() {
+        val defs = "class user { mutable name: text; } query q()"
+        check("$defs { create user('Bob'); return 0; }", "ct_err:no_db_update")
+        check("$defs { update user @ {} ( name = 'Bob'); return 0; }", "ct_err:no_db_update")
+        check("$defs { delete user @ { name = 'Bob' }; return 0; }", "ct_err:no_db_update")
+        check("$defs { if (2 < 3) create user('Bob'); return 0; }", "ct_err:no_db_update")
+        check("$defs { if (2 < 3) update user @ {} ( name = 'Bob'); return 0; }", "ct_err:no_db_update")
+        check("$defs { if (2 < 3) delete user @ { name = 'Bob' }; return 0; }", "ct_err:no_db_update")
     }
 
-    private fun check(code: String, inserts: Array<String>, expectedResult: String) {
-        check(code, inserts, arrayOf(), expectedResult)
-    }
+    private fun check(code: String, expectedResult: String) = check(code, listOf(), expectedResult)
+    private fun check(code: String, args: List<RtValue>, expected: String) = tst.chkQueryEx(code, args, expected)
 
-    private fun check(code: String, inserts: Array<String>, args: Array<RtValue>, expectedResult: String) {
-        val actualResult = TestUtils.invokeWithSql(code, inserts, args)
-        assertEquals(expectedResult, actualResult)
-    }
-
-    private val mkins = TestUtils::mkins
+    private val mkins = SqlTestUtils::mkins
 }

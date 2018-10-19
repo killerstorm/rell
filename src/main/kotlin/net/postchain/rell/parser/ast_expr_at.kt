@@ -160,6 +160,12 @@ class S_AtExpr(
 ): S_Expression()
 {
     override fun compile(ctx: ExprCompilationContext): RExpr {
+        val (base, resType) = compileBase(ctx)
+        val type = if (all) RListType(resType.type) else resType.type
+        return RAtExpr(type, base, resType.rowDecoder)
+    }
+
+    private fun compileBase(ctx: ExprCompilationContext): Pair<RAtExprBase, AtResultType> {
         val rFrom = compileFrom(ctx, from)
         val dbCtx = DbCompilationContext(null, ctx, rFrom)
 
@@ -171,7 +177,8 @@ class S_AtExpr(
 
         val dbWhatExprs = whatPairs.map { it.second }
 
-        return RAtExpr(type, rFrom, dbWhatExprs, dbWhere, all, resType.rowDecoder)
+        val base = RAtExprBase(rFrom, dbWhatExprs, dbWhere, all)
+        return Pair(base, resType)
     }
 
     private fun calcResultType(dbWhat: List<Pair<String?, DbExpr>>): AtResultType {
@@ -183,6 +190,11 @@ class S_AtExpr(
             val type = RTupleType(fields)
             return AtResultType(type, RAtExprRowTypeTuple(type))
         }
+    }
+
+    override fun compileAsBoolean(ctx: ExprCompilationContext): RExpr {
+        val (base, _) = compileBase(ctx)
+        return RBooleanAtExpr(base)
     }
 
     override fun compileDb(ctx: DbCompilationContext): DbExpr = delegateCompileDb(ctx)
