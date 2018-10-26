@@ -7,11 +7,17 @@ import net.postchain.rell.runtime.RtValue
 class RVariable(val name: String, val type: RType)
 
 sealed class RStatementResult
-class RStatementResult_Return(val value: RtValue): RStatementResult()
+class RStatementResult_Return(val value: RtValue?): RStatementResult()
 class RStatementResult_Break: RStatementResult()
 
 abstract class RStatement {
     abstract fun execute(env: RtEnv): RStatementResult?
+}
+
+object REmptyStatement: RStatement() {
+    override fun execute(env: RtEnv): RStatementResult? {
+        return null
+    }
 }
 
 class RValStatement(val offset: Int, val expr: RExpr): RStatement() {
@@ -32,9 +38,9 @@ class RVarStatement(val offset: Int, val expr: RExpr?): RStatement() {
     }
 }
 
-class RReturnStatement(val expr: RExpr): RStatement() {
+class RReturnStatement(val expr: RExpr?): RStatement() {
     override fun execute(env: RtEnv): RStatementResult? {
-        val value = expr.evaluate(env)
+        val value = expr?.evaluate(env)
         return RStatementResult_Return(value)
     }
 }
@@ -58,9 +64,15 @@ class RExprStatement(val expr: RExpr): RStatement() {
     }
 }
 
-class RAssignStatement(val offset: Int, val expr: RExpr): RStatement() {
+class RAssignStatement(val offset: Int, val expr: RExpr, val op: RBinaryOp?): RStatement() {
     override fun execute(env: RtEnv): RStatementResult? {
-        val value = expr.evaluate(env)
+        val value = if (op != null) {
+            val left = env.get(offset)
+            val right = expr.evaluate(env)
+            op.evaluate(left, right)
+        } else {
+            expr.evaluate(env)
+        }
         env.set(offset, value)
         return null
     }
@@ -82,7 +94,7 @@ class RWhileStatement(val expr: RExpr, val stmt: RStatement): RStatement() {
             val cond = expr.evaluate(env)
             val b = cond.asBoolean()
             if (!b) {
-                return break
+                break
             }
 
             val res = stmt.execute(env)
@@ -94,10 +106,22 @@ class RWhileStatement(val expr: RExpr, val stmt: RStatement): RStatement() {
     }
 }
 
-class RForStatement(val varOffset: Int, val expr: RExpr, val stmt: RStatement): RStatement() {
+sealed class RForIterator {
+    abstract fun list(v: RtValue): Iterable<RtValue>
+}
+
+object RForIterator_List: RForIterator() {
+    override fun list(v: RtValue): Iterable<RtValue> = v.asList()
+}
+
+object RForIterator_Range: RForIterator() {
+    override fun list(v: RtValue): Iterable<RtValue> = v.asRange()
+}
+
+class RForStatement(val varOffset: Int, val expr: RExpr, val iterator: RForIterator, val stmt: RStatement): RStatement() {
     override fun execute(env: RtEnv): RStatementResult? {
         val value = expr.evaluate(env)
-        val list = value.asList()
+        val list = iterator.list(value)
 
         for (item in list) {
             env.set(varOffset, item)

@@ -1,5 +1,7 @@
 package net.postchain.rell.model
 
+import net.postchain.rell.parser.CtError
+import net.postchain.rell.parser.CtUtils
 import net.postchain.rell.runtime.*
 import org.jooq.DataType
 import org.jooq.SQLDialect
@@ -12,13 +14,24 @@ import java.sql.PreparedStatement
 import java.sql.ResultSet
 
 sealed class RType(val name: String) {
+    open fun allowedForAttributes(): Boolean = true
     abstract fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue)
     abstract fun fromSql(rs: ResultSet, idx: Int): RtValue
     abstract fun toStrictString(): String
     override fun toString(): String = toStrictString()
 
-    fun accepts(valueType: RType): Boolean {
-        return valueType == this //TODO allow subtypes
+    fun match(expr: RExpr, errCode: String, errMsg: String): RExpr {
+        val expr2 = matchOpt(expr)
+        if (expr2 == null) throw CtUtils.errTypeMissmatch(expr.type, this, errCode, errMsg)
+        return expr2
+    }
+
+    open fun matchOpt(expr: RExpr): RExpr? {
+        return if (expr.type == this) expr else null
+    }
+
+    open fun matchOpt(expr: DbExpr): DbExpr? {
+        return if (expr.type == this) expr else null
     }
 }
 
@@ -94,24 +107,27 @@ object RJSONType: RPrimitiveType("json", jsonSQLDataType) {
     }
 }
 
-class RInstanceRefType(val rclass: RClass): RType(rclass.name) {
+class RInstanceRefType(val rClass: RClass): RType(rClass.name) {
     override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = stmt.setLong(idx, value.asObjectId())
     override fun fromSql(rs: ResultSet, idx: Int): RtValue = RtObjectValue(this, rs.getLong(idx))
     override fun toStrictString(): String = name
-    override fun equals(other: Any?): Boolean = other is RInstanceRefType && other.rclass == rclass
+    override fun equals(other: Any?): Boolean = other is RInstanceRefType && other.rClass == rClass
 }
 
 // TODO: make this more elaborate
 class RClosureType(name: String): RType(name) {
+    override fun allowedForAttributes(): Boolean = false
     override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = TODO("TODO")
     override fun fromSql(rs: ResultSet, idx: Int): RtValue = TODO("TODO")
     override fun toStrictString(): String = TODO("TODO")
 }
 
 class RListType(val elementType: RType): RType("list<${elementType.toStrictString()}>") {
+    override fun allowedForAttributes(): Boolean = false
     override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = throw UnsupportedOperationException()
     override fun fromSql(rs: ResultSet, idx: Int): RtValue = throw UnsupportedOperationException()
     override fun toStrictString(): String = name
+    override fun equals(other: Any?): Boolean = other is RListType && elementType == other.elementType
 }
 
 class RTupleField(val name: String?, val type: RType) {
@@ -120,10 +136,30 @@ class RTupleField(val name: String?, val type: RType) {
     }
 
     override fun toString(): String = toStrictString()
+    override fun equals(other: Any?): Boolean = other is RTupleField && name == other.name && type == other.type
 }
 
 class RTupleType(val fields: List<RTupleField>): RType("(${fields.joinToString(",") { it.toStrictString() }})") {
+    override fun matchOpt(expr: RExpr): RExpr? {
+        val type = expr.type
+        if (type == this) {
+            return expr
+        }
+
+        val castExpr = RTupleCastExpr.create(expr, this)
+        return castExpr
+    }
+
+    override fun allowedForAttributes(): Boolean = false
     override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = TODO()
     override fun fromSql(rs: ResultSet, idx: Int): RtValue = TODO()
     override fun toStrictString(): String = name
+    override fun equals(other: Any?): Boolean = other is RTupleType && fields == other.fields
+}
+
+object RRangeType: RType("range") {
+    override fun allowedForAttributes(): Boolean = false
+    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = TODO() // Not allowed
+    override fun fromSql(rs: ResultSet, idx: Int): RtValue = TODO() // Not allowed
+    override fun toStrictString(): String = "range"
 }

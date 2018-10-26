@@ -33,8 +33,8 @@ class AtExprTest {
     @After fun after() = tst.destroy()
 
     @Test fun testEmptyWhere() {
-        chk("all user @ {}", "list<user>[user[10],user[20],user[21],user[30],user[40],user[41],user[50],user[51]]")
-        chk("all company @ {}", "list<company>[company[100],company[200],company[300],company[400],company[500]]")
+        chk("user @* {}", "list<user>[user[10],user[20],user[21],user[30],user[40],user[41],user[50],user[51]]")
+        chk("company @* {}", "list<company>[company[100],company[200],company[300],company[400],company[500]]")
     }
 
     @Test fun testNoRecordsFound() {
@@ -50,7 +50,7 @@ class AtExprTest {
     }
 
     @Test fun testFindUserWithSameName() {
-        chk("all (u1: user, u2: user) @ { u1.firstName = u2.firstName, u1 != u2 }",
+        chk("(u1: user, u2: user) @* { u1.firstName = u2.firstName, u1 != u2 }",
                 "list<(u1:user,u2:user)>[(user[20],user[21]),(user[21],user[20])]")
     }
 
@@ -65,7 +65,7 @@ class AtExprTest {
 
     @Test fun testAttributeByExpressionType() {
         chkEx("val corp = company @ { name = 'Facebook' }; return user @ { corp };", "user[10]")
-        chkEx("val corp = company @ { name = 'Microsoft' }; return all user @ { corp };", "list<user>[user[40],user[41]]")
+        chkEx("val corp = company @ { name = 'Microsoft' }; return user @* { corp };", "list<user>[user[40],user[41]]")
     }
 
     @Test fun testAttributeByNameAndType() {
@@ -92,17 +92,17 @@ class AtExprTest {
             val bar2 = bar @ { name = 'Bar-2' };
         """.trimIndent()
 
-        chkEx("val name = 'Bob'; return all (foo_owner, bar_owner) @ { name };", "ct_err:at_attr_name_ambig:0:name:2")
-        chkEx("val garbage = foo1; return all (foo_owner, bar_owner) @ { garbage };", "ct_err:at_attr_type_ambig:0:foo:3")
-        chkEx("val garbage = bar1; return all (foo_owner, bar_owner) @ { garbage };", "ct_err:at_attr_type_ambig:0:bar:3")
+        chkEx("val name = 'Bob'; return (foo_owner, bar_owner) @* { name };", "ct_err:at_attr_name_ambig:0:name:2")
+        chkEx("val garbage = foo1; return (foo_owner, bar_owner) @* { garbage };", "ct_err:at_attr_type_ambig:0:foo:3")
+        chkEx("val garbage = bar1; return (foo_owner, bar_owner) @* { garbage };", "ct_err:at_attr_type_ambig:0:bar:3")
 
-        chkEx("val stuff = foo1; return all (foo_owner, bar_owner) @ { stuff };",
+        chkEx("val stuff = foo1; return (foo_owner, bar_owner) @* { stuff };",
                 "list<(foo_owner:foo_owner,bar_owner:bar_owner)>[(foo_owner[4],bar_owner[6]),(foo_owner[4],bar_owner[7])]")
-        chkEx("val stuff = foo2; return all (foo_owner, bar_owner) @ { stuff };",
+        chkEx("val stuff = foo2; return (foo_owner, bar_owner) @* { stuff };",
                 "list<(foo_owner:foo_owner,bar_owner:bar_owner)>[(foo_owner[5],bar_owner[6]),(foo_owner[5],bar_owner[7])]")
-        chkEx("val stuff = bar1; return all (foo_owner, bar_owner) @ { stuff };",
+        chkEx("val stuff = bar1; return (foo_owner, bar_owner) @* { stuff };",
                 "list<(foo_owner:foo_owner,bar_owner:bar_owner)>[(foo_owner[4],bar_owner[6]),(foo_owner[5],bar_owner[6])]")
-        chkEx("val stuff = bar2; return all (foo_owner, bar_owner) @ { stuff };",
+        chkEx("val stuff = bar2; return (foo_owner, bar_owner) @* { stuff };",
                 "list<(foo_owner:foo_owner,bar_owner:bar_owner)>[(foo_owner[4],bar_owner[7]),(foo_owner[5],bar_owner[7])]")
     }
 
@@ -139,17 +139,17 @@ class AtExprTest {
 
     @Test fun testNameResolutionLocalVsAttr() {
         // Local vs. attr: local wins.
-        chkEx("return all user @ { firstName = 'Mark' };", "list<user>[user[10]]")
-        chkEx("val firstName = 'Bill'; return all user @ { firstName = 'Mark' };", "list<user>[]")
-        chkEx("val firstName = 'Bill'; return all user @ { firstName = firstName };",
+        chkEx("return user @* { firstName = 'Mark' };", "list<user>[user[10]]")
+        chkEx("val firstName = 'Bill'; return user @* { firstName = 'Mark' };", "list<user>[]")
+        chkEx("val firstName = 'Bill'; return user @* { firstName = firstName };",
                 "list<user>[user[10],user[20],user[21],user[30],user[40],user[41],user[50],user[51]]")
     }
 
     @Test fun testNameResolutionAliasVsLocalAttr() {
         // Alias vs. attr: alias wins.
-        chk("all user @ { firstName = 'Mark' }", "list<user>[user[10]]")
-        chk("all (firstName: user) @ { firstName = 'Mark' }", "ct_err:binop_operand_type:==:user:text")
-        chk("all (firstName: user) @ { firstName.firstName = 'Mark' }", "list<user>[user[10]]")
+        chk("user @* { firstName = 'Mark' }", "list<user>[user[10]]")
+        chk("(firstName: user) @* { firstName = 'Mark' }", "ct_err:binop_operand_type:==:user:text")
+        chk("(firstName: user) @* { firstName.firstName = 'Mark' }", "list<user>[user[10]]")
 
         // Alias vs. local: alias wins.
         chkEx("val u = 'Bill'; return user @ { firstName = u };", "user[40]")
@@ -236,7 +236,7 @@ class AtExprTest {
                 mkins("country", "name", "302,'USA'")
         )
 
-        chk("all (person, city, country) @ { city.name = person.cityName, country.name = city.countryName }",
+        chk("(person, city, country) @* { city.name = person.cityName, country.name = city.countryName }",
                 "list<(person:person,city:city,country:country)>[" +
                 "(person[100],city[200],country[302])," +
                 "(person[101],city[202],country[300])," +
@@ -265,53 +265,53 @@ class AtExprTest {
         )
 
         // Direct fields of the query class.
-        chk("all testee @ { k1 = 100 }", "list<testee>[testee[1]]")
-        chk("all testee @ { k2 = 201 }", "list<testee>[testee[2]]")
-        chk("all testee @ { k3 = 302 }", "list<testee>[testee[3]]")
-        chk("all testee @ { i1 = 103 }", "list<testee>[testee[1]]")
-        chk("all testee @ { i2 = 204 }", "list<testee>[testee[2]]")
-        chk("all testee @ { i3 = 305 }", "list<testee>[testee[3]]")
-        chk("all testee @ { f1 = 106 }", "list<testee>[testee[1]]")
-        chk("all testee @ { f2 = 207 }", "list<testee>[testee[2]]")
-        chk("all testee @ { k1 = 300 }", "list<testee>[testee[3]]")
-        chk("all testee @ { k2 = 101 }", "list<testee>[testee[1]]")
-        chk("all testee @ { k3 = 202 }", "list<testee>[testee[2]]")
-        chk("all testee @ { i1 = 303 }", "list<testee>[testee[3]]")
-        chk("all testee @ { i2 = 104 }", "list<testee>[testee[1]]")
-        chk("all testee @ { i3 = 205 }", "list<testee>[testee[2]]")
-        chk("all testee @ { f1 = 306 }", "list<testee>[testee[3]]")
-        chk("all testee @ { f2 = 107 }", "list<testee>[testee[1]]")
+        chk("testee @* { k1 = 100 }", "list<testee>[testee[1]]")
+        chk("testee @* { k2 = 201 }", "list<testee>[testee[2]]")
+        chk("testee @* { k3 = 302 }", "list<testee>[testee[3]]")
+        chk("testee @* { i1 = 103 }", "list<testee>[testee[1]]")
+        chk("testee @* { i2 = 204 }", "list<testee>[testee[2]]")
+        chk("testee @* { i3 = 305 }", "list<testee>[testee[3]]")
+        chk("testee @* { f1 = 106 }", "list<testee>[testee[1]]")
+        chk("testee @* { f2 = 207 }", "list<testee>[testee[2]]")
+        chk("testee @* { k1 = 300 }", "list<testee>[testee[3]]")
+        chk("testee @* { k2 = 101 }", "list<testee>[testee[1]]")
+        chk("testee @* { k3 = 202 }", "list<testee>[testee[2]]")
+        chk("testee @* { i1 = 303 }", "list<testee>[testee[3]]")
+        chk("testee @* { i2 = 104 }", "list<testee>[testee[1]]")
+        chk("testee @* { i3 = 205 }", "list<testee>[testee[2]]")
+        chk("testee @* { f1 = 306 }", "list<testee>[testee[3]]")
+        chk("testee @* { f2 = 107 }", "list<testee>[testee[1]]")
 
         // Fields of a referenced class.
-        chk("all proxy @ { ref.k1 = 100 }", "list<proxy>[proxy[1]]")
-        chk("all proxy @ { ref.k2 = 201 }", "list<proxy>[proxy[2]]")
-        chk("all proxy @ { ref.k3 = 302 }", "list<proxy>[proxy[3]]")
-        chk("all proxy @ { ref.i1 = 103 }", "list<proxy>[proxy[1]]")
-        chk("all proxy @ { ref.i2 = 204 }", "list<proxy>[proxy[2]]")
-        chk("all proxy @ { ref.i3 = 305 }", "list<proxy>[proxy[3]]")
-        chk("all proxy @ { ref.f1 = 106 }", "list<proxy>[proxy[1]]")
-        chk("all proxy @ { ref.f2 = 207 }", "list<proxy>[proxy[2]]")
-        chk("all proxy @ { ref.k1 = 300 }", "list<proxy>[proxy[3]]")
-        chk("all proxy @ { ref.k2 = 101 }", "list<proxy>[proxy[1]]")
-        chk("all proxy @ { ref.k3 = 202 }", "list<proxy>[proxy[2]]")
-        chk("all proxy @ { ref.i1 = 303 }", "list<proxy>[proxy[3]]")
-        chk("all proxy @ { ref.i2 = 104 }", "list<proxy>[proxy[1]]")
-        chk("all proxy @ { ref.i3 = 205 }", "list<proxy>[proxy[2]]")
-        chk("all proxy @ { ref.f1 = 306 }", "list<proxy>[proxy[3]]")
-        chk("all proxy @ { ref.f2 = 107 }", "list<proxy>[proxy[1]]")
+        chk("proxy @* { ref.k1 = 100 }", "list<proxy>[proxy[1]]")
+        chk("proxy @* { ref.k2 = 201 }", "list<proxy>[proxy[2]]")
+        chk("proxy @* { ref.k3 = 302 }", "list<proxy>[proxy[3]]")
+        chk("proxy @* { ref.i1 = 103 }", "list<proxy>[proxy[1]]")
+        chk("proxy @* { ref.i2 = 204 }", "list<proxy>[proxy[2]]")
+        chk("proxy @* { ref.i3 = 305 }", "list<proxy>[proxy[3]]")
+        chk("proxy @* { ref.f1 = 106 }", "list<proxy>[proxy[1]]")
+        chk("proxy @* { ref.f2 = 207 }", "list<proxy>[proxy[2]]")
+        chk("proxy @* { ref.k1 = 300 }", "list<proxy>[proxy[3]]")
+        chk("proxy @* { ref.k2 = 101 }", "list<proxy>[proxy[1]]")
+        chk("proxy @* { ref.k3 = 202 }", "list<proxy>[proxy[2]]")
+        chk("proxy @* { ref.i1 = 303 }", "list<proxy>[proxy[3]]")
+        chk("proxy @* { ref.i2 = 104 }", "list<proxy>[proxy[1]]")
+        chk("proxy @* { ref.i3 = 205 }", "list<proxy>[proxy[2]]")
+        chk("proxy @* { ref.f1 = 306 }", "list<proxy>[proxy[3]]")
+        chk("proxy @* { ref.f2 = 107 }", "list<proxy>[proxy[1]]")
     }
 
     @Test fun testNestedAtExpression() {
-        chk("all user @ { company = company @ { name = 'Facebook' } }", "list<user>[user[10]]")
-        chk("all user @ { company = company @ { name = 'Apple' } }", "list<user>[user[20],user[21]]")
-        chk("all user @ { company = company @ { name = 'Amazon' } }", "list<user>[user[30]]")
-        chk("all user @ { company = company @ { name = 'Microsoft' } }", "list<user>[user[40],user[41]]")
-        chk("all user @ { company = company @ { name = 'Google' } }", "list<user>[user[50],user[51]]")
-        chk("all user @ { company @ { name = 'Facebook' } }", "list<user>[user[10]]")
-        chk("all user @ { company @ { name = 'Apple' } }", "list<user>[user[20],user[21]]")
-        chk("all user @ { company @ { name = 'Amazon' } }", "list<user>[user[30]]")
-        chk("all user @ { company @ { name = 'Microsoft' } }", "list<user>[user[40],user[41]]")
-        chk("all user @ { company @ { name = 'Google' } }", "list<user>[user[50],user[51]]")
+        chk("user @* { company = company @ { name = 'Facebook' } }", "list<user>[user[10]]")
+        chk("user @* { company = company @ { name = 'Apple' } }", "list<user>[user[20],user[21]]")
+        chk("user @* { company = company @ { name = 'Amazon' } }", "list<user>[user[30]]")
+        chk("user @* { company = company @ { name = 'Microsoft' } }", "list<user>[user[40],user[41]]")
+        chk("user @* { company = company @ { name = 'Google' } }", "list<user>[user[50],user[51]]")
+        chk("user @* { company @ { name = 'Facebook' } }", "list<user>[user[10]]")
+        chk("user @* { company @ { name = 'Apple' } }", "list<user>[user[20],user[21]]")
+        chk("user @* { company @ { name = 'Amazon' } }", "list<user>[user[30]]")
+        chk("user @* { company @ { name = 'Microsoft' } }", "list<user>[user[40],user[41]]")
+        chk("user @* { company @ { name = 'Google' } }", "list<user>[user[50],user[51]]")
     }
 
     @Test fun testFieldSelectionSimple() {
@@ -365,7 +365,67 @@ class AtExprTest {
         chk("t.firstName", "text[Bill]")
         chk("t.lastName", "text[Gates]")
         chk("t.companyName", "text[Microsoft]")
-        chk("t.foo", "ct_err:unknown_member:foo")
+        chk("t.foo", "ct_err:unknown_member:(firstName:text,lastName:text,companyName:text):foo")
+    }
+
+    @Test fun testLimit() {
+        chk("user @* {} limit 0", "list<user>[]")
+        chk("user @* {} limit 1", "list<user>[user[10]]")
+        chk("user @* {} limit 2", "list<user>[user[10],user[20]]")
+        chk("user @* {} limit 3", "list<user>[user[10],user[20],user[21]]")
+        chk("user @* {} limit 4", "list<user>[user[10],user[20],user[21],user[30]]")
+        chk("user @* {} limit 5", "list<user>[user[10],user[20],user[21],user[30],user[40]]")
+        chk("user @* {} limit 6", "list<user>[user[10],user[20],user[21],user[30],user[40],user[41]]")
+        chk("user @* {} limit 7", "list<user>[user[10],user[20],user[21],user[30],user[40],user[41],user[50]]")
+
+        chk("user @* {} ( lastName ) limit 0", "list<text>[]")
+        chk("user @* {} ( lastName ) limit 1", "list<text>[text[Zuckerberg]]")
+        chk("user @* {} ( lastName ) limit 2", "list<text>[text[Zuckerberg],text[Jobs]]")
+        chk("user @* {} ( lastName ) limit 3", "list<text>[text[Zuckerberg],text[Jobs],text[Wozniak]]")
+        chk("user @* {} ( lastName ) limit 4", "list<text>[text[Zuckerberg],text[Jobs],text[Wozniak],text[Bezos]]")
+
+        chk("user @ {} limit 5", "ct_err:expr_at_limit_one")
+        chk("user @ {} limit 'Hello'", "ct_err:expr_at_limit_type:text")
+    }
+
+    @Test fun testZeroOne() {
+        chk("user @ { firstName = 'Chuck' }", "rt_err:at:wrong_count:0")
+        chk("user @? { firstName = 'Chuck' }", "null[user]")
+        chk("user @? { firstName = 'Bill' }", "user[40]")
+        chk("user @? { firstName = 'Steve' }", "rt_err:at:wrong_count:2")
+    }
+
+    @Test fun testOneMany() {
+        chk("user @* { firstName = 'Chuck' }", "list<user>[]")
+        chk("user @+ { firstName = 'Chuck' }", "rt_err:at:wrong_count:0")
+        chk("user @+ { firstName = 'Bill' }", "list<user>[user[40]]")
+        chk("user @+ { firstName = 'Steve' }", "list<user>[user[20],user[21]]")
+    }
+
+    @Test fun testSort() {
+        tst.strictToString = false
+
+        chk("'' + user @* {} ( firstName )", "[Mark, Steve, Steve, Jeff, Bill, Paul, Sergey, Larry]")
+        chk("'' + user @* {} ( sort firstName )", "[Bill, Jeff, Larry, Mark, Paul, Sergey, Steve, Steve]")
+        chk("'' + user @* {} ( -sort firstName )", "[Steve, Steve, Sergey, Paul, Mark, Larry, Jeff, Bill]")
+
+        chk("'' + user @* { company.name = 'Apple' } ( sort =firstName, sort =lastName )", "[(Steve,Jobs), (Steve,Wozniak)]")
+        chk("'' + user @* { company.name = 'Apple' } ( sort =firstName, -sort =lastName )", "[(Steve,Wozniak), (Steve,Jobs)]")
+
+        chk("'' + user @* {} ( sort =company.name, =lastName )",
+                "[(Amazon,Bezos), (Apple,Jobs), (Apple,Wozniak), (Facebook,Zuckerberg), (Google,Brin), (Google,Page), " +
+                        "(Microsoft,Gates), (Microsoft,Allen)]")
+
+        chk("'' + user @* {} ( sort =company.name, sort =lastName )",
+                "[(Amazon,Bezos), (Apple,Jobs), (Apple,Wozniak), (Facebook,Zuckerberg), (Google,Brin), (Google,Page), " +
+                        "(Microsoft,Allen), (Microsoft,Gates)]")
+
+        chk("'' + user @* {} ( -sort user )",
+                "[user[51], user[50], user[41], user[40], user[30], user[21], user[20], user[10]]")
+
+        chk("'' + user @* {} ( -sort =company, =user )",
+                "[(company[500],user[50]), (company[500],user[51]), (company[400],user[40]), (company[400],user[41]), " +
+                "(company[300],user[30]), (company[200],user[20]), (company[200],user[21]), (company[100],user[10])]")
     }
 
     private fun chk(code: String, expectedResult: String) {

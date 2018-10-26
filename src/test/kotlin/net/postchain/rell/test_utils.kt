@@ -8,10 +8,7 @@ import net.postchain.rell.model.*
 import net.postchain.rell.parser.CtError
 import net.postchain.rell.parser.S_Grammar
 import net.postchain.rell.parser.S_ModuleDefinition
-import net.postchain.rell.runtime.RtError
-import net.postchain.rell.runtime.RtJsonValue
-import net.postchain.rell.runtime.RtRequireError
-import net.postchain.rell.runtime.RtValue
+import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.*
 import java.io.Closeable
 import java.io.FileInputStream
@@ -19,6 +16,7 @@ import java.lang.IllegalStateException
 import java.sql.ResultSet
 import java.util.*
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 
 object RellTestUtils {
     fun processModule(code: String, processor: (RModule) -> String): String {
@@ -30,40 +28,51 @@ object RellTestUtils {
         return processor(module)
     }
 
-    private fun executeQuery(sqlExec: SqlExecutor, query: RQuery, args: List<RtValue>): String {
-        val res = try {
-            query.execute(sqlExec, args)
+    private fun catchRtErr(block: () -> String): String {
+        try {
+            return block()
         } catch (e: RtError) {
             return "rt_err:" + e.code
         } catch (e: RtRequireError) {
             return "req_err:" + e.message
         }
-        return if (res == null) "null" else res.toStrictString()
     }
 
-    fun callQuery(sqlExec: SqlExecutor, moduleCode: String, name: String, args: List<RtValue>): String {
+    fun callQuery(globalCtx: RtGlobalContext, moduleCode: String, name: String, args: List<RtValue>, strict: Boolean = true): String {
         return processModule(moduleCode) { module ->
-            callQuery(sqlExec, module, name, args)
+            callQuery(globalCtx, module, name, args, strict)
         }
     }
 
-    fun callQuery(sqlExec: SqlExecutor, module: RModule, name: String, args: List<RtValue>): String {
+    fun callQuery(globalCtx: RtGlobalContext, module: RModule, name: String, args: List<RtValue>, strict: Boolean): String {
         val query = module.queries.find { it.name == name }
         if (query == null) throw IllegalStateException("Query not found: '$name'")
-        return executeQuery(sqlExec, query, args)
+        val modCtx = RtModuleContext(globalCtx, module)
+        return callQuery(modCtx, query, args, strict)
     }
 
-    fun callOp(sqlExec: SqlExecutor, moduleCode: String, name: String, args: List<RtValue>): String {
+    private fun callQuery(modCtx: RtModuleContext, query: RQuery, args: List<RtValue>, strict: Boolean): String {
+        val res = catchRtErr {
+            val v = query.callTopQuery(modCtx, args)
+            if (v == null) "null" else if (strict) v.toStrictString() else v.toString()
+        }
+        return res
+    }
+
+    fun callOp(globalCtx: RtGlobalContext, moduleCode: String, name: String, args: List<RtValue>): String {
         return processModule(moduleCode) { module ->
-            callOp(sqlExec, module, name, args)
+            callOp(globalCtx, module, name, args)
         }
     }
 
-    fun callOp(sqlExec: SqlExecutor, module: RModule, name: String, args: List<RtValue>): String {
+    fun callOp(globalCtx: RtGlobalContext, module: RModule, name: String, args: List<RtValue>): String {
         val op = module.operations.find { it.name == name }
         if (op == null) throw IllegalStateException("Operation not found: '$name'")
-        op.execute(sqlExec, args)
-        return ""
+        val modCtx = RtModuleContext(globalCtx, module)
+        return catchRtErr {
+            op.callTop(modCtx, args)
+            ""
+        }
     }
 
     fun parseModule(code: String): RModule {
@@ -209,6 +218,8 @@ class RellSqlTester(
     private var modelClasses: List<RClass> = listOf()
     private var lastInserts = listOf<String>()
     private val expectedData = mutableListOf<String>()
+    private val stdoutPrinter = TesterRtPrinter()
+    private val logPrinter = TesterRtPrinter()
 
     var useSql: Boolean = useSql
     set(value) {
@@ -223,6 +234,8 @@ class RellSqlTester(
     }
 
     var inserts: List<String> = inserts
+
+    var strictToString = true
 
     private fun init() {
         if (!inited) {
@@ -288,6 +301,10 @@ class RellSqlTester(
 
     fun chkOp(bodyCode: String, expected: String) {
         val opCode = "operation o() { $bodyCode }"
+        chkOpEx(opCode, expected)
+    }
+
+    fun chkOpEx(opCode: String, expected: String) {
         val actual = callOp(opCode, listOf())
         assertEquals(expected, actual)
     }
@@ -323,15 +340,38 @@ class RellSqlTester(
     fun callQuery(code: String, args: List<RtValue>): String {
         init()
         val moduleCode = moduleCode(code)
-        return RellTestUtils.callQuery(sqlExec, moduleCode, "q", args)
+        val globalCtx = createGlobalCtx()
+        return RellTestUtils.callQuery(globalCtx, moduleCode, "q", args, strictToString)
     }
 
     fun callOp(code: String, args: List<RtValue>): String {
         init()
         val moduleCode = moduleCode(code)
-        return RellTestUtils.callOp(sqlExec, moduleCode, "o", args)
+        val globalCtx = createGlobalCtx()
+        return RellTestUtils.callOp(globalCtx, moduleCode, "o", args)
     }
+
+    private fun createGlobalCtx() = RtGlobalContext(stdoutPrinter, logPrinter, sqlExec)
+
+    fun chkStdout(vararg expected: String) = stdoutPrinter.chk(*expected)
+    fun chkLog(vararg expected: String) = logPrinter.chk(*expected)
 
     private fun classDefsCode(): String = classDefs.joinToString("\n")
     private fun moduleCode(code: String): String = classDefsCode() + "\n" + code
+
+    private class TesterRtPrinter: RtPrinter() {
+        private val queue = LinkedList<String>()
+
+        override fun print(str: String) {
+            queue.add(str)
+        }
+
+        fun chk(vararg expected: String) {
+            for (s in expected) {
+                assertFalse(queue.isEmpty())
+                assertEquals(s, queue.remove())
+            }
+            assertEquals(0, queue.size)
+        }
+    }
 }

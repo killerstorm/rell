@@ -1,6 +1,7 @@
 package net.postchain.rell.parser
 
 import net.postchain.rell.model.*
+import java.util.*
 
 class S_NameExpr(val name: String): S_Expression() {
     override fun compile(ctx: ExprCompilationContext): RExpr {
@@ -54,44 +55,35 @@ class S_NameExpr(val name: String): S_Expression() {
     }
 
     override fun compileCall(ctx: ExprCompilationContext, args: List<RExpr>): RExpr {
-        val fn = ctx.modCtx.getFunction(name)
+        val fn = ctx.entCtx.modCtx.getFunction(name)
         return fn.compileCall(args)
     }
 
     override fun compileCallDb(ctx: DbCompilationContext, args: List<DbExpr>): DbExpr {
-        val fn = ctx.exprCtx.modCtx.getFunction(name)
+        val fn = ctx.exprCtx.entCtx.modCtx.getFunction(name)
         return fn.compileCallDb(args)
     }
 
-    override fun iteratePathExpr(path: MutableList<String>): Boolean {
+    override fun discoverFullPathExpr(path: MutableList<String>): List<String>? {
         path.add(name)
-        return true
+        return path.reversed()
     }
 }
 
 class S_AttributeExpr(val base: S_Expression, val name: String): S_Expression() {
     override fun compile(ctx: ExprCompilationContext): RExpr {
-        val rBase = base.compile(ctx)
-        val type = rBase.type
-
-        if (type is RTupleType) {
-            val idx = type.fields.indexOfFirst { it.name == name }
-            if (idx == -1) {
-                throw CtError("unknown_member:$name", "Unknown member: $name")
-            }
-            return RTupleFieldExpr(type.fields[idx].type, rBase, idx)
-        } else {
-            TODO(type.toStrictString())
-        }
+        val mutPath = mutableListOf<String>()
+        val (deepBase, path) = discoverTailPathExpr(mutPath)
+        val rBase = deepBase.compile(ctx)
+        return compilePath(ctx, rBase, path)
     }
 
     override fun compileDb(ctx: DbCompilationContext): DbExpr {
         val mutPath = mutableListOf<String>()
+        val fullPath = discoverFullPathExpr(mutPath)
 
-        if (iteratePathExpr(mutPath)) {
-            mutPath.reverse()
-
-            val dbExpr = compileDbPathExprOpt(ctx, mutPath.toList(), true)
+        if (fullPath != null) {
+            val dbExpr = compileDbPathExprOpt(ctx, fullPath, true)
             if (dbExpr != null) {
                 return dbExpr
             }
@@ -117,17 +109,74 @@ class S_AttributeExpr(val base: S_Expression, val name: String): S_Expression() 
         }
 
         val fn = S_SysMemberFunctions.getMemberFunction(dbBase.type, name)
-        return fn.compileMemberCallDb(dbBase, args)
+        return fn.compileCallDb(dbBase, args)
     }
 
     private fun compileCall0(rBase: RExpr, args: List<RExpr>): RExpr {
         val fn = S_SysMemberFunctions.getMemberFunction(rBase.type, name)
-        return fn.compileMemberCall(rBase, args)
+        return fn.compileCall(rBase, args)
     }
 
-    override fun iteratePathExpr(path: MutableList<String>): Boolean {
+    override fun discoverFullPathExpr(path: MutableList<String>): List<String>? {
         path.add(name)
-        return base.iteratePathExpr(path)
+        return base.discoverFullPathExpr(path)
+    }
+
+    override fun discoverTailPathExpr(path: MutableList<String>): Pair<S_Expression, List<String>> {
+        path.add(name)
+        return base.discoverTailPathExpr(path)
+    }
+
+    companion object {
+        private fun compilePath(ctx: ExprCompilationContext, rBase: RExpr, path: List<String>): RExpr {
+            var headBase = rBase
+            var tailPath = LinkedList(path)
+
+            while (!tailPath.isEmpty()) {
+                val type = headBase.type
+                if (type is RTupleType) {
+                    headBase = compilePathStepTuple(headBase, type, tailPath)
+                } else if (type is RInstanceRefType) {
+                    headBase = compilePathStepDataObject(ctx, headBase, type, tailPath)
+                } else {
+                    TODO(type.toStrictString())
+                }
+            }
+
+            return headBase
+        }
+
+        private fun compilePathStepTuple(base: RExpr, type: RTupleType, path: Queue<String>): RExpr {
+            val step = path.remove()
+            val idx = type.fields.indexOfFirst { it.name == step }
+            if (idx == -1) {
+                throw CtError("unknown_member:${type.toStrictString()}:$step",
+                        "Unknown member for type ${type.toStrictString()}: '$step'")
+            }
+            return RTupleFieldExpr(type.fields[idx].type, base, idx)
+        }
+
+        private fun compilePathStepDataObject(
+                ctx: ExprCompilationContext,
+                base: RExpr,
+                type: RInstanceRefType,
+                path: Queue<String>): RExpr
+        {
+            val atClass = RAtClass(type.rClass, "", 0)
+            val from = listOf(atClass)
+            val dbCtx = DbCompilationContext(null, ctx, from)
+
+            val pathList = path.toList()
+            path.clear()
+            val what = compileDbPathExpr(dbCtx, pathList, false)
+
+            val whereLeft = PathDbExpr(type, atClass, listOf(), null)
+            val whereRight = InterpretedDbExpr(base)
+            val where = BinaryDbExpr(RBooleanType, DbBinaryOp_Eq, whereLeft, whereRight)
+
+            val atExprBase = RAtExprBase(from, listOf(what), where, listOf(), false, false)
+            return RAtExpr(what.type, atExprBase, null, RAtExprRowTypeSimple)
+        }
     }
 }
 
@@ -212,7 +261,7 @@ private fun resolvePathEntry(cls: RClass, name: String): PathEntry? {
     }
 
     val resultType = attr.type
-    val resultClass = if (resultType is RInstanceRefType) resultType.rclass else null
+    val resultClass = if (resultType is RInstanceRefType) resultType.rClass else null
     return PathEntry(name, resultType, resultClass)
 }
 

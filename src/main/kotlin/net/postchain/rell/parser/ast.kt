@@ -2,11 +2,31 @@ package net.postchain.rell.parser
 
 import net.postchain.rell.model.*
 
-internal typealias TypeMap = Map<String, RType>
-
 class CtError(val code: String, msg: String): Exception(msg)
 
-class S_NameTypePair(val name: String, val type: String)
+class S_NameTypePair(val name: String, val type: S_Type)
+
+class Ct_UserFunctionDeclaration(val name: String, val params: List<RExternalParam>, val type: RType)
+
+sealed class Ct_Function {
+    abstract fun compileCall(args: List<RExpr>): RExpr
+    abstract fun compileCallDb(args: List<DbExpr>): DbExpr
+}
+
+class Ct_SysFunction(val fn: S_SysFunction): Ct_Function() {
+    override fun compileCall(args: List<RExpr>): RExpr = fn.compileCall(args)
+    override fun compileCallDb(args: List<DbExpr>): DbExpr = fn.compileCallDb(args)
+}
+
+class Ct_UserFunction(val fn: Ct_UserFunctionDeclaration, val fnKey: Int): Ct_Function() {
+    override fun compileCall(args: List<RExpr>): RExpr {
+        val params = fn.params.map { it.type }
+        val args2 = S_SysFunction.matchArgs(fn.name, params, args)
+        return RUserCallExpr(fn.type, fn.name, fnKey, args2)
+    }
+
+    override fun compileCallDb(args: List<DbExpr>): DbExpr = TODO()
+}
 
 internal class ModuleCompilationContext {
     private val typeMap = mutableMapOf<String, RType>(
@@ -16,30 +36,32 @@ internal class ModuleCompilationContext {
             "integer" to RIntegerType,
             "pubkey" to RByteArrayType,
             "name" to RTextType,
-            "timestamp" to RTimestampType,
+            "timestamp" to RIntegerType,
             "signer" to RSignerType,
             "guid" to RGUIDType,
             "tuid" to RTextType,
             "json" to RJSONType,
-            "retval json" to RJSONType,
-            "retval require" to RUnitType
+            "range" to RRangeType
     )
-
-    private val functionMap = mutableMapOf<String, S_SysFunction>()
 
     private val classes = mutableMapOf<String, RClass>()
     private val operations = mutableMapOf<String, ROperation>()
     private val queries = mutableMapOf<String, RQuery>()
+    private val functions = mutableMapOf<String, Ct_Function>()
+    private val functionDecls = mutableListOf<Ct_UserFunctionDeclaration>()
+    private val functionDefs = mutableListOf<RFunction>()
+
+    private val secondPass = mutableListOf<() -> Unit>()
 
     init {
         for (fn in S_SYS_FUNCTIONS) {
-            check(!(fn.name in functionMap))
-            functionMap[fn.name] = fn
+            check(!(fn.name in functions))
+            functions[fn.name] = Ct_SysFunction(fn)
         }
     }
 
     fun typeExists(name: String): Boolean = name in typeMap
-    fun functionExists(name: String): Boolean = name in queries || name in operations
+    fun functionExists(name: String): Boolean = name in functions || name in queries || name in operations
 
     fun getType(name: String): RType {
         val type = typeMap[name]
@@ -57,8 +79,8 @@ internal class ModuleCompilationContext {
         return cls
     }
 
-    fun getFunction(name: String): S_SysFunction {
-        val fn = functionMap[name]
+    fun getFunction(name: String): Ct_Function {
+        val fn = functions[name]
         if (fn == null) {
             throw CtError("unknown_function:$name", "Unknown function: '$name'")
         }
@@ -73,42 +95,110 @@ internal class ModuleCompilationContext {
     }
 
     fun addQuery(query: RQuery) {
-        check(!(query.name in queries))
-        check(!(query.name in operations))
+        check(!functionExists(query.name))
         queries[query.name] = query
     }
 
     fun addOperation(operation: ROperation) {
-        check(!(operation.name in queries))
-        check(!(operation.name in operations))
+        check(!functionExists(operation.name))
         operations[operation.name] = operation
     }
 
+    fun addFunctionDeclaration(declaration: Ct_UserFunctionDeclaration): Int {
+        check(!functionExists(declaration.name))
+        val fnKey = functionDecls.size
+        functionDecls.add(declaration)
+        functions[declaration.name] = Ct_UserFunction(declaration, fnKey)
+        return fnKey
+    }
+
+    fun addFunctionDefinition(function: RFunction) {
+        check(functionDefs.size == function.fnKey)
+        functionDefs.add(function)
+    }
+
+    fun onSecondPass(code: () -> Unit) {
+        secondPass.add(code)
+    }
+
     fun createModule(): RModule {
-        return RModule(classes.values.toList(), operations.values.toList(), queries.values.toList())
+        return RModule(classes.values.toList(), operations.values.toList(), queries.values.toList(), functionDefs.toList())
+    }
+
+    fun runSecondPass() {
+        for (code in secondPass) {
+            code()
+        }
     }
 }
 
-internal class CompilationScopeEntry(val type: RType, val modifiable: Boolean, val offset: Int) {
-    fun toVarExpr(): RVarExpr = RVarExpr(type, offset)
+internal enum class CtEntityType {
+    CLASS,
+    QUERY,
+    OPERATION,
+    FUNCTION,
+}
+
+internal class EntityCompilationContext(
+        val modCtx: ModuleCompilationContext,
+        val entityType: CtEntityType,
+        returnType: RType?
+){
+    private var actualReturnType: RType? = returnType
+
+    fun checkDbUpdateAllowed() {
+        if (entityType == CtEntityType.QUERY) {
+            throw CtError("no_db_update", "Database modifications are not allowed in this context")
+        }
+    }
+
+    fun matchReturnTypeUnit() {
+        val retType = actualReturnType
+        if (retType == null) {
+            actualReturnType = RUnitType
+        } else if (retType != RUnitType) {
+            throw CtUtils.errTypeMissmatch(retType, RUnitType, "entity_rettype", "Return type missmatch")
+        }
+    }
+
+    fun matchReturnType(expr: RExpr): RExpr {
+        val retType = actualReturnType
+        if (retType == null) {
+            actualReturnType = expr.type
+            return expr
+        }
+        return retType.match(expr, "entity_rettype", "Return type missmatch")
+    }
+
+    fun actualReturnType(): RType {
+        var t = actualReturnType
+        if (t == null) {
+            t = RUnitType
+            actualReturnType = t
+        }
+        return t
+    }
+}
+
+internal class CompilationScopeEntry(val name: String, val type: RType, val modifiable: Boolean, val offset: Int) {
+    fun toVarExpr(): RVarExpr = RVarExpr(type, offset, name)
 }
 
 internal class ExprCompilationContext(
-        val modCtx: ModuleCompilationContext,
+        val entCtx: EntityCompilationContext,
         private val parent: ExprCompilationContext?,
-        val dbUpdateAllowed: Boolean,
         val insideLoop: Boolean
 ){
     val startOffset: Int = if (parent == null) 0 else parent.startOffset + parent.locals.size
     val locals = mutableMapOf<String, CompilationScopeEntry>()
 
     fun add(name: String, type: RType, modifiable: Boolean): CompilationScopeEntry {
-        if (name in locals) {
+        if (lookupOpt(name) != null) {
             throw CtError("var_dupname:$name", "Duplicated variable name: $name")
         }
 
         val ofs = startOffset + locals.size
-        val entry = CompilationScopeEntry(type, modifiable, ofs)
+        val entry = CompilationScopeEntry(name, type, modifiable, ofs)
         locals.put(name, entry)
         return entry
     }
@@ -131,12 +221,6 @@ internal class ExprCompilationContext(
             ctx = ctx.parent
         }
         return null
-    }
-
-    fun checkDbUpdateAllowed() {
-        if (!dbUpdateAllowed) {
-            throw CtError("no_db_update", "Database modifications are not allowed in this context")
-        }
     }
 }
 
@@ -172,26 +256,28 @@ sealed class S_Definition(val name: String) {
     internal abstract fun compile(ctx: ModuleCompilationContext)
 }
 
-internal class ClassCompilationContext(private val ctx: ModuleCompilationContext) {
+internal class ClassCompilationContext(private val modCtx: ModuleCompilationContext) {
+    private val entCtx = EntityCompilationContext(modCtx, CtEntityType.CLASS, null)
+
     private val attributes = mutableMapOf<String, RAttrib>()
     private val keys = mutableListOf<RKey>()
     private val indices = mutableListOf<RIndex>()
 
-    fun addAttribute(name: String, type: String, mutable: Boolean, expr: S_Expression?) {
+    fun addAttribute(name: String, type: S_Type, mutable: Boolean, expr: S_Expression?) {
         if (name in attributes) {
             throw CtError("dup_attr:$name", "Duplicated attribute name: $name")
         }
 
-        val rType = ctx.getType(type)
+        val rType = type.compile(modCtx)
+        if (!rType.allowedForAttributes()) {
+            throw CtError("class_attr_type:$name:${rType.toStrictString()}",
+                    "Attribute '$name' has unallowed type: ${rType.toStrictString()}")
+        }
 
         val rExpr = if (expr == null) null else {
-            val exprCtx = ExprCompilationContext(ctx, null, false, false)
+            val exprCtx = ExprCompilationContext(entCtx, null, false)
             val rExpr = expr.compile(exprCtx)
-            if (!rType.accepts(rExpr.type)) {
-                throw CtError("attr_type:$name:${rType.toStrictString()}:${rExpr.type.toStrictString()}",
-                        "Default value type missmatch for '$name': ${rExpr.type.toStrictString()} instead of ${rType.toStrictString()}")
-            }
-            rExpr
+            rType.match(rExpr, "attr_type:$name", "Default value type missmatch for '$name'")
         }
 
         attributes[name] = RAttrib(name, rType, mutable, rExpr)
@@ -234,10 +320,11 @@ class S_OpDefinition(
 {
     override fun compile(ctx: ModuleCompilationContext) {
         if (ctx.functionExists(name)) {
-            throw CtError("dup_operation_name:$name", "Duplicated operation name: $name")
+            throw CtError("oper_name_dup:$name", "Duplicated function name: $name")
         }
 
-        val exprCtx = ExprCompilationContext(ctx, null, true, false)
+        val entCtx = EntityCompilationContext(ctx, CtEntityType.OPERATION, null)
+        val exprCtx = ExprCompilationContext(entCtx, null, false)
         val rParams = compileExternalParams(ctx, exprCtx, params)
         val rBody = body.compile(exprCtx)
 
@@ -246,39 +333,115 @@ class S_OpDefinition(
     }
 }
 
-abstract class S_QueryBody {
-    internal abstract fun compile(ctx: ExprCompilationContext): RStatement
-}
-
-class S_QueryBodyShort(val expr: S_Expression): S_QueryBody() {
-    override fun compile(ctx: ExprCompilationContext): RStatement {
-        val rExpr = expr.compile(ctx)
-        return RReturnStatement(rExpr)
-    }
-}
-
-class S_QueryBodyFull(val body: S_Statement): S_QueryBody() {
-    override fun compile(ctx: ExprCompilationContext): RStatement {
-        return body.compile(ctx)
-    }
-}
-
 class S_QueryDefinition(
         name: String,
         val params: List<S_NameTypePair>,
-        val body: S_QueryBody
+        val retType: S_Type?,
+        val body: S_FunctionBody
 ): S_Definition(name) {
     override fun compile(ctx: ModuleCompilationContext) {
         if (ctx.functionExists(name)) {
-            throw CtError("dup_query_name:$name", "Duplicated query name: $name")
+            throw CtError("query_name_dup:$name", "Duplicated function name: $name")
         }
 
-        val exprCtx = ExprCompilationContext(ctx, null, false, false)
+        val rRetType = retType?.compile(ctx)
+
+        val entCtx = EntityCompilationContext(ctx, CtEntityType.QUERY, rRetType)
+        val exprCtx = ExprCompilationContext(entCtx, null, false)
         val rParams = compileExternalParams(ctx, exprCtx, params)
-        val rBody = body.compile(exprCtx)
+        val rBody = body.compileQuery(exprCtx)
 
         val rQuery = RQuery(name, rParams, rBody)
         ctx.addQuery(rQuery)
+    }
+}
+
+abstract class S_FunctionBody {
+    internal abstract fun compileQuery(ctx: ExprCompilationContext): RStatement
+    internal abstract fun compileFunction(ctx: ExprCompilationContext): RStatement
+}
+
+class S_FunctionBodyShort(val expr: S_Expression): S_FunctionBody() {
+    override fun compileQuery(ctx: ExprCompilationContext): RStatement {
+        val rExpr = expr.compile(ctx)
+        CtUtils.checkUnitType(rExpr.type, "query_exprtype_unit", "Query expressions returns nothing")
+        val rExpr2 = ctx.entCtx.matchReturnType(rExpr)
+        return RReturnStatement(rExpr2)
+    }
+
+    override fun compileFunction(ctx: ExprCompilationContext): RStatement {
+        val rExpr = expr.compile(ctx)
+        val rExpr2 = ctx.entCtx.matchReturnType(rExpr)
+
+        if (rExpr2.type == RUnitType) {
+            return RBlockStatement(listOf(RExprStatement(rExpr2), RReturnStatement(null)))
+        } else {
+            return RReturnStatement(rExpr2)
+        }
+    }
+}
+
+class S_FunctionBodyFull(val body: S_Statement): S_FunctionBody() {
+    override fun compileQuery(ctx: ExprCompilationContext): RStatement {
+        val rBody = body.compile(ctx)
+
+        val ret = body.returns()
+        if (!ret) {
+            throw CtError("query_noreturn", "Not all code paths return value")
+        }
+
+        return rBody
+    }
+
+    override fun compileFunction(ctx: ExprCompilationContext): RStatement {
+        val rBody = body.compile(ctx)
+
+        val retType = ctx.entCtx.actualReturnType()
+        if (retType != RUnitType) {
+            val ret = body.returns()
+            if (!ret) {
+                throw CtError("fun_noreturn", "Not all code paths return value")
+            }
+        }
+
+        return rBody
+    }
+}
+
+class S_FunctionDefinition(
+        name: String,
+        val params: List<S_NameTypePair>,
+        val retType: S_Type?,
+        val body: S_FunctionBody
+): S_Definition(name) {
+    override fun compile(ctx: ModuleCompilationContext) {
+        if (ctx.functionExists(name)) {
+            throw CtError("fun_name_dup:$name", "Duplicated function name: $name")
+        }
+
+        val rRetType = if (retType != null) retType.compile(ctx) else RUnitType
+
+        val entCtx = EntityCompilationContext(ctx, CtEntityType.FUNCTION, rRetType)
+        val exprCtx = ExprCompilationContext(entCtx, null, false)
+        val rParams = compileExternalParams(ctx, exprCtx, params)
+
+        val declaration = Ct_UserFunctionDeclaration(name, rParams, rRetType)
+        val fnKey = ctx.addFunctionDeclaration(declaration)
+
+        ctx.onSecondPass {
+            secondPass(ctx, exprCtx, declaration, fnKey)
+        }
+    }
+
+    private fun secondPass(
+            ctx: ModuleCompilationContext,
+            exprCtx: ExprCompilationContext,
+            declaration: Ct_UserFunctionDeclaration,
+            fnKey: Int
+    ){
+        val rBody = body.compileFunction(exprCtx)
+        val rFunction = RFunction(name, declaration.params, rBody, declaration.type, fnKey)
+        ctx.addFunctionDefinition(rFunction)
     }
 }
 
@@ -289,6 +452,8 @@ class S_ModuleDefinition(val definitions: List<S_Definition>) {
         for (def in definitions) {
             def.compile(ctx)
         }
+
+        ctx.runSecondPass()
 
         return ctx.createModule()
     }
@@ -319,9 +484,22 @@ private fun compileParams(ctx: ModuleCompilationContext, params: List<S_NameType
         if (!names.add(name)) {
             throw CtError("dup_param_name:$name", "Duplicated parameter name: $name")
         }
-        val rType = ctx.getType(param.type)
+        val rType = param.type.compile(ctx)
         val rAttr = RVariable(param.name, rType)
         res.add(rAttr)
     }
     return res
+}
+
+object CtUtils {
+    fun checkUnitType(type: RType, errCode: String, errMsg: String) {
+        if (type == RUnitType) {
+            throw CtError(errCode, errMsg)
+        }
+    }
+
+    fun errTypeMissmatch(srcType: RType, dstType: RType, errCode: String, errMsg: String): CtError {
+        return CtError("$errCode:${dstType.toStrictString()}:${srcType.toStrictString()}",
+                "$errMsg: ${srcType.toStrictString()} instead of ${dstType.toStrictString()}")
+    }
 }

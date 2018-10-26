@@ -2,8 +2,6 @@ package net.postchain.rell.parser
 
 import net.postchain.rell.model.*
 
-class S_UnOpType(val resType: RType, val rOp: RUnaryOp?, val dbOp: DbUnaryOp?)
-
 sealed class S_UnaryOp(val code: String) {
     abstract fun compile(expr: RExpr): RExpr
     abstract fun compileDb(expr: DbExpr): DbExpr
@@ -64,11 +62,13 @@ object S_UnaryOp_Not: S_UnaryOp("not") {
 class S_UnaryExpr(val op: S_UnaryOp, val expr: S_Expression): S_Expression() {
     override fun compile(ctx: ExprCompilationContext): RExpr {
         val rExpr = expr.compile(ctx)
+        checkUnitType(rExpr.type)
         return op.compile(rExpr)
     }
 
     override fun compileDb(ctx: DbCompilationContext): DbExpr {
         val dbExpr = expr.compileDb(ctx)
+        checkUnitType(dbExpr.type)
 
         //TODO don't use "is"
         if (dbExpr is InterpretedDbExpr) {
@@ -78,4 +78,6 @@ class S_UnaryExpr(val op: S_UnaryOp, val expr: S_Expression): S_Expression() {
             return op.compileDb(dbExpr)
         }
     }
+
+    private fun checkUnitType(type: RType) = CtUtils.checkUnitType(type, "expr_operand_unit", "Type of operand is unit")
 }

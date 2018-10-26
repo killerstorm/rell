@@ -141,16 +141,21 @@ object DbSysFunction_Text_Len: DbSysFunction_Simple("text.len", "LENGTH")
 object DbSysFunction_ByteArray_Len: DbSysFunction_Simple("byte_array.len", "LENGTH")
 object DbSysFunction_Json: DbSysFunction_Cast("json", "JSONB")
 object DbSysFunction_Json_Str: DbSysFunction_Cast("json.str", "TEXT")
+object DbSysFunction_ToString: DbSysFunction_Cast("toString", "TEXT")
 
 class CallDbExpr(type: RType, val fn: DbSysFunction, val args: List<DbExpr>): DbExpr(type) {
+    override fun visit(visitor: (DbExpr) -> Unit) {
+        for (arg in args) {
+            arg.visit(visitor)
+        }
+    }
+
     override fun toSql(ctx: SqlGenContext, bld: RtSqlBuilder) = fn.toSql(ctx, bld, args)
 }
 
 internal class RtSqlBuilder {
     private val sqlBuf = StringBuilder()
     private val paramsBuf = mutableListOf<RExpr>()
-
-    fun isEmpty(): Boolean = sqlBuf.isEmpty() && paramsBuf.isEmpty()
 
     fun <T> append(list: List<T>, sep: String, block: (T) -> Unit) {
         var s = ""
@@ -182,7 +187,20 @@ internal class RtSqlBuilder {
         paramsBuf.add(param)
     }
 
+    fun listBuilder(sep: String = ", "): RtSqlListBuilder = RtSqlListBuilder(this, sep)
+
     fun build(): RtSql = RtSql(sqlBuf.toString(), paramsBuf.toList())
+}
+
+internal class RtSqlListBuilder(private val builder: RtSqlBuilder, private val sep: String) {
+    private var first = true
+
+    fun nextItem() {
+        if (!first) {
+            builder.append(sep)
+        }
+        first = false
+    }
 }
 
 internal class RtSql(val sql: String, val params: List<RExpr>) {
@@ -209,7 +227,7 @@ internal class RtSelect(val rtSql: RtSql, val resultTypes: List<RType>) {
 
         val args = rtSql.calcArgs(env)
 
-        env.sqlExec.executeQuery(rtSql.sql, args::bind) { rs ->
+        env.modCtx.globalCtx.sqlExec.executeQuery(rtSql.sql, args::bind) { rs ->
             val list = mutableListOf<RtValue>()
             for (i in resultTypes.indices) {
                 val type = resultTypes[i]
@@ -226,6 +244,6 @@ internal class RtSelect(val rtSql: RtSql, val resultTypes: List<RType>) {
 internal class RtUpdate(val rtSql: RtSql) {
     fun execute(env: RtEnv) {
         val args = rtSql.calcArgs(env)
-        env.sqlExec.execute(rtSql.sql, args::bind)
+        env.modCtx.globalCtx.sqlExec.execute(rtSql.sql, args::bind)
     }
 }

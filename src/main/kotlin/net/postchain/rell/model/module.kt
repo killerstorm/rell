@@ -1,36 +1,74 @@
 package net.postchain.rell.model
 
-import net.postchain.rell.runtime.RtEnv
-import net.postchain.rell.runtime.RtError
-import net.postchain.rell.runtime.RtValue
-import net.postchain.rell.sql.SqlExecutor
+import net.postchain.rell.runtime.*
 import java.lang.IllegalStateException
 
 class RAttrib(val name: String, val type: RType, val mutable: Boolean, val expr: RExpr?)
 
 class RExternalParam(val name: String, val type: RType, val offset: Int)
 
-class ROperation(val name: String, val params: List<RExternalParam>, val body: RStatement) {
-    fun execute(sqlExec: SqlExecutor, args: List<RtValue>) {
-        val env = RtEnv(sqlExec, true)
+sealed class RRoutine(val name: String, val params: List<RExternalParam>, val body: RStatement) {
+    abstract fun callTop(modCtx: RtModuleContext, args: List<RtValue>)
+}
+
+class ROperation(name: String, params: List<RExternalParam>, body: RStatement): RRoutine(name, params, body) {
+    override fun callTop(modCtx: RtModuleContext, args: List<RtValue>) {
+        val env = RtEnv(modCtx, true)
         processArgs(name, params, args, env)
 
-        val res = body.execute(env)
-        check(res == null)
+        modCtx.globalCtx.sqlExec.transaction {
+            val res = body.execute(env)
+            if (res != null) {
+                check(res is RStatementResult_Return && res.value == null)
+            }
+        }
     }
 }
 
-class RQuery(val name: String, val params: List<RExternalParam>, val body: RStatement) {
-    fun execute(sqlExec: SqlExecutor, args: List<RtValue>): RtValue {
-        val env = RtEnv(sqlExec, false)
+class RQuery(name: String, params: List<RExternalParam>, body: RStatement): RRoutine(name, params, body) {
+    override fun callTop(modCtx: RtModuleContext, args: List<RtValue>) {
+        callTopQuery(modCtx, args)
+    }
+
+    fun callTopQuery(modCtx: RtModuleContext, args: List<RtValue>): RtValue {
+        val env = RtEnv(modCtx, false)
         processArgs(name, params, args, env)
 
         val res = body.execute(env)
-        if (res == null || !(res is RStatementResult_Return)) {
-            throw IllegalStateException("No return value")
+        if (res == null) {
+            throw RtError("query_novalue:$name", "Query '$name' did not return a value")
         }
 
-        return res.value
+        if (!(res is RStatementResult_Return)) {
+            throw IllegalStateException("" + res)
+        }
+        check(res.value != null)
+
+        return res.value!!
+    }
+}
+
+class RFunction(
+        name: String,
+        params: List<RExternalParam>,
+        body: RStatement,
+        val type: RType,
+        val fnKey: Int
+): RRoutine(name, params, body)
+{
+    override fun callTop(modCtx: RtModuleContext, args: List<RtValue>) {
+        val env = RtEnv(modCtx, false)
+        call(env, args)
+    }
+
+    fun call(env: RtEnv, args: List<RtValue>): RtValue {
+        val fnEnv = RtEnv(env.modCtx, env.dbUpdateAllowed)
+        processArgs(name, params, args, fnEnv)
+
+        val res = body.execute(fnEnv)
+
+        val retVal = if (res is RStatementResult_Return) res.value else null
+        return if (retVal == null) RtUnitValue else retVal
     }
 }
 
@@ -56,5 +94,12 @@ private fun processArgs(name: String, params: List<RExternalParam>, args: List<R
 class RModule(
         val classes: List<RClass>,
         val operations: List<ROperation>,
-        val queries: List<RQuery>
-)
+        val queries: List<RQuery>,
+        val functions: List<RFunction>
+){
+    init {
+        for ((i, f) in functions.withIndex()) {
+            check(f.fnKey == i)
+        }
+    }
+}

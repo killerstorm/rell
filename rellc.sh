@@ -19,7 +19,7 @@ if [ ! -z "$2" ]
     outputname="$2"
 fi
 
-java -cp "$scriptdir/rellr.jar" net.postchain.rell.CLIKt "$1" "$outputname"
+java -cp "$scriptdir/rellr.jar" net.postchain.rell.SqlgenCLIKt "$1" "$outputname"
 
 echo ""
 echo ""

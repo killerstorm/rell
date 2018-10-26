@@ -4,31 +4,35 @@ import net.postchain.rell.model.*
 
 class S_AtExprFrom(val alias: String?, val className: String)
 
+internal class S_AtWhat(val exprs: List<Pair<String?, DbExpr>>, val sort: List<Pair<DbExpr, Boolean>>)
+
 sealed class S_AtExprWhat {
-    internal abstract fun compile(ctx: DbCompilationContext): List<Pair<String?, DbExpr>>
+    internal abstract fun compile(ctx: DbCompilationContext): S_AtWhat
 }
 
 class S_AtExprWhatDefault: S_AtExprWhat() {
-    override fun compile(ctx: DbCompilationContext): List<Pair<String?, DbExpr>> {
-        return ctx.classes.map {
+    override fun compile(ctx: DbCompilationContext): S_AtWhat {
+        val exprs = ctx.classes.map {
             val name = if (ctx.classes.size == 1) null else it.alias
             val expr = PathDbExpr(RInstanceRefType(it.rClass), it, listOf(), null)
             Pair(name, expr)
         }
+        return S_AtWhat(exprs, listOf())
     }
 }
 
 class S_AtExprWhatSimple(val path: List<String>): S_AtExprWhat() {
-    override fun compile(ctx: DbCompilationContext): List<Pair<String?, DbExpr>> {
+    override fun compile(ctx: DbCompilationContext): S_AtWhat {
         val dbExpr = compileDbPathExpr(ctx, path, false)
-        return listOf(Pair(null, dbExpr))
+        val exprs = listOf(Pair(null, dbExpr))
+        return S_AtWhat(exprs, listOf())
     }
 }
 
-class S_AtExprWhatComplexField(val name: String?, val expr: S_Expression)
+class S_AtExprWhatComplexField(val name: String?, val expr: S_Expression, val sort: Boolean?)
 
 class S_AtExprWhatComplex(val fields: List<S_AtExprWhatComplexField>): S_AtExprWhat() {
-    override fun compile(ctx: DbCompilationContext): List<Pair<String?, DbExpr>> {
+    override fun compile(ctx: DbCompilationContext): S_AtWhat {
         checkExplicitNames()
 
         val dbExprs = fields.map { it.expr.compileDb(ctx) }
@@ -38,7 +42,7 @@ class S_AtExprWhatComplex(val fields: List<S_AtExprWhatComplexField>): S_AtExprW
         }
 
         val names = mutableSetOf<String>()
-        names.addAll(fields.filter { it.name != null }.map { it.name!! })
+        names.addAll(fields.filter { it.name != null && !it.name.isEmpty() }.map { it.name!! })
 
         val dupNames = mutableSetOf<String>()
 
@@ -48,9 +52,9 @@ class S_AtExprWhatComplex(val fields: List<S_AtExprWhatComplexField>): S_AtExprW
             }
         }
 
-        return fields.withIndex().map { (idx, field) ->
+        val exprs = fields.withIndex().map { (idx, field) ->
             val name = if (field.name != null) {
-                field.name
+                if (field.name.isEmpty()) null else field.name
             } else {
                 val impName = implicitNames[idx]
                 if (impName != null && !dupNames.contains(impName) && fields.size > 1) {
@@ -59,15 +63,20 @@ class S_AtExprWhatComplex(val fields: List<S_AtExprWhatComplexField>): S_AtExprW
                     null
                 }
             }
-
             Pair(name, dbExprs[idx])
         }
+
+        val sort = fields.withIndex()
+                .filter { (idx, field) -> field.sort != null }
+                .map { (idx, field) -> Pair(exprs[idx].second, field.sort!!) }
+
+        return S_AtWhat(exprs, sort)
     }
 
     private fun checkExplicitNames() {
         val names = mutableSetOf<String>()
         for (field in fields) {
-            if (field.name != null && !names.add(field.name)) {
+            if (field.name != null && !field.name.isEmpty() && !names.add(field.name)) {
                 throw CtError("ct_err:at_dup_what_name:${field.name}", "Duplicated field name: ${field.name}")
             }
         }
@@ -156,29 +165,32 @@ class S_AtExpr(
         val from: List<S_AtExprFrom>,
         val what: S_AtExprWhat,
         val where: S_AtExprWhere,
-        val all: Boolean
+        val limit: S_Expression?,
+        val zero: Boolean,
+        val many: Boolean
 ): S_Expression()
 {
     override fun compile(ctx: ExprCompilationContext): RExpr {
-        val (base, resType) = compileBase(ctx)
-        val type = if (all) RListType(resType.type) else resType.type
-        return RAtExpr(type, base, resType.rowDecoder)
+        val base = compileBase(ctx)
+        val type = if (many) RListType(base.resType.type) else base.resType.type
+        return RAtExpr(type, base.rBase, base.limit, base.resType.rowDecoder)
     }
 
-    private fun compileBase(ctx: ExprCompilationContext): Pair<RAtExprBase, AtResultType> {
+    private fun compileBase(ctx: ExprCompilationContext): AtBase {
         val rFrom = compileFrom(ctx, from)
         val dbCtx = DbCompilationContext(null, ctx, rFrom)
 
         val dbWhere = where.compile(dbCtx)
 
-        val whatPairs = what.compile(dbCtx)
-        val resType = calcResultType(whatPairs)
-        val type = if (all) RListType(resType.type) else resType.type
+        val ctWhat = what.compile(dbCtx)
+        val resType = calcResultType(ctWhat.exprs)
 
-        val dbWhatExprs = whatPairs.map { it.second }
+        val dbWhatExprs = ctWhat.exprs.map { it.second }
 
-        val base = RAtExprBase(rFrom, dbWhatExprs, dbWhere, all)
-        return Pair(base, resType)
+        val rLimit = compileLimit(ctx)
+
+        val base = RAtExprBase(rFrom, dbWhatExprs, dbWhere, ctWhat.sort, zero, many)
+        return AtBase(base, rLimit, resType)
     }
 
     private fun calcResultType(dbWhat: List<Pair<String?, DbExpr>>): AtResultType {
@@ -192,9 +204,27 @@ class S_AtExpr(
         }
     }
 
+    private fun compileLimit(ctx: ExprCompilationContext): RExpr? {
+        if (limit == null) {
+            return null
+        }
+
+        val r = limit.compile(ctx)
+        if (r.type != RIntegerType) {
+            throw CtError("expr_at_limit_type:${r.type.toStrictString()}",
+                    "Wrong limit type: ${r.type.toStrictString()} instead of ${RIntegerType.toStrictString()}")
+        }
+
+        if (!many) {
+            throw CtError("expr_at_limit_one", "Limit cannot be used with a single-object @-expression")
+        }
+
+        return r
+    }
+
     override fun compileAsBoolean(ctx: ExprCompilationContext): RExpr {
-        val (base, _) = compileBase(ctx)
-        return RBooleanAtExpr(base)
+        val base = compileBase(ctx)
+        return RBooleanAtExpr(base.rBase, base.limit)
     }
 
     override fun compileDb(ctx: DbCompilationContext): DbExpr = delegateCompileDb(ctx)
@@ -216,8 +246,10 @@ class S_AtExpr(
         private fun compileFromClass(ctx: ExprCompilationContext, idx: Int, from: S_AtExprFrom): RAtClass {
             val name = from.className
             val alias = if (from.alias != null) from.alias else name
-            val cls = ctx.modCtx.getClass(name)
+            val cls = ctx.entCtx.modCtx.getClass(name)
             return RAtClass(cls, alias, idx)
         }
+
+        private class AtBase(val rBase: RAtExprBase, val limit: RExpr?, val resType: AtResultType)
     }
 }

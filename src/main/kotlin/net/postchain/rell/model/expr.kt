@@ -8,24 +8,27 @@ abstract class RExpr(val type: RType) {
     abstract fun evaluate(env: RtEnv): RtValue
 }
 
-class RVarExpr(type: RType, val offset: Int): RExpr(type) {
+class RVarExpr(type: RType, val offset: Int, val name: String): RExpr(type) {
     override fun evaluate(env: RtEnv): RtValue {
-        val value = env.get(offset)
+        val value = env.getOpt(offset)
+        if (value == null) {
+            throw RtError("expr_var_uninit:$name", "Variable '$name' has not been initialized")
+        }
         return value
     }
 }
 
-class RStringLiteralExpr(type: RType, literal: String): RExpr(type) {
+class RStringLiteralExpr(literal: String): RExpr(RTextType) {
     val value = RtTextValue(literal)
     override fun evaluate(env: RtEnv): RtValue = value
 }
 
-class RByteArrayLiteralExpr(type: RType, literal: ByteArray): RExpr(type) {
+class RByteArrayLiteralExpr(literal: ByteArray): RExpr(RByteArrayType) {
     val value = RtByteArrayValue(literal)
     override fun evaluate(env: RtEnv): RtValue = value
 }
 
-class RIntegerLiteralExpr(type: RType, literal: Long): RExpr(type) {
+class RIntegerLiteralExpr(literal: Long): RExpr(RIntegerType) {
     val value = RtIntValue(literal)
     override fun evaluate(env: RtEnv): RtValue = value
 }
@@ -60,6 +63,82 @@ class RLookupExpr(type: RType, val base: RExpr, val expr: RExpr): RExpr(type) {
         }
 
         return list[index.toInt()]
+    }
+}
+
+class RTupleExpr(val tupleType: RTupleType, val exprs: List<RExpr>): RExpr(tupleType) {
+    override fun evaluate(env: RtEnv): RtValue {
+        val values = exprs.map { it.evaluate(env) }
+        return RtTupleValue(tupleType, values)
+    }
+}
+
+class RTupleCastExpr private constructor(
+        type: RType,
+        private val expr: RExpr,
+        private val caster: ValueCaster
+): RExpr(type)
+{
+    override fun evaluate(env: RtEnv): RtValue {
+        val value = expr.evaluate(env)
+        val value2 = caster.cast(value)
+        return value2
+    }
+
+    companion object {
+        fun create(srcExpr: RExpr, dstType: RType): RExpr? {
+            val caster = createCaster(srcExpr.type, dstType)
+            return if (caster == null) null else RTupleCastExpr(dstType, srcExpr, caster)
+        }
+
+        private fun createCaster(srcType: RType, dstType: RType): ValueCaster? {
+            if (srcType == dstType) {
+                return LeafValueCaster
+            }
+
+            if (!(srcType is RTupleType) || !(dstType is RTupleType)) {
+                return null
+            }
+
+            if (srcType.fields.size != dstType.fields.size) {
+                return null
+            }
+
+            val subCasters = mutableListOf<ValueCaster>()
+            for (i in srcType.fields.indices) {
+                val srcFieldType = srcType.fields[i].type
+                val dstFieldType = dstType.fields[i].type
+                val subCaster = createCaster(srcFieldType, dstFieldType)
+                if (subCaster == null) {
+                    return null
+                }
+                subCasters.add(subCaster)
+            }
+
+            return TupleValueCaster(dstType, subCasters)
+        }
+
+        private abstract class ValueCaster {
+            abstract fun cast(v: RtValue): RtValue
+        }
+
+        private object LeafValueCaster: ValueCaster() {
+            override fun cast(v: RtValue): RtValue = v
+        }
+
+        private class TupleValueCaster(val type: RTupleType, val casters: List<ValueCaster>): ValueCaster() {
+            override fun cast(v: RtValue): RtValue {
+                val values = v.asTuple().withIndex().map { (i, subv) -> casters[i].cast(subv) }
+                return RtTupleValue(type, values)
+            }
+        }
+    }
+}
+
+class RListExpr(type: RListType, val exprs: List<RExpr>): RExpr(type) {
+    override fun evaluate(env: RtEnv): RtValue {
+        val values = exprs.map { it.evaluate(env) }
+        return RtListValue(type, values)
     }
 }
 

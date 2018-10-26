@@ -23,20 +23,27 @@ class RAtExprRowTypeTuple(val type: RTupleType): RAtExprRowType() {
     }
 }
 
-class RAtExprBase(val from: List<RAtClass>, val what: List<DbExpr>, val where: DbExpr?, val all: Boolean) {
+class RAtExprBase(
+        val from: List<RAtClass>,
+        val what: List<DbExpr>,
+        val where: DbExpr?,
+        val sort: List<Pair<DbExpr, Boolean>>,
+        val zero: Boolean,
+        val many: Boolean
+) {
     init {
         from.withIndex().forEach { check(it.index == it.value.index) }
     }
 
-    fun execute(env: RtEnv): List<Array<RtValue>> {
-        val rtSql = buildSql()
+    fun execute(env: RtEnv, limit: RExpr?): List<Array<RtValue>> {
+        val rtSql = buildSql(limit)
         val resultTypes = what.map { it.type }
         val select = RtSelect(rtSql, resultTypes)
         val records = select.execute(env)
         return records
     }
 
-    private fun buildSql(): RtSql {
+    private fun buildSql(limit: RExpr?): RtSql {
         val builder = RtSqlBuilder()
 
         val fromInfo = buildFromInfo()
@@ -56,8 +63,22 @@ class RAtExprBase(val from: List<RAtClass>, val what: List<DbExpr>, val where: D
         }
 
         builder.append(" ORDER BY ")
-        builder.append(fromInfo.classes, ", ") {
-            builder.appendColumn(it.alias, ROWID_COLUMN)
+        val orderByList = builder.listBuilder()
+        for ((expr, asc) in sort) {
+            orderByList.nextItem()
+            expr.toSql(ctx, builder)
+            if (!asc) {
+                builder.append(" DESC")
+            }
+        }
+        for (cls in fromInfo.classes) {
+            orderByList.nextItem()
+            builder.appendColumn(cls.alias, ROWID_COLUMN)
+        }
+
+        if (limit != null) {
+            builder.append(" LIMIT ")
+            builder.append(limit)
         }
 
         return builder.build()
@@ -69,6 +90,7 @@ class RAtExprBase(val from: List<RAtClass>, val what: List<DbExpr>, val where: D
         if (where != null) {
             exprs.add(where)
         }
+        exprs.addAll(sort.map { it.first })
 
         return SqlFromInfo.create(from, exprs)
     }
@@ -95,36 +117,44 @@ class RAtExprBase(val from: List<RAtClass>, val what: List<DbExpr>, val where: D
     }
 }
 
-class RAtExpr(type: RType, val base: RAtExprBase, val rowType: RAtExprRowType): RExpr(type) {
+class RAtExpr(
+        type: RType,
+        val base: RAtExprBase,
+        val limit: RExpr?,
+        val rowType: RAtExprRowType
+): RExpr(type)
+{
     override fun evaluate(env: RtEnv): RtValue {
-        val records = base.execute(env)
+        val records = base.execute(env, limit)
         return decodeResult(records)
     }
 
     private fun decodeResult(records: List<Array<RtValue>>): RtValue {
         val values = records.map { rowType.decode(it) }
 
-        if (base.all) {
-            return RtListValue(type, values)
+        val count = values.size
+        if (count == 0 && !base.zero) {
+            throw RtError("at:wrong_count:$count", "No records found")
+        } else if (count > 1 && !base.many) {
+            throw RtError("at:wrong_count:$count", "Multiple records found: $count")
         }
 
-        val count = values.size
-        if (count == 0) {
-            throw RtError("at:wrong_count:$count", "No records found")
-        } else if (count > 1) {
-            throw RtError("at:wrong_count:$count", "Multiple records found: $count")
-        } else {
+        if (base.many) {
+            return RtListValue(type, values)
+        } else if (count > 0) {
             return values[0]
+        } else {
+            return RtNullValue(type)
         }
     }
 }
 
-class RBooleanAtExpr(val base: RAtExprBase): RExpr(RBooleanType) {
+class RBooleanAtExpr(val base: RAtExprBase, val limit: RExpr?): RExpr(RBooleanType) {
     override fun evaluate(env: RtEnv): RtValue {
-        val records = base.execute(env)
+        val records = base.execute(env, limit)
 
         val count = records.size
-        if (!base.all && count > 1) {
+        if (!base.many && count > 1) {
             throw RtError("at:wrong_count:$count", "Multiple records found: $count")
         }
 

@@ -15,12 +15,12 @@ class SQLGenTest {
     }
 
 
-    @Test
+    //@Test
     fun contract03() { testresource("contract03.rell")   }
 
-    @Test
+    //@Test
     fun contract01() { testresource("contract01.rell")   }
 
-    @Test
+    //@Test
     fun jsoncontract() { testresource("json.rell")   }
 }

@@ -216,6 +216,13 @@ abstract class AbstractOpTest {
 
         chkOp("+", vInt(123), "int[123]")
         chkOp("+", vInt(-123), "int[-123]")
+
+        chkOp("+", vBool(false), vText("Hello"), "text[falseHello]")
+        chkOp("+", vText("Hello"), vBool(true), "text[Hellotrue]")
+        chkOp("+", vInt(123), vText("Hello"), "text[123Hello]")
+        chkOp("+", vText("Hello"), vInt(123), "text[Hello123]")
+        chkOp("+", vJson("[{}]"), vText("Hello"), "text[[{}]Hello]")
+        chkOp("+", vText("Hello"), vJson("[{}]"), "text[Hello[{}]]")
     }
 
     @Test fun testMinus() {
@@ -261,7 +268,14 @@ abstract class AbstractOpTest {
     }
 
     @Test fun testErr() {
-        chkErrSub("+")
+        chkOpErr("boolean + integer")
+        chkOpErr("boolean + user")
+        chkOpErr("integer + boolean")
+        chkOpErr("integer + user")
+        chkOpErr("user + boolean")
+        chkOpErr("user + integer")
+        chkOpErr("user + company")
+
         chkErrSub("-")
         chkErrSub("*")
         chkErrSub("/")
@@ -364,11 +378,11 @@ abstract class AbstractOpTest {
         chkExpr("$op #0", listOf(right), expected)
     }
 
-    private fun chkOp(op: String, left: TstVal, right: TstVal, expected: String) {
+    fun chkOp(op: String, left: TstVal, right: TstVal, expected: String) {
         chkExpr("#0 $op #1", expected, left, right)
     }
 
-    private fun chkOp(op: String, right: TstVal, expected: String) {
+    fun chkOp(op: String, right: TstVal, expected: String) {
         chkExpr("$op #0", expected, right)
     }
 

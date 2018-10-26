@@ -73,82 +73,82 @@ class AtExprPathTest {
     @After fun after() = tst.destroy()
 
     @Test fun testSimpleAttr() {
-        chk("all person @ { city.name = 'San Francisco' }", "list<person>[person[607],person[611]]")
-        chk("all person @ { city.name = 'Las Vegas' }", "list<person>[person[601],person[608]]")
-        chk("all person @ { city.name = 'Munich' }", "list<person>[person[604]]")
+        chk("person @* { city.name = 'San Francisco' }", "list<person>[person[607],person[611]]")
+        chk("person @* { city.name = 'Las Vegas' }", "list<person>[person[601],person[608]]")
+        chk("person @* { city.name = 'Munich' }", "list<person>[person[604]]")
 
-        chk("all person @ { city.state.name = 'CA' }", "list<person>[person[605],person[607],person[611]]")
-        chk("all person @ { city.state.name = 'WA' }", "list<person>[person[606],person[610]]")
-        chk("all person @ { city.state.name = 'NRW' }", "list<person>[person[600],person[603]]")
+        chk("person @* { city.state.name = 'CA' }", "list<person>[person[605],person[607],person[611]]")
+        chk("person @* { city.state.name = 'WA' }", "list<person>[person[606],person[610]]")
+        chk("person @* { city.state.name = 'NRW' }", "list<person>[person[600],person[603]]")
 
-        chk("all person @ { city.state.country.name = 'USA' }",
+        chk("person @* { city.state.country.name = 'USA' }",
                 "list<person>[person[601],person[605],person[606],person[607],person[608],person[610],person[611]]")
-        chk("all person @ { city.state.country.name = 'Germany' }",
+        chk("person @* { city.state.country.name = 'Germany' }",
                 "list<person>[person[600],person[602],person[603],person[604],person[609]]")
 
-        chk("all company @ { hq.state.country.name = 'USA' }",
+        chk("company @* { hq.state.country.name = 'USA' }",
                 "list<company>[company[400],company[401],company[402],company[403],company[404]]")
-        chk("all company @ { hq.state.country.name = 'Germany' }",
+        chk("company @* { hq.state.country.name = 'Germany' }",
                 "list<company>[company[405],company[406],company[407],company[408]]")
     }
 
     @Test fun testSimpleReference() {
-        chkEx("val x = city @ { name = 'Seattle' }; return all person @ { city = x };",
+        chkEx("val x = city @ { name = 'Seattle' }; return person @* { city = x };",
                 "list<person>[person[606],person[610]]")
-        chkEx("val x = city @ { name = 'Cologne' }; return all person @ { city = x };",
+        chkEx("val x = city @ { name = 'Cologne' }; return person @* { city = x };",
                 "list<person>[person[603]]")
-        chkEx("val x = city @ { name = 'Stuttgart' }; return all person @ { city = x };",
+        chkEx("val x = city @ { name = 'Stuttgart' }; return person @* { city = x };",
                 "list<person>[person[602],person[609]]")
 
-        chkEx("val x = state @ { name = 'NV' }; return all person @ { city.state = x };",
+        chkEx("val x = state @ { name = 'NV' }; return person @* { city.state = x };",
                 "list<person>[person[601],person[608]]")
-        chkEx("val x = state @ { name = 'BY' }; return all person @ { city.state = x };",
+        chkEx("val x = state @ { name = 'BY' }; return person @* { city.state = x };",
                 "list<person>[person[604]]")
-        chkEx("val x = state @ { name = 'CA' }; return all person @ { city.state = x };",
+        chkEx("val x = state @ { name = 'CA' }; return person @* { city.state = x };",
                 "list<person>[person[605],person[607],person[611]]")
 
-        chkEx("val x = country @ { name = 'USA' }; return all person @ { city.state.country = x };",
+        chkEx("val x = country @ { name = 'USA' }; return person @* { city.state.country = x };",
                 "list<person>[person[601],person[605],person[606],person[607],person[608],person[610],person[611]]")
-        chkEx("val x = country @ { name = 'Germany' }; return all person @ { city.state.country = x };",
+        chkEx("val x = country @ { name = 'Germany' }; return person @* { city.state.country = x };",
                 "list<person>[person[600],person[602],person[603],person[604],person[609]]")
     }
 
     @Test fun testCompanyLocation() {
-        chk("all person @ { department.company.hq.name = 'Seattle' }", "list<person>[person[607],person[610]]")
-        chk("all person @ { department.company.hq.name = 'Dusseldorf' }", "list<person>[person[608]]")
-        chk("all person @ { department.company.hq.name = 'Los Angeles' }", "list<person>[person[600]]")
+        chk("person @* { department.company.hq.name = 'Seattle' }", "list<person>[person[607],person[610]]")
+        chk("person @* { department.company.hq.name = 'Dusseldorf' }", "list<person>[person[608]]")
+        chk("person @* { department.company.hq.name = 'Los Angeles' }", "list<person>[person[600]]")
 
-        chk("all person @ { department.company.hq.state.country.name = 'USA' }",
+        chk("person @* { department.company.hq.state.country.name = 'USA' }",
                 "list<person>[person[600],person[604],person[605],person[606],person[607],person[609],person[610]]")
-        chk("all person @ { department.company.hq.state.country.name = 'Germany' }",
+        chk("person @* { department.company.hq.state.country.name = 'Germany' }",
                 "list<person>[person[601],person[602],person[603],person[608],person[611]]")
     }
 
     @Test fun testHomeAndCompanyLocation() {
-        chk("all person @ { city.name = 'Las Vegas', department.company.hq.name = 'Cologne' }",
+        chk("person @* { city.name = 'Las Vegas', department.company.hq.name = 'Cologne' }",
                 "list<person>[person[601]]")
-        chk("all person @ { city.name = 'Stuttgart', department.company.hq.name = 'Las Vegas' }",
+        chk("person @* { city.name = 'Stuttgart', department.company.hq.name = 'Las Vegas' }",
                 "list<person>[person[609]]")
-        chk("all person @ { city.name = 'Seattle', department.company.hq.name = 'San Francisco' }",
+        chk("person @* { city.name = 'Seattle', department.company.hq.name = 'San Francisco' }",
                 "list<person>[person[606]]")
 
-        chk("all person @ { city.state.name = 'CA', department.company.hq.state.name = 'NRW' }",
+        chk("person @* { city.state.name = 'CA', department.company.hq.state.name = 'NRW' }",
                 "list<person>[person[611]]")
-        chk("all person @ { city.state.name = 'BY', department.company.hq.state.name = 'CA' }",
+        chk("person @* { city.state.name = 'BY', department.company.hq.state.name = 'CA' }",
                 "list<person>[]")
-        chk("all person @ { city.state.name = 'NV', department.company.hq.state.name = 'NRW' }",
+        chk("person @* { city.state.name = 'NV', department.company.hq.state.name = 'NRW' }",
                 "list<person>[person[601],person[608]]")
     }
 
     @Test fun testHomeCompanyCrossReference() {
-        chk("all person @ { city = department.company.hq }", "list<person>[person[610]]")
-        chk("all person @ { city.state = department.company.hq.state }", "list<person>[person[605],person[610]]")
-        chk("all person @ { city.state.country = department.company.hq.state.country }",
+        chk("person @* { city = department.company.hq }", "list<person>[person[610]]")
+        chk("person @* { city.state = department.company.hq.state }", "list<person>[person[605],person[610]]")
+        chk("person @* { city.state.country = department.company.hq.state.country }",
                 "list<person>[person[602],person[603],person[605],person[606],person[607],person[610]]")
     }
 
     @Test fun testMultiClass() {
-        chk("all (p1: person, p2: person) @ { p1.city.name = 'San Francisco', p2.department.company.name = 'Amazon' }",
+        chk("(p1: person, p2: person) @* { p1.city.name = 'San Francisco', p2.department.company.name = 'Amazon' }",
                 "list<(p1:person,p2:person)>[" +
                         "(person[607],person[607])," +
                         "(person[607],person[610])," +
@@ -156,10 +156,10 @@ class AtExprPathTest {
                         "(person[611],person[610])" +
                         "]")
 
-        chk("all (p1: person, p2: person) @ { p1.city.name = 'Munich', p2.department.company.name = 'Mercedes' }",
+        chk("(p1: person, p2: person) @* { p1.city.name = 'Munich', p2.department.company.name = 'Mercedes' }",
                 "list<(p1:person,p2:person)>[(person[604],person[603])]")
 
-        chk("all (p1: person, p2: person) @ { p1.city.name = 'Las Vegas', p2.department.company.name = 'Twitter' }",
+        chk("(p1: person, p2: person) @* { p1.city.name = 'Las Vegas', p2.department.company.name = 'Twitter' }",
                 "list<(p1:person,p2:person)>[(person[601],person[606]),(person[608],person[606])]")
     }
 

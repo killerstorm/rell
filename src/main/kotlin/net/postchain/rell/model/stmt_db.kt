@@ -1,17 +1,15 @@
 package net.postchain.rell.model
 
 import net.postchain.rell.runtime.RtEnv
-import net.postchain.rell.runtime.RtValue
-import net.postchain.rell.sql.MAKE_ROWID_FUNCTION
 import net.postchain.rell.sql.ROWID_COLUMN
 
-class RUpdateStatementAttr(val attr: RAttrib, val expr: DbExpr)
+class RUpdateStatementWhat(val attr: RAttrib, val expr: DbExpr, val op: DbBinaryOp?)
 
 class RUpdateStatement(
         val cls: RAtClass,
         val extraClasses: List<RAtClass>,
         val where: DbExpr?,
-        val attrs: List<RUpdateStatementAttr>
+        val what: List<RUpdateStatementWhat>
 ): RStatement()
 {
     init {
@@ -47,7 +45,7 @@ class RUpdateStatement(
         val from = listOf(cls) + extraClasses
 
         val exprs = mutableListOf<DbExpr>()
-        exprs.addAll(attrs.map { it.expr })
+        exprs.addAll(what.map { it.expr })
         if (where != null) {
             exprs.add(where)
         }
@@ -58,10 +56,16 @@ class RUpdateStatement(
     private fun appendSet(ctx: SqlGenContext, builder: RtSqlBuilder) {
         builder.append(" SET ")
 
-        builder.append(attrs, ", ") { attr ->
-            builder.appendName(attr.attr.name)
+        builder.append(what, ", ") { whatExpr ->
+            builder.appendName(whatExpr.attr.name)
             builder.append(" = ")
-            attr.expr.toSql(ctx, builder)
+            if (whatExpr.op != null) {
+                builder.appendName(whatExpr.attr.name)
+                builder.append(" ")
+                builder.append(whatExpr.op.sql)
+                builder.append(" ")
+            }
+            whatExpr.expr.toSql(ctx, builder)
         }
     }
 }

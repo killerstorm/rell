@@ -151,6 +151,108 @@ class UpdateDeleteTest {
         chk("person(4,James,3,Evergreen Ave,5,100)")
     }
 
+    @Test fun testCompoundAssignmentInt() {
+        createCitiesAndPersons()
+
+        execute("update person @ {} ( score += 555 );")
+        chk("person(4,James,3,Evergreen Ave,5,655)", "person(5,Mike,1,Grand St,7,805)")
+
+        execute("update person @ {} ( score -= 123 );")
+        chk("person(4,James,3,Evergreen Ave,5,532)", "person(5,Mike,1,Grand St,7,682)")
+
+        execute("update person @ {} ( score *= 123 );")
+        chk("person(4,James,3,Evergreen Ave,5,65436)", "person(5,Mike,1,Grand St,7,83886)")
+
+        execute("update person @ {} ( score /= 55 );")
+        chk("person(4,James,3,Evergreen Ave,5,1189)", "person(5,Mike,1,Grand St,7,1525)")
+
+        execute("update person @ {} ( score %= 33 );")
+        chk("person(4,James,3,Evergreen Ave,5,1)", "person(5,Mike,1,Grand St,7,7)")
+    }
+
+    @Test fun testCompoundAssignmentText() {
+        createCitiesAndPersons()
+
+        execute("update person @ {} ( street += ' Foo ' );")
+        chk("person(4,James,3,Evergreen Ave Foo ,5,100)", "person(5,Mike,1,Grand St Foo ,7,250)")
+
+        execute("update person @ {} ( street += 123 );")
+        chk("person(4,James,3,Evergreen Ave Foo 123,5,100)", "person(5,Mike,1,Grand St Foo 123,7,250)")
+        execute("update person @ {} ( street += ' ' );")
+        chk("person(4,James,3,Evergreen Ave Foo 123 ,5,100)", "person(5,Mike,1,Grand St Foo 123 ,7,250)")
+
+        execute("update person @ {} ( street += score > 200 );")
+        chk("person(4,James,3,Evergreen Ave Foo 123 false,5,100)", "person(5,Mike,1,Grand St Foo 123 true,7,250)")
+    }
+
+    @Test fun testCompoundAssignmentErr() {
+        executeErr("update person @ {} ( score += false );", "ct_err:binop_operand_type:+=:integer:boolean")
+        executeErr("update person @ {} ( score += 'Hello' );", "ct_err:binop_operand_type:+=:integer:text")
+
+        chkAssignmentErr("-=")
+        chkAssignmentErr("*=")
+        chkAssignmentErr("/=")
+        chkAssignmentErr("%=")
+    }
+
+    private fun chkAssignmentErr(op: String) {
+        executeErr("update person @ {} ( score $op false );", "ct_err:binop_operand_type:$op:integer:boolean")
+        executeErr("update person @ {} ( score $op 'Hello' );", "ct_err:binop_operand_type:$op:integer:text")
+        executeErr("update person @ {} ( street $op false );", "ct_err:binop_operand_type:$op:text:boolean")
+        executeErr("update person @ {} ( street $op 123 );", "ct_err:binop_operand_type:$op:text:integer")
+        executeErr("update person @ {} ( street $op 'Hello' );", "ct_err:binop_operand_type:$op:text:text")
+    }
+
+    @Test fun testRollback() {
+        createCitiesAndPersons()
+
+        chk("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,250)")
+
+        executeErr("""
+            update person @ { name = 'James' } ( score += 1000 );
+            val x = 1 / 0;
+            update person @ { name = 'Mike' } ( score += 500 );
+        """.trimIndent(), "rt_err:expr_div_by_zero")
+
+        chk("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,250)")
+
+        executeErr("""
+            update person @ { name = 'James' } ( score += 1000 );
+            update person @ { name = 'Mike' } ( score += 500 );
+            val x = 1 / 0;
+        """.trimIndent(), "rt_err:expr_div_by_zero")
+
+        chk("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,250)")
+
+        execute("""
+            update person @ { name = 'James' } ( score += 1000 );
+            update person @ { name = 'Mike' } ( score += 500 );
+        """.trimIndent())
+
+        chk("person(4,James,3,Evergreen Ave,5,1100)", "person(5,Mike,1,Grand St,7,750)")
+    }
+
+    @Test fun testAccessChangedRecords() {
+        createCitiesAndPersons()
+
+        execute("""
+            print(person @* {} ( name, score ));
+            update person @ { name = 'James' } ( score += 100 );
+            print(person @* {} ( name, score ));
+            update person @ { name = 'Mike' } ( score += 200 );
+            print(person @* {} ( name, score ));
+            update person @ {} ( score /= 2 );
+            print(person @* {} ( name, score ));
+        """.trimIndent())
+
+        tst.chkStdout(
+                "[(name=James,score=100), (name=Mike,score=250)]",
+                "[(name=James,score=200), (name=Mike,score=250)]",
+                "[(name=James,score=200), (name=Mike,score=450)]",
+                "[(name=James,score=100), (name=Mike,score=225)]"
+        )
+    }
+
     private fun createCities() {
         chkAll()
 

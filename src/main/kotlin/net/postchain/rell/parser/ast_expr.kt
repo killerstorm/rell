@@ -66,23 +66,27 @@ abstract class S_Expression {
     internal open fun compileCallDb(ctx: DbCompilationContext, args: List<DbExpr>): DbExpr = TODO()
     internal open fun compileAsBoolean(ctx: ExprCompilationContext): RExpr = compile(ctx)
 
-    internal open fun iteratePathExpr(path: MutableList<String>): Boolean = false
+    internal open fun discoverFullPathExpr(path: MutableList<String>): List<String>? = null
+
+    internal open fun discoverTailPathExpr(path: MutableList<String>): Pair<S_Expression, List<String>> {
+        return Pair(this, path.reversed())
+    }
 
     internal fun delegateCompileDb(ctx: DbCompilationContext): DbExpr = InterpretedDbExpr(compile(ctx.exprCtx))
 }
 
 class S_StringLiteralExpr(val literal: String): S_Expression() {
-    override fun compile(ctx: ExprCompilationContext): RExpr = RStringLiteralExpr(RTextType, literal)
+    override fun compile(ctx: ExprCompilationContext): RExpr = RStringLiteralExpr(literal)
     override fun compileDb(ctx: DbCompilationContext): DbExpr = delegateCompileDb(ctx)
 }
 
 class S_ByteALiteralExpr(val bytes: ByteArray): S_Expression() {
-    override fun compile(ctx: ExprCompilationContext): RExpr = RByteArrayLiteralExpr(RByteArrayType, bytes)
+    override fun compile(ctx: ExprCompilationContext): RExpr = RByteArrayLiteralExpr(bytes)
     override fun compileDb(ctx: DbCompilationContext): DbExpr = delegateCompileDb(ctx)
 }
 
 class S_IntLiteralExpr(val value: Long): S_Expression() {
-    override fun compile(ctx: ExprCompilationContext): RExpr = RIntegerLiteralExpr(RIntegerType, value)
+    override fun compile(ctx: ExprCompilationContext): RExpr = RIntegerLiteralExpr(value)
     override fun compileDb(ctx: DbCompilationContext): DbExpr = delegateCompileDb(ctx)
 }
 
@@ -94,12 +98,20 @@ class S_BooleanLiteralExpr(val value: Boolean): S_Expression() {
 class S_CallExpr(val base: S_Expression, val args: List<S_Expression>): S_Expression() {
     override fun compile(ctx: ExprCompilationContext): RExpr {
         val rArgs = args.map { it.compile(ctx) }
+        checkUnitTypes(rArgs.map { it.type })
         return base.compileCall(ctx, rArgs)
     }
 
     override fun compileDb(ctx: DbCompilationContext): DbExpr {
         val dbArgs = args.map { it.compileDb(ctx) }
+        checkUnitTypes(dbArgs.map { it.type })
         return base.compileCallDb(ctx, dbArgs)
+    }
+
+    private fun checkUnitTypes(types: List<RType>) {
+        for (type in types) {
+            CtUtils.checkUnitType(type, "expr_arg_unit", "Type of argument is unit")
+        }
     }
 }
 
@@ -114,12 +126,8 @@ class S_LookupExpr(val base: S_Expression, val expr: S_Expression): S_Expression
                     "Operator '[]' undefined for type ${baseType.toStrictString()}")
         }
 
-        if (!RIntegerType.accepts(rExpr.type)) {
-            throw CtError("expr_lookup_keytype:${baseType.toStrictString()}:${rExpr.type.toStrictString()}",
-                    "Invalid lookup key type: ${rExpr.type.toStrictString()}")
-        }
-
-        return RLookupExpr(baseType.elementType, rBase, rExpr)
+        val rExpr2 = RIntegerType.match(rExpr, "expr_lookup_keytype", "Invalid lookup key type")
+        return RLookupExpr(baseType.elementType, rBase, rExpr2)
     }
 
     override fun compileDb(ctx: DbCompilationContext): DbExpr {
@@ -131,13 +139,13 @@ class S_CreateExpr(val className: String, val exprs: List<S_NameExprPair>): S_Ex
     override fun compileDb(ctx: DbCompilationContext): DbExpr = delegateCompileDb(ctx)
 
     override fun compile(ctx: ExprCompilationContext): RExpr {
-        ctx.checkDbUpdateAllowed()
+        ctx.entCtx.checkDbUpdateAllowed()
 
-        val cls = ctx.modCtx.getClass(className)
+        val cls = ctx.entCtx.modCtx.getClass(className)
         val rExprs = exprs.map { it.expr.compile(ctx) }
 
         val types = rExprs.map { it.type }
-        val attrs = S_UpdateExprMatcher.matchExpressions(cls, exprs, types, false)
+        val attrs = matchExprs(cls, exprs, types)
         val attrExprs = attrs.withIndex().map { (idx, attr) -> RCreateExprAttr(attr, rExprs[idx]) }
 
         val attrExprsDef = attrExprs + matchDefaultExpressions(cls, attrExprs)
@@ -145,6 +153,12 @@ class S_CreateExpr(val className: String, val exprs: List<S_NameExprPair>): S_Ex
 
         val type = RInstanceRefType(cls)
         return RCreateExpr(type, cls, attrExprsDef)
+    }
+
+    private fun matchExprs(cls: RClass, exprs: List<S_NameExprPair>, types: List<RType>): List<RAttrib> {
+        val explicitExprs = S_UpdateExprMatcher.matchExplicitExprs(cls, exprs, false)
+        S_UpdateExprMatcher.checkExplicitExprTypes(explicitExprs, types)
+        return S_UpdateExprMatcher.matchImplicitExprs(cls, exprs, types, explicitExprs, false)
     }
 
     private fun matchDefaultExpressions(cls: RClass, attrExprs: List<RCreateExprAttr>): List<RCreateExprAttr> {
@@ -160,5 +174,47 @@ class S_CreateExpr(val className: String, val exprs: List<S_NameExprPair>): S_Ex
             throw CtError("attr_missing:${missing.joinToString(",")}",
                     "Attributes not specified: ${missing.joinToString()}")
         }
+    }
+}
+
+class S_TupleExpression(val exprs: List<S_Expression>): S_Expression() {
+    override fun compile(ctx: ExprCompilationContext): RExpr {
+        val rExprs = exprs.map {
+            val rExpr = it.compile(ctx)
+            CtUtils.checkUnitType(rExpr.type, "expr_tuple_unit", "Type of expression is unit")
+            rExpr
+        }
+
+        val fields = rExprs.map { RTupleField(null, it.type) }
+        val type = RTupleType(fields)
+
+        return RTupleExpr(type, rExprs)
+    }
+
+    override fun compileDb(ctx: DbCompilationContext): DbExpr {
+        throw CtError("expr_tuple_at", "Tuples are not allowed within @-expressions")
+    }
+}
+
+class S_ListExpression(val type: S_Type?, val exprs: List<S_Expression>): S_Expression() {
+    override fun compile(ctx: ExprCompilationContext): RExpr {
+        val rType = type?.compile(ctx)
+        val rExprs = exprs.map { it.compile(ctx) }
+
+        if (rType == null && rExprs.isEmpty()) {
+            throw CtError("expr_list_notype", "List element type not specified")
+        }
+
+        val rActType = if (rType != null) rType else rExprs[0].type
+        CtUtils.checkUnitType(rActType, "expr_list_unit", "Invalid list element type: ${rActType.toStrictString()}")
+
+        val rExprs2 = rExprs.map { rActType.match(it, "expr_list_itemtype", "Wrong list item type") }
+
+        val rListType = RListType(rActType)
+        return RListExpr(rListType, rExprs2)
+    }
+
+    override fun compileDb(ctx: DbCompilationContext): DbExpr {
+        TODO()
     }
 }

@@ -1,12 +1,12 @@
 package net.postchain.rell.runtime
 
 import com.fasterxml.jackson.core.JsonProcessingException
-import com.fasterxml.jackson.databind.JsonMappingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import net.postchain.rell.model.*
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.toHex
 import java.lang.IllegalArgumentException
+import java.lang.UnsupportedOperationException
 
 sealed class RtValue {
     abstract fun type(): RType
@@ -17,11 +17,19 @@ sealed class RtValue {
     open fun asByteArray(): ByteArray = throw errType()
     open fun asJsonString(): String = throw errType()
     open fun asList(): List<RtValue> = throw errType()
+    open fun asTuple(): List<RtValue> = throw errType()
+    open fun asRange(): RtRangeValue = throw errType()
     open fun asObjectId(): Long = throw errType()
 
     abstract fun toStrictString(showTupleFieldNames: Boolean = true): String
 
     private fun errType() = IllegalStateException("$javaClass")
+}
+
+object RtUnitValue: RtValue() {
+    override fun type(): RType = RUnitType
+    override fun toStrictString(showTupleFieldNames: Boolean): String = "unit"
+    override fun toString(): String = "unit"
 }
 
 class RtBooleanValue(val value: Boolean): RtValue() {
@@ -59,10 +67,16 @@ class RtObjectValue(val type: RInstanceRefType, val rowid: Long): RtValue() {
     override fun toString(): String = toStrictString()
 }
 
+class RtNullValue(val type: RType): RtValue() {
+    override fun type(): RType = type
+    override fun toStrictString(showTupleFieldNames: Boolean): String = "null[${type.toStrictString()}]"
+    override fun toString(): String = "null"
+}
+
 class RtListValue(val type: RType, val elements: List<RtValue>): RtValue() {
     override fun type(): RType = type
     override fun asList(): List<RtValue> = elements
-    override fun toString(): String = toStrictString()
+    override fun toString(): String = elements.toString()
 
     override fun toStrictString(showTupleFieldNames: Boolean): String =
             "${type.toStrictString()}[${elements.joinToString(",") { it.toStrictString(false) }}]"
@@ -70,13 +84,22 @@ class RtListValue(val type: RType, val elements: List<RtValue>): RtValue() {
 
 class RtTupleValue(val type: RTupleType, val elements: List<RtValue>): RtValue() {
     override fun type(): RType = type
-    override fun toString(): String = toStrictString()
+    override fun asTuple(): List<RtValue> = elements
 
-    override fun toStrictString(showTupleFieldNames: Boolean): String {
-        return "(${elements.indices.joinToString(",") { elementToString(showTupleFieldNames, it) }})"
+    override fun toString(): String = "(${elements.indices.joinToString(",") { elementToString(it) }})"
+
+    private fun elementToString(idx: Int): String {
+        val name = type.fields[idx].name
+        val value = elements[idx]
+        val valueStr = value.toString()
+        return if (name == null) valueStr else "$name=$valueStr"
     }
 
-    private fun elementToString(showTupleFieldNames: Boolean, idx: Int): String {
+    override fun toStrictString(showTupleFieldNames: Boolean): String {
+        return "(${elements.indices.joinToString(",") { elementToStrictString(showTupleFieldNames, it) }})"
+    }
+
+    private fun elementToStrictString(showTupleFieldNames: Boolean, idx: Int): String {
         val name = type.fields[idx].name
         val value = elements[idx]
         val valueStr = value.toStrictString()
@@ -105,7 +128,50 @@ class RtJsonValue private constructor(private val str: String): RtValue() {
     }
 }
 
-class RtEnv(val sqlExec: SqlExecutor, private val dbUpdateAllowed: Boolean) {
+class RtRangeValue(val start: Long, val end: Long, val step: Long): RtValue(), Iterable<RtValue> {
+    override fun type(): RType = RRangeType
+    override fun asRange(): RtRangeValue = this
+    override fun toString(): String = "range($start,$end,$step)"
+    override fun toStrictString(showTupleFieldNames: Boolean): String = "range[$start,$end,$step]"
+
+    override fun iterator(): Iterator<RtValue> = RangeIterator(this)
+
+    companion object {
+        private class RangeIterator(private val range: RtRangeValue): Iterator<RtValue> {
+            private var current = range.start
+
+            override fun hasNext(): Boolean {
+                if (range.step > 0) {
+                    return current < range.end
+                } else {
+                    return current > range.end
+                }
+            }
+
+            override fun next(): RtValue {
+                val res = current
+                current = RtUtils.saturatedAdd(current, range.step)
+                return RtIntValue(res)
+            }
+        }
+    }
+}
+
+abstract class RtPrinter {
+    abstract fun print(str: String)
+}
+
+object FailingRtPrinter: RtPrinter() {
+    override fun print(str: String) {
+        throw UnsupportedOperationException()
+    }
+}
+
+class RtGlobalContext(val stdoutPrinter: RtPrinter, val logPrinter: RtPrinter, val sqlExec: SqlExecutor)
+
+class RtModuleContext(val globalCtx: RtGlobalContext, val module: RModule)
+
+class RtEnv(val modCtx: RtModuleContext, val dbUpdateAllowed: Boolean) {
     private val values = mutableListOf<RtValue?>()
 
     fun set(offset: Int, value: RtValue) {
@@ -116,17 +182,32 @@ class RtEnv(val sqlExec: SqlExecutor, private val dbUpdateAllowed: Boolean) {
     }
 
     fun get(offset: Int): RtValue {
-        val value = values[offset]
-        if (value == null) {
-            throw RuntimeException("Value not set: $offset")
-        } else {
-            return value
-        }
+        val value = getOpt(offset)
+        check(value != null) { "Variable not initialized: offset = $offset" }
+        return value!!
+    }
+
+    fun getOpt(offset: Int): RtValue? {
+        check(offset >= 0)
+        return if (offset < values.size) values[offset] else null
     }
 
     fun checkDbUpdateAllowed() {
         if (!dbUpdateAllowed) {
             throw RtError("no_db_update", "Database modifications are not allowed in this context")
+        }
+    }
+}
+
+object RtUtils {
+    // https://stackoverflow.com/a/2632501
+    fun saturatedAdd(a: Long, b: Long): Long {
+        if (a == 0L || b == 0L || ((a > 0) != (b > 0))) {
+            return a + b
+        } else if (a > 0) {
+            return if (Long.MAX_VALUE - a < b) Long.MAX_VALUE else (a + b)
+        } else {
+            return if (Long.MIN_VALUE - a > b) Long.MIN_VALUE else (a + b)
         }
     }
 }

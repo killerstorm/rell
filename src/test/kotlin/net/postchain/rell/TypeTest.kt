@@ -60,6 +60,47 @@ class TypeTest {
         chkData("""foo(1,{"a": 999, "b": [5, 4, 3, 2, 1]})""")
     }
 
+    @Test fun testExplicitUnitType() {
+        tst.chkQueryEx("class foo { x: unit; } query q() = 0;", listOf(), "ct_err:unknown_type:unit")
+        chkQuery("{ var x: unit; return 123; }", "ct_err:unknown_type:unit")
+    }
+
+    @Test fun testTuple() {
+        chkQuery("{ var x: (integer, text); x = (123, 'Hello'); return x; }", "(int[123],text[Hello])");
+        chkQuery("{ var x: (a: integer, b: text); x = (123, 'Hello'); return x; }", "(a:int[123],b:text[Hello])");
+
+        chkQuery("{ var x: (a: integer, b: text); val y: (x: integer, y: text) = (123, 'Hello'); x = y; return x; }",
+                "(a:int[123],b:text[Hello])");
+    }
+
+    @Test fun testRange() {
+        chkQuery("{ var x: range; x = range(0,100); return x; }", "range[0,100,1]")
+        chkQuery("{ var x: range; x = 12345; return x; }", "ct_err:stmt_assign_type:x:range:integer")
+    }
+
+    @Test fun testList() {
+        chkQuery("{ var x: list<integer>; x = list(1, 2, 3); return x; }", "list<integer>[int[1],int[2],int[3]]")
+        chkQuery("{ var x: list<integer>; x = list('Hello', 'World'); return x; }",
+                "ct_err:stmt_assign_type:x:list<integer>:list<text>")
+        chkQuery("{ var x: list<list<text>>; x = list(list('Hello', 'World')); return x; }",
+                "list<list<text>>[list<text>[text[Hello],text[World]]]")
+        chkQuery("{ var x: list<integer>; x = 123; return x; }", "ct_err:stmt_assign_type:x:list<integer>:integer")
+    }
+
+    @Test fun testClassAttributeTypeErr() {
+        tst.chkQueryEx("class foo { x: (integer); } query q() = 0;", listOf(),
+                "ct_err:class_attr_type:x:(integer)")
+
+        tst.chkQueryEx("class foo { x: (integer, text); } query q() = 0;", listOf(),
+                "ct_err:class_attr_type:x:(integer,text)")
+
+        tst.chkQueryEx("class foo { x: range; } query q() = 0;", listOf(),
+                "ct_err:class_attr_type:x:range")
+
+        tst.chkQueryEx("class foo { x: list<integer>; } query q() = 0;", listOf(),
+                "ct_err:class_attr_type:x:list<integer>")
+    }
+
     private fun exec(code: String) = tst.chkOp(code, "")
     private fun chkData(vararg expected: String) = tst.chkData(*expected)
     private fun chkQuery(code: String, expected: String) = tst.chkQuery(code, expected)

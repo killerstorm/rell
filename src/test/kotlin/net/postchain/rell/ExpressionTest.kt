@@ -1,12 +1,8 @@
 package net.postchain.rell
 
-import net.postchain.rell.runtime.RtIntValue
-import net.postchain.rell.runtime.RtValue
 import org.junit.Test
 
-class ExpressionTest {
-    private val tst = RellSqlTester(useSql = false)
-
+class ExpressionTest: BaseRellTest(false) {
     @Test fun testPrecedence() {
         chk("2 * 3 + 4", "int[10]")
         chk("4 + 2 * 3", "int[10]")
@@ -60,46 +56,10 @@ class ExpressionTest {
         chk("a == 0 or 15 / a > 3", 3, "boolean[true]")
     }
 
-    @Test fun testFunctions() {
-        chk("abs(a)", 0, "int[0]")
-        chk("abs(a)", -123, "int[123]")
-        chk("abs(a)", 123, "int[123]")
-        chk("abs('Hello')", "ct_err:expr_call_argtype:abs:0:integer:text")
-        chk("abs()", "ct_err:expr_call_argcnt:abs:1:0")
-        chk("abs(1, 2)", "ct_err:expr_call_argcnt:abs:1:2")
-
-        chk("min(a, b)", 100, 200, "int[100]")
-        chk("min(a, b)", 200, 100, "int[100]")
-        chk("max(a, b)", 100, 200, "int[200]")
-        chk("max(a, b)", 200, 100, "int[200]")
-    }
-
     @Test fun testFunctionVsVariable() {
         chkEx("{ val abs = a; return abs(abs); }", 123, "int[123]")
         chkEx("{ val abs = a; return abs(abs); }", -123, "int[123]")
         chkEx("{ val abs = a; return abs; }", -123, "int[-123]")
-    }
-
-    @Test fun testMemberFunctions() {
-        chkEx("{ return ''.len(); }", "int[0]")
-        chkEx("{ return 'Hello'.len(); }", "int[5]")
-        chkEx("{ val s = ''; return s.len(); }", "int[0]")
-        chkEx("{ val s = 'Hello'; return s.len(); }", "int[5]")
-        chkEx("""{ val s = json('{  "x":5, "y" : 10  }'); return s.str(); }""", """text[{"x":5,"y":10}]""")
-        chkEx("{ val s = 'Hello'; return s.badfunc(); }", "ct_err:expr_call_unknown:text:badfunc")
-    }
-
-    @Test fun testListLen() {
-        tst.useSql = true
-        tst.classDefs = listOf("class user { name: text; }")
-
-        tst.execOp("create user('Bob');")
-        tst.execOp("create user('Alice');")
-        tst.execOp("create user('Trudy');")
-
-        chkEx("{ val s = all user @ { name = 'James' }; return s.len(); }", "int[0]")
-        chkEx("{ val s = all user @ { name = 'Bob' }; return s.len(); }", "int[1]")
-        chkEx("{ val s = all user @ {}; return s.len(); }", "int[3]")
     }
 
     @Test fun testListItems() {
@@ -110,12 +70,12 @@ class ExpressionTest {
         tst.execOp("create user('Alice');")
         tst.execOp("create user('Trudy');")
 
-        chkEx("{ val s = all user @ {}; return s[0]; }", "user[1]")
-        chkEx("{ val s = all user @ {}; return s[1]; }", "user[2]")
-        chkEx("{ val s = all user @ {}; return s[2]; }", "user[3]")
+        chkEx("{ val s = user @* {}; return s[0]; }", "user[1]")
+        chkEx("{ val s = user @* {}; return s[1]; }", "user[2]")
+        chkEx("{ val s = user @* {}; return s[2]; }", "user[3]")
 
-        chkEx("{ val s = all user @ {}; return s[-1]; }", "rt_err:expr_lookup_index:3:-1")
-        chkEx("{ val s = all user @ {}; return s[3]; }", "rt_err:expr_lookup_index:3:3")
+        chkEx("{ val s = user @* {}; return s[-1]; }", "rt_err:expr_lookup_index:3:-1")
+        chkEx("{ val s = user @* {}; return s[3]; }", "rt_err:expr_lookup_index:3:3")
     }
 
     @Test fun testFunctionsUnderAt() {
@@ -127,21 +87,97 @@ class ExpressionTest {
         chkEx("{ val x = -1234; return user @ {} ( abs(x), abs(score) ); }", "(int[1234],int[5678])")
     }
 
-    private fun chk(code: String, expected: String) = chkEx("= $code ;", expected)
-    private fun chk(code: String, arg: Long, expected: String) = chkEx("= $code ;", arg, expected)
-    private fun chk(code: String, arg1: Long, arg2: Long, expected: String) = chkEx("= $code ;", arg1, arg2, expected)
-
-    private fun chkEx(code: String, expected: String) = chkFull("query q() $code", listOf(), expected)
-
-    private fun chkEx(code: String, arg: Long, expected: String) {
-        chkFull("query q(a: integer) $code", listOf(RtIntValue(arg)), expected)
+    @Test fun testUnitType() {
+        chk("+ unit()", "ct_err:expr_operand_unit")
+        chk("- unit()", "ct_err:expr_operand_unit")
+        chk("not unit()", "ct_err:expr_operand_unit")
+        chk("unit() + 5", "ct_err:expr_operand_unit")
+        chk("abs(unit())", "ct_err:expr_arg_unit")
+        chkEx("{ print(unit()); return 123; }", "ct_err:expr_arg_unit")
+        chkEx("{ return unit(); }", "ct_err:stmt_return_unit")
     }
 
-    private fun chkEx(code: String, arg1: Long, arg2: Long, expected: String) {
-        chkFull("query q(a: integer, b: integer) $code", listOf(RtIntValue(arg1), RtIntValue(arg2)), expected)
+    @Test fun testDataClassPathExpr() {
+        tst.useSql = true
+        tst.classDefs = listOf("class company { name: text; }", "class user { name: text; company; }")
+
+        tst.execOp("""
+            val facebook = create company('Facebook');
+            val amazon = create company('Amazon');
+            val microsoft = create company('Microsoft');
+            create user('Mark', facebook);
+            create user('Jeff', amazon);
+            create user('Bill', microsoft);
+        """.trimIndent())
+
+        chkEx("{ val u = user @ { 'Mark' }; return u.company.name; }", "text[Facebook]")
+        chkEx("{ val u = user @ { 'Jeff' }; return u.company.name; }", "text[Amazon]")
+        chkEx("{ val u = user @ { 'Bill' }; return u.company.name; }", "text[Microsoft]")
+
+        chk("((u: user) @ { 'Mark' } ( u )).company.name", "text[Facebook]")
+        chk("((u: user) @ { 'Jeff' } ( u )).company.name", "text[Amazon]")
+        chk("((u: user) @ { 'Bill' } ( u )).company.name", "text[Microsoft]")
     }
 
-    private fun chkFull(code: String, args: List<RtValue>, expected: String) {
-        tst.chkQueryEx(code, args, expected)
+    @Test fun testDataClassPathExprComplex() {
+        tst.useSql = true
+        tst.classDefs = listOf(
+                "class c1 { name: text; }",
+                "class c2 { name: text; c1; }",
+                "class c3 { name: text; c2; }",
+                "class c4 { name: text; c3; }"
+        )
+
+        tst.execOp("""
+            val c1_1 = create c1('c1_1');
+            val c1_2 = create c1('c1_2');
+            val c2_1 = create c2('c2_1', c1_1);
+            val c2_2 = create c2('c2_2', c1_2);
+            val c3_1 = create c3('c3_1', c2_1);
+            val c3_2 = create c3('c3_2', c2_2);
+            val c4_1 = create c4('c4_1', c3_1);
+            val c4_2 = create c4('c4_2', c3_2);
+        """.trimIndent())
+
+        chk("((c: c4) @ { 'c4_1' } ( c )).c3.c2.c1.name", "text[c1_1]")
+        chk("((c: c4) @ { 'c4_2' } ( c )).c3.c2.c1.name", "text[c1_2]")
+
+        chk("((c: c4) @ { 'c4_1' } ( t3 = c3, t2 = c3.c2 )).t3.c2.c1.name", "text[c1_1]")
+        chk("((c: c4) @ { 'c4_1' } ( t3 = c3, t2 = c3.c2 )).t2.c1.name", "text[c1_1]")
+        chk("((c: c4) @ { 'c4_2' } ( t3 = c3, t2 = c3.c2 )).t3.c2.c1.name", "text[c1_2]")
+        chk("((c: c4) @ { 'c4_2' } ( t3 = c3, t2 = c3.c2 )).t2.c1.name", "text[c1_2]")
+    }
+
+    @Test fun testUninitializedVariableAccess() {
+        chkEx("{ var x: integer; return x; }", "rt_err:expr_var_uninit:x")
+        chkEx("{ var x: integer; x = 123; return x; }", "int[123]")
+    }
+
+    @Test fun testTuple() {
+        chk("(123)", "int[123]")
+        chk("(((123)))", "int[123]")
+        chk("(123,)", "(int[123])")
+        chk("(123,'Hello',false)", "(int[123],text[Hello],boolean[false])")
+        chk("(123,('Hello',('World',456)),false)", "(int[123],(text[Hello],(text[World],int[456])),boolean[false])")
+    }
+
+    @Test fun testTupleAt() {
+        tst.classDefs = listOf("class user { name: text; street: text; house: integer; }")
+
+        chk("user @ {} ( x = (name,) ) ", "ct_err:expr_tuple_at")
+        chk("user @ {} ( x = (name, street, house) ) ", "ct_err:expr_tuple_at")
+    }
+
+    @Test fun testList() {
+        chk("list(1,2,3,4,5)", "list<integer>[int[1],int[2],int[3],int[4],int[5]]")
+        chk("list()", "ct_err:expr_list_notype")
+        chk("list<integer>()", "list<integer>[]")
+        chk("list<integer>(1,2,3)", "list<integer>[int[1],int[2],int[3]]")
+        chk("list<integer>('Hello')", "ct_err:expr_list_itemtype:integer:text")
+        chk("list<text>(12345)", "ct_err:expr_list_itemtype:text:integer")
+        chk("list('Hello', 'World')", "list<text>[text[Hello],text[World]]")
+        chk("list('Hello', 'World', 12345)", "ct_err:expr_list_itemtype:text:integer")
+        chk("list(unit())", "ct_err:expr_list_unit")
+        chk("list(print('Hello'))", "ct_err:expr_list_unit")
     }
 }

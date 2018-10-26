@@ -101,7 +101,7 @@ class AtExprOpTest: AbstractOpTest() {
 
     private fun calcExprWhere(expr: String, args: List<Pair<String, String>>): String {
         val values = makeValues(args)
-        return calc(values, "= all optest @ { $expr };")
+        return calc(values, "= optest @* { $expr };")
     }
 
     private fun calcExprWhat(expr: String, args: List<Pair<String, String>>): String {
