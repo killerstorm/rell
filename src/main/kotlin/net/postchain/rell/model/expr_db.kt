@@ -1,6 +1,6 @@
 package net.postchain.rell.model
 
-import net.postchain.rell.runtime.RtEnv
+import net.postchain.rell.runtime.RtCallFrame
 import net.postchain.rell.runtime.RtValue
 import net.postchain.rell.sql.ROWID_COLUMN
 import java.lang.IllegalStateException
@@ -137,8 +137,8 @@ object DbSysFunction_Int_Str: DbSysFunction_Cast("int.str", "TEXT")
 object DbSysFunction_Abs: DbSysFunction_Simple("abs", "ABS")
 object DbSysFunction_Min: DbSysFunction_Simple("min", "LEAST")
 object DbSysFunction_Max: DbSysFunction_Simple("max", "GREATEST")
-object DbSysFunction_Text_Len: DbSysFunction_Simple("text.len", "LENGTH")
-object DbSysFunction_ByteArray_Len: DbSysFunction_Simple("byte_array.len", "LENGTH")
+object DbSysFunction_Text_Size: DbSysFunction_Simple("text.len", "LENGTH")
+object DbSysFunction_ByteArray_Size: DbSysFunction_Simple("byte_array.len", "LENGTH")
 object DbSysFunction_Json: DbSysFunction_Cast("json", "JSONB")
 object DbSysFunction_Json_Str: DbSysFunction_Cast("json.str", "TEXT")
 object DbSysFunction_ToString: DbSysFunction_Cast("toString", "TEXT")
@@ -204,9 +204,9 @@ internal class RtSqlListBuilder(private val builder: RtSqlBuilder, private val s
 }
 
 internal class RtSql(val sql: String, val params: List<RExpr>) {
-    fun calcArgs(env: RtEnv): RtSqlArgs {
+    fun calcArgs(frame: RtCallFrame): RtSqlArgs {
         val types = params.map { it.type }
-        val values = params.map { it.evaluate(env) }
+        val values = params.map { it.evaluate(frame) }
         return RtSqlArgs(types, values)
     }
 }
@@ -222,12 +222,12 @@ internal class RtSqlArgs(val types: List<RType>, val values: List<RtValue>) {
 }
 
 internal class RtSelect(val rtSql: RtSql, val resultTypes: List<RType>) {
-    fun execute(env: RtEnv): List<Array<RtValue>> {
+    fun execute(frame: RtCallFrame): List<Array<RtValue>> {
         val result = mutableListOf<Array<RtValue>>()
 
-        val args = rtSql.calcArgs(env)
+        val args = rtSql.calcArgs(frame)
 
-        env.modCtx.globalCtx.sqlExec.executeQuery(rtSql.sql, args::bind) { rs ->
+        frame.entCtx.modCtx.globalCtx.sqlExec.executeQuery(rtSql.sql, args::bind) { rs ->
             val list = mutableListOf<RtValue>()
             for (i in resultTypes.indices) {
                 val type = resultTypes[i]
@@ -242,8 +242,8 @@ internal class RtSelect(val rtSql: RtSql, val resultTypes: List<RType>) {
 }
 
 internal class RtUpdate(val rtSql: RtSql) {
-    fun execute(env: RtEnv) {
-        val args = rtSql.calcArgs(env)
-        env.modCtx.globalCtx.sqlExec.execute(rtSql.sql, args::bind)
+    fun execute(frame: RtCallFrame) {
+        val args = rtSql.calcArgs(frame)
+        frame.entCtx.modCtx.globalCtx.sqlExec.execute(rtSql.sql, args::bind)
     }
 }

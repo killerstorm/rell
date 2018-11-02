@@ -60,13 +60,13 @@ object S_UnaryOp_Not: S_UnaryOp("not") {
 }
 
 class S_UnaryExpr(val op: S_UnaryOp, val expr: S_Expression): S_Expression() {
-    override fun compile(ctx: ExprCompilationContext): RExpr {
+    override fun compile(ctx: CtExprContext): RExpr {
         val rExpr = expr.compile(ctx)
         checkUnitType(rExpr.type)
         return op.compile(rExpr)
     }
 
-    override fun compileDb(ctx: DbCompilationContext): DbExpr {
+    override fun compileDb(ctx: CtDbExprContext): DbExpr {
         val dbExpr = expr.compileDb(ctx)
         checkUnitType(dbExpr.type)
 

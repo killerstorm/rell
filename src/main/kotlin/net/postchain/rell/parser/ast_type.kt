@@ -3,16 +3,16 @@ package net.postchain.rell.parser
 import net.postchain.rell.model.*
 
 sealed class S_Type {
-    internal abstract fun compile(ctx: ModuleCompilationContext): RType
-    internal fun compile(ctx: ExprCompilationContext): RType = compile(ctx.entCtx.modCtx)
+    internal abstract fun compile(ctx: CtModuleContext): RType
+    internal fun compile(ctx: CtExprContext): RType = compile(ctx.entCtx.modCtx)
 }
 
 class S_NameType(val name: String): S_Type() {
-    override fun compile(ctx: ModuleCompilationContext): RType = ctx.getType(name)
+    override fun compile(ctx: CtModuleContext): RType = ctx.getType(name)
 }
 
 class S_TupleType(val fields: List<Pair<String?, S_Type>>): S_Type() {
-    override fun compile(ctx: ModuleCompilationContext): RType {
+    override fun compile(ctx: CtModuleContext): RType {
         val names = mutableSetOf<String>()
         for ((name, _) in fields) {
             if (name != null && !names.add(name)) {
@@ -26,9 +26,27 @@ class S_TupleType(val fields: List<Pair<String?, S_Type>>): S_Type() {
 }
 
 class S_ListType(val element: S_Type): S_Type() {
-    override fun compile(ctx: ModuleCompilationContext): RType {
+    override fun compile(ctx: CtModuleContext): RType {
         val rElement = element.compile(ctx)
         if (rElement == RUnitType) TODO()
         return RListType(rElement)
+    }
+}
+
+class S_SetType(val element: S_Type): S_Type() {
+    override fun compile(ctx: CtModuleContext): RType {
+        val rElement = element.compile(ctx)
+        if (rElement == RUnitType) TODO()
+        return RSetType(rElement)
+    }
+}
+
+class S_MapType(val key: S_Type, val value: S_Type): S_Type() {
+    override fun compile(ctx: CtModuleContext): RType {
+        val rKey = key.compile(ctx)
+        val rValue = value.compile(ctx)
+        if (rKey == RUnitType) TODO()
+        if (rValue == RUnitType) TODO()
+        return RMapType(rKey, rValue)
     }
 }

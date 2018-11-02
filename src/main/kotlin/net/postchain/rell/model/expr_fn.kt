@@ -2,29 +2,30 @@ package net.postchain.rell.model
 
 import net.postchain.rell.runtime.*
 import java.lang.IllegalArgumentException
+import java.util.*
 
 sealed class RCallExpr(type: RType, val args: List<RExpr>): RExpr(type) {
-    abstract fun call(env: RtEnv, values: List<RtValue>): RtValue
+    abstract fun call(frame: RtCallFrame, values: List<RtValue>): RtValue
 
-    override fun evaluate(env: RtEnv): RtValue {
-        val values = args.map { it.evaluate(env) }
-        val res = call(env, values)
+    override fun evaluate(frame: RtCallFrame): RtValue {
+        val values = args.map { it.evaluate(frame) }
+        val res = call(frame, values)
         return res
     }
 }
 
 class RSysCallExpr(type: RType, val fn: RSysFunction, args: List<RExpr>): RCallExpr(type, args) {
-    override fun call(env: RtEnv, values: List<RtValue>): RtValue {
-        val res = fn.call(env.modCtx.globalCtx, values)
+    override fun call(frame: RtCallFrame, values: List<RtValue>): RtValue {
+        val res = fn.call(frame.entCtx.modCtx.globalCtx, values)
         return res
     }
 }
 
 class RUserCallExpr(type: RType, val name: String, val fnKey: Int, args: List<RExpr>): RCallExpr(type, args) {
-    override fun call(env: RtEnv, values: List<RtValue>): RtValue {
-        val fn = env.modCtx.module.functions[fnKey]
+    override fun call(frame: RtCallFrame, values: List<RtValue>): RtValue {
+        val fn = frame.entCtx.modCtx.module.functions[fnKey]
         check(fn.fnKey == fnKey)
-        val res = fn.call(env, values)
+        val res = fn.call(frame, values)
         return res
     }
 }
@@ -33,7 +34,7 @@ sealed class RSysFunction {
     abstract fun call(ctx: RtGlobalContext, args: List<RtValue>): RtValue
 }
 
-sealed class RSysFunction_Unary: RSysFunction() {
+sealed class RSysFunction_1: RSysFunction() {
     abstract fun call(arg: RtValue): RtValue
 
     override fun call(ctx: RtGlobalContext, args: List<RtValue>): RtValue {
@@ -43,7 +44,7 @@ sealed class RSysFunction_Unary: RSysFunction() {
     }
 }
 
-sealed class RSysFunction_Binary: RSysFunction() {
+sealed class RSysFunction_2: RSysFunction() {
     abstract fun call(arg1: RtValue, arg2: RtValue): RtValue
 
     override fun call(ctx: RtGlobalContext, args: List<RtValue>): RtValue {
@@ -53,6 +54,38 @@ sealed class RSysFunction_Binary: RSysFunction() {
     }
 }
 
+abstract class RSysFunction_Generic<T>: RSysFunction() {
+    abstract fun extract(v: RtValue): T
+
+    open fun call(type: RType, obj: T): RtValue = call(obj)
+    open fun call(type: RType, obj: T, a: RtValue): RtValue = call(obj, a)
+    open fun call(type: RType, obj: T, a: RtValue, b: RtValue): RtValue = call(obj, a, b)
+
+    open fun call(obj: T): RtValue = throw errArgCnt(0)
+    open fun call(obj: T, a: RtValue): RtValue = throw errArgCnt(1)
+    open fun call(obj: T, a: RtValue, b: RtValue): RtValue = throw errArgCnt(2)
+
+    override fun call(ctx: RtGlobalContext, args: List<RtValue>): RtValue {
+        check(args.size >= 1)
+
+        val objVal = args[0]
+        val type = objVal.type()
+        val obj = extract(objVal)
+
+        if (args.size == 1) {
+            return call(type, obj)
+        } else if (args.size == 2) {
+            return call(type, obj, args[1])
+        } else if (args.size == 3) {
+            return call(type, obj, args[1], args[2])
+        } else {
+            throw errArgCnt(args.size)
+        }
+    }
+
+    private fun errArgCnt(n: Int) = IllegalStateException("Wrong number of arguments for ${javaClass.simpleName}: $n")
+}
+
 object RSysFunction_Unit: RSysFunction() {
     override fun call(ctx: RtGlobalContext, args: List<RtValue>): RtValue {
         check(args.size == 0)
@@ -60,7 +93,7 @@ object RSysFunction_Unit: RSysFunction() {
     }
 }
 
-object RSysFunction_Abs: RSysFunction_Unary() {
+object RSysFunction_Abs: RSysFunction_1() {
     override fun call(arg: RtValue): RtValue {
         val a = arg.asInteger()
         val r = Math.abs(a)
@@ -68,7 +101,7 @@ object RSysFunction_Abs: RSysFunction_Unary() {
     }
 }
 
-object RSysFunction_Min: RSysFunction_Binary() {
+object RSysFunction_Min: RSysFunction_2() {
     override fun call(arg1: RtValue, arg2: RtValue): RtValue {
         val a1 = arg1.asInteger()
         val a2 = arg2.asInteger()
@@ -77,7 +110,7 @@ object RSysFunction_Min: RSysFunction_Binary() {
     }
 }
 
-object RSysFunction_Max: RSysFunction_Binary() {
+object RSysFunction_Max: RSysFunction_2() {
     override fun call(arg1: RtValue, arg2: RtValue): RtValue {
         val a1 = arg1.asInteger()
         val a2 = arg2.asInteger()
@@ -86,7 +119,7 @@ object RSysFunction_Max: RSysFunction_Binary() {
     }
 }
 
-object RSysFunction_Json: RSysFunction_Unary() {
+object RSysFunction_Json: RSysFunction_1() {
     override fun call(arg: RtValue): RtValue {
         val a = arg.asString()
 
@@ -116,46 +149,75 @@ object RSysFunction_Range: RSysFunction() {
     }
 }
 
-object RSysFunction_Int_Str: RSysFunction_Unary() {
-    override fun call(arg: RtValue): RtValue {
-        val a = arg.asInteger()
-        val r = a.toString()
-        return RtTextValue(r)
+sealed class RSysFunction_Common: RSysFunction_Generic<RtValue>() {
+    override fun extract(v: RtValue): RtValue = v
+}
+
+object RSysFunction_Int_Str: RSysFunction_Common() {
+    override fun call(a: RtValue): RtValue = RtTextValue(a.asInteger().toString())
+
+    override fun call(a: RtValue, b: RtValue): RtValue {
+        val v = a.asInteger()
+        val r = b.asInteger()
+        if (r < Character.MIN_RADIX || r > Character.MAX_RADIX) {
+            throw RtError("fn_int_str_radix:$r", "Invalid radix: $r")
+        }
+        val s = v.toString(r.toInt())
+        return RtTextValue(s)
     }
 }
 
-object RSysFunction_Text_Len: RSysFunction_Unary() {
-    override fun call(arg: RtValue): RtValue {
-        val a = arg.asString()
-        val r = a.length.toLong()
-        return RtIntValue(r)
+object RSysFunction_Int_Signum: RSysFunction_Common() {
+    override fun call(a: RtValue): RtValue = RtIntValue(java.lang.Long.signum(a.asInteger()).toLong())
+}
+
+sealed class RSysFunction_ByteArray: RSysFunction_Generic<ByteArray>() {
+    override fun extract(v: RtValue): ByteArray = v.asByteArray()
+}
+
+object RSysFunction_ByteArray_Empty: RSysFunction_ByteArray() {
+    override fun call(obj: ByteArray): RtValue = RtBooleanValue(obj.isEmpty())
+}
+
+object RSysFunction_ByteArray_Size: RSysFunction_ByteArray() {
+    override fun call(obj: ByteArray): RtValue = RtIntValue(obj.size.toLong())
+}
+
+object RSysFunction_ByteArray_Sub: RSysFunction_ByteArray() {
+    override fun call(obj: ByteArray, a: RtValue): RtValue {
+        val start = a.asInteger()
+        return call0(obj, start, obj.size.toLong())
+    }
+
+    override fun call(obj: ByteArray, a: RtValue, b: RtValue): RtValue {
+        val start = a.asInteger()
+        val end = b.asInteger()
+        return call0(obj, start, end)
+    }
+
+    private fun call0(obj: ByteArray, start: Long, end: Long): RtValue {
+        val len = obj.size
+        if (start < 0 || start > len || end < start || end > len) {
+            throw RtError("fn_bytearray_sub_range:$len:$start:$end",
+                    "Invalid range: start = $start, end = $end (length $len)")
+        }
+        val r = Arrays.copyOfRange(obj, start.toInt(), end.toInt())
+        return RtByteArrayValue(r)
     }
 }
 
-object RSysFunction_ByteArray_Len: RSysFunction_Unary() {
-    override fun call(arg: RtValue): RtValue {
-        val a = arg.asByteArray()
-        val r = a.size.toLong()
-        return RtIntValue(r)
-    }
+object RSysFunction_ByteArray_Decode: RSysFunction_ByteArray() {
+    override fun call(obj: ByteArray): RtValue = RtTextValue(String(obj))
 }
 
-object RSysFunction_List_Len: RSysFunction_Unary() {
-    override fun call(arg: RtValue): RtValue {
-        val a = arg.asList()
-        val r = a.size.toLong()
-        return RtIntValue(r)
-    }
-}
-
-object RSysFunction_Json_Str: RSysFunction_Unary() {
+object RSysFunction_Json_Str: RSysFunction_1() {
     override fun call(arg: RtValue): RtValue {
         val a = arg.asJsonString()
         return RtTextValue(a)
     }
 }
 
-object RSysFunction_ToString: RSysFunction_Unary() {
+object RSysFunction_ToString: RSysFunction_1() {
     override fun call(arg: RtValue): RtValue {
         val a = arg.toString()
         return RtTextValue(a)

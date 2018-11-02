@@ -3,7 +3,6 @@ package net.postchain.rell
 import com.github.h0tk3y.betterParse.grammar.parseToEnd
 import net.postchain.rell.model.*
 import net.postchain.rell.parser.S_Grammar
-import net.postchain.rell.runtime.RTGlobalContext
 import org.junit.Test
 
 class InterpTest

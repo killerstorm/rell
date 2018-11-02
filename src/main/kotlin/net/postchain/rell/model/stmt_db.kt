@@ -1,6 +1,6 @@
 package net.postchain.rell.model
 
-import net.postchain.rell.runtime.RtEnv
+import net.postchain.rell.runtime.RtCallFrame
 import net.postchain.rell.sql.ROWID_COLUMN
 
 class RUpdateStatementWhat(val attr: RAttrib, val expr: DbExpr, val op: DbBinaryOp?)
@@ -17,11 +17,11 @@ class RUpdateStatement(
         extraClasses.withIndex().forEach { check(it.index + 1 == it.value.index) }
     }
 
-    override fun execute(env: RtEnv): RStatementResult? {
-        env.checkDbUpdateAllowed()
+    override fun execute(frame: RtCallFrame): RStatementResult? {
+        frame.entCtx.checkDbUpdateAllowed()
         val rtSql = buildSql()
         val rtUpdate = RtUpdate(rtSql)
-        rtUpdate.execute(env)
+        rtUpdate.execute(frame)
         return null
     }
 
@@ -76,11 +76,11 @@ class RDeleteStatement(val cls: RAtClass, val extraClasses: List<RAtClass>, val 
         extraClasses.withIndex().forEach { check(it.index + 1 == it.value.index) }
     }
 
-    override fun execute(env: RtEnv): RStatementResult? {
-        env.checkDbUpdateAllowed()
+    override fun execute(frame: RtCallFrame): RStatementResult? {
+        frame.entCtx.checkDbUpdateAllowed()
         val rtSql = buildSql()
         val rtUpdate = RtUpdate(rtSql)
-        rtUpdate.execute(env)
+        rtUpdate.execute(frame)
         return null
     }
 

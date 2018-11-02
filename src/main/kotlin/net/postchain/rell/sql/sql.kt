@@ -92,7 +92,7 @@ class DefaultSqlExecutor(private val con: Connection): SqlExecutor(), Closeable 
 
 object NullSqlExecutor: SqlExecutor() {
     override fun transaction(code: () -> Unit) {
-        throw UnsupportedOperationException()
+        code()
     }
 
     override fun execute(sql: String) {

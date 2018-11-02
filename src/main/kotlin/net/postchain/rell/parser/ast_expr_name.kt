@@ -4,33 +4,41 @@ import net.postchain.rell.model.*
 import java.util.*
 
 class S_NameExpr(val name: String): S_Expression() {
-    override fun compile(ctx: ExprCompilationContext): RExpr {
+    override fun compile(ctx: CtExprContext): RExpr {
         val entry = ctx.lookup(name)
         return entry.toVarExpr()
     }
 
-    override fun compileDb(ctx: DbCompilationContext): DbExpr {
+    override fun compileDestination(ctx: CtExprContext): RDestinationExpr {
+        val entry = ctx.lookup(name)
+        if (!entry.modifiable) {
+            throw CtError("stmt_assign_val:$name", "Value of '$name' cannot be changed")
+        }
+        return entry.toVarExpr()
+    }
+
+    override fun compileDb(ctx: CtDbExprContext): DbExpr {
         val dbExpr = compileDbPathExprOpt(ctx, listOf(name), true)
         if (dbExpr != null) {
             return dbExpr
         }
 
-        val localAttr = ctx.exprCtx.lookup(name)
-        val rExpr = localAttr.toVarExpr()
+        val localVar = ctx.exprCtx.lookup(name)
+        val rExpr = localVar.toVarExpr()
         return InterpretedDbExpr(rExpr)
     }
 
-    override fun compileDbWhere(ctx: DbCompilationContext, idx: Int): DbExpr {
+    override fun compileDbWhere(ctx: CtDbExprContext, idx: Int): DbExpr {
         val clsAttrs = ctx.findAttributesByName(name)
-        val localAttr = ctx.exprCtx.lookupOpt(name)
+        val localVar = ctx.exprCtx.lookupOpt(name)
 
-        if (clsAttrs.isEmpty() || localAttr == null) {
+        if (clsAttrs.isEmpty() || localVar == null) {
             return compileDb(ctx)
         }
 
         // There is a class attribute and a local variable with such name -> implicit where condition.
 
-        val argType = localAttr.type
+        val argType = localVar.type
         val clsAttrsByType = clsAttrs.filter { S_BinaryOp_EqNe.checkTypes(it.type, argType) }
 
         if (clsAttrsByType.isEmpty()) {
@@ -50,16 +58,16 @@ class S_NameExpr(val name: String): S_Expression() {
         }
 
         val clsAttrExpr = PathDbExpr(clsAttr.type, clsAttr.cls, listOf(), clsAttr.name)
-        val localAttrExpr = localAttr.toVarExpr()
+        val localAttrExpr = localVar.toVarExpr()
         return BinaryDbExpr(RBooleanType, DbBinaryOp_Eq, clsAttrExpr, InterpretedDbExpr(localAttrExpr))
     }
 
-    override fun compileCall(ctx: ExprCompilationContext, args: List<RExpr>): RExpr {
+    override fun compileCall(ctx: CtExprContext, args: List<RExpr>): RExpr {
         val fn = ctx.entCtx.modCtx.getFunction(name)
         return fn.compileCall(args)
     }
 
-    override fun compileCallDb(ctx: DbCompilationContext, args: List<DbExpr>): DbExpr {
+    override fun compileCallDb(ctx: CtDbExprContext, args: List<DbExpr>): DbExpr {
         val fn = ctx.exprCtx.entCtx.modCtx.getFunction(name)
         return fn.compileCallDb(args)
     }
@@ -71,14 +79,14 @@ class S_NameExpr(val name: String): S_Expression() {
 }
 
 class S_AttributeExpr(val base: S_Expression, val name: String): S_Expression() {
-    override fun compile(ctx: ExprCompilationContext): RExpr {
+    override fun compile(ctx: CtExprContext): RExpr {
         val mutPath = mutableListOf<String>()
         val (deepBase, path) = discoverTailPathExpr(mutPath)
         val rBase = deepBase.compile(ctx)
         return compilePath(ctx, rBase, path)
     }
 
-    override fun compileDb(ctx: DbCompilationContext): DbExpr {
+    override fun compileDb(ctx: CtDbExprContext): DbExpr {
         val mutPath = mutableListOf<String>()
         val fullPath = discoverFullPathExpr(mutPath)
 
@@ -92,12 +100,12 @@ class S_AttributeExpr(val base: S_Expression, val name: String): S_Expression() 
         return delegateCompileDb(ctx)
     }
 
-    override fun compileCall(ctx: ExprCompilationContext, args: List<RExpr>): RExpr {
+    override fun compileCall(ctx: CtExprContext, args: List<RExpr>): RExpr {
         val rBase = base.compile(ctx)
         return compileCall0(rBase, args)
     }
 
-    override fun compileCallDb(ctx: DbCompilationContext, args: List<DbExpr>): DbExpr {
+    override fun compileCallDb(ctx: CtDbExprContext, args: List<DbExpr>): DbExpr {
         val dbBase = base.compileDb(ctx)
 
         if (dbBase is InterpretedDbExpr) {
@@ -108,12 +116,12 @@ class S_AttributeExpr(val base: S_Expression, val name: String): S_Expression() 
             }
         }
 
-        val fn = S_SysMemberFunctions.getMemberFunction(dbBase.type, name)
+        val fn = S_LibFunctions.getMemberFunction(dbBase.type, name)
         return fn.compileCallDb(dbBase, args)
     }
 
     private fun compileCall0(rBase: RExpr, args: List<RExpr>): RExpr {
-        val fn = S_SysMemberFunctions.getMemberFunction(rBase.type, name)
+        val fn = S_LibFunctions.getMemberFunction(rBase.type, name)
         return fn.compileCall(rBase, args)
     }
 
@@ -128,7 +136,7 @@ class S_AttributeExpr(val base: S_Expression, val name: String): S_Expression() 
     }
 
     companion object {
-        private fun compilePath(ctx: ExprCompilationContext, rBase: RExpr, path: List<String>): RExpr {
+        private fun compilePath(ctx: CtExprContext, rBase: RExpr, path: List<String>): RExpr {
             var headBase = rBase
             var tailPath = LinkedList(path)
 
@@ -157,14 +165,14 @@ class S_AttributeExpr(val base: S_Expression, val name: String): S_Expression() 
         }
 
         private fun compilePathStepDataObject(
-                ctx: ExprCompilationContext,
+                ctx: CtExprContext,
                 base: RExpr,
                 type: RInstanceRefType,
                 path: Queue<String>): RExpr
         {
             val atClass = RAtClass(type.rClass, "", 0)
             val from = listOf(atClass)
-            val dbCtx = DbCompilationContext(null, ctx, from)
+            val dbCtx = CtDbExprContext(null, ctx, from)
 
             val pathList = path.toList()
             path.clear()
@@ -180,7 +188,7 @@ class S_AttributeExpr(val base: S_Expression, val name: String): S_Expression() 
     }
 }
 
-internal fun compileDbPathExpr(ctx: DbCompilationContext, path: List<String>, classAliasAllowed: Boolean): DbExpr {
+internal fun compileDbPathExpr(ctx: CtDbExprContext, path: List<String>, classAliasAllowed: Boolean): DbExpr {
     val dbExpr = compileDbPathExprOpt(ctx, path, classAliasAllowed)
     if (dbExpr == null) {
         throw errBadPath(path, path.size)
@@ -188,7 +196,7 @@ internal fun compileDbPathExpr(ctx: DbCompilationContext, path: List<String>, cl
     return dbExpr
 }
 
-private fun compileDbPathExprOpt(ctx: DbCompilationContext, path: List<String>, classAliasAllowed: Boolean): DbExpr? {
+private fun compileDbPathExprOpt(ctx: CtDbExprContext, path: List<String>, classAliasAllowed: Boolean): DbExpr? {
     val head = path[0]
 
     val cls = if (classAliasAllowed) ctx.findClassByAlias(head) else null

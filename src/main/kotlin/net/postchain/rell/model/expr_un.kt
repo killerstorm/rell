@@ -1,7 +1,7 @@
 package net.postchain.rell.model
 
 import net.postchain.rell.runtime.RtBooleanValue
-import net.postchain.rell.runtime.RtEnv
+import net.postchain.rell.runtime.RtCallFrame
 import net.postchain.rell.runtime.RtIntValue
 import net.postchain.rell.runtime.RtValue
 
@@ -24,8 +24,8 @@ object RUnaryOp_Not: RUnaryOp() {
 }
 
 class RUnaryExpr(type: RType, val op: RUnaryOp, val expr: RExpr): RExpr(type) {
-    override fun evaluate(env: RtEnv): RtValue {
-        val operand = expr.evaluate(env)
+    override fun evaluate(frame: RtCallFrame): RtValue {
+        val operand = expr.evaluate(frame)
         val resValue = op.evaluate(operand)
         return resValue
     }

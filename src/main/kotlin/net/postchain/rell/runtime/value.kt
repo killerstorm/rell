@@ -3,10 +3,9 @@ package net.postchain.rell.runtime
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import net.postchain.rell.model.*
-import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.toHex
 import java.lang.IllegalArgumentException
-import java.lang.UnsupportedOperationException
+import java.util.*
 
 sealed class RtValue {
     abstract fun type(): RType
@@ -16,7 +15,10 @@ sealed class RtValue {
     open fun asString(): String = throw errType()
     open fun asByteArray(): ByteArray = throw errType()
     open fun asJsonString(): String = throw errType()
-    open fun asList(): List<RtValue> = throw errType()
+    open fun asCollection(): MutableCollection<RtValue> = throw errType()
+    open fun asList(): MutableList<RtValue> = throw errType()
+    open fun asSet(): MutableSet<RtValue> = throw errType()
+    open fun asMap(): MutableMap<RtValue, RtValue> = throw errType()
     open fun asTuple(): List<RtValue> = throw errType()
     open fun asRange(): RtRangeValue = throw errType()
     open fun asObjectId(): Long = throw errType()
@@ -37,6 +39,8 @@ class RtBooleanValue(val value: Boolean): RtValue() {
     override fun asBoolean(): Boolean = value
     override fun toStrictString(showTupleFieldNames: Boolean): String = "boolean[$value]"
     override fun toString(): String = "" + value
+    override fun equals(other: Any?): Boolean = other is RtBooleanValue && value == other.value
+    override fun hashCode(): Int = java.lang.Boolean.hashCode(value)
 }
 
 class RtIntValue(val value: Long): RtValue() {
@@ -44,6 +48,8 @@ class RtIntValue(val value: Long): RtValue() {
     override fun asInteger(): Long = value
     override fun toStrictString(showTupleFieldNames: Boolean): String = "int[$value]"
     override fun toString(): String = "" + value
+    override fun equals(other: Any?): Boolean = other is RtIntValue && value == other.value
+    override fun hashCode(): Int = java.lang.Long.hashCode(value)
 }
 
 class RtTextValue(val value: String): RtValue() {
@@ -51,6 +57,8 @@ class RtTextValue(val value: String): RtValue() {
     override fun asString(): String = value
     override fun toStrictString(showTupleFieldNames: Boolean): String = "text[$value]"
     override fun toString(): String = value
+    override fun equals(other: Any?): Boolean = other is RtTextValue && value == other.value
+    override fun hashCode(): Int = value.hashCode()
 }
 
 class RtByteArrayValue(val value: ByteArray): RtValue() {
@@ -58,6 +66,8 @@ class RtByteArrayValue(val value: ByteArray): RtValue() {
     override fun asByteArray(): ByteArray = value
     override fun toStrictString(showTupleFieldNames: Boolean): String = "byte_array[${value.toHex()}]"
     override fun toString(): String = "0x" + value.toHex()
+    override fun equals(other: Any?): Boolean = other is RtByteArrayValue && Arrays.equals(value, other.value)
+    override fun hashCode(): Int = Arrays.hashCode(value)
 }
 
 class RtObjectValue(val type: RInstanceRefType, val rowid: Long): RtValue() {
@@ -65,26 +75,65 @@ class RtObjectValue(val type: RInstanceRefType, val rowid: Long): RtValue() {
     override fun asObjectId(): Long = rowid
     override fun toStrictString(showTupleFieldNames: Boolean): String = "${type.name}[$rowid]"
     override fun toString(): String = toStrictString()
+    override fun equals(other: Any?): Boolean = other is RtObjectValue && type == other.type && rowid == other.rowid
+    override fun hashCode(): Int = Objects.hash(type, rowid)
 }
 
 class RtNullValue(val type: RType): RtValue() {
     override fun type(): RType = type
     override fun toStrictString(showTupleFieldNames: Boolean): String = "null[${type.toStrictString()}]"
     override fun toString(): String = "null"
+    override fun equals(other: Any?): Boolean = other is RtNullValue
+    override fun hashCode(): Int = javaClass.hashCode()
 }
 
-class RtListValue(val type: RType, val elements: List<RtValue>): RtValue() {
+class RtListValue(private val type: RType, private val elements: MutableList<RtValue>): RtValue() {
     override fun type(): RType = type
-    override fun asList(): List<RtValue> = elements
-    override fun toString(): String = elements.toString()
+    override fun asCollection(): MutableCollection<RtValue> = elements
+    override fun asList(): MutableList<RtValue> = elements
 
     override fun toStrictString(showTupleFieldNames: Boolean): String =
             "${type.toStrictString()}[${elements.joinToString(",") { it.toStrictString(false) }}]"
+
+    override fun toString(): String = elements.toString()
+    override fun equals(other: Any?): Boolean = other is RtListValue && elements == other.elements
+    override fun hashCode(): Int = elements.hashCode()
+}
+
+class RtSetValue(private val type: RType, private val elements: MutableSet<RtValue>): RtValue() {
+    override fun type(): RType = type
+    override fun asCollection(): MutableCollection<RtValue> = elements
+    override fun asSet(): MutableSet<RtValue> = elements
+
+    override fun toStrictString(showTupleFieldNames: Boolean): String =
+            "${type.toStrictString()}[${elements.joinToString(",") { it.toStrictString(false) }}]"
+
+    override fun toString(): String = elements.toString()
+    override fun equals(other: Any?): Boolean = other is RtSetValue && elements == other.elements
+    override fun hashCode(): Int = elements.hashCode()
+}
+
+class RtMapValue(private val type: RType, private val map: MutableMap<RtValue, RtValue>): RtValue() {
+    override fun type(): RType = type
+    override fun asMap(): MutableMap<RtValue, RtValue> = map
+
+    override fun toStrictString(showTupleFieldNames: Boolean): String {
+        val entries = map.entries.joinToString(",") { (key, value) ->
+            key.toStrictString(false) + "=" + value.toStrictString(false)
+        }
+        return "${type.toStrictString()}[$entries]"
+    }
+
+    override fun toString(): String = map.toString()
+    override fun equals(other: Any?): Boolean = other is RtMapValue && map == other.map
+    override fun hashCode(): Int = map.hashCode()
 }
 
 class RtTupleValue(val type: RTupleType, val elements: List<RtValue>): RtValue() {
     override fun type(): RType = type
     override fun asTuple(): List<RtValue> = elements
+    override fun equals(other: Any?): Boolean = other is RtTupleValue && elements == other.elements
+    override fun hashCode(): Int = elements.hashCode()
 
     override fun toString(): String = "(${elements.indices.joinToString(",") { elementToString(it) }})"
 
@@ -112,6 +161,8 @@ class RtJsonValue private constructor(private val str: String): RtValue() {
     override fun asJsonString(): String = str
     override fun toString(): String = str
     override fun toStrictString(showTupleFieldNames: Boolean): String = "json[$str]"
+    override fun equals(other: Any?): Boolean = other is RtJsonValue && str == other.str
+    override fun hashCode(): Int = str.hashCode()
 
     companion object {
         fun parse(s: String): RtValue {
@@ -136,6 +187,9 @@ class RtRangeValue(val start: Long, val end: Long, val step: Long): RtValue(), I
 
     override fun iterator(): Iterator<RtValue> = RangeIterator(this)
 
+    override fun equals(other: Any?): Boolean = other is RtRangeValue && start == other.start && end == other.end && step == other.step
+    override fun hashCode(): Int = Objects.hash(start, end, step)
+
     companion object {
         private class RangeIterator(private val range: RtRangeValue): Iterator<RtValue> {
             private var current = range.start
@@ -157,57 +211,7 @@ class RtRangeValue(val start: Long, val end: Long, val step: Long): RtValue(), I
     }
 }
 
-abstract class RtPrinter {
-    abstract fun print(str: String)
-}
-
-object FailingRtPrinter: RtPrinter() {
-    override fun print(str: String) {
-        throw UnsupportedOperationException()
-    }
-}
-
-class RtGlobalContext(val stdoutPrinter: RtPrinter, val logPrinter: RtPrinter, val sqlExec: SqlExecutor)
-
-class RtModuleContext(val globalCtx: RtGlobalContext, val module: RModule)
-
-class RtEnv(val modCtx: RtModuleContext, val dbUpdateAllowed: Boolean) {
-    private val values = mutableListOf<RtValue?>()
-
-    fun set(offset: Int, value: RtValue) {
-        while (values.size <= offset) {
-            values.add(null)
-        }
-        values[offset] = value
-    }
-
-    fun get(offset: Int): RtValue {
-        val value = getOpt(offset)
-        check(value != null) { "Variable not initialized: offset = $offset" }
-        return value!!
-    }
-
-    fun getOpt(offset: Int): RtValue? {
-        check(offset >= 0)
-        return if (offset < values.size) values[offset] else null
-    }
-
-    fun checkDbUpdateAllowed() {
-        if (!dbUpdateAllowed) {
-            throw RtError("no_db_update", "Database modifications are not allowed in this context")
-        }
-    }
-}
-
-object RtUtils {
-    // https://stackoverflow.com/a/2632501
-    fun saturatedAdd(a: Long, b: Long): Long {
-        if (a == 0L || b == 0L || ((a > 0) != (b > 0))) {
-            return a + b
-        } else if (a > 0) {
-            return if (Long.MAX_VALUE - a < b) Long.MAX_VALUE else (a + b)
-        } else {
-            return if (Long.MIN_VALUE - a > b) Long.MIN_VALUE else (a + b)
-        }
-    }
+abstract class RtValueRef {
+    abstract fun get(): RtValue
+    abstract fun set(value: RtValue)
 }

@@ -3,21 +3,29 @@ package net.postchain.rell.model
 import net.postchain.rell.runtime.*
 import java.lang.IllegalStateException
 
+data class RFrameBlockId(val id: Long)
+data class RVarPtr(val blockId: RFrameBlockId, val offset: Int)
+class RFrameBlock(val parentId: RFrameBlockId?, val id: RFrameBlockId, val offset: Int, val size: Int)
+class RCallFrame(val size: Int, val rootBlock: RFrameBlock)
+
 class RAttrib(val name: String, val type: RType, val mutable: Boolean, val expr: RExpr?)
 
-class RExternalParam(val name: String, val type: RType, val offset: Int)
+class RExternalParam(val name: String, val type: RType, val ptr: RVarPtr)
 
-sealed class RRoutine(val name: String, val params: List<RExternalParam>, val body: RStatement) {
+sealed class RRoutine(val name: String, val params: List<RExternalParam>, val body: RStatement, val frame: RCallFrame) {
     abstract fun callTop(modCtx: RtModuleContext, args: List<RtValue>)
 }
 
-class ROperation(name: String, params: List<RExternalParam>, body: RStatement): RRoutine(name, params, body) {
+class ROperation(name: String, params: List<RExternalParam>, body: RStatement, frame: RCallFrame)
+    : RRoutine(name, params, body, frame)
+{
     override fun callTop(modCtx: RtModuleContext, args: List<RtValue>) {
-        val env = RtEnv(modCtx, true)
-        processArgs(name, params, args, env)
+        val entCtx = RtEntityContext(modCtx, true)
+        val rtFrame = RtCallFrame(entCtx, frame)
+        processArgs(name, params, args, rtFrame)
 
         modCtx.globalCtx.sqlExec.transaction {
-            val res = body.execute(env)
+            val res = body.execute(rtFrame)
             if (res != null) {
                 check(res is RStatementResult_Return && res.value == null)
             }
@@ -25,16 +33,19 @@ class ROperation(name: String, params: List<RExternalParam>, body: RStatement): 
     }
 }
 
-class RQuery(name: String, params: List<RExternalParam>, body: RStatement): RRoutine(name, params, body) {
+class RQuery(name: String, params: List<RExternalParam>, body: RStatement, frame: RCallFrame)
+    : RRoutine(name, params, body, frame)
+{
     override fun callTop(modCtx: RtModuleContext, args: List<RtValue>) {
         callTopQuery(modCtx, args)
     }
 
     fun callTopQuery(modCtx: RtModuleContext, args: List<RtValue>): RtValue {
-        val env = RtEnv(modCtx, false)
-        processArgs(name, params, args, env)
+        val entCtx = RtEntityContext(modCtx, false)
+        val rtFrame = RtCallFrame(entCtx, frame)
+        processArgs(name, params, args, rtFrame)
 
-        val res = body.execute(env)
+        val res = body.execute(rtFrame)
         if (res == null) {
             throw RtError("query_novalue:$name", "Query '$name' did not return a value")
         }
@@ -52,27 +63,31 @@ class RFunction(
         name: String,
         params: List<RExternalParam>,
         body: RStatement,
+        frame: RCallFrame,
         val type: RType,
         val fnKey: Int
-): RRoutine(name, params, body)
+): RRoutine(name, params, body, frame)
 {
     override fun callTop(modCtx: RtModuleContext, args: List<RtValue>) {
-        val env = RtEnv(modCtx, false)
-        call(env, args)
+        val entCtx = RtEntityContext(modCtx, false)
+        val rtFrame = RtCallFrame(entCtx, frame)
+        call(rtFrame, args)
     }
 
-    fun call(env: RtEnv, args: List<RtValue>): RtValue {
-        val fnEnv = RtEnv(env.modCtx, env.dbUpdateAllowed)
-        processArgs(name, params, args, fnEnv)
+    fun call(rtFrame: RtCallFrame, args: List<RtValue>): RtValue {
+        val subEntCtx = RtEntityContext(rtFrame.entCtx.modCtx, rtFrame.entCtx.dbUpdateAllowed)
+        val rtSubFrame = RtCallFrame(subEntCtx, frame)
 
-        val res = body.execute(fnEnv)
+        processArgs(name, params, args, rtSubFrame)
+
+        val res = body.execute(rtSubFrame)
 
         val retVal = if (res is RStatementResult_Return) res.value else null
         return if (retVal == null) RtUnitValue else retVal
     }
 }
 
-private fun processArgs(name: String, params: List<RExternalParam>, args: List<RtValue>, env: RtEnv) {
+private fun processArgs(name: String, params: List<RExternalParam>, args: List<RtValue>, frame: RtCallFrame) {
     if (args.size != params.size) {
         throw RtError("fn_wrong_arg_count:$name:${params.size}:${args.size}",
                 "Wrong number of arguments for '$name': ${args.size} instead of ${params.size}")
@@ -87,7 +102,7 @@ private fun processArgs(name: String, params: List<RExternalParam>, args: List<R
                     "Wrong type of argument ${param.name} for '$name': " +
                             "${argType.toStrictString()} instead of ${param.type.toStrictString()}")
         }
-        env.set(param.offset, arg)
+        frame.set(param.ptr, arg, false)
     }
 }
 

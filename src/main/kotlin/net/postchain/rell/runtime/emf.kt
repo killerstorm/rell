@@ -3,6 +3,9 @@ package net.postchain.rell.runtime
 import net.postchain.rell.model.RIntegerType
 import net.postchain.rell.model.RType
 
+typealias RTEnv = Array<*>
+typealias RTF<T> = (RTEnv) -> T
+
 data class TypedRTF(val type: RType, val rtf: RTF<*>)
 
 typealias FunctionResolver = (args: List<TypedRTF>) -> TypedRTF

@@ -16,7 +16,6 @@ import java.lang.IllegalStateException
 import java.sql.ResultSet
 import java.util.*
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 
 object RellTestUtils {
     fun processModule(code: String, processor: (RModule) -> String): String {
@@ -112,10 +111,12 @@ object SqlTestUtils {
     }
 
     fun setupDatabase(module: RModule, sqlExec: SqlExecutor) {
-        dropTables(sqlExec)
-        dropFunctions(sqlExec)
-        val sql = gensql(module, false)
-        sqlExec.execute(sql)
+        sqlExec.transaction {
+            dropTables(sqlExec)
+            dropFunctions(sqlExec)
+            val sql = gensql(module, false)
+            sqlExec.execute(sql)
+        }
     }
 
     private fun dropTables(sqlExec: SqlExecutor) {
@@ -133,7 +134,9 @@ object SqlTestUtils {
     fun clearTables(sqlExec: SqlExecutor) {
         val tables = getExistingTables(sqlExec)
         val sql = tables.joinToString("\n") { "TRUNCATE \"$it\" CASCADE;" }
-        sqlExec.execute(sql)
+        sqlExec.transaction {
+            sqlExec.execute(sql)
+        }
     }
 
     private fun getExistingTables(sqlExec: SqlExecutor): List<String> {
@@ -273,7 +276,9 @@ class RellSqlTester(
     private fun initSqlInserts(sqlExecLoc: SqlExecutor) {
         if (!inserts.isEmpty()) {
             val insertSql = inserts.joinToString("\n") { it }
-            sqlExecLoc.execute(insertSql)
+            sqlExecLoc.transaction {
+                sqlExecLoc.execute(insertSql)
+            }
             lastInserts = inserts
         }
     }
@@ -367,11 +372,10 @@ class RellSqlTester(
         }
 
         fun chk(vararg expected: String) {
-            for (s in expected) {
-                assertFalse(queue.isEmpty())
-                assertEquals(s, queue.remove())
-            }
-            assertEquals(0, queue.size)
+            val expectedList = expected.toList()
+            val actualList = queue.toList()
+            assertEquals(expectedList, actualList)
+            queue.clear()
         }
     }
 }

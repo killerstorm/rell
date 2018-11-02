@@ -35,11 +35,11 @@ class RAtExprBase(
         from.withIndex().forEach { check(it.index == it.value.index) }
     }
 
-    fun execute(env: RtEnv, limit: RExpr?): List<Array<RtValue>> {
+    fun execute(frame: RtCallFrame, limit: RExpr?): List<Array<RtValue>> {
         val rtSql = buildSql(limit)
         val resultTypes = what.map { it.type }
         val select = RtSelect(rtSql, resultTypes)
-        val records = select.execute(env)
+        val records = select.execute(frame)
         return records
     }
 
@@ -124,15 +124,15 @@ class RAtExpr(
         val rowType: RAtExprRowType
 ): RExpr(type)
 {
-    override fun evaluate(env: RtEnv): RtValue {
-        val records = base.execute(env, limit)
+    override fun evaluate(frame: RtCallFrame): RtValue {
+        val records = base.execute(frame, limit)
         return decodeResult(records)
     }
 
     private fun decodeResult(records: List<Array<RtValue>>): RtValue {
-        val values = records.map { rowType.decode(it) }
+        val list = MutableList(records.size) { rowType.decode(records[it]) }
 
-        val count = values.size
+        val count = list.size
         if (count == 0 && !base.zero) {
             throw RtError("at:wrong_count:$count", "No records found")
         } else if (count > 1 && !base.many) {
@@ -140,9 +140,9 @@ class RAtExpr(
         }
 
         if (base.many) {
-            return RtListValue(type, values)
+            return RtListValue(type, list)
         } else if (count > 0) {
-            return values[0]
+            return list[0]
         } else {
             return RtNullValue(type)
         }
@@ -150,8 +150,8 @@ class RAtExpr(
 }
 
 class RBooleanAtExpr(val base: RAtExprBase, val limit: RExpr?): RExpr(RBooleanType) {
-    override fun evaluate(env: RtEnv): RtValue {
-        val records = base.execute(env, limit)
+    override fun evaluate(frame: RtCallFrame): RtValue {
+        val records = base.execute(frame, limit)
 
         val count = records.size
         if (!base.many && count > 1) {

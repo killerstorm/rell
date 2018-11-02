@@ -1,71 +1,99 @@
 package net.postchain.rell.runtime
 
 import net.postchain.rell.model.*
-
-typealias RTEnv = Array<*>
-typealias RTF<T> = (RTEnv) -> T
-typealias EnvMap = (n: String) -> List<Int>
-
-class RTGlobalContext (val conn: java.sql.Connection?)
+import net.postchain.rell.sql.SqlExecutor
+import java.lang.UnsupportedOperationException
 
 sealed class RtBaseError(msg: String): Exception(msg)
 class RtError(val code: String, msg: String): RtBaseError(msg)
 class RtRequireError(msg: String): RtBaseError(msg)
 
-fun <T>make_var_ref(em: EnvMap, name: String): RTF<T> {
-    val indexes = em(name)
-    return when (indexes.size) {
-        1 -> {
-            val idx = indexes[0]
-            { env -> env[idx] as T}
+class RtGlobalContext(val stdoutPrinter: RtPrinter, val logPrinter: RtPrinter, val sqlExec: SqlExecutor)
+
+class RtModuleContext(val globalCtx: RtGlobalContext, val module: RModule)
+
+class RtEntityContext(val modCtx: RtModuleContext, val dbUpdateAllowed: Boolean) {
+    fun checkDbUpdateAllowed() {
+        if (!dbUpdateAllowed) {
+            throw RtError("no_db_update", "Database modifications are not allowed in this context")
         }
-        2 -> {
-            val idx1 = indexes[0]
-            val idx2 = indexes[1]
-            { env ->
-                val env2 = env[idx1] as RTEnv
-                env2[idx2] as T
+    }
+}
+
+class RtCallFrame(val entCtx: RtEntityContext, rFrame: RCallFrame) {
+    private var curBlock = rFrame.rootBlock
+    private val values = Array<RtValue?>(rFrame.size) { null }
+
+    fun <T> block(block: RFrameBlock, code: () -> T): T {
+        val oldBlock = curBlock
+        check(block.parentId == oldBlock.id)
+        check(block.offset + block.size <= values.size)
+
+        for (i in 0 until block.size) {
+            check(values[block.offset + i] == null)
+        }
+
+        curBlock = block
+        try {
+            val res = code()
+            return res
+        } finally {
+            curBlock = oldBlock
+            for (i in 0 until block.size) {
+                values[block.offset + i] = null
             }
         }
-        else -> {
-            env ->
-            var x : Any? = env
-            for (i in 0 until indexes.size) {
-                x = (x as RTEnv)[i]
-            }
-            x as T
+    }
+
+    fun set(ptr: RVarPtr, value: RtValue, overwrite: Boolean) {
+        val offset = checkPtr(ptr)
+        if (!overwrite) {
+            check(values[offset] == null)
         }
+        values[offset] = value
+    }
+
+    fun get(ptr: RVarPtr): RtValue {
+        val value = getOpt(ptr)
+        check(value != null) { "Variable not initialized: $ptr" }
+        return value!!
+    }
+
+    fun getOpt(ptr: RVarPtr): RtValue? {
+        val offset = checkPtr(ptr)
+        val value = values[offset]
+        return value
+    }
+
+    private fun checkPtr(ptr: RVarPtr): Int {
+        val block = curBlock
+        check(ptr.blockId == block.id)
+        val offset = ptr.offset
+        check(offset >= 0)
+        check(offset < block.offset + block.size)
+        return offset
     }
 }
 
-fun make_seq(statements: List<RTF<Unit>>): RTF<Unit> {
-    return {
-        for (s in statements) s(it)
+abstract class RtPrinter {
+    abstract fun print(str: String)
+}
+
+object FailingRtPrinter: RtPrinter() {
+    override fun print(str: String) {
+        throw UnsupportedOperationException()
     }
 }
 
-fun buildEnvMap(op: ROperation): Pair<EnvMap, Int> {
-    val m = mutableMapOf<String, Int>()
-    m["*global*"] = 0
-    fun add(n: String) {
-        m[n] = m.size
-    }
-    for (p in op.params) add(p.name)
-    // TODO: collect variable bindings
-    return Pair({ name -> listOf(m[name]!!)}, m.size)
-}
-
-class RTOperation(val opModel: ROperation,
-                  val envSize: Int,
-                  val nArgs: Int,
-                  val rtf: RTF<Unit>) {
-    fun call(context: RTGlobalContext, args: Array<Any?>) {
-        val env = arrayOfNulls<Any>(envSize)
-        env[0] = context
-        assert(nArgs == args.size)
-        for (i in 0 until nArgs) {
-            env[1 + i] = args[i]
+object RtUtils {
+    // https://stackoverflow.com/a/2632501
+    fun saturatedAdd(a: Long, b: Long): Long {
+        if (a == 0L || b == 0L || ((a > 0) != (b > 0))) {
+            return a + b
+        } else if (a > 0) {
+            return if (Long.MAX_VALUE - a < b) Long.MAX_VALUE else (a + b)
+        } else {
+            return if (Long.MIN_VALUE - a > b) Long.MIN_VALUE else (a + b)
         }
-        rtf(env)
     }
 }

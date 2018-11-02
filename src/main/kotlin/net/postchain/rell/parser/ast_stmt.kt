@@ -3,16 +3,16 @@ package net.postchain.rell.parser
 import net.postchain.rell.model.*
 
 abstract class S_Statement {
-    internal abstract fun compile(ctx: ExprCompilationContext): RStatement
+    internal abstract fun compile(ctx: CtExprContext): RStatement
     internal open fun returns(): Boolean = false
 }
 
 class S_EmptyStatement: S_Statement() {
-    override fun compile(ctx: ExprCompilationContext): RStatement = REmptyStatement
+    override fun compile(ctx: CtExprContext): RStatement = REmptyStatement
 }
 
 class S_ValStatement(val name: String, val type: S_Type?, val expr: S_Expression): S_Statement() {
-    override fun compile(ctx: ExprCompilationContext): RStatement {
+    override fun compile(ctx: CtExprContext): RStatement {
         val rExpr = expr.compile(ctx)
 
         val rType = type?.compile(ctx)
@@ -21,13 +21,13 @@ class S_ValStatement(val name: String, val type: S_Type?, val expr: S_Expression
         val varType = if (rType != null) rType else rExpr.type
         CtUtils.checkUnitType(varType, "stmt_val_unit:$name", "Type of '$name' is ${varType.toStrictString()}")
 
-        val entry = ctx.add(name, varType, false)
-        return RValStatement(entry.offset, rExpr2)
+        val ptr = ctx.add(name, varType, false)
+        return RValStatement(ptr, rExpr2)
     }
 }
 
 class S_VarStatement(val name: String, val type: S_Type?, val expr: S_Expression?): S_Statement() {
-    override fun compile(ctx: ExprCompilationContext): RStatement {
+    override fun compile(ctx: CtExprContext): RStatement {
         val rExpr = expr?.compile(ctx)
         val rType = type?.compile(ctx)
 
@@ -44,13 +44,13 @@ class S_VarStatement(val name: String, val type: S_Type?, val expr: S_Expression
         val rVarType = if (rType != null) rType else rExpr2!!.type
         CtUtils.checkUnitType(rVarType, "stmt_var_unit:$name", "Type of '$name' is ${rVarType.toStrictString()}")
 
-        val entry = ctx.add(name, rVarType, true)
-        return RVarStatement(entry.offset, rExpr2)
+        val ptr = ctx.add(name, rVarType, true)
+        return RVarStatement(ptr, rExpr2)
     }
 }
 
 class S_ReturnStatement(val expr: S_Expression?): S_Statement() {
-    override fun compile(ctx: ExprCompilationContext): RStatement {
+    override fun compile(ctx: CtExprContext): RStatement {
         val rExpr = expr?.compile(ctx)
         if (rExpr != null) {
             CtUtils.checkUnitType(rExpr.type, "stmt_return_unit", "Type of return value is unit")
@@ -82,10 +82,11 @@ class S_ReturnStatement(val expr: S_Expression?): S_Statement() {
 }
 
 class S_BlockStatement(val stmts: List<S_Statement>): S_Statement() {
-    override fun compile(ctx: ExprCompilationContext): RStatement {
-        val subCtx = ExprCompilationContext(ctx.entCtx, ctx, ctx.insideLoop)
+    override fun compile(ctx: CtExprContext): RStatement {
+        val subCtx = CtExprContext(ctx.entCtx, ctx, ctx.insideLoop)
         val rStmts = stmts.map { it.compile(subCtx) }
-        return RBlockStatement(rStmts)
+        val frameBlock = subCtx.makeFrameBlock()
+        return RBlockStatement(rStmts, frameBlock)
     }
 
     override fun returns(): Boolean {
@@ -99,31 +100,27 @@ class S_BlockStatement(val stmts: List<S_Statement>): S_Statement() {
 }
 
 class S_ExprStatement(val expr: S_Expression): S_Statement() {
-    override fun compile(ctx: ExprCompilationContext): RStatement {
+    override fun compile(ctx: CtExprContext): RStatement {
         val rExpr = expr.compile(ctx)
         return RExprStatement(rExpr)
     }
 }
 
-class S_AssignStatement(val name: String, val opCode: S_AssignOpCode, val expr: S_Expression): S_Statement() {
-    override fun compile(ctx: ExprCompilationContext): RStatement {
-        val entry = ctx.lookup(name)
-        if (!entry.modifiable) {
-            throw CtError("stmt_assign_val:$name", "Value of '$name' cannot be changed")
-        }
-
-        val rExpr = expr.compile(ctx)
-        return opCode.op.compile(entry, rExpr)
+class S_AssignStatement(val dstExpr: S_Expression, val opCode: S_AssignOpCode, val srcExpr: S_Expression): S_Statement() {
+    override fun compile(ctx: CtExprContext): RStatement {
+        val rDstExpr = dstExpr.compileDestination(ctx)
+        val rSrcExpr = srcExpr.compile(ctx)
+        return opCode.op.compile(rDstExpr, rSrcExpr)
     }
 }
 
 class S_IfStatement(val expr: S_Expression, val trueStmt: S_Statement, val falseStmt: S_Statement?): S_Statement() {
-    override fun compile(ctx: ExprCompilationContext): RStatement {
+    override fun compile(ctx: CtExprContext): RStatement {
         val rExpr = expr.compileAsBoolean(ctx)
         val rExpr2 = RBooleanType.match(rExpr, "stmt_if_expr_type", "Wrong type of if-expression")
 
         val rTrueStmt = trueStmt.compile(ctx)
-        val rFalseStmt = if (falseStmt != null) falseStmt.compile(ctx) else RBlockStatement(listOf())
+        val rFalseStmt = if (falseStmt != null) falseStmt.compile(ctx) else REmptyStatement
 
         return RIfStatement(rExpr2, rTrueStmt, rFalseStmt)
     }
@@ -134,32 +131,40 @@ class S_IfStatement(val expr: S_Expression, val trueStmt: S_Statement, val false
 }
 
 class S_WhileStatement(val expr: S_Expression, val stmt: S_Statement): S_Statement() {
-    override fun compile(ctx: ExprCompilationContext): RStatement {
+    override fun compile(ctx: CtExprContext): RStatement {
         val rExpr = expr.compileAsBoolean(ctx)
         val rExpr2 = RBooleanType.match(rExpr, "stmt_while_expr_type", "Wrong type of while-expression")
 
-        val subCtx = ExprCompilationContext(ctx.entCtx, ctx, true)
+        val subCtx = CtExprContext(ctx.entCtx, ctx, true)
         val rStmt = stmt.compile(subCtx)
+        val rBlock = subCtx.makeFrameBlock()
 
-        return RWhileStatement(rExpr2, rStmt)
+        return RWhileStatement(rExpr2, rStmt, rBlock)
     }
 }
 
 class S_ForStatement(val name: String, val expr: S_Expression, val stmt: S_Statement): S_Statement() {
-    override fun compile(ctx: ExprCompilationContext): RStatement {
+    override fun compile(ctx: CtExprContext): RStatement {
         val rExpr = expr.compile(ctx)
         val exprType = rExpr.type
 
-        val subCtx = ExprCompilationContext(ctx.entCtx, ctx, true)
+        val (varType, iterator) = compileForIterator(exprType)
 
-        if (exprType is RListType) {
-            val entry = subCtx.add(name, exprType.elementType, false)
-            val rStmt = stmt.compile(subCtx)
-            return RForStatement(entry.offset, rExpr, RForIterator_List, rStmt)
+        val subCtx = CtExprContext(ctx.entCtx, ctx, true)
+        val ptr = subCtx.add(name, varType, false)
+        val rStmt = stmt.compile(subCtx)
+        val rBlock = subCtx.makeFrameBlock()
+
+        return RForStatement(ptr, rExpr, iterator, rStmt, rBlock)
+    }
+
+    private fun compileForIterator(exprType: RType): Pair<RType, RForIterator> {
+        if (exprType is RCollectionType) {
+            return Pair(exprType.elementType, RForIterator_Collection)
+        } else if (exprType is RMapType) {
+            return Pair(exprType.keyType, RForIterator_Map)
         } else if (exprType == RRangeType) {
-            val entry = subCtx.add(name, RIntegerType, false)
-            val rStmt = stmt.compile(subCtx)
-            return RForStatement(entry.offset, rExpr, RForIterator_Range, rStmt)
+            return Pair(RIntegerType, RForIterator_Range)
         } else {
             throw CtError("stmt_for_expr_type:${exprType.toStrictString()}",
                     "Type of for-expression is ${exprType.toStrictString()}")
@@ -168,7 +173,7 @@ class S_ForStatement(val name: String, val expr: S_Expression, val stmt: S_State
 }
 
 class S_BreakStatement(): S_Statement() {
-    override fun compile(ctx: ExprCompilationContext): RStatement {
+    override fun compile(ctx: CtExprContext): RStatement {
         if (!ctx.insideLoop) {
             throw CtError("stmt_break_noloop", "Break without a loop")
         }
@@ -177,7 +182,7 @@ class S_BreakStatement(): S_Statement() {
 }
 
 class S_RequireStatement(val expr: S_Expression, val msgExpr: S_Expression?): S_Statement() {
-    override fun compile(ctx: ExprCompilationContext): RStatement {
+    override fun compile(ctx: CtExprContext): RStatement {
         val rExpr = expr.compileAsBoolean(ctx)
         val rExpr2 = RBooleanType.match(rExpr, "stmt_require_expr_type", "Wrong type of require-expression")
 

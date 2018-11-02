@@ -2,20 +2,7 @@ package net.postchain.rell.parser
 
 import net.postchain.rell.model.*
 
-val S_SYS_FUNCTIONS = listOf<S_SysFunction>(
-        S_StdSysFunction("unit", RUnitType, listOf(), RSysFunction_Unit, null),
-
-        S_StdSysFunction("abs", RIntegerType, listOf(RIntegerType), RSysFunction_Abs, DbSysFunction_Abs),
-        S_StdSysFunction("min", RIntegerType, listOf(RIntegerType, RIntegerType), RSysFunction_Min, DbSysFunction_Min),
-        S_StdSysFunction("max", RIntegerType, listOf(RIntegerType, RIntegerType), RSysFunction_Max, DbSysFunction_Max),
-        S_StdSysFunction("json", RJSONType, listOf(RTextType), RSysFunction_Json, DbSysFunction_Json),
-
-        S_SysFunction_Range,
-        S_SysFunction_Print("print", RSysFunction_Print(false)),
-        S_SysFunction_Print("log", RSysFunction_Print(true))
-)
-
-sealed class S_SysFunction(val name: String) {
+abstract class S_SysFunction(val name: String) {
     abstract fun compileCall(args: List<RExpr>): RExpr
     abstract fun compileCallDb(args: List<DbExpr>): DbExpr
 
@@ -30,142 +17,98 @@ sealed class S_SysFunction(val name: String) {
     }
 }
 
-private class S_StdSysFunction(
+sealed class S_SysMemberFunction(val name: String, val type: RType) {
+    abstract fun compileCall(base: RExpr, args: List<RExpr>): RExpr
+    abstract fun compileCallDb(base: DbExpr, args: List<DbExpr>): DbExpr
+}
+
+class S_OverloadFnCase(val params: List<RType>, val rFn: RSysFunction, val dbFn: DbSysFunction?) {
+    fun <T> matchArgs(args: List<T>, matcher: (RType, T) -> T?): List<T>? {
+        if (args.size != params.size) {
+            return null
+        }
+
+        val args2 = mutableListOf<T>()
+        for ((i, arg) in args.withIndex()) {
+            val arg2 = matcher(params[i], arg)
+            if (arg2 == null) {
+                return null
+            }
+            args2.add(arg2)
+        }
+
+        return args2
+    }
+
+    companion object {
+        fun match(name: String, cases: List<S_OverloadFnCase>, args: List<RExpr>): Pair<RSysFunction, List<RExpr>> {
+            val (case, args2) = match0(name, cases, args, RExpr::type, RType::matchOpt)
+            return Pair(case.rFn, args2)
+        }
+
+        fun matchDb(name: String, cases: List<S_OverloadFnCase>, args: List<DbExpr>): Pair<DbSysFunction, List<DbExpr>> {
+            val (case, args2) = match0(name, cases, args, DbExpr::type, RType::matchOpt)
+            if (case.dbFn == null) {
+                throw CtError("expr_call_nosql:$name", "Function '$name' has no SQL equivalent")
+            }
+            return Pair(case.dbFn, args2)
+        }
+
+        private fun <T> match0(
+                name: String,
+                cases: List<S_OverloadFnCase>,
+                args: List<T>,
+                getter: (T) -> RType,
+                matcher: (RType, T) -> T?
+        ): Pair<S_OverloadFnCase, List<T>>
+        {
+            for (case in cases) {
+                val args2 = case.matchArgs(args, matcher)
+                if (args2 != null) {
+                    return Pair(case, args2)
+                }
+            }
+            throw errNoMatch(name, args, getter)
+        }
+
+        private fun <T> errNoMatch(name: String, args: List<T>, getter: (T) -> RType): CtError {
+            val argsStrShort = args.joinToString(",") { getter(it).toStrictString() }
+            val argsStr = args.joinToString { getter(it).toStrictString() }
+            return CtError("expr_call_argtypes:$name:$argsStrShort", "Function $name undefined for arguments ($argsStr)")
+        }
+    }
+}
+
+class S_StdSysFunction(
         name: String,
         val type: RType,
-        val params: List<RType>,
-        val rFn: RSysFunction,
-        val dbFn: DbSysFunction?
+        val cases: List<S_OverloadFnCase>
 ): S_SysFunction(name)
 {
     override fun compileCall(args: List<RExpr>): RExpr {
-        val args2 = matchArgs(name, params, args)
+        val (rFn, args2) = S_OverloadFnCase.match(name, cases, args)
         return RSysCallExpr(type, rFn, args2)
     }
 
     override fun compileCallDb(args: List<DbExpr>): DbExpr {
-        val args2 = matchArgsDb(name, params, args)
-        if (dbFn == null) {
-            throw CtError("expr_call_nosql:$name", "Function '$name' has no SQL equivalent")
-        }
+        val (dbFn, args2) = S_OverloadFnCase.matchDb(name, cases, args)
         return CallDbExpr(type, dbFn, args2)
     }
 }
 
-private class S_SysFunction_Print(name: String, val rFn: RSysFunction): S_SysFunction(name) {
-    override fun compileCall(args: List<RExpr>): RExpr {
-        // Print supports any number of arguments and any types.
-        return RSysCallExpr(RUnitType, rFn, args)
-    }
-
-    override fun compileCallDb(args: List<DbExpr>): DbExpr {
-        TODO()
-    }
-}
-
-private object S_SysFunction_Range: S_SysFunction("range") {
-    override fun compileCall(args: List<RExpr>): RExpr {
-        val allParams = listOf(RIntegerType, RIntegerType, RIntegerType)
-        val n = Math.min(Math.max(args.size, 1), 3)
-        val params = allParams.subList(0, n)
-
-        val args2 = matchArgs(name, params, args)
-
-        val allArgs = if (args2.size == 1) {
-            listOf(RIntegerLiteralExpr(0), args2[0], RIntegerLiteralExpr(1))
-        } else if (args2.size == 2) {
-            listOf(args2[0], args2[1], RIntegerLiteralExpr(1))
-        } else {
-            args2
-        }
-
-        return RSysCallExpr(RRangeType, RSysFunction_Range, allArgs)
-    }
-
-    override fun compileCallDb(args: List<DbExpr>): DbExpr = TODO()
-}
-
-class S_SysMemberFunction(
-        val name: String,
-        val type: RType,
-        val params: List<RType>,
-        val rFn: RSysFunction,
-        val dbFn: DbSysFunction?
-) {
-    fun compileCall(base: RExpr, args: List<RExpr>): RExpr {
-        val args2 = S_SysFunction.matchArgs(name, params, args)
+class S_StdSysMemberFunction(name: String, type: RType, val cases: List<S_OverloadFnCase>)
+    : S_SysMemberFunction(name, type)
+{
+    override fun compileCall(base: RExpr, args: List<RExpr>): RExpr {
+        val (rFn, args2) = S_OverloadFnCase.match("${base.type.toStrictString()}.$name", cases, args)
         val fullArgs = listOf(base) + args2
         return RSysCallExpr(type, rFn, fullArgs)
     }
 
-    fun compileCallDb(base: DbExpr, args: List<DbExpr>): DbExpr {
-        val args2 = S_SysFunction.matchArgsDb(name, params, args)
-
-        if (dbFn == null) {
-            throw CtError("expr_call_nosql:${base.type.toStrictString()}:$name",
-                    "Function '$name' of ${base.type.toStrictString()} has no SQL equivalent")
-        }
-
+    override fun compileCallDb(base: DbExpr, args: List<DbExpr>): DbExpr {
+        val (dbFn, args2) = S_OverloadFnCase.matchDb("${base.type.toStrictString()}.$name", cases, args)
         val fullArgs = listOf(base) + args2
         return CallDbExpr(type, dbFn, fullArgs)
-    }
-}
-
-object S_SysMemberFunctions {
-    private val INT_FNS = makeFnMap(
-            S_SysMemberFunction("str", RTextType, listOf(), RSysFunction_Int_Str, DbSysFunction_Int_Str)
-    )
-
-    private val TEXT_FNS = makeFnMap(
-            S_SysMemberFunction("len", RIntegerType, listOf(), RSysFunction_Text_Len, DbSysFunction_Text_Len)
-    )
-
-    private val BYTEARRAY_FNS = makeFnMap(
-            S_SysMemberFunction("len", RIntegerType, listOf(), RSysFunction_ByteArray_Len, DbSysFunction_ByteArray_Len)
-    )
-
-    private val JSON_FNS = makeFnMap(
-            S_SysMemberFunction("str", RTextType, listOf(), RSysFunction_Json_Str, DbSysFunction_Json_Str)
-    )
-
-    private val LIST_FNS = makeFnMap(
-            S_SysMemberFunction("len", RIntegerType, listOf(), RSysFunction_List_Len, null)
-    )
-
-
-    fun getMemberFunction(type: RType, name: String): S_SysMemberFunction {
-        val map = getTypeMemberFunctions(type)
-        val fn = map[name]
-        if (fn == null) {
-            throw CtError("expr_call_unknown:${type.toStrictString()}:$name",
-                    "Unknown function '$name' for type ${type.toStrictString()}")
-        }
-        return fn
-    }
-
-    private fun getTypeMemberFunctions(type: RType): Map<String, S_SysMemberFunction> {
-        if (type == RIntegerType) {
-            return INT_FNS
-        } else if (type == RTextType) {
-            return TEXT_FNS
-        } else if (type == RByteArrayType) {
-            return BYTEARRAY_FNS
-        } else if (type == RJSONType) {
-            return JSON_FNS
-        } else if (type is RListType) {
-            return LIST_FNS
-        } else {
-            return mapOf()
-        }
-    }
-
-    private fun makeFnMap(vararg fns: S_SysMemberFunction): Map<String, S_SysMemberFunction> {
-        val map = mutableMapOf<String, S_SysMemberFunction>()
-        for (fn in fns) {
-            check(!(fn.name in map))
-            map[fn.name] = fn
-        }
-        return map.toMap()
     }
 }
 

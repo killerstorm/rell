@@ -91,6 +91,15 @@ class CreateTest {
         chkNew("person(3,Alice,555)")
     }
 
+    @Test fun testErr() {
+        executeErr("create foo(x = 123);", "ct_err:unknown_class:foo")
+
+        executeErr("create city(foo = 123);", "ct_err:attr_unknown_name:foo")
+
+        executeErr("create city(name = 'New York', name = 'New York');", "ct_err:attr_dup_name:name")
+        executeErr("create city(name = 'New York', name = 'New Orlean');", "ct_err:attr_dup_name:name")
+    }
+
     private fun execute(code: String) = tst.execOp(code)
     private fun executeErr(code: String, expected: String) = tst.chkOp(code, expected)
 

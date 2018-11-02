@@ -43,9 +43,9 @@ class TypeTest {
                 """json[{"a":5,"b":[1,2,3],"c":{"x":10,"y":20}}]""")
 
         // Bad argument
-        chkQuery("= json();", "ct_err:expr_call_argcnt:json:1:0")
-        chkQuery("= json(1234);", "ct_err:expr_call_argtype:json:0:text:integer")
-        chkQuery("= json(json('{}'));", "ct_err:expr_call_argtype:json:0:text:json")
+        chkQuery("= json();", "ct_err:expr_call_argtypes:json:")
+        chkQuery("= json(1234);", "ct_err:expr_call_argtypes:json:integer")
+        chkQuery("= json(json('{}'));", "ct_err:expr_call_argtypes:json:json")
         chkQuery("= json('');", "rt_err:fn_json_badstr")
         chkQuery("= json('{]');", "rt_err:fn_json_badstr")
     }
@@ -75,16 +75,35 @@ class TypeTest {
 
     @Test fun testRange() {
         chkQuery("{ var x: range; x = range(0,100); return x; }", "range[0,100,1]")
-        chkQuery("{ var x: range; x = 12345; return x; }", "ct_err:stmt_assign_type:x:range:integer")
+        chkQuery("{ var x: range; x = 12345; return x; }", "ct_err:stmt_assign_type:range:integer")
     }
 
     @Test fun testList() {
-        chkQuery("{ var x: list<integer>; x = list(1, 2, 3); return x; }", "list<integer>[int[1],int[2],int[3]]")
-        chkQuery("{ var x: list<integer>; x = list('Hello', 'World'); return x; }",
-                "ct_err:stmt_assign_type:x:list<integer>:list<text>")
-        chkQuery("{ var x: list<list<text>>; x = list(list('Hello', 'World')); return x; }",
+        chkQuery("{ var x: list<integer>; x = [1, 2, 3]; return x; }", "list<integer>[int[1],int[2],int[3]]")
+        chkQuery("{ var x: list<integer>; x = ['Hello', 'World']; return x; }",
+                "ct_err:stmt_assign_type:list<integer>:list<text>")
+        chkQuery("{ var x: list<list<text>>; x = [['Hello', 'World']]; return x; }",
                 "list<list<text>>[list<text>[text[Hello],text[World]]]")
-        chkQuery("{ var x: list<integer>; x = 123; return x; }", "ct_err:stmt_assign_type:x:list<integer>:integer")
+        chkQuery("{ var x: list<integer>; x = 123; return x; }", "ct_err:stmt_assign_type:list<integer>:integer")
+    }
+
+    @Test fun testSet() {
+        chkQuery("{ var x: set<integer>; x = set([1, 2, 3]); return x; }", "set<integer>[int[1],int[2],int[3]]")
+        chkQuery("{ var x: set<integer>; x = [1, 2, 3]; return x; }",
+                "ct_err:stmt_assign_type:set<integer>:list<integer>")
+        chkQuery("{ var x: set<integer>; x = set(['Hello', 'World']); return x; }",
+                "ct_err:stmt_assign_type:set<integer>:set<text>")
+        chkQuery("{ var x: set<list<text>>; x = set([['Hello', 'World']]); return x; }",
+                "set<list<text>>[list<text>[text[Hello],text[World]]]")
+        chkQuery("{ var x: set<integer>; x = 123; return x; }", "ct_err:stmt_assign_type:set<integer>:integer")
+    }
+
+    @Test fun testMap() {
+        chkQuery("{ var x: map<text,integer>; x = ['Bob':123]; return x; }", "map<text,integer>[text[Bob]=int[123]]")
+        chkQuery("{ var x: map<text,integer>; x = [1, 2, 3]; return x; }",
+                "ct_err:stmt_assign_type:map<text,integer>:list<integer>")
+        chkQuery("{ var x: map<text,integer>; x = set(['Hello', 'World']); return x; }",
+                "ct_err:stmt_assign_type:map<text,integer>:set<text>")
     }
 
     @Test fun testClassAttributeTypeErr() {

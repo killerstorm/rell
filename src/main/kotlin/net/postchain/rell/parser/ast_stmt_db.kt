@@ -22,21 +22,21 @@ class S_UpdateStatement(
         val where: S_AtExprWhere,
         val what: List<S_UpdateWhat>): S_Statement()
 {
-    override fun compile(ctx: ExprCompilationContext): RStatement {
+    override fun compile(ctx: CtExprContext): RStatement {
         ctx.entCtx.checkDbUpdateAllowed()
 
         val rFrom = S_AtExpr.compileFrom(ctx, from)
         val cls = rFrom[0]
         val extraClasses = rFrom.subList(1, rFrom.size)
 
-        val dbCtx = DbCompilationContext(null, ctx, rFrom)
+        val dbCtx = CtDbExprContext(null, ctx, rFrom)
         val dbWhere = where.compile(dbCtx)
         val dbWhat = compileWhat(cls.rClass, dbCtx)
 
         return RUpdateStatement(cls, extraClasses, dbWhere, dbWhat)
     }
 
-    private fun compileWhat(cls: RClass, dbCtx: DbCompilationContext): List<RUpdateStatementWhat> {
+    private fun compileWhat(cls: RClass, dbCtx: CtDbExprContext): List<RUpdateStatementWhat> {
         val dbWhat = what.map { it.expr.compileDb(dbCtx) }
         val types = dbWhat.map { it.type }
         val whatPairs = what.map { it.toNameExprPair() }
@@ -57,14 +57,14 @@ class S_UpdateStatement(
 }
 
 class S_DeleteStatement(val from: List<S_AtExprFrom>, val where: S_AtExprWhere): S_Statement() {
-    override fun compile(ctx: ExprCompilationContext): RStatement {
+    override fun compile(ctx: CtExprContext): RStatement {
         ctx.entCtx.checkDbUpdateAllowed()
 
         val rFrom = S_AtExpr.compileFrom(ctx, from)
         val cls = rFrom[0]
         val extraClasses = rFrom.subList(1, rFrom.size)
 
-        val dbCtx = DbCompilationContext(null, ctx, rFrom)
+        val dbCtx = CtDbExprContext(null, ctx, rFrom)
         val dbWhere = where.compile(dbCtx)
 
         return RDeleteStatement(cls, extraClasses, dbWhere)

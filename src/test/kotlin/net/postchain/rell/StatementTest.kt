@@ -25,12 +25,18 @@ class StatementTest {
         chk("var x;", "ct_err:stmt_var_notypeexpr:x")
         chk("var x: integer = 123; return x;", "int[123]")
         chk("var x: integer; x = 123; return x;", "int[123]")
-        chk("var x: integer; x = 'Hello'; return x;", "ct_err:stmt_assign_type:x:integer:text")
-        chk("var x: text; x = 123; return x;", "ct_err:stmt_assign_type:x:text:integer")
+        chk("var x: integer; x = 'Hello'; return x;", "ct_err:stmt_assign_type:integer:text")
+        chk("var x: text; x = 123; return x;", "ct_err:stmt_assign_type:text:integer")
         chk("var x: integer = 'Hello'; return x;", "ct_err:stmt_var_type:x:integer:text")
         chk("var x: text = 123; return x;", "ct_err:stmt_var_type:x:text:integer")
-        chk("var x = 123; x = 'Hello'; return x;", "ct_err:stmt_assign_type:x:integer:text")
+        chk("var x = 123; x = 'Hello'; return x;", "ct_err:stmt_assign_type:integer:text")
         chk("var x = unit(); return 123;", "ct_err:stmt_var_unit:x")
+    }
+
+    @Test fun testVarUninit() {
+        chk("var x: integer; return x;", "rt_err:expr_var_uninit:x")
+        chk("{ var x = 123; } { var y: integer; return y; }", "rt_err:expr_var_uninit:y")
+        chk("for (i in range(2)) { var x: integer; if (i == 0) x = 123; else return x; } return 456;", "rt_err:expr_var_uninit:x")
     }
 
     @Test fun testNameConflict() {
@@ -195,6 +201,22 @@ class StatementTest {
         chk(code, "text[Bob,Alice]")
     }
 
+    @Test fun testForReturn() {
+        tst.classDefs = listOf("class user { name: text; }")
+        tst.execOp("create user('Bob'); create user('Alice'); create user('Trudy');")
+
+        val code = """
+            for (i in range(10)) {
+                print(i);
+                if (i == 3) return 123;
+            }
+            return 456;
+        """.trimIndent()
+
+        chk(code, "int[123]")
+        tst.chkStdout("0", "1", "2", "3")
+    }
+
     @Test fun testForRange() {
         tst.execOp("for (i in range(5)) print(i);")
         tst.chkStdout("0", "1", "2", "3", "4")
@@ -253,6 +275,52 @@ class StatementTest {
         chkAssignmentErr("*=")
         chkAssignmentErr("/=")
         chkAssignmentErr("%=")
+    }
+
+    @Test fun testComplexListAssignment() {
+        val code = """
+            function f(x: list<integer>): list<integer> {
+                for (i in range(5)) x.add(i);
+                return x;
+            }
+        """.trimIndent()
+        chkFull("$code query q() { val p = list<integer>(); f(p)[2] = 777; return ''+p; }", listOf(), "text[[0, 1, 777, 3, 4]]")
+    }
+
+    @Test fun testComplexListAssignment2() {
+        val code = """
+            query q(x: integer, y: integer): text {
+                val p = list<list<integer>>();
+                for (i in range(3)) {
+                    p.add(list<integer>());
+                    for (j in range(3)) {
+                        p[i].add(i * 10 + j);
+                    }
+                }
+                p[x][y] = 777;
+                return ''+p;
+            }
+        """.trimIndent()
+
+        chkFull(code, listOf(RtIntValue(0), RtIntValue(0)), "text[[[777, 1, 2], [10, 11, 12], [20, 21, 22]]]")
+        chkFull(code, listOf(RtIntValue(1), RtIntValue(1)), "text[[[0, 1, 2], [10, 777, 12], [20, 21, 22]]]")
+        chkFull(code, listOf(RtIntValue(2), RtIntValue(2)), "text[[[0, 1, 2], [10, 11, 12], [20, 21, 777]]]")
+    }
+
+    @Test fun testCallChain() {
+        val code = """
+            function f(x: integer): map<integer, text> = [x:'Bob',x*2:'Alice'];
+            query q(i: integer)
+        """.trimIndent()
+
+        chkFull("$code = f(123);", listOf(RtIntValue(0)), "map<integer,text>[int[123]=text[Bob],int[246]=text[Alice]]")
+        chkFull("$code = f(123).values();", listOf(RtIntValue(0)), "list<text>[text[Bob],text[Alice]]")
+        chkFull("$code = f(123).values().get(i);", listOf(RtIntValue(0)), "text[Bob]")
+        chkFull("$code = f(123).values().get(i);", listOf(RtIntValue(1)), "text[Alice]")
+        chkFull("$code = f(123).values().get(i).upperCase();", listOf(RtIntValue(0)), "text[BOB]")
+        chkFull("$code = f(123).values().get(i).upperCase();", listOf(RtIntValue(1)), "text[ALICE]")
+        chkFull("$code = f(123).values().get(i).upperCase().size();", listOf(RtIntValue(0)), "int[3]")
+        chkFull("$code = f(123).values().get(i).upperCase().size();", listOf(RtIntValue(1)), "int[5]")
     }
 
     private fun chkAssignmentErr(op: String) {

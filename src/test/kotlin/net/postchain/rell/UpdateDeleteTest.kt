@@ -151,6 +151,16 @@ class UpdateDeleteTest {
         chk("person(4,James,3,Evergreen Ave,5,100)")
     }
 
+    @Test fun testErr() {
+        executeErr("update foo @ {} ( x = 0 );", "ct_err:unknown_class:foo")
+        executeErr("delete foo @ {};", "ct_err:unknown_class:foo")
+
+        executeErr("update person @ {} ( foo = 123 );", "ct_err:attr_unknown_name:foo")
+
+        executeErr("update person @ {} ( score = 123, score = 456 );", "ct_err:attr_dup_name:score")
+        executeErr("update person @ {} ( score = 123, score = 123 );", "ct_err:attr_dup_name:score")
+    }
+
     @Test fun testCompoundAssignmentInt() {
         createCitiesAndPersons()
 
@@ -289,14 +299,4 @@ class UpdateDeleteTest {
     }
 
     private fun chkAll(vararg expectedArray: String) = tst.chkData(expectedArray.toList())
-
-    // bad class name
-    // operator += and similar
-    // not all attributes specified for create
-    // bad attribute specified for create/update
-    // attribute specified twice for create/update
-    // attribute match name/type ambiguity
-    // implicit attribute match by name/type
-    // rollback
-    // delete referenced record
 }

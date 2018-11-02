@@ -1,7 +1,6 @@
 package net.postchain.rell.model
 
 import net.postchain.rell.runtime.*
-import kotlin.experimental.and
 
 sealed class RCmpOp(val code: String, val checker: (Int) -> Boolean) {
     fun check(cmp: Int): Boolean = checker(cmp)
@@ -78,17 +77,25 @@ sealed class RBinaryOp(val code: String) {
     open fun evaluate(left: RtValue): RtValue? = null
     abstract fun evaluate(left: RtValue, right: RtValue): RtValue
 
-    fun evaluate(env: RtEnv, left: RExpr, right: RExpr): RtValue {
-        val leftValue = left.evaluate(env)
+    fun evaluate(frame: RtCallFrame, left: RExpr, right: RExpr): RtValue {
+        val leftValue = left.evaluate(frame)
         val scValue = evaluate(leftValue)
         if (scValue != null) {
             return scValue
         }
 
-        val rightValue = right.evaluate(env)
+        val rightValue = right.evaluate(frame)
         val resValue = evaluate(leftValue, rightValue)
         return resValue
     }
+}
+
+object RBinaryOp_Eq: RBinaryOp("==") {
+    override fun evaluate(left: RtValue, right: RtValue): RtValue = RtBooleanValue(left == right)
+}
+
+object RBinaryOp_Ne: RBinaryOp("!=") {
+    override fun evaluate(left: RtValue, right: RtValue): RtValue = RtBooleanValue(left != right)
 }
 
 class RBinaryOp_Cmp(val cmpOp: RCmpOp, val cmpType: RCmpType): RBinaryOp(cmpOp.code) {
@@ -138,8 +145,8 @@ object RBinaryOp_Or: RBinaryOp_Logic("or") {
 }
 
 class RBinaryExpr(type: RType, val op: RBinaryOp, val left: RExpr, val right: RExpr): RExpr(type) {
-    override fun evaluate(env: RtEnv): RtValue {
-        val resValue = op.evaluate(env, left, right)
+    override fun evaluate(frame: RtCallFrame): RtValue {
+        val resValue = op.evaluate(frame, left, right)
         return resValue
     }
 }
@@ -195,5 +202,21 @@ object RBinaryOp_Concat_ByteArray: RBinaryOp("+") {
         val rightVal = right.asByteArray()
         val resVal = leftVal + rightVal
         return RtByteArrayValue(resVal)
+    }
+}
+
+object RBinaryOp_In_Collection: RBinaryOp("in") {
+    override fun evaluate(left: RtValue, right: RtValue): RtValue {
+        val c = right.asCollection()
+        val r = c.contains(left)
+        return RtBooleanValue(r)
+    }
+}
+
+object RBinaryOp_In_Map: RBinaryOp("in") {
+    override fun evaluate(left: RtValue, right: RtValue): RtValue {
+        val c = right.asMap()
+        val r = c.containsKey(left)
+        return RtBooleanValue(r)
     }
 }

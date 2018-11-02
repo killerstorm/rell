@@ -1,6 +1,5 @@
 package net.postchain.rell.model
 
-import net.postchain.rell.parser.CtError
 import net.postchain.rell.parser.CtUtils
 import net.postchain.rell.runtime.*
 import org.jooq.DataType
@@ -112,6 +111,7 @@ class RInstanceRefType(val rClass: RClass): RType(rClass.name) {
     override fun fromSql(rs: ResultSet, idx: Int): RtValue = RtObjectValue(this, rs.getLong(idx))
     override fun toStrictString(): String = name
     override fun equals(other: Any?): Boolean = other is RInstanceRefType && other.rClass == rClass
+    override fun hashCode(): Int = rClass.hashCode()
 }
 
 // TODO: make this more elaborate
@@ -122,12 +122,27 @@ class RClosureType(name: String): RType(name) {
     override fun toStrictString(): String = TODO("TODO")
 }
 
-class RListType(val elementType: RType): RType("list<${elementType.toStrictString()}>") {
+sealed class RCollectionType(val elementType: RType, baseName: String): RType("$baseName<${elementType.toStrictString()}>") {
     override fun allowedForAttributes(): Boolean = false
     override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = throw UnsupportedOperationException()
     override fun fromSql(rs: ResultSet, idx: Int): RtValue = throw UnsupportedOperationException()
     override fun toStrictString(): String = name
+}
+
+class RListType(elementType: RType): RCollectionType(elementType, "list") {
     override fun equals(other: Any?): Boolean = other is RListType && elementType == other.elementType
+}
+
+class RSetType(elementType: RType): RCollectionType(elementType, "set") {
+    override fun equals(other: Any?): Boolean = other is RSetType && elementType == other.elementType
+}
+
+class RMapType(val keyType: RType, val valueType: RType): RType("map<${keyType.toStrictString()},${valueType.toStrictString()}>") {
+    override fun allowedForAttributes(): Boolean = false
+    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = throw UnsupportedOperationException()
+    override fun fromSql(rs: ResultSet, idx: Int): RtValue = throw UnsupportedOperationException()
+    override fun toStrictString(): String = name
+    override fun equals(other: Any?): Boolean = other is RMapType && keyType == other.keyType && valueType == other.valueType
 }
 
 class RTupleField(val name: String?, val type: RType) {

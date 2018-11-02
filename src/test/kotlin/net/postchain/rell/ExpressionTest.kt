@@ -74,8 +74,8 @@ class ExpressionTest: BaseRellTest(false) {
         chkEx("{ val s = user @* {}; return s[1]; }", "user[2]")
         chkEx("{ val s = user @* {}; return s[2]; }", "user[3]")
 
-        chkEx("{ val s = user @* {}; return s[-1]; }", "rt_err:expr_lookup_index:3:-1")
-        chkEx("{ val s = user @* {}; return s[3]; }", "rt_err:expr_lookup_index:3:3")
+        chkEx("{ val s = user @* {}; return s[-1]; }", "rt_err:expr_list_lookup_index:3:-1")
+        chkEx("{ val s = user @* {}; return s[3]; }", "rt_err:expr_list_lookup_index:3:3")
     }
 
     @Test fun testFunctionsUnderAt() {
@@ -169,15 +169,47 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testList() {
-        chk("list(1,2,3,4,5)", "list<integer>[int[1],int[2],int[3],int[4],int[5]]")
+        chk("list([1,2,3,4,5])", "list<integer>[int[1],int[2],int[3],int[4],int[5]]")
         chk("list()", "ct_err:expr_list_notype")
         chk("list<integer>()", "list<integer>[]")
-        chk("list<integer>(1,2,3)", "list<integer>[int[1],int[2],int[3]]")
-        chk("list<integer>('Hello')", "ct_err:expr_list_itemtype:integer:text")
-        chk("list<text>(12345)", "ct_err:expr_list_itemtype:text:integer")
-        chk("list('Hello', 'World')", "list<text>[text[Hello],text[World]]")
-        chk("list('Hello', 'World', 12345)", "ct_err:expr_list_itemtype:text:integer")
-        chk("list(unit())", "ct_err:expr_list_unit")
-        chk("list(print('Hello'))", "ct_err:expr_list_unit")
+        chk("list<integer>([1,2,3])", "list<integer>[int[1],int[2],int[3]]")
+        chk("list<integer>(['Hello'])", "ct_err:expr_list_typemiss:integer:text")
+        chk("list<text>([12345])", "ct_err:expr_list_typemiss:text:integer")
+        chk("['Hello', 'World']", "list<text>[text[Hello],text[World]]")
+        chk("['Hello', 'World', 12345]", "ct_err:expr_list_itemtype:text:integer")
+        chk("[unit()]", "ct_err:expr_list_unit")
+        chk("[print('Hello')]", "ct_err:expr_list_unit")
+    }
+
+    @Test fun testUnknownFunction() {
+        chkEx("{ val s = 'Hello'; return s.badfunc(); }", "ct_err:expr_call_unknown:text:badfunc")
+    }
+
+    @Test fun testIn() {
+        chk("123 in [123, 456]", "boolean[true]")
+        chk("456 in [123, 456]", "boolean[true]")
+        chk("789 in [123, 456]", "boolean[false]")
+        chk("123 in list<integer>()", "boolean[false]")
+        chk("123 in list<text>()", "ct_err:binop_operand_type:in:integer:list<text>")
+        chk("'Hello' in list<integer>()", "ct_err:binop_operand_type:in:text:list<integer>")
+
+        chk("123 in set([123, 456])", "boolean[true]")
+        chk("456 in set([123, 456])", "boolean[true]")
+        chk("789 in set([123, 456])", "boolean[false]")
+        chk("123 in set<integer>()", "boolean[false]")
+        chk("123 in set<text>()", "ct_err:binop_operand_type:in:integer:set<text>")
+        chk("'Hello' in set<integer>()", "ct_err:binop_operand_type:in:text:set<integer>")
+
+        chk("123 in [123:'Bob',456:'Alice']", "boolean[true]")
+        chk("456 in [123:'Bob',456:'Alice']", "boolean[true]")
+        chk("789 in [123:'Bob',456:'Alice']", "boolean[false]")
+        chk("123 in map<integer,text>()", "boolean[false]")
+        chk("123 in map<text,integer>()", "ct_err:binop_operand_type:in:integer:map<text,integer>")
+        chk("'Hello' in map<integer,text>()", "ct_err:binop_operand_type:in:text:map<integer,text>")
+    }
+
+    /*@Test*/ fun testNamespace() {
+        chk("integer", "ct_err:unknown_name:integer")
+        chk("integer.parse('123')", "int[123]")
     }
 }
