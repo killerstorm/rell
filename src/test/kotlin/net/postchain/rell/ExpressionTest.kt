@@ -208,8 +208,57 @@ class ExpressionTest: BaseRellTest(false) {
         chk("'Hello' in map<integer,text>()", "ct_err:binop_operand_type:in:text:map<integer,text>")
     }
 
-    /*@Test*/ fun testNamespace() {
+    @Test fun testNamespace() {
         chk("integer", "ct_err:unknown_name:integer")
-        chk("integer.parse('123')", "int[123]")
+        chk("integer('123')", "int[123]")
+        chk("integer.parseHex('1234')", "int[4660]")
+        chk("integer.MAX_VALUE", "int[9223372036854775807]")
+    }
+
+    @Test fun testNamespaceUnderAt() {
+        tst.useSql = true
+        tst.classDefs = listOf("class user { name: text; score: integer; }")
+        tst.execOp("create user('Bob',-5678);")
+
+        chk("user @ { score == integer }", "ct_err:unknown_name:integer")
+        chk("user @ { score == integer('-5678') } ( name )", "text[Bob]")
+        chk("user @ { score == -5678 } ( name, integer('1234') )", "(name:text[Bob],int[1234])")
+        chk("user @ { score == -integer.parseHex('162e') } ( name )", "text[Bob]")
+        chk("user @ { name = 'Bob' } ( name, score + integer.parseHex('1234') )", "(name:text[Bob],int[-1018])")
+
+        chk("user @ { score < integer.MAX_VALUE } ( name )", "text[Bob]")
+        chk("user @* { score < integer.MIN_VALUE } ( name )", "list<text>[]")
+        chk("user @ { integer.MAX_VALUE + score == 9223372036854770129 } ( name )", "text[Bob]")
+        chk("user @ {} ( name, score + integer.MAX_VALUE )", "(name:text[Bob],int[9223372036854770129])")
+    }
+
+    @Test fun testMoreFunctionsUnderAt() {
+        tst.useSql = true
+        tst.strictToString = false
+        tst.classDefs = listOf("class user { id: integer; name1: text; name2: text; v1: integer; v2: integer; }")
+        tst.execOp("""
+            create user(id = 1, name1 = 'Bill', name2 = 'Gates', v1 = 111, v2 = 222);
+            create user(id = 2, name1 = 'Mark', name2 = 'Zuckerberg', v1 = 333, v2 = 444);
+            create user(id = 3, name1 = 'Steve', name2 = 'Wozniak', v1 = 555, v2 = 666);
+        """.trimIndent())
+
+        chkEx("{ return user @* {} (id+0, (name1 + name2).size()); }", "[(1,9), (2,14), (3,12)]")
+        chkEx("{ return user @* {} (id+0, (name1 + name2).upperCase().lowerCase().size()); }", "[(1,9), (2,14), (3,12)]")
+        chkEx("{ return user @* {} (id+0, (v1 * (v2 + 101)).str()); }", "[(1,35853), (2,181485), (3,425685)]")
+        chkEx("{ return user @* {} (id+0, (v1 * (v2 + 101)).str().size()); }", "[(1,5), (2,6), (3,6)]")
+        chkEx("{ return user @* {} (id+0, (name1 + name2).foo); }", "ct_err:expr_attr_member:text:foo")
+        chkEx("{ return user @* {} (id+0, (v1 * (v2 + 101)).foo); }", "ct_err:expr_attr_member:integer:foo")
+        chkEx("{ return user @* {} (id+0, (name1 + name2).foo()); }", "ct_err:expr_call_unknown:text:foo")
+        chkEx("{ return user @* {} (id+0, (v1 * (v2 + 101)).foo()); }", "ct_err:expr_call_unknown:integer:foo")
+
+        val c = "val str1 = 'Hello'; val k1 = 777;"
+        chkEx("{ $c return user @* {} (id+0, (str1 + name2).size()); }", "[(1,10), (2,15), (3,12)]")
+        chkEx("{ $c return user @* {} (id+0, (str1 + name2).upperCase().lowerCase().size()); }", "[(1,10), (2,15), (3,12)]")
+        chkEx("{ $c return user @* {} (id+0, (k1 * (v2 + 101)).str()); }", "[(1,250971), (2,423465), (3,595959)]")
+        chkEx("{ $c return user @* {} (id+0, (k1 * (v2 + 101)).str().size()); }", "[(1,6), (2,6), (3,6)]")
+        chkEx("{ $c return user @* {} (id+0, (str1 + name2).foo); }", "ct_err:expr_attr_member:text:foo")
+        chkEx("{ $c return user @* {} (id+0, (k1 * (v2 + 101)).foo); }", "ct_err:expr_attr_member:integer:foo")
+        chkEx("{ $c return user @* {} (id+0, (str1 + name2).foo()); }", "ct_err:expr_call_unknown:text:foo")
+        chkEx("{ $c return user @* {} (id+0, (k1 * (v2 + 101)).foo()); }", "ct_err:expr_call_unknown:integer:foo")
     }
 }

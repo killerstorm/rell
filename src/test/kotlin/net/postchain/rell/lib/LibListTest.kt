@@ -86,6 +86,13 @@ class LibListTest: BaseRellTest(false) {
         chk("[1, 2, 3].contains('Hello')", "ct_err:expr_call_argtypes:list<integer>.contains:text")
     }
 
+    @Test fun testIn() {
+        chk("1 in [1, 2, 3]", "boolean[true]")
+        chk("3 in [1, 2, 3]", "boolean[true]")
+        chk("5 in [1, 2, 3]", "boolean[false]")
+        chk("'Hello' in [1, 2, 3]", "ct_err:binop_operand_type:in:text:list<integer>")
+    }
+
     @Test fun testContainsAll() {
         chk("list<integer>().containsAll(list<integer>())", "boolean[true]")
         chk("list<integer>().containsAll(set<integer>())", "boolean[true]")
@@ -109,12 +116,23 @@ class LibListTest: BaseRellTest(false) {
     }
 
     @Test fun testSub() {
+        chk("list<integer>().sub(0)", "list<integer>[]")
         chk("list<integer>().sub(0, 0)", "list<integer>[]")
+        chk("list<integer>().sub(-1)", "rt_err:fn_list_sub_args:0:-1:0")
         chk("list<integer>().sub(-1, 0)", "rt_err:fn_list_sub_args:0:-1:0")
         chk("list<integer>().sub(0, 1)", "rt_err:fn_list_sub_args:0:0:1")
-        chk("list<integer>().sub(0)", "ct_err:expr_call_argtypes:list<integer>.sub:integer")
         chk("list<integer>().sub(0, 0, 0)", "ct_err:expr_call_argtypes:list<integer>.sub:integer,integer,integer")
+        chk("list<integer>([1, 2, 3]).sub(-1)", "rt_err:fn_list_sub_args:3:-1:3")
+        chk("list<integer>([1, 2, 3]).sub(0)", "list<integer>[int[1],int[2],int[3]]")
+        chk("list<integer>([1, 2, 3]).sub(1)", "list<integer>[int[2],int[3]]")
+        chk("list<integer>([1, 2, 3]).sub(2)", "list<integer>[int[3]]")
+        chk("list<integer>([1, 2, 3]).sub(3)", "list<integer>[]")
+        chk("list<integer>([1, 2, 3]).sub(4)", "rt_err:fn_list_sub_args:3:4:3")
         chk("list<integer>([1, 2, 3]).sub(0, 1)", "list<integer>[int[1]]")
+        chk("list<integer>([1, 2, 3]).sub(1, 2)", "list<integer>[int[2]]")
+        chk("list<integer>([1, 2, 3]).sub(2, 3)", "list<integer>[int[3]]")
+        chk("list<integer>([1, 2, 3]).sub(0, 2)", "list<integer>[int[1],int[2]]")
+        chk("list<integer>([1, 2, 3]).sub(1, 3)", "list<integer>[int[2],int[3]]")
         chk("list<integer>([1, 2, 3]).sub(0, 3)", "list<integer>[int[1],int[2],int[3]]")
         chk("list<integer>([1, 2, 3]).sub(0, 4)", "rt_err:fn_list_sub_args:3:0:4")
         chk("list<integer>([1, 2, 3]).sub(2, 2)", "list<integer>[]")
@@ -128,58 +146,63 @@ class LibListTest: BaseRellTest(false) {
     }
 
     @Test fun testAdd() {
+        tst.strictToString = false
         val init = "val x = [1, 2, 3];"
-        chkEx("{ $init val r = x.add(4); return r+' '+x; }", "text[true [1, 2, 3, 4]]")
-        chkEx("{ $init val r = x.add(0, 4); return r+' '+x; }", "text[true [4, 1, 2, 3]]")
-        chkEx("{ $init val r = x.add(3, 4); return r+' '+x; }", "text[true [1, 2, 3, 4]]")
-        chkEx("{ $init val r = x.add(2); return r+' '+x; }", "text[true [1, 2, 3, 2]]")
+        chkEx("{ $init val r = x.add(4); return r+' '+x; }", "true [1, 2, 3, 4]")
+        chkEx("{ $init val r = x.add(0, 4); return r+' '+x; }", "true [4, 1, 2, 3]")
+        chkEx("{ $init val r = x.add(3, 4); return r+' '+x; }", "true [1, 2, 3, 4]")
+        chkEx("{ $init val r = x.add(2); return r+' '+x; }", "true [1, 2, 3, 2]")
         chkEx("{ $init val r = x.add(-1, 4); return r+' '+x; }", "rt_err:fn_list_add_index:3:-1")
         chkEx("{ $init val r = x.add(4, 4); return r+' '+x; }", "rt_err:fn_list_add_index:3:4")
         chkEx("{ $init val r = x.add('Hello'); return r+' '+x; }", "ct_err:expr_call_argtypes:list<integer>.add:text")
     }
 
     @Test fun testAddAll() {
+        tst.strictToString = false
         val init = "val x = [1, 2, 3];"
-        chkEx("{ $init val r = x.addAll(list<integer>()); return r+' '+x; }", "text[false [1, 2, 3]]")
-        chkEx("{ $init val r = x.addAll([4, 5, 6]); return r+' '+x; }", "text[true [1, 2, 3, 4, 5, 6]]")
-        chkEx("{ $init val r = x.addAll([1, 2, 3]); return r+' '+x; }", "text[true [1, 2, 3, 1, 2, 3]]")
+        chkEx("{ $init val r = x.addAll(list<integer>()); return r+' '+x; }", "false [1, 2, 3]")
+        chkEx("{ $init val r = x.addAll([4, 5, 6]); return r+' '+x; }", "true [1, 2, 3, 4, 5, 6]")
+        chkEx("{ $init val r = x.addAll([1, 2, 3]); return r+' '+x; }", "true [1, 2, 3, 1, 2, 3]")
         chkEx("{ $init val r = x.addAll(['Hello']); return r+' '+x; }", "ct_err:expr_call_argtypes:list<integer>.addAll:list<text>")
-        chkEx("{ $init val r = x.addAll(0, [4, 5, 6]); return r+' '+x; }", "text[true [4, 5, 6, 1, 2, 3]]")
-        chkEx("{ $init val r = x.addAll(3, [4, 5, 6]); return r+' '+x; }", "text[true [1, 2, 3, 4, 5, 6]]")
+        chkEx("{ $init val r = x.addAll(0, [4, 5, 6]); return r+' '+x; }", "true [4, 5, 6, 1, 2, 3]")
+        chkEx("{ $init val r = x.addAll(3, [4, 5, 6]); return r+' '+x; }", "true [1, 2, 3, 4, 5, 6]")
         chkEx("{ $init val r = x.addAll(-1, [4, 5, 6]); return r+' '+x; }", "rt_err:fn_list_addAll_index:3:-1")
         chkEx("{ $init val r = x.addAll(4, [4, 5, 6]); return r+' '+x; }", "rt_err:fn_list_addAll_index:3:4")
-        chkEx("{ $init val r = x.addAll(set([4, 5, 6])); return r+' '+x; }", "text[true [1, 2, 3, 4, 5, 6]]")
-        chkEx("{ $init val r = x.addAll(0, set([4, 5, 6])); return r+' '+x; }", "text[true [4, 5, 6, 1, 2, 3]]")
+        chkEx("{ $init val r = x.addAll(set([4, 5, 6])); return r+' '+x; }", "true [1, 2, 3, 4, 5, 6]")
+        chkEx("{ $init val r = x.addAll(0, set([4, 5, 6])); return r+' '+x; }", "true [4, 5, 6, 1, 2, 3]")
     }
 
     @Test fun testRemove() {
-        val init = "val x = [1, 2, 3];"
-        chkEx("{ $init val r = x.remove(1); return ''+r+' '+x; }", "text[true [2, 3]]")
-        chkEx("{ $init val r = x.remove(2); return ''+r+' '+x; }", "text[true [1, 3]]")
-        chkEx("{ $init val r = x.remove(3); return ''+r+' '+x; }", "text[true [1, 2]]")
-        chkEx("{ $init val r = x.remove(0); return ''+r+' '+x; }", "text[false [1, 2, 3]]")
+        tst.strictToString = false
+        val init = "val x = [1, 2, 3, 2, 3, 4];"
+        chkEx("{ $init val r = x.remove(1); return ''+r+' '+x; }", "true [2, 3, 2, 3, 4]")
+        chkEx("{ $init val r = x.remove(2); return ''+r+' '+x; }", "true [1, 3, 2, 3, 4]")
+        chkEx("{ $init val r = x.remove(3); return ''+r+' '+x; }", "true [1, 2, 2, 3, 4]")
+        chkEx("{ $init val r = x.remove(0); return ''+r+' '+x; }", "false [1, 2, 3, 2, 3, 4]")
         chkEx("{ $init val r = x.remove('Hello'); return ''+r+' '+x; }", "ct_err:expr_call_argtypes:list<integer>.remove:text")
     }
 
     @Test fun testRemoveAll() {
+        tst.strictToString = false
         val init = "val x = [1, 2, 3, 2, 3, 4];"
-        chkEx("{ $init val r = x.removeAll(set([0])); return ''+r+' '+x; }", "text[false [1, 2, 3, 2, 3, 4]]")
-        chkEx("{ $init val r = x.removeAll(set([1])); return ''+r+' '+x; }", "text[true [2, 3, 2, 3, 4]]")
-        chkEx("{ $init val r = x.removeAll(set([2])); return ''+r+' '+x; }", "text[true [1, 3, 3, 4]]")
-        chkEx("{ $init val r = x.removeAll(set([3])); return ''+r+' '+x; }", "text[true [1, 2, 2, 4]]")
-        chkEx("{ $init val r = x.removeAll([0]); return ''+r+' '+x; }", "text[false [1, 2, 3, 2, 3, 4]]")
-        chkEx("{ $init val r = x.removeAll([2]); return ''+r+' '+x; }", "text[true [1, 3, 3, 4]]")
-        chkEx("{ $init val r = x.removeAll([1, 2, 3]); return ''+r+' '+x; }", "text[true [4]]")
-        chkEx("{ $init val r = x.removeAll([1, 3]); return ''+r+' '+x; }", "text[true [2, 2, 4]]")
+        chkEx("{ $init val r = x.removeAll(set([0])); return ''+r+' '+x; }", "false [1, 2, 3, 2, 3, 4]")
+        chkEx("{ $init val r = x.removeAll(set([1])); return ''+r+' '+x; }", "true [2, 3, 2, 3, 4]")
+        chkEx("{ $init val r = x.removeAll(set([2])); return ''+r+' '+x; }", "true [1, 3, 3, 4]")
+        chkEx("{ $init val r = x.removeAll(set([3])); return ''+r+' '+x; }", "true [1, 2, 2, 4]")
+        chkEx("{ $init val r = x.removeAll([0]); return ''+r+' '+x; }", "false [1, 2, 3, 2, 3, 4]")
+        chkEx("{ $init val r = x.removeAll([2]); return ''+r+' '+x; }", "true [1, 3, 3, 4]")
+        chkEx("{ $init val r = x.removeAll([1, 2, 3]); return ''+r+' '+x; }", "true [4]")
+        chkEx("{ $init val r = x.removeAll([1, 3]); return ''+r+' '+x; }", "true [2, 2, 4]")
         chkEx("{ $init val r = x.removeAll(['Hello']); return ''+r+' '+x; }", "ct_err:expr_call_argtypes:list<integer>.removeAll:list<text>")
         chkEx("{ $init val r = x.removeAll(set(['Hello'])); return ''+r+' '+x; }", "ct_err:expr_call_argtypes:list<integer>.removeAll:set<text>")
     }
 
     @Test fun testRemoveAt() {
+        tst.strictToString = false
         val init = "val x = [1, 2, 3];"
-        chkEx("{ $init val r = x.removeAt(0); return ''+r+' '+x; }", "text[1 [2, 3]]")
-        chkEx("{ $init val r = x.removeAt(1); return ''+r+' '+x; }", "text[2 [1, 3]]")
-        chkEx("{ $init val r = x.removeAt(2); return ''+r+' '+x; }", "text[3 [1, 2]]")
+        chkEx("{ $init val r = x.removeAt(0); return ''+r+' '+x; }", "1 [2, 3]")
+        chkEx("{ $init val r = x.removeAt(1); return ''+r+' '+x; }", "2 [1, 3]")
+        chkEx("{ $init val r = x.removeAt(2); return ''+r+' '+x; }", "3 [1, 2]")
         chkEx("{ $init val r = x.removeAt(-1); return ''+r+' '+x; }", "rt_err:fn_list_removeAt_index:3:-1")
         chkEx("{ $init val r = x.removeAt(3); return ''+r+' '+x; }", "rt_err:fn_list_removeAt_index:3:3")
         chkEx("{ $init val r = x.removeAt('Hello'); return ''+r+' '+x; }", "ct_err:expr_call_argtypes:list<integer>.removeAt:text")
@@ -190,21 +213,23 @@ class LibListTest: BaseRellTest(false) {
     }
 
     @Test fun testSet() {
+        tst.strictToString = false
         val init = "val x = [1, 2, 3];"
-        chkEx("{ $init val r = x._set(0, 5); return ''+r+' '+x; }", "text[1 [5, 2, 3]]")
-        chkEx("{ $init val r = x._set(1, 5); return ''+r+' '+x; }", "text[2 [1, 5, 3]]")
-        chkEx("{ $init val r = x._set(2, 5); return ''+r+' '+x; }", "text[3 [1, 2, 5]]")
+        chkEx("{ $init val r = x._set(0, 5); return ''+r+' '+x; }", "1 [5, 2, 3]")
+        chkEx("{ $init val r = x._set(1, 5); return ''+r+' '+x; }", "2 [1, 5, 3]")
+        chkEx("{ $init val r = x._set(2, 5); return ''+r+' '+x; }", "3 [1, 2, 5]")
         chkEx("{ $init val r = x._set(-1, 5); return ''+r+' '+x; }", "rt_err:fn_list_set_index:3:-1")
         chkEx("{ $init val r = x._set(3, 5); return ''+r+' '+x; }", "rt_err:fn_list_set_index:3:3")
     }
 
     @Test fun testSubscriptSet() {
+        tst.strictToString = false
         val init = "val x = [1, 2, 3];"
-        chkEx("{ $init x[0] = 5; return ''+x; }", "text[[5, 2, 3]]")
-        chkEx("{ $init x[1] = 5; return ''+x; }", "text[[1, 5, 3]]")
-        chkEx("{ $init x[2] = 5; return ''+x; }", "text[[1, 2, 5]]")
-        chkEx("{ $init x[-1] = 5; return ''+x; }", "rt_err:expr_list_lookup_index:3:-1")
-        chkEx("{ $init x[3] = 5; return ''+x; }", "rt_err:expr_list_lookup_index:3:3")
+        chkEx("{ $init x[0] = 5; return x; }", "[5, 2, 3]")
+        chkEx("{ $init x[1] = 5; return x; }", "[1, 5, 3]")
+        chkEx("{ $init x[2] = 5; return x; }", "[1, 2, 5]")
+        chkEx("{ $init x[-1] = 5; return x; }", "rt_err:expr_list_lookup_index:3:-1")
+        chkEx("{ $init x[3] = 5; return x; }", "rt_err:expr_list_lookup_index:3:3")
     }
 
     @Test fun testFor() {

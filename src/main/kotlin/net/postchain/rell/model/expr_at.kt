@@ -3,7 +3,9 @@ package net.postchain.rell.model
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.ROWID_COLUMN
 
-class RAtClass(val rClass: RClass, val alias: String, val index: Int)
+class RAtClass(val rClass: RClass, val alias: String, val index: Int) {
+    val type: RType = RInstanceRefType(rClass)
+}
 
 sealed class RAtExprRowType {
     abstract fun decode(row: Array<RtValue>): RtValue

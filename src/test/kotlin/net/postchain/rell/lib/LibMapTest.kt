@@ -57,6 +57,16 @@ class LibMapTest: BaseRellTest(false) {
         chk("['Bob':123,'Alice':456].contains('Trudy')", "boolean[false]")
     }
 
+    @Test fun testIn() {
+        chk("'Bob' in map<text,integer>()", "boolean[false]")
+        chk("123 in map<text,integer>()", "ct_err:binop_operand_type:in:integer:map<text,integer>")
+        chk("'Bob' in ['Bob':123]", "boolean[true]")
+        chk("'Alice' in ['Bob':123]", "boolean[false]")
+        chk("'Bob' in ['Bob':123,'Alice':456]", "boolean[true]")
+        chk("'Alice' in ['Bob':123,'Alice':456]", "boolean[true]")
+        chk("'Trudy' in ['Bob':123,'Alice':456]", "boolean[false]")
+    }
+
     @Test fun testGet() {
         chk("map<text,integer>().get('Bob')", "rt_err:fn_map_get_novalue:text[Bob]")
         chk("map<text,integer>().get(123)", "ct_err:expr_call_argtypes:map<text,integer>.get:integer")

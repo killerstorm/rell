@@ -347,6 +347,8 @@ object S_BinaryOp_In: S_BinaryOp("in") {
             return Pair(RBinaryOp_In_Collection, right.elementType)
         } else if (right is RMapType) {
             return Pair(RBinaryOp_In_Map, right.keyType)
+        } else if (right is RRangeType) {
+            return Pair(RBinaryOp_In_Range, RIntegerType)
         } else {
             return null
         }

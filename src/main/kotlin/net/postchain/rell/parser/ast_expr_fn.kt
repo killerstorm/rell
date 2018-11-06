@@ -17,7 +17,7 @@ abstract class S_SysFunction(val name: String) {
     }
 }
 
-sealed class S_SysMemberFunction(val name: String, val type: RType) {
+abstract class S_SysMemberFunction(val name: String, val type: RType) {
     abstract fun compileCall(base: RExpr, args: List<RExpr>): RExpr
     abstract fun compileCallDb(base: DbExpr, args: List<DbExpr>): DbExpr
 }

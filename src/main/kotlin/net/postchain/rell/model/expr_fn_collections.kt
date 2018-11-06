@@ -65,6 +65,10 @@ object RSysFunction_List_IndexOf: RSysFunction_List() {
 }
 
 object RSysFunction_List_Sub: RSysFunction_List() {
+    override fun call(type: RType, obj: MutableList<RtValue>, a: RtValue): RtValue {
+        return call(type, obj, a, RtIntValue(obj.size.toLong()))
+    }
+
     override fun call(type: RType, obj: MutableList<RtValue>, a: RtValue, b: RtValue): RtValue {
         val start = a.asInteger()
         val end = b.asInteger()

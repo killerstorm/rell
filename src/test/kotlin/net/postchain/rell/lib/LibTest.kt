@@ -56,37 +56,31 @@ class LibTest: BaseRellTest(false) {
         tst.chkLog("")
     }
 
-    @Test fun testRange() {
-        chk("range(10)", "range[0,10,1]")
-        chk("range(5,10)", "range[5,10,1]")
-        chk("range(5,10,3)", "range[5,10,3]")
-        chk("range(0)", "range[0,0,1]")
-        chk("range(-1)", "rt_err:fn_range_args:0:-1:1")
-        chk("range(10,10)", "range[10,10,1]")
-        chk("range(11,10)", "rt_err:fn_range_args:11:10:1")
-        chk("range(1,0)", "rt_err:fn_range_args:1:0:1")
-
-        chk("range(0,10,0)", "rt_err:fn_range_args:0:10:0")
-        chk("range(0,10,-1)", "rt_err:fn_range_args:0:10:-1")
-        chk("range(0,0,-1)", "range[0,0,-1]")
-        chk("range(1,0,-1)", "range[1,0,-1]")
-        chk("range(10,0,-1)", "range[10,0,-1]")
-
-        chk("range()", "ct_err:expr_call_argcnt:range:1:0")
-        chk("range(1,2,3,4)", "ct_err:expr_call_argcnt:range:3:4")
-    }
-
     @Test fun testJsonStr() {
         chkEx("""{ val s = json('{  "x":5, "y" : 10  }'); return s.str(); }""", """text[{"x":5,"y":10}]""")
     }
 
-    /*@Test*/ fun testByteArrayParse() {
-        chk("byte_array.parse('0123abcd')", "byte_array[0123abcd]")
-        chk("byte_array.parse('0123ABCD')", "byte_array[0123abcd]")
-        chk("byte_array.parse('')", "byte_array[]")
-        chk("byte_array.parse('0')", "*error*")
-        chk("byte_array.parse('0g')", "*error*")
-        chk("byte_array.parse(123)", "*error*")
+    @Test fun testByteArrayConstructorText() {
+        chk("byte_array('0123abcd')", "byte_array[0123abcd]")
+        chk("byte_array('0123ABCD')", "byte_array[0123abcd]")
+        chk("byte_array('')", "byte_array[]")
+        chk("byte_array('0')", "rt_err:fn_bytearray_new_text:0")
+        chk("byte_array('0g')", "rt_err:fn_bytearray_new_text:0g")
+        chk("byte_array(123)", "ct_err:expr_call_argtypes:byte_array:integer")
+    }
+
+    @Test fun testByteArrayConstructorList() {
+        chk("byte_array(list<integer>())", "byte_array[]")
+        chk("byte_array([123])", "byte_array[7b]")
+        chk("byte_array([18, 52, 171, 205])", "byte_array[1234abcd]")
+        chk("byte_array([0, 255])", "byte_array[00ff]")
+
+        chk("byte_array()", "ct_err:expr_call_argtypes:byte_array:")
+        chk("byte_array(list<text>())", "ct_err:expr_call_argtypes:byte_array:list<text>")
+        chk("byte_array(['Hello'])", "ct_err:expr_call_argtypes:byte_array:list<text>")
+        chk("byte_array(set<integer>())", "ct_err:expr_call_argtypes:byte_array:set<integer>")
+        chk("byte_array([-1])", "rt_err:fn_bytearray_new_list:-1")
+        chk("byte_array([256])", "rt_err:fn_bytearray_new_list:256")
     }
 
     @Test fun testByteArrayEmpty() {
@@ -135,5 +129,10 @@ class LibTest: BaseRellTest(false) {
         chk("x'0123ABCD'.sub(0, 4)", "byte_array[0123abcd]")
         chk("x'0123ABCD'.sub(1, 0)", "rt_err:fn_bytearray_sub_range:4:1:0")
         chk("x'0123ABCD'.sub(1, 5)", "rt_err:fn_bytearray_sub_range:4:1:5")
+    }
+
+    @Test fun testByteArrayToList() {
+        chk("x''.toList()", "list<integer>[]")
+        chk("x'1234abcd'.toList()", "list<integer>[int[18],int[52],int[171],int[205]]")
     }
 }

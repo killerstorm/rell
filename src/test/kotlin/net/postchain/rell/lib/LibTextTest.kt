@@ -181,4 +181,21 @@ class LibTextTest: BaseRellTest(false) {
         chk("'Hello'.chatAt(-1)", "rt_err:fn_text_charAt_index:5:-1")
         chk("'Hello World'.chatAt(5)", "int[32]")
     }
+
+    @Test fun testFormat() {
+        chk("'%s'.format(123)", "text[123]")
+        chk("'%s'.format('Hello')", "text[Hello]")
+
+        chk("'%d'.format(123)", "text[123]")
+        chk("'%5d'.format(123)", "text[  123]")
+        chk("'%-5d'.format(123)", "text[123  ]")
+        chk("'%05d'.format(123)", "text[00123]")
+        chk("'%5d'.format(1234567)", "text[1234567]")
+        chk("'%,d'.format(1234567)", "text[1,234,567]")
+        chk("'%+d'.format(123)", "text[+123]")
+        chk("'%+d'.format(-123)", "text[-123]")
+
+        chk("'%s'.format()", "text[%s]")
+        chk("'%d'.format('Hello')", "text[%d]")
+    }
 }

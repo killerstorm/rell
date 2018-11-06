@@ -38,24 +38,15 @@ class RVarExpr(type: RType, val ptr: RVarPtr, val name: String): RDestinationExp
     }
 }
 
-class RStringLiteralExpr(literal: String): RExpr(RTextType) {
-    val value = RtTextValue(literal)
+class RConstantExpr(val value: RtValue): RExpr(value.type()) {
     override fun evaluate(frame: RtCallFrame): RtValue = value
-}
 
-class RByteArrayLiteralExpr(literal: ByteArray): RExpr(RByteArrayType) {
-    val value = RtByteArrayValue(literal)
-    override fun evaluate(frame: RtCallFrame): RtValue = value
-}
-
-class RIntegerLiteralExpr(literal: Long): RExpr(RIntegerType) {
-    val value = RtIntValue(literal)
-    override fun evaluate(frame: RtCallFrame): RtValue = value
-}
-
-class RBooleanLiteralExpr(literal: Boolean): RExpr(RBooleanType) {
-    val value = RtBooleanValue(literal)
-    override fun evaluate(frame: RtCallFrame): RtValue = value
+    companion object {
+        fun makeBool(v: Boolean) = RConstantExpr(RtBooleanValue(v))
+        fun makeInt(v: Long) = RConstantExpr(RtIntValue(v))
+        fun makeText(v: String) = RConstantExpr(RtTextValue(v))
+        fun makeBytes(v: ByteArray) = RConstantExpr(RtByteArrayValue(v))
+    }
 }
 
 class RTupleFieldExpr(type: RType, val baseExpr: RExpr, val fieldIndex: Int): RExpr(type) {

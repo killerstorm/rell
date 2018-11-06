@@ -1,7 +1,9 @@
 package net.postchain.rell.model
 
+import net.postchain.rell.hexStringToByteArray
 import net.postchain.rell.runtime.*
 import java.lang.IllegalArgumentException
+import java.lang.NumberFormatException
 import java.util.*
 
 sealed class RCallExpr(type: RType, val args: List<RExpr>): RExpr(type) {
@@ -61,11 +63,13 @@ abstract class RSysFunction_Generic<T>: RSysFunction() {
     open fun call(type: RType, obj: T, a: RtValue): RtValue = call(obj, a)
     open fun call(type: RType, obj: T, a: RtValue, b: RtValue): RtValue = call(obj, a, b)
 
-    open fun call(obj: T): RtValue = throw errArgCnt(0)
-    open fun call(obj: T, a: RtValue): RtValue = throw errArgCnt(1)
-    open fun call(obj: T, a: RtValue, b: RtValue): RtValue = throw errArgCnt(2)
+    open fun call(obj: T): RtValue = call(obj, listOf())
+    open fun call(obj: T, a: RtValue): RtValue = call(obj, listOf(a))
+    open fun call(obj: T, a: RtValue, b: RtValue): RtValue = call(obj, listOf(a, b))
 
-    override fun call(ctx: RtGlobalContext, args: List<RtValue>): RtValue {
+    open fun call(obj: T, args: List<RtValue>): RtValue = throw errArgCnt(args.size)
+
+    final override fun call(ctx: RtGlobalContext, args: List<RtValue>): RtValue {
         check(args.size >= 1)
 
         val objVal = args[0]
@@ -132,19 +136,16 @@ object RSysFunction_Json: RSysFunction_1() {
     }
 }
 
-object RSysFunction_Range: RSysFunction() {
-    override fun call(ctx: RtGlobalContext, args: List<RtValue>): RtValue {
-        check(args.size == 3)
+object RSysFunction_Range: RSysFunction_Common() {
+    override fun call(a: RtValue): RtValue = call0(0, a.asInteger(), 1)
+    override fun call(a: RtValue, b: RtValue): RtValue = call0(a.asInteger(), b.asInteger(), 1)
+    override fun call(a: RtValue, b: RtValue, c: RtValue): RtValue = call0(a.asInteger(), b.asInteger(), c.asInteger())
 
-        val start = args[0].asInteger()
-        val end = args[1].asInteger()
-        val step = args[2].asInteger()
-
+    private fun call0(start: Long, end: Long, step: Long): RtValue {
         if (step == 0L || (step > 0 && start > end) || (step < 0 && start < end)) {
             throw RtError("fn_range_args:$start:$end:$step",
                     "Invalid arguments for range: start = $start, end = $end, step = $step")
         }
-
         return RtRangeValue(start, end, step)
     }
 }
@@ -167,8 +168,46 @@ object RSysFunction_Int_Str: RSysFunction_Common() {
     }
 }
 
+object RSysFunction_Int_Hex: RSysFunction_Common() {
+    override fun call(a: RtValue): RtValue = RtTextValue(java.lang.Long.toHexString(a.asInteger()))
+}
+
 object RSysFunction_Int_Signum: RSysFunction_Common() {
     override fun call(a: RtValue): RtValue = RtIntValue(java.lang.Long.signum(a.asInteger()).toLong())
+}
+
+object RSysFunction_Int_Parse: RSysFunction_Common() {
+    override fun call(a: RtValue): RtValue = parse(a, 10)
+
+    override fun call(a: RtValue, b: RtValue): RtValue {
+        val r = b.asInteger()
+        if (r < Character.MIN_RADIX || r > Character.MAX_RADIX) {
+            throw RtError("fn_int_parse_radix:$r", "Invalid radix: $r")
+        }
+        return parse(a, r.toInt())
+    }
+
+    private fun parse(a: RtValue, radix: Int): RtValue {
+        val s = a.asString()
+        val r = try {
+            java.lang.Long.parseLong(s, radix)
+        } catch (e: NumberFormatException) {
+            throw RtError("fn_int_parse:$s", "Invalid number: '$s'")
+        }
+        return RtIntValue(r)
+    }
+}
+
+object RSysFunction_Int_ParseHex: RSysFunction_Common() {
+    override fun call(a: RtValue): RtValue {
+        val s = a.asString()
+        val r = try {
+            java.lang.Long.parseUnsignedLong(s, 16)
+        } catch (e: NumberFormatException) {
+            throw RtError("fn_int_parseHex:$s", "Invalid hex number: '$s'")
+        }
+        return RtIntValue(r)
+    }
 }
 
 sealed class RSysFunction_ByteArray: RSysFunction_Generic<ByteArray>() {
@@ -208,6 +247,40 @@ object RSysFunction_ByteArray_Sub: RSysFunction_ByteArray() {
 
 object RSysFunction_ByteArray_Decode: RSysFunction_ByteArray() {
     override fun call(obj: ByteArray): RtValue = RtTextValue(String(obj))
+}
+
+object RSysFunction_ByteArray_ToList: RSysFunction_ByteArray() {
+    private val type = RListType(RIntegerType)
+
+    override fun call(obj: ByteArray): RtValue {
+        val list = MutableList<RtValue>(obj.size) { RtIntValue(obj[it].toLong() and 0xFF) }
+        return RtListValue(type, list)
+    }
+}
+
+object RSysFunction_ByteArray_New_Text: RSysFunction_Common() {
+    override fun call(a: RtValue): RtValue {
+        val s = a.asString()
+        val r = try {
+            s.hexStringToByteArray()
+        } catch (e: IllegalArgumentException) {
+            throw RtError("fn_bytearray_new_text:$s", "Invalid byte_array value: '$s'")
+        }
+        return RtByteArrayValue(r)
+    }
+}
+
+object RSysFunction_ByteArray_New_List: RSysFunction_Common() {
+    override fun call(a: RtValue): RtValue {
+        val s = a.asList()
+        val r = ByteArray(s.size)
+        for (i in s.indices) {
+            val b = s[i].asInteger()
+            if (b < 0 || b > 255) throw RtError("fn_bytearray_new_list:$b", "Byte value out of range: $b")
+            r[i] = b.toByte()
+        }
+        return RtByteArrayValue(r)
+    }
 }
 
 object RSysFunction_Json_Str: RSysFunction_1() {

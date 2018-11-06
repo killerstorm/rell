@@ -1,8 +1,12 @@
 package net.postchain.rell.parser
 
 import net.postchain.rell.model.*
+import net.postchain.rell.runtime.RtBooleanValue
+import net.postchain.rell.runtime.RtByteArrayValue
+import net.postchain.rell.runtime.RtIntValue
+import net.postchain.rell.runtime.RtTextValue
 
-internal class DbClassAttr(val cls: RAtClass, val name: String, val type: RType)
+internal class DbClassAttr(val cls: RAtClass, val attr: RAttrib)
 
 internal class CtDbExprContext(
         val parent: CtDbExprContext?,
@@ -34,7 +38,7 @@ internal class CtDbExprContext(
         for (cls in classes) {
             for (attr in cls.rClass.attributes.values) {
                 if (matcher(attr)) {
-                    attrs.add(DbClassAttr(cls, attr.name, attr.type))
+                    attrs.add(DbClassAttr(cls, attr))
                 }
             }
         }
@@ -70,31 +74,30 @@ abstract class S_Expression {
         throw CtError("expr_bad_dst", "Invalid assignment destination")
     }
 
-    internal open fun discoverFullPathExpr(path: MutableList<String>): List<String>? = null
-    internal open fun discoverTailPathExpr(path: MutableList<String>): Pair<S_Expression, List<String>> {
-        return Pair(this, path.reversed())
+    internal open fun discoverPathExpr(tailPath: List<String>): Pair<S_Expression?, List<String>> {
+        return Pair(this, tailPath)
     }
 
     internal fun delegateCompileDb(ctx: CtDbExprContext): DbExpr = InterpretedDbExpr(compile(ctx.exprCtx))
 }
 
 class S_StringLiteralExpr(val literal: String): S_Expression() {
-    override fun compile(ctx: CtExprContext): RExpr = RStringLiteralExpr(literal)
+    override fun compile(ctx: CtExprContext): RExpr = RConstantExpr.makeText(literal)
     override fun compileDb(ctx: CtDbExprContext): DbExpr = delegateCompileDb(ctx)
 }
 
 class S_ByteALiteralExpr(val bytes: ByteArray): S_Expression() {
-    override fun compile(ctx: CtExprContext): RExpr = RByteArrayLiteralExpr(bytes)
+    override fun compile(ctx: CtExprContext): RExpr = RConstantExpr.makeBytes(bytes)
     override fun compileDb(ctx: CtDbExprContext): DbExpr = delegateCompileDb(ctx)
 }
 
 class S_IntLiteralExpr(val value: Long): S_Expression() {
-    override fun compile(ctx: CtExprContext): RExpr = RIntegerLiteralExpr(value)
+    override fun compile(ctx: CtExprContext): RExpr = RConstantExpr.makeInt(value)
     override fun compileDb(ctx: CtDbExprContext): DbExpr = delegateCompileDb(ctx)
 }
 
 class S_BooleanLiteralExpr(val value: Boolean): S_Expression() {
-    override fun compile(ctx: CtExprContext): RExpr = RBooleanLiteralExpr(value)
+    override fun compile(ctx: CtExprContext): RExpr = RConstantExpr.makeBool(value)
     override fun compileDb(ctx: CtDbExprContext): DbExpr = delegateCompileDb(ctx)
 }
 

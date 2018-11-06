@@ -6,8 +6,6 @@ import com.github.h0tk3y.betterParse.combinators.*
 import com.github.h0tk3y.betterParse.grammar.parseToEnd
 import com.github.h0tk3y.betterParse.grammar.parser
 import net.postchain.rell.hexStringToByteArray
-import net.postchain.rell.parser.S_Grammar.getValue
-import net.postchain.rell.parser.S_Grammar.provideDelegate
 import java.lang.IllegalArgumentException
 
 object S_Grammar : Grammar<S_ModuleDefinition>() {
@@ -233,13 +231,13 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
             or mapExpr
     )
 
-    private val baseExprTailAttribute by ( -DOT * id ) map { name -> BaseExprTailAttribute(name) }
+    private val baseExprTailMember by ( -DOT * id ) map { name -> BaseExprTailMember(name) }
     private val baseExprTailLookup by ( -LBRACK * _expression * -RBRACK ) map { expr -> BaseExprTailLookup(expr) }
     private val baseExprTailCall by ( -LPAR * separatedTerms(_expression, COMMA, true)  * -RPAR ) map { args ->
         BaseExprTailCall(args)
     }
 
-    private val baseExprTailNoCall by ( baseExprTailAttribute or baseExprTailLookup )
+    private val baseExprTailNoCall by ( baseExprTailMember or baseExprTailLookup )
     private val baseExprTail by ( baseExprTailNoCall or baseExprTailCall )
 
     private val baseExpr: Parser<S_Expression> by ( baseExprHead * zeroOrMore(baseExprTail) ) map {
@@ -457,8 +455,8 @@ private sealed class BaseExprTail {
     abstract fun toExpr(base: S_Expression): S_Expression
 }
 
-private class BaseExprTailAttribute(val name: String): BaseExprTail() {
-    override fun toExpr(base: S_Expression): S_Expression = S_AttributeExpr(base, name)
+private class BaseExprTailMember(val name: String): BaseExprTail() {
+    override fun toExpr(base: S_Expression): S_Expression = S_MemberExpr(base, name)
 }
 
 private class BaseExprTailLookup(val expr: S_Expression): BaseExprTail() {

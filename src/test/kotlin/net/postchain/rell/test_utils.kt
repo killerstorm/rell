@@ -127,7 +127,7 @@ object SqlTestUtils {
 
     private fun dropFunctions(sqlExec: SqlExecutor) {
         val functions = getExistingFunctions(sqlExec)
-        val sql = functions.joinToString("\n") { "DROP FUNCTION \"$it\";" }
+        val sql = functions.joinToString("\n") { "DROP FUNCTION \"$it\"();" }
         sqlExec.execute(sql)
     }
 

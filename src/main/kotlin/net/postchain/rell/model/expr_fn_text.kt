@@ -1,6 +1,7 @@
 package net.postchain.rell.model
 
 import net.postchain.rell.runtime.*
+import java.util.*
 import java.util.regex.Pattern
 
 sealed class RSysFunction_Text: RSysFunction_Generic<String>() {
@@ -119,5 +120,17 @@ object RSysFunction_Text_Sub: RSysFunction_Text() {
                     "Invalid substring range: start = $start, end = $end (length $len)")
         }
         return RtTextValue(s.substring(start.toInt(), end.toInt()))
+    }
+}
+
+object RSysFunction_Text_Format: RSysFunction_Text() {
+    override fun call(obj: String, args: List<RtValue>): RtValue {
+        val anys = args.map { it.asFormatArg() }.toTypedArray()
+        val r = try {
+            obj.format(*anys)
+        } catch (e: IllegalFormatException) {
+            obj
+        }
+        return RtTextValue(r)
     }
 }

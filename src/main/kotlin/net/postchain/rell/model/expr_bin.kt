@@ -220,3 +220,12 @@ object RBinaryOp_In_Map: RBinaryOp("in") {
         return RtBooleanValue(r)
     }
 }
+
+object RBinaryOp_In_Range: RBinaryOp("in") {
+    override fun evaluate(left: RtValue, right: RtValue): RtValue {
+        val x = left.asInteger()
+        val c = right.asRange()
+        val r = c.contains(x)
+        return RtBooleanValue(r)
+    }
+}

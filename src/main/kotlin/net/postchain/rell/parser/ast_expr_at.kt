@@ -14,7 +14,7 @@ class S_AtExprWhatDefault: S_AtExprWhat() {
     override fun compile(ctx: CtDbExprContext): S_AtWhat {
         val exprs = ctx.classes.map {
             val name = if (ctx.classes.size == 1) null else it.alias
-            val expr = PathDbExpr(RInstanceRefType(it.rClass), it, listOf(), null)
+            val expr = PathDbExpr(it.type, it, listOf(), null)
             Pair(name, expr)
         }
         return S_AtWhat(exprs, listOf())
@@ -107,7 +107,7 @@ class S_AtExprWhere(val exprs: List<S_Expression>) {
         }
 
         val attr = attrs[0]
-        val attrExpr = PathDbExpr(attr.type, attr.cls, listOf(), attr.name)
+        val attrExpr = PathDbExpr(attr.attr.type, attr.cls, listOf(), attr.attr.name)
         return BinaryDbExpr(RBooleanType, DbBinaryOp_Eq, attrExpr, dbExpr)
     }
 

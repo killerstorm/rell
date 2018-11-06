@@ -103,9 +103,9 @@ fun genExpr(expr: RExpr): String {
         is RVarExpr -> TODO() //"_" + expr.name
         is RAtExpr -> TODO()
         is RBinaryExpr -> TODO()
-        is RStringLiteralExpr -> "'${expr.value}'" // TODO: esscape
-        is RIntegerLiteralExpr -> expr.value.toString()
-        is RByteArrayLiteralExpr -> TODO()//"E'\\\\x${expr.literal.toHex()}'"
+//        is RStringLiteralExpr -> "'${expr.value}'" // TODO: esscape
+//        is RIntegerLiteralExpr -> expr.value.toString()
+//        is RByteArrayLiteralExpr -> TODO()//"E'\\\\x${expr.literal.toHex()}'"
         is RCallExpr -> TODO() // (
                 //if (expr.fname == "json")
                 //    genJSON(expr)

@@ -22,6 +22,7 @@ sealed class RtValue {
     open fun asTuple(): List<RtValue> = throw errType()
     open fun asRange(): RtRangeValue = throw errType()
     open fun asObjectId(): Long = throw errType()
+    open fun asFormatArg(): Any = toString()
 
     abstract fun toStrictString(showTupleFieldNames: Boolean = true): String
 
@@ -37,6 +38,7 @@ object RtUnitValue: RtValue() {
 class RtBooleanValue(val value: Boolean): RtValue() {
     override fun type(): RType = RBooleanType
     override fun asBoolean(): Boolean = value
+    override fun asFormatArg(): Any = value
     override fun toStrictString(showTupleFieldNames: Boolean): String = "boolean[$value]"
     override fun toString(): String = "" + value
     override fun equals(other: Any?): Boolean = other is RtBooleanValue && value == other.value
@@ -46,6 +48,7 @@ class RtBooleanValue(val value: Boolean): RtValue() {
 class RtIntValue(val value: Long): RtValue() {
     override fun type(): RType = RIntegerType
     override fun asInteger(): Long = value
+    override fun asFormatArg(): Any = value
     override fun toStrictString(showTupleFieldNames: Boolean): String = "int[$value]"
     override fun toString(): String = "" + value
     override fun equals(other: Any?): Boolean = other is RtIntValue && value == other.value
@@ -55,6 +58,7 @@ class RtIntValue(val value: Long): RtValue() {
 class RtTextValue(val value: String): RtValue() {
     override fun type(): RType = RTextType
     override fun asString(): String = value
+    override fun asFormatArg(): Any = value
     override fun toStrictString(showTupleFieldNames: Boolean): String = "text[$value]"
     override fun toString(): String = value
     override fun equals(other: Any?): Boolean = other is RtTextValue && value == other.value
@@ -64,6 +68,7 @@ class RtTextValue(val value: String): RtValue() {
 class RtByteArrayValue(val value: ByteArray): RtValue() {
     override fun type(): RType = RByteArrayType
     override fun asByteArray(): ByteArray = value
+    override fun asFormatArg(): Any = toString()
     override fun toStrictString(showTupleFieldNames: Boolean): String = "byte_array[${value.toHex()}]"
     override fun toString(): String = "0x" + value.toHex()
     override fun equals(other: Any?): Boolean = other is RtByteArrayValue && Arrays.equals(value, other.value)
@@ -73,6 +78,7 @@ class RtByteArrayValue(val value: ByteArray): RtValue() {
 class RtObjectValue(val type: RInstanceRefType, val rowid: Long): RtValue() {
     override fun type(): RType = type
     override fun asObjectId(): Long = rowid
+    override fun asFormatArg(): Any = toString()
     override fun toStrictString(showTupleFieldNames: Boolean): String = "${type.name}[$rowid]"
     override fun toString(): String = toStrictString()
     override fun equals(other: Any?): Boolean = other is RtObjectValue && type == other.type && rowid == other.rowid
@@ -81,6 +87,7 @@ class RtObjectValue(val type: RInstanceRefType, val rowid: Long): RtValue() {
 
 class RtNullValue(val type: RType): RtValue() {
     override fun type(): RType = type
+    override fun asFormatArg(): Any = toString()
     override fun toStrictString(showTupleFieldNames: Boolean): String = "null[${type.toStrictString()}]"
     override fun toString(): String = "null"
     override fun equals(other: Any?): Boolean = other is RtNullValue
@@ -91,6 +98,7 @@ class RtListValue(private val type: RType, private val elements: MutableList<RtV
     override fun type(): RType = type
     override fun asCollection(): MutableCollection<RtValue> = elements
     override fun asList(): MutableList<RtValue> = elements
+    override fun asFormatArg(): Any = elements
 
     override fun toStrictString(showTupleFieldNames: Boolean): String =
             "${type.toStrictString()}[${elements.joinToString(",") { it.toStrictString(false) }}]"
@@ -104,6 +112,7 @@ class RtSetValue(private val type: RType, private val elements: MutableSet<RtVal
     override fun type(): RType = type
     override fun asCollection(): MutableCollection<RtValue> = elements
     override fun asSet(): MutableSet<RtValue> = elements
+    override fun asFormatArg(): Any = elements
 
     override fun toStrictString(showTupleFieldNames: Boolean): String =
             "${type.toStrictString()}[${elements.joinToString(",") { it.toStrictString(false) }}]"
@@ -116,6 +125,7 @@ class RtSetValue(private val type: RType, private val elements: MutableSet<RtVal
 class RtMapValue(private val type: RType, private val map: MutableMap<RtValue, RtValue>): RtValue() {
     override fun type(): RType = type
     override fun asMap(): MutableMap<RtValue, RtValue> = map
+    override fun asFormatArg(): Any = map
 
     override fun toStrictString(showTupleFieldNames: Boolean): String {
         val entries = map.entries.joinToString(",") { (key, value) ->
@@ -132,6 +142,7 @@ class RtMapValue(private val type: RType, private val map: MutableMap<RtValue, R
 class RtTupleValue(val type: RTupleType, val elements: List<RtValue>): RtValue() {
     override fun type(): RType = type
     override fun asTuple(): List<RtValue> = elements
+    override fun asFormatArg(): Any = toString()
     override fun equals(other: Any?): Boolean = other is RtTupleValue && elements == other.elements
     override fun hashCode(): Int = elements.hashCode()
 
@@ -159,6 +170,7 @@ class RtTupleValue(val type: RTupleType, val elements: List<RtValue>): RtValue()
 class RtJsonValue private constructor(private val str: String): RtValue() {
     override fun type(): RType = RJSONType
     override fun asJsonString(): String = str
+    override fun asFormatArg(): Any = str
     override fun toString(): String = str
     override fun toStrictString(showTupleFieldNames: Boolean): String = "json[$str]"
     override fun equals(other: Any?): Boolean = other is RtJsonValue && str == other.str
@@ -182,6 +194,7 @@ class RtJsonValue private constructor(private val str: String): RtValue() {
 class RtRangeValue(val start: Long, val end: Long, val step: Long): RtValue(), Iterable<RtValue> {
     override fun type(): RType = RRangeType
     override fun asRange(): RtRangeValue = this
+    override fun asFormatArg(): Any = toString()
     override fun toString(): String = "range($start,$end,$step)"
     override fun toStrictString(showTupleFieldNames: Boolean): String = "range[$start,$end,$step]"
 
@@ -190,7 +203,25 @@ class RtRangeValue(val start: Long, val end: Long, val step: Long): RtValue(), I
     override fun equals(other: Any?): Boolean = other is RtRangeValue && start == other.start && end == other.end && step == other.step
     override fun hashCode(): Int = Objects.hash(start, end, step)
 
+    fun contains(v: Long): Boolean {
+        if (step > 0) {
+            if (v < start || v >= end) return false
+        } else {
+            check(step < 0)
+            if (v > start || v <= end) return false
+        }
+        val m1 = valueMod(start, step)
+        val m2 = valueMod(v, step)
+        return m1 == m2
+    }
+
     companion object {
+        private fun valueMod(v: Long, m: Long): Long {
+            val r = v % m
+            if (r >= 0) return r
+            return if (m > 0) r + m else r - m
+        }
+
         private class RangeIterator(private val range: RtRangeValue): Iterator<RtValue> {
             private var current = range.start
 
