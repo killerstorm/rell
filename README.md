@@ -1,4 +1,6 @@
-##Running Unit Tests
+See [Language Guide](Language.md).
+
+## Running Unit Tests
 
 First, set up a PostgreSQL database and user:
 
@@ -8,10 +10,22 @@ CREATE USER "relltestuser" WITH PASSWORD '1234';
 GRANT ALL ON DATABASE "relltestdb" TO "relltestuser";
 ```
 
-Then, create a file `tests.properties` in the project root directory, and put the database connection URL there:
+By default, database connection configuration for tests is taken from file `config.properties` in the `postchain2` artifact. At the moment of writing:
 
 ```
-jdbcUrl=jdbc:postgresql://localhost/relltestdb?user=relltestuser&password=1234
+database.url=jdbc:postgresql://localhost:5432/postchain
+database.username=postchain
+database.password=postchain
+```
+
+Those values can be overridden in a local file `src/test/resources/local-config.properties` (git-ignored). For example:
+
+```
+database.url=jdbc:postgresql://test-sql-server/relltestdb
+database.username=relltestuser
+database.password=1234
+
+include = config.properties
 ```
 
 **WARNING**: Unit tests drop all existing tables in the specified database, so make sure you specify a right database.

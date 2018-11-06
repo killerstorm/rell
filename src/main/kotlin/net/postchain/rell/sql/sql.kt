@@ -77,7 +77,15 @@ class DefaultSqlExecutor(private val con: Connection): SqlExecutor(), Closeable 
 
     companion object {
         fun connect(url: String): DefaultSqlExecutor {
-            val con = DriverManager.getConnection(url)
+            return connect0() { DriverManager.getConnection(url) }
+        }
+
+        fun connect(url: String, user: String, password: String): DefaultSqlExecutor {
+            return connect0() { DriverManager.getConnection(url, user, password) }
+        }
+
+        private fun connect0(factory: () -> Connection): DefaultSqlExecutor {
+            val con = factory()
             var c: AutoCloseable? = con
             try {
                 val exec = DefaultSqlExecutor(con)

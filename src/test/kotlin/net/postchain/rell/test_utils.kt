@@ -4,14 +4,19 @@ import com.github.h0tk3y.betterParse.grammar.parseToEnd
 import com.github.h0tk3y.betterParse.parser.AlternativesFailure
 import com.github.h0tk3y.betterParse.parser.ErrorResult
 import com.github.h0tk3y.betterParse.parser.ParseException
+import com.google.common.collect.Iterators
 import net.postchain.rell.model.*
 import net.postchain.rell.parser.CtError
 import net.postchain.rell.parser.S_Grammar
 import net.postchain.rell.parser.S_ModuleDefinition
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.*
+import org.apache.commons.configuration2.PropertiesConfiguration
+import org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder
+import org.apache.commons.configuration2.builder.fluent.Parameters
+import org.apache.commons.configuration2.io.ClasspathLocationStrategy
 import java.io.Closeable
-import java.io.FileInputStream
+import java.io.File
 import java.lang.IllegalStateException
 import java.sql.ResultSet
 import java.util.*
@@ -44,7 +49,7 @@ object RellTestUtils {
     }
 
     fun callQuery(globalCtx: RtGlobalContext, module: RModule, name: String, args: List<RtValue>, strict: Boolean): String {
-        val query = module.queries.find { it.name == name }
+        val query = module.queries[name]
         if (query == null) throw IllegalStateException("Query not found: '$name'")
         val modCtx = RtModuleContext(globalCtx, module)
         return callQuery(modCtx, query, args, strict)
@@ -65,11 +70,11 @@ object RellTestUtils {
     }
 
     fun callOp(globalCtx: RtGlobalContext, module: RModule, name: String, args: List<RtValue>): String {
-        val op = module.operations.find { it.name == name }
+        val op = module.operations[name]
         if (op == null) throw IllegalStateException("Operation not found: '$name'")
         val modCtx = RtModuleContext(globalCtx, module)
         return catchRtErr {
-            op.callTop(modCtx, args)
+            op.callInTransaction(modCtx, args)
             ""
         }
     }
@@ -104,11 +109,34 @@ object RellTestUtils {
 
 object SqlTestUtils {
     fun createSqlExecutor(): DefaultSqlExecutor {
-        val prop = Properties()
-        FileInputStream("tests.properties").use(prop::load)
-        val url = prop.getProperty("jdbcUrl")
-        return DefaultSqlExecutor.connect(url!!)
+        val prop = readDbProperties()
+        return DefaultSqlExecutor.connect(prop.url, prop.user, prop.password)
     }
+
+    private fun readDbProperties(): DbConnProps {
+        val localFileName = "local-config.properties"
+        val localRes = javaClass.getResource("/" + localFileName)
+        val configFileName = if (localRes != null) localFileName else "config.properties"
+        val config = readProperties(configFileName)
+
+        val url = config.getString("database.url")
+        val user = config.getString("database.username")
+        val password = config.getString("database.password")
+        return DbConnProps(url, user, password)
+    }
+
+    private fun readProperties(fileName: String): PropertiesConfiguration {
+        val propertiesFile = File(fileName)
+        val params = Parameters()
+                .fileBased()
+                .setLocationStrategy(ClasspathLocationStrategy())
+                .setFile(propertiesFile)
+
+        val builder = FileBasedConfigurationBuilder(PropertiesConfiguration::class.java).configure(params)
+        return builder.configuration
+    }
+
+    private data class DbConnProps(val url: String, val user: String, val password: String)
 
     fun setupDatabase(module: RModule, sqlExec: SqlExecutor) {
         sqlExec.transaction {
@@ -152,7 +180,6 @@ object SqlTestUtils {
         sqlExec.executeQuery(sql, {}) { rs -> list.add(rs.getString(1))}
         return list.toList()
     }
-
 
     fun mkins(table: String, columns: String, values: String): String {
         val quotedColumns = columns.split(",").joinToString { "\"$it\"" }
@@ -243,7 +270,7 @@ class RellSqlTester(
     private fun init() {
         if (!inited) {
             val module = RellTestUtils.parseModule(classDefsCode())
-            modelClasses = module.classes
+            modelClasses = module.classes.values.toList()
 
             if (useSql) {
                 initSql(module)

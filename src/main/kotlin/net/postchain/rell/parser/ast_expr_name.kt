@@ -238,7 +238,9 @@ class S_MemberExpr(val base: S_Expression, val name: String): S_Expression() {
                 } else if (type is RInstanceRefType) {
                     headBase = compilePathStepDataObject(ctx, headBase, type, tailPath)
                 } else {
-                    TODO(type.toStrictString())
+                    val name = tailPath[0]
+                    throw CtError("expr_badfield:${type.toStrictString()}:$name",
+                            "Type ${type.toStrictString()} has no field '$name'")
                 }
             }
 

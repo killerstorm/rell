@@ -128,7 +128,7 @@ internal class CtModuleContext(val globalCtx: CtGlobalContext) {
     }
 
     fun createModule(): RModule {
-        return RModule(classes.values.toList(), operations.values.toList(), queries.values.toList(), functionDefs.toList())
+        return RModule(classes.toMap(), operations.toMap(), queries.toMap(), functionDefs.toList())
     }
 
     fun runSecondPass() {

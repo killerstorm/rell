@@ -23,12 +23,23 @@ class ROperation(name: String, params: List<RExternalParam>, body: RStatement, f
         val entCtx = RtEntityContext(modCtx, true)
         val rtFrame = RtCallFrame(entCtx, frame)
         processArgs(name, params, args, rtFrame)
+        execute(rtFrame)
+    }
+
+    fun callInTransaction(modCtx: RtModuleContext, args: List<RtValue>) {
+        val entCtx = RtEntityContext(modCtx, true)
+        val rtFrame = RtCallFrame(entCtx, frame)
+        processArgs(name, params, args, rtFrame)
 
         modCtx.globalCtx.sqlExec.transaction {
-            val res = body.execute(rtFrame)
-            if (res != null) {
-                check(res is RStatementResult_Return && res.value == null)
-            }
+            execute(rtFrame)
+        }
+    }
+
+    private fun execute(rtFrame: RtCallFrame) {
+        val res = body.execute(rtFrame)
+        if (res != null) {
+            check(res is RStatementResult_Return && res.value == null)
         }
     }
 }
@@ -107,9 +118,9 @@ private fun processArgs(name: String, params: List<RExternalParam>, args: List<R
 }
 
 class RModule(
-        val classes: List<RClass>,
-        val operations: List<ROperation>,
-        val queries: List<RQuery>,
+        val classes: Map<String, RClass>,
+        val operations: Map<String, ROperation>,
+        val queries: Map<String, RQuery>,
         val functions: List<RFunction>
 ){
     init {

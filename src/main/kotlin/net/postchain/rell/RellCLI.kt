@@ -34,8 +34,8 @@ private fun runRell(jdbcUrl: String, rellFile: String, opName: String, opArgs: L
     val ast = S_Grammar.parseToEnd(sourceCode)
     val module = ast.compile()
 
-    val oper = module.operations.find { it.name == opName }
-    val query = module.queries.find { it.name == opName }
+    val oper = module.operations[opName]
+    val query = module.queries[opName]
     if (oper != null && query != null) {
         System.err.println("Found both operation and query with name '$opName'")
         exitProcess(1)

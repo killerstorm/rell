@@ -98,7 +98,7 @@ class InterpOpTest: AbstractOpTest() {
 
         class Obj(val cls: String, val id: Long): InterpTstVal(cls) {
             override fun rt(m: RModule): RtValue {
-                val c = m.classes.find { it.name == cls }
+                val c = m.classes[cls]
                 val t = RInstanceRefType(c!!)
                 return RtObjectValue(t, id)
             }

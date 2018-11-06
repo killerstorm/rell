@@ -1,7 +1,14 @@
 package net.postchain.rell
 
+import com.google.common.collect.Iterators
+import com.google.common.io.Resources
+import org.apache.commons.configuration2.PropertiesConfiguration
+import org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder
+import org.apache.commons.configuration2.builder.fluent.Parameters
+import org.apache.commons.configuration2.io.ClasspathLocationStrategy
 import org.junit.After
 import org.junit.Test
+import java.io.File
 
 class TypeTest {
     private val tst = RellSqlTester()

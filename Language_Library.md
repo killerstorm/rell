@@ -18,7 +18,8 @@
 `json(text): json` - parse a JSON
 
 ---
-## `integer`
+
+## integer
 
 `integer.MIN_VALUE` = minimum value (`-2^63`)
 
@@ -35,7 +36,8 @@
 `.signum(): integer` - returns `-1`, `0` or `1` depending on the sign
 
 ---
-## `text`
+
+## text
 
 `.empty(): boolean`
 
@@ -81,7 +83,8 @@ Special operators:
 * `[]` : character access (returns single-character `text`)
 
 ---
-## `byte_array`
+
+## byte_array
 
 `byte_array(text)` - create a `byte_array` from a HEX string, e.g.`'1234abcd'`
 
@@ -103,7 +106,8 @@ Special operators:
 * `[]` : element access
 
 ---
-## `range`
+
+## range
 
 `range(start: integer = 0, end: integer, step: integer = 1)` - start-inclusive, end-exclusive (as in Python):
 
@@ -118,7 +122,8 @@ Special operators:
 * `in` - returns `true` if the value is in the range (taking `step` into account)
 
 ---
-## `list<T>`
+
+## list<T>
 
 `list<T>()` - a new empty list
 
@@ -166,7 +171,8 @@ Special operators:
 * `in` - returns `true` if the value is in the list
 
 ---
-## `set<T>`
+
+## set<T>
 
 `set<T>()` - a new empty set
 
@@ -205,7 +211,8 @@ Special operators:
 * `in` - returns `true` if the value is in the set
 
 ---
-## `map<K,V>`
+
+## map<K,V>
 
 `map<K,V>()` - a new empty map
 

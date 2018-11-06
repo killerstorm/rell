@@ -261,4 +261,10 @@ class ExpressionTest: BaseRellTest(false) {
         chkEx("{ $c return user @* {} (id+0, (str1 + name2).foo()); }", "ct_err:expr_call_unknown:text:foo")
         chkEx("{ $c return user @* {} (id+0, (k1 * (v2 + 101)).foo()); }", "ct_err:expr_call_unknown:integer:foo")
     }
+
+    @Test fun testPathError() {
+        chkEx("{ val s = 'Hello'; return s.foo.bar; }", "ct_err:expr_badfield:text:foo")
+        chkEx("{ val s = 'Hello'; return s.foo.bar(); }", "ct_err:expr_badfield:text:foo")
+        chkEx("{ val s = 'Hello'; return s.foo(); }", "ct_err:expr_call_unknown:text:foo")
+    }
 }

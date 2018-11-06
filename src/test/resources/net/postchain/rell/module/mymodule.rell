@@ -1,0 +1,28 @@
+class city { key name: text; }
+class person { name: text; city; street: text; house: integer; score: integer; }
+
+operation insert_city (name: text) {
+    create city (name);
+}
+
+operation insert_person (name: text, city, street: text, house: integer, score: integer) {
+    create person(name, city, street, house, score);
+}
+
+operation op_integer_division(a: integer, b: integer) {
+    print(a / b);
+}
+
+query get_all_cities () = city @* {};
+query get_all_city_names() = city @* {}.name;
+query get_city_by_name (name: text) = city @ { name };
+query get_persons_by_city (city) = person @* { city };
+query get_persons_names_by_city_name(cityName: text) = person @* { city.name = cityName }.name;
+query get_person_address_by_name(name: text) = person @ { name } ( city.name, street, house );
+query integer_division(a: integer, b: integer) = a / b;
+
+query get_persons_by_city_set(cities: set<text>): list<text> {
+    val persons = list<text>();
+    for (city in cities) persons.addAll(person @* { person.city.name == city }.name);
+    return persons;
+}

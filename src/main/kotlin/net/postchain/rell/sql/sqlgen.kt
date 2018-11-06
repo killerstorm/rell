@@ -135,11 +135,11 @@ fun genop(opDefinition: ROperation): String {
 fun gensql(model: RModule, ops: Boolean): String {
     var s = ""
     s += ROWID_SQL
-    for (cls in model.classes) {
+    for (cls in model.classes.values) {
         s += genclass(cls)
     }
     if (ops) {
-        for (op in model.operations) {
+        for (op in model.operations.values) {
             s += genop(op)
         }
     }

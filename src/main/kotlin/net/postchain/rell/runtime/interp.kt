@@ -2,7 +2,6 @@ package net.postchain.rell.runtime
 
 import net.postchain.rell.model.*
 import net.postchain.rell.sql.SqlExecutor
-import java.lang.UnsupportedOperationException
 
 sealed class RtBaseError(msg: String): Exception(msg)
 class RtError(val code: String, msg: String): RtBaseError(msg)
