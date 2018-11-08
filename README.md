@@ -1,4 +1,53 @@
+## Language Guide
+
 See [Language Guide](Language.md).
+
+## Build
+
+Simplest way to build:
+
+1. Check out the `postchain2` repository (`git clone git@bitbucket.org:chromawallet/postchain2.git`), switch to the `stable` branch.
+
+2. Build `postchain2`:  
+    ```
+    mvn clean install -DskipTests
+    ```
+3. Build `rellr`:  
+    ```
+    mvn clean package -DskipTests
+    ```
+
+## Command Line Interpreter
+
+Run `rell.sh`:
+
+```
+Usage: rell [--resetdb] [--dburl=URL] FILE [OP] [ARGS...]
+Executes a rell program
+      FILE          Rell source file
+      [OP]          Operation or query name
+      [ARGS...]     Call arguments
+      --dburl=URL   Database JDBC URL, e. g. jdbc:postgresql://localhost/relltestdb?user=relltestuser&password=1234
+      --resetdb     Reset database (drop all and create tables from scratch)
+```
+
+To execute an operation without a database connection:
+
+```
+./rell.sh RELL_FILE OPERATION_NAME [ARGS...]
+```
+
+To create database tables (**drops all existing tables**):
+
+```
+./rell.sh --dburl JDBC_URL --resetdb RELL_FILE
+```
+
+To execute an operation with a database connection (using existing tables):
+
+```
+./rell.sh --dburl JDBC_URL RELL_FILE OPERATION_NAME [ARGS...]
+```
 
 ## Running Unit Tests
 

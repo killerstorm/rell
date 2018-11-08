@@ -45,14 +45,15 @@ Examples:
 
 ```
 class company {
-    key text name;
-    index text address;
+    key name: text;
+    index address: text;
 }
 
 class user {
-    key text firstName, lastName;
+    key firstName: text, lastName: text;
     index company;
-    integer yearOfBirth;
+    yearOfBirth: integer;
+    mutable salary: integer;
 }
 ```
 
@@ -135,6 +136,13 @@ Simple values:
 * Text: `'Hello'`, `"World"`
 * Byte array: `x'1234'`, `x"ABCD"`
 
+Tuple:
+
+`(1, 2, 3)` - three values
+`(123, 'Hello')` - two values
+`(456,)` - one value (because of the comma)
+`(789)` - not a tuple (no comma)
+
 List:
 ```
 [ 1, 2, 3, 4, 5 ]
@@ -149,7 +157,7 @@ Map:
 
 Special:
 
-* `.` - member access: `x.foo`, `x.bar(123)`
+* `.` - member access: `user.name`, `s.sub(5, 10)`
 * `()` - function call: `print('Hello')`, `value.str()`
 * `[]` - element access: `values[i]`
 
@@ -241,6 +249,15 @@ if (y == 10) {
 } else {
     print('Bye');
 }
+
+if (x == 0) {
+    return 'Zero';
+} else if (x == 1) {
+    return 'One';
+} else {
+    return 'Many';
+}
+
 ```
 
 ## Loop statements
@@ -248,7 +265,7 @@ if (y == 10) {
 For:
 
 ```
-for (x in range(10) {
+for (x in range(10)) {
     print(x);
 }
 

@@ -3,7 +3,7 @@ package net.postchain.rell
 import net.postchain.rell.model.RInstanceRefType
 import net.postchain.rell.model.RModule
 import net.postchain.rell.runtime.*
-import net.postchain.rell.sql.NullSqlExecutor
+import net.postchain.rell.sql.NoConnSqlExecutor
 import org.junit.Test
 import kotlin.test.assertEquals
 
@@ -25,7 +25,7 @@ class InterpOpTest: AbstractOpTest() {
         val args2 = args.map { it as InterpTstVal }
         val types = args2.map { it.type }
 
-        val globalCtx = RtGlobalContext(FailingRtPrinter, FailingRtPrinter, NullSqlExecutor)
+        val globalCtx = RtGlobalContext(FailingRtPrinter, FailingRtPrinter, NoConnSqlExecutor)
 
         val res = processExpr0(expr2, types) { module ->
             val rtArgs = args2.map { it.rt(module) }

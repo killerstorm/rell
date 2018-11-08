@@ -4,7 +4,6 @@ import com.github.h0tk3y.betterParse.grammar.parseToEnd
 import com.github.h0tk3y.betterParse.parser.AlternativesFailure
 import com.github.h0tk3y.betterParse.parser.ErrorResult
 import com.github.h0tk3y.betterParse.parser.ParseException
-import com.google.common.collect.Iterators
 import net.postchain.rell.model.*
 import net.postchain.rell.parser.CtError
 import net.postchain.rell.parser.S_Grammar
@@ -138,47 +137,12 @@ object SqlTestUtils {
 
     private data class DbConnProps(val url: String, val user: String, val password: String)
 
-    fun setupDatabase(module: RModule, sqlExec: SqlExecutor) {
-        sqlExec.transaction {
-            dropTables(sqlExec)
-            dropFunctions(sqlExec)
-            val sql = gensql(module, false)
-            sqlExec.execute(sql)
-        }
-    }
-
-    private fun dropTables(sqlExec: SqlExecutor) {
-        val tables = getExistingTables(sqlExec)
-        val sql = tables.joinToString("\n") { "DROP TABLE \"$it\" CASCADE;" }
-        sqlExec.execute(sql)
-    }
-
-    private fun dropFunctions(sqlExec: SqlExecutor) {
-        val functions = getExistingFunctions(sqlExec)
-        val sql = functions.joinToString("\n") { "DROP FUNCTION \"$it\"();" }
-        sqlExec.execute(sql)
-    }
-
     fun clearTables(sqlExec: SqlExecutor) {
-        val tables = getExistingTables(sqlExec)
+        val tables = SqlUtils.getExistingTables(sqlExec)
         val sql = tables.joinToString("\n") { "TRUNCATE \"$it\" CASCADE;" }
         sqlExec.transaction {
             sqlExec.execute(sql)
         }
-    }
-
-    private fun getExistingTables(sqlExec: SqlExecutor): List<String> {
-        val sql = "SELECT table_name FROM information_schema.tables WHERE table_catalog = CURRENT_DATABASE() AND table_schema = 'public'"
-        val list = mutableListOf<String>()
-        sqlExec.executeQuery(sql, {}) { rs -> list.add(rs.getString(1))}
-        return list.toList()
-    }
-
-    private fun getExistingFunctions(sqlExec: SqlExecutor): List<String> {
-        val sql = "SELECT routine_name FROM information_schema.routines WHERE routine_catalog = CURRENT_DATABASE() AND routine_schema = 'public'"
-        val list = mutableListOf<String>()
-        sqlExec.executeQuery(sql, {}) { rs -> list.add(rs.getString(1))}
-        return list.toList()
     }
 
     fun mkins(table: String, columns: String, values: String): String {
@@ -243,7 +207,7 @@ class RellSqlTester(
 {
     private var inited = false
     private var destroyed = false
-    private var sqlExec: SqlExecutor = NullSqlExecutor
+    private var sqlExec: SqlExecutor = NoConnSqlExecutor
     private var sqlExecResource: Closeable? = null
     private var modelClasses: List<RClass> = listOf()
     private var lastInserts = listOf<String>()
@@ -290,7 +254,7 @@ class RellSqlTester(
         var closeable: Closeable? = realSqlExec
 
         try {
-            SqlTestUtils.setupDatabase(module, realSqlExec)
+            SqlUtils.resetDatabase(module, realSqlExec)
             initSqlInserts(realSqlExec)
             sqlExec = realSqlExec
             sqlExecResource = realSqlExec

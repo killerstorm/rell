@@ -133,15 +133,19 @@ fun genop(opDefinition: ROperation): String {
 }
 
 fun gensql(model: RModule, ops: Boolean): String {
+    System.setProperty("org.jooq.no-logo", "true")
+
     var s = ""
     s += ROWID_SQL
     for (cls in model.classes.values) {
         s += genclass(cls)
     }
+
     if (ops) {
         for (op in model.operations.values) {
             s += genop(op)
         }
     }
+
     return s
 }

@@ -242,5 +242,5 @@ Special operators:
 
 Special operators:
 
-* `[]` - access get/set value by key
-* `in` - returns `true` if the key is in the map
+* `[]` - get/set value by key
+* `in` - returns `true` if a key is in the map

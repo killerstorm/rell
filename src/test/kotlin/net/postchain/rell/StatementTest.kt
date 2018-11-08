@@ -63,6 +63,12 @@ class StatementTest {
         chk("if (a == 0) return 123; else return 456; return 789;", 0, "int[123]")
         chk("if (a == 0) return 123; else return 456; return 789;", 1, "int[456]")
 
+        // Chain of ifs
+        chk("if (a == 0) return 111; else if (a == 1) return 222; else if (a == 2) return 333; else return 444;", 0, "int[111]")
+        chk("if (a == 0) return 111; else if (a == 1) return 222; else if (a == 2) return 333; else return 444;", 1, "int[222]")
+        chk("if (a == 0) return 111; else if (a == 1) return 222; else if (a == 2) return 333; else return 444;", 2, "int[333]")
+        chk("if (a == 0) return 111; else if (a == 1) return 222; else if (a == 2) return 333; else return 444;", 3, "int[444]")
+
         // Dangling else
         chk("if (false) if (false) return 123; else return 456; return 789;", "int[789]")
         chk("if (false) if (true) return 123; else return 456; return 789;", "int[789]")

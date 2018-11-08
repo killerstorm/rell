@@ -8,7 +8,7 @@ Simplest form:
 
 General syntax:
 
-`<from> <cardinality> { <where> } [<what>]`
+`<from> <cardinality> { <where> } [<what>] [limit N]`
 
 ## Cardinality
 
@@ -44,6 +44,14 @@ Zero or more comma-separated expressions using class attributes, local variables
 
 `user @ { name = 'Bill', company = 'Microsoft' }` - returns a specific user (all conditions must match)
 
+Class attributes can be resolved implicitly by name or type:
+
+```
+val ms = company @ { name = 'Microsoft' };
+val name = 'Bill';
+return user @ { name, ms };
+```
+
 ## What-part
 
 Simple what:
@@ -68,6 +76,23 @@ Field names can be combined with sorting:
 
 `user @* {} ( sort x = lastName, -sort y = yearOfBirth )`
 
+When field names are not specified explicitly, they can be deducted implicitly by attribute name:
+
+```
+val u = user @ { ... } ( firstName, lastName, age = 2018 - yearOfBirth );
+print(u.firstName, u.lastName, u.age);
+```
+
+## Tail part
+
+Limiting records:
+
+`user @* { company = 'Microsoft' } limit 10`
+
+Returns at most 10 objects. The limit is applied before the cardinality check, so the following code can't fail with "more than one object" error:
+
+`val u: user = user @ { company = 'Microsoft' } limit 1;`
+
 ## Result type
 
 Depends on the cardinality, from- and what-parts.
@@ -86,6 +111,19 @@ Examples:
 * `user @ { ... } ( firstName, lastName )` - returns `(text,text)`
 * `(user, company) @ { ... } ( user.firstName, user.lastName, company )` - returns `(text,text,company)`
 
+## Nested At-Operators
+
+A nested at-operator can be used in any expression inside of another at-operator:
+
+`user @* { company = company @ { name = 'Microsoft' } } ( ... )`
+
+This is equivalent to:
+
+```
+val c = company @ { name = 'Microsoft' };
+user @* { company = c } ( ... )
+```
+
 # 2. Create Statement
 
 Must specify all attributes that don't have default values.
@@ -98,7 +136,7 @@ create user(name = 'Bob', company = company @ { name = 'Amazon' });
 No need to specify attribute name if it can be matched by name or type:
 ```
 val name = 'Bob';
-create user(name, company @ { name = 'Amazon' });
+create user(name, company @ { company.name = 'Amazon' });
 ```
 
 Can use the created object:
@@ -109,6 +147,8 @@ print('Created new user:', newUser);
 ```
 
 # 3. Update Statement
+
+Can change only `mutable` attributes.
 
 ```
 update user @ { name = 'Bob' } ( company = 'Microsoft' );
@@ -129,5 +169,5 @@ delete user @ { name = 'Bob' };
 
 Using multiple classes. Similar to `update`, only the object(s) of the first class will be deleted:
 ```
-update (u: user, c: company) @ { u.xyz = c.xyz, u.name = 'Bob', c.name = 'Google' };
+delete (u: user, c: company) @ { u.xyz = c.xyz, u.name = 'Bob', c.name = 'Google' };
 ```

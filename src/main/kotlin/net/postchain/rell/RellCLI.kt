@@ -5,65 +5,122 @@ import net.postchain.rell.model.*
 import net.postchain.rell.parser.S_Grammar
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.DefaultSqlExecutor
+import net.postchain.rell.sql.NoConnSqlExecutor
+import net.postchain.rell.sql.SqlExecutor
+import net.postchain.rell.sql.SqlUtils
 import org.apache.commons.logging.LogFactory
+import picocli.CommandLine
 import java.io.File
 import java.lang.NumberFormatException
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
-    if (args.size < 3) {
-        System.err.println("Usage: JDBC_URL RELL_FILE OPERATION_NAME ARG*")
-        System.err.println("    JDBC_URL         E.g. jdbc:postgresql://localhost/relltestdb?user=relltestuser&password=1234")
-        System.err.println("    RELL_FILE        Rell source file")
-        System.err.println("    OPERATION_NAME   Operation or query name")
-        System.err.println("    ARG              Arguments")
-        exitProcess(1)
+    val argsEx = parseArgs(args)
+
+    if (argsEx.resetdb) {
+        if (argsEx.dburl == null) {
+            System.err.println("Database URL not specified")
+            exitProcess(1)
+        }
+
+        val module = compileModule(argsEx.rellFile)
+        val routine = if (argsEx.op == null) null else findRoutine(module, argsEx.op!!)
+        val rtArgs = if (routine == null) listOf() else parseArgs(routine, argsEx.args ?: listOf())
+
+        DefaultSqlExecutor.connect(argsEx.dburl!!).use { sqlExec ->
+            SqlUtils.resetDatabase(module, sqlExec)
+            println("Database reset done")
+            if (routine != null) {
+                callRoutine(sqlExec, module, routine, rtArgs)
+            }
+        }
+    } else {
+        if (argsEx.op == null) {
+            System.err.println("Operation or query name not specified")
+            exitProcess(1)
+        }
+
+        val module = compileModule(argsEx.rellFile)
+        val routine = findRoutine(module, argsEx.op!!)
+        val rtArgs = parseArgs(routine, argsEx.args ?: listOf())
+
+        if (argsEx.dburl != null) {
+            DefaultSqlExecutor.connect(argsEx.dburl!!).use { sqlExec ->
+                callRoutine(sqlExec, module, routine, rtArgs)
+            }
+        } else {
+            callRoutine(NoConnSqlExecutor, module, routine, rtArgs)
+        }
     }
-
-    val jdbcUrl = args[0]
-    val rellFile = args[1]
-    val opName = args[2]
-    val opArgs = args.slice(3 .. args.size - 1).toList()
-
-    runRell(jdbcUrl, rellFile, opName, opArgs)
 }
 
-private fun runRell(jdbcUrl: String, rellFile: String, opName: String, opArgs: List<String>) {
-    val sourceCode = File(rellFile).readText()
+private fun parseArgs(args: Array<String>): Args {
+    val argsObj = Args()
+    val cl = CommandLine(argsObj)
+    try {
+        cl.parse(*args)
+    } catch (e: CommandLine.PicocliException) {
+        cl.usageHelpWidth = 1000
+        cl.usage(System.err)
+        exitProcess(1)
+    }
+    return argsObj
+}
 
+@CommandLine.Command(name = "rell", description = ["Executes a rell program"])
+private class Args {
+    @CommandLine.Option(names = ["--dburl"], paramLabel =  "URL",
+            description =  ["Database JDBC URL, e. g. jdbc:postgresql://localhost/relltestdb?user=relltestuser&password=1234"])
+    var dburl: String? = null
+
+    @CommandLine.Option(names = ["--resetdb"], description = ["Reset database (drop all and create tables from scratch)"])
+    var resetdb = false
+
+    @CommandLine.Parameters(index = "0", paramLabel = "FILE", description = ["Rell source file"])
+    var rellFile: String = ""
+
+    @CommandLine.Parameters(index = "1", arity = "0..1", paramLabel = "OP", description = ["Operation or query name"])
+    var op: String? = null
+
+    @CommandLine.Parameters(index = "2..*", paramLabel = "ARGS", description = ["Call arguments"])
+    var args: List<String>? = null
+}
+
+private fun compileModule(rellFile: String): RModule {
+    val sourceCode = File(rellFile).readText()
     val ast = S_Grammar.parseToEnd(sourceCode)
     val module = ast.compile()
+    return module
+}
 
-    val oper = module.operations[opName]
-    val query = module.queries[opName]
+private fun findRoutine(module: RModule, name: String): RRoutine {
+    val oper = module.operations[name]
+    val query = module.queries[name]
     if (oper != null && query != null) {
-        System.err.println("Found both operation and query with name '$opName'")
+        System.err.println("Found both operation and query with name '$name'")
         exitProcess(1)
     } else if (oper != null) {
-        runOperation(jdbcUrl, opArgs, module, oper)
+        return oper
     } else if (query != null) {
-        runOperation(jdbcUrl, opArgs, module, query)
+        return query
     } else {
-        System.err.println("Found no operation or query with name '$opName'")
+        System.err.println("Found no operation or query with name '$name'")
         exitProcess(1)
     }
 }
 
-private fun runOperation(jdbcUrl: String, opArgs: List<String>, module: RModule, op: RRoutine) {
-    val args = parseArgs(op.params, opArgs)
-    DefaultSqlExecutor.connect(jdbcUrl).use { sqlExec ->
-        val globalCtx = RtGlobalContext(StdoutRtPrinter, LogRtPrinter, sqlExec)
-        val modCtx = RtModuleContext(globalCtx, module)
-        op.callTop(modCtx, args)
-    }
+private fun callRoutine(sqlExec: SqlExecutor, module: RModule, op: RRoutine, args: List<RtValue>) {
+    val globalCtx = RtGlobalContext(StdoutRtPrinter, LogRtPrinter, sqlExec)
+    val modCtx = RtModuleContext(globalCtx, module)
+    op.callCli(modCtx, args)
 }
 
-private fun parseArgs(params: List<RExternalParam>, args: List<String>): List<RtValue> {
-    if (params.size != args.size) {
-        System.err.println("Wrong number of arguments: ${args.size} instead of ${params.size}")
+private fun parseArgs(routine: RRoutine, args: List<String>): List<RtValue> {
+    if (args.size != routine.params.size) {
+        System.err.println("Wrong number of arguments: ${args.size} instead of ${routine.params.size}")
         exitProcess(1)
     }
-    return args.withIndex().map { (idx, arg) -> parseArg(params[idx], arg) }
+    return args.withIndex().map { (idx, arg) -> parseArg(routine.params[idx], arg) }
 }
 
 private fun parseArg(param: RExternalParam, arg: String): RtValue {

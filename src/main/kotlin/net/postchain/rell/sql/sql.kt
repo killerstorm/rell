@@ -1,5 +1,6 @@
 package net.postchain.rell.sql
 
+import net.postchain.rell.model.RModule
 import java.io.Closeable
 import java.lang.UnsupportedOperationException
 import java.sql.*
@@ -98,21 +99,52 @@ class DefaultSqlExecutor(private val con: Connection): SqlExecutor(), Closeable 
     }
 }
 
-object NullSqlExecutor: SqlExecutor() {
+object NoConnSqlExecutor: SqlExecutor() {
     override fun transaction(code: () -> Unit) {
         code()
     }
 
-    override fun execute(sql: String) {
-        throw UnsupportedOperationException()
+    override fun execute(sql: String) = throw err()
+    override fun execute(sql: String, preparator: (PreparedStatement) -> Unit) = throw err()
+    override fun executeQuery(sql: String, preparator: (PreparedStatement) -> Unit, consumer: (ResultSet) -> Unit) = throw err()
+
+    private fun err() = IllegalStateException("No database connection")
+}
+
+object SqlUtils {
+    fun resetDatabase(module: RModule, sqlExec: SqlExecutor) {
+        sqlExec.transaction {
+            dropTables(sqlExec)
+            dropFunctions(sqlExec)
+            val sql = gensql(module, false)
+            sqlExec.execute(sql)
+        }
     }
 
-    override fun execute(sql: String, preparator: (PreparedStatement) -> Unit) {
-        throw UnsupportedOperationException()
+    private fun dropTables(sqlExec: SqlExecutor) {
+        val tables = getExistingTables(sqlExec)
+        val sql = tables.joinToString("\n") { "DROP TABLE \"$it\" CASCADE;" }
+        sqlExec.execute(sql)
     }
 
-    override fun executeQuery(sql: String, preparator: (PreparedStatement) -> Unit, consumer: (ResultSet) -> Unit) {
-        throw UnsupportedOperationException()
+    private fun dropFunctions(sqlExec: SqlExecutor) {
+        val functions = getExistingFunctions(sqlExec)
+        val sql = functions.joinToString("\n") { "DROP FUNCTION \"$it\"();" }
+        sqlExec.execute(sql)
+    }
+
+    fun getExistingTables(sqlExec: SqlExecutor): List<String> {
+        val sql = "SELECT table_name FROM information_schema.tables WHERE table_catalog = CURRENT_DATABASE() AND table_schema = 'public'"
+        val list = mutableListOf<String>()
+        sqlExec.executeQuery(sql, {}) { rs -> list.add(rs.getString(1))}
+        return list.toList()
+    }
+
+    private fun getExistingFunctions(sqlExec: SqlExecutor): List<String> {
+        val sql = "SELECT routine_name FROM information_schema.routines WHERE routine_catalog = CURRENT_DATABASE() AND routine_schema = 'public'"
+        val list = mutableListOf<String>()
+        sqlExec.executeQuery(sql, {}) { rs -> list.add(rs.getString(1))}
+        return list.toList()
     }
 }
 
