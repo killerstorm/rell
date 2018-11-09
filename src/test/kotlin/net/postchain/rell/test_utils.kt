@@ -73,7 +73,7 @@ object RellTestUtils {
         if (op == null) throw IllegalStateException("Operation not found: '$name'")
         val modCtx = RtModuleContext(globalCtx, module)
         return catchRtErr {
-            op.callInTransaction(modCtx, args)
+            op.callTop(modCtx, args)
             ""
         }
     }
@@ -230,6 +230,7 @@ class RellSqlTester(
     var inserts: List<String> = inserts
 
     var strictToString = true
+    var signers = listOf<ByteArray>()
 
     private fun init() {
         if (!inited) {
@@ -347,7 +348,7 @@ class RellSqlTester(
         return RellTestUtils.callOp(globalCtx, moduleCode, "o", args)
     }
 
-    private fun createGlobalCtx() = RtGlobalContext(stdoutPrinter, logPrinter, sqlExec)
+    private fun createGlobalCtx() = RtGlobalContext(stdoutPrinter, logPrinter, sqlExec, signers)
 
     fun chkStdout(vararg expected: String) = stdoutPrinter.chk(*expected)
     fun chkLog(vararg expected: String) = logPrinter.chk(*expected)

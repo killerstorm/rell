@@ -1,6 +1,7 @@
 package net.postchain.rell.lib
 
 import net.postchain.rell.BaseRellTest
+import net.postchain.rell.hexStringToByteArray
 import org.junit.Test
 
 class LibTest: BaseRellTest(false) {
@@ -54,6 +55,20 @@ class LibTest: BaseRellTest(false) {
         chkEx("{ log(); return 123; }", "int[123]")
         tst.chkStdout()
         tst.chkLog("")
+    }
+
+    @Test fun testIsSigner() {
+        tst.signers = listOf("1234".hexStringToByteArray(), "abcd".hexStringToByteArray())
+
+        chk("is_signer(x'1234')", "boolean[true]")
+        chk("is_signer(x'abcd')", "boolean[true]")
+        chk("is_signer(x'1234abcd')", "boolean[false]")
+        chk("is_signer(x'')", "boolean[false]")
+
+        chk("is_signer()", "ct_err:expr_call_argtypes:is_signer:")
+        chk("is_signer(123)", "ct_err:expr_call_argtypes:is_signer:integer")
+        chk("is_signer('1234')", "ct_err:expr_call_argtypes:is_signer:text")
+        chk("is_signer(x'12', x'34')", "ct_err:expr_call_argtypes:is_signer:byte_array,byte_array")
     }
 
     @Test fun testJsonStr() {

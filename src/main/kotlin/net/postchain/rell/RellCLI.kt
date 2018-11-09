@@ -110,9 +110,9 @@ private fun findRoutine(module: RModule, name: String): RRoutine {
 }
 
 private fun callRoutine(sqlExec: SqlExecutor, module: RModule, op: RRoutine, args: List<RtValue>) {
-    val globalCtx = RtGlobalContext(StdoutRtPrinter, LogRtPrinter, sqlExec)
+    val globalCtx = RtGlobalContext(StdoutRtPrinter, LogRtPrinter, sqlExec, listOf())
     val modCtx = RtModuleContext(globalCtx, module)
-    op.callCli(modCtx, args)
+    op.callTop(modCtx, args)
 }
 
 private fun parseArgs(routine: RRoutine, args: List<String>): List<RtValue> {

@@ -22,6 +22,7 @@ object S_LibFunctions {
             stdFn("abs", RIntegerType, listOf(RIntegerType), RSysFunction_Abs, DbSysFunction_Abs),
             stdFn("min", RIntegerType, listOf(RIntegerType, RIntegerType), RSysFunction_Min, DbSysFunction_Min),
             stdFn("max", RIntegerType, listOf(RIntegerType, RIntegerType), RSysFunction_Max, DbSysFunction_Max),
+            stdFn("is_signer", RBooleanType, listOf(RByteArrayType), RSysFunction_IsSigner),
             stdFn("json", RJSONType, listOf(RTextType), RSysFunction_Json, DbSysFunction_Json),
 
             overFn("integer", RIntegerType,

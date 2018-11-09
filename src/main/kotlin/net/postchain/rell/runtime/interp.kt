@@ -7,11 +7,10 @@ sealed class RtBaseError(msg: String): Exception(msg)
 class RtError(val code: String, msg: String): RtBaseError(msg)
 class RtRequireError(msg: String): RtBaseError(msg)
 
-class RtGlobalContext(val stdoutPrinter: RtPrinter, val logPrinter: RtPrinter, val sqlExec: SqlExecutor)
-
+class RtGlobalContext(val stdoutPrinter: RtPrinter, val logPrinter: RtPrinter, val sqlExec: SqlExecutor, val signers: List<ByteArray>)
 class RtModuleContext(val globalCtx: RtGlobalContext, val module: RModule)
 
-class RtEntityContext(val modCtx: RtModuleContext, val dbUpdateAllowed: Boolean) {
+class RtEntityContext(val modCtx: RtModuleContext, val dbUpdateAllowed: Boolean, val signers: List<ByteArray>) {
     fun checkDbUpdateAllowed() {
         if (!dbUpdateAllowed) {
             throw RtError("no_db_update", "Database modifications are not allowed in this context")

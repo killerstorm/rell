@@ -14,21 +14,13 @@ class RExternalParam(val name: String, val type: RType, val ptr: RVarPtr)
 
 sealed class RRoutine(val name: String, val params: List<RExternalParam>, val body: RStatement, val frame: RCallFrame) {
     abstract fun callTop(modCtx: RtModuleContext, args: List<RtValue>)
-    abstract fun callCli(modCtx: RtModuleContext, args: List<RtValue>)
 }
 
 class ROperation(name: String, params: List<RExternalParam>, body: RStatement, frame: RCallFrame)
     : RRoutine(name, params, body, frame)
 {
     override fun callTop(modCtx: RtModuleContext, args: List<RtValue>) {
-        val entCtx = RtEntityContext(modCtx, true)
-        val rtFrame = RtCallFrame(entCtx, frame)
-        processArgs(name, params, args, rtFrame)
-        execute(rtFrame)
-    }
-
-    fun callInTransaction(modCtx: RtModuleContext, args: List<RtValue>) {
-        val entCtx = RtEntityContext(modCtx, true)
+        val entCtx = RtEntityContext(modCtx, true, listOf())
         val rtFrame = RtCallFrame(entCtx, frame)
         processArgs(name, params, args, rtFrame)
 
@@ -37,7 +29,12 @@ class ROperation(name: String, params: List<RExternalParam>, body: RStatement, f
         }
     }
 
-    override fun callCli(modCtx: RtModuleContext, args: List<RtValue>) = callInTransaction(modCtx, args)
+    fun callTopNoTx(modCtx: RtModuleContext, args: List<RtValue>) {
+        val entCtx = RtEntityContext(modCtx, true, listOf())
+        val rtFrame = RtCallFrame(entCtx, frame)
+        processArgs(name, params, args, rtFrame)
+        execute(rtFrame)
+    }
 
     private fun execute(rtFrame: RtCallFrame) {
         val res = body.execute(rtFrame)
@@ -54,10 +51,8 @@ class RQuery(name: String, params: List<RExternalParam>, body: RStatement, frame
         callTopQuery(modCtx, args)
     }
 
-    override fun callCli(modCtx: RtModuleContext, args: List<RtValue>) = callTop(modCtx, args)
-
     fun callTopQuery(modCtx: RtModuleContext, args: List<RtValue>): RtValue {
-        val entCtx = RtEntityContext(modCtx, false)
+        val entCtx = RtEntityContext(modCtx, false, listOf())
         val rtFrame = RtCallFrame(entCtx, frame)
         processArgs(name, params, args, rtFrame)
 
@@ -85,15 +80,13 @@ class RFunction(
 ): RRoutine(name, params, body, frame)
 {
     override fun callTop(modCtx: RtModuleContext, args: List<RtValue>) {
-        val entCtx = RtEntityContext(modCtx, false)
+        val entCtx = RtEntityContext(modCtx, false, listOf())
         val rtFrame = RtCallFrame(entCtx, frame)
         call(rtFrame, args)
     }
 
-    override fun callCli(modCtx: RtModuleContext, args: List<RtValue>) = callTop(modCtx, args)
-
     fun call(rtFrame: RtCallFrame, args: List<RtValue>): RtValue {
-        val subEntCtx = RtEntityContext(rtFrame.entCtx.modCtx, rtFrame.entCtx.dbUpdateAllowed)
+        val subEntCtx = RtEntityContext(rtFrame.entCtx.modCtx, rtFrame.entCtx.dbUpdateAllowed, listOf())
         val rtSubFrame = RtCallFrame(subEntCtx, frame)
 
         processArgs(name, params, args, rtSubFrame)

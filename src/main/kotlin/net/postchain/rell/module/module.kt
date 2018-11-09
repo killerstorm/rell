@@ -30,9 +30,9 @@ private object LogRtPrinter: RtPrinter() {
     }
 }
 
-private fun makeRtModuleContext(rModule: RModule, eCtx: EContext): RtModuleContext {
+private fun makeRtModuleContext(rModule: RModule, eCtx: EContext, signers: List<ByteArray>): RtModuleContext {
     val exec = DefaultSqlExecutor(eCtx.conn)
-    val globalCtx = RtGlobalContext(StdoutRtPrinter, LogRtPrinter, exec)
+    val globalCtx = RtGlobalContext(StdoutRtPrinter, LogRtPrinter, exec, signers)
     return RtModuleContext(globalCtx, rModule)
 }
 
@@ -147,9 +147,11 @@ class RellGTXOperation(val rOperation: ROperation, val rModule: RModule, opData:
     }
 
     override fun apply(ctx: TxEContext): Boolean {
-        val modCtx = makeRtModuleContext(rModule, ctx)
+        val modCtx = makeRtModuleContext(rModule, ctx, data.signers.toList())
         converter.finish(modCtx.globalCtx.sqlExec)
-        rOperation.callTop(modCtx, args)
+
+        rOperation.callTopNoTx(modCtx, args)
+
         return true
     }
 }
@@ -184,7 +186,7 @@ class RellPostchainModule(val rModule: RModule, val moduleName: String): GTXModu
     override fun query(ctx: EContext, name: String, args: GTXValue): GTXValue {
         val rQuery = rModule.queries[name] ?: throw UserMistake("Query not found: '$name'")
 
-        val modCtx = makeRtModuleContext(rModule, ctx)
+        val modCtx = makeRtModuleContext(rModule, ctx, listOf())
         val rtArgs = translateQueryArgs(modCtx, rQuery, args)
 
         val rtResult = try {

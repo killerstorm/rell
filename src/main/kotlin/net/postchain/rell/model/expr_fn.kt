@@ -123,6 +123,15 @@ object RSysFunction_Max: RSysFunction_2() {
     }
 }
 
+object RSysFunction_IsSigner: RSysFunction() {
+    override fun call(ctx: RtGlobalContext, args: List<RtValue>): RtValue {
+        check(args.size == 1)
+        val a = args[0].asByteArray()
+        val r = ctx.signers.any { Arrays.equals(it, a) }
+        return RtBooleanValue(r)
+    }
+}
+
 object RSysFunction_Json: RSysFunction_1() {
     override fun call(arg: RtValue): RtValue {
         val a = arg.asString()
