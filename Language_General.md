@@ -10,6 +10,7 @@ Simple types:
 * `byte_array`
 * `json`
 * `unit` (no value; cannot be used explicitly)
+* `null` (type of `null` expression; cannot be used explicitly)
 
 Simple type aliases:
 
@@ -20,24 +21,66 @@ Simple type aliases:
 Complex types:
 
 * object reference
+* `T?` - nullable type
 * `range` (can be used in `for` statement)
 * `list<T>`
 * `set<T>`
 * `map<K,V>`
 * tuple: `(T1, ..., Tn)`
 
+### Nullable type
+
+* Class attributes cannot be nullable.
+* Can be used with almost any type (except nullable, `unit`, `null`).
+* Nullable nullable (`T??` is not allowed).
+* Normal operations of the underlying type cannot be applied directly.
+* Supports `?:`, `?.` and `!!` operators (like in Kotlin).
+
+Compatibility with other types:
+
+* Can assign a value of type `T` to a variable of type `T?`, but not the other way round.
+* Can assign `null` to a variable of type `T?`, but not to a variable of type `T`.
+* Can assign a value of type `(T)` (tuple) to a variable of type `(T?)`.
+* Cannot assign a value of type `list<T>` to a variable of type `list<T?>`.
+
+Allowed operations:
+
+* Null comparison: `x == null`, `x != null`.
+* `?:` - Elvis operator: `x ?: y` means `x` if `x` is not `null`, otherwise `y`.
+* `?.` - safe access: `x?.y` results in `x.y` if `x` is not `null` and `null` otherwise.
+* Operator `?.` can be used with function calls, e. g. `x?.upperCase()`.
+* `!!` - null check operator: `x!!` returns value of `x` if `x` is not `null`, otherwise throws an exception.
+* `require(x)`, `requireNotEmpty(x)`: throws an exception if `x` is `null`, otherwise returns value of `x`.
+
+Examples:
+```
+val x: integer? = 123;
+val y = x;            // type of "y" is "integer?"
+val z = y!!;          // type of "z" is "integer"
+val p = require(y);   // type of "p" is "integer"
+```
+
 ### Tuple type
 
 Examples:
 
-`(integer)` - one value
+* `(integer)` - one value
+* `(integer, text)` - two values
+* `(integer, (text, boolean))` - nested tuple
+* `(x: integer, y: integer)` - named fields (can be accessed as `A.x`, `A.y`)
 
-`(integer, text)` - two values
+Tuple types are compatible only if names and types of fields are the same:
 
-`(integer, (text, boolean))` - nested tuple
+* `(x:integer, y:integer)` and `(a:integer,b:integer)` are not compatible.
+* `(x:integer, y:integer)` and `(integer,integer)` are not compatible.
 
-`(x: integer, y: integer)` - named fields (can be accessed as `A.x`, `A.y`)
+### Subtypes
 
+If type `B` is a subtype of type `A`, a value of type `B` can be assigned to a variable of type `A` (or passed as a parameter of type `A`).
+
+* `T` is a subtype of `T?`.
+* `null` is a subtype of `T?`.
+* `(T,P)` is a subtype of `(T?,P?)`, `(T?,P)` and `(T,P?)`.
 
 # 2. Module definition
 
@@ -131,6 +174,7 @@ function f(x: integer) {
 
 Simple values:
 
+* Null: `null` (type is `null`)
 * Boolean: `true`, `false`
 * Integer: `123`, `0`, `-456`
 * Text: `'Hello'`, `"World"`
@@ -138,10 +182,11 @@ Simple values:
 
 Tuple:
 
-`(1, 2, 3)` - three values
-`(123, 'Hello')` - two values
-`(456,)` - one value (because of the comma)
-`(789)` - not a tuple (no comma)
+* `(1, 2, 3)` - three values
+* `(123, 'Hello')` - two values
+* `(456,)` - one value (because of the comma)
+* `(789)` - not a tuple (no comma)
+* `(a: 123, b: 'Hello')` - tuple with named fields
 
 List:
 ```
@@ -155,13 +200,31 @@ Map:
 
 ## Operators
 
-Special:
+#### Special:
 
 * `.` - member access: `user.name`, `s.sub(5, 10)`
 * `()` - function call: `print('Hello')`, `value.str()`
 * `[]` - element access: `values[i]`
 
-Comparison:
+#### Null handling:
+
+* `?:` - Elvis operator: `x ?: y` returns `x` if `x` is not `null`, otherwise returns `y`.
+* `?.` - safe access operator: `x?.y` returns `x.y` if `x` is not `null`, otherwise returns `null`; similarly, `x?.y()` returns either `x.y()` or `null`.
+* `!!` - null check: `x!!` returns `x` if `x` is not `null`, otherwise throws an exception.
+
+Examples:
+```
+val x: integer? = 123;
+val y = x;              // type of "y" is "integer?"
+
+val a = y ?: 456;       // type of "a" is "integer"
+val b = y ?: null;      // type of "b" is "integer?"
+
+val p = y!!;            // type of "p" is "integer"
+val q = y?.hex();       // type of "q" is "text?"
+```
+
+#### Comparison:
 
 * `==`
 * `!=`
@@ -170,7 +233,7 @@ Comparison:
 * `<=`
 * `>=`
 
-Arithmetical:
+#### Arithmetical:
 
 * `+`
 * `-`
@@ -178,13 +241,13 @@ Arithmetical:
 * `/`
 * `%`
 
-Logical:
+#### Logical:
 
 * `and`
 * `or`
 * `not`
 
-Other:
+#### Other:
 
 * `in` - check if an element is in a range/set/map
 
@@ -299,14 +362,4 @@ while (x < 5) {
     if (values[x] == 3) break;
     x = x + 1;
 }
-```
-
-## Require
-
-Throws an error if a condition is not met.
-
-```
-require(name != '');
-require(name != '', 'Name is empty!');
-require(user @ { name = 'Bob' }, 'User not found!');
 ```

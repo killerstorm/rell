@@ -37,8 +37,25 @@ object RellTestUtils {
         } catch (e: RtError) {
             return "rt_err:" + e.code
         } catch (e: RtRequireError) {
-            return "req_err:" + e.message
+            return "req_err:" + if (e.userMsg != null) "[${e.userMsg}]" else "null"
         }
+    }
+
+    fun callFn(globalCtx: RtGlobalContext, moduleCode: String, name: String, args: List<RtValue>, strict: Boolean = true): String {
+        return processModule(moduleCode) { module ->
+            callFn(globalCtx, module, name, args, strict)
+        }
+    }
+
+    private fun callFn(globalCtx: RtGlobalContext, module: RModule, name: String, args: List<RtValue>, strict: Boolean): String {
+        val fn = module.functions[name]
+        if (fn == null) throw IllegalStateException("Function not found: '$name'")
+        val modCtx = RtModuleContext(globalCtx, module)
+        val res = catchRtErr {
+            val v = fn.callTopFunction(modCtx, args)
+            if (strict) v.toStrictString() else v.toString()
+        }
+        return res
     }
 
     fun callQuery(globalCtx: RtGlobalContext, moduleCode: String, name: String, args: List<RtValue>, strict: Boolean = true): String {
@@ -57,7 +74,7 @@ object RellTestUtils {
     private fun callQuery(modCtx: RtModuleContext, query: RQuery, args: List<RtValue>, strict: Boolean): String {
         val res = catchRtErr {
             val v = query.callTopQuery(modCtx, args)
-            if (v == null) "null" else if (strict) v.toStrictString() else v.toString()
+            if (strict) v.toStrictString() else v.toString()
         }
         return res
     }
@@ -73,7 +90,7 @@ object RellTestUtils {
         if (op == null) throw IllegalStateException("Operation not found: '$name'")
         val modCtx = RtModuleContext(globalCtx, module)
         return catchRtErr {
-            op.callInTransaction(modCtx, args)
+            op.callTop(modCtx, args)
             ""
         }
     }
@@ -230,6 +247,7 @@ class RellSqlTester(
     var inserts: List<String> = inserts
 
     var strictToString = true
+    var signers = listOf<ByteArray>()
 
     private fun init() {
         if (!inited) {
@@ -285,6 +303,11 @@ class RellSqlTester(
         return SqlTestUtils.dumpDatabase(sqlExec, modelClasses)
     }
 
+    fun chkCompile(code: String, expected: String) {
+        val actual = compileModule(code)
+        assertEquals(expected, actual)
+    }
+
     fun chkQuery(bodyCode: String, expected: String) {
         val queryCode = "query q() $bodyCode"
         chkQueryEx(queryCode, listOf(), expected)
@@ -292,6 +315,15 @@ class RellSqlTester(
 
     fun chkQueryEx(code: String, args: List<RtValue>, expected: String) {
         val actual = callQuery(code, args)
+        assertEquals(expected, actual)
+    }
+
+    fun chkQueryType(bodyCode: String, expected: String) {
+        val queryCode = "query q() $bodyCode"
+        val moduleCode = moduleCode(queryCode)
+        val actual = RellTestUtils.processModule(moduleCode) { module ->
+            module.queries.getValue("q").type.toStrictString()
+        }
         assertEquals(expected, actual)
     }
 
@@ -307,6 +339,11 @@ class RellSqlTester(
 
     fun execOp(code: String) {
         chkOp(code, "")
+    }
+
+    fun chkFnEx(code: String, expected: String) {
+        val actual = callFn(code)
+        assertEquals(expected, actual)
     }
 
     fun chkData(expected: List<String>) {
@@ -333,6 +370,13 @@ class RellSqlTester(
         return RellTestUtils.processModule(moduleCode) { "OK" }
     }
 
+    private fun callFn(code: String): String {
+        init()
+        val moduleCode = moduleCode(code)
+        val globalCtx = createGlobalCtx()
+        return RellTestUtils.callFn(globalCtx, moduleCode, "f", listOf(), strictToString)
+    }
+
     fun callQuery(code: String, args: List<RtValue>): String {
         init()
         val moduleCode = moduleCode(code)
@@ -347,7 +391,7 @@ class RellSqlTester(
         return RellTestUtils.callOp(globalCtx, moduleCode, "o", args)
     }
 
-    private fun createGlobalCtx() = RtGlobalContext(stdoutPrinter, logPrinter, sqlExec)
+    private fun createGlobalCtx() = RtGlobalContext(stdoutPrinter, logPrinter, sqlExec, signers)
 
     fun chkStdout(vararg expected: String) = stdoutPrinter.chk(*expected)
     fun chkLog(vararg expected: String) = logPrinter.chk(*expected)

@@ -1,10 +1,6 @@
 package net.postchain.rell.parser
 
 import net.postchain.rell.model.*
-import net.postchain.rell.runtime.RtBooleanValue
-import net.postchain.rell.runtime.RtByteArrayValue
-import net.postchain.rell.runtime.RtIntValue
-import net.postchain.rell.runtime.RtTextValue
 
 internal class DbClassAttr(val cls: RAtClass, val attr: RAttrib)
 
@@ -68,7 +64,6 @@ abstract class S_Expression {
     internal open fun compileDbWhere(ctx: CtDbExprContext, idx: Int): DbExpr = compileDb(ctx)
     internal open fun compileCall(ctx: CtExprContext, args: List<RExpr>): RExpr = TODO()
     internal open fun compileCallDb(ctx: CtDbExprContext, args: List<DbExpr>): DbExpr = TODO()
-    internal open fun compileAsBoolean(ctx: CtExprContext): RExpr = compile(ctx)
 
     internal open fun compileDestination(ctx: CtExprContext): RDestinationExpr {
         throw CtError("expr_bad_dst", "Invalid assignment destination")
@@ -101,6 +96,11 @@ class S_BooleanLiteralExpr(val value: Boolean): S_Expression() {
     override fun compileDb(ctx: CtDbExprContext): DbExpr = delegateCompileDb(ctx)
 }
 
+class S_NullLiteralExpr(): S_Expression() {
+    override fun compile(ctx: CtExprContext): RExpr = RConstantExpr.makeNull()
+    override fun compileDb(ctx: CtDbExprContext): DbExpr = TODO()
+}
+
 class S_CallExpr(val base: S_Expression, val args: List<S_Expression>): S_Expression() {
     override fun compile(ctx: CtExprContext): RExpr {
         val rArgs = args.map { it.compile(ctx) }
@@ -127,6 +127,18 @@ class S_LookupExpr(val base: S_Expression, val expr: S_Expression): S_Expression
         val rExpr = expr.compile(ctx)
 
         val baseType = rBase.type
+        val effectiveType = if (baseType is RNullableType) baseType.valueType else baseType
+
+        val rResExpr = compile0(effectiveType, rBase, rExpr)
+
+        if (baseType is RNullableType) {
+            throw CtError("expr_lookup_null", "Cannot apply '[]' on null")
+        }
+
+        return rResExpr
+    }
+
+    private fun compile0(baseType: RType, rBase: RExpr, rExpr: RExpr): RExpr {
         if (baseType == RTextType) {
             return compileText(rBase, rExpr)
         } else if (baseType == RByteArrayType) {
@@ -154,27 +166,27 @@ class S_LookupExpr(val base: S_Expression, val expr: S_Expression): S_Expression
     }
 
     private fun compileList(rBase: RExpr, rExpr: RExpr, elementType: RType): RDestinationExpr {
-        val rExpr2 = matchKey(RIntegerType, rExpr)
-        return RListLookupExpr(elementType, rBase, rExpr2)
+        matchKey(RIntegerType, rExpr)
+        return RListLookupExpr(elementType, rBase, rExpr)
     }
 
     private fun compileMap(rBase: RExpr, rExpr: RExpr, keyType: RType, valueType: RType): RDestinationExpr {
-        val rExpr2 = matchKey(keyType, rExpr)
-        return RMapLookupExpr(valueType, rBase, rExpr2)
+        matchKey(keyType, rExpr)
+        return RMapLookupExpr(valueType, rBase, rExpr)
     }
 
     private fun compileText(rBase: RExpr, rExpr: RExpr): RExpr {
-        val rExpr2 = matchKey(RIntegerType, rExpr)
-        return RTextSubscriptExpr(rBase, rExpr2)
+        matchKey(RIntegerType, rExpr)
+        return RTextSubscriptExpr(rBase, rExpr)
     }
 
     private fun compileByteArray(rBase: RExpr, rExpr: RExpr): RExpr {
-        val rExpr2 = matchKey(RIntegerType, rExpr)
-        return RByteArraySubscriptExpr(rBase, rExpr2)
+        matchKey(RIntegerType, rExpr)
+        return RByteArraySubscriptExpr(rBase, rExpr)
     }
 
-    private fun matchKey(rType: RType, rExpr: RExpr): RExpr {
-        return rType.match(rExpr, "expr_lookup_keytype", "Invalid lookup key type")
+    private fun matchKey(rType: RType, rExpr: RExpr) {
+        rType.match(rExpr.type, "expr_lookup_keytype", "Invalid lookup key type")
     }
 
     override fun compileDb(ctx: CtDbExprContext): DbExpr {
@@ -224,15 +236,22 @@ class S_CreateExpr(val className: String, val exprs: List<S_NameExprPair>): S_Ex
     }
 }
 
-class S_TupleExpression(val exprs: List<S_Expression>): S_Expression() {
+class S_TupleExpression(val fields: List<Pair<String?, S_Expression>>): S_Expression() {
     override fun compile(ctx: CtExprContext): RExpr {
-        val rExprs = exprs.map {
-            val rExpr = it.compile(ctx)
+        val names = mutableSetOf<String>()
+        for ((name, _) in fields) {
+            if (name != null && !names.add(name)) {
+                throw CtError("expr_tuple_dupname:$name", "Duplicated tuple field: '$name'")
+            }
+        }
+
+        val rExprs = fields.map { (_, expr) ->
+            val rExpr = expr.compile(ctx)
             CtUtils.checkUnitType(rExpr.type, "expr_tuple_unit", "Type of expression is unit")
             rExpr
         }
 
-        val fields = rExprs.map { RTupleField(null, it.type) }
+        val fields = rExprs.mapIndexed { i, rExpr -> RTupleField(fields[i].first, rExpr.type) }
         val type = RTupleType(fields)
 
         return RTupleExpr(type, rExprs)
@@ -250,13 +269,18 @@ class S_ListLiteralExpression(val exprs: List<S_Expression>): S_Expression() {
         }
 
         val rExprs = exprs.map { it.compile(ctx) }
-        val rType = rExprs[0].type
-        CtUtils.checkUnitType(rType, "expr_list_unit", "Invalid list element type: ${rType.toStrictString()}")
 
-        val rExprs2 = rExprs.map { rType.match(it, "expr_list_itemtype", "Wrong list item type") }
+        for (rExpr in rExprs) {
+            CtUtils.checkUnitType(rExpr.type, "expr_list_unit", "Invalid list element type: ${rExpr.type.toStrictString()}")
+        }
+
+        var rType = rExprs[0].type
+        for (rExpr in rExprs.subList(1, rExprs.size)) {
+            rType = RType.commonType(rType, rExpr.type, "expr_list_itemtype", "Wrong list item type")
+        }
 
         val rListType = RListType(rType)
-        return RListLiteralExpr(rListType, rExprs2)
+        return RListLiteralExpr(rListType, rExprs)
     }
 
     override fun compileDb(ctx: CtDbExprContext): DbExpr {
@@ -271,20 +295,22 @@ class S_MapLiteralExpression(val entries: List<Pair<S_Expression, S_Expression>>
         }
 
         val rEntries = entries.map { Pair(it.first.compile(ctx), it.second.compile(ctx)) }
-        val rKeyType = rEntries[0].first.type
-        val rValueType = rEntries[0].second.type
 
-        CtUtils.checkUnitType(rKeyType, "expr_list_unit", "Invalid list element type: ${rKeyType.toStrictString()}")
-        CtUtils.checkUnitType(rValueType, "expr_list_unit", "Invalid list element type: ${rValueType.toStrictString()}")
+        for ((rKey, rValue) in rEntries) {
+            CtUtils.checkUnitType(rKey.type, "expr_map_key_unit", "Invalid map key type: ${rKey.type.toStrictString()}")
+            CtUtils.checkUnitType(rValue.type, "expr_map_value_unit", "Invalid map value type: ${rValue.type.toStrictString()}")
+        }
 
-        val rEntries2 = rEntries.map {
-            val key = rKeyType.match(it.first, "expr_map_keytype", "Wrong map entry key type")
-            val value = rValueType.match(it.second, "expr_map_valuetype", "Wrong map entry value type")
-            Pair(key, value)
+        var rKeyType = rEntries[0].first.type
+        var rValueType = rEntries[0].second.type
+
+        for ((rKey, rValue) in rEntries.subList(1, rEntries.size)) {
+            rKeyType = RType.commonType(rKeyType, rKey.type, "expr_map_keytype", "Wrong map entry key type")
+            rValueType = RType.commonType(rValueType, rValue.type, "expr_map_valuetype", "Wrong map entry value type")
         }
 
         val rMapType = RMapType(rKeyType, rValueType)
-        return RMapLiteralExpr(rMapType, rEntries2)
+        return RMapLiteralExpr(rMapType, rEntries)
     }
 
     override fun compileDb(ctx: CtDbExprContext): DbExpr {
@@ -324,17 +350,32 @@ sealed class S_CollectionExpression(val type: S_Type?, val args: List<S_Expressi
                     "Wrong argument type for $colType<>: ${rArgType.toStrictString()}")
         }
 
-        if (rType != null && rArgType.elementType != rType) {
-            throw CtError("expr_${colType}_typemiss:${rType.toStrictString()}:${rArgType.elementType.toStrictString()}",
-                    "Element type missmatch for $colType<>: ${rArgType.elementType.toStrictString()} " +
-                            "instead of ${rType.toStrictString()}")
-        }
+        val rElementType = checkElementType(
+                rType,
+                rArgType.elementType,
+                "expr_${colType}_typemiss",
+                "Element type missmatch for $colType<>")
 
-        return makeExpr(rArgType.elementType, rArg)
+        return makeExpr(rElementType, rArg)
     }
 
     override fun compileDb(ctx: CtDbExprContext): DbExpr {
         TODO()
+    }
+
+    companion object {
+        fun checkElementType(declaredType: RType?, argumentType: RType, errCode: String, errMsg: String): RType {
+            if (declaredType == null) {
+                return argumentType
+            }
+
+            if (!declaredType.isAssignableFrom(argumentType)) {
+                throw CtError("$errCode:${declaredType.toStrictString()}:${argumentType.toStrictString()}",
+                        "$errMsg: ${argumentType.toStrictString()} instead of ${declaredType.toStrictString()}")
+            }
+
+            return declaredType
+        }
     }
 }
 
@@ -364,8 +405,7 @@ class S_MapExpression(val keyValueTypes: Pair<S_Type, S_Type>?, val args: List<S
             val rArg = rArgs[0]
             return compileOneArg(rKeyType, rValueType, rArg)
         } else {
-            throw CtError("expr_map_argcnt:${rArgs.size}",
-                    "Wrong number of arguments for map<>: ${rArgs.size}")
+            throw CtError("expr_map_argcnt:${rArgs.size}", "Wrong number of arguments for map<>: ${rArgs.size}")
         }
     }
 
@@ -380,22 +420,25 @@ class S_MapExpression(val keyValueTypes: Pair<S_Type, S_Type>?, val args: List<S
     private fun compileOneArg(rKeyType: RType?, rValueType: RType?, rArg: RExpr): RExpr {
         val rArgType = rArg.type
 
-        if (rKeyType != null && rValueType != null) {
-            val rMapType = RMapType(rKeyType, rValueType)
-            if (rArgType != rMapType) {
-                throw CtError("expr_map_typemiss:${rMapType.toStrictString()}:${rArgType.toStrictString()}",
-                        "Argument type missmatch for map: ${rArgType.toStrictString()} " +
-                                "instead of ${rMapType.toStrictString()}")
-            }
-            return RMapExpr(rMapType, rArg)
-        }
-
         if (!(rArgType is RMapType)) {
-            throw CtError("expr_map_badtype",
+            throw CtError("expr_map_badtype:${rArgType.toStrictString()}",
                     "Wrong argument type for map<>: ${rArgType.toStrictString()}")
         }
 
-        return RMapExpr(rArgType, rArg)
+        val rActualKeyType = S_CollectionExpression.checkElementType(
+                rKeyType,
+                rArgType.keyType,
+                "expr_map_key_typemiss",
+                "Key type missmatch for map<>")
+
+        val rActualValueType = S_CollectionExpression.checkElementType(
+                rValueType,
+                rArgType.valueType,
+                "expr_map_value_typemiss",
+                "Value type missmatch for map<>")
+
+        val rMapType = RMapType(rActualKeyType, rActualValueType)
+        return RMapExpr(rMapType, rArg)
     }
 
     override fun compileDb(ctx: CtDbExprContext): DbExpr {

@@ -34,4 +34,13 @@ abstract class BaseRellTest(useSql: Boolean = true) {
     fun chkQueryEx(code: String, args: List<RtValue>, expected: String) {
         tst.chkQueryEx(code, args, expected)
     }
+
+    fun chkFn(code: String, expected: String) {
+        val modCode = "function f() $code"
+        tst.chkFnEx(modCode, expected)
+    }
+
+    fun chkData(vararg expected: String) = tst.chkData(*expected)
+
+    fun execOp(code: String) = tst.execOp(code)
 }

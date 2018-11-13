@@ -54,17 +54,15 @@ return user @ { name, ms };
 
 ## What-part
 
-Simple what:
+Simple example:
 
-`user @* {}.company.name` - returns an attribute of the object
+`user @ { name = 'Bob' } ( company.name )` - returns a single value (name of the user's company)
 
-Complex what:
-
-`user @* {} ( company.name, company.address )` - returns a tuple of values (if more than one)
+`user @ { name = 'Bob' } ( company.name, company.address )` - returns a tuple of two values
 
 Specifying names of result tuple fields:
 
-`user @* {} ( x = company.name, y = company.address, z = yearOfBirth )`
+`user @* {} ( x = company.name, y = company.address, z = yearOfBirth )` - returns a tuple with named fields (`x`, `y`, `z`)
 
 Sorting:
 
@@ -98,15 +96,16 @@ Returns at most 10 objects. The limit is applied before the cardinality check, s
 Depends on the cardinality, from- and what-parts.
 
 * From- and what-parts define the type of a single record, `T`.
-* Cardinality defines the type of the @-operator result: either `T` or `list<T>`.
+* Cardinality defines the type of the @-operator result: `T?`, `T` or `list<T>`.
 
 Examples:
 
 * `user @ { ... }` - returns `user`
+* `user @? { ... }` - returns `user?`
+* `user @* { ... }` - returns `list<user>`
+* `user @+ { ... }` - returns `list<user>`
 * `(user, company) @ { ... }` - returns a tuple `(user,company)`
 * `(user, company) @* { ... }` - returns `list<(user,company)>`
-* `user @ { ... }.name` - returns `text` (type of `name`)
-* `user @* { ... }.name` - returns `list<text>`
 * `user @ { ... } ( name )` - returns `text`
 * `user @ { ... } ( firstName, lastName )` - returns `(text,text)`
 * `(user, company) @ { ... } ( user.firstName, user.lastName, company )` - returns `(text,text,company)`

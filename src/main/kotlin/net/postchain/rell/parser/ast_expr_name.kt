@@ -94,9 +94,9 @@ class S_MemberExpr(val base: S_Expression, val name: String): S_Expression() {
 
         if (deepBase != null) {
             val rBase = deepBase.compile(ctx)
-            return compilePath(ctx, rBase, path)
+            return C_PathExprUtils.compilePath(ctx, rBase, path)
         } else {
-            return compilePath(ctx, path)
+            return C_PathExprUtils.compilePath(ctx, path)
         }
     }
 
@@ -104,9 +104,9 @@ class S_MemberExpr(val base: S_Expression, val name: String): S_Expression() {
         val (deepBase, path) = discoverPathExpr(listOf())
         if (deepBase != null) {
             val dbBase = deepBase.compileDb(ctx)
-            return compilePathDb(ctx, dbBase, path)
+            return C_PathExprUtils.compilePathDb(ctx, dbBase, path)
         }
-        return compilePathDb(ctx, path)
+        return C_PathExprUtils.compilePathDb(ctx, path)
     }
 
     override fun compileCall(ctx: CtExprContext, args: List<RExpr>): RExpr {
@@ -117,12 +117,12 @@ class S_MemberExpr(val base: S_Expression, val name: String): S_Expression() {
 
         if (deepBase != null) {
             val rDeepBase = deepBase.compile(ctx)
-            val rBase = compilePath(ctx, rDeepBase, leftPath)
+            val rBase = C_PathExprUtils.compilePath(ctx, rDeepBase, leftPath)
             return compileCall0(rBase, args)
         }
 
         if (leftPath.size > 1) {
-            val rBase = compilePath(ctx, leftPath)
+            val rBase = C_PathExprUtils.compilePath(ctx, leftPath)
             return compileCall0(rBase, args)
         }
 
@@ -150,14 +150,14 @@ class S_MemberExpr(val base: S_Expression, val name: String): S_Expression() {
 
         if (deepBase != null) {
             val dbDeepBase = deepBase.compileDb(ctx)
-            val dbBase = compilePathDb(ctx, dbDeepBase, leftPath)
+            val dbBase = C_PathExprUtils.compilePathDb(ctx, dbDeepBase, leftPath)
             return compileCallDb0(dbBase, args)
         }
 
         check(leftPath.size >= 1)
 
         if (leftPath.size > 1) {
-            val dbBase = compilePathDb(ctx, leftPath)
+            val dbBase = C_PathExprUtils.compilePathDb(ctx, leftPath)
             return compileCallDb0(dbBase, args)
         }
 
@@ -186,8 +186,8 @@ class S_MemberExpr(val base: S_Expression, val name: String): S_Expression() {
     }
 
     private fun compileCall0(rBase: RExpr, args: List<RExpr>): RExpr {
-        val fn = S_LibFunctions.getMemberFunction(rBase.type, name)
-        return fn.compileCall(rBase, args)
+        val calculator = C_PathExprUtils.compileCallStep(rBase.type, name, args)
+        return RMemberExpr(rBase, false, calculator)
     }
 
     private fun compileCallDb0(dbBase: DbExpr, args: List<DbExpr>): DbExpr {
@@ -195,7 +195,8 @@ class S_MemberExpr(val base: S_Expression, val name: String): S_Expression() {
 
         val rArgs = args.filter { it is InterpretedDbExpr }.map { (it as InterpretedDbExpr).expr }
         if (dbBase is InterpretedDbExpr && rArgs.size == args.size) {
-            val rExpr = fn.compileCall(dbBase.expr, rArgs)
+            val calculator = fn.compileCall(dbBase.type, rArgs)
+            val rExpr = RMemberExpr(dbBase.expr, false, calculator)
             return InterpretedDbExpr(rExpr)
         }
 
@@ -205,122 +206,199 @@ class S_MemberExpr(val base: S_Expression, val name: String): S_Expression() {
     override fun discoverPathExpr(tailPath: List<String>): Pair<S_Expression?, List<String>> {
         return base.discoverPathExpr(listOf(name) + tailPath)
     }
+}
 
-    companion object {
-        private fun compilePath(ctx: CtExprContext, path: List<String>): RExpr {
-            check(!path.isEmpty())
+class S_SafeMemberExpr(val base: S_Expression, val name: String): S_Expression() {
+    override fun compile(ctx: CtExprContext): RExpr {
+        val rBase = base.compile(ctx)
+        return compile0(ctx, rBase)
+    }
 
-            val head = path[0]
-            val res = resolveName(ctx, head)
+    override fun compileDb(ctx: CtDbExprContext): DbExpr {
+        val dbBase = base.compileDb(ctx)
+        if (dbBase is InterpretedDbExpr) {
+            val rExpr = compile0(ctx.exprCtx, dbBase.expr)
+            return InterpretedDbExpr(rExpr)
+        } else {
+            throw errWrongType(dbBase.type)
+        }
+    }
 
-            if (res is CtNameResolution_Local) {
-                val rBase = res.loc.toVarExpr()
-                return compilePath(ctx, rBase, path.subList(1, path.size))
-            } else if (res is CtNameResolution_Namespace && path.size >= 2) {
-                val second = path[1]
-                val const = res.ns.getConstantOpt(second)
-                if (const == null) throw errUnknownName("$head.$second")
-                val rBase = RConstantExpr(const)
-                return compilePath(ctx, rBase, path.subList(2, path.size))
-            } else {
-                throw errUnknownName(head)
-            }
+    private fun compile0(ctx: CtExprContext, rBase: RExpr): RExpr {
+        val valueType = getValueType(rBase)
+        val tailPath = LinkedList(listOf(name))
+        val getter = C_PathExprUtils.compilePathStep(ctx, valueType, tailPath)
+        check(tailPath.isEmpty())
+        return RMemberExpr(rBase, true, getter)
+    }
+
+    override fun compileCall(ctx: CtExprContext, args: List<RExpr>): RExpr {
+        val rBase = base.compile(ctx)
+        val valueType = getValueType(rBase)
+        val calculator = C_PathExprUtils.compileCallStep(valueType, name, args)
+        return RMemberExpr(rBase, true, calculator)
+    }
+
+    private fun getValueType(rBase: RExpr): RType {
+        val baseType = rBase.type
+        if (baseType !is RNullableType) {
+            throw errWrongType(baseType)
+        }
+        return baseType.valueType
+    }
+
+    private fun errWrongType(type: RType): CtError {
+        return CtError("expr_safemem_type:${type.toStrictString()}",
+                "Wrong type for operator '?.': ${type.toStrictString()}")
+    }
+}
+
+internal object C_PathExprUtils {
+    fun compilePath(ctx: CtExprContext, path: List<String>): RExpr {
+        check(!path.isEmpty())
+
+        val head = path[0]
+        val res = resolveName(ctx, head)
+
+        if (res is CtNameResolution_Local) {
+            val rBase = res.loc.toVarExpr()
+            return compilePath(ctx, rBase, path.subList(1, path.size))
+        } else if (res is CtNameResolution_Namespace && path.size >= 2) {
+            val second = path[1]
+            val const = res.ns.getConstantOpt(second)
+            if (const == null) throw errUnknownName("$head.$second")
+            val rBase = RConstantExpr(const)
+            return compilePath(ctx, rBase, path.subList(2, path.size))
+        } else {
+            throw errUnknownName(head)
+        }
+    }
+
+    fun compilePath(ctx: CtExprContext, rBase: RExpr, path: List<String>): RExpr {
+        var headBase = rBase
+        val tailPath = LinkedList(path)
+
+        while (!tailPath.isEmpty()) {
+            val getter = compilePathStep(ctx, headBase.type, tailPath)
+            headBase = RMemberExpr(headBase, false, getter)
         }
 
-        private fun compilePath(ctx: CtExprContext, rBase: RExpr, path: List<String>): RExpr {
-            var headBase = rBase
-            var tailPath = LinkedList(path)
+        return headBase
+    }
 
-            while (!tailPath.isEmpty()) {
-                val type = headBase.type
-                if (type is RTupleType) {
-                    headBase = compilePathStepTuple(headBase, type, tailPath)
-                } else if (type is RInstanceRefType) {
-                    headBase = compilePathStepDataObject(ctx, headBase, type, tailPath)
-                } else {
-                    val name = tailPath[0]
-                    throw CtError("expr_badfield:${type.toStrictString()}:$name",
-                            "Type ${type.toStrictString()} has no field '$name'")
-                }
-            }
+    fun compilePathStep(ctx: CtExprContext, baseType: RType, tailPath: Queue<String>): RMemberCalculator {
+        val name = tailPath.peek()
 
-            return headBase
+        val effectiveType = if (baseType is RNullableType) baseType.valueType else baseType
+        val calculator = compilePathStep0(ctx, effectiveType, tailPath)
+
+        if (calculator == null) {
+            throw CtError("expr_badfield:${baseType.toStrictString()}:$name",
+                    "Type ${baseType.toStrictString()} has no field '$name'")
         }
 
-        private fun compilePathStepTuple(base: RExpr, type: RTupleType, path: Queue<String>): RExpr {
-            val step = path.remove()
-            val idx = type.fields.indexOfFirst { it.name == step }
-            if (idx == -1) {
-                throw CtError("unknown_member:${type.toStrictString()}:$step",
-                        "Unknown member for type ${type.toStrictString()}: '$step'")
-            }
-            return RTupleFieldExpr(type.fields[idx].type, base, idx)
+        if (baseType is RNullableType) {
+            throw CtError("expr_mem_null:$name", "Cannot access member '$name' of null")
         }
 
-        private fun compilePathStepDataObject(
-                ctx: CtExprContext,
-                base: RExpr,
-                type: RInstanceRefType,
-                path: Queue<String>): RExpr
-        {
-            val atClass = RAtClass(type.rClass, "", 0)
-            val from = listOf(atClass)
-            val dbCtx = CtDbExprContext(null, ctx, from)
+        return calculator
+    }
 
-            val pathList = path.toList()
-            path.clear()
-            val what = compileDbPathExpr(dbCtx, pathList, false)
+    private fun compilePathStep0(ctx: CtExprContext, baseType: RType, tailPath: Queue<String>): RMemberCalculator? {
+        if (baseType is RTupleType) {
+            return compilePathStepTuple(baseType, tailPath)
+        } else if (baseType is RInstanceRefType) {
+            return compilePathStepDataObject(ctx, baseType, tailPath)
+        } else {
+            return null
+        }
+    }
 
-            val whereLeft = PathDbExpr(atClass.type, atClass, listOf(), null)
-            val whereRight = InterpretedDbExpr(base)
-            val where = BinaryDbExpr(RBooleanType, DbBinaryOp_Eq, whereLeft, whereRight)
+    private fun compilePathStepTuple(type: RTupleType, path: Queue<String>): RMemberCalculator {
+        val step = path.remove()
+        val idx = type.fields.indexOfFirst { it.name == step }
+        if (idx == -1) {
+            throw CtError("unknown_member:${type.toStrictString()}:$step",
+                    "Unknown member for type ${type.toStrictString()}: '$step'")
+        }
+        return RMemberCalculator_TupleField(type.fields[idx].type, idx)
+    }
 
-            val atExprBase = RAtExprBase(from, listOf(what), where, listOf(), false, false)
-            return RAtExpr(what.type, atExprBase, null, RAtExprRowTypeSimple)
+    private fun compilePathStepDataObject(
+            ctx: CtExprContext,
+            type: RInstanceRefType,
+            path: Queue<String>): RMemberCalculator
+    {
+        val atClass = RAtClass(type.rClass, "", 0)
+        val from = listOf(atClass)
+        val dbCtx = CtDbExprContext(null, ctx, from)
+
+        val pathList = path.toList()
+        path.clear()
+        val what = compileDbPathExpr(dbCtx, pathList, false)
+
+        val whereLeft = PathDbExpr(atClass.type, atClass, listOf(), null)
+        val whereRight = ParameterDbExpr(atClass.type, 0)
+        val where = BinaryDbExpr(RBooleanType, DbBinaryOp_Eq, whereLeft, whereRight)
+
+        val atBase = RAtExprBase(from, listOf(what), where, listOf(), false, false)
+        return RMemberCalculator_DataAttribute(what.type, atBase)
+    }
+
+    fun compilePathDb(ctx: CtDbExprContext, path: List<String>): DbExpr {
+        val head = path[0]
+        val res = resolveNameDb(ctx, head)
+
+        if (res is CtDbNameResolution_Class) {
+            return compileDbPathExpr0(res.cls, path, 1)
+        } else if (res is CtDbNameResolution_Attr) {
+            return compileDbPathExpr0(res.attr.cls, path, 0)
+        } else if (res is CtDbNameResolution_Local) {
+            val rBase = res.loc.toVarExpr()
+            val rExpr = compilePath(ctx.exprCtx, rBase, path.subList(1, path.size))
+            return InterpretedDbExpr(rExpr)
+        } else if (res is CtDbNameResolution_Namespace && path.size >= 2) {
+            val second = path[1]
+            val const = res.ns.getConstantOpt(second)
+            if (const == null) throw errUnknownName("$head.$second")
+            val rBase = RConstantExpr(const)
+            val rExpr = compilePath(ctx.exprCtx, rBase, path.subList(2, path.size))
+            return InterpretedDbExpr(rExpr)
+        } else {
+            throw errUnknownName(head)
+        }
+    }
+
+    fun compilePathDb(ctx: CtDbExprContext, base: DbExpr, path: List<String>): DbExpr {
+        if (base is InterpretedDbExpr) {
+            val rExpr = compilePath(ctx.exprCtx, base.expr, path)
+            return InterpretedDbExpr(rExpr)
         }
 
-        private fun compilePathDb(ctx: CtDbExprContext, path: List<String>): DbExpr {
-            val head = path[0]
-            val res = resolveNameDb(ctx, head)
+        var res = base
+        for (step in path) {
+            res = compilePathDbStep(res, step)
+        }
+        return res
+    }
 
-            if (res is CtDbNameResolution_Class) {
-                return compileDbPathExpr0(res.cls, path, 1)
-            } else if (res is CtDbNameResolution_Attr) {
-                return compileDbPathExpr0(res.attr.cls, path, 0)
-            } else if (res is CtDbNameResolution_Local) {
-                val rBase = res.loc.toVarExpr()
-                val rExpr = compilePath(ctx.exprCtx, rBase, path.subList(1, path.size))
-                return InterpretedDbExpr(rExpr)
-            } else if (res is CtDbNameResolution_Namespace && path.size >= 2) {
-                val second = path[1]
-                val const = res.ns.getConstantOpt(second)
-                if (const == null) throw errUnknownName("$head.$second")
-                val rBase = RConstantExpr(const)
-                val rExpr = compilePath(ctx.exprCtx, rBase, path.subList(2, path.size))
-                return InterpretedDbExpr(rExpr)
-            } else {
-                throw errUnknownName(head)
-            }
+    private fun compilePathDbStep(base: DbExpr, step: String): DbExpr {
+        val type = base.type
+        throw CtError("expr_attr_member:${type.toStrictString()}:$step",
+                "Type ${type.toStrictString()} has no member '$step'")
+    }
+
+    fun compileCallStep(baseType: RType, name: String, args: List<RExpr>): RMemberCalculator {
+        val effectiveType = if (baseType is RNullableType) baseType.valueType else baseType
+
+        val fn = S_LibFunctions.getMemberFunction(effectiveType, name)
+        val calculator = fn.compileCall(baseType, args)
+
+        if (baseType is RNullableType) {
+            throw CtError("expr_call_null:$name", "Cannot call function '$name' on null")
         }
 
-        private fun compilePathDb(ctx: CtDbExprContext, base: DbExpr, path: List<String>): DbExpr {
-            if (base is InterpretedDbExpr) {
-                val rExpr = compilePath(ctx.exprCtx, base.expr, path)
-                return InterpretedDbExpr(rExpr)
-            }
-
-            var res = base
-            for (step in path) {
-                res = compilePathDbStep(res, step)
-            }
-            return res
-        }
-
-        private fun compilePathDbStep(base: DbExpr, step: String): DbExpr {
-            val type = base.type
-            throw CtError("expr_attr_member:${type.toStrictString()}:$step",
-                    "Type ${type.toStrictString()} has no member '$step'")
-        }
+        return calculator
     }
 }
 

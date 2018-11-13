@@ -25,7 +25,7 @@ class RSysCallExpr(type: RType, val fn: RSysFunction, args: List<RExpr>): RCallE
 
 class RUserCallExpr(type: RType, val name: String, val fnKey: Int, args: List<RExpr>): RCallExpr(type, args) {
     override fun call(frame: RtCallFrame, values: List<RtValue>): RtValue {
-        val fn = frame.entCtx.modCtx.module.functions[fnKey]
+        val fn = frame.entCtx.modCtx.module.functionsTable[fnKey]
         check(fn.fnKey == fnKey)
         val res = fn.call(frame, values)
         return res
@@ -90,6 +90,10 @@ abstract class RSysFunction_Generic<T>: RSysFunction() {
     private fun errArgCnt(n: Int) = IllegalStateException("Wrong number of arguments for ${javaClass.simpleName}: $n")
 }
 
+sealed class RSysFunction_Common: RSysFunction_Generic<RtValue>() {
+    override fun extract(v: RtValue): RtValue = v
+}
+
 object RSysFunction_Unit: RSysFunction() {
     override fun call(ctx: RtGlobalContext, args: List<RtValue>): RtValue {
         check(args.size == 0)
@@ -123,6 +127,15 @@ object RSysFunction_Max: RSysFunction_2() {
     }
 }
 
+object RSysFunction_IsSigner: RSysFunction() {
+    override fun call(ctx: RtGlobalContext, args: List<RtValue>): RtValue {
+        check(args.size == 1)
+        val a = args[0].asByteArray()
+        val r = ctx.signers.any { Arrays.equals(it, a) }
+        return RtBooleanValue(r)
+    }
+}
+
 object RSysFunction_Json: RSysFunction_1() {
     override fun call(arg: RtValue): RtValue {
         val a = arg.asString()
@@ -148,10 +161,6 @@ object RSysFunction_Range: RSysFunction_Common() {
         }
         return RtRangeValue(start, end, step)
     }
-}
-
-sealed class RSysFunction_Common: RSysFunction_Generic<RtValue>() {
-    override fun extract(v: RtValue): RtValue = v
 }
 
 object RSysFunction_Int_Str: RSysFunction_Common() {

@@ -119,6 +119,33 @@ class ExpressionTest: BaseRellTest(false) {
         chk("((u: user) @ { 'Bill' } ( u )).company.name", "text[Microsoft]")
     }
 
+    @Test fun testDataClassPathExprMix() {
+        tst.useSql = true
+        tst.classDefs = listOf("class company { name: text; }", "class user { name: text; company; }")
+
+        tst.execOp("""
+            val microsoft = create company('Microsoft');
+            create user('Bill', microsoft);
+        """.trimIndent())
+
+        chk("((u: user) @ { 'Bill' } ( u )).company.name.size()", "int[9]")
+        chk("((u: user) @ { 'Bill' } ( u )).company.name.upperCase()", "text[MICROSOFT]")
+        chk("((u: user) @ { 'Bill' } ( u )).company.name.replace('soft', 'hard')", "text[Microhard]")
+        chk("((u: user) @ { 'Bill' } ( u )).company.name.split('o')", "list<text>[text[Micr],text[s],text[ft]]")
+        chk("((u: user) @ { 'Bill' } ( u )).company.name.matches('[A-Za-z]+')", "boolean[true]")
+        chk("((u: user) @ { 'Bill' } ( u )).company.name.matches('[0-9]+')", "boolean[false]")
+        chk("((u: user) @ { 'Bill' } ( u )).company.name.upperCase().replace('SOFT','HARD').lowerCase()", "text[microhard]")
+
+        chkEx("{ val x = user@{'Bill'}(u=user); return x.u.company.name.size(); }", "int[9]")
+        chkEx("{ val x = user@{'Bill'}(u=user); return x.u.company.name.upperCase(); }", "text[MICROSOFT]")
+        chkEx("{ val x = user@{'Bill'}(u=user); return x.u.company.name.replace('soft', 'hard'); }", "text[Microhard]")
+        chkEx("{ val x = user@{'Bill'}(u=user); return x.u.company.name.split('o'); }", "list<text>[text[Micr],text[s],text[ft]]")
+        chkEx("{ val x = user@{'Bill'}(u=user); return x.u.company.name.matches('[A-Za-z]+'); }", "boolean[true]")
+        chkEx("{ val x = user@{'Bill'}(u=user); return x.u.company.name.matches('[0-9]+'); }", "boolean[false]")
+        chkEx("{ val x = user@{'Bill'}(u=user); return x.u.company.name.encode().decode().upperCase().replace('SOFT','HARD').lowerCase(); }",
+                "text[microhard]")
+    }
+
     @Test fun testDataClassPathExprComplex() {
         tst.useSql = true
         tst.classDefs = listOf(
@@ -159,6 +186,13 @@ class ExpressionTest: BaseRellTest(false) {
         chk("(123,)", "(int[123])")
         chk("(123,'Hello',false)", "(int[123],text[Hello],boolean[false])")
         chk("(123,('Hello',('World',456)),false)", "(int[123],(text[Hello],(text[World],int[456])),boolean[false])")
+        chk("(a:123)", "(a:int[123])")
+        chk("(a:123,b:'Hello')", "(a:int[123],b:text[Hello])")
+        chk("(a:123,'Hello')", "(a:int[123],text[Hello])")
+        chk("(123,b:'Hello')", "(int[123],b:text[Hello])")
+        chk("(a:'Hello',b:(x:123,y:456))", "(a:text[Hello],b:(x:int[123],y:int[456]))")
+        chk("(a:123,a:456)", "ct_err:expr_tuple_dupname:a")
+        chk("(a:123,a:123)", "ct_err:expr_tuple_dupname:a")
     }
 
     @Test fun testTupleAt() {

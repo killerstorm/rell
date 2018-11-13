@@ -18,17 +18,17 @@ class LibMapTest: BaseRellTest(false) {
     @Test fun testConstructor() {
         chk("map()", "ct_err:expr_map_notype")
         chk("map<text,integer>()", "map<text,integer>[]")
-        chk("map<integer,integer>([123])", "ct_err:expr_map_typemiss:map<integer,integer>:list<integer>")
-        chk("map<integer,integer>(['Bob':123])", "ct_err:expr_map_typemiss:map<integer,integer>:map<text,integer>")
+        chk("map<integer,integer>([123])", "ct_err:expr_map_badtype:list<integer>")
+        chk("map<integer,integer>(['Bob':123])", "ct_err:expr_map_key_typemiss:integer:text")
         chk("map<text,integer>(['Bob':123])", "map<text,integer>[text[Bob]=int[123]]")
         chk("map(['Bob':123])", "map<text,integer>[text[Bob]=int[123]]")
 
         val exp = "map<text,integer>[text[Bob]=int[123],text[Alice]=int[456],text[Trudy]=int[789]]"
         chk("map(['Bob':123,'Alice':456,'Trudy':789])", exp)
         chk("map<text,integer>(['Bob':123,'Alice':456,'Trudy':789])", exp)
-        chk("map<integer,text>(['Bob':123,'Alice':456,'Trudy':789])", "ct_err:expr_map_typemiss:map<integer,text>:map<text,integer>")
-        chk("map<integer,integer>(['Bob':123,'Alice':456,'Trudy':789])", "ct_err:expr_map_typemiss:map<integer,integer>:map<text,integer>")
-        chk("map<text,text>(['Bob':123,'Alice':456,'Trudy':789])", "ct_err:expr_map_typemiss:map<text,text>:map<text,integer>")
+        chk("map<integer,text>(['Bob':123,'Alice':456,'Trudy':789])", "ct_err:expr_map_key_typemiss:integer:text")
+        chk("map<integer,integer>(['Bob':123,'Alice':456,'Trudy':789])", "ct_err:expr_map_key_typemiss:integer:text")
+        chk("map<text,text>(['Bob':123,'Alice':456,'Trudy':789])", "ct_err:expr_map_value_typemiss:text:integer")
     }
 
     @Test fun testEmpty() {
@@ -68,13 +68,13 @@ class LibMapTest: BaseRellTest(false) {
     }
 
     @Test fun testGet() {
-        chk("map<text,integer>().get('Bob')", "rt_err:fn_map_get_novalue:text[Bob]")
-        chk("map<text,integer>().get(123)", "ct_err:expr_call_argtypes:map<text,integer>.get:integer")
-        chk("['Bob':123].get('Bob')", "int[123]")
-        chk("['Bob':123].get('Alice')", "rt_err:fn_map_get_novalue:text[Alice]")
-        chk("['Bob':123,'Alice':456].get('Bob')", "int[123]")
-        chk("['Bob':123,'Alice':456].get('Alice')", "int[456]")
-        chk("['Bob':123,'Alice':456].get('Trudy')", "rt_err:fn_map_get_novalue:text[Trudy]")
+        chk("map<text,integer>().calculate('Bob')", "rt_err:fn_map_get_novalue:text[Bob]")
+        chk("map<text,integer>().calculate(123)", "ct_err:expr_call_argtypes:map<text,integer>.calculate:integer")
+        chk("['Bob':123].calculate('Bob')", "int[123]")
+        chk("['Bob':123].calculate('Alice')", "rt_err:fn_map_get_novalue:text[Alice]")
+        chk("['Bob':123,'Alice':456].calculate('Bob')", "int[123]")
+        chk("['Bob':123,'Alice':456].calculate('Alice')", "int[456]")
+        chk("['Bob':123,'Alice':456].calculate('Trudy')", "rt_err:fn_map_get_novalue:text[Trudy]")
     }
 
     @Test fun testSubscriptGet() {

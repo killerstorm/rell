@@ -11,6 +11,14 @@ class S_NameType(val name: String): S_Type() {
     override fun compile(ctx: CtModuleContext): RType = ctx.getType(name)
 }
 
+class S_NullableType(val valueType: S_Type): S_Type() {
+    override fun compile(ctx: CtModuleContext): RType {
+        val rValueType = valueType.compile(ctx)
+        if (rValueType is RNullableType) throw CtError("type_nullable_nullable", "Nullable nullable (T??) is not allowed")
+        return RNullableType(rValueType)
+    }
+}
+
 class S_TupleType(val fields: List<Pair<String?, S_Type>>): S_Type() {
     override fun compile(ctx: CtModuleContext): RType {
         val names = mutableSetOf<String>()

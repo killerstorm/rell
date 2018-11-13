@@ -172,7 +172,15 @@ class S_AtExpr(
 {
     override fun compile(ctx: CtExprContext): RExpr {
         val base = compileBase(ctx)
-        val type = if (many) RListType(base.resType.type) else base.resType.type
+
+        val type = if (many) {
+            RListType(base.resType.type)
+        } else if (zero) {
+            RNullableType(base.resType.type)
+        } else {
+            base.resType.type
+        }
+
         return RAtExpr(type, base.rBase, base.limit, base.resType.rowDecoder)
     }
 
@@ -220,11 +228,6 @@ class S_AtExpr(
         }
 
         return r
-    }
-
-    override fun compileAsBoolean(ctx: CtExprContext): RExpr {
-        val base = compileBase(ctx)
-        return RBooleanAtExpr(base.rBase, base.limit)
     }
 
     override fun compileDb(ctx: CtDbExprContext): DbExpr = delegateCompileDb(ctx)

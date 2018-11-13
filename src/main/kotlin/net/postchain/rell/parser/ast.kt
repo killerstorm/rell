@@ -21,8 +21,8 @@ class Ct_SysFunction(val fn: S_SysFunction): Ct_Function() {
 class Ct_UserFunction(val fn: Ct_UserFunctionDeclaration, val fnKey: Int): Ct_Function() {
     override fun compileCall(args: List<RExpr>): RExpr {
         val params = fn.params.map { it.type }
-        val args2 = S_SysFunction.matchArgs(fn.name, params, args)
-        return RUserCallExpr(fn.type, fn.name, fnKey, args2)
+        S_SysFunction.matchArgs(fn.name, params, args)
+        return RUserCallExpr(fn.type, fn.name, fnKey, args)
     }
 
     override fun compileCallDb(args: List<DbExpr>): DbExpr = TODO()
@@ -148,9 +148,11 @@ internal enum class CtEntityType {
 internal class CtEntityContext(
         val modCtx: CtModuleContext,
         val entityType: CtEntityType,
-        returnType: RType?
+        explicitReturnType: RType?
 ){
-    private var actualReturnType: RType? = returnType
+    private val retTypeTracker =
+            if (explicitReturnType != null) RetTypeTracker.Explicit(explicitReturnType) else RetTypeTracker.Implicit()
+
     private var callFrameSize = 0
 
     val rootExprCtx = CtExprContext(this, null, false)
@@ -161,32 +163,11 @@ internal class CtEntityContext(
         }
     }
 
-    fun matchReturnTypeUnit() {
-        val retType = actualReturnType
-        if (retType == null) {
-            actualReturnType = RUnitType
-        } else if (retType != RUnitType) {
-            throw CtUtils.errTypeMissmatch(retType, RUnitType, "entity_rettype", "Return type missmatch")
-        }
+    fun matchReturnType(type: RType) {
+        retTypeTracker.match(type)
     }
 
-    fun matchReturnType(expr: RExpr): RExpr {
-        val retType = actualReturnType
-        if (retType == null) {
-            actualReturnType = expr.type
-            return expr
-        }
-        return retType.match(expr, "entity_rettype", "Return type missmatch")
-    }
-
-    fun actualReturnType(): RType {
-        var t = actualReturnType
-        if (t == null) {
-            t = RUnitType
-            actualReturnType = t
-        }
-        return t
-    }
+    fun actualReturnType(): RType = retTypeTracker.getRetType()
 
     fun adjustCallFrameSize(size: Int) {
         check(size >= 0)
@@ -196,6 +177,56 @@ internal class CtEntityContext(
     fun makeCallFrame(): RCallFrame {
         val rootBlock = rootExprCtx.makeFrameBlock()
         return RCallFrame(callFrameSize, rootBlock)
+    }
+
+    private sealed class RetTypeTracker {
+        abstract fun getRetType(): RType
+        abstract fun match(type: RType)
+
+        class Implicit: RetTypeTracker() {
+            private var impType: RType? = null
+
+            override fun getRetType(): RType {
+                val t = impType
+                if (t != null) return t
+                val res = RUnitType
+                impType = res
+                return res
+            }
+
+            override fun match(type: RType) {
+                val t = impType
+                if (t == null) {
+                    impType = type
+                } else if (t == RUnitType) {
+                    if (type != RUnitType) {
+                        throw errRetTypeMiss(t, type)
+                    }
+                } else {
+                    val comType = RType.commonTypeOpt(t, type)
+                    if (comType == null) {
+                        throw errRetTypeMiss(t, type)
+                    }
+                    impType = comType
+                }
+            }
+        }
+
+        class Explicit(val expType: RType): RetTypeTracker() {
+            override fun getRetType() = expType
+
+            override fun match(type: RType) {
+                val m = if (expType == RUnitType) type == RUnitType else expType.isAssignableFrom(type)
+                if (!m) {
+                    throw errRetTypeMiss(expType, type)
+                }
+            }
+        }
+    }
+
+    companion object {
+        private fun errRetTypeMiss(dstType: RType, srcType: RType): CtError =
+                CtUtils.errTypeMissmatch(srcType, dstType, "entity_rettype", "Return type missmatch")
     }
 }
 
@@ -313,9 +344,9 @@ internal class CtClassContext(private val modCtx: CtModuleContext) {
                     "Attribute '$name' has unallowed type: ${rType.toStrictString()}")
         }
 
-        val rExpr = if (expr == null) null else {
-            val rExpr = expr.compile(entCtx.rootExprCtx)
-            rType.match(rExpr, "attr_type:$name", "Default value type missmatch for '$name'")
+        val rExpr = expr?.compile(entCtx.rootExprCtx)
+        if (rExpr != null) {
+            rType.match(rExpr.type, "attr_type:$name", "Default value type missmatch for '$name'")
         }
 
         attributes[name] = RAttrib(name, rType, mutable, rExpr)
@@ -389,7 +420,7 @@ class S_QueryDefinition(
         val rBody = body.compileQuery(entCtx.rootExprCtx)
 
         val rCallFrame = entCtx.makeCallFrame()
-        val rQuery = RQuery(name, rParams, rBody, rCallFrame)
+        val rQuery = RQuery(name, entCtx.actualReturnType(), rParams, rBody, rCallFrame)
         ctx.addQuery(rQuery)
     }
 }
@@ -403,20 +434,20 @@ class S_FunctionBodyShort(val expr: S_Expression): S_FunctionBody() {
     override fun compileQuery(ctx: CtExprContext): RStatement {
         val rExpr = expr.compile(ctx)
         CtUtils.checkUnitType(rExpr.type, "query_exprtype_unit", "Query expressions returns nothing")
-        val rExpr2 = ctx.entCtx.matchReturnType(rExpr)
-        return RReturnStatement(rExpr2)
+        ctx.entCtx.matchReturnType(rExpr.type)
+        return RReturnStatement(rExpr)
     }
 
     override fun compileFunction(ctx: CtExprContext): RStatement {
         val rExpr = expr.compile(ctx)
-        val rExpr2 = ctx.entCtx.matchReturnType(rExpr)
+        ctx.entCtx.matchReturnType(rExpr.type)
 
-        if (rExpr2.type == RUnitType) {
+        if (rExpr.type == RUnitType) {
             val subCtx = CtExprContext(ctx.entCtx, ctx, ctx.insideLoop)
             val rBlock = subCtx.makeFrameBlock()
-            return RBlockStatement(listOf(RExprStatement(rExpr2), RReturnStatement(null)), rBlock)
+            return RBlockStatement(listOf(RExprStatement(rExpr), RReturnStatement(null)), rBlock)
         } else {
-            return RReturnStatement(rExpr2)
+            return RReturnStatement(rExpr)
         }
     }
 }

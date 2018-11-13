@@ -30,7 +30,7 @@ class RUpdateStatement(
 
         val fromInfo = buildFromInfo()
 
-        val ctx = SqlGenContext(fromInfo)
+        val ctx = SqlGenContext(fromInfo, listOf())
 
         builder.append("UPDATE ")
         appendMainTable(builder, cls, fromInfo)
@@ -89,7 +89,7 @@ class RDeleteStatement(val cls: RAtClass, val extraClasses: List<RAtClass>, val 
 
         val fromInfo = buildFromInfo()
 
-        val ctx = SqlGenContext(fromInfo)
+        val ctx = SqlGenContext(fromInfo, listOf())
 
         builder.append("DELETE FROM ")
         appendMainTable(builder, cls, fromInfo)

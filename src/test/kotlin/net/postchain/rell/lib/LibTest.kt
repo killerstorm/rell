@@ -1,6 +1,7 @@
 package net.postchain.rell.lib
 
 import net.postchain.rell.BaseRellTest
+import net.postchain.rell.hexStringToByteArray
 import org.junit.Test
 
 class LibTest: BaseRellTest(false) {
@@ -54,6 +55,43 @@ class LibTest: BaseRellTest(false) {
         chkEx("{ log(); return 123; }", "int[123]")
         tst.chkStdout()
         tst.chkLog("")
+    }
+
+    @Test fun testIsSigner() {
+        tst.signers = listOf("1234".hexStringToByteArray(), "abcd".hexStringToByteArray())
+
+        chk("is_signer(x'1234')", "boolean[true]")
+        chk("is_signer(x'abcd')", "boolean[true]")
+        chk("is_signer(x'1234abcd')", "boolean[false]")
+        chk("is_signer(x'')", "boolean[false]")
+
+        chk("is_signer()", "ct_err:expr_call_argtypes:is_signer:")
+        chk("is_signer(123)", "ct_err:expr_call_argtypes:is_signer:integer")
+        chk("is_signer('1234')", "ct_err:expr_call_argtypes:is_signer:text")
+        chk("is_signer(x'12', x'34')", "ct_err:expr_call_argtypes:is_signer:byte_array,byte_array")
+    }
+
+    @Test fun testTypeOf() {
+        tst.strictToString = false
+        tst.classDefs = listOf("class user { name: text; }")
+
+        chk("_typeOf(null)", "null")
+        chk("_typeOf(true)", "boolean")
+        chk("_typeOf(123)", "integer")
+        chk("_typeOf('Hello')", "text")
+        chk("_typeOf(range(10))", "range")
+        chk("_typeOf((123,'Hello'))", "(integer,text)")
+        chk("_typeOf(list<integer>())", "list<integer>")
+        chk("_typeOf(set<integer>())", "set<integer>")
+        chk("_typeOf(map<integer,text>())", "map<integer,text>")
+
+        chk("1/0", "rt_err:expr_div_by_zero")
+        chk("_typeOf(1/0)", "integer")
+
+        chk("_typeOf(user @ {})", "user")
+        chk("_typeOf(user @? {})", "user?")
+        chk("_typeOf(user @* {})", "list<user>")
+        chk("_typeOf(user @+ {})", "list<user>")
     }
 
     @Test fun testJsonStr() {

@@ -59,6 +59,20 @@ object S_UnaryOp_Not: S_UnaryOp("not") {
     }
 }
 
+object S_UnaryOp_NotNull: S_UnaryOp("!!") {
+    override fun compile(expr: RExpr): RExpr {
+        val type = expr.type
+        if (type !is RNullableType) {
+            throw errTypeMissmatch(type)
+        }
+        return RNotNullExpr(type.valueType, expr)
+    }
+
+    override fun compileDb(expr: DbExpr): DbExpr {
+        throw errTypeMissmatch(expr.type)
+    }
+}
+
 class S_UnaryExpr(val op: S_UnaryOp, val expr: S_Expression): S_Expression() {
     override fun compile(ctx: CtExprContext): RExpr {
         val rExpr = expr.compile(ctx)

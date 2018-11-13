@@ -7,137 +7,183 @@ abstract class S_SysFunction(val name: String) {
     abstract fun compileCallDb(args: List<DbExpr>): DbExpr
 
     companion object {
-        fun matchArgs(name: String, params: List<RType>, args: List<RExpr>): List<RExpr> {
-            return matchArgs0(name, params, args, RExpr::type, { t, e -> t.matchOpt(e) })
+        fun matchArgs(name: String, params: List<RType>, args: List<RExpr>) {
+            val argTypes = args.map { it.type }
+            matchArgs0(name, params, argTypes)
         }
 
-        fun matchArgsDb(name: String, params: List<RType>, args: List<DbExpr>): List<DbExpr> {
-            return matchArgs0(name, params, args, DbExpr::type, { t, e -> t.matchOpt(e) })
+        fun matchArgsDb(name: String, params: List<RType>, args: List<DbExpr>) {
+            val argTypes = args.map { it.type }
+            matchArgs0(name, params, argTypes)
+        }
+
+        private fun matchArgs0(name: String, params: List<RType>, args: List<RType>) {
+            if (args.size != params.size) {
+                throw CtError("expr_call_argcnt:$name:${params.size}:${args.size}",
+                        "Wrong number of arguments for '$name': ${args.size} instead of ${params.size}")
+            }
+
+            for ((i, param) in params.withIndex()) {
+                val arg = args[i]
+                if (!param.isAssignableFrom(arg)) {
+                    throw CtError("expr_call_argtype:$name:$i:${param.toStrictString()}:${arg.toStrictString()}",
+                            "Wrong argument type for '$name' #${i + 1}: ${arg.toStrictString()} instead of ${param.toStrictString()}")
+                }
+            }
         }
     }
 }
 
-abstract class S_SysMemberFunction(val name: String, val type: RType) {
-    abstract fun compileCall(base: RExpr, args: List<RExpr>): RExpr
+abstract class S_SysMemberFunction(val name: String) {
+    abstract fun compileCall(baseType: RType, args: List<RExpr>): RMemberCalculator
     abstract fun compileCallDb(base: DbExpr, args: List<DbExpr>): DbExpr
 }
 
-class S_OverloadFnCase(val params: List<RType>, val rFn: RSysFunction, val dbFn: DbSysFunction?) {
-    fun <T> matchArgs(args: List<T>, matcher: (RType, T) -> T?): List<T>? {
-        if (args.size != params.size) {
-            return null
-        }
-
-        val args2 = mutableListOf<T>()
-        for ((i, arg) in args.withIndex()) {
-            val arg2 = matcher(params[i], arg)
-            if (arg2 == null) {
-                return null
-            }
-            args2.add(arg2)
-        }
-
-        return args2
-    }
-
-    companion object {
-        fun match(name: String, cases: List<S_OverloadFnCase>, args: List<RExpr>): Pair<RSysFunction, List<RExpr>> {
-            val (case, args2) = match0(name, cases, args, RExpr::type, RType::matchOpt)
-            return Pair(case.rFn, args2)
-        }
-
-        fun matchDb(name: String, cases: List<S_OverloadFnCase>, args: List<DbExpr>): Pair<DbSysFunction, List<DbExpr>> {
-            val (case, args2) = match0(name, cases, args, DbExpr::type, RType::matchOpt)
-            if (case.dbFn == null) {
-                throw CtError("expr_call_nosql:$name", "Function '$name' has no SQL equivalent")
-            }
-            return Pair(case.dbFn, args2)
-        }
-
-        private fun <T> match0(
-                name: String,
-                cases: List<S_OverloadFnCase>,
-                args: List<T>,
-                getter: (T) -> RType,
-                matcher: (RType, T) -> T?
-        ): Pair<S_OverloadFnCase, List<T>>
-        {
-            for (case in cases) {
-                val args2 = case.matchArgs(args, matcher)
-                if (args2 != null) {
-                    return Pair(case, args2)
-                }
-            }
-            throw errNoMatch(name, args, getter)
-        }
-
-        private fun <T> errNoMatch(name: String, args: List<T>, getter: (T) -> RType): CtError {
-            val argsStrShort = args.joinToString(",") { getter(it).toStrictString() }
-            val argsStr = args.joinToString { getter(it).toStrictString() }
-            return CtError("expr_call_argtypes:$name:$argsStrShort", "Function $name undefined for arguments ($argsStr)")
-        }
-    }
+sealed class C_ArgTypeMatcher {
+    abstract fun match(type: RType): Boolean
 }
 
-class S_StdSysFunction(
-        name: String,
+class C_ArgTypeMatcher_Simple(val targetType: RType): C_ArgTypeMatcher() {
+    override fun match(type: RType) = targetType.isAssignableFrom(type)
+}
+
+class C_ArgTypeMatcher_CollectionSub(val elementType: RType): C_ArgTypeMatcher() {
+    override fun match(type: RType) = type is RCollectionType && elementType.isAssignableFrom(type.elementType)
+}
+
+class C_ArgTypeMatcher_MapSub(val keyType: RType, val valueType: RType): C_ArgTypeMatcher() {
+    override fun match(type: RType) =
+            type is RMapType
+            && keyType.isAssignableFrom(type.keyType)
+            && valueType.isAssignableFrom(type.valueType)
+}
+
+sealed class C_GlobalOverloadFnCase {
+    abstract fun compileCall(name: String, args: List<RExpr>): RExpr?
+    abstract fun compileCallDb(name: String, args: List<DbExpr>): DbExpr?
+}
+
+class C_StdGlobalOverloadFnCase(
+        val params: List<C_ArgTypeMatcher>,
         val type: RType,
-        val cases: List<S_OverloadFnCase>
-): S_SysFunction(name)
+        val rFn: RSysFunction,
+        val dbFn: DbSysFunction?
+): C_GlobalOverloadFnCase()
 {
-    override fun compileCall(args: List<RExpr>): RExpr {
-        val (rFn, args2) = S_OverloadFnCase.match(name, cases, args)
-        return RSysCallExpr(type, rFn, args2)
+    override fun compileCall(name: String, args: List<RExpr>): RExpr? {
+        if (!C_OverloadFnUtils.matchArgs(params, args.map { it.type })) return null
+        return RSysCallExpr(type, rFn, args)
     }
 
-    override fun compileCallDb(args: List<DbExpr>): DbExpr {
-        val (dbFn, args2) = S_OverloadFnCase.matchDb(name, cases, args)
-        return CallDbExpr(type, dbFn, args2)
+    override fun compileCallDb(name: String, args: List<DbExpr>): DbExpr? {
+        if (!C_OverloadFnUtils.matchArgs(params, args.map { it.type })) return null
+        if (dbFn == null) throw CtError("expr_call_nosql:$name", "Function '$name' has no SQL equivalent")
+        return CallDbExpr(type, dbFn, args)
     }
 }
 
-class S_StdSysMemberFunction(name: String, type: RType, val cases: List<S_OverloadFnCase>)
-    : S_SysMemberFunction(name, type)
+abstract class C_CustomGlobalOverloadFnCase: C_GlobalOverloadFnCase() {
+    override fun compileCallDb(name: String, args: List<DbExpr>): DbExpr? = null
+}
+
+sealed class C_MemberOverloadFnCase {
+    abstract fun compileCall(name: String, args: List<RExpr>): RMemberCalculator?
+    abstract fun compileCallDb(name: String, base: DbExpr, args: List<DbExpr>): DbExpr?
+}
+
+class C_StdMemberOverloadFnCase(
+        val params: List<C_ArgTypeMatcher>,
+        val type: RType,
+        val rFn: RSysFunction,
+        val dbFn: DbSysFunction?
+): C_MemberOverloadFnCase()
 {
-    override fun compileCall(base: RExpr, args: List<RExpr>): RExpr {
-        val (rFn, args2) = S_OverloadFnCase.match("${base.type.toStrictString()}.$name", cases, args)
-        val fullArgs = listOf(base) + args2
-        return RSysCallExpr(type, rFn, fullArgs)
+    override fun compileCall(name: String, args: List<RExpr>): RMemberCalculator? {
+        if (!C_OverloadFnUtils.matchArgs(params, args.map { it.type })) return null
+        return RMemberCalculator_SysFn(type, rFn, args)
     }
 
-    override fun compileCallDb(base: DbExpr, args: List<DbExpr>): DbExpr {
-        val (dbFn, args2) = S_OverloadFnCase.matchDb("${base.type.toStrictString()}.$name", cases, args)
-        val fullArgs = listOf(base) + args2
+    override fun compileCallDb(name: String, base: DbExpr, args: List<DbExpr>): DbExpr? {
+        if (!C_OverloadFnUtils.matchArgs(params, args.map { it.type })) return null
+        if (dbFn == null) throw CtError("expr_call_nosql:$name", "Function '$name' has no SQL equivalent")
+        val fullArgs = listOf(base) + args
         return CallDbExpr(type, dbFn, fullArgs)
     }
 }
 
-private fun <T> matchArgs0(
-        name: String,
-        params: List<RType>,
-        args: List<T>,
-        typeGetter: (T) -> RType,
-        typeMatcher: (RType, T) -> T?
-): List<T>
-{
-    if (args.size != params.size) {
-        throw CtError("expr_call_argcnt:$name:${params.size}:${args.size}",
-                "Wrong number of arguments for '$name': ${args.size} instead of ${params.size}")
-    }
-
-    val res = mutableListOf<T>()
-
-    for (i in params.indices) {
-        val param = params[i]
-        val arg = args[i]
-        val arg2 = typeMatcher(param, arg)
-        if (arg2 == null) {
-            val argType = typeGetter(arg)
-            throw CtError("expr_call_argtype:$name:$i:${param.toStrictString()}:${argType.toStrictString()}",
-                    "Wrong argument type for '$name' #${i + 1}: ${argType.toStrictString()} instead of ${param.toStrictString()}")
+object C_OverloadFnUtils {
+    fun compileCall(name: String, cases: List<C_GlobalOverloadFnCase>, args: List<RExpr>): RExpr {
+        for (case in cases) {
+            val res = case.compileCall(name, args)
+            if (res != null) {
+                return res
+            }
         }
-        res.add(arg2)
+        throw errNoMatch(name, args.map { it.type })
     }
 
-    return res
+    fun compileCallDb(name: String, cases: List<C_GlobalOverloadFnCase>, args: List<DbExpr>): DbExpr {
+        for (case in cases) {
+            val res = case.compileCallDb(name, args)
+            if (res != null) {
+                return res
+            }
+        }
+        throw errNoMatch(name, args.map { it.type })
+    }
+
+    fun compileCall(name: String, cases: List<C_MemberOverloadFnCase>, args: List<RExpr>): RMemberCalculator {
+        for (case in cases) {
+            val res = case.compileCall(name, args)
+            if (res != null) {
+                return res
+            }
+        }
+        throw errNoMatch(name, args.map { it.type })
+    }
+
+    fun compileCallDb(name: String, cases: List<C_MemberOverloadFnCase>, base: DbExpr, args: List<DbExpr>): DbExpr {
+        for (case in cases) {
+            val res = case.compileCallDb(name, base, args)
+            if (res != null) {
+                return res
+            }
+        }
+        throw errNoMatch(name, args.map { it.type })
+    }
+
+    fun matchArgs(params: List<C_ArgTypeMatcher>, args: List<RType>): Boolean {
+        if (args.size != params.size) {
+            return false
+        }
+
+        for ((i, arg) in args.withIndex()) {
+            if (!params[i].match(arg)) {
+                return false
+            }
+        }
+
+        return true
+    }
+
+    fun errNoMatch(name: String, args: List<RType>): CtError {
+        val argsStrShort = args.joinToString(",") { it.toStrictString() }
+        val argsStr = args.joinToString { it.toStrictString() }
+        return CtError("expr_call_argtypes:$name:$argsStrShort", "Function $name undefined for arguments ($argsStr)")
+    }
+}
+
+class S_StdSysFunction(name: String, private val cases: List<C_GlobalOverloadFnCase>): S_SysFunction(name) {
+    override fun compileCall(args: List<RExpr>) = C_OverloadFnUtils.compileCall(name, cases, args)
+    override fun compileCallDb(args: List<DbExpr>) = C_OverloadFnUtils.compileCallDb(name, cases, args)
+}
+
+class S_StdSysMemberFunction(name: String, val cases: List<C_MemberOverloadFnCase>): S_SysMemberFunction(name) {
+    override fun compileCall(baseType: RType, args: List<RExpr>): RMemberCalculator {
+        return C_OverloadFnUtils.compileCall("${baseType.toStrictString()}.$name", cases, args)
+    }
+
+    override fun compileCallDb(base: DbExpr, args: List<DbExpr>): DbExpr {
+        return C_OverloadFnUtils.compileCallDb("${base.type.toStrictString()}.$name", cases, base, args)
+    }
 }

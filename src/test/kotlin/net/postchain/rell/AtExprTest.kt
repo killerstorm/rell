@@ -388,15 +388,17 @@ class AtExprTest {
         chk("user @ {} limit 'Hello'", "ct_err:expr_at_limit_type:text")
     }
 
-    @Test fun testZeroOne() {
+    @Test fun testCardinalityOne() {
         chk("user @ { firstName = 'Chuck' }", "rt_err:at:wrong_count:0")
-        chk("user @? { firstName = 'Chuck' }", "null[user]")
+        chk("user @ { firstName = 'Bill' }", "user[40]")
+        chk("user @? { firstName = 'Chuck' }", "null")
         chk("user @? { firstName = 'Bill' }", "user[40]")
         chk("user @? { firstName = 'Steve' }", "rt_err:at:wrong_count:2")
     }
 
-    @Test fun testOneMany() {
+    @Test fun testCardinalityMany() {
         chk("user @* { firstName = 'Chuck' }", "list<user>[]")
+        chk("user @* { firstName = 'Bill' }", "list<user>[user[40]]")
         chk("user @+ { firstName = 'Chuck' }", "rt_err:at:wrong_count:0")
         chk("user @+ { firstName = 'Bill' }", "list<user>[user[40]]")
         chk("user @+ { firstName = 'Steve' }", "list<user>[user[20],user[21]]")

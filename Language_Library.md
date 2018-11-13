@@ -4,22 +4,59 @@
 
 `abs(integer): integer` - absolute value
 
-`min(integer, integer): integer` - minimum of two values
+`is_signer(byte_array): boolean` - returns `true` if a byte array is in the list of signers of current operation
+
+`json(text): json` - parse a JSON
+
+`log(...)` - print a message to the log (same usage as `print`)
 
 `max(integer, integer): integer` - maximum of two values
+
+`min(integer, integer): integer` - minimum of two values
 
 `print(...)` - print a message to STDOUT:
 
 * `print()` - prints an empty line
 * `print('Hello', 123)` - prints `"Hello 123"`
 
-`log(...)` - print a message to the log (same usage as `print`)
+### Require functions
 
-`json(text): json` - parse a JSON
+For checking a boolean condition:
+
+`require(boolean[, text])` - throws an exception if the argument is `false`
+
+For checking for `null`:
+
+`require(T?[, text]): T` - throws an exception if the argument is `null`, otherwise returns the argument
+
+`requireNotEmpty(T?[, text]): T` - same as the previous one
+
+For checking for an empty collection:
+
+`requireNotEmpty(list<T>[, text]): list<T>` - throws an exception if the argument is an empty collection, otherwise returns the argument
+
+`requireNotEmpty(set<T>[, text]): set<T>` - same as the previous
+
+`requireNotEmpty(map<K,V>[, text]): map<K,V>` - same as the previous
+
+When passing a nullable collection to `requireNotEmpty`, it throws an exception if the argument is either `null` or an empty collection.
+
+Examples:
+```
+val x: integer? = calculate();
+val y = require(x, "x is null"); // type of "y" is "integer", not "integer?"
+
+val p: list<integer> = getList();
+requireNotEmpty(p, "List is empty");
+
+val q: list<integer>? = tryToGetList();
+require(q);         // fails if q is null
+requireNotEmpty(q); // fails if q is null or an empty list
+```
 
 ---
 
-## integer
+### integer
 
 `integer.MIN_VALUE` = minimum value (`-2^63`)
 
@@ -127,15 +164,19 @@ Special operators:
 
 `list<T>()` - a new empty list
 
-`list<T>(list<T>)` - a copy of the given list
+`list<T>(list<T>)` - a copy of the given list (list of subtype is accepted as well)
 
-`list<T>(set<T>)` - a copy of the given set
+`list<T>(set<T>)` - a copy of the given set (set of subtype is accepted)
 
 `.empty(): boolean`
 
 `.size(): integer`
 
 `.contains(T): boolean`
+
+`.containsAll(list<T>): boolean`
+
+`.containsAll(set<T>): boolean`
 
 `.indexOf(T): integer` - returns `-1` if element is not found
 
@@ -176,7 +217,7 @@ Special operators:
 
 `set<T>()` - a new empty set
 
-`set<T>(set<T>)` - a copy of the given set
+`set<T>(set<T>)` - a copy of the given set (set of subtype is accepted as well)
 
 `set<T>(list<T>)` - a copy of the given list (with duplicates removed)
 
@@ -216,7 +257,7 @@ Special operators:
 
 `map<K,V>()` - a new empty map
 
-`map<K,V>(map<K,V>)` - a copy of the given map
+`map<K,V>(map<K,V>)` - a copy of the given map (map of subtypes is accepted as well)
 
 `.empty(): boolean`
 

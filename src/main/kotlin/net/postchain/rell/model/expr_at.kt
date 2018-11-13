@@ -37,19 +37,19 @@ class RAtExprBase(
         from.withIndex().forEach { check(it.index == it.value.index) }
     }
 
-    fun execute(frame: RtCallFrame, limit: RExpr?): List<Array<RtValue>> {
-        val rtSql = buildSql(limit)
+    fun execute(frame: RtCallFrame, params: List<RtValue>, limit: RExpr?): List<Array<RtValue>> {
+        val rtSql = buildSql(params, limit)
         val resultTypes = what.map { it.type }
         val select = RtSelect(rtSql, resultTypes)
         val records = select.execute(frame)
         return records
     }
 
-    private fun buildSql(limit: RExpr?): RtSql {
+    private fun buildSql(params: List<RtValue>, limit: RExpr?): RtSql {
         val builder = RtSqlBuilder()
 
         val fromInfo = buildFromInfo()
-        val ctx = SqlGenContext(fromInfo)
+        val ctx = SqlGenContext(fromInfo, params)
 
         builder.append("SELECT ")
 
@@ -127,7 +127,7 @@ class RAtExpr(
 ): RExpr(type)
 {
     override fun evaluate(frame: RtCallFrame): RtValue {
-        val records = base.execute(frame, limit)
+        val records = base.execute(frame, listOf(), limit)
         return decodeResult(records)
     }
 
@@ -135,10 +135,8 @@ class RAtExpr(
         val list = MutableList(records.size) { rowType.decode(records[it]) }
 
         val count = list.size
-        if (count == 0 && !base.zero) {
-            throw RtError("at:wrong_count:$count", "No records found")
-        } else if (count > 1 && !base.many) {
-            throw RtError("at:wrong_count:$count", "Multiple records found: $count")
+        if (count == 0 && !base.zero || count > 1 && !base.many) {
+            throw errWrongCount(count)
         }
 
         if (base.many) {
@@ -146,21 +144,15 @@ class RAtExpr(
         } else if (count > 0) {
             return list[0]
         } else {
-            return RtNullValue(type)
+            return RtNullValue
         }
     }
-}
 
-class RBooleanAtExpr(val base: RAtExprBase, val limit: RExpr?): RExpr(RBooleanType) {
-    override fun evaluate(frame: RtCallFrame): RtValue {
-        val records = base.execute(frame, limit)
-
-        val count = records.size
-        if (!base.many && count > 1) {
-            throw RtError("at:wrong_count:$count", "Multiple records found: $count")
+    companion object {
+        fun errWrongCount(count: Int): RtError {
+            val msg = if (count == 0) "No records found" else "Multiple records found: $count"
+            return RtError("at:wrong_count:$count", msg)
         }
-
-        return RtBooleanValue(count > 0)
     }
 }
 

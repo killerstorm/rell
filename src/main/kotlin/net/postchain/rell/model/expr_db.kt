@@ -26,7 +26,7 @@ sealed class DbUnaryOp(val code: String, val sql: String)
 object DbUnaryOp_Minus: DbUnaryOp("-", "-")
 object DbUnaryOp_Not: DbUnaryOp("not", "NOT")
 
-class SqlGenContext(private val fromInfo: SqlFromInfo) {
+class SqlGenContext(private val fromInfo: SqlFromInfo, private val parameters: List<RtValue>) {
     fun getPathAlias(cls: RAtClass, path: List<PathDbExprStep>): String {
         val fromCls = fromInfo.classes[cls.index]
         val pathKey = path.map { it.attr }
@@ -37,6 +37,10 @@ class SqlGenContext(private val fromInfo: SqlFromInfo) {
             throw IllegalStateException("Join path differs: ${pathAlias.path} instead of ${path}")
         }
         return pathAlias.alias
+    }
+
+    fun getParameter(index: Int): RtValue {
+        return parameters[index]
     }
 }
 
@@ -109,6 +113,13 @@ class PathDbExpr(type: RType, val cls: RAtClass, val path: List<PathDbExprStep>,
     }
 }
 
+class ParameterDbExpr(type: RType, val index: Int): DbExpr(type) {
+    override fun toSql(ctx: SqlGenContext, bld: RtSqlBuilder) {
+        val value = ctx.getParameter(index)
+        bld.append(type, value)
+    }
+}
+
 sealed class DbSysFunction(val name: String) {
     internal abstract fun toSql(ctx: SqlGenContext, bld: RtSqlBuilder, args: List<DbExpr>)
 }
@@ -155,9 +166,24 @@ class CallDbExpr(type: RType, val fn: DbSysFunction, val args: List<DbExpr>): Db
     override fun toSql(ctx: SqlGenContext, bld: RtSqlBuilder) = fn.toSql(ctx, bld, args)
 }
 
+internal sealed class RtSqlParam {
+    abstract fun type(): RType
+    abstract fun evaluate(frame: RtCallFrame): RtValue
+}
+
+internal class RtSqlParam_Expr(private val expr: RExpr): RtSqlParam() {
+    override fun type() = expr.type
+    override fun evaluate(frame: RtCallFrame) = expr.evaluate(frame)
+}
+
+internal class RtSqlParam_Value(private val type: RType, private val value: RtValue): RtSqlParam() {
+    override fun type() = type
+    override fun evaluate(frame: RtCallFrame) = value
+}
+
 internal class RtSqlBuilder {
     private val sqlBuf = StringBuilder()
-    private val paramsBuf = mutableListOf<RExpr>()
+    private val paramsBuf = mutableListOf<RtSqlParam>()
 
     fun <T> append(list: List<T>, sep: String, block: (T) -> Unit) {
         var s = ""
@@ -186,7 +212,12 @@ internal class RtSqlBuilder {
 
     fun append(param: RExpr) {
         sqlBuf.append("?")
-        paramsBuf.add(param)
+        paramsBuf.add(RtSqlParam_Expr(param))
+    }
+
+    fun append(type: RType, value: RtValue) {
+        sqlBuf.append("?")
+        paramsBuf.add(RtSqlParam_Value(type, value))
     }
 
     fun listBuilder(sep: String = ", "): RtSqlListBuilder = RtSqlListBuilder(this, sep)
@@ -205,9 +236,9 @@ internal class RtSqlListBuilder(private val builder: RtSqlBuilder, private val s
     }
 }
 
-internal class RtSql(val sql: String, val params: List<RExpr>) {
+internal class RtSql(val sql: String, val params: List<RtSqlParam>) {
     fun calcArgs(frame: RtCallFrame): RtSqlArgs {
-        val types = params.map { it.type }
+        val types = params.map { it.type() }
         val values = params.map { it.evaluate(frame) }
         return RtSqlArgs(types, values)
     }

@@ -25,7 +25,7 @@ class InterpOpTest: AbstractOpTest() {
         val args2 = args.map { it as InterpTstVal }
         val types = args2.map { it.type }
 
-        val globalCtx = RtGlobalContext(FailingRtPrinter, FailingRtPrinter, NoConnSqlExecutor)
+        val globalCtx = RtGlobalContext(FailingRtPrinter, FailingRtPrinter, NoConnSqlExecutor, listOf())
 
         val res = processExpr0(expr2, types) { module ->
             val rtArgs = args2.map { it.rt(module) }

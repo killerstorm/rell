@@ -1,125 +1,78 @@
 package net.postchain.rell
 
 import net.postchain.rell.runtime.RtIntValue
-import net.postchain.rell.runtime.RtValue
-import org.junit.After
 import org.junit.Test
 
-class StatementTest {
-    private val tst = RellSqlTester()
-
-    @After fun after() = tst.destroy()
-
+class StatementTest: BaseRellTest() {
     @Test fun testVal() {
-        chk("val x = 123; return x;", "int[123]")
-        chk("val x = 123; x = 456; return x;", "ct_err:stmt_assign_val:x")
-        chk("val x: integer = 123; return x;", "int[123]")
-        chk("val x: text = 123; return x;", "ct_err:stmt_val_type:x:text:integer")
-        chk("val x: integer = 'Hello'; return x;", "ct_err:stmt_val_type:x:integer:text")
-        chk("val x = unit(); return 123;", "ct_err:stmt_val_unit:x")
+        chkEx("{ val x = 123; return x; }", "int[123]")
+        chkEx("{ val x = 123; x = 456; return x; }", "ct_err:stmt_assign_val:x")
+        chkEx("{ val x: integer = 123; return x; }", "int[123]")
+        chkEx("{ val x: text = 123; return x; }", "ct_err:stmt_val_type:x:text:integer")
+        chkEx("{ val x: integer = 'Hello'; return x; }", "ct_err:stmt_val_type:x:integer:text")
+        chkEx("{ val x = unit(); return 123; }", "ct_err:stmt_val_unit:x")
     }
 
     @Test fun testVar() {
-        chk("var x = 123; return x;", "int[123]")
-        chk("var x = 123; x = 456; return x;", "int[456]")
-        chk("var x;", "ct_err:stmt_var_notypeexpr:x")
-        chk("var x: integer = 123; return x;", "int[123]")
-        chk("var x: integer; x = 123; return x;", "int[123]")
-        chk("var x: integer; x = 'Hello'; return x;", "ct_err:stmt_assign_type:integer:text")
-        chk("var x: text; x = 123; return x;", "ct_err:stmt_assign_type:text:integer")
-        chk("var x: integer = 'Hello'; return x;", "ct_err:stmt_var_type:x:integer:text")
-        chk("var x: text = 123; return x;", "ct_err:stmt_var_type:x:text:integer")
-        chk("var x = 123; x = 'Hello'; return x;", "ct_err:stmt_assign_type:integer:text")
-        chk("var x = unit(); return 123;", "ct_err:stmt_var_unit:x")
+        chkEx("{ var x = 123; return x; }", "int[123]")
+        chkEx("{ var x = 123; x = 456; return x; }", "int[456]")
+        chkEx("{ var x; }", "ct_err:stmt_var_notypeexpr:x")
+        chkEx("{ var x: integer = 123; return x; }", "int[123]")
+        chkEx("{ var x: integer; x = 123; return x; }", "int[123]")
+        chkEx("{ var x: integer; x = 'Hello'; return x; }", "ct_err:stmt_assign_type:integer:text")
+        chkEx("{ var x: text; x = 123; return x; }", "ct_err:stmt_assign_type:text:integer")
+        chkEx("{ var x: integer = 'Hello'; return x; }", "ct_err:stmt_var_type:x:integer:text")
+        chkEx("{ var x: text = 123; return x; }", "ct_err:stmt_var_type:x:text:integer")
+        chkEx("{ var x = 123; x = 'Hello'; return x; }", "ct_err:stmt_assign_type:integer:text")
+        chkEx("{ var x = unit(); return 123; }", "ct_err:stmt_var_unit:x")
     }
 
     @Test fun testVarUninit() {
-        chk("var x: integer; return x;", "rt_err:expr_var_uninit:x")
-        chk("{ var x = 123; } { var y: integer; return y; }", "rt_err:expr_var_uninit:y")
-        chk("for (i in range(2)) { var x: integer; if (i == 0) x = 123; else return x; } return 456;", "rt_err:expr_var_uninit:x")
+        chkEx("{ var x: integer; return x; }", "rt_err:expr_var_uninit:x")
+        chkEx("{ { var x = 123; } { var y: integer; return y; } }", "rt_err:expr_var_uninit:y")
+        chkEx("{ for (i in range(2)) { var x: integer; if (i == 0) x = 123; else return x; } return 456; }", "rt_err:expr_var_uninit:x")
     }
 
     @Test fun testNameConflict() {
-        chk("val x = 123; val x = 456;", "ct_err:var_dupname:x")
-        chk("val x = 123; var x = 456;", "ct_err:var_dupname:x")
-        chk("var x = 123; val x = 456;", "ct_err:var_dupname:x")
-        chk("var x = 123; var x = 456;", "ct_err:var_dupname:x")
-        chk("val x = 123; { val x = 456; } return 789;", "ct_err:var_dupname:x")
-        chk("val x = 123; if (2 > 1) { val x = 456; } return 789;", "ct_err:var_dupname:x")
+        chkEx("{ val x = 123; val x = 456; }", "ct_err:var_dupname:x")
+        chkEx("{ val x = 123; var x = 456; }", "ct_err:var_dupname:x")
+        chkEx("{ var x = 123; val x = 456; }", "ct_err:var_dupname:x")
+        chkEx("{ var x = 123; var x = 456; }", "ct_err:var_dupname:x")
+        chkEx("{ val x = 123; { val x = 456; } return 789; }", "ct_err:var_dupname:x")
+        chkEx("{ val x = 123; if (2 > 1) { val x = 456; } return 789; }", "ct_err:var_dupname:x")
 
-        chk("{ val x = 123; } val x = 456; return x;", "int[456]")
-        chk("{ val x = 123; } return x;", "ct_err:unknown_name:x")
+        chkEx("{ { val x = 123; } val x = 456; return x; }", "int[456]")
+        chkEx("{ { val x = 123; } return x; }", "ct_err:unknown_name:x")
     }
 
     @Test fun testIf() {
-        chk("if (true) return 123; return 456;", "int[123]")
-        chk("if (false) return 123; return 456;", "int[456]")
+        chkEx("{ if (true) return 123; return 456; }", "int[123]")
+        chkEx("{ if (false) return 123; return 456; }", "int[456]")
 
-        chk("if ('Hello') return 123; return 456;", "ct_err:stmt_if_expr_type:boolean:text")
-        chk("if (555) return 123; return 456;", "ct_err:stmt_if_expr_type:boolean:integer")
+        chkEx("{ if ('Hello') return 123; return 456; }", "ct_err:stmt_if_expr_type:boolean:text")
+        chkEx("{ if (555) return 123; return 456; }", "ct_err:stmt_if_expr_type:boolean:integer")
 
-        chk("if (a == 0) return 123; return 456;", 0, "int[123]")
-        chk("if (a == 0) return 123; return 456;", 1, "int[456]")
-        chk("if (a == 0) return 123; else return 456; return 789;", 0, "int[123]")
-        chk("if (a == 0) return 123; else return 456; return 789;", 1, "int[456]")
+        chkEx("{ if (a == 0) return 123; return 456; }", 0, "int[123]")
+        chkEx("{ if (a == 0) return 123; return 456; }", 1, "int[456]")
+        chkEx("{ if (a == 0) return 123; else return 456; return 789; }", 0, "int[123]")
+        chkEx("{ if (a == 0) return 123; else return 456; return 789; }", 1, "int[456]")
 
         // Chain of ifs
-        chk("if (a == 0) return 111; else if (a == 1) return 222; else if (a == 2) return 333; else return 444;", 0, "int[111]")
-        chk("if (a == 0) return 111; else if (a == 1) return 222; else if (a == 2) return 333; else return 444;", 1, "int[222]")
-        chk("if (a == 0) return 111; else if (a == 1) return 222; else if (a == 2) return 333; else return 444;", 2, "int[333]")
-        chk("if (a == 0) return 111; else if (a == 1) return 222; else if (a == 2) return 333; else return 444;", 3, "int[444]")
+        val code = "{ if (a == 0) return 111; else if (a == 1) return 222; else if (a == 2) return 333; else return 444; }"
+        chkEx(code, 0, "int[111]")
+        chkEx(code, 1, "int[222]")
+        chkEx(code, 2, "int[333]")
+        chkEx(code, 3, "int[444]")
 
         // Dangling else
-        chk("if (false) if (false) return 123; else return 456; return 789;", "int[789]")
-        chk("if (false) if (true) return 123; else return 456; return 789;", "int[789]")
-        chk("if (true) if (false) return 123; else return 456; return 789;", "int[456]")
-        chk("if (true) if (true) return 123; else return 456; return 789;", "int[123]")
-    }
-
-    @Test fun testRequire() {
-        chk("require(true); return 123;", "int[123]")
-        chk("require(false); return 123;", "req_err:")
-
-        chk("require(a != 0); return 123;", 1, "int[123]")
-        chk("require(a != 0); return 123;", 0, "req_err:")
-
-        chk("require(false, 'Hello'); return 123;", "req_err:Hello")
-        chk("require(123);", "ct_err:stmt_require_expr_type:boolean:integer")
-        chk("require('Hello');", "ct_err:stmt_require_expr_type:boolean:text")
-        chk("require(true, true);", "ct_err:stmt_require_msg_type:text:boolean")
-        chk("require(true, 123);", "ct_err:stmt_require_msg_type:text:integer")
-    }
-
-    @Test fun testAtAsBoolean() {
-        tst.classDefs = listOf("class user { name: text; }")
-        tst.execOp("create user('Bob'); create user('Alice');")
-
-        chk("require(user @ { name = 'Bob' }); return 123;", "int[123]")
-        chk("require(user @ { name = 'Alice' }); return 123;", "int[123]")
-        chk("require(user @ { name = 'Trudy' }); return 123;", "req_err:")
-        chk("require(user @ { name != 'Trudy' }); return 123;", "rt_err:at:wrong_count:2")
-
-        chk("if (user @ { name = 'Bob' }) return 123; return 456;", "int[123]")
-        chk("if (user @ { name = 'Alice' }) return 123; return 456;", "int[123]")
-        chk("if (user @ { name = 'Trudy' }) return 123; return 456;", "int[456]")
-        chk("if (user @ { name != 'Trudy' }) return 123; return 456;", "rt_err:at:wrong_count:2")
-
-        chk("require(user @* { name = 'Trudy' }); return 123;", "req_err:")
-        chk("require(user @* { name != 'Trudy' }); return 123;", "int[123]")
-        chk("if (user @* { name = 'Trudy' }) return 123; return 456;", "int[456]")
-        chk("if (user @* { name != 'Trudy' }) return 123; return 456;", "int[123]")
-
-        // Currently not allowed, may reconsider later
-        chk("require(not user @ { name = 'Bob' });", "ct_err:unop_operand_type:not:user")
-        chk("require(true and user @ { name = 'Bob' });", "ct_err:binop_operand_type:and:boolean:user")
-        chk("require(false or user @ { name = 'Bob' });", "ct_err:binop_operand_type:or:boolean:user")
-        chk("val u = user @ { name = 'Bob' }; require(u);", "ct_err:stmt_require_expr_type:boolean:user")
-        chk("val u = user @ { name = 'Bob' }; if (u) return 123;", "ct_err:stmt_if_expr_type:boolean:user")
-        chk("val u: boolean = user @ { name = 'Bob' };", "ct_err:stmt_val_type:u:boolean:user")
+        chkEx("{ if (false) if (false) return 123; else return 456; return 789; }", "int[789]")
+        chkEx("{ if (false) if (true) return 123; else return 456; return 789; }", "int[789]")
+        chkEx("{ if (true) if (false) return 123; else return 456; return 789; }", "int[456]")
+        chkEx("{ if (true) if (true) return 123; else return 456; return 789; }", "int[123]")
     }
 
     @Test fun testWhile() {
-        val code = """
+        val code = """{
             var s = '';
             var i = 0;
             while (i < 5) {
@@ -127,13 +80,13 @@ class StatementTest {
                 i = i + 1;
             }
             return s;
-        """.trimIndent()
+        }""".trimIndent()
 
-        chk(code, "text[01234]")
+        chkEx(code, "text[01234]")
     }
 
     @Test fun testWhileBreak() {
-        val code = """
+        val code = """{
             var s = '';
             var i = 0;
             while (i < 10) {
@@ -142,13 +95,13 @@ class StatementTest {
                 if (i >= 5) break;
             }
             return s;
-        """.trimIndent()
+        }""".trimIndent()
 
-        chk(code, "text[01234]")
+        chkEx(code, "text[01234]")
     }
 
     @Test fun testWhileBreakComplex() {
-        val code = """
+        val code = """{
             var s = '';
             var i = 0;
             while (i < 10) {
@@ -162,37 +115,37 @@ class StatementTest {
                 if (i >= 3) break;
             }
             return s;
-        """.trimIndent()
+        }""".trimIndent()
 
-        chk(code, "text[0,0 0,1 0,2 0,3 0,4 1,0 1,1 1,2 1,3 1,4 2,0 2,1 2,2 2,3 2,4 ]")
+        chkEx(code, "text[0,0 0,1 0,2 0,3 0,4 1,0 1,1 1,2 1,3 1,4 2,0 2,1 2,2 2,3 2,4 ]")
     }
 
     @Test fun testBreakWithoutLoop() {
-        chk("break; return 123;", "ct_err:stmt_break_noloop")
-        chk("if (2 > 1) break; return 123;", "ct_err:stmt_break_noloop")
+        chkEx("{ break; return 123; }", "ct_err:stmt_break_noloop")
+        chkEx("{ if (2 > 1) break; return 123; }", "ct_err:stmt_break_noloop")
     }
 
     @Test fun testFor() {
         tst.classDefs = listOf("class user { name: text; }")
         tst.execOp("create user('Bob'); create user('Alice'); create user('Trudy');")
 
-        val code = """
+        val code = """{
             var s = '';
             for (name in user@*{}.name) {
                 if (s.len() > 0) s = s + ',';
                 s = s + name;
             }
             return s;
-        """.trimIndent()
+        }""".trimIndent()
 
-        chk(code, "text[Bob,Alice,Trudy]")
+        chkEx(code, "text[Bob,Alice,Trudy]")
     }
 
     @Test fun testForBreak() {
         tst.classDefs = listOf("class user { name: text; }")
         tst.execOp("create user('Bob'); create user('Alice'); create user('Trudy');")
 
-        val code = """
+        val code = """{
             var s = '';
             var n = 0;
             for (name in user@*{}.name) {
@@ -202,24 +155,24 @@ class StatementTest {
                 if (n >= 2) break;
             }
             return s;
-        """.trimIndent()
+        }""".trimIndent()
 
-        chk(code, "text[Bob,Alice]")
+        chkEx(code, "text[Bob,Alice]")
     }
 
     @Test fun testForReturn() {
         tst.classDefs = listOf("class user { name: text; }")
         tst.execOp("create user('Bob'); create user('Alice'); create user('Trudy');")
 
-        val code = """
+        val code = """{
             for (i in range(10)) {
                 print(i);
                 if (i == 3) return 123;
             }
             return 456;
-        """.trimIndent()
+        }""".trimIndent()
 
-        chk(code, "int[123]")
+        chkEx(code, "int[123]")
         tst.chkStdout("0", "1", "2", "3")
     }
 
@@ -250,32 +203,32 @@ class StatementTest {
     }
 
     @Test fun testEmptyStatement() {
-        chk(";;;;; return 123;", "int[123]")
+        chkEx("{ ;;;;; return 123; }", "int[123]")
     }
 
     @Test fun testEmptyBlock() {
-        chk("if (1 > 0) {} else {}; return 123;", "int[123]")
+        chkEx("{ if (1 > 0) {} else {}; return 123; }", "int[123]")
     }
 
     @Test fun testAssignment() {
-        chk("var x = 123; x += 456; return x;", "int[579]")
-        chk("var x = 123; x -= 456; return x;", "int[-333]")
-        chk("var x = 123; x *= 456; return x;", "int[56088]")
-        chk("var x = 123456; x /= 789; return x;", "int[156]")
-        chk("var x = 123456; x %= 789; return x;", "int[372]")
+        chkEx("{ var x = 123; x += 456; return x; }", "int[579]")
+        chkEx("{ var x = 123; x -= 456; return x; }", "int[-333]")
+        chkEx("{ var x = 123; x *= 456; return x; }", "int[56088]")
+        chkEx("{ var x = 123456; x /= 789; return x; }", "int[156]")
+        chkEx("{ var x = 123456; x %= 789; return x; }", "int[372]")
 
-        chk("var x = 'Hello'; x += 'World'; return x;", "text[HelloWorld]")
-        chk("var x = 'Hello'; x += 12345; return x;", "text[Hello12345]")
-        chk("var x = 'Hello'; x += true; return x;", "text[Hellotrue]")
-        chk("var x = 'Hello'; x += x'1234ABCD'; return x;", "text[Hello0x1234abcd]")
+        chkEx("{ var x = 'Hello'; x += 'World'; return x; }", "text[HelloWorld]")
+        chkEx("{ var x = 'Hello'; x += 12345; return x; }", "text[Hello12345]")
+        chkEx("{ var x = 'Hello'; x += true; return x; }", "text[Hellotrue]")
+        chkEx("{ var x = 'Hello'; x += x'1234ABCD'; return x; }", "text[Hello0x1234abcd]")
     }
 
     @Test fun testAssignmentErr() {
-        chk("var x = true; x += false; return x;", "ct_err:binop_operand_type:+=:boolean:boolean")
-        chk("var x = true; x += 123; return x;", "ct_err:binop_operand_type:+=:boolean:integer")
-        chk("var x = true; x += 'Hello'; return x;", "ct_err:binop_operand_type:+=:boolean:text")
-        chk("var x = 123; x += false; return x;", "ct_err:binop_operand_type:+=:integer:boolean")
-        chk("var x = 123; x += 'Hello'; return x;", "ct_err:binop_operand_type:+=:integer:text")
+        chkEx("{ var x = true; x += false; return x; }", "ct_err:binop_operand_type:+=:boolean:boolean")
+        chkEx("{ var x = true; x += 123; return x; }", "ct_err:binop_operand_type:+=:boolean:integer")
+        chkEx("{ var x = true; x += 'Hello'; return x; }", "ct_err:binop_operand_type:+=:boolean:text")
+        chkEx("{ var x = 123; x += false; return x; }", "ct_err:binop_operand_type:+=:integer:boolean")
+        chkEx("{ var x = 123; x += 'Hello'; return x; }", "ct_err:binop_operand_type:+=:integer:text")
 
         chkAssignmentErr("-=")
         chkAssignmentErr("*=")
@@ -321,34 +274,22 @@ class StatementTest {
 
         chkFull("$code = f(123);", listOf(RtIntValue(0)), "map<integer,text>[int[123]=text[Bob],int[246]=text[Alice]]")
         chkFull("$code = f(123).values();", listOf(RtIntValue(0)), "list<text>[text[Bob],text[Alice]]")
-        chkFull("$code = f(123).values().get(i);", listOf(RtIntValue(0)), "text[Bob]")
-        chkFull("$code = f(123).values().get(i);", listOf(RtIntValue(1)), "text[Alice]")
-        chkFull("$code = f(123).values().get(i).upperCase();", listOf(RtIntValue(0)), "text[BOB]")
-        chkFull("$code = f(123).values().get(i).upperCase();", listOf(RtIntValue(1)), "text[ALICE]")
-        chkFull("$code = f(123).values().get(i).upperCase().size();", listOf(RtIntValue(0)), "int[3]")
-        chkFull("$code = f(123).values().get(i).upperCase().size();", listOf(RtIntValue(1)), "int[5]")
+        chkFull("$code = f(123).values().calculate(i);", listOf(RtIntValue(0)), "text[Bob]")
+        chkFull("$code = f(123).values().calculate(i);", listOf(RtIntValue(1)), "text[Alice]")
+        chkFull("$code = f(123).values().calculate(i).upperCase();", listOf(RtIntValue(0)), "text[BOB]")
+        chkFull("$code = f(123).values().calculate(i).upperCase();", listOf(RtIntValue(1)), "text[ALICE]")
+        chkFull("$code = f(123).values().calculate(i).upperCase().size();", listOf(RtIntValue(0)), "int[3]")
+        chkFull("$code = f(123).values().calculate(i).upperCase().size();", listOf(RtIntValue(1)), "int[5]")
     }
 
     private fun chkAssignmentErr(op: String) {
-        chk("var x = true; x $op false; return x;", "ct_err:binop_operand_type:$op:boolean:boolean")
-        chk("var x = true; x $op 123; return x;", "ct_err:binop_operand_type:$op:boolean:integer")
-        chk("var x = true; x $op 'Hello'; return x;", "ct_err:binop_operand_type:$op:boolean:text")
-        chk("var x = 123; x $op false; return x;", "ct_err:binop_operand_type:$op:integer:boolean")
-        chk("var x = 123; x $op 'Hello'; return x;", "ct_err:binop_operand_type:$op:integer:text")
-        chk("var x = 'Hello'; x $op false; return x;", "ct_err:binop_operand_type:$op:text:boolean")
-        chk("var x = 'Hello'; x $op 123; return x;", "ct_err:binop_operand_type:$op:text:integer")
-        chk("var x = 'Hello'; x $op 'Hello'; return x;", "ct_err:binop_operand_type:$op:text:text")
-    }
-
-    private fun chk(code: String, arg: Long, expectedResult: String) {
-        chkFull("query q(a: integer) { $code }", listOf(RtIntValue(arg)), expectedResult)
-    }
-
-    private fun chk(code: String, expectedResult: String) {
-        chkFull("query q() { $code }", listOf(), expectedResult)
-    }
-
-    private fun chkFull(code: String, args: List<RtValue>, expected: String) {
-        tst.chkQueryEx(code, args, expected)
+        chkEx("{ var x = true; x $op false; return x; }", "ct_err:binop_operand_type:$op:boolean:boolean")
+        chkEx("{ var x = true; x $op 123; return x; }", "ct_err:binop_operand_type:$op:boolean:integer")
+        chkEx("{ var x = true; x $op 'Hello'; return x; }", "ct_err:binop_operand_type:$op:boolean:text")
+        chkEx("{ var x = 123; x $op false; return x; }", "ct_err:binop_operand_type:$op:integer:boolean")
+        chkEx("{ var x = 123; x $op 'Hello'; return x; }", "ct_err:binop_operand_type:$op:integer:text")
+        chkEx("{ var x = 'Hello'; x $op false; return x; }", "ct_err:binop_operand_type:$op:text:boolean")
+        chkEx("{ var x = 'Hello'; x $op 123; return x; }", "ct_err:binop_operand_type:$op:text:integer")
+        chkEx("{ var x = 'Hello'; x $op 'Hello'; return x; }", "ct_err:binop_operand_type:$op:text:text")
     }
 }

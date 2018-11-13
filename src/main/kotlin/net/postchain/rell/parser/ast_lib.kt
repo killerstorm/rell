@@ -2,7 +2,6 @@ package net.postchain.rell.parser
 
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.RtIntValue
-import net.postchain.rell.runtime.RtTextValue
 import net.postchain.rell.runtime.RtValue
 
 class S_LibNamespace(private val consts: Map<String, RtValue>, private val fns: Map<String, Ct_Function>) {
@@ -22,31 +21,42 @@ object S_LibFunctions {
             stdFn("abs", RIntegerType, listOf(RIntegerType), RSysFunction_Abs, DbSysFunction_Abs),
             stdFn("min", RIntegerType, listOf(RIntegerType, RIntegerType), RSysFunction_Min, DbSysFunction_Min),
             stdFn("max", RIntegerType, listOf(RIntegerType, RIntegerType), RSysFunction_Max, DbSysFunction_Max),
+            stdFn("is_signer", RBooleanType, listOf(RByteArrayType), RSysFunction_IsSigner),
             stdFn("json", RJSONType, listOf(RTextType), RSysFunction_Json, DbSysFunction_Json),
 
-            overFn("integer", RIntegerType,
-                    overCase(listOf(RTextType), RSysFunction_Int_Parse),
-                    overCase(listOf(RTextType, RIntegerType), RSysFunction_Int_Parse)
+            overFn("require",
+                    S_SysFunction_Require_Boolean,
+                    S_SysFunction_Require_Nullable
             ),
-            overFn("byte_array", RByteArrayType,
-                    overCase(listOf(RTextType), RSysFunction_ByteArray_New_Text),
-                    overCase(listOf(RListType(RIntegerType)), RSysFunction_ByteArray_New_List)
+            overFn("requireNotEmpty",
+                    S_SysFunction_Require_Collection,
+                    S_SysFunction_Require_Nullable
             ),
 
-            overFn("range", RRangeType,
-                    overCase(listOf(RIntegerType), RSysFunction_Range),
-                    overCase(listOf(RIntegerType, RIntegerType), RSysFunction_Range),
-                    overCase(listOf(RIntegerType, RIntegerType, RIntegerType), RSysFunction_Range)
+            overFn("integer",
+                    globCase(RIntegerType, listOf(RTextType), RSysFunction_Int_Parse),
+                    globCase(RIntegerType, listOf(RTextType, RIntegerType), RSysFunction_Int_Parse)
+            ),
+            overFn("byte_array",
+                    globCase(RByteArrayType, listOf(RTextType), RSysFunction_ByteArray_New_Text),
+                    globCase(RByteArrayType, listOf(RListType(RIntegerType)), RSysFunction_ByteArray_New_List)
+            ),
+
+            overFn("range",
+                    globCase(RRangeType, listOf(RIntegerType), RSysFunction_Range),
+                    globCase(RRangeType, listOf(RIntegerType, RIntegerType), RSysFunction_Range),
+                    globCase(RRangeType, listOf(RIntegerType, RIntegerType, RIntegerType), RSysFunction_Range)
             ),
 
             NamespaceDef_Fn(S_SysFunction_Print("print", RSysFunction_Print(false))),
-            NamespaceDef_Fn(S_SysFunction_Print("log", RSysFunction_Print(true)))
-    )
+            NamespaceDef_Fn(S_SysFunction_Print("log", RSysFunction_Print(true))),
+            NamespaceDef_Fn(S_SysFunction_TypeOf)
+   )
 
     private val INTEGER_FNS = makeFnMap(
-            overMemFn("str", RTextType,
-                    overCase(listOf(), RSysFunction_Int_Str, DbSysFunction_Int_Str),
-                    overCase(listOf(RIntegerType), RSysFunction_Int_Str)
+            overMemFn("str",
+                    memCase(RTextType, listOf(), RSysFunction_Int_Str, DbSysFunction_Int_Str),
+                    memCase(RTextType, listOf(RIntegerType), RSysFunction_Int_Str)
             ),
             stdMemFn("hex", RTextType, listOf(), RSysFunction_Int_Hex),
             stdMemFn("signum", RIntegerType, listOf(), RSysFunction_Int_Signum)
@@ -74,17 +84,17 @@ object S_LibFunctions {
             stdMemFn("matches", RBooleanType, listOf(RTextType), RSysFunction_Text_Matches),
             stdMemFn("encode", RByteArrayType, listOf(), RSysFunction_Text_Encode),
             stdMemFn("chatAt", RIntegerType, listOf(RIntegerType), RSysFunction_Text_CharAt),
-            overMemFn("indexOf", RTextType,
-                    overCase(listOf(RTextType), RSysFunction_Text_IndexOf),
-                    overCase(listOf(RTextType, RIntegerType), RSysFunction_Text_IndexOf)
+            overMemFn("indexOf",
+                    memCase(RTextType, listOf(RTextType), RSysFunction_Text_IndexOf),
+                    memCase(RTextType, listOf(RTextType, RIntegerType), RSysFunction_Text_IndexOf)
             ),
-            overMemFn("lastIndexOf", RTextType,
-                    overCase(listOf(RTextType), RSysFunction_Text_LastIndexOf),
-                    overCase(listOf(RTextType, RIntegerType), RSysFunction_Text_LastIndexOf)
+            overMemFn("lastIndexOf",
+                    memCase(RTextType, listOf(RTextType), RSysFunction_Text_LastIndexOf),
+                    memCase(RTextType, listOf(RTextType, RIntegerType), RSysFunction_Text_LastIndexOf)
             ),
-            overMemFn("sub", RTextType,
-                    overCase(listOf(RIntegerType), RSysFunction_Text_Sub),
-                    overCase(listOf(RIntegerType, RIntegerType), RSysFunction_Text_Sub)
+            overMemFn("sub",
+                    memCase(RTextType, listOf(RIntegerType), RSysFunction_Text_Sub),
+                    memCase(RTextType, listOf(RIntegerType, RIntegerType), RSysFunction_Text_Sub)
             ),
             S_SysMemberFunction_Text_Format
     )
@@ -95,9 +105,9 @@ object S_LibFunctions {
             stdMemFn("len", RIntegerType, listOf(), RSysFunction_ByteArray_Size, DbSysFunction_ByteArray_Size),
             stdMemFn("decode", RTextType, listOf(), RSysFunction_ByteArray_Decode),
             stdMemFn("toList", RListType(RIntegerType), listOf(), RSysFunction_ByteArray_ToList),
-            overMemFn("sub", RByteArrayType,
-                    overCase(listOf(RIntegerType), RSysFunction_ByteArray_Sub),
-                    overCase(listOf(RIntegerType, RIntegerType), RSysFunction_ByteArray_Sub)
+            overMemFn("sub",
+                    memCase(RByteArrayType, listOf(RIntegerType), RSysFunction_ByteArray_Sub),
+                    memCase(RByteArrayType, listOf(RIntegerType, RIntegerType), RSysFunction_ByteArray_Sub)
             )
     )
 
@@ -147,47 +157,36 @@ object S_LibFunctions {
 
     private fun getListFns(elemType: RType): Map<String, S_SysMemberFunction> {
         val listType = RListType(elemType)
-        val setType = RSetType(elemType)
         return makeFnMap(
                 stdMemFn("str", RTextType, listOf(), RSysFunction_ToString),
                 stdMemFn("empty", RBooleanType, listOf(), RSysFunction_Collection_Empty),
                 stdMemFn("size", RIntegerType, listOf(), RSysFunction_Collection_Size),
                 stdMemFn("len", RIntegerType, listOf(), RSysFunction_Collection_Size),
-                stdMemFn("get", elemType, listOf(RIntegerType), RSysFunction_List_Get),
+                stdMemFn("calculate", elemType, listOf(RIntegerType), RSysFunction_List_Get),
                 stdMemFn("contains", RBooleanType, listOf(elemType), RSysFunction_Collection_Contains),
                 stdMemFn("indexOf", RIntegerType, listOf(elemType), RSysFunction_List_IndexOf),
                 stdMemFn("clear", RUnitType, listOf(), RSysFunction_Collection_Clear),
                 stdMemFn("remove", RBooleanType, listOf(elemType), RSysFunction_Collection_Remove),
                 stdMemFn("removeAt", elemType, listOf(RIntegerType), RSysFunction_List_RemoveAt),
                 stdMemFn("_set", elemType, listOf(RIntegerType, elemType), RSysFunction_List_Set),
-                overMemFn("sub", listType,
-                        overCase(listOf(RIntegerType), RSysFunction_List_Sub),
-                        overCase(listOf(RIntegerType, RIntegerType), RSysFunction_List_Sub)
+                stdMemFnEx("containsAll", RBooleanType, listOf(matcherColSub(elemType)), RSysFunction_Collection_ContainsAll),
+                stdMemFnEx("removeAll", RBooleanType, listOf(matcherColSub(elemType)), RSysFunction_Collection_RemoveAll),
+                overMemFn("sub",
+                        memCase(listType, listOf(RIntegerType), RSysFunction_List_Sub),
+                        memCase(listType, listOf(RIntegerType, RIntegerType), RSysFunction_List_Sub)
                 ),
-                overMemFn("removeAll", RBooleanType,
-                        overCase(listOf(listType), RSysFunction_Collection_RemoveAll),
-                        overCase(listOf(setType), RSysFunction_Collection_RemoveAll)
+                overMemFn("add",
+                        memCase(RBooleanType, listOf(elemType), RSysFunction_Collection_Add),
+                        memCase(RBooleanType, listOf(RIntegerType, elemType), RSysFunction_List_Add)
                 ),
-                overMemFn("containsAll", RBooleanType,
-                        overCase(listOf(listType), RSysFunction_Collection_ContainsAll),
-                        overCase(listOf(setType), RSysFunction_Collection_ContainsAll)
-                ),
-                overMemFn("add", RBooleanType,
-                        overCase(listOf(elemType), RSysFunction_Collection_Add),
-                        overCase(listOf(RIntegerType, elemType), RSysFunction_List_Add)
-                ),
-                overMemFn("addAll", RBooleanType,
-                        overCase(listOf(listType), RSysFunction_Collection_AddAll),
-                        overCase(listOf(setType), RSysFunction_Collection_AddAll),
-                        overCase(listOf(RIntegerType, listType), RSysFunction_List_AddAll),
-                        overCase(listOf(RIntegerType, setType), RSysFunction_List_AddAll)
+                overMemFn("addAll",
+                        memCaseEx(RBooleanType, listOf(matcherColSub(elemType)), RSysFunction_Collection_AddAll),
+                        memCaseEx(RBooleanType, listOf(matcher(RIntegerType), matcherColSub(elemType)), RSysFunction_List_AddAll)
                 )
         )
     }
 
     private fun getSetFns(elemType: RType): Map<String, S_SysMemberFunction> {
-        val listType = RListType(elemType)
-        val setType = RSetType(elemType)
         return makeFnMap(
                 stdMemFn("str", RTextType, listOf(), RSysFunction_ToString),
                 stdMemFn("empty", RBooleanType, listOf(), RSysFunction_Collection_Empty),
@@ -197,23 +196,13 @@ object S_LibFunctions {
                 stdMemFn("clear", RUnitType, listOf(), RSysFunction_Collection_Clear),
                 stdMemFn("remove", RBooleanType, listOf(elemType), RSysFunction_Collection_Remove),
                 stdMemFn("add", RBooleanType, listOf(elemType), RSysFunction_Collection_Add),
-                overMemFn("removeAll", RBooleanType,
-                        overCase(listOf(listType), RSysFunction_Collection_RemoveAll),
-                        overCase(listOf(setType), RSysFunction_Collection_RemoveAll)
-                ),
-                overMemFn("containsAll", RBooleanType,
-                        overCase(listOf(listType), RSysFunction_Collection_ContainsAll),
-                        overCase(listOf(setType), RSysFunction_Collection_ContainsAll)
-                ),
-                overMemFn("addAll", RBooleanType,
-                        overCase(listOf(listType), RSysFunction_Collection_AddAll),
-                        overCase(listOf(setType), RSysFunction_Collection_AddAll)
-                )
+                stdMemFnEx("containsAll", RBooleanType, listOf(matcherColSub(elemType)), RSysFunction_Collection_ContainsAll),
+                stdMemFnEx("addAll", RBooleanType, listOf(matcherColSub(elemType)), RSysFunction_Collection_AddAll),
+                stdMemFnEx("removeAll", RBooleanType, listOf(matcherColSub(elemType)), RSysFunction_Collection_RemoveAll)
         )
     }
 
     private fun getMapFns(keyType: RType, valueType: RType): Map<String, S_SysMemberFunction> {
-        val mapType = RMapType(keyType, valueType)
         val keySetType = RSetType(keyType)
         val valueListType = RListType(valueType)
         return makeFnMap(
@@ -221,11 +210,11 @@ object S_LibFunctions {
                 stdMemFn("empty", RBooleanType, listOf(), RSysFunction_Map_Empty),
                 stdMemFn("size", RIntegerType, listOf(), RSysFunction_Map_Size),
                 stdMemFn("len", RIntegerType, listOf(), RSysFunction_Map_Size),
-                stdMemFn("get", valueType, listOf(keyType), RSysFunction_Map_Get),
+                stdMemFn("calculate", valueType, listOf(keyType), RSysFunction_Map_Get),
                 stdMemFn("contains", RBooleanType, listOf(keyType), RSysFunction_Map_Contains),
                 stdMemFn("clear", RUnitType, listOf(), RSysFunction_Map_Clear),
                 stdMemFn("put", RUnitType, listOf(keyType, valueType), RSysFunction_Map_Put),
-                stdMemFn("putAll", RUnitType, listOf(mapType), RSysFunction_Map_PutAll),
+                stdMemFnEx("putAll", RUnitType, listOf(matcherMapSub(keyType, valueType)), RSysFunction_Map_PutAll),
                 stdMemFn("remove", valueType, listOf(keyType), RSysFunction_Map_Remove),
                 stdMemFn("keys", keySetType, listOf(), RSysFunction_Map_Keys(keySetType)),
                 stdMemFn("values", valueListType, listOf(), RSysFunction_Map_Values(valueListType))
@@ -244,9 +233,77 @@ private class S_SysFunction_Print(name: String, val rFn: RSysFunction): S_SysFun
     }
 }
 
-private object S_SysMemberFunction_Text_Format: S_SysMemberFunction("format", RTextType) {
-    override fun compileCall(base: RExpr, args: List<RExpr>): RExpr {
-        return RSysCallExpr(RTextType, RSysFunction_Text_Format, listOf(base) + args)
+private object S_SysFunction_TypeOf: S_SysFunction("_typeOf") {
+    override fun compileCall(args: List<RExpr>): RExpr {
+        val types = args.map { it.type }
+        return compile0(types)
+    }
+
+    override fun compileCallDb(args: List<DbExpr>): DbExpr {
+        val types = args.map { it.type }
+        val rExpr = compile0(types)
+        return InterpretedDbExpr(rExpr)
+    }
+
+    private fun compile0(types: List<RType>): RExpr {
+        if (types.size != 1) throw C_OverloadFnUtils.errNoMatch(name, types)
+        val s = types[0].toStrictString()
+        return RConstantExpr.makeText(s)
+    }
+}
+
+private object S_SysFunction_Require_Boolean: C_CustomGlobalOverloadFnCase() {
+    override fun compileCall(name: String, args: List<RExpr>): RExpr? {
+        if (args.size < 1 || args.size > 2) return null
+
+        val rExpr = args[0]
+        if (!RBooleanType.isAssignableFrom(rExpr.type)) return null
+
+        val rMsgExpr = if (args.size < 2) null else args[1]
+        if (rMsgExpr != null && !RTextType.isAssignableFrom(rMsgExpr.type)) return null
+
+        return RRequireExpr_Boolean(rExpr, rMsgExpr)
+    }
+}
+
+private object S_SysFunction_Require_Nullable: C_CustomGlobalOverloadFnCase() {
+    override fun compileCall(name: String, args: List<RExpr>): RExpr? {
+        if (args.size < 1 || args.size > 2) return null
+
+        val rExpr = args[0]
+        if (!(rExpr.type is RNullableType)) return null
+
+        val rMsgExpr = if (args.size < 2) null else args[1]
+        if (rMsgExpr != null && !RTextType.isAssignableFrom(rMsgExpr.type)) return null
+
+        val rType = rExpr.type.valueType
+        return RRequireExpr_Nullable(rType, rExpr, rMsgExpr)
+    }
+}
+
+private object S_SysFunction_Require_Collection: C_CustomGlobalOverloadFnCase() {
+    override fun compileCall(name: String, args: List<RExpr>): RExpr? {
+        if (args.size < 1 || args.size > 2) return null
+
+        val rExpr = args[0]
+        val rType = if (rExpr.type is RNullableType) rExpr.type.valueType else rExpr.type
+
+        val rMsgExpr = if (args.size < 2) null else args[1]
+        if (rMsgExpr != null && !RTextType.isAssignableFrom(rMsgExpr.type)) return null
+
+        if (rType is RCollectionType) {
+            return RRequireExpr_Collection(rType, rExpr, rMsgExpr)
+        } else if (rType is RMapType) {
+            return RRequireExpr_Map(rType, rExpr, rMsgExpr)
+        } else {
+            return null
+        }
+    }
+}
+
+private object S_SysMemberFunction_Text_Format: S_SysMemberFunction("format") {
+    override fun compileCall(baseType: RType, args: List<RExpr>): RMemberCalculator {
+        return RMemberCalculator_SysFn(RTextType, RSysFunction_Text_Format, args)
     }
 
     override fun compileCallDb(base: DbExpr, args: List<DbExpr>): DbExpr {
@@ -304,16 +361,29 @@ private class NamespaceDef_Const(name: String, val value: RtValue): NamespaceDef
 private fun stdConst(name: String, value: Long): NamespaceDef_Const = NamespaceDef_Const(name, RtIntValue(value))
 
 private fun stdFn(name: String, type: RType, params: List<RType>, rFn: RSysFunction, dbFn: DbSysFunction? = null)
-        : NamespaceDef_Fn = NamespaceDef_Fn(S_StdSysFunction(name, type, listOf(overCase(params, rFn, dbFn))))
+        : NamespaceDef_Fn = NamespaceDef_Fn(S_StdSysFunction(name, listOf(globCase(type, params, rFn, dbFn))))
 
-private fun overFn(name: String, type: RType, vararg cases: S_OverloadFnCase): NamespaceDef_Fn =
-        NamespaceDef_Fn(S_StdSysFunction(name, type, cases.toList()))
+private fun overFn(name: String, vararg cases: C_GlobalOverloadFnCase): NamespaceDef_Fn =
+        NamespaceDef_Fn(S_StdSysFunction(name, cases.toList()))
 
 private fun stdMemFn(name: String, type: RType, params: List<RType>, rFn: RSysFunction, dbFn: DbSysFunction? = null)
-        : S_SysMemberFunction = S_StdSysMemberFunction(name, type, listOf(overCase(params, rFn, dbFn)))
+        : S_SysMemberFunction = S_StdSysMemberFunction(name, listOf(memCase(type, params, rFn, dbFn)))
 
-private fun overMemFn(name: String, type: RType, vararg cases: S_OverloadFnCase): S_SysMemberFunction =
-        S_StdSysMemberFunction(name, type, cases.toList())
+private fun stdMemFnEx(name: String, type: RType, params: List<C_ArgTypeMatcher>, rFn: RSysFunction, dbFn: DbSysFunction? = null)
+        : S_SysMemberFunction = S_StdSysMemberFunction(name, listOf(memCaseEx(type, params, rFn, dbFn)))
 
-private fun overCase(params: List<RType>, rFn: RSysFunction, dbFn: DbSysFunction? = null): S_OverloadFnCase =
-        S_OverloadFnCase(params, rFn, dbFn)
+private fun overMemFn(name: String, vararg cases: C_MemberOverloadFnCase): S_SysMemberFunction =
+        S_StdSysMemberFunction(name, cases.toList())
+
+private fun globCase(type: RType, params: List<RType>, rFn: RSysFunction, dbFn: DbSysFunction? = null): C_GlobalOverloadFnCase =
+        C_StdGlobalOverloadFnCase(params.map{ matcher(it) }, type, rFn, dbFn)
+
+private fun memCase(type: RType, params: List<RType>, rFn: RSysFunction, dbFn: DbSysFunction? = null): C_MemberOverloadFnCase =
+        C_StdMemberOverloadFnCase(params.map{ matcher(it) }, type, rFn, dbFn)
+
+private fun memCaseEx(type: RType, params: List<C_ArgTypeMatcher>, rFn: RSysFunction, dbFn: DbSysFunction? = null): C_MemberOverloadFnCase =
+        C_StdMemberOverloadFnCase(params, type, rFn, dbFn)
+
+private fun matcher(type: RType): C_ArgTypeMatcher = C_ArgTypeMatcher_Simple(type)
+private fun matcherColSub(elementType: RType): C_ArgTypeMatcher = C_ArgTypeMatcher_CollectionSub(elementType)
+private fun matcherMapSub(keyType: RType, valueType: RType): C_ArgTypeMatcher = C_ArgTypeMatcher_MapSub(keyType, valueType)

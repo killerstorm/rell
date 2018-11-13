@@ -110,5 +110,32 @@ class QueryTest: BaseRellTest() {
         chkEx("{ if (2 < 3) delete user @ { name = 'Bob' }; return 0; }", "ct_err:no_db_update")
     }
 
+    @Test fun testReturnTypeExplicit() {
+        tst.useSql = false
+        tst.chkQueryType(": integer { return null; }", "ct_err:entity_rettype:integer:null")
+        tst.chkQueryType(": integer? { return null; }", "integer?")
+        tst.chkQueryType(": integer? { return 123; }", "integer?")
+        tst.chkQueryType(": integer { return 123; }", "integer")
+        tst.chkQueryType(": integer { if (integer('0') == 0) return 123; else return null; }",
+                "ct_err:entity_rettype:integer:null")
+        tst.chkQueryType(": integer? { if (integer('0') == 0) return null; else return 123; }", "integer?")
+        tst.chkQueryType(": integer? { if (integer('0') == 0) return 123; else return null; }", "integer?")
+    }
+
+    @Test fun testReturnTypeImplicit() {
+        tst.useSql = false
+
+        tst.chkQueryType("{ return null; }", "null")
+        tst.chkQueryType("{ if (integer('0') == 0) return 123; else return 456; }", "integer")
+        tst.chkQueryType("{ if (integer('0') == 0) return 123; else return null; }", "integer?")
+        tst.chkQueryType("{ if (integer('0') == 0) return null; else return 123; }", "integer?")
+
+        chkEx("{ if (a == 0) return null; else return 123; }", 0, "null")
+        chkEx("{ if (a == 0) return null; else return 123; }", 1, "int[123]")
+        chkEx("{ if (a == 0) return 123; else return null; }", 0, "int[123]")
+        chkEx("{ if (a == 0) return 123; else return null; }", 1, "null")
+        chkEx("{ return null; }", "null")
+    }
+
     private val mkins = SqlTestUtils::mkins
 }

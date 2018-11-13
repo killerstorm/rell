@@ -85,13 +85,11 @@ class RtObjectValue(val type: RInstanceRefType, val rowid: Long): RtValue() {
     override fun hashCode(): Int = Objects.hash(type, rowid)
 }
 
-class RtNullValue(val type: RType): RtValue() {
-    override fun type(): RType = type
+object RtNullValue: RtValue() {
+    override fun type(): RType = RNullType
     override fun asFormatArg(): Any = toString()
-    override fun toStrictString(showTupleFieldNames: Boolean): String = "null[${type.toStrictString()}]"
+    override fun toStrictString(showTupleFieldNames: Boolean): String = "null"
     override fun toString(): String = "null"
-    override fun equals(other: Any?): Boolean = other is RtNullValue
-    override fun hashCode(): Int = javaClass.hashCode()
 }
 
 class RtListValue(private val type: RType, private val elements: MutableList<RtValue>): RtValue() {

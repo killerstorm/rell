@@ -44,15 +44,15 @@ class LibListTest: BaseRellTest(false) {
     }
 
     @Test fun testGet() {
-        chk("list([1, 2, 3, 4, 5]).get(0)", "int[1]")
-        chk("list([1, 2, 3, 4, 5]).get(4)", "int[5]")
-        chk("list([1, 2, 3, 4, 5]).get(-1)", "rt_err:fn_list_get_index:5:-1")
-        chk("list([1, 2, 3, 4, 5]).get(5)", "rt_err:fn_list_get_index:5:5")
+        chk("list([1, 2, 3, 4, 5]).calculate(0)", "int[1]")
+        chk("list([1, 2, 3, 4, 5]).calculate(4)", "int[5]")
+        chk("list([1, 2, 3, 4, 5]).calculate(-1)", "rt_err:fn_list_get_index:5:-1")
+        chk("list([1, 2, 3, 4, 5]).calculate(5)", "rt_err:fn_list_get_index:5:5")
 
-        chk("[1, 2, 3, 4, 5].get(0)", "int[1]")
-        chk("[1, 2, 3, 4, 5].get(4)", "int[5]")
-        chk("[1, 2, 3, 4, 5].get(-1)", "rt_err:fn_list_get_index:5:-1")
-        chk("[1, 2, 3, 4, 5].get(5)", "rt_err:fn_list_get_index:5:5")
+        chk("[1, 2, 3, 4, 5].calculate(0)", "int[1]")
+        chk("[1, 2, 3, 4, 5].calculate(4)", "int[5]")
+        chk("[1, 2, 3, 4, 5].calculate(-1)", "rt_err:fn_list_get_index:5:-1")
+        chk("[1, 2, 3, 4, 5].calculate(5)", "rt_err:fn_list_get_index:5:5")
     }
 
     @Test fun testSubscriptGet() {

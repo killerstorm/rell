@@ -19,18 +19,32 @@ sealed class RType(val name: String) {
     abstract fun toStrictString(): String
     override fun toString(): String = toStrictString()
 
-    fun match(expr: RExpr, errCode: String, errMsg: String): RExpr {
-        val expr2 = matchOpt(expr)
-        if (expr2 == null) throw CtUtils.errTypeMissmatch(expr.type, this, errCode, errMsg)
-        return expr2
+    fun match(otherType: RType, errCode: String, errMsg: String) {
+        if (!isAssignableFrom(otherType)) {
+            throw CtUtils.errTypeMissmatch(otherType, this, errCode, errMsg)
+        }
     }
 
-    open fun matchOpt(expr: RExpr): RExpr? {
-        return if (expr.type == this) expr else null
-    }
+    open fun isAssignableFrom(type: RType): Boolean = type == this
 
-    open fun matchOpt(expr: DbExpr): DbExpr? {
-        return if (expr.type == this) expr else null
+    open fun calcCommonType(other: RType): RType? = null
+
+    companion object {
+        fun commonType(a: RType, b: RType, errCode: String, errMsg: String): RType {
+            val res = commonTypeOpt(a, b)
+            return res ?: throw CtUtils.errTypeMissmatch(b, a, errCode, errMsg)
+        }
+
+        fun commonTypeOpt(a: RType, b: RType): RType? {
+            if (a.isAssignableFrom(b)) {
+                return a
+            } else if (b.isAssignableFrom(a)) {
+                return b
+            }
+
+            val res = a.calcCommonType(b) ?: b.calcCommonType(a)
+            return res
+        }
     }
 }
 
@@ -106,12 +120,39 @@ object RJSONType: RPrimitiveType("json", jsonSQLDataType) {
     }
 }
 
+object RNullType: RType("null") {
+    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = throw UnsupportedOperationException()
+    override fun fromSql(rs: ResultSet, idx: Int) = throw UnsupportedOperationException()
+    override fun toStrictString() = "null"
+
+    override fun calcCommonType(other: RType): RType? = RNullableType(other)
+}
+
 class RInstanceRefType(val rClass: RClass): RType(rClass.name) {
     override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = stmt.setLong(idx, value.asObjectId())
     override fun fromSql(rs: ResultSet, idx: Int): RtValue = RtObjectValue(this, rs.getLong(idx))
     override fun toStrictString(): String = name
     override fun equals(other: Any?): Boolean = other is RInstanceRefType && other.rClass == rClass
     override fun hashCode(): Int = rClass.hashCode()
+}
+
+class RNullableType(val valueType: RType): RType(valueType.name + "?") {
+    init {
+        check(valueType != RNullType)
+        check(valueType != RUnitType)
+        check(!(valueType is RNullableType))
+    }
+
+    override fun allowedForAttributes() = false
+    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = TODO()
+    override fun fromSql(rs: ResultSet, idx: Int) = TODO()
+    override fun toStrictString() = name
+    override fun equals(other: Any?) = other is RNullableType && valueType == other.valueType
+    override fun hashCode() = valueType.hashCode()
+
+    override fun isAssignableFrom(type: RType): Boolean {
+        return type == this || type == RNullType || valueType.isAssignableFrom(type)
+    }
 }
 
 // TODO: make this more elaborate
@@ -155,21 +196,40 @@ class RTupleField(val name: String?, val type: RType) {
 }
 
 class RTupleType(val fields: List<RTupleField>): RType("(${fields.joinToString(",") { it.toStrictString() }})") {
-    override fun matchOpt(expr: RExpr): RExpr? {
-        val type = expr.type
-        if (type == this) {
-            return expr
-        }
-
-        val castExpr = RTupleCastExpr.create(expr, this)
-        return castExpr
-    }
-
     override fun allowedForAttributes(): Boolean = false
     override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = TODO()
     override fun fromSql(rs: ResultSet, idx: Int): RtValue = TODO()
     override fun toStrictString(): String = name
     override fun equals(other: Any?): Boolean = other is RTupleType && fields == other.fields
+
+    override fun isAssignableFrom(type: RType): Boolean {
+        if (!(type is RTupleType)) return false
+        if (fields.size != type.fields.size) return false
+
+        for (i in fields.indices) {
+            val field = fields[i]
+            val otherField = type.fields[i]
+            if (field.name != otherField.name) return false
+            if (!field.type.isAssignableFrom(otherField.type)) return false
+        }
+
+        return true
+    }
+
+    override fun calcCommonType(other: RType): RType? {
+        if (!(other is RTupleType)) return null
+        if (fields.size != other.fields.size) return null
+
+        val resFields = fields.mapIndexed { i, field ->
+            val otherField = other.fields[i]
+            if (field.name != otherField.name) return null
+            val type = RType.commonTypeOpt(field.type, otherField.type)
+            if (type == null) return null
+            RTupleField(field.name, type)
+        }
+
+        return RTupleType(resFields)
+    }
 }
 
 object RRangeType: RType("range") {

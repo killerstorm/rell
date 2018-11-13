@@ -174,18 +174,3 @@ class RBreakStatement(): RStatement() {
         return RStatementResult_Break()
     }
 }
-
-class RRequireStatement(val expr: RExpr, val msgExpr: RExpr?): RStatement() {
-    override fun execute(frame: RtCallFrame): RStatementResult? {
-        val condValue = expr.evaluate(frame)
-        val cond = condValue.asBoolean()
-        if (!cond) {
-            val msg = if (msgExpr == null) "" else {
-                val msgValue = msgExpr.evaluate(frame)
-                msgValue.asString()
-            }
-            throw RtRequireError(msg)
-        }
-        return null
-    }
-}
