@@ -88,15 +88,24 @@ If type `B` is a subtype of type `A`, a value of type `B` can be assigned to a v
 
 ```
 class company {
-    key name: text;
-    index address: text;
+    name: text;
+    address: text;
 }
 
 class user {
-    key firstName: text, lastName: text;
-    index company;
+    firstName: text;
+    lastName: text;
     yearOfBirth: integer;
     mutable salary: integer;
+}
+```
+
+If attribute type is not specified, it will be the same as attribute name:
+
+```
+class user {
+    name;       // built-in type "name"
+    company;    // user-defined type "company" (error if no such type)
 }
 ```
 
@@ -105,6 +114,38 @@ Attributes may have default values:
 ```
 class user {
     homeCity: text = 'New York';
+}
+```
+
+### Keys and Indices
+
+Classes can have `key` and `index` clauses:
+
+```
+class user {
+    name: text;
+    address: text;
+    key name;
+    index address;
+}
+```
+
+Keys and indices may have multiple attributes:
+
+```
+class user {
+    firstName: text;
+    lastName: text;
+    key firstName, lastName;
+}
+```
+
+Attribute definitions can be combined with `key` or `index` clauses, but such definition has restrictions (e. g. cannot specify `mutable`):
+
+```
+class user {
+    key firstName: text, lastName: text;
+    index address: text;
 }
 ```
 

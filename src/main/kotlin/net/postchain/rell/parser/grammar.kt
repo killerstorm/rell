@@ -5,13 +5,15 @@ import com.github.h0tk3y.betterParse.parser.Parser
 import com.github.h0tk3y.betterParse.combinators.*
 import com.github.h0tk3y.betterParse.grammar.parseToEnd
 import com.github.h0tk3y.betterParse.grammar.parser
+import com.github.h0tk3y.betterParse.lexer.TokenMatch
 import net.postchain.rell.hexStringToByteArray
-import net.postchain.rell.parser.S_Grammar.getValue
-import net.postchain.rell.parser.S_Grammar.provideDelegate
 import java.lang.IllegalArgumentException
+import java.util.regex.Pattern
 
 object S_Grammar : Grammar<S_ModuleDefinition>() {
-    private val ws by token("\\s+", ignore = true)
+    private val ws by token("""\s+""", ignore = true)
+    private val singleLineComment by token("""//.*""", ignore = true)
+
     private val LPAR by token("\\(")
     private val RPAR by token("\\)")
     private val LCURL by token("\\{")
@@ -87,7 +89,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val STRINGLIT_SINGLE by token("'.*?'")
     private val STRINGLIT_DOUBLE by token("\".*?\"")
     private val IDT by token("[A-Za-z_][A-Za-z_0-9]*")
-    private val id by (IDT) use { text }
+    private val id by ( IDT ) map { S_Name(S_Pos(it), it.text) }
 
     private val _type by parser(this::type)
     private val _expression by parser(this::expression)
@@ -98,9 +100,12 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val tupleField by ( optional(id * -COLON) * _type ) map { (name, type) -> Pair(name, type) }
     private val tupleType by ( -LPAR * separatedTerms(tupleField, COMMA, false) * -RPAR ) map { S_TupleType(it) }
 
-    private val listType by ( -LIST * -LT * _type * -GT ) map { S_ListType(it) }
-    private val setType by ( -SET * -LT * _type * -GT ) map { S_SetType(it) }
-    private val mapType by ( -MAP * -LT * _type * -COMMA * _type * -GT ) map { (key, value ) -> S_MapType(key, value) }
+    private val listType by ( LIST * -LT * _type * -GT ) map { (kw, type) -> S_ListType(S_Pos(kw), type) }
+    private val setType by ( SET * -LT * _type * -GT ) map { (kw, type) -> S_SetType(S_Pos(kw), type) }
+
+    private val mapType by ( MAP * -LT * _type * -COMMA * _type * -GT ) map { (kw, key, value ) ->
+        S_MapType(S_Pos(kw), key, value)
+    }
 
     private val baseType by (
             nameType
@@ -113,20 +118,20 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val type: Parser<S_Type> by ( baseType * zeroOrMore(QUESTION) ) map { (base, nulls) ->
         var res = base
         for (n in nulls) {
-            res = S_NullableType(res)
+            res = S_NullableType(S_Pos(n), res)
         }
         res
     }
 
-    private val relAutoField by (id) map { S_NameTypePair(it, S_NameType(it)) }
-    private val relNamedField by (id * -COLON * type) map { (name, type) -> S_NameTypePair(name, type) }
-    private val relField by (relNamedField or relAutoField)
+    private val relAutoField by ( id ) map { S_NameTypePair(it, null) }
+    private val relNamedField by ( id * -COLON * type ) map { (name, type) -> S_NameTypePair(name, type) }
+    private val relField by ( relNamedField or relAutoField )
     private val relFields by separatedTerms(relField, COMMA, false)
 
-    private val relKeyClause by (-KEY * relFields) map { S_KeyClause(it) }
-    private val relIndexClause by (-INDEX * relFields) map { S_IndexClause(it) }
+    private val relKeyClause by ( KEY * relFields ) map { (kw, attrs) -> S_KeyClause(S_Pos(kw), attrs) }
+    private val relIndexClause by ( INDEX * relFields ) map { (kw, attrs) -> S_IndexClause(S_Pos(kw), attrs) }
 
-    private val relAttributeClause by (optional(MUTABLE) * relField * optional(-EQ * _expression)) map {
+    private val relAttributeClause by ( optional(MUTABLE) * relField * optional(-EQ * _expression) ) map {
         ( mutable, field, expr ) ->
         S_AttributeClause(field, mutable != null, expr)
     }
@@ -141,90 +146,90 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     }
 
     private val binaryOperator = (
-            ( EQ map { S_BinaryOpCode.EQ } )
-            or ( EQEQ map { S_BinaryOpCode.EQ } )
-            or ( NE map { S_BinaryOpCode.NE } )
-            or ( LE map { S_BinaryOpCode.LE } )
-            or ( GE map { S_BinaryOpCode.GE } )
-            or ( LT map { S_BinaryOpCode.LT } )
-            or ( GT map { S_BinaryOpCode.GT } )
+            ( EQ mapNode { S_BinaryOpCode.EQ } )
+            or ( EQEQ mapNode { S_BinaryOpCode.EQ } )
+            or ( NE mapNode { S_BinaryOpCode.NE } )
+            or ( LE mapNode { S_BinaryOpCode.LE } )
+            or ( GE mapNode { S_BinaryOpCode.GE } )
+            or ( LT mapNode { S_BinaryOpCode.LT } )
+            or ( GT mapNode { S_BinaryOpCode.GT } )
 
-            or ( PLUS map { S_BinaryOpCode.PLUS } )
-            or ( MINUS map { S_BinaryOpCode.MINUS } )
-            or ( MUL map { S_BinaryOpCode.MUL } )
-            or ( DIV map { S_BinaryOpCode.DIV } )
-            or ( MOD map { S_BinaryOpCode.MOD } )
+            or ( PLUS mapNode { S_BinaryOpCode.PLUS } )
+            or ( MINUS mapNode { S_BinaryOpCode.MINUS } )
+            or ( MUL mapNode { S_BinaryOpCode.MUL } )
+            or ( DIV mapNode { S_BinaryOpCode.DIV } )
+            or ( MOD mapNode { S_BinaryOpCode.MOD } )
 
-            or ( AND map { S_BinaryOpCode.AND } )
-            or ( OR map { S_BinaryOpCode.OR } )
+            or ( AND mapNode { S_BinaryOpCode.AND } )
+            or ( OR mapNode { S_BinaryOpCode.OR } )
 
-            or ( IN map { S_BinaryOpCode.IN } )
-            or ( ELVIS map { S_BinaryOpCode.ELVIS } )
+            or ( IN mapNode { S_BinaryOpCode.IN } )
+            or ( ELVIS mapNode { S_BinaryOpCode.ELVIS } )
     )
 
     private val unaryOperator = (
-            ( PLUS map { S_UnaryOp_Plus } )
-            or ( MINUS map { S_UnaryOp_Minus }  )
-            or ( NOT map { S_UnaryOp_Not }  )
+            ( PLUS mapNode { S_UnaryOp_Plus } )
+            or ( MINUS mapNode { S_UnaryOp_Minus }  )
+            or ( NOT mapNode { S_UnaryOp_Not }  )
     )
 
     private val nameExpr by id map { S_NameExpr(it) }
 
-    private val intExpr by NUMBER map { S_IntLiteralExpr(it.text.toLong()) }
+    private val intExpr by NUMBER map { S_IntLiteralExpr(S_Pos(it), it.text.toLong()) }
 
     private val stringExpr =
-            ( STRINGLIT_SINGLE map { S_StringLiteralExpr(it.text.removeSurrounding("'", "'")) } ) or
-            ( STRINGLIT_DOUBLE map { S_StringLiteralExpr(it.text.removeSurrounding("\"", "\"")) } )
+            ( STRINGLIT_SINGLE map { S_StringLiteralExpr(S_Pos(it), it.text.removeSurrounding("'", "'")) } ) or
+            ( STRINGLIT_DOUBLE map { S_StringLiteralExpr(S_Pos(it), it.text.removeSurrounding("\"", "\"")) } )
 
     private val bytesExpr by
-            ( HEXLIT_SINGLE map { S_ByteALiteralExpr(decodeByteArray(it.text.removeSurrounding("x'", "'"))) }) or
-            ( HEXLIT_DOUBLE map { S_ByteALiteralExpr(decodeByteArray(it.text.removeSurrounding("x\"", "\""))) })
+            ( HEXLIT_SINGLE map { S_ByteALiteralExpr(S_Pos(it), decodeByteArray(it, it.text.removeSurrounding("x'", "'"))) }) or
+            ( HEXLIT_DOUBLE map { S_ByteALiteralExpr(S_Pos(it), decodeByteArray(it, it.text.removeSurrounding("x\"", "\""))) })
 
     private val booleanLiteralExpr by
-            ( FALSE map { S_BooleanLiteralExpr(false) } ) or
-            ( TRUE map { S_BooleanLiteralExpr(true) } )
+            ( FALSE map { S_BooleanLiteralExpr(S_Pos(it), false) } ) or
+            ( TRUE map { S_BooleanLiteralExpr(S_Pos(it), true) } )
 
-    private val nullLiteralExpr by NULL map { S_NullLiteralExpr() }
+    private val nullLiteralExpr by NULL map { S_NullLiteralExpr(S_Pos(it)) }
 
     private val literalExpr by ( intExpr or stringExpr or bytesExpr or booleanLiteralExpr or nullLiteralExpr )
 
     private val tupleExprField by ( optional(id * -COLON) * _expression ) map { ( name, expr ) -> Pair(name, expr)  }
 
-    private val parenthesesExpr by ( -LPAR * tupleExprField * optional(-COMMA * separatedTerms(tupleExprField, COMMA, true)) * -RPAR ) map {
-        (field, tail) ->
+    private val parenthesesExpr by ( LPAR * tupleExprField * optional(-COMMA * separatedTerms(tupleExprField, COMMA, true)) * -RPAR ) map {
+        (pos, field, tail) ->
         if (tail == null && field.first == null) {
             field.second
         } else {
             val fields = listOf(field) + (tail ?: listOf())
-            S_TupleExpression(fields)
+            S_TupleExpression(S_Pos(pos), fields)
         }
     }
 
-    private val listLiteralExpr by ( -LBRACK * separatedTerms(_expression, COMMA, true) * -RBRACK ) map {
-        exprs -> S_ListLiteralExpression(exprs)
+    private val listLiteralExpr by ( LBRACK * separatedTerms(_expression, COMMA, true) * -RBRACK ) map {
+        ( pos, exprs ) -> S_ListLiteralExpression(S_Pos(pos), exprs)
     }
 
     private val mapLiteralExprEntry by ( _expression * -COLON * _expression ) map { (key, value) -> Pair(key, value) }
-    private val mapLiteralExpr by ( -LBRACK * separatedTerms(mapLiteralExprEntry, COMMA, true) * -RBRACK ) map {
-        entries -> S_MapLiteralExpression(entries)
+    private val mapLiteralExpr by ( LBRACK * separatedTerms(mapLiteralExprEntry, COMMA, true) * -RBRACK ) map {
+        ( pos, entries ) -> S_MapLiteralExpression(S_Pos(pos), entries)
     }
 
     private val listExprType by ( -LT * type * -GT )
 
-    private val listExpr by ( -LIST * optional(listExprType) * -LPAR * separatedTerms(_expression, COMMA, true) * -RPAR  ) map {
-        (type, args) -> S_ListExpression(type, args)
+    private val listExpr by ( LIST * optional(listExprType) * -LPAR * separatedTerms(_expression, COMMA, true) * -RPAR  ) map {
+        (kw, type, args) -> S_ListExpression(S_Pos(kw), type, args)
     }
 
-    private val setExpr by ( -SET * optional(listExprType) * -LPAR * separatedTerms(_expression, COMMA, true) * -RPAR  ) map {
-        (type, args) -> S_SetExpression(type, args)
+    private val setExpr by ( SET * optional(listExprType) * -LPAR * separatedTerms(_expression, COMMA, true) * -RPAR  ) map {
+        (kw, type, args) -> S_SetExpression(S_Pos(kw), type, args)
     }
 
     private val mapExprType by ( -LT * type * -COMMA * type * -GT )
 
-    private val mapExpr by ( -MAP * optional(mapExprType) * -LPAR * separatedTerms(_expression, COMMA, true) * -RPAR ) map {
-        ( types, args ) ->
+    private val mapExpr by ( MAP * optional(mapExprType) * -LPAR * separatedTerms(_expression, COMMA, true) * -RPAR ) map {
+        ( kw, types, args ) ->
         val keyValueTypes = if (types == null) null else Pair(types.t1, types.t2)
-        S_MapExpression(keyValueTypes, args)
+        S_MapExpression(S_Pos(kw), keyValueTypes, args)
     }
 
     private val nameExprPair by ( optional(id * -EQ) * _expression ) map {
@@ -233,9 +238,9 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     private val nameEqExprPairList by ( -LPAR * separatedTerms(nameExprPair, COMMA, true) * -RPAR )
 
-    private val createExpr by (-CREATE * id * nameEqExprPairList) map {
-        (className, exprs) ->
-        S_CreateExpr(className, exprs)
+    private val createExpr by (CREATE * id * nameEqExprPairList) map {
+        (kw, className, exprs) ->
+        S_CreateExpr(S_Pos(kw), className, exprs)
     }
 
     private val baseExprHead by (
@@ -250,8 +255,8 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     )
 
     private val baseExprTailMember by ( -DOT * id ) map { name -> BaseExprTail_Member(name) }
-    private val baseExprTailLookup by ( -LBRACK * _expression * -RBRACK ) map { expr -> BaseExprTail_Lookup(expr) }
-    private val baseExprTailNotNull by ( NOTNULL ) map { BaseExprTail_NotNull() }
+    private val baseExprTailLookup by ( LBRACK * _expression * -RBRACK ) map { (pos, expr) -> BaseExprTail_Lookup(S_Pos(pos), expr) }
+    private val baseExprTailNotNull by ( NOTNULL ) map { BaseExprTail_NotNull(S_Pos(it)) }
     private val baseExprTailSafeMember by ( -SAFECALL * id ) map { name -> BaseExprTail_SafeMember(name) }
     private val baseExprTailCall by ( -LPAR * separatedTerms(_expression, COMMA, true)  * -RPAR ) map { args ->
         BaseExprTail_Call(args)
@@ -278,13 +283,15 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         (head, tails) -> tailsToExpr(head, tails)
     }
 
-    private val atExprFromSingle by id map { listOf(S_AtExprFrom(null, it)) }
+    private val atExprFromSingle by id map { S_Node(it.pos, listOf(S_AtExprFrom(null, it))) }
 
     private val atExprFromItem by ( optional( id * -COLON ) * id ) map {
         ( alias, className ) -> S_AtExprFrom(alias, className)
     }
 
-    private val atExprFromMulti by ( -LPAR * separatedTerms( atExprFromItem, COMMA, false ) * -RPAR )
+    private val atExprFromMulti by ( LPAR * separatedTerms( atExprFromItem, COMMA, false ) * -RPAR ) map {
+        ( pos, items ) -> S_Node(pos, items)
+    }
 
     private val atExprFrom by ( atExprFromSingle or atExprFromMulti )
 
@@ -299,7 +306,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     private val atExprWhatSort by ( optional(MINUS) * SORT ) map { (minus, _) -> minus == null }
 
-    private val atExprWhatName by ( optional(id) * -EQ ) map { name -> if (name == null) "" else name }
+    private val atExprWhatName by ( optional(id) * -EQ ) map { name -> S_AtExprWhatAttr(name) }
 
     private val atExprWhatComplexItem by ( optional(atExprWhatSort) * optional(atExprWhatName) * _expression ) map {
         (sort, name, expr) -> S_AtExprWhatComplexField(name, expr, sort)
@@ -321,13 +328,13 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         ( from, zeroMany, where, whatOpt, limit ) ->
         val (zero, many) = zeroMany
         val what = if (whatOpt == null) S_AtExprWhatDefault() else whatOpt
-        S_AtExpr(from, what, where, limit, zero, many)
+        S_AtExpr(from.pos, from.value, what, where, limit, zero, many)
     }
 
     private val operandExpr: Parser<S_Expression> by ( atExpr or baseExpr or createExpr )
 
     private val unaryExpr by ( optional(unaryOperator) * operandExpr ) map { (op, expr) ->
-        if (op == null) expr else S_UnaryExpr(op, expr)
+        if (op == null) expr else S_UnaryExpr(op.pos, S_Node(op.pos, op.value), expr)
     }
 
     private val binaryExprOperand by ( binaryOperator * unaryExpr ) map { ( op, expr ) -> S_BinaryExprTail(op, expr) }
@@ -340,73 +347,73 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     private val emptyStatement by SEMI map { S_EmptyStatement() }
 
-    private val valStatement by (-VAL * id * optional(-COLON * type) * -EQ * expression * -SEMI) map {
+    private val valStatement by ( -VAL * id * optional(-COLON * type ) * -EQ * expression * -SEMI) map {
         (name, type, expr) -> S_ValStatement(name, type, expr)
     }
 
-    private val varStatement by (-VAR * id * optional(-COLON * type) * optional(-EQ * expression) * -SEMI) map {
+    private val varStatement by ( -VAR * id * optional(-COLON * type ) * optional(-EQ * expression) * -SEMI) map {
         (name, type, expr) -> S_VarStatement(name, type, expr)
     }
 
-    private val returnStatement by (-RETURN * optional(expression) * -SEMI) map {
-        expr ->
-        S_ReturnStatement(expr)
+    private val returnStatement by ( RETURN * optional(expression) * -SEMI ) map { ( kw, expr ) ->
+        S_ReturnStatement(S_Pos(kw), expr)
     }
 
     private val assignOp by (
-            ( EQ map { S_AssignOpCode.EQ })
-            or ( PLUS_EQ map { S_AssignOpCode.PLUS })
-            or ( MINUS_EQ map { S_AssignOpCode.MINUS })
-            or ( MUL_EQ map { S_AssignOpCode.MUL })
-            or ( DIV_EQ map { S_AssignOpCode.DIV })
-            or ( MOD_EQ map { S_AssignOpCode.MOD })
+            ( EQ mapNode { S_AssignOpCode.EQ })
+            or ( PLUS_EQ mapNode { S_AssignOpCode.PLUS })
+            or ( MINUS_EQ mapNode { S_AssignOpCode.MINUS })
+            or ( MUL_EQ mapNode { S_AssignOpCode.MUL })
+            or ( DIV_EQ mapNode { S_AssignOpCode.DIV })
+            or ( MOD_EQ mapNode { S_AssignOpCode.MOD })
     )
 
-    private val assignStatement by (baseExpr * assignOp * expression * -SEMI) map {
+    private val assignStatement by ( baseExpr * assignOp * expression * -SEMI ) map {
         (expr1, op, expr2) -> S_AssignStatement(expr1, op, expr2)
     }
 
-    private val blockStatement by (-LCURL * zeroOrMore(_statement) * -RCURL) map {
+    private val blockStatement by ( -LCURL * zeroOrMore(_statement) * -RCURL ) map {
         statements -> S_BlockStatement(statements)
     }
 
-    private val ifStatement by (-IF * -LPAR * expression * -RPAR * _statement * optional(-ELSE * _statement)) map {
+    private val ifStatement by ( -IF * -LPAR * expression * -RPAR * _statement * optional(-ELSE * _statement) ) map {
         (expr, trueStmt, falseStmt) -> S_IfStatement(expr, trueStmt, falseStmt)
     }
 
-    private val whileStatement by (-WHILE * -LPAR * expression * -RPAR * _statement) map {
+    private val whileStatement by ( -WHILE * -LPAR * expression * -RPAR * _statement ) map {
         (expr, stmt) -> S_WhileStatement(expr, stmt)
     }
 
-    private val forStatement by (-FOR * -LPAR * id * -IN * expression * -RPAR * _statement) map {
+    private val forStatement by ( -FOR * -LPAR * id * -IN * expression * -RPAR * _statement ) map {
         (name, expr, stmt) -> S_ForStatement(name, expr, stmt)
     }
 
-    private val breakStatement by (BREAK * -SEMI) map { S_BreakStatement() }
+    private val breakStatement by ( BREAK * -SEMI ) map { S_BreakStatement(S_Pos(it)) }
 
-    private val callStatement by (callExpr * -SEMI) map { expr -> S_ExprStatement(expr) }
+    private val callStatement by ( callExpr * -SEMI ) map { expr -> S_ExprStatement(expr) }
 
     private val updateFrom by ( atExprFromItem * optional(atExprFromMulti) ) map {
         ( targetClass, joinClasses ) ->
-        listOf(targetClass) + (if (joinClasses == null) listOf() else joinClasses)
+        listOf(targetClass) + (if (joinClasses == null) listOf() else joinClasses.value)
     }
 
-    private val createStatement by (createExpr * -SEMI) map { expr -> S_ExprStatement(expr) }
+    private val createStatement by ( createExpr * -SEMI ) map { expr -> S_ExprStatement(expr) }
 
     private val updateWhatNameOp by ( id * assignOp ) map { (name, op) -> Pair(name, op) }
 
     private val updateWhatExpr by ( optional(updateWhatNameOp) * expression ) map {
-        (nameOp, expr) -> if (nameOp == null) S_UpdateWhatAnon(expr) else S_UpdateWhatNamed(nameOp.first, nameOp.second, expr)
+        (nameOp, expr) ->
+        if (nameOp == null) S_UpdateWhatAnon(expr) else S_UpdateWhatNamed(nameOp.first, nameOp.second, expr)
     }
 
     private val updateWhat by ( -LPAR * separatedTerms(updateWhatExpr, COMMA, true) * -RPAR )
 
-    private val updateStatement by (-UPDATE * updateFrom * -AT * atExprWhere * updateWhat * -SEMI) map {
-        (from, where, what) -> S_UpdateStatement(from, where, what)
+    private val updateStatement by (UPDATE * updateFrom * -AT * atExprWhere * updateWhat * -SEMI) map {
+        (kw, from, where, what) -> S_UpdateStatement(S_Pos(kw), from, where, what)
     }
 
-    private val deleteStatement by (-DELETE * updateFrom * -AT * atExprWhere * -SEMI) map {
-        (from, where) -> S_DeleteStatement(from, where)
+    private val deleteStatement by (DELETE * updateFrom * -AT * atExprWhere * -SEMI) map {
+        (kw, from, where) -> S_DeleteStatement(S_Pos(kw), from, where)
     }
 
     private val statement: Parser<S_Statement> by (
@@ -450,11 +457,11 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     override val rootParser by zeroOrMore(anyDef) map { S_ModuleDefinition(it) }
 }
 
-private fun decodeByteArray(s: String): ByteArray {
+private fun decodeByteArray(t: TokenMatch, s: String): ByteArray {
     try {
         return s.hexStringToByteArray()
     } catch (e: IllegalArgumentException) {
-        throw CtError("parser_bad_hex:$s", "Invalid byte array literal: '$s'")
+        throw CtError(S_Pos(t), "parser_bad_hex:$s", "Invalid byte array literal: '$s'")
     }
 }
 
@@ -470,24 +477,28 @@ private sealed class BaseExprTail {
     abstract fun toExpr(base: S_Expression): S_Expression
 }
 
-private class BaseExprTail_Member(val name: String): BaseExprTail() {
+private class BaseExprTail_Member(val name: S_Name): BaseExprTail() {
     override fun toExpr(base: S_Expression): S_Expression = S_MemberExpr(base, name)
 }
 
-private class BaseExprTail_SafeMember(val name: String): BaseExprTail() {
+private class BaseExprTail_SafeMember(val name: S_Name): BaseExprTail() {
     override fun toExpr(base: S_Expression): S_Expression = S_SafeMemberExpr(base, name)
 }
 
-private class BaseExprTail_Lookup(val expr: S_Expression): BaseExprTail() {
-    override fun toExpr(base: S_Expression): S_Expression = S_LookupExpr(base, expr)
+private class BaseExprTail_Lookup(val pos: S_Pos, val expr: S_Expression): BaseExprTail() {
+    override fun toExpr(base: S_Expression): S_Expression = S_LookupExpr(pos, base, expr)
 }
 
 private class BaseExprTail_Call(val args: List<S_Expression>): BaseExprTail() {
     override fun toExpr(base: S_Expression): S_Expression = S_CallExpr(base, args)
 }
 
-private class BaseExprTail_NotNull(): BaseExprTail() {
-    override fun toExpr(base: S_Expression): S_Expression = S_UnaryExpr(S_UnaryOp_NotNull, base)
+private class BaseExprTail_NotNull(val pos: S_Pos): BaseExprTail() {
+    override fun toExpr(base: S_Expression): S_Expression = S_UnaryExpr(base.startPos, S_Node(pos, S_UnaryOp_NotNull), base)
+}
+
+private infix fun <A: TokenMatch, T> Parser<A>.mapNode(transform: (A) -> T): Parser<S_Node<T>> = MapCombinator(this) {
+    S_Node(it, transform(it))
 }
 
 fun parseRellCode(s: String): S_ModuleDefinition {

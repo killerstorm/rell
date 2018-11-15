@@ -1,6 +1,8 @@
 package net.postchain.rell.model
 
+import net.postchain.rell.hexStringToByteArray
 import net.postchain.rell.parser.CtUtils
+import net.postchain.rell.parser.S_Pos
 import net.postchain.rell.runtime.*
 import org.jooq.DataType
 import org.jooq.SQLDialect
@@ -8,33 +10,30 @@ import org.jooq.impl.DefaultDataType
 import org.jooq.impl.SQLDataType
 import org.jooq.util.postgres.PostgresDataType
 import org.postgresql.util.PGobject
+import java.lang.IllegalArgumentException
 import java.lang.UnsupportedOperationException
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 
 sealed class RType(val name: String) {
     open fun allowedForAttributes(): Boolean = true
-    abstract fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue)
-    abstract fun fromSql(rs: ResultSet, idx: Int): RtValue
+
+    open fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) {
+        throw RtUtils.errNotSupported("Type cannot be passed to SQL: ${toStrictString()}")
+    }
+
+    open fun fromSql(rs: ResultSet, idx: Int): RtValue =
+        throw RtUtils.errNotSupported("Type cannot be read from SQL: ${toStrictString()}")
+
+    open fun fromCli(s: String): RtValue = throw UnsupportedOperationException()
     abstract fun toStrictString(): String
     override fun toString(): String = toStrictString()
-
-    fun match(otherType: RType, errCode: String, errMsg: String) {
-        if (!isAssignableFrom(otherType)) {
-            throw CtUtils.errTypeMissmatch(otherType, this, errCode, errMsg)
-        }
-    }
 
     open fun isAssignableFrom(type: RType): Boolean = type == this
 
     open fun calcCommonType(other: RType): RType? = null
 
     companion object {
-        fun commonType(a: RType, b: RType, errCode: String, errMsg: String): RType {
-            val res = commonTypeOpt(a, b)
-            return res ?: throw CtUtils.errTypeMissmatch(b, a, errCode, errMsg)
-        }
-
         fun commonTypeOpt(a: RType, b: RType): RType? {
             if (a.isAssignableFrom(b)) {
                 return a
@@ -63,6 +62,12 @@ object RBooleanType: RPrimitiveType("boolean", SQLDataType.BOOLEAN) {
     }
 
     override fun fromSql(rs: ResultSet, idx: Int): RtValue = RtBooleanValue(rs.getBoolean(idx))
+
+    override fun fromCli(s: String): RtValue {
+        if (s == "false") return RtBooleanValue(false)
+        else if (s == "true") return RtBooleanValue(true)
+        else throw IllegalArgumentException(s)
+    }
 }
 
 object RTextType: RPrimitiveType("text", PostgresDataType.TEXT) {
@@ -71,6 +76,8 @@ object RTextType: RPrimitiveType("text", PostgresDataType.TEXT) {
     }
 
     override fun fromSql(rs: ResultSet, idx: Int): RtValue = RtTextValue(rs.getString(idx))
+
+    override fun fromCli(s: String): RtValue = RtTextValue(s)
 }
 
 object RIntegerType: RPrimitiveType("integer", SQLDataType.BIGINT) {
@@ -79,29 +86,23 @@ object RIntegerType: RPrimitiveType("integer", SQLDataType.BIGINT) {
     }
 
     override fun fromSql(rs: ResultSet, idx: Int): RtValue = RtIntValue(rs.getLong(idx))
+
+    override fun fromCli(s: String): RtValue = RtIntValue(s.toLong())
 }
 
 object RByteArrayType: RPrimitiveType("byte_array", PostgresDataType.BYTEA) {
     override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = stmt.setBytes(idx, value.asByteArray())
     override fun fromSql(rs: ResultSet, idx: Int): RtValue = RtByteArrayValue(rs.getBytes(idx))
+    override fun fromCli(s: String): RtValue = RtByteArrayValue(s.hexStringToByteArray())
 }
 
-object RTimestampType: RPrimitiveType("timestamp", SQLDataType.BIGINT) {
-    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = TODO("TODO")
-    override fun fromSql(rs: ResultSet, idx: Int): RtValue = TODO("TODO")
-}
+object RTimestampType: RPrimitiveType("timestamp", SQLDataType.BIGINT)
 
-object RGUIDType: RPrimitiveType("guid", PostgresDataType.BYTEA) {
-    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = TODO("TODO")
-    override fun fromSql(rs: ResultSet, idx: Int): RtValue = TODO("TODO")
-}
+object RGUIDType: RPrimitiveType("guid", PostgresDataType.BYTEA)
 
 val gtxSignerSQLDataType = DefaultDataType(null as SQLDialect?, ByteArray::class.java, "gtx_signer")
 
-object RSignerType: RPrimitiveType("signer", gtxSignerSQLDataType) {
-    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = TODO("TODO")
-    override fun fromSql(rs: ResultSet, idx: Int): RtValue = TODO("TODO")
-}
+object RSignerType: RPrimitiveType("signer", gtxSignerSQLDataType)
 
 val jsonSQLDataType = DefaultDataType(null as SQLDialect?, String::class.java, "jsonb")
 
@@ -118,19 +119,19 @@ object RJSONType: RPrimitiveType("json", jsonSQLDataType) {
         val str = rs.getString(idx)
         return RtJsonValue.parse(str)
     }
+
+    override fun fromCli(s: String): RtValue = RtJsonValue.parse(s)
 }
 
 object RNullType: RType("null") {
-    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = throw UnsupportedOperationException()
-    override fun fromSql(rs: ResultSet, idx: Int) = throw UnsupportedOperationException()
     override fun toStrictString() = "null"
-
     override fun calcCommonType(other: RType): RType? = RNullableType(other)
 }
 
 class RInstanceRefType(val rClass: RClass): RType(rClass.name) {
     override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = stmt.setLong(idx, value.asObjectId())
     override fun fromSql(rs: ResultSet, idx: Int): RtValue = RtObjectValue(this, rs.getLong(idx))
+    override fun fromCli(s: String): RtValue = RtObjectValue(this, s.toLong())
     override fun toStrictString(): String = name
     override fun equals(other: Any?): Boolean = other is RInstanceRefType && other.rClass == rClass
     override fun hashCode(): Int = rClass.hashCode()
@@ -140,12 +141,11 @@ class RNullableType(val valueType: RType): RType(valueType.name + "?") {
     init {
         check(valueType != RNullType)
         check(valueType != RUnitType)
-        check(!(valueType is RNullableType))
+        check(valueType !is RNullableType)
     }
 
     override fun allowedForAttributes() = false
-    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = TODO()
-    override fun fromSql(rs: ResultSet, idx: Int) = TODO()
+    override fun fromCli(s: String): RtValue = if (s == "null") RtNullValue else valueType.fromCli(s)
     override fun toStrictString() = name
     override fun equals(other: Any?) = other is RNullableType && valueType == other.valueType
     override fun hashCode() = valueType.hashCode()
@@ -158,8 +158,6 @@ class RNullableType(val valueType: RType): RType(valueType.name + "?") {
 // TODO: make this more elaborate
 class RClosureType(name: String): RType(name) {
     override fun allowedForAttributes(): Boolean = false
-    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = TODO("TODO")
-    override fun fromSql(rs: ResultSet, idx: Int): RtValue = TODO("TODO")
     override fun toStrictString(): String = TODO("TODO")
 }
 
@@ -171,10 +169,12 @@ sealed class RCollectionType(val elementType: RType, baseName: String): RType("$
 }
 
 class RListType(elementType: RType): RCollectionType(elementType, "list") {
+    override fun fromCli(s: String): RtValue = RtListValue(this, s.split(",").map { elementType.fromCli(it) }.toMutableList())
     override fun equals(other: Any?): Boolean = other is RListType && elementType == other.elementType
 }
 
 class RSetType(elementType: RType): RCollectionType(elementType, "set") {
+    override fun fromCli(s: String): RtValue = RtSetValue(this, s.split(",").map { elementType.fromCli(it) }.toMutableSet())
     override fun equals(other: Any?): Boolean = other is RSetType && elementType == other.elementType
 }
 
@@ -184,6 +184,14 @@ class RMapType(val keyType: RType, val valueType: RType): RType("map<${keyType.t
     override fun fromSql(rs: ResultSet, idx: Int): RtValue = throw UnsupportedOperationException()
     override fun toStrictString(): String = name
     override fun equals(other: Any?): Boolean = other is RMapType && keyType == other.keyType && valueType == other.valueType
+
+    override fun fromCli(s: String): RtValue {
+        val map = s.split(",").associate {
+            val (k, v) = it.split("=")
+            Pair(keyType.fromCli(k), valueType.fromCli(v))
+        }
+        return RtMapValue(this, map.toMutableMap())
+    }
 }
 
 class RTupleField(val name: String?, val type: RType) {
@@ -197,13 +205,11 @@ class RTupleField(val name: String?, val type: RType) {
 
 class RTupleType(val fields: List<RTupleField>): RType("(${fields.joinToString(",") { it.toStrictString() }})") {
     override fun allowedForAttributes(): Boolean = false
-    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = TODO()
-    override fun fromSql(rs: ResultSet, idx: Int): RtValue = TODO()
     override fun toStrictString(): String = name
     override fun equals(other: Any?): Boolean = other is RTupleType && fields == other.fields
 
     override fun isAssignableFrom(type: RType): Boolean {
-        if (!(type is RTupleType)) return false
+        if (type !is RTupleType) return false
         if (fields.size != type.fields.size) return false
 
         for (i in fields.indices) {
@@ -217,7 +223,7 @@ class RTupleType(val fields: List<RTupleField>): RType("(${fields.joinToString("
     }
 
     override fun calcCommonType(other: RType): RType? {
-        if (!(other is RTupleType)) return null
+        if (other !is RTupleType) return null
         if (fields.size != other.fields.size) return null
 
         val resFields = fields.mapIndexed { i, field ->
@@ -234,7 +240,5 @@ class RTupleType(val fields: List<RTupleField>): RType("(${fields.joinToString("
 
 object RRangeType: RType("range") {
     override fun allowedForAttributes(): Boolean = false
-    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = TODO() // Not allowed
-    override fun fromSql(rs: ResultSet, idx: Int): RtValue = TODO() // Not allowed
     override fun toStrictString(): String = "range"
 }

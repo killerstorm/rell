@@ -2,7 +2,7 @@ package net.postchain.rell.parser
 
 import net.postchain.rell.model.*
 
-class S_AtExprFrom(val alias: String?, val className: String)
+class S_AtExprFrom(val alias: S_Name?, val className: S_Name)
 
 internal class S_AtWhat(val exprs: List<Pair<String?, DbExpr>>, val sort: List<Pair<DbExpr, Boolean>>)
 
@@ -21,7 +21,7 @@ class S_AtExprWhatDefault: S_AtExprWhat() {
     }
 }
 
-class S_AtExprWhatSimple(val path: List<String>): S_AtExprWhat() {
+class S_AtExprWhatSimple(val path: List<S_Name>): S_AtExprWhat() {
     override fun compile(ctx: CtDbExprContext): S_AtWhat {
         val dbExpr = compileDbPathExpr(ctx, path, false)
         val exprs = listOf(Pair(null, dbExpr))
@@ -29,7 +29,9 @@ class S_AtExprWhatSimple(val path: List<String>): S_AtExprWhat() {
     }
 }
 
-class S_AtExprWhatComplexField(val name: String?, val expr: S_Expression, val sort: Boolean?)
+class S_AtExprWhatAttr(val name: S_Name?)
+
+class S_AtExprWhatComplexField(val attr: S_AtExprWhatAttr?, val expr: S_Expression, val sort: Boolean?)
 
 class S_AtExprWhatComplex(val fields: List<S_AtExprWhatComplexField>): S_AtExprWhat() {
     override fun compile(ctx: CtDbExprContext): S_AtWhat {
@@ -38,11 +40,11 @@ class S_AtExprWhatComplex(val fields: List<S_AtExprWhatComplexField>): S_AtExprW
         val dbExprs = fields.map { it.expr.compileDb(ctx) }
 
         val implicitNames = fields.withIndex().map { (idx, field) ->
-            if (field.name != null) null else dbExprs[idx].implicitName()
+            if (field.attr != null) null else dbExprs[idx].implicitName()
         }
 
         val names = mutableSetOf<String>()
-        names.addAll(fields.filter { it.name != null && !it.name.isEmpty() }.map { it.name!! })
+        names.addAll(fields.filter { it.attr?.name != null }.map { it.attr!!.name!!.str })
 
         val dupNames = mutableSetOf<String>()
 
@@ -53,8 +55,8 @@ class S_AtExprWhatComplex(val fields: List<S_AtExprWhatComplexField>): S_AtExprW
         }
 
         val exprs = fields.withIndex().map { (idx, field) ->
-            val name = if (field.name != null) {
-                if (field.name.isEmpty()) null else field.name
+            val name = if (field.attr != null) {
+                if (field.attr.name == null) null else field.attr.name.str
             } else {
                 val impName = implicitNames[idx]
                 if (impName != null && !dupNames.contains(impName) && fields.size > 1) {
@@ -76,8 +78,9 @@ class S_AtExprWhatComplex(val fields: List<S_AtExprWhatComplexField>): S_AtExprW
     private fun checkExplicitNames() {
         val names = mutableSetOf<String>()
         for (field in fields) {
-            if (field.name != null && !field.name.isEmpty() && !names.add(field.name)) {
-                throw CtError("ct_err:at_dup_what_name:${field.name}", "Duplicated field name: ${field.name}")
+            val name = field.attr?.name
+            if (name != null && !names.add(name.str)) {
+                throw CtError(name.pos, "ct_err:at_dup_what_name:${name.str}", "Duplicate field: '${name.str}'")
             }
         }
     }
@@ -99,11 +102,10 @@ class S_AtExprWhere(val exprs: List<S_Expression>) {
 
         val attrs = ctx.findAttributesByType(type)
         if (attrs.isEmpty()) {
-            throw CtError("at_where_type:$idx:$type", "No attribute matches type of where-expression #${idx+1}: $type")
+            throw CtError(expr.startPos, "at_where_type:$idx:$type", "No attribute matches type of where-expression #${idx+1}: $type")
         } else if (attrs.size > 1) {
-            val n = attrs.size
-            throw CtError("at_attr_type_ambig:$idx:$type:$n",
-                    "Multiple attributes match type of where-expression #${idx+1} ($type): $n")
+            throw CtUtils.errMutlipleAttrs(expr.startPos, attrs, "at_attr_type_ambig:$idx:$type",
+                    "Multiple attributes match type of where-expression #${idx+1} ($type)")
         }
 
         val attr = attrs[0]
@@ -112,14 +114,11 @@ class S_AtExprWhere(val exprs: List<S_Expression>) {
     }
 
     private fun makeWhere(compiledExprs: List<DbExpr>): DbExpr? {
-        for (i in compiledExprs.indices) {
-            val type = compiledExprs[i].type
-            if (type != RBooleanType) {
-                throw CtError("at_where_type:$i:$type", "Wrong type of where-expression $i: $type")
-            }
+        for (expr in compiledExprs) {
+            check(expr.type == RBooleanType)
         }
 
-        val dbExprs = compiledExprs.filter { !(it is InterpretedDbExpr) }
+        val dbExprs = compiledExprs.filter { it !is InterpretedDbExpr }
         val rExprs = compiledExprs.filter { it is InterpretedDbExpr }.map { (it as InterpretedDbExpr).expr }
 
         val dbTree = exprsToTree(dbExprs)
@@ -155,20 +154,22 @@ class S_AtExprWhere(val exprs: List<S_Expression>) {
 
         var left = exprs[0]
         for (right in exprs.subList(1, exprs.size)) {
-            TODO("TODO")
+            left = RBinaryExpr(RBooleanType, RBinaryOp_And, left, right)
         }
+
         return left
     }
 }
 
 class S_AtExpr(
+        startPos: S_Pos,
         val from: List<S_AtExprFrom>,
         val what: S_AtExprWhat,
         val where: S_AtExprWhere,
         val limit: S_Expression?,
         val zero: Boolean,
         val many: Boolean
-): S_Expression()
+): S_Expression(startPos)
 {
     override fun compile(ctx: CtExprContext): RExpr {
         val base = compileBase(ctx)
@@ -219,12 +220,8 @@ class S_AtExpr(
 
         val r = limit.compile(ctx)
         if (r.type != RIntegerType) {
-            throw CtError("expr_at_limit_type:${r.type.toStrictString()}",
+            throw CtError(limit.startPos, "expr_at_limit_type:${r.type.toStrictString()}",
                     "Wrong limit type: ${r.type.toStrictString()} instead of ${RIntegerType.toStrictString()}")
-        }
-
-        if (!many) {
-            throw CtError("expr_at_limit_one", "Limit cannot be used with a single-object @-expression")
         }
 
         return r
@@ -236,21 +233,22 @@ class S_AtExpr(
 
     companion object {
         internal fun compileFrom(ctx: CtExprContext, from: List<S_AtExprFrom>): List<RAtClass> {
-            val rFrom = from.indices.map { compileFromClass(ctx, it, from[it]) }
+            val rFrom = from.mapIndexed { i, f -> compileFromClass(ctx, i, f) }
+
             val names = mutableSetOf<String>()
-            for (cls in rFrom) {
+            for ((alias, cls) in rFrom) {
                 if (!names.add(cls.alias)) {
-                    throw CtError("at_dup_alias:${cls.alias}", "Duplicated class alias: ${cls.alias}")
+                    throw CtError(alias.pos, "at_dup_alias:${cls.alias}", "Duplicate class alias: ${cls.alias}")
                 }
             }
-            return rFrom
+
+            return rFrom.map { ( alias, cls ) -> cls }
         }
 
-        private fun compileFromClass(ctx: CtExprContext, idx: Int, from: S_AtExprFrom): RAtClass {
-            val name = from.className
-            val alias = if (from.alias != null) from.alias else name
-            val cls = ctx.entCtx.modCtx.getClass(name)
-            return RAtClass(cls, alias, idx)
+        private fun compileFromClass(ctx: CtExprContext, idx: Int, from: S_AtExprFrom): Pair<S_Name, RAtClass> {
+            val alias = from.alias ?: from.className
+            val cls = ctx.entCtx.modCtx.getClass(from.className)
+            return Pair(alias, RAtClass(cls, alias.str, idx))
         }
 
         private class AtBase(val rBase: RAtExprBase, val limit: RExpr?, val resType: AtResultType)

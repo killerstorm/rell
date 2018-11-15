@@ -12,8 +12,8 @@ class UserFunctionTest: BaseRellTest(false) {
 
     @Test fun testNoReturnValue() {
         chkFn("function f(){}", "123", "int[123]")
-        chkFn("function f(): integer {}", "123", "ct_err:fun_noreturn")
-        chkFn("function f(): integer { if (1 > 0) return 123; }", "123", "ct_err:fun_noreturn")
+        chkFn("function f(): integer {}", "123", "ct_err:fun_noreturn:f")
+        chkFn("function f(): integer { if (1 > 0) return 123; }", "123", "ct_err:fun_noreturn:f")
         chkFn("function f() = print('Hello');", "f()", "ct_err:query_exprtype_unit")
 
         chkFnEx("function f() = print('Hello');", "{ f(); return 123; }", "int[123]")
@@ -114,6 +114,20 @@ class UserFunctionTest: BaseRellTest(false) {
 
         chkFnEx(fn, "{ foo(5); return 0; }", "int[0]")
         tst.chkStdout("foo 5", "bar 4", "foo 3", "bar 2", "foo 1", "bar 0")
+    }
+
+    @Test fun testCallUnderAt() {
+        tst.useSql = true
+        tst.classDefs = listOf("class user { name: text; id: integer; }")
+        tst.execOp("create user('Bob',123); create user('Alice',456);")
+
+        val fn = "function foo(a: text): text = a.upperCase();"
+
+        chkFnEx(fn, "= user @ { name.upperCase() = foo('bob') };", "user[1]")
+        chkFnEx(fn, "= user @ { name.upperCase() = foo('alice') };", "user[2]")
+
+        chkFnEx(fn, "= user @ { foo(name) = 'BOB' };", "ct_err:call_userfn_nosql:foo")
+        chkFnEx(fn, "= user @ { id = 123 } ( foo(name) );", "ct_err:call_userfn_nosql:foo")
     }
 
     private fun chkFn(fnCode: String, callCode: String, expected: String) {

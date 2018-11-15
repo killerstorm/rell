@@ -198,8 +198,8 @@ class ExpressionTest: BaseRellTest(false) {
     @Test fun testTupleAt() {
         tst.classDefs = listOf("class user { name: text; street: text; house: integer; }")
 
-        chk("user @ {} ( x = (name,) ) ", "ct_err:expr_tuple_at")
-        chk("user @ {} ( x = (name, street, house) ) ", "ct_err:expr_tuple_at")
+        chk("user @ {} ( x = (name,) ) ", "ct_err:expr_nosql")
+        chk("user @ {} ( x = (name, street, house) ) ", "ct_err:expr_nosql")
     }
 
     @Test fun testList() {
@@ -216,7 +216,7 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testUnknownFunction() {
-        chkEx("{ val s = 'Hello'; return s.badfunc(); }", "ct_err:expr_call_unknown:text:badfunc")
+        chkEx("{ val s = 'Hello'; return s.badfunc(); }", "ct_err:unknown_member_fn:text:badfunc")
     }
 
     @Test fun testIn() {
@@ -280,25 +280,32 @@ class ExpressionTest: BaseRellTest(false) {
         chkEx("{ return user @* {} (id+0, (name1 + name2).upperCase().lowerCase().size()); }", "[(1,9), (2,14), (3,12)]")
         chkEx("{ return user @* {} (id+0, (v1 * (v2 + 101)).str()); }", "[(1,35853), (2,181485), (3,425685)]")
         chkEx("{ return user @* {} (id+0, (v1 * (v2 + 101)).str().size()); }", "[(1,5), (2,6), (3,6)]")
-        chkEx("{ return user @* {} (id+0, (name1 + name2).foo); }", "ct_err:expr_attr_member:text:foo")
-        chkEx("{ return user @* {} (id+0, (v1 * (v2 + 101)).foo); }", "ct_err:expr_attr_member:integer:foo")
-        chkEx("{ return user @* {} (id+0, (name1 + name2).foo()); }", "ct_err:expr_call_unknown:text:foo")
-        chkEx("{ return user @* {} (id+0, (v1 * (v2 + 101)).foo()); }", "ct_err:expr_call_unknown:integer:foo")
+        chkEx("{ return user @* {} (id+0, (name1 + name2).foo); }", "ct_err:unknown_member:text:foo")
+        chkEx("{ return user @* {} (id+0, (v1 * (v2 + 101)).foo); }", "ct_err:unknown_member:integer:foo")
+        chkEx("{ return user @* {} (id+0, (name1 + name2).foo()); }", "ct_err:unknown_member_fn:text:foo")
+        chkEx("{ return user @* {} (id+0, (v1 * (v2 + 101)).foo()); }", "ct_err:unknown_member_fn:integer:foo")
 
         val c = "val str1 = 'Hello'; val k1 = 777;"
         chkEx("{ $c return user @* {} (id+0, (str1 + name2).size()); }", "[(1,10), (2,15), (3,12)]")
         chkEx("{ $c return user @* {} (id+0, (str1 + name2).upperCase().lowerCase().size()); }", "[(1,10), (2,15), (3,12)]")
         chkEx("{ $c return user @* {} (id+0, (k1 * (v2 + 101)).str()); }", "[(1,250971), (2,423465), (3,595959)]")
         chkEx("{ $c return user @* {} (id+0, (k1 * (v2 + 101)).str().size()); }", "[(1,6), (2,6), (3,6)]")
-        chkEx("{ $c return user @* {} (id+0, (str1 + name2).foo); }", "ct_err:expr_attr_member:text:foo")
-        chkEx("{ $c return user @* {} (id+0, (k1 * (v2 + 101)).foo); }", "ct_err:expr_attr_member:integer:foo")
-        chkEx("{ $c return user @* {} (id+0, (str1 + name2).foo()); }", "ct_err:expr_call_unknown:text:foo")
-        chkEx("{ $c return user @* {} (id+0, (k1 * (v2 + 101)).foo()); }", "ct_err:expr_call_unknown:integer:foo")
+        chkEx("{ $c return user @* {} (id+0, (str1 + name2).foo); }", "ct_err:unknown_member:text:foo")
+        chkEx("{ $c return user @* {} (id+0, (k1 * (v2 + 101)).foo); }", "ct_err:unknown_member:integer:foo")
+        chkEx("{ $c return user @* {} (id+0, (str1 + name2).foo()); }", "ct_err:unknown_member_fn:text:foo")
+        chkEx("{ $c return user @* {} (id+0, (k1 * (v2 + 101)).foo()); }", "ct_err:unknown_member_fn:integer:foo")
     }
 
     @Test fun testPathError() {
-        chkEx("{ val s = 'Hello'; return s.foo.bar; }", "ct_err:expr_badfield:text:foo")
-        chkEx("{ val s = 'Hello'; return s.foo.bar(); }", "ct_err:expr_badfield:text:foo")
-        chkEx("{ val s = 'Hello'; return s.foo(); }", "ct_err:expr_call_unknown:text:foo")
+        chkEx("{ val s = 'Hello'; return s.foo.bar; }", "ct_err:unknown_member:text:foo")
+        chkEx("{ val s = 'Hello'; return s.foo.bar(); }", "ct_err:unknown_member:text:foo")
+        chkEx("{ val s = 'Hello'; return s.foo(); }", "ct_err:unknown_member_fn:text:foo")
+    }
+
+    @Test fun testCallNotCallable() {
+        chk("123()", "ct_err:expr_call_nofn:integer")
+        chk("123(456)", "ct_err:expr_call_nofn:integer")
+        chk("'Hello'()", "ct_err:expr_call_nofn:text")
+        chk("'Hello'(123)", "ct_err:expr_call_nofn:text")
     }
 }

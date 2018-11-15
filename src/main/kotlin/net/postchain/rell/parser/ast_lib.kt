@@ -125,12 +125,11 @@ object S_LibFunctions {
         return NAMESPACES[name]
     }
 
-    fun getMemberFunction(type: RType, name: String): S_SysMemberFunction {
+    fun getMemberFunction(type: RType, name: S_Name): S_SysMemberFunction {
         val map = getTypeMemberFunctions(type)
-        val fn = map[name]
+        val fn = map[name.str]
         if (fn == null) {
-            throw CtError("expr_call_unknown:${type.toStrictString()}:$name",
-                    "Unknown function '$name' for type ${type.toStrictString()}")
+            throw CtUtils.errUnknownMemberFunction(type, name)
         }
         return fn
     }
@@ -223,30 +222,30 @@ object S_LibFunctions {
 }
 
 private class S_SysFunction_Print(name: String, val rFn: RSysFunction): S_SysFunction(name) {
-    override fun compileCall(args: List<RExpr>): RExpr {
+    override fun compileCall(pos: S_Pos, args: List<RExpr>): RExpr {
         // Print supports any number of arguments and any types.
         return RSysCallExpr(RUnitType, rFn, args)
     }
 
-    override fun compileCallDb(args: List<DbExpr>): DbExpr {
-        TODO()
+    override fun compileCallDb(pos: S_Pos, args: List<DbExpr>): DbExpr {
+        throw CtUtils.errFunctionNoSql(pos, name)
     }
 }
 
 private object S_SysFunction_TypeOf: S_SysFunction("_typeOf") {
-    override fun compileCall(args: List<RExpr>): RExpr {
+    override fun compileCall(pos: S_Pos, args: List<RExpr>): RExpr {
         val types = args.map { it.type }
-        return compile0(types)
+        return compile0(pos, types)
     }
 
-    override fun compileCallDb(args: List<DbExpr>): DbExpr {
+    override fun compileCallDb(pos: S_Pos, args: List<DbExpr>): DbExpr {
         val types = args.map { it.type }
-        val rExpr = compile0(types)
+        val rExpr = compile0(pos, types)
         return InterpretedDbExpr(rExpr)
     }
 
-    private fun compile0(types: List<RType>): RExpr {
-        if (types.size != 1) throw C_OverloadFnUtils.errNoMatch(name, types)
+    private fun compile0(pos: S_Pos, types: List<RType>): RExpr {
+        if (types.size != 1) throw C_OverloadFnUtils.errNoMatch(pos, name, types)
         val s = types[0].toStrictString()
         return RConstantExpr.makeText(s)
     }
@@ -271,7 +270,7 @@ private object S_SysFunction_Require_Nullable: C_CustomGlobalOverloadFnCase() {
         if (args.size < 1 || args.size > 2) return null
 
         val rExpr = args[0]
-        if (!(rExpr.type is RNullableType)) return null
+        if (rExpr.type !is RNullableType) return null
 
         val rMsgExpr = if (args.size < 2) null else args[1]
         if (rMsgExpr != null && !RTextType.isAssignableFrom(rMsgExpr.type)) return null
@@ -302,12 +301,12 @@ private object S_SysFunction_Require_Collection: C_CustomGlobalOverloadFnCase() 
 }
 
 private object S_SysMemberFunction_Text_Format: S_SysMemberFunction("format") {
-    override fun compileCall(baseType: RType, args: List<RExpr>): RMemberCalculator {
+    override fun compileCall(pos: S_Pos, baseType: RType, args: List<RExpr>): RMemberCalculator {
         return RMemberCalculator_SysFn(RTextType, RSysFunction_Text_Format, args)
     }
 
-    override fun compileCallDb(base: DbExpr, args: List<DbExpr>): DbExpr {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+    override fun compileCallDb(pos: S_Pos, base: DbExpr, args: List<DbExpr>): DbExpr {
+        throw CtUtils.errFunctionNoSql(pos, name)
     }
 }
 
@@ -319,11 +318,11 @@ private fun makeNamespace(vararg defs: NamespaceDef): S_LibNamespace {
         val name = def.name
         when (def) {
             is NamespaceDef_Fn -> {
-                check(!(name in fns))
+                check(name !in fns)
                 fns[name] = Ct_SysFunction(def.fn)
             }
             is NamespaceDef_Const -> {
-                check(!(name in consts))
+                check(name !in consts)
                 consts[name] = def.value
             }
         }
@@ -339,7 +338,7 @@ private fun makeGlobalFns(vararg fns: NamespaceDef_Fn): List<S_SysFunction> {
 private fun makeFnMap(vararg fns: S_SysFunction): Map<String, S_SysFunction> {
     val map = mutableMapOf<String, S_SysFunction>()
     for (fn in fns) {
-        check(!(fn.name in map))
+        check(fn.name !in map)
         map[fn.name] = fn
     }
     return map.toMap()
@@ -348,7 +347,7 @@ private fun makeFnMap(vararg fns: S_SysFunction): Map<String, S_SysFunction> {
 private fun makeFnMap(vararg fns: S_SysMemberFunction): Map<String, S_SysMemberFunction> {
     val map = mutableMapOf<String, S_SysMemberFunction>()
     for (fn in fns) {
-        check(!(fn.name in map))
+        check(fn.name !in map)
         map[fn.name] = fn
     }
     return map.toMap()

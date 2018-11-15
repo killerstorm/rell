@@ -8,7 +8,7 @@ import java.sql.*
 val ROWID_COLUMN = "rowid"
 val MAKE_ROWID_FUNCTION = "make_rowid"
 
-sealed class SqlExecutor {
+abstract class SqlExecutor {
     abstract fun transaction(code: () -> Unit)
     abstract fun execute(sql: String)
     abstract fun execute(sql: String, preparator: (PreparedStatement) -> Unit)
@@ -64,12 +64,7 @@ class DefaultSqlExecutor(private val con: Connection): SqlExecutor(), Closeable 
     }
 
     private fun <T> execute0(sql: String, code: () -> T): T {
-        try {
-            return code()
-        } catch (e: SQLException) {
-            System.err.println("SQL FAILED: $sql")
-            throw e
-        }
+        return code()
     }
 
     override fun close() {

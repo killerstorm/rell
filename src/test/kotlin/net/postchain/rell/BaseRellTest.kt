@@ -40,7 +40,11 @@ abstract class BaseRellTest(useSql: Boolean = true) {
         tst.chkFnEx(modCode, expected)
     }
 
+    fun chkCompile(code: String, expected: String) = tst.chkCompile(code, expected)
+
     fun chkData(vararg expected: String) = tst.chkData(*expected)
 
     fun execOp(code: String) = tst.execOp(code)
+
+    fun chkOp(code: String, expected: String) = tst.chkOp(code, expected)
 }

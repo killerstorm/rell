@@ -4,6 +4,7 @@ import com.github.h0tk3y.betterParse.grammar.parseToEnd
 import net.postchain.core.*
 import net.postchain.gtx.*
 import net.postchain.rell.model.*
+import net.postchain.rell.parser.CtUtils
 
 import net.postchain.rell.parser.S_Grammar
 import net.postchain.rell.runtime.*
@@ -221,7 +222,7 @@ class RellPostchainModuleFactory: GTXModuleFactory {
     override fun makeModule(data: GTXValue, blockchainRID: ByteArray): GTXModule {
         val rellSourceModule = data["gtx"]!!["rellSrcModule"]!!.asString()
         val sourceCode = File(rellSourceModule).readText()
-        val ast = S_Grammar.parseToEnd(sourceCode)
+        val ast = CtUtils.parse(sourceCode)
         val module = ast.compile()
         return RellPostchainModule(module, rellSourceModule)
     }

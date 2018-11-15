@@ -108,7 +108,7 @@ class PathDbExpr(type: RType, val cls: RAtClass, val path: List<PathDbExprStep>,
 
     override fun toSql(ctx: SqlGenContext, bld: RtSqlBuilder) {
         val alias = ctx.getPathAlias(cls, path)
-        val field = if (attr != null) attr else ROWID_COLUMN //TODO do not hardcode rowid
+        val field = if (attr != null) attr else ROWID_COLUMN
         bld.appendColumn(alias, field)
     }
 }

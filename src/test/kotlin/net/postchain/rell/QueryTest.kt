@@ -75,14 +75,14 @@ class QueryTest: BaseRellTest() {
 
     @Test fun testNoReturn() {
         chkEx("{ return 123; }", "int[123]")
-        chkEx("{}", "ct_err:query_noreturn")
-        chkEx("{ if (1 > 0) return 123; }", "ct_err:query_noreturn")
+        chkEx("{}", "ct_err:query_noreturn:q")
+        chkEx("{ if (1 > 0) return 123; }", "ct_err:query_noreturn:q")
         chkEx("{ if (1 > 0) return 123; return 456; }", "int[123]")
-        chkEx("{ if (1 > 0) {} else return 456; }", "ct_err:query_noreturn")
+        chkEx("{ if (1 > 0) {} else return 456; }", "ct_err:query_noreturn:q")
         chkEx("{ if (1 > 0) return 123; else return 456; }", "int[123]")
         chkEx("{ if (1 > 0) { return 123; } else { return 456; } }", "int[123]")
         chkEx("{ if (1 > 0) { if (2 > 3) return 100; else return 200; } else { return 456; } }", "int[200]")
-        chkEx("{ while (1 < 0) return 123; }", "ct_err:query_noreturn")
+        chkEx("{ while (1 < 0) return 123; }", "ct_err:query_noreturn:q")
     }
 
     @Test fun testWrongNumberOfArguments() {

@@ -58,7 +58,7 @@ class AtExprTest {
         chkEx("val firstName = 'Bill'; return user @ { firstName };", "user[40]")
         chkEx("val lastName = 'Gates'; return user @ { lastName };", "user[40]")
         chkEx("val name = 'Microsoft'; return company @ { name };", "company[400]")
-        chkEx("val name = 'Bill'; return user @ { name };", "ct_err:at_attr_type_ambig:0:text:2")
+        chkEx("val name = 'Bill'; return user @ { name };", "ct_err:at_attr_type_ambig:0:text:user.firstName,user.lastName")
         chkEx("val name = 12345; return company @ { name };", "ct_err:at_attr_type:0:name:integer")
         chkEx("val company = company @ { name = 'Facebook' }; return user @ { company };", "user[10]")
     }
@@ -92,9 +92,12 @@ class AtExprTest {
             val bar2 = bar @ { name = 'Bar-2' };
         """.trimIndent()
 
-        chkEx("val name = 'Bob'; return (foo_owner, bar_owner) @* { name };", "ct_err:at_attr_name_ambig:0:name:2")
-        chkEx("val garbage = foo1; return (foo_owner, bar_owner) @* { garbage };", "ct_err:at_attr_type_ambig:0:foo:3")
-        chkEx("val garbage = bar1; return (foo_owner, bar_owner) @* { garbage };", "ct_err:at_attr_type_ambig:0:bar:3")
+        chkEx("val name = 'Bob'; return (foo_owner, bar_owner) @* { name };",
+                "ct_err:at_attr_name_ambig:0:name:foo_owner.name,bar_owner.name")
+        chkEx("val garbage = foo1; return (foo_owner, bar_owner) @* { garbage };",
+                "ct_err:at_attr_type_ambig:0:foo:foo_owner.stuff,foo_owner.foo,bar_owner.foo")
+        chkEx("val garbage = bar1; return (foo_owner, bar_owner) @* { garbage };",
+                "ct_err:at_attr_type_ambig:0:bar:foo_owner.bar,bar_owner.stuff,bar_owner.bar")
 
         chkEx("val stuff = foo1; return (foo_owner, bar_owner) @* { stuff };",
                 "list<(foo_owner:foo_owner,bar_owner:bar_owner)>[(foo_owner[4],bar_owner[6]),(foo_owner[4],bar_owner[7])]")
@@ -169,12 +172,12 @@ class AtExprTest {
                 mkins("company", "name", "3,'Bell'")
         )
 
-        chk("(user, company) @ { name = 'Bob' }", "ct_err:at_attr_name_ambig:name:2")
-        chk("(user, company) @ { name = 'Xerox' }", "ct_err:at_attr_name_ambig:name:2")
-        chk("(u: user, c: company) @ { name = 'Xerox' }", "ct_err:at_attr_name_ambig:name:2")
+        chk("(user, company) @ { name = 'Bob' }", "ct_err:at_attr_name_ambig:name:user.name,company.name")
+        chk("(user, company) @ { name = 'Xerox' }", "ct_err:at_attr_name_ambig:name:user.name,company.name")
+        chk("(u: user, c: company) @ { name = 'Xerox' }", "ct_err:at_attr_name_ambig:name:u.name,c.name")
         chk("(user, company) @ { user.name = 'Bob', company.name = 'Xerox' }", "(user:user[0],company:company[2])")
-        chk("(u1: user, u2: user) @ { name = 'Bob' }", "ct_err:at_attr_name_ambig:name:2")
-        chk("(c1: company, c2: company) @ { name = 'Bob' }", "ct_err:at_attr_name_ambig:name:2")
+        chk("(u1: user, u2: user) @ { name = 'Bob' }", "ct_err:at_attr_name_ambig:name:u1.name,u2.name")
+        chk("(c1: company, c2: company) @ { name = 'Bob' }", "ct_err:at_attr_name_ambig:name:c1.name,c2.name")
     }
 
     @Test fun testAttributeAmbiguityType() {
@@ -204,15 +207,15 @@ class AtExprTest {
         chk("single @ { tgt2 }", "single[1]")
 
         // Ambiguity between attributes of the same class.
-        chk("double @ { tgt1 }", "ct_err:at_attr_type_ambig:0:target:2")
-        chk("double @ { t1 = tgt1, tgt2 }", "ct_err:at_attr_type_ambig:1:target:2")
+        chk("double @ { tgt1 }", "ct_err:at_attr_type_ambig:0:target:double.t1,double.t2")
+        chk("double @ { t1 = tgt1, tgt2 }", "ct_err:at_attr_type_ambig:1:target:double.t1,double.t2")
         chk("double @ { t1 = tgt1, t2 = tgt2 }", "double[0]")
         chk("double @ { t1 = tgt3, t2 = tgt1 }", "double[2]")
 
         // Ambiguity between attributes of different classes.
-        chk("(s1: single, s2: single) @ { tgt1 }", "ct_err:at_attr_type_ambig:0:target:2")
-        chk("(s1: single, s2: single) @ { tgt1, tgt2 }", "ct_err:at_attr_type_ambig:0:target:2")
-        chk("(s1: single, s2: single) @ { s1.t = tgt1, tgt2 }", "ct_err:at_attr_type_ambig:1:target:2")
+        chk("(s1: single, s2: single) @ { tgt1 }", "ct_err:at_attr_type_ambig:0:target:s1.t,s2.t")
+        chk("(s1: single, s2: single) @ { tgt1, tgt2 }", "ct_err:at_attr_type_ambig:0:target:s1.t,s2.t")
+        chk("(s1: single, s2: single) @ { s1.t = tgt1, tgt2 }", "ct_err:at_attr_type_ambig:1:target:s1.t,s2.t")
         chk("(s1: single, s2: single) @ { s1.t = tgt1, s2.t = tgt2 }", "(s1:single[0],s2:single[1])")
     }
 
@@ -328,7 +331,7 @@ class AtExprTest {
         chk("user @ { firstName = 'Bill' } ( lastName )", "text[Gates]")
         chk("(u: user) @ { firstName = 'Bill' } ( u.lastName )", "text[Gates]")
         chk("(u1: user, u2: user) @ { u1.firstName = 'Bill', u2.firstName = 'Mark' } ( lastName )",
-                "ct_err:at_attr_name_ambig:lastName:2")
+                "ct_err:at_attr_name_ambig:lastName:u1.lastName,u2.lastName")
 
         chk("(u1: user, u2: user) @ { u1.firstName = 'Bill', u2.firstName = 'Mark' } ( u1.lastName, u2.lastName )",
                 "(text[Gates],text[Zuckerberg])")
@@ -384,7 +387,13 @@ class AtExprTest {
         chk("user @* {} ( lastName ) limit 3", "list<text>[text[Zuckerberg],text[Jobs],text[Wozniak]]")
         chk("user @* {} ( lastName ) limit 4", "list<text>[text[Zuckerberg],text[Jobs],text[Wozniak],text[Bezos]]")
 
-        chk("user @ {} limit 5", "ct_err:expr_at_limit_one")
+        chk("user @ {} limit 0", "rt_err:at:wrong_count:0")
+        chk("user @ {} limit 1", "user[10]")
+        chk("user @ {} limit 2", "rt_err:at:wrong_count:2")
+        chk("user @? {} limit 0", "null")
+        chk("user @? {} limit 1", "user[10]")
+        chk("user @? {} limit 2", "rt_err:at:wrong_count:2")
+
         chk("user @ {} limit 'Hello'", "ct_err:expr_at_limit_type:text")
     }
 
@@ -428,6 +437,44 @@ class AtExprTest {
         chk("'' + user @* {} ( -sort =company, =user )",
                 "[(company[500],user[50]), (company[500],user[51]), (company[400],user[40]), (company[400],user[41]), " +
                 "(company[300],user[30]), (company[200],user[20]), (company[200],user[21]), (company[100],user[10])]")
+    }
+
+    @Test fun testNullLiteral() {
+        chk("user @ { firstName = 'Bill' } (=lastName, ''+null)", "(text[Gates],text[null])")
+        //chk("user @ { firstName = 'Bill' } (lastName, null)", "(text[Gates],null)")
+    }
+
+    @Test fun testLookupExpr() {
+        chk("user @ { firstName = 'Bill' } (=lastName, 'Hello'[1])", "(text[Gates],text[e])")
+        chk("user @ { firstName = 'Bill' } (lastName[2])", "ct_err:expr_nosql")
+        chk("user @ { firstName = 'Bill' } ('HelloWorld'[lastName.size()])", "ct_err:expr_nosql")
+    }
+
+    @Test fun testTupleExpr() {
+        chk("user @ { firstName = 'Bill' } (=lastName, '' + (123,'Hello'))", "(text[Gates],text[(123,Hello)])")
+        chk("user @ { firstName = 'Bill' } (=lastName, '' + (123,firstName))", "ct_err:expr_nosql")
+    }
+
+    @Test fun testCollectionLiteralExpr() {
+        chk("user @ { firstName = 'Bill' } (=lastName, '' + [1,2,3])", "(text[Gates],text[[1, 2, 3]])")
+        chk("user @ { firstName = 'Bill' } (=lastName, '' + [firstName,lastName])", "ct_err:expr_nosql")
+
+        chk("user @ { firstName = 'Bill' } (=lastName, '' + [123:'Hello'])", "(text[Gates],text[{123=Hello}])")
+        chk("user @ { firstName = 'Bill' } (=lastName, '' + [firstName:lastName])", "ct_err:expr_nosql")
+    }
+
+    @Test fun testCollectionConstructorExpr() {
+        chk("user @ { firstName = 'Bill' } (=lastName, '' + list([1,2,3]))", "(text[Gates],text[[1, 2, 3]])")
+        chk("user @ { firstName = 'Bill' } (=lastName, '' + set([1,2,3]))", "(text[Gates],text[[1, 2, 3]])")
+        chk("user @ { firstName = 'Bill' } (=lastName, '' + map([123:'Hello']))", "(text[Gates],text[{123=Hello}])")
+
+        chk("user @ { firstName = 'Bill' } (=lastName, '' + list(firstName))", "ct_err:expr_nosql")
+        chk("user @ { firstName = 'Bill' } (=lastName, '' + set(firstName))", "ct_err:expr_nosql")
+        chk("user @ { firstName = 'Bill' } (=lastName, '' + map(firstName))", "ct_err:expr_nosql")
+    }
+
+    @Test fun testMultiLocalWhere() {
+        chkEx("{ val x = 123; return user @ { firstName = 'Bill', x > 10, x > 20, x > 30 }; }", "user[40]")
     }
 
     private fun chk(code: String, expectedResult: String) {

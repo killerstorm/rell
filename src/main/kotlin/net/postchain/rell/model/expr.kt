@@ -126,7 +126,7 @@ class RMapLiteralExpr(type: RMapType, val entries: List<Pair<RExpr, RExpr>>): RE
             val key = keyExpr.evaluate(frame)
             val value = valueExpr.evaluate(frame)
             if (key in map) {
-                throw RtError("expr_map_dupkey:${key.toStrictString()}", "Duplicated map key: $key")
+                throw RtError("expr_map_dupkey:${key.toStrictString()}", "Duplicate map key: $key")
             }
             map.put(key, value)
         }

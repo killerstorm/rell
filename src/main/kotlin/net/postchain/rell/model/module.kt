@@ -61,7 +61,7 @@ class RQuery(name: String, val type: RType, params: List<RExternalParam>, body: 
             throw RtError("query_novalue:$name", "Query '$name' did not return a value")
         }
 
-        if (!(res is RStatementResult_Return)) {
+        if (res !is RStatementResult_Return) {
             throw IllegalStateException("" + res)
         }
         check(res.value != null)

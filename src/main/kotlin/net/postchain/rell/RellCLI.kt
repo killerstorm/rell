@@ -1,7 +1,14 @@
 package net.postchain.rell
 
 import com.github.h0tk3y.betterParse.grammar.parseToEnd
+import com.github.h0tk3y.betterParse.lexer.TokenMatch
+import com.github.h0tk3y.betterParse.parser.AlternativesFailure
+import com.github.h0tk3y.betterParse.parser.ErrorResult
+import com.github.h0tk3y.betterParse.parser.ParseException
+import com.github.h0tk3y.betterParse.parser.parseToEnd
 import net.postchain.rell.model.*
+import net.postchain.rell.parser.CtError
+import net.postchain.rell.parser.CtUtils
 import net.postchain.rell.parser.S_Grammar
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.DefaultSqlExecutor
@@ -11,46 +18,46 @@ import net.postchain.rell.sql.SqlUtils
 import org.apache.commons.logging.LogFactory
 import picocli.CommandLine
 import java.io.File
-import java.lang.NumberFormatException
+import java.lang.UnsupportedOperationException
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
     val argsEx = parseArgs(args)
 
-    if (argsEx.resetdb) {
-        if (argsEx.dburl == null) {
-            System.err.println("Database URL not specified")
-            exitProcess(1)
-        }
+    if (argsEx.resetdb && argsEx.dburl == null) {
+        System.err.println("Database URL not specified")
+        exitProcess(1)
+    }
 
-        val module = compileModule(argsEx.rellFile)
-        val routine = if (argsEx.op == null) null else findRoutine(module, argsEx.op!!)
-        val rtArgs = if (routine == null) listOf() else parseArgs(routine, argsEx.args ?: listOf())
+    val module = compileModule(argsEx.rellFile)
+    val routine = getRoutineCaller(argsEx, module)
 
-        DefaultSqlExecutor.connect(argsEx.dburl!!).use { sqlExec ->
+    runWithSql(argsEx.dburl) { sqlExec ->
+        if (argsEx.resetdb) {
             SqlUtils.resetDatabase(module, sqlExec)
             println("Database reset done")
-            if (routine != null) {
-                callRoutine(sqlExec, module, routine, rtArgs)
-            }
         }
+        routine(sqlExec)
+    }
+}
+
+private fun getRoutineCaller(args: Args, module: RModule): (SqlExecutor) -> Unit {
+    val op = args.op
+    if (op == null) return {}
+
+    val routine = findRoutine(module, op)
+    val rtArgs = parseArgs(routine, args.args ?: listOf())
+
+    return { sqlExec ->
+        callRoutine(sqlExec, module, routine, rtArgs)
+    }
+}
+
+private fun runWithSql(dbUrl: String?, code: (SqlExecutor) -> Unit) {
+    if (dbUrl != null) {
+        DefaultSqlExecutor.connect(dbUrl).use(code)
     } else {
-        if (argsEx.op == null) {
-            System.err.println("Operation or query name not specified")
-            exitProcess(1)
-        }
-
-        val module = compileModule(argsEx.rellFile)
-        val routine = findRoutine(module, argsEx.op!!)
-        val rtArgs = parseArgs(routine, argsEx.args ?: listOf())
-
-        if (argsEx.dburl != null) {
-            DefaultSqlExecutor.connect(argsEx.dburl!!).use { sqlExec ->
-                callRoutine(sqlExec, module, routine, rtArgs)
-            }
-        } else {
-            callRoutine(NoConnSqlExecutor, module, routine, rtArgs)
-        }
+        code(NoConnSqlExecutor)
     }
 }
 
@@ -88,8 +95,14 @@ private class Args {
 
 private fun compileModule(rellFile: String): RModule {
     val sourceCode = File(rellFile).readText()
-    val ast = S_Grammar.parseToEnd(sourceCode)
-    val module = ast.compile()
+
+    val module = try {
+        val ast = CtUtils.parse(sourceCode)
+        ast.compile()
+    } catch (e: CtError) {
+        System.err.println("ERROR ${e.pos} ${e.errMsg}")
+        exitProcess(1)
+    }
     return module
 }
 
@@ -125,16 +138,13 @@ private fun parseArgs(routine: RRoutine, args: List<String>): List<RtValue> {
 
 private fun parseArg(param: RExternalParam, arg: String): RtValue {
     val type = param.type
-    if (type == RIntegerType) {
-        val v = try { arg.toLong() } catch (e: NumberFormatException) {
-            System.err.println("Bad value for parameter '${param.name}': '$arg'")
-            exitProcess(1)
-        }
-        return RtIntValue(v)
-    } else if (type == RTextType) {
-        return RtTextValue(arg)
-    } else {
+    try {
+        return type.fromCli(arg)
+    } catch (e: UnsupportedOperationException) {
         System.err.println("Parameter '${param.name}' has unsupported type: ${type.toStrictString()}")
+        exitProcess(1)
+    } catch (e: Exception) {
+        System.err.println("Invalid value for type ${type.toStrictString()}: '$arg'")
         exitProcess(1)
     }
 }

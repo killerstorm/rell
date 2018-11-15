@@ -2,6 +2,7 @@ package net.postchain.rell.runtime
 
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.google.common.math.LongMath
 import net.postchain.rell.model.*
 import net.postchain.rell.toHex
 import java.lang.IllegalArgumentException
@@ -233,7 +234,7 @@ class RtRangeValue(val start: Long, val end: Long, val step: Long): RtValue(), I
 
             override fun next(): RtValue {
                 val res = current
-                current = RtUtils.saturatedAdd(current, range.step)
+                current = LongMath.saturatedAdd(current, range.step)
                 return RtIntValue(res)
             }
         }

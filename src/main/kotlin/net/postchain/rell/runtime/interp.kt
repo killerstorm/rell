@@ -2,12 +2,23 @@ package net.postchain.rell.runtime
 
 import net.postchain.rell.model.*
 import net.postchain.rell.sql.SqlExecutor
+import java.sql.PreparedStatement
+import java.sql.ResultSet
+import java.sql.SQLException
 
 sealed class RtBaseError(msg: String): Exception(msg)
 class RtError(val code: String, msg: String): RtBaseError(msg)
 class RtRequireError(val userMsg: String?): RtBaseError(userMsg ?: "Requirement error")
 
-class RtGlobalContext(val stdoutPrinter: RtPrinter, val logPrinter: RtPrinter, val sqlExec: SqlExecutor, val signers: List<ByteArray>)
+class RtGlobalContext(
+        val stdoutPrinter: RtPrinter,
+        val logPrinter: RtPrinter,
+        sqlExec: SqlExecutor,
+        val signers: List<ByteArray>)
+{
+    val sqlExec: SqlExecutor = RtSqlExecutor(sqlExec)
+}
+
 class RtModuleContext(val globalCtx: RtGlobalContext, val module: RModule)
 
 class RtEntityContext(val modCtx: RtModuleContext, val dbUpdateAllowed: Boolean, val signers: List<ByteArray>) {
@@ -83,15 +94,42 @@ object FailingRtPrinter: RtPrinter() {
     }
 }
 
-object RtUtils {
-    // https://stackoverflow.com/a/2632501
-    fun saturatedAdd(a: Long, b: Long): Long {
-        if (a == 0L || b == 0L || ((a > 0) != (b > 0))) {
-            return a + b
-        } else if (a > 0) {
-            return if (Long.MAX_VALUE - a < b) Long.MAX_VALUE else (a + b)
-        } else {
-            return if (Long.MIN_VALUE - a > b) Long.MIN_VALUE else (a + b)
+class RtSqlExecutor(private val sqlExec: SqlExecutor): SqlExecutor() {
+    override fun transaction(code: () -> Unit) {
+        wrapErr {
+            sqlExec.transaction(code)
         }
+    }
+
+    override fun execute(sql: String) {
+        wrapErr {
+            sqlExec.execute(sql)
+        }
+    }
+
+    override fun execute(sql: String, preparator: (PreparedStatement) -> Unit) {
+        wrapErr {
+            sqlExec.execute(sql, preparator)
+        }
+    }
+
+    override fun executeQuery(sql: String, preparator: (PreparedStatement) -> Unit, consumer: (ResultSet) -> Unit) {
+        wrapErr {
+            sqlExec.executeQuery(sql, preparator, consumer)
+        }
+    }
+
+    private fun wrapErr(code: () -> Unit) {
+        try {
+            code()
+        } catch (e: SQLException) {
+            throw RtError("sqlerr:${e.errorCode}", "SQL Error: ${e.message}")
+        }
+    }
+}
+
+object RtUtils {
+    fun errNotSupported(msg: String): RtError {
+        return RtError("not_supported", msg)
     }
 }
