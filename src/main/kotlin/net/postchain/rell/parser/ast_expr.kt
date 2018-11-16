@@ -66,6 +66,8 @@ abstract class S_Expression(val startPos: S_Pos) {
 
     internal open fun compileDbWhere(ctx: CtDbExprContext, idx: Int): DbExpr = compileDb(ctx)
 
+    internal open fun compileDbAttr(ctx: CtDbExprContext): DbExpr? = null
+
     internal open fun compileCall(ctx: CtExprContext, args: List<RExpr>): RExpr = throw errCallNoFn(compile(ctx).type)
 
     internal open fun compileCallDb(ctx: CtDbExprContext, args: List<DbExpr>): DbExpr =

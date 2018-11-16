@@ -141,11 +141,10 @@ class AtExprTest {
     }
 
     @Test fun testNameResolutionLocalVsAttr() {
-        // Local vs. attr: local wins.
-        chkEx("return user @* { firstName = 'Mark' };", "list<user>[user[10]]")
-        chkEx("val firstName = 'Bill'; return user @* { firstName = 'Mark' };", "list<user>[]")
-        chkEx("val firstName = 'Bill'; return user @* { firstName = firstName };",
-                "list<user>[user[10],user[20],user[21],user[30],user[40],user[41],user[50],user[51]]")
+        // Local vs. attr: compilation error.
+        chkEx("return user @* { firstName == 'Mark' };", "list<user>[user[10]]")
+        chkEx("val firstName = 'Bill'; return user @* { firstName == 'Mark' };", "ct_err:expr_name_locattr:firstName")
+        chkEx("val firstName = 'Bill'; return user @* { firstName == firstName };", "ct_err:expr_name_locattr:firstName")
     }
 
     @Test fun testNameResolutionAliasVsLocalAttr() {
@@ -475,6 +474,25 @@ class AtExprTest {
 
     @Test fun testMultiLocalWhere() {
         chkEx("{ val x = 123; return user @ { firstName = 'Bill', x > 10, x > 20, x > 30 }; }", "user[40]")
+    }
+
+    @Test fun testSingleEq() {
+        chkEx("val firstName = 'Bill'; return user @ { firstName = 'Mark' };", "user[10]")
+        chkEx("val firstName = 'Bill'; return user @ { user.firstName = 'Mark' };", "user[10]")
+        chkEx("val firstName = 'Bill'; return user @ { firstName = firstName };", "ct_err:expr_name_locattr:firstName")
+        chkEx("val firstName = 'Bill'; return user @ { firstName == 'Mark' };", "ct_err:expr_name_locattr:firstName")
+        chkEx("val firstName = 'Bill'; return user @ { user.firstName == 'Mark' };", "user[10]")
+        chkEx("val firstName = 'Bill'; return user @ { lastName = 'Zuckerberg' } ( firstName );", "ct_err:expr_name_locattr:firstName")
+        chkEx("val firstName = 'Bill'; return user @ { lastName = 'Zuckerberg' } ( user.firstName );", "text[Mark]")
+
+        chkEx("val foo = 'Bill'; return user @ { firstName = foo };", "user[40]")
+        chkEx("val foo = 'Bill'; return user @ { foo = firstName };", "ct_err:expr_name_noattr:foo")
+    }
+
+    @Test fun testSingleEqWithoutAt() {
+        chk("123 == 456", "boolean[false]")
+        chk("123 == 456-333", "boolean[true]")
+        chk("123 = 456", "ct_err:expr_binop_sngeq_nosql")
     }
 
     private fun chk(code: String, expectedResult: String) {

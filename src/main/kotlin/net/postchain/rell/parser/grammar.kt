@@ -146,7 +146,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     }
 
     private val binaryOperator = (
-            ( EQ mapNode { S_BinaryOpCode.EQ } )
+            ( EQ mapNode { S_BinaryOpCode.SINGLE_EQ } )
             or ( EQEQ mapNode { S_BinaryOpCode.EQ } )
             or ( NE mapNode { S_BinaryOpCode.NE } )
             or ( LE mapNode { S_BinaryOpCode.LE } )
