@@ -61,7 +61,6 @@ class S_NameExprPair(val name: S_Name?, val expr: S_Expression)
 abstract class S_Expression(val startPos: S_Pos) {
     internal abstract fun compile(ctx: CtExprContext): RExpr
 
-//    internal abstract fun compileDb(ctx: CtDbExprContext): DbExpr
     internal open fun compileDb(ctx: CtDbExprContext): DbExpr = throw errNoDb()
 
     internal open fun compileDbWhere(ctx: CtDbExprContext, idx: Int): DbExpr = compileDb(ctx)
@@ -76,6 +75,8 @@ abstract class S_Expression(val startPos: S_Pos) {
     internal open fun compileDestination(opPos: S_Pos, ctx: CtExprContext): RDestinationExpr {
         throw CtError(opPos, "expr_bad_dst", "Invalid assignment destination")
     }
+
+    internal open fun asName(): S_Name? = null
 
     internal open fun discoverPathExpr(tailPath: List<S_Name>): Pair<S_Expression?, List<S_Name>> {
         return Pair(this, tailPath)
@@ -245,9 +246,9 @@ class S_CreateExpr(pos: S_Pos, val className: S_Name, val exprs: List<S_NameExpr
     }
 
     private fun matchExprs(cls: RClass, exprs: List<S_NameExprPair>, types: List<RType>): List<RAttrib> {
-        val explicitExprs = S_UpdateExprMatcher.matchExplicitExprs(cls, exprs, false)
-        S_UpdateExprMatcher.checkExplicitExprTypes(exprs, explicitExprs, types)
-        return S_UpdateExprMatcher.matchImplicitExprs(cls, exprs, types, explicitExprs, false)
+        val explicitExprs = C_UpdateExprMatcher.matchExplicitExprs(cls, exprs, false)
+        C_UpdateExprMatcher.checkExplicitExprTypes(exprs, explicitExprs, types)
+        return C_UpdateExprMatcher.matchImplicitExprs(cls, exprs, types, explicitExprs, false)
     }
 
     private fun matchDefaultExpressions(cls: RClass, attrExprs: List<RCreateExprAttr>): List<RCreateExprAttr> {

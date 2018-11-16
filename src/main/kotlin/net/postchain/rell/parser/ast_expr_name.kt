@@ -4,6 +4,8 @@ import net.postchain.rell.model.*
 import java.util.*
 
 class S_NameExpr(val name: S_Name): S_Expression(name.pos) {
+    override fun asName(): S_Name? = name
+
     override fun compile(ctx: CtExprContext): RExpr {
         val res = resolveName(ctx, name)
         if (res is CtNameResolution_Local) {

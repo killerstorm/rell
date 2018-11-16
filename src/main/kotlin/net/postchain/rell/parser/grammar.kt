@@ -8,7 +8,6 @@ import com.github.h0tk3y.betterParse.grammar.parser
 import com.github.h0tk3y.betterParse.lexer.TokenMatch
 import net.postchain.rell.hexStringToByteArray
 import java.lang.IllegalArgumentException
-import java.util.regex.Pattern
 
 object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val ws by token("""\s+""", ignore = true)
@@ -403,7 +402,12 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     private val updateWhatExpr by ( optional(updateWhatNameOp) * expression ) map {
         (nameOp, expr) ->
-        if (nameOp == null) S_UpdateWhatAnon(expr) else S_UpdateWhatNamed(nameOp.first, nameOp.second, expr)
+        if (nameOp == null) {
+            S_UpdateWhat(expr.startPos, null, null, expr)
+        } else {
+            val (name, op) = nameOp
+            S_UpdateWhat(name.pos, name, op.value, expr)
+        }
     }
 
     private val updateWhat by ( -LPAR * separatedTerms(updateWhatExpr, COMMA, true) * -RPAR )

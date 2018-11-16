@@ -145,6 +145,7 @@ class AtExprTest {
         chkEx("return user @* { firstName == 'Mark' };", "list<user>[user[10]]")
         chkEx("val firstName = 'Bill'; return user @* { firstName == 'Mark' };", "ct_err:expr_name_locattr:firstName")
         chkEx("val firstName = 'Bill'; return user @* { firstName == firstName };", "ct_err:expr_name_locattr:firstName")
+        chkEx("val firstName = 'Bill'; return user @ { firstName };", "user[40]")
     }
 
     @Test fun testNameResolutionAliasVsLocalAttr() {
