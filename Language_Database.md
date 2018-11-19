@@ -44,7 +44,7 @@ Zero or more comma-separated expressions using class attributes, local variables
 
 `user @ { name = 'Bill', company = 'Microsoft' }` - returns a specific user (all conditions must match)
 
-Class attributes can be resolved implicitly by name or type:
+Class attributes can be matched implicitly by name or type:
 
 ```
 val ms = company @ { name = 'Microsoft' };
@@ -152,6 +152,13 @@ Can change only `mutable` attributes.
 ```
 update user @ { name = 'Bob' } ( company = 'Microsoft' );
 update user @ { name = 'Alice' } ( salary += 5000 );
+```
+
+Class attributes can be matched implicitly by name or type:
+
+```
+val company = 'Microsoft';
+update user @ { name = 'Bob' } ( company );
 ```
 
 Using multiple classes with aliases. The first class is the one being updated. Other classes can be used in the where-part:

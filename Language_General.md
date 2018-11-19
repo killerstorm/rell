@@ -267,12 +267,15 @@ val q = y?.hex();       // type of "q" is "text?"
 
 #### Comparison:
 
-* `==`
+* `==` (general equality check)
+* `=` (equality check for attributes)
 * `!=`
 * `<`
 * `>`
 * `<=`
 * `>=`
+
+Operator `=` can be used for comparison only in at-expressions. Left operand must be an attribute, and implicitly resolved to an attribute in case of ambiguity when an attribute and a local variable with the same name exists.
 
 #### Arithmetical:
 
