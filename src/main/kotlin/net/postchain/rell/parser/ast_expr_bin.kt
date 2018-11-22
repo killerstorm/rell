@@ -4,6 +4,7 @@ import net.postchain.rell.model.*
 import java.util.*
 
 enum class S_BinaryOpCode(val op: S_BinaryOp) {
+    SINGLE_EQ(S_BinaryOp_SingleEq),
     EQ(S_BinaryOp_Eq),
     NE(S_BinaryOp_Ne),
     LE(S_BinaryOp_Le),
@@ -25,7 +26,7 @@ enum class S_BinaryOpCode(val op: S_BinaryOp) {
         private val PRECEDENCE_LEVELS = listOf(
                 listOf(OR),
                 listOf(AND),
-                listOf(EQ, NE, LE, GE, LT, GT),
+                listOf(SINGLE_EQ, EQ, NE, LE, GE, LT, GT),
                 listOf(IN),
                 listOf(ELVIS),
                 listOf(PLUS, MINUS),
@@ -131,8 +132,8 @@ class S_BinOpType(
 )
 
 sealed class S_BinaryOp(val code: String) {
-    abstract fun compile(pos: S_Pos, left: RExpr, right: RExpr): RExpr
-    abstract fun compileDb(pos: S_Pos, left: DbExpr, right: DbExpr): DbExpr
+    internal abstract fun compile(pos: S_Pos, ctx: CtExprContext, left: C_BinaryExprNode, right: C_BinaryExprNode): RExpr
+    internal abstract fun compileDb(pos: S_Pos, ctx: CtDbExprContext, left: C_BinaryExprNode, right: C_BinaryExprNode): DbExpr
 
     fun errTypeMissmatch(pos: S_Pos, leftType: RType, rightType: RType): CtError {
         return errTypeMissmatch(pos, code, leftType, rightType)
@@ -146,7 +147,31 @@ sealed class S_BinaryOp(val code: String) {
     }
 }
 
-sealed class S_BinaryOp_Common(code: String): S_BinaryOp(code) {
+sealed class S_BinaryOp_Base(code: String): S_BinaryOp(code) {
+    abstract fun compile(pos: S_Pos, left: RExpr, right: RExpr): RExpr
+    abstract fun compileDb(pos: S_Pos, left: DbExpr, right: DbExpr): DbExpr
+
+    final override fun compile(pos: S_Pos, ctx: CtExprContext, left: C_BinaryExprNode, right: C_BinaryExprNode): RExpr {
+        val rLeft = left.compile(ctx)
+        val rRight = right.compile(ctx)
+        return compile(pos, rLeft, rRight)
+    }
+
+    final override fun compileDb(pos: S_Pos, ctx: CtDbExprContext, left: C_BinaryExprNode, right: C_BinaryExprNode): DbExpr {
+        val dbLeft = left.compileDb(ctx)
+        val dbRight = right.compileDb(ctx)
+
+        //TODO don't use "is"
+        if (dbLeft is InterpretedDbExpr && dbRight is InterpretedDbExpr) {
+            val rExpr = compile(pos, dbLeft.expr, dbRight.expr)
+            return InterpretedDbExpr(rExpr)
+        } else {
+            return compileDb(pos, dbLeft, dbRight)
+        }
+    }
+}
+
+sealed class S_BinaryOp_Common(code: String): S_BinaryOp_Base(code) {
     abstract fun compileOp(left: RType, right: RType): S_BinOpType?
 
     override fun compile(pos: S_Pos, left: RExpr, right: RExpr): RExpr {
@@ -240,6 +265,23 @@ sealed class S_BinaryOp_EqNe(val rOp: RBinaryOp, val dbOp: DbBinaryOp): S_Binary
             val op = S_BinaryOp_Eq.compileOp(left, right)
             return op != null && op.dbOp != null
         }
+    }
+}
+
+object S_BinaryOp_SingleEq: S_BinaryOp("=") {
+    override fun compile(pos: S_Pos, ctx: CtExprContext, left: C_BinaryExprNode, right: C_BinaryExprNode): RExpr {
+        throw CtError(pos, "expr_binop_sngeq_nosql",
+                "Operator '${code}' can be used only in @-expression; use '${S_BinaryOp_Eq.code}' instead")
+    }
+
+    override fun compileDb(pos: S_Pos, ctx: CtDbExprContext, left: C_BinaryExprNode, right: C_BinaryExprNode): DbExpr {
+        val dbLeft = left.compileDbAttr(ctx)
+        if (dbLeft == null) {
+            throw CtError(pos, "expr_binop_sngeq_noattr", "Left operand of '${code}' must be an attribute")
+        }
+
+        val dbRight = right.compileDb(ctx)
+        return S_BinaryOp_Eq.compileDb(pos, dbLeft, dbRight)
     }
 }
 
@@ -377,7 +419,7 @@ object S_BinaryOp_In: S_BinaryOp_Common("in") {
     }
 }
 
-object S_BinaryOp_Elvis: S_BinaryOp("?:") {
+object S_BinaryOp_Elvis: S_BinaryOp_Base("?:") {
     override fun compile(pos: S_Pos, left: RExpr, right: RExpr): RExpr {
         val leftType = left.type
         if (leftType == RNullType) {
@@ -414,15 +456,15 @@ class S_BinaryExpr(val head: S_Expression, val tail: List<S_BinaryExprTail>): S_
         return tree.compileDb(ctx)
     }
 
-    private fun buildTree(): BinaryExprNode {
+    private fun buildTree(): C_BinaryExprNode {
         val queue = LinkedList(tail)
         val tree = buildOperandNode(head, queue, 0)
         return tree
     }
 
-    private fun buildOperandNode(left: S_Expression, tail: Queue<S_BinaryExprTail>, level: Int): BinaryExprNode {
+    private fun buildOperandNode(left: S_Expression, tail: Queue<S_BinaryExprTail>, level: Int): C_BinaryExprNode {
         if (tail.isEmpty() || tail.peek().op.value.precedence() < level) {
-            return TermBinaryExprNode(left)
+            return C_TermBinaryExprNode(left)
         }
 
         var res = buildOperandNode(left, tail, level + 1)
@@ -430,61 +472,55 @@ class S_BinaryExpr(val head: S_Expression, val tail: List<S_BinaryExprTail>): S_
         while (!tail.isEmpty() && tail.peek().op.value.precedence() == level) {
             val next = tail.remove()
             val right = buildOperandNode(next.expr, tail, level + 1)
-            res = OpBinaryExprNode(next.op.pos, next.op.value.op, res, right)
+            res = C_OpBinaryExprNode(next.op.pos, next.op.value.op, res, right)
         }
 
         return res
     }
+}
 
-    companion object {
-        private abstract class BinaryExprNode {
-            abstract fun compile(ctx: CtExprContext): RExpr
-            abstract fun compileDb(ctx: CtDbExprContext): DbExpr
-        }
+abstract class C_BinaryExprNode {
+    internal abstract fun compile(ctx: CtExprContext): RExpr
+    internal abstract fun compileDb(ctx: CtDbExprContext): DbExpr
+    internal abstract fun compileDbAttr(ctx: CtDbExprContext): DbExpr?
+}
 
-        private class TermBinaryExprNode(val expr: S_Expression): BinaryExprNode() {
-            override fun compile(ctx: CtExprContext): RExpr {
-                val rExpr = expr.compile(ctx)
-                checkUnitType(rExpr.type)
-                return rExpr
-            }
-
-            override fun compileDb(ctx: CtDbExprContext): DbExpr {
-                val dbExpr = expr.compileDb(ctx)
-                checkUnitType(dbExpr.type)
-                return dbExpr
-            }
-
-            private fun checkUnitType(type: RType) {
-                CtUtils.checkUnitType(expr.startPos, type, "expr_operand_unit", "Operand expression returns nothing")
-            }
-        }
-
-        private class OpBinaryExprNode(
-                val pos: S_Pos,
-                val op: S_BinaryOp,
-                val left: BinaryExprNode,
-                val right: BinaryExprNode
-        ): BinaryExprNode()
-        {
-            override fun compile(ctx: CtExprContext): RExpr {
-                val rLeft = left.compile(ctx)
-                val rRight = right.compile(ctx)
-                return op.compile(pos, rLeft, rRight)
-            }
-
-            override fun compileDb(ctx: CtDbExprContext): DbExpr {
-                val dbLeft = left.compileDb(ctx)
-                val dbRight = right.compileDb(ctx)
-
-                //TODO don't use "is"
-                if (dbLeft is InterpretedDbExpr && dbRight is InterpretedDbExpr) {
-                    val rExpr = op.compile(pos, dbLeft.expr, dbRight.expr)
-                    return InterpretedDbExpr(rExpr)
-                } else {
-                    return op.compileDb(pos, dbLeft, dbRight)
-                }
-            }
-        }
+private class C_TermBinaryExprNode(val expr: S_Expression): C_BinaryExprNode() {
+    override fun compile(ctx: CtExprContext): RExpr {
+        val rExpr = expr.compile(ctx)
+        checkUnitType(rExpr.type)
+        return rExpr
     }
+
+    override fun compileDb(ctx: CtDbExprContext): DbExpr {
+        val dbExpr = expr.compileDb(ctx)
+        checkUnitType(dbExpr.type)
+        return dbExpr
+    }
+
+    override fun compileDbAttr(ctx: CtDbExprContext): DbExpr? {
+        return expr.compileDbAttr(ctx)
+    }
+
+    private fun checkUnitType(type: RType) {
+        CtUtils.checkUnitType(expr.startPos, type, "expr_operand_unit", "Operand expression returns nothing")
+    }
+}
+
+private class C_OpBinaryExprNode(
+        val pos: S_Pos,
+        val op: S_BinaryOp,
+        val left: C_BinaryExprNode,
+        val right: C_BinaryExprNode
+): C_BinaryExprNode()
+{
+    override fun compile(ctx: CtExprContext): RExpr {
+        return op.compile(pos, ctx, left, right)
+    }
+
+    override fun compileDb(ctx: CtDbExprContext): DbExpr {
+        return op.compileDb(pos, ctx, left, right)
+    }
+
+    override fun compileDbAttr(ctx: CtDbExprContext): DbExpr? = null
 }

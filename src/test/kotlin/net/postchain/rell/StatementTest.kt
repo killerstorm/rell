@@ -282,22 +282,6 @@ class StatementTest: BaseRellTest() {
         chkFull("$code = f(123).values().calculate(i).upperCase().size();", listOf(RtIntValue(1)), "int[5]")
     }
 
-    @Test fun testComments() {
-        chk("123//456\n", "int[123]")
-        chk("//456\n123", "int[123]")
-        chk("//456\n\n123", "int[123]")
-        chk("123//789\n+456", "int[579]")
-        chk("123+//789\n456", "int[579]")
-        chk("// /*\n 123 // */ 456\n", "int[123]")
-        chk("'Hello//' + '//World'", "text[Hello////World]")
-
-//        chk("/*123*/456", "int[456]")
-//        chk("123/*456*/", "int[123]")
-//        chk("/*456\n789*/123", "int[123]")
-//        chk("123/*777\n888*/+456", "int[579]")
-//        chk("'Hello/*'+'*/World'", "text[Hello/**/World]")
-    }
-
     private fun chkAssignmentErr(op: String) {
         chkEx("{ var x = true; x $op false; return x; }", "ct_err:binop_operand_type:$op:boolean:boolean")
         chkEx("{ var x = true; x $op 123; return x; }", "ct_err:binop_operand_type:$op:boolean:integer")

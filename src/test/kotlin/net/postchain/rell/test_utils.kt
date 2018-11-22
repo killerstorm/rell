@@ -6,6 +6,7 @@ import com.github.h0tk3y.betterParse.parser.ErrorResult
 import com.github.h0tk3y.betterParse.parser.ParseException
 import net.postchain.rell.model.*
 import net.postchain.rell.parser.CtError
+import net.postchain.rell.parser.CtUtils
 import net.postchain.rell.parser.S_Grammar
 import net.postchain.rell.parser.S_ModuleDefinition
 import net.postchain.rell.runtime.*
@@ -22,11 +23,12 @@ import java.util.*
 import kotlin.test.assertEquals
 
 object RellTestUtils {
-    fun processModule(code: String, processor: (RModule) -> String): String {
+    fun processModule(code: String, errPos: Boolean = false, processor: (RModule) -> String): String {
         val module = try {
             parseModule(code)
         } catch (e: CtError) {
-            return "ct_err:" + e.code
+            val p = if (errPos) "" + e.pos else ""
+            return "ct_err$p:" + e.code
         }
         return processor(module)
     }
@@ -41,13 +43,7 @@ object RellTestUtils {
         }
     }
 
-    fun callFn(globalCtx: RtGlobalContext, moduleCode: String, name: String, args: List<RtValue>, strict: Boolean = true): String {
-        return processModule(moduleCode) { module ->
-            callFn(globalCtx, module, name, args, strict)
-        }
-    }
-
-    private fun callFn(globalCtx: RtGlobalContext, module: RModule, name: String, args: List<RtValue>, strict: Boolean): String {
+    fun callFn(globalCtx: RtGlobalContext, module: RModule, name: String, args: List<RtValue>, strict: Boolean): String {
         val fn = module.functions[name]
         if (fn == null) throw IllegalStateException("Function not found: '$name'")
         val modCtx = RtModuleContext(globalCtx, module)
@@ -56,12 +52,6 @@ object RellTestUtils {
             if (strict) v.toStrictString() else v.toString()
         }
         return res
-    }
-
-    fun callQuery(globalCtx: RtGlobalContext, moduleCode: String, name: String, args: List<RtValue>, strict: Boolean = true): String {
-        return processModule(moduleCode) { module ->
-            callQuery(globalCtx, module, name, args, strict)
-        }
     }
 
     fun callQuery(globalCtx: RtGlobalContext, module: RModule, name: String, args: List<RtValue>, strict: Boolean): String {
@@ -77,12 +67,6 @@ object RellTestUtils {
             if (strict) v.toStrictString() else v.toString()
         }
         return res
-    }
-
-    fun callOp(globalCtx: RtGlobalContext, moduleCode: String, name: String, args: List<RtValue>): String {
-        return processModule(moduleCode) { module ->
-            callOp(globalCtx, module, name, args)
-        }
     }
 
     fun callOp(globalCtx: RtGlobalContext, module: RModule, name: String, args: List<RtValue>): String {
@@ -102,7 +86,7 @@ object RellTestUtils {
 
     private fun parse(code: String): S_ModuleDefinition {
         try {
-            return S_Grammar.parseToEnd(code)
+            return CtUtils.parse(code)
         } catch (e: ParseException) {
             println("PARSER FAILURE:")
             println(code)
@@ -247,6 +231,7 @@ class RellSqlTester(
     var inserts: List<String> = inserts
 
     var strictToString = true
+    var errMsgPos = false
     var signers = listOf<ByteArray>()
 
     private fun init() {
@@ -321,7 +306,7 @@ class RellSqlTester(
     fun chkQueryType(bodyCode: String, expected: String) {
         val queryCode = "query q() $bodyCode"
         val moduleCode = moduleCode(queryCode)
-        val actual = RellTestUtils.processModule(moduleCode) { module ->
+        val actual = processModule(moduleCode) { module ->
             module.queries.getValue("q").type.toStrictString()
         }
         assertEquals(expected, actual)
@@ -367,28 +352,38 @@ class RellSqlTester(
 
     fun compileModule(code: String): String {
         val moduleCode = moduleCode(code)
-        return RellTestUtils.processModule(moduleCode) { "OK" }
+        return processModule(moduleCode) { "OK" }
     }
 
     private fun callFn(code: String): String {
         init()
         val moduleCode = moduleCode(code)
         val globalCtx = createGlobalCtx()
-        return RellTestUtils.callFn(globalCtx, moduleCode, "f", listOf(), strictToString)
+        return processModule(moduleCode) { module ->
+            RellTestUtils.callFn(globalCtx, module, "f", listOf(), strictToString)
+        }
     }
 
     fun callQuery(code: String, args: List<RtValue>): String {
         init()
         val moduleCode = moduleCode(code)
         val globalCtx = createGlobalCtx()
-        return RellTestUtils.callQuery(globalCtx, moduleCode, "q", args, strictToString)
+        return processModule(moduleCode) { module ->
+            RellTestUtils.callQuery(globalCtx, module, "q", args, strictToString)
+        }
     }
 
     fun callOp(code: String, args: List<RtValue>): String {
         init()
         val moduleCode = moduleCode(code)
         val globalCtx = createGlobalCtx()
-        return RellTestUtils.callOp(globalCtx, moduleCode, "o", args)
+        return processModule(moduleCode) { module ->
+            RellTestUtils.callOp(globalCtx, module, "o", args)
+        }
+    }
+
+    private fun processModule(code: String, processor: (RModule) -> String): String {
+        return RellTestUtils.processModule(code, errMsgPos, processor)
     }
 
     private fun createGlobalCtx() = RtGlobalContext(stdoutPrinter, logPrinter, sqlExec, signers)
@@ -397,7 +392,11 @@ class RellSqlTester(
     fun chkLog(vararg expected: String) = logPrinter.chk(*expected)
 
     private fun classDefsCode(): String = classDefs.joinToString("\n")
-    private fun moduleCode(code: String): String = classDefsCode() + "\n" + code
+    private fun moduleCode(code: String): String {
+        val clsCode = classDefsCode()
+        val modCode = (if (clsCode.isEmpty()) "" else clsCode + "\n") + code
+        return modCode
+    }
 
     private class TesterRtPrinter: RtPrinter() {
         private val queue = LinkedList<String>()

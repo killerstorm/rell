@@ -23,6 +23,6 @@ query integer_division(a: integer, b: integer) = a / b;
 
 query get_persons_by_city_set(cities: set<text>): list<text> {
     val persons = list<text>();
-    for (city in cities) persons.addAll(person @* { person.city.name == city }.name);
+    for (locCity in cities) persons.addAll(person @* { person.city.name == locCity }.name);
     return persons;
 }

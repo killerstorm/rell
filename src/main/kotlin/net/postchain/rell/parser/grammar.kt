@@ -3,92 +3,90 @@ package net.postchain.rell.parser
 import com.github.h0tk3y.betterParse.grammar.Grammar
 import com.github.h0tk3y.betterParse.parser.Parser
 import com.github.h0tk3y.betterParse.combinators.*
-import com.github.h0tk3y.betterParse.grammar.parseToEnd
 import com.github.h0tk3y.betterParse.grammar.parser
+import com.github.h0tk3y.betterParse.lexer.Token
 import com.github.h0tk3y.betterParse.lexer.TokenMatch
+import com.github.h0tk3y.betterParse.lexer.Tokenizer
 import net.postchain.rell.hexStringToByteArray
 import java.lang.IllegalArgumentException
-import java.util.regex.Pattern
 
 object S_Grammar : Grammar<S_ModuleDefinition>() {
-    private val ws by token("""\s+""", ignore = true)
-    private val singleLineComment by token("""//.*""", ignore = true)
+    private val LPAR by relltok("(")
+    private val RPAR by relltok(")")
+    private val LCURL by relltok("{")
+    private val RCURL by relltok("}")
+    private val LBRACK by relltok("[")
+    private val RBRACK by relltok("]")
+    private val AT by relltok("@")
+    private val COLON by relltok(":")
+    private val SEMI by relltok(";")
+    private val COMMA by relltok(",")
+    private val DOT by relltok(".")
+    private val ELVIS by relltok("?:")
+    private val SAFECALL by relltok("?.")
+    private val NOTNULL by relltok("!!")
+    private val QUESTION by relltok("?")
 
-    private val LPAR by token("\\(")
-    private val RPAR by token("\\)")
-    private val LCURL by token("\\{")
-    private val RCURL by token("\\}")
-    private val LBRACK by token("\\[")
-    private val RBRACK by token("\\]")
-    private val AT by token("@")
-    private val COLON by token(":")
-    private val SEMI by token(";")
-    private val COMMA by token(",")
-    private val DOT by token("\\.")
-    private val ELVIS by token("\\?:")
-    private val SAFECALL by token("\\?\\.")
-    private val NOTNULL by token("!!")
-    private val QUESTION by token("\\?")
+    private val EQ by relltok("=")
+    private val EQEQ by relltok("==")
+    private val NE by relltok("!=")
+    private val LT by relltok("<")
+    private val GT by relltok(">")
+    private val LE by relltok("<=")
+    private val GE by relltok(">=")
 
-    private val EQ by token("=(?!=)")
-    private val EQEQ by token("==")
-    private val NE by token("!=")
-    private val LT by token("<(?!=)")
-    private val GT by token(">(?!=)")
-    private val LE by token("<=")
-    private val GE by token(">=")
+    private val PLUS by relltok("+")
+    private val MINUS by relltok("-")
+    private val MUL by relltok("*")
+    private val DIV by relltok("/")
+    private val MOD by relltok("%")
 
-    private val PLUS by token("\\+(?!=)")
-    private val MINUS by token("-(?!=)")
-    private val MUL by token("\\*(?!=)")
-    private val DIV by token("/(?!=)")
-    private val MOD by token("%(?!=)")
+    private val AND by relltok("and")
+    private val OR by relltok("or")
+    private val NOT by relltok("not")
 
-    private val AND by token("and\\b")
-    private val OR by token("or\\b")
-    private val NOT by token("not\\b")
+    private val PLUS_EQ by relltok("+=")
+    private val MINUS_EQ by relltok("-=")
+    private val MUL_EQ by relltok("*=")
+    private val DIV_EQ by relltok("/=")
+    private val MOD_EQ by relltok("%=")
 
-    private val PLUS_EQ by token("\\+=")
-    private val MINUS_EQ by token("-=")
-    private val MUL_EQ by token("\\*=")
-    private val DIV_EQ by token("/=")
-    private val MOD_EQ by token("%=")
+    private val CREATE by relltok("create")
+    private val UPDATE by relltok("update")
+    private val DELETE by relltok("delete")
+    private val CLASS by relltok("class")
+    private val KEY by relltok("key")
+    private val INDEX by relltok("index")
+    private val OPERATION by relltok("operation")
+    private val QUERY by relltok("query")
+    private val FUNCTION by relltok("function")
+    private val VAL by relltok("val")
+    private val VAR by relltok("var")
+    private val RETURN by relltok("return")
+    private val IF by relltok("if")
+    private val ELSE by relltok("else")
+    private val WHILE by relltok("while")
+    private val FOR by relltok("for")
+    private val BREAK by relltok("break")
+    private val IN by relltok("in")
+    private val MUTABLE by relltok("mutable")
+    private val LIMIT by relltok("limit")
+    private val SORT by relltok("sort")
+    private val LIST by relltok("list")
+    private val SET by relltok("set")
+    private val MAP by relltok("map")
 
-    private val CREATE by token("create\\b")
-    private val UPDATE by token("update\\b")
-    private val DELETE by token("delete\\b")
-    private val CLASS by token("class\\b")
-    private val KEY by token("key\\b")
-    private val INDEX by token("index\\b")
-    private val OPERATION by token("operation\\b")
-    private val QUERY by token("query\\b")
-    private val FUNCTION by token("function\\b")
-    private val VAL by token("val\\b")
-    private val VAR by token("var\\b")
-    private val RETURN by token("return\\b")
-    private val IF by token("if\\b")
-    private val ELSE by token("else\\b")
-    private val WHILE by token("while\\b")
-    private val FOR by token("for\\b")
-    private val BREAK by token("break\\b")
-    private val IN by token("in\\b")
-    private val MUTABLE by token("mutable\\b")
-    private val LIMIT by token("limit\\b")
-    private val SORT by token("sort\\b")
-    private val LIST by token("list\\b")
-    private val SET by token("set\\b")
-    private val MAP by token("map\\b")
+    private val FALSE by relltok("false")
+    private val TRUE by relltok("true")
+    private val NULL by relltok("null")
 
-    private val FALSE by token("false\\b")
-    private val TRUE by token("true\\b")
-    private val NULL by token("null\\b")
+    private val NUMBER by relltok(RellTokenizer.INTEGER)
+    private val HEXLIT by relltok(RellTokenizer.BYTEARRAY)
+    private val STRINGLIT by relltok(RellTokenizer.STRING)
+    private val IDT by relltok(RellTokenizer.IDENTIFIER)
 
-    private val NUMBER by token("\\d+")
-    private val HEXLIT_SINGLE by token("x'.*?'")
-    private val HEXLIT_DOUBLE by token("x\".*?\"")
-    private val STRINGLIT_SINGLE by token("'.*?'")
-    private val STRINGLIT_DOUBLE by token("\".*?\"")
-    private val IDT by token("[A-Za-z_][A-Za-z_0-9]*")
+    override val tokenizer: Tokenizer by lazy { RellTokenizer(tokens) }
+
     private val id by ( IDT ) map { S_Name(S_Pos(it), it.text) }
 
     private val _type by parser(this::type)
@@ -146,7 +144,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     }
 
     private val binaryOperator = (
-            ( EQ mapNode { S_BinaryOpCode.EQ } )
+            ( EQ mapNode { S_BinaryOpCode.SINGLE_EQ } )
             or ( EQEQ mapNode { S_BinaryOpCode.EQ } )
             or ( NE mapNode { S_BinaryOpCode.NE } )
             or ( LE mapNode { S_BinaryOpCode.LE } )
@@ -175,15 +173,11 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     private val nameExpr by id map { S_NameExpr(it) }
 
-    private val intExpr by NUMBER map { S_IntLiteralExpr(S_Pos(it), it.text.toLong()) }
+    private val intExpr by NUMBER map { S_IntLiteralExpr(S_Pos(it), RellTokenizer.decodeInteger(it)) }
 
-    private val stringExpr =
-            ( STRINGLIT_SINGLE map { S_StringLiteralExpr(S_Pos(it), it.text.removeSurrounding("'", "'")) } ) or
-            ( STRINGLIT_DOUBLE map { S_StringLiteralExpr(S_Pos(it), it.text.removeSurrounding("\"", "\"")) } )
+    private val stringExpr = STRINGLIT map { S_StringLiteralExpr(S_Pos(it), RellTokenizer.decodeString(it)) }
 
-    private val bytesExpr by
-            ( HEXLIT_SINGLE map { S_ByteALiteralExpr(S_Pos(it), decodeByteArray(it, it.text.removeSurrounding("x'", "'"))) }) or
-            ( HEXLIT_DOUBLE map { S_ByteALiteralExpr(S_Pos(it), decodeByteArray(it, it.text.removeSurrounding("x\"", "\""))) })
+    private val bytesExpr by HEXLIT map { S_ByteALiteralExpr(S_Pos(it), RellTokenizer.decodeByteArray(it)) }
 
     private val booleanLiteralExpr by
             ( FALSE map { S_BooleanLiteralExpr(S_Pos(it), false) } ) or
@@ -403,7 +397,12 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     private val updateWhatExpr by ( optional(updateWhatNameOp) * expression ) map {
         (nameOp, expr) ->
-        if (nameOp == null) S_UpdateWhatAnon(expr) else S_UpdateWhatNamed(nameOp.first, nameOp.second, expr)
+        if (nameOp == null) {
+            S_UpdateWhat(expr.startPos, null, null, expr)
+        } else {
+            val (name, op) = nameOp
+            S_UpdateWhat(name.pos, name, op.value, expr)
+        }
     }
 
     private val updateWhat by ( -LPAR * separatedTerms(updateWhatExpr, COMMA, true) * -RPAR )
@@ -455,6 +454,8 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val anyDef by ( classDef or opDefinition or queryDefinition or functionDefinition )
 
     override val rootParser by zeroOrMore(anyDef) map { S_ModuleDefinition(it) }
+
+    private fun relltok(s: String): Token = token(s)
 }
 
 private fun decodeByteArray(t: TokenMatch, s: String): ByteArray {
@@ -497,10 +498,6 @@ private class BaseExprTail_NotNull(val pos: S_Pos): BaseExprTail() {
     override fun toExpr(base: S_Expression): S_Expression = S_UnaryExpr(base.startPos, S_Node(pos, S_UnaryOp_NotNull), base)
 }
 
-private infix fun <A: TokenMatch, T> Parser<A>.mapNode(transform: (A) -> T): Parser<S_Node<T>> = MapCombinator(this) {
+private infix fun <T> Parser<TokenMatch>.mapNode(transform: (TokenMatch) -> T): Parser<S_Node<T>> = MapCombinator(this) {
     S_Node(it, transform(it))
-}
-
-fun parseRellCode(s: String): S_ModuleDefinition {
-    return S_Grammar.parseToEnd(s)
 }

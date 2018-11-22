@@ -1,15 +1,8 @@
 package net.postchain.rell
 
-import com.github.h0tk3y.betterParse.grammar.parseToEnd
-import com.github.h0tk3y.betterParse.lexer.TokenMatch
-import com.github.h0tk3y.betterParse.parser.AlternativesFailure
-import com.github.h0tk3y.betterParse.parser.ErrorResult
-import com.github.h0tk3y.betterParse.parser.ParseException
-import com.github.h0tk3y.betterParse.parser.parseToEnd
 import net.postchain.rell.model.*
 import net.postchain.rell.parser.CtError
 import net.postchain.rell.parser.CtUtils
-import net.postchain.rell.parser.S_Grammar
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.DefaultSqlExecutor
 import net.postchain.rell.sql.NoConnSqlExecutor

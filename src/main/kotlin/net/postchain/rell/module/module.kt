@@ -1,12 +1,10 @@
 package net.postchain.rell.module
 
-import com.github.h0tk3y.betterParse.grammar.parseToEnd
 import net.postchain.core.*
 import net.postchain.gtx.*
 import net.postchain.rell.model.*
 import net.postchain.rell.parser.CtUtils
 
-import net.postchain.rell.parser.S_Grammar
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.DefaultSqlExecutor
 import net.postchain.rell.sql.ROWID_COLUMN

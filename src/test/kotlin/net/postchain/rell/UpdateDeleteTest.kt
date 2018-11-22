@@ -263,6 +263,16 @@ class UpdateDeleteTest {
         )
     }
 
+    @Test fun testUpdateNameResolution() {
+        createCitiesAndPersons()
+
+        execute("val score = 10; update person @ { name = 'Mike' } ( score );")
+        chk("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,10)")
+
+        executeErr("val score = 'Hello'; update person @ { name = 'Mike' } ( score );",
+                "ct_err:attr_bad_type:0:score:integer:text")
+    }
+
     private fun createCities() {
         chkAll()
 

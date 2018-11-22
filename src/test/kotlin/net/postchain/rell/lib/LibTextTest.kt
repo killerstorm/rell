@@ -154,7 +154,7 @@ class LibTextTest: BaseRellTest(false) {
 
     @Test fun testTrim() {
         chk("'  Hello   '", "text[  Hello   ]")
-        chk("'  \t\tHello\t   '", "text[  \t\tHello\t   ]")
+        chk("'  \t\tHello\t   '", """text[  \t\tHello\t   ]""")
         chk("'  Hello   '.trim()", "text[Hello]")
         chk("'  \t\t   Hello   \t  '.trim()", "text[Hello]")
     }

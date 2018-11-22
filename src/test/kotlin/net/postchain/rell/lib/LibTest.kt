@@ -152,8 +152,8 @@ class LibTest: BaseRellTest(false) {
     @Test fun testByteArrayDecode() {
         chk("x''.decode()", "text[]")
         chk("x'48656c6c6f'.decode()", "text[Hello]")
-        chk("x'd09fd180d0b8d0b2d0b5d182'.decode()", "text[\u041f\u0440\u0438\u0432\u0435\u0442]")
-        chk("x'fefeffff'.decode()", "text[\ufffd\ufffd\ufffd\ufffd]")
+        chk("x'd09fd180d0b8d0b2d0b5d182'.decode()", """text[\u041f\u0440\u0438\u0432\u0435\u0442]""")
+        chk("x'fefeffff'.decode()", """text[\ufffd\ufffd\ufffd\ufffd]""")
     }
 
     @Test fun testByteArraySub() {

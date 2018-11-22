@@ -2,7 +2,7 @@
 
 # 1. Types
 
-Simple types:
+### Simple types:
 
 * `boolean`
 * `integer`
@@ -18,7 +18,7 @@ Simple type aliases:
 * `name` = `text`
 * `tuid` = `text`
 
-Complex types:
+### Complex types:
 
 * object reference
 * `T?` - nullable type
@@ -221,6 +221,12 @@ Simple values:
 * Text: `'Hello'`, `"World"`
 * Byte array: `x'1234'`, `x"ABCD"`
 
+Text literals may have escape-sequences:
+
+* Standard: `\r`, `\n`, `\t`, `\b`.
+* Special characters: `\"`, `\'`, `\\`.
+* Unicode: `\u003A`.
+
 Tuple:
 
 * `(1, 2, 3)` - three values
@@ -267,12 +273,15 @@ val q = y?.hex();       // type of "q" is "text?"
 
 #### Comparison:
 
-* `==`
+* `==` (general equality check)
+* `=` (equality check for attributes)
 * `!=`
 * `<`
 * `>`
 * `<=`
 * `>=`
+
+Operator `=` can be used for comparison only in at-expressions. Left operand must be an attribute, and implicitly resolved to an attribute in case of ambiguity when an attribute and a local variable with the same name exists.
 
 #### Arithmetical:
 
@@ -403,4 +412,23 @@ while (x < 5) {
     if (values[x] == 3) break;
     x = x + 1;
 }
+```
+
+# 5. Miscellaneous
+
+### Comments
+
+Single-line comment:
+
+```
+print("Hello"); // Some comment
+```
+
+Multi-line comment:
+
+```
+print("Hello"/*, "World"*/);
+/*
+print("Bye");
+*/
 ```

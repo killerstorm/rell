@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.google.common.math.LongMath
 import net.postchain.rell.model.*
 import net.postchain.rell.toHex
+import org.apache.commons.lang3.StringEscapeUtils
 import java.lang.IllegalArgumentException
 import java.util.*
 
@@ -60,10 +61,43 @@ class RtTextValue(val value: String): RtValue() {
     override fun type(): RType = RTextType
     override fun asString(): String = value
     override fun asFormatArg(): Any = value
-    override fun toStrictString(showTupleFieldNames: Boolean): String = "text[$value]"
+
+    override fun toStrictString(showTupleFieldNames: Boolean): String {
+        val esc = escape(value)
+        return "text[$esc]"
+    }
+
     override fun toString(): String = value
     override fun equals(other: Any?): Boolean = other is RtTextValue && value == other.value
     override fun hashCode(): Int = value.hashCode()
+
+    companion object {
+        private fun escape(s: String): String {
+            if (s.isEmpty()) return ""
+
+            val buf = StringBuilder(s.length)
+            for (c in s) {
+                if (c == '\t') {
+                    buf.append("\\t")
+                } else if (c == '\r') {
+                    buf.append("\\r")
+                } else if (c == '\n') {
+                    buf.append("\\n")
+                } else if (c == '\b') {
+                    buf.append("\\b")
+                } else if (c == '\\') {
+                    buf.append("\\\\")
+                } else if (c >= '\u0020' && c < '\u0080') {
+                    buf.append(c)
+                } else {
+                    buf.append("\\u")
+                    buf.append(String.format("%04x", c.toInt()))
+                }
+            }
+
+            return buf.toString()
+        }
+    }
 }
 
 class RtByteArrayValue(val value: ByteArray): RtValue() {

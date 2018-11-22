@@ -4,6 +4,8 @@ import net.postchain.rell.model.*
 import java.util.*
 
 class S_NameExpr(val name: S_Name): S_Expression(name.pos) {
+    override fun asName(): S_Name? = name
+
     override fun compile(ctx: CtExprContext): RExpr {
         val res = resolveName(ctx, name)
         if (res is CtNameResolution_Local) {
@@ -27,6 +29,15 @@ class S_NameExpr(val name: S_Name): S_Expression(name.pos) {
 
     override fun compileDb(ctx: CtDbExprContext): DbExpr {
         val res = resolveNameDb(ctx, name)
+        return compileDb0(res)
+    }
+
+    override fun compileDbAttr(ctx: CtDbExprContext): DbExpr? {
+        val res = resolveNameDbAttr(ctx, name)
+        return compileDb0(res)
+    }
+
+    private fun compileDb0(res: CtDbNameResolution): DbExpr {
         if (res is CtDbNameResolution_Class) {
             return PathDbExpr(res.cls.type, res.cls, listOf(), null)
         } else if (res is CtDbNameResolution_Attr) {
@@ -107,6 +118,14 @@ class S_MemberExpr(val base: S_Expression, val name: S_Name): S_Expression(base.
             return C_PathExprUtils.compilePathDb(ctx, dbBase, path)
         }
         return C_PathExprUtils.compilePathDb(ctx, path)
+    }
+
+    override fun compileDbAttr(ctx: CtDbExprContext): DbExpr? {
+        val (deepBase, path) = discoverPathExpr(listOf())
+        if (deepBase != null) {
+            return null
+        }
+        return C_PathExprUtils.compilePathDbAttr(ctx, path)
     }
 
     override fun compileCall(ctx: CtExprContext, args: List<RExpr>): RExpr {
@@ -346,7 +365,16 @@ internal object C_PathExprUtils {
     fun compilePathDb(ctx: CtDbExprContext, path: List<S_Name>): DbExpr {
         val head = path[0]
         val res = resolveNameDb(ctx, head)
+        return compilePathDb0(ctx, path, head, res)
+    }
 
+    fun compilePathDbAttr(ctx: CtDbExprContext, path: List<S_Name>): DbExpr {
+        val head = path[0]
+        val res = resolveNameDbAttr(ctx, head)
+        return compilePathDb0(ctx, path, head, res)
+    }
+
+    private fun compilePathDb0(ctx: CtDbExprContext, path: List<S_Name>, head: S_Name, res: CtDbNameResolution): DbExpr {
         if (res is CtDbNameResolution_Class) {
             return compileDbPathExpr0(res.cls, path, 1)
         } else if (res is CtDbNameResolution_Attr) {
@@ -526,15 +554,21 @@ private fun resolveNameDb(ctx: CtDbExprContext, name: S_Name): CtDbNameResolutio
     val nameStr = name.str
 
     val cls = ctx.findClassByAlias(nameStr)
+    val loc = ctx.exprCtx.lookupOpt(nameStr)
+    val ns = S_LibFunctions.getNamespace(nameStr)
+    val attrs = ctx.findAttributesByName(nameStr)
+
     if (cls != null) return CtDbNameResolution_Class(cls)
 
-    val loc = ctx.exprCtx.lookupOpt(nameStr)
+    if (loc != null && !attrs.isEmpty()) {
+        throw CtError(name.pos, "expr_name_locattr:$nameStr",
+                "Name '$nameStr' is ambiguous: can be attribute or local variable")
+    }
+
     if (loc != null) return CtDbNameResolution_Local(loc)
 
-    val ns = S_LibFunctions.getNamespace(nameStr)
     if (ns != null) return CtDbNameResolution_Namespace(ns)
 
-    val attrs = ctx.findAttributesByName(nameStr)
     if (attrs.size > 1) {
         throw CtUtils.errMutlipleAttrs(name.pos, attrs, "at_attr_name_ambig:$nameStr",
                 "Multiple attributes with name '$nameStr'")
@@ -542,6 +576,29 @@ private fun resolveNameDb(ctx: CtDbExprContext, name: S_Name): CtDbNameResolutio
     if (attrs.size == 1) return CtDbNameResolution_Attr(attrs[0])
 
     throw CtUtils.errUnknownName(name)
+}
+
+private fun resolveNameDbAttr(ctx: CtDbExprContext, name: S_Name): CtDbNameResolution {
+    val nameStr = name.str
+
+    val cls = ctx.findClassByAlias(nameStr)
+    val loc = ctx.exprCtx.lookupOpt(nameStr)
+    val ns = S_LibFunctions.getNamespace(nameStr)
+    val attrs = ctx.findAttributesByName(nameStr)
+
+    if (cls != null) return CtDbNameResolution_Class(cls)
+
+    if (attrs.size > 1) {
+        throw CtUtils.errMutlipleAttrs(name.pos, attrs, "at_attr_name_ambig:$nameStr",
+                "Multiple attributes with name '$nameStr'")
+    }
+    if (attrs.size == 1) return CtDbNameResolution_Attr(attrs[0])
+
+    if (loc != null || ns != null) {
+        throw CtError(name.pos, "expr_name_noattr:$nameStr", "Unknown attribute: '$nameStr'")
+    } else {
+        throw CtUtils.errUnknownName(name)
+    }
 }
 
 private sealed class CtNameResolution

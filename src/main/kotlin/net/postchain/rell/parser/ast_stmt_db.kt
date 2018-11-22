@@ -2,23 +2,7 @@ package net.postchain.rell.parser
 
 import net.postchain.rell.model.*
 
-sealed class S_UpdateWhat(val expr: S_Expression) {
-    abstract fun opCode(): S_AssignOpCode?
-    abstract fun pos(): S_Pos
-    abstract fun toNameExprPair(): S_NameExprPair
-}
-
-class S_UpdateWhatAnon(expr: S_Expression): S_UpdateWhat(expr) {
-    override fun opCode(): S_AssignOpCode? = null
-    override fun pos() = expr.startPos
-    override fun toNameExprPair(): S_NameExprPair = S_NameExprPair(null, expr)
-}
-
-class S_UpdateWhatNamed(val name: S_Name, val op: S_Node<S_AssignOpCode>, expr: S_Expression): S_UpdateWhat(expr) {
-    override fun opCode(): S_AssignOpCode? = op.value
-    override fun pos() = name.pos
-    override fun toNameExprPair(): S_NameExprPair = S_NameExprPair(name, expr)
-}
+class S_UpdateWhat(val pos: S_Pos, val name: S_Name?, val op: S_AssignOpCode?, val expr: S_Expression)
 
 class S_UpdateStatement(
         val pos: S_Pos,
@@ -41,25 +25,34 @@ class S_UpdateStatement(
     }
 
     private fun compileWhat(cls: RClass, dbCtx: CtDbExprContext): List<RUpdateStatementWhat> {
-        val dbWhat = what.map { it.expr.compileDb(dbCtx) }
+        val dbWhat = what.map { compileWhatExpr(cls, dbCtx, it) }
         val types = dbWhat.map { it.type }
-        val whatPairs = what.map { it.toNameExprPair() }
+        val whatPairs = what.map { S_NameExprPair(it.name, it.expr) }
         val attrs = matchExprs(cls, whatPairs, types)
         val updAttrs = attrs.withIndex().map { (idx, attr) ->
             val w = what[idx]
-            compileWhatExpr(w.pos(), attr, dbWhat[idx], w.opCode())
+            val op = if (w.op == null) S_AssignOp_Eq else w.op.op
+            op.compileDbUpdate(w.pos, attr, dbWhat[idx])
         }
         return updAttrs
     }
 
-    private fun matchExprs(cls: RClass, exprs: List<S_NameExprPair>, types: List<RType>): List<RAttrib> {
-        val explicitExprs = S_UpdateExprMatcher.matchExplicitExprs(cls, exprs, true)
-        return S_UpdateExprMatcher.matchImplicitExprs(cls, exprs, types, explicitExprs, true)
+    private fun compileWhatExpr(cls: RClass, ctx: CtDbExprContext, pair: S_UpdateWhat): DbExpr {
+        val locName = pair.expr.asName()
+        if (locName != null && pair.name == null) {
+            val clsAttr = cls.attributes[locName.str]
+            val localVar = ctx.exprCtx.lookupOpt(locName.str)
+            if (clsAttr != null && localVar != null) {
+                val rExpr = localVar.toVarExpr()
+                return InterpretedDbExpr(rExpr)
+            }
+        }
+        return pair.expr.compileDb(ctx)
     }
 
-    private fun compileWhatExpr(pos: S_Pos, attr: RAttrib, expr: DbExpr, opCode: S_AssignOpCode?): RUpdateStatementWhat {
-        val op = if (opCode == null) S_AssignOp_Eq else opCode.op
-        return op.compileDbUpdate(pos, attr, expr)
+    private fun matchExprs(cls: RClass, exprs: List<S_NameExprPair>, types: List<RType>): List<RAttrib> {
+        val explicitExprs = C_UpdateExprMatcher.matchExplicitExprs(cls, exprs, true)
+        return C_UpdateExprMatcher.matchImplicitExprs(cls, exprs, types, explicitExprs, true)
     }
 }
 
@@ -78,15 +71,7 @@ class S_DeleteStatement(val pos: S_Pos, val from: List<S_AtExprFrom>, val where:
     }
 }
 
-object S_UpdateExprMatcher {
-    fun matchExpressions(cls: RClass, exprs: List<S_NameExprPair>, types: List<RType>, mutableOnly: Boolean)
-            : List<RAttrib>
-    {
-        val explicitExprs = matchExplicitExprs(cls, exprs, mutableOnly)
-        checkExplicitExprTypes(exprs, explicitExprs, types)
-        return matchImplicitExprs(cls, exprs, types, explicitExprs, mutableOnly)
-    }
-
+object C_UpdateExprMatcher {
     fun matchExplicitExprs(cls: RClass, exprs: List<S_NameExprPair>, mutableOnly: Boolean)
             : List<IndexedValue<RAttrib>>
     {
@@ -128,7 +113,16 @@ object S_UpdateExprMatcher {
     ) : List<RAttrib>
     {
         val implicitExprs = matchImplicitExprs0(cls, exprs, types, mutableOnly)
+        val result = combineMatchedExprs(exprs, explicitExprs, implicitExprs)
+        return result
+    }
 
+    private fun combineMatchedExprs(
+            exprs: List<S_NameExprPair>,
+            explicitExprs: List<IndexedValue<RAttrib>>,
+            implicitExprs: List<IndexedValue<RAttrib>>
+    ) : List<RAttrib>
+    {
         checkImplicitExprsConflicts1(exprs, explicitExprs, implicitExprs)
         checkImplicitExprsConflicts2(exprs, implicitExprs)
 
@@ -198,7 +192,8 @@ object S_UpdateExprMatcher {
         if (byName != null) {
             typeCheck(expr.startPos, idx, byName, type)
             if (mutableOnly && !byName.mutable) {
-                throw CtError(expr.startPos, "update_attr_not_mutable:${byName.name}", "Attribute is not mutable: '${byName.name}'")
+                throw CtError(expr.startPos, "update_attr_not_mutable:${byName.name}",
+                        "Attribute is not mutable: '${byName.name}'")
             }
             return byName
         }
@@ -216,10 +211,8 @@ object S_UpdateExprMatcher {
     }
 
     private fun implicitMatchByName(cls: RClass, expr: S_Expression): RAttrib? {
-        if (expr !is S_NameExpr) { //TODO consider not using "is"
-            return null
-        }
-        return cls.attributes[expr.name.str]
+        val name = expr.asName()
+        return if (name == null) null else cls.attributes[name.str]
     }
 
     private fun implicitMatchByType(cls: RClass, type: RType, mutableOnly: Boolean): List<RAttrib> {

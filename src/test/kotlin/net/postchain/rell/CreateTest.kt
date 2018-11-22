@@ -107,7 +107,7 @@ class CreateTest {
     private fun chkNew(vararg expected: String) = tst.chkDataNew(expected.toList())
 
     private fun classDefErr(code: String, expected: String) {
-        val actual = RellTestUtils.processModule(code, { "OK" })
+        val actual = RellTestUtils.processModule(code) { "OK" }
         assertEquals(expected, actual)
     }
 }

@@ -69,7 +69,7 @@ class S_AtExprWhatComplex(val fields: List<S_AtExprWhatComplexField>): S_AtExprW
         }
 
         val sort = fields.withIndex()
-                .filter { (idx, field) -> field.sort != null }
+                .filter { (_, field) -> field.sort != null }
                 .map { (idx, field) -> Pair(exprs[idx].second, field.sort!!) }
 
         return S_AtWhat(exprs, sort)
@@ -242,7 +242,7 @@ class S_AtExpr(
                 }
             }
 
-            return rFrom.map { ( alias, cls ) -> cls }
+            return rFrom.map { ( _, cls ) -> cls }
         }
 
         private fun compileFromClass(ctx: CtExprContext, idx: Int, from: S_AtExprFrom): Pair<S_Name, RAtClass> {
