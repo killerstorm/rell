@@ -330,7 +330,6 @@ private class CharSeq(private val str: String) {
     fun textPos() = S_Pos(row, col)
     fun text(startSkip: Int, endSkip: Int) = str.substring(startPos + startSkip, pos - endSkip)
 
-    fun tokenMatch(type: Token, startSkip: Int, endSkip: Int) = tokenMatch(type, text(startSkip, endSkip))
     fun tokenMatch(type: Token, text: String) = TokenMatch(type, text, startPos, startRow, startCol)
 
     fun err(code: String, msg: String) = err(textPos(), code, msg)

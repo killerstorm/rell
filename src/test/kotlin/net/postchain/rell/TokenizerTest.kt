@@ -23,12 +23,16 @@ class TokenizerTest: BaseRellTest(false) {
         chk("0xabcd", "int[43981]")
         chk("0x1234ABCD", "int[305441741]")
         chk("0x1234abcd", "int[305441741]")
+        chk("0x1234abcd", "int[305441741]")
+        chk("0x7FFFFFFFFFFFFFFF", "int[9223372036854775807]")
+        chk("0x8000000000000000", "ct_err(1:13):lex_int:0x8000000000000000")
         chk("0xFED", "int[4077]")
         chk("0xFed", "int[4077]")
         chk("0xfed", "int[4077]")
         chk("\n0x", "ct_err(2:1):lex_int:0x")
         chk("\n0X0", "ct_err(2:1):lex_int:0X0")
         chk("\n0xg", "ct_err(2:1):lex_int:0xg")
+        chk("\n0x0g", "ct_err(2:1):lex_int:0x0g")
         chk("\n0xz", "ct_err(2:1):lex_int:0xz")
     }
 

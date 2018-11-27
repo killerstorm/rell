@@ -1,6 +1,6 @@
 ## Language Guide
 
-See [Language Guide](Language.md).
+See [Language Guide](doc/guide/Language.md).
 
 ## Build
 

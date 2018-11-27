@@ -1,13 +1,12 @@
 package net.postchain.rell
 
-import com.github.h0tk3y.betterParse.grammar.parseToEnd
 import com.github.h0tk3y.betterParse.parser.AlternativesFailure
 import com.github.h0tk3y.betterParse.parser.ErrorResult
 import com.github.h0tk3y.betterParse.parser.ParseException
+import com.google.common.io.Files
 import net.postchain.rell.model.*
 import net.postchain.rell.parser.CtError
 import net.postchain.rell.parser.CtUtils
-import net.postchain.rell.parser.S_Grammar
 import net.postchain.rell.parser.S_ModuleDefinition
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.*
@@ -17,12 +16,18 @@ import org.apache.commons.configuration2.builder.fluent.Parameters
 import org.apache.commons.configuration2.io.ClasspathLocationStrategy
 import java.io.Closeable
 import java.io.File
+import java.io.FileOutputStream
 import java.lang.IllegalStateException
 import java.sql.ResultSet
 import java.util.*
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import kotlin.test.assertEquals
 
 object RellTestUtils {
+    private val sources = mutableSetOf<String>()
+    private val sourcesFile: String? = null//System.getProperty("user.home") + "/testsources.rell"
+
     fun processModule(code: String, errPos: Boolean = false, processor: (RModule) -> String): String {
         val module = try {
             parseModule(code)
@@ -81,7 +86,38 @@ object RellTestUtils {
 
     fun parseModule(code: String): RModule {
         val ast = parse(code)
-        return ast.compile()
+        val m = ast.compile()
+        if (sourcesFile != null) {
+            sources.add(code)
+        }
+        return m
+    }
+
+    fun saveSources() {
+        if (sourcesFile == null) return
+        saveSourcesSingleFile(File(sourcesFile))
+        saveSourcesZipFile(File(sourcesFile + ".zip"))
+    }
+
+    private fun saveSourcesSingleFile(f: File) {
+        val buf = StringBuilder()
+        for (code in sources) {
+            buf.append(code + "\n")
+        }
+        Files.write(buf.toString(), f, Charsets.UTF_8)
+    }
+
+    private fun saveSourcesZipFile(f: File) {
+        FileOutputStream(f).use { fout ->
+            ZipOutputStream(fout).use { zout ->
+                var i = 0
+                for (code in sources) {
+                    zout.putNextEntry(ZipEntry(String.format("%04d.rell", i)))
+                    zout.write(code.toByteArray())
+                    i++
+                }
+            }
+        }
     }
 
     private fun parse(code: String): S_ModuleDefinition {

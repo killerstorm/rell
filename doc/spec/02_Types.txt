@@ -1,0 +1,118 @@
+2. Types
+
+
+2.1. General
+
+(1) A type of an attribute, parameter, variable, etc. can be:
+
+- name of a built-in or user-defined type (Identifier)
+- nullable type
+- tuple type
+- collection type
+
+(2) Built-in types
+
+(2.1) Basic built-in types are:
+
+boolean
+byte_array
+integer
+json
+range
+text
+
+(2.2) Built-in type aliases are:
+
+name = text
+pubkey = byte_array
+timestamp = integer
+tuid = text
+
+(3) Type alias A = T means that entities (attributes, variables, etc.) of type A will effectively have type T during compilation.
+
+
+2.2. Special types
+
+Special types cannot be used in code explicitly (in attribute declarations, etc.), but they are used by the compiler internally as types of some expressions.
+
+(1) Special types are: unit, null.
+
+(2) Names of special types cannot be used in code as types. Trying to use "unit" as a type causes an error e. g. "Unknown type name". "null" is a keyword, so using it as a type is a syntax error.
+
+
+2.3. Nullable type
+
+The idea was taken from Kotlin.
+
+(1) Syntax:
+
+NullableType: Type "?"
+
+Examples:
+integer?
+list<text>?
+
+(2) Error if the underlying type is nullable, e. g. integer??.
+
+
+2.4. Tuple type
+
+Consists of one or more fields. Each field must have a type and may have a name.
+
+(1) Syntax:
+
+TupleType: "(" TupleTypeField ( "," TupleTypeField )* ")"
+
+TupleTypeField: ( Identifier ":" )? Type
+
+Examples:
+(integer)
+(integer, text)
+(x: integer, y: integer)
+(p: text, q: byte_array, list<integer>)
+
+(2) Error if same field name is used more than once.
+
+
+2.5. Collection types
+
+Collection types are: list, set, map.
+
+(1) Syntax:
+
+"list" "<" Type ">"
+"set" "<" Type ">"
+"map" "<" Type "," Type ">"
+
+Examples:
+list<integer>
+set<text>
+map<text, byte_array>
+
+
+2.6. Subtypes
+
+Purpose: if type B is a subtype of type A, a value of type B can be assigned to a variable of type A.
+
+(1) T is subtype of T.
+
+(2) T is subtype of T?.
+
+(3) null is subtype of T?.
+
+(4) Tuple type T1 is subtype of tuple type T2 if:
+
+- the number of fields is the same
+- names of corresponding fields are the same (if a field has no name, the other field must have no name)
+- type of each field of T1 is a subtype of the type of the corresponding field of T2
+
+Examples:
+
+(integer, text) is subtype of (integer, text?)
+(integer, text?) is subtype of (integer?, text?)
+(integer, text?) is not subtype of (integer, text), because text? is not subtype of text
+
+(x: integer, y: integer) is subtype of (x: integer?, y: integer?)
+(x: integer, y: integer) is not subtype of (p: integer, q: integer), because field names differ
+(integer, text) is not subtype of (x: integer, y: integer)
+(x: integer, y: integer) is not subtype of (integer, text)

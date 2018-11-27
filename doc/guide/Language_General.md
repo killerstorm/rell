@@ -16,6 +16,7 @@ Simple type aliases:
 
 * `pubkey` = `byte_array`
 * `name` = `text`
+* `timestamp` = `integer`
 * `tuid` = `text`
 
 ### Complex types:
@@ -424,7 +425,7 @@ Single-line comment:
 print("Hello"); // Some comment
 ```
 
-Multi-line comment:
+Multiline comment:
 
 ```
 print("Hello"/*, "World"*/);

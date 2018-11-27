@@ -8,6 +8,8 @@ import com.github.h0tk3y.betterParse.lexer.Token
 import com.github.h0tk3y.betterParse.lexer.TokenMatch
 import com.github.h0tk3y.betterParse.lexer.Tokenizer
 import net.postchain.rell.hexStringToByteArray
+import net.postchain.rell.parser.S_Grammar.getValue
+import net.postchain.rell.parser.S_Grammar.provideDelegate
 import java.lang.IllegalArgumentException
 
 object S_Grammar : Grammar<S_ModuleDefinition>() {
@@ -386,12 +388,12 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     private val callStatement by ( callExpr * -SEMI ) map { expr -> S_ExprStatement(expr) }
 
+    private val createStatement by ( createExpr * -SEMI ) map { expr -> S_ExprStatement(expr) }
+
     private val updateFrom by ( atExprFromItem * optional(atExprFromMulti) ) map {
         ( targetClass, joinClasses ) ->
         listOf(targetClass) + (if (joinClasses == null) listOf() else joinClasses.value)
     }
-
-    private val createStatement by ( createExpr * -SEMI ) map { expr -> S_ExprStatement(expr) }
 
     private val updateWhatNameOp by ( id * assignOp ) map { (name, op) -> Pair(name, op) }
 
@@ -456,14 +458,6 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     override val rootParser by zeroOrMore(anyDef) map { S_ModuleDefinition(it) }
 
     private fun relltok(s: String): Token = token(s)
-}
-
-private fun decodeByteArray(t: TokenMatch, s: String): ByteArray {
-    try {
-        return s.hexStringToByteArray()
-    } catch (e: IllegalArgumentException) {
-        throw CtError(S_Pos(t), "parser_bad_hex:$s", "Invalid byte array literal: '$s'")
-    }
 }
 
 private fun tailsToExpr(head: S_Expression, tails: List<BaseExprTail>): S_Expression {

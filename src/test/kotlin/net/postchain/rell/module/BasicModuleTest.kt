@@ -8,9 +8,10 @@ import net.postchain.gtx.GTXBlockchainConfigurationFactory
 import net.postchain.gtx.GTXDataBuilder
 import net.postchain.gtx.GTXValue
 import net.postchain.gtx.gtx
-import net.postchain.test.IntegrationTest
-import net.postchain.test.KeyPairHelper
-import net.postchain.test.SingleChainTestNode
+import net.postchain.devtools.IntegrationTest
+import net.postchain.devtools.KeyPairHelper
+import net.postchain.devtools.SingleChainTestNode
+import net.postchain.rell.RellTestUtils
 import org.junit.Test
 import java.nio.file.Paths
 import kotlin.test.assertEquals
@@ -172,6 +173,7 @@ class BasicModuleTest : IntegrationTest() {
         assertFailsWith<ProgrammerMistake> {
             callQuery(node, """{ type : "integer_division", q_a : 123, q_b: 0 }""")
         }
+        RellTestUtils.saveSources()
     }
 
     private fun makeTx(ownerIdx: Int, opName: String, vararg opArgs: GTXValue): ByteArray {
