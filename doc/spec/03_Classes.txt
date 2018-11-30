@@ -41,13 +41,22 @@ FieldDefinition: Identifier (":" Type)?
 
 (2) If type is not specified, same type as the attribute name is taken (built-in or user-defined). Error if there is no such type.
 
+(2.1) Following types cannot be used for class attributes:
+
+nullable type
+tuple type
+range
+list<T>
+set<T>
+map<K,V>
+
 (3) Error if there already is another attribute with same name in the same class.
 
 (4) If default value expression is specified, the type of the expression must be a subtype of the attribute's type.
 
 Expressions specification will be written later. We can use simplest expressions now for testing: integer literal, string literal, true, false, null, etc.
 
-(2) Examples:
+(5) Examples:
 
 name;            // same as "name: name;", there is a built-in type "name"
 address: text;
@@ -89,7 +98,7 @@ Error:
 index a, b;
 index b, a;
 
-(4) It does not matter if a key/index is defined before or after an attribute used in it
+(4) It does not matter if a key/index is defined before or after an attribute used in it.
 
 Code:
 x: integer;
@@ -99,7 +108,7 @@ is equivalent to:
 key x;
 x: integer;
 
-(4.1) Same for field type restrictions: does not matter whether it is before or after the attribute definition
+(4.1) Same for field type restrictions: does not matter whether a key/index is defined before or after the attribute.
 
 No error:
 key x: integer;

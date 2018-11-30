@@ -135,6 +135,13 @@ class QueryTest: BaseRellTest() {
         chkEx("{ if (a == 0) return 123; else return null; }", 0, "int[123]")
         chkEx("{ if (a == 0) return 123; else return null; }", 1, "null")
         chkEx("{ return null; }", "null")
+
+        chkEx("= unit();", "ct_err:query_exprtype_unit")
+        chkEx("= print('Hello');", "ct_err:query_exprtype_unit")
+        chkEx("{ return unit(); }", "ct_err:stmt_return_unit")
+        chkEx("{ return print('Hello'); }", "ct_err:stmt_return_unit")
+
+        chkEx("{ if (1 > 0) return 123; else return 'Hello'; }", "ct_err:entity_rettype:integer:text")
     }
 
     private val mkins = SqlTestUtils::mkins
