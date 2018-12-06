@@ -4,13 +4,18 @@ import net.postchain.rell.model.*
 import net.postchain.rell.runtime.RtIntValue
 import net.postchain.rell.runtime.RtValue
 
-class S_LibNamespace(private val consts: Map<String, RtValue>, private val fns: Map<String, Ct_Function>) {
-    fun getConstantOpt(name: String): RtValue? {
-        return consts[name]
+abstract class S_LibNamespace {
+    abstract fun getValueOpt(entCtx: CtEntityContext, nsName: S_Name, name: S_Name): RExpr?
+    abstract fun getFunctionOpt(entCtx: CtEntityContext, nsName: S_Name, name: S_Name): Ct_Function?
+
+    fun getValue(entCtx: CtEntityContext, nsName: S_Name, name: S_Name): RExpr {
+        val v = getValueOpt(entCtx, nsName, name)
+        return v ?: throw CtUtils.errUnknownName(nsName, name)
     }
 
-    fun getFunctionOpt(name: String): Ct_Function? {
-        return fns[name]
+    fun getFunction(entCtx: CtEntityContext, nsName: S_Name, name: S_Name): Ct_Function {
+        val fn = getFunctionOpt(entCtx, nsName, name)
+        return fn ?: throw CtUtils.errUnknownFunction(nsName, name)
     }
 }
 
@@ -116,7 +121,8 @@ object S_LibFunctions {
     )
 
     private val NAMESPACES = mutableMapOf(
-            "integer" to INTEGER_NAMESPACE
+            "integer" to INTEGER_NAMESPACE,
+            "op_context" to S_OpContextNamespace
     )
 
     fun getGlobalFunctions(): List<S_SysFunction> = GLOBAL_FNS
@@ -219,6 +225,35 @@ object S_LibFunctions {
                 stdMemFn("values", valueListType, listOf(), RSysFunction_Map_Values(valueListType))
         )
     }
+}
+
+private class S_StdLibNamespace(
+        private val consts: Map<String, RtValue>,
+        private val fns: Map<String, Ct_Function>
+): S_LibNamespace()
+{
+    override fun getValueOpt(entCtx: CtEntityContext, nsName: S_Name, name: S_Name): RExpr? {
+        val v = consts[name.str]
+        return if (v == null) null else RConstantExpr(v)
+    }
+
+    override fun getFunctionOpt(entCtx: CtEntityContext, nsName: S_Name, name: S_Name) = fns[name.str]
+}
+
+private object S_OpContextNamespace: S_LibNamespace() {
+    override fun getValueOpt(entCtx: CtEntityContext, nsName: S_Name, name: S_Name): RExpr? {
+        if (entCtx.entityType != CtEntityType.OPERATION && entCtx.entityType != CtEntityType.FUNCTION) {
+            throw CtError(nsName.pos, "op_ctx_noop", "Cannot access '${nsName.str}' outside of an operation")
+        }
+
+        if (name.str == "last_block_time") {
+            return RSysCallExpr(RIntegerType, RSysFunction_LastBlockTime, listOf())
+        } else {
+            return null
+        }
+    }
+
+    override fun getFunctionOpt(entCtx: CtEntityContext, nsName: S_Name, name: S_Name) = null
 }
 
 private class S_SysFunction_Print(name: String, val rFn: RSysFunction): S_SysFunction(name) {
@@ -328,7 +363,7 @@ private fun makeNamespace(vararg defs: NamespaceDef): S_LibNamespace {
         }
     }
 
-    return S_LibNamespace(consts, fns)
+    return S_StdLibNamespace(consts, fns)
 }
 
 private fun makeGlobalFns(vararg fns: NamespaceDef_Fn): List<S_SysFunction> {

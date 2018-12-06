@@ -10,13 +10,13 @@ import java.util.*
 import kotlin.coroutines.experimental.buildSequence
 
 class RellTokenizer(override val tokens: List<Token>) : Tokenizer {
-    private val tkIdentifier: Token
-    private val tkInteger: Token
-    private val tkString: Token
-    private val tkByteArray: Token
+    val tkIdentifier: Token
+    val tkInteger: Token
+    val tkString: Token
+    val tkByteArray: Token
 
-    private val tkKeywords: Map<String, Token>
-    private val tkDelims: List<Token>
+    val tkKeywords: Map<String, Token>
+    val tkDelims: List<Token>
 
     init {
         require(tokens.isNotEmpty()) { "The tokens list should not be empty" }

@@ -14,20 +14,22 @@ class RtGlobalContext(
         val stdoutPrinter: RtPrinter,
         val logPrinter: RtPrinter,
         sqlExec: SqlExecutor,
-        val signers: List<ByteArray>)
-{
+        val opCtx: RtOpContext?
+){
     val sqlExec: SqlExecutor = RtSqlExecutor(sqlExec)
 }
 
 class RtModuleContext(val globalCtx: RtGlobalContext, val module: RModule)
 
-class RtEntityContext(val modCtx: RtModuleContext, val dbUpdateAllowed: Boolean, val signers: List<ByteArray>) {
+class RtEntityContext(val modCtx: RtModuleContext, val dbUpdateAllowed: Boolean) {
     fun checkDbUpdateAllowed() {
         if (!dbUpdateAllowed) {
             throw RtError("no_db_update", "Database modifications are not allowed in this context")
         }
     }
 }
+
+class RtOpContext(val lastBlockTime: Long, val signers: List<ByteArray>)
 
 class RtCallFrame(val entCtx: RtEntityContext, rFrame: RCallFrame) {
     private var curBlock = rFrame.rootBlock

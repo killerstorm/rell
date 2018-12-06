@@ -47,4 +47,5 @@ abstract class BaseRellTest(useSql: Boolean = true) {
     fun execOp(code: String) = tst.execOp(code)
 
     fun chkOp(code: String, expected: String) = tst.chkOp(code, expected)
+    fun chkOpFull(code: String, expected: String) = tst.chkOpEx(code, expected)
 }

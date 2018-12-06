@@ -131,7 +131,7 @@ object RSysFunction_IsSigner: RSysFunction() {
     override fun call(ctx: RtGlobalContext, args: List<RtValue>): RtValue {
         check(args.size == 1)
         val a = args[0].asByteArray()
-        val r = ctx.signers.any { Arrays.equals(it, a) }
+        val r = if (ctx.opCtx == null) false else  ctx.opCtx.signers.any { Arrays.equals(it, a) }
         return RtBooleanValue(r)
     }
 }
@@ -322,5 +322,13 @@ class RSysFunction_Print(val log: Boolean): RSysFunction() {
         printer.print(str)
 
         return RtUnitValue
+    }
+}
+
+object RSysFunction_LastBlockTime: RSysFunction() {
+    override fun call(ctx: RtGlobalContext, args: List<RtValue>): RtValue {
+        check(args.size == 0)
+        if (ctx.opCtx == null) throw RtError("fn_last_block_time_noop", "Operation context not available")
+        return RtIntValue(ctx.opCtx.lastBlockTime)
     }
 }

@@ -153,8 +153,7 @@ class S_MemberExpr(val base: S_Expression, val name: S_Name): S_Expression(base.
             val rBase = res.loc.toVarExpr()
             return compileCall0(rBase, args)
         } else if (res is CtNameResolution_Namespace) {
-            val fn = res.ns.getFunctionOpt(name.str)
-            if (fn == null) throw CtUtils.errUnknownFunction(head, name)
+            val fn = res.ns.getFunction(ctx.entCtx, head, name)
             return fn.compileCall(name, args)
         } else {
             throw CtUtils.errUnknownName(head)
@@ -196,8 +195,7 @@ class S_MemberExpr(val base: S_Expression, val name: S_Name): S_Expression(base.
             val dbBase = InterpretedDbExpr(rBase)
             return compileCallDb0(dbBase, args)
         } else if (res is CtDbNameResolution_Namespace) {
-            val fn = res.ns.getFunctionOpt(name.str)
-            if (fn == null) throw CtUtils.errUnknownFunction(head, name)
+            val fn = res.ns.getFunction(ctx.exprCtx.entCtx, head, name)
             return compileCallDbGlobal(name, fn, args)
         } else {
             throw errBadPath(path, 2)
@@ -284,9 +282,7 @@ internal object C_PathExprUtils {
             return compilePath(ctx, rBase, path.subList(1, path.size))
         } else if (res is CtNameResolution_Namespace && path.size >= 2) {
             val second = path[1]
-            val const = res.ns.getConstantOpt(second.str)
-            if (const == null) throw CtUtils.errUnknownName(head, second)
-            val rBase = RConstantExpr(const)
+            val rBase = res.ns.getValue(ctx.entCtx, head, second)
             return compilePath(ctx, rBase, path.subList(2, path.size))
         } else {
             throw CtUtils.errUnknownName(head)
@@ -385,9 +381,7 @@ internal object C_PathExprUtils {
             return InterpretedDbExpr(rExpr)
         } else if (res is CtDbNameResolution_Namespace && path.size >= 2) {
             val second = path[1]
-            val const = res.ns.getConstantOpt(second.str)
-            if (const == null) throw CtUtils.errUnknownName(head, second)
-            val rBase = RConstantExpr(const)
+            val rBase = res.ns.getValue(ctx.exprCtx.entCtx, head, second)
             val rExpr = compilePath(ctx.exprCtx, rBase, path.subList(2, path.size))
             return InterpretedDbExpr(rExpr)
         } else {

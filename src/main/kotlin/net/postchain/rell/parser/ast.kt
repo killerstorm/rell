@@ -61,13 +61,13 @@ class Ct_UserFunction(val fn: Ct_UserFunctionDeclaration, val fnKey: Int): Ct_Fu
     }
 }
 
-internal class CtGlobalContext {
+class CtGlobalContext {
     private var frameBlockIdCtr = 0L
 
     fun nextFrameBlockId(): RFrameBlockId = RFrameBlockId(frameBlockIdCtr++)
 }
 
-internal class CtModuleContext(val globalCtx: CtGlobalContext) {
+class CtModuleContext(val globalCtx: CtGlobalContext) {
     private val typeMap = mutableMapOf(
             "boolean" to RBooleanType,
             "text" to RTextType,
@@ -176,14 +176,14 @@ internal class CtModuleContext(val globalCtx: CtGlobalContext) {
     }
 }
 
-internal enum class CtEntityType {
+enum class CtEntityType {
     CLASS,
     QUERY,
     OPERATION,
     FUNCTION,
 }
 
-internal class CtEntityContext(
+class CtEntityContext(
         val modCtx: CtModuleContext,
         val entityType: CtEntityType,
         explicitReturnType: RType?
@@ -268,11 +268,11 @@ internal class CtEntityContext(
     }
 }
 
-internal class CtScopeEntry(val name: String, val type: RType, val modifiable: Boolean, val ptr: RVarPtr) {
+class CtScopeEntry(val name: String, val type: RType, val modifiable: Boolean, val ptr: RVarPtr) {
     fun toVarExpr(): RVarExpr = RVarExpr(type, ptr, name)
 }
 
-internal class CtExprContext(
+class CtExprContext(
         val entCtx: CtEntityContext,
         private val parent: CtExprContext?,
         val insideLoop: Boolean

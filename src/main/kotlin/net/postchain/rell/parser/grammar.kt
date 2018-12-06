@@ -87,7 +87,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val STRINGLIT by relltok(RellTokenizer.STRING)
     private val IDT by relltok(RellTokenizer.IDENTIFIER)
 
-    override val tokenizer: Tokenizer by lazy { RellTokenizer(tokens) }
+    override val tokenizer: RellTokenizer by lazy { RellTokenizer(tokens) }
 
     private val id by ( IDT ) map { S_Name(S_Pos(it), it.text) }
 

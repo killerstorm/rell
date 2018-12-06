@@ -88,7 +88,7 @@ object RellTestUtils {
         val ast = parse(code)
         val m = ast.compile()
         if (sourcesFile != null) {
-            sources.add(code)
+            sources.add(code.trim())
         }
         return m
     }
@@ -268,7 +268,7 @@ class RellSqlTester(
 
     var strictToString = true
     var errMsgPos = false
-    var signers = listOf<ByteArray>()
+    var opContext: RtOpContext? = null
 
     private fun init() {
         if (!inited) {
@@ -422,7 +422,7 @@ class RellSqlTester(
         return RellTestUtils.processModule(code, errMsgPos, processor)
     }
 
-    private fun createGlobalCtx() = RtGlobalContext(stdoutPrinter, logPrinter, sqlExec, signers)
+    private fun createGlobalCtx() = RtGlobalContext(stdoutPrinter, logPrinter, sqlExec, opContext)
 
     fun chkStdout(vararg expected: String) = stdoutPrinter.chk(*expected)
     fun chkLog(vararg expected: String) = logPrinter.chk(*expected)

@@ -1,5 +1,12 @@
 # Library
 
+## Context
+
+`op_context.last_block_time: integer` - the timestamp of the last block, in milliseconds
+(like `System.currentTimeMillis()` in Java). Returns `-1` if there is no last block (the block currently being built
+is the first block).
+Can be used only in an operation or a function called from an operation, but not in a query.
+
 ## Global Functions
 
 `abs(integer): integer` - absolute value

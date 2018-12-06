@@ -20,7 +20,7 @@ class ROperation(name: String, params: List<RExternalParam>, body: RStatement, f
     : RRoutine(name, params, body, frame)
 {
     override fun callTop(modCtx: RtModuleContext, args: List<RtValue>) {
-        val entCtx = RtEntityContext(modCtx, true, listOf())
+        val entCtx = RtEntityContext(modCtx, true)
         val rtFrame = RtCallFrame(entCtx, frame)
         processArgs(name, params, args, rtFrame)
 
@@ -30,7 +30,7 @@ class ROperation(name: String, params: List<RExternalParam>, body: RStatement, f
     }
 
     fun callTopNoTx(modCtx: RtModuleContext, args: List<RtValue>) {
-        val entCtx = RtEntityContext(modCtx, true, listOf())
+        val entCtx = RtEntityContext(modCtx, true)
         val rtFrame = RtCallFrame(entCtx, frame)
         processArgs(name, params, args, rtFrame)
         execute(rtFrame)
@@ -52,7 +52,7 @@ class RQuery(name: String, val type: RType, params: List<RExternalParam>, body: 
     }
 
     fun callTopQuery(modCtx: RtModuleContext, args: List<RtValue>): RtValue {
-        val entCtx = RtEntityContext(modCtx, false, listOf())
+        val entCtx = RtEntityContext(modCtx, false)
         val rtFrame = RtCallFrame(entCtx, frame)
         processArgs(name, params, args, rtFrame)
 
@@ -84,14 +84,14 @@ class RFunction(
     }
 
     fun callTopFunction(modCtx: RtModuleContext, args: List<RtValue>): RtValue {
-        val entCtx = RtEntityContext(modCtx, false, listOf())
+        val entCtx = RtEntityContext(modCtx, false)
         val rtFrame = RtCallFrame(entCtx, frame)
         val res = call(rtFrame, args)
         return res
     }
 
     fun call(rtFrame: RtCallFrame, args: List<RtValue>): RtValue {
-        val subEntCtx = RtEntityContext(rtFrame.entCtx.modCtx, rtFrame.entCtx.dbUpdateAllowed, listOf())
+        val subEntCtx = RtEntityContext(rtFrame.entCtx.modCtx, rtFrame.entCtx.dbUpdateAllowed)
         val rtSubFrame = RtCallFrame(subEntCtx, frame)
 
         processArgs(name, params, args, rtSubFrame)

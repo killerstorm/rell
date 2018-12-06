@@ -29,9 +29,9 @@ private object LogRtPrinter: RtPrinter() {
     }
 }
 
-private fun makeRtModuleContext(rModule: RModule, eCtx: EContext, signers: List<ByteArray>): RtModuleContext {
+private fun makeRtModuleContext(rModule: RModule, eCtx: EContext, opCtx: RtOpContext?): RtModuleContext {
     val exec = DefaultSqlExecutor(eCtx.conn)
-    val globalCtx = RtGlobalContext(StdoutRtPrinter, LogRtPrinter, exec, signers)
+    val globalCtx = RtGlobalContext(StdoutRtPrinter, LogRtPrinter, exec, opCtx)
     return RtModuleContext(globalCtx, rModule)
 }
 
@@ -124,9 +124,7 @@ private fun gtxValueFromRtValue(rt: RtValue): GTXValue {
     }
 }
 
-class RellGTXOperation(val rOperation: ROperation, val rModule: RModule, opData: ExtOpData):
-        GTXOperation(opData)
-{
+class RellGTXOperation(val rOperation: ROperation, val rModule: RModule, opData: ExtOpData): GTXOperation(opData) {
     private lateinit var converter: GtxToRtValueConverter
     private lateinit var args: List<RtValue>
 
@@ -146,7 +144,8 @@ class RellGTXOperation(val rOperation: ROperation, val rModule: RModule, opData:
     }
 
     override fun apply(ctx: TxEContext): Boolean {
-        val modCtx = makeRtModuleContext(rModule, ctx, data.signers.toList())
+        val opCtx = RtOpContext(ctx.timestamp, data.signers.toList())
+        val modCtx = makeRtModuleContext(rModule, ctx, opCtx)
         converter.finish(modCtx.globalCtx.sqlExec)
 
         rOperation.callTopNoTx(modCtx, args)
@@ -185,7 +184,7 @@ class RellPostchainModule(val rModule: RModule, val moduleName: String): GTXModu
     override fun query(ctx: EContext, name: String, args: GTXValue): GTXValue {
         val rQuery = rModule.queries[name] ?: throw UserMistake("Query not found: '$name'")
 
-        val modCtx = makeRtModuleContext(rModule, ctx, listOf())
+        val modCtx = makeRtModuleContext(rModule, ctx, null)
         val rtArgs = translateQueryArgs(modCtx, rQuery, args)
 
         val rtResult = try {

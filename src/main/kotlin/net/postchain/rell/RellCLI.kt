@@ -38,11 +38,11 @@ private fun getRoutineCaller(args: Args, module: RModule): (SqlExecutor) -> Unit
     val op = args.op
     if (op == null) return {}
 
-    val routine = findRoutine(module, op)
+    val (routine, opCtx) = findRoutine(module, op)
     val rtArgs = parseArgs(routine, args.args ?: listOf())
 
     return { sqlExec ->
-        callRoutine(sqlExec, module, routine, rtArgs)
+        callRoutine(sqlExec, module, routine, opCtx, rtArgs)
     }
 }
 
@@ -99,24 +99,25 @@ private fun compileModule(rellFile: String): RModule {
     return module
 }
 
-private fun findRoutine(module: RModule, name: String): RRoutine {
+private fun findRoutine(module: RModule, name: String): Pair<RRoutine, RtOpContext?> {
     val oper = module.operations[name]
     val query = module.queries[name]
     if (oper != null && query != null) {
         System.err.println("Found both operation and query with name '$name'")
         exitProcess(1)
     } else if (oper != null) {
-        return oper
+        val time = System.currentTimeMillis() / 1000
+        return Pair(oper, RtOpContext(time, listOf()))
     } else if (query != null) {
-        return query
+        return Pair(query, null)
     } else {
         System.err.println("Found no operation or query with name '$name'")
         exitProcess(1)
     }
 }
 
-private fun callRoutine(sqlExec: SqlExecutor, module: RModule, op: RRoutine, args: List<RtValue>) {
-    val globalCtx = RtGlobalContext(StdoutRtPrinter, LogRtPrinter, sqlExec, listOf())
+private fun callRoutine(sqlExec: SqlExecutor, module: RModule, op: RRoutine, opCtx: RtOpContext?, args: List<RtValue>) {
+    val globalCtx = RtGlobalContext(StdoutRtPrinter, LogRtPrinter, sqlExec, opCtx)
     val modCtx = RtModuleContext(globalCtx, module)
     op.callTop(modCtx, args)
 }
