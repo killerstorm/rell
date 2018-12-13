@@ -200,7 +200,7 @@ class RellPostchainModule(val rModule: RModule, val moduleName: String): GTXModu
     private fun translateQueryArgs(modCtx: RtModuleContext, rQuery: RQuery, gtxArgs: GTXValue): List<RtValue> {
         gtxArgs is DictGTXValue
 
-        val argMap = gtxArgs.asDict().filterKeys { it.startsWith("q_") }.mapKeys { (k, v) -> k.substring(2) }
+        val argMap = gtxArgs.asDict().filterKeys { it != "type" }
         val actArgNames = argMap.keys
         val expArgNames = rQuery.params.map { it.name }.toSet()
         if (actArgNames != expArgNames) {

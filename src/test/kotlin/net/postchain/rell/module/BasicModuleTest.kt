@@ -80,43 +80,43 @@ class BasicModuleTest : IntegrationTest() {
 
     @Test fun testQueryGetPersonsByCity() {
         val node = setupNodeAndObjects()
-        chkQuery(node, """{ type : "get_persons_by_city", q_city : 1 }""", "[5]")
-        chkQuery(node, """{ type : "get_persons_by_city", q_city : 2 }""", "[4,6]")
-        chkQuery(node, """{ type : "get_persons_by_city", q_city : 3 }""", "[]")
+        chkQuery(node, """{ type : "get_persons_by_city", city : 1 }""", "[5]")
+        chkQuery(node, """{ type : "get_persons_by_city", city : 2 }""", "[4,6]")
+        chkQuery(node, """{ type : "get_persons_by_city", city : 3 }""", "[]")
     }
 
     @Test fun testQueryGetCityByName() {
         val node = setupNodeAndObjects()
-        chkQuery(node, """{ type : "get_city_by_name", q_name : "New York" }""", "1")
-        chkQuery(node, """{ type : "get_city_by_name", q_name : "Los Angeles" }""", "2")
-        chkQuery(node, """{ type : "get_city_by_name", q_name : "Seattle" }""", "3")
+        chkQuery(node, """{ type : "get_city_by_name", name : "New York" }""", "1")
+        chkQuery(node, """{ type : "get_city_by_name", name : "Los Angeles" }""", "2")
+        chkQuery(node, """{ type : "get_city_by_name", name : "Seattle" }""", "3")
     }
 
     @Test fun testQueryGetPersonsNamesByCityName() {
         val node = setupNodeAndObjects()
-        chkQuery(node, """{ type : "get_persons_names_by_city_name", q_cityName : "Los Angeles" }""", """["Bob","Trudy"]""")
-        chkQuery(node, """{ type : "get_persons_names_by_city_name", q_cityName : "New York" }""", """["Alice"]""")
-        chkQuery(node, """{ type : "get_persons_names_by_city_name", q_cityName : "Seattle" }""", "[]")
+        chkQuery(node, """{ type : "get_persons_names_by_city_name", cityName : "Los Angeles" }""", """["Bob","Trudy"]""")
+        chkQuery(node, """{ type : "get_persons_names_by_city_name", cityName : "New York" }""", """["Alice"]""")
+        chkQuery(node, """{ type : "get_persons_names_by_city_name", cityName : "Seattle" }""", "[]")
     }
 
     @Test fun testQueryGetPersonAddressByName() {
         val node = setupNodeAndObjects()
-        chkQuery(node, """{ type : "get_person_address_by_name", q_name : "Bob" }""",
+        chkQuery(node, """{ type : "get_person_address_by_name", name : "Bob" }""",
                 """["Los Angeles","Main St",5]""")
-        chkQuery(node, """{ type : "get_person_address_by_name", q_name : "Alice" }""",
+        chkQuery(node, """{ type : "get_person_address_by_name", name : "Alice" }""",
                 """["New York","Evergreen Ave",11]""")
-        chkQuery(node, """{ type : "get_person_address_by_name", q_name : "Trudy" }""",
+        chkQuery(node, """{ type : "get_person_address_by_name", name : "Trudy" }""",
                 """["Los Angeles","Mulholland Dr",3]""")
     }
 
     @Test fun testQueryGetPersonsByCitySet() {
         val node = setupNodeAndObjects()
-        chkQuery(node, """{ type : "get_persons_by_city_set", q_cities : [] }""", """[]""")
-        chkQuery(node, """{ type : "get_persons_by_city_set", q_cities : ["New York"] }""", """["Alice"]""")
-        chkQuery(node, """{ type : "get_persons_by_city_set", q_cities : ["Los Angeles"] }""", """["Bob","Trudy"]""")
-        chkQuery(node, """{ type : "get_persons_by_city_set", q_cities : ["New York","Los Angeles"] }""",
+        chkQuery(node, """{ type : "get_persons_by_city_set", cities : [] }""", """[]""")
+        chkQuery(node, """{ type : "get_persons_by_city_set", cities : ["New York"] }""", """["Alice"]""")
+        chkQuery(node, """{ type : "get_persons_by_city_set", cities : ["Los Angeles"] }""", """["Bob","Trudy"]""")
+        chkQuery(node, """{ type : "get_persons_by_city_set", cities : ["New York","Los Angeles"] }""",
                 """["Alice","Bob","Trudy"]""")
-        chkQuery(node, """{ type : "get_persons_by_city_set", q_cities : ["Seattle","New York"] }""", """["Alice"]""")
+        chkQuery(node, """{ type : "get_persons_by_city_set", cities : ["Seattle","New York"] }""", """["Alice"]""")
     }
 
     @Test fun testQueryErrArgMissing() {
@@ -129,49 +129,49 @@ class BasicModuleTest : IntegrationTest() {
     @Test fun testQueryErrArgExtra() {
         val node = setupNodeAndObjects()
         assertFailsWith<UserMistake> {
-            callQuery(node, """{ type : "get_city_by_name", q_name : "New York", q_foo : 12345 }""")
+            callQuery(node, """{ type : "get_city_by_name", name : "New York", foo : 12345 }""")
         }
     }
 
     @Test fun testQueryErrArgWrongType() {
         val node = setupNodeAndObjects()
         assertFailsWith<UserMistake> {
-            callQuery(node, """{ type : "get_city_by_name", q_name : 12345 }""")
+            callQuery(node, """{ type : "get_city_by_name", name : 12345 }""")
         }
     }
 
     @Test fun testQueryErrArgSetDuplicate() {
         val node = setupNodeAndObjects()
         assertFailsWith<UserMistake> {
-            callQuery(node, """{ type : "get_persons_by_city_set", q_cities : ["New York","New York"] }""")
+            callQuery(node, """{ type : "get_persons_by_city_set", cities : ["New York","New York"] }""")
         }
     }
 
     @Test fun testQueryErrArgNonexistentObjectId() {
         val node = setupNodeAndObjects()
         assertFailsWith<UserMistake> {
-            callQuery(node, """{ type : "get_persons_by_city", q_city : 999 }""")
+            callQuery(node, """{ type : "get_persons_by_city", city : 999 }""")
         }
     }
 
     @Test fun testQueryErrArgObjectIdOfWrongClass() {
         val node = setupNodeAndObjects()
         assertFailsWith<UserMistake> {
-            callQuery(node, """{ type : "get_persons_by_city", q_city : 5 }""")
+            callQuery(node, """{ type : "get_persons_by_city", city : 5 }""")
         }
     }
 
     @Test fun testQueryErrRuntimeErrorNoObjects() {
         val node = setupNodeAndObjects()
         assertFailsWith<ProgrammerMistake> {
-            callQuery(node, """{ type : "get_city_by_name", q_name : "Den Helder" }""")
+            callQuery(node, """{ type : "get_city_by_name", name : "Den Helder" }""")
         }
     }
 
     @Test fun testQueryErrRuntimeErrorOther() {
         val node = setupNodeAndObjects()
         assertFailsWith<ProgrammerMistake> {
-            callQuery(node, """{ type : "integer_division", q_a : 123, q_b: 0 }""")
+            callQuery(node, """{ type : "integer_division", a : 123, b: 0 }""")
         }
         RellTestUtils.saveSources()
     }
