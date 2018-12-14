@@ -104,7 +104,13 @@ private fun makeRtSetValue(type: RType, elements: List<RtValue>): RtValue {
     return RtSetValue(type, set)
 }
 
-private fun gtxValueFromRtValue(rt: RtValue): GTXValue {
+private fun gtxValueFromRtValue(rt: RtValue, tupleAsDict: Boolean): GTXValue {
+    fun gtxifyMap(m: Map<RtValue, RtValue>):GTXValue {
+        return DictGTXValue(m.mapKeys { (k, _) -> k.asString() }
+                .mapValues { (_, v) -> gtxValueFromRtValue(v, tupleAsDict)  }
+        )
+    }
+
     return when (rt) {
         is RtUnitValue -> GTXNull
         is RtNullValue -> GTXNull
@@ -113,12 +119,14 @@ private fun gtxValueFromRtValue(rt: RtValue): GTXValue {
         is RtTextValue -> StringGTXValue(rt.asString())
         is RtByteArrayValue -> ByteArrayGTXValue(rt.asByteArray())
         is RtObjectValue -> IntegerGTXValue(rt.asObjectId())
-        is RtListValue -> ArrayGTXValue(rt.asList().map { gtxValueFromRtValue(it) }.toTypedArray())
-        is RtSetValue -> ArrayGTXValue(rt.asSet().map { gtxValueFromRtValue(it) }.toTypedArray())
-        is RtMapValue -> DictGTXValue(rt.asMap()
-                .mapKeys { (k, v) -> k.asString() }
-                .mapValues { (k, v) -> gtxValueFromRtValue(v) })
-        is RtTupleValue -> ArrayGTXValue(rt.asTuple().map { gtxValueFromRtValue(it) }.toTypedArray())
+        is RtListValue -> ArrayGTXValue(rt.asList().map { gtxValueFromRtValue(it, tupleAsDict) }.toTypedArray())
+        is RtSetValue -> ArrayGTXValue(rt.asSet().map { gtxValueFromRtValue(it, tupleAsDict) }.toTypedArray())
+        is RtMapValue -> gtxifyMap(rt.asMap())
+        is RtTupleValue -> if (tupleAsDict && rt.hasAllFieldNames()) {
+            gtxifyMap(rt.asMap())
+        } else {
+            ArrayGTXValue(rt.asTuple().map { gtxValueFromRtValue(it, tupleAsDict) }.toTypedArray())
+        }
         is RtJsonValue -> StringGTXValue(rt.asJsonString()) // TODO consider parsing JSON into GTX array/object
         else -> throw ProgrammerMistake("Cannot convert to GTX: ${rt.type().toStrictString()}")
     }
@@ -190,10 +198,10 @@ class RellPostchainModule(val rModule: RModule, val moduleName: String): GTXModu
         val rtResult = try {
             rQuery.callTopQuery(modCtx, rtArgs)
         } catch (e: Exception) {
-            throw ProgrammerMistake("Query failed: ${e.message}", e)
+            throw UserMistake("Query failed: ${e.message}", e)
         }
 
-        val gtxResult = gtxValueFromRtValue(rtResult)
+        val gtxResult = gtxValueFromRtValue(rtResult, true)
         return gtxResult
     }
 

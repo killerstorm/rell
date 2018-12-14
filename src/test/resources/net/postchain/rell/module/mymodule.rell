@@ -18,7 +18,7 @@ query get_all_city_names() = city @* {}.name;
 query get_city_by_name (name: text) = city @ { name };
 query get_persons_by_city (city) = person @* { city };
 query get_persons_names_by_city_name(cityName: text) = person @* { city.name = cityName }.name;
-query get_person_address_by_name(name: text) = person @ { name } ( city.name, street, house );
+query get_person_address_by_name(name: text) = person @ { name } ( city_name = city.name, street, house );
 query integer_division(a: integer, b: integer) = a / b;
 
 query get_persons_by_city_set(cities: set<text>): list<text> {

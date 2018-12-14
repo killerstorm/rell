@@ -102,11 +102,11 @@ class BasicModuleTest : IntegrationTest() {
     @Test fun testQueryGetPersonAddressByName() {
         val node = setupNodeAndObjects()
         chkQuery(node, """{ type : "get_person_address_by_name", name : "Bob" }""",
-                """["Los Angeles","Main St",5]""")
+                """{"city_name":"Los Angeles","street":"Main St","house":5}""")
         chkQuery(node, """{ type : "get_person_address_by_name", name : "Alice" }""",
-                """["New York","Evergreen Ave",11]""")
+                """{"city_name":"New York","street":"Evergreen Ave","house":11}""")
         chkQuery(node, """{ type : "get_person_address_by_name", name : "Trudy" }""",
-                """["Los Angeles","Mulholland Dr",3]""")
+                """{"city_name":"Los Angeles","street":"Mulholland Dr","house":3}""")
     }
 
     @Test fun testQueryGetPersonsByCitySet() {
@@ -163,14 +163,14 @@ class BasicModuleTest : IntegrationTest() {
 
     @Test fun testQueryErrRuntimeErrorNoObjects() {
         val node = setupNodeAndObjects()
-        assertFailsWith<ProgrammerMistake> {
+        assertFailsWith<UserMistake> {
             callQuery(node, """{ type : "get_city_by_name", name : "Den Helder" }""")
         }
     }
 
     @Test fun testQueryErrRuntimeErrorOther() {
         val node = setupNodeAndObjects()
-        assertFailsWith<ProgrammerMistake> {
+        assertFailsWith<UserMistake> {
             callQuery(node, """{ type : "integer_division", a : 123, b: 0 }""")
         }
         RellTestUtils.saveSources()

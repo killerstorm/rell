@@ -181,6 +181,20 @@ class RtTupleValue(val type: RTupleType, val elements: List<RtValue>): RtValue()
 
     override fun toString(): String = "(${elements.indices.joinToString(",") { elementToString(it) }})"
 
+    fun hasAllFieldNames(): Boolean {
+        return type.fields.all { it.name != null }
+    }
+
+    override fun asMap(): MutableMap<RtValue, RtValue> {
+        val m = mutableMapOf<RtValue, RtValue>()
+        for (i in 0 until elements.size) {
+            val name = type.fields[i].name
+            if (name == null) throw IllegalStateException("Tuple without names cannot be represented as map")
+            m.put(RtTextValue(name), elements[i])
+        }
+        return m
+    }
+
     private fun elementToString(idx: Int): String {
         val name = type.fields[idx].name
         val value = elements[idx]
