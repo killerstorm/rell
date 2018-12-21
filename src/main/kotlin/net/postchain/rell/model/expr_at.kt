@@ -46,74 +46,77 @@ class RAtExprBase(
     }
 
     private fun buildSql(params: List<RtValue>, limit: RExpr?): RtSql {
-        val builder = RtSqlBuilder()
+        val ctx = SqlGenContext(from, params)
+        val fromInfo = buildFromInfo(ctx)
 
-        val fromInfo = buildFromInfo()
-        val ctx = SqlGenContext(fromInfo, params)
+        val b = RtSqlBuilder()
 
-        builder.append("SELECT ")
-
-        builder.append(what, ", ") {
-            it.toSql(ctx, builder)
+        b.append("SELECT ")
+        b.append(what, ", ") {
+            it.toSql(ctx, b)
         }
 
-        appendFrom(builder, fromInfo)
+        appendFrom(b, fromInfo)
 
         if (where != null) {
-            builder.append(" WHERE ")
-            where.toSql(ctx, builder)
+            b.append(" WHERE ")
+            where.toSql(ctx, b)
         }
 
-        builder.append(" ORDER BY ")
-        val orderByList = builder.listBuilder()
+        b.append(" ORDER BY ")
+        val orderByList = b.listBuilder()
         for ((expr, asc) in sort) {
             orderByList.nextItem()
-            expr.toSql(ctx, builder)
+            expr.toSql(ctx, b)
             if (!asc) {
-                builder.append(" DESC")
+                b.append(" DESC")
             }
         }
-        for (cls in fromInfo.classes) {
+        for (cls in from) {
             orderByList.nextItem()
-            builder.appendColumn(cls.alias, ROWID_COLUMN)
+            val alias = ctx.getClassAlias(cls)
+            b.appendColumn(alias, ROWID_COLUMN)
         }
 
         if (limit != null) {
-            builder.append(" LIMIT ")
-            builder.append(limit)
+            b.append(" LIMIT ")
+            b.append(limit)
         }
 
-        return builder.build()
+        return b.build()
     }
 
-    private fun buildFromInfo(): SqlFromInfo {
-        val exprs = mutableListOf<DbExpr>()
-        exprs.addAll(what)
-        if (where != null) {
-            exprs.add(where)
+    private fun buildFromInfo(ctx: SqlGenContext): SqlFromInfo {
+        val b = RtSqlBuilder()
+        for (w in what) {
+            w.toSql(ctx, b)
         }
-        exprs.addAll(sort.map { it.first })
-
-        return SqlFromInfo.create(from, exprs)
+        where?.toSql(ctx, b)
+        for ((expr, _) in sort) {
+            expr.toSql(ctx, b)
+        }
+        for (cls in from) {
+            ctx.getClassAlias(cls)
+        }
+        return ctx.getFromInfo()
     }
 
-    private fun appendFrom(builder: RtSqlBuilder, fromInfo: SqlFromInfo) {
-        builder.append(" FROM ")
+    private fun appendFrom(b: RtSqlBuilder, fromInfo: SqlFromInfo) {
+        b.append(" FROM ")
+        b.append(fromInfo.classes, ", ") { cls ->
+            b.appendName(cls.alias.cls.name)
+            b.append(" ")
+            b.append(cls.alias.str)
 
-        builder.append(from.indices.toList(), ", ") {
-            builder.appendName(from[it].rClass.name)
-            builder.append(" ")
-            builder.append(fromInfo.classes[it].alias)
-
-            for (join in fromInfo.classes[it].joins) {
-                builder.append(" INNER JOIN ")
-                builder.appendName(join.cls.name)
-                builder.append(" ")
-                builder.append(join.alias)
-                builder.append(" ON ")
-                builder.appendColumn(join.baseAlias, join.attr)
-                builder.append(" = ")
-                builder.appendColumn(join.alias, ROWID_COLUMN)
+            for (join in cls.joins) {
+                b.append(" INNER JOIN ")
+                b.appendName(join.alias.cls.name)
+                b.append(" ")
+                b.append(join.alias.str)
+                b.append(" ON ")
+                b.appendColumn(join.baseAlias, join.attr)
+                b.append(" = ")
+                b.appendColumn(join.alias, ROWID_COLUMN)
             }
         }
     }
@@ -153,74 +156,5 @@ class RAtExpr(
             val msg = if (count == 0) "No records found" else "Multiple records found: $count"
             return RtError("at:wrong_count:$count", msg)
         }
-    }
-}
-
-class SqlFromInfo(val classes: List<SqlFromClass>) {
-    companion object {
-        fun create(from: List<RAtClass>, exprs: List<DbExpr>): SqlFromInfo {
-            val aliasGen = SqlAliasGenerator()
-            val builders = from.map { SqlFromClassBuilder(aliasGen) }
-
-            for (expr in exprs) {
-                collectFromInfo(builders, expr)
-            }
-
-            val fromClasses = builders.map { it.build() }
-            return SqlFromInfo(fromClasses)
-        }
-
-        private fun collectFromInfo(builders: List<SqlFromClassBuilder>, expr: DbExpr) {
-            expr.visit {
-                if (it is PathDbExpr) {
-                    val builder = builders[it.cls.index]
-                    builder.addPath(it.path)
-                }
-            }
-        }
-    }
-}
-
-class SqlFromClass(val alias: String, val joins: List<SqlFromJoin>, val pathAliases: Map<List<String>, SqlFromPathAlias>)
-class SqlFromJoin(val baseAlias: String, val cls: RClass, val alias: String, val attr: String)
-class SqlFromPathAlias(val alias: String, val path: List<PathDbExprStep>)
-
-private class SqlAliasGenerator {
-    private var counter = 0
-    fun next(): String = String.format("A%02d", counter++)
-}
-
-private class SqlFromClassBuilder(private val aliasGen: SqlAliasGenerator) {
-    private val alias = aliasGen.next()
-    private val joins = mutableListOf<SqlFromJoin>()
-    private val pathAliases = mutableMapOf<List<String>, SqlFromPathAlias>()
-
-    init {
-        pathAliases[listOf<String>()] = SqlFromPathAlias(alias, listOf<PathDbExprStep>())
-    }
-
-    fun addPath(path: List<PathDbExprStep>) {
-        var baseAlias = alias
-
-        for (ofs in 1 .. path.size) {
-            val subPath = path.subList(0, ofs)
-            val pathKey = subPath.map { it.attr }
-            var pathAlias = pathAliases[pathKey]
-
-            if (pathAlias == null) {
-                val tail = path[ofs - 1]
-                val nextAlias = aliasGen.next()
-                pathAlias = SqlFromPathAlias(nextAlias, subPath)
-                joins.add(SqlFromJoin(baseAlias, tail.targetClass, nextAlias, tail.attr))
-                pathAliases[pathKey] = pathAlias
-            }
-
-            check(pathAlias.path == subPath)
-            baseAlias = pathAlias.alias
-        }
-    }
-
-    fun build(): SqlFromClass {
-        return SqlFromClass(alias, joins, pathAliases)
     }
 }

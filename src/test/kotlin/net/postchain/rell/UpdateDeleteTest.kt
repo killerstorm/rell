@@ -14,36 +14,36 @@ class UpdateDeleteTest {
 
     @Test fun testUpdatePersonSetScore() {
         createCitiesAndPersons()
-        execute("update person @ { name = 'James' } ( score = 125 );")
+        execute("update person @ { .name == 'James' } ( score = 125 );")
         chk("person(4,James,3,Evergreen Ave,5,125)", "person(5,Mike,1,Grand St,7,250)")
     }
 
     @Test fun testUpdatePersonAddScore() {
         createCitiesAndPersons()
-        execute("update person @ { name = 'James' } ( score = score + 50 );")
+        execute("update person @ { .name == 'James' } ( score = .score + 50 );")
         chk("person(4,James,3,Evergreen Ave,5,150)", "person(5,Mike,1,Grand St,7,250)")
     }
 
     @Test fun testUpdatePersonMultiplyScore() {
         createCitiesAndPersons()
-        execute("update person @ { name = 'James' } ( score = score * 3 );")
+        execute("update person @ { .name == 'James' } ( score = .score * 3 );")
         chk("person(4,James,3,Evergreen Ave,5,300)", "person(5,Mike,1,Grand St,7,250)")
     }
 
     @Test fun testUpdatePersonAll() {
         createCitiesAndPersons()
-        execute("update person @ {} ( score = score + 75 );")
+        execute("update person @ {} ( score = .score + 75 );")
         chk("person(4,James,3,Evergreen Ave,5,175)", "person(5,Mike,1,Grand St,7,325)")
     }
 
     @Test fun testUpdatePersonSetFullAddress() {
         createCitiesAndPersons()
-        execute("update person @ { name = 'Mike' } ( city @ { 'San Francisco' }, street = 'Lawton St', house = 13 );")
+        execute("update person @ { .name == 'Mike' } ( city @ { 'San Francisco' }, street = 'Lawton St', house = 13 );")
         chk("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,2,Lawton St,13,250)")
     }
 
     @Test fun testUpdateMutable() {
-        tst.classDefs = listOf(
+        tst.defs = listOf(
                 "class city { name: text; }",
                 "class person { name: text; home: city; mutable work: city; base: integer; mutable score: integer; }"
         )
@@ -64,9 +64,9 @@ class UpdateDeleteTest {
                 "person(5,Bob,2,3,200,500)"
         )
 
-        executeErr("update person @ { name = 'Mike' } ( name = 'Bob' );", "ct_err:update_attr_not_mutable:name")
-        executeErr("update person @ { name = 'Bob' } ( home = city @ { name = 'Boston' } );", "ct_err:update_attr_not_mutable:home")
-        executeErr("update person @ { name = 'Mike' } ( base = 999 );", "ct_err:update_attr_not_mutable:base")
+        executeErr("update person @ { .name == 'Mike' } ( name = 'Bob' );", "ct_err:update_attr_not_mutable:name")
+        executeErr("update person @ { .name == 'Bob' } ( home = city @ { .name == 'Boston' } );", "ct_err:update_attr_not_mutable:home")
+        executeErr("update person @ { .name == 'Mike' } ( base = 999 );", "ct_err:update_attr_not_mutable:base")
 
         chkAll(
                 "city(1,Boston)",
@@ -76,8 +76,8 @@ class UpdateDeleteTest {
                 "person(5,Bob,2,3,200,500)"
         )
 
-        execute("update person @ { name = 'Bob' } ( city @ { name = 'Dallas' } );")
-        execute("update person @ { name = 'Mike' } ( 777 );")
+        execute("update person @ { .name == 'Bob' } ( city @ { .name == 'Dallas' } );")
+        execute("update person @ { .name == 'Mike' } ( 777 );")
 
         chkAll(
                 "city(1,Boston)",
@@ -91,17 +91,17 @@ class UpdateDeleteTest {
     @Test fun testDeletePerson() {
         createCitiesAndPersons()
 
-        execute("delete person @ { name = 'James' };")
+        execute("delete person @ { .name == 'James' };")
         chk("person(5,Mike,1,Grand St,7,250)")
 
-        execute("delete person @ { name = 'Mike' };")
+        execute("delete person @ { .name == 'Mike' };")
         chk()
     }
 
     @Test fun testDeleteCity() {
         createCities()
 
-        execute("delete city @ { name = 'San Francisco' };")
+        execute("delete city @ { .name == 'San Francisco' };")
         chkAll(
                 "city(1,New York)",
                 "city(3,Los Angeles)"
@@ -114,40 +114,40 @@ class UpdateDeleteTest {
     @Test fun testUpdateClassAlias() {
         createCitiesAndPersons()
 
-        execute("update p: person @ { p.name = 'Mike' } ( score = 999 );")
+        execute("update p: person @ { p.name == 'Mike' } ( score = 999 );")
         chk("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,999)")
 
-        executeErr("update p: person @ { person.name = 'Mike' } ( score = 777 );", "ct_err:unknown_name:person")
+        executeErr("update p: person @ { person.name == 'Mike' } ( score = 777 );", "ct_err:unknown_name:person")
         chk("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,999)")
 
-        execute("update person @ { person.name = 'Mike' } ( score = 777 );")
+        execute("update person @ { person.name == 'Mike' } ( score = 777 );")
         chk("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,777)")
     }
 
     @Test fun testDeleteClassAlias() {
         createCitiesAndPersons()
 
-        execute("delete p: person @ { p.name = 'Mike' };")
+        execute("delete p: person @ { p.name == 'Mike' };")
         chk("person(4,James,3,Evergreen Ave,5,100)")
 
-        executeErr("delete p: person @ { person.name = 'James' };", "ct_err:unknown_name:person")
+        executeErr("delete p: person @ { person.name == 'James' };", "ct_err:unknown_name:person")
         chk("person(4,James,3,Evergreen Ave,5,100)")
 
-        execute("delete person @ { person.name = 'James' };")
+        execute("delete person @ { person.name == 'James' };")
         chk()
     }
 
     @Test fun testUpdateExtraClass() {
         createCitiesAndPersons()
 
-        execute("update p: person (c: city) @ { p.city = c, c.name = 'New York' } ( score = 999 );")
+        execute("update p: person (c: city) @ { p.city == c, c.name == 'New York' } ( score = 999 );")
         chk("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,999)")
     }
 
     @Test fun testDeleteExtraClass() {
         createCitiesAndPersons()
 
-        execute("delete p: person (c: city) @ { p.city = c, c.name = 'New York' };")
+        execute("delete p: person (c: city) @ { p.city == c, c.name == 'New York' };")
         chk("person(4,James,3,Evergreen Ave,5,100)")
     }
 
@@ -191,7 +191,7 @@ class UpdateDeleteTest {
         execute("update person @ {} ( street += ' ' );")
         chk("person(4,James,3,Evergreen Ave Foo 123 ,5,100)", "person(5,Mike,1,Grand St Foo 123 ,7,250)")
 
-        execute("update person @ {} ( street += score > 200 );")
+        execute("update person @ {} ( street += .score > 200 );")
         chk("person(4,James,3,Evergreen Ave Foo 123 false,5,100)", "person(5,Mike,1,Grand St Foo 123 true,7,250)")
     }
 
@@ -213,30 +213,43 @@ class UpdateDeleteTest {
         executeErr("update person @ {} ( street $op 'Hello' );", "ct_err:binop_operand_type:$op:text:text")
     }
 
+    @Test fun testUpdateDotAttribute() {
+        createCitiesAndPersons()
+
+        execute("update person @ { .name == 'James' } ( .score = 123 );")
+        chk("person(4,James,3,Evergreen Ave,5,123)", "person(5,Mike,1,Grand St,7,250)")
+
+        execute("update person @ {} ( .score += 456 );")
+        chk("person(4,James,3,Evergreen Ave,5,579)", "person(5,Mike,1,Grand St,7,706)")
+
+        execute("update person @ {} ( .score = .score - 789 );")
+        chk("person(4,James,3,Evergreen Ave,5,-210)", "person(5,Mike,1,Grand St,7,-83)")
+    }
+
     @Test fun testRollback() {
         createCitiesAndPersons()
 
         chk("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,250)")
 
         executeErr("""
-            update person @ { name = 'James' } ( score += 1000 );
+            update person @ { .name == 'James' } ( score += 1000 );
             val x = 1 / 0;
-            update person @ { name = 'Mike' } ( score += 500 );
+            update person @ { .name == 'Mike' } ( score += 500 );
         """.trimIndent(), "rt_err:expr_div_by_zero")
 
         chk("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,250)")
 
         executeErr("""
-            update person @ { name = 'James' } ( score += 1000 );
-            update person @ { name = 'Mike' } ( score += 500 );
+            update person @ { .name == 'James' } ( score += 1000 );
+            update person @ { .name == 'Mike' } ( score += 500 );
             val x = 1 / 0;
         """.trimIndent(), "rt_err:expr_div_by_zero")
 
         chk("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,250)")
 
         execute("""
-            update person @ { name = 'James' } ( score += 1000 );
-            update person @ { name = 'Mike' } ( score += 500 );
+            update person @ { .name == 'James' } ( score += 1000 );
+            update person @ { .name == 'Mike' } ( score += 500 );
         """.trimIndent())
 
         chk("person(4,James,3,Evergreen Ave,5,1100)", "person(5,Mike,1,Grand St,7,750)")
@@ -246,13 +259,13 @@ class UpdateDeleteTest {
         createCitiesAndPersons()
 
         execute("""
-            print(person @* {} ( name, score ));
-            update person @ { name = 'James' } ( score += 100 );
-            print(person @* {} ( name, score ));
-            update person @ { name = 'Mike' } ( score += 200 );
-            print(person @* {} ( name, score ));
+            print(person @* {} ( .name, .score ));
+            update person @ { .name == 'James' } ( score += 100 );
+            print(person @* {} ( .name, .score ));
+            update person @ { .name == 'Mike' } ( score += 200 );
+            print(person @* {} ( .name, .score ));
             update person @ {} ( score /= 2 );
-            print(person @* {} ( name, score ));
+            print(person @* {} ( .name, .score ));
         """.trimIndent())
 
         tst.chkStdout(
@@ -266,11 +279,34 @@ class UpdateDeleteTest {
     @Test fun testUpdateNameResolution() {
         createCitiesAndPersons()
 
-        execute("val score = 10; update person @ { name = 'Mike' } ( score );")
+        execute("val score = 10; update person @ { .name == 'Mike' } ( score );")
         chk("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,10)")
 
-        executeErr("val score = 'Hello'; update person @ { name = 'Mike' } ( score );",
+        executeErr("val score = 'Hello'; update person @ { .name == 'Mike' } ( score );",
                 "ct_err:attr_bad_type:0:score:integer:text")
+    }
+
+    @Test fun testUpdateNameConflictAliasVsLocal() {
+        createCitiesAndPersons()
+
+        execute("update p: person @ { .name == 'James' } ( .score = 123 );")
+        chk("person(4,James,3,Evergreen Ave,5,123)", "person(5,Mike,1,Grand St,7,250)")
+
+        executeErr("val p = 123; update p: person @ { .name == 'James' } ( .score = 123 );",
+                "ct_err:expr_at_conflict_alias:p")
+
+        execute("update person (p: person) @ { person.name == 'James' } ( .score = 456 );")
+        chk("person(4,James,3,Evergreen Ave,5,456)", "person(5,Mike,1,Grand St,7,250)")
+
+        executeErr("val p = 123; update person (p: person) @ { person.name == 'James' } ( .score = 789 );",
+                "ct_err:expr_at_conflict_alias:p")
+    }
+
+    @Test fun testDeleteNameConflictAliasVsLocal() {
+        createCitiesAndPersons()
+        executeErr("val p = 123; delete p: person @ { .name == 'James' };", "ct_err:expr_at_conflict_alias:p")
+        executeErr("val p = 123; delete person (p: person) @ { person.name == 'James' };", "ct_err:expr_at_conflict_alias:p")
+        chk("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,250)")
     }
 
     private fun createCities() {

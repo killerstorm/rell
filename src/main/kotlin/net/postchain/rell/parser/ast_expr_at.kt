@@ -7,14 +7,14 @@ class S_AtExprFrom(val alias: S_Name?, val className: S_Name)
 internal class S_AtWhat(val exprs: List<Pair<String?, DbExpr>>, val sort: List<Pair<DbExpr, Boolean>>)
 
 sealed class S_AtExprWhat {
-    internal abstract fun compile(ctx: CtDbExprContext): S_AtWhat
+    internal abstract fun compile(ctx: C_DbExprContext): S_AtWhat
 }
 
 class S_AtExprWhatDefault: S_AtExprWhat() {
-    override fun compile(ctx: CtDbExprContext): S_AtWhat {
+    override fun compile(ctx: C_DbExprContext): S_AtWhat {
         val exprs = ctx.classes.map {
             val name = if (ctx.classes.size == 1) null else it.alias
-            val expr = PathDbExpr(it.type, it, listOf(), null)
+            val expr = ClassDbExpr(it)
             Pair(name, expr)
         }
         return S_AtWhat(exprs, listOf())
@@ -22,8 +22,8 @@ class S_AtExprWhatDefault: S_AtExprWhat() {
 }
 
 class S_AtExprWhatSimple(val path: List<S_Name>): S_AtExprWhat() {
-    override fun compile(ctx: CtDbExprContext): S_AtWhat {
-        val dbExpr = compileDbPathExpr(ctx, path, false)
+    override fun compile(ctx: C_DbExprContext): S_AtWhat {
+        val dbExpr = compileDbPathExpr(ctx, path)
         val exprs = listOf(Pair(null, dbExpr))
         return S_AtWhat(exprs, listOf())
     }
@@ -31,10 +31,10 @@ class S_AtExprWhatSimple(val path: List<S_Name>): S_AtExprWhat() {
 
 class S_AtExprWhatAttr(val name: S_Name?)
 
-class S_AtExprWhatComplexField(val attr: S_AtExprWhatAttr?, val expr: S_Expression, val sort: Boolean?)
+class S_AtExprWhatComplexField(val attr: S_AtExprWhatAttr?, val expr: S_Expr, val sort: Boolean?)
 
 class S_AtExprWhatComplex(val fields: List<S_AtExprWhatComplexField>): S_AtExprWhat() {
-    override fun compile(ctx: CtDbExprContext): S_AtWhat {
+    override fun compile(ctx: C_DbExprContext): S_AtWhat {
         checkExplicitNames()
 
         val dbExprs = fields.map { it.expr.compileDb(ctx) }
@@ -80,20 +80,20 @@ class S_AtExprWhatComplex(val fields: List<S_AtExprWhatComplexField>): S_AtExprW
         for (field in fields) {
             val name = field.attr?.name
             if (name != null && !names.add(name.str)) {
-                throw CtError(name.pos, "ct_err:at_dup_what_name:${name.str}", "Duplicate field: '${name.str}'")
+                throw C_Error(name.pos, "ct_err:at_dup_what_name:${name.str}", "Duplicate field: '${name.str}'")
             }
         }
     }
 }
 
-class S_AtExprWhere(val exprs: List<S_Expression>) {
-    internal fun compile(ctx: CtDbExprContext): DbExpr? {
+class S_AtExprWhere(val exprs: List<S_Expr>) {
+    internal fun compile(ctx: C_DbExprContext): DbExpr? {
         val dbWhereExprs = exprs.withIndex().map { (idx, expr) -> compileWhereExpr(ctx, idx, expr) }
         val dbWhere = makeWhere(dbWhereExprs)
         return dbWhere
     }
 
-    private fun compileWhereExpr(ctx: CtDbExprContext, idx: Int, expr: S_Expression): DbExpr {
+    private fun compileWhereExpr(ctx: C_DbExprContext, idx: Int, expr: S_Expr): DbExpr {
         val dbExpr = expr.compileDbWhere(ctx, idx)
         val type = dbExpr.type
         if (type == RBooleanType) {
@@ -102,14 +102,15 @@ class S_AtExprWhere(val exprs: List<S_Expression>) {
 
         val attrs = ctx.findAttributesByType(type)
         if (attrs.isEmpty()) {
-            throw CtError(expr.startPos, "at_where_type:$idx:$type", "No attribute matches type of where-expression #${idx+1}: $type")
+            throw C_Error(expr.startPos, "at_where_type:$idx:$type", "No attribute matches type of where-expression #${idx+1}: $type")
         } else if (attrs.size > 1) {
-            throw CtUtils.errMutlipleAttrs(expr.startPos, attrs, "at_attr_type_ambig:$idx:$type",
+            throw C_Utils.errMutlipleAttrs(expr.startPos, attrs, "at_attr_type_ambig:$idx:$type",
                     "Multiple attributes match type of where-expression #${idx+1} ($type)")
         }
 
         val attr = attrs[0]
-        val attrExpr = PathDbExpr(attr.attr.type, attr.cls, listOf(), attr.attr.name)
+        val attrExpr = AttrDbExpr(ClassDbExpr(attr.cls), attr.attr)
+
         return BinaryDbExpr(RBooleanType, DbBinaryOp_Eq, attrExpr, dbExpr)
     }
 
@@ -166,12 +167,12 @@ class S_AtExpr(
         val from: List<S_AtExprFrom>,
         val what: S_AtExprWhat,
         val where: S_AtExprWhere,
-        val limit: S_Expression?,
+        val limit: S_Expr?,
         val zero: Boolean,
         val many: Boolean
-): S_Expression(startPos)
+): S_Expr(startPos)
 {
-    override fun compile(ctx: CtExprContext): RExpr {
+    override fun compile(ctx: C_ExprContext): RExpr {
         val base = compileBase(ctx)
 
         val type = if (many) {
@@ -185,9 +186,9 @@ class S_AtExpr(
         return RAtExpr(type, base.rBase, base.limit, base.resType.rowDecoder)
     }
 
-    private fun compileBase(ctx: CtExprContext): AtBase {
+    private fun compileBase(ctx: C_ExprContext): AtBase {
         val rFrom = compileFrom(ctx, from)
-        val dbCtx = CtDbExprContext(null, ctx, rFrom)
+        val dbCtx = C_DbExprContext(null, ctx, rFrom)
 
         val dbWhere = where.compile(dbCtx)
 
@@ -213,39 +214,47 @@ class S_AtExpr(
         }
     }
 
-    private fun compileLimit(ctx: CtExprContext): RExpr? {
+    private fun compileLimit(ctx: C_ExprContext): RExpr? {
         if (limit == null) {
             return null
         }
 
         val r = limit.compile(ctx)
         if (r.type != RIntegerType) {
-            throw CtError(limit.startPos, "expr_at_limit_type:${r.type.toStrictString()}",
+            throw C_Error(limit.startPos, "expr_at_limit_type:${r.type.toStrictString()}",
                     "Wrong limit type: ${r.type.toStrictString()} instead of ${RIntegerType.toStrictString()}")
         }
 
         return r
     }
 
-    override fun compileDb(ctx: CtDbExprContext): DbExpr = delegateCompileDb(ctx)
+    override fun compileDb(ctx: C_DbExprContext): DbExpr = delegateCompileDb(ctx)
 
     private class AtResultType(val type: RType, val rowDecoder: RAtExprRowType)
 
     companion object {
-        internal fun compileFrom(ctx: CtExprContext, from: List<S_AtExprFrom>): List<RAtClass> {
+        internal fun compileFrom(ctx: C_ExprContext, from: List<S_AtExprFrom>): List<RAtClass> {
             val rFrom = from.mapIndexed { i, f -> compileFromClass(ctx, i, f) }
 
             val names = mutableSetOf<String>()
             for ((alias, cls) in rFrom) {
                 if (!names.add(cls.alias)) {
-                    throw CtError(alias.pos, "at_dup_alias:${cls.alias}", "Duplicate class alias: ${cls.alias}")
+                    throw C_Error(alias.pos, "at_dup_alias:${cls.alias}", "Duplicate class alias: ${cls.alias}")
                 }
             }
 
             return rFrom.map { ( _, cls ) -> cls }
         }
 
-        private fun compileFromClass(ctx: CtExprContext, idx: Int, from: S_AtExprFrom): Pair<S_Name, RAtClass> {
+        private fun compileFromClass(ctx: C_ExprContext, idx: Int, from: S_AtExprFrom): Pair<S_Name, RAtClass> {
+            if (from.alias != null) {
+                val name = from.alias
+                val entry = ctx.lookupOpt(name.str)
+                if (entry != null) {
+                    throw C_Error(name.pos, "expr_at_conflict_alias:${name.str}", "Name conflict: '${name.str}'")
+                }
+            }
+
             val alias = from.alias ?: from.className
             val cls = ctx.entCtx.modCtx.getClass(from.className)
             return Pair(alias, RAtClass(cls, alias.str, idx))

@@ -1,12 +1,11 @@
 package net.postchain.rell
 
-import com.github.h0tk3y.betterParse.parser.AlternativesFailure
-import com.github.h0tk3y.betterParse.parser.ErrorResult
-import com.github.h0tk3y.betterParse.parser.ParseException
 import com.google.common.io.Files
+import net.postchain.gtx.GTXValue
 import net.postchain.rell.model.*
-import net.postchain.rell.parser.CtError
-import net.postchain.rell.parser.CtUtils
+import net.postchain.rell.module.GtxToRtContext
+import net.postchain.rell.parser.C_Error
+import net.postchain.rell.parser.C_Utils
 import net.postchain.rell.parser.S_ModuleDefinition
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.*
@@ -25,13 +24,14 @@ import java.util.zip.ZipOutputStream
 import kotlin.test.assertEquals
 
 object RellTestUtils {
-    private val sources = mutableSetOf<String>()
-    private val sourcesFile: String? = null//System.getProperty("user.home") + "/testsources.rell"
+    val ENCODER_PLAIN = { t: RType, v: RtValue -> v.toString() }
+    val ENCODER_STRICT = { t: RType, v: RtValue -> v.toStrictString() }
+    val ENCODER_GTX = { t: RType, v: RtValue -> encodeGtxStr(t.rtToGtx(v, true)) }
 
-    fun processModule(code: String, errPos: Boolean = false, processor: (RModule) -> String): String {
+    fun processModule(code: String, errPos: Boolean = false, gtx: Boolean = false, processor: (RModule) -> String): String {
         val module = try {
-            parseModule(code)
-        } catch (e: CtError) {
+            parseModule(code, gtx)
+        } catch (e: C_Error) {
             val p = if (errPos) "" + e.pos else ""
             return "ct_err$p:" + e.code
         }
@@ -39,12 +39,20 @@ object RellTestUtils {
     }
 
     private fun catchRtErr(block: () -> String): String {
+        val p = catchRtErr0(block)
+        return p.first ?: p.second!!
+    }
+
+    private fun <T> catchRtErr0(block: () -> T): Pair<String?, T?> {
         try {
-            return block()
+            val res = block()
+            return Pair(null, res)
         } catch (e: RtError) {
-            return "rt_err:" + e.code
+            return Pair("rt_err:" + e.code, null)
         } catch (e: RtRequireError) {
-            return "req_err:" + if (e.userMsg != null) "[${e.userMsg}]" else "null"
+            return Pair("req_err:" + if (e.userMsg != null) "[${e.userMsg}]" else "null", null)
+        } catch (e: RtGtxValueError) {
+            return Pair("gtx_err:" + e.code, null)
         }
     }
 
@@ -59,86 +67,102 @@ object RellTestUtils {
         return res
     }
 
-    fun callQuery(globalCtx: RtGlobalContext, module: RModule, name: String, args: List<RtValue>, strict: Boolean): String {
-        val query = module.queries[name]
-        if (query == null) throw IllegalStateException("Query not found: '$name'")
-        val modCtx = RtModuleContext(globalCtx, module)
-        return callQuery(modCtx, query, args, strict)
+    fun callQuery(globalCtx: RtGlobalContext, module: RModule, name: String, args: List<RtValue>, encoder: (RType, RtValue) -> String): String {
+        val decoder = { params: List<RExternalParam>, args: List<RtValue> -> args }
+        return callQueryGeneric(globalCtx, module, name, args, decoder, encoder)
     }
 
-    private fun callQuery(modCtx: RtModuleContext, query: RQuery, args: List<RtValue>, strict: Boolean): String {
+    fun <T> callQueryGeneric(
+            globalCtx: RtGlobalContext,
+            module: RModule,
+            name: String,
+            args: List<T>,
+            decoder: (List<RExternalParam>, List<T>) -> List<RtValue>,
+            encoder: (RType, RtValue) -> String
+    ): String
+    {
+        val query = module.queries[name]
+        if (query == null) throw IllegalStateException("Query not found: '$name'")
+
+        val (rtErr, rtArgs) = catchRtErr0 { decoder(query.params, args) }
+        if (rtErr != null) {
+            return rtErr
+        }
+
+        val modCtx = RtModuleContext(globalCtx, module)
+        return callQuery0(modCtx, query, rtArgs!!, encoder)
+    }
+
+    private fun callQuery0(modCtx: RtModuleContext, query: RQuery, args: List<RtValue>, encoder: (RType, RtValue) -> String): String {
         val res = catchRtErr {
             val v = query.callTopQuery(modCtx, args)
-            if (strict) v.toStrictString() else v.toString()
+            encoder(query.type, v)
         }
         return res
     }
 
     fun callOp(globalCtx: RtGlobalContext, module: RModule, name: String, args: List<RtValue>): String {
+        val decoder = { params: List<RExternalParam>, args: List<RtValue> -> args }
+        return callOpGeneric(globalCtx, module, name, args, decoder)
+    }
+
+    fun <T> callOpGeneric(
+            globalCtx: RtGlobalContext,
+            module: RModule,
+            name: String,
+            args: List<T>,
+            decoder: (List<RExternalParam>, List<T>) -> List<RtValue>
+    ): String
+    {
         val op = module.operations[name]
         if (op == null) throw IllegalStateException("Operation not found: '$name'")
+
+        val (rtErr, rtArgs) = catchRtErr0 { decoder(op.params, args) }
+        if (rtErr != null) {
+            return rtErr
+        }
+
         val modCtx = RtModuleContext(globalCtx, module)
         return catchRtErr {
-            op.callTop(modCtx, args)
+            op.callTop(modCtx, rtArgs!!)
             ""
         }
     }
 
-    fun parseModule(code: String): RModule {
+    fun parseModule(code: String, gtx: Boolean): RModule {
         val ast = parse(code)
-        val m = ast.compile()
-        if (sourcesFile != null) {
-            sources.add(code.trim())
-        }
+        val m = ast.compile(gtx)
+        TestSourcesRecorder.addSource(code)
         return m
-    }
-
-    fun saveSources() {
-        if (sourcesFile == null) return
-        saveSourcesSingleFile(File(sourcesFile))
-        saveSourcesZipFile(File(sourcesFile + ".zip"))
-    }
-
-    private fun saveSourcesSingleFile(f: File) {
-        val buf = StringBuilder()
-        for (code in sources) {
-            buf.append(code + "\n")
-        }
-        Files.write(buf.toString(), f, Charsets.UTF_8)
-    }
-
-    private fun saveSourcesZipFile(f: File) {
-        FileOutputStream(f).use { fout ->
-            ZipOutputStream(fout).use { zout ->
-                var i = 0
-                for (code in sources) {
-                    zout.putNextEntry(ZipEntry(String.format("%04d.rell", i)))
-                    zout.write(code.toByteArray())
-                    i++
-                }
-            }
-        }
     }
 
     private fun parse(code: String): S_ModuleDefinition {
         try {
-            return CtUtils.parse(code)
-        } catch (e: ParseException) {
-            println("PARSER FAILURE:")
+            return C_Utils.parse(code)
+        } catch (e: C_Error) {
+            println("PARSING FAILED:")
             println(code)
-            printError(e.errorResult, "")
-            throw Exception("Parse failed")
+            throw e
         }
     }
 
-    private fun printError(err: ErrorResult, indent: String) {
-        if (err is AlternativesFailure) {
-            println(indent + "Alternatives:")
-            for (x in err.errors) {
-                printError(x, indent + "    ")
-            }
-        } else {
-            println(indent + err)
+    fun decodeGtxStr(s: String) = RtGtxValue.jsonStringToGtxValue(s)
+    fun encodeGtxStr(gtx: GTXValue) = RtGtxValue.gtxValueToJsonString(gtx)
+
+    fun decodeGtxQueryArgs(params: List<RExternalParam>, args: List<String>): List<RtValue> {
+        return decodeGtxArgs(params, args, true)
+    }
+
+    fun decodeGtxOpArgs(params: List<RExternalParam>, args: List<String>): List<RtValue> {
+        return decodeGtxArgs(params, args, false)
+    }
+
+    private fun decodeGtxArgs(params: List<RExternalParam>, args: List<String>, human: Boolean): List<RtValue> {
+        check(params.size == args.size)
+        val ctx = GtxToRtContext()
+        return args.mapIndexed { i, arg ->
+            val gtx = decodeGtxStr(arg)
+            params[i].type.gtxToRt(ctx, gtx, human)
         }
     }
 }
@@ -236,10 +260,69 @@ object SqlTestUtils {
     }
 }
 
+object TestSourcesRecorder {
+    private val ENABLED = false
+    private val SOURCES_FILE: String = System.getProperty("user.home") + "/testsources.rell"
+
+    private val sync = Any()
+    private val sources = mutableSetOf<String>()
+    private var shutdownHookInstalled = false
+
+    fun addSource(code: String) {
+        if (!ENABLED) return
+
+        synchronized (sync) {
+            sources.add(code.trim())
+            if (!shutdownHookInstalled) {
+                val thread = Thread(TestSourcesRecorder::saveSources)
+                thread.name = "SaveSources"
+                thread.isDaemon = false
+                Runtime.getRuntime().addShutdownHook(thread)
+                shutdownHookInstalled = true
+            }
+        }
+    }
+
+    private fun saveSources() {
+        synchronized (sync) {
+            saveSourcesSingleFile(File(SOURCES_FILE))
+            saveSourcesZipFile(File(SOURCES_FILE + ".zip"))
+        }
+    }
+
+    private fun saveSourcesSingleFile(f: File) {
+        val buf = StringBuilder()
+        for (code in sources) {
+            buf.append(code + "\n")
+        }
+        Files.write(buf.toString(), f, Charsets.UTF_8)
+        printNotice(sources.size, f)
+    }
+
+    private fun saveSourcesZipFile(f: File) {
+        FileOutputStream(f).use { fout ->
+            ZipOutputStream(fout).use { zout ->
+                var i = 0
+                for (code in sources) {
+                    zout.putNextEntry(ZipEntry(String.format("%04d.rell", i)))
+                    zout.write(code.toByteArray())
+                    i++
+                }
+            }
+        }
+        printNotice(sources.size, f)
+    }
+
+    private fun printNotice(count: Int, f: File) {
+        println("Test sources ($count) written to file: $f")
+    }
+}
+
 class RellSqlTester(
         useSql: Boolean = true,
         classDefs: List<String> = listOf(),
-        inserts: List<String> = listOf()
+        inserts: List<String> = listOf(),
+        gtx: Boolean = false
 )
 {
     private var inited = false
@@ -251,6 +334,7 @@ class RellSqlTester(
     private val expectedData = mutableListOf<String>()
     private val stdoutPrinter = TesterRtPrinter()
     private val logPrinter = TesterRtPrinter()
+    private val gtx = gtx
 
     var useSql: Boolean = useSql
     set(value) {
@@ -258,11 +342,17 @@ class RellSqlTester(
         field = value
     }
 
-    var classDefs: List<String> = classDefs
+    var defs: List<String> = classDefs
     set(value) {
         check(!inited)
         field = value
     }
+
+    var gtxResult: Boolean = gtx
+        set(value) {
+            check(!inited)
+            field = value
+        }
 
     var inserts: List<String> = inserts
 
@@ -272,7 +362,7 @@ class RellSqlTester(
 
     private fun init() {
         if (!inited) {
-            val module = RellTestUtils.parseModule(classDefsCode())
+            val module = RellTestUtils.parseModule(defsCode(), gtx)
             modelClasses = module.classes.values.toList()
 
             if (useSql) {
@@ -339,6 +429,17 @@ class RellSqlTester(
         assertEquals(expected, actual)
     }
 
+    fun chkQueryGtx(code: String, expected: String) {
+        val queryCode = "query q() $code"
+        val actual = callQuery0(queryCode, listOf(), RellTestUtils::decodeGtxQueryArgs)
+        assertEquals(expected, actual)
+    }
+
+    fun chkQueryGtxEx(code: String, args: List<String>, expected: String) {
+        val actual = callQuery0(code, args, RellTestUtils::decodeGtxQueryArgs)
+        assertEquals(expected, actual)
+    }
+
     fun chkQueryType(bodyCode: String, expected: String) {
         val queryCode = "query q() $bodyCode"
         val moduleCode = moduleCode(queryCode)
@@ -355,6 +456,11 @@ class RellSqlTester(
 
     fun chkOpEx(opCode: String, expected: String) {
         val actual = callOp(opCode, listOf())
+        assertEquals(expected, actual)
+    }
+
+    fun chkOpGtxEx(code: String, args: List<String>, expected: String) {
+        val actual = callOp0(code, args, RellTestUtils::decodeGtxOpArgs)
         assertEquals(expected, actual)
     }
 
@@ -401,25 +507,42 @@ class RellSqlTester(
     }
 
     fun callQuery(code: String, args: List<RtValue>): String {
+        return callQuery0(code, args) { _, v -> v }
+    }
+
+    private fun <T> callQuery0(code: String, args: List<T>, decoder: (List<RExternalParam>, List<T>) -> List<RtValue>): String {
         init()
         val moduleCode = moduleCode(code)
         val globalCtx = createGlobalCtx()
+
+        val encoder = if (gtxResult) RellTestUtils.ENCODER_GTX
+        else if (strictToString) RellTestUtils.ENCODER_STRICT
+        else RellTestUtils.ENCODER_PLAIN
+
         return processModule(moduleCode) { module ->
-            RellTestUtils.callQuery(globalCtx, module, "q", args, strictToString)
+            RellTestUtils.callQueryGeneric(globalCtx, module, "q", args, decoder, encoder)
         }
     }
 
     fun callOp(code: String, args: List<RtValue>): String {
+        return callOp0(code, args) { _, v -> v }
+    }
+
+    fun callOpGtx(code: String, args: List<String>): String {
+        return callOp0(code, args, RellTestUtils::decodeGtxOpArgs)
+    }
+
+    private fun <T> callOp0(code: String, args: List<T>, decoder: (List<RExternalParam>, List<T>) -> List<RtValue>): String {
         init()
         val moduleCode = moduleCode(code)
         val globalCtx = createGlobalCtx()
         return processModule(moduleCode) { module ->
-            RellTestUtils.callOp(globalCtx, module, "o", args)
+            RellTestUtils.callOpGeneric(globalCtx, module, "o", args, decoder)
         }
     }
 
-    private fun processModule(code: String, processor: (RModule) -> String): String {
-        return RellTestUtils.processModule(code, errMsgPos, processor)
+    fun processModule(code: String, processor: (RModule) -> String): String {
+        return RellTestUtils.processModule(code, errMsgPos, gtx, processor)
     }
 
     private fun createGlobalCtx() = RtGlobalContext(stdoutPrinter, logPrinter, sqlExec, opContext)
@@ -427,10 +550,11 @@ class RellSqlTester(
     fun chkStdout(vararg expected: String) = stdoutPrinter.chk(*expected)
     fun chkLog(vararg expected: String) = logPrinter.chk(*expected)
 
-    private fun classDefsCode(): String = classDefs.joinToString("\n")
+    private fun defsCode(): String = defs.joinToString("\n")
+
     private fun moduleCode(code: String): String {
-        val clsCode = classDefsCode()
-        val modCode = (if (clsCode.isEmpty()) "" else clsCode + "\n") + code
+        val defsCode = defsCode()
+        val modCode = (if (defsCode.isEmpty()) "" else defsCode + "\n") + code
         return modCode
     }
 

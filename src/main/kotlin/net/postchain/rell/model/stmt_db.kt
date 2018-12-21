@@ -28,9 +28,8 @@ class RUpdateStatement(
     private fun buildSql(): RtSql {
         val builder = RtSqlBuilder()
 
-        val fromInfo = buildFromInfo()
-
-        val ctx = SqlGenContext(fromInfo, listOf())
+        val ctx = SqlGenContext(listOf(cls) + extraClasses, listOf())
+        val fromInfo = buildFromInfo(ctx)
 
         builder.append("UPDATE ")
         appendMainTable(builder, cls, fromInfo)
@@ -41,16 +40,13 @@ class RUpdateStatement(
         return builder.build()
     }
 
-    private fun buildFromInfo(): SqlFromInfo {
-        val from = listOf(cls) + extraClasses
-
-        val exprs = mutableListOf<DbExpr>()
-        exprs.addAll(what.map { it.expr })
+    private fun buildFromInfo(ctx: SqlGenContext): SqlFromInfo {
+        val b = RtSqlBuilder()
+        what.forEach { it.expr.toSql(ctx, b) }
         if (where != null) {
-            exprs.add(where)
+            where.toSql(ctx, b)
         }
-
-        return SqlFromInfo.create(from, exprs)
+        return ctx.getFromInfo()
     }
 
     private fun appendSet(ctx: SqlGenContext, builder: RtSqlBuilder) {
@@ -87,9 +83,8 @@ class RDeleteStatement(val cls: RAtClass, val extraClasses: List<RAtClass>, val 
     private fun buildSql(): RtSql {
         val builder = RtSqlBuilder()
 
-        val fromInfo = buildFromInfo()
-
-        val ctx = SqlGenContext(fromInfo, listOf())
+        val ctx = SqlGenContext(listOf(cls) + extraClasses, listOf())
+        val fromInfo = buildFromInfo(ctx)
 
         builder.append("DELETE FROM ")
         appendMainTable(builder, cls, fromInfo)
@@ -99,22 +94,19 @@ class RDeleteStatement(val cls: RAtClass, val extraClasses: List<RAtClass>, val 
         return builder.build()
     }
 
-    private fun buildFromInfo(): SqlFromInfo {
-        val from = listOf(cls) + extraClasses
-
-        val exprs = mutableListOf<DbExpr>()
+    private fun buildFromInfo(ctx: SqlGenContext): SqlFromInfo {
+        val b = RtSqlBuilder()
         if (where != null) {
-            exprs.add(where)
+            where.toSql(ctx, b)
         }
-
-        return SqlFromInfo.create(from, exprs)
+        return ctx.getFromInfo()
     }
 }
 
 private fun appendMainTable(builder: RtSqlBuilder, cls: RAtClass, fromInfo: SqlFromInfo) {
     builder.appendName(cls.rClass.name)
     builder.append(" ")
-    builder.append(fromInfo.classes[cls.index].alias)
+    builder.append(fromInfo.classes[cls.index].alias.str)
 }
 
 private fun appendExtraTables(
@@ -124,16 +116,16 @@ private fun appendExtraTables(
         fromInfo: SqlFromInfo,
         keyword: String)
 {
-    val tables = mutableListOf<Pair<String, String>>()
+    val tables = mutableListOf<Pair<String, SqlTableAlias>>()
 
     for (join in fromInfo.classes[cls.index].joins) {
-        tables.add(Pair(join.cls.name, join.alias))
+        tables.add(Pair(join.alias.cls.name, join.alias))
     }
 
     for (extraCls in extraClasses) {
         tables.add(Pair(extraCls.rClass.name, fromInfo.classes[extraCls.index].alias))
         for (join in fromInfo.classes[extraCls.index].joins) {
-            tables.add(Pair(join.cls.name, join.alias))
+            tables.add(Pair(join.alias.cls.name, join.alias))
         }
     }
 
@@ -146,7 +138,7 @@ private fun appendExtraTables(
     builder.append(tables, ", ") { (table, alias) ->
         builder.appendName(table)
         builder.append(" ")
-        builder.append(alias)
+        builder.append(alias.str)
     }
 }
 

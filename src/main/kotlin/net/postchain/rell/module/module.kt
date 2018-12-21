@@ -3,15 +3,11 @@ package net.postchain.rell.module
 import net.postchain.core.*
 import net.postchain.gtx.*
 import net.postchain.rell.model.*
-import net.postchain.rell.parser.CtUtils
+import net.postchain.rell.parser.C_Utils
 
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.DefaultSqlExecutor
-import net.postchain.rell.sql.ROWID_COLUMN
-import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.sql.gensql
-import org.apache.commons.collections4.MultiValuedMap
-import org.apache.commons.collections4.multimap.HashSetValuedHashMap
 import org.apache.commons.logging.LogFactory
 import java.io.File
 
@@ -35,97 +31,24 @@ private fun makeRtModuleContext(rModule: RModule, eCtx: EContext, opCtx: RtOpCon
     return RtModuleContext(globalCtx, rModule)
 }
 
-private class GtxToRtValueConverter {
-    private val objectIds: MultiValuedMap<RClass, Long> = HashSetValuedHashMap()
-
-    fun convert(type: RType, gv: GTXValue): RtValue {
-        return when (type) {
-            RBooleanType -> RtBooleanValue(gv.asInteger() != 0L)
-            RTextType -> RtTextValue(gv.asString())
-            RIntegerType -> RtIntValue(gv.asInteger())
-            RByteArrayType -> RtByteArrayValue(gv.asByteArray())
-            RJSONType -> RtJsonValue.parse(gv.asString())
-            is RListType -> RtListValue(type, gv.asArray()
-                    .map { convert(type.elementType, it) }.toMutableList())
-            is RSetType -> makeRtSetValue(type, gv.asArray().map { convert(type.elementType, it) })
-            is RMapType -> RtMapValue(type, gv.asDict()
-                    .mapKeys { (k, v) -> convert(type.keyType, gtx(k)) }
-                    .mapValues { (k, v) -> convert(type.valueType, v) }
-                    .toMutableMap())
-            is RTupleType -> RtTupleValue(type, type.fields
-                    .mapIndexed { i, f -> convert(f.type, gv.asArray()[i]) })
-            is RInstanceRefType -> {
-                val rowid = gv.asInteger()
-                objectIds.put(type.rClass, rowid)
-                RtObjectValue(type, rowid)
-            }
-            else -> throw UserMistake("Cannot convert GTX value to ${type.toStrictString()}")
-        }
-    }
-
-    fun finish(sqlExec: SqlExecutor) {
-        for (rClass in objectIds.keySet()) {
-            val rowids = objectIds.get(rClass)
-            checkRowids(sqlExec, rClass, rowids)
-        }
-    }
-
-    private fun checkRowids(sqlExec: SqlExecutor, rClass: RClass, rowids: Collection<Long>) {
-        val existingIds = selectExistingIds(sqlExec, rClass, rowids)
-        val missingIds = rowids.toSet() - existingIds
-        if (!missingIds.isEmpty()) {
-            val s = missingIds.toList().sorted()
-            throw UserMistake("Missing objects of class '${rClass.name}': $s")
-        }
-    }
-
-    private fun selectExistingIds(sqlExec: SqlExecutor, rClass: RClass, rowids: Collection<Long>): Set<Long> {
-        val buf = StringBuilder()
-        buf.append("SELECT \"").append(ROWID_COLUMN).append("\"")
-        buf.append(" FROM \"").append(rClass.name).append("\"")
-        buf.append(" WHERE \"").append(ROWID_COLUMN).append("\" IN (")
-        rowids.joinTo(buf, ",")
-        buf.append(")")
-        val sql = buf.toString()
-
-        val existingIds = mutableSetOf<Long>()
-        sqlExec.executeQuery(sql, {}) { existingIds.add(it.getLong(1)) }
-        return existingIds
+private fun <T> catchRtErr(code: () -> T): T {
+    try {
+        return code()
+    } catch (e: RtBaseError) {
+        throw UserMistake(e.message ?: "")
     }
 }
 
-private fun makeRtSetValue(type: RType, elements: List<RtValue>): RtValue {
-    val set = mutableSetOf<RtValue>()
-    for (value in elements) {
-        if (!set.add(value)) {
-            throw UserMistake("Duplicate set element: ${value}")
-        }
-    }
-    return RtSetValue(type, set)
-}
-
-private fun gtxValueFromRtValue(rt: RtValue): GTXValue {
-    return when (rt) {
-        is RtUnitValue -> GTXNull
-        is RtNullValue -> GTXNull
-        is RtBooleanValue -> IntegerGTXValue(if (rt.asBoolean()) 1L else 0L)
-        is RtIntValue -> IntegerGTXValue(rt.asInteger())
-        is RtTextValue -> StringGTXValue(rt.asString())
-        is RtByteArrayValue -> ByteArrayGTXValue(rt.asByteArray())
-        is RtObjectValue -> IntegerGTXValue(rt.asObjectId())
-        is RtListValue -> ArrayGTXValue(rt.asList().map { gtxValueFromRtValue(it) }.toTypedArray())
-        is RtSetValue -> ArrayGTXValue(rt.asSet().map { gtxValueFromRtValue(it) }.toTypedArray())
-        is RtMapValue -> DictGTXValue(rt.asMap()
-                .mapKeys { (k, v) -> k.asString() }
-                .mapValues { (k, v) -> gtxValueFromRtValue(v) })
-        is RtTupleValue -> ArrayGTXValue(rt.asTuple().map { gtxValueFromRtValue(it) }.toTypedArray())
-        is RtJsonValue -> StringGTXValue(rt.asJsonString()) // TODO consider parsing JSON into GTX array/object
-        else -> throw ProgrammerMistake("Cannot convert to GTX: ${rt.type().toStrictString()}")
+private fun convertArgs(ctx: GtxToRtContext, params: List<RExternalParam>, args: List<GTXValue>, human: Boolean): List<RtValue> {
+    return args.mapIndexed {
+        index, arg ->
+        val type = params[index].type
+        type.gtxToRt(ctx, arg, human)
     }
 }
 
 class RellGTXOperation(val rOperation: ROperation, val rModule: RModule, opData: ExtOpData): GTXOperation(opData) {
-    private lateinit var converter: GtxToRtValueConverter
+    private lateinit var gtxToRtCtx: GtxToRtContext
     private lateinit var args: List<RtValue>
 
     override fun isCorrect(): Boolean {
@@ -134,10 +57,9 @@ class RellGTXOperation(val rOperation: ROperation, val rModule: RModule, opData:
                     "Wrong argument count for op '${rOperation.name}': ${data.args.size} instead of ${rOperation.params.size}")
         }
 
-        converter = GtxToRtValueConverter()
-        args = data.args.mapIndexed {
-            index, arg ->
-            converter.convert(rOperation.params[index].type, arg)
+        catchRtErr {
+            gtxToRtCtx = GtxToRtContext()
+            args = convertArgs(gtxToRtCtx, rOperation.params, data.args.toList(), GTX_OPERATION_HUMAN)
         }
 
         return true
@@ -146,9 +68,16 @@ class RellGTXOperation(val rOperation: ROperation, val rModule: RModule, opData:
     override fun apply(ctx: TxEContext): Boolean {
         val opCtx = RtOpContext(ctx.timestamp, data.signers.toList())
         val modCtx = makeRtModuleContext(rModule, ctx, opCtx)
-        converter.finish(modCtx.globalCtx.sqlExec)
 
-        rOperation.callTopNoTx(modCtx, args)
+        catchRtErr {
+            gtxToRtCtx.finish(modCtx.globalCtx.sqlExec)
+        }
+
+        try {
+            rOperation.callTopNoTx(modCtx, args)
+        } catch (e: Exception) {
+            throw UserMistake("Query failed: ${e.message}", e)
+        }
 
         return true
     }
@@ -190,10 +119,10 @@ class RellPostchainModule(val rModule: RModule, val moduleName: String): GTXModu
         val rtResult = try {
             rQuery.callTopQuery(modCtx, rtArgs)
         } catch (e: Exception) {
-            throw ProgrammerMistake("Query failed: ${e.message}", e)
+            throw UserMistake("Query failed: ${e.message}", e)
         }
 
-        val gtxResult = gtxValueFromRtValue(rtResult)
+        val gtxResult = rQuery.type.rtToGtx(rtResult, GTX_QUERY_HUMAN)
         return gtxResult
     }
 
@@ -207,9 +136,13 @@ class RellPostchainModule(val rModule: RModule, val moduleName: String): GTXModu
             throw UserMistake("Wrong arguments for query '${rQuery.name}': $actArgNames instead of $expArgNames")
         }
 
-        val converter = GtxToRtValueConverter()
-        val rtArgs = rQuery.params.map { converter.convert(it.type, argMap.getValue(it.name)) }
-        converter.finish(modCtx.globalCtx.sqlExec)
+        val rtArgs = catchRtErr {
+            val gtxToRtCtx = GtxToRtContext()
+            val args = rQuery.params.map { argMap.getValue(it.name) }
+            val res = convertArgs(gtxToRtCtx, rQuery.params, args, GTX_QUERY_HUMAN)
+            gtxToRtCtx.finish(modCtx.globalCtx.sqlExec)
+            res
+        }
 
         return rtArgs
     }
@@ -219,8 +152,8 @@ class RellPostchainModuleFactory: GTXModuleFactory {
     override fun makeModule(data: GTXValue, blockchainRID: ByteArray): GTXModule {
         val rellSourceModule = data["gtx"]!!["rellSrcModule"]!!.asString()
         val sourceCode = File(rellSourceModule).readText()
-        val ast = CtUtils.parse(sourceCode)
-        val module = ast.compile()
+        val ast = C_Utils.parse(sourceCode)
+        val module = ast.compile(true)
         return RellPostchainModule(module, rellSourceModule)
     }
 }

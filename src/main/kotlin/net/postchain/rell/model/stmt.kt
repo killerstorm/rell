@@ -74,6 +74,11 @@ class RExprStatement(val expr: RExpr): RStatement() {
 class RAssignStatement(val dstExpr: RDestinationExpr, val expr: RExpr, val op: RBinaryOp?): RStatement() {
     override fun execute(frame: RtCallFrame): RStatementResult? {
         val dstRef = dstExpr.evaluateRef(frame)
+        if (dstRef == null) {
+            // Null-safe access (operator ?.).
+            return null
+        }
+
         val value = if (op != null) {
             val left = dstRef.get()
             val right = expr.evaluate(frame)

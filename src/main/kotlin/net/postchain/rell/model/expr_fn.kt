@@ -1,6 +1,9 @@
 package net.postchain.rell.model
 
+import net.postchain.gtx.decodeGTXValue
+import net.postchain.gtx.encodeGTXValue
 import net.postchain.rell.hexStringToByteArray
+import net.postchain.rell.module.GtxToRtContext
 import net.postchain.rell.runtime.*
 import java.lang.IllegalArgumentException
 import java.lang.NumberFormatException
@@ -330,5 +333,103 @@ object RSysFunction_LastBlockTime: RSysFunction() {
         check(args.size == 0)
         if (ctx.opCtx == null) throw RtError("fn_last_block_time_noop", "Operation context not available")
         return RtIntValue(ctx.opCtx.lastBlockTime)
+    }
+}
+
+object RSysFunction_StrictStr: RSysFunction_1() {
+    override fun call(arg: RtValue): RtValue {
+        val s = arg.toStrictString()
+        return RtTextValue(s)
+    }
+}
+
+object RSysFunction_GtxValue_ToBytes: RSysFunction_1() {
+    override fun call(arg: RtValue): RtValue {
+        val gtx = arg.asGtxValue()
+        val bytes = encodeGTXValue(gtx)
+        return RtByteArrayValue(bytes)
+    }
+}
+
+object RSysFunction_GtxValue_ToJson: RSysFunction_1() {
+    override fun call(arg: RtValue): RtValue {
+        val gtx = arg.asGtxValue()
+        val json = RtGtxValue.gtxValueToJsonString(gtx)
+        //TODO consider making a separate function toJSONStr() to avoid unnecessary conversion str -> json -> str.
+        return RtJsonValue.parse(json)
+    }
+}
+
+object RSysFunction_GtxValue_FromBytes: RSysFunction_1() {
+    override fun call(arg: RtValue): RtValue {
+        val bytes = arg.asByteArray()
+        return RtUtils.wrapErr("fn:GTXValue.fromBytes") {
+            val gtx = decodeGTXValue(bytes)
+            RtGtxValue(gtx)
+        }
+    }
+}
+
+object RSysFunction_GtxValue_FromJson_Text: RSysFunction_1() {
+    override fun call(arg: RtValue): RtValue {
+        val str = arg.asString()
+        return RtUtils.wrapErr("fn:GTXValue.fromJSON(text)") {
+            val gtx = RtGtxValue.jsonStringToGtxValue(str)
+            RtGtxValue(gtx)
+        }
+    }
+}
+
+object RSysFunction_GtxValue_FromJson_Json: RSysFunction_1() {
+    override fun call(arg: RtValue): RtValue {
+        val str = arg.asJsonString()
+        return RtUtils.wrapErr("fn:GTXValue.fromJSON(json)") {
+            val gtx = RtGtxValue.jsonStringToGtxValue(str)
+            RtGtxValue(gtx)
+        }
+    }
+}
+
+class RSysFunction_Record_ToBytes(val type: RRecordType): RSysFunction_1() {
+    override fun call(arg: RtValue): RtValue {
+        val gtx = type.rtToGtx(arg, false)
+        val bytes = encodeGTXValue(gtx)
+        return RtByteArrayValue(bytes)
+    }
+}
+
+class RSysFunction_Record_ToGtx(val type: RRecordType, val human: Boolean): RSysFunction_1() {
+    override fun call(arg: RtValue): RtValue {
+        val gtx = type.rtToGtx(arg, human)
+        return RtGtxValue(gtx)
+    }
+}
+
+class RSysFunction_Record_FromBytes(val type: RRecordType): RSysFunction() {
+    override fun call(ctx: RtGlobalContext, args: List<RtValue>): RtValue {
+        check(args.size == 1)
+        val arg = args[0]
+        val bytes = arg.asByteArray()
+        return RtUtils.wrapErr("fn:record:fromBytes") {
+            val gtx = decodeGTXValue(bytes)
+            val convCtx = GtxToRtContext()
+            val res = type.gtxToRt(convCtx, gtx, false)
+            convCtx.finish(ctx.sqlExec)
+            res
+        }
+    }
+}
+
+class RSysFunction_Record_FromGtx(val type: RRecordType, val human: Boolean): RSysFunction() {
+    override fun call(ctx: RtGlobalContext, args: List<RtValue>): RtValue {
+        check(args.size == 1)
+        val arg = args[0]
+        val gtx = arg.asGtxValue()
+        return RtUtils.wrapErr("fn:record:fromGtx") {
+            val convCtx = GtxToRtContext()
+            val res = type.gtxToRt(convCtx, gtx, human)
+            convCtx.finish(ctx.sqlExec)
+            res
+        }
     }
 }

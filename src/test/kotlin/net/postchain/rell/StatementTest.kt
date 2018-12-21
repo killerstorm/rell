@@ -126,7 +126,7 @@ class StatementTest: BaseRellTest() {
     }
 
     @Test fun testFor() {
-        tst.classDefs = listOf("class user { name: text; }")
+        tst.defs = listOf("class user { name: text; }")
         tst.execOp("create user('Bob'); create user('Alice'); create user('Trudy');")
 
         val code = """{
@@ -142,7 +142,7 @@ class StatementTest: BaseRellTest() {
     }
 
     @Test fun testForBreak() {
-        tst.classDefs = listOf("class user { name: text; }")
+        tst.defs = listOf("class user { name: text; }")
         tst.execOp("create user('Bob'); create user('Alice'); create user('Trudy');")
 
         val code = """{
@@ -161,7 +161,7 @@ class StatementTest: BaseRellTest() {
     }
 
     @Test fun testForReturn() {
-        tst.classDefs = listOf("class user { name: text; }")
+        tst.defs = listOf("class user { name: text; }")
         tst.execOp("create user('Bob'); create user('Alice'); create user('Trudy');")
 
         val code = """{

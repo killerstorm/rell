@@ -6,8 +6,8 @@ sealed class S_UnaryOp(val code: String) {
     abstract fun compile(pos: S_Pos, expr: RExpr): RExpr
     abstract fun compileDb(pos: S_Pos, expr: DbExpr): DbExpr
 
-    fun errTypeMissmatch(pos: S_Pos, type: RType): CtError {
-        return CtError(pos, "unop_operand_type:$code:$type", "Wrong operand type for '$code': $type")
+    fun errTypeMissmatch(pos: S_Pos, type: RType): C_Error {
+        return C_Error(pos, "unop_operand_type:$code:$type", "Wrong operand type for '$code': $type")
     }
 }
 
@@ -73,14 +73,14 @@ object S_UnaryOp_NotNull: S_UnaryOp("!!") {
     }
 }
 
-class S_UnaryExpr(startPos: S_Pos, val op: S_Node<S_UnaryOp>, val expr: S_Expression): S_Expression(startPos) {
-    override fun compile(ctx: CtExprContext): RExpr {
+class S_UnaryExpr(startPos: S_Pos, val op: S_Node<S_UnaryOp>, val expr: S_Expr): S_Expr(startPos) {
+    override fun compile(ctx: C_ExprContext): RExpr {
         val rExpr = expr.compile(ctx)
         checkUnitType(rExpr.type)
         return op.value.compile(op.pos, rExpr)
     }
 
-    override fun compileDb(ctx: CtDbExprContext): DbExpr {
+    override fun compileDb(ctx: C_DbExprContext): DbExpr {
         val dbExpr = expr.compileDb(ctx)
         checkUnitType(dbExpr.type)
 
@@ -93,6 +93,6 @@ class S_UnaryExpr(startPos: S_Pos, val op: S_Node<S_UnaryOp>, val expr: S_Expres
         }
     }
 
-    private fun checkUnitType(type: RType) = CtUtils.checkUnitType(op.pos, type, "expr_operand_unit",
+    private fun checkUnitType(type: RType) = C_Utils.checkUnitType(op.pos, type, "expr_operand_unit",
             "Operand of '${op.value.code}' returns nothing")
 }

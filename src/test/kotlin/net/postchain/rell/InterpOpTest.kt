@@ -29,7 +29,7 @@ class InterpOpTest: AbstractOpTest() {
 
         val res = processExpr0(expr2, types) { module ->
             val rtArgs = args2.map { it.rt(module) }
-            RellTestUtils.callQuery(globalCtx, module, "q", rtArgs, true)
+            RellTestUtils.callQuery(globalCtx, module, "q", rtArgs, RellTestUtils.ENCODER_STRICT)
         }
         return res
     }
@@ -59,7 +59,7 @@ class InterpOpTest: AbstractOpTest() {
             query q($params) = $expr;
         """.trimIndent()
 
-        val res = RellTestUtils.processModule(code, false, block)
+        val res = RellTestUtils.processModule(code, false, false, block)
         return res
     }
 

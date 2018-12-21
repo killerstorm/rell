@@ -9,12 +9,12 @@ abstract class RExpr(val type: RType) {
 }
 
 sealed class RDestinationExpr(type: RType): RExpr(type) {
-    abstract fun evaluateRef(frame: RtCallFrame): RtValueRef
+    abstract fun evaluateRef(frame: RtCallFrame): RtValueRef?
 
     override fun evaluate(frame: RtCallFrame): RtValue {
         val ref = evaluateRef(frame)
-        val value = ref.get()
-        return value
+        val value = ref?.get()
+        return value ?: RtNullValue
     }
 }
 
@@ -34,6 +34,30 @@ class RVarExpr(type: RType, val ptr: RVarPtr, val name: String): RDestinationExp
 
         override fun set(value: RtValue) {
             frame.set(ptr, value, true)
+        }
+    }
+}
+
+class RRecordMemberExpr(val base: RExpr, val attr: RAttrib): RDestinationExpr(attr.type) {
+    override fun evaluateRef(frame: RtCallFrame): RtValueRef? {
+        val baseValue = base.evaluate(frame)
+        if (baseValue is RtNullValue) {
+            // Must be operator "?."
+            return null
+        }
+
+        val recordValue = baseValue.asRecord()
+        return RtRecordAttrRef(recordValue, attr)
+    }
+
+    private class RtRecordAttrRef(val record: RtRecordValue, val attr: RAttrib): RtValueRef() {
+        override fun get(): RtValue {
+            val value = record.get(attr.index)
+            return value
+        }
+
+        override fun set(value: RtValue) {
+            record.set(attr.index, value)
         }
     }
 }
@@ -79,8 +103,15 @@ sealed class RMemberCalculator(val type: RType) {
 
 class RMemberCalculator_TupleField(type: RType, val fieldIndex: Int): RMemberCalculator(type) {
     override fun calculate(frame: RtCallFrame, baseValue: RtValue): RtValue {
-        val tupleValue = baseValue as RtTupleValue
-        return tupleValue.elements[fieldIndex]
+        val values = baseValue.asTuple()
+        return values[fieldIndex]
+    }
+}
+
+class RMemberCalculator_RecordAttr(val attr: RAttrib): RMemberCalculator(attr.type) {
+    override fun calculate(frame: RtCallFrame, baseValue: RtValue): RtValue {
+        val recordValue = baseValue.asRecord()
+        return recordValue.get(attr.index)
     }
 }
 
@@ -309,7 +340,17 @@ class RRequireExpr_Map(type: RType, expr: RExpr, msgExpr: RExpr?): RRequireExpr(
     override fun calculate(v: RtValue) = if (v != RtNullValue && !v.asMap().isEmpty()) v else null
 }
 
-class RCreateExprAttr(val attr: RAttrib, val expr: RExpr)
+sealed class RCreateExprAttr(val attr: RAttrib) {
+    abstract fun expr(): RExpr
+}
+
+class RCreateExprAttr_Specified(attr: RAttrib, private val expr: RExpr): RCreateExprAttr(attr) {
+    override fun expr() = expr
+}
+
+class RCreateExprAttr_Default(attr: RAttrib): RCreateExprAttr(attr) {
+    override fun expr() = attr.expr!!
+}
 
 class RCreateExpr(type: RType, val rClass: RClass, val attrs: List<RCreateExprAttr>): RExpr(type) {
     override fun evaluate(frame: RtCallFrame): RtValue {
@@ -339,7 +380,7 @@ class RCreateExpr(type: RType, val rClass: RClass, val attrs: List<RCreateExprAt
         builder.append(" VALUES (")
         builder.append("$MAKE_ROWID_FUNCTION(), ")
         builder.append(attrs, ", ") { attr ->
-            builder.append(attr.expr)
+            builder.append(attr.expr())
         }
         builder.append(")")
 
@@ -347,5 +388,21 @@ class RCreateExpr(type: RType, val rClass: RClass, val attrs: List<RCreateExprAt
         builder.appendName(ROWID_COLUMN)
 
         return builder.build()
+    }
+}
+
+class RRecordExpr(val record: RRecordType, val attrs: List<RCreateExprAttr>): RExpr(record) {
+    init {
+        check(attrs.size == record.attributesList.size)
+        check(attrs.map { it.attr.index }.toSet() == record.attributesList.indices.toSet())
+    }
+
+    override fun evaluate(frame: RtCallFrame): RtValue {
+        val values = MutableList<RtValue>(attrs.size) { RtUnitValue }
+        for (attr in attrs) {
+            val value = attr.expr().evaluate(frame)
+            values[attr.attr.index] = value
+        }
+        return RtRecordValue(record, values)
     }
 }

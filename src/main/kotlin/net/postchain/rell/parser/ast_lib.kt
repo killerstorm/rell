@@ -3,19 +3,20 @@ package net.postchain.rell.parser
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.RtIntValue
 import net.postchain.rell.runtime.RtValue
+import java.util.*
 
 abstract class S_LibNamespace {
-    abstract fun getValueOpt(entCtx: CtEntityContext, nsName: S_Name, name: S_Name): RExpr?
-    abstract fun getFunctionOpt(entCtx: CtEntityContext, nsName: S_Name, name: S_Name): Ct_Function?
+    abstract fun getValueOpt(entCtx: C_EntityContext, nsName: S_Name, name: S_Name): RExpr?
+    abstract fun getFunctionOpt(entCtx: C_EntityContext, nsName: S_Name, name: S_Name): C_Function?
 
-    fun getValue(entCtx: CtEntityContext, nsName: S_Name, name: S_Name): RExpr {
+    fun getValue(entCtx: C_EntityContext, nsName: S_Name, name: S_Name): RExpr {
         val v = getValueOpt(entCtx, nsName, name)
-        return v ?: throw CtUtils.errUnknownName(nsName, name)
+        return v ?: throw C_Utils.errUnknownName(nsName, name)
     }
 
-    fun getFunction(entCtx: CtEntityContext, nsName: S_Name, name: S_Name): Ct_Function {
+    fun getFunction(entCtx: C_EntityContext, nsName: S_Name, name: S_Name): C_Function {
         val fn = getFunctionOpt(entCtx, nsName, name)
-        return fn ?: throw CtUtils.errUnknownFunction(nsName, name)
+        return fn ?: throw C_Utils.errUnknownFunction(nsName, name)
     }
 }
 
@@ -55,7 +56,9 @@ object S_LibFunctions {
 
             NamespaceDef_Fn(S_SysFunction_Print("print", RSysFunction_Print(false))),
             NamespaceDef_Fn(S_SysFunction_Print("log", RSysFunction_Print(true))),
-            NamespaceDef_Fn(S_SysFunction_TypeOf)
+
+            NamespaceDef_Fn(S_SysFunction_TypeOf),
+            specFn("_strictStr", RTextType, listOf(C_ArgTypeMatcher_Any), RSysFunction_StrictStr)
    )
 
     private val INTEGER_FNS = makeFnMap(
@@ -71,6 +74,14 @@ object S_LibFunctions {
             stdConst("MIN_VALUE", Long.MIN_VALUE),
             stdConst("MAX_VALUE", Long.MAX_VALUE),
             stdFn("parseHex", RIntegerType, listOf(RTextType), RSysFunction_Int_ParseHex)
+    )
+
+    private val GTXVALUE_NAMESPACE = makeNamespace(
+            stdFn("fromBytes", RGtxValueType, listOf(RByteArrayType), RSysFunction_GtxValue_FromBytes),
+            overFn("fromJSON",
+                    globCase(RGtxValueType, listOf(RTextType), RSysFunction_GtxValue_FromJson_Text),
+                    globCase(RGtxValueType, listOf(RJSONType), RSysFunction_GtxValue_FromJson_Json)
+            )
     )
 
     private val TEXT_FNS = makeFnMap(
@@ -120,14 +131,24 @@ object S_LibFunctions {
             stdMemFn("str", RTextType, listOf(), RSysFunction_Json_Str, DbSysFunction_Json_Str)
     )
 
+    private val GTXVALUE_FNS = makeFnMap(
+            stdMemFn("toBytes", RByteArrayType, listOf(), RSysFunction_GtxValue_ToBytes),
+            stdMemFn("toJSON", RJSONType, listOf(), RSysFunction_GtxValue_ToJson)
+    )
+
     private val NAMESPACES = mutableMapOf(
             "integer" to INTEGER_NAMESPACE,
+            "GTXValue" to GTXVALUE_NAMESPACE,
             "op_context" to S_OpContextNamespace
     )
 
     fun getGlobalFunctions(): List<S_SysFunction> = GLOBAL_FNS
 
-    fun getNamespace(name: String): S_LibNamespace? {
+    fun getNamespace(modCtx: C_ModuleContext, name: String): S_LibNamespace? {
+        val record = modCtx.getRecordOpt(name)
+        if (record != null) {
+            return getRecordNamespace(record)
+        }
         return NAMESPACES[name]
     }
 
@@ -135,7 +156,7 @@ object S_LibFunctions {
         val map = getTypeMemberFunctions(type)
         val fn = map[name.str]
         if (fn == null) {
-            throw CtUtils.errUnknownMemberFunction(type, name)
+            throw C_Utils.errUnknownMemberFunction(type, name)
         }
         return fn
     }
@@ -149,12 +170,16 @@ object S_LibFunctions {
             return BYTEARRAY_FNS
         } else if (type == RJSONType) {
             return JSON_FNS
+        } else if (type == RGtxValueType) {
+            return GTXVALUE_FNS
         } else if (type is RListType) {
             return getListFns(type.elementType)
         } else if (type is RSetType) {
             return getSetFns(type.elementType)
         } else if (type is RMapType) {
             return getMapFns(type.keyType, type.valueType)
+        } else if (type is RRecordType) {
+            return getRecordFns(type)
         } else {
             return mapOf()
         }
@@ -225,25 +250,67 @@ object S_LibFunctions {
                 stdMemFn("values", valueListType, listOf(), RSysFunction_Map_Values(valueListType))
         )
     }
+
+    private fun getRecordNamespace(type: RRecordType): S_LibNamespace {
+        val flags = type.completeFlags()
+        val fns = mutableListOf<NamespaceDef>()
+
+        if (flags.gtxCompact) {
+            fns.add(stdFn("fromBytes", type, listOf(RByteArrayType), RSysFunction_Record_FromBytes(type)))
+            fns.add(stdFn("fromGTXValue", type, listOf(RGtxValueType), RSysFunction_Record_FromGtx(type, false)))
+        } else {
+            fns.add(invalidRecordFn(type, "fromBytes", listOf(RByteArrayType)))
+            fns.add(invalidRecordFn(type, "fromGTXValue", listOf(RGtxValueType)))
+        }
+
+        if (flags.gtxHuman) {
+            fns.add(stdFn("fromPrettyGTXValue", type, listOf(RGtxValueType), RSysFunction_Record_FromGtx(type, true)))
+        } else {
+            fns.add(invalidRecordFn(type, "fromPrettyGTXValue", listOf(RGtxValueType)))
+        }
+
+        return makeNamespace(*fns.toTypedArray())
+    }
+
+    private fun getRecordFns(type: RRecordType): Map<String, S_SysMemberFunction> {
+        val flags = type.completeFlags()
+        val fns = mutableListOf<S_SysMemberFunction>()
+
+        if (flags.gtxCompact) {
+            fns.add(stdMemFn("toBytes", RByteArrayType, listOf(), RSysFunction_Record_ToBytes(type)))
+            fns.add(stdMemFn("toGTXValue", RGtxValueType, listOf(), RSysFunction_Record_ToGtx(type, false)))
+        } else {
+            fns.add(invalidRecordMemFn(type, "toBytes", listOf()))
+            fns.add(invalidRecordMemFn(type, "toGTXValue", listOf()))
+        }
+
+        if (flags.gtxHuman) {
+            fns.add(stdMemFn("toPrettyGTXValue", RGtxValueType, listOf(), RSysFunction_Record_ToGtx(type, true)))
+        } else {
+            fns.add(invalidRecordMemFn(type, "toPrettyGTXValue", listOf()))
+        }
+
+        return makeFnMap(*fns.toTypedArray())
+    }
 }
 
 private class S_StdLibNamespace(
         private val consts: Map<String, RtValue>,
-        private val fns: Map<String, Ct_Function>
+        private val fns: Map<String, C_Function>
 ): S_LibNamespace()
 {
-    override fun getValueOpt(entCtx: CtEntityContext, nsName: S_Name, name: S_Name): RExpr? {
+    override fun getValueOpt(entCtx: C_EntityContext, nsName: S_Name, name: S_Name): RExpr? {
         val v = consts[name.str]
         return if (v == null) null else RConstantExpr(v)
     }
 
-    override fun getFunctionOpt(entCtx: CtEntityContext, nsName: S_Name, name: S_Name) = fns[name.str]
+    override fun getFunctionOpt(entCtx: C_EntityContext, nsName: S_Name, name: S_Name) = fns[name.str]
 }
 
 private object S_OpContextNamespace: S_LibNamespace() {
-    override fun getValueOpt(entCtx: CtEntityContext, nsName: S_Name, name: S_Name): RExpr? {
-        if (entCtx.entityType != CtEntityType.OPERATION && entCtx.entityType != CtEntityType.FUNCTION) {
-            throw CtError(nsName.pos, "op_ctx_noop", "Cannot access '${nsName.str}' outside of an operation")
+    override fun getValueOpt(entCtx: C_EntityContext, nsName: S_Name, name: S_Name): RExpr? {
+        if (entCtx.entityType != C_EntityType.OPERATION && entCtx.entityType != C_EntityType.FUNCTION) {
+            throw C_Error(nsName.pos, "op_ctx_noop", "Cannot access '${nsName.str}' outside of an operation")
         }
 
         if (name.str == "last_block_time") {
@@ -253,7 +320,7 @@ private object S_OpContextNamespace: S_LibNamespace() {
         }
     }
 
-    override fun getFunctionOpt(entCtx: CtEntityContext, nsName: S_Name, name: S_Name) = null
+    override fun getFunctionOpt(entCtx: C_EntityContext, nsName: S_Name, name: S_Name) = null
 }
 
 private class S_SysFunction_Print(name: String, val rFn: RSysFunction): S_SysFunction(name) {
@@ -263,7 +330,7 @@ private class S_SysFunction_Print(name: String, val rFn: RSysFunction): S_SysFun
     }
 
     override fun compileCallDb(pos: S_Pos, args: List<DbExpr>): DbExpr {
-        throw CtUtils.errFunctionNoSql(pos, name)
+        throw C_Utils.errFunctionNoSql(pos, name)
     }
 }
 
@@ -287,7 +354,7 @@ private object S_SysFunction_TypeOf: S_SysFunction("_typeOf") {
 }
 
 private object S_SysFunction_Require_Boolean: C_CustomGlobalOverloadFnCase() {
-    override fun compileCall(name: String, args: List<RExpr>): RExpr? {
+    override fun compileCall(pos: S_Pos, name: String, args: List<RExpr>): RExpr? {
         if (args.size < 1 || args.size > 2) return null
 
         val rExpr = args[0]
@@ -301,7 +368,7 @@ private object S_SysFunction_Require_Boolean: C_CustomGlobalOverloadFnCase() {
 }
 
 private object S_SysFunction_Require_Nullable: C_CustomGlobalOverloadFnCase() {
-    override fun compileCall(name: String, args: List<RExpr>): RExpr? {
+    override fun compileCall(pos: S_Pos, name: String, args: List<RExpr>): RExpr? {
         if (args.size < 1 || args.size > 2) return null
 
         val rExpr = args[0]
@@ -316,7 +383,7 @@ private object S_SysFunction_Require_Nullable: C_CustomGlobalOverloadFnCase() {
 }
 
 private object S_SysFunction_Require_Collection: C_CustomGlobalOverloadFnCase() {
-    override fun compileCall(name: String, args: List<RExpr>): RExpr? {
+    override fun compileCall(pos: S_Pos, name: String, args: List<RExpr>): RExpr? {
         if (args.size < 1 || args.size > 2) return null
 
         val rExpr = args[0]
@@ -341,20 +408,56 @@ private object S_SysMemberFunction_Text_Format: S_SysMemberFunction("format") {
     }
 
     override fun compileCallDb(pos: S_Pos, base: DbExpr, args: List<DbExpr>): DbExpr {
-        throw CtUtils.errFunctionNoSql(pos, name)
+        throw C_Utils.errFunctionNoSql(pos, name)
     }
 }
 
+private class C_SysFnCase_InvalidRecord(val recordType: RRecordType, val params: List<C_ArgTypeMatcher>)
+    : C_GlobalOverloadFnCase()
+{
+    override fun compileCall(pos: S_Pos, name: String, args: List<RExpr>): RExpr? {
+        if (!C_OverloadFnUtils.matchArgs(params, args.map { it.type })) return null
+        val typeStr = recordType.name
+        throw C_Error(pos, "fn_record_invalid:$typeStr:$name", "Function '$name' not available for type '$typeStr'")
+    }
+
+    override fun compileCallDb(pos: S_Pos, name: String, args: List<DbExpr>): Optional<DbExpr>? {
+        if (!C_OverloadFnUtils.matchArgs(params, args.map { it.type })) return null
+        return Optional.empty()
+    }
+}
+
+private class C_SysMemberFnCase_InvalidRecord(val recordType: RRecordType, val params: List<C_ArgTypeMatcher>)
+    : C_MemberOverloadFnCase()
+{
+    override fun compileCall(pos: S_Pos, name: String, args: List<RExpr>): RMemberCalculator? {
+        if (!C_OverloadFnUtils.matchArgs(params, args.map { it.type })) return null
+        val typeStr = recordType.name
+        throw C_Error(pos, "fn_record_invalid:$typeStr:$name", "Function '$name' not available for type '$typeStr'")
+    }
+
+    override fun compileCallDb(pos: S_Pos, name: String, base: DbExpr, args: List<DbExpr>): Optional<DbExpr>? {
+        if (!C_OverloadFnUtils.matchArgs(params, args.map { it.type })) return null
+        return Optional.empty()
+    }
+}
+
+private fun invalidRecordFn(recordType: RRecordType, name: String, params: List<RType>): NamespaceDef_Fn =
+        NamespaceDef_Fn(S_StdSysFunction(name, listOf(C_SysFnCase_InvalidRecord(recordType, params.map{ matcher(it) }))))
+
+private fun invalidRecordMemFn(recordType: RRecordType, name: String, params: List<RType>): S_SysMemberFunction =
+        S_StdSysMemberFunction(name, listOf(C_SysMemberFnCase_InvalidRecord(recordType, params.map{ matcher(it) })))
+
 private fun makeNamespace(vararg defs: NamespaceDef): S_LibNamespace {
     val consts = mutableMapOf<String, RtValue>()
-    val fns = mutableMapOf<String, Ct_Function>()
+    val fns = mutableMapOf<String, C_Function>()
 
     for  (def in defs) {
         val name = def.name
         when (def) {
             is NamespaceDef_Fn -> {
                 check(name !in fns)
-                fns[name] = Ct_SysFunction(def.fn)
+                fns[name] = C_SysFunction(def.fn)
             }
             is NamespaceDef_Const -> {
                 check(name !in consts)
@@ -399,6 +502,9 @@ private fun stdFn(name: String, type: RType, params: List<RType>, rFn: RSysFunct
 
 private fun overFn(name: String, vararg cases: C_GlobalOverloadFnCase): NamespaceDef_Fn =
         NamespaceDef_Fn(S_StdSysFunction(name, cases.toList()))
+
+private fun specFn(name: String, type: RType, params: List<C_ArgTypeMatcher>, rFn: RSysFunction)
+        : NamespaceDef_Fn = NamespaceDef_Fn(S_StdSysFunction(name, listOf(C_StdGlobalOverloadFnCase(params, type, rFn, null))))
 
 private fun stdMemFn(name: String, type: RType, params: List<RType>, rFn: RSysFunction, dbFn: DbSysFunction? = null)
         : S_SysMemberFunction = S_StdSysMemberFunction(name, listOf(memCase(type, params, rFn, dbFn)))

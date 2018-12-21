@@ -9,7 +9,7 @@ class SQLGenTest {
     fun testresource(f: String) {
         val contractText = javaClass.getResource(f).readText()
         val ast = S_Grammar.parseToEnd(contractText)
-        val model = ast.compile()
+        val model = ast.compile(false)
         println(gensql(model, true))
     }
 

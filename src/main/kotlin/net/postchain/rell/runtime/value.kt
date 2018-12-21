@@ -3,42 +3,49 @@ package net.postchain.rell.runtime
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.google.common.math.LongMath
+import net.postchain.gtx.GTXNull
+import net.postchain.gtx.GTXValue
+import net.postchain.gtx.make_gtx_gson
 import net.postchain.rell.model.*
 import net.postchain.rell.toHex
-import org.apache.commons.lang3.StringEscapeUtils
 import java.lang.IllegalArgumentException
 import java.util.*
 
 sealed class RtValue {
     abstract fun type(): RType
+    abstract fun valueType(): String
 
-    open fun asBoolean(): Boolean = throw errType()
-    open fun asInteger(): Long = throw errType()
-    open fun asString(): String = throw errType()
-    open fun asByteArray(): ByteArray = throw errType()
-    open fun asJsonString(): String = throw errType()
-    open fun asCollection(): MutableCollection<RtValue> = throw errType()
-    open fun asList(): MutableList<RtValue> = throw errType()
-    open fun asSet(): MutableSet<RtValue> = throw errType()
-    open fun asMap(): MutableMap<RtValue, RtValue> = throw errType()
-    open fun asTuple(): List<RtValue> = throw errType()
-    open fun asRange(): RtRangeValue = throw errType()
-    open fun asObjectId(): Long = throw errType()
+    open fun asBoolean(): Boolean = throw errType("Boolean")
+    open fun asInteger(): Long = throw errType("Integer")
+    open fun asString(): String = throw errType("String")
+    open fun asByteArray(): ByteArray = throw errType("ByteArray")
+    open fun asJsonString(): String = throw errType("Json")
+    open fun asCollection(): MutableCollection<RtValue> = throw errType("Collection")
+    open fun asList(): MutableList<RtValue> = throw errType("List")
+    open fun asSet(): MutableSet<RtValue> = throw errType("Set")
+    open fun asMap(): MutableMap<RtValue, RtValue> = throw errType("Map")
+    open fun asTuple(): List<RtValue> = throw errType("Tuple")
+    open fun asRecord(): RtRecordValue = throw errType("Record")
+    open fun asRange(): RtRangeValue = throw errType("Range")
+    open fun asObjectId(): Long = throw errType("Object")
+    open fun asGtxValue(): GTXValue = throw errType("GTXValue")
     open fun asFormatArg(): Any = toString()
 
     abstract fun toStrictString(showTupleFieldNames: Boolean = true): String
 
-    private fun errType() = IllegalStateException("$javaClass")
+    private fun errType(expected: String) = RtValueTypeError(expected, valueType())
 }
 
 object RtUnitValue: RtValue() {
-    override fun type(): RType = RUnitType
+    override fun type() = RUnitType
+    override fun valueType() = "Unit"
     override fun toStrictString(showTupleFieldNames: Boolean): String = "unit"
     override fun toString(): String = "unit"
 }
 
 class RtBooleanValue(val value: Boolean): RtValue() {
-    override fun type(): RType = RBooleanType
+    override fun type() = RBooleanType
+    override fun valueType() = "Boolean"
     override fun asBoolean(): Boolean = value
     override fun asFormatArg(): Any = value
     override fun toStrictString(showTupleFieldNames: Boolean): String = "boolean[$value]"
@@ -48,7 +55,8 @@ class RtBooleanValue(val value: Boolean): RtValue() {
 }
 
 class RtIntValue(val value: Long): RtValue() {
-    override fun type(): RType = RIntegerType
+    override fun type() = RIntegerType
+    override fun valueType() = "Integer"
     override fun asInteger(): Long = value
     override fun asFormatArg(): Any = value
     override fun toStrictString(showTupleFieldNames: Boolean): String = "int[$value]"
@@ -58,7 +66,8 @@ class RtIntValue(val value: Long): RtValue() {
 }
 
 class RtTextValue(val value: String): RtValue() {
-    override fun type(): RType = RTextType
+    override fun type() = RTextType
+    override fun valueType() = "Text"
     override fun asString(): String = value
     override fun asFormatArg(): Any = value
 
@@ -101,7 +110,8 @@ class RtTextValue(val value: String): RtValue() {
 }
 
 class RtByteArrayValue(val value: ByteArray): RtValue() {
-    override fun type(): RType = RByteArrayType
+    override fun type() = RByteArrayType
+    override fun valueType() = "ByteArray"
     override fun asByteArray(): ByteArray = value
     override fun asFormatArg(): Any = toString()
     override fun toStrictString(showTupleFieldNames: Boolean): String = "byte_array[${value.toHex()}]"
@@ -111,7 +121,8 @@ class RtByteArrayValue(val value: ByteArray): RtValue() {
 }
 
 class RtObjectValue(val type: RInstanceRefType, val rowid: Long): RtValue() {
-    override fun type(): RType = type
+    override fun type() = type
+    override fun valueType() = "Object"
     override fun asObjectId(): Long = rowid
     override fun asFormatArg(): Any = toString()
     override fun toStrictString(showTupleFieldNames: Boolean): String = "${type.name}[$rowid]"
@@ -121,14 +132,16 @@ class RtObjectValue(val type: RInstanceRefType, val rowid: Long): RtValue() {
 }
 
 object RtNullValue: RtValue() {
-    override fun type(): RType = RNullType
+    override fun type() = RNullType
+    override fun valueType() = "Null"
     override fun asFormatArg(): Any = toString()
     override fun toStrictString(showTupleFieldNames: Boolean): String = "null"
     override fun toString(): String = "null"
 }
 
 class RtListValue(private val type: RType, private val elements: MutableList<RtValue>): RtValue() {
-    override fun type(): RType = type
+    override fun type() = type
+    override fun valueType() = "List"
     override fun asCollection(): MutableCollection<RtValue> = elements
     override fun asList(): MutableList<RtValue> = elements
     override fun asFormatArg(): Any = elements
@@ -142,7 +155,8 @@ class RtListValue(private val type: RType, private val elements: MutableList<RtV
 }
 
 class RtSetValue(private val type: RType, private val elements: MutableSet<RtValue>): RtValue() {
-    override fun type(): RType = type
+    override fun type() = type
+    override fun valueType() = "Set"
     override fun asCollection(): MutableCollection<RtValue> = elements
     override fun asSet(): MutableSet<RtValue> = elements
     override fun asFormatArg(): Any = elements
@@ -156,7 +170,8 @@ class RtSetValue(private val type: RType, private val elements: MutableSet<RtVal
 }
 
 class RtMapValue(private val type: RType, private val map: MutableMap<RtValue, RtValue>): RtValue() {
-    override fun type(): RType = type
+    override fun type() = type
+    override fun valueType() = "Map"
     override fun asMap(): MutableMap<RtValue, RtValue> = map
     override fun asFormatArg(): Any = map
 
@@ -173,7 +188,8 @@ class RtMapValue(private val type: RType, private val map: MutableMap<RtValue, R
 }
 
 class RtTupleValue(val type: RTupleType, val elements: List<RtValue>): RtValue() {
-    override fun type(): RType = type
+    override fun type() = type
+    override fun valueType() = "Tuple"
     override fun asTuple(): List<RtValue> = elements
     override fun asFormatArg(): Any = toString()
     override fun equals(other: Any?): Boolean = other is RtTupleValue && elements == other.elements
@@ -196,12 +212,50 @@ class RtTupleValue(val type: RTupleType, val elements: List<RtValue>): RtValue()
         val name = type.fields[idx].name
         val value = elements[idx]
         val valueStr = value.toStrictString()
-        return if (name == null || !showTupleFieldNames) valueStr else "$name:$valueStr"
+        return if (name == null || !showTupleFieldNames) valueStr else "$name=$valueStr"
+    }
+}
+
+class RtRecordValue(private val type: RRecordType, private val attributes: MutableList<RtValue>): RtValue() {
+    override fun type() = type
+    override fun valueType() = "Record"
+    override fun asRecord() = this
+    override fun asFormatArg(): Any = toString()
+    override fun equals(other: Any?): Boolean = other is RtRecordValue && attributes == other.attributes
+    override fun hashCode(): Int = type.hashCode() * 31 + attributes.hashCode()
+
+    override fun toString(): String {
+        val attrs = attributes.withIndex().joinToString(",") { (i, attr) ->
+            val n = type.attributesList[i].name
+            val v = attr.toString()
+            "$n=$v"
+        }
+        return "${type.name}{$attrs}"
+    }
+
+    override fun toStrictString(showTupleFieldNames: Boolean): String {
+        return "${type.name}[${attributes.indices.joinToString(",") { attributeToStrictString(it) }}]"
+    }
+
+    private fun attributeToStrictString(idx: Int): String {
+        val name = type.attributesList[idx].name
+        val value = attributes[idx]
+        val valueStr = value.toStrictString()
+        return "$name=$valueStr"
+    }
+
+    fun get(index: Int): RtValue {
+        return attributes[index]
+    }
+
+    fun set(index: Int, value: RtValue) {
+        attributes[index] = value
     }
 }
 
 class RtJsonValue private constructor(private val str: String): RtValue() {
-    override fun type(): RType = RJSONType
+    override fun type() = RJSONType
+    override fun valueType() = "Json"
     override fun asJsonString(): String = str
     override fun asFormatArg(): Any = str
     override fun toString(): String = str
@@ -225,7 +279,8 @@ class RtJsonValue private constructor(private val str: String): RtValue() {
 }
 
 class RtRangeValue(val start: Long, val end: Long, val step: Long): RtValue(), Iterable<RtValue> {
-    override fun type(): RType = RRangeType
+    override fun type() = RRangeType
+    override fun valueType() = "Range"
     override fun asRange(): RtRangeValue = this
     override fun asFormatArg(): Any = toString()
     override fun toString(): String = "range($start,$end,$step)"
@@ -271,6 +326,39 @@ class RtRangeValue(val start: Long, val end: Long, val step: Long): RtValue(), I
                 current = LongMath.saturatedAdd(current, range.step)
                 return RtIntValue(res)
             }
+        }
+    }
+}
+
+class RtGtxValue(val value: GTXValue): RtValue() {
+    override fun type() = RGtxValueType
+    override fun valueType() = "GTXValue"
+    override fun asGtxValue() = value
+
+    override fun toStrictString(showTupleFieldNames: Boolean): String = "gtx[$this]"
+
+    override fun toString(): String {
+        try {
+            return gtxValueToJsonString(value)
+        } catch (e: Exception) {
+            return value.toString() // Fallback, just in case (did not happen).
+        }
+    }
+
+    override fun equals(other: Any?): Boolean = other is RtGtxValue && value == other.value
+    override fun hashCode(): Int = value.hashCode()
+
+    companion object {
+        private val GSON = make_gtx_gson()
+
+        fun gtxValueToJsonString(v: GTXValue): String {
+            val s = GSON.toJson(v, GTXValue::class.java)
+            return s
+        }
+
+        fun jsonStringToGtxValue(s: String): GTXValue {
+            val v = GSON.fromJson<GTXValue>(s, GTXValue::class.java)
+            return v ?: GTXNull
         }
     }
 }

@@ -1,11 +1,11 @@
 package net.postchain.rell.parser
 
 import com.github.h0tk3y.betterParse.lexer.TokenMatch
-import com.github.h0tk3y.betterParse.parser.ParseException
-import com.github.h0tk3y.betterParse.parser.parseToEnd
 import net.postchain.rell.model.*
+import net.postchain.rell.module.GTX_OPERATION_HUMAN
+import net.postchain.rell.module.GTX_QUERY_HUMAN
 
-class CtError(val pos: S_Pos, val code: String, val errMsg: String): Exception("$pos $errMsg")
+class C_Error(val pos: S_Pos, val code: String, val errMsg: String): Exception("$pos $errMsg")
 
 class S_Pos(val row: Int, val col: Int) {
     constructor(t: TokenMatch): this(t.row, t.column)
@@ -22,14 +22,14 @@ class S_Name(val pos: S_Pos, val str: String) {
 }
 
 class S_NameTypePair(val name: S_Name, val type: S_Type?) {
-    internal fun compileType(ctx: CtModuleContext): RType {
+    fun compileType(ctx: C_ModuleContext): RType {
         if (type != null) {
             return type.compile(ctx)
         }
 
         val rType = ctx.getTypeOpt(name.str)
         if (rType == null) {
-            throw CtError(name.pos, "unknown_name_type:${name.str}",
+            throw C_Error(name.pos, "unknown_name_type:${name.str}",
                     "Type for '${name.str}' not specified and no type called '${name.str}'")
         }
 
@@ -37,19 +37,19 @@ class S_NameTypePair(val name: S_Name, val type: S_Type?) {
     }
 }
 
-class Ct_UserFunctionDeclaration(val name: String, val params: List<RExternalParam>, val type: RType)
+class C_UserFunctionDeclaration(val name: String, val params: List<RExternalParam>, val type: RType)
 
-sealed class Ct_Function {
+sealed class C_Function {
     abstract fun compileCall(name: S_Name, args: List<RExpr>): RExpr
     abstract fun compileCallDb(name: S_Name, args: List<DbExpr>): DbExpr
 }
 
-class Ct_SysFunction(val fn: S_SysFunction): Ct_Function() {
+class C_SysFunction(val fn: S_SysFunction): C_Function() {
     override fun compileCall(name: S_Name, args: List<RExpr>): RExpr = fn.compileCall(name.pos, args)
     override fun compileCallDb(name: S_Name, args: List<DbExpr>): DbExpr = fn.compileCallDb(name.pos, args)
 }
 
-class Ct_UserFunction(val fn: Ct_UserFunctionDeclaration, val fnKey: Int): Ct_Function() {
+class C_UserFunction(val fn: C_UserFunctionDeclaration, val fnKey: Int): C_Function() {
     override fun compileCall(name: S_Name, args: List<RExpr>): RExpr {
         val params = fn.params.map { it.type }
         S_SysFunction.matchArgs(name, params, args)
@@ -57,18 +57,18 @@ class Ct_UserFunction(val fn: Ct_UserFunctionDeclaration, val fnKey: Int): Ct_Fu
     }
 
     override fun compileCallDb(name: S_Name, args: List<DbExpr>): DbExpr {
-        throw CtError(name.pos, "call_userfn_nosql:${name.str}", "Cannot call function '${name.str}' in SQL")
+        throw C_Error(name.pos, "call_userfn_nosql:${name.str}", "Cannot call function '${name.str}' in SQL")
     }
 }
 
-class CtGlobalContext {
+class C_GlobalContext(val gtx: Boolean) {
     private var frameBlockIdCtr = 0L
 
     fun nextFrameBlockId(): RFrameBlockId = RFrameBlockId(frameBlockIdCtr++)
 }
 
-class CtModuleContext(val globalCtx: CtGlobalContext) {
-    private val typeMap = mutableMapOf(
+class C_ModuleContext(val globalCtx: C_GlobalContext) {
+    private val types = mutableMapOf(
             "boolean" to RBooleanType,
             "text" to RTextType,
             "byte_array" to RByteArrayType,
@@ -80,79 +80,130 @@ class CtModuleContext(val globalCtx: CtGlobalContext) {
             "guid" to RGUIDType,
             "tuid" to RTextType,
             "json" to RJSONType,
-            "range" to RRangeType
+            "range" to RRangeType,
+            "GTXValue" to RGtxValueType
     )
 
     private val classes = mutableMapOf<String, RClass>()
+    private val records = mutableMapOf<String, RRecordType>()
     private val operations = mutableMapOf<String, ROperation>()
     private val queries = mutableMapOf<String, RQuery>()
-    private val functions = mutableMapOf<String, Ct_Function>()
-    private val functionDecls = mutableListOf<Ct_UserFunctionDeclaration>()
+    private val functions = mutableMapOf<String, C_Function>()
+    private val functionDecls = mutableListOf<C_UserFunctionDeclaration>()
     private val functionDefs = mutableListOf<RFunction>()
 
-    private val secondPass = mutableListOf<() -> Unit>()
+    val classesPass = C_ModulePass()
+    val functionsPass = C_ModulePass()
 
     init {
         for (fn in S_LibFunctions.getGlobalFunctions()) {
             check(fn.name !in functions)
-            functions[fn.name] = Ct_SysFunction(fn)
+            functions[fn.name] = C_SysFunction(fn)
         }
     }
 
-    fun typeExists(name: String): Boolean = name in typeMap
-    fun functionExists(name: String): Boolean = name in functions || name in queries || name in operations
+    fun checkTypeName(name: S_Name) {
+        checkNameConflict("record", name, records)
+        checkNameConflict("type", name, types)
+    }
+
+    fun checkRecordName(name: S_Name) {
+        checkNameConflict("record", name, records)
+        checkNameConflict("type", name, types)
+        checkNameConflict("function", name, functions)
+    }
+
+    fun checkFunctionName(name: S_Name) {
+        checkNameConflict("function", name, functions)
+        checkNameConflict("operation", name, operations)
+        checkNameConflict("query", name, queries)
+        checkNameConflict("record", name, records)
+    }
+
+    fun checkOperationName(name: S_Name) {
+        checkNameConflict("function", name, functions)
+        checkNameConflict("operation", name, operations)
+        checkNameConflict("query", name, queries)
+    }
+
+    private fun checkNameConflict(kind: String, name: S_Name, map: Map<String, Any>) {
+        val nameStr = name.str
+        if (nameStr in map) {
+            throw C_Error(name.pos, "name_conflict:$kind:$nameStr", "Name conflict: $kind '$nameStr'")
+        }
+    }
 
     fun getType(name: S_Name): RType {
         val nameStr = name.str
         val type = getTypeOpt(nameStr)
         if (type == null) {
-            throw CtError(name.pos, "unknown_type:$nameStr", "Unknown type: '$nameStr'")
+            throw C_Error(name.pos, "unknown_type:$nameStr", "Unknown type: '$nameStr'")
         }
         return type
     }
 
-    fun getTypeOpt(name: String): RType? = typeMap[name]
+    fun getTypeOpt(name: String): RType? = types[name]
 
     fun getClass(name: S_Name): RClass {
         val nameStr = name.str
-        val  cls = classes[nameStr]
+        val cls = classes[nameStr]
         if (cls == null) {
-            throw CtError(name.pos, "unknown_class:$nameStr", "Unknown class: '$nameStr'")
+            throw C_Error(name.pos, "unknown_class:$nameStr", "Unknown class: '$nameStr'")
         }
         return cls
     }
 
-    fun getFunction(name: S_Name): Ct_Function {
+    fun getRecord(name: S_Name): RRecordType {
+        val nameStr = name.str
+        val rec = records[nameStr]
+        if (rec == null) {
+            throw C_Error(name.pos, "unknown_record:$nameStr", "Unknown record: '$nameStr'")
+        }
+        return rec
+    }
+
+    fun getRecordOpt(name: String): RRecordType? {
+        return records[name]
+    }
+
+    fun getFunction(name: S_Name): C_Function {
         val nameStr = name.str
         val fn = functions[nameStr]
         if (fn == null) {
-            throw CtUtils.errUnknownFunction(name)
+            throw C_Utils.errUnknownFunction(name)
         }
         return fn
     }
 
     fun addClass(cls: RClass) {
-        check(cls.name !in typeMap)
+        check(cls.name !in types)
         check(cls.name !in classes)
         classes[cls.name] = cls
-        typeMap[cls.name] = RInstanceRefType(cls)
+        types[cls.name] = RInstanceRefType(cls)
+    }
+
+    fun addRecord(rec: RRecordType) {
+        check(rec.name !in types)
+        check(rec.name !in records)
+        records[rec.name] = rec
+        types[rec.name] = rec
     }
 
     fun addQuery(query: RQuery) {
-        check(!functionExists(query.name))
+        check(query.name !in queries)
         queries[query.name] = query
     }
 
     fun addOperation(operation: ROperation) {
-        check(!functionExists(operation.name))
+        check(operation.name !in operations)
         operations[operation.name] = operation
     }
 
-    fun addFunctionDeclaration(declaration: Ct_UserFunctionDeclaration): Int {
-        check(!functionExists(declaration.name))
+    fun addFunctionDeclaration(declaration: C_UserFunctionDeclaration): Int {
+        check(declaration.name !in functions)
         val fnKey = functionDecls.size
         functionDecls.add(declaration)
-        functions[declaration.name] = Ct_UserFunction(declaration, fnKey)
+        functions[declaration.name] = C_UserFunction(declaration, fnKey)
         return fnKey
     }
 
@@ -161,31 +212,54 @@ class CtModuleContext(val globalCtx: CtGlobalContext) {
         functionDefs.add(function)
     }
 
-    fun onSecondPass(code: () -> Unit) {
-        secondPass.add(code)
-    }
-
     fun createModule(): RModule {
-        return RModule(classes.toMap(), operations.toMap(), queries.toMap(), functionDefs.toList())
+        classesPass.run()
+        processRecords()
+        functionsPass.run()
+        return RModule(classes.toMap(), records.toMap(), operations.toMap(), queries.toMap(), functionDefs.toList())
     }
 
-    fun runSecondPass() {
-        for (code in secondPass) {
-            code()
+    private fun processRecords() {
+        val structure = buildRecordsStructure(records.values)
+        val graph = structure.graph
+        val transGraph = C_GraphUtils.transpose(graph)
+
+        val cyclicRecs = C_GraphUtils.findCyclicVertices(graph).toSet()
+        val infiniteRecs = C_GraphUtils.closure(transGraph, cyclicRecs).toSet()
+        val mutableRecs = C_GraphUtils.closure(transGraph, structure.mutable).toSet()
+        val nonGtxHumanRecs = C_GraphUtils.closure(transGraph, structure.nonGtxHuman).toSet()
+        val nonGtxCompactRecs = C_GraphUtils.closure(transGraph, structure.nonGtxCompact).toSet()
+
+        for (record in records.values) {
+            val typeFlags = RTypeFlags(record in mutableRecs, record !in nonGtxHumanRecs, record !in nonGtxCompactRecs)
+            val flags = RRecordFlags(typeFlags, record in cyclicRecs, record in infiniteRecs)
+            record.setFlags(flags)
         }
     }
 }
 
-enum class CtEntityType {
+class C_ModulePass {
+    private val jobs = mutableListOf<() -> Unit>()
+
+    fun add(code: () -> Unit) {
+        jobs.add(code)
+    }
+
+    fun run() {
+        jobs.forEach { it() }
+    }
+}
+
+enum class C_EntityType {
     CLASS,
     QUERY,
     OPERATION,
     FUNCTION,
 }
 
-class CtEntityContext(
-        val modCtx: CtModuleContext,
-        val entityType: CtEntityType,
+class C_EntityContext(
+        val modCtx: C_ModuleContext,
+        val entityType: C_EntityType,
         explicitReturnType: RType?
 ){
     private val retTypeTracker =
@@ -193,11 +267,11 @@ class CtEntityContext(
 
     private var callFrameSize = 0
 
-    val rootExprCtx = CtExprContext(this, null, false)
+    val rootExprCtx = C_ExprContext(this, null, false)
 
     fun checkDbUpdateAllowed(pos: S_Pos) {
-        if (entityType == CtEntityType.QUERY) {
-            throw CtError(pos, "no_db_update", "Database modifications are not allowed in this context")
+        if (entityType == C_EntityType.QUERY) {
+            throw C_Error(pos, "no_db_update", "Database modifications are not allowed in this context")
         }
     }
 
@@ -263,51 +337,51 @@ class CtEntityContext(
     }
 
     companion object {
-        private fun errRetTypeMiss(pos: S_Pos, dstType: RType, srcType: RType): CtError =
-                CtUtils.errTypeMissmatch(pos, srcType, dstType, "entity_rettype", "Return type missmatch")
+        private fun errRetTypeMiss(pos: S_Pos, dstType: RType, srcType: RType): C_Error =
+                C_Utils.errTypeMissmatch(pos, srcType, dstType, "entity_rettype", "Return type missmatch")
     }
 }
 
-class CtScopeEntry(val name: String, val type: RType, val modifiable: Boolean, val ptr: RVarPtr) {
+class C_ScopeEntry(val name: String, val type: RType, val modifiable: Boolean, val ptr: RVarPtr) {
     fun toVarExpr(): RVarExpr = RVarExpr(type, ptr, name)
 }
 
-class CtExprContext(
-        val entCtx: CtEntityContext,
-        private val parent: CtExprContext?,
+class C_ExprContext(
+        val entCtx: C_EntityContext,
+        private val parent: C_ExprContext?,
         val insideLoop: Boolean
 ){
     private val startOffset: Int = if (parent == null) 0 else parent.startOffset + parent.locals.size
-    private val locals = mutableMapOf<String, CtScopeEntry0>()
+    private val locals = mutableMapOf<String, C_ScopeEntry0>()
 
     val blockId = entCtx.modCtx.globalCtx.nextFrameBlockId()
 
     fun add(name: S_Name, type: RType, modifiable: Boolean): RVarPtr {
         val nameStr = name.str
         if (lookupOpt(nameStr) != null) {
-            throw CtError(name.pos, "var_dupname:$nameStr", "Duplicate variable: '$nameStr'")
+            throw C_Error(name.pos, "var_dupname:$nameStr", "Duplicate variable: '$nameStr'")
         }
 
         val ofs = startOffset + locals.size
         entCtx.adjustCallFrameSize(ofs + 1)
 
-        val entry = CtScopeEntry0(nameStr, type, modifiable, ofs)
+        val entry = C_ScopeEntry0(nameStr, type, modifiable, ofs)
         locals.put(nameStr, entry)
 
         return entry.toVarPtr(blockId)
     }
 
-    fun lookup(name: S_Name): CtScopeEntry {
+    fun lookup(name: S_Name): C_ScopeEntry {
         val nameStr = name.str
         val local = lookupOpt(nameStr)
         if (local == null) {
-            throw CtError(name.pos, "unknown_name:$nameStr", "Unknown name: '$nameStr'")
+            throw C_Error(name.pos, "unknown_name:$nameStr", "Unknown name: '$nameStr'")
         }
         return local
     }
 
-    fun lookupOpt(name: String): CtScopeEntry? {
-        var ctx: CtExprContext? = this
+    fun lookupOpt(name: String): C_ScopeEntry? {
+        var ctx: C_ExprContext? = this
         while (ctx != null) {
             val local = ctx.locals[name]
             if (local != null) {
@@ -324,39 +398,39 @@ class CtExprContext(
     }
 
     companion object {
-        private class CtScopeEntry0(val name: String, val type: RType, val modifiable: Boolean, val offset: Int) {
+        private class C_ScopeEntry0(val name: String, val type: RType, val modifiable: Boolean, val offset: Int) {
             fun toVarPtr(blockId: RFrameBlockId): RVarPtr = RVarPtr(blockId, offset)
 
-            fun toScopeEntry(blockId: RFrameBlockId): CtScopeEntry {
-                return CtScopeEntry(name, type, modifiable, toVarPtr(blockId))
+            fun toScopeEntry(blockId: RFrameBlockId): C_ScopeEntry {
+                return C_ScopeEntry(name, type, modifiable, toVarPtr(blockId))
             }
         }
     }
 }
 
 sealed class S_RelClause {
-    internal abstract fun compileAttributes(ctx: CtClassContext)
-    internal abstract fun compileRest(ctx: CtClassContext)
+    abstract fun compileAttributes(ctx: C_ClassContext)
+    abstract fun compileRest(ctx: C_ClassContext)
 }
 
-class S_AttributeClause(val attr: S_NameTypePair, val mutable: Boolean, val expr: S_Expression?): S_RelClause() {
-    override fun compileAttributes(ctx: CtClassContext) {
+class S_AttributeClause(val attr: S_NameTypePair, val mutable: Boolean, val expr: S_Expr?): S_RelClause() {
+    override fun compileAttributes(ctx: C_ClassContext) {
         ctx.addAttribute(attr, mutable, expr)
     }
 
-    override fun compileRest(ctx: CtClassContext) {}
+    override fun compileRest(ctx: C_ClassContext) {}
 }
 
 sealed class S_KeyIndexClause(val pos: S_Pos, val attrs: List<S_NameTypePair>): S_RelClause() {
-    final override fun compileAttributes(ctx: CtClassContext) {}
+    final override fun compileAttributes(ctx: C_ClassContext) {}
 
-    internal abstract fun addToContext(ctx: CtClassContext, pos: S_Pos, names: List<S_Name>)
+    abstract fun addToContext(ctx: C_ClassContext, pos: S_Pos, names: List<S_Name>)
 
-    final override fun compileRest(ctx: CtClassContext) {
+    final override fun compileRest(ctx: C_ClassContext) {
         val names = mutableSetOf<String>()
         for (attr in attrs) {
             if (!names.add(attr.name.str)) {
-                throw CtError(attr.name.pos, "class_keyindex_dup:${attr.name.str}",
+                throw C_Error(attr.name.pos, "class_keyindex_dup:${attr.name.str}",
                         "Duplicate attribute: '${attr.name.str}'")
             }
         }
@@ -364,7 +438,7 @@ sealed class S_KeyIndexClause(val pos: S_Pos, val attrs: List<S_NameTypePair>): 
         for (attr in attrs) {
             if (ctx.hasAttribute(attr.name.str)) {
                 if (attr.type != null) {
-                    throw CtError(attr.name.pos, "class_keyindex_def:${attr.name.str}",
+                    throw C_Error(attr.name.pos, "class_keyindex_def:${attr.name.str}",
                             "Attribute '${attr.name.str}' is defined elsewhere, cannot specify type")
                 }
             } else {
@@ -377,23 +451,23 @@ sealed class S_KeyIndexClause(val pos: S_Pos, val attrs: List<S_NameTypePair>): 
 }
 
 class S_KeyClause(pos: S_Pos, attrs: List<S_NameTypePair>): S_KeyIndexClause(pos, attrs) {
-    override fun addToContext(ctx: CtClassContext, pos: S_Pos, names: List<S_Name>) {
+    override fun addToContext(ctx: C_ClassContext, pos: S_Pos, names: List<S_Name>) {
         ctx.addKey(pos, names)
     }
 }
 
 class S_IndexClause(pos: S_Pos, attrs: List<S_NameTypePair>): S_KeyIndexClause(pos, attrs) {
-    override fun addToContext(ctx: CtClassContext, pos: S_Pos, names: List<S_Name>) {
+    override fun addToContext(ctx: C_ClassContext, pos: S_Pos, names: List<S_Name>) {
         ctx.addIndex(pos, names)
     }
 }
 
 sealed class S_Definition(val name: S_Name) {
-    internal abstract fun compile(ctx: CtModuleContext)
+    abstract fun compile(ctx: C_ModuleContext)
 }
 
-internal class CtClassContext(private val modCtx: CtModuleContext) {
-    private val entCtx = CtEntityContext(modCtx, CtEntityType.CLASS, null)
+class C_ClassContext(private val modCtx: C_ModuleContext, private val dataClass: Boolean) {
+    private val entCtx = C_EntityContext(modCtx, C_EntityType.CLASS, null)
 
     private val attributes = mutableMapOf<String, RAttrib>()
     private val keys = mutableListOf<RKey>()
@@ -403,26 +477,33 @@ internal class CtClassContext(private val modCtx: CtModuleContext) {
 
     fun hasAttribute(name: String): Boolean = name in attributes
 
-    fun addAttribute(attr: S_NameTypePair, mutable: Boolean, expr: S_Expression?) {
+    fun addAttribute(attr: S_NameTypePair, mutable: Boolean, expr: S_Expr?) {
         val name = attr.name
 
         val nameStr = name.str
         if (nameStr in attributes) {
-            throw CtError(name.pos, "dup_attr:$nameStr", "Duplicate attribute: '$nameStr'")
+            throw C_Error(name.pos, "dup_attr:$nameStr", "Duplicate attribute: '$nameStr'")
         }
 
         val rType = attr.compileType(modCtx)
-        if (!rType.allowedForAttributes()) {
-            throw CtError(name.pos, "class_attr_type:$nameStr:${rType.toStrictString()}",
+        if (dataClass && !rType.isAllowedForClassAttribute()) {
+            throw C_Error(name.pos, "class_attr_type:$nameStr:${rType.toStrictString()}",
                     "Attribute '$nameStr' has unallowed type: ${rType.toStrictString()}")
         }
 
-        val rExpr = expr?.compile(entCtx.rootExprCtx)
-        if (rExpr != null) {
-            S_Type.match(rType, rExpr.type, name.pos, "attr_type:$nameStr", "Default value type missmatch for '$nameStr'")
+        val rAttr = RAttrib(attributes.size, nameStr, rType, mutable, expr != null)
+
+        if (expr == null) {
+            rAttr.setExpr(null)
+        } else {
+            modCtx.functionsPass.add {
+                val rExpr = expr.compile(entCtx.rootExprCtx)
+                S_Type.match(rType, rExpr.type, name.pos, "attr_type:$nameStr", "Default value type missmatch for '$nameStr'")
+                rAttr.setExpr(rExpr)
+            }
         }
 
-        attributes[nameStr] = RAttrib(nameStr, rType, mutable, rExpr)
+        attributes[nameStr] = rAttr
     }
 
     fun addKey(pos: S_Pos, attrs: List<S_Name>) {
@@ -437,27 +518,37 @@ internal class CtClassContext(private val modCtx: CtModuleContext) {
         indices.add(RIndex(names))
     }
 
-    fun createClass(name: String): RClass {
-        return RClass(name, keys.toList(), indices.toList(), attributes.toMap())
+    fun createClassBody(): RClassBody {
+        return RClassBody(keys.toList(), indices.toList(), attributes.toMap())
+    }
+
+    fun createRecordBody(): Map<String, RAttrib> {
+        return attributes.toMap()
     }
 
     private fun addUniqueKeyIndex(pos: S_Pos, set: MutableSet<Set<String>>, names: List<String>, errCode: String, errMsg: String) {
         val nameSet = names.toSet()
         if (!set.add(nameSet)) {
             val nameLst = names.sorted()
-            throw CtError(pos, "$errCode:${nameLst.joinToString(",")}", "$errMsg: ${nameLst.joinToString()}")
+            throw C_Error(pos, "$errCode:${nameLst.joinToString(",")}", "$errMsg: ${nameLst.joinToString()}")
         }
     }
 }
 
 class S_ClassDefinition(name: S_Name, val clauses: List<S_RelClause>): S_Definition(name) {
-    override fun compile(ctx: CtModuleContext) {
-        val nameStr = name.str
-        if (ctx.typeExists(nameStr)) {
-            throw CtError(name.pos, "dup_type_name:$nameStr", "Duplicate type: '$nameStr'")
-        }
+    override fun compile(ctx: C_ModuleContext) {
+        ctx.checkTypeName(name)
 
-        val clsCtx = CtClassContext(ctx)
+        val rClass = RClass(name.str)
+        ctx.addClass(rClass)
+
+        ctx.classesPass.add {
+            classesPass(ctx, rClass)
+        }
+    }
+
+    private fun classesPass(ctx: C_ModuleContext, rClass: RClass) {
+        val clsCtx = C_ClassContext(ctx, true)
         for (clause in clauses) {
             clause.compileAttributes(clsCtx)
         }
@@ -465,8 +556,31 @@ class S_ClassDefinition(name: S_Name, val clauses: List<S_RelClause>): S_Definit
             clause.compileRest(clsCtx)
         }
 
-        val rClass = clsCtx.createClass(nameStr)
-        ctx.addClass(rClass)
+        val body = clsCtx.createClassBody()
+        rClass.setBody(body)
+    }
+}
+
+class S_RecordDefinition(name: S_Name, val attrs: List<S_AttributeClause>): S_Definition(name) {
+    override fun compile(ctx: C_ModuleContext) {
+        ctx.checkRecordName(name)
+
+        val rType = RRecordType(name.str)
+        ctx.addRecord(rType)
+
+        ctx.classesPass.add {
+            classesPass(ctx, rType)
+        }
+    }
+
+    private fun classesPass(ctx: C_ModuleContext, rType: RRecordType) {
+        val clsCtx = C_ClassContext(ctx, false)
+        for (clause in attrs) {
+            clause.compileAttributes(clsCtx)
+        }
+
+        val attributes = clsCtx.createRecordBody()
+        rType.setAttributes(attributes)
     }
 }
 
@@ -476,18 +590,25 @@ class S_OpDefinition(
         val body: S_Statement
 ): S_Definition(name)
 {
-    override fun compile(ctx: CtModuleContext) {
-        val nameStr = name.str
-        if (ctx.functionExists(nameStr)) {
-            throw CtError(name.pos, "oper_name_dup:$nameStr", "Duplicate function: '$nameStr'")
+    override fun compile(ctx: C_ModuleContext) {
+        ctx.functionsPass.add {
+            doCompile(ctx)
         }
+    }
 
-        val entCtx = CtEntityContext(ctx, CtEntityType.OPERATION, null)
+    private fun doCompile(ctx: C_ModuleContext) {
+        ctx.checkOperationName(name)
+
+        val entCtx = C_EntityContext(ctx, C_EntityType.OPERATION, null)
         val rParams = compileExternalParams(ctx, entCtx.rootExprCtx, params)
         val rBody = body.compile(entCtx.rootExprCtx)
-
         val rCallFrame = entCtx.makeCallFrame()
-        val rOperation = ROperation(nameStr, rParams, rBody, rCallFrame)
+
+        if (ctx.globalCtx.gtx) {
+            checkGtxParams(params, rParams, GTX_OPERATION_HUMAN)
+        }
+
+        val rOperation = ROperation(name.str, rParams, rBody, rCallFrame)
         ctx.addOperation(rOperation)
     }
 }
@@ -498,43 +619,75 @@ class S_QueryDefinition(
         val retType: S_Type?,
         val body: S_FunctionBody
 ): S_Definition(name) {
-    override fun compile(ctx: CtModuleContext) {
-        val nameStr = name.str
-        if (ctx.functionExists(nameStr)) {
-            throw CtError(name.pos, "query_name_dup:$nameStr", "Duplicate function: '$nameStr'")
+    override fun compile(ctx: C_ModuleContext) {
+        ctx.functionsPass.add {
+            doCompile(ctx)
         }
+    }
 
-        val rRetType = retType?.compile(ctx)
+    private fun doCompile(ctx: C_ModuleContext) {
+        ctx.checkOperationName(name)
 
-        val entCtx = CtEntityContext(ctx, CtEntityType.QUERY, rRetType)
+        val rExplicitRetType = retType?.compile(ctx)
+
+        val entCtx = C_EntityContext(ctx, C_EntityType.QUERY, rExplicitRetType)
         val rParams = compileExternalParams(ctx, entCtx.rootExprCtx, params)
         val rBody = body.compileQuery(name, entCtx.rootExprCtx)
-
         val rCallFrame = entCtx.makeCallFrame()
-        val rQuery = RQuery(nameStr, entCtx.actualReturnType(), rParams, rBody, rCallFrame)
+        val rRetType = entCtx.actualReturnType()
+
+        if (ctx.globalCtx.gtx) {
+            checkGtxParams(params, rParams, GTX_QUERY_HUMAN)
+            checkGtxResult(rRetType, GTX_QUERY_HUMAN)
+        }
+
+        val rQuery = RQuery(name.str, rRetType, rParams, rBody, rCallFrame)
         ctx.addQuery(rQuery)
+    }
+
+    private fun checkGtxResult(rType: RType, human: Boolean) {
+        val flags = rType.completeFlags()
+        val gtx = if (human) flags.gtxHuman else flags.gtxCompact
+        if (!gtx) {
+            throw C_Error(name.pos, "result_nogtx:${name.str}:${rType.toStrictString()}",
+                    "Return type of query '${name.str}' is not GTX-conversible: ${rType.toStrictString()}")
+        }
+    }
+}
+
+private fun checkGtxParams(params: List<S_NameTypePair>, rParams: List<RExternalParam>, human: Boolean) {
+    params.forEachIndexed { i, param ->
+        val type = rParams[i].type
+        val flags = type.completeFlags()
+        val gtx = if (human) flags.gtxHuman else flags.gtxCompact
+        if (!gtx) {
+            val name = param.name.str
+            val typeStr = type.toStrictString()
+            throw C_Error(param.name.pos, "param_nogtx:$name:$typeStr",
+                    "Type of parameter '$name' is not GTX-conversible: $typeStr")
+        }
     }
 }
 
 abstract class S_FunctionBody {
-    internal abstract fun compileQuery(name: S_Name, ctx: CtExprContext): RStatement
-    internal abstract fun compileFunction(name: S_Name, ctx: CtExprContext): RStatement
+    abstract fun compileQuery(name: S_Name, ctx: C_ExprContext): RStatement
+    abstract fun compileFunction(name: S_Name, ctx: C_ExprContext): RStatement
 }
 
-class S_FunctionBodyShort(val expr: S_Expression): S_FunctionBody() {
-    override fun compileQuery(name: S_Name, ctx: CtExprContext): RStatement {
+class S_FunctionBodyShort(val expr: S_Expr): S_FunctionBody() {
+    override fun compileQuery(name: S_Name, ctx: C_ExprContext): RStatement {
         val rExpr = expr.compile(ctx)
-        CtUtils.checkUnitType(name.pos, rExpr.type, "query_exprtype_unit", "Query expressions returns nothing")
+        C_Utils.checkUnitType(name.pos, rExpr.type, "query_exprtype_unit", "Query expressions returns nothing")
         ctx.entCtx.matchReturnType(name.pos, rExpr.type)
         return RReturnStatement(rExpr)
     }
 
-    override fun compileFunction(name: S_Name, ctx: CtExprContext): RStatement {
+    override fun compileFunction(name: S_Name, ctx: C_ExprContext): RStatement {
         val rExpr = expr.compile(ctx)
         ctx.entCtx.matchReturnType(name.pos, rExpr.type)
 
         if (rExpr.type == RUnitType) {
-            val subCtx = CtExprContext(ctx.entCtx, ctx, ctx.insideLoop)
+            val subCtx = C_ExprContext(ctx.entCtx, ctx, ctx.insideLoop)
             val rBlock = subCtx.makeFrameBlock()
             return RBlockStatement(listOf(RExprStatement(rExpr), RReturnStatement(null)), rBlock)
         } else {
@@ -544,25 +697,25 @@ class S_FunctionBodyShort(val expr: S_Expression): S_FunctionBody() {
 }
 
 class S_FunctionBodyFull(val body: S_Statement): S_FunctionBody() {
-    override fun compileQuery(name: S_Name, ctx: CtExprContext): RStatement {
+    override fun compileQuery(name: S_Name, ctx: C_ExprContext): RStatement {
         val rBody = body.compile(ctx)
 
         val ret = body.returns()
         if (!ret) {
-            throw CtError(name.pos, "query_noreturn:${name.str}", "Query '${name.str}': not all code paths return value")
+            throw C_Error(name.pos, "query_noreturn:${name.str}", "Query '${name.str}': not all code paths return value")
         }
 
         return rBody
     }
 
-    override fun compileFunction(name: S_Name, ctx: CtExprContext): RStatement {
+    override fun compileFunction(name: S_Name, ctx: C_ExprContext): RStatement {
         val rBody = body.compile(ctx)
 
         val retType = ctx.entCtx.actualReturnType()
         if (retType != RUnitType) {
             val ret = body.returns()
             if (!ret) {
-                throw CtError(name.pos, "fun_noreturn:${name.str}", "Function '${name.str}': not all code paths return value")
+                throw C_Error(name.pos, "fun_noreturn:${name.str}", "Function '${name.str}': not all code paths return value")
             }
         }
 
@@ -576,29 +729,26 @@ class S_FunctionDefinition(
         val retType: S_Type?,
         val body: S_FunctionBody
 ): S_Definition(name) {
-    override fun compile(ctx: CtModuleContext) {
-        val nameStr = name.str
-        if (ctx.functionExists(nameStr)) {
-            throw CtError(name.pos, "fun_name_dup:$nameStr", "Duplicate function: '$nameStr'")
-        }
+    override fun compile(ctx: C_ModuleContext) {
+        ctx.checkFunctionName(name)
 
         val rRetType = if (retType != null) retType.compile(ctx) else RUnitType
 
-        val entCtx = CtEntityContext(ctx, CtEntityType.FUNCTION, rRetType)
+        val entCtx = C_EntityContext(ctx, C_EntityType.FUNCTION, rRetType)
         val rParams = compileExternalParams(ctx, entCtx.rootExprCtx, params)
 
-        val declaration = Ct_UserFunctionDeclaration(nameStr, rParams, rRetType)
+        val declaration = C_UserFunctionDeclaration(name.str, rParams, rRetType)
         val fnKey = ctx.addFunctionDeclaration(declaration)
 
-        ctx.onSecondPass {
+        ctx.functionsPass.add {
             secondPass(ctx, entCtx, declaration, fnKey)
         }
     }
 
     private fun secondPass(
-            ctx: CtModuleContext,
-            entCtx: CtEntityContext,
-            declaration: Ct_UserFunctionDeclaration,
+            ctx: C_ModuleContext,
+            entCtx: C_EntityContext,
+            declaration: C_UserFunctionDeclaration,
             fnKey: Int
     ){
         val rBody = body.compileFunction(name, entCtx.rootExprCtx)
@@ -610,23 +760,21 @@ class S_FunctionDefinition(
 }
 
 class S_ModuleDefinition(val definitions: List<S_Definition>) {
-    fun compile(): RModule {
-        val globalCtx = CtGlobalContext()
-        val ctx = CtModuleContext(globalCtx)
+    fun compile(gtx: Boolean): RModule {
+        val globalCtx = C_GlobalContext(gtx)
+        val ctx = C_ModuleContext(globalCtx)
 
         for (def in definitions) {
             def.compile(ctx)
         }
-
-        ctx.runSecondPass()
 
         return ctx.createModule()
     }
 }
 
 private fun compileExternalParams(
-        ctx: CtModuleContext,
-        exprCtx: CtExprContext,
+        ctx: C_ModuleContext,
+        exprCtx: C_ExprContext,
         params: List<S_NameTypePair>
 ) : List<RExternalParam>
 {
@@ -640,13 +788,13 @@ private fun compileExternalParams(
     return rExtParams.toList()
 }
 
-private fun compileParams(ctx: CtModuleContext, params: List<S_NameTypePair>): List<Pair<S_Name, RVariable>> {
+private fun compileParams(ctx: C_ModuleContext, params: List<S_NameTypePair>): List<Pair<S_Name, RVariable>> {
     val names = mutableSetOf<String>()
 
     val res = params.map { param ->
         val nameStr = param.name.str
         if (!names.add(nameStr)) {
-            throw CtError(param.name.pos, "dup_param_name:$nameStr", "Duplicate parameter: '$nameStr'")
+            throw C_Error(param.name.pos, "dup_param_name:$nameStr", "Duplicate parameter: '$nameStr'")
         }
         val rType = param.compileType(ctx)
         Pair(param.name, RVariable(nameStr, rType))
@@ -655,77 +803,41 @@ private fun compileParams(ctx: CtModuleContext, params: List<S_NameTypePair>): L
     return res
 }
 
-internal object CtUtils {
-    fun parse(sourceCode: String): S_ModuleDefinition {
-        val tokenSeq = S_Grammar.tokenizer.tokenize(sourceCode)
-
-        // The syntax error position returned by the parser library is misleading: if there is an error in the middle
-        // of an operation, it returns the position of the beginning of the operation.
-        // Following workaround handles this by tracking the position of the farthest reached token (seems to work fine).
-
-        var maxPos = 0
-        var maxRowCol = S_Pos(1, 1)
-        val tokenSeq2 = tokenSeq.map {
-            if (!it.type.ignored && it.position > maxPos) {
-                maxPos = it.position
-                maxRowCol = S_Pos(it)
-            }
-            it
-        }
-
-        try {
-            val ast = S_Grammar.parseToEnd(tokenSeq2)
-            return ast
-        } catch (e: ParseException) {
-            throw CtError(maxRowCol, "syntax", "Syntax error")
-        }
-    }
-
-    fun checkUnitType(pos: S_Pos, type: RType, errCode: String, errMsg: String) {
-        if (type == RUnitType) {
-            throw CtError(pos, errCode, errMsg)
-        }
-    }
-
-    fun errTypeMissmatch(pos: S_Pos, srcType: RType, dstType: RType, errCode: String, errMsg: String): CtError {
-        return CtError(pos, "$errCode:${dstType.toStrictString()}:${srcType.toStrictString()}",
-                "$errMsg: ${srcType.toStrictString()} instead of ${dstType.toStrictString()}")
-    }
-
-    fun errMutlipleAttrs(pos: S_Pos, attrs: List<DbClassAttr>, errCode: String, errMsg: String): CtError {
-        val attrsLst = attrs.map { it.cls.alias + "." + it.attr.name }
-        return CtError(pos, "$errCode:${attrsLst.joinToString(",")}", "$errMsg: ${attrsLst.joinToString()}")
-    }
-
-    fun errUnknownName(name: S_Name): CtError {
-        return CtError(name.pos, "unknown_name:${name.str}", "Unknown name: '${name.str}'")
-    }
-
-    fun errUnknownName(name1: S_Name, name2: S_Name): CtError {
-        return CtError(name1.pos, "unknown_name:${name1.str}.${name2.str}", "Unknown name: '${name1.str}.${name2.str}'")
-    }
-
-    fun errUnknownFunction(name: S_Name): CtError {
-        return CtError(name.pos, "unknown_fn:${name.str}", "Unknown function: '${name.str}'")
-    }
-
-    fun errUnknownFunction(name1: S_Name, name2: S_Name): CtError {
-        return CtError(name1.pos, "unknown_fn:${name1.str}.${name2.str}", "Unknown function: '${name1.str}.${name2.str}'")
-    }
-
-    fun errUnknownMember(type: RType, name: S_Name): CtError {
-        return CtError(name.pos, "unknown_member:${type.toStrictString()}:${name.str}",
-                "Type ${type.toStrictString()} has no member '${name.str}'")
-
-    }
-
-    fun errUnknownMemberFunction(type: RType, name: S_Name): CtError {
-        return CtError(name.pos, "unknown_member_fn:${type.toStrictString()}:${name.str}",
-                "Type ${type.toStrictString()} has no member function '${name.str}'")
-
-    }
-
-    fun errFunctionNoSql(pos: S_Pos, name: String): CtError {
-        return CtError(pos, "expr_call_nosql:$name", "Function '$name' cannot be converted to SQL")
-    }
+private fun buildRecordsStructure(records: Collection<RRecordType>): RecordsStructure {
+    val structMap = records.map { Pair(it, calcRecStruct(it)) }.toMap()
+    val graph = structMap.mapValues { (k, v) -> v.dependencies.toList() }
+    val mutable = structMap.filter { (k, v) -> v.directFlags.mutable }.keys
+    val nonGtxHuman = structMap.filter { (k, v) -> !v.directFlags.gtxHuman }.keys
+    val nonGtxCompact = structMap.filter { (k, v) -> !v.directFlags.gtxCompact }.keys
+    return RecordsStructure(mutable, nonGtxHuman, nonGtxCompact, graph)
 }
+
+private fun calcRecStruct(type: RType): RecStruct {
+    val flags = mutableListOf(type.directFlags())
+    val deps = mutableSetOf<RRecordType>()
+
+    for (subType in type.componentTypes()) {
+        val subStruct = discoverRecStruct(subType)
+        flags.add(subStruct.directFlags)
+        deps.addAll(subStruct.dependencies)
+    }
+
+    val resFlags = RTypeFlags.combine(flags)
+    return RecStruct(resFlags, deps.toSet())
+}
+
+private fun discoverRecStruct(type: RType): RecStruct {
+    if (type is RRecordType) {
+        return RecStruct(type.directFlags(), setOf(type))
+    }
+    return calcRecStruct(type)
+}
+
+private class RecordsStructure(
+        val mutable: Set<RRecordType>,
+        val nonGtxHuman: Set<RRecordType>,
+        val nonGtxCompact: Set<RRecordType>,
+        val graph: Map<RRecordType, List<RRecordType>>
+)
+
+private class RecStruct(val directFlags: RTypeFlags, val dependencies: Set<RRecordType>)

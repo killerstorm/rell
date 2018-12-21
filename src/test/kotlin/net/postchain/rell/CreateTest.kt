@@ -45,7 +45,7 @@ class CreateTest {
     }
 
     @Test fun testDefaultValues() {
-        tst.classDefs = listOf("class person { name: text; year: integer; score: integer = 777; status: text = 'Unknown'; }")
+        tst.defs = listOf("class person { name: text; year: integer; score: integer = 777; status: text = 'Unknown'; }")
         chkAll()
 
         executeErr("create person();", "ct_err:attr_missing:name,year")
@@ -72,7 +72,7 @@ class CreateTest {
     }
 
     @Test fun testDefaultValueVariable() {
-        tst.classDefs = listOf(
+        tst.defs = listOf(
                 "class default_score { mutable value: integer; }",
                 "class person { name: text; score: integer = default_score@{}.value; }"
         )
@@ -98,6 +98,14 @@ class CreateTest {
 
         executeErr("create city(name = 'New York', name = 'New York');", "ct_err:attr_dup_name:name")
         executeErr("create city(name = 'New York', name = 'New Orlean');", "ct_err:attr_dup_name:name")
+    }
+
+    @Test fun testDotAttribute() {
+        tst.defs = listOf("class person { name: text; year: integer; score: integer = 777; status: text = 'Unknown'; }")
+        chkAll()
+
+        execute("create person(.name = 'Bob', .year = 1980);")
+        chkNew("person(1,Bob,1980,777,Unknown)")
     }
 
     private fun execute(code: String) = tst.execOp(code)

@@ -23,20 +23,20 @@ class LibRequireTest: BaseRellTest(false) {
 
     @Test fun testRequireAt() {
         tst.useSql = true
-        tst.classDefs = listOf("class user { name: text; }")
+        tst.defs = listOf("class user { name: text; }")
         tst.execOp("create user(name = 'Bob'); create user(name = 'Alice');")
 
-        chkEx("{ return require(user @? { name = 'Bob' }, 'User not found'); }", "user[1]")
-        chkEx("{ return require(user @? { name = 'Alice' }, 'User not found'); }", "user[2]")
-        chkEx("{ return require(user @? { name = 'Trudy' }, 'User not found'); }", "req_err:[User not found]")
+        chkEx("{ return require(user @? { .name == 'Bob' }, 'User not found'); }", "user[1]")
+        chkEx("{ return require(user @? { .name == 'Alice' }, 'User not found'); }", "user[2]")
+        chkEx("{ return require(user @? { .name == 'Trudy' }, 'User not found'); }", "req_err:[User not found]")
         chkEx("{ return require(user @? {}, 'User not found'); }", "rt_err:at:wrong_count:2")
 
-        chkEx("{ return _typeOf(user @? { name = 'Bob' }); }", "text[user?]")
-        chkEx("{ return _typeOf(require(user @? { name = 'Bob' })); }", "text[user]")
+        chkEx("{ return _typeOf(user @? { .name == 'Bob' }); }", "text[user?]")
+        chkEx("{ return _typeOf(require(user @? { .name == 'Bob' })); }", "text[user]")
 
-        chkEx("{ return require(user @ { name = 'Bob' }); }", "ct_err:expr_call_argtypes:require:user")
-        chkEx("{ return require(user @+ { name = 'Bob' }); }", "ct_err:expr_call_argtypes:require:list<user>")
-        chkEx("{ return require(user @* { name = 'Bob' }); }", "ct_err:expr_call_argtypes:require:list<user>")
+        chkEx("{ return require(user @ { .name == 'Bob' }); }", "ct_err:expr_call_argtypes:require:user")
+        chkEx("{ return require(user @+ { .name == 'Bob' }); }", "ct_err:expr_call_argtypes:require:list<user>")
+        chkEx("{ return require(user @* { .name == 'Bob' }); }", "ct_err:expr_call_argtypes:require:list<user>")
     }
 
     @Test fun testRequireWrongArgs() {

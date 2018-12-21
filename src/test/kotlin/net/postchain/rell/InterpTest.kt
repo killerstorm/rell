@@ -15,7 +15,7 @@ class InterpTest
 
             """
         val ast = S_Grammar.parseToEnd(contractText)
-        val model = ast.compile()
+        val model = ast.compile(false)
     }
 
     @Test

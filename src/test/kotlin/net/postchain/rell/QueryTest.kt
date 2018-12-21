@@ -30,22 +30,22 @@ class QueryTest: BaseRellTest() {
     }
 
     @Test fun testReturnSelectAllNoObjects() {
-        tst.classDefs = listOf("class user { name: text; }")
+        tst.defs = listOf("class user { name: text; }")
         tst.inserts = listOf(mkins("user", "name", "11, 'Alice'"))
-        chkEx("= user @* { name = \"Bob\" } ;", "list<user>[]")
+        chkEx("= user @* { .name == 'Bob' } ;", "list<user>[]")
     }
 
     @Test fun testReturnSelectAllOneObject() {
-        tst.classDefs = listOf("class user { name: text; }")
+        tst.defs = listOf("class user { name: text; }")
         tst.inserts = listOf(
                 mkins("user", "name", "11,'Alice'"),
                 mkins("user", "name", "33,'Bob'")
         )
-        chkEx("= user @* { name = \"Bob\" } ;", "list<user>[user[33]]")
+        chkEx("= user @* { .name == \"Bob\" } ;", "list<user>[user[33]]")
     }
 
     @Test fun testReturnSelectAllManyObjects() {
-        tst.classDefs = listOf("class user { name: text; }")
+        tst.defs = listOf("class user { name: text; }")
         tst.inserts = listOf(
                 mkins("user", "name", "11,'Alice'"),
                 mkins("user", "name", "33,'Bob'"),
@@ -54,7 +54,7 @@ class QueryTest: BaseRellTest() {
                 mkins("user", "name", "99,'Victor'"),
                 mkins("user", "name", "111,'Bob'")
         )
-        chkEx("= user @* { name = \"Bob\" } ;", "list<user>[user[33],user[77],user[111]]")
+        chkEx("= user @* { .name == 'Bob' } ;", "list<user>[user[33],user[77],user[111]]")
     }
 
     @Test fun testReturnErr() {
@@ -101,13 +101,13 @@ class QueryTest: BaseRellTest() {
     }
 
     @Test fun testCreateUpdateDelete() {
-        tst.classDefs = listOf("class user { mutable name: text; }")
+        tst.defs = listOf("class user { mutable name: text; }")
         chkEx("{ create user('Bob'); return 0; }", "ct_err:no_db_update")
         chkEx("{ update user @ {} ( name = 'Bob'); return 0; }", "ct_err:no_db_update")
-        chkEx("{ delete user @ { name = 'Bob' }; return 0; }", "ct_err:no_db_update")
+        chkEx("{ delete user @ { .name == 'Bob' }; return 0; }", "ct_err:no_db_update")
         chkEx("{ if (2 < 3) create user('Bob'); return 0; }", "ct_err:no_db_update")
-        chkEx("{ if (2 < 3) update user @ {} ( name = 'Bob'); return 0; }", "ct_err:no_db_update")
-        chkEx("{ if (2 < 3) delete user @ { name = 'Bob' }; return 0; }", "ct_err:no_db_update")
+        chkEx("{ if (2 < 3) update user @ {} ( .name == 'Bob'); return 0; }", "ct_err:no_db_update")
+        chkEx("{ if (2 < 3) delete user @ { .name == 'Bob' }; return 0; }", "ct_err:no_db_update")
     }
 
     @Test fun testReturnTypeExplicit() {
@@ -135,6 +135,13 @@ class QueryTest: BaseRellTest() {
         chkEx("{ if (a == 0) return 123; else return null; }", 0, "int[123]")
         chkEx("{ if (a == 0) return 123; else return null; }", 1, "null")
         chkEx("{ return null; }", "null")
+
+        chkEx("= unit();", "ct_err:query_exprtype_unit")
+        chkEx("= print('Hello');", "ct_err:query_exprtype_unit")
+        chkEx("{ return unit(); }", "ct_err:stmt_return_unit")
+        chkEx("{ return print('Hello'); }", "ct_err:stmt_return_unit")
+
+        chkEx("{ if (1 > 0) return 123; else return 'Hello'; }", "ct_err:entity_rettype:integer:text")
     }
 
     private val mkins = SqlTestUtils::mkins

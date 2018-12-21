@@ -65,6 +65,9 @@ class LibListTest: BaseRellTest(false) {
         chk("[1, 2, 3, 4, 5][4]", "int[5]")
         chk("[1, 2, 3, 4, 5][-1]", "rt_err:expr_list_lookup_index:5:-1")
         chk("[1, 2, 3, 4, 5][5]", "rt_err:expr_list_lookup_index:5:5")
+
+        chkEx("{ val x: list<integer>? = [1,2,3]; return x[1]; }", "ct_err:expr_lookup_null")
+        chkEx("{ val x: list<integer>? = [1,2,3]; return x!![1]; }", "int[2]")
     }
 
     @Test fun testEquals() {
@@ -230,6 +233,9 @@ class LibListTest: BaseRellTest(false) {
         chkEx("{ $init x[2] = 5; return x; }", "[1, 2, 5]")
         chkEx("{ $init x[-1] = 5; return x; }", "rt_err:expr_list_lookup_index:3:-1")
         chkEx("{ $init x[3] = 5; return x; }", "rt_err:expr_list_lookup_index:3:3")
+
+        chkEx("{ val x: list<integer>? = [1, 2, 3]; x[1] = 5; return x; }", "ct_err:expr_lookup_base:list<integer>?")
+        chkEx("{ val x: list<integer>? = [1, 2, 3]; x!![1] = 5; return x; }", "[1, 5, 3]")
     }
 
     @Test fun testFor() {

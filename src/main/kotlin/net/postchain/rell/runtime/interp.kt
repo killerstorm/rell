@@ -9,6 +9,9 @@ import java.sql.SQLException
 sealed class RtBaseError(msg: String): Exception(msg)
 class RtError(val code: String, msg: String): RtBaseError(msg)
 class RtRequireError(val userMsg: String?): RtBaseError(userMsg ?: "Requirement error")
+class RtValueTypeError(val expected: String, val actual: String):
+        RtBaseError("Value type missmatch: expected $expected, but was $actual")
+class RtGtxValueError(val code: String, msg: String): RtBaseError(msg)
 
 class RtGlobalContext(
         val stdoutPrinter: RtPrinter,
@@ -133,5 +136,16 @@ class RtSqlExecutor(private val sqlExec: SqlExecutor): SqlExecutor() {
 object RtUtils {
     fun errNotSupported(msg: String): RtError {
         return RtError("not_supported", msg)
+    }
+
+    fun <T> wrapErr(errCode: String, code: () -> T): T {
+        try {
+            val res = code()
+            return res
+        } catch (e: RtBaseError) {
+            throw e
+        } catch (e: Throwable) {
+            throw RtError(errCode, e.message ?: "")
+        }
     }
 }

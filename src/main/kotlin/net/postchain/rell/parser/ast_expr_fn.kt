@@ -17,14 +17,14 @@ abstract class S_SysFunction(val name: String) {
             val nameStr = name.str
 
             if (args.size != params.size) {
-                throw CtError(name.pos, "expr_call_argcnt:$nameStr:${params.size}:${args.size}",
+                throw C_Error(name.pos, "expr_call_argcnt:$nameStr:${params.size}:${args.size}",
                         "Wrong number of arguments for '$nameStr': ${args.size} instead of ${params.size}")
             }
 
             for ((i, param) in params.withIndex()) {
                 val arg = args[i]
                 if (!param.isAssignableFrom(arg)) {
-                    throw CtError(name.pos, "expr_call_argtype:$nameStr:$i:${param.toStrictString()}:${arg.toStrictString()}",
+                    throw C_Error(name.pos, "expr_call_argtype:$nameStr:$i:${param.toStrictString()}:${arg.toStrictString()}",
                             "Wrong argument type for '$nameStr' #${i + 1}: ${arg.toStrictString()} instead of ${param.toStrictString()}")
                 }
             }
@@ -39,6 +39,10 @@ abstract class S_SysMemberFunction(val name: String) {
 
 sealed class C_ArgTypeMatcher {
     abstract fun match(type: RType): Boolean
+}
+
+object C_ArgTypeMatcher_Any: C_ArgTypeMatcher() {
+    override fun match(type: RType) = true
 }
 
 class C_ArgTypeMatcher_Simple(val targetType: RType): C_ArgTypeMatcher() {
@@ -56,9 +60,9 @@ class C_ArgTypeMatcher_MapSub(val keyType: RType, val valueType: RType): C_ArgTy
             && valueType.isAssignableFrom(type.valueType)
 }
 
-sealed class C_GlobalOverloadFnCase {
-    abstract fun compileCall(name: String, args: List<RExpr>): RExpr?
-    abstract fun compileCallDb(name: String, args: List<DbExpr>): Optional<DbExpr>?
+abstract class C_GlobalOverloadFnCase {
+    abstract fun compileCall(pos: S_Pos, name: String, args: List<RExpr>): RExpr?
+    abstract fun compileCallDb(pos: S_Pos, name: String, args: List<DbExpr>): Optional<DbExpr>?
 }
 
 class C_StdGlobalOverloadFnCase(
@@ -68,12 +72,12 @@ class C_StdGlobalOverloadFnCase(
         val dbFn: DbSysFunction?
 ): C_GlobalOverloadFnCase()
 {
-    override fun compileCall(name: String, args: List<RExpr>): RExpr? {
+    override fun compileCall(pos: S_Pos, name: String, args: List<RExpr>): RExpr? {
         if (!C_OverloadFnUtils.matchArgs(params, args.map { it.type })) return null
         return RSysCallExpr(type, rFn, args)
     }
 
-    override fun compileCallDb(name: String, args: List<DbExpr>): Optional<DbExpr>? {
+    override fun compileCallDb(pos: S_Pos, name: String, args: List<DbExpr>): Optional<DbExpr>? {
         if (!C_OverloadFnUtils.matchArgs(params, args.map { it.type })) return null
         if (dbFn == null) return Optional.empty()
         return Optional.of(CallDbExpr(type, dbFn, args))
@@ -81,12 +85,12 @@ class C_StdGlobalOverloadFnCase(
 }
 
 abstract class C_CustomGlobalOverloadFnCase: C_GlobalOverloadFnCase() {
-    override fun compileCallDb(name: String, args: List<DbExpr>): Optional<DbExpr>? = null
+    override fun compileCallDb(pos: S_Pos, name: String, args: List<DbExpr>): Optional<DbExpr>? = null
 }
 
-sealed class C_MemberOverloadFnCase {
-    abstract fun compileCall(name: String, args: List<RExpr>): RMemberCalculator?
-    abstract fun compileCallDb(name: String, base: DbExpr, args: List<DbExpr>): Optional<DbExpr>?
+abstract class C_MemberOverloadFnCase {
+    abstract fun compileCall(pos: S_Pos, name: String, args: List<RExpr>): RMemberCalculator?
+    abstract fun compileCallDb(pos: S_Pos, name: String, base: DbExpr, args: List<DbExpr>): Optional<DbExpr>?
 }
 
 class C_StdMemberOverloadFnCase(
@@ -96,12 +100,12 @@ class C_StdMemberOverloadFnCase(
         val dbFn: DbSysFunction?
 ): C_MemberOverloadFnCase()
 {
-    override fun compileCall(name: String, args: List<RExpr>): RMemberCalculator? {
+    override fun compileCall(pos: S_Pos, name: String, args: List<RExpr>): RMemberCalculator? {
         if (!C_OverloadFnUtils.matchArgs(params, args.map { it.type })) return null
         return RMemberCalculator_SysFn(type, rFn, args)
     }
 
-    override fun compileCallDb(name: String, base: DbExpr, args: List<DbExpr>): Optional<DbExpr>? {
+    override fun compileCallDb(pos: S_Pos, name: String, base: DbExpr, args: List<DbExpr>): Optional<DbExpr>? {
         if (!C_OverloadFnUtils.matchArgs(params, args.map { it.type })) return null
         if (dbFn == null) return Optional.empty()
         val fullArgs = listOf(base) + args
@@ -112,7 +116,7 @@ class C_StdMemberOverloadFnCase(
 object C_OverloadFnUtils {
     fun compileCall(pos: S_Pos, name: String, cases: List<C_GlobalOverloadFnCase>, args: List<RExpr>): RExpr {
         for (case in cases) {
-            val res = case.compileCall(name, args)
+            val res = case.compileCall(pos, name, args)
             if (res != null) {
                 return res
             }
@@ -122,7 +126,7 @@ object C_OverloadFnUtils {
 
     fun compileCallDb(pos: S_Pos, name: String, cases: List<C_GlobalOverloadFnCase>, args: List<DbExpr>): DbExpr {
         for (case in cases) {
-            val opt = case.compileCallDb(name, args)
+            val opt = case.compileCallDb(pos, name, args)
             if (opt != null) {
                 return compileCallDbCase(pos, name, opt)
             }
@@ -132,7 +136,7 @@ object C_OverloadFnUtils {
 
     fun compileCall(pos: S_Pos, name: String, cases: List<C_MemberOverloadFnCase>, args: List<RExpr>): RMemberCalculator {
         for (case in cases) {
-            val res = case.compileCall(name, args)
+            val res = case.compileCall(pos, name, args)
             if (res != null) {
                 return res
             }
@@ -142,7 +146,7 @@ object C_OverloadFnUtils {
 
     fun compileCallDb(pos: S_Pos, name: String, cases: List<C_MemberOverloadFnCase>, base: DbExpr, args: List<DbExpr>): DbExpr {
         for (case in cases) {
-            val opt = case.compileCallDb(name, base, args)
+            val opt = case.compileCallDb(pos, name, base, args)
             if (opt != null) {
                 return compileCallDbCase(pos, name, opt)
             }
@@ -154,7 +158,7 @@ object C_OverloadFnUtils {
         if (opt.isPresent) {
             return opt.get()
         } else {
-            throw CtUtils.errFunctionNoSql(pos, name)
+            throw C_Utils.errFunctionNoSql(pos, name)
         }
     }
 
@@ -172,10 +176,10 @@ object C_OverloadFnUtils {
         return true
     }
 
-    fun errNoMatch(pos: S_Pos, name: String, args: List<RType>): CtError {
+    fun errNoMatch(pos: S_Pos, name: String, args: List<RType>): C_Error {
         val argsStrShort = args.joinToString(",") { it.toStrictString() }
         val argsStr = args.joinToString { it.toStrictString() }
-        return CtError(pos, "expr_call_argtypes:$name:$argsStrShort", "Function $name undefined for arguments ($argsStr)")
+        return C_Error(pos, "expr_call_argtypes:$name:$argsStrShort", "Function $name undefined for arguments ($argsStr)")
     }
 }
 

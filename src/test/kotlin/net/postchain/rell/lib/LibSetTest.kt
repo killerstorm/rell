@@ -139,4 +139,10 @@ class LibSetTest: BaseRellTest(false) {
         tst.execOp("for (i in set([123, 456, 789, 456, 123])) print(i);")
         tst.chkStdout("123", "456", "789")
     }
+
+    @Test fun testMutableElement() {
+        chkEx("{ return set([[123]]); }", "ct_err:expr_set_type:list<integer>")
+        chkEx("{ return set<list<integer>>(); }", "ct_err:expr_set_type:list<integer>")
+        chkEx("{ var x: set<list<integer>>; return 0; }", "ct_err:expr_set_type:list<integer>")
+    }
 }

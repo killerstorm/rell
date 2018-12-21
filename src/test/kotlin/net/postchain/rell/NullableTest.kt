@@ -73,23 +73,26 @@ class NullableTest: BaseRellTest(false) {
         chkEx("{ val x: integer? = null; return x > null; }", "ct_err:binop_operand_type:>:integer?:null")
         chkEx("{ val x: integer? = null; return x <= null; }", "ct_err:binop_operand_type:<=:integer?:null")
         chkEx("{ val x: integer? = null; return x >= null; }", "ct_err:binop_operand_type:>=:integer?:null")
+
+        chkEx("{ return null == null; }", "boolean[true]")
+        chkEx("{ return null != null; }", "boolean[false]")
     }
 
     @Test fun testNullableClass() {
         tst.useSql = true
-        tst.classDefs = listOf("class user { name: text; }")
+        tst.defs = listOf("class user { name: text; }")
         tst.execOp("create user (name = 'Bob');")
 
         chkFn(": user = null;", "ct_err:entity_rettype:user:null")
-        chkFn(": user = user @? { name = 'Bob' };", "ct_err:entity_rettype:user:user?")
-        chkFn(": user = user @ { name = 'Bob' };", "user[1]")
-        chkFn(": user = user @ { name = 'Alice' };", "rt_err:at:wrong_count:0")
+        chkFn(": user = user @? { .name == 'Bob' };", "ct_err:entity_rettype:user:user?")
+        chkFn(": user = user @ { .name == 'Bob' };", "user[1]")
+        chkFn(": user = user @ { .name == 'Alice' };", "rt_err:at:wrong_count:0")
 
         chkFn(": user? = null;", "null")
-        chkFn(": user? = user @? { name = 'Bob' };", "user[1]")
-        chkFn(": user? = user @? { name = 'Alice' };", "null")
-        chkFn(": user? = user @ { name = 'Bob' };", "user[1]")
-        chkFn(": user? = user @ { name = 'Alice' };", "rt_err:at:wrong_count:0")
+        chkFn(": user? = user @? { .name == 'Bob' };", "user[1]")
+        chkFn(": user? = user @? { .name == 'Alice' };", "null")
+        chkFn(": user? = user @ { .name == 'Bob' };", "user[1]")
+        chkFn(": user? = user @ { .name == 'Alice' };", "rt_err:at:wrong_count:0")
     }
 
     @Test fun testNullableAttribute() {
@@ -545,6 +548,24 @@ class NullableTest: BaseRellTest(false) {
         chkEx("{ var x: list<integer>?; return 123 in x; }", "ct_err:binop_operand_type:in:integer:list<integer>?")
     }
 
+    @Test fun testEq() {
+        chkEx("{ val a: integer? = 123; return a == null; }", "boolean[false]")
+        chkEx("{ val a: integer? = 123; return a != null; }", "boolean[true]")
+        chkEx("{ val a: integer? = 123; return a == 123; }", "ct_err:binop_operand_type:==:integer?:integer")
+        chkEx("{ val a: integer? = 123; return a != 123; }", "ct_err:binop_operand_type:!=:integer?:integer")
+        chkEx("{ val a: integer? = null; return a == null; }", "boolean[true]")
+        chkEx("{ val a: integer? = null; return a != null; }", "boolean[false]")
+        chkEx("{ val a: integer? = null; return a == 123; }", "ct_err:binop_operand_type:==:integer?:integer")
+        chkEx("{ val a: integer? = null; return a != 123; }", "ct_err:binop_operand_type:!=:integer?:integer")
+
+        chkEx("{ val a: integer? = 123; val b: integer? = 123; return a == b; }", "boolean[true]")
+        chkEx("{ val a: integer? = 123; val b: integer? = 123; return a != b; }", "boolean[false]")
+        chkEx("{ val a: integer? = 123; val b: integer? = 456; return a == b; }", "boolean[false]")
+        chkEx("{ val a: integer? = 123; val b: integer? = 456; return a != b; }", "boolean[true]")
+        chkEx("{ val a: integer? = 123; val b: integer? = null; return a == b; }", "boolean[false]")
+        chkEx("{ val a: integer? = 123; val b: integer? = null; return a != b; }", "boolean[true]")
+    }
+
     @Test fun testMemberAccess() {
         chkEx("{ var x: text?; return x.size(); }", "ct_err:expr_call_null:size")
         chkEx("{ var x: (a:integer)?; return x.a; }", "ct_err:expr_mem_null:a")
@@ -580,13 +601,13 @@ class NullableTest: BaseRellTest(false) {
 
     @Test fun testSpecOpElvisUnderAt() {
         tst.useSql = true
-        tst.classDefs = listOf("class user { name: text; }")
+        tst.defs = listOf("class user { name: text; }")
         tst.execOp("create user(name = 'Bob'); create user(name = 'Alice');")
 
-        chkEx("{ val s: text? = 'Bob'; return user @ { name = s ?: 'Alice' }; }", "user[1]")
-        chkEx("{ val s: text? = null; return user @ { name = s ?: 'Alice' }; }", "user[2]")
+        chkEx("{ val s: text? = 'Bob'; return user @ { .name == s ?: 'Alice' }; }", "user[1]")
+        chkEx("{ val s: text? = null; return user @ { .name == s ?: 'Alice' }; }", "user[2]")
 
-        chkEx("{ val s: text = 'Bob'; return user @ { name ?: 'Alice' == s }; }", "ct_err:binop_operand_type:?::text:text")
+        chkEx("{ val s: text = 'Bob'; return user @ { .name ?: 'Alice' == s }; }", "ct_err:binop_operand_type:?::text:text")
     }
 
     @Test fun testSpecOpNotNull() {
@@ -603,27 +624,27 @@ class NullableTest: BaseRellTest(false) {
     }
 
     @Test fun testSpecOpSafeField() {
-        chkEx("{ val x: (a:integer)? = (a:123); return x.a; }", "ct_err:expr_mem_null:a")
-        chkEx("{ val x: (a:integer)? = (a:123); return x?.a; }", "int[123]")
+        chkEx("{ val x: (a:integer)? = (a=123); return x.a; }", "ct_err:expr_mem_null:a")
+        chkEx("{ val x: (a:integer)? = (a=123); return x?.a; }", "int[123]")
         chkEx("{ val x: (a:integer)? = null; return x?.a; }", "null")
 
-        chkEx("{ val x: (a:(b:(c:integer)?)?)? = (a:(b:(c:123))); return x?.a?.b?.c; }", "int[123]")
-        chkEx("{ val x: (a:(b:(c:integer)?)?)? = (a:(b:null)); return x?.a?.b?.c; }", "null")
-        chkEx("{ val x: (a:(b:(c:integer)?)?)? = (a:null); return x?.a?.b?.c; }", "null")
+        chkEx("{ val x: (a:(b:(c:integer)?)?)? = (a=(b=(c=123))); return x?.a?.b?.c; }", "int[123]")
+        chkEx("{ val x: (a:(b:(c:integer)?)?)? = (a=(b=null)); return x?.a?.b?.c; }", "null")
+        chkEx("{ val x: (a:(b:(c:integer)?)?)? = (a=null); return x?.a?.b?.c; }", "null")
         chkEx("{ val x: (a:(b:(c:integer)?)?)? = null; return x?.a?.b?.c; }", "null")
 
-        chkEx("{ val x: (a:(b:(c:integer)?)?)? = (a:(b:(c:123))); return x.a.b.c; }", "ct_err:expr_mem_null:a")
-        chkEx("{ val x: (a:(b:(c:integer)?)?)? = (a:(b:(c:123))); return x?.a.b.c; }", "ct_err:expr_mem_null:b")
-        chkEx("{ val x: (a:(b:(c:integer)?)?)? = (a:(b:(c:123))); return x?.a?.b.c; }", "ct_err:expr_mem_null:c")
+        chkEx("{ val x: (a:(b:(c:integer)?)?)? = (a=(b=(c=123))); return x.a.b.c; }", "ct_err:expr_mem_null:a")
+        chkEx("{ val x: (a:(b:(c:integer)?)?)? = (a=(b=(c=123))); return x?.a.b.c; }", "ct_err:expr_mem_null:b")
+        chkEx("{ val x: (a:(b:(c:integer)?)?)? = (a=(b=(c=123))); return x?.a?.b.c; }", "ct_err:expr_mem_null:c")
 
-        chkEx("{ val x: (a:(b:(c:integer)))? = (a:(b:(c:123))); return x.a.b.c; }", "ct_err:expr_mem_null:a")
-        chkEx("{ val x: (a:(b:(c:integer)))? = (a:(b:(c:123))); return x?.a.b.c; }", "ct_err:expr_mem_null:b")
-        chkEx("{ val x: (a:(b:(c:integer)))? = (a:(b:(c:123))); return x?.a?.b.c; }", "ct_err:expr_mem_null:c")
-        chkEx("{ val x: (a:(b:(c:integer)))? = (a:(b:(c:123))); return x?.a?.b?.c; }", "int[123]")
+        chkEx("{ val x: (a:(b:(c:integer)))? = (a=(b=(c=123))); return x.a.b.c; }", "ct_err:expr_mem_null:a")
+        chkEx("{ val x: (a:(b:(c:integer)))? = (a=(b=(c=123))); return x?.a.b.c; }", "ct_err:expr_mem_null:b")
+        chkEx("{ val x: (a:(b:(c:integer)))? = (a=(b=(c=123))); return x?.a?.b.c; }", "ct_err:expr_mem_null:c")
+        chkEx("{ val x: (a:(b:(c:integer)))? = (a=(b=(c=123))); return x?.a?.b?.c; }", "int[123]")
 
-        chkEx("{ val x: (a:(b:(c:integer)))? = (a:(b:(c:123))); return _typeOf(x?.a); }", "text[(b:(c:integer))?]")
-        chkEx("{ val x: (a:(b:(c:integer)))? = (a:(b:(c:123))); return _typeOf(x?.a?.b); }", "text[(c:integer)?]")
-        chkEx("{ val x: (a:(b:(c:integer)))? = (a:(b:(c:123))); return _typeOf(x?.a?.b?.c); }", "text[integer?]")
+        chkEx("{ val x: (a:(b:(c:integer)))? = (a=(b=(c=123))); return _typeOf(x?.a); }", "text[(b:(c:integer))?]")
+        chkEx("{ val x: (a:(b:(c:integer)))? = (a=(b=(c=123))); return _typeOf(x?.a?.b); }", "text[(c:integer)?]")
+        chkEx("{ val x: (a:(b:(c:integer)))? = (a=(b=(c=123))); return _typeOf(x?.a?.b?.c); }", "text[integer?]")
     }
 
     @Test fun testSpecOpSafeCall() {
@@ -639,8 +660,8 @@ class NullableTest: BaseRellTest(false) {
         chkEx("{ val x: text? = 'Hello'; return x?.upperCase()?.lowerCase(); }", "text[hello]")
         chkEx("{ val x: text? = null; return x?.upperCase()?.lowerCase(); }", "null")
 
-        chkEx("{ val x: (a:integer?)? = (a:123); return x?.a?.hex(); }", "text[7b]")
-        chkEx("{ val x: (a:integer?)? = (a:null); return x?.a?.hex(); }", "null")
+        chkEx("{ val x: (a:integer?)? = (a=123); return x?.a?.hex(); }", "text[7b]")
+        chkEx("{ val x: (a:integer?)? = (a=null); return x?.a?.hex(); }", "null")
         chkEx("{ val x: (a:integer?)? = null; return x?.a?.hex(); }", "null")
 
         chkEx("{ null?.str(); }", "ct_err:expr_safemem_type:null")
@@ -651,7 +672,7 @@ class NullableTest: BaseRellTest(false) {
 
     @Test fun testSpecOpSafeDataField() {
         tst.useSql = true
-        tst.classDefs = listOf("class company { name: text; }", "class user { name: text; company; }")
+        tst.defs = listOf("class company { name: text; }", "class user { name: text; company; }")
 
         tst.execOp("""
             val ms = create company(name = 'Microsoft');
@@ -660,11 +681,11 @@ class NullableTest: BaseRellTest(false) {
             create user(name = 'Alice', ap);
         """.trimIndent())
 
-        chkEx("{ val u = user@{name='Bob'}; return u.company.name; }", "text[Microsoft]")
-        chkEx("{ val u = user@?{name='Bob'}; return u.company.name; }", "ct_err:expr_mem_null:company")
-        chkEx("{ val u = user@?{name='Bob'}; return u?.company.name; }", "ct_err:expr_mem_null:name")
-        chkEx("{ val u = user@?{name='Bob'}; return u?.company?.name; }", "text[Microsoft]")
-        chkEx("{ val u = user@?{name='Alice'}; return u?.company?.name; }", "text[Apple]")
-        chkEx("{ val u = user@?{name='Trudy'}; return u?.company?.name; }", "null")
+        chkEx("{ val u = user@{.name=='Bob'}; return u.company.name; }", "text[Microsoft]")
+        chkEx("{ val u = user@?{.name=='Bob'}; return u.company.name; }", "ct_err:expr_mem_null:company")
+        chkEx("{ val u = user@?{.name=='Bob'}; return u?.company.name; }", "ct_err:expr_mem_null:name")
+        chkEx("{ val u = user@?{.name=='Bob'}; return u?.company?.name; }", "text[Microsoft]")
+        chkEx("{ val u = user@?{.name=='Alice'}; return u?.company?.name; }", "text[Apple]")
+        chkEx("{ val u = user@?{.name=='Trudy'}; return u?.company?.name; }", "null")
     }
 }

@@ -1,8 +1,8 @@
 package net.postchain.rell
 
 import net.postchain.rell.model.*
-import net.postchain.rell.parser.CtError
-import net.postchain.rell.parser.CtUtils
+import net.postchain.rell.parser.C_Error
+import net.postchain.rell.parser.C_Utils
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.DefaultSqlExecutor
 import net.postchain.rell.sql.NoConnSqlExecutor
@@ -90,9 +90,9 @@ private fun compileModule(rellFile: String): RModule {
     val sourceCode = File(rellFile).readText()
 
     val module = try {
-        val ast = CtUtils.parse(sourceCode)
-        ast.compile()
-    } catch (e: CtError) {
+        val ast = C_Utils.parse(sourceCode)
+        ast.compile(true)
+    } catch (e: C_Error) {
         System.err.println("ERROR ${e.pos} ${e.errMsg}")
         exitProcess(1)
     }

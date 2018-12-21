@@ -34,16 +34,16 @@ class ClassTest: BaseRellTest(false) {
 
     @Test fun testIndexWithoutAttr() {
         tst.useSql = true
-        tst.classDefs = listOf("class foo { index name; }", "class bar { index name: text; }")
+        tst.defs = listOf("class foo { index name; }", "class bar { index name: text; }")
         execOp("create foo(name = 'A');")
         execOp("create bar(name = 'B');")
-        chk("foo @ {} (name)", "text[A]")
-        chk("bar @ {} (name)", "text[B]")
+        chk("foo @ {} (.name)", "text[A]")
+        chk("bar @ {} (.name)", "text[B]")
     }
 
     @Test fun testIndexWithAttr() {
         tst.useSql = true
-        tst.classDefs = listOf(
+        tst.defs = listOf(
                 "class A { name; index name; }",
                 "class B { index name; name: text; }",
                 "class C { name1: text; index name1, name2: text; }",
@@ -55,13 +55,13 @@ class ClassTest: BaseRellTest(false) {
         execOp("create C(name1 = 'C1', name2 = 'C2');")
         execOp("create D(name = 'D1');")
 
-        chk("A @ {} (name)", "text[A]")
-        chk("B @ {} (name)", "text[B]")
-        chk("C @ {} (=name1,=name2)", "(text[C1],text[C2])")
-        chk("D @ {} (name)", "text[D1]")
+        chk("A @ {} (.name)", "text[A]")
+        chk("B @ {} (.name)", "text[B]")
+        chk("C @ {} (=.name1,=.name2)", "(text[C1],text[C2])")
+        chk("D @ {} (.name)", "text[D1]")
 
         execOp("update D @ {} (name = 'D2');")
-        chk("D @ {} (name)", "text[D2]")
+        chk("D @ {} (.name)", "text[D2]")
     }
 
     @Test fun testKey() {
@@ -88,16 +88,16 @@ class ClassTest: BaseRellTest(false) {
 
     @Test fun testKeyWithoutAttr() {
         tst.useSql = true
-        tst.classDefs = listOf("class foo { key name; }", "class bar { key name: text; }")
+        tst.defs = listOf("class foo { key name; }", "class bar { key name: text; }")
         execOp("create foo(name = 'A');")
         execOp("create bar(name = 'B');")
-        chk("foo @ {} (name)", "text[A]")
-        chk("bar @ {} (name)", "text[B]")
+        chk("foo @ {} (.name)", "text[A]")
+        chk("bar @ {} (.name)", "text[B]")
     }
 
     @Test fun testKeyWithAttr() {
         tst.useSql = true
-        tst.classDefs = listOf(
+        tst.defs = listOf(
                 "class A { name; key name; }",
                 "class B { key name; name: text; }",
                 "class C { name1: text; key name1, name2: text; }",
@@ -109,25 +109,54 @@ class ClassTest: BaseRellTest(false) {
         execOp("create C(name1 = 'C1', name2 = 'C2');")
         execOp("create D(name = 'D1');")
 
-        chk("A @ {} (name)", "text[A]")
-        chk("B @ {} (name)", "text[B]")
-        chk("C @ {} (=name1,=name2)", "(text[C1],text[C2])")
-        chk("D @ {} (name)", "text[D1]")
+        chk("A @ {} (.name)", "text[A]")
+        chk("B @ {} (.name)", "text[B]")
+        chk("C @ {} (=.name1,=.name2)", "(text[C1],text[C2])")
+        chk("D @ {} (.name)", "text[D1]")
 
         execOp("update D @ {} (name = 'D2');")
-        chk("D @ {} (name)", "text[D2]")
+        chk("D @ {} (.name)", "text[D2]")
     }
 
     @Test fun testKeyIndexDupValue() {
         tst.useSql = true
-        tst.classDefs = listOf("class foo { mutable k: text; mutable i: text; key k; index i; }")
+        tst.defs = listOf("class foo { mutable k: text; mutable i: text; key k; index i; }")
 
         chkOp("create foo(k = 'K1', i = 'I1');", "")
         chkOp("create foo(k = 'K1', i = 'I2');", "rt_err:sqlerr:0")
         chkOp("create foo(k = 'K2', i = 'I1');", "")
         chkData("foo(1,K1,I1)", "foo(2,K2,I1)")
 
-        chkOp("update foo @ { k = 'K2' } ( k = 'K1' );", "rt_err:sqlerr:0")
+        chkOp("update foo @ { .k == 'K2' } ( k = 'K1' );", "rt_err:sqlerr:0")
         chkData("foo(1,K1,I1)", "foo(2,K2,I1)")
+    }
+
+    @Test fun testDeclarationOrder() {
+        chkCompile("class user { c: company; } class company { name; }", "OK")
+        chkCompile("class user { c: company; } class company { u: user; }", "OK")
+        chkCompile("query q() = user @* {}; class user { name; }", "OK")
+    }
+
+    @Test fun testForwardReferenceInAttributeValue() {
+        tst.useSql = true
+        tst.defs = listOf(
+                "class foo { x: integer; k: integer = (bar@*{ .v > 0 }).size(); }",
+                "class bar { v: integer; }"
+        )
+
+        execOp("""
+            create foo(x = 1);
+            create bar(-1);
+            create foo(x = 2);
+            create bar(5);
+            create foo(x = 3);
+            create bar(6);
+            create foo(x = 4);
+        """.trimIndent())
+
+        chk("foo @ {.x == 1}(.k)", "int[0]")
+        chk("foo @ {.x == 2}(.k)", "int[0]")
+        chk("foo @ {.x == 3}(.k)", "int[1]")
+        chk("foo @ {.x == 4}(.k)", "int[2]")
     }
 }

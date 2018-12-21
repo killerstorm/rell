@@ -1,0 +1,110 @@
+RELEASE NOTES 0.6.1 (2018-12-21)
+
+
+1. Must use "." to access class attributes in @-expressions
+
+user @* { .balance >= 1000 }
+user @* { user.balance >= 1000 }
+
+Name resolution rules changed:
+
+- Not an error any more when there is a local variable and a class attribute with the same name:
+
+  val name = 'Bob';
+  return user @ { .name == name };
+
+- Error if there is a local variable with the same name as an involved class:
+
+  val user = 'Bob';
+  return user @ { user.name == 'Alice' }; // Error: "user" is ambiguous.
+
+  val user = 'Bob';
+  return user @ { .name == 'Alice' }; // OK - not trying to use "user" in the where-part
+
+- Error if trying to use a name of an existing local variable as a class alias:
+
+  val u = 'Bob';
+  return (u: user) @ { .name == 'Alice' } // Error even if "u" is not used in the where-part
+
+
+2. Equality check operator "=" removed
+
+Operator "==" must be used instead, while "=" is used for assignment.
+
+
+3. Using "=" instead of ":" for named tuple fields
+
+val myTuple = (name = 'Bob', value = 123);
+
+
+4. Record type
+
+Declaration:
+
+record user {
+    name: text;
+    mutable balance: integer = 123;
+}
+
+Usage:
+
+val u = user(name = 'Bob', balance = 123);
+print(u.name);
+print(u.balance);
+
+Functions of record:
+
+- fromBytes()
+- fromGTXValue()
+- fromPrettyGTXValue()
+- toBytes()
+- toGTXValue()
+- toPrettyGTXValue()
+
+
+5. New built-in type: GTXValue
+
+Used to represent encoded arguments and results of operations and queries.
+
+Records can be converted to/from GTXValue.
+
+Functions:
+
+- fromBytes()
+- fromJSON()
+- toBytes()
+- toJSON()
+
+
+6. Types of operation/query parameters/result must be GTX-compatible
+
+Compilation error if:
+
+- Type of an operation parameter is not GTX-compatible.
+- Type of a query parameter or result is not pretty-GTX-compatible.
+
+
+7. Operators "===" and "!=="
+
+Compare references to objects, not contents. May be useful for records, as well as other reference types: collections, tuples.
+
+
+8. Only non-mutable types are allowed as map keys or set elements
+
+Implication: a list/set/map cannot be used as a map key/set element.
+
+
+9. Class declaration order does not matter
+
+A class may reference another class defined after it:
+
+class user { c: company; }
+class company {}
+
+Same for records. This allows to define cyclic records, and thus data structures like trees:
+
+record tree_node {
+    value: integer;
+    left: tree_node?;
+    right: tree_node?;
+}

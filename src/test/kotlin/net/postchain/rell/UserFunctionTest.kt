@@ -26,12 +26,12 @@ class UserFunctionTest: BaseRellTest(false) {
         chkFn("function f(): integer { return 'Hello'; }", "f()", "ct_err:entity_rettype:integer:text")
         chkFn("function f(): integer { if (1 > 0) return 123; return 'Hello'; }", "f()", "ct_err:entity_rettype:integer:text")
         chkFn("function f(): integer { if (1 > 0) return 123; return 456; }", "f()", "int[123]")
-        chkFn("function g(x: integer): integer = 123; function f(x: integer) = g(x);", "f(123)", "ct_err:query_exprtype_unit")
+        chkFn("function g(x: integer): integer = 123; function f(x: integer) = g(x);", "f(123)", "ct_err:entity_rettype:unit:integer")
     }
 
     @Test fun testDbSelect() {
         tst.useSql = true
-        tst.classDefs = listOf("class user { name: text; }")
+        tst.defs = listOf("class user { name: text; }")
         tst.execOp("create user('Bob'); create user('Alice');")
 
         chkFn("function f(name: text): user = user @ { name };", "f('Bob')", "user[1]")
@@ -40,7 +40,7 @@ class UserFunctionTest: BaseRellTest(false) {
 
     @Test fun testDbUpdate() {
         tst.useSql = true
-        tst.classDefs = listOf("class user { name: text; mutable score: integer; }")
+        tst.defs = listOf("class user { name: text; mutable score: integer; }")
         tst.execOp("create user('Bob', 100); create user('Alice', 250);")
 
         val fn = "function f(name: text, s: integer): integer { update user @ { name } ( score += s ); return s; }"
@@ -118,16 +118,16 @@ class UserFunctionTest: BaseRellTest(false) {
 
     @Test fun testCallUnderAt() {
         tst.useSql = true
-        tst.classDefs = listOf("class user { name: text; id: integer; }")
+        tst.defs = listOf("class user { name: text; id: integer; }")
         tst.execOp("create user('Bob',123); create user('Alice',456);")
 
         val fn = "function foo(a: text): text = a.upperCase();"
 
-        chkFnEx(fn, "= user @ { name.upperCase() == foo('bob') };", "user[1]")
-        chkFnEx(fn, "= user @ { name.upperCase() == foo('alice') };", "user[2]")
+        chkFnEx(fn, "= user @ { .name.upperCase() == foo('bob') };", "user[1]")
+        chkFnEx(fn, "= user @ { .name.upperCase() == foo('alice') };", "user[2]")
 
-        chkFnEx(fn, "= user @ { foo(name) == 'BOB' };", "ct_err:call_userfn_nosql:foo")
-        chkFnEx(fn, "= user @ { id = 123 } ( foo(name) );", "ct_err:call_userfn_nosql:foo")
+        chkFnEx(fn, "= user @ { foo(.name) == 'BOB' };", "ct_err:call_userfn_nosql:foo")
+        chkFnEx(fn, "= user @ { .id == 123 } ( foo(.name) );", "ct_err:call_userfn_nosql:foo")
     }
 
     private fun chkFn(fnCode: String, callCode: String, expected: String) {

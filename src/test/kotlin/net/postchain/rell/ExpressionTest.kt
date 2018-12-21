@@ -64,7 +64,7 @@ class ExpressionTest: BaseRellTest(false) {
 
     @Test fun testListItems() {
         tst.useSql = true
-        tst.classDefs = listOf("class user { name: text; }")
+        tst.defs = listOf("class user { name: text; }")
 
         tst.execOp("create user('Bob');")
         tst.execOp("create user('Alice');")
@@ -80,11 +80,11 @@ class ExpressionTest: BaseRellTest(false) {
 
     @Test fun testFunctionsUnderAt() {
         tst.useSql = true
-        tst.classDefs = listOf("class user { name: text; score: integer; }")
+        tst.defs = listOf("class user { name: text; score: integer; }")
         tst.execOp("create user('Bob',-5678);")
 
-        chkEx("{ val s = 'Hello'; return user @ {} ( name.len() + s.len() ); }", "int[8]")
-        chkEx("{ val x = -1234; return user @ {} ( abs(x), abs(score) ); }", "(int[1234],int[5678])")
+        chkEx("{ val s = 'Hello'; return user @ {} ( .name.len() + s.len() ); }", "int[8]")
+        chkEx("{ val x = -1234; return user @ {} ( abs(x), abs(.score) ); }", "(int[1234],int[5678])")
     }
 
     @Test fun testUnitType() {
@@ -99,7 +99,7 @@ class ExpressionTest: BaseRellTest(false) {
 
     @Test fun testDataClassPathExpr() {
         tst.useSql = true
-        tst.classDefs = listOf("class company { name: text; }", "class user { name: text; company; }")
+        tst.defs = listOf("class company { name: text; }", "class user { name: text; company; }")
 
         tst.execOp("""
             val facebook = create company('Facebook');
@@ -121,7 +121,7 @@ class ExpressionTest: BaseRellTest(false) {
 
     @Test fun testDataClassPathExprMix() {
         tst.useSql = true
-        tst.classDefs = listOf("class company { name: text; }", "class user { name: text; company; }")
+        tst.defs = listOf("class company { name: text; }", "class user { name: text; company; }")
 
         tst.execOp("""
             val microsoft = create company('Microsoft');
@@ -148,7 +148,7 @@ class ExpressionTest: BaseRellTest(false) {
 
     @Test fun testDataClassPathExprComplex() {
         tst.useSql = true
-        tst.classDefs = listOf(
+        tst.defs = listOf(
                 "class c1 { name: text; }",
                 "class c2 { name: text; c1; }",
                 "class c3 { name: text; c2; }",
@@ -169,10 +169,10 @@ class ExpressionTest: BaseRellTest(false) {
         chk("((c: c4) @ { 'c4_1' } ( c )).c3.c2.c1.name", "text[c1_1]")
         chk("((c: c4) @ { 'c4_2' } ( c )).c3.c2.c1.name", "text[c1_2]")
 
-        chk("((c: c4) @ { 'c4_1' } ( t3 = c3, t2 = c3.c2 )).t3.c2.c1.name", "text[c1_1]")
-        chk("((c: c4) @ { 'c4_1' } ( t3 = c3, t2 = c3.c2 )).t2.c1.name", "text[c1_1]")
-        chk("((c: c4) @ { 'c4_2' } ( t3 = c3, t2 = c3.c2 )).t3.c2.c1.name", "text[c1_2]")
-        chk("((c: c4) @ { 'c4_2' } ( t3 = c3, t2 = c3.c2 )).t2.c1.name", "text[c1_2]")
+        chk("((c: c4) @ { 'c4_1' } ( t3 = .c3, t2 = .c3.c2 )).t3.c2.c1.name", "text[c1_1]")
+        chk("((c: c4) @ { 'c4_1' } ( t3 = .c3, t2 = .c3.c2 )).t2.c1.name", "text[c1_1]")
+        chk("((c: c4) @ { 'c4_2' } ( t3 = .c3, t2 = .c3.c2 )).t3.c2.c1.name", "text[c1_2]")
+        chk("((c: c4) @ { 'c4_2' } ( t3 = .c3, t2 = .c3.c2 )).t2.c1.name", "text[c1_2]")
     }
 
     @Test fun testUninitializedVariableAccess() {
@@ -186,20 +186,24 @@ class ExpressionTest: BaseRellTest(false) {
         chk("(123,)", "(int[123])")
         chk("(123,'Hello',false)", "(int[123],text[Hello],boolean[false])")
         chk("(123,('Hello',('World',456)),false)", "(int[123],(text[Hello],(text[World],int[456])),boolean[false])")
-        chk("(a:123)", "(a:int[123])")
-        chk("(a:123,b:'Hello')", "(a:int[123],b:text[Hello])")
-        chk("(a:123,'Hello')", "(a:int[123],text[Hello])")
-        chk("(123,b:'Hello')", "(int[123],b:text[Hello])")
-        chk("(a:'Hello',b:(x:123,y:456))", "(a:text[Hello],b:(x:int[123],y:int[456]))")
-        chk("(a:123,a:456)", "ct_err:expr_tuple_dupname:a")
-        chk("(a:123,a:123)", "ct_err:expr_tuple_dupname:a")
+        chk("(123,456)", "(int[123],int[456])")
+        chk("(123,456,)", "ct_err:syntax")
+        chk("(a=123)", "(a=int[123])")
+        chk("(a=123,)", "(a=int[123])")
+        chk("(a=123,b='Hello')", "(a=int[123],b=text[Hello])")
+        chk("(a=123,b='Hello',)", "ct_err:syntax")
+        chk("(a=123,'Hello')", "(a=int[123],text[Hello])")
+        chk("(123,b='Hello')", "(int[123],b=text[Hello])")
+        chk("(a='Hello',b=(x=123,y=456))", "(a=text[Hello],b=(x=int[123],y=int[456]))")
+        chk("(a=123,a=456)", "ct_err:expr_tuple_dupname:a")
+        chk("(a=123,a=123)", "ct_err:expr_tuple_dupname:a")
     }
 
     @Test fun testTupleAt() {
-        tst.classDefs = listOf("class user { name: text; street: text; house: integer; }")
+        tst.defs = listOf("class user { name: text; street: text; house: integer; }")
 
-        chk("user @ {} ( x = (name,) ) ", "ct_err:expr_nosql")
-        chk("user @ {} ( x = (name, street, house) ) ", "ct_err:expr_nosql")
+        chk("user @ {} ( x = (.name,) ) ", "ct_err:expr_nosql")
+        chk("user @ {} ( x = (.name, .street, .house) ) ", "ct_err:expr_nosql")
     }
 
     @Test fun testList() {
@@ -251,49 +255,49 @@ class ExpressionTest: BaseRellTest(false) {
 
     @Test fun testNamespaceUnderAt() {
         tst.useSql = true
-        tst.classDefs = listOf("class user { name: text; score: integer; }")
+        tst.defs = listOf("class user { name: text; score: integer; }")
         tst.execOp("create user('Bob',-5678);")
 
-        chk("user @ { score == integer }", "ct_err:unknown_name:integer")
-        chk("user @ { score == integer('-5678') } ( name )", "text[Bob]")
-        chk("user @ { score == -5678 } ( name, integer('1234') )", "(name:text[Bob],int[1234])")
-        chk("user @ { score == -integer.parseHex('162e') } ( name )", "text[Bob]")
-        chk("user @ { name = 'Bob' } ( name, score + integer.parseHex('1234') )", "(name:text[Bob],int[-1018])")
+        chk("user @ { .score == integer }", "ct_err:unknown_name:integer")
+        chk("user @ { .score == integer('-5678') } ( .name )", "text[Bob]")
+        chk("user @ { .score == -5678 } ( .name, integer('1234') )", "(name=text[Bob],int[1234])")
+        chk("user @ { .score == -integer.parseHex('162e') } ( .name )", "text[Bob]")
+        chk("user @ { .name == 'Bob' } ( .name, .score + integer.parseHex('1234') )", "(name=text[Bob],int[-1018])")
 
-        chk("user @ { score < integer.MAX_VALUE } ( name )", "text[Bob]")
-        chk("user @* { score < integer.MIN_VALUE } ( name )", "list<text>[]")
-        chk("user @ { integer.MAX_VALUE + score == 9223372036854770129 } ( name )", "text[Bob]")
-        chk("user @ {} ( name, score + integer.MAX_VALUE )", "(name:text[Bob],int[9223372036854770129])")
+        chk("user @ { .score < integer.MAX_VALUE } ( .name )", "text[Bob]")
+        chk("user @* { .score < integer.MIN_VALUE } ( .name )", "list<text>[]")
+        chk("user @ { integer.MAX_VALUE + .score == 9223372036854770129 } ( .name )", "text[Bob]")
+        chk("user @ {} ( .name, .score + integer.MAX_VALUE )", "(name=text[Bob],int[9223372036854770129])")
     }
 
     @Test fun testMoreFunctionsUnderAt() {
         tst.useSql = true
         tst.strictToString = false
-        tst.classDefs = listOf("class user { id: integer; name1: text; name2: text; v1: integer; v2: integer; }")
+        tst.defs = listOf("class user { id: integer; name1: text; name2: text; v1: integer; v2: integer; }")
         tst.execOp("""
             create user(id = 1, name1 = 'Bill', name2 = 'Gates', v1 = 111, v2 = 222);
             create user(id = 2, name1 = 'Mark', name2 = 'Zuckerberg', v1 = 333, v2 = 444);
             create user(id = 3, name1 = 'Steve', name2 = 'Wozniak', v1 = 555, v2 = 666);
         """.trimIndent())
 
-        chkEx("{ return user @* {} (id+0, (name1 + name2).size()); }", "[(1,9), (2,14), (3,12)]")
-        chkEx("{ return user @* {} (id+0, (name1 + name2).upperCase().lowerCase().size()); }", "[(1,9), (2,14), (3,12)]")
-        chkEx("{ return user @* {} (id+0, (v1 * (v2 + 101)).str()); }", "[(1,35853), (2,181485), (3,425685)]")
-        chkEx("{ return user @* {} (id+0, (v1 * (v2 + 101)).str().size()); }", "[(1,5), (2,6), (3,6)]")
-        chkEx("{ return user @* {} (id+0, (name1 + name2).foo); }", "ct_err:unknown_member:text:foo")
-        chkEx("{ return user @* {} (id+0, (v1 * (v2 + 101)).foo); }", "ct_err:unknown_member:integer:foo")
-        chkEx("{ return user @* {} (id+0, (name1 + name2).foo()); }", "ct_err:unknown_member_fn:text:foo")
-        chkEx("{ return user @* {} (id+0, (v1 * (v2 + 101)).foo()); }", "ct_err:unknown_member_fn:integer:foo")
+        chkEx("{ return user @* {} (.id+0, (.name1 + .name2).size()); }", "[(1,9), (2,14), (3,12)]")
+        chkEx("{ return user @* {} (.id+0, (.name1 + .name2).upperCase().lowerCase().size()); }", "[(1,9), (2,14), (3,12)]")
+        chkEx("{ return user @* {} (.id+0, (.v1 * (.v2 + 101)).str()); }", "[(1,35853), (2,181485), (3,425685)]")
+        chkEx("{ return user @* {} (.id+0, (.v1 * (.v2 + 101)).str().size()); }", "[(1,5), (2,6), (3,6)]")
+        chkEx("{ return user @* {} (.id+0, (.name1 + .name2).foo); }", "ct_err:unknown_member:text:foo")
+        chkEx("{ return user @* {} (.id+0, (.v1 * (.v2 + 101)).foo); }", "ct_err:unknown_member:integer:foo")
+        chkEx("{ return user @* {} (.id+0, (.name1 + .name2).foo()); }", "ct_err:unknown_member_fn:text:foo")
+        chkEx("{ return user @* {} (.id+0, (.v1 * (.v2 + 101)).foo()); }", "ct_err:unknown_member_fn:integer:foo")
 
         val c = "val str1 = 'Hello'; val k1 = 777;"
-        chkEx("{ $c return user @* {} (id+0, (str1 + name2).size()); }", "[(1,10), (2,15), (3,12)]")
-        chkEx("{ $c return user @* {} (id+0, (str1 + name2).upperCase().lowerCase().size()); }", "[(1,10), (2,15), (3,12)]")
-        chkEx("{ $c return user @* {} (id+0, (k1 * (v2 + 101)).str()); }", "[(1,250971), (2,423465), (3,595959)]")
-        chkEx("{ $c return user @* {} (id+0, (k1 * (v2 + 101)).str().size()); }", "[(1,6), (2,6), (3,6)]")
-        chkEx("{ $c return user @* {} (id+0, (str1 + name2).foo); }", "ct_err:unknown_member:text:foo")
-        chkEx("{ $c return user @* {} (id+0, (k1 * (v2 + 101)).foo); }", "ct_err:unknown_member:integer:foo")
-        chkEx("{ $c return user @* {} (id+0, (str1 + name2).foo()); }", "ct_err:unknown_member_fn:text:foo")
-        chkEx("{ $c return user @* {} (id+0, (k1 * (v2 + 101)).foo()); }", "ct_err:unknown_member_fn:integer:foo")
+        chkEx("{ $c return user @* {} (.id+0, (str1 + .name2).size()); }", "[(1,10), (2,15), (3,12)]")
+        chkEx("{ $c return user @* {} (.id+0, (str1 + .name2).upperCase().lowerCase().size()); }", "[(1,10), (2,15), (3,12)]")
+        chkEx("{ $c return user @* {} (.id+0, (k1 * (.v2 + 101)).str()); }", "[(1,250971), (2,423465), (3,595959)]")
+        chkEx("{ $c return user @* {} (.id+0, (k1 * (.v2 + 101)).str().size()); }", "[(1,6), (2,6), (3,6)]")
+        chkEx("{ $c return user @* {} (.id+0, (str1 + .name2).foo); }", "ct_err:unknown_member:text:foo")
+        chkEx("{ $c return user @* {} (.id+0, (k1 * (.v2 + 101)).foo); }", "ct_err:unknown_member:integer:foo")
+        chkEx("{ $c return user @* {} (.id+0, (str1 + .name2).foo()); }", "ct_err:unknown_member_fn:text:foo")
+        chkEx("{ $c return user @* {} (.id+0, (k1 * (.v2 + 101)).foo()); }", "ct_err:unknown_member_fn:integer:foo")
     }
 
     @Test fun testPathError() {
@@ -307,5 +311,73 @@ class ExpressionTest: BaseRellTest(false) {
         chk("123(456)", "ct_err:expr_call_nofn:integer")
         chk("'Hello'()", "ct_err:expr_call_nofn:text")
         chk("'Hello'(123)", "ct_err:expr_call_nofn:text")
+    }
+
+    @Test fun testRefEq() {
+        chkEx("{ val a = [1, 2, 3]; val b = [1, 2, 3]; return a == b; }", "boolean[true]")
+        chkEx("{ val a = [1, 2, 3]; val b = [1, 2, 3]; return a != b; }", "boolean[false]")
+        chkEx("{ val a = [1, 2, 3]; val b = [1, 2, 3]; return a === b; }", "boolean[false]")
+        chkEx("{ val a = [1, 2, 3]; val b = [1, 2, 3]; return a !== b; }", "boolean[true]")
+        chkEx("{ val a = [1, 2, 3]; val b = a; return a === b; }", "boolean[true]")
+        chkEx("{ val a = [1, 2, 3]; val b = a; return a !== b; }", "boolean[false]")
+
+        chkEx("{ val a = set([1, 2, 3]); val b = set([1, 2, 3]); return a == b; }", "boolean[true]")
+        chkEx("{ val a = set([1, 2, 3]); val b = set([1, 2, 3]); return a != b; }", "boolean[false]")
+        chkEx("{ val a = set([1, 2, 3]); val b = set([1, 2, 3]); return a === b; }", "boolean[false]")
+        chkEx("{ val a = set([1, 2, 3]); val b = set([1, 2, 3]); return a !== b; }", "boolean[true]")
+        chkEx("{ val a = set([1, 2, 3]); val b = a; return a === b; }", "boolean[true]")
+        chkEx("{ val a = set([1, 2, 3]); val b = a; return a !== b; }", "boolean[false]")
+
+        chkEx("{ val a = [1:'A',2:'B',3:'C']; val b = [1:'A',2:'B',3:'C']; return a == b; }", "boolean[true]")
+        chkEx("{ val a = [1:'A',2:'B',3:'C']; val b = [1:'A',2:'B',3:'C']; return a != b; }", "boolean[false]")
+        chkEx("{ val a = [1:'A',2:'B',3:'C']; val b = [1:'A',2:'B',3:'C']; return a === b; }", "boolean[false]")
+        chkEx("{ val a = [1:'A',2:'B',3:'C']; val b = [1:'A',2:'B',3:'C']; return a !== b; }", "boolean[true]")
+        chkEx("{ val a = [1:'A',2:'B',3:'C']; val b = a; return a === b; }", "boolean[true]")
+        chkEx("{ val a = [1:'A',2:'B',3:'C']; val b = a; return a !== b; }", "boolean[false]")
+
+        chkEx("{ val a = (123, 'Hello'); val b = (123, 'Hello'); return a == b; }", "boolean[true]")
+        chkEx("{ val a = (123, 'Hello'); val b = (123, 'Hello'); return a != b; }", "boolean[false]")
+        chkEx("{ val a = (123, 'Hello'); val b = (123, 'Hello'); return a === b; }", "boolean[false]")
+        chkEx("{ val a = (123, 'Hello'); val b = (123, 'Hello'); return a !== b; }", "boolean[true]")
+        chkEx("{ val a = (123, 'Hello'); val b = a; return a === b; }", "boolean[true]")
+        chkEx("{ val a = (123, 'Hello'); val b = a; return a !== b; }", "boolean[false]")
+        chkEx("{ val a = (123, 'Hello'); val b = ('Hello', 123); return a == b; }",
+                "ct_err:binop_operand_type:==:(integer,text):(text,integer)")
+
+        chkEx("{ val a = range(123); val b = range(123); return a == b; }", "boolean[true]")
+        chkEx("{ val a = range(123); val b = range(123); return a != b; }", "boolean[false]")
+        chkEx("{ val a = range(123); val b = range(123); return a === b; }", "boolean[false]")
+        chkEx("{ val a = range(123); val b = range(123); return a !== b; }", "boolean[true]")
+        chkEx("{ val a = range(123); val b = a; return a === b; }", "boolean[true]")
+        chkEx("{ val a = range(123); val b = a; return a !== b; }", "boolean[false]")
+
+        chkEx("{ return 123 === 123; }", "ct_err:binop_operand_type:===:integer:integer")
+        chkEx("{ return 123 !== 123; }", "ct_err:binop_operand_type:!==:integer:integer")
+        chkEx("{ return true === true; }", "ct_err:binop_operand_type:===:boolean:boolean")
+        chkEx("{ return true !== true; }", "ct_err:binop_operand_type:!==:boolean:boolean")
+        chkEx("{ return 'Hello' === 'Hello'; }", "ct_err:binop_operand_type:===:text:text")
+        chkEx("{ return 'Hello' !== 'Hello'; }", "ct_err:binop_operand_type:!==:text:text")
+        chkEx("{ return x'12AB' === x'12AB'; }", "ct_err:binop_operand_type:===:byte_array:byte_array")
+        chkEx("{ return x'12AB' !== x'12AB'; }", "ct_err:binop_operand_type:!==:byte_array:byte_array")
+        chkEx("{ return null === null; }", "ct_err:binop_operand_type:===:null:null")
+        chkEx("{ return null !== null; }", "ct_err:binop_operand_type:!==:null:null")
+    }
+
+    @Test fun testEqRefNullable() {
+        chkEx("{ val a: integer? = 123; return a === null; }", "ct_err:binop_operand_type:===:integer?:null")
+        chkEx("{ val a: integer? = 123; return a !== null; }", "ct_err:binop_operand_type:!==:integer?:null")
+        chkEx("{ val a: integer? = 123; return a === 123; }", "ct_err:binop_operand_type:===:integer?:integer")
+        chkEx("{ val a: integer? = 123; return a !== 123; }", "ct_err:binop_operand_type:!==:integer?:integer")
+
+        chkEx("{ val a: list<integer>? = [1,2,3]; return a === null; }", "boolean[false]")
+        chkEx("{ val a: list<integer>? = [1,2,3]; return a !== null; }", "boolean[true]")
+        chkEx("{ val a: list<integer>? = [1,2,3]; return a === [1,2,3]; }", "boolean[false]")
+        chkEx("{ val a: list<integer>? = [1,2,3]; return a !== [1,2,3]; }", "boolean[true]")
+        chkEx("{ val a: list<integer>? = [1,2,3]; val b = a; return a === b; }", "boolean[true]")
+        chkEx("{ val a: list<integer>? = [1,2,3]; val b = a; return a !== b; }", "boolean[false]")
+        chkEx("{ val a: list<integer>? = null; return a === null; }", "boolean[true]")
+        chkEx("{ val a: list<integer>? = null; return a !== null; }", "boolean[false]")
+        chkEx("{ val a: list<integer>? = null; return a === [1,2,3]; }", "boolean[false]")
+        chkEx("{ val a: list<integer>? = null; return a !== [1,2,3]; }", "boolean[true]")
     }
 }

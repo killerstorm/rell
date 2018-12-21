@@ -277,7 +277,7 @@ class RellTokenizer(override val tokens: List<Token>) : Tokenizer {
                     java.lang.Long.parseLong(s)
                 }
             } catch (e: NumberFormatException) {
-                throw CtError(S_Pos(t), "lex_int:$s", "Invalid integer literal: '$s'")
+                throw C_Error(S_Pos(t), "lex_int:$s", "Invalid integer literal: '$s'")
             }
         }
 
@@ -292,7 +292,7 @@ class RellTokenizer(override val tokens: List<Token>) : Tokenizer {
             } catch (e: IllegalArgumentException) {
                 val maxlen = 64
                 val p = if (s.length <= maxlen) s else (s.substring(0, maxlen) + "...")
-                throw CtError(S_Pos(t), "parser_bad_hex:$p", "Invalid byte array literal: '$p'")
+                throw C_Error(S_Pos(t), "parser_bad_hex:$p", "Invalid byte array literal: '$p'")
             }
         }
     }
@@ -333,7 +333,7 @@ private class CharSeq(private val str: String) {
     fun tokenMatch(type: Token, text: String) = TokenMatch(type, text, startPos, startRow, startCol)
 
     fun err(code: String, msg: String) = err(textPos(), code, msg)
-    fun err(pos: S_Pos, code: String, msg: String) = CtError(pos, code, msg)
+    fun err(pos: S_Pos, code: String, msg: String) = C_Error(pos, code, msg)
 
     fun next() {
         if (pos < len) {

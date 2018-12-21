@@ -98,6 +98,14 @@ object RBinaryOp_Ne: RBinaryOp("!=") {
     override fun evaluate(left: RtValue, right: RtValue): RtValue = RtBooleanValue(left != right)
 }
 
+object RBinaryOp_EqRef: RBinaryOp("===") {
+    override fun evaluate(left: RtValue, right: RtValue): RtValue = RtBooleanValue(left === right)
+}
+
+object RBinaryOp_NeRef: RBinaryOp("!==") {
+    override fun evaluate(left: RtValue, right: RtValue): RtValue = RtBooleanValue(left !== right)
+}
+
 class RBinaryOp_Cmp(val cmpOp: RCmpOp, val cmpType: RCmpType): RBinaryOp(cmpOp.code) {
     override fun evaluate(left: RtValue, right: RtValue): RtValue {
         val cmp = cmpType.compare(left, right)

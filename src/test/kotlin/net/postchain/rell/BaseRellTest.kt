@@ -4,8 +4,8 @@ import net.postchain.rell.runtime.RtIntValue
 import net.postchain.rell.runtime.RtValue
 import org.junit.After
 
-abstract class BaseRellTest(useSql: Boolean = true) {
-    val tst = RellSqlTester(useSql = useSql)
+abstract class BaseRellTest(useSql: Boolean = true, gtx: Boolean = false) {
+    val tst = RellSqlTester(useSql = useSql, gtx = gtx)
 
     @After fun after() = tst.destroy()
 

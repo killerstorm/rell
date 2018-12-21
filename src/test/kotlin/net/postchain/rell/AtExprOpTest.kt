@@ -94,7 +94,7 @@ class AtExprOpTest: AbstractOpTest() {
     private fun replaceParams(expr: String, params: List<String>): String {
         var s = expr
         for ((idx, param) in params.withIndex()) {
-            s = s.replace("#$idx", param)
+            s = s.replace("#$idx", "." + param)
         }
         return s
     }

@@ -74,7 +74,7 @@ class LibTest: BaseRellTest(false) {
 
     @Test fun testTypeOf() {
         tst.strictToString = false
-        tst.classDefs = listOf("class user { name: text; }")
+        tst.defs = listOf("class user { name: text; }")
 
         chk("_typeOf(null)", "null")
         chk("_typeOf(true)", "boolean")
@@ -93,6 +93,15 @@ class LibTest: BaseRellTest(false) {
         chk("_typeOf(user @? {})", "user?")
         chk("_typeOf(user @* {})", "list<user>")
         chk("_typeOf(user @+ {})", "list<user>")
+    }
+
+    @Test fun testStrictStr() {
+        tst.strictToString = false
+        chk("123", "123")
+        chk("_strictStr(123)", "int[123]")
+        chk("_strictStr('Hello')", "text[Hello]")
+        chk("_strictStr(true)", "boolean[true]")
+        chk("_strictStr((123,'Hello'))", "(int[123],text[Hello])")
     }
 
     @Test fun testJsonStr() {
@@ -147,7 +156,7 @@ class LibTest: BaseRellTest(false) {
         chk("x'0123ABCD'[4]", "rt_err:expr_bytearray_subscript_index:4:4")
         chk("x'0123ABCD'[-1]", "rt_err:expr_bytearray_subscript_index:4:-1")
 
-        chkEx("{ val x = x'0123ABCD'; x[1] = 123; return x; }", "ct_err:expr_lookup_base:byte_array")
+        chkEx("{ val x = x'0123ABCD'; x[1] = 123; return x; }", "ct_err:expr_lookup_unmodifiable:byte_array")
     }
 
     @Test fun testByteArrayDecode() {
@@ -194,5 +203,49 @@ class LibTest: BaseRellTest(false) {
                 "rt_err:fn_last_block_time_noop")
 
         chk("op_context", "ct_err:unknown_name:op_context")
+    }
+
+    @Test fun testGtxValue() {
+        chk("""GTXValue.fromJSON('{"x":123,"y":[4,5,6]}')""", """gtx[{"x":123,"y":[4,5,6]}]""")
+        chk("""GTXValue.fromJSON(json('{"x":123,"y":[4,5,6]}'))""", """gtx[{"x":123,"y":[4,5,6]}]""")
+        chk("GTXValue.fromBytes(x'a424302230080c0178a30302017b30160c0179a511300fa303020104a303020105a303020106')",
+                """gtx[{"x":123,"y":[4,5,6]}]""")
+        chk("GTXValue.fromBytes(x'a424302230080c0178a30302017b30160c0179a511300fa303020104a303020105a303020106').toJSON()",
+                """json[{"x":123,"y":[4,5,6]}]""")
+        chk("''+GTXValue.fromBytes(x'a424302230080c0178a30302017b30160c0179a511300fa303020104a303020105a303020106').toJSON()",
+                """text[{"x":123,"y":[4,5,6]}]""")
+        chk("""GTXValue.fromJSON('{"x":123,"y":[4,5,6]}').toBytes()""",
+                "byte_array[a424302230080c0178a30302017b30160c0179a511300fa303020104a303020105a303020106]")
+    }
+
+    @Test fun testRecord() {
+        tst.defs = listOf(
+                "record foo { a: integer; b: text; }",
+                "record bar { a: (x: integer, text); }",
+                "record qaz { m: map<integer,text>; }"
+        )
+
+        chk("foo(123,'Hello').toGTXValue()", """gtx[[123,"Hello"]]""")
+        chk("foo(123,'Hello').toPrettyGTXValue()", """gtx[{"a":123,"b":"Hello"}]""")
+        chk("foo(123,'Hello').toBytes()", "byte_array[a510300ea30302017ba2070c0548656c6c6f]")
+        chk("foo.fromGTXValue(GTXValue.fromBytes(x'a510300ea30302017ba2070c0548656c6c6f'))", "foo[a=int[123],b=text[Hello]]")
+        chk("foo.fromPrettyGTXValue(GTXValue.fromBytes(x'a41a301830080c0161a30302017b300c0c0162a2070c0548656c6c6f'))",
+                "foo[a=int[123],b=text[Hello]]")
+        chk("foo.fromBytes(x'a510300ea30302017ba2070c0548656c6c6f')", "foo[a=int[123],b=text[Hello]]")
+
+        chk("bar((x=123,'Hello')).toGTXValue()", """gtx[[[123,"Hello"]]]""")
+        chk("bar((x=123,'Hello')).toPrettyGTXValue()", "ct_err:fn_record_invalid:bar:bar.toPrettyGTXValue")
+        chk("bar((x=123,'Hello')).toBytes()", "byte_array[a5143012a510300ea30302017ba2070c0548656c6c6f]")
+        chk("bar.fromGTXValue(GTXValue.fromBytes(x'a5143012a510300ea30302017ba2070c0548656c6c6f'))",
+                "bar[a=(x=int[123],text[Hello])]")
+        chk("bar.fromPrettyGTXValue(GTXValue.fromBytes(x''))", "ct_err:fn_record_invalid:bar:fromPrettyGTXValue")
+        chk("bar.fromBytes(x'a5143012a510300ea30302017ba2070c0548656c6c6f')", "bar[a=(x=int[123],text[Hello])]")
+
+        chk("qaz([123:'Hello']).toGTXValue()", "ct_err:fn_record_invalid:qaz:qaz.toGTXValue")
+        chk("qaz([123:'Hello']).toPrettyGTXValue()", "ct_err:fn_record_invalid:qaz:qaz.toPrettyGTXValue")
+        chk("qaz([123:'Hello']).toBytes()", "ct_err:fn_record_invalid:qaz:qaz.toBytes")
+        chk("qaz.fromGTXValue(GTXValue.fromBytes(x''))", "ct_err:fn_record_invalid:qaz:fromGTXValue")
+        chk("qaz.fromPrettyGTXValue(GTXValue.fromBytes(x''))", "ct_err:fn_record_invalid:qaz:fromPrettyGTXValue")
+        chk("qaz.fromBytes(x'')", "ct_err:fn_record_invalid:qaz:fromBytes")
     }
 }

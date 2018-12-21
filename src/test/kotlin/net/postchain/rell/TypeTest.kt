@@ -22,7 +22,7 @@ class TypeTest: BaseRellTest() {
     }
 
     @Test fun testByteArraySql() {
-        tst.classDefs = listOf("class foo { mutable x: byte_array; }")
+        tst.defs = listOf("class foo { mutable x: byte_array; }")
 
         execOp("create foo(x'0123456789abcdef');")
         chkData("foo(1,0x0123456789abcdef)")
@@ -44,7 +44,7 @@ class TypeTest: BaseRellTest() {
     }
 
     @Test fun testJsonSql() {
-        tst.classDefs = listOf("class foo { mutable j: json; }")
+        tst.defs = listOf("class foo { mutable j: json; }")
 
         execOp("""create foo(json('{ "a" : 5, "b" : [1,2,3], "c": { "x":10,"y":20 } }'));""")
         chkData("""foo(1,{"a": 5, "b": [1, 2, 3], "c": {"x": 10, "y": 20}})""")
@@ -91,8 +91,6 @@ class TypeTest: BaseRellTest() {
                 "ct_err:stmt_assign_type:set<integer>:list<integer>")
         chkEx("{ var x: set<integer>; x = set(['Hello', 'World']); return x; }",
                 "ct_err:stmt_assign_type:set<integer>:set<text>")
-        chkEx("{ var x: set<list<text>>; x = set([['Hello', 'World']]); return x; }",
-                "set<list<text>>[list<text>[text[Hello],text[World]]]")
         chkEx("{ var x: set<integer>; x = 123; return x; }", "ct_err:stmt_assign_type:set<integer>:integer")
     }
 
