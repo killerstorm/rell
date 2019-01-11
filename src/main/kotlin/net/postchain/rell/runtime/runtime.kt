@@ -6,39 +6,39 @@ import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.sql.SQLException
 
-sealed class RtBaseError(msg: String): Exception(msg)
-class RtError(val code: String, msg: String): RtBaseError(msg)
-class RtRequireError(val userMsg: String?): RtBaseError(userMsg ?: "Requirement error")
-class RtValueTypeError(val expected: String, val actual: String):
-        RtBaseError("Value type missmatch: expected $expected, but was $actual")
-class RtGtxValueError(val code: String, msg: String): RtBaseError(msg)
+sealed class Rt_BaseError(msg: String): Exception(msg)
+class Rt_Error(val code: String, msg: String): Rt_BaseError(msg)
+class Rt_RequireError(val userMsg: String?): Rt_BaseError(userMsg ?: "Requirement error")
+class Rt_ValueTypeError(val expected: String, val actual: String):
+        Rt_BaseError("Value type missmatch: expected $expected, but was $actual")
+class Rt_GtxValueError(val code: String, msg: String): Rt_BaseError(msg)
 
-class RtGlobalContext(
-        val stdoutPrinter: RtPrinter,
-        val logPrinter: RtPrinter,
+class Rt_GlobalContext(
+        val stdoutPrinter: Rt_Printer,
+        val logPrinter: Rt_Printer,
         sqlExec: SqlExecutor,
-        val opCtx: RtOpContext?
+        val opCtx: Rt_OpContext?
 ){
-    val sqlExec: SqlExecutor = RtSqlExecutor(sqlExec)
+    val sqlExec: SqlExecutor = Rt_SqlExecutor(sqlExec)
 }
 
-class RtModuleContext(val globalCtx: RtGlobalContext, val module: RModule)
+class Rt_ModuleContext(val globalCtx: Rt_GlobalContext, val module: R_Module)
 
-class RtEntityContext(val modCtx: RtModuleContext, val dbUpdateAllowed: Boolean) {
+class Rt_EntityContext(val modCtx: Rt_ModuleContext, val dbUpdateAllowed: Boolean) {
     fun checkDbUpdateAllowed() {
         if (!dbUpdateAllowed) {
-            throw RtError("no_db_update", "Database modifications are not allowed in this context")
+            throw Rt_Error("no_db_update", "Database modifications are not allowed in this context")
         }
     }
 }
 
-class RtOpContext(val lastBlockTime: Long, val signers: List<ByteArray>)
+class Rt_OpContext(val lastBlockTime: Long, val signers: List<ByteArray>)
 
-class RtCallFrame(val entCtx: RtEntityContext, rFrame: RCallFrame) {
+class Rt_CallFrame(val entCtx: Rt_EntityContext, rFrame: R_CallFrame) {
     private var curBlock = rFrame.rootBlock
-    private val values = Array<RtValue?>(rFrame.size) { null }
+    private val values = Array<Rt_Value?>(rFrame.size) { null }
 
-    fun <T> block(block: RFrameBlock, code: () -> T): T {
+    fun <T> block(block: R_FrameBlock, code: () -> T): T {
         val oldBlock = curBlock
         check(block.parentId == oldBlock.id)
         check(block.offset + block.size <= values.size)
@@ -59,7 +59,7 @@ class RtCallFrame(val entCtx: RtEntityContext, rFrame: RCallFrame) {
         }
     }
 
-    fun set(ptr: RVarPtr, value: RtValue, overwrite: Boolean) {
+    fun set(ptr: R_VarPtr, value: Rt_Value, overwrite: Boolean) {
         val offset = checkPtr(ptr)
         if (!overwrite) {
             check(values[offset] == null)
@@ -67,19 +67,19 @@ class RtCallFrame(val entCtx: RtEntityContext, rFrame: RCallFrame) {
         values[offset] = value
     }
 
-    fun get(ptr: RVarPtr): RtValue {
+    fun get(ptr: R_VarPtr): Rt_Value {
         val value = getOpt(ptr)
         check(value != null) { "Variable not initialized: $ptr" }
         return value!!
     }
 
-    fun getOpt(ptr: RVarPtr): RtValue? {
+    fun getOpt(ptr: R_VarPtr): Rt_Value? {
         val offset = checkPtr(ptr)
         val value = values[offset]
         return value
     }
 
-    private fun checkPtr(ptr: RVarPtr): Int {
+    private fun checkPtr(ptr: R_VarPtr): Int {
         val block = curBlock
         check(ptr.blockId == block.id)
         val offset = ptr.offset
@@ -89,17 +89,17 @@ class RtCallFrame(val entCtx: RtEntityContext, rFrame: RCallFrame) {
     }
 }
 
-abstract class RtPrinter {
+abstract class Rt_Printer {
     abstract fun print(str: String)
 }
 
-object FailingRtPrinter: RtPrinter() {
+object Rt_FailingPrinter: Rt_Printer() {
     override fun print(str: String) {
         throw UnsupportedOperationException()
     }
 }
 
-class RtSqlExecutor(private val sqlExec: SqlExecutor): SqlExecutor() {
+class Rt_SqlExecutor(private val sqlExec: SqlExecutor): SqlExecutor() {
     override fun transaction(code: () -> Unit) {
         wrapErr {
             sqlExec.transaction(code)
@@ -128,24 +128,24 @@ class RtSqlExecutor(private val sqlExec: SqlExecutor): SqlExecutor() {
         try {
             code()
         } catch (e: SQLException) {
-            throw RtError("sqlerr:${e.errorCode}", "SQL Error: ${e.message}")
+            throw Rt_Error("sqlerr:${e.errorCode}", "SQL Error: ${e.message}")
         }
     }
 }
 
-object RtUtils {
-    fun errNotSupported(msg: String): RtError {
-        return RtError("not_supported", msg)
+object Rt_Utils {
+    fun errNotSupported(msg: String): Rt_Error {
+        return Rt_Error("not_supported", msg)
     }
 
     fun <T> wrapErr(errCode: String, code: () -> T): T {
         try {
             val res = code()
             return res
-        } catch (e: RtBaseError) {
+        } catch (e: Rt_BaseError) {
             throw e
         } catch (e: Throwable) {
-            throw RtError(errCode, e.message ?: "")
+            throw Rt_Error(errCode, e.message ?: "")
         }
     }
 }

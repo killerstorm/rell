@@ -15,9 +15,9 @@ import java.lang.UnsupportedOperationException
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 
-class RTypeFlags(val mutable: Boolean, val gtxHuman: Boolean, val gtxCompact: Boolean) {
+class R_TypeFlags(val mutable: Boolean, val gtxHuman: Boolean, val gtxCompact: Boolean) {
     companion object {
-        fun combine(flags: Collection<RTypeFlags>): RTypeFlags {
+        fun combine(flags: Collection<R_TypeFlags>): R_TypeFlags {
             var mutable = false
             var gtxHuman = true
             var gtxCompact = true
@@ -28,54 +28,56 @@ class RTypeFlags(val mutable: Boolean, val gtxHuman: Boolean, val gtxCompact: Bo
                 gtxCompact = gtxCompact and f.gtxCompact
             }
 
-            return RTypeFlags(mutable, gtxHuman, gtxCompact)
+            return R_TypeFlags(mutable, gtxHuman, gtxCompact)
         }
     }
 }
 
-sealed class RType(val name: String) {
+sealed class R_Type(val name: String) {
     private val gtxConversion by lazy { createGtxConversion() }
 
-    open fun isAllowedForClassAttribute(): Boolean = true
     open fun isReference(): Boolean = false
     protected open fun isDirectMutable(): Boolean = false
 
-    fun directFlags(): RTypeFlags {
+    fun directFlags(): R_TypeFlags {
         val gtxConv = gtxConversion
-        return RTypeFlags(isDirectMutable(), gtxConv.directHuman(), gtxConv.directCompact())
+        return R_TypeFlags(isDirectMutable(), gtxConv.directHuman(), gtxConv.directCompact())
     }
 
-    open fun completeFlags(): RTypeFlags {
+    open fun completeFlags(): R_TypeFlags {
         val flags = mutableListOf(directFlags())
         for (sub in componentTypes()) {
             flags.add(sub.completeFlags())
         }
-        return RTypeFlags.combine(flags)
+        return R_TypeFlags.combine(flags)
     }
 
-    open fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) {
-        throw RtUtils.errNotSupported("Type cannot be passed to SQL: ${toStrictString()}")
+    open fun isSqlCompatible(): Boolean = false
+
+    open fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
+        throw Rt_Utils.errNotSupported("Type cannot be converted to SQL: ${toStrictString()}")
     }
 
-    open fun fromSql(rs: ResultSet, idx: Int): RtValue =
-        throw RtUtils.errNotSupported("Type cannot be read from SQL: ${toStrictString()}")
+    open fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+        throw Rt_Utils.errNotSupported("Type cannot be converted from SQL: ${toStrictString()}")
+    }
 
-    open fun fromCli(s: String): RtValue = throw UnsupportedOperationException()
+    open fun fromCli(s: String): Rt_Value = throw UnsupportedOperationException()
 
-    fun rtToGtx(rt: RtValue, human: Boolean): GTXValue = gtxConversion.rtToGtx(rt, human)
+    fun rtToGtx(rt: Rt_Value, human: Boolean): GTXValue = gtxConversion.rtToGtx(rt, human)
     fun gtxToRt(ctx: GtxToRtContext, gtx: GTXValue, human: Boolean) = gtxConversion.gtxToRt(ctx, gtx, human)
     protected abstract fun createGtxConversion(): GtxRtConversion
 
     abstract fun toStrictString(): String
     override fun toString(): String = toStrictString()
 
-    open fun componentTypes(): List<RType> = listOf()
+    open fun componentTypes(): List<R_Type> = listOf()
 
-    open fun isAssignableFrom(type: RType): Boolean = type == this
-    protected open fun calcCommonType(other: RType): RType? = null
+    open fun isAssignableFrom(type: R_Type): Boolean = type == this
+    protected open fun calcCommonType(other: R_Type): R_Type? = null
 
     companion object {
-        fun commonTypeOpt(a: RType, b: RType): RType? {
+        fun commonTypeOpt(a: R_Type, b: R_Type): R_Type? {
             if (a.isAssignableFrom(b)) {
                 return a
             } else if (b.isAssignableFrom(a)) {
@@ -88,85 +90,92 @@ sealed class RType(val name: String) {
     }
 }
 
-sealed class RPrimitiveType(name: String, val sqlType: DataType<*>): RType(name) {
+sealed class R_PrimitiveType(name: String, val sqlType: DataType<*>): R_Type(name) {
     override fun toStrictString(): String = name
 }
 
-object RUnitType: RPrimitiveType("unit", SQLDataType.OTHER) {
-    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = throw UnsupportedOperationException()
-    override fun fromSql(rs: ResultSet, idx: Int): RtValue = throw UnsupportedOperationException()
+object R_UnitType: R_PrimitiveType("unit", SQLDataType.OTHER) {
     override fun createGtxConversion() = GtxRtConversion_None
 }
 
-object RBooleanType: RPrimitiveType("boolean", SQLDataType.BOOLEAN) {
-    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) {
+object R_BooleanType: R_PrimitiveType("boolean", SQLDataType.BOOLEAN) {
+    override fun isSqlCompatible(): Boolean = true
+
+    override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
         stmt.setBoolean(idx, value.asBoolean())
     }
 
-    override fun fromSql(rs: ResultSet, idx: Int): RtValue = RtBooleanValue(rs.getBoolean(idx))
+    override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_BooleanValue(rs.getBoolean(idx))
 
-    override fun fromCli(s: String): RtValue {
-        if (s == "false") return RtBooleanValue(false)
-        else if (s == "true") return RtBooleanValue(true)
+    override fun fromCli(s: String): Rt_Value {
+        if (s == "false") return Rt_BooleanValue(false)
+        else if (s == "true") return Rt_BooleanValue(true)
         else throw IllegalArgumentException(s)
     }
 
     override fun createGtxConversion() = GtxRtConversion_Boolean
 }
 
-object RTextType: RPrimitiveType("text", PostgresDataType.TEXT) {
-    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) {
+object R_TextType: R_PrimitiveType("text", PostgresDataType.TEXT) {
+    override fun isSqlCompatible(): Boolean = true
+
+    override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
         stmt.setString(idx, value.asString())
     }
 
-    override fun fromSql(rs: ResultSet, idx: Int): RtValue = RtTextValue(rs.getString(idx))
+    override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_TextValue(rs.getString(idx))
 
-    override fun fromCli(s: String): RtValue = RtTextValue(s)
+    override fun fromCli(s: String): Rt_Value = Rt_TextValue(s)
 
     override fun createGtxConversion() = GtxRtConversion_Text
 }
 
-object RIntegerType: RPrimitiveType("integer", SQLDataType.BIGINT) {
-    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) {
+object R_IntegerType: R_PrimitiveType("integer", SQLDataType.BIGINT) {
+    override fun isSqlCompatible(): Boolean = true
+
+    override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
         stmt.setLong(idx, value.asInteger())
     }
 
-    override fun fromSql(rs: ResultSet, idx: Int): RtValue = RtIntValue(rs.getLong(idx))
+    override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_IntValue(rs.getLong(idx))
 
-    override fun fromCli(s: String): RtValue = RtIntValue(s.toLong())
+    override fun fromCli(s: String): Rt_Value = Rt_IntValue(s.toLong())
 
     override fun createGtxConversion() = GtxRtConversion_Integer
 }
 
-object RByteArrayType: RPrimitiveType("byte_array", PostgresDataType.BYTEA) {
-    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = stmt.setBytes(idx, value.asByteArray())
-    override fun fromSql(rs: ResultSet, idx: Int): RtValue = RtByteArrayValue(rs.getBytes(idx))
-    override fun fromCli(s: String): RtValue = RtByteArrayValue(s.hexStringToByteArray())
+object R_ByteArrayType: R_PrimitiveType("byte_array", PostgresDataType.BYTEA) {
+    override fun isSqlCompatible(): Boolean = true
+    override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = stmt.setBytes(idx, value.asByteArray())
+    override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_ByteArrayValue(rs.getBytes(idx))
+    override fun fromCli(s: String): Rt_Value = Rt_ByteArrayValue(s.hexStringToByteArray())
 
     override fun createGtxConversion() = GtxRtConversion_ByteArray
 }
 
-object RTimestampType: RPrimitiveType("timestamp", SQLDataType.BIGINT) {
+object R_TimestampType: R_PrimitiveType("timestamp", SQLDataType.BIGINT) {
     //TODO support GTX
     override fun createGtxConversion() = GtxRtConversion_None
 }
 
-object RGUIDType: RPrimitiveType("guid", PostgresDataType.BYTEA) {
+object R_GUIDType: R_PrimitiveType("guid", PostgresDataType.BYTEA) {
     //TODO support GTX
     override fun createGtxConversion() = GtxRtConversion_None
 }
 
-val gtxSignerSQLDataType = DefaultDataType(null as SQLDialect?, ByteArray::class.java, "gtx_signer")
+private val GTX_SIGNER_SQL_DATA_TYPE = DefaultDataType(null as SQLDialect?, ByteArray::class.java, "gtx_signer")
 
-object RSignerType: RPrimitiveType("signer", gtxSignerSQLDataType) {
+object R_SignerType: R_PrimitiveType("signer", GTX_SIGNER_SQL_DATA_TYPE) {
     //TODO support GTX
     override fun createGtxConversion() = GtxRtConversion_None
 }
 
-val jsonSQLDataType = DefaultDataType(null as SQLDialect?, String::class.java, "jsonb")
+private val JSON_SQL_DATA_TYPE = DefaultDataType(null as SQLDialect?, String::class.java, "jsonb")
 
-object RJSONType: RPrimitiveType("json", jsonSQLDataType) {
-    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) {
+object R_JSONType: R_PrimitiveType("json", JSON_SQL_DATA_TYPE) {
+    override fun isSqlCompatible(): Boolean = true
+
+    override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
         val str = value.asJsonString()
         val obj = PGobject()
         obj.type = "json"
@@ -174,168 +183,155 @@ object RJSONType: RPrimitiveType("json", jsonSQLDataType) {
         stmt.setObject(idx, obj)
     }
 
-    override fun fromSql(rs: ResultSet, idx: Int): RtValue {
+    override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
         val str = rs.getString(idx)
-        return RtJsonValue.parse(str)
+        return Rt_JsonValue.parse(str)
     }
 
-    override fun fromCli(s: String): RtValue = RtJsonValue.parse(s)
+    override fun fromCli(s: String): Rt_Value = Rt_JsonValue.parse(s)
 
-    //TODO consider converting between RtJsonValue and arbitrary GTXValue, not only String
+    //TODO consider converting between Rt_JsonValue and arbitrary GTXValue, not only String
     override fun createGtxConversion() = GtxRtConversion_Json
 }
 
-object RNullType: RType("null") {
+object R_NullType: R_Type("null") {
     override fun toStrictString() = "null"
-    override fun calcCommonType(other: RType): RType? = RNullableType(other)
+    override fun calcCommonType(other: R_Type): R_Type? = R_NullableType(other)
     override fun createGtxConversion() = GtxRtConversion_Null
 }
 
-class RInstanceRefType(val rClass: RClass): RType(rClass.name) {
-    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = stmt.setLong(idx, value.asObjectId())
-    override fun fromSql(rs: ResultSet, idx: Int): RtValue = RtObjectValue(this, rs.getLong(idx))
-    override fun fromCli(s: String): RtValue = RtObjectValue(this, s.toLong())
+class R_ClassType(val rClass: R_Class): R_Type(rClass.name) {
+    override fun isSqlCompatible(): Boolean = true
+    override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = stmt.setLong(idx, value.asObjectId())
+    override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_ObjectValue(this, rs.getLong(idx))
+    override fun fromCli(s: String): Rt_Value = Rt_ObjectValue(this, s.toLong())
     override fun toStrictString(): String = name
-    override fun equals(other: Any?): Boolean = other is RInstanceRefType && other.rClass == rClass
+    override fun equals(other: Any?): Boolean = other is R_ClassType && other.rClass == rClass
     override fun hashCode(): Int = rClass.hashCode()
 
     override fun createGtxConversion() = GtxRtConversion_Object(this)
 }
 
-class RRecordFlags(val typeFlags: RTypeFlags, val cyclic: Boolean, val infinite: Boolean)
+class R_RecordFlags(val typeFlags: R_TypeFlags, val cyclic: Boolean, val infinite: Boolean)
 
-class RRecordType(name: String): RType(name) {
+class R_RecordType(name: String): R_Type(name) {
     private lateinit var bodyLate: RRecordBody
-    private lateinit var flagsLate: RRecordFlags
+    private lateinit var flagsLate: R_RecordFlags
 
-    val attributes: Map<String, RAttrib> get() = bodyLate.attrMap
-    val attributesList: List<RAttrib> get() = bodyLate.attrList
-    val flags: RRecordFlags get() = flagsLate
+    val attributes: Map<String, R_Attrib> get() = bodyLate.attrMap
+    val attributesList: List<R_Attrib> get() = bodyLate.attrList
+    val flags: R_RecordFlags get() = flagsLate
 
-    fun setAttributes(attrs: Map<String, RAttrib>) {
+    fun setAttributes(attrs: Map<String, R_Attrib>) {
         val attrsList = attrs.values.toList()
         attrsList.withIndex().forEach { (idx, attr) -> check(attr.index == idx) }
         val attrMutable = attrs.values.any { it.mutable }
         bodyLate = RRecordBody(attrs, attrsList, attrMutable)
     }
 
-    fun setFlags(flags: RRecordFlags) {
+    fun setFlags(flags: R_RecordFlags) {
         flagsLate = flags
     }
 
-    override fun isAllowedForClassAttribute() = false
     override fun isReference() = true
     override fun isDirectMutable() = bodyLate.attrMutable
     override fun completeFlags() = flagsLate.typeFlags
 
-    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = throw UnsupportedOperationException()
-    override fun fromSql(rs: ResultSet, idx: Int): RtValue = throw UnsupportedOperationException()
-    override fun fromCli(s: String): RtValue = throw UnsupportedOperationException()
     override fun toStrictString(): String = name
     override fun componentTypes() = attributesList.map { it.type }.toList()
 
     override fun createGtxConversion() = GtxRtConversion_Record(this)
 
-    private class RRecordBody(val attrMap: Map<String, RAttrib>, val attrList: List<RAttrib>, val attrMutable: Boolean)
+    private class RRecordBody(val attrMap: Map<String, R_Attrib>, val attrList: List<R_Attrib>, val attrMutable: Boolean)
 }
 
-class RNullableType(val valueType: RType): RType(valueType.name + "?") {
+class R_NullableType(val valueType: R_Type): R_Type(valueType.name + "?") {
     init {
-        check(valueType != RNullType)
-        check(valueType != RUnitType)
-        check(valueType !is RNullableType)
+        check(valueType != R_NullType)
+        check(valueType != R_UnitType)
+        check(valueType !is R_NullableType)
     }
 
-    override fun isAllowedForClassAttribute() = false
     override fun isReference() = valueType.isReference()
     override fun isDirectMutable() = false
 
-    override fun fromCli(s: String): RtValue = if (s == "null") RtNullValue else valueType.fromCli(s)
+    override fun fromCli(s: String): Rt_Value = if (s == "null") Rt_NullValue else valueType.fromCli(s)
     override fun toStrictString() = name
     override fun componentTypes() = listOf(valueType)
-    override fun equals(other: Any?) = other is RNullableType && valueType == other.valueType
+    override fun equals(other: Any?) = other is R_NullableType && valueType == other.valueType
     override fun hashCode() = valueType.hashCode()
 
-    override fun isAssignableFrom(type: RType): Boolean {
-        return type == this || type == RNullType || valueType.isAssignableFrom(type)
+    override fun isAssignableFrom(type: R_Type): Boolean {
+        return type == this || type == R_NullType || valueType.isAssignableFrom(type)
     }
 
     override fun createGtxConversion() = GtxRtConversion_Nullable(this)
 }
 
 // TODO: make this more elaborate
-class RClosureType(name: String): RType(name) {
-    override fun isAllowedForClassAttribute(): Boolean = false
+class R_ClosureType(name: String): R_Type(name) {
     override fun toStrictString(): String = TODO("TODO")
     override fun createGtxConversion() = GtxRtConversion_None
 }
 
-sealed class RCollectionType(val elementType: RType, baseName: String): RType("$baseName<${elementType.toStrictString()}>") {
-    override fun isAllowedForClassAttribute(): Boolean = false
-    override fun isReference() = true
+sealed class R_CollectionType(val elementType: R_Type, baseName: String): R_Type("$baseName<${elementType.toStrictString()}>") {
+    final override fun isReference() = true
     final override fun isDirectMutable() = true
-
-    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = throw UnsupportedOperationException()
-    override fun fromSql(rs: ResultSet, idx: Int): RtValue = throw UnsupportedOperationException()
-    override fun toStrictString(): String = name
-    override fun componentTypes(): List<RType> = listOf(elementType)
+    final override fun toStrictString(): String = name
+    final override fun componentTypes(): List<R_Type> = listOf(elementType)
 }
 
-class RListType(elementType: RType): RCollectionType(elementType, "list") {
-    override fun fromCli(s: String): RtValue = RtListValue(this, s.split(",").map { elementType.fromCli(it) }.toMutableList())
-    override fun equals(other: Any?): Boolean = other is RListType && elementType == other.elementType
+class R_ListType(elementType: R_Type): R_CollectionType(elementType, "list") {
+    override fun fromCli(s: String): Rt_Value = Rt_ListValue(this, s.split(",").map { elementType.fromCli(it) }.toMutableList())
+    override fun equals(other: Any?): Boolean = other is R_ListType && elementType == other.elementType
     override fun createGtxConversion() = GtxRtConversion_List(this)
 }
 
-class RSetType(elementType: RType): RCollectionType(elementType, "set") {
-    override fun fromCli(s: String): RtValue = RtSetValue(this, s.split(",").map { elementType.fromCli(it) }.toMutableSet())
-    override fun equals(other: Any?): Boolean = other is RSetType && elementType == other.elementType
+class R_SetType(elementType: R_Type): R_CollectionType(elementType, "set") {
+    override fun fromCli(s: String): Rt_Value = Rt_SetValue(this, s.split(",").map { elementType.fromCli(it) }.toMutableSet())
+    override fun equals(other: Any?): Boolean = other is R_SetType && elementType == other.elementType
     override fun createGtxConversion() = GtxRtConversion_Set(this)
 }
 
-class RMapType(val keyType: RType, val valueType: RType): RType("map<${keyType.toStrictString()},${valueType.toStrictString()}>") {
-    override fun isAllowedForClassAttribute(): Boolean = false
+class R_MapType(val keyType: R_Type, val valueType: R_Type): R_Type("map<${keyType.toStrictString()},${valueType.toStrictString()}>") {
     override fun isReference() = true
     override fun isDirectMutable() = true
 
-    override fun toSql(stmt: PreparedStatement, idx: Int, value: RtValue) = throw UnsupportedOperationException()
-    override fun fromSql(rs: ResultSet, idx: Int): RtValue = throw UnsupportedOperationException()
     override fun toStrictString(): String = name
-    override fun componentTypes(): List<RType> = listOf(keyType, valueType)
-    override fun equals(other: Any?): Boolean = other is RMapType && keyType == other.keyType && valueType == other.valueType
+    override fun componentTypes(): List<R_Type> = listOf(keyType, valueType)
+    override fun equals(other: Any?): Boolean = other is R_MapType && keyType == other.keyType && valueType == other.valueType
 
-    override fun fromCli(s: String): RtValue {
+    override fun fromCli(s: String): Rt_Value {
         val map = s.split(",").associate {
             val (k, v) = it.split("=")
             Pair(keyType.fromCli(k), valueType.fromCli(v))
         }
-        return RtMapValue(this, map.toMutableMap())
+        return Rt_MapValue(this, map.toMutableMap())
     }
 
     override fun createGtxConversion() = GtxRtConversion_Map(this)
 }
 
-class RTupleField(val name: String?, val type: RType) {
+class R_TupleField(val name: String?, val type: R_Type) {
     fun toStrictString(): String {
         return if (name != null) "${name}:${type.toStrictString()}" else type.toStrictString()
     }
 
     override fun toString(): String = toStrictString()
-    override fun equals(other: Any?): Boolean = other is RTupleField && name == other.name && type == other.type
+    override fun equals(other: Any?): Boolean = other is R_TupleField && name == other.name && type == other.type
 }
 
-class RTupleType(val fields: List<RTupleField>): RType("(${fields.joinToString(",") { it.toStrictString() }})") {
-    override fun isAllowedForClassAttribute(): Boolean = false
+class R_TupleType(val fields: List<R_TupleField>): R_Type("(${fields.joinToString(",") { it.toStrictString() }})") {
     override fun isReference() = true
     override fun isDirectMutable() = false
 
     override fun toStrictString(): String = name
-    override fun equals(other: Any?): Boolean = other is RTupleType && fields == other.fields
+    override fun equals(other: Any?): Boolean = other is R_TupleType && fields == other.fields
 
     override fun componentTypes() = fields.map { it.type }.toList()
 
-    override fun isAssignableFrom(type: RType): Boolean {
-        if (type !is RTupleType) return false
+    override fun isAssignableFrom(type: R_Type): Boolean {
+        if (type !is R_TupleType) return false
         if (fields.size != type.fields.size) return false
 
         for (i in fields.indices) {
@@ -348,34 +344,37 @@ class RTupleType(val fields: List<RTupleField>): RType("(${fields.joinToString("
         return true
     }
 
-    override fun calcCommonType(other: RType): RType? {
-        if (other !is RTupleType) return null
+    override fun calcCommonType(other: R_Type): R_Type? {
+        if (other !is R_TupleType) return null
         if (fields.size != other.fields.size) return null
 
         val resFields = fields.mapIndexed { i, field ->
             val otherField = other.fields[i]
             if (field.name != otherField.name) return null
-            val type = RType.commonTypeOpt(field.type, otherField.type)
+            val type = R_Type.commonTypeOpt(field.type, otherField.type)
             if (type == null) return null
-            RTupleField(field.name, type)
+            R_TupleField(field.name, type)
         }
 
-        return RTupleType(resFields)
+        return R_TupleType(resFields)
     }
 
     override fun createGtxConversion() = GtxRtConversion_Tuple(this)
 }
 
-object RRangeType: RType("range") {
-    override fun isAllowedForClassAttribute(): Boolean = false
+object R_RangeType: R_Type("range") {
     override fun isReference() = true
     override fun toStrictString(): String = "range"
     override fun createGtxConversion() = GtxRtConversion_None
 }
 
-object RGtxValueType: RType("GTXValue") {
-    override fun isAllowedForClassAttribute(): Boolean = false
+object R_GtxValueType: R_Type("GTXValue") {
     override fun isReference() = true
     override fun toStrictString() = name
     override fun createGtxConversion() = GtxRtConversion_GtxValue
+}
+
+class R_NamespaceType(name: String): R_Type("namespace[$name]") {
+    override fun toStrictString() = name
+    override fun createGtxConversion() = GtxRtConversion_None
 }

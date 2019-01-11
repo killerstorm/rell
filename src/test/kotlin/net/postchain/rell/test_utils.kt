@@ -24,11 +24,11 @@ import java.util.zip.ZipOutputStream
 import kotlin.test.assertEquals
 
 object RellTestUtils {
-    val ENCODER_PLAIN = { t: RType, v: RtValue -> v.toString() }
-    val ENCODER_STRICT = { t: RType, v: RtValue -> v.toStrictString() }
-    val ENCODER_GTX = { t: RType, v: RtValue -> encodeGtxStr(t.rtToGtx(v, true)) }
+    val ENCODER_PLAIN = { t: R_Type, v: Rt_Value -> v.toString() }
+    val ENCODER_STRICT = { t: R_Type, v: Rt_Value -> v.toStrictString() }
+    val ENCODER_GTX = { t: R_Type, v: Rt_Value -> encodeGtxStr(t.rtToGtx(v, true)) }
 
-    fun processModule(code: String, errPos: Boolean = false, gtx: Boolean = false, processor: (RModule) -> String): String {
+    fun processModule(code: String, errPos: Boolean = false, gtx: Boolean = false, processor: (R_Module) -> String): String {
         val module = try {
             parseModule(code, gtx)
         } catch (e: C_Error) {
@@ -47,19 +47,19 @@ object RellTestUtils {
         try {
             val res = block()
             return Pair(null, res)
-        } catch (e: RtError) {
+        } catch (e: Rt_Error) {
             return Pair("rt_err:" + e.code, null)
-        } catch (e: RtRequireError) {
+        } catch (e: Rt_RequireError) {
             return Pair("req_err:" + if (e.userMsg != null) "[${e.userMsg}]" else "null", null)
-        } catch (e: RtGtxValueError) {
+        } catch (e: Rt_GtxValueError) {
             return Pair("gtx_err:" + e.code, null)
         }
     }
 
-    fun callFn(globalCtx: RtGlobalContext, module: RModule, name: String, args: List<RtValue>, strict: Boolean): String {
+    fun callFn(globalCtx: Rt_GlobalContext, module: R_Module, name: String, args: List<Rt_Value>, strict: Boolean): String {
         val fn = module.functions[name]
         if (fn == null) throw IllegalStateException("Function not found: '$name'")
-        val modCtx = RtModuleContext(globalCtx, module)
+        val modCtx = Rt_ModuleContext(globalCtx, module)
         val res = catchRtErr {
             val v = fn.callTopFunction(modCtx, args)
             if (strict) v.toStrictString() else v.toString()
@@ -67,18 +67,18 @@ object RellTestUtils {
         return res
     }
 
-    fun callQuery(globalCtx: RtGlobalContext, module: RModule, name: String, args: List<RtValue>, encoder: (RType, RtValue) -> String): String {
-        val decoder = { params: List<RExternalParam>, args: List<RtValue> -> args }
+    fun callQuery(globalCtx: Rt_GlobalContext, module: R_Module, name: String, args: List<Rt_Value>, encoder: (R_Type, Rt_Value) -> String): String {
+        val decoder = { params: List<R_ExternalParam>, args: List<Rt_Value> -> args }
         return callQueryGeneric(globalCtx, module, name, args, decoder, encoder)
     }
 
     fun <T> callQueryGeneric(
-            globalCtx: RtGlobalContext,
-            module: RModule,
+            globalCtx: Rt_GlobalContext,
+            module: R_Module,
             name: String,
             args: List<T>,
-            decoder: (List<RExternalParam>, List<T>) -> List<RtValue>,
-            encoder: (RType, RtValue) -> String
+            decoder: (List<R_ExternalParam>, List<T>) -> List<Rt_Value>,
+            encoder: (R_Type, Rt_Value) -> String
     ): String
     {
         val query = module.queries[name]
@@ -89,11 +89,11 @@ object RellTestUtils {
             return rtErr
         }
 
-        val modCtx = RtModuleContext(globalCtx, module)
+        val modCtx = Rt_ModuleContext(globalCtx, module)
         return callQuery0(modCtx, query, rtArgs!!, encoder)
     }
 
-    private fun callQuery0(modCtx: RtModuleContext, query: RQuery, args: List<RtValue>, encoder: (RType, RtValue) -> String): String {
+    private fun callQuery0(modCtx: Rt_ModuleContext, query: R_Query, args: List<Rt_Value>, encoder: (R_Type, Rt_Value) -> String): String {
         val res = catchRtErr {
             val v = query.callTopQuery(modCtx, args)
             encoder(query.type, v)
@@ -101,17 +101,17 @@ object RellTestUtils {
         return res
     }
 
-    fun callOp(globalCtx: RtGlobalContext, module: RModule, name: String, args: List<RtValue>): String {
-        val decoder = { params: List<RExternalParam>, args: List<RtValue> -> args }
+    fun callOp(globalCtx: Rt_GlobalContext, module: R_Module, name: String, args: List<Rt_Value>): String {
+        val decoder = { params: List<R_ExternalParam>, args: List<Rt_Value> -> args }
         return callOpGeneric(globalCtx, module, name, args, decoder)
     }
 
     fun <T> callOpGeneric(
-            globalCtx: RtGlobalContext,
-            module: RModule,
+            globalCtx: Rt_GlobalContext,
+            module: R_Module,
             name: String,
             args: List<T>,
-            decoder: (List<RExternalParam>, List<T>) -> List<RtValue>
+            decoder: (List<R_ExternalParam>, List<T>) -> List<Rt_Value>
     ): String
     {
         val op = module.operations[name]
@@ -122,14 +122,14 @@ object RellTestUtils {
             return rtErr
         }
 
-        val modCtx = RtModuleContext(globalCtx, module)
+        val modCtx = Rt_ModuleContext(globalCtx, module)
         return catchRtErr {
             op.callTop(modCtx, rtArgs!!)
             ""
         }
     }
 
-    fun parseModule(code: String, gtx: Boolean): RModule {
+    fun parseModule(code: String, gtx: Boolean): R_Module {
         val ast = parse(code)
         val m = ast.compile(gtx)
         TestSourcesRecorder.addSource(code)
@@ -146,18 +146,18 @@ object RellTestUtils {
         }
     }
 
-    fun decodeGtxStr(s: String) = RtGtxValue.jsonStringToGtxValue(s)
-    fun encodeGtxStr(gtx: GTXValue) = RtGtxValue.gtxValueToJsonString(gtx)
+    fun decodeGtxStr(s: String) = Rt_GtxValue.jsonStringToGtxValue(s)
+    fun encodeGtxStr(gtx: GTXValue) = Rt_GtxValue.gtxValueToJsonString(gtx)
 
-    fun decodeGtxQueryArgs(params: List<RExternalParam>, args: List<String>): List<RtValue> {
+    fun decodeGtxQueryArgs(params: List<R_ExternalParam>, args: List<String>): List<Rt_Value> {
         return decodeGtxArgs(params, args, true)
     }
 
-    fun decodeGtxOpArgs(params: List<RExternalParam>, args: List<String>): List<RtValue> {
+    fun decodeGtxOpArgs(params: List<R_ExternalParam>, args: List<String>): List<Rt_Value> {
         return decodeGtxArgs(params, args, false)
     }
 
-    private fun decodeGtxArgs(params: List<RExternalParam>, args: List<String>, human: Boolean): List<RtValue> {
+    private fun decodeGtxArgs(params: List<R_ExternalParam>, args: List<String>, human: Boolean): List<Rt_Value> {
         check(params.size == args.size)
         val ctx = GtxToRtContext()
         return args.mapIndexed { i, arg ->
@@ -211,7 +211,7 @@ object SqlTestUtils {
         return "INSERT INTO \"$table\"(\"$ROWID_COLUMN\",$quotedColumns) VALUES ($values);"
     }
 
-    fun dumpDatabase(sqlExec: SqlExecutor, modelClasses: List<RClass>): List<String> {
+    fun dumpDatabase(sqlExec: SqlExecutor, modelClasses: List<R_Class>): List<String> {
         val list = mutableListOf<String>()
 
         for (cls in modelClasses) {
@@ -221,12 +221,12 @@ object SqlTestUtils {
         return list.toList()
     }
 
-    private fun dumpTable(sqlExec: SqlExecutor, cls: RClass, list: MutableList<String>) {
+    private fun dumpTable(sqlExec: SqlExecutor, cls: R_Class, list: MutableList<String>) {
         val sql = getDumpSql(cls)
         sqlExec.executeQuery(sql, {}) { rs -> list.add(dumpRecord(cls, rs)) }
     }
 
-    private fun getDumpSql(cls: RClass): String {
+    private fun getDumpSql(cls: R_Class): String {
         val buf = StringBuilder()
         buf.append("SELECT \"$ROWID_COLUMN\"")
         for (attr in cls.attributes.values) {
@@ -236,19 +236,19 @@ object SqlTestUtils {
         return buf.toString()
     }
 
-    private fun dumpRecord(cls: RClass, rs: ResultSet): String {
+    private fun dumpRecord(cls: R_Class, rs: ResultSet): String {
         val buf = StringBuilder()
         buf.append("${cls.name}(${rs.getLong(1)}")
         for ((listIndex, attr) in cls.attributes.values.withIndex()) {
             val idx = listIndex + 2
             val type = attr.type
-            val value = if (type == RTextType) {
+            val value = if (type == R_TextType) {
                 rs.getString(idx)
-            } else if (type == RByteArrayType) {
+            } else if (type == R_ByteArrayType) {
                 "0x" + rs.getBytes(idx).toHex()
-            } else if (type == RJSONType) {
+            } else if (type == R_JSONType) {
                 "" + rs.getString(idx)
-            } else if (type == RIntegerType || type is RInstanceRefType) {
+            } else if (type == R_IntegerType || type is R_ClassType) {
                 "" + rs.getLong(idx)
             } else {
                 throw IllegalStateException(type.toStrictString())
@@ -329,7 +329,7 @@ class RellSqlTester(
     private var destroyed = false
     private var sqlExec: SqlExecutor = NoConnSqlExecutor
     private var sqlExecResource: Closeable? = null
-    private var modelClasses: List<RClass> = listOf()
+    private var modelClasses: List<R_Class> = listOf()
     private var lastInserts = listOf<String>()
     private val expectedData = mutableListOf<String>()
     private val stdoutPrinter = TesterRtPrinter()
@@ -358,7 +358,7 @@ class RellSqlTester(
 
     var strictToString = true
     var errMsgPos = false
-    var opContext: RtOpContext? = null
+    var opContext: Rt_OpContext? = null
 
     private fun init() {
         if (!inited) {
@@ -378,7 +378,7 @@ class RellSqlTester(
         }
     }
 
-    private fun initSql(module: RModule) {
+    private fun initSql(module: R_Module) {
         val realSqlExec = SqlTestUtils.createSqlExecutor()
         var closeable: Closeable? = realSqlExec
 
@@ -424,7 +424,7 @@ class RellSqlTester(
         chkQueryEx(queryCode, listOf(), expected)
     }
 
-    fun chkQueryEx(code: String, args: List<RtValue>, expected: String) {
+    fun chkQueryEx(code: String, args: List<Rt_Value>, expected: String) {
         val actual = callQuery(code, args)
         assertEquals(expected, actual)
     }
@@ -506,11 +506,11 @@ class RellSqlTester(
         }
     }
 
-    fun callQuery(code: String, args: List<RtValue>): String {
+    fun callQuery(code: String, args: List<Rt_Value>): String {
         return callQuery0(code, args) { _, v -> v }
     }
 
-    private fun <T> callQuery0(code: String, args: List<T>, decoder: (List<RExternalParam>, List<T>) -> List<RtValue>): String {
+    private fun <T> callQuery0(code: String, args: List<T>, decoder: (List<R_ExternalParam>, List<T>) -> List<Rt_Value>): String {
         init()
         val moduleCode = moduleCode(code)
         val globalCtx = createGlobalCtx()
@@ -524,7 +524,7 @@ class RellSqlTester(
         }
     }
 
-    fun callOp(code: String, args: List<RtValue>): String {
+    fun callOp(code: String, args: List<Rt_Value>): String {
         return callOp0(code, args) { _, v -> v }
     }
 
@@ -532,7 +532,7 @@ class RellSqlTester(
         return callOp0(code, args, RellTestUtils::decodeGtxOpArgs)
     }
 
-    private fun <T> callOp0(code: String, args: List<T>, decoder: (List<RExternalParam>, List<T>) -> List<RtValue>): String {
+    private fun <T> callOp0(code: String, args: List<T>, decoder: (List<R_ExternalParam>, List<T>) -> List<Rt_Value>): String {
         init()
         val moduleCode = moduleCode(code)
         val globalCtx = createGlobalCtx()
@@ -541,11 +541,11 @@ class RellSqlTester(
         }
     }
 
-    fun processModule(code: String, processor: (RModule) -> String): String {
+    fun processModule(code: String, processor: (R_Module) -> String): String {
         return RellTestUtils.processModule(code, errMsgPos, gtx, processor)
     }
 
-    private fun createGlobalCtx() = RtGlobalContext(stdoutPrinter, logPrinter, sqlExec, opContext)
+    private fun createGlobalCtx() = Rt_GlobalContext(stdoutPrinter, logPrinter, sqlExec, opContext)
 
     fun chkStdout(vararg expected: String) = stdoutPrinter.chk(*expected)
     fun chkLog(vararg expected: String) = logPrinter.chk(*expected)
@@ -558,7 +558,7 @@ class RellSqlTester(
         return modCode
     }
 
-    private class TesterRtPrinter: RtPrinter() {
+    private class TesterRtPrinter: Rt_Printer() {
         private val queue = LinkedList<String>()
 
         override fun print(str: String) {

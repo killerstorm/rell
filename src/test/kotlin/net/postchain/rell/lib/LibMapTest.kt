@@ -149,7 +149,7 @@ class LibMapTest: BaseRellTest(false) {
         chkEx("{ val x = ['Bob':123]; x[123] = 'Bob'; return ''+x; }", "ct_err:expr_lookup_keytype:text:integer")
         chkEx("{ val x = ['Bob':123,'Alice':456]; x['Bob'] += 500; return ''+x; }", "{Bob=623, Alice=456}")
 
-        chkEx("{ val m: map<text,integer>? = ['Bob':123]; m['Bob'] = 456; return m; }", "ct_err:expr_lookup_base:map<text,integer>?")
+        chkEx("{ val m: map<text,integer>? = ['Bob':123]; m['Bob'] = 456; return m; }", "ct_err:expr_lookup_null")
         chkEx("{ val m: map<text,integer>? = ['Bob':123]; m!!['Bob'] = 456; return m; }", "{Bob=456}")
     }
 

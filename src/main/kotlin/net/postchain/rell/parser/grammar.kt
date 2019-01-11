@@ -182,7 +182,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     private val stringExpr = STRINGLIT map { S_StringLiteralExpr(S_Pos(it), RellTokenizer.decodeString(it)) }
 
-    private val bytesExpr by HEXLIT map { S_ByteALiteralExpr(S_Pos(it), RellTokenizer.decodeByteArray(it)) }
+    private val bytesExpr by HEXLIT map { S_ByteArrayLiteralExpr(S_Pos(it), RellTokenizer.decodeByteArray(it)) }
 
     private val booleanLiteralExpr by
             ( FALSE map { S_BooleanLiteralExpr(S_Pos(it), false) } ) or
@@ -204,6 +204,54 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
             val fields = listOf(field) + (tail ?: listOf())
             S_TupleExpr(S_Pos(pos), fields)
         }
+    }
+
+    private val atExprFromSingle by id map { S_Node(it.pos, listOf(S_AtExprFrom(null, it))) }
+
+    private val atExprFromItem by ( optional( id * -COLON ) * id ) map {
+        ( alias, className ) -> S_AtExprFrom(alias, className)
+    }
+
+    private val atExprFromMulti by ( LPAR * separatedTerms( atExprFromItem, COMMA, false ) * -RPAR ) map {
+        ( pos, items ) -> S_Node(pos, items)
+    }
+
+    private val atExprFrom by ( atExprFromSingle or atExprFromMulti )
+
+    private val atExprAt by (
+            ( AT * QUESTION map { Pair(true, false) } )
+                    or ( AT * MUL map { Pair(true, true) } )
+                    or ( AT * PLUS map { Pair(false, true) } )
+                    or ( AT map { Pair(false, false) } )
+            )
+
+    private val atExprWhatSimple by oneOrMore((-DOT * id)) map { path -> S_AtExprWhatSimple(path) }
+
+    private val atExprWhatSort by ( optional(MINUS) * SORT ) map { (minus, _) -> minus == null }
+
+    private val atExprWhatName by ( optional(id) * -ASSIGN ) map { name -> S_AtExprWhatAttr(name) }
+
+    private val atExprWhatComplexItem by ( optional(atExprWhatSort) * optional(atExprWhatName) * _expression ) map {
+        (sort, name, expr) -> S_AtExprWhatComplexField(name, expr, sort)
+    }
+
+    private val atExprWhatComplex by ( -LPAR * separatedTerms(atExprWhatComplexItem, COMMA, false) * -RPAR ) map {
+        exprs -> S_AtExprWhatComplex(exprs)
+    }
+
+    private val atExprWhat by ( atExprWhatSimple or atExprWhatComplex )
+
+    private val atExprWhere by ( -LCURL * separatedTerms(_expression, COMMA, true) * -RCURL ) map {
+        exprs -> S_AtExprWhere(exprs)
+    }
+
+    private val atExprLimit by ( -LIMIT * _expression )
+
+    private val atExpr by ( atExprFrom * atExprAt * atExprWhere * optional(atExprWhat) * optional(atExprLimit) ) map {
+        ( from, zeroMany, where, whatOpt, limit ) ->
+        val (zero, many) = zeroMany
+        val what = if (whatOpt == null) S_AtExprWhatDefault() else whatOpt
+        S_AtExpr(from.pos, from.value, what, where, limit, zero, many)
     }
 
     private val listLiteralExpr by ( LBRACK * separatedTerms(_expression, COMMA, true) * -RBRACK ) map {
@@ -245,10 +293,12 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     }
 
     private val baseExprHead by (
-            nameExpr
+            atExpr
+            or nameExpr
             or attrExpr
             or literalExpr
             or parenthesesExpr
+            or createExpr
             or listLiteralExpr
             or mapLiteralExpr
             or listExpr
@@ -291,55 +341,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         (head, tails) -> tailsToExpr(head, tails)
     }
 
-    private val atExprFromSingle by id map { S_Node(it.pos, listOf(S_AtExprFrom(null, it))) }
-
-    private val atExprFromItem by ( optional( id * -COLON ) * id ) map {
-        ( alias, className ) -> S_AtExprFrom(alias, className)
-    }
-
-    private val atExprFromMulti by ( LPAR * separatedTerms( atExprFromItem, COMMA, false ) * -RPAR ) map {
-        ( pos, items ) -> S_Node(pos, items)
-    }
-
-    private val atExprFrom by ( atExprFromSingle or atExprFromMulti )
-
-    private val atExprAt by (
-            ( AT * QUESTION map { Pair(true, false) } )
-            or ( AT * MUL map { Pair(true, true) } )
-            or ( AT * PLUS map { Pair(false, true) } )
-            or ( AT map { Pair(false, false) } )
-    )
-
-    private val atExprWhatSimple by oneOrMore((-DOT * id)) map { path -> S_AtExprWhatSimple(path) }
-
-    private val atExprWhatSort by ( optional(MINUS) * SORT ) map { (minus, _) -> minus == null }
-
-    private val atExprWhatName by ( optional(id) * -ASSIGN ) map { name -> S_AtExprWhatAttr(name) }
-
-    private val atExprWhatComplexItem by ( optional(atExprWhatSort) * optional(atExprWhatName) * _expression ) map {
-        (sort, name, expr) -> S_AtExprWhatComplexField(name, expr, sort)
-    }
-
-    private val atExprWhatComplex by ( -LPAR * separatedTerms(atExprWhatComplexItem, COMMA, false) * -RPAR ) map {
-        exprs -> S_AtExprWhatComplex(exprs)
-    }
-
-    private val atExprWhat by ( atExprWhatSimple or atExprWhatComplex )
-
-    private val atExprWhere by ( -LCURL * separatedTerms(_expression, COMMA, true) * -RCURL ) map {
-        exprs -> S_AtExprWhere(exprs)
-    }
-
-    private val atExprLimit by ( -LIMIT * _expression )
-
-    private val atExpr by ( atExprFrom * atExprAt * atExprWhere * optional(atExprWhat) * optional(atExprLimit) ) map {
-        ( from, zeroMany, where, whatOpt, limit ) ->
-        val (zero, many) = zeroMany
-        val what = if (whatOpt == null) S_AtExprWhatDefault() else whatOpt
-        S_AtExpr(from.pos, from.value, what, where, limit, zero, many)
-    }
-
-    private val operandExpr: Parser<S_Expr> by ( atExpr or baseExpr or createExpr )
+    private val operandExpr: Parser<S_Expr> by baseExpr
 
     private val unaryExpr by ( optional(unaryOperator) * operandExpr ) map { (op, expr) ->
         if (op == null) expr else S_UnaryExpr(op.pos, S_Node(op.pos, op.value), expr)

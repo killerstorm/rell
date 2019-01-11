@@ -34,7 +34,7 @@ fun main(args: Array<String>) {
     }
 }
 
-private fun getRoutineCaller(args: Args, module: RModule): (SqlExecutor) -> Unit {
+private fun getRoutineCaller(args: Args, module: R_Module): (SqlExecutor) -> Unit {
     val op = args.op
     if (op == null) return {}
 
@@ -76,7 +76,7 @@ private class Args {
     @CommandLine.Option(names = ["--resetdb"], description = ["Reset database (drop all and create tables from scratch)"])
     var resetdb = false
 
-    @CommandLine.Parameters(index = "0", paramLabel = "FILE", description = ["Rell source file"])
+    @CommandLine.Parameters(index = "0", paramLabel = "FILE", description = ["Rell toExpr file"])
     var rellFile: String = ""
 
     @CommandLine.Parameters(index = "1", arity = "0..1", paramLabel = "OP", description = ["Operation or query name"])
@@ -86,7 +86,7 @@ private class Args {
     var args: List<String>? = null
 }
 
-private fun compileModule(rellFile: String): RModule {
+private fun compileModule(rellFile: String): R_Module {
     val sourceCode = File(rellFile).readText()
 
     val module = try {
@@ -99,7 +99,7 @@ private fun compileModule(rellFile: String): RModule {
     return module
 }
 
-private fun findRoutine(module: RModule, name: String): Pair<RRoutine, RtOpContext?> {
+private fun findRoutine(module: R_Module, name: String): Pair<R_Routine, Rt_OpContext?> {
     val oper = module.operations[name]
     val query = module.queries[name]
     if (oper != null && query != null) {
@@ -107,7 +107,7 @@ private fun findRoutine(module: RModule, name: String): Pair<RRoutine, RtOpConte
         exitProcess(1)
     } else if (oper != null) {
         val time = System.currentTimeMillis() / 1000
-        return Pair(oper, RtOpContext(time, listOf()))
+        return Pair(oper, Rt_OpContext(time, listOf()))
     } else if (query != null) {
         return Pair(query, null)
     } else {
@@ -116,13 +116,13 @@ private fun findRoutine(module: RModule, name: String): Pair<RRoutine, RtOpConte
     }
 }
 
-private fun callRoutine(sqlExec: SqlExecutor, module: RModule, op: RRoutine, opCtx: RtOpContext?, args: List<RtValue>) {
-    val globalCtx = RtGlobalContext(StdoutRtPrinter, LogRtPrinter, sqlExec, opCtx)
-    val modCtx = RtModuleContext(globalCtx, module)
+private fun callRoutine(sqlExec: SqlExecutor, module: R_Module, op: R_Routine, opCtx: Rt_OpContext?, args: List<Rt_Value>) {
+    val globalCtx = Rt_GlobalContext(StdoutRtPrinter, LogRtPrinter, sqlExec, opCtx)
+    val modCtx = Rt_ModuleContext(globalCtx, module)
     op.callTop(modCtx, args)
 }
 
-private fun parseArgs(routine: RRoutine, args: List<String>): List<RtValue> {
+private fun parseArgs(routine: R_Routine, args: List<String>): List<Rt_Value> {
     if (args.size != routine.params.size) {
         System.err.println("Wrong number of arguments: ${args.size} instead of ${routine.params.size}")
         exitProcess(1)
@@ -130,7 +130,7 @@ private fun parseArgs(routine: RRoutine, args: List<String>): List<RtValue> {
     return args.withIndex().map { (idx, arg) -> parseArg(routine.params[idx], arg) }
 }
 
-private fun parseArg(param: RExternalParam, arg: String): RtValue {
+private fun parseArg(param: R_ExternalParam, arg: String): Rt_Value {
     val type = param.type
     try {
         return type.fromCli(arg)
@@ -143,13 +143,13 @@ private fun parseArg(param: RExternalParam, arg: String): RtValue {
     }
 }
 
-private object StdoutRtPrinter: RtPrinter() {
+private object StdoutRtPrinter: Rt_Printer() {
     override fun print(str: String) {
         println(str)
     }
 }
 
-private object LogRtPrinter: RtPrinter() {
+private object LogRtPrinter: Rt_Printer() {
     private val log = LogFactory.getLog(LogRtPrinter.javaClass)
 
     override fun print(str: String) {

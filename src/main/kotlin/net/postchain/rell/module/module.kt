@@ -11,13 +11,13 @@ import net.postchain.rell.sql.gensql
 import org.apache.commons.logging.LogFactory
 import java.io.File
 
-private object StdoutRtPrinter: RtPrinter() {
+private object StdoutRtPrinter: Rt_Printer() {
     override fun print(str: String) {
         println(str)
     }
 }
 
-private object LogRtPrinter: RtPrinter() {
+private object LogRtPrinter: Rt_Printer() {
     private val log = LogFactory.getLog(LogRtPrinter.javaClass)
 
     override fun print(str: String) {
@@ -25,21 +25,21 @@ private object LogRtPrinter: RtPrinter() {
     }
 }
 
-private fun makeRtModuleContext(rModule: RModule, eCtx: EContext, opCtx: RtOpContext?): RtModuleContext {
+private fun makeRtModuleContext(rModule: R_Module, eCtx: EContext, opCtx: Rt_OpContext?): Rt_ModuleContext {
     val exec = DefaultSqlExecutor(eCtx.conn)
-    val globalCtx = RtGlobalContext(StdoutRtPrinter, LogRtPrinter, exec, opCtx)
-    return RtModuleContext(globalCtx, rModule)
+    val globalCtx = Rt_GlobalContext(StdoutRtPrinter, LogRtPrinter, exec, opCtx)
+    return Rt_ModuleContext(globalCtx, rModule)
 }
 
 private fun <T> catchRtErr(code: () -> T): T {
     try {
         return code()
-    } catch (e: RtBaseError) {
+    } catch (e: Rt_BaseError) {
         throw UserMistake(e.message ?: "")
     }
 }
 
-private fun convertArgs(ctx: GtxToRtContext, params: List<RExternalParam>, args: List<GTXValue>, human: Boolean): List<RtValue> {
+private fun convertArgs(ctx: GtxToRtContext, params: List<R_ExternalParam>, args: List<GTXValue>, human: Boolean): List<Rt_Value> {
     return args.mapIndexed {
         index, arg ->
         val type = params[index].type
@@ -47,9 +47,9 @@ private fun convertArgs(ctx: GtxToRtContext, params: List<RExternalParam>, args:
     }
 }
 
-class RellGTXOperation(val rOperation: ROperation, val rModule: RModule, opData: ExtOpData): GTXOperation(opData) {
+class RellGTXOperation(val rOperation: R_Operation, val rModule: R_Module, opData: ExtOpData): GTXOperation(opData) {
     private lateinit var gtxToRtCtx: GtxToRtContext
-    private lateinit var args: List<RtValue>
+    private lateinit var args: List<Rt_Value>
 
     override fun isCorrect(): Boolean {
         if (data.args.size != rOperation.params.size) {
@@ -66,7 +66,7 @@ class RellGTXOperation(val rOperation: ROperation, val rModule: RModule, opData:
     }
 
     override fun apply(ctx: TxEContext): Boolean {
-        val opCtx = RtOpContext(ctx.timestamp, data.signers.toList())
+        val opCtx = Rt_OpContext(ctx.timestamp, data.signers.toList())
         val modCtx = makeRtModuleContext(rModule, ctx, opCtx)
 
         catchRtErr {
@@ -83,7 +83,7 @@ class RellGTXOperation(val rOperation: ROperation, val rModule: RModule, opData:
     }
 }
 
-class RellPostchainModule(val rModule: RModule, val moduleName: String): GTXModule {
+class RellPostchainModule(val rModule: R_Module, val moduleName: String): GTXModule {
     override fun getOperations(): Set<String> {
         return rModule.operations.keys
     }
@@ -126,7 +126,7 @@ class RellPostchainModule(val rModule: RModule, val moduleName: String): GTXModu
         return gtxResult
     }
 
-    private fun translateQueryArgs(modCtx: RtModuleContext, rQuery: RQuery, gtxArgs: GTXValue): List<RtValue> {
+    private fun translateQueryArgs(modCtx: Rt_ModuleContext, rQuery: R_Query, gtxArgs: GTXValue): List<Rt_Value> {
         gtxArgs is DictGTXValue
 
         val argMap = gtxArgs.asDict().filterKeys { it != "type" }

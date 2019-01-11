@@ -20,14 +20,14 @@ class InterpTest
 
     @Test
     fun closure () {
-//        val lambda = RLambdaExpr(RClosureType("Hello?"), listOf(RAttrib("a", RIntegerType)),
-//                RBinaryExpr(RIntegerType, "+",
-//                        RVarExpr(RAttrib("a", RIntegerType), 0),
-//                        RIntegerLiteralExpr(RIntegerType, 1)))
-//        val funcall = RFuncall(RIntegerType,
-//                lambda, listOf(RVarExpr(RAttrib("b", RIntegerType), 0)))
-//        val condition = RBinaryExpr(RBooleanType, "==", funcall, RIntegerLiteralExpr(RIntegerType, 3))
-//        val require = RCallStatement(RCallExpr(RUnitType, "require", listOf(condition)))
-//        val op = ROperation("hello", arrayOf(RAttrib("b", RIntegerType)), arrayOf(require))
+//        val lambda = RLambdaExpr(R_ClosureType("Hello?"), listOf(R_Attrib("a", R_IntegerType)),
+//                R_BinaryExpr(R_IntegerType, "+",
+//                        R_VarExpr(R_Attrib("a", R_IntegerType), 0),
+//                        RIntegerLiteralExpr(R_IntegerType, 1)))
+//        val funcall = RFuncall(R_IntegerType,
+//                lambda, listOf(R_VarExpr(R_Attrib("b", R_IntegerType), 0)))
+//        val condition = R_BinaryExpr(R_BooleanType, "==", funcall, RIntegerLiteralExpr(R_IntegerType, 3))
+//        val require = RCallStatement(R_CallExpr(R_UnitType, "require", listOf(condition)))
+//        val op = R_Operation("hello", arrayOf(R_Attrib("b", R_IntegerType)), arrayOf(require))
     }
 }

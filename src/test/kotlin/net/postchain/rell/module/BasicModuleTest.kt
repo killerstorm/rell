@@ -10,6 +10,7 @@ import net.postchain.gtx.gtx
 import net.postchain.devtools.IntegrationTest
 import net.postchain.devtools.KeyPairHelper
 import net.postchain.devtools.SingleChainTestNode
+import org.junit.Ignore
 import org.junit.Test
 import java.nio.file.Paths
 import kotlin.test.assertEquals

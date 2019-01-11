@@ -1,101 +1,40 @@
 package net.postchain.rell.model
 
-import net.postchain.rell.runtime.RtCallFrame
-import net.postchain.rell.runtime.RtValue
 import net.postchain.rell.sql.ROWID_COLUMN
-import java.sql.PreparedStatement
 
-sealed class DbBinaryOp(val code: String, val sql: String)
-object DbBinaryOp_Eq: DbBinaryOp("==", "=")
-object DbBinaryOp_Ne: DbBinaryOp("!=", "<>")
-object DbBinaryOp_Lt: DbBinaryOp("<", "<")
-object DbBinaryOp_Gt: DbBinaryOp(">", ">")
-object DbBinaryOp_Le: DbBinaryOp("<=", "<=")
-object DbBinaryOp_Ge: DbBinaryOp(">=", ">=")
-object DbBinaryOp_Add: DbBinaryOp("+", "+")
-object DbBinaryOp_Sub: DbBinaryOp("-", "-")
-object DbBinaryOp_Mul: DbBinaryOp("*", "*")
-object DbBinaryOp_Div: DbBinaryOp("/", "/")
-object DbBinaryOp_Mod: DbBinaryOp("%", "%")
-object DbBinaryOp_And: DbBinaryOp("and", "AND")
-object DbBinaryOp_Or: DbBinaryOp("or", "OR")
-object DbBinaryOp_Concat: DbBinaryOp("+", "||")
+sealed class Db_BinaryOp(val code: String, val sql: String)
+object Db_BinaryOp_Eq: Db_BinaryOp("==", "=")
+object Db_BinaryOp_Ne: Db_BinaryOp("!=", "<>")
+object Db_BinaryOp_Lt: Db_BinaryOp("<", "<")
+object Db_BinaryOp_Gt: Db_BinaryOp(">", ">")
+object Db_BinaryOp_Le: Db_BinaryOp("<=", "<=")
+object Db_BinaryOp_Ge: Db_BinaryOp(">=", ">=")
+object Db_BinaryOp_Add: Db_BinaryOp("+", "+")
+object Db_BinaryOp_Sub: Db_BinaryOp("-", "-")
+object Db_BinaryOp_Mul: Db_BinaryOp("*", "*")
+object Db_BinaryOp_Div: Db_BinaryOp("/", "/")
+object Db_BinaryOp_Mod: Db_BinaryOp("%", "%")
+object Db_BinaryOp_And: Db_BinaryOp("and", "AND")
+object Db_BinaryOp_Or: Db_BinaryOp("or", "OR")
+object Db_BinaryOp_Concat: Db_BinaryOp("+", "||")
 
-sealed class DbUnaryOp(val code: String, val sql: String)
-object DbUnaryOp_Minus: DbUnaryOp("-", "-")
-object DbUnaryOp_Not: DbUnaryOp("not", "NOT")
+sealed class Db_UnaryOp(val code: String, val sql: String)
+object Db_UnaryOp_Minus: Db_UnaryOp("-", "-")
+object Db_UnaryOp_Not: Db_UnaryOp("not", "NOT")
 
-data class SqlTableAlias(val cls: RClass, val str: String)
-
-class SqlFromInfo(val classes: List<SqlFromClass>)
-class SqlFromClass(val alias: SqlTableAlias, val joins: List<SqlFromJoin>)
-class SqlFromJoin(val baseAlias: SqlTableAlias, val attr: String, val alias: SqlTableAlias)
-
-class SqlGenContext(classes: List<RAtClass>, private val parameters: List<RtValue>) {
-    private var aliasCtr = 0
-    private val clsAliasMap = mutableMapOf<RAtClass, ClassAliasTbl>()
-    private val aliasTblMap = mutableMapOf<SqlTableAlias, ClassAliasTbl>()
-
-    init {
-        classes.withIndex().forEach { (i, cls) -> check(cls.index == i) }
-        for (cls in classes) {
-            getClassAlias(cls)
-        }
-    }
-
-    fun getParameter(index: Int): RtValue {
-        return parameters[index]
-    }
-
-    fun getClassAlias(cls: RAtClass): SqlTableAlias {
-        val tbl = clsAliasMap.computeIfAbsent(cls) {
-            val tbl = ClassAliasTbl(nextAlias(cls.rClass))
-            aliasTblMap[tbl.alias] = tbl
-            tbl
-        }
-        return tbl.alias
-    }
-
-    fun getRelAlias(baseAlias: SqlTableAlias, rel: String, cls: RClass): SqlTableAlias {
-        val tbl = aliasTblMap.getValue(baseAlias)
-        val map = tbl.subAliases.computeIfAbsent(baseAlias) { mutableMapOf() }
-        return map.computeIfAbsent(rel) {
-            val alias = nextAlias(cls)
-            aliasTblMap[alias] = tbl
-            alias
-        }
-    }
-
-    fun getFromInfo(): SqlFromInfo {
-        val classes = clsAliasMap.entries.map { (cls, tbl) ->
-            val joins = tbl.subAliases.entries.flatMap { (alias, map) ->
-                map.entries.map { (attr, alias2) -> SqlFromJoin(alias, attr, alias2) }
-            }
-            SqlFromClass(tbl.alias, joins)
-        }
-        return SqlFromInfo(classes)
-    }
-
-    private fun nextAlias(cls: RClass) = SqlTableAlias(cls, String.format("A%02d", aliasCtr++))
-
-    private class ClassAliasTbl(val alias: SqlTableAlias) {
-        val subAliases = mutableMapOf<SqlTableAlias, MutableMap<String, SqlTableAlias>>()
-    }
-}
-
-sealed class DbExpr(val type: RType) {
+sealed class Db_Expr(val type: R_Type) {
     open fun implicitName(): String? = null
-    abstract fun toSql(ctx: SqlGenContext, bld: RtSqlBuilder)
+    abstract fun toSql(ctx: SqlGenContext, bld: SqlBuilder)
 }
 
-class InterpretedDbExpr(val expr: RExpr): DbExpr(expr.type) {
-    override fun toSql(ctx: SqlGenContext, bld: RtSqlBuilder) {
+class Db_InterpretedExpr(val expr: R_Expr): Db_Expr(expr.type) {
+    override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
         bld.append(expr)
     }
 }
 
-class BinaryDbExpr(type: RType, val op: DbBinaryOp, val left: DbExpr, val right: DbExpr): DbExpr(type) {
-    override fun toSql(ctx: SqlGenContext, bld: RtSqlBuilder) {
+class Db_BinaryExpr(type: R_Type, val op: Db_BinaryOp, val left: Db_Expr, val right: Db_Expr): Db_Expr(type) {
+    override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
         bld.append("(")
         left.toSql(ctx, bld)
         bld.append(" ")
@@ -106,8 +45,8 @@ class BinaryDbExpr(type: RType, val op: DbBinaryOp, val left: DbExpr, val right:
     }
 }
 
-class UnaryDbExpr(type: RType, val op: DbUnaryOp, val expr: DbExpr): DbExpr(type) {
-    override fun toSql(ctx: SqlGenContext, bld: RtSqlBuilder) {
+class Db_UnaryExpr(type: R_Type, val op: Db_UnaryOp, val expr: Db_Expr): Db_Expr(type) {
+    override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
         bld.append("(")
         bld.append(op.sql)
         bld.append(" ")
@@ -116,22 +55,22 @@ class UnaryDbExpr(type: RType, val op: DbUnaryOp, val expr: DbExpr): DbExpr(type
     }
 }
 
-sealed class TableDbExpr(val rClass: RClass): DbExpr(RInstanceRefType(rClass)) {
+sealed class Db_TableExpr(val rClass: R_Class): Db_Expr(R_ClassType(rClass)) {
     abstract fun alias(ctx: SqlGenContext): SqlTableAlias
 
-    final override fun toSql(ctx: SqlGenContext, bld: RtSqlBuilder) {
+    final override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
         val alias = alias(ctx)
         bld.appendColumn(alias, ROWID_COLUMN)
     }
 }
 
-class ClassDbExpr(val cls: RAtClass): TableDbExpr(cls.rClass) {
+class Db_ClassExpr(val cls: R_AtClass): Db_TableExpr(cls.rClass) {
     override fun alias(ctx: SqlGenContext) = ctx.getClassAlias(cls)
 }
 
-class RelDbExpr(val base: TableDbExpr, val attr: RAttrib, targetClass: RClass): TableDbExpr(targetClass) {
+class Db_RelExpr(val base: Db_TableExpr, val attr: R_Attrib, targetClass: R_Class): Db_TableExpr(targetClass) {
     override fun implicitName(): String? {
-        return if (base is ClassDbExpr) attr.name else null
+        return if (base is Db_ClassExpr) attr.name else null
     }
 
     override fun alias(ctx: SqlGenContext): SqlTableAlias {
@@ -140,30 +79,30 @@ class RelDbExpr(val base: TableDbExpr, val attr: RAttrib, targetClass: RClass): 
     }
 }
 
-class AttrDbExpr(val base: TableDbExpr, val attr: RAttrib): DbExpr(attr.type) {
+class Db_AttrExpr(val base: Db_TableExpr, val attr: R_Attrib): Db_Expr(attr.type) {
     override fun implicitName(): String? {
-        return if (base is ClassDbExpr) attr.name else null
+        return if (base is Db_ClassExpr) attr.name else null
     }
 
-    override fun toSql(ctx: SqlGenContext, bld: RtSqlBuilder) {
+    override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
         val alias = base.alias(ctx)
         bld.appendColumn(alias, attr.name)
     }
 }
 
-class ParameterDbExpr(type: RType, val index: Int): DbExpr(type) {
-    override fun toSql(ctx: SqlGenContext, bld: RtSqlBuilder) {
+class Db_ParameterExpr(type: R_Type, val index: Int): Db_Expr(type) {
+    override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
         val value = ctx.getParameter(index)
         bld.append(type, value)
     }
 }
 
-sealed class DbSysFunction(val name: String) {
-    abstract fun toSql(ctx: SqlGenContext, bld: RtSqlBuilder, args: List<DbExpr>)
+sealed class Db_SysFunction(val name: String) {
+    abstract fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<Db_Expr>)
 }
 
-sealed class DbSysFunction_Simple(name: String, val sql: String): DbSysFunction(name) {
-    override fun toSql(ctx: SqlGenContext, bld: RtSqlBuilder, args: List<DbExpr>) {
+sealed class Db_SysFunction_Simple(name: String, val sql: String): Db_SysFunction(name) {
+    override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<Db_Expr>) {
         bld.append(sql)
         bld.append("(")
         bld.append(args, ", ") {
@@ -173,8 +112,8 @@ sealed class DbSysFunction_Simple(name: String, val sql: String): DbSysFunction(
     }
 }
 
-sealed class DbSysFunction_Cast(name: String, val type: String): DbSysFunction(name) {
-    override fun toSql(ctx: SqlGenContext, bld: RtSqlBuilder, args: List<DbExpr>) {
+sealed class Db_SysFn_Cast(name: String, val type: String): Db_SysFunction(name) {
+    override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<Db_Expr>) {
         check(args.size == 1)
         bld.append("((")
         args[0].toSql(ctx, bld)
@@ -182,142 +121,18 @@ sealed class DbSysFunction_Cast(name: String, val type: String): DbSysFunction(n
     }
 }
 
-object DbSysFunction_Int_Str: DbSysFunction_Cast("int.str", "TEXT")
-object DbSysFunction_Abs: DbSysFunction_Simple("abs", "ABS")
-object DbSysFunction_Min: DbSysFunction_Simple("min", "LEAST")
-object DbSysFunction_Max: DbSysFunction_Simple("max", "GREATEST")
-object DbSysFunction_Text_Size: DbSysFunction_Simple("text.len", "LENGTH")
-object DbSysFunction_Text_UpperCase: DbSysFunction_Simple("text.len", "UPPER")
-object DbSysFunction_Text_LowerCase: DbSysFunction_Simple("text.len", "LOWER")
-object DbSysFunction_ByteArray_Size: DbSysFunction_Simple("byte_array.len", "LENGTH")
-object DbSysFunction_Json: DbSysFunction_Cast("json", "JSONB")
-object DbSysFunction_Json_Str: DbSysFunction_Cast("json.str", "TEXT")
-object DbSysFunction_ToString: DbSysFunction_Cast("toString", "TEXT")
+object Db_SysFn_Int_Str: Db_SysFn_Cast("int.str", "TEXT")
+object Db_SysFn_Abs: Db_SysFunction_Simple("abs", "ABS")
+object Db_SysFn_Min: Db_SysFunction_Simple("min", "LEAST")
+object Db_SysFn_Max: Db_SysFunction_Simple("max", "GREATEST")
+object Db_SysFn_Text_Size: Db_SysFunction_Simple("text.len", "LENGTH")
+object Db_SysFn_Text_UpperCase: Db_SysFunction_Simple("text.len", "UPPER")
+object Db_SysFn_Text_LowerCase: Db_SysFunction_Simple("text.len", "LOWER")
+object Db_SysFn_ByteArray_Size: Db_SysFunction_Simple("byte_array.len", "LENGTH")
+object Db_SysFn_Json: Db_SysFn_Cast("json", "JSONB")
+object Db_SysFn_Json_Str: Db_SysFn_Cast("json.str", "TEXT")
+object Db_SysFn_ToString: Db_SysFn_Cast("toString", "TEXT")
 
-class CallDbExpr(type: RType, val fn: DbSysFunction, val args: List<DbExpr>): DbExpr(type) {
-    override fun toSql(ctx: SqlGenContext, bld: RtSqlBuilder) = fn.toSql(ctx, bld, args)
-}
-
-sealed class RtSqlParam {
-    abstract fun type(): RType
-    abstract fun evaluate(frame: RtCallFrame): RtValue
-}
-
-class RtSqlParam_Expr(private val expr: RExpr): RtSqlParam() {
-    override fun type() = expr.type
-    override fun evaluate(frame: RtCallFrame) = expr.evaluate(frame)
-}
-
-class RtSqlParam_Value(private val type: RType, private val value: RtValue): RtSqlParam() {
-    override fun type() = type
-    override fun evaluate(frame: RtCallFrame) = value
-}
-
-class RtSqlBuilder {
-    private val sqlBuf = StringBuilder()
-    private val paramsBuf = mutableListOf<RtSqlParam>()
-
-    fun <T> append(list: List<T>, sep: String, block: (T) -> Unit) {
-        var s = ""
-        for (t in list) {
-            append(s)
-            block(t)
-            s = sep
-        }
-    }
-
-    fun appendName(name: String) {
-        append("\"")
-        append(name)
-        append("\"")
-    }
-
-    fun appendColumn(alias: SqlTableAlias, column: String) {
-        appendColumn(alias.str, column)
-    }
-
-    fun appendColumn(alias: String, column: String) {
-        append(alias)
-        append(".")
-        appendName(column)
-    }
-
-    fun append(sql: String) {
-        sqlBuf.append(sql)
-    }
-
-    fun append(param: RExpr) {
-        sqlBuf.append("?")
-        paramsBuf.add(RtSqlParam_Expr(param))
-    }
-
-    fun append(type: RType, value: RtValue) {
-        sqlBuf.append("?")
-        paramsBuf.add(RtSqlParam_Value(type, value))
-    }
-
-    fun append(sql: RtSql) {
-        sqlBuf.append(sql.sql)
-        paramsBuf.addAll(sql.params)
-    }
-
-    fun listBuilder(sep: String = ", "): RtSqlListBuilder = RtSqlListBuilder(this, sep)
-
-    fun build(): RtSql = RtSql(sqlBuf.toString(), paramsBuf.toList())
-}
-
-class RtSqlListBuilder(private val builder: RtSqlBuilder, private val sep: String) {
-    private var first = true
-
-    fun nextItem() {
-        if (!first) {
-            builder.append(sep)
-        }
-        first = false
-    }
-}
-
-class RtSql(val sql: String, val params: List<RtSqlParam>) {
-    fun calcArgs(frame: RtCallFrame): RtSqlArgs {
-        val types = params.map { it.type() }
-        val values = params.map { it.evaluate(frame) }
-        return RtSqlArgs(types, values)
-    }
-}
-
-class RtSqlArgs(val types: List<RType>, val values: List<RtValue>) {
-    fun bind(stmt: PreparedStatement) {
-        for (i in values.indices) {
-            val type = types[i]
-            val arg = values[i]
-            type.toSql(stmt, i + 1, arg)
-        }
-    }
-}
-
-class RtSelect(val rtSql: RtSql, val resultTypes: List<RType>) {
-    fun execute(frame: RtCallFrame): List<Array<RtValue>> {
-        val result = mutableListOf<Array<RtValue>>()
-
-        val args = rtSql.calcArgs(frame)
-
-        frame.entCtx.modCtx.globalCtx.sqlExec.executeQuery(rtSql.sql, args::bind) { rs ->
-            val list = mutableListOf<RtValue>()
-            for (i in resultTypes.indices) {
-                val type = resultTypes[i]
-                val value = type.fromSql(rs, i + 1)
-                list.add(value)
-            }
-            result.add(list.toTypedArray())
-        }
-
-        return result
-    }
-}
-
-class RtUpdate(val rtSql: RtSql) {
-    fun execute(frame: RtCallFrame) {
-        val args = rtSql.calcArgs(frame)
-        frame.entCtx.modCtx.globalCtx.sqlExec.execute(rtSql.sql, args::bind)
-    }
+class Db_CallExpr(type: R_Type, val fn: Db_SysFunction, val args: List<Db_Expr>): Db_Expr(type) {
+    override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) = fn.toSql(ctx, bld, args)
 }

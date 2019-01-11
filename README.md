@@ -1,6 +1,10 @@
 ## Language Guide
 
-See [Language Guide](doc/guide/Language.md).
+[General Language Features](doc/guide/general.rst)
+
+[Database Operations](doc/guide/database.rst)
+
+[Library](doc/guide/library.rst)
 
 ## Build
 

@@ -453,21 +453,21 @@ class AtExprTest {
 
     @Test fun testLookupExpr() {
         chk("user @ { .firstName == 'Bill' } (=.lastName, 'Hello'[1])", "(text[Gates],text[e])")
-        chk("user @ { .firstName == 'Bill' } (.lastName[2])", "ct_err:expr_nosql")
-        chk("user @ { .firstName == 'Bill' } ('HelloWorld'[.lastName.size()])", "ct_err:expr_nosql")
+        chk("user @ { .firstName == 'Bill' } (.lastName[2])", "ct_err:expr_sqlnotallowed")
+        chk("user @ { .firstName == 'Bill' } ('HelloWorld'[.lastName.size()])", "ct_err:expr_sqlnotallowed")
     }
 
     @Test fun testTupleExpr() {
         chk("user @ { .firstName == 'Bill' } (=.lastName, '' + (123,'Hello'))", "(text[Gates],text[(123,Hello)])")
-        chk("user @ { .firstName == 'Bill' } (=.lastName, '' + (123,.firstName))", "ct_err:expr_nosql")
+        chk("user @ { .firstName == 'Bill' } (=.lastName, '' + (123,.firstName))", "ct_err:expr_sqlnotallowed")
     }
 
     @Test fun testCollectionLiteralExpr() {
         chk("user @ { .firstName == 'Bill' } (=.lastName, '' + [1,2,3])", "(text[Gates],text[[1, 2, 3]])")
-        chk("user @ { .firstName == 'Bill' } (=.lastName, '' + [.firstName,.lastName])", "ct_err:expr_nosql")
+        chk("user @ { .firstName == 'Bill' } (=.lastName, '' + [.firstName,.lastName])", "ct_err:expr_sqlnotallowed")
 
         chk("user @ { .firstName == 'Bill' } (=.lastName, '' + [123:'Hello'])", "(text[Gates],text[{123=Hello}])")
-        chk("user @ { .firstName == 'Bill' } (=.lastName, '' + [.firstName:.lastName])", "ct_err:expr_nosql")
+        chk("user @ { .firstName == 'Bill' } (=.lastName, '' + [.firstName:.lastName])", "ct_err:expr_sqlnotallowed")
     }
 
     @Test fun testCollectionConstructorExpr() {
@@ -475,9 +475,9 @@ class AtExprTest {
         chk("user @ { .firstName == 'Bill' } (=.lastName, '' + set([1,2,3]))", "(text[Gates],text[[1, 2, 3]])")
         chk("user @ { .firstName == 'Bill' } (=.lastName, '' + map([123:'Hello']))", "(text[Gates],text[{123=Hello}])")
 
-        chk("user @ { .firstName == 'Bill' } (=.lastName, '' + list(.firstName))", "ct_err:expr_nosql")
-        chk("user @ { .firstName == 'Bill' } (=.lastName, '' + set(.firstName))", "ct_err:expr_nosql")
-        chk("user @ { .firstName == 'Bill' } (=.lastName, '' + map(.firstName))", "ct_err:expr_nosql")
+        chk("user @ { .firstName == 'Bill' } (=.lastName, '' + list(.firstName))", "ct_err:expr_sqlnotallowed")
+        chk("user @ { .firstName == 'Bill' } (=.lastName, '' + set(.firstName))", "ct_err:expr_sqlnotallowed")
+        chk("user @ { .firstName == 'Bill' } (=.lastName, '' + map(.firstName))", "ct_err:expr_sqlnotallowed")
     }
 
     @Test fun testMultiLocalWhere() {
@@ -540,6 +540,10 @@ class AtExprTest {
         chkEx("{ val search_role = 'validator'; $ret }", "int[1]")
         chkEx("{ val search_role = 'issuer'; $ret }", "int[1]")
         chkEx("{ val search_role = 'foo'; $ret }", "int[0]")
+    }
+
+    @Test fun testSubscript() {
+        chk("user @* { .firstName == 'Bill' }[0]", "user[40]")
     }
 
     private fun chk(code: String, expectedResult: String) {

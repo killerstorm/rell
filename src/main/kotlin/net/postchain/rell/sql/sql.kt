@@ -1,8 +1,7 @@
 package net.postchain.rell.sql
 
-import net.postchain.rell.model.RModule
+import net.postchain.rell.model.R_Module
 import java.io.Closeable
-import java.lang.UnsupportedOperationException
 import java.sql.*
 
 val ROWID_COLUMN = "rowid"
@@ -107,7 +106,7 @@ object NoConnSqlExecutor: SqlExecutor() {
 }
 
 object SqlUtils {
-    fun resetDatabase(module: RModule, sqlExec: SqlExecutor) {
+    fun resetDatabase(module: R_Module, sqlExec: SqlExecutor) {
         sqlExec.transaction {
             dropTables(sqlExec)
             dropFunctions(sqlExec)

@@ -8,10 +8,10 @@ import org.jooq.impl.SQLDataType
 
 val ctx = DSL.using(SQLDialect.POSTGRES);
 
-fun getSQLType(t: RType): DataType<*> {
+fun getSQLType(t: R_Type): DataType<*> {
     when (t) {
-        is RPrimitiveType -> return t.sqlType
-        is RInstanceRefType -> return SQLDataType.BIGINT
+        is R_PrimitiveType -> return t.sqlType
+        is R_ClassType -> return SQLDataType.BIGINT
         else -> throw Exception("SQL Type not implemented")
     }
 }
@@ -24,7 +24,7 @@ private val ROWID_SQL = """
     LANGUAGE SQL;
     """
 
-fun genclass(classDefinition: RClass): String {
+fun genclass(classDefinition: R_Class): String {
     val t = ctx.createTable(classDefinition.name)
     var q = t.column(ROWID_COLUMN, SQLDataType.BIGINT.nullable(false))
     val constraints = mutableListOf<Constraint>(constraint("PK_" + classDefinition.name).primaryKey(ROWID_COLUMN))
@@ -32,12 +32,12 @@ fun genclass(classDefinition: RClass): String {
     val jsonAttribSet = mutableSetOf<String>()
 
     for (attr in classDefinition.attributes.values) {
-        if (attr.type is RInstanceRefType) {
+        if (attr.type is R_ClassType) {
             constraints.add(
                     constraint("${classDefinition.name}_${attr.name}_FK")
                             .foreignKey(attr.name).references(attr.type.name, ROWID_COLUMN)
             )
-        } else if (attr.type is RJSONType) {
+        } else if (attr.type is R_JSONType) {
             jsonAttribSet.add(attr.name)
         }
         q = q.column(attr.name, getSQLType(attr.type).nullable(false))
@@ -61,15 +61,15 @@ fun genclass(classDefinition: RClass): String {
     return ddl
 }
 
-fun genRequire(s: RCallExpr): String {
+fun genRequire(s: R_CallExpr): String {
     if (s.args.size == 0 || s.args.size > 2) throw Exception("Too many (or too little) arguments to require")
     val message = if (s.args.size == 2) genExpr(s.args[1]) else "'Require failed'"
 
     val condition = s.args[0]
     val condSQL : String
-    if (condition.type is RBooleanType)
+    if (condition.type is R_BooleanType)
         condSQL = "NOT ${genExpr(condition)}"
-    else if (condition.type is RInstanceRefType)
+    else if (condition.type is R_ClassType)
         condSQL = "NOT EXISTS ${genExpr(condition)}"
     else throw Exception("Cannot handle type in require")
 
@@ -84,7 +84,7 @@ val specialOps = mapOf(
         "require" to ::genRequire
 )
 
-fun genJSON(s: RCallExpr): String {
+fun genJSON(s: R_CallExpr): String {
     if (s.args.size != 1) throw Exception("Wrong number of parameters to json function")
     val arg = genExpr(s.args[0])
     return " (${arg}::jsonb) "
@@ -94,19 +94,19 @@ val specialFuns = mapOf(
     "json" to ::genJSON
 )
 
-fun genstatement(s: RStatement): String {
+fun genstatement(s: R_Statement): String {
     TODO()
 }
 
-fun genExpr(expr: RExpr): String {
+fun genExpr(expr: R_Expr): String {
     return when (expr) {
-        is RVarExpr -> TODO() //"_" + expr.name
-        is RAtExpr -> TODO()
-        is RBinaryExpr -> TODO()
+        is R_VarExpr -> TODO() //"_" + expr.name
+        is R_AtExpr -> TODO()
+        is R_BinaryExpr -> TODO()
 //        is RStringLiteralExpr -> "'${expr.value}'" // TODO: esscape
 //        is RIntegerLiteralExpr -> expr.value.toString()
 //        is RByteArrayLiteralExpr -> TODO()//"E'\\\\x${expr.literal.toHex()}'"
-        is RCallExpr -> TODO() // (
+        is R_CallExpr -> TODO() // (
                 //if (expr.fname == "json")
                 //    genJSON(expr)
                 //else throw Exception("unknown funcall"))
@@ -114,7 +114,7 @@ fun genExpr(expr: RExpr): String {
     }
 }
 
-fun genop(opDefinition: ROperation): String {
+fun genop(opDefinition: R_Operation): String {
     val args = opDefinition.params.map {
         val typename = getSQLType(it.type).getTypeName(ctx.configuration())
         "_${it.name} ${typename}"
@@ -132,7 +132,7 @@ fun genop(opDefinition: ROperation): String {
 """
 }
 
-fun gensql(model: RModule, ops: Boolean): String {
+fun gensql(model: R_Module, ops: Boolean): String {
     System.setProperty("org.jooq.no-logo", "true")
 
     var s = ""

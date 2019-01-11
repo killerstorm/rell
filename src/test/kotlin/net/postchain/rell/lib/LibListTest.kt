@@ -234,7 +234,7 @@ class LibListTest: BaseRellTest(false) {
         chkEx("{ $init x[-1] = 5; return x; }", "rt_err:expr_list_lookup_index:3:-1")
         chkEx("{ $init x[3] = 5; return x; }", "rt_err:expr_list_lookup_index:3:3")
 
-        chkEx("{ val x: list<integer>? = [1, 2, 3]; x[1] = 5; return x; }", "ct_err:expr_lookup_base:list<integer>?")
+        chkEx("{ val x: list<integer>? = [1, 2, 3]; x[1] = 5; return x; }", "ct_err:expr_lookup_null")
         chkEx("{ val x: list<integer>? = [1, 2, 3]; x!![1] = 5; return x; }", "[1, 5, 3]")
     }
 

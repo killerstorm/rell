@@ -2,47 +2,37 @@ package net.postchain.rell.model
 
 import net.postchain.rell.runtime.*
 
-sealed class RCmpOp(val code: String, val checker: (Int) -> Boolean) {
+sealed class R_CmpOp(val code: String, val checker: (Int) -> Boolean) {
     fun check(cmp: Int): Boolean = checker(cmp)
 }
 
-object RCmpOp_Eq: RCmpOp("==", { it == 0 })
-object RCmpOp_Ne: RCmpOp("!=", { it != 0 })
-object RCmpOp_Lt: RCmpOp("<", { it < 0 })
-object RCmpOp_Gt: RCmpOp(">", { it > 0 })
-object RCmpOp_Le: RCmpOp("<=", { it <= 0 })
-object RCmpOp_Ge: RCmpOp(">=", { it >= 0 })
+object R_CmpOp_Lt: R_CmpOp("<", { it < 0 })
+object R_CmpOp_Gt: R_CmpOp(">", { it > 0 })
+object R_CmpOp_Le: R_CmpOp("<=", { it <= 0 })
+object R_CmpOp_Ge: R_CmpOp(">=", { it >= 0 })
 
-sealed class RCmpType {
-    abstract fun compare(left: RtValue, right: RtValue): Int
+sealed class R_CmpType {
+    abstract fun compare(left: Rt_Value, right: Rt_Value): Int
 }
 
-object RCmpType_Boolean: RCmpType() {
-    override fun compare(left: RtValue, right: RtValue): Int {
-        val l = left.asBoolean()
-        val r = right.asBoolean()
-        return l.compareTo(r)
-    }
-}
-
-object RCmpType_Integer: RCmpType() {
-    override fun compare(left: RtValue, right: RtValue): Int {
+object R_CmpType_Integer: R_CmpType() {
+    override fun compare(left: Rt_Value, right: Rt_Value): Int {
         val l = left.asInteger()
         val r = right.asInteger()
         return l.compareTo(r)
     }
 }
 
-object RCmpType_Text: RCmpType() {
-    override fun compare(left: RtValue, right: RtValue): Int {
+object R_CmpType_Text: R_CmpType() {
+    override fun compare(left: Rt_Value, right: Rt_Value): Int {
         val l = left.asString()
         val r = right.asString()
         return l.compareTo(r)
     }
 }
 
-object RCmpType_ByteArray: RCmpType() {
-    override fun compare(left: RtValue, right: RtValue): Int {
+object R_CmpType_ByteArray: R_CmpType() {
+    override fun compare(left: Rt_Value, right: Rt_Value): Int {
         val l = left.asByteArray()
         val r = right.asByteArray()
 
@@ -65,19 +55,19 @@ object RCmpType_ByteArray: RCmpType() {
     }
 }
 
-object RCmpType_Object: RCmpType() {
-    override fun compare(left: RtValue, right: RtValue): Int {
+object R_CmpType_Object: R_CmpType() {
+    override fun compare(left: Rt_Value, right: Rt_Value): Int {
         val l = left.asObjectId()
         val r = right.asObjectId()
         return l.compareTo(r)
     }
 }
 
-sealed class RBinaryOp(val code: String) {
-    open fun evaluate(left: RtValue): RtValue? = null
-    abstract fun evaluate(left: RtValue, right: RtValue): RtValue
+sealed class R_BinaryOp(val code: String) {
+    open fun evaluate(left: Rt_Value): Rt_Value? = null
+    abstract fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value
 
-    fun evaluate(frame: RtCallFrame, left: RExpr, right: RExpr): RtValue {
+    fun evaluate(frame: Rt_CallFrame, left: R_Expr, right: R_Expr): Rt_Value {
         val leftValue = left.evaluate(frame)
         val scValue = evaluate(leftValue)
         if (scValue != null) {
@@ -90,49 +80,49 @@ sealed class RBinaryOp(val code: String) {
     }
 }
 
-object RBinaryOp_Eq: RBinaryOp("==") {
-    override fun evaluate(left: RtValue, right: RtValue): RtValue = RtBooleanValue(left == right)
+object R_BinaryOp_Eq: R_BinaryOp("==") {
+    override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value = Rt_BooleanValue(left == right)
 }
 
-object RBinaryOp_Ne: RBinaryOp("!=") {
-    override fun evaluate(left: RtValue, right: RtValue): RtValue = RtBooleanValue(left != right)
+object R_BinaryOp_Ne: R_BinaryOp("!=") {
+    override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value = Rt_BooleanValue(left != right)
 }
 
-object RBinaryOp_EqRef: RBinaryOp("===") {
-    override fun evaluate(left: RtValue, right: RtValue): RtValue = RtBooleanValue(left === right)
+object R_BinaryOp_EqRef: R_BinaryOp("===") {
+    override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value = Rt_BooleanValue(left === right)
 }
 
-object RBinaryOp_NeRef: RBinaryOp("!==") {
-    override fun evaluate(left: RtValue, right: RtValue): RtValue = RtBooleanValue(left !== right)
+object R_BinaryOp_NeRef: R_BinaryOp("!==") {
+    override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value = Rt_BooleanValue(left !== right)
 }
 
-class RBinaryOp_Cmp(val cmpOp: RCmpOp, val cmpType: RCmpType): RBinaryOp(cmpOp.code) {
-    override fun evaluate(left: RtValue, right: RtValue): RtValue {
+class R_BinaryOp_Cmp(val cmpOp: R_CmpOp, val cmpType: R_CmpType): R_BinaryOp(cmpOp.code) {
+    override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value {
         val cmp = cmpType.compare(left, right)
         val res = cmpOp.check(cmp)
-        return RtBooleanValue(res)
+        return Rt_BooleanValue(res)
     }
 }
 
-sealed class RBinaryOp_Logic(code: String): RBinaryOp(code) {
+sealed class R_BinaryOp_Logic(code: String): R_BinaryOp(code) {
     abstract fun evaluate(left: Boolean): Boolean?
     abstract fun evaluate(left: Boolean, right: Boolean): Boolean
 
-    override fun evaluate(left: RtValue): RtValue? {
+    override fun evaluate(left: Rt_Value): Rt_Value? {
         val lb = left.asBoolean()
         val res = evaluate(lb)
-        return if (res == null) null else RtBooleanValue(res)
+        return if (res == null) null else Rt_BooleanValue(res)
     }
 
-    override fun evaluate(left: RtValue, right: RtValue): RtValue {
+    override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value {
         val lb = left.asBoolean()
         val rb = right.asBoolean()
         val res = evaluate(lb, rb)
-        return RtBooleanValue(res)
+        return Rt_BooleanValue(res)
     }
 }
 
-object RBinaryOp_And: RBinaryOp_Logic("and") {
+object R_BinaryOp_And: R_BinaryOp_Logic("and") {
     override fun evaluate(left: Boolean): Boolean? {
         return if (!left) false else null
     }
@@ -142,7 +132,7 @@ object RBinaryOp_And: RBinaryOp_Logic("and") {
     }
 }
 
-object RBinaryOp_Or: RBinaryOp_Logic("or") {
+object R_BinaryOp_Or: R_BinaryOp_Logic("or") {
     override fun evaluate(left: Boolean): Boolean? {
         return if (left) true else null
     }
@@ -152,88 +142,88 @@ object RBinaryOp_Or: RBinaryOp_Logic("or") {
     }
 }
 
-class RBinaryExpr(type: RType, val op: RBinaryOp, val left: RExpr, val right: RExpr): RExpr(type) {
-    override fun evaluate(frame: RtCallFrame): RtValue {
+class R_BinaryExpr(type: R_Type, val op: R_BinaryOp, val left: R_Expr, val right: R_Expr): R_Expr(type) {
+    override fun evaluate(frame: Rt_CallFrame): Rt_Value {
         val resValue = op.evaluate(frame, left, right)
         return resValue
     }
 }
 
-sealed class RBinaryOp_Arith(code: String): RBinaryOp(code) {
+sealed class R_BinaryOp_Arith(code: String): R_BinaryOp(code) {
     abstract fun evaluate(left: Long, right: Long): Long
 
-    override final fun evaluate(left: RtValue, right: RtValue): RtValue {
+    override final fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value {
         val leftVal = left.asInteger()
         val rightVal = right.asInteger()
         val resVal = evaluate(leftVal, rightVal)
-        return RtIntValue(resVal)
+        return Rt_IntValue(resVal)
     }
 }
 
-object RBinaryOp_Add: RBinaryOp_Arith("+") {
+object R_BinaryOp_Add: R_BinaryOp_Arith("+") {
     override fun evaluate(left: Long, right: Long): Long = left + right
 }
 
-object RBinaryOp_Sub: RBinaryOp_Arith("-") {
+object R_BinaryOp_Sub: R_BinaryOp_Arith("-") {
     override fun evaluate(left: Long, right: Long): Long = left - right
 }
 
-object RBinaryOp_Mul: RBinaryOp_Arith("*") {
+object R_BinaryOp_Mul: R_BinaryOp_Arith("*") {
     override fun evaluate(left: Long, right: Long): Long = left * right
 }
 
-object RBinaryOp_Div: RBinaryOp_Arith("/") {
+object R_BinaryOp_Div: R_BinaryOp_Arith("/") {
     override fun evaluate(left: Long, right: Long): Long {
         if (right == 0L) {
-            throw RtError("expr_div_by_zero", "Division by zero")
+            throw Rt_Error("expr_div_by_zero", "Division by zero")
         }
         return left / right
     }
 }
 
-object RBinaryOp_Mod: RBinaryOp_Arith("%") {
+object R_BinaryOp_Mod: R_BinaryOp_Arith("%") {
     override fun evaluate(left: Long, right: Long): Long = left % right
 }
 
-object RBinaryOp_Concat_Text: RBinaryOp("+") {
-    override fun evaluate(left: RtValue, right: RtValue): RtValue {
+object R_BinaryOp_Concat_Text: R_BinaryOp("+") {
+    override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value {
         val leftVal = left.asString()
         val rightVal = right.asString()
         val resVal = leftVal + rightVal
-        return RtTextValue(resVal)
+        return Rt_TextValue(resVal)
     }
 }
 
-object RBinaryOp_Concat_ByteArray: RBinaryOp("+") {
-    override fun evaluate(left: RtValue, right: RtValue): RtValue {
+object R_BinaryOp_Concat_ByteArray: R_BinaryOp("+") {
+    override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value {
         val leftVal = left.asByteArray()
         val rightVal = right.asByteArray()
         val resVal = leftVal + rightVal
-        return RtByteArrayValue(resVal)
+        return Rt_ByteArrayValue(resVal)
     }
 }
 
-object RBinaryOp_In_Collection: RBinaryOp("in") {
-    override fun evaluate(left: RtValue, right: RtValue): RtValue {
+object R_BinaryOp_In_Collection: R_BinaryOp("in") {
+    override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value {
         val c = right.asCollection()
         val r = c.contains(left)
-        return RtBooleanValue(r)
+        return Rt_BooleanValue(r)
     }
 }
 
-object RBinaryOp_In_Map: RBinaryOp("in") {
-    override fun evaluate(left: RtValue, right: RtValue): RtValue {
+object R_BinaryOp_In_Map: R_BinaryOp("in") {
+    override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value {
         val c = right.asMap()
         val r = c.containsKey(left)
-        return RtBooleanValue(r)
+        return Rt_BooleanValue(r)
     }
 }
 
-object RBinaryOp_In_Range: RBinaryOp("in") {
-    override fun evaluate(left: RtValue, right: RtValue): RtValue {
+object R_BinaryOp_In_Range: R_BinaryOp("in") {
+    override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value {
         val x = left.asInteger()
         val c = right.asRange()
         val r = c.contains(x)
-        return RtBooleanValue(r)
+        return Rt_BooleanValue(r)
     }
 }

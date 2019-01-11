@@ -10,21 +10,21 @@ class S_UpdateStatement(
         val where: S_AtExprWhere,
         val what: List<S_UpdateWhat>): S_Statement()
 {
-    override fun compile(ctx: C_ExprContext): RStatement {
-        ctx.entCtx.checkDbUpdateAllowed(pos)
+    override fun compile(ctx: C_ExprContext): R_Statement {
+        ctx.blkCtx.entCtx.checkDbUpdateAllowed(pos)
 
         val rFrom = S_AtExpr.compileFrom(ctx, from)
         val cls = rFrom[0]
         val extraClasses = rFrom.subList(1, rFrom.size)
 
-        val dbCtx = C_DbExprContext(null, ctx, rFrom)
+        val dbCtx = C_DbExprContext(ctx.blkCtx, rFrom)
         val dbWhere = where.compile(dbCtx)
         val dbWhat = compileWhat(cls.rClass, dbCtx)
 
-        return RUpdateStatement(cls, extraClasses, dbWhere, dbWhat)
+        return R_UpdateStatement(cls, extraClasses, dbWhere, dbWhat)
     }
 
-    private fun compileWhat(cls: RClass, dbCtx: C_DbExprContext): List<RUpdateStatementWhat> {
+    private fun compileWhat(cls: R_Class, dbCtx: C_DbExprContext): List<R_UpdateStatementWhat> {
         val dbWhat = what.map { compileWhatExpr(cls, dbCtx, it) }
         val types = dbWhat.map { it.type }
         val whatPairs = what.map { S_NameExprPair(it.name, it.expr) }
@@ -37,31 +37,31 @@ class S_UpdateStatement(
         return updAttrs
     }
 
-    private fun compileWhatExpr(cls: RClass, ctx: C_DbExprContext, pair: S_UpdateWhat): DbExpr {
-        val locName = pair.expr.asName()
-        if (locName != null && pair.name == null) {
-            val clsAttr = cls.attributes[locName.str]
-            val localVar = ctx.exprCtx.lookupOpt(locName.str)
+    private fun compileWhatExpr(cls: R_Class, ctx: C_DbExprContext, pair: S_UpdateWhat): Db_Expr {
+        val impName = pair.expr.asName()
+        if (impName != null && pair.name == null) {
+            val clsAttr = cls.attributes[impName.str]
+            val localVar = ctx.blkCtx.lookupLocalVar(impName.str)
             if (clsAttr != null && localVar != null) {
                 val rExpr = localVar.toVarExpr()
-                return InterpretedDbExpr(rExpr)
+                return C_Utils.toDbExpr(impName.pos, rExpr)
             }
         }
-        return pair.expr.compileDb(ctx)
+        return pair.expr.compile(ctx).toDbExpr()
     }
 }
 
 class S_DeleteStatement(val pos: S_Pos, val from: List<S_AtExprFrom>, val where: S_AtExprWhere): S_Statement() {
-    override fun compile(ctx: C_ExprContext): RStatement {
-        ctx.entCtx.checkDbUpdateAllowed(pos)
+    override fun compile(ctx: C_ExprContext): R_Statement {
+        ctx.blkCtx.entCtx.checkDbUpdateAllowed(pos)
 
         val rFrom = S_AtExpr.compileFrom(ctx, from)
         val cls = rFrom[0]
         val extraClasses = rFrom.subList(1, rFrom.size)
 
-        val dbCtx = C_DbExprContext(null, ctx, rFrom)
+        val dbCtx = C_DbExprContext(ctx.blkCtx, rFrom)
         val dbWhere = where.compile(dbCtx)
 
-        return RDeleteStatement(cls, extraClasses, dbWhere)
+        return R_DeleteStatement(cls, extraClasses, dbWhere)
     }
 }

@@ -126,8 +126,8 @@ class UserFunctionTest: BaseRellTest(false) {
         chkFnEx(fn, "= user @ { .name.upperCase() == foo('bob') };", "user[1]")
         chkFnEx(fn, "= user @ { .name.upperCase() == foo('alice') };", "user[2]")
 
-        chkFnEx(fn, "= user @ { foo(.name) == 'BOB' };", "ct_err:call_userfn_nosql:foo")
-        chkFnEx(fn, "= user @ { .id == 123 } ( foo(.name) );", "ct_err:call_userfn_nosql:foo")
+        chkFnEx(fn, "= user @ { foo(.name) == 'BOB' };", "ct_err:expr_sqlnotallowed")
+        chkFnEx(fn, "= user @ { .id == 123 } ( foo(.name) );", "ct_err:expr_sqlnotallowed")
     }
 
     private fun chkFn(fnCode: String, callCode: String, expected: String) {

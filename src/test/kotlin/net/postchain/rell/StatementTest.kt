@@ -1,12 +1,12 @@
 package net.postchain.rell
 
-import net.postchain.rell.runtime.RtIntValue
+import net.postchain.rell.runtime.Rt_IntValue
 import org.junit.Test
 
 class StatementTest: BaseRellTest() {
     @Test fun testVal() {
         chkEx("{ val x = 123; return x; }", "int[123]")
-        chkEx("{ val x = 123; x = 456; return x; }", "ct_err:stmt_assign_val:x")
+        chkEx("{ val x = 123; x = 456; return x; }", "ct_err:expr_assign_val:x")
         chkEx("{ val x: integer = 123; return x; }", "int[123]")
         chkEx("{ val x: text = 123; return x; }", "ct_err:stmt_val_type:x:text:integer")
         chkEx("{ val x: integer = 'Hello'; return x; }", "ct_err:stmt_val_type:x:integer:text")
@@ -261,9 +261,9 @@ class StatementTest: BaseRellTest() {
             }
         """.trimIndent()
 
-        chkFull(code, listOf(RtIntValue(0), RtIntValue(0)), "text[[[777, 1, 2], [10, 11, 12], [20, 21, 22]]]")
-        chkFull(code, listOf(RtIntValue(1), RtIntValue(1)), "text[[[0, 1, 2], [10, 777, 12], [20, 21, 22]]]")
-        chkFull(code, listOf(RtIntValue(2), RtIntValue(2)), "text[[[0, 1, 2], [10, 11, 12], [20, 21, 777]]]")
+        chkFull(code, listOf(Rt_IntValue(0), Rt_IntValue(0)), "text[[[777, 1, 2], [10, 11, 12], [20, 21, 22]]]")
+        chkFull(code, listOf(Rt_IntValue(1), Rt_IntValue(1)), "text[[[0, 1, 2], [10, 777, 12], [20, 21, 22]]]")
+        chkFull(code, listOf(Rt_IntValue(2), Rt_IntValue(2)), "text[[[0, 1, 2], [10, 11, 12], [20, 21, 777]]]")
     }
 
     @Test fun testCallChain() {
@@ -272,14 +272,14 @@ class StatementTest: BaseRellTest() {
             query q(i: integer)
         """.trimIndent()
 
-        chkFull("$code = f(123);", listOf(RtIntValue(0)), "map<integer,text>[int[123]=text[Bob],int[246]=text[Alice]]")
-        chkFull("$code = f(123).values();", listOf(RtIntValue(0)), "list<text>[text[Bob],text[Alice]]")
-        chkFull("$code = f(123).values().calculate(i);", listOf(RtIntValue(0)), "text[Bob]")
-        chkFull("$code = f(123).values().calculate(i);", listOf(RtIntValue(1)), "text[Alice]")
-        chkFull("$code = f(123).values().calculate(i).upperCase();", listOf(RtIntValue(0)), "text[BOB]")
-        chkFull("$code = f(123).values().calculate(i).upperCase();", listOf(RtIntValue(1)), "text[ALICE]")
-        chkFull("$code = f(123).values().calculate(i).upperCase().size();", listOf(RtIntValue(0)), "int[3]")
-        chkFull("$code = f(123).values().calculate(i).upperCase().size();", listOf(RtIntValue(1)), "int[5]")
+        chkFull("$code = f(123);", listOf(Rt_IntValue(0)), "map<integer,text>[int[123]=text[Bob],int[246]=text[Alice]]")
+        chkFull("$code = f(123).values();", listOf(Rt_IntValue(0)), "list<text>[text[Bob],text[Alice]]")
+        chkFull("$code = f(123).values().calculate(i);", listOf(Rt_IntValue(0)), "text[Bob]")
+        chkFull("$code = f(123).values().calculate(i);", listOf(Rt_IntValue(1)), "text[Alice]")
+        chkFull("$code = f(123).values().calculate(i).upperCase();", listOf(Rt_IntValue(0)), "text[BOB]")
+        chkFull("$code = f(123).values().calculate(i).upperCase();", listOf(Rt_IntValue(1)), "text[ALICE]")
+        chkFull("$code = f(123).values().calculate(i).upperCase().size();", listOf(Rt_IntValue(0)), "int[3]")
+        chkFull("$code = f(123).values().calculate(i).upperCase().size();", listOf(Rt_IntValue(1)), "int[5]")
     }
 
     private fun chkAssignmentErr(op: String) {

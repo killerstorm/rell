@@ -4,28 +4,33 @@ import net.postchain.rell.model.*
 
 class S_AtExprFrom(val alias: S_Name?, val className: S_Name)
 
-internal class S_AtWhat(val exprs: List<Pair<String?, DbExpr>>, val sort: List<Pair<DbExpr, Boolean>>)
+class C_AtWhat(val exprs: List<Pair<String?, Db_Expr>>, val sort: List<Pair<Db_Expr, Boolean>>)
 
 sealed class S_AtExprWhat {
-    internal abstract fun compile(ctx: C_DbExprContext): S_AtWhat
+    abstract fun compile(ctx: C_DbExprContext): C_AtWhat
 }
 
 class S_AtExprWhatDefault: S_AtExprWhat() {
-    override fun compile(ctx: C_DbExprContext): S_AtWhat {
+    override fun compile(ctx: C_DbExprContext): C_AtWhat {
         val exprs = ctx.classes.map {
             val name = if (ctx.classes.size == 1) null else it.alias
-            val expr = ClassDbExpr(it)
+            val expr = Db_ClassExpr(it)
             Pair(name, expr)
         }
-        return S_AtWhat(exprs, listOf())
+        return C_AtWhat(exprs, listOf())
     }
 }
 
 class S_AtExprWhatSimple(val path: List<S_Name>): S_AtExprWhat() {
-    override fun compile(ctx: C_DbExprContext): S_AtWhat {
-        val dbExpr = compileDbPathExpr(ctx, path)
+    override fun compile(ctx: C_DbExprContext): C_AtWhat {
+        var expr = ctx.resolveAttr(path[0])
+        for (step in path.subList(1, path.size)) {
+            expr = expr.member(ctx, step, false)
+        }
+
+        var dbExpr = expr.toDbExpr()
         val exprs = listOf(Pair(null, dbExpr))
-        return S_AtWhat(exprs, listOf())
+        return C_AtWhat(exprs, listOf())
     }
 }
 
@@ -34,10 +39,10 @@ class S_AtExprWhatAttr(val name: S_Name?)
 class S_AtExprWhatComplexField(val attr: S_AtExprWhatAttr?, val expr: S_Expr, val sort: Boolean?)
 
 class S_AtExprWhatComplex(val fields: List<S_AtExprWhatComplexField>): S_AtExprWhat() {
-    override fun compile(ctx: C_DbExprContext): S_AtWhat {
+    override fun compile(ctx: C_DbExprContext): C_AtWhat {
         checkExplicitNames()
 
-        val dbExprs = fields.map { it.expr.compileDb(ctx) }
+        val dbExprs = fields.map { it.expr.compile(ctx).toDbExpr() }
 
         val implicitNames = fields.withIndex().map { (idx, field) ->
             if (field.attr != null) null else dbExprs[idx].implicitName()
@@ -72,7 +77,7 @@ class S_AtExprWhatComplex(val fields: List<S_AtExprWhatComplexField>): S_AtExprW
                 .filter { (_, field) -> field.sort != null }
                 .map { (idx, field) -> Pair(exprs[idx].second, field.sort!!) }
 
-        return S_AtWhat(exprs, sort)
+        return C_AtWhat(exprs, sort)
     }
 
     private fun checkExplicitNames() {
@@ -87,75 +92,83 @@ class S_AtExprWhatComplex(val fields: List<S_AtExprWhatComplexField>): S_AtExprW
 }
 
 class S_AtExprWhere(val exprs: List<S_Expr>) {
-    internal fun compile(ctx: C_DbExprContext): DbExpr? {
-        val dbWhereExprs = exprs.withIndex().map { (idx, expr) -> compileWhereExpr(ctx, idx, expr) }
-        val dbWhere = makeWhere(dbWhereExprs)
+    fun compile(ctx: C_DbExprContext): Db_Expr? {
+        val whereExprs = exprs.withIndex().map { (idx, expr) -> compileWhereExpr(ctx, idx, expr) }
+        val dbWhere = makeWhere(whereExprs)
         return dbWhere
     }
 
-    private fun compileWhereExpr(ctx: C_DbExprContext, idx: Int, expr: S_Expr): DbExpr {
-        val dbExpr = expr.compileDbWhere(ctx, idx)
-        val type = dbExpr.type
-        if (type == RBooleanType) {
-            return dbExpr
+    private fun compileWhereExpr(ctx: C_DbExprContext, idx: Int, expr: S_Expr): C_Expr {
+        val cExpr = expr.compileWhere(ctx, idx)
+        val type = cExpr.type()
+        if (type == R_BooleanType) {
+            return cExpr
         }
+
+        val dbExpr = cExpr.toDbExpr()
 
         val attrs = ctx.findAttributesByType(type)
         if (attrs.isEmpty()) {
             throw C_Error(expr.startPos, "at_where_type:$idx:$type", "No attribute matches type of where-expression #${idx+1}: $type")
         } else if (attrs.size > 1) {
-            throw C_Utils.errMutlipleAttrs(expr.startPos, attrs, "at_attr_type_ambig:$idx:$type",
+            throw C_Errors.errMutlipleAttrs(expr.startPos, attrs, "at_attr_type_ambig:$idx:$type",
                     "Multiple attributes match type of where-expression #${idx+1} ($type)")
         }
 
         val attr = attrs[0]
-        val attrExpr = AttrDbExpr(ClassDbExpr(attr.cls), attr.attr)
+        val attrExpr = Db_AttrExpr(Db_ClassExpr(attr.cls), attr.attr)
 
-        return BinaryDbExpr(RBooleanType, DbBinaryOp_Eq, attrExpr, dbExpr)
+        val dbEqExpr = Db_BinaryExpr(R_BooleanType, Db_BinaryOp_Eq, attrExpr, dbExpr)
+        return C_DbExpr(expr.startPos, dbEqExpr)
     }
 
-    private fun makeWhere(compiledExprs: List<DbExpr>): DbExpr? {
+    private fun makeWhere(compiledExprs: List<C_Expr>): Db_Expr? {
         for (expr in compiledExprs) {
-            check(expr.type == RBooleanType)
+            check(expr.type() == R_BooleanType)
         }
 
-        val dbExprs = compiledExprs.filter { it !is InterpretedDbExpr }
-        val rExprs = compiledExprs.filter { it is InterpretedDbExpr }.map { (it as InterpretedDbExpr).expr }
+        val dbExprs = compiledExprs.filter { it.isDb() }.map { it.toDbExpr() }
+        val rExprs = compiledExprs.filter { !it.isDb() }.map { it.toRExpr() }
 
         val dbTree = exprsToTree(dbExprs)
         val rTree = exprsToTree(rExprs)
 
-        if (dbTree != null && rTree != null) {
-            return BinaryDbExpr(RBooleanType, DbBinaryOp_And, dbTree, InterpretedDbExpr(rTree))
+        val dbRTree = if (rTree == null) null else {
+            val pos = compiledExprs.first { !it.isDb() }.startPos()
+            C_Utils.toDbExpr(pos, rTree)
+        }
+
+        if (dbTree != null && dbRTree != null) {
+            return Db_BinaryExpr(R_BooleanType, Db_BinaryOp_And, dbTree, dbRTree)
         } else if (dbTree != null) {
             return dbTree
-        } else if (rTree != null) {
-            return InterpretedDbExpr(rTree)
+        } else if (dbRTree != null) {
+            return dbRTree
         } else {
             return null
         }
     }
 
-    private fun exprsToTree(exprs: List<DbExpr>): DbExpr? {
+    private fun exprsToTree(exprs: List<Db_Expr>): Db_Expr? {
         if (exprs.isEmpty()) {
             return null
         }
 
         var left = exprs[0]
         for (right in exprs.subList(1, exprs.size)) {
-            left = BinaryDbExpr(RBooleanType, DbBinaryOp_And, left, right)
+            left = Db_BinaryExpr(R_BooleanType, Db_BinaryOp_And, left, right)
         }
         return left
     }
 
-    private fun exprsToTree(exprs: List<RExpr>): RExpr? {
+    private fun exprsToTree(exprs: List<R_Expr>): R_Expr? {
         if (exprs.isEmpty()) {
             return null
         }
 
         var left = exprs[0]
         for (right in exprs.subList(1, exprs.size)) {
-            left = RBinaryExpr(RBooleanType, RBinaryOp_And, left, right)
+            left = R_BinaryExpr(R_BooleanType, R_BinaryOp_And, left, right)
         }
 
         return left
@@ -172,23 +185,24 @@ class S_AtExpr(
         val many: Boolean
 ): S_Expr(startPos)
 {
-    override fun compile(ctx: C_ExprContext): RExpr {
+    override fun compile(ctx: C_ExprContext): C_Expr {
         val base = compileBase(ctx)
 
         val type = if (many) {
-            RListType(base.resType.type)
+            R_ListType(base.resType.type)
         } else if (zero) {
-            RNullableType(base.resType.type)
+            R_NullableType(base.resType.type)
         } else {
             base.resType.type
         }
 
-        return RAtExpr(type, base.rBase, base.limit, base.resType.rowDecoder)
+        var rExpr = R_AtExpr(type, base.rBase, base.limit, base.resType.rowDecoder)
+        return C_RExpr(startPos, rExpr)
     }
 
     private fun compileBase(ctx: C_ExprContext): AtBase {
         val rFrom = compileFrom(ctx, from)
-        val dbCtx = C_DbExprContext(null, ctx, rFrom)
+        val dbCtx = C_DbExprContext(ctx.blkCtx, rFrom)
 
         val dbWhere = where.compile(dbCtx)
 
@@ -199,41 +213,40 @@ class S_AtExpr(
 
         val rLimit = compileLimit(ctx)
 
-        val base = RAtExprBase(rFrom, dbWhatExprs, dbWhere, ctWhat.sort, zero, many)
+        val base = R_AtExprBase(rFrom, dbWhatExprs, dbWhere, ctWhat.sort, zero, many)
         return AtBase(base, rLimit, resType)
     }
 
-    private fun calcResultType(dbWhat: List<Pair<String?, DbExpr>>): AtResultType {
+    private fun calcResultType(dbWhat: List<Pair<String?, Db_Expr>>): AtResultType {
         if (dbWhat.size == 1 && dbWhat[0].first == null) {
             val type = dbWhat[0].second.type
-            return AtResultType(type, RAtExprRowTypeSimple)
+            return AtResultType(type, R_AtExprRowTypeSimple)
         } else {
-            val fields = dbWhat.map { RTupleField(it.first, it.second.type) }
-            val type = RTupleType(fields)
-            return AtResultType(type, RAtExprRowTypeTuple(type))
+            val fields = dbWhat.map { R_TupleField(it.first, it.second.type) }
+            val type = R_TupleType(fields)
+            return AtResultType(type, R_AtExprRowTypeTuple(type))
         }
     }
 
-    private fun compileLimit(ctx: C_ExprContext): RExpr? {
+    private fun compileLimit(ctx: C_ExprContext): R_Expr? {
         if (limit == null) {
             return null
         }
 
-        val r = limit.compile(ctx)
-        if (r.type != RIntegerType) {
-            throw C_Error(limit.startPos, "expr_at_limit_type:${r.type.toStrictString()}",
-                    "Wrong limit type: ${r.type.toStrictString()} instead of ${RIntegerType.toStrictString()}")
+        val cExpr = limit.compile(ctx)
+        val type = cExpr.type()
+        if (type != R_IntegerType) {
+            throw C_Error(limit.startPos, "expr_at_limit_type:${type.toStrictString()}",
+                    "Wrong limit type: ${type.toStrictString()} instead of ${R_IntegerType.toStrictString()}")
         }
 
-        return r
+        return cExpr.toRExpr()
     }
 
-    override fun compileDb(ctx: C_DbExprContext): DbExpr = delegateCompileDb(ctx)
-
-    private class AtResultType(val type: RType, val rowDecoder: RAtExprRowType)
+    private class AtResultType(val type: R_Type, val rowDecoder: R_AtExprRowType)
 
     companion object {
-        internal fun compileFrom(ctx: C_ExprContext, from: List<S_AtExprFrom>): List<RAtClass> {
+        fun compileFrom(ctx: C_ExprContext, from: List<S_AtExprFrom>): List<R_AtClass> {
             val rFrom = from.mapIndexed { i, f -> compileFromClass(ctx, i, f) }
 
             val names = mutableSetOf<String>()
@@ -246,20 +259,20 @@ class S_AtExpr(
             return rFrom.map { ( _, cls ) -> cls }
         }
 
-        private fun compileFromClass(ctx: C_ExprContext, idx: Int, from: S_AtExprFrom): Pair<S_Name, RAtClass> {
+        private fun compileFromClass(ctx: C_ExprContext, idx: Int, from: S_AtExprFrom): Pair<S_Name, R_AtClass> {
             if (from.alias != null) {
                 val name = from.alias
-                val entry = ctx.lookupOpt(name.str)
+                val entry = ctx.blkCtx.lookupLocalVar(name.str)
                 if (entry != null) {
                     throw C_Error(name.pos, "expr_at_conflict_alias:${name.str}", "Name conflict: '${name.str}'")
                 }
             }
 
             val alias = from.alias ?: from.className
-            val cls = ctx.entCtx.modCtx.getClass(from.className)
-            return Pair(alias, RAtClass(cls, alias.str, idx))
+            val cls = ctx.blkCtx.entCtx.modCtx.getClass(from.className)
+            return Pair(alias, R_AtClass(cls, alias.str, idx))
         }
 
-        private class AtBase(val rBase: RAtExprBase, val limit: RExpr?, val resType: AtResultType)
+        private class AtBase(val rBase: R_AtExprBase, val limit: R_Expr?, val resType: AtResultType)
     }
 }

@@ -1,35 +1,34 @@
 package net.postchain.rell.model
 
-import net.postchain.rell.runtime.RtCallFrame
-import net.postchain.rell.runtime.RtRequireError
-import net.postchain.rell.runtime.RtValue
+import net.postchain.rell.runtime.Rt_CallFrame
+import net.postchain.rell.runtime.Rt_Value
 
-class RVariable(val name: String, val type: RType)
+class R_Variable(val name: String, val type: R_Type)
 
-sealed class RStatementResult
-class RStatementResult_Return(val value: RtValue?): RStatementResult()
-class RStatementResult_Break: RStatementResult()
+sealed class R_StatementResult
+class R_StatementResult_Return(val value: Rt_Value?): R_StatementResult()
+class R_StatementResult_Break: R_StatementResult()
 
-abstract class RStatement {
-    abstract fun execute(frame: RtCallFrame): RStatementResult?
+abstract class R_Statement {
+    abstract fun execute(frame: Rt_CallFrame): R_StatementResult?
 }
 
-object REmptyStatement: RStatement() {
-    override fun execute(frame: RtCallFrame): RStatementResult? {
+object R_EmptyStatement: R_Statement() {
+    override fun execute(frame: Rt_CallFrame): R_StatementResult? {
         return null
     }
 }
 
-class RValStatement(val ptr: RVarPtr, val expr: RExpr): RStatement() {
-    override fun execute(frame: RtCallFrame): RStatementResult? {
+class R_ValStatement(val ptr: R_VarPtr, val expr: R_Expr): R_Statement() {
+    override fun execute(frame: Rt_CallFrame): R_StatementResult? {
         val value = expr.evaluate(frame)
         frame.set(ptr, value, false)
         return null
     }
 }
 
-class RVarStatement(val ptr: RVarPtr, val expr: RExpr?): RStatement() {
-    override fun execute(frame: RtCallFrame): RStatementResult? {
+class R_VarStatement(val ptr: R_VarPtr, val expr: R_Expr?): R_Statement() {
+    override fun execute(frame: Rt_CallFrame): R_StatementResult? {
         if (expr != null) {
             val value = expr.evaluate(frame)
             frame.set(ptr, value, false)
@@ -38,22 +37,22 @@ class RVarStatement(val ptr: RVarPtr, val expr: RExpr?): RStatement() {
     }
 }
 
-class RReturnStatement(val expr: RExpr?): RStatement() {
-    override fun execute(frame: RtCallFrame): RStatementResult? {
+class R_ReturnStatement(val expr: R_Expr?): R_Statement() {
+    override fun execute(frame: Rt_CallFrame): R_StatementResult? {
         val value = expr?.evaluate(frame)
-        return RStatementResult_Return(value)
+        return R_StatementResult_Return(value)
     }
 }
 
-class RBlockStatement(val stmts: List<RStatement>, val frameBlock: RFrameBlock): RStatement() {
-    override fun execute(frame: RtCallFrame): RStatementResult? {
+class R_BlockStatement(val stmts: List<R_Statement>, val frameBlock: R_FrameBlock): R_Statement() {
+    override fun execute(frame: Rt_CallFrame): R_StatementResult? {
         val res = frame.block(frameBlock) {
             execute0(frame)
         }
         return res
     }
 
-    private fun execute0(frame: RtCallFrame): RStatementResult? {
+    private fun execute0(frame: Rt_CallFrame): R_StatementResult? {
         for (stmt in stmts) {
             val res = stmt.execute(frame)
             if (res != null) {
@@ -64,15 +63,15 @@ class RBlockStatement(val stmts: List<RStatement>, val frameBlock: RFrameBlock):
     }
 }
 
-class RExprStatement(val expr: RExpr): RStatement() {
-    override fun execute(frame: RtCallFrame): RStatementResult? {
+class R_ExprStatement(val expr: R_Expr): R_Statement() {
+    override fun execute(frame: Rt_CallFrame): R_StatementResult? {
         expr.evaluate(frame)
         return null
     }
 }
 
-class RAssignStatement(val dstExpr: RDestinationExpr, val expr: RExpr, val op: RBinaryOp?): RStatement() {
-    override fun execute(frame: RtCallFrame): RStatementResult? {
+class R_AssignStatement(val dstExpr: R_DestinationExpr, val expr: R_Expr, val op: R_BinaryOp?): R_Statement() {
+    override fun execute(frame: Rt_CallFrame): R_StatementResult? {
         val dstRef = dstExpr.evaluateRef(frame)
         if (dstRef == null) {
             // Null-safe access (operator ?.).
@@ -91,8 +90,8 @@ class RAssignStatement(val dstExpr: RDestinationExpr, val expr: RExpr, val op: R
     }
 }
 
-class RIfStatement(val expr: RExpr, val trueStmt: RStatement, val falseStmt: RStatement): RStatement() {
-    override fun execute(frame: RtCallFrame): RStatementResult? {
+class R_IfStatement(val expr: R_Expr, val trueStmt: R_Statement, val falseStmt: R_Statement): R_Statement() {
+    override fun execute(frame: Rt_CallFrame): R_StatementResult? {
         val cond = expr.evaluate(frame)
         val b = cond.asBoolean()
         val stmt = if (b) trueStmt else falseStmt
@@ -101,8 +100,8 @@ class RIfStatement(val expr: RExpr, val trueStmt: RStatement, val falseStmt: RSt
     }
 }
 
-class RWhileStatement(val expr: RExpr, val stmt: RStatement, val frameBlock: RFrameBlock): RStatement() {
-    override fun execute(frame: RtCallFrame): RStatementResult? {
+class R_WhileStatement(val expr: R_Expr, val stmt: R_Statement, val frameBlock: R_FrameBlock): R_Statement() {
+    override fun execute(frame: Rt_CallFrame): R_StatementResult? {
         while (true) {
             val cond = expr.evaluate(frame)
             val b = cond.asBoolean()
@@ -112,44 +111,44 @@ class RWhileStatement(val expr: RExpr, val stmt: RStatement, val frameBlock: RFr
 
             val res = executeBody(frame)
             if (res != null) {
-                return if (res is RStatementResult_Return) res else null
+                return if (res is R_StatementResult_Return) res else null
             }
         }
         return null
     }
 
-    private fun executeBody(frame: RtCallFrame): RStatementResult? {
+    private fun executeBody(frame: Rt_CallFrame): R_StatementResult? {
         return frame.block(frameBlock) {
             stmt.execute(frame)
         }
     }
 }
 
-sealed class RForIterator {
-    abstract fun list(v: RtValue): Iterable<RtValue>
+sealed class R_ForIterator {
+    abstract fun list(v: Rt_Value): Iterable<Rt_Value>
 }
 
-object RForIterator_Collection: RForIterator() {
-    override fun list(v: RtValue): Iterable<RtValue> = v.asCollection()
+object R_ForIterator_Collection: R_ForIterator() {
+    override fun list(v: Rt_Value): Iterable<Rt_Value> = v.asCollection()
 }
 
-object RForIterator_Map: RForIterator() {
-    override fun list(v: RtValue): Iterable<RtValue> = v.asMap().keys
+object R_ForIterator_Map: R_ForIterator() {
+    override fun list(v: Rt_Value): Iterable<Rt_Value> = v.asMap().keys
 }
 
-object RForIterator_Range: RForIterator() {
-    override fun list(v: RtValue): Iterable<RtValue> = v.asRange()
+object R_ForIterator_Range: R_ForIterator() {
+    override fun list(v: Rt_Value): Iterable<Rt_Value> = v.asRange()
 }
 
-class RForStatement(
-        val varPtr: RVarPtr,
-        val expr: RExpr,
-        val iterator: RForIterator,
-        val stmt: RStatement,
-        val frameBlock: RFrameBlock
-): RStatement()
+class R_ForStatement(
+        val varPtr: R_VarPtr,
+        val expr: R_Expr,
+        val iterator: R_ForIterator,
+        val stmt: R_Statement,
+        val frameBlock: R_FrameBlock
+): R_Statement()
 {
-    override fun execute(frame: RtCallFrame): RStatementResult? {
+    override fun execute(frame: Rt_CallFrame): R_StatementResult? {
         val value = expr.evaluate(frame)
         val list = iterator.list(value)
 
@@ -160,22 +159,22 @@ class RForStatement(
         return res
     }
 
-    private fun execute0(frame: RtCallFrame, list: Iterable<RtValue>): RStatementResult? {
+    private fun execute0(frame: Rt_CallFrame, list: Iterable<Rt_Value>): R_StatementResult? {
         var first = true
         for (item in list) {
             frame.set(varPtr, item, !first)
             first = false
             val res = stmt.execute(frame)
             if (res != null) {
-                return if (res is RStatementResult_Return) res else null
+                return if (res is R_StatementResult_Return) res else null
             }
         }
         return null
     }
 }
 
-class RBreakStatement(): RStatement() {
-    override fun execute(frame: RtCallFrame): RStatementResult? {
-        return RStatementResult_Break()
+class R_BreakStatement: R_Statement() {
+    override fun execute(frame: Rt_CallFrame): R_StatementResult? {
+        return R_StatementResult_Break()
     }
 }

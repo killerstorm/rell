@@ -1,7 +1,7 @@
 package net.postchain.rell
 
-import net.postchain.rell.runtime.RtIntValue
-import net.postchain.rell.runtime.RtValue
+import net.postchain.rell.runtime.Rt_IntValue
+import net.postchain.rell.runtime.Rt_Value
 import org.junit.After
 
 abstract class BaseRellTest(useSql: Boolean = true, gtx: Boolean = false) {
@@ -16,14 +16,14 @@ abstract class BaseRellTest(useSql: Boolean = true, gtx: Boolean = false) {
     fun chkEx(code: String, expected: String) = chkFull("query q() $code", listOf(), expected)
 
     fun chkEx(code: String, arg: Long, expected: String) {
-        chkFull("query q(a: integer) $code", listOf(RtIntValue(arg)), expected)
+        chkFull("query q(a: integer) $code", listOf(Rt_IntValue(arg)), expected)
     }
 
     fun chkEx(code: String, arg1: Long, arg2: Long, expected: String) {
-        chkFull("query q(a: integer, b: integer) $code", listOf(RtIntValue(arg1), RtIntValue(arg2)), expected)
+        chkFull("query q(a: integer, b: integer) $code", listOf(Rt_IntValue(arg1), Rt_IntValue(arg2)), expected)
     }
 
-    fun chkFull(code: String, args: List<RtValue>, expected: String) {
+    fun chkFull(code: String, args: List<Rt_Value>, expected: String) {
         tst.chkQueryEx(code, args, expected)
     }
 
@@ -31,7 +31,7 @@ abstract class BaseRellTest(useSql: Boolean = true, gtx: Boolean = false) {
         tst.chkQueryEx(code, listOf(), expected)
     }
 
-    fun chkQueryEx(code: String, args: List<RtValue>, expected: String) {
+    fun chkQueryEx(code: String, args: List<Rt_Value>, expected: String) {
         tst.chkQueryEx(code, args, expected)
     }
 

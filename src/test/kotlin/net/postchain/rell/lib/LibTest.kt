@@ -2,7 +2,7 @@ package net.postchain.rell.lib
 
 import net.postchain.rell.BaseRellTest
 import net.postchain.rell.hexStringToByteArray
-import net.postchain.rell.runtime.RtOpContext
+import net.postchain.rell.runtime.Rt_OpContext
 import org.junit.Test
 
 class LibTest: BaseRellTest(false) {
@@ -59,7 +59,7 @@ class LibTest: BaseRellTest(false) {
     }
 
     @Test fun testIsSigner() {
-        tst.opContext = RtOpContext(-1, listOf("1234".hexStringToByteArray(), "abcd".hexStringToByteArray()))
+        tst.opContext = Rt_OpContext(-1, listOf("1234".hexStringToByteArray(), "abcd".hexStringToByteArray()))
 
         chk("is_signer(x'1234')", "boolean[true]")
         chk("is_signer(x'abcd')", "boolean[true]")
@@ -156,7 +156,7 @@ class LibTest: BaseRellTest(false) {
         chk("x'0123ABCD'[4]", "rt_err:expr_bytearray_subscript_index:4:4")
         chk("x'0123ABCD'[-1]", "rt_err:expr_bytearray_subscript_index:4:-1")
 
-        chkEx("{ val x = x'0123ABCD'; x[1] = 123; return x; }", "ct_err:expr_lookup_unmodifiable:byte_array")
+        chkEx("{ val x = x'0123ABCD'; x[1] = 123; return x; }", "ct_err:expr_unmodifiable:byte_array")
     }
 
     @Test fun testByteArrayDecode() {
@@ -185,7 +185,7 @@ class LibTest: BaseRellTest(false) {
     }
 
     @Test fun testOpContextLastBlockTime() {
-        tst.opContext = RtOpContext(12345, listOf())
+        tst.opContext = Rt_OpContext(12345, listOf())
         chkOp("print(op_context.last_block_time);", "")
         tst.chkStdout("12345")
 

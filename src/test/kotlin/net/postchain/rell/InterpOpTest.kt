@@ -1,7 +1,7 @@
 package net.postchain.rell
 
-import net.postchain.rell.model.RInstanceRefType
-import net.postchain.rell.model.RModule
+import net.postchain.rell.model.R_ClassType
+import net.postchain.rell.model.R_Module
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.NoConnSqlExecutor
 import org.junit.Test
@@ -25,7 +25,7 @@ class InterpOpTest: AbstractOpTest() {
         val args2 = args.map { it as InterpTstVal }
         val types = args2.map { it.type }
 
-        val globalCtx = RtGlobalContext(FailingRtPrinter, FailingRtPrinter, NoConnSqlExecutor, null)
+        val globalCtx = Rt_GlobalContext(Rt_FailingPrinter, Rt_FailingPrinter, NoConnSqlExecutor, null)
 
         val res = processExpr0(expr2, types) { module ->
             val rtArgs = args2.map { it.rt(module) }
@@ -51,7 +51,7 @@ class InterpOpTest: AbstractOpTest() {
         return processExpr0(expr, types) { "OK" }
     }
 
-    private fun processExpr0(expr: String, types: List<String>, block: (RModule) -> String): String {
+    private fun processExpr0(expr: String, types: List<String>, block: (R_Module) -> String): String {
         val params = types.withIndex().joinToString(", ") { (idx, type) -> "${paramName(idx)}: $type" }
         val code = """
             class company { name: text; }
@@ -73,34 +73,34 @@ class InterpOpTest: AbstractOpTest() {
     override fun vObj(cls: String, id: Long): TstVal = InterpTstVal.Obj(cls, id)
 
     private sealed class InterpTstVal(val type: String): TstVal() {
-        abstract fun rt(m: RModule): RtValue
+        abstract fun rt(m: R_Module): Rt_Value
 
         class Bool(val v: Boolean): InterpTstVal("boolean") {
-            override fun rt(m: RModule): RtValue = RtBooleanValue(v)
+            override fun rt(m: R_Module): Rt_Value = Rt_BooleanValue(v)
         }
 
         class Integer(val v: Long): InterpTstVal("integer") {
-            override fun rt(m: RModule): RtValue = RtIntValue(v)
+            override fun rt(m: R_Module): Rt_Value = Rt_IntValue(v)
         }
 
         class Text(val v: String): InterpTstVal("text") {
-            override fun rt(m: RModule): RtValue = RtTextValue(v)
+            override fun rt(m: R_Module): Rt_Value = Rt_TextValue(v)
         }
 
         class Bytes(str: String): InterpTstVal("byte_array") {
             private val v = str.hexStringToByteArray()
-            override fun rt(m: RModule): RtValue = RtByteArrayValue(v)
+            override fun rt(m: R_Module): Rt_Value = Rt_ByteArrayValue(v)
         }
 
         class Json(val v: String): InterpTstVal("json") {
-            override fun rt(m: RModule): RtValue = RtJsonValue.parse(v)
+            override fun rt(m: R_Module): Rt_Value = Rt_JsonValue.parse(v)
         }
 
         class Obj(val cls: String, val id: Long): InterpTstVal(cls) {
-            override fun rt(m: RModule): RtValue {
+            override fun rt(m: R_Module): Rt_Value {
                 val c = m.classes[cls]
-                val t = RInstanceRefType(c!!)
-                return RtObjectValue(t, id)
+                val t = R_ClassType(c!!)
+                return Rt_ObjectValue(t, id)
             }
         }
     }

@@ -567,12 +567,12 @@ class NullableTest: BaseRellTest(false) {
     }
 
     @Test fun testMemberAccess() {
-        chkEx("{ var x: text?; return x.size(); }", "ct_err:expr_call_null:size")
+        chkEx("{ var x: text?; return x.size(); }", "ct_err:expr_mem_null:size")
         chkEx("{ var x: (a:integer)?; return x.a; }", "ct_err:expr_mem_null:a")
         chkEx("{ var x: (a:integer)?; return x.b; }", "ct_err:unknown_member:(a:integer):b")
         chkEx("{ var x: list<integer>?; return x[0]; }", "ct_err:expr_lookup_null")
         chkEx("{ var x: integer?; val y = [1, 2, 3]; return y[x]; }", "ct_err:expr_lookup_keytype:integer:integer?")
-        chkEx("{ val x: integer? = 123; return x.hex(); }", "ct_err:expr_call_null:hex")
+        chkEx("{ val x: integer? = 123; return x.hex(); }", "ct_err:expr_mem_null:hex")
     }
 
     private fun tstOperErr(type: String, op: String) {
@@ -616,7 +616,7 @@ class NullableTest: BaseRellTest(false) {
 
         chkEx("{ val x: integer? = 123; return x!!; }", "int[123]")
         chkEx("{ val x: integer? = null; return x!!; }", "rt_err:null_value")
-        chkEx("{ val x: integer? = 123; return x.hex(); }", "ct_err:expr_call_null:hex")
+        chkEx("{ val x: integer? = 123; return x.hex(); }", "ct_err:expr_mem_null:hex")
         chkEx("{ val x: integer? = 123; return x!!.hex(); }", "text[7b]")
         chkEx("{ val x: integer? = null; return x!!.hex(); }", "rt_err:null_value")
         chkEx("{ val x: integer = 123; return x!!; }", "ct_err:unop_operand_type:!!:integer")
@@ -645,20 +645,25 @@ class NullableTest: BaseRellTest(false) {
         chkEx("{ val x: (a:(b:(c:integer)))? = (a=(b=(c=123))); return _typeOf(x?.a); }", "text[(b:(c:integer))?]")
         chkEx("{ val x: (a:(b:(c:integer)))? = (a=(b=(c=123))); return _typeOf(x?.a?.b); }", "text[(c:integer)?]")
         chkEx("{ val x: (a:(b:(c:integer)))? = (a=(b=(c=123))); return _typeOf(x?.a?.b?.c); }", "text[integer?]")
+
+        chkEx("{ return integer.MAX_VALUE; }", "int[9223372036854775807]")
+        chkEx("{ return integer?.MAX_VALUE; }", "ct_err:expr_safemem_type:namespace[integer]")
     }
 
     @Test fun testSpecOpSafeCall() {
-        chkEx("{ val x: integer? = 123; return x.hex(); }", "ct_err:expr_call_null:hex")
+        chkEx("{ val x: integer? = 123; return x.hex(); }", "ct_err:expr_mem_null:hex")
         chkEx("{ val x: integer? = 123; return x?.hex(); }", "text[7b]")
         chkEx("{ val x: integer? = null; return x?.hex(); }", "null")
         chkEx("{ val x: integer = 123; return x?.hex(); }", "ct_err:expr_safemem_type:integer")
 
-        chkEx("{ val x: text? = 'Hello'; return x.upperCase(); }", "ct_err:expr_call_null:upperCase")
+        chkEx("{ val x: text? = 'Hello'; return x.upperCase(); }", "ct_err:expr_mem_null:upperCase")
         chkEx("{ val x: text? = 'Hello'; return x?.upperCase(); }", "text[HELLO]")
         chkEx("{ val x: text? = null; return x?.upperCase(); }", "null")
-        chkEx("{ val x: text? = 'Hello'; return x?.upperCase().lowerCase(); }", "ct_err:expr_call_null:lowerCase")
+        chkEx("{ val x: text? = 'Hello'; return x?.upperCase().lowerCase(); }", "ct_err:expr_mem_null:lowerCase")
         chkEx("{ val x: text? = 'Hello'; return x?.upperCase()?.lowerCase(); }", "text[hello]")
         chkEx("{ val x: text? = null; return x?.upperCase()?.lowerCase(); }", "null")
+        chkEx("{ val x: text? = 'Hello'; return x?.upperCase()?.lowerCase().size(); }", "ct_err:expr_mem_null:size")
+        chkEx("{ val x: text? = 'Hello'; return x?.upperCase()?.lowerCase()?.size(); }", "int[5]")
 
         chkEx("{ val x: (a:integer?)? = (a=123); return x?.a?.hex(); }", "text[7b]")
         chkEx("{ val x: (a:integer?)? = (a=null); return x?.a?.hex(); }", "null")
@@ -667,7 +672,7 @@ class NullableTest: BaseRellTest(false) {
         chkEx("{ null?.str(); }", "ct_err:expr_safemem_type:null")
 
         chkEx("{ return integer.parseHex('7b'); }", "int[123]")
-        chkEx("{ return integer?.parseHex('7b'); }", "ct_err:unknown_name:integer")
+        chkEx("{ return integer?.parseHex('7b'); }", "ct_err:expr_safemem_type:namespace[integer]")
     }
 
     @Test fun testSpecOpSafeDataField() {
@@ -687,5 +692,12 @@ class NullableTest: BaseRellTest(false) {
         chkEx("{ val u = user@?{.name=='Bob'}; return u?.company?.name; }", "text[Microsoft]")
         chkEx("{ val u = user@?{.name=='Alice'}; return u?.company?.name; }", "text[Apple]")
         chkEx("{ val u = user@?{.name=='Trudy'}; return u?.company?.name; }", "null")
+
+        chkEx("{ val u = user@{.name=='Bob'}; return u?.company.name; }", "ct_err:expr_safemem_type:user")
+        chkEx("{ val u = user@{.name=='Bob'}; return u.company?.name; }", "ct_err:expr_safemem_type:company")
+        chkEx("{ val u = user@{.name=='Bob'}; return u.company.name; }", "text[Microsoft]")
+
+        chkEx("{ return user@{.company.name=='Microsoft'}(.name); }", "text[Bob]")
+        chkEx("{ return user@{.company?.name=='Microsoft'}(.name); }", "ct_err:expr_safemem_type:company")
     }
 }

@@ -1,40 +1,39 @@
 package net.postchain.rell.model
 
-import net.postchain.rell.module.GtxRtConversion
 import net.postchain.rell.runtime.*
 import java.lang.IllegalStateException
 import java.util.*
 
-data class RFrameBlockId(val id: Long)
-data class RVarPtr(val blockId: RFrameBlockId, val offset: Int)
-class RFrameBlock(val parentId: RFrameBlockId?, val id: RFrameBlockId, val offset: Int, val size: Int)
-class RCallFrame(val size: Int, val rootBlock: RFrameBlock)
+data class R_FrameBlockId(val id: Long)
+data class R_VarPtr(val blockId: R_FrameBlockId, val offset: Int)
+class R_FrameBlock(val parentId: R_FrameBlockId?, val id: R_FrameBlockId, val offset: Int, val size: Int)
+class R_CallFrame(val size: Int, val rootBlock: R_FrameBlock)
 
-class RAttrib(val index: Int, val name: String, val type: RType, val mutable: Boolean, val hasExpr: Boolean) {
-    private lateinit var expr0: Optional<RExpr>
-    val expr: RExpr? get() = expr0.orElse(null)
+class R_Attrib(val index: Int, val name: String, val type: R_Type, val mutable: Boolean, val hasExpr: Boolean) {
+    private lateinit var expr0: Optional<R_Expr>
+    val expr: R_Expr? get() = expr0.orElse(null)
 
-    fun setExpr(expr: RExpr?) {
+    fun setExpr(expr: R_Expr?) {
         expr0 = Optional.ofNullable(expr)
     }
 }
 
-class RExternalParam(val name: String, val type: RType, val ptr: RVarPtr)
+class R_ExternalParam(val name: String, val type: R_Type, val ptr: R_VarPtr)
 
-sealed class RRoutine(val name: String, val params: List<RExternalParam>, val body: RStatement, val frame: RCallFrame) {
-    abstract fun callTop(modCtx: RtModuleContext, args: List<RtValue>)
+sealed class R_Routine(val name: String, val params: List<R_ExternalParam>, val body: R_Statement, val frame: R_CallFrame) {
+    abstract fun callTop(modCtx: Rt_ModuleContext, args: List<Rt_Value>)
 }
 
-class ROperation(
+class R_Operation(
         name: String,
-        params: List<RExternalParam>,
-        body: RStatement,
-        frame: RCallFrame
-): RRoutine(name, params, body, frame)
+        params: List<R_ExternalParam>,
+        body: R_Statement,
+        frame: R_CallFrame
+): R_Routine(name, params, body, frame)
 {
-    override fun callTop(modCtx: RtModuleContext, args: List<RtValue>) {
-        val entCtx = RtEntityContext(modCtx, true)
-        val rtFrame = RtCallFrame(entCtx, frame)
+    override fun callTop(modCtx: Rt_ModuleContext, args: List<Rt_Value>) {
+        val entCtx = Rt_EntityContext(modCtx, true)
+        val rtFrame = Rt_CallFrame(entCtx, frame)
 
         checkCallArgs(name, params, args)
         processArgs(params, args, rtFrame)
@@ -44,46 +43,46 @@ class ROperation(
         }
     }
 
-    fun callTopNoTx(modCtx: RtModuleContext, args: List<RtValue>) {
-        val entCtx = RtEntityContext(modCtx, true)
-        val rtFrame = RtCallFrame(entCtx, frame)
+    fun callTopNoTx(modCtx: Rt_ModuleContext, args: List<Rt_Value>) {
+        val entCtx = Rt_EntityContext(modCtx, true)
+        val rtFrame = Rt_CallFrame(entCtx, frame)
         checkCallArgs(name, params, args)
         processArgs(params, args, rtFrame)
         execute(rtFrame)
     }
 
-    private fun execute(rtFrame: RtCallFrame) {
+    private fun execute(rtFrame: Rt_CallFrame) {
         val res = body.execute(rtFrame)
         if (res != null) {
-            check(res is RStatementResult_Return && res.value == null)
+            check(res is R_StatementResult_Return && res.value == null)
         }
     }
 }
 
-class RQuery(
+class R_Query(
         name: String,
-        val type: RType,
-        params: List<RExternalParam>,
-        body: RStatement,
-        frame: RCallFrame
-): RRoutine(name, params, body, frame)
+        val type: R_Type,
+        params: List<R_ExternalParam>,
+        body: R_Statement,
+        frame: R_CallFrame
+): R_Routine(name, params, body, frame)
 {
-    override fun callTop(modCtx: RtModuleContext, args: List<RtValue>) {
+    override fun callTop(modCtx: Rt_ModuleContext, args: List<Rt_Value>) {
         callTopQuery(modCtx, args)
     }
 
-    fun callTopQuery(modCtx: RtModuleContext, args: List<RtValue>): RtValue {
-        val entCtx = RtEntityContext(modCtx, false)
-        val rtFrame = RtCallFrame(entCtx, frame)
+    fun callTopQuery(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
+        val entCtx = Rt_EntityContext(modCtx, false)
+        val rtFrame = Rt_CallFrame(entCtx, frame)
         checkCallArgs(name, params, args)
         processArgs(params, args, rtFrame)
 
         val res = body.execute(rtFrame)
         if (res == null) {
-            throw RtError("query_novalue:$name", "Query '$name' did not return a value")
+            throw Rt_Error("query_novalue:$name", "Query '$name' did not return a value")
         }
 
-        if (res !is RStatementResult_Return) {
+        if (res !is R_StatementResult_Return) {
             throw IllegalStateException("" + res)
         }
         check(res.value != null)
@@ -92,41 +91,41 @@ class RQuery(
     }
 }
 
-class RFunction(
+class R_Function(
         name: String,
-        params: List<RExternalParam>,
-        body: RStatement,
-        frame: RCallFrame,
-        val type: RType,
+        params: List<R_ExternalParam>,
+        body: R_Statement,
+        frame: R_CallFrame,
+        val type: R_Type,
         val fnKey: Int
-): RRoutine(name, params, body, frame)
+): R_Routine(name, params, body, frame)
 {
-    override fun callTop(modCtx: RtModuleContext, args: List<RtValue>) {
+    override fun callTop(modCtx: Rt_ModuleContext, args: List<Rt_Value>) {
         callTopFunction(modCtx, args)
     }
 
-    fun callTopFunction(modCtx: RtModuleContext, args: List<RtValue>): RtValue {
-        val entCtx = RtEntityContext(modCtx, false)
-        val rtFrame = RtCallFrame(entCtx, frame)
+    fun callTopFunction(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
+        val entCtx = Rt_EntityContext(modCtx, false)
+        val rtFrame = Rt_CallFrame(entCtx, frame)
         val res = call(rtFrame, args)
         return res
     }
 
-    fun call(rtFrame: RtCallFrame, args: List<RtValue>): RtValue {
-        val subEntCtx = RtEntityContext(rtFrame.entCtx.modCtx, rtFrame.entCtx.dbUpdateAllowed)
-        val rtSubFrame = RtCallFrame(subEntCtx, frame)
+    fun call(rtFrame: Rt_CallFrame, args: List<Rt_Value>): Rt_Value {
+        val subEntCtx = Rt_EntityContext(rtFrame.entCtx.modCtx, rtFrame.entCtx.dbUpdateAllowed)
+        val rtSubFrame = Rt_CallFrame(subEntCtx, frame)
 
         processArgs(params, args, rtSubFrame)
         val res = body.execute(rtSubFrame)
 
-        val retVal = if (res is RStatementResult_Return) res.value else null
-        return if (retVal == null) RtUnitValue else retVal
+        val retVal = if (res is R_StatementResult_Return) res.value else null
+        return if (retVal == null) Rt_UnitValue else retVal
     }
 }
 
-private fun checkCallArgs(name: String, params: List<RExternalParam>, args: List<RtValue>) {
+private fun checkCallArgs(name: String, params: List<R_ExternalParam>, args: List<Rt_Value>) {
     if (args.size != params.size) {
-        throw RtError("fn_wrong_arg_count:$name:${params.size}:${args.size}",
+        throw Rt_Error("fn_wrong_arg_count:$name:${params.size}:${args.size}",
                 "Wrong number of arguments for '$name': ${args.size} instead of ${params.size}")
     }
 
@@ -134,14 +133,14 @@ private fun checkCallArgs(name: String, params: List<RExternalParam>, args: List
         val param = params[i]
         val argType = args[i].type()
         if (!param.type.isAssignableFrom(argType)) {
-            throw RtError("fn_wrong_arg_type:$name:${param.type.toStrictString()}:${argType.toStrictString()}",
+            throw Rt_Error("fn_wrong_arg_type:$name:${param.type.toStrictString()}:${argType.toStrictString()}",
                     "Wrong type of argument ${param.name} for '$name': " +
                             "${argType.toStrictString()} instead of ${param.type.toStrictString()}")
         }
     }
 }
 
-private fun processArgs(params: List<RExternalParam>, args: List<RtValue>, frame: RtCallFrame) {
+private fun processArgs(params: List<R_ExternalParam>, args: List<Rt_Value>, frame: Rt_CallFrame) {
     check(args.size == params.size)
     for (i in params.indices) {
         val param = params[i]
@@ -150,12 +149,12 @@ private fun processArgs(params: List<RExternalParam>, args: List<RtValue>, frame
     }
 }
 
-class RModule(
-        val classes: Map<String, RClass>,
-        val records: Map<String, RRecordType>,
-        val operations: Map<String, ROperation>,
-        val queries: Map<String, RQuery>,
-        val functionsTable: List<RFunction>
+class R_Module(
+        val classes: Map<String, R_Class>,
+        val records: Map<String, R_RecordType>,
+        val operations: Map<String, R_Operation>,
+        val queries: Map<String, R_Query>,
+        val functionsTable: List<R_Function>
 ){
     val functions = functionsTable.associate { Pair(it.name, it) }
 

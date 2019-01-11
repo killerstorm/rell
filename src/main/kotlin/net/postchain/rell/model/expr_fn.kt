@@ -9,25 +9,25 @@ import java.lang.IllegalArgumentException
 import java.lang.NumberFormatException
 import java.util.*
 
-sealed class RCallExpr(type: RType, val args: List<RExpr>): RExpr(type) {
-    abstract fun call(frame: RtCallFrame, values: List<RtValue>): RtValue
+sealed class R_CallExpr(type: R_Type, val args: List<R_Expr>): R_Expr(type) {
+    abstract fun call(frame: Rt_CallFrame, values: List<Rt_Value>): Rt_Value
 
-    override fun evaluate(frame: RtCallFrame): RtValue {
+    override fun evaluate(frame: Rt_CallFrame): Rt_Value {
         val values = args.map { it.evaluate(frame) }
         val res = call(frame, values)
         return res
     }
 }
 
-class RSysCallExpr(type: RType, val fn: RSysFunction, args: List<RExpr>): RCallExpr(type, args) {
-    override fun call(frame: RtCallFrame, values: List<RtValue>): RtValue {
+class R_SysCallExpr(type: R_Type, val fn: R_SysFunction, args: List<R_Expr>): R_CallExpr(type, args) {
+    override fun call(frame: Rt_CallFrame, values: List<Rt_Value>): Rt_Value {
         val res = fn.call(frame.entCtx.modCtx.globalCtx, values)
         return res
     }
 }
 
-class RUserCallExpr(type: RType, val name: String, val fnKey: Int, args: List<RExpr>): RCallExpr(type, args) {
-    override fun call(frame: RtCallFrame, values: List<RtValue>): RtValue {
+class R_UserCallExpr(type: R_Type, val name: String, val fnKey: Int, args: List<R_Expr>): R_CallExpr(type, args) {
+    override fun call(frame: Rt_CallFrame, values: List<Rt_Value>): Rt_Value {
         val fn = frame.entCtx.modCtx.module.functionsTable[fnKey]
         check(fn.fnKey == fnKey)
         val res = fn.call(frame, values)
@@ -35,44 +35,44 @@ class RUserCallExpr(type: RType, val name: String, val fnKey: Int, args: List<RE
     }
 }
 
-sealed class RSysFunction {
-    abstract fun call(ctx: RtGlobalContext, args: List<RtValue>): RtValue
+sealed class R_SysFunction {
+    abstract fun call(ctx: Rt_GlobalContext, args: List<Rt_Value>): Rt_Value
 }
 
-sealed class RSysFunction_1: RSysFunction() {
-    abstract fun call(arg: RtValue): RtValue
+sealed class R_SysFunction_1: R_SysFunction() {
+    abstract fun call(arg: Rt_Value): Rt_Value
 
-    override fun call(ctx: RtGlobalContext, args: List<RtValue>): RtValue {
+    override fun call(ctx: Rt_GlobalContext, args: List<Rt_Value>): Rt_Value {
         check(args.size == 1)
         val res = call(args[0])
         return res
     }
 }
 
-sealed class RSysFunction_2: RSysFunction() {
-    abstract fun call(arg1: RtValue, arg2: RtValue): RtValue
+sealed class R_SysFunction_2: R_SysFunction() {
+    abstract fun call(arg1: Rt_Value, arg2: Rt_Value): Rt_Value
 
-    override fun call(ctx: RtGlobalContext, args: List<RtValue>): RtValue {
+    override fun call(ctx: Rt_GlobalContext, args: List<Rt_Value>): Rt_Value {
         check(args.size == 2)
         val res = call(args[0], args[1])
         return res
     }
 }
 
-abstract class RSysFunction_Generic<T>: RSysFunction() {
-    abstract fun extract(v: RtValue): T
+abstract class R_SysFunction_Generic<T>: R_SysFunction() {
+    abstract fun extract(v: Rt_Value): T
 
-    open fun call(type: RType, obj: T): RtValue = call(obj)
-    open fun call(type: RType, obj: T, a: RtValue): RtValue = call(obj, a)
-    open fun call(type: RType, obj: T, a: RtValue, b: RtValue): RtValue = call(obj, a, b)
+    open fun call(type: R_Type, obj: T): Rt_Value = call(obj)
+    open fun call(type: R_Type, obj: T, a: Rt_Value): Rt_Value = call(obj, a)
+    open fun call(type: R_Type, obj: T, a: Rt_Value, b: Rt_Value): Rt_Value = call(obj, a, b)
 
-    open fun call(obj: T): RtValue = call(obj, listOf())
-    open fun call(obj: T, a: RtValue): RtValue = call(obj, listOf(a))
-    open fun call(obj: T, a: RtValue, b: RtValue): RtValue = call(obj, listOf(a, b))
+    open fun call(obj: T): Rt_Value = call(obj, listOf())
+    open fun call(obj: T, a: Rt_Value): Rt_Value = call(obj, listOf(a))
+    open fun call(obj: T, a: Rt_Value, b: Rt_Value): Rt_Value = call(obj, listOf(a, b))
 
-    open fun call(obj: T, args: List<RtValue>): RtValue = throw errArgCnt(args.size)
+    open fun call(obj: T, args: List<Rt_Value>): Rt_Value = throw errArgCnt(args.size)
 
-    final override fun call(ctx: RtGlobalContext, args: List<RtValue>): RtValue {
+    final override fun call(ctx: Rt_GlobalContext, args: List<Rt_Value>): Rt_Value {
         check(args.size >= 1)
 
         val objVal = args[0]
@@ -93,224 +93,224 @@ abstract class RSysFunction_Generic<T>: RSysFunction() {
     private fun errArgCnt(n: Int) = IllegalStateException("Wrong number of arguments for ${javaClass.simpleName}: $n")
 }
 
-sealed class RSysFunction_Common: RSysFunction_Generic<RtValue>() {
-    override fun extract(v: RtValue): RtValue = v
+sealed class R_SysFunction_Common: R_SysFunction_Generic<Rt_Value>() {
+    override fun extract(v: Rt_Value): Rt_Value = v
 }
 
-object RSysFunction_Unit: RSysFunction() {
-    override fun call(ctx: RtGlobalContext, args: List<RtValue>): RtValue {
+object R_SysFn_Unit: R_SysFunction() {
+    override fun call(ctx: Rt_GlobalContext, args: List<Rt_Value>): Rt_Value {
         check(args.size == 0)
-        return RtUnitValue
+        return Rt_UnitValue
     }
 }
 
-object RSysFunction_Abs: RSysFunction_1() {
-    override fun call(arg: RtValue): RtValue {
+object R_SysFn_Abs: R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value {
         val a = arg.asInteger()
         val r = Math.abs(a)
-        return RtIntValue(r)
+        return Rt_IntValue(r)
     }
 }
 
-object RSysFunction_Min: RSysFunction_2() {
-    override fun call(arg1: RtValue, arg2: RtValue): RtValue {
+object R_SysFn_Min: R_SysFunction_2() {
+    override fun call(arg1: Rt_Value, arg2: Rt_Value): Rt_Value {
         val a1 = arg1.asInteger()
         val a2 = arg2.asInteger()
         val r = Math.min(a1, a2)
-        return RtIntValue(r)
+        return Rt_IntValue(r)
     }
 }
 
-object RSysFunction_Max: RSysFunction_2() {
-    override fun call(arg1: RtValue, arg2: RtValue): RtValue {
+object R_SysFn_Max: R_SysFunction_2() {
+    override fun call(arg1: Rt_Value, arg2: Rt_Value): Rt_Value {
         val a1 = arg1.asInteger()
         val a2 = arg2.asInteger()
         val r = Math.max(a1, a2)
-        return RtIntValue(r)
+        return Rt_IntValue(r)
     }
 }
 
-object RSysFunction_IsSigner: RSysFunction() {
-    override fun call(ctx: RtGlobalContext, args: List<RtValue>): RtValue {
+object R_SysFn_IsSigner: R_SysFunction() {
+    override fun call(ctx: Rt_GlobalContext, args: List<Rt_Value>): Rt_Value {
         check(args.size == 1)
         val a = args[0].asByteArray()
         val r = if (ctx.opCtx == null) false else  ctx.opCtx.signers.any { Arrays.equals(it, a) }
-        return RtBooleanValue(r)
+        return Rt_BooleanValue(r)
     }
 }
 
-object RSysFunction_Json: RSysFunction_1() {
-    override fun call(arg: RtValue): RtValue {
+object R_SysFn_Json: R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value {
         val a = arg.asString()
 
-        val r = try { RtJsonValue.parse(a) }
+        val r = try { Rt_JsonValue.parse(a) }
         catch (e: IllegalArgumentException) {
-            throw RtError("fn_json_badstr", "Bad JSON: $a")
+            throw Rt_Error("fn_json_badstr", "Bad JSON: $a")
         }
 
         return r
     }
 }
 
-object RSysFunction_Range: RSysFunction_Common() {
-    override fun call(a: RtValue): RtValue = call0(0, a.asInteger(), 1)
-    override fun call(a: RtValue, b: RtValue): RtValue = call0(a.asInteger(), b.asInteger(), 1)
-    override fun call(a: RtValue, b: RtValue, c: RtValue): RtValue = call0(a.asInteger(), b.asInteger(), c.asInteger())
+object R_SysFn_Range: R_SysFunction_Common() {
+    override fun call(a: Rt_Value): Rt_Value = call0(0, a.asInteger(), 1)
+    override fun call(a: Rt_Value, b: Rt_Value): Rt_Value = call0(a.asInteger(), b.asInteger(), 1)
+    override fun call(a: Rt_Value, b: Rt_Value, c: Rt_Value): Rt_Value = call0(a.asInteger(), b.asInteger(), c.asInteger())
 
-    private fun call0(start: Long, end: Long, step: Long): RtValue {
+    private fun call0(start: Long, end: Long, step: Long): Rt_Value {
         if (step == 0L || (step > 0 && start > end) || (step < 0 && start < end)) {
-            throw RtError("fn_range_args:$start:$end:$step",
+            throw Rt_Error("fn_range_args:$start:$end:$step",
                     "Invalid arguments for range: start = $start, end = $end, step = $step")
         }
-        return RtRangeValue(start, end, step)
+        return Rt_RangeValue(start, end, step)
     }
 }
 
-object RSysFunction_Int_Str: RSysFunction_Common() {
-    override fun call(a: RtValue): RtValue = RtTextValue(a.asInteger().toString())
+object R_SysFn_Int_Str: R_SysFunction_Common() {
+    override fun call(a: Rt_Value): Rt_Value = Rt_TextValue(a.asInteger().toString())
 
-    override fun call(a: RtValue, b: RtValue): RtValue {
+    override fun call(a: Rt_Value, b: Rt_Value): Rt_Value {
         val v = a.asInteger()
         val r = b.asInteger()
         if (r < Character.MIN_RADIX || r > Character.MAX_RADIX) {
-            throw RtError("fn_int_str_radix:$r", "Invalid radix: $r")
+            throw Rt_Error("fn_int_str_radix:$r", "Invalid radix: $r")
         }
         val s = v.toString(r.toInt())
-        return RtTextValue(s)
+        return Rt_TextValue(s)
     }
 }
 
-object RSysFunction_Int_Hex: RSysFunction_Common() {
-    override fun call(a: RtValue): RtValue = RtTextValue(java.lang.Long.toHexString(a.asInteger()))
+object R_SysFn_Int_Hex: R_SysFunction_Common() {
+    override fun call(a: Rt_Value): Rt_Value = Rt_TextValue(java.lang.Long.toHexString(a.asInteger()))
 }
 
-object RSysFunction_Int_Signum: RSysFunction_Common() {
-    override fun call(a: RtValue): RtValue = RtIntValue(java.lang.Long.signum(a.asInteger()).toLong())
+object R_SysFn_Int_Signum: R_SysFunction_Common() {
+    override fun call(a: Rt_Value): Rt_Value = Rt_IntValue(java.lang.Long.signum(a.asInteger()).toLong())
 }
 
-object RSysFunction_Int_Parse: RSysFunction_Common() {
-    override fun call(a: RtValue): RtValue = parse(a, 10)
+object R_SysFn_Int_Parse: R_SysFunction_Common() {
+    override fun call(a: Rt_Value): Rt_Value = parse(a, 10)
 
-    override fun call(a: RtValue, b: RtValue): RtValue {
+    override fun call(a: Rt_Value, b: Rt_Value): Rt_Value {
         val r = b.asInteger()
         if (r < Character.MIN_RADIX || r > Character.MAX_RADIX) {
-            throw RtError("fn_int_parse_radix:$r", "Invalid radix: $r")
+            throw Rt_Error("fn_int_parse_radix:$r", "Invalid radix: $r")
         }
         return parse(a, r.toInt())
     }
 
-    private fun parse(a: RtValue, radix: Int): RtValue {
+    private fun parse(a: Rt_Value, radix: Int): Rt_Value {
         val s = a.asString()
         val r = try {
             java.lang.Long.parseLong(s, radix)
         } catch (e: NumberFormatException) {
-            throw RtError("fn_int_parse:$s", "Invalid number: '$s'")
+            throw Rt_Error("fn_int_parse:$s", "Invalid number: '$s'")
         }
-        return RtIntValue(r)
+        return Rt_IntValue(r)
     }
 }
 
-object RSysFunction_Int_ParseHex: RSysFunction_Common() {
-    override fun call(a: RtValue): RtValue {
+object R_SysFn_Int_ParseHex: R_SysFunction_Common() {
+    override fun call(a: Rt_Value): Rt_Value {
         val s = a.asString()
         val r = try {
             java.lang.Long.parseUnsignedLong(s, 16)
         } catch (e: NumberFormatException) {
-            throw RtError("fn_int_parseHex:$s", "Invalid hex number: '$s'")
+            throw Rt_Error("fn_int_parseHex:$s", "Invalid hex number: '$s'")
         }
-        return RtIntValue(r)
+        return Rt_IntValue(r)
     }
 }
 
-sealed class RSysFunction_ByteArray: RSysFunction_Generic<ByteArray>() {
-    override fun extract(v: RtValue): ByteArray = v.asByteArray()
+sealed class R_SysFn_ByteArray: R_SysFunction_Generic<ByteArray>() {
+    override fun extract(v: Rt_Value): ByteArray = v.asByteArray()
 }
 
-object RSysFunction_ByteArray_Empty: RSysFunction_ByteArray() {
-    override fun call(obj: ByteArray): RtValue = RtBooleanValue(obj.isEmpty())
+object R_SysFn_ByteArray_Empty: R_SysFn_ByteArray() {
+    override fun call(obj: ByteArray): Rt_Value = Rt_BooleanValue(obj.isEmpty())
 }
 
-object RSysFunction_ByteArray_Size: RSysFunction_ByteArray() {
-    override fun call(obj: ByteArray): RtValue = RtIntValue(obj.size.toLong())
+object R_SysFn_ByteArray_Size: R_SysFn_ByteArray() {
+    override fun call(obj: ByteArray): Rt_Value = Rt_IntValue(obj.size.toLong())
 }
 
-object RSysFunction_ByteArray_Sub: RSysFunction_ByteArray() {
-    override fun call(obj: ByteArray, a: RtValue): RtValue {
+object R_SysFn_ByteArray_Sub: R_SysFn_ByteArray() {
+    override fun call(obj: ByteArray, a: Rt_Value): Rt_Value {
         val start = a.asInteger()
         return call0(obj, start, obj.size.toLong())
     }
 
-    override fun call(obj: ByteArray, a: RtValue, b: RtValue): RtValue {
+    override fun call(obj: ByteArray, a: Rt_Value, b: Rt_Value): Rt_Value {
         val start = a.asInteger()
         val end = b.asInteger()
         return call0(obj, start, end)
     }
 
-    private fun call0(obj: ByteArray, start: Long, end: Long): RtValue {
+    private fun call0(obj: ByteArray, start: Long, end: Long): Rt_Value {
         val len = obj.size
         if (start < 0 || start > len || end < start || end > len) {
-            throw RtError("fn_bytearray_sub_range:$len:$start:$end",
+            throw Rt_Error("fn_bytearray_sub_range:$len:$start:$end",
                     "Invalid range: start = $start, end = $end (length $len)")
         }
         val r = Arrays.copyOfRange(obj, start.toInt(), end.toInt())
-        return RtByteArrayValue(r)
+        return Rt_ByteArrayValue(r)
     }
 }
 
-object RSysFunction_ByteArray_Decode: RSysFunction_ByteArray() {
-    override fun call(obj: ByteArray): RtValue = RtTextValue(String(obj))
+object R_SysFn_ByteArray_Decode: R_SysFn_ByteArray() {
+    override fun call(obj: ByteArray): Rt_Value = Rt_TextValue(String(obj))
 }
 
-object RSysFunction_ByteArray_ToList: RSysFunction_ByteArray() {
-    private val type = RListType(RIntegerType)
+object R_SysFn_ByteArray_ToList: R_SysFn_ByteArray() {
+    private val type = R_ListType(R_IntegerType)
 
-    override fun call(obj: ByteArray): RtValue {
-        val list = MutableList<RtValue>(obj.size) { RtIntValue(obj[it].toLong() and 0xFF) }
-        return RtListValue(type, list)
+    override fun call(obj: ByteArray): Rt_Value {
+        val list = MutableList<Rt_Value>(obj.size) { Rt_IntValue(obj[it].toLong() and 0xFF) }
+        return Rt_ListValue(type, list)
     }
 }
 
-object RSysFunction_ByteArray_New_Text: RSysFunction_Common() {
-    override fun call(a: RtValue): RtValue {
+object R_SysFn_ByteArray_New_Text: R_SysFunction_Common() {
+    override fun call(a: Rt_Value): Rt_Value {
         val s = a.asString()
         val r = try {
             s.hexStringToByteArray()
         } catch (e: IllegalArgumentException) {
-            throw RtError("fn_bytearray_new_text:$s", "Invalid byte_array value: '$s'")
+            throw Rt_Error("fn_bytearray_new_text:$s", "Invalid byte_array value: '$s'")
         }
-        return RtByteArrayValue(r)
+        return Rt_ByteArrayValue(r)
     }
 }
 
-object RSysFunction_ByteArray_New_List: RSysFunction_Common() {
-    override fun call(a: RtValue): RtValue {
+object R_SysFn_ByteArray_New_List: R_SysFunction_Common() {
+    override fun call(a: Rt_Value): Rt_Value {
         val s = a.asList()
         val r = ByteArray(s.size)
         for (i in s.indices) {
             val b = s[i].asInteger()
-            if (b < 0 || b > 255) throw RtError("fn_bytearray_new_list:$b", "Byte value out of range: $b")
+            if (b < 0 || b > 255) throw Rt_Error("fn_bytearray_new_list:$b", "Byte value out of range: $b")
             r[i] = b.toByte()
         }
-        return RtByteArrayValue(r)
+        return Rt_ByteArrayValue(r)
     }
 }
 
-object RSysFunction_Json_Str: RSysFunction_1() {
-    override fun call(arg: RtValue): RtValue {
+object R_SysFn_Json_Str: R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value {
         val a = arg.asJsonString()
-        return RtTextValue(a)
+        return Rt_TextValue(a)
     }
 }
 
-object RSysFunction_ToString: RSysFunction_1() {
-    override fun call(arg: RtValue): RtValue {
+object R_SysFn_ToString: R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value {
         val a = arg.toString()
-        return RtTextValue(a)
+        return Rt_TextValue(a)
     }
 }
 
-class RSysFunction_Print(val log: Boolean): RSysFunction() {
-    override fun call(ctx: RtGlobalContext, args: List<RtValue>): RtValue {
+class R_SysFn_Print(val log: Boolean): R_SysFunction() {
+    override fun call(ctx: Rt_GlobalContext, args: List<Rt_Value>): Rt_Value {
         val buf = StringBuilder()
         for (arg in args) {
             if (!buf.isEmpty()) {
@@ -324,93 +324,93 @@ class RSysFunction_Print(val log: Boolean): RSysFunction() {
         val printer = if (log) ctx.logPrinter else ctx.stdoutPrinter
         printer.print(str)
 
-        return RtUnitValue
+        return Rt_UnitValue
     }
 }
 
-object RSysFunction_LastBlockTime: RSysFunction() {
-    override fun call(ctx: RtGlobalContext, args: List<RtValue>): RtValue {
+object R_SysFn_LastBlockTime: R_SysFunction() {
+    override fun call(ctx: Rt_GlobalContext, args: List<Rt_Value>): Rt_Value {
         check(args.size == 0)
-        if (ctx.opCtx == null) throw RtError("fn_last_block_time_noop", "Operation context not available")
-        return RtIntValue(ctx.opCtx.lastBlockTime)
+        if (ctx.opCtx == null) throw Rt_Error("fn_last_block_time_noop", "Operation context not available")
+        return Rt_IntValue(ctx.opCtx.lastBlockTime)
     }
 }
 
-object RSysFunction_StrictStr: RSysFunction_1() {
-    override fun call(arg: RtValue): RtValue {
+object R_SysFn_StrictStr: R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value {
         val s = arg.toStrictString()
-        return RtTextValue(s)
+        return Rt_TextValue(s)
     }
 }
 
-object RSysFunction_GtxValue_ToBytes: RSysFunction_1() {
-    override fun call(arg: RtValue): RtValue {
+object R_SysFn_GtxValue_ToBytes: R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value {
         val gtx = arg.asGtxValue()
         val bytes = encodeGTXValue(gtx)
-        return RtByteArrayValue(bytes)
+        return Rt_ByteArrayValue(bytes)
     }
 }
 
-object RSysFunction_GtxValue_ToJson: RSysFunction_1() {
-    override fun call(arg: RtValue): RtValue {
+object R_SysFn_GtxValue_ToJson: R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value {
         val gtx = arg.asGtxValue()
-        val json = RtGtxValue.gtxValueToJsonString(gtx)
+        val json = Rt_GtxValue.gtxValueToJsonString(gtx)
         //TODO consider making a separate function toJSONStr() to avoid unnecessary conversion str -> json -> str.
-        return RtJsonValue.parse(json)
+        return Rt_JsonValue.parse(json)
     }
 }
 
-object RSysFunction_GtxValue_FromBytes: RSysFunction_1() {
-    override fun call(arg: RtValue): RtValue {
+object R_SysFn_GtxValue_FromBytes: R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value {
         val bytes = arg.asByteArray()
-        return RtUtils.wrapErr("fn:GTXValue.fromBytes") {
+        return Rt_Utils.wrapErr("fn:GTXValue.fromBytes") {
             val gtx = decodeGTXValue(bytes)
-            RtGtxValue(gtx)
+            Rt_GtxValue(gtx)
         }
     }
 }
 
-object RSysFunction_GtxValue_FromJson_Text: RSysFunction_1() {
-    override fun call(arg: RtValue): RtValue {
+object R_SysFn_GtxValue_FromJson_Text: R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value {
         val str = arg.asString()
-        return RtUtils.wrapErr("fn:GTXValue.fromJSON(text)") {
-            val gtx = RtGtxValue.jsonStringToGtxValue(str)
-            RtGtxValue(gtx)
+        return Rt_Utils.wrapErr("fn:GTXValue.fromJSON(text)") {
+            val gtx = Rt_GtxValue.jsonStringToGtxValue(str)
+            Rt_GtxValue(gtx)
         }
     }
 }
 
-object RSysFunction_GtxValue_FromJson_Json: RSysFunction_1() {
-    override fun call(arg: RtValue): RtValue {
+object R_SysFn_GtxValue_FromJson_Json: R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value {
         val str = arg.asJsonString()
-        return RtUtils.wrapErr("fn:GTXValue.fromJSON(json)") {
-            val gtx = RtGtxValue.jsonStringToGtxValue(str)
-            RtGtxValue(gtx)
+        return Rt_Utils.wrapErr("fn:GTXValue.fromJSON(json)") {
+            val gtx = Rt_GtxValue.jsonStringToGtxValue(str)
+            Rt_GtxValue(gtx)
         }
     }
 }
 
-class RSysFunction_Record_ToBytes(val type: RRecordType): RSysFunction_1() {
-    override fun call(arg: RtValue): RtValue {
+class R_SysFn_Record_ToBytes(val type: R_RecordType): R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value {
         val gtx = type.rtToGtx(arg, false)
         val bytes = encodeGTXValue(gtx)
-        return RtByteArrayValue(bytes)
+        return Rt_ByteArrayValue(bytes)
     }
 }
 
-class RSysFunction_Record_ToGtx(val type: RRecordType, val human: Boolean): RSysFunction_1() {
-    override fun call(arg: RtValue): RtValue {
+class R_SysFn_Record_ToGtx(val type: R_RecordType, val human: Boolean): R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value {
         val gtx = type.rtToGtx(arg, human)
-        return RtGtxValue(gtx)
+        return Rt_GtxValue(gtx)
     }
 }
 
-class RSysFunction_Record_FromBytes(val type: RRecordType): RSysFunction() {
-    override fun call(ctx: RtGlobalContext, args: List<RtValue>): RtValue {
+class R_SysFn_Record_FromBytes(val type: R_RecordType): R_SysFunction() {
+    override fun call(ctx: Rt_GlobalContext, args: List<Rt_Value>): Rt_Value {
         check(args.size == 1)
         val arg = args[0]
         val bytes = arg.asByteArray()
-        return RtUtils.wrapErr("fn:record:fromBytes") {
+        return Rt_Utils.wrapErr("fn:record:fromBytes") {
             val gtx = decodeGTXValue(bytes)
             val convCtx = GtxToRtContext()
             val res = type.gtxToRt(convCtx, gtx, false)
@@ -420,12 +420,12 @@ class RSysFunction_Record_FromBytes(val type: RRecordType): RSysFunction() {
     }
 }
 
-class RSysFunction_Record_FromGtx(val type: RRecordType, val human: Boolean): RSysFunction() {
-    override fun call(ctx: RtGlobalContext, args: List<RtValue>): RtValue {
+class R_SysFn_Record_FromGtx(val type: R_RecordType, val human: Boolean): R_SysFunction() {
+    override fun call(ctx: Rt_GlobalContext, args: List<Rt_Value>): Rt_Value {
         check(args.size == 1)
         val arg = args[0]
         val gtx = arg.asGtxValue()
-        return RtUtils.wrapErr("fn:record:fromGtx") {
+        return Rt_Utils.wrapErr("fn:record:fromGtx") {
             val convCtx = GtxToRtContext()
             val res = type.gtxToRt(convCtx, gtx, human)
             convCtx.finish(ctx.sqlExec)

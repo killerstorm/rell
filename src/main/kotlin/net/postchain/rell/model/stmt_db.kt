@@ -1,32 +1,32 @@
 package net.postchain.rell.model
 
-import net.postchain.rell.runtime.RtCallFrame
+import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.sql.ROWID_COLUMN
 
-class RUpdateStatementWhat(val attr: RAttrib, val expr: DbExpr, val op: DbBinaryOp?)
+class R_UpdateStatementWhat(val attr: R_Attrib, val expr: Db_Expr, val op: Db_BinaryOp?)
 
-class RUpdateStatement(
-        val cls: RAtClass,
-        val extraClasses: List<RAtClass>,
-        val where: DbExpr?,
-        val what: List<RUpdateStatementWhat>
-): RStatement()
+class R_UpdateStatement(
+        val cls: R_AtClass,
+        val extraClasses: List<R_AtClass>,
+        val where: Db_Expr?,
+        val what: List<R_UpdateStatementWhat>
+): R_Statement()
 {
     init {
         check(cls.index == 0)
         extraClasses.withIndex().forEach { check(it.index + 1 == it.value.index) }
     }
 
-    override fun execute(frame: RtCallFrame): RStatementResult? {
+    override fun execute(frame: Rt_CallFrame): R_StatementResult? {
         frame.entCtx.checkDbUpdateAllowed()
         val rtSql = buildSql()
-        val rtUpdate = RtUpdate(rtSql)
+        val rtUpdate = SqlUpdate(rtSql)
         rtUpdate.execute(frame)
         return null
     }
 
-    private fun buildSql(): RtSql {
-        val builder = RtSqlBuilder()
+    private fun buildSql(): ParameterizedSql {
+        val builder = SqlBuilder()
 
         val ctx = SqlGenContext(listOf(cls) + extraClasses, listOf())
         val fromInfo = buildFromInfo(ctx)
@@ -41,7 +41,7 @@ class RUpdateStatement(
     }
 
     private fun buildFromInfo(ctx: SqlGenContext): SqlFromInfo {
-        val b = RtSqlBuilder()
+        val b = SqlBuilder()
         what.forEach { it.expr.toSql(ctx, b) }
         if (where != null) {
             where.toSql(ctx, b)
@@ -49,7 +49,7 @@ class RUpdateStatement(
         return ctx.getFromInfo()
     }
 
-    private fun appendSet(ctx: SqlGenContext, builder: RtSqlBuilder) {
+    private fun appendSet(ctx: SqlGenContext, builder: SqlBuilder) {
         builder.append(" SET ")
 
         builder.append(what, ", ") { whatExpr ->
@@ -66,22 +66,22 @@ class RUpdateStatement(
     }
 }
 
-class RDeleteStatement(val cls: RAtClass, val extraClasses: List<RAtClass>, val where: DbExpr?): RStatement() {
+class R_DeleteStatement(val cls: R_AtClass, val extraClasses: List<R_AtClass>, val where: Db_Expr?): R_Statement() {
     init {
         check(cls.index == 0)
         extraClasses.withIndex().forEach { check(it.index + 1 == it.value.index) }
     }
 
-    override fun execute(frame: RtCallFrame): RStatementResult? {
+    override fun execute(frame: Rt_CallFrame): R_StatementResult? {
         frame.entCtx.checkDbUpdateAllowed()
         val rtSql = buildSql()
-        val rtUpdate = RtUpdate(rtSql)
+        val rtUpdate = SqlUpdate(rtSql)
         rtUpdate.execute(frame)
         return null
     }
 
-    private fun buildSql(): RtSql {
-        val builder = RtSqlBuilder()
+    private fun buildSql(): ParameterizedSql {
+        val builder = SqlBuilder()
 
         val ctx = SqlGenContext(listOf(cls) + extraClasses, listOf())
         val fromInfo = buildFromInfo(ctx)
@@ -95,7 +95,7 @@ class RDeleteStatement(val cls: RAtClass, val extraClasses: List<RAtClass>, val 
     }
 
     private fun buildFromInfo(ctx: SqlGenContext): SqlFromInfo {
-        val b = RtSqlBuilder()
+        val b = SqlBuilder()
         if (where != null) {
             where.toSql(ctx, b)
         }
@@ -103,16 +103,16 @@ class RDeleteStatement(val cls: RAtClass, val extraClasses: List<RAtClass>, val 
     }
 }
 
-private fun appendMainTable(builder: RtSqlBuilder, cls: RAtClass, fromInfo: SqlFromInfo) {
+private fun appendMainTable(builder: SqlBuilder, cls: R_AtClass, fromInfo: SqlFromInfo) {
     builder.appendName(cls.rClass.name)
     builder.append(" ")
     builder.append(fromInfo.classes[cls.index].alias.str)
 }
 
 private fun appendExtraTables(
-        builder: RtSqlBuilder,
-        cls: RAtClass,
-        extraClasses: List<RAtClass>,
+        builder: SqlBuilder,
+        cls: R_AtClass,
+        extraClasses: List<R_AtClass>,
         fromInfo: SqlFromInfo,
         keyword: String)
 {
@@ -142,7 +142,7 @@ private fun appendExtraTables(
     }
 }
 
-private fun appendWhere(ctx: SqlGenContext, builder: RtSqlBuilder, fromInfo: SqlFromInfo, where: DbExpr?) {
+private fun appendWhere(ctx: SqlGenContext, builder: SqlBuilder, fromInfo: SqlFromInfo, where: Db_Expr?) {
     val allJoins = fromInfo.classes.flatMap { it.joins }
 
     if (allJoins.isEmpty() && where == null) {
@@ -164,7 +164,7 @@ private fun appendWhere(ctx: SqlGenContext, builder: RtSqlBuilder, fromInfo: Sql
     }
 }
 
-private fun appendWhereJoins(builder: RtSqlBuilder, allJoins: List<SqlFromJoin>) {
+private fun appendWhereJoins(builder: SqlBuilder, allJoins: List<SqlFromJoin>) {
     builder.append(allJoins, " AND ") { join ->
         builder.appendColumn(join.baseAlias, join.attr)
         builder.append(" = ")

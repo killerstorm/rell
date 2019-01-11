@@ -3,33 +3,33 @@ package net.postchain.rell.model
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.ROWID_COLUMN
 
-class RAtClass(val rClass: RClass, val alias: String, val index: Int) {
-    val type: RType = RInstanceRefType(rClass)
+class R_AtClass(val rClass: R_Class, val alias: String, val index: Int) {
+    val type: R_Type = R_ClassType(rClass)
 }
 
-sealed class RAtExprRowType {
-    abstract fun decode(row: Array<RtValue>): RtValue
+sealed class R_AtExprRowType {
+    abstract fun decode(row: Array<Rt_Value>): Rt_Value
 }
 
-object RAtExprRowTypeSimple: RAtExprRowType() {
-    override fun decode(row: Array<RtValue>): RtValue {
+object R_AtExprRowTypeSimple: R_AtExprRowType() {
+    override fun decode(row: Array<Rt_Value>): Rt_Value {
         check(row.size == 1) { "row.size == ${row.size}" }
         return row[0]
     }
 }
 
-class RAtExprRowTypeTuple(val type: RTupleType): RAtExprRowType() {
-    override fun decode(row: Array<RtValue>): RtValue {
+class R_AtExprRowTypeTuple(val type: R_TupleType): R_AtExprRowType() {
+    override fun decode(row: Array<Rt_Value>): Rt_Value {
         check(row.size == type.fields.size) { "row.size == ${row.size}, not ${type.fields.size}" }
-        return RtTupleValue(type, row.toList())
+        return Rt_TupleValue(type, row.toList())
     }
 }
 
-class RAtExprBase(
-        val from: List<RAtClass>,
-        val what: List<DbExpr>,
-        val where: DbExpr?,
-        val sort: List<Pair<DbExpr, Boolean>>,
+class R_AtExprBase(
+        val from: List<R_AtClass>,
+        val what: List<Db_Expr>,
+        val where: Db_Expr?,
+        val sort: List<Pair<Db_Expr, Boolean>>,
         val zero: Boolean,
         val many: Boolean
 ) {
@@ -37,19 +37,19 @@ class RAtExprBase(
         from.withIndex().forEach { check(it.index == it.value.index) }
     }
 
-    fun execute(frame: RtCallFrame, params: List<RtValue>, limit: RExpr?): List<Array<RtValue>> {
+    fun execute(frame: Rt_CallFrame, params: List<Rt_Value>, limit: R_Expr?): List<Array<Rt_Value>> {
         val rtSql = buildSql(params, limit)
         val resultTypes = what.map { it.type }
-        val select = RtSelect(rtSql, resultTypes)
+        val select = SqlSelect(rtSql, resultTypes)
         val records = select.execute(frame)
         return records
     }
 
-    private fun buildSql(params: List<RtValue>, limit: RExpr?): RtSql {
+    private fun buildSql(params: List<Rt_Value>, limit: R_Expr?): ParameterizedSql {
         val ctx = SqlGenContext(from, params)
         val fromInfo = buildFromInfo(ctx)
 
-        val b = RtSqlBuilder()
+        val b = SqlBuilder()
 
         b.append("SELECT ")
         b.append(what, ", ") {
@@ -87,7 +87,7 @@ class RAtExprBase(
     }
 
     private fun buildFromInfo(ctx: SqlGenContext): SqlFromInfo {
-        val b = RtSqlBuilder()
+        val b = SqlBuilder()
         for (w in what) {
             w.toSql(ctx, b)
         }
@@ -101,7 +101,7 @@ class RAtExprBase(
         return ctx.getFromInfo()
     }
 
-    private fun appendFrom(b: RtSqlBuilder, fromInfo: SqlFromInfo) {
+    private fun appendFrom(b: SqlBuilder, fromInfo: SqlFromInfo) {
         b.append(" FROM ")
         b.append(fromInfo.classes, ", ") { cls ->
             b.appendName(cls.alias.cls.name)
@@ -122,19 +122,19 @@ class RAtExprBase(
     }
 }
 
-class RAtExpr(
-        type: RType,
-        val base: RAtExprBase,
-        val limit: RExpr?,
-        val rowType: RAtExprRowType
-): RExpr(type)
+class R_AtExpr(
+        type: R_Type,
+        val base: R_AtExprBase,
+        val limit: R_Expr?,
+        val rowType: R_AtExprRowType
+): R_Expr(type)
 {
-    override fun evaluate(frame: RtCallFrame): RtValue {
+    override fun evaluate(frame: Rt_CallFrame): Rt_Value {
         val records = base.execute(frame, listOf(), limit)
         return decodeResult(records)
     }
 
-    private fun decodeResult(records: List<Array<RtValue>>): RtValue {
+    private fun decodeResult(records: List<Array<Rt_Value>>): Rt_Value {
         val list = MutableList(records.size) { rowType.decode(records[it]) }
 
         val count = list.size
@@ -143,18 +143,18 @@ class RAtExpr(
         }
 
         if (base.many) {
-            return RtListValue(type, list)
+            return Rt_ListValue(type, list)
         } else if (count > 0) {
             return list[0]
         } else {
-            return RtNullValue
+            return Rt_NullValue
         }
     }
 
     companion object {
-        fun errWrongCount(count: Int): RtError {
+        fun errWrongCount(count: Int): Rt_Error {
             val msg = if (count == 0) "No records found" else "Multiple records found: $count"
-            return RtError("at:wrong_count:$count", msg)
+            return Rt_Error("at:wrong_count:$count", msg)
         }
     }
 }

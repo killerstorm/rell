@@ -60,6 +60,14 @@ class ExpressionTest: BaseRellTest(false) {
         chkEx("{ val abs = a; return abs(abs); }", 123, "int[123]")
         chkEx("{ val abs = a; return abs(abs); }", -123, "int[123]")
         chkEx("{ val abs = a; return abs; }", -123, "int[-123]")
+        chkEx("{ val abs = a; return abs.str(); }", -123, "text[-123]")
+    }
+
+    @Test fun testMemberFunctionVsField() {
+        tst.defs = listOf("record foo { toGTXValue: integer; }")
+        chkEx("{ val v = foo(123); return v.toGTXValue; }", "int[123]")
+        chkEx("{ val v = foo(123); return v.toGTXValue.str(); }", "text[123]")
+        chkEx("{ val v = foo(123); return v.toGTXValue().toJSON().str(); }", "text[[123]]")
     }
 
     @Test fun testListItems() {
@@ -202,8 +210,8 @@ class ExpressionTest: BaseRellTest(false) {
     @Test fun testTupleAt() {
         tst.defs = listOf("class user { name: text; street: text; house: integer; }")
 
-        chk("user @ {} ( x = (.name,) ) ", "ct_err:expr_nosql")
-        chk("user @ {} ( x = (.name, .street, .house) ) ", "ct_err:expr_nosql")
+        chk("user @ {} ( x = (.name,) ) ", "ct_err:expr_sqlnotallowed")
+        chk("user @ {} ( x = (.name, .street, .house) ) ", "ct_err:expr_sqlnotallowed")
     }
 
     @Test fun testList() {
@@ -220,7 +228,7 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testUnknownFunction() {
-        chkEx("{ val s = 'Hello'; return s.badfunc(); }", "ct_err:unknown_member_fn:text:badfunc")
+        chkEx("{ val s = 'Hello'; return s.badfunc(); }", "ct_err:unknown_member:text:badfunc")
     }
 
     @Test fun testIn() {
@@ -286,8 +294,8 @@ class ExpressionTest: BaseRellTest(false) {
         chkEx("{ return user @* {} (.id+0, (.v1 * (.v2 + 101)).str().size()); }", "[(1,5), (2,6), (3,6)]")
         chkEx("{ return user @* {} (.id+0, (.name1 + .name2).foo); }", "ct_err:unknown_member:text:foo")
         chkEx("{ return user @* {} (.id+0, (.v1 * (.v2 + 101)).foo); }", "ct_err:unknown_member:integer:foo")
-        chkEx("{ return user @* {} (.id+0, (.name1 + .name2).foo()); }", "ct_err:unknown_member_fn:text:foo")
-        chkEx("{ return user @* {} (.id+0, (.v1 * (.v2 + 101)).foo()); }", "ct_err:unknown_member_fn:integer:foo")
+        chkEx("{ return user @* {} (.id+0, (.name1 + .name2).foo()); }", "ct_err:unknown_member:text:foo")
+        chkEx("{ return user @* {} (.id+0, (.v1 * (.v2 + 101)).foo()); }", "ct_err:unknown_member:integer:foo")
 
         val c = "val str1 = 'Hello'; val k1 = 777;"
         chkEx("{ $c return user @* {} (.id+0, (str1 + .name2).size()); }", "[(1,10), (2,15), (3,12)]")
@@ -296,14 +304,14 @@ class ExpressionTest: BaseRellTest(false) {
         chkEx("{ $c return user @* {} (.id+0, (k1 * (.v2 + 101)).str().size()); }", "[(1,6), (2,6), (3,6)]")
         chkEx("{ $c return user @* {} (.id+0, (str1 + .name2).foo); }", "ct_err:unknown_member:text:foo")
         chkEx("{ $c return user @* {} (.id+0, (k1 * (.v2 + 101)).foo); }", "ct_err:unknown_member:integer:foo")
-        chkEx("{ $c return user @* {} (.id+0, (str1 + .name2).foo()); }", "ct_err:unknown_member_fn:text:foo")
-        chkEx("{ $c return user @* {} (.id+0, (k1 * (.v2 + 101)).foo()); }", "ct_err:unknown_member_fn:integer:foo")
+        chkEx("{ $c return user @* {} (.id+0, (str1 + .name2).foo()); }", "ct_err:unknown_member:text:foo")
+        chkEx("{ $c return user @* {} (.id+0, (k1 * (.v2 + 101)).foo()); }", "ct_err:unknown_member:integer:foo")
     }
 
     @Test fun testPathError() {
         chkEx("{ val s = 'Hello'; return s.foo.bar; }", "ct_err:unknown_member:text:foo")
         chkEx("{ val s = 'Hello'; return s.foo.bar(); }", "ct_err:unknown_member:text:foo")
-        chkEx("{ val s = 'Hello'; return s.foo(); }", "ct_err:unknown_member_fn:text:foo")
+        chkEx("{ val s = 'Hello'; return s.foo(); }", "ct_err:unknown_member:text:foo")
     }
 
     @Test fun testCallNotCallable() {
