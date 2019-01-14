@@ -101,12 +101,12 @@ object S_LibFunctions {
             stdMemFn("encode", RByteArrayType, listOf(), RSysFunction_Text_Encode),
             stdMemFn("chatAt", RIntegerType, listOf(RIntegerType), RSysFunction_Text_CharAt),
             overMemFn("indexOf",
-                    memCase(RTextType, listOf(RTextType), RSysFunction_Text_IndexOf),
-                    memCase(RTextType, listOf(RTextType, RIntegerType), RSysFunction_Text_IndexOf)
+                    memCase(RIntegerType, listOf(RTextType), RSysFunction_Text_IndexOf),
+                    memCase(RIntegerType, listOf(RTextType, RIntegerType), RSysFunction_Text_IndexOf)
             ),
             overMemFn("lastIndexOf",
-                    memCase(RTextType, listOf(RTextType), RSysFunction_Text_LastIndexOf),
-                    memCase(RTextType, listOf(RTextType, RIntegerType), RSysFunction_Text_LastIndexOf)
+                    memCase(RIntegerType, listOf(RTextType), RSysFunction_Text_LastIndexOf),
+                    memCase(RIntegerType, listOf(RTextType, RIntegerType), RSysFunction_Text_LastIndexOf)
             ),
             overMemFn("sub",
                     memCase(RTextType, listOf(RIntegerType), RSysFunction_Text_Sub),
