@@ -84,10 +84,10 @@ object C_LibFunctions {
             .add("matches", R_BooleanType, listOf(R_TextType), R_SysFn_Text_Matches)
             .add("encode", R_ByteArrayType, listOf(), R_SysFn_Text_Encode)
             .add("chatAt", R_IntegerType, listOf(R_IntegerType), R_SysFn_Text_CharAt)
-            .add("indexOf", R_TextType, listOf(R_TextType), R_SysFn_Text_IndexOf)
-            .add("indexOf", R_TextType, listOf(R_TextType, R_IntegerType), R_SysFn_Text_IndexOf)
-            .add("lastIndexOf", R_TextType, listOf(R_TextType), R_SysFn_Text_LastIndexOf)
-            .add("lastIndexOf", R_TextType, listOf(R_TextType, R_IntegerType), R_SysFn_Text_LastIndexOf)
+            .add("indexOf", R_IntegerType, listOf(R_TextType), R_SysFn_Text_IndexOf)
+            .add("indexOf", R_IntegerType, listOf(R_TextType, R_IntegerType), R_SysFn_Text_IndexOf)
+            .add("lastIndexOf", R_IntegerType, listOf(R_TextType), R_SysFn_Text_LastIndexOf)
+            .add("lastIndexOf", R_IntegerType, listOf(R_TextType, R_IntegerType), R_SysFn_Text_LastIndexOf)
             .add("sub", R_TextType, listOf(R_IntegerType), R_SysFn_Text_Sub)
             .add("sub", R_TextType, listOf(R_IntegerType, R_IntegerType), R_SysFn_Text_Sub)
             .add("format", C_SysMemberFunction_Text_Format)
@@ -281,20 +281,28 @@ private class C_StdLibNamespace(
     override fun getFunctionOpt(entCtx: C_EntityContext, nsName: S_Name, name: S_Name) = fns.get(name.str)
 }
 
-private object C_OpContextNamespace: C_LibNamespace() {
+object C_OpContextNamespace: C_LibNamespace() {
     override fun getValueOpt(entCtx: C_EntityContext, nsName: S_Name, name: S_Name): R_Expr? {
-        if (entCtx.entityType != C_EntityType.OPERATION && entCtx.entityType != C_EntityType.FUNCTION) {
+        val et = entCtx.entityType
+        if (et != C_EntityType.OPERATION && et != C_EntityType.FUNCTION && et != C_EntityType.CLASS) {
             throw C_Error(nsName.pos, "op_ctx_noop", "Cannot access '${nsName.str}' outside of an operation")
         }
 
         if (name.str == "last_block_time") {
-            return R_SysCallExpr(R_IntegerType, R_SysFn_LastBlockTime, listOf())
+            return R_SysCallExpr(R_IntegerType, R_SysFn_OpContext_LastBlockTime, listOf())
+        } else if (name.str == "transaction") {
+            return transactionExpr(entCtx)
         } else {
             return null
         }
     }
 
     override fun getFunctionOpt(entCtx: C_EntityContext, nsName: S_Name, name: S_Name) = null
+
+    fun transactionExpr(entCtx: C_EntityContext): R_Expr {
+        val type = entCtx.modCtx.transactionClassType
+        return R_SysCallExpr(type, R_SysFn_OpContext_Transaction(type), listOf())
+    }
 }
 
 private class C_SysFunction_Print(val rFn: R_SysFunction): C_GlobalFuncCase() {

@@ -27,7 +27,7 @@ fun main(args: Array<String>) {
 
     runWithSql(argsEx.dburl) { sqlExec ->
         if (argsEx.resetdb) {
-            SqlUtils.resetDatabase(module, sqlExec)
+            SqlUtils.resetDatabase(sqlExec, module, false)
             println("Database reset done")
         }
         routine(sqlExec)
@@ -107,7 +107,7 @@ private fun findRoutine(module: R_Module, name: String): Pair<R_Routine, Rt_OpCo
         exitProcess(1)
     } else if (oper != null) {
         val time = System.currentTimeMillis() / 1000
-        return Pair(oper, Rt_OpContext(time, listOf()))
+        return Pair(oper, Rt_OpContext(time, -1, listOf()))
     } else if (query != null) {
         return Pair(query, null)
     } else {

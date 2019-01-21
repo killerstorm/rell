@@ -215,7 +215,9 @@ object SqlTestUtils {
         val list = mutableListOf<String>()
 
         for (cls in modelClasses) {
-            dumpTable(sqlExec, cls, list)
+            if (cls.mapping.autoCreateTable) {
+                dumpTable(sqlExec, cls, list)
+            }
         }
 
         return list.toList()
@@ -227,12 +229,13 @@ object SqlTestUtils {
     }
 
     private fun getDumpSql(cls: R_Class): String {
+        val rowid = cls.mapping.rowidColumn
         val buf = StringBuilder()
-        buf.append("SELECT \"$ROWID_COLUMN\"")
+        buf.append("SELECT \"$rowid\"")
         for (attr in cls.attributes.values) {
-            buf.append(", \"${attr.name}\"")
+            buf.append(", \"${attr.sqlMapping}\"")
         }
-        buf.append(" FROM \"${cls.name}\" ORDER BY \"$ROWID_COLUMN\"")
+        buf.append(" FROM \"${cls.mapping.table}\" ORDER BY \"$rowid\"")
         return buf.toString()
     }
 
@@ -383,7 +386,7 @@ class RellSqlTester(
         var closeable: Closeable? = realSqlExec
 
         try {
-            SqlUtils.resetDatabase(module, realSqlExec)
+            SqlUtils.resetDatabase(realSqlExec, module, true)
             initSqlInserts(realSqlExec)
             sqlExec = realSqlExec
             sqlExecResource = realSqlExec
@@ -495,6 +498,16 @@ class RellSqlTester(
     fun compileModule(code: String): String {
         val moduleCode = moduleCode(code)
         return processModule(moduleCode) { "OK" }
+    }
+
+    fun compileModuleEx(code: String): R_Module {
+        val moduleCode = moduleCode(code)
+        var res: R_Module? = null
+        processModule(moduleCode) {
+            res = it
+            "OK"
+        }
+        return res!!
     }
 
     private fun callFn(code: String): String {

@@ -96,6 +96,11 @@ class S_CreateExpr(pos: S_Pos, val className: S_Name, val exprs: List<S_NameExpr
         val cls = ctx.blkCtx.entCtx.modCtx.getClass(className)
         val attrs = C_AttributeResolver.resolveCreate(ctx, cls.attributes, exprs, startPos)
 
+        if (!cls.flags.canCreate) {
+            val name = className.str
+            throw C_Error(startPos, "expr_create_cant:$name", "Not allowed to create instances of class '$name'")
+        }
+
         val type = R_ClassType(cls)
         val rExpr = R_CreateExpr(type, cls, attrs)
         return C_RExpr(startPos, rExpr)

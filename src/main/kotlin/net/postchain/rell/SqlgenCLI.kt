@@ -6,8 +6,8 @@ import java.io.File
 
 fun main(args: Array<String>) {
     val text = File(args[0]).readText(Charsets.UTF_8)
-
-    val compiled = gensql(C_Utils.parse(text).compile(true), true)
+    val module = C_Utils.parse(text).compile(true)
+    val compiled = gensql(module, false, true)
 
     var path = args[0] + ".sql"
     if (args.size > 1) {

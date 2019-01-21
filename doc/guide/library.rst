@@ -1,6 +1,28 @@
 Library
 =======
 
+System classes
+--------------
+
+::
+
+   class block {
+       block_height: integer;
+       block_rid: byte_array;
+       timestamp;
+   }
+
+   class transaction {
+       tx_rid: byte_array;
+       tx_hash: byte_array;
+       tx_data: byte_array;
+       block;
+   }
+
+It is not possible to create, modify or delete objects of those classes in code.
+
+--------------
+
 Context
 -------
 
@@ -8,6 +30,11 @@ Context
 (like ``System.currentTimeMillis()`` in Java). Returns ``-1`` if there is no last block (the block currently being built
 is the first block).
 Can be used only in an operation or a function called from an operation, but not in a query.
+
+``op_context.transaction: transaction`` - the transaction currently being built.
+Can be used only in an operation or a function called from an operation, but not in a query.
+
+--------------
 
 Global Functions
 ----------------
@@ -29,6 +56,8 @@ in the list of signers of current operation
 
 -  ``print()`` - prints an empty line
 -  ``print('Hello', 123)`` - prints ``"Hello 123"``
+
+--------------
 
 Require functions
 -----------------

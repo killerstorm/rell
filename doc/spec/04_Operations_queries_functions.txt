@@ -7,7 +7,7 @@ Let's say that operations, queries and functions are routines. Some rules are co
 
 Module : Definition*
 
-Definition : ClassDefinition | RoutineDefinition
+Definition : ClassDefinition | RecordDefinition | RoutineDefinition
 
 RoutineDefinition : Operation | Query | Function
 

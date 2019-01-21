@@ -546,6 +546,10 @@ class AtExprTest {
         chk("user @* { .firstName == 'Bill' }[0]", "user[40]")
     }
 
+    @Test fun testNoSqlWhatExpr() {
+        chk("user @* { .firstName == 'Bill' } ( x = (123, 'Hello') )", "ct_err:expr_nosql:(integer,text)")
+    }
+
     private fun chk(code: String, expectedResult: String) {
         val queryCode = "return " + code + ";";
         chkEx(queryCode, expectedResult)

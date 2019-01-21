@@ -17,6 +17,10 @@ class S_UpdateStatement(
         val cls = rFrom[0]
         val extraClasses = rFrom.subList(1, rFrom.size)
 
+        if (!cls.rClass.flags.canUpdate) {
+            throw C_Errors.errCannotUpdate(pos, cls.rClass.name)
+        }
+
         val dbCtx = C_DbExprContext(ctx.blkCtx, rFrom)
         val dbWhere = where.compile(dbCtx)
         val dbWhat = compileWhat(cls.rClass, dbCtx)
@@ -58,6 +62,10 @@ class S_DeleteStatement(val pos: S_Pos, val from: List<S_AtExprFrom>, val where:
         val rFrom = S_AtExpr.compileFrom(ctx, from)
         val cls = rFrom[0]
         val extraClasses = rFrom.subList(1, rFrom.size)
+
+        if (!cls.rClass.flags.canDelete) {
+            throw C_Errors.errCannotDelete(pos, cls.rClass.name)
+        }
 
         val dbCtx = C_DbExprContext(ctx.blkCtx, rFrom)
         val dbWhere = where.compile(dbCtx)

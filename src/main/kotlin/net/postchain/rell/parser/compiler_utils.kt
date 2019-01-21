@@ -123,6 +123,14 @@ object C_Errors {
     fun errExprDbNotAllowed(pos: S_Pos): C_Error {
         return C_Error(pos, "expr_sqlnotallowed", "Database expression not allowed here")
     }
+
+    fun errCannotUpdate(pos: S_Pos, name: String): C_Error {
+        return C_Error(pos, "stmt_update_cant:$name", "Not allowed to update objects of class '$name'")
+    }
+
+    fun errCannotDelete(pos: S_Pos, name: String): C_Error {
+        return C_Error(pos, "stmt_delete_cant:$name", "Not allowed to delete objects of class '$name'")
+    }
 }
 
 object C_GraphUtils {

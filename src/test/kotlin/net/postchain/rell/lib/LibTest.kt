@@ -59,7 +59,7 @@ class LibTest: BaseRellTest(false) {
     }
 
     @Test fun testIsSigner() {
-        tst.opContext = Rt_OpContext(-1, listOf("1234".hexStringToByteArray(), "abcd".hexStringToByteArray()))
+        tst.opContext = Rt_OpContext(-1, -1, listOf("1234".hexStringToByteArray(), "abcd".hexStringToByteArray()))
 
         chk("is_signer(x'1234')", "boolean[true]")
         chk("is_signer(x'abcd')", "boolean[true]")
@@ -182,27 +182,6 @@ class LibTest: BaseRellTest(false) {
     @Test fun testByteArrayToList() {
         chk("x''.toList()", "list<integer>[]")
         chk("x'1234abcd'.toList()", "list<integer>[int[18],int[52],int[171],int[205]]")
-    }
-
-    @Test fun testOpContextLastBlockTime() {
-        tst.opContext = Rt_OpContext(12345, listOf())
-        chkOp("print(op_context.last_block_time);", "")
-        tst.chkStdout("12345")
-
-        chkOp("val t: timestamp = op_context.last_block_time; print(t);", "") // Will fail when timestamp type becomes intependent.
-        tst.chkStdout("12345")
-        chkOp("val t: integer = op_context.last_block_time; print(t);", "")
-        tst.chkStdout("12345")
-
-        chkOpFull("function f(): timestamp = op_context.last_block_time; operation o() { print(f()); }", "")
-        tst.chkStdout("12345")
-
-        tst.opContext = null
-        chk("op_context.last_block_time", "ct_err:op_ctx_noop")
-        chkFull("function f(): timestamp = op_context.last_block_time; query q() = f();", listOf(),
-                "rt_err:fn_last_block_time_noop")
-
-        chk("op_context", "ct_err:unknown_name:op_context")
     }
 
     @Test fun testGtxValue() {

@@ -328,11 +328,19 @@ class R_SysFn_Print(val log: Boolean): R_SysFunction() {
     }
 }
 
-object R_SysFn_LastBlockTime: R_SysFunction() {
+object R_SysFn_OpContext_LastBlockTime: R_SysFunction() {
     override fun call(ctx: Rt_GlobalContext, args: List<Rt_Value>): Rt_Value {
         check(args.size == 0)
         if (ctx.opCtx == null) throw Rt_Error("fn_last_block_time_noop", "Operation context not available")
         return Rt_IntValue(ctx.opCtx.lastBlockTime)
+    }
+}
+
+class R_SysFn_OpContext_Transaction(private val type: R_ClassType): R_SysFunction() {
+    override fun call(ctx: Rt_GlobalContext, args: List<Rt_Value>): Rt_Value {
+        check(args.size == 0)
+        if (ctx.opCtx == null) throw Rt_Error("fn_opctx_transaction_noop", "Operation context not available")
+        return Rt_ObjectValue(type, ctx.opCtx.transactionIid)
     }
 }
 

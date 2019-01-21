@@ -32,7 +32,7 @@ class Rt_EntityContext(val modCtx: Rt_ModuleContext, val dbUpdateAllowed: Boolea
     }
 }
 
-class Rt_OpContext(val lastBlockTime: Long, val signers: List<ByteArray>)
+class Rt_OpContext(val lastBlockTime: Long, val transactionIid: Long, val signers: List<ByteArray>)
 
 class Rt_CallFrame(val entCtx: Rt_EntityContext, rFrame: R_CallFrame) {
     private var curBlock = rFrame.rootBlock

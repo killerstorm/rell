@@ -5,6 +5,7 @@ import net.postchain.rell.runtime.Rt_Value
 import java.sql.PreparedStatement
 
 data class SqlTableAlias(val cls: R_Class, val str: String)
+class SqlTableJoin(val attr: R_Attrib, val alias: SqlTableAlias)
 
 class SqlFromInfo(val classes: List<SqlFromClass>)
 class SqlFromClass(val alias: SqlTableAlias, val joins: List<SqlFromJoin>)
@@ -35,20 +36,21 @@ class SqlGenContext(classes: List<R_AtClass>, private val parameters: List<Rt_Va
         return tbl.alias
     }
 
-    fun getRelAlias(baseAlias: SqlTableAlias, rel: String, cls: R_Class): SqlTableAlias {
+    fun getRelAlias(baseAlias: SqlTableAlias, rel: R_Attrib, cls: R_Class): SqlTableAlias {
         val tbl = aliasTblMap.getValue(baseAlias)
         val map = tbl.subAliases.computeIfAbsent(baseAlias) { mutableMapOf() }
-        return map.computeIfAbsent(rel) {
+        val join = map.computeIfAbsent(rel.name) {
             val alias = nextAlias(cls)
             aliasTblMap[alias] = tbl
-            alias
+            SqlTableJoin(rel, alias)
         }
+        return join.alias
     }
 
     fun getFromInfo(): SqlFromInfo {
         val classes = clsAliasMap.entries.map { (cls, tbl) ->
             val joins = tbl.subAliases.entries.flatMap { (alias, map) ->
-                map.entries.map { (attr, alias2) -> SqlFromJoin(alias, attr, alias2) }
+                map.values.map { tblJoin -> SqlFromJoin(alias, tblJoin.attr.sqlMapping, tblJoin.alias) }
             }
             SqlFromClass(tbl.alias, joins)
         }
@@ -58,7 +60,7 @@ class SqlGenContext(classes: List<R_AtClass>, private val parameters: List<Rt_Va
     private fun nextAlias(cls: R_Class) = SqlTableAlias(cls, String.format("A%02d", aliasCtr++))
 
     private class ClassAliasTbl(val alias: SqlTableAlias) {
-        val subAliases = mutableMapOf<SqlTableAlias, MutableMap<String, SqlTableAlias>>()
+        val subAliases = mutableMapOf<SqlTableAlias, MutableMap<String, SqlTableJoin>>()
     }
 }
 

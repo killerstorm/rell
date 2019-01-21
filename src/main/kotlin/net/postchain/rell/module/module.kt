@@ -66,7 +66,7 @@ class RellGTXOperation(val rOperation: R_Operation, val rModule: R_Module, opDat
     }
 
     override fun apply(ctx: TxEContext): Boolean {
-        val opCtx = Rt_OpContext(ctx.timestamp, data.signers.toList())
+        val opCtx = Rt_OpContext(ctx.timestamp, ctx.txIID, data.signers.toList())
         val modCtx = makeRtModuleContext(rModule, ctx, opCtx)
 
         catchRtErr {
@@ -94,7 +94,7 @@ class RellPostchainModule(val rModule: R_Module, val moduleName: String): GTXMod
 
     override fun initializeDB(ctx: EContext) {
         if (GTXSchemaManager.getModuleVersion(ctx, moduleName) == null) {
-            val sql = gensql(rModule, false)
+            val sql = gensql(rModule, false, false)
             ctx.conn.createStatement().use {
                 it.execute(sql)
             }

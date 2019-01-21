@@ -1,6 +1,7 @@
 package net.postchain.rell
 
 import org.junit.Test
+import kotlin.test.assertEquals
 
 class ClassTest: BaseRellTest(false) {
     @Test fun testAttrNoType() {
@@ -158,5 +159,19 @@ class ClassTest: BaseRellTest(false) {
         chk("foo @ {.x == 2}(.k)", "int[0]")
         chk("foo @ {.x == 3}(.k)", "int[1]")
         chk("foo @ {.x == 4}(.k)", "int[2]")
+    }
+
+    @Test fun testAnnotations() {
+        chkCompile("class user (log) {}", "OK")
+        chkCompile("class user (foo) {}", "ct_err:class_ann_bad:foo")
+        chkCompile("class user (log, log) {}", "ct_err:class_ann_dup:log")
+
+        val m1 = tst.compileModuleEx("class user {}")
+        val c1 = m1.classes["user"]!!
+        assertEquals(false, c1.flags.log)
+
+        val m2 = tst.compileModuleEx("class user (log) {}")
+        val c2 = m2.classes["user"]!!
+        assertEquals(true, c2.flags.log)
     }
 }

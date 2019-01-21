@@ -1,0 +1,31 @@
+RELEASE NOTES 0.7
+
+
+1. System classes "block" and "transaction":
+
+class block {
+    block_height: integer;
+    block_rid: byte_array;
+    timestamp;
+}
+
+class transaction {
+    tx_rid: byte_array;
+    tx_hash: byte_array;
+    tx_data: byte_array;
+    block;
+}
+
+2. Library: "op_context.transaction"
+
+3. Log annotation:
+
+class user (log) {
+    name: text;
+}
+
+Effects:
+
+- Implicit "transaction" reference.
+- All attributes are immutable.
+- Cannot delete objects.

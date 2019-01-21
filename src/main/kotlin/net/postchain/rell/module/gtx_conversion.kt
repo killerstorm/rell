@@ -40,9 +40,10 @@ class GtxToRtContext {
 
     private fun selectExistingIds(sqlExec: SqlExecutor, rClass: R_Class, rowids: Collection<Long>): Set<Long> {
         val buf = StringBuilder()
-        buf.append("SELECT \"").append(ROWID_COLUMN).append("\"")
-        buf.append(" FROM \"").append(rClass.name).append("\"")
-        buf.append(" WHERE \"").append(ROWID_COLUMN).append("\" IN (")
+        val col = rClass.mapping.rowidColumn
+        buf.append("SELECT \"").append(col).append("\"")
+        buf.append(" FROM \"").append(rClass.mapping.table).append("\"")
+        buf.append(" WHERE \"").append(col).append("\" IN (")
         rowids.joinTo(buf, ",")
         buf.append(")")
         val sql = buf.toString()

@@ -24,36 +24,66 @@ private val ROWID_SQL = """
     LANGUAGE SQL;
     """
 
-fun genclass(classDefinition: R_Class): String {
-    val t = ctx.createTable(classDefinition.name)
-    var q = t.column(ROWID_COLUMN, SQLDataType.BIGINT.nullable(false))
-    val constraints = mutableListOf<Constraint>(constraint("PK_" + classDefinition.name).primaryKey(ROWID_COLUMN))
+private val CREATE_TABLE_BLOCKS = """
+CREATE TABLE blocks(
+    block_iid BIGSERIAL PRIMARY KEY,
+    block_height BIGINT NOT NULL,
+    block_rid BYTEA,
+    chain_id BIGINT NOT NULL,
+    block_header_data BYTEA,
+    block_witness BYTEA,
+    timestamp BIGINT,
+    UNIQUE (chain_id, block_rid),
+    UNIQUE (chain_id, block_height)
+);
+""".trimIndent()
+
+private val CREATE_TABLE_TRANSACTIONS = """
+CREATE TABLE transactions(
+    tx_iid BIGSERIAL PRIMARY KEY,
+    chain_id bigint NOT NULL,
+    tx_rid bytea NOT NULL,
+    tx_data bytea NOT NULL,
+    tx_hash bytea NOT NULL,
+    block_iid bigint NOT NULL REFERENCES blocks(block_iid),
+    UNIQUE (chain_id, tx_rid)
+);
+""".trimIndent()
+
+private fun genclass(classDefinition: R_Class): String {
+    val mapping = classDefinition.mapping
+
+    val t = ctx.createTable(mapping.table)
+    var q = t.column(mapping.rowidColumn, SQLDataType.BIGINT.nullable(false))
+    val constraints = mutableListOf<Constraint>(constraint("PK_" + mapping.table).primaryKey(mapping.rowidColumn))
 
     val jsonAttribSet = mutableSetOf<String>()
 
     for (attr in classDefinition.attributes.values) {
         if (attr.type is R_ClassType) {
+            val refCls = attr.type.rClass
             constraints.add(
-                    constraint("${classDefinition.name}_${attr.name}_FK")
-                            .foreignKey(attr.name).references(attr.type.name, ROWID_COLUMN)
+                    constraint("${mapping.table}_${attr.sqlMapping}_FK")
+                            .foreignKey(attr.sqlMapping).references(refCls.mapping.table, refCls.mapping.rowidColumn)
             )
         } else if (attr.type is R_JSONType) {
             jsonAttribSet.add(attr.name)
         }
-        q = q.column(attr.name, getSQLType(attr.type).nullable(false))
+        q = q.column(attr.sqlMapping, getSQLType(attr.type).nullable(false))
     }
     for ((kidx, key) in classDefinition.keys.withIndex()) {
-        constraints.add(constraint("K_${classDefinition.name}_${kidx}").unique(*key.attribs.toTypedArray()))
+        constraints.add(constraint("K_${mapping.table}_${kidx}").unique(*key.attribs.toTypedArray()))
     }
     var ddl = q.constraints(*constraints.toTypedArray()).toString() + ";\n"
 
     for ((iidx, index) in classDefinition.indexes.withIndex()) {
         val index_sql : String;
+        val tableName = mapping.table
         if (index.attribs.size == 1 && jsonAttribSet.contains(index.attribs[0])) {
             val attrName = index.attribs[0]
-            index_sql = "CREATE INDEX \"IDX_${classDefinition.name}_${iidx}\" ON \"${classDefinition.name}\" USING gin (\"${attrName}\" jsonb_path_ops)"
+            index_sql = "CREATE INDEX \"IDX_${tableName}_${iidx}\" ON \"$tableName\" USING gin (\"${attrName}\" jsonb_path_ops)"
         } else {
-            index_sql = (ctx.createIndex("IDX_${classDefinition.name}_${iidx}").on(classDefinition.name, *index.attribs.toTypedArray())).toString();
+            index_sql = (ctx.createIndex("IDX_${tableName}_${iidx}").on(tableName, *index.attribs.toTypedArray())).toString();
         }
         ddl += index_sql + ";\n";
     }
@@ -132,16 +162,22 @@ fun genop(opDefinition: R_Operation): String {
 """
 }
 
-fun gensql(model: R_Module, ops: Boolean): String {
+fun gensql(model: R_Module, blockTable: Boolean, operations: Boolean): String {
     System.setProperty("org.jooq.no-logo", "true")
 
     var s = ""
     s += ROWID_SQL
+    if (blockTable) {
+        s += CREATE_TABLE_BLOCKS
+        s += CREATE_TABLE_TRANSACTIONS
+    }
     for (cls in model.classes.values) {
-        s += genclass(cls)
+        if (cls.mapping.autoCreateTable) {
+            s += genclass(cls)
+        }
     }
 
-    if (ops) {
+    if (operations) {
         for (op in model.operations.values) {
             s += genop(op)
         }

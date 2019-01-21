@@ -3,7 +3,6 @@ package net.postchain.rell.model
 import net.postchain.rell.parser.C_Utils
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.MAKE_ROWID_FUNCTION
-import net.postchain.rell.sql.ROWID_COLUMN
 
 abstract class R_Expr(val type: R_Type) {
     abstract fun evaluate(frame: Rt_CallFrame): Rt_Value
@@ -360,13 +359,13 @@ class R_CreateExpr(type: R_Type, val rClass: R_Class, val attrs: List<R_CreateEx
         val builder = SqlBuilder()
 
         builder.append("INSERT INTO ")
-        builder.appendName(rClass.name)
+        builder.appendName(rClass.mapping.table)
 
         builder.append("(")
-        builder.appendName(ROWID_COLUMN)
+        builder.appendName(rClass.mapping.rowidColumn)
         builder.append(", ")
         builder.append(attrs, ", ") { attr ->
-            builder.appendName(attr.attr.name)
+            builder.appendName(attr.attr.sqlMapping)
         }
         builder.append(")")
 
@@ -378,7 +377,7 @@ class R_CreateExpr(type: R_Type, val rClass: R_Class, val attrs: List<R_CreateEx
         builder.append(")")
 
         builder.append(" RETURNING ")
-        builder.appendName(ROWID_COLUMN)
+        builder.appendName(rClass.mapping.rowidColumn)
 
         return builder.build()
     }

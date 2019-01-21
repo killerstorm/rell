@@ -1,7 +1,6 @@
 package net.postchain.rell.model
 
 import net.postchain.rell.runtime.Rt_CallFrame
-import net.postchain.rell.sql.ROWID_COLUMN
 
 class R_UpdateStatementWhat(val attr: R_Attrib, val expr: Db_Expr, val op: Db_BinaryOp?)
 
@@ -53,10 +52,10 @@ class R_UpdateStatement(
         builder.append(" SET ")
 
         builder.append(what, ", ") { whatExpr ->
-            builder.appendName(whatExpr.attr.name)
+            builder.appendName(whatExpr.attr.sqlMapping)
             builder.append(" = ")
             if (whatExpr.op != null) {
-                builder.appendName(whatExpr.attr.name)
+                builder.appendName(whatExpr.attr.sqlMapping)
                 builder.append(" ")
                 builder.append(whatExpr.op.sql)
                 builder.append(" ")
@@ -104,7 +103,7 @@ class R_DeleteStatement(val cls: R_AtClass, val extraClasses: List<R_AtClass>, v
 }
 
 private fun appendMainTable(builder: SqlBuilder, cls: R_AtClass, fromInfo: SqlFromInfo) {
-    builder.appendName(cls.rClass.name)
+    builder.appendName(cls.rClass.mapping.table)
     builder.append(" ")
     builder.append(fromInfo.classes[cls.index].alias.str)
 }
@@ -119,13 +118,13 @@ private fun appendExtraTables(
     val tables = mutableListOf<Pair<String, SqlTableAlias>>()
 
     for (join in fromInfo.classes[cls.index].joins) {
-        tables.add(Pair(join.alias.cls.name, join.alias))
+        tables.add(Pair(join.alias.cls.mapping.table, join.alias))
     }
 
     for (extraCls in extraClasses) {
-        tables.add(Pair(extraCls.rClass.name, fromInfo.classes[extraCls.index].alias))
+        tables.add(Pair(extraCls.rClass.mapping.table, fromInfo.classes[extraCls.index].alias))
         for (join in fromInfo.classes[extraCls.index].joins) {
-            tables.add(Pair(join.alias.cls.name, join.alias))
+            tables.add(Pair(join.alias.cls.mapping.table, join.alias))
         }
     }
 
@@ -168,6 +167,6 @@ private fun appendWhereJoins(builder: SqlBuilder, allJoins: List<SqlFromJoin>) {
     builder.append(allJoins, " AND ") { join ->
         builder.appendColumn(join.baseAlias, join.attr)
         builder.append(" = ")
-        builder.appendColumn(join.alias, ROWID_COLUMN)
+        builder.appendColumn(join.alias, join.alias.cls.mapping.rowidColumn)
     }
 }

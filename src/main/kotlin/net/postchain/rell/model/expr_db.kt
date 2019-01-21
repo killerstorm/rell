@@ -1,7 +1,5 @@
 package net.postchain.rell.model
 
-import net.postchain.rell.sql.ROWID_COLUMN
-
 sealed class Db_BinaryOp(val code: String, val sql: String)
 object Db_BinaryOp_Eq: Db_BinaryOp("==", "=")
 object Db_BinaryOp_Ne: Db_BinaryOp("!=", "<>")
@@ -60,7 +58,7 @@ sealed class Db_TableExpr(val rClass: R_Class): Db_Expr(R_ClassType(rClass)) {
 
     final override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
         val alias = alias(ctx)
-        bld.appendColumn(alias, ROWID_COLUMN)
+        bld.appendColumn(alias, rClass.mapping.rowidColumn)
     }
 }
 
@@ -75,7 +73,7 @@ class Db_RelExpr(val base: Db_TableExpr, val attr: R_Attrib, targetClass: R_Clas
 
     override fun alias(ctx: SqlGenContext): SqlTableAlias {
         val baseAlias = base.alias(ctx)
-        return ctx.getRelAlias(baseAlias, attr.name, rClass)
+        return ctx.getRelAlias(baseAlias, attr, rClass)
     }
 }
 
@@ -86,7 +84,7 @@ class Db_AttrExpr(val base: Db_TableExpr, val attr: R_Attrib): Db_Expr(attr.type
 
     override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
         val alias = base.alias(ctx)
-        bld.appendColumn(alias, attr.name)
+        bld.appendColumn(alias, attr.sqlMapping)
     }
 }
 

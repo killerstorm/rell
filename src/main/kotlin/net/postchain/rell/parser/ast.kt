@@ -4,6 +4,7 @@ import com.github.h0tk3y.betterParse.lexer.TokenMatch
 import net.postchain.rell.model.*
 import net.postchain.rell.module.GTX_OPERATION_HUMAN
 import net.postchain.rell.module.GTX_QUERY_HUMAN
+import net.postchain.rell.sql.ROWID_COLUMN
 
 class S_Pos(val row: Int, val col: Int) {
     constructor(t: TokenMatch): this(t.row, t.column)
@@ -93,11 +94,16 @@ sealed class S_Definition(val name: S_Name) {
     abstract fun compile(ctx: C_ModuleContext)
 }
 
-class S_ClassDefinition(name: S_Name, val clauses: List<S_RelClause>): S_Definition(name) {
+class S_ClassDefinition(name: S_Name, val annotations: List<S_Name>, val clauses: List<S_RelClause>): S_Definition(name) {
     override fun compile(ctx: C_ModuleContext) {
         ctx.checkTypeName(name)
 
-        val rClass = R_Class(name.str)
+        val rFlags = compileFlags()
+
+        val rMapping = R_ClassSqlMapping(name.str, ROWID_COLUMN, true)
+        ctx.checkTableName(name, rMapping.table)
+
+        val rClass = R_Class(name.str, rFlags, rMapping)
         ctx.addClass(rClass)
 
         ctx.classesPass.add {
@@ -105,8 +111,35 @@ class S_ClassDefinition(name: S_Name, val clauses: List<S_RelClause>): S_Definit
         }
     }
 
+    private fun compileFlags(): R_ClassFlags {
+        val set = mutableSetOf<String>()
+        var log = false
+
+        for (ann in annotations) {
+            val annStr = ann.str
+            if (!set.add(annStr)) {
+                throw C_Error(ann.pos, "class_ann_dup:$annStr", "Duplicate annotation: '$annStr'")
+            }
+
+            if (annStr == C_Defs.LOG_ANNOTATION) {
+                log = true
+            } else {
+                throw C_Error(ann.pos, "class_ann_bad:$annStr", "Invalid annotation: '$annStr'")
+            }
+        }
+
+        return R_ClassFlags(true, true, !log, log)
+    }
+
     private fun classesPass(ctx: C_ModuleContext, rClass: R_Class) {
-        val clsCtx = C_ClassContext(ctx, true)
+        val clsCtx = C_ClassContext(ctx, name.str, C_EntityType.CLASS, rClass.flags.log)
+
+        if (rClass.flags.log) {
+            clsCtx.addAttribute0("transaction", ctx.transactionClassType, false, false) {
+                C_OpContextNamespace.transactionExpr(clsCtx.entCtx)
+            }
+        }
+
         for (clause in clauses) {
             clause.compileAttributes(clsCtx)
         }
@@ -132,7 +165,7 @@ class S_RecordDefinition(name: S_Name, val attrs: List<S_AttributeClause>): S_De
     }
 
     private fun classesPass(ctx: C_ModuleContext, rType: R_RecordType) {
-        val clsCtx = C_ClassContext(ctx, false)
+        val clsCtx = C_ClassContext(ctx, name.str, C_EntityType.RECORD, false)
         for (clause in attrs) {
             clause.compileAttributes(clsCtx)
         }

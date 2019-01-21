@@ -19,6 +19,14 @@ object C_AttributeResolver {
         val attrExprsDef = attrExprs + matchDefaultExprs(attributes, attrExprs)
         checkMissingAttrs(attributes, attrExprsDef, pos)
 
+        for ((idx, attr) in attrs.withIndex()) {
+            if (!attr.canSetInCreate) {
+                val name = attr.name
+                val expr = exprs[idx].expr
+                throw C_Error(expr.startPos, "create_attr_cantset:$name", "Cannot set value of system attribute '$name'")
+            }
+        }
+
         return attrExprsDef
     }
 

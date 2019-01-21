@@ -138,8 +138,11 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     private val relClauses by zeroOrMore(anyRelClause)
 
-    private val classDef by (-CLASS * id * -LCURL * relClauses * -RCURL) map { (name, clauses) ->
-        S_ClassDefinition(name, clauses)
+    private val classAnnotations by -LPAR * separatedTerms(id, COMMA, false) * -RPAR
+
+    private val classDef by (-CLASS * id * optional(classAnnotations) * -LCURL * relClauses * -RCURL) map {
+        (name, annotations, clauses) ->
+        S_ClassDefinition(name, annotations ?: listOf(), clauses)
     }
 
     private val recordDef by (-RECORD * id * -LCURL * zeroOrMore(relAttributeClause) * -RCURL) map { (name, attrs) ->

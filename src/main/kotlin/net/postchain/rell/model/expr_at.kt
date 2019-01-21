@@ -75,7 +75,7 @@ class R_AtExprBase(
         for (cls in from) {
             orderByList.nextItem()
             val alias = ctx.getClassAlias(cls)
-            b.appendColumn(alias, ROWID_COLUMN)
+            b.appendColumn(alias, cls.rClass.mapping.rowidColumn)
         }
 
         if (limit != null) {
@@ -104,19 +104,19 @@ class R_AtExprBase(
     private fun appendFrom(b: SqlBuilder, fromInfo: SqlFromInfo) {
         b.append(" FROM ")
         b.append(fromInfo.classes, ", ") { cls ->
-            b.appendName(cls.alias.cls.name)
+            b.appendName(cls.alias.cls.mapping.table)
             b.append(" ")
             b.append(cls.alias.str)
 
             for (join in cls.joins) {
                 b.append(" INNER JOIN ")
-                b.appendName(join.alias.cls.name)
+                b.appendName(join.alias.cls.mapping.table)
                 b.append(" ")
                 b.append(join.alias.str)
                 b.append(" ON ")
                 b.appendColumn(join.baseAlias, join.attr)
                 b.append(" = ")
-                b.appendColumn(join.alias, ROWID_COLUMN)
+                b.appendColumn(join.alias, join.alias.cls.mapping.rowidColumn)
             }
         }
     }

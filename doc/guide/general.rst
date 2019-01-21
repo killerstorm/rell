@@ -222,6 +222,22 @@ but such definition has restrictions (e. g. cannot specify ``mutable``):
        index address: text;
    }
 
+Class annotations
+-----------------
+
+::
+
+   class user (log) {
+       name: text;
+   }
+
+The ``log`` annotation has following effects:
+
+- Special attribute ``transaction`` of type ``transaction`` is added to the class.
+- When an object is created, ``transaction`` is set to the result of ``op_context.transaction`` (current transaction).
+- Class cannot have mutable attributes.
+- Objects cannot be deleted.
+
 Record
 ------
 
