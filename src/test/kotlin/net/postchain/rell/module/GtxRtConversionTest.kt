@@ -1,6 +1,10 @@
 package net.postchain.rell.module
 
+import net.postchain.gtx.ByteArrayGTXValue
+import net.postchain.gtx.GTXValue
+import net.postchain.gtx.StringGTXValue
 import net.postchain.rell.BaseRellTest
+import net.postchain.rell.hexStringToByteArray
 import org.junit.Test
 import kotlin.test.assertEquals
 
@@ -70,6 +74,18 @@ class GtxRtConversionTest: BaseRellTest(useSql = false, gtx = true) {
         chkArg("json", """"{\"x\":123,\"y\":\"Hello\"}"""", """json[{"x":123,"y":"Hello"}]""")
         chkArg("json", """{"x":123,"y":"Hello"}""", "gtx_err:type:json:DICT")
         chkArg("json", """"{"""", "gtx_err:type:json:STRING")
+    }
+
+    @Test fun testArgByteArray() {
+        chkOpArg("byte_array", gtxBytes("12EF"), "byte_array[12ef]")
+        chkOpArg("byte_array", gtxBytes("12ef"), "byte_array[12ef]")
+        chkOpArg("byte_array", gtxBytes("12eF"), "byte_array[12ef]")
+        chkOpArg("byte_array", gtxStr("12EF"), "byte_array[12ef]")
+        chkOpArg("byte_array", gtxStr("12ef"), "byte_array[12ef]")
+        chkOpArg("byte_array", gtxStr("12eF"), "byte_array[12ef]")
+        chkOpArg("byte_array", gtxStr("12EG"), "gtx_err:type:byte_array:STRING")
+        chkOpArg("byte_array", gtxStr("12E"), "gtx_err:type:byte_array:STRING")
+        chkOpArg("byte_array", gtxStr("Hello"), "gtx_err:type:byte_array:STRING")
     }
 
     @Test fun testArgTupleQuery() {
@@ -201,11 +217,30 @@ class GtxRtConversionTest: BaseRellTest(useSql = false, gtx = true) {
 
     private fun chkOpArg(type: String, arg: String, expected: String) {
         val code = "operation o(a: $type) { print(_strictStr(a)); }"
+        val actual = tst.callOpGtxStr(code, listOf(arg))
+        chkRes(expected, actual)
+    }
+
+    private fun chkOpArg(type: String, arg: GTXValue, expected: String) {
+        val code = "operation o(a: $type) { print(_strictStr(a)); }"
         val actual = tst.callOpGtx(code, listOf(arg))
+        chkRes(expected, actual)
+    }
+
+    private fun chkRes(expected: String, actual: String) {
         if (actual == "") {
             tst.chkStdout(expected)
         } else {
             assertEquals(expected, actual)
         }
+    }
+
+    private fun gtxBytes(s: String): GTXValue {
+        var bytes = s.hexStringToByteArray()
+        return ByteArrayGTXValue(bytes)
+    }
+
+    private fun gtxStr(s: String): GTXValue {
+        return StringGTXValue(s)
     }
 }

@@ -372,15 +372,13 @@ private fun gtxToString(gtx: GTXValue): String {
 }
 
 private fun gtxToByteArray(gtx: GTXValue): ByteArray {
-    val str = try {
-        gtx.asString()
+    try {
+        // TODO: This allows interpreting string as byte array.
+        // This is a temporary measure needed because of deficiency of the query API.
+        // Auto-conversion should be removed later.
+        return gtx.asByteArray(true)
     } catch (e: UserMistake) {
         throw errGtxType("byte_array", gtx, e)
-    }
-    try {
-        return str.hexStringToByteArray()
-    } catch (e: IllegalArgumentException) {
-        throw errGtxType("byte_array", gtx, "Type error: invalid byte array string")
     }
 }
 

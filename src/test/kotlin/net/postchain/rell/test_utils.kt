@@ -153,7 +153,15 @@ object RellTestUtils {
         return decodeGtxArgs(params, args, true)
     }
 
-    fun decodeGtxOpArgs(params: List<R_ExternalParam>, args: List<String>): List<Rt_Value> {
+    fun decodeGtxOpArgs(params: List<R_ExternalParam>, args: List<GTXValue>): List<Rt_Value> {
+        check(params.size == args.size)
+        val ctx = GtxToRtContext()
+        return args.mapIndexed { i, gtx ->
+            params[i].type.gtxToRt(ctx, gtx, false)
+        }
+    }
+
+    fun decodeGtxOpArgsStr(params: List<R_ExternalParam>, args: List<String>): List<Rt_Value> {
         return decodeGtxArgs(params, args, false)
     }
 
@@ -463,7 +471,7 @@ class RellSqlTester(
     }
 
     fun chkOpGtxEx(code: String, args: List<String>, expected: String) {
-        val actual = callOp0(code, args, RellTestUtils::decodeGtxOpArgs)
+        val actual = callOp0(code, args, RellTestUtils::decodeGtxOpArgsStr)
         assertEquals(expected, actual)
     }
 
@@ -541,8 +549,12 @@ class RellSqlTester(
         return callOp0(code, args) { _, v -> v }
     }
 
-    fun callOpGtx(code: String, args: List<String>): String {
+    fun callOpGtx(code: String, args: List<GTXValue>): String {
         return callOp0(code, args, RellTestUtils::decodeGtxOpArgs)
+    }
+
+    fun callOpGtxStr(code: String, args: List<String>): String {
+        return callOp0(code, args, RellTestUtils::decodeGtxOpArgsStr)
     }
 
     private fun <T> callOp0(code: String, args: List<T>, decoder: (List<R_ExternalParam>, List<T>) -> List<Rt_Value>): String {
