@@ -1,5 +1,7 @@
 package net.postchain.rell
 
+import net.postchain.rell.test.RellCodeTester
+import net.postchain.rell.test.RellTestUtils
 import org.junit.After
 import org.junit.Test
 import kotlin.test.assertEquals
@@ -10,7 +12,7 @@ class CreateTest {
             "class person { name: text; city; street: text; house: integer; score: integer; }"
     )
 
-    private val tst = RellSqlTester(classDefs = classDefs)
+    private val tst = RellCodeTester(classDefs = classDefs)
 
     @After fun after() = tst.destroy()
 

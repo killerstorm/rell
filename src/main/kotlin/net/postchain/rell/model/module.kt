@@ -162,7 +162,8 @@ class R_Module(
         val records: Map<String, R_RecordType>,
         val operations: Map<String, R_Operation>,
         val queries: Map<String, R_Query>,
-        val functionsTable: List<R_Function>
+        val functionsTable: List<R_Function>,
+        val moduleArgsRecord: R_RecordType?
 ){
     val functions = functionsTable.associate { Pair(it.name, it) }
 

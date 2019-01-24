@@ -23,8 +23,49 @@ It is not possible to create, modify or delete objects of those classes in code.
 
 --------------
 
-Context
--------
+chain_context
+-------------
+
+``chain_context.raw_config: GTXValue`` - blockchain configuration object, e. g. ``{"gtx":{"rellSrcModule":"foo.rell"}}``
+
+``chain_context.args: module_args?`` - module arguments specified in ``raw_config`` under path ``gtx.rellModuleArgs``.
+The type is ``module_args``, which must be a user-defined record. If no ``module_args`` record is defined in the module,
+the ``args`` field cannot be accessed. The value is ``null`` if arguments are not specified in the module configuration.
+
+Example of ``module_args``:
+
+::
+
+    record module_args {
+        s: text;
+        n: integer;
+    }
+
+Corresponding module configuration:
+
+::
+
+    {
+        "gtx": {
+            "rellSrcModule": "foo.rell",
+            "rellModuleArgs": {
+                "s": "Hello",
+                "n": 123
+            }
+        }
+    }
+
+Code that reads ``module_args``:
+
+::
+
+    function f() {
+        print(chain_context.args?.s);
+        print(chain_context.args?.n);
+    }
+
+op_context
+----------
 
 ``op_context.last_block_time: integer`` - the timestamp of the last block, in milliseconds
 (like ``System.currentTimeMillis()`` in Java). Returns ``-1`` if there is no last block (the block currently being built

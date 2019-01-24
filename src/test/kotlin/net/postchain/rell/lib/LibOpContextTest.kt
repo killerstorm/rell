@@ -1,6 +1,6 @@
 package net.postchain.rell.lib
 
-import net.postchain.rell.BaseRellTest
+import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.runtime.Rt_OpContext
 import org.junit.Test
 

@@ -108,11 +108,15 @@ object NoConnSqlExecutor: SqlExecutor() {
 object SqlUtils {
     fun resetDatabase(sqlExec: SqlExecutor, module: R_Module, blockTables: Boolean) {
         sqlExec.transaction {
-            dropTables(sqlExec)
-            dropFunctions(sqlExec)
+            dropAll(sqlExec)
             val sql = gensql(module, blockTables, false)
             sqlExec.execute(sql)
         }
+    }
+
+    fun dropAll(sqlExec: SqlExecutor) {
+        dropTables(sqlExec)
+        dropFunctions(sqlExec)
     }
 
     private fun dropTables(sqlExec: SqlExecutor) {

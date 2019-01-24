@@ -2,6 +2,7 @@ package net.postchain.rell
 
 import net.postchain.rell.lib.LibClassesTest
 import net.postchain.rell.runtime.Rt_OpContext
+import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 
 class LogAnnotationTest: BaseRellTest() {

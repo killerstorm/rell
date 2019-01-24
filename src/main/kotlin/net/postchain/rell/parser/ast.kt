@@ -136,7 +136,7 @@ class S_ClassDefinition(name: S_Name, val annotations: List<S_Name>, val clauses
 
         if (rClass.flags.log) {
             clsCtx.addAttribute0("transaction", ctx.transactionClassType, false, false) {
-                C_OpContextNamespace.transactionExpr(clsCtx.entCtx)
+                C_Ns_OpContext.transactionExpr(clsCtx.entCtx)
             }
         }
 
@@ -157,7 +157,7 @@ class S_RecordDefinition(name: S_Name, val attrs: List<S_AttributeClause>): S_De
         ctx.checkRecordName(name)
 
         val rType = R_RecordType(name.str)
-        ctx.addRecord(rType)
+        ctx.addRecord(C_Record(name, rType))
 
         ctx.classesPass.add {
             classesPass(ctx, rType)

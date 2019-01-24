@@ -3,7 +3,7 @@ package net.postchain.rell.module
 import net.postchain.gtx.ByteArrayGTXValue
 import net.postchain.gtx.GTXValue
 import net.postchain.gtx.StringGTXValue
-import net.postchain.rell.BaseRellTest
+import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.hexStringToByteArray
 import org.junit.Test
 import kotlin.test.assertEquals

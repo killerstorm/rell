@@ -1,6 +1,7 @@
 package net.postchain.rell
 
 import net.postchain.rell.runtime.Rt_IntValue
+import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 
 class StatementTest: BaseRellTest() {

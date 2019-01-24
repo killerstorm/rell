@@ -39,6 +39,16 @@ sealed class R_SysFunction {
     abstract fun call(ctx: Rt_GlobalContext, args: List<Rt_Value>): Rt_Value
 }
 
+sealed class R_SysFunction_0: R_SysFunction() {
+    abstract fun call(): Rt_Value
+
+    override fun call(ctx: Rt_GlobalContext, args: List<Rt_Value>): Rt_Value {
+        check(args.size == 0)
+        val res = call()
+        return res
+    }
+}
+
 sealed class R_SysFunction_1: R_SysFunction() {
     abstract fun call(arg: Rt_Value): Rt_Value
 
@@ -97,9 +107,8 @@ sealed class R_SysFunction_Common: R_SysFunction_Generic<Rt_Value>() {
     override fun extract(v: Rt_Value): Rt_Value = v
 }
 
-object R_SysFn_Unit: R_SysFunction() {
-    override fun call(ctx: Rt_GlobalContext, args: List<Rt_Value>): Rt_Value {
-        check(args.size == 0)
+object R_SysFn_Unit: R_SysFunction_0() {
+    override fun call(): Rt_Value {
         return Rt_UnitValue
     }
 }
@@ -341,6 +350,20 @@ class R_SysFn_OpContext_Transaction(private val type: R_ClassType): R_SysFunctio
         check(args.size == 0)
         if (ctx.opCtx == null) throw Rt_Error("fn_opctx_transaction_noop", "Operation context not available")
         return Rt_ObjectValue(type, ctx.opCtx.transactionIid)
+    }
+}
+
+object R_SysFn_ChainContext_RawConfig: R_SysFunction() {
+    override fun call(ctx: Rt_GlobalContext, args: List<Rt_Value>): Rt_Value {
+        check(args.size == 0)
+        return Rt_GtxValue(ctx.chainCtx.rawConfig)
+    }
+}
+
+object R_SysFn_ChainContext_Args: R_SysFunction() {
+    override fun call(ctx: Rt_GlobalContext, args: List<Rt_Value>): Rt_Value {
+        check(args.size == 0)
+        return ctx.chainCtx.args
     }
 }
 

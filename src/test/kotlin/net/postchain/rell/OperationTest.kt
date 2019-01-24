@@ -1,5 +1,6 @@
 package net.postchain.rell
 
+import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 
 class OperationTest: BaseRellTest() {

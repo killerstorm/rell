@@ -1,5 +1,6 @@
 package net.postchain.rell
 
+import net.postchain.gtx.GTXNull
 import net.postchain.rell.model.*
 import net.postchain.rell.parser.C_Error
 import net.postchain.rell.parser.C_Utils
@@ -117,7 +118,8 @@ private fun findRoutine(module: R_Module, name: String): Pair<R_Routine, Rt_OpCo
 }
 
 private fun callRoutine(sqlExec: SqlExecutor, module: R_Module, op: R_Routine, opCtx: Rt_OpContext?, args: List<Rt_Value>) {
-    val globalCtx = Rt_GlobalContext(StdoutRtPrinter, LogRtPrinter, sqlExec, opCtx)
+    val chainCtx = Rt_ChainContext(GTXNull, Rt_NullValue)
+    val globalCtx = Rt_GlobalContext(StdoutRtPrinter, LogRtPrinter, sqlExec, opCtx, chainCtx)
     val modCtx = Rt_ModuleContext(globalCtx, module)
     op.callTop(modCtx, args)
 }

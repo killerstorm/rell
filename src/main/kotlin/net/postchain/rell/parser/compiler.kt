@@ -28,7 +28,10 @@ class C_GlobalContext(val gtx: Boolean) {
 
 object C_Defs {
     val LOG_ANNOTATION = "log"
+    val MODULE_ARGS_RECORD = "module_args"
 }
+
+class C_Record(val name: S_Name, val type: R_RecordType)
 
 class C_ModuleContext(val globalCtx: C_GlobalContext) {
     private val types = mutableMapOf(
@@ -49,7 +52,7 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
 
     private val classes = mutableMapOf<String, R_Class>()
     private val tables = mutableSetOf<String>()
-    private val records = mutableMapOf<String, R_RecordType>()
+    private val records = mutableMapOf<String, C_Record>()
     private val operations = mutableMapOf<String, R_Operation>()
     private val queries = mutableMapOf<String, R_Query>()
     private val functions = mutableMapOf<String, C_GlobalFunction>()
@@ -162,12 +165,16 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
     }
 
     fun getRecordOpt(name: String): R_RecordType? {
-        return records[name]
+        return records[name]?.type
     }
 
     fun getFunctionOpt(name: String): C_GlobalFunction? {
         val fn = functions[name]
         return fn
+    }
+
+    fun getModuleArgsRecord(): R_RecordType? {
+        return records[C_Defs.MODULE_ARGS_RECORD]?.type
     }
 
     fun addClass(cls: R_Class) {
@@ -180,11 +187,12 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
         tables.add(cls.mapping.table)
     }
 
-    fun addRecord(rec: R_RecordType) {
-        check(rec.name !in types)
-        check(rec.name !in records)
-        records[rec.name] = rec
-        types[rec.name] = rec
+    fun addRecord(rec: C_Record) {
+        val name = rec.type.name
+        check(name !in types)
+        check(name !in records)
+        records[name] = rec
+        types[name] = rec.type
     }
 
     fun addQuery(query: R_Query) {
@@ -214,11 +222,24 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
         classesPass.run()
         processRecords()
         functionsPass.run()
-        return R_Module(classes.toMap(), records.toMap(), operations.toMap(), queries.toMap(), functionDefs.toList())
+
+        val moduleArgs = records[C_Defs.MODULE_ARGS_RECORD]
+        if (moduleArgs != null && !moduleArgs.type.flags.typeFlags.gtxHuman) {
+            throw C_Error(moduleArgs.name.pos, "module_args_nogtx", "Record '${C_Defs.MODULE_ARGS_RECORD}' is not GTX-compatible")
+        }
+
+        return R_Module(
+                classes.toMap(),
+                records.mapValues { it.value.type }.toMap(),
+                operations.toMap(),
+                queries.toMap(),
+                functionDefs.toList(),
+                moduleArgs?.type
+        )
     }
 
     private fun processRecords() {
-        val structure = buildRecordsStructure(records.values)
+        val structure = buildRecordsStructure(records.values.map { it.type })
         val graph = structure.graph
         val transGraph = C_GraphUtils.transpose(graph)
 
@@ -228,7 +249,8 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
         val nonGtxHumanRecs = C_GraphUtils.closure(transGraph, structure.nonGtxHuman).toSet()
         val nonGtxCompactRecs = C_GraphUtils.closure(transGraph, structure.nonGtxCompact).toSet()
 
-        for (record in records.values) {
+        for (cRecord in records.values) {
+            val record = cRecord.type
             val typeFlags = R_TypeFlags(record in mutableRecs, record !in nonGtxHumanRecs, record !in nonGtxCompactRecs)
             val flags = R_RecordFlags(typeFlags, record in cyclicRecs, record in infiniteRecs)
             record.setFlags(flags)

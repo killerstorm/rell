@@ -2,7 +2,6 @@ package net.postchain.rell.module
 
 import net.postchain.base.SECP256K1CryptoSystem
 import net.postchain.common.hexStringToByteArray
-import net.postchain.core.UserMistake
 import net.postchain.gtx.GTXBlockchainConfigurationFactory
 import net.postchain.gtx.GTXDataBuilder
 import net.postchain.gtx.GTXValue
@@ -10,11 +9,9 @@ import net.postchain.gtx.gtx
 import net.postchain.devtools.IntegrationTest
 import net.postchain.devtools.KeyPairHelper
 import net.postchain.devtools.SingleChainTestNode
-import org.junit.Ignore
 import org.junit.Test
 import java.nio.file.Paths
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 
 class BasicModuleTest : IntegrationTest() {
     private val testBlockchainRID = "78967baa4768cbcef11c508326ffb13a956689fcb6dc3ba17f4b895cbb1577a3".hexStringToByteArray()
@@ -61,12 +58,6 @@ class BasicModuleTest : IntegrationTest() {
         buildBlockAndCommit(node)
     }
 
-    @Test fun testQueryNoObjects() {
-        val node = setupNode()
-        chkQuery(node, """{ type : "get_all_cities" }""", "[]")
-        chkQuery(node, """{ type : "get_all_city_names" }""", "[]")
-    }
-
     @Test fun testQueryGetAllCities() {
         val node = setupNodeAndObjects()
         chkQuery(node, """{ type : "get_all_cities" }""", "[1,2,3]")
@@ -82,96 +73,6 @@ class BasicModuleTest : IntegrationTest() {
         chkQuery(node, """{ type : "get_persons_by_city", city : 1 }""", "[5]")
         chkQuery(node, """{ type : "get_persons_by_city", city : 2 }""", "[4,6]")
         chkQuery(node, """{ type : "get_persons_by_city", city : 3 }""", "[]")
-    }
-
-    @Test fun testQueryGetCityByName() {
-        val node = setupNodeAndObjects()
-        chkQuery(node, """{ type : "get_city_by_name", name : "New York" }""", "1")
-        chkQuery(node, """{ type : "get_city_by_name", name : "Los Angeles" }""", "2")
-        chkQuery(node, """{ type : "get_city_by_name", name : "Seattle" }""", "3")
-    }
-
-    @Test fun testQueryGetPersonsNamesByCityName() {
-        val node = setupNodeAndObjects()
-        chkQuery(node, """{ type : "get_persons_names_by_city_name", cityName : "Los Angeles" }""", """["Bob","Trudy"]""")
-        chkQuery(node, """{ type : "get_persons_names_by_city_name", cityName : "New York" }""", """["Alice"]""")
-        chkQuery(node, """{ type : "get_persons_names_by_city_name", cityName : "Seattle" }""", "[]")
-    }
-
-    @Test fun testQueryGetPersonAddressByName() {
-        val node = setupNodeAndObjects()
-        chkQuery(node, """{ type : "get_person_address_by_name", name : "Bob" }""",
-                """{"city_name":"Los Angeles","street":"Main St","house":5}""")
-        chkQuery(node, """{ type : "get_person_address_by_name", name : "Alice" }""",
-                """{"city_name":"New York","street":"Evergreen Ave","house":11}""")
-        chkQuery(node, """{ type : "get_person_address_by_name", name : "Trudy" }""",
-                """{"city_name":"Los Angeles","street":"Mulholland Dr","house":3}""")
-    }
-
-    @Test fun testQueryGetPersonsByCitySet() {
-        val node = setupNodeAndObjects()
-        chkQuery(node, """{ type : "get_persons_by_city_set", cities : [] }""", """[]""")
-        chkQuery(node, """{ type : "get_persons_by_city_set", cities : ["New York"] }""", """["Alice"]""")
-        chkQuery(node, """{ type : "get_persons_by_city_set", cities : ["Los Angeles"] }""", """["Bob","Trudy"]""")
-        chkQuery(node, """{ type : "get_persons_by_city_set", cities : ["New York","Los Angeles"] }""",
-                """["Alice","Bob","Trudy"]""")
-        chkQuery(node, """{ type : "get_persons_by_city_set", cities : ["Seattle","New York"] }""", """["Alice"]""")
-    }
-
-    @Test fun testQueryErrArgMissing() {
-        val node = setupNodeAndObjects()
-        assertFailsWith<UserMistake> {
-            callQuery(node, """{ type : "get_city_by_name" }""")
-        }
-    }
-
-    @Test fun testQueryErrArgExtra() {
-        val node = setupNodeAndObjects()
-        assertFailsWith<UserMistake> {
-            callQuery(node, """{ type : "get_city_by_name", name : "New York", foo : 12345 }""")
-        }
-    }
-
-    @Test fun testQueryErrArgWrongType() {
-        val node = setupNodeAndObjects()
-        assertFailsWith<UserMistake> {
-            callQuery(node, """{ type : "get_city_by_name", name : 12345 }""")
-        }
-    }
-
-    @Test fun testQueryErrArgSetDuplicate() {
-        val node = setupNodeAndObjects()
-        assertFailsWith<UserMistake> {
-            callQuery(node, """{ type : "get_persons_by_city_set", cities : ["New York","New York"] }""")
-        }
-    }
-
-    @Test fun testQueryErrArgNonexistentObjectId() {
-        val node = setupNodeAndObjects()
-        assertFailsWith<UserMistake> {
-            callQuery(node, """{ type : "get_persons_by_city", city : 999 }""")
-        }
-    }
-
-    @Test fun testQueryErrArgObjectIdOfWrongClass() {
-        val node = setupNodeAndObjects()
-        assertFailsWith<UserMistake> {
-            callQuery(node, """{ type : "get_persons_by_city", city : 5 }""")
-        }
-    }
-
-    @Test fun testQueryErrRuntimeErrorNoObjects() {
-        val node = setupNodeAndObjects()
-        assertFailsWith<UserMistake> {
-            callQuery(node, """{ type : "get_city_by_name", name : "Den Helder" }""")
-        }
-    }
-
-    @Test fun testQueryErrRuntimeErrorOther() {
-        val node = setupNodeAndObjects()
-        assertFailsWith<UserMistake> {
-            callQuery(node, """{ type : "integer_division", a : 123, b: 0 }""")
-        }
     }
 
     private fun makeTx(ownerIdx: Int, opName: String, vararg opArgs: GTXValue): ByteArray {

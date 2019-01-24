@@ -1,5 +1,6 @@
 package net.postchain.rell
 
+import net.postchain.rell.test.RellCodeTester
 import org.junit.After
 import org.junit.Test
 
@@ -12,7 +13,7 @@ class UpdateDeletePathTest {
             "class person { name: text; homeCity: city; workCity: city; mutable score: integer; }"
     )
 
-    private val tst = RellSqlTester(classDefs = classDefs)
+    private val tst = RellCodeTester(classDefs = classDefs)
 
     @After fun after() = tst.destroy()
 

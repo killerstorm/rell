@@ -1,5 +1,7 @@
 package net.postchain.rell
 
+import net.postchain.rell.test.RellCodeTester
+import net.postchain.rell.test.SqlTestUtils
 import org.junit.After
 import kotlin.test.assertEquals
 
@@ -53,7 +55,7 @@ class AtExprOpTest: AbstractOpTest() {
             "company" to "company"
     )
 
-    private val tst = RellSqlTester(classDefs = classDefs, inserts = inserts)
+    private val tst = RellCodeTester(classDefs = classDefs, inserts = inserts)
 
     @After fun after() = tst.destroy()
 

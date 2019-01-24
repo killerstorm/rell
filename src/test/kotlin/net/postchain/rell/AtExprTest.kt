@@ -1,5 +1,7 @@
 package net.postchain.rell
 
+import net.postchain.rell.test.RellCodeTester
+import net.postchain.rell.test.SqlTestUtils
 import org.junit.After
 import org.junit.Test
 
@@ -28,7 +30,7 @@ class AtExprTest {
 
     private var testDataBaseCode = ""
 
-    private val tst = RellSqlTester(classDefs = testDataClassDefs, inserts = testDataInserts)
+    private val tst = RellCodeTester(classDefs = testDataClassDefs, inserts = testDataInserts)
 
     @After fun after() = tst.destroy()
 

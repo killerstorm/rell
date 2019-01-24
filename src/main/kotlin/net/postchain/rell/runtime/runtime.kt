@@ -1,5 +1,6 @@
 package net.postchain.rell.runtime
 
+import net.postchain.gtx.GTXValue
 import net.postchain.rell.model.*
 import net.postchain.rell.sql.SqlExecutor
 import java.sql.PreparedStatement
@@ -17,7 +18,8 @@ class Rt_GlobalContext(
         val stdoutPrinter: Rt_Printer,
         val logPrinter: Rt_Printer,
         sqlExec: SqlExecutor,
-        val opCtx: Rt_OpContext?
+        val opCtx: Rt_OpContext?,
+        val chainCtx: Rt_ChainContext
 ){
     val sqlExec: SqlExecutor = Rt_SqlExecutor(sqlExec)
 }
@@ -33,6 +35,8 @@ class Rt_EntityContext(val modCtx: Rt_ModuleContext, val dbUpdateAllowed: Boolea
 }
 
 class Rt_OpContext(val lastBlockTime: Long, val transactionIid: Long, val signers: List<ByteArray>)
+
+class Rt_ChainContext(val rawConfig: GTXValue, val args: Rt_Value)
 
 class Rt_CallFrame(val entCtx: Rt_EntityContext, rFrame: R_CallFrame) {
     private var curBlock = rFrame.rootBlock

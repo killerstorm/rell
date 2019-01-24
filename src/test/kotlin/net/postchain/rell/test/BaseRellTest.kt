@@ -1,11 +1,11 @@
-package net.postchain.rell
+package net.postchain.rell.test
 
 import net.postchain.rell.runtime.Rt_IntValue
 import net.postchain.rell.runtime.Rt_Value
 import org.junit.After
 
 abstract class BaseRellTest(useSql: Boolean = true, gtx: Boolean = false) {
-    val tst = RellSqlTester(useSql = useSql, gtx = gtx)
+    val tst = RellCodeTester(useSql = useSql, gtx = gtx)
 
     @After fun after() = tst.destroy()
 

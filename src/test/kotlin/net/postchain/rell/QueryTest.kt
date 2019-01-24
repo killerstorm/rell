@@ -1,6 +1,8 @@
 package net.postchain.rell
 
 import net.postchain.rell.runtime.*
+import net.postchain.rell.test.BaseRellTest
+import net.postchain.rell.test.SqlTestUtils
 import org.junit.Test
 
 class QueryTest: BaseRellTest() {
