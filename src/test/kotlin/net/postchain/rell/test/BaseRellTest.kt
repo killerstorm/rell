@@ -5,7 +5,10 @@ import net.postchain.rell.runtime.Rt_Value
 import org.junit.After
 
 abstract class BaseRellTest(useSql: Boolean = true, gtx: Boolean = false) {
-    val tst = RellCodeTester(useSql = useSql, gtx = gtx)
+    open fun classDefs(): List<String> = listOf()
+    open fun objInserts(): List<String> = listOf()
+
+    val tst = RellCodeTester(useSql, classDefs(), objInserts(), gtx = gtx)
 
     @After fun after() = tst.destroy()
 
@@ -43,6 +46,7 @@ abstract class BaseRellTest(useSql: Boolean = true, gtx: Boolean = false) {
     fun chkCompile(code: String, expected: String) = tst.chkCompile(code, expected)
 
     fun chkData(vararg expected: String) = tst.chkData(*expected)
+    fun chkDataNew(vararg expected: String) = tst.chkDataNew(*expected)
 
     fun execOp(code: String) = tst.execOp(code)
 

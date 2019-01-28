@@ -202,6 +202,13 @@ updated. Other classes can be used in the where-part:
 
    update u: user (c: company) @ { u.xyz == c.xyz, u.name == 'Bob', c.name == 'Google' } ( city = 'Seattle' );
 
+Can specify an arbitrary expression returning a class, a nullable class or a collection of a class:
+
+::
+
+   val u = user @? { .name == 'Bob' };
+   update u ( salary += 5000 );
+
 Delete Statement
 ~~~~~~~~~~~~~~~~~~~
 
@@ -216,3 +223,9 @@ first class will be deleted:
 
    delete u: user (c: company) @ { u.xyz == c.xyz, u.name == 'Bob', c.name == 'Google' };
 
+Can specify an arbitrary expression returning a class, a nullable class or a collection of a class:
+
+::
+
+   val u = user @? { .name == 'Bob' };
+   delete u;

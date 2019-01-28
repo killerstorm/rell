@@ -6,6 +6,8 @@ import com.github.h0tk3y.betterParse.combinators.*
 import com.github.h0tk3y.betterParse.grammar.parser
 import com.github.h0tk3y.betterParse.lexer.Token
 import com.github.h0tk3y.betterParse.lexer.TokenMatch
+import net.postchain.rell.parser.S_Grammar.getValue
+import net.postchain.rell.parser.S_Grammar.provideDelegate
 
 object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val LPAR by relltok("(")
@@ -330,6 +332,10 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         ( head, tails ) -> tailsToExpr(head, tails)
     }
 
+    private val baseExprNoCall by ( baseExprHead * zeroOrMore(baseExprTailNoCall) ) map {
+        ( head, tails ) -> tailsToExpr(head, tails)
+    }
+
     private val callExprTail by ( oneOrMore(zeroOrMore(baseExprTailNoCall) * baseExprTailCall )) map {
         tails ->
         val list = mutableListOf<BaseExprTail>()
@@ -412,6 +418,14 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         listOf(targetClass) + (if (joinClasses == null) listOf() else joinClasses.value)
     }
 
+    private val updateTargetSimple by ( updateFrom * -AT * atExprWhere ) map {
+        (from, where) -> S_UpdateTarget_Simple(from, where)
+    }
+
+    private val updateTargetExpr by baseExprNoCall map { expr -> S_UpdateTarget_Expr(expr) }
+
+    private val updateTarget by ( updateTargetSimple or updateTargetExpr )
+
     private val updateWhatNameOp by ( -optional(DOT) * id * assignOp ) map { (name, op) -> Pair(name, op) }
 
     private val updateWhatExpr by ( optional(updateWhatNameOp) * expression ) map {
@@ -426,12 +440,12 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     private val updateWhat by ( -LPAR * separatedTerms(updateWhatExpr, COMMA, true) * -RPAR )
 
-    private val updateStatement by (UPDATE * updateFrom * -AT * atExprWhere * updateWhat * -SEMI) map {
-        (kw, from, where, what) -> S_UpdateStatement(S_Pos(kw), from, where, what)
+    private val updateStatement by (UPDATE * updateTarget * updateWhat * -SEMI) map {
+        (kw, target, what) -> S_UpdateStatement(S_Pos(kw), target, what)
     }
 
-    private val deleteStatement by (DELETE * updateFrom * -AT * atExprWhere * -SEMI) map {
-        (kw, from, where) -> S_DeleteStatement(S_Pos(kw), from, where)
+    private val deleteStatement by (DELETE * updateTarget * -SEMI) map {
+        (kw, target) -> S_DeleteStatement(S_Pos(kw), target)
     }
 
     private val statement: Parser<S_Statement> by (

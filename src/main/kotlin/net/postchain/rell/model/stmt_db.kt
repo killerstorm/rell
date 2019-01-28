@@ -1,40 +1,182 @@
 package net.postchain.rell.model
 
+import net.postchain.rell.CommonUtils
 import net.postchain.rell.runtime.Rt_CallFrame
+import net.postchain.rell.runtime.Rt_ListValue
+import net.postchain.rell.runtime.Rt_NullValue
+import net.postchain.rell.runtime.Rt_SetValue
 
-class R_UpdateStatementWhat(val attr: R_Attrib, val expr: Db_Expr, val op: Db_BinaryOp?)
+sealed class R_UpdateTarget {
+    abstract fun cls(): R_AtClass
+    abstract fun extraClasses(): List<R_AtClass>
+    abstract fun where(): Db_Expr?
 
-class R_UpdateStatement(
-        val cls: R_AtClass,
-        val extraClasses: List<R_AtClass>,
-        val where: Db_Expr?,
-        val what: List<R_UpdateStatementWhat>
-): R_Statement()
-{
+    abstract fun execute(stmt: R_BaseUpdateStatement, frame: Rt_CallFrame)
+}
+
+class R_UpdateTarget_Simple(val cls: R_AtClass, val extraClasses: List<R_AtClass>, val where: Db_Expr?): R_UpdateTarget() {
     init {
         check(cls.index == 0)
         extraClasses.withIndex().forEach { check(it.index + 1 == it.value.index) }
     }
 
-    override fun execute(frame: Rt_CallFrame): R_StatementResult? {
+    override fun cls() = cls
+    override fun extraClasses() = extraClasses
+    override fun where() = where
+
+    override fun execute(stmt: R_BaseUpdateStatement, frame: Rt_CallFrame) {
+        val ctx = SqlGenContext(listOf(cls) + extraClasses, listOf())
+        stmt.execute0(frame, ctx)
+    }
+}
+
+sealed class R_UpdateTarget_Expr(val cls: R_AtClass, val where: Db_Expr, val expr: R_Expr): R_UpdateTarget() {
+    init {
+        check(cls.index == 0)
+    }
+
+    final override fun cls() = cls
+    final override fun extraClasses() = listOf<R_AtClass>()
+    final override fun where() = where
+}
+
+class R_UpdateTarget_Expr_One(cls: R_AtClass, where: Db_Expr, expr: R_Expr): R_UpdateTarget_Expr(cls, where, expr) {
+    override fun execute(stmt: R_BaseUpdateStatement, frame: Rt_CallFrame) {
+        val value = expr.evaluate(frame)
+        if (value == Rt_NullValue) {
+            return
+        }
+
+        val ctx = SqlGenContext(listOf(cls), listOf(value))
+        stmt.execute0(frame, ctx)
+    }
+}
+
+class R_UpdateTarget_Expr_Many(
+        cls: R_AtClass,
+        where: Db_Expr,
+        expr: R_Expr,
+        val set: Boolean,
+        val listType: R_Type
+): R_UpdateTarget_Expr(cls, where, expr) {
+    override fun execute(stmt: R_BaseUpdateStatement, frame: Rt_CallFrame) {
+        val value = expr.evaluate(frame)
+
+        val lst = if (set) {
+            value.asSet().toMutableList()
+        } else {
+            value.asList().toSet().toMutableList()
+        }
+
+        if (lst.isEmpty()) {
+            return
+        }
+
+        // Experimental maximum is 2^15
+        val partSize = frame.entCtx.modCtx.globalCtx.sqlUpdatePortionSize
+
+        for (part in CommonUtils.split(lst, partSize)) {
+            val partValue = Rt_ListValue(listType, part)
+            val ctx = SqlGenContext(listOf(cls), listOf(partValue))
+            stmt.execute0(frame, ctx)
+        }
+    }
+}
+
+class R_UpdateStatementWhat(val attr: R_Attrib, val expr: Db_Expr, val op: Db_BinaryOp?)
+
+sealed class R_BaseUpdateStatement(val target: R_UpdateTarget): R_Statement() {
+    abstract fun buildSql(ctx: SqlGenContext): ParameterizedSql
+
+    final override fun execute(frame: Rt_CallFrame): R_StatementResult? {
         frame.entCtx.checkDbUpdateAllowed()
-        val rtSql = buildSql()
-        val rtUpdate = SqlUpdate(rtSql)
-        rtUpdate.execute(frame)
+        target.execute(this, frame)
         return null
     }
 
-    private fun buildSql(): ParameterizedSql {
+    fun execute0(frame: Rt_CallFrame, ctx: SqlGenContext) {
+        val rtSql = buildSql(ctx)
+        val rtUpdate = SqlUpdate(rtSql)
+        rtUpdate.execute(frame)
+    }
+
+    fun appendMainTable(builder: SqlBuilder, fromInfo: SqlFromInfo) {
+        val cls = target.cls()
+        builder.appendName(cls.rClass.mapping.table)
+        builder.append(" ")
+        builder.append(fromInfo.classes[cls.index].alias.str)
+    }
+
+    fun appendExtraTables(builder: SqlBuilder, fromInfo: SqlFromInfo, keyword: String) {
+        val tables = mutableListOf<Pair<String, SqlTableAlias>>()
+
+        val cls = target.cls()
+        for (join in fromInfo.classes[cls.index].joins) {
+            tables.add(Pair(join.alias.cls.mapping.table, join.alias))
+        }
+
+        for (extraCls in target.extraClasses()) {
+            tables.add(Pair(extraCls.rClass.mapping.table, fromInfo.classes[extraCls.index].alias))
+            for (join in fromInfo.classes[extraCls.index].joins) {
+                tables.add(Pair(join.alias.cls.mapping.table, join.alias))
+            }
+        }
+
+        if (tables.isEmpty()) {
+            return
+        }
+
+        builder.append(" $keyword ")
+
+        builder.append(tables, ", ") { (table, alias) ->
+            builder.appendName(table)
+            builder.append(" ")
+            builder.append(alias.str)
+        }
+    }
+
+    fun appendWhere(ctx: SqlGenContext, builder: SqlBuilder, fromInfo: SqlFromInfo) {
+        val allJoins = fromInfo.classes.flatMap { it.joins }
+        val where = target.where()
+
+        if (allJoins.isEmpty() && where == null) {
+            return
+        }
+
+        builder.append(" WHERE ")
+
+        if (!allJoins.isEmpty() && where != null) {
+            builder.append("(")
+            appendWhereJoins(builder, allJoins)
+            builder.append(") AND (")
+            where.toSql(ctx, builder)
+            builder.append(")")
+        } else if (!allJoins.isEmpty()) {
+            appendWhereJoins(builder, allJoins)
+        } else if (where != null) {
+            where.toSql(ctx, builder)
+        }
+    }
+
+    private fun appendWhereJoins(builder: SqlBuilder, allJoins: List<SqlFromJoin>) {
+        builder.append(allJoins, " AND ") { join ->
+            builder.appendColumn(join.baseAlias, join.attr)
+            builder.append(" = ")
+            builder.appendColumn(join.alias, join.alias.cls.mapping.rowidColumn)
+        }
+    }
+}
+
+class R_UpdateStatement(target: R_UpdateTarget, val what: List<R_UpdateStatementWhat>): R_BaseUpdateStatement(target) {
+    override fun buildSql(ctx: SqlGenContext): ParameterizedSql {
+        val fromInfo = buildFromInfo(ctx)
         val builder = SqlBuilder()
 
-        val ctx = SqlGenContext(listOf(cls) + extraClasses, listOf())
-        val fromInfo = buildFromInfo(ctx)
-
         builder.append("UPDATE ")
-        appendMainTable(builder, cls, fromInfo)
+        appendMainTable(builder, fromInfo)
         appendSet(ctx, builder)
-        appendExtraTables(builder, cls, extraClasses, fromInfo, "FROM")
-        appendWhere(ctx, builder, fromInfo, where)
+        appendExtraTables(builder, fromInfo, "FROM")
+        appendWhere(ctx, builder, fromInfo)
 
         return builder.build()
     }
@@ -42,9 +184,7 @@ class R_UpdateStatement(
     private fun buildFromInfo(ctx: SqlGenContext): SqlFromInfo {
         val b = SqlBuilder()
         what.forEach { it.expr.toSql(ctx, b) }
-        if (where != null) {
-            where.toSql(ctx, b)
-        }
+        target.where()?.toSql(ctx, b)
         return ctx.getFromInfo()
     }
 
@@ -65,108 +205,22 @@ class R_UpdateStatement(
     }
 }
 
-class R_DeleteStatement(val cls: R_AtClass, val extraClasses: List<R_AtClass>, val where: Db_Expr?): R_Statement() {
-    init {
-        check(cls.index == 0)
-        extraClasses.withIndex().forEach { check(it.index + 1 == it.value.index) }
-    }
-
-    override fun execute(frame: Rt_CallFrame): R_StatementResult? {
-        frame.entCtx.checkDbUpdateAllowed()
-        val rtSql = buildSql()
-        val rtUpdate = SqlUpdate(rtSql)
-        rtUpdate.execute(frame)
-        return null
-    }
-
-    private fun buildSql(): ParameterizedSql {
+class R_DeleteStatement(target: R_UpdateTarget): R_BaseUpdateStatement(target) {
+    override fun buildSql(ctx: SqlGenContext): ParameterizedSql {
+        val fromInfo = buildFromInfo(ctx)
         val builder = SqlBuilder()
 
-        val ctx = SqlGenContext(listOf(cls) + extraClasses, listOf())
-        val fromInfo = buildFromInfo(ctx)
-
         builder.append("DELETE FROM ")
-        appendMainTable(builder, cls, fromInfo)
-        appendExtraTables(builder, cls, extraClasses, fromInfo, "USING")
-        appendWhere(ctx, builder, fromInfo, where)
+        appendMainTable(builder, fromInfo)
+        appendExtraTables(builder, fromInfo, "USING")
+        appendWhere(ctx, builder, fromInfo)
 
         return builder.build()
     }
 
     private fun buildFromInfo(ctx: SqlGenContext): SqlFromInfo {
         val b = SqlBuilder()
-        if (where != null) {
-            where.toSql(ctx, b)
-        }
+        target.where()?.toSql(ctx, b)
         return ctx.getFromInfo()
-    }
-}
-
-private fun appendMainTable(builder: SqlBuilder, cls: R_AtClass, fromInfo: SqlFromInfo) {
-    builder.appendName(cls.rClass.mapping.table)
-    builder.append(" ")
-    builder.append(fromInfo.classes[cls.index].alias.str)
-}
-
-private fun appendExtraTables(
-        builder: SqlBuilder,
-        cls: R_AtClass,
-        extraClasses: List<R_AtClass>,
-        fromInfo: SqlFromInfo,
-        keyword: String)
-{
-    val tables = mutableListOf<Pair<String, SqlTableAlias>>()
-
-    for (join in fromInfo.classes[cls.index].joins) {
-        tables.add(Pair(join.alias.cls.mapping.table, join.alias))
-    }
-
-    for (extraCls in extraClasses) {
-        tables.add(Pair(extraCls.rClass.mapping.table, fromInfo.classes[extraCls.index].alias))
-        for (join in fromInfo.classes[extraCls.index].joins) {
-            tables.add(Pair(join.alias.cls.mapping.table, join.alias))
-        }
-    }
-
-    if (tables.isEmpty()) {
-        return
-    }
-
-    builder.append(" $keyword ")
-
-    builder.append(tables, ", ") { (table, alias) ->
-        builder.appendName(table)
-        builder.append(" ")
-        builder.append(alias.str)
-    }
-}
-
-private fun appendWhere(ctx: SqlGenContext, builder: SqlBuilder, fromInfo: SqlFromInfo, where: Db_Expr?) {
-    val allJoins = fromInfo.classes.flatMap { it.joins }
-
-    if (allJoins.isEmpty() && where == null) {
-        return
-    }
-
-    builder.append(" WHERE ")
-
-    if (!allJoins.isEmpty() && where != null) {
-        builder.append("(")
-        appendWhereJoins(builder, allJoins)
-        builder.append(") AND (")
-        where.toSql(ctx, builder)
-        builder.append(")")
-    } else if (!allJoins.isEmpty()) {
-        appendWhereJoins(builder, allJoins)
-    } else if (where != null) {
-        where.toSql(ctx, builder)
-    }
-}
-
-private fun appendWhereJoins(builder: SqlBuilder, allJoins: List<SqlFromJoin>) {
-    builder.append(allJoins, " AND ") { join ->
-        builder.appendColumn(join.baseAlias, join.attr)
-        builder.append(" = ")
-        builder.appendColumn(join.alias, join.alias.cls.mapping.rowidColumn)
     }
 }

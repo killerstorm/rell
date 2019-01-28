@@ -169,6 +169,7 @@ class RellCodeTester(
 
     var strictToString = true
     var opContext: Rt_OpContext? = null
+    var rtSqlUpdatePortionSize = 1000
 
     fun chkQuery(bodyCode: String, expected: String) {
         val queryCode = "query q() $bodyCode"
@@ -293,7 +294,15 @@ class RellCodeTester(
 
     private fun createGlobalCtx(): Rt_GlobalContext {
         val chainContext = Rt_ChainContext(GTXNull, Rt_NullValue)
-        return Rt_GlobalContext(stdoutPrinter, logPrinter, getSqlExec(), opContext, chainContext)
+        return Rt_GlobalContext(
+                stdoutPrinter,
+                logPrinter,
+                getSqlExec(),
+                opContext,
+                chainContext,
+                logSqlErrors = true,
+                sqlUpdatePortionSize = rtSqlUpdatePortionSize
+        )
     }
 
     fun chkStdout(vararg expected: String) = stdoutPrinter.chk(*expected)

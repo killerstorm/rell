@@ -83,7 +83,7 @@ class SqlBuilder {
     private val sqlBuf = StringBuilder()
     private val paramsBuf = mutableListOf<SqlParam>()
 
-    fun <T> append(list: List<T>, sep: String, block: (T) -> Unit) {
+    fun <T> append(list: Collection<T>, sep: String, block: (T) -> Unit) {
         var s = ""
         for (t in list) {
             append(s)

@@ -1,7 +1,6 @@
 package net.postchain.rell.model
 
 import net.postchain.rell.runtime.*
-import net.postchain.rell.sql.ROWID_COLUMN
 
 class R_AtClass(val rClass: R_Class, val alias: String, val index: Int) {
     val type: R_Type = R_ClassType(rClass)

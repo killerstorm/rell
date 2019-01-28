@@ -1,17 +1,16 @@
 package net.postchain.rell
 
-import net.postchain.rell.test.RellCodeTester
+import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.test.SqlTestUtils
-import org.junit.After
 import org.junit.Test
 
-class AtExprTest {
-    private val testDataClassDefs = listOf(
+class AtExprTest: BaseRellTest() {
+    override fun classDefs() = listOf(
             "class company { name: text; }",
             "class user { firstName: text; lastName: text; company; }"
     )
 
-    private val testDataInserts = listOf(
+    override fun objInserts() = listOf(
             Ins.company(100, "Facebook"),
             Ins.company(200, "Apple"),
             Ins.company(300, "Amazon"),
@@ -28,12 +27,6 @@ class AtExprTest {
             Ins.user(51, 500, "Larry", "Page")
     )
 
-    private var testDataBaseCode = ""
-
-    private val tst = RellCodeTester(classDefs = testDataClassDefs, inserts = testDataInserts)
-
-    @After fun after() = tst.destroy()
-
     @Test fun testEmptyWhere() {
         chk("user @* {}", "list<user>[user[10],user[20],user[21],user[30],user[40],user[41],user[50],user[51]]")
         chk("company @* {}", "list<company>[company[100],company[200],company[300],company[400],company[500]]")
@@ -48,7 +41,7 @@ class AtExprTest {
     }
 
     @Test fun testFindByObjectReference() {
-        chkEx("val corp = company @ { .name == 'Facebook' }; return user @ { .company == corp };", "user[10]")
+        chkEx("{ val corp = company @ { .name == 'Facebook' }; return user @ { .company == corp }; }", "user[10]")
     }
 
     @Test fun testFindUserWithSameName() {
@@ -57,17 +50,17 @@ class AtExprTest {
     }
 
     @Test fun testAttributeByVariableName() {
-        chkEx("val firstName = 'Bill'; return user @ { firstName };", "user[40]")
-        chkEx("val lastName = 'Gates'; return user @ { lastName };", "user[40]")
-        chkEx("val name = 'Microsoft'; return company @ { name };", "company[400]")
-        chkEx("val name = 'Bill'; return user @ { name };", "ct_err:at_attr_type_ambig:0:text:user.firstName,user.lastName")
-        chkEx("val name = 12345; return company @ { name };", "ct_err:at_attr_type:0:name:integer")
-        chkEx("val company = company @ { .name == 'Facebook' }; return user @ { company };", "user[10]")
+        chkEx("{ val firstName = 'Bill'; return user @ { firstName }; }", "user[40]")
+        chkEx("{ val lastName = 'Gates'; return user @ { lastName }; }", "user[40]")
+        chkEx("{ val name = 'Microsoft'; return company @ { name }; }", "company[400]")
+        chkEx("{ val name = 'Bill'; return user @ { name }; }", "ct_err:at_attr_type_ambig:0:text:user.firstName,user.lastName")
+        chkEx("{ val name = 12345; return company @ { name }; }", "ct_err:at_attr_type:0:name:integer")
+        chkEx("{ val company = company @ { .name == 'Facebook' }; return user @ { company }; }", "user[10]")
     }
 
     @Test fun testAttributeByExpressionType() {
-        chkEx("val corp = company @ { .name == 'Facebook' }; return user @ { corp };", "user[10]")
-        chkEx("val corp = company @ { .name == 'Microsoft' }; return user @* { corp };", "list<user>[user[40],user[41]]")
+        chkEx("{ val corp = company @ { .name == 'Facebook' }; return user @ { corp }; }", "user[10]")
+        chkEx("{ val corp = company @ { .name == 'Microsoft' }; return user @* { corp }; }", "list<user>[user[40],user[41]]")
     }
 
     @Test fun testAttributeByNameAndType() {
@@ -87,27 +80,27 @@ class AtExprTest {
                 mkins("bar_owner", "name,stuff,foo,bar", "6,'Trudy',2,1,3"),
                 mkins("bar_owner", "name,stuff,foo,bar", "7,'Andrew',3,0,2")
         )
-        testDataBaseCode = """
+        val base = """
             val foo1 = foo @ { .name == 'Foo-1' };
             val foo2 = foo @ { .name == 'Foo-2' };
             val bar1 = bar @ { .name == 'Bar-1' };
             val bar2 = bar @ { .name == 'Bar-2' };
         """.trimIndent()
 
-        chkEx("val name = 'Bob'; return (foo_owner, bar_owner) @* { name };",
+        chkEx("{ $base val name = 'Bob'; return (foo_owner, bar_owner) @* { name }; }",
                 "ct_err:at_attr_name_ambig:0:name:foo_owner.name,bar_owner.name")
-        chkEx("val garbage = foo1; return (foo_owner, bar_owner) @* { garbage };",
+        chkEx("{ $base val garbage = foo1; return (foo_owner, bar_owner) @* { garbage }; }",
                 "ct_err:at_attr_type_ambig:0:foo:foo_owner.stuff,foo_owner.foo,bar_owner.foo")
-        chkEx("val garbage = bar1; return (foo_owner, bar_owner) @* { garbage };",
+        chkEx("{ $base val garbage = bar1; return (foo_owner, bar_owner) @* { garbage }; }",
                 "ct_err:at_attr_type_ambig:0:bar:foo_owner.bar,bar_owner.stuff,bar_owner.bar")
 
-        chkEx("val stuff = foo1; return (foo_owner, bar_owner) @* { stuff };",
+        chkEx("{ $base val stuff = foo1; return (foo_owner, bar_owner) @* { stuff }; }",
                 "list<(foo_owner:foo_owner,bar_owner:bar_owner)>[(foo_owner[4],bar_owner[6]),(foo_owner[4],bar_owner[7])]")
-        chkEx("val stuff = foo2; return (foo_owner, bar_owner) @* { stuff };",
+        chkEx("{ $base val stuff = foo2; return (foo_owner, bar_owner) @* { stuff }; }",
                 "list<(foo_owner:foo_owner,bar_owner:bar_owner)>[(foo_owner[5],bar_owner[6]),(foo_owner[5],bar_owner[7])]")
-        chkEx("val stuff = bar1; return (foo_owner, bar_owner) @* { stuff };",
+        chkEx("{ $base val stuff = bar1; return (foo_owner, bar_owner) @* { stuff }; }",
                 "list<(foo_owner:foo_owner,bar_owner:bar_owner)>[(foo_owner[4],bar_owner[6]),(foo_owner[5],bar_owner[6])]")
-        chkEx("val stuff = bar2; return (foo_owner, bar_owner) @* { stuff };",
+        chkEx("{ $base val stuff = bar2; return (foo_owner, bar_owner) @* { stuff }; }",
                 "list<(foo_owner:foo_owner,bar_owner:bar_owner)>[(foo_owner[4],bar_owner[7]),(foo_owner[5],bar_owner[7])]")
     }
 
@@ -143,15 +136,15 @@ class AtExprTest {
     }
 
     @Test fun testNameResolutionLocalVsAttr() {
-        chkEx("return user @* { .firstName == 'Mark' };", "list<user>[user[10]]")
-        chkEx("val firstName = 'Bill'; return user @* { firstName == 'Mark' };", "list<user>[]")
-        chkEx("val firstName = 'Bill'; return user @* { firstName == firstName };",
+        chkEx("{ return user @* { .firstName == 'Mark' }; }", "list<user>[user[10]]")
+        chkEx("{ val firstName = 'Bill'; return user @* { firstName == 'Mark' }; }", "list<user>[]")
+        chkEx("{ val firstName = 'Bill'; return user @* { firstName == firstName }; }",
                 "list<user>[user[10],user[20],user[21],user[30],user[40],user[41],user[50],user[51]]")
-        chkEx("val firstName = 'Bill'; return user @ { firstName };", "user[40]")
-        chkEx("val firstName = 'Bill'; return user @ { .firstName == firstName };", "user[40]")
-        chkEx("val firstName = 'Bill'; return user @* {} ( firstName );",
+        chkEx("{ val firstName = 'Bill'; return user @ { firstName }; }", "user[40]")
+        chkEx("{ val firstName = 'Bill'; return user @ { .firstName == firstName }; }", "user[40]")
+        chkEx("{ val firstName = 'Bill'; return user @* {} ( firstName ); }",
                 "list<text>[text[Bill],text[Bill],text[Bill],text[Bill],text[Bill],text[Bill],text[Bill],text[Bill]]")
-        chkEx("val firstName = 'Bill'; return user @* {} ( .firstName );",
+        chkEx("{ val firstName = 'Bill'; return user @* {} ( .firstName ); }",
                 "list<text>[text[Mark],text[Steve],text[Steve],text[Jeff],text[Bill],text[Paul],text[Sergey],text[Larry]]")
     }
 
@@ -163,10 +156,10 @@ class AtExprTest {
         chk("(firstName: user) @* { firstName.firstName == 'Mark' }", "list<user>[user[10]]")
 
         // Alias vs. local: error.
-        chkEx("val u = 'Bill'; return user @ { .firstName == u };", "user[40]")
-        chkEx("val u = 'Bill'; return (u: user) @ { .firstName == u };", "ct_err:expr_at_conflict_alias:u")
-        chkEx("val u = 'Bill'; return (u: user) @ { .firstName == 'Bill' };", "ct_err:expr_at_conflict_alias:u")
-        chkEx("val u = 'Bill'; return (u: user) @ { u.firstName == 'Mark' };", "ct_err:expr_at_conflict_alias:u")
+        chkEx("{ val u = 'Bill'; return user @ { .firstName == u }; }", "user[40]")
+        chkEx("{ val u = 'Bill'; return (u: user) @ { .firstName == u }; }", "ct_err:expr_at_conflict_alias:u")
+        chkEx("{ val u = 'Bill'; return (u: user) @ { .firstName == 'Bill' }; }", "ct_err:expr_at_conflict_alias:u")
+        chkEx("{ val u = 'Bill'; return (u: user) @ { u.firstName == 'Mark' }; }", "ct_err:expr_at_conflict_alias:u")
     }
 
     @Test fun testAttributeAmbiguityName() {
@@ -205,27 +198,27 @@ class AtExprTest {
                 mkins("double", "t1,t2", "1,1,2"),
                 mkins("double", "t1,t2", "2,2,0")
         )
-        testDataBaseCode = """
+        val base = """
             val tgt1 = target @ { .name == 'A' };
             val tgt2 = target @ { .name == 'B' };
             val tgt3 = target @ { .name == 'C' };
         """.trimIndent()
 
         // Correct code.
-        chk("single @ { tgt1 }", "single[0]")
-        chk("single @ { tgt2 }", "single[1]")
+        chkEx("{ $base return single @ { tgt1 }; }", "single[0]")
+        chkEx("{ $base return single @ { tgt2 }; }", "single[1]")
 
         // Ambiguity between attributes of the same class.
-        chk("double @ { tgt1 }", "ct_err:at_attr_type_ambig:0:target:double.t1,double.t2")
-        chk("double @ { .t1 == tgt1, tgt2 }", "ct_err:at_attr_type_ambig:1:target:double.t1,double.t2")
-        chk("double @ { .t1 == tgt1, .t2 == tgt2 }", "double[0]")
-        chk("double @ { .t1 == tgt3, .t2 == tgt1 }", "double[2]")
+        chkEx("{ $base return double @ { tgt1 }; }", "ct_err:at_attr_type_ambig:0:target:double.t1,double.t2")
+        chkEx("{ $base return double @ { .t1 == tgt1, tgt2 }; }", "ct_err:at_attr_type_ambig:1:target:double.t1,double.t2")
+        chkEx("{ $base return double @ { .t1 == tgt1, .t2 == tgt2 }; }", "double[0]")
+        chkEx("{ $base return double @ { .t1 == tgt3, .t2 == tgt1 }; }", "double[2]")
 
         // Ambiguity between attributes of different classes.
-        chk("(s1: single, s2: single) @ { tgt1 }", "ct_err:at_attr_type_ambig:0:target:s1.t,s2.t")
-        chk("(s1: single, s2: single) @ { tgt1, tgt2 }", "ct_err:at_attr_type_ambig:0:target:s1.t,s2.t")
-        chk("(s1: single, s2: single) @ { s1.t == tgt1, tgt2 }", "ct_err:at_attr_type_ambig:1:target:s1.t,s2.t")
-        chk("(s1: single, s2: single) @ { s1.t == tgt1, s2.t == tgt2 }", "(s1=single[0],s2=single[1])")
+        chkEx("{ $base return (s1: single, s2: single) @ { tgt1 }; }", "ct_err:at_attr_type_ambig:0:target:s1.t,s2.t")
+        chkEx("{ $base return (s1: single, s2: single) @ { tgt1, tgt2 }; }", "ct_err:at_attr_type_ambig:0:target:s1.t,s2.t")
+        chkEx("{ $base return (s1: single, s2: single) @ { s1.t == tgt1, tgt2 }; }", "ct_err:at_attr_type_ambig:1:target:s1.t,s2.t")
+        chkEx("{ $base return (s1: single, s2: single) @ { s1.t == tgt1, s2.t == tgt2 }; }", "(s1=single[0],s2=single[1])")
     }
 
     @Test fun testMultipleClassesCrossReference() {
@@ -373,11 +366,11 @@ class AtExprTest {
     }
 
     @Test fun testTupleFieldAccess() {
-        testDataBaseCode = "val t = user @ { .firstName == 'Bill' } ( .firstName, .lastName, companyName = .company.name );"
-        chk("t.firstName", "text[Bill]")
-        chk("t.lastName", "text[Gates]")
-        chk("t.companyName", "text[Microsoft]")
-        chk("t.foo", "ct_err:unknown_member:(firstName:text,lastName:text,companyName:text):foo")
+        val base = "val t = user @ { .firstName == 'Bill' } ( .firstName, .lastName, companyName = .company.name );"
+        chkEx("{ $base return t.firstName; }", "text[Bill]")
+        chkEx("{ $base return t.lastName; }", "text[Gates]")
+        chkEx("{ $base return t.companyName; }", "text[Microsoft]")
+        chkEx("{ $base return t.foo; }", "ct_err:unknown_member:(firstName:text,lastName:text,companyName:text):foo")
     }
 
     @Test fun testLimit() {
@@ -550,16 +543,6 @@ class AtExprTest {
 
     @Test fun testNoSqlWhatExpr() {
         chk("user @* { .firstName == 'Bill' } ( x = (123, 'Hello') )", "ct_err:expr_nosql:(integer,text)")
-    }
-
-    private fun chk(code: String, expectedResult: String) {
-        val queryCode = "return " + code + ";";
-        chkEx(queryCode, expectedResult)
-    }
-
-    private fun chkEx(code: String, expectedResult: String) {
-        val bodyCode = "{ $testDataBaseCode $code }"
-        tst.chkQuery(bodyCode, expectedResult)
     }
 
     companion object {

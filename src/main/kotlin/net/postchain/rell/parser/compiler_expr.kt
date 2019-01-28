@@ -377,7 +377,7 @@ private class C_ClassFieldExpr(
 ): C_Expr() {
     override fun type() = resultType
     override fun startPos() = base.startPos()
-    override fun isDb() = false // Important: node does not belong to proper @-expression
+    override fun isDb() = false // Important: node does not belong to an outer @-expression
 
     override fun toRExpr(): R_Expr {
         val from = listOf(atClass)

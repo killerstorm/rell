@@ -16,7 +16,11 @@ class transaction {
     block;
 }
 
+
 2. Library: "op_context.transaction"
+
+Returns the transaction currently being built.
+
 
 3. Log annotation:
 
@@ -29,3 +33,20 @@ Effects:
 - Implicit "transaction" reference.
 - All attributes are immutable.
 - Cannot delete objects.
+
+
+4. Library: "chain_context"
+
+chain_context.raw_config: GTXValue
+
+chain_context.args: module_args?
+
+Special user-defined record type "module_args": if defined, "chain_context.args" is set to a parameter passed via
+GTX module configuration.
+
+
+5. Update/delete accepts expression
+
+val users = user @* { .company.name = 'Google' };
+update users ( score += 100 );
+delete users;

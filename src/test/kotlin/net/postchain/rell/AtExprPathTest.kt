@@ -1,12 +1,13 @@
 package net.postchain.rell
 
+import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.test.RellCodeTester
 import net.postchain.rell.test.SqlTestUtils
 import org.junit.After
 import org.junit.Test
 
-class AtExprPathTest {
-    private val classDefs = listOf(
+class AtExprPathTest: BaseRellTest() {
+    override fun classDefs() = listOf(
             "class country { name: text; }",
             "class state { name: text; country; }",
             "class city { name: text; state; }",
@@ -15,7 +16,7 @@ class AtExprPathTest {
             "class person { name: text; city; department; }"
     )
 
-    private val inserts = listOf(
+    override fun objInserts() = listOf(
             Ins.country(100, "USA"),
             Ins.country(101, "Germany"),
 
@@ -70,10 +71,6 @@ class AtExprPathTest {
             Ins.person(611, "Bill", 300, 506)
     )
 
-    private val tst = RellCodeTester(classDefs = classDefs, inserts = inserts)
-
-    @After fun after() = tst.destroy()
-
     @Test fun testSimpleAttr() {
         chk("person @* { .city.name == 'San Francisco' }", "list<person>[person[607],person[611]]")
         chk("person @* { .city.name == 'Las Vegas' }", "list<person>[person[601],person[608]]")
@@ -95,23 +92,23 @@ class AtExprPathTest {
     }
 
     @Test fun testSimpleReference() {
-        chkEx("val x = city @ { .name == 'Seattle' }; return person @* { .city == x };",
+        chkEx("{ val x = city @ { .name == 'Seattle' }; return person @* { .city == x }; }",
                 "list<person>[person[606],person[610]]")
-        chkEx("val x = city @ { .name == 'Cologne' }; return person @* { .city == x };",
+        chkEx("{ val x = city @ { .name == 'Cologne' }; return person @* { .city == x }; }",
                 "list<person>[person[603]]")
-        chkEx("val x = city @ { .name == 'Stuttgart' }; return person @* { .city == x };",
+        chkEx("{ val x = city @ { .name == 'Stuttgart' }; return person @* { .city == x }; }",
                 "list<person>[person[602],person[609]]")
 
-        chkEx("val x = state @ { .name == 'NV' }; return person @* { .city.state == x };",
+        chkEx("{ val x = state @ { .name == 'NV' }; return person @* { .city.state == x }; }",
                 "list<person>[person[601],person[608]]")
-        chkEx("val x = state @ { .name == 'BY' }; return person @* { .city.state == x };",
+        chkEx("{ val x = state @ { .name == 'BY' }; return person @* { .city.state == x }; }",
                 "list<person>[person[604]]")
-        chkEx("val x = state @ { .name == 'CA' }; return person @* { .city.state == x };",
+        chkEx("{ val x = state @ { .name == 'CA' }; return person @* { .city.state == x }; }",
                 "list<person>[person[605],person[607],person[611]]")
 
-        chkEx("val x = country @ { .name == 'USA' }; return person @* { .city.state.country == x };",
+        chkEx("{ val x = country @ { .name == 'USA' }; return person @* { .city.state.country == x }; }",
                 "list<person>[person[601],person[605],person[606],person[607],person[608],person[610],person[611]]")
-        chkEx("val x = country @ { .name == 'Germany' }; return person @* { .city.state.country == x };",
+        chkEx("{ val x = country @ { .name == 'Germany' }; return person @* { .city.state.country == x }; }",
                 "list<person>[person[600],person[602],person[603],person[604],person[609]]")
     }
 
@@ -176,15 +173,6 @@ class AtExprPathTest {
         chk("(p: person) @ { p.city.state.country.foo.bar == 123 }", "ct_err:unknown_member:country:foo")
         chk("person @ { .city.state.country.foo.bar == 123 }", "ct_err:unknown_member:country:foo")
         chk("person @ { person.city.state.country.foo.bar == 123 }", "ct_err:unknown_member:country:foo")
-    }
-
-    private fun chk(code: String, expected: String) {
-        val queryCode = "return " + code + ";";
-        chkEx(queryCode, expected)
-    }
-
-    private fun chkEx(code: String, expected: String) {
-        tst.chkQuery("{ $code }", expected)
     }
 
     private object Ins {

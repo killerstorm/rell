@@ -19,9 +19,11 @@ class Rt_GlobalContext(
         val logPrinter: Rt_Printer,
         sqlExec: SqlExecutor,
         val opCtx: Rt_OpContext?,
-        val chainCtx: Rt_ChainContext
+        val chainCtx: Rt_ChainContext,
+        val logSqlErrors: Boolean = false,
+        val sqlUpdatePortionSize: Int = 1000 // Experimental maximum is 2^15
 ){
-    val sqlExec: SqlExecutor = Rt_SqlExecutor(sqlExec)
+    val sqlExec: SqlExecutor = Rt_SqlExecutor(sqlExec, logSqlErrors)
 }
 
 class Rt_ModuleContext(val globalCtx: Rt_GlobalContext, val module: R_Module)
@@ -103,7 +105,7 @@ object Rt_FailingPrinter: Rt_Printer() {
     }
 }
 
-class Rt_SqlExecutor(private val sqlExec: SqlExecutor): SqlExecutor() {
+class Rt_SqlExecutor(private val sqlExec: SqlExecutor, private val logErrors: Boolean): SqlExecutor() {
     override fun transaction(code: () -> Unit) {
         wrapErr {
             sqlExec.transaction(code)
@@ -132,6 +134,9 @@ class Rt_SqlExecutor(private val sqlExec: SqlExecutor): SqlExecutor() {
         try {
             code()
         } catch (e: SQLException) {
+            if (logErrors) {
+                e.printStackTrace()
+            }
             throw Rt_Error("sqlerr:${e.errorCode}", "SQL Error: ${e.message}")
         }
     }

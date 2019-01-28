@@ -15,6 +15,7 @@ object Db_BinaryOp_Mod: Db_BinaryOp("%", "%")
 object Db_BinaryOp_And: Db_BinaryOp("and", "AND")
 object Db_BinaryOp_Or: Db_BinaryOp("or", "OR")
 object Db_BinaryOp_Concat: Db_BinaryOp("+", "||")
+object Db_BinaryOp_In: Db_BinaryOp("in", "IN")
 
 sealed class Db_UnaryOp(val code: String, val sql: String)
 object Db_UnaryOp_Minus: Db_UnaryOp("-", "-")
@@ -92,6 +93,17 @@ class Db_ParameterExpr(type: R_Type, val index: Int): Db_Expr(type) {
     override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
         val value = ctx.getParameter(index)
         bld.append(type, value)
+    }
+}
+
+class Db_ArrayParameterExpr(type: R_Type, val elementType: R_Type, val index: Int): Db_Expr(type) {
+    override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
+        val value = ctx.getParameter(index)
+        bld.append("(")
+        bld.append(value.asCollection(), ",") {
+            bld.append(elementType, it)
+        }
+        bld.append(")")
     }
 }
 
