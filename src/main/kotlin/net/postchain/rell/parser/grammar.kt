@@ -6,8 +6,6 @@ import com.github.h0tk3y.betterParse.combinators.*
 import com.github.h0tk3y.betterParse.grammar.parser
 import com.github.h0tk3y.betterParse.lexer.Token
 import com.github.h0tk3y.betterParse.lexer.TokenMatch
-import net.postchain.rell.parser.S_Grammar.getValue
-import net.postchain.rell.parser.S_Grammar.provideDelegate
 
 object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val LPAR by relltok("(")
@@ -224,11 +222,11 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val atExprFrom by ( atExprFromSingle or atExprFromMulti )
 
     private val atExprAt by (
-            ( AT * QUESTION map { Pair(true, false) } )
-                    or ( AT * MUL map { Pair(true, true) } )
-                    or ( AT * PLUS map { Pair(false, true) } )
-                    or ( AT map { Pair(false, false) } )
-            )
+            ( AT * QUESTION map { S_AtCardinality.ZERO_ONE } )
+            or ( AT * MUL map { S_AtCardinality.ZERO_MANY } )
+            or ( AT * PLUS map { S_AtCardinality.ONE_MANY } )
+            or ( AT map { S_AtCardinality.ONE } )
+    )
 
     private val atExprWhatSimple by oneOrMore((-DOT * id)) map { path -> S_AtExprWhatSimple(path) }
 
@@ -253,10 +251,9 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val atExprLimit by ( -LIMIT * _expression )
 
     private val atExpr by ( atExprFrom * atExprAt * atExprWhere * optional(atExprWhat) * optional(atExprLimit) ) map {
-        ( from, zeroMany, where, whatOpt, limit ) ->
-        val (zero, many) = zeroMany
+        ( from, cardinality, where, whatOpt, limit ) ->
         val what = if (whatOpt == null) S_AtExprWhatDefault() else whatOpt
-        S_AtExpr(from.pos, from.value, what, where, limit, zero, many)
+        S_AtExpr(from.pos, cardinality, from.value, where, what, limit)
     }
 
     private val listLiteralExpr by ( LBRACK * separatedTerms(_expression, COMMA, true) * -RBRACK ) map {
@@ -297,9 +294,8 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         S_CreateExpr(S_Pos(kw), className, exprs)
     }
 
-    private val baseExprHead by (
-            atExpr
-            or nameExpr
+    private val baseExprHeadNoAt by (
+            nameExpr
             or attrExpr
             or literalExpr
             or parenthesesExpr
@@ -310,6 +306,8 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
             or setExpr
             or mapExpr
     )
+
+    private val baseExprHead by ( atExpr or baseExprHeadNoAt )
 
     private val callArg by ( optional(id * -ASSIGN) * _expression ) map {
         (name, expr) -> S_NameExprPair(name, expr)
@@ -332,7 +330,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         ( head, tails ) -> tailsToExpr(head, tails)
     }
 
-    private val baseExprNoCall by ( baseExprHead * zeroOrMore(baseExprTailNoCall) ) map {
+    private val baseExprNoCallNoAt by ( baseExprHeadNoAt * zeroOrMore(baseExprTailNoCall) ) map {
         ( head, tails ) -> tailsToExpr(head, tails)
     }
 
@@ -418,13 +416,13 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         listOf(targetClass) + (if (joinClasses == null) listOf() else joinClasses.value)
     }
 
-    private val updateTargetSimple by ( updateFrom * -AT * atExprWhere ) map {
-        (from, where) -> S_UpdateTarget_Simple(from, where)
+    private val updateTargetAt by ( atExprFrom * atExprAt * atExprWhere ) map {
+        (from, cardinality, where) -> S_UpdateTarget_Simple(cardinality, from.value, where)
     }
 
-    private val updateTargetExpr by baseExprNoCall map { expr -> S_UpdateTarget_Expr(expr) }
+    private val updateTargetExpr by baseExprNoCallNoAt map { expr -> S_UpdateTarget_Expr(expr) }
 
-    private val updateTarget by ( updateTargetSimple or updateTargetExpr )
+    private val updateTarget by ( updateTargetAt or updateTargetExpr )
 
     private val updateWhatNameOp by ( -optional(DOT) * id * assignOp ) map { (name, op) -> Pair(name, op) }
 

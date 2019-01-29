@@ -110,9 +110,7 @@ class R_MemberCalculator_RecordAttr(val attr: R_Attrib): R_MemberCalculator(attr
 class R_MemberCalculator_DataAttribute(type: R_Type, val atBase: R_AtExprBase): R_MemberCalculator(type) {
     override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
         val list = atBase.execute(frame, listOf(baseValue), null)
-        if (list.size != 1) {
-            throw R_AtExpr.errWrongCount(list.size)
-        }
+        R_AtExpr.checkCount(R_AtCardinality.ONE, list.size)
 
         check(list[0].size == 1)
         val res = list[0][0]

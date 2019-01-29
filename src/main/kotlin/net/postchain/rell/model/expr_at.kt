@@ -2,6 +2,21 @@ package net.postchain.rell.model
 
 import net.postchain.rell.runtime.*
 
+enum class R_AtCardinality(val zero: Boolean, val many: Boolean) {
+    ZERO_ONE(true, false),
+    ONE(false, false),
+    ZERO_MANY(true, true),
+    ONE_MANY(false, true),
+    ;
+
+    fun matches(count: Int): Boolean {
+        if (count < 0 || count == 0 && !zero || count > 1 && !many) {
+            return false
+        }
+        return true
+    }
+}
+
 class R_AtClass(val rClass: R_Class, val alias: String, val index: Int) {
     val type: R_Type = R_ClassType(rClass)
 }
@@ -29,8 +44,7 @@ class R_AtExprBase(
         val what: List<Db_Expr>,
         val where: Db_Expr?,
         val sort: List<Pair<Db_Expr, Boolean>>,
-        val zero: Boolean,
-        val many: Boolean
+        val cardinality: R_AtCardinality
 ) {
     init {
         from.withIndex().forEach { check(it.index == it.value.index) }
@@ -137,11 +151,9 @@ class R_AtExpr(
         val list = MutableList(records.size) { rowType.decode(records[it]) }
 
         val count = list.size
-        if (count == 0 && !base.zero || count > 1 && !base.many) {
-            throw errWrongCount(count)
-        }
+        checkCount(base.cardinality, count)
 
-        if (base.many) {
+        if (base.cardinality.many) {
             return Rt_ListValue(type, list)
         } else if (count > 0) {
             return list[0]
@@ -151,9 +163,11 @@ class R_AtExpr(
     }
 
     companion object {
-        fun errWrongCount(count: Int): Rt_Error {
-            val msg = if (count == 0) "No records found" else "Multiple records found: $count"
-            return Rt_Error("at:wrong_count:$count", msg)
+        fun checkCount(cardinality: R_AtCardinality, count: Int) {
+            if (!cardinality.matches(count)) {
+                val msg = if (count == 0) "No records found" else "Multiple records found: $count"
+                throw Rt_Error("at:wrong_count:$count", msg)
+            }
         }
     }
 }

@@ -6,14 +6,18 @@ sealed class S_UpdateTarget {
     abstract fun compile(ctx: C_ExprContext): Pair<C_DbExprContext, R_UpdateTarget>
 }
 
-class S_UpdateTarget_Simple(val from: List<S_AtExprFrom>, val where: S_AtExprWhere): S_UpdateTarget() {
+class S_UpdateTarget_Simple(
+        val cardinality: S_AtCardinality,
+        val from: List<S_AtExprFrom>,
+        val where: S_AtExprWhere
+): S_UpdateTarget() {
     override fun compile(ctx: C_ExprContext): Pair<C_DbExprContext, R_UpdateTarget> {
         val rFrom = S_AtExpr.compileFrom(ctx, from)
         val cls = rFrom[0]
         val extraClasses = rFrom.subList(1, rFrom.size)
         val dbCtx = C_DbExprContext(ctx.blkCtx, rFrom)
         val dbWhere = where.compile(dbCtx)
-        val rTarget = R_UpdateTarget_Simple(cls, extraClasses, dbWhere)
+        val rTarget = R_UpdateTarget_Simple(cls, extraClasses, cardinality.rCardinality, dbWhere)
         return Pair(dbCtx, rTarget)
     }
 }

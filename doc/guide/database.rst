@@ -181,12 +181,16 @@ Can use the created object:
 Update Statement
 ~~~~~~~~~~~~~~~~~~~
 
-Can change only ``mutable`` attributes.
+Operators ``@``, ``@?``, ``@*``, ``@+`` are used to specify cardinality, like for the at-operator.
+If the number of updated records does not match the cardinality, a run-time error occurs.
 
 ::
 
-   update user @ { .name == 'Bob' } ( company = 'Microsoft' );
-   update user @ { .name == 'Alice' } ( salary += 5000 );
+   update user @ { .name == 'Bob' } ( company = 'Microsoft' );             // exactly one
+   update user @? { .name == 'Bob' } ( deleted = true );                   // zero or one
+   update user @* { .company.name == 'Bad Company' } ( salary -= 1000 );   // any number
+
+Can change only ``mutable`` attributes.
 
 Class attributes can be matched implicitly by name or type:
 
@@ -200,7 +204,7 @@ updated. Other classes can be used in the where-part:
 
 ::
 
-   update u: user (c: company) @ { u.xyz == c.xyz, u.name == 'Bob', c.name == 'Google' } ( city = 'Seattle' );
+   update (u: user, c: company) @ { u.xyz == c.xyz, u.name == 'Bob', c.name == 'Google' } ( city = 'Seattle' );
 
 Can specify an arbitrary expression returning a class, a nullable class or a collection of a class:
 
@@ -212,16 +216,20 @@ Can specify an arbitrary expression returning a class, a nullable class or a col
 Delete Statement
 ~~~~~~~~~~~~~~~~~~~
 
-::
-
-   delete user @ { .name == 'Bob' };
-
-Using multiple classes. Similar to ``update``, only the object(s) of the
-first class will be deleted:
+Operators ``@``, ``@?``, ``@*``, ``@+`` are used to specify cardinality, like for the at-operator.
+If the number of deleted records does not match the cardinality, a run-time error occurs.
 
 ::
 
-   delete u: user (c: company) @ { u.xyz == c.xyz, u.name == 'Bob', c.name == 'Google' };
+   delete user @ { .name == 'Bob' };                    // exactly one
+   delete user @? { .name == 'Bob' };                   // zero or one
+   delete user @* { .company.name == 'Bad Company' };   // any number
+
+Using multiple classes. Similar to ``update``, only the object(s) of the first class will be deleted:
+
+::
+
+   delete (u: user, c: company) @ { u.xyz == c.xyz, u.name == 'Bob', c.name == 'Google' };
 
 Can specify an arbitrary expression returning a class, a nullable class or a collection of a class:
 

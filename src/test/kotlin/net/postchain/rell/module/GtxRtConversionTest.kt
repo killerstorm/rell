@@ -228,8 +228,8 @@ class GtxRtConversionTest: BaseRellTest(useSql = false, gtx = true) {
     }
 
     private fun chkRes(expected: String, actual: String) {
-        if (actual == "") {
-            tst.chkStdout(expected)
+        if (actual == "OK") {
+            chkStdout(expected)
         } else {
             assertEquals(expected, actual)
         }

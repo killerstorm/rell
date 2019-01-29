@@ -386,7 +386,7 @@ private class C_ClassFieldExpr(
         val whereRight = Db_ParameterExpr(atClass.type, 0)
         val where = Db_BinaryExpr(R_BooleanType, Db_BinaryOp_Eq, whereLeft, whereRight)
 
-        val atBase = R_AtExprBase(from, listOf(dbExpr), where, listOf(), false, false)
+        val atBase = R_AtExprBase(from, listOf(dbExpr), where, listOf(), R_AtCardinality.ONE)
         val calculator = R_MemberCalculator_DataAttribute(dbExpr.type, atBase)
 
         val rBase = base.toRExpr()

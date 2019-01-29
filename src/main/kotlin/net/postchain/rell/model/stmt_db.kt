@@ -4,7 +4,6 @@ import net.postchain.rell.CommonUtils
 import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_ListValue
 import net.postchain.rell.runtime.Rt_NullValue
-import net.postchain.rell.runtime.Rt_SetValue
 
 sealed class R_UpdateTarget {
     abstract fun cls(): R_AtClass
@@ -14,7 +13,12 @@ sealed class R_UpdateTarget {
     abstract fun execute(stmt: R_BaseUpdateStatement, frame: Rt_CallFrame)
 }
 
-class R_UpdateTarget_Simple(val cls: R_AtClass, val extraClasses: List<R_AtClass>, val where: Db_Expr?): R_UpdateTarget() {
+class R_UpdateTarget_Simple(
+        val cls: R_AtClass,
+        val extraClasses: List<R_AtClass>,
+        val cardinality: R_AtCardinality,
+        val where: Db_Expr?
+): R_UpdateTarget() {
     init {
         check(cls.index == 0)
         extraClasses.withIndex().forEach { check(it.index + 1 == it.value.index) }
@@ -26,7 +30,14 @@ class R_UpdateTarget_Simple(val cls: R_AtClass, val extraClasses: List<R_AtClass
 
     override fun execute(stmt: R_BaseUpdateStatement, frame: Rt_CallFrame) {
         val ctx = SqlGenContext(listOf(cls) + extraClasses, listOf())
-        stmt.execute0(frame, ctx)
+        val pSql = stmt.buildSql(ctx, true)
+
+        var count = 0
+        pSql.executeQuery(frame) { rs ->
+            ++count
+        }
+
+        R_AtExpr.checkCount(cardinality, count)
     }
 }
 
@@ -38,6 +49,11 @@ sealed class R_UpdateTarget_Expr(val cls: R_AtClass, val where: Db_Expr, val exp
     final override fun cls() = cls
     final override fun extraClasses() = listOf<R_AtClass>()
     final override fun where() = where
+
+    protected fun execute0(stmt: R_BaseUpdateStatement, frame: Rt_CallFrame, ctx: SqlGenContext) {
+        val pSql = stmt.buildSql(ctx, false)
+        pSql.execute(frame)
+    }
 }
 
 class R_UpdateTarget_Expr_One(cls: R_AtClass, where: Db_Expr, expr: R_Expr): R_UpdateTarget_Expr(cls, where, expr) {
@@ -48,7 +64,7 @@ class R_UpdateTarget_Expr_One(cls: R_AtClass, where: Db_Expr, expr: R_Expr): R_U
         }
 
         val ctx = SqlGenContext(listOf(cls), listOf(value))
-        stmt.execute0(frame, ctx)
+        execute0(stmt, frame, ctx)
     }
 }
 
@@ -78,7 +94,7 @@ class R_UpdateTarget_Expr_Many(
         for (part in CommonUtils.split(lst, partSize)) {
             val partValue = Rt_ListValue(listType, part)
             val ctx = SqlGenContext(listOf(cls), listOf(partValue))
-            stmt.execute0(frame, ctx)
+            execute0(stmt, frame, ctx)
         }
     }
 }
@@ -86,18 +102,12 @@ class R_UpdateTarget_Expr_Many(
 class R_UpdateStatementWhat(val attr: R_Attrib, val expr: Db_Expr, val op: Db_BinaryOp?)
 
 sealed class R_BaseUpdateStatement(val target: R_UpdateTarget): R_Statement() {
-    abstract fun buildSql(ctx: SqlGenContext): ParameterizedSql
+    abstract fun buildSql(ctx: SqlGenContext, returning: Boolean): ParameterizedSql
 
     final override fun execute(frame: Rt_CallFrame): R_StatementResult? {
         frame.entCtx.checkDbUpdateAllowed()
         target.execute(this, frame)
         return null
-    }
-
-    fun execute0(frame: Rt_CallFrame, ctx: SqlGenContext) {
-        val rtSql = buildSql(ctx)
-        val rtUpdate = SqlUpdate(rtSql)
-        rtUpdate.execute(frame)
     }
 
     fun appendMainTable(builder: SqlBuilder, fromInfo: SqlFromInfo) {
@@ -165,10 +175,16 @@ sealed class R_BaseUpdateStatement(val target: R_UpdateTarget): R_Statement() {
             builder.appendColumn(join.alias, join.alias.cls.mapping.rowidColumn)
         }
     }
+
+    fun appendReturning(builder: SqlBuilder, fromInfo: SqlFromInfo) {
+        val cls = target.cls()
+        builder.append(" RETURNING ")
+        builder.appendColumn(fromInfo.classes[cls.index].alias, cls.rClass.mapping.rowidColumn)
+    }
 }
 
 class R_UpdateStatement(target: R_UpdateTarget, val what: List<R_UpdateStatementWhat>): R_BaseUpdateStatement(target) {
-    override fun buildSql(ctx: SqlGenContext): ParameterizedSql {
+    override fun buildSql(ctx: SqlGenContext, returning: Boolean): ParameterizedSql {
         val fromInfo = buildFromInfo(ctx)
         val builder = SqlBuilder()
 
@@ -177,6 +193,10 @@ class R_UpdateStatement(target: R_UpdateTarget, val what: List<R_UpdateStatement
         appendSet(ctx, builder)
         appendExtraTables(builder, fromInfo, "FROM")
         appendWhere(ctx, builder, fromInfo)
+
+        if (returning) {
+            appendReturning(builder, fromInfo)
+        }
 
         return builder.build()
     }
@@ -206,7 +226,7 @@ class R_UpdateStatement(target: R_UpdateTarget, val what: List<R_UpdateStatement
 }
 
 class R_DeleteStatement(target: R_UpdateTarget): R_BaseUpdateStatement(target) {
-    override fun buildSql(ctx: SqlGenContext): ParameterizedSql {
+    override fun buildSql(ctx: SqlGenContext, returning: Boolean): ParameterizedSql {
         val fromInfo = buildFromInfo(ctx)
         val builder = SqlBuilder()
 
@@ -214,6 +234,10 @@ class R_DeleteStatement(target: R_UpdateTarget): R_BaseUpdateStatement(target) {
         appendMainTable(builder, fromInfo)
         appendExtraTables(builder, fromInfo, "USING")
         appendWhere(ctx, builder, fromInfo)
+
+        if (returning) {
+            appendReturning(builder, fromInfo)
+        }
 
         return builder.build()
     }

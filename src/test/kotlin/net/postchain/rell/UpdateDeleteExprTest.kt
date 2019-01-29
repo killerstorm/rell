@@ -17,138 +17,138 @@ class UpdateDeleteExprTest: BaseRellTest() {
     @Test fun testUpdateObject() {
         chkData("user(101,Bob,333)", "user(102,Alice,555)")
 
-        execOp("val u = user @ { .name == 'Bob' }; update u ( score += 123 );")
+        chkOp("val u = user @ { .name == 'Bob' }; update u ( score += 123 );")
         chkData("user(101,Bob,456)", "user(102,Alice,555)")
 
-        execOp("val u = user @ { .name == 'Alice' }; update u ( score += 123 );")
+        chkOp("val u = user @ { .name == 'Alice' }; update u ( score += 123 );")
         chkData("user(101,Bob,456)", "user(102,Alice,678)")
     }
 
     @Test fun testDeleteObject() {
         chkData("user(101,Bob,333)", "user(102,Alice,555)")
 
-        execOp("val u = user @ { .name == 'Bob' }; delete u;")
+        chkOp("val u = user @ { .name == 'Bob' }; delete u;")
         chkData("user(102,Alice,555)")
 
-        execOp("val u = user @ { .name == 'Alice' }; delete u;")
+        chkOp("val u = user @ { .name == 'Alice' }; delete u;")
         chkData()
     }
 
     @Test fun testUpdateNullable() {
         chkData("user(101,Bob,333)", "user(102,Alice,555)")
 
-        execOp("val u = user @? { .name == 'Bob' }; update u ( score += 123 );")
+        chkOp("val u = user @? { .name == 'Bob' }; update u ( score += 123 );")
         chkData("user(101,Bob,456)", "user(102,Alice,555)")
 
-        execOp("val u = user @? { .name == 'Trudy' }; update u ( score += 123 );")
+        chkOp("val u = user @? { .name == 'Trudy' }; update u ( score += 123 );")
         chkData("user(101,Bob,456)", "user(102,Alice,555)")
     }
 
     @Test fun testDeleteNullable() {
         chkData("user(101,Bob,333)", "user(102,Alice,555)")
 
-        execOp("val u = user @? { .name == 'Bob' }; delete u;")
+        chkOp("val u = user @? { .name == 'Bob' }; delete u;")
         chkData("user(102,Alice,555)")
 
-        execOp("val u = user @? { .name == 'Trudy' }; delete u;")
+        chkOp("val u = user @? { .name == 'Trudy' }; delete u;")
         chkData("user(102,Alice,555)")
     }
 
     @Test fun testUpdateCollection() {
         chkData("user(101,Bob,333)", "user(102,Alice,555)")
 
-        execOp("val u = user @* {}; update u ( score += 123 );")
+        chkOp("val u = user @* {}; update u ( score += 123 );")
         chkData("user(101,Bob,456)", "user(102,Alice,678)")
 
-        execOp("val u = user @* { .name == 'Bob' }; update u ( score += 123 );")
+        chkOp("val u = user @* { .name == 'Bob' }; update u ( score += 123 );")
         chkData("user(101,Bob,579)", "user(102,Alice,678)")
 
-        execOp("val u = user @* { .name == 'Alice' }; update u ( score += 123 );")
+        chkOp("val u = user @* { .name == 'Alice' }; update u ( score += 123 );")
         chkData("user(101,Bob,579)", "user(102,Alice,801)")
 
-        execOp("val u = user @* { .name == 'Trudy' }; update u ( score += 123 );")
+        chkOp("val u = user @* { .name == 'Trudy' }; update u ( score += 123 );")
         chkData("user(101,Bob,579)", "user(102,Alice,801)")
     }
 
     @Test fun testDeleteCollection() {
         chkData("user(101,Bob,333)", "user(102,Alice,555)")
 
-        execOp("val u = user @* { .name == 'Trudy' }; delete u;")
+        chkOp("val u = user @* { .name == 'Trudy' }; delete u;")
         chkData("user(101,Bob,333)", "user(102,Alice,555)")
 
-        execOp("val u = user @* { .name == 'Bob' }; delete u;")
+        chkOp("val u = user @* { .name == 'Bob' }; delete u;")
         chkData("user(102,Alice,555)")
 
-        execOp("val u = user @* {}; delete u;")
+        chkOp("val u = user @* {}; delete u;")
         chkData()
     }
 
     @Test fun testUpdateCollectionDuplicate() {
         chkData("user(101,Bob,333)", "user(102,Alice,555)")
 
-        execOp("val u = user @ { .name == 'Bob' }; update [u, u, u] ( score += 123 );")
+        chkOp("val u = user @ { .name == 'Bob' }; update [u, u, u] ( score += 123 );")
         chkData("user(101,Bob,456)", "user(102,Alice,555)")
 
-        execOp("val u = user @* {}; update [u[0], u[1], u[0], u[1], u[0], u[1]] ( score += 123 );")
+        chkOp("val u = user @* {}; update [u[0], u[1], u[0], u[1], u[0], u[1]] ( score += 123 );")
         chkData("user(101,Bob,579)", "user(102,Alice,678)")
     }
 
     @Test fun testDeleteCollectionDuplicate() {
         chkData("user(101,Bob,333)", "user(102,Alice,555)")
 
-        execOp("val u = user @ { .name == 'Bob' }; delete [u, u, u];")
+        chkOp("val u = user @ { .name == 'Bob' }; delete [u, u, u];")
         chkData("user(102,Alice,555)")
     }
 
     @Test fun testUpdateParentheses() {
         chkData("user(101,Bob,333)", "user(102,Alice,555)")
 
-        execOp("update (user @ { .name == 'Bob' }) ( score += 123 );")
+        chkOp("update (user @ { .name == 'Bob' }) ( score += 123 );")
         chkData("user(101,Bob,456)", "user(102,Alice,555)")
 
-        execOp("update (user @? { .name == 'Alice' }) ( score += 123 );")
+        chkOp("update (user @? { .name == 'Alice' }) ( score += 123 );")
         chkData("user(101,Bob,456)", "user(102,Alice,678)")
 
-        execOp("update (user @* {}) ( score += 123 );")
+        chkOp("update (user @* {}) ( score += 123 );")
         chkData("user(101,Bob,579)", "user(102,Alice,801)")
     }
 
     @Test fun testDeleteParentheses() {
         chkData("user(101,Bob,333)", "user(102,Alice,555)")
 
-        execOp("delete (user @ { .name == 'Bob' });")
+        chkOp("delete (user @ { .name == 'Bob' });")
         chkData("user(102,Alice,555)")
 
-        execOp("delete (user @? { .name == 'Trudy' });")
+        chkOp("delete (user @? { .name == 'Trudy' });")
         chkData("user(102,Alice,555)")
 
-        execOp("delete (user @* {});")
+        chkOp("delete (user @* {});")
         chkData()
     }
 
     @Test fun testUpdateWhatSimple() {
         chkData("user(101,Bob,333)", "user(102,Alice,555)")
 
-        execOp("val u = user @ { .name == 'Bob' }; update u ( .score = 444 );")
+        chkOp("val u = user @ { .name == 'Bob' }; update u ( .score = 444 );")
         chkData("user(101,Bob,444)", "user(102,Alice,555)")
 
-        execOp("val u = user @ { .name == 'Bob' }; update u ( score = 666 );")
+        chkOp("val u = user @ { .name == 'Bob' }; update u ( score = 666 );")
         chkData("user(101,Bob,666)", "user(102,Alice,555)")
 
-        execOp("val u = user @ { .name == 'Bob' }; update (u) ( score = 555 );")
+        chkOp("val u = user @ { .name == 'Bob' }; update (u) ( score = 555 );")
         chkData("user(101,Bob,555)", "user(102,Alice,555)")
     }
 
     @Test fun testUpdateWhatAttributes() {
         chkData("user(101,Bob,333)", "user(102,Alice,555)")
 
-        execOp("val u = user @ { .name == 'Bob' }; update u ( score = 500 );")
+        chkOp("val u = user @ { .name == 'Bob' }; update u ( score = 500 );")
         chkData("user(101,Bob,500)", "user(102,Alice,555)")
 
-        execOp("val u = user @ { .name == 'Bob' }; update u ( score = (user.score * 3 + 500) );")
+        chkOp("val u = user @ { .name == 'Bob' }; update u ( score = (user.score * 3 + 500) );")
         chkData("user(101,Bob,2000)", "user(102,Alice,555)")
 
-        execOp("val u = user @ { .name == 'Bob' }; update u ( score = (u.score * 3 + 500) );")
+        chkOp("val u = user @ { .name == 'Bob' }; update u ( score = (u.score * 3 + 500) );")
         chkData("user(101,Bob,6500)", "user(102,Alice,555)")
 
         chkOp("val u = user @* { .name == 'Bob' }; update u ( score = (u.score * 3 + 500) );",
@@ -176,9 +176,7 @@ class UpdateDeleteExprTest: BaseRellTest() {
     }
 
     @Test fun testError() {
-        chkOp("update user @* {} ( .name ) ( .score += 123 );", "ct_err:stmt_update_expr_type:list<text>")
         chkOp("update (user @* {} ( .name )) ( .score += 123 );", "ct_err:stmt_update_expr_type:list<text>")
-        chkOp("delete user @* {} ( .name );", "ct_err:stmt_update_expr_type:list<text>")
         chkOp("delete (user @* {} ( .name ));", "ct_err:stmt_update_expr_type:list<text>")
     }
 
@@ -187,10 +185,10 @@ class UpdateDeleteExprTest: BaseRellTest() {
         tst.rtSqlUpdatePortionSize = 5
         val n = 33
 
-        execOp("for (i in range($n)) { create user(name = 'user_' + i, score = i * i); }")
+        chkOp("for (i in range($n)) { create user(name = 'user_' + i, score = i * i); }")
         chk("(user@*{}).size()", "int[$n]")
 
-        execOp("val u = user @* {}; update u (score += 100);")
+        chkOp("val u = user @* {}; update u (score += 100);")
 
         val code = """{
             val n = $n;
@@ -211,11 +209,42 @@ class UpdateDeleteExprTest: BaseRellTest() {
         tst.rtSqlUpdatePortionSize = 5
         val n = 33
 
-        execOp("for (i in range($n)) { create user(name = 'user_' + i, score = i * i); }")
+        chkOp("for (i in range($n)) { create user(name = 'user_' + i, score = i * i); }")
         chk("(user@*{}).size()", "int[$n]")
 
-        execOp("val u = user @* {}; delete u;")
+        chkOp("val u = user @* {}; delete u;")
         chkData()
+    }
+
+    @Test fun testUpdateMultiClasses() {
+        initUserCompany()
+        chkData("user(1,Bob,Google,100)", "user(2,Alice,Amazon,200)", "company(3,Google,250)", "company(4,Amazon,525)")
+
+        chkOp("update (user, company) @* { user.company == company.name } ( score = user.score + company.score );")
+        chkData("user(1,Bob,Google,350)", "user(2,Alice,Amazon,725)", "company(3,Google,250)", "company(4,Amazon,525)")
+    }
+
+    @Test fun testDeleteMultiClasses() {
+        initUserCompany()
+        chkData("user(1,Bob,Google,100)", "user(2,Alice,Amazon,200)", "company(3,Google,250)", "company(4,Amazon,525)")
+
+        chkOp("delete (user, company) @* { user.company == company.name, company.score == 250 };")
+        chkData("user(2,Alice,Amazon,200)", "company(3,Google,250)", "company(4,Amazon,525)")
+    }
+
+    private fun initUserCompany() {
+        tst.defs = listOf(
+                "class user { name: text; company: text; mutable score: integer; }",
+                "class company { name: text; score: integer; }"
+        )
+        tst.inserts = listOf()
+
+        chkOp("""
+            create user(name = 'Bob', company = 'Google', score = 100);
+            create user(name = 'Alice', company = 'Amazon', score = 200);
+            create company(name = 'Google', score = 250);
+            create company(name = 'Amazon', score = 525);
+        """.trimIndent())
     }
 
     private fun insUser(id: Int, name: String, score: Int): String =

@@ -12,30 +12,30 @@ class CreateTest: BaseRellTest() {
     @Test fun testCreateCity() {
         chkData()
 
-        execOp("create city ( 'New York' );")
+        chkOp("create city ( 'New York' );")
         chkDataNew("city(1,New York)")
 
-        execOp("create city ( 'San Francisco' );")
+        chkOp("create city ( 'San Francisco' );")
         chkDataNew("city(2,San Francisco)")
 
-        execOp("create city ( 'Los Angeles' );")
+        chkOp("create city ( 'Los Angeles' );")
         chkDataNew("city(3,Los Angeles)")
     }
 
     @Test fun testCreatePerson() {
         chkData()
 
-        execOp("""
+        chkOp("""
             create city ( 'New York' );
             create city ( 'San Francisco' );
             create city ( 'Los Angeles' );
         """.trimIndent())
         chkDataNew("city(1,New York)", "city(2,San Francisco)", "city(3,Los Angeles)")
 
-        execOp("create person ( name = 'James', city @ { 'Los Angeles' }, street = 'Evergreen Ave', house = 5, score = 100 );")
+        chkOp("create person ( name = 'James', city @ { 'Los Angeles' }, street = 'Evergreen Ave', house = 5, score = 100 );")
         chkDataNew("person(4,James,3,Evergreen Ave,5,100)")
 
-        execOp("create person ( name = 'Mike', city @ { 'New York' }, street =  'Grand St', house = 7, score = 250 );")
+        chkOp("create person ( name = 'Mike', city @ { 'New York' }, street =  'Grand St', house = 7, score = 250 );")
         chkDataNew("person(5,Mike,1,Grand St,7,250)")
     }
 
@@ -48,16 +48,16 @@ class CreateTest: BaseRellTest() {
         chkOp("create person(year = 1980);", "ct_err:attr_missing:name")
         chkDataNew()
 
-        execOp("create person(name = 'Bob', year = 1980);")
+        chkOp("create person(name = 'Bob', year = 1980);")
         chkDataNew("person(1,Bob,1980,777,Unknown)")
 
-        execOp("create person(name = 'Alice', year = 1985, score = 55555);")
+        chkOp("create person(name = 'Alice', year = 1985, score = 55555);")
         chkDataNew("person(2,Alice,1985,55555,Unknown)")
 
-        execOp("create person(name = 'Trudy', year = 2000, status = 'Ready');")
+        chkOp("create person(name = 'Trudy', year = 2000, status = 'Ready');")
         chkDataNew("person(3,Trudy,2000,777,Ready)")
 
-        execOp("create person(name = 'Will', year = 1990, status = 'Busy', score = 1000);")
+        chkOp("create person(name = 'Will', year = 1990, status = 'Busy', score = 1000);")
         chkDataNew("person(4,Will,1990,1000,Busy)")
     }
 
@@ -74,16 +74,16 @@ class CreateTest: BaseRellTest() {
         )
         chkData()
 
-        execOp("create default_score( 100 );")
+        chkOp("create default_score( 100 );")
         chkDataNew("default_score(1,100)")
 
-        execOp("create person('Bob');")
+        chkOp("create person('Bob');")
         chkDataNew("person(2,Bob,100)")
 
-        execOp("update default_score @ {} ( value = 555 );")
+        chkOp("update default_score @ {} ( value = 555 );")
         chkData("default_score(1,555)", "person(2,Bob,100)")
 
-        execOp("create person('Alice');")
+        chkOp("create person('Alice');")
         chkDataNew("person(3,Alice,555)")
     }
 
@@ -100,7 +100,7 @@ class CreateTest: BaseRellTest() {
         tst.defs = listOf("class person { name: text; year: integer; score: integer = 777; status: text = 'Unknown'; }")
         chkData()
 
-        execOp("create person(.name = 'Bob', .year = 1980);")
+        chkOp("create person(.name = 'Bob', .year = 1980);")
         chkDataNew("person(1,Bob,1980,777,Unknown)")
     }
 }

@@ -100,7 +100,7 @@ class LibClassesTest: BaseRellTest() {
         tst.defs = listOf("class foo { x: integer; block; }")
         tst.inserts = BLOCK_INSERTS
 
-        chkOp("create foo (123, block@{});", "")
+        chkOp("create foo (123, block@{});")
 
         val base = "val f = foo@{}"
         chkEx("{ $base; return f.block; }", "block[111]")
@@ -118,7 +118,7 @@ class LibClassesTest: BaseRellTest() {
         tst.defs = listOf("class foo { x: integer; trans: transaction; }")
         tst.inserts = BLOCK_INSERTS
 
-        chkOp("create foo (123, transaction@{});", "")
+        chkOp("create foo (123, transaction@{});")
 
         val base = "val f = foo@{}"
         chkEx("{ $base; return f.trans.block; }", "block[111]")

@@ -11,31 +11,31 @@ class UpdateDeleteTest: BaseRellTest() {
 
     @Test fun testUpdatePersonSetScore() {
         createCitiesAndPersons()
-        execOp("update person @ { .name == 'James' } ( score = 125 );")
+        chkOp("update person @ { .name == 'James' } ( score = 125 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,125)", "person(5,Mike,1,Grand St,7,250)")
     }
 
     @Test fun testUpdatePersonAddScore() {
         createCitiesAndPersons()
-        execOp("update person @ { .name == 'James' } ( score = .score + 50 );")
+        chkOp("update person @ { .name == 'James' } ( score = .score + 50 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,150)", "person(5,Mike,1,Grand St,7,250)")
     }
 
     @Test fun testUpdatePersonMultiplyScore() {
         createCitiesAndPersons()
-        execOp("update person @ { .name == 'James' } ( score = .score * 3 );")
+        chkOp("update person @ { .name == 'James' } ( score = .score * 3 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,300)", "person(5,Mike,1,Grand St,7,250)")
     }
 
     @Test fun testUpdatePersonAll() {
         createCitiesAndPersons()
-        execOp("update person @ {} ( score = .score + 75 );")
+        chkOp("update person @* {} ( score = .score + 75 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,175)", "person(5,Mike,1,Grand St,7,325)")
     }
 
     @Test fun testUpdatePersonSetFullAddress() {
         createCitiesAndPersons()
-        execOp("update person @ { .name == 'Mike' } ( city @ { 'San Francisco' }, street = 'Lawton St', house = 13 );")
+        chkOp("update person @ { .name == 'Mike' } ( city @ { 'San Francisco' }, street = 'Lawton St', house = 13 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,2,Lawton St,13,250)")
     }
 
@@ -45,7 +45,7 @@ class UpdateDeleteTest: BaseRellTest() {
                 "class person { name: text; home: city; mutable work: city; base: integer; mutable score: integer; }"
         )
 
-        execOp("""
+        chkOp("""
                 val boston = create city('Boston');
                 val seattle = create city('Seattle');
                 val dallas = create city('Dallas');
@@ -73,8 +73,8 @@ class UpdateDeleteTest: BaseRellTest() {
                 "person(5,Bob,2,3,200,500)"
         )
 
-        execOp("update person @ { .name == 'Bob' } ( city @ { .name == 'Dallas' } );")
-        execOp("update person @ { .name == 'Mike' } ( 777 );")
+        chkOp("update person @ { .name == 'Bob' } ( city @ { .name == 'Dallas' } );")
+        chkOp("update person @ { .name == 'Mike' } ( 777 );")
 
         chkData(
                 "city(1,Boston)",
@@ -88,63 +88,63 @@ class UpdateDeleteTest: BaseRellTest() {
     @Test fun testDeletePerson() {
         createCitiesAndPersons()
 
-        execOp("delete person @ { .name == 'James' };")
+        chkOp("delete person @ { .name == 'James' };")
         chkDataCommon("person(5,Mike,1,Grand St,7,250)")
 
-        execOp("delete person @ { .name == 'Mike' };")
+        chkOp("delete person @ { .name == 'Mike' };")
         chkDataCommon()
     }
 
     @Test fun testDeleteCity() {
         createCities()
 
-        execOp("delete city @ { .name == 'San Francisco' };")
+        chkOp("delete city @ { .name == 'San Francisco' };")
         chkData(
                 "city(1,New York)",
                 "city(3,Los Angeles)"
         )
 
-        execOp("delete city @ {};")
+        chkOp("delete city @* {};")
         chkData()
     }
 
     @Test fun testUpdateClassAlias() {
         createCitiesAndPersons()
 
-        execOp("update p: person @ { p.name == 'Mike' } ( score = 999 );")
+        chkOp("update (p: person) @ { p.name == 'Mike' } ( score = 999 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,999)")
 
-        chkOp("update p: person @ { person.name == 'Mike' } ( score = 777 );", "ct_err:unknown_name:person")
+        chkOp("update (p: person) @ { person.name == 'Mike' } ( score = 777 );", "ct_err:unknown_name:person")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,999)")
 
-        execOp("update person @ { person.name == 'Mike' } ( score = 777 );")
+        chkOp("update person @ { person.name == 'Mike' } ( score = 777 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,777)")
     }
 
     @Test fun testDeleteClassAlias() {
         createCitiesAndPersons()
 
-        execOp("delete p: person @ { p.name == 'Mike' };")
+        chkOp("delete (p: person) @ { p.name == 'Mike' };")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)")
 
-        chkOp("delete p: person @ { person.name == 'James' };", "ct_err:unknown_name:person")
+        chkOp("delete (p: person) @ { person.name == 'James' };", "ct_err:unknown_name:person")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)")
 
-        execOp("delete person @ { person.name == 'James' };")
+        chkOp("delete person @ { person.name == 'James' };")
         chkDataCommon()
     }
 
     @Test fun testUpdateExtraClass() {
         createCitiesAndPersons()
 
-        execOp("update p: person (c: city) @ { p.city == c, c.name == 'New York' } ( score = 999 );")
+        chkOp("update (p: person, c: city) @ { p.city == c, c.name == 'New York' } ( score = 999 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,999)")
     }
 
     @Test fun testDeleteExtraClass() {
         createCitiesAndPersons()
 
-        execOp("delete p: person (c: city) @ { p.city == c, c.name == 'New York' };")
+        chkOp("delete (p: person, c: city) @ { p.city == c, c.name == 'New York' };")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)")
     }
 
@@ -161,34 +161,34 @@ class UpdateDeleteTest: BaseRellTest() {
     @Test fun testCompoundAssignmentInt() {
         createCitiesAndPersons()
 
-        execOp("update person @ {} ( score += 555 );")
+        chkOp("update person @* {} ( score += 555 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,655)", "person(5,Mike,1,Grand St,7,805)")
 
-        execOp("update person @ {} ( score -= 123 );")
+        chkOp("update person @* {} ( score -= 123 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,532)", "person(5,Mike,1,Grand St,7,682)")
 
-        execOp("update person @ {} ( score *= 123 );")
+        chkOp("update person @* {} ( score *= 123 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,65436)", "person(5,Mike,1,Grand St,7,83886)")
 
-        execOp("update person @ {} ( score /= 55 );")
+        chkOp("update person @* {} ( score /= 55 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,1189)", "person(5,Mike,1,Grand St,7,1525)")
 
-        execOp("update person @ {} ( score %= 33 );")
+        chkOp("update person @* {} ( score %= 33 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,1)", "person(5,Mike,1,Grand St,7,7)")
     }
 
     @Test fun testCompoundAssignmentText() {
         createCitiesAndPersons()
 
-        execOp("update person @ {} ( street += ' Foo ' );")
+        chkOp("update person @* {} ( street += ' Foo ' );")
         chkDataCommon("person(4,James,3,Evergreen Ave Foo ,5,100)", "person(5,Mike,1,Grand St Foo ,7,250)")
 
-        execOp("update person @ {} ( street += 123 );")
+        chkOp("update person @* {} ( street += 123 );")
         chkDataCommon("person(4,James,3,Evergreen Ave Foo 123,5,100)", "person(5,Mike,1,Grand St Foo 123,7,250)")
-        execOp("update person @ {} ( street += ' ' );")
+        chkOp("update person @* {} ( street += ' ' );")
         chkDataCommon("person(4,James,3,Evergreen Ave Foo 123 ,5,100)", "person(5,Mike,1,Grand St Foo 123 ,7,250)")
 
-        execOp("update person @ {} ( street += .score > 200 );")
+        chkOp("update person @* {} ( street += .score > 200 );")
         chkDataCommon("person(4,James,3,Evergreen Ave Foo 123 false,5,100)", "person(5,Mike,1,Grand St Foo 123 true,7,250)")
     }
 
@@ -213,13 +213,13 @@ class UpdateDeleteTest: BaseRellTest() {
     @Test fun testUpdateDotAttribute() {
         createCitiesAndPersons()
 
-        execOp("update person @ { .name == 'James' } ( .score = 123 );")
+        chkOp("update person @ { .name == 'James' } ( .score = 123 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,123)", "person(5,Mike,1,Grand St,7,250)")
 
-        execOp("update person @ {} ( .score += 456 );")
+        chkOp("update person @* {} ( .score += 456 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,579)", "person(5,Mike,1,Grand St,7,706)")
 
-        execOp("update person @ {} ( .score = .score - 789 );")
+        chkOp("update person @* {} ( .score = .score - 789 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,-210)", "person(5,Mike,1,Grand St,7,-83)")
     }
 
@@ -244,7 +244,7 @@ class UpdateDeleteTest: BaseRellTest() {
 
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,250)")
 
-        execOp("""
+        chkOp("""
             update person @ { .name == 'James' } ( score += 1000 );
             update person @ { .name == 'Mike' } ( score += 500 );
         """.trimIndent())
@@ -255,17 +255,17 @@ class UpdateDeleteTest: BaseRellTest() {
     @Test fun testAccessChangedRecords() {
         createCitiesAndPersons()
 
-        execOp("""
+        chkOp("""
             print(person @* {} ( .name, .score ));
             update person @ { .name == 'James' } ( score += 100 );
             print(person @* {} ( .name, .score ));
             update person @ { .name == 'Mike' } ( score += 200 );
             print(person @* {} ( .name, .score ));
-            update person @ {} ( score /= 2 );
+            update person @* {} ( score /= 2 );
             print(person @* {} ( .name, .score ));
         """.trimIndent())
 
-        tst.chkStdout(
+        chkStdout(
                 "[(name=James,score=100), (name=Mike,score=250)]",
                 "[(name=James,score=200), (name=Mike,score=250)]",
                 "[(name=James,score=200), (name=Mike,score=450)]",
@@ -276,7 +276,7 @@ class UpdateDeleteTest: BaseRellTest() {
     @Test fun testUpdateNameResolution() {
         createCitiesAndPersons()
 
-        execOp("val score = 10; update person @ { .name == 'Mike' } ( score );")
+        chkOp("val score = 10; update person @ { .name == 'Mike' } ( score );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,10)")
 
         chkOp("val score = 'Hello'; update person @ { .name == 'Mike' } ( score );",
@@ -286,46 +286,130 @@ class UpdateDeleteTest: BaseRellTest() {
     @Test fun testUpdateNameConflictAliasVsLocal() {
         createCitiesAndPersons()
 
-        execOp("update p: person @ { .name == 'James' } ( .score = 123 );")
+        chkOp("update (p: person) @ { .name == 'James' } ( .score = 123 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,123)", "person(5,Mike,1,Grand St,7,250)")
 
-        chkOp("val p = 123; update p: person @ { .name == 'James' } ( .score = 123 );",
+        chkOp("val p = 123; update (p: person) @ { .name == 'James' } ( .score = 123 );",
                 "ct_err:expr_at_conflict_alias:p")
 
-        execOp("update person (p: person) @ { person.name == 'James' } ( .score = 456 );")
+        chkOp("update (person, p: person) @ { person.name == 'James' } ( .score = 456 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,456)", "person(5,Mike,1,Grand St,7,250)")
 
-        chkOp("val p = 123; update person (p: person) @ { person.name == 'James' } ( .score = 789 );",
+        chkOp("val p = 123; update (person, p: person) @ { person.name == 'James' } ( .score = 789 );",
                 "ct_err:expr_at_conflict_alias:p")
     }
 
     @Test fun testDeleteNameConflictAliasVsLocal() {
         createCitiesAndPersons()
-        chkOp("val p = 123; delete p: person @ { .name == 'James' };", "ct_err:expr_at_conflict_alias:p")
-        chkOp("val p = 123; delete person (p: person) @ { person.name == 'James' };", "ct_err:expr_at_conflict_alias:p")
+        chkOp("val p = 123; delete (p: person) @ { .name == 'James' };", "ct_err:expr_at_conflict_alias:p")
+        chkOp("val p = 123; delete (person, p: person) @ { person.name == 'James' };", "ct_err:expr_at_conflict_alias:p")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,250)")
+    }
+
+    @Test fun testUpdateCardinality() {
+        fun james(score: Int) = "person(4,James,3,Evergreen Ave,5,$score)"
+        fun mike(score: Int) = "person(5,Mike,1,Grand St,7,$score)"
+
+        createCitiesAndPersons()
+        chkDataCommon(james(100), mike(250))
+
+        // @
+        chkOp("update person @ { .name == 'Unknown' } ( score = 10 );", "rt_err:at:wrong_count:0")
+        chkDataCommon(james(100), mike(250))
+        chkOp("update person @ { .name == 'James' } ( score = 11 );")
+        chkDataCommon(james(11), mike(250))
+        chkOp("update person @ {} ( score = 12 );", "rt_err:at:wrong_count:2")
+        chkDataCommon(james(11), mike(250))
+
+        // @?
+        chkOp("update person @? { .name == 'Unknown' } ( score = 20 );")
+        chkDataCommon(james(11), mike(250))
+        chkOp("update person @? { .name == 'James' } ( score = 21 );")
+        chkDataCommon(james(21), mike(250))
+        chkOp("update person @? {} ( score = 22 );", "rt_err:at:wrong_count:2")
+        chkDataCommon(james(21), mike(250))
+
+        // @+
+        chkOp("update person @+ { .name == 'Unknown' } ( score = 30 );", "rt_err:at:wrong_count:0")
+        chkDataCommon(james(21), mike(250))
+        chkOp("update person @+ { .name == 'James' } ( score = 31 );")
+        chkDataCommon(james(31), mike(250))
+        chkOp("update person @+ {} ( score = 32 );")
+        chkDataCommon(james(32), mike(32))
+
+        // @*
+        chkOp("update person @* { .name == 'Unknown' } ( score = 40 );")
+        chkDataCommon(james(32), mike(32))
+        chkOp("update person @* { .name == 'James' } ( score = 41 );")
+        chkDataCommon(james(41), mike(32))
+        chkOp("update person @* {} ( score = 42 );")
+        chkDataCommon(james(42), mike(42))
+    }
+
+    @Test fun testDeleteCardinality() {
+        val james = "person(4,James,3,Evergreen Ave,5,100)"
+        val mike = "person(5,Mike,1,Grand St,7,250)"
+
+        // @
+        resetChkOp("delete person @ { .name == 'Unknown' };", "rt_err:at:wrong_count:0")
+        chkDataCommon(james, mike)
+        resetChkOp("delete person @ { .name == 'James' };")
+        chkDataCommon(mike)
+        resetChkOp("delete person @ {};", "rt_err:at:wrong_count:2")
+        chkDataCommon(james, mike)
+
+        // @?
+        resetChkOp("delete person @? { .name == 'Unknown' };")
+        chkDataCommon(james, mike)
+        resetChkOp("delete person @? { .name == 'James' };")
+        chkDataCommon(mike)
+        resetChkOp("delete person @? {};", "rt_err:at:wrong_count:2")
+        chkDataCommon(james, mike)
+
+        // @+
+        resetChkOp("delete person @+ { .name == 'Unknown' };", "rt_err:at:wrong_count:0")
+        chkDataCommon(james, mike)
+        resetChkOp("delete person @+ { .name == 'James' };")
+        chkDataCommon(mike)
+        resetChkOp("delete person @+ {};")
+        chkDataCommon()
+
+        // @*
+        resetChkOp("delete person @* { .name == 'Unknown' };")
+        chkDataCommon(james, mike)
+        resetChkOp("delete person @* { .name == 'James' };")
+        chkDataCommon(mike)
+        resetChkOp("delete person @* {};")
+        chkDataCommon()
+    }
+
+    private fun resetChkOp(code: String, expected: String = "OK") {
+        tst.resetRowid()
+        chkOp("delete person @* {}; delete city @* {};")
+        createCitiesAndPersons()
+        chkOp(code, expected)
     }
 
     private fun createCities() {
         chkData()
 
-        execOp("create city ( 'New York' );")
+        chkOp("create city ( 'New York' );")
         chkData("city(1,New York)")
 
-        execOp("create city ( 'San Francisco' );")
+        chkOp("create city ( 'San Francisco' );")
         chkData("city(1,New York)", "city(2,San Francisco)")
 
-        execOp("create city ( 'Los Angeles' );")
+        chkOp("create city ( 'Los Angeles' );")
         chkData("city(1,New York)", "city(2,San Francisco)", "city(3,Los Angeles)")
     }
 
     private fun createCitiesAndPersons() {
         createCities()
 
-        execOp("create person ( name = 'James', city @ { 'Los Angeles' }, street = 'Evergreen Ave', house = 5, score = 100 );")
+        chkOp("create person ( name = 'James', city @ { 'Los Angeles' }, street = 'Evergreen Ave', house = 5, score = 100 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)")
 
-        execOp("create person ( name = 'Mike', city @ { 'New York' }, street =  'Grand St', house = 7, score = 250 );")
+        chkOp("create person ( name = 'Mike', city @ { 'New York' }, street =  'Grand St', house = 7, score = 250 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,250)")
     }
 

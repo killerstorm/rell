@@ -7,16 +7,16 @@ import org.junit.Test
 class LibOpContextTest: BaseRellTest(false) {
     @Test fun testLastBlockTime() {
         tst.opContext = Rt_OpContext(12345, -1, listOf())
-        chkOp("print(op_context.last_block_time);", "")
-        tst.chkStdout("12345")
+        chkOp("print(op_context.last_block_time);")
+        chkStdout("12345")
 
-        chkOp("val t: timestamp = op_context.last_block_time; print(t);", "") // Will fail when timestamp type becomes intependent.
-        tst.chkStdout("12345")
-        chkOp("val t: integer = op_context.last_block_time; print(t);", "")
-        tst.chkStdout("12345")
+        chkOp("val t: timestamp = op_context.last_block_time; print(t);") // Will fail when timestamp type becomes intependent.
+        chkStdout("12345")
+        chkOp("val t: integer = op_context.last_block_time; print(t);")
+        chkStdout("12345")
 
-        chkOpFull("function f(): timestamp = op_context.last_block_time; operation o() { print(f()); }", "")
-        tst.chkStdout("12345")
+        chkOpFull("function f(): timestamp = op_context.last_block_time; operation o() { print(f()); }")
+        chkStdout("12345")
 
         tst.opContext = null
         chk("op_context.last_block_time", "ct_err:op_ctx_noop")
@@ -31,7 +31,7 @@ class LibOpContextTest: BaseRellTest(false) {
         tst.defs = listOf("class foo { t: integer = op_context.last_block_time; }")
         tst.opContext = Rt_OpContext(12345, -1, listOf())
 
-        execOp("create foo();")
+        chkOp("create foo();")
         chkData("foo(1,12345)")
     }
 
@@ -40,11 +40,11 @@ class LibOpContextTest: BaseRellTest(false) {
         tst.inserts = LibClassesTest.BLOCK_INSERTS
         tst.opContext = Rt_OpContext(-1, 444, listOf())
 
-        execOp("print(_typeOf(op_context.transaction));")
-        tst.chkStdout("transaction")
+        chkOp("print(_typeOf(op_context.transaction));")
+        chkStdout("transaction")
 
-        execOp("print(_strictStr(op_context.transaction));")
-        tst.chkStdout("transaction[444]")
+        chkOp("print(_strictStr(op_context.transaction));")
+        chkStdout("transaction[444]")
     }
 
     @Test fun testTransactionAsDefaultValue() {
@@ -53,8 +53,8 @@ class LibOpContextTest: BaseRellTest(false) {
         tst.defs = listOf("class foo { t: transaction = op_context.transaction; }")
         tst.opContext = Rt_OpContext(-1, 444, listOf())
 
-        execOp("create foo();")
-        tst.chkData("foo(1,444)")
+        chkOp("create foo();")
+        chkData("foo(1,444)")
     }
 
     @Test fun testAssignmentValue() {

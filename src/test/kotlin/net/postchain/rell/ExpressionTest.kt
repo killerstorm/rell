@@ -75,9 +75,9 @@ class ExpressionTest: BaseRellTest(false) {
         tst.useSql = true
         tst.defs = listOf("class user { name: text; }")
 
-        tst.execOp("create user('Bob');")
-        tst.execOp("create user('Alice');")
-        tst.execOp("create user('Trudy');")
+        chkOp("create user('Bob');")
+        chkOp("create user('Alice');")
+        chkOp("create user('Trudy');")
 
         chkEx("{ val s = user @* {}; return s[0]; }", "user[1]")
         chkEx("{ val s = user @* {}; return s[1]; }", "user[2]")
@@ -90,7 +90,7 @@ class ExpressionTest: BaseRellTest(false) {
     @Test fun testFunctionsUnderAt() {
         tst.useSql = true
         tst.defs = listOf("class user { name: text; score: integer; }")
-        tst.execOp("create user('Bob',-5678);")
+        chkOp("create user('Bob',-5678);")
 
         chkEx("{ val s = 'Hello'; return user @ {} ( .name.len() + s.len() ); }", "int[8]")
         chkEx("{ val x = -1234; return user @ {} ( abs(x), abs(.score) ); }", "(int[1234],int[5678])")
@@ -110,7 +110,7 @@ class ExpressionTest: BaseRellTest(false) {
         tst.useSql = true
         tst.defs = listOf("class company { name: text; }", "class user { name: text; company; }")
 
-        tst.execOp("""
+        chkOp("""
             val facebook = create company('Facebook');
             val amazon = create company('Amazon');
             val microsoft = create company('Microsoft');
@@ -132,7 +132,7 @@ class ExpressionTest: BaseRellTest(false) {
         tst.useSql = true
         tst.defs = listOf("class company { name: text; }", "class user { name: text; company; }")
 
-        tst.execOp("""
+        chkOp("""
             val microsoft = create company('Microsoft');
             create user('Bill', microsoft);
         """.trimIndent())
@@ -164,7 +164,7 @@ class ExpressionTest: BaseRellTest(false) {
                 "class c4 { name: text; c3; }"
         )
 
-        tst.execOp("""
+        chkOp("""
             val c1_1 = create c1('c1_1');
             val c1_2 = create c1('c1_2');
             val c2_1 = create c2('c2_1', c1_1);
@@ -265,7 +265,7 @@ class ExpressionTest: BaseRellTest(false) {
     @Test fun testNamespaceUnderAt() {
         tst.useSql = true
         tst.defs = listOf("class user { name: text; score: integer; }")
-        tst.execOp("create user('Bob',-5678);")
+        chkOp("create user('Bob',-5678);")
 
         chk("user @ { .score == integer }", "ct_err:unknown_name:integer")
         chk("user @ { .score == integer('-5678') } ( .name )", "text[Bob]")
@@ -283,7 +283,7 @@ class ExpressionTest: BaseRellTest(false) {
         tst.useSql = true
         tst.strictToString = false
         tst.defs = listOf("class user { id: integer; name1: text; name2: text; v1: integer; v2: integer; }")
-        tst.execOp("""
+        chkOp("""
             create user(id = 1, name1 = 'Bill', name2 = 'Gates', v1 = 111, v2 = 222);
             create user(id = 2, name1 = 'Mark', name2 = 'Zuckerberg', v1 = 333, v2 = 444);
             create user(id = 3, name1 = 'Steve', name2 = 'Wozniak', v1 = 555, v2 = 666);

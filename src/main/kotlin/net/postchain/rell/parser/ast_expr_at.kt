@@ -175,22 +175,28 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
     }
 }
 
+enum class S_AtCardinality(val rCardinality: R_AtCardinality) {
+    ZERO_ONE(R_AtCardinality.ZERO_ONE),
+    ONE(R_AtCardinality.ONE),
+    ZERO_MANY(R_AtCardinality.ZERO_MANY),
+    ONE_MANY(R_AtCardinality.ONE_MANY),
+}
+
 class S_AtExpr(
         startPos: S_Pos,
+        val cardinality: S_AtCardinality,
         val from: List<S_AtExprFrom>,
-        val what: S_AtExprWhat,
         val where: S_AtExprWhere,
-        val limit: S_Expr?,
-        val zero: Boolean,
-        val many: Boolean
+        val what: S_AtExprWhat,
+        val limit: S_Expr?
 ): S_Expr(startPos)
 {
     override fun compile(ctx: C_ExprContext): C_Expr {
         val base = compileBase(ctx)
 
-        val type = if (many) {
+        val type = if (cardinality.rCardinality.many) {
             R_ListType(base.resType.type)
-        } else if (zero) {
+        } else if (cardinality.rCardinality.zero) {
             R_NullableType(base.resType.type)
         } else {
             base.resType.type
@@ -213,7 +219,7 @@ class S_AtExpr(
 
         val rLimit = compileLimit(ctx)
 
-        val base = R_AtExprBase(rFrom, dbWhatExprs, dbWhere, ctWhat.sort, zero, many)
+        val base = R_AtExprBase(rFrom, dbWhatExprs, dbWhere, ctWhat.sort, cardinality.rCardinality)
         return AtBase(base, rLimit, resType)
     }
 

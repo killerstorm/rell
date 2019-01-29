@@ -239,7 +239,7 @@ class LibListTest: BaseRellTest(false) {
     }
 
     @Test fun testFor() {
-        tst.execOp("for (i in list([123, 456, 789])) print(i);")
-        tst.chkStdout("123", "456", "789")
+        chkOp("for (i in list([123, 456, 789])) print(i);")
+        chkStdout("123", "456", "789")
     }
 }

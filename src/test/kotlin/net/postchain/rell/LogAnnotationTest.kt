@@ -22,7 +22,7 @@ class LogAnnotationTest: BaseRellTest() {
         tst.inserts = LibClassesTest.BLOCK_INSERTS
         tst.opContext = Rt_OpContext(-1, 444, listOf())
 
-        execOp("create foo(x = 123);")
+        chkOp("create foo(x = 123);")
         tst.chkData("foo(1,444,123)")
 
         val base = "val f = foo@{}"
@@ -53,7 +53,7 @@ class LogAnnotationTest: BaseRellTest() {
         chkOp("create foo(x = 123, transaction@{});", "ct_err:create_attr_cantset:transaction")
         tst.chkData()
 
-        execOp("create foo(x = 123);")
+        chkOp("create foo(x = 123);")
         tst.chkData("foo(1,444,123)")
 
         chkOp("update foo@{} ( transaction = transaction@{} );", "ct_err:update_attr_not_mutable:transaction")
@@ -61,7 +61,7 @@ class LogAnnotationTest: BaseRellTest() {
 
     @Test fun testDelete() {
         tst.defs = listOf("class foo(log) { x: integer; } class bar { x: integer; }")
-        chkOp("delete foo @ {};", "ct_err:stmt_delete_cant:foo")
-        chkOp("delete bar @ {};", "")
+        chkOp("delete foo @* {};", "ct_err:stmt_delete_cant:foo")
+        chkOp("delete bar @* {};")
     }
 }

@@ -114,7 +114,7 @@ object RellTestUtils {
         val modCtx = Rt_ModuleContext(globalCtx, module)
         return catchRtErr {
             op.callTop(modCtx, rtArgs!!)
-            ""
+            "OK"
         }
     }
 

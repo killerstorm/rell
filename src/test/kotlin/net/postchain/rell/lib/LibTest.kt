@@ -24,38 +24,38 @@ class LibTest: BaseRellTest(false) {
 
     @Test fun testPrint() {
         chkEx("{ print('Hello'); return 123; }", "int[123]")
-        tst.chkStdout("Hello")
-        tst.chkLog()
+        chkStdout("Hello")
+        chkLog()
 
         chkEx("{ print(12345); return 123; }", "int[123]")
-        tst.chkStdout("12345")
-        tst.chkLog()
+        chkStdout("12345")
+        chkLog()
 
         chkEx("{ print(1, 2, 3, 4, 5); return 123; }", "int[123]")
-        tst.chkStdout("1 2 3 4 5")
-        tst.chkLog()
+        chkStdout("1 2 3 4 5")
+        chkLog()
 
         chkEx("{ print(); return 123; }", "int[123]")
-        tst.chkStdout("")
-        tst.chkLog()
+        chkStdout("")
+        chkLog()
     }
 
     @Test fun testLog() {
         chkEx("{ log('Hello'); return 123; }", "int[123]")
-        tst.chkLog("Hello")
-        tst.chkStdout()
+        chkLog("Hello")
+        chkStdout()
 
         chkEx("{ log(12345); return 123; }", "int[123]")
-        tst.chkLog("12345")
-        tst.chkStdout()
+        chkLog("12345")
+        chkStdout()
 
         chkEx("{ log(1, 2, 3, 4, 5); return 123; }", "int[123]")
-        tst.chkLog("1 2 3 4 5")
-        tst.chkStdout()
+        chkLog("1 2 3 4 5")
+        chkStdout()
 
         chkEx("{ log(); return 123; }", "int[123]")
-        tst.chkStdout()
-        tst.chkLog("")
+        chkStdout()
+        chkLog("")
     }
 
     @Test fun testIsSigner() {

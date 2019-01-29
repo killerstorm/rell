@@ -48,8 +48,9 @@ abstract class BaseRellTest(useSql: Boolean = true, gtx: Boolean = false) {
     fun chkData(vararg expected: String) = tst.chkData(*expected)
     fun chkDataNew(vararg expected: String) = tst.chkDataNew(*expected)
 
-    fun execOp(code: String) = tst.execOp(code)
+    fun chkOp(code: String, expected: String = "OK") = tst.chkOp(code, expected)
+    fun chkOpFull(code: String, expected: String = "OK") = tst.chkOpEx(code, expected)
 
-    fun chkOp(code: String, expected: String) = tst.chkOp(code, expected)
-    fun chkOpFull(code: String, expected: String) = tst.chkOpEx(code, expected)
+    fun chkStdout(vararg expected: String) = tst.chkStdout(*expected)
+    fun chkLog(vararg expected: String) = tst.chkLog(*expected)
 }

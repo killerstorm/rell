@@ -115,6 +115,11 @@ open class RellBaseTester(
         return SqlTestUtils.dumpDatabase(sqlExec, modelClasses)
     }
 
+    fun resetRowid() {
+        init()
+        SqlTestUtils.resetRowid(sqlExec)
+    }
+
     protected fun defsCode(): String = defs.joinToString("\n")
 
     protected fun moduleCode(extraCode: String): String {
@@ -214,10 +219,6 @@ class RellCodeTester(
     fun chkOpGtxEx(code: String, args: List<String>, expected: String) {
         val actual = callOp0(code, args, GtxTestUtils::decodeGtxOpArgsStr)
         assertEquals(expected, actual)
-    }
-
-    fun execOp(code: String) {
-        chkOp(code, "")
     }
 
     fun chkFnEx(code: String, expected: String) {

@@ -136,8 +136,8 @@ class LibSetTest: BaseRellTest(false) {
     }
 
     @Test fun testFor() {
-        tst.execOp("for (i in set([123, 456, 789, 456, 123])) print(i);")
-        tst.chkStdout("123", "456", "789")
+        chkOp("for (i in set([123, 456, 789, 456, 123])) print(i);")
+        chkStdout("123", "456", "789")
     }
 
     @Test fun testMutableElement() {

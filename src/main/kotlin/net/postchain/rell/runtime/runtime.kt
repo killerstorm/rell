@@ -130,9 +130,10 @@ class Rt_SqlExecutor(private val sqlExec: SqlExecutor, private val logErrors: Bo
         }
     }
 
-    private fun wrapErr(code: () -> Unit) {
+    private fun <T> wrapErr(code: () -> T): T {
         try {
-            code()
+            val res = code()
+            return res
         } catch (e: SQLException) {
             if (logErrors) {
                 e.printStackTrace()

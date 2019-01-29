@@ -58,6 +58,10 @@ object SqlTestUtils {
 
     private data class DbConnProps(val url: String, val user: String, val password: String)
 
+    fun resetRowid(sqlExec: SqlExecutor) {
+        sqlExec.execute("UPDATE rowid_gen SET last_value = 0;")
+    }
+
     fun clearTables(sqlExec: SqlExecutor) {
         val tables = SqlUtils.getExistingTables(sqlExec)
         val sql = tables.joinToString("\n") { "TRUNCATE \"$it\" CASCADE;" }
