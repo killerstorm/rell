@@ -40,8 +40,10 @@ abstract class BaseRellTest(useSql: Boolean = true, gtx: Boolean = false) {
 
     fun chkFn(code: String, expected: String) {
         val modCode = "function f() $code"
-        tst.chkFnEx(modCode, expected)
+        chkFnEx(modCode, expected)
     }
+
+    fun chkFnEx(code: String, expected: String) = tst.chkFnEx(code, expected)
 
     fun chkCompile(code: String, expected: String) = tst.chkCompile(code, expected)
 

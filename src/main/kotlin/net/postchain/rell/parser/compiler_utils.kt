@@ -131,6 +131,24 @@ object C_Errors {
     fun errCannotDelete(pos: S_Pos, name: String): C_Error {
         return C_Error(pos, "stmt_delete_cant:$name", "Not allowed to delete objects of class '$name'")
     }
+
+    fun errNameConflictLocalObject(name: S_Name): C_Error {
+        val nameStr = name.str
+        throw C_Error(name.pos, "expr_name_objloc:$nameStr",
+                "Name '$nameStr' is ambiguous: can be object or local variable")
+    }
+
+    fun errNameConflictClassObject(name: S_Name): C_Error {
+        val nameStr = name.str
+        throw C_Error(name.pos, "expr_name_clsobj:$nameStr",
+                "Name '$nameStr' is ambiguous: can be class alias or object")
+    }
+
+    fun errNameConflictAliasLocal(name: S_Name): C_Error {
+        val nameStr = name.str
+        throw C_Error(name.pos, "expr_name_clsloc:$nameStr",
+                "Name '$nameStr' is ambiguous: can be class alias or local variable")
+    }
 }
 
 object C_GraphUtils {

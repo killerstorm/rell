@@ -35,9 +35,11 @@ class S_UpdateTarget_Expr(val expr: S_Expr): S_UpdateTarget() {
         val type = rExpr.type
 
         if (type is R_ClassType) {
-            return compileTargetClass(rExpr, type)
+            return compileTargetClass(rExpr, type.rClass)
         } else if (type is R_NullableType && type.valueType is R_ClassType) {
-            return compileTargetClass(rExpr, type.valueType)
+            return compileTargetClass(rExpr, type.valueType.rClass)
+        } else if (type is R_ObjectType) {
+            return compileTargetObject(type.rObject)
         } else if (type is R_SetType && type.elementType is R_ClassType) {
             return compileTargetCollection(rExpr, type, type.elementType, true)
         } else if (type is R_ListType && type.elementType is R_ClassType) {
@@ -48,13 +50,18 @@ class S_UpdateTarget_Expr(val expr: S_Expr): S_UpdateTarget() {
         }
     }
 
-    private fun compileTargetClass(rExpr: R_Expr, type: R_ClassType): R_UpdateTarget {
-        val rClass = type.rClass
+    private fun compileTargetClass(rExpr: R_Expr, rClass: R_Class): R_UpdateTarget {
         val cls = R_AtClass(rClass, rClass.name, 0)
         val whereLeft = Db_ClassExpr(cls)
-        val whereRight = Db_ParameterExpr(type, 0)
+        val whereRight = Db_ParameterExpr(R_ClassType(rClass), 0)
         val where = Db_BinaryExpr(R_BooleanType, Db_BinaryOp_Eq, whereLeft, whereRight)
         return R_UpdateTarget_Expr_One(cls, where, rExpr)
+    }
+
+    private fun compileTargetObject(rObject: R_Object): R_UpdateTarget {
+        val rClass = rObject.rClass
+        val cls = R_AtClass(rClass, rClass.name, 0)
+        return R_UpdateTarget_Object(cls, rObject)
     }
 
     private fun compileTargetCollection(rExpr: R_Expr, type: R_Type, clsType: R_ClassType, set: Boolean): R_UpdateTarget {
@@ -124,7 +131,9 @@ class S_DeleteStatement(val pos: S_Pos, val target: S_UpdateTarget): S_Statement
         val (_, rTarget) = target.compile(ctx)
 
         val rClass = rTarget.cls().rClass
-        if (!rClass.flags.canDelete) {
+        if (rClass.flags.isObject) {
+            throw C_Error(pos, "stmt_delete_obj:${rClass.name}", "Cannot delete object '${rClass.name}' (not a class)")
+        } else if (!rClass.flags.canDelete) {
             throw C_Errors.errCannotDelete(pos, rClass.name)
         }
 

@@ -2,10 +2,8 @@ package net.postchain.rell.module
 
 import net.postchain.core.UserMistake
 import net.postchain.gtx.*
-import net.postchain.rell.hexStringToByteArray
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
-import net.postchain.rell.sql.ROWID_COLUMN
 import net.postchain.rell.sql.SqlExecutor
 import org.apache.commons.collections4.MultiValuedMap
 import org.apache.commons.collections4.multimap.HashSetValuedHashMap
@@ -118,7 +116,7 @@ object GtxRtConversion_Json: GtxRtConversion() {
     override fun gtxToRt(ctx: GtxToRtContext, gtx: GTXValue, human: Boolean) = gtxToJson(gtx)
 }
 
-class GtxRtConversion_Object(val type: R_ClassType): GtxRtConversion() {
+class GtxRtConversion_Class(val type: R_ClassType): GtxRtConversion() {
     override fun directHuman() = true
     override fun directCompact() = true
 
@@ -127,7 +125,7 @@ class GtxRtConversion_Object(val type: R_ClassType): GtxRtConversion() {
     override fun gtxToRt(ctx: GtxToRtContext, gtx: GTXValue, human: Boolean): Rt_Value {
         val rowid = gtxToInteger(gtx)
         ctx.trackObject(type.rClass, rowid)
-        return Rt_ObjectValue(type, rowid)
+        return Rt_ClassValue(type, rowid)
     }
 }
 

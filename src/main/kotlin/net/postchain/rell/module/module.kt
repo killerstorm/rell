@@ -10,6 +10,7 @@ import net.postchain.rell.sql.DefaultSqlExecutor
 import net.postchain.rell.sql.gensql
 import org.apache.commons.logging.LogFactory
 import java.io.File
+import java.sql.Connection
 
 private object StdoutRtPrinter: Rt_Printer() {
     override fun print(str: String) {
@@ -88,11 +89,20 @@ class RellPostchainModule(val rModule: R_Module, val moduleName: String, val cha
 
     override fun initializeDB(ctx: EContext) {
         if (GTXSchemaManager.getModuleVersion(ctx, moduleName) == null) {
-            val sql = gensql(rModule, false, false)
-            ctx.conn.createStatement().use {
-                it.execute(sql)
-            }
+            initDb(ctx)
             GTXSchemaManager.setModuleVersion(ctx, moduleName, 0)
+        }
+    }
+
+    private fun initDb(ctx: EContext) {
+        val sql = gensql(rModule, false, false)
+        ctx.conn.createStatement().use {
+            it.execute(sql)
+        }
+
+        catchRtErr {
+            val modCtx = makeRtModuleContext(ctx, null)
+            modCtx.insertObjectRecords()
         }
     }
 

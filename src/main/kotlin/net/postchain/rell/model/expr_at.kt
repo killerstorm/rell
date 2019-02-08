@@ -25,14 +25,14 @@ sealed class R_AtExprRowType {
     abstract fun decode(row: Array<Rt_Value>): Rt_Value
 }
 
-object R_AtExprRowTypeSimple: R_AtExprRowType() {
+object R_AtExprRowType_Simple: R_AtExprRowType() {
     override fun decode(row: Array<Rt_Value>): Rt_Value {
         check(row.size == 1) { "row.size == ${row.size}" }
         return row[0]
     }
 }
 
-class R_AtExprRowTypeTuple(val type: R_TupleType): R_AtExprRowType() {
+class R_AtExprRowType_Tuple(val type: R_TupleType): R_AtExprRowType() {
     override fun decode(row: Array<Rt_Value>): Rt_Value {
         check(row.size == type.fields.size) { "row.size == ${row.size}, not ${type.fields.size}" }
         return Rt_TupleValue(type, row.toList())
@@ -43,8 +43,7 @@ class R_AtExprBase(
         val from: List<R_AtClass>,
         val what: List<Db_Expr>,
         val where: Db_Expr?,
-        val sort: List<Pair<Db_Expr, Boolean>>,
-        val cardinality: R_AtCardinality
+        val sort: List<Pair<Db_Expr, Boolean>>
 ) {
     init {
         from.withIndex().forEach { check(it.index == it.value.index) }
@@ -138,6 +137,7 @@ class R_AtExprBase(
 class R_AtExpr(
         type: R_Type,
         val base: R_AtExprBase,
+        val cardinality: R_AtCardinality,
         val limit: R_Expr?,
         val rowType: R_AtExprRowType
 ): R_Expr(type)
@@ -151,9 +151,9 @@ class R_AtExpr(
         val list = MutableList(records.size) { rowType.decode(records[it]) }
 
         val count = list.size
-        checkCount(base.cardinality, count)
+        checkCount(cardinality, count)
 
-        if (base.cardinality.many) {
+        if (cardinality.many) {
             return Rt_ListValue(type, list)
         } else if (count > 0) {
             return list[0]

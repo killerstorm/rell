@@ -75,3 +75,22 @@ delete u: user @* { u.name == 'Bob' };
 In the old syntax, the first class (the one being updated/deleted) was written without brackets, and extra classes
 required brackets. In the new syntax, all classes must be in brackets, if there is more than one class, or if a class
 alias is specified. The old syntax will not compile now.
+
+
+8. Object
+
+Objects are singleton classes (like objects in Kotlin and Scala):
+
+object state {
+    mutable x: integer = 0;
+    mutable s: text = 'n/a';
+}
+
+Reading attributes of an object:
+
+print(state.x);
+print(state.text);
+
+Modifying an object using the update statement:
+
+update state ( x += 5, s = 'Updated' );

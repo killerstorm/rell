@@ -49,4 +49,10 @@ class GtxTest : BaseGtxTest() {
         tst.chkCompile("record module_args { x: (a: integer, text); }", "ct_err:module_args_nogtx")
         tst.chkCompile("class module_args {}", "OK")
     }
+
+    @Test fun testObject() {
+        tst.defs = listOf("object foo { x: integer = 123; s: text = 'Hello'; }")
+        tst.chkQuery("foo.x", "123")
+        tst.chkQuery("foo.s", "'Hello'")
+    }
 }

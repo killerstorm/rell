@@ -1,8 +1,11 @@
+===================
 Database Operations
 ===================
 
+-------------
+
 At-Operator
-~~~~~~~~~~~~~~
+===========
 
 Simplest form:
 
@@ -154,8 +157,10 @@ This is equivalent to:
    val c = company @ { .name == 'Microsoft' };
    user @* { .company == c } ( ... )
 
+-------------
+
 Create Statement
-~~~~~~~~~~~~~~~~~~~
+================
 
 Must specify all attributes that don't have default values.
 
@@ -178,8 +183,10 @@ Can use the created object:
    val newUser = create user(name = 'Bob', newCompany);
    print('Created new user:', newUser);
 
+-------------
+
 Update Statement
-~~~~~~~~~~~~~~~~~~~
+================
 
 Operators ``@``, ``@?``, ``@*``, ``@+`` are used to specify cardinality, like for the at-operator.
 If the number of updated records does not match the cardinality, a run-time error occurs.
@@ -213,8 +220,10 @@ Can specify an arbitrary expression returning a class, a nullable class or a col
    val u = user @? { .name == 'Bob' };
    update u ( salary += 5000 );
 
+-------------
+
 Delete Statement
-~~~~~~~~~~~~~~~~~~~
+================
 
 Operators ``@``, ``@?``, ``@*``, ``@+`` are used to specify cardinality, like for the at-operator.
 If the number of deleted records does not match the cardinality, a run-time error occurs.

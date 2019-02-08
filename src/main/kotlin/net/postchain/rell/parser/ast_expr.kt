@@ -93,11 +93,13 @@ class S_CreateExpr(pos: S_Pos, val className: S_Name, val exprs: List<S_NameExpr
     override fun compile(ctx: C_ExprContext): C_Expr {
         ctx.blkCtx.entCtx.checkDbUpdateAllowed(startPos)
 
-        val cls = ctx.blkCtx.entCtx.modCtx.getClass(className)
+        val name = className.str
+
+        val modCtx = ctx.blkCtx.entCtx.modCtx
+        val cls = modCtx.getClass(className)
         val attrs = C_AttributeResolver.resolveCreate(ctx, cls.attributes, exprs, startPos)
 
         if (!cls.flags.canCreate) {
-            val name = className.str
             throw C_Error(startPos, "expr_create_cant:$name", "Not allowed to create instances of class '$name'")
         }
 

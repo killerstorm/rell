@@ -349,7 +349,7 @@ class R_SysFn_OpContext_Transaction(private val type: R_ClassType): R_SysFunctio
     override fun call(ctx: Rt_GlobalContext, args: List<Rt_Value>): Rt_Value {
         check(args.size == 0)
         if (ctx.opCtx == null) throw Rt_Error("fn_opctx_transaction_noop", "Operation context not available")
-        return Rt_ObjectValue(type, ctx.opCtx.transactionIid)
+        return Rt_ClassValue(type, ctx.opCtx.transactionIid)
     }
 }
 

@@ -13,7 +13,6 @@ import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.sql.SqlUtils
 import java.sql.Connection
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import kotlin.test.fail
 

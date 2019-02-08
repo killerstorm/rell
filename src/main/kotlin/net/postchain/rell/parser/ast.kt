@@ -26,7 +26,7 @@ class S_NameTypePair(val name: S_Name, val type: S_Type?) {
             return type.compile(ctx)
         }
 
-        val rType = ctx.getTypeOpt(name.str)
+        val rType = ctx.getTypeOpt(name)
         if (rType == null) {
             throw C_Error(name.pos, "unknown_name_type:${name.str}",
                     "Type for '${name.str}' not specified and no type called '${name.str}'")
@@ -91,23 +91,24 @@ class S_IndexClause(pos: S_Pos, attrs: List<S_NameTypePair>): S_KeyIndexClause(p
 }
 
 sealed class S_Definition(val name: S_Name) {
-    abstract fun compile(ctx: C_ModuleContext)
+    abstract fun compile(ctx: C_ModuleContext, entityIndex: Int)
 }
 
 class S_ClassDefinition(name: S_Name, val annotations: List<S_Name>, val clauses: List<S_RelClause>): S_Definition(name) {
-    override fun compile(ctx: C_ModuleContext) {
+    override fun compile(ctx: C_ModuleContext, entityIndex: Int) {
         ctx.checkTypeName(name)
 
         val rFlags = compileFlags()
 
-        val rMapping = R_ClassSqlMapping(name.str, ROWID_COLUMN, true)
+        val sqlTable = classNameToSqlTable(name.str)
+        val rMapping = R_ClassSqlMapping(sqlTable, ROWID_COLUMN, true)
         ctx.checkTableName(name, rMapping.table)
 
         val rClass = R_Class(name.str, rFlags, rMapping)
         ctx.addClass(rClass)
 
         ctx.classesPass.add {
-            classesPass(ctx, rClass)
+            classesPass(ctx, entityIndex, rClass)
         }
     }
 
@@ -128,11 +129,12 @@ class S_ClassDefinition(name: S_Name, val annotations: List<S_Name>, val clauses
             }
         }
 
-        return R_ClassFlags(true, true, !log, log)
+        return R_ClassFlags(false, true, true, !log, log)
     }
 
-    private fun classesPass(ctx: C_ModuleContext, rClass: R_Class) {
-        val clsCtx = C_ClassContext(ctx, name.str, C_EntityType.CLASS, rClass.flags.log)
+    private fun classesPass(ctx: C_ModuleContext, entityIndex: Int, rClass: R_Class) {
+        val entCtx = C_EntityContext(ctx, C_EntityType.CLASS, entityIndex, null)
+        val clsCtx = C_ClassContext(entCtx, name.str, rClass.flags.log)
 
         if (rClass.flags.log) {
             clsCtx.addAttribute0("transaction", ctx.transactionClassType, false, false) {
@@ -140,32 +142,67 @@ class S_ClassDefinition(name: S_Name, val annotations: List<S_Name>, val clauses
             }
         }
 
-        for (clause in clauses) {
-            clause.compileAttributes(clsCtx)
-        }
-        for (clause in clauses) {
-            clause.compileRest(clsCtx)
-        }
+        compileClauses(clsCtx, clauses)
 
         val body = clsCtx.createClassBody()
         rClass.setBody(body)
     }
+
+    companion object {
+        fun compileClauses(clsCtx: C_ClassContext, clauses: List<S_RelClause>) {
+            for (clause in clauses) {
+                clause.compileAttributes(clsCtx)
+            }
+            for (clause in clauses) {
+                clause.compileRest(clsCtx)
+            }
+        }
+    }
+}
+
+class S_ObjectDefinition(name: S_Name, val clauses: List<S_RelClause>): S_Definition(name) {
+    override fun compile(ctx: C_ModuleContext, entityIndex: Int) {
+        ctx.checkTypeName(name)
+
+        val sqlTable = classNameToSqlTable(name.str)
+        ctx.checkTableName(name, sqlTable)
+
+        val classFlags = R_ClassFlags(true, false, true, false, false)
+        val sqlMapping = R_ClassSqlMapping(sqlTable, ROWID_COLUMN, true)
+        val rClass = R_Class(name.str, classFlags, sqlMapping)
+        val rObject = R_Object(rClass, entityIndex)
+        ctx.addObject(rObject)
+
+        ctx.classesPass.add {
+            classesPass(ctx, entityIndex, rObject)
+        }
+    }
+
+    private fun classesPass(ctx: C_ModuleContext, entityIndex: Int, rObject: R_Object) {
+        val entCtx = C_EntityContext(ctx, C_EntityType.OBJECT, entityIndex, null)
+        val clsCtx = C_ClassContext(entCtx, name.str, false)
+        S_ClassDefinition.compileClauses(clsCtx, clauses)
+
+        val body = clsCtx.createClassBody()
+        rObject.rClass.setBody(body)
+    }
 }
 
 class S_RecordDefinition(name: S_Name, val attrs: List<S_AttributeClause>): S_Definition(name) {
-    override fun compile(ctx: C_ModuleContext) {
+    override fun compile(ctx: C_ModuleContext, entityIndex: Int) {
         ctx.checkRecordName(name)
 
         val rType = R_RecordType(name.str)
         ctx.addRecord(C_Record(name, rType))
 
         ctx.classesPass.add {
-            classesPass(ctx, rType)
+            classesPass(ctx, entityIndex, rType)
         }
     }
 
-    private fun classesPass(ctx: C_ModuleContext, rType: R_RecordType) {
-        val clsCtx = C_ClassContext(ctx, name.str, C_EntityType.RECORD, false)
+    private fun classesPass(ctx: C_ModuleContext, entityIndex: Int, rType: R_RecordType) {
+        val entCtx = C_EntityContext(ctx, C_EntityType.RECORD, entityIndex, null)
+        val clsCtx = C_ClassContext(entCtx, name.str, false)
         for (clause in attrs) {
             clause.compileAttributes(clsCtx)
         }
@@ -181,16 +218,16 @@ class S_OpDefinition(
         val body: S_Statement
 ): S_Definition(name)
 {
-    override fun compile(ctx: C_ModuleContext) {
+    override fun compile(ctx: C_ModuleContext, entityIndex: Int) {
         ctx.functionsPass.add {
-            doCompile(ctx)
+            doCompile(ctx, entityIndex)
         }
     }
 
-    private fun doCompile(ctx: C_ModuleContext) {
+    private fun doCompile(ctx: C_ModuleContext, entityIndex: Int) {
         ctx.checkOperationName(name)
 
-        val entCtx = C_EntityContext(ctx, C_EntityType.OPERATION, null)
+        val entCtx = C_EntityContext(ctx, C_EntityType.OPERATION, entityIndex, null)
         val rParams = compileExternalParams(ctx, entCtx.rootExprCtx, params)
         val rBody = body.compile(entCtx.rootExprCtx)
         val rCallFrame = entCtx.makeCallFrame()
@@ -210,18 +247,18 @@ class S_QueryDefinition(
         val retType: S_Type?,
         val body: S_FunctionBody
 ): S_Definition(name) {
-    override fun compile(ctx: C_ModuleContext) {
+    override fun compile(ctx: C_ModuleContext, entityIndex: Int) {
         ctx.functionsPass.add {
-            doCompile(ctx)
+            doCompile(ctx, entityIndex)
         }
     }
 
-    private fun doCompile(ctx: C_ModuleContext) {
+    private fun doCompile(ctx: C_ModuleContext, entityIndex: Int) {
         ctx.checkOperationName(name)
 
         val rExplicitRetType = retType?.compile(ctx)
 
-        val entCtx = C_EntityContext(ctx, C_EntityType.QUERY, rExplicitRetType)
+        val entCtx = C_EntityContext(ctx, C_EntityType.QUERY, entityIndex, rExplicitRetType)
         val rParams = compileExternalParams(ctx, entCtx.rootExprCtx, params)
         val rBody = body.compileQuery(name, entCtx.rootExprCtx)
         val rCallFrame = entCtx.makeCallFrame()
@@ -323,12 +360,12 @@ class S_FunctionDefinition(
         val retType: S_Type?,
         val body: S_FunctionBody
 ): S_Definition(name) {
-    override fun compile(ctx: C_ModuleContext) {
+    override fun compile(ctx: C_ModuleContext, entityIndex: Int) {
         ctx.checkFunctionName(name)
 
         val rRetType = if (retType != null) retType.compile(ctx) else R_UnitType
 
-        val entCtx = C_EntityContext(ctx, C_EntityType.FUNCTION, rRetType)
+        val entCtx = C_EntityContext(ctx, C_EntityType.FUNCTION, entityIndex, rRetType)
         val rParams = compileExternalParams(ctx, entCtx.rootExprCtx, params)
 
         val declaration = C_UserFunctionDeclaration(name.str, rParams, rRetType)
@@ -358,8 +395,8 @@ class S_ModuleDefinition(val definitions: List<S_Definition>) {
         val globalCtx = C_GlobalContext(gtx)
         val ctx = C_ModuleContext(globalCtx)
 
-        for (def in definitions) {
-            def.compile(ctx)
+        for ((index, def) in definitions.withIndex()) {
+            def.compile(ctx, index)
         }
 
         return ctx.createModule()
@@ -396,3 +433,5 @@ private fun compileParams(ctx: C_ModuleContext, params: List<S_NameTypePair>): L
 
     return res
 }
+
+private fun classNameToSqlTable(className: String) = className

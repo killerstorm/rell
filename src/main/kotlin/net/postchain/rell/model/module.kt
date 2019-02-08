@@ -159,6 +159,7 @@ private fun processArgs(params: List<R_ExternalParam>, args: List<Rt_Value>, fra
 
 class R_Module(
         val classes: Map<String, R_Class>,
+        val objects: Map<String, R_Object>,
         val records: Map<String, R_RecordType>,
         val operations: Map<String, R_Operation>,
         val queries: Map<String, R_Query>,

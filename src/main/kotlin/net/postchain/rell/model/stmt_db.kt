@@ -30,14 +30,25 @@ class R_UpdateTarget_Simple(
 
     override fun execute(stmt: R_BaseUpdateStatement, frame: Rt_CallFrame) {
         val ctx = SqlGenContext(listOf(cls) + extraClasses, listOf())
-        val pSql = stmt.buildSql(ctx, true)
+        execute(stmt, frame, ctx, cardinality)
+    }
 
-        var count = 0
-        pSql.executeQuery(frame) { rs ->
-            ++count
+    companion object {
+        fun execute(
+                stmt: R_BaseUpdateStatement,
+                frame: Rt_CallFrame,
+                ctx: SqlGenContext,
+                cardinality: R_AtCardinality
+        ) {
+            val pSql = stmt.buildSql(ctx, true)
+
+            var count = 0
+            pSql.executeQuery(frame) { rs ->
+                ++count
+            }
+
+            R_AtExpr.checkCount(cardinality, count)
         }
-
-        R_AtExpr.checkCount(cardinality, count)
     }
 }
 
@@ -96,6 +107,21 @@ class R_UpdateTarget_Expr_Many(
             val ctx = SqlGenContext(listOf(cls), listOf(partValue))
             execute0(stmt, frame, ctx)
         }
+    }
+}
+
+class R_UpdateTarget_Object(private val cls: R_AtClass, private val rObject: R_Object): R_UpdateTarget() {
+    init {
+        check(cls.index == 0)
+    }
+
+    override fun cls() = cls
+    override fun extraClasses(): List<R_AtClass> = listOf()
+    override fun where() = null
+
+    override fun execute(stmt: R_BaseUpdateStatement, frame: Rt_CallFrame) {
+        val ctx = SqlGenContext(listOf(cls), listOf())
+        R_UpdateTarget_Simple.execute(stmt, frame, ctx, R_AtCardinality.ONE)
     }
 }
 

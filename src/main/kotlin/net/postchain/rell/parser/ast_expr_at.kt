@@ -202,7 +202,7 @@ class S_AtExpr(
             base.resType.type
         }
 
-        var rExpr = R_AtExpr(type, base.rBase, base.limit, base.resType.rowDecoder)
+        var rExpr = R_AtExpr(type, base.rBase, cardinality.rCardinality, base.limit, base.resType.rowDecoder)
         return C_RExpr(startPos, rExpr)
     }
 
@@ -219,18 +219,18 @@ class S_AtExpr(
 
         val rLimit = compileLimit(ctx)
 
-        val base = R_AtExprBase(rFrom, dbWhatExprs, dbWhere, ctWhat.sort, cardinality.rCardinality)
+        val base = R_AtExprBase(rFrom, dbWhatExprs, dbWhere, ctWhat.sort)
         return AtBase(base, rLimit, resType)
     }
 
     private fun calcResultType(dbWhat: List<Pair<String?, Db_Expr>>): AtResultType {
         if (dbWhat.size == 1 && dbWhat[0].first == null) {
             val type = dbWhat[0].second.type
-            return AtResultType(type, R_AtExprRowTypeSimple)
+            return AtResultType(type, R_AtExprRowType_Simple)
         } else {
             val fields = dbWhat.map { R_TupleField(it.first, it.second.type) }
             val type = R_TupleType(fields)
-            return AtResultType(type, R_AtExprRowTypeTuple(type))
+            return AtResultType(type, R_AtExprRowType_Tuple(type))
         }
     }
 

@@ -56,6 +56,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val CLASS by relltok("class")
     private val KEY by relltok("key")
     private val INDEX by relltok("index")
+    private val OBJECT by relltok("object")
     private val OPERATION by relltok("operation")
     private val QUERY by relltok("query")
     private val RECORD by relltok("record")
@@ -143,6 +144,10 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val classDef by (-CLASS * id * optional(classAnnotations) * -LCURL * relClauses * -RCURL) map {
         (name, annotations, clauses) ->
         S_ClassDefinition(name, annotations ?: listOf(), clauses)
+    }
+
+    private val objectDef by (-OBJECT * id * -LCURL * zeroOrMore(anyRelClause) * -RCURL) map { (name, clauses) ->
+        S_ObjectDefinition(name, clauses)
     }
 
     private val recordDef by (-RECORD * id * -LCURL * zeroOrMore(relAttributeClause) * -RCURL) map { (name, attrs) ->
@@ -482,7 +487,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         (name, params, type, body) -> S_FunctionDefinition(name, params, type, body)
     }
 
-    private val anyDef by ( classDef or recordDef or opDefinition or queryDefinition or functionDefinition )
+    private val anyDef by ( classDef or objectDef or recordDef or opDefinition or queryDefinition or functionDefinition )
 
     override val rootParser by zeroOrMore(anyDef) map { S_ModuleDefinition(it) }
 

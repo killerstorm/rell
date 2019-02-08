@@ -26,7 +26,18 @@ class Rt_GlobalContext(
     val sqlExec: SqlExecutor = Rt_SqlExecutor(sqlExec, logSqlErrors)
 }
 
-class Rt_ModuleContext(val globalCtx: Rt_GlobalContext, val module: R_Module)
+class Rt_ModuleContext(val globalCtx: Rt_GlobalContext, val module: R_Module) {
+    fun insertObjectRecords() {
+        val rFrameBlock = R_FrameBlock(null, R_FrameBlockId(0), 0, 0)
+        val rFrame = R_CallFrame(0, rFrameBlock)
+        val entCtx = Rt_EntityContext(this, true)
+        val frame = Rt_CallFrame(entCtx, rFrame)
+
+        for (rObject in module.objects.values) {
+            rObject.insert(frame)
+        }
+    }
+}
 
 class Rt_EntityContext(val modCtx: Rt_ModuleContext, val dbUpdateAllowed: Boolean) {
     fun checkDbUpdateAllowed() {
@@ -107,35 +118,36 @@ object Rt_FailingPrinter: Rt_Printer() {
 
 class Rt_SqlExecutor(private val sqlExec: SqlExecutor, private val logErrors: Boolean): SqlExecutor() {
     override fun transaction(code: () -> Unit) {
-        wrapErr {
+        wrapErr("(transaction)") {
             sqlExec.transaction(code)
         }
     }
 
     override fun execute(sql: String) {
-        wrapErr {
+        wrapErr(sql) {
             sqlExec.execute(sql)
         }
     }
 
     override fun execute(sql: String, preparator: (PreparedStatement) -> Unit) {
-        wrapErr {
+        wrapErr(sql) {
             sqlExec.execute(sql, preparator)
         }
     }
 
     override fun executeQuery(sql: String, preparator: (PreparedStatement) -> Unit, consumer: (ResultSet) -> Unit) {
-        wrapErr {
+        wrapErr(sql) {
             sqlExec.executeQuery(sql, preparator, consumer)
         }
     }
 
-    private fun <T> wrapErr(code: () -> T): T {
+    private fun <T> wrapErr(sql: String, code: () -> T): T {
         try {
             val res = code()
             return res
         } catch (e: SQLException) {
             if (logErrors) {
+                System.err.println("SQL: " + sql)
                 e.printStackTrace()
             }
             throw Rt_Error("sqlerr:${e.errorCode}", "SQL Error: ${e.message}")

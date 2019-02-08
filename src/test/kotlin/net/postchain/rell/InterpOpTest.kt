@@ -103,7 +103,7 @@ class InterpOpTest: AbstractOpTest() {
             override fun rt(m: R_Module): Rt_Value {
                 val c = m.classes[cls]
                 val t = R_ClassType(c!!)
-                return Rt_ObjectValue(t, id)
+                return Rt_ClassValue(t, id)
             }
         }
     }

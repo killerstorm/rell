@@ -203,13 +203,20 @@ object R_NullType: R_Type("null") {
 class R_ClassType(val rClass: R_Class): R_Type(rClass.name) {
     override fun isSqlCompatible(): Boolean = true
     override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = stmt.setLong(idx, value.asObjectId())
-    override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_ObjectValue(this, rs.getLong(idx))
-    override fun fromCli(s: String): Rt_Value = Rt_ObjectValue(this, s.toLong())
+    override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_ClassValue(this, rs.getLong(idx))
+    override fun fromCli(s: String): Rt_Value = Rt_ClassValue(this, s.toLong())
     override fun toStrictString(): String = name
     override fun equals(other: Any?): Boolean = other is R_ClassType && other.rClass == rClass
     override fun hashCode(): Int = rClass.hashCode()
 
-    override fun createGtxConversion() = GtxRtConversion_Object(this)
+    override fun createGtxConversion() = GtxRtConversion_Class(this)
+}
+
+class R_ObjectType(val rObject: R_Object): R_Type(rObject.rClass.name) {
+    override fun toStrictString(): String = name
+    override fun equals(other: Any?): Boolean = other is R_ObjectType && other.rObject == rObject
+    override fun hashCode(): Int = rObject.hashCode()
+    override fun createGtxConversion() = GtxRtConversion_None
 }
 
 class R_RecordFlags(val typeFlags: R_TypeFlags, val cyclic: Boolean, val infinite: Boolean)

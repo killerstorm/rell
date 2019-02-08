@@ -103,4 +103,12 @@ class CreateTest: BaseRellTest() {
         chkOp("create person(.name = 'Bob', .year = 1980);")
         chkDataNew("person(1,Bob,1980,777,Unknown)")
     }
+
+    @Test fun testNoAttributes() {
+        tst.defs = listOf("class person {}")
+        chkData()
+
+        chkOp("create person();")
+        chkData("person(1)")
+    }
 }

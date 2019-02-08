@@ -23,11 +23,6 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 object SqlTestUtils {
-    fun createSqlExecutor(): DefaultSqlExecutor {
-        val prop = readDbProperties()
-        return DefaultSqlExecutor.connect(prop.url, prop.user, prop.password)
-    }
-
     fun createSqlConnection(): Connection {
         val prop = readDbProperties()
         return DriverManager.getConnection(prop.url, prop.user, prop.password)
@@ -75,39 +70,60 @@ object SqlTestUtils {
         return "INSERT INTO \"$table\"(\"$ROWID_COLUMN\",$quotedColumns) VALUES ($values);"
     }
 
-    fun dumpDatabase(sqlExec: SqlExecutor, modelClasses: List<R_Class>): List<String> {
+    fun dumpDatabase(sqlExec: SqlExecutor, module: R_Module): List<String> {
         val list = mutableListOf<String>()
 
-        for (cls in modelClasses) {
+        for (cls in module.classes.values) {
             if (cls.mapping.autoCreateTable) {
                 dumpTable(sqlExec, cls, list)
             }
+        }
+
+        for (obj in module.objects.values) {
+            dumpTable(sqlExec, obj, list)
         }
 
         return list.toList()
     }
 
     private fun dumpTable(sqlExec: SqlExecutor, cls: R_Class, list: MutableList<String>) {
-        val sql = getDumpSql(cls)
-        sqlExec.executeQuery(sql, {}) { rs -> list.add(dumpRecord(cls, rs)) }
+        val sql = getDumpSql(cls.mapping.table, cls.mapping.rowidColumn, cls.attributes)
+        sqlExec.executeQuery(sql, {}) { rs -> list.add(dumpRecord(cls.name, true, cls.attributes, rs)) }
     }
 
-    private fun getDumpSql(cls: R_Class): String {
-        val rowid = cls.mapping.rowidColumn
+    private fun dumpTable(sqlExec: SqlExecutor, obj: R_Object, list: MutableList<String>) {
+        dumpTable(sqlExec, obj.rClass, list)
+    }
+
+    private fun getDumpSql(table: String, rowidCol: String?, attrs: Map<String, R_Attrib>): String {
         val buf = StringBuilder()
-        buf.append("SELECT \"$rowid\"")
-        for (attr in cls.attributes.values) {
-            buf.append(", \"${attr.sqlMapping}\"")
+        buf.append("SELECT")
+
+        val cols = mutableListOf<String>()
+        if (rowidCol != null) {
+            cols.add(rowidCol)
         }
-        buf.append(" FROM \"${cls.mapping.table}\" ORDER BY \"$rowid\"")
+        for (attr in attrs.values) {
+            cols.add(attr.sqlMapping)
+        }
+        cols.joinTo(buf, ", ") { "\"$it\"" }
+
+        buf.append(" FROM \"${table}\"")
+        if (rowidCol != null) {
+            buf.append(" ORDER BY \"$rowidCol\"")
+        }
+
         return buf.toString()
     }
 
-    private fun dumpRecord(cls: R_Class, rs: ResultSet): String {
-        val buf = StringBuilder()
-        buf.append("${cls.name}(${rs.getLong(1)}")
-        for ((listIndex, attr) in cls.attributes.values.withIndex()) {
-            val idx = listIndex + 2
+    private fun dumpRecord(name: String, rowid: Boolean, attrs: Map<String, R_Attrib>, rs: ResultSet): String {
+        val values = mutableListOf<String>()
+        if (rowid) {
+            values.add("" + rs.getLong(1))
+        }
+
+        for ((listIndex, attr) in attrs.values.withIndex()) {
+            val idx = listIndex + (if (rowid) 2 else 1)
             val type = attr.type
             val value = if (type == R_TextType) {
                 rs.getString(idx)
@@ -120,8 +136,12 @@ object SqlTestUtils {
             } else {
                 throw IllegalStateException(type.toStrictString())
             }
-            buf.append(",$value")
+            values.add("" + value)
         }
+
+        val buf = StringBuilder()
+        buf.append("$name(")
+        values.joinTo(buf, ",")
         buf.append(")")
         return buf.toString()
     }

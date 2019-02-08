@@ -383,6 +383,14 @@ class UpdateDeleteTest: BaseRellTest() {
         chkDataCommon()
     }
 
+    @Test fun testDeleteNoAttributes() {
+        tst.defs = listOf("class person {}")
+        chkOp("create person();")
+        chkData("person(1)")
+        chkOp("delete person@*{};")
+        chkData()
+    }
+
     private fun resetChkOp(code: String, expected: String = "OK") {
         tst.resetRowid()
         chkOp("delete person @* {}; delete city @* {};")

@@ -222,7 +222,7 @@ sealed class S_BinaryOp_Common(code: String): S_BinaryOp_Base(code) {
 sealed class S_BinaryOp_EqNe(val rOp: R_BinaryOp, val dbOp: Db_BinaryOp): S_BinaryOp_Common(rOp.code) {
     override final fun compileOp(left: R_Type, right: R_Type): C_BinOpType? {
         val type = calcCommonType(left, right) ?: calcCommonType(right, left)
-        if (type == null) {
+        if (type == null || type is R_ObjectType) {
             return null
         }
 

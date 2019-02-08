@@ -75,6 +75,16 @@ class BasicModuleTest : IntegrationTest() {
         chkQuery(node, """{ type : "get_persons_by_city", city : 3 }""", "[]")
     }
 
+    @Test fun testObject() {
+        val node = setupNodeAndObjects()
+        chkQuery(node, """{ type : "get_state" }""", "5")
+
+        enqueueTx(node, makeTx_setState(0, 33), 0)
+        buildBlockAndCommit(node)
+
+        chkQuery(node, """{ type : "get_state" }""", "33")
+    }
+
     private fun makeTx(ownerIdx: Int, opName: String, vararg opArgs: GTXValue): ByteArray {
         val owner = KeyPairHelper.pubKey(ownerIdx)
         return GTXDataBuilder(testBlockchainRID, arrayOf(owner), myCS).run {
@@ -91,6 +101,10 @@ class BasicModuleTest : IntegrationTest() {
 
     private fun makeTx_insertPerson(ownerIdx: Int, name: String, city: Long, street: String, house: Long, score: Long): ByteArray {
         return makeTx(ownerIdx, "insert_person", gtx(name), gtx(city), gtx(street), gtx(house), gtx(score))
+    }
+
+    private fun makeTx_setState(ownerIdx: Int, value: Long): ByteArray {
+        return makeTx(ownerIdx, "set_state", gtx(value))
     }
 
     private fun setupNodeAndObjects(): SingleChainTestNode {

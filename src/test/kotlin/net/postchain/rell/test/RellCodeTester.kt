@@ -2,158 +2,14 @@ package net.postchain.rell.test
 
 import net.postchain.gtx.GTXNull
 import net.postchain.gtx.GTXValue
-import net.postchain.rell.model.R_Class
 import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.runtime.*
-import net.postchain.rell.sql.DefaultSqlExecutor
-import net.postchain.rell.sql.NoConnSqlExecutor
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.sql.SqlUtils
-import java.io.Closeable
 import java.sql.Connection
 import java.util.*
 import kotlin.test.assertEquals
-
-open class RellBaseTester(
-        useSql: Boolean = true,
-        classDefs: List<String> = listOf(),
-        inserts: List<String> = listOf(),
-        protected val gtx: Boolean = false
-) {
-    private var inited = false
-    private var destroyed = false
-    private var sqlConn: Connection? = null
-    private var sqlExec: SqlExecutor = NoConnSqlExecutor
-    private var sqlExecResource: Closeable? = null
-    private var lastInserts = listOf<String>()
-    private var modelClasses: List<R_Class> = listOf()
-
-    var errMsgPos = false
-
-    var useSql: Boolean = useSql
-        set(value) {
-            checkNotInited()
-            field = value
-        }
-
-    var defs: List<String> = classDefs
-        set(value) {
-            checkNotInited()
-            field = value
-        }
-
-    var inserts: List<String> = inserts
-
-    protected fun init() {
-        if (!inited) {
-            val code = defsCode()
-            val module = RellTestUtils.parseModule(code, gtx)
-            modelClasses = module.classes.values.toList()
-
-            if (useSql) {
-                initSql(code, module)
-            }
-
-            inited = true
-        } else if (inserts != lastInserts) {
-            if (!lastInserts.isEmpty()) {
-                SqlTestUtils.clearTables(sqlExec)
-            }
-            initSqlInserts(sqlExec)
-        }
-    }
-
-    protected fun checkNotInited() {
-        check(!inited)
-    }
-
-    private fun initSql(moduleCode: String, module: R_Module) {
-        val realSqlConn = SqlTestUtils.createSqlConnection()
-        var closeable: Connection? = realSqlConn
-
-        try {
-            val realSqlExec = DefaultSqlExecutor(realSqlConn)
-            initSqlReset(realSqlConn, realSqlExec, moduleCode, module)
-            initSqlInserts(realSqlExec)
-            sqlConn = realSqlConn
-            sqlExec = realSqlExec
-            sqlExecResource = realSqlExec
-            closeable = null
-        } finally {
-            closeable?.close()
-        }
-    }
-
-    protected open fun initSqlReset(conn: Connection, exec: SqlExecutor, moduleCode: String, module: R_Module) {
-        SqlUtils.resetDatabase(exec, module, true)
-    }
-
-    private fun initSqlInserts(sqlExecLoc: SqlExecutor) {
-        if (!inserts.isEmpty()) {
-            val insertSql = inserts.joinToString("\n") { it }
-            sqlExecLoc.transaction {
-                sqlExecLoc.execute(insertSql)
-            }
-            lastInserts = inserts
-        }
-    }
-
-    fun destroy() {
-        if (!inited || destroyed) return
-        destroyed = true
-        sqlExecResource?.close()
-    }
-
-    protected fun getSqlConn(): Connection {
-        init()
-        return sqlConn!!
-    }
-
-    fun dumpDatabase(): List<String> {
-        init()
-        return SqlTestUtils.dumpDatabase(sqlExec, modelClasses)
-    }
-
-    fun resetRowid() {
-        init()
-        SqlTestUtils.resetRowid(sqlExec)
-    }
-
-    protected fun defsCode(): String = defs.joinToString("\n")
-
-    protected fun moduleCode(extraCode: String): String {
-        val defsCode = defsCode()
-        val modCode = (if (defsCode.isEmpty()) "" else defsCode + "\n") + extraCode
-        return modCode
-    }
-
-    protected fun getSqlExec() = sqlExec
-
-    fun chkCompile(code: String, expected: String) {
-        val actual = compileModule(code)
-        assertEquals(expected, actual)
-    }
-
-    fun compileModule(code: String): String {
-        val moduleCode = moduleCode(code)
-        return processModule(moduleCode) { "OK" }
-    }
-
-    fun compileModuleEx(code: String): R_Module {
-        val moduleCode = moduleCode(code)
-        var res: R_Module? = null
-        processModule(moduleCode) {
-            res = it
-            "OK"
-        }
-        return res!!
-    }
-
-    fun processModule(code: String, processor: (R_Module) -> String): String {
-        return RellTestUtils.processModule(code, errMsgPos, gtx, processor)
-    }
-}
 
 class RellCodeTester(
         useSql: Boolean = true,
@@ -172,9 +28,26 @@ class RellCodeTester(
             field = value
         }
 
+    var autoInitObjects = true
     var strictToString = true
     var opContext: Rt_OpContext? = null
     var rtSqlUpdatePortionSize = 1000
+
+    override fun initSqlReset(conn: Connection, exec: SqlExecutor, moduleCode: String, module: R_Module) {
+        SqlUtils.resetDatabase(exec, module, true)
+        if (autoInitObjects) {
+            initSqlObjects(exec, module)
+        }
+    }
+
+    private fun initSqlObjects(sqlExec: SqlExecutor, module: R_Module) {
+        val chainCtx = Rt_ChainContext(GTXNull, Rt_NullValue)
+        val globalCtx = Rt_GlobalContext(Rt_FailingPrinter, Rt_FailingPrinter, sqlExec, null, chainCtx, logSqlErrors = true)
+        val modCtx = Rt_ModuleContext(globalCtx, module)
+        sqlExec.transaction {
+            modCtx.insertObjectRecords()
+        }
+    }
 
     fun chkQuery(bodyCode: String, expected: String) {
         val queryCode = "query q() $bodyCode"
@@ -308,6 +181,17 @@ class RellCodeTester(
 
     fun chkStdout(vararg expected: String) = stdoutPrinter.chk(*expected)
     fun chkLog(vararg expected: String) = logPrinter.chk(*expected)
+
+    fun chkInitObjects(expected: String) {
+        init()
+        val sqlExec = getSqlExec()
+        val moduleProto = getModuleProto()
+        val actual = RellTestUtils.catchRtErr {
+            initSqlObjects(sqlExec, moduleProto)
+            "OK"
+        }
+        assertEquals(expected, actual)
+    }
 
     private class TesterRtPrinter: Rt_Printer() {
         private val queue = LinkedList<String>()

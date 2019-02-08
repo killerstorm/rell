@@ -1,6 +1,10 @@
 class city { key name: text; }
 class person { name: text; city; street: text; house: integer; score: integer; }
 
+object some_state {
+    mutable x: integer = 5;
+}
+
 operation insert_city (name: text) {
     create city (name);
 }
@@ -23,4 +27,10 @@ query get_persons_by_city_set(cities: set<text>): list<text> {
     val persons = list<text>();
     for (locCity in cities) persons.addAll(person @* { person.city.name == locCity }.name);
     return persons;
+}
+
+query get_state() = some_state.x;
+
+operation set_state(x: integer) {
+    update some_state(x = x);
 }

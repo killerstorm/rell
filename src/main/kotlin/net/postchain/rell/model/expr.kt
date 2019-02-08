@@ -345,7 +345,7 @@ class R_CreateExprAttr_Default(attr: R_Attrib): R_CreateExprAttr(attr) {
 class R_CreateExpr(type: R_Type, val rClass: R_Class, val attrs: List<R_CreateExprAttr>): R_Expr(type) {
     override fun evaluate(frame: Rt_CallFrame): Rt_Value {
         frame.entCtx.checkDbUpdateAllowed()
-        val rtSql = buildSql()
+        val rtSql = buildSql(rClass, attrs, "$MAKE_ROWID_FUNCTION()")
         val rtSel = SqlSelect(rtSql, listOf(type))
         val res = rtSel.execute(frame)
         check(res.size == 1)
@@ -353,31 +353,34 @@ class R_CreateExpr(type: R_Type, val rClass: R_Class, val attrs: List<R_CreateEx
         return res[0][0]
     }
 
-    private fun buildSql(): ParameterizedSql {
-        val builder = SqlBuilder()
+    companion object {
+        fun buildSql(rClass: R_Class, attrs: List<R_CreateExprAttr>, rowidExpr: String): ParameterizedSql {
+            val builder = SqlBuilder()
 
-        builder.append("INSERT INTO ")
-        builder.appendName(rClass.mapping.table)
+            builder.append("INSERT INTO ")
+            builder.appendName(rClass.mapping.table)
 
-        builder.append("(")
-        builder.appendName(rClass.mapping.rowidColumn)
-        builder.append(", ")
-        builder.append(attrs, ", ") { attr ->
-            builder.appendName(attr.attr.sqlMapping)
+            builder.append("(")
+            builder.appendName(rClass.mapping.rowidColumn)
+            builder.append(attrs, "") { attr ->
+                builder.append(", ")
+                builder.appendName(attr.attr.sqlMapping)
+            }
+            builder.append(")")
+
+            builder.append(" VALUES (")
+            builder.append(rowidExpr)
+            builder.append(attrs, "") { attr ->
+                builder.append(", ")
+                builder.append(attr.expr())
+            }
+            builder.append(")")
+
+            builder.append(" RETURNING ")
+            builder.appendName(rClass.mapping.rowidColumn)
+
+            return builder.build()
         }
-        builder.append(")")
-
-        builder.append(" VALUES (")
-        builder.append("$MAKE_ROWID_FUNCTION(), ")
-        builder.append(attrs, ", ") { attr ->
-            builder.append(attr.expr())
-        }
-        builder.append(")")
-
-        builder.append(" RETURNING ")
-        builder.appendName(rClass.mapping.rowidColumn)
-
-        return builder.build()
     }
 }
 
@@ -394,5 +397,31 @@ class R_RecordExpr(val record: R_RecordType, val attrs: List<R_CreateExprAttr>):
             values[attr.attr.index] = value
         }
         return Rt_RecordValue(record, values)
+    }
+}
+
+class R_ObjectExpr(val objType: R_ObjectType): R_Expr(objType) {
+    override fun evaluate(frame: Rt_CallFrame): Rt_Value {
+        return Rt_ObjectValue(objType)
+    }
+}
+
+class R_ObjectAttrExpr(type: R_Type, val rObject: R_Object, val atBase: R_AtExprBase): R_Expr(type) {
+    override fun evaluate(frame: Rt_CallFrame): Rt_Value {
+        val records = atBase.execute(frame, listOf(), null)
+        val count = records.size
+
+        if (count == 0) {
+            val name = rObject.rClass.name
+            throw Rt_Error("obj_norec:$name", "No record for object '$name' in database")
+        } else if (count > 1) {
+            val name = rObject.rClass.name
+            throw Rt_Error("obj_multirec:$name:$count", "Multiple records for object '$name' in database: $count")
+        }
+
+        var record = records[0]
+        check(record.size == 1)
+        val value = record[0]
+        return value
     }
 }

@@ -77,9 +77,15 @@ sealed class C_ExprContext(val blkCtx: C_BlockContext) {
 class C_RExprContext(blkCtx: C_BlockContext): C_ExprContext(blkCtx) {
     override fun resolveNameValue(name: S_Name): C_NameResolution? {
         val loc = blkCtx.lookupLocalVar(name.str)
-        if (loc != null) return C_NameResolution_Local(name, loc)
-
+        val obj = blkCtx.entCtx.modCtx.getObjectOpt(name.str)
         val ns = C_LibFunctions.getNamespace(blkCtx.entCtx.modCtx, name.str)
+
+        if (loc != null && obj != null) {
+            throw C_Errors.errNameConflictLocalObject(name)
+        }
+
+        if (loc != null) return C_NameResolution_Local(name, loc)
+        if (obj != null) return C_NameResolution_Object(name, obj, blkCtx.entCtx)
         if (ns != null) return C_NameResolution_Namespace(name, ns)
 
         return null
@@ -96,17 +102,22 @@ class C_DbExprContext(blkCtx: C_BlockContext, val classes: List<R_AtClass>): C_E
 
         val cls = findClassByAlias(nameStr)
         val loc = blkCtx.lookupLocalVar(nameStr)
+        val obj = blkCtx.entCtx.modCtx.getObjectOpt(name.str)
         val ns = C_LibFunctions.getNamespace(blkCtx.entCtx.modCtx, nameStr)
 
         if (cls != null && loc != null) {
-            throw C_Error(name.pos, "expr_name_clsloc:$nameStr",
-                    "Name '$nameStr' is ambiguous: can be class alias or local variable")
+            throw C_Errors.errNameConflictAliasLocal(name)
+        }
+        if (cls != null && obj != null) {
+            throw C_Errors.errNameConflictClassObject(name)
+        }
+        if (obj != null && loc != null) {
+            throw C_Errors.errNameConflictLocalObject(name)
         }
 
         if (cls != null) return C_NameResolution_Class(name, cls)
-
         if (loc != null) return C_NameResolution_Local(name, loc)
-
+        if (obj != null) return C_NameResolution_Object(name, obj, blkCtx.entCtx)
         if (ns != null) return C_NameResolution_Namespace(name, ns)
 
         return null
@@ -185,6 +196,19 @@ private class C_NameResolution_Local(name: S_Name, private val entry: C_ScopeEnt
 
 private class C_NameResolution_Namespace(name: S_Name, private val ns: C_LibNamespace): C_NameResolution(name) {
     override fun toExpr(): C_Expr = C_NamespaceExpr(name, ns)
+}
+
+private class C_NameResolution_Object(
+        name: S_Name,
+        private val rObject: R_Object,
+        private val entCtx: C_EntityContext
+): C_NameResolution(name) {
+    override fun toExpr(): C_Expr {
+        if (rObject.entityIndex >= entCtx.entityIndex && entCtx.entityType == C_EntityType.OBJECT) {
+            throw C_Error(name.pos, "object_fwdref:${name.str}", "Object '${name.str}' must be defined before using")
+        }
+        return C_ObjectExpr(name, rObject)
+    }
 }
 
 typealias C_OperandConversion_R = (R_Expr) -> R_Expr
@@ -306,6 +330,34 @@ private class C_NamespaceExpr(private val name: S_Name, private val ns: C_LibNam
     }
 }
 
+private class C_ObjectExpr(private val name: S_Name, private val rObject: R_Object): C_Expr() {
+    override fun type() = rObject.type
+    override fun startPos() = name.pos
+    override fun isDb() = false
+    override fun toRExpr() = R_ObjectExpr(rObject.type)
+    override fun toDbExpr() = C_Utils.toDbExpr(name.pos, toRExpr())
+
+    override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
+        val attr = rObject.rClass.attributes[memberName.str]
+        if (attr == null) {
+            return throw C_Errors.errUnknownName(name, memberName)
+        }
+
+        val rExpr = createAccessExpr(attr)
+        return C_RExpr(name.pos, rExpr)
+    }
+
+    private fun createAccessExpr(attr: R_Attrib): R_Expr {
+        val rClass = rObject.rClass
+        val atCls = R_AtClass(rClass, rClass.name, 0)
+        val from = listOf(atCls)
+        val whatExpr = Db_AttrExpr(Db_ClassExpr(atCls), attr)
+        val what = listOf(whatExpr)
+        val atBase = R_AtExprBase(from, what, null, listOf())
+        return R_ObjectAttrExpr(attr.type, rObject, atBase)
+    }
+}
+
 private class C_MemberFieldExpr(
         private val base: C_Expr,
         private val name: S_Name,
@@ -386,7 +438,7 @@ private class C_ClassFieldExpr(
         val whereRight = Db_ParameterExpr(atClass.type, 0)
         val where = Db_BinaryExpr(R_BooleanType, Db_BinaryOp_Eq, whereLeft, whereRight)
 
-        val atBase = R_AtExprBase(from, listOf(dbExpr), where, listOf(), R_AtCardinality.ONE)
+        val atBase = R_AtExprBase(from, listOf(dbExpr), where, listOf())
         val calculator = R_MemberCalculator_DataAttribute(dbExpr.type, atBase)
 
         val rBase = base.toRExpr()

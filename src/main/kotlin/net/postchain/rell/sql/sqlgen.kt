@@ -1,6 +1,7 @@
 package net.postchain.rell.sql
 
 import net.postchain.rell.model.*
+import net.postchain.rell.runtime.Rt_JsonValue
 import org.jooq.*
 import org.jooq.impl.DSL
 import org.jooq.impl.DSL.constraint
@@ -50,31 +51,26 @@ CREATE TABLE transactions(
 );
 """.trimIndent()
 
-private fun genclass(classDefinition: R_Class): String {
+private fun genClass(classDefinition: R_Class): String {
     val mapping = classDefinition.mapping
+    val attrs = classDefinition.attributes.values
 
     val t = ctx.createTable(mapping.table)
+
+    val constraints = mutableListOf<Constraint>()
+    constraints.add(constraint("PK_" + mapping.table).primaryKey(mapping.rowidColumn))
+    constraints += genAttrConstraints(mapping.table, attrs)
+
     var q = t.column(mapping.rowidColumn, SQLDataType.BIGINT.nullable(false))
-    val constraints = mutableListOf<Constraint>(constraint("PK_" + mapping.table).primaryKey(mapping.rowidColumn))
+    q = genAttrColumns(attrs, q)
 
-    val jsonAttribSet = mutableSetOf<String>()
-
-    for (attr in classDefinition.attributes.values) {
-        if (attr.type is R_ClassType) {
-            val refCls = attr.type.rClass
-            constraints.add(
-                    constraint("${mapping.table}_${attr.sqlMapping}_FK")
-                            .foreignKey(attr.sqlMapping).references(refCls.mapping.table, refCls.mapping.rowidColumn)
-            )
-        } else if (attr.type is R_JSONType) {
-            jsonAttribSet.add(attr.name)
-        }
-        q = q.column(attr.sqlMapping, getSQLType(attr.type).nullable(false))
-    }
     for ((kidx, key) in classDefinition.keys.withIndex()) {
         constraints.add(constraint("K_${mapping.table}_${kidx}").unique(*key.attribs.toTypedArray()))
     }
+
     var ddl = q.constraints(*constraints.toTypedArray()).toString() + ";\n"
+
+    val jsonAttribSet = attrs.filter { it.type is R_JSONType }.map { it.name }.toSet()
 
     for ((iidx, index) in classDefinition.indexes.withIndex()) {
         val index_sql : String;
@@ -89,6 +85,30 @@ private fun genclass(classDefinition: R_Class): String {
     }
 
     return ddl
+}
+
+private fun genAttrColumns(attrs: Collection<R_Attrib>, step: CreateTableColumnStep): CreateTableColumnStep {
+    var q = step
+    for (attr in attrs) {
+        q = q.column(attr.sqlMapping, getSQLType(attr.type).nullable(false))
+    }
+    return q
+}
+
+private fun genAttrConstraints(sqlTable: String, attrs: Collection<R_Attrib>): List<Constraint> {
+    val constraints = mutableListOf<Constraint>()
+
+    for (attr in attrs) {
+        if (attr.type is R_ClassType) {
+            val refCls = attr.type.rClass
+            val constraint = constraint("${sqlTable}_${attr.sqlMapping}_FK")
+                    .foreignKey(attr.sqlMapping)
+                    .references(refCls.mapping.table, refCls.mapping.rowidColumn)
+            constraints.add(constraint)
+        }
+    }
+
+    return constraints
 }
 
 fun genRequire(s: R_CallExpr): String {
@@ -171,10 +191,15 @@ fun gensql(model: R_Module, blockTable: Boolean, operations: Boolean): String {
         s += CREATE_TABLE_BLOCKS
         s += CREATE_TABLE_TRANSACTIONS
     }
+
     for (cls in model.classes.values) {
         if (cls.mapping.autoCreateTable) {
-            s += genclass(cls)
+            s += genClass(cls)
         }
+    }
+
+    for (obj in model.objects.values) {
+        s += genClass(obj.rClass)
     }
 
     if (operations) {

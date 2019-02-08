@@ -1,8 +1,9 @@
+=======
 Library
 =======
 
 System classes
---------------
+==============
 
 ::
 
@@ -76,6 +77,9 @@ Can be used only in an operation or a function called from an operation, but not
 Can be used only in an operation or a function called from an operation, but not in a query.
 
 --------------
+
+Functions
+================
 
 Global Functions
 ----------------
@@ -408,6 +412,8 @@ Special operators:
 -  ``[]`` - get/set value by key
 -  ``in`` - returns ``true`` if a key is in the map
 
+--------------
+
 GTXValue
 --------
 
@@ -420,6 +426,8 @@ GTXValue
 ``.toJSON(): json`` - encode in JSON format
 
 ``.toBytes(): byte_array`` - encode in binary format
+
+--------------
 
 record
 ------

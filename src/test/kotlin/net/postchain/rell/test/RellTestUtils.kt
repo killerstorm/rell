@@ -27,7 +27,7 @@ object RellTestUtils {
         return processor(module)
     }
 
-    private fun catchRtErr(block: () -> String): String {
+    fun catchRtErr(block: () -> String): String {
         val p = catchRtErr0(block)
         return p.first ?: p.second!!
     }

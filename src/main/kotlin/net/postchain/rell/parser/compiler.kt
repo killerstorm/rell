@@ -51,6 +51,7 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
     )
 
     private val classes = mutableMapOf<String, R_Class>()
+    private val objects = mutableMapOf<String, R_Object>()
     private val tables = mutableSetOf<String>()
     private val records = mutableMapOf<String, C_Record>()
     private val operations = mutableMapOf<String, R_Operation>()
@@ -96,7 +97,7 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
     }
 
     private fun createSysClass(name: String, table: String, rowid: String, attrs: List<R_Attrib>): R_Class {
-        val flags = R_ClassFlags(false, false, false, false)
+        val flags = R_ClassFlags(false, false, false, false, false)
         val mapping = R_ClassSqlMapping(table, rowid, false)
         val cls = R_Class(name, flags, mapping)
 
@@ -145,23 +146,40 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
     }
 
     fun getType(name: S_Name): R_Type {
-        val nameStr = name.str
-        val type = getTypeOpt(nameStr)
+        val type = getTypeOpt(name)
         if (type == null) {
+            val nameStr = name.str
             throw C_Error(name.pos, "unknown_type:$nameStr", "Unknown type: '$nameStr'")
         }
         return type
     }
 
-    fun getTypeOpt(name: String): R_Type? = types[name]
+    fun getTypeOpt(name: S_Name): R_Type? {
+        val type = types[name.str]
+        if (type == null && name.str in objects) {
+            throw C_Error(name.pos, "object_astype:${name.str}", "Cannot use object '${name.str}' as a type")
+        }
+        return type
+    }
 
     fun getClass(name: S_Name): R_Class {
         val nameStr = name.str
         val cls = classes[nameStr]
         if (cls == null) {
+            if (nameStr in objects) {
+                throw C_Error(name.pos, "object_not_class:$nameStr", "'$nameStr' is an object, not a class")
+            }
             throw C_Error(name.pos, "unknown_class:$nameStr", "Unknown class: '$nameStr'")
         }
         return cls
+    }
+
+    fun getClassOpt(name: String): R_Class? {
+        return classes[name]
+    }
+
+    fun getObjectOpt(name: String): R_Object? {
+        return objects[name]
     }
 
     fun getRecordOpt(name: String): R_RecordType? {
@@ -184,6 +202,17 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
         check(cls.mapping.table !in tables)
         classes[name] = cls
         types[name] = R_ClassType(cls)
+        tables.add(cls.mapping.table)
+    }
+
+    fun addObject(obj: R_Object) {
+        val cls = obj.rClass
+        val name = cls.name
+        check(name !in types)
+        check(name !in classes)
+        check(name !in objects)
+        check(cls.mapping.table !in tables)
+        objects[name] = obj
         tables.add(cls.mapping.table)
     }
 
@@ -230,6 +259,7 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
 
         return R_Module(
                 classes.toMap(),
+                objects.toMap(),
                 records.mapValues { it.value.type }.toMap(),
                 operations.toMap(),
                 queries.toMap(),
@@ -272,6 +302,7 @@ class C_ModulePass {
 
 enum class C_EntityType {
     CLASS,
+    OBJECT,
     RECORD,
     QUERY,
     OPERATION,
@@ -281,6 +312,7 @@ enum class C_EntityType {
 class C_EntityContext(
         val modCtx: C_ModuleContext,
         val entityType: C_EntityType,
+        val entityIndex: Int,
         explicitReturnType: R_Type?
 ){
     private val retTypeTracker =
@@ -368,13 +400,10 @@ class C_ScopeEntry(val name: String, val type: R_Type, val modifiable: Boolean, 
 }
 
 class C_ClassContext(
-        private val modCtx: C_ModuleContext,
+        val entCtx: C_EntityContext,
         private val className: String,
-        private val entityType: C_EntityType,
         private val logAnnotation: Boolean
 ) {
-    val entCtx = C_EntityContext(modCtx, entityType, null)
-
     private val attributes = mutableMapOf<String, R_Attrib>()
     private val keys = mutableListOf<R_Key>()
     private val indices = mutableListOf<R_Index>()
@@ -385,14 +414,15 @@ class C_ClassContext(
 
     fun addAttribute(attr: S_NameTypePair, mutable: Boolean, expr: S_Expr?) {
         val name = attr.name
+        val entityType = entCtx.entityType
 
         val nameStr = name.str
         if (nameStr in attributes) {
             throw C_Error(name.pos, "dup_attr:$nameStr", "Duplicate attribute: '$nameStr'")
         }
 
-        val rType = attr.compileType(modCtx)
-        if (entityType == C_EntityType.CLASS && !rType.isSqlCompatible()) {
+        val rType = attr.compileType(entCtx.modCtx)
+        if ((entityType == C_EntityType.CLASS || entityType == C_EntityType.OBJECT) && !rType.isSqlCompatible()) {
             throw C_Error(name.pos, "class_attr_type:$nameStr:${rType.toStrictString()}",
                     "Attribute '$nameStr' has unallowed type: ${rType.toStrictString()}")
         }
@@ -401,6 +431,11 @@ class C_ClassContext(
             val ann = C_Defs.LOG_ANNOTATION
             throw C_Error(name.pos, "class_attr_mutable_log:$className:$nameStr",
                     "Class '$className' cannot have mutable attributes because of the '$ann' annotation")
+        }
+
+        if (entityType == C_EntityType.OBJECT && expr == null) {
+            throw C_Error(name.pos, "object_attr_novalue:$className:$nameStr",
+                    "Object attribute '$className.$nameStr' must have a default value")
         }
 
         val exprCreator: (() -> R_Expr)? = if (expr == null) null else { ->
@@ -414,13 +449,14 @@ class C_ClassContext(
 
     fun addAttribute0(name: String, rType: R_Type, mutable: Boolean, canSetInCreate: Boolean, exprCreator: (() -> R_Expr)?) {
         check(name !in attributes)
+        check(entCtx.entityType != C_EntityType.OBJECT || exprCreator != null)
 
         val rAttr = R_Attrib(attributes.size, name, rType, mutable, exprCreator != null, canSetInCreate)
 
         if (exprCreator == null) {
             rAttr.setExpr(null)
         } else {
-            modCtx.functionsPass.add {
+            entCtx.modCtx.functionsPass.add {
                 val rExpr = exprCreator()
                 check(rType.isAssignableFrom(rExpr.type)) {
                     val exp = rType.toStrictString()
@@ -455,6 +491,10 @@ class C_ClassContext(
     }
 
     private fun addUniqueKeyIndex(pos: S_Pos, set: MutableSet<Set<String>>, names: List<String>, errCode: String, errMsg: String) {
+        if (entCtx.entityType == C_EntityType.OBJECT) {
+            throw C_Error(pos, "object_keyindex:${className}", "Object cannot have key or index")
+        }
+
         val nameSet = names.toSet()
         if (!set.add(nameSet)) {
             val nameLst = names.sorted()
