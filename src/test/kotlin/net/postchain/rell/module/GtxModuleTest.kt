@@ -7,18 +7,20 @@ import org.junit.Test
 import kotlin.test.assertFailsWith
 
 class GtxModuleTest : BaseGtxTest() {
+    private val tablePrefix = "c995511_"
+
     private val classDefs = listOf(
             "class city { key name: text; }",
             "class person { name: text; city; street: text; house: integer; score: integer; }"
     )
 
     private val inserts = listOf(
-            SqlTestUtils.mkins("city", "name", "1,'New York'"),
-            SqlTestUtils.mkins("city", "name", "2,'Los Angeles'"),
-            SqlTestUtils.mkins("city", "name", "3,'Seattle'"),
-            SqlTestUtils.mkins("person", "name,city,street,house,score", "4,'Bob',2,'Main St',5,100"),
-            SqlTestUtils.mkins("person", "name,city,street,house,score", "5,'Alice',1,'Evergreen Ave',11,250"),
-            SqlTestUtils.mkins("person", "name,city,street,house,score", "6,'Trudy',2,'Mulholland Dr',3,500")
+            SqlTestUtils.mkins("${tablePrefix}city", "name", "1,'New York'"),
+            SqlTestUtils.mkins("${tablePrefix}city", "name", "2,'Los Angeles'"),
+            SqlTestUtils.mkins("${tablePrefix}city", "name", "3,'Seattle'"),
+            SqlTestUtils.mkins("${tablePrefix}person", "name,city,street,house,score", "4,'Bob',2,'Main St',5,100"),
+            SqlTestUtils.mkins("${tablePrefix}person", "name,city,street,house,score", "5,'Alice',1,'Evergreen Ave',11,250"),
+            SqlTestUtils.mkins("${tablePrefix}person", "name,city,street,house,score", "6,'Trudy',2,'Mulholland Dr',3,500")
     )
 
     @Test fun testQueryNoObjects() {

@@ -194,7 +194,7 @@ class ObjectTest: BaseRellTest() {
 
     @Test fun testNameResolution() {
         tst.defs = listOf("object foo { x: integer = 123; }", "class user { name; }")
-        tst.inserts = listOf(SqlTestUtils.mkins("user", "name", "1,'Bob'"))
+        tst.inserts = listOf(SqlTestUtils.mkins("c0_user", "name", "1,'Bob'"))
 
         // Object vs. local: error.
         chkEx("{ val foo = (s = 'Hello'); return foo.s; }", "ct_err:expr_name_objloc:foo")
@@ -209,9 +209,9 @@ class ObjectTest: BaseRellTest() {
     @Test fun testMultipleRecords() {
         tst.defs = listOf("object foo { x: integer = 123; }")
         tst.inserts = listOf(
-                SqlTestUtils.mkins("foo", "x", "1,123"),
-                SqlTestUtils.mkins("foo", "x", "2,456"),
-                SqlTestUtils.mkins("foo", "x", "3,789")
+                SqlTestUtils.mkins("c0_foo", "x", "1,123"),
+                SqlTestUtils.mkins("c0_foo", "x", "2,456"),
+                SqlTestUtils.mkins("c0_foo", "x", "3,789")
         )
         tst.autoInitObjects = false
 

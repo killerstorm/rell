@@ -51,8 +51,8 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
     )
 
     private val classes = mutableMapOf<String, R_Class>()
+    private val classPoses = mutableMapOf<R_Class, S_Pos>()
     private val objects = mutableMapOf<String, R_Object>()
-    private val tables = mutableSetOf<String>()
     private val records = mutableMapOf<String, C_Record>()
     private val operations = mutableMapOf<String, R_Operation>()
     private val queries = mutableMapOf<String, R_Query>()
@@ -73,8 +73,8 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
             functions[name] = fn
         }
 
-        addClass(blockClass)
-        addClass(transactionClass)
+        addClass0(null, blockClass)
+        addClass0(null, transactionClass)
     }
 
     private fun createBlockClass(): R_Class {
@@ -98,7 +98,7 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
 
     private fun createSysClass(name: String, table: String, rowid: String, attrs: List<R_Attrib>): R_Class {
         val flags = R_ClassFlags(false, false, false, false, false)
-        val mapping = R_ClassSqlMapping(table, rowid, false)
+        val mapping = R_ClassSqlMapping(table, true, rowid, false)
         val cls = R_Class(name, flags, mapping)
 
         val attrMap = attrs.map { Pair(it.name, it) }.toMap()
@@ -110,13 +110,6 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
     fun checkTypeName(name: S_Name) {
         checkNameConflict("record", name, records)
         checkNameConflict("type", name, types)
-    }
-
-    fun checkTableName(className: S_Name, tableName: String) {
-        if (tableName in tables) {
-            throw C_Error(className.pos, "name_conflict:table:$tableName",
-                    "Cannot define class '${className.str}', because table '$tableName' already exists")
-        }
     }
 
     fun checkRecordName(name: S_Name) {
@@ -195,14 +188,19 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
         return records[C_Defs.MODULE_ARGS_RECORD]?.type
     }
 
-    fun addClass(cls: R_Class) {
+    fun addClass(name: S_Name, cls: R_Class) {
+        addClass0(name, cls)
+    }
+
+    private fun addClass0(sName: S_Name?, cls: R_Class) {
         val name = cls.name
         check(name !in types)
         check(name !in classes)
-        check(cls.mapping.table !in tables)
         classes[name] = cls
         types[name] = R_ClassType(cls)
-        tables.add(cls.mapping.table)
+        if (sName != null) {
+            classPoses[cls] = sName.pos
+        }
     }
 
     fun addObject(obj: R_Object) {
@@ -211,9 +209,7 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
         check(name !in types)
         check(name !in classes)
         check(name !in objects)
-        check(cls.mapping.table !in tables)
         objects[name] = obj
-        tables.add(cls.mapping.table)
     }
 
     fun addRecord(rec: C_Record) {
@@ -252,6 +248,8 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
         processRecords()
         functionsPass.run()
 
+        val topologicalClasses = calcTopologicalClasses()
+
         val moduleArgs = records[C_Defs.MODULE_ARGS_RECORD]
         if (moduleArgs != null && !moduleArgs.type.flags.typeFlags.gtxHuman) {
             throw C_Error(moduleArgs.name.pos, "module_args_nogtx", "Record '${C_Defs.MODULE_ARGS_RECORD}' is not GTX-compatible")
@@ -264,7 +262,8 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
                 operations.toMap(),
                 queries.toMap(),
                 functionDefs.toList(),
-                moduleArgs?.type
+                moduleArgs?.type,
+                topologicalClasses
         )
     }
 
@@ -285,6 +284,33 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
             val flags = R_RecordFlags(typeFlags, record in cyclicRecs, record in infiniteRecs)
             record.setFlags(flags)
         }
+    }
+
+    private fun calcTopologicalClasses(): List<R_Class> {
+        val graph = mutableMapOf<R_Class, Collection<R_Class>>()
+        for (cls in classes.values) {
+            val deps = mutableSetOf<R_Class>()
+            for (attr in cls.attributes.values) {
+                if (attr.type is R_ClassType) {
+                    deps.add(attr.type.rClass)
+                }
+            }
+            graph[cls] = deps
+        }
+
+        val cycles = C_GraphUtils.findCycles(graph)
+        if (!cycles.isEmpty()) {
+            val cycle = cycles[0]
+            val shortStr = cycle.joinToString(",") { it.name }
+            val str = cycle.joinToString { it.name }
+            val cls = cycle[0]
+            val pos = classPoses[cls]
+            check(pos != null) { cls.name }
+            throw C_Error(pos!!, "class_cycle:$shortStr", "Class cycle, not allowed: $str")
+        }
+
+        val res = C_GraphUtils.topologicalSort(graph)
+        return res
     }
 }
 

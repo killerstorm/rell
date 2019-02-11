@@ -28,21 +28,25 @@ class RellCodeTester(
             field = value
         }
 
+    var dropTables = true
+    var createSystemTables = true
     var autoInitObjects = true
     var strictToString = true
     var opContext: Rt_OpContext? = null
-    var rtSqlUpdatePortionSize = 1000
+    var sqlUpdatePortionSize = 1000
 
     override fun initSqlReset(conn: Connection, exec: SqlExecutor, moduleCode: String, module: R_Module) {
-        SqlUtils.resetDatabase(exec, module, true)
+        val sqlMapper = createSqlMapper()
+        SqlUtils.resetDatabase(exec, module, sqlMapper, dropTables, createSystemTables)
         if (autoInitObjects) {
             initSqlObjects(exec, module)
         }
     }
 
     private fun initSqlObjects(sqlExec: SqlExecutor, module: R_Module) {
+        val sqlMapper = createSqlMapper()
         val chainCtx = Rt_ChainContext(GTXNull, Rt_NullValue)
-        val globalCtx = Rt_GlobalContext(Rt_FailingPrinter, Rt_FailingPrinter, sqlExec, null, chainCtx, logSqlErrors = true)
+        val globalCtx = Rt_GlobalContext(Rt_FailingPrinter, Rt_FailingPrinter, sqlExec, sqlMapper, null, chainCtx, logSqlErrors = true)
         val modCtx = Rt_ModuleContext(globalCtx, module)
         sqlExec.transaction {
             modCtx.insertObjectRecords()
@@ -50,7 +54,7 @@ class RellCodeTester(
     }
 
     fun chkQuery(bodyCode: String, expected: String) {
-        val queryCode = "query q() $bodyCode"
+        val queryCode = "query q() = $bodyCode;"
         chkQueryEx(queryCode, listOf(), expected)
     }
 
@@ -79,7 +83,7 @@ class RellCodeTester(
         assertEquals(expected, actual)
     }
 
-    fun chkOp(bodyCode: String, expected: String) {
+    fun chkOp(bodyCode: String, expected: String = "OK") {
         val opCode = "operation o() { $bodyCode }"
         chkOpEx(opCode, expected)
     }
@@ -172,10 +176,11 @@ class RellCodeTester(
                 stdoutPrinter,
                 logPrinter,
                 getSqlExec(),
+                createSqlMapper(),
                 opContext,
                 chainContext,
                 logSqlErrors = true,
-                sqlUpdatePortionSize = rtSqlUpdatePortionSize
+                sqlUpdatePortionSize = sqlUpdatePortionSize
         )
     }
 

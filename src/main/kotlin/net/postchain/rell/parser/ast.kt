@@ -101,11 +101,10 @@ class S_ClassDefinition(name: S_Name, val annotations: List<S_Name>, val clauses
         val rFlags = compileFlags()
 
         val sqlTable = classNameToSqlTable(name.str)
-        val rMapping = R_ClassSqlMapping(sqlTable, ROWID_COLUMN, true)
-        ctx.checkTableName(name, rMapping.table)
+        val rMapping = R_ClassSqlMapping(sqlTable, false, ROWID_COLUMN, true)
 
         val rClass = R_Class(name.str, rFlags, rMapping)
-        ctx.addClass(rClass)
+        ctx.addClass(name, rClass)
 
         ctx.classesPass.add {
             classesPass(ctx, entityIndex, rClass)
@@ -165,10 +164,9 @@ class S_ObjectDefinition(name: S_Name, val clauses: List<S_RelClause>): S_Defini
         ctx.checkTypeName(name)
 
         val sqlTable = classNameToSqlTable(name.str)
-        ctx.checkTableName(name, sqlTable)
 
         val classFlags = R_ClassFlags(true, false, true, false, false)
-        val sqlMapping = R_ClassSqlMapping(sqlTable, ROWID_COLUMN, true)
+        val sqlMapping = R_ClassSqlMapping(sqlTable, false, ROWID_COLUMN, true)
         val rClass = R_Class(name.str, classFlags, sqlMapping)
         val rObject = R_Object(rClass, entityIndex)
         ctx.addObject(rObject)

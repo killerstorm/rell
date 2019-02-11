@@ -445,7 +445,7 @@ class R_SysFn_Record_FromBytes(val type: R_RecordType): R_SysFunction() {
             val gtx = decodeGTXValue(bytes)
             val convCtx = GtxToRtContext()
             val res = type.gtxToRt(convCtx, gtx, false)
-            convCtx.finish(ctx.sqlExec)
+            convCtx.finish(ctx.sqlExec, ctx.sqlMapper)
             res
         }
     }
@@ -459,7 +459,7 @@ class R_SysFn_Record_FromGtx(val type: R_RecordType, val human: Boolean): R_SysF
         return Rt_Utils.wrapErr("fn:record:fromGtx") {
             val convCtx = GtxToRtContext()
             val res = type.gtxToRt(convCtx, gtx, human)
-            convCtx.finish(ctx.sqlExec)
+            convCtx.finish(ctx.sqlExec, ctx.sqlMapper)
             res
         }
     }

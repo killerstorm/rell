@@ -1,7 +1,7 @@
 package net.postchain.rell.sql
 
 import net.postchain.rell.model.*
-import net.postchain.rell.runtime.Rt_JsonValue
+import net.postchain.rell.runtime.Rt_SqlMapper
 import org.jooq.*
 import org.jooq.impl.DSL
 import org.jooq.impl.DSL.constraint
@@ -17,13 +17,17 @@ fun getSQLType(t: R_Type): DataType<*> {
     }
 }
 
-private val ROWID_SQL = """
-    CREATE TABLE rowid_gen( last_value bigint not null);
-    INSERT INTO rowid_gen (last_value) VALUES (0);
-    CREATE FUNCTION $MAKE_ROWID_FUNCTION() RETURNS BIGINT AS
-    'UPDATE rowid_gen SET last_value = last_value + 1 RETURNING last_value'
-    LANGUAGE SQL;
-    """
+private fun genRowidSql(sqlMapper: Rt_SqlMapper): String {
+    val table = sqlMapper.rowidTable
+    val func = sqlMapper.rowidFunction
+    return """
+            CREATE TABLE $table( last_value bigint not null);
+            INSERT INTO $table(last_value) VALUES (0);
+            CREATE FUNCTION $func() RETURNS BIGINT AS
+            'UPDATE $table SET last_value = last_value + 1 RETURNING last_value'
+            LANGUAGE SQL;
+    """.trimIndent()
+}
 
 private val CREATE_TABLE_BLOCKS = """
 CREATE TABLE blocks(
@@ -51,21 +55,22 @@ CREATE TABLE transactions(
 );
 """.trimIndent()
 
-private fun genClass(classDefinition: R_Class): String {
+private fun genClass(sqlMapper: Rt_SqlMapper, classDefinition: R_Class): String {
     val mapping = classDefinition.mapping
+    val tableName = mapping.table(sqlMapper)
     val attrs = classDefinition.attributes.values
 
-    val t = ctx.createTable(mapping.table)
+    val t = ctx.createTable(tableName)
 
     val constraints = mutableListOf<Constraint>()
-    constraints.add(constraint("PK_" + mapping.table).primaryKey(mapping.rowidColumn))
-    constraints += genAttrConstraints(mapping.table, attrs)
+    constraints.add(constraint("PK_" + tableName).primaryKey(mapping.rowidColumn))
+    constraints += genAttrConstraints(sqlMapper, tableName, attrs)
 
     var q = t.column(mapping.rowidColumn, SQLDataType.BIGINT.nullable(false))
     q = genAttrColumns(attrs, q)
 
     for ((kidx, key) in classDefinition.keys.withIndex()) {
-        constraints.add(constraint("K_${mapping.table}_${kidx}").unique(*key.attribs.toTypedArray()))
+        constraints.add(constraint("K_${tableName}_${kidx}").unique(*key.attribs.toTypedArray()))
     }
 
     var ddl = q.constraints(*constraints.toTypedArray()).toString() + ";\n"
@@ -74,7 +79,6 @@ private fun genClass(classDefinition: R_Class): String {
 
     for ((iidx, index) in classDefinition.indexes.withIndex()) {
         val index_sql : String;
-        val tableName = mapping.table
         if (index.attribs.size == 1 && jsonAttribSet.contains(index.attribs[0])) {
             val attrName = index.attribs[0]
             index_sql = "CREATE INDEX \"IDX_${tableName}_${iidx}\" ON \"$tableName\" USING gin (\"${attrName}\" jsonb_path_ops)"
@@ -95,15 +99,16 @@ private fun genAttrColumns(attrs: Collection<R_Attrib>, step: CreateTableColumnS
     return q
 }
 
-private fun genAttrConstraints(sqlTable: String, attrs: Collection<R_Attrib>): List<Constraint> {
+private fun genAttrConstraints(sqlMapper: Rt_SqlMapper, sqlTable: String, attrs: Collection<R_Attrib>): List<Constraint> {
     val constraints = mutableListOf<Constraint>()
 
     for (attr in attrs) {
         if (attr.type is R_ClassType) {
             val refCls = attr.type.rClass
+            val refTable = refCls.mapping.table(sqlMapper)
             val constraint = constraint("${sqlTable}_${attr.sqlMapping}_FK")
                     .foreignKey(attr.sqlMapping)
-                    .references(refCls.mapping.table, refCls.mapping.rowidColumn)
+                    .references(refTable, refCls.mapping.rowidColumn)
             constraints.add(constraint)
         }
     }
@@ -164,7 +169,7 @@ fun genExpr(expr: R_Expr): String {
     }
 }
 
-fun genop(opDefinition: R_Operation): String {
+fun genOp(opDefinition: R_Operation): String {
     val args = opDefinition.params.map {
         val typename = getSQLType(it.type).getTypeName(ctx.configuration())
         "_${it.name} ${typename}"
@@ -182,29 +187,29 @@ fun genop(opDefinition: R_Operation): String {
 """
 }
 
-fun gensql(model: R_Module, blockTable: Boolean, operations: Boolean): String {
+fun genSql(module: R_Module, sqlMapper: Rt_SqlMapper, blockTable: Boolean, operations: Boolean): String {
     System.setProperty("org.jooq.no-logo", "true")
 
     var s = ""
-    s += ROWID_SQL
+    s += genRowidSql(sqlMapper)
     if (blockTable) {
         s += CREATE_TABLE_BLOCKS
         s += CREATE_TABLE_TRANSACTIONS
     }
 
-    for (cls in model.classes.values) {
+    for (cls in module.topologicalClasses) {
         if (cls.mapping.autoCreateTable) {
-            s += genClass(cls)
+            s += genClass(sqlMapper, cls)
         }
     }
 
-    for (obj in model.objects.values) {
-        s += genClass(obj.rClass)
+    for (obj in module.objects.values) {
+        s += genClass(sqlMapper, obj.rClass)
     }
 
     if (operations) {
-        for (op in model.operations.values) {
-            s += genop(op)
+        for (op in module.operations.values) {
+            s += genOp(op)
         }
     }
 

@@ -7,10 +7,9 @@ import net.postchain.rell.parser.C_Utils
 
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.DefaultSqlExecutor
-import net.postchain.rell.sql.gensql
+import net.postchain.rell.sql.genSql
 import org.apache.commons.logging.LogFactory
 import java.io.File
-import java.sql.Connection
 
 private object StdoutRtPrinter: Rt_Printer() {
     override fun print(str: String) {
@@ -65,7 +64,8 @@ class RellGTXOperation(val module: RellPostchainModule, val rOperation: R_Operat
         val modCtx = module.makeRtModuleContext(ctx, opCtx)
 
         catchRtErr {
-            gtxToRtCtx.finish(modCtx.globalCtx.sqlExec)
+            val globalCtx = modCtx.globalCtx
+            gtxToRtCtx.finish(globalCtx.sqlExec, globalCtx.sqlMapper)
         }
 
         try {
@@ -95,13 +95,14 @@ class RellPostchainModule(val rModule: R_Module, val moduleName: String, val cha
     }
 
     private fun initDb(ctx: EContext) {
-        val sql = gensql(rModule, false, false)
-        ctx.conn.createStatement().use {
-            it.execute(sql)
-        }
-
         catchRtErr {
             val modCtx = makeRtModuleContext(ctx, null)
+
+            val sql = genSql(rModule, modCtx.globalCtx.sqlMapper, false, false)
+            ctx.conn.createStatement().use {
+                it.execute(sql)
+            }
+
             modCtx.insertObjectRecords()
         }
     }
@@ -144,7 +145,8 @@ class RellPostchainModule(val rModule: R_Module, val moduleName: String, val cha
             val gtxToRtCtx = GtxToRtContext()
             val args = rQuery.params.map { argMap.getValue(it.name) }
             val res = convertArgs(gtxToRtCtx, rQuery.params, args, GTX_QUERY_HUMAN)
-            gtxToRtCtx.finish(modCtx.globalCtx.sqlExec)
+            val globalCtx = modCtx.globalCtx
+            gtxToRtCtx.finish(globalCtx.sqlExec, globalCtx.sqlMapper)
             res
         }
 
@@ -152,8 +154,9 @@ class RellPostchainModule(val rModule: R_Module, val moduleName: String, val cha
     }
 
     fun makeRtModuleContext(eCtx: EContext, opCtx: Rt_OpContext?): Rt_ModuleContext {
-        val exec = DefaultSqlExecutor(eCtx.conn)
-        val globalCtx = Rt_GlobalContext(StdoutRtPrinter, LogRtPrinter, exec, opCtx, chainCtx)
+        val exec = DefaultSqlExecutor(eCtx.conn, false)
+        val sqlMapper = Rt_SqlMapper(eCtx.chainID)
+        val globalCtx = Rt_GlobalContext(StdoutRtPrinter, LogRtPrinter, exec, sqlMapper, opCtx, chainCtx)
         return Rt_ModuleContext(globalCtx, rModule)
     }
 }

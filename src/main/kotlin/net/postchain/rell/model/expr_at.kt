@@ -50,14 +50,15 @@ class R_AtExprBase(
     }
 
     fun execute(frame: Rt_CallFrame, params: List<Rt_Value>, limit: R_Expr?): List<Array<Rt_Value>> {
-        val rtSql = buildSql(params, limit)
+        val sqlMapper = frame.entCtx.modCtx.globalCtx.sqlMapper
+        val rtSql = buildSql(sqlMapper, params, limit)
         val resultTypes = what.map { it.type }
         val select = SqlSelect(rtSql, resultTypes)
         val records = select.execute(frame)
         return records
     }
 
-    private fun buildSql(params: List<Rt_Value>, limit: R_Expr?): ParameterizedSql {
+    private fun buildSql(sqlMapper: Rt_SqlMapper, params: List<Rt_Value>, limit: R_Expr?): ParameterizedSql {
         val ctx = SqlGenContext(from, params)
         val fromInfo = buildFromInfo(ctx)
 
@@ -68,12 +69,8 @@ class R_AtExprBase(
             it.toSql(ctx, b)
         }
 
-        appendFrom(b, fromInfo)
-
-        if (where != null) {
-            b.append(" WHERE ")
-            where.toSql(ctx, b)
-        }
+        appendFrom(b, sqlMapper, fromInfo)
+        appendWhere(b, ctx, sqlMapper, fromInfo)
 
         b.append(" ORDER BY ")
         val orderByList = b.listBuilder()
@@ -113,22 +110,46 @@ class R_AtExprBase(
         return ctx.getFromInfo()
     }
 
-    private fun appendFrom(b: SqlBuilder, fromInfo: SqlFromInfo) {
+    private fun appendFrom(b: SqlBuilder, sqlMapper: Rt_SqlMapper, fromInfo: SqlFromInfo) {
         b.append(" FROM ")
         b.append(fromInfo.classes, ", ") { cls ->
-            b.appendName(cls.alias.cls.mapping.table)
+            val table = cls.alias.cls.mapping.table(sqlMapper)
+            b.appendName(table)
             b.append(" ")
             b.append(cls.alias.str)
 
             for (join in cls.joins) {
                 b.append(" INNER JOIN ")
-                b.appendName(join.alias.cls.mapping.table)
+                val joinTable = join.alias.cls.mapping.table(sqlMapper)
+                b.appendName(joinTable)
                 b.append(" ")
                 b.append(join.alias.str)
                 b.append(" ON ")
                 b.appendColumn(join.baseAlias, join.attr)
                 b.append(" = ")
                 b.appendColumn(join.alias, join.alias.cls.mapping.rowidColumn)
+            }
+        }
+    }
+
+    private fun appendWhere(b: SqlBuilder, ctx: SqlGenContext, sqlMapper: Rt_SqlMapper, fromInfo: SqlFromInfo) {
+        val whereB = SqlBuilder()
+        where?.toSql(ctx, whereB)
+        appendExtraWhere(whereB, sqlMapper, fromInfo)
+
+        if (!whereB.isEmpty()) {
+            b.append(" WHERE ")
+            b.append(whereB)
+        }
+    }
+
+    companion object {
+        fun appendExtraWhere(b: SqlBuilder, sqlMapper: Rt_SqlMapper, fromInfo: SqlFromInfo) {
+            for (cls in fromInfo.classes) {
+                cls.alias.cls.mapping.extraWhere(b, sqlMapper, cls.alias)
+                for (join in cls.joins) {
+                    join.alias.cls.mapping.extraWhere(b, sqlMapper, join.alias)
+                }
             }
         }
     }

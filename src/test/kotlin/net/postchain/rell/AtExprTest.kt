@@ -71,14 +71,14 @@ class AtExprTest: BaseRellTest() {
                 "class bar_owner { name: text; stuff: bar; foo: foo; bar: bar; }"
         )
         tst.inserts = listOf(
-                mkins("foo", "name", "0,'Foo-1'"),
-                mkins("foo", "name", "1,'Foo-2'"),
-                mkins("bar", "name", "2,'Bar-1'"),
-                mkins("bar", "name", "3,'Bar-2'"),
-                mkins("foo_owner", "name,stuff,foo,bar", "4,'Bob',0,1,2"),
-                mkins("foo_owner", "name,stuff,foo,bar", "5,'Alice',1,0,3"),
-                mkins("bar_owner", "name,stuff,foo,bar", "6,'Trudy',2,1,3"),
-                mkins("bar_owner", "name,stuff,foo,bar", "7,'Andrew',3,0,2")
+                mkins("c0_foo", "name", "0,'Foo-1'"),
+                mkins("c0_foo", "name", "1,'Foo-2'"),
+                mkins("c0_bar", "name", "2,'Bar-1'"),
+                mkins("c0_bar", "name", "3,'Bar-2'"),
+                mkins("c0_foo_owner", "name,stuff,foo,bar", "4,'Bob',0,1,2"),
+                mkins("c0_foo_owner", "name,stuff,foo,bar", "5,'Alice',1,0,3"),
+                mkins("c0_bar_owner", "name,stuff,foo,bar", "6,'Trudy',2,1,3"),
+                mkins("c0_bar_owner", "name,stuff,foo,bar", "7,'Andrew',3,0,2")
         )
         val base = """
             val foo1 = foo @ { .name == 'Foo-1' };
@@ -168,10 +168,10 @@ class AtExprTest: BaseRellTest() {
                 "class company { name: text; }"
         )
         tst.inserts = listOf(
-                mkins("user", "name", "0,'Bob'"),
-                mkins("user", "name", "1,'Alice'"),
-                mkins("company", "name", "2,'Xerox'"),
-                mkins("company", "name", "3,'Bell'")
+                mkins("c0_user", "name", "0,'Bob'"),
+                mkins("c0_user", "name", "1,'Alice'"),
+                mkins("c0_company", "name", "2,'Xerox'"),
+                mkins("c0_company", "name", "3,'Bell'")
         )
 
         chk("(user, company) @ { .name == 'Bob' }", "ct_err:at_attr_name_ambig:name:user.name,company.name")
@@ -189,14 +189,14 @@ class AtExprTest: BaseRellTest() {
                 "class double { t1: target; t2: target; }"
         )
         tst.inserts = listOf(
-                mkins("target", "name", "0,'A'"),
-                mkins("target", "name", "1,'B'"),
-                mkins("target", "name", "2,'C'"),
-                mkins("single", "t", "0,0"),
-                mkins("single", "t", "1,1"),
-                mkins("double", "t1,t2", "0,0,1"),
-                mkins("double", "t1,t2", "1,1,2"),
-                mkins("double", "t1,t2", "2,2,0")
+                mkins("c0_target", "name", "0,'A'"),
+                mkins("c0_target", "name", "1,'B'"),
+                mkins("c0_target", "name", "2,'C'"),
+                mkins("c0_single", "t", "0,0"),
+                mkins("c0_single", "t", "1,1"),
+                mkins("c0_double", "t1,t2", "0,0,1"),
+                mkins("c0_double", "t1,t2", "1,1,2"),
+                mkins("c0_double", "t1,t2", "2,2,0")
         )
         val base = """
             val tgt1 = target @ { .name == 'A' };
@@ -228,17 +228,17 @@ class AtExprTest: BaseRellTest() {
                 "class country { name: text; }"
         )
         tst.inserts = listOf(
-                mkins("person", "name,cityName", "100,'James','New York'"),
-                mkins("person", "name,cityName", "101,'Phil','London'"),
-                mkins("person", "name,cityName", "102,'Roman','Kyiv'"),
+                mkins("c0_person", "name,cityName", "100,'James','New York'"),
+                mkins("c0_person", "name,cityName", "101,'Phil','London'"),
+                mkins("c0_person", "name,cityName", "102,'Roman','Kyiv'"),
 
-                mkins("city", "name,countryName", "200,'New York','USA'"),
-                mkins("city", "name,countryName", "201,'Kyiv','Ukraine'"),
-                mkins("city", "name,countryName", "202,'London','England'"),
+                mkins("c0_city", "name,countryName", "200,'New York','USA'"),
+                mkins("c0_city", "name,countryName", "201,'Kyiv','Ukraine'"),
+                mkins("c0_city", "name,countryName", "202,'London','England'"),
 
-                mkins("country", "name", "300,'England'"),
-                mkins("country", "name", "301,'Ukraine'"),
-                mkins("country", "name", "302,'USA'")
+                mkins("c0_country", "name", "300,'England'"),
+                mkins("c0_country", "name", "301,'Ukraine'"),
+                mkins("c0_country", "name", "302,'USA'")
         )
 
         chk("(person, city, country) @* { city.name == person.cityName, country.name == city.countryName }",
@@ -261,12 +261,12 @@ class AtExprTest: BaseRellTest() {
                 "class proxy { ref: testee; }"
         )
         tst.inserts = listOf(
-                mkins("testee", "k1,k2,k3,i1,i2,i3,f1,f2", "1,100,101,102,103,104,105,106,107"),
-                mkins("testee", "k1,k2,k3,i1,i2,i3,f1,f2", "2,200,201,202,203,204,205,206,207"),
-                mkins("testee", "k1,k2,k3,i1,i2,i3,f1,f2", "3,300,301,302,303,304,305,306,307"),
-                mkins("proxy", "ref", "1,1"),
-                mkins("proxy", "ref", "2,2"),
-                mkins("proxy", "ref", "3,3")
+                mkins("c0_testee", "k1,k2,k3,i1,i2,i3,f1,f2", "1,100,101,102,103,104,105,106,107"),
+                mkins("c0_testee", "k1,k2,k3,i1,i2,i3,f1,f2", "2,200,201,202,203,204,205,206,207"),
+                mkins("c0_testee", "k1,k2,k3,i1,i2,i3,f1,f2", "3,300,301,302,303,304,305,306,307"),
+                mkins("c0_proxy", "ref", "1,1"),
+                mkins("c0_proxy", "ref", "2,2"),
+                mkins("c0_proxy", "ref", "3,3")
         )
 
         // Direct fields of the query class.
@@ -511,7 +511,7 @@ class AtExprTest: BaseRellTest() {
         """.trimIndent())
 
         tst.inserts = listOf("""
-            INSERT INTO user_account(rowid, name, login, role, password_hash, deleted, pubkey, aux_data, tuid, created_by)
+            INSERT INTO c0_user_account(rowid, name, login, role, password_hash, deleted, pubkey, aux_data, tuid, created_by)
             VALUES (0, 'name1', 'test1@mail.io', 'issuer', 'test', false, '123', '{}', '12345', '1231234'),
             (1, 'name2', 'test2@mail.io', 'validator', '2test', false, '2123', '{}', '212345', '21231234');
         """.trimIndent())
@@ -550,9 +550,9 @@ class AtExprTest: BaseRellTest() {
     }
 
     private object Ins {
-        fun company(id: Int, name: String): String = mkins("company", "name", "$id, '$name'")
+        fun company(id: Int, name: String): String = mkins("c0_company", "name", "$id, '$name'")
 
         fun user(id: Int, companyId: Int, firstName: String, lastName: String): String =
-                mkins("user", "firstName,lastName,company", "$id, '$firstName', '$lastName', $companyId")
+                mkins("c0_user", "firstName,lastName,company", "$id, '$firstName', '$lastName', $companyId")
     }
 }

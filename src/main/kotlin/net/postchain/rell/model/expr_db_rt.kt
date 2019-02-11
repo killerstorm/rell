@@ -84,6 +84,10 @@ class SqlBuilder {
     private val sqlBuf = StringBuilder()
     private val paramsBuf = mutableListOf<SqlParam>()
 
+    fun isEmpty(): Boolean {
+        return sqlBuf.isEmpty() && paramsBuf.isEmpty()
+    }
+
     fun <T> append(list: Collection<T>, sep: String, block: (T) -> Unit) {
         var s = ""
         for (t in list) {
@@ -123,9 +127,20 @@ class SqlBuilder {
         paramsBuf.add(SqlParam_Value(type, value))
     }
 
+    fun append(buf: SqlBuilder) {
+        sqlBuf.append(buf.sqlBuf)
+        paramsBuf.addAll(buf.paramsBuf)
+    }
+
     fun append(sql: ParameterizedSql) {
         sqlBuf.append(sql.sql)
         paramsBuf.addAll(sql.params)
+    }
+
+    fun appendSep(sep: String) {
+        if (!isEmpty()) {
+            append(sep)
+        }
     }
 
     fun listBuilder(sep: String = ", "): SqlListBuilder = SqlListBuilder(this, sep)

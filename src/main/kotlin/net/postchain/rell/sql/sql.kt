@@ -1,11 +1,11 @@
 package net.postchain.rell.sql
 
 import net.postchain.rell.model.R_Module
+import net.postchain.rell.runtime.Rt_SqlMapper
 import java.io.Closeable
 import java.sql.*
 
 val ROWID_COLUMN = "rowid"
-val MAKE_ROWID_FUNCTION = "make_rowid"
 
 abstract class SqlExecutor {
     abstract fun transaction(code: () -> Unit)
@@ -14,11 +14,7 @@ abstract class SqlExecutor {
     abstract fun executeQuery(sql: String, preparator: (PreparedStatement) -> Unit, consumer: (ResultSet) -> Unit)
 }
 
-class DefaultSqlExecutor(private val con: Connection): SqlExecutor(), Closeable {
-    init {
-        con.autoCommit = false
-    }
-
+class DefaultSqlExecutor(private val con: Connection, private val logging: Boolean): SqlExecutor(), Closeable {
     override fun transaction(code: () -> Unit) {
         var rollback = true
         try {
@@ -63,6 +59,9 @@ class DefaultSqlExecutor(private val con: Connection): SqlExecutor(), Closeable 
     }
 
     private fun <T> execute0(sql: String, code: () -> T): T {
+        if (logging) {
+            println(sql)
+        }
         return code()
     }
 
@@ -75,15 +74,12 @@ class DefaultSqlExecutor(private val con: Connection): SqlExecutor(), Closeable 
             return connect0() { DriverManager.getConnection(url) }
         }
 
-        fun connect(url: String, user: String, password: String): DefaultSqlExecutor {
-            return connect0() { DriverManager.getConnection(url, user, password) }
-        }
-
         private fun connect0(factory: () -> Connection): DefaultSqlExecutor {
             val con = factory()
             var c: AutoCloseable? = con
             try {
-                val exec = DefaultSqlExecutor(con)
+                con.autoCommit = false
+                val exec = DefaultSqlExecutor(con, false)
                 c = null
                 return exec
             } finally {
@@ -106,10 +102,18 @@ object NoConnSqlExecutor: SqlExecutor() {
 }
 
 object SqlUtils {
-    fun resetDatabase(sqlExec: SqlExecutor, module: R_Module, blockTables: Boolean) {
+    fun resetDatabase(
+            sqlExec: SqlExecutor,
+            module: R_Module,
+            sqlMapper: Rt_SqlMapper,
+            dropTables: Boolean,
+            createBlockTables: Boolean
+    ) {
         sqlExec.transaction {
-            dropAll(sqlExec)
-            val sql = gensql(module, blockTables, false)
+            if (dropTables) {
+                dropAll(sqlExec)
+            }
+            val sql = genSql(module, sqlMapper, createBlockTables, false)
             sqlExec.execute(sql)
         }
     }

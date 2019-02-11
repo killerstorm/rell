@@ -1,6 +1,8 @@
 package net.postchain.rell
 
 import net.postchain.rell.test.BaseRellTest
+import net.postchain.rell.test.RellCodeTester
+import net.postchain.rell.test.SqlTestUtils
 import org.junit.Test
 import kotlin.test.assertEquals
 
@@ -135,7 +137,6 @@ class ClassTest: BaseRellTest(false) {
 
     @Test fun testDeclarationOrder() {
         chkCompile("class user { c: company; } class company { name; }", "OK")
-        chkCompile("class user { c: company; } class company { u: user; }", "OK")
         chkCompile("query q() = user @* {}; class user { name; }", "OK")
     }
 
@@ -174,5 +175,61 @@ class ClassTest: BaseRellTest(false) {
         val m2 = tst.compileModuleEx("class user (log) {}")
         val c2 = m2.classes["user"]!!
         assertEquals(true, c2.flags.log)
+    }
+
+    @Test fun testBugSqlCreateTableOrder() {
+        // Bug: SQL tables must be created in topological order because of foreign key constraints.
+        tst.defs = listOf("class user { name: text; company; }", "class company { name: text; }")
+        tst.useSql = true
+        chkOp("val c = create company('Amazon'); create user ('Bob', c);")
+        chkData("user(2,Bob,1)", "company(1,Amazon)")
+        chk("company @* {} ( =.name )", "list<text>[text[Amazon]]")
+        chk("user @* {} ( =.name, =.company )", "list<(text,company)>[(text[Bob],company[1])]")
+    }
+
+    @Test fun testCycle() {
+        chkCompile("class foo { bar; } class bar { foo; }", "ct_err:class_cycle:foo,bar")
+    }
+
+    @Test fun testTablePrefix() {
+        tst.useSql = true
+        tst.chkData() // Does database reset, creates system tables
+
+        val tst1 = createTablePrefixTester(123, 100, "Amazon", "Bob")
+        val tst2 = createTablePrefixTester(456, 200, "Google", "Alice")
+
+        tst1.chkData("user(101,Bob,100)", "company(100,Amazon)")
+        tst1.chkQuery("company @* {}( =company, =.name )", "[(company[100],Amazon)]")
+        tst1.chkQuery("user @* {}( =user, =.name, =.company.name )", "[(user[101],Bob,Amazon)]")
+
+        tst2.chkData("user(201,Alice,200)", "company(200,Google)")
+        tst2.chkQuery("company @* {}( =company, =.name )", "[(company[200],Google)]")
+        tst2.chkQuery("user @* {}( =user, =.name, =.company.name )", "[(user[201],Alice,Google)]")
+
+        tst1.chkOp("val c = create company('Facebook'); create user ('Trudy', c);")
+        tst2.chkOp("val c = create company('Microsoft'); create user ('James', c);")
+
+        tst1.chkData("user(2,Trudy,1)", "user(101,Bob,100)", "company(1,Facebook)", "company(100,Amazon)")
+        tst1.chkQuery("company @* {}( =company, =.name )", "[(company[1],Facebook), (company[100],Amazon)]")
+        tst1.chkQuery("user @* {}( =user, =.name, =.company.name )", "[(user[2],Trudy,Facebook), (user[101],Bob,Amazon)]")
+
+        tst2.chkData("user(2,James,1)", "user(201,Alice,200)", "company(1,Microsoft)", "company(200,Google)")
+        tst2.chkQuery("company @* {}( =company, =.name )", "[(company[1],Microsoft), (company[200],Google)]")
+        tst2.chkQuery("user @* {}( =user, =.name, =.company.name )", "[(user[2],James,Microsoft), (user[201],Alice,Google)]")
+    }
+
+    private fun createTablePrefixTester(chainId: Long, rowid: Long, company: String, user: String): RellCodeTester {
+        val t = resource(RellCodeTester())
+        t.useSql = true
+        t.defs = listOf("class user { name: text; company; }", "class company { name: text; }")
+        t.chainId = chainId
+        t.inserts = listOf(
+                SqlTestUtils.mkins("c${chainId}_company", "name","${rowid},'$company'"),
+                SqlTestUtils.mkins("c${chainId}_user", "name,company","${rowid+1},'$user',${rowid}")
+        )
+        t.dropTables = false
+        t.createSystemTables = false
+        t.strictToString = false
+        return t
     }
 }

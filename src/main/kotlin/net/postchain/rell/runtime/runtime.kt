@@ -18,6 +18,7 @@ class Rt_GlobalContext(
         val stdoutPrinter: Rt_Printer,
         val logPrinter: Rt_Printer,
         sqlExec: SqlExecutor,
+        val sqlMapper: Rt_SqlMapper,
         val opCtx: Rt_OpContext?,
         val chainCtx: Rt_ChainContext,
         val logSqlErrors: Boolean = false,
@@ -113,6 +114,26 @@ abstract class Rt_Printer {
 object Rt_FailingPrinter: Rt_Printer() {
     override fun print(str: String) {
         throw UnsupportedOperationException()
+    }
+}
+
+class Rt_SqlMapper(private val chainId: Long) {
+    private val prefix = "c" + chainId + "_"
+
+    val rowidTable = mapName("rowid_gen")
+    val rowidFunction = mapName("make_rowid")
+
+    fun mapName(name: String): String {
+        return prefix + name
+    }
+
+    fun blockTxWhere(b: SqlBuilder, alias: SqlTableAlias) {
+        b.appendSep(" AND ")
+        b.append("(")
+        b.appendColumn(alias, "chain_id")
+        b.append(" = ")
+        b.append(R_IntegerType, Rt_IntValue(chainId))
+        b.append(")")
     }
 }
 

@@ -1,9 +1,10 @@
 package net.postchain.rell
 
+import net.postchain.rell.test.BaseResourcefulTest
 import org.junit.Test
 import kotlin.test.assertEquals
 
-abstract class AbstractOpTest {
+abstract class AbstractOpTest: BaseResourcefulTest() {
     @Test fun testCmpBoolean() {
         chkOpBool("==", vBool(false), vBool(false), true)
         chkOpBool("==", vBool(false), vBool(true), false)

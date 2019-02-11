@@ -94,3 +94,11 @@ print(state.text);
 Modifying an object using the update statement:
 
 update state ( x += 5, s = 'Updated' );
+
+
+9. Table name prefixing (multiple blockchains support)
+
+SQL table for a class or object X will be called c{BLOCKCHAIN_ID}_X, not X. This allows to run multiple blockchains on
+a single database without table name conflicts.
+
+System tables "blocks" and "transactions" will be shared by different blockchains, and their names will not be prefixed.

@@ -19,15 +19,15 @@ class GtxToRtContext {
         objectIds.put(cls, rowid)
     }
 
-    fun finish(sqlExec: SqlExecutor) {
+    fun finish(sqlExec: SqlExecutor, sqlMapper: Rt_SqlMapper) {
         for (rClass in objectIds.keySet()) {
             val rowids = objectIds.get(rClass)
-            checkRowids(sqlExec, rClass, rowids)
+            checkRowids(sqlExec, sqlMapper, rClass, rowids)
         }
     }
 
-    private fun checkRowids(sqlExec: SqlExecutor, rClass: R_Class, rowids: Collection<Long>) {
-        val existingIds = selectExistingIds(sqlExec, rClass, rowids)
+    private fun checkRowids(sqlExec: SqlExecutor, sqlMapper: Rt_SqlMapper, rClass: R_Class, rowids: Collection<Long>) {
+        val existingIds = selectExistingIds(sqlExec, sqlMapper, rClass, rowids)
         val missingIds = rowids.toSet() - existingIds
         if (!missingIds.isEmpty()) {
             val s = missingIds.toList().sorted()
@@ -36,11 +36,12 @@ class GtxToRtContext {
         }
     }
 
-    private fun selectExistingIds(sqlExec: SqlExecutor, rClass: R_Class, rowids: Collection<Long>): Set<Long> {
+    private fun selectExistingIds(sqlExec: SqlExecutor, sqlMapper: Rt_SqlMapper, rClass: R_Class, rowids: Collection<Long>): Set<Long> {
         val buf = StringBuilder()
+        val table = rClass.mapping.table(sqlMapper)
         val col = rClass.mapping.rowidColumn
         buf.append("SELECT \"").append(col).append("\"")
-        buf.append(" FROM \"").append(rClass.mapping.table).append("\"")
+        buf.append(" FROM \"").append(table).append("\"")
         buf.append(" WHERE \"").append(col).append("\" IN (")
         rowids.joinTo(buf, ",")
         buf.append(")")

@@ -182,7 +182,7 @@ class UpdateDeleteExprTest: BaseRellTest() {
 
     @Test fun testUpdatePortions() {
         tst.inserts = listOf()
-        tst.rtSqlUpdatePortionSize = 5
+        tst.sqlUpdatePortionSize = 5
         val n = 33
 
         chkOp("for (i in range($n)) { create user(name = 'user_' + i, score = i * i); }")
@@ -206,7 +206,7 @@ class UpdateDeleteExprTest: BaseRellTest() {
 
     @Test fun testDeletePortions() {
         tst.inserts = listOf()
-        tst.rtSqlUpdatePortionSize = 5
+        tst.sqlUpdatePortionSize = 5
         val n = 33
 
         chkOp("for (i in range($n)) { create user(name = 'user_' + i, score = i * i); }")
@@ -248,5 +248,5 @@ class UpdateDeleteExprTest: BaseRellTest() {
     }
 
     private fun insUser(id: Int, name: String, score: Int): String =
-            SqlTestUtils.mkins("user", "name,score", "$id,'$name',$score")
+            SqlTestUtils.mkins("c0_user", "name,score", "$id,'$name',$score")
 }

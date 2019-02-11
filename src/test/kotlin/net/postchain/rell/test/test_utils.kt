@@ -2,10 +2,10 @@ package net.postchain.rell.test
 
 import com.google.common.io.Files
 import net.postchain.gtx.GTXValue
-import net.postchain.gtx.GTXValueType
 import net.postchain.rell.model.*
 import net.postchain.rell.module.GtxToRtContext
 import net.postchain.rell.runtime.Rt_GtxValue
+import net.postchain.rell.runtime.Rt_SqlMapper
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.sql.*
 import net.postchain.rell.toHex
@@ -53,8 +53,9 @@ object SqlTestUtils {
 
     private data class DbConnProps(val url: String, val user: String, val password: String)
 
-    fun resetRowid(sqlExec: SqlExecutor) {
-        sqlExec.execute("UPDATE rowid_gen SET last_value = 0;")
+    fun resetRowid(sqlExec: SqlExecutor, sqlMapper: Rt_SqlMapper) {
+        val table = sqlMapper.rowidTable
+        sqlExec.execute("UPDATE $table SET last_value = 0;")
     }
 
     fun clearTables(sqlExec: SqlExecutor) {
@@ -70,32 +71,29 @@ object SqlTestUtils {
         return "INSERT INTO \"$table\"(\"$ROWID_COLUMN\",$quotedColumns) VALUES ($values);"
     }
 
-    fun dumpDatabase(sqlExec: SqlExecutor, module: R_Module): List<String> {
+    fun dumpDatabaseClasses(sqlExec: SqlExecutor, sqlMapper: Rt_SqlMapper, module: R_Module): List<String> {
         val list = mutableListOf<String>()
 
         for (cls in module.classes.values) {
             if (cls.mapping.autoCreateTable) {
-                dumpTable(sqlExec, cls, list)
+                dumpClassTable(sqlExec, sqlMapper, cls, list)
             }
         }
 
         for (obj in module.objects.values) {
-            dumpTable(sqlExec, obj, list)
+            dumpClassTable(sqlExec, sqlMapper, obj.rClass, list)
         }
 
         return list.toList()
     }
 
-    private fun dumpTable(sqlExec: SqlExecutor, cls: R_Class, list: MutableList<String>) {
-        val sql = getDumpSql(cls.mapping.table, cls.mapping.rowidColumn, cls.attributes)
-        sqlExec.executeQuery(sql, {}) { rs -> list.add(dumpRecord(cls.name, true, cls.attributes, rs)) }
+    private fun dumpClassTable(sqlExec: SqlExecutor, sqlMapper: Rt_SqlMapper, cls: R_Class, list: MutableList<String>) {
+        val table = cls.mapping.table(sqlMapper)
+        val sql = getClassDumpSql(table, cls.mapping.rowidColumn, cls.attributes)
+        sqlExec.executeQuery(sql, {}) { rs -> list.add(dumpClassRecord(cls.name, true, cls.attributes, rs)) }
     }
 
-    private fun dumpTable(sqlExec: SqlExecutor, obj: R_Object, list: MutableList<String>) {
-        dumpTable(sqlExec, obj.rClass, list)
-    }
-
-    private fun getDumpSql(table: String, rowidCol: String?, attrs: Map<String, R_Attrib>): String {
+    private fun getClassDumpSql(table: String, rowidCol: String?, attrs: Map<String, R_Attrib>): String {
         val buf = StringBuilder()
         buf.append("SELECT")
 
@@ -116,7 +114,7 @@ object SqlTestUtils {
         return buf.toString()
     }
 
-    private fun dumpRecord(name: String, rowid: Boolean, attrs: Map<String, R_Attrib>, rs: ResultSet): String {
+    private fun dumpClassRecord(name: String, rowid: Boolean, attrs: Map<String, R_Attrib>, rs: ResultSet): String {
         val values = mutableListOf<String>()
         if (rowid) {
             values.add("" + rs.getLong(1))

@@ -2,15 +2,12 @@ package net.postchain.rell.test
 
 import net.postchain.rell.runtime.Rt_IntValue
 import net.postchain.rell.runtime.Rt_Value
-import org.junit.After
 
-abstract class BaseRellTest(useSql: Boolean = true, gtx: Boolean = false) {
+abstract class BaseRellTest(useSql: Boolean = true, gtx: Boolean = false): BaseResourcefulTest() {
     open fun classDefs(): List<String> = listOf()
     open fun objInserts(): List<String> = listOf()
 
-    val tst = RellCodeTester(useSql, classDefs(), objInserts(), gtx = gtx)
-
-    @After fun after() = tst.destroy()
+    val tst = resource(RellCodeTester(useSql, classDefs(), objInserts(), gtx = gtx))
 
     fun chk(code: String, expected: String) = chkEx("= $code ;", expected)
     fun chk(code: String, arg: Long, expected: String) = chkEx("= $code ;", arg, expected)

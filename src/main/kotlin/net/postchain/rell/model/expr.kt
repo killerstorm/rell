@@ -2,7 +2,6 @@ package net.postchain.rell.model
 
 import net.postchain.rell.parser.C_Utils
 import net.postchain.rell.runtime.*
-import net.postchain.rell.sql.MAKE_ROWID_FUNCTION
 
 abstract class R_Expr(val type: R_Type) {
     abstract fun evaluate(frame: Rt_CallFrame): Rt_Value
@@ -345,7 +344,9 @@ class R_CreateExprAttr_Default(attr: R_Attrib): R_CreateExprAttr(attr) {
 class R_CreateExpr(type: R_Type, val rClass: R_Class, val attrs: List<R_CreateExprAttr>): R_Expr(type) {
     override fun evaluate(frame: Rt_CallFrame): Rt_Value {
         frame.entCtx.checkDbUpdateAllowed()
-        val rtSql = buildSql(rClass, attrs, "$MAKE_ROWID_FUNCTION()")
+        val sqlMapper = frame.entCtx.modCtx.globalCtx.sqlMapper
+        val rowidFunc = sqlMapper.rowidFunction
+        val rtSql = buildSql(sqlMapper, rClass, attrs, "$rowidFunc()")
         val rtSel = SqlSelect(rtSql, listOf(type))
         val res = rtSel.execute(frame)
         check(res.size == 1)
@@ -354,11 +355,12 @@ class R_CreateExpr(type: R_Type, val rClass: R_Class, val attrs: List<R_CreateEx
     }
 
     companion object {
-        fun buildSql(rClass: R_Class, attrs: List<R_CreateExprAttr>, rowidExpr: String): ParameterizedSql {
+        fun buildSql(sqlMapper: Rt_SqlMapper, rClass: R_Class, attrs: List<R_CreateExprAttr>, rowidExpr: String): ParameterizedSql {
             val builder = SqlBuilder()
 
             builder.append("INSERT INTO ")
-            builder.appendName(rClass.mapping.table)
+            val table = rClass.mapping.table(sqlMapper)
+            builder.appendName(table)
 
             builder.append("(")
             builder.appendName(rClass.mapping.rowidColumn)

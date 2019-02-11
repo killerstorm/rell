@@ -1,6 +1,6 @@
 package net.postchain.rell
 
-import net.postchain.rell.lib.LibClassesTest
+import net.postchain.rell.lib.LibBlockTransactionTest
 import net.postchain.rell.runtime.Rt_OpContext
 import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
@@ -19,7 +19,8 @@ class LogAnnotationTest: BaseRellTest() {
 
     @Test fun testSysAttributes() {
         tst.defs = listOf("class foo(log) { x: integer; }")
-        tst.inserts = LibClassesTest.BLOCK_INSERTS
+        tst.inserts = LibBlockTransactionTest.BLOCK_INSERTS
+        tst.chainId = 333
         tst.opContext = Rt_OpContext(-1, 444, listOf())
 
         chkOp("create foo(x = 123);")
@@ -47,7 +48,8 @@ class LogAnnotationTest: BaseRellTest() {
 
     @Test fun testSysAttributesModify() {
         tst.defs = listOf("class foo(log) { x: integer; }")
-        tst.inserts = LibClassesTest.BLOCK_INSERTS
+        tst.inserts = LibBlockTransactionTest.BLOCK_INSERTS
+        tst.chainId = 333
         tst.opContext = Rt_OpContext(-1, 444, listOf())
 
         chkOp("create foo(x = 123, transaction@{});", "ct_err:create_attr_cantset:transaction")

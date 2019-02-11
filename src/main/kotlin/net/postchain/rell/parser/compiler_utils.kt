@@ -152,13 +152,14 @@ object C_Errors {
 }
 
 object C_GraphUtils {
-    fun <T> findCyclicVertices(graph: Map<T, Collection<T>>): List<T> {
+    /** Returns some, not all cycles (at least one cycle for each cyclic vertex). */
+    fun <T> findCycles(graph: Map<T, Collection<T>>): List<List<T>> {
         class VertEntry<T>(val vert: T, val enter: Boolean, val parent: VertEntry<T>?)
 
         val queue = LinkedList<VertEntry<T>>()
         val visiting = mutableSetOf<T>()
         val visited = mutableSetOf<T>()
-        val cycleVerts = mutableSetOf<T>()
+        val cycles = mutableListOf<List<T>>()
 
         for (vert in graph.keys) {
             queue.add(VertEntry(vert, true, null))
@@ -176,12 +177,14 @@ object C_GraphUtils {
                 continue
             } else if (entry.vert in visiting) {
                 var cycleEntry = entry
+                val cycle = mutableListOf<T>()
                 while (true) {
-                    cycleVerts.add(cycleEntry.vert)
+                    cycle.add(cycleEntry.vert)
                     cycleEntry = cycleEntry.parent
                     check(cycleEntry != null)
                     if (cycleEntry.vert == entry.vert) break
                 }
+                cycles.add(cycle.toList())
                 continue
             }
 
@@ -193,7 +196,53 @@ object C_GraphUtils {
             }
         }
 
-        return cycleVerts.toList()
+        return cycles.toList()
+    }
+
+    fun <T> topologicalSort(graph: Map<T, Collection<T>>): List<T> {
+        class VertEntry<T>(val vert: T, val enter: Boolean, val parent: VertEntry<T>?)
+
+        val queue = LinkedList<VertEntry<T>>()
+        val visiting = mutableSetOf<T>()
+        val visited = mutableSetOf<T>()
+        val result = mutableListOf<T>()
+
+        for (vert in graph.keys) {
+            queue.add(VertEntry(vert, true, null))
+        }
+
+        while (!queue.isEmpty()) {
+            val entry = queue.remove()
+
+            if (!entry.enter) {
+                check(visiting.remove(entry.vert))
+                check(visited.add(entry.vert))
+                result.add(entry.vert)
+                continue
+            } else if (entry.vert in visited) {
+                check(entry.vert !in visiting)
+                continue
+            }
+
+            check(entry.vert !in visiting) // Cycle
+            queue.addFirst(VertEntry(entry.vert, false, entry.parent))
+            visiting.add(entry.vert)
+
+            for (adjVert in graph.getValue(entry.vert)) {
+                queue.addFirst(VertEntry(adjVert, true, entry))
+            }
+        }
+
+        return result.toList()
+    }
+
+    fun <T> findCyclicVertices(graph: Map<T, Collection<T>>): List<T> {
+        val cycles = findCycles(graph)
+        val cyclicVertices = mutableSetOf<T>()
+        for (cycle in cycles) {
+            cyclicVertices.addAll(cycle)
+        }
+        return cyclicVertices.toList()
     }
 
     fun <T> transpose(graph: Map<T, Collection<T>>): Map<T, Collection<T>> {

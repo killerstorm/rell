@@ -55,9 +55,7 @@ class AtExprOpTest: AbstractOpTest() {
             "company" to "company"
     )
 
-    private val tst = RellCodeTester(classDefs = classDefs, inserts = inserts)
-
-    @After fun after() = tst.destroy()
+    private val tst = resource(RellCodeTester(classDefs = classDefs, inserts = inserts))
 
     override fun chkExpr(expr: String, args: List<TstVal>, expected: Boolean) {
         val (expr2, values) = transformExpr(expr, args)
@@ -129,7 +127,7 @@ class AtExprOpTest: AbstractOpTest() {
         val columns = values.keys.toList()
         val insColumns = columns.joinToString(",")
         val insValues = "5," + columns.map{ values[it] }.joinToString(",")
-        val insert = SqlTestUtils.mkins("optest", insColumns, insValues)
+        val insert = SqlTestUtils.mkins("c0_optest", insColumns, insValues)
         return this.inserts + insert
     }
 
@@ -172,8 +170,8 @@ class AtExprOpTest: AbstractOpTest() {
     }
 
     private object Ins {
-        fun company(id: Int, name: String): String = mkins("company", "name", "$id, '$name'")
-        fun user(id: Int, name: String, company: Int): String = mkins("user", "name,company", "$id, '$name', $company")
+        fun company(id: Int, name: String): String = mkins("c0_company", "name", "$id, '$name'")
+        fun user(id: Int, name: String, company: Int): String = mkins("c0_user", "name,company", "$id, '$name', $company")
         val mkins = SqlTestUtils::mkins
     }
 }
