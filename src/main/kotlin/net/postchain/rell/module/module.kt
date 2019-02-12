@@ -165,12 +165,23 @@ class RellPostchainModuleFactory(
         private val moduleLoader: (String) -> String = { path -> File(path).readText() }
 ): GTXModuleFactory {
     override fun makeModule(data: GTXValue, blockchainRID: ByteArray): GTXModule {
-        val rellSourceModule = data["gtx"]!!["rellSrcModule"]!!.asString()
-        val sourceCode = moduleLoader(rellSourceModule)
+        val gtxData = data["gtx"]!!
+        val sourceCode: String
+        val moduleName: String
+        if (gtxData["rellSourceCode_v07"] != null) {
+            sourceCode = gtxData["rellSourceCode_v07"]!!.asString()
+            moduleName = ""
+        } else if (gtxData["rellSrcModule"] != null) {
+            // legacy -- load from path
+            sourceCode = moduleLoader(gtxData["rellSrcModule"]!!.asString())
+            moduleName = gtxData["rellSrcModule"]!!.asString()
+        } else {
+            throw UserMistake("Rell module source is not specified in configuration")
+        }
         val ast = C_Utils.parse(sourceCode)
         val module = ast.compile(true)
         val chainCtx = createChainContext(data, module)
-        return RellPostchainModule(module, rellSourceModule, chainCtx)
+        return RellPostchainModule(module, moduleName, chainCtx)
     }
 
     private fun createChainContext(rawConfig: GTXValue, rModule: R_Module): Rt_ChainContext {
