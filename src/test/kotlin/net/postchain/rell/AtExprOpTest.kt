@@ -2,22 +2,48 @@ package net.postchain.rell
 
 import net.postchain.rell.test.RellCodeTester
 import net.postchain.rell.test.SqlTestUtils
-import org.junit.After
 import kotlin.test.assertEquals
 
 class AtExprOpTest: AbstractOpTest() {
+    private val dataAttrs = listOf(
+            Triple("b", "boolean", "false"),
+            Triple("i", "integer", "0"),
+            Triple("t", "text", "''"),
+            Triple("ba", "byte_array", "''"),
+            Triple("j", "json", "'{}'"),
+            Triple("user", "user", "1000"),
+            Triple("company", "company", "100")
+    )
+
+    private val dataAttrCount = 3
+
+    private val defaultValues = dataAttrs
+            .flatMap { attr -> ( 1 .. dataAttrCount ).map { Pair(attr, it) } }
+            .map { (attr, i) -> ""
+                val (field, _, value) = attr
+                Pair(field + i, value)
+            }
+            .toMap()
+
+    private val typeToField = dataAttrs
+            .map { attr -> ""
+                val (field, type, _) = attr
+                Pair(type, field)
+            }
+            .toMap()
+
+    private val dataAttrDefs = dataAttrs
+            .flatMap { attr -> ( 1 .. dataAttrCount ).map { Pair(attr, it) } }
+            .map { (attr, i) -> ""
+                val (field, type, _) = attr
+                "$field$i: $type;"
+            }
+            .joinToString("")
+
     private val classDefs = listOf(
             "class company { name: text; }",
             "class user { name: text; company; }",
-            """class optest {
-                    b1: boolean; b2: boolean;
-                    i1: integer; i2: integer;
-                    t1: text; t2: text;
-                    ba1: byte_array; ba2: byte_array;
-                    j1: json; j2: json;
-                    user1: user; user2: user;
-                    company1: company; company2: company;
-            }""".trimMargin()
+            "class optest { $dataAttrDefs }"
     )
 
     private val inserts = listOf(
@@ -26,33 +52,6 @@ class AtExprOpTest: AbstractOpTest() {
 
             Ins.user(1000, "Bill Gates", 100),
             Ins.user(2000, "Steve Jobs", 200)
-    )
-
-    private val defaultValues = mapOf(
-            "b1" to "false",
-            "b2" to "false",
-            "i1" to "0",
-            "i2" to "0",
-            "t1" to "''",
-            "t2" to "''",
-            "ba1" to "''",
-            "ba2" to "''",
-            "j1" to "'{}'",
-            "j2" to "'{}'",
-            "user1" to "1000",
-            "user2" to "2000",
-            "company1" to "100",
-            "company2" to "200"
-    )
-
-    private val typeToField = mapOf(
-            "boolean" to "b",
-            "integer" to "i",
-            "text" to "t",
-            "byte_array" to "ba",
-            "json" to "j",
-            "user" to "user",
-            "company" to "company"
     )
 
     private val tst = resource(RellCodeTester(classDefs = classDefs, inserts = inserts))

@@ -107,6 +107,18 @@ class Db_ArrayParameterExpr(type: R_Type, val elementType: R_Type, val index: In
     }
 }
 
+class Db_IfExpr(type: R_Type, val cond: Db_Expr, val trueExpr: Db_Expr, val falseExpr: Db_Expr): Db_Expr(type) {
+    override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
+        bld.append("CASE WHEN ")
+        cond.toSql(ctx, bld)
+        bld.append(" THEN ")
+        trueExpr.toSql(ctx, bld)
+        bld.append(" ELSE ")
+        falseExpr.toSql(ctx, bld)
+        bld.append(" END")
+    }
+}
+
 sealed class Db_SysFunction(val name: String) {
     abstract fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<Db_Expr>)
 }

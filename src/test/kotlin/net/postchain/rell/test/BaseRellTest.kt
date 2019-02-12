@@ -1,5 +1,6 @@
 package net.postchain.rell.test
 
+import net.postchain.rell.runtime.Rt_BooleanValue
 import net.postchain.rell.runtime.Rt_IntValue
 import net.postchain.rell.runtime.Rt_Value
 
@@ -21,6 +22,10 @@ abstract class BaseRellTest(useSql: Boolean = true, gtx: Boolean = false): BaseR
 
     fun chkEx(code: String, arg1: Long, arg2: Long, expected: String) {
         chkFull("query q(a: integer, b: integer) $code", listOf(Rt_IntValue(arg1), Rt_IntValue(arg2)), expected)
+    }
+
+    fun chkEx(code: String, arg: Boolean, expected: String) {
+        chkFull("query q(a: boolean) $code", listOf(Rt_BooleanValue(arg)), expected)
     }
 
     fun chkFull(code: String, args: List<Rt_Value>, expected: String) {

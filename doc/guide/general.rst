@@ -492,6 +492,16 @@ Example:
    print(x == y);      // true - values are equal
    print(x === y);     // false - two different objects
 
+If:
+~~~~~~~~~~~
+
+Operator ``if`` is used for conditional evaluation:
+
+::
+
+   val max = if (a >= b) a else b;
+   return max;
+
 Arithmetical:
 ~~~~~~~~~~~~~
 

@@ -353,7 +353,12 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         (head, tails) -> tailsToExpr(head, tails)
     }
 
-    private val operandExpr: Parser<S_Expr> by baseExpr
+    private val ifExpr by ( IF * -LPAR * _expression * -RPAR * _expression * -ELSE * _expression ) map {
+        ( pos, cond, trueExpr, falseExpr ) ->
+        S_IfExpr(S_Pos(pos), cond, trueExpr, falseExpr)
+    }
+
+    private val operandExpr: Parser<S_Expr> by ( baseExpr or ifExpr )
 
     private val unaryExpr by ( optional(unaryOperator) * operandExpr ) map { (op, expr) ->
         if (op == null) expr else S_UnaryExpr(op.pos, S_Node(op.pos, op.value), expr)

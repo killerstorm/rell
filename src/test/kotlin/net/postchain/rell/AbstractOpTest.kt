@@ -353,6 +353,24 @@ abstract class AbstractOpTest: BaseResourcefulTest() {
         chkExpr("#0.len()", "int[5]", vBytes("123456789A"))
     }
 
+    @Test fun testIf() {
+        chkExpr("if (#0) 1 else 2", "int[1]", vBool(true))
+        chkExpr("if (#0) 1 else 2", "int[2]", vBool(false))
+        chkExpr("if (#0) 'Yes' else 'No'", "text[Yes]", vBool(true))
+        chkExpr("if (#0) 'Yes' else 'No'", "text[No]", vBool(false))
+
+        chkExpr("if (#0) #1 else #2", "int[123]", vBool(true), vInt(123), vInt(456))
+        chkExpr("if (#0) #1 else #2", "int[456]", vBool(false), vInt(123), vInt(456))
+        chkExpr("if (#0) #1 else #2", "text[Yes]", vBool(true), vText("Yes"), vText("No"))
+        chkExpr("if (#0) #1 else #2", "text[No]", vBool(false), vText("Yes"), vText("No"))
+
+        chkExprErr("if (true) 'Hello' else 123", listOf(), "ct_err:expr_if_restype:text:integer")
+        chkExprErr("if (123) 'A' else 'B'", listOf(), "ct_err:expr_if_cond_type:boolean:integer")
+        chkExprErr("if ('Hello') 'A' else 'B'", listOf(), "ct_err:expr_if_cond_type:boolean:text")
+        chkExprErr("if (null) 'A' else 'B'", listOf(), "ct_err:expr_if_cond_type:boolean:null")
+        chkExprErr("if (unit()) 'A' else 'B'", listOf(), "ct_err:expr_if_cond_type:boolean:unit")
+    }
+
     private fun chkOpErr(expr: String) {
         val (left, op, right) = expr.split(" ")
         chkOpErr(op, left, right)

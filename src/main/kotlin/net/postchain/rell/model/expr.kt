@@ -295,6 +295,16 @@ class R_NotNullExpr(type: R_Type, val expr: R_Expr): R_Expr(type) {
     }
 }
 
+class R_IfExpr(type: R_Type, val cond: R_Expr, val trueExpr: R_Expr, val falseExpr: R_Expr): R_Expr(type) {
+    override fun evaluate(frame: Rt_CallFrame): Rt_Value {
+        val v = cond.evaluate(frame)
+        val b = v.asBoolean()
+        val expr = if (b) trueExpr else falseExpr
+        val res = expr.evaluate(frame)
+        return res
+    }
+}
+
 sealed class R_RequireExpr(type: R_Type, val expr: R_Expr, val msgExpr: R_Expr?): R_Expr(type) {
     abstract fun calculate(v: Rt_Value): Rt_Value?
 

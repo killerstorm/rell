@@ -102,3 +102,11 @@ SQL table for a class or object X will be called c{BLOCKCHAIN_ID}_X, not X. This
 a single database without table name conflicts.
 
 System tables "blocks" and "transactions" will be shared by different blockchains, and their names will not be prefixed.
+
+
+10. Operator "if"
+
+Like in Kotlin, "if" can be used as an operator:
+
+val max = if (a >= b) a else b;
+return max;

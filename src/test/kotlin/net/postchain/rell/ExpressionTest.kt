@@ -1,5 +1,6 @@
 package net.postchain.rell
 
+import net.postchain.rell.runtime.Rt_BooleanValue
 import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 
@@ -388,5 +389,45 @@ class ExpressionTest: BaseRellTest(false) {
         chkEx("{ val a: list<integer>? = null; return a !== null; }", "boolean[false]")
         chkEx("{ val a: list<integer>? = null; return a === [1,2,3]; }", "boolean[false]")
         chkEx("{ val a: list<integer>? = null; return a !== [1,2,3]; }", "boolean[true]")
+    }
+
+    @Test fun testIf() {
+        chkEx("= if (a) 1 else 2;", true, "int[1]")
+        chkEx("= if (a) 1 else 2;", false, "int[2]")
+        chkEx("= if (a) 'Hello' else 123;", true, "ct_err:expr_if_restype:text:integer")
+        chkEx("= if (a) 123 else null;", true, "int[123]")
+        chkEx("= if (a) 123 else null;", false, "null")
+        chkEx("= if (a) (null, 'Hello') else (123, null);", true, "(null,text[Hello])")
+        chkEx("= if (a) (null, 'Hello') else (123, null);", false, "(int[123],null)")
+        chkEx("= if (a) (null, 'Hello') else (null, 123);", true, "ct_err:expr_if_restype:(null,text):(null,integer)")
+
+        chk("if (123) 'A' else 'B'", "ct_err:expr_if_cond_type:boolean:integer")
+        chk("if ('Hello') 'A' else 'B'", "ct_err:expr_if_cond_type:boolean:text")
+        chk("if (null) 'A' else 'B'", "ct_err:expr_if_cond_type:boolean:null")
+        chk("if (unit()) 'A' else 'B'", "ct_err:expr_if_cond_type:boolean:unit")
+        chkEx("{ val x: boolean? = true; return if (x) 'A' else 'B'; }", "ct_err:expr_if_cond_type:boolean:boolean?")
+    }
+
+    @Test fun testIfShortCircuit() {
+        val code = """
+            function f(s: text, v: integer): integer {
+               print(s);
+               return v;
+            }
+            query q(a: boolean) = if (a) f('Yes', 123) else f('No', 456);
+        """.trimIndent()
+
+        chkFull(code, listOf(Rt_BooleanValue(true)), "int[123]")
+        chkStdout("Yes")
+        chkFull(code, listOf(Rt_BooleanValue(false)), "int[456]")
+        chkStdout("No")
+    }
+
+    @Test fun testIfPrecedence() {
+        chk("if (true) 'A' else 'B' + 'C'", "text[A]")
+        chk("if (false) 'A' else 'B' + 'C'", "text[BC]")
+        chk("if (true) 'A' else if (true) 'B' else 'C' + 'D'", "text[A]")
+        chk("if (false) 'A' else if (true) 'B' else 'C' + 'D'", "text[B]")
+        chk("if (false) 'A' else if (false) 'B' else 'C' + 'D'", "text[CD]")
     }
 }
