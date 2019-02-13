@@ -33,29 +33,25 @@ class QueryTest: BaseRellTest() {
 
     @Test fun testReturnSelectAllNoObjects() {
         tst.defs = listOf("class user { name: text; }")
-        tst.inserts = listOf(mkins("c0_user", "name", "11, 'Alice'"))
+        tst.insert("c0_user", "name", "11, 'Alice'")
         chkEx("= user @* { .name == 'Bob' } ;", "list<user>[]")
     }
 
     @Test fun testReturnSelectAllOneObject() {
         tst.defs = listOf("class user { name: text; }")
-        tst.inserts = listOf(
-                mkins("c0_user", "name", "11,'Alice'"),
-                mkins("c0_user", "name", "33,'Bob'")
-        )
+        tst.insert("c0_user", "name", "11,'Alice'")
+        tst.insert("c0_user", "name", "33,'Bob'")
         chkEx("= user @* { .name == \"Bob\" } ;", "list<user>[user[33]]")
     }
 
     @Test fun testReturnSelectAllManyObjects() {
         tst.defs = listOf("class user { name: text; }")
-        tst.inserts = listOf(
-                mkins("c0_user", "name", "11,'Alice'"),
-                mkins("c0_user", "name", "33,'Bob'"),
-                mkins("c0_user", "name", "55,'James'"),
-                mkins("c0_user", "name", "77,'Bob'"),
-                mkins("c0_user", "name", "99,'Victor'"),
-                mkins("c0_user", "name", "111,'Bob'")
-        )
+        tst.insert("c0_user", "name", "11,'Alice'")
+        tst.insert("c0_user", "name", "33,'Bob'")
+        tst.insert("c0_user", "name", "55,'James'")
+        tst.insert("c0_user", "name", "77,'Bob'")
+        tst.insert("c0_user", "name", "99,'Victor'")
+        tst.insert("c0_user", "name", "111,'Bob'")
         chkEx("= user @* { .name == 'Bob' } ;", "list<user>[user[33],user[77],user[111]]")
     }
 

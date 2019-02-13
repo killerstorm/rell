@@ -129,7 +129,7 @@ object SqlTestUtils {
                 "0x" + rs.getBytes(idx).toHex()
             } else if (type == R_JSONType) {
                 "" + rs.getString(idx)
-            } else if (type == R_IntegerType || type is R_ClassType) {
+            } else if (type == R_IntegerType || type is R_ClassType || type is R_EnumType) {
                 "" + rs.getLong(idx)
             } else {
                 throw IllegalStateException(type.toStrictString())

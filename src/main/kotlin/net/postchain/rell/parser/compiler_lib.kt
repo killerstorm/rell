@@ -273,6 +273,20 @@ object C_LibFunctions {
                 .add("toPrettyGTXValue", listOf(), mToPrettyGtxValue)
                 .build()
     }
+
+    fun getEnumStaticFunction(type: R_EnumType, name: String): C_GlobalFunction? {
+        val fns = getEnumFns(type)
+        val fn = fns.get(name)
+        return fn
+    }
+
+    private fun getEnumFns(type: R_EnumType): C_GlobalFuncTable {
+        return C_GlobalFuncBuilder()
+                .add("values", R_ListType(type), listOf(), R_SysFn_Enum_Values(type))
+                .add("value", type, listOf(R_TextType), R_SysFn_Enum_Value_Text(type))
+                .add("value", type, listOf(R_IntegerType), R_SysFn_Enum_Value_Int(type))
+                .build()
+    }
 }
 
 private class C_StdLibNamespace(

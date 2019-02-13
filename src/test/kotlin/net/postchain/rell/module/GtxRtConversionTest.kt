@@ -10,41 +10,41 @@ import kotlin.test.assertEquals
 
 class GtxRtConversionTest: BaseRellTest(useSql = false, gtx = true) {
     @Test fun testQueryResult() {
-        tst.chkQueryGtx("= true;", "1")
-        tst.chkQueryGtx("= 123;", "123")
-        tst.chkQueryGtx("= 'Hello';", """"Hello"""")
-        tst.chkQueryGtx("= x'12EF';", """"12EF"""")
-        tst.chkQueryGtx("""= json('{"x":123,"y":"Hello"}');""", """"{\"x\":123,\"y\":\"Hello\"}"""")
-        tst.chkQueryGtx("= null;", "null")
+        chkQueryRes("= true;", "1")
+        chkQueryRes("= 123;", "123")
+        chkQueryRes("= 'Hello';", """"Hello"""")
+        chkQueryRes("= x'12EF';", """"12EF"""")
+        chkQueryRes("""= json('{"x":123,"y":"Hello"}');""", """"{\"x\":123,\"y\":\"Hello\"}"""")
+        chkQueryRes("= null;", "null")
     }
 
     @Test fun testQueryResultTuple() {
-        tst.chkQueryGtx("= (x = 123, y = 'Hello');", """{"x":123,"y":"Hello"}""")
-        tst.chkQueryGtx("= (123, 'Hello');", """[123,"Hello"]""")
-        tst.chkQueryGtx("= (x = 123, 'Hello');", "ct_err:result_nogtx:q:(x:integer,text)")
-        tst.chkQueryGtx("= (123, y = 'Hello');", "ct_err:result_nogtx:q:(integer,y:text)")
+        chkQueryRes("= (x = 123, y = 'Hello');", """{"x":123,"y":"Hello"}""")
+        chkQueryRes("= (123, 'Hello');", """[123,"Hello"]""")
+        chkQueryRes("= (x = 123, 'Hello');", "ct_err:result_nogtx:q:(x:integer,text)")
+        chkQueryRes("= (123, y = 'Hello');", "ct_err:result_nogtx:q:(integer,y:text)")
     }
 
     @Test fun testQueryResultNullable() {
-        tst.chkQueryGtx("{ val x: integer? = 123; return x; }", "123")
-        tst.chkQueryGtx("{ val x: integer? = null; return x; }", "null")
+        chkQueryRes("{ val x: integer? = 123; return x; }", "123")
+        chkQueryRes("{ val x: integer? = null; return x; }", "null")
     }
 
     @Test fun testQueryResultCollection() {
-        tst.chkQueryGtx("= [1,2,3];", "[1,2,3]")
-        tst.chkQueryGtx("= set([1,2,3]);", "[1,2,3]")
-        tst.chkQueryGtx("= ['A':1,'B':2,'C':3];", """{"A":1,"B":2,"C":3}""")
-        tst.chkQueryGtx("= [1:'A',2:'B',3:'C'];", "ct_err:result_nogtx:q:map<integer,text>")
+        chkQueryRes("= [1,2,3];", "[1,2,3]")
+        chkQueryRes("= set([1,2,3]);", "[1,2,3]")
+        chkQueryRes("= ['A':1,'B':2,'C':3];", """{"A":1,"B":2,"C":3}""")
+        chkQueryRes("= [1:'A',2:'B',3:'C'];", "ct_err:result_nogtx:q:map<integer,text>")
     }
 
     @Test fun testQueryResultRecord() {
         tst.defs = listOf("record foo { x: integer; b: bar; } record bar { p: boolean; q: text; }")
-        tst.chkQueryGtx(" = foo(123, bar(true, 'Hello'));", """{"x":123,"b":{"p":1,"q":"Hello"}}""")
+        chkQueryRes(" = foo(123, bar(true, 'Hello'));", """{"x":123,"b":{"p":1,"q":"Hello"}}""")
     }
 
     @Test fun testQueryResultCyclicRecord() {
         tst.defs = listOf("record node { v: integer; left: node? = null; right: node? = null; }")
-        tst.chkQueryGtx("= node(456, left = node(123), right = node(789));",
+        chkQueryRes("= node(456, left = node(123), right = node(789));",
                 """{"v":456,"left":{"v":123,"left":null,"right":null},"right":{"v":789,"left":null,"right":null}}""")
     }
 
@@ -205,9 +205,32 @@ class GtxRtConversionTest: BaseRellTest(useSql = false, gtx = true) {
                 "node[v=int[456],left=node[v=int[123],left=null,right=null],right=node[v=int[789],left=null,right=null]]")
     }
 
+    @Test fun testEnum() {
+        tst.defs = listOf("enum foo { A, B, C }")
+
+        chkQueryRes("= foo.A;", "\"A\"")
+        chkQueryArg("foo", "\"A\"", "\"A\"")
+        chkQueryArg("foo", "\"B\"", "\"B\"")
+        chkQueryArg("foo", "\"C\"", "\"C\"")
+        chkQueryArg("foo", "\"D\"", "gtx_err:type:enum[foo]:STRING")
+        chkQueryArg("foo", "0", "gtx_err:type:string:INTEGER")
+        chkQueryArg("foo", "\"0\"", "gtx_err:type:enum[foo]:STRING")
+
+        chkOpArg("foo", "0", "foo[A]")
+        chkOpArg("foo", "1", "foo[B]")
+        chkOpArg("foo", "2", "foo[C]")
+        chkOpArg("foo", "3", "gtx_err:type:enum[foo]:INTEGER")
+        chkOpArg("foo", "\"0\"", "gtx_err:type:integer:STRING")
+        chkOpArg("foo", "\"A\"", "gtx_err:type:integer:STRING")
+    }
+
     private fun chkArg(type: String, arg: String, expected: String) {
         chkQueryArg(type, arg, expected)
         chkOpArg(type, arg, expected)
+    }
+
+    private fun chkQueryRes(code: String, expected: String) {
+        tst.chkQueryGtx(code, expected)
     }
 
     private fun chkQueryArg(type: String, arg: String, expected: String) {
@@ -236,7 +259,7 @@ class GtxRtConversionTest: BaseRellTest(useSql = false, gtx = true) {
     }
 
     private fun gtxBytes(s: String): GTXValue {
-        var bytes = s.hexStringToByteArray()
+        val bytes = s.hexStringToByteArray()
         return ByteArrayGTXValue(bytes)
     }
 

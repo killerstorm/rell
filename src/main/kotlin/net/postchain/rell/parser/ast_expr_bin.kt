@@ -231,8 +231,12 @@ sealed class S_BinaryOp_EqNe(val rOp: R_BinaryOp, val dbOp: Db_BinaryOp): S_Bina
     }
 
     private fun dbOpSupported(type: R_Type): Boolean {
-        return type == R_BooleanType || type == R_IntegerType || type == R_TextType || type == R_ByteArrayType
+        return type == R_BooleanType
+                || type == R_IntegerType
+                || type == R_TextType
+                || type == R_ByteArrayType
                 || type is R_ClassType
+                || type is R_EnumType
     }
 
     companion object {
@@ -304,7 +308,9 @@ sealed class S_BinaryOp_LtGt(cmpOp: R_CmpOp, dbOp: Db_BinaryOp): S_BinaryOp_Cmp(
         } else if (type == R_ByteArrayType) {
             return R_CmpType_ByteArray
         } else if (type is R_ClassType) {
-            return R_CmpType_Object
+            return R_CmpType_Class
+        } else if (type is R_EnumType) {
+            return R_CmpType_Enum
         } else {
             return null
         }

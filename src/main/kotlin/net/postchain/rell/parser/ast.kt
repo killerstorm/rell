@@ -210,6 +210,25 @@ class S_RecordDefinition(name: S_Name, val attrs: List<S_AttributeClause>): S_De
     }
 }
 
+class S_EnumDefinition(name: S_Name, val attrs: List<S_Name>): S_Definition(name) {
+    override fun compile(ctx: C_ModuleContext, entityIndex: Int) {
+        ctx.checkTypeName(name)
+
+        val set = mutableSetOf<String>()
+        val rAttrs = mutableListOf<R_EnumAttr>()
+
+        for (attr in attrs) {
+            if (!set.add(attr.str)) {
+                throw C_Error(attr.pos, "enum_dup:${attr.str}", "Duplicate enum constant: '${attr.str}'")
+            }
+            rAttrs.add(R_EnumAttr(attr.str, rAttrs.size))
+        }
+
+        val rEnum = R_EnumType(name.str, rAttrs.toList())
+        ctx.addEnum(rEnum)
+    }
+}
+
 class S_OpDefinition(
         name: S_Name,
         val params: List<S_NameTypePair>,

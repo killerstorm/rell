@@ -252,6 +252,36 @@ class R_RecordType(name: String): R_Type(name) {
     private class RRecordBody(val attrMap: Map<String, R_Attrib>, val attrList: List<R_Attrib>, val attrMutable: Boolean)
 }
 
+class R_EnumAttr(val name: String, val value: Int)
+
+class R_EnumType(name: String, val attrs: List<R_EnumAttr>): R_Type(name) {
+    private val attrMap = attrs.map { Pair(it.name, it) }.toMap()
+    private val rtValues = attrs.map { Rt_EnumValue(this, it) }
+
+    override fun isSqlCompatible(): Boolean = true
+    override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = stmt.setInt(idx, value.asEnum().value)
+    override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_EnumValue(this, attrs[rs.getInt(idx)])
+    override fun fromCli(s: String): Rt_Value = Rt_EnumValue(this, attrMap.getValue(s))
+    override fun toStrictString(): String = name
+
+    override fun createGtxConversion() = GtxRtConversion_Enum(this)
+
+    fun attr(name: String): R_EnumAttr? {
+        return attrMap[name]
+    }
+
+    fun attr(value: Long): R_EnumAttr? {
+        if (value < 0 || value >= attrs.size) {
+            return null
+        }
+        return attrs[value.toInt()]
+    }
+
+    fun values(): List<Rt_Value> {
+        return rtValues
+    }
+}
+
 class R_NullableType(val valueType: R_Type): R_Type(valueType.name + "?") {
     init {
         check(valueType != R_NullType)

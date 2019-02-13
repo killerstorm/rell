@@ -31,6 +31,7 @@ sealed class Rt_Value {
     open fun asMap(): MutableMap<Rt_Value, Rt_Value> = throw errType("Map")
     open fun asTuple(): List<Rt_Value> = throw errType("Tuple")
     open fun asRecord(): Rt_RecordValue = throw errType("Record")
+    open fun asEnum(): R_EnumAttr = throw errType("Enum")
     open fun asRange(): Rt_RangeValue = throw errType("Range")
     open fun asObjectId(): Long = throw errType("Class")
     open fun asGtxValue(): GTXValue = throw errType("GTXValue")
@@ -255,6 +256,23 @@ class Rt_RecordValue(private val type: R_RecordType, private val attributes: Mut
 
     fun set(index: Int, value: Rt_Value) {
         attributes[index] = value
+    }
+}
+
+class Rt_EnumValue(private val type: R_EnumType, private val attr: R_EnumAttr): Rt_Value() {
+    override fun type() = type
+    override fun valueType() = "Enum"
+    override fun asEnum() = attr
+    override fun asFormatArg(): Any = attr.name
+    override fun equals(other: Any?): Boolean = other is Rt_EnumValue && attr == other.attr
+    override fun hashCode(): Int = type.hashCode() * 31 + attr.value
+
+    override fun toString(): String {
+        return attr.name
+    }
+
+    override fun toStrictString(showTupleFieldNames: Boolean): String {
+        return "${type.name}[${attr.name}]"
     }
 }
 

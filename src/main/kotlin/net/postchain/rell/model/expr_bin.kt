@@ -55,11 +55,19 @@ object R_CmpType_ByteArray: R_CmpType() {
     }
 }
 
-object R_CmpType_Object: R_CmpType() {
+object R_CmpType_Class: R_CmpType() {
     override fun compare(left: Rt_Value, right: Rt_Value): Int {
         val l = left.asObjectId()
         val r = right.asObjectId()
         return l.compareTo(r)
+    }
+}
+
+object R_CmpType_Enum: R_CmpType() {
+    override fun compare(left: Rt_Value, right: Rt_Value): Int {
+        val l = left.asEnum()
+        val r = right.asEnum()
+        return l.value.compareTo(r.value)
     }
 }
 

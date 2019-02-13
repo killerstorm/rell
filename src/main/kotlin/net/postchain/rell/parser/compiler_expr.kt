@@ -1,6 +1,7 @@
 package net.postchain.rell.parser
 
 import net.postchain.rell.model.*
+import net.postchain.rell.runtime.Rt_EnumValue
 
 class C_ClassAttr(val cls: R_AtClass, val attr: R_Attrib)
 
@@ -60,6 +61,8 @@ class C_BlockContext(
 sealed class C_ExprContext(val blkCtx: C_BlockContext) {
     abstract fun resolveAttr(name: S_Name): C_Expr
 
+    abstract fun resolveNameValue(name: S_Name): C_NameResolution?
+
     fun resolveName(name: S_Name): C_Expr {
         val value = resolveNameValue(name)
         val valueExpr = value?.toExpr()
@@ -71,21 +74,31 @@ sealed class C_ExprContext(val blkCtx: C_BlockContext) {
         return expr ?: throw C_Errors.errUnknownName(name)
     }
 
-    abstract fun resolveNameValue(name: S_Name): C_NameResolution?
+    protected fun resolveNameGlobal(name: S_Name): C_NameResolution? {
+        val modCtx = blkCtx.entCtx.modCtx
+
+        val obj = modCtx.getObjectOpt(name.str)
+        if (obj != null) return C_NameResolution_Object(name, obj, blkCtx.entCtx)
+
+        val enum = modCtx.getEnumOpt(name.str)
+        if (enum != null) return C_NameResolution_Enum(name, enum)
+
+        return null
+    }
 }
 
 class C_RExprContext(blkCtx: C_BlockContext): C_ExprContext(blkCtx) {
     override fun resolveNameValue(name: S_Name): C_NameResolution? {
         val loc = blkCtx.lookupLocalVar(name.str)
-        val obj = blkCtx.entCtx.modCtx.getObjectOpt(name.str)
+        val glob = resolveNameGlobal(name)
         val ns = C_LibFunctions.getNamespace(blkCtx.entCtx.modCtx, name.str)
 
-        if (loc != null && obj != null) {
-            throw C_Errors.errNameConflictLocalObject(name)
+        if (loc != null && glob != null) {
+            throw C_Errors.errNameConflictLocalGlobal(name)
         }
 
         if (loc != null) return C_NameResolution_Local(name, loc)
-        if (obj != null) return C_NameResolution_Object(name, obj, blkCtx.entCtx)
+        if (glob != null) return glob
         if (ns != null) return C_NameResolution_Namespace(name, ns)
 
         return null
@@ -102,22 +115,22 @@ class C_DbExprContext(blkCtx: C_BlockContext, val classes: List<R_AtClass>): C_E
 
         val cls = findClassByAlias(nameStr)
         val loc = blkCtx.lookupLocalVar(nameStr)
-        val obj = blkCtx.entCtx.modCtx.getObjectOpt(name.str)
+        val glob = resolveNameGlobal(name)
         val ns = C_LibFunctions.getNamespace(blkCtx.entCtx.modCtx, nameStr)
 
         if (cls != null && loc != null) {
             throw C_Errors.errNameConflictAliasLocal(name)
         }
-        if (cls != null && obj != null) {
-            throw C_Errors.errNameConflictClassObject(name)
+        if (cls != null && glob != null) {
+            throw C_Errors.errNameConflictClassGlobal(name)
         }
-        if (obj != null && loc != null) {
-            throw C_Errors.errNameConflictLocalObject(name)
+        if (loc != null && glob != null) {
+            throw C_Errors.errNameConflictLocalGlobal(name)
         }
 
         if (cls != null) return C_NameResolution_Class(name, cls)
         if (loc != null) return C_NameResolution_Local(name, loc)
-        if (obj != null) return C_NameResolution_Object(name, obj, blkCtx.entCtx)
+        if (glob != null) return glob
         if (ns != null) return C_NameResolution_Namespace(name, ns)
 
         return null
@@ -211,6 +224,10 @@ private class C_NameResolution_Object(
     }
 }
 
+private class C_NameResolution_Enum(name: S_Name, private val rEnum: R_EnumType): C_NameResolution(name) {
+    override fun toExpr(): C_Expr = C_EnumExpr(name, rEnum)
+}
+
 typealias C_OperandConversion_R = (R_Expr) -> R_Expr
 typealias C_OperandConversion_Db = (Db_Expr) -> Db_Expr
 
@@ -240,6 +257,10 @@ sealed class C_Expr {
 
     open fun destination(): R_DestinationExpr {
         throw C_Errors.errBadDestination(startPos())
+    }
+
+    protected fun errNoValue(name: S_Name, code: String, msg: String): C_Error {
+        return C_Error(name.pos, "$code:${name.str}", "Not a value: '${name.str}' is $msg")
     }
 }
 
@@ -358,6 +379,39 @@ private class C_ObjectExpr(private val name: S_Name, private val rObject: R_Obje
     }
 }
 
+private class C_EnumExpr(private val name: S_Name, private val rEnum: R_EnumType): C_Expr() {
+    override fun type() = rEnum
+    override fun startPos() = name.pos
+    override fun isDb() = false
+    override fun toRExpr() = throw errNoValue()
+    override fun toDbExpr() = throw errNoValue()
+
+    override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
+        val valueExpr = memberValue(memberName)
+        val fnExpr = memberFn(memberName)
+        val expr = makeValueFunctionExpr(memberName, valueExpr, fnExpr)
+        return expr ?: throw C_Errors.errUnknownName(name, memberName)
+    }
+
+    private fun memberValue(memberName: S_Name): C_Expr? {
+        val attr = rEnum.attr(memberName.str)
+        if (attr == null) {
+            return null
+        }
+
+        val rValue = Rt_EnumValue(rEnum, attr)
+        val rExpr = R_ConstantExpr(rValue)
+        return C_RExpr(name.pos, rExpr)
+    }
+
+    private fun memberFn(memberName: S_Name): C_Expr? {
+        val fn = C_LibFunctions.getEnumStaticFunction(rEnum, memberName.str)
+        return if (fn == null) null else C_FunctionExpr(memberName, fn)
+    }
+
+    private fun errNoValue() = errNoValue(name, "expr_val_enum", "an enum type")
+}
+
 private class C_MemberFieldExpr(
         private val base: C_Expr,
         private val name: S_Name,
@@ -405,7 +459,7 @@ private class C_MemberFunctionExpr(
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean) = throw errNoValue()
     override fun call(pos: S_Pos, args: List<C_Expr>) = fn.compileCall(name, base, safe, args)
 
-    private fun errNoValue() = C_Errors.errUnknownMember(baseType, name)
+    private fun errNoValue() = errNoValue(name, "expr_val_fn", "a function")
 }
 
 private class C_FunctionExpr(private val name: S_Name, private val fn: C_GlobalFunction): C_Expr() {
@@ -417,7 +471,7 @@ private class C_FunctionExpr(private val name: S_Name, private val fn: C_GlobalF
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean) = throw errNoValue()
     override fun call(pos: S_Pos, args: List<C_Expr>) = fn.compileCall(name, args)
 
-    private fun errNoValue() = C_Error(name.pos, "expr_fn:${name.str}", "'${name.str}' is a function")
+    private fun errNoValue() = errNoValue(name, "expr_val_fn", "a function")
 }
 
 private class C_ClassFieldExpr(
@@ -518,6 +572,8 @@ private fun memberFieldForType(base: C_Expr, type: R_Type, name: S_Name, safe: B
         return memberFieldForRecord(base, type, name, safe)
     } else if (type is R_ClassType) {
         return memberFieldForClass(base, type, name, safe)
+    } else if (type is R_EnumType) {
+        return memberFieldForEnum(base, name, safe)
     } else {
         return null
     }
@@ -550,6 +606,18 @@ private fun memberFieldForClass(base: C_Expr, type: R_ClassType, name: S_Name, s
     if (dbExpr == null) return null
     val resultType = C_Utils.effectiveMemberType(dbExpr.type, safe)
     return C_ClassFieldExpr(base, safe, atClass, dbExpr, resultType)
+}
+
+private fun memberFieldForEnum(base: C_Expr, name: S_Name, safe: Boolean): C_Expr? {
+    val calculator = if (name.str == "name") {
+        R_MemberCalculator_SysFn(R_TextType, R_SysFn_Enum_Name, listOf())
+    } else if (name.str == "value") {
+        R_MemberCalculator_SysFn(R_IntegerType, R_SysFn_Enum_Value, listOf())
+    } else {
+        return null
+    }
+    val field = C_MemberField_SimpleReadOnly(name, calculator)
+    return makeMemberExpr(base, name, safe, field)
 }
 
 private fun memberFunctionForType(base: C_Expr, type: R_Type, name: S_Name, safe: Boolean): C_Expr? {
@@ -600,4 +668,9 @@ private class C_MemberField_RecordAttr(val attr: R_Attrib): C_MemberField(attr.t
         }
         return R_RecordMemberExpr(base, attr)
     }
+}
+
+private class C_MemberField_SimpleReadOnly(val name: S_Name, val calculator: R_MemberCalculator): C_MemberField(calculator.type) {
+    override fun calculator() = calculator
+    override fun destination(pos: S_Pos, base: R_Expr) = throw C_Errors.errBadDestination(name)
 }

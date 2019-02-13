@@ -194,25 +194,23 @@ class ObjectTest: BaseRellTest() {
 
     @Test fun testNameResolution() {
         tst.defs = listOf("object foo { x: integer = 123; }", "class user { name; }")
-        tst.inserts = listOf(SqlTestUtils.mkins("c0_user", "name", "1,'Bob'"))
+        tst.insert("c0_user", "name", "1,'Bob'")
 
         // Object vs. local: error.
-        chkEx("{ val foo = (s = 'Hello'); return foo.s; }", "ct_err:expr_name_objloc:foo")
-        chkEx("{ val foo = (s = 'Hello'); return foo.x; }", "ct_err:expr_name_objloc:foo")
-        chkEx("{ val foo = (x = 456); return foo.x; }", "ct_err:expr_name_objloc:foo")
+        chkEx("{ val foo = (s = 'Hello'); return foo.s; }", "ct_err:expr_name_locglob:foo")
+        chkEx("{ val foo = (s = 'Hello'); return foo.x; }", "ct_err:expr_name_locglob:foo")
+        chkEx("{ val foo = (x = 456); return foo.x; }", "ct_err:expr_name_locglob:foo")
 
         // Object vs. alias: error.
         chk("(foo: user) @* {}", "list<user>[user[1]]")
-        chk("(foo: user) @* { foo.name == 'Bob' }", "ct_err:expr_name_clsobj:foo")
+        chk("(foo: user) @* { foo.name == 'Bob' }", "ct_err:expr_name_clsglob:foo")
     }
 
     @Test fun testMultipleRecords() {
         tst.defs = listOf("object foo { x: integer = 123; }")
-        tst.inserts = listOf(
-                SqlTestUtils.mkins("c0_foo", "x", "1,123"),
-                SqlTestUtils.mkins("c0_foo", "x", "2,456"),
-                SqlTestUtils.mkins("c0_foo", "x", "3,789")
-        )
+        tst.insert("c0_foo", "x", "1,123")
+        tst.insert("c0_foo", "x", "2,456")
+        tst.insert("c0_foo", "x", "3,789")
         tst.autoInitObjects = false
 
         chk("foo.x", "rt_err:obj_multirec:foo:3")

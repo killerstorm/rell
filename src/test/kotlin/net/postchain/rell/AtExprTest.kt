@@ -70,16 +70,17 @@ class AtExprTest: BaseRellTest() {
                 "class foo_owner { name: text; stuff: foo; foo: foo; bar: bar; }",
                 "class bar_owner { name: text; stuff: bar; foo: foo; bar: bar; }"
         )
-        tst.inserts = listOf(
-                mkins("c0_foo", "name", "0,'Foo-1'"),
-                mkins("c0_foo", "name", "1,'Foo-2'"),
-                mkins("c0_bar", "name", "2,'Bar-1'"),
-                mkins("c0_bar", "name", "3,'Bar-2'"),
-                mkins("c0_foo_owner", "name,stuff,foo,bar", "4,'Bob',0,1,2"),
-                mkins("c0_foo_owner", "name,stuff,foo,bar", "5,'Alice',1,0,3"),
-                mkins("c0_bar_owner", "name,stuff,foo,bar", "6,'Trudy',2,1,3"),
-                mkins("c0_bar_owner", "name,stuff,foo,bar", "7,'Andrew',3,0,2")
-        )
+
+        tst.inserts = listOf()
+        tst.insert("c0_foo", "name", "0,'Foo-1'")
+        tst.insert("c0_foo", "name", "1,'Foo-2'")
+        tst.insert("c0_bar", "name", "2,'Bar-1'")
+        tst.insert("c0_bar", "name", "3,'Bar-2'")
+        tst.insert("c0_foo_owner", "name,stuff,foo,bar", "4,'Bob',0,1,2")
+        tst.insert("c0_foo_owner", "name,stuff,foo,bar", "5,'Alice',1,0,3")
+        tst.insert("c0_bar_owner", "name,stuff,foo,bar", "6,'Trudy',2,1,3")
+        tst.insert("c0_bar_owner", "name,stuff,foo,bar", "7,'Andrew',3,0,2")
+
         val base = """
             val foo1 = foo @ { .name == 'Foo-1' };
             val foo2 = foo @ { .name == 'Foo-2' };
@@ -167,12 +168,12 @@ class AtExprTest: BaseRellTest() {
                 "class user { name: text; }",
                 "class company { name: text; }"
         )
-        tst.inserts = listOf(
-                mkins("c0_user", "name", "0,'Bob'"),
-                mkins("c0_user", "name", "1,'Alice'"),
-                mkins("c0_company", "name", "2,'Xerox'"),
-                mkins("c0_company", "name", "3,'Bell'")
-        )
+
+        tst.inserts = listOf()
+        tst.insert("c0_user", "name", "0,'Bob'")
+        tst.insert("c0_user", "name", "1,'Alice'")
+        tst.insert("c0_company", "name", "2,'Xerox'")
+        tst.insert("c0_company", "name", "3,'Bell'")
 
         chk("(user, company) @ { .name == 'Bob' }", "ct_err:at_attr_name_ambig:name:user.name,company.name")
         chk("(user, company) @ { .name == 'Xerox' }", "ct_err:at_attr_name_ambig:name:user.name,company.name")
@@ -188,16 +189,17 @@ class AtExprTest: BaseRellTest() {
                 "class single { t: target; }",
                 "class double { t1: target; t2: target; }"
         )
-        tst.inserts = listOf(
-                mkins("c0_target", "name", "0,'A'"),
-                mkins("c0_target", "name", "1,'B'"),
-                mkins("c0_target", "name", "2,'C'"),
-                mkins("c0_single", "t", "0,0"),
-                mkins("c0_single", "t", "1,1"),
-                mkins("c0_double", "t1,t2", "0,0,1"),
-                mkins("c0_double", "t1,t2", "1,1,2"),
-                mkins("c0_double", "t1,t2", "2,2,0")
-        )
+
+        tst.inserts = listOf()
+        tst.insert("c0_target", "name", "0,'A'")
+        tst.insert("c0_target", "name", "1,'B'")
+        tst.insert("c0_target", "name", "2,'C'")
+        tst.insert("c0_single", "t", "0,0")
+        tst.insert("c0_single", "t", "1,1")
+        tst.insert("c0_double", "t1,t2", "0,0,1")
+        tst.insert("c0_double", "t1,t2", "1,1,2")
+        tst.insert("c0_double", "t1,t2", "2,2,0")
+
         val base = """
             val tgt1 = target @ { .name == 'A' };
             val tgt2 = target @ { .name == 'B' };
@@ -227,19 +229,20 @@ class AtExprTest: BaseRellTest() {
                 "class city { name: text; countryName: text; }",
                 "class country { name: text; }"
         )
-        tst.inserts = listOf(
-                mkins("c0_person", "name,cityName", "100,'James','New York'"),
-                mkins("c0_person", "name,cityName", "101,'Phil','London'"),
-                mkins("c0_person", "name,cityName", "102,'Roman','Kyiv'"),
 
-                mkins("c0_city", "name,countryName", "200,'New York','USA'"),
-                mkins("c0_city", "name,countryName", "201,'Kyiv','Ukraine'"),
-                mkins("c0_city", "name,countryName", "202,'London','England'"),
+        tst.inserts = listOf()
 
-                mkins("c0_country", "name", "300,'England'"),
-                mkins("c0_country", "name", "301,'Ukraine'"),
-                mkins("c0_country", "name", "302,'USA'")
-        )
+        tst.insert("c0_person", "name,cityName", "100,'James','New York'")
+        tst.insert("c0_person", "name,cityName", "101,'Phil','London'")
+        tst.insert("c0_person", "name,cityName", "102,'Roman','Kyiv'")
+
+        tst.insert("c0_city", "name,countryName", "200,'New York','USA'")
+        tst.insert("c0_city", "name,countryName", "201,'Kyiv','Ukraine'")
+        tst.insert("c0_city", "name,countryName", "202,'London','England'")
+
+        tst.insert("c0_country", "name", "300,'England'")
+        tst.insert("c0_country", "name", "301,'Ukraine'")
+        tst.insert("c0_country", "name", "302,'USA'")
 
         chk("(person, city, country) @* { city.name == person.cityName, country.name == city.countryName }",
                 "list<(person:person,city:city,country:country)>[" +
@@ -260,14 +263,14 @@ class AtExprTest: BaseRellTest() {
                 }""".trimIndent(),
                 "class proxy { ref: testee; }"
         )
-        tst.inserts = listOf(
-                mkins("c0_testee", "k1,k2,k3,i1,i2,i3,f1,f2", "1,100,101,102,103,104,105,106,107"),
-                mkins("c0_testee", "k1,k2,k3,i1,i2,i3,f1,f2", "2,200,201,202,203,204,205,206,207"),
-                mkins("c0_testee", "k1,k2,k3,i1,i2,i3,f1,f2", "3,300,301,302,303,304,305,306,307"),
-                mkins("c0_proxy", "ref", "1,1"),
-                mkins("c0_proxy", "ref", "2,2"),
-                mkins("c0_proxy", "ref", "3,3")
-        )
+
+        tst.inserts = listOf()
+        tst.insert("c0_testee", "k1,k2,k3,i1,i2,i3,f1,f2", "1,100,101,102,103,104,105,106,107")
+        tst.insert("c0_testee", "k1,k2,k3,i1,i2,i3,f1,f2", "2,200,201,202,203,204,205,206,207")
+        tst.insert("c0_testee", "k1,k2,k3,i1,i2,i3,f1,f2", "3,300,301,302,303,304,305,306,307")
+        tst.insert("c0_proxy", "ref", "1,1")
+        tst.insert("c0_proxy", "ref", "2,2")
+        tst.insert("c0_proxy", "ref", "3,3")
 
         // Direct fields of the query class.
         chk("testee @* { .k1 == 100 }", "list<testee>[testee[1]]")
@@ -495,7 +498,7 @@ class AtExprTest: BaseRellTest() {
                 "list<user>[user[10],user[20],user[21],user[30],user[40],user[41],user[50],user[51]]")
     }
 
-    @Test fun testMaxDevicoBug() {
+    @Test fun testOrConditionBug() {
         tst.defs = listOf("""
             class user_account {
                 key tuid;

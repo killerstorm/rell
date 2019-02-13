@@ -54,6 +54,7 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
     private val classPoses = mutableMapOf<R_Class, S_Pos>()
     private val objects = mutableMapOf<String, R_Object>()
     private val records = mutableMapOf<String, C_Record>()
+    private val enums = mutableMapOf<String, R_EnumType>()
     private val operations = mutableMapOf<String, R_Operation>()
     private val queries = mutableMapOf<String, R_Query>()
     private val functions = mutableMapOf<String, C_GlobalFunction>()
@@ -108,13 +109,15 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
     }
 
     fun checkTypeName(name: S_Name) {
+        checkNameConflict("class", name, classes)
+        checkNameConflict("object", name, objects)
         checkNameConflict("record", name, records)
+        checkNameConflict("enum", name, enums)
         checkNameConflict("type", name, types)
     }
 
     fun checkRecordName(name: S_Name) {
-        checkNameConflict("record", name, records)
-        checkNameConflict("type", name, types)
+        checkTypeName(name)
         checkNameConflict("function", name, functions)
     }
 
@@ -179,6 +182,10 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
         return records[name]?.type
     }
 
+    fun getEnumOpt(name: String): R_EnumType? {
+        return enums[name]
+    }
+
     fun getFunctionOpt(name: String): C_GlobalFunction? {
         val fn = functions[name]
         return fn
@@ -220,6 +227,14 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
         types[name] = rec.type
     }
 
+    fun addEnum(e: R_EnumType) {
+        val name = e.name
+        check(name !in types)
+        check(name !in enums)
+        enums[name] = e
+        types[name] = e
+    }
+
     fun addQuery(query: R_Query) {
         check(query.name !in queries)
         queries[query.name] = query
@@ -259,6 +274,7 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
                 classes.toMap(),
                 objects.toMap(),
                 records.mapValues { it.value.type }.toMap(),
+                enums.toMap(),
                 operations.toMap(),
                 queries.toMap(),
                 functionDefs.toList(),

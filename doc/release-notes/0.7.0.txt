@@ -110,3 +110,20 @@ Like in Kotlin, "if" can be used as an operator:
 
 val max = if (a >= b) a else b;
 return max;
+
+
+11. Enum
+
+enum currency {
+    USD,
+    EUR,
+    GBP
+}
+
+val c: currency = currency.USD;
+print(c.name);
+print(c.value);
+
+val allCurrencies: list<currency> = currency.values();
+val curByName: currency = currency.value('EUR');
+val curByValue: currency = currency.value(2);

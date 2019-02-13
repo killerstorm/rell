@@ -66,6 +66,12 @@ abstract class RellBaseTester(
         }
     }
 
+    fun insert(table: String, columns: String, values: String): RellBaseTester {
+        val ins = SqlTestUtils.mkins(table, columns, values)
+        inserts = inserts + listOf(ins)
+        return this
+    }
+
     protected fun checkNotInited() {
         check(!inited)
     }

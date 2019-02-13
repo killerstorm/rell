@@ -7,6 +7,7 @@ import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlExecutor
 import org.apache.commons.collections4.MultiValuedMap
 import org.apache.commons.collections4.multimap.HashSetValuedHashMap
+import java.lang.IllegalArgumentException
 import java.lang.UnsupportedOperationException
 
 val GTX_QUERY_HUMAN = true
@@ -184,6 +185,38 @@ class GtxRtConversion_Record(val type: R_RecordType): GtxRtConversion() {
             val typeName = type.name
             throw Rt_GtxValueError("record_size:$typeName:$expectedCount:$actualCount",
                     "Wrong GTX array size for record $typeName: $actualCount instead of $expectedCount")
+        }
+    }
+}
+
+class GtxRtConversion_Enum(val type: R_EnumType): GtxRtConversion() {
+    override fun directHuman() = true
+    override fun directCompact() = true
+
+    override fun rtToGtx(rt: Rt_Value, human: Boolean): GTXValue {
+        val e = rt.asEnum()
+        if (human) {
+            return StringGTXValue(e.name)
+        } else {
+            return IntegerGTXValue(e.value.toLong())
+        }
+    }
+
+    override fun gtxToRt(ctx: GtxToRtContext, gtx: GTXValue, human: Boolean): Rt_Value {
+        if (human) {
+            val name = gtxToString(gtx)
+            val attr = type.attr(name)
+            if (attr == null) {
+                throw errGtxType("enum[${type.name}]", gtx, "Invalid enum value: '$name'")
+            }
+            return Rt_EnumValue(type, attr)
+        } else {
+            val value = gtxToInteger(gtx)
+            val attr = type.attr(value)
+            if (attr == null) {
+                throw errGtxType("enum[${type.name}]", gtx, "Invalid enum value: $value")
+            }
+            return Rt_EnumValue(type, attr)
         }
     }
 }

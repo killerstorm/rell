@@ -464,3 +464,48 @@ class R_SysFn_Record_FromGtx(val type: R_RecordType, val human: Boolean): R_SysF
         }
     }
 }
+
+class R_SysFn_Enum_Values(private val type: R_EnumType): R_SysFunction_0() {
+    private val listType = R_ListType(type)
+
+    override fun call(): Rt_Value {
+        val list = ArrayList(type.values())
+        return Rt_ListValue(listType, list)
+    }
+}
+
+class R_SysFn_Enum_Value_Text(private val type: R_EnumType): R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value {
+        val name = arg.asString()
+        val attr = type.attr(name)
+        if (attr == null) {
+            throw Rt_Error("enum_badname:${type.name}:$name", "Enum '${type.name}' has no value '$name'")
+        }
+        return Rt_EnumValue(type, attr)
+    }
+}
+
+class R_SysFn_Enum_Value_Int(private val type: R_EnumType): R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value {
+        val value = arg.asInteger()
+        val attr = type.attr(value)
+        if (attr == null) {
+            throw Rt_Error("enum_badvalue:${type.name}:$value", "Enum '${type.name}' has no value $value")
+        }
+        return Rt_EnumValue(type, attr)
+    }
+}
+
+object R_SysFn_Enum_Name: R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value {
+        val attr = arg.asEnum()
+        return Rt_TextValue(attr.name)
+    }
+}
+
+object R_SysFn_Enum_Value: R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value {
+        val attr = arg.asEnum()
+        return Rt_IntValue(attr.value.toLong())
+    }
+}

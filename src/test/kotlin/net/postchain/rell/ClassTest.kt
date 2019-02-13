@@ -223,10 +223,8 @@ class ClassTest: BaseRellTest(false) {
         t.useSql = true
         t.defs = listOf("class user { name: text; company; }", "class company { name: text; }")
         t.chainId = chainId
-        t.inserts = listOf(
-                SqlTestUtils.mkins("c${chainId}_company", "name","${rowid},'$company'"),
-                SqlTestUtils.mkins("c${chainId}_user", "name,company","${rowid+1},'$user',${rowid}")
-        )
+        t.insert("c${chainId}_company", "name","${rowid},'$company'")
+        t.insert("c${chainId}_user", "name,company","${rowid+1},'$user',${rowid}")
         t.dropTables = false
         t.createSystemTables = false
         t.strictToString = false

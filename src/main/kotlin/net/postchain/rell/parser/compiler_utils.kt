@@ -111,6 +111,10 @@ object C_Errors {
         return C_Error(pos, "expr_bad_dst", "Invalid assignment destination")
     }
 
+    fun errBadDestination(name: S_Name): C_Error {
+        return C_Error(name.pos, "expr_bad_dst:${name.str}", "Cannot modify '${name.str}'")
+    }
+
     fun errAttrNotMutable(pos: S_Pos, name: String): C_Error {
         return C_Error(pos, "update_attr_not_mutable:$name", "Attribute '$name' is not mutable")
     }
@@ -132,16 +136,16 @@ object C_Errors {
         return C_Error(pos, "stmt_delete_cant:$name", "Not allowed to delete objects of class '$name'")
     }
 
-    fun errNameConflictLocalObject(name: S_Name): C_Error {
+    fun errNameConflictLocalGlobal(name: S_Name): C_Error {
         val nameStr = name.str
-        throw C_Error(name.pos, "expr_name_objloc:$nameStr",
-                "Name '$nameStr' is ambiguous: can be object or local variable")
+        throw C_Error(name.pos, "expr_name_locglob:$nameStr",
+                "Name '$nameStr' is ambiguous: can be type or local variable")
     }
 
-    fun errNameConflictClassObject(name: S_Name): C_Error {
+    fun errNameConflictClassGlobal(name: S_Name): C_Error {
         val nameStr = name.str
-        throw C_Error(name.pos, "expr_name_clsobj:$nameStr",
-                "Name '$nameStr' is ambiguous: can be class alias or object")
+        throw C_Error(name.pos, "expr_name_clsglob:$nameStr",
+                "Name '$nameStr' is ambiguous: can be type or class alias")
     }
 
     fun errNameConflictAliasLocal(name: S_Name): C_Error {

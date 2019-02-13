@@ -13,6 +13,7 @@ fun getSQLType(t: R_Type): DataType<*> {
     when (t) {
         is R_PrimitiveType -> return t.sqlType
         is R_ClassType -> return SQLDataType.BIGINT
+        is R_EnumType -> return SQLDataType.INTEGER
         else -> throw Exception("SQL Type not implemented")
     }
 }

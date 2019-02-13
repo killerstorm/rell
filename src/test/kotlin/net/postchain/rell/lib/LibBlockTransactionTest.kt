@@ -104,8 +104,8 @@ class LibBlockTransactionTest: BaseRellTest() {
         tst.inserts = BLOCK_INSERTS
         tst.chainId = 333
 
-        chkCompile("class transaction{}", "ct_err:name_conflict:type:transaction")
-        chkCompile("class block{}", "ct_err:name_conflict:type:block")
+        chkCompile("class transaction{}", "ct_err:name_conflict:class:transaction")
+        chkCompile("class block{}", "ct_err:name_conflict:class:block")
 
         chk("block @* {}", "list<block>[block[111]]")
         chk("transaction @* {}", "list<transaction>[transaction[444]]")
@@ -245,7 +245,7 @@ class LibBlockTransactionTest: BaseRellTest() {
     private fun createChainIdTester(chainId: Long, blockIid: Long, txIid: Long): RellCodeTester {
         val t = resource(RellCodeTester())
         t.defs = listOf("class foo { b: block; t: transaction; mutable value: integer; }")
-        t.inserts = listOf(SqlTestUtils.mkins("c${chainId}_foo", "b,t,value", "1,$blockIid,$txIid,0"))
+        t.insert("c${chainId}_foo", "b,t,value", "1,$blockIid,$txIid,0")
         t.strictToString = false
         t.dropTables = false
         t.autoInitObjects = false

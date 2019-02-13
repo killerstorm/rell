@@ -414,6 +414,25 @@ Special operators:
 
 --------------
 
+enum
+------
+
+Assuming ``T`` is an enum type.
+
+``T.values(): list<T>`` - returns all values of the enum, in the order of declaration
+
+``T.value(text): T`` - finds a value by name, throws en exception if not found
+
+``T.value(integer): T`` - finds a value by index, throws an exception if not found
+
+Enum value properties:
+
+``.name: text`` - the name of the enum value
+
+``.value: integer`` - the numeric value (index) associated with the enum value
+
+--------------
+
 GTXValue
 --------
 

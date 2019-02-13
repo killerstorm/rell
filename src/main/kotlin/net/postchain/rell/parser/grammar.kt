@@ -60,6 +60,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val OPERATION by relltok("operation")
     private val QUERY by relltok("query")
     private val RECORD by relltok("record")
+    private val ENUM by relltok("enum")
     private val FUNCTION by relltok("function")
     private val VAL by relltok("val")
     private val VAR by relltok("var")
@@ -141,17 +142,22 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     private val classAnnotations by -LPAR * separatedTerms(id, COMMA, false) * -RPAR
 
-    private val classDef by (-CLASS * id * optional(classAnnotations) * -LCURL * relClauses * -RCURL) map {
+    private val classDef by ( -CLASS * id * optional(classAnnotations) * -LCURL * relClauses * -RCURL ) map {
         (name, annotations, clauses) ->
         S_ClassDefinition(name, annotations ?: listOf(), clauses)
     }
 
-    private val objectDef by (-OBJECT * id * -LCURL * zeroOrMore(anyRelClause) * -RCURL) map { (name, clauses) ->
+    private val objectDef by ( -OBJECT * id * -LCURL * zeroOrMore(anyRelClause) * -RCURL ) map { (name, clauses) ->
         S_ObjectDefinition(name, clauses)
     }
 
-    private val recordDef by (-RECORD * id * -LCURL * zeroOrMore(relAttributeClause) * -RCURL) map { (name, attrs) ->
+    private val recordDef by ( -RECORD * id * -LCURL * zeroOrMore(relAttributeClause) * -RCURL ) map { (name, attrs) ->
         S_RecordDefinition(name, attrs)
+    }
+
+    private val enumDef by ( -ENUM * id * -LCURL * separatedTerms(id, COMMA, true) * optional(COMMA) * -RCURL ) map {
+        (name, values) ->
+        S_EnumDefinition(name, values)
     }
 
     private val binaryOperator = (
@@ -475,7 +481,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     private val formalParameters by ( -LPAR * separatedTerms(relField, COMMA, true) * -RPAR )
 
-    private val opDefinition by (-OPERATION * id * formalParameters * blockStatement) map {
+    private val opDef by (-OPERATION * id * formalParameters * blockStatement) map {
         (name, params, body) ->
         S_OpDefinition(name, params, body)
     }
@@ -484,15 +490,15 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val functionBodyFull by blockStatement map { stmt -> S_FunctionBodyFull(stmt) }
     private val functionBody by ( functionBodyShort or functionBodyFull )
 
-    private val queryDefinition by (-QUERY * id * formalParameters * optional(-COLON * type) * functionBody) map {
+    private val queryDef by (-QUERY * id * formalParameters * optional(-COLON * type) * functionBody) map {
         (name, params, type, body) -> S_QueryDefinition(name, params, type, body)
     }
 
-    private val functionDefinition by (-FUNCTION * id * formalParameters * optional(-COLON * type) * functionBody) map {
+    private val functionDef by (-FUNCTION * id * formalParameters * optional(-COLON * type) * functionBody) map {
         (name, params, type, body) -> S_FunctionDefinition(name, params, type, body)
     }
 
-    private val anyDef by ( classDef or objectDef or recordDef or opDefinition or queryDefinition or functionDefinition )
+    private val anyDef by ( classDef or objectDef or recordDef or enumDef or opDef or queryDef or functionDef )
 
     override val rootParser by zeroOrMore(anyDef) map { S_ModuleDefinition(it) }
 

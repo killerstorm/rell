@@ -321,6 +321,41 @@ Safe-access operator ``?.`` can be used to read or modify attributes of a nullab
    val u: user? = findUser('Bob');
    u?.balance += 100;        // no-op if 'u' is null
 
+Enum
+-----
+
+Enum declaration:
+
+::
+
+   enum currency {
+       USD,
+       EUR,
+       GBP
+   }
+
+Values are stored in a database as integers. Each constant has a numeric value equal to its position in the enum
+(the first value is 0).
+
+Usage:
+
+::
+
+   var c: currency;
+   c = currency.USD;
+
+Enum-specific functions and properties:
+
+::
+
+   val cs: list<currency> = currency.values() // Returns all values (in the order in which they are declared)
+
+   val eur = currency.value('EUR') // Finds enum value by name
+   val gbp = currency.value(2) // Finds enum value by index
+
+   val usdStr: text = currency.USD.name // Returns 'USD'
+   val usdValue: integer = currency.USD.value // Return 0.
+
 Query
 -----
 
