@@ -111,10 +111,8 @@ class R_UpdateTarget_Expr_Many(
     }
 }
 
-class R_UpdateTarget_Object(private val cls: R_AtClass, private val rObject: R_Object): R_UpdateTarget() {
-    init {
-        check(cls.index == 0)
-    }
+class R_UpdateTarget_Object(rObject: R_Object): R_UpdateTarget() {
+    private val cls = R_AtClass(rObject.rClass, 0)
 
     override fun cls() = cls
     override fun extraClasses(): List<R_AtClass> = listOf()

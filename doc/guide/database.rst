@@ -220,6 +220,13 @@ Can specify an arbitrary expression returning a class, a nullable class or a col
    val u = user @? { .name == 'Bob' };
    update u ( salary += 5000 );
 
+A single attribute of can be modified using a regular assignment syntax:
+
+::
+
+   val u = user @ { .name == 'Bob' };
+   u.salary += 5000;
+
 -------------
 
 Delete Statement

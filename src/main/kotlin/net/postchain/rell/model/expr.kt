@@ -19,10 +19,10 @@ sealed class R_DestinationExpr(type: R_Type): R_Expr(type) {
 
 class R_VarExpr(type: R_Type, val ptr: R_VarPtr, val name: String): R_DestinationExpr(type) {
     override fun evaluateRef(frame: Rt_CallFrame): Rt_ValueRef {
-        return RtVarValueRef(ptr, name, frame)
+        return Rt_VarValueRef(ptr, name, frame)
     }
 
-    private class RtVarValueRef(val ptr: R_VarPtr, val name: String, val frame: Rt_CallFrame): Rt_ValueRef() {
+    private class Rt_VarValueRef(val ptr: R_VarPtr, val name: String, val frame: Rt_CallFrame): Rt_ValueRef() {
         override fun get(): Rt_Value {
             val value = frame.getOpt(ptr)
             if (value == null) {
@@ -46,10 +46,10 @@ class R_RecordMemberExpr(val base: R_Expr, val attr: R_Attrib): R_DestinationExp
         }
 
         val recordValue = baseValue.asRecord()
-        return RtRecordAttrRef(recordValue, attr)
+        return Rt_RecordAttrRef(recordValue, attr)
     }
 
-    private class RtRecordAttrRef(val record: Rt_RecordValue, val attr: R_Attrib): Rt_ValueRef() {
+    private class Rt_RecordAttrRef(val record: Rt_RecordValue, val attr: R_Attrib): Rt_ValueRef() {
         override fun get(): Rt_Value {
             val value = record.get(attr.index)
             return value
@@ -199,10 +199,10 @@ class R_ListLookupExpr(type: R_Type, val base: R_Expr, val expr: R_Expr): R_Dest
                     "List index out of bounds: $index (size ${list.size})")
         }
 
-        return RtListValueRef(list, index.toInt())
+        return Rt_ListValueRef(list, index.toInt())
     }
 
-    private class RtListValueRef(val list: MutableList<Rt_Value>, val index: Int): Rt_ValueRef() {
+    private class Rt_ListValueRef(val list: MutableList<Rt_Value>, val index: Int): Rt_ValueRef() {
         override fun get(): Rt_Value {
             return list[index]
         }
@@ -218,10 +218,10 @@ class R_MapLookupExpr(type: R_Type, val base: R_Expr, val expr: R_Expr): R_Desti
         val baseValue = base.evaluate(frame)
         val keyValue = expr.evaluate(frame)
         val map = baseValue.asMap()
-        return RtMapValueRef(map, keyValue)
+        return Rt_MapValueRef(map, keyValue)
     }
 
-    private class RtMapValueRef(val map: MutableMap<Rt_Value, Rt_Value>, val key: Rt_Value): Rt_ValueRef() {
+    private class Rt_MapValueRef(val map: MutableMap<Rt_Value, Rt_Value>, val key: Rt_Value): Rt_ValueRef() {
         override fun get(): Rt_Value {
             val value = map[key]
             if (value == null) {

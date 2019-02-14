@@ -115,6 +115,9 @@ class RecordTest: BaseRellTest(false) {
         chkEx("{ val r: foo? = null; r?.x = 456; return r; }", "null")
         chkEx("{ val r: foo? = foo(123); r?.x += 456; return r; }", "foo[x=int[579]]")
         chkEx("{ val r: foo? = null; r?.x += 456; return r; }", "null")
+
+        chkEx("{ val r: foo? = foo(123); r!!.x = 456; return r; }", "foo[x=int[456]]")
+        chkEx("{ val r: foo? = null; r!!.x = 456; return r; }", "rt_err:null_value")
     }
 
     @Test fun testAttributeOfNullableRecord2() {

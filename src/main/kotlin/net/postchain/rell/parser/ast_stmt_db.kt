@@ -12,10 +12,10 @@ class S_UpdateTarget_Simple(
         val where: S_AtExprWhere
 ): S_UpdateTarget() {
     override fun compile(ctx: C_ExprContext): Pair<C_DbExprContext, R_UpdateTarget> {
-        val rFrom = S_AtExpr.compileFrom(ctx, from)
-        val cls = rFrom[0]
-        val extraClasses = rFrom.subList(1, rFrom.size)
-        val dbCtx = C_DbExprContext(ctx.blkCtx, rFrom)
+        val cFrom = S_AtExpr.compileFrom(ctx, from)
+        val cls = cFrom[0].compile()
+        val extraClasses = cFrom.subList(1, cFrom.size).map { it.compile() }
+        val dbCtx = C_DbExprContext(ctx.blkCtx, cFrom)
         val dbWhere = where.compile(dbCtx)
         val rTarget = R_UpdateTarget_Simple(cls, extraClasses, cardinality.rCardinality, dbWhere)
         return Pair(dbCtx, rTarget)
@@ -25,7 +25,9 @@ class S_UpdateTarget_Simple(
 class S_UpdateTarget_Expr(val expr: S_Expr): S_UpdateTarget() {
     override fun compile(ctx: C_ExprContext): Pair<C_DbExprContext, R_UpdateTarget> {
         val target = compileTarget(ctx)
-        val dbCtx = C_DbExprContext(ctx.blkCtx, listOf(target.cls()))
+        val rCls = target.cls()
+        val cCls = C_AtClass(rCls.rClass, rCls.rClass.name, rCls.index)
+        val dbCtx = C_DbExprContext(ctx.blkCtx, listOf(cCls))
         return Pair(dbCtx, target)
     }
 
@@ -51,7 +53,7 @@ class S_UpdateTarget_Expr(val expr: S_Expr): S_UpdateTarget() {
     }
 
     private fun compileTargetClass(rExpr: R_Expr, rClass: R_Class): R_UpdateTarget {
-        val cls = R_AtClass(rClass, rClass.name, 0)
+        val cls = R_AtClass(rClass, 0)
         val whereLeft = Db_ClassExpr(cls)
         val whereRight = Db_ParameterExpr(R_ClassType(rClass), 0)
         val where = Db_BinaryExpr(R_BooleanType, Db_BinaryOp_Eq, whereLeft, whereRight)
@@ -59,14 +61,12 @@ class S_UpdateTarget_Expr(val expr: S_Expr): S_UpdateTarget() {
     }
 
     private fun compileTargetObject(rObject: R_Object): R_UpdateTarget {
-        val rClass = rObject.rClass
-        val cls = R_AtClass(rClass, rClass.name, 0)
-        return R_UpdateTarget_Object(cls, rObject)
+        return R_UpdateTarget_Object(rObject)
     }
 
     private fun compileTargetCollection(rExpr: R_Expr, type: R_Type, clsType: R_ClassType, set: Boolean): R_UpdateTarget {
         val rClass = clsType.rClass
-        val cls = R_AtClass(rClass, rClass.name, 0)
+        val cls = R_AtClass(rClass, 0)
         val whereLeft = Db_ClassExpr(cls)
         val whereRight = Db_ArrayParameterExpr(type, clsType, 0)
         val where = Db_BinaryExpr(R_BooleanType, Db_BinaryOp_In, whereLeft, whereRight)

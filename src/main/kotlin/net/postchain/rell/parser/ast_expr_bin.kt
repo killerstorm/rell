@@ -67,14 +67,15 @@ enum class S_AssignOpCode(val op: S_AssignOp) {
 }
 
 sealed class S_AssignOp {
-    abstract fun compile(pos: S_Pos, dstExpr: R_DestinationExpr, expr: R_Expr): R_Statement
+    abstract fun compile(pos: S_Pos, dstExpr: C_Destination, expr: R_Expr): R_Statement
     abstract fun compileDbUpdate(pos: S_Pos, attr: R_Attrib, expr: Db_Expr): R_UpdateStatementWhat
 }
 
 object S_AssignOp_Eq: S_AssignOp() {
-    override fun compile(pos: S_Pos, dstExpr: R_DestinationExpr, expr: R_Expr): R_Statement {
-        S_Type.match(dstExpr.type, expr.type, pos, "stmt_assign_type", "Assignment type missmatch")
-        return R_AssignStatement(dstExpr, expr, null)
+    override fun compile(pos: S_Pos, dstExpr: C_Destination, expr: R_Expr): R_Statement {
+        val dstType = dstExpr.type()
+        S_Type.match(dstType, expr.type, pos, "stmt_assign_type", "Assignment type missmatch")
+        return dstExpr.compileAssignStatement(expr, null)
     }
 
     override fun compileDbUpdate(pos: S_Pos, attr: R_Attrib, expr: Db_Expr): R_UpdateStatementWhat {
@@ -90,14 +91,16 @@ object S_AssignOp_Eq: S_AssignOp() {
 class S_AssignOp_Op(val op: S_BinaryOp_Common): S_AssignOp() {
     val code = op.code + "="
 
-    override fun compile(pos: S_Pos, dstExpr: R_DestinationExpr, expr: R_Expr): R_Statement {
-        val binOp = compileBinOp(pos, dstExpr.type, expr.type)
+    override fun compile(pos: S_Pos, dstExpr: C_Destination, expr: R_Expr): R_Statement {
+        val dstType = dstExpr.type()
+        val binOp = compileBinOp(pos, dstType, expr.type)
         if (binOp.rOp == null) {
-            throw S_BinaryOp.errTypeMissmatch(pos, code, dstExpr.type, expr.type)
+            throw S_BinaryOp.errTypeMissmatch(pos, code, dstType, expr.type)
         }
 
-        val expr2 = S_BinaryOp_Common.convertExpr(pos, code, dstExpr.type, expr.type, expr, binOp.rightConv)
-        return R_AssignStatement(dstExpr, expr2, binOp.rOp)
+        val expr2 = S_BinaryOp_Common.convertExpr(pos, code, dstType, expr.type, expr, binOp.rightConv)
+        val cOp = C_AssignOp(pos, code, binOp.rOp, binOp.dbOp)
+        return dstExpr.compileAssignStatement(expr2, cOp)
     }
 
     override fun compileDbUpdate(pos: S_Pos, attr: R_Attrib, expr: Db_Expr): R_UpdateStatementWhat {

@@ -391,6 +391,117 @@ class UpdateDeleteTest: BaseRellTest() {
         chkData()
     }
 
+    @Test fun testUpdateShortSyntax() {
+        fun james(score: Int) = "person(4,James,3,Evergreen Ave,5,$score)"
+        fun mike(score: Int) = "person(5,Mike,1,Grand St,7,$score)"
+        fun person(name: String) = "person @ { .name == '$name' }"
+
+        createCitiesAndPersons()
+        chkDataCommon(james(100), mike(250))
+
+        resetChkOp("val p = ${person("James")}; p.score = 33;")
+        chkDataCommon(james(33), mike(250))
+
+        resetChkOp("val p = ${person("James")}; p.score += 33;")
+        chkDataCommon(james(100+33), mike(250))
+
+        resetChkOp("val p = ${person("James")}; p.score *= 33;")
+        chkDataCommon(james(100*33), mike(250))
+
+        resetChkOp("val p = ${person("Mike")}; p.score *= 33;")
+        chkDataCommon(james(100), mike(250*33))
+
+        resetChkOp("val p = ${person("Mike")}; p.score = 'Hello';", "ct_err:stmt_assign_type:integer:text")
+        chkDataCommon(james(100), mike(250))
+
+        resetChkOp("val p = ${person("Mike")}; p.score += 'Hello';", "ct_err:binop_operand_type:+=:integer:text")
+        chkDataCommon(james(100), mike(250))
+
+        resetChkOp("val p = ${person("Mike")}; val v: integer? = 123; p.score += v;",
+                "ct_err:binop_operand_type:+=:integer:integer?")
+        chkDataCommon(james(100), mike(250))
+
+        resetChkOp("val p = ${person("Mike")}; p.name = 'Bond';", "ct_err:update_attr_not_mutable:name")
+        chkDataCommon(james(100), mike(250))
+
+        resetChkOp("val p = ${person("Mike")}; p.name += 'Bond';", "ct_err:update_attr_not_mutable:name")
+        chkDataCommon(james(100), mike(250))
+    }
+
+    @Test fun testUpdateShortSyntaxNullable() {
+        fun james(score: Int) = "person(4,James,3,Evergreen Ave,5,$score)"
+        fun mike(score: Int) = "person(5,Mike,1,Grand St,7,$score)"
+        fun person(name: String) = "person @? { .name == '$name' }"
+
+        createCitiesAndPersons()
+        chkDataCommon(james(100), mike(250))
+
+        resetChkOp("val p = ${person("James")}; p.score = 33;", "ct_err:expr_mem_null:score")
+        chkDataCommon(james(100), mike(250))
+
+        resetChkOp("val p = ${person("James")}; p!!.score = 33;")
+        chkDataCommon(james(33), mike(250))
+
+        resetChkOp("val p = ${person("Bob")}; p!!.score = 33;", "rt_err:null_value")
+        chkDataCommon(james(100), mike(250))
+
+        resetChkOp("val p = ${person("James")}; p?.score = 33;")
+        chkDataCommon(james(33), mike(250))
+
+        resetChkOp("val p = ${person("Bob")}; p?.score = 33;")
+        chkDataCommon(james(100), mike(250))
+
+        resetChkOp("val p = ${person("James")}; p?.score += 33;")
+        chkDataCommon(james(133), mike(250))
+
+        resetChkOp("val p = ${person("Bob")}; p?.score += 33;")
+        chkDataCommon(james(100), mike(250))
+    }
+
+    @Test fun testUpdateShortSyntaxReference() {
+        fun james(score: Int, city: Int) = "person(4,James,$city,Evergreen Ave,5,$score)"
+        fun mike(score: Int, city: Int) = "person(5,Mike,$city,Grand St,7,$score)"
+        fun person(name: String) = "person @ { .name == '$name' }"
+        fun city(name: String) = "city @ { .name == '$name' }"
+
+        createCitiesAndPersons()
+        chkDataCommon(james(100, 3), mike(250, 1))
+
+        resetChkOp("val p = ${person("James")}; p.city = ${city("San Francisco")};")
+        chkDataCommon(james(100, 2), mike(250, 1))
+
+        resetChkOp("val p = ${person("James")}; p.city += ${city("San Francisco")};", "ct_err:binop_operand_type:+=:city:city")
+        resetChkOp("val p = ${person("James")}; p.city *= ${city("San Francisco")};", "ct_err:binop_operand_type:*=:city:city")
+        chkDataCommon(james(100, 3), mike(250, 1))
+
+        resetChkOp("val p = ${person("Mike")}; p.city = ${city("Los Angeles")};")
+        chkDataCommon(james(100, 3), mike(250, 3))
+    }
+
+    @Test fun testUpdateShortSyntaxPath() {
+        tst.defs = listOf(
+                "class person { name; mutable score: integer; }",
+                "class foo { p: person; }",
+                "class bar { f: foo; }"
+        )
+        tst.inserts = listOf()
+        tst.insert("c0_person", "name,score", "1,'James',100")
+        tst.insert("c0_person", "name,score", "2,'Mike',250")
+        tst.insert("c0_foo", "p", "1,1")
+        tst.insert("c0_bar", "f", "1,1")
+
+        chkData("person(1,James,100)", "person(2,Mike,250)", "foo(1,1)", "bar(1,1)")
+
+        chkOp("val b = bar @ {}; b.f.p.score = 50;")
+        chkData("person(1,James,50)", "person(2,Mike,250)", "foo(1,1)", "bar(1,1)")
+
+        chkOp("val b = bar @ {}; b.f.p.score += 33;")
+        chkData("person(1,James,83)", "person(2,Mike,250)", "foo(1,1)", "bar(1,1)")
+
+        chkOp("val b = bar @ {}; b.f.p.score *= 11;")
+        chkData("person(1,James,913)", "person(2,Mike,250)", "foo(1,1)", "bar(1,1)")
+    }
+
     private fun resetChkOp(code: String, expected: String = "OK") {
         tst.resetRowid()
         chkOp("delete person @* {}; delete city @* {};")

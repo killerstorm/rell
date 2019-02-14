@@ -17,8 +17,10 @@ enum class R_AtCardinality(val zero: Boolean, val many: Boolean) {
     }
 }
 
-class R_AtClass(val rClass: R_Class, val alias: String, val index: Int) {
+class R_AtClass(val rClass: R_Class, val index: Int) {
     val type: R_Type = R_ClassType(rClass)
+    override fun equals(other: Any?) = other is R_AtClass && rClass == other.rClass && index == other.index
+    override fun hashCode() = rClass.hashCode() * 31 + index
 }
 
 sealed class R_AtExprRowType {

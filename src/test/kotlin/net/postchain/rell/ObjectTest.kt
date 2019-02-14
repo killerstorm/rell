@@ -215,4 +215,24 @@ class ObjectTest: BaseRellTest() {
 
         chk("foo.x", "rt_err:obj_multirec:foo:3")
     }
+
+    @Test fun testUpdateShortSyntax() {
+        tst.defs = listOf("object foo { mutable x: integer = 100; y: integer = 250; }")
+        chkData("foo(0,100,250)")
+
+        chkOp("foo.x = 50;")
+        chkData("foo(0,50,250)")
+
+        chkOp("foo.x += 33;")
+        chkData("foo(0,83,250)")
+
+        chkOp("foo.x *= 55;")
+        chkData("foo(0,4565,250)")
+
+        chkOp("foo.y = 10;", "ct_err:update_attr_not_mutable:y")
+        chkData("foo(0,4565,250)")
+
+        chkOp("foo.y += 10;", "ct_err:update_attr_not_mutable:y")
+        chkData("foo(0,4565,250)")
+    }
 }

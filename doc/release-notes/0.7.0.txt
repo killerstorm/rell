@@ -127,3 +127,19 @@ print(c.value);
 val allCurrencies: list<currency> = currency.values();
 val curByName: currency = currency.value('EUR');
 val curByValue: currency = currency.value(2);
+
+
+12. Short attribute update notation
+
+Instead of writing
+
+val u = user @ { .name == 'Bob' };
+update u ( salary += 1000 );
+
+One can simply write:
+
+val u = user @ { .name == 'Bob' };
+u.salary += 1000;
+
+The assignment (operator +=) will be translated to an update statement, so the two code fragments are equivalent.
+Any assignment operators are allowed: =, +=, -=, *=, /=, etc.
