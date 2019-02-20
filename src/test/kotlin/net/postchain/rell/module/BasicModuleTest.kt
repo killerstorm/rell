@@ -2,15 +2,13 @@ package net.postchain.rell.module
 
 import net.postchain.base.SECP256K1CryptoSystem
 import net.postchain.common.hexStringToByteArray
-import net.postchain.gtx.GTXBlockchainConfigurationFactory
-import net.postchain.gtx.GTXDataBuilder
-import net.postchain.gtx.GTXValue
-import net.postchain.gtx.gtx
 import net.postchain.devtools.IntegrationTest
 import net.postchain.devtools.KeyPairHelper
 import net.postchain.devtools.SingleChainTestNode
+import net.postchain.gtx.GTXDataBuilder
+import net.postchain.gtx.GTXValue
+import net.postchain.gtx.gtx
 import org.junit.Test
-import java.nio.file.Paths
 import kotlin.test.assertEquals
 
 class BasicModuleTest : IntegrationTest() {
@@ -114,23 +112,7 @@ class BasicModuleTest : IntegrationTest() {
     }
 
     private fun setupNode(): SingleChainTestNode {
-        val rellModulePath = Paths.get(javaClass.getResource("mymodule.rell").toURI()).toString()
-        /* FYI: [et]: Commons config has been used again instead of gtx-config
-        gtxConfig = gtx(
-                "configurationfactory" to gtx(GTXBlockchainConfigurationFactory::class.qualifiedName!!),
-                "signers" to gtxConfigSigners(),
-                "gtx" to gtx(
-                        "modules" to gtx(listOf(gtx(SQLGTXModuleFactory::class.qualifiedName!!))),
-                        "sqlmodules" to gtx(listOf(gtx(sqlModulePath)))
-                )
-        )
-        */
-
-        configOverrides.setProperty("blockchain.1.configurationfactory", GTXBlockchainConfigurationFactory::class.qualifiedName)
-        configOverrides.setProperty("blockchain.1.gtx.modules", listOf(RellPostchainModuleFactory::class.qualifiedName))
-        configOverrides.setProperty("blockchain.1.gtx.rellSrcModule", rellModulePath)
-
-        return createNode(0)
+        return createNode(0, "/net/postchain/rell/basic/blockchain_config.xml")
     }
 
     private fun insertObjects(node: SingleChainTestNode) {

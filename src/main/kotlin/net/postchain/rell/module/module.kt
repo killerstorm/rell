@@ -1,23 +1,28 @@
 package net.postchain.rell.module
 
-import net.postchain.core.*
+import net.postchain.core.EContext
+import net.postchain.core.Transactor
+import net.postchain.core.TxEContext
+import net.postchain.core.UserMistake
 import net.postchain.gtx.*
-import net.postchain.rell.model.*
+import net.postchain.rell.CommonUtils
+import net.postchain.rell.model.R_ExternalParam
+import net.postchain.rell.model.R_Module
+import net.postchain.rell.model.R_Operation
+import net.postchain.rell.model.R_Query
 import net.postchain.rell.parser.C_Utils
-
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.DefaultSqlExecutor
 import net.postchain.rell.sql.genSql
 import org.apache.commons.logging.LogFactory
-import java.io.File
 
-private object StdoutRtPrinter: Rt_Printer() {
+private object StdoutRtPrinter : Rt_Printer() {
     override fun print(str: String) {
         println(str)
     }
 }
 
-private object LogRtPrinter: Rt_Printer() {
+private object LogRtPrinter : Rt_Printer() {
     private val log = LogFactory.getLog(LogRtPrinter.javaClass)
 
     override fun print(str: String) {
@@ -34,14 +39,13 @@ private fun <T> catchRtErr(code: () -> T): T {
 }
 
 private fun convertArgs(ctx: GtxToRtContext, params: List<R_ExternalParam>, args: List<GTXValue>, human: Boolean): List<Rt_Value> {
-    return args.mapIndexed {
-        index, arg ->
+    return args.mapIndexed { index, arg ->
         val type = params[index].type
         type.gtxToRt(ctx, arg, human)
     }
 }
 
-class RellGTXOperation(val module: RellPostchainModule, val rOperation: R_Operation, opData: ExtOpData): GTXOperation(opData) {
+class RellGTXOperation(val module: RellPostchainModule, val rOperation: R_Operation, opData: ExtOpData) : GTXOperation(opData) {
     private lateinit var gtxToRtCtx: GtxToRtContext
     private lateinit var args: List<Rt_Value>
 
@@ -78,7 +82,7 @@ class RellGTXOperation(val module: RellPostchainModule, val rOperation: R_Operat
     }
 }
 
-class RellPostchainModule(val rModule: R_Module, val moduleName: String, val chainCtx: Rt_ChainContext): GTXModule {
+class RellPostchainModule(val rModule: R_Module, val moduleName: String, val chainCtx: Rt_ChainContext) : GTXModule {
     override fun getOperations(): Set<String> {
         return rModule.operations.keys
     }
@@ -162,8 +166,8 @@ class RellPostchainModule(val rModule: R_Module, val moduleName: String, val cha
 }
 
 class RellPostchainModuleFactory(
-        private val moduleLoader: (String) -> String = { path -> File(path).readText() }
-): GTXModuleFactory {
+        private val moduleLoader: (String) -> String = CommonUtils::readFileContent
+) : GTXModuleFactory {
     override fun makeModule(data: GTXValue, blockchainRID: ByteArray): GTXModule {
         val gtxData = data["gtx"]!!
         val sourceCode: String
