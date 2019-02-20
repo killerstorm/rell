@@ -203,13 +203,20 @@ object R_NullType: R_Type("null") {
 class R_ClassType(val rClass: R_Class): R_Type(rClass.name) {
     override fun isSqlCompatible(): Boolean = true
     override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = stmt.setLong(idx, value.asObjectId())
-    override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_ObjectValue(this, rs.getLong(idx))
-    override fun fromCli(s: String): Rt_Value = Rt_ObjectValue(this, s.toLong())
+    override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_ClassValue(this, rs.getLong(idx))
+    override fun fromCli(s: String): Rt_Value = Rt_ClassValue(this, s.toLong())
     override fun toStrictString(): String = name
     override fun equals(other: Any?): Boolean = other is R_ClassType && other.rClass == rClass
     override fun hashCode(): Int = rClass.hashCode()
 
-    override fun createGtxConversion() = GtxRtConversion_Object(this)
+    override fun createGtxConversion() = GtxRtConversion_Class(this)
+}
+
+class R_ObjectType(val rObject: R_Object): R_Type(rObject.rClass.name) {
+    override fun toStrictString(): String = name
+    override fun equals(other: Any?): Boolean = other is R_ObjectType && other.rObject == rObject
+    override fun hashCode(): Int = rObject.hashCode()
+    override fun createGtxConversion() = GtxRtConversion_None
 }
 
 class R_RecordFlags(val typeFlags: R_TypeFlags, val cyclic: Boolean, val infinite: Boolean)
@@ -243,6 +250,36 @@ class R_RecordType(name: String): R_Type(name) {
     override fun createGtxConversion() = GtxRtConversion_Record(this)
 
     private class RRecordBody(val attrMap: Map<String, R_Attrib>, val attrList: List<R_Attrib>, val attrMutable: Boolean)
+}
+
+class R_EnumAttr(val name: String, val value: Int)
+
+class R_EnumType(name: String, val attrs: List<R_EnumAttr>): R_Type(name) {
+    private val attrMap = attrs.map { Pair(it.name, it) }.toMap()
+    private val rtValues = attrs.map { Rt_EnumValue(this, it) }
+
+    override fun isSqlCompatible(): Boolean = true
+    override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = stmt.setInt(idx, value.asEnum().value)
+    override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_EnumValue(this, attrs[rs.getInt(idx)])
+    override fun fromCli(s: String): Rt_Value = Rt_EnumValue(this, attrMap.getValue(s))
+    override fun toStrictString(): String = name
+
+    override fun createGtxConversion() = GtxRtConversion_Enum(this)
+
+    fun attr(name: String): R_EnumAttr? {
+        return attrMap[name]
+    }
+
+    fun attr(value: Long): R_EnumAttr? {
+        if (value < 0 || value >= attrs.size) {
+            return null
+        }
+        return attrs[value.toInt()]
+    }
+
+    fun values(): List<Rt_Value> {
+        return rtValues
+    }
 }
 
 class R_NullableType(val valueType: R_Type): R_Type(valueType.name + "?") {

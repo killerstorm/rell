@@ -1,5 +1,6 @@
 package net.postchain.rell
 
+import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 
 class NullableTest: BaseRellTest(false) {
@@ -81,7 +82,7 @@ class NullableTest: BaseRellTest(false) {
     @Test fun testNullableClass() {
         tst.useSql = true
         tst.defs = listOf("class user { name: text; }")
-        tst.execOp("create user (name = 'Bob');")
+        chkOp("create user (name = 'Bob');")
 
         chkFn(": user = null;", "ct_err:entity_rettype:user:null")
         chkFn(": user = user @? { .name == 'Bob' };", "ct_err:entity_rettype:user:user?")
@@ -602,7 +603,7 @@ class NullableTest: BaseRellTest(false) {
     @Test fun testSpecOpElvisUnderAt() {
         tst.useSql = true
         tst.defs = listOf("class user { name: text; }")
-        tst.execOp("create user(name = 'Bob'); create user(name = 'Alice');")
+        chkOp("create user(name = 'Bob'); create user(name = 'Alice');")
 
         chkEx("{ val s: text? = 'Bob'; return user @ { .name == s ?: 'Alice' }; }", "user[1]")
         chkEx("{ val s: text? = null; return user @ { .name == s ?: 'Alice' }; }", "user[2]")
@@ -679,7 +680,7 @@ class NullableTest: BaseRellTest(false) {
         tst.useSql = true
         tst.defs = listOf("class company { name: text; }", "class user { name: text; company; }")
 
-        tst.execOp("""
+        chkOp("""
             val ms = create company(name = 'Microsoft');
             val ap = create company(name = 'Apple');
             create user(name = 'Bob', ms);

@@ -1,13 +1,85 @@
+=======
 Library
 =======
 
-Context
--------
+System classes
+==============
+
+::
+
+   class block {
+       block_height: integer;
+       block_rid: byte_array;
+       timestamp;
+   }
+
+   class transaction {
+       tx_rid: byte_array;
+       tx_hash: byte_array;
+       tx_data: byte_array;
+       block;
+   }
+
+It is not possible to create, modify or delete objects of those classes in code.
+
+--------------
+
+chain_context
+-------------
+
+``chain_context.raw_config: GTXValue`` - blockchain configuration object, e. g. ``{"gtx":{"rellSrcModule":"foo.rell"}}``
+
+``chain_context.args: module_args?`` - module arguments specified in ``raw_config`` under path ``gtx.rellModuleArgs``.
+The type is ``module_args``, which must be a user-defined record. If no ``module_args`` record is defined in the module,
+the ``args`` field cannot be accessed. The value is ``null`` if arguments are not specified in the module configuration.
+
+Example of ``module_args``:
+
+::
+
+    record module_args {
+        s: text;
+        n: integer;
+    }
+
+Corresponding module configuration:
+
+::
+
+    {
+        "gtx": {
+            "rellSrcModule": "foo.rell",
+            "rellModuleArgs": {
+                "s": "Hello",
+                "n": 123
+            }
+        }
+    }
+
+Code that reads ``module_args``:
+
+::
+
+    function f() {
+        print(chain_context.args?.s);
+        print(chain_context.args?.n);
+    }
+
+op_context
+----------
 
 ``op_context.last_block_time: integer`` - the timestamp of the last block, in milliseconds
 (like ``System.currentTimeMillis()`` in Java). Returns ``-1`` if there is no last block (the block currently being built
 is the first block).
 Can be used only in an operation or a function called from an operation, but not in a query.
+
+``op_context.transaction: transaction`` - the transaction currently being built.
+Can be used only in an operation or a function called from an operation, but not in a query.
+
+--------------
+
+Functions
+================
 
 Global Functions
 ----------------
@@ -29,6 +101,8 @@ in the list of signers of current operation
 
 -  ``print()`` - prints an empty line
 -  ``print('Hello', 123)`` - prints ``"Hello 123"``
+
+--------------
 
 Require functions
 -----------------
@@ -338,6 +412,27 @@ Special operators:
 -  ``[]`` - get/set value by key
 -  ``in`` - returns ``true`` if a key is in the map
 
+--------------
+
+enum
+------
+
+Assuming ``T`` is an enum type.
+
+``T.values(): list<T>`` - returns all values of the enum, in the order of declaration
+
+``T.value(text): T`` - finds a value by name, throws en exception if not found
+
+``T.value(integer): T`` - finds a value by index, throws an exception if not found
+
+Enum value properties:
+
+``.name: text`` - the name of the enum value
+
+``.value: integer`` - the numeric value (index) associated with the enum value
+
+--------------
+
 GTXValue
 --------
 
@@ -350,6 +445,8 @@ GTXValue
 ``.toJSON(): json`` - encode in JSON format
 
 ``.toBytes(): byte_array`` - encode in binary format
+
+--------------
 
 record
 ------

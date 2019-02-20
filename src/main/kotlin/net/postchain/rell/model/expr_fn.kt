@@ -39,6 +39,16 @@ sealed class R_SysFunction {
     abstract fun call(ctx: Rt_GlobalContext, args: List<Rt_Value>): Rt_Value
 }
 
+sealed class R_SysFunction_0: R_SysFunction() {
+    abstract fun call(): Rt_Value
+
+    override fun call(ctx: Rt_GlobalContext, args: List<Rt_Value>): Rt_Value {
+        check(args.size == 0)
+        val res = call()
+        return res
+    }
+}
+
 sealed class R_SysFunction_1: R_SysFunction() {
     abstract fun call(arg: Rt_Value): Rt_Value
 
@@ -97,9 +107,8 @@ sealed class R_SysFunction_Common: R_SysFunction_Generic<Rt_Value>() {
     override fun extract(v: Rt_Value): Rt_Value = v
 }
 
-object R_SysFn_Unit: R_SysFunction() {
-    override fun call(ctx: Rt_GlobalContext, args: List<Rt_Value>): Rt_Value {
-        check(args.size == 0)
+object R_SysFn_Unit: R_SysFunction_0() {
+    override fun call(): Rt_Value {
         return Rt_UnitValue
     }
 }
@@ -328,11 +337,33 @@ class R_SysFn_Print(val log: Boolean): R_SysFunction() {
     }
 }
 
-object R_SysFn_LastBlockTime: R_SysFunction() {
+object R_SysFn_OpContext_LastBlockTime: R_SysFunction() {
     override fun call(ctx: Rt_GlobalContext, args: List<Rt_Value>): Rt_Value {
         check(args.size == 0)
         if (ctx.opCtx == null) throw Rt_Error("fn_last_block_time_noop", "Operation context not available")
         return Rt_IntValue(ctx.opCtx.lastBlockTime)
+    }
+}
+
+class R_SysFn_OpContext_Transaction(private val type: R_ClassType): R_SysFunction() {
+    override fun call(ctx: Rt_GlobalContext, args: List<Rt_Value>): Rt_Value {
+        check(args.size == 0)
+        if (ctx.opCtx == null) throw Rt_Error("fn_opctx_transaction_noop", "Operation context not available")
+        return Rt_ClassValue(type, ctx.opCtx.transactionIid)
+    }
+}
+
+object R_SysFn_ChainContext_RawConfig: R_SysFunction() {
+    override fun call(ctx: Rt_GlobalContext, args: List<Rt_Value>): Rt_Value {
+        check(args.size == 0)
+        return Rt_GtxValue(ctx.chainCtx.rawConfig)
+    }
+}
+
+object R_SysFn_ChainContext_Args: R_SysFunction() {
+    override fun call(ctx: Rt_GlobalContext, args: List<Rt_Value>): Rt_Value {
+        check(args.size == 0)
+        return ctx.chainCtx.args
     }
 }
 
@@ -414,7 +445,7 @@ class R_SysFn_Record_FromBytes(val type: R_RecordType): R_SysFunction() {
             val gtx = decodeGTXValue(bytes)
             val convCtx = GtxToRtContext()
             val res = type.gtxToRt(convCtx, gtx, false)
-            convCtx.finish(ctx.sqlExec)
+            convCtx.finish(ctx.sqlExec, ctx.sqlMapper)
             res
         }
     }
@@ -428,8 +459,53 @@ class R_SysFn_Record_FromGtx(val type: R_RecordType, val human: Boolean): R_SysF
         return Rt_Utils.wrapErr("fn:record:fromGtx") {
             val convCtx = GtxToRtContext()
             val res = type.gtxToRt(convCtx, gtx, human)
-            convCtx.finish(ctx.sqlExec)
+            convCtx.finish(ctx.sqlExec, ctx.sqlMapper)
             res
         }
+    }
+}
+
+class R_SysFn_Enum_Values(private val type: R_EnumType): R_SysFunction_0() {
+    private val listType = R_ListType(type)
+
+    override fun call(): Rt_Value {
+        val list = ArrayList(type.values())
+        return Rt_ListValue(listType, list)
+    }
+}
+
+class R_SysFn_Enum_Value_Text(private val type: R_EnumType): R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value {
+        val name = arg.asString()
+        val attr = type.attr(name)
+        if (attr == null) {
+            throw Rt_Error("enum_badname:${type.name}:$name", "Enum '${type.name}' has no value '$name'")
+        }
+        return Rt_EnumValue(type, attr)
+    }
+}
+
+class R_SysFn_Enum_Value_Int(private val type: R_EnumType): R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value {
+        val value = arg.asInteger()
+        val attr = type.attr(value)
+        if (attr == null) {
+            throw Rt_Error("enum_badvalue:${type.name}:$value", "Enum '${type.name}' has no value $value")
+        }
+        return Rt_EnumValue(type, attr)
+    }
+}
+
+object R_SysFn_Enum_Name: R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value {
+        val attr = arg.asEnum()
+        return Rt_TextValue(attr.name)
+    }
+}
+
+object R_SysFn_Enum_Value: R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value {
+        val attr = arg.asEnum()
+        return Rt_IntValue(attr.value.toLong())
     }
 }

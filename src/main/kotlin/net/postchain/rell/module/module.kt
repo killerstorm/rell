@@ -1,34 +1,33 @@
 package net.postchain.rell.module
 
-import net.postchain.core.*
+import net.postchain.core.EContext
+import net.postchain.core.Transactor
+import net.postchain.core.TxEContext
+import net.postchain.core.UserMistake
 import net.postchain.gtx.*
-import net.postchain.rell.model.*
+import net.postchain.rell.CommonUtils
+import net.postchain.rell.model.R_ExternalParam
+import net.postchain.rell.model.R_Module
+import net.postchain.rell.model.R_Operation
+import net.postchain.rell.model.R_Query
 import net.postchain.rell.parser.C_Utils
-
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.DefaultSqlExecutor
-import net.postchain.rell.sql.gensql
+import net.postchain.rell.sql.genSql
 import org.apache.commons.logging.LogFactory
-import java.io.File
 
-private object StdoutRtPrinter: Rt_Printer() {
+private object StdoutRtPrinter : Rt_Printer() {
     override fun print(str: String) {
         println(str)
     }
 }
 
-private object LogRtPrinter: Rt_Printer() {
+private object LogRtPrinter : Rt_Printer() {
     private val log = LogFactory.getLog(LogRtPrinter.javaClass)
 
     override fun print(str: String) {
         log.info(str)
     }
-}
-
-private fun makeRtModuleContext(rModule: R_Module, eCtx: EContext, opCtx: Rt_OpContext?): Rt_ModuleContext {
-    val exec = DefaultSqlExecutor(eCtx.conn)
-    val globalCtx = Rt_GlobalContext(StdoutRtPrinter, LogRtPrinter, exec, opCtx)
-    return Rt_ModuleContext(globalCtx, rModule)
 }
 
 private fun <T> catchRtErr(code: () -> T): T {
@@ -40,14 +39,13 @@ private fun <T> catchRtErr(code: () -> T): T {
 }
 
 private fun convertArgs(ctx: GtxToRtContext, params: List<R_ExternalParam>, args: List<GTXValue>, human: Boolean): List<Rt_Value> {
-    return args.mapIndexed {
-        index, arg ->
+    return args.mapIndexed { index, arg ->
         val type = params[index].type
         type.gtxToRt(ctx, arg, human)
     }
 }
 
-class RellGTXOperation(val rOperation: R_Operation, val rModule: R_Module, opData: ExtOpData): GTXOperation(opData) {
+class RellGTXOperation(val module: RellPostchainModule, val rOperation: R_Operation, opData: ExtOpData) : GTXOperation(opData) {
     private lateinit var gtxToRtCtx: GtxToRtContext
     private lateinit var args: List<Rt_Value>
 
@@ -66,11 +64,12 @@ class RellGTXOperation(val rOperation: R_Operation, val rModule: R_Module, opDat
     }
 
     override fun apply(ctx: TxEContext): Boolean {
-        val opCtx = Rt_OpContext(ctx.timestamp, data.signers.toList())
-        val modCtx = makeRtModuleContext(rModule, ctx, opCtx)
+        val opCtx = Rt_OpContext(ctx.timestamp, ctx.txIID, data.signers.toList())
+        val modCtx = module.makeRtModuleContext(ctx, opCtx)
 
         catchRtErr {
-            gtxToRtCtx.finish(modCtx.globalCtx.sqlExec)
+            val globalCtx = modCtx.globalCtx
+            gtxToRtCtx.finish(globalCtx.sqlExec, globalCtx.sqlMapper)
         }
 
         try {
@@ -83,7 +82,7 @@ class RellGTXOperation(val rOperation: R_Operation, val rModule: R_Module, opDat
     }
 }
 
-class RellPostchainModule(val rModule: R_Module, val moduleName: String): GTXModule {
+class RellPostchainModule(val rModule: R_Module, val moduleName: String, val chainCtx: Rt_ChainContext) : GTXModule {
     override fun getOperations(): Set<String> {
         return rModule.operations.keys
     }
@@ -94,17 +93,27 @@ class RellPostchainModule(val rModule: R_Module, val moduleName: String): GTXMod
 
     override fun initializeDB(ctx: EContext) {
         if (GTXSchemaManager.getModuleVersion(ctx, moduleName) == null) {
-            val sql = gensql(rModule, false)
+            initDb(ctx)
+            GTXSchemaManager.setModuleVersion(ctx, moduleName, 0)
+        }
+    }
+
+    private fun initDb(ctx: EContext) {
+        catchRtErr {
+            val modCtx = makeRtModuleContext(ctx, null)
+
+            val sql = genSql(rModule, modCtx.globalCtx.sqlMapper, false, false)
             ctx.conn.createStatement().use {
                 it.execute(sql)
             }
-            GTXSchemaManager.setModuleVersion(ctx, moduleName, 0)
+
+            modCtx.insertObjectRecords()
         }
     }
 
     override fun makeTransactor(opData: ExtOpData): Transactor {
         if (opData.opName in rModule.operations) {
-            return RellGTXOperation(rModule.operations[opData.opName]!!, rModule, opData)
+            return RellGTXOperation(this, rModule.operations[opData.opName]!!, opData)
         } else {
             throw UserMistake("Operation not found: '${opData.opName}'")
         }
@@ -113,7 +122,7 @@ class RellPostchainModule(val rModule: R_Module, val moduleName: String): GTXMod
     override fun query(ctx: EContext, name: String, args: GTXValue): GTXValue {
         val rQuery = rModule.queries[name] ?: throw UserMistake("Query not found: '$name'")
 
-        val modCtx = makeRtModuleContext(rModule, ctx, null)
+        val modCtx = makeRtModuleContext(ctx, null)
         val rtArgs = translateQueryArgs(modCtx, rQuery, args)
 
         val rtResult = try {
@@ -140,20 +149,56 @@ class RellPostchainModule(val rModule: R_Module, val moduleName: String): GTXMod
             val gtxToRtCtx = GtxToRtContext()
             val args = rQuery.params.map { argMap.getValue(it.name) }
             val res = convertArgs(gtxToRtCtx, rQuery.params, args, GTX_QUERY_HUMAN)
-            gtxToRtCtx.finish(modCtx.globalCtx.sqlExec)
+            val globalCtx = modCtx.globalCtx
+            gtxToRtCtx.finish(globalCtx.sqlExec, globalCtx.sqlMapper)
             res
         }
 
         return rtArgs
     }
+
+    fun makeRtModuleContext(eCtx: EContext, opCtx: Rt_OpContext?): Rt_ModuleContext {
+        val exec = DefaultSqlExecutor(eCtx.conn, false)
+        val sqlMapper = Rt_SqlMapper(eCtx.chainID)
+        val globalCtx = Rt_GlobalContext(StdoutRtPrinter, LogRtPrinter, exec, sqlMapper, opCtx, chainCtx)
+        return Rt_ModuleContext(globalCtx, rModule)
+    }
 }
 
-class RellPostchainModuleFactory: GTXModuleFactory {
+class RellPostchainModuleFactory(
+        private val moduleLoader: (String) -> String = CommonUtils::readFileContent
+) : GTXModuleFactory {
     override fun makeModule(data: GTXValue, blockchainRID: ByteArray): GTXModule {
-        val rellSourceModule = data["gtx"]!!["rellSrcModule"]!!.asString()
-        val sourceCode = File(rellSourceModule).readText()
+        val gtxData = data["gtx"]!!
+        val sourceCode: String
+        val moduleName: String
+        if (gtxData["rellSourceCode_v07"] != null) {
+            sourceCode = gtxData["rellSourceCode_v07"]!!.asString()
+            moduleName = ""
+        } else if (gtxData["rellSrcModule"] != null) {
+            // legacy -- load from path
+            sourceCode = moduleLoader(gtxData["rellSrcModule"]!!.asString())
+            moduleName = gtxData["rellSrcModule"]!!.asString()
+        } else {
+            throw UserMistake("Rell module source is not specified in configuration")
+        }
         val ast = C_Utils.parse(sourceCode)
         val module = ast.compile(true)
-        return RellPostchainModule(module, rellSourceModule)
+        val chainCtx = createChainContext(data, module)
+        return RellPostchainModule(module, moduleName, chainCtx)
+    }
+
+    private fun createChainContext(rawConfig: GTXValue, rModule: R_Module): Rt_ChainContext {
+        val argsRec = rModule.moduleArgsRecord
+        val gtxArgs = rawConfig["gtx"]!!["rellModuleArgs"]
+
+        val args = if (argsRec == null || gtxArgs == null) Rt_NullValue else {
+            val convCtx = GtxToRtContext()
+            catchRtErr {
+                argsRec.gtxToRt(convCtx, gtxArgs, true)
+            }
+        }
+
+        return Rt_ChainContext(rawConfig, args)
     }
 }

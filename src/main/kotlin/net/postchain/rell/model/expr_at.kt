@@ -1,24 +1,40 @@
 package net.postchain.rell.model
 
 import net.postchain.rell.runtime.*
-import net.postchain.rell.sql.ROWID_COLUMN
 
-class R_AtClass(val rClass: R_Class, val alias: String, val index: Int) {
+enum class R_AtCardinality(val zero: Boolean, val many: Boolean) {
+    ZERO_ONE(true, false),
+    ONE(false, false),
+    ZERO_MANY(true, true),
+    ONE_MANY(false, true),
+    ;
+
+    fun matches(count: Int): Boolean {
+        if (count < 0 || count == 0 && !zero || count > 1 && !many) {
+            return false
+        }
+        return true
+    }
+}
+
+class R_AtClass(val rClass: R_Class, val index: Int) {
     val type: R_Type = R_ClassType(rClass)
+    override fun equals(other: Any?) = other is R_AtClass && rClass == other.rClass && index == other.index
+    override fun hashCode() = rClass.hashCode() * 31 + index
 }
 
 sealed class R_AtExprRowType {
     abstract fun decode(row: Array<Rt_Value>): Rt_Value
 }
 
-object R_AtExprRowTypeSimple: R_AtExprRowType() {
+object R_AtExprRowType_Simple: R_AtExprRowType() {
     override fun decode(row: Array<Rt_Value>): Rt_Value {
         check(row.size == 1) { "row.size == ${row.size}" }
         return row[0]
     }
 }
 
-class R_AtExprRowTypeTuple(val type: R_TupleType): R_AtExprRowType() {
+class R_AtExprRowType_Tuple(val type: R_TupleType): R_AtExprRowType() {
     override fun decode(row: Array<Rt_Value>): Rt_Value {
         check(row.size == type.fields.size) { "row.size == ${row.size}, not ${type.fields.size}" }
         return Rt_TupleValue(type, row.toList())
@@ -29,23 +45,22 @@ class R_AtExprBase(
         val from: List<R_AtClass>,
         val what: List<Db_Expr>,
         val where: Db_Expr?,
-        val sort: List<Pair<Db_Expr, Boolean>>,
-        val zero: Boolean,
-        val many: Boolean
+        val sort: List<Pair<Db_Expr, Boolean>>
 ) {
     init {
         from.withIndex().forEach { check(it.index == it.value.index) }
     }
 
     fun execute(frame: Rt_CallFrame, params: List<Rt_Value>, limit: R_Expr?): List<Array<Rt_Value>> {
-        val rtSql = buildSql(params, limit)
+        val sqlMapper = frame.entCtx.modCtx.globalCtx.sqlMapper
+        val rtSql = buildSql(sqlMapper, params, limit)
         val resultTypes = what.map { it.type }
         val select = SqlSelect(rtSql, resultTypes)
         val records = select.execute(frame)
         return records
     }
 
-    private fun buildSql(params: List<Rt_Value>, limit: R_Expr?): ParameterizedSql {
+    private fun buildSql(sqlMapper: Rt_SqlMapper, params: List<Rt_Value>, limit: R_Expr?): ParameterizedSql {
         val ctx = SqlGenContext(from, params)
         val fromInfo = buildFromInfo(ctx)
 
@@ -56,12 +71,8 @@ class R_AtExprBase(
             it.toSql(ctx, b)
         }
 
-        appendFrom(b, fromInfo)
-
-        if (where != null) {
-            b.append(" WHERE ")
-            where.toSql(ctx, b)
-        }
+        appendFrom(b, sqlMapper, fromInfo)
+        appendWhere(b, ctx, sqlMapper, fromInfo)
 
         b.append(" ORDER BY ")
         val orderByList = b.listBuilder()
@@ -75,7 +86,7 @@ class R_AtExprBase(
         for (cls in from) {
             orderByList.nextItem()
             val alias = ctx.getClassAlias(cls)
-            b.appendColumn(alias, ROWID_COLUMN)
+            b.appendColumn(alias, cls.rClass.mapping.rowidColumn)
         }
 
         if (limit != null) {
@@ -101,22 +112,46 @@ class R_AtExprBase(
         return ctx.getFromInfo()
     }
 
-    private fun appendFrom(b: SqlBuilder, fromInfo: SqlFromInfo) {
+    private fun appendFrom(b: SqlBuilder, sqlMapper: Rt_SqlMapper, fromInfo: SqlFromInfo) {
         b.append(" FROM ")
         b.append(fromInfo.classes, ", ") { cls ->
-            b.appendName(cls.alias.cls.name)
+            val table = cls.alias.cls.mapping.table(sqlMapper)
+            b.appendName(table)
             b.append(" ")
             b.append(cls.alias.str)
 
             for (join in cls.joins) {
                 b.append(" INNER JOIN ")
-                b.appendName(join.alias.cls.name)
+                val joinTable = join.alias.cls.mapping.table(sqlMapper)
+                b.appendName(joinTable)
                 b.append(" ")
                 b.append(join.alias.str)
                 b.append(" ON ")
                 b.appendColumn(join.baseAlias, join.attr)
                 b.append(" = ")
-                b.appendColumn(join.alias, ROWID_COLUMN)
+                b.appendColumn(join.alias, join.alias.cls.mapping.rowidColumn)
+            }
+        }
+    }
+
+    private fun appendWhere(b: SqlBuilder, ctx: SqlGenContext, sqlMapper: Rt_SqlMapper, fromInfo: SqlFromInfo) {
+        val whereB = SqlBuilder()
+        where?.toSql(ctx, whereB)
+        appendExtraWhere(whereB, sqlMapper, fromInfo)
+
+        if (!whereB.isEmpty()) {
+            b.append(" WHERE ")
+            b.append(whereB)
+        }
+    }
+
+    companion object {
+        fun appendExtraWhere(b: SqlBuilder, sqlMapper: Rt_SqlMapper, fromInfo: SqlFromInfo) {
+            for (cls in fromInfo.classes) {
+                cls.alias.cls.mapping.extraWhere(b, sqlMapper, cls.alias)
+                for (join in cls.joins) {
+                    join.alias.cls.mapping.extraWhere(b, sqlMapper, join.alias)
+                }
             }
         }
     }
@@ -125,6 +160,7 @@ class R_AtExprBase(
 class R_AtExpr(
         type: R_Type,
         val base: R_AtExprBase,
+        val cardinality: R_AtCardinality,
         val limit: R_Expr?,
         val rowType: R_AtExprRowType
 ): R_Expr(type)
@@ -138,11 +174,9 @@ class R_AtExpr(
         val list = MutableList(records.size) { rowType.decode(records[it]) }
 
         val count = list.size
-        if (count == 0 && !base.zero || count > 1 && !base.many) {
-            throw errWrongCount(count)
-        }
+        checkCount(cardinality, count)
 
-        if (base.many) {
+        if (cardinality.many) {
             return Rt_ListValue(type, list)
         } else if (count > 0) {
             return list[0]
@@ -152,9 +186,11 @@ class R_AtExpr(
     }
 
     companion object {
-        fun errWrongCount(count: Int): Rt_Error {
-            val msg = if (count == 0) "No records found" else "Multiple records found: $count"
-            return Rt_Error("at:wrong_count:$count", msg)
+        fun checkCount(cardinality: R_AtCardinality, count: Int) {
+            if (!cardinality.matches(count)) {
+                val msg = if (count == 0) "No records found" else "Multiple records found: $count"
+                throw Rt_Error("at:wrong_count:$count", msg)
+            }
         }
     }
 }

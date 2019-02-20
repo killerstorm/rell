@@ -1,8 +1,16 @@
 package net.postchain.rell.parser
 
 import net.postchain.rell.model.*
+import net.postchain.rell.runtime.Rt_EnumValue
 
-class C_ClassAttr(val cls: R_AtClass, val attr: R_Attrib)
+class C_AtClass(val rClass: R_Class, val alias: String, val index: Int) {
+    private val rAtClass = R_AtClass(rClass, index)
+
+    fun compile() = rAtClass
+    fun compileExpr() = Db_ClassExpr(rAtClass)
+}
+
+class C_ClassAttr(val cls: C_AtClass, val attr: R_Attrib)
 
 class C_BlockContext(
         val entCtx: C_EntityContext,
@@ -60,6 +68,8 @@ class C_BlockContext(
 sealed class C_ExprContext(val blkCtx: C_BlockContext) {
     abstract fun resolveAttr(name: S_Name): C_Expr
 
+    abstract fun resolveNameValue(name: S_Name): C_NameResolution?
+
     fun resolveName(name: S_Name): C_Expr {
         val value = resolveNameValue(name)
         val valueExpr = value?.toExpr()
@@ -71,15 +81,31 @@ sealed class C_ExprContext(val blkCtx: C_BlockContext) {
         return expr ?: throw C_Errors.errUnknownName(name)
     }
 
-    abstract fun resolveNameValue(name: S_Name): C_NameResolution?
+    protected fun resolveNameGlobal(name: S_Name): C_NameResolution? {
+        val modCtx = blkCtx.entCtx.modCtx
+
+        val obj = modCtx.getObjectOpt(name.str)
+        if (obj != null) return C_NameResolution_Object(name, obj, blkCtx.entCtx)
+
+        val enum = modCtx.getEnumOpt(name.str)
+        if (enum != null) return C_NameResolution_Enum(name, enum)
+
+        return null
+    }
 }
 
 class C_RExprContext(blkCtx: C_BlockContext): C_ExprContext(blkCtx) {
     override fun resolveNameValue(name: S_Name): C_NameResolution? {
         val loc = blkCtx.lookupLocalVar(name.str)
-        if (loc != null) return C_NameResolution_Local(name, loc)
-
+        val glob = resolveNameGlobal(name)
         val ns = C_LibFunctions.getNamespace(blkCtx.entCtx.modCtx, name.str)
+
+        if (loc != null && glob != null) {
+            throw C_Errors.errNameConflictLocalGlobal(name)
+        }
+
+        if (loc != null) return C_NameResolution_Local(name, loc)
+        if (glob != null) return glob
         if (ns != null) return C_NameResolution_Namespace(name, ns)
 
         return null
@@ -90,23 +116,28 @@ class C_RExprContext(blkCtx: C_BlockContext): C_ExprContext(blkCtx) {
     }
 }
 
-class C_DbExprContext(blkCtx: C_BlockContext, val classes: List<R_AtClass>): C_ExprContext(blkCtx) {
+class C_DbExprContext(blkCtx: C_BlockContext, val classes: List<C_AtClass>): C_ExprContext(blkCtx) {
     override fun resolveNameValue(name: S_Name): C_NameResolution? {
         val nameStr = name.str
 
         val cls = findClassByAlias(nameStr)
         val loc = blkCtx.lookupLocalVar(nameStr)
+        val glob = resolveNameGlobal(name)
         val ns = C_LibFunctions.getNamespace(blkCtx.entCtx.modCtx, nameStr)
 
         if (cls != null && loc != null) {
-            throw C_Error(name.pos, "expr_name_clsloc:$nameStr",
-                    "Name '$nameStr' is ambiguous: can be class alias or local variable")
+            throw C_Errors.errNameConflictAliasLocal(name)
+        }
+        if (cls != null && glob != null) {
+            throw C_Errors.errNameConflictClassGlobal(name)
+        }
+        if (loc != null && glob != null) {
+            throw C_Errors.errNameConflictLocalGlobal(name)
         }
 
         if (cls != null) return C_NameResolution_Class(name, cls)
-
         if (loc != null) return C_NameResolution_Local(name, loc)
-
+        if (glob != null) return glob
         if (ns != null) return C_NameResolution_Namespace(name, ns)
 
         return null
@@ -129,7 +160,7 @@ class C_DbExprContext(blkCtx: C_BlockContext, val classes: List<R_AtClass>): C_E
     }
 
     private fun makeDbAttrExpr(attr: C_ClassAttr): Db_Expr {
-        val clsExpr = Db_ClassExpr(attr.cls)
+        val clsExpr = attr.cls.compileExpr()
         val resultType = attr.attr.type
         val resultClass = if (resultType is R_ClassType) resultType.rClass else null
         return if (resultClass == null) Db_AttrExpr(clsExpr, attr.attr) else Db_RelExpr(clsExpr, attr.attr, resultClass)
@@ -160,7 +191,7 @@ class C_DbExprContext(blkCtx: C_BlockContext, val classes: List<R_AtClass>): C_E
         return attrs.toList()
     }
 
-    fun findClassByAlias(alias: String): R_AtClass? {
+    fun findClassByAlias(alias: String): C_AtClass? {
         //TODO use a lookup table
         for (cls in classes) {
             if (cls.alias == alias) {
@@ -175,8 +206,8 @@ sealed class C_NameResolution(val name: S_Name) {
     abstract fun toExpr(): C_Expr
 }
 
-private class C_NameResolution_Class(name: S_Name, private val cls: R_AtClass): C_NameResolution(name) {
-    override fun toExpr() = C_DbExpr(name.pos, Db_ClassExpr(cls))
+private class C_NameResolution_Class(name: S_Name, private val cls: C_AtClass): C_NameResolution(name) {
+    override fun toExpr() = C_DbExpr(name.pos, cls.compileExpr())
 }
 
 private class C_NameResolution_Local(name: S_Name, private val entry: C_ScopeEntry): C_NameResolution(name) {
@@ -185,6 +216,23 @@ private class C_NameResolution_Local(name: S_Name, private val entry: C_ScopeEnt
 
 private class C_NameResolution_Namespace(name: S_Name, private val ns: C_LibNamespace): C_NameResolution(name) {
     override fun toExpr(): C_Expr = C_NamespaceExpr(name, ns)
+}
+
+private class C_NameResolution_Object(
+        name: S_Name,
+        private val rObject: R_Object,
+        private val entCtx: C_EntityContext
+): C_NameResolution(name) {
+    override fun toExpr(): C_Expr {
+        if (rObject.entityIndex >= entCtx.entityIndex && entCtx.entityType == C_EntityType.OBJECT) {
+            throw C_Error(name.pos, "object_fwdref:${name.str}", "Object '${name.str}' must be defined before using")
+        }
+        return C_ObjectExpr(name, rObject)
+    }
+}
+
+private class C_NameResolution_Enum(name: S_Name, private val rEnum: R_EnumType): C_NameResolution(name) {
+    override fun toExpr(): C_Expr = C_EnumExpr(name, rEnum)
 }
 
 typealias C_OperandConversion_R = (R_Expr) -> R_Expr
@@ -200,6 +248,57 @@ class C_BinOpType(
         val rightConv: C_OperandConversion? = null
 )
 
+class C_AssignOp(val pos: S_Pos, val code: String, val rOp: R_BinaryOp, val dbOp: Db_BinaryOp?)
+
+sealed class C_Destination {
+    abstract fun type(): R_Type
+    abstract fun compileAssignStatement(srcExpr: R_Expr, op: C_AssignOp?): R_Statement
+}
+
+class C_SimpleDestination(private val rDstExpr: R_DestinationExpr): C_Destination() {
+    override fun type() = rDstExpr.type
+
+    override fun compileAssignStatement(srcExpr: R_Expr, op: C_AssignOp?): R_Statement {
+        return R_AssignStatement(rDstExpr, srcExpr, op?.rOp)
+    }
+}
+
+class C_ClassFieldDestination(private val base: C_Expr, private val rClass: R_Class, private val attr: R_Attrib): C_Destination() {
+    override fun type() = attr.type
+
+    override fun compileAssignStatement(srcExpr: R_Expr, op: C_AssignOp?): R_Statement {
+        if (op != null && op.dbOp == null) {
+            throw S_BinaryOp.errTypeMissmatch(op.pos, op.code, attr.type, srcExpr.type)
+        }
+
+        val atClass = R_AtClass(rClass, 0)
+        val whereLeft = Db_ClassExpr(atClass)
+        val whereRight = Db_ParameterExpr(atClass.type, 0)
+        val where = Db_BinaryExpr(R_BooleanType, Db_BinaryOp_Eq, whereLeft, whereRight)
+
+        val rBase = base.toRExpr()
+        val rTarget = R_UpdateTarget_Expr_One(atClass, where, rBase)
+        val dbExpr = Db_InterpretedExpr(srcExpr)
+        val rWhat = R_UpdateStatementWhat(attr, dbExpr, op?.dbOp)
+        return R_UpdateStatement(rTarget, listOf(rWhat))
+    }
+}
+
+class C_ObjectFieldDestination(private val rObject: R_Object, private val attr: R_Attrib): C_Destination() {
+    override fun type() = attr.type
+
+    override fun compileAssignStatement(srcExpr: R_Expr, op: C_AssignOp?): R_Statement {
+        if (op != null && op.dbOp == null) {
+            throw S_BinaryOp.errTypeMissmatch(op.pos, op.code, attr.type, srcExpr.type)
+        }
+
+        val rTarget = R_UpdateTarget_Object(rObject)
+        val dbExpr = Db_InterpretedExpr(srcExpr)
+        val rWhat = R_UpdateStatementWhat(attr, dbExpr, op?.dbOp)
+        return R_UpdateStatement(rTarget, listOf(rWhat))
+    }
+}
+
 sealed class C_Expr {
     abstract fun type(): R_Type
     abstract fun startPos(): S_Pos
@@ -214,8 +313,12 @@ sealed class C_Expr {
         throw C_Error(pos, "expr_call_nofn:$typeStr", "Not a function: value of type $typeStr")
     }
 
-    open fun destination(): R_DestinationExpr {
+    open fun destination(): C_Destination {
         throw C_Errors.errBadDestination(startPos())
+    }
+
+    protected fun errNoValue(name: S_Name, code: String, msg: String): C_Error {
+        return C_Error(name.pos, "$code:${name.str}", "Not a value: '${name.str}' is $msg")
     }
 }
 
@@ -242,7 +345,7 @@ class C_DbExpr(private val startPos: S_Pos, private val dbExpr: Db_Expr): C_Expr
         if (dbExpr is Db_TableExpr) {
             val memExpr = makeDbMemberExpr(dbExpr, memberName)
             if (memExpr == null) throw C_Errors.errUnknownMember(dbExpr.type, memberName)
-            return C_DbExpr(startPos, memExpr)
+            return C_DbExpr(startPos, memExpr.dbExpr)
         } else {
             return memberExprForType(this, memberName, safe)
         }
@@ -262,12 +365,12 @@ class C_LookupExpr(
     override fun toDbExpr() = C_Utils.toDbExpr(startPos, expr)
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean) = memberExprForType(this, memberName, safe)
 
-    override fun destination(): R_DestinationExpr {
+    override fun destination(): C_Destination {
         if (dstExpr == null) {
             val type = baseType.toStrictString()
             throw C_Error(startPos, "expr_unmodifiable:$type", "Value of type '$type' cannot be modified")
         }
-        return dstExpr
+        return C_SimpleDestination(dstExpr)
     }
 }
 
@@ -279,11 +382,12 @@ private class C_LocalExpr(private val name: S_Name, private val entry: C_ScopeEn
     override fun toDbExpr() = C_Utils.toDbExpr(name.pos, toRExpr())
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean) = memberExprForType(this, memberName, safe)
 
-    override fun destination(): R_DestinationExpr {
+    override fun destination(): C_Destination {
         if (!entry.modifiable) {
             throw C_Error(name.pos, "expr_assign_val:${name.str}", "Value of '${name.str}' cannot be changed")
         }
-        return entry.toVarExpr()
+        val rDstExpr = entry.toVarExpr()
+        return C_SimpleDestination(rDstExpr)
     }
 }
 
@@ -304,6 +408,83 @@ private class C_NamespaceExpr(private val name: S_Name, private val ns: C_LibNam
         val expr = makeValueFunctionExpr(memberName, valueExpr, fnExpr)
         return expr ?: throw C_Errors.errUnknownName(name, memberName)
     }
+}
+
+private class C_ObjectExpr(private val name: S_Name, private val rObject: R_Object): C_Expr() {
+    override fun type() = rObject.type
+    override fun startPos() = name.pos
+    override fun isDb() = false
+    override fun toRExpr() = R_ObjectExpr(rObject.type)
+    override fun toDbExpr() = C_Utils.toDbExpr(name.pos, toRExpr())
+
+    override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
+        val attr = rObject.rClass.attributes[memberName.str]
+        attr ?: throw C_Errors.errUnknownName(name, memberName)
+        return C_ObjectFieldExpr(memberName, rObject, attr)
+    }
+}
+
+private class C_ObjectFieldExpr(
+        private val name: S_Name,
+        private val rObject: R_Object,
+        private val attr: R_Attrib
+): C_Expr() {
+    override fun type() = attr.type
+    override fun startPos() = name.pos
+    override fun isDb() = false
+    override fun toRExpr() = createAccessExpr()
+    override fun toDbExpr() = C_Utils.toDbExpr(name.pos, toRExpr())
+    override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean) = memberExprForType(this, memberName, safe)
+
+    override fun destination(): C_Destination {
+        if (!attr.mutable) {
+            throw C_Errors.errAttrNotMutable(name.pos, attr.name)
+        }
+        return C_ObjectFieldDestination(rObject, attr)
+    }
+
+    private fun createAccessExpr(): R_Expr {
+        val rClass = rObject.rClass
+        val atCls = R_AtClass(rClass, 0)
+        val from = listOf(atCls)
+        val whatExpr = Db_AttrExpr(Db_ClassExpr(atCls), attr)
+        val what = listOf(whatExpr)
+        val atBase = R_AtExprBase(from, what, null, listOf())
+        return R_ObjectAttrExpr(attr.type, rObject, atBase)
+    }
+}
+
+private class C_EnumExpr(private val name: S_Name, private val rEnum: R_EnumType): C_Expr() {
+    override fun type() = rEnum
+    override fun startPos() = name.pos
+    override fun isDb() = false
+    override fun toRExpr() = throw errNoValue()
+    override fun toDbExpr() = throw errNoValue()
+
+    override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
+        val valueExpr = memberValue(memberName)
+        val fnExpr = memberFn(memberName)
+        val expr = makeValueFunctionExpr(memberName, valueExpr, fnExpr)
+        return expr ?: throw C_Errors.errUnknownName(name, memberName)
+    }
+
+    private fun memberValue(memberName: S_Name): C_Expr? {
+        val attr = rEnum.attr(memberName.str)
+        if (attr == null) {
+            return null
+        }
+
+        val rValue = Rt_EnumValue(rEnum, attr)
+        val rExpr = R_ConstantExpr(rValue)
+        return C_RExpr(name.pos, rExpr)
+    }
+
+    private fun memberFn(memberName: S_Name): C_Expr? {
+        val fn = C_LibFunctions.getEnumStaticFunction(rEnum, memberName.str)
+        return if (fn == null) null else C_FunctionExpr(memberName, fn)
+    }
+
+    private fun errNoValue() = errNoValue(name, "expr_val_enum", "an enum type")
 }
 
 private class C_MemberFieldExpr(
@@ -332,9 +513,10 @@ private class C_MemberFieldExpr(
         return memberExprForType(this, memberName, safe)
     }
 
-    override fun destination(): R_DestinationExpr {
+    override fun destination(): C_Destination {
         val rBase = base.toRExpr()
-        return field.destination(name.pos, rBase)
+        val rDstExpr = field.destination(name.pos, rBase)
+        return C_SimpleDestination(rDstExpr)
     }
 }
 
@@ -353,7 +535,7 @@ private class C_MemberFunctionExpr(
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean) = throw errNoValue()
     override fun call(pos: S_Pos, args: List<C_Expr>) = fn.compileCall(name, base, safe, args)
 
-    private fun errNoValue() = C_Errors.errUnknownMember(baseType, name)
+    private fun errNoValue() = errNoValue(name, "expr_val_fn", "a function")
 }
 
 private class C_FunctionExpr(private val name: S_Name, private val fn: C_GlobalFunction): C_Expr() {
@@ -365,19 +547,20 @@ private class C_FunctionExpr(private val name: S_Name, private val fn: C_GlobalF
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean) = throw errNoValue()
     override fun call(pos: S_Pos, args: List<C_Expr>) = fn.compileCall(name, args)
 
-    private fun errNoValue() = C_Error(name.pos, "expr_fn:${name.str}", "'${name.str}' is a function")
+    private fun errNoValue() = errNoValue(name, "expr_val_fn", "a function")
 }
 
 private class C_ClassFieldExpr(
         private val base: C_Expr,
         private val baseSafe: Boolean,
         private val atClass: R_AtClass,
-        private val dbExpr: Db_Expr,
+        private val parent: C_Expr,
+        private val memberExpr: C_DbMemberExpr,
         private val resultType: R_Type
 ): C_Expr() {
     override fun type() = resultType
     override fun startPos() = base.startPos()
-    override fun isDb() = false // Important: node does not belong to proper @-expression
+    override fun isDb() = false // Important: node does not belong to an outer @-expression
 
     override fun toRExpr(): R_Expr {
         val from = listOf(atClass)
@@ -386,35 +569,40 @@ private class C_ClassFieldExpr(
         val whereRight = Db_ParameterExpr(atClass.type, 0)
         val where = Db_BinaryExpr(R_BooleanType, Db_BinaryOp_Eq, whereLeft, whereRight)
 
-        val atBase = R_AtExprBase(from, listOf(dbExpr), where, listOf(), false, false)
-        val calculator = R_MemberCalculator_DataAttribute(dbExpr.type, atBase)
+        val atBase = R_AtExprBase(from, listOf(memberExpr.dbExpr), where, listOf())
+        val calculator = R_MemberCalculator_DataAttribute(memberExpr.dbExpr.type, atBase)
 
         val rBase = base.toRExpr()
         val rExpr = R_MemberExpr(rBase, baseSafe, calculator)
         return rExpr
     }
 
-    override fun toDbExpr() = dbExpr
+    override fun toDbExpr() = memberExpr.dbExpr
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
         val valueExpr = memberValue(memberName, safe)
-        val fnExpr = memberFunctionForType(this, dbExpr.type, memberName, safe)
+        val fnExpr = memberFunctionForType(this, memberExpr.dbExpr.type, memberName, safe)
 
         val res = makeValueFunctionExpr(memberName, valueExpr, fnExpr)
-        if (res == null) {
-            throw C_Errors.errUnknownMember(dbExpr.type, memberName)
-        }
+        res ?: throw C_Errors.errUnknownMember(memberExpr.dbExpr.type, memberName)
 
         checkNullAccess(resultType, memberName, safe)
         return res
     }
 
     private fun memberValue(memberName: S_Name, safe: Boolean): C_Expr? {
-        val resDbExpr = makeDbMemberExpr(dbExpr, memberName)
+        val resDbExpr = makeDbMemberExpr(memberExpr.dbExpr, memberName)
         if (resDbExpr == null) return null
         checkNullAccess(resultType, memberName, safe)
-        val resResultType = C_Utils.effectiveMemberType(resDbExpr.type, safe)
-        return C_ClassFieldExpr(base, baseSafe, atClass, resDbExpr, resResultType)
+        val resResultType = C_Utils.effectiveMemberType(resDbExpr.dbExpr.type, safe)
+        return C_ClassFieldExpr(base, baseSafe, atClass, this, resDbExpr, resResultType)
+    }
+
+    override fun destination(): C_Destination {
+        if (!memberExpr.attr.mutable) {
+            throw C_Errors.errAttrNotMutable(memberExpr.name.pos, memberExpr.attr.name)
+        }
+        return C_ClassFieldDestination(parent, memberExpr.rClass, memberExpr.attr)
     }
 }
 
@@ -431,6 +619,8 @@ private class C_ValueFunctionExpr(private val name: S_Name, private val valueExp
     private fun toValueExpr(): C_Expr = valueExpr ?: throw C_Errors.errUnknownName(name)
     private fun toFnExpr(): C_Expr = fnExpr ?: throw C_Error(name.pos, "expr_nofn:${name.str}", "Not a function: '${name.str}'")
 }
+
+private class C_DbMemberExpr(val rClass: R_Class, val name: S_Name, val attr: R_Attrib, val dbExpr: Db_Expr)
 
 private fun makeValueFunctionExpr(name: S_Name, valueExpr: C_Expr?, fnExpr: C_Expr?): C_Expr? {
     if (valueExpr != null && fnExpr != null) {
@@ -466,6 +656,8 @@ private fun memberFieldForType(base: C_Expr, type: R_Type, name: S_Name, safe: B
         return memberFieldForRecord(base, type, name, safe)
     } else if (type is R_ClassType) {
         return memberFieldForClass(base, type, name, safe)
+    } else if (type is R_EnumType) {
+        return memberFieldForEnum(base, name, safe)
     } else {
         return null
     }
@@ -492,12 +684,24 @@ private fun memberFieldForRecord(base: C_Expr, type: R_RecordType, name: S_Name,
 }
 
 private fun memberFieldForClass(base: C_Expr, type: R_ClassType, name: S_Name, safe: Boolean): C_Expr? {
-    val atClass = R_AtClass(type.rClass, "", 0)
+    val atClass = R_AtClass(type.rClass, 0)
     val baseDbExpr = Db_ClassExpr(atClass)
-    val dbExpr = makeDbMemberExpr(baseDbExpr, name)
-    if (dbExpr == null) return null
-    val resultType = C_Utils.effectiveMemberType(dbExpr.type, safe)
-    return C_ClassFieldExpr(base, safe, atClass, dbExpr, resultType)
+    val memExpr = makeDbMemberExpr(baseDbExpr, name)
+    if (memExpr == null) return null
+    val resultType = C_Utils.effectiveMemberType(memExpr.dbExpr.type, safe)
+    return C_ClassFieldExpr(base, safe, atClass, base, memExpr, resultType)
+}
+
+private fun memberFieldForEnum(base: C_Expr, name: S_Name, safe: Boolean): C_Expr? {
+    val calculator = if (name.str == "name") {
+        R_MemberCalculator_SysFn(R_TextType, R_SysFn_Enum_Name, listOf())
+    } else if (name.str == "value") {
+        R_MemberCalculator_SysFn(R_IntegerType, R_SysFn_Enum_Value, listOf())
+    } else {
+        return null
+    }
+    val field = C_MemberField_SimpleReadOnly(name, calculator)
+    return makeMemberExpr(base, name, safe, field)
 }
 
 private fun memberFunctionForType(base: C_Expr, type: R_Type, name: S_Name, safe: Boolean): C_Expr? {
@@ -511,7 +715,7 @@ private fun makeMemberExpr(base: C_Expr, name: S_Name, safe: Boolean, field: C_M
     return C_MemberFieldExpr(base, name, safe, field, effectiveType)
 }
 
-private fun makeDbMemberExpr(base: Db_Expr, name: S_Name): Db_Expr? {
+private fun makeDbMemberExpr(base: Db_Expr, name: S_Name): C_DbMemberExpr? {
     if (base !is Db_TableExpr) return null
     val attr = base.rClass.attributes[name.str]
     if (attr == null) {
@@ -520,7 +724,8 @@ private fun makeDbMemberExpr(base: Db_Expr, name: S_Name): Db_Expr? {
 
     val resultType = attr.type
     val resultClass = if (resultType is R_ClassType) resultType.rClass else null
-    return if (resultClass == null) Db_AttrExpr(base, attr) else Db_RelExpr(base, attr, resultClass)
+    val dbExpr = if (resultClass == null) Db_AttrExpr(base, attr) else Db_RelExpr(base, attr, resultClass)
+    return C_DbMemberExpr(base.rClass, name, attr, dbExpr)
 }
 
 private fun checkNullAccess(type: R_Type, name: S_Name, safe: Boolean) {
@@ -548,4 +753,9 @@ private class C_MemberField_RecordAttr(val attr: R_Attrib): C_MemberField(attr.t
         }
         return R_RecordMemberExpr(base, attr)
     }
+}
+
+private class C_MemberField_SimpleReadOnly(val name: S_Name, val calculator: R_MemberCalculator): C_MemberField(calculator.type) {
+    override fun calculator() = calculator
+    override fun destination(pos: S_Pos, base: R_Expr) = throw C_Errors.errBadDestination(name)
 }

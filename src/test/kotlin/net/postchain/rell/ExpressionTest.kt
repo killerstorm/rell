@@ -1,5 +1,7 @@
 package net.postchain.rell
 
+import net.postchain.rell.runtime.Rt_BooleanValue
+import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 
 class ExpressionTest: BaseRellTest(false) {
@@ -74,9 +76,9 @@ class ExpressionTest: BaseRellTest(false) {
         tst.useSql = true
         tst.defs = listOf("class user { name: text; }")
 
-        tst.execOp("create user('Bob');")
-        tst.execOp("create user('Alice');")
-        tst.execOp("create user('Trudy');")
+        chkOp("create user('Bob');")
+        chkOp("create user('Alice');")
+        chkOp("create user('Trudy');")
 
         chkEx("{ val s = user @* {}; return s[0]; }", "user[1]")
         chkEx("{ val s = user @* {}; return s[1]; }", "user[2]")
@@ -89,7 +91,7 @@ class ExpressionTest: BaseRellTest(false) {
     @Test fun testFunctionsUnderAt() {
         tst.useSql = true
         tst.defs = listOf("class user { name: text; score: integer; }")
-        tst.execOp("create user('Bob',-5678);")
+        chkOp("create user('Bob',-5678);")
 
         chkEx("{ val s = 'Hello'; return user @ {} ( .name.len() + s.len() ); }", "int[8]")
         chkEx("{ val x = -1234; return user @ {} ( abs(x), abs(.score) ); }", "(int[1234],int[5678])")
@@ -109,7 +111,7 @@ class ExpressionTest: BaseRellTest(false) {
         tst.useSql = true
         tst.defs = listOf("class company { name: text; }", "class user { name: text; company; }")
 
-        tst.execOp("""
+        chkOp("""
             val facebook = create company('Facebook');
             val amazon = create company('Amazon');
             val microsoft = create company('Microsoft');
@@ -131,7 +133,7 @@ class ExpressionTest: BaseRellTest(false) {
         tst.useSql = true
         tst.defs = listOf("class company { name: text; }", "class user { name: text; company; }")
 
-        tst.execOp("""
+        chkOp("""
             val microsoft = create company('Microsoft');
             create user('Bill', microsoft);
         """.trimIndent())
@@ -163,7 +165,7 @@ class ExpressionTest: BaseRellTest(false) {
                 "class c4 { name: text; c3; }"
         )
 
-        tst.execOp("""
+        chkOp("""
             val c1_1 = create c1('c1_1');
             val c1_2 = create c1('c1_2');
             val c2_1 = create c2('c2_1', c1_1);
@@ -264,7 +266,7 @@ class ExpressionTest: BaseRellTest(false) {
     @Test fun testNamespaceUnderAt() {
         tst.useSql = true
         tst.defs = listOf("class user { name: text; score: integer; }")
-        tst.execOp("create user('Bob',-5678);")
+        chkOp("create user('Bob',-5678);")
 
         chk("user @ { .score == integer }", "ct_err:unknown_name:integer")
         chk("user @ { .score == integer('-5678') } ( .name )", "text[Bob]")
@@ -282,7 +284,7 @@ class ExpressionTest: BaseRellTest(false) {
         tst.useSql = true
         tst.strictToString = false
         tst.defs = listOf("class user { id: integer; name1: text; name2: text; v1: integer; v2: integer; }")
-        tst.execOp("""
+        chkOp("""
             create user(id = 1, name1 = 'Bill', name2 = 'Gates', v1 = 111, v2 = 222);
             create user(id = 2, name1 = 'Mark', name2 = 'Zuckerberg', v1 = 333, v2 = 444);
             create user(id = 3, name1 = 'Steve', name2 = 'Wozniak', v1 = 555, v2 = 666);
@@ -387,5 +389,45 @@ class ExpressionTest: BaseRellTest(false) {
         chkEx("{ val a: list<integer>? = null; return a !== null; }", "boolean[false]")
         chkEx("{ val a: list<integer>? = null; return a === [1,2,3]; }", "boolean[false]")
         chkEx("{ val a: list<integer>? = null; return a !== [1,2,3]; }", "boolean[true]")
+    }
+
+    @Test fun testIf() {
+        chkEx("= if (a) 1 else 2;", true, "int[1]")
+        chkEx("= if (a) 1 else 2;", false, "int[2]")
+        chkEx("= if (a) 'Hello' else 123;", true, "ct_err:expr_if_restype:text:integer")
+        chkEx("= if (a) 123 else null;", true, "int[123]")
+        chkEx("= if (a) 123 else null;", false, "null")
+        chkEx("= if (a) (null, 'Hello') else (123, null);", true, "(null,text[Hello])")
+        chkEx("= if (a) (null, 'Hello') else (123, null);", false, "(int[123],null)")
+        chkEx("= if (a) (null, 'Hello') else (null, 123);", true, "ct_err:expr_if_restype:(null,text):(null,integer)")
+
+        chk("if (123) 'A' else 'B'", "ct_err:expr_if_cond_type:boolean:integer")
+        chk("if ('Hello') 'A' else 'B'", "ct_err:expr_if_cond_type:boolean:text")
+        chk("if (null) 'A' else 'B'", "ct_err:expr_if_cond_type:boolean:null")
+        chk("if (unit()) 'A' else 'B'", "ct_err:expr_if_cond_type:boolean:unit")
+        chkEx("{ val x: boolean? = true; return if (x) 'A' else 'B'; }", "ct_err:expr_if_cond_type:boolean:boolean?")
+    }
+
+    @Test fun testIfShortCircuit() {
+        val code = """
+            function f(s: text, v: integer): integer {
+               print(s);
+               return v;
+            }
+            query q(a: boolean) = if (a) f('Yes', 123) else f('No', 456);
+        """.trimIndent()
+
+        chkFull(code, listOf(Rt_BooleanValue(true)), "int[123]")
+        chkStdout("Yes")
+        chkFull(code, listOf(Rt_BooleanValue(false)), "int[456]")
+        chkStdout("No")
+    }
+
+    @Test fun testIfPrecedence() {
+        chk("if (true) 'A' else 'B' + 'C'", "text[A]")
+        chk("if (false) 'A' else 'B' + 'C'", "text[BC]")
+        chk("if (true) 'A' else if (true) 'B' else 'C' + 'D'", "text[A]")
+        chk("if (false) 'A' else if (true) 'B' else 'C' + 'D'", "text[B]")
+        chk("if (false) 'A' else if (false) 'B' else 'C' + 'D'", "text[CD]")
     }
 }

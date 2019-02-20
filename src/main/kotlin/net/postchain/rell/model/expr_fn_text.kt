@@ -127,7 +127,7 @@ object R_SysFn_Text_Format: R_SysFn_Text() {
     override fun call(obj: String, args: List<Rt_Value>): Rt_Value {
         val anys = args.map { it.asFormatArg() }.toTypedArray()
         val r = try {
-            obj.format(*anys)
+            obj.format(Locale.US, *anys)
         } catch (e: IllegalFormatException) {
             obj
         }

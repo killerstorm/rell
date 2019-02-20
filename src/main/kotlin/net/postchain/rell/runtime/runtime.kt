@@ -1,5 +1,6 @@
 package net.postchain.rell.runtime
 
+import net.postchain.gtx.GTXValue
 import net.postchain.rell.model.*
 import net.postchain.rell.sql.SqlExecutor
 import java.sql.PreparedStatement
@@ -17,12 +18,27 @@ class Rt_GlobalContext(
         val stdoutPrinter: Rt_Printer,
         val logPrinter: Rt_Printer,
         sqlExec: SqlExecutor,
-        val opCtx: Rt_OpContext?
+        val sqlMapper: Rt_SqlMapper,
+        val opCtx: Rt_OpContext?,
+        val chainCtx: Rt_ChainContext,
+        val logSqlErrors: Boolean = false,
+        val sqlUpdatePortionSize: Int = 1000 // Experimental maximum is 2^15
 ){
-    val sqlExec: SqlExecutor = Rt_SqlExecutor(sqlExec)
+    val sqlExec: SqlExecutor = Rt_SqlExecutor(sqlExec, logSqlErrors)
 }
 
-class Rt_ModuleContext(val globalCtx: Rt_GlobalContext, val module: R_Module)
+class Rt_ModuleContext(val globalCtx: Rt_GlobalContext, val module: R_Module) {
+    fun insertObjectRecords() {
+        val rFrameBlock = R_FrameBlock(null, R_FrameBlockId(0), 0, 0)
+        val rFrame = R_CallFrame(0, rFrameBlock)
+        val entCtx = Rt_EntityContext(this, true)
+        val frame = Rt_CallFrame(entCtx, rFrame)
+
+        for (rObject in module.objects.values) {
+            rObject.insert(frame)
+        }
+    }
+}
 
 class Rt_EntityContext(val modCtx: Rt_ModuleContext, val dbUpdateAllowed: Boolean) {
     fun checkDbUpdateAllowed() {
@@ -32,7 +48,9 @@ class Rt_EntityContext(val modCtx: Rt_ModuleContext, val dbUpdateAllowed: Boolea
     }
 }
 
-class Rt_OpContext(val lastBlockTime: Long, val signers: List<ByteArray>)
+class Rt_OpContext(val lastBlockTime: Long, val transactionIid: Long, val signers: List<ByteArray>)
+
+class Rt_ChainContext(val rawConfig: GTXValue, val args: Rt_Value)
 
 class Rt_CallFrame(val entCtx: Rt_EntityContext, rFrame: R_CallFrame) {
     private var curBlock = rFrame.rootBlock
@@ -99,35 +117,60 @@ object Rt_FailingPrinter: Rt_Printer() {
     }
 }
 
-class Rt_SqlExecutor(private val sqlExec: SqlExecutor): SqlExecutor() {
+class Rt_SqlMapper(private val chainId: Long) {
+    private val prefix = "c" + chainId + "_"
+
+    val rowidTable = mapName("rowid_gen")
+    val rowidFunction = mapName("make_rowid")
+
+    fun mapName(name: String): String {
+        return prefix + name
+    }
+
+    fun blockTxWhere(b: SqlBuilder, alias: SqlTableAlias) {
+        b.appendSep(" AND ")
+        b.append("(")
+        b.appendColumn(alias, "chain_id")
+        b.append(" = ")
+        b.append(R_IntegerType, Rt_IntValue(chainId))
+        b.append(")")
+    }
+}
+
+class Rt_SqlExecutor(private val sqlExec: SqlExecutor, private val logErrors: Boolean): SqlExecutor() {
     override fun transaction(code: () -> Unit) {
-        wrapErr {
+        wrapErr("(transaction)") {
             sqlExec.transaction(code)
         }
     }
 
     override fun execute(sql: String) {
-        wrapErr {
+        wrapErr(sql) {
             sqlExec.execute(sql)
         }
     }
 
     override fun execute(sql: String, preparator: (PreparedStatement) -> Unit) {
-        wrapErr {
+        wrapErr(sql) {
             sqlExec.execute(sql, preparator)
         }
     }
 
     override fun executeQuery(sql: String, preparator: (PreparedStatement) -> Unit, consumer: (ResultSet) -> Unit) {
-        wrapErr {
+        wrapErr(sql) {
             sqlExec.executeQuery(sql, preparator, consumer)
         }
     }
 
-    private fun wrapErr(code: () -> Unit) {
+    private fun <T> wrapErr(sql: String, code: () -> T): T {
         try {
-            code()
+            val res = code()
+            return res
         } catch (e: SQLException) {
+            if (logErrors) {
+                System.err.println("SQL: " + sql)
+                e.printStackTrace()
+            }
             throw Rt_Error("sqlerr:${e.errorCode}", "SQL Error: ${e.message}")
         }
     }

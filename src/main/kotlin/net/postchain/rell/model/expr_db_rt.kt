@@ -3,8 +3,10 @@ package net.postchain.rell.model
 import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_Value
 import java.sql.PreparedStatement
+import java.sql.ResultSet
 
 data class SqlTableAlias(val cls: R_Class, val str: String)
+class SqlTableJoin(val attr: R_Attrib, val alias: SqlTableAlias)
 
 class SqlFromInfo(val classes: List<SqlFromClass>)
 class SqlFromClass(val alias: SqlTableAlias, val joins: List<SqlFromJoin>)
@@ -35,20 +37,21 @@ class SqlGenContext(classes: List<R_AtClass>, private val parameters: List<Rt_Va
         return tbl.alias
     }
 
-    fun getRelAlias(baseAlias: SqlTableAlias, rel: String, cls: R_Class): SqlTableAlias {
+    fun getRelAlias(baseAlias: SqlTableAlias, rel: R_Attrib, cls: R_Class): SqlTableAlias {
         val tbl = aliasTblMap.getValue(baseAlias)
         val map = tbl.subAliases.computeIfAbsent(baseAlias) { mutableMapOf() }
-        return map.computeIfAbsent(rel) {
+        val join = map.computeIfAbsent(rel.name) {
             val alias = nextAlias(cls)
             aliasTblMap[alias] = tbl
-            alias
+            SqlTableJoin(rel, alias)
         }
+        return join.alias
     }
 
     fun getFromInfo(): SqlFromInfo {
         val classes = clsAliasMap.entries.map { (cls, tbl) ->
             val joins = tbl.subAliases.entries.flatMap { (alias, map) ->
-                map.entries.map { (attr, alias2) -> SqlFromJoin(alias, attr, alias2) }
+                map.values.map { tblJoin -> SqlFromJoin(alias, tblJoin.attr.sqlMapping, tblJoin.alias) }
             }
             SqlFromClass(tbl.alias, joins)
         }
@@ -58,7 +61,7 @@ class SqlGenContext(classes: List<R_AtClass>, private val parameters: List<Rt_Va
     private fun nextAlias(cls: R_Class) = SqlTableAlias(cls, String.format("A%02d", aliasCtr++))
 
     private class ClassAliasTbl(val alias: SqlTableAlias) {
-        val subAliases = mutableMapOf<SqlTableAlias, MutableMap<String, SqlTableAlias>>()
+        val subAliases = mutableMapOf<SqlTableAlias, MutableMap<String, SqlTableJoin>>()
     }
 }
 
@@ -81,7 +84,11 @@ class SqlBuilder {
     private val sqlBuf = StringBuilder()
     private val paramsBuf = mutableListOf<SqlParam>()
 
-    fun <T> append(list: List<T>, sep: String, block: (T) -> Unit) {
+    fun isEmpty(): Boolean {
+        return sqlBuf.isEmpty() && paramsBuf.isEmpty()
+    }
+
+    fun <T> append(list: Collection<T>, sep: String, block: (T) -> Unit) {
         var s = ""
         for (t in list) {
             append(s)
@@ -120,9 +127,20 @@ class SqlBuilder {
         paramsBuf.add(SqlParam_Value(type, value))
     }
 
+    fun append(buf: SqlBuilder) {
+        sqlBuf.append(buf.sqlBuf)
+        paramsBuf.addAll(buf.paramsBuf)
+    }
+
     fun append(sql: ParameterizedSql) {
         sqlBuf.append(sql.sql)
         paramsBuf.addAll(sql.params)
+    }
+
+    fun appendSep(sep: String) {
+        if (!isEmpty()) {
+            append(sep)
+        }
     }
 
     fun listBuilder(sep: String = ", "): SqlListBuilder = SqlListBuilder(this, sep)
@@ -142,7 +160,19 @@ class SqlListBuilder(private val builder: SqlBuilder, private val sep: String) {
 }
 
 class ParameterizedSql(val sql: String, val params: List<SqlParam>) {
-    fun calcArgs(frame: Rt_CallFrame): SqlArgs {
+    fun execute(frame: Rt_CallFrame) {
+        val args = calcArgs(frame)
+        val sqlExec = frame.entCtx.modCtx.globalCtx.sqlExec
+        sqlExec.execute(sql, args::bind)
+    }
+
+    fun executeQuery(frame: Rt_CallFrame, consumer: (ResultSet) -> Unit) {
+        val args = calcArgs(frame)
+        val sqlExec = frame.entCtx.modCtx.globalCtx.sqlExec
+        sqlExec.executeQuery(sql, args::bind, consumer)
+    }
+
+    private fun calcArgs(frame: Rt_CallFrame): SqlArgs {
         val types = params.map { it.type() }
         val values = params.map { it.evaluate(frame) }
         return SqlArgs(types, values)
@@ -163,9 +193,7 @@ class SqlSelect(val pSql: ParameterizedSql, val resultTypes: List<R_Type>) {
     fun execute(frame: Rt_CallFrame): List<Array<Rt_Value>> {
         val result = mutableListOf<Array<Rt_Value>>()
 
-        val args = pSql.calcArgs(frame)
-
-        frame.entCtx.modCtx.globalCtx.sqlExec.executeQuery(pSql.sql, args::bind) { rs ->
+        pSql.executeQuery(frame) { rs ->
             val list = mutableListOf<Rt_Value>()
             for (i in resultTypes.indices) {
                 val type = resultTypes[i]
@@ -176,12 +204,5 @@ class SqlSelect(val pSql: ParameterizedSql, val resultTypes: List<R_Type>) {
         }
 
         return result
-    }
-}
-
-class SqlUpdate(val pSql: ParameterizedSql) {
-    fun execute(frame: Rt_CallFrame) {
-        val args = pSql.calcArgs(frame)
-        frame.entCtx.modCtx.globalCtx.sqlExec.execute(pSql.sql, args::bind)
     }
 }

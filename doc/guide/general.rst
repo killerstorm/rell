@@ -1,8 +1,11 @@
+=========================
 General Language Features
 =========================
 
+--------------
+
 Types
-~~~~~~~~
+=====
 
 Simple types:
 -------------
@@ -25,7 +28,7 @@ Simple type aliases:
 Complex types:
 --------------
 
--  object reference
+-  class
 -  ``T?`` - nullable type
 -  ``record``
 -  tuple: ``(T1, ..., Tn)``
@@ -150,8 +153,10 @@ assigned to a variable of type ``A`` (or passed as a parameter of type
 -  ``null`` is a subtype of ``T?``.
 -  ``(T,P)`` is a subtype of ``(T?,P?)``, ``(T?,P)`` and ``(T,P?)``.
 
-Module definition
-~~~~~~~~~~~~~~~~~~~~
+--------------
+
+Module definitions
+==================
 
 Class
 -----
@@ -189,7 +194,7 @@ Attributes may have default values:
    }
 
 Keys and Indices
-----------------
+~~~~~~~~~~~~~~~~
 
 Classes can have ``key`` and ``index`` clauses:
 
@@ -221,6 +226,55 @@ but such definition has restrictions (e. g. cannot specify ``mutable``):
        key firstName: text, lastName: text;
        index address: text;
    }
+
+Class annotations
+~~~~~~~~~~~~~~~~~
+
+::
+
+   class user (log) {
+       name: text;
+   }
+
+The ``log`` annotation has following effects:
+
+- Special attribute ``transaction`` of type ``transaction`` is added to the class.
+- When an object is created, ``transaction`` is set to the result of ``op_context.transaction`` (current transaction).
+- Class cannot have mutable attributes.
+- Objects cannot be deleted.
+
+Object
+------
+
+Object is similar to class, but there can be only one instance of an object:
+
+::
+
+   object event_stats {
+       mutable event_count: integer = 0;
+       mutable last_event: text = 'n/a';
+   }
+
+Reading object attributes:
+
+::
+
+   query get_event_count() = event_stats.event_count;
+
+Modifying an object:
+
+::
+
+   operation process_event(event: text) {
+       update event_stats ( event_count += 1, last_event = event );
+   }
+
+Features of objects:
+
+- Like classes, objects are stored in a database.
+- Objects are initialized automatically during blockchain initialization.
+- Cannot create or delete an object from code.
+- Attributes of an object must have default values.
 
 Record
 ------
@@ -266,6 +320,41 @@ Safe-access operator ``?.`` can be used to read or modify attributes of a nullab
 
    val u: user? = findUser('Bob');
    u?.balance += 100;        // no-op if 'u' is null
+
+Enum
+-----
+
+Enum declaration:
+
+::
+
+   enum currency {
+       USD,
+       EUR,
+       GBP
+   }
+
+Values are stored in a database as integers. Each constant has a numeric value equal to its position in the enum
+(the first value is 0).
+
+Usage:
+
+::
+
+   var c: currency;
+   c = currency.USD;
+
+Enum-specific functions and properties:
+
+::
+
+   val cs: list<currency> = currency.values() // Returns all values (in the order in which they are declared)
+
+   val eur = currency.value('EUR') // Finds enum value by name
+   val gbp = currency.value(2) // Finds enum value by index
+
+   val usdStr: text = currency.USD.name // Returns 'USD'
+   val usdValue: integer = currency.USD.value // Return 0.
 
 Query
 -----
@@ -335,8 +424,10 @@ When return type is not specified, it is considered ``unit``:
        print(x);
    }
 
+--------------
+
 Expressions
-~~~~~~~~~~~~~~
+===========
 
 Values
 ------
@@ -379,14 +470,14 @@ Operators
 ---------
 
 Special:
-^^^^^^^^
+~~~~~~~~
 
 -  ``.`` - member access: ``user.name``, ``s.sub(5, 10)``
 -  ``()`` - function call: ``print('Hello')``, ``value.str()``
 -  ``[]`` - element access: ``values[i]``
 
 Null handling:
-^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~
 
 -  ``?:`` - Elvis operator: ``x ?: y`` returns ``x`` if ``x`` is not
    ``null``, otherwise returns ``y``.
@@ -410,7 +501,7 @@ Examples:
    val q = y?.hex();       // type of "q" is "text?"
 
 Comparison:
-^^^^^^^^^^^
+~~~~~~~~~~~
 
 -  ``==``
 -  ``!=``
@@ -436,8 +527,18 @@ Example:
    print(x == y);      // true - values are equal
    print(x === y);     // false - two different objects
 
+If:
+~~~~~~~~~~~
+
+Operator ``if`` is used for conditional evaluation:
+
+::
+
+   val max = if (a >= b) a else b;
+   return max;
+
 Arithmetical:
-^^^^^^^^^^^^^
+~~~~~~~~~~~~~
 
 -  ``+``
 -  ``-``
@@ -446,19 +547,21 @@ Arithmetical:
 -  ``%``
 
 Logical:
-^^^^^^^^
+~~~~~~~~
 
 -  ``and``
 -  ``or``
 -  ``not``
 
 Other:
-^^^^^^
+~~~~~~
 
 -  ``in`` - check if an element is in a range/set/map
 
+-------------
+
 Statements
-~~~~~~~~~~~~~
+==========
 
 Local variable declaration
 --------------------------
@@ -576,7 +679,7 @@ Break:
    }
 
 Miscellaneous
-~~~~~~~~~~~~~~~~
+=============
 
 Comments
 --------

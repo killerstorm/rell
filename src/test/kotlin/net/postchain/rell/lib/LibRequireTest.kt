@@ -1,6 +1,6 @@
 package net.postchain.rell.lib
 
-import net.postchain.rell.BaseRellTest
+import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 
 class LibRequireTest: BaseRellTest(false) {
@@ -24,7 +24,7 @@ class LibRequireTest: BaseRellTest(false) {
     @Test fun testRequireAt() {
         tst.useSql = true
         tst.defs = listOf("class user { name: text; }")
-        tst.execOp("create user(name = 'Bob'); create user(name = 'Alice');")
+        chkOp("create user(name = 'Bob'); create user(name = 'Alice');")
 
         chkEx("{ return require(user @? { .name == 'Bob' }, 'User not found'); }", "user[1]")
         chkEx("{ return require(user @? { .name == 'Alice' }, 'User not found'); }", "user[2]")

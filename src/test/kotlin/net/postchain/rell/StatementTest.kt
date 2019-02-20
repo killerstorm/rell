@@ -1,6 +1,7 @@
 package net.postchain.rell
 
 import net.postchain.rell.runtime.Rt_IntValue
+import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 
 class StatementTest: BaseRellTest() {
@@ -127,7 +128,7 @@ class StatementTest: BaseRellTest() {
 
     @Test fun testFor() {
         tst.defs = listOf("class user { name: text; }")
-        tst.execOp("create user('Bob'); create user('Alice'); create user('Trudy');")
+        chkOp("create user('Bob'); create user('Alice'); create user('Trudy');")
 
         val code = """{
             var s = '';
@@ -143,7 +144,7 @@ class StatementTest: BaseRellTest() {
 
     @Test fun testForBreak() {
         tst.defs = listOf("class user { name: text; }")
-        tst.execOp("create user('Bob'); create user('Alice'); create user('Trudy');")
+        chkOp("create user('Bob'); create user('Alice'); create user('Trudy');")
 
         val code = """{
             var s = '';
@@ -162,7 +163,7 @@ class StatementTest: BaseRellTest() {
 
     @Test fun testForReturn() {
         tst.defs = listOf("class user { name: text; }")
-        tst.execOp("create user('Bob'); create user('Alice'); create user('Trudy');")
+        chkOp("create user('Bob'); create user('Alice'); create user('Trudy');")
 
         val code = """{
             for (i in range(10)) {
@@ -173,33 +174,33 @@ class StatementTest: BaseRellTest() {
         }""".trimIndent()
 
         chkEx(code, "int[123]")
-        tst.chkStdout("0", "1", "2", "3")
+        chkStdout("0", "1", "2", "3")
     }
 
     @Test fun testForRange() {
-        tst.execOp("for (i in range(5)) print(i);")
-        tst.chkStdout("0", "1", "2", "3", "4")
+        chkOp("for (i in range(5)) print(i);")
+        chkStdout("0", "1", "2", "3", "4")
 
-        tst.execOp("for (i in range(5, 0, -1)) print(i);")
-        tst.chkStdout("5", "4", "3", "2", "1")
+        chkOp("for (i in range(5, 0, -1)) print(i);")
+        chkStdout("5", "4", "3", "2", "1")
 
-        tst.execOp("for (i in range(0)) print(i);")
-        tst.chkStdout()
+        chkOp("for (i in range(0)) print(i);")
+        chkStdout()
 
-        tst.execOp("for (i in range(1000,1000)) print(i);")
-        tst.chkStdout()
+        chkOp("for (i in range(1000,1000)) print(i);")
+        chkStdout()
 
-        tst.execOp("for (i in range(9223372036854775800,9223372036854775807,5)) print(i);")
-        tst.chkStdout("9223372036854775800", "9223372036854775805")
+        chkOp("for (i in range(9223372036854775800,9223372036854775807,5)) print(i);")
+        chkStdout("9223372036854775800", "9223372036854775805")
 
-        tst.execOp("for (i in range(-9223372036854775807-1,9223372036854775807,9223372036854775807)) print(i);")
-        tst.chkStdout("-9223372036854775808", "-1", "9223372036854775806")
+        chkOp("for (i in range(-9223372036854775807-1,9223372036854775807,9223372036854775807)) print(i);")
+        chkStdout("-9223372036854775808", "-1", "9223372036854775806")
 
-        tst.execOp("for (i in range(9223372036854775807,-9223372036854775807-1,-9223372036854775807)) print(i);")
-        tst.chkStdout("9223372036854775807", "0", "-9223372036854775807")
+        chkOp("for (i in range(9223372036854775807,-9223372036854775807-1,-9223372036854775807)) print(i);")
+        chkStdout("9223372036854775807", "0", "-9223372036854775807")
 
-        tst.execOp("for (i in range(9223372036854775807,-9223372036854775807-1,-9223372036854775807-1)) print(i);")
-        tst.chkStdout("9223372036854775807", "-1")
+        chkOp("for (i in range(9223372036854775807,-9223372036854775807-1,-9223372036854775807-1)) print(i);")
+        chkStdout("9223372036854775807", "-1")
     }
 
     @Test fun testEmptyStatement() {

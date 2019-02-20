@@ -93,8 +93,15 @@ class S_CreateExpr(pos: S_Pos, val className: S_Name, val exprs: List<S_NameExpr
     override fun compile(ctx: C_ExprContext): C_Expr {
         ctx.blkCtx.entCtx.checkDbUpdateAllowed(startPos)
 
-        val cls = ctx.blkCtx.entCtx.modCtx.getClass(className)
+        val name = className.str
+
+        val modCtx = ctx.blkCtx.entCtx.modCtx
+        val cls = modCtx.getClass(className)
         val attrs = C_AttributeResolver.resolveCreate(ctx, cls.attributes, exprs, startPos)
+
+        if (!cls.flags.canCreate) {
+            throw C_Error(startPos, "expr_create_cant:$name", "Not allowed to create instances of class '$name'")
+        }
 
         val type = R_ClassType(cls)
         val rExpr = R_CreateExpr(type, cls, attrs)
@@ -132,6 +139,40 @@ class S_TupleExpr(startPos: S_Pos, val fields: List<Pair<S_Name?, S_Expr>>): S_E
                 throw C_Error(name.pos, "expr_tuple_dupname:$nameStr", "Duplicate field: '$nameStr'")
             }
         }
+    }
+}
+
+class S_IfExpr(pos: S_Pos, val cond: S_Expr, val trueExpr: S_Expr, val falseExpr: S_Expr): S_Expr(pos) {
+    override fun compile(ctx: C_ExprContext): C_Expr {
+        val cCond = cond.compile(ctx)
+        val cTrue = trueExpr.compile(ctx)
+        val cFalse = falseExpr.compile(ctx)
+
+        S_Type.match(R_BooleanType, cCond.type(), cond.startPos, "expr_if_cond_type", "Wrong type of condition expression")
+        checkUnitType(trueExpr, cTrue)
+        checkUnitType(falseExpr, cFalse)
+
+        val trueType = cTrue.type()
+        val falseType = cFalse.type()
+        val resType = S_Type.commonType(trueType, falseType, startPos, "expr_if_restype", "Incompatible types of if branches")
+
+        if (cCond.isDb() || cTrue.isDb() || cFalse.isDb()) {
+            val dbCond = cCond.toDbExpr()
+            val dbTrue = cTrue.toDbExpr()
+            val dbFalse = cFalse.toDbExpr()
+            val dbExpr = Db_IfExpr(resType, dbCond, dbTrue, dbFalse)
+            return C_DbExpr(startPos, dbExpr)
+        } else {
+            val rCond = cCond.toRExpr()
+            val rTrue = cTrue.toRExpr()
+            val rFalse = cFalse.toRExpr()
+            val rExpr = R_IfExpr(resType, rCond, rTrue, rFalse)
+            return C_RExpr(startPos, rExpr)
+        }
+    }
+
+    private fun checkUnitType(expr: S_Expr, cExpr: C_Expr) {
+        C_Utils.checkUnitType(expr.startPos, cExpr.type(), "expr_if_unit", "Expression returns nothing")
     }
 }
 

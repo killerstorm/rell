@@ -14,7 +14,7 @@ class S_AtExprWhatDefault: S_AtExprWhat() {
     override fun compile(ctx: C_DbExprContext): C_AtWhat {
         val exprs = ctx.classes.map {
             val name = if (ctx.classes.size == 1) null else it.alias
-            val expr = Db_ClassExpr(it)
+            val expr = it.compileExpr()
             Pair(name, expr)
         }
         return C_AtWhat(exprs, listOf())
@@ -116,7 +116,8 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
         }
 
         val attr = attrs[0]
-        val attrExpr = Db_AttrExpr(Db_ClassExpr(attr.cls), attr.attr)
+        val clsExpr = attr.cls.compileExpr()
+        val attrExpr = Db_AttrExpr(clsExpr, attr.attr)
 
         val dbEqExpr = Db_BinaryExpr(R_BooleanType, Db_BinaryOp_Eq, attrExpr, dbExpr)
         return C_DbExpr(expr.startPos, dbEqExpr)
@@ -175,34 +176,42 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
     }
 }
 
+enum class S_AtCardinality(val rCardinality: R_AtCardinality) {
+    ZERO_ONE(R_AtCardinality.ZERO_ONE),
+    ONE(R_AtCardinality.ONE),
+    ZERO_MANY(R_AtCardinality.ZERO_MANY),
+    ONE_MANY(R_AtCardinality.ONE_MANY),
+}
+
 class S_AtExpr(
         startPos: S_Pos,
+        val cardinality: S_AtCardinality,
         val from: List<S_AtExprFrom>,
-        val what: S_AtExprWhat,
         val where: S_AtExprWhere,
-        val limit: S_Expr?,
-        val zero: Boolean,
-        val many: Boolean
+        val what: S_AtExprWhat,
+        val limit: S_Expr?
 ): S_Expr(startPos)
 {
     override fun compile(ctx: C_ExprContext): C_Expr {
         val base = compileBase(ctx)
 
-        val type = if (many) {
+        val type = if (cardinality.rCardinality.many) {
             R_ListType(base.resType.type)
-        } else if (zero) {
+        } else if (cardinality.rCardinality.zero) {
             R_NullableType(base.resType.type)
         } else {
             base.resType.type
         }
 
-        var rExpr = R_AtExpr(type, base.rBase, base.limit, base.resType.rowDecoder)
+        var rExpr = R_AtExpr(type, base.rBase, cardinality.rCardinality, base.limit, base.resType.rowDecoder)
         return C_RExpr(startPos, rExpr)
     }
 
     private fun compileBase(ctx: C_ExprContext): AtBase {
-        val rFrom = compileFrom(ctx, from)
-        val dbCtx = C_DbExprContext(ctx.blkCtx, rFrom)
+        val cFrom = compileFrom(ctx, from)
+        val rFrom = cFrom.map { it.compile() }
+
+        val dbCtx = C_DbExprContext(ctx.blkCtx, cFrom)
 
         val dbWhere = where.compile(dbCtx)
 
@@ -213,18 +222,18 @@ class S_AtExpr(
 
         val rLimit = compileLimit(ctx)
 
-        val base = R_AtExprBase(rFrom, dbWhatExprs, dbWhere, ctWhat.sort, zero, many)
+        val base = R_AtExprBase(rFrom, dbWhatExprs, dbWhere, ctWhat.sort)
         return AtBase(base, rLimit, resType)
     }
 
     private fun calcResultType(dbWhat: List<Pair<String?, Db_Expr>>): AtResultType {
         if (dbWhat.size == 1 && dbWhat[0].first == null) {
             val type = dbWhat[0].second.type
-            return AtResultType(type, R_AtExprRowTypeSimple)
+            return AtResultType(type, R_AtExprRowType_Simple)
         } else {
             val fields = dbWhat.map { R_TupleField(it.first, it.second.type) }
             val type = R_TupleType(fields)
-            return AtResultType(type, R_AtExprRowTypeTuple(type))
+            return AtResultType(type, R_AtExprRowType_Tuple(type))
         }
     }
 
@@ -246,20 +255,20 @@ class S_AtExpr(
     private class AtResultType(val type: R_Type, val rowDecoder: R_AtExprRowType)
 
     companion object {
-        fun compileFrom(ctx: C_ExprContext, from: List<S_AtExprFrom>): List<R_AtClass> {
-            val rFrom = from.mapIndexed { i, f -> compileFromClass(ctx, i, f) }
+        fun compileFrom(ctx: C_ExprContext, from: List<S_AtExprFrom>): List<C_AtClass> {
+            val cFrom = from.mapIndexed { i, f -> compileFromClass(ctx, i, f) }
 
             val names = mutableSetOf<String>()
-            for ((alias, cls) in rFrom) {
+            for ((alias, cls) in cFrom) {
                 if (!names.add(cls.alias)) {
                     throw C_Error(alias.pos, "at_dup_alias:${cls.alias}", "Duplicate class alias: ${cls.alias}")
                 }
             }
 
-            return rFrom.map { ( _, cls ) -> cls }
+            return cFrom.map { ( _, cls ) -> cls }
         }
 
-        private fun compileFromClass(ctx: C_ExprContext, idx: Int, from: S_AtExprFrom): Pair<S_Name, R_AtClass> {
+        private fun compileFromClass(ctx: C_ExprContext, idx: Int, from: S_AtExprFrom): Pair<S_Name, C_AtClass> {
             if (from.alias != null) {
                 val name = from.alias
                 val entry = ctx.blkCtx.lookupLocalVar(name.str)
@@ -270,7 +279,7 @@ class S_AtExpr(
 
             val alias = from.alias ?: from.className
             val cls = ctx.blkCtx.entCtx.modCtx.getClass(from.className)
-            return Pair(alias, R_AtClass(cls, alias.str, idx))
+            return Pair(alias, C_AtClass(cls, alias.str, idx))
         }
 
         private class AtBase(val rBase: R_AtExprBase, val limit: R_Expr?, val resType: AtResultType)

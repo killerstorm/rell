@@ -1,8 +1,11 @@
+===================
 Database Operations
 ===================
 
+-------------
+
 At-Operator
-~~~~~~~~~~~~~~
+===========
 
 Simplest form:
 
@@ -154,8 +157,10 @@ This is equivalent to:
    val c = company @ { .name == 'Microsoft' };
    user @* { .company == c } ( ... )
 
+-------------
+
 Create Statement
-~~~~~~~~~~~~~~~~~~~
+================
 
 Must specify all attributes that don't have default values.
 
@@ -178,15 +183,21 @@ Can use the created object:
    val newUser = create user(name = 'Bob', newCompany);
    print('Created new user:', newUser);
 
-Update Statement
-~~~~~~~~~~~~~~~~~~~
+-------------
 
-Can change only ``mutable`` attributes.
+Update Statement
+================
+
+Operators ``@``, ``@?``, ``@*``, ``@+`` are used to specify cardinality, like for the at-operator.
+If the number of updated records does not match the cardinality, a run-time error occurs.
 
 ::
 
-   update user @ { .name == 'Bob' } ( company = 'Microsoft' );
-   update user @ { .name == 'Alice' } ( salary += 5000 );
+   update user @ { .name == 'Bob' } ( company = 'Microsoft' );             // exactly one
+   update user @? { .name == 'Bob' } ( deleted = true );                   // zero or one
+   update user @* { .company.name == 'Bad Company' } ( salary -= 1000 );   // any number
+
+Can change only ``mutable`` attributes.
 
 Class attributes can be matched implicitly by name or type:
 
@@ -200,19 +211,45 @@ updated. Other classes can be used in the where-part:
 
 ::
 
-   update u: user (c: company) @ { u.xyz == c.xyz, u.name == 'Bob', c.name == 'Google' } ( city = 'Seattle' );
+   update (u: user, c: company) @ { u.xyz == c.xyz, u.name == 'Bob', c.name == 'Google' } ( city = 'Seattle' );
+
+Can specify an arbitrary expression returning a class, a nullable class or a collection of a class:
+
+::
+
+   val u = user @? { .name == 'Bob' };
+   update u ( salary += 5000 );
+
+A single attribute of can be modified using a regular assignment syntax:
+
+::
+
+   val u = user @ { .name == 'Bob' };
+   u.salary += 5000;
+
+-------------
 
 Delete Statement
-~~~~~~~~~~~~~~~~~~~
+================
+
+Operators ``@``, ``@?``, ``@*``, ``@+`` are used to specify cardinality, like for the at-operator.
+If the number of deleted records does not match the cardinality, a run-time error occurs.
 
 ::
 
-   delete user @ { .name == 'Bob' };
+   delete user @ { .name == 'Bob' };                    // exactly one
+   delete user @? { .name == 'Bob' };                   // zero or one
+   delete user @* { .company.name == 'Bad Company' };   // any number
 
-Using multiple classes. Similar to ``update``, only the object(s) of the
-first class will be deleted:
+Using multiple classes. Similar to ``update``, only the object(s) of the first class will be deleted:
 
 ::
 
-   delete u: user (c: company) @ { u.xyz == c.xyz, u.name == 'Bob', c.name == 'Google' };
+   delete (u: user, c: company) @ { u.xyz == c.xyz, u.name == 'Bob', c.name == 'Google' };
 
+Can specify an arbitrary expression returning a class, a nullable class or a collection of a class:
+
+::
+
+   val u = user @? { .name == 'Bob' };
+   delete u;

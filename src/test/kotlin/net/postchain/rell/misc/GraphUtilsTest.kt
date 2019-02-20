@@ -5,6 +5,28 @@ import org.junit.Test
 import kotlin.test.assertEquals
 
 class GraphUtilsTest {
+    @Test fun testFindCycles1() {
+        val graph = mutableMapOf<String, List<String>>()
+        graph["A"] = listOf("B")
+        graph["B"] = listOf("A")
+        graph["C"] = listOf("D")
+        graph["D"] = listOf()
+
+        val cycles = C_GraphUtils.findCycles(graph)
+        assertEquals("[[A, B]]", cycles.toString())
+    }
+
+    @Test fun testFindCycles2() {
+        val graph = mutableMapOf<String, List<String>>()
+        graph["A"] = listOf("B", "C", "D")
+        graph["B"] = listOf("A")
+        graph["C"] = listOf("A")
+        graph["D"] = listOf("A")
+
+        val cycles = C_GraphUtils.findCycles(graph)
+        assertEquals("[[A, B], [A, C], [A, D]]", cycles.map {it.sorted()}.sortedBy { it.toString() }.toString())
+    }
+
     @Test fun testFindCyclicVertices_AllVerticesInOneCycle() {
         val graph = mutableMapOf<String, List<String>>()
         graph["A"] = listOf("B")
@@ -96,6 +118,16 @@ class GraphUtilsTest {
 
         val cycles = C_GraphUtils.findCyclicVertices(graph)
         assertEquals("[A, B, C]", cycles.sorted().toString())
+    }
+
+    @Test fun testTopologicalSort() {
+        val graph = mutableMapOf<String, List<String>>()
+        graph["A"] = listOf("B")
+        graph["B"] = listOf("C")
+        graph["C"] = listOf()
+
+        val sort = C_GraphUtils.topologicalSort(graph)
+        assertEquals("[C, B, A]", sort.toString())
     }
 
     @Test fun testTranspose() {

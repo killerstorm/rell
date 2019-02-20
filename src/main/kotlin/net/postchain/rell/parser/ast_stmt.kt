@@ -3,8 +3,8 @@ package net.postchain.rell.parser
 import net.postchain.rell.model.*
 
 abstract class S_Statement {
-    internal abstract fun compile(ctx: C_ExprContext): R_Statement
-    internal open fun returns(): Boolean = false
+    abstract fun compile(ctx: C_ExprContext): R_Statement
+    open fun returns(): Boolean = false
 }
 
 class S_EmptyStatement: S_Statement() {
@@ -111,9 +111,9 @@ class S_ExprStatement(val expr: S_Expr): S_Statement() {
 
 class S_AssignStatement(val dstExpr: S_Expr, val op: S_Node<S_AssignOpCode>, val srcExpr: S_Expr): S_Statement() {
     override fun compile(ctx: C_ExprContext): R_Statement {
-        val rDstExpr = dstExpr.compile(ctx).destination()
+        val cDstExpr = dstExpr.compile(ctx).destination()
         val rSrcExpr = srcExpr.compile(ctx).toRExpr()
-        return op.value.op.compile(op.pos, rDstExpr, rSrcExpr)
+        return op.value.op.compile(op.pos, cDstExpr, rSrcExpr)
     }
 }
 

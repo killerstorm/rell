@@ -26,6 +26,13 @@ class C_GlobalContext(val gtx: Boolean) {
     fun nextFrameBlockId(): R_FrameBlockId = R_FrameBlockId(frameBlockIdCtr++)
 }
 
+object C_Defs {
+    val LOG_ANNOTATION = "log"
+    val MODULE_ARGS_RECORD = "module_args"
+}
+
+class C_Record(val name: S_Name, val type: R_RecordType)
+
 class C_ModuleContext(val globalCtx: C_GlobalContext) {
     private val types = mutableMapOf(
             "boolean" to R_BooleanType,
@@ -44,12 +51,19 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
     )
 
     private val classes = mutableMapOf<String, R_Class>()
-    private val records = mutableMapOf<String, R_RecordType>()
+    private val classPoses = mutableMapOf<R_Class, S_Pos>()
+    private val objects = mutableMapOf<String, R_Object>()
+    private val records = mutableMapOf<String, C_Record>()
+    private val enums = mutableMapOf<String, R_EnumType>()
     private val operations = mutableMapOf<String, R_Operation>()
     private val queries = mutableMapOf<String, R_Query>()
     private val functions = mutableMapOf<String, C_GlobalFunction>()
     private val functionDecls = mutableListOf<C_UserFunctionDeclaration>()
     private val functionDefs = mutableListOf<R_Function>()
+
+    private val blockClass = createBlockClass()
+    private val transactionClass = createTransactionClass()
+    val transactionClassType = R_ClassType(transactionClass)
 
     val classesPass = C_ModulePass()
     val functionsPass = C_ModulePass()
@@ -59,16 +73,51 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
             check(name !in functions)
             functions[name] = fn
         }
+
+        addClass0(null, blockClass)
+        addClass0(null, transactionClass)
+    }
+
+    private fun createBlockClass(): R_Class {
+        val attrs = listOf(
+                R_Attrib(0, "block_height", R_IntegerType, false, false),
+                R_Attrib(1, "block_rid", R_ByteArrayType, false, false),
+                R_Attrib(2, "timestamp", R_IntegerType, false, false)
+        )
+        return createSysClass("block", "blocks", "block_iid", attrs)
+    }
+
+    private fun createTransactionClass(): R_Class {
+        val attrs = listOf(
+                R_Attrib(0, "tx_rid", R_ByteArrayType, false, false),
+                R_Attrib(1, "tx_hash", R_ByteArrayType, false, false),
+                R_Attrib(2, "tx_data", R_ByteArrayType, false, false),
+                R_Attrib(3, "block", R_ClassType(blockClass), false, false, true, "block_iid")
+        )
+        return createSysClass("transaction", "transactions", "tx_iid", attrs)
+    }
+
+    private fun createSysClass(name: String, table: String, rowid: String, attrs: List<R_Attrib>): R_Class {
+        val flags = R_ClassFlags(false, false, false, false, false)
+        val mapping = R_ClassSqlMapping(table, true, rowid, false)
+        val cls = R_Class(name, flags, mapping)
+
+        val attrMap = attrs.map { Pair(it.name, it) }.toMap()
+        cls.setBody(R_ClassBody(listOf(), listOf(), attrMap))
+
+        return cls
     }
 
     fun checkTypeName(name: S_Name) {
+        checkNameConflict("class", name, classes)
+        checkNameConflict("object", name, objects)
         checkNameConflict("record", name, records)
+        checkNameConflict("enum", name, enums)
         checkNameConflict("type", name, types)
     }
 
     fun checkRecordName(name: S_Name) {
-        checkNameConflict("record", name, records)
-        checkNameConflict("type", name, types)
+        checkTypeName(name)
         checkNameConflict("function", name, functions)
     }
 
@@ -93,45 +142,48 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
     }
 
     fun getType(name: S_Name): R_Type {
-        val nameStr = name.str
-        val type = getTypeOpt(nameStr)
+        val type = getTypeOpt(name)
         if (type == null) {
+            val nameStr = name.str
             throw C_Error(name.pos, "unknown_type:$nameStr", "Unknown type: '$nameStr'")
         }
         return type
     }
 
-    fun getTypeOpt(name: String): R_Type? = types[name]
+    fun getTypeOpt(name: S_Name): R_Type? {
+        val type = types[name.str]
+        if (type == null && name.str in objects) {
+            throw C_Error(name.pos, "object_astype:${name.str}", "Cannot use object '${name.str}' as a type")
+        }
+        return type
+    }
 
     fun getClass(name: S_Name): R_Class {
         val nameStr = name.str
         val cls = classes[nameStr]
         if (cls == null) {
+            if (nameStr in objects) {
+                throw C_Error(name.pos, "object_not_class:$nameStr", "'$nameStr' is an object, not a class")
+            }
             throw C_Error(name.pos, "unknown_class:$nameStr", "Unknown class: '$nameStr'")
         }
         return cls
     }
 
-    fun getRecord(name: S_Name): R_RecordType {
-        val nameStr = name.str
-        val rec = records[nameStr]
-        if (rec == null) {
-            throw C_Error(name.pos, "unknown_record:$nameStr", "Unknown record: '$nameStr'")
-        }
-        return rec
+    fun getClassOpt(name: String): R_Class? {
+        return classes[name]
+    }
+
+    fun getObjectOpt(name: String): R_Object? {
+        return objects[name]
     }
 
     fun getRecordOpt(name: String): R_RecordType? {
-        return records[name]
+        return records[name]?.type
     }
 
-    fun getFunction(name: S_Name): C_GlobalFunction {
-        val nameStr = name.str
-        val fn = getFunctionOpt(nameStr)
-        if (fn == null) {
-            throw C_Errors.errUnknownFunction(name)
-        }
-        return fn
+    fun getEnumOpt(name: String): R_EnumType? {
+        return enums[name]
     }
 
     fun getFunctionOpt(name: String): C_GlobalFunction? {
@@ -139,18 +191,48 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
         return fn
     }
 
-    fun addClass(cls: R_Class) {
-        check(cls.name !in types)
-        check(cls.name !in classes)
-        classes[cls.name] = cls
-        types[cls.name] = R_ClassType(cls)
+    fun getModuleArgsRecord(): R_RecordType? {
+        return records[C_Defs.MODULE_ARGS_RECORD]?.type
     }
 
-    fun addRecord(rec: R_RecordType) {
-        check(rec.name !in types)
-        check(rec.name !in records)
-        records[rec.name] = rec
-        types[rec.name] = rec
+    fun addClass(name: S_Name, cls: R_Class) {
+        addClass0(name, cls)
+    }
+
+    private fun addClass0(sName: S_Name?, cls: R_Class) {
+        val name = cls.name
+        check(name !in types)
+        check(name !in classes)
+        classes[name] = cls
+        types[name] = R_ClassType(cls)
+        if (sName != null) {
+            classPoses[cls] = sName.pos
+        }
+    }
+
+    fun addObject(obj: R_Object) {
+        val cls = obj.rClass
+        val name = cls.name
+        check(name !in types)
+        check(name !in classes)
+        check(name !in objects)
+        objects[name] = obj
+    }
+
+    fun addRecord(rec: C_Record) {
+        val name = rec.type.name
+        check(name !in types)
+        check(name !in records)
+        records[name] = rec
+        types[name] = rec.type
+    }
+
+    fun addEnum(e: R_EnumType) {
+        val name = e.name
+        check(name !in types)
+        check(name !in enums)
+        enums[name] = e
+        types[name] = e
     }
 
     fun addQuery(query: R_Query) {
@@ -180,11 +262,29 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
         classesPass.run()
         processRecords()
         functionsPass.run()
-        return R_Module(classes.toMap(), records.toMap(), operations.toMap(), queries.toMap(), functionDefs.toList())
+
+        val topologicalClasses = calcTopologicalClasses()
+
+        val moduleArgs = records[C_Defs.MODULE_ARGS_RECORD]
+        if (moduleArgs != null && !moduleArgs.type.flags.typeFlags.gtxHuman) {
+            throw C_Error(moduleArgs.name.pos, "module_args_nogtx", "Record '${C_Defs.MODULE_ARGS_RECORD}' is not GTX-compatible")
+        }
+
+        return R_Module(
+                classes.toMap(),
+                objects.toMap(),
+                records.mapValues { it.value.type }.toMap(),
+                enums.toMap(),
+                operations.toMap(),
+                queries.toMap(),
+                functionDefs.toList(),
+                moduleArgs?.type,
+                topologicalClasses
+        )
     }
 
     private fun processRecords() {
-        val structure = buildRecordsStructure(records.values)
+        val structure = buildRecordsStructure(records.values.map { it.type })
         val graph = structure.graph
         val transGraph = C_GraphUtils.transpose(graph)
 
@@ -194,11 +294,39 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
         val nonGtxHumanRecs = C_GraphUtils.closure(transGraph, structure.nonGtxHuman).toSet()
         val nonGtxCompactRecs = C_GraphUtils.closure(transGraph, structure.nonGtxCompact).toSet()
 
-        for (record in records.values) {
+        for (cRecord in records.values) {
+            val record = cRecord.type
             val typeFlags = R_TypeFlags(record in mutableRecs, record !in nonGtxHumanRecs, record !in nonGtxCompactRecs)
             val flags = R_RecordFlags(typeFlags, record in cyclicRecs, record in infiniteRecs)
             record.setFlags(flags)
         }
+    }
+
+    private fun calcTopologicalClasses(): List<R_Class> {
+        val graph = mutableMapOf<R_Class, Collection<R_Class>>()
+        for (cls in classes.values) {
+            val deps = mutableSetOf<R_Class>()
+            for (attr in cls.attributes.values) {
+                if (attr.type is R_ClassType) {
+                    deps.add(attr.type.rClass)
+                }
+            }
+            graph[cls] = deps
+        }
+
+        val cycles = C_GraphUtils.findCycles(graph)
+        if (!cycles.isEmpty()) {
+            val cycle = cycles[0]
+            val shortStr = cycle.joinToString(",") { it.name }
+            val str = cycle.joinToString { it.name }
+            val cls = cycle[0]
+            val pos = classPoses[cls]
+            check(pos != null) { cls.name }
+            throw C_Error(pos!!, "class_cycle:$shortStr", "Class cycle, not allowed: $str")
+        }
+
+        val res = C_GraphUtils.topologicalSort(graph)
+        return res
     }
 }
 
@@ -216,6 +344,8 @@ class C_ModulePass {
 
 enum class C_EntityType {
     CLASS,
+    OBJECT,
+    RECORD,
     QUERY,
     OPERATION,
     FUNCTION,
@@ -224,6 +354,7 @@ enum class C_EntityType {
 class C_EntityContext(
         val modCtx: C_ModuleContext,
         val entityType: C_EntityType,
+        val entityIndex: Int,
         explicitReturnType: R_Type?
 ){
     private val retTypeTracker =
@@ -310,9 +441,11 @@ class C_ScopeEntry(val name: String, val type: R_Type, val modifiable: Boolean, 
     fun toVarExpr(): R_VarExpr = R_VarExpr(type, ptr, name)
 }
 
-class C_ClassContext(private val modCtx: C_ModuleContext, private val dataClass: Boolean) {
-    private val entCtx = C_EntityContext(modCtx, C_EntityType.CLASS, null)
-
+class C_ClassContext(
+        val entCtx: C_EntityContext,
+        private val className: String,
+        private val logAnnotation: Boolean
+) {
     private val attributes = mutableMapOf<String, R_Attrib>()
     private val keys = mutableListOf<R_Key>()
     private val indices = mutableListOf<R_Index>()
@@ -323,31 +456,60 @@ class C_ClassContext(private val modCtx: C_ModuleContext, private val dataClass:
 
     fun addAttribute(attr: S_NameTypePair, mutable: Boolean, expr: S_Expr?) {
         val name = attr.name
+        val entityType = entCtx.entityType
 
         val nameStr = name.str
         if (nameStr in attributes) {
             throw C_Error(name.pos, "dup_attr:$nameStr", "Duplicate attribute: '$nameStr'")
         }
 
-        val rType = attr.compileType(modCtx)
-        if (dataClass && !rType.isSqlCompatible()) {
+        val rType = attr.compileType(entCtx.modCtx)
+        if ((entityType == C_EntityType.CLASS || entityType == C_EntityType.OBJECT) && !rType.isSqlCompatible()) {
             throw C_Error(name.pos, "class_attr_type:$nameStr:${rType.toStrictString()}",
                     "Attribute '$nameStr' has unallowed type: ${rType.toStrictString()}")
         }
 
-        val rAttr = R_Attrib(attributes.size, nameStr, rType, mutable, expr != null)
+        if (mutable && logAnnotation) {
+            val ann = C_Defs.LOG_ANNOTATION
+            throw C_Error(name.pos, "class_attr_mutable_log:$className:$nameStr",
+                    "Class '$className' cannot have mutable attributes because of the '$ann' annotation")
+        }
 
-        if (expr == null) {
+        if (entityType == C_EntityType.OBJECT && expr == null) {
+            throw C_Error(name.pos, "object_attr_novalue:$className:$nameStr",
+                    "Object attribute '$className.$nameStr' must have a default value")
+        }
+
+        val exprCreator: (() -> R_Expr)? = if (expr == null) null else { ->
+            val rExpr = expr.compile(entCtx.rootExprCtx).toRExpr()
+            S_Type.match(rType, rExpr.type, name.pos, "attr_type:$nameStr", "Default value type missmatch for '$nameStr'")
+            rExpr
+        }
+
+        addAttribute0(nameStr, rType, mutable, true, exprCreator)
+    }
+
+    fun addAttribute0(name: String, rType: R_Type, mutable: Boolean, canSetInCreate: Boolean, exprCreator: (() -> R_Expr)?) {
+        check(name !in attributes)
+        check(entCtx.entityType != C_EntityType.OBJECT || exprCreator != null)
+
+        val rAttr = R_Attrib(attributes.size, name, rType, mutable, exprCreator != null, canSetInCreate)
+
+        if (exprCreator == null) {
             rAttr.setExpr(null)
         } else {
-            modCtx.functionsPass.add {
-                val rExpr = expr.compile(entCtx.rootExprCtx).toRExpr()
-                S_Type.match(rType, rExpr.type, name.pos, "attr_type:$nameStr", "Default value type missmatch for '$nameStr'")
+            entCtx.modCtx.functionsPass.add {
+                val rExpr = exprCreator()
+                check(rType.isAssignableFrom(rExpr.type)) {
+                    val exp = rType.toStrictString()
+                    val act = rExpr.type.toStrictString()
+                    "Attribute '$className.$name' expression type missmatch: expected '$exp', was '$act'"
+                }
                 rAttr.setExpr(rExpr)
             }
         }
 
-        attributes[nameStr] = rAttr
+        attributes[name] = rAttr
     }
 
     fun addKey(pos: S_Pos, attrs: List<S_Name>) {
@@ -371,6 +533,10 @@ class C_ClassContext(private val modCtx: C_ModuleContext, private val dataClass:
     }
 
     private fun addUniqueKeyIndex(pos: S_Pos, set: MutableSet<Set<String>>, names: List<String>, errCode: String, errMsg: String) {
+        if (entCtx.entityType == C_EntityType.OBJECT) {
+            throw C_Error(pos, "object_keyindex:${className}", "Object cannot have key or index")
+        }
+
         val nameSet = names.toSet()
         if (!set.add(nameSet)) {
             val nameLst = names.sorted()

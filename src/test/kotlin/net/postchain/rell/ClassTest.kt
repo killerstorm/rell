@@ -1,6 +1,10 @@
 package net.postchain.rell
 
+import net.postchain.rell.test.BaseRellTest
+import net.postchain.rell.test.RellCodeTester
+import net.postchain.rell.test.SqlTestUtils
 import org.junit.Test
+import kotlin.test.assertEquals
 
 class ClassTest: BaseRellTest(false) {
     @Test fun testAttrNoType() {
@@ -35,8 +39,8 @@ class ClassTest: BaseRellTest(false) {
     @Test fun testIndexWithoutAttr() {
         tst.useSql = true
         tst.defs = listOf("class foo { index name; }", "class bar { index name: text; }")
-        execOp("create foo(name = 'A');")
-        execOp("create bar(name = 'B');")
+        chkOp("create foo(name = 'A');")
+        chkOp("create bar(name = 'B');")
         chk("foo @ {} (.name)", "text[A]")
         chk("bar @ {} (.name)", "text[B]")
     }
@@ -50,17 +54,17 @@ class ClassTest: BaseRellTest(false) {
                 "class D { mutable name: text; index name; }"
         )
 
-        execOp("create A(name = 'A');")
-        execOp("create B(name = 'B');")
-        execOp("create C(name1 = 'C1', name2 = 'C2');")
-        execOp("create D(name = 'D1');")
+        chkOp("create A(name = 'A');")
+        chkOp("create B(name = 'B');")
+        chkOp("create C(name1 = 'C1', name2 = 'C2');")
+        chkOp("create D(name = 'D1');")
 
         chk("A @ {} (.name)", "text[A]")
         chk("B @ {} (.name)", "text[B]")
         chk("C @ {} (=.name1,=.name2)", "(text[C1],text[C2])")
         chk("D @ {} (.name)", "text[D1]")
 
-        execOp("update D @ {} (name = 'D2');")
+        chkOp("update D @ {} (name = 'D2');")
         chk("D @ {} (.name)", "text[D2]")
     }
 
@@ -89,8 +93,8 @@ class ClassTest: BaseRellTest(false) {
     @Test fun testKeyWithoutAttr() {
         tst.useSql = true
         tst.defs = listOf("class foo { key name; }", "class bar { key name: text; }")
-        execOp("create foo(name = 'A');")
-        execOp("create bar(name = 'B');")
+        chkOp("create foo(name = 'A');")
+        chkOp("create bar(name = 'B');")
         chk("foo @ {} (.name)", "text[A]")
         chk("bar @ {} (.name)", "text[B]")
     }
@@ -104,17 +108,17 @@ class ClassTest: BaseRellTest(false) {
                 "class D { mutable name: text; key name; }"
         )
 
-        execOp("create A(name = 'A');")
-        execOp("create B(name = 'B');")
-        execOp("create C(name1 = 'C1', name2 = 'C2');")
-        execOp("create D(name = 'D1');")
+        chkOp("create A(name = 'A');")
+        chkOp("create B(name = 'B');")
+        chkOp("create C(name1 = 'C1', name2 = 'C2');")
+        chkOp("create D(name = 'D1');")
 
         chk("A @ {} (.name)", "text[A]")
         chk("B @ {} (.name)", "text[B]")
         chk("C @ {} (=.name1,=.name2)", "(text[C1],text[C2])")
         chk("D @ {} (.name)", "text[D1]")
 
-        execOp("update D @ {} (name = 'D2');")
+        chkOp("update D @ {} (name = 'D2');")
         chk("D @ {} (.name)", "text[D2]")
     }
 
@@ -122,9 +126,9 @@ class ClassTest: BaseRellTest(false) {
         tst.useSql = true
         tst.defs = listOf("class foo { mutable k: text; mutable i: text; key k; index i; }")
 
-        chkOp("create foo(k = 'K1', i = 'I1');", "")
+        chkOp("create foo(k = 'K1', i = 'I1');")
         chkOp("create foo(k = 'K1', i = 'I2');", "rt_err:sqlerr:0")
-        chkOp("create foo(k = 'K2', i = 'I1');", "")
+        chkOp("create foo(k = 'K2', i = 'I1');")
         chkData("foo(1,K1,I1)", "foo(2,K2,I1)")
 
         chkOp("update foo @ { .k == 'K2' } ( k = 'K1' );", "rt_err:sqlerr:0")
@@ -133,7 +137,6 @@ class ClassTest: BaseRellTest(false) {
 
     @Test fun testDeclarationOrder() {
         chkCompile("class user { c: company; } class company { name; }", "OK")
-        chkCompile("class user { c: company; } class company { u: user; }", "OK")
         chkCompile("query q() = user @* {}; class user { name; }", "OK")
     }
 
@@ -144,7 +147,7 @@ class ClassTest: BaseRellTest(false) {
                 "class bar { v: integer; }"
         )
 
-        execOp("""
+        chkOp("""
             create foo(x = 1);
             create bar(-1);
             create foo(x = 2);
@@ -158,5 +161,73 @@ class ClassTest: BaseRellTest(false) {
         chk("foo @ {.x == 2}(.k)", "int[0]")
         chk("foo @ {.x == 3}(.k)", "int[1]")
         chk("foo @ {.x == 4}(.k)", "int[2]")
+    }
+
+    @Test fun testAnnotations() {
+        chkCompile("class user (log) {}", "OK")
+        chkCompile("class user (foo) {}", "ct_err:class_ann_bad:foo")
+        chkCompile("class user (log, log) {}", "ct_err:class_ann_dup:log")
+
+        val m1 = tst.compileModuleEx("class user {}")
+        val c1 = m1.classes["user"]!!
+        assertEquals(false, c1.flags.log)
+
+        val m2 = tst.compileModuleEx("class user (log) {}")
+        val c2 = m2.classes["user"]!!
+        assertEquals(true, c2.flags.log)
+    }
+
+    @Test fun testBugSqlCreateTableOrder() {
+        // Bug: SQL tables must be created in topological order because of foreign key constraints.
+        tst.defs = listOf("class user { name: text; company; }", "class company { name: text; }")
+        tst.useSql = true
+        chkOp("val c = create company('Amazon'); create user ('Bob', c);")
+        chkData("user(2,Bob,1)", "company(1,Amazon)")
+        chk("company @* {} ( =.name )", "list<text>[text[Amazon]]")
+        chk("user @* {} ( =.name, =.company )", "list<(text,company)>[(text[Bob],company[1])]")
+    }
+
+    @Test fun testCycle() {
+        chkCompile("class foo { bar; } class bar { foo; }", "ct_err:class_cycle:foo,bar")
+    }
+
+    @Test fun testTablePrefix() {
+        tst.useSql = true
+        tst.chkData() // Does database reset, creates system tables
+
+        val tst1 = createTablePrefixTester(123, 100, "Amazon", "Bob")
+        val tst2 = createTablePrefixTester(456, 200, "Google", "Alice")
+
+        tst1.chkData("user(101,Bob,100)", "company(100,Amazon)")
+        tst1.chkQuery("company @* {}( =company, =.name )", "[(company[100],Amazon)]")
+        tst1.chkQuery("user @* {}( =user, =.name, =.company.name )", "[(user[101],Bob,Amazon)]")
+
+        tst2.chkData("user(201,Alice,200)", "company(200,Google)")
+        tst2.chkQuery("company @* {}( =company, =.name )", "[(company[200],Google)]")
+        tst2.chkQuery("user @* {}( =user, =.name, =.company.name )", "[(user[201],Alice,Google)]")
+
+        tst1.chkOp("val c = create company('Facebook'); create user ('Trudy', c);")
+        tst2.chkOp("val c = create company('Microsoft'); create user ('James', c);")
+
+        tst1.chkData("user(2,Trudy,1)", "user(101,Bob,100)", "company(1,Facebook)", "company(100,Amazon)")
+        tst1.chkQuery("company @* {}( =company, =.name )", "[(company[1],Facebook), (company[100],Amazon)]")
+        tst1.chkQuery("user @* {}( =user, =.name, =.company.name )", "[(user[2],Trudy,Facebook), (user[101],Bob,Amazon)]")
+
+        tst2.chkData("user(2,James,1)", "user(201,Alice,200)", "company(1,Microsoft)", "company(200,Google)")
+        tst2.chkQuery("company @* {}( =company, =.name )", "[(company[1],Microsoft), (company[200],Google)]")
+        tst2.chkQuery("user @* {}( =user, =.name, =.company.name )", "[(user[2],James,Microsoft), (user[201],Alice,Google)]")
+    }
+
+    private fun createTablePrefixTester(chainId: Long, rowid: Long, company: String, user: String): RellCodeTester {
+        val t = resource(RellCodeTester())
+        t.useSql = true
+        t.defs = listOf("class user { name: text; company; }", "class company { name: text; }")
+        t.chainId = chainId
+        t.insert("c${chainId}_company", "name","${rowid},'$company'")
+        t.insert("c${chainId}_user", "name,company","${rowid+1},'$user',${rowid}")
+        t.dropTables = false
+        t.createSystemTables = false
+        t.strictToString = false
+        return t
     }
 }

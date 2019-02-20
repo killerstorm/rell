@@ -111,6 +111,10 @@ object C_Errors {
         return C_Error(pos, "expr_bad_dst", "Invalid assignment destination")
     }
 
+    fun errBadDestination(name: S_Name): C_Error {
+        return C_Error(name.pos, "expr_bad_dst:${name.str}", "Cannot modify '${name.str}'")
+    }
+
     fun errAttrNotMutable(pos: S_Pos, name: String): C_Error {
         return C_Error(pos, "update_attr_not_mutable:$name", "Attribute '$name' is not mutable")
     }
@@ -123,16 +127,43 @@ object C_Errors {
     fun errExprDbNotAllowed(pos: S_Pos): C_Error {
         return C_Error(pos, "expr_sqlnotallowed", "Database expression not allowed here")
     }
+
+    fun errCannotUpdate(pos: S_Pos, name: String): C_Error {
+        return C_Error(pos, "stmt_update_cant:$name", "Not allowed to update objects of class '$name'")
+    }
+
+    fun errCannotDelete(pos: S_Pos, name: String): C_Error {
+        return C_Error(pos, "stmt_delete_cant:$name", "Not allowed to delete objects of class '$name'")
+    }
+
+    fun errNameConflictLocalGlobal(name: S_Name): C_Error {
+        val nameStr = name.str
+        throw C_Error(name.pos, "expr_name_locglob:$nameStr",
+                "Name '$nameStr' is ambiguous: can be type or local variable")
+    }
+
+    fun errNameConflictClassGlobal(name: S_Name): C_Error {
+        val nameStr = name.str
+        throw C_Error(name.pos, "expr_name_clsglob:$nameStr",
+                "Name '$nameStr' is ambiguous: can be type or class alias")
+    }
+
+    fun errNameConflictAliasLocal(name: S_Name): C_Error {
+        val nameStr = name.str
+        throw C_Error(name.pos, "expr_name_clsloc:$nameStr",
+                "Name '$nameStr' is ambiguous: can be class alias or local variable")
+    }
 }
 
 object C_GraphUtils {
-    fun <T> findCyclicVertices(graph: Map<T, Collection<T>>): List<T> {
+    /** Returns some, not all cycles (at least one cycle for each cyclic vertex). */
+    fun <T> findCycles(graph: Map<T, Collection<T>>): List<List<T>> {
         class VertEntry<T>(val vert: T, val enter: Boolean, val parent: VertEntry<T>?)
 
         val queue = LinkedList<VertEntry<T>>()
         val visiting = mutableSetOf<T>()
         val visited = mutableSetOf<T>()
-        val cycleVerts = mutableSetOf<T>()
+        val cycles = mutableListOf<List<T>>()
 
         for (vert in graph.keys) {
             queue.add(VertEntry(vert, true, null))
@@ -150,12 +181,14 @@ object C_GraphUtils {
                 continue
             } else if (entry.vert in visiting) {
                 var cycleEntry = entry
+                val cycle = mutableListOf<T>()
                 while (true) {
-                    cycleVerts.add(cycleEntry.vert)
+                    cycle.add(cycleEntry.vert)
                     cycleEntry = cycleEntry.parent
                     check(cycleEntry != null)
                     if (cycleEntry.vert == entry.vert) break
                 }
+                cycles.add(cycle.toList())
                 continue
             }
 
@@ -167,7 +200,53 @@ object C_GraphUtils {
             }
         }
 
-        return cycleVerts.toList()
+        return cycles.toList()
+    }
+
+    fun <T> topologicalSort(graph: Map<T, Collection<T>>): List<T> {
+        class VertEntry<T>(val vert: T, val enter: Boolean, val parent: VertEntry<T>?)
+
+        val queue = LinkedList<VertEntry<T>>()
+        val visiting = mutableSetOf<T>()
+        val visited = mutableSetOf<T>()
+        val result = mutableListOf<T>()
+
+        for (vert in graph.keys) {
+            queue.add(VertEntry(vert, true, null))
+        }
+
+        while (!queue.isEmpty()) {
+            val entry = queue.remove()
+
+            if (!entry.enter) {
+                check(visiting.remove(entry.vert))
+                check(visited.add(entry.vert))
+                result.add(entry.vert)
+                continue
+            } else if (entry.vert in visited) {
+                check(entry.vert !in visiting)
+                continue
+            }
+
+            check(entry.vert !in visiting) // Cycle
+            queue.addFirst(VertEntry(entry.vert, false, entry.parent))
+            visiting.add(entry.vert)
+
+            for (adjVert in graph.getValue(entry.vert)) {
+                queue.addFirst(VertEntry(adjVert, true, entry))
+            }
+        }
+
+        return result.toList()
+    }
+
+    fun <T> findCyclicVertices(graph: Map<T, Collection<T>>): List<T> {
+        val cycles = findCycles(graph)
+        val cyclicVertices = mutableSetOf<T>()
+        for (cycle in cycles) {
+            cyclicVertices.addAll(cycle)
+        }
+        return cyclicVertices.toList()
     }
 
     fun <T> transpose(graph: Map<T, Collection<T>>): Map<T, Collection<T>> {

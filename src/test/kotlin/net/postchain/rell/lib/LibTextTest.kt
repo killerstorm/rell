@@ -1,6 +1,6 @@
 package net.postchain.rell.lib
 
-import net.postchain.rell.BaseRellTest
+import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 
 class LibTextTest: BaseRellTest(false) {
@@ -87,6 +87,9 @@ class LibTextTest: BaseRellTest(false) {
         chk("'Hello World'.indexOf('o', 6)", "int[7]")
         chk("'Hello World'.indexOf('o', 7)", "int[7]")
         chk("'Hello World'.indexOf('o', 8)", "int[-1]")
+
+        chkEx(": integer = 'Hello'.indexOf('l');", "int[2]")
+        chkEx(": integer = 'Hello'.indexOf('l', 3);", "int[3]")
     }
 
     @Test fun testLastIndexOf() {
@@ -110,6 +113,9 @@ class LibTextTest: BaseRellTest(false) {
         chk("'Hello World'.lastIndexOf('o', 3)", "int[-1]")
         chk("'Hello World'.lastIndexOf('o', -1)", "rt_err:fn_text_lastIndexOf_index:11:-1")
         chk("'Hello World'.lastIndexOf('o', 11)", "rt_err:fn_text_lastIndexOf_index:11:11")
+
+        chkEx(": integer = 'Hello World'.lastIndexOf('o');", "int[7]")
+        chkEx(": integer = 'Hello World'.lastIndexOf('o', 6);", "int[4]")
     }
 
     @Test fun testSub() {

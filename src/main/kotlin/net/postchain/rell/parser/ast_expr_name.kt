@@ -38,7 +38,8 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
                     "Parameter type does not match attribute type for '$name': $argType instead of $attrType")
         }
 
-        val clsAttrExpr = Db_AttrExpr(Db_ClassExpr(clsAttr.cls), clsAttr.attr)
+        val clsExpr = clsAttr.cls.compileExpr()
+        val clsAttrExpr = Db_AttrExpr(clsExpr, clsAttr.attr)
 
         val localAttrExpr = localVar.toVarExpr()
         val dbLocalAttrExpr = C_Utils.toDbExpr(startPos, localAttrExpr)

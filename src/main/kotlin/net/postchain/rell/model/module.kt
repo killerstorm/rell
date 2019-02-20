@@ -9,7 +9,15 @@ data class R_VarPtr(val blockId: R_FrameBlockId, val offset: Int)
 class R_FrameBlock(val parentId: R_FrameBlockId?, val id: R_FrameBlockId, val offset: Int, val size: Int)
 class R_CallFrame(val size: Int, val rootBlock: R_FrameBlock)
 
-class R_Attrib(val index: Int, val name: String, val type: R_Type, val mutable: Boolean, val hasExpr: Boolean) {
+class R_Attrib(
+        val index: Int,
+        val name: String,
+        val type: R_Type,
+        val mutable: Boolean,
+        val hasExpr: Boolean,
+        val canSetInCreate: Boolean = true,
+        val sqlMapping: String = name
+){
     private lateinit var expr0: Optional<R_Expr>
     val expr: R_Expr? get() = expr0.orElse(null)
 
@@ -151,10 +159,14 @@ private fun processArgs(params: List<R_ExternalParam>, args: List<Rt_Value>, fra
 
 class R_Module(
         val classes: Map<String, R_Class>,
+        val objects: Map<String, R_Object>,
         val records: Map<String, R_RecordType>,
+        val enums: Map<String, R_EnumType>,
         val operations: Map<String, R_Operation>,
         val queries: Map<String, R_Query>,
-        val functionsTable: List<R_Function>
+        val functionsTable: List<R_Function>,
+        val moduleArgsRecord: R_RecordType?,
+        val topologicalClasses: List<R_Class>
 ){
     val functions = functionsTable.associate { Pair(it.name, it) }
 

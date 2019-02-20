@@ -1,6 +1,8 @@
 package net.postchain.rell
 
 import net.postchain.rell.runtime.*
+import net.postchain.rell.test.BaseRellTest
+import net.postchain.rell.test.SqlTestUtils
 import org.junit.Test
 
 class QueryTest: BaseRellTest() {
@@ -31,29 +33,25 @@ class QueryTest: BaseRellTest() {
 
     @Test fun testReturnSelectAllNoObjects() {
         tst.defs = listOf("class user { name: text; }")
-        tst.inserts = listOf(mkins("user", "name", "11, 'Alice'"))
+        tst.insert("c0_user", "name", "11, 'Alice'")
         chkEx("= user @* { .name == 'Bob' } ;", "list<user>[]")
     }
 
     @Test fun testReturnSelectAllOneObject() {
         tst.defs = listOf("class user { name: text; }")
-        tst.inserts = listOf(
-                mkins("user", "name", "11,'Alice'"),
-                mkins("user", "name", "33,'Bob'")
-        )
+        tst.insert("c0_user", "name", "11,'Alice'")
+        tst.insert("c0_user", "name", "33,'Bob'")
         chkEx("= user @* { .name == \"Bob\" } ;", "list<user>[user[33]]")
     }
 
     @Test fun testReturnSelectAllManyObjects() {
         tst.defs = listOf("class user { name: text; }")
-        tst.inserts = listOf(
-                mkins("user", "name", "11,'Alice'"),
-                mkins("user", "name", "33,'Bob'"),
-                mkins("user", "name", "55,'James'"),
-                mkins("user", "name", "77,'Bob'"),
-                mkins("user", "name", "99,'Victor'"),
-                mkins("user", "name", "111,'Bob'")
-        )
+        tst.insert("c0_user", "name", "11,'Alice'")
+        tst.insert("c0_user", "name", "33,'Bob'")
+        tst.insert("c0_user", "name", "55,'James'")
+        tst.insert("c0_user", "name", "77,'Bob'")
+        tst.insert("c0_user", "name", "99,'Victor'")
+        tst.insert("c0_user", "name", "111,'Bob'")
         chkEx("= user @* { .name == 'Bob' } ;", "list<user>[user[33],user[77],user[111]]")
     }
 

@@ -1,6 +1,6 @@
 package net.postchain.rell.lib
 
-import net.postchain.rell.BaseRellTest
+import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.hexStringToByteArray
 import net.postchain.rell.runtime.Rt_OpContext
 import org.junit.Test
@@ -24,42 +24,42 @@ class LibTest: BaseRellTest(false) {
 
     @Test fun testPrint() {
         chkEx("{ print('Hello'); return 123; }", "int[123]")
-        tst.chkStdout("Hello")
-        tst.chkLog()
+        chkStdout("Hello")
+        chkLog()
 
         chkEx("{ print(12345); return 123; }", "int[123]")
-        tst.chkStdout("12345")
-        tst.chkLog()
+        chkStdout("12345")
+        chkLog()
 
         chkEx("{ print(1, 2, 3, 4, 5); return 123; }", "int[123]")
-        tst.chkStdout("1 2 3 4 5")
-        tst.chkLog()
+        chkStdout("1 2 3 4 5")
+        chkLog()
 
         chkEx("{ print(); return 123; }", "int[123]")
-        tst.chkStdout("")
-        tst.chkLog()
+        chkStdout("")
+        chkLog()
     }
 
     @Test fun testLog() {
         chkEx("{ log('Hello'); return 123; }", "int[123]")
-        tst.chkLog("Hello")
-        tst.chkStdout()
+        chkLog("Hello")
+        chkStdout()
 
         chkEx("{ log(12345); return 123; }", "int[123]")
-        tst.chkLog("12345")
-        tst.chkStdout()
+        chkLog("12345")
+        chkStdout()
 
         chkEx("{ log(1, 2, 3, 4, 5); return 123; }", "int[123]")
-        tst.chkLog("1 2 3 4 5")
-        tst.chkStdout()
+        chkLog("1 2 3 4 5")
+        chkStdout()
 
         chkEx("{ log(); return 123; }", "int[123]")
-        tst.chkStdout()
-        tst.chkLog("")
+        chkStdout()
+        chkLog("")
     }
 
     @Test fun testIsSigner() {
-        tst.opContext = Rt_OpContext(-1, listOf("1234".hexStringToByteArray(), "abcd".hexStringToByteArray()))
+        tst.opContext = Rt_OpContext(-1, -1, listOf("1234".hexStringToByteArray(), "abcd".hexStringToByteArray()))
 
         chk("is_signer(x'1234')", "boolean[true]")
         chk("is_signer(x'abcd')", "boolean[true]")
@@ -182,27 +182,6 @@ class LibTest: BaseRellTest(false) {
     @Test fun testByteArrayToList() {
         chk("x''.toList()", "list<integer>[]")
         chk("x'1234abcd'.toList()", "list<integer>[int[18],int[52],int[171],int[205]]")
-    }
-
-    @Test fun testOpContextLastBlockTime() {
-        tst.opContext = Rt_OpContext(12345, listOf())
-        chkOp("print(op_context.last_block_time);", "")
-        tst.chkStdout("12345")
-
-        chkOp("val t: timestamp = op_context.last_block_time; print(t);", "") // Will fail when timestamp type becomes intependent.
-        tst.chkStdout("12345")
-        chkOp("val t: integer = op_context.last_block_time; print(t);", "")
-        tst.chkStdout("12345")
-
-        chkOpFull("function f(): timestamp = op_context.last_block_time; operation o() { print(f()); }", "")
-        tst.chkStdout("12345")
-
-        tst.opContext = null
-        chk("op_context.last_block_time", "ct_err:op_ctx_noop")
-        chkFull("function f(): timestamp = op_context.last_block_time; query q() = f();", listOf(),
-                "rt_err:fn_last_block_time_noop")
-
-        chk("op_context", "ct_err:unknown_name:op_context")
     }
 
     @Test fun testGtxValue() {

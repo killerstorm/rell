@@ -1,9 +1,11 @@
 package net.postchain.rell
 
+import net.postchain.gtx.GTXNull
 import net.postchain.rell.model.R_ClassType
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.NoConnSqlExecutor
+import net.postchain.rell.test.RellTestUtils
 import org.junit.Test
 import kotlin.test.assertEquals
 
@@ -25,7 +27,9 @@ class InterpOpTest: AbstractOpTest() {
         val args2 = args.map { it as InterpTstVal }
         val types = args2.map { it.type }
 
-        val globalCtx = Rt_GlobalContext(Rt_FailingPrinter, Rt_FailingPrinter, NoConnSqlExecutor, null)
+        val sqlMapper = Rt_SqlMapper(0)
+        val chainCtx = Rt_ChainContext(GTXNull, Rt_NullValue)
+        val globalCtx = Rt_GlobalContext(Rt_FailingPrinter, Rt_FailingPrinter, NoConnSqlExecutor, sqlMapper, null, chainCtx)
 
         val res = processExpr0(expr2, types) { module ->
             val rtArgs = args2.map { it.rt(module) }
@@ -100,7 +104,7 @@ class InterpOpTest: AbstractOpTest() {
             override fun rt(m: R_Module): Rt_Value {
                 val c = m.classes[cls]
                 val t = R_ClassType(c!!)
-                return Rt_ObjectValue(t, id)
+                return Rt_ClassValue(t, id)
             }
         }
     }

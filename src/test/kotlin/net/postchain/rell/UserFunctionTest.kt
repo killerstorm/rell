@@ -1,5 +1,6 @@
 package net.postchain.rell
 
+import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 
 class UserFunctionTest: BaseRellTest(false) {
@@ -17,7 +18,7 @@ class UserFunctionTest: BaseRellTest(false) {
         chkFn("function f() = print('Hello');", "f()", "ct_err:query_exprtype_unit")
 
         chkFnEx("function f() = print('Hello');", "{ f(); return 123; }", "int[123]")
-        tst.chkStdout("Hello")
+        chkStdout("Hello")
     }
 
     @Test fun testReturnType() {
@@ -32,7 +33,7 @@ class UserFunctionTest: BaseRellTest(false) {
     @Test fun testDbSelect() {
         tst.useSql = true
         tst.defs = listOf("class user { name: text; }")
-        tst.execOp("create user('Bob'); create user('Alice');")
+        chkOp("create user('Bob'); create user('Alice');")
 
         chkFn("function f(name: text): user = user @ { name };", "f('Bob')", "user[1]")
         chkFn("function f(name: text): user = user @ { name };", "f('Alice')", "user[2]")
@@ -41,7 +42,7 @@ class UserFunctionTest: BaseRellTest(false) {
     @Test fun testDbUpdate() {
         tst.useSql = true
         tst.defs = listOf("class user { name: text; mutable score: integer; }")
-        tst.execOp("create user('Bob', 100); create user('Alice', 250);")
+        chkOp("create user('Bob', 100); create user('Alice', 250);")
 
         val fn = "function f(name: text, s: integer): integer { update user @ { name } ( score += s ); return s; }"
 
@@ -50,9 +51,9 @@ class UserFunctionTest: BaseRellTest(false) {
         tst.chkData("user(1,Bob,100)", "user(2,Alice,250)")
 
         // When f() is called from an operation, everything must work.
-        chkFnOp(fn, "f('Bob', 500);", "")
+        chkFnOp(fn, "f('Bob', 500);")
         tst.chkData("user(1,Bob,600)", "user(2,Alice,250)")
-        chkFnOp(fn, "f('Alice', 750);", "")
+        chkFnOp(fn, "f('Alice', 750);")
         tst.chkData("user(1,Bob,600)", "user(2,Alice,1000)")
     }
 
@@ -113,13 +114,13 @@ class UserFunctionTest: BaseRellTest(false) {
         """.trimIndent()
 
         chkFnEx(fn, "{ foo(5); return 0; }", "int[0]")
-        tst.chkStdout("foo 5", "bar 4", "foo 3", "bar 2", "foo 1", "bar 0")
+        chkStdout("foo 5", "bar 4", "foo 3", "bar 2", "foo 1", "bar 0")
     }
 
     @Test fun testCallUnderAt() {
         tst.useSql = true
         tst.defs = listOf("class user { name: text; id: integer; }")
-        tst.execOp("create user('Bob',123); create user('Alice',456);")
+        chkOp("create user('Bob',123); create user('Alice',456);")
 
         val fn = "function foo(a: text): text = a.upperCase();"
 
@@ -139,7 +140,7 @@ class UserFunctionTest: BaseRellTest(false) {
         tst.chkQueryEx(code, listOf(), expected)
     }
 
-    private fun chkFnOp(fnCode: String, callCode: String, expected: String) {
+    private fun chkFnOp(fnCode: String, callCode: String, expected: String = "OK") {
         val code = "$fnCode operation o() { $callCode }"
         tst.chkOpEx(code, expected)
     }

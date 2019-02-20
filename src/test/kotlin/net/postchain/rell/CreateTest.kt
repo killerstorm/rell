@@ -1,74 +1,70 @@
 package net.postchain.rell
 
-import org.junit.After
+import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
-import kotlin.test.assertEquals
 
-class CreateTest {
-    private val classDefs = listOf(
+class CreateTest: BaseRellTest() {
+    override fun classDefs() = listOf(
             "class city { name: text; }",
             "class person { name: text; city; street: text; house: integer; score: integer; }"
     )
 
-    private val tst = RellSqlTester(classDefs = classDefs)
-
-    @After fun after() = tst.destroy()
-
     @Test fun testCreateCity() {
-        chkAll()
+        chkData()
 
-        execute("create city ( 'New York' );")
-        chkNew("city(1,New York)")
+        chkOp("create city ( 'New York' );")
+        chkDataNew("city(1,New York)")
 
-        execute("create city ( 'San Francisco' );")
-        chkNew("city(2,San Francisco)")
+        chkOp("create city ( 'San Francisco' );")
+        chkDataNew("city(2,San Francisco)")
 
-        execute("create city ( 'Los Angeles' );")
-        chkNew("city(3,Los Angeles)")
+        chkOp("create city ( 'Los Angeles' );")
+        chkDataNew("city(3,Los Angeles)")
     }
 
     @Test fun testCreatePerson() {
-        chkAll()
+        chkData()
 
-        execute("""
+        chkOp("""
             create city ( 'New York' );
             create city ( 'San Francisco' );
             create city ( 'Los Angeles' );
         """.trimIndent())
-        chkNew("city(1,New York)", "city(2,San Francisco)", "city(3,Los Angeles)")
+        chkDataNew("city(1,New York)", "city(2,San Francisco)", "city(3,Los Angeles)")
 
-        execute("create person ( name = 'James', city @ { 'Los Angeles' }, street = 'Evergreen Ave', house = 5, score = 100 );")
-        chkNew("person(4,James,3,Evergreen Ave,5,100)")
+        chkOp("create person ( name = 'James', city @ { 'Los Angeles' }, street = 'Evergreen Ave', house = 5, score = 100 );")
+        chkDataNew("person(4,James,3,Evergreen Ave,5,100)")
 
-        execute("create person ( name = 'Mike', city @ { 'New York' }, street =  'Grand St', house = 7, score = 250 );")
-        chkNew("person(5,Mike,1,Grand St,7,250)")
+        chkOp("create person ( name = 'Mike', city @ { 'New York' }, street =  'Grand St', house = 7, score = 250 );")
+        chkDataNew("person(5,Mike,1,Grand St,7,250)")
     }
 
     @Test fun testDefaultValues() {
         tst.defs = listOf("class person { name: text; year: integer; score: integer = 777; status: text = 'Unknown'; }")
-        chkAll()
+        chkData()
 
-        executeErr("create person();", "ct_err:attr_missing:name,year")
-        executeErr("create person(name = 'Bob');", "ct_err:attr_missing:year")
-        executeErr("create person(year = 1980);", "ct_err:attr_missing:name")
-        chkNew()
+        chkOp("create person();", "ct_err:attr_missing:name,year")
+        chkOp("create person(name = 'Bob');", "ct_err:attr_missing:year")
+        chkOp("create person(year = 1980);", "ct_err:attr_missing:name")
+        chkDataNew()
 
-        execute("create person(name = 'Bob', year = 1980);")
-        chkNew("person(1,Bob,1980,777,Unknown)")
+        chkOp("create person(name = 'Bob', year = 1980);")
+        chkDataNew("person(1,Bob,1980,777,Unknown)")
 
-        execute("create person(name = 'Alice', year = 1985, score = 55555);")
-        chkNew("person(2,Alice,1985,55555,Unknown)")
+        chkOp("create person(name = 'Alice', year = 1985, score = 55555);")
+        chkDataNew("person(2,Alice,1985,55555,Unknown)")
 
-        execute("create person(name = 'Trudy', year = 2000, status = 'Ready');")
-        chkNew("person(3,Trudy,2000,777,Ready)")
+        chkOp("create person(name = 'Trudy', year = 2000, status = 'Ready');")
+        chkDataNew("person(3,Trudy,2000,777,Ready)")
 
-        execute("create person(name = 'Will', year = 1990, status = 'Busy', score = 1000);")
-        chkNew("person(4,Will,1990,1000,Busy)")
+        chkOp("create person(name = 'Will', year = 1990, status = 'Busy', score = 1000);")
+        chkDataNew("person(4,Will,1990,1000,Busy)")
     }
 
     @Test fun testDefaultValueTypeErr() {
-        classDefErr("class person { name: text; year: integer = 'Hello'; }", "ct_err:attr_type:year:integer:text")
-        classDefErr("class person { name: text = 12345; year: integer; }", "ct_err:attr_type:name:text:integer")
+        tst.defs = listOf()
+        chkCompile("class person { name: text; year: integer = 'Hello'; }", "ct_err:attr_type:year:integer:text")
+        chkCompile("class person { name: text = 12345; year: integer; }", "ct_err:attr_type:name:text:integer")
     }
 
     @Test fun testDefaultValueVariable() {
@@ -76,46 +72,43 @@ class CreateTest {
                 "class default_score { mutable value: integer; }",
                 "class person { name: text; score: integer = default_score@{}.value; }"
         )
-        chkAll()
+        chkData()
 
-        execute("create default_score( 100 );")
-        chkNew("default_score(1,100)")
+        chkOp("create default_score( 100 );")
+        chkDataNew("default_score(1,100)")
 
-        execute("create person('Bob');")
-        chkNew("person(2,Bob,100)")
+        chkOp("create person('Bob');")
+        chkDataNew("person(2,Bob,100)")
 
-        execute("update default_score @ {} ( value = 555 );")
-        chkAll("default_score(1,555)", "person(2,Bob,100)")
+        chkOp("update default_score @ {} ( value = 555 );")
+        chkData("default_score(1,555)", "person(2,Bob,100)")
 
-        execute("create person('Alice');")
-        chkNew("person(3,Alice,555)")
+        chkOp("create person('Alice');")
+        chkDataNew("person(3,Alice,555)")
     }
 
     @Test fun testErr() {
-        executeErr("create foo(x = 123);", "ct_err:unknown_class:foo")
+        chkOp("create foo(x = 123);", "ct_err:unknown_class:foo")
 
-        executeErr("create city(foo = 123);", "ct_err:attr_unknown_name:foo")
+        chkOp("create city(foo = 123);", "ct_err:attr_unknown_name:foo")
 
-        executeErr("create city(name = 'New York', name = 'New York');", "ct_err:attr_dup_name:name")
-        executeErr("create city(name = 'New York', name = 'New Orlean');", "ct_err:attr_dup_name:name")
+        chkOp("create city(name = 'New York', name = 'New York');", "ct_err:attr_dup_name:name")
+        chkOp("create city(name = 'New York', name = 'New Orlean');", "ct_err:attr_dup_name:name")
     }
 
     @Test fun testDotAttribute() {
         tst.defs = listOf("class person { name: text; year: integer; score: integer = 777; status: text = 'Unknown'; }")
-        chkAll()
+        chkData()
 
-        execute("create person(.name = 'Bob', .year = 1980);")
-        chkNew("person(1,Bob,1980,777,Unknown)")
+        chkOp("create person(.name = 'Bob', .year = 1980);")
+        chkDataNew("person(1,Bob,1980,777,Unknown)")
     }
 
-    private fun execute(code: String) = tst.execOp(code)
-    private fun executeErr(code: String, expected: String) = tst.chkOp(code, expected)
+    @Test fun testNoAttributes() {
+        tst.defs = listOf("class person {}")
+        chkData()
 
-    private fun chkAll(vararg expected: String) = tst.chkData(expected.toList())
-    private fun chkNew(vararg expected: String) = tst.chkDataNew(expected.toList())
-
-    private fun classDefErr(code: String, expected: String) {
-        val actual = RellTestUtils.processModule(code) { "OK" }
-        assertEquals(expected, actual)
+        chkOp("create person();")
+        chkData("person(1)")
     }
 }

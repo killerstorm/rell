@@ -1,5 +1,6 @@
 package net.postchain.rell
 
+import net.postchain.gtx.GTXNull
 import net.postchain.rell.model.*
 import net.postchain.rell.parser.C_Error
 import net.postchain.rell.parser.C_Utils
@@ -14,6 +15,8 @@ import java.io.File
 import java.lang.UnsupportedOperationException
 import kotlin.system.exitProcess
 
+private val SQL_MAPPER = Rt_SqlMapper(0)
+
 fun main(args: Array<String>) {
     val argsEx = parseArgs(args)
 
@@ -27,7 +30,7 @@ fun main(args: Array<String>) {
 
     runWithSql(argsEx.dburl) { sqlExec ->
         if (argsEx.resetdb) {
-            SqlUtils.resetDatabase(module, sqlExec)
+            SqlUtils.resetDatabase(sqlExec, module, SQL_MAPPER, true, false)
             println("Database reset done")
         }
         routine(sqlExec)
@@ -107,7 +110,7 @@ private fun findRoutine(module: R_Module, name: String): Pair<R_Routine, Rt_OpCo
         exitProcess(1)
     } else if (oper != null) {
         val time = System.currentTimeMillis() / 1000
-        return Pair(oper, Rt_OpContext(time, listOf()))
+        return Pair(oper, Rt_OpContext(time, -1, listOf()))
     } else if (query != null) {
         return Pair(query, null)
     } else {
@@ -117,7 +120,8 @@ private fun findRoutine(module: R_Module, name: String): Pair<R_Routine, Rt_OpCo
 }
 
 private fun callRoutine(sqlExec: SqlExecutor, module: R_Module, op: R_Routine, opCtx: Rt_OpContext?, args: List<Rt_Value>) {
-    val globalCtx = Rt_GlobalContext(StdoutRtPrinter, LogRtPrinter, sqlExec, opCtx)
+    val chainCtx = Rt_ChainContext(GTXNull, Rt_NullValue)
+    val globalCtx = Rt_GlobalContext(StdoutRtPrinter, LogRtPrinter, sqlExec, SQL_MAPPER, opCtx, chainCtx)
     val modCtx = Rt_ModuleContext(globalCtx, module)
     op.callTop(modCtx, args)
 }

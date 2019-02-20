@@ -1,0 +1,150 @@
+RELEASE NOTES 0.7.0 (2019-02-20)
+
+
+1. Object
+
+Objects are singleton classes (like objects in Kotlin and Scala):
+
+object state {
+    mutable x: integer = 0;
+    mutable s: text = 'n/a';
+}
+
+Reading attributes of an object:
+
+print(state.x);
+print(state.s);
+
+Modifying an object:
+
+update state ( x += 5, s = 'Updated' );
+
+or
+
+state.x += 10;
+state.s = 'Updated';
+
+
+2. Enum
+
+enum currency {
+    USD,
+    EUR,
+    GBP
+}
+
+val c: currency = currency.USD;
+print(c.name);
+print(c.value);
+
+val allCurrencies: list<currency> = currency.values();
+val curByName: currency = currency.value('EUR');
+val curByValue: currency = currency.value(2);
+
+
+3. Operator "if"
+
+Like in Kotlin, "if" can be used in expressions:
+
+val max = if (a >= b) a else b;
+return max;
+
+
+4. Update/delete accepts expression
+
+val users = user @* { .company.name = 'Google' };
+update users ( score += 100 );
+delete users;
+
+
+5. Cardinality in update/delete statements
+
+Now one of operators "@", "@?", "@+", "@*" must be used in update/delete to specify the number of objects to modify.
+If the actual number of objects does not match the cardinality operator, a run-time error is thrown.
+
+update user @* { .company.name == 'Bad Company' } ( salary -= 1000 );
+
+
+6. Short attribute update notation
+
+Instead of writing
+
+val u = user @ { .name == 'Bob' };
+update u ( salary += 1000 );
+
+One can simply write:
+
+val u = user @ { .name == 'Bob' };
+u.salary += 1000;
+
+The assignment (operator +=) will be translated to an update statement, so the two code fragments are equivalent.
+Any assignment operators are allowed: =, +=, -=, *=, /=, etc.
+
+
+7. Changed syntax of multi-class update/delete
+
+Using the same syntax as for @-expressions:
+
+update (user, company) @* { user.company_name == company.name } ( user.work_address = company.address ) ;
+delete (u: user) @* { u.name == 'Bob' };
+
+Old syntax was:
+
+update user (company) @* { user.company_name == company.name } ( user.work_address = company.address ) ;
+delete u: user @* { u.name == 'Bob' };
+
+In the old syntax, the first class (the one being updated/deleted) was specified without brackets, and extra classes
+required brackets. In the new syntax, all classes must be in brackets, if there is more than one class, or if a class
+alias is specified. The old syntax will not compile now.
+
+
+8. System classes "block" and "transaction":
+
+class block {
+    block_height: integer;
+    block_rid: byte_array;
+    timestamp;
+}
+
+class transaction {
+    tx_rid: byte_array;
+    tx_hash: byte_array;
+    tx_data: byte_array;
+    block;
+}
+
+
+9. Library: "op_context.transaction"
+
+Returns the transaction currently being built.
+
+
+10. Log annotation:
+
+class user (log) {
+    name: text;
+}
+
+Effects:
+
+- Implicit "transaction" reference.
+- All attributes are immutable.
+- Cannot delete objects.
+
+
+11. Library: "chain_context"
+
+chain_context.raw_config: GTXValue
+
+chain_context.args: module_args?
+
+Special user-defined record type "module_args": if defined, "chain_context.args" is set to a parameter passed via
+GTX module configuration.
+
+
+12. Table name prefixing (multiple blockchain support)
+
+SQL table for a class or object X will be called c{BLOCKCHAIN_ID}_X, not X (e. g. "c0_user" instead of "user").
+This allows to avoid table name conflicts when running multiple blockchains on a single database.
+
+System tables "blocks" and "transactions" will be shared by different blockchains, and their names will not be prefixed.

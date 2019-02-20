@@ -199,6 +199,10 @@ class C_StdSysMemberFunction(val cases: List<C_MemberFuncCase>): C_SysMemberFunc
 }
 
 class C_GlobalFuncTable(private val map: Map<String, C_GlobalFunction>) {
+    companion object {
+        val EMPTY = C_GlobalFuncTable(mapOf())
+    }
+
     fun get(name: String): C_GlobalFunction? {
         return map[name]
     }

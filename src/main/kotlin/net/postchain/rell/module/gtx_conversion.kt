@@ -2,13 +2,12 @@ package net.postchain.rell.module
 
 import net.postchain.core.UserMistake
 import net.postchain.gtx.*
-import net.postchain.rell.hexStringToByteArray
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
-import net.postchain.rell.sql.ROWID_COLUMN
 import net.postchain.rell.sql.SqlExecutor
 import org.apache.commons.collections4.MultiValuedMap
 import org.apache.commons.collections4.multimap.HashSetValuedHashMap
+import java.lang.IllegalArgumentException
 import java.lang.UnsupportedOperationException
 
 val GTX_QUERY_HUMAN = true
@@ -21,15 +20,15 @@ class GtxToRtContext {
         objectIds.put(cls, rowid)
     }
 
-    fun finish(sqlExec: SqlExecutor) {
+    fun finish(sqlExec: SqlExecutor, sqlMapper: Rt_SqlMapper) {
         for (rClass in objectIds.keySet()) {
             val rowids = objectIds.get(rClass)
-            checkRowids(sqlExec, rClass, rowids)
+            checkRowids(sqlExec, sqlMapper, rClass, rowids)
         }
     }
 
-    private fun checkRowids(sqlExec: SqlExecutor, rClass: R_Class, rowids: Collection<Long>) {
-        val existingIds = selectExistingIds(sqlExec, rClass, rowids)
+    private fun checkRowids(sqlExec: SqlExecutor, sqlMapper: Rt_SqlMapper, rClass: R_Class, rowids: Collection<Long>) {
+        val existingIds = selectExistingIds(sqlExec, sqlMapper, rClass, rowids)
         val missingIds = rowids.toSet() - existingIds
         if (!missingIds.isEmpty()) {
             val s = missingIds.toList().sorted()
@@ -38,11 +37,13 @@ class GtxToRtContext {
         }
     }
 
-    private fun selectExistingIds(sqlExec: SqlExecutor, rClass: R_Class, rowids: Collection<Long>): Set<Long> {
+    private fun selectExistingIds(sqlExec: SqlExecutor, sqlMapper: Rt_SqlMapper, rClass: R_Class, rowids: Collection<Long>): Set<Long> {
         val buf = StringBuilder()
-        buf.append("SELECT \"").append(ROWID_COLUMN).append("\"")
-        buf.append(" FROM \"").append(rClass.name).append("\"")
-        buf.append(" WHERE \"").append(ROWID_COLUMN).append("\" IN (")
+        val table = rClass.mapping.table(sqlMapper)
+        val col = rClass.mapping.rowidColumn
+        buf.append("SELECT \"").append(col).append("\"")
+        buf.append(" FROM \"").append(table).append("\"")
+        buf.append(" WHERE \"").append(col).append("\" IN (")
         rowids.joinTo(buf, ",")
         buf.append(")")
         val sql = buf.toString()
@@ -117,7 +118,7 @@ object GtxRtConversion_Json: GtxRtConversion() {
     override fun gtxToRt(ctx: GtxToRtContext, gtx: GTXValue, human: Boolean) = gtxToJson(gtx)
 }
 
-class GtxRtConversion_Object(val type: R_ClassType): GtxRtConversion() {
+class GtxRtConversion_Class(val type: R_ClassType): GtxRtConversion() {
     override fun directHuman() = true
     override fun directCompact() = true
 
@@ -126,7 +127,7 @@ class GtxRtConversion_Object(val type: R_ClassType): GtxRtConversion() {
     override fun gtxToRt(ctx: GtxToRtContext, gtx: GTXValue, human: Boolean): Rt_Value {
         val rowid = gtxToInteger(gtx)
         ctx.trackObject(type.rClass, rowid)
-        return Rt_ObjectValue(type, rowid)
+        return Rt_ClassValue(type, rowid)
     }
 }
 
@@ -184,6 +185,38 @@ class GtxRtConversion_Record(val type: R_RecordType): GtxRtConversion() {
             val typeName = type.name
             throw Rt_GtxValueError("record_size:$typeName:$expectedCount:$actualCount",
                     "Wrong GTX array size for record $typeName: $actualCount instead of $expectedCount")
+        }
+    }
+}
+
+class GtxRtConversion_Enum(val type: R_EnumType): GtxRtConversion() {
+    override fun directHuman() = true
+    override fun directCompact() = true
+
+    override fun rtToGtx(rt: Rt_Value, human: Boolean): GTXValue {
+        val e = rt.asEnum()
+        if (human) {
+            return StringGTXValue(e.name)
+        } else {
+            return IntegerGTXValue(e.value.toLong())
+        }
+    }
+
+    override fun gtxToRt(ctx: GtxToRtContext, gtx: GTXValue, human: Boolean): Rt_Value {
+        if (human) {
+            val name = gtxToString(gtx)
+            val attr = type.attr(name)
+            if (attr == null) {
+                throw errGtxType("enum[${type.name}]", gtx, "Invalid enum value: '$name'")
+            }
+            return Rt_EnumValue(type, attr)
+        } else {
+            val value = gtxToInteger(gtx)
+            val attr = type.attr(value)
+            if (attr == null) {
+                throw errGtxType("enum[${type.name}]", gtx, "Invalid enum value: $value")
+            }
+            return Rt_EnumValue(type, attr)
         }
     }
 }
@@ -371,15 +404,13 @@ private fun gtxToString(gtx: GTXValue): String {
 }
 
 private fun gtxToByteArray(gtx: GTXValue): ByteArray {
-    val str = try {
-        gtx.asString()
+    try {
+        // TODO: This allows interpreting string as byte array.
+        // This is a temporary measure needed because of deficiency of the query API.
+        // Auto-conversion should be removed later.
+        return gtx.asByteArray(true)
     } catch (e: UserMistake) {
         throw errGtxType("byte_array", gtx, e)
-    }
-    try {
-        return str.hexStringToByteArray()
-    } catch (e: IllegalArgumentException) {
-        throw errGtxType("byte_array", gtx, "Type error: invalid byte array string")
     }
 }
 

@@ -56,9 +56,11 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val CLASS by relltok("class")
     private val KEY by relltok("key")
     private val INDEX by relltok("index")
+    private val OBJECT by relltok("object")
     private val OPERATION by relltok("operation")
     private val QUERY by relltok("query")
     private val RECORD by relltok("record")
+    private val ENUM by relltok("enum")
     private val FUNCTION by relltok("function")
     private val VAL by relltok("val")
     private val VAR by relltok("var")
@@ -138,12 +140,24 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     private val relClauses by zeroOrMore(anyRelClause)
 
-    private val classDef by (-CLASS * id * -LCURL * relClauses * -RCURL) map { (name, clauses) ->
-        S_ClassDefinition(name, clauses)
+    private val classAnnotations by -LPAR * separatedTerms(id, COMMA, false) * -RPAR
+
+    private val classDef by ( -CLASS * id * optional(classAnnotations) * -LCURL * relClauses * -RCURL ) map {
+        (name, annotations, clauses) ->
+        S_ClassDefinition(name, annotations ?: listOf(), clauses)
     }
 
-    private val recordDef by (-RECORD * id * -LCURL * zeroOrMore(relAttributeClause) * -RCURL) map { (name, attrs) ->
+    private val objectDef by ( -OBJECT * id * -LCURL * zeroOrMore(anyRelClause) * -RCURL ) map { (name, clauses) ->
+        S_ObjectDefinition(name, clauses)
+    }
+
+    private val recordDef by ( -RECORD * id * -LCURL * zeroOrMore(relAttributeClause) * -RCURL ) map { (name, attrs) ->
         S_RecordDefinition(name, attrs)
+    }
+
+    private val enumDef by ( -ENUM * id * -LCURL * separatedTerms(id, COMMA, true) * optional(COMMA) * -RCURL ) map {
+        (name, values) ->
+        S_EnumDefinition(name, values)
     }
 
     private val binaryOperator = (
@@ -219,11 +233,11 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val atExprFrom by ( atExprFromSingle or atExprFromMulti )
 
     private val atExprAt by (
-            ( AT * QUESTION map { Pair(true, false) } )
-                    or ( AT * MUL map { Pair(true, true) } )
-                    or ( AT * PLUS map { Pair(false, true) } )
-                    or ( AT map { Pair(false, false) } )
-            )
+            ( AT * QUESTION map { S_AtCardinality.ZERO_ONE } )
+            or ( AT * MUL map { S_AtCardinality.ZERO_MANY } )
+            or ( AT * PLUS map { S_AtCardinality.ONE_MANY } )
+            or ( AT map { S_AtCardinality.ONE } )
+    )
 
     private val atExprWhatSimple by oneOrMore((-DOT * id)) map { path -> S_AtExprWhatSimple(path) }
 
@@ -248,10 +262,9 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val atExprLimit by ( -LIMIT * _expression )
 
     private val atExpr by ( atExprFrom * atExprAt * atExprWhere * optional(atExprWhat) * optional(atExprLimit) ) map {
-        ( from, zeroMany, where, whatOpt, limit ) ->
-        val (zero, many) = zeroMany
+        ( from, cardinality, where, whatOpt, limit ) ->
         val what = if (whatOpt == null) S_AtExprWhatDefault() else whatOpt
-        S_AtExpr(from.pos, from.value, what, where, limit, zero, many)
+        S_AtExpr(from.pos, cardinality, from.value, where, what, limit)
     }
 
     private val listLiteralExpr by ( LBRACK * separatedTerms(_expression, COMMA, true) * -RBRACK ) map {
@@ -292,9 +305,8 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         S_CreateExpr(S_Pos(kw), className, exprs)
     }
 
-    private val baseExprHead by (
-            atExpr
-            or nameExpr
+    private val baseExprHeadNoAt by (
+            nameExpr
             or attrExpr
             or literalExpr
             or parenthesesExpr
@@ -305,6 +317,8 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
             or setExpr
             or mapExpr
     )
+
+    private val baseExprHead by ( atExpr or baseExprHeadNoAt )
 
     private val callArg by ( optional(id * -ASSIGN) * _expression ) map {
         (name, expr) -> S_NameExprPair(name, expr)
@@ -327,6 +341,10 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         ( head, tails ) -> tailsToExpr(head, tails)
     }
 
+    private val baseExprNoCallNoAt by ( baseExprHeadNoAt * zeroOrMore(baseExprTailNoCall) ) map {
+        ( head, tails ) -> tailsToExpr(head, tails)
+    }
+
     private val callExprTail by ( oneOrMore(zeroOrMore(baseExprTailNoCall) * baseExprTailCall )) map {
         tails ->
         val list = mutableListOf<BaseExprTail>()
@@ -341,7 +359,12 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         (head, tails) -> tailsToExpr(head, tails)
     }
 
-    private val operandExpr: Parser<S_Expr> by baseExpr
+    private val ifExpr by ( IF * -LPAR * _expression * -RPAR * _expression * -ELSE * _expression ) map {
+        ( pos, cond, trueExpr, falseExpr ) ->
+        S_IfExpr(S_Pos(pos), cond, trueExpr, falseExpr)
+    }
+
+    private val operandExpr: Parser<S_Expr> by ( baseExpr or ifExpr )
 
     private val unaryExpr by ( optional(unaryOperator) * operandExpr ) map { (op, expr) ->
         if (op == null) expr else S_UnaryExpr(op.pos, S_Node(op.pos, op.value), expr)
@@ -409,6 +432,14 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         listOf(targetClass) + (if (joinClasses == null) listOf() else joinClasses.value)
     }
 
+    private val updateTargetAt by ( atExprFrom * atExprAt * atExprWhere ) map {
+        (from, cardinality, where) -> S_UpdateTarget_Simple(cardinality, from.value, where)
+    }
+
+    private val updateTargetExpr by baseExprNoCallNoAt map { expr -> S_UpdateTarget_Expr(expr) }
+
+    private val updateTarget by ( updateTargetAt or updateTargetExpr )
+
     private val updateWhatNameOp by ( -optional(DOT) * id * assignOp ) map { (name, op) -> Pair(name, op) }
 
     private val updateWhatExpr by ( optional(updateWhatNameOp) * expression ) map {
@@ -423,12 +454,12 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     private val updateWhat by ( -LPAR * separatedTerms(updateWhatExpr, COMMA, true) * -RPAR )
 
-    private val updateStatement by (UPDATE * updateFrom * -AT * atExprWhere * updateWhat * -SEMI) map {
-        (kw, from, where, what) -> S_UpdateStatement(S_Pos(kw), from, where, what)
+    private val updateStatement by (UPDATE * updateTarget * updateWhat * -SEMI) map {
+        (kw, target, what) -> S_UpdateStatement(S_Pos(kw), target, what)
     }
 
-    private val deleteStatement by (DELETE * updateFrom * -AT * atExprWhere * -SEMI) map {
-        (kw, from, where) -> S_DeleteStatement(S_Pos(kw), from, where)
+    private val deleteStatement by (DELETE * updateTarget * -SEMI) map {
+        (kw, target) -> S_DeleteStatement(S_Pos(kw), target)
     }
 
     private val statement: Parser<S_Statement> by (
@@ -450,7 +481,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     private val formalParameters by ( -LPAR * separatedTerms(relField, COMMA, true) * -RPAR )
 
-    private val opDefinition by (-OPERATION * id * formalParameters * blockStatement) map {
+    private val opDef by (-OPERATION * id * formalParameters * blockStatement) map {
         (name, params, body) ->
         S_OpDefinition(name, params, body)
     }
@@ -459,15 +490,15 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val functionBodyFull by blockStatement map { stmt -> S_FunctionBodyFull(stmt) }
     private val functionBody by ( functionBodyShort or functionBodyFull )
 
-    private val queryDefinition by (-QUERY * id * formalParameters * optional(-COLON * type) * functionBody) map {
+    private val queryDef by (-QUERY * id * formalParameters * optional(-COLON * type) * functionBody) map {
         (name, params, type, body) -> S_QueryDefinition(name, params, type, body)
     }
 
-    private val functionDefinition by (-FUNCTION * id * formalParameters * optional(-COLON * type) * functionBody) map {
+    private val functionDef by (-FUNCTION * id * formalParameters * optional(-COLON * type) * functionBody) map {
         (name, params, type, body) -> S_FunctionDefinition(name, params, type, body)
     }
 
-    private val anyDef by ( classDef or recordDef or opDefinition or queryDefinition or functionDefinition )
+    private val anyDef by ( classDef or objectDef or recordDef or enumDef or opDef or queryDef or functionDef )
 
     override val rootParser by zeroOrMore(anyDef) map { S_ModuleDefinition(it) }
 

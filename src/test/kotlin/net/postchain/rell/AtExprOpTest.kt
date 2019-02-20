@@ -1,21 +1,49 @@
 package net.postchain.rell
 
-import org.junit.After
+import net.postchain.rell.test.RellCodeTester
+import net.postchain.rell.test.SqlTestUtils
 import kotlin.test.assertEquals
 
 class AtExprOpTest: AbstractOpTest() {
+    private val dataAttrs = listOf(
+            Triple("b", "boolean", "false"),
+            Triple("i", "integer", "0"),
+            Triple("t", "text", "''"),
+            Triple("ba", "byte_array", "''"),
+            Triple("j", "json", "'{}'"),
+            Triple("user", "user", "1000"),
+            Triple("company", "company", "100")
+    )
+
+    private val dataAttrCount = 3
+
+    private val defaultValues = dataAttrs
+            .flatMap { attr -> ( 1 .. dataAttrCount ).map { Pair(attr, it) } }
+            .map { (attr, i) -> ""
+                val (field, _, value) = attr
+                Pair(field + i, value)
+            }
+            .toMap()
+
+    private val typeToField = dataAttrs
+            .map { attr -> ""
+                val (field, type, _) = attr
+                Pair(type, field)
+            }
+            .toMap()
+
+    private val dataAttrDefs = dataAttrs
+            .flatMap { attr -> ( 1 .. dataAttrCount ).map { Pair(attr, it) } }
+            .map { (attr, i) -> ""
+                val (field, type, _) = attr
+                "$field$i: $type;"
+            }
+            .joinToString("")
+
     private val classDefs = listOf(
             "class company { name: text; }",
             "class user { name: text; company; }",
-            """class optest {
-                    b1: boolean; b2: boolean;
-                    i1: integer; i2: integer;
-                    t1: text; t2: text;
-                    ba1: byte_array; ba2: byte_array;
-                    j1: json; j2: json;
-                    user1: user; user2: user;
-                    company1: company; company2: company;
-            }""".trimMargin()
+            "class optest { $dataAttrDefs }"
     )
 
     private val inserts = listOf(
@@ -26,36 +54,7 @@ class AtExprOpTest: AbstractOpTest() {
             Ins.user(2000, "Steve Jobs", 200)
     )
 
-    private val defaultValues = mapOf(
-            "b1" to "false",
-            "b2" to "false",
-            "i1" to "0",
-            "i2" to "0",
-            "t1" to "''",
-            "t2" to "''",
-            "ba1" to "''",
-            "ba2" to "''",
-            "j1" to "'{}'",
-            "j2" to "'{}'",
-            "user1" to "1000",
-            "user2" to "2000",
-            "company1" to "100",
-            "company2" to "200"
-    )
-
-    private val typeToField = mapOf(
-            "boolean" to "b",
-            "integer" to "i",
-            "text" to "t",
-            "byte_array" to "ba",
-            "json" to "j",
-            "user" to "user",
-            "company" to "company"
-    )
-
-    private val tst = RellSqlTester(classDefs = classDefs, inserts = inserts)
-
-    @After fun after() = tst.destroy()
+    private val tst = resource(RellCodeTester(classDefs = classDefs, inserts = inserts))
 
     override fun chkExpr(expr: String, args: List<TstVal>, expected: Boolean) {
         val (expr2, values) = transformExpr(expr, args)
@@ -127,7 +126,7 @@ class AtExprOpTest: AbstractOpTest() {
         val columns = values.keys.toList()
         val insColumns = columns.joinToString(",")
         val insValues = "5," + columns.map{ values[it] }.joinToString(",")
-        val insert = SqlTestUtils.mkins("optest", insColumns, insValues)
+        val insert = SqlTestUtils.mkins("c0_optest", insColumns, insValues)
         return this.inserts + insert
     }
 
@@ -170,8 +169,8 @@ class AtExprOpTest: AbstractOpTest() {
     }
 
     private object Ins {
-        fun company(id: Int, name: String): String = mkins("company", "name", "$id, '$name'")
-        fun user(id: Int, name: String, company: Int): String = mkins("user", "name,company", "$id, '$name', $company")
+        fun company(id: Int, name: String): String = mkins("c0_company", "name", "$id, '$name'")
+        fun user(id: Int, name: String, company: Int): String = mkins("c0_user", "name,company", "$id, '$name', $company")
         val mkins = SqlTestUtils::mkins
     }
 }

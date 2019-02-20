@@ -1,6 +1,6 @@
 package net.postchain.rell.lib
 
-import net.postchain.rell.BaseRellTest
+import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 
 class LibMapTest: BaseRellTest(false) {
@@ -208,8 +208,8 @@ class LibMapTest: BaseRellTest(false) {
     }
 
     @Test fun testFor() {
-        tst.execOp("for (k in ['Bob':123,'Alice':456,'Trudy':789]) print(k);")
-        tst.chkStdout("Bob", "Alice", "Trudy")
+        chkOp("for (k in ['Bob':123,'Alice':456,'Trudy':789]) print(k);")
+        chkStdout("Bob", "Alice", "Trudy")
     }
 
     @Test fun testMutableKey() {
