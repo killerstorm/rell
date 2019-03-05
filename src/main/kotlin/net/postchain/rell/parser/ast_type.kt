@@ -3,8 +3,8 @@ package net.postchain.rell.parser
 import net.postchain.rell.model.*
 
 sealed class S_Type {
-    abstract fun compile(ctx: C_ModuleContext): R_Type
-    fun compile(ctx: C_ExprContext): R_Type = compile(ctx.blkCtx.entCtx.modCtx)
+    abstract fun compile(ctx: C_NamespaceContext): R_Type
+    fun compile(ctx: C_ExprContext): R_Type = compile(ctx.blkCtx.entCtx.nsCtx)
 
     companion object {
         fun match(dstType: R_Type, srcType: R_Type, errPos: S_Pos, errCode: String, errMsg: String) {
@@ -20,12 +20,12 @@ sealed class S_Type {
     }
 }
 
-class S_NameType(val name: S_Name): S_Type() {
-    override fun compile(ctx: C_ModuleContext): R_Type = ctx.getType(name)
+class S_NameType(val names: List<S_Name>): S_Type() {
+    override fun compile(ctx: C_NamespaceContext): R_Type = ctx.getType(names)
 }
 
 class S_NullableType(val pos: S_Pos, val valueType: S_Type): S_Type() {
-    override fun compile(ctx: C_ModuleContext): R_Type {
+    override fun compile(ctx: C_NamespaceContext): R_Type {
         val rValueType = valueType.compile(ctx)
         if (rValueType is R_NullableType) throw C_Error(pos, "type_nullable_nullable", "Nullable nullable (T??) is not allowed")
         return R_NullableType(rValueType)
@@ -33,7 +33,7 @@ class S_NullableType(val pos: S_Pos, val valueType: S_Type): S_Type() {
 }
 
 class S_TupleType(val fields: List<Pair<S_Name?, S_Type>>): S_Type() {
-    override fun compile(ctx: C_ModuleContext): R_Type {
+    override fun compile(ctx: C_NamespaceContext): R_Type {
         val names = mutableSetOf<String>()
         for ((name, _) in fields) {
             val nameStr = name?.str
@@ -48,7 +48,7 @@ class S_TupleType(val fields: List<Pair<S_Name?, S_Type>>): S_Type() {
 }
 
 class S_ListType(val pos: S_Pos, val element: S_Type): S_Type() {
-    override fun compile(ctx: C_ModuleContext): R_Type {
+    override fun compile(ctx: C_NamespaceContext): R_Type {
         val rElement = element.compile(ctx)
         C_Utils.checkUnitType(pos, rElement, "type_list_unit", "Invalid list element type")
         return R_ListType(rElement)
@@ -56,7 +56,7 @@ class S_ListType(val pos: S_Pos, val element: S_Type): S_Type() {
 }
 
 class S_SetType(val pos: S_Pos, val element: S_Type): S_Type() {
-    override fun compile(ctx: C_ModuleContext): R_Type {
+    override fun compile(ctx: C_NamespaceContext): R_Type {
         val rElement = element.compile(ctx)
         C_Utils.checkUnitType(pos, rElement, "type_set_unit", "Invalid set element type")
         C_Utils.checkSetElementType(pos, rElement)
@@ -65,7 +65,7 @@ class S_SetType(val pos: S_Pos, val element: S_Type): S_Type() {
 }
 
 class S_MapType(val pos: S_Pos, val key: S_Type, val value: S_Type): S_Type() {
-    override fun compile(ctx: C_ModuleContext): R_Type {
+    override fun compile(ctx: C_NamespaceContext): R_Type {
         val rKey = key.compile(ctx)
         val rValue = value.compile(ctx)
         C_Utils.checkUnitType(pos, rKey, "type_map_key_unit", "Invalid map key type")

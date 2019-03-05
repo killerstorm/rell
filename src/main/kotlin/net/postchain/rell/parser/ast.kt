@@ -21,12 +21,12 @@ class S_Name(val pos: S_Pos, val str: String) {
 }
 
 class S_NameTypePair(val name: S_Name, val type: S_Type?) {
-    fun compileType(ctx: C_ModuleContext): R_Type {
+    fun compileType(ctx: C_NamespaceContext): R_Type {
         if (type != null) {
             return type.compile(ctx)
         }
 
-        val rType = ctx.getTypeOpt(name)
+        val rType = ctx.getTypeOpt(listOf(name))
         if (rType == null) {
             throw C_Error(name.pos, "unknown_name_type:${name.str}",
                     "Type for '${name.str}' not specified and no type called '${name.str}'")
@@ -91,22 +91,21 @@ class S_IndexClause(pos: S_Pos, attrs: List<S_NameTypePair>): S_KeyIndexClause(p
 }
 
 sealed class S_Definition(val name: S_Name) {
-    abstract fun compile(ctx: C_ModuleContext, entityIndex: Int)
+    abstract fun compile(ctx: C_NamespaceContext, entityIndex: Int)
 }
 
 class S_ClassDefinition(name: S_Name, val annotations: List<S_Name>, val clauses: List<S_RelClause>): S_Definition(name) {
-    override fun compile(ctx: C_ModuleContext, entityIndex: Int) {
-        ctx.checkTypeName(name)
-
+    override fun compile(ctx: C_NamespaceContext, entityIndex: Int) {
+        val fullName = ctx.registerName(name, C_NameType.CLASS)
         val rFlags = compileFlags()
 
-        val sqlTable = classNameToSqlTable(name.str)
+        val sqlTable = classNameToSqlTable(fullName)
         val rMapping = R_ClassSqlMapping(sqlTable, false, ROWID_COLUMN, true)
 
-        val rClass = R_Class(name.str, rFlags, rMapping)
+        val rClass = R_Class(fullName, rFlags, rMapping)
         ctx.addClass(name, rClass)
 
-        ctx.classesPass.add {
+        ctx.modCtx.onPass(C_ModulePass.DEFINITIONS) {
             classesPass(ctx, entityIndex, rClass)
         }
     }
@@ -131,12 +130,12 @@ class S_ClassDefinition(name: S_Name, val annotations: List<S_Name>, val clauses
         return R_ClassFlags(false, true, true, !log, log)
     }
 
-    private fun classesPass(ctx: C_ModuleContext, entityIndex: Int, rClass: R_Class) {
+    private fun classesPass(ctx: C_NamespaceContext, entityIndex: Int, rClass: R_Class) {
         val entCtx = C_EntityContext(ctx, C_EntityType.CLASS, entityIndex, null)
         val clsCtx = C_ClassContext(entCtx, name.str, rClass.flags.log)
 
         if (rClass.flags.log) {
-            clsCtx.addAttribute0("transaction", ctx.transactionClassType, false, false) {
+            clsCtx.addAttribute0("transaction", ctx.modCtx.transactionClassType, false, false) {
                 C_Ns_OpContext.transactionExpr(clsCtx.entCtx)
             }
         }
@@ -160,23 +159,23 @@ class S_ClassDefinition(name: S_Name, val annotations: List<S_Name>, val clauses
 }
 
 class S_ObjectDefinition(name: S_Name, val clauses: List<S_RelClause>): S_Definition(name) {
-    override fun compile(ctx: C_ModuleContext, entityIndex: Int) {
-        ctx.checkTypeName(name)
+    override fun compile(ctx: C_NamespaceContext, entityIndex: Int) {
+        val fullName = ctx.registerName(name, C_NameType.OBJECT)
 
-        val sqlTable = classNameToSqlTable(name.str)
+        val sqlTable = classNameToSqlTable(fullName)
 
         val classFlags = R_ClassFlags(true, false, true, false, false)
         val sqlMapping = R_ClassSqlMapping(sqlTable, false, ROWID_COLUMN, true)
-        val rClass = R_Class(name.str, classFlags, sqlMapping)
+        val rClass = R_Class(fullName, classFlags, sqlMapping)
         val rObject = R_Object(rClass, entityIndex)
-        ctx.addObject(rObject)
+        ctx.addObject(name, rObject)
 
-        ctx.classesPass.add {
+        ctx.modCtx.onPass(C_ModulePass.DEFINITIONS) {
             classesPass(ctx, entityIndex, rObject)
         }
     }
 
-    private fun classesPass(ctx: C_ModuleContext, entityIndex: Int, rObject: R_Object) {
+    private fun classesPass(ctx: C_NamespaceContext, entityIndex: Int, rObject: R_Object) {
         val entCtx = C_EntityContext(ctx, C_EntityType.OBJECT, entityIndex, null)
         val clsCtx = C_ClassContext(entCtx, name.str, false)
         S_ClassDefinition.compileClauses(clsCtx, clauses)
@@ -187,18 +186,18 @@ class S_ObjectDefinition(name: S_Name, val clauses: List<S_RelClause>): S_Defini
 }
 
 class S_RecordDefinition(name: S_Name, val attrs: List<S_AttributeClause>): S_Definition(name) {
-    override fun compile(ctx: C_ModuleContext, entityIndex: Int) {
-        ctx.checkRecordName(name)
+    override fun compile(ctx: C_NamespaceContext, entityIndex: Int) {
+        val fullName = ctx.registerName(name, C_NameType.RECORD)
 
-        val rType = R_RecordType(name.str)
+        val rType = R_RecordType(fullName)
         ctx.addRecord(C_Record(name, rType))
 
-        ctx.classesPass.add {
+        ctx.modCtx.onPass(C_ModulePass.DEFINITIONS) {
             classesPass(ctx, entityIndex, rType)
         }
     }
 
-    private fun classesPass(ctx: C_ModuleContext, entityIndex: Int, rType: R_RecordType) {
+    private fun classesPass(ctx: C_NamespaceContext, entityIndex: Int, rType: R_RecordType) {
         val entCtx = C_EntityContext(ctx, C_EntityType.RECORD, entityIndex, null)
         val clsCtx = C_ClassContext(entCtx, name.str, false)
         for (clause in attrs) {
@@ -211,8 +210,8 @@ class S_RecordDefinition(name: S_Name, val attrs: List<S_AttributeClause>): S_De
 }
 
 class S_EnumDefinition(name: S_Name, val attrs: List<S_Name>): S_Definition(name) {
-    override fun compile(ctx: C_ModuleContext, entityIndex: Int) {
-        ctx.checkTypeName(name)
+    override fun compile(ctx: C_NamespaceContext, entityIndex: Int) {
+        val fullName = ctx.registerName(name, C_NameType.ENUM)
 
         val set = mutableSetOf<String>()
         val rAttrs = mutableListOf<R_EnumAttr>()
@@ -224,8 +223,8 @@ class S_EnumDefinition(name: S_Name, val attrs: List<S_Name>): S_Definition(name
             rAttrs.add(R_EnumAttr(attr.str, rAttrs.size))
         }
 
-        val rEnum = R_EnumType(name.str, rAttrs.toList())
-        ctx.addEnum(rEnum)
+        val rEnum = R_EnumType(fullName, rAttrs.toList())
+        ctx.addEnum(name.str, rEnum)
     }
 }
 
@@ -235,25 +234,26 @@ class S_OpDefinition(
         val body: S_Statement
 ): S_Definition(name)
 {
-    override fun compile(ctx: C_ModuleContext, entityIndex: Int) {
-        ctx.functionsPass.add {
-            doCompile(ctx, entityIndex)
+    override fun compile(ctx: C_NamespaceContext, entityIndex: Int) {
+        val fullName = ctx.registerName(name, C_NameType.OPERATION)
+        ctx.checkTopNamespace(name.pos, C_NameType.OPERATION)
+
+        ctx.modCtx.onPass(C_ModulePass.EXPRESSIONS) {
+            doCompile(ctx, entityIndex, fullName)
         }
     }
 
-    private fun doCompile(ctx: C_ModuleContext, entityIndex: Int) {
-        ctx.checkOperationName(name)
-
+    private fun doCompile(ctx: C_NamespaceContext, entityIndex: Int, fullName: String) {
         val entCtx = C_EntityContext(ctx, C_EntityType.OPERATION, entityIndex, null)
         val rParams = compileExternalParams(ctx, entCtx.rootExprCtx, params)
         val rBody = body.compile(entCtx.rootExprCtx)
         val rCallFrame = entCtx.makeCallFrame()
 
-        if (ctx.globalCtx.gtx) {
+        if (ctx.modCtx.globalCtx.gtx) {
             checkGtxParams(params, rParams, GTX_OPERATION_HUMAN)
         }
 
-        val rOperation = R_Operation(name.str, rParams, rBody, rCallFrame)
+        val rOperation = R_Operation(fullName, rParams, rBody, rCallFrame)
         ctx.addOperation(rOperation)
     }
 }
@@ -264,15 +264,16 @@ class S_QueryDefinition(
         val retType: S_Type?,
         val body: S_FunctionBody
 ): S_Definition(name) {
-    override fun compile(ctx: C_ModuleContext, entityIndex: Int) {
-        ctx.functionsPass.add {
-            doCompile(ctx, entityIndex)
+    override fun compile(ctx: C_NamespaceContext, entityIndex: Int) {
+        val fullName = ctx.registerName(name, C_NameType.QUERY)
+        ctx.checkTopNamespace(name.pos, C_NameType.QUERY)
+
+        ctx.modCtx.onPass(C_ModulePass.EXPRESSIONS) {
+            doCompile(ctx, entityIndex, fullName)
         }
     }
 
-    private fun doCompile(ctx: C_ModuleContext, entityIndex: Int) {
-        ctx.checkOperationName(name)
-
+    private fun doCompile(ctx: C_NamespaceContext, entityIndex: Int, fullName: String) {
         val rExplicitRetType = retType?.compile(ctx)
 
         val entCtx = C_EntityContext(ctx, C_EntityType.QUERY, entityIndex, rExplicitRetType)
@@ -281,12 +282,12 @@ class S_QueryDefinition(
         val rCallFrame = entCtx.makeCallFrame()
         val rRetType = entCtx.actualReturnType()
 
-        if (ctx.globalCtx.gtx) {
+        if (ctx.modCtx.globalCtx.gtx) {
             checkGtxParams(params, rParams, GTX_QUERY_HUMAN)
             checkGtxResult(rRetType, GTX_QUERY_HUMAN)
         }
 
-        val rQuery = R_Query(name.str, rRetType, rParams, rBody, rCallFrame)
+        val rQuery = R_Query(fullName, rRetType, rParams, rBody, rCallFrame)
         ctx.addQuery(rQuery)
     }
 
@@ -322,14 +323,14 @@ abstract class S_FunctionBody {
 class S_FunctionBodyShort(val expr: S_Expr): S_FunctionBody() {
     override fun compileQuery(name: S_Name, ctx: C_ExprContext): R_Statement {
         val cExpr = expr.compile(ctx)
-        val rExpr = cExpr.toRExpr()
+        val rExpr = cExpr.value().toRExpr()
         C_Utils.checkUnitType(name.pos, rExpr.type, "query_exprtype_unit", "Query expressions returns nothing")
         ctx.blkCtx.entCtx.matchReturnType(name.pos, rExpr.type)
         return R_ReturnStatement(rExpr)
     }
 
     override fun compileFunction(name: S_Name, ctx: C_ExprContext): R_Statement {
-        val rExpr = expr.compile(ctx).toRExpr()
+        val rExpr = expr.compile(ctx).value().toRExpr()
         ctx.blkCtx.entCtx.matchReturnType(name.pos, rExpr.type)
 
         if (rExpr.type != R_UnitType) {
@@ -377,33 +378,49 @@ class S_FunctionDefinition(
         val retType: S_Type?,
         val body: S_FunctionBody
 ): S_Definition(name) {
-    override fun compile(ctx: C_ModuleContext, entityIndex: Int) {
-        ctx.checkFunctionName(name)
-
-        val rRetType = if (retType != null) retType.compile(ctx) else R_UnitType
-
-        val entCtx = C_EntityContext(ctx, C_EntityType.FUNCTION, entityIndex, rRetType)
-        val rParams = compileExternalParams(ctx, entCtx.rootExprCtx, params)
-
-        val declaration = C_UserFunctionDeclaration(name.str, rParams, rRetType)
-        val fnKey = ctx.addFunctionDeclaration(declaration)
-
-        ctx.functionsPass.add {
-            secondPass(ctx, entCtx, declaration, fnKey)
+    override fun compile(ctx: C_NamespaceContext, entityIndex: Int) {
+        ctx.registerName(name, C_NameType.FUNCTION)
+        val fn = ctx.addFunctionDeclaration(name.str)
+        ctx.modCtx.onPass(C_ModulePass.DEFINITIONS) {
+            compileDefinition(ctx, entityIndex, fn)
         }
     }
 
-    private fun secondPass(
-            ctx: C_ModuleContext,
-            entCtx: C_EntityContext,
-            declaration: C_UserFunctionDeclaration,
-            fnKey: Int
-    ){
-        val rBody = body.compileFunction(name, entCtx.rootExprCtx)
+    private fun compileDefinition(ctx: C_NamespaceContext, entityIndex: Int, fn: C_UserGlobalFunction) {
+        val rRetType = if (retType != null) retType.compile(ctx) else R_UnitType
+        val entCtx = C_EntityContext(ctx, C_EntityType.FUNCTION, entityIndex, rRetType)
 
+        val rParams = compileExternalParams(ctx, entCtx.rootExprCtx, params)
+        val header = C_UserFunctionHeader(rParams, rRetType)
+        fn.setHeader(header)
+
+        ctx.modCtx.onPass(C_ModulePass.EXPRESSIONS) {
+            compileFinish(ctx, entCtx, fn)
+        }
+    }
+
+    private fun compileFinish(ctx: C_NamespaceContext, entCtx: C_EntityContext, fn: C_UserGlobalFunction) {
+        val rBody = body.compileFunction(name, entCtx.rootExprCtx)
         val rCallFrame = entCtx.makeCallFrame()
-        val rFunction = R_Function(name.str, declaration.params, rBody, rCallFrame, declaration.type, fnKey)
-        ctx.addFunctionDefinition(rFunction)
+        val rFunction = fn.toRFunction(rBody, rCallFrame)
+        ctx.addFunctionBody(rFunction)
+    }
+}
+
+class S_NamespaceDefinition(name: S_Name, val definitions: List<S_Definition>): S_Definition(name) {
+    override fun compile(ctx: C_NamespaceContext, entityIndex: Int) {
+        ctx.registerName(name, C_NameType.NAMESPACE)
+
+        val subName = ctx.fullName(name.str)
+        val subCtx = C_NamespaceContext(ctx.modCtx, ctx, subName)
+
+        for (def in definitions) {
+            val index = ctx.modCtx.nextEntityIndex()
+            def.compile(subCtx, index)
+        }
+
+        val ns = subCtx.createNamespace()
+        ctx.addNamespace(name.str, ns)
     }
 }
 
@@ -412,8 +429,9 @@ class S_ModuleDefinition(val definitions: List<S_Definition>) {
         val globalCtx = C_GlobalContext(gtx)
         val ctx = C_ModuleContext(globalCtx)
 
-        for ((index, def) in definitions.withIndex()) {
-            def.compile(ctx, index)
+        for (def in definitions) {
+            val index = ctx.nextEntityIndex()
+            def.compile(ctx.nsCtx, index)
         }
 
         return ctx.createModule()
@@ -421,7 +439,7 @@ class S_ModuleDefinition(val definitions: List<S_Definition>) {
 }
 
 private fun compileExternalParams(
-        ctx: C_ModuleContext,
+        ctx: C_NamespaceContext,
         exprCtx: C_ExprContext,
         params: List<S_NameTypePair>
 ) : List<R_ExternalParam>
@@ -436,7 +454,7 @@ private fun compileExternalParams(
     return rExtParams.toList()
 }
 
-private fun compileParams(ctx: C_ModuleContext, params: List<S_NameTypePair>): List<Pair<S_Name, R_Variable>> {
+private fun compileParams(ctx: C_NamespaceContext, params: List<S_NameTypePair>): List<Pair<S_Name, R_Variable>> {
     val names = mutableSetOf<String>()
 
     val res = params.map { param ->

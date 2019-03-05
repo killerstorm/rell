@@ -30,6 +30,10 @@ class R_ClassSqlMapping(
         }
     }
 
+    fun tableKey(): String {
+        return Rt_SqlMapper.namePattern(table)
+    }
+
     fun extraWhere(b: SqlBuilder, sqlMapper: Rt_SqlMapper, alias: SqlTableAlias) {
         if (sysBlockTx) {
             sqlMapper.blockTxWhere(b, alias)

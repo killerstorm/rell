@@ -67,6 +67,8 @@ object C_Utils {
             throw C_Error(pos, "$errCode:$typeStr", "Mutable type cannot be used as $errMsg: $typeStr")
         }
     }
+
+    fun nameStr(name: List<S_Name>): String = name.joinToString(".") { it.str }
 }
 
 object C_Errors {
@@ -84,8 +86,10 @@ object C_Errors {
         return C_Error(name.pos, "unknown_name:${name.str}", "Unknown name: '${name.str}'")
     }
 
-    fun errUnknownName(name1: S_Name, name2: S_Name): C_Error {
-        return C_Error(name1.pos, "unknown_name:${name1.str}.${name2.str}", "Unknown name: '${name1.str}.${name2.str}'")
+    fun errUnknownName(baseName: List<S_Name>, name: S_Name): C_Error {
+        val fullName = baseName + listOf(name)
+        val nameStr = C_Utils.nameStr(fullName)
+        return C_Error(name.pos, "unknown_name:$nameStr", "Unknown name: '$nameStr'")
     }
 
     fun errUnknownAttr(name: S_Name): C_Error {

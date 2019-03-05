@@ -248,5 +248,5 @@ class UpdateDeleteExprTest: BaseRellTest() {
     }
 
     private fun insUser(id: Int, name: String, score: Int): String =
-            SqlTestUtils.mkins("c0_user", "name,score", "$id,'$name',$score")
+            SqlTestUtils.mkins("c0.user", "name,score", "$id,'$name',$score")
 }

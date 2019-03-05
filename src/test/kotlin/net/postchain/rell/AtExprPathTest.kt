@@ -176,16 +176,16 @@ class AtExprPathTest: BaseRellTest() {
     }
 
     private object Ins {
-        fun country(id: Int, name: String): String = mkins("c0_country", "name", "$id, '$name'")
-        fun state(id: Int, name: String, country: Int): String = mkins("c0_state", "name,country", "$id, '$name', $country")
-        fun city(id: Int, name: String, state: Int): String = mkins("c0_city", "name,state", "$id, '$name', $state")
-        fun company(id: Int, name: String, hq: Int): String = mkins("c0_company", "name,hq", "$id, '$name', $hq")
+        fun country(id: Int, name: String): String = mkins("c0.country", "name", "$id, '$name'")
+        fun state(id: Int, name: String, country: Int): String = mkins("c0.state", "name,country", "$id, '$name', $country")
+        fun city(id: Int, name: String, state: Int): String = mkins("c0.city", "name,state", "$id, '$name', $state")
+        fun company(id: Int, name: String, hq: Int): String = mkins("c0.company", "name,hq", "$id, '$name', $hq")
 
         fun department(id: Int, name: String, company: Int): String =
-                mkins("c0_department", "name,company", "$id, '$name', $company")
+                mkins("c0.department", "name,company", "$id, '$name', $company")
 
         fun person(id: Int, name: String, city: Int, department: Int): String =
-                mkins("c0_person", "name,city,department", "$id, '$name', $city, $department")
+                mkins("c0.person", "name,city,department", "$id, '$name', $city, $department")
 
         val mkins = SqlTestUtils::mkins
     }

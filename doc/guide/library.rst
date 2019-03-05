@@ -268,8 +268,8 @@ Special operators:
 
 --------------
 
-list
-----
+list<T>
+-------
 
 ``list<T>()`` - a new empty list
 
@@ -328,8 +328,8 @@ Special operators:
 
 --------------
 
-set
----
+set<T>
+------
 
 ``set<T>()`` - a new empty set
 

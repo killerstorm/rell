@@ -142,18 +142,20 @@ sealed class S_BinaryOp_Base(code: String): S_BinaryOp(code) {
     abstract fun compileDb(pos: S_Pos, left: Db_Expr, right: Db_Expr): Db_Expr
 
     override fun compile(pos: S_Pos, left: C_Expr, right: C_Expr): C_Expr {
-        val leftDb = left.isDb()
-        val rightDb = right.isDb()
+        val leftVal = left.value()
+        val rightVal = right.value()
+        val leftDb = leftVal.isDb()
+        val rightDb = rightVal.isDb()
         val db = leftDb || rightDb
 
         if (db) {
-            val dbLeft = left.toDbExpr()
-            val dbRight = right.toDbExpr()
+            val dbLeft = leftVal.toDbExpr()
+            val dbRight = rightVal.toDbExpr()
             val dbExpr = compileDb(pos, dbLeft, dbRight)
             return C_DbExpr(left.startPos(), dbExpr)
         } else {
-            val rLeft = left.toRExpr()
-            val rRight = right.toRExpr()
+            val rLeft = leftVal.toRExpr()
+            val rRight = rightVal.toRExpr()
             val rExpr = compile(pos, rLeft, rRight)
             return C_RExpr(left.startPos(), rExpr)
         }
@@ -454,7 +456,7 @@ class S_BinaryExpr(val head: S_Expr, val tail: List<S_BinaryExprTail>): S_Expr(h
     private fun buildTree(ctx: C_ExprContext, left: S_Expr, tail: Queue<S_BinaryExprTail>, level: Int): C_Expr {
         if (tail.isEmpty() || tail.peek().op.value.precedence() < level) {
             val res = left.compile(ctx)
-            C_Utils.checkUnitType(left.startPos, res.type(), "expr_operand_unit", "Operand expression returns nothing")
+            C_Utils.checkUnitType(left.startPos, res.value().type(), "expr_operand_unit", "Operand expression returns nothing")
             return res
         }
 

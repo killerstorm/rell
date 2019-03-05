@@ -1,6 +1,7 @@
 package net.postchain.rell.test
 
 import net.postchain.rell.model.R_Module
+import net.postchain.rell.runtime.Rt_SqlExecutor
 import net.postchain.rell.runtime.Rt_SqlMapper
 import net.postchain.rell.sql.DefaultSqlExecutor
 import net.postchain.rell.sql.NoConnSqlExecutor
@@ -19,7 +20,6 @@ abstract class RellBaseTester(
     private var destroyed = false
     private var sqlConn: Connection? = null
     private var sqlExec: SqlExecutor = NoConnSqlExecutor
-    private var sqlExecResource: Closeable? = null
     private var lastInserts = listOf<String>()
     private var moduleProto: R_Module? = null
 
@@ -82,12 +82,11 @@ abstract class RellBaseTester(
 
         try {
             realSqlConn.autoCommit = false
-            val realSqlExec = DefaultSqlExecutor(realSqlConn, sqlLogging)
+            val realSqlExec = Rt_SqlExecutor(DefaultSqlExecutor(realSqlConn, sqlLogging), true)
             initSqlReset(realSqlConn, realSqlExec, moduleCode, module)
             initSqlInserts(realSqlExec)
             sqlConn = realSqlConn
             sqlExec = realSqlExec
-            sqlExecResource = realSqlExec
             closeable = null
         } finally {
             closeable?.close()
@@ -109,7 +108,7 @@ abstract class RellBaseTester(
     override final fun close() {
         if (!inited || destroyed) return
         destroyed = true
-        sqlExecResource?.close()
+        sqlConn?.close()
     }
 
     protected fun getSqlConn(): Connection {

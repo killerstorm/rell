@@ -8,6 +8,7 @@ import net.postchain.devtools.SingleChainTestNode
 import net.postchain.gtx.GTXDataBuilder
 import net.postchain.gtx.GTXValue
 import net.postchain.gtx.gtx
+import org.junit.Ignore
 import org.junit.Test
 import kotlin.test.assertEquals
 

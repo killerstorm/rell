@@ -4,7 +4,7 @@ import net.postchain.rell.model.*
 import org.apache.commons.collections4.multimap.ArrayListValuedHashMap
 
 abstract class C_SysMemberFunction {
-    abstract fun compileCall(name: S_Name, base: C_Expr, safe: Boolean, args: List<C_Expr>): C_Expr
+    abstract fun compileCall(name: S_Name, base: C_Value, safe: Boolean, args: List<C_Value>): C_Expr
 }
 
 sealed class C_ArgTypeMatcher {
@@ -136,7 +136,7 @@ object C_FuncUtils {
 }
 
 class C_SysGlobalFunction(private val cases: List<C_GlobalFuncCase>): C_GlobalFunction() {
-    override fun compileCall(name: S_Name, args: List<C_Expr>): C_Expr {
+    override fun compileCall(name: S_Name, args: List<C_Value>): C_Expr {
         val match = matchCase(name, args)
         val db = args.any { it.isDb() }
         if (db) {
@@ -150,7 +150,7 @@ class C_SysGlobalFunction(private val cases: List<C_GlobalFuncCase>): C_GlobalFu
         }
     }
 
-    private fun matchCase(name: S_Name, args: List<C_Expr>): C_GlobalFuncCaseMatch {
+    private fun matchCase(name: S_Name, args: List<C_Value>): C_GlobalFuncCaseMatch {
         val argTypes = args.map { it.type() }
 
         for (case in cases) {
@@ -165,7 +165,7 @@ class C_SysGlobalFunction(private val cases: List<C_GlobalFuncCase>): C_GlobalFu
 }
 
 class C_StdSysMemberFunction(val cases: List<C_MemberFuncCase>): C_SysMemberFunction() {
-    override fun compileCall(name: S_Name, base: C_Expr, safe: Boolean, args: List<C_Expr>): C_Expr {
+    override fun compileCall(name: S_Name, base: C_Value, safe: Boolean, args: List<C_Value>): C_Expr {
         val fullName = "${base.type().toStrictString()}.${name.str}"
         val match = matchCase(name.pos, fullName, args)
 
@@ -184,7 +184,7 @@ class C_StdSysMemberFunction(val cases: List<C_MemberFuncCase>): C_SysMemberFunc
         }
     }
 
-    private fun matchCase(pos: S_Pos, fullName: String, args: List<C_Expr>): C_MemberFuncCaseMatch {
+    private fun matchCase(pos: S_Pos, fullName: String, args: List<C_Value>): C_MemberFuncCaseMatch {
         val argTypes = args.map { it.type() }
 
         for (case in cases) {

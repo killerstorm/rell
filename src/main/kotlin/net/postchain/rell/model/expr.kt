@@ -356,7 +356,7 @@ class R_CreateExpr(type: R_Type, val rClass: R_Class, val attrs: List<R_CreateEx
         frame.entCtx.checkDbUpdateAllowed()
         val sqlMapper = frame.entCtx.modCtx.globalCtx.sqlMapper
         val rowidFunc = sqlMapper.rowidFunction
-        val rtSql = buildSql(sqlMapper, rClass, attrs, "$rowidFunc()")
+        val rtSql = buildSql(sqlMapper, rClass, attrs, "\"$rowidFunc\"()")
         val rtSel = SqlSelect(rtSql, listOf(type))
         val res = rtSel.execute(frame)
         check(res.size == 1)

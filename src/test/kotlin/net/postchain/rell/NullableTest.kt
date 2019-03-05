@@ -648,7 +648,7 @@ class NullableTest: BaseRellTest(false) {
         chkEx("{ val x: (a:(b:(c:integer)))? = (a=(b=(c=123))); return _typeOf(x?.a?.b?.c); }", "text[integer?]")
 
         chkEx("{ return integer.MAX_VALUE; }", "int[9223372036854775807]")
-        chkEx("{ return integer?.MAX_VALUE; }", "ct_err:expr_safemem_type:namespace[integer]")
+        chkEx("{ return integer?.MAX_VALUE; }", "ct_err:expr_novalue:namespace")
     }
 
     @Test fun testSpecOpSafeCall() {
@@ -673,7 +673,7 @@ class NullableTest: BaseRellTest(false) {
         chkEx("{ null?.str(); }", "ct_err:expr_safemem_type:null")
 
         chkEx("{ return integer.parseHex('7b'); }", "int[123]")
-        chkEx("{ return integer?.parseHex('7b'); }", "ct_err:expr_safemem_type:namespace[integer]")
+        chkEx("{ return integer?.parseHex('7b'); }", "ct_err:expr_novalue:namespace")
     }
 
     @Test fun testSpecOpSafeDataField() {

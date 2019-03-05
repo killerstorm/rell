@@ -257,7 +257,7 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testNamespace() {
-        chk("integer", "ct_err:unknown_name:integer")
+        chk("integer", "ct_err:expr_novalue:namespace")
         chk("integer('123')", "int[123]")
         chk("integer.parseHex('1234')", "int[4660]")
         chk("integer.MAX_VALUE", "int[9223372036854775807]")
@@ -268,7 +268,7 @@ class ExpressionTest: BaseRellTest(false) {
         tst.defs = listOf("class user { name: text; score: integer; }")
         chkOp("create user('Bob',-5678);")
 
-        chk("user @ { .score == integer }", "ct_err:unknown_name:integer")
+        chk("user @ { .score == integer }", "ct_err:expr_novalue:namespace")
         chk("user @ { .score == integer('-5678') } ( .name )", "text[Bob]")
         chk("user @ { .score == -5678 } ( .name, integer('1234') )", "(name=text[Bob],int[1234])")
         chk("user @ { .score == -integer.parseHex('162e') } ( .name )", "text[Bob]")

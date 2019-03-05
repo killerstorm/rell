@@ -126,7 +126,7 @@ class AtExprOpTest: AbstractOpTest() {
         val columns = values.keys.toList()
         val insColumns = columns.joinToString(",")
         val insValues = "5," + columns.map{ values[it] }.joinToString(",")
-        val insert = SqlTestUtils.mkins("c0_optest", insColumns, insValues)
+        val insert = SqlTestUtils.mkins("c0.optest", insColumns, insValues)
         return this.inserts + insert
     }
 
@@ -169,8 +169,8 @@ class AtExprOpTest: AbstractOpTest() {
     }
 
     private object Ins {
-        fun company(id: Int, name: String): String = mkins("c0_company", "name", "$id, '$name'")
-        fun user(id: Int, name: String, company: Int): String = mkins("c0_user", "name,company", "$id, '$name', $company")
+        fun company(id: Int, name: String): String = mkins("c0.company", "name", "$id, '$name'")
+        fun user(id: Int, name: String, company: Int): String = mkins("c0.user", "name,company", "$id, '$name', $company")
         val mkins = SqlTestUtils::mkins
     }
 }

@@ -55,7 +55,7 @@ object SqlTestUtils {
 
     fun resetRowid(sqlExec: SqlExecutor, sqlMapper: Rt_SqlMapper) {
         val table = sqlMapper.rowidTable
-        sqlExec.execute("UPDATE $table SET last_value = 0;")
+        sqlExec.execute("""UPDATE "$table" SET last_value = 0;""")
     }
 
     fun clearTables(sqlExec: SqlExecutor) {

@@ -33,7 +33,7 @@ class S_UpdateTarget_Expr(val expr: S_Expr): S_UpdateTarget() {
 
     private fun compileTarget(ctx: C_ExprContext): R_UpdateTarget {
         val cExpr = expr.compile(ctx)
-        val rExpr = cExpr.toRExpr()
+        val rExpr = cExpr.value().toRExpr()
         val type = rExpr.type
 
         if (type is R_ClassType) {
@@ -120,7 +120,7 @@ class S_UpdateStatement(
                 return C_Utils.toDbExpr(impName.pos, rExpr)
             }
         }
-        return pair.expr.compile(ctx).toDbExpr()
+        return pair.expr.compile(ctx).value().toDbExpr()
     }
 }
 

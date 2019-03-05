@@ -12,7 +12,7 @@ sealed class S_UnaryOp(val code: String) {
 
 object S_UnaryOp_Plus: S_UnaryOp("+") {
     override fun compile(startPos: S_Pos, opPos: S_Pos, expr: C_Expr): C_Expr {
-        val type = expr.type()
+        val type = expr.value().type()
         if (type != R_IntegerType) {
             throw errTypeMissmatch(opPos, type)
         }
@@ -22,16 +22,17 @@ object S_UnaryOp_Plus: S_UnaryOp("+") {
 
 object S_UnaryOp_Minus: S_UnaryOp("-") {
     override fun compile(startPos: S_Pos, opPos: S_Pos, expr: C_Expr): C_Expr {
-        val type = expr.type()
+        val value = expr.value()
+        val type = value.type()
         if (type != R_IntegerType) {
             throw errTypeMissmatch(opPos, type)
         }
 
-        if (expr.isDb()) {
-            val dbExpr = Db_UnaryExpr(R_IntegerType, Db_UnaryOp_Minus, expr.toDbExpr())
+        if (value.isDb()) {
+            val dbExpr = Db_UnaryExpr(R_IntegerType, Db_UnaryOp_Minus, value.toDbExpr())
             return C_DbExpr(startPos, dbExpr)
         } else {
-            val rExpr = R_UnaryExpr(R_IntegerType, R_UnaryOp_Minus, expr.toRExpr())
+            val rExpr = R_UnaryExpr(R_IntegerType, R_UnaryOp_Minus, value.toRExpr())
             return C_RExpr(startPos, rExpr)
         }
     }
@@ -39,16 +40,17 @@ object S_UnaryOp_Minus: S_UnaryOp("-") {
 
 object S_UnaryOp_Not: S_UnaryOp("not") {
     override fun compile(startPos: S_Pos, opPos: S_Pos, expr: C_Expr): C_Expr {
-        val type = expr.type()
+        val value = expr.value()
+        val type = value.type()
         if (type != R_BooleanType) {
             throw errTypeMissmatch(opPos, type)
         }
 
-        if (expr.isDb()) {
-            val dbExpr = Db_UnaryExpr(R_BooleanType, Db_UnaryOp_Not, expr.toDbExpr())
+        if (value.isDb()) {
+            val dbExpr = Db_UnaryExpr(R_BooleanType, Db_UnaryOp_Not, value.toDbExpr())
             return C_DbExpr(startPos, dbExpr)
         } else {
-            val rExpr = R_UnaryExpr(R_BooleanType, R_UnaryOp_Not, expr.toRExpr())
+            val rExpr = R_UnaryExpr(R_BooleanType, R_UnaryOp_Not, value.toRExpr())
             return C_RExpr(startPos, rExpr)
         }
     }
@@ -56,12 +58,13 @@ object S_UnaryOp_Not: S_UnaryOp("not") {
 
 object S_UnaryOp_NotNull: S_UnaryOp("!!") {
     override fun compile(startPos: S_Pos, opPos: S_Pos, expr: C_Expr): C_Expr {
-        val type = expr.type()
+        val value = expr.value()
+        val type = value.type()
         if (type !is R_NullableType) {
             throw errTypeMissmatch(opPos, type)
         }
 
-        val rExpr = R_NotNullExpr(type.valueType, expr.toRExpr())
+        val rExpr = R_NotNullExpr(type.valueType, value.toRExpr())
         return C_RExpr(startPos, rExpr)
     }
 }
@@ -69,7 +72,7 @@ object S_UnaryOp_NotNull: S_UnaryOp("!!") {
 class S_UnaryExpr(startPos: S_Pos, val op: S_Node<S_UnaryOp>, val expr: S_Expr): S_Expr(startPos) {
     override fun compile(ctx: C_ExprContext): C_Expr {
         val cExpr = expr.compile(ctx)
-        checkUnitType(cExpr.type())
+        checkUnitType(cExpr.value().type())
         return op.value.compile(startPos, op.pos, cExpr)
     }
 

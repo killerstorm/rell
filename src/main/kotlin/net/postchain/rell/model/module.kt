@@ -161,7 +161,6 @@ class R_Module(
         val classes: Map<String, R_Class>,
         val objects: Map<String, R_Object>,
         val records: Map<String, R_RecordType>,
-        val enums: Map<String, R_EnumType>,
         val operations: Map<String, R_Operation>,
         val queries: Map<String, R_Query>,
         val functionsTable: List<R_Function>,

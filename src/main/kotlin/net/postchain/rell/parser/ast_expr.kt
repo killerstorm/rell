@@ -32,8 +32,8 @@ class S_NullLiteralExpr(pos: S_Pos): S_Expr(pos) {
 
 class S_LookupExpr(val opPos: S_Pos, val base: S_Expr, val expr: S_Expr): S_Expr(base.startPos) {
     override fun compile(ctx: C_ExprContext): C_Expr {
-        val rBase = base.compile(ctx).toRExpr()
-        val rExpr = expr.compile(ctx).toRExpr()
+        val rBase = base.compile(ctx).value().toRExpr()
+        val rExpr = expr.compile(ctx).value().toRExpr()
 
         val baseType = rBase.type
         val effectiveType = if (baseType is R_NullableType) baseType.valueType else baseType
@@ -89,18 +89,18 @@ class S_LookupExpr(val opPos: S_Pos, val base: S_Expr, val expr: S_Expr): S_Expr
     }
 }
 
-class S_CreateExpr(pos: S_Pos, val className: S_Name, val exprs: List<S_NameExprPair>): S_Expr(pos) {
+class S_CreateExpr(pos: S_Pos, val className: List<S_Name>, val exprs: List<S_NameExprPair>): S_Expr(pos) {
     override fun compile(ctx: C_ExprContext): C_Expr {
         ctx.blkCtx.entCtx.checkDbUpdateAllowed(startPos)
 
-        val name = className.str
-
-        val modCtx = ctx.blkCtx.entCtx.modCtx
-        val cls = modCtx.getClass(className)
+        val nsCtx = ctx.blkCtx.entCtx.nsCtx
+        val cls = nsCtx.getClass(className)
         val attrs = C_AttributeResolver.resolveCreate(ctx, cls.attributes, exprs, startPos)
 
         if (!cls.flags.canCreate) {
-            throw C_Error(startPos, "expr_create_cant:$name", "Not allowed to create instances of class '$name'")
+            val classNameStr = C_Utils.nameStr(className)
+            throw C_Error(startPos, "expr_create_cant:$classNameStr",
+                    "Not allowed to create instances of class '$classNameStr'")
         }
 
         val type = R_ClassType(cls)
@@ -116,7 +116,7 @@ class S_ParenthesesExpr(startPos: S_Pos, val expr: S_Expr): S_Expr(startPos) {
 class S_TupleExpr(startPos: S_Pos, val fields: List<Pair<S_Name?, S_Expr>>): S_Expr(startPos) {
     override fun compile(ctx: C_ExprContext): C_Expr {
         checkNames()
-        val rExprs = fields.map { (_, expr) -> expr.compile(ctx).toRExpr() }
+        val rExprs = fields.map { (_, expr) -> expr.compile(ctx).value().toRExpr() }
         val rExpr = compile0(rExprs)
         return C_RExpr(startPos, rExpr)
     }
@@ -144,9 +144,9 @@ class S_TupleExpr(startPos: S_Pos, val fields: List<Pair<S_Name?, S_Expr>>): S_E
 
 class S_IfExpr(pos: S_Pos, val cond: S_Expr, val trueExpr: S_Expr, val falseExpr: S_Expr): S_Expr(pos) {
     override fun compile(ctx: C_ExprContext): C_Expr {
-        val cCond = cond.compile(ctx)
-        val cTrue = trueExpr.compile(ctx)
-        val cFalse = falseExpr.compile(ctx)
+        val cCond = cond.compile(ctx).value()
+        val cTrue = trueExpr.compile(ctx).value()
+        val cFalse = falseExpr.compile(ctx).value()
 
         S_Type.match(R_BooleanType, cCond.type(), cond.startPos, "expr_if_cond_type", "Wrong type of condition expression")
         checkUnitType(trueExpr, cTrue)
@@ -171,15 +171,15 @@ class S_IfExpr(pos: S_Pos, val cond: S_Expr, val trueExpr: S_Expr, val falseExpr
         }
     }
 
-    private fun checkUnitType(expr: S_Expr, cExpr: C_Expr) {
-        C_Utils.checkUnitType(expr.startPos, cExpr.type(), "expr_if_unit", "Expression returns nothing")
+    private fun checkUnitType(expr: S_Expr, cValue: C_Value) {
+        C_Utils.checkUnitType(expr.startPos, cValue.type(), "expr_if_unit", "Expression returns nothing")
     }
 }
 
 class S_ListLiteralExpr(pos: S_Pos, val exprs: List<S_Expr>): S_Expr(pos) {
     override fun compile(ctx: C_ExprContext): C_Expr {
         checkEmpty()
-        val rExprs = exprs.map { it.compile(ctx).toRExpr() }
+        val rExprs = exprs.map { it.compile(ctx).value().toRExpr() }
         val rExpr = compile0(rExprs)
         return C_RExpr(startPos, rExpr)
     }
@@ -208,7 +208,9 @@ class S_ListLiteralExpr(pos: S_Pos, val exprs: List<S_Expr>): S_Expr(pos) {
 class S_MapLiteralExpr(startPos: S_Pos, val entries: List<Pair<S_Expr, S_Expr>>): S_Expr(startPos) {
     override fun compile(ctx: C_ExprContext): C_Expr {
         checkEmpty()
-        val rEntries = entries.map { (key, value) -> Pair(key.compile(ctx).toRExpr(), value.compile(ctx).toRExpr()) }
+        val rEntries = entries.map { (key, value) ->
+            Pair(key.compile(ctx).value().toRExpr(), value.compile(ctx).value().toRExpr())
+        }
         val rExpr = compile0(rEntries)
         return C_RExpr(startPos, rExpr)
     }
@@ -258,7 +260,7 @@ sealed class S_CollectionExpr(
     }
 
     override fun compile(ctx: C_ExprContext): C_Expr {
-        val rArgs = args.map { it.compile(ctx).toRExpr() }
+        val rArgs = args.map { it.compile(ctx).value().toRExpr() }
         val rExpr = compile0(ctx, rArgs)
         return C_RExpr(startPos, rExpr)
     }
@@ -354,7 +356,7 @@ class S_MapExpr(
 ): S_Expr(pos)
 {
     override fun compile(ctx: C_ExprContext): C_Expr {
-        val rArgs = args.map { it.compile(ctx).toRExpr() }
+        val rArgs = args.map { it.compile(ctx).value().toRExpr() }
         val rExpr = compile0(ctx, rArgs)
         return C_RExpr(startPos, rExpr)
     }
@@ -414,39 +416,7 @@ class S_MapExpr(
 
 class S_RecordOrCallExpr(val base: S_Expr, val args: List<S_NameExprPair>): S_Expr(base.startPos) {
     override fun compile(ctx: C_ExprContext): C_Expr {
-        if (base is S_NameExpr) {
-            val record = ctx.blkCtx.entCtx.modCtx.getRecordOpt(base.name.str)
-            if (record != null) {
-                return compileRecord(ctx, record)
-            }
-        }
-
-        return compileCall(ctx)
-    }
-
-    private fun compileRecord(ctx: C_ExprContext, record: R_RecordType): C_Expr {
-        val attrs = C_AttributeResolver.resolveCreate(ctx, record.attributes, args, startPos)
-        val rExpr = R_RecordExpr(record, attrs)
-        return C_RExpr(startPos, rExpr)
-    }
-
-    private fun compileCall(ctx: C_ExprContext): C_Expr {
-        val namedArg = args.map { it.name }.filterNotNull().firstOrNull()
-        if (namedArg != null) {
-            val argName = namedArg.str
-            throw C_Error(namedArg.pos, "expr_call_namedarg:$argName", "Named function arguments not supported")
-        }
-
         val cBase = base.compile(ctx)
-
-        val cArgs = args.map {
-            val sArg = it.expr
-            val cArg = sArg.compile(ctx)
-            val type = cArg.type()
-            C_Utils.checkUnitType(sArg.startPos, type, "expr_arg_unit", "Argument expression returns nothing")
-            cArg
-        }
-
-        return cBase.call(base.startPos, cArgs)
+        return cBase.call(ctx, base.startPos, args)
     }
 }

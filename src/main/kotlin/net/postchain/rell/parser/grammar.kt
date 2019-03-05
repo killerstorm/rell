@@ -62,6 +62,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val RECORD by relltok("record")
     private val ENUM by relltok("enum")
     private val FUNCTION by relltok("function")
+    private val NAMESPACE by relltok("namespace")
     private val VAL by relltok("val")
     private val VAR by relltok("var")
     private val RETURN by relltok("return")
@@ -91,11 +92,13 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     private val id by ( IDT ) map { S_Name(S_Pos(it), it.text) }
 
+    private val fullName by separatedTerms(id, DOT, false)
+
     private val _type by parser(this::type)
     private val _expression by parser(this::expression)
     private val _statement by parser(this::statement)
 
-    private val nameType by id map { S_NameType(it) }
+    private val nameType by fullName map { S_NameType(it) }
 
     private val tupleField by ( optional(id * -COLON) * _type ) map { (name, type) -> Pair(name, type) }
     private val tupleType by ( -LPAR * separatedTerms(tupleField, COMMA, false) * -RPAR ) map { S_TupleType(it) }
@@ -220,9 +223,9 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         }
     }
 
-    private val atExprFromSingle by id map { S_Node(it.pos, listOf(S_AtExprFrom(null, it))) }
+    private val atExprFromSingle by fullName map { S_Node(it[0].pos, listOf(S_AtExprFrom(null, it))) }
 
-    private val atExprFromItem by ( optional( id * -COLON ) * id ) map {
+    private val atExprFromItem by ( optional( id * -COLON ) * fullName ) map {
         ( alias, className ) -> S_AtExprFrom(alias, className)
     }
 
@@ -300,7 +303,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     private val createExprArgs by ( -LPAR * separatedTerms(createExprArg, COMMA, true) * -RPAR )
 
-    private val createExpr by (CREATE * id * createExprArgs) map {
+    private val createExpr by (CREATE * fullName * createExprArgs) map {
         (kw, className, exprs) ->
         S_CreateExpr(S_Pos(kw), className, exprs)
     }
@@ -498,7 +501,20 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         (name, params, type, body) -> S_FunctionDefinition(name, params, type, body)
     }
 
-    private val anyDef by ( classDef or objectDef or recordDef or enumDef or opDef or queryDef or functionDef )
+    private val namespaceDef by ( -NAMESPACE * id * -LCURL * zeroOrMore(parser(this::anyDef)) * -RCURL ) map {
+        (name, defs) -> S_NamespaceDefinition(name, defs)
+    }
+
+    private val anyDef: Parser<S_Definition> by (
+            classDef
+            or objectDef
+            or recordDef
+            or enumDef
+            or opDef
+            or queryDef
+            or functionDef
+            or namespaceDef
+    )
 
     override val rootParser by zeroOrMore(anyDef) map { S_ModuleDefinition(it) }
 

@@ -22,16 +22,16 @@ private fun genRowidSql(sqlMapper: Rt_SqlMapper): String {
     val table = sqlMapper.rowidTable
     val func = sqlMapper.rowidFunction
     return """
-            CREATE TABLE $table( last_value bigint not null);
-            INSERT INTO $table(last_value) VALUES (0);
-            CREATE FUNCTION $func() RETURNS BIGINT AS
-            'UPDATE $table SET last_value = last_value + 1 RETURNING last_value'
+            CREATE TABLE "$table"( last_value bigint not null);
+            INSERT INTO "$table"(last_value) VALUES (0);
+            CREATE FUNCTION "$func"() RETURNS BIGINT AS
+            'UPDATE "$table" SET last_value = last_value + 1 RETURNING last_value'
             LANGUAGE SQL;
     """.trimIndent()
 }
 
 private val CREATE_TABLE_BLOCKS = """
-CREATE TABLE blocks(
+CREATE TABLE "blocks"(
     block_iid BIGSERIAL PRIMARY KEY,
     block_height BIGINT NOT NULL,
     block_rid BYTEA,
@@ -45,7 +45,7 @@ CREATE TABLE blocks(
 """.trimIndent()
 
 private val CREATE_TABLE_TRANSACTIONS = """
-CREATE TABLE transactions(
+CREATE TABLE "transactions"(
     tx_iid BIGSERIAL PRIMARY KEY,
     chain_id bigint NOT NULL,
     tx_rid bytea NOT NULL,
@@ -79,14 +79,15 @@ private fun genClass(sqlMapper: Rt_SqlMapper, classDefinition: R_Class): String 
     val jsonAttribSet = attrs.filter { it.type is R_JSONType }.map { it.name }.toSet()
 
     for ((iidx, index) in classDefinition.indexes.withIndex()) {
-        val index_sql : String;
+        val indexName = "IDX_${tableName}_${iidx}"
+        val indexSql : String
         if (index.attribs.size == 1 && jsonAttribSet.contains(index.attribs[0])) {
             val attrName = index.attribs[0]
-            index_sql = "CREATE INDEX \"IDX_${tableName}_${iidx}\" ON \"$tableName\" USING gin (\"${attrName}\" jsonb_path_ops)"
+            indexSql = """CREATE INDEX "$indexName" ON "$tableName" USING gin ("${attrName}" jsonb_path_ops)"""
         } else {
-            index_sql = (ctx.createIndex("IDX_${tableName}_${iidx}").on(tableName, *index.attribs.toTypedArray())).toString();
+            indexSql = (ctx.createIndex(indexName).on(tableName, *index.attribs.toTypedArray())).toString();
         }
-        ddl += index_sql + ";\n";
+        ddl += indexSql + ";\n";
     }
 
     return ddl

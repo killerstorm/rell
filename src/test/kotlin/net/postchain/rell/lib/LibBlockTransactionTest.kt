@@ -245,7 +245,7 @@ class LibBlockTransactionTest: BaseRellTest() {
     private fun createChainIdTester(chainId: Long, blockIid: Long, txIid: Long): RellCodeTester {
         val t = resource(RellCodeTester())
         t.defs = listOf("class foo { b: block; t: transaction; mutable value: integer; }")
-        t.insert("c${chainId}_foo", "b,t,value", "1,$blockIid,$txIid,0")
+        t.insert("c${chainId}.foo", "b,t,value", "1,$blockIid,$txIid,0")
         t.strictToString = false
         t.dropTables = false
         t.autoInitObjects = false

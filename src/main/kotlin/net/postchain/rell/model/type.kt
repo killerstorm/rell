@@ -410,8 +410,3 @@ object R_GtxValueType: R_Type("GTXValue") {
     override fun toStrictString() = name
     override fun createGtxConversion() = GtxRtConversion_GtxValue
 }
-
-class R_NamespaceType(name: String): R_Type("namespace[$name]") {
-    override fun toStrictString() = name
-    override fun createGtxConversion() = GtxRtConversion_None
-}

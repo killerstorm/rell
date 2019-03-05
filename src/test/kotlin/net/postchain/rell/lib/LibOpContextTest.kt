@@ -23,7 +23,7 @@ class LibOpContextTest: BaseRellTest(false) {
         chkFull("function f(): timestamp = op_context.last_block_time; query q() = f();", listOf(),
                 "rt_err:fn_last_block_time_noop")
 
-        chk("op_context", "ct_err:unknown_name:op_context")
+        chk("op_context", "ct_err:expr_novalue:namespace")
     }
 
     @Test fun testLastBlockTimeAsDefaultValue() {

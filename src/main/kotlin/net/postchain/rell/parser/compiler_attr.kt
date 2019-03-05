@@ -10,7 +10,7 @@ object C_AttributeResolver {
             pos: S_Pos
     ): List<R_CreateExprAttr>
     {
-        val rExprs = exprs.map { it.expr.compile(ctx).toRExpr() }
+        val rExprs = exprs.map { it.expr.compile(ctx).value().toRExpr() }
         val types = rExprs.map { it.type }
 
         val attrs = matchCreateAttrs(attributes, exprs, types)

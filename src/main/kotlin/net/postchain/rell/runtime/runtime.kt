@@ -118,7 +118,7 @@ object Rt_FailingPrinter: Rt_Printer() {
 }
 
 class Rt_SqlMapper(private val chainId: Long) {
-    private val prefix = "c" + chainId + "_"
+    private val prefix = "c" + chainId + "."
 
     val rowidTable = mapName("rowid_gen")
     val rowidFunction = mapName("make_rowid")
@@ -134,6 +134,10 @@ class Rt_SqlMapper(private val chainId: Long) {
         b.append(" = ")
         b.append(R_IntegerType, Rt_IntValue(chainId))
         b.append(")")
+    }
+
+    companion object {
+        fun namePattern(name: String) = "c*.$name"
     }
 }
 

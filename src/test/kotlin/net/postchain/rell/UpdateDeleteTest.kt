@@ -485,10 +485,10 @@ class UpdateDeleteTest: BaseRellTest() {
                 "class bar { f: foo; }"
         )
         tst.inserts = listOf()
-        tst.insert("c0_person", "name,score", "1,'James',100")
-        tst.insert("c0_person", "name,score", "2,'Mike',250")
-        tst.insert("c0_foo", "p", "1,1")
-        tst.insert("c0_bar", "f", "1,1")
+        tst.insert("c0.person", "name,score", "1,'James',100")
+        tst.insert("c0.person", "name,score", "2,'Mike',250")
+        tst.insert("c0.foo", "p", "1,1")
+        tst.insert("c0.bar", "f", "1,1")
 
         chkData("person(1,James,100)", "person(2,Mike,250)", "foo(1,1)", "bar(1,1)")
 

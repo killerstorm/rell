@@ -7,7 +7,7 @@ import org.junit.Test
 import kotlin.test.assertFailsWith
 
 class GtxModuleTest : BaseGtxTest() {
-    private val tablePrefix = "c995511_"
+    private val tablePrefix = "c995511."
 
     private val classDefs = listOf(
             "class city { key name: text; }",

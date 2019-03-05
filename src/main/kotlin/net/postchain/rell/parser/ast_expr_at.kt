@@ -2,7 +2,7 @@ package net.postchain.rell.parser
 
 import net.postchain.rell.model.*
 
-class S_AtExprFrom(val alias: S_Name?, val className: S_Name)
+class S_AtExprFrom(val alias: S_Name?, val className: List<S_Name>)
 
 class C_AtWhat(val exprs: List<Pair<String?, Db_Expr>>, val sort: List<Pair<Db_Expr, Boolean>>)
 
@@ -28,7 +28,7 @@ class S_AtExprWhatSimple(val path: List<S_Name>): S_AtExprWhat() {
             expr = expr.member(ctx, step, false)
         }
 
-        var dbExpr = expr.toDbExpr()
+        var dbExpr = expr.value().toDbExpr()
         val exprs = listOf(Pair(null, dbExpr))
         return C_AtWhat(exprs, listOf())
     }
@@ -42,7 +42,7 @@ class S_AtExprWhatComplex(val fields: List<S_AtExprWhatComplexField>): S_AtExprW
     override fun compile(ctx: C_DbExprContext): C_AtWhat {
         checkExplicitNames()
 
-        val dbExprs = fields.map { it.expr.compile(ctx).toDbExpr() }
+        val dbExprs = fields.map { it.expr.compile(ctx).value().toDbExpr() }
 
         val implicitNames = fields.withIndex().map { (idx, field) ->
             if (field.attr != null) null else dbExprs[idx].implicitName()
@@ -100,12 +100,14 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
 
     private fun compileWhereExpr(ctx: C_DbExprContext, idx: Int, expr: S_Expr): C_Expr {
         val cExpr = expr.compileWhere(ctx, idx)
-        val type = cExpr.type()
+        val cValue = cExpr.value()
+
+        val type = cValue.type()
         if (type == R_BooleanType) {
             return cExpr
         }
 
-        val dbExpr = cExpr.toDbExpr()
+        val dbExpr = cValue.toDbExpr()
 
         val attrs = ctx.findAttributesByType(type)
         if (attrs.isEmpty()) {
@@ -124,18 +126,19 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
     }
 
     private fun makeWhere(compiledExprs: List<C_Expr>): Db_Expr? {
-        for (expr in compiledExprs) {
-            check(expr.type() == R_BooleanType)
+        val compiledValues = compiledExprs.map { it.value() }
+        for (value in compiledValues) {
+            check(value.type() == R_BooleanType)
         }
 
-        val dbExprs = compiledExprs.filter { it.isDb() }.map { it.toDbExpr() }
-        val rExprs = compiledExprs.filter { !it.isDb() }.map { it.toRExpr() }
+        val dbExprs = compiledValues.filter { it.isDb() }.map { it.toDbExpr() }
+        val rExprs = compiledValues.filter { !it.isDb() }.map { it.toRExpr() }
 
         val dbTree = exprsToTree(dbExprs)
         val rTree = exprsToTree(rExprs)
 
         val dbRTree = if (rTree == null) null else {
-            val pos = compiledExprs.first { !it.isDb() }.startPos()
+            val pos = compiledValues.first { !it.isDb() }.pos
             C_Utils.toDbExpr(pos, rTree)
         }
 
@@ -242,14 +245,14 @@ class S_AtExpr(
             return null
         }
 
-        val cExpr = limit.compile(ctx)
-        val type = cExpr.type()
+        val cValue = limit.compile(ctx).value()
+        val type = cValue.type()
         if (type != R_IntegerType) {
             throw C_Error(limit.startPos, "expr_at_limit_type:${type.toStrictString()}",
                     "Wrong limit type: ${type.toStrictString()} instead of ${R_IntegerType.toStrictString()}")
         }
 
-        return cExpr.toRExpr()
+        return cValue.toRExpr()
     }
 
     private class AtResultType(val type: R_Type, val rowDecoder: R_AtExprRowType)
@@ -277,8 +280,8 @@ class S_AtExpr(
                 }
             }
 
-            val alias = from.alias ?: from.className
-            val cls = ctx.blkCtx.entCtx.modCtx.getClass(from.className)
+            val alias = from.alias ?: from.className[from.className.size - 1]
+            val cls = ctx.blkCtx.entCtx.nsCtx.getClass(from.className)
             return Pair(alias, C_AtClass(cls, alias.str, idx))
         }
 

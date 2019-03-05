@@ -47,21 +47,21 @@ class ObjectTest: BaseRellTest() {
 
     @Test fun testUseAsType() {
         tst.defs = listOf("object foo { x: integer = 123; }")
-        chkCompile("function g(f: foo){}", "ct_err:object_astype:foo")
-        chkCompile("function g(): foo {}", "ct_err:object_astype:foo")
-        chkCompile("function g() { var f: foo; }", "ct_err:object_astype:foo")
-        chkCompile("class bar { f: foo; }", "ct_err:object_astype:foo")
-        chkCompile("function g() { var l: list<foo>; }", "ct_err:object_astype:foo")
-        chkCompile("function g() { var l: set<foo>; }", "ct_err:object_astype:foo")
-        chkCompile("function g() { var l: map<integer, foo>; }", "ct_err:object_astype:foo")
-        chkCompile("function g() { var l: map<foo, integer>; }", "ct_err:object_astype:foo")
-        chkCompile("record bar { foo; }", "ct_err:object_astype:foo")
+        chkCompile("function g(f: foo){}", "ct_err:unknown_type:foo")
+        chkCompile("function g(): foo {}", "ct_err:unknown_type:foo")
+        chkCompile("function g() { var f: foo; }", "ct_err:unknown_type:foo")
+        chkCompile("class bar { f: foo; }", "ct_err:unknown_type:foo")
+        chkCompile("function g() { var l: list<foo>; }", "ct_err:unknown_type:foo")
+        chkCompile("function g() { var l: set<foo>; }", "ct_err:unknown_type:foo")
+        chkCompile("function g() { var l: map<integer, foo>; }", "ct_err:unknown_type:foo")
+        chkCompile("function g() { var l: map<foo, integer>; }", "ct_err:unknown_type:foo")
+        chkCompile("record bar { foo; }", "ct_err:unknown_name_type:foo")
     }
 
     @Test fun testCreateDelete() {
         tst.defs = listOf("object foo { x: integer = 123; }")
-        chkOp("create foo(x=123);", "ct_err:object_not_class:foo")
-        chkOp("delete foo @* {};", "ct_err:object_not_class:foo")
+        chkOp("create foo(x=123);", "ct_err:unknown_class:foo")
+        chkOp("delete foo @* {};", "ct_err:unknown_class:foo")
         chkOp("delete foo;", "ct_err:stmt_delete_obj:foo")
     }
 
@@ -194,12 +194,12 @@ class ObjectTest: BaseRellTest() {
 
     @Test fun testNameResolution() {
         tst.defs = listOf("object foo { x: integer = 123; }", "class user { name; }")
-        tst.insert("c0_user", "name", "1,'Bob'")
+        tst.insert("c0.user", "name", "1,'Bob'")
 
         // Object vs. local: error.
-        chkEx("{ val foo = (s = 'Hello'); return foo.s; }", "ct_err:expr_name_locglob:foo")
-        chkEx("{ val foo = (s = 'Hello'); return foo.x; }", "ct_err:expr_name_locglob:foo")
-        chkEx("{ val foo = (x = 456); return foo.x; }", "ct_err:expr_name_locglob:foo")
+        chkEx("{ val foo = (s = 'Hello'); return foo.s; }", "text[Hello]")
+        chkEx("{ val foo = (s = 'Hello'); return foo.x; }", "ct_err:unknown_member:(s:text):x")
+        chkEx("{ val foo = (x = 456); return foo.x; }", "int[456]")
 
         // Object vs. alias: error.
         chk("(foo: user) @* {}", "list<user>[user[1]]")
@@ -208,9 +208,9 @@ class ObjectTest: BaseRellTest() {
 
     @Test fun testMultipleRecords() {
         tst.defs = listOf("object foo { x: integer = 123; }")
-        tst.insert("c0_foo", "x", "1,123")
-        tst.insert("c0_foo", "x", "2,456")
-        tst.insert("c0_foo", "x", "3,789")
+        tst.insert("c0.foo", "x", "1,123")
+        tst.insert("c0.foo", "x", "2,456")
+        tst.insert("c0.foo", "x", "3,789")
         tst.autoInitObjects = false
 
         chk("foo.x", "rt_err:obj_multirec:foo:3")

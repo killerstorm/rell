@@ -2,12 +2,6 @@ package net.postchain.rell.parser
 
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_IntValue
-import net.postchain.rell.runtime.Rt_Value
-
-abstract class C_LibNamespace {
-    abstract fun getValueOpt(entCtx: C_EntityContext, nsName: S_Name, name: S_Name): R_Expr?
-    abstract fun getFunctionOpt(entCtx: C_EntityContext, nsName: S_Name, name: S_Name): C_GlobalFunction?
-}
 
 object C_LibFunctions {
     private val GLOBAL_FNS = C_GlobalFuncBuilder()
@@ -56,8 +50,8 @@ object C_LibFunctions {
 
     private val INTEGER_NAMESPACE = makeNamespace(
             INTEGER_NAMESPACE_FNS,
-            stdConstField("MIN_VALUE", Long.MIN_VALUE),
-            stdConstField("MAX_VALUE", Long.MAX_VALUE)
+            stdConstValue("MIN_VALUE", Long.MIN_VALUE),
+            stdConstValue("MAX_VALUE", Long.MAX_VALUE)
     )
 
     private val GTXVALUE_NAMESPACE_FNS = C_GlobalFuncBuilder()
@@ -70,8 +64,14 @@ object C_LibFunctions {
 
     private val CHAIN_CONTEXT_NAMESPACE = makeNamespace(
             C_GlobalFuncTable.EMPTY,
-            stdFnField("raw_config", R_GtxValueType, R_SysFn_ChainContext_RawConfig),
-            Pair("args", C_NsField_ChainContext_Args)
+            stdFnValue("raw_config", R_GtxValueType, R_SysFn_ChainContext_RawConfig),
+            Pair("args", C_NsValue_ChainContext_Args)
+    )
+
+    private val OP_CONTEXT_NAMESPACE = makeNamespace(
+            C_GlobalFuncTable.EMPTY,
+            Pair("last_block_time", C_Ns_OpContext.Value_LastBlockTime),
+            Pair("transaction", C_Ns_OpContext.Value_Transaction)
     )
 
     private val TEXT_FNS = C_MemberFuncBuilder()
@@ -118,22 +118,15 @@ object C_LibFunctions {
             .add("toJSON", R_JSONType, listOf(), R_SysFn_GtxValue_ToJson)
             .build()
 
-    private val NAMESPACES = mutableMapOf(
+    private val NAMESPACES = mapOf(
             "integer" to INTEGER_NAMESPACE,
             "GTXValue" to GTXVALUE_NAMESPACE,
             "chain_context" to CHAIN_CONTEXT_NAMESPACE,
-            "op_context" to C_Ns_OpContext
+            C_Ns_OpContext.NAME to OP_CONTEXT_NAMESPACE
     )
 
     fun getGlobalFunctions(): Map<String, C_GlobalFunction> = GLOBAL_FNS.toMap()
-
-    fun getNamespace(modCtx: C_ModuleContext, name: String): C_LibNamespace? {
-        val record = modCtx.getRecordOpt(name)
-        if (record != null) {
-            return getRecordNamespace(record)
-        }
-        return NAMESPACES[name]
-    }
+    fun getSystemNamespaces(): Map<String, C_Namespace> = NAMESPACES
 
     fun getMemberFunctionOpt(type: R_Type, name: String): C_SysMemberFunction? {
         val table = getTypeMemberFunctions(type)
@@ -225,7 +218,7 @@ object C_LibFunctions {
                 .build()
     }
 
-    private fun getRecordNamespace(type: R_RecordType): C_LibNamespace {
+    fun makeRecordNamespace(type: R_RecordType): C_Namespace {
         val flags = type.completeFlags()
         val invalid = C_SysFunction_InvalidRecord(type)
 
@@ -289,64 +282,43 @@ object C_LibFunctions {
     }
 }
 
-private class C_StdLibNamespace(
-        private val consts: Map<String, C_NamespaceField>,
-        private val fns: C_GlobalFuncTable
-): C_LibNamespace()
-{
-    override fun getValueOpt(entCtx: C_EntityContext, nsName: S_Name, name: S_Name): R_Expr? {
-        val field = consts[name.str]
-        val expr = field?.getExpr(entCtx, name)
-        return expr
-    }
-
-    override fun getFunctionOpt(entCtx: C_EntityContext, nsName: S_Name, name: S_Name) = fns.get(name.str)
-}
-
-private sealed class C_NamespaceField {
-    abstract fun getExpr(entCtx: C_EntityContext, name: S_Name): R_Expr
-}
-
-private class C_ConstNamespaceField(private val value: Rt_Value): C_NamespaceField() {
-    override fun getExpr(entCtx: C_EntityContext, name: S_Name) = R_ConstantExpr(value)
-}
-
-private class C_FuncNamespaceField(private val resultType: R_Type, private val fn: R_SysFunction): C_NamespaceField() {
-    override fun getExpr(entCtx: C_EntityContext, name: S_Name): R_Expr {
-        return R_SysCallExpr(resultType, fn, listOf())
-    }
-}
-
-object C_Ns_OpContext: C_LibNamespace() {
-    override fun getValueOpt(entCtx: C_EntityContext, nsName: S_Name, name: S_Name): R_Expr? {
-        val et = entCtx.entityType
-        if (et != C_EntityType.OPERATION && et != C_EntityType.FUNCTION && et != C_EntityType.CLASS) {
-            throw C_Error(nsName.pos, "op_ctx_noop", "Cannot access '${nsName.str}' outside of an operation")
-        }
-
-        if (name.str == "last_block_time") {
-            return R_SysCallExpr(R_IntegerType, R_SysFn_OpContext_LastBlockTime, listOf())
-        } else if (name.str == "transaction") {
-            return transactionExpr(entCtx)
-        } else {
-            return null
-        }
-    }
-
-    override fun getFunctionOpt(entCtx: C_EntityContext, nsName: S_Name, name: S_Name) = null
+object C_Ns_OpContext {
+    val NAME = "op_context"
 
     fun transactionExpr(entCtx: C_EntityContext): R_Expr {
-        val type = entCtx.modCtx.transactionClassType
+        val type = entCtx.nsCtx.modCtx.transactionClassType
         return R_SysCallExpr(type, R_SysFn_OpContext_Transaction(type), listOf())
+    }
+
+    private fun checkCtx(entCtx: C_EntityContext, name: List<S_Name>) {
+        val et = entCtx.entityType
+        if (et != C_EntityType.OPERATION && et != C_EntityType.FUNCTION && et != C_EntityType.CLASS) {
+            throw C_Error(name[0].pos, "op_ctx_noop", "Cannot access '$NAME' outside of an operation")
+        }
+    }
+
+    object Value_LastBlockTime: C_NamespaceValue_RExpr() {
+        override fun get0(entCtx: C_EntityContext, name: List<S_Name>): R_Expr {
+            checkCtx(entCtx, name)
+            return R_SysCallExpr(R_IntegerType, R_SysFn_OpContext_LastBlockTime, listOf())
+        }
+    }
+
+    object Value_Transaction: C_NamespaceValue_RExpr() {
+        override fun get0(entCtx: C_EntityContext, name: List<S_Name>): R_Expr {
+            checkCtx(entCtx, name)
+            return transactionExpr(entCtx)
+        }
     }
 }
 
-private object C_NsField_ChainContext_Args: C_NamespaceField() {
-    override fun getExpr(entCtx: C_EntityContext, name: S_Name): R_Expr {
-        val record = entCtx.modCtx.getModuleArgsRecord()
+private object C_NsValue_ChainContext_Args: C_NamespaceValue_RExpr() {
+    override fun get0(entCtx: C_EntityContext, name: List<S_Name>): R_Expr {
+        val record = entCtx.nsCtx.modCtx.getModuleArgsRecord()
         if (record == null) {
-            throw C_Error(name.pos, "expr_chainctx_args_norec",
-                    "To use '${name.str}', define a record '${C_Defs.MODULE_ARGS_RECORD}'")
+            val nameStr = C_Utils.nameStr(name)
+            throw C_Error(name[0].pos, "expr_chainctx_args_norec",
+                    "To use '$nameStr', define a record '${C_Defs.MODULE_ARGS_RECORD}'")
         }
         val type = R_NullableType(record)
         return R_SysCallExpr(type, R_SysFn_ChainContext_Args, listOf())
@@ -498,23 +470,23 @@ private class C_SysMemberFunction_InvalidRecord(val recordType: R_RecordType): C
     }
 }
 
-private fun makeNamespace(fns: C_GlobalFuncTable, vararg fields: Pair<String, C_NamespaceField>): C_LibNamespace {
-    val fieldMap = mutableMapOf<String, C_NamespaceField>()
-
-    for ((name, field) in fields) {
-        check(name !in fieldMap)
-        fieldMap[name] = field
+private fun makeNamespace(fns: C_GlobalFuncTable, vararg values: Pair<String, C_NamespaceValue>): C_Namespace {
+    val valueMap = mutableMapOf<String, C_NamespaceValue>()
+    for ((name, field) in values) {
+        check(name !in valueMap)
+        valueMap[name] = field
     }
 
-    return C_StdLibNamespace(fieldMap, fns)
+    val functionMap = fns.toMap()
+    return C_Namespace(mapOf(), mapOf(), valueMap, functionMap)
 }
 
-private fun stdConstField(name: String, value: Long): Pair<String, C_NamespaceField> {
-    return Pair(name, C_ConstNamespaceField(Rt_IntValue(value)))
+private fun stdConstValue(name: String, value: Long): Pair<String, C_NamespaceValue> {
+    return Pair(name, C_NamespaceValue_Value(Rt_IntValue(value)))
 }
 
-private fun stdFnField(name: String, type: R_Type, fn: R_SysFunction): Pair<String, C_NamespaceField> {
-    return Pair(name, C_FuncNamespaceField(type, fn))
+private fun stdFnValue(name: String, type: R_Type, fn: R_SysFunction): Pair<String, C_NamespaceValue> {
+    return Pair(name, C_NamespaceValue_SysFunction(type, fn))
 }
 
 private fun matcher(type: R_Type): C_ArgTypeMatcher = C_ArgTypeMatcher_Simple(type)

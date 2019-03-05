@@ -68,7 +68,7 @@ class S_SafeMemberExpr(val base: S_Expr, val name: S_Name): S_Expr(base.startPos
     override fun compile(ctx: C_ExprContext): C_Expr {
         val cBase = base.compile(ctx)
 
-        val baseType = cBase.type()
+        val baseType = cBase.value().type()
         if (baseType !is R_NullableType) {
             throw errWrongType(baseType)
         }
