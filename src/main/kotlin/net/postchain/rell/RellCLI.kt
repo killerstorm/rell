@@ -1,21 +1,19 @@
 package net.postchain.rell
 
 import net.postchain.gtx.GTXNull
-import net.postchain.rell.model.*
+import net.postchain.rell.model.R_ExternalParam
+import net.postchain.rell.model.R_Module
+import net.postchain.rell.model.R_Routine
 import net.postchain.rell.parser.C_Error
 import net.postchain.rell.parser.C_Utils
 import net.postchain.rell.runtime.*
-import net.postchain.rell.sql.DefaultSqlExecutor
-import net.postchain.rell.sql.NoConnSqlExecutor
-import net.postchain.rell.sql.SqlExecutor
-import net.postchain.rell.sql.SqlUtils
+import net.postchain.rell.sql.*
 import org.apache.commons.logging.LogFactory
 import picocli.CommandLine
 import java.io.File
-import java.lang.UnsupportedOperationException
 import kotlin.system.exitProcess
 
-private val SQL_MAPPER = Rt_SqlMapper(0)
+private val SQL_MAPPER = Rt_ChainSqlMapping(0)
 
 fun main(args: Array<String>) {
     val argsEx = parseArgs(args)
@@ -29,23 +27,28 @@ fun main(args: Array<String>) {
     val routine = getRoutineCaller(argsEx, module)
 
     runWithSql(argsEx.dburl) { sqlExec ->
+        val sqlCtx = Rt_SqlContext.createNoExternalChains(module, SQL_MAPPER)
         if (argsEx.resetdb) {
-            SqlUtils.resetDatabase(sqlExec, module, SQL_MAPPER, true, false)
+            sqlExec.transaction {
+                SqlUtils.dropAll(sqlExec, true)
+                val sql = genSqlForChain(sqlCtx)
+                sqlExec.execute(sql)
+            }
             println("Database reset done")
         }
-        routine(sqlExec)
+        routine(sqlExec, sqlCtx)
     }
 }
 
-private fun getRoutineCaller(args: Args, module: R_Module): (SqlExecutor) -> Unit {
+private fun getRoutineCaller(args: Args, module: R_Module): (SqlExecutor, Rt_SqlContext) -> Unit {
     val op = args.op
-    if (op == null) return {}
+    if (op == null) return { _, _ -> }
 
     val (routine, opCtx) = findRoutine(module, op)
     val rtArgs = parseArgs(routine, args.args ?: listOf())
 
-    return { sqlExec ->
-        callRoutine(sqlExec, module, routine, opCtx, rtArgs)
+    return { sqlExec, sqlCtx ->
+        callRoutine(sqlExec, sqlCtx, routine, opCtx, rtArgs)
     }
 }
 
@@ -119,10 +122,16 @@ private fun findRoutine(module: R_Module, name: String): Pair<R_Routine, Rt_OpCo
     }
 }
 
-private fun callRoutine(sqlExec: SqlExecutor, module: R_Module, op: R_Routine, opCtx: Rt_OpContext?, args: List<Rt_Value>) {
+private fun callRoutine(
+        sqlExec: SqlExecutor,
+        sqlCtx: Rt_SqlContext,
+        op: R_Routine,
+        opCtx: Rt_OpContext?,
+        args: List<Rt_Value>
+) {
     val chainCtx = Rt_ChainContext(GTXNull, Rt_NullValue)
-    val globalCtx = Rt_GlobalContext(StdoutRtPrinter, LogRtPrinter, sqlExec, SQL_MAPPER, opCtx, chainCtx)
-    val modCtx = Rt_ModuleContext(globalCtx, module)
+    val globalCtx = Rt_GlobalContext(StdoutRtPrinter, LogRtPrinter, sqlExec, opCtx, chainCtx)
+    val modCtx = Rt_ModuleContext(globalCtx, sqlCtx.module, sqlCtx)
     op.callTop(modCtx, args)
 }
 

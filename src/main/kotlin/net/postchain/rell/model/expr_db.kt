@@ -1,5 +1,7 @@
 package net.postchain.rell.model
 
+import net.postchain.rell.runtime.Rt_IntValue
+
 sealed class Db_BinaryOp(val code: String, val sql: String)
 object Db_BinaryOp_Eq: Db_BinaryOp("==", "=")
 object Db_BinaryOp_Ne: Db_BinaryOp("!=", "<>")
@@ -59,7 +61,7 @@ sealed class Db_TableExpr(val rClass: R_Class): Db_Expr(R_ClassType(rClass)) {
 
     final override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
         val alias = alias(ctx)
-        bld.appendColumn(alias, rClass.mapping.rowidColumn)
+        bld.appendColumn(alias, rClass.sqlMapping.rowidColumn())
     }
 }
 
@@ -116,6 +118,13 @@ class Db_IfExpr(type: R_Type, val cond: Db_Expr, val trueExpr: Db_Expr, val fals
         bld.append(" ELSE ")
         falseExpr.toSql(ctx, bld)
         bld.append(" END")
+    }
+}
+
+class Db_ChainHeightExpr(val chain: R_ExternalChain): Db_Expr(R_IntegerType) {
+    override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
+        val rtChain = ctx.sqlCtx.linkedChain(chain)
+        bld.append(R_IntegerType, Rt_IntValue(rtChain.height))
     }
 }
 

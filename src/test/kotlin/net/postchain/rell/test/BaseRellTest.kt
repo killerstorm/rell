@@ -8,7 +8,8 @@ abstract class BaseRellTest(useSql: Boolean = true, gtx: Boolean = false): BaseR
     open fun classDefs(): List<String> = listOf()
     open fun objInserts(): List<String> = listOf()
 
-    val tst = resource(RellCodeTester(useSql, classDefs(), objInserts(), gtx = gtx))
+    val tstCtx = resource(RellTestContext(useSql))
+    val tst = RellCodeTester(tstCtx, classDefs(), objInserts(), gtx = gtx)
 
     fun chk(code: String, expected: String) = chkEx("= $code ;", expected)
     fun chk(code: String, arg: Long, expected: String) = chkEx("= $code ;", arg, expected)

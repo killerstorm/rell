@@ -136,7 +136,7 @@ class RecordTest: BaseRellTest(false) {
     }
 
     @Test fun testConstructUnderAt() {
-        tst.useSql = true
+        tstCtx.useSql = true
         tst.defs = listOf("class user { name; value: integer; } record foo { x: integer; }")
         chkOp("create user('Bob', 123); create user('Alice', 456);")
         chk("user @ { .value == foo(x = 123).x }(.name)", "text[Bob]")
@@ -144,7 +144,7 @@ class RecordTest: BaseRellTest(false) {
     }
 
     @Test fun testAccessUnderAt() {
-        tst.useSql = true
+        tstCtx.useSql = true
         tst.defs = listOf("class user { name; value: integer; } record foo { x: integer; }")
         chkOp("create user('Bob', 123); create user('Alice', 456);")
         chkEx("{ var r = foo(123); return user @ { .value == r.x }(.name); }", "text[Bob]")

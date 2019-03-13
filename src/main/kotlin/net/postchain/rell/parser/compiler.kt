@@ -41,18 +41,21 @@ class C_GlobalContext(val gtx: Boolean) {
 object C_Defs {
     val LOG_ANNOTATION = "log"
     val MODULE_ARGS_RECORD = "module_args"
+
+    val TRANSACTION_CLASS = "transaction"
+    val BLOCK_CLASS = "block"
 }
 
 class C_Class(val name: S_Name?, val cls: R_Class)
 class C_Record(val name: S_Name, val type: R_RecordType)
 
 enum class C_ModulePass {
-    DECLARATIONS,
-    DEFINITIONS,
+    NAMES,
+    TYPES,
     EXPRESSIONS,
 }
 
-private class C_Table(val type: C_NameType, val name: String)
+private class C_Table(val type: C_DefType, val name: String)
 
 class C_ModuleContext(val globalCtx: C_GlobalContext) {
     private val sysTypes = mapOf(
@@ -71,8 +74,8 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
             "GTXValue" to R_GtxValueType
     )
 
-    private val blockClass = createBlockClass()
-    private val transactionClass = createTransactionClass()
+    private val blockClass = C_Utils.createBlockClass(null, null)
+    private val transactionClass = C_Utils.createTransactionClass(null, null, blockClass)
     val transactionClassType = R_ClassType(transactionClass)
 
     private val allClasses = mutableMapOf<String, C_Class>()
@@ -81,14 +84,14 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
     private val allOperations = mutableMapOf<String, R_Operation>()
     private val allQueries = mutableMapOf<String, R_Query>()
 
-    private val tables = mutableMapOf<String, C_Table>()
-
     private var entityCount: Int = 0
     private var functionCount: Int = 0
     private val functions = mutableListOf<R_Function>()
 
+    private val externalChains = mutableMapOf<String, R_ExternalChain>()
+
     private val passes = C_ModulePass.values().map { Pair(it, mutableListOf<()->Unit>()) }.toMap()
-    private var currentPass = C_ModulePass.DECLARATIONS
+    private var currentPass = C_ModulePass.NAMES
 
     val nsCtx = C_NamespaceContext(
             this,
@@ -100,36 +103,6 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
             predefFunctions = C_LibFunctions.getGlobalFunctions()
     )
 
-    private fun createBlockClass(): R_Class {
-        val attrs = listOf(
-                R_Attrib(0, "block_height", R_IntegerType, false, false),
-                R_Attrib(1, "block_rid", R_ByteArrayType, false, false),
-                R_Attrib(2, "timestamp", R_IntegerType, false, false)
-        )
-        return createSysClass("block", "blocks", "block_iid", attrs)
-    }
-
-    private fun createTransactionClass(): R_Class {
-        val attrs = listOf(
-                R_Attrib(0, "tx_rid", R_ByteArrayType, false, false),
-                R_Attrib(1, "tx_hash", R_ByteArrayType, false, false),
-                R_Attrib(2, "tx_data", R_ByteArrayType, false, false),
-                R_Attrib(3, "block", R_ClassType(blockClass), false, false, true, "block_iid")
-        )
-        return createSysClass("transaction", "transactions", "tx_iid", attrs)
-    }
-
-    private fun createSysClass(name: String, table: String, rowid: String, attrs: List<R_Attrib>): R_Class {
-        val flags = R_ClassFlags(false, false, false, false, false)
-        val mapping = R_ClassSqlMapping(table, true, rowid, false)
-        val cls = R_Class(name, flags, mapping)
-
-        val attrMap = attrs.map { Pair(it.name, it) }.toMap()
-        cls.setBody(R_ClassBody(listOf(), listOf(), attrMap))
-
-        return cls
-    }
-
     fun getModuleArgsRecord(): R_RecordType? {
         return nsCtx.getRecordOpt(C_Defs.MODULE_ARGS_RECORD)?.type
     }
@@ -137,31 +110,17 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
     fun nextEntityIndex(): Int = entityCount++
     fun nextFunctionKey(): Int = functionCount++
 
-    fun addClass(def: C_Class, sName: S_Name?) {
-        addTable(def.cls, C_NameType.CLASS, sName)
-        addDef(def.cls.name, def, allClasses)
+    fun addClass(def: R_Class, sName: S_Name?) {
+        addDef(def.name, C_Class(sName, def), allClasses)
     }
 
-    fun addObject(def: R_Object, sName: S_Name) {
-        addTable(def.rClass, C_NameType.OBJECT, sName)
+    fun addObject(def: R_Object) {
         addDef(def.rClass.name, def, allObjects)
     }
 
     fun addRecord(def: R_RecordType) = addDef(def.name, def, allRecords)
     fun addOperation(def: R_Operation) = addDef(def.name, def, allOperations)
     fun addQuery(def: R_Query) = addDef(def.name, def, allQueries)
-
-    private fun addTable(rClass: R_Class, defType: C_NameType, sName: S_Name?) {
-        val tableKey = rClass.mapping.tableKey()
-        val oldTable = tables[tableKey]
-        if (oldTable != null) {
-            sName ?: throw IllegalStateException("tableKey:$defType:${rClass.name}")
-            throw C_Error(sName.pos,
-                    "def_duptable:$tableKey:${oldTable.type.description}:${oldTable.name}",
-                    "Table '$tableKey' already used for ${oldTable.type.description} '${oldTable.name}'")
-        }
-        tables[tableKey] = C_Table(defType, rClass.name)
-    }
 
     private fun <T> addDef(name: String, def: T, map: MutableMap<String, T>) {
         check(name !in map) { name }
@@ -171,6 +130,19 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
     fun addFunctionDefinition(f: R_Function) {
         check(functions.size == f.fnKey)
         functions.add(f)
+    }
+
+    fun addExternalChain(pos: S_Pos, name: String): R_ExternalChain {
+        if (name.isEmpty()) {
+            throw C_Error(pos, "def_external_invalid:$name", "Invalid chain name: '$name'")
+        }
+        if (name in externalChains) {
+            throw C_Error(pos, "def_external_dup:$name", "Chain '$name' already exported")
+        }
+        val index = externalChains.size
+        val chain = R_ExternalChain(name, index)
+        externalChains[name] = chain
+        return chain
     }
 
     fun checkPass(minPass: C_ModulePass?, maxPass: C_ModulePass?) {
@@ -207,7 +179,7 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
 
     fun createModule(): R_Module {
         nsCtx.createNamespace()
-        runPass(C_ModulePass.DEFINITIONS)
+        runPass(C_ModulePass.TYPES)
         processRecords()
         runPass(C_ModulePass.EXPRESSIONS)
 
@@ -226,7 +198,8 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
                 allQueries.toMap(),
                 functions.toList(),
                 moduleArgs?.type,
-                topologicalClasses
+                topologicalClasses,
+                externalChains.values.toList()
         )
     }
 
@@ -279,7 +252,7 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
     }
 }
 
-enum class C_NameType(val description: String) {
+enum class C_DefType(val description: String) {
     NAMESPACE("namespace"),
     TYPE("type"),
     CLASS("class"),
@@ -288,19 +261,20 @@ enum class C_NameType(val description: String) {
     OBJECT("object"),
     FUNCTION("function"),
     OPERATION("operation"),
-    QUERY("query")
+    QUERY("query"),
+    EXTERNAL("external")
 }
 
 class C_NamespaceContext(
         val modCtx: C_ModuleContext,
         private val parentCtx: C_NamespaceContext?,
-        private val namespaceName: String?,
+        val namespaceName: String?,
         predefNamespaces: Map<String, C_Namespace> = mapOf(),
         predefTypes: Map<String, R_Type> = mapOf(),
         predefClasses: List<R_Class> = listOf(),
         predefFunctions: Map<String, C_GlobalFunction> = mapOf()
 ){
-    private val names = mutableMapOf<String, C_NameType>()
+    private val names = mutableMapOf<String, C_DefType>()
     private val nsBuilder = C_NamespaceBuilder()
 
     private val records = mutableMapOf<String, C_Record>()
@@ -310,22 +284,23 @@ class C_NamespaceContext(
     init {
         val predefValues = predefNamespaces.mapValues { C_NamespaceValue_Namespace(it.value) }
 
-        addPredefs(predefTypes, C_NameType.TYPE, nsBuilder::addType)
-        addPredefs(predefNamespaces, C_NameType.NAMESPACE, nsBuilder::addNamespace)
-        addPredefs(predefValues, C_NameType.NAMESPACE, nsBuilder::addValue)
-        addPredefs(predefFunctions, C_NameType.FUNCTION, nsBuilder::addFunction)
+        addPredefs(predefTypes, C_DefType.TYPE, nsBuilder::addType)
+        addPredefs(predefNamespaces, C_DefType.NAMESPACE, nsBuilder::addNamespace)
+        addPredefs(predefValues, C_DefType.NAMESPACE, nsBuilder::addValue)
+        addPredefs(predefFunctions, C_DefType.FUNCTION, nsBuilder::addFunction)
 
         for (cls in predefClasses) {
             // Assuming only top-level namespace can have predefined classes, so name == fullName
             check(parentCtx == null)
             val name = cls.name
             check(name !in names)
-            addClass0(null, name, cls)
-            names[name] = C_NameType.CLASS
+            modCtx.addClass(cls, null)
+            addClass0(name, cls)
+            names[name] = C_DefType.CLASS
         }
     }
 
-    private fun <T> addPredefs(predefs: Map<String, T>, type: C_NameType, adder: (String, T) -> Unit) {
+    private fun <T> addPredefs(predefs: Map<String, T>, type: C_DefType, adder: (String, T) -> Unit) {
         for ((name, def) in predefs) {
             adder(name, def)
             // For predefined names, name duplication is allowed (e.g. "integer" is a type, function and namespace)
@@ -333,9 +308,7 @@ class C_NamespaceContext(
         }
     }
 
-    fun fullName(name: String): String {
-        return if (namespaceName == null) name else (namespaceName + "." + name)
-    }
+    fun fullName(name: String) = C_Utils.fullName(namespaceName, name)
 
     fun getType(name: List<S_Name>): R_Type {
         val type = getTypeOpt(name)
@@ -395,7 +368,7 @@ class C_NamespaceContext(
     }
 
     private fun <T> getDefOpt(getter: (C_NamespaceContext) -> T?): T? {
-        modCtx.checkPass(C_ModulePass.DEFINITIONS, null)
+        modCtx.checkPass(C_ModulePass.TYPES, null)
         var ctx: C_NamespaceContext? = this
         while (ctx != null) {
             val def = getter(ctx)
@@ -406,30 +379,30 @@ class C_NamespaceContext(
     }
 
     fun addNamespace(name: String, ns: C_Namespace) {
-        modCtx.checkPass(null, C_ModulePass.DECLARATIONS)
+        modCtx.checkPass(null, C_ModulePass.NAMES)
         nsBuilder.addNamespace(name, ns)
         nsBuilder.addValue(name, C_NamespaceValue_Namespace(ns))
     }
 
     fun addClass(name: S_Name, cls: R_Class) {
-        modCtx.checkPass(null, C_ModulePass.DECLARATIONS)
-        addClass0(name, name.str, cls)
+        modCtx.checkPass(null, C_ModulePass.NAMES)
+        modCtx.addClass(cls, name)
+        addClass0(name.str, cls)
     }
 
-    private fun addClass0(sName: S_Name?, name: String, cls: R_Class) {
-        val cCls = C_Class(sName, cls)
-        modCtx.addClass(cCls, sName)
+    fun addClass0(name: String, cls: R_Class) {
+        modCtx.checkPass(null, C_ModulePass.NAMES)
         nsBuilder.addType(name, R_ClassType(cls))
     }
 
     fun addObject(sName: S_Name, obj: R_Object) {
-        modCtx.checkPass(null, C_ModulePass.DECLARATIONS)
-        modCtx.addObject(obj, sName)
+        modCtx.checkPass(null, C_ModulePass.NAMES)
+        modCtx.addObject(obj)
         nsBuilder.addValue(sName.str, C_NamespaceValue_Object(obj))
     }
 
     fun addRecord(rec: C_Record) {
-        modCtx.checkPass(null, C_ModulePass.DECLARATIONS)
+        modCtx.checkPass(null, C_ModulePass.NAMES)
         val name = rec.name.str
         check(name !in records)
         modCtx.addRecord(rec.type)
@@ -439,7 +412,7 @@ class C_NamespaceContext(
     }
 
     fun addEnum(name: String, e: R_EnumType) {
-        modCtx.checkPass(null, C_ModulePass.DECLARATIONS)
+        modCtx.checkPass(null, C_ModulePass.NAMES)
         nsBuilder.addType(name, e)
         nsBuilder.addValue(name, C_NamespaceValue_Enum(e))
     }
@@ -455,7 +428,7 @@ class C_NamespaceContext(
     }
 
     fun addFunctionDeclaration(name: String): C_UserGlobalFunction {
-        modCtx.checkPass(null, C_ModulePass.DECLARATIONS)
+        modCtx.checkPass(null, C_ModulePass.NAMES)
         val fnKey = modCtx.nextFunctionKey()
         val fullName = fullName(name)
         val fn = C_UserGlobalFunction(fullName, fnKey)
@@ -468,8 +441,8 @@ class C_NamespaceContext(
         modCtx.addFunctionDefinition(function)
     }
 
-    fun registerName(name: S_Name, type: C_NameType): String {
-        modCtx.checkPass(null, C_ModulePass.DECLARATIONS)
+    fun registerName(name: S_Name, type: C_DefType): String {
+        modCtx.checkPass(null, C_ModulePass.NAMES)
         val oldType = names[name.str]
         if (oldType != null) {
             throw C_Error(name.pos, "name_conflict:${oldType.description}:${name.str}",
@@ -479,7 +452,7 @@ class C_NamespaceContext(
         return fullName(name.str)
     }
 
-    fun checkTopNamespace(pos: S_Pos, type: C_NameType) {
+    fun checkTopNamespace(pos: S_Pos, type: C_DefType) {
         if (parentCtx != null) {
             val s = type.description
             throw C_Error(pos, "def_ns:$s", "Not allowed to declare $s in a namespace")
@@ -487,9 +460,67 @@ class C_NamespaceContext(
     }
 
     fun createNamespace(): C_Namespace {
-        modCtx.checkPass(null, C_ModulePass.DECLARATIONS)
+        modCtx.checkPass(null, C_ModulePass.NAMES)
         namespace = nsBuilder.build()
         return namespace
+    }
+}
+
+class C_DefinitionContext(
+        val nsCtx: C_NamespaceContext,
+        val chainCtx: C_ExternalChainContext?,
+        val namespaceName: String?
+) {
+    val modCtx = nsCtx.modCtx
+
+    fun checkNotExternal(pos: S_Pos, defType: C_DefType) {
+        if (chainCtx != null) {
+            val def = defType.description
+            throw C_Error(pos, "def_external:$def", "Not allowed to have $def in external block")
+        }
+    }
+
+    fun fullName(name: String) = C_Utils.fullName(namespaceName, name)
+}
+
+class C_ExternalChainContext(val nsCtx: C_NamespaceContext, val chain: R_ExternalChain) {
+    private var classDeclaredBlock = false
+    private var classDeclaredTx = false
+    private lateinit var transactionClassType: R_Type
+
+    fun declareClassBlock() {
+        check(!classDeclaredBlock)
+        classDeclaredBlock = true
+    }
+
+    fun declareClassTransaction() {
+        check(!classDeclaredTx)
+        classDeclaredTx = true
+    }
+
+    fun registerSysClasses() {
+        val blkClassNs = sysClassNamespace(classDeclaredBlock)
+        val txClassNs = sysClassNamespace(classDeclaredTx)
+
+        val blkClass = C_Utils.createBlockClass(blkClassNs, chain)
+        val txClass = C_Utils.createTransactionClass(txClassNs, chain, blkClass)
+
+        nsCtx.modCtx.addClass(blkClass, null)
+        nsCtx.modCtx.addClass(txClass, null)
+
+        if (classDeclaredBlock) nsCtx.addClass0(C_Defs.BLOCK_CLASS, blkClass)
+        if (classDeclaredTx) nsCtx.addClass0(C_Defs.TRANSACTION_CLASS, txClass)
+
+        transactionClassType = R_ClassType(txClass)
+    }
+
+    private fun sysClassNamespace(defined: Boolean): String {
+        return if (defined) nsCtx.namespaceName!! else "external[${chain.name}]"
+    }
+
+    fun transactionClassType(): R_Type {
+        nsCtx.modCtx.checkPass(C_ModulePass.TYPES, null)
+        return transactionClassType
     }
 }
 
@@ -615,7 +646,8 @@ class C_ClassContext(
         }
 
         val rType = attr.compileType(entCtx.nsCtx)
-        if ((entityType == C_EntityType.CLASS || entityType == C_EntityType.OBJECT) && !rType.isSqlCompatible()) {
+        val insideClass = entityType == C_EntityType.CLASS || entityType == C_EntityType.OBJECT
+        if (insideClass && !rType.sqlAdapter.isSqlCompatible()) {
             throw C_Error(name.pos, "class_attr_type:$nameStr:${rType.toStrictString()}",
                     "Attribute '$nameStr' has unallowed type: ${rType.toStrictString()}")
         }
@@ -650,17 +682,21 @@ class C_ClassContext(
             rAttr.setExpr(null)
         } else {
             entCtx.nsCtx.modCtx.onPass(C_ModulePass.EXPRESSIONS) {
-                val rExpr = exprCreator()
-                check(rType.isAssignableFrom(rExpr.type)) {
-                    val exp = rType.toStrictString()
-                    val act = rExpr.type.toStrictString()
-                    "Attribute '$className.$name' expression type missmatch: expected '$exp', was '$act'"
-                }
-                rAttr.setExpr(rExpr)
+                compileAttributeExpression(rAttr, exprCreator)
             }
         }
 
         attributes[name] = rAttr
+    }
+
+    private fun compileAttributeExpression(rAttr: R_Attrib, exprCreator: (() -> R_Expr)) {
+        val rExpr = exprCreator()
+        check(rAttr.type.isAssignableFrom(rExpr.type)) {
+            val exp = rAttr.type.toStrictString()
+            val act = rExpr.type.toStrictString()
+            "Attribute '$className.${rAttr.name}' expression type missmatch: expected '$exp', was '$act'"
+        }
+        rAttr.setExpr(rExpr)
     }
 
     fun addKey(pos: S_Pos, attrs: List<S_Name>) {

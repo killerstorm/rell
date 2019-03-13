@@ -8,34 +8,36 @@ import net.postchain.gtx.GTXValue
 import net.postchain.rell.hexStringToByteArray
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.module.RellPostchainModuleFactory
-import net.postchain.rell.parser.C_Error
 import net.postchain.rell.sql.SqlExecutor
-import net.postchain.rell.sql.SqlUtils
 import java.sql.Connection
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.fail
 
 class RellGtxTester(
-        useSql: Boolean = true,
+        tstCtx: RellTestContext,
         classDefs: List<String> = listOf(),
         inserts: List<String> = listOf(),
         gtx: Boolean = false
-): RellBaseTester(useSql, classDefs, inserts, gtx)
+): RellBaseTester(tstCtx, classDefs, inserts, gtx)
 {
+    var translateRtError = true
     var moduleArgs: String? = null
+    var extraModuleConfig: String? = null
     var blockchainRID = "DEADBEEF"
-    var chainID: Long = 995511
-    var nodeID: Int = 3377
+    var nodeId: Int = 3377
+
+    init {
+        chainId = 995511
+    }
 
     override fun initSqlReset(conn: Connection, sqlExec: SqlExecutor, moduleCode: String, module: R_Module) {
-        val module = createGtxModule(moduleCode)
+        val gtxModule = createGtxModule(moduleCode)
 
         sqlExec.transaction {
-            SqlUtils.dropAll(sqlExec)
-            val ctx = EContext(conn, chainID, nodeID)
+            val ctx = EContext(conn, chainId, nodeId)
             GTXSchemaManager.initializeDB(ctx)
-            module.initializeDB(ctx)
+            gtxModule.initializeDB(ctx)
         }
     }
 
@@ -44,23 +46,27 @@ class RellGtxTester(
     }
 
     fun chkQueryEx(code: String, args: String, expected: String) {
-        init()
+        val actual = callQueryEx(code, args)
+        assertEquals(expected, actual)
+    }
 
-        val argsExtra = if (args.isEmpty()) "" else ",$args"
-        val argsStr = "{'type':'q'$argsExtra}"
-        val argsGtx = GtxTestUtils.decodeGtxStr(argsStr.replace('\'', '"'))
+    private fun callQueryEx(code: String, args: String): String {
+        return eval.eval {
+            eval.wrapRt { init() }
 
-        val moduleCode = moduleCode(code)
+            val argsExtra = if (args.isEmpty()) "" else ",$args"
+            val argsStr = "{'type':'q'$argsExtra}"
+            val argsGtx = GtxTestUtils.decodeGtxStr(argsStr.replace('\'', '"'))
 
-        val actual = processGtxModule(moduleCode) { module ->
+            val moduleCode = moduleCode(code)
+            val module = eval.wrapCt { createGtxModule(moduleCode) }
+
             val conn = getSqlConn()
-            val ctx = EContext(conn, chainID, nodeID)
+            val ctx = EContext(conn, chainId, nodeId)
 
             val res = module.query(ctx, "q", argsGtx)
             GtxTestUtils.gtxToStr(res)
         }
-
-        assertEquals(expected, actual)
     }
 
     fun chkUserMistake(code: String, msg: String) {
@@ -74,18 +80,9 @@ class RellGtxTester(
         }
     }
 
-    private fun processGtxModule(moduleCode: String, processor: (GTXModule) -> String): String {
-        val module = try {
-            createGtxModule(moduleCode)
-        } catch (e: C_Error) {
-            return "ct_err:" + e.code
-        }
-        return processor(module)
-    }
-
     private fun createGtxModule(moduleCode: String): GTXModule {
         val moduleLoader = { path: String -> moduleCode }
-        val factory = RellPostchainModuleFactory(moduleLoader)
+        val factory = RellPostchainModuleFactory(moduleLoader, translateRtError)
         val moduleCfg = moduleConfig()
         val bcRidBytes = blockchainRID.hexStringToByteArray()
         val module = factory.makeModule(moduleCfg, bcRidBytes)
@@ -94,7 +91,8 @@ class RellGtxTester(
 
     private fun moduleConfig(): GTXValue {
         val args = if (moduleArgs == null) "" else ",'rellModuleArgs':$moduleArgs"
-        val moduleConfigStr = "{'gtx':{'rellSrcModule':'foo'$args}}"
+        val extra = if (extraModuleConfig == null) "" else ",$extraModuleConfig"
+        val moduleConfigStr = "{'gtx':{'rellSrcModule':'foo'$args}$extra}"
         val str = moduleConfigStr.replace('\'', '"')
         val cfg = GtxTestUtils.decodeGtxStr(str)
         return cfg

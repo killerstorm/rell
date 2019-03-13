@@ -33,7 +33,7 @@ object C_Utils {
 
     fun toDbExpr(pos: S_Pos, rExpr: R_Expr): Db_Expr {
         val type = rExpr.type
-        if (!type.isSqlCompatible()) {
+        if (!type.sqlAdapter.isSqlCompatible()) {
             throw C_Errors.errExprNoDb(pos, type)
         }
         return Db_InterpretedExpr(rExpr)
@@ -67,6 +67,50 @@ object C_Utils {
             throw C_Error(pos, "$errCode:$typeStr", "Mutable type cannot be used as $errMsg: $typeStr")
         }
     }
+
+    fun createBlockClass(namespace: String?, chain: R_ExternalChain?): R_Class {
+        val attrs = listOf(
+                R_Attrib(0, "block_height", R_IntegerType, false, false),
+                R_Attrib(1, "block_rid", R_ByteArrayType, false, false),
+                R_Attrib(2, "timestamp", R_IntegerType, false, false)
+        )
+        val sqlMapping = R_ClassSqlMapping_Block(chain)
+        return createSysClass(namespace, C_Defs.BLOCK_CLASS, chain, sqlMapping, attrs)
+    }
+
+    fun createTransactionClass(namespace: String?, chain: R_ExternalChain?, blockClass: R_Class): R_Class {
+        val attrs = listOf(
+                R_Attrib(0, "tx_rid", R_ByteArrayType, false, false),
+                R_Attrib(1, "tx_hash", R_ByteArrayType, false, false),
+                R_Attrib(2, "tx_data", R_ByteArrayType, false, false),
+                R_Attrib(3, "block", R_ClassType(blockClass), false, false, true, "block_iid")
+        )
+        val sqlMapping = R_ClassSqlMapping_Transaction(chain)
+        return createSysClass(namespace, C_Defs.TRANSACTION_CLASS, chain, sqlMapping, attrs)
+    }
+
+    private fun createSysClass(
+            namespace: String?,
+            name: String,
+            chain: R_ExternalChain?,
+            sqlMapping: R_ClassSqlMapping,
+            attrs: List<R_Attrib>
+    ): R_Class {
+        val fullName = C_Utils.fullName(namespace, name)
+        val flags = R_ClassFlags(false, false, false, false, false, false)
+        val externalCls = if (chain == null) null else R_ExternalClass(chain, name, false)
+        val cls = R_Class(fullName, flags, sqlMapping, externalCls)
+        val attrMap = attrs.map { Pair(it.name, it) }.toMap()
+        cls.setBody(R_ClassBody(listOf(), listOf(), attrMap))
+        return cls
+    }
+
+    fun crashExpr(type: R_Type, msg: String): R_Expr {
+        val fn = R_SysFn_ThrowCrash(msg)
+        return R_SysCallExpr(type, fn, listOf())
+    }
+
+    fun fullName(namespaceName: String?, name: String) = if (namespaceName == null) name else (namespaceName + "." + name)
 
     fun nameStr(name: List<S_Name>): String = name.joinToString(".") { it.str }
 }

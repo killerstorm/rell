@@ -1,9 +1,11 @@
 package net.postchain.rell.sql
 
-import net.postchain.rell.model.R_Module
-import net.postchain.rell.runtime.Rt_SqlMapper
 import java.io.Closeable
-import java.sql.*
+import java.sql.Connection
+import java.sql.DriverManager
+import java.sql.PreparedStatement
+import java.sql.ResultSet
+import java.util.concurrent.atomic.AtomicLong
 
 val ROWID_COLUMN = "rowid"
 
@@ -15,16 +17,27 @@ abstract class SqlExecutor {
 }
 
 class DefaultSqlExecutor(private val con: Connection, private val logging: Boolean): SqlExecutor(), Closeable {
+    private val conId = idCounter.getAndIncrement()
+
     override fun transaction(code: () -> Unit) {
-        var rollback = true
+        val autoCommit = con.autoCommit
         try {
-            code()
-            con.commit()
-            rollback = false
-        } finally {
-            if (rollback) {
-                con.rollback()
+            con.autoCommit = false
+            var rollback = true
+            try {
+                log("BEGIN TRANSACTION")
+                code()
+                log("COMMIT TRANSACTION")
+                con.commit()
+                rollback = false
+            } finally {
+                if (rollback) {
+                    log("ROLLBACK TRANSACTION")
+                    con.rollback()
+                }
             }
+        } finally {
+            con.autoCommit = autoCommit
         }
     }
 
@@ -59,9 +72,7 @@ class DefaultSqlExecutor(private val con: Connection, private val logging: Boole
     }
 
     private fun <T> execute0(sql: String, code: () -> T): T {
-        if (logging) {
-            println(sql)
-        }
+        log(sql)
         return code()
     }
 
@@ -69,7 +80,13 @@ class DefaultSqlExecutor(private val con: Connection, private val logging: Boole
         con.close()
     }
 
+    private fun log(s: String) {
+        if (logging) println("[$conId] $s")
+    }
+
     companion object {
+        private val idCounter = AtomicLong()
+
         fun connect(url: String): DefaultSqlExecutor {
             return connect0() { DriverManager.getConnection(url) }
         }
@@ -78,7 +95,7 @@ class DefaultSqlExecutor(private val con: Connection, private val logging: Boole
             val con = factory()
             var c: AutoCloseable? = con
             try {
-                con.autoCommit = false
+                con.autoCommit = true
                 val exec = DefaultSqlExecutor(con, false)
                 c = null
                 return exec
@@ -102,30 +119,20 @@ object NoConnSqlExecutor: SqlExecutor() {
 }
 
 object SqlUtils {
-    fun resetDatabase(
-            sqlExec: SqlExecutor,
-            module: R_Module,
-            sqlMapper: Rt_SqlMapper,
-            dropTables: Boolean,
-            createBlockTables: Boolean
-    ) {
-        sqlExec.transaction {
-            if (dropTables) {
-                dropAll(sqlExec)
-            }
-            val sql = genSql(module, sqlMapper, createBlockTables, false)
-            sqlExec.execute(sql)
-        }
-    }
-
-    fun dropAll(sqlExec: SqlExecutor) {
-        dropTables(sqlExec)
+    fun dropAll(sqlExec: SqlExecutor, sysTables: Boolean) {
+        dropTables(sqlExec, sysTables)
         dropFunctions(sqlExec)
     }
 
-    private fun dropTables(sqlExec: SqlExecutor) {
+    private fun dropTables(sqlExec: SqlExecutor, sysTables: Boolean) {
         val tables = getExistingTables(sqlExec)
-        val sql = tables.joinToString("\n") { "DROP TABLE \"$it\" CASCADE;" }
+
+        val delTables = if (sysTables) tables else {
+            val sys = setOf("blocks", "transactions", "blockchains")
+            tables.filter { it !in sys }
+        }
+
+        val sql = delTables.joinToString("\n") { "DROP TABLE \"$it\" CASCADE;" }
         sqlExec.execute(sql)
     }
 

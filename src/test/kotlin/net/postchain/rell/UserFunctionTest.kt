@@ -31,7 +31,7 @@ class UserFunctionTest: BaseRellTest(false) {
     }
 
     @Test fun testDbSelect() {
-        tst.useSql = true
+        tstCtx.useSql = true
         tst.defs = listOf("class user { name: text; }")
         chkOp("create user('Bob'); create user('Alice');")
 
@@ -40,7 +40,7 @@ class UserFunctionTest: BaseRellTest(false) {
     }
 
     @Test fun testDbUpdate() {
-        tst.useSql = true
+        tstCtx.useSql = true
         tst.defs = listOf("class user { name: text; mutable score: integer; }")
         chkOp("create user('Bob', 100); create user('Alice', 250);")
 
@@ -118,7 +118,7 @@ class UserFunctionTest: BaseRellTest(false) {
     }
 
     @Test fun testCallUnderAt() {
-        tst.useSql = true
+        tstCtx.useSql = true
         tst.defs = listOf("class user { name: text; id: integer; }")
         chkOp("create user('Bob',123); create user('Alice',456);")
 

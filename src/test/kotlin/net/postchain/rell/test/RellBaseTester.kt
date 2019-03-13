@@ -1,37 +1,23 @@
 package net.postchain.rell.test
 
 import net.postchain.rell.model.R_Module
-import net.postchain.rell.runtime.Rt_SqlExecutor
-import net.postchain.rell.runtime.Rt_SqlMapper
-import net.postchain.rell.sql.DefaultSqlExecutor
-import net.postchain.rell.sql.NoConnSqlExecutor
+import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.sql.SqlExecutor
-import java.io.Closeable
 import java.sql.Connection
 import kotlin.test.assertEquals
 
 abstract class RellBaseTester(
-        useSql: Boolean = true,
+        private val tstCtx: RellTestContext,
         classDefs: List<String> = listOf(),
         inserts: List<String> = listOf(),
         gtx: Boolean = false
-): Closeable {
+){
     private var inited = false
-    private var destroyed = false
-    private var sqlConn: Connection? = null
-    private var sqlExec: SqlExecutor = NoConnSqlExecutor
     private var lastInserts = listOf<String>()
     private var moduleProto: R_Module? = null
 
     var errMsgPos = false
     var gtx = gtx
-    var sqlLogging = false
-
-    var useSql: Boolean = useSql
-        set(value) {
-            checkNotInited()
-            field = value
-        }
 
     var defs: List<String> = classDefs
         set(value) {
@@ -47,18 +33,21 @@ abstract class RellBaseTester(
 
     var inserts: List<String> = inserts
 
-    protected fun init() {
+    fun init() {
+        tstCtx.init()
+
         if (!inited) {
             val code = defsCode()
             val module = RellTestUtils.parseModule(code, gtx)
 
-            if (useSql) {
+            if (tstCtx.useSql) {
                 initSql(code, module)
             }
 
             moduleProto = module
             inited = true
         } else if (inserts != lastInserts) {
+            val sqlExec = tstCtx.sqlExec()
             if (!lastInserts.isEmpty()) {
                 SqlTestUtils.clearTables(sqlExec)
             }
@@ -66,10 +55,15 @@ abstract class RellBaseTester(
         }
     }
 
-    fun insert(table: String, columns: String, values: String): RellBaseTester {
+    protected val eval = RellTestEval()
+
+    fun insert(table: String, columns: String, values: String) {
         val ins = SqlTestUtils.mkins(table, columns, values)
         inserts = inserts + listOf(ins)
-        return this
+    }
+
+    fun insert(inserts: List<String>) {
+        this.inserts += inserts
     }
 
     protected fun checkNotInited() {
@@ -77,20 +71,10 @@ abstract class RellBaseTester(
     }
 
     private fun initSql(moduleCode: String, module: R_Module) {
-        val realSqlConn = SqlTestUtils.createSqlConnection()
-        var closeable: Connection? = realSqlConn
-
-        try {
-            realSqlConn.autoCommit = false
-            val realSqlExec = Rt_SqlExecutor(DefaultSqlExecutor(realSqlConn, sqlLogging), true)
-            initSqlReset(realSqlConn, realSqlExec, moduleCode, module)
-            initSqlInserts(realSqlExec)
-            sqlConn = realSqlConn
-            sqlExec = realSqlExec
-            closeable = null
-        } finally {
-            closeable?.close()
-        }
+        val sqlConn = tstCtx.sqlConn()
+        val sqlExec = tstCtx.sqlExec()
+        initSqlReset(sqlConn, sqlExec, moduleCode, module)
+        initSqlInserts(sqlExec)
     }
 
     protected abstract fun initSqlReset(conn: Connection, exec: SqlExecutor, moduleCode: String, module: R_Module)
@@ -101,31 +85,25 @@ abstract class RellBaseTester(
             sqlExecLoc.transaction {
                 sqlExecLoc.execute(insertSql)
             }
-            lastInserts = inserts
         }
-    }
-
-    override final fun close() {
-        if (!inited || destroyed) return
-        destroyed = true
-        sqlConn?.close()
+        lastInserts = inserts
     }
 
     protected fun getSqlConn(): Connection {
         init()
-        return sqlConn!!
+        return tstCtx.sqlConn()
     }
 
     fun dumpDatabase(): List<String> {
         init()
-        val sqlMapper = createSqlMapper()
-        return SqlTestUtils.dumpDatabaseClasses(sqlExec, sqlMapper, moduleProto!!)
+        val sqlMapping = createChainSqlMapping()
+        return SqlTestUtils.dumpDatabaseClasses(tstCtx.sqlExec(), sqlMapping, moduleProto!!)
     }
 
     fun resetRowid() {
         init()
-        val sqlMapper = createSqlMapper()
-        SqlTestUtils.resetRowid(sqlExec, sqlMapper)
+        val sqlMapping = createChainSqlMapping()
+        SqlTestUtils.resetRowid(tstCtx.sqlExec(), sqlMapping)
     }
 
     protected fun defsCode(): String = defs.joinToString("\n")
@@ -136,7 +114,7 @@ abstract class RellBaseTester(
         return modCode
     }
 
-    protected fun getSqlExec() = sqlExec
+    protected fun getSqlExec() = tstCtx.sqlExec()
     protected fun getModuleProto() = moduleProto!!
 
     fun chkCompile(code: String, expected: String) {
@@ -163,7 +141,7 @@ abstract class RellBaseTester(
         return RellTestUtils.processModule(code, errMsgPos, gtx, processor)
     }
 
-    protected fun createSqlMapper(): Rt_SqlMapper {
-        return Rt_SqlMapper(chainId)
+    protected fun createChainSqlMapping(): Rt_ChainSqlMapping {
+        return Rt_ChainSqlMapping(chainId)
     }
 }

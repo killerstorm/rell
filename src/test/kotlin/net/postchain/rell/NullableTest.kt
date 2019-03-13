@@ -80,7 +80,7 @@ class NullableTest: BaseRellTest(false) {
     }
 
     @Test fun testNullableClass() {
-        tst.useSql = true
+        tstCtx.useSql = true
         tst.defs = listOf("class user { name: text; }")
         chkOp("create user (name = 'Bob');")
 
@@ -601,7 +601,7 @@ class NullableTest: BaseRellTest(false) {
     }
 
     @Test fun testSpecOpElvisUnderAt() {
-        tst.useSql = true
+        tstCtx.useSql = true
         tst.defs = listOf("class user { name: text; }")
         chkOp("create user(name = 'Bob'); create user(name = 'Alice');")
 
@@ -677,7 +677,7 @@ class NullableTest: BaseRellTest(false) {
     }
 
     @Test fun testSpecOpSafeDataField() {
-        tst.useSql = true
+        tstCtx.useSql = true
         tst.defs = listOf("class company { name: text; }", "class user { name: text; company; }")
 
         chkOp("""

@@ -1,6 +1,7 @@
 package net.postchain.rell
 
 import net.postchain.rell.test.RellCodeTester
+import net.postchain.rell.test.RellTestContext
 import net.postchain.rell.test.SqlTestUtils
 import kotlin.test.assertEquals
 
@@ -54,7 +55,8 @@ class AtExprOpTest: AbstractOpTest() {
             Ins.user(2000, "Steve Jobs", 200)
     )
 
-    private val tst = resource(RellCodeTester(classDefs = classDefs, inserts = inserts))
+    private val tstCtx = resource(RellTestContext())
+    private val tst = RellCodeTester(tstCtx, classDefs = classDefs, inserts = inserts)
 
     override fun chkExpr(expr: String, args: List<TstVal>, expected: Boolean) {
         val (expr2, values) = transformExpr(expr, args)

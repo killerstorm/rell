@@ -73,7 +73,7 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testListItems() {
-        tst.useSql = true
+        tstCtx.useSql = true
         tst.defs = listOf("class user { name: text; }")
 
         chkOp("create user('Bob');")
@@ -89,7 +89,7 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testFunctionsUnderAt() {
-        tst.useSql = true
+        tstCtx.useSql = true
         tst.defs = listOf("class user { name: text; score: integer; }")
         chkOp("create user('Bob',-5678);")
 
@@ -108,7 +108,7 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testDataClassPathExpr() {
-        tst.useSql = true
+        tstCtx.useSql = true
         tst.defs = listOf("class company { name: text; }", "class user { name: text; company; }")
 
         chkOp("""
@@ -130,7 +130,7 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testDataClassPathExprMix() {
-        tst.useSql = true
+        tstCtx.useSql = true
         tst.defs = listOf("class company { name: text; }", "class user { name: text; company; }")
 
         chkOp("""
@@ -157,7 +157,7 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testDataClassPathExprComplex() {
-        tst.useSql = true
+        tstCtx.useSql = true
         tst.defs = listOf(
                 "class c1 { name: text; }",
                 "class c2 { name: text; c1; }",
@@ -264,7 +264,7 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testNamespaceUnderAt() {
-        tst.useSql = true
+        tstCtx.useSql = true
         tst.defs = listOf("class user { name: text; score: integer; }")
         chkOp("create user('Bob',-5678);")
 
@@ -281,7 +281,7 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testMoreFunctionsUnderAt() {
-        tst.useSql = true
+        tstCtx.useSql = true
         tst.strictToString = false
         tst.defs = listOf("class user { id: integer; name1: text; name2: text; v1: integer; v2: integer; }")
         chkOp("""

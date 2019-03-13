@@ -22,7 +22,7 @@ class LibRequireTest: BaseRellTest(false) {
     }
 
     @Test fun testRequireAt() {
-        tst.useSql = true
+        tstCtx.useSql = true
         tst.defs = listOf("class user { name: text; }")
         chkOp("create user(name = 'Bob'); create user(name = 'Alice');")
 

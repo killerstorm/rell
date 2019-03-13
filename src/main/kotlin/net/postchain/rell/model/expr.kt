@@ -121,7 +121,7 @@ class R_MemberCalculator_SysFn(type: R_Type, val fn: R_SysFunction, val args: Li
     override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
         val vArgs = args.map { it.evaluate(frame) }
         val vFullArgs = listOf(baseValue) + vArgs
-        return fn.call(frame.entCtx.modCtx.globalCtx, vFullArgs)
+        return fn.call(frame.entCtx.modCtx, vFullArgs)
     }
 }
 
@@ -354,9 +354,9 @@ class R_CreateExprAttr_Default(attr: R_Attrib): R_CreateExprAttr(attr) {
 class R_CreateExpr(type: R_Type, val rClass: R_Class, val attrs: List<R_CreateExprAttr>): R_Expr(type) {
     override fun evaluate(frame: Rt_CallFrame): Rt_Value {
         frame.entCtx.checkDbUpdateAllowed()
-        val sqlMapper = frame.entCtx.modCtx.globalCtx.sqlMapper
-        val rowidFunc = sqlMapper.rowidFunction
-        val rtSql = buildSql(sqlMapper, rClass, attrs, "\"$rowidFunc\"()")
+        val sqlCtx = frame.entCtx.modCtx.sqlCtx
+        val rowidFunc = sqlCtx.mainChainMapping.rowidFunction
+        val rtSql = buildSql(sqlCtx, rClass, attrs, "\"$rowidFunc\"()")
         val rtSel = SqlSelect(rtSql, listOf(type))
         val res = rtSel.execute(frame)
         check(res.size == 1)
@@ -365,15 +365,17 @@ class R_CreateExpr(type: R_Type, val rClass: R_Class, val attrs: List<R_CreateEx
     }
 
     companion object {
-        fun buildSql(sqlMapper: Rt_SqlMapper, rClass: R_Class, attrs: List<R_CreateExprAttr>, rowidExpr: String): ParameterizedSql {
+        fun buildSql(sqlCtx: Rt_SqlContext, rClass: R_Class, attrs: List<R_CreateExprAttr>, rowidExpr: String): ParameterizedSql {
             val builder = SqlBuilder()
 
+            val table = rClass.sqlMapping.table(sqlCtx)
+            val rowid = rClass.sqlMapping.rowidColumn()
+
             builder.append("INSERT INTO ")
-            val table = rClass.mapping.table(sqlMapper)
             builder.appendName(table)
 
             builder.append("(")
-            builder.appendName(rClass.mapping.rowidColumn)
+            builder.appendName(rowid)
             builder.append(attrs, "") { attr ->
                 builder.append(", ")
                 builder.appendName(attr.attr.sqlMapping)
@@ -389,7 +391,7 @@ class R_CreateExpr(type: R_Type, val rClass: R_Class, val attrs: List<R_CreateEx
             builder.append(")")
 
             builder.append(" RETURNING ")
-            builder.appendName(rClass.mapping.rowidColumn)
+            builder.appendName(rowid)
 
             return builder.build()
         }

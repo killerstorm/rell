@@ -18,13 +18,20 @@ object RellTestUtils {
     val ENCODER_GTX = { t: R_Type, v: Rt_Value -> GtxTestUtils.encodeGtxStr(t.rtToGtx(v, true)) }
 
     fun processModule(code: String, errPos: Boolean = false, gtx: Boolean = false, processor: (R_Module) -> String): String {
-        val module = try {
+        val p = catchCtErr0(errPos) {
             parseModule(code, gtx)
+        }
+        return p.first ?: processor(p.second!!)
+    }
+
+    fun <T> catchCtErr0(errPos: Boolean, block: () -> T): Pair<String?, T?> {
+        try {
+            val res = block()
+            return Pair(null, res)
         } catch (e: C_Error) {
             val p = if (errPos) "" + e.pos else ""
-            return "ct_err$p:" + e.code
+            return Pair("ct_err$p:" + e.code, null)
         }
-        return processor(module)
     }
 
     fun catchRtErr(block: () -> String): String {
@@ -32,7 +39,13 @@ object RellTestUtils {
         return p.first ?: p.second!!
     }
 
-    private fun <T> catchRtErr0(block: () -> T): Pair<String?, T?> {
+    fun <T> catchRtErr(block1: () -> T, block2: (T) -> String): String {
+        val p1 = catchRtErr0(block1)
+        if (p1.first != null) return p1.first!!
+        return block2(p1.second!!)
+    }
+
+    fun <T> catchRtErr0(block: () -> T): Pair<String?, T?> {
         try {
             val res = block()
             return Pair(null, res)
@@ -45,10 +58,9 @@ object RellTestUtils {
         }
     }
 
-    fun callFn(globalCtx: Rt_GlobalContext, module: R_Module, name: String, args: List<Rt_Value>, strict: Boolean): String {
-        val fn = module.functions[name]
+    fun callFn(modCtx: Rt_ModuleContext, name: String, args: List<Rt_Value>, strict: Boolean): String {
+        val fn = modCtx.module.functions[name]
         if (fn == null) throw IllegalStateException("Function not found: '$name'")
-        val modCtx = Rt_ModuleContext(globalCtx, module)
         val res = catchRtErr {
             val v = fn.callTopFunction(modCtx, args)
             if (strict) v.toStrictString() else v.toString()
@@ -56,21 +68,20 @@ object RellTestUtils {
         return res
     }
 
-    fun callQuery(globalCtx: Rt_GlobalContext, module: R_Module, name: String, args: List<Rt_Value>, encoder: (R_Type, Rt_Value) -> String): String {
+    fun callQuery(modCtx: Rt_ModuleContext, name: String, args: List<Rt_Value>, encoder: (R_Type, Rt_Value) -> String): String {
         val decoder = { params: List<R_ExternalParam>, args: List<Rt_Value> -> args }
-        return callQueryGeneric(globalCtx, module, name, args, decoder, encoder)
+        return callQueryGeneric(modCtx, name, args, decoder, encoder)
     }
 
     fun <T> callQueryGeneric(
-            globalCtx: Rt_GlobalContext,
-            module: R_Module,
+            modCtx: Rt_ModuleContext,
             name: String,
             args: List<T>,
             decoder: (List<R_ExternalParam>, List<T>) -> List<Rt_Value>,
             encoder: (R_Type, Rt_Value) -> String
     ): String
     {
-        val query = module.queries[name]
+        val query = modCtx.module.queries[name]
         if (query == null) throw IllegalStateException("Query not found: '$name'")
 
         val (rtErr, rtArgs) = catchRtErr0 { decoder(query.params, args) }
@@ -78,32 +89,26 @@ object RellTestUtils {
             return rtErr
         }
 
-        val modCtx = Rt_ModuleContext(globalCtx, module)
-        return callQuery0(modCtx, query, rtArgs!!, encoder)
-    }
-
-    private fun callQuery0(modCtx: Rt_ModuleContext, query: R_Query, args: List<Rt_Value>, encoder: (R_Type, Rt_Value) -> String): String {
         val res = catchRtErr {
-            val v = query.callTopQuery(modCtx, args)
+            val v = query.callTopQuery(modCtx, rtArgs!!)
             encoder(query.type, v)
         }
         return res
     }
 
-    fun callOp(globalCtx: Rt_GlobalContext, module: R_Module, name: String, args: List<Rt_Value>): String {
+    fun callOp(modCtx: Rt_ModuleContext, name: String, args: List<Rt_Value>): String {
         val decoder = { params: List<R_ExternalParam>, args: List<Rt_Value> -> args }
-        return callOpGeneric(globalCtx, module, name, args, decoder)
+        return callOpGeneric(modCtx, name, args, decoder)
     }
 
     fun <T> callOpGeneric(
-            globalCtx: Rt_GlobalContext,
-            module: R_Module,
+            modCtx: Rt_ModuleContext,
             name: String,
             args: List<T>,
             decoder: (List<R_ExternalParam>, List<T>) -> List<Rt_Value>
     ): String
     {
-        val op = module.operations[name]
+        val op = modCtx.module.operations[name]
         if (op == null) throw IllegalStateException("Operation not found: '$name'")
 
         val (rtErr, rtArgs) = catchRtErr0 { decoder(op.params, args) }
@@ -111,7 +116,6 @@ object RellTestUtils {
             return rtErr
         }
 
-        val modCtx = Rt_ModuleContext(globalCtx, module)
         return catchRtErr {
             op.callTop(modCtx, rtArgs!!)
             "OK"

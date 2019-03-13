@@ -215,8 +215,7 @@ class S_AtExpr(
         val rFrom = cFrom.map { it.compile() }
 
         val dbCtx = C_DbExprContext(ctx.blkCtx, cFrom)
-
-        val dbWhere = where.compile(dbCtx)
+        val dbWhere = where?.compile(dbCtx)
 
         val ctWhat = what.compile(dbCtx)
         val resType = calcResultType(ctWhat.exprs)

@@ -4,7 +4,6 @@ import com.github.h0tk3y.betterParse.lexer.TokenMatch
 import net.postchain.rell.model.*
 import net.postchain.rell.module.GTX_OPERATION_HUMAN
 import net.postchain.rell.module.GTX_QUERY_HUMAN
-import net.postchain.rell.sql.ROWID_COLUMN
 
 class S_Pos(val row: Int, val col: Int) {
     constructor(t: TokenMatch): this(t.row, t.column)
@@ -90,27 +89,79 @@ class S_IndexClause(pos: S_Pos, attrs: List<S_NameTypePair>): S_KeyIndexClause(p
     }
 }
 
-sealed class S_Definition(val name: S_Name) {
-    abstract fun compile(ctx: C_NamespaceContext, entityIndex: Int)
+sealed class S_Definition {
+    abstract fun compile(ctx: C_DefinitionContext, entityIndex: Int)
 }
 
-class S_ClassDefinition(name: S_Name, val annotations: List<S_Name>, val clauses: List<S_RelClause>): S_Definition(name) {
-    override fun compile(ctx: C_NamespaceContext, entityIndex: Int) {
-        val fullName = ctx.registerName(name, C_NameType.CLASS)
-        val rFlags = compileFlags()
+class S_ClassDefinition(val name: S_Name, val annotations: List<S_Name>, val body: List<S_RelClause>?): S_Definition() {
+    override fun compile(ctx: C_DefinitionContext, entityIndex: Int) {
+        if (body == null) {
+            compileHeader(ctx)
+            return
+        }
 
-        val sqlTable = classNameToSqlTable(fullName)
-        val rMapping = R_ClassSqlMapping(sqlTable, false, ROWID_COLUMN, true)
+        val fullName = ctx.nsCtx.registerName(name, C_DefType.CLASS)
 
-        val rClass = R_Class(fullName, rFlags, rMapping)
-        ctx.addClass(name, rClass)
+        val chain = ctx.chainCtx?.chain
+        val external = chain != null
+        val rFlags = compileFlags(external)
 
-        ctx.modCtx.onPass(C_ModulePass.DEFINITIONS) {
-            classesPass(ctx, entityIndex, rClass)
+        if (external && !rFlags.log) {
+            throw C_Error(name.pos, "def_class_external_nolog:$fullName",
+                    "External class '$fullName' must have '${C_Defs.LOG_ANNOTATION}' annotation")
+        }
+
+        if (external && ctx.namespaceName == null && (name.str == C_Defs.BLOCK_CLASS || name.str == C_Defs.TRANSACTION_CLASS)) {
+            throw C_Error(name.pos, "def_class_external_unallowed:${name.str}",
+                    "External class '${name.str}' can be declared only without body (as class header)")
+        }
+
+        val physicalFullName = ctx.fullName(name.str)
+        val sqlTable = classNameToSqlTable(physicalFullName)
+        val rMapping = if (chain == null) R_ClassSqlMapping_Regular(sqlTable) else R_ClassSqlMapping_External(sqlTable, chain)
+
+        val rExternalClass = if (chain == null) null else R_ExternalClass(chain, physicalFullName, true)
+
+        val rClass = R_Class(fullName, rFlags, rMapping, rExternalClass)
+        ctx.nsCtx.addClass(name, rClass)
+
+        ctx.modCtx.onPass(C_ModulePass.TYPES) {
+            classesPass(ctx, entityIndex, rClass, body)
         }
     }
 
-    private fun compileFlags(): R_ClassFlags {
+    private fun compileHeader(ctx: C_DefinitionContext) {
+        ctx.nsCtx.registerName(name, C_DefType.CLASS)
+
+        if (!annotations.isEmpty()) {
+            throw C_Error(name.pos, "def_class_hdr_annotations:${name.str}",
+                    "Annotations not allowed for class header '${name.str}'")
+        }
+
+        if (name.str != C_Defs.BLOCK_CLASS && name.str != C_Defs.TRANSACTION_CLASS) {
+            val classes = listOf(C_Defs.BLOCK_CLASS, C_Defs.TRANSACTION_CLASS).joinToString()
+            throw C_Error(name.pos, "def_class_hdr_name:${name.str}",
+                    "Class header declarations allowed only for classes: $classes")
+        }
+
+        if (ctx.chainCtx == null) {
+            throw C_Error(name.pos, "def_class_hdr_noexternal:${name.str}",
+                    "Class header must be declared in external block")
+        }
+
+        if (ctx.namespaceName != null) {
+            throw C_Error(name.pos, "def_class_hdr_ns:${name.str}",
+                    "Class header '${name.str}' cannot be declared in a namespace")
+        }
+
+        if (name.str == C_Defs.BLOCK_CLASS) {
+            ctx.chainCtx.declareClassBlock()
+        } else {
+            ctx.chainCtx.declareClassTransaction()
+        }
+    }
+
+    private fun compileFlags(external: Boolean): R_ClassFlags {
         val set = mutableSetOf<String>()
         var log = false
 
@@ -127,16 +178,28 @@ class S_ClassDefinition(name: S_Name, val annotations: List<S_Name>, val clauses
             }
         }
 
-        return R_ClassFlags(false, true, true, !log, log)
+        return R_ClassFlags(
+                isObject = false,
+                canCreate = !external,
+                canUpdate = !external,
+                canDelete = !log && !external,
+                gtx = true,
+                log = log
+        )
     }
 
-    private fun classesPass(ctx: C_NamespaceContext, entityIndex: Int, rClass: R_Class) {
-        val entCtx = C_EntityContext(ctx, C_EntityType.CLASS, entityIndex, null)
+    private fun classesPass(ctx: C_DefinitionContext, entityIndex: Int, rClass: R_Class, clauses: List<S_RelClause>) {
+        val entCtx = C_EntityContext(ctx.nsCtx, C_EntityType.CLASS, entityIndex, null)
         val clsCtx = C_ClassContext(entCtx, name.str, rClass.flags.log)
 
         if (rClass.flags.log) {
-            clsCtx.addAttribute0("transaction", ctx.modCtx.transactionClassType, false, false) {
-                C_Ns_OpContext.transactionExpr(clsCtx.entCtx)
+            val txType = if (ctx.chainCtx == null) ctx.modCtx.transactionClassType else ctx.chainCtx.transactionClassType()
+            clsCtx.addAttribute0("transaction", txType, false, false) {
+                if (ctx.chainCtx == null) {
+                    C_Ns_OpContext.transactionExpr(clsCtx.entCtx)
+                } else {
+                    C_Utils.crashExpr(txType, "Trying to initialize transaction for external class '${rClass.name}'")
+                }
             }
         }
 
@@ -158,20 +221,22 @@ class S_ClassDefinition(name: S_Name, val annotations: List<S_Name>, val clauses
     }
 }
 
-class S_ObjectDefinition(name: S_Name, val clauses: List<S_RelClause>): S_Definition(name) {
-    override fun compile(ctx: C_NamespaceContext, entityIndex: Int) {
-        val fullName = ctx.registerName(name, C_NameType.OBJECT)
+class S_ObjectDefinition(val name: S_Name, val clauses: List<S_RelClause>): S_Definition() {
+    override fun compile(ctx: C_DefinitionContext, entityIndex: Int) {
+        val fullName = ctx.nsCtx.registerName(name, C_DefType.OBJECT)
+        ctx.checkNotExternal(name.pos, C_DefType.OBJECT)
+
+        val classFlags = R_ClassFlags(true, false, true, false, false, false)
 
         val sqlTable = classNameToSqlTable(fullName)
+        val sqlMapping = R_ClassSqlMapping_Regular(sqlTable)
 
-        val classFlags = R_ClassFlags(true, false, true, false, false)
-        val sqlMapping = R_ClassSqlMapping(sqlTable, false, ROWID_COLUMN, true)
-        val rClass = R_Class(fullName, classFlags, sqlMapping)
+        val rClass = R_Class(fullName, classFlags, sqlMapping, null)
         val rObject = R_Object(rClass, entityIndex)
-        ctx.addObject(name, rObject)
+        ctx.nsCtx.addObject(name, rObject)
 
-        ctx.modCtx.onPass(C_ModulePass.DEFINITIONS) {
-            classesPass(ctx, entityIndex, rObject)
+        ctx.modCtx.onPass(C_ModulePass.TYPES) {
+            classesPass(ctx.nsCtx, entityIndex, rObject)
         }
     }
 
@@ -185,15 +250,16 @@ class S_ObjectDefinition(name: S_Name, val clauses: List<S_RelClause>): S_Defini
     }
 }
 
-class S_RecordDefinition(name: S_Name, val attrs: List<S_AttributeClause>): S_Definition(name) {
-    override fun compile(ctx: C_NamespaceContext, entityIndex: Int) {
-        val fullName = ctx.registerName(name, C_NameType.RECORD)
+class S_RecordDefinition(val name: S_Name, val attrs: List<S_AttributeClause>): S_Definition() {
+    override fun compile(ctx: C_DefinitionContext, entityIndex: Int) {
+        val fullName = ctx.nsCtx.registerName(name, C_DefType.RECORD)
+        ctx.checkNotExternal(name.pos, C_DefType.RECORD)
 
         val rType = R_RecordType(fullName)
-        ctx.addRecord(C_Record(name, rType))
+        ctx.nsCtx.addRecord(C_Record(name, rType))
 
-        ctx.modCtx.onPass(C_ModulePass.DEFINITIONS) {
-            classesPass(ctx, entityIndex, rType)
+        ctx.modCtx.onPass(C_ModulePass.TYPES) {
+            classesPass(ctx.nsCtx, entityIndex, rType)
         }
     }
 
@@ -209,9 +275,10 @@ class S_RecordDefinition(name: S_Name, val attrs: List<S_AttributeClause>): S_De
     }
 }
 
-class S_EnumDefinition(name: S_Name, val attrs: List<S_Name>): S_Definition(name) {
-    override fun compile(ctx: C_NamespaceContext, entityIndex: Int) {
-        val fullName = ctx.registerName(name, C_NameType.ENUM)
+class S_EnumDefinition(val name: S_Name, val attrs: List<S_Name>): S_Definition() {
+    override fun compile(ctx: C_DefinitionContext, entityIndex: Int) {
+        val fullName = ctx.nsCtx.registerName(name, C_DefType.ENUM)
+        ctx.checkNotExternal(name.pos, C_DefType.ENUM)
 
         val set = mutableSetOf<String>()
         val rAttrs = mutableListOf<R_EnumAttr>()
@@ -224,22 +291,18 @@ class S_EnumDefinition(name: S_Name, val attrs: List<S_Name>): S_Definition(name
         }
 
         val rEnum = R_EnumType(fullName, rAttrs.toList())
-        ctx.addEnum(name.str, rEnum)
+        ctx.nsCtx.addEnum(name.str, rEnum)
     }
 }
 
-class S_OpDefinition(
-        name: S_Name,
-        val params: List<S_NameTypePair>,
-        val body: S_Statement
-): S_Definition(name)
-{
-    override fun compile(ctx: C_NamespaceContext, entityIndex: Int) {
-        val fullName = ctx.registerName(name, C_NameType.OPERATION)
-        ctx.checkTopNamespace(name.pos, C_NameType.OPERATION)
+class S_OpDefinition(val name: S_Name, val params: List<S_NameTypePair>, val body: S_Statement): S_Definition() {
+    override fun compile(ctx: C_DefinitionContext, entityIndex: Int) {
+        val fullName = ctx.nsCtx.registerName(name, C_DefType.OPERATION)
+        ctx.nsCtx.checkTopNamespace(name.pos, C_DefType.OPERATION)
+        ctx.checkNotExternal(name.pos, C_DefType.OPERATION)
 
         ctx.modCtx.onPass(C_ModulePass.EXPRESSIONS) {
-            doCompile(ctx, entityIndex, fullName)
+            doCompile(ctx.nsCtx, entityIndex, fullName)
         }
     }
 
@@ -259,17 +322,18 @@ class S_OpDefinition(
 }
 
 class S_QueryDefinition(
-        name: S_Name,
+        val name: S_Name,
         val params: List<S_NameTypePair>,
         val retType: S_Type?,
         val body: S_FunctionBody
-): S_Definition(name) {
-    override fun compile(ctx: C_NamespaceContext, entityIndex: Int) {
-        val fullName = ctx.registerName(name, C_NameType.QUERY)
-        ctx.checkTopNamespace(name.pos, C_NameType.QUERY)
+): S_Definition() {
+    override fun compile(ctx: C_DefinitionContext, entityIndex: Int) {
+        val fullName = ctx.nsCtx.registerName(name, C_DefType.QUERY)
+        ctx.nsCtx.checkTopNamespace(name.pos, C_DefType.QUERY)
+        ctx.checkNotExternal(name.pos, C_DefType.QUERY)
 
         ctx.modCtx.onPass(C_ModulePass.EXPRESSIONS) {
-            doCompile(ctx, entityIndex, fullName)
+            doCompile(ctx.nsCtx, entityIndex, fullName)
         }
     }
 
@@ -373,16 +437,18 @@ class S_FunctionBodyFull(val body: S_Statement): S_FunctionBody() {
 }
 
 class S_FunctionDefinition(
-        name: S_Name,
+        val name: S_Name,
         val params: List<S_NameTypePair>,
         val retType: S_Type?,
         val body: S_FunctionBody
-): S_Definition(name) {
-    override fun compile(ctx: C_NamespaceContext, entityIndex: Int) {
-        ctx.registerName(name, C_NameType.FUNCTION)
-        val fn = ctx.addFunctionDeclaration(name.str)
-        ctx.modCtx.onPass(C_ModulePass.DEFINITIONS) {
-            compileDefinition(ctx, entityIndex, fn)
+): S_Definition() {
+    override fun compile(ctx: C_DefinitionContext, entityIndex: Int) {
+        ctx.nsCtx.registerName(name, C_DefType.FUNCTION)
+        ctx.checkNotExternal(name.pos, C_DefType.FUNCTION)
+
+        val fn = ctx.nsCtx.addFunctionDeclaration(name.str)
+        ctx.modCtx.onPass(C_ModulePass.TYPES) {
+            compileDefinition(ctx.nsCtx, entityIndex, fn)
         }
     }
 
@@ -407,20 +473,39 @@ class S_FunctionDefinition(
     }
 }
 
-class S_NamespaceDefinition(name: S_Name, val definitions: List<S_Definition>): S_Definition(name) {
-    override fun compile(ctx: C_NamespaceContext, entityIndex: Int) {
-        ctx.registerName(name, C_NameType.NAMESPACE)
+class S_NamespaceDefinition(val name: S_Name, val definitions: List<S_Definition>): S_Definition() {
+    override fun compile(ctx: C_DefinitionContext, entityIndex: Int) {
+        ctx.nsCtx.registerName(name, C_DefType.NAMESPACE)
 
-        val subName = ctx.fullName(name.str)
-        val subCtx = C_NamespaceContext(ctx.modCtx, ctx, subName)
+        val nsSubName = ctx.nsCtx.fullName(name.str)
+        val subNsCtx = C_NamespaceContext(ctx.modCtx, ctx.nsCtx, nsSubName)
+        val defSubName = ctx.fullName(name.str)
+        val subCtx = C_DefinitionContext(subNsCtx, ctx.chainCtx, defSubName)
 
         for (def in definitions) {
             val index = ctx.modCtx.nextEntityIndex()
             def.compile(subCtx, index)
         }
 
-        val ns = subCtx.createNamespace()
-        ctx.addNamespace(name.str, ns)
+        val ns = subCtx.nsCtx.createNamespace()
+        ctx.nsCtx.addNamespace(name.str, ns)
+    }
+}
+
+class S_ExternalDefinition(val pos: S_Pos, val name: String, val definitions: List<S_Definition>): S_Definition() {
+    override fun compile(ctx: C_DefinitionContext, entityIndex: Int) {
+        ctx.checkNotExternal(pos, C_DefType.EXTERNAL)
+
+        val chain = ctx.modCtx.addExternalChain(pos, name)
+        val subChainCtx = C_ExternalChainContext(ctx.nsCtx, chain)
+        val subCtx = C_DefinitionContext(ctx.nsCtx, subChainCtx, null)
+
+        for (def in definitions) {
+            val index = ctx.modCtx.nextEntityIndex()
+            def.compile(subCtx, index)
+        }
+
+        subChainCtx.registerSysClasses()
     }
 }
 
@@ -428,10 +513,11 @@ class S_ModuleDefinition(val definitions: List<S_Definition>) {
     fun compile(gtx: Boolean): R_Module {
         val globalCtx = C_GlobalContext(gtx)
         val ctx = C_ModuleContext(globalCtx)
+        val defCtx = C_DefinitionContext(ctx.nsCtx, null, null)
 
         for (def in definitions) {
             val index = ctx.nextEntityIndex()
-            def.compile(ctx.nsCtx, index)
+            def.compile(defCtx, index)
         }
 
         return ctx.createModule()

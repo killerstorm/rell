@@ -63,6 +63,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val ENUM by relltok("enum")
     private val FUNCTION by relltok("function")
     private val NAMESPACE by relltok("namespace")
+    private val EXTERNAL by relltok("external")
     private val VAL by relltok("val")
     private val VAR by relltok("var")
     private val RETURN by relltok("return")
@@ -145,7 +146,11 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     private val classAnnotations by -LPAR * separatedTerms(id, COMMA, false) * -RPAR
 
-    private val classDef by ( -CLASS * id * optional(classAnnotations) * -LCURL * relClauses * -RCURL ) map {
+    private val classBodyFull by ( -LCURL * relClauses * -RCURL )
+    private val classBodyShort by ( SEMI ) map { _ -> null }
+    private val classBody by ( classBodyFull or classBodyShort )
+
+    private val classDef by ( -CLASS * id * optional(classAnnotations) * optional(classBody) ) map {
         (name, annotations, clauses) ->
         S_ClassDefinition(name, annotations ?: listOf(), clauses)
     }
@@ -505,6 +510,10 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         (name, defs) -> S_NamespaceDefinition(name, defs)
     }
 
+    private val externalDef by ( EXTERNAL * STRINGLIT * -LCURL * zeroOrMore(parser(this::anyDef)) * -RCURL ) map {
+        (pos, name, defs) -> S_ExternalDefinition(S_Pos(pos), name.text, defs)
+    }
+
     private val anyDef: Parser<S_Definition> by (
             classDef
             or objectDef
@@ -514,6 +523,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
             or queryDef
             or functionDef
             or namespaceDef
+            or externalDef
     )
 
     override val rootParser by zeroOrMore(anyDef) map { S_ModuleDefinition(it) }

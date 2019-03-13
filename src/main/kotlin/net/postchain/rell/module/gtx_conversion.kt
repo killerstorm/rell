@@ -20,15 +20,15 @@ class GtxToRtContext {
         objectIds.put(cls, rowid)
     }
 
-    fun finish(sqlExec: SqlExecutor, sqlMapper: Rt_SqlMapper) {
+    fun finish(modCtx: Rt_ModuleContext) {
         for (rClass in objectIds.keySet()) {
             val rowids = objectIds.get(rClass)
-            checkRowids(sqlExec, sqlMapper, rClass, rowids)
+            checkRowids(modCtx.globalCtx.sqlExec, modCtx.sqlCtx, rClass, rowids)
         }
     }
 
-    private fun checkRowids(sqlExec: SqlExecutor, sqlMapper: Rt_SqlMapper, rClass: R_Class, rowids: Collection<Long>) {
-        val existingIds = selectExistingIds(sqlExec, sqlMapper, rClass, rowids)
+    private fun checkRowids(sqlExec: SqlExecutor, sqlCtx: Rt_SqlContext, rClass: R_Class, rowids: Collection<Long>) {
+        val existingIds = selectExistingIds(sqlExec, sqlCtx, rClass, rowids)
         val missingIds = rowids.toSet() - existingIds
         if (!missingIds.isEmpty()) {
             val s = missingIds.toList().sorted()
@@ -37,17 +37,14 @@ class GtxToRtContext {
         }
     }
 
-    private fun selectExistingIds(sqlExec: SqlExecutor, sqlMapper: Rt_SqlMapper, rClass: R_Class, rowids: Collection<Long>): Set<Long> {
+    private fun selectExistingIds(sqlExec: SqlExecutor, sqlCtx: Rt_SqlContext, rClass: R_Class, rowids: Collection<Long>): Set<Long> {
         val buf = StringBuilder()
-        val table = rClass.mapping.table(sqlMapper)
-        val col = rClass.mapping.rowidColumn
-        buf.append("SELECT \"").append(col).append("\"")
-        buf.append(" FROM \"").append(table).append("\"")
-        buf.append(" WHERE \"").append(col).append("\" IN (")
+        buf.append("\"").append(rClass.sqlMapping.rowidColumn()).append("\" IN (")
         rowids.joinTo(buf, ",")
         buf.append(")")
-        val sql = buf.toString()
+        val whereSql = buf.toString()
 
+        val sql = rClass.sqlMapping.selectExistingObjects(sqlCtx, whereSql)
         val existingIds = mutableSetOf<Long>()
         sqlExec.executeQuery(sql, {}) { existingIds.add(it.getLong(1)) }
         return existingIds
@@ -119,8 +116,8 @@ object GtxRtConversion_Json: GtxRtConversion() {
 }
 
 class GtxRtConversion_Class(val type: R_ClassType): GtxRtConversion() {
-    override fun directHuman() = true
-    override fun directCompact() = true
+    override fun directHuman() = type.rClass.flags.gtx
+    override fun directCompact() = type.rClass.flags.gtx
 
     override fun rtToGtx(rt: Rt_Value, human: Boolean) = IntegerGTXValue(rt.asObjectId())
 

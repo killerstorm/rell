@@ -1,6 +1,7 @@
 package net.postchain.rell.model
 
 import net.postchain.rell.runtime.Rt_CallFrame
+import net.postchain.rell.runtime.Rt_SqlContext
 import net.postchain.rell.runtime.Rt_Value
 import java.sql.PreparedStatement
 import java.sql.ResultSet
@@ -12,7 +13,7 @@ class SqlFromInfo(val classes: List<SqlFromClass>)
 class SqlFromClass(val alias: SqlTableAlias, val joins: List<SqlFromJoin>)
 class SqlFromJoin(val baseAlias: SqlTableAlias, val attr: String, val alias: SqlTableAlias)
 
-class SqlGenContext(classes: List<R_AtClass>, private val parameters: List<Rt_Value>) {
+class SqlGenContext(val sqlCtx: Rt_SqlContext, classes: List<R_AtClass>, private val parameters: List<Rt_Value>) {
     private var aliasCtr = 0
     private val clsAliasMap = mutableMapOf<R_AtClass, ClassAliasTbl>()
     private val aliasTblMap = mutableMapOf<SqlTableAlias, ClassAliasTbl>()
@@ -184,7 +185,7 @@ class SqlArgs(val types: List<R_Type>, val values: List<Rt_Value>) {
         for (i in values.indices) {
             val type = types[i]
             val arg = values[i]
-            type.toSql(stmt, i + 1, arg)
+            type.sqlAdapter.toSql(stmt, i + 1, arg)
         }
     }
 }
@@ -197,7 +198,7 @@ class SqlSelect(val pSql: ParameterizedSql, val resultTypes: List<R_Type>) {
             val list = mutableListOf<Rt_Value>()
             for (i in resultTypes.indices) {
                 val type = resultTypes[i]
-                val value = type.fromSql(rs, i + 1)
+                val value = type.sqlAdapter.fromSql(rs, i + 1)
                 list.add(value)
             }
             result.add(list.toTypedArray())
