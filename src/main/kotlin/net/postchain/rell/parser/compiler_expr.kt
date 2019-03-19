@@ -577,7 +577,8 @@ private class C_ClassFieldExpr(
         return rExpr
     }
 
-    override fun toDbExpr() = memberExpr.dbExpr
+    // Cannot inject the corresponding Db_Expr directly into another Db_Expr - must wrap it in R_Expr.
+    override fun toDbExpr() = C_Utils.toDbExpr(startPos(), toRExpr())
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
         val valueExpr = memberValue(memberName, safe)
