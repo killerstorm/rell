@@ -4,8 +4,10 @@ import net.postchain.gtx.GTXNull
 import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.model.R_Routine
+import net.postchain.rell.parser.C_DiskIncludeDir
 import net.postchain.rell.parser.C_Error
-import net.postchain.rell.parser.C_Utils
+import net.postchain.rell.parser.C_IncludeResolver
+import net.postchain.rell.parser.C_Parser
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.*
 import org.apache.commons.logging.LogFactory
@@ -26,7 +28,7 @@ fun main(args: Array<String>) {
     val module = compileModule(argsEx.rellFile)
     val routine = getRoutineCaller(argsEx, module)
 
-    runWithSql(argsEx.dburl) { sqlExec ->
+    runWithSql(argsEx.dburl, argsEx.sqlLog) { sqlExec ->
         val sqlCtx = Rt_SqlContext.createNoExternalChains(module, SQL_MAPPER)
         if (argsEx.resetdb) {
             sqlExec.transaction {
@@ -52,9 +54,12 @@ private fun getRoutineCaller(args: Args, module: R_Module): (SqlExecutor, Rt_Sql
     }
 }
 
-private fun runWithSql(dbUrl: String?, code: (SqlExecutor) -> Unit) {
+private fun runWithSql(dbUrl: String?, logging: Boolean, code: (SqlExecutor) -> Unit) {
     if (dbUrl != null) {
-        DefaultSqlExecutor.connect(dbUrl).use(code)
+        DefaultSqlExecutor.connect(dbUrl).use { con ->
+            val exec = Rt_SqlExecutor(DefaultSqlExecutor(con, logging), true)
+            code(exec)
+        }
     } else {
         code(NoConnSqlExecutor)
     }
@@ -82,6 +87,9 @@ private class Args {
     @CommandLine.Option(names = ["--resetdb"], description = ["Reset database (drop all and create tables from scratch)"])
     var resetdb = false
 
+    @CommandLine.Option(names = ["--sqllog"], description = ["Enable SQL logging"])
+    var sqlLog = false
+
     @CommandLine.Parameters(index = "0", paramLabel = "FILE", description = ["Rell toExpr file"])
     var rellFile: String = ""
 
@@ -92,12 +100,18 @@ private class Args {
     var args: List<String>? = null
 }
 
-private fun compileModule(rellFile: String): R_Module {
-    val sourceCode = File(rellFile).readText()
+private fun compileModule(rellPath: String): R_Module {
+    val sourceFile = File(rellPath)
+    val sourceCode = sourceFile.readText()
+
+    val sourceName = sourceFile.name
+
+    val includeDir = C_DiskIncludeDir(sourceFile.absoluteFile.parentFile)
+    val includeResolver = C_IncludeResolver(includeDir)
 
     val module = try {
-        val ast = C_Utils.parse(sourceCode)
-        ast.compile(true)
+        val ast = C_Parser.parse(sourceName, sourceCode)
+        ast.compile(sourceName, includeResolver, true)
     } catch (e: C_Error) {
         System.err.println("ERROR ${e.pos} ${e.errMsg}")
         exitProcess(1)

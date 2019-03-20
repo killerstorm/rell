@@ -5,10 +5,12 @@ import org.junit.Test
 
 class GtxTest : BaseGtxTest() {
     @Test fun testChainContextRawConfig() {
-        tst.chkQuery("chain_context.raw_config", "{'gtx':{'rellSrcModule':'foo'}}")
+        tst.chkQuery("chain_context.raw_config",
+                "{'gtx':{'rell':{'mainFile':'main.rell','sources_v0.8':{'main.rell':'query q() \\u003d chain_context.raw_config;'}}}}")
 
         tst.moduleArgs = "'bar'"
-        tst.chkQuery("chain_context.raw_config", "{'gtx':{'rellSrcModule':'foo','rellModuleArgs':'bar'}}")
+        tst.chkQuery("chain_context.raw_config",
+                "{'gtx':{'rell':{'mainFile':'main.rell','sources_v0.8':{'main.rell':'query q() \\u003d chain_context.raw_config;'},'moduleArgs':'bar'}}}")
     }
 
     @Test fun testChainContextModuleArgs() {
@@ -54,5 +56,11 @@ class GtxTest : BaseGtxTest() {
         tst.defs = listOf("object foo { x: integer = 123; s: text = 'Hello'; }")
         tst.chkQuery("foo.x", "123")
         tst.chkQuery("foo.s", "'Hello'")
+    }
+
+    @Test fun testInclude() {
+        tst.file("foo.rell", "function f(): integer = 123;")
+        tst.defs = listOf("namespace foo { include 'foo'; }")
+        tst.chkQuery("foo.f()", "123")
     }
 }

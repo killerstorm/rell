@@ -420,7 +420,8 @@ private class C_ClassFieldValue(
         return rExpr
     }
 
-    override fun toDbExpr() = memberExpr.dbExpr
+    // Cannot inject the corresponding Db_Expr directly into another Db_Expr - must wrap it in R_Expr.
+    override fun toDbExpr() = C_Utils.toDbExpr(pos, toRExpr())
 
     override fun destination(): C_Destination {
         if (!memberExpr.attr.mutable) {

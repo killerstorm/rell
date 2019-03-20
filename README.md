@@ -39,6 +39,7 @@ Executes a rell program
       [ARGS...]     Call arguments
       --dburl=URL   Database JDBC URL, e. g. jdbc:postgresql://localhost/relltestdb?user=relltestuser&password=1234
       --resetdb     Reset database (drop all and create tables from scratch)
+      --sqllog      Enable SQL logging
 ```
 
 To execute an operation without a database connection:

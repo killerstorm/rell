@@ -87,18 +87,13 @@ class DefaultSqlExecutor(private val con: Connection, private val logging: Boole
     companion object {
         private val idCounter = AtomicLong()
 
-        fun connect(url: String): DefaultSqlExecutor {
-            return connect0() { DriverManager.getConnection(url) }
-        }
-
-        private fun connect0(factory: () -> Connection): DefaultSqlExecutor {
-            val con = factory()
+        fun connect(url: String): Connection {
+            val con = DriverManager.getConnection(url)
             var c: AutoCloseable? = con
             try {
                 con.autoCommit = true
-                val exec = DefaultSqlExecutor(con, false)
                 c = null
-                return exec
+                return con
             } finally {
                 c?.close()
             }

@@ -5,10 +5,10 @@ import net.postchain.rell.model.*
 import net.postchain.rell.module.GTX_OPERATION_HUMAN
 import net.postchain.rell.module.GTX_QUERY_HUMAN
 
-class S_Pos(val row: Int, val col: Int) {
-    constructor(t: TokenMatch): this(t.row, t.column)
+class S_Pos(val file: String, val row: Int, val col: Int) {
+    constructor(t: TokenMatch): this(C_Parser.currentFile(), t.row, t.column)
 
-    override fun toString() = "($row:$col)"
+    override fun toString() = "$file($row:$col)"
 }
 
 class S_Node<T>(val pos: S_Pos, val value: T) {
@@ -479,8 +479,9 @@ class S_NamespaceDefinition(val name: S_Name, val definitions: List<S_Definition
 
         val nsSubName = ctx.nsCtx.fullName(name.str)
         val subNsCtx = C_NamespaceContext(ctx.modCtx, ctx.nsCtx, nsSubName)
+        val subIncCtx = ctx.incCtx.subNamespace()
         val defSubName = ctx.fullName(name.str)
-        val subCtx = C_DefinitionContext(subNsCtx, ctx.chainCtx, defSubName)
+        val subCtx = C_DefinitionContext(subNsCtx, ctx.chainCtx, subIncCtx, defSubName)
 
         for (def in definitions) {
             val index = ctx.modCtx.nextEntityIndex()
@@ -498,7 +499,7 @@ class S_ExternalDefinition(val pos: S_Pos, val name: String, val definitions: Li
 
         val chain = ctx.modCtx.addExternalChain(pos, name)
         val subChainCtx = C_ExternalChainContext(ctx.nsCtx, chain)
-        val subCtx = C_DefinitionContext(ctx.nsCtx, subChainCtx, null)
+        val subCtx = C_DefinitionContext(ctx.nsCtx, subChainCtx, ctx.incCtx, null)
 
         for (def in definitions) {
             val index = ctx.modCtx.nextEntityIndex()
@@ -509,18 +510,38 @@ class S_ExternalDefinition(val pos: S_Pos, val name: String, val definitions: Li
     }
 }
 
-class S_ModuleDefinition(val definitions: List<S_Definition>) {
-    fun compile(gtx: Boolean): R_Module {
-        val globalCtx = C_GlobalContext(gtx)
-        val ctx = C_ModuleContext(globalCtx)
-        val defCtx = C_DefinitionContext(ctx.nsCtx, null, null)
-
-        for (def in definitions) {
-            val index = ctx.nextEntityIndex()
-            def.compile(defCtx, index)
+class S_IncludeDefinition(val pos: S_Pos, val pathPos: S_Pos, val path: String): S_Definition() {
+    override fun compile(ctx: C_DefinitionContext, entityIndex: Int) {
+        val resource = ctx.incCtx.resolver.resolve(pathPos, path)
+        val subIncCtx = ctx.incCtx.subInclude(pathPos, resource)
+        if (subIncCtx == null) {
+            // Already included in current namespace (indirectly, so no error)
+            return
         }
 
+        val text = resource.file.read()
+        val module = C_Parser.parse(resource.path, text)
+
+        val subDefCtx = C_DefinitionContext(ctx.nsCtx, ctx.chainCtx, subIncCtx, ctx.namespaceName)
+        module.compileDefs(subDefCtx)
+    }
+}
+
+class S_ModuleDefinition(val definitions: List<S_Definition>) {
+    fun compile(path: String, includeResolver: C_IncludeResolver, gtx: Boolean): R_Module {
+        val globalCtx = C_GlobalContext(gtx)
+        val ctx = C_ModuleContext(globalCtx)
+        val incCtx = C_IncludeContext.createTop(path, includeResolver)
+        val defCtx = C_DefinitionContext(ctx.nsCtx, null, incCtx, null)
+        compileDefs(defCtx)
         return ctx.createModule()
+    }
+
+    fun compileDefs(defCtx: C_DefinitionContext) {
+        for (def in definitions) {
+            val index = defCtx.nsCtx.modCtx.nextEntityIndex()
+            def.compile(defCtx, index)
+        }
     }
 }
 

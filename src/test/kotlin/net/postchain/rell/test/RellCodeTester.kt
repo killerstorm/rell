@@ -5,6 +5,8 @@ import net.postchain.gtx.GTXValue
 import net.postchain.rell.hexStringToByteArray
 import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_Module
+import net.postchain.rell.parser.C_IncludeDir
+import net.postchain.rell.parser.C_VirtualIncludeDir
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.sql.SqlUtils
@@ -237,7 +239,8 @@ class RellCodeTester(
     }
 
     private fun processModuleCtx(globalCtx: Rt_GlobalContext, code: String, processor: (Rt_ModuleContext) -> String): String {
-        return RellTestUtils.processModule(code, errMsgPos, gtx) { module ->
+        val includeDir = createIncludeDir(code)
+        return RellTestUtils.processModule(code, errMsgPos, gtx, includeDir) { module ->
             RellTestUtils.catchRtErr({ createModuleCtx(globalCtx, module) }) {
                 modCtx -> processor(modCtx) }
         }

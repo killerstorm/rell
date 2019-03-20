@@ -10,7 +10,9 @@ import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.model.R_Operation
 import net.postchain.rell.model.R_Query
-import net.postchain.rell.parser.C_Utils
+import net.postchain.rell.parser.C_IncludeResolver
+import net.postchain.rell.parser.C_Parser
+import net.postchain.rell.parser.C_VirtualIncludeDir
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.DefaultSqlExecutor
 import net.postchain.rell.sql.genSqlForChain
@@ -78,7 +80,8 @@ class RellPostchainModule(
         private val rModule: R_Module,
         private val moduleName: String,
         private val chainCtx: Rt_ChainContext,
-        private val chainDeps: Map<String, ByteArray>
+        private val chainDeps: Map<String, ByteArray>,
+        private val sqlLogging: Boolean
 ) : GTXModule {
     override fun getOperations(): Set<String> {
         return rModule.operations.keys
@@ -154,7 +157,7 @@ class RellPostchainModule(
     }
 
     fun makeRtModuleContext(eCtx: EContext, opCtx: Rt_OpContext?): Rt_ModuleContext {
-        val sqlExec = DefaultSqlExecutor(eCtx.conn, false)
+        val sqlExec = DefaultSqlExecutor(eCtx.conn, sqlLogging)
         val sqlMapping = Rt_ChainSqlMapping(eCtx.chainID)
         val globalCtx = Rt_GlobalContext(StdoutRtPrinter, LogRtPrinter, sqlExec, opCtx, chainCtx)
 
@@ -165,43 +168,63 @@ class RellPostchainModule(
     }
 }
 
-class RellPostchainModuleFactory(
-        private val moduleLoader: (String) -> String = CommonUtils::readFileContent,
-        private val translateRtError: Boolean = true
-) : GTXModuleFactory {
+class RellPostchainModuleFactory(private val translateRtError: Boolean = true) : GTXModuleFactory {
     override fun makeModule(data: GTXValue, blockchainRID: ByteArray): GTXModule {
-        val gtxData = data["gtx"]!!
+        val gtxNode = data.asDict().getValue("gtx").asDict()
+        val rellNode = gtxNode.getValue("rell").asDict()
 
-        val (moduleName, sourceCode) = getModuleSourceCode(gtxData)
-        val ast = C_Utils.parse(sourceCode)
-        val module = ast.compile(true)
+        val moduleNameNode = rellNode["moduleName"]
+        val moduleName = if (moduleNameNode == null) "" else moduleNameNode.asString()
 
-        val chainCtx = createChainContext(data, gtxData, module)
+        val (sourceCodes, mainFileName) = getModuleCode(rellNode)
+
+        val mainFileText = sourceCodes.getValue(mainFileName)
+        val ast = C_Parser.parse(mainFileName, mainFileText)
+
+        val includeResolver = C_IncludeResolver(C_VirtualIncludeDir(sourceCodes))
+        val module = ast.compile(mainFileName, includeResolver, true)
+
+        val chainCtx = createChainContext(data, rellNode, module)
 
         val chainDeps = catchRtErr {
             getGtxChainDependencies(data)
         }
 
-        return RellPostchainModule(this, module, moduleName, chainCtx, chainDeps)
+        val sqlLogging = (rellNode["sqlLog"]?.asInteger() ?: 0L) != 0L
+
+        return RellPostchainModule(this, module, moduleName, chainCtx, chainDeps, sqlLogging)
     }
 
-    private fun getModuleSourceCode(gtxData: GTXValue): Pair<String, String> {
-        if (gtxData["rellSourceCode_v07"] != null) {
-            val sourceCode = gtxData["rellSourceCode_v07"]!!.asString()
-            return Pair("", sourceCode)
-        } else if (gtxData["rellSrcModule"] != null) {
-            // legacy -- load from path
-            val moduleName = gtxData["rellSrcModule"]!!.asString()
-            val sourceCode = moduleLoader(gtxData["rellSrcModule"]!!.asString())
-            return Pair(moduleName, sourceCode)
-        } else {
-            throw UserMistake("Rell module source is not specified in configuration")
+    private fun getModuleCode(rellNode: Map<String, GTXValue>): Pair<Map<String, String>, String> {
+        val version = "v0.8"
+
+        val filesNode = rellNode["files_$version"]
+        val sourcesNode = rellNode["sources_$version"]
+
+        if (filesNode == null && sourcesNode == null) {
+            throw UserMistake("Neither files nor sources specified")
+        } else if (filesNode != null && sourcesNode != null) {
+            throw UserMistake("Both files and sources specified")
         }
+
+        val sourceCodes = if (sourcesNode != null) {
+            sourcesNode.asDict().mapValues { (_, v) -> v.asString() }
+        } else {
+            filesNode!!.asDict().mapValues { (_, v) -> CommonUtils.readFileContent(v.asString()) }
+        }
+
+        val mainFileName = rellNode.getValue("mainFile").asString()
+
+        if (mainFileName !in sourceCodes) {
+            throw UserMistake("File '$mainFileName' not found in sources")
+        }
+
+        return Pair(sourceCodes, mainFileName)
     }
 
-    private fun createChainContext(rawConfig: GTXValue, gtxData: GTXValue, rModule: R_Module): Rt_ChainContext {
+    private fun createChainContext(rawConfig: GTXValue, rellNode: Map<String, GTXValue>, rModule: R_Module): Rt_ChainContext {
         val argsRec = rModule.moduleArgsRecord
-        val gtxArgs = gtxData["rellModuleArgs"]
+        val gtxArgs = rellNode["moduleArgs"]
 
         val args = if (argsRec == null || gtxArgs == null) Rt_NullValue else {
             val convCtx = GtxToRtContext()

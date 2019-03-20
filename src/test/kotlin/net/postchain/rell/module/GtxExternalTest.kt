@@ -15,7 +15,7 @@ class GtxExternalTest: BaseGtxTest() {
     @Test fun testUnknownChain2() {
         tst.defs = listOf("external 'foo' {}")
         tst.translateRtError = false
-        tst.extraModuleConfig = "'dependencies':{'foo':'deadbeef'}"
+        tst.extraModuleConfig["dependencies"] = "{'foo':'deadbeef'}"
         tst.chkQuery("123", "rt_err:external_chain_norid:foo:deadbeef")
     }
 
@@ -31,7 +31,7 @@ class GtxExternalTest: BaseGtxTest() {
 
         tst.defs = listOf("external 'foo' {}")
         tst.translateRtError = false
-        tst.extraModuleConfig = "'dependencies':{'foo':'deadbeef'}"
+        tst.extraModuleConfig["dependencies"] = "{'foo':'deadbeef'}"
         tst.chkQuery("123", "123")
     }
 
@@ -47,7 +47,7 @@ class GtxExternalTest: BaseGtxTest() {
 
         tst.defs = listOf("external 'foo' { class user(log) {} }")
         tst.translateRtError = false
-        tst.extraModuleConfig = "'dependencies':{'foo':'deadbeef'}"
+        tst.extraModuleConfig["dependencies"] = "{'foo':'deadbeef'}"
         tst.chkQuery("123", "rt_err:external_meta_nocls:foo:user")
     }
 
@@ -65,7 +65,7 @@ class GtxExternalTest: BaseGtxTest() {
 
         tst.defs = listOf("external 'foo' { class user(log) { name; } }")
         tst.translateRtError = false
-        tst.extraModuleConfig = "'dependencies':{'foo':'deadbeef'}"
+        tst.extraModuleConfig["dependencies"] = "{'foo':'deadbeef'}"
         tst.chkQuery("_strictStr(user @{} ( =user, =.name ))", "'(user[15],text[Bob])'")
     }
 }

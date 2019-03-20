@@ -1,6 +1,8 @@
 package net.postchain.rell.test
 
 import net.postchain.rell.model.R_Module
+import net.postchain.rell.parser.C_IncludeDir
+import net.postchain.rell.parser.C_VirtualIncludeDir
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.sql.SqlExecutor
 import java.sql.Connection
@@ -33,12 +35,16 @@ abstract class RellBaseTester(
 
     var inserts: List<String> = inserts
 
+    private val files = mutableMapOf<String, String>()
+
     fun init() {
         tstCtx.init()
 
         if (!inited) {
             val code = defsCode()
-            val module = RellTestUtils.parseModule(code, gtx)
+
+            val includeDir = createIncludeDir(code)
+            val module = RellTestUtils.parseModule(code, gtx, includeDir)
 
             if (tstCtx.useSql) {
                 initSql(code, module)
@@ -66,6 +72,17 @@ abstract class RellBaseTester(
         this.inserts += inserts
     }
 
+    fun file(path: String, text: String) {
+        checkNotInited()
+        check(path !in files)
+        check(path != RellTestUtils.MAIN_FILE)
+        files[path] = text
+    }
+
+    protected fun files(code: String): Map<String, String> {
+        return files.toMap() + mapOf(RellTestUtils.MAIN_FILE to code)
+    }
+
     protected fun checkNotInited() {
         check(!inited)
     }
@@ -78,6 +95,10 @@ abstract class RellBaseTester(
     }
 
     protected abstract fun initSqlReset(conn: Connection, exec: SqlExecutor, moduleCode: String, module: R_Module)
+
+    protected fun createIncludeDir(code: String): C_IncludeDir {
+        return C_VirtualIncludeDir(files(code))
+    }
 
     private fun initSqlInserts(sqlExecLoc: SqlExecutor) {
         if (!inserts.isEmpty()) {
@@ -138,7 +159,8 @@ abstract class RellBaseTester(
     }
 
     fun processModule(code: String, processor: (R_Module) -> String): String {
-        return RellTestUtils.processModule(code, errMsgPos, gtx, processor)
+        val includeDir = createIncludeDir(code)
+        return RellTestUtils.processModule(code, errMsgPos, gtx, includeDir, processor)
     }
 
     protected fun createChainSqlMapping(): Rt_ChainSqlMapping {

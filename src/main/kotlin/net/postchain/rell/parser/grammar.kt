@@ -1,11 +1,11 @@
 package net.postchain.rell.parser
 
-import com.github.h0tk3y.betterParse.grammar.Grammar
-import com.github.h0tk3y.betterParse.parser.Parser
 import com.github.h0tk3y.betterParse.combinators.*
+import com.github.h0tk3y.betterParse.grammar.Grammar
 import com.github.h0tk3y.betterParse.grammar.parser
 import com.github.h0tk3y.betterParse.lexer.Token
 import com.github.h0tk3y.betterParse.lexer.TokenMatch
+import com.github.h0tk3y.betterParse.parser.Parser
 
 object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val LPAR by relltok("(")
@@ -64,6 +64,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val FUNCTION by relltok("function")
     private val NAMESPACE by relltok("namespace")
     private val EXTERNAL by relltok("external")
+    private val INCLUDE by relltok("include")
     private val VAL by relltok("val")
     private val VAR by relltok("var")
     private val RETURN by relltok("return")
@@ -514,6 +515,10 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         (pos, name, defs) -> S_ExternalDefinition(S_Pos(pos), name.text, defs)
     }
 
+    private val includeDef by ( INCLUDE * STRINGLIT * -SEMI ) map {
+        (pos, path) -> S_IncludeDefinition(S_Pos(pos), S_Pos(path), path.text)
+    }
+
     private val anyDef: Parser<S_Definition> by (
             classDef
             or objectDef
@@ -524,6 +529,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
             or functionDef
             or namespaceDef
             or externalDef
+            or includeDef
     )
 
     override val rootParser by zeroOrMore(anyDef) map { S_ModuleDefinition(it) }

@@ -2,12 +2,11 @@ package net.postchain.rell.test
 
 import net.postchain.core.EContext
 import net.postchain.core.UserMistake
-import net.postchain.gtx.GTXModule
-import net.postchain.gtx.GTXSchemaManager
-import net.postchain.gtx.GTXValue
+import net.postchain.gtx.*
 import net.postchain.rell.hexStringToByteArray
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.module.RellPostchainModuleFactory
+import net.postchain.rell.parser.C_EmptyIncludeDir
 import net.postchain.rell.sql.SqlExecutor
 import java.sql.Connection
 import kotlin.test.assertEquals
@@ -23,7 +22,7 @@ class RellGtxTester(
 {
     var translateRtError = true
     var moduleArgs: String? = null
-    var extraModuleConfig: String? = null
+    val extraModuleConfig = mutableMapOf<String, String>()
     var blockchainRID = "DEADBEEF"
     var nodeId: Int = 3377
 
@@ -81,20 +80,30 @@ class RellGtxTester(
     }
 
     private fun createGtxModule(moduleCode: String): GTXModule {
-        val moduleLoader = { path: String -> moduleCode }
-        val factory = RellPostchainModuleFactory(moduleLoader, translateRtError)
-        val moduleCfg = moduleConfig()
+        val factory = RellPostchainModuleFactory(translateRtError)
+        val moduleCfg = moduleConfig(moduleCode)
         val bcRidBytes = blockchainRID.hexStringToByteArray()
         val module = factory.makeModule(moduleCfg, bcRidBytes)
         return module
     }
 
-    private fun moduleConfig(): GTXValue {
-        val args = if (moduleArgs == null) "" else ",'rellModuleArgs':$moduleArgs"
-        val extra = if (extraModuleConfig == null) "" else ",$extraModuleConfig"
-        val moduleConfigStr = "{'gtx':{'rellSrcModule':'foo'$args}$extra}"
-        val str = moduleConfigStr.replace('\'', '"')
-        val cfg = GtxTestUtils.decodeGtxStr(str)
-        return cfg
+    private fun moduleConfig(moduleCode: String): GTXValue {
+        val rellMap = mutableMapOf<String, GTXValue>()
+        rellMap["mainFile"] = StringGTXValue(RellTestUtils.MAIN_FILE)
+
+        val sourceCodes = files(moduleCode)
+        rellMap["sources_v0.8"] = DictGTXValue(sourceCodes.mapValues { (_, v) -> StringGTXValue(v) })
+
+        if (moduleArgs != null) {
+            rellMap["moduleArgs"] = GtxTestUtils.decodeGtxStr(moduleArgs!!)
+        }
+
+        val cfgMap = mutableMapOf<String, GTXValue>()
+        cfgMap["gtx"] = DictGTXValue(mapOf("rell" to DictGTXValue(rellMap)))
+        for ((key, value) in extraModuleConfig) {
+            cfgMap[key] = GtxTestUtils.decodeGtxStr(value)
+        }
+
+        return DictGTXValue(cfgMap)
     }
 }

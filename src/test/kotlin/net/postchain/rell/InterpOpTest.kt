@@ -64,7 +64,7 @@ class InterpOpTest: AbstractOpTest() {
             query q($params) = $expr;
         """.trimIndent()
 
-        val res = RellTestUtils.processModule(code, false, false, block)
+        val res = RellTestUtils.processModule(code, processor = block)
         return res
     }
 

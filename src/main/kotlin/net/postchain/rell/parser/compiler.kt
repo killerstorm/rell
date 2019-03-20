@@ -275,6 +275,7 @@ class C_NamespaceContext(
         predefFunctions: Map<String, C_GlobalFunction> = mapOf()
 ){
     private val names = mutableMapOf<String, C_DefType>()
+    private val includes = mutableSetOf<String>()
     private val nsBuilder = C_NamespaceBuilder()
 
     private val records = mutableMapOf<String, C_Record>()
@@ -469,6 +470,7 @@ class C_NamespaceContext(
 class C_DefinitionContext(
         val nsCtx: C_NamespaceContext,
         val chainCtx: C_ExternalChainContext?,
+        val incCtx: C_IncludeContext,
         val namespaceName: String?
 ) {
     val modCtx = nsCtx.modCtx
@@ -521,6 +523,51 @@ class C_ExternalChainContext(val nsCtx: C_NamespaceContext, val chain: R_Externa
     fun transactionClassType(): R_Type {
         nsCtx.modCtx.checkPass(C_ModulePass.TYPES, null)
         return transactionClassType
+    }
+}
+
+class C_IncludeContext private constructor(
+        val resolver: C_IncludeResolver,
+        private val pathChain: List<String>,
+        private val namespaceIncludes: MutableSet<String> = mutableSetOf()
+) {
+    private val includes = mutableSetOf<String>()
+
+    fun subInclude(pos: S_Pos, resource: C_IncludeResource): C_IncludeContext? {
+        val path = resource.path
+
+        val recIdx = pathChain.indexOf(path)
+        if (recIdx >= 0) {
+            val recChain = pathChain.subList(recIdx, pathChain.size) + listOf(path)
+            throw C_Error(pos, "include_rec:${recChain.joinToString(",")}",
+                    "Recursive file inclusion: ${recChain.joinToString(" -> ") { "'$it'" }}")
+        }
+
+        if (!includes.add(path)) {
+            throw C_Error(pos, "include_dup:$path", "File already included: '$path'")
+        }
+
+        val subChain = pathChain + listOf(path)
+        if (subChain.size >= MAX_DEPTH) {
+            throw C_Error(pos, "include_long:${subChain.size}:${subChain.first()}:${subChain.last()}",
+                    "Inclusion chain is too long (${subChain.size}): ${subChain.joinToString(" -> ") { "'$it'" }}")
+        }
+
+        if (!namespaceIncludes.add(path)) {
+            return null
+        }
+
+        return C_IncludeContext(resource.innerResolver, subChain, namespaceIncludes)
+    }
+
+    fun subNamespace(): C_IncludeContext {
+        return C_IncludeContext(resolver, pathChain)
+    }
+
+    companion object {
+        private val MAX_DEPTH = 100
+
+        fun createTop(path: String, resolver: C_IncludeResolver) = C_IncludeContext(resolver, listOf(path))
     }
 }
 

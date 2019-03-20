@@ -1,11 +1,11 @@
 package net.postchain.rell.parser
 
-import com.github.h0tk3y.betterParse.lexer.*
+import com.github.h0tk3y.betterParse.lexer.Token
+import com.github.h0tk3y.betterParse.lexer.TokenMatch
+import com.github.h0tk3y.betterParse.lexer.Tokenizer
 import com.github.h0tk3y.betterParse.utils.cached
 import net.postchain.rell.hexStringToByteArray
 import java.io.InputStream
-import java.lang.IllegalArgumentException
-import java.lang.UnsupportedOperationException
 import java.util.*
 import kotlin.coroutines.experimental.buildSequence
 
@@ -327,7 +327,7 @@ private class CharSeq(private val str: String) {
         startCol = col
     }
 
-    fun textPos() = S_Pos(row, col)
+    fun textPos() = S_Pos(C_Parser.currentFile(), row, col)
     fun text(startSkip: Int, endSkip: Int) = str.substring(startPos + startSkip, pos - endSkip)
 
     fun tokenMatch(type: Token, text: String) = TokenMatch(type, text, startPos, startRow, startCol)

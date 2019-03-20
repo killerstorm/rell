@@ -1,25 +1,27 @@
 package net.postchain.rell.test
 
-import net.postchain.gtx.GTXValue
 import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_Module
-import net.postchain.rell.model.R_Query
 import net.postchain.rell.model.R_Type
-import net.postchain.rell.module.GtxToRtContext
-import net.postchain.rell.parser.C_Error
-import net.postchain.rell.parser.C_Utils
-import net.postchain.rell.parser.S_ModuleDefinition
+import net.postchain.rell.parser.*
 import net.postchain.rell.runtime.*
-import java.lang.IllegalStateException
 
 object RellTestUtils {
     val ENCODER_PLAIN = { t: R_Type, v: Rt_Value -> v.toString() }
     val ENCODER_STRICT = { t: R_Type, v: Rt_Value -> v.toStrictString() }
     val ENCODER_GTX = { t: R_Type, v: Rt_Value -> GtxTestUtils.encodeGtxStr(t.rtToGtx(v, true)) }
 
-    fun processModule(code: String, errPos: Boolean = false, gtx: Boolean = false, processor: (R_Module) -> String): String {
+    val MAIN_FILE = "main.rell"
+
+    fun processModule(
+            code: String,
+            errPos: Boolean = false,
+            gtx: Boolean = false,
+            includeDir: C_IncludeDir = C_EmptyIncludeDir,
+            processor: (R_Module) -> String): String
+    {
         val p = catchCtErr0(errPos) {
-            parseModule(code, gtx)
+            parseModule(code, gtx, includeDir)
         }
         return p.first ?: processor(p.second!!)
     }
@@ -29,7 +31,7 @@ object RellTestUtils {
             val res = block()
             return Pair(null, res)
         } catch (e: C_Error) {
-            val p = if (errPos) "" + e.pos else ""
+            val p = if (errPos) ":" + e.pos else ""
             return Pair("ct_err$p:" + e.code, null)
         }
     }
@@ -122,16 +124,19 @@ object RellTestUtils {
         }
     }
 
-    fun parseModule(code: String, gtx: Boolean): R_Module {
+    fun parseModule(code: String, gtx: Boolean, includeDir: C_IncludeDir): R_Module {
+        val includeResolver = C_IncludeResolver(includeDir)
+
         val ast = parse(code)
-        val m = ast.compile(gtx)
+        val m = ast.compile(MAIN_FILE, includeResolver, gtx)
+
         TestSourcesRecorder.addSource(code)
         return m
     }
 
     private fun parse(code: String): S_ModuleDefinition {
         try {
-            return C_Utils.parse(code)
+            return C_Parser.parse(MAIN_FILE, code)
         } catch (e: C_Error) {
             println("PARSING FAILED:")
             println(code)

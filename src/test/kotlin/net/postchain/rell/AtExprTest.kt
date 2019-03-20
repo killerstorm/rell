@@ -548,14 +548,19 @@ class AtExprTest: BaseRellTest() {
         chk("user @* { .firstName == 'Bill' } ( x = (123, 'Hello') )", "ct_err:expr_nosql:(integer,text)")
     }
 
-    companion object {
-        val mkins = SqlTestUtils::mkins
+    @Test fun testIndependentClassFieldExpression() {
+        val code = """
+            { val u = user @ { .firstName == 'Paul' };
+              return user @ { .company == u.company, .firstName != 'Paul' } ( .firstName );
+            }
+        """.trimIndent()
+        chkEx(code, "text[Bill]")
     }
 
     private object Ins {
-        fun company(id: Int, name: String): String = mkins("c0.company", "name", "$id, '$name'")
+        fun company(id: Int, name: String): String = SqlTestUtils.mkins("c0.company", "name", "$id, '$name'")
 
         fun user(id: Int, companyId: Int, firstName: String, lastName: String): String =
-                mkins("c0.user", "firstName,lastName,company", "$id, '$firstName', '$lastName', $companyId")
+                SqlTestUtils.mkins("c0.user", "firstName,lastName,company", "$id, '$firstName', '$lastName', $companyId")
     }
 }
