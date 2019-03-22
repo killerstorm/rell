@@ -23,6 +23,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val SAFECALL by relltok("?.")
     private val NOTNULL by relltok("!!")
     private val QUESTION by relltok("?")
+    private val ARROW by relltok("->")
 
     private val EQ by relltok("==")
     private val NE by relltok("!=")
@@ -70,6 +71,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val RETURN by relltok("return")
     private val IF by relltok("if")
     private val ELSE by relltok("else")
+    private val WHEN by relltok("when")
     private val WHILE by relltok("while")
     private val FOR by relltok("for")
     private val BREAK by relltok("break")
@@ -373,7 +375,23 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         S_IfExpr(S_Pos(pos), cond, trueExpr, falseExpr)
     }
 
-    private val operandExpr: Parser<S_Expr> by ( baseExpr or ifExpr )
+    private val whenConditionExpr by separatedTerms(_expression, COMMA, false) map { exprs -> S_WhenConditionExpr(exprs) }
+    private val whenConditionElse by ELSE map { S_WhenCondtiionElse(S_Pos(it)) }
+    private val whenCondition by whenConditionExpr or whenConditionElse
+
+    private val whenExprCase by whenCondition * -ARROW * _expression map {
+        (cond, expr) -> S_WhenExprCase(cond, expr)
+    }
+
+    private val whenExprCases by separatedTerms(whenExprCase, oneOrMore(SEMI), false) * zeroOrMore(SEMI) map {
+        (cases, _) -> cases
+    }
+
+    private val whenExpr by WHEN * optional(-LPAR * _expression * -RPAR) * -LCURL * whenExprCases * -RCURL map {
+        (pos, expr, cases) -> S_WhenExpr(S_Pos(pos), expr, cases)
+    }
+
+    private val operandExpr: Parser<S_Expr> by ( baseExpr or ifExpr or whenExpr )
 
     private val unaryExpr by ( optional(unaryOperator) * operandExpr ) map { (op, expr) ->
         if (op == null) expr else S_UnaryExpr(op.pos, S_Node(op.pos, op.value), expr)
@@ -387,17 +405,17 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     private val expression: Parser<S_Expr> by binaryExpr
 
-    private val emptyStatement by SEMI map { S_EmptyStatement() }
+    private val emptyStmt by SEMI map { S_EmptyStatement() }
 
-    private val valStatement by ( -VAL * id * optional(-COLON * type ) * -ASSIGN * expression * -SEMI) map {
+    private val valStmt by ( -VAL * id * optional(-COLON * type ) * -ASSIGN * expression * -SEMI) map {
         (name, type, expr) -> S_ValStatement(name, type, expr)
     }
 
-    private val varStatement by ( -VAR * id * optional(-COLON * type ) * optional(-ASSIGN * expression) * -SEMI) map {
+    private val varStmt by ( -VAR * id * optional(-COLON * type ) * optional(-ASSIGN * expression) * -SEMI) map {
         (name, type, expr) -> S_VarStatement(name, type, expr)
     }
 
-    private val returnStatement by ( RETURN * optional(expression) * -SEMI ) map { ( kw, expr ) ->
+    private val returnStmt by ( RETURN * optional(expression) * -SEMI ) map { ( kw, expr ) ->
         S_ReturnStatement(S_Pos(kw), expr)
     }
 
@@ -410,36 +428,39 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
             or ( MOD_ASSIGN mapNode { S_AssignOpCode.MOD })
     )
 
-    private val assignStatement by ( baseExpr * assignOp * expression * -SEMI ) map {
+    private val assignStmt by ( baseExpr * assignOp * expression * -SEMI ) map {
         (expr1, op, expr2) -> S_AssignStatement(expr1, op, expr2)
     }
 
-    private val blockStatement by ( -LCURL * zeroOrMore(_statement) * -RCURL ) map {
+    private val blockStmt by ( -LCURL * zeroOrMore(_statement) * -RCURL ) map {
         statements -> S_BlockStatement(statements)
     }
 
-    private val ifStatement by ( -IF * -LPAR * expression * -RPAR * _statement * optional(-ELSE * _statement) ) map {
+    private val ifStmt by ( -IF * -LPAR * expression * -RPAR * _statement * optional(-ELSE * _statement) ) map {
         (expr, trueStmt, falseStmt) -> S_IfStatement(expr, trueStmt, falseStmt)
     }
 
-    private val whileStatement by ( -WHILE * -LPAR * expression * -RPAR * _statement ) map {
+    private val whenStmtCase by whenCondition * -ARROW * _statement * zeroOrMore(SEMI) map {
+        (cond, stmt) -> S_WhenStatementCase(cond, stmt)
+    }
+
+    private val whenStmt by WHEN * optional(-LPAR * _expression * -RPAR) * -LCURL * zeroOrMore(whenStmtCase) * -RCURL map {
+        (pos, expr, cases) -> S_WhenStatement(S_Pos(pos), expr, cases)
+    }
+
+    private val whileStmt by ( -WHILE * -LPAR * expression * -RPAR * _statement ) map {
         (expr, stmt) -> S_WhileStatement(expr, stmt)
     }
 
-    private val forStatement by ( -FOR * -LPAR * id * -IN * expression * -RPAR * _statement ) map {
+    private val forStmt by ( -FOR * -LPAR * id * -IN * expression * -RPAR * _statement ) map {
         (name, expr, stmt) -> S_ForStatement(name, expr, stmt)
     }
 
-    private val breakStatement by ( BREAK * -SEMI ) map { S_BreakStatement(S_Pos(it)) }
+    private val breakStmt by ( BREAK * -SEMI ) map { S_BreakStatement(S_Pos(it)) }
 
-    private val callStatement by ( callExpr * -SEMI ) map { expr -> S_ExprStatement(expr) }
+    private val callStmt by ( callExpr * -SEMI ) map { expr -> S_ExprStatement(expr) }
 
-    private val createStatement by ( createExpr * -SEMI ) map { expr -> S_ExprStatement(expr) }
-
-    private val updateFrom by ( atExprFromItem * optional(atExprFromMulti) ) map {
-        ( targetClass, joinClasses ) ->
-        listOf(targetClass) + (if (joinClasses == null) listOf() else joinClasses.value)
-    }
+    private val createStmt by ( createExpr * -SEMI ) map { expr -> S_ExprStatement(expr) }
 
     private val updateTargetAt by ( atExprFrom * atExprAt * atExprWhere ) map {
         (from, cardinality, where) -> S_UpdateTarget_Simple(cardinality, from.value, where)
@@ -463,40 +484,41 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     private val updateWhat by ( -LPAR * separatedTerms(updateWhatExpr, COMMA, true) * -RPAR )
 
-    private val updateStatement by (UPDATE * updateTarget * updateWhat * -SEMI) map {
+    private val updateStmt by (UPDATE * updateTarget * updateWhat * -SEMI) map {
         (kw, target, what) -> S_UpdateStatement(S_Pos(kw), target, what)
     }
 
-    private val deleteStatement by (DELETE * updateTarget * -SEMI) map {
+    private val deleteStmt by (DELETE * updateTarget * -SEMI) map {
         (kw, target) -> S_DeleteStatement(S_Pos(kw), target)
     }
 
     private val statement: Parser<S_Statement> by (
-            emptyStatement
-            or valStatement
-            or varStatement
-            or assignStatement
-            or returnStatement
-            or blockStatement
-            or ifStatement
-            or whileStatement
-            or forStatement
-            or breakStatement
-            or callStatement
-            or createStatement
-            or updateStatement
-            or deleteStatement
+            emptyStmt
+            or valStmt
+            or varStmt
+            or assignStmt
+            or returnStmt
+            or blockStmt
+            or ifStmt
+            or whenStmt
+            or whileStmt
+            or forStmt
+            or breakStmt
+            or callStmt
+            or createStmt
+            or updateStmt
+            or deleteStmt
     )
 
     private val formalParameters by ( -LPAR * separatedTerms(relField, COMMA, true) * -RPAR )
 
-    private val opDef by (-OPERATION * id * formalParameters * blockStatement) map {
+    private val opDef by (-OPERATION * id * formalParameters * blockStmt) map {
         (name, params, body) ->
         S_OpDefinition(name, params, body)
     }
 
     private val functionBodyShort by (-ASSIGN * expression * -SEMI) map { S_FunctionBodyShort(it) }
-    private val functionBodyFull by blockStatement map { stmt -> S_FunctionBodyFull(stmt) }
+    private val functionBodyFull by blockStmt map { stmt -> S_FunctionBodyFull(stmt) }
     private val functionBody by ( functionBodyShort or functionBodyFull )
 
     private val queryDef by (-QUERY * id * formalParameters * optional(-COLON * type) * functionBody) map {

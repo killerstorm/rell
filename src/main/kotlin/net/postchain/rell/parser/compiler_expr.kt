@@ -2,6 +2,7 @@ package net.postchain.rell.parser
 
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_EnumValue
+import net.postchain.rell.runtime.Rt_Value
 
 class C_AtClass(val rClass: R_Class, val alias: String, val index: Int) {
     private val rAtClass = R_AtClass(rClass, index)
@@ -275,6 +276,8 @@ sealed class C_Value(val pos: S_Pos) {
     abstract fun toRExpr(): R_Expr
     abstract fun toDbExpr(): Db_Expr
 
+    open fun constantValue(): Rt_Value? = null
+
     open fun destination(): C_Destination {
         throw C_Errors.errBadDestination(pos)
     }
@@ -285,6 +288,7 @@ private class C_RValue(pos: S_Pos, private val rExpr: R_Expr): C_Value(pos) {
     override fun isDb() = false
     override fun toRExpr() = rExpr
     override fun toDbExpr() = C_Utils.toDbExpr(pos, rExpr)
+    override fun constantValue() = rExpr.constantValue()
 }
 
 private class C_DbValue(pos: S_Pos, private val dbExpr: Db_Expr): C_Value(pos) {
@@ -292,6 +296,7 @@ private class C_DbValue(pos: S_Pos, private val dbExpr: Db_Expr): C_Value(pos) {
     override fun isDb() = true
     override fun toRExpr() = throw C_Errors.errExprDbNotAllowed(pos)
     override fun toDbExpr() = dbExpr
+    override fun constantValue() = dbExpr.constantValue()
 }
 
 private class C_LookupValue(

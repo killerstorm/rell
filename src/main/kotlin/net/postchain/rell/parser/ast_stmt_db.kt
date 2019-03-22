@@ -82,7 +82,7 @@ class S_UpdateStatement(
         val target: S_UpdateTarget,
         val what: List<S_UpdateWhat>): S_Statement()
 {
-    override fun compile(ctx: C_ExprContext): R_Statement {
+    override fun compile(ctx: C_ExprContext): C_Statement {
         ctx.blkCtx.entCtx.checkDbUpdateAllowed(pos)
 
         val (dbCtx, rTarget) = target.compile(ctx)
@@ -94,7 +94,8 @@ class S_UpdateStatement(
 
         val dbWhat = compileWhat(rClass, dbCtx)
 
-        return R_UpdateStatement(rTarget, dbWhat)
+        val rStmt = R_UpdateStatement(rTarget, dbWhat)
+        return C_Statement(rStmt, false)
     }
 
     private fun compileWhat(cls: R_Class, dbCtx: C_DbExprContext): List<R_UpdateStatementWhat> {
@@ -125,7 +126,7 @@ class S_UpdateStatement(
 }
 
 class S_DeleteStatement(val pos: S_Pos, val target: S_UpdateTarget): S_Statement() {
-    override fun compile(ctx: C_ExprContext): R_Statement {
+    override fun compile(ctx: C_ExprContext): C_Statement {
         ctx.blkCtx.entCtx.checkDbUpdateAllowed(pos)
 
         val (_, rTarget) = target.compile(ctx)
@@ -137,6 +138,7 @@ class S_DeleteStatement(val pos: S_Pos, val target: S_UpdateTarget): S_Statement
             throw C_Errors.errCannotDelete(pos, rClass.name)
         }
 
-        return R_DeleteStatement(rTarget)
+        val rStmt = R_DeleteStatement(rTarget)
+        return C_Statement(rStmt, false)
     }
 }

@@ -20,7 +20,7 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
         // There is a class attribute and a local variable with such name -> implicit where condition.
 
         val argType = localVar.type
-        val clsAttrsByType = clsAttrs.filter { S_BinaryOp_EqNe.checkTypes(it.attr.type, argType) }
+        val clsAttrsByType = clsAttrs.filter { S_BinaryOp_EqNe.checkTypesDb(it.attr.type, argType) }
 
         if (clsAttrsByType.isEmpty()) {
             val typeStr = argType.toStrictString()
@@ -33,7 +33,7 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
 
         val clsAttr = clsAttrsByType[0]
         val attrType = clsAttr.attr.type
-        if (!S_BinaryOp_EqNe.checkTypes(attrType, argType)) {
+        if (!S_BinaryOp_EqNe.checkTypesDb(attrType, argType)) {
             throw C_Error(name.pos, "at_param_attr_type_missmatch:$name:$attrType:$argType",
                     "Parameter type does not match attribute type for '$name': $argType instead of $attrType")
         }

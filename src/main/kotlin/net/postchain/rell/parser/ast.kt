@@ -309,7 +309,7 @@ class S_OpDefinition(val name: S_Name, val params: List<S_NameTypePair>, val bod
     private fun doCompile(ctx: C_NamespaceContext, entityIndex: Int, fullName: String) {
         val entCtx = C_EntityContext(ctx, C_EntityType.OPERATION, entityIndex, null)
         val rParams = compileExternalParams(ctx, entCtx.rootExprCtx, params)
-        val rBody = body.compile(entCtx.rootExprCtx)
+        val rBody = body.compile(entCtx.rootExprCtx).rStmt
         val rCallFrame = entCtx.makeCallFrame()
 
         if (ctx.modCtx.globalCtx.gtx) {
@@ -411,28 +411,26 @@ class S_FunctionBodyShort(val expr: S_Expr): S_FunctionBody() {
 
 class S_FunctionBodyFull(val body: S_Statement): S_FunctionBody() {
     override fun compileQuery(name: S_Name, ctx: C_ExprContext): R_Statement {
-        val rBody = body.compile(ctx)
+        val cBody = body.compile(ctx)
 
-        val ret = body.returns()
-        if (!ret) {
+        if (!cBody.alwaysReturn) {
             throw C_Error(name.pos, "query_noreturn:${name.str}", "Query '${name.str}': not all code paths return value")
         }
 
-        return rBody
+        return cBody.rStmt
     }
 
     override fun compileFunction(name: S_Name, ctx: C_ExprContext): R_Statement {
-        val rBody = body.compile(ctx)
+        val cBody = body.compile(ctx)
 
         val retType = ctx.blkCtx.entCtx.actualReturnType()
         if (retType != R_UnitType) {
-            val ret = body.returns()
-            if (!ret) {
+            if (!cBody.alwaysReturn) {
                 throw C_Error(name.pos, "fun_noreturn:${name.str}", "Function '${name.str}': not all code paths return value")
             }
         }
 
-        return rBody
+        return cBody.rStmt
     }
 }
 

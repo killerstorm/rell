@@ -1,6 +1,7 @@
 package net.postchain.rell.parser
 
 import net.postchain.rell.model.*
+import net.postchain.rell.runtime.*
 
 class S_NameExprPair(val name: S_Name?, val expr: S_Expr)
 
@@ -8,6 +9,7 @@ abstract class S_Expr(val startPos: S_Pos) {
     abstract fun compile(ctx: C_ExprContext): C_Expr
     open fun compileWhere(ctx: C_DbExprContext, idx: Int): C_Expr = compile(ctx)
     open fun asName(): S_Name? = null
+    open fun constantValue(): Rt_Value? = null
 }
 
 class S_StringLiteralExpr(pos: S_Pos, val literal: String): S_Expr(pos) {
@@ -160,7 +162,8 @@ class S_IfExpr(pos: S_Pos, val cond: S_Expr, val trueExpr: S_Expr, val falseExpr
             val dbCond = cCond.toDbExpr()
             val dbTrue = cTrue.toDbExpr()
             val dbFalse = cFalse.toDbExpr()
-            val dbExpr = Db_IfExpr(resType, dbCond, dbTrue, dbFalse)
+            val cases = listOf(Db_WhenCase(dbCond, dbTrue))
+            val dbExpr = Db_WhenExpr(resType, cases, dbFalse)
             return C_DbExpr(startPos, dbExpr)
         } else {
             val rCond = cCond.toRExpr()
@@ -173,6 +176,271 @@ class S_IfExpr(pos: S_Pos, val cond: S_Expr, val trueExpr: S_Expr, val falseExpr
 
     private fun checkUnitType(expr: S_Expr, cValue: C_Value) {
         C_Utils.checkUnitType(expr.startPos, cValue.type(), "expr_if_unit", "Expression returns nothing")
+    }
+}
+
+sealed class S_WhenCondition {
+    abstract fun compile(ctx: C_ExprContext, builder: C_WhenChooserBuilder, keyType: R_Type?, idx: Int, last: Boolean)
+}
+
+class S_WhenConditionExpr(val exprs: List<S_Expr>): S_WhenCondition() {
+    override fun compile(ctx: C_ExprContext, builder: C_WhenChooserBuilder, keyType: R_Type?, idx: Int, last: Boolean) {
+        for (expr in exprs) {
+            val cValue = compileExpr(ctx, keyType, expr)
+            builder.variableCases.add(C_ChooserCase(expr, cValue, idx))
+
+            val value = evaluateConstantValue(cValue)
+            if (value != null) {
+                if (value in builder.constantCases) {
+                    throw C_Error(expr.startPos, "when_expr_dupvalue:$value", "Value already used")
+                }
+                builder.constantCases[value] = idx
+            }
+        }
+    }
+
+    private fun evaluateConstantValue(cValue: C_Value): Rt_Value? {
+        try {
+            val v = cValue.constantValue()
+            return v
+        } catch (e: Rt_Error) {
+            throw C_Error(cValue.pos, "expr_eval_fail:${e.code}", e.message ?: "Evaluation failed")
+        } catch (e: Throwable) {
+            throw C_Error(cValue.pos, "expr_eval_fail:${e.javaClass.canonicalName}", "Evaluation failed")
+        }
+    }
+
+    private fun compileExpr(ctx: C_ExprContext, keyType: R_Type?, expr: S_Expr): C_Value {
+        val valueType = if (keyType is R_NullableType) keyType.valueType else keyType
+        if (valueType is R_EnumType) {
+            val name = expr.asName()
+            if (name != null) {
+                val attr = valueType.attr(name.str)
+                if (attr != null) {
+                    val value = Rt_EnumValue(valueType, attr)
+                    val rExpr = R_ConstantExpr(value)
+                    return C_RExpr(expr.startPos, rExpr).value()
+                }
+            }
+        }
+
+        val cValue = expr.compile(ctx).value()
+        return cValue
+    }
+}
+
+class S_WhenCondtiionElse(val pos: S_Pos): S_WhenCondition() {
+    override fun compile(ctx: C_ExprContext, builder: C_WhenChooserBuilder, keyType: R_Type?, idx: Int, last: Boolean) {
+        if (!last) {
+            throw C_Error(pos, "when_else_notlast", "Else case must be the last one")
+        }
+
+        check(builder.elseCase == null)
+        builder.elseCase = Pair(pos, idx)
+    }
+}
+
+class C_WhenChooserBuilder(val keyValue: C_Value?) {
+    val constantCases = mutableMapOf<Rt_Value, Int>()
+    val variableCases = mutableListOf<C_ChooserCase>()
+    var elseCase: Pair<S_Pos, Int>? = null
+    var fullCoverage = false
+}
+
+class C_ChooserCase(val expr: S_Expr, val cValue: C_Value, val idx: Int)
+
+class S_WhenExprCase(val cond: S_WhenCondition, val expr: S_Expr)
+
+class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>): S_Expr(pos) {
+    override fun compile(ctx: C_ExprContext): C_Expr {
+        val conds = cases.map { it.cond }
+
+        val builder = createWhenBuilder(ctx, expr, conds)
+        if (!builder.fullCoverage) {
+            throw C_Error(startPos, "when_no_else", "Else case missing")
+        }
+
+        val (type, cValues) = compileExprs(ctx)
+
+        val db = (builder.keyValue?.isDb() ?: false)
+                || builder.variableCases.any { it.cValue.isDb() }
+                || cValues.any { it.isDb() }
+
+        if (db) {
+            val dbExpr = compileDb(builder, type, cValues)
+            return C_DbExpr(startPos, dbExpr)
+        } else {
+            val rChooser = compileChooserR(builder)
+            val rExprs = cValues.map { it.toRExpr() }
+            val rExpr = R_WhenExpr(type, rChooser, rExprs)
+            return C_RExpr(startPos, rExpr)
+        }
+    }
+
+    private fun compileExprs(ctx: C_ExprContext): Pair<R_Type, List<C_Value>> {
+        val cValues = cases.map { it.expr.compile(ctx).value() }
+        val type = cValues.withIndex().fold(cValues[0].type()) { t, (i, value) ->
+            S_Type.commonType(t, value.type(), cases[i].expr.startPos, "expr_when_incompatible_type",
+                    "When case expressions have incompatible types")
+        }
+        return Pair(type, cValues)
+    }
+
+    private fun compileDb(builder: C_WhenChooserBuilder, type: R_Type, cValues: List<C_Value>): Db_Expr {
+        val caseCondMap = mutableMapOf<Int, MutableList<Db_Expr>>()
+        for (case in builder.variableCases) caseCondMap[case.idx] = mutableListOf()
+        for (case in builder.variableCases) caseCondMap.getValue(case.idx).add(case.cValue.toDbExpr())
+
+        val keyExpr = builder.keyValue?.toDbExpr()
+
+        val caseExprs = caseCondMap.keys.sorted().map { idx ->
+            val conds = caseCondMap.getValue(idx)
+            val value = cValues[idx]
+            val dbCond = compileDbCondition(keyExpr, conds)
+            Db_WhenCase(dbCond, value.toDbExpr())
+        }
+
+        val elseIdx = builder.elseCase
+        val elseExpr = if (elseIdx == null) null else cValues[elseIdx.second].toDbExpr()
+
+        return Db_WhenExpr(type, caseExprs, elseExpr)
+    }
+
+    private fun compileDbCondition(keyExpr: Db_Expr?, conds: List<Db_Expr>): Db_Expr {
+        check(!conds.isEmpty())
+
+        if (keyExpr != null) {
+            if (conds.size == 1) {
+                return Db_BinaryExpr(R_BooleanType, Db_BinaryOp_Eq, keyExpr, conds[0])
+            } else {
+                return Db_InExpr(keyExpr, conds)
+            }
+        }
+
+        var res = conds[0]
+        for (cond in conds.subList(1, conds.size)) {
+            res = Db_BinaryExpr(R_BooleanType, Db_BinaryOp_Or, res, cond)
+        }
+
+        return res
+    }
+
+    companion object {
+        fun compileChooser(
+                ctx: C_ExprContext,
+                expr: S_Expr?,
+                conds: List<S_WhenCondition>
+        ): Pair<Boolean, R_WhenChooser> {
+            val builder = createWhenBuilder(ctx, expr, conds)
+            val chooser = compileChooserR(builder)
+            return Pair(builder.fullCoverage, chooser)
+        }
+
+        private fun createWhenBuilder(
+                ctx: C_ExprContext,
+                expr: S_Expr?,
+                conds: List<S_WhenCondition>
+        ): C_WhenChooserBuilder {
+            val keyValue = if (expr == null) null else expr.compile(ctx).value()
+
+            val keyType = keyValue?.type()
+            if (keyType == R_NullType) {
+                throw C_Error(expr!!.startPos, "when_expr_type:null", "Cannot use null as when expression")
+            }
+
+            val builder = C_WhenChooserBuilder(keyValue)
+            for ((i, cond) in conds.withIndex()) {
+                cond.compile(ctx, builder, keyType, i, i == conds.size - 1)
+            }
+
+            checkTypes(builder)
+            builder.fullCoverage = checkFullCoverage(builder)
+
+            return builder
+        }
+
+        private fun checkTypes(builder: C_WhenChooserBuilder) {
+            val keyValue = builder.keyValue
+
+            if (keyValue == null) {
+                for (case in builder.variableCases) {
+                    S_Type.match(R_BooleanType, case.cValue.type(), case.expr.startPos, "when_case_type", "Type missmatch")
+                }
+            } else {
+                val keyType = keyValue.type()
+                for (case in builder.variableCases) {
+                    val caseType = case.cValue.type()
+                    if (!checkCaseType(keyType, caseType)) {
+                        throw C_Error(case.expr.startPos, "when_case_type:$keyType:$caseType",
+                                "Type missmatch: $caseType instead of $keyType")
+                    }
+                }
+            }
+        }
+
+        private fun checkFullCoverage(builder: C_WhenChooserBuilder): Boolean {
+            val keyValue = builder.keyValue
+            if (keyValue == null) {
+                return builder.elseCase != null
+            }
+
+            val keyType = keyValue.type()
+            val allValues = allTypeValues(keyType)
+            val allValuesCovered = !allValues.isEmpty() && allValues == builder.constantCases.keys
+
+            if (allValuesCovered && builder.elseCase != null) {
+                throw C_Error(builder.elseCase!!.first, "when_else_allvalues:$keyType",
+                        "No values of type '$keyType' left for the else case")
+            }
+
+            return allValuesCovered || builder.elseCase != null
+        }
+
+        private fun compileChooserR(builder: C_WhenChooserBuilder): R_WhenChooser {
+            val keyValue = builder.keyValue
+
+            if (keyValue == null) {
+                val keyExpr = R_ConstantExpr.makeBool(true)
+                val caseExprs = builder.variableCases.map { IndexedValue(it.idx, it.cValue.toRExpr()) }
+                return R_IterativeWhenChooser(keyExpr, caseExprs, builder.elseCase?.second)
+            }
+
+            val rKeyExpr = keyValue.toRExpr()
+
+            val chooser = if (builder.constantCases.size == builder.variableCases.size) {
+                R_LookupWhenChooser(rKeyExpr, builder.constantCases.toMap(), builder.elseCase?.second)
+            } else {
+                val caseExprs = builder.variableCases.map { IndexedValue(it.idx, it.cValue.toRExpr()) }
+                R_IterativeWhenChooser(rKeyExpr, caseExprs, builder.elseCase?.second)
+            }
+
+            return chooser
+        }
+
+        private fun checkCaseType(keyType: R_Type, caseType: R_Type): Boolean {
+            val eq = S_BinaryOp_EqNe.checkTypes(keyType, caseType)
+            if (eq) return true
+
+            if (keyType is R_NullableType) {
+                val eq2 = S_BinaryOp_EqNe.checkTypes(keyType.valueType, caseType)
+                return eq2
+            }
+
+            return false
+        }
+
+        private fun allTypeValues(type: R_Type): Set<Rt_Value> {
+            if (type == R_BooleanType) {
+                return setOf(Rt_BooleanValue(false), Rt_BooleanValue(true))
+            } else if (type is R_EnumType) {
+                return type.values().toSet()
+            } else if (type is R_NullableType) {
+                val values = allTypeValues(type.valueType)
+                return if (values.isEmpty()) values else (values + setOf(Rt_NullValue))
+            } else {
+                return setOf()
+            }
+        }
     }
 }
 

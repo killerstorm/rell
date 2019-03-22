@@ -247,6 +247,11 @@ sealed class S_BinaryOp_EqNe(val rOp: R_BinaryOp, val dbOp: Db_BinaryOp): S_Bina
     companion object {
         fun checkTypes(left: R_Type, right: R_Type): Boolean {
             val op = S_BinaryOp_Eq.compileOp(left, right)
+            return op != null
+        }
+
+        fun checkTypesDb(left: R_Type, right: R_Type): Boolean {
+            val op = S_BinaryOp_Eq.compileOp(left, right)
             return op != null && op.dbOp != null
         }
 

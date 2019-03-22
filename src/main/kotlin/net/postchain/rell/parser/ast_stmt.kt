@@ -2,17 +2,18 @@ package net.postchain.rell.parser
 
 import net.postchain.rell.model.*
 
+class C_Statement(val rStmt: R_Statement, val alwaysReturn: Boolean)
+
 abstract class S_Statement {
-    abstract fun compile(ctx: C_ExprContext): R_Statement
-    open fun returns(): Boolean = false
+    abstract fun compile(ctx: C_ExprContext): C_Statement
 }
 
 class S_EmptyStatement: S_Statement() {
-    override fun compile(ctx: C_ExprContext): R_Statement = R_EmptyStatement
+    override fun compile(ctx: C_ExprContext) = C_Statement(R_EmptyStatement, false)
 }
 
 class S_ValStatement(val name: S_Name, val type: S_Type?, val expr: S_Expr): S_Statement() {
-    override fun compile(ctx: C_ExprContext): R_Statement {
+    override fun compile(ctx: C_ExprContext): C_Statement {
         val rExpr = expr.compile(ctx).value().toRExpr()
 
         C_Utils.checkUnitType(name.pos, rExpr.type, "stmt_val_unit:${name.str}",
@@ -25,12 +26,13 @@ class S_ValStatement(val name: S_Name, val type: S_Type?, val expr: S_Expr): S_S
 
         val varType = rType ?: rExpr.type
         val ptr = ctx.blkCtx.add(name, varType, false)
-        return R_ValStatement(ptr, rExpr)
+        val rStmt = R_ValStatement(ptr, rExpr)
+        return C_Statement(rStmt, false)
     }
 }
 
 class S_VarStatement(val name: S_Name, val type: S_Type?, val expr: S_Expr?): S_Statement() {
-    override fun compile(ctx: C_ExprContext): R_Statement {
+    override fun compile(ctx: C_ExprContext): C_Statement {
         val rExpr = expr?.compile(ctx)?.value()?.toRExpr()
         val rType = type?.compile(ctx)
 
@@ -46,12 +48,13 @@ class S_VarStatement(val name: S_Name, val type: S_Type?, val expr: S_Expr?): S_
 
         val rVarType = if (rType != null) rType else rExpr!!.type
         val ptr = ctx.blkCtx.add(name, rVarType, true)
-        return R_VarStatement(ptr, rExpr)
+        val rStmt = R_VarStatement(ptr, rExpr)
+        return C_Statement(rStmt, false)
     }
 }
 
 class S_ReturnStatement(val pos: S_Pos, val expr: S_Expr?): S_Statement() {
-    override fun compile(ctx: C_ExprContext): R_Statement {
+    override fun compile(ctx: C_ExprContext): C_Statement {
         val cExpr = expr?.compile(ctx)
         val rExpr = cExpr?.value()?.toRExpr()
         if (rExpr != null) {
@@ -74,82 +77,94 @@ class S_ReturnStatement(val pos: S_Pos, val expr: S_Expr?): S_Statement() {
             entCtx.matchReturnType(pos, rRetType)
         }
 
-        return R_ReturnStatement(rExpr)
+        val rStmt = R_ReturnStatement(rExpr)
+        return C_Statement(rStmt, true)
     }
-
-    override fun returns(): Boolean = true
 }
 
 class S_BlockStatement(val stmts: List<S_Statement>): S_Statement() {
-    override fun compile(ctx: C_ExprContext): R_Statement {
+    override fun compile(ctx: C_ExprContext): C_Statement {
         val blkCtx = ctx.blkCtx
         val subBlkCtx = C_BlockContext(blkCtx.entCtx, blkCtx, blkCtx.insideLoop)
         val subCtx = C_RExprContext(subBlkCtx)
 
-        val rStmts = stmts.map { it.compile(subCtx) }
+        val cStmts = stmts.map { it.compile(subCtx) }
+        val rStmts = cStmts.map { it.rStmt }
+        val returns = cStmts.any { it.alwaysReturn }
 
         val frameBlock = subBlkCtx.makeFrameBlock()
-        return R_BlockStatement(rStmts, frameBlock)
-    }
-
-    override fun returns(): Boolean {
-        for (stmt in stmts) {
-            if (stmt.returns()) {
-                return true
-            }
-        }
-        return false
+        val rStmt = R_BlockStatement(rStmts, frameBlock)
+        return C_Statement(rStmt, returns)
     }
 }
 
 class S_ExprStatement(val expr: S_Expr): S_Statement() {
-    override fun compile(ctx: C_ExprContext): R_Statement {
+    override fun compile(ctx: C_ExprContext): C_Statement {
         val rExpr = expr.compile(ctx).value().toRExpr()
-        return R_ExprStatement(rExpr)
+        val rStmt = R_ExprStatement(rExpr)
+        return C_Statement(rStmt, false)
     }
 }
 
 class S_AssignStatement(val dstExpr: S_Expr, val op: S_Node<S_AssignOpCode>, val srcExpr: S_Expr): S_Statement() {
-    override fun compile(ctx: C_ExprContext): R_Statement {
+    override fun compile(ctx: C_ExprContext): C_Statement {
         val cDstExpr = dstExpr.compile(ctx).value().destination()
         val rSrcExpr = srcExpr.compile(ctx).value().toRExpr()
-        return op.value.op.compile(op.pos, cDstExpr, rSrcExpr)
+        val rStmt = op.value.op.compile(op.pos, cDstExpr, rSrcExpr)
+        return C_Statement(rStmt, false)
     }
 }
 
 class S_IfStatement(val expr: S_Expr, val trueStmt: S_Statement, val falseStmt: S_Statement?): S_Statement() {
-    override fun compile(ctx: C_ExprContext): R_Statement {
+    override fun compile(ctx: C_ExprContext): C_Statement {
         val rExpr = expr.compile(ctx).value().toRExpr()
         S_Type.match(R_BooleanType, rExpr.type, expr.startPos, "stmt_if_expr_type", "Wrong type of if-expression")
 
-        val rTrueStmt = trueStmt.compile(ctx)
-        val rFalseStmt = if (falseStmt != null) falseStmt.compile(ctx) else R_EmptyStatement
+        val cTrueStmt = trueStmt.compile(ctx)
+        val cFalseStmt = if (falseStmt != null) falseStmt.compile(ctx) else C_Statement(R_EmptyStatement, false)
+        val returns = cTrueStmt.alwaysReturn && cFalseStmt.alwaysReturn
 
-        return R_IfStatement(rExpr, rTrueStmt, rFalseStmt)
+        val rStmt = R_IfStatement(rExpr, cTrueStmt.rStmt, cFalseStmt.rStmt)
+        return C_Statement(rStmt, returns)
+
     }
+}
 
-    override fun returns(): Boolean {
-        return falseStmt != null && trueStmt.returns() && falseStmt.returns()
+class S_WhenStatementCase(val cond: S_WhenCondition, val stmt: S_Statement)
+
+class S_WhenStatement(val pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenStatementCase>): S_Statement() {
+    override fun compile(ctx: C_ExprContext): C_Statement {
+        val conds = cases.map { it.cond }
+
+        val (full, chooser) = S_WhenExpr.compileChooser(ctx, expr, conds)
+
+        val cStmts = cases.map { it.stmt.compile(ctx) }
+        val returns = full && cStmts.all { it.alwaysReturn }
+
+        val rStmts = cStmts.map { it.rStmt }
+        val rStmt = R_WhenStatement(chooser, rStmts)
+        return C_Statement(rStmt, returns)
     }
 }
 
 class S_WhileStatement(val expr: S_Expr, val stmt: S_Statement): S_Statement() {
-    override fun compile(ctx: C_ExprContext): R_Statement {
+    override fun compile(ctx: C_ExprContext): C_Statement {
         val rExpr = expr.compile(ctx).value().toRExpr()
         S_Type.match(R_BooleanType, rExpr.type, expr.startPos, "stmt_while_expr_type", "Wrong type of while-expression")
 
         val subBlkCtx = C_BlockContext(ctx.blkCtx.entCtx, ctx.blkCtx, true)
         val subCtx = C_RExprContext(subBlkCtx)
 
-        val rStmt = stmt.compile(subCtx)
+        val rBodyStmt = stmt.compile(subCtx).rStmt
 
         val rBlock = subBlkCtx.makeFrameBlock()
-        return R_WhileStatement(rExpr, rStmt, rBlock)
+        val rStmt = R_WhileStatement(rExpr, rBodyStmt, rBlock)
+        return C_Statement(rStmt, false)
     }
 }
 
 class S_ForStatement(val name: S_Name, val expr: S_Expr, val stmt: S_Statement): S_Statement() {
-    override fun compile(ctx: C_ExprContext): R_Statement {
+    override fun compile(ctx: C_ExprContext): C_Statement {
         val rExpr = expr.compile(ctx).value().toRExpr()
         val exprType = rExpr.type
 
@@ -159,10 +174,11 @@ class S_ForStatement(val name: S_Name, val expr: S_Expr, val stmt: S_Statement):
         val subCtx = C_RExprContext(subBlkCtx)
 
         val ptr = subBlkCtx.add(name, varType, false)
-        val rStmt = stmt.compile(subCtx)
+        val rBodyStmt = stmt.compile(subCtx).rStmt
 
         val rBlock = subBlkCtx.makeFrameBlock()
-        return R_ForStatement(ptr, rExpr, iterator, rStmt, rBlock)
+        val rStmt = R_ForStatement(ptr, rExpr, iterator, rBodyStmt, rBlock)
+        return C_Statement(rStmt, false)
     }
 
     private fun compileForIterator(exprType: R_Type): Pair<R_Type, R_ForIterator> {
@@ -180,10 +196,11 @@ class S_ForStatement(val name: S_Name, val expr: S_Expr, val stmt: S_Statement):
 }
 
 class S_BreakStatement(val pos: S_Pos): S_Statement() {
-    override fun compile(ctx: C_ExprContext): R_Statement {
+    override fun compile(ctx: C_ExprContext): C_Statement {
         if (!ctx.blkCtx.insideLoop) {
             throw C_Error(pos, "stmt_break_noloop", "Break without a loop")
         }
-        return R_BreakStatement()
+        val rStmt = R_BreakStatement()
+        return C_Statement(rStmt, false)
     }
 }

@@ -100,6 +100,14 @@ class R_IfStatement(val expr: R_Expr, val trueStmt: R_Statement, val falseStmt: 
     }
 }
 
+class R_WhenStatement(val chooser: R_WhenChooser, val stmts: List<R_Statement>): R_Statement() {
+    override fun execute(frame: Rt_CallFrame): R_StatementResult? {
+        val choice = chooser.choose(frame)
+        val res = if (choice == null) null else stmts[choice].execute(frame)
+        return res
+    }
+}
+
 class R_WhileStatement(val expr: R_Expr, val stmt: R_Statement, val frameBlock: R_FrameBlock): R_Statement() {
     override fun execute(frame: Rt_CallFrame): R_StatementResult? {
         while (true) {

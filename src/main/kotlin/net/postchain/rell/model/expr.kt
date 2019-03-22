@@ -5,6 +5,7 @@ import net.postchain.rell.runtime.*
 
 abstract class R_Expr(val type: R_Type) {
     abstract fun evaluate(frame: Rt_CallFrame): Rt_Value
+    open fun constantValue(): Rt_Value? = null
 }
 
 sealed class R_DestinationExpr(type: R_Type): R_Expr(type) {
@@ -63,6 +64,7 @@ class R_RecordMemberExpr(val base: R_Expr, val attr: R_Attrib): R_DestinationExp
 
 class R_ConstantExpr(val value: Rt_Value): R_Expr(value.type()) {
     override fun evaluate(frame: Rt_CallFrame): Rt_Value = value
+    override fun constantValue() = value
 
     companion object {
         fun makeNull() = R_ConstantExpr(Rt_NullValue)
@@ -130,12 +132,24 @@ class R_TupleExpr(val tupleType: R_TupleType, val exprs: List<R_Expr>): R_Expr(t
         val values = exprs.map { it.evaluate(frame) }
         return Rt_TupleValue(tupleType, values)
     }
+
+    override fun constantValue(): Rt_Value? {
+        val values = exprs.map { it.constantValue() }
+        if (values.any { it == null }) return null
+        return Rt_TupleValue(tupleType, values.map { it!! })
+    }
 }
 
 class R_ListLiteralExpr(type: R_ListType, val exprs: List<R_Expr>): R_Expr(type) {
     override fun evaluate(frame: Rt_CallFrame): Rt_Value {
         val list = MutableList(exprs.size) { exprs[it].evaluate(frame) }
         return Rt_ListValue(type, list)
+    }
+
+    override fun constantValue(): Rt_Value? {
+        val values = exprs.map { it.constantValue() }
+        if (values.any { it == null }) return null
+        return Rt_ListValue(type, values.map { it!! }.toMutableList())
     }
 }
 
@@ -151,6 +165,12 @@ class R_MapLiteralExpr(type: R_MapType, val entries: List<Pair<R_Expr, R_Expr>>)
             map.put(key, value)
         }
         return Rt_MapValue(type, map)
+    }
+
+    override fun constantValue(): Rt_Value? {
+        val values = entries.map { (k, v) -> Pair(k.constantValue(), v.constantValue()) }
+        if (values.any { (k, v) -> k == null || v == null }) return null
+        return Rt_MapValue(type, values.map { (k, v) -> Pair(k!!, v!!) }.toMap().toMutableMap())
     }
 }
 
@@ -300,6 +320,41 @@ class R_IfExpr(type: R_Type, val cond: R_Expr, val trueExpr: R_Expr, val falseEx
         val v = cond.evaluate(frame)
         val b = v.asBoolean()
         val expr = if (b) trueExpr else falseExpr
+        val res = expr.evaluate(frame)
+        return res
+    }
+}
+
+sealed class R_WhenChooser {
+    abstract fun choose(frame: Rt_CallFrame): Int?
+}
+
+class R_IterativeWhenChooser(val keyExpr: R_Expr, val exprs: List<IndexedValue<R_Expr>>, val elseIdx: Int?): R_WhenChooser() {
+    override fun choose(frame: Rt_CallFrame): Int? {
+        val keyValue = keyExpr.evaluate(frame)
+        for ((i, expr) in exprs) {
+            val value = expr.evaluate(frame)
+            if (value == keyValue) {
+                return i
+            }
+        }
+        return elseIdx
+    }
+}
+
+class R_LookupWhenChooser(val keyExpr: R_Expr, val map: Map<Rt_Value, Int>, val elseIdx: Int?): R_WhenChooser() {
+    override fun choose(frame: Rt_CallFrame): Int? {
+        val keyValue = keyExpr.evaluate(frame)
+        val idx = map[keyValue]
+        return idx ?: elseIdx
+    }
+}
+
+class R_WhenExpr(type: R_Type, val chooser: R_WhenChooser, val exprs: List<R_Expr>): R_Expr(type) {
+    override fun evaluate(frame: Rt_CallFrame): Rt_Value {
+        val choice = chooser.choose(frame)
+        check(choice != null)
+        val expr = exprs[choice!!]
         val res = expr.evaluate(frame)
         return res
     }
