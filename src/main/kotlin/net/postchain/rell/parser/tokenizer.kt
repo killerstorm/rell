@@ -56,14 +56,14 @@ class RellTokenizer(override val tokens: List<Token>) : Tokenizer {
 
     override fun tokenize(input: Scanner) = throw UnsupportedOperationException()
 
-    override fun tokenize(input: String) = buildSequence<TokenMatch> {
-        val seq = CharSeq(input)
+    override fun tokenize(input: String) = tokenize(input) {}
 
+    fun tokenize(input: String, callback: (TokenMatch) -> Unit) = buildSequence<TokenMatch> {
+        val seq = CharSeq(input)
         while (true) {
             val token = scanToken(seq)
-            if (token == null) {
-                break
-            }
+            token ?: break
+            callback(token)
             yield(token)
         }
     }.constrainOnce().cached()

@@ -3,9 +3,7 @@ package net.postchain.rell.parser
 import com.github.h0tk3y.betterParse.parser.ParseException
 import com.github.h0tk3y.betterParse.parser.parseToEnd
 import net.postchain.rell.model.*
-import org.apache.commons.lang3.StringUtils
 import java.util.*
-import java.util.regex.Pattern
 
 object C_Utils {
     fun toDbExpr(pos: S_Pos, rExpr: R_Expr): Db_Expr {
@@ -96,25 +94,19 @@ object C_Parser {
     private val currentFileLocal = ThreadLocal.withInitial<String> { "?" }
 
     fun parse(file: String, sourceCode: String): S_ModuleDefinition {
-        val tokenSeq = S_Grammar.tokenizer.tokenize(sourceCode)
-
         // The syntax error position returned by the parser library is misleading: if there is an error in the middle
         // of an operation, it returns the position of the beginning of the operation.
         // Following workaround handles this by tracking the position of the farthest reached token (seems to work fine).
 
-        var maxPos = 0
         var maxRowCol = S_Pos(file, 1, 1)
-        val tokenSeq2 = tokenSeq.map {
-            if (!it.type.ignored && it.position > maxPos) {
-                maxPos = it.position
-                maxRowCol = S_Pos(it)
-            }
-            it
+
+        val tokenSeq = S_Grammar.tokenizer.tokenize(sourceCode) {
+            if (!it.type.ignored) maxRowCol = S_Pos(it)
         }
 
         try {
             val ast = overrideCurrentFile(file) {
-                S_Grammar.parseToEnd(tokenSeq2)
+                S_Grammar.parseToEnd(tokenSeq)
             }
             return ast
         } catch (e: ParseException) {
