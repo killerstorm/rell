@@ -231,6 +231,9 @@ class StatementTest: BaseRellTest() {
         chkEx("{ var x = 123; x += false; return x; }", "ct_err:binop_operand_type:+=:integer:boolean")
         chkEx("{ var x = 123; x += 'Hello'; return x; }", "ct_err:binop_operand_type:+=:integer:text")
 
+        chkEx("{ var x = 123; +x = 456; return x; }", "ct_err:syntax")
+        chkEx("{ var x = 123; +x += 456; return x; }", "ct_err:syntax")
+
         chkAssignmentErr("-=")
         chkAssignmentErr("*=")
         chkAssignmentErr("/=")

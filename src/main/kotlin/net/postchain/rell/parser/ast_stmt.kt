@@ -108,7 +108,7 @@ class S_ExprStatement(val expr: S_Expr): S_Statement() {
 
 class S_AssignStatement(val dstExpr: S_Expr, val op: S_Node<S_AssignOpCode>, val srcExpr: S_Expr): S_Statement() {
     override fun compile(ctx: C_ExprContext): C_Statement {
-        val cDstExpr = dstExpr.compile(ctx).value().destination()
+        val cDstExpr = dstExpr.compile(ctx).value().destination(ctx)
         val rSrcExpr = srcExpr.compile(ctx).value().toRExpr()
         val rStmt = op.value.op.compile(op.pos, cDstExpr, rSrcExpr)
         return C_Statement(rStmt, false)

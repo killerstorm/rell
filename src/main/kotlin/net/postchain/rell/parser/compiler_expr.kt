@@ -81,12 +81,6 @@ sealed class C_ExprContext(val blkCtx: C_BlockContext) {
         val expr = makeValueFunctionExpr(name, valueExpr, fnExpr)
         return expr ?: throw C_Errors.errUnknownName(name)
     }
-
-    protected fun resolveNameGlobal(name: S_Name): C_NameResolution? {
-        val nsCtx = blkCtx.entCtx.nsCtx
-        val value = nsCtx.getValueOpt(name.str)
-        return if (value == null) null else C_NameResolution_Value(name, blkCtx.entCtx, value)
-    }
 }
 
 class C_RExprContext(blkCtx: C_BlockContext): C_ExprContext(blkCtx) {
@@ -224,6 +218,7 @@ class C_AssignOp(val pos: S_Pos, val code: String, val rOp: R_BinaryOp, val dbOp
 sealed class C_Destination {
     abstract fun type(): R_Type
     abstract fun compileAssignStatement(srcExpr: R_Expr, op: C_AssignOp?): R_Statement
+    abstract fun compileAssignExpr(startPos: S_Pos, srcExpr: R_Expr, op: C_AssignOp, post: Boolean): C_Expr
 }
 
 class C_SimpleDestination(private val rDstExpr: R_DestinationExpr): C_Destination() {
@@ -231,6 +226,11 @@ class C_SimpleDestination(private val rDstExpr: R_DestinationExpr): C_Destinatio
 
     override fun compileAssignStatement(srcExpr: R_Expr, op: C_AssignOp?): R_Statement {
         return R_AssignStatement(rDstExpr, srcExpr, op?.rOp)
+    }
+
+    override fun compileAssignExpr(startPos: S_Pos, srcExpr: R_Expr, op: C_AssignOp, post: Boolean): C_Expr {
+        val rExpr = R_AssignExpr(rDstExpr.type, op.rOp, rDstExpr, srcExpr, post)
+        return C_RExpr(startPos, rExpr)
     }
 }
 
@@ -253,6 +253,12 @@ class C_ClassFieldDestination(private val base: C_Value, private val rClass: R_C
         val rWhat = R_UpdateStatementWhat(attr, dbExpr, op?.dbOp)
         return R_UpdateStatement(rTarget, listOf(rWhat))
     }
+
+    override fun compileAssignExpr(startPos: S_Pos, srcExpr: R_Expr, op: C_AssignOp, post: Boolean): C_Expr {
+        val rStmt = compileAssignStatement(srcExpr, op)
+        val rExpr = R_StatementExpr(rStmt)
+        return C_RExpr(startPos, rExpr)
+    }
 }
 
 class C_ObjectFieldDestination(private val rObject: R_Object, private val attr: R_Attrib): C_Destination() {
@@ -268,6 +274,12 @@ class C_ObjectFieldDestination(private val rObject: R_Object, private val attr: 
         val rWhat = R_UpdateStatementWhat(attr, dbExpr, op?.dbOp)
         return R_UpdateStatement(rTarget, listOf(rWhat))
     }
+
+    override fun compileAssignExpr(startPos: S_Pos, srcExpr: R_Expr, op: C_AssignOp, post: Boolean): C_Expr {
+        val rStmt = compileAssignStatement(srcExpr, op)
+        val rExpr = R_StatementExpr(rStmt)
+        return C_RExpr(startPos, rExpr)
+    }
 }
 
 sealed class C_Value(val pos: S_Pos) {
@@ -278,7 +290,7 @@ sealed class C_Value(val pos: S_Pos) {
 
     open fun constantValue(): Rt_Value? = null
 
-    open fun destination(): C_Destination {
+    open fun destination(ctx: C_ExprContext): C_Destination {
         throw C_Errors.errBadDestination(pos)
     }
 }
@@ -310,7 +322,7 @@ private class C_LookupValue(
     override fun toRExpr() = expr
     override fun toDbExpr() = C_Utils.toDbExpr(pos, expr)
 
-    override fun destination(): C_Destination {
+    override fun destination(ctx: C_ExprContext): C_Destination {
         if (dstExpr == null) {
             val type = baseType.toStrictString()
             throw C_Error(pos, "expr_unmodifiable:$type", "Value of type '$type' cannot be modified")
@@ -325,7 +337,7 @@ private class C_LocalVarValue(private val name: S_Name, private val entry: C_Sco
     override fun toRExpr() = entry.toVarExpr()
     override fun toDbExpr() = C_Utils.toDbExpr(pos, toRExpr())
 
-    override fun destination(): C_Destination {
+    override fun destination(ctx: C_ExprContext): C_Destination {
         if (!entry.modifiable) {
             throw C_Error(name.pos, "expr_assign_val:${name.str}", "Value of '${name.str}' cannot be changed")
         }
@@ -341,20 +353,17 @@ private class C_ObjectValue(pos: S_Pos, private val rObject: R_Object): C_Value(
     override fun toDbExpr() = C_Utils.toDbExpr(pos, toRExpr())
 }
 
-private class C_ObjectFieldValue(
-        pos: S_Pos,
-        private val rObject: R_Object,
-        private val attr: R_Attrib
-): C_Value(pos) {
+private class C_ObjectFieldValue(pos: S_Pos, private val rObject: R_Object, private val attr: R_Attrib): C_Value(pos) {
     override fun type() = attr.type
     override fun isDb() = false
     override fun toRExpr() = createAccessExpr()
     override fun toDbExpr() = C_Utils.toDbExpr(pos, toRExpr())
 
-    override fun destination(): C_Destination {
+    override fun destination(ctx: C_ExprContext): C_Destination {
         if (!attr.mutable) {
             throw C_Errors.errAttrNotMutable(pos, attr.name)
         }
+        ctx.blkCtx.entCtx.checkDbUpdateAllowed(pos)
         return C_ObjectFieldDestination(rObject, attr)
     }
 
@@ -391,7 +400,7 @@ private class C_MemberFieldValue(
         return C_Utils.toDbExpr(name.pos, rExpr)
     }
 
-    override fun destination(): C_Destination {
+    override fun destination(ctx: C_ExprContext): C_Destination {
         val rBase = base.toRExpr()
         val rDstExpr = field.destination(name.pos, rBase)
         return C_SimpleDestination(rDstExpr)
@@ -404,7 +413,7 @@ private class C_ClassFieldValue(
         private val baseSafe: Boolean,
         private val atClass: R_AtClass,
         private val parent: C_Value,
-        private val memberExpr: C_DbMemberExpr,
+        private val memberInfo: C_DbMemberInfo,
         private val resultType: R_Type
 ): C_Value(pos) {
     override fun type() = resultType
@@ -417,8 +426,8 @@ private class C_ClassFieldValue(
         val whereRight = Db_ParameterExpr(atClass.type, 0)
         val where = Db_BinaryExpr(R_BooleanType, Db_BinaryOp_Eq, whereLeft, whereRight)
 
-        val atBase = R_AtExprBase(from, listOf(memberExpr.dbExpr), where, listOf())
-        val calculator = R_MemberCalculator_DataAttribute(memberExpr.dbExpr.type, atBase)
+        val atBase = R_AtExprBase(from, listOf(memberInfo.dbExpr), where, listOf())
+        val calculator = R_MemberCalculator_DataAttribute(memberInfo.dbExpr.type, atBase)
 
         val rBase = base.toRExpr()
         val rExpr = R_MemberExpr(rBase, baseSafe, calculator)
@@ -428,11 +437,12 @@ private class C_ClassFieldValue(
     // Cannot inject the corresponding Db_Expr directly into another Db_Expr - must wrap it in R_Expr.
     override fun toDbExpr() = C_Utils.toDbExpr(pos, toRExpr())
 
-    override fun destination(): C_Destination {
-        if (!memberExpr.attr.mutable) {
-            throw C_Errors.errAttrNotMutable(memberExpr.name.pos, memberExpr.attr.name)
+    override fun destination(ctx: C_ExprContext): C_Destination {
+        if (!memberInfo.attr.mutable) {
+            throw C_Errors.errAttrNotMutable(memberInfo.name.pos, memberInfo.attr.name)
         }
-        return C_ClassFieldDestination(parent, memberExpr.rClass, memberExpr.attr)
+        ctx.blkCtx.entCtx.checkDbUpdateAllowed(pos)
+        return C_ClassFieldDestination(parent, memberInfo.rClass, memberInfo.attr)
     }
 }
 
@@ -515,7 +525,7 @@ class C_DbExpr(private val startPos: S_Pos, private val dbExpr: Db_Expr): C_Expr
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
         if (dbExpr is Db_TableExpr) {
             val memExpr = makeDbMemberExpr(dbExpr, memberName)
-            if (memExpr == null) throw C_Errors.errUnknownMember(dbExpr.type, memberName)
+            memExpr ?: throw C_Errors.errUnknownMember(dbExpr.type, memberName)
             return C_DbExpr(startPos, memExpr.dbExpr)
         }
         return super.member(ctx, memberName, safe)
@@ -675,27 +685,27 @@ private class C_ClassFieldExpr(
         private val baseSafe: Boolean,
         private val atClass: R_AtClass,
         private val parent: C_Value,
-        private val memberExpr: C_DbMemberExpr,
+        private val memberInfo: C_DbMemberInfo,
         private val resultType: R_Type
 ): C_Expr() {
     override fun kind() = C_ExprKind.VALUE
     override fun startPos() = startPos
-    override fun value(): C_Value = C_ClassFieldValue(startPos, base, baseSafe, atClass, parent, memberExpr, resultType)
+    override fun value(): C_Value = C_ClassFieldValue(startPos, base, baseSafe, atClass, parent, memberInfo, resultType)
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
         val thisValue = value()
         val valueExpr = memberValue(thisValue, memberName, safe)
-        val fnExpr = memberFunctionForType(startPos, thisValue, memberExpr.dbExpr.type, memberName, safe)
+        val fnExpr = memberFunctionForType(startPos, thisValue, memberInfo.dbExpr.type, memberName, safe)
 
         val res = makeValueFunctionExpr(memberName, valueExpr, fnExpr)
-        res ?: throw C_Errors.errUnknownMember(memberExpr.dbExpr.type, memberName)
+        res ?: throw C_Errors.errUnknownMember(memberInfo.dbExpr.type, memberName)
 
         checkNullAccess(resultType, memberName, safe)
         return res
     }
 
     private fun memberValue(thisValue: C_Value, memberName: S_Name, safe: Boolean): C_Expr? {
-        val resDbExpr = makeDbMemberExpr(memberExpr.dbExpr, memberName)
+        val resDbExpr = makeDbMemberExpr(memberInfo.dbExpr, memberName)
         if (resDbExpr == null) return null
         checkNullAccess(resultType, memberName, safe)
         val resResultType = C_Utils.effectiveMemberType(resDbExpr.dbExpr.type, safe)
@@ -716,7 +726,7 @@ class C_ValueFunctionExpr(private val name: S_Name, private val valueExpr: C_Exp
     override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_NameExprPair>) = fnExpr.call(ctx, pos, args)
 }
 
-private class C_DbMemberExpr(val rClass: R_Class, val name: S_Name, val attr: R_Attrib, val dbExpr: Db_Expr)
+private class C_DbMemberInfo(val rClass: R_Class, val name: S_Name, val attr: R_Attrib, val dbExpr: Db_Expr)
 
 private fun makeValueFunctionExpr(name: S_Name, valueExpr: C_Expr?, fnExpr: C_Expr?): C_Expr? {
     if (valueExpr != null && fnExpr != null) {
@@ -766,7 +776,7 @@ private fun memberFieldForClass(pos: S_Pos, base: C_Value, type: R_ClassType, na
     val atClass = R_AtClass(type.rClass, 0)
     val baseDbExpr = Db_ClassExpr(atClass)
     val memExpr = makeDbMemberExpr(baseDbExpr, name)
-    if (memExpr == null) return null
+    memExpr ?: return null
     val resultType = C_Utils.effectiveMemberType(memExpr.dbExpr.type, safe)
     return C_ClassFieldExpr(pos, base, safe, atClass, base, memExpr, resultType)
 }
@@ -794,7 +804,7 @@ private fun makeMemberExpr(pos: S_Pos, base: C_Value, name: S_Name, safe: Boolea
     return C_MemberFieldExpr(pos, base, name, safe, field, effectiveType)
 }
 
-private fun makeDbMemberExpr(base: Db_Expr, name: S_Name): C_DbMemberExpr? {
+private fun makeDbMemberExpr(base: Db_Expr, name: S_Name): C_DbMemberInfo? {
     if (base !is Db_TableExpr) return null
     val attr = base.rClass.attributes[name.str]
     if (attr == null) {
@@ -804,7 +814,7 @@ private fun makeDbMemberExpr(base: Db_Expr, name: S_Name): C_DbMemberExpr? {
     val resultType = attr.type
     val resultClass = if (resultType is R_ClassType) resultType.rClass else null
     val dbExpr = if (resultClass == null) Db_AttrExpr(base, attr) else Db_RelExpr(base, attr, resultClass)
-    return C_DbMemberExpr(base.rClass, name, attr, dbExpr)
+    return C_DbMemberInfo(base.rClass, name, attr, dbExpr)
 }
 
 private fun checkNullAccess(type: R_Type, name: S_Name, safe: Boolean) {

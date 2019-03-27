@@ -1,7 +1,6 @@
 package net.postchain.rell
 
 import net.postchain.rell.test.BaseRellTest
-import net.postchain.rell.test.SqlTestUtils
 import org.junit.Test
 
 class ObjectTest: BaseRellTest() {
@@ -156,6 +155,8 @@ class ObjectTest: BaseRellTest() {
         chkOp("update foo ( 'Tschuss' );")
         chkData("foo(0,33,Tschuss,999)")
         chk("(foo.x,foo.s,foo.c)", "(int[33],text[Tschuss],int[999])")
+
+        chkEx("{ update foo ( 'Tschuss' ); }", "ct_err:no_db_update")
     }
 
     @Test fun testUpdateMemory() {
@@ -234,5 +235,8 @@ class ObjectTest: BaseRellTest() {
 
         chkOp("foo.y += 10;", "ct_err:update_attr_not_mutable:y")
         chkData("foo(0,4565,250)")
+
+        chkEx("{ foo.x = 50; return 0; }", "ct_err:no_db_update")
+        chkEx("{ foo.x += 50; return 0; }", "ct_err:no_db_update")
     }
 }

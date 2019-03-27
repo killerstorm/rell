@@ -242,7 +242,7 @@ class RellTokenizer(override val tokens: List<Token>) : Tokenizer {
         for (tk in tkDelims) {
             if (s.startsWith(tk.pattern)) {
                 seq.back(s.length - tk.pattern.length)
-                return seq.tokenMatch(tk, s)
+                return seq.tokenMatch(tk, tk.pattern)
             }
         }
         throw seq.err("lex_delim:$s", "Syntax error")

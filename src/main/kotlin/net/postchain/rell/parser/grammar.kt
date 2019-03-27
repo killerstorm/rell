@@ -39,6 +39,8 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val MUL by relltok("*")
     private val DIV by relltok("/")
     private val MOD by relltok("%")
+    private val PLUSPLUS by relltok("++")
+    private val MINUSMINUS by relltok("--")
 
     private val AND by relltok("and")
     private val OR by relltok("or")
@@ -194,10 +196,16 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
             or ( ELVIS mapNode { S_BinaryOpCode.ELVIS } )
     )
 
+    private val incrementOperator = (
+            ( PLUSPLUS mapNode { true }  )
+            or ( MINUSMINUS mapNode { false }  )
+    )
+
     private val unaryOperator = (
             ( PLUS mapNode { S_UnaryOp_Plus } )
             or ( MINUS mapNode { S_UnaryOp_Minus }  )
             or ( NOT mapNode { S_UnaryOp_Not }  )
+            or ( incrementOperator map { S_Node(it.pos, S_UnaryOp_IncDec(it.value, false)) } )
     )
 
     private val nameExpr by id map { S_NameExpr(it) }
@@ -341,11 +349,20 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val baseExprTailLookup by ( LBRACK * _expression * -RBRACK ) map { (pos, expr) -> BaseExprTail_Lookup(S_Pos(pos), expr) }
     private val baseExprTailNotNull by ( NOTNULL ) map { BaseExprTail_NotNull(S_Pos(it)) }
     private val baseExprTailSafeMember by ( -SAFECALL * id ) map { name -> BaseExprTail_SafeMember(name) }
+    private val baseExprTailIncrement by incrementOperator map { BaseExprTail_IncDec(it.pos, it.value) }
+
     private val baseExprTailCall by callArgs map { args ->
         BaseExprTail_Call(args)
     }
 
-    private val baseExprTailNoCall by ( baseExprTailMember or baseExprTailLookup or baseExprTailNotNull or baseExprTailSafeMember )
+    private val baseExprTailNoCall by (
+            baseExprTailMember
+            or baseExprTailLookup
+            or baseExprTailNotNull
+            or baseExprTailSafeMember
+            or baseExprTailIncrement
+    )
+
     private val baseExprTail by ( baseExprTailNoCall or baseExprTailCall )
 
     private val baseExpr: Parser<S_Expr> by ( baseExprHead * zeroOrMore(baseExprTail) ) map {
@@ -364,10 +381,6 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
             list.add(call)
         }
         list
-    }
-
-    private val callExpr by ( baseExprHead * callExprTail ) map {
-        (head, tails) -> tailsToExpr(head, tails)
     }
 
     private val ifExpr by ( IF * -LPAR * _expression * -RPAR * _expression * -ELSE * _expression ) map {
@@ -393,8 +406,12 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     private val operandExpr: Parser<S_Expr> by ( baseExpr or ifExpr or whenExpr )
 
-    private val unaryExpr by ( optional(unaryOperator) * operandExpr ) map { (op, expr) ->
-        if (op == null) expr else S_UnaryExpr(op.pos, S_Node(op.pos, op.value), expr)
+    private val unaryExpr by ( zeroOrMore(unaryOperator) * operandExpr ) map { (ops, expr) ->
+        var res = expr
+        for (op in ops.reversed()) {
+            res = S_UnaryExpr(op.pos, S_Node(op.pos, op.value), res)
+        }
+        res
     }
 
     private val binaryExprOperand by ( binaryOperator * unaryExpr ) map { ( op, expr ) -> S_BinaryExprTail(op, expr) }
@@ -432,6 +449,10 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         (expr1, op, expr2) -> S_AssignStatement(expr1, op, expr2)
     }
 
+    private val incrementStmt by ( incrementOperator * baseExpr * -SEMI ) map {
+        (op, expr) -> S_ExprStatement(S_UnaryExpr(op.pos, S_Node(op.pos, S_UnaryOp_IncDec(op.value, false)), expr))
+    }
+
     private val blockStmt by ( -LCURL * zeroOrMore(_statement) * -RCURL ) map {
         statements -> S_BlockStatement(statements)
     }
@@ -458,7 +479,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     private val breakStmt by ( BREAK * -SEMI ) map { S_BreakStatement(S_Pos(it)) }
 
-    private val callStmt by ( callExpr * -SEMI ) map { expr -> S_ExprStatement(expr) }
+    private val callStmt by ( baseExpr * -SEMI ) map { expr -> S_ExprStatement(expr) }
 
     private val createStmt by ( createExpr * -SEMI ) map { expr -> S_ExprStatement(expr) }
 
@@ -497,6 +518,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
             or valStmt
             or varStmt
             or assignStmt
+            or incrementStmt
             or returnStmt
             or blockStmt
             or ifStmt
@@ -589,6 +611,13 @@ private class BaseExprTail_Call(val args: List<S_NameExprPair>): BaseExprTail() 
 
 private class BaseExprTail_NotNull(val pos: S_Pos): BaseExprTail() {
     override fun toExpr(base: S_Expr): S_Expr = S_UnaryExpr(base.startPos, S_Node(pos, S_UnaryOp_NotNull), base)
+}
+
+private class BaseExprTail_IncDec(val pos: S_Pos, val inc: Boolean): BaseExprTail() {
+    override fun toExpr(base: S_Expr): S_Expr {
+        val op = S_UnaryOp_IncDec(inc, true)
+        return S_UnaryExpr(base.startPos, S_Node(pos, op), base)
+    }
 }
 
 private infix fun <T> Parser<TokenMatch>.mapNode(transform: (TokenMatch) -> T): Parser<S_Node<T>> = MapCombinator(this) {

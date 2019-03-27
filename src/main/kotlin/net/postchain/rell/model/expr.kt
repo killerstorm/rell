@@ -494,3 +494,31 @@ class R_ObjectAttrExpr(type: R_Type, val rObject: R_Object, val atBase: R_AtExpr
         return value
     }
 }
+
+class R_AssignExpr(
+        type: R_Type,
+        val op: R_BinaryOp,
+        val dstExpr: R_DestinationExpr,
+        val srcExpr: R_Expr,
+        val post: Boolean
+): R_Expr(type) {
+    override fun evaluate(frame: Rt_CallFrame): Rt_Value {
+        val ref = dstExpr.evaluateRef(frame)
+        ref ?: return Rt_NullValue // Null-safe access operator
+
+        val oldValue = ref.get()
+        val srcValue = srcExpr.evaluate(frame)
+        val newValue = op.evaluate(oldValue, srcValue)
+        ref.set(newValue)
+
+        return if (post) oldValue else newValue
+    }
+}
+
+class R_StatementExpr(val stmt: R_Statement): R_Expr(R_UnitType) {
+    override fun evaluate(frame: Rt_CallFrame): Rt_Value {
+        val res = stmt.execute(frame)
+        check(res == null)
+        return Rt_UnitValue
+    }
+}

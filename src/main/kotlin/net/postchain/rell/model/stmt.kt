@@ -73,10 +73,7 @@ class R_ExprStatement(val expr: R_Expr): R_Statement() {
 class R_AssignStatement(val dstExpr: R_DestinationExpr, val expr: R_Expr, val op: R_BinaryOp?): R_Statement() {
     override fun execute(frame: Rt_CallFrame): R_StatementResult? {
         val dstRef = dstExpr.evaluateRef(frame)
-        if (dstRef == null) {
-            // Null-safe access (operator ?.).
-            return null
-        }
+        dstRef ?: return null // Null-safe access (operator ?.).
 
         val value = if (op != null) {
             val left = dstRef.get()
@@ -85,6 +82,7 @@ class R_AssignStatement(val dstExpr: R_DestinationExpr, val expr: R_Expr, val op
         } else {
             expr.evaluate(frame)
         }
+
         dstRef.set(value)
         return null
     }

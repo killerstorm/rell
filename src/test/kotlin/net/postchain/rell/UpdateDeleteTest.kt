@@ -426,6 +426,10 @@ class UpdateDeleteTest: BaseRellTest() {
 
         resetChkOp("val p = ${person("Mike")}; p.name += 'Bond';", "ct_err:update_attr_not_mutable:name")
         chkDataCommon(james(100), mike(250))
+
+        resetData()
+        chkEx("{ val p = ${person("Mike")}; p.score += 123; return 0; }", "ct_err:no_db_update")
+        chkDataCommon(james(100), mike(250))
     }
 
     @Test fun testUpdateShortSyntaxNullable() {
@@ -502,6 +506,20 @@ class UpdateDeleteTest: BaseRellTest() {
         chkData("person(1,James,913)", "person(2,Mike,250)", "foo(1,1)", "bar(1,1)")
     }
 
+    @Test fun testUpdateIncrementDecrement() {
+        fun james(score: Int) = "person(4,James,3,Evergreen Ave,5,$score)"
+        fun mike(score: Int) = "person(5,Mike,1,Grand St,7,$score)"
+
+        createCitiesAndPersons()
+        chkDataCommon(james(100), mike(250))
+
+        // Increment/decrement is not supported now, but may be supported later.
+        chkOp("update person @ { .name == 'James' } ( .score++ );", "ct_err:expr_bad_dst")
+        chkOp("update person @ { .name == 'James' } ( .score-- );", "ct_err:expr_bad_dst")
+        chkOp("update person @ { .name == 'James' } ( ++.score );", "ct_err:expr_bad_dst")
+        chkOp("update person @ { .name == 'James' } ( --.score );", "ct_err:expr_bad_dst")
+    }
+
     @Test fun testBugGamePlayerSubExpr() {
         tst.defs = listOf(
                 "class user { name; mutable games_total: integer; mutable games_won: integer; }",
@@ -519,10 +537,14 @@ class UpdateDeleteTest: BaseRellTest() {
     }
 
     private fun resetChkOp(code: String, expected: String = "OK") {
+        resetData()
+        chkOp(code, expected)
+    }
+
+    private fun resetData() {
         tst.resetRowid()
         chkOp("delete person @* {}; delete city @* {};")
         createCitiesAndPersons()
-        chkOp(code, expected)
     }
 
     private fun createCities() {
