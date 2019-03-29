@@ -77,11 +77,7 @@ class S_UpdateTarget_Expr(val expr: S_Expr): S_UpdateTarget() {
 
 class S_UpdateWhat(val pos: S_Pos, val name: S_Name?, val op: S_AssignOpCode?, val expr: S_Expr)
 
-class S_UpdateStatement(
-        val pos: S_Pos,
-        val target: S_UpdateTarget,
-        val what: List<S_UpdateWhat>): S_Statement()
-{
+class S_UpdateStatement(pos: S_Pos, val target: S_UpdateTarget, val what: List<S_UpdateWhat>): S_Statement(pos) {
     override fun compile(ctx: C_ExprContext): C_Statement {
         ctx.blkCtx.entCtx.checkDbUpdateAllowed(pos)
 
@@ -125,7 +121,7 @@ class S_UpdateStatement(
     }
 }
 
-class S_DeleteStatement(val pos: S_Pos, val target: S_UpdateTarget): S_Statement() {
+class S_DeleteStatement(pos: S_Pos, val target: S_UpdateTarget): S_Statement(pos) {
     override fun compile(ctx: C_ExprContext): C_Statement {
         ctx.blkCtx.entCtx.checkDbUpdateAllowed(pos)
 

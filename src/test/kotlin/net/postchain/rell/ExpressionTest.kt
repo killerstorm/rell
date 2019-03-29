@@ -185,11 +185,6 @@ class ExpressionTest: BaseRellTest(false) {
         chk("((c: c4) @ { 'c4_2' } ( t3 = .c3, t2 = .c3.c2 )).t2.c1.name", "text[c1_2]")
     }
 
-    @Test fun testUninitializedVariableAccess() {
-        chkEx("{ var x: integer; return x; }", "rt_err:expr_var_uninit:x")
-        chkEx("{ var x: integer; x = 123; return x; }", "int[123]")
-    }
-
     @Test fun testTuple() {
         chk("(123)", "int[123]")
         chk("(((123)))", "int[123]")

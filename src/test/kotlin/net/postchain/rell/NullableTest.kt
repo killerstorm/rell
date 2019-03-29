@@ -51,8 +51,8 @@ class NullableTest: BaseRellTest(false) {
     }
 
     @Test fun testAssignment() {
-        chkEx("{ val x: integer? = null; val y: integer = x; return y; }", "ct_err:stmt_val_type:y:integer:integer?")
-        chkEx("{ val x: integer? = 123; val y: integer = x; return y; }", "ct_err:stmt_val_type:y:integer:integer?")
+        chkEx("{ val x: integer? = null; val y: integer = x; return y; }", "ct_err:stmt_var_type:y:integer:integer?")
+        chkEx("{ val x: integer? = 123; val y: integer = x; return y; }", "ct_err:stmt_var_type:y:integer:integer?")
         chkEx("{ val x: integer = 123; val y: integer = x; return y; }", "int[123]")
         chkEx("{ val x: integer? = null; val y: integer? = x; return y; }", "null")
         chkEx("{ val x: integer? = 123; val y: integer? = x; return y; }", "int[123]")
@@ -147,27 +147,27 @@ class NullableTest: BaseRellTest(false) {
     @Test fun testNullableTupleAssignment() {
         chkEx("{ val x: (integer,text) = (123,'Hello'); val y: (integer,text) = x; return y; }", "(int[123],text[Hello])")
         chkEx("{ val x: (integer?,text) = (123,'Hello'); val y: (integer,text) = x; return y; }",
-                "ct_err:stmt_val_type:y:(integer,text):(integer?,text)")
+                "ct_err:stmt_var_type:y:(integer,text):(integer?,text)")
         chkEx("{ val x: (integer,text?) = (123,'Hello'); val y: (integer,text) = x; return y; }",
-                "ct_err:stmt_val_type:y:(integer,text):(integer,text?)")
+                "ct_err:stmt_var_type:y:(integer,text):(integer,text?)")
         chkEx("{ val x: (integer?,text?) = (123,'Hello'); val y: (integer,text) = x; return y; }",
-                "ct_err:stmt_val_type:y:(integer,text):(integer?,text?)")
+                "ct_err:stmt_var_type:y:(integer,text):(integer?,text?)")
 
         chkEx("{ val x: (integer,text) = (123,'Hello'); val y: (integer?,text) = x; return y; }", "(int[123],text[Hello])")
         chkEx("{ val x: (integer?,text) = (123,'Hello'); val y: (integer?,text) = x; return y; }", "(int[123],text[Hello])")
         chkEx("{ val x: (integer?,text) = (null,'Hello'); val y: (integer?,text) = x; return y; }", "(null,text[Hello])")
         chkEx("{ val x: (integer,text?) = (123,'Hello'); val y: (integer?,text) = x; return y; }",
-                "ct_err:stmt_val_type:y:(integer?,text):(integer,text?)")
+                "ct_err:stmt_var_type:y:(integer?,text):(integer,text?)")
         chkEx("{ val x: (integer?,text?) = (123,'Hello'); val y: (integer?,text) = x; return y; }",
-                "ct_err:stmt_val_type:y:(integer?,text):(integer?,text?)")
+                "ct_err:stmt_var_type:y:(integer?,text):(integer?,text?)")
 
         chkEx("{ val x: (integer,text) = (123,'Hello'); val y: (integer,text?) = x; return y; }", "(int[123],text[Hello])")
         chkEx("{ val x: (integer?,text) = (123,'Hello'); val y: (integer,text?) = x; return y; }",
-                "ct_err:stmt_val_type:y:(integer,text?):(integer?,text)")
+                "ct_err:stmt_var_type:y:(integer,text?):(integer?,text)")
         chkEx("{ val x: (integer,text?) = (123,'Hello'); val y: (integer,text?) = x; return y; }", "(int[123],text[Hello])")
         chkEx("{ val x: (integer,text?) = (123,null); val y: (integer,text?) = x; return y; }", "(int[123],null)")
         chkEx("{ val x: (integer?,text?) = (123,'Hello'); val y: (integer,text?) = x; return y; }",
-                "ct_err:stmt_val_type:y:(integer,text?):(integer?,text?)")
+                "ct_err:stmt_var_type:y:(integer,text?):(integer?,text?)")
 
         chkEx("{ val x: (integer,text) = (123,'Hello'); val y: (integer?,text?) = x; return y; }", "(int[123],text[Hello])")
         chkEx("{ val x: (integer?,text) = (123,'Hello'); val y: (integer?,text?) = x; return y; }", "(int[123],text[Hello])")
@@ -255,9 +255,9 @@ class NullableTest: BaseRellTest(false) {
         chkEx("{ val x = list<integer?>([123]); return x.contains(123); }", "true")
 
         chkEx("{ val x = list<integer>([123]); val y: list<integer?> = x; return ''+y; }",
-                "ct_err:stmt_val_type:y:list<integer?>:list<integer>")
+                "ct_err:stmt_var_type:y:list<integer?>:list<integer>")
         chkEx("{ val x = list<integer?>([123]); val y: list<integer> = x; return ''+y; }",
-                "ct_err:stmt_val_type:y:list<integer>:list<integer?>")
+                "ct_err:stmt_var_type:y:list<integer>:list<integer?>")
         chkEx("{ val x = list<integer?>([123]); val y: list<integer?> = x; return ''+y; }", "[123]")
     }
 
@@ -265,9 +265,9 @@ class NullableTest: BaseRellTest(false) {
         tst.strictToString = false
         chkEx("{ val x: list<integer> = list<integer>(); return ''+x; }", "[]")
         chkEx("{ val x: list<integer> = list<integer?>(); return ''+x; }",
-                "ct_err:stmt_val_type:x:list<integer>:list<integer?>")
+                "ct_err:stmt_var_type:x:list<integer>:list<integer?>")
         chkEx("{ val x: list<integer?> = list<integer>(); return ''+x; }",
-                "ct_err:stmt_val_type:x:list<integer?>:list<integer>")
+                "ct_err:stmt_var_type:x:list<integer?>:list<integer>")
         chkEx("{ val x: list<integer?> = list<integer?>(); return ''+x; }", "[]")
     }
 
@@ -503,25 +503,25 @@ class NullableTest: BaseRellTest(false) {
 
     @Test fun testCollectionAssignment() {
         tst.strictToString = false
-        chkEx("{ val x: list<integer?> = list<integer>([123]); return ''+x; }", "ct_err:stmt_val_type:x:list<integer?>:list<integer>")
+        chkEx("{ val x: list<integer?> = list<integer>([123]); return ''+x; }", "ct_err:stmt_var_type:x:list<integer?>:list<integer>")
         chkEx("{ val x: list<integer?> = list<integer?>([123]); return ''+x; }", "[123]")
 
-        chkEx("{ val x: set<integer?> = set<integer>([123]); return ''+x; }", "ct_err:stmt_val_type:x:set<integer?>:set<integer>")
+        chkEx("{ val x: set<integer?> = set<integer>([123]); return ''+x; }", "ct_err:stmt_var_type:x:set<integer?>:set<integer>")
         chkEx("{ val x: set<integer?> = set<integer?>([123]); return ''+x; }", "[123]")
 
         chkEx("{ val x: map<integer,text> = map<integer,text>([123:'Hello']); return ''+x; }", "{123=Hello}")
         chkEx("{ val x: map<integer,text> = map<integer?,text>([123:'Hello']); return ''+x; }",
-                "ct_err:stmt_val_type:x:map<integer,text>:map<integer?,text>")
+                "ct_err:stmt_var_type:x:map<integer,text>:map<integer?,text>")
         chkEx("{ val x: map<integer,text> = map<integer,text?>([123:'Hello']); return ''+x; }",
-                "ct_err:stmt_val_type:x:map<integer,text>:map<integer,text?>")
+                "ct_err:stmt_var_type:x:map<integer,text>:map<integer,text?>")
         chkEx("{ val x: map<integer,text> = map<integer?,text?>([123:'Hello']); return ''+x; }",
-                "ct_err:stmt_val_type:x:map<integer,text>:map<integer?,text?>")
+                "ct_err:stmt_var_type:x:map<integer,text>:map<integer?,text?>")
         chkEx("{ val x: map<integer?,text> = map<integer,text>([123:'Hello']); return ''+x; }",
-                "ct_err:stmt_val_type:x:map<integer?,text>:map<integer,text>")
+                "ct_err:stmt_var_type:x:map<integer?,text>:map<integer,text>")
         chkEx("{ val x: map<integer,text?> = map<integer,text>([123:'Hello']); return ''+x; }",
-                "ct_err:stmt_val_type:x:map<integer,text?>:map<integer,text>")
+                "ct_err:stmt_var_type:x:map<integer,text?>:map<integer,text>")
         chkEx("{ val x: map<integer?,text?> = map<integer,text>([123:'Hello']); return ''+x; }",
-                "ct_err:stmt_val_type:x:map<integer?,text?>:map<integer,text>")
+                "ct_err:stmt_var_type:x:map<integer?,text?>:map<integer,text>")
     }
 
     @Test fun testBasicOperators() {
@@ -545,8 +545,8 @@ class NullableTest: BaseRellTest(false) {
         chkEx("{ var x: integer?; return +x; }", "ct_err:unop_operand_type:+:integer?")
         chkEx("{ var x: integer?; return -x; }", "ct_err:unop_operand_type:-:integer?")
 
-        chkEx("{ var x: integer?; return x in [123, 456]; }", "ct_err:binop_operand_type:in:integer?:list<integer>")
-        chkEx("{ var x: list<integer>?; return 123 in x; }", "ct_err:binop_operand_type:in:integer:list<integer>?")
+        chkEx("{ var x: integer? = 123; return x in [123, 456]; }", "ct_err:binop_operand_type:in:integer?:list<integer>")
+        chkEx("{ var x: list<integer>? = [123]; return 123 in x; }", "ct_err:binop_operand_type:in:integer:list<integer>?")
     }
 
     @Test fun testEq() {
@@ -571,14 +571,15 @@ class NullableTest: BaseRellTest(false) {
         chkEx("{ var x: text?; return x.size(); }", "ct_err:expr_mem_null:size")
         chkEx("{ var x: (a:integer)?; return x.a; }", "ct_err:expr_mem_null:a")
         chkEx("{ var x: (a:integer)?; return x.b; }", "ct_err:unknown_member:(a:integer):b")
-        chkEx("{ var x: list<integer>?; return x[0]; }", "ct_err:expr_lookup_null")
-        chkEx("{ var x: integer?; val y = [1, 2, 3]; return y[x]; }", "ct_err:expr_lookup_keytype:integer:integer?")
+        chkEx("{ var x: (a:integer); return x.a; }", "ct_err:expr_var_uninit:x")
+        chkEx("{ var x: list<integer>? = [1]; return x[0]; }", "ct_err:expr_lookup_null")
+        chkEx("{ var x: integer? = 123; val y = [1, 2, 3]; return y[x]; }", "ct_err:expr_lookup_keytype:integer:integer?")
         chkEx("{ val x: integer? = 123; return x.hex(); }", "ct_err:expr_mem_null:hex")
     }
 
     private fun tstOperErr(type: String, op: String) {
-        chkEx("{ var x: $type?; var y: $type; return x $op y; }", "ct_err:binop_operand_type:$op:$type?:$type")
-        chkEx("{ var x: $type?; var y: $type; return y $op x; }", "ct_err:binop_operand_type:$op:$type:$type?")
+        chkQueryEx("query q(x: $type?, y: $type) = x $op y;", "ct_err:binop_operand_type:$op:$type?:$type")
+        chkQueryEx("query q(x: $type?, y: $type) = y $op x;", "ct_err:binop_operand_type:$op:$type:$type?")
     }
 
     @Test fun testSpecOpElvis() {

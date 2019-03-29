@@ -4,6 +4,9 @@ import net.postchain.rell.model.*
 
 class C_Error(val pos: S_Pos, val code: String, val errMsg: String): Exception("$pos $errMsg")
 
+data class C_VarId(val id: Int, val name: String)
+data class C_LoopId(val id: Int)
+
 abstract class C_GlobalFunction {
     abstract fun compileCall(name: S_Name, args: List<C_Value>): C_Expr
 }
@@ -591,7 +594,10 @@ class C_EntityContext(
 
     private var callFrameSize = 0
 
-    val rootExprCtx = C_RExprContext(C_BlockContext(this, null, false))
+    private var nextLoopId = 0
+    private var nextVarId = 0
+
+    val rootExprCtx = C_RExprContext(C_BlockContext(this, null, null))
 
     fun checkDbUpdateAllowed(pos: S_Pos) {
         if (entityType == C_EntityType.QUERY) {
@@ -609,6 +615,9 @@ class C_EntityContext(
         check(size >= 0)
         callFrameSize = Math.max(callFrameSize, size)
     }
+
+    fun nextLoopId() = C_LoopId(nextLoopId++)
+    fun nextVarId(name: String) = C_VarId(nextVarId++, name)
 
     fun makeCallFrame(): R_CallFrame {
         val rootBlock = rootExprCtx.blkCtx.makeFrameBlock()
@@ -666,7 +675,14 @@ class C_EntityContext(
     }
 }
 
-class C_ScopeEntry(val name: String, val type: R_Type, val modifiable: Boolean, val ptr: R_VarPtr) {
+class C_ScopeEntry(
+        val name: String,
+        val type: R_Type,
+        val modifiable: Boolean,
+        val varId: C_VarId,
+        val ptr: R_VarPtr,
+        val loop: C_LoopId?
+) {
     fun toVarExpr(): R_VarExpr = R_VarExpr(type, ptr, name)
 }
 

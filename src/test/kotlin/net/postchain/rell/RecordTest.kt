@@ -87,8 +87,8 @@ class RecordTest: BaseRellTest(false) {
         tst.defs = listOf("record foo { x: integer; } record bar { x: integer; }")
         chkEx("{ val r: foo = foo(123); return r; }", "foo[x=int[123]]")
         chkEx("{ val r: bar = bar(123); return r; }", "bar[x=int[123]]")
-        chkEx("{ val r: foo = bar(123); return r; }", "ct_err:stmt_val_type:r:foo:bar")
-        chkEx("{ val r: bar = foo(123); return r; }", "ct_err:stmt_val_type:r:bar:foo")
+        chkEx("{ val r: foo = bar(123); return r; }", "ct_err:stmt_var_type:r:foo:bar")
+        chkEx("{ val r: bar = foo(123); return r; }", "ct_err:stmt_var_type:r:bar:foo")
     }
 
     @Test fun testRecordAsClassAttributeType() {

@@ -9,9 +9,11 @@ class StatementTest: BaseRellTest() {
         chkEx("{ val x = 123; return x; }", "int[123]")
         chkEx("{ val x = 123; x = 456; return x; }", "ct_err:expr_assign_val:x")
         chkEx("{ val x: integer = 123; return x; }", "int[123]")
-        chkEx("{ val x: text = 123; return x; }", "ct_err:stmt_val_type:x:text:integer")
-        chkEx("{ val x: integer = 'Hello'; return x; }", "ct_err:stmt_val_type:x:integer:text")
-        chkEx("{ val x = unit(); return 123; }", "ct_err:stmt_val_unit:x")
+        chkEx("{ val x: text = 123; return x; }", "ct_err:stmt_var_type:x:text:integer")
+        chkEx("{ val x: integer = 'Hello'; return x; }", "ct_err:stmt_var_type:x:integer:text")
+        chkEx("{ val x = unit(); return 123; }", "ct_err:stmt_var_unit:x")
+        chkEx("{ val x: integer; x = 123; return x; }", "int[123]")
+        chkEx("{ val x: integer; x = 123; x = 456; return x; }", "ct_err:expr_assign_val:x")
     }
 
     @Test fun testVar() {
@@ -26,12 +28,6 @@ class StatementTest: BaseRellTest() {
         chkEx("{ var x: text = 123; return x; }", "ct_err:stmt_var_type:x:text:integer")
         chkEx("{ var x = 123; x = 'Hello'; return x; }", "ct_err:stmt_assign_type:integer:text")
         chkEx("{ var x = unit(); return 123; }", "ct_err:stmt_var_unit:x")
-    }
-
-    @Test fun testVarUninit() {
-        chkEx("{ var x: integer; return x; }", "rt_err:expr_var_uninit:x")
-        chkEx("{ { var x = 123; } { var y: integer; return y; } }", "rt_err:expr_var_uninit:y")
-        chkEx("{ for (i in range(2)) { var x: integer; if (i == 0) x = 123; else return x; } return 456; }", "rt_err:expr_var_uninit:x")
     }
 
     @Test fun testNameConflict() {
@@ -55,8 +51,6 @@ class StatementTest: BaseRellTest() {
 
         chkEx("{ if (a == 0) return 123; return 456; }", 0, "int[123]")
         chkEx("{ if (a == 0) return 123; return 456; }", 1, "int[456]")
-        chkEx("{ if (a == 0) return 123; else return 456; return 789; }", 0, "int[123]")
-        chkEx("{ if (a == 0) return 123; else return 456; return 789; }", 1, "int[456]")
 
         // Chain of ifs
         val code = "{ if (a == 0) return 111; else if (a == 1) return 222; else if (a == 2) return 333; else return 444; }"
@@ -240,6 +234,17 @@ class StatementTest: BaseRellTest() {
         chkAssignmentErr("%=")
     }
 
+    private fun chkAssignmentErr(op: String) {
+        chkEx("{ var x = true; x $op false; return x; }", "ct_err:binop_operand_type:$op:boolean:boolean")
+        chkEx("{ var x = true; x $op 123; return x; }", "ct_err:binop_operand_type:$op:boolean:integer")
+        chkEx("{ var x = true; x $op 'Hello'; return x; }", "ct_err:binop_operand_type:$op:boolean:text")
+        chkEx("{ var x = 123; x $op false; return x; }", "ct_err:binop_operand_type:$op:integer:boolean")
+        chkEx("{ var x = 123; x $op 'Hello'; return x; }", "ct_err:binop_operand_type:$op:integer:text")
+        chkEx("{ var x = 'Hello'; x $op false; return x; }", "ct_err:binop_operand_type:$op:text:boolean")
+        chkEx("{ var x = 'Hello'; x $op 123; return x; }", "ct_err:binop_operand_type:$op:text:integer")
+        chkEx("{ var x = 'Hello'; x $op 'Hello'; return x; }", "ct_err:binop_operand_type:$op:text:text")
+    }
+
     @Test fun testComplexListAssignment() {
         val code = """
             function f(x: list<integer>): list<integer> {
@@ -286,14 +291,113 @@ class StatementTest: BaseRellTest() {
         chkFull("$code = f(123).values().calculate(i).upperCase().size();", listOf(Rt_IntValue(1)), "int[5]")
     }
 
-    private fun chkAssignmentErr(op: String) {
-        chkEx("{ var x = true; x $op false; return x; }", "ct_err:binop_operand_type:$op:boolean:boolean")
-        chkEx("{ var x = true; x $op 123; return x; }", "ct_err:binop_operand_type:$op:boolean:integer")
-        chkEx("{ var x = true; x $op 'Hello'; return x; }", "ct_err:binop_operand_type:$op:boolean:text")
-        chkEx("{ var x = 123; x $op false; return x; }", "ct_err:binop_operand_type:$op:integer:boolean")
-        chkEx("{ var x = 123; x $op 'Hello'; return x; }", "ct_err:binop_operand_type:$op:integer:text")
-        chkEx("{ var x = 'Hello'; x $op false; return x; }", "ct_err:binop_operand_type:$op:text:boolean")
-        chkEx("{ var x = 'Hello'; x $op 123; return x; }", "ct_err:binop_operand_type:$op:text:integer")
-        chkEx("{ var x = 'Hello'; x $op 'Hello'; return x; }", "ct_err:binop_operand_type:$op:text:text")
+    @Test fun testUninitializedVar() {
+        chkEx("{ var x: integer; return x; }", "ct_err:expr_var_uninit:x")
+        chkEx("{ var x: integer; x = 123; return x; }", "int[123]")
+        chkEx("{ var x: integer; x = 123; x = 456; return x; }", "int[456]")
+        chkEx("{ var x: integer = 123; x = 456; return x; }", "int[456]")
+
+        chkEx("{ var x: integer; if (a) x = 123; else x = 456; return x; }", true, "int[123]")
+        chkEx("{ var x: integer; if (a) x = 123; else x = 456; return x; }", false, "int[456]")
+        chkEx("{ var x: integer; if (a) x = 123; return x; }", true, "ct_err:expr_var_uninit:x")
+
+        chkEx("{ var x: integer; if (a) { x = 123; return x; } return 456; }", true, "int[123]")
+        chkEx("{ var x: integer; if (a) { x = 123; return x; } return 456; }", false, "int[456]")
+        chkEx("{ var x: integer; if (a) { x = 123; } return x; }", false, "ct_err:expr_var_uninit:x")
+        chkEx("{ var x: integer; if (a) { return x; } return 456; }", true, "ct_err:expr_var_uninit:x")
+        chkEx("{ var x: integer; if (a) { x = 123; } x = 456; return x; }", true, "int[456]")
+        chkEx("{ var x: integer; if (a) { x = 123; } x = 456; return x; }", false, "int[456]")
+        chkEx("{ var x: integer; if (a) { return x; } x = 456; return x; }", true, "ct_err:expr_var_uninit:x")
+        chkEx("{ var x: integer; if (a) { return 123; } x = 456; return x; }", true, "int[123]")
+        chkEx("{ var x: integer; if (a) { return 123; } x = 456; return x; }", false, "int[456]")
+
+        chkEx("{ var x: integer; if (a) { return 123; } else { x = 456; } return x; }", true, "int[123]")
+        chkEx("{ var x: integer; if (a) { return 123; } else { x = 456; } return x; }", false, "int[456]")
+        chkEx("{ var x: integer; if (a) { x = 123; } else { return 456; } return x; }", true, "int[123]")
+        chkEx("{ var x: integer; if (a) { x = 123; } else { return 456; } return x; }", false, "int[456]")
+
+        chkEx("{ var x: integer; x += 5; return x; }", "ct_err:expr_var_uninit:x")
+        chkEx("{ var x: integer; if (a) { x = 0; } x += 5; return x; }", true, "ct_err:expr_var_uninit:x")
+
+        chkEx("{ var x: integer; x++; return x; }", "ct_err:expr_var_uninit:x")
+        chkEx("{ var x: integer; if (a) { x = 0; } x++; return x; }", true, "ct_err:expr_var_uninit:x")
+        chkEx("{ var x: integer; ++x; return x; }", "ct_err:expr_var_uninit:x")
+        chkEx("{ var x: integer; if (a) { x = 0; } ++x; return x; }", true, "ct_err:expr_var_uninit:x")
+    }
+
+    @Test fun testUninitializedVarWhen() {
+        run {
+            val code = "{ var x: integer; when(a) { 0 -> return 123; 1 -> x = 456; 2 -> return 789; else -> x = 987; } return x; }"
+            chkEx(code, 0, "int[123]")
+            chkEx(code, 1, "int[456]")
+            chkEx(code, 2, "int[789]")
+            chkEx(code, 3, "int[987]")
+        }
+
+        run {
+            val code = "{ var x: integer; when(a) { 0 -> x = 123; 1 -> x = 456; else -> return 789; } return x; }"
+            chkEx(code, 0, "int[123]")
+            chkEx(code, 1, "int[456]")
+            chkEx(code, 2, "int[789]")
+        }
+
+        chkEx("{ var x: integer; when(a) { 0 -> x = 123; 1 -> x = 456; } return x; }", 0, "ct_err:expr_var_uninit:x")
+        chkEx("{ var x: integer; when(a) { 0 -> print(x); 1 -> x = 456; else -> return 789; } return x; }", 0,
+                "ct_err:expr_var_uninit:x")
+    }
+
+    @Test fun testUninitializedVarLoop() {
+        chkEx("{ var x: integer; for (v in range(1)) { x = 123; } return x; }", "ct_err:expr_var_uninit:x")
+        chkEx("{ var x: integer; for (v in range(a)) { x = 123; return x; } return 456; }", 0, "int[456]")
+        chkEx("{ var x: integer; for (v in range(a)) { x = 123; return x; } return 456; }", 1, "int[123]")
+
+        chkEx("{ var x: integer; while(a) { x = 123; } return x; }", false, "ct_err:expr_var_uninit:x")
+        chkEx("{ var x: integer; while(a) { x = 123; return x; } return x; }", false, "ct_err:expr_var_uninit:x")
+        chkEx("{ var x: integer; while(a) { x = 123; return x; } return 456; }", false, "int[456]")
+        chkEx("{ var x: integer; while(a) { x = 123; return x; } return 456; }", true, "int[123]")
+
+        chkEx("{ val x: integer; for (v in range(0)) { x = 123; } return 0; }", "ct_err:expr_assign_val:x")
+        chkEx("{ val x: integer; for (v in range(1)) { x = 123; } return 0; }", "ct_err:expr_assign_val:x")
+        chkEx("{ val x: integer; for (v in range(a)) { x = 123; return 123; } return 456; }", 0, "ct_err:expr_assign_val:x")
+        chkEx("{ val x: integer; for (v in range(1)) { if (a) { x = 123; } } return 456; }", false, "ct_err:expr_assign_val:x")
+
+        chkEx("{ val x: integer; while(a) { x = 123; } return 0; }", false, "ct_err:expr_assign_val:x")
+        chkEx("{ val x: integer; while(a) { x = 123; return x; } return 0; }", false, "ct_err:expr_assign_val:x")
+        chkEx("{ val x: integer; while(a) { x = 123; return x; } return 456; }", false, "ct_err:expr_assign_val:x")
+        chkEx("{ val x: integer; while(a) { x = 123; return x; } return 456; }", true, "ct_err:expr_assign_val:x")
+        chkEx("{ val x: integer; while (false) { if (a) { x = 123; } } return 456; }", false, "ct_err:expr_assign_val:x")
+    }
+
+    @Test fun testUninitializedVal() {
+        chkEx("{ val x: integer; return x; }", "ct_err:expr_var_uninit:x")
+        chkEx("{ val x: integer; x = 123; return x; }", "int[123]")
+        chkEx("{ val x: integer; x = 123; x = 456; return x; }", "ct_err:expr_assign_val:x")
+        chkEx("{ val x: integer = 123; x = 456; return x; }", "ct_err:expr_assign_val:x")
+
+        chkEx("{ val x: integer; if (a) x = 123; else x = 456; return x; }", true, "int[123]")
+        chkEx("{ val x: integer; if (a) x = 123; else x = 456; return x; }", false, "int[456]")
+        chkEx("{ val x: integer; if (a) x = 123; return x; }", true, "ct_err:expr_var_uninit:x")
+        chkEx("{ val x: integer = 123; if (a) x = 456; else x = 789; return x; }", true, "ct_err:expr_assign_val:x")
+        chkEx("{ val x: integer = 123; if (a) x = 456; return x; }", true, "ct_err:expr_assign_val:x")
+
+        chkEx("{ val x: integer; if (a) { x = 123; return x; } return 456; }", true, "int[123]")
+        chkEx("{ val x: integer; if (a) { x = 123; return x; } return 456; }", false, "int[456]")
+        chkEx("{ val x: integer; if (a) { x = 123; } return x; }", true, "ct_err:expr_var_uninit:x")
+        chkEx("{ val x: integer; if (a) { return x; } return 456; }", true, "ct_err:expr_var_uninit:x")
+        chkEx("{ val x: integer; if (a) { x = 123; } x = 456; return x; }", true, "ct_err:expr_assign_val:x")
+        chkEx("{ val x: integer; if (a) { x = 123; return x; } x = 456; return x; }", true, "int[123]")
+        chkEx("{ val x: integer; if (a) { x = 123; return x; } x = 456; return x; }", false, "int[456]")
+        chkEx("{ val x: integer; if (a) { x = 123; return x; } else {} x = 456; return x; }", true, "int[123]")
+        chkEx("{ val x: integer; if (a) { x = 123; return x; } else {} x = 456; return x; }", false, "int[456]")
+        chkEx("{ var x: integer; if (a) { return x; } x = 456; return x; }", true, "ct_err:expr_var_uninit:x")
+        chkEx("{ val x: integer; if (a) { return 123; } x = 456; return x; }", true, "int[123]")
+        chkEx("{ val x: integer; if (a) { return 123; } x = 456; return x; }", false, "int[456]")
+    }
+
+    @Test fun testDeadCode() {
+        chkEx("{ return 123; return 456; }", "ct_err:stmt_deadcode")
+        chkEx("{ if (a) return 123; else return 456; return 789; }", true, "ct_err:stmt_deadcode")
+        chkEx("{ if (a) { return 123; } else { return 456; } return 789; }", true, "ct_err:stmt_deadcode")
+        chkEx("{ if (a) { return 123; print('Hello'); } return 456; }", true, "ct_err:stmt_deadcode")
     }
 }

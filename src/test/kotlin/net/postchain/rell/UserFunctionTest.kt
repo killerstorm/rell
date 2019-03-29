@@ -60,7 +60,7 @@ class UserFunctionTest: BaseRellTest(false) {
     @Test fun testResultType() {
         chkFnEx("function f(): integer = 123;", "{ var x: text; x = f(); return 123; }", "ct_err:stmt_assign_type:text:integer")
         chkFnEx("function f() {}", "{ var x: text; x = f(); return 123; }", "ct_err:stmt_assign_type:text:unit")
-        chkFnEx("function f() {}", "{ val x = f(); return 123; }", "ct_err:stmt_val_unit:x")
+        chkFnEx("function f() {}", "{ val x = f(); return 123; }", "ct_err:stmt_var_unit:x")
     }
 
     @Test fun testWrongArgs() {

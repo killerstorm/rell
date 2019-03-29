@@ -422,14 +422,15 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     private val expression: Parser<S_Expr> by binaryExpr
 
-    private val emptyStmt by SEMI map { S_EmptyStatement() }
+    private val emptyStmt by SEMI map { S_EmptyStatement(S_Pos(it)) }
 
-    private val valStmt by ( -VAL * id * optional(-COLON * type ) * -ASSIGN * expression * -SEMI) map {
-        (name, type, expr) -> S_ValStatement(name, type, expr)
-    }
+    private val varVal by (
+            ( VAL map { S_Node(it, false) } )
+            or ( VAR map { S_Node(it, true) } )
+    )
 
-    private val varStmt by ( -VAR * id * optional(-COLON * type ) * optional(-ASSIGN * expression) * -SEMI) map {
-        (name, type, expr) -> S_VarStatement(name, type, expr)
+    private val varStmt by ( varVal * id * optional(-COLON * type ) * optional(-ASSIGN * expression) * -SEMI) map {
+        (mutable, name, type, expr) -> S_VarStatement(mutable.pos, name, type, expr, mutable.value)
     }
 
     private val returnStmt by ( RETURN * optional(expression) * -SEMI ) map { ( kw, expr ) ->
@@ -453,12 +454,12 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         (op, expr) -> S_ExprStatement(S_UnaryExpr(op.pos, S_Node(op.pos, S_UnaryOp_IncDec(op.value, false)), expr))
     }
 
-    private val blockStmt by ( -LCURL * zeroOrMore(_statement) * -RCURL ) map {
-        statements -> S_BlockStatement(statements)
+    private val blockStmt by ( LCURL * zeroOrMore(_statement) * -RCURL ) map {
+        (pos, statements) -> S_BlockStatement(S_Pos(pos), statements)
     }
 
-    private val ifStmt by ( -IF * -LPAR * expression * -RPAR * _statement * optional(-ELSE * _statement) ) map {
-        (expr, trueStmt, falseStmt) -> S_IfStatement(expr, trueStmt, falseStmt)
+    private val ifStmt by ( IF * -LPAR * expression * -RPAR * _statement * optional(-ELSE * _statement) ) map {
+        (pos, expr, trueStmt, falseStmt) -> S_IfStatement(S_Pos(pos), expr, trueStmt, falseStmt)
     }
 
     private val whenStmtCase by whenCondition * -ARROW * _statement * zeroOrMore(SEMI) map {
@@ -469,12 +470,12 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         (pos, expr, cases) -> S_WhenStatement(S_Pos(pos), expr, cases)
     }
 
-    private val whileStmt by ( -WHILE * -LPAR * expression * -RPAR * _statement ) map {
-        (expr, stmt) -> S_WhileStatement(expr, stmt)
+    private val whileStmt by ( WHILE * -LPAR * expression * -RPAR * _statement ) map {
+        (pos, expr, stmt) -> S_WhileStatement(S_Pos(pos), expr, stmt)
     }
 
-    private val forStmt by ( -FOR * -LPAR * id * -IN * expression * -RPAR * _statement ) map {
-        (name, expr, stmt) -> S_ForStatement(name, expr, stmt)
+    private val forStmt by ( FOR * -LPAR * id * -IN * expression * -RPAR * _statement ) map {
+        (pos, name, expr, stmt) -> S_ForStatement(S_Pos(pos), name, expr, stmt)
     }
 
     private val breakStmt by ( BREAK * -SEMI ) map { S_BreakStatement(S_Pos(it)) }
@@ -515,7 +516,6 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     private val statement: Parser<S_Statement> by (
             emptyStmt
-            or valStmt
             or varStmt
             or assignStmt
             or incrementStmt

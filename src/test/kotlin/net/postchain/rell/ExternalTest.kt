@@ -243,9 +243,9 @@ class ExternalTest: BaseRellTest() {
         chk("_typeOf((local_user @ {}).transaction.block)", "text[block]")
 
         chkEx("{ val t: transaction = (foo.user @ {}).transaction; return 0; }",
-                "ct_err:stmt_val_type:t:transaction:external[foo].transaction")
+                "ct_err:stmt_var_type:t:transaction:external[foo].transaction")
         chkEx("{ val b: block = (foo.user @ {}).transaction.block; return 0; }",
-                "ct_err:stmt_val_type:b:block:external[foo].block")
+                "ct_err:stmt_var_type:b:block:external[foo].block")
 
         val txFn = "function f(t: transaction, u: foo.user)"
         chkCompile("$txFn = (t == u.transaction);", "ct_err:binop_operand_type:==:transaction:external[foo].transaction")

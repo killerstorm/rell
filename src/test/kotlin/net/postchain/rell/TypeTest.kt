@@ -65,10 +65,10 @@ class TypeTest: BaseRellTest() {
         chkEx("{ var x: (a: integer, b: text); x = (123, 'Hello'); return x; }",
                 "ct_err:stmt_assign_type:(a:integer,b:text):(integer,text)");
 
-        chkEx("{ var x: (a: integer, b: text); var y: (integer, text); y = x; return y; }",
+        chkEx("{ var x: (a: integer, b: text) = (a=1,b=''); var y: (integer, text) = (2,''); y = x; return y; }",
                 "ct_err:stmt_assign_type:(integer,text):(a:integer,b:text)");
 
-        chkEx("{ var x: (a: integer, b: text); var y: (p: integer, q: text); y = x; return y; }",
+        chkEx("{ var x: (a: integer, b: text) = (a=1,b=''); var y: (p: integer, q: text) = (p=2,q=''); y = x; return y; }",
                 "ct_err:stmt_assign_type:(p:integer,q:text):(a:integer,b:text)");
     }
 

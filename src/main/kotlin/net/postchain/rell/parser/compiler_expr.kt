@@ -13,17 +13,16 @@ class C_AtClass(val rClass: R_Class, val alias: String, val index: Int) {
 
 class C_ClassAttr(val cls: C_AtClass, val attr: R_Attrib)
 
-class C_BlockContext(
-        val entCtx: C_EntityContext,
-        private val parent: C_BlockContext?,
-        val insideLoop: Boolean
-){
+class C_BlockContext(val entCtx: C_EntityContext, private val parent: C_BlockContext?, val loop: C_LoopId?) {
     private val startOffset: Int = if (parent == null) 0 else parent.startOffset + parent.locals.size
     private val locals = mutableMapOf<String, C_ScopeEntry0>()
 
     private val blockId = entCtx.nsCtx.modCtx.globalCtx.nextFrameBlockId()
 
-    fun add(name: S_Name, type: R_Type, modifiable: Boolean): R_VarPtr {
+    private val varsInitedAlways = mutableSetOf<C_VarId>()
+    private val varsInitedSometimes = mutableSetOf<C_VarId>()
+
+    fun add(name: S_Name, type: R_Type, modifiable: Boolean): Pair<C_VarId, R_VarPtr> {
         val nameStr = name.str
         if (lookupLocalVar(nameStr) != null) {
             throw C_Error(name.pos, "var_dupname:$nameStr", "Duplicate variable: '$nameStr'")
@@ -32,18 +31,37 @@ class C_BlockContext(
         val ofs = startOffset + locals.size
         entCtx.adjustCallFrameSize(ofs + 1)
 
-        val entry = C_ScopeEntry0(nameStr, type, modifiable, ofs)
-        locals.put(nameStr, entry)
+        val varId = entCtx.nextVarId(nameStr)
 
-        return entry.toVarPtr(blockId)
+        val entry = C_ScopeEntry0(nameStr, type, modifiable, ofs, varId, loop)
+        locals[nameStr] = entry
+
+        val ptr = entry.toVarPtr(blockId)
+        return Pair(varId, ptr)
     }
 
     fun lookupLocalVar(name: String): C_ScopeEntry? {
+        val local = findValue { it.locals[name] }
+        return local?.toScopeEntry(blockId)
+    }
+
+    fun addVarsInited(always: Set<C_VarId>, sometimes: Set<C_VarId>) {
+        varsInitedAlways += always
+        varsInitedSometimes += sometimes
+    }
+
+    fun varsInitedAlways() = varsInitedAlways.toSet()
+    fun varsInitedSometimes() = varsInitedSometimes.toSet()
+
+    fun varInitedAlways(id: C_VarId) = findValue { if (id in it.varsInitedAlways) true else null } != null
+    fun varInitedSometimes(id: C_VarId) = findValue { if (id in it.varsInitedSometimes) true else null } != null
+
+    private fun <T> findValue(getter: (C_BlockContext) -> T?): T? {
         var ctx: C_BlockContext? = this
         while (ctx != null) {
-            val local = ctx.locals[name]
-            if (local != null) {
-                return local.toScopeEntry(blockId)
+            val value = getter(ctx)
+            if (value != null) {
+                return value
             }
             ctx = ctx.parent
         }
@@ -56,11 +74,21 @@ class C_BlockContext(
     }
 
     companion object {
-        private class C_ScopeEntry0(val name: String, val type: R_Type, val modifiable: Boolean, val offset: Int) {
+        // Difference between C_ScopeEntry0 and C_ScopeEntry: there is one C_ScopeEntry0 for each variable, but
+        // may be different C_ScopeEntry for same variable if it is being accessed from different scopes.
+        // C_ScopeEntry refers to a scope (via ptr.blockId) where the variable is being used, not where it is declared.
+        private class C_ScopeEntry0(
+                val name: String,
+                val type: R_Type,
+                val modifiable: Boolean,
+                val offset: Int,
+                val varId: C_VarId,
+                val loop: C_LoopId?
+        ) {
             fun toVarPtr(blockId: R_FrameBlockId): R_VarPtr = R_VarPtr(blockId, offset)
 
             fun toScopeEntry(blockId: R_FrameBlockId): C_ScopeEntry {
-                return C_ScopeEntry(name, type, modifiable, toVarPtr(blockId))
+                return C_ScopeEntry(name, type, modifiable, varId, toVarPtr(blockId), loop)
             }
         }
     }
@@ -88,7 +116,7 @@ class C_RExprContext(blkCtx: C_BlockContext): C_ExprContext(blkCtx) {
         val loc = blkCtx.lookupLocalVar(name.str)
         val glob = blkCtx.entCtx.nsCtx.getValueOpt(name.str)
 
-        if (loc != null) return C_NameResolution_Local(name, loc)
+        if (loc != null) return C_NameResolution_Local(name, this, loc)
         if (glob != null) return C_NameResolution_Value(name, blkCtx.entCtx, glob)
 
         return null
@@ -115,7 +143,7 @@ class C_DbExprContext(blkCtx: C_BlockContext, val classes: List<C_AtClass>): C_E
         }
 
         if (cls != null) return C_NameResolution_Class(name, cls)
-        if (loc != null) return C_NameResolution_Local(name, loc)
+        if (loc != null) return C_NameResolution_Local(name, this, loc)
         if (glob != null) return C_NameResolution_Value(name, blkCtx.entCtx, glob)
 
         return null
@@ -188,8 +216,12 @@ private class C_NameResolution_Class(name: S_Name, private val cls: C_AtClass): 
     override fun toExpr() = C_DbExpr(name.pos, cls.compileExpr())
 }
 
-private class C_NameResolution_Local(name: S_Name, private val entry: C_ScopeEntry): C_NameResolution(name) {
-    override fun toExpr(): C_Expr = C_LocalVarExpr(name, entry)
+private class C_NameResolution_Local(
+        name: S_Name,
+        private val ctx: C_ExprContext,
+        private val entry: C_ScopeEntry
+): C_NameResolution(name) {
+    override fun toExpr(): C_Expr = C_LocalVarExpr(ctx, name, entry)
 }
 
 private class C_NameResolution_Value(
@@ -215,7 +247,7 @@ class C_BinOpType(
 
 class C_AssignOp(val pos: S_Pos, val code: String, val rOp: R_BinaryOp, val dbOp: Db_BinaryOp?)
 
-sealed class C_Destination {
+abstract class C_Destination {
     abstract fun type(): R_Type
     abstract fun compileAssignStatement(srcExpr: R_Expr, op: C_AssignOp?): R_Statement
     abstract fun compileAssignExpr(startPos: S_Pos, srcExpr: R_Expr, op: C_AssignOp, post: Boolean): C_Expr
@@ -289,6 +321,7 @@ sealed class C_Value(val pos: S_Pos) {
     abstract fun toDbExpr(): Db_Expr
 
     open fun constantValue(): Rt_Value? = null
+    open fun varId(): C_VarId? = null
 
     open fun destination(ctx: C_ExprContext): C_Destination {
         throw C_Errors.errBadDestination(pos)
@@ -331,18 +364,55 @@ private class C_LookupValue(
     }
 }
 
-private class C_LocalVarValue(private val name: S_Name, private val entry: C_ScopeEntry): C_Value(name.pos) {
+private class C_LocalVarValue(
+        private val ctx: C_ExprContext,
+        private val name: S_Name,
+        private val entry: C_ScopeEntry
+): C_Value(name.pos) {
     override fun type() = entry.type
     override fun isDb() = false
-    override fun toRExpr() = entry.toVarExpr()
     override fun toDbExpr() = C_Utils.toDbExpr(pos, toRExpr())
+    override fun varId() = entry.varId
+
+    override fun toRExpr(): R_Expr {
+        checkInitialized()
+        return entry.toVarExpr()
+    }
 
     override fun destination(ctx: C_ExprContext): C_Destination {
+        check(ctx === this.ctx)
         if (!entry.modifiable) {
-            throw C_Error(name.pos, "expr_assign_val:${name.str}", "Value of '${name.str}' cannot be changed")
+            if (ctx.blkCtx.varInitedSometimes(entry.varId) || ctx.blkCtx.loop != entry.loop) {
+                throw C_Error(name.pos, "expr_assign_val:${name.str}", "Value of '${name.str}' cannot be changed")
+            }
         }
-        val rDstExpr = entry.toVarExpr()
-        return C_SimpleDestination(rDstExpr)
+        return C_LocalVarDestination()
+    }
+
+    private fun checkInitialized() {
+        if (!ctx.blkCtx.varInitedAlways(entry.varId)) {
+            val nameStr = name.str
+            throw C_Error(pos, "expr_var_uninit:$nameStr", "Variable '$nameStr' may be uninitialized")
+        }
+    }
+
+    private inner class C_LocalVarDestination: C_Destination() {
+        override fun type() = entry.type
+
+        override fun compileAssignStatement(srcExpr: R_Expr, op: C_AssignOp?): R_Statement {
+            if (op != null) {
+                checkInitialized()
+            }
+            val rDstExpr = entry.toVarExpr()
+            return R_AssignStatement(rDstExpr, srcExpr, op?.rOp)
+        }
+
+        override fun compileAssignExpr(startPos: S_Pos, srcExpr: R_Expr, op: C_AssignOp, post: Boolean): C_Expr {
+            checkInitialized()
+            val rDstExpr = entry.toVarExpr()
+            val rExpr = R_AssignExpr(rDstExpr.type, op.rOp, rDstExpr, srcExpr, post)
+            return C_RExpr(startPos, rExpr)
+        }
     }
 }
 
@@ -543,10 +613,14 @@ class C_LookupExpr(
     override fun value(): C_Value = C_LookupValue(startPos, baseType, expr, dstExpr)
 }
 
-private class C_LocalVarExpr(private val name: S_Name, private val entry: C_ScopeEntry): C_Expr() {
+private class C_LocalVarExpr(
+        private val ctx: C_ExprContext,
+        private val name: S_Name,
+        private val entry: C_ScopeEntry
+): C_Expr() {
     override fun kind() = C_ExprKind.VALUE
     override fun startPos() = name.pos
-    override fun value(): C_Value = C_LocalVarValue(name, entry)
+    override fun value(): C_Value = C_LocalVarValue(ctx, name, entry)
 }
 
 class C_NamespaceExpr(private val name: List<S_Name>, private val ns: C_Namespace): C_Expr() {

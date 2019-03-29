@@ -308,7 +308,7 @@ class S_OpDefinition(val name: S_Name, val params: List<S_NameTypePair>, val bod
 
     private fun doCompile(ctx: C_NamespaceContext, entityIndex: Int, fullName: String) {
         val entCtx = C_EntityContext(ctx, C_EntityType.OPERATION, entityIndex, null)
-        val rParams = compileExternalParams(ctx, entCtx.rootExprCtx, params)
+        val rParams = compileExternalParams(ctx, entCtx, params)
         val rBody = body.compile(entCtx.rootExprCtx).rStmt
         val rCallFrame = entCtx.makeCallFrame()
 
@@ -341,7 +341,7 @@ class S_QueryDefinition(
         val rExplicitRetType = retType?.compile(ctx)
 
         val entCtx = C_EntityContext(ctx, C_EntityType.QUERY, entityIndex, rExplicitRetType)
-        val rParams = compileExternalParams(ctx, entCtx.rootExprCtx, params)
+        val rParams = compileExternalParams(ctx, entCtx, params)
         val rBody = body.compileQuery(name, entCtx.rootExprCtx)
         val rCallFrame = entCtx.makeCallFrame()
         val rRetType = entCtx.actualReturnType()
@@ -402,7 +402,7 @@ class S_FunctionBodyShort(val expr: S_Expr): S_FunctionBody() {
         }
 
         val blkCtx = ctx.blkCtx
-        val subBlkCtx = C_BlockContext(blkCtx.entCtx, blkCtx, blkCtx.insideLoop)
+        val subBlkCtx = C_BlockContext(blkCtx.entCtx, blkCtx, blkCtx.loop)
         val rBlock = subBlkCtx.makeFrameBlock()
 
         return R_BlockStatement(listOf(R_ExprStatement(rExpr), R_ReturnStatement(null)), rBlock)
@@ -413,7 +413,7 @@ class S_FunctionBodyFull(val body: S_Statement): S_FunctionBody() {
     override fun compileQuery(name: S_Name, ctx: C_ExprContext): R_Statement {
         val cBody = body.compile(ctx)
 
-        if (!cBody.alwaysReturn) {
+        if (!cBody.returnAlways) {
             throw C_Error(name.pos, "query_noreturn:${name.str}", "Query '${name.str}': not all code paths return value")
         }
 
@@ -425,7 +425,7 @@ class S_FunctionBodyFull(val body: S_Statement): S_FunctionBody() {
 
         val retType = ctx.blkCtx.entCtx.actualReturnType()
         if (retType != R_UnitType) {
-            if (!cBody.alwaysReturn) {
+            if (!cBody.returnAlways) {
                 throw C_Error(name.pos, "fun_noreturn:${name.str}", "Function '${name.str}': not all code paths return value")
             }
         }
@@ -454,7 +454,7 @@ class S_FunctionDefinition(
         val rRetType = if (retType != null) retType.compile(ctx) else R_UnitType
         val entCtx = C_EntityContext(ctx, C_EntityType.FUNCTION, entityIndex, rRetType)
 
-        val rParams = compileExternalParams(ctx, entCtx.rootExprCtx, params)
+        val rParams = compileExternalParams(ctx, entCtx, params)
         val header = C_UserFunctionHeader(rParams, rRetType)
         fn.setHeader(header)
 
@@ -545,14 +545,17 @@ class S_ModuleDefinition(val definitions: List<S_Definition>) {
 
 private fun compileExternalParams(
         ctx: C_NamespaceContext,
-        exprCtx: C_ExprContext,
+        entCtx: C_EntityContext,
         params: List<S_NameTypePair>
 ) : List<R_ExternalParam>
 {
+    val blkCtx = entCtx.rootExprCtx.blkCtx
     val rParams = compileParams(ctx, params)
 
     val rExtParams = rParams.map { (name, rParam) ->
-        val ptr = exprCtx.blkCtx.add(name, rParam.type, false)
+        val (cId, ptr) = blkCtx.add(name, rParam.type, false)
+        val vars = setOf(cId)
+        blkCtx.addVarsInited(vars, vars)
         R_ExternalParam(name.str, rParam.type, ptr)
     }
 

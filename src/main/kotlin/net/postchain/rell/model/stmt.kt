@@ -19,14 +19,6 @@ object R_EmptyStatement: R_Statement() {
     }
 }
 
-class R_ValStatement(val ptr: R_VarPtr, val expr: R_Expr): R_Statement() {
-    override fun execute(frame: Rt_CallFrame): R_StatementResult? {
-        val value = expr.evaluate(frame)
-        frame.set(ptr, value, false)
-        return null
-    }
-}
-
 class R_VarStatement(val ptr: R_VarPtr, val expr: R_Expr?): R_Statement() {
     override fun execute(frame: Rt_CallFrame): R_StatementResult? {
         if (expr != null) {
