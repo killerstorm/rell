@@ -10,14 +10,14 @@
 
 Simplest way to build:
 
-1. Check out the `postchain2` repository:
-   ```
-   git clone git@bitbucket.org:chromawallet/postchain2.git
-   ```
-   Switch to the right tag:
-   ```
-   git checkout ver-2.4.3
-   ```
+1. Check out the `postchain2` repository:  
+    ```
+    git clone git@bitbucket.org:chromawallet/postchain2.git
+    ```  
+    Switch to the right tag:  
+    ```
+    git checkout ver-2.4.3
+    ```
 2. Build `postchain2`:  
     ```
     mvn clean install -DskipTests

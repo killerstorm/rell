@@ -1,0 +1,186 @@
+RELEASE NOTES 0.8.0 (2019-04-01)
+
+
+1. Include
+
+Allows to use definitions from other Rell files:
+
+include 'helper';
+
+or
+
+namespace helper {
+    include 'helper';
+}
+
+
+2. Namespace
+
+Definitions can now be put in namespaces:
+
+namespace foo {
+    namespace bar {
+        function f(x: integer): integer = x * x * x;
+    }
+}
+
+query calculate(a: integer) = foo.bar.f(a);
+
+All kinds of definitions, except operations and queries, can be put in a namespace.
+
+
+3. External block
+
+Allows to access classes defined in other blockchains:
+
+external 'foo' {
+    class company(log) { name; }
+    class user(log) { name; company; }
+}
+
+All external classes must be log-annotated.
+
+Available external blockchains are defined in the blockchain configuration under the "dependencies" node.
+
+
+4. When statement/expression
+
+Like "when" in Kotlin, or similar to "switch" in C/C++/Java.
+
+As a statement:
+
+when(x) {
+    1 -> return 'One';
+    2, 3 -> return 'Few';
+    else -> {
+        return 'Many';
+    }
+}
+
+when {
+    x >= 5 -> do_something();
+    x < 0 and y == 10 -> return;
+    else -> {
+        print('Illegal state');
+    }
+}
+
+As an expression:
+
+return when(x) {
+    1 -> 'One';
+    2, 3 -> 'Few';
+    else -> 'Many';
+}
+
+See more examples in the Language Guide.
+
+
+5. Operators "++", "--"
+
+Increment and decrement operators existing in many languages:
+
+var x: integer = 123;
+
+x++;
+x--;
+++x;
+--x;
+
+Can be used with class and object fields as well:
+
+object state {
+    mutable counter: integer = 0;
+}
+
+++state.counter; // Executes SQL UPDATE.
+
+
+6. Uninitialized variables access check
+
+An attempt to use an uninitialized variable causes a compilation error:
+
+var x: integer;
+return x; // Compilation error
+
+Can use a variable only if all code paths initialize it:
+
+var x: integer;
+if (condition) {
+    x = 5;
+} else {
+    x = 10;
+}
+return x; // OK
+
+var x: integer;
+if (condition) {
+    x = 5;
+}
+return x; // Compilation error
+
+
+7. Late "val" initialization
+
+Not required anymore to specify an expression for "val" - a value can be assigned later:
+
+val x: integer;
+x = 5;
+return x; // OK
+
+Error on attempt to reassign a value or to use an uninitialized "val":
+
+val x: integer;
+val y: integer = 5;
+y = 10; // Compilation error: val reassignment.
+return x; // Compilation error: uninitialized variable access
+
+
+8. Dead code check
+
+Compilation error if there is code after "return":
+
+if (condition) {
+    return 123;
+    print('Hello'); // Compilation error: dead code
+}
+
+
+9. Blockchain meta-information
+
+In order to check that declared external classes have correct structure, each blockchain stores the information about
+its classes in two tables: cX.sys.classes and cX.sys.attributes, where X is chain_id.
+
+The tables are created and initialized when the blockchain is being initialized.
+
+The information in the meta tables for a blockchain C is checked when starting a blockchain which uses C as an
+external blockchain.
+
+
+10. Changes in the blockchain configuration structure:
+
+All Rell-related settings are now under the path "gtx.rell":
+
+- gtx.rell.moduleName - module name, which is used for module version tracking
+
+- gtx.rell.mainFile - the name of the main file which gets compiled/executed
+
+- gtx.rell.sources_v0.8 - a map (file name -> file contents), which must contain the main file and all files it includes
+                          (directly or indirectly)
+
+- gtx.rell.moduleArgs is the new name for gtx.rellModuleArgs
+
+- gtx.rell.sqllog - when set to 1, all executed SQL queries are logged
+
+
+11. Table naming changed
+
+Tables for classes and objects are now named "cX.Y" instead of "cX_Y", where "X" is a chain_id and "Y" is a name
+of a class/object.
+
+For classes and objects defined in a namespace, the fully-qualified name is used, e. g. "c0.foo.bar.user".
+
+
+12. Bug fixed: slow compilation
+
+There was a bug which made compilation of large files (~1000+ lines) considerably slow.
