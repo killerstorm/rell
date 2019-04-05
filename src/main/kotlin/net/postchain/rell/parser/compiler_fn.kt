@@ -263,7 +263,6 @@ sealed class C_FuncBuilder<BuilderT, CaseT, MatchT, FuncT> {
         return this as BuilderT
     }
 
-
     fun add(name: String, params: List<R_Type>, match: MatchT): BuilderT {
         val matchers = params.map { C_ArgTypeMatcher_Simple(it) }
         val case = makeCase(matchers, match)
@@ -273,6 +272,20 @@ sealed class C_FuncBuilder<BuilderT, CaseT, MatchT, FuncT> {
 
     fun add(name: String, case: CaseT): BuilderT {
         addCase(name, case)
+        return this as BuilderT
+    }
+
+    fun addIf(
+            c: Boolean,
+            name: String,
+            result: R_Type,
+            params: List<R_Type>,
+            rFn: R_SysFunction,
+            dbFn: Db_SysFunction? = null
+    ): BuilderT {
+        if (c) {
+            add(name, result, params, rFn, dbFn)
+        }
         return this as BuilderT
     }
 }

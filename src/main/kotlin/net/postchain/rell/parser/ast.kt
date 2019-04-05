@@ -356,26 +356,23 @@ class S_QueryDefinition(
     }
 
     private fun checkGtxResult(rType: R_Type, human: Boolean) {
-        val flags = rType.completeFlags()
-        val gtx = if (human) flags.gtxHuman else flags.gtxCompact
-        if (!gtx) {
-            throw C_Error(name.pos, "result_nogtx:${name.str}:${rType.toStrictString()}",
-                    "Return type of query '${name.str}' is not GTX-conversible: ${rType.toStrictString()}")
-        }
+        checkGtxCompatibility(name.pos, rType, human, "result_nogtx:${name.str}", "Return type of query '${name.str}'")
     }
 }
 
 private fun checkGtxParams(params: List<S_NameTypePair>, rParams: List<R_ExternalParam>, human: Boolean) {
     params.forEachIndexed { i, param ->
         val type = rParams[i].type
-        val flags = type.completeFlags()
-        val gtx = if (human) flags.gtxHuman else flags.gtxCompact
-        if (!gtx) {
-            val name = param.name.str
-            val typeStr = type.toStrictString()
-            throw C_Error(param.name.pos, "param_nogtx:$name:$typeStr",
-                    "Type of parameter '$name' is not GTX-conversible: $typeStr")
-        }
+        val name = param.name.str
+        checkGtxCompatibility(param.name.pos, type, human, "param_nogtx:$name", "Type of parameter '$name'")
+    }
+}
+
+private fun checkGtxCompatibility(pos: S_Pos, type: R_Type, human: Boolean, errCode: String, errMsg: String) {
+    val flags = type.completeFlags()
+    val gtx = if (human) flags.gtxHuman else flags.gtxCompact
+    if (!gtx.compatible) {
+        throw C_Errors.errTypeNotGtxCompatible(pos, type, gtx.err, errCode, errMsg)
     }
 }
 

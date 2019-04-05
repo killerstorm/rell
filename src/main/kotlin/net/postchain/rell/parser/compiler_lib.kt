@@ -160,6 +160,8 @@ object C_LibFunctions {
 
     private fun getListFns(elemType: R_Type): C_MemberFuncTable {
         val listType = R_ListType(elemType)
+        val comparator = elemType.comparator()
+        val comparator2 = comparator ?: Comparator { _, _ -> 0 }
         return C_MemberFuncBuilder()
                 .add("str", R_TextType, listOf(), R_SysFn_ToString)
                 .add("empty", R_BooleanType, listOf(), R_SysFn_Collection_Empty)
@@ -180,10 +182,15 @@ object C_LibFunctions {
                 .add("add", R_BooleanType, listOf(R_IntegerType, elemType), R_SysFn_List_Add)
                 .addEx("addAll", R_BooleanType, listOf(matcherColSub(elemType)), R_SysFn_Collection_AddAll)
                 .addEx("addAll", R_BooleanType, listOf(matcher(R_IntegerType), matcherColSub(elemType)), R_SysFn_List_AddAll)
+                .addIf(comparator != null, "_sort", R_UnitType, listOf(), R_SysFn_List_Sort(comparator2))
+                .addIf(comparator != null, "sorted", listType, listOf(), R_SysFn_Collection_Sorted(listType, comparator2))
                 .build()
     }
 
     private fun getSetFns(elemType: R_Type): C_MemberFuncTable {
+        val listType = R_ListType(elemType)
+        val comparator = elemType.comparator()
+        val comparator2 = comparator ?: Comparator { _, _ -> 0 }
         return C_MemberFuncBuilder()
                 .add("str", R_TextType, listOf(), R_SysFn_ToString)
                 .add("empty", R_BooleanType, listOf(), R_SysFn_Collection_Empty)
@@ -196,6 +203,7 @@ object C_LibFunctions {
                 .addEx("containsAll", R_BooleanType, listOf(matcherColSub(elemType)), R_SysFn_Collection_ContainsAll)
                 .addEx("addAll", R_BooleanType, listOf(matcherColSub(elemType)), R_SysFn_Collection_AddAll)
                 .addEx("removeAll", R_BooleanType, listOf(matcherColSub(elemType)), R_SysFn_Collection_RemoveAll)
+                .addIf(comparator != null, "sorted", listType, listOf(), R_SysFn_Collection_Sorted(listType, comparator2))
                 .build()
     }
 
@@ -222,15 +230,15 @@ object C_LibFunctions {
         val flags = type.completeFlags()
         val invalid = C_SysFunction_InvalidRecord(type)
 
-        val mFromBytes = if (!flags.gtxCompact) invalid else {
+        val mFromBytes = if (!flags.gtxCompact.compatible) invalid else {
             C_StdGlobalFuncCaseMatch(type, R_SysFn_Record_FromBytes(type))
         }
 
-        val mFromGtxValue = if (!flags.gtxCompact) invalid else {
+        val mFromGtxValue = if (!flags.gtxCompact.compatible) invalid else {
             C_StdGlobalFuncCaseMatch(type, R_SysFn_Record_FromGtx(type, false))
         }
 
-        val mFromPrettyGtxValue = if (!flags.gtxHuman) invalid else {
+        val mFromPrettyGtxValue = if (!flags.gtxHuman.compatible) invalid else {
             C_StdGlobalFuncCaseMatch(type, R_SysFn_Record_FromGtx(type, true))
         }
 
@@ -248,15 +256,15 @@ object C_LibFunctions {
 
         val invalid = C_SysMemberFunction_InvalidRecord(type)
 
-        val mToBytes = if (!flags.gtxCompact) invalid else {
+        val mToBytes = if (!flags.gtxCompact.compatible) invalid else {
             C_StdMemberFuncCaseMatch(R_ByteArrayType, R_SysFn_Record_ToBytes(type))
         }
 
-        val mToGtxValue = if (!flags.gtxCompact) invalid else {
+        val mToGtxValue = if (!flags.gtxCompact.compatible) invalid else {
             C_StdMemberFuncCaseMatch(R_GtxValueType, R_SysFn_Record_ToGtx(type, false))
         }
 
-        val mToPrettyGtxValue = if (!flags.gtxHuman) invalid else {
+        val mToPrettyGtxValue = if (!flags.gtxHuman.compatible) invalid else {
             C_StdMemberFuncCaseMatch(R_GtxValueType, R_SysFn_Record_ToGtx(type, true))
         }
 

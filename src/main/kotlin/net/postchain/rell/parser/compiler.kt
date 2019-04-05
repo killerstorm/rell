@@ -189,7 +189,7 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
         val topologicalClasses = calcTopologicalClasses()
 
         val moduleArgs = nsCtx.getRecordOpt(C_Defs.MODULE_ARGS_RECORD)
-        if (moduleArgs != null && !moduleArgs.type.flags.typeFlags.gtxHuman) {
+        if (moduleArgs != null && !moduleArgs.type.flags.typeFlags.gtxHuman.compatible) {
             throw C_Error(moduleArgs.name.pos, "module_args_nogtx", "Record '${C_Defs.MODULE_ARGS_RECORD}' is not GTX-compatible")
         }
 
@@ -219,7 +219,9 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
         val nonGtxCompactRecs = C_GraphUtils.closure(transGraph, structure.nonGtxCompact).toSet()
 
         for (record in records) {
-            val typeFlags = R_TypeFlags(record in mutableRecs, record !in nonGtxHumanRecs, record !in nonGtxCompactRecs)
+            val gtxHuman = R_GtxCompatibility(record !in nonGtxHumanRecs)
+            val gtxCompact = R_GtxCompatibility(record !in nonGtxCompactRecs)
+            val typeFlags = R_TypeFlags(record in mutableRecs, gtxHuman, gtxCompact)
             val flags = R_RecordFlags(typeFlags, record in cyclicRecs, record in infiniteRecs)
             record.setFlags(flags)
         }
@@ -799,8 +801,8 @@ private fun buildRecordsStructure(records: Collection<R_RecordType>): RecordsStr
     val structMap = records.map { Pair(it, calcRecStruct(it)) }.toMap()
     val graph = structMap.mapValues { (_, v) -> v.dependencies.toList() }
     val mutable = structMap.filter { (_, v) -> v.directFlags.mutable }.keys
-    val nonGtxHuman = structMap.filter { (_, v) -> !v.directFlags.gtxHuman }.keys
-    val nonGtxCompact = structMap.filter { (_, v) -> !v.directFlags.gtxCompact }.keys
+    val nonGtxHuman = structMap.filter { (_, v) -> !v.directFlags.gtxHuman.compatible }.keys
+    val nonGtxCompact = structMap.filter { (_, v) -> !v.directFlags.gtxCompact.compatible }.keys
     return RecordsStructure(mutable, nonGtxHuman, nonGtxCompact, graph)
 }
 

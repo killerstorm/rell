@@ -10,23 +10,34 @@ import org.jooq.impl.DefaultDataType
 import org.jooq.impl.SQLDataType
 import org.jooq.util.postgres.PostgresDataType
 import org.postgresql.util.PGobject
+import org.spongycastle.util.Arrays
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 
-class R_TypeFlags(val mutable: Boolean, val gtxHuman: Boolean, val gtxCompact: Boolean) {
+class R_GtxCompatibility(val compatible: Boolean, val err: String? = null)
+
+class R_TypeFlags(val mutable: Boolean, val gtxHuman: R_GtxCompatibility, val gtxCompact: R_GtxCompatibility) {
     companion object {
         fun combine(flags: Collection<R_TypeFlags>): R_TypeFlags {
             var mutable = false
             var gtxHuman = true
+            var gtxHumanErr: String? = null
             var gtxCompact = true
+            var gtxCompactErr: String? = null
 
             for (f in flags) {
                 mutable = mutable or f.mutable
-                gtxHuman = gtxHuman and f.gtxHuman
-                gtxCompact = gtxCompact and f.gtxCompact
+                gtxHuman = gtxHuman and f.gtxHuman.compatible
+                gtxHumanErr = gtxHumanErr ?: f.gtxHuman.err
+                gtxCompact = gtxCompact and f.gtxCompact.compatible
+                gtxCompactErr = gtxCompactErr ?: f.gtxCompact.err
             }
 
-            return R_TypeFlags(mutable, gtxHuman, gtxCompact)
+            return R_TypeFlags(
+                    mutable,
+                    R_GtxCompatibility(gtxHuman, gtxHumanErr),
+                    R_GtxCompatibility(gtxCompact, gtxCompactErr)
+            )
         }
     }
 }
@@ -63,6 +74,7 @@ sealed class R_Type(val name: String) {
     val sqlAdapter = createSqlAdapter()
 
     open fun isReference(): Boolean = false
+    open fun comparator(): Comparator<Rt_Value>? = null
     protected open fun isDirectMutable(): Boolean = false
 
     fun directFlags(): R_TypeFlags {
@@ -87,7 +99,7 @@ sealed class R_Type(val name: String) {
     protected abstract fun createGtxConversion(): GtxRtConversion
 
     abstract fun toStrictString(): String
-    override fun toString(): String = toStrictString()
+    final override fun toString(): String = toStrictString()
 
     open fun componentTypes(): List<R_Type> = listOf()
 
@@ -117,6 +129,8 @@ object R_UnitType: R_PrimitiveType("unit", SQLDataType.OTHER) {
 }
 
 object R_BooleanType: R_PrimitiveType("boolean", SQLDataType.BOOLEAN) {
+    override fun comparator() = Rt_Comparator.create { it.asBoolean() }
+
     override fun fromCli(s: String): Rt_Value {
         if (s == "false") return Rt_BooleanValue(false)
         else if (s == "true") return Rt_BooleanValue(true)
@@ -140,6 +154,7 @@ private object R_TypeSqlAdapter_Boolean: R_TypeSqlAdapter_Primitive("boolean") {
 }
 
 object R_TextType: R_PrimitiveType("text", PostgresDataType.TEXT) {
+    override fun comparator() = Rt_Comparator.create { it.asString() }
     override fun fromCli(s: String): Rt_Value = Rt_TextValue(s)
     override fun createGtxConversion() = GtxRtConversion_Text
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Text
@@ -154,6 +169,7 @@ private object R_TypeSqlAdapter_Text: R_TypeSqlAdapter_Primitive("text") {
 }
 
 object R_IntegerType: R_PrimitiveType("integer", SQLDataType.BIGINT) {
+    override fun comparator() = Rt_Comparator.create { it.asInteger() }
     override fun fromCli(s: String): Rt_Value = Rt_IntValue(s.toLong())
 
     override fun createGtxConversion() = GtxRtConversion_Integer
@@ -169,6 +185,7 @@ private object R_TypeSqlAdapter_Integer: R_TypeSqlAdapter_Primitive("integer") {
 }
 
 object R_ByteArrayType: R_PrimitiveType("byte_array", PostgresDataType.BYTEA) {
+    override fun comparator() = Rt_Comparator({ it.asByteArray() }, Comparator { x, y -> Arrays.compareUnsigned(x, y) })
     override fun fromCli(s: String): Rt_Value = Rt_ByteArrayValue(s.hexStringToByteArray())
 
     override fun createGtxConversion() = GtxRtConversion_ByteArray
@@ -200,6 +217,7 @@ object R_SignerType: R_PrimitiveType("signer", GTX_SIGNER_SQL_DATA_TYPE) {
 private val JSON_SQL_DATA_TYPE = DefaultDataType(null as SQLDialect?, String::class.java, "jsonb")
 
 object R_JSONType: R_PrimitiveType("json", JSON_SQL_DATA_TYPE) {
+    override fun comparator() = Rt_Comparator.create { it.asJsonString() }
     override fun fromCli(s: String): Rt_Value = Rt_JsonValue.parse(s)
 
     //TODO consider converting between Rt_JsonValue and arbitrary GTXValue, not only String
@@ -224,12 +242,14 @@ private object R_TypeSqlAdapter_Json: R_TypeSqlAdapter_Primitive("json") {
 }
 
 object R_NullType: R_Type("null") {
+    override fun comparator() = Rt_Comparator.create { 0 }
     override fun toStrictString() = "null"
     override fun calcCommonType(other: R_Type): R_Type? = R_NullableType(other)
     override fun createGtxConversion() = GtxRtConversion_Null
 }
 
 class R_ClassType(val rClass: R_Class): R_Type(rClass.name) {
+    override fun comparator() = Rt_Comparator.create { it.asObjectId() }
     override fun fromCli(s: String): Rt_Value = Rt_ClassValue(this, s.toLong())
     override fun toStrictString(): String = name
     override fun equals(other: Any?): Boolean = other is R_ClassType && other.rClass == rClass
@@ -297,6 +317,7 @@ class R_EnumType(name: String, val attrs: List<R_EnumAttr>): R_Type(name) {
     private val attrMap = attrs.map { Pair(it.name, it) }.toMap()
     private val rtValues = attrs.map { Rt_EnumValue(this, it) }
 
+    override fun comparator() = Rt_Comparator.create { it.asEnum().value }
     override fun fromCli(s: String): Rt_Value = Rt_EnumValue(this, attrMap.getValue(s))
     override fun toStrictString(): String = name
 
@@ -338,6 +359,7 @@ class R_NullableType(val valueType: R_Type): R_Type(valueType.name + "?") {
     override fun isReference() = valueType.isReference()
     override fun isDirectMutable() = false
 
+    override fun comparator() = valueType.comparator()
     override fun fromCli(s: String): Rt_Value = if (s == "null") Rt_NullValue else valueType.fromCli(s)
     override fun toStrictString() = name
     override fun componentTypes() = listOf(valueType)
@@ -368,6 +390,11 @@ class R_ListType(elementType: R_Type): R_CollectionType(elementType, "list") {
     override fun fromCli(s: String): Rt_Value = Rt_ListValue(this, s.split(",").map { elementType.fromCli(it) }.toMutableList())
     override fun equals(other: Any?): Boolean = other is R_ListType && elementType == other.elementType
     override fun createGtxConversion() = GtxRtConversion_List(this)
+
+    override fun comparator(): Comparator<Rt_Value>? {
+        val elemComparator = elementType.comparator()
+        return if (elemComparator == null) null else Rt_ListComparator(elemComparator)
+    }
 }
 
 class R_SetType(elementType: R_Type): R_CollectionType(elementType, "set") {
@@ -443,10 +470,21 @@ class R_TupleType(val fields: List<R_TupleField>): R_Type("(${fields.joinToStrin
     }
 
     override fun createGtxConversion() = GtxRtConversion_Tuple(this)
+
+    override fun comparator(): Comparator<Rt_Value>? {
+        val fieldComparators = mutableListOf<Comparator<Rt_Value>>()
+        for (field in fields) {
+            val comparator = field.type.comparator()
+            comparator ?: return null
+            fieldComparators.add(comparator)
+        }
+        return Rt_TupleComparator(fieldComparators)
+    }
 }
 
 object R_RangeType: R_Type("range") {
     override fun isReference() = true
+    override fun comparator() = Rt_Comparator.create { it.asRange() }
     override fun toStrictString(): String = "range"
     override fun createGtxConversion() = GtxRtConversion_None
 }

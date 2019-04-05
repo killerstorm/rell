@@ -8,7 +8,6 @@ import net.postchain.gtx.GTXValue
 import net.postchain.gtx.make_gtx_gson
 import net.postchain.rell.model.*
 import net.postchain.rell.toHex
-import java.lang.IllegalArgumentException
 import java.util.*
 
 abstract class Rt_ValueRef {
@@ -308,7 +307,7 @@ class Rt_JsonValue private constructor(private val str: String): Rt_Value() {
     }
 }
 
-class Rt_RangeValue(val start: Long, val end: Long, val step: Long): Rt_Value(), Iterable<Rt_Value> {
+class Rt_RangeValue(val start: Long, val end: Long, val step: Long): Rt_Value(), Iterable<Rt_Value>, Comparable<Rt_RangeValue> {
     override fun type() = R_RangeType
     override fun valueType() = "Range"
     override fun asRange(): Rt_RangeValue = this
@@ -331,6 +330,13 @@ class Rt_RangeValue(val start: Long, val end: Long, val step: Long): Rt_Value(),
         val m1 = valueMod(start, step)
         val m2 = valueMod(v, step)
         return m1 == m2
+    }
+
+    override fun compareTo(other: Rt_RangeValue): Int {
+        var c = start.compareTo(other.start)
+        if (c == 0) c = end.compareTo(other.end)
+        if (c == 0) c = step.compareTo(other.step)
+        return c
     }
 
     companion object {

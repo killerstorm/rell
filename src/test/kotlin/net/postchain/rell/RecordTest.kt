@@ -220,8 +220,8 @@ class RecordTest: BaseRellTest(false) {
             for (rec in module.records.values.sortedBy { it.name }) {
                 val flags = mutableListOf<String>()
                 if (rec.flags.typeFlags.mutable) flags.add("mut")
-                if (rec.flags.typeFlags.gtxHuman) flags.add("hum")
-                if (rec.flags.typeFlags.gtxCompact) flags.add("com")
+                if (rec.flags.typeFlags.gtxHuman.compatible) flags.add("hum")
+                if (rec.flags.typeFlags.gtxCompact.compatible) flags.add("com")
                 if (rec.flags.cyclic) flags.add("cyc")
                 if (rec.flags.infinite) flags.add("inf")
                 lst.add("${rec.name}[${flags.joinToString(",")}]")

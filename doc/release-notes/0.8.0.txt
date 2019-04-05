@@ -1,4 +1,4 @@
-RELEASE NOTES 0.8.0 (2019-04-01)
+RELEASE NOTES 0.8.0 (2019-04-05)
 
 
 1. Include
@@ -174,7 +174,16 @@ if (condition) {
 }
 
 
-10. Blockchain meta-information
+10. Library: sorting a list
+
+Added methods list<T>.sorted(), list<T>._sort(), set<T>.sorted():
+
+val l: list<integer> = get_list();
+val sorted_copy = l.sorted();
+return sorted_copy;
+
+
+11. Blockchain meta-information
 
 In order to check that declared external classes have correct structure, each blockchain stores the information about
 its classes in two tables: cX.sys.classes and cX.sys.attributes, where X is chain_id.
@@ -185,7 +194,7 @@ The information in the meta tables for a blockchain C is checked when starting a
 external blockchain.
 
 
-11. Changes in the blockchain configuration structure:
+12. Changes in the blockchain configuration structure:
 
 All Rell-related settings are now under the path "gtx.rell":
 
@@ -201,7 +210,7 @@ All Rell-related settings are now under the path "gtx.rell":
 - gtx.rell.sqllog - when set to 1, all executed SQL queries are logged
 
 
-12. Table naming changed
+13. Table naming changed
 
 Tables for classes and objects are now named "cX.Y" instead of "cX_Y", where "X" is a chain_id and "Y" is a name
 of a class/object.
@@ -209,6 +218,6 @@ of a class/object.
 For classes and objects defined in a namespace, the fully-qualified name is used, e. g. "c0.foo.bar.user".
 
 
-13. Bug fixed: slow compilation
+14. Bug fixed: slow compilation
 
 There was a bug which made compilation of large files (~1000+ lines) considerably slow.

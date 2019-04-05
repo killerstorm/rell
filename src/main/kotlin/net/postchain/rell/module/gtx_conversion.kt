@@ -7,8 +7,6 @@ import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlExecutor
 import org.apache.commons.collections4.MultiValuedMap
 import org.apache.commons.collections4.multimap.HashSetValuedHashMap
-import java.lang.IllegalArgumentException
-import java.lang.UnsupportedOperationException
 
 val GTX_QUERY_HUMAN = true
 val GTX_OPERATION_HUMAN = false
@@ -52,22 +50,22 @@ class GtxToRtContext {
 }
 
 sealed class GtxRtConversion {
-    abstract fun directHuman(): Boolean
-    abstract fun directCompact(): Boolean
+    abstract fun directHuman(): R_GtxCompatibility
+    abstract fun directCompact(): R_GtxCompatibility
     abstract fun rtToGtx(rt: Rt_Value, human: Boolean): GTXValue
     abstract fun gtxToRt(ctx: GtxToRtContext, gtx: GTXValue, human: Boolean): Rt_Value
 }
 
 object GtxRtConversion_None: GtxRtConversion() {
-    override fun directHuman() = false
-    override fun directCompact() = false
+    override fun directHuman() = R_GtxCompatibility(false)
+    override fun directCompact() = R_GtxCompatibility(false)
     override fun rtToGtx(rt: Rt_Value, human: Boolean) = throw UnsupportedOperationException()
     override fun gtxToRt(ctx: GtxToRtContext, gtx: GTXValue, human: Boolean) = throw UnsupportedOperationException()
 }
 
 object GtxRtConversion_Null: GtxRtConversion() {
-    override fun directHuman() = true
-    override fun directCompact() = true
+    override fun directHuman() = R_GtxCompatibility(true)
+    override fun directCompact() = R_GtxCompatibility(true)
 
     override fun rtToGtx(rt: Rt_Value, human: Boolean): GTXValue {
         check(rt == Rt_NullValue)
@@ -81,43 +79,43 @@ object GtxRtConversion_Null: GtxRtConversion() {
 }
 
 object GtxRtConversion_Boolean: GtxRtConversion() {
-    override fun directHuman() = true
-    override fun directCompact() = true
+    override fun directHuman() = R_GtxCompatibility(true)
+    override fun directCompact() = R_GtxCompatibility(true)
     override fun rtToGtx(rt: Rt_Value, human: Boolean) = IntegerGTXValue(if (rt.asBoolean()) 1L else 0L)
     override fun gtxToRt(ctx: GtxToRtContext, gtx: GTXValue, human: Boolean) = Rt_BooleanValue(gtxToBoolean(gtx))
 }
 
 object GtxRtConversion_Text: GtxRtConversion() {
-    override fun directHuman() = true
-    override fun directCompact() = true
+    override fun directHuman() = R_GtxCompatibility(true)
+    override fun directCompact() = R_GtxCompatibility(true)
     override fun rtToGtx(rt: Rt_Value, human: Boolean) = StringGTXValue(rt.asString())
     override fun gtxToRt(ctx: GtxToRtContext, gtx: GTXValue, human: Boolean) = Rt_TextValue(gtxToString(gtx))
 }
 
 object GtxRtConversion_Integer: GtxRtConversion() {
-    override fun directHuman() = true
-    override fun directCompact() = true
+    override fun directHuman() = R_GtxCompatibility(true)
+    override fun directCompact() = R_GtxCompatibility(true)
     override fun rtToGtx(rt: Rt_Value, human: Boolean) = IntegerGTXValue(rt.asInteger())
     override fun gtxToRt(ctx: GtxToRtContext, gtx: GTXValue, human: Boolean) = Rt_IntValue(gtxToInteger(gtx))
 }
 
 object GtxRtConversion_ByteArray: GtxRtConversion() {
-    override fun directHuman() = true
-    override fun directCompact() = true
+    override fun directHuman() = R_GtxCompatibility(true)
+    override fun directCompact() = R_GtxCompatibility(true)
     override fun rtToGtx(rt: Rt_Value, human: Boolean) = ByteArrayGTXValue(rt.asByteArray())
     override fun gtxToRt(ctx: GtxToRtContext, gtx: GTXValue, human: Boolean) = Rt_ByteArrayValue(gtxToByteArray(gtx))
 }
 
 object GtxRtConversion_Json: GtxRtConversion() {
-    override fun directHuman() = true
-    override fun directCompact() = true
+    override fun directHuman() = R_GtxCompatibility(true)
+    override fun directCompact() = R_GtxCompatibility(true)
     override fun rtToGtx(rt: Rt_Value, human: Boolean) = StringGTXValue(rt.asJsonString())
     override fun gtxToRt(ctx: GtxToRtContext, gtx: GTXValue, human: Boolean) = gtxToJson(gtx)
 }
 
 class GtxRtConversion_Class(val type: R_ClassType): GtxRtConversion() {
-    override fun directHuman() = type.rClass.flags.gtx
-    override fun directCompact() = type.rClass.flags.gtx
+    override fun directHuman() = R_GtxCompatibility(type.rClass.flags.gtx)
+    override fun directCompact() = R_GtxCompatibility(type.rClass.flags.gtx)
 
     override fun rtToGtx(rt: Rt_Value, human: Boolean) = IntegerGTXValue(rt.asObjectId())
 
@@ -129,8 +127,8 @@ class GtxRtConversion_Class(val type: R_ClassType): GtxRtConversion() {
 }
 
 class GtxRtConversion_Record(val type: R_RecordType): GtxRtConversion() {
-    override fun directHuman() = true
-    override fun directCompact() = true
+    override fun directHuman() = R_GtxCompatibility(true)
+    override fun directCompact() = R_GtxCompatibility(true)
 
     override fun rtToGtx(rt: Rt_Value, human: Boolean): GTXValue {
         val attrs = type.attributesList
@@ -187,8 +185,8 @@ class GtxRtConversion_Record(val type: R_RecordType): GtxRtConversion() {
 }
 
 class GtxRtConversion_Enum(val type: R_EnumType): GtxRtConversion() {
-    override fun directHuman() = true
-    override fun directCompact() = true
+    override fun directHuman() = R_GtxCompatibility(true)
+    override fun directCompact() = R_GtxCompatibility(true)
 
     override fun rtToGtx(rt: Rt_Value, human: Boolean): GTXValue {
         val e = rt.asEnum()
@@ -219,8 +217,8 @@ class GtxRtConversion_Enum(val type: R_EnumType): GtxRtConversion() {
 }
 
 class GtxRtConversion_Nullable(val type: R_NullableType): GtxRtConversion() {
-    override fun directHuman() = true
-    override fun directCompact() = true
+    override fun directHuman() = R_GtxCompatibility(true)
+    override fun directCompact() = R_GtxCompatibility(true)
 
     override fun rtToGtx(rt: Rt_Value, human: Boolean): GTXValue {
         return if (rt == Rt_NullValue) {
@@ -240,8 +238,8 @@ class GtxRtConversion_Nullable(val type: R_NullableType): GtxRtConversion() {
 }
 
 sealed class GtxRtConversion_Collection(val type: R_CollectionType): GtxRtConversion() {
-    final override fun directHuman() = true
-    final override fun directCompact() = true
+    final override fun directHuman() = R_GtxCompatibility(true)
+    final override fun directCompact() = R_GtxCompatibility(true)
 
     final override fun rtToGtx(rt: Rt_Value, human: Boolean): GTXValue {
         val elementType = type.elementType
@@ -274,8 +272,12 @@ class GtxRtConversion_Set(type: R_SetType): GtxRtConversion_Collection(type) {
 }
 
 class GtxRtConversion_Map(val type: R_MapType): GtxRtConversion() {
-    override fun directHuman() = R_TextType.isAssignableFrom(type.keyType)
-    override fun directCompact() = R_TextType.isAssignableFrom(type.keyType)
+    override fun directHuman() = directCompact()
+
+    override fun directCompact(): R_GtxCompatibility {
+        if (R_TextType.isAssignableFrom(type.keyType)) return R_GtxCompatibility(true)
+        return R_GtxCompatibility(false, "map key type is not $R_TextType")
+    }
 
     override fun rtToGtx(rt: Rt_Value, human: Boolean): GTXValue {
         val valueType = type.valueType
@@ -296,8 +298,12 @@ class GtxRtConversion_Map(val type: R_MapType): GtxRtConversion() {
 }
 
 class GtxRtConversion_Tuple(val type: R_TupleType): GtxRtConversion() {
-    override fun directHuman() = type.fields.all { it.name != null } || !type.fields.any { it.name != null }
-    override fun directCompact() = true
+    override fun directHuman(): R_GtxCompatibility {
+        val gtx = type.fields.all { it.name != null } || !type.fields.any { it.name != null }
+        return R_GtxCompatibility(gtx, if (gtx) null else "not all tuple fields have names")
+    }
+
+    override fun directCompact() = R_GtxCompatibility(true)
 
     override fun rtToGtx(rt: Rt_Value, human: Boolean): GTXValue {
         return if (human && type.fields.all { it.name != null }) rtToGtxHuman(rt) else rtToGtxCompact(rt)
@@ -363,8 +369,8 @@ class GtxRtConversion_Tuple(val type: R_TupleType): GtxRtConversion() {
 }
 
 object GtxRtConversion_GtxValue: GtxRtConversion() {
-    override fun directHuman() = true
-    override fun directCompact() = true
+    override fun directHuman() = R_GtxCompatibility(true)
+    override fun directCompact() = R_GtxCompatibility(true)
     override fun rtToGtx(rt: Rt_Value, human: Boolean) = rt.asGtxValue()
     override fun gtxToRt(ctx: GtxToRtContext, gtx: GTXValue, human: Boolean) = Rt_GtxValue(gtx)
 }

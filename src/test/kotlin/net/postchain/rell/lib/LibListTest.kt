@@ -242,4 +242,23 @@ class LibListTest: BaseRellTest(false) {
         chkOp("for (i in list([123, 456, 789])) print(i);")
         chkStdout("123", "456", "789")
     }
+
+    @Test fun testSort() {
+        tst.strictToString = false
+        tst.defs = listOf("record rec { x: integer; }")
+
+        chkEx("{ val l = [ 5, 4, 3, 2, 1 ]; l._sort(); return l; }", "[1, 2, 3, 4, 5]")
+        chkEx("{ val l = [ 5, 4, 3, 2, 1 ]; return l._sort(); }", "ct_err:stmt_return_unit")
+        chkEx("{ val l = [ 5, 4, 3, 2, 1 ]; return l.sorted(); }", "[1, 2, 3, 4, 5]")
+        chkEx("{ val l = [ 5, 4, 3, 2, 1 ]; l.sorted(); return l; }", "[5, 4, 3, 2, 1]")
+
+        chk("['F', 'E', 'D', 'C', 'B', 'A'].sorted()", "[A, B, C, D, E, F]")
+        chk("[true, false].sorted()", "[false, true]")
+        chk("[3, 2, 1, null].sorted()", "[null, 1, 2, 3]")
+        chk("['C', 'B', 'A', null].sorted()", "[null, A, B, C]")
+
+        chk("[(2,'B'),(2,'A'),(1,'X')].sorted()", "[(1,X), (2,A), (2,B)]")
+
+        chk("[rec(123), rec(456)].sorted()", "ct_err:unknown_member:list<rec>:sorted")
+    }
 }

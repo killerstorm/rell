@@ -213,6 +213,12 @@ object C_Errors {
         throw C_Error(name.pos, "expr_name_clsloc:$nameStr",
                 "Name '$nameStr' is ambiguous: can be class alias or local variable")
     }
+
+    fun errTypeNotGtxCompatible(pos: S_Pos, type: R_Type, reason: String?, code: String, msg: String): C_Error {
+        val extra = if (reason == null) "" else "; reason: $reason"
+        val fullMsg = "$msg is not GTX-compatible: ${type.toStrictString()}$extra"
+        throw C_Error(pos, "$code:${type.toStrictString()}", fullMsg)
+    }
 }
 
 object C_GraphUtils {
