@@ -429,8 +429,18 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
             or ( VAR map { S_Node(it, true) } )
     )
 
-    private val varStmt by ( varVal * id * optional(-COLON * type ) * optional(-ASSIGN * expression) * -SEMI) map {
-        (mutable, name, type, expr) -> S_VarStatement(mutable.pos, name, type, expr, mutable.value)
+    private val simpleVarDeclarator by id * optional( -COLON * type ) map { (name, type) ->
+        S_SimpleVarDeclarator(name, type)
+    }
+
+    private val tupleVarDeclarator by LPAR * separatedTerms(parser(this::varDeclarator), COMMA, false) * -RPAR map {
+        (pos, decls) -> S_TupleVarDeclarator(S_Pos(pos), decls)
+    }
+
+    private val varDeclarator: Parser<S_VarDeclarator> by simpleVarDeclarator or tupleVarDeclarator
+
+    private val varStmt by ( varVal * varDeclarator * optional(-ASSIGN * expression) * -SEMI) map {
+        (mutable, declarator, expr) -> S_VarStatement(mutable.pos, declarator, expr, mutable.value)
     }
 
     private val returnStmt by ( RETURN * optional(expression) * -SEMI ) map { ( kw, expr ) ->
@@ -474,8 +484,8 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         (pos, expr, stmt) -> S_WhileStatement(S_Pos(pos), expr, stmt)
     }
 
-    private val forStmt by ( FOR * -LPAR * id * -IN * expression * -RPAR * _statement ) map {
-        (pos, name, expr, stmt) -> S_ForStatement(S_Pos(pos), name, expr, stmt)
+    private val forStmt by ( FOR * -LPAR * varDeclarator * -IN * expression * -RPAR * _statement ) map {
+        (pos, declarator, expr, stmt) -> S_ForStatement(S_Pos(pos), declarator, expr, stmt)
     }
 
     private val breakStmt by ( BREAK * -SEMI ) map { S_BreakStatement(S_Pos(it)) }

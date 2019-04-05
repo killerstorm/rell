@@ -1,6 +1,8 @@
 package net.postchain.rell.model
 
+import com.google.common.collect.Iterables
 import net.postchain.rell.runtime.Rt_CallFrame
+import net.postchain.rell.runtime.Rt_TupleValue
 import net.postchain.rell.runtime.Rt_Value
 
 class R_Variable(val name: String, val type: R_Type)
@@ -19,11 +21,37 @@ object R_EmptyStatement: R_Statement() {
     }
 }
 
-class R_VarStatement(val ptr: R_VarPtr, val expr: R_Expr?): R_Statement() {
+sealed class R_VarDeclarator {
+    abstract fun initialize(frame: Rt_CallFrame, value: Rt_Value, overwrite: Boolean)
+}
+
+class R_SimpleVarDeclarator(val ptr: R_VarPtr): R_VarDeclarator() {
+    override fun initialize(frame: Rt_CallFrame, value: Rt_Value, overwrite: Boolean) {
+        frame.set(ptr, value, overwrite)
+    }
+}
+
+class R_TupleVarDeclarator(val subDeclarators: List<R_VarDeclarator>): R_VarDeclarator() {
+    override fun initialize(frame: Rt_CallFrame, value: Rt_Value, overwrite: Boolean) {
+        val tuple = value.asTuple()
+        for ((i, declarator) in subDeclarators.withIndex()) {
+            val subValue = tuple[i]
+            declarator.initialize(frame, subValue, overwrite)
+        }
+    }
+}
+
+object R_WildcardVarDeclarator: R_VarDeclarator() {
+    override fun initialize(frame: Rt_CallFrame, value: Rt_Value, overwrite: Boolean) {
+        // Do nothing.
+    }
+}
+
+class R_VarStatement(val declarator: R_VarDeclarator, val expr: R_Expr?): R_Statement() {
     override fun execute(frame: Rt_CallFrame): R_StatementResult? {
         if (expr != null) {
             val value = expr.evaluate(frame)
-            frame.set(ptr, value, false)
+            declarator.initialize(frame, value, false)
         }
         return null
     }
@@ -130,8 +158,14 @@ object R_ForIterator_Collection: R_ForIterator() {
     override fun list(v: Rt_Value): Iterable<Rt_Value> = v.asCollection()
 }
 
-object R_ForIterator_Map: R_ForIterator() {
-    override fun list(v: Rt_Value): Iterable<Rt_Value> = v.asMap().keys
+class R_ForIterator_Map(private val tupleType: R_TupleType): R_ForIterator() {
+    override fun list(v: Rt_Value): Iterable<Rt_Value> {
+        return Iterables.transform(v.asMap().entries) {
+            val key = it!!.key
+            val value = it!!.value
+            Rt_TupleValue(tupleType, listOf(key, value))
+        }
+    }
 }
 
 object R_ForIterator_Range: R_ForIterator() {
@@ -139,7 +173,7 @@ object R_ForIterator_Range: R_ForIterator() {
 }
 
 class R_ForStatement(
-        val varPtr: R_VarPtr,
+        val varDeclarator: R_VarDeclarator,
         val expr: R_Expr,
         val iterator: R_ForIterator,
         val stmt: R_Statement,
@@ -160,7 +194,7 @@ class R_ForStatement(
     private fun execute0(frame: Rt_CallFrame, list: Iterable<Rt_Value>): R_StatementResult? {
         var first = true
         for (item in list) {
-            frame.set(varPtr, item, !first)
+            varDeclarator.initialize(frame, item, !first)
             first = false
             val res = stmt.execute(frame)
             if (res != null) {

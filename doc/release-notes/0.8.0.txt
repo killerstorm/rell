@@ -76,7 +76,35 @@ return when(x) {
 See more examples in the Language Guide.
 
 
-5. Operators "++", "--"
+5. Tuple unpacking
+
+val t = (123, 'Hello');
+val (n, s) = t;           // n = 123, s = 'Hello'
+
+Works with arbitrarily nested tuples:
+
+val (n, (p, (x, y), q)) = calculate();
+
+Use special name "_" to ignore a tuple element:
+
+val (_, s) = (123, 'Hello'); // s = 'Hello'
+
+Variable types can be specified explicitly:
+
+val (n: integer, s: text) = (123, 'Hello');
+
+Can be used in "for" loop:
+
+val l: list<(integer, text)> = get_list();
+for ((n, s) in l) { ... }
+
+Iterating map entries:
+
+val m: map<integer, text> = get_map();
+for ((key, value) in m) { ... }
+
+
+6. Operators "++", "--"
 
 Increment and decrement operators existing in many languages:
 
@@ -96,7 +124,7 @@ object state {
 ++state.counter; // Executes SQL UPDATE.
 
 
-6. Uninitialized variables access check
+7. Uninitialized variables access check
 
 An attempt to use an uninitialized variable causes a compilation error:
 
@@ -120,7 +148,7 @@ if (condition) {
 return x; // Compilation error
 
 
-7. Late "val" initialization
+8. Late "val" initialization
 
 Not required anymore to specify an expression for "val" - a value can be assigned later:
 
@@ -136,7 +164,7 @@ y = 10; // Compilation error: val reassignment.
 return x; // Compilation error: uninitialized variable access
 
 
-8. Dead code check
+9. Dead code check
 
 Compilation error if there is code after "return":
 
@@ -146,7 +174,7 @@ if (condition) {
 }
 
 
-9. Blockchain meta-information
+10. Blockchain meta-information
 
 In order to check that declared external classes have correct structure, each blockchain stores the information about
 its classes in two tables: cX.sys.classes and cX.sys.attributes, where X is chain_id.
@@ -157,7 +185,7 @@ The information in the meta tables for a blockchain C is checked when starting a
 external blockchain.
 
 
-10. Changes in the blockchain configuration structure:
+11. Changes in the blockchain configuration structure:
 
 All Rell-related settings are now under the path "gtx.rell":
 
@@ -173,7 +201,7 @@ All Rell-related settings are now under the path "gtx.rell":
 - gtx.rell.sqllog - when set to 1, all executed SQL queries are logged
 
 
-11. Table naming changed
+12. Table naming changed
 
 Tables for classes and objects are now named "cX.Y" instead of "cX_Y", where "X" is a chain_id and "Y" is a name
 of a class/object.
@@ -181,6 +209,6 @@ of a class/object.
 For classes and objects defined in a namespace, the fully-qualified name is used, e. g. "c0.foo.bar.user".
 
 
-12. Bug fixed: slow compilation
+13. Bug fixed: slow compilation
 
 There was a bug which made compilation of large files (~1000+ lines) considerably slow.

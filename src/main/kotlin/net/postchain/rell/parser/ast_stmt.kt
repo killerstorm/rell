@@ -17,31 +17,88 @@ class S_EmptyStatement(pos: S_Pos): S_Statement(pos) {
     override fun compile(ctx: C_ExprContext) = C_Statement(R_EmptyStatement, false)
 }
 
+sealed class S_VarDeclarator {
+    abstract fun compile(ctx: C_ExprContext, mutable: Boolean, rExprType: R_Type?, initedVars: MutableSet<C_VarId>): R_VarDeclarator
+}
+
+class S_SimpleVarDeclarator(val name: S_Name, val type: S_Type?): S_VarDeclarator() {
+    override fun compile(ctx: C_ExprContext, mutable: Boolean, rExprType: R_Type?, initedVars: MutableSet<C_VarId>): R_VarDeclarator {
+        val rType = type?.compile(ctx)
+
+        if (name.str == "_") {
+            if (rType != null) {
+                throw C_Error(name.pos, "var_wildcard_type", "Name '${name.str}' is a wildcard, it cannot have a type")
+            }
+            return R_WildcardVarDeclarator
+        }
+
+        if (type == null && rExprType == null) {
+            throw C_Error(name.pos, "stmt_var_notypeexpr:${name.str}", "Neither type nor expression specified for '${name.str}'")
+        } else if (rExprType != null) {
+            C_Utils.checkUnitType(name.pos, rExprType, "stmt_var_unit:${name.str}", "Expression for '${name.str}' returns nothing")
+        }
+
+        if (rExprType != null && rType != null) {
+            S_Type.match(rType, rExprType, name.pos, "stmt_var_type:${name.str}", "Type missmatch for '${name.str}'")
+        }
+
+        val rVarType = rType ?: rExprType!!
+        val (cId, ptr) = ctx.blkCtx.add(name, rVarType, mutable)
+
+        if (rExprType != null) {
+            initedVars.add(cId)
+        }
+
+        return R_SimpleVarDeclarator(ptr)
+    }
+}
+
+class S_TupleVarDeclarator(val pos: S_Pos, val subDeclarators: List<S_VarDeclarator>): S_VarDeclarator() {
+    override fun compile(ctx: C_ExprContext, mutable: Boolean, rExprType: R_Type?, initedVars: MutableSet<C_VarId>): R_VarDeclarator {
+        val rSubDeclarators = compileSub(ctx, mutable, rExprType, initedVars)
+        return R_TupleVarDeclarator(rSubDeclarators)
+    }
+
+    private fun compileSub(
+            ctx: C_ExprContext,
+            mutable: Boolean,
+            rExprType: R_Type?,
+            initedVars: MutableSet<C_VarId>
+    ): List<R_VarDeclarator> {
+        if (rExprType == null) {
+            return subDeclarators.map { it.compile(ctx, mutable, null, initedVars) }
+        }
+
+        if (rExprType !is R_TupleType) {
+            throw C_Error(pos, "var_notuple:$rExprType", "Expression must return a tuple, but it returns '$rExprType'")
+        }
+
+        val n1 = subDeclarators.size
+        val n2 = rExprType.fields.size
+        if (n1 != n2) {
+            throw C_Error(pos, "var_tuple_wrongsize:$n1:$n2:$rExprType",
+                    "Expression returns a tuple of $n2 element(s) instead of $n1 element(s): $rExprType")
+        }
+
+        return subDeclarators.withIndex().map { (i, subDeclarator) ->
+            subDeclarator.compile(ctx, mutable, rExprType.fields[i].type, initedVars)
+        }
+    }
+}
+
 class S_VarStatement(
         pos: S_Pos,
-        val name: S_Name,
-        val type: S_Type?,
+        val declarator: S_VarDeclarator,
         val expr: S_Expr?,
         val mutable: Boolean
 ): S_Statement(pos) {
     override fun compile(ctx: C_ExprContext): C_Statement {
         val rExpr = expr?.compile(ctx)?.value()?.toRExpr()
-        val rType = type?.compile(ctx)
 
-        if (rExpr == null && rType == null) {
-            throw C_Error(name.pos, "stmt_var_notypeexpr:${name.str}", "Neither type nor expression specified for '${name.str}'")
-        } else if (rExpr != null) {
-            C_Utils.checkUnitType(name.pos, rExpr.type, "stmt_var_unit:${name.str}", "Expression for '${name.str}' returns nothing")
-        }
+        val initedVars = mutableSetOf<C_VarId>()
+        var rDeclarator = declarator.compile(ctx, mutable, rExpr?.type, initedVars)
 
-        if (rExpr != null && rType != null) {
-            S_Type.match(rType, rExpr.type, name.pos, "stmt_var_type:${name.str}", "Type missmatch for '${name.str}'")
-        }
-
-        val rVarType = rType ?: rExpr!!.type
-        val (cId, ptr) = ctx.blkCtx.add(name, rVarType, mutable)
-        val rStmt = R_VarStatement(ptr, rExpr)
-        val initedVars = if (rExpr != null) setOf(cId) else setOf()
+        val rStmt = R_VarStatement(rDeclarator, rExpr)
         return C_Statement(rStmt, false, varsInitedAlways = initedVars, varsInitedSometimes = initedVars)
     }
 }
@@ -203,25 +260,26 @@ class S_WhileStatement(pos: S_Pos, val expr: S_Expr, val stmt: S_Statement): S_S
     }
 }
 
-class S_ForStatement(pos: S_Pos, val name: S_Name, val expr: S_Expr, val stmt: S_Statement): S_Statement(pos) {
+class S_ForStatement(pos: S_Pos, val declarator: S_VarDeclarator, val expr: S_Expr, val stmt: S_Statement): S_Statement(pos) {
     override fun compile(ctx: C_ExprContext): C_Statement {
         val rExpr = expr.compile(ctx).value().toRExpr()
         val exprType = rExpr.type
 
-        val (varType, iterator) = compileForIterator(exprType)
+        val (itemType, iterator) = compileForIterator(exprType)
 
         val loopId = ctx.blkCtx.entCtx.nextLoopId()
         val subBlkCtx = C_BlockContext(ctx.blkCtx.entCtx, ctx.blkCtx, loopId)
         val subCtx = C_RExprContext(subBlkCtx)
 
-        val (cId, ptr) = subBlkCtx.add(name, varType, false)
-        subBlkCtx.addVarsInited(setOf(cId), setOf(cId))
+        val initedVars = mutableSetOf<C_VarId>()
+        val rDeclarator = declarator.compile(subCtx, false, itemType, initedVars)
+        subBlkCtx.addVarsInited(initedVars, initedVars)
 
         val cBodyStmt = stmt.compile(subCtx)
         val rBodyStmt = cBodyStmt.rStmt
 
         val rBlock = subBlkCtx.makeFrameBlock()
-        val rStmt = R_ForStatement(ptr, rExpr, iterator, rBodyStmt, rBlock)
+        val rStmt = R_ForStatement(rDeclarator, rExpr, iterator, rBodyStmt, rBlock)
 
         return C_Statement(
                 rStmt,
@@ -235,7 +293,8 @@ class S_ForStatement(pos: S_Pos, val name: S_Name, val expr: S_Expr, val stmt: S
         if (exprType is R_CollectionType) {
             return Pair(exprType.elementType, R_ForIterator_Collection)
         } else if (exprType is R_MapType) {
-            return Pair(exprType.keyType, R_ForIterator_Map)
+            val itemType = R_TupleType(listOf(R_TupleField(null, exprType.keyType), R_TupleField(null, exprType.valueType)))
+            return Pair(itemType, R_ForIterator_Map(itemType))
         } else if (exprType == R_RangeType) {
             return Pair(R_IntegerType, R_ForIterator_Range)
         } else {

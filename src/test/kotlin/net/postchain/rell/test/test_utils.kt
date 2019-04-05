@@ -2,12 +2,16 @@ package net.postchain.rell.test
 
 import com.google.common.io.Files
 import net.postchain.gtx.GTXValue
-import net.postchain.rell.model.*
+import net.postchain.rell.model.R_Class
+import net.postchain.rell.model.R_ExternalParam
+import net.postchain.rell.model.R_Module
 import net.postchain.rell.module.GtxToRtContext
-import net.postchain.rell.runtime.Rt_GtxValue
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
+import net.postchain.rell.runtime.Rt_GtxValue
 import net.postchain.rell.runtime.Rt_Value
-import net.postchain.rell.sql.*
+import net.postchain.rell.sql.ROWID_COLUMN
+import net.postchain.rell.sql.SqlExecutor
+import net.postchain.rell.sql.SqlUtils
 import net.postchain.rell.toHex
 import org.apache.commons.configuration2.PropertiesConfiguration
 import org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder
@@ -16,7 +20,6 @@ import org.apache.commons.configuration2.io.ClasspathLocationStrategy
 import org.postgresql.util.PGobject
 import java.io.File
 import java.io.FileOutputStream
-import java.lang.IllegalStateException
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.ResultSet

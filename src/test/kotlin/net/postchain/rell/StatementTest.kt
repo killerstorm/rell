@@ -283,12 +283,12 @@ class StatementTest: BaseRellTest() {
 
         chkFull("$code = f(123);", listOf(Rt_IntValue(0)), "map<integer,text>[int[123]=text[Bob],int[246]=text[Alice]]")
         chkFull("$code = f(123).values();", listOf(Rt_IntValue(0)), "list<text>[text[Bob],text[Alice]]")
-        chkFull("$code = f(123).values().calculate(i);", listOf(Rt_IntValue(0)), "text[Bob]")
-        chkFull("$code = f(123).values().calculate(i);", listOf(Rt_IntValue(1)), "text[Alice]")
-        chkFull("$code = f(123).values().calculate(i).upperCase();", listOf(Rt_IntValue(0)), "text[BOB]")
-        chkFull("$code = f(123).values().calculate(i).upperCase();", listOf(Rt_IntValue(1)), "text[ALICE]")
-        chkFull("$code = f(123).values().calculate(i).upperCase().size();", listOf(Rt_IntValue(0)), "int[3]")
-        chkFull("$code = f(123).values().calculate(i).upperCase().size();", listOf(Rt_IntValue(1)), "int[5]")
+        chkFull("$code = f(123).values().get(i);", listOf(Rt_IntValue(0)), "text[Bob]")
+        chkFull("$code = f(123).values().get(i);", listOf(Rt_IntValue(1)), "text[Alice]")
+        chkFull("$code = f(123).values().get(i).upperCase();", listOf(Rt_IntValue(0)), "text[BOB]")
+        chkFull("$code = f(123).values().get(i).upperCase();", listOf(Rt_IntValue(1)), "text[ALICE]")
+        chkFull("$code = f(123).values().get(i).upperCase().size();", listOf(Rt_IntValue(0)), "int[3]")
+        chkFull("$code = f(123).values().get(i).upperCase().size();", listOf(Rt_IntValue(1)), "int[5]")
     }
 
     @Test fun testUninitializedVar() {

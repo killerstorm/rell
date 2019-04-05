@@ -743,6 +743,32 @@ Variables:
    var y = 123;
    var z: text = 'Hello';
 
+Tuple unpacking
+~~~~~~~~~~~~~~~
+
+::
+
+    val t = (123, 'Hello');
+    val (n, s) = t;           // n = 123, s = 'Hello'
+
+Works with arbitrarily nested tuples:
+
+::
+
+    val (n, (p, (x, y), q)) = calculate();
+
+Special symbol ``_`` is used to ignore a tuple element:
+
+::
+
+    val (_, s) = (123, 'Hello'); // s = 'Hello'
+
+Variable types can be specified explicitly:
+
+::
+
+    val (n: integer, s: text) = (123, 'Hello');
+
 Basic statements
 ----------------
 
@@ -871,6 +897,13 @@ For:
 
 The expression after ``in`` may return a ``range`` or a collection
 (``list``, ``set``, ``map``).
+
+Tuple unpacking can be used:
+
+::
+
+    val l: list<(integer, text)> = get_list();
+    for ((n, s) in l) { ... }
 
 While:
 

@@ -68,13 +68,13 @@ class LibMapTest: BaseRellTest(false) {
     }
 
     @Test fun testGet() {
-        chk("map<text,integer>().calculate('Bob')", "rt_err:fn_map_get_novalue:text[Bob]")
-        chk("map<text,integer>().calculate(123)", "ct_err:expr_call_argtypes:map<text,integer>.calculate:integer")
-        chk("['Bob':123].calculate('Bob')", "int[123]")
-        chk("['Bob':123].calculate('Alice')", "rt_err:fn_map_get_novalue:text[Alice]")
-        chk("['Bob':123,'Alice':456].calculate('Bob')", "int[123]")
-        chk("['Bob':123,'Alice':456].calculate('Alice')", "int[456]")
-        chk("['Bob':123,'Alice':456].calculate('Trudy')", "rt_err:fn_map_get_novalue:text[Trudy]")
+        chk("map<text,integer>().get('Bob')", "rt_err:fn_map_get_novalue:text[Bob]")
+        chk("map<text,integer>().get(123)", "ct_err:expr_call_argtypes:map<text,integer>.get:integer")
+        chk("['Bob':123].get('Bob')", "int[123]")
+        chk("['Bob':123].get('Alice')", "rt_err:fn_map_get_novalue:text[Alice]")
+        chk("['Bob':123,'Alice':456].get('Bob')", "int[123]")
+        chk("['Bob':123,'Alice':456].get('Alice')", "int[456]")
+        chk("['Bob':123,'Alice':456].get('Trudy')", "rt_err:fn_map_get_novalue:text[Trudy]")
     }
 
     @Test fun testSubscriptGet() {
@@ -209,7 +209,7 @@ class LibMapTest: BaseRellTest(false) {
 
     @Test fun testFor() {
         chkOp("for (k in ['Bob':123,'Alice':456,'Trudy':789]) print(k);")
-        chkStdout("Bob", "Alice", "Trudy")
+        chkStdout("(Bob,123)", "(Alice,456)", "(Trudy,789)")
     }
 
     @Test fun testMutableKey() {
