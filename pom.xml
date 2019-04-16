@@ -11,9 +11,11 @@
     <name>rellr</name>
 
     <properties>
+        <postchain.version>2.4.3</postchain.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <kotlin.version>1.2.21</kotlin.version>
         <junit.version>4.12</junit.version>
+        <dist-classifier>dist</dist-classifier>
     </properties>
 
     <profiles>
@@ -40,13 +42,14 @@
         <dependency>
             <groupId>net.postchain</groupId>
             <artifactId>postchain-base</artifactId>
-            <version>2.4.3</version>
+            <version>${postchain.version}</version>
             <scope>${rell.postchainScope}</scope>
+            <classifier>jar-with-dependencies</classifier>
         </dependency>
         <dependency>
             <groupId>net.postchain</groupId>
             <artifactId>postchain-devtools</artifactId>
-            <version>2.4.3</version>
+            <version>${postchain.version}</version>
             <scope>${rell.postchainScope}</scope>
         </dependency>
 
@@ -183,6 +186,26 @@
                         <configuration>
                             <finalName>${rell.jarName}</finalName>
                             <createDependencyReducedPom>false</createDependencyReducedPom>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <version>2.6</version>
+                <executions>
+                    <execution>
+                        <id>make-archive</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                        <configuration>
+                            <descriptors>
+                                <descriptor>src/main/assembly/targz.xml</descriptor>
+                            </descriptors>
+                            <classifier>${dist-classifier}</classifier>
                         </configuration>
                     </execution>
                 </executions>
