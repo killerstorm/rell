@@ -174,13 +174,18 @@ if (condition) {
 }
 
 
-10. Library: sorting a list
+10. New library functions
 
 Added methods list<T>.sorted(), list<T>._sort(), set<T>.sorted():
 
 val l: list<integer> = get_list();
 val sorted_copy = l.sorted();
 return sorted_copy;
+
+Function empty(T?) - returns true if a nullable value is null:
+
+val x: integer? = calc();
+if (empty(x)) return 0;
 
 
 11. Blockchain meta-information

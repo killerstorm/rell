@@ -19,6 +19,8 @@ object C_LibFunctions {
             .add("requireNotEmpty", C_SysFunction_Require_Collection)
             .add("requireNotEmpty", C_SysFunction_Require_Nullable)
 
+            .addEx("exists", R_BooleanType, listOf(C_ArgTypeMatcher_Nullable), R_SysFn_Exists)
+
             .add("integer", R_IntegerType, listOf(R_TextType), R_SysFn_Int_Parse)
             .add("integer", R_IntegerType, listOf(R_TextType, R_IntegerType), R_SysFn_Int_Parse)
 

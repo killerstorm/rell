@@ -86,6 +86,8 @@ Global Functions
 
 ``abs(integer): integer`` - absolute value
 
+``empty(T?): boolean`` - returns ``true`` if the argument is ``null`` and ``false`` otherwise
+
 ``is_signer(byte_array): boolean`` - returns ``true`` if a byte array is
 in the list of signers of current operation
 

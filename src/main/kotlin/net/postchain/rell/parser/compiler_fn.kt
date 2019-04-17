@@ -15,6 +15,10 @@ object C_ArgTypeMatcher_Any: C_ArgTypeMatcher() {
     override fun match(type: R_Type) = true
 }
 
+object C_ArgTypeMatcher_Nullable: C_ArgTypeMatcher() {
+    override fun match(type: R_Type) = type is R_NullableType
+}
+
 class C_ArgTypeMatcher_Simple(val targetType: R_Type): C_ArgTypeMatcher() {
     override fun match(type: R_Type) = targetType.isAssignableFrom(type)
 }

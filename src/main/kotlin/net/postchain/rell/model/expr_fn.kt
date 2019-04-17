@@ -5,8 +5,6 @@ import net.postchain.gtx.encodeGTXValue
 import net.postchain.rell.hexStringToByteArray
 import net.postchain.rell.module.GtxToRtContext
 import net.postchain.rell.runtime.*
-import java.lang.IllegalArgumentException
-import java.lang.NumberFormatException
 import java.util.*
 
 sealed class R_CallExpr(type: R_Type, val args: List<R_Expr>): R_Expr(type) {
@@ -173,6 +171,13 @@ object R_SysFn_Range: R_SysFunction_Common() {
                     "Invalid arguments for range: start = $start, end = $end, step = $step")
         }
         return Rt_RangeValue(start, end, step)
+    }
+}
+
+object R_SysFn_Exists: R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value {
+        val b = arg != Rt_NullValue
+        return Rt_BooleanValue(b)
     }
 }
 
