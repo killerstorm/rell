@@ -10,4 +10,4 @@ if [[ ! -f "$J" ]]; then
     exit 1
 fi
 
-${RELL_JAVA:-java} -cp "$J" net.postchain.rell.RellCLIKt "$@"
+${RELL_JAVA:-java} -cp "$J" net.postchain.rell.RellConfigGenKt "$@"

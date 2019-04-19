@@ -131,7 +131,7 @@ object RellTestUtils {
         val m = ast.compile(MAIN_FILE, includeResolver, gtx)
 
         TestSourcesRecorder.addSource(code)
-        return m
+        return m.rModule
     }
 
     private fun parse(code: String): S_ModuleDefinition {

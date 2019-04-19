@@ -215,7 +215,12 @@ All Rell-related settings are now under the path "gtx.rell":
 - gtx.rell.sqllog - when set to 1, all executed SQL queries are logged
 
 
-13. Table naming changed
+13. Utility that generates blockchain configuration
+
+rellcfg.sh - adds Rell source files (the main file and all files it includes) to a Postchain configuration XML file.
+
+
+14. Table naming changed
 
 Tables for classes and objects are now named "cX.Y" instead of "cX_Y", where "X" is a chain_id and "Y" is a name
 of a class/object.
@@ -223,6 +228,6 @@ of a class/object.
 For classes and objects defined in a namespace, the fully-qualified name is used, e. g. "c0.foo.bar.user".
 
 
-14. Bug fixed: slow compilation
+15. Bug fixed: slow compilation
 
 There was a bug which made compilation of large files (~1000+ lines) considerably slow.

@@ -18,6 +18,10 @@ import net.postchain.rell.sql.DefaultSqlExecutor
 import net.postchain.rell.sql.genSqlForChain
 import org.apache.commons.logging.LogFactory
 
+val RELL_VERSION = "v0.8"
+val CONFIG_RELL_FILES = "files_$RELL_VERSION"
+val CONFIG_RELL_SOURCES = "sources_$RELL_VERSION"
+
 private object StdoutRtPrinter : Rt_Printer() {
     override fun print(str: String) {
         println(str)
@@ -184,7 +188,7 @@ class RellPostchainModuleFactory(private val translateRtError: Boolean = true) :
         val includeResolver = C_IncludeResolver(C_VirtualIncludeDir(sourceCodes))
         val module = ast.compile(mainFileName, includeResolver, true)
 
-        val chainCtx = createChainContext(data, rellNode, module)
+        val chainCtx = createChainContext(data, rellNode, module.rModule)
 
         val chainDeps = catchRtErr {
             getGtxChainDependencies(data)
@@ -192,14 +196,12 @@ class RellPostchainModuleFactory(private val translateRtError: Boolean = true) :
 
         val sqlLogging = (rellNode["sqlLog"]?.asInteger() ?: 0L) != 0L
 
-        return RellPostchainModule(this, module, moduleName, chainCtx, chainDeps, sqlLogging)
+        return RellPostchainModule(this, module.rModule, moduleName, chainCtx, chainDeps, sqlLogging)
     }
 
     private fun getModuleCode(rellNode: Map<String, GTXValue>): Pair<Map<String, String>, String> {
-        val version = "v0.8"
-
-        val filesNode = rellNode["files_$version"]
-        val sourcesNode = rellNode["sources_$version"]
+        val filesNode = rellNode[CONFIG_RELL_FILES]
+        val sourcesNode = rellNode[CONFIG_RELL_SOURCES]
 
         if (filesNode == null && sourcesNode == null) {
             throw UserMistake("Neither files nor sources specified")

@@ -176,6 +176,11 @@ object GtxTestUtils {
         val s = encodeGtxStr(gtx)
         return s.replace('"', '\'')
     }
+
+    fun strToGtx(s: String): GTXValue {
+        val s2 = s.replace('\'', '"')
+        return decodeGtxStr(s2)
+    }
 }
 
 object TestSourcesRecorder {

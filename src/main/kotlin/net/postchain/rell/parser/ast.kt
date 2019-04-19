@@ -519,17 +519,22 @@ class S_IncludeDefinition(val pos: S_Pos, val pathPos: S_Pos, val path: String):
 
         val subDefCtx = C_DefinitionContext(ctx.nsCtx, ctx.chainCtx, subIncCtx, ctx.namespaceName)
         module.compileDefs(subDefCtx)
+
+        ctx.modCtx.addIncludedResource(resource)
     }
 }
 
 class S_ModuleDefinition(val definitions: List<S_Definition>) {
-    fun compile(path: String, includeResolver: C_IncludeResolver, gtx: Boolean): R_Module {
+    fun compile(path: String, includeResolver: C_IncludeResolver, gtx: Boolean): C_Module {
         val globalCtx = C_GlobalContext(gtx)
         val ctx = C_ModuleContext(globalCtx)
         val incCtx = C_IncludeContext.createTop(path, includeResolver)
         val defCtx = C_DefinitionContext(ctx.nsCtx, null, incCtx, null)
         compileDefs(defCtx)
-        return ctx.createModule()
+
+        val rModule = ctx.createModule()
+        val includes = ctx.includedResources()
+        return C_Module(rModule, includes)
     }
 
     fun compileDefs(defCtx: C_DefinitionContext) {

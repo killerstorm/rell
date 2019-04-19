@@ -15,7 +15,7 @@ fun main(args: Array<String>) {
     val text = file.readText(Charsets.UTF_8)
     val module = C_Parser.parse(file.name, text).compile(file.name, includeResolver, true)
 
-    val sqlCtx = Rt_SqlContext.createNoExternalChains(module, Rt_ChainSqlMapping(0))
+    val sqlCtx = Rt_SqlContext.createNoExternalChains(module.rModule, Rt_ChainSqlMapping(0))
     val compiled = genSql(sqlCtx, false, true)
 
     var path = args[0] + ".sql"

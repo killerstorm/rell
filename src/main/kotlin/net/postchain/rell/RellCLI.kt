@@ -42,7 +42,7 @@ fun main(args: Array<String>) {
     }
 }
 
-private fun getRoutineCaller(args: Args, module: R_Module): (SqlExecutor, Rt_SqlContext) -> Unit {
+private fun getRoutineCaller(args: RellCliArgs, module: R_Module): (SqlExecutor, Rt_SqlContext) -> Unit {
     val op = args.op
     if (op == null) return { _, _ -> }
 
@@ -65,8 +65,8 @@ private fun runWithSql(dbUrl: String?, logging: Boolean, code: (SqlExecutor) -> 
     }
 }
 
-private fun parseArgs(args: Array<String>): Args {
-    val argsObj = Args()
+private fun parseArgs(args: Array<String>): RellCliArgs {
+    val argsObj = RellCliArgs()
     val cl = CommandLine(argsObj)
     try {
         cl.parse(*args)
@@ -79,7 +79,7 @@ private fun parseArgs(args: Array<String>): Args {
 }
 
 @CommandLine.Command(name = "rell", description = ["Executes a rell program"])
-private class Args {
+private class RellCliArgs {
     @CommandLine.Option(names = ["--dburl"], paramLabel =  "URL",
             description =  ["Database JDBC URL, e. g. jdbc:postgresql://localhost/relltestdb?user=relltestuser&password=1234"])
     var dburl: String? = null
@@ -116,7 +116,8 @@ private fun compileModule(rellPath: String): R_Module {
         System.err.println("ERROR ${e.pos} ${e.errMsg}")
         exitProcess(1)
     }
-    return module
+
+    return module.rModule
 }
 
 private fun findRoutine(module: R_Module, name: String): Pair<R_Routine, Rt_OpContext?> {

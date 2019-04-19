@@ -7,7 +7,6 @@ fun String.hexStringToByteArray(): ByteArray = DatatypeConverter.parseHexBinary(
 fun ByteArray.toHex(): String = DatatypeConverter.printHexBinary(this).toLowerCase()
 
 object CommonUtils {
-
     fun <T> split(lst: MutableList<T>, partSize: Int): List<MutableList<T>> {
         val s = lst.size
         if (s <= partSize) {
