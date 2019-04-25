@@ -5,6 +5,8 @@ import com.github.h0tk3y.betterParse.parser.parseToEnd
 import net.postchain.rell.model.*
 import java.util.*
 
+class C_CommonError(val code: String, val msg: String): RuntimeException(msg)
+
 object C_Utils {
     fun toDbExpr(pos: S_Pos, rExpr: R_Expr): Db_Expr {
         val type = rExpr.type
@@ -98,10 +100,14 @@ object C_Parser {
         // of an operation, it returns the position of the beginning of the operation.
         // Following workaround handles this by tracking the position of the farthest reached token (seems to work fine).
 
-        var maxRowCol = S_Pos(file, 1, 1)
+        var maxRow = 1
+        var maxCol = 1
 
         val tokenSeq = S_Grammar.tokenizer.tokenize(sourceCode) {
-            if (!it.type.ignored) maxRowCol = S_Pos(it)
+            if (!it.type.ignored) {
+                maxRow = it.row
+                maxCol = it.column
+            }
         }
 
         try {
@@ -110,7 +116,8 @@ object C_Parser {
             }
             return ast
         } catch (e: ParseException) {
-            throw C_Error(maxRowCol, "syntax", "Syntax error")
+            val pos = S_BasicPos(file, maxRow, maxCol)
+            throw C_Error(pos, "syntax", "Syntax error")
         }
     }
 

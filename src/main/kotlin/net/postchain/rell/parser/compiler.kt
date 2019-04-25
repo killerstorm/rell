@@ -2,7 +2,12 @@ package net.postchain.rell.parser
 
 import net.postchain.rell.model.*
 
-class C_Error(val pos: S_Pos, val code: String, val errMsg: String): Exception("$pos $errMsg")
+class C_Error(
+        val pos: S_Pos,
+        val code: String,
+        val errMsg: String,
+        val posStack: List<S_Pos> = listOf(pos)
+): RuntimeException("$pos $errMsg")
 
 data class C_VarId(val id: Int, val name: String)
 data class C_LoopId(val id: Int)
@@ -35,7 +40,7 @@ class C_UserGlobalFunction(val name: String, val fnKey: Int): C_GlobalFunction()
     }
 }
 
-class C_Module(val rModule: R_Module, val includes: List<C_IncludeResource>)
+class C_Module(val rModule: R_Module)
 
 class C_GlobalContext(val gtx: Boolean) {
     private var frameBlockIdCtr = 0L
@@ -86,8 +91,6 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
     private val allRecords = mutableMapOf<String, R_RecordType>()
     private val allOperations = mutableMapOf<String, R_Operation>()
     private val allQueries = mutableMapOf<String, R_Query>()
-
-    private val includedResources = mutableListOf<C_IncludeResource>()
 
     private var entityCount: Int = 0
     private var functionCount: Int = 0
@@ -150,10 +153,6 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
         return chain
     }
 
-    fun addIncludedResource(resource: C_IncludeResource) {
-        includedResources.add(resource)
-    }
-
     fun checkPass(minPass: C_ModulePass?, maxPass: C_ModulePass?) {
         if (minPass != null) {
             check(currentPass >= minPass) { "Expected pass >= $minPass, actual $currentPass" }
@@ -211,8 +210,6 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
                 externalChains.values.toList()
         )
     }
-
-    fun includedResources() = includedResources.toList()
 
     private fun processRecords() {
         val records = allRecords.values
@@ -460,7 +457,7 @@ class C_NamespaceContext(
         val oldType = names[name.str]
         if (oldType != null) {
             throw C_Error(name.pos, "name_conflict:${oldType.description}:${name.str}",
-                    "Name conflict: ${oldType.description} '$name.str' exists")
+                    "Name conflict: ${oldType.description} '${name.str}' exists")
         }
         names[name.str] = type
         return fullName(name.str)

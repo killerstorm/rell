@@ -22,7 +22,7 @@ class RellConfigGenTest {
 
     @Test fun testNoTemplateIncludedFiles() {
         val files = mapOf("main.rell" to "include 'foo';", "foo.rell" to "include 'bar';", "bar.rell" to "class bar {}")
-        val expFiles = "{'main.rell':'include \\u0027foo\\u0027;','bar.rell':'class bar {}','foo.rell':'include \\u0027bar\\u0027;'}"
+        val expFiles = "{'main.rell':'include \\u0027foo\\u0027;','foo.rell':'include \\u0027bar\\u0027;','bar.rell':'class bar {}'}"
         chkCfg(files, null, "{'gtx':{'rell':{'mainFile':'main.rell','sources_v0.8':$expFiles}}}")
     }
 

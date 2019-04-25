@@ -6,6 +6,7 @@ import net.postchain.rell.model.R_Class
 import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.module.GtxToRtContext
+import net.postchain.rell.module.RELL_VERSION
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_GtxValue
 import net.postchain.rell.runtime.Rt_Value
@@ -185,17 +186,17 @@ object GtxTestUtils {
 
 object TestSourcesRecorder {
     private val ENABLED = false
-    private val SOURCES_FILE: String = System.getProperty("user.home") + "/testsources.rell"
+    private val SOURCES_FILE: String = System.getProperty("user.home") + "/testsources-$RELL_VERSION.rell"
 
     private val sync = Any()
-    private val sources = mutableSetOf<String>()
+    private val sources = mutableMapOf<String, String>()
     private var shutdownHookInstalled = false
 
-    fun addSource(code: String) {
+    fun addSource(code: String, result: String) {
         if (!ENABLED) return
 
         synchronized (sync) {
-            sources.add(code.trim())
+            sources[code.trim()] = result
             if (!shutdownHookInstalled) {
                 val thread = Thread(TestSourcesRecorder::saveSources)
                 thread.name = "SaveSources"
@@ -215,8 +216,10 @@ object TestSourcesRecorder {
 
     private fun saveSourcesSingleFile(f: File) {
         val buf = StringBuilder()
-        for (code in sources) {
-            buf.append(code + "\n")
+        for ((code, result) in sources) {
+            if (result == "OK") {
+                buf.append(code + "\n")
+            }
         }
         Files.write(buf.toString(), f, Charsets.UTF_8)
         printNotice(sources.size, f)
@@ -226,14 +229,19 @@ object TestSourcesRecorder {
         FileOutputStream(f).use { fout ->
             ZipOutputStream(fout).use { zout ->
                 var i = 0
-                for (code in sources) {
+                for ((code, result) in sources) {
+                    val str = codeToString(code, result)
                     zout.putNextEntry(ZipEntry(String.format("%04d.rell", i)))
-                    zout.write(code.toByteArray())
+                    zout.write(str.toByteArray())
                     i++
                 }
             }
         }
         printNotice(sources.size, f)
+    }
+
+    private fun codeToString(code: String, result: String): String {
+        return "$code\n--==[RESULT]==--\n$result"
     }
 
     private fun printNotice(count: Int, f: File) {

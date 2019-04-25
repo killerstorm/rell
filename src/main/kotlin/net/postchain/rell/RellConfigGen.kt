@@ -66,14 +66,15 @@ fun makeRellPostchainConfig(resolver: C_IncludeResolver, mainFile: String, templ
 
 private fun discoverBundleFiles(resolver: C_IncludeResolver, mainFile: String): Map<String, String> {
     val mainCode = try {
-        resolver.read(mainFile)
+        val resource = resolver.resolve(mainFile)
+        resource.file.readText()
     } catch (e: Exception) {
         throw RellCfgErr(e.message ?: "unknown")
     }
 
-    val module = try {
+    val includes = try {
         val ast = C_Parser.parse(mainFile, mainCode)
-        ast.compile(mainFile, resolver, true)
+        ast.getIncludes(mainFile, resolver, nested = true, fail = true)
     } catch (e: C_Error) {
         throw RellCfgErr(e.message!!)
     }
@@ -81,9 +82,9 @@ private fun discoverBundleFiles(resolver: C_IncludeResolver, mainFile: String): 
     val files = mutableMapOf<String, String>()
     files[mainFile] = mainCode
 
-    for (include in module.includes) {
+    for (include in includes) {
         if (include.path !in files) {
-            files[include.path] = include.file.read()
+            files[include.path] = include.file.readText()
         }
     }
 

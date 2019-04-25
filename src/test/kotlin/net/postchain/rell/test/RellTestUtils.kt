@@ -127,11 +127,20 @@ object RellTestUtils {
     fun parseModule(code: String, gtx: Boolean, includeDir: C_IncludeDir): R_Module {
         val includeResolver = C_IncludeResolver(includeDir)
 
-        val ast = parse(code)
-        val m = ast.compile(MAIN_FILE, includeResolver, gtx)
-
-        TestSourcesRecorder.addSource(code)
-        return m.rModule
+        var result: String? = null
+        try {
+            val ast = parse(code)
+            val m = ast.compile(MAIN_FILE, includeResolver, gtx)
+            result = "OK"
+            return m.rModule
+        } catch (e: C_Error) {
+            result = "ct_err:${e.code}"
+            throw e
+        } finally {
+            if (result != null) {
+                TestSourcesRecorder.addSource(code, result)
+            }
+        }
     }
 
     private fun parse(code: String): S_ModuleDefinition {
