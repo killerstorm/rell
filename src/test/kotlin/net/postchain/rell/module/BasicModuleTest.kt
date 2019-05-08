@@ -4,7 +4,7 @@ import net.postchain.base.SECP256K1CryptoSystem
 import net.postchain.common.hexStringToByteArray
 import net.postchain.devtools.IntegrationTest
 import net.postchain.devtools.KeyPairHelper
-import net.postchain.devtools.SingleChainTestNode
+import net.postchain.devtools.PostchainTestNode
 import net.postchain.gtx.GTXDataBuilder
 import net.postchain.gtx.GTXValue
 import net.postchain.gtx.gtx
@@ -105,17 +105,17 @@ class BasicModuleTest : IntegrationTest() {
         return makeTx(ownerIdx, "set_state", gtx(value))
     }
 
-    private fun setupNodeAndObjects(): SingleChainTestNode {
+    private fun setupNodeAndObjects(): PostchainTestNode {
         val node = setupNode()
         insertObjects(node)
         return node
     }
 
-    private fun setupNode(): SingleChainTestNode {
+    private fun setupNode(): PostchainTestNode {
         return createNode(0, "/net/postchain/rell/basic/blockchain_config.xml")
     }
 
-    private fun insertObjects(node: SingleChainTestNode) {
+    private fun insertObjects(node: PostchainTestNode) {
         enqueueTx(node, makeTx_insertCity(0, "New York"), 0)
         enqueueTx(node, makeTx_insertCity(0, "Los Angeles"), 0)
         enqueueTx(node, makeTx_insertCity(0, "Seattle"), 0)
@@ -125,12 +125,12 @@ class BasicModuleTest : IntegrationTest() {
         buildBlockAndCommit(node)
     }
 
-    private fun chkQuery(node: SingleChainTestNode, json: String, expected: String) {
+    private fun chkQuery(node: PostchainTestNode, json: String, expected: String) {
         val actual = callQuery(node, json)
         assertEquals(expected, actual)
     }
 
-    private fun callQuery(node: SingleChainTestNode, json: String): String {
+    private fun callQuery(node: PostchainTestNode, json: String): String {
         val blockQueries = node.getBlockchainInstance().getEngine().getBlockQueries()
         val actual = blockQueries.query(json).get()
         return actual

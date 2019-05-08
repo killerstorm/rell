@@ -2,16 +2,18 @@ package net.postchain.rell.test
 
 import net.postchain.core.EContext
 import net.postchain.core.UserMistake
+import net.postchain.base.BaseEContext
+import net.postchain.base.data.SQLDatabaseAccess
 import net.postchain.gtx.*
 import net.postchain.rell.hexStringToByteArray
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.module.RellPostchainModuleFactory
-import net.postchain.rell.parser.C_EmptyIncludeDir
 import net.postchain.rell.sql.SqlExecutor
 import java.sql.Connection
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.fail
+
 
 class RellGtxTester(
         tstCtx: RellTestContext,
@@ -34,7 +36,7 @@ class RellGtxTester(
         val gtxModule = createGtxModule(moduleCode)
 
         sqlExec.transaction {
-            val ctx = EContext(conn, chainId, nodeId)
+            val ctx = BaseEContext(conn, chainId, nodeId, SQLDatabaseAccess())
             GTXSchemaManager.initializeDB(ctx)
             gtxModule.initializeDB(ctx)
         }
@@ -61,7 +63,7 @@ class RellGtxTester(
             val module = eval.wrapCt { createGtxModule(moduleCode) }
 
             val conn = getSqlConn()
-            val ctx = EContext(conn, chainId, nodeId)
+            val ctx = BaseEContext(conn, chainId, nodeId, SQLDatabaseAccess())
 
             val res = module.query(ctx, "q", argsGtx)
             GtxTestUtils.gtxToStr(res)

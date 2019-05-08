@@ -1,6 +1,8 @@
 #!/bin/bash
 
-scriptdir=`dirname $0`
+set -eu
 
-java -cp $scriptdir/postchain-base-${postchain.version}-jar-with-dependencies.jar:$APPCP net.postchain.AppKt $@
+scriptdir=`dirname ${BASH_SOURCE[0]}`
+
+${RELL_JAVA:-java} -cp "$scriptdir/lib/*" net.postchain.AppKt $@
 

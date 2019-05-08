@@ -1,13 +1,4 @@
 #!/bin/bash
-set -eu
 
-D="$(dirname $0)"
+target/rellr-?.?.?-dist/postchain-node/rell.sh $@
 
-J="$D/target/rellr-0.8.0-console.jar"
-
-if [[ ! -f "$J" ]]; then
-    >&2 echo "File not found: '$J'"
-    exit 1
-fi
-
-${RELL_JAVA:-java} -cp "$J" net.postchain.rell.RellCLIKt "$@"

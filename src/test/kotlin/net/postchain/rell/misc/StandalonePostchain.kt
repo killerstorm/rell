@@ -1,9 +1,10 @@
 package net.postchain.rell.misc
 
+import net.postchain.common.hexStringToByteArray
 import net.postchain.devtools.IntegrationTest
-import net.postchain.devtools.SingleChainTestNode
+import net.postchain.devtools.PostchainTestNode
+import net.postchain.gtx.GTXValue
 import net.postchain.gtx.gtxml.GTXMLValueParser
-import org.apache.commons.configuration2.Configuration
 import java.io.File
 
 fun main(args: Array<String>) {
@@ -24,18 +25,31 @@ fun main(args: Array<String>) {
 }
 
 private class PostchainAccess: IntegrationTest() {
-    fun createNode(configFile: String): SingleChainTestNode {
-        val nodeConfig = createConfigStub(0, 1, DEFAULT_CONFIG_FILE)
-        val blockchainConfig = GTXMLValueParser.parseGTXMLValue(File(configFile).readText())
-        return SingleChainTestNode(nodeConfig, blockchainConfig)
-                .apply { startBlockchain() }
-                .also { nodes.add(it) }
+    fun createNode(configFile: String): PostchainTestNode {
+        val nodeIndex = 0
+        val totalNodesCount = 1
+        val preWipeDatabase = true
+
+        val nodeConfigProvider = createNodeConfig(nodeIndex, totalNodesCount, DEFAULT_CONFIG_FILE)
+        val nodeConfig = nodeConfigProvider.getConfiguration()
+        nodesNames[nodeConfig.pubKey] = "$nodeIndex"
+        val blockchainConfig = readBlockchainConfigStub(configFile)
+        val chainId = nodeConfig.activeChainIds.first().toLong()
+        val blockchainRid = blockchainRids[chainId]!!.hexStringToByteArray()
+
+        return PostchainTestNode(nodeConfigProvider, preWipeDatabase)
+                .apply {
+                    addBlockchain(chainId, blockchainRid, blockchainConfig)
+                    startBlockchain()
+                }
+                .also {
+                    nodes.add(it)
+                }
+
     }
 
-    private fun createConfigStub(nodeIndex: Int, nodeCount: Int, configFile: String): Configuration {
-        val m = javaClass.superclass.getDeclaredMethod("createConfig", Integer.TYPE, Integer.TYPE, Class.forName("java.lang.String"))
-        m.isAccessible = true
-        val res = m.invoke(this, nodeIndex, nodeCount, configFile)
-        return res as Configuration
+    private fun readBlockchainConfigStub(configFile: String): GTXValue {
+        val file = File(configFile)
+        return GTXMLValueParser.parseGTXMLValue(file.readText())
     }
 }

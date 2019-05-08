@@ -5,11 +5,11 @@
         <format>tar.gz</format>
         <format>dir</format>
     </formats>
-
+    <baseDirectory>postchain-node</baseDirectory>
 
     <dependencySets>
         <dependencySet>
-            <outputDirectory></outputDirectory>
+            <outputDirectory>/lib</outputDirectory>
             <useTransitiveDependencies>false</useTransitiveDependencies>
             <useProjectArtifact>false</useProjectArtifact>
             <includes>
@@ -30,7 +30,7 @@
             <source>
                 target/${rell.jarName}.jar
             </source>
-            <outputDirectory>/</outputDirectory>
+            <outputDirectory>/lib</outputDirectory>
         </file>
     </files>
 
@@ -43,10 +43,6 @@
             </includes>
             <fileMode>0755</fileMode>
             <filtered>true</filtered>
-        </fileSet>
-        <fileSet>
-            <directory>src/main/resources/config</directory>
-            <outputDirectory>/config</outputDirectory>
         </fileSet>
     </fileSets>
 </assembly>

@@ -16,7 +16,7 @@ Simplest way to build:
     ```  
     Switch to the right tag:  
     ```
-    git checkout ver-2.4.3
+    git checkout ver-2.5
     ```
 2. Build `postchain2`:  
     ```
