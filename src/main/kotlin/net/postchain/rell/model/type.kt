@@ -1,6 +1,6 @@
 package net.postchain.rell.model
 
-import net.postchain.gtx.GTXValue
+import net.postchain.gtv.Gtv
 import net.postchain.rell.hexStringToByteArray
 import net.postchain.rell.module.*
 import net.postchain.rell.runtime.*
@@ -94,8 +94,8 @@ sealed class R_Type(val name: String) {
 
     open fun fromCli(s: String): Rt_Value = throw UnsupportedOperationException()
 
-    fun rtToGtx(rt: Rt_Value, human: Boolean): GTXValue = gtxConversion.rtToGtx(rt, human)
-    fun gtxToRt(ctx: GtxToRtContext, gtx: GTXValue, human: Boolean) = gtxConversion.gtxToRt(ctx, gtx, human)
+    fun rtToGtx(rt: Rt_Value, human: Boolean): Gtv = gtxConversion.rtToGtx(rt, human)
+    fun gtxToRt(ctx: GtxToRtContext, gtx: Gtv, human: Boolean) = gtxConversion.gtxToRt(ctx, gtx, human)
     protected abstract fun createGtxConversion(): GtxRtConversion
 
     abstract fun toStrictString(): String

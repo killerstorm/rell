@@ -1,9 +1,11 @@
 package net.postchain.rell.test
 
-import net.postchain.core.EContext
 import net.postchain.core.UserMistake
 import net.postchain.base.BaseEContext
 import net.postchain.base.data.SQLDatabaseAccess
+import net.postchain.gtv.GtvDictionary
+import net.postchain.gtv.Gtv
+import net.postchain.gtv.GtvString
 import net.postchain.gtx.*
 import net.postchain.rell.hexStringToByteArray
 import net.postchain.rell.model.R_Module
@@ -89,23 +91,23 @@ class RellGtxTester(
         return module
     }
 
-    private fun moduleConfig(moduleCode: String): GTXValue {
-        val rellMap = mutableMapOf<String, GTXValue>()
-        rellMap["mainFile"] = StringGTXValue(RellTestUtils.MAIN_FILE)
+    private fun moduleConfig(moduleCode: String): Gtv {
+        val rellMap = mutableMapOf<String, Gtv>()
+        rellMap["mainFile"] = GtvString(RellTestUtils.MAIN_FILE)
 
         val sourceCodes = files(moduleCode)
-        rellMap["sources_v0.8"] = DictGTXValue(sourceCodes.mapValues { (_, v) -> StringGTXValue(v) })
+        rellMap["sources_v0.8"] = GtvDictionary(sourceCodes.mapValues { (_, v) -> GtvString(v) })
 
         if (moduleArgs != null) {
             rellMap["moduleArgs"] = GtxTestUtils.decodeGtxStr(moduleArgs!!)
         }
 
-        val cfgMap = mutableMapOf<String, GTXValue>()
-        cfgMap["gtx"] = DictGTXValue(mapOf("rell" to DictGTXValue(rellMap)))
+        val cfgMap = mutableMapOf<String, Gtv>()
+        cfgMap["gtx"] = GtvDictionary(mapOf("rell" to GtvDictionary(rellMap)))
         for ((key, value) in extraModuleConfig) {
             cfgMap[key] = GtxTestUtils.decodeGtxStr(value)
         }
 
-        return DictGTXValue(cfgMap)
+        return GtvDictionary(cfgMap)
     }
 }

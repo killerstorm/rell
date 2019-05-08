@@ -1,6 +1,6 @@
 package net.postchain.rell
 
-import net.postchain.gtx.GTXNull
+import net.postchain.gtv.GtvNull
 import net.postchain.rell.model.R_ClassType
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.runtime.*
@@ -27,7 +27,7 @@ class InterpOpTest: AbstractOpTest() {
         val args2 = args.map { it as InterpTstVal }
         val types = args2.map { it.type }
 
-        val chainCtx = Rt_ChainContext(GTXNull, Rt_NullValue)
+        val chainCtx = Rt_ChainContext(GtvNull, Rt_NullValue)
         val globalCtx = Rt_GlobalContext(Rt_FailingPrinter, Rt_FailingPrinter, NoConnSqlExecutor, null, chainCtx)
 
         val res = processExpr0(expr2, types) { module ->

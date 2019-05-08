@@ -5,6 +5,8 @@ import net.postchain.core.EContext
 import net.postchain.core.Transactor
 import net.postchain.core.TxEContext
 import net.postchain.core.UserMistake
+import net.postchain.gtv.GtvDictionary
+import net.postchain.gtv.Gtv
 import net.postchain.gtx.*
 import net.postchain.rell.CommonUtils
 import net.postchain.rell.model.R_ExternalParam
@@ -36,7 +38,7 @@ private object LogRtPrinter : Rt_Printer() {
     }
 }
 
-private fun convertArgs(ctx: GtxToRtContext, params: List<R_ExternalParam>, args: List<GTXValue>, human: Boolean): List<Rt_Value> {
+private fun convertArgs(ctx: GtxToRtContext, params: List<R_ExternalParam>, args: List<Gtv>, human: Boolean): List<Rt_Value> {
     return args.mapIndexed { index, arg ->
         val type = params[index].type
         type.gtxToRt(ctx, arg, human)
@@ -123,7 +125,7 @@ class RellPostchainModule(
         }
     }
 
-    override fun query(ctx: EContext, name: String, args: GTXValue): GTXValue {
+    override fun query(ctx: EContext, name: String, args: Gtv): Gtv {
         val rQuery = rModule.queries[name] ?: throw UserMistake("Query not found: '$name'")
 
         val modCtx = makeRtModuleContext(ctx, null)
@@ -139,8 +141,8 @@ class RellPostchainModule(
         return gtxResult
     }
 
-    private fun translateQueryArgs(modCtx: Rt_ModuleContext, rQuery: R_Query, gtxArgs: GTXValue): List<Rt_Value> {
-        gtxArgs is DictGTXValue
+    private fun translateQueryArgs(modCtx: Rt_ModuleContext, rQuery: R_Query, gtxArgs: Gtv): List<Rt_Value> {
+        gtxArgs is GtvDictionary
 
         val argMap = gtxArgs.asDict().filterKeys { it != "type" }
         val actArgNames = argMap.keys
@@ -176,7 +178,7 @@ class RellPostchainModuleFactory(
         private val wrapCtErrors: Boolean = true,
         private val wrapRtErrors: Boolean = true
 ) : GTXModuleFactory {
-    override fun makeModule(data: GTXValue, blockchainRID: ByteArray): GTXModule {
+    override fun makeModule(data: Gtv, blockchainRID: ByteArray): GTXModule {
         val gtxNode = data.asDict().getValue("gtx").asDict()
         val rellNode = gtxNode.getValue("rell").asDict()
 
@@ -221,7 +223,7 @@ class RellPostchainModuleFactory(
         return RellPostchainModule(this, module, moduleName, chainCtx, chainDeps, sqlLogging)
     }
 
-    private fun getModuleCode(rellNode: Map<String, GTXValue>): Pair<Map<String, String>, String> {
+    private fun getModuleCode(rellNode: Map<String, Gtv>): Pair<Map<String, String>, String> {
         val filesNode = rellNode[CONFIG_RELL_FILES]
         val sourcesNode = rellNode[CONFIG_RELL_SOURCES]
 
@@ -246,7 +248,7 @@ class RellPostchainModuleFactory(
         return Pair(sourceCodes, mainFileName)
     }
 
-    private fun createChainContext(rawConfig: GTXValue, rellNode: Map<String, GTXValue>, rModule: R_Module): Rt_ChainContext {
+    private fun createChainContext(rawConfig: Gtv, rellNode: Map<String, Gtv>, rModule: R_Module): Rt_ChainContext {
         val argsRec = rModule.moduleArgsRecord
         val gtxArgs = rellNode["moduleArgs"]
 
@@ -260,7 +262,7 @@ class RellPostchainModuleFactory(
         return Rt_ChainContext(rawConfig, args)
     }
 
-    private fun getGtxChainDependencies(data: GTXValue): Map<String, ByteArray> {
+    private fun getGtxChainDependencies(data: Gtv): Map<String, ByteArray> {
         val gtxDeps = data["dependencies"]
         if (gtxDeps == null) return mapOf()
 

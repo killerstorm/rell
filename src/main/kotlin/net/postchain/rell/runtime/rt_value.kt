@@ -3,9 +3,9 @@ package net.postchain.rell.runtime
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.google.common.math.LongMath
-import net.postchain.gtx.GTXNull
-import net.postchain.gtx.GTXValue
-import net.postchain.gtx.make_gtx_gson
+import net.postchain.gtv.Gtv
+import net.postchain.gtv.GtvNull
+import net.postchain.gtv.make_gtv_gson
 import net.postchain.rell.model.*
 import net.postchain.rell.toHex
 import java.util.*
@@ -33,7 +33,7 @@ sealed class Rt_Value {
     open fun asEnum(): R_EnumAttr = throw errType("Enum")
     open fun asRange(): Rt_RangeValue = throw errType("Range")
     open fun asObjectId(): Long = throw errType("Class")
-    open fun asGtxValue(): GTXValue = throw errType("GTXValue")
+    open fun asGtxValue(): Gtv = throw errType("GTXValue")
     open fun asFormatArg(): Any = toString()
 
     abstract fun toStrictString(showTupleFieldNames: Boolean = true): String
@@ -366,7 +366,7 @@ class Rt_RangeValue(val start: Long, val end: Long, val step: Long): Rt_Value(),
     }
 }
 
-class Rt_GtxValue(val value: GTXValue): Rt_Value() {
+class Rt_GtxValue(val value: Gtv): Rt_Value() {
     override fun type() = R_GtxValueType
     override fun valueType() = "GTXValue"
     override fun asGtxValue() = value
@@ -385,16 +385,16 @@ class Rt_GtxValue(val value: GTXValue): Rt_Value() {
     override fun hashCode(): Int = value.hashCode()
 
     companion object {
-        private val GSON = make_gtx_gson()
+        private val GSON = make_gtv_gson()
 
-        fun gtxValueToJsonString(v: GTXValue): String {
-            val s = GSON.toJson(v, GTXValue::class.java)
+        fun gtxValueToJsonString(v: Gtv): String {
+            val s = GSON.toJson(v, Gtv::class.java)
             return s
         }
 
-        fun jsonStringToGtxValue(s: String): GTXValue {
-            val v = GSON.fromJson<GTXValue>(s, GTXValue::class.java)
-            return v ?: GTXNull
+        fun jsonStringToGtxValue(s: String): Gtv {
+            val v = GSON.fromJson<Gtv>(s, Gtv::class.java)
+            return v ?: GtvNull
         }
     }
 }

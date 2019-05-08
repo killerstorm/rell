@@ -1,6 +1,6 @@
 package net.postchain.rell
 
-import net.postchain.gtx.GTXNull
+import net.postchain.gtv.GtvNull
 import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.model.R_Routine
@@ -123,7 +123,7 @@ private fun callRoutine(
         opCtx: Rt_OpContext?,
         args: List<Rt_Value>
 ) {
-    val chainCtx = Rt_ChainContext(GTXNull, Rt_NullValue)
+    val chainCtx = Rt_ChainContext(GtvNull, Rt_NullValue)
     val globalCtx = Rt_GlobalContext(StdoutRtPrinter, LogRtPrinter, sqlExec, opCtx, chainCtx)
     val modCtx = Rt_ModuleContext(globalCtx, sqlCtx.module, sqlCtx)
     op.callTop(modCtx, args)

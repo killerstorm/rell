@@ -1,7 +1,7 @@
 package net.postchain.rell.runtime
 
 import com.google.common.collect.Sets
-import net.postchain.gtx.GTXValue
+import net.postchain.gtv.Gtv
 import net.postchain.rell.model.*
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.toHex
@@ -262,4 +262,4 @@ class Rt_EntityContext(val modCtx: Rt_ModuleContext, val dbUpdateAllowed: Boolea
 
 class Rt_OpContext(val lastBlockTime: Long, val transactionIid: Long, val signers: List<ByteArray>)
 
-class Rt_ChainContext(val rawConfig: GTXValue, val args: Rt_Value)
+class Rt_ChainContext(val rawConfig: Gtv, val args: Rt_Value)

@@ -1,7 +1,6 @@
 package net.postchain.rell.model
 
-import net.postchain.gtx.decodeGTXValue
-import net.postchain.gtx.encodeGTXValue
+import net.postchain.rell.PostchainUtils
 import net.postchain.rell.hexStringToByteArray
 import net.postchain.rell.module.GtxToRtContext
 import net.postchain.rell.runtime.*
@@ -392,7 +391,7 @@ object R_SysFn_Nop: R_SysFunction_1() {
 object R_SysFn_GtxValue_ToBytes: R_SysFunction_1() {
     override fun call(arg: Rt_Value): Rt_Value {
         val gtx = arg.asGtxValue()
-        val bytes = encodeGTXValue(gtx)
+        val bytes = PostchainUtils.gtvToBytes(gtx)
         return Rt_ByteArrayValue(bytes)
     }
 }
@@ -410,7 +409,7 @@ object R_SysFn_GtxValue_FromBytes: R_SysFunction_1() {
     override fun call(arg: Rt_Value): Rt_Value {
         val bytes = arg.asByteArray()
         return Rt_Utils.wrapErr("fn:GTXValue.fromBytes") {
-            val gtx = decodeGTXValue(bytes)
+            val gtx = PostchainUtils.bytesToGtv(bytes)
             Rt_GtxValue(gtx)
         }
     }
@@ -439,7 +438,7 @@ object R_SysFn_GtxValue_FromJson_Json: R_SysFunction_1() {
 class R_SysFn_Record_ToBytes(val type: R_RecordType): R_SysFunction_1() {
     override fun call(arg: Rt_Value): Rt_Value {
         val gtx = type.rtToGtx(arg, false)
-        val bytes = encodeGTXValue(gtx)
+        val bytes = PostchainUtils.gtvToBytes(gtx)
         return Rt_ByteArrayValue(bytes)
     }
 }
@@ -457,7 +456,7 @@ class R_SysFn_Record_FromBytes(val type: R_RecordType): R_SysFunction() {
         val arg = args[0]
         val bytes = arg.asByteArray()
         return Rt_Utils.wrapErr("fn:record:fromBytes") {
-            val gtx = decodeGTXValue(bytes)
+            val gtx = PostchainUtils.bytesToGtv(bytes)
             val convCtx = GtxToRtContext()
             val res = type.gtxToRt(convCtx, gtx, false)
             convCtx.finish(modCtx)

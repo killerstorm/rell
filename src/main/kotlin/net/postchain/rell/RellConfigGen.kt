@@ -1,11 +1,9 @@
 package net.postchain.rell
 
-import net.postchain.gtx.DictGTXValue
-import net.postchain.gtx.GTXValue
-import net.postchain.gtx.GTXValueType
-import net.postchain.gtx.StringGTXValue
-import net.postchain.gtx.gtxml.GTXMLValueEncoder
-import net.postchain.gtx.gtxml.GTXMLValueParser
+import net.postchain.gtv.Gtv
+import net.postchain.gtv.GtvDictionary
+import net.postchain.gtv.GtvString
+import net.postchain.gtv.GtvType
 import net.postchain.rell.module.CONFIG_RELL_FILES
 import net.postchain.rell.module.CONFIG_RELL_SOURCES
 import net.postchain.rell.parser.C_DiskIncludeDir
@@ -91,11 +89,11 @@ private fun discoverBundleFiles(resolver: C_IncludeResolver, mainFile: String): 
     return files
 }
 
-private fun getConfigTemplate(template: String?): GTXValue {
-    if (template == null) return DictGTXValue(mapOf())
+private fun getConfigTemplate(template: String?): Gtv {
+    if (template == null) return GtvDictionary(mapOf())
 
     try {
-        return GTXMLValueParser.parseGTXMLValue(template)
+        return PostchainUtils.xmlToGtv(template)
     } catch (e: Exception) {
         throw RellCfgErr("Failed to parse template XML: ${e.message}")
     }
@@ -130,13 +128,13 @@ private fun asDictNode(node: GtxNode): DictGtxNode {
     if (node !is DictGtxNode) {
         val pathStr = if (node.path == null) "<root>" else node.path
         val type = node.type()
-        throw RellCfgErr("Found $type instead of ${GTXValueType.DICT} ($pathStr)")
+        throw RellCfgErr("Found $type instead of ${GtvType.DICT} ($pathStr)")
     }
     return node
 }
 
-private fun generateConfigText(gtxConfig: GTXValue): String {
-    val xml = GTXMLValueEncoder.encodeXMLGTXValue(gtxConfig)
+private fun generateConfigText(gtxConfig: Gtv): String {
+    val xml = PostchainUtils.gtvToXml(gtxConfig)
     return xml
 }
 
@@ -162,14 +160,14 @@ private fun parseArgs(args: Array<String>): RellCfgArgs {
 private class RellCfgErr(msg: String): RuntimeException(msg)
 
 private sealed class GtxNode(val path: String?) {
-    abstract fun type(): GTXValueType
-    abstract fun toValue(): GTXValue
+    abstract fun type(): GtvType
+    abstract fun toValue(): Gtv
 
     companion object {
         fun subPath(parentPath: String?, key: String) = if (parentPath == null) key else "$parentPath.$key"
 
-        fun create(path: String?, value: GTXValue): GtxNode {
-            return if (value.type == GTXValueType.DICT) {
+        fun create(path: String?, value: Gtv): GtxNode {
+            return if (value.type == GtvType.DICT) {
                 val map = value.asDict().mapValues { (k, v) -> create(subPath(path, k), v) }
                 DictGtxNode(path, LinkedHashMap(map))
             } else {
@@ -179,20 +177,20 @@ private sealed class GtxNode(val path: String?) {
     }
 }
 
-private class TermGtxNode(path: String?, private val value: GTXValue): GtxNode(path) {
+private class TermGtxNode(path: String?, private val value: Gtv): GtxNode(path) {
     override fun type() = value.type
     override fun toValue() = value
 }
 
 private class DictGtxNode(path: String?, private val map: MutableMap<String, GtxNode>): GtxNode(path) {
-    override fun type() = GTXValueType.DICT
-    override fun toValue() = DictGTXValue(map.mapValues { (k, v) -> v.toValue() })
+    override fun type() = GtvType.DICT
+    override fun toValue() = GtvDictionary(map.mapValues { (k, v) -> v.toValue() })
 
     fun get(key: String) = map[key]
 
     fun putString(key: String, value: String) {
         val path = subPath(path, key)
-        map[key] = TermGtxNode(path, StringGTXValue(value))
+        map[key] = TermGtxNode(path, GtvString(value))
     }
 
     fun putDict(key: String): DictGtxNode {

@@ -5,9 +5,9 @@ import net.postchain.common.hexStringToByteArray
 import net.postchain.devtools.IntegrationTest
 import net.postchain.devtools.KeyPairHelper
 import net.postchain.devtools.PostchainTestNode
+import net.postchain.gtv.Gtv
+import net.postchain.gtv.GtvFactory.gtv
 import net.postchain.gtx.GTXDataBuilder
-import net.postchain.gtx.GTXValue
-import net.postchain.gtx.gtx
 import org.junit.Test
 import kotlin.test.assertEquals
 
@@ -28,19 +28,19 @@ class BasicModuleTest : IntegrationTest() {
 
     @Test fun testOpErrWrongArgCount() {
         val node = setupNode()
-        enqueueTx(node, makeTx(0, "insert_city", gtx("New York"), gtx("Foo")), 0)
+        enqueueTx(node, makeTx(0, "insert_city", gtv("New York"), gtv("Foo")), 0)
         buildBlockAndCommit(node) //TODO check the error somehow
     }
 
     @Test fun testOpErrWrongArgType() {
         val node = setupNode()
-        enqueueTx(node, makeTx(0, "insert_city", gtx(12345)), 0)
+        enqueueTx(node, makeTx(0, "insert_city", gtv(12345)), 0)
         buildBlockAndCommit(node) //TODO check the error somehow
     }
 
     @Test fun testOpErrRuntimeError() {
         val node = setupNode()
-        enqueueTx(node, makeTx(0, "op_integer_division", gtx(123), gtx(0)), 0)
+        enqueueTx(node, makeTx(0, "op_integer_division", gtv(123), gtv(0)), 0)
         buildBlockAndCommit(node) //TODO check the error somehow
     }
 
@@ -83,26 +83,26 @@ class BasicModuleTest : IntegrationTest() {
         chkQuery(node, """{ type : "get_state" }""", "33")
     }
 
-    private fun makeTx(ownerIdx: Int, opName: String, vararg opArgs: GTXValue): ByteArray {
+    private fun makeTx(ownerIdx: Int, opName: String, vararg opArgs: Gtv): ByteArray {
         val owner = KeyPairHelper.pubKey(ownerIdx)
         return GTXDataBuilder(testBlockchainRID, arrayOf(owner), myCS).run {
             addOperation(opName, opArgs.toList().toTypedArray())
             finish()
-            sign(myCS.makeSigner(owner, KeyPairHelper.privKey(ownerIdx)))
+            sign(myCS.buildSigMaker(owner, KeyPairHelper.privKey(ownerIdx)))
             serialize()
         }
     }
 
     private fun makeTx_insertCity(ownerIdx: Int, name: String): ByteArray {
-        return makeTx(ownerIdx, "insert_city", gtx(name))
+        return makeTx(ownerIdx, "insert_city", gtv(name))
     }
 
     private fun makeTx_insertPerson(ownerIdx: Int, name: String, city: Long, street: String, house: Long, score: Long): ByteArray {
-        return makeTx(ownerIdx, "insert_person", gtx(name), gtx(city), gtx(street), gtx(house), gtx(score))
+        return makeTx(ownerIdx, "insert_person", gtv(name), gtv(city), gtv(street), gtv(house), gtv(score))
     }
 
     private fun makeTx_setState(ownerIdx: Int, value: Long): ByteArray {
-        return makeTx(ownerIdx, "set_state", gtx(value))
+        return makeTx(ownerIdx, "set_state", gtv(value))
     }
 
     private fun setupNodeAndObjects(): PostchainTestNode {

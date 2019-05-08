@@ -1,8 +1,8 @@
 package net.postchain.rell.test
 
 import com.google.common.collect.Sets
-import net.postchain.gtx.GTXNull
-import net.postchain.gtx.GTXValue
+import net.postchain.gtv.GtvNull
+import net.postchain.gtv.Gtv
 import net.postchain.rell.hexStringToByteArray
 import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_Module
@@ -64,7 +64,7 @@ class RellCodeTester(
     }
 
     private fun initSqlObjects(sqlExec: SqlExecutor, sqlCtx: Rt_SqlContext) {
-        val chainCtx = Rt_ChainContext(GTXNull, Rt_NullValue)
+        val chainCtx = Rt_ChainContext(GtvNull, Rt_NullValue)
         val globalCtx = Rt_GlobalContext(Rt_FailingPrinter, Rt_FailingPrinter, sqlExec, null, chainCtx, logSqlErrors = true)
         val modCtx = Rt_ModuleContext(globalCtx, sqlCtx.module, sqlCtx)
         modCtx.insertObjectRecords()
@@ -186,7 +186,7 @@ class RellCodeTester(
         return callOp0(code, args) { _, v -> v }
     }
 
-    fun callOpGtx(code: String, args: List<GTXValue>): String {
+    fun callOpGtx(code: String, args: List<Gtv>): String {
         return callOp0(code, args, GtxTestUtils::decodeGtxOpArgs)
     }
 
@@ -204,7 +204,7 @@ class RellCodeTester(
     }
 
     private fun createGlobalCtx(): Rt_GlobalContext {
-        val chainContext = Rt_ChainContext(GTXNull, Rt_NullValue)
+        val chainContext = Rt_ChainContext(GtvNull, Rt_NullValue)
         return Rt_GlobalContext(
                 stdoutPrinter,
                 logPrinter,

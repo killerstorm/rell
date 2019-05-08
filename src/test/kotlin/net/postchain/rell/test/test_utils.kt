@@ -1,7 +1,7 @@
 package net.postchain.rell.test
 
 import com.google.common.io.Files
-import net.postchain.gtx.GTXValue
+import net.postchain.gtv.Gtv
 import net.postchain.rell.model.R_Class
 import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_Module
@@ -149,13 +149,13 @@ object SqlTestUtils {
 
 object GtxTestUtils {
     fun decodeGtxStr(s: String) = Rt_GtxValue.jsonStringToGtxValue(s)
-    fun encodeGtxStr(gtx: GTXValue) = Rt_GtxValue.gtxValueToJsonString(gtx)
+    fun encodeGtxStr(gtx: Gtv) = Rt_GtxValue.gtxValueToJsonString(gtx)
 
     fun decodeGtxQueryArgs(params: List<R_ExternalParam>, args: List<String>): List<Rt_Value> {
         return decodeGtxArgs(params, args, true)
     }
 
-    fun decodeGtxOpArgs(params: List<R_ExternalParam>, args: List<GTXValue>): List<Rt_Value> {
+    fun decodeGtxOpArgs(params: List<R_ExternalParam>, args: List<Gtv>): List<Rt_Value> {
         check(params.size == args.size)
         val ctx = GtxToRtContext()
         return args.mapIndexed { i, gtx ->
@@ -176,12 +176,12 @@ object GtxTestUtils {
         }
     }
 
-    fun gtxToStr(gtx: GTXValue): String {
+    fun gtxToStr(gtx: Gtv): String {
         val s = encodeGtxStr(gtx)
         return s.replace('"', '\'')
     }
 
-    fun strToGtx(s: String): GTXValue {
+    fun strToGtx(s: String): Gtv {
         val s2 = s.replace('\'', '"')
         return decodeGtxStr(s2)
     }

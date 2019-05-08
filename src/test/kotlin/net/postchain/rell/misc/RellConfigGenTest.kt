@@ -1,7 +1,6 @@
 package net.postchain.rell.misc
 
-import net.postchain.gtx.gtxml.GTXMLValueEncoder
-import net.postchain.gtx.gtxml.GTXMLValueParser
+import net.postchain.rell.PostchainUtils
 import net.postchain.rell.makeRellPostchainConfig
 import net.postchain.rell.parser.C_IncludeResolver
 import net.postchain.rell.parser.C_VirtualIncludeDir
@@ -94,12 +93,12 @@ class RellConfigGenTest {
     }
 
     private fun xmlToJson(xml: String): String {
-        val gtx = GTXMLValueParser.parseGTXMLValue(xml)
+        val gtx = PostchainUtils.xmlToGtv(xml)
         return GtxTestUtils.gtxToStr(gtx)
     }
 
     private fun jsonToXml(json: String): String {
         val gtx = GtxTestUtils.strToGtx(json)
-        return GTXMLValueEncoder.encodeXMLGTXValue(gtx)
+        return PostchainUtils.gtvToXml(gtx)
     }
 }

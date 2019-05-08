@@ -3,8 +3,8 @@ package net.postchain.rell.misc
 import net.postchain.common.hexStringToByteArray
 import net.postchain.devtools.IntegrationTest
 import net.postchain.devtools.PostchainTestNode
-import net.postchain.gtx.GTXValue
-import net.postchain.gtx.gtxml.GTXMLValueParser
+import net.postchain.gtv.Gtv
+import net.postchain.rell.PostchainUtils
 import java.io.File
 
 fun main(args: Array<String>) {
@@ -48,8 +48,8 @@ private class PostchainAccess: IntegrationTest() {
 
     }
 
-    private fun readBlockchainConfigStub(configFile: String): GTXValue {
+    private fun readBlockchainConfigStub(configFile: String): Gtv {
         val file = File(configFile)
-        return GTXMLValueParser.parseGTXMLValue(file.readText())
+        return PostchainUtils.xmlToGtv(file.readText())
     }
 }

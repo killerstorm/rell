@@ -1,8 +1,8 @@
 package net.postchain.rell.module
 
-import net.postchain.gtx.ByteArrayGTXValue
-import net.postchain.gtx.GTXValue
-import net.postchain.gtx.StringGTXValue
+import net.postchain.gtv.GtvByteArray
+import net.postchain.gtv.Gtv
+import net.postchain.gtv.GtvString
 import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.hexStringToByteArray
 import org.junit.Test
@@ -244,7 +244,7 @@ class GtxRtConversionTest: BaseRellTest(useSql = false, gtx = true) {
         chkRes(expected, actual)
     }
 
-    private fun chkOpArg(type: String, arg: GTXValue, expected: String) {
+    private fun chkOpArg(type: String, arg: Gtv, expected: String) {
         val code = "operation o(a: $type) { print(_strictStr(a)); }"
         val actual = tst.callOpGtx(code, listOf(arg))
         chkRes(expected, actual)
@@ -258,12 +258,12 @@ class GtxRtConversionTest: BaseRellTest(useSql = false, gtx = true) {
         }
     }
 
-    private fun gtxBytes(s: String): GTXValue {
+    private fun gtxBytes(s: String): Gtv {
         val bytes = s.hexStringToByteArray()
-        return ByteArrayGTXValue(bytes)
+        return GtvByteArray(bytes)
     }
 
-    private fun gtxStr(s: String): GTXValue {
-        return StringGTXValue(s)
+    private fun gtxStr(s: String): Gtv {
+        return GtvString(s)
     }
 }
