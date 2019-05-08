@@ -5,35 +5,12 @@ import com.github.h0tk3y.betterParse.parser.parseToEnd
 import net.postchain.rell.model.*
 import java.util.*
 
+class C_CommonError(val code: String, val msg: String): RuntimeException(msg)
+
 object C_Utils {
-    fun parse(sourceCode: String): S_ModuleDefinition {
-        val tokenSeq = S_Grammar.tokenizer.tokenize(sourceCode)
-
-        // The syntax error position returned by the parser library is misleading: if there is an error in the middle
-        // of an operation, it returns the position of the beginning of the operation.
-        // Following workaround handles this by tracking the position of the farthest reached token (seems to work fine).
-
-        var maxPos = 0
-        var maxRowCol = S_Pos(1, 1)
-        val tokenSeq2 = tokenSeq.map {
-            if (!it.type.ignored && it.position > maxPos) {
-                maxPos = it.position
-                maxRowCol = S_Pos(it)
-            }
-            it
-        }
-
-        try {
-            val ast = S_Grammar.parseToEnd(tokenSeq2)
-            return ast
-        } catch (e: ParseException) {
-            throw C_Error(maxRowCol, "syntax", "Syntax error")
-        }
-    }
-
     fun toDbExpr(pos: S_Pos, rExpr: R_Expr): Db_Expr {
         val type = rExpr.type
-        if (!type.isSqlCompatible()) {
+        if (!type.sqlAdapter.isSqlCompatible()) {
             throw C_Errors.errExprNoDb(pos, type)
         }
         return Db_InterpretedExpr(rExpr)
@@ -67,10 +44,98 @@ object C_Utils {
             throw C_Error(pos, "$errCode:$typeStr", "Mutable type cannot be used as $errMsg: $typeStr")
         }
     }
+
+    fun createBlockClass(namespace: String?, chain: R_ExternalChain?): R_Class {
+        val attrs = listOf(
+                R_Attrib(0, "block_height", R_IntegerType, false, false),
+                R_Attrib(1, "block_rid", R_ByteArrayType, false, false),
+                R_Attrib(2, "timestamp", R_IntegerType, false, false)
+        )
+        val sqlMapping = R_ClassSqlMapping_Block(chain)
+        return createSysClass(namespace, C_Defs.BLOCK_CLASS, chain, sqlMapping, attrs)
+    }
+
+    fun createTransactionClass(namespace: String?, chain: R_ExternalChain?, blockClass: R_Class): R_Class {
+        val attrs = listOf(
+                R_Attrib(0, "tx_rid", R_ByteArrayType, false, false),
+                R_Attrib(1, "tx_hash", R_ByteArrayType, false, false),
+                R_Attrib(2, "tx_data", R_ByteArrayType, false, false),
+                R_Attrib(3, "block", R_ClassType(blockClass), false, false, true, "block_iid")
+        )
+        val sqlMapping = R_ClassSqlMapping_Transaction(chain)
+        return createSysClass(namespace, C_Defs.TRANSACTION_CLASS, chain, sqlMapping, attrs)
+    }
+
+    private fun createSysClass(
+            namespace: String?,
+            name: String,
+            chain: R_ExternalChain?,
+            sqlMapping: R_ClassSqlMapping,
+            attrs: List<R_Attrib>
+    ): R_Class {
+        val fullName = C_Utils.fullName(namespace, name)
+        val flags = R_ClassFlags(false, false, false, false, false, false)
+        val externalCls = if (chain == null) null else R_ExternalClass(chain, name, false)
+        val cls = R_Class(fullName, flags, sqlMapping, externalCls)
+        val attrMap = attrs.map { Pair(it.name, it) }.toMap()
+        cls.setBody(R_ClassBody(listOf(), listOf(), attrMap))
+        return cls
+    }
+
+    fun crashExpr(type: R_Type, msg: String): R_Expr {
+        val fn = R_SysFn_ThrowCrash(msg)
+        return R_SysCallExpr(type, fn, listOf())
+    }
+
+    fun fullName(namespaceName: String?, name: String) = if (namespaceName == null) name else (namespaceName + "." + name)
+
+    fun nameStr(name: List<S_Name>): String = name.joinToString(".") { it.str }
+}
+
+object C_Parser {
+    private val currentFileLocal = ThreadLocal.withInitial<String> { "?" }
+
+    fun parse(file: String, sourceCode: String): S_ModuleDefinition {
+        // The syntax error position returned by the parser library is misleading: if there is an error in the middle
+        // of an operation, it returns the position of the beginning of the operation.
+        // Following workaround handles this by tracking the position of the farthest reached token (seems to work fine).
+
+        var maxRow = 1
+        var maxCol = 1
+
+        val tokenSeq = S_Grammar.tokenizer.tokenize(sourceCode) {
+            if (!it.type.ignored) {
+                maxRow = it.row
+                maxCol = it.column
+            }
+        }
+
+        try {
+            val ast = overrideCurrentFile(file) {
+                S_Grammar.parseToEnd(tokenSeq)
+            }
+            return ast
+        } catch (e: ParseException) {
+            val pos = S_BasicPos(file, maxRow, maxCol)
+            throw C_Error(pos, "syntax", "Syntax error")
+        }
+    }
+
+    private fun <T> overrideCurrentFile(file: String, code: () -> T): T {
+        val oldFile = currentFileLocal.get()
+        try {
+            currentFileLocal.set(file)
+            return code()
+        } finally {
+            currentFileLocal.set(oldFile)
+        }
+    }
+
+    fun currentFile() = currentFileLocal.get()
 }
 
 object C_Errors {
-    fun errTypeMissmatch(pos: S_Pos, srcType: R_Type, dstType: R_Type, errCode: String, errMsg: String): C_Error {
+    fun errTypeMismatch(pos: S_Pos, srcType: R_Type, dstType: R_Type, errCode: String, errMsg: String): C_Error {
         return C_Error(pos, "$errCode:${dstType.toStrictString()}:${srcType.toStrictString()}",
                 "$errMsg: ${srcType.toStrictString()} instead of ${dstType.toStrictString()}")
     }
@@ -84,8 +149,10 @@ object C_Errors {
         return C_Error(name.pos, "unknown_name:${name.str}", "Unknown name: '${name.str}'")
     }
 
-    fun errUnknownName(name1: S_Name, name2: S_Name): C_Error {
-        return C_Error(name1.pos, "unknown_name:${name1.str}.${name2.str}", "Unknown name: '${name1.str}.${name2.str}'")
+    fun errUnknownName(baseName: List<S_Name>, name: S_Name): C_Error {
+        val fullName = baseName + listOf(name)
+        val nameStr = C_Utils.nameStr(fullName)
+        return C_Error(name.pos, "unknown_name:$nameStr", "Unknown name: '$nameStr'")
     }
 
     fun errUnknownAttr(name: S_Name): C_Error {
@@ -152,6 +219,12 @@ object C_Errors {
         val nameStr = name.str
         throw C_Error(name.pos, "expr_name_clsloc:$nameStr",
                 "Name '$nameStr' is ambiguous: can be class alias or local variable")
+    }
+
+    fun errTypeNotGtxCompatible(pos: S_Pos, type: R_Type, reason: String?, code: String, msg: String): C_Error {
+        val extra = if (reason == null) "" else "; reason: $reason"
+        val fullMsg = "$msg is not GTX-compatible: ${type.toStrictString()}$extra"
+        throw C_Error(pos, "$code:${type.toStrictString()}", fullMsg)
     }
 }
 
@@ -280,4 +353,45 @@ object C_GraphUtils {
 
         return visited.toList()
     }
+}
+
+class C_RecordsStructure(
+        val mutable: Set<R_RecordType>,
+        val nonGtxHuman: Set<R_RecordType>,
+        val nonGtxCompact: Set<R_RecordType>,
+        val graph: Map<R_RecordType, List<R_RecordType>>
+)
+
+object C_RecordUtils {
+    fun buildRecordsStructure(records: Collection<R_RecordType>): C_RecordsStructure {
+        val structMap = records.map { Pair(it, calcRecStruct(it)) }.toMap()
+        val graph = structMap.mapValues { (_, v) -> v.dependencies.toList() }
+        val mutable = structMap.filter { (_, v) -> v.directFlags.mutable }.keys
+        val nonGtxHuman = structMap.filter { (_, v) -> !v.directFlags.gtxHuman.compatible }.keys
+        val nonGtxCompact = structMap.filter { (_, v) -> !v.directFlags.gtxCompact.compatible }.keys
+        return C_RecordsStructure(mutable, nonGtxHuman, nonGtxCompact, graph)
+    }
+
+    private fun calcRecStruct(type: R_Type): RecStruct {
+        val flags = mutableListOf(type.directFlags())
+        val deps = mutableSetOf<R_RecordType>()
+
+        for (subType in type.componentTypes()) {
+            val subStruct = discoverRecStruct(subType)
+            flags.add(subStruct.directFlags)
+            deps.addAll(subStruct.dependencies)
+        }
+
+        val resFlags = R_TypeFlags.combine(flags)
+        return RecStruct(resFlags, deps.toSet())
+    }
+
+    private fun discoverRecStruct(type: R_Type): RecStruct {
+        if (type is R_RecordType) {
+            return RecStruct(type.directFlags(), setOf(type))
+        }
+        return calcRecStruct(type)
+    }
+
+    private class RecStruct(val directFlags: R_TypeFlags, val dependencies: Set<R_RecordType>)
 }

@@ -145,4 +145,14 @@ class LibSetTest: BaseRellTest(false) {
         chkEx("{ return set<list<integer>>(); }", "ct_err:expr_set_type:list<integer>")
         chkEx("{ var x: set<list<integer>>; return 0; }", "ct_err:expr_set_type:list<integer>")
     }
+
+    @Test fun testSort() {
+        tst.strictToString = false
+        tst.defs = listOf("record rec { x: integer; }")
+
+        chkEx("{ val s = set([ 5, 4, 3, 2, 1 ]); s._sort(); return s; }", "ct_err:unknown_member:set<integer>:_sort")
+
+        chk("set([ 5, 4, 3, 2, 1 ]).sorted()", "[1, 2, 3, 4, 5]")
+        chk("set([rec(123), rec(456)]).sorted()", "ct_err:unknown_member:set<rec>:sorted")
+    }
 }

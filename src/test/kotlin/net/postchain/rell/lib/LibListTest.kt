@@ -44,15 +44,15 @@ class LibListTest: BaseRellTest(false) {
     }
 
     @Test fun testGet() {
-        chk("list([1, 2, 3, 4, 5]).calculate(0)", "int[1]")
-        chk("list([1, 2, 3, 4, 5]).calculate(4)", "int[5]")
-        chk("list([1, 2, 3, 4, 5]).calculate(-1)", "rt_err:fn_list_get_index:5:-1")
-        chk("list([1, 2, 3, 4, 5]).calculate(5)", "rt_err:fn_list_get_index:5:5")
+        chk("list([1, 2, 3, 4, 5]).get(0)", "int[1]")
+        chk("list([1, 2, 3, 4, 5]).get(4)", "int[5]")
+        chk("list([1, 2, 3, 4, 5]).get(-1)", "rt_err:fn_list_get_index:5:-1")
+        chk("list([1, 2, 3, 4, 5]).get(5)", "rt_err:fn_list_get_index:5:5")
 
-        chk("[1, 2, 3, 4, 5].calculate(0)", "int[1]")
-        chk("[1, 2, 3, 4, 5].calculate(4)", "int[5]")
-        chk("[1, 2, 3, 4, 5].calculate(-1)", "rt_err:fn_list_get_index:5:-1")
-        chk("[1, 2, 3, 4, 5].calculate(5)", "rt_err:fn_list_get_index:5:5")
+        chk("[1, 2, 3, 4, 5].get(0)", "int[1]")
+        chk("[1, 2, 3, 4, 5].get(4)", "int[5]")
+        chk("[1, 2, 3, 4, 5].get(-1)", "rt_err:fn_list_get_index:5:-1")
+        chk("[1, 2, 3, 4, 5].get(5)", "rt_err:fn_list_get_index:5:5")
     }
 
     @Test fun testSubscriptGet() {
@@ -66,8 +66,8 @@ class LibListTest: BaseRellTest(false) {
         chk("[1, 2, 3, 4, 5][-1]", "rt_err:expr_list_lookup_index:5:-1")
         chk("[1, 2, 3, 4, 5][5]", "rt_err:expr_list_lookup_index:5:5")
 
-        chkEx("{ val x: list<integer>? = [1,2,3]; return x[1]; }", "ct_err:expr_lookup_null")
-        chkEx("{ val x: list<integer>? = [1,2,3]; return x!![1]; }", "int[2]")
+        chkEx("{ val x: list<integer>? = if (1>0) [1,2,3] else null; return x[1]; }", "ct_err:expr_lookup_null")
+        chkEx("{ val x: list<integer>? = if (1>0) [1,2,3] else null; return x!![1]; }", "int[2]")
     }
 
     @Test fun testEquals() {
@@ -234,12 +234,31 @@ class LibListTest: BaseRellTest(false) {
         chkEx("{ $init x[-1] = 5; return x; }", "rt_err:expr_list_lookup_index:3:-1")
         chkEx("{ $init x[3] = 5; return x; }", "rt_err:expr_list_lookup_index:3:3")
 
-        chkEx("{ val x: list<integer>? = [1, 2, 3]; x[1] = 5; return x; }", "ct_err:expr_lookup_null")
-        chkEx("{ val x: list<integer>? = [1, 2, 3]; x!![1] = 5; return x; }", "[1, 5, 3]")
+        chkEx("{ val x: list<integer>? = if (1>0) [1,2,3] else null; x[1] = 5; return x; }", "ct_err:expr_lookup_null")
+        chkEx("{ val x: list<integer>? = if (1>0) [1,2,3] else null; x!![1] = 5; return x; }", "[1, 5, 3]")
     }
 
     @Test fun testFor() {
         chkOp("for (i in list([123, 456, 789])) print(i);")
         chkStdout("123", "456", "789")
+    }
+
+    @Test fun testSort() {
+        tst.strictToString = false
+        tst.defs = listOf("record rec { x: integer; }")
+
+        chkEx("{ val l = [ 5, 4, 3, 2, 1 ]; l._sort(); return l; }", "[1, 2, 3, 4, 5]")
+        chkEx("{ val l = [ 5, 4, 3, 2, 1 ]; return l._sort(); }", "ct_err:stmt_return_unit")
+        chkEx("{ val l = [ 5, 4, 3, 2, 1 ]; return l.sorted(); }", "[1, 2, 3, 4, 5]")
+        chkEx("{ val l = [ 5, 4, 3, 2, 1 ]; l.sorted(); return l; }", "[5, 4, 3, 2, 1]")
+
+        chk("['F', 'E', 'D', 'C', 'B', 'A'].sorted()", "[A, B, C, D, E, F]")
+        chk("[true, false].sorted()", "[false, true]")
+        chk("[3, 2, 1, null].sorted()", "[null, 1, 2, 3]")
+        chk("['C', 'B', 'A', null].sorted()", "[null, A, B, C]")
+
+        chk("[(2,'B'),(2,'A'),(1,'X')].sorted()", "[(1,X), (2,A), (2,B)]")
+
+        chk("[rec(123), rec(456)].sorted()", "ct_err:unknown_member:list<rec>:sorted")
     }
 }

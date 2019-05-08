@@ -23,10 +23,32 @@ object R_UnaryOp_Not: R_UnaryOp() {
     }
 }
 
+object R_UnaryOp_Increment: R_UnaryOp() {
+    override fun evaluate(operand: Rt_Value): Rt_Value {
+        val v = operand.asInteger()
+        return Rt_IntValue(v + 1)
+    }
+}
+
+object R_UnaryOp_Decrement: R_UnaryOp() {
+    override fun evaluate(operand: Rt_Value): Rt_Value {
+        val v = operand.asInteger()
+        return Rt_IntValue(v - 1)
+    }
+}
+
 class R_UnaryExpr(type: R_Type, val op: R_UnaryOp, val expr: R_Expr): R_Expr(type) {
     override fun evaluate(frame: Rt_CallFrame): Rt_Value {
         val operand = expr.evaluate(frame)
         val resValue = op.evaluate(operand)
         return resValue
+    }
+
+    override fun constantValue(): Rt_Value? {
+        val v = expr.constantValue()
+        if (v == null) return null
+
+        val res = op.evaluate(v)
+        return res
     }
 }

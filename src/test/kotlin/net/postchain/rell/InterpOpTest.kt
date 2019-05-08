@@ -27,13 +27,14 @@ class InterpOpTest: AbstractOpTest() {
         val args2 = args.map { it as InterpTstVal }
         val types = args2.map { it.type }
 
-        val sqlMapper = Rt_SqlMapper(0)
         val chainCtx = Rt_ChainContext(GTXNull, Rt_NullValue)
-        val globalCtx = Rt_GlobalContext(Rt_FailingPrinter, Rt_FailingPrinter, NoConnSqlExecutor, sqlMapper, null, chainCtx)
+        val globalCtx = Rt_GlobalContext(Rt_FailingPrinter, Rt_FailingPrinter, NoConnSqlExecutor, null, chainCtx)
 
         val res = processExpr0(expr2, types) { module ->
             val rtArgs = args2.map { it.rt(module) }
-            RellTestUtils.callQuery(globalCtx, module, "q", rtArgs, RellTestUtils.ENCODER_STRICT)
+            val sqlCtx = Rt_SqlContext.createNoExternalChains(module, Rt_ChainSqlMapping(0))
+            val modCtx = Rt_ModuleContext(globalCtx, module, sqlCtx)
+            RellTestUtils.callQuery(modCtx, "q", rtArgs, RellTestUtils.ENCODER_STRICT)
         }
         return res
     }
@@ -63,7 +64,7 @@ class InterpOpTest: AbstractOpTest() {
             query q($params) = $expr;
         """.trimIndent()
 
-        val res = RellTestUtils.processModule(code, false, false, block)
+        val res = RellTestUtils.processModule(code, processor = { block(it.rModule) })
         return res
     }
 

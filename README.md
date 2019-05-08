@@ -10,14 +10,14 @@
 
 Simplest way to build:
 
-1. Check out the `postchain2` repository:
-   ```
-   git clone git@bitbucket.org:chromawallet/postchain2.git
-   ```
-   Switch to the right tag:
-   ```
-   git checkout ver-2.4.3
-   ```
+1. Check out the `postchain2` repository:  
+    ```
+    git clone git@bitbucket.org:chromawallet/postchain2.git
+    ```  
+    Switch to the right tag:  
+    ```
+    git checkout ver-2.5
+    ```
 2. Build `postchain2`:  
     ```
     mvn clean install -DskipTests
@@ -39,6 +39,7 @@ Executes a rell program
       [ARGS...]     Call arguments
       --dburl=URL   Database JDBC URL, e. g. jdbc:postgresql://localhost/relltestdb?user=relltestuser&password=1234
       --resetdb     Reset database (drop all and create tables from scratch)
+      --sqllog      Enable SQL logging
 ```
 
 To execute an operation without a database connection:

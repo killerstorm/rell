@@ -8,8 +8,11 @@ class OperationTest: BaseRellTest() {
         chkOp("print('Hello'); print('World');")
         chkStdout("Hello", "World")
 
-        chkOp("print('Hello'); return; print('World');")
+        chkOp("print('Hello'); return;")
         chkStdout("Hello")
+
+        chkOp("print('Hello'); return; print('World');", "ct_err:stmt_deadcode")
+        chkStdout()
 
         chkOp("return 123;", "ct_err:stmt_return_op_value")
     }

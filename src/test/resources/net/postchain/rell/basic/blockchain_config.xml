@@ -40,8 +40,17 @@
                     <string>net.postchain.rell.module.RellPostchainModuleFactory</string>
                 </array>
             </entry>
-            <entry key="rellSrcModule">
-                <string>classpath:/net/postchain/rell/module/mymodule.rell</string>
+            <entry key="rell">
+                <dict>
+                    <entry key = "mainFile"><string>mymodule.rell</string></entry>
+                    <entry key = "files_v0.8">
+                        <dict>
+                            <entry key = "mymodule.rell">
+                                <string>classpath:/net/postchain/rell/module/mymodule.rell</string>
+                            </entry>
+                        </dict>
+                    </entry>
+                </dict>
             </entry>
         </dict>
     </entry>

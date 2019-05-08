@@ -2,29 +2,19 @@ package net.postchain.rell.lib
 
 import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.test.RellCodeTester
-import net.postchain.rell.test.SqlTestUtils
+import net.postchain.rell.test.RellTestContext
 import org.junit.Test
 
 class LibBlockTransactionTest: BaseRellTest() {
     companion object {
-        val BLOCK_INSERTS = listOf(
-                insBlock(111, 333, 222, "DEADBEEF", "5678", 1500000000000),
-                insTx(444, 333, "FADE", "EDAF", "1234", 111),
-                insBlock(1, 555, 35, "FEEBDAED", "8765", 1400000000000),
-                insTx(2, 555, "CEED", "FEED", "4321", 1),
-                insBlock(3, 600, 46, "BADBAD", "FEDC", 1300000000000),
-                insTx(4, 601, "CEED", "CDEF", "F00D", 3)
-        )
-
-        private fun insBlock(iid: Long, chainId: Long, height: Long, rid: String, header: String, timestamp: Long): String {
-            return """INSERT INTO "blocks"(block_iid,block_height,block_rid,chain_id,block_header_data,block_witness,timestamp)
-                VALUES($iid,$height,E'\\x$rid',$chainId,E'\\x$header',NULL,$timestamp);""".trimIndent()
-        }
-
-        private fun insTx(iid: Long, chainId: Long, rid: String, data: String, hash: String, block: Long): String {
-            return """INSERT INTO "transactions"(tx_iid,chain_id,tx_rid,tx_data,tx_hash,block_iid)
-                VALUES($iid,$chainId,E'\\x$rid',E'\\x$data',E'\\x$hash',$block);""".trimIndent()
-        }
+        val BLOCK_INSERTS = RellTestContext.BlockBuilder()
+                .block(111, 333, 222, "DEADBEEF", "5678", 1500000000000)
+                .block(1, 555, 35, "FEEBDAED", "8765", 1400000000000)
+                .block(3, 600, 46, "BADBAD", "FEDC", 1300000000000)
+                .tx(444, 333, 111, "FADE", "EDAF", "1234")
+                .tx(2, 555, 1, "CEED", "FEED", "4321")
+                .tx(4, 601, 3, "CEED", "CDEF", "F00D")
+                .list()
     }
 
     @Test fun testBlockRead() {
@@ -151,6 +141,32 @@ class LibBlockTransactionTest: BaseRellTest() {
         chk("foo@{} ( .trans.block.timestamp )", "int[1500000000000]")
     }
 
+    @Test fun testBlockRefChainId() {
+        tst.defs = listOf("class foo { x: integer; b: block; t: transaction; }")
+        tst.inserts = BLOCK_INSERTS
+        tst.insert("c0.foo", "x,b,t", "1,123,111,444")
+        tst.chainId = 0
+
+        val base = "val f = foo@{}"
+        chkEx("{ $base; return f.b; }", "block[111]")
+        chkEx("{ $base; return f.b.block_height; }", "int[222]")
+        chkEx("{ $base; return f.b.block_rid; }", "byte_array[deadbeef]")
+        chkEx("{ $base; return f.b.timestamp; }", "int[1500000000000]")
+        chkEx("{ $base; return f.t.block; }", "block[111]")
+        chkEx("{ $base; return f.t.block.block_height; }", "int[222]")
+        chkEx("{ $base; return f.t.block.block_rid; }", "byte_array[deadbeef]")
+        chkEx("{ $base; return f.t.block.timestamp; }", "int[1500000000000]")
+
+        chk("foo@{} ( .b )", "block[111]")
+        chk("foo@{} ( .b.block_height )", "int[222]")
+        chk("foo@{} ( .b.block_rid )", "byte_array[deadbeef]")
+        chk("foo@{} ( .b.timestamp )", "int[1500000000000]")
+        chk("foo@{} ( .t.block )", "block[111]")
+        chk("foo@{} ( .t.block.block_height )", "int[222]")
+        chk("foo@{} ( .t.block.block_rid )", "byte_array[deadbeef]")
+        chk("foo@{} ( .t.block.timestamp )", "int[1500000000000]")
+    }
+
     @Test fun testBlockReadChainId() {
         tst.inserts = BLOCK_INSERTS
         tst.strictToString = false
@@ -203,53 +219,58 @@ class LibBlockTransactionTest: BaseRellTest() {
 
         t.chkQuery("foo @* {}", "[foo[1]]")
         t.chkQuery("foo @* {} (=foo,=.b)", "[(foo[1],block[3])]")
-        t.chkQuery("foo @* {} (=foo,=.t)", "[]")
-        t.chkQuery("foo @* {} (=foo,=.b,=.t)", "[]")
+        t.chkQuery("foo @* {} (=foo,=.t)", "[(foo[1],transaction[4])]")
+        t.chkQuery("foo @* {} (=foo,=.b,=.t)", "[(foo[1],block[3],transaction[4])]")
         t.chkQuery("foo @* {} (=.value)", "[0]")
         t.chkOp("update foo @* {} ( value = 100 );")
         t.chkQuery("foo @* {} (=.value)", "[100]")
         t.chkOp("update foo @* { .b.block_height >= 0 } ( value = 200 );")
         t.chkQuery("foo @* {} (=.value)", "[200]")
         t.chkOp("update foo @* { .t.tx_hash != x'' } ( value = 300 );")
-        t.chkQuery("foo @* {} (=.value)", "[200]")
+        t.chkQuery("foo @* {} (=.value)", "[300]")
         t.chkOp("delete foo @* { .t.tx_hash != x'' };")
-        t.chkQuery("foo @* {} (=.value)", "[200]")
-        t.chkOp("delete foo @* { .b.block_height >= 0 };")
         t.chkQuery("foo @* {} (=.value)", "[]")
 
         t = createChainIdTester(601, 3, 4)
 
-        t.chkQuery(expr, "[]")
+        t.chkQuery(expr, "[(transaction[4],0xceed,0xf00d,0xcdef,block[3],46,0xbadbad,1300000000000)]")
         t.chkQuery("transaction @* {} ( =transaction, =.tx_rid, =.tx_hash, =.tx_data )", "[(transaction[4],0xceed,0xf00d,0xcdef)]")
-        t.chkQuery("transaction @* { .block }", "[]")
+        t.chkQuery("transaction @* { .block }", "[transaction[4]]")
         t.chkQuery("block @* {}", "[]")
         t.chkQuery("(b: block, t: transaction) @* {}", "[]")
 
         t.chkQuery("foo @* {}", "[foo[1]]")
-        t.chkQuery("foo @* {} (=foo,=.b)", "[]")
+        t.chkQuery("foo @* {} (=foo,=.b)", "[(foo[1],block[3])]")
         t.chkQuery("foo @* {} (=foo,=.t)", "[(foo[1],transaction[4])]")
-        t.chkQuery("foo @* {} (=foo,=.b,=.t)", "[]")
+        t.chkQuery("foo @* {} (=foo,=.b,=.t)", "[(foo[1],block[3],transaction[4])]")
         t.chkQuery("foo @* {} (=.value)", "[0]")
         t.chkOp("update foo @* {} ( value = 100 );")
         t.chkQuery("foo @* {} (=.value)", "[100]")
         t.chkOp("update foo @* { .b.block_height >= 0 } ( value = 200 );")
-        t.chkQuery("foo @* {} (=.value)", "[100]")
+        t.chkQuery("foo @* {} (=.value)", "[200]")
         t.chkOp("update foo @* { .t.tx_hash != x'' } ( value = 300 );")
         t.chkQuery("foo @* {} (=.value)", "[300]")
         t.chkOp("delete foo @* { .b.block_height >= 0 };")
-        t.chkQuery("foo @* {} (=.value)", "[300]")
-        t.chkOp("delete foo @* { .t.tx_hash != x'' };")
         t.chkQuery("foo @* {} (=.value)", "[]")
     }
 
+    @Test fun textGtx() {
+        tst.defs = listOf("record r { t: transaction; }")
+        tst.chainId = 333
+        tst.inserts = BLOCK_INSERTS
+        chk("transaction @ {}", "transaction[444]")
+        chk("r(transaction @ {})", "r[t=transaction[444]]")
+        chkEx("{ val r = r(transaction @ {}); return r.toPrettyGTXValue(); }", "ct_err:fn_record_invalid:r:r.toPrettyGTXValue")
+        chk("""r.fromPrettyGTXValue(GTXValue.fromJSON('{"t":444}'))""", "ct_err:fn_record_invalid:r:fromPrettyGTXValue")
+    }
+
     private fun createChainIdTester(chainId: Long, blockIid: Long, txIid: Long): RellCodeTester {
-        val t = resource(RellCodeTester())
+        val t = RellCodeTester(tstCtx)
         t.defs = listOf("class foo { b: block; t: transaction; mutable value: integer; }")
-        t.insert("c${chainId}_foo", "b,t,value", "1,$blockIid,$txIid,0")
+        t.insert("c${chainId}.foo", "b,t,value", "1,$blockIid,$txIid,0")
         t.strictToString = false
         t.dropTables = false
         t.autoInitObjects = false
-        t.createSystemTables = false
         t.chainId = chainId
         return t
     }

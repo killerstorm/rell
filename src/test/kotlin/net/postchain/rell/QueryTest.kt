@@ -33,25 +33,25 @@ class QueryTest: BaseRellTest() {
 
     @Test fun testReturnSelectAllNoObjects() {
         tst.defs = listOf("class user { name: text; }")
-        tst.insert("c0_user", "name", "11, 'Alice'")
+        tst.insert("c0.user", "name", "11, 'Alice'")
         chkEx("= user @* { .name == 'Bob' } ;", "list<user>[]")
     }
 
     @Test fun testReturnSelectAllOneObject() {
         tst.defs = listOf("class user { name: text; }")
-        tst.insert("c0_user", "name", "11,'Alice'")
-        tst.insert("c0_user", "name", "33,'Bob'")
+        tst.insert("c0.user", "name", "11,'Alice'")
+        tst.insert("c0.user", "name", "33,'Bob'")
         chkEx("= user @* { .name == \"Bob\" } ;", "list<user>[user[33]]")
     }
 
     @Test fun testReturnSelectAllManyObjects() {
         tst.defs = listOf("class user { name: text; }")
-        tst.insert("c0_user", "name", "11,'Alice'")
-        tst.insert("c0_user", "name", "33,'Bob'")
-        tst.insert("c0_user", "name", "55,'James'")
-        tst.insert("c0_user", "name", "77,'Bob'")
-        tst.insert("c0_user", "name", "99,'Victor'")
-        tst.insert("c0_user", "name", "111,'Bob'")
+        tst.insert("c0.user", "name", "11,'Alice'")
+        tst.insert("c0.user", "name", "33,'Bob'")
+        tst.insert("c0.user", "name", "55,'James'")
+        tst.insert("c0.user", "name", "77,'Bob'")
+        tst.insert("c0.user", "name", "99,'Victor'")
+        tst.insert("c0.user", "name", "111,'Bob'")
         chkEx("= user @* { .name == 'Bob' } ;", "list<user>[user[33],user[77],user[111]]")
     }
 
@@ -109,7 +109,7 @@ class QueryTest: BaseRellTest() {
     }
 
     @Test fun testReturnTypeExplicit() {
-        tst.useSql = false
+        tstCtx.useSql = true
         tst.chkQueryType(": integer { return null; }", "ct_err:entity_rettype:integer:null")
         tst.chkQueryType(": integer? { return null; }", "integer?")
         tst.chkQueryType(": integer? { return 123; }", "integer?")
@@ -121,7 +121,7 @@ class QueryTest: BaseRellTest() {
     }
 
     @Test fun testReturnTypeImplicit() {
-        tst.useSql = false
+        tstCtx.useSql = true
 
         tst.chkQueryType("{ return null; }", "null")
         tst.chkQueryType("{ if (integer('0') == 0) return 123; else return 456; }", "integer")
@@ -141,6 +141,4 @@ class QueryTest: BaseRellTest() {
 
         chkEx("{ if (1 > 0) return 123; else return 'Hello'; }", "ct_err:entity_rettype:integer:text")
     }
-
-    private val mkins = SqlTestUtils::mkins
 }

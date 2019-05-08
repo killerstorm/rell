@@ -130,6 +130,21 @@ object R_SysFn_List_Set: R_SysFn_List() {
     }
 }
 
+class R_SysFn_List_Sort(private val comparator: Comparator<Rt_Value>): R_SysFn_List() {
+    override fun call(obj: MutableList<Rt_Value>): Rt_Value {
+        obj.sortWith(comparator)
+        return Rt_UnitValue
+    }
+}
+
+class R_SysFn_Collection_Sorted(private val type: R_Type, private val comparator: Comparator<Rt_Value>): R_SysFn_Collection() {
+    override fun call(obj: MutableCollection<Rt_Value>): Rt_Value {
+        val copy = ArrayList(obj)
+        copy.sortWith(comparator)
+        return Rt_ListValue(type, copy)
+    }
+}
+
 sealed class R_SysFn_Map: R_SysFunction_Generic<MutableMap<Rt_Value, Rt_Value>>() {
     override fun extract(v: Rt_Value): MutableMap<Rt_Value, Rt_Value> = v.asMap()
 }

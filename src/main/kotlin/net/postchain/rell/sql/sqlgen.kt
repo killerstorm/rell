@@ -1,13 +1,21 @@
 package net.postchain.rell.sql
 
 import net.postchain.rell.model.*
-import net.postchain.rell.runtime.Rt_SqlMapper
-import org.jooq.*
+import net.postchain.rell.runtime.Rt_ChainSqlMapping
+import net.postchain.rell.runtime.Rt_SqlContext
+import org.jooq.Constraint
+import org.jooq.CreateTableColumnStep
+import org.jooq.DataType
+import org.jooq.SQLDialect
 import org.jooq.impl.DSL
 import org.jooq.impl.DSL.constraint
 import org.jooq.impl.SQLDataType
 
-val ctx = DSL.using(SQLDialect.POSTGRES);
+private val disableLogo = run {
+    System.setProperty("org.jooq.no-logo", "true")
+}
+
+private val dslCtx = DSL.using(SQLDialect.POSTGRES);
 
 fun getSQLType(t: R_Type): DataType<*> {
     when (t) {
@@ -18,20 +26,20 @@ fun getSQLType(t: R_Type): DataType<*> {
     }
 }
 
-private fun genRowidSql(sqlMapper: Rt_SqlMapper): String {
-    val table = sqlMapper.rowidTable
-    val func = sqlMapper.rowidFunction
+private fun genRowidSql(chainMapping: Rt_ChainSqlMapping): String {
+    val table = chainMapping.rowidTable
+    val func = chainMapping.rowidFunction
     return """
-            CREATE TABLE $table( last_value bigint not null);
-            INSERT INTO $table(last_value) VALUES (0);
-            CREATE FUNCTION $func() RETURNS BIGINT AS
-            'UPDATE $table SET last_value = last_value + 1 RETURNING last_value'
+            CREATE TABLE "$table"( last_value bigint not null);
+            INSERT INTO "$table"(last_value) VALUES (0);
+            CREATE FUNCTION "$func"() RETURNS BIGINT AS
+            'UPDATE "$table" SET last_value = last_value + 1 RETURNING last_value'
             LANGUAGE SQL;
     """.trimIndent()
 }
 
 private val CREATE_TABLE_BLOCKS = """
-CREATE TABLE blocks(
+CREATE TABLE "blocks"(
     block_iid BIGSERIAL PRIMARY KEY,
     block_height BIGINT NOT NULL,
     block_rid BYTEA,
@@ -45,32 +53,56 @@ CREATE TABLE blocks(
 """.trimIndent()
 
 private val CREATE_TABLE_TRANSACTIONS = """
-CREATE TABLE transactions(
+CREATE TABLE "transactions"(
     tx_iid BIGSERIAL PRIMARY KEY,
-    chain_id bigint NOT NULL,
-    tx_rid bytea NOT NULL,
-    tx_data bytea NOT NULL,
-    tx_hash bytea NOT NULL,
-    block_iid bigint NOT NULL REFERENCES blocks(block_iid),
+    chain_id BIGINT NOT NULL,
+    tx_rid BYTEA NOT NULL,
+    tx_data BYTEA NOT NULL,
+    tx_hash BYTEA NOT NULL,
+    block_iid BIGINT NOT NULL REFERENCES blocks(block_iid),
     UNIQUE (chain_id, tx_rid)
 );
 """.trimIndent()
 
-private fun genClass(sqlMapper: Rt_SqlMapper, classDefinition: R_Class): String {
-    val mapping = classDefinition.mapping
-    val tableName = mapping.table(sqlMapper)
-    val attrs = classDefinition.attributes.values
+private val CREATE_TABLE_BLOCKCHAINS = """
+CREATE TABLE "blockchains"(
+    chain_id BIGINT NOT NULL PRIMARY KEY,
+    blockchain_rid BYTEA NOT NULL UNIQUE
+);
+""".trimIndent()
 
-    val t = ctx.createTable(tableName)
+private val CREATE_TABLE_META_CLASSES = """
+CREATE TABLE "%s"(
+    "id" INT NOT NULL PRIMARY KEY,
+    "name" TEXT NOT NULL UNIQUE,
+    "log" BOOLEAN NOT NULL
+);
+""".trimIndent()
+
+private val CREATE_TABLE_META_ATTRIBUTES = """
+CREATE TABLE "%s"(
+    "class_id" INT NOT NULL,
+    "name" TEXT NOT NULL,
+    "type" TEXT NOT NULL
+);
+""".trimIndent()
+
+private fun genClass(sqlCtx: Rt_SqlContext, rClass: R_Class): String {
+    val mapping = rClass.sqlMapping
+    val rowid = mapping.rowidColumn()
+    val tableName = mapping.table(sqlCtx)
+    val attrs = rClass.attributes.values
+
+    val t = dslCtx.createTable(tableName)
 
     val constraints = mutableListOf<Constraint>()
-    constraints.add(constraint("PK_" + tableName).primaryKey(mapping.rowidColumn))
-    constraints += genAttrConstraints(sqlMapper, tableName, attrs)
+    constraints.add(constraint("PK_" + tableName).primaryKey(rowid))
+    constraints += genAttrConstraints(sqlCtx, tableName, attrs)
 
-    var q = t.column(mapping.rowidColumn, SQLDataType.BIGINT.nullable(false))
+    var q = t.column(rowid, SQLDataType.BIGINT.nullable(false))
     q = genAttrColumns(attrs, q)
 
-    for ((kidx, key) in classDefinition.keys.withIndex()) {
+    for ((kidx, key) in rClass.keys.withIndex()) {
         constraints.add(constraint("K_${tableName}_${kidx}").unique(*key.attribs.toTypedArray()))
     }
 
@@ -78,15 +110,16 @@ private fun genClass(sqlMapper: Rt_SqlMapper, classDefinition: R_Class): String 
 
     val jsonAttribSet = attrs.filter { it.type is R_JSONType }.map { it.name }.toSet()
 
-    for ((iidx, index) in classDefinition.indexes.withIndex()) {
-        val index_sql : String;
+    for ((iidx, index) in rClass.indexes.withIndex()) {
+        val indexName = "IDX_${tableName}_${iidx}"
+        val indexSql : String
         if (index.attribs.size == 1 && jsonAttribSet.contains(index.attribs[0])) {
             val attrName = index.attribs[0]
-            index_sql = "CREATE INDEX \"IDX_${tableName}_${iidx}\" ON \"$tableName\" USING gin (\"${attrName}\" jsonb_path_ops)"
+            indexSql = """CREATE INDEX "$indexName" ON "$tableName" USING gin ("${attrName}" jsonb_path_ops)"""
         } else {
-            index_sql = (ctx.createIndex("IDX_${tableName}_${iidx}").on(tableName, *index.attribs.toTypedArray())).toString();
+            indexSql = (dslCtx.createIndex(indexName).on(tableName, *index.attribs.toTypedArray())).toString();
         }
-        ddl += index_sql + ";\n";
+        ddl += indexSql + ";\n";
     }
 
     return ddl
@@ -100,16 +133,16 @@ private fun genAttrColumns(attrs: Collection<R_Attrib>, step: CreateTableColumnS
     return q
 }
 
-private fun genAttrConstraints(sqlMapper: Rt_SqlMapper, sqlTable: String, attrs: Collection<R_Attrib>): List<Constraint> {
+private fun genAttrConstraints(sqlCtx: Rt_SqlContext, sqlTable: String, attrs: Collection<R_Attrib>): List<Constraint> {
     val constraints = mutableListOf<Constraint>()
 
     for (attr in attrs) {
         if (attr.type is R_ClassType) {
             val refCls = attr.type.rClass
-            val refTable = refCls.mapping.table(sqlMapper)
+            val refTable = refCls.sqlMapping.table(sqlCtx)
             val constraint = constraint("${sqlTable}_${attr.sqlMapping}_FK")
                     .foreignKey(attr.sqlMapping)
-                    .references(refTable, refCls.mapping.rowidColumn)
+                    .references(refTable, refCls.sqlMapping.rowidColumn())
             constraints.add(constraint)
         }
     }
@@ -172,7 +205,7 @@ fun genExpr(expr: R_Expr): String {
 
 fun genOp(opDefinition: R_Operation): String {
     val args = opDefinition.params.map {
-        val typename = getSQLType(it.type).getTypeName(ctx.configuration())
+        val typename = getSQLType(it.type).getTypeName(dslCtx.configuration())
         "_${it.name} ${typename}"
     }.joinToString()
     val body = genstatement(opDefinition.body)
@@ -188,31 +221,101 @@ fun genOp(opDefinition: R_Operation): String {
 """
 }
 
-fun genSql(module: R_Module, sqlMapper: Rt_SqlMapper, blockTable: Boolean, operations: Boolean): String {
-    System.setProperty("org.jooq.no-logo", "true")
+fun genSql(sqlCtx: Rt_SqlContext, sysTables: Boolean, operations: Boolean): String {
+    disableLogo
 
-    var s = ""
-    s += genRowidSql(sqlMapper)
-    if (blockTable) {
-        s += CREATE_TABLE_BLOCKS
-        s += CREATE_TABLE_TRANSACTIONS
+    val sqls = mutableListOf<String>()
+
+    if (sysTables) {
+        sqls += genSqlCreateSysTables()
     }
 
-    for (cls in module.topologicalClasses) {
-        if (cls.mapping.autoCreateTable) {
-            s += genClass(sqlMapper, cls)
-        }
-    }
-
-    for (obj in module.objects.values) {
-        s += genClass(sqlMapper, obj.rClass)
-    }
+    sqls += genSqlForChain(sqlCtx)
 
     if (operations) {
-        for (op in module.operations.values) {
-            s += genOp(op)
+        for (op in sqlCtx.module.operations.values) {
+            sqls += genOp(op)
         }
     }
 
-    return s
+    return joinSqls(sqls)
 }
+
+fun genSqlCreateSysTables(): String {
+    val sqls = mutableListOf<String>()
+    sqls += CREATE_TABLE_BLOCKS
+    sqls += CREATE_TABLE_TRANSACTIONS
+    sqls += CREATE_TABLE_BLOCKCHAINS
+    return joinSqls(sqls)
+}
+
+fun genSqlForChain(sqlCtx: Rt_SqlContext): String {
+    val sqls = mutableListOf<String>()
+    sqls += genRowidSql(sqlCtx.mainChainMapping)
+    sqls += genSqlMetaData(sqlCtx)
+    sqls += genSqlCreateClassTables(sqlCtx)
+    return joinSqls(sqls)
+}
+
+private fun genSqlMetaData(sqlCtx: Rt_SqlContext): String {
+    val sqls = mutableListOf<String>()
+
+    sqls += String.format(CREATE_TABLE_META_CLASSES, sqlCtx.mainChainMapping.metaClassTable)
+    sqls += String.format(CREATE_TABLE_META_ATTRIBUTES, sqlCtx.mainChainMapping.metaAttributesTable)
+
+    val metaClasses = sqlCtx.module.topologicalClasses.filter { it.sqlMapping.autoCreateTable() }
+    for ((i, cls) in metaClasses.withIndex()) {
+        sqls += genMetaClassInserts(sqlCtx, i, cls)
+    }
+
+    return joinSqls(sqls)
+}
+
+private fun genMetaClassInserts(sqlCtx: Rt_SqlContext, id: Int, cls: R_Class): List<String> {
+    val clsTable = DSL.tableByName(sqlCtx.mainChainMapping.metaClassTable)
+    val attrTable = DSL.tableByName(sqlCtx.mainChainMapping.metaAttributesTable)
+
+    val res = mutableListOf<String>()
+
+    res += dslCtx.insertInto(clsTable,
+            DSL.fieldByName("id"),
+            DSL.fieldByName("name"),
+            DSL.fieldByName("log")
+    ).values(
+            id,
+            cls.name,
+            cls.flags.log
+    ).getSQL(true) + ";"
+
+    for (attr in cls.attributes.values) {
+        res += dslCtx.insertInto(attrTable,
+                DSL.fieldByName("class_id"),
+                DSL.fieldByName("name"),
+                DSL.fieldByName("type")
+        ).values(
+                id,
+                attr.name,
+                attr.type.sqlAdapter.metaName(sqlCtx)
+        ).getSQL(true) + ";"
+    }
+
+    return res
+}
+
+private fun genSqlCreateClassTables(sqlCtx: Rt_SqlContext): String {
+    val sqls = mutableListOf<String>()
+
+    for (cls in sqlCtx.module.topologicalClasses) {
+        if (cls.sqlMapping.autoCreateTable()) {
+            sqls += genClass(sqlCtx, cls)
+        }
+    }
+
+    for (obj in sqlCtx.module.objects.values) {
+        sqls += genClass(sqlCtx, obj.rClass)
+    }
+
+    return joinSqls(sqls)
+}
+
+private fun joinSqls(sqls: List<String>) = sqls.joinToString("\n") + "\n"

@@ -9,7 +9,7 @@ class LibRequireTest: BaseRellTest(false) {
         chkEx("{ require(true, 'Hello'); return 0; }", "int[0]")
         chkEx("{ require(false); return 0; }", "req_err:null")
         chkEx("{ require(false, 'Hello'); return 0; }", "req_err:[Hello]")
-        chkEx("{ val x = require(true); return 0; }", "ct_err:stmt_val_unit:x")
+        chkEx("{ val x = require(true); return 0; }", "ct_err:stmt_var_unit:x")
 
         chkEx("{ require(true, ''+(1/0)); return 0; }", "int[0]")
         chkEx("{ require(false, ''+(1/0)); return 0; }", "rt_err:expr_div_by_zero")
@@ -17,12 +17,12 @@ class LibRequireTest: BaseRellTest(false) {
 
     @Test fun testRequireNullable() {
         chkEx("{ val x: integer = 123; return require(x); }", "ct_err:expr_call_argtypes:require:integer")
-        chkEx("{ val x: integer? = 123; return require(x); }", "int[123]")
+        chkEx("{ val x: integer? = _nullable(123); return require(x); }", "int[123]")
         chkEx("{ val x: integer? = null; return require(x); }", "req_err:null")
     }
 
     @Test fun testRequireAt() {
-        tst.useSql = true
+        tstCtx.useSql = true
         tst.defs = listOf("class user { name: text; }")
         chkOp("create user(name = 'Bob'); create user(name = 'Alice');")
 
@@ -50,7 +50,7 @@ class LibRequireTest: BaseRellTest(false) {
 
     @Test fun testRequireNotEmptyNullable() {
         chkEx("{ val x: integer = 123; return requireNotEmpty(x); }", "ct_err:expr_call_argtypes:requireNotEmpty:integer")
-        chkEx("{ val x: integer? = 123; return requireNotEmpty(x); }", "int[123]")
+        chkEx("{ val x: integer? = _nullable(123); return requireNotEmpty(x); }", "int[123]")
         chkEx("{ val x: integer? = null; return requireNotEmpty(x); }", "req_err:null")
     }
 
@@ -73,8 +73,8 @@ class LibRequireTest: BaseRellTest(false) {
         chkEx("{ val x: map<integer,text>? = map<integer,text>(); return requireNotEmpty(x); }", "req_err:null")
         chkEx("{ val x: map<integer,text>? = [123:'Hello']; return requireNotEmpty(x); }", "map<integer,text>[int[123]=text[Hello]]")
 
-        chkEx("{ val x: list<integer>? = [123]; return _typeOf(x); }", "text[list<integer>?]")
-        chkEx("{ val x: list<integer>? = [123]; return _typeOf(requireNotEmpty(x)); }", "text[list<integer>]")
+        chkEx("{ val x: list<integer>? = _nullable([123]); return _typeOf(x); }", "text[list<integer>?]")
+        chkEx("{ val x: list<integer>? = _nullable([123]); return _typeOf(requireNotEmpty(x)); }", "text[list<integer>]")
     }
 
     @Test fun testRequireNotEmptyWrongArgs() {

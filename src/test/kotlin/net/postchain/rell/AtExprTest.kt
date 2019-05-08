@@ -72,14 +72,14 @@ class AtExprTest: BaseRellTest() {
         )
 
         tst.inserts = listOf()
-        tst.insert("c0_foo", "name", "0,'Foo-1'")
-        tst.insert("c0_foo", "name", "1,'Foo-2'")
-        tst.insert("c0_bar", "name", "2,'Bar-1'")
-        tst.insert("c0_bar", "name", "3,'Bar-2'")
-        tst.insert("c0_foo_owner", "name,stuff,foo,bar", "4,'Bob',0,1,2")
-        tst.insert("c0_foo_owner", "name,stuff,foo,bar", "5,'Alice',1,0,3")
-        tst.insert("c0_bar_owner", "name,stuff,foo,bar", "6,'Trudy',2,1,3")
-        tst.insert("c0_bar_owner", "name,stuff,foo,bar", "7,'Andrew',3,0,2")
+        tst.insert("c0.foo", "name", "0,'Foo-1'")
+        tst.insert("c0.foo", "name", "1,'Foo-2'")
+        tst.insert("c0.bar", "name", "2,'Bar-1'")
+        tst.insert("c0.bar", "name", "3,'Bar-2'")
+        tst.insert("c0.foo_owner", "name,stuff,foo,bar", "4,'Bob',0,1,2")
+        tst.insert("c0.foo_owner", "name,stuff,foo,bar", "5,'Alice',1,0,3")
+        tst.insert("c0.bar_owner", "name,stuff,foo,bar", "6,'Trudy',2,1,3")
+        tst.insert("c0.bar_owner", "name,stuff,foo,bar", "7,'Andrew',3,0,2")
 
         val base = """
             val foo1 = foo @ { .name == 'Foo-1' };
@@ -170,10 +170,10 @@ class AtExprTest: BaseRellTest() {
         )
 
         tst.inserts = listOf()
-        tst.insert("c0_user", "name", "0,'Bob'")
-        tst.insert("c0_user", "name", "1,'Alice'")
-        tst.insert("c0_company", "name", "2,'Xerox'")
-        tst.insert("c0_company", "name", "3,'Bell'")
+        tst.insert("c0.user", "name", "0,'Bob'")
+        tst.insert("c0.user", "name", "1,'Alice'")
+        tst.insert("c0.company", "name", "2,'Xerox'")
+        tst.insert("c0.company", "name", "3,'Bell'")
 
         chk("(user, company) @ { .name == 'Bob' }", "ct_err:at_attr_name_ambig:name:user.name,company.name")
         chk("(user, company) @ { .name == 'Xerox' }", "ct_err:at_attr_name_ambig:name:user.name,company.name")
@@ -191,14 +191,14 @@ class AtExprTest: BaseRellTest() {
         )
 
         tst.inserts = listOf()
-        tst.insert("c0_target", "name", "0,'A'")
-        tst.insert("c0_target", "name", "1,'B'")
-        tst.insert("c0_target", "name", "2,'C'")
-        tst.insert("c0_single", "t", "0,0")
-        tst.insert("c0_single", "t", "1,1")
-        tst.insert("c0_double", "t1,t2", "0,0,1")
-        tst.insert("c0_double", "t1,t2", "1,1,2")
-        tst.insert("c0_double", "t1,t2", "2,2,0")
+        tst.insert("c0.target", "name", "0,'A'")
+        tst.insert("c0.target", "name", "1,'B'")
+        tst.insert("c0.target", "name", "2,'C'")
+        tst.insert("c0.single", "t", "0,0")
+        tst.insert("c0.single", "t", "1,1")
+        tst.insert("c0.double", "t1,t2", "0,0,1")
+        tst.insert("c0.double", "t1,t2", "1,1,2")
+        tst.insert("c0.double", "t1,t2", "2,2,0")
 
         val base = """
             val tgt1 = target @ { .name == 'A' };
@@ -232,17 +232,17 @@ class AtExprTest: BaseRellTest() {
 
         tst.inserts = listOf()
 
-        tst.insert("c0_person", "name,cityName", "100,'James','New York'")
-        tst.insert("c0_person", "name,cityName", "101,'Phil','London'")
-        tst.insert("c0_person", "name,cityName", "102,'Roman','Kyiv'")
+        tst.insert("c0.person", "name,cityName", "100,'James','New York'")
+        tst.insert("c0.person", "name,cityName", "101,'Phil','London'")
+        tst.insert("c0.person", "name,cityName", "102,'Roman','Kyiv'")
 
-        tst.insert("c0_city", "name,countryName", "200,'New York','USA'")
-        tst.insert("c0_city", "name,countryName", "201,'Kyiv','Ukraine'")
-        tst.insert("c0_city", "name,countryName", "202,'London','England'")
+        tst.insert("c0.city", "name,countryName", "200,'New York','USA'")
+        tst.insert("c0.city", "name,countryName", "201,'Kyiv','Ukraine'")
+        tst.insert("c0.city", "name,countryName", "202,'London','England'")
 
-        tst.insert("c0_country", "name", "300,'England'")
-        tst.insert("c0_country", "name", "301,'Ukraine'")
-        tst.insert("c0_country", "name", "302,'USA'")
+        tst.insert("c0.country", "name", "300,'England'")
+        tst.insert("c0.country", "name", "301,'Ukraine'")
+        tst.insert("c0.country", "name", "302,'USA'")
 
         chk("(person, city, country) @* { city.name == person.cityName, country.name == city.countryName }",
                 "list<(person:person,city:city,country:country)>[" +
@@ -265,12 +265,12 @@ class AtExprTest: BaseRellTest() {
         )
 
         tst.inserts = listOf()
-        tst.insert("c0_testee", "k1,k2,k3,i1,i2,i3,f1,f2", "1,100,101,102,103,104,105,106,107")
-        tst.insert("c0_testee", "k1,k2,k3,i1,i2,i3,f1,f2", "2,200,201,202,203,204,205,206,207")
-        tst.insert("c0_testee", "k1,k2,k3,i1,i2,i3,f1,f2", "3,300,301,302,303,304,305,306,307")
-        tst.insert("c0_proxy", "ref", "1,1")
-        tst.insert("c0_proxy", "ref", "2,2")
-        tst.insert("c0_proxy", "ref", "3,3")
+        tst.insert("c0.testee", "k1,k2,k3,i1,i2,i3,f1,f2", "1,100,101,102,103,104,105,106,107")
+        tst.insert("c0.testee", "k1,k2,k3,i1,i2,i3,f1,f2", "2,200,201,202,203,204,205,206,207")
+        tst.insert("c0.testee", "k1,k2,k3,i1,i2,i3,f1,f2", "3,300,301,302,303,304,305,306,307")
+        tst.insert("c0.proxy", "ref", "1,1")
+        tst.insert("c0.proxy", "ref", "2,2")
+        tst.insert("c0.proxy", "ref", "3,3")
 
         // Direct fields of the query class.
         chk("testee @* { .k1 == 100 }", "list<testee>[testee[1]]")
@@ -514,7 +514,7 @@ class AtExprTest: BaseRellTest() {
         """.trimIndent())
 
         tst.inserts = listOf("""
-            INSERT INTO c0_user_account(rowid, name, login, role, password_hash, deleted, pubkey, aux_data, tuid, created_by)
+            INSERT INTO "c0.user_account"(rowid, name, login, role, password_hash, deleted, pubkey, aux_data, tuid, created_by)
             VALUES (0, 'name1', 'test1@mail.io', 'issuer', 'test', false, '123', '{}', '12345', '1231234'),
             (1, 'name2', 'test2@mail.io', 'validator', '2test', false, '2123', '{}', '212345', '21231234');
         """.trimIndent())
@@ -548,14 +548,19 @@ class AtExprTest: BaseRellTest() {
         chk("user @* { .firstName == 'Bill' } ( x = (123, 'Hello') )", "ct_err:expr_nosql:(integer,text)")
     }
 
-    companion object {
-        val mkins = SqlTestUtils::mkins
+    @Test fun testIndependentClassFieldExpression() {
+        val code = """
+            { val u = user @ { .firstName == 'Paul' };
+              return user @ { .company == u.company, .firstName != 'Paul' } ( .firstName );
+            }
+        """.trimIndent()
+        chkEx(code, "text[Bill]")
     }
 
     private object Ins {
-        fun company(id: Int, name: String): String = mkins("c0_company", "name", "$id, '$name'")
+        fun company(id: Int, name: String): String = SqlTestUtils.mkins("c0.company", "name", "$id, '$name'")
 
         fun user(id: Int, companyId: Int, firstName: String, lastName: String): String =
-                mkins("c0_user", "firstName,lastName,company", "$id, '$firstName', '$lastName', $companyId")
+                SqlTestUtils.mkins("c0.user", "firstName,lastName,company", "$id, '$firstName', '$lastName', $companyId")
     }
 }

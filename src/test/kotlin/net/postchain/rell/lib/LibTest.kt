@@ -1,8 +1,8 @@
 package net.postchain.rell.lib
 
-import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.hexStringToByteArray
 import net.postchain.rell.runtime.Rt_OpContext
+import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 
 class LibTest: BaseRellTest(false) {
@@ -102,6 +102,12 @@ class LibTest: BaseRellTest(false) {
         chk("_strictStr('Hello')", "text[Hello]")
         chk("_strictStr(true)", "boolean[true]")
         chk("_strictStr((123,'Hello'))", "(int[123],text[Hello])")
+    }
+
+    @Test fun testNullable() {
+        tst.strictToString = false
+        chk("_typeOf(123)", "integer")
+        chk("_typeOf(_nullable(123))", "integer?")
     }
 
     @Test fun testJsonStr() {
@@ -226,5 +232,17 @@ class LibTest: BaseRellTest(false) {
         chk("qaz.fromGTXValue(GTXValue.fromBytes(x''))", "ct_err:fn_record_invalid:qaz:fromGTXValue")
         chk("qaz.fromPrettyGTXValue(GTXValue.fromBytes(x''))", "ct_err:fn_record_invalid:qaz:fromPrettyGTXValue")
         chk("qaz.fromBytes(x'')", "ct_err:fn_record_invalid:qaz:fromBytes")
+    }
+
+    @Test fun testExists() {
+        chkEx("{ var x: integer? = _nullable(123); return exists(x); }", "boolean[true]")
+        chkEx("{ var x: integer? = null; return exists(x); }", "boolean[false]")
+
+        chk("exists(123)", "ct_err:expr_call_argtypes:exists:integer")
+        chk("exists(false)", "ct_err:expr_call_argtypes:exists:boolean")
+        chk("exists('Hello')", "ct_err:expr_call_argtypes:exists:text")
+        chk("exists(null)", "ct_err:expr_call_argtypes:exists:null")
+        chk("exists([123])", "ct_err:expr_call_argtypes:exists:list<integer>")
+        chk("exists([123 : 'Hello'])", "ct_err:expr_call_argtypes:exists:map<integer,text>")
     }
 }

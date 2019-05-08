@@ -86,6 +86,8 @@ Global Functions
 
 ``abs(integer): integer`` - absolute value
 
+``empty(T?): boolean`` - returns ``true`` if the argument is ``null`` and ``false`` otherwise
+
 ``is_signer(byte_array): boolean`` - returns ``true`` if a byte array is
 in the list of signers of current operation
 
@@ -268,8 +270,10 @@ Special operators:
 
 --------------
 
-list
-----
+list<T>
+--------
+
+Constructors:
 
 ``list<T>()`` - a new empty list
 
@@ -279,22 +283,7 @@ accepted as well)
 ``list<T>(set<T>)`` - a copy of the given set (set of subtype is
 accepted)
 
-``.empty(): boolean``
-
-``.size(): integer``
-
-``.contains(T): boolean``
-
-``.containsAll(list<T>): boolean``
-
-``.containsAll(set<T>): boolean``
-
-``.indexOf(T): integer`` - returns ``-1`` if element is not found
-
-``.sub(start: integer[, end: integer]): list<T>`` - returns a sub-list
-(start-inclusive, end-exclusive)
-
-``.str(): text`` - returns e. g. ``'[1, 2, 3, 4, 5]'``
+Methods:
 
 ``.add(T): boolean`` - adds an element to the end, always returns
 ``true``
@@ -310,6 +299,18 @@ always returns ``true``
 
 ``.addAll(pos: integer, set<T>): boolean``
 
+``.clear()``
+
+``.contains(T): boolean``
+
+``.containsAll(list<T>): boolean``
+
+``.containsAll(set<T>): boolean``
+
+``.empty(): boolean``
+
+``.indexOf(T): integer`` - returns ``-1`` if element is not found
+
 ``.remove(T): boolean`` - removes the first occurrence of the value,
 return ``true`` if found
 
@@ -319,7 +320,15 @@ return ``true`` if found
 
 ``.removeAt(pos: integer): T`` - removes an element at a given position
 
-``.clear()``
+``.size(): integer``
+
+``._sort()`` - sorts this list, returns nothing (name is ``_sort``, because ``sort`` is a keyword in Rell)
+
+``.sorted(): list<T>`` - returns a sorted copy of this list
+
+``.str(): text`` - returns e. g. ``'[1, 2, 3, 4, 5]'``
+
+``.sub(start: integer[, end: integer]): list<T>`` - returns a sub-list (start-inclusive, end-exclusive)
 
 Special operators:
 
@@ -328,8 +337,10 @@ Special operators:
 
 --------------
 
-set
----
+set<T>
+-------
+
+Constructors:
 
 ``set<T>()`` - a new empty set
 
@@ -338,9 +349,15 @@ as well)
 
 ``set<T>(list<T>)`` - a copy of the given list (with duplicates removed)
 
-``.empty(): boolean``
+Methods:
 
-``.size(): integer``
+``.add(T): boolean`` - if the element is not in the set, adds it and returns ``true``
+
+``.addAll(list<T>): boolean`` - adds all elements, returns ``true`` if at least one added
+
+``.addAll(set<T>): boolean`` - adds all elements, returns ``true`` if at least one added
+
+``.clear()``
 
 ``.contains(T): boolean``
 
@@ -348,26 +365,19 @@ as well)
 
 ``.containsAll(set<T>): boolean``
 
-``.str(): text`` - returns e. g. ``'[1, 2, 3, 4, 5]'``
-
-``.add(T): boolean`` - if the element is not in the set, adds it and
-returns ``true``
-
-``.addAll(list<T>): boolean`` - adds all elements, returns ``true`` if
-at least one added
-
-``.addAll(set<T>): boolean`` - adds all elements, returns ``true`` if at
-least one added
+``.empty(): boolean``
 
 ``.remove(T): boolean`` - removes the element, returns ``true`` if found
 
-``.removeAll(list<T>): boolean`` - returns ``true`` if at least one
-removed
+``.removeAll(list<T>): boolean`` - returns ``true`` if at least one removed
 
-``.removeAll(set<T>): boolean`` - returns ``true`` if at least one
-removed
+``.removeAll(set<T>): boolean`` - returns ``true`` if at least one removed
 
-``.clear()``
+``.size(): integer``
+
+``.sorted(): list<T>`` - returns a sorted copy of this set (as a list)
+
+``.str(): text`` - returns e. g. ``'[1, 2, 3, 4, 5]'``
 
 Special operators:
 
@@ -378,32 +388,33 @@ Special operators:
 map<K,V>
 --------
 
+Constructors:
+
 ``map<K,V>()`` - a new empty map
 
-``map<K,V>(map<K,V>)`` - a copy of the given map (map of subtypes is
-accepted as well)
+``map<K,V>(map<K,V>)`` - a copy of the given map (map of subtypes is accepted as well)
 
-``.empty(): boolean``
-
-``.size(): integer``
-
-``.contains(K): boolean``
-
-``.get(K): V`` - get value by key (same as ``[]``)
-
-``.str(): text`` - returns e. g. ``'{x=123, y=456}'``
+Methods:
 
 ``.clear()``
 
+``.contains(K): boolean``
+
+``.empty(): boolean``
+
+``.get(K): V`` - get value by key (same as ``[]``)
+
 ``.put(K, V)`` - adds/replaces a key-value pair
 
-``.putAll(map<K, V>)`` - adds/replaces all key-value pairs from the
-given map
-
-``.remove(K): V`` - removes a key-value pair (fails if the key is not in
-the map)
-
 ``.keys(): set<K>`` - returns a copy of keys
+
+``.putAll(map<K, V>)`` - adds/replaces all key-value pairs from the given map
+
+``.remove(K): V`` - removes a key-value pair (fails if the key is not in the map)
+
+``.size(): integer``
+
+``.str(): text`` - returns e. g. ``'{x=123, y=456}'``
 
 ``.values(): list<V>`` - returns a copy of values
 

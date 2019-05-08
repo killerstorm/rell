@@ -2,25 +2,33 @@ package net.postchain.rell.test
 
 import com.google.common.io.Files
 import net.postchain.gtx.GTXValue
-import net.postchain.rell.model.*
+import net.postchain.rell.model.R_Class
+import net.postchain.rell.model.R_ExternalParam
+import net.postchain.rell.model.R_Module
 import net.postchain.rell.module.GtxToRtContext
+import net.postchain.rell.module.RELL_VERSION
+import net.postchain.rell.parser.C_Message
+import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_GtxValue
-import net.postchain.rell.runtime.Rt_SqlMapper
 import net.postchain.rell.runtime.Rt_Value
-import net.postchain.rell.sql.*
+import net.postchain.rell.sql.ROWID_COLUMN
+import net.postchain.rell.sql.SqlExecutor
+import net.postchain.rell.sql.SqlUtils
 import net.postchain.rell.toHex
 import org.apache.commons.configuration2.PropertiesConfiguration
 import org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder
 import org.apache.commons.configuration2.builder.fluent.Parameters
 import org.apache.commons.configuration2.io.ClasspathLocationStrategy
+import org.postgresql.util.PGobject
 import java.io.File
 import java.io.FileOutputStream
-import java.lang.IllegalStateException
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.ResultSet
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+
+class RellTestModule(val rModule: R_Module, val messages: List<C_Message>)
 
 object SqlTestUtils {
     fun createSqlConnection(): Connection {
@@ -53,9 +61,9 @@ object SqlTestUtils {
 
     private data class DbConnProps(val url: String, val user: String, val password: String)
 
-    fun resetRowid(sqlExec: SqlExecutor, sqlMapper: Rt_SqlMapper) {
-        val table = sqlMapper.rowidTable
-        sqlExec.execute("UPDATE $table SET last_value = 0;")
+    fun resetRowid(sqlExec: SqlExecutor, chainMapping: Rt_ChainSqlMapping) {
+        val table = chainMapping.rowidTable
+        sqlExec.execute("""UPDATE "$table" SET last_value = 0;""")
     }
 
     fun clearTables(sqlExec: SqlExecutor) {
@@ -71,77 +79,71 @@ object SqlTestUtils {
         return "INSERT INTO \"$table\"(\"$ROWID_COLUMN\",$quotedColumns) VALUES ($values);"
     }
 
-    fun dumpDatabaseClasses(sqlExec: SqlExecutor, sqlMapper: Rt_SqlMapper, module: R_Module): List<String> {
+    fun dumpDatabaseClasses(sqlExec: SqlExecutor, chainMapping: Rt_ChainSqlMapping, module: R_Module): List<String> {
         val list = mutableListOf<String>()
 
         for (cls in module.classes.values) {
-            if (cls.mapping.autoCreateTable) {
-                dumpClassTable(sqlExec, sqlMapper, cls, list)
+            if (cls.sqlMapping.autoCreateTable()) {
+                dumpClassTable(sqlExec, chainMapping, cls, list)
             }
         }
 
         for (obj in module.objects.values) {
-            dumpClassTable(sqlExec, sqlMapper, obj.rClass, list)
+            dumpClassTable(sqlExec, chainMapping, obj.rClass, list)
         }
 
         return list.toList()
     }
 
-    private fun dumpClassTable(sqlExec: SqlExecutor, sqlMapper: Rt_SqlMapper, cls: R_Class, list: MutableList<String>) {
-        val table = cls.mapping.table(sqlMapper)
-        val sql = getClassDumpSql(table, cls.mapping.rowidColumn, cls.attributes)
-        sqlExec.executeQuery(sql, {}) { rs -> list.add(dumpClassRecord(cls.name, true, cls.attributes, rs)) }
+    private fun dumpClassTable(sqlExec: SqlExecutor, chainMapping: Rt_ChainSqlMapping, cls: R_Class, list: MutableList<String>) {
+        val table = cls.sqlMapping.table(chainMapping)
+        val cols = listOf(cls.sqlMapping.rowidColumn()) + cls.attributes.values.map { it.sqlMapping }
+        val sql = getClassDumpSql(table, cols, cls.sqlMapping.rowidColumn())
+        val rows = dumpSql(sqlExec, sql).map { "${cls.name}($it)" }
+        list += rows
     }
 
-    private fun getClassDumpSql(table: String, rowidCol: String?, attrs: Map<String, R_Attrib>): String {
+    fun dumpSql(sqlExec: SqlExecutor, sql: String): List<String> {
+        val list = mutableListOf<String>()
+        sqlExec.executeQuery(sql, {}) { rs -> list.add(dumpSqlRecord(rs)) }
+        return list
+    }
+
+    private fun getClassDumpSql(table: String, columns: List<String>, sortColumn: String?): String {
         val buf = StringBuilder()
         buf.append("SELECT")
-
-        val cols = mutableListOf<String>()
-        if (rowidCol != null) {
-            cols.add(rowidCol)
-        }
-        for (attr in attrs.values) {
-            cols.add(attr.sqlMapping)
-        }
-        cols.joinTo(buf, ", ") { "\"$it\"" }
+        columns.joinTo(buf, ", ") { "\"$it\"" }
 
         buf.append(" FROM \"${table}\"")
-        if (rowidCol != null) {
-            buf.append(" ORDER BY \"$rowidCol\"")
+        if (sortColumn != null) {
+            buf.append(" ORDER BY \"$sortColumn\"")
         }
 
         return buf.toString()
     }
 
-    private fun dumpClassRecord(name: String, rowid: Boolean, attrs: Map<String, R_Attrib>, rs: ResultSet): String {
+    private fun dumpSqlRecord(rs: ResultSet): String {
         val values = mutableListOf<String>()
-        if (rowid) {
-            values.add("" + rs.getLong(1))
-        }
 
-        for ((listIndex, attr) in attrs.values.withIndex()) {
-            val idx = listIndex + (if (rowid) 2 else 1)
-            val type = attr.type
-            val value = if (type == R_TextType) {
-                rs.getString(idx)
-            } else if (type == R_ByteArrayType) {
+        for (idx in 1 .. rs.metaData.columnCount) {
+            val value = rs.getObject(idx)
+            val str = if (value is String) {
+                value
+            } else if (value is ByteArray) {
                 "0x" + rs.getBytes(idx).toHex()
-            } else if (type == R_JSONType) {
-                "" + rs.getString(idx)
-            } else if (type == R_IntegerType || type is R_ClassType || type is R_EnumType) {
-                "" + rs.getLong(idx)
+            } else if (value is PGobject) {
+                value.value
+            } else if (value is Int || value is Long) {
+                "" + value
+            } else if (value is Boolean) {
+                "" + value
             } else {
-                throw IllegalStateException(type.toStrictString())
+                throw IllegalStateException(value.javaClass.canonicalName)
             }
-            values.add("" + value)
+            values.add("" + str)
         }
 
-        val buf = StringBuilder()
-        buf.append("$name(")
-        values.joinTo(buf, ",")
-        buf.append(")")
-        return buf.toString()
+        return values.joinToString(",")
     }
 }
 
@@ -178,21 +180,26 @@ object GtxTestUtils {
         val s = encodeGtxStr(gtx)
         return s.replace('"', '\'')
     }
+
+    fun strToGtx(s: String): GTXValue {
+        val s2 = s.replace('\'', '"')
+        return decodeGtxStr(s2)
+    }
 }
 
 object TestSourcesRecorder {
     private val ENABLED = false
-    private val SOURCES_FILE: String = System.getProperty("user.home") + "/testsources.rell"
+    private val SOURCES_FILE: String = System.getProperty("user.home") + "/testsources-$RELL_VERSION.rell"
 
     private val sync = Any()
-    private val sources = mutableSetOf<String>()
+    private val sources = mutableMapOf<String, String>()
     private var shutdownHookInstalled = false
 
-    fun addSource(code: String) {
+    fun addSource(code: String, result: String) {
         if (!ENABLED) return
 
         synchronized (sync) {
-            sources.add(code.trim())
+            sources[code.trim()] = result
             if (!shutdownHookInstalled) {
                 val thread = Thread(TestSourcesRecorder::saveSources)
                 thread.name = "SaveSources"
@@ -212,8 +219,10 @@ object TestSourcesRecorder {
 
     private fun saveSourcesSingleFile(f: File) {
         val buf = StringBuilder()
-        for (code in sources) {
-            buf.append(code + "\n")
+        for ((code, result) in sources) {
+            if (result == "OK") {
+                buf.append(code + "\n")
+            }
         }
         Files.write(buf.toString(), f, Charsets.UTF_8)
         printNotice(sources.size, f)
@@ -223,9 +232,10 @@ object TestSourcesRecorder {
         FileOutputStream(f).use { fout ->
             ZipOutputStream(fout).use { zout ->
                 var i = 0
-                for (code in sources) {
+                for ((code, result) in sources) {
+                    val str = codeToString(code, result)
                     zout.putNextEntry(ZipEntry(String.format("%04d.rell", i)))
-                    zout.write(code.toByteArray())
+                    zout.write(str.toByteArray())
                     i++
                 }
             }
@@ -233,7 +243,59 @@ object TestSourcesRecorder {
         printNotice(sources.size, f)
     }
 
+    private fun codeToString(code: String, result: String): String {
+        return "$code\n--==[RESULT]==--\n$result"
+    }
+
     private fun printNotice(count: Int, f: File) {
         println("Test sources ($count) written to file: $f")
     }
+}
+
+class RellTestEval() {
+    private var wrapping = false
+
+    fun eval(code: () -> String): String {
+        val oldWrapping = wrapping
+        wrapping = true
+        return try {
+            code()
+        } catch (e: EvalException) {
+            e.message!!
+        } finally {
+            wrapping = oldWrapping
+        }
+    }
+
+    fun <T> wrapCt(code: () -> T): T {
+        if (wrapping) {
+            val p = RellTestUtils.catchCtErr0(false, code)
+            return result(p)
+        } else {
+            return code()
+        }
+    }
+
+    fun <T> wrapRt(code: () -> T): T {
+        if (wrapping) {
+            val p = RellTestUtils.catchRtErr0(code)
+            return result(p)
+        } else {
+            return code()
+        }
+    }
+
+    fun <T> wrap(code: () -> T): T {
+        check(wrapping)
+        return wrapRt {
+            wrapCt(code)
+        }
+    }
+
+    private fun <T> result(p: Pair<String?, T?>): T {
+        if (p.first != null) throw EvalException(p.first!!)
+        return p.second!!
+    }
+
+    private class EvalException(msg: String): RuntimeException(msg)
 }

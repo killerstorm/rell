@@ -1,10 +1,7 @@
 package net.postchain.rell.model
 
 import net.postchain.rell.CommonUtils
-import net.postchain.rell.runtime.Rt_CallFrame
-import net.postchain.rell.runtime.Rt_ListValue
-import net.postchain.rell.runtime.Rt_NullValue
-import net.postchain.rell.runtime.Rt_SqlMapper
+import net.postchain.rell.runtime.*
 
 sealed class R_UpdateTarget {
     abstract fun cls(): R_AtClass
@@ -30,7 +27,7 @@ class R_UpdateTarget_Simple(
     override fun where() = where
 
     override fun execute(stmt: R_BaseUpdateStatement, frame: Rt_CallFrame) {
-        val ctx = SqlGenContext(listOf(cls) + extraClasses, listOf())
+        val ctx = SqlGenContext(frame.entCtx.modCtx.sqlCtx, listOf(cls) + extraClasses, listOf())
         execute(stmt, frame, ctx, cardinality)
     }
 
@@ -41,7 +38,7 @@ class R_UpdateTarget_Simple(
                 ctx: SqlGenContext,
                 cardinality: R_AtCardinality
         ) {
-            val pSql = stmt.buildSql(frame, ctx, true)
+            val pSql = stmt.buildSql(ctx, true)
 
             var count = 0
             pSql.executeQuery(frame) { rs ->
@@ -63,7 +60,7 @@ sealed class R_UpdateTarget_Expr(val cls: R_AtClass, val where: Db_Expr, val exp
     final override fun where() = where
 
     protected fun execute0(stmt: R_BaseUpdateStatement, frame: Rt_CallFrame, ctx: SqlGenContext) {
-        val pSql = stmt.buildSql(frame, ctx, false)
+        val pSql = stmt.buildSql(ctx, false)
         pSql.execute(frame)
     }
 }
@@ -75,7 +72,7 @@ class R_UpdateTarget_Expr_One(cls: R_AtClass, where: Db_Expr, expr: R_Expr): R_U
             return
         }
 
-        val ctx = SqlGenContext(listOf(cls), listOf(value))
+        val ctx = SqlGenContext(frame.entCtx.modCtx.sqlCtx, listOf(cls), listOf(value))
         execute0(stmt, frame, ctx)
     }
 }
@@ -105,7 +102,7 @@ class R_UpdateTarget_Expr_Many(
 
         for (part in CommonUtils.split(lst, partSize)) {
             val partValue = Rt_ListValue(listType, part)
-            val ctx = SqlGenContext(listOf(cls), listOf(partValue))
+            val ctx = SqlGenContext(frame.entCtx.modCtx.sqlCtx, listOf(cls), listOf(partValue))
             execute0(stmt, frame, ctx)
         }
     }
@@ -119,7 +116,7 @@ class R_UpdateTarget_Object(rObject: R_Object): R_UpdateTarget() {
     override fun where() = null
 
     override fun execute(stmt: R_BaseUpdateStatement, frame: Rt_CallFrame) {
-        val ctx = SqlGenContext(listOf(cls), listOf())
+        val ctx = SqlGenContext(frame.entCtx.modCtx.sqlCtx, listOf(cls), listOf())
         R_UpdateTarget_Simple.execute(stmt, frame, ctx, R_AtCardinality.ONE)
     }
 }
@@ -127,12 +124,7 @@ class R_UpdateTarget_Object(rObject: R_Object): R_UpdateTarget() {
 class R_UpdateStatementWhat(val attr: R_Attrib, val expr: Db_Expr, val op: Db_BinaryOp?)
 
 sealed class R_BaseUpdateStatement(val target: R_UpdateTarget): R_Statement() {
-    protected abstract fun buildSql(sqlMapper: Rt_SqlMapper, ctx: SqlGenContext, returning: Boolean): ParameterizedSql
-
-    fun buildSql(frame: Rt_CallFrame, ctx: SqlGenContext, returning: Boolean): ParameterizedSql {
-        val sqlMapper = frame.entCtx.modCtx.globalCtx.sqlMapper
-        return buildSql(sqlMapper, ctx, returning)
-    }
+    abstract fun buildSql(ctx: SqlGenContext, returning: Boolean): ParameterizedSql
 
     final override fun execute(frame: Rt_CallFrame): R_StatementResult? {
         frame.entCtx.checkDbUpdateAllowed()
@@ -140,27 +132,27 @@ sealed class R_BaseUpdateStatement(val target: R_UpdateTarget): R_Statement() {
         return null
     }
 
-    fun appendMainTable(builder: SqlBuilder, sqlMapper: Rt_SqlMapper, fromInfo: SqlFromInfo) {
+    fun appendMainTable(builder: SqlBuilder, sqlCtx: Rt_SqlContext, fromInfo: SqlFromInfo) {
         val cls = target.cls()
-        val table = cls.rClass.mapping.table(sqlMapper)
+        val table = cls.rClass.sqlMapping.table(sqlCtx)
         builder.appendName(table)
         builder.append(" ")
         builder.append(fromInfo.classes[cls.index].alias.str)
     }
 
-    fun appendExtraTables(builder: SqlBuilder, sqlMapper: Rt_SqlMapper, fromInfo: SqlFromInfo, keyword: String) {
+    fun appendExtraTables(builder: SqlBuilder, sqlCtx: Rt_SqlContext, fromInfo: SqlFromInfo, keyword: String) {
         val tables = mutableListOf<Pair<String, SqlTableAlias>>()
 
         val cls = target.cls()
         for (join in fromInfo.classes[cls.index].joins) {
-            val table = join.alias.cls.mapping.table(sqlMapper)
+            val table = join.alias.cls.sqlMapping.table(sqlCtx)
             tables.add(Pair(table, join.alias))
         }
 
         for (extraCls in target.extraClasses()) {
-            tables.add(Pair(extraCls.rClass.mapping.table(sqlMapper), fromInfo.classes[extraCls.index].alias))
+            tables.add(Pair(extraCls.rClass.sqlMapping.table(sqlCtx), fromInfo.classes[extraCls.index].alias))
             for (join in fromInfo.classes[extraCls.index].joins) {
-                tables.add(Pair(join.alias.cls.mapping.table(sqlMapper), join.alias))
+                tables.add(Pair(join.alias.cls.sqlMapping.table(sqlCtx), join.alias))
             }
         }
 
@@ -177,7 +169,7 @@ sealed class R_BaseUpdateStatement(val target: R_UpdateTarget): R_Statement() {
         }
     }
 
-    fun appendWhere(ctx: SqlGenContext, b: SqlBuilder, sqlMapper: Rt_SqlMapper, fromInfo: SqlFromInfo) {
+    fun appendWhere(b: SqlBuilder, ctx: SqlGenContext, fromInfo: SqlFromInfo) {
         val allJoins = fromInfo.classes.flatMap { it.joins }
         val where = target.where()
 
@@ -189,7 +181,7 @@ sealed class R_BaseUpdateStatement(val target: R_UpdateTarget): R_Statement() {
             where.toSql(ctx, whereB)
         }
 
-        R_AtExprBase.appendExtraWhere(whereB, sqlMapper, fromInfo)
+        R_AtExprBase.appendExtraWhere(whereB, ctx.sqlCtx, fromInfo)
 
         if (!whereB.isEmpty()) {
             b.append(" WHERE ")
@@ -202,7 +194,7 @@ sealed class R_BaseUpdateStatement(val target: R_UpdateTarget): R_Statement() {
             b.append("(")
             b.appendColumn(join.baseAlias, join.attr)
             b.append(" = ")
-            b.appendColumn(join.alias, join.alias.cls.mapping.rowidColumn)
+            b.appendColumn(join.alias, join.alias.cls.sqlMapping.rowidColumn())
             b.append(")")
         }
     }
@@ -210,20 +202,20 @@ sealed class R_BaseUpdateStatement(val target: R_UpdateTarget): R_Statement() {
     fun appendReturning(builder: SqlBuilder, fromInfo: SqlFromInfo) {
         val cls = target.cls()
         builder.append(" RETURNING ")
-        builder.appendColumn(fromInfo.classes[cls.index].alias, cls.rClass.mapping.rowidColumn)
+        builder.appendColumn(fromInfo.classes[cls.index].alias, cls.rClass.sqlMapping.rowidColumn())
     }
 }
 
 class R_UpdateStatement(target: R_UpdateTarget, val what: List<R_UpdateStatementWhat>): R_BaseUpdateStatement(target) {
-    override fun buildSql(sqlMapper: Rt_SqlMapper, ctx: SqlGenContext, returning: Boolean): ParameterizedSql {
+    override fun buildSql(ctx: SqlGenContext, returning: Boolean): ParameterizedSql {
         val fromInfo = buildFromInfo(ctx)
         val builder = SqlBuilder()
 
         builder.append("UPDATE ")
-        appendMainTable(builder, sqlMapper, fromInfo)
+        appendMainTable(builder, ctx.sqlCtx, fromInfo)
         appendSet(ctx, builder)
-        appendExtraTables(builder, sqlMapper, fromInfo, "FROM")
-        appendWhere(ctx, builder, sqlMapper, fromInfo)
+        appendExtraTables(builder, ctx.sqlCtx, fromInfo, "FROM")
+        appendWhere(builder, ctx, fromInfo)
 
         if (returning) {
             appendReturning(builder, fromInfo)
@@ -257,14 +249,14 @@ class R_UpdateStatement(target: R_UpdateTarget, val what: List<R_UpdateStatement
 }
 
 class R_DeleteStatement(target: R_UpdateTarget): R_BaseUpdateStatement(target) {
-    override fun buildSql(sqlMapper: Rt_SqlMapper, ctx: SqlGenContext, returning: Boolean): ParameterizedSql {
+    override fun buildSql(ctx: SqlGenContext, returning: Boolean): ParameterizedSql {
         val fromInfo = buildFromInfo(ctx)
         val builder = SqlBuilder()
 
         builder.append("DELETE FROM ")
-        appendMainTable(builder, sqlMapper, fromInfo)
-        appendExtraTables(builder, sqlMapper, fromInfo, "USING")
-        appendWhere(ctx, builder, sqlMapper, fromInfo)
+        appendMainTable(builder, ctx.sqlCtx, fromInfo)
+        appendExtraTables(builder, ctx.sqlCtx, fromInfo, "USING")
+        appendWhere(builder, ctx, fromInfo)
 
         if (returning) {
             appendReturning(builder, fromInfo)

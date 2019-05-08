@@ -1,7 +1,7 @@
 package net.postchain.rell
 
 import net.postchain.rell.test.BaseRellTest
-import org.junit.*
+import org.junit.Test
 
 class UpdateDeleteTest: BaseRellTest() {
     override fun classDefs() = listOf(
@@ -417,7 +417,7 @@ class UpdateDeleteTest: BaseRellTest() {
         resetChkOp("val p = ${person("Mike")}; p.score += 'Hello';", "ct_err:binop_operand_type:+=:integer:text")
         chkDataCommon(james(100), mike(250))
 
-        resetChkOp("val p = ${person("Mike")}; val v: integer? = 123; p.score += v;",
+        resetChkOp("val p = ${person("Mike")}; val v: integer? = _nullable(123); p.score += v;",
                 "ct_err:binop_operand_type:+=:integer:integer?")
         chkDataCommon(james(100), mike(250))
 
@@ -425,6 +425,10 @@ class UpdateDeleteTest: BaseRellTest() {
         chkDataCommon(james(100), mike(250))
 
         resetChkOp("val p = ${person("Mike")}; p.name += 'Bond';", "ct_err:update_attr_not_mutable:name")
+        chkDataCommon(james(100), mike(250))
+
+        resetData()
+        chkEx("{ val p = ${person("Mike")}; p.score += 123; return 0; }", "ct_err:no_db_update")
         chkDataCommon(james(100), mike(250))
     }
 
@@ -485,10 +489,10 @@ class UpdateDeleteTest: BaseRellTest() {
                 "class bar { f: foo; }"
         )
         tst.inserts = listOf()
-        tst.insert("c0_person", "name,score", "1,'James',100")
-        tst.insert("c0_person", "name,score", "2,'Mike',250")
-        tst.insert("c0_foo", "p", "1,1")
-        tst.insert("c0_bar", "f", "1,1")
+        tst.insert("c0.person", "name,score", "1,'James',100")
+        tst.insert("c0.person", "name,score", "2,'Mike',250")
+        tst.insert("c0.foo", "p", "1,1")
+        tst.insert("c0.bar", "f", "1,1")
 
         chkData("person(1,James,100)", "person(2,Mike,250)", "foo(1,1)", "bar(1,1)")
 
@@ -502,11 +506,45 @@ class UpdateDeleteTest: BaseRellTest() {
         chkData("person(1,James,913)", "person(2,Mike,250)", "foo(1,1)", "bar(1,1)")
     }
 
+    @Test fun testUpdateIncrementDecrement() {
+        fun james(score: Int) = "person(4,James,3,Evergreen Ave,5,$score)"
+        fun mike(score: Int) = "person(5,Mike,1,Grand St,7,$score)"
+
+        createCitiesAndPersons()
+        chkDataCommon(james(100), mike(250))
+
+        // Increment/decrement is not supported now, but may be supported later.
+        chkOp("update person @ { .name == 'James' } ( .score++ );", "ct_err:expr_bad_dst")
+        chkOp("update person @ { .name == 'James' } ( .score-- );", "ct_err:expr_bad_dst")
+        chkOp("update person @ { .name == 'James' } ( ++.score );", "ct_err:expr_bad_dst")
+        chkOp("update person @ { .name == 'James' } ( --.score );", "ct_err:expr_bad_dst")
+    }
+
+    @Test fun testBugGamePlayerSubExpr() {
+        tst.defs = listOf(
+                "class user { name; mutable games_total: integer; mutable games_won: integer; }",
+                "class game { player_1: user; player_2: user; }"
+        )
+        tst.insert("c0.user", "name,games_total,games_won", "1,'Bob',3,2")
+        tst.insert("c0.user", "name,games_total,games_won", "4,'Alice',6,5")
+        tst.insert("c0.game", "player_1,player_2", "7,1,4")
+
+        chkOp("""
+            val the_game = game @ {};
+            val the_user = user @ { .name == 'Bob' };
+            update user @ { the_game.player_1 == user } ( games_won += 1, games_total += 1 );
+        """.trimIndent())
+    }
+
     private fun resetChkOp(code: String, expected: String = "OK") {
+        resetData()
+        chkOp(code, expected)
+    }
+
+    private fun resetData() {
         tst.resetRowid()
         chkOp("delete person @* {}; delete city @* {};")
         createCitiesAndPersons()
-        chkOp(code, expected)
     }
 
     private fun createCities() {

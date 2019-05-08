@@ -1,5 +1,6 @@
 package net.postchain.rell.module
 
+import mu.KLogging
 import net.postchain.core.EContext
 import net.postchain.core.Transactor
 import net.postchain.core.TxEContext
@@ -10,11 +11,16 @@ import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.model.R_Operation
 import net.postchain.rell.model.R_Query
-import net.postchain.rell.parser.C_Utils
+import net.postchain.rell.parser.C_Compiler
+import net.postchain.rell.parser.C_MessageType
+import net.postchain.rell.parser.C_VirtualIncludeDir
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.DefaultSqlExecutor
-import net.postchain.rell.sql.genSql
-import org.apache.commons.logging.LogFactory
+import net.postchain.rell.sql.genSqlForChain
+
+val RELL_VERSION = "v0.8"
+val CONFIG_RELL_FILES = "files_$RELL_VERSION"
+val CONFIG_RELL_SOURCES = "sources_$RELL_VERSION"
 
 private object StdoutRtPrinter : Rt_Printer() {
     override fun print(str: String) {
@@ -23,18 +29,10 @@ private object StdoutRtPrinter : Rt_Printer() {
 }
 
 private object LogRtPrinter : Rt_Printer() {
-    private val log = LogFactory.getLog(LogRtPrinter.javaClass)
+    private val logger = KLogging().logger("Rell")
 
     override fun print(str: String) {
-        log.info(str)
-    }
-}
-
-private fun <T> catchRtErr(code: () -> T): T {
-    try {
-        return code()
-    } catch (e: Rt_BaseError) {
-        throw UserMistake(e.message ?: "")
+        logger.info(str)
     }
 }
 
@@ -55,7 +53,7 @@ class RellGTXOperation(val module: RellPostchainModule, val rOperation: R_Operat
                     "Wrong argument count for op '${rOperation.name}': ${data.args.size} instead of ${rOperation.params.size}")
         }
 
-        catchRtErr {
+        module.factory.catchRtErr {
             gtxToRtCtx = GtxToRtContext()
             args = convertArgs(gtxToRtCtx, rOperation.params, data.args.toList(), GTX_OPERATION_HUMAN)
         }
@@ -67,9 +65,8 @@ class RellGTXOperation(val module: RellPostchainModule, val rOperation: R_Operat
         val opCtx = Rt_OpContext(ctx.timestamp, ctx.txIID, data.signers.toList())
         val modCtx = module.makeRtModuleContext(ctx, opCtx)
 
-        catchRtErr {
-            val globalCtx = modCtx.globalCtx
-            gtxToRtCtx.finish(globalCtx.sqlExec, globalCtx.sqlMapper)
+        module.factory.catchRtErr {
+            gtxToRtCtx.finish(modCtx)
         }
 
         try {
@@ -82,7 +79,14 @@ class RellGTXOperation(val module: RellPostchainModule, val rOperation: R_Operat
     }
 }
 
-class RellPostchainModule(val rModule: R_Module, val moduleName: String, val chainCtx: Rt_ChainContext) : GTXModule {
+class RellPostchainModule(
+        val factory: RellPostchainModuleFactory,
+        private val rModule: R_Module,
+        private val moduleName: String,
+        private val chainCtx: Rt_ChainContext,
+        private val chainDeps: Map<String, ByteArray>,
+        private val sqlLogging: Boolean
+) : GTXModule {
     override fun getOperations(): Set<String> {
         return rModule.operations.keys
     }
@@ -99,10 +103,10 @@ class RellPostchainModule(val rModule: R_Module, val moduleName: String, val cha
     }
 
     private fun initDb(ctx: EContext) {
-        catchRtErr {
+        factory.catchRtErr {
             val modCtx = makeRtModuleContext(ctx, null)
 
-            val sql = genSql(rModule, modCtx.globalCtx.sqlMapper, false, false)
+            val sql = genSqlForChain(modCtx.sqlCtx)
             ctx.conn.createStatement().use {
                 it.execute(sql)
             }
@@ -145,12 +149,11 @@ class RellPostchainModule(val rModule: R_Module, val moduleName: String, val cha
             throw UserMistake("Wrong arguments for query '${rQuery.name}': $actArgNames instead of $expArgNames")
         }
 
-        val rtArgs = catchRtErr {
+        val rtArgs = factory.catchRtErr {
             val gtxToRtCtx = GtxToRtContext()
             val args = rQuery.params.map { argMap.getValue(it.name) }
             val res = convertArgs(gtxToRtCtx, rQuery.params, args, GTX_QUERY_HUMAN)
-            val globalCtx = modCtx.globalCtx
-            gtxToRtCtx.finish(globalCtx.sqlExec, globalCtx.sqlMapper)
+            gtxToRtCtx.finish(modCtx)
             res
         }
 
@@ -158,39 +161,94 @@ class RellPostchainModule(val rModule: R_Module, val moduleName: String, val cha
     }
 
     fun makeRtModuleContext(eCtx: EContext, opCtx: Rt_OpContext?): Rt_ModuleContext {
-        val exec = DefaultSqlExecutor(eCtx.conn, false)
-        val sqlMapper = Rt_SqlMapper(eCtx.chainID)
-        val globalCtx = Rt_GlobalContext(StdoutRtPrinter, LogRtPrinter, exec, sqlMapper, opCtx, chainCtx)
-        return Rt_ModuleContext(globalCtx, rModule)
+        val sqlExec = DefaultSqlExecutor(eCtx.conn, sqlLogging)
+        val sqlMapping = Rt_ChainSqlMapping(eCtx.chainID)
+        val globalCtx = Rt_GlobalContext(StdoutRtPrinter, LogRtPrinter, sqlExec, opCtx, chainCtx)
+
+        val chainDeps = chainDeps.mapValues { (_, rid) -> Rt_ChainDependency(rid, Long.MAX_VALUE) }
+        val sqlCtx = Rt_SqlContext.create(rModule, sqlMapping, chainDeps, sqlExec)
+
+        return Rt_ModuleContext(globalCtx, rModule, sqlCtx)
     }
 }
 
 class RellPostchainModuleFactory(
-        private val moduleLoader: (String) -> String = CommonUtils::readFileContent
+        private val wrapCtErrors: Boolean = true,
+        private val wrapRtErrors: Boolean = true
 ) : GTXModuleFactory {
     override fun makeModule(data: GTXValue, blockchainRID: ByteArray): GTXModule {
-        val gtxData = data["gtx"]!!
-        val sourceCode: String
-        val moduleName: String
-        if (gtxData["rellSourceCode_v07"] != null) {
-            sourceCode = gtxData["rellSourceCode_v07"]!!.asString()
-            moduleName = ""
-        } else if (gtxData["rellSrcModule"] != null) {
-            // legacy -- load from path
-            sourceCode = moduleLoader(gtxData["rellSrcModule"]!!.asString())
-            moduleName = gtxData["rellSrcModule"]!!.asString()
-        } else {
-            throw UserMistake("Rell module source is not specified in configuration")
+        val gtxNode = data.asDict().getValue("gtx").asDict()
+        val rellNode = gtxNode.getValue("rell").asDict()
+
+        val moduleNameNode = rellNode["moduleName"]
+        val moduleName = if (moduleNameNode == null) "" else moduleNameNode.asString()
+
+        val (sourceCodes, mainFileName) = getModuleCode(rellNode)
+        val includeDir = C_VirtualIncludeDir(sourceCodes)
+        val cResult = C_Compiler.compile(includeDir, mainFileName, true)
+
+        var failure = false
+        for (message in cResult.messages) {
+            val str = message.toString()
+            val type = message.type
+            if (type == C_MessageType.WARNING) {
+                logger.warn(str)
+            } else if (type == C_MessageType.ERROR) {
+                logger.error(str)
+            } else {
+                logger.info(str)
+            }
+            failure = failure || type == C_MessageType.ERROR
         }
-        val ast = C_Utils.parse(sourceCode)
-        val module = ast.compile(true)
-        val chainCtx = createChainContext(data, module)
-        return RellPostchainModule(module, moduleName, chainCtx)
+
+        if (cResult.error != null && !wrapCtErrors) {
+            throw cResult.error
+        }
+
+        if (failure || cResult.error != null || cResult.module == null) {
+            throw UserMistake(cResult?.error?.message ?: "Compilation error")
+        }
+
+        val module = cResult.module
+        val chainCtx = createChainContext(data, rellNode, module)
+
+        val chainDeps = catchRtErr {
+            getGtxChainDependencies(data)
+        }
+
+        val sqlLogging = (rellNode["sqlLog"]?.asInteger() ?: 0L) != 0L
+
+        return RellPostchainModule(this, module, moduleName, chainCtx, chainDeps, sqlLogging)
     }
 
-    private fun createChainContext(rawConfig: GTXValue, rModule: R_Module): Rt_ChainContext {
+    private fun getModuleCode(rellNode: Map<String, GTXValue>): Pair<Map<String, String>, String> {
+        val filesNode = rellNode[CONFIG_RELL_FILES]
+        val sourcesNode = rellNode[CONFIG_RELL_SOURCES]
+
+        if (filesNode == null && sourcesNode == null) {
+            throw UserMistake("Neither files nor sources specified")
+        } else if (filesNode != null && sourcesNode != null) {
+            throw UserMistake("Both files and sources specified")
+        }
+
+        val sourceCodes = if (sourcesNode != null) {
+            sourcesNode.asDict().mapValues { (_, v) -> v.asString() }
+        } else {
+            filesNode!!.asDict().mapValues { (_, v) -> CommonUtils.readFileContent(v.asString()) }
+        }
+
+        val mainFileName = rellNode.getValue("mainFile").asString()
+
+        if (mainFileName !in sourceCodes) {
+            throw UserMistake("File '$mainFileName' not found in sources")
+        }
+
+        return Pair(sourceCodes, mainFileName)
+    }
+
+    private fun createChainContext(rawConfig: GTXValue, rellNode: Map<String, GTXValue>, rModule: R_Module): Rt_ChainContext {
         val argsRec = rModule.moduleArgsRecord
-        val gtxArgs = rawConfig["gtx"]!!["rellModuleArgs"]
+        val gtxArgs = rellNode["moduleArgs"]
 
         val args = if (argsRec == null || gtxArgs == null) Rt_NullValue else {
             val convCtx = GtxToRtContext()
@@ -201,4 +259,29 @@ class RellPostchainModuleFactory(
 
         return Rt_ChainContext(rawConfig, args)
     }
+
+    private fun getGtxChainDependencies(data: GTXValue): Map<String, ByteArray> {
+        val gtxDeps = data["dependencies"]
+        if (gtxDeps == null) return mapOf()
+
+        val deps = mutableMapOf<String, ByteArray>()
+
+        for ((name, ridGtx) in gtxDeps.asDict()) {
+            val rid = ridGtx.asByteArray(true)
+            check(name !in deps)
+            deps[name] = rid
+        }
+
+        return deps.toMap()
+    }
+
+    fun <T> catchRtErr(code: () -> T): T {
+        try {
+            return code()
+        } catch (e: Rt_BaseError) {
+            throw if (wrapRtErrors) UserMistake(e.message ?: "") else e
+        }
+    }
+
+    companion object : KLogging()
 }

@@ -1,8 +1,8 @@
-#!/bin/sh
+#!/bin/bash
 
-set -e
+set -eu
+D=`dirname ${BASH_SOURCE[0]}`
 
-scriptdir=`dirname "$BASH_SOURCE"`
 outputname="$PWD/$1".sql
 if [ $1 = "-h" ]
   then
@@ -12,20 +12,9 @@ if [ $1 = "-h" ]
     exit 1
 fi
 
-
-
 if [ ! -z "$2" ]
   then
     outputname="$2"
 fi
 
-java -cp "$scriptdir/rellr.jar" net.postchain.rell.SqlgenCLIKt "$1" "$outputname"
-
-echo ""
-echo ""
-
-echo "Chromaway - RELL"
-
-echo ""
-
-echo Output file "$outputname"
+${RELL_JAVA:-java} -cp "$D/lib/*" net.postchain.rell.SqlgenCLIKt "$1" "$outputname"

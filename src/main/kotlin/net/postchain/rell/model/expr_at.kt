@@ -42,27 +42,28 @@ class R_AtExprRowType_Tuple(val type: R_TupleType): R_AtExprRowType() {
 }
 
 class R_AtExprBase(
-        val from: List<R_AtClass>,
-        val what: List<Db_Expr>,
-        val where: Db_Expr?,
-        val sort: List<Pair<Db_Expr, Boolean>>
+        private val from: List<R_AtClass>,
+        private val what: List<Db_Expr>,
+        private val where: Db_Expr?,
+        private val sort: List<Pair<Db_Expr, Boolean>>
 ) {
     init {
         from.withIndex().forEach { check(it.index == it.value.index) }
     }
 
     fun execute(frame: Rt_CallFrame, params: List<Rt_Value>, limit: R_Expr?): List<Array<Rt_Value>> {
-        val sqlMapper = frame.entCtx.modCtx.globalCtx.sqlMapper
-        val rtSql = buildSql(sqlMapper, params, limit)
+        val rtSql = buildSql(frame.entCtx.modCtx.sqlCtx, params, limit)
         val resultTypes = what.map { it.type }
         val select = SqlSelect(rtSql, resultTypes)
         val records = select.execute(frame)
         return records
     }
 
-    private fun buildSql(sqlMapper: Rt_SqlMapper, params: List<Rt_Value>, limit: R_Expr?): ParameterizedSql {
-        val ctx = SqlGenContext(from, params)
-        val fromInfo = buildFromInfo(ctx)
+    private fun buildSql(sqlCtx: Rt_SqlContext, params: List<Rt_Value>, limit: R_Expr?): ParameterizedSql {
+        val fullWhere = makeFullWhere()
+
+        val ctx = SqlGenContext(sqlCtx, from, params)
+        val fromInfo = buildFromInfo(ctx, fullWhere)
 
         val b = SqlBuilder()
 
@@ -71,8 +72,8 @@ class R_AtExprBase(
             it.toSql(ctx, b)
         }
 
-        appendFrom(b, sqlMapper, fromInfo)
-        appendWhere(b, ctx, sqlMapper, fromInfo)
+        appendFrom(b, sqlCtx, fromInfo)
+        appendWhere(b, ctx, fullWhere, fromInfo)
 
         b.append(" ORDER BY ")
         val orderByList = b.listBuilder()
@@ -86,7 +87,7 @@ class R_AtExprBase(
         for (cls in from) {
             orderByList.nextItem()
             val alias = ctx.getClassAlias(cls)
-            b.appendColumn(alias, cls.rClass.mapping.rowidColumn)
+            b.appendColumn(alias, cls.rClass.sqlMapping.rowidColumn())
         }
 
         if (limit != null) {
@@ -97,12 +98,12 @@ class R_AtExprBase(
         return b.build()
     }
 
-    private fun buildFromInfo(ctx: SqlGenContext): SqlFromInfo {
+    private fun buildFromInfo(ctx: SqlGenContext, fullWhere: Db_Expr?): SqlFromInfo {
         val b = SqlBuilder()
         for (w in what) {
             w.toSql(ctx, b)
         }
-        where?.toSql(ctx, b)
+        fullWhere?.toSql(ctx, b)
         for ((expr, _) in sort) {
             expr.toSql(ctx, b)
         }
@@ -112,32 +113,32 @@ class R_AtExprBase(
         return ctx.getFromInfo()
     }
 
-    private fun appendFrom(b: SqlBuilder, sqlMapper: Rt_SqlMapper, fromInfo: SqlFromInfo) {
+    private fun appendFrom(b: SqlBuilder, sqlCtx: Rt_SqlContext, fromInfo: SqlFromInfo) {
         b.append(" FROM ")
         b.append(fromInfo.classes, ", ") { cls ->
-            val table = cls.alias.cls.mapping.table(sqlMapper)
+            val table = cls.alias.cls.sqlMapping.table(sqlCtx)
             b.appendName(table)
             b.append(" ")
             b.append(cls.alias.str)
 
             for (join in cls.joins) {
                 b.append(" INNER JOIN ")
-                val joinTable = join.alias.cls.mapping.table(sqlMapper)
-                b.appendName(joinTable)
+                val joinMapping = join.alias.cls.sqlMapping
+                b.appendName(joinMapping.table(sqlCtx))
                 b.append(" ")
                 b.append(join.alias.str)
                 b.append(" ON ")
                 b.appendColumn(join.baseAlias, join.attr)
                 b.append(" = ")
-                b.appendColumn(join.alias, join.alias.cls.mapping.rowidColumn)
+                b.appendColumn(join.alias, joinMapping.rowidColumn())
             }
         }
     }
 
-    private fun appendWhere(b: SqlBuilder, ctx: SqlGenContext, sqlMapper: Rt_SqlMapper, fromInfo: SqlFromInfo) {
+    private fun appendWhere(b: SqlBuilder, ctx: SqlGenContext, fullWhere: Db_Expr?, fromInfo: SqlFromInfo) {
         val whereB = SqlBuilder()
-        where?.toSql(ctx, whereB)
-        appendExtraWhere(whereB, sqlMapper, fromInfo)
+        fullWhere?.toSql(ctx, whereB)
+        appendExtraWhere(whereB, ctx.sqlCtx, fromInfo)
 
         if (!whereB.isEmpty()) {
             b.append(" WHERE ")
@@ -145,13 +146,19 @@ class R_AtExprBase(
         }
     }
 
+    private fun makeFullWhere(): Db_Expr? {
+        var res = where
+        for (atCls in from) {
+            val expr = atCls.rClass.sqlMapping.extraWhereExpr(atCls)
+            res = if (res != null && expr != null) Db_BinaryExpr(R_BooleanType, Db_BinaryOp_And, res, expr) else (res ?: expr)
+        }
+        return res
+    }
+
     companion object {
-        fun appendExtraWhere(b: SqlBuilder, sqlMapper: Rt_SqlMapper, fromInfo: SqlFromInfo) {
+        fun appendExtraWhere(b: SqlBuilder, sqlCtx: Rt_SqlContext, fromInfo: SqlFromInfo) {
             for (cls in fromInfo.classes) {
-                cls.alias.cls.mapping.extraWhere(b, sqlMapper, cls.alias)
-                for (join in cls.joins) {
-                    join.alias.cls.mapping.extraWhere(b, sqlMapper, join.alias)
-                }
+                cls.alias.cls.sqlMapping.appendExtraWhere(b, sqlCtx, cls.alias)
             }
         }
     }

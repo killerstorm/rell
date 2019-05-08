@@ -1,5 +1,8 @@
 package net.postchain.rell.model
 
+import net.postchain.rell.runtime.Rt_IntValue
+import net.postchain.rell.runtime.Rt_Value
+
 sealed class Db_BinaryOp(val code: String, val sql: String)
 object Db_BinaryOp_Eq: Db_BinaryOp("==", "=")
 object Db_BinaryOp_Ne: Db_BinaryOp("!=", "<>")
@@ -23,10 +26,13 @@ object Db_UnaryOp_Not: Db_UnaryOp("not", "NOT")
 
 sealed class Db_Expr(val type: R_Type) {
     open fun implicitName(): String? = null
+    open fun constantValue(): Rt_Value? = null
     abstract fun toSql(ctx: SqlGenContext, bld: SqlBuilder)
 }
 
 class Db_InterpretedExpr(val expr: R_Expr): Db_Expr(expr.type) {
+    override fun constantValue() = expr.constantValue()
+
     override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
         bld.append(expr)
     }
@@ -59,7 +65,7 @@ sealed class Db_TableExpr(val rClass: R_Class): Db_Expr(R_ClassType(rClass)) {
 
     final override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
         val alias = alias(ctx)
-        bld.appendColumn(alias, rClass.mapping.rowidColumn)
+        bld.appendColumn(alias, rClass.sqlMapping.rowidColumn())
     }
 }
 
@@ -107,15 +113,42 @@ class Db_ArrayParameterExpr(type: R_Type, val elementType: R_Type, val index: In
     }
 }
 
-class Db_IfExpr(type: R_Type, val cond: Db_Expr, val trueExpr: Db_Expr, val falseExpr: Db_Expr): Db_Expr(type) {
+class Db_InExpr(val keyExpr: Db_Expr, val exprs: List<Db_Expr>): Db_Expr(R_BooleanType) {
     override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
-        bld.append("CASE WHEN ")
-        cond.toSql(ctx, bld)
-        bld.append(" THEN ")
-        trueExpr.toSql(ctx, bld)
-        bld.append(" ELSE ")
-        falseExpr.toSql(ctx, bld)
+        bld.append("(")
+        keyExpr.toSql(ctx, bld)
+        bld.append(" IN (")
+        bld.append(exprs, ", ") { expr ->
+            expr.toSql(ctx, bld)
+        }
+        bld.append(")")
+        bld.append(")")
+    }
+}
+
+class Db_WhenCase(val cond: Db_Expr, val expr: Db_Expr)
+
+class Db_WhenExpr(type: R_Type, val cases: List<Db_WhenCase>, val elseExpr: Db_Expr?): Db_Expr(type) {
+    override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
+        bld.append("CASE")
+        for (case in cases) {
+            bld.append(" WHEN ")
+            case.cond.toSql(ctx, bld)
+            bld.append(" THEN ")
+            case.expr.toSql(ctx, bld)
+        }
+        if (elseExpr != null) {
+            bld.append(" ELSE ")
+            elseExpr.toSql(ctx, bld)
+        }
         bld.append(" END")
+    }
+}
+
+class Db_ChainHeightExpr(val chain: R_ExternalChain): Db_Expr(R_IntegerType) {
+    override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
+        val rtChain = ctx.sqlCtx.linkedChain(chain)
+        bld.append(R_IntegerType, Rt_IntValue(rtChain.height))
     }
 }
 

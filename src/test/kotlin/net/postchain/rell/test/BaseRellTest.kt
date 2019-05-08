@@ -1,14 +1,13 @@
 package net.postchain.rell.test
 
-import net.postchain.rell.runtime.Rt_BooleanValue
-import net.postchain.rell.runtime.Rt_IntValue
-import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.runtime.*
 
 abstract class BaseRellTest(useSql: Boolean = true, gtx: Boolean = false): BaseResourcefulTest() {
     open fun classDefs(): List<String> = listOf()
     open fun objInserts(): List<String> = listOf()
 
-    val tst = resource(RellCodeTester(useSql, classDefs(), objInserts(), gtx = gtx))
+    val tstCtx = resource(RellTestContext(useSql))
+    val tst = RellCodeTester(tstCtx, classDefs(), objInserts(), gtx = gtx)
 
     fun chk(code: String, expected: String) = chkEx("= $code ;", expected)
     fun chk(code: String, arg: Long, expected: String) = chkEx("= $code ;", arg, expected)
@@ -40,6 +39,11 @@ abstract class BaseRellTest(useSql: Boolean = true, gtx: Boolean = false): BaseR
         tst.chkQueryEx(code, args, expected)
     }
 
+    fun chkQueryEx(code: String, arg: Long?, expected: String) = chkQueryEx(code, listOf(rtVal(arg)), expected)
+    fun chkQueryEx(code: String, arg1: Long?, arg2: Long?, expected: String) = chkQueryEx(code, listOf(rtVal(arg1), rtVal(arg2)), expected)
+    fun chkQueryEx(code: String, arg: String?, expected: String) = chkQueryEx(code, listOf(rtVal(arg)), expected)
+    fun chkQueryEx(code: String, arg: Boolean?, expected: String) = chkQueryEx(code, listOf(rtVal(arg)), expected)
+
     fun chkFn(code: String, expected: String) {
         val modCode = "function f() $code"
         chkFnEx(modCode, expected)
@@ -57,4 +61,9 @@ abstract class BaseRellTest(useSql: Boolean = true, gtx: Boolean = false): BaseR
 
     fun chkStdout(vararg expected: String) = tst.chkStdout(*expected)
     fun chkLog(vararg expected: String) = tst.chkLog(*expected)
+    fun chkWarn(vararg  expected: String) = tst.chkWarn(*expected)
+
+    private fun rtVal(v: Long?) = if (v == null) Rt_NullValue else Rt_IntValue(v)
+    private fun rtVal(v: String?) = if (v == null) Rt_NullValue else Rt_TextValue(v)
+    private fun rtVal(v: Boolean?) = if (v == null) Rt_NullValue else Rt_BooleanValue(v)
 }

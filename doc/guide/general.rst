@@ -158,6 +158,66 @@ assigned to a variable of type ``A`` (or passed as a parameter of type
 Module definitions
 ==================
 
+Include
+-------
+
+A Rell file can include contents of other Rell files.
+
+Suppose file ``helper.rell`` contains:
+
+::
+
+   class user { name; }
+   function square(x: integer): integer = x * x;
+
+Definitions from ``helper.rell`` can be included using the ``include`` directive:
+
+::
+
+   include 'helper';
+
+   query get_all_users() = user @* {};
+   query my_query() = square(33);
+
+Included directive can be put in a namespace or an external block:
+
+::
+
+   namespace helper {
+       include 'helper';
+   }
+
+   query get_all_users() = helper.user @* {};
+   query my_query() = helper.square(33);
+
+All definitions from the included file are visible in the including file, and vice versa, i. e. the code in the
+included file can access all definitions of the including file.
+
+In a standard operational mode, when Rell is run via Postchain, available files are defined in the blockchain
+configuration under the path ``gtx.rell``:
+
+::
+
+   {
+       "gtx": {
+           "rell": {
+               "mainFile": "main.rell",
+               "sources_v0.8": {
+                   "main.rell": "...",
+                   "helper.rell": "..."
+               }
+           }
+       }
+   }
+
+More details:
+
+- File name is specified without extension.
+- An absolute or relative path can be specified. Absolute path starts with ``/``, and points to the Rell sources root,
+  not to the file system root.
+- Not allowed to include the same file twice within the same namespace. But if the same file is included indirectly
+  (via another included file), the include directive has no effect.
+
 Class
 -----
 
@@ -354,7 +414,7 @@ Enum-specific functions and properties:
    val gbp = currency.value(2) // Finds enum value by index
 
    val usdStr: text = currency.USD.name // Returns 'USD'
-   val usdValue: integer = currency.USD.value // Return 0.
+   val usdValue: integer = currency.USD.value // Returns 0.
 
 Query
 -----
@@ -423,6 +483,106 @@ When return type is not specified, it is considered ``unit``:
    function f(x: integer) {
        print(x);
    }
+
+Namespace
+---------
+
+Definitions can be put in a namespace:
+
+::
+
+   namespace foo {
+       class user {
+           name;
+           country;
+       }
+
+       record point {
+           x: integer;
+           y: integer;
+       }
+
+       enum country {
+           USA,
+           DE,
+           FR
+       }
+   }
+
+   query get_users_by_country(c: foo.country) = foo.user @* { .country == c };
+
+Features of namespaces:
+
+- Operations and queries are not allowed in a namespace.
+- No need to specify a full name within a namespace, i. e. can use ``country`` under namespace ``foo`` directly, not as
+  ``foo.country``.
+- Names of tables for classes and objects defined in a namespace contain the full name, e. g. the table for class
+  ``foo.user`` will be called ``c0.foo.user``.
+
+External
+--------
+
+External blocks are used to access classes defined in other blockchains:
+
+::
+
+   external 'foo' {
+       class user(log) {
+           name;
+       }
+   }
+
+   query get_all_users() = user @* {};
+
+In this example, ``'foo'`` is the name of an external blockchain. To be used in an external block, a blockchain
+must be defined in the blockchain configuration (``dependencies`` node).
+
+Every blockchain has its ``chain_id``, which is included in table names for classes and objects of that chain. If the
+blockchain ``'foo'`` has ``chain_id`` = 123, the table for the class ``user`` will be called ``c123.user``.
+
+Can use ``include`` within an external block:
+
+::
+
+   external 'foo' {
+       include 'foo_defs';
+   }
+
+Other features:
+
+- External classes must be annotated with the ``log`` annotation. This implies that those classes cannot have mutable
+  attributes.
+- Objects of external classes cannot be created or deleted.
+- Only classes and namespaces are allowed inside of an external block.
+- Can have only one external block for a specific blockchain name.
+- When selecting objects of an external class (using at-expression), an implicit block height filter is applied, so
+  the active blockchain can see only those blocks of the external blockchain whose height is lower than a specific value.
+- Every blockchain stores the structure of its classes in meta-information tables. When a blockchain is started,
+  the meta-information of all involved external blockchains is verified to make sure that all declared external classes
+  exist and have declared attributes.
+
+Transactions and blocks
+~~~~~~~~~~~~~~~~~~~~~~~
+
+To access blocks and transactions of an external blockchian, a special syntax is used:
+
+::
+
+   namespace foo {
+       external 'foo' {
+           class transaction;
+           class block;
+       }
+   }
+
+   function get_foo_transactions(): list<foo.transaction> = foo.transaction @* {};
+   function get_foo_blocks(): list<foo.block> = foo.block @* {};
+
+- External block must be put in a namespace in order to prevent name conflict, since classes ``transaction`` and
+  ``block`` are already defined in the top-level scope (they represent transactions and blocks of the active blockchain).
+- Namespace name can be arbitrary.
+- External and non-external transactions/blocks are distinct, incompatible types.
+- When selecting external transactions or blocks, an implicit height filter is applied (like for external classes).
 
 --------------
 
@@ -545,6 +705,8 @@ Arithmetical:
 -  ``*``
 -  ``/``
 -  ``%``
+-  ``++``
+-  ``--``
 
 Logical:
 ~~~~~~~~
@@ -580,6 +742,32 @@ Variables:
    var x: integer;
    var y = 123;
    var z: text = 'Hello';
+
+Tuple unpacking
+~~~~~~~~~~~~~~~
+
+::
+
+    val t = (123, 'Hello');
+    val (n, s) = t;           // n = 123, s = 'Hello'
+
+Works with arbitrarily nested tuples:
+
+::
+
+    val (n, (p, (x, y), q)) = calculate();
+
+Special symbol ``_`` is used to ignore a tuple element:
+
+::
+
+    val (_, s) = (123, 'Hello'); // s = 'Hello'
+
+Variable types can be specified explicitly:
+
+::
+
+    val (n: integer, s: text) = (123, 'Hello');
 
 Basic statements
 ----------------
@@ -635,6 +823,63 @@ If statement
        return 'Many';
    }
 
+Can also be used as an expression:
+
+::
+
+   function my_abs(x: integer): integer = if (x >= 0) x else -x;
+
+When statement
+--------------
+
+Similar to ``switch`` in C++ or Java, but using the syntax of ``when`` in Kotlin:
+
+::
+
+   when(x) {
+       1 -> return 'One';
+       2, 3 -> return 'Few';
+       else -> {
+           val res = 'Many: ' + x;
+           return res;
+       }
+   }
+
+Features:
+
+- Can use both constants as well as arbitrary expressions.
+- When using constant values, the compiler checks that all values are unique.
+- When using with an enum type, values can be specified by simple name, not full name.
+
+A form of ``when`` without an argument is equivalent to a chain of ``if`` ... ``else`` ``if``:
+
+::
+
+   when {
+       x == 1 -> return 'One';
+       x >= 2 and x <= 7 -> return 'Several';
+       x == 11, x == 111 -> return 'Magic number';
+       some_value > 1000 -> return 'Special case';
+       else -> return 'Unknown';
+   }
+
+- Can use arbitrary boolean expressions.
+- When multiple comma-separated expressions are specified, any of them triggers the block (i. e. they are combined via OR).
+
+Both forms of ``when`` (with and without an argument) can be used as an expression:
+
+::
+
+   return when(x) {
+       1 -> 'One';
+       2, 3 -> 'Few';
+       else -> 'Many';
+   }
+
+- ``else`` must always be specified, unless all possible values of the argument are specified (possible for boolean
+  and enum types).
+- Can be used in at-expression, in which case it is translated to SQL ``CASE WHEN`` ... ``THEN`` expression.
+
 Loop statements
 ---------------
 
@@ -652,6 +897,13 @@ For:
 
 The expression after ``in`` may return a ``range`` or a collection
 (``list``, ``set``, ``map``).
+
+Tuple unpacking can be used:
+
+::
+
+    val l: list<(integer, text)> = get_list();
+    for ((n, s) in l) { ... }
 
 While:
 

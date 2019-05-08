@@ -2,7 +2,6 @@ package net.postchain.rell
 
 import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.test.RellCodeTester
-import net.postchain.rell.test.SqlTestUtils
 import org.junit.Test
 import kotlin.test.assertEquals
 
@@ -37,7 +36,7 @@ class ClassTest: BaseRellTest(false) {
     }
 
     @Test fun testIndexWithoutAttr() {
-        tst.useSql = true
+        tstCtx.useSql = true
         tst.defs = listOf("class foo { index name; }", "class bar { index name: text; }")
         chkOp("create foo(name = 'A');")
         chkOp("create bar(name = 'B');")
@@ -46,7 +45,7 @@ class ClassTest: BaseRellTest(false) {
     }
 
     @Test fun testIndexWithAttr() {
-        tst.useSql = true
+        tstCtx.useSql = true
         tst.defs = listOf(
                 "class A { name; index name; }",
                 "class B { index name; name: text; }",
@@ -91,7 +90,7 @@ class ClassTest: BaseRellTest(false) {
     }
 
     @Test fun testKeyWithoutAttr() {
-        tst.useSql = true
+        tstCtx.useSql = true
         tst.defs = listOf("class foo { key name; }", "class bar { key name: text; }")
         chkOp("create foo(name = 'A');")
         chkOp("create bar(name = 'B');")
@@ -100,7 +99,7 @@ class ClassTest: BaseRellTest(false) {
     }
 
     @Test fun testKeyWithAttr() {
-        tst.useSql = true
+        tstCtx.useSql = true
         tst.defs = listOf(
                 "class A { name; key name; }",
                 "class B { key name; name: text; }",
@@ -123,7 +122,7 @@ class ClassTest: BaseRellTest(false) {
     }
 
     @Test fun testKeyIndexDupValue() {
-        tst.useSql = true
+        tstCtx.useSql = true
         tst.defs = listOf("class foo { mutable k: text; mutable i: text; key k; index i; }")
 
         chkOp("create foo(k = 'K1', i = 'I1');")
@@ -141,7 +140,7 @@ class ClassTest: BaseRellTest(false) {
     }
 
     @Test fun testForwardReferenceInAttributeValue() {
-        tst.useSql = true
+        tstCtx.useSql = true
         tst.defs = listOf(
                 "class foo { x: integer; k: integer = (bar@*{ .v > 0 }).size(); }",
                 "class bar { v: integer; }"
@@ -180,7 +179,7 @@ class ClassTest: BaseRellTest(false) {
     @Test fun testBugSqlCreateTableOrder() {
         // Bug: SQL tables must be created in topological order because of foreign key constraints.
         tst.defs = listOf("class user { name: text; company; }", "class company { name: text; }")
-        tst.useSql = true
+        tstCtx.useSql = true
         chkOp("val c = create company('Amazon'); create user ('Bob', c);")
         chkData("user(2,Bob,1)", "company(1,Amazon)")
         chk("company @* {} ( =.name )", "list<text>[text[Amazon]]")
@@ -192,7 +191,7 @@ class ClassTest: BaseRellTest(false) {
     }
 
     @Test fun testTablePrefix() {
-        tst.useSql = true
+        tstCtx.useSql = true
         tst.chkData() // Does database reset, creates system tables
 
         val tst1 = createTablePrefixTester(123, 100, "Amazon", "Bob")
@@ -219,14 +218,12 @@ class ClassTest: BaseRellTest(false) {
     }
 
     private fun createTablePrefixTester(chainId: Long, rowid: Long, company: String, user: String): RellCodeTester {
-        val t = resource(RellCodeTester())
-        t.useSql = true
+        val t = RellCodeTester(tstCtx)
         t.defs = listOf("class user { name: text; company; }", "class company { name: text; }")
         t.chainId = chainId
-        t.insert("c${chainId}_company", "name","${rowid},'$company'")
-        t.insert("c${chainId}_user", "name,company","${rowid+1},'$user',${rowid}")
+        t.insert("c${chainId}.company", "name","${rowid},'$company'")
+        t.insert("c${chainId}.user", "name,company","${rowid+1},'$user',${rowid}")
         t.dropTables = false
-        t.createSystemTables = false
         t.strictToString = false
         return t
     }

@@ -4,6 +4,8 @@ import net.postchain.rell.runtime.*
 import java.lang.IllegalStateException
 import java.util.*
 
+class R_ExternalChain(val name: String, val index: Int)
+
 data class R_FrameBlockId(val id: Long)
 data class R_VarPtr(val blockId: R_FrameBlockId, val offset: Int)
 class R_FrameBlock(val parentId: R_FrameBlockId?, val id: R_FrameBlockId, val offset: Int, val size: Int)
@@ -161,18 +163,21 @@ class R_Module(
         val classes: Map<String, R_Class>,
         val objects: Map<String, R_Object>,
         val records: Map<String, R_RecordType>,
-        val enums: Map<String, R_EnumType>,
         val operations: Map<String, R_Operation>,
         val queries: Map<String, R_Query>,
         val functionsTable: List<R_Function>,
         val moduleArgsRecord: R_RecordType?,
-        val topologicalClasses: List<R_Class>
+        val topologicalClasses: List<R_Class>,
+        val externalChains: List<R_ExternalChain>
 ){
     val functions = functionsTable.associate { Pair(it.name, it) }
 
     init {
         for ((i, f) in functionsTable.withIndex()) {
             check(f.fnKey == i)
+        }
+        for ((i, c) in externalChains.withIndex()) {
+            check(c.index == i)
         }
     }
 }

@@ -1,6 +1,7 @@
 package net.postchain.rell
 
 import net.postchain.rell.test.RellCodeTester
+import net.postchain.rell.test.RellTestContext
 import net.postchain.rell.test.SqlTestUtils
 import kotlin.test.assertEquals
 
@@ -54,7 +55,8 @@ class AtExprOpTest: AbstractOpTest() {
             Ins.user(2000, "Steve Jobs", 200)
     )
 
-    private val tst = resource(RellCodeTester(classDefs = classDefs, inserts = inserts))
+    private val tstCtx = resource(RellTestContext())
+    private val tst = RellCodeTester(tstCtx, classDefs = classDefs, inserts = inserts)
 
     override fun chkExpr(expr: String, args: List<TstVal>, expected: Boolean) {
         val (expr2, values) = transformExpr(expr, args)
@@ -126,7 +128,7 @@ class AtExprOpTest: AbstractOpTest() {
         val columns = values.keys.toList()
         val insColumns = columns.joinToString(",")
         val insValues = "5," + columns.map{ values[it] }.joinToString(",")
-        val insert = SqlTestUtils.mkins("c0_optest", insColumns, insValues)
+        val insert = SqlTestUtils.mkins("c0.optest", insColumns, insValues)
         return this.inserts + insert
     }
 
@@ -169,8 +171,8 @@ class AtExprOpTest: AbstractOpTest() {
     }
 
     private object Ins {
-        fun company(id: Int, name: String): String = mkins("c0_company", "name", "$id, '$name'")
-        fun user(id: Int, name: String, company: Int): String = mkins("c0_user", "name,company", "$id, '$name', $company")
+        fun company(id: Int, name: String): String = mkins("c0.company", "name", "$id, '$name'")
+        fun user(id: Int, name: String, company: Int): String = mkins("c0.user", "name,company", "$id, '$name', $company")
         val mkins = SqlTestUtils::mkins
     }
 }

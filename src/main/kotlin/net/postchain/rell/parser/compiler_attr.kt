@@ -8,9 +8,10 @@ object C_AttributeResolver {
             attributes: Map<String, R_Attrib>,
             exprs: List<S_NameExprPair>,
             pos: S_Pos
-    ): List<R_CreateExprAttr>
+    ): C_CreateAttributes
     {
-        val rExprs = exprs.map { it.expr.compile(ctx).toRExpr() }
+        val values = exprs.map { it.expr.compile(ctx).value() }
+        val rExprs = values.map { it.toRExpr() }
         val types = rExprs.map { it.type }
 
         val attrs = matchCreateAttrs(attributes, exprs, types)
@@ -27,7 +28,8 @@ object C_AttributeResolver {
             }
         }
 
-        return attrExprsDef
+        val exprFacts = C_ExprVarFacts.forSubExpressions(values)
+        return C_CreateAttributes(attrExprsDef, exprFacts)
     }
 
     private fun matchCreateAttrs(attributes: Map<String, R_Attrib>, exprs: List<S_NameExprPair>, types: List<R_Type>): List<R_Attrib> {
@@ -218,8 +220,10 @@ object C_AttributeResolver {
             throw C_Error(
                     pos,
                     "attr_bad_type:$idx:${attr.name}:${attr.type.toStrictString()}:${exprType.toStrictString()}",
-                    "Attribute type missmatch for '${attr.name}': ${exprType} instead of ${attr.type}"
+                    "Attribute type mismatch for '${attr.name}': ${exprType} instead of ${attr.type}"
             )
         }
     }
 }
+
+class C_CreateAttributes(val rAttrs: List<R_CreateExprAttr>, val exprFacts: C_ExprVarFacts)

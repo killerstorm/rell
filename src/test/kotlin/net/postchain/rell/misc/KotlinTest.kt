@@ -16,5 +16,13 @@ class KotlinTest {
 
         mut.add(5)
         assertEquals(listOf(1, 2, 3, 4, 5), imm2)
+
+        val mut2 = imm as MutableList<Int>
+        assertEquals(listOf(1, 2, 3), mut2)
+
+        mut2.add(7)
+        assertEquals(listOf(1, 2, 3, 7), mut2)
+        assertEquals(listOf(1, 2, 3, 7), imm)
+        assertEquals(listOf(1, 2, 3, 4, 5), mut)
     }
 }
