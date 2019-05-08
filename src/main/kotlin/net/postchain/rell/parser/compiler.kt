@@ -1,5 +1,6 @@
 package net.postchain.rell.parser
 
+import net.postchain.rell.TypedKeyMap
 import net.postchain.rell.model.*
 
 class C_Error(
@@ -8,9 +9,6 @@ class C_Error(
         val errMsg: String,
         val posStack: List<S_Pos> = listOf(pos)
 ): RuntimeException("$pos $errMsg")
-
-data class C_VarId(val id: Int, val name: String)
-data class C_LoopId(val id: Int)
 
 abstract class C_GlobalFunction {
     abstract fun compileCall(name: S_Name, args: List<C_Value>): C_Expr
@@ -31,7 +29,8 @@ class C_UserGlobalFunction(val name: String, val fnKey: Int): C_GlobalFunction()
         val rArgs = args.map { it.toRExpr() }
         C_FuncUtils.checkArgs(sName, params, rArgs)
         val rExpr = R_UserCallExpr(header.type, name, fnKey, rArgs)
-        return C_RExpr(sName.pos, rExpr)
+        val exprFacts = C_ExprVarFacts.forSubExpressions(args)
+        return C_RValue.makeExpr(sName.pos, rExpr, exprFacts)
     }
 
     fun toRFunction(body: R_Statement, frame: R_CallFrame): R_Function {
@@ -40,12 +39,32 @@ class C_UserGlobalFunction(val name: String, val fnKey: Int): C_GlobalFunction()
     }
 }
 
-class C_Module(val rModule: R_Module)
+enum class C_MessageType(val text: String) {
+    WARNING("Warning"),
+    ERROR("ERROR")
+}
+
+class C_Message(val type: C_MessageType, val pos: S_Pos, val code: String, val text: String) {
+    override fun toString(): String {
+        return "$pos ${type.text}: $text"
+    }
+}
 
 class C_GlobalContext(val gtx: Boolean) {
     private var frameBlockIdCtr = 0L
+    private val messages = mutableListOf<C_Message>()
 
     fun nextFrameBlockId(): R_FrameBlockId = R_FrameBlockId(frameBlockIdCtr++)
+
+    fun message(type: C_MessageType, pos: S_Pos, code: String, text: String) {
+        messages.add(C_Message(type, pos, code, text))
+    }
+
+    fun warning(pos: S_Pos, code: String, text: String) {
+        message(C_MessageType.WARNING, pos, code, text)
+    }
+
+    fun messages() = messages.toList()
 }
 
 object C_Defs {
@@ -213,7 +232,7 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
 
     private fun processRecords() {
         val records = allRecords.values
-        val structure = buildRecordsStructure(records)
+        val structure = C_RecordUtils.buildRecordsStructure(records)
         val graph = structure.graph
         val transGraph = C_GraphUtils.transpose(graph)
 
@@ -594,7 +613,8 @@ class C_EntityContext(
         val nsCtx: C_NamespaceContext,
         val entityType: C_EntityType,
         val entityIndex: Int,
-        explicitReturnType: R_Type?
+        explicitReturnType: R_Type?,
+        val statementVars: TypedKeyMap
 ){
     private val retTypeTracker =
             if (explicitReturnType != null) RetTypeTracker.Explicit(explicitReturnType) else RetTypeTracker.Implicit()
@@ -604,7 +624,9 @@ class C_EntityContext(
     private var nextLoopId = 0
     private var nextVarId = 0
 
-    val rootExprCtx = C_RExprContext(C_BlockContext(this, null, null))
+    private val rootBlkCtx = C_BlockContext(this, null, null)
+    private val rootNameCtx = C_RNameContext(rootBlkCtx)
+    val rootExprCtx = C_ExprContext(rootBlkCtx, rootNameCtx, C_VarFactsContext(C_VarFacts.EMPTY))
 
     fun checkDbUpdateAllowed(pos: S_Pos) {
         if (entityType == C_EntityType.QUERY) {
@@ -678,8 +700,33 @@ class C_EntityContext(
 
     companion object {
         private fun errRetTypeMiss(pos: S_Pos, dstType: R_Type, srcType: R_Type): C_Error =
-                C_Errors.errTypeMissmatch(pos, srcType, dstType, "entity_rettype", "Return type missmatch")
+                C_Errors.errTypeMismatch(pos, srcType, dstType, "entity_rettype", "Return type mismatch")
     }
+}
+
+class C_StatementVars(val declared: Set<String>, val modified: Set<String>) {
+    companion object {
+        val EMPTY = C_StatementVars(setOf(), setOf())
+    }
+}
+
+class C_StatementVarsBlock {
+    private val declared = mutableSetOf<String>()
+    private val modified = mutableSetOf<String>()
+
+    fun declared(names: Set<String>) {
+        declared.addAll(names)
+    }
+
+    fun modified(names: Set<String>) {
+        for (name in names) {
+            if (name !in declared) {
+                modified.add(name)
+            }
+        }
+    }
+
+    fun modified() = modified.toSet()
 }
 
 class C_ScopeEntry(
@@ -687,8 +734,7 @@ class C_ScopeEntry(
         val type: R_Type,
         val modifiable: Boolean,
         val varId: C_VarId,
-        val ptr: R_VarPtr,
-        val loop: C_LoopId?
+        val ptr: R_VarPtr
 ) {
     fun toVarExpr(): R_VarExpr = R_VarExpr(type, ptr, name)
 }
@@ -735,7 +781,7 @@ class C_ClassContext(
 
         val exprCreator: (() -> R_Expr)? = if (expr == null) null else { ->
             val rExpr = expr.compile(entCtx.rootExprCtx).value().toRExpr()
-            S_Type.match(rType, rExpr.type, name.pos, "attr_type:$nameStr", "Default value type missmatch for '$nameStr'")
+            S_Type.match(rType, rExpr.type, name.pos, "attr_type:$nameStr", "Default value type mismatch for '$nameStr'")
             rExpr
         }
 
@@ -764,7 +810,7 @@ class C_ClassContext(
         check(rAttr.type.isAssignableFrom(rExpr.type)) {
             val exp = rAttr.type.toStrictString()
             val act = rExpr.type.toStrictString()
-            "Attribute '$className.${rAttr.name}' expression type missmatch: expected '$exp', was '$act'"
+            "Attribute '$className.${rAttr.name}' expression type mismatch: expected '$exp', was '$act'"
         }
         rAttr.setExpr(rExpr)
     }
@@ -802,41 +848,25 @@ class C_ClassContext(
     }
 }
 
-private fun buildRecordsStructure(records: Collection<R_RecordType>): RecordsStructure {
-    val structMap = records.map { Pair(it, calcRecStruct(it)) }.toMap()
-    val graph = structMap.mapValues { (_, v) -> v.dependencies.toList() }
-    val mutable = structMap.filter { (_, v) -> v.directFlags.mutable }.keys
-    val nonGtxHuman = structMap.filter { (_, v) -> !v.directFlags.gtxHuman.compatible }.keys
-    val nonGtxCompact = structMap.filter { (_, v) -> !v.directFlags.gtxCompact.compatible }.keys
-    return RecordsStructure(mutable, nonGtxHuman, nonGtxCompact, graph)
-}
+object C_Compiler {
+    fun compile(includeDir: C_IncludeDir, mainFile: String, gtx: Boolean): C_CompilationResult {
+        val globalCtx = C_GlobalContext(gtx)
+        var module: R_Module? = null
+        var error: C_Error? = null
 
-private fun calcRecStruct(type: R_Type): RecStruct {
-    val flags = mutableListOf(type.directFlags())
-    val deps = mutableSetOf<R_RecordType>()
+        try {
+            val includeResolver = C_IncludeResolver(includeDir)
+            val code = includeResolver.resolve(mainFile).file.readText()
+            val ast = C_Parser.parse(mainFile, code)
+            module = ast.compile(globalCtx, mainFile, includeResolver)
+        } catch (e: C_Error) {
+            globalCtx.message(C_MessageType.ERROR, e.pos, e.code, e.errMsg)
+            error = e
+        }
 
-    for (subType in type.componentTypes()) {
-        val subStruct = discoverRecStruct(subType)
-        flags.add(subStruct.directFlags)
-        deps.addAll(subStruct.dependencies)
+        val messages = globalCtx.messages()
+        return C_CompilationResult(module, error, messages)
     }
-
-    val resFlags = R_TypeFlags.combine(flags)
-    return RecStruct(resFlags, deps.toSet())
 }
 
-private fun discoverRecStruct(type: R_Type): RecStruct {
-    if (type is R_RecordType) {
-        return RecStruct(type.directFlags(), setOf(type))
-    }
-    return calcRecStruct(type)
-}
-
-private class RecordsStructure(
-        val mutable: Set<R_RecordType>,
-        val nonGtxHuman: Set<R_RecordType>,
-        val nonGtxCompact: Set<R_RecordType>,
-        val graph: Map<R_RecordType, List<R_RecordType>>
-)
-
-private class RecStruct(val directFlags: R_TypeFlags, val dependencies: Set<R_RecordType>)
+class C_CompilationResult(val module: R_Module?, val error: C_Error?, val messages: List<C_Message>)

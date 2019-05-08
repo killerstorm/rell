@@ -417,7 +417,7 @@ class UpdateDeleteTest: BaseRellTest() {
         resetChkOp("val p = ${person("Mike")}; p.score += 'Hello';", "ct_err:binop_operand_type:+=:integer:text")
         chkDataCommon(james(100), mike(250))
 
-        resetChkOp("val p = ${person("Mike")}; val v: integer? = 123; p.score += v;",
+        resetChkOp("val p = ${person("Mike")}; val v: integer? = _nullable(123); p.score += v;",
                 "ct_err:binop_operand_type:+=:integer:integer?")
         chkDataCommon(james(100), mike(250))
 

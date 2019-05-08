@@ -134,7 +134,7 @@ class IncrementTest: BaseRellTest(false) {
     }
 
     @Test fun testOperandNullable() {
-        val init = "var x: integer? = 123";
+        val init = "var x: integer? = if(1>0) 123 else null;"
 
         chkEx("{ $init; x++; return x; }", "ct_err:expr_incdec_type:++:integer?")
         chkEx("{ $init; x--; return x; }", "ct_err:expr_incdec_type:--:integer?")
@@ -173,7 +173,7 @@ class IncrementTest: BaseRellTest(false) {
 
     @Test fun testSafeAccess() {
         tst.defs = listOf("record r { mutable x: integer; }")
-        val init = "val r: r? = r(123)"
+        val init = "val r: r? = _nullable(r(123))"
 
         chkEx("{ $init; r.x++; return r; }", "ct_err:expr_mem_null:x")
         chkEx("{ $init; r.x--; return r; }", "ct_err:expr_mem_null:x")
@@ -200,7 +200,7 @@ class IncrementTest: BaseRellTest(false) {
         tstCtx.useSql = true
         tst.defs = listOf("class user { mutable x: integer; }")
         tst.insert("c0.user", "x", "1,123")
-        val init = "val u: user? = user@{}"
+        val init = "val u: user? = user@?{}"
 
         chkOp("$init; val y = u.x++;", "ct_err:expr_mem_null:x")
         chkOp("$init; val y = u.x--;", "ct_err:expr_mem_null:x")

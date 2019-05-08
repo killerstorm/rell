@@ -161,7 +161,7 @@ Module definitions
 Include
 -------
 
-A Rell file can include contents other Rell files.
+A Rell file can include contents of other Rell files.
 
 Suppose file ``helper.rell`` contains:
 
@@ -414,7 +414,7 @@ Enum-specific functions and properties:
    val gbp = currency.value(2) // Finds enum value by index
 
    val usdStr: text = currency.USD.name // Returns 'USD'
-   val usdValue: integer = currency.USD.value // Return 0.
+   val usdValue: integer = currency.USD.value // Returns 0.
 
 Query
 -----

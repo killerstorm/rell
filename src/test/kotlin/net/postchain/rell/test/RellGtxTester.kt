@@ -22,7 +22,7 @@ class RellGtxTester(
         gtx: Boolean = false
 ): RellBaseTester(tstCtx, classDefs, inserts, gtx)
 {
-    var translateRtError = true
+    var wrapRtErrors = true
     var moduleArgs: String? = null
     val extraModuleConfig = mutableMapOf<String, String>()
     var blockchainRID = "DEADBEEF"
@@ -82,7 +82,7 @@ class RellGtxTester(
     }
 
     private fun createGtxModule(moduleCode: String): GTXModule {
-        val factory = RellPostchainModuleFactory(translateRtError)
+        val factory = RellPostchainModuleFactory(false, wrapRtErrors)
         val moduleCfg = moduleConfig(moduleCode)
         val bcRidBytes = blockchainRID.hexStringToByteArray()
         val module = factory.makeModule(moduleCfg, bcRidBytes)

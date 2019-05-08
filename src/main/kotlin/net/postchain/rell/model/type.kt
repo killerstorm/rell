@@ -367,7 +367,10 @@ class R_NullableType(val valueType: R_Type): R_Type(valueType.name + "?") {
     override fun hashCode() = valueType.hashCode()
 
     override fun isAssignableFrom(type: R_Type): Boolean {
-        return type == this || type == R_NullType || valueType.isAssignableFrom(type)
+        return type == this
+                || type == R_NullType
+                || (type is R_NullableType && valueType.isAssignableFrom(type.valueType))
+                || valueType.isAssignableFrom(type)
     }
 
     override fun createGtxConversion() = GtxRtConversion_Nullable(this)

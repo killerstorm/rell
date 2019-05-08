@@ -7,6 +7,7 @@ import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.module.GtxToRtContext
 import net.postchain.rell.module.RELL_VERSION
+import net.postchain.rell.parser.C_Message
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_GtxValue
 import net.postchain.rell.runtime.Rt_Value
@@ -26,6 +27,8 @@ import java.sql.DriverManager
 import java.sql.ResultSet
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+
+class RellTestModule(val rModule: R_Module, val messages: List<C_Message>)
 
 object SqlTestUtils {
     fun createSqlConnection(): Connection {

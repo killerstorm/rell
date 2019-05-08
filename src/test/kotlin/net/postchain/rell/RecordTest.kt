@@ -96,42 +96,42 @@ class RecordTest: BaseRellTest(false) {
     }
 
     @Test fun testAttributeOfNullableRecord() {
-        tst.defs = listOf("record foo { mutable x: integer; }")
+        tst.defs = listOf("record foo { mutable x: integer; }", "function nop(x: foo?): foo? = x;")
 
-        chkEx("{ val r: foo? = foo(123); return r.x; }", "ct_err:expr_mem_null:x")
-        chkEx("{ val r: foo? = foo(123); return r!!.x; }", "int[123]")
-        chkEx("{ val r: foo? = null; return r!!.x; }", "rt_err:null_value")
-        chkEx("{ val r: foo? = foo(123); return r?.x; }", "int[123]")
-        chkEx("{ val r: foo? = null; return r?.x; }", "null")
+        chkEx("{ val r: foo? = nop(foo(123)); return r.x; }", "ct_err:expr_mem_null:x")
+        chkEx("{ val r: foo? = nop(foo(123)); return r!!.x; }", "int[123]")
+        chkEx("{ val r: foo? = nop(null); return r!!.x; }", "rt_err:null_value")
+        chkEx("{ val r: foo? = nop(foo(123)); return r?.x; }", "int[123]")
+        chkEx("{ val r: foo? = nop(null); return r?.x; }", "null")
 
-        chkEx("{ val r: foo? = foo(123); r.x = 456; return r; }", "ct_err:expr_mem_null:x")
+        chkEx("{ val r: foo? = nop(foo(123)); r.x = 456; return r; }", "ct_err:expr_mem_null:x")
 
-        chkEx("{ val r: foo? = foo(123); r!!.x = 456; return r; }", "foo[x=int[456]]")
-        chkEx("{ val r: foo? = null; r!!.x = 456; return r; }", "rt_err:null_value")
-        chkEx("{ val r: foo? = foo(123); r!!.x += 456; return r; }", "foo[x=int[579]]")
-        chkEx("{ val r: foo? = null; r!!.x += 456; return r; }", "rt_err:null_value")
+        chkEx("{ val r: foo? = nop(foo(123)); r!!.x = 456; return r; }", "foo[x=int[456]]")
+        chkEx("{ val r: foo? = nop(null); r!!.x = 456; return r; }", "rt_err:null_value")
+        chkEx("{ val r: foo? = nop(foo(123)); r!!.x += 456; return r; }", "foo[x=int[579]]")
+        chkEx("{ val r: foo? = nop(null); r!!.x += 456; return r; }", "rt_err:null_value")
 
-        chkEx("{ val r: foo? = foo(123); r?.x = 456; return r; }", "foo[x=int[456]]")
-        chkEx("{ val r: foo? = null; r?.x = 456; return r; }", "null")
-        chkEx("{ val r: foo? = foo(123); r?.x += 456; return r; }", "foo[x=int[579]]")
-        chkEx("{ val r: foo? = null; r?.x += 456; return r; }", "null")
+        chkEx("{ val r: foo? = nop(foo(123)); r?.x = 456; return r; }", "foo[x=int[456]]")
+        chkEx("{ val r: foo? = nop(null); r?.x = 456; return r; }", "null")
+        chkEx("{ val r: foo? = nop(foo(123)); r?.x += 456; return r; }", "foo[x=int[579]]")
+        chkEx("{ val r: foo? = nop(null); r?.x += 456; return r; }", "null")
 
-        chkEx("{ val r: foo? = foo(123); r!!.x = 456; return r; }", "foo[x=int[456]]")
-        chkEx("{ val r: foo? = null; r!!.x = 456; return r; }", "rt_err:null_value")
+        chkEx("{ val r: foo? = nop(foo(123)); r!!.x = 456; return r; }", "foo[x=int[456]]")
+        chkEx("{ val r: foo? = nop(null); r!!.x = 456; return r; }", "rt_err:null_value")
     }
 
     @Test fun testAttributeOfNullableRecord2() {
         tst.defs = listOf("record foo { b: bar?; } record bar { mutable x: integer; }")
-        chkEx("{ val r: foo? = foo(bar(123)); return r?.b?.x; }", "int[123]")
-        chkEx("{ val r: foo? = foo(null); return r?.b?.x; }", "null")
+        chkEx("{ val r: foo? = _nullable(foo(bar(123))); return r?.b?.x; }", "int[123]")
+        chkEx("{ val r: foo? = _nullable(foo(null)); return r?.b?.x; }", "null")
         chkEx("{ val r: foo? = null; return r?.b?.x; }", "null")
 
-        chkEx("{ val r: foo? = foo(bar(123)); r?.b?.x = 456; return r; }", "foo[b=bar[x=int[456]]]")
-        chkEx("{ val r: foo? = foo(null); r?.b?.x = 456; return r; }", "foo[b=null]")
+        chkEx("{ val r: foo? = _nullable(foo(bar(123))); r?.b?.x = 456; return r; }", "foo[b=bar[x=int[456]]]")
+        chkEx("{ val r: foo? = _nullable(foo(null)); r?.b?.x = 456; return r; }", "foo[b=null]")
         chkEx("{ val r: foo? = null; r?.b?.x = 456; return r; }", "null")
 
-        chkEx("{ val r: foo? = foo(bar(123)); r?.b?.x += 456; return r; }", "foo[b=bar[x=int[579]]]")
-        chkEx("{ val r: foo? = foo(null); r?.b?.x += 456; return r; }", "foo[b=null]")
+        chkEx("{ val r: foo? = _nullable(foo(bar(123))); r?.b?.x += 456; return r; }", "foo[b=bar[x=int[579]]]")
+        chkEx("{ val r: foo? = _nullable(foo(null)); r?.b?.x += 456; return r; }", "foo[b=null]")
         chkEx("{ val r: foo? = null; r?.b?.x += 456; return r; }", "null")
     }
 
@@ -373,7 +373,7 @@ class RecordTest: BaseRellTest(false) {
                         first = node;
                         last = node;
                     } else {
-                        last!!.next = node;
+                        last.next = node;
                         last = node;
                     }
                 }
@@ -384,8 +384,8 @@ class RecordTest: BaseRellTest(false) {
                 val res = list<integer>();
                 var ptr = chain;
                 while (ptr != null) {
-                    res.add(ptr!!.value);
-                    ptr = ptr!!.next;
+                    res.add(ptr.value);
+                    ptr = ptr.next;
                 }
                 return res;
             }

@@ -1,4 +1,4 @@
-RELEASE NOTES 0.8.0 (2019-04-05)
+RELEASE NOTES 0.8.0 (2019-05-08)
 
 
 1. Include
@@ -7,16 +7,12 @@ Allows to use definitions from other Rell files:
 
 include 'helper';
 
-or
-
-namespace helper {
-    include 'helper';
-}
+This includes a file "helper.rell". The path is relative to the main file's directory.
 
 
 2. Namespace
 
-Definitions can now be put in namespaces:
+Definitions can be put in namespaces:
 
 namespace foo {
     namespace bar {
@@ -27,6 +23,12 @@ namespace foo {
 query calculate(a: integer) = foo.bar.f(a);
 
 All kinds of definitions, except operations and queries, can be put in a namespace.
+
+Include can be put in a namespace too:
+
+namespace helper {
+    include 'helper';
+}
 
 
 3. External block
@@ -104,7 +106,33 @@ val m: map<integer, text> = get_map();
 for ((key, value) in m) { ... }
 
 
-6. Operators "++", "--"
+6. Implicit nullable variables casting
+
+Inspired by the smart cast feature of Kotlin. A nullable variable becomes not nullable after a null check or one of few
+other operations.
+
+val u = user @? { .name == 'Bob' }; // Type of "u" is "user?".
+if (u == null) return;
+// From this point, type of "u" is "user", not "user?".
+print(u.name);
+
+Code under if:
+
+val u = user @? { .name == 'Bob' }; // Type of "u" is "user?".
+if (u != null) {
+    // "u" is not nullable here.
+}
+// Now "u" is nullable again.
+
+Other nullable-affecting operations are: operator !!, functions require() and requireNotEmpty().
+
+val u = user @? { .name == 'Bob' };
+u!!; // Throws an exception if "u" is null.
+// Now "u" is not nullable.
+print(u.name);
+
+
+7. Operators "++", "--"
 
 Increment and decrement operators existing in many languages:
 
@@ -124,7 +152,7 @@ object state {
 ++state.counter; // Executes SQL UPDATE.
 
 
-7. Uninitialized variables access check
+8. Uninitialized variables access check
 
 An attempt to use an uninitialized variable causes a compilation error:
 
@@ -148,13 +176,25 @@ if (condition) {
 return x; // Compilation error
 
 
-8. Late "val" initialization
+9. Late "val" initialization
 
 Not required anymore to specify an expression for "val" - a value can be assigned later:
 
 val x: integer;
 x = 5;
 return x; // OK
+
+Useful when using conditional initialization of multiple variables:
+
+val x: integer;
+val y: text;
+if (correct) {
+    x = 123;
+    y = 'Hello';
+} else {
+    x = 456;
+    y = 'Bye';
+}
 
 Error on attempt to reassign a value or to use an uninitialized "val":
 
@@ -164,7 +204,7 @@ y = 10; // Compilation error: val reassignment.
 return x; // Compilation error: uninitialized variable access
 
 
-9. Dead code check
+10. Dead code check
 
 Compilation error if there is code after "return":
 
@@ -174,7 +214,7 @@ if (condition) {
 }
 
 
-10. New library functions
+11. New library functions
 
 Added methods list<T>.sorted(), list<T>._sort(), set<T>.sorted():
 
@@ -188,7 +228,7 @@ val x: integer? = calc();
 if (empty(x)) return 0;
 
 
-11. Blockchain meta-information
+12. Blockchain meta-information
 
 In order to check that declared external classes have correct structure, each blockchain stores the information about
 its classes in two tables: cX.sys.classes and cX.sys.attributes, where X is chain_id.
@@ -199,7 +239,7 @@ The information in the meta tables for a blockchain C is checked when starting a
 external blockchain.
 
 
-12. Changes in the blockchain configuration structure:
+13. Changes in the blockchain configuration structure:
 
 All Rell-related settings are now under the path "gtx.rell":
 
@@ -215,12 +255,12 @@ All Rell-related settings are now under the path "gtx.rell":
 - gtx.rell.sqllog - when set to 1, all executed SQL queries are logged
 
 
-13. Utility that generates blockchain configuration
+14. Utility that generates blockchain configuration
 
 rellcfg.sh - adds Rell source files (the main file and all files it includes) to a Postchain configuration XML file.
 
 
-14. Table naming changed
+15. Table naming changed
 
 Tables for classes and objects are now named "cX.Y" instead of "cX_Y", where "X" is a chain_id and "Y" is a name
 of a class/object.
@@ -228,6 +268,6 @@ of a class/object.
 For classes and objects defined in a namespace, the fully-qualified name is used, e. g. "c0.foo.bar.user".
 
 
-15. Bug fixed: slow compilation
+16. Bug fixed: slow compilation
 
 There was a bug which made compilation of large files (~1000+ lines) considerably slow.

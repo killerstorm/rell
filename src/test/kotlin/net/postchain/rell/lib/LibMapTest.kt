@@ -92,8 +92,8 @@ class LibMapTest: BaseRellTest(false) {
         chk("map(['Bob':123,'Alice':456])['Alice']", "int[456]")
         chk("map(['Bob':123,'Alice':456])['Trudy']", "rt_err:fn_map_get_novalue:text[Trudy]")
 
-        chkEx("{ val m: map<text,integer>? = ['Bob':123]; return m['Bob']; }", "ct_err:expr_lookup_null")
-        chkEx("{ val m: map<text,integer>? = ['Bob':123]; return m!!['Bob']; }", "int[123]")
+        chkEx("{ val m: map<text,integer>? = if (1>0) ['Bob':123] else null; return m['Bob']; }", "ct_err:expr_lookup_null")
+        chkEx("{ val m: map<text,integer>? = if (1>0) ['Bob':123] else null; return m!!['Bob']; }", "int[123]")
     }
 
     @Test fun testEquals() {
@@ -149,8 +149,8 @@ class LibMapTest: BaseRellTest(false) {
         chkEx("{ val x = ['Bob':123]; x[123] = 'Bob'; return ''+x; }", "ct_err:expr_lookup_keytype:text:integer")
         chkEx("{ val x = ['Bob':123,'Alice':456]; x['Bob'] += 500; return ''+x; }", "{Bob=623, Alice=456}")
 
-        chkEx("{ val m: map<text,integer>? = ['Bob':123]; m['Bob'] = 456; return m; }", "ct_err:expr_lookup_null")
-        chkEx("{ val m: map<text,integer>? = ['Bob':123]; m!!['Bob'] = 456; return m; }", "{Bob=456}")
+        chkEx("{ val m: map<text,integer>? = if (1>0) ['Bob':123] else null; m['Bob'] = 456; return m; }", "ct_err:expr_lookup_null")
+        chkEx("{ val m: map<text,integer>? = if (1>0) ['Bob':123] else null; m!!['Bob'] = 456; return m; }", "{Bob=456}")
     }
 
     @Test fun testPutAll() {

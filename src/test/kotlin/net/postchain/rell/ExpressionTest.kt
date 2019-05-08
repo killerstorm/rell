@@ -318,7 +318,7 @@ class ExpressionTest: BaseRellTest(false) {
         chk("'Hello'(123)", "ct_err:expr_call_nofn:text")
     }
 
-    @Test fun testRefEq() {
+    @Test fun testEqRef() {
         chkEx("{ val a = [1, 2, 3]; val b = [1, 2, 3]; return a == b; }", "boolean[true]")
         chkEx("{ val a = [1, 2, 3]; val b = [1, 2, 3]; return a != b; }", "boolean[false]")
         chkEx("{ val a = [1, 2, 3]; val b = [1, 2, 3]; return a === b; }", "boolean[false]")
@@ -369,21 +369,38 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testEqRefNullable() {
-        chkEx("{ val a: integer? = 123; return a === null; }", "ct_err:binop_operand_type:===:integer?:null")
-        chkEx("{ val a: integer? = 123; return a !== null; }", "ct_err:binop_operand_type:!==:integer?:null")
-        chkEx("{ val a: integer? = 123; return a === 123; }", "ct_err:binop_operand_type:===:integer?:integer")
-        chkEx("{ val a: integer? = 123; return a !== 123; }", "ct_err:binop_operand_type:!==:integer?:integer")
+        chkEx("{ val a: integer? = _nullable(123); return a === null; }", "ct_err:binop_operand_type:===:integer?:null")
+        chkEx("{ val a: integer? = _nullable(123); return a !== null; }", "ct_err:binop_operand_type:!==:integer?:null")
+        chkEx("{ val a: integer? = _nullable(123); return a === 123; }", "ct_err:binop_operand_type:===:integer?:integer")
+        chkEx("{ val a: integer? = _nullable(123); return a !== 123; }", "ct_err:binop_operand_type:!==:integer?:integer")
 
-        chkEx("{ val a: list<integer>? = [1,2,3]; return a === null; }", "boolean[false]")
-        chkEx("{ val a: list<integer>? = [1,2,3]; return a !== null; }", "boolean[true]")
-        chkEx("{ val a: list<integer>? = [1,2,3]; return a === [1,2,3]; }", "boolean[false]")
-        chkEx("{ val a: list<integer>? = [1,2,3]; return a !== [1,2,3]; }", "boolean[true]")
-        chkEx("{ val a: list<integer>? = [1,2,3]; val b = a; return a === b; }", "boolean[true]")
-        chkEx("{ val a: list<integer>? = [1,2,3]; val b = a; return a !== b; }", "boolean[false]")
+        chkEx("{ val a: list<integer>? = _nullable([1,2,3]); return a === null; }", "boolean[false]")
+        chkEx("{ val a: list<integer>? = _nullable([1,2,3]); return a !== null; }", "boolean[true]")
+        chkEx("{ val a: list<integer>? = _nullable([1,2,3]); return a === [1,2,3]; }", "boolean[false]")
+        chkEx("{ val a: list<integer>? = _nullable([1,2,3]); return a !== [1,2,3]; }", "boolean[true]")
+        chkEx("{ val a: list<integer>? = _nullable([1,2,3]); val b = a; return a === b; }", "boolean[true]")
+        chkEx("{ val a: list<integer>? = _nullable([1,2,3]); val b = a; return a !== b; }", "boolean[false]")
         chkEx("{ val a: list<integer>? = null; return a === null; }", "boolean[true]")
         chkEx("{ val a: list<integer>? = null; return a !== null; }", "boolean[false]")
         chkEx("{ val a: list<integer>? = null; return a === [1,2,3]; }", "boolean[false]")
         chkEx("{ val a: list<integer>? = null; return a !== [1,2,3]; }", "boolean[true]")
+    }
+
+    @Test fun testEqTupleSubtype() {
+        chkEx("{ val a = (123, 'Hello'); val b: (integer?, text?) = a; return a === b; }", "boolean[true]")
+        chkEx("{ val a = (123, 'Hello'); val b: (integer?, text?) = a; return b === a; }", "boolean[true]")
+        chkEx("{ val a = (123, 'Hello'); val b: (integer?, text?) = a; return a !== b; }", "boolean[false]")
+        chkEx("{ val a = (123, 'Hello'); val b: (integer?, text?) = a; return b !== a; }", "boolean[false]")
+
+        chkEx("{ val a = (123, 'Hello'); val b: (integer?, text?) = (123, 'Hello'); return a === b; }", "boolean[false]")
+        chkEx("{ val a = (123, 'Hello'); val b: (integer?, text?) = (123, 'Hello'); return b === a; }", "boolean[false]")
+        chkEx("{ val a = (123, 'Hello'); val b: (integer?, text?) = (123, 'Hello'); return a !== b; }", "boolean[true]")
+        chkEx("{ val a = (123, 'Hello'); val b: (integer?, text?) = (123, 'Hello'); return b !== a; }", "boolean[true]")
+
+        chkEx("{ val a = (123, 'Hello'); val b: (integer?, text?) = (123, 'Hello'); return a == b; }", "boolean[true]")
+        chkEx("{ val a = (123, 'Hello'); val b: (integer?, text?) = (123, 'Hello'); return b == a; }", "boolean[true]")
+        chkEx("{ val a = (123, 'Hello'); val b: (integer?, text?) = (123, 'Hello'); return a != b; }", "boolean[false]")
+        chkEx("{ val a = (123, 'Hello'); val b: (integer?, text?) = (123, 'Hello'); return b != a; }", "boolean[false]")
     }
 
     @Test fun testIf() {
@@ -400,7 +417,7 @@ class ExpressionTest: BaseRellTest(false) {
         chk("if ('Hello') 'A' else 'B'", "ct_err:expr_if_cond_type:boolean:text")
         chk("if (null) 'A' else 'B'", "ct_err:expr_if_cond_type:boolean:null")
         chk("if (unit()) 'A' else 'B'", "ct_err:expr_if_cond_type:boolean:unit")
-        chkEx("{ val x: boolean? = true; return if (x) 'A' else 'B'; }", "ct_err:expr_if_cond_type:boolean:boolean?")
+        chkEx("{ val x: boolean? = _nullable(true); return if (x) 'A' else 'B'; }", "ct_err:expr_if_cond_type:boolean:boolean?")
     }
 
     @Test fun testIfShortCircuit() {

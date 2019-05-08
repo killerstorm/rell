@@ -166,7 +166,7 @@ class Rt_SqlContext private constructor(
                 if (metaType != extType) {
                     val clsName = extCls.name
                     throw Rt_Error("external_meta_attrtype:$chain:$clsName:$attrName:[$extType]:[$metaType]",
-                            "Attribute type missmatch for class '$clsName' in external chain '$chain': " +
+                            "Attribute type mismatch for class '$clsName' in external chain '$chain': " +
                                     "expected '$extType', actual '$metaType'")
                 }
             }

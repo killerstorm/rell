@@ -383,6 +383,12 @@ object R_SysFn_StrictStr: R_SysFunction_1() {
     }
 }
 
+object R_SysFn_Nop: R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value {
+        return arg
+    }
+}
+
 object R_SysFn_GtxValue_ToBytes: R_SysFunction_1() {
     override fun call(arg: Rt_Value): Rt_Value {
         val gtx = arg.asGtxValue()

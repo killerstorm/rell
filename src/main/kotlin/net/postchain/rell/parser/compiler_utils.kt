@@ -135,7 +135,7 @@ object C_Parser {
 }
 
 object C_Errors {
-    fun errTypeMissmatch(pos: S_Pos, srcType: R_Type, dstType: R_Type, errCode: String, errMsg: String): C_Error {
+    fun errTypeMismatch(pos: S_Pos, srcType: R_Type, dstType: R_Type, errCode: String, errMsg: String): C_Error {
         return C_Error(pos, "$errCode:${dstType.toStrictString()}:${srcType.toStrictString()}",
                 "$errMsg: ${srcType.toStrictString()} instead of ${dstType.toStrictString()}")
     }
@@ -353,4 +353,45 @@ object C_GraphUtils {
 
         return visited.toList()
     }
+}
+
+class C_RecordsStructure(
+        val mutable: Set<R_RecordType>,
+        val nonGtxHuman: Set<R_RecordType>,
+        val nonGtxCompact: Set<R_RecordType>,
+        val graph: Map<R_RecordType, List<R_RecordType>>
+)
+
+object C_RecordUtils {
+    fun buildRecordsStructure(records: Collection<R_RecordType>): C_RecordsStructure {
+        val structMap = records.map { Pair(it, calcRecStruct(it)) }.toMap()
+        val graph = structMap.mapValues { (_, v) -> v.dependencies.toList() }
+        val mutable = structMap.filter { (_, v) -> v.directFlags.mutable }.keys
+        val nonGtxHuman = structMap.filter { (_, v) -> !v.directFlags.gtxHuman.compatible }.keys
+        val nonGtxCompact = structMap.filter { (_, v) -> !v.directFlags.gtxCompact.compatible }.keys
+        return C_RecordsStructure(mutable, nonGtxHuman, nonGtxCompact, graph)
+    }
+
+    private fun calcRecStruct(type: R_Type): RecStruct {
+        val flags = mutableListOf(type.directFlags())
+        val deps = mutableSetOf<R_RecordType>()
+
+        for (subType in type.componentTypes()) {
+            val subStruct = discoverRecStruct(subType)
+            flags.add(subStruct.directFlags)
+            deps.addAll(subStruct.dependencies)
+        }
+
+        val resFlags = R_TypeFlags.combine(flags)
+        return RecStruct(resFlags, deps.toSet())
+    }
+
+    private fun discoverRecStruct(type: R_Type): RecStruct {
+        if (type is R_RecordType) {
+            return RecStruct(type.directFlags(), setOf(type))
+        }
+        return calcRecStruct(type)
+    }
+
+    private class RecStruct(val directFlags: R_TypeFlags, val dependencies: Set<R_RecordType>)
 }

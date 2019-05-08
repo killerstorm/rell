@@ -35,30 +35,62 @@ class C_ArgTypeMatcher_MapSub(val keyType: R_Type, val valueType: R_Type): C_Arg
 }
 
 abstract class C_GlobalFuncCase {
-    abstract fun match(args: List<R_Type>): C_GlobalFuncCaseMatch?
+    abstract fun match(args: List<C_Value>): C_GlobalFuncCaseMatch?
+}
+
+abstract class C_SimpleGlobalFuncCase: C_GlobalFuncCase() {
+    abstract fun matchTypes(args: List<R_Type>): C_GlobalFuncCaseMatch?
+
+    override fun match(args: List<C_Value>): C_GlobalFuncCaseMatch? {
+        val argTypes = args.map { it.type() }
+        return matchTypes(argTypes)
+    }
 }
 
 abstract class C_GlobalFuncCaseMatch {
-    abstract fun compileCall(name: S_Name, args: List<R_Expr>): R_Expr
+    abstract fun compileCall(name: S_Name, args: List<C_Value>): C_Value
 
-    open fun compileCallDb(name: S_Name, args: List<Db_Expr>): Db_Expr {
+    open fun compileCallDb(name: S_Name, args: List<C_Value>): C_Value {
         throw C_Errors.errFunctionNoSql(name.pos, name.str)
     }
 }
 
-class C_StdGlobalFuncCase(val params: List<C_ArgTypeMatcher>, val match: C_GlobalFuncCaseMatch): C_GlobalFuncCase() {
-    override fun match(args: List<R_Type>): C_GlobalFuncCaseMatch? {
+abstract class C_SimpleGlobalFuncCaseMatch: C_GlobalFuncCaseMatch() {
+    abstract fun compileCallExpr(name: S_Name, args: List<R_Expr>): R_Expr
+
+    open fun compileCallDbExpr(name: S_Name, args: List<Db_Expr>): Db_Expr {
+        throw C_Errors.errFunctionNoSql(name.pos, name.str)
+    }
+
+    override fun compileCall(name: S_Name, args: List<C_Value>): C_Value {
+        val rArgs = args.map { it.toRExpr() }
+        val rExpr = compileCallExpr(name, rArgs)
+        val facts = C_ExprVarFacts.forSubExpressions(args)
+        return C_RValue(name.pos, rExpr, facts)
+    }
+
+    override fun compileCallDb(name: S_Name, args: List<C_Value>): C_Value {
+        val dbArgs = args.map { it.toDbExpr() }
+        val dbExpr = compileCallDbExpr(name, dbArgs)
+        val facts = C_ExprVarFacts.forSubExpressions(args)
+        return C_DbValue(name.pos, dbExpr, facts)
+    }
+}
+
+class C_StdGlobalFuncCase(val params: List<C_ArgTypeMatcher>, val match: C_GlobalFuncCaseMatch): C_SimpleGlobalFuncCase() {
+    override fun matchTypes(args: List<R_Type>): C_GlobalFuncCaseMatch? {
         if (!C_FuncUtils.matchArgs(params, args)) return null
         return match
     }
 }
 
-class C_StdGlobalFuncCaseMatch(val type: R_Type, val rFn: R_SysFunction, val dbFn: Db_SysFunction? = null): C_GlobalFuncCaseMatch() {
-    override fun compileCall(name: S_Name, args: List<R_Expr>): R_Expr {
+class C_StdGlobalFuncCaseMatch(val type: R_Type, val rFn: R_SysFunction, val dbFn: Db_SysFunction? = null
+): C_SimpleGlobalFuncCaseMatch() {
+    override fun compileCallExpr(name: S_Name, args: List<R_Expr>): R_Expr {
         return R_SysCallExpr(type, rFn, args)
     }
 
-    override fun compileCallDb(name: S_Name, args: List<Db_Expr>): Db_Expr {
+    override fun compileCallDbExpr(name: S_Name, args: List<Db_Expr>): Db_Expr {
         if (dbFn == null) throw C_Errors.errFunctionNoSql(name.pos, name.str)
         return Db_CallExpr(type, dbFn, args)
     }
@@ -143,27 +175,23 @@ class C_SysGlobalFunction(private val cases: List<C_GlobalFuncCase>): C_GlobalFu
     override fun compileCall(name: S_Name, args: List<C_Value>): C_Expr {
         val match = matchCase(name, args)
         val db = args.any { it.isDb() }
-        if (db) {
-            val dbArgs = args.map { it.toDbExpr() }
-            val dbExpr = match.compileCallDb(name, dbArgs)
-            return C_DbExpr(name.pos, dbExpr)
+        val value = if (db) {
+            match.compileCallDb(name, args)
         } else {
-            val rArgs = args.map { it.toRExpr() }
-            val rExpr = match.compileCall(name, rArgs)
-            return C_RExpr(name.pos, rExpr)
+            match.compileCall(name, args)
         }
+        return C_ValueExpr(value)
     }
 
     private fun matchCase(name: S_Name, args: List<C_Value>): C_GlobalFuncCaseMatch {
-        val argTypes = args.map { it.type() }
-
         for (case in cases) {
-            val res = case.match(argTypes)
+            val res = case.match(args)
             if (res != null) {
                 return res
             }
         }
 
+        val argTypes = args.map { it.type() }
         throw C_FuncUtils.errNoMatch(name.pos, name.str, argTypes)
     }
 }
@@ -178,14 +206,18 @@ class C_StdSysMemberFunction(val cases: List<C_MemberFuncCase>): C_SysMemberFunc
             val dbBase = base.toDbExpr()
             val dbArgs = args.map { it.toDbExpr() }
             val dbExpr = match.compileCallDb(name.pos, fullName, dbBase, dbArgs)
-            return C_DbExpr(name.pos, dbExpr)
-        } else {
-            val rBase = base.toRExpr()
-            val rArgs = args.map { it.toRExpr() }
-            val calculator = match.compileCall(name.pos, fullName, rArgs)
-            val rExpr = R_MemberExpr(rBase, safe, calculator)
-            return C_RExpr(name.pos, rExpr)
+            return C_DbValue.makeExpr(name.pos, dbExpr)
         }
+
+        val rBase = base.toRExpr()
+        val rArgs = args.map { it.toRExpr() }
+        val calculator = match.compileCall(name.pos, fullName, rArgs)
+        val rExpr = R_MemberExpr(rBase, safe, calculator)
+
+        val subValues = listOf(base) + args
+        val exprFacts = C_ExprVarFacts.forSubExpressions(subValues)
+
+        return C_RValue.makeExpr(name.pos, rExpr, exprFacts)
     }
 
     private fun matchCase(pos: S_Pos, fullName: String, args: List<C_Value>): C_MemberFuncCaseMatch {

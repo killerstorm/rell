@@ -1,7 +1,6 @@
 package net.postchain.rell.test
 
 import net.postchain.rell.model.R_ExternalParam
-import net.postchain.rell.model.R_Module
 import net.postchain.rell.model.R_Type
 import net.postchain.rell.parser.*
 import net.postchain.rell.runtime.*
@@ -13,15 +12,19 @@ object RellTestUtils {
 
     val MAIN_FILE = "main.rell"
 
+    fun processModule(code: String, processor: (RellTestModule) -> String): String {
+        val includeDir = C_VirtualIncludeDir(mapOf(MAIN_FILE to code))
+        return processModule(includeDir, processor = processor)
+    }
+
     fun processModule(
-            code: String,
+            includeDir: C_IncludeDir,
             errPos: Boolean = false,
             gtx: Boolean = false,
-            includeDir: C_IncludeDir = C_EmptyIncludeDir,
-            processor: (R_Module) -> String): String
-    {
+            processor: (RellTestModule) -> String
+    ): String {
         val p = catchCtErr0(errPos) {
-            parseModule(code, gtx, includeDir)
+            parseModule(includeDir, gtx)
         }
         return p.first ?: processor(p.second!!)
     }
@@ -124,32 +127,20 @@ object RellTestUtils {
         }
     }
 
-    fun parseModule(code: String, gtx: Boolean, includeDir: C_IncludeDir): R_Module {
-        val includeResolver = C_IncludeResolver(includeDir)
-
-        var result: String? = null
-        try {
-            val ast = parse(code)
-            val m = ast.compile(MAIN_FILE, includeResolver, gtx)
-            result = "OK"
-            return m.rModule
-        } catch (e: C_Error) {
-            result = "ct_err:${e.code}"
-            throw e
-        } finally {
-            if (result != null) {
-                TestSourcesRecorder.addSource(code, result)
-            }
+    fun parseModule(includeDir: C_IncludeDir, gtx: Boolean): RellTestModule {
+        val res = C_Compiler.compile(includeDir, MAIN_FILE, gtx)
+        if (res.error != null) {
+            throw res.error!!
+        } else {
+            return RellTestModule(res.module!!, res.messages)
         }
     }
 
-    private fun parse(code: String): S_ModuleDefinition {
-        try {
-            return C_Parser.parse(MAIN_FILE, code)
-        } catch (e: C_Error) {
-            println("PARSING FAILED:")
-            println(code)
-            throw e
-        }
+    private fun saveSource(includeDir: C_IncludeDir, gtx: Boolean, res: C_CompilationResult) {
+        val error = res.error
+        val result = if (error == null) "OK" else "ct_err:${error.code}"
+        val includeResolver = C_IncludeResolver(includeDir)
+        val code = includeResolver.resolve(MAIN_FILE).file.readText()
+        TestSourcesRecorder.addSource(code, result)
     }
 }

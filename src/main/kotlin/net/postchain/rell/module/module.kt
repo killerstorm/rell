@@ -1,5 +1,6 @@
 package net.postchain.rell.module
 
+import mu.KLogging
 import net.postchain.core.EContext
 import net.postchain.core.Transactor
 import net.postchain.core.TxEContext
@@ -10,13 +11,12 @@ import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.model.R_Operation
 import net.postchain.rell.model.R_Query
-import net.postchain.rell.parser.C_IncludeResolver
-import net.postchain.rell.parser.C_Parser
+import net.postchain.rell.parser.C_Compiler
+import net.postchain.rell.parser.C_MessageType
 import net.postchain.rell.parser.C_VirtualIncludeDir
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.DefaultSqlExecutor
 import net.postchain.rell.sql.genSqlForChain
-import org.apache.commons.logging.LogFactory
 
 val RELL_VERSION = "v0.8"
 val CONFIG_RELL_FILES = "files_$RELL_VERSION"
@@ -29,10 +29,10 @@ private object StdoutRtPrinter : Rt_Printer() {
 }
 
 private object LogRtPrinter : Rt_Printer() {
-    private val log = LogFactory.getLog(LogRtPrinter.javaClass)
+    private val logger = KLogging().logger("Rell")
 
     override fun print(str: String) {
-        log.info(str)
+        logger.info(str)
     }
 }
 
@@ -172,7 +172,10 @@ class RellPostchainModule(
     }
 }
 
-class RellPostchainModuleFactory(private val translateRtError: Boolean = true) : GTXModuleFactory {
+class RellPostchainModuleFactory(
+        private val wrapCtErrors: Boolean = true,
+        private val wrapRtErrors: Boolean = true
+) : GTXModuleFactory {
     override fun makeModule(data: GTXValue, blockchainRID: ByteArray): GTXModule {
         val gtxNode = data.asDict().getValue("gtx").asDict()
         val rellNode = gtxNode.getValue("rell").asDict()
@@ -181,14 +184,33 @@ class RellPostchainModuleFactory(private val translateRtError: Boolean = true) :
         val moduleName = if (moduleNameNode == null) "" else moduleNameNode.asString()
 
         val (sourceCodes, mainFileName) = getModuleCode(rellNode)
+        val includeDir = C_VirtualIncludeDir(sourceCodes)
+        val cResult = C_Compiler.compile(includeDir, mainFileName, true)
 
-        val mainFileText = sourceCodes.getValue(mainFileName)
-        val ast = C_Parser.parse(mainFileName, mainFileText)
+        var failure = false
+        for (message in cResult.messages) {
+            val str = message.toString()
+            val type = message.type
+            if (type == C_MessageType.WARNING) {
+                logger.warn(str)
+            } else if (type == C_MessageType.ERROR) {
+                logger.error(str)
+            } else {
+                logger.info(str)
+            }
+            failure = failure || type == C_MessageType.ERROR
+        }
 
-        val includeResolver = C_IncludeResolver(C_VirtualIncludeDir(sourceCodes))
-        val module = ast.compile(mainFileName, includeResolver, true)
+        if (cResult.error != null && !wrapCtErrors) {
+            throw cResult.error
+        }
 
-        val chainCtx = createChainContext(data, rellNode, module.rModule)
+        if (failure || cResult.error != null || cResult.module == null) {
+            throw UserMistake(cResult?.error?.message ?: "Compilation error")
+        }
+
+        val module = cResult.module
+        val chainCtx = createChainContext(data, rellNode, module)
 
         val chainDeps = catchRtErr {
             getGtxChainDependencies(data)
@@ -196,7 +218,7 @@ class RellPostchainModuleFactory(private val translateRtError: Boolean = true) :
 
         val sqlLogging = (rellNode["sqlLog"]?.asInteger() ?: 0L) != 0L
 
-        return RellPostchainModule(this, module.rModule, moduleName, chainCtx, chainDeps, sqlLogging)
+        return RellPostchainModule(this, module, moduleName, chainCtx, chainDeps, sqlLogging)
     }
 
     private fun getModuleCode(rellNode: Map<String, GTXValue>): Pair<Map<String, String>, String> {
@@ -257,7 +279,9 @@ class RellPostchainModuleFactory(private val translateRtError: Boolean = true) :
         try {
             return code()
         } catch (e: Rt_BaseError) {
-            throw if (translateRtError) UserMistake(e.message ?: "") else e
+            throw if (wrapRtErrors) UserMistake(e.message ?: "") else e
         }
     }
+
+    companion object : KLogging()
 }

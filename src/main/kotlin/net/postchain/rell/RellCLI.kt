@@ -4,10 +4,9 @@ import net.postchain.gtx.GTXNull
 import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.model.R_Routine
+import net.postchain.rell.parser.C_Compiler
 import net.postchain.rell.parser.C_DiskIncludeDir
-import net.postchain.rell.parser.C_Error
-import net.postchain.rell.parser.C_IncludeResolver
-import net.postchain.rell.parser.C_Parser
+import net.postchain.rell.parser.C_MessageType
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.*
 import org.apache.commons.logging.LogFactory
@@ -25,7 +24,7 @@ fun main(args: Array<String>) {
         exitProcess(1)
     }
 
-    val module = compileModule(argsEx.rellFile)
+    val module = RellCliUtils.compileModule(argsEx.rellFile)
     val routine = getRoutineCaller(argsEx, module)
 
     runWithSql(argsEx.dburl, argsEx.sqlLog) { sqlExec ->
@@ -100,26 +99,6 @@ private class RellCliArgs {
     var args: List<String>? = null
 }
 
-private fun compileModule(rellPath: String): R_Module {
-    val sourceFile = File(rellPath)
-    val sourceCode = sourceFile.readText()
-
-    val sourceName = sourceFile.name
-
-    val includeDir = C_DiskIncludeDir(sourceFile.absoluteFile.parentFile)
-    val includeResolver = C_IncludeResolver(includeDir)
-
-    val module = try {
-        val ast = C_Parser.parse(sourceName, sourceCode)
-        ast.compile(sourceName, includeResolver, true)
-    } catch (e: C_Error) {
-        System.err.println("ERROR ${e.pos} ${e.errMsg}")
-        exitProcess(1)
-    }
-
-    return module.rModule
-}
-
 private fun findRoutine(module: R_Module, name: String): Pair<R_Routine, Rt_OpContext?> {
     val oper = module.operations[name]
     val query = module.queries[name]
@@ -182,5 +161,31 @@ private object LogRtPrinter: Rt_Printer() {
 
     override fun print(str: String) {
         log.info(str)
+    }
+}
+
+object RellCliUtils {
+    fun compileModule(rellPath: String): R_Module {
+        val sourceFile = File(rellPath)
+        val sourceName = sourceFile.name
+
+        val includeDir = C_DiskIncludeDir(sourceFile.absoluteFile.parentFile)
+        val res = C_Compiler.compile(includeDir, sourceName, true)
+
+        var errCnt = 0
+        for (message in res.messages) {
+            System.err.println(message)
+            if (message.type == C_MessageType.ERROR) ++errCnt
+        }
+
+        val module = res.module
+        if (module == null) {
+            if (errCnt == 0) System.err.println("${C_MessageType.ERROR.text}: compilation failed")
+            exitProcess(1)
+        } else if (errCnt > 0) {
+            exitProcess(1)
+        }
+
+        return module
     }
 }

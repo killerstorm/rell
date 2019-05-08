@@ -1,16 +1,18 @@
 package net.postchain.rell.test
 
+import com.google.common.collect.Sets
 import net.postchain.gtx.GTXNull
 import net.postchain.gtx.GTXValue
 import net.postchain.rell.hexStringToByteArray
 import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_Module
-import net.postchain.rell.parser.C_IncludeDir
-import net.postchain.rell.parser.C_VirtualIncludeDir
+import net.postchain.rell.parser.C_Message
+import net.postchain.rell.parser.C_MessageType
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.sql.SqlUtils
 import net.postchain.rell.sql.genSqlForChain
+import org.junit.Assert
 import java.sql.Connection
 import java.util.*
 import kotlin.test.assertEquals
@@ -25,6 +27,7 @@ class RellCodeTester(
     private val expectedData = mutableListOf<String>()
     private val stdoutPrinter = TesterRtPrinter()
     private val logPrinter = TesterRtPrinter()
+    private val messages = mutableListOf<C_Message>()
 
     var gtxResult: Boolean = gtx
         set(value) {
@@ -162,6 +165,8 @@ class RellCodeTester(
     }
 
     private fun <T> callQuery0(code: String, args: List<T>, decoder: (List<R_ExternalParam>, List<T>) -> List<Rt_Value>): String {
+        messages.clear()
+
         return eval.eval {
             init()
             val moduleCode = moduleCode(code)
@@ -224,6 +229,20 @@ class RellCodeTester(
     fun chkStdout(vararg expected: String) = stdoutPrinter.chk(*expected)
     fun chkLog(vararg expected: String) = logPrinter.chk(*expected)
 
+    fun chkWarn(vararg msgs: String) {
+        val actual = messages.filter { it.type == C_MessageType.WARNING }.map { it.code }.toSet()
+        val expected = msgs.toSet()
+        if (actual != expected) {
+            val diffAct = Sets.difference(actual, expected)
+            val diffExp = Sets.difference(expected, actual)
+            val list = mutableListOf<String>()
+            if (!diffExp.isEmpty()) list.add("missing: $diffExp")
+            if (!diffAct.isEmpty()) list.add("extra: $diffAct")
+            val msg = list.joinToString()
+            Assert.fail(msg)
+        }
+    }
+
     fun chkInitObjects(expected: String) {
         init()
         val sqlExec = getSqlExec()
@@ -240,8 +259,9 @@ class RellCodeTester(
 
     private fun processModuleCtx(globalCtx: Rt_GlobalContext, code: String, processor: (Rt_ModuleContext) -> String): String {
         val includeDir = createIncludeDir(code)
-        return RellTestUtils.processModule(code, errMsgPos, gtx, includeDir) { module ->
-            RellTestUtils.catchRtErr({ createModuleCtx(globalCtx, module) }) {
+        return RellTestUtils.processModule(includeDir, errMsgPos, gtx) { module ->
+            messages.addAll(module.messages)
+            RellTestUtils.catchRtErr({ createModuleCtx(globalCtx, module.rModule) }) {
                 modCtx -> processor(modCtx) }
         }
     }

@@ -133,20 +133,20 @@ class EnumTest: BaseRellTest() {
     }
 
     @Test fun testNullable() {
-        tst.defs = listOf("enum foo { A, B, C }")
+        tst.defs = listOf("enum foo { A, B, C }", "function nop(x: foo?): foo? = x;")
 
         chkEx("{ val f: foo = foo.A; return f.name; }", "text[A]")
         chkEx("{ val f: foo = foo.A; return f?.name; }", "ct_err:expr_safemem_type:foo")
         chkEx("{ val f: foo = foo.A; return f!!.name; }", "ct_err:unop_operand_type:!!:foo")
         chkEx("{ val f: foo = foo.A; return f ?: foo.C; }", "ct_err:binop_operand_type:?::foo:foo")
 
-        chkEx("{ val f: foo? = foo.A; return f.name; }", "ct_err:expr_mem_null:name")
-        chkEx("{ val f: foo? = foo.A; return f?.name; }", "text[A]")
-        chkEx("{ val f: foo? = foo.A; return f!!.name; }", "text[A]")
-        chkEx("{ val f: foo? = foo.A; return f ?: foo.C; }", "foo[A]")
+        chkEx("{ val f: foo? = nop(foo.A); return f.name; }", "ct_err:expr_mem_null:name")
+        chkEx("{ val f: foo? = nop(foo.A); return f?.name; }", "text[A]")
+        chkEx("{ val f: foo? = nop(foo.A); return f!!.name; }", "text[A]")
+        chkEx("{ val f: foo? = nop(foo.A); return f ?: foo.C; }", "foo[A]")
 
-        chkEx("{ val f: foo? = null; return f?.name; }", "null")
-        chkEx("{ val f: foo? = null; return f!!.name; }", "rt_err:null_value")
-        chkEx("{ val f: foo? = null; return f ?: foo.C; }", "foo[C]")
+        chkEx("{ val f: foo? = nop(null); return f?.name; }", "null")
+        chkEx("{ val f: foo? = nop(null); return f!!.name; }", "rt_err:null_value")
+        chkEx("{ val f: foo? = nop(null); return f ?: foo.C; }", "foo[C]")
     }
 }

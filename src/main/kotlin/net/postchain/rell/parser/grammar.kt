@@ -180,26 +180,26 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     }
 
     private val binaryOperator = (
-            ( EQ mapNode { S_BinaryOpCode.EQ } )
-            or ( NE mapNode { S_BinaryOpCode.NE } )
-            or ( LE mapNode { S_BinaryOpCode.LE } )
-            or ( GE mapNode { S_BinaryOpCode.GE } )
-            or ( LT mapNode { S_BinaryOpCode.LT } )
-            or ( GT mapNode { S_BinaryOpCode.GT } )
-            or ( EQ_REF mapNode { S_BinaryOpCode.EQ_REF } )
-            or ( NE_REF mapNode { S_BinaryOpCode.NE_REF } )
+            ( EQ mapNode { S_BinaryOp.EQ } )
+            or ( NE mapNode { S_BinaryOp.NE } )
+            or ( LE mapNode { S_BinaryOp.LE } )
+            or ( GE mapNode { S_BinaryOp.GE } )
+            or ( LT mapNode { S_BinaryOp.LT } )
+            or ( GT mapNode { S_BinaryOp.GT } )
+            or ( EQ_REF mapNode { S_BinaryOp.EQ_REF } )
+            or ( NE_REF mapNode { S_BinaryOp.NE_REF } )
 
-            or ( PLUS mapNode { S_BinaryOpCode.PLUS } )
-            or ( MINUS mapNode { S_BinaryOpCode.MINUS } )
-            or ( MUL mapNode { S_BinaryOpCode.MUL } )
-            or ( DIV mapNode { S_BinaryOpCode.DIV } )
-            or ( MOD mapNode { S_BinaryOpCode.MOD } )
+            or ( PLUS mapNode { S_BinaryOp.PLUS } )
+            or ( MINUS mapNode { S_BinaryOp.MINUS } )
+            or ( MUL mapNode { S_BinaryOp.MUL } )
+            or ( DIV mapNode { S_BinaryOp.DIV } )
+            or ( MOD mapNode { S_BinaryOp.MOD } )
 
-            or ( AND mapNode { S_BinaryOpCode.AND } )
-            or ( OR mapNode { S_BinaryOpCode.OR } )
+            or ( AND mapNode { S_BinaryOp.AND } )
+            or ( OR mapNode { S_BinaryOp.OR } )
 
-            or ( IN mapNode { S_BinaryOpCode.IN } )
-            or ( ELVIS mapNode { S_BinaryOpCode.ELVIS } )
+            or ( IN mapNode { S_BinaryOp.IN } )
+            or ( ELVIS mapNode { S_BinaryOp.ELVIS } )
     )
 
     private val incrementOperator = (

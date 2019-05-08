@@ -104,6 +104,12 @@ class LibTest: BaseRellTest(false) {
         chk("_strictStr((123,'Hello'))", "(int[123],text[Hello])")
     }
 
+    @Test fun testNullable() {
+        tst.strictToString = false
+        chk("_typeOf(123)", "integer")
+        chk("_typeOf(_nullable(123))", "integer?")
+    }
+
     @Test fun testJsonStr() {
         chkEx("""{ val s = json('{  "x":5, "y" : 10  }'); return s.str(); }""", """text[{"x":5,"y":10}]""")
     }
@@ -229,7 +235,7 @@ class LibTest: BaseRellTest(false) {
     }
 
     @Test fun testExists() {
-        chkEx("{ var x: integer? = 123; return exists(x); }", "boolean[true]")
+        chkEx("{ var x: integer? = _nullable(123); return exists(x); }", "boolean[true]")
         chkEx("{ var x: integer? = null; return exists(x); }", "boolean[false]")
 
         chk("exists(123)", "ct_err:expr_call_argtypes:exists:integer")

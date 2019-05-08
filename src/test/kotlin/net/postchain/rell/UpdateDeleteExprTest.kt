@@ -161,7 +161,7 @@ class UpdateDeleteExprTest: BaseRellTest() {
         chkOp("update true ( .x = 0 );", "ct_err:stmt_update_expr_type:boolean")
         chkOp("update null ( .x = 0 );", "ct_err:stmt_update_expr_type:null")
         chkOp("update list<text>() ( .x = 0 );", "ct_err:stmt_update_expr_type:list<text>")
-        chkOp("val v: integer? = 123; update v ( .x = 0 );", "ct_err:stmt_update_expr_type:integer?")
+        chkOp("val v: integer? = _nullable(123); update v ( .x = 0 );", "ct_err:stmt_update_expr_type:integer?")
         chkOp("val v: list<user>? = null; update v ( .x = 0 );", "ct_err:stmt_update_expr_type:list<user>?")
         chkOp("val v = list<user?>(); update v ( .x = 0 );", "ct_err:stmt_update_expr_type:list<user?>")
 
@@ -170,7 +170,7 @@ class UpdateDeleteExprTest: BaseRellTest() {
         chkOp("delete true;", "ct_err:stmt_update_expr_type:boolean")
         chkOp("delete null;", "ct_err:stmt_update_expr_type:null")
         chkOp("delete list<text>();", "ct_err:stmt_update_expr_type:list<text>")
-        chkOp("val v: integer? = 123; delete v;", "ct_err:stmt_update_expr_type:integer?")
+        chkOp("val v: integer? = _nullable(123); delete v;", "ct_err:stmt_update_expr_type:integer?")
         chkOp("val v: list<user>? = null; delete v;", "ct_err:stmt_update_expr_type:list<user>?")
         chkOp("val v = list<user?>(); delete v;", "ct_err:stmt_update_expr_type:list<user?>")
     }

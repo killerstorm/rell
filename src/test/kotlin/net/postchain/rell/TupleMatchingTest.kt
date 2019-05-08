@@ -25,7 +25,7 @@ class TupleMatchingTest: BaseRellTest(false) {
         chkEx("{ val i: integer = 123; return i; }", "int[123]")
     }
 
-    @Test fun testTypeMissmatch() {
+    @Test fun testTypeMismatch() {
         chkEx("{ val (x, y) = (123, 'Hello', true); return x; }", "ct_err:var_tuple_wrongsize:2:3:(integer,text,boolean)")
         chkEx("{ val (x, y, z) = (123, 'Hello'); return x; }", "ct_err:var_tuple_wrongsize:3:2:(integer,text)")
         chkEx("{ val (x: integer, y: text) = ('Hello', 123); return x; }", "ct_err:stmt_var_type:x:integer:text")
@@ -49,10 +49,10 @@ class TupleMatchingTest: BaseRellTest(false) {
     }
 
     @Test fun testNullable() {
-        chkEx("{ val t: integer? = 123; var (x, y) = (t, 'Hello'); return x; }", "int[123]")
-        chkEx("{ val t: integer? = 123; var (x: integer, y: text) = (t, 'Hello'); return x; }",
+        chkEx("{ val t: integer? = _nullable(123); var (x, y) = (t, 'Hello'); return x; }", "int[123]")
+        chkEx("{ val t: integer? = _nullable(123); var (x: integer, y: text) = (t, 'Hello'); return x; }",
                 "ct_err:stmt_var_type:x:integer:integer?")
-        chkEx("{ val t: integer? = 123; var (x: integer?, y) = (t, 'Hello'); return x; }", "int[123]")
+        chkEx("{ val t: integer? = _nullable(123); var (x: integer?, y) = (t, 'Hello'); return x; }", "int[123]")
         chkEx("{ val (x: integer, y) = (123, 'Hello'); return x; }", "int[123]")
     }
 

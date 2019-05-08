@@ -7,49 +7,61 @@ class S_NameExprPair(val name: S_Name?, val expr: S_Expr)
 
 abstract class S_Expr(val startPos: S_Pos) {
     abstract fun compile(ctx: C_ExprContext): C_Expr
-    open fun compileWhere(ctx: C_DbExprContext, idx: Int): C_Expr = compile(ctx)
+    open fun compileWhere(ctx: C_ExprContext, idx: Int): C_Expr = compile(ctx)
     open fun asName(): S_Name? = null
     open fun constantValue(): Rt_Value? = null
+
+    fun compileWithFacts(ctx: C_ExprContext, facts: C_VarFacts): C_Expr {
+        val factsCtx = ctx.updateFacts(facts)
+        return compile(factsCtx)
+    }
 }
 
 class S_StringLiteralExpr(pos: S_Pos, val literal: String): S_Expr(pos) {
-    override fun compile(ctx: C_ExprContext): C_Expr = C_RExpr(startPos, R_ConstantExpr.makeText(literal))
+    override fun compile(ctx: C_ExprContext): C_Expr = C_RValue.makeExpr(startPos, R_ConstantExpr.makeText(literal))
 }
 
 class S_ByteArrayLiteralExpr(pos: S_Pos, val bytes: ByteArray): S_Expr(pos) {
-    override fun compile(ctx: C_ExprContext): C_Expr = C_RExpr(startPos, R_ConstantExpr.makeBytes(bytes))
+    override fun compile(ctx: C_ExprContext): C_Expr = C_RValue.makeExpr(startPos, R_ConstantExpr.makeBytes(bytes))
 }
 
 class S_IntLiteralExpr(pos: S_Pos, val value: Long): S_Expr(pos) {
-    override fun compile(ctx: C_ExprContext): C_Expr = C_RExpr(startPos, R_ConstantExpr.makeInt(value))
+    override fun compile(ctx: C_ExprContext): C_Expr = C_RValue.makeExpr(startPos, R_ConstantExpr.makeInt(value))
 }
 
 class S_BooleanLiteralExpr(pos: S_Pos, val value: Boolean): S_Expr(pos) {
-    override fun compile(ctx: C_ExprContext): C_Expr = C_RExpr(startPos, R_ConstantExpr.makeBool(value))
+    override fun compile(ctx: C_ExprContext): C_Expr = C_RValue.makeExpr(startPos, R_ConstantExpr.makeBool(value))
 }
 
 class S_NullLiteralExpr(pos: S_Pos): S_Expr(pos) {
-    override fun compile(ctx: C_ExprContext): C_Expr = C_RExpr(startPos, R_ConstantExpr.makeNull())
+    override fun compile(ctx: C_ExprContext): C_Expr = C_RValue.makeExpr(startPos, R_ConstantExpr.makeNull())
 }
 
 class S_LookupExpr(val opPos: S_Pos, val base: S_Expr, val expr: S_Expr): S_Expr(base.startPos) {
     override fun compile(ctx: C_ExprContext): C_Expr {
-        val rBase = base.compile(ctx).value().toRExpr()
-        val rExpr = expr.compile(ctx).value().toRExpr()
+        val baseValue = base.compile(ctx).value()
+        val exprValue = expr.compile(ctx).value()
+
+        val rBase = baseValue.toRExpr()
+        val rExpr = exprValue.toRExpr()
 
         val baseType = rBase.type
         val effectiveType = if (baseType is R_NullableType) baseType.valueType else baseType
 
-        val resExpr = compile0(opPos, rBase, rExpr, effectiveType)
+        val lookup = compile0(opPos, rBase, rExpr, effectiveType)
 
         if (baseType is R_NullableType) {
             throw C_Error(opPos, "expr_lookup_null", "Cannot apply '[]' on nullable value")
         }
 
-        return resExpr
+        val postFacts = baseValue.varFacts().postFacts.and(exprValue.varFacts().postFacts)
+        val exprFacts = C_ExprVarFacts.of(postFacts = postFacts)
+
+        val lookupValue = C_LookupValue(startPos, rBase.type, lookup.expr, lookup.dstExpr, exprFacts)
+        return C_ValueExpr(lookupValue)
     }
 
-    private fun compile0(opPos2: S_Pos, rBase: R_Expr, rExpr: R_Expr, baseType: R_Type): C_Expr {
+    private fun compile0(opPos2: S_Pos, rBase: R_Expr, rExpr: R_Expr, baseType: R_Type): C_LookupInternal {
         if (baseType == R_TextType) {
             return compileText(rBase, rExpr)
         } else if (baseType == R_ByteArrayType) {
@@ -64,31 +76,35 @@ class S_LookupExpr(val opPos: S_Pos, val base: S_Expr, val expr: S_Expr): S_Expr
                 "Operator '[]' undefined for type ${baseType.toStrictString()}")
     }
 
-    private fun compileList(rBase: R_Expr, rExpr: R_Expr, elementType: R_Type): C_Expr {
+    private fun compileList(rBase: R_Expr, rExpr: R_Expr, elementType: R_Type): C_LookupInternal {
         matchKey(R_IntegerType, rExpr)
-        val rExpr = R_ListLookupExpr(elementType, rBase, rExpr)
-        return C_LookupExpr(startPos, rBase.type, rExpr, rExpr)
+        val rResExpr = R_ListLookupExpr(elementType, rBase, rExpr)
+        return C_LookupInternal(rResExpr, rResExpr)
     }
 
-    private fun compileMap(rBase: R_Expr, rExpr: R_Expr, keyType: R_Type, valueType: R_Type): C_Expr {
+    private fun compileMap(rBase: R_Expr, rExpr: R_Expr, keyType: R_Type, valueType: R_Type): C_LookupInternal {
         matchKey(keyType, rExpr)
-        val rExpr = R_MapLookupExpr(valueType, rBase, rExpr)
-        return C_LookupExpr(startPos, rBase.type, rExpr, rExpr)
+        val rResExpr = R_MapLookupExpr(valueType, rBase, rExpr)
+        return C_LookupInternal(rResExpr, rResExpr)
     }
 
-    private fun compileText(rBase: R_Expr, rExpr: R_Expr): C_Expr {
+    private fun compileText(rBase: R_Expr, rExpr: R_Expr): C_LookupInternal {
         matchKey(R_IntegerType, rExpr)
-        return C_LookupExpr(startPos, rBase.type, R_TextSubscriptExpr(rBase, rExpr), null)
+        val rResExpr = R_TextSubscriptExpr(rBase, rExpr)
+        return C_LookupInternal(rResExpr, null)
     }
 
-    private fun compileByteArray(rBase: R_Expr, rExpr: R_Expr): C_Expr {
+    private fun compileByteArray(rBase: R_Expr, rExpr: R_Expr): C_LookupInternal {
         matchKey(R_IntegerType, rExpr)
-        return C_LookupExpr(startPos, rBase.type, R_ByteArraySubscriptExpr(rBase, rExpr), null)
+        val rResExpr = R_ByteArraySubscriptExpr(rBase, rExpr)
+        return C_LookupInternal(rResExpr, null)
     }
 
     private fun matchKey(rType: R_Type, rExpr: R_Expr) {
         S_Type.match(rType, rExpr.type, expr.startPos, "expr_lookup_keytype", "Invalid lookup key type")
     }
+
+    private class C_LookupInternal(val expr: R_Expr, val dstExpr: R_DestinationExpr?)
 }
 
 class S_CreateExpr(pos: S_Pos, val className: List<S_Name>, val exprs: List<S_NameExprPair>): S_Expr(pos) {
@@ -106,8 +122,8 @@ class S_CreateExpr(pos: S_Pos, val className: List<S_Name>, val exprs: List<S_Na
         }
 
         val type = R_ClassType(cls)
-        val rExpr = R_CreateExpr(type, cls, attrs)
-        return C_RExpr(startPos, rExpr)
+        val rExpr = R_CreateExpr(type, cls, attrs.rAttrs)
+        return C_RValue.makeExpr(startPos, rExpr, attrs.exprFacts)
     }
 }
 
@@ -118,9 +134,11 @@ class S_ParenthesesExpr(startPos: S_Pos, val expr: S_Expr): S_Expr(startPos) {
 class S_TupleExpr(startPos: S_Pos, val fields: List<Pair<S_Name?, S_Expr>>): S_Expr(startPos) {
     override fun compile(ctx: C_ExprContext): C_Expr {
         checkNames()
-        val rExprs = fields.map { (_, expr) -> expr.compile(ctx).value().toRExpr() }
+        val values = fields.map { (_, expr) -> expr.compile(ctx).value() }
+        val rExprs = values.map { value -> value.toRExpr() }
         val rExpr = compile0(rExprs)
-        return C_RExpr(startPos, rExpr)
+        val exprFacts = C_ExprVarFacts.forSubExpressions(values)
+        return C_RValue.makeExpr(startPos, rExpr, exprFacts)
     }
 
     private fun compile0(rExprs: List<R_Expr>): R_Expr {
@@ -147,8 +165,18 @@ class S_TupleExpr(startPos: S_Pos, val fields: List<Pair<S_Name?, S_Expr>>): S_E
 class S_IfExpr(pos: S_Pos, val cond: S_Expr, val trueExpr: S_Expr, val falseExpr: S_Expr): S_Expr(pos) {
     override fun compile(ctx: C_ExprContext): C_Expr {
         val cCond = cond.compile(ctx).value()
-        val cTrue = trueExpr.compile(ctx).value()
-        val cFalse = falseExpr.compile(ctx).value()
+
+        val condFacts = cCond.varFacts()
+        val trueFacts = condFacts.postFacts.and(condFacts.trueFacts)
+        val falseFacts = condFacts.postFacts.and(condFacts.falseFacts)
+
+        val cTrue = trueExpr.compileWithFacts(ctx, trueFacts).value()
+        val cFalse = falseExpr.compileWithFacts(ctx, falseFacts).value()
+
+        val truePostFacts = trueFacts.and(cTrue.varFacts().postFacts)
+        val falsePostFacts = falseFacts.and(cFalse.varFacts().postFacts)
+        val resPostFacts = condFacts.postFacts.and(C_VarFacts.forBranches(ctx, listOf(truePostFacts, falsePostFacts)))
+        val resFacts = C_ExprVarFacts.of(postFacts = resPostFacts)
 
         S_Type.match(R_BooleanType, cCond.type(), cond.startPos, "expr_if_cond_type", "Wrong type of condition expression")
         checkUnitType(trueExpr, cTrue)
@@ -164,13 +192,13 @@ class S_IfExpr(pos: S_Pos, val cond: S_Expr, val trueExpr: S_Expr, val falseExpr
             val dbFalse = cFalse.toDbExpr()
             val cases = listOf(Db_WhenCase(dbCond, dbTrue))
             val dbExpr = Db_WhenExpr(resType, cases, dbFalse)
-            return C_DbExpr(startPos, dbExpr)
+            return C_DbValue.makeExpr(startPos, dbExpr, resFacts)
         } else {
             val rCond = cCond.toRExpr()
             val rTrue = cTrue.toRExpr()
             val rFalse = cFalse.toRExpr()
             val rExpr = R_IfExpr(resType, rCond, rTrue, rFalse)
-            return C_RExpr(startPos, rExpr)
+            return C_RValue.makeExpr(startPos, rExpr, resFacts)
         }
     }
 
@@ -180,14 +208,40 @@ class S_IfExpr(pos: S_Pos, val cond: S_Expr, val trueExpr: S_Expr, val falseExpr
 }
 
 sealed class S_WhenCondition {
-    abstract fun compile(ctx: C_ExprContext, builder: C_WhenChooserBuilder, keyType: R_Type?, idx: Int, last: Boolean)
+    abstract fun compile(
+            ctx: C_ExprContext,
+            builder: C_WhenChooserBuilder,
+            keyVarId: C_VarId?,
+            keyType: R_Type?,
+            idx: Int,
+            last: Boolean
+    )
 }
 
 class S_WhenConditionExpr(val exprs: List<S_Expr>): S_WhenCondition() {
-    override fun compile(ctx: C_ExprContext, builder: C_WhenChooserBuilder, keyType: R_Type?, idx: Int, last: Boolean) {
+    override fun compile(
+            ctx: C_ExprContext,
+            builder: C_WhenChooserBuilder,
+            keyVarId: C_VarId?,
+            keyType: R_Type?,
+            idx: Int,
+            last: Boolean
+    ) {
+        var caseFacts = C_VarFacts.EMPTY
+
         for (expr in exprs) {
-            val cValue = compileExpr(ctx, keyType, expr)
+            val elseFacts = builder.elseFacts.immutableCopy()
+            val exprCtx = ctx.updateFacts(elseFacts)
+            val cValue = compileExpr(exprCtx, keyType, expr)
+
             builder.variableCases.add(C_ChooserCase(expr, cValue, idx))
+
+            val valueFacts = getVarFacts(keyVarId, keyType, cValue)
+            builder.elseFacts.andFacts(valueFacts.falseFacts)
+
+            if (exprs.size == 1) {
+                caseFacts = elseFacts.and(valueFacts.trueFacts)
+            }
 
             val value = evaluateConstantValue(cValue)
             if (value != null) {
@@ -197,6 +251,8 @@ class S_WhenConditionExpr(val exprs: List<S_Expr>): S_WhenCondition() {
                 builder.constantCases[value] = idx
             }
         }
+
+        builder.caseFacts[idx] = caseFacts
     }
 
     private fun evaluateConstantValue(cValue: C_Value): Rt_Value? {
@@ -210,17 +266,31 @@ class S_WhenConditionExpr(val exprs: List<S_Expr>): S_WhenCondition() {
         }
     }
 
+    private fun getVarFacts(keyVarId: C_VarId?, keyType: R_Type?, cValue: C_Value): C_ExprVarFacts {
+        if (keyType == null) {
+            return cValue.varFacts()
+        }
+
+        val type = cValue.type()
+        if (keyVarId != null && type == R_NullType) {
+            val trueFacts = C_VarFacts.of(nulled = mapOf(keyVarId to C_VarFact.YES))
+            val falseFacts = C_VarFacts.of(nulled = mapOf(keyVarId to C_VarFact.NO))
+            return C_ExprVarFacts.of(trueFacts, falseFacts)
+        }
+
+        return C_ExprVarFacts.EMPTY
+    }
+
     private fun compileExpr(ctx: C_ExprContext, keyType: R_Type?, expr: S_Expr): C_Value {
         val valueType = if (keyType is R_NullableType) keyType.valueType else keyType
-        if (valueType is R_EnumType) {
-            val name = expr.asName()
-            if (name != null) {
-                val attr = valueType.attr(name.str)
-                if (attr != null) {
-                    val value = Rt_EnumValue(valueType, attr)
-                    val rExpr = R_ConstantExpr(value)
-                    return C_RExpr(expr.startPos, rExpr).value()
-                }
+        val name = expr.asName()
+
+        if (valueType is R_EnumType && name != null) {
+            val attr = valueType.attr(name.str)
+            if (attr != null) {
+                val value = Rt_EnumValue(valueType, attr)
+                val rExpr = R_ConstantExpr(value)
+                return C_RValue(expr.startPos, rExpr)
             }
         }
 
@@ -230,24 +300,52 @@ class S_WhenConditionExpr(val exprs: List<S_Expr>): S_WhenCondition() {
 }
 
 class S_WhenCondtiionElse(val pos: S_Pos): S_WhenCondition() {
-    override fun compile(ctx: C_ExprContext, builder: C_WhenChooserBuilder, keyType: R_Type?, idx: Int, last: Boolean) {
+    override fun compile(
+            ctx: C_ExprContext,
+            builder: C_WhenChooserBuilder,
+            keyVarId: C_VarId?,
+            keyType: R_Type?,
+            idx: Int,
+            last: Boolean
+    ) {
         if (!last) {
             throw C_Error(pos, "when_else_notlast", "Else case must be the last one")
         }
 
         check(builder.elseCase == null)
         builder.elseCase = Pair(pos, idx)
+        builder.caseFacts[idx] = builder.elseFacts.immutableCopy()
+        builder.elseFacts.clear()
     }
 }
 
-class C_WhenChooserBuilder(val keyValue: C_Value?) {
+class C_WhenChooserBuilder(val keyValue: C_Value?, val keyPostFacts: C_VarFacts, val bodyCtx: C_ExprContext) {
     val constantCases = mutableMapOf<Rt_Value, Int>()
     val variableCases = mutableListOf<C_ChooserCase>()
     var elseCase: Pair<S_Pos, Int>? = null
     var fullCoverage = false
+    val caseFacts = mutableMapOf<Int, C_VarFacts>()
+    val elseFacts = C_MutableVarFacts()
+
+    fun caseFactsToList(): List<C_VarFacts> {
+        val list = ArrayList<C_VarFacts>(caseFacts.size)
+        for (i in 0 until caseFacts.size) {
+            list.add(caseFacts.getValue(i))
+        }
+        return list
+    }
 }
 
 class C_ChooserCase(val expr: S_Expr, val cValue: C_Value, val idx: Int)
+
+class C_WhenChooser(
+        val rChooser: R_WhenChooser,
+        val keyPostFacts: C_VarFacts,
+        val bodyCtx: C_ExprContext,
+        val full: Boolean,
+        val caseFacts: List<C_VarFacts>,
+        val elseFacts: C_VarFacts
+)
 
 class S_WhenExprCase(val cond: S_WhenCondition, val expr: S_Expr)
 
@@ -260,25 +358,31 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
             throw C_Error(startPos, "when_no_else", "Else case missing")
         }
 
-        val (type, cValues) = compileExprs(ctx)
+        val caseFacts = builder.caseFactsToList()
+        val (type, cValues) = compileExprs(ctx, caseFacts)
 
         val db = (builder.keyValue?.isDb() ?: false)
                 || builder.variableCases.any { it.cValue.isDb() }
                 || cValues.any { it.isDb() }
 
+        val resFacts = C_ExprVarFacts.of(postFacts = builder.keyPostFacts)
+
         if (db) {
             val dbExpr = compileDb(builder, type, cValues)
-            return C_DbExpr(startPos, dbExpr)
+            return C_DbValue.makeExpr(startPos, dbExpr, resFacts)
         } else {
             val rChooser = compileChooserR(builder)
             val rExprs = cValues.map { it.toRExpr() }
             val rExpr = R_WhenExpr(type, rChooser, rExprs)
-            return C_RExpr(startPos, rExpr)
+            return C_RValue.makeExpr(startPos, rExpr, resFacts)
         }
     }
 
-    private fun compileExprs(ctx: C_ExprContext): Pair<R_Type, List<C_Value>> {
-        val cValues = cases.map { it.expr.compile(ctx).value() }
+    private fun compileExprs(ctx: C_ExprContext, caseFacts: List<C_VarFacts>): Pair<R_Type, List<C_Value>> {
+        val cValues = cases.mapIndexed { i, case ->
+            case.expr.compileWithFacts(ctx, caseFacts[i]).value()
+        }
+
         val type = cValues.withIndex().fold(cValues[0].type()) { t, (i, value) ->
             S_Type.commonType(t, value.type(), cases[i].expr.startPos, "expr_when_incompatible_type",
                     "When case expressions have incompatible types")
@@ -330,10 +434,17 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
                 ctx: C_ExprContext,
                 expr: S_Expr?,
                 conds: List<S_WhenCondition>
-        ): Pair<Boolean, R_WhenChooser> {
+        ): C_WhenChooser {
             val builder = createWhenBuilder(ctx, expr, conds)
             val chooser = compileChooserR(builder)
-            return Pair(builder.fullCoverage, chooser)
+            return C_WhenChooser(
+                    chooser,
+                    builder.keyPostFacts,
+                    builder.bodyCtx,
+                    builder.fullCoverage,
+                    builder.caseFactsToList(),
+                    builder.elseFacts.immutableCopy()
+            )
         }
 
         private fun createWhenBuilder(
@@ -343,14 +454,19 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
         ): C_WhenChooserBuilder {
             val keyValue = if (expr == null) null else expr.compile(ctx).value()
 
+            val keyVarId = keyValue?.varId()
             val keyType = keyValue?.type()
+            val keyPostFacts = keyValue?.varFacts()?.postFacts ?: C_VarFacts.EMPTY
+
             if (keyType == R_NullType) {
                 throw C_Error(expr!!.startPos, "when_expr_type:null", "Cannot use null as when expression")
             }
 
-            val builder = C_WhenChooserBuilder(keyValue)
+            val bodyCtx = ctx.updateFacts(keyPostFacts)
+            val builder = C_WhenChooserBuilder(keyValue, keyPostFacts, bodyCtx)
+
             for ((i, cond) in conds.withIndex()) {
-                cond.compile(ctx, builder, keyType, i, i == conds.size - 1)
+                cond.compile(bodyCtx, builder, keyVarId, keyType, i, i == conds.size - 1)
             }
 
             checkTypes(builder)
@@ -364,7 +480,7 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
 
             if (keyValue == null) {
                 for (case in builder.variableCases) {
-                    S_Type.match(R_BooleanType, case.cValue.type(), case.expr.startPos, "when_case_type", "Type missmatch")
+                    S_Type.match(R_BooleanType, case.cValue.type(), case.expr.startPos, "when_case_type", "Type mismatch")
                 }
             } else {
                 val keyType = keyValue.type()
@@ -372,7 +488,7 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
                     val caseType = case.cValue.type()
                     if (!checkCaseType(keyType, caseType)) {
                         throw C_Error(case.expr.startPos, "when_case_type:$keyType:$caseType",
-                                "Type missmatch: $caseType instead of $keyType")
+                                "Type mismatch: $caseType instead of $keyType")
                     }
                 }
             }
@@ -418,11 +534,11 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
         }
 
         private fun checkCaseType(keyType: R_Type, caseType: R_Type): Boolean {
-            val eq = S_BinaryOp_EqNe.checkTypes(keyType, caseType)
+            val eq = C_BinOp_EqNe.checkTypes(keyType, caseType)
             if (eq) return true
 
             if (keyType is R_NullableType) {
-                val eq2 = S_BinaryOp_EqNe.checkTypes(keyType.valueType, caseType)
+                val eq2 = C_BinOp_EqNe.checkTypes(keyType.valueType, caseType)
                 return eq2
             }
 
@@ -447,9 +563,11 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
 class S_ListLiteralExpr(pos: S_Pos, val exprs: List<S_Expr>): S_Expr(pos) {
     override fun compile(ctx: C_ExprContext): C_Expr {
         checkEmpty()
-        val rExprs = exprs.map { it.compile(ctx).value().toRExpr() }
+        val values = exprs.map { it.compile(ctx).value() }
+        val rExprs = values.map { it.toRExpr() }
         val rExpr = compile0(rExprs)
-        return C_RExpr(startPos, rExpr)
+        val exprFacts = C_ExprVarFacts.forSubExpressions(values)
+        return C_RValue.makeExpr(startPos, rExpr, exprFacts)
     }
 
     private fun checkEmpty() {
@@ -476,11 +594,16 @@ class S_ListLiteralExpr(pos: S_Pos, val exprs: List<S_Expr>): S_Expr(pos) {
 class S_MapLiteralExpr(startPos: S_Pos, val entries: List<Pair<S_Expr, S_Expr>>): S_Expr(startPos) {
     override fun compile(ctx: C_ExprContext): C_Expr {
         checkEmpty()
-        val rEntries = entries.map { (key, value) ->
-            Pair(key.compile(ctx).value().toRExpr(), value.compile(ctx).value().toRExpr())
-        }
+
+        val valueEntries = entries.map { (key, value) -> Pair(key.compile(ctx).value(), value.compile(ctx).value()) }
+        val rEntries = valueEntries.map { (key, value) -> Pair(key.toRExpr(), value.toRExpr()) }
+
         val rExpr = compile0(rEntries)
-        return C_RExpr(startPos, rExpr)
+
+        val values = valueEntries.flatMap { (key, value) -> listOf(key, value) }
+        val exprFacts = C_ExprVarFacts.forSubExpressions(values)
+
+        return C_RValue.makeExpr(startPos, rExpr, exprFacts)
     }
 
     private fun checkEmpty() {
@@ -528,9 +651,11 @@ sealed class S_CollectionExpr(
     }
 
     override fun compile(ctx: C_ExprContext): C_Expr {
-        val rArgs = args.map { it.compile(ctx).value().toRExpr() }
+        val values = args.map { it.compile(ctx).value() }
+        val rArgs = values.map { it.toRExpr() }
         val rExpr = compile0(ctx, rArgs)
-        return C_RExpr(startPos, rExpr)
+        val exprFacts = C_ExprVarFacts.forSubExpressions(values)
+        return C_RValue.makeExpr(startPos, rExpr, exprFacts)
     }
 
     private fun compile0(ctx: C_ExprContext, rArgs: List<R_Expr>): R_Expr {
@@ -570,7 +695,7 @@ sealed class S_CollectionExpr(
                 rType,
                 rArgType.elementType,
                 "expr_${colType}_typemiss",
-                "Element type missmatch for $colType<>")
+                "Element type mismatch for $colType<>")
 
         return makeExpr(rElementType, rArg)
     }
@@ -624,9 +749,11 @@ class S_MapExpr(
 ): S_Expr(pos)
 {
     override fun compile(ctx: C_ExprContext): C_Expr {
-        val rArgs = args.map { it.compile(ctx).value().toRExpr() }
+        val values = args.map { it.compile(ctx).value() }
+        val rArgs = values.map { it.toRExpr() }
         val rExpr = compile0(ctx, rArgs)
-        return C_RExpr(startPos, rExpr)
+        val exprFacts = C_ExprVarFacts.forSubExpressions(values)
+        return C_RValue.makeExpr(startPos, rExpr, exprFacts)
     }
 
     private fun compile0(ctx: C_ExprContext, rArgs: List<R_Expr>): R_Expr {
@@ -668,14 +795,14 @@ class S_MapExpr(
                 rKeyType,
                 rArgType.keyType,
                 "expr_map_key_typemiss",
-                "Key type missmatch for map<>")
+                "Key type mismatch for map<>")
 
         val rActualValueType = S_CollectionExpr.checkElementType(
                 startPos,
                 rValueType,
                 rArgType.valueType,
                 "expr_map_value_typemiss",
-                "Value type missmatch for map<>")
+                "Value type mismatch for map<>")
 
         val rMapType = R_MapType(rActualKeyType, rActualValueType)
         return R_MapExpr(rMapType, rArg)

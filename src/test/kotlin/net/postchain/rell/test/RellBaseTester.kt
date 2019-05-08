@@ -44,7 +44,7 @@ abstract class RellBaseTester(
             val code = defsCode()
 
             val includeDir = createIncludeDir(code)
-            val module = RellTestUtils.parseModule(code, gtx, includeDir)
+            val module = RellTestUtils.parseModule(includeDir, gtx).rModule
 
             if (tstCtx.useSql) {
                 initSql(code, module)
@@ -160,7 +160,7 @@ abstract class RellBaseTester(
 
     fun processModule(code: String, processor: (R_Module) -> String): String {
         val includeDir = createIncludeDir(code)
-        return RellTestUtils.processModule(code, errMsgPos, gtx, includeDir, processor)
+        return RellTestUtils.processModule(includeDir, errMsgPos, gtx) { processor(it.rModule) }
     }
 
     protected fun createChainSqlMapping(): Rt_ChainSqlMapping {

@@ -6,11 +6,11 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
     override fun asName(): S_Name? = name
 
     override fun compile(ctx: C_ExprContext): C_Expr {
-        return ctx.resolveName(name)
+        return ctx.nameCtx.resolveName(ctx, name)
     }
 
-    override fun compileWhere(ctx: C_DbExprContext, idx: Int): C_Expr {
-        val clsAttrs = ctx.findAttributesByName(name.str)
+    override fun compileWhere(ctx: C_ExprContext, idx: Int): C_Expr {
+        val clsAttrs = ctx.nameCtx.findAttributesByName(name.str)
         val localVar = ctx.blkCtx.lookupLocalVar(name.str)
 
         if (clsAttrs.isEmpty() || localVar == null) {
@@ -20,7 +20,7 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
         // There is a class attribute and a local variable with such name -> implicit where condition.
 
         val argType = localVar.type
-        val clsAttrsByType = clsAttrs.filter { S_BinaryOp_EqNe.checkTypesDb(it.attr.type, argType) }
+        val clsAttrsByType = clsAttrs.filter { C_BinOp_EqNe.checkTypesDb(it.attr.type, argType) }
 
         if (clsAttrsByType.isEmpty()) {
             val typeStr = argType.toStrictString()
@@ -33,8 +33,8 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
 
         val clsAttr = clsAttrsByType[0]
         val attrType = clsAttr.attr.type
-        if (!S_BinaryOp_EqNe.checkTypesDb(attrType, argType)) {
-            throw C_Error(name.pos, "at_param_attr_type_missmatch:$name:$attrType:$argType",
+        if (!C_BinOp_EqNe.checkTypesDb(attrType, argType)) {
+            throw C_Error(name.pos, "at_param_attr_type_mismatch:$name:$attrType:$argType",
                     "Parameter type does not match attribute type for '$name': $argType instead of $attrType")
         }
 
@@ -45,13 +45,13 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
         val dbLocalAttrExpr = C_Utils.toDbExpr(startPos, localAttrExpr)
 
         val dbExpr = Db_BinaryExpr(R_BooleanType, Db_BinaryOp_Eq, clsAttrExpr, dbLocalAttrExpr)
-        return C_DbExpr(startPos, dbExpr)
+        return C_DbValue.makeExpr(startPos, dbExpr)
     }
 }
 
 class S_AttrExpr(pos: S_Pos, val name: S_Name): S_Expr(pos) {
     override fun compile(ctx: C_ExprContext): C_Expr {
-        val expr = ctx.resolveAttr(name)
+        val expr = ctx.nameCtx.resolveAttr(name)
         return expr
     }
 }
@@ -68,7 +68,8 @@ class S_SafeMemberExpr(val base: S_Expr, val name: S_Name): S_Expr(base.startPos
     override fun compile(ctx: C_ExprContext): C_Expr {
         val cBase = base.compile(ctx)
 
-        val baseType = cBase.value().type()
+        val baseValue = cBase.value().asNullable()
+        val baseType = baseValue.type()
         if (baseType !is R_NullableType) {
             throw errWrongType(baseType)
         }

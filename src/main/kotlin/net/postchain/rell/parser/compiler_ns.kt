@@ -50,7 +50,7 @@ abstract class C_NamespaceValue_RExpr: C_NamespaceValue() {
 
     override final fun get(entCtx: C_EntityContext, name: List<S_Name>): C_Expr {
         val rExpr = get0(entCtx, name)
-        return C_RExpr(name[0].pos, rExpr)
+        return C_RValue.makeExpr(name[0].pos, rExpr)
     }
 }
 

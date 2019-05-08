@@ -1,5 +1,7 @@
 package net.postchain.rell.parser
 
+import net.postchain.rell.MutableTypedKeyMap
+import net.postchain.rell.TypedKeyMap
 import net.postchain.rell.model.*
 import net.postchain.rell.module.GTX_OPERATION_HUMAN
 import net.postchain.rell.module.GTX_QUERY_HUMAN
@@ -200,7 +202,7 @@ class S_ClassDefinition(val name: S_Name, val annotations: List<S_Name>, val bod
     }
 
     private fun classesPass(ctx: C_DefinitionContext, entityIndex: Int, rClass: R_Class, clauses: List<S_RelClause>) {
-        val entCtx = C_EntityContext(ctx.nsCtx, C_EntityType.CLASS, entityIndex, null)
+        val entCtx = C_EntityContext(ctx.nsCtx, C_EntityType.CLASS, entityIndex, null, TypedKeyMap())
         val clsCtx = C_ClassContext(entCtx, name.str, rClass.flags.log)
 
         if (rClass.flags.log) {
@@ -252,7 +254,7 @@ class S_ObjectDefinition(val name: S_Name, val clauses: List<S_RelClause>): S_De
     }
 
     private fun classesPass(ctx: C_NamespaceContext, entityIndex: Int, rObject: R_Object) {
-        val entCtx = C_EntityContext(ctx, C_EntityType.OBJECT, entityIndex, null)
+        val entCtx = C_EntityContext(ctx, C_EntityType.OBJECT, entityIndex, null, TypedKeyMap())
         val clsCtx = C_ClassContext(entCtx, name.str, false)
         S_ClassDefinition.compileClauses(clsCtx, clauses)
 
@@ -275,7 +277,7 @@ class S_RecordDefinition(val name: S_Name, val attrs: List<S_AttributeClause>): 
     }
 
     private fun classesPass(ctx: C_NamespaceContext, entityIndex: Int, rType: R_RecordType) {
-        val entCtx = C_EntityContext(ctx, C_EntityType.RECORD, entityIndex, null)
+        val entCtx = C_EntityContext(ctx, C_EntityType.RECORD, entityIndex, null, TypedKeyMap())
         val clsCtx = C_ClassContext(entCtx, name.str, false)
         for (clause in attrs) {
             clause.compileAttributes(clsCtx)
@@ -318,9 +320,11 @@ class S_OpDefinition(val name: S_Name, val params: List<S_NameTypePair>, val bod
     }
 
     private fun doCompile(ctx: C_NamespaceContext, entityIndex: Int, fullName: String) {
-        val entCtx = C_EntityContext(ctx, C_EntityType.OPERATION, entityIndex, null)
-        val rParams = compileExternalParams(ctx, entCtx, params)
-        val rBody = body.compile(entCtx.rootExprCtx).rStmt
+        val statementVars = processStatementVars()
+        val entCtx = C_EntityContext(ctx, C_EntityType.OPERATION, entityIndex, null, statementVars)
+
+        val (exprCtx, rParams) = compileExternalParams(ctx, entCtx, params)
+        val rBody = body.compile(exprCtx).rStmt
         val rCallFrame = entCtx.makeCallFrame()
 
         if (ctx.modCtx.globalCtx.gtx) {
@@ -329,6 +333,12 @@ class S_OpDefinition(val name: S_Name, val params: List<S_NameTypePair>, val bod
 
         val rOperation = R_Operation(fullName, rParams, rBody, rCallFrame)
         ctx.addOperation(rOperation)
+    }
+
+    private fun processStatementVars(): TypedKeyMap {
+        val map = MutableTypedKeyMap()
+        body.discoverVars(map)
+        return map.immutableCopy()
     }
 }
 
@@ -350,10 +360,11 @@ class S_QueryDefinition(
 
     private fun doCompile(ctx: C_NamespaceContext, entityIndex: Int, fullName: String) {
         val rExplicitRetType = retType?.compile(ctx)
+        val statementVars = body.processStatementVars()
+        val entCtx = C_EntityContext(ctx, C_EntityType.QUERY, entityIndex, rExplicitRetType, statementVars)
 
-        val entCtx = C_EntityContext(ctx, C_EntityType.QUERY, entityIndex, rExplicitRetType)
-        val rParams = compileExternalParams(ctx, entCtx, params)
-        val rBody = body.compileQuery(name, entCtx.rootExprCtx)
+        val (exprCtx, rParams) = compileExternalParams(ctx, entCtx, params)
+        val rBody = body.compileQuery(name, exprCtx)
         val rCallFrame = entCtx.makeCallFrame()
         val rRetType = entCtx.actualReturnType()
 
@@ -388,11 +399,14 @@ private fun checkGtxCompatibility(pos: S_Pos, type: R_Type, human: Boolean, errC
 }
 
 abstract class S_FunctionBody {
+    abstract fun processStatementVars(): TypedKeyMap
     abstract fun compileQuery(name: S_Name, ctx: C_ExprContext): R_Statement
     abstract fun compileFunction(name: S_Name, ctx: C_ExprContext): R_Statement
 }
 
 class S_FunctionBodyShort(val expr: S_Expr): S_FunctionBody() {
+    override fun processStatementVars() = TypedKeyMap()
+
     override fun compileQuery(name: S_Name, ctx: C_ExprContext): R_Statement {
         val cExpr = expr.compile(ctx)
         val rExpr = cExpr.value().toRExpr()
@@ -418,6 +432,12 @@ class S_FunctionBodyShort(val expr: S_Expr): S_FunctionBody() {
 }
 
 class S_FunctionBodyFull(val body: S_Statement): S_FunctionBody() {
+    override fun processStatementVars(): TypedKeyMap {
+        val map = MutableTypedKeyMap()
+        body.discoverVars(map)
+        return map.immutableCopy()
+    }
+
     override fun compileQuery(name: S_Name, ctx: C_ExprContext): R_Statement {
         val cBody = body.compile(ctx)
 
@@ -460,19 +480,25 @@ class S_FunctionDefinition(
 
     private fun compileDefinition(ctx: C_NamespaceContext, entityIndex: Int, fn: C_UserGlobalFunction) {
         val rRetType = if (retType != null) retType.compile(ctx) else R_UnitType
-        val entCtx = C_EntityContext(ctx, C_EntityType.FUNCTION, entityIndex, rRetType)
+        val statementVars = body.processStatementVars()
+        val entCtx = C_EntityContext(ctx, C_EntityType.FUNCTION, entityIndex, rRetType, statementVars)
 
-        val rParams = compileExternalParams(ctx, entCtx, params)
+        val (exprCtx, rParams) = compileExternalParams(ctx, entCtx, params)
         val header = C_UserFunctionHeader(rParams, rRetType)
         fn.setHeader(header)
 
         ctx.modCtx.onPass(C_ModulePass.EXPRESSIONS) {
-            compileFinish(ctx, entCtx, fn)
+            compileFinish(ctx, entCtx, exprCtx, fn)
         }
     }
 
-    private fun compileFinish(ctx: C_NamespaceContext, entCtx: C_EntityContext, fn: C_UserGlobalFunction) {
-        val rBody = body.compileFunction(name, entCtx.rootExprCtx)
+    private fun compileFinish(
+            ctx: C_NamespaceContext,
+            entCtx: C_EntityContext,
+            exprCtx: C_ExprContext,
+            fn: C_UserGlobalFunction
+    ){
+        val rBody = body.compileFunction(name, exprCtx)
         val rCallFrame = entCtx.makeCallFrame()
         val rFunction = fn.toRFunction(rBody, rCallFrame)
         ctx.addFunctionBody(rFunction)
@@ -622,15 +648,15 @@ class S_IncludeDefinition(val pos: S_Pos, val pathPos: S_Pos, val path: String):
 }
 
 class S_ModuleDefinition(val definitions: List<S_Definition>) {
-    fun compile(path: String, includeResolver: C_IncludeResolver, gtx: Boolean): C_Module {
-        val globalCtx = C_GlobalContext(gtx)
+    fun compile(globalCtx: C_GlobalContext, path: String, includeResolver: C_IncludeResolver): R_Module {
         val ctx = C_ModuleContext(globalCtx)
+
         val incCtx = C_IncludeContext.createTop(path, includeResolver)
         val defCtx = C_DefinitionContext(ctx.nsCtx, null, incCtx, null)
         compileDefs(defCtx)
 
         val rModule = ctx.createModule()
-        return C_Module(rModule)
+        return rModule
     }
 
     fun compileDefs(defCtx: C_DefinitionContext) {
@@ -663,19 +689,24 @@ private fun compileExternalParams(
         ctx: C_NamespaceContext,
         entCtx: C_EntityContext,
         params: List<S_NameTypePair>
-) : List<R_ExternalParam>
+): Pair<C_ExprContext, List<R_ExternalParam>>
 {
     val blkCtx = entCtx.rootExprCtx.blkCtx
     val rParams = compileParams(ctx, params)
 
+    val inited = mutableMapOf<C_VarId, C_VarFact>()
+
     val rExtParams = rParams.map { (name, rParam) ->
         val (cId, ptr) = blkCtx.add(name, rParam.type, false)
-        val vars = setOf(cId)
-        blkCtx.addVarsInited(vars, vars)
+        inited[cId] = C_VarFact.YES
         R_ExternalParam(name.str, rParam.type, ptr)
     }
 
-    return rExtParams.toList()
+    val varFacts = C_VarFacts.of(inited = inited.toMap())
+    val exprCtx = entCtx.rootExprCtx
+    val exprCtx2 = exprCtx.update(factsCtx = exprCtx.factsCtx.sub(varFacts))
+
+    return Pair(exprCtx2, rExtParams.toList())
 }
 
 private fun compileParams(ctx: C_NamespaceContext, params: List<S_NameTypePair>): List<Pair<S_Name, R_Variable>> {

@@ -8,7 +8,7 @@ sealed class Rt_BaseError(msg: String): Exception(msg)
 class Rt_Error(val code: String, msg: String): Rt_BaseError(msg)
 class Rt_RequireError(val userMsg: String?): Rt_BaseError(userMsg ?: "Requirement error")
 class Rt_ValueTypeError(val expected: String, val actual: String):
-        Rt_BaseError("Value type missmatch: expected $expected, but was $actual")
+        Rt_BaseError("Value type mismatch: expected $expected, but was $actual")
 class Rt_GtxValueError(val code: String, msg: String): Rt_BaseError(msg)
 
 class Rt_ChainDependency(val rid: ByteArray, val height: Long)

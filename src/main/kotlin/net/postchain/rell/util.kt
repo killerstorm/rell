@@ -31,3 +31,27 @@ object CommonUtils {
         }
     }
 }
+
+class MutableTypedKeyMap {
+    private val map = mutableMapOf<TypedKey<Any>, Any>()
+
+    fun <V> put(key: TypedKey<V>, value: V) {
+        key as TypedKey<Any>
+        check(key !in map)
+        map[key] = value as Any
+    }
+
+    fun immutableCopy(): TypedKeyMap {
+        return TypedKeyMap(map.toMap())
+    }
+}
+
+class TypedKeyMap(private val map: Map<TypedKey<Any>, Any> = mapOf()) {
+    fun <V> get(key: TypedKey<V>): V {
+        key as TypedKey<Any>
+        val value = map.getValue(key)
+        return value as V
+    }
+}
+
+class TypedKey<V>

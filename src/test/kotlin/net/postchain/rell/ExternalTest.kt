@@ -462,7 +462,8 @@ class ExternalTest: BaseRellTest() {
         tst.gtx = true
 
         fun chkType(type: String) {
-            chkCompile("query q(): $type { var t: $type? = null; return t!!; }", "ct_err:result_nogtx:q:$type")
+            chkCompile("function nop(x: $type?): $type? = x; query q(): $type { var t: $type? = nop(null); return t!!; }",
+                    "ct_err:result_nogtx:q:$type")
             chkCompile("query q(x: $type) = 0;", "ct_err:param_nogtx:x:$type")
             chkCompile("operation o(x: $type) {}", "ct_err:param_nogtx:x:$type")
         }

@@ -317,12 +317,19 @@ class StatementTest: BaseRellTest() {
         chkEx("{ var x: integer; if (a) { x = 123; } else { return 456; } return x; }", false, "int[456]")
 
         chkEx("{ var x: integer; x += 5; return x; }", "ct_err:expr_var_uninit:x")
+        chkEx("{ var x: integer; x += 5; return 0; }", "ct_err:expr_var_uninit:x")
         chkEx("{ var x: integer; if (a) { x = 0; } x += 5; return x; }", true, "ct_err:expr_var_uninit:x")
 
         chkEx("{ var x: integer; x++; return x; }", "ct_err:expr_var_uninit:x")
+        chkEx("{ var x: integer; x++; return 0; }", "ct_err:expr_var_uninit:x")
         chkEx("{ var x: integer; if (a) { x = 0; } x++; return x; }", true, "ct_err:expr_var_uninit:x")
         chkEx("{ var x: integer; ++x; return x; }", "ct_err:expr_var_uninit:x")
         chkEx("{ var x: integer; if (a) { x = 0; } ++x; return x; }", true, "ct_err:expr_var_uninit:x")
+
+        chkEx("{ var x: integer = 123; if (a) { x = 456; } return x; }", false, "int[123]")
+        chkEx("{ var x: integer = 123; if (a) { x = 456; } return x; }", true, "int[456]")
+        chkEx("{ var x: integer = 123; { if (a) { x = 456; } return x; } }", false, "int[123]")
+        chkEx("{ var x: integer = 123; { if (a) { x = 456; } return x; } }", true, "int[456]")
     }
 
     @Test fun testUninitializedVarWhen() {
@@ -342,6 +349,8 @@ class StatementTest: BaseRellTest() {
         }
 
         chkEx("{ var x: integer; when(a) { 0 -> x = 123; 1 -> x = 456; } return x; }", 0, "ct_err:expr_var_uninit:x")
+        chkEx("{ var x: integer; when(a) { true -> x = 123; false -> x = 456; } return x; }", true, "int[123]")
+        chkEx("{ var x: integer; when(a) { true -> x = 123; false -> x = 456; } return x; }", false, "int[456]")
         chkEx("{ var x: integer; when(a) { 0 -> print(x); 1 -> x = 456; else -> return 789; } return x; }", 0,
                 "ct_err:expr_var_uninit:x")
     }
@@ -366,6 +375,8 @@ class StatementTest: BaseRellTest() {
         chkEx("{ val x: integer; while(a) { x = 123; return x; } return 456; }", false, "ct_err:expr_assign_val:x")
         chkEx("{ val x: integer; while(a) { x = 123; return x; } return 456; }", true, "ct_err:expr_assign_val:x")
         chkEx("{ val x: integer; while (false) { if (a) { x = 123; } } return 456; }", false, "ct_err:expr_assign_val:x")
+
+        chkEx("{ var x: boolean; while(x) { x = false; } return 0; }", "ct_err:expr_var_uninit:x")
     }
 
     @Test fun testUninitializedVal() {

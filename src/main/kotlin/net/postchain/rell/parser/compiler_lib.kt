@@ -15,11 +15,9 @@ object C_LibFunctions {
 
             .add("require", C_SysFunction_Require_Boolean)
             .add("require", C_SysFunction_Require_Nullable)
-
             .add("requireNotEmpty", C_SysFunction_Require_Collection)
             .add("requireNotEmpty", C_SysFunction_Require_Nullable)
-
-            .addEx("exists", R_BooleanType, listOf(C_ArgTypeMatcher_Nullable), R_SysFn_Exists)
+            .add("exists", C_SysFunction_Exists)
 
             .add("integer", R_IntegerType, listOf(R_TextType), R_SysFn_Int_Parse)
             .add("integer", R_IntegerType, listOf(R_TextType, R_IntegerType), R_SysFn_Int_Parse)
@@ -35,6 +33,8 @@ object C_LibFunctions {
             .add("log", C_SysFunction_Print(R_SysFn_Print(true)))
 
             .add("_typeOf", C_SysFunction_TypeOf)
+            .add("_nullable", C_SysFunction_Nullable(null))
+            .add("_nullable_int", C_SysFunction_Nullable(R_IntegerType))
             .addEx("_strictStr", R_TextType, listOf(C_ArgTypeMatcher_Any), R_SysFn_StrictStr)
 
             .build()
@@ -335,13 +335,13 @@ private object C_NsValue_ChainContext_Args: C_NamespaceValue_RExpr() {
     }
 }
 
-private class C_SysFunction_Print(val rFn: R_SysFunction): C_GlobalFuncCase() {
-    override fun match(args: List<R_Type>): C_GlobalFuncCaseMatch? {
+private class C_SysFunction_Print(val rFn: R_SysFunction): C_SimpleGlobalFuncCase() {
+    override fun matchTypes(args: List<R_Type>): C_GlobalFuncCaseMatch? {
         return CaseMatch()
     }
 
-    private inner class CaseMatch: C_GlobalFuncCaseMatch() {
-        override fun compileCall(name: S_Name, args: List<R_Expr>): R_Expr {
+    private inner class CaseMatch: C_SimpleGlobalFuncCaseMatch() {
+        override fun compileCallExpr(name: S_Name, args: List<R_Expr>): R_Expr {
             // Print supports any number of arguments and any types.
             val rExpr = R_SysCallExpr(R_UnitType, rFn, args)
             return rExpr
@@ -349,29 +349,52 @@ private class C_SysFunction_Print(val rFn: R_SysFunction): C_GlobalFuncCase() {
     }
 }
 
-private object C_SysFunction_TypeOf: C_GlobalFuncCase() {
-    override fun match(args: List<R_Type>): C_GlobalFuncCaseMatch? {
+private object C_SysFunction_TypeOf: C_SimpleGlobalFuncCase() {
+    override fun matchTypes(args: List<R_Type>): C_GlobalFuncCaseMatch? {
         if (args.size != 1) return null
         val type = args[0]
         val str = type.toStrictString()
         return CaseMatch(str)
     }
 
-    private class CaseMatch(val str: String): C_GlobalFuncCaseMatch() {
-        override fun compileCall(name: S_Name, args: List<R_Expr>): R_Expr {
+    private class CaseMatch(val str: String): C_SimpleGlobalFuncCaseMatch() {
+        override fun compileCallExpr(name: S_Name, args: List<R_Expr>): R_Expr {
             var rExpr = R_ConstantExpr.makeText(str)
             return rExpr
         }
 
-        override fun compileCallDb(name: S_Name, args: List<Db_Expr>): Db_Expr {
+        override fun compileCallDbExpr(name: S_Name, args: List<Db_Expr>): Db_Expr {
             var rExpr = R_ConstantExpr.makeText(str)
             return C_Utils.toDbExpr(name.pos, rExpr)
         }
     }
 }
 
-private object C_SysFunction_Require_Boolean: C_GlobalFuncCase() {
-    override fun match(args: List<R_Type>): C_GlobalFuncCaseMatch? {
+private class C_SysFunction_Nullable(private val baseType: R_Type?): C_SimpleGlobalFuncCase() {
+    override fun matchTypes(args: List<R_Type>): C_GlobalFuncCaseMatch? {
+        if (args.size != 1) return null
+        val type = args[0]
+        if (baseType == null && type == R_NullType) return null
+        if (baseType != null && !R_NullableType(baseType).isAssignableFrom(type)) return null
+        return CaseMatch()
+    }
+
+    private inner class CaseMatch: C_SimpleGlobalFuncCaseMatch() {
+        override fun compileCallExpr(name: S_Name, args: List<R_Expr>): R_Expr {
+            check(args.size == 1)
+            val arg = args[0]
+            if (arg.type is R_NullableType) {
+                return arg
+            } else {
+                val type = R_NullableType(baseType ?: arg.type)
+                return R_SysCallExpr(type, R_SysFn_Nop, args)
+            }
+        }
+    }
+}
+
+private object C_SysFunction_Require_Boolean: C_SimpleGlobalFuncCase() {
+    override fun matchTypes(args: List<R_Type>): C_GlobalFuncCaseMatch? {
         if (args.size < 1 || args.size > 2) return null
 
         val expr = args[0]
@@ -383,8 +406,8 @@ private object C_SysFunction_Require_Boolean: C_GlobalFuncCase() {
         return CaseMatch()
     }
 
-    private class CaseMatch: C_GlobalFuncCaseMatch() {
-        override fun compileCall(name: S_Name, args: List<R_Expr>): R_Expr {
+    private class CaseMatch: C_SimpleGlobalFuncCaseMatch() {
+        override fun compileCallExpr(name: S_Name, args: List<R_Expr>): R_Expr {
             val rExpr = args[0]
             val rMsgExpr = if (args.size < 2) null else args[1]
             return R_RequireExpr_Boolean(rExpr, rMsgExpr)
@@ -393,29 +416,37 @@ private object C_SysFunction_Require_Boolean: C_GlobalFuncCase() {
 }
 
 private object C_SysFunction_Require_Nullable: C_GlobalFuncCase() {
-    override fun match(args: List<R_Type>): C_GlobalFuncCaseMatch? {
+    override fun match(args: List<C_Value>): C_GlobalFuncCaseMatch? {
         if (args.size < 1 || args.size > 2) return null
 
-        val expr = args[0]
-        if (expr !is R_NullableType) return null
+        val expr = args[0].asNullable()
+        val exprType = expr.type()
+        if (exprType !is R_NullableType) return null
 
         val msg = if (args.size < 2) null else args[1]
-        if (msg != null && !R_TextType.isAssignableFrom(msg)) return null
+        if (msg != null && !R_TextType.isAssignableFrom(msg.type())) return null
 
-        return CaseMatch(expr.valueType)
+        return CaseMatch(exprType.valueType)
     }
 
     private class CaseMatch(val valueType: R_Type): C_GlobalFuncCaseMatch() {
-        override fun compileCall(name: S_Name, args: List<R_Expr>): R_Expr {
-            val rExpr = args[0]
-            val rMsgExpr = if (args.size < 2) null else args[1]
-            return R_RequireExpr_Nullable(valueType, rExpr, rMsgExpr)
+        override fun compileCall(name: S_Name, args: List<C_Value>): C_Value {
+            val exprValue = args[0]
+            val rExpr = exprValue.toRExpr()
+
+            val rMsgExpr = if (args.size < 2) null else args[1].toRExpr()
+            val rResExpr = R_RequireExpr_Nullable(valueType, rExpr, rMsgExpr)
+
+            val preFacts = exprValue.varFacts().postFacts
+            val exprVarFacts = C_ExprVarFacts.forNullCast(preFacts, exprValue)
+
+            return C_RValue(name.pos, rResExpr, exprVarFacts)
         }
     }
 }
 
-private object C_SysFunction_Require_Collection: C_GlobalFuncCase() {
-    override fun match(args: List<R_Type>): C_GlobalFuncCaseMatch? {
+private object C_SysFunction_Require_Collection: C_SimpleGlobalFuncCase() {
+    override fun matchTypes(args: List<R_Type>): C_GlobalFuncCaseMatch? {
         if (args.size < 1 || args.size > 2) return null
 
         val expr = args[0]
@@ -433,19 +464,47 @@ private object C_SysFunction_Require_Collection: C_GlobalFuncCase() {
         }
     }
 
-    private class CaseMatch_Collection(val valueType: R_Type): C_GlobalFuncCaseMatch() {
-        override fun compileCall(name: S_Name, args: List<R_Expr>): R_Expr {
+    private class CaseMatch_Collection(val valueType: R_Type): C_SimpleGlobalFuncCaseMatch() {
+        override fun compileCallExpr(name: S_Name, args: List<R_Expr>): R_Expr {
             val rExpr = args[0]
             val rMsgExpr = if (args.size < 2) null else args[1]
             return R_RequireExpr_Collection(valueType, rExpr, rMsgExpr)
         }
     }
 
-    private class CaseMatch_Map(val valueType: R_Type): C_GlobalFuncCaseMatch() {
-        override fun compileCall(name: S_Name, args: List<R_Expr>): R_Expr {
+    private class CaseMatch_Map(val valueType: R_Type): C_SimpleGlobalFuncCaseMatch() {
+        override fun compileCallExpr(name: S_Name, args: List<R_Expr>): R_Expr {
             val rExpr = args[0]
             val rMsgExpr = if (args.size < 2) null else args[1]
             return R_RequireExpr_Map(valueType, rExpr, rMsgExpr)
+        }
+    }
+}
+
+private object C_SysFunction_Exists: C_GlobalFuncCase() {
+    override fun match(args: List<C_Value>): C_GlobalFuncCaseMatch? {
+        if (args.size != 1) return null
+
+        val expr = args[0].asNullable()
+        val exprType = expr.type()
+        if (exprType !is R_NullableType) return null
+
+        return CaseMatch()
+    }
+
+    private class CaseMatch: C_GlobalFuncCaseMatch() {
+        override fun compileCall(name: S_Name, args: List<C_Value>): C_Value {
+            check(args.size == 1)
+
+            val arg = args[0]
+
+            val preFacts = C_ExprVarFacts.forSubExpressions(args)
+            val facts = preFacts.and(C_ExprVarFacts.forNullCheck(arg, false))
+
+            val rArgs = args.map { it.toRExpr() }
+            val rExpr = R_SysCallExpr(R_BooleanType, R_SysFn_Exists, rArgs)
+
+            return C_RValue(name.pos, rExpr, facts)
         }
     }
 }
@@ -462,9 +521,9 @@ private object C_SysMemberFunction_Text_Format: C_MemberFuncCase() {
     }
 }
 
-private class C_SysFunction_InvalidRecord(val recordType: R_RecordType): C_GlobalFuncCaseMatch() {
-    override fun compileCall(name: S_Name, args: List<R_Expr>) = throw err(name)
-    override fun compileCallDb(name: S_Name, args: List<Db_Expr>) = throw err(name)
+private class C_SysFunction_InvalidRecord(val recordType: R_RecordType): C_SimpleGlobalFuncCaseMatch() {
+    override fun compileCallExpr(name: S_Name, args: List<R_Expr>) = throw err(name)
+    override fun compileCallDbExpr(name: S_Name, args: List<Db_Expr>) = throw err(name)
 
     private fun err(name: S_Name): C_Error {
         val typeStr = recordType.name

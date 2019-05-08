@@ -5,7 +5,7 @@ import net.postchain.rell.model.*
 sealed class S_UnaryOp(val code: String) {
     abstract fun compile(ctx: C_ExprContext, startPos: S_Pos, opPos: S_Pos, expr: C_Expr): C_Expr
 
-    fun errTypeMissmatch(pos: S_Pos, type: R_Type): C_Error {
+    fun errTypeMismatch(pos: S_Pos, type: R_Type): C_Error {
         return C_Error(pos, "unop_operand_type:$code:$type", "Wrong operand type for '$code': $type")
     }
 }
@@ -14,17 +14,20 @@ object S_UnaryOp_Plus: S_UnaryOp("+") {
     override fun compile(ctx: C_ExprContext, startPos: S_Pos, opPos: S_Pos, expr: C_Expr): C_Expr {
         val type = expr.value().type()
         if (type != R_IntegerType) {
-            throw errTypeMissmatch(opPos, type)
+            throw errTypeMismatch(opPos, type)
         }
 
         // Cannot simply return "expr", because then expressions like "(+x)++" or "(+x) = 123" will be allowed.
+
         val value = expr.value()
+
         if (value.isDb()) {
             val dbExpr = value.toDbExpr()
-            return C_DbExpr(expr.startPos(), dbExpr)
+            return C_DbValue.makeExpr(expr.startPos(), dbExpr)
         } else {
             val rExpr = value.toRExpr()
-            return C_RExpr(expr.startPos(), rExpr)
+            val varFacts = C_ExprVarFacts.of(postFacts = value.varFacts().postFacts)
+            return C_RValue.makeExpr(expr.startPos(), rExpr, varFacts)
         }
     }
 }
@@ -34,15 +37,16 @@ object S_UnaryOp_Minus: S_UnaryOp("-") {
         val value = expr.value()
         val type = value.type()
         if (type != R_IntegerType) {
-            throw errTypeMissmatch(opPos, type)
+            throw errTypeMismatch(opPos, type)
         }
 
         if (value.isDb()) {
             val dbExpr = Db_UnaryExpr(R_IntegerType, Db_UnaryOp_Minus, value.toDbExpr())
-            return C_DbExpr(startPos, dbExpr)
+            return C_DbValue.makeExpr(startPos, dbExpr)
         } else {
             val rExpr = R_UnaryExpr(R_IntegerType, R_UnaryOp_Minus, value.toRExpr())
-            return C_RExpr(startPos, rExpr)
+            val varFacts = C_ExprVarFacts.of(postFacts = value.varFacts().postFacts)
+            return C_RValue.makeExpr(startPos, rExpr, varFacts)
         }
     }
 }
@@ -52,24 +56,32 @@ object S_UnaryOp_Not: S_UnaryOp("not") {
         val value = expr.value()
         val type = value.type()
         if (type != R_BooleanType) {
-            throw errTypeMissmatch(opPos, type)
+            throw errTypeMismatch(opPos, type)
         }
 
-        if (value.isDb()) {
+        val varFacts = value.varFacts()
+        val resVarFacts = C_ExprVarFacts.of(
+                trueFacts = varFacts.falseFacts,
+                falseFacts = varFacts.trueFacts,
+                postFacts =  varFacts.postFacts
+        )
+
+        val resValue = if (value.isDb()) {
             val dbExpr = Db_UnaryExpr(R_BooleanType, Db_UnaryOp_Not, value.toDbExpr())
-            return C_DbExpr(startPos, dbExpr)
+            C_DbValue(startPos, dbExpr, resVarFacts)
         } else {
             val rExpr = R_UnaryExpr(R_BooleanType, R_UnaryOp_Not, value.toRExpr())
-            return C_RExpr(startPos, rExpr)
+            C_RValue(startPos, rExpr, resVarFacts)
         }
+
+        return C_ValueExpr(resValue)
     }
 }
 
 class S_UnaryOp_IncDec(val inc: Boolean, val post: Boolean): S_UnaryOp(if (inc) "++" else "--") {
     override fun compile(ctx: C_ExprContext, startPos: S_Pos, opPos: S_Pos, expr: C_Expr): C_Expr {
-        var dst = expr.value().destination(ctx)
-
-        val type = dst.type()
+        val value = expr.value()
+        var dst = value.destination(ctx)
 
         val op = if (inc) {
             C_AssignOp(opPos, "++", R_BinaryOp_Add, Db_BinaryOp_Add)
@@ -77,26 +89,34 @@ class S_UnaryOp_IncDec(val inc: Boolean, val post: Boolean): S_UnaryOp(if (inc) 
             C_AssignOp(opPos, "--", R_BinaryOp_Sub, Db_BinaryOp_Sub)
         }
 
-        if (!R_IntegerType.isAssignableFrom(type)) {
+        val dstType = dst.effectiveType()
+        if (!R_IntegerType.isAssignableFrom(dstType)) {
             val opCode = op.code
-            throw C_Error(opPos, "expr_incdec_type:$opCode:$type", "Bad operand type for '$opCode': $type")
+            throw C_Error(opPos, "expr_incdec_type:$opCode:$dstType", "Bad operand type for '$opCode': $dstType")
         }
 
         val srcExpr = R_ConstantExpr.makeInt(1)
-        return dst.compileAssignExpr(startPos, srcExpr, op, post)
+        val rExpr = dst.compileAssignExpr(startPos, srcExpr, op, post)
+
+        val varFacts = C_ExprVarFacts.of(postFacts = value.varFacts().postFacts)
+        return C_RValue.makeExpr(startPos, rExpr, varFacts)
     }
 }
 
 object S_UnaryOp_NotNull: S_UnaryOp("!!") {
     override fun compile(ctx: C_ExprContext, startPos: S_Pos, opPos: S_Pos, expr: C_Expr): C_Expr {
-        val value = expr.value()
+        val value = expr.value().asNullable()
         val type = value.type()
         if (type !is R_NullableType) {
-            throw errTypeMissmatch(opPos, type)
+            throw errTypeMismatch(opPos, type)
         }
 
         val rExpr = R_NotNullExpr(type.valueType, value.toRExpr())
-        return C_RExpr(startPos, rExpr)
+
+        val preFacts = value.varFacts().postFacts
+        val varFacts = C_ExprVarFacts.forNullCast(preFacts, value)
+
+        return C_RValue.makeExpr(startPos, rExpr, varFacts)
     }
 }
 
