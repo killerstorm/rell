@@ -1,7 +1,5 @@
 package net.postchain.rell.model
 
-import net.postchain.base.CryptoSystem
-import net.postchain.base.SECP256K1CryptoSystem
 import net.postchain.core.Signature
 import net.postchain.rell.PostchainUtils
 import net.postchain.rell.hexStringToByteArray
@@ -542,16 +540,26 @@ class R_SysFn_ThrowCrash(private val msg: String): R_SysFunction_0() {
 }
 
 object R_SysFn_VerifySignature: R_SysFunction_3() {
-    private val cs: CryptoSystem = SECP256K1CryptoSystem()
-
     override fun call(arg1: Rt_Value, arg2: Rt_Value, arg3: Rt_Value): Rt_Value {
         val digest = arg1.asByteArray()
         val res = try {
             val signature = Signature(arg2.asByteArray(), arg3.asByteArray())
-            cs.verifyDigest(digest, signature)
+            PostchainUtils.cryptoSystem.verifyDigest(digest, signature)
         } catch (e: Exception) {
             throw Rt_Error("verify_signature", e.message ?: "")
         }
         return Rt_BooleanValue(res)
+    }
+}
+
+class R_SysFn_Any_Hash(val type: R_Type): R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value {
+        val gtx = type.rtToGtx(arg, false)
+        val hash = try {
+            PostchainUtils.merkleHash(gtx)
+        } catch (e: Exception) {
+            throw Rt_Error("hash", e.message ?: "")
+        }
+        return Rt_ByteArrayValue(hash)
     }
 }

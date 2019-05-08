@@ -41,7 +41,10 @@ object C_LibFunctions {
 
             .build()
 
-    private val INTEGER_FNS = C_MemberFuncBuilder()
+    private val BOOLEAN_FNS = typeMemFuncBuilder(R_BooleanType)
+            .build()
+
+    private val INTEGER_FNS = typeMemFuncBuilder(R_IntegerType)
             .add("str", R_TextType, listOf(), R_SysFn_Int_Str, Db_SysFn_Int_Str)
             .add("str", R_TextType, listOf(R_IntegerType), R_SysFn_Int_Str)
             .add("hex", R_TextType, listOf(), R_SysFn_Int_Hex)
@@ -78,7 +81,7 @@ object C_LibFunctions {
             Pair("transaction", C_Ns_OpContext.Value_Transaction)
     )
 
-    private val TEXT_FNS = C_MemberFuncBuilder()
+    private val TEXT_FNS = typeMemFuncBuilder(R_TextType)
             .add("empty", R_BooleanType, listOf(), R_SysFn_Text_Empty)
             .add("size", R_IntegerType, listOf(), R_SysFn_Text_Size, Db_SysFn_Text_Size)
             .add("len", R_IntegerType, listOf(), R_SysFn_Text_Size, Db_SysFn_Text_Size)
@@ -103,7 +106,7 @@ object C_LibFunctions {
             .add("format", C_SysMemberFunction_Text_Format)
             .build()
 
-    private val BYTEARRAY_FNS = C_MemberFuncBuilder()
+    private val BYTEARRAY_FNS = typeMemFuncBuilder(R_ByteArrayType)
             .add("empty", R_BooleanType, listOf(), R_SysFn_ByteArray_Empty)
             .add("size", R_IntegerType, listOf(), R_SysFn_ByteArray_Size, Db_SysFn_ByteArray_Size)
             .add("len", R_IntegerType, listOf(), R_SysFn_ByteArray_Size, Db_SysFn_ByteArray_Size)
@@ -113,11 +116,11 @@ object C_LibFunctions {
             .add("sub", R_ByteArrayType, listOf(R_IntegerType, R_IntegerType), R_SysFn_ByteArray_Sub)
             .build()
 
-    private val JSON_FNS = C_MemberFuncBuilder()
+    private val JSON_FNS = typeMemFuncBuilder(R_JSONType)
             .add("str", R_TextType, listOf(), R_SysFn_Json_Str, Db_SysFn_Json_Str)
             .build()
 
-    private val GTXVALUE_FNS = C_MemberFuncBuilder()
+    private val GTXVALUE_FNS = typeMemFuncBuilder(R_GtxValueType)
             .add("toBytes", R_ByteArrayType, listOf(), R_SysFn_GtxValue_ToBytes)
             .add("toJSON", R_JSONType, listOf(), R_SysFn_GtxValue_ToJson)
             .build()
@@ -139,34 +142,44 @@ object C_LibFunctions {
     }
 
     private fun getTypeMemberFunctions(type: R_Type): C_MemberFuncTable {
-        if (type == R_IntegerType) {
-            return INTEGER_FNS
-        } else if (type == R_TextType) {
-            return TEXT_FNS
-        } else if (type == R_ByteArrayType) {
-            return BYTEARRAY_FNS
-        } else if (type == R_JSONType) {
-            return JSON_FNS
-        } else if (type == R_GtxValueType) {
-            return GTXVALUE_FNS
-        } else if (type is R_ListType) {
-            return getListFns(type.elementType)
-        } else if (type is R_SetType) {
-            return getSetFns(type.elementType)
-        } else if (type is R_MapType) {
-            return getMapFns(type.keyType, type.valueType)
-        } else if (type is R_RecordType) {
-            return getRecordFns(type)
-        } else {
-            return C_MemberFuncTable(mapOf())
+        return when (type) {
+            R_BooleanType -> BOOLEAN_FNS
+            R_IntegerType -> INTEGER_FNS
+            R_TextType -> TEXT_FNS
+            R_ByteArrayType -> BYTEARRAY_FNS
+            R_JSONType -> JSON_FNS
+            R_GtxValueType -> GTXVALUE_FNS
+            is R_ListType -> getListFns(type)
+            is R_SetType -> getSetFns(type)
+            is R_MapType -> getMapFns(type)
+            is R_ClassType -> getClassFns(type)
+            is R_EnumType -> getEnumFns(type)
+            is R_TupleType -> getTupleFns(type)
+            is R_RecordType -> getRecordFns(type)
+            else -> C_MemberFuncTable(mapOf())
         }
     }
 
-    private fun getListFns(elemType: R_Type): C_MemberFuncTable {
-        val listType = R_ListType(elemType)
+    private fun getClassFns(type: R_ClassType): C_MemberFuncTable {
+        return typeMemFuncBuilder(type)
+                .build()
+    }
+
+    private fun getEnumFns(type: R_EnumType): C_MemberFuncTable {
+        return typeMemFuncBuilder(type)
+                .build()
+    }
+
+    private fun getTupleFns(type: R_TupleType): C_MemberFuncTable {
+        return typeMemFuncBuilder(type)
+                .build()
+    }
+
+    private fun getListFns(listType: R_ListType): C_MemberFuncTable {
+        val elemType = listType.elementType
         val comparator = elemType.comparator()
         val comparator2 = comparator ?: Comparator { _, _ -> 0 }
-        return C_MemberFuncBuilder()
+        return typeMemFuncBuilder(listType)
                 .add("str", R_TextType, listOf(), R_SysFn_ToString)
                 .add("empty", R_BooleanType, listOf(), R_SysFn_Collection_Empty)
                 .add("size", R_IntegerType, listOf(), R_SysFn_Collection_Size)
@@ -191,11 +204,12 @@ object C_LibFunctions {
                 .build()
     }
 
-    private fun getSetFns(elemType: R_Type): C_MemberFuncTable {
+    private fun getSetFns(setType: R_SetType): C_MemberFuncTable {
+        val elemType = setType.elementType
         val listType = R_ListType(elemType)
         val comparator = elemType.comparator()
         val comparator2 = comparator ?: Comparator { _, _ -> 0 }
-        return C_MemberFuncBuilder()
+        return typeMemFuncBuilder(setType)
                 .add("str", R_TextType, listOf(), R_SysFn_ToString)
                 .add("empty", R_BooleanType, listOf(), R_SysFn_Collection_Empty)
                 .add("size", R_IntegerType, listOf(), R_SysFn_Collection_Size)
@@ -211,10 +225,12 @@ object C_LibFunctions {
                 .build()
     }
 
-    private fun getMapFns(keyType: R_Type, valueType: R_Type): C_MemberFuncTable {
+    private fun getMapFns(mapType: R_MapType): C_MemberFuncTable {
+        val keyType = mapType.keyType
+        val valueType = mapType.valueType
         val keySetType = R_SetType(keyType)
         val valueListType = R_ListType(valueType)
-        return C_MemberFuncBuilder()
+        return typeMemFuncBuilder(mapType)
                 .add("str", R_TextType, listOf(), R_SysFn_ToString)
                 .add("empty", R_BooleanType, listOf(), R_SysFn_Map_Empty)
                 .add("size", R_IntegerType, listOf(), R_SysFn_Map_Size)
@@ -260,37 +276,48 @@ object C_LibFunctions {
 
         val invalid = C_SysMemberFunction_InvalidRecord(type)
 
-        val mToBytes = if (!flags.gtxCompact.compatible) invalid else {
-            C_StdMemberFuncCaseMatch(R_ByteArrayType, R_SysFn_Record_ToBytes(type))
-        }
-
-        val mToGtxValue = if (!flags.gtxCompact.compatible) invalid else {
-            C_StdMemberFuncCaseMatch(R_GtxValueType, R_SysFn_Record_ToGtx(type, false))
-        }
-
-        val mToPrettyGtxValue = if (!flags.gtxHuman.compatible) invalid else {
-            C_StdMemberFuncCaseMatch(R_GtxValueType, R_SysFn_Record_ToGtx(type, true))
-        }
+        val mToBytes = recordMemFn(flags.gtxCompact, invalid, R_ByteArrayType, R_SysFn_Record_ToBytes(type))
+        val mToGtxValue = recordMemFn(flags.gtxCompact, invalid, R_GtxValueType, R_SysFn_Record_ToGtx(type, false))
+        val mToPrettyGtxValue = recordMemFn(flags.gtxHuman, invalid, R_GtxValueType, R_SysFn_Record_ToGtx(type, true))
+        val mHash = recordMemFn(flags.gtxCompact, invalid, R_ByteArrayType, R_SysFn_Any_Hash(type))
 
         return C_MemberFuncBuilder()
                 .add("toBytes", listOf(), mToBytes)
                 .add("toGTXValue", listOf(), mToGtxValue)
                 .add("toPrettyGTXValue", listOf(), mToPrettyGtxValue)
+                .add("hash", listOf(), mHash)
                 .build()
     }
 
+    private fun recordMemFn(
+            flag: R_GtxCompatibility,
+            invalid: C_MemberFuncCaseMatch,
+            resType: R_Type,
+            fn: R_SysFunction
+    ): C_MemberFuncCaseMatch {
+        return if (!flag.compatible) invalid else C_StdMemberFuncCaseMatch(resType, fn)
+    }
+
     fun getEnumStaticFunction(type: R_EnumType, name: String): C_GlobalFunction? {
-        val fns = getEnumFns(type)
+        val fns = getEnumStaticFns(type)
         val fn = fns.get(name)
         return fn
     }
 
-    private fun getEnumFns(type: R_EnumType): C_GlobalFuncTable {
+    private fun getEnumStaticFns(type: R_EnumType): C_GlobalFuncTable {
         return C_GlobalFuncBuilder()
                 .add("values", R_ListType(type), listOf(), R_SysFn_Enum_Values(type))
                 .add("value", type, listOf(R_TextType), R_SysFn_Enum_Value_Text(type))
                 .add("value", type, listOf(R_IntegerType), R_SysFn_Enum_Value_Int(type))
                 .build()
+    }
+
+    private fun typeMemFuncBuilder(type: R_Type): C_MemberFuncBuilder {
+        val b = C_MemberFuncBuilder()
+        if (type.completeFlags().gtxCompact.compatible) {
+            b.add("hash", R_ByteArrayType, listOf(), R_SysFn_Any_Hash(type))
+        }
+        return b
     }
 }
 

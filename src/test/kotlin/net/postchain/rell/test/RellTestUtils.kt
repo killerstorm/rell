@@ -129,6 +129,7 @@ object RellTestUtils {
 
     fun parseModule(includeDir: C_IncludeDir, gtx: Boolean): RellTestModule {
         val res = C_Compiler.compile(includeDir, MAIN_FILE, gtx)
+        saveSource(includeDir, res)
         if (res.error != null) {
             throw res.error!!
         } else {
@@ -136,7 +137,7 @@ object RellTestUtils {
         }
     }
 
-    private fun saveSource(includeDir: C_IncludeDir, gtx: Boolean, res: C_CompilationResult) {
+    private fun saveSource(includeDir: C_IncludeDir, res: C_CompilationResult) {
         val error = res.error
         val result = if (error == null) "OK" else "ct_err:${error.code}"
         val includeResolver = C_IncludeResolver(includeDir)

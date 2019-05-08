@@ -1,10 +1,13 @@
 package net.postchain.rell
 
+import net.postchain.base.SECP256K1CryptoSystem
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvEncoder
 import net.postchain.gtv.GtvFactory
 import net.postchain.gtv.gtvml.GtvMLEncoder
 import net.postchain.gtv.gtvml.GtvMLParser
+import net.postchain.gtv.merkle.GtvMerkleHashCalculator
+import net.postchain.gtv.merkleHash
 import java.io.File
 import javax.xml.bind.DatatypeConverter
 
@@ -38,10 +41,16 @@ object CommonUtils {
 }
 
 object PostchainUtils {
+    val cryptoSystem = SECP256K1CryptoSystem()
+
+    private val merkleCalculator = GtvMerkleHashCalculator(cryptoSystem)
+
     fun gtvToBytes(v: Gtv): ByteArray = GtvEncoder.encodeGtv(v)
     fun bytesToGtv(v: ByteArray): Gtv = GtvFactory.decodeGtv(v)
     fun xmlToGtv(s: String): Gtv = GtvMLParser.parseGtvML(s)
     fun gtvToXml(v: Gtv): String = GtvMLEncoder.encodeXMLGtv(v)
+
+    fun merkleHash(v: Gtv): ByteArray = v.merkleHash(merkleCalculator)
 }
 
 class MutableTypedKeyMap {
