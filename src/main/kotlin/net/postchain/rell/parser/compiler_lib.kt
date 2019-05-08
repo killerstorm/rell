@@ -32,6 +32,8 @@ object C_LibFunctions {
             .add("print", C_SysFunction_Print(R_SysFn_Print(false)))
             .add("log", C_SysFunction_Print(R_SysFn_Print(true)))
 
+            .add("verify_signature", R_BooleanType, listOf(R_ByteArrayType, R_ByteArrayType, R_ByteArrayType), R_SysFn_VerifySignature)
+
             .add("_typeOf", C_SysFunction_TypeOf)
             .add("_nullable", C_SysFunction_Nullable(null))
             .add("_nullable_int", C_SysFunction_Nullable(R_IntegerType))

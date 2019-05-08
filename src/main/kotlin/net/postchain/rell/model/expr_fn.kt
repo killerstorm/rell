@@ -1,5 +1,8 @@
 package net.postchain.rell.model
 
+import net.postchain.base.CryptoSystem
+import net.postchain.base.SECP256K1CryptoSystem
+import net.postchain.core.Signature
 import net.postchain.rell.PostchainUtils
 import net.postchain.rell.hexStringToByteArray
 import net.postchain.rell.module.GtxToRtContext
@@ -62,6 +65,16 @@ sealed class R_SysFunction_2: R_SysFunction() {
     override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
         check(args.size == 2)
         val res = call(args[0], args[1])
+        return res
+    }
+}
+
+sealed class R_SysFunction_3: R_SysFunction() {
+    abstract fun call(arg1: Rt_Value, arg2: Rt_Value, arg3: Rt_Value): Rt_Value
+
+    override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
+        check(args.size == 3)
+        val res = call(args[0], args[1], args[2])
         return res
     }
 }
@@ -526,4 +539,19 @@ object R_SysFn_Enum_Value: R_SysFunction_1() {
 
 class R_SysFn_ThrowCrash(private val msg: String): R_SysFunction_0() {
     override fun call() = throw IllegalStateException(msg)
+}
+
+object R_SysFn_VerifySignature: R_SysFunction_3() {
+    private val cs: CryptoSystem = SECP256K1CryptoSystem()
+
+    override fun call(arg1: Rt_Value, arg2: Rt_Value, arg3: Rt_Value): Rt_Value {
+        val digest = arg1.asByteArray()
+        val res = try {
+            val signature = Signature(arg2.asByteArray(), arg3.asByteArray())
+            cs.verifyDigest(digest, signature)
+        } catch (e: Exception) {
+            throw Rt_Error("verify_signature", e.message ?: "")
+        }
+        return Rt_BooleanValue(res)
+    }
 }
