@@ -13,21 +13,21 @@ class LibIntegerTest: BaseRellTest(false) {
         chk("integer('0')", "int[0]")
         chk("integer('123456789')", "int[123456789]")
         chk("integer('9223372036854775807')", "int[9223372036854775807]")
-        chk("integer('9223372036854775808')", "rt_err:fn_int_parse:9223372036854775808")
+        chk("integer('9223372036854775808')", "rt_err:fn:integer.parse:9223372036854775808")
         chk("integer('-123456789')", "int[-123456789]")
         chk("integer('-9223372036854775808')", "int[-9223372036854775808]")
-        chk("integer('-9223372036854775809')", "rt_err:fn_int_parse:-9223372036854775809")
-        chk("integer('')", "rt_err:fn_int_parse:")
-        chk("integer(' 123')", "rt_err:fn_int_parse: 123")
-        chk("integer('123 ')", "rt_err:fn_int_parse:123 ")
+        chk("integer('-9223372036854775809')", "rt_err:fn:integer.parse:-9223372036854775809")
+        chk("integer('')", "rt_err:fn:integer.parse:")
+        chk("integer(' 123')", "rt_err:fn:integer.parse: 123")
+        chk("integer('123 ')", "rt_err:fn:integer.parse:123 ")
         chk("integer('0123')", "int[123]")
-        chk("integer('0x123')", "rt_err:fn_int_parse:0x123")
+        chk("integer('0x123')", "rt_err:fn:integer.parse:0x123")
         chk("integer(123)", "ct_err:expr_call_argtypes:integer:integer")
-        chk("integer('aaa')", "rt_err:fn_int_parse:aaa")
-        chk("integer('123', 0)", "rt_err:fn_int_parse_radix:0")
-        chk("integer('123', 1)", "rt_err:fn_int_parse_radix:1")
-        chk("integer('123', 40)", "rt_err:fn_int_parse_radix:40")
-        chk("integer('123', -1)", "rt_err:fn_int_parse_radix:-1")
+        chk("integer('aaa')", "rt_err:fn:integer.parse:aaa")
+        chk("integer('123', 0)", "rt_err:fn:integer.parse:radix:0")
+        chk("integer('123', 1)", "rt_err:fn:integer.parse:radix:1")
+        chk("integer('123', 40)", "rt_err:fn:integer.parse:radix:40")
+        chk("integer('123', -1)", "rt_err:fn:integer.parse:radix:-1")
     }
 
     @Test fun testIntegerParse_2() {
@@ -38,9 +38,9 @@ class LibIntegerTest: BaseRellTest(false) {
         chk("integer('-1', 2)", "int[-1]")
         chk("integer('-1000000000000000000000000000000000000000000000000000000000000000', 2)", "int[-9223372036854775808]")
         chk("integer('1000000000000000000000000000000000000000000000000000000000000000', 2)",
-                "rt_err:fn_int_parse:1000000000000000000000000000000000000000000000000000000000000000")
+                "rt_err:fn:integer.parse:1000000000000000000000000000000000000000000000000000000000000000")
         chk("integer('-1000000000000000000000000000000000000000000000000000000000000001', 2)",
-                "rt_err:fn_int_parse:-1000000000000000000000000000000000000000000000000000000000000001")
+                "rt_err:fn:integer.parse:-1000000000000000000000000000000000000000000000000000000000000001")
     }
 
     @Test fun testIntegerParse_8() {
@@ -50,18 +50,18 @@ class LibIntegerTest: BaseRellTest(false) {
         chk("integer('777777777777777777777', 8)", "int[9223372036854775807]")
         chk("integer('-1', 8)", "int[-1]")
         chk("integer('-1000000000000000000000', 8)", "int[-9223372036854775808]")
-        chk("integer('1000000000000000000000', 8)", "rt_err:fn_int_parse:1000000000000000000000")
-        chk("integer('-1000000000000000000001', 8)", "rt_err:fn_int_parse:-1000000000000000000001")
+        chk("integer('1000000000000000000000', 8)", "rt_err:fn:integer.parse:1000000000000000000000")
+        chk("integer('-1000000000000000000001', 8)", "rt_err:fn:integer.parse:-1000000000000000000001")
     }
 
     @Test fun testIntegerParse_10() {
         chk("integer('0', 10)", "int[0]")
         chk("integer('123456789', 10)", "int[123456789]")
         chk("integer('9223372036854775807', 10)", "int[9223372036854775807]")
-        chk("integer('9223372036854775808', 10)", "rt_err:fn_int_parse:9223372036854775808")
+        chk("integer('9223372036854775808', 10)", "rt_err:fn:integer.parse:9223372036854775808")
         chk("integer('-123456789', 10)", "int[-123456789]")
         chk("integer('-9223372036854775808', 10)", "int[-9223372036854775808]")
-        chk("integer('-9223372036854775809', 10)", "rt_err:fn_int_parse:-9223372036854775809")
+        chk("integer('-9223372036854775809', 10)", "rt_err:fn:integer.parse:-9223372036854775809")
     }
 
     @Test fun testIntegerParse_16() {
@@ -71,23 +71,23 @@ class LibIntegerTest: BaseRellTest(false) {
         chk("integer('7fffffffffffffff', 16)", "int[9223372036854775807]")
         chk("integer('-1', 16)", "int[-1]")
         chk("integer('-8000000000000000', 16)", "int[-9223372036854775808]")
-        chk("integer('8000000000000000', 16)", "rt_err:fn_int_parse:8000000000000000")
-        chk("integer('-8000000000000001', 16)", "rt_err:fn_int_parse:-8000000000000001")
+        chk("integer('8000000000000000', 16)", "rt_err:fn:integer.parse:8000000000000000")
+        chk("integer('-8000000000000001', 16)", "rt_err:fn:integer.parse:-8000000000000001")
     }
 
     @Test fun testIntegerParseHex() {
-        chk("integer.parseHex('0')", "int[0]")
-        chk("integer.parseHex('7b')", "int[123]")
-        chk("integer.parseHex('ff')", "int[255]")
-        chk("integer.parseHex('7fffffffffffffff')", "int[9223372036854775807]")
-        chk("integer.parseHex('ffffffffffffffff')", "int[-1]")
-        chk("integer.parseHex('8000000000000000')", "int[-9223372036854775808]")
-        chk("integer.parseHex('-1')", "rt_err:fn_int_parseHex:-1")
-        chk("integer.parseHex('10000000000000000')", "rt_err:fn_int_parseHex:10000000000000000")
-        chk("integer.parseHex()", "ct_err:expr_call_argtypes:parseHex:")
-        chk("integer.parseHex(123)", "ct_err:expr_call_argtypes:parseHex:integer")
-        chk("integer.parseHex('')", "rt_err:fn_int_parseHex:")
-        chk("integer.parseHex('ghi')", "rt_err:fn_int_parseHex:ghi")
+        chk("integer.parse_hex('0')", "int[0]")
+        chk("integer.parse_hex('7b')", "int[123]")
+        chk("integer.parse_hex('ff')", "int[255]")
+        chk("integer.parse_hex('7fffffffffffffff')", "int[9223372036854775807]")
+        chk("integer.parse_hex('ffffffffffffffff')", "int[-1]")
+        chk("integer.parse_hex('8000000000000000')", "int[-9223372036854775808]")
+        chk("integer.parse_hex('-1')", "rt_err:fn:integer.parse_hex:-1")
+        chk("integer.parse_hex('10000000000000000')", "rt_err:fn:integer.parse_hex:10000000000000000")
+        chk("integer.parse_hex()", "ct_err:expr_call_argtypes:parse_hex:")
+        chk("integer.parse_hex(123)", "ct_err:expr_call_argtypes:parse_hex:integer")
+        chk("integer.parse_hex('')", "rt_err:fn:integer.parse_hex:")
+        chk("integer.parse_hex('ghi')", "rt_err:fn:integer.parse_hex:ghi")
     }
 
     @Test fun testIntegerHex() {

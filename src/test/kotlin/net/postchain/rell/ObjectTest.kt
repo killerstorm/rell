@@ -78,7 +78,7 @@ class ObjectTest: BaseRellTest() {
         tst.defs = listOf("object foo { x: integer = 123; }")
 
         chk("'' + foo", "text[foo]")
-        chk("_typeOf(foo)", "text[foo]")
+        chk("_type_of(foo)", "text[foo]")
         chk("abs(foo)", "ct_err:expr_call_argtypes:abs:foo")
         chk("foo", "foo")
 

@@ -13,8 +13,8 @@ class EnumTest: BaseRellTest() {
 
         chk("foo", "ct_err:expr_novalue:enum")
         chk("'' + foo", "ct_err:expr_novalue:enum")
-        chk("_typeOf(foo.A)", "text[foo]")
-        chk("_typeOf(foo)", "ct_err:expr_novalue:enum")
+        chk("_type_of(foo.A)", "text[foo]")
+        chk("_type_of(foo)", "ct_err:expr_novalue:enum")
     }
 
     @Test fun testOperators() {

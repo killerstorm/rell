@@ -1,7 +1,7 @@
 package net.postchain.rell.lib
 
-import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.runtime.Rt_OpContext
+import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 
 class LibOpContextTest: BaseRellTest(false) {
@@ -21,7 +21,7 @@ class LibOpContextTest: BaseRellTest(false) {
         tst.opContext = null
         chk("op_context.last_block_time", "ct_err:op_ctx_noop")
         chkFull("function f(): timestamp = op_context.last_block_time; query q() = f();", listOf(),
-                "rt_err:fn_last_block_time_noop")
+                "rt_err:fn:op_context.last_block_time:noop")
 
         chk("op_context", "ct_err:expr_novalue:namespace")
     }
@@ -41,10 +41,10 @@ class LibOpContextTest: BaseRellTest(false) {
         tst.chainId = 333
         tst.opContext = Rt_OpContext(-1, 444, listOf())
 
-        chkOp("print(_typeOf(op_context.transaction));")
+        chkOp("print(_type_of(op_context.transaction));")
         chkStdout("transaction")
 
-        chkOp("print(_strictStr(op_context.transaction));")
+        chkOp("print(_strict_str(op_context.transaction));")
         chkStdout("transaction[444]")
     }
 

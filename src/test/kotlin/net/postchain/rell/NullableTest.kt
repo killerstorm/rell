@@ -187,58 +187,58 @@ class NullableTest: BaseRellTest(false) {
 
     @Test fun testListLiteral() {
         tst.strictToString = false
-        chk("_typeOf([null])", "list<null>")
-        chk("_typeOf([123])", "list<integer>")
-        chk("_typeOf([123,null])", "list<integer?>")
-        chk("_typeOf([null,123])", "list<integer?>")
-        chk("_typeOf(['Hello',null])", "list<text?>")
-        chk("_typeOf([null,'Hello'])", "list<text?>")
-        chk("_typeOf([123,null,456])", "list<integer?>")
-        chk("_typeOf([null,123,456])", "list<integer?>")
-        chk("_typeOf(['Hello',null,123])", "ct_err:expr_list_itemtype:text?:integer")
-        chk("_typeOf([123,null,'Hello'])", "ct_err:expr_list_itemtype:integer?:text")
+        chk("_type_of([null])", "list<null>")
+        chk("_type_of([123])", "list<integer>")
+        chk("_type_of([123,null])", "list<integer?>")
+        chk("_type_of([null,123])", "list<integer?>")
+        chk("_type_of(['Hello',null])", "list<text?>")
+        chk("_type_of([null,'Hello'])", "list<text?>")
+        chk("_type_of([123,null,456])", "list<integer?>")
+        chk("_type_of([null,123,456])", "list<integer?>")
+        chk("_type_of(['Hello',null,123])", "ct_err:expr_list_itemtype:text?:integer")
+        chk("_type_of([123,null,'Hello'])", "ct_err:expr_list_itemtype:integer?:text")
     }
 
     @Test fun testMapLiteral() {
         tst.strictToString = false
-        chk("_typeOf([null:null])", "map<null,null>")
-        chk("_typeOf([123:null])", "map<integer,null>")
-        chk("_typeOf([null:'Hello'])", "map<null,text>")
+        chk("_type_of([null:null])", "map<null,null>")
+        chk("_type_of([123:null])", "map<integer,null>")
+        chk("_type_of([null:'Hello'])", "map<null,text>")
 
-        chk("_typeOf([123:'Hello',null:'World'])", "map<integer?,text>")
-        chk("_typeOf([null:'Hello',123:'World'])", "map<integer?,text>")
-        chk("_typeOf([123:'Hello',456:null])", "map<integer,text?>")
-        chk("_typeOf([123:null,456:'Hello'])", "map<integer,text?>")
+        chk("_type_of([123:'Hello',null:'World'])", "map<integer?,text>")
+        chk("_type_of([null:'Hello',123:'World'])", "map<integer?,text>")
+        chk("_type_of([123:'Hello',456:null])", "map<integer,text?>")
+        chk("_type_of([123:null,456:'Hello'])", "map<integer,text?>")
 
-        chk("_typeOf([123:null,null:'Hello'])", "map<integer?,text?>")
-        chk("_typeOf([null:'Hello',123:null])", "map<integer?,text?>")
-        chk("_typeOf([123:'Hello',null:null])", "map<integer?,text?>")
+        chk("_type_of([123:null,null:'Hello'])", "map<integer?,text?>")
+        chk("_type_of([null:'Hello',123:null])", "map<integer?,text?>")
+        chk("_type_of([123:'Hello',null:null])", "map<integer?,text?>")
 
-        chk("_typeOf([123:'Hello',null:null,456:'World'])", "map<integer?,text?>")
-        chk("_typeOf([null:null,123:'Hello',456:'World'])", "map<integer?,text?>")
+        chk("_type_of([123:'Hello',null:null,456:'World'])", "map<integer?,text?>")
+        chk("_type_of([null:null,123:'Hello',456:'World'])", "map<integer?,text?>")
 
-        chk("_typeOf([123:'Hello',null:null,'World':456])", "ct_err:expr_map_keytype:integer?:text")
-        chk("_typeOf([123:null,456:789,null:'World'])", "ct_err:expr_map_valuetype:integer?:text")
-        chk("_typeOf([null:'Hello','Hi':'World',123:'Bye'])", "ct_err:expr_map_keytype:text?:integer")
+        chk("_type_of([123:'Hello',null:null,'World':456])", "ct_err:expr_map_keytype:integer?:text")
+        chk("_type_of([123:null,456:789,null:'World'])", "ct_err:expr_map_valuetype:integer?:text")
+        chk("_type_of([null:'Hello','Hi':'World',123:'Bye'])", "ct_err:expr_map_keytype:text?:integer")
     }
 
     @Test fun testListLiteralOfTuples() {
         tst.strictToString = false
-        chkEx("{ return _typeOf([(1,'A')]); }", "list<(integer,text)>")
+        chkEx("{ return _type_of([(1,'A')]); }", "list<(integer,text)>")
 
-        chkEx("{ return _typeOf([(1,'A'), (null,'B')]); }", "list<(integer?,text)>")
-        chkEx("{ return _typeOf([(1,'A'), (2,null)]); }", "list<(integer,text?)>")
-        chkEx("{ return _typeOf([(1,'A'), (null,null)]); }", "list<(integer?,text?)>")
-        chkEx("{ return _typeOf([(null,'A'), (2,'B')]); }", "list<(integer?,text)>")
-        chkEx("{ return _typeOf([(1,null), (2,'B')]); }", "list<(integer,text?)>")
-        chkEx("{ return _typeOf([(null,null), (2,'B')]); }", "list<(integer?,text?)>")
+        chkEx("{ return _type_of([(1,'A'), (null,'B')]); }", "list<(integer?,text)>")
+        chkEx("{ return _type_of([(1,'A'), (2,null)]); }", "list<(integer,text?)>")
+        chkEx("{ return _type_of([(1,'A'), (null,null)]); }", "list<(integer?,text?)>")
+        chkEx("{ return _type_of([(null,'A'), (2,'B')]); }", "list<(integer?,text)>")
+        chkEx("{ return _type_of([(1,null), (2,'B')]); }", "list<(integer,text?)>")
+        chkEx("{ return _type_of([(null,null), (2,'B')]); }", "list<(integer?,text?)>")
 
-        chkEx("{ return _typeOf([(1,'A'), (null,'B'), null]); }", "list<(integer?,text)?>")
-        chkEx("{ return _typeOf([(1,'A'), (2,null), null]); }", "list<(integer,text?)?>")
-        chkEx("{ return _typeOf([(1,'A'), (null,null), null]); }", "list<(integer?,text?)?>")
-        chkEx("{ return _typeOf([(null,'A'), (2,'B'), null]); }", "list<(integer?,text)?>")
-        chkEx("{ return _typeOf([(1,null), (2,'B'), null]); }", "list<(integer,text?)?>")
-        chkEx("{ return _typeOf([(null,null), (2,'B'), null]); }", "list<(integer?,text?)?>")
+        chkEx("{ return _type_of([(1,'A'), (null,'B'), null]); }", "list<(integer?,text)?>")
+        chkEx("{ return _type_of([(1,'A'), (2,null), null]); }", "list<(integer,text?)?>")
+        chkEx("{ return _type_of([(1,'A'), (null,null), null]); }", "list<(integer?,text?)?>")
+        chkEx("{ return _type_of([(null,'A'), (2,'B'), null]); }", "list<(integer?,text)?>")
+        chkEx("{ return _type_of([(1,null), (2,'B'), null]); }", "list<(integer,text?)?>")
+        chkEx("{ return _type_of([(null,null), (2,'B'), null]); }", "list<(integer?,text?)?>")
     }
 
     @Test fun testListBasics() {
@@ -623,8 +623,8 @@ class NullableTest: BaseRellTest(false) {
     @Test fun testSpecOpNotNull() {
         tst.defs = listOf("function nop(x: integer?): integer? = x;")
 
-        chkEx("{ val x: integer? = nop(123); return _typeOf(x); }", "text[integer?]")
-        chkEx("{ val x: integer? = nop(123); return _typeOf(x!!); }", "text[integer]")
+        chkEx("{ val x: integer? = nop(123); return _type_of(x); }", "text[integer?]")
+        chkEx("{ val x: integer? = nop(123); return _type_of(x!!); }", "text[integer]")
 
         chkEx("{ val x: integer? = nop(123); return x!!; }", "int[123]")
         chkEx("{ val x: integer? = nop(null); return x!!; }", "rt_err:null_value")
@@ -654,9 +654,9 @@ class NullableTest: BaseRellTest(false) {
         chkEx("{ val x: (a:(b:(c:integer)))? = _nullable((a=(b=(c=123)))); return x?.a?.b.c; }", "ct_err:expr_mem_null:c")
         chkEx("{ val x: (a:(b:(c:integer)))? = _nullable((a=(b=(c=123)))); return x?.a?.b?.c; }", "int[123]")
 
-        chkEx("{ val x: (a:(b:(c:integer)))? = _nullable((a=(b=(c=123)))); return _typeOf(x?.a); }", "text[(b:(c:integer))?]")
-        chkEx("{ val x: (a:(b:(c:integer)))? = _nullable((a=(b=(c=123)))); return _typeOf(x?.a?.b); }", "text[(c:integer)?]")
-        chkEx("{ val x: (a:(b:(c:integer)))? = _nullable((a=(b=(c=123)))); return _typeOf(x?.a?.b?.c); }", "text[integer?]")
+        chkEx("{ val x: (a:(b:(c:integer)))? = _nullable((a=(b=(c=123)))); return _type_of(x?.a); }", "text[(b:(c:integer))?]")
+        chkEx("{ val x: (a:(b:(c:integer)))? = _nullable((a=(b=(c=123)))); return _type_of(x?.a?.b); }", "text[(c:integer)?]")
+        chkEx("{ val x: (a:(b:(c:integer)))? = _nullable((a=(b=(c=123)))); return _type_of(x?.a?.b?.c); }", "text[integer?]")
 
         chkEx("{ return integer.MAX_VALUE; }", "int[9223372036854775807]")
         chkEx("{ return integer?.MAX_VALUE; }", "ct_err:expr_novalue:namespace")

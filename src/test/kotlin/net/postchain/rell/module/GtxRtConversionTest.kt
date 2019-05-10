@@ -1,10 +1,10 @@
 package net.postchain.rell.module
 
-import net.postchain.gtv.GtvByteArray
 import net.postchain.gtv.Gtv
+import net.postchain.gtv.GtvByteArray
 import net.postchain.gtv.GtvString
-import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.hexStringToByteArray
+import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 import kotlin.test.assertEquals
 
@@ -239,13 +239,13 @@ class GtxRtConversionTest: BaseRellTest(useSql = false, gtx = true) {
     }
 
     private fun chkOpArg(type: String, arg: String, expected: String) {
-        val code = "operation o(a: $type) { print(_strictStr(a)); }"
+        val code = "operation o(a: $type) { print(_strict_str(a)); }"
         val actual = tst.callOpGtxStr(code, listOf(arg))
         chkRes(expected, actual)
     }
 
     private fun chkOpArg(type: String, arg: Gtv, expected: String) {
-        val code = "operation o(a: $type) { print(_strictStr(a)); }"
+        val code = "operation o(a: $type) { print(_strict_str(a)); }"
         val actual = tst.callOpGtx(code, listOf(arg))
         chkRes(expected, actual)
     }

@@ -31,8 +31,8 @@ class LibRequireTest: BaseRellTest(false) {
         chkEx("{ return require(user @? { .name == 'Trudy' }, 'User not found'); }", "req_err:[User not found]")
         chkEx("{ return require(user @? {}, 'User not found'); }", "rt_err:at:wrong_count:2")
 
-        chkEx("{ return _typeOf(user @? { .name == 'Bob' }); }", "text[user?]")
-        chkEx("{ return _typeOf(require(user @? { .name == 'Bob' })); }", "text[user]")
+        chkEx("{ return _type_of(user @? { .name == 'Bob' }); }", "text[user?]")
+        chkEx("{ return _type_of(require(user @? { .name == 'Bob' })); }", "text[user]")
 
         chkEx("{ return require(user @ { .name == 'Bob' }); }", "ct_err:expr_call_argtypes:require:user")
         chkEx("{ return require(user @+ { .name == 'Bob' }); }", "ct_err:expr_call_argtypes:require:list<user>")
@@ -49,40 +49,40 @@ class LibRequireTest: BaseRellTest(false) {
     }
 
     @Test fun testRequireNotEmptyNullable() {
-        chkEx("{ val x: integer = 123; return requireNotEmpty(x); }", "ct_err:expr_call_argtypes:requireNotEmpty:integer")
-        chkEx("{ val x: integer? = _nullable(123); return requireNotEmpty(x); }", "int[123]")
-        chkEx("{ val x: integer? = null; return requireNotEmpty(x); }", "req_err:null")
+        chkEx("{ val x: integer = 123; return require_not_empty(x); }", "ct_err:expr_call_argtypes:require_not_empty:integer")
+        chkEx("{ val x: integer? = _nullable(123); return require_not_empty(x); }", "int[123]")
+        chkEx("{ val x: integer? = null; return require_not_empty(x); }", "req_err:null")
     }
 
     @Test fun testRequireNotEmptyCollection() {
-        chkEx("{ val x = list<integer>(); return requireNotEmpty(x); }", "req_err:null")
-        chkEx("{ val x = [123]; return requireNotEmpty(x); }", "list<integer>[int[123]]")
-        chkEx("{ val x: list<integer>? = null; return requireNotEmpty(x); }", "req_err:null")
-        chkEx("{ val x: list<integer>? = list<integer>(); return requireNotEmpty(x); }", "req_err:null")
-        chkEx("{ val x: list<integer>? = [123]; return requireNotEmpty(x); }", "list<integer>[int[123]]")
+        chkEx("{ val x = list<integer>(); return require_not_empty(x); }", "req_err:null")
+        chkEx("{ val x = [123]; return require_not_empty(x); }", "list<integer>[int[123]]")
+        chkEx("{ val x: list<integer>? = null; return require_not_empty(x); }", "req_err:null")
+        chkEx("{ val x: list<integer>? = list<integer>(); return require_not_empty(x); }", "req_err:null")
+        chkEx("{ val x: list<integer>? = [123]; return require_not_empty(x); }", "list<integer>[int[123]]")
 
-        chkEx("{ val x = set<integer>(); return requireNotEmpty(x); }", "req_err:null")
-        chkEx("{ val x = set([123]); return requireNotEmpty(x); }", "set<integer>[int[123]]")
-        chkEx("{ val x: set<integer>? = null; return requireNotEmpty(x); }", "req_err:null")
-        chkEx("{ val x: set<integer>? = set<integer>(); return requireNotEmpty(x); }", "req_err:null")
-        chkEx("{ val x: set<integer>? = set([123]); return requireNotEmpty(x); }", "set<integer>[int[123]]")
+        chkEx("{ val x = set<integer>(); return require_not_empty(x); }", "req_err:null")
+        chkEx("{ val x = set([123]); return require_not_empty(x); }", "set<integer>[int[123]]")
+        chkEx("{ val x: set<integer>? = null; return require_not_empty(x); }", "req_err:null")
+        chkEx("{ val x: set<integer>? = set<integer>(); return require_not_empty(x); }", "req_err:null")
+        chkEx("{ val x: set<integer>? = set([123]); return require_not_empty(x); }", "set<integer>[int[123]]")
 
-        chkEx("{ val x = map<integer,text>(); return requireNotEmpty(x); }", "req_err:null")
-        chkEx("{ val x = map([123:'Hello']); return requireNotEmpty(x); }", "map<integer,text>[int[123]=text[Hello]]")
-        chkEx("{ val x: map<integer,text>? = null; return requireNotEmpty(x); }", "req_err:null")
-        chkEx("{ val x: map<integer,text>? = map<integer,text>(); return requireNotEmpty(x); }", "req_err:null")
-        chkEx("{ val x: map<integer,text>? = [123:'Hello']; return requireNotEmpty(x); }", "map<integer,text>[int[123]=text[Hello]]")
+        chkEx("{ val x = map<integer,text>(); return require_not_empty(x); }", "req_err:null")
+        chkEx("{ val x = map([123:'Hello']); return require_not_empty(x); }", "map<integer,text>[int[123]=text[Hello]]")
+        chkEx("{ val x: map<integer,text>? = null; return require_not_empty(x); }", "req_err:null")
+        chkEx("{ val x: map<integer,text>? = map<integer,text>(); return require_not_empty(x); }", "req_err:null")
+        chkEx("{ val x: map<integer,text>? = [123:'Hello']; return require_not_empty(x); }", "map<integer,text>[int[123]=text[Hello]]")
 
-        chkEx("{ val x: list<integer>? = _nullable([123]); return _typeOf(x); }", "text[list<integer>?]")
-        chkEx("{ val x: list<integer>? = _nullable([123]); return _typeOf(requireNotEmpty(x)); }", "text[list<integer>]")
+        chkEx("{ val x: list<integer>? = _nullable([123]); return _type_of(x); }", "text[list<integer>?]")
+        chkEx("{ val x: list<integer>? = _nullable([123]); return _type_of(require_not_empty(x)); }", "text[list<integer>]")
     }
 
     @Test fun testRequireNotEmptyWrongArgs() {
-        chkEx("{ requireNotEmpty(); return 0; }", "ct_err:expr_call_argtypes:requireNotEmpty:")
-        chkEx("{ requireNotEmpty(null); return 0; }", "ct_err:expr_call_argtypes:requireNotEmpty:null")
-        chkEx("{ requireNotEmpty(false); return 0; }", "ct_err:expr_call_argtypes:requireNotEmpty:boolean")
-        chkEx("{ requireNotEmpty(true); return 0; }", "ct_err:expr_call_argtypes:requireNotEmpty:boolean")
-        chkEx("{ requireNotEmpty(123); return 0; }", "ct_err:expr_call_argtypes:requireNotEmpty:integer")
-        chkEx("{ requireNotEmpty('Hello'); return 0; }", "ct_err:expr_call_argtypes:requireNotEmpty:text")
+        chkEx("{ require_not_empty(); return 0; }", "ct_err:expr_call_argtypes:require_not_empty:")
+        chkEx("{ require_not_empty(null); return 0; }", "ct_err:expr_call_argtypes:require_not_empty:null")
+        chkEx("{ require_not_empty(false); return 0; }", "ct_err:expr_call_argtypes:require_not_empty:boolean")
+        chkEx("{ require_not_empty(true); return 0; }", "ct_err:expr_call_argtypes:require_not_empty:boolean")
+        chkEx("{ require_not_empty(123); return 0; }", "ct_err:expr_call_argtypes:require_not_empty:integer")
+        chkEx("{ require_not_empty('Hello'); return 0; }", "ct_err:expr_call_argtypes:require_not_empty:text")
     }
 }

@@ -219,7 +219,7 @@ object R_SysFn_Int_Parse: R_SysFunction_Common() {
     override fun call(a: Rt_Value, b: Rt_Value): Rt_Value {
         val r = b.asInteger()
         if (r < Character.MIN_RADIX || r > Character.MAX_RADIX) {
-            throw Rt_Error("fn_int_parse_radix:$r", "Invalid radix: $r")
+            throw Rt_Error("fn:integer.parse:radix:$r", "Invalid radix: $r")
         }
         return parse(a, r.toInt())
     }
@@ -229,7 +229,7 @@ object R_SysFn_Int_Parse: R_SysFunction_Common() {
         val r = try {
             java.lang.Long.parseLong(s, radix)
         } catch (e: NumberFormatException) {
-            throw Rt_Error("fn_int_parse:$s", "Invalid number: '$s'")
+            throw Rt_Error("fn:integer.parse:$s", "Invalid number: '$s'")
         }
         return Rt_IntValue(r)
     }
@@ -241,7 +241,7 @@ object R_SysFn_Int_ParseHex: R_SysFunction_Common() {
         val r = try {
             java.lang.Long.parseUnsignedLong(s, 16)
         } catch (e: NumberFormatException) {
-            throw Rt_Error("fn_int_parseHex:$s", "Invalid hex number: '$s'")
+            throw Rt_Error("fn:integer.parse_hex:$s", "Invalid hex number: '$s'")
         }
         return Rt_IntValue(r)
     }
@@ -274,7 +274,7 @@ object R_SysFn_ByteArray_Sub: R_SysFn_ByteArray() {
     private fun call0(obj: ByteArray, start: Long, end: Long): Rt_Value {
         val len = obj.size
         if (start < 0 || start > len || end < start || end > len) {
-            throw Rt_Error("fn_bytearray_sub_range:$len:$start:$end",
+            throw Rt_Error("fn:byte_array.sub:range:$len:$start:$end",
                     "Invalid range: start = $start, end = $end (length $len)")
         }
         val r = Arrays.copyOfRange(obj, start.toInt(), end.toInt())
@@ -301,7 +301,7 @@ object R_SysFn_ByteArray_New_Text: R_SysFunction_Common() {
         val r = try {
             s.hexStringToByteArray()
         } catch (e: IllegalArgumentException) {
-            throw Rt_Error("fn_bytearray_new_text:$s", "Invalid byte_array value: '$s'")
+            throw Rt_Error("fn:byte_array.new(text):$s", "Invalid byte_array value: '$s'")
         }
         return Rt_ByteArrayValue(r)
     }
@@ -313,7 +313,7 @@ object R_SysFn_ByteArray_New_List: R_SysFunction_Common() {
         val r = ByteArray(s.size)
         for (i in s.indices) {
             val b = s[i].asInteger()
-            if (b < 0 || b > 255) throw Rt_Error("fn_bytearray_new_list:$b", "Byte value out of range: $b")
+            if (b < 0 || b > 255) throw Rt_Error("fn:byte_array.new(list):$b", "Byte value out of range: $b")
             r[i] = b.toByte()
         }
         return Rt_ByteArrayValue(r)
@@ -358,7 +358,7 @@ object R_SysFn_OpContext_LastBlockTime: R_SysFunction() {
     override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
         check(args.size == 0)
         val opCtx = modCtx.globalCtx.opCtx
-        if (opCtx == null) throw Rt_Error("fn_last_block_time_noop", "Operation context not available")
+        if (opCtx == null) throw Rt_Error("fn:op_context.last_block_time:noop", "Operation context not available")
         return Rt_IntValue(opCtx.lastBlockTime)
     }
 }
@@ -367,7 +367,7 @@ class R_SysFn_OpContext_Transaction(private val type: R_ClassType): R_SysFunctio
     override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
         check(args.size == 0)
         val opCtx = modCtx.globalCtx.opCtx
-        if (opCtx == null) throw Rt_Error("fn_opctx_transaction_noop", "Operation context not available")
+        if (opCtx == null) throw Rt_Error("fn:op_context.transaction:noop", "Operation context not available")
         return Rt_ClassValue(type, opCtx.transactionIid)
     }
 }
@@ -419,7 +419,7 @@ object R_SysFn_GtxValue_ToJson: R_SysFunction_1() {
 object R_SysFn_GtxValue_FromBytes: R_SysFunction_1() {
     override fun call(arg: Rt_Value): Rt_Value {
         val bytes = arg.asByteArray()
-        return Rt_Utils.wrapErr("fn:GTXValue.fromBytes") {
+        return Rt_Utils.wrapErr("fn:GTXValue.from_bytes") {
             val gtx = PostchainUtils.bytesToGtv(bytes)
             Rt_GtxValue(gtx)
         }
@@ -429,7 +429,7 @@ object R_SysFn_GtxValue_FromBytes: R_SysFunction_1() {
 object R_SysFn_GtxValue_FromJson_Text: R_SysFunction_1() {
     override fun call(arg: Rt_Value): Rt_Value {
         val str = arg.asString()
-        return Rt_Utils.wrapErr("fn:GTXValue.fromJSON(text)") {
+        return Rt_Utils.wrapErr("fn:GTXValue.from_json(text)") {
             val gtx = Rt_GtxValue.jsonStringToGtxValue(str)
             Rt_GtxValue(gtx)
         }
@@ -439,7 +439,7 @@ object R_SysFn_GtxValue_FromJson_Text: R_SysFunction_1() {
 object R_SysFn_GtxValue_FromJson_Json: R_SysFunction_1() {
     override fun call(arg: Rt_Value): Rt_Value {
         val str = arg.asJsonString()
-        return Rt_Utils.wrapErr("fn:GTXValue.fromJSON(json)") {
+        return Rt_Utils.wrapErr("fn:GTXValue.from_json(json)") {
             val gtx = Rt_GtxValue.jsonStringToGtxValue(str)
             Rt_GtxValue(gtx)
         }
@@ -466,7 +466,7 @@ class R_SysFn_Record_FromBytes(val type: R_RecordType): R_SysFunction() {
         check(args.size == 1)
         val arg = args[0]
         val bytes = arg.asByteArray()
-        return Rt_Utils.wrapErr("fn:record:fromBytes") {
+        return Rt_Utils.wrapErr("fn:record:from_bytes") {
             val gtx = PostchainUtils.bytesToGtv(bytes)
             val convCtx = GtxToRtContext()
             val res = type.gtxToRt(convCtx, gtx, false)
@@ -481,7 +481,7 @@ class R_SysFn_Record_FromGtx(val type: R_RecordType, val human: Boolean): R_SysF
         check(args.size == 1)
         val arg = args[0]
         val gtx = arg.asGtxValue()
-        return Rt_Utils.wrapErr("fn:record:fromGtx") {
+        return Rt_Utils.wrapErr("fn:record:from_gtx") {
             val convCtx = GtxToRtContext()
             val res = type.gtxToRt(convCtx, gtx, human)
             convCtx.finish(modCtx)

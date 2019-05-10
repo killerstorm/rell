@@ -54,7 +54,7 @@ object R_SysFn_List_Get: R_SysFn_List() {
     override fun call(obj: MutableList<Rt_Value>, a: Rt_Value): Rt_Value {
         val i = a.asInteger()
         if (i < 0 || i >= obj.size) {
-            throw Rt_Error("fn_list_get_index:${obj.size}:$i", "Index out of bounds: $i (size ${obj.size})")
+            throw Rt_Error("fn:list.get:index:${obj.size}:$i", "Index out of bounds: $i (size ${obj.size})")
         }
         return obj[i.toInt()]
     }
@@ -73,7 +73,7 @@ object R_SysFn_List_Sub: R_SysFn_List() {
         val start = a.asInteger()
         val end = b.asInteger()
         if (start < 0 || end < start || end > obj.size) {
-            throw Rt_Error("fn_list_sub_args:${obj.size}:$start:$end",
+            throw Rt_Error("fn:list.sub:args:${obj.size}:$start:$end",
                     "Out of range: start = $start, end = $end, size = ${obj.size}")
         }
 
@@ -86,7 +86,7 @@ object R_SysFn_List_Add: R_SysFn_List() {
     override fun call(obj: MutableList<Rt_Value>, a: Rt_Value, b: Rt_Value): Rt_Value {
         val i = a.asInteger()
         if (i < 0 || i > obj.size) {
-            throw Rt_Error("fn_list_add_index:${obj.size}:$i", "Index out of range: $i (size ${obj.size})")
+            throw Rt_Error("fn:list.add:index:${obj.size}:$i", "Index out of range: $i (size ${obj.size})")
         }
 
         obj.add(i.toInt(), b)
@@ -98,7 +98,7 @@ object R_SysFn_List_AddAll: R_SysFn_List() {
     override fun call(obj: MutableList<Rt_Value>, a: Rt_Value, b: Rt_Value): Rt_Value {
         val i = a.asInteger()
         if (i < 0 || i > obj.size) {
-            throw Rt_Error("fn_list_addAll_index:${obj.size}:$i", "Index out of range: $i (size ${obj.size})")
+            throw Rt_Error("fn:list.add_all:index:${obj.size}:$i", "Index out of range: $i (size ${obj.size})")
         }
 
         val r = obj.addAll(i.toInt(), b.asCollection())
@@ -110,7 +110,7 @@ object R_SysFn_List_RemoveAt: R_SysFn_List() {
     override fun call(obj: MutableList<Rt_Value>, a: Rt_Value): Rt_Value {
         val i = a.asInteger()
         if (i < 0 || i >= obj.size) {
-            throw Rt_Error("fn_list_removeAt_index:${obj.size}:$i", "Index out of range: $i (size ${obj.size})")
+            throw Rt_Error("fn:list.remove_at:index:${obj.size}:$i", "Index out of range: $i (size ${obj.size})")
         }
 
         val r = obj.removeAt(i.toInt())
@@ -122,7 +122,7 @@ object R_SysFn_List_Set: R_SysFn_List() {
     override fun call(obj: MutableList<Rt_Value>, a: Rt_Value, b: Rt_Value): Rt_Value {
         val i = a.asInteger()
         if (i < 0 || i >= obj.size) {
-            throw Rt_Error("fn_list_set_index:${obj.size}:$i", "Index out of range: $i (size ${obj.size})")
+            throw Rt_Error("fn:list.set:index:${obj.size}:$i", "Index out of range: $i (size ${obj.size})")
         }
 
         val r = obj.set(i.toInt(), b)
@@ -161,7 +161,7 @@ object R_SysFn_Map_Get: R_SysFn_Map() {
     override fun call(obj: MutableMap<Rt_Value, Rt_Value>, a: Rt_Value): Rt_Value {
         val r = obj[a]
         if (r == null) {
-            throw Rt_Error("fn_map_get_novalue:${a.toStrictString()}", "Key not in map: $a")
+            throw Rt_Error("fn:map.get:novalue:${a.toStrictString()}", "Key not in map: $a")
         }
         return r
     }
@@ -196,7 +196,7 @@ object R_SysFn_Map_Remove: R_SysFn_Map() {
     override fun call(obj: MutableMap<Rt_Value, Rt_Value>, a: Rt_Value): Rt_Value {
         val v = obj.remove(a)
         if (v == null) {
-            throw Rt_Error("fn_map_remove_novalue:${a.toStrictString()}", "Key not in map: $a")
+            throw Rt_Error("fn:map.remove:novalue:${a.toStrictString()}", "Key not in map: $a")
         }
         return v
     }

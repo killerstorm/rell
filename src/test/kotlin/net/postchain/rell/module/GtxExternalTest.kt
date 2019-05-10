@@ -66,6 +66,6 @@ class GtxExternalTest: BaseGtxTest() {
         tst.defs = listOf("external 'foo' { class user(log) { name; } }")
         tst.wrapRtErrors = false
         tst.extraModuleConfig["dependencies"] = "{'foo':'deadbeef'}"
-        tst.chkQuery("_strictStr(user @{} ( =user, =.name ))", "'(user[15],text[Bob])'")
+        tst.chkQuery("_strict_str(user @{} ( =user, =.name ))", "'(user[15],text[Bob])'")
     }
 }

@@ -235,12 +235,12 @@ class ExternalTest: BaseRellTest() {
         tst.chainDependency("bar", "beefdead", 1000)
         tst.insert("c0.local_user", "name,transaction", "1,'Bob',2")
 
-        chk("_typeOf((foo.user @ {}).transaction)", "text[external[foo].transaction]")
-        chk("_typeOf((foo.user @ {}).transaction.block)", "text[external[foo].block]")
-        chk("_typeOf((bar.user @ {}).transaction)", "text[external[bar].transaction]")
-        chk("_typeOf((bar.user @ {}).transaction.block)", "text[external[bar].block]")
-        chk("_typeOf((local_user @ {}).transaction)", "text[transaction]")
-        chk("_typeOf((local_user @ {}).transaction.block)", "text[block]")
+        chk("_type_of((foo.user @ {}).transaction)", "text[external[foo].transaction]")
+        chk("_type_of((foo.user @ {}).transaction.block)", "text[external[foo].block]")
+        chk("_type_of((bar.user @ {}).transaction)", "text[external[bar].transaction]")
+        chk("_type_of((bar.user @ {}).transaction.block)", "text[external[bar].block]")
+        chk("_type_of((local_user @ {}).transaction)", "text[transaction]")
+        chk("_type_of((local_user @ {}).transaction.block)", "text[block]")
 
         chkEx("{ val t: transaction = (foo.user @ {}).transaction; return 0; }",
                 "ct_err:stmt_var_type:t:transaction:external[foo].transaction")
