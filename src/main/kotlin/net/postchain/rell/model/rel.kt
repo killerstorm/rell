@@ -1,7 +1,6 @@
 package net.postchain.rell.model
 
-import net.postchain.rell.runtime.*
-import java.lang.IllegalStateException
+import net.postchain.rell.runtime.Rt_CallFrame
 
 class R_Key(val attribs: List<String>)
 
@@ -12,7 +11,7 @@ class R_ClassFlags(
         val canCreate: Boolean,
         val canUpdate: Boolean,
         val canDelete: Boolean,
-        val gtx: Boolean,
+        val gtv: Boolean,
         val log: Boolean
 )
 

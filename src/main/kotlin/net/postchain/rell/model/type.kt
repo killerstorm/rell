@@ -14,29 +14,29 @@ import org.spongycastle.util.Arrays
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 
-class R_GtxCompatibility(val compatible: Boolean, val err: String? = null)
+class R_GtvCompatibility(val compatible: Boolean, val err: String? = null)
 
-class R_TypeFlags(val mutable: Boolean, val gtxHuman: R_GtxCompatibility, val gtxCompact: R_GtxCompatibility) {
+class R_TypeFlags(val mutable: Boolean, val gtvHuman: R_GtvCompatibility, val gtvCompact: R_GtvCompatibility) {
     companion object {
         fun combine(flags: Collection<R_TypeFlags>): R_TypeFlags {
             var mutable = false
-            var gtxHuman = true
-            var gtxHumanErr: String? = null
-            var gtxCompact = true
-            var gtxCompactErr: String? = null
+            var gtvHuman = true
+            var gtvHumanErr: String? = null
+            var gtvCompact = true
+            var gtvCompactErr: String? = null
 
             for (f in flags) {
                 mutable = mutable or f.mutable
-                gtxHuman = gtxHuman and f.gtxHuman.compatible
-                gtxHumanErr = gtxHumanErr ?: f.gtxHuman.err
-                gtxCompact = gtxCompact and f.gtxCompact.compatible
-                gtxCompactErr = gtxCompactErr ?: f.gtxCompact.err
+                gtvHuman = gtvHuman and f.gtvHuman.compatible
+                gtvHumanErr = gtvHumanErr ?: f.gtvHuman.err
+                gtvCompact = gtvCompact and f.gtvCompact.compatible
+                gtvCompactErr = gtvCompactErr ?: f.gtvCompact.err
             }
 
             return R_TypeFlags(
                     mutable,
-                    R_GtxCompatibility(gtxHuman, gtxHumanErr),
-                    R_GtxCompatibility(gtxCompact, gtxCompactErr)
+                    R_GtvCompatibility(gtvHuman, gtvHumanErr),
+                    R_GtvCompatibility(gtvCompact, gtvCompactErr)
             )
         }
     }
@@ -70,7 +70,7 @@ private sealed class R_TypeSqlAdapter_Some: R_TypeSqlAdapter() {
 }
 
 sealed class R_Type(val name: String) {
-    private val gtxConversion by lazy { createGtxConversion() }
+    private val gtvConversion by lazy { createGtvConversion() }
     val sqlAdapter = createSqlAdapter()
 
     open fun isReference(): Boolean = false
@@ -78,8 +78,8 @@ sealed class R_Type(val name: String) {
     protected open fun isDirectMutable(): Boolean = false
 
     fun directFlags(): R_TypeFlags {
-        val gtxConv = gtxConversion
-        return R_TypeFlags(isDirectMutable(), gtxConv.directHuman(), gtxConv.directCompact())
+        val gtvConv = gtvConversion
+        return R_TypeFlags(isDirectMutable(), gtvConv.directHuman(), gtvConv.directCompact())
     }
 
     open fun completeFlags(): R_TypeFlags {
@@ -94,9 +94,9 @@ sealed class R_Type(val name: String) {
 
     open fun fromCli(s: String): Rt_Value = throw UnsupportedOperationException()
 
-    fun rtToGtx(rt: Rt_Value, human: Boolean): Gtv = gtxConversion.rtToGtx(rt, human)
-    fun gtxToRt(ctx: GtxToRtContext, gtx: Gtv, human: Boolean) = gtxConversion.gtxToRt(ctx, gtx, human)
-    protected abstract fun createGtxConversion(): GtxRtConversion
+    fun rtToGtv(rt: Rt_Value, human: Boolean): Gtv = gtvConversion.rtToGtv(rt, human)
+    fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv) = gtvConversion.gtvToRt(ctx, gtv)
+    protected abstract fun createGtvConversion(): GtvRtConversion
 
     abstract fun toStrictString(): String
     final override fun toString(): String = toStrictString()
@@ -125,7 +125,7 @@ sealed class R_PrimitiveType(name: String, val sqlType: DataType<*>): R_Type(nam
 }
 
 object R_UnitType: R_PrimitiveType("unit", SQLDataType.OTHER) {
-    override fun createGtxConversion() = GtxRtConversion_None
+    override fun createGtvConversion() = GtvRtConversion_None
 }
 
 object R_BooleanType: R_PrimitiveType("boolean", SQLDataType.BOOLEAN) {
@@ -137,7 +137,7 @@ object R_BooleanType: R_PrimitiveType("boolean", SQLDataType.BOOLEAN) {
         else throw IllegalArgumentException(s)
     }
 
-    override fun createGtxConversion() = GtxRtConversion_Boolean
+    override fun createGtvConversion() = GtvRtConversion_Boolean
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Boolean
 }
 
@@ -156,7 +156,7 @@ private object R_TypeSqlAdapter_Boolean: R_TypeSqlAdapter_Primitive("boolean") {
 object R_TextType: R_PrimitiveType("text", PostgresDataType.TEXT) {
     override fun comparator() = Rt_Comparator.create { it.asString() }
     override fun fromCli(s: String): Rt_Value = Rt_TextValue(s)
-    override fun createGtxConversion() = GtxRtConversion_Text
+    override fun createGtvConversion() = GtvRtConversion_Text
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Text
 }
 
@@ -172,7 +172,7 @@ object R_IntegerType: R_PrimitiveType("integer", SQLDataType.BIGINT) {
     override fun comparator() = Rt_Comparator.create { it.asInteger() }
     override fun fromCli(s: String): Rt_Value = Rt_IntValue(s.toLong())
 
-    override fun createGtxConversion() = GtxRtConversion_Integer
+    override fun createGtvConversion() = GtvRtConversion_Integer
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Integer
 }
 
@@ -188,7 +188,7 @@ object R_ByteArrayType: R_PrimitiveType("byte_array", PostgresDataType.BYTEA) {
     override fun comparator() = Rt_Comparator({ it.asByteArray() }, Comparator { x, y -> Arrays.compareUnsigned(x, y) })
     override fun fromCli(s: String): Rt_Value = Rt_ByteArrayValue(s.hexStringToByteArray())
 
-    override fun createGtxConversion() = GtxRtConversion_ByteArray
+    override fun createGtvConversion() = GtvRtConversion_ByteArray
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_ByteArray
 }
 
@@ -198,30 +198,30 @@ private object R_TypeSqlAdapter_ByteArray: R_TypeSqlAdapter_Primitive("byte_arra
 }
 
 object R_TimestampType: R_PrimitiveType("timestamp", SQLDataType.BIGINT) {
-    //TODO support GTX
-    override fun createGtxConversion() = GtxRtConversion_None
+    //TODO support Gtv
+    override fun createGtvConversion() = GtvRtConversion_None
 }
 
 object R_GUIDType: R_PrimitiveType("guid", PostgresDataType.BYTEA) {
-    //TODO support GTX
-    override fun createGtxConversion() = GtxRtConversion_None
+    //TODO support Gtv
+    override fun createGtvConversion() = GtvRtConversion_None
 }
 
 private val GTX_SIGNER_SQL_DATA_TYPE = DefaultDataType(null as SQLDialect?, ByteArray::class.java, "gtx_signer")
 
 object R_SignerType: R_PrimitiveType("signer", GTX_SIGNER_SQL_DATA_TYPE) {
-    //TODO support GTX
-    override fun createGtxConversion() = GtxRtConversion_None
+    //TODO support Gtv
+    override fun createGtvConversion() = GtvRtConversion_None
 }
 
 private val JSON_SQL_DATA_TYPE = DefaultDataType(null as SQLDialect?, String::class.java, "jsonb")
 
-object R_JSONType: R_PrimitiveType("json", JSON_SQL_DATA_TYPE) {
+object R_JsonType: R_PrimitiveType("json", JSON_SQL_DATA_TYPE) {
     override fun comparator() = Rt_Comparator.create { it.asJsonString() }
     override fun fromCli(s: String): Rt_Value = Rt_JsonValue.parse(s)
 
-    //TODO consider converting between Rt_JsonValue and arbitrary GTXValue, not only String
-    override fun createGtxConversion() = GtxRtConversion_Json
+    //TODO consider converting between Rt_JsonValue and arbitrary Gtv, not only String
+    override fun createGtvConversion() = GtvRtConversion_Json
 
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Json
 }
@@ -245,7 +245,7 @@ object R_NullType: R_Type("null") {
     override fun comparator() = Rt_Comparator.create { 0 }
     override fun toStrictString() = "null"
     override fun calcCommonType(other: R_Type): R_Type? = R_NullableType(other)
-    override fun createGtxConversion() = GtxRtConversion_Null
+    override fun createGtvConversion() = GtvRtConversion_Null
 }
 
 class R_ClassType(val rClass: R_Class): R_Type(rClass.name) {
@@ -255,7 +255,7 @@ class R_ClassType(val rClass: R_Class): R_Type(rClass.name) {
     override fun equals(other: Any?): Boolean = other is R_ClassType && other.rClass == rClass
     override fun hashCode(): Int = rClass.hashCode()
 
-    override fun createGtxConversion() = GtxRtConversion_Class(this)
+    override fun createGtvConversion() = GtvRtConversion_Class(this)
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Class(this)
 }
 
@@ -275,7 +275,7 @@ class R_ObjectType(val rObject: R_Object): R_Type(rObject.rClass.name) {
     override fun toStrictString(): String = name
     override fun equals(other: Any?): Boolean = other is R_ObjectType && other.rObject == rObject
     override fun hashCode(): Int = rObject.hashCode()
-    override fun createGtxConversion() = GtxRtConversion_None
+    override fun createGtvConversion() = GtvRtConversion_None
 }
 
 class R_RecordFlags(val typeFlags: R_TypeFlags, val cyclic: Boolean, val infinite: Boolean)
@@ -306,7 +306,7 @@ class R_RecordType(name: String): R_Type(name) {
     override fun toStrictString(): String = name
     override fun componentTypes() = attributesList.map { it.type }.toList()
 
-    override fun createGtxConversion() = GtxRtConversion_Record(this)
+    override fun createGtvConversion() = GtvRtConversion_Record(this)
 
     private class RRecordBody(val attrMap: Map<String, R_Attrib>, val attrList: List<R_Attrib>, val attrMutable: Boolean)
 }
@@ -321,7 +321,7 @@ class R_EnumType(name: String, val attrs: List<R_EnumAttr>): R_Type(name) {
     override fun fromCli(s: String): Rt_Value = Rt_EnumValue(this, attrMap.getValue(s))
     override fun toStrictString(): String = name
 
-    override fun createGtxConversion() = GtxRtConversion_Enum(this)
+    override fun createGtvConversion() = GtvRtConversion_Enum(this)
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Enum(this)
 
     fun attr(name: String): R_EnumAttr? {
@@ -373,13 +373,13 @@ class R_NullableType(val valueType: R_Type): R_Type(valueType.name + "?") {
                 || valueType.isAssignableFrom(type)
     }
 
-    override fun createGtxConversion() = GtxRtConversion_Nullable(this)
+    override fun createGtvConversion() = GtvRtConversion_Nullable(this)
 }
 
 // TODO: make this more elaborate
 class R_ClosureType(name: String): R_Type(name) {
     override fun toStrictString() = TODO("TODO")
-    override fun createGtxConversion() = GtxRtConversion_None
+    override fun createGtvConversion() = GtvRtConversion_None
 }
 
 sealed class R_CollectionType(val elementType: R_Type, baseName: String): R_Type("$baseName<${elementType.toStrictString()}>") {
@@ -392,7 +392,7 @@ sealed class R_CollectionType(val elementType: R_Type, baseName: String): R_Type
 class R_ListType(elementType: R_Type): R_CollectionType(elementType, "list") {
     override fun fromCli(s: String): Rt_Value = Rt_ListValue(this, s.split(",").map { elementType.fromCli(it) }.toMutableList())
     override fun equals(other: Any?): Boolean = other is R_ListType && elementType == other.elementType
-    override fun createGtxConversion() = GtxRtConversion_List(this)
+    override fun createGtvConversion() = GtvRtConversion_List(this)
 
     override fun comparator(): Comparator<Rt_Value>? {
         val elemComparator = elementType.comparator()
@@ -403,7 +403,7 @@ class R_ListType(elementType: R_Type): R_CollectionType(elementType, "list") {
 class R_SetType(elementType: R_Type): R_CollectionType(elementType, "set") {
     override fun fromCli(s: String): Rt_Value = Rt_SetValue(this, s.split(",").map { elementType.fromCli(it) }.toMutableSet())
     override fun equals(other: Any?): Boolean = other is R_SetType && elementType == other.elementType
-    override fun createGtxConversion() = GtxRtConversion_Set(this)
+    override fun createGtvConversion() = GtvRtConversion_Set(this)
 }
 
 class R_MapType(val keyType: R_Type, val valueType: R_Type): R_Type("map<${keyType.toStrictString()},${valueType.toStrictString()}>") {
@@ -422,7 +422,7 @@ class R_MapType(val keyType: R_Type, val valueType: R_Type): R_Type("map<${keyTy
         return Rt_MapValue(this, map.toMutableMap())
     }
 
-    override fun createGtxConversion() = GtxRtConversion_Map(this)
+    override fun createGtvConversion() = GtvRtConversion_Map(this)
 }
 
 class R_TupleField(val name: String?, val type: R_Type) {
@@ -472,7 +472,7 @@ class R_TupleType(val fields: List<R_TupleField>): R_Type("(${fields.joinToStrin
         return R_TupleType(resFields)
     }
 
-    override fun createGtxConversion() = GtxRtConversion_Tuple(this)
+    override fun createGtvConversion() = GtvRtConversion_Tuple(this)
 
     override fun comparator(): Comparator<Rt_Value>? {
         val fieldComparators = mutableListOf<Comparator<Rt_Value>>()
@@ -489,11 +489,11 @@ object R_RangeType: R_Type("range") {
     override fun isReference() = true
     override fun comparator() = Rt_Comparator.create { it.asRange() }
     override fun toStrictString(): String = "range"
-    override fun createGtxConversion() = GtxRtConversion_None
+    override fun createGtvConversion() = GtvRtConversion_None
 }
 
-object R_GtxValueType: R_Type("GTXValue") {
+object R_GtvType: R_Type("gtv") {
     override fun isReference() = true
     override fun toStrictString() = name
-    override fun createGtxConversion() = GtxRtConversion_GtxValue
+    override fun createGtvConversion() = GtvRtConversion_Gtv
 }

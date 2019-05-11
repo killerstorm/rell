@@ -301,19 +301,21 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         ( pos, entries ) -> S_MapLiteralExpr(pos.pos, entries)
     }
 
-    private val listExprType by ( -LT * type * -GT )
+    private val listExprType by -LT * type * -GT
 
-    private val listExpr by ( LIST * optional(listExprType) * -LPAR * separatedTerms(expressionRef, COMMA, true) * -RPAR  ) map {
+    private val exprArgs by -LPAR * separatedTerms(expressionRef, COMMA, true) * -RPAR
+
+    private val listExpr by ( LIST * optional(listExprType) * optional(exprArgs) ) map {
         (kw, type, args) -> S_ListExpr(kw.pos, type, args)
     }
 
-    private val setExpr by ( SET * optional(listExprType) * -LPAR * separatedTerms(expressionRef, COMMA, true) * -RPAR  ) map {
+    private val setExpr by ( SET * optional(listExprType) * optional(exprArgs) ) map {
         (kw, type, args) -> S_SetExpr(kw.pos, type, args)
     }
 
     private val mapExprType by ( -LT * type * -COMMA * type * -GT )
 
-    private val mapExpr by ( MAP * optional(mapExprType) * -LPAR * separatedTerms(expressionRef, COMMA, true) * -RPAR ) map {
+    private val mapExpr by ( MAP * optional(mapExprType) * optional(exprArgs) ) map {
         ( kw, types, args ) ->
         val keyValueTypes = if (types == null) null else Pair(types.t1, types.t2)
         S_MapExpr(kw.pos, keyValueTypes, args)

@@ -5,8 +5,8 @@ import net.postchain.core.EContext
 import net.postchain.core.Transactor
 import net.postchain.core.TxEContext
 import net.postchain.core.UserMistake
-import net.postchain.gtv.GtvDictionary
 import net.postchain.gtv.Gtv
+import net.postchain.gtv.GtvDictionary
 import net.postchain.gtx.*
 import net.postchain.rell.CommonUtils
 import net.postchain.rell.model.R_ExternalParam
@@ -38,15 +38,15 @@ private object LogRtPrinter : Rt_Printer() {
     }
 }
 
-private fun convertArgs(ctx: GtxToRtContext, params: List<R_ExternalParam>, args: List<Gtv>, human: Boolean): List<Rt_Value> {
+private fun convertArgs(ctx: GtvToRtContext, params: List<R_ExternalParam>, args: List<Gtv>): List<Rt_Value> {
     return args.mapIndexed { index, arg ->
         val type = params[index].type
-        type.gtxToRt(ctx, arg, human)
+        type.gtvToRt(ctx, arg)
     }
 }
 
 class RellGTXOperation(val module: RellPostchainModule, val rOperation: R_Operation, opData: ExtOpData) : GTXOperation(opData) {
-    private lateinit var gtxToRtCtx: GtxToRtContext
+    private lateinit var gtvToRtCtx: GtvToRtContext
     private lateinit var args: List<Rt_Value>
 
     override fun isCorrect(): Boolean {
@@ -56,8 +56,8 @@ class RellGTXOperation(val module: RellPostchainModule, val rOperation: R_Operat
         }
 
         module.factory.catchRtErr {
-            gtxToRtCtx = GtxToRtContext()
-            args = convertArgs(gtxToRtCtx, rOperation.params, data.args.toList(), GTX_OPERATION_HUMAN)
+            gtvToRtCtx = GtvToRtContext(GTV_OPERATION_HUMAN)
+            args = convertArgs(gtvToRtCtx, rOperation.params, data.args.toList())
         }
 
         return true
@@ -68,7 +68,7 @@ class RellGTXOperation(val module: RellPostchainModule, val rOperation: R_Operat
         val modCtx = module.makeRtModuleContext(ctx, opCtx)
 
         module.factory.catchRtErr {
-            gtxToRtCtx.finish(modCtx)
+            gtvToRtCtx.finish(modCtx)
         }
 
         try {
@@ -137,14 +137,14 @@ class RellPostchainModule(
             throw UserMistake("Query failed: ${e.message}", e)
         }
 
-        val gtxResult = rQuery.type.rtToGtx(rtResult, GTX_QUERY_HUMAN)
-        return gtxResult
+        val gtvResult = rQuery.type.rtToGtv(rtResult, GTV_QUERY_HUMAN)
+        return gtvResult
     }
 
-    private fun translateQueryArgs(modCtx: Rt_ModuleContext, rQuery: R_Query, gtxArgs: Gtv): List<Rt_Value> {
-        gtxArgs is GtvDictionary
+    private fun translateQueryArgs(modCtx: Rt_ModuleContext, rQuery: R_Query, gtvArgs: Gtv): List<Rt_Value> {
+        gtvArgs is GtvDictionary
 
-        val argMap = gtxArgs.asDict().filterKeys { it != "type" }
+        val argMap = gtvArgs.asDict().filterKeys { it != "type" }
         val actArgNames = argMap.keys
         val expArgNames = rQuery.params.map { it.name }.toSet()
         if (actArgNames != expArgNames) {
@@ -152,10 +152,10 @@ class RellPostchainModule(
         }
 
         val rtArgs = factory.catchRtErr {
-            val gtxToRtCtx = GtxToRtContext()
+            val gtvToRtCtx = GtvToRtContext(GTV_QUERY_HUMAN)
             val args = rQuery.params.map { argMap.getValue(it.name) }
-            val res = convertArgs(gtxToRtCtx, rQuery.params, args, GTX_QUERY_HUMAN)
-            gtxToRtCtx.finish(modCtx)
+            val res = convertArgs(gtvToRtCtx, rQuery.params, args)
+            gtvToRtCtx.finish(modCtx)
             res
         }
 
@@ -215,7 +215,7 @@ class RellPostchainModuleFactory(
         val chainCtx = createChainContext(data, rellNode, module)
 
         val chainDeps = catchRtErr {
-            getGtxChainDependencies(data)
+            getGtvChainDependencies(data)
         }
 
         val sqlLogging = (rellNode["sqlLog"]?.asInteger() ?: 0L) != 0L
@@ -250,26 +250,26 @@ class RellPostchainModuleFactory(
 
     private fun createChainContext(rawConfig: Gtv, rellNode: Map<String, Gtv>, rModule: R_Module): Rt_ChainContext {
         val argsRec = rModule.moduleArgsRecord
-        val gtxArgs = rellNode["moduleArgs"]
+        val gtvArgs = rellNode["moduleArgs"]
 
-        val args = if (argsRec == null || gtxArgs == null) Rt_NullValue else {
-            val convCtx = GtxToRtContext()
+        val args = if (argsRec == null || gtvArgs == null) Rt_NullValue else {
+            val convCtx = GtvToRtContext(true)
             catchRtErr {
-                argsRec.gtxToRt(convCtx, gtxArgs, true)
+                argsRec.gtvToRt(convCtx, gtvArgs)
             }
         }
 
         return Rt_ChainContext(rawConfig, args)
     }
 
-    private fun getGtxChainDependencies(data: Gtv): Map<String, ByteArray> {
-        val gtxDeps = data["dependencies"]
-        if (gtxDeps == null) return mapOf()
+    private fun getGtvChainDependencies(data: Gtv): Map<String, ByteArray> {
+        val gtvDeps = data["dependencies"]
+        if (gtvDeps == null) return mapOf()
 
         val deps = mutableMapOf<String, ByteArray>()
 
-        for ((name, ridGtx) in gtxDeps.asDict()) {
-            val rid = ridGtx.asByteArray(true)
+        for ((name, ridGtv) in gtvDeps.asDict()) {
+            val rid = ridGtv.asByteArray(true)
             check(name !in deps)
             deps[name] = rid
         }

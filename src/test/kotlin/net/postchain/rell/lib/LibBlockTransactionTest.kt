@@ -254,14 +254,14 @@ class LibBlockTransactionTest: BaseRellTest() {
         t.chkQuery("foo @* {} (=.value)", "[]")
     }
 
-    @Test fun textGtx() {
+    @Test fun textGtv() {
         tst.defs = listOf("record r { t: transaction; }")
         tst.chainId = 333
         tst.inserts = BLOCK_INSERTS
         chk("transaction @ {}", "transaction[444]")
         chk("r(transaction @ {})", "r[t=transaction[444]]")
-        chkEx("{ val r = r(transaction @ {}); return r.toPrettyGTXValue(); }", "ct_err:fn_record_invalid:r:r.toPrettyGTXValue")
-        chk("""r.fromPrettyGTXValue(GTXValue.fromJSON('{"t":444}'))""", "ct_err:fn_record_invalid:r:fromPrettyGTXValue")
+        chkEx("{ val r = r(transaction @ {}); return r.to_gtv_pretty(); }", "ct_err:fn:invalid:r:r.to_gtv_pretty")
+        chk("""r.from_gtv_pretty(gtv.from_json('{"t":444}'))""", "ct_err:fn:invalid:r:from_gtv_pretty")
     }
 
     private fun createChainIdTester(chainId: Long, blockIid: Long, txIid: Long): RellCodeTester {

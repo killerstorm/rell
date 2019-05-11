@@ -2,12 +2,12 @@ package net.postchain.rell.test
 
 import net.postchain.rell.runtime.*
 
-abstract class BaseRellTest(useSql: Boolean = true, gtx: Boolean = false): BaseResourcefulTest() {
+abstract class BaseRellTest(useSql: Boolean = true, gtv: Boolean = false): BaseResourcefulTest() {
     open fun classDefs(): List<String> = listOf()
     open fun objInserts(): List<String> = listOf()
 
     val tstCtx = resource(RellTestContext(useSql))
-    val tst = RellCodeTester(tstCtx, classDefs(), objInserts(), gtx = gtx)
+    val tst = RellCodeTester(tstCtx, classDefs(), objInserts(), gtv = gtv)
 
     fun chk(code: String, expected: String) = chkEx("= $code ;", expected)
     fun chk(code: String, arg: Long, expected: String) = chkEx("= $code ;", arg, expected)

@@ -19,21 +19,21 @@ sealed class Rt_Value {
     abstract fun type(): R_Type
     abstract fun valueType(): String
 
-    open fun asBoolean(): Boolean = throw errType("Boolean")
-    open fun asInteger(): Long = throw errType("Integer")
-    open fun asString(): String = throw errType("String")
-    open fun asByteArray(): ByteArray = throw errType("ByteArray")
-    open fun asJsonString(): String = throw errType("Json")
-    open fun asCollection(): MutableCollection<Rt_Value> = throw errType("Collection")
-    open fun asList(): MutableList<Rt_Value> = throw errType("List")
-    open fun asSet(): MutableSet<Rt_Value> = throw errType("Set")
-    open fun asMap(): MutableMap<Rt_Value, Rt_Value> = throw errType("Map")
-    open fun asTuple(): List<Rt_Value> = throw errType("Tuple")
-    open fun asRecord(): Rt_RecordValue = throw errType("Record")
-    open fun asEnum(): R_EnumAttr = throw errType("Enum")
-    open fun asRange(): Rt_RangeValue = throw errType("Range")
-    open fun asObjectId(): Long = throw errType("Class")
-    open fun asGtxValue(): Gtv = throw errType("GTXValue")
+    open fun asBoolean(): Boolean = throw errType("boolean")
+    open fun asInteger(): Long = throw errType("integer")
+    open fun asString(): String = throw errType("text")
+    open fun asByteArray(): ByteArray = throw errType("byte_array")
+    open fun asJsonString(): String = throw errType("json")
+    open fun asCollection(): MutableCollection<Rt_Value> = throw errType("collection")
+    open fun asList(): MutableList<Rt_Value> = throw errType("list")
+    open fun asSet(): MutableSet<Rt_Value> = throw errType("set")
+    open fun asMap(): MutableMap<Rt_Value, Rt_Value> = throw errType("map")
+    open fun asTuple(): List<Rt_Value> = throw errType("tuple")
+    open fun asRecord(): Rt_RecordValue = throw errType("record")
+    open fun asEnum(): R_EnumAttr = throw errType("enum")
+    open fun asRange(): Rt_RangeValue = throw errType("range")
+    open fun asObjectId(): Long = throw errType("class")
+    open fun asGtv(): Gtv = throw errType("gtv")
     open fun asFormatArg(): Any = toString()
 
     abstract fun toStrictString(showTupleFieldNames: Boolean = true): String
@@ -283,7 +283,7 @@ class Rt_ObjectValue(private val type: R_ObjectType): Rt_Value() {
 }
 
 class Rt_JsonValue private constructor(private val str: String): Rt_Value() {
-    override fun type() = R_JSONType
+    override fun type() = R_JsonType
     override fun valueType() = "Json"
     override fun asJsonString(): String = str
     override fun asFormatArg(): Any = str
@@ -366,33 +366,33 @@ class Rt_RangeValue(val start: Long, val end: Long, val step: Long): Rt_Value(),
     }
 }
 
-class Rt_GtxValue(val value: Gtv): Rt_Value() {
-    override fun type() = R_GtxValueType
-    override fun valueType() = "GTXValue"
-    override fun asGtxValue() = value
+class Rt_GtvValue(val value: Gtv): Rt_Value() {
+    override fun type() = R_GtvType
+    override fun valueType() = "gtv"
+    override fun asGtv() = value
 
-    override fun toStrictString(showTupleFieldNames: Boolean): String = "gtx[$this]"
+    override fun toStrictString(showTupleFieldNames: Boolean): String = "gtv[$this]"
 
     override fun toString(): String {
         try {
-            return gtxValueToJsonString(value)
+            return gtvToJsonString(value)
         } catch (e: Exception) {
             return value.toString() // Fallback, just in case (did not happen).
         }
     }
 
-    override fun equals(other: Any?): Boolean = other is Rt_GtxValue && value == other.value
+    override fun equals(other: Any?): Boolean = other is Rt_GtvValue && value == other.value
     override fun hashCode(): Int = value.hashCode()
 
     companion object {
         private val GSON = make_gtv_gson()
 
-        fun gtxValueToJsonString(v: Gtv): String {
+        fun gtvToJsonString(v: Gtv): String {
             val s = GSON.toJson(v, Gtv::class.java)
             return s
         }
 
-        fun jsonStringToGtxValue(s: String): Gtv {
+        fun jsonStringToGtv(s: String): Gtv {
             val v = GSON.fromJson<Gtv>(s, Gtv::class.java)
             return v ?: GtvNull
         }

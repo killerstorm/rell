@@ -190,16 +190,16 @@ class LibTest: BaseRellTest(false) {
         chk("x'1234abcd'.to_list()", "list<integer>[int[18],int[52],int[171],int[205]]")
     }
 
-    @Test fun testGtxValue() {
-        chk("""GTXValue.from_json('{"x":123,"y":[4,5,6]}')""", """gtx[{"x":123,"y":[4,5,6]}]""")
-        chk("""GTXValue.from_json(json('{"x":123,"y":[4,5,6]}'))""", """gtx[{"x":123,"y":[4,5,6]}]""")
-        chk("GTXValue.from_bytes(x'a424302230080c0178a30302017b30160c0179a511300fa303020104a303020105a303020106')",
-                """gtx[{"x":123,"y":[4,5,6]}]""")
-        chk("GTXValue.from_bytes(x'a424302230080c0178a30302017b30160c0179a511300fa303020104a303020105a303020106').to_json()",
+    @Test fun testGtv() {
+        chk("""gtv.from_json('{"x":123,"y":[4,5,6]}')""", """gtv[{"x":123,"y":[4,5,6]}]""")
+        chk("""gtv.from_json(json('{"x":123,"y":[4,5,6]}'))""", """gtv[{"x":123,"y":[4,5,6]}]""")
+        chk("gtv.from_bytes(x'a424302230080c0178a30302017b30160c0179a511300fa303020104a303020105a303020106')",
+                """gtv[{"x":123,"y":[4,5,6]}]""")
+        chk("gtv.from_bytes(x'a424302230080c0178a30302017b30160c0179a511300fa303020104a303020105a303020106').to_json()",
                 """json[{"x":123,"y":[4,5,6]}]""")
-        chk("''+GTXValue.from_bytes(x'a424302230080c0178a30302017b30160c0179a511300fa303020104a303020105a303020106').to_json()",
+        chk("''+gtv.from_bytes(x'a424302230080c0178a30302017b30160c0179a511300fa303020104a303020105a303020106').to_json()",
                 """text[{"x":123,"y":[4,5,6]}]""")
-        chk("""GTXValue.from_json('{"x":123,"y":[4,5,6]}').to_bytes()""",
+        chk("""gtv.from_json('{"x":123,"y":[4,5,6]}').to_bytes()""",
                 "byte_array[a424302230080c0178a30302017b30160c0179a511300fa303020104a303020105a303020106]")
     }
 
@@ -210,28 +210,35 @@ class LibTest: BaseRellTest(false) {
                 "record qaz { m: map<integer,text>; }"
         )
 
-        chk("foo(123,'Hello').to_gtx_value()", """gtx[[123,"Hello"]]""")
-        chk("foo(123,'Hello').to_pretty_gtx_value()", """gtx[{"a":123,"b":"Hello"}]""")
+        chk("foo(123,'Hello').to_gtv()", """gtv[[123,"Hello"]]""")
+        chk("foo(123,'Hello').to_gtv_pretty()", """gtv[{"a":123,"b":"Hello"}]""")
         chk("foo(123,'Hello').to_bytes()", "byte_array[a510300ea30302017ba2070c0548656c6c6f]")
-        chk("foo.from_gtx_value(GTXValue.from_bytes(x'a510300ea30302017ba2070c0548656c6c6f'))", "foo[a=int[123],b=text[Hello]]")
-        chk("foo.from_pretty_gtx_value(GTXValue.from_bytes(x'a41a301830080c0161a30302017b300c0c0162a2070c0548656c6c6f'))",
+        chk("foo.from_gtv(gtv.from_bytes(x'a510300ea30302017ba2070c0548656c6c6f'))", "foo[a=int[123],b=text[Hello]]")
+        chk("foo.from_gtv_pretty(gtv.from_bytes(x'a41a301830080c0161a30302017b300c0c0162a2070c0548656c6c6f'))",
                 "foo[a=int[123],b=text[Hello]]")
         chk("foo.from_bytes(x'a510300ea30302017ba2070c0548656c6c6f')", "foo[a=int[123],b=text[Hello]]")
 
-        chk("bar((x=123,'Hello')).to_gtx_value()", """gtx[[[123,"Hello"]]]""")
-        chk("bar((x=123,'Hello')).to_pretty_gtx_value()", "ct_err:fn_record_invalid:bar:bar.to_pretty_gtx_value")
+        chk("bar((x=123,'Hello')).to_gtv()", """gtv[[[123,"Hello"]]]""")
+        chk("bar((x=123,'Hello')).to_gtv_pretty()", """gtv[{"a":[123,"Hello"]}]""")
         chk("bar((x=123,'Hello')).to_bytes()", "byte_array[a5143012a510300ea30302017ba2070c0548656c6c6f]")
-        chk("bar.from_gtx_value(GTXValue.from_bytes(x'a5143012a510300ea30302017ba2070c0548656c6c6f'))",
+        chk("bar.from_gtv(gtv.from_bytes(x'a5143012a510300ea30302017ba2070c0548656c6c6f'))",
                 "bar[a=(x=int[123],text[Hello])]")
-        chk("bar.from_pretty_gtx_value(GTXValue.from_bytes(x''))", "ct_err:fn_record_invalid:bar:from_pretty_gtx_value")
+        chk("bar((x=123,'Hello')).to_gtv_pretty().to_bytes()", "byte_array[a419301730150c0161a510300ea30302017ba2070c0548656c6c6f]")
+        chk("bar.from_gtv_pretty(gtv.from_bytes(x'a419301730150c0161a510300ea30302017ba2070c0548656c6c6f'))",
+                "bar[a=(x=int[123],text[Hello])]")
         chk("bar.from_bytes(x'a5143012a510300ea30302017ba2070c0548656c6c6f')", "bar[a=(x=int[123],text[Hello])]")
 
-        chk("qaz([123:'Hello']).to_gtx_value()", "ct_err:fn_record_invalid:qaz:qaz.to_gtx_value")
-        chk("qaz([123:'Hello']).to_pretty_gtx_value()", "ct_err:fn_record_invalid:qaz:qaz.to_pretty_gtx_value")
-        chk("qaz([123:'Hello']).to_bytes()", "ct_err:fn_record_invalid:qaz:qaz.to_bytes")
-        chk("qaz.from_gtx_value(GTXValue.from_bytes(x''))", "ct_err:fn_record_invalid:qaz:from_gtx_value")
-        chk("qaz.from_pretty_gtx_value(GTXValue.from_bytes(x''))", "ct_err:fn_record_invalid:qaz:from_pretty_gtx_value")
-        chk("qaz.from_bytes(x'')", "ct_err:fn_record_invalid:qaz:from_bytes")
+        chk("qaz([123:'Hello']).to_gtv()", """gtv[[[[123,"Hello"]]]]""")
+        chk("qaz([123:'Hello']).to_gtv_pretty()", """gtv[{"m":[[123,"Hello"]]}]""")
+        chk("qaz([123:'Hello']).to_bytes()", "byte_array[a5183016a5143012a510300ea30302017ba2070c0548656c6c6f]")
+        chk("qaz([123:'Hello']).to_gtv_pretty().to_bytes()",
+                "byte_array[a41d301b30190c016da5143012a510300ea30302017ba2070c0548656c6c6f]")
+        chk("qaz.from_gtv(gtv.from_bytes(x'a5183016a5143012a510300ea30302017ba2070c0548656c6c6f'))",
+                "qaz[m=map<integer,text>[int[123]=text[Hello]]]")
+        chk("qaz.from_gtv_pretty(gtv.from_bytes(x'a41d301b30190c016da5143012a510300ea30302017ba2070c0548656c6c6f'))",
+                "qaz[m=map<integer,text>[int[123]=text[Hello]]]")
+        chk("qaz.from_bytes(x'a5183016a5143012a510300ea30302017ba2070c0548656c6c6f')",
+                "qaz[m=map<integer,text>[int[123]=text[Hello]]]")
     }
 
     @Test fun testExists() {

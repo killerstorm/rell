@@ -409,7 +409,7 @@ class ExternalTest: BaseRellTest() {
         }
     }
 
-    @Test fun testGtxExternalClass() {
+    @Test fun testGtvExternalClass() {
         val blockInserts = RellTestContext.BlockBuilder()
                 .block(1001, 123, 1, "DEAD01", "1001", 1510000000000)
                 .block(1002, 123, 2, "DEAD02", "1002", 1520000000000)
@@ -442,16 +442,16 @@ class ExternalTest: BaseRellTest() {
         tst.defs = listOf("external 'foo' { class user(log) { name; } }", "record rec { u: user; }")
         tst.chainDependency("foo", "deadbeef", 3)
 
-        fun code(id: Long) = """rec.fromPrettyGTXValue(GTXValue.fromJSON('{"u":$id}'))"""
+        fun code(id: Long) = """rec.from_gtv_pretty(gtv.from_json('{"u":$id}'))"""
         chk(code(1), "rec[u=user[1]]")
         chk(code(2), "rec[u=user[2]]")
         chk(code(3), "rec[u=user[3]]")
-        chk(code(4), "gtx_err:obj_missing:user:4")
-        chk(code(5), "gtx_err:obj_missing:user:5")
-        chk(code(321), "gtx_err:obj_missing:user:321")
+        chk(code(4), "gtv_err:obj_missing:user:4")
+        chk(code(5), "gtv_err:obj_missing:user:5")
+        chk(code(321), "gtv_err:obj_missing:user:321")
     }
 
-    @Test fun testGtxExternalTransaction() {
+    @Test fun testGtvExternalTransaction() {
         tst.defs = listOf(
                 "namespace foo { external 'foo' { class block; class transaction; } }",
                 "record r_tx { t: transaction; }",
@@ -459,27 +459,27 @@ class ExternalTest: BaseRellTest() {
                 "record r_foo_tx { t: foo.transaction; }",
                 "record r_foo_block { b: foo.block; }"
         )
-        tst.gtx = true
+        tst.gtv = true
 
         fun chkType(type: String) {
             chkCompile("function nop(x: $type?): $type? = x; query q(): $type { var t: $type? = nop(null); return t!!; }",
-                    "ct_err:result_nogtx:q:$type")
-            chkCompile("query q(x: $type) = 0;", "ct_err:param_nogtx:x:$type")
-            chkCompile("operation o(x: $type) {}", "ct_err:param_nogtx:x:$type")
+                    "ct_err:result_nogtv:q:$type")
+            chkCompile("query q(x: $type) = 0;", "ct_err:param_nogtv:x:$type")
+            chkCompile("operation o(x: $type) {}", "ct_err:param_nogtv:x:$type")
         }
 
         fun chkRecType(type: String) {
             chkType(type)
 
-            val err1 = "ct_err:fn_record_invalid:$type:$type"
-            chkCompile("function f(x: $type) { x.toBytes(); }", "$err1.toBytes")
-            chkCompile("function f(x: $type) { x.toGTXValue(); }", "$err1.toGTXValue")
-            chkCompile("function f(x: $type) { x.toPrettyGTXValue(); }", "$err1.toPrettyGTXValue")
+            val err1 = "ct_err:fn:invalid:$type:$type"
+            chkCompile("function f(x: $type) { x.to_bytes(); }", "$err1.to_bytes")
+            chkCompile("function f(x: $type) { x.to_gtv(); }", "$err1.to_gtv")
+            chkCompile("function f(x: $type) { x.to_gtv_pretty(); }", "$err1.to_gtv_pretty")
 
-            val err2 = "ct_err:fn_record_invalid:$type"
-            chkCompile("function f() { $type.fromBytes(x''); }", "$err2:fromBytes")
-            chkCompile("function f() { $type.fromGTXValue(GTXValue.fromBytes(x'')); }", "$err2:fromGTXValue")
-            chkCompile("function f() { $type.fromPrettyGTXValue(GTXValue.fromBytes(x'')); }", "$err2:fromPrettyGTXValue")
+            val err2 = "ct_err:fn:invalid:$type"
+            chkCompile("function f() { $type.from_bytes(x''); }", "$err2:from_bytes")
+            chkCompile("function f() { $type.from_gtv(gtv.from_bytes(x'')); }", "$err2:from_gtv")
+            chkCompile("function f() { $type.from_gtv_pretty(gtv.from_bytes(x'')); }", "$err2:from_gtv_pretty")
         }
 
         chkType("transaction")

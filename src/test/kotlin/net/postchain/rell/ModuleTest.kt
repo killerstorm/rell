@@ -20,7 +20,7 @@ class ModuleTest: BaseRellTest() {
             record foo { p: integer; }
             record bar { x: foo; }
         """.trimIndent()
-        tst.chkOpGtxEx(code, listOf("""[123]"""), "OK")
+        tst.chkOpGtvEx(code, listOf("""[123]"""), "OK")
         chkStdout("bar[x=foo[p=int[123]]]")
     }
 
@@ -30,6 +30,6 @@ class ModuleTest: BaseRellTest() {
             record foo { p: integer; }
             record bar { x: foo; }
         """.trimIndent()
-        tst.chkQueryGtxEx(code, listOf("""{"p":123}"""), "bar[x=foo[p=int[123]]]")
+        tst.chkQueryGtvEx(code, listOf("""{"p":123}"""), "bar[x=foo[p=int[123]]]")
     }
 }

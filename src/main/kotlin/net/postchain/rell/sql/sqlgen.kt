@@ -108,7 +108,7 @@ private fun genClass(sqlCtx: Rt_SqlContext, rClass: R_Class): String {
 
     var ddl = q.constraints(*constraints.toTypedArray()).toString() + ";\n"
 
-    val jsonAttribSet = attrs.filter { it.type is R_JSONType }.map { it.name }.toSet()
+    val jsonAttribSet = attrs.filter { it.type is R_JsonType }.map { it.name }.toSet()
 
     for ((iidx, index) in rClass.indexes.withIndex()) {
         val indexName = "IDX_${tableName}_${iidx}"

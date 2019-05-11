@@ -422,7 +422,7 @@ object C_BinOp_Plus: C_BinOp_Common() {
             val rExpr = value.toRExpr()
             val rResExpr = R_SysCallExpr(R_TextType, R_SysFn_ToString, listOf(rExpr))
             return C_RValue(value.pos, rResExpr, value.varFacts().copyPostFacts())
-        } else if (type == R_BooleanType || type == R_IntegerType || type == R_JSONType || type is R_ClassType) {
+        } else if (type == R_BooleanType || type == R_IntegerType || type == R_JsonType || type is R_ClassType) {
             val dbExpr = value.toDbExpr()
             val dbResExpr = Db_CallExpr(R_TextType, Db_SysFn_ToString, listOf(dbExpr))
             return C_DbValue(value.pos, dbResExpr, value.varFacts().copyPostFacts())

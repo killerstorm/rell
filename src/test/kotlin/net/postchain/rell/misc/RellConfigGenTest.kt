@@ -4,7 +4,7 @@ import net.postchain.rell.PostchainUtils
 import net.postchain.rell.makeRellPostchainConfig
 import net.postchain.rell.parser.C_IncludeResolver
 import net.postchain.rell.parser.C_VirtualIncludeDir
-import net.postchain.rell.test.GtxTestUtils
+import net.postchain.rell.test.GtvTestUtils
 import org.junit.Test
 import kotlin.test.assertEquals
 
@@ -93,12 +93,12 @@ class RellConfigGenTest {
     }
 
     private fun xmlToJson(xml: String): String {
-        val gtx = PostchainUtils.xmlToGtv(xml)
-        return GtxTestUtils.gtxToStr(gtx)
+        val gtv = PostchainUtils.xmlToGtv(xml)
+        return GtvTestUtils.gtvToStr(gtv)
     }
 
     private fun jsonToXml(json: String): String {
-        val gtx = GtxTestUtils.strToGtx(json)
-        return PostchainUtils.gtvToXml(gtx)
+        val gtv = GtvTestUtils.strToGtv(json)
+        return PostchainUtils.gtvToXml(gtv)
     }
 }

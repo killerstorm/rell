@@ -3,7 +3,7 @@ package net.postchain.rell.model
 import net.postchain.core.Signature
 import net.postchain.rell.PostchainUtils
 import net.postchain.rell.hexStringToByteArray
-import net.postchain.rell.module.GtxToRtContext
+import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.runtime.*
 import java.util.*
 
@@ -375,7 +375,7 @@ class R_SysFn_OpContext_Transaction(private val type: R_ClassType): R_SysFunctio
 object R_SysFn_ChainContext_RawConfig: R_SysFunction() {
     override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
         check(args.size == 0)
-        return Rt_GtxValue(modCtx.globalCtx.chainCtx.rawConfig)
+        return Rt_GtvValue(modCtx.globalCtx.chainCtx.rawConfig)
     }
 }
 
@@ -399,65 +399,65 @@ object R_SysFn_Nop: R_SysFunction_1() {
     }
 }
 
-object R_SysFn_GtxValue_ToBytes: R_SysFunction_1() {
+object R_SysFn_Gtv_ToBytes: R_SysFunction_1() {
     override fun call(arg: Rt_Value): Rt_Value {
-        val gtx = arg.asGtxValue()
-        val bytes = PostchainUtils.gtvToBytes(gtx)
+        val gtv = arg.asGtv()
+        val bytes = PostchainUtils.gtvToBytes(gtv)
         return Rt_ByteArrayValue(bytes)
     }
 }
 
-object R_SysFn_GtxValue_ToJson: R_SysFunction_1() {
+object R_SysFn_Gtv_ToJson: R_SysFunction_1() {
     override fun call(arg: Rt_Value): Rt_Value {
-        val gtx = arg.asGtxValue()
-        val json = Rt_GtxValue.gtxValueToJsonString(gtx)
+        val gtv = arg.asGtv()
+        val json = Rt_GtvValue.gtvToJsonString(gtv)
         //TODO consider making a separate function toJSONStr() to avoid unnecessary conversion str -> json -> str.
         return Rt_JsonValue.parse(json)
     }
 }
 
-object R_SysFn_GtxValue_FromBytes: R_SysFunction_1() {
+object R_SysFn_Gtv_FromBytes: R_SysFunction_1() {
     override fun call(arg: Rt_Value): Rt_Value {
         val bytes = arg.asByteArray()
-        return Rt_Utils.wrapErr("fn:GTXValue.from_bytes") {
-            val gtx = PostchainUtils.bytesToGtv(bytes)
-            Rt_GtxValue(gtx)
+        return Rt_Utils.wrapErr("fn:gtv.from_bytes") {
+            val gtv = PostchainUtils.bytesToGtv(bytes)
+            Rt_GtvValue(gtv)
         }
     }
 }
 
-object R_SysFn_GtxValue_FromJson_Text: R_SysFunction_1() {
+object R_SysFn_Gtv_FromJson_Text: R_SysFunction_1() {
     override fun call(arg: Rt_Value): Rt_Value {
         val str = arg.asString()
-        return Rt_Utils.wrapErr("fn:GTXValue.from_json(text)") {
-            val gtx = Rt_GtxValue.jsonStringToGtxValue(str)
-            Rt_GtxValue(gtx)
+        return Rt_Utils.wrapErr("fn:gtv.from_json(text)") {
+            val gtv = Rt_GtvValue.jsonStringToGtv(str)
+            Rt_GtvValue(gtv)
         }
     }
 }
 
-object R_SysFn_GtxValue_FromJson_Json: R_SysFunction_1() {
+object R_SysFn_Gtv_FromJson_Json: R_SysFunction_1() {
     override fun call(arg: Rt_Value): Rt_Value {
         val str = arg.asJsonString()
-        return Rt_Utils.wrapErr("fn:GTXValue.from_json(json)") {
-            val gtx = Rt_GtxValue.jsonStringToGtxValue(str)
-            Rt_GtxValue(gtx)
+        return Rt_Utils.wrapErr("fn:gtv.from_json(json)") {
+            val gtv = Rt_GtvValue.jsonStringToGtv(str)
+            Rt_GtvValue(gtv)
         }
     }
 }
 
 class R_SysFn_Record_ToBytes(val type: R_RecordType): R_SysFunction_1() {
     override fun call(arg: Rt_Value): Rt_Value {
-        val gtx = type.rtToGtx(arg, false)
-        val bytes = PostchainUtils.gtvToBytes(gtx)
+        val gtv = type.rtToGtv(arg, false)
+        val bytes = PostchainUtils.gtvToBytes(gtv)
         return Rt_ByteArrayValue(bytes)
     }
 }
 
-class R_SysFn_Record_ToGtx(val type: R_RecordType, val human: Boolean): R_SysFunction_1() {
+class R_SysFn_Record_ToGtv(val type: R_RecordType, val human: Boolean): R_SysFunction_1() {
     override fun call(arg: Rt_Value): Rt_Value {
-        val gtx = type.rtToGtx(arg, human)
-        return Rt_GtxValue(gtx)
+        val gtv = type.rtToGtv(arg, human)
+        return Rt_GtvValue(gtv)
     }
 }
 
@@ -467,23 +467,23 @@ class R_SysFn_Record_FromBytes(val type: R_RecordType): R_SysFunction() {
         val arg = args[0]
         val bytes = arg.asByteArray()
         return Rt_Utils.wrapErr("fn:record:from_bytes") {
-            val gtx = PostchainUtils.bytesToGtv(bytes)
-            val convCtx = GtxToRtContext()
-            val res = type.gtxToRt(convCtx, gtx, false)
+            val gtv = PostchainUtils.bytesToGtv(bytes)
+            val convCtx = GtvToRtContext(false)
+            val res = type.gtvToRt(convCtx, gtv)
             convCtx.finish(modCtx)
             res
         }
     }
 }
 
-class R_SysFn_Record_FromGtx(val type: R_RecordType, val human: Boolean): R_SysFunction() {
+class R_SysFn_Record_FromGtv(val type: R_RecordType, val human: Boolean): R_SysFunction() {
     override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
         check(args.size == 1)
         val arg = args[0]
-        val gtx = arg.asGtxValue()
-        return Rt_Utils.wrapErr("fn:record:from_gtx") {
-            val convCtx = GtxToRtContext()
-            val res = type.gtxToRt(convCtx, gtx, human)
+        val gtv = arg.asGtv()
+        return Rt_Utils.wrapErr("fn:record:from_gtv:$human") {
+            val convCtx = GtvToRtContext(human)
+            val res = type.gtvToRt(convCtx, gtv)
             convCtx.finish(modCtx)
             res
         }
@@ -554,12 +554,39 @@ object R_SysFn_VerifySignature: R_SysFunction_3() {
 
 class R_SysFn_Any_Hash(val type: R_Type): R_SysFunction_1() {
     override fun call(arg: Rt_Value): Rt_Value {
-        val gtx = type.rtToGtx(arg, false)
         val hash = try {
-            PostchainUtils.merkleHash(gtx)
+            val gtv = type.rtToGtv(arg, false)
+            PostchainUtils.merkleHash(gtv)
         } catch (e: Exception) {
             throw Rt_Error("hash", e.message ?: "")
         }
         return Rt_ByteArrayValue(hash)
+    }
+}
+
+class R_SysFn_Any_ToGtv(val type: R_Type, val human: Boolean, val name: String): R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value {
+        val gtv = try {
+            type.rtToGtv(arg, human)
+        } catch (e: Exception) {
+            throw Rt_Error(name, e.message ?: "")
+        }
+        return Rt_GtvValue(gtv)
+    }
+}
+
+class R_SysFn_Any_FromGtv(val type: R_Type, val human: Boolean, val name: String): R_SysFunction() {
+    override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
+        check(args.size == 1)
+        val gtv = args[0].asGtv()
+        val res = try {
+            val gtvCtx = GtvToRtContext(human)
+            val rt = type.gtvToRt(gtvCtx, gtv)
+            gtvCtx.finish(modCtx)
+            rt
+        } catch (e: Exception) {
+            throw Rt_Error(name, e.message ?: "")
+        }
+        return res
     }
 }

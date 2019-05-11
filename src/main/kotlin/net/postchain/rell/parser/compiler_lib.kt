@@ -11,7 +11,7 @@ object C_LibFunctions {
             .add("min", R_IntegerType, listOf(R_IntegerType, R_IntegerType), R_SysFn_Min, Db_SysFn_Min)
             .add("max", R_IntegerType, listOf(R_IntegerType, R_IntegerType), R_SysFn_Max, Db_SysFn_Max)
             .add("is_signer", R_BooleanType, listOf(R_ByteArrayType), R_SysFn_IsSigner)
-            .add("json", R_JSONType, listOf(R_TextType), R_SysFn_Json, Db_SysFn_Json)
+            .add("json", R_JsonType, listOf(R_TextType), R_SysFn_Json, Db_SysFn_Json)
 
             .add("require", C_SysFunction_Require_Boolean)
             .add("require", C_SysFunction_Require_Nullable)
@@ -53,7 +53,12 @@ object C_LibFunctions {
             .add("signum", R_IntegerType, listOf(), R_SysFn_Int_Signum)
             .build()
 
-    private val INTEGER_NAMESPACE_FNS = C_GlobalFuncBuilder()
+    private val BOOLEAN_NAMESPACE_FNS = typeGlobalFuncBuilder(R_BooleanType)
+            .build()
+
+    private val BOOLEAN_NAMESPACE = makeNamespace(BOOLEAN_NAMESPACE_FNS)
+
+    private val INTEGER_NAMESPACE_FNS = typeGlobalFuncBuilder(R_IntegerType)
             .add("parseHex", R_IntegerType, listOf(R_TextType), R_SysFn_Int_ParseHex)
             .add("parse_hex", R_IntegerType, listOf(R_TextType), R_SysFn_Int_ParseHex)
             .build()
@@ -64,20 +69,20 @@ object C_LibFunctions {
             stdConstValue("MAX_VALUE", Long.MAX_VALUE)
     )
 
-    private val GTXVALUE_NAMESPACE_FNS = C_GlobalFuncBuilder()
-            .add("fromBytes", R_GtxValueType, listOf(R_ByteArrayType), R_SysFn_GtxValue_FromBytes)
-            .add("from_bytes", R_GtxValueType, listOf(R_ByteArrayType), R_SysFn_GtxValue_FromBytes)
-            .add("fromJSON", R_GtxValueType, listOf(R_TextType), R_SysFn_GtxValue_FromJson_Text)
-            .add("from_json", R_GtxValueType, listOf(R_TextType), R_SysFn_GtxValue_FromJson_Text)
-            .add("fromJSON", R_GtxValueType, listOf(R_JSONType), R_SysFn_GtxValue_FromJson_Json)
-            .add("from_json", R_GtxValueType, listOf(R_JSONType), R_SysFn_GtxValue_FromJson_Json)
+    private val GTV_NAMESPACE_FNS = C_GlobalFuncBuilder()
+            .add("fromBytes", R_GtvType, listOf(R_ByteArrayType), R_SysFn_Gtv_FromBytes)
+            .add("from_bytes", R_GtvType, listOf(R_ByteArrayType), R_SysFn_Gtv_FromBytes)
+            .add("fromJSON", R_GtvType, listOf(R_TextType), R_SysFn_Gtv_FromJson_Text)
+            .add("from_json", R_GtvType, listOf(R_TextType), R_SysFn_Gtv_FromJson_Text)
+            .add("fromJSON", R_GtvType, listOf(R_JsonType), R_SysFn_Gtv_FromJson_Json)
+            .add("from_json", R_GtvType, listOf(R_JsonType), R_SysFn_Gtv_FromJson_Json)
             .build()
 
-    private val GTXVALUE_NAMESPACE = makeNamespace(GTXVALUE_NAMESPACE_FNS)
+    private val GTV_NAMESPACE = makeNamespace(GTV_NAMESPACE_FNS)
 
     private val CHAIN_CONTEXT_NAMESPACE = makeNamespace(
             C_GlobalFuncTable.EMPTY,
-            stdFnValue("raw_config", R_GtxValueType, R_SysFn_ChainContext_RawConfig),
+            stdFnValue("raw_config", R_GtvType, R_SysFn_ChainContext_RawConfig),
             Pair("args", C_NsValue_ChainContext_Args)
     )
 
@@ -86,6 +91,11 @@ object C_LibFunctions {
             Pair("last_block_time", C_Ns_OpContext.Value_LastBlockTime),
             Pair("transaction", C_Ns_OpContext.Value_Transaction)
     )
+
+    private val TEXT_NAMESPACE_FNS = typeGlobalFuncBuilder(R_TextType)
+            .build()
+
+    private val TEXT_NAMESPACE = makeNamespace(TEXT_NAMESPACE_FNS)
 
     private val TEXT_FNS = typeMemFuncBuilder(R_TextType)
             .add("empty", R_BooleanType, listOf(), R_SysFn_Text_Empty)
@@ -122,6 +132,11 @@ object C_LibFunctions {
             .add("format", C_SysMemberFunction_Text_Format)
             .build()
 
+    private val BYTEARRAY_NAMESPACE_FNS = typeGlobalFuncBuilder(R_ByteArrayType)
+            .build()
+
+    private val BYTEARRAY_NAMESPACE = makeNamespace(BYTEARRAY_NAMESPACE_FNS)
+
     private val BYTEARRAY_FNS = typeMemFuncBuilder(R_ByteArrayType)
             .add("empty", R_BooleanType, listOf(), R_SysFn_ByteArray_Empty)
             .add("size", R_IntegerType, listOf(), R_SysFn_ByteArray_Size, Db_SysFn_ByteArray_Size)
@@ -133,20 +148,36 @@ object C_LibFunctions {
             .add("sub", R_ByteArrayType, listOf(R_IntegerType, R_IntegerType), R_SysFn_ByteArray_Sub)
             .build()
 
-    private val JSON_FNS = typeMemFuncBuilder(R_JSONType)
+    private val JSON_NAMESPACE_FNS = typeGlobalFuncBuilder(R_JsonType)
+            .build()
+
+    private val JSON_NAMESPACE = makeNamespace(JSON_NAMESPACE_FNS)
+
+    private val JSON_FNS = typeMemFuncBuilder(R_JsonType)
             .add("str", R_TextType, listOf(), R_SysFn_Json_Str, Db_SysFn_Json_Str)
             .build()
 
-    private val GTXVALUE_FNS = typeMemFuncBuilder(R_GtxValueType)
-            .add("toBytes", R_ByteArrayType, listOf(), R_SysFn_GtxValue_ToBytes)
-            .add("to_bytes", R_ByteArrayType, listOf(), R_SysFn_GtxValue_ToBytes)
-            .add("toJSON", R_JSONType, listOf(), R_SysFn_GtxValue_ToJson)
-            .add("to_json", R_JSONType, listOf(), R_SysFn_GtxValue_ToJson)
+    private val RANGE_NAMESPACE_FNS = typeGlobalFuncBuilder(R_RangeType)
+            .build()
+
+    private val RANGE_NAMESPACE = makeNamespace(RANGE_NAMESPACE_FNS)
+
+    private val GTV_FNS = typeMemFuncBuilder(R_GtvType)
+            .add("toBytes", R_ByteArrayType, listOf(), R_SysFn_Gtv_ToBytes)
+            .add("to_bytes", R_ByteArrayType, listOf(), R_SysFn_Gtv_ToBytes)
+            .add("toJSON", R_JsonType, listOf(), R_SysFn_Gtv_ToJson)
+            .add("to_json", R_JsonType, listOf(), R_SysFn_Gtv_ToJson)
             .build()
 
     private val NAMESPACES = mapOf(
+            "boolean" to BOOLEAN_NAMESPACE,
             "integer" to INTEGER_NAMESPACE,
-            "GTXValue" to GTXVALUE_NAMESPACE,
+            "text" to TEXT_NAMESPACE,
+            "byte_array" to BYTEARRAY_NAMESPACE,
+            "json" to JSON_NAMESPACE,
+            "range" to RANGE_NAMESPACE,
+            "GTXValue" to GTV_NAMESPACE,
+            "gtv" to GTV_NAMESPACE,
             "chain_context" to CHAIN_CONTEXT_NAMESPACE,
             C_Ns_OpContext.NAME to OP_CONTEXT_NAMESPACE
     )
@@ -166,8 +197,8 @@ object C_LibFunctions {
             R_IntegerType -> INTEGER_FNS
             R_TextType -> TEXT_FNS
             R_ByteArrayType -> BYTEARRAY_FNS
-            R_JSONType -> JSON_FNS
-            R_GtxValueType -> GTXVALUE_FNS
+            R_JsonType -> JSON_FNS
+            R_GtvType -> GTV_FNS
             is R_ListType -> getListFns(type)
             is R_SetType -> getSetFns(type)
             is R_MapType -> getMapFns(type)
@@ -276,82 +307,84 @@ object C_LibFunctions {
     }
 
     fun makeRecordNamespace(type: R_RecordType): C_Namespace {
-        val flags = type.completeFlags()
-        val invalid = C_SysFunction_InvalidRecord(type)
-
-        val mFromBytes = if (!flags.gtxCompact.compatible) invalid else {
-            C_StdGlobalFuncCaseMatch(type, R_SysFn_Record_FromBytes(type))
-        }
-
-        val mFromGtxValue = if (!flags.gtxCompact.compatible) invalid else {
-            C_StdGlobalFuncCaseMatch(type, R_SysFn_Record_FromGtx(type, false))
-        }
-
-        val mFromPrettyGtxValue = if (!flags.gtxHuman.compatible) invalid else {
-            C_StdGlobalFuncCaseMatch(type, R_SysFn_Record_FromGtx(type, true))
-        }
+        val mFromBytes = gtvGlobalFn(type, false, R_SysFn_Record_FromBytes(type))
+        val mFromGtv = gtvGlobalFn(type, false, R_SysFn_Record_FromGtv(type, false))
+        val mFromGtvPretty = gtvGlobalFn(type, true, R_SysFn_Record_FromGtv(type, true))
 
         val fns = C_GlobalFuncBuilder()
                 .add("fromBytes", listOf(R_ByteArrayType), mFromBytes)
                 .add("from_bytes", listOf(R_ByteArrayType), mFromBytes)
-                .add("fromGTXValue", listOf(R_GtxValueType), mFromGtxValue)
-                .add("from_gtx_value", listOf(R_GtxValueType), mFromGtxValue)
-                .add("fromPrettyGTXValue", listOf(R_GtxValueType), mFromPrettyGtxValue)
-                .add("from_pretty_gtx_value", listOf(R_GtxValueType), mFromPrettyGtxValue)
+                .add("fromGTXValue", listOf(R_GtvType), mFromGtv)
+                .add("from_gtv", listOf(R_GtvType), mFromGtv)
+                .add("fromPrettyGTXValue", listOf(R_GtvType), mFromGtvPretty)
+                .add("from_gtv_pretty", listOf(R_GtvType), mFromGtvPretty)
                 .build()
 
         return makeNamespace(fns)
     }
 
-    private fun getRecordFns(type: R_RecordType): C_MemberFuncTable {
+    private fun gtvGlobalFn(type: R_Type, human: Boolean, fn: R_SysFunction): C_GlobalFuncCaseMatch {
         val flags = type.completeFlags()
+        val flag = if (human) flags.gtvHuman else flags.gtvCompact
+        return if (!flag.compatible) C_SysFunction_Invalid(type) else C_StdGlobalFuncCaseMatch(R_GtvType, fn)
+    }
 
-        val invalid = C_SysMemberFunction_InvalidRecord(type)
-
-        val mToBytes = recordMemFn(flags.gtxCompact, invalid, R_ByteArrayType, R_SysFn_Record_ToBytes(type))
-        val mToGtxValue = recordMemFn(flags.gtxCompact, invalid, R_GtxValueType, R_SysFn_Record_ToGtx(type, false))
-        val mToPrettyGtxValue = recordMemFn(flags.gtxHuman, invalid, R_GtxValueType, R_SysFn_Record_ToGtx(type, true))
-        val mHash = recordMemFn(flags.gtxCompact, invalid, R_ByteArrayType, R_SysFn_Any_Hash(type))
+    private fun getRecordFns(type: R_RecordType): C_MemberFuncTable {
+        val mToBytes = gtvMemFn(type, false, R_ByteArrayType, R_SysFn_Record_ToBytes(type))
+        val mToGtv = gtvMemFn(type, false, R_GtvType, R_SysFn_Record_ToGtv(type, false))
+        val mToGtvPretty = gtvMemFn(type, true, R_GtvType, R_SysFn_Record_ToGtv(type, true))
+        val mHash = gtvMemFn(type, false, R_ByteArrayType, R_SysFn_Any_Hash(type))
 
         return C_MemberFuncBuilder()
                 .add("toBytes", listOf(), mToBytes)
                 .add("to_bytes", listOf(), mToBytes)
-                .add("toGTXValue", listOf(), mToGtxValue)
-                .add("to_gtx_value", listOf(), mToGtxValue)
-                .add("toPrettyGTXValue", listOf(), mToPrettyGtxValue)
-                .add("to_pretty_gtx_value", listOf(), mToPrettyGtxValue)
+                .add("toGTXValue", listOf(), mToGtv)
+                .add("to_gtv", listOf(), mToGtv)
+                .add("toPrettyGTXValue", listOf(), mToGtvPretty)
+                .add("to_gtv_pretty", listOf(), mToGtvPretty)
                 .add("hash", listOf(), mHash)
                 .build()
     }
 
-    private fun recordMemFn(
-            flag: R_GtxCompatibility,
-            invalid: C_MemberFuncCaseMatch,
+    private fun gtvMemFn(
+            type: R_Type,
+            human: Boolean,
             resType: R_Type,
             fn: R_SysFunction
     ): C_MemberFuncCaseMatch {
-        return if (!flag.compatible) invalid else C_StdMemberFuncCaseMatch(resType, fn)
+        val flags = type.completeFlags()
+        val flag = if (human) flags.gtvHuman else flags.gtvCompact
+        return if (!flag.compatible) C_SysMemberFunction_Invalid(type) else C_StdMemberFuncCaseMatch(resType, fn)
     }
 
-    fun getEnumStaticFunction(type: R_EnumType, name: String): C_GlobalFunction? {
-        val fns = getEnumStaticFns(type)
+    fun getTypeStaticFunction(type: R_Type, name: String): C_GlobalFunction? {
+        val b = typeGlobalFuncBuilder(type)
+        when(type) {
+            is R_EnumType -> getEnumStaticFns(b, type)
+        }
+        val fns = b.build()
         val fn = fns.get(name)
         return fn
     }
 
-    private fun getEnumStaticFns(type: R_EnumType): C_GlobalFuncTable {
-        return C_GlobalFuncBuilder()
-                .add("values", R_ListType(type), listOf(), R_SysFn_Enum_Values(type))
-                .add("value", type, listOf(R_TextType), R_SysFn_Enum_Value_Text(type))
-                .add("value", type, listOf(R_IntegerType), R_SysFn_Enum_Value_Int(type))
-                .build()
+    private fun getEnumStaticFns(b: C_GlobalFuncBuilder, type: R_EnumType) {
+        b.add("values", R_ListType(type), listOf(), R_SysFn_Enum_Values(type))
+        b.add("value", type, listOf(R_TextType), R_SysFn_Enum_Value_Text(type))
+        b.add("value", type, listOf(R_IntegerType), R_SysFn_Enum_Value_Int(type))
+    }
+
+    private fun typeGlobalFuncBuilder(type: R_Type): C_GlobalFuncBuilder {
+        val b = C_GlobalFuncBuilder()
+        b.add("from_gtv", listOf(R_GtvType), gtvGlobalFn(type, false, R_SysFn_Any_FromGtv(type, false, "from_gtv")))
+        b.add("from_gtv_pretty", listOf(R_GtvType), gtvGlobalFn(type, true, R_SysFn_Any_FromGtv(type, true, "from_gtv_pretty")))
+        return b
     }
 
     private fun typeMemFuncBuilder(type: R_Type): C_MemberFuncBuilder {
         val b = C_MemberFuncBuilder()
-        if (type.completeFlags().gtxCompact.compatible) {
-            b.add("hash", R_ByteArrayType, listOf(), R_SysFn_Any_Hash(type))
-        }
+        b.add("hash", listOf(), gtvMemFn(type, false, R_ByteArrayType, R_SysFn_Any_Hash(type)))
+        b.add("to_gtv", listOf(), gtvMemFn(type, false, R_GtvType, R_SysFn_Any_ToGtv(type, false, "to_gtv")))
+        b.add("to_gtv_pretty", listOf(), gtvMemFn(type, true, R_GtvType, R_SysFn_Any_ToGtv(type, true, "to_gtv_pretty")))
         return b
     }
 }
@@ -585,21 +618,21 @@ private object C_SysMemberFunction_Text_Format: C_MemberFuncCase() {
     }
 }
 
-private class C_SysFunction_InvalidRecord(val recordType: R_RecordType): C_SimpleGlobalFuncCaseMatch() {
+private class C_SysFunction_Invalid(private val type: R_Type): C_SimpleGlobalFuncCaseMatch() {
     override fun compileCallExpr(name: S_Name, args: List<R_Expr>) = throw err(name)
     override fun compileCallDbExpr(name: S_Name, args: List<Db_Expr>) = throw err(name)
 
     private fun err(name: S_Name): C_Error {
-        val typeStr = recordType.name
+        val typeStr = type.name
         val nameStr = name.str
-        return C_Error(name.pos, "fn_record_invalid:$typeStr:$nameStr", "Function '$nameStr' not available for type '$typeStr'")
+        return C_Error(name.pos, "fn:invalid:$typeStr:$nameStr", "Function '$nameStr' not available for type '$typeStr'")
     }
 }
 
-private class C_SysMemberFunction_InvalidRecord(val recordType: R_RecordType): C_MemberFuncCaseMatch() {
+private class C_SysMemberFunction_Invalid(private val type: R_Type): C_MemberFuncCaseMatch() {
     override fun compileCall(pos: S_Pos, name: String, args: List<R_Expr>): R_MemberCalculator {
-        val typeStr = recordType.name
-        throw C_Error(pos, "fn_record_invalid:$typeStr:$name", "Function '$name' not available for type '$typeStr'")
+        val typeStr = type.name
+        throw C_Error(pos, "fn:invalid:$typeStr:$name", "Function '$name' not available for type '$typeStr'")
     }
 }
 

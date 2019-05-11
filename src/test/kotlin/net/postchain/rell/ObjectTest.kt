@@ -97,11 +97,11 @@ class ObjectTest: BaseRellTest() {
         chk("foo?.x", "ct_err:expr_safemem_type:foo")
     }
 
-    @Test fun testGtx() {
+    @Test fun testGtv() {
         tst.defs = listOf("object foo { x: integer = 123; }")
-        tst.gtx = true
-        chk("foo", "ct_err:result_nogtx:q:foo")
-        chkQueryEx("query q() { return foo; }", "ct_err:result_nogtx:q:foo")
+        tst.gtv = true
+        chk("foo", "ct_err:result_nogtv:q:foo")
+        chkQueryEx("query q() { return foo; }", "ct_err:result_nogtv:q:foo")
     }
 
     @Test fun testForwardReference() {
@@ -204,7 +204,7 @@ class ObjectTest: BaseRellTest() {
 
         // Object vs. alias: error.
         chk("(foo: user) @* {}", "list<user>[user[1]]")
-        chk("(foo: user) @* { foo.name == 'Bob' }", "ct_err:expr_name_clsglob:foo")
+        chk("(foo: user) @* { foo.name == 'Bob' }", "list<user>[user[1]]")
     }
 
     @Test fun testMultipleRecords() {

@@ -1,12 +1,13 @@
 package net.postchain.rell.test
 
-import net.postchain.core.UserMistake
 import net.postchain.base.BaseEContext
 import net.postchain.base.data.SQLDatabaseAccess
-import net.postchain.gtv.GtvDictionary
+import net.postchain.core.UserMistake
 import net.postchain.gtv.Gtv
+import net.postchain.gtv.GtvDictionary
 import net.postchain.gtv.GtvString
-import net.postchain.gtx.*
+import net.postchain.gtx.GTXModule
+import net.postchain.gtx.GTXSchemaManager
 import net.postchain.rell.hexStringToByteArray
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.module.RellPostchainModuleFactory
@@ -21,8 +22,8 @@ class RellGtxTester(
         tstCtx: RellTestContext,
         classDefs: List<String> = listOf(),
         inserts: List<String> = listOf(),
-        gtx: Boolean = false
-): RellBaseTester(tstCtx, classDefs, inserts, gtx)
+        gtv: Boolean = false
+): RellBaseTester(tstCtx, classDefs, inserts, gtv)
 {
     var wrapRtErrors = true
     var moduleArgs: String? = null
@@ -59,7 +60,7 @@ class RellGtxTester(
 
             val argsExtra = if (args.isEmpty()) "" else ",$args"
             val argsStr = "{'type':'q'$argsExtra}"
-            val argsGtx = GtxTestUtils.decodeGtxStr(argsStr.replace('\'', '"'))
+            val argsGtv = GtvTestUtils.decodeGtvStr(argsStr.replace('\'', '"'))
 
             val moduleCode = moduleCode(code)
             val module = eval.wrapCt { createGtxModule(moduleCode) }
@@ -67,8 +68,8 @@ class RellGtxTester(
             val conn = getSqlConn()
             val ctx = BaseEContext(conn, chainId, nodeId, SQLDatabaseAccess())
 
-            val res = module.query(ctx, "q", argsGtx)
-            GtxTestUtils.gtxToStr(res)
+            val res = module.query(ctx, "q", argsGtv)
+            GtvTestUtils.gtvToStr(res)
         }
     }
 
@@ -99,13 +100,13 @@ class RellGtxTester(
         rellMap["sources_v0.8"] = GtvDictionary(sourceCodes.mapValues { (_, v) -> GtvString(v) })
 
         if (moduleArgs != null) {
-            rellMap["moduleArgs"] = GtxTestUtils.decodeGtxStr(moduleArgs!!)
+            rellMap["moduleArgs"] = GtvTestUtils.decodeGtvStr(moduleArgs!!)
         }
 
         val cfgMap = mutableMapOf<String, Gtv>()
         cfgMap["gtx"] = GtvDictionary(mapOf("rell" to GtvDictionary(rellMap)))
         for ((key, value) in extraModuleConfig) {
-            cfgMap[key] = GtxTestUtils.decodeGtxStr(value)
+            cfgMap[key] = GtvTestUtils.decodeGtvStr(value)
         }
 
         return GtvDictionary(cfgMap)

@@ -149,6 +149,10 @@ object C_Errors {
         return C_Error(name.pos, "unknown_name:${name.str}", "Unknown name: '${name.str}'")
     }
 
+    fun errUnknownName(baseName: String, name: S_Name): C_Error {
+        return C_Error(name.pos, "unknown_name:$baseName.${name.str}", "Unknown name: '$baseName.${name.str}'")
+    }
+
     fun errUnknownName(baseName: List<S_Name>, name: S_Name): C_Error {
         val fullName = baseName + listOf(name)
         val nameStr = C_Utils.nameStr(fullName)
@@ -203,27 +207,15 @@ object C_Errors {
         return C_Error(pos, "stmt_delete_cant:$name", "Not allowed to delete objects of class '$name'")
     }
 
-    fun errNameConflictLocalGlobal(name: S_Name): C_Error {
-        val nameStr = name.str
-        throw C_Error(name.pos, "expr_name_locglob:$nameStr",
-                "Name '$nameStr' is ambiguous: can be type or local variable")
-    }
-
-    fun errNameConflictClassGlobal(name: S_Name): C_Error {
-        val nameStr = name.str
-        throw C_Error(name.pos, "expr_name_clsglob:$nameStr",
-                "Name '$nameStr' is ambiguous: can be type or class alias")
-    }
-
     fun errNameConflictAliasLocal(name: S_Name): C_Error {
         val nameStr = name.str
         throw C_Error(name.pos, "expr_name_clsloc:$nameStr",
                 "Name '$nameStr' is ambiguous: can be class alias or local variable")
     }
 
-    fun errTypeNotGtxCompatible(pos: S_Pos, type: R_Type, reason: String?, code: String, msg: String): C_Error {
+    fun errTypeNotGtvCompatible(pos: S_Pos, type: R_Type, reason: String?, code: String, msg: String): C_Error {
         val extra = if (reason == null) "" else "; reason: $reason"
-        val fullMsg = "$msg is not GTX-compatible: ${type.toStrictString()}$extra"
+        val fullMsg = "$msg is not Gtv-compatible: ${type.toStrictString()}$extra"
         throw C_Error(pos, "$code:${type.toStrictString()}", fullMsg)
     }
 }
@@ -357,8 +349,8 @@ object C_GraphUtils {
 
 class C_RecordsStructure(
         val mutable: Set<R_RecordType>,
-        val nonGtxHuman: Set<R_RecordType>,
-        val nonGtxCompact: Set<R_RecordType>,
+        val nonGtvHuman: Set<R_RecordType>,
+        val nonGtvCompact: Set<R_RecordType>,
         val graph: Map<R_RecordType, List<R_RecordType>>
 )
 
@@ -367,9 +359,9 @@ object C_RecordUtils {
         val structMap = records.map { Pair(it, calcRecStruct(it)) }.toMap()
         val graph = structMap.mapValues { (_, v) -> v.dependencies.toList() }
         val mutable = structMap.filter { (_, v) -> v.directFlags.mutable }.keys
-        val nonGtxHuman = structMap.filter { (_, v) -> !v.directFlags.gtxHuman.compatible }.keys
-        val nonGtxCompact = structMap.filter { (_, v) -> !v.directFlags.gtxCompact.compatible }.keys
-        return C_RecordsStructure(mutable, nonGtxHuman, nonGtxCompact, graph)
+        val nonGtvHuman = structMap.filter { (_, v) -> !v.directFlags.gtvHuman.compatible }.keys
+        val nonGtvCompact = structMap.filter { (_, v) -> !v.directFlags.gtvCompact.compatible }.keys
+        return C_RecordsStructure(mutable, nonGtvHuman, nonGtvCompact, graph)
     }
 
     private fun calcRecStruct(type: R_Type): RecStruct {

@@ -5,11 +5,11 @@ import net.postchain.gtv.Gtv
 import net.postchain.rell.model.R_Class
 import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_Module
-import net.postchain.rell.module.GtxToRtContext
+import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.module.RELL_VERSION
 import net.postchain.rell.parser.C_Message
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
-import net.postchain.rell.runtime.Rt_GtxValue
+import net.postchain.rell.runtime.Rt_GtvValue
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.sql.ROWID_COLUMN
 import net.postchain.rell.sql.SqlExecutor
@@ -147,43 +147,43 @@ object SqlTestUtils {
     }
 }
 
-object GtxTestUtils {
-    fun decodeGtxStr(s: String) = Rt_GtxValue.jsonStringToGtxValue(s)
-    fun encodeGtxStr(gtx: Gtv) = Rt_GtxValue.gtxValueToJsonString(gtx)
+object GtvTestUtils {
+    fun decodeGtvStr(s: String) = Rt_GtvValue.jsonStringToGtv(s)
+    fun encodeGtvStr(gtv: Gtv) = Rt_GtvValue.gtvToJsonString(gtv)
 
-    fun decodeGtxQueryArgs(params: List<R_ExternalParam>, args: List<String>): List<Rt_Value> {
-        return decodeGtxArgs(params, args, true)
+    fun decodeGtvQueryArgs(params: List<R_ExternalParam>, args: List<String>): List<Rt_Value> {
+        return decodeGtvArgs(params, args, true)
     }
 
-    fun decodeGtxOpArgs(params: List<R_ExternalParam>, args: List<Gtv>): List<Rt_Value> {
+    fun decodeGtvOpArgs(params: List<R_ExternalParam>, args: List<Gtv>): List<Rt_Value> {
         check(params.size == args.size)
-        val ctx = GtxToRtContext()
-        return args.mapIndexed { i, gtx ->
-            params[i].type.gtxToRt(ctx, gtx, false)
+        val ctx = GtvToRtContext(false)
+        return args.mapIndexed { i, gtv ->
+            params[i].type.gtvToRt(ctx, gtv)
         }
     }
 
-    fun decodeGtxOpArgsStr(params: List<R_ExternalParam>, args: List<String>): List<Rt_Value> {
-        return decodeGtxArgs(params, args, false)
+    fun decodeGtvOpArgsStr(params: List<R_ExternalParam>, args: List<String>): List<Rt_Value> {
+        return decodeGtvArgs(params, args, false)
     }
 
-    private fun decodeGtxArgs(params: List<R_ExternalParam>, args: List<String>, human: Boolean): List<Rt_Value> {
+    private fun decodeGtvArgs(params: List<R_ExternalParam>, args: List<String>, human: Boolean): List<Rt_Value> {
         check(params.size == args.size)
-        val ctx = GtxToRtContext()
+        val ctx = GtvToRtContext(human)
         return args.mapIndexed { i, arg ->
-            val gtx = decodeGtxStr(arg)
-            params[i].type.gtxToRt(ctx, gtx, human)
+            val gtv = decodeGtvStr(arg)
+            params[i].type.gtvToRt(ctx, gtv)
         }
     }
 
-    fun gtxToStr(gtx: Gtv): String {
-        val s = encodeGtxStr(gtx)
+    fun gtvToStr(gtv: Gtv): String {
+        val s = encodeGtvStr(gtv)
         return s.replace('"', '\'')
     }
 
-    fun strToGtx(s: String): Gtv {
+    fun strToGtv(s: String): Gtv {
         val s2 = s.replace('\'', '"')
-        return decodeGtxStr(s2)
+        return decodeGtvStr(s2)
     }
 }
 

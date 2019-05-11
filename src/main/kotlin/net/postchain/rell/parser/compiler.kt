@@ -50,7 +50,7 @@ class C_Message(val type: C_MessageType, val pos: S_Pos, val code: String, val t
     }
 }
 
-class C_GlobalContext(val gtx: Boolean) {
+class C_GlobalContext(val gtv: Boolean) {
     private var frameBlockIdCtr = 0L
     private val messages = mutableListOf<C_Message>()
 
@@ -96,9 +96,10 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
             "signer" to R_SignerType,
             "guid" to R_GUIDType,
             "tuid" to R_TextType,
-            "json" to R_JSONType,
+            "json" to R_JsonType,
             "range" to R_RangeType,
-            "GTXValue" to R_GtxValueType
+            "GTXValue" to R_GtvType,
+            "gtv" to R_GtvType
     )
 
     private val blockClass = C_Utils.createBlockClass(null, null)
@@ -213,8 +214,8 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
         val topologicalClasses = calcTopologicalClasses()
 
         val moduleArgs = nsCtx.getRecordOpt(C_Defs.MODULE_ARGS_RECORD)
-        if (moduleArgs != null && !moduleArgs.type.flags.typeFlags.gtxHuman.compatible) {
-            throw C_Error(moduleArgs.name.pos, "module_args_nogtx", "Record '${C_Defs.MODULE_ARGS_RECORD}' is not GTX-compatible")
+        if (moduleArgs != null && !moduleArgs.type.flags.typeFlags.gtvHuman.compatible) {
+            throw C_Error(moduleArgs.name.pos, "module_args_nogtv", "Record '${C_Defs.MODULE_ARGS_RECORD}' is not Gtv-compatible")
         }
 
         return R_Module(
@@ -239,13 +240,13 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
         val cyclicRecs = C_GraphUtils.findCyclicVertices(graph).toSet()
         val infiniteRecs = C_GraphUtils.closure(transGraph, cyclicRecs).toSet()
         val mutableRecs = C_GraphUtils.closure(transGraph, structure.mutable).toSet()
-        val nonGtxHumanRecs = C_GraphUtils.closure(transGraph, structure.nonGtxHuman).toSet()
-        val nonGtxCompactRecs = C_GraphUtils.closure(transGraph, structure.nonGtxCompact).toSet()
+        val nonGtvHumanRecs = C_GraphUtils.closure(transGraph, structure.nonGtvHuman).toSet()
+        val nonGtvCompactRecs = C_GraphUtils.closure(transGraph, structure.nonGtvCompact).toSet()
 
         for (record in records) {
-            val gtxHuman = R_GtxCompatibility(record !in nonGtxHumanRecs)
-            val gtxCompact = R_GtxCompatibility(record !in nonGtxCompactRecs)
-            val typeFlags = R_TypeFlags(record in mutableRecs, gtxHuman, gtxCompact)
+            val gtvHuman = R_GtvCompatibility(record !in nonGtvHumanRecs)
+            val gtvCompact = R_GtvCompatibility(record !in nonGtvCompactRecs)
+            val typeFlags = R_TypeFlags(record in mutableRecs, gtvHuman, gtvCompact)
             val flags = R_RecordFlags(typeFlags, record in cyclicRecs, record in infiniteRecs)
             record.setFlags(flags)
         }
@@ -422,7 +423,9 @@ class C_NamespaceContext(
 
     fun addClass0(name: String, cls: R_Class) {
         modCtx.checkPass(null, C_ModulePass.NAMES)
-        nsBuilder.addType(name, R_ClassType(cls))
+        val type = R_ClassType(cls)
+        nsBuilder.addType(name, type)
+        nsBuilder.addValue(name, C_NamespaceValue_Class(type))
     }
 
     fun addObject(sName: S_Name, obj: R_Object) {
@@ -849,8 +852,8 @@ class C_ClassContext(
 }
 
 object C_Compiler {
-    fun compile(includeDir: C_IncludeDir, mainFile: String, gtx: Boolean): C_CompilationResult {
-        val globalCtx = C_GlobalContext(gtx)
+    fun compile(includeDir: C_IncludeDir, mainFile: String, gtv: Boolean): C_CompilationResult {
+        val globalCtx = C_GlobalContext(gtv)
         var module: R_Module? = null
         var error: C_Error? = null
 

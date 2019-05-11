@@ -8,7 +8,7 @@ import net.postchain.rell.runtime.*
 object RellTestUtils {
     val ENCODER_PLAIN = { t: R_Type, v: Rt_Value -> v.toString() }
     val ENCODER_STRICT = { t: R_Type, v: Rt_Value -> v.toStrictString() }
-    val ENCODER_GTX = { t: R_Type, v: Rt_Value -> GtxTestUtils.encodeGtxStr(t.rtToGtx(v, true)) }
+    val ENCODER_GTV = { t: R_Type, v: Rt_Value -> GtvTestUtils.encodeGtvStr(t.rtToGtv(v, true)) }
 
     val MAIN_FILE = "main.rell"
 
@@ -20,11 +20,11 @@ object RellTestUtils {
     fun processModule(
             includeDir: C_IncludeDir,
             errPos: Boolean = false,
-            gtx: Boolean = false,
+            gtv: Boolean = false,
             processor: (RellTestModule) -> String
     ): String {
         val p = catchCtErr0(errPos) {
-            parseModule(includeDir, gtx)
+            parseModule(includeDir, gtv)
         }
         return p.first ?: processor(p.second!!)
     }
@@ -58,8 +58,8 @@ object RellTestUtils {
             return Pair("rt_err:" + e.code, null)
         } catch (e: Rt_RequireError) {
             return Pair("req_err:" + if (e.userMsg != null) "[${e.userMsg}]" else "null", null)
-        } catch (e: Rt_GtxValueError) {
-            return Pair("gtx_err:" + e.code, null)
+        } catch (e: Rt_GtvError) {
+            return Pair("gtv_err:" + e.code, null)
         }
     }
 
@@ -127,8 +127,8 @@ object RellTestUtils {
         }
     }
 
-    fun parseModule(includeDir: C_IncludeDir, gtx: Boolean): RellTestModule {
-        val res = C_Compiler.compile(includeDir, MAIN_FILE, gtx)
+    fun parseModule(includeDir: C_IncludeDir, gtv: Boolean): RellTestModule {
+        val res = C_Compiler.compile(includeDir, MAIN_FILE, gtv)
         saveSource(includeDir, res)
         if (res.error != null) {
             throw res.error!!

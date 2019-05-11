@@ -52,13 +52,13 @@ private fun readFile(file: File): String {
 fun makeRellPostchainConfig(resolver: C_IncludeResolver, mainFile: String, template: String?, pretty: Boolean): String {
     val files = discoverBundleFiles(resolver, mainFile)
 
-    val gtxTemplate = getConfigTemplate(template)
+    val gtvTemplate = getConfigTemplate(template)
 
-    val mutableConfig = GtxNode.create(null, gtxTemplate)
+    val mutableConfig = GtvNode.create(null, gtvTemplate)
     injectRellFiles(mutableConfig, files, mainFile, pretty)
 
-    val gtxConfig = mutableConfig.toValue()
-    val config = generateConfigText(gtxConfig)
+    val gtvConfig = mutableConfig.toValue()
+    val config = generateConfigText(gtvConfig)
     return config
 }
 
@@ -99,7 +99,7 @@ private fun getConfigTemplate(template: String?): Gtv {
     }
 }
 
-private fun injectRellFiles(template: GtxNode, files: Map<String, String>, mainFile: String, pretty: Boolean) {
+private fun injectRellFiles(template: GtvNode, files: Map<String, String>, mainFile: String, pretty: Boolean) {
     val rootDict = asDictNode(template)
     val gtxDict = getDictByKey(rootDict, "gtx")
     val rellDict = getDictByKey(gtxDict, "rell")
@@ -115,7 +115,7 @@ private fun injectRellFiles(template: GtxNode, files: Map<String, String>, mainF
     rellDict.remove(CONFIG_RELL_FILES)
 }
 
-private fun getDictByKey(dict: DictGtxNode, key: String): DictGtxNode {
+private fun getDictByKey(dict: DictGtvNode, key: String): DictGtvNode {
     val node = dict.get(key)
     return if (node == null) {
         dict.putDict(key)
@@ -124,8 +124,8 @@ private fun getDictByKey(dict: DictGtxNode, key: String): DictGtxNode {
     }
 }
 
-private fun asDictNode(node: GtxNode): DictGtxNode {
-    if (node !is DictGtxNode) {
+private fun asDictNode(node: GtvNode): DictGtvNode {
+    if (node !is DictGtvNode) {
         val pathStr = if (node.path == null) "<root>" else node.path
         val type = node.type()
         throw RellCfgErr("Found $type instead of ${GtvType.DICT} ($pathStr)")
@@ -133,8 +133,8 @@ private fun asDictNode(node: GtxNode): DictGtxNode {
     return node
 }
 
-private fun generateConfigText(gtxConfig: Gtv): String {
-    val xml = PostchainUtils.gtvToXml(gtxConfig)
+private fun generateConfigText(gtvConfig: Gtv): String {
+    val xml = PostchainUtils.gtvToXml(gtvConfig)
     return xml
 }
 
@@ -159,30 +159,30 @@ private fun parseArgs(args: Array<String>): RellCfgArgs {
 
 private class RellCfgErr(msg: String): RuntimeException(msg)
 
-private sealed class GtxNode(val path: String?) {
+private sealed class GtvNode(val path: String?) {
     abstract fun type(): GtvType
     abstract fun toValue(): Gtv
 
     companion object {
         fun subPath(parentPath: String?, key: String) = if (parentPath == null) key else "$parentPath.$key"
 
-        fun create(path: String?, value: Gtv): GtxNode {
+        fun create(path: String?, value: Gtv): GtvNode {
             return if (value.type == GtvType.DICT) {
                 val map = value.asDict().mapValues { (k, v) -> create(subPath(path, k), v) }
-                DictGtxNode(path, LinkedHashMap(map))
+                DictGtvNode(path, LinkedHashMap(map))
             } else {
-                TermGtxNode(path, value)
+                TermGtvNode(path, value)
             }
         }
     }
 }
 
-private class TermGtxNode(path: String?, private val value: Gtv): GtxNode(path) {
+private class TermGtvNode(path: String?, private val value: Gtv): GtvNode(path) {
     override fun type() = value.type
     override fun toValue() = value
 }
 
-private class DictGtxNode(path: String?, private val map: MutableMap<String, GtxNode>): GtxNode(path) {
+private class DictGtvNode(path: String?, private val map: MutableMap<String, GtvNode>): GtvNode(path) {
     override fun type() = GtvType.DICT
     override fun toValue() = GtvDictionary(map.mapValues { (k, v) -> v.toValue() })
 
@@ -190,12 +190,12 @@ private class DictGtxNode(path: String?, private val map: MutableMap<String, Gtx
 
     fun putString(key: String, value: String) {
         val path = subPath(path, key)
-        map[key] = TermGtxNode(path, GtvString(value))
+        map[key] = TermGtvNode(path, GtvString(value))
     }
 
-    fun putDict(key: String): DictGtxNode {
+    fun putDict(key: String): DictGtvNode {
         val path = subPath(path, key)
-        val dict = DictGtxNode(path, mutableMapOf())
+        val dict = DictGtvNode(path, mutableMapOf())
         map[key] = dict
         return dict
     }

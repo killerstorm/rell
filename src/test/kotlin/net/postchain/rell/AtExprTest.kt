@@ -107,7 +107,7 @@ class AtExprTest: BaseRellTest() {
 
     @Test fun testSingleClassAlias() {
         chk("(u: user) @ { u.firstName == 'Bill' }", "user[40]")
-        chk("(u: user) @ { user.firstName == 'Bill' }", "ct_err:unknown_name:user")
+        chk("(u: user) @ { user.firstName == 'Bill' }", "ct_err:unknown_name:user.firstName")
     }
 
     @Test fun testMultipleClassesBadAlias() {
@@ -133,7 +133,7 @@ class AtExprTest: BaseRellTest() {
     @Test fun testNameResolutionClassVsAlias() {
         chk("(user) @ { user.firstName == 'Bill' }", "user[40]")
         chk("(u: user) @ { u.firstName == 'Bill' }", "user[40]")
-        chk("(u: user) @ { user.firstName == 'Bill' }", "ct_err:unknown_name:user")
+        chk("(u: user) @ { user.firstName == 'Bill' }", "ct_err:unknown_name:user.firstName")
     }
 
     @Test fun testNameResolutionLocalVsAttr() {

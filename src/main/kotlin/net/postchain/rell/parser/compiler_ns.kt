@@ -65,6 +65,10 @@ class C_NamespaceValue_SysFunction(
     override fun get0(entCtx: C_EntityContext, name: List<S_Name>) = R_SysCallExpr(resultType, fn, listOf())
 }
 
+class C_NamespaceValue_Class(private val rType: R_ClassType): C_NamespaceValue() {
+    override fun get(entCtx: C_EntityContext, name: List<S_Name>) = C_TypeExpr(name.last().pos, rType)
+}
+
 class C_NamespaceValue_Enum(private val rEnum: R_EnumType): C_NamespaceValue() {
     override fun get(entCtx: C_EntityContext, name: List<S_Name>) = C_EnumExpr(name, rEnum)
 }

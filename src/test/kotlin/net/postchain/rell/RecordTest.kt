@@ -162,12 +162,12 @@ class RecordTest: BaseRellTest(false) {
         chkFlags("record foo { x: text; }", "foo[hum,com]")
         chkFlags("record foo { x: byte_array; }", "foo[hum,com]")
         chkFlags("record foo { x: boolean; }", "foo[hum,com]")
-        chkFlags("record foo { x: (x: integer, text); }", "foo[com]")
+        chkFlags("record foo { x: (x: integer, text); }", "foo[hum,com]")
         chkFlags("record foo { x: range; }", "foo[]")
         chkFlags("class user { name; } record foo { x: user; }", "foo[hum,com]")
         chkFlags("record foo { x: list<integer>; }", "foo[mut,hum,com]")
         chkFlags("record foo { x: set<integer>; }", "foo[mut,hum,com]")
-        chkFlags("record foo { x: map<integer,text>; }", "foo[mut]")
+        chkFlags("record foo { x: map<integer,text>; }", "foo[mut,hum,com]")
 
         chkFlags("record bar { x: integer; } record foo { y: bar; }", "bar[hum,com],foo[hum,com]")
         chkFlags("record bar { x: integer; } record foo { mutable y: bar; }", "bar[hum,com],foo[mut,hum,com]")
@@ -183,34 +183,35 @@ class RecordTest: BaseRellTest(false) {
         chkFlags("record bar { x: bar?; } record foo { mutable y: bar?; }", "bar[hum,com,cyc,inf],foo[mut,hum,com,inf]")
 
         chkFlags("record bar { x: foo?; } record foo { y: (q: boolean, list<map<text,bar>>); }",
-                "bar[mut,com,cyc,inf],foo[mut,com,cyc,inf]")
-        chkFlags("record bar { x: integer; } record foo { y: (q: boolean, list<map<text,bar>>); }", "bar[hum,com],foo[mut,com]")
+                "bar[mut,hum,com,cyc,inf],foo[mut,hum,com,cyc,inf]")
+        chkFlags("record bar { x: integer; } record foo { y: (q: boolean, list<map<text,bar>>); }",
+                "bar[hum,com],foo[mut,hum,com]")
     }
 
-    @Test fun testRecordFlagsGtx() {
+    @Test fun testRecordFlagsGtv() {
         chkFlags("record foo { x: integer; }", "foo[hum,com]")
         chkFlags("record foo { x: (a: text, b: integer); }", "foo[hum,com]")
         chkFlags("record foo { x: (a: integer, b: text); }", "foo[hum,com]")
-        chkFlags("record foo { x: (x: text, integer); }", "foo[com]")
+        chkFlags("record foo { x: (x: text, integer); }", "foo[hum,com]")
 
         chkFlags("record foo { x: map<text,integer>; }", "foo[mut,hum,com]")
-        chkFlags("record foo { x: map<integer,text>; }", "foo[mut]")
+        chkFlags("record foo { x: map<integer,text>; }", "foo[mut,hum,com]")
 
         chkFlags("record foo { x: list<set<(a: text, b: integer)>>; }", "foo[mut,hum,com]")
-        chkFlags("record foo { x: list<set<(q: text, integer)>>; }", "foo[mut,com]")
+        chkFlags("record foo { x: list<set<(q: text, integer)>>; }", "foo[mut,hum,com]")
         chkFlags("record foo { x: list<map<text,integer>>; }", "foo[mut,hum,com]")
-        chkFlags("record foo { x: list<map<integer,text>>; }", "foo[mut]")
+        chkFlags("record foo { x: list<map<integer,text>>; }", "foo[mut,hum,com]")
 
-        chkFlags("record foo { x: (a:text,b:integer); } record bar { y: map<integer,text>; }", "bar[mut],foo[hum,com]")
-        chkFlags("record foo { x: (a:text,b:integer); p: bar; } record bar { y: map<integer,text>; }", "bar[mut],foo[mut]")
-        chkFlags("record foo { x: (a:text,b:integer); } record bar { y: map<integer,text>; q: foo; }", "bar[mut],foo[hum,com]")
-        chkFlags("record foo { x: (a:text,b:integer); p: bar; } record bar { y: map<integer,text>; q: foo; }",
+        chkFlags("record foo { x: (a:text,b:integer); } record bar { mutable y: range; }", "bar[mut],foo[hum,com]")
+        chkFlags("record foo { x: (a:text,b:integer); p: bar; } record bar { mutable y: range; }", "bar[mut],foo[mut]")
+        chkFlags("record foo { x: (a:text,b:integer); } record bar { mutable y: range; q: foo; }", "bar[mut],foo[hum,com]")
+        chkFlags("record foo { x: (a:text,b:integer); p: bar; } record bar { mutable y: range; q: foo; }",
                 "bar[mut,cyc,inf],foo[mut,cyc,inf]")
 
-        chkFlags("record foo { x: (t:text,integer); } record bar { y: map<integer,text>; }", "bar[mut],foo[com]")
-        chkFlags("record foo { x: (t:text,integer); p: bar; } record bar { y: map<integer,text>; }", "bar[mut],foo[mut]")
-        chkFlags("record foo { x: (t:text,integer); } record bar { y: map<integer,text>; q: foo; }", "bar[mut],foo[com]")
-        chkFlags("record foo { x: (t:text,integer); p: bar; } record bar { y: map<integer,text>; q: foo; }",
+        chkFlags("record foo { x: (t:text,integer); } record bar { mutable y: range; }", "bar[mut],foo[hum,com]")
+        chkFlags("record foo { x: (t:text,integer); p: bar; } record bar { mutable y: range; }", "bar[mut],foo[mut]")
+        chkFlags("record foo { x: (t:text,integer); } record bar { mutable y: range; q: foo; }", "bar[mut],foo[hum,com]")
+        chkFlags("record foo { x: (t:text,integer); p: bar; } record bar { mutable y: range; q: foo; }",
                 "bar[mut,cyc,inf],foo[mut,cyc,inf]")
     }
 
@@ -220,8 +221,8 @@ class RecordTest: BaseRellTest(false) {
             for (rec in module.records.values.sortedBy { it.name }) {
                 val flags = mutableListOf<String>()
                 if (rec.flags.typeFlags.mutable) flags.add("mut")
-                if (rec.flags.typeFlags.gtxHuman.compatible) flags.add("hum")
-                if (rec.flags.typeFlags.gtxCompact.compatible) flags.add("com")
+                if (rec.flags.typeFlags.gtvHuman.compatible) flags.add("hum")
+                if (rec.flags.typeFlags.gtvCompact.compatible) flags.add("com")
                 if (rec.flags.cyclic) flags.add("cyc")
                 if (rec.flags.infinite) flags.add("inf")
                 lst.add("${rec.name}[${flags.joinToString(",")}]")

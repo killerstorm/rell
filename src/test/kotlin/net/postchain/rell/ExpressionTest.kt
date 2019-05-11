@@ -66,10 +66,10 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testMemberFunctionVsField() {
-        tst.defs = listOf("record foo { toGTXValue: integer; }")
-        chkEx("{ val v = foo(123); return v.toGTXValue; }", "int[123]")
-        chkEx("{ val v = foo(123); return v.toGTXValue.str(); }", "text[123]")
-        chkEx("{ val v = foo(123); return v.toGTXValue().toJSON().str(); }", "text[[123]]")
+        tst.defs = listOf("record foo { to_gtv: integer; }")
+        chkEx("{ val v = foo(123); return v.to_gtv; }", "int[123]")
+        chkEx("{ val v = foo(123); return v.to_gtv.str(); }", "text[123]")
+        chkEx("{ val v = foo(123); return v.to_gtv().to_json().str(); }", "text[[123]]")
     }
 
     @Test fun testListItems() {

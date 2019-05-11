@@ -1,8 +1,8 @@
 package net.postchain.rell.test
 
 import com.google.common.collect.Sets
-import net.postchain.gtv.GtvNull
 import net.postchain.gtv.Gtv
+import net.postchain.gtv.GtvNull
 import net.postchain.rell.hexStringToByteArray
 import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_Module
@@ -21,15 +21,15 @@ class RellCodeTester(
         tstCtx: RellTestContext,
         classDefs: List<String> = listOf(),
         inserts: List<String> = listOf(),
-        gtx: Boolean = false
-): RellBaseTester(tstCtx, classDefs, inserts, gtx)
+        gtv: Boolean = false
+): RellBaseTester(tstCtx, classDefs, inserts, gtv)
 {
     private val expectedData = mutableListOf<String>()
     private val stdoutPrinter = TesterRtPrinter()
     private val logPrinter = TesterRtPrinter()
     private val messages = mutableListOf<C_Message>()
 
-    var gtxResult: Boolean = gtx
+    var gtvResult: Boolean = gtv
         set(value) {
             checkNotInited()
             field = value
@@ -86,14 +86,14 @@ class RellCodeTester(
         assertEquals(expected, actual)
     }
 
-    fun chkQueryGtx(code: String, expected: String) {
+    fun chkQueryGtv(code: String, expected: String) {
         val queryCode = "query q() $code"
-        val actual = callQuery0(queryCode, listOf(), GtxTestUtils::decodeGtxQueryArgs)
+        val actual = callQuery0(queryCode, listOf(), GtvTestUtils::decodeGtvQueryArgs)
         assertEquals(expected, actual)
     }
 
-    fun chkQueryGtxEx(code: String, args: List<String>, expected: String) {
-        val actual = callQuery0(code, args, GtxTestUtils::decodeGtxQueryArgs)
+    fun chkQueryGtvEx(code: String, args: List<String>, expected: String) {
+        val actual = callQuery0(code, args, GtvTestUtils::decodeGtvQueryArgs)
         assertEquals(expected, actual)
     }
 
@@ -116,8 +116,8 @@ class RellCodeTester(
         assertEquals(expected, actual)
     }
 
-    fun chkOpGtxEx(code: String, args: List<String>, expected: String) {
-        val actual = callOp0(code, args, GtxTestUtils::decodeGtxOpArgsStr)
+    fun chkOpGtvEx(code: String, args: List<String>, expected: String) {
+        val actual = callOp0(code, args, GtvTestUtils::decodeGtvOpArgsStr)
         assertEquals(expected, actual)
     }
 
@@ -172,7 +172,7 @@ class RellCodeTester(
             val moduleCode = moduleCode(code)
             val globalCtx = createGlobalCtx()
 
-            val encoder = if (gtxResult) RellTestUtils.ENCODER_GTX
+            val encoder = if (gtvResult) RellTestUtils.ENCODER_GTV
             else if (strictToString) RellTestUtils.ENCODER_STRICT
             else RellTestUtils.ENCODER_PLAIN
 
@@ -186,12 +186,12 @@ class RellCodeTester(
         return callOp0(code, args) { _, v -> v }
     }
 
-    fun callOpGtx(code: String, args: List<Gtv>): String {
-        return callOp0(code, args, GtxTestUtils::decodeGtxOpArgs)
+    fun callOpGtv(code: String, args: List<Gtv>): String {
+        return callOp0(code, args, GtvTestUtils::decodeGtvOpArgs)
     }
 
-    fun callOpGtxStr(code: String, args: List<String>): String {
-        return callOp0(code, args, GtxTestUtils::decodeGtxOpArgsStr)
+    fun callOpGtvStr(code: String, args: List<String>): String {
+        return callOp0(code, args, GtvTestUtils::decodeGtvOpArgsStr)
     }
 
     private fun <T> callOp0(code: String, args: List<T>, decoder: (List<R_ExternalParam>, List<T>) -> List<Rt_Value>): String {
@@ -259,7 +259,7 @@ class RellCodeTester(
 
     private fun processModuleCtx(globalCtx: Rt_GlobalContext, code: String, processor: (Rt_ModuleContext) -> String): String {
         val includeDir = createIncludeDir(code)
-        return RellTestUtils.processModule(includeDir, errMsgPos, gtx) { module ->
+        return RellTestUtils.processModule(includeDir, errMsgPos, gtv) { module ->
             messages.addAll(module.messages)
             RellTestUtils.catchRtErr({ createModuleCtx(globalCtx, module.rModule) }) {
                 modCtx -> processor(modCtx) }

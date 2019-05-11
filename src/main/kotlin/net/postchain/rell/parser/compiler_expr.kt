@@ -158,9 +158,6 @@ class C_DbNameContext(blkCtx: C_BlockContext, private val classes: List<C_AtClas
         if (cls != null && loc != null) {
             throw C_Errors.errNameConflictAliasLocal(name)
         }
-        if (cls != null && glob != null) {
-            throw C_Errors.errNameConflictClassGlobal(name)
-        }
 
         if (cls != null) return C_NameResolution_Class(name, cls)
         if (loc != null) return C_NameResolution_Local(name, ctx, loc)
@@ -724,7 +721,7 @@ class C_NamespaceExpr(private val name: List<S_Name>, private val ns: C_Namespac
         if (valueExpr != null) return valueExpr
 
         val nsType = ns.types[memberName.str]
-        return if (nsType == null) null else C_TypeExpr(memberName, nsType)
+        return if (nsType == null) null else C_TypeExpr(memberName.pos, nsType)
     }
 }
 
@@ -780,7 +777,7 @@ class C_EnumExpr(private val name: List<S_Name>, private val rEnum: R_EnumType):
     }
 
     private fun memberFn(memberName: S_Name): C_Expr? {
-        val fn = C_LibFunctions.getEnumStaticFunction(rEnum, memberName.str)
+        val fn = C_LibFunctions.getTypeStaticFunction(rEnum, memberName.str)
         return if (fn == null) null else C_FunctionExpr(memberName, fn)
     }
 }
@@ -811,9 +808,15 @@ class C_FunctionExpr(private val name: S_Name, private val fn: C_GlobalFunction)
     }
 }
 
-class C_TypeExpr(private val name: S_Name, private val type: R_Type): C_Expr() {
+class C_TypeExpr(private val pos: S_Pos, private val type: R_Type): C_Expr() {
     override fun kind() = C_ExprKind.TYPE
-    override fun startPos() = name.pos
+    override fun startPos() = pos
+
+    override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
+        val fn = C_LibFunctions.getTypeStaticFunction(type, memberName.str)
+        if (fn == null) throw C_Errors.errUnknownName(type.name, memberName)
+        return C_FunctionExpr(memberName, fn)
+    }
 }
 
 class C_ValueFunctionExpr(private val name: S_Name, private val valueExpr: C_Expr, private val fnExpr: C_Expr): C_Expr() {

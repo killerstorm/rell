@@ -12,14 +12,14 @@ abstract class RellBaseTester(
         private val tstCtx: RellTestContext,
         classDefs: List<String> = listOf(),
         inserts: List<String> = listOf(),
-        gtx: Boolean = false
+        gtv: Boolean = false
 ){
     private var inited = false
     private var lastInserts = listOf<String>()
     private var moduleProto: R_Module? = null
 
     var errMsgPos = false
-    var gtx = gtx
+    var gtv = gtv
 
     var defs: List<String> = classDefs
         set(value) {
@@ -44,7 +44,7 @@ abstract class RellBaseTester(
             val code = defsCode()
 
             val includeDir = createIncludeDir(code)
-            val module = RellTestUtils.parseModule(includeDir, gtx).rModule
+            val module = RellTestUtils.parseModule(includeDir, gtv).rModule
 
             if (tstCtx.useSql) {
                 initSql(code, module)
@@ -160,7 +160,7 @@ abstract class RellBaseTester(
 
     fun processModule(code: String, processor: (R_Module) -> String): String {
         val includeDir = createIncludeDir(code)
-        return RellTestUtils.processModule(includeDir, errMsgPos, gtx) { processor(it.rModule) }
+        return RellTestUtils.processModule(includeDir, errMsgPos, gtv) { processor(it.rModule) }
     }
 
     protected fun createChainSqlMapping(): Rt_ChainSqlMapping {

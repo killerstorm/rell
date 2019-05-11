@@ -31,7 +31,7 @@ class GtxTest : BaseGtxTest() {
         tst.chkUserMistake("", "Type error: ")
 
         tst.moduleArgs = "{'p':'Hello','q':123}"
-        tst.chkUserMistake("", "Key missing in GTX dictionary: ")
+        tst.chkUserMistake("", "Key missing in Gtv dictionary: ")
 
         tst.moduleArgs = "{'n':'Hello','s':123}"
         tst.chkUserMistake("", "Type error: ")
@@ -47,8 +47,8 @@ class GtxTest : BaseGtxTest() {
     @Test fun testModuleArgsRecord() {
         tst.chkCompile("record module_args {}", "OK")
         tst.chkCompile("record module_args { x: map<text, integer>; }", "OK")
-        tst.chkCompile("record module_args { x: map<integer, text>; }", "ct_err:module_args_nogtx")
-        tst.chkCompile("record module_args { x: (a: integer, text); }", "ct_err:module_args_nogtx")
+        tst.chkCompile("record module_args { x: range; }", "ct_err:module_args_nogtv")
+        tst.chkCompile("record module_args { x: (a: integer, text); }", "OK")
         tst.chkCompile("class module_args {}", "OK")
     }
 

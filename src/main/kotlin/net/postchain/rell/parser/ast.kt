@@ -3,8 +3,8 @@ package net.postchain.rell.parser
 import net.postchain.rell.MutableTypedKeyMap
 import net.postchain.rell.TypedKeyMap
 import net.postchain.rell.model.*
-import net.postchain.rell.module.GTX_OPERATION_HUMAN
-import net.postchain.rell.module.GTX_QUERY_HUMAN
+import net.postchain.rell.module.GTV_OPERATION_HUMAN
+import net.postchain.rell.module.GTV_QUERY_HUMAN
 
 abstract class S_Pos
 
@@ -196,7 +196,7 @@ class S_ClassDefinition(val name: S_Name, val annotations: List<S_Name>, val bod
                 canCreate = !external,
                 canUpdate = !external,
                 canDelete = !log && !external,
-                gtx = true,
+                gtv = true,
                 log = log
         )
     }
@@ -327,8 +327,8 @@ class S_OpDefinition(val name: S_Name, val params: List<S_NameTypePair>, val bod
         val rBody = body.compile(exprCtx).rStmt
         val rCallFrame = entCtx.makeCallFrame()
 
-        if (ctx.modCtx.globalCtx.gtx) {
-            checkGtxParams(params, rParams, GTX_OPERATION_HUMAN)
+        if (ctx.modCtx.globalCtx.gtv) {
+            checkGtvParams(params, rParams, GTV_OPERATION_HUMAN)
         }
 
         val rOperation = R_Operation(fullName, rParams, rBody, rCallFrame)
@@ -368,33 +368,33 @@ class S_QueryDefinition(
         val rCallFrame = entCtx.makeCallFrame()
         val rRetType = entCtx.actualReturnType()
 
-        if (ctx.modCtx.globalCtx.gtx) {
-            checkGtxParams(params, rParams, GTX_QUERY_HUMAN)
-            checkGtxResult(rRetType, GTX_QUERY_HUMAN)
+        if (ctx.modCtx.globalCtx.gtv) {
+            checkGtvParams(params, rParams, GTV_QUERY_HUMAN)
+            checkGtvResult(rRetType, GTV_QUERY_HUMAN)
         }
 
         val rQuery = R_Query(fullName, rRetType, rParams, rBody, rCallFrame)
         ctx.addQuery(rQuery)
     }
 
-    private fun checkGtxResult(rType: R_Type, human: Boolean) {
-        checkGtxCompatibility(name.pos, rType, human, "result_nogtx:${name.str}", "Return type of query '${name.str}'")
+    private fun checkGtvResult(rType: R_Type, human: Boolean) {
+        checkGtvCompatibility(name.pos, rType, human, "result_nogtv:${name.str}", "Return type of query '${name.str}'")
     }
 }
 
-private fun checkGtxParams(params: List<S_NameTypePair>, rParams: List<R_ExternalParam>, human: Boolean) {
+private fun checkGtvParams(params: List<S_NameTypePair>, rParams: List<R_ExternalParam>, human: Boolean) {
     params.forEachIndexed { i, param ->
         val type = rParams[i].type
         val name = param.name.str
-        checkGtxCompatibility(param.name.pos, type, human, "param_nogtx:$name", "Type of parameter '$name'")
+        checkGtvCompatibility(param.name.pos, type, human, "param_nogtv:$name", "Type of parameter '$name'")
     }
 }
 
-private fun checkGtxCompatibility(pos: S_Pos, type: R_Type, human: Boolean, errCode: String, errMsg: String) {
+private fun checkGtvCompatibility(pos: S_Pos, type: R_Type, human: Boolean, errCode: String, errMsg: String) {
     val flags = type.completeFlags()
-    val gtx = if (human) flags.gtxHuman else flags.gtxCompact
-    if (!gtx.compatible) {
-        throw C_Errors.errTypeNotGtxCompatible(pos, type, gtx.err, errCode, errMsg)
+    val gtv = if (human) flags.gtvHuman else flags.gtvCompact
+    if (!gtv.compatible) {
+        throw C_Errors.errTypeNotGtvCompatible(pos, type, gtv.err, errCode, errMsg)
     }
 }
 

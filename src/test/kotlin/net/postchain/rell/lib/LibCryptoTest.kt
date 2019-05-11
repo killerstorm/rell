@@ -31,13 +31,13 @@ class LibCryptoTest: BaseRellTest(false) {
 
     @Test fun testHashRecord() {
         tst.strictToString = false
-        tst.defs = listOf("record rec { i: integer; t: text; }", "record rec_nogtx { m: map<integer,text>; }")
+        tst.defs = listOf("record rec { i: integer; t: text; }", "record rec_nogtv { m: range; }")
         chk("rec(123,'Hello').hash()", "0x74443c7de4d4fee6f6f4d9b0aa5d4749dbfb0965b422e578802701b9ac2e063a")
         chk("rec(456,'Bye').hash()", "0x7758916e7f9f1a9e0a84351f402dbc9c906492879a9d71dc4ff1f5b7d67bdf53")
-        chk("rec_nogtx(map<integer,text>()).hash()", "ct_err:fn_record_invalid:rec_nogtx:rec_nogtx.hash")
-        chk("rec_nogtx([123:'Hello']).hash()", "ct_err:fn_record_invalid:rec_nogtx:rec_nogtx.hash")
-        chk("rec(123,'Hello').toGTXValue().hash()", "0x74443c7de4d4fee6f6f4d9b0aa5d4749dbfb0965b422e578802701b9ac2e063a")
-        chk("rec(456,'Bye').toGTXValue().hash()", "0x7758916e7f9f1a9e0a84351f402dbc9c906492879a9d71dc4ff1f5b7d67bdf53")
+        chk("rec_nogtv(range(10)).hash()", "ct_err:fn:invalid:rec_nogtv:rec_nogtv.hash")
+        chk("rec_nogtv(range(10)).hash()", "ct_err:fn:invalid:rec_nogtv:rec_nogtv.hash")
+        chk("rec(123,'Hello').to_gtv().hash()", "0x74443c7de4d4fee6f6f4d9b0aa5d4749dbfb0965b422e578802701b9ac2e063a")
+        chk("rec(456,'Bye').to_gtv().hash()", "0x7758916e7f9f1a9e0a84351f402dbc9c906492879a9d71dc4ff1f5b7d67bdf53")
     }
 
     @Test fun testHashSimple() {
@@ -78,7 +78,7 @@ class LibCryptoTest: BaseRellTest(false) {
         chk("set(['Hello']).hash()", "0xd801dd39d403f923583a943cbbe641cb73f665bff3c19984a3389d58b620ab9a")
 
         chk("map<text,integer>().hash()", "0x300b4292a3591228725e6e2e20be3ab63a6a99cc695e925c6c20a90c570a5e71")
-        chk("[1:'A',2:'B'].hash()", "ct_err:unknown_member:map<integer,text>:hash")
+        chk("[1:'A',2:'B'].hash()", "0x51626de7acc3fe1070354211eaa7dd072728f5bb863a30866613cae41a8290cf")
         chk("['Hello':1,'Bye':2].hash()", "0xb2ce92049c9ce75afccf2fe979ff8626ffaebbcaa538bfb8fe9efdc150035e23")
     }
 
