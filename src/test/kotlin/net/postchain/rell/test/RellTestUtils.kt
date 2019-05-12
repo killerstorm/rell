@@ -20,11 +20,11 @@ object RellTestUtils {
     fun processModule(
             includeDir: C_IncludeDir,
             errPos: Boolean = false,
-            gtv: Boolean = false,
+            options: C_CompilerOptions = C_CompilerOptions(),
             processor: (RellTestModule) -> String
     ): String {
         val p = catchCtErr0(errPos) {
-            parseModule(includeDir, gtv)
+            parseModule(includeDir, options)
         }
         return p.first ?: processor(p.second!!)
     }
@@ -127,8 +127,8 @@ object RellTestUtils {
         }
     }
 
-    fun parseModule(includeDir: C_IncludeDir, gtv: Boolean): RellTestModule {
-        val res = C_Compiler.compile(includeDir, MAIN_FILE, gtv)
+    fun parseModule(includeDir: C_IncludeDir, options: C_CompilerOptions): RellTestModule {
+        val res = C_Compiler.compile(includeDir, MAIN_FILE, options)
         saveSource(includeDir, res)
         if (res.error != null) {
             throw res.error!!

@@ -93,7 +93,7 @@ class InterpOpTest: AbstractOpTest() {
         }
 
         class Bytes(str: String): InterpTstVal("byte_array") {
-            private val v = str.hexStringToByteArray()
+            private val v = CommonUtils.hexToBytes(str)
             override fun rt(m: R_Module): Rt_Value = Rt_ByteArrayValue(v)
         }
 

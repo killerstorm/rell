@@ -1,6 +1,7 @@
 package net.postchain.rell.model
 
 import net.postchain.rell.runtime.*
+import java.nio.ByteBuffer
 import java.util.*
 import java.util.regex.Pattern
 
@@ -86,8 +87,32 @@ object R_SysFn_Text_Matches: R_SysFn_Text() {
     override fun call(obj: String, a: Rt_Value): Rt_Value = Rt_BooleanValue(Pattern.matches(a.asString(), obj))
 }
 
-object R_SysFn_Text_Encode: R_SysFn_Text() {
-    override fun call(obj: String): Rt_Value = Rt_ByteArrayValue(obj.toByteArray())
+private val CHARSET = Charsets.UTF_8
+
+object R_SysFn_Text_ToBytes: R_SysFn_Text() {
+    override fun call(obj: String): Rt_Value = Rt_ByteArrayValue(obj.toByteArray(CHARSET))
+}
+
+object R_SysFn_Text_FromBytes_1: R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value = R_SysFn_Text_FromBytes.call(arg, Rt_BooleanValue(false))
+}
+
+object R_SysFn_Text_FromBytes: R_SysFunction_2() {
+    override fun call(arg1: Rt_Value, arg2: Rt_Value): Rt_Value {
+        val bytes = arg1.asByteArray()
+        val ignoreErr = arg2.asBoolean()
+        val s = if (ignoreErr) {
+            String(bytes, CHARSET)
+        } else {
+            val decoder = CHARSET.newDecoder()
+            val byteBuffer = ByteBuffer.wrap(bytes)
+            val charBuffer = Rt_Utils.wrapErr("fn:text.from_bytes") {
+                decoder.decode(byteBuffer)
+            }
+            charBuffer.toString()
+        }
+        return Rt_TextValue(s)
+    }
 }
 
 object R_SysFn_Text_CharAt: R_SysFn_Text() {

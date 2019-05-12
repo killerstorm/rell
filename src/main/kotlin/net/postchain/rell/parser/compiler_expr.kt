@@ -468,7 +468,7 @@ private class C_LocalVarValue(
 
         val globCtx = ctx.blkCtx.entCtx.nsCtx.modCtx.globalCtx
         val freq = if (nulled == C_VarFact.YES) "always" else "never"
-        globCtx.warning(name.pos, "expr_var_null:$freq:${name.str}", "Variable '${name.str}' is $freq null")
+        globCtx.warning(name.pos, "expr_var_null:$freq:${name.str}", "Variable '${name.str}' is $freq null at that location")
 
         return C_LocalVarValue(ctx, name, entry, nulled, entry.type, false)
     }
@@ -701,12 +701,13 @@ class C_ValueExpr(private val value: C_Value): C_Expr() {
     }
 }
 
-class C_NamespaceExpr(private val name: List<S_Name>, private val ns: C_Namespace): C_Expr() {
+class C_NamespaceExpr(private val name: List<S_Name>, private val nsDef: C_NamespaceDef): C_Expr() {
     override fun kind() = C_ExprKind.NAMESPACE
     override fun startPos() = name[0].pos
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
-        val valueExpr = memberValue(ctx.blkCtx.entCtx, memberName)
+        val ns = nsDef.useDef(ctx.blkCtx.entCtx.nsCtx, name)
+        val valueExpr = memberValue(ctx.blkCtx.entCtx, memberName, ns)
 
         val fn = ns.functions[memberName.str]
         val fnExpr = if (fn != null) C_FunctionExpr(memberName, fn) else null
@@ -715,22 +716,29 @@ class C_NamespaceExpr(private val name: List<S_Name>, private val ns: C_Namespac
         return expr ?: throw C_Errors.errUnknownName(name, memberName)
     }
 
-    private fun memberValue(entCtx: C_EntityContext, memberName: S_Name): C_Expr? {
+    private fun memberValue(entCtx: C_EntityContext, memberName: S_Name, ns: C_Namespace): C_Expr? {
         val nsValue = ns.values[memberName.str]
         val valueExpr = nsValue?.get(entCtx, name + listOf(memberName))
         if (valueExpr != null) return valueExpr
 
-        val nsType = ns.types[memberName.str]
-        return if (nsType == null) null else C_TypeExpr(memberName.pos, nsType)
+        val nsTypeDef = ns.types[memberName.str]
+        return if (nsTypeDef == null) null else {
+            val fullName = name + listOf(memberName)
+            C_TypeNameExpr(memberName.pos, fullName, nsTypeDef)
+        }
     }
 }
 
-class C_RecordExpr(private val name: List<S_Name>, private val record: R_RecordType, private val ns: C_Namespace): C_Expr() {
+class C_RecordExpr(
+        private val name: List<S_Name>,
+        private val record: R_RecordType,
+        private val nsDef: C_NamespaceDef
+): C_Expr() {
     override fun kind() = C_ExprKind.RECORD
     override fun startPos() = name[0].pos
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
-        val nsExpr = C_NamespaceExpr(name, ns)
+        val nsExpr = C_NamespaceExpr(name, nsDef)
         return nsExpr.member(ctx, memberName, safe)
     }
 
@@ -794,7 +802,7 @@ private class C_MemberFunctionExpr(
 
     override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_NameExprPair>): C_Expr {
         val cArgs = compileArgs(ctx, args)
-        return fn.compileCall(name, base, safe, cArgs)
+        return fn.compileCall(ctx, name, base, safe, cArgs)
     }
 }
 
@@ -804,7 +812,19 @@ class C_FunctionExpr(private val name: S_Name, private val fn: C_GlobalFunction)
 
     override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_NameExprPair>): C_Expr {
         val cArgs = compileArgs(ctx, args)
-        return fn.compileCall(name, cArgs)
+        return fn.compileCall(ctx, name, cArgs)
+    }
+}
+
+class C_TypeNameExpr(private val pos: S_Pos, private val name: List<S_Name>, private val typeDef: C_TypeDef): C_Expr() {
+    override fun kind() = C_ExprKind.TYPE
+    override fun startPos() = pos
+
+    override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
+        val type = typeDef.useDef(ctx.blkCtx.entCtx.nsCtx, name)
+        val fn = C_LibFunctions.getTypeStaticFunction(type, memberName.str)
+        if (fn == null) throw C_Errors.errUnknownName(type.name, memberName)
+        return C_FunctionExpr(memberName, fn)
     }
 }
 

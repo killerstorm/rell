@@ -11,9 +11,6 @@ import net.postchain.gtv.merkleHash
 import java.io.File
 import javax.xml.bind.DatatypeConverter
 
-fun String.hexStringToByteArray(): ByteArray = DatatypeConverter.parseHexBinary(this)
-fun ByteArray.toHex(): String = DatatypeConverter.printHexBinary(this).toLowerCase()
-
 object CommonUtils {
     fun <T> split(lst: MutableList<T>, partSize: Int): List<MutableList<T>> {
         val s = lst.size
@@ -38,6 +35,9 @@ object CommonUtils {
             File(filename).readText()
         }
     }
+
+    fun bytesToHex(bytes: ByteArray): String = DatatypeConverter.printHexBinary(bytes).toLowerCase()
+    fun hexToBytes(hex: String): ByteArray = DatatypeConverter.parseHexBinary(hex)
 }
 
 object PostchainUtils {

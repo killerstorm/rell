@@ -20,10 +20,6 @@ abstract class C_IncludeDir {
     abstract fun file(path: C_IncludePath): C_IncludeFile?
 }
 
-object C_EmptyIncludeDir: C_IncludeDir() {
-    override fun file(path: C_IncludePath) = null
-}
-
 private class C_VirtualIncludeFile(private val path: String, private val text: String): C_IncludeFile() {
     override fun readAst(): S_ModuleDefinition {
         return C_Parser.parse(path, text)

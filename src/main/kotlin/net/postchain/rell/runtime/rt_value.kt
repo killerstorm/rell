@@ -6,8 +6,8 @@ import com.google.common.math.LongMath
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
 import net.postchain.gtv.make_gtv_gson
+import net.postchain.rell.CommonUtils
 import net.postchain.rell.model.*
-import net.postchain.rell.toHex
 import java.util.*
 
 abstract class Rt_ValueRef {
@@ -119,8 +119,8 @@ class Rt_ByteArrayValue(val value: ByteArray): Rt_Value() {
     override fun valueType() = "ByteArray"
     override fun asByteArray(): ByteArray = value
     override fun asFormatArg(): Any = toString()
-    override fun toStrictString(showTupleFieldNames: Boolean): String = "byte_array[${value.toHex()}]"
-    override fun toString(): String = "0x" + value.toHex()
+    override fun toStrictString(showTupleFieldNames: Boolean): String = "byte_array[${CommonUtils.bytesToHex(value)}]"
+    override fun toString(): String = "0x" + CommonUtils.bytesToHex(value)
     override fun equals(other: Any?): Boolean = other is Rt_ByteArrayValue && Arrays.equals(value, other.value)
     override fun hashCode(): Int = Arrays.hashCode(value)
 }

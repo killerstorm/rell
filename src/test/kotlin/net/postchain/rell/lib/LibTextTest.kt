@@ -204,4 +204,29 @@ class LibTextTest: BaseRellTest(false) {
         chk("'%s'.format()", "text[%s]")
         chk("'%d'.format('Hello')", "text[%d]")
     }
+
+    @Test fun testToFromBytes() {
+        chk("''.to_bytes()", "byte_array[]")
+        chk("text.from_bytes(x'')", "text[]")
+        chk("text.from_bytes(x'', false)", "text[]")
+        chk("text.from_bytes(x'', true)", "text[]")
+
+        chk("'Hello'.to_bytes()", "byte_array[48656c6c6f]")
+        chk("text.from_bytes(x'48656c6c6f')", "text[Hello]")
+        chk("text.from_bytes(x'48656c6c6f', false)", "text[Hello]")
+        chk("text.from_bytes(x'48656c6c6f', true)", "text[Hello]")
+
+        chk("'\u041f\u0440\u0438\u0432\u0435\u0442'.to_bytes()", "byte_array[d09fd180d0b8d0b2d0b5d182]")
+        chk("text.from_bytes(x'd09fd180d0b8d0b2d0b5d182')", """text[\u041f\u0440\u0438\u0432\u0435\u0442]""")
+        chk("text.from_bytes(x'd09fd180d0b8d0b2d0b5d182', false)", """text[\u041f\u0440\u0438\u0432\u0435\u0442]""")
+        chk("text.from_bytes(x'd09fd180d0b8d0b2d0b5d182', true)", """text[\u041f\u0440\u0438\u0432\u0435\u0442]""")
+
+        // See https://www.cl.cam.ac.uk/~mgk25/ucs/examples/UTF-8-test.txt
+        chk("text.from_bytes(x'80')", "rt_err:fn:text.from_bytes")
+        chk("text.from_bytes(x'bf')", "rt_err:fn:text.from_bytes")
+        chk("text.from_bytes(x'80', false)", "rt_err:fn:text.from_bytes")
+        chk("text.from_bytes(x'bf', false)", "rt_err:fn:text.from_bytes")
+        chk("text.from_bytes(x'80', true)", "text[\\ufffd]")
+        chk("text.from_bytes(x'bf', true)", "text[\\ufffd]")
+    }
 }

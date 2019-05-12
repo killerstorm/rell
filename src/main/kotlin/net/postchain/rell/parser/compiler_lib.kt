@@ -15,17 +15,18 @@ object C_LibFunctions {
 
             .add("require", C_SysFunction_Require_Boolean)
             .add("require", C_SysFunction_Require_Nullable)
-            .add("requireNotEmpty", C_SysFunction_Require_Collection)
-            .add("requireNotEmpty", C_SysFunction_Require_Nullable)
+            .add("requireNotEmpty", C_SysFunction_Require_Collection, C_Deprecated_UseInstead("require_not_empty"))
+            .add("requireNotEmpty", C_SysFunction_Require_Nullable, C_Deprecated_UseInstead("require_not_empty"))
             .add("require_not_empty", C_SysFunction_Require_Collection)
             .add("require_not_empty", C_SysFunction_Require_Nullable)
             .add("exists", C_SysFunction_Exists)
 
-            .add("integer", R_IntegerType, listOf(R_TextType), R_SysFn_Int_Parse)
-            .add("integer", R_IntegerType, listOf(R_TextType, R_IntegerType), R_SysFn_Int_Parse)
+            .add("integer", R_IntegerType, listOf(R_TextType), R_SysFn_Int_FromText)
+            .add("integer", R_IntegerType, listOf(R_TextType, R_IntegerType), R_SysFn_Int_FromText)
 
-            .add("byte_array", R_ByteArrayType, listOf(R_TextType), R_SysFn_ByteArray_New_Text)
-            .add("byte_array", R_ByteArrayType, listOf(R_ListType(R_IntegerType)), R_SysFn_ByteArray_New_List)
+            .add("byte_array", R_ByteArrayType, listOf(R_TextType), R_SysFn_ByteArray_FromHex)
+            .add("byte_array", R_ByteArrayType, listOf(R_ListType(R_IntegerType)), R_SysFn_ByteArray_FromList,
+                    C_Deprecated_UseInstead("byte_array.from_list"))
 
             .add("range", R_RangeType, listOf(R_IntegerType), R_SysFn_Range)
             .add("range", R_RangeType, listOf(R_IntegerType, R_IntegerType), R_SysFn_Range)
@@ -47,9 +48,12 @@ object C_LibFunctions {
             .build()
 
     private val INTEGER_FNS = typeMemFuncBuilder(R_IntegerType)
-            .add("str", R_TextType, listOf(), R_SysFn_Int_Str, Db_SysFn_Int_Str)
-            .add("str", R_TextType, listOf(R_IntegerType), R_SysFn_Int_Str)
-            .add("hex", R_TextType, listOf(), R_SysFn_Int_Hex)
+            .add("str", R_TextType, listOf(), R_SysFn_Int_ToText, Db_SysFn_Int_ToText)
+            .add("str", R_TextType, listOf(R_IntegerType), R_SysFn_Int_ToText)
+            .add("hex", R_TextType, listOf(), R_SysFn_Int_ToHex, C_Deprecated_UseInstead("to_hex"))
+            .add("to_text", R_TextType, listOf(), R_SysFn_Int_ToText, Db_SysFn_Int_ToText)
+            .add("to_text", R_TextType, listOf(R_IntegerType), R_SysFn_Int_ToText)
+            .add("to_hex", R_TextType, listOf(), R_SysFn_Int_ToHex)
             .add("signum", R_IntegerType, listOf(), R_SysFn_Int_Signum)
             .build()
 
@@ -59,8 +63,10 @@ object C_LibFunctions {
     private val BOOLEAN_NAMESPACE = makeNamespace(BOOLEAN_NAMESPACE_FNS)
 
     private val INTEGER_NAMESPACE_FNS = typeGlobalFuncBuilder(R_IntegerType)
-            .add("parseHex", R_IntegerType, listOf(R_TextType), R_SysFn_Int_ParseHex)
-            .add("parse_hex", R_IntegerType, listOf(R_TextType), R_SysFn_Int_ParseHex)
+            .add("parseHex", R_IntegerType, listOf(R_TextType), R_SysFn_Int_FromHex, C_Deprecated_UseInstead("from_hex"))
+            .add("from_text", R_IntegerType, listOf(R_TextType), R_SysFn_Int_FromText)
+            .add("from_text", R_IntegerType, listOf(R_TextType, R_IntegerType), R_SysFn_Int_FromText)
+            .add("from_hex", R_IntegerType, listOf(R_TextType), R_SysFn_Int_FromHex)
             .build()
 
     private val INTEGER_NAMESPACE = makeNamespace(
@@ -70,11 +76,11 @@ object C_LibFunctions {
     )
 
     private val GTV_NAMESPACE_FNS = C_GlobalFuncBuilder()
-            .add("fromBytes", R_GtvType, listOf(R_ByteArrayType), R_SysFn_Gtv_FromBytes)
+            .add("fromBytes", R_GtvType, listOf(R_ByteArrayType), R_SysFn_Gtv_FromBytes, C_Deprecated_UseInstead("from_bytes"))
             .add("from_bytes", R_GtvType, listOf(R_ByteArrayType), R_SysFn_Gtv_FromBytes)
-            .add("fromJSON", R_GtvType, listOf(R_TextType), R_SysFn_Gtv_FromJson_Text)
+            .add("fromJSON", R_GtvType, listOf(R_TextType), R_SysFn_Gtv_FromJson_Text, C_Deprecated_UseInstead("from_json"))
             .add("from_json", R_GtvType, listOf(R_TextType), R_SysFn_Gtv_FromJson_Text)
-            .add("fromJSON", R_GtvType, listOf(R_JsonType), R_SysFn_Gtv_FromJson_Json)
+            .add("fromJSON", R_GtvType, listOf(R_JsonType), R_SysFn_Gtv_FromJson_Json, C_Deprecated_UseInstead("from_json"))
             .add("from_json", R_GtvType, listOf(R_JsonType), R_SysFn_Gtv_FromJson_Json)
             .build()
 
@@ -93,6 +99,8 @@ object C_LibFunctions {
     )
 
     private val TEXT_NAMESPACE_FNS = typeGlobalFuncBuilder(R_TextType)
+            .add("from_bytes", R_TextType, listOf(R_ByteArrayType), R_SysFn_Text_FromBytes_1)
+            .add("from_bytes", R_TextType, listOf(R_ByteArrayType, R_BooleanType), R_SysFn_Text_FromBytes)
             .build()
 
     private val TEXT_NAMESPACE = makeNamespace(TEXT_NAMESPACE_FNS)
@@ -100,39 +108,43 @@ object C_LibFunctions {
     private val TEXT_FNS = typeMemFuncBuilder(R_TextType)
             .add("empty", R_BooleanType, listOf(), R_SysFn_Text_Empty)
             .add("size", R_IntegerType, listOf(), R_SysFn_Text_Size, Db_SysFn_Text_Size)
-            .add("len", R_IntegerType, listOf(), R_SysFn_Text_Size, Db_SysFn_Text_Size)
-            .add("upperCase", R_TextType, listOf(), R_SysFn_Text_UpperCase, Db_SysFn_Text_UpperCase)
+            .add("len", R_IntegerType, listOf(), R_SysFn_Text_Size, Db_SysFn_Text_Size, C_Deprecated_UseInstead("size"))
+            .add("upperCase", R_TextType, listOf(), R_SysFn_Text_UpperCase, Db_SysFn_Text_UpperCase, C_Deprecated_UseInstead("upper_case"))
             .add("upper_case", R_TextType, listOf(), R_SysFn_Text_UpperCase, Db_SysFn_Text_UpperCase)
-            .add("lowerCase", R_TextType, listOf(), R_SysFn_Text_LowerCase, Db_SysFn_Text_LowerCase)
+            .add("lowerCase", R_TextType, listOf(), R_SysFn_Text_LowerCase, Db_SysFn_Text_LowerCase, C_Deprecated_UseInstead("lower_case"))
             .add("lower_case", R_TextType, listOf(), R_SysFn_Text_LowerCase, Db_SysFn_Text_LowerCase)
-            .add("compareTo", R_IntegerType, listOf(R_TextType), R_SysFn_Text_CompareTo)
+            .add("compareTo", R_IntegerType, listOf(R_TextType), R_SysFn_Text_CompareTo, C_Deprecated_UseInstead("compare_to"))
             .add("compare_to", R_IntegerType, listOf(R_TextType), R_SysFn_Text_CompareTo)
-            .add("startsWith", R_BooleanType, listOf(R_TextType), R_SysFn_Text_StartsWith)
-            .add("starts_with", R_BooleanType, listOf(R_TextType), R_SysFn_Text_StartsWith)
-            .add("endsWith", R_BooleanType, listOf(R_TextType), R_SysFn_Text_EndsWith)
-            .add("ends_with", R_BooleanType, listOf(R_TextType), R_SysFn_Text_EndsWith)
             .add("contains", R_BooleanType, listOf(R_TextType), R_SysFn_Text_Contains)
+            .add("startsWith", R_BooleanType, listOf(R_TextType), R_SysFn_Text_StartsWith, C_Deprecated_UseInstead("starts_with"))
+            .add("starts_with", R_BooleanType, listOf(R_TextType), R_SysFn_Text_StartsWith)
+            .add("endsWith", R_BooleanType, listOf(R_TextType), R_SysFn_Text_EndsWith, C_Deprecated_UseInstead("ends_with"))
+            .add("ends_with", R_BooleanType, listOf(R_TextType), R_SysFn_Text_EndsWith)
+            .add("format", C_SysMemberFunction_Text_Format)
             .add("replace", R_TextType, listOf(R_TextType, R_TextType), R_SysFn_Text_Replace)
             .add("split", R_TextType, listOf(R_TextType), R_SysFn_Text_Split)
             .add("trim", R_TextType, listOf(), R_SysFn_Text_Trim)
             .add("matches", R_BooleanType, listOf(R_TextType), R_SysFn_Text_Matches)
-            .add("encode", R_ByteArrayType, listOf(), R_SysFn_Text_Encode)
-            .add("charAt", R_IntegerType, listOf(R_IntegerType), R_SysFn_Text_CharAt)
+            .add("encode", R_ByteArrayType, listOf(), R_SysFn_Text_ToBytes, C_Deprecated_UseInstead("to_bytes"))
+            .add("charAt", R_IntegerType, listOf(R_IntegerType), R_SysFn_Text_CharAt, C_Deprecated_UseInstead("char_at"))
             .add("char_at", R_IntegerType, listOf(R_IntegerType), R_SysFn_Text_CharAt)
-            .add("indexOf", R_IntegerType, listOf(R_TextType), R_SysFn_Text_IndexOf)
+            .add("indexOf", R_IntegerType, listOf(R_TextType), R_SysFn_Text_IndexOf, C_Deprecated_UseInstead("index_of"))
             .add("index_of", R_IntegerType, listOf(R_TextType), R_SysFn_Text_IndexOf)
-            .add("indexOf", R_IntegerType, listOf(R_TextType, R_IntegerType), R_SysFn_Text_IndexOf)
+            .add("indexOf", R_IntegerType, listOf(R_TextType, R_IntegerType), R_SysFn_Text_IndexOf, C_Deprecated_UseInstead("index_of"))
             .add("index_of", R_IntegerType, listOf(R_TextType, R_IntegerType), R_SysFn_Text_IndexOf)
-            .add("lastIndexOf", R_IntegerType, listOf(R_TextType), R_SysFn_Text_LastIndexOf)
+            .add("lastIndexOf", R_IntegerType, listOf(R_TextType), R_SysFn_Text_LastIndexOf, C_Deprecated_UseInstead("last_index_of"))
             .add("last_index_of", R_IntegerType, listOf(R_TextType), R_SysFn_Text_LastIndexOf)
-            .add("lastIndexOf", R_IntegerType, listOf(R_TextType, R_IntegerType), R_SysFn_Text_LastIndexOf)
+            .add("lastIndexOf", R_IntegerType, listOf(R_TextType, R_IntegerType), R_SysFn_Text_LastIndexOf, C_Deprecated_UseInstead("last_index_of"))
             .add("last_index_of", R_IntegerType, listOf(R_TextType, R_IntegerType), R_SysFn_Text_LastIndexOf)
             .add("sub", R_TextType, listOf(R_IntegerType), R_SysFn_Text_Sub)
             .add("sub", R_TextType, listOf(R_IntegerType, R_IntegerType), R_SysFn_Text_Sub)
-            .add("format", C_SysMemberFunction_Text_Format)
+            .add("to_bytes", R_ByteArrayType, listOf(), R_SysFn_Text_ToBytes)
             .build()
 
     private val BYTEARRAY_NAMESPACE_FNS = typeGlobalFuncBuilder(R_ByteArrayType)
+            .add("from_list", R_ByteArrayType, listOf(R_ListType(R_IntegerType)), R_SysFn_ByteArray_FromList)
+            .add("from_hex", R_ByteArrayType, listOf(R_TextType), R_SysFn_ByteArray_FromHex)
+            .add("from_base64", R_ByteArrayType, listOf(R_TextType), R_SysFn_ByteArray_FromBase64)
             .build()
 
     private val BYTEARRAY_NAMESPACE = makeNamespace(BYTEARRAY_NAMESPACE_FNS)
@@ -140,12 +152,14 @@ object C_LibFunctions {
     private val BYTEARRAY_FNS = typeMemFuncBuilder(R_ByteArrayType)
             .add("empty", R_BooleanType, listOf(), R_SysFn_ByteArray_Empty)
             .add("size", R_IntegerType, listOf(), R_SysFn_ByteArray_Size, Db_SysFn_ByteArray_Size)
-            .add("len", R_IntegerType, listOf(), R_SysFn_ByteArray_Size, Db_SysFn_ByteArray_Size)
-            .add("decode", R_TextType, listOf(), R_SysFn_ByteArray_Decode)
-            .add("toList", R_ListType(R_IntegerType), listOf(), R_SysFn_ByteArray_ToList)
+            .add("len", R_IntegerType, listOf(), R_SysFn_ByteArray_Size, Db_SysFn_ByteArray_Size, C_Deprecated_UseInstead("size"))
+            .add("decode", R_TextType, listOf(), R_SysFn_ByteArray_Decode, C_Deprecated_UseInstead("text.from_bytes"))
+            .add("toList", R_ListType(R_IntegerType), listOf(), R_SysFn_ByteArray_ToList, C_Deprecated_UseInstead("to_list"))
             .add("to_list", R_ListType(R_IntegerType), listOf(), R_SysFn_ByteArray_ToList)
             .add("sub", R_ByteArrayType, listOf(R_IntegerType), R_SysFn_ByteArray_Sub)
             .add("sub", R_ByteArrayType, listOf(R_IntegerType, R_IntegerType), R_SysFn_ByteArray_Sub)
+            .add("to_hex", R_TextType, listOf(), R_SysFn_ByteArray_ToHex)
+            .add("to_base64", R_TextType, listOf(), R_SysFn_ByteArray_ToBase64)
             .build()
 
     private val JSON_NAMESPACE_FNS = typeGlobalFuncBuilder(R_JsonType)
@@ -155,6 +169,7 @@ object C_LibFunctions {
 
     private val JSON_FNS = typeMemFuncBuilder(R_JsonType)
             .add("str", R_TextType, listOf(), R_SysFn_Json_Str, Db_SysFn_Json_Str)
+            .add("to_text", R_TextType, listOf(), R_SysFn_Json_Str, Db_SysFn_Json_Str)
             .build()
 
     private val RANGE_NAMESPACE_FNS = typeGlobalFuncBuilder(R_RangeType)
@@ -163,27 +178,27 @@ object C_LibFunctions {
     private val RANGE_NAMESPACE = makeNamespace(RANGE_NAMESPACE_FNS)
 
     private val GTV_FNS = typeMemFuncBuilder(R_GtvType)
-            .add("toBytes", R_ByteArrayType, listOf(), R_SysFn_Gtv_ToBytes)
+            .add("toBytes", R_ByteArrayType, listOf(), R_SysFn_Gtv_ToBytes, C_Deprecated_UseInstead("to_bytes"))
             .add("to_bytes", R_ByteArrayType, listOf(), R_SysFn_Gtv_ToBytes)
-            .add("toJSON", R_JsonType, listOf(), R_SysFn_Gtv_ToJson)
+            .add("toJSON", R_JsonType, listOf(), R_SysFn_Gtv_ToJson, C_Deprecated_UseInstead("to_json"))
             .add("to_json", R_JsonType, listOf(), R_SysFn_Gtv_ToJson)
             .build()
 
     private val NAMESPACES = mapOf(
-            "boolean" to BOOLEAN_NAMESPACE,
-            "integer" to INTEGER_NAMESPACE,
-            "text" to TEXT_NAMESPACE,
-            "byte_array" to BYTEARRAY_NAMESPACE,
-            "json" to JSON_NAMESPACE,
-            "range" to RANGE_NAMESPACE,
-            "GTXValue" to GTV_NAMESPACE,
-            "gtv" to GTV_NAMESPACE,
-            "chain_context" to CHAIN_CONTEXT_NAMESPACE,
-            C_Ns_OpContext.NAME to OP_CONTEXT_NAMESPACE
+            "boolean" to C_NamespaceDef(BOOLEAN_NAMESPACE),
+            "integer" to C_NamespaceDef(INTEGER_NAMESPACE),
+            "text" to C_NamespaceDef(TEXT_NAMESPACE),
+            "byte_array" to C_NamespaceDef(BYTEARRAY_NAMESPACE),
+            "json" to C_NamespaceDef(JSON_NAMESPACE),
+            "range" to C_NamespaceDef(RANGE_NAMESPACE),
+            "GTXValue" to C_NamespaceDef(GTV_NAMESPACE, C_Deprecated_UseInstead("gtv")),
+            "gtv" to C_NamespaceDef(GTV_NAMESPACE),
+            "chain_context" to C_NamespaceDef(CHAIN_CONTEXT_NAMESPACE),
+            C_Ns_OpContext.NAME to C_NamespaceDef(OP_CONTEXT_NAMESPACE)
     )
 
     fun getGlobalFunctions(): Map<String, C_GlobalFunction> = GLOBAL_FNS.toMap()
-    fun getSystemNamespaces(): Map<String, C_Namespace> = NAMESPACES
+    fun getSystemNamespaces(): Map<String, C_NamespaceDef> = NAMESPACES
 
     fun getMemberFunctionOpt(type: R_Type, name: String): C_SysMemberFunction? {
         val table = getTypeMemberFunctions(type)
@@ -231,29 +246,33 @@ object C_LibFunctions {
         val comparator2 = comparator ?: Comparator { _, _ -> 0 }
         return typeMemFuncBuilder(listType)
                 .add("str", R_TextType, listOf(), R_SysFn_ToString)
+                .add("to_text", R_TextType, listOf(), R_SysFn_ToString)
                 .add("empty", R_BooleanType, listOf(), R_SysFn_Collection_Empty)
                 .add("size", R_IntegerType, listOf(), R_SysFn_Collection_Size)
-                .add("len", R_IntegerType, listOf(), R_SysFn_Collection_Size)
+                .add("len", R_IntegerType, listOf(), R_SysFn_Collection_Size, C_Deprecated_UseInstead("size"))
                 .add("get", elemType, listOf(R_IntegerType), R_SysFn_List_Get)
                 .add("contains", R_BooleanType, listOf(elemType), R_SysFn_Collection_Contains)
-                .add("indexOf", R_IntegerType, listOf(elemType), R_SysFn_List_IndexOf)
+                .add("indexOf", R_IntegerType, listOf(elemType), R_SysFn_List_IndexOf, C_Deprecated_UseInstead("index_of"))
                 .add("index_of", R_IntegerType, listOf(elemType), R_SysFn_List_IndexOf)
                 .add("clear", R_UnitType, listOf(), R_SysFn_Collection_Clear)
                 .add("remove", R_BooleanType, listOf(elemType), R_SysFn_Collection_Remove)
-                .add("removeAt", elemType, listOf(R_IntegerType), R_SysFn_List_RemoveAt)
+                .add("removeAt", elemType, listOf(R_IntegerType), R_SysFn_List_RemoveAt, C_Deprecated_UseInstead("remove_at"))
                 .add("remove_at", elemType, listOf(R_IntegerType), R_SysFn_List_RemoveAt)
                 .add("_set", elemType, listOf(R_IntegerType, elemType), R_SysFn_List_Set)
-                .addEx("containsAll", R_BooleanType, listOf(matcherColSub(elemType)), R_SysFn_Collection_ContainsAll)
+                .addEx("containsAll", R_BooleanType, listOf(matcherColSub(elemType)), R_SysFn_Collection_ContainsAll,
+                        C_Deprecated_UseInstead("contains_all"))
                 .addEx("contains_all", R_BooleanType, listOf(matcherColSub(elemType)), R_SysFn_Collection_ContainsAll)
-                .addEx("removeAll", R_BooleanType, listOf(matcherColSub(elemType)), R_SysFn_Collection_RemoveAll)
+                .addEx("removeAll", R_BooleanType, listOf(matcherColSub(elemType)), R_SysFn_Collection_RemoveAll,
+                        C_Deprecated_UseInstead("remove_all"))
                 .addEx("remove_all", R_BooleanType, listOf(matcherColSub(elemType)), R_SysFn_Collection_RemoveAll)
                 .add("sub", listType, listOf(R_IntegerType), R_SysFn_List_Sub)
                 .add("sub", listType, listOf(R_IntegerType, R_IntegerType), R_SysFn_List_Sub)
                 .add("add", R_BooleanType, listOf(elemType), R_SysFn_Collection_Add)
                 .add("add", R_BooleanType, listOf(R_IntegerType, elemType), R_SysFn_List_Add)
-                .addEx("addAll", R_BooleanType, listOf(matcherColSub(elemType)), R_SysFn_Collection_AddAll)
+                .addEx("addAll", R_BooleanType, listOf(matcherColSub(elemType)), R_SysFn_Collection_AddAll, C_Deprecated_UseInstead("add_all"))
                 .addEx("add_all", R_BooleanType, listOf(matcherColSub(elemType)), R_SysFn_Collection_AddAll)
-                .addEx("addAll", R_BooleanType, listOf(matcher(R_IntegerType), matcherColSub(elemType)), R_SysFn_List_AddAll)
+                .addEx("addAll", R_BooleanType, listOf(matcher(R_IntegerType), matcherColSub(elemType)), R_SysFn_List_AddAll,
+                        C_Deprecated_UseInstead("add_all"))
                 .addEx("add_all", R_BooleanType, listOf(matcher(R_IntegerType), matcherColSub(elemType)), R_SysFn_List_AddAll)
                 .addIf(comparator != null, "_sort", R_UnitType, listOf(), R_SysFn_List_Sort(comparator2))
                 .addIf(comparator != null, "sorted", listType, listOf(), R_SysFn_Collection_Sorted(listType, comparator2))
@@ -267,18 +286,22 @@ object C_LibFunctions {
         val comparator2 = comparator ?: Comparator { _, _ -> 0 }
         return typeMemFuncBuilder(setType)
                 .add("str", R_TextType, listOf(), R_SysFn_ToString)
+                .add("to_text", R_TextType, listOf(), R_SysFn_ToString)
                 .add("empty", R_BooleanType, listOf(), R_SysFn_Collection_Empty)
                 .add("size", R_IntegerType, listOf(), R_SysFn_Collection_Size)
-                .add("len", R_IntegerType, listOf(), R_SysFn_Collection_Size)
+                .add("len", R_IntegerType, listOf(), R_SysFn_Collection_Size, C_Deprecated_UseInstead("size"))
                 .add("contains", R_BooleanType, listOf(elemType), R_SysFn_Collection_Contains)
                 .add("clear", R_UnitType, listOf(), R_SysFn_Collection_Clear)
                 .add("remove", R_BooleanType, listOf(elemType), R_SysFn_Collection_Remove)
                 .add("add", R_BooleanType, listOf(elemType), R_SysFn_Collection_Add)
-                .addEx("containsAll", R_BooleanType, listOf(matcherColSub(elemType)), R_SysFn_Collection_ContainsAll)
+                .addEx("containsAll", R_BooleanType, listOf(matcherColSub(elemType)), R_SysFn_Collection_ContainsAll,
+                        C_Deprecated_UseInstead("contains_all"))
                 .addEx("contains_all", R_BooleanType, listOf(matcherColSub(elemType)), R_SysFn_Collection_ContainsAll)
-                .addEx("addAll", R_BooleanType, listOf(matcherColSub(elemType)), R_SysFn_Collection_AddAll)
+                .addEx("addAll", R_BooleanType, listOf(matcherColSub(elemType)), R_SysFn_Collection_AddAll,
+                        C_Deprecated_UseInstead("add_all"))
                 .addEx("add_all", R_BooleanType, listOf(matcherColSub(elemType)), R_SysFn_Collection_AddAll)
-                .addEx("removeAll", R_BooleanType, listOf(matcherColSub(elemType)), R_SysFn_Collection_RemoveAll)
+                .addEx("removeAll", R_BooleanType, listOf(matcherColSub(elemType)), R_SysFn_Collection_RemoveAll,
+                        C_Deprecated_UseInstead("remove_all"))
                 .addEx("remove_all", R_BooleanType, listOf(matcherColSub(elemType)), R_SysFn_Collection_RemoveAll)
                 .addIf(comparator != null, "sorted", listType, listOf(), R_SysFn_Collection_Sorted(listType, comparator2))
                 .build()
@@ -291,14 +314,16 @@ object C_LibFunctions {
         val valueListType = R_ListType(valueType)
         return typeMemFuncBuilder(mapType)
                 .add("str", R_TextType, listOf(), R_SysFn_ToString)
+                .add("to_text", R_TextType, listOf(), R_SysFn_ToString)
                 .add("empty", R_BooleanType, listOf(), R_SysFn_Map_Empty)
                 .add("size", R_IntegerType, listOf(), R_SysFn_Map_Size)
-                .add("len", R_IntegerType, listOf(), R_SysFn_Map_Size)
+                .add("len", R_IntegerType, listOf(), R_SysFn_Map_Size, C_Deprecated_UseInstead("size"))
                 .add("get", valueType, listOf(keyType), R_SysFn_Map_Get)
                 .add("contains", R_BooleanType, listOf(keyType), R_SysFn_Map_Contains)
                 .add("clear", R_UnitType, listOf(), R_SysFn_Map_Clear)
                 .add("put", R_UnitType, listOf(keyType, valueType), R_SysFn_Map_Put)
-                .addEx("putAll", R_UnitType, listOf(matcherMapSub(keyType, valueType)), R_SysFn_Map_PutAll)
+                .addEx("putAll", R_UnitType, listOf(matcherMapSub(keyType, valueType)), R_SysFn_Map_PutAll,
+                        C_Deprecated_UseInstead("put_all"))
                 .addEx("put_all", R_UnitType, listOf(matcherMapSub(keyType, valueType)), R_SysFn_Map_PutAll)
                 .add("remove", valueType, listOf(keyType), R_SysFn_Map_Remove)
                 .add("keys", keySetType, listOf(), R_SysFn_Map_Keys(keySetType))
@@ -306,21 +331,22 @@ object C_LibFunctions {
                 .build()
     }
 
-    fun makeRecordNamespace(type: R_RecordType): C_Namespace {
+    fun makeRecordNamespace(type: R_RecordType): C_NamespaceDef {
         val mFromBytes = gtvGlobalFn(type, false, R_SysFn_Record_FromBytes(type))
         val mFromGtv = gtvGlobalFn(type, false, R_SysFn_Record_FromGtv(type, false))
         val mFromGtvPretty = gtvGlobalFn(type, true, R_SysFn_Record_FromGtv(type, true))
 
         val fns = C_GlobalFuncBuilder()
-                .add("fromBytes", listOf(R_ByteArrayType), mFromBytes)
+                .add("fromBytes", listOf(R_ByteArrayType), mFromBytes, C_Deprecated_UseInstead("from_bytes"))
                 .add("from_bytes", listOf(R_ByteArrayType), mFromBytes)
-                .add("fromGTXValue", listOf(R_GtvType), mFromGtv)
+                .add("fromGTXValue", listOf(R_GtvType), mFromGtv, C_Deprecated_UseInstead("from_gtv"))
                 .add("from_gtv", listOf(R_GtvType), mFromGtv)
-                .add("fromPrettyGTXValue", listOf(R_GtvType), mFromGtvPretty)
+                .add("fromPrettyGTXValue", listOf(R_GtvType), mFromGtvPretty, C_Deprecated_UseInstead("from_gtv_pretty"))
                 .add("from_gtv_pretty", listOf(R_GtvType), mFromGtvPretty)
                 .build()
 
-        return makeNamespace(fns)
+        val ns = makeNamespace(fns)
+        return C_NamespaceDef(ns)
     }
 
     private fun gtvGlobalFn(type: R_Type, human: Boolean, fn: R_SysFunction): C_GlobalFuncCaseMatch {
@@ -336,11 +362,11 @@ object C_LibFunctions {
         val mHash = gtvMemFn(type, false, R_ByteArrayType, R_SysFn_Any_Hash(type))
 
         return C_MemberFuncBuilder()
-                .add("toBytes", listOf(), mToBytes)
+                .add("toBytes", listOf(), mToBytes, C_Deprecated_UseInstead("to_bytes"))
                 .add("to_bytes", listOf(), mToBytes)
-                .add("toGTXValue", listOf(), mToGtv)
+                .add("toGTXValue", listOf(), mToGtv, C_Deprecated_UseInstead("to_gtv"))
                 .add("to_gtv", listOf(), mToGtv)
-                .add("toPrettyGTXValue", listOf(), mToGtvPretty)
+                .add("toPrettyGTXValue", listOf(), mToGtvPretty, C_Deprecated_UseInstead("to_gtv_pretty"))
                 .add("to_gtv_pretty", listOf(), mToGtvPretty)
                 .add("hash", listOf(), mHash)
                 .build()
@@ -527,7 +553,7 @@ private object C_SysFunction_Require_Nullable: C_GlobalFuncCase() {
     }
 
     private class CaseMatch(val valueType: R_Type): C_GlobalFuncCaseMatch() {
-        override fun compileCall(name: S_Name, args: List<C_Value>): C_Value {
+        override fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Value {
             val exprValue = args[0]
             val rExpr = exprValue.toRExpr()
 
@@ -590,7 +616,7 @@ private object C_SysFunction_Exists: C_GlobalFuncCase() {
     }
 
     private class CaseMatch: C_GlobalFuncCaseMatch() {
-        override fun compileCall(name: S_Name, args: List<C_Value>): C_Value {
+        override fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Value {
             check(args.size == 1)
 
             val arg = args[0]
@@ -612,7 +638,7 @@ private object C_SysMemberFunction_Text_Format: C_MemberFuncCase() {
     }
 
     private class CaseMatch: C_MemberFuncCaseMatch() {
-        override fun compileCall(pos: S_Pos, name: String, args: List<R_Expr>): R_MemberCalculator {
+        override fun compileCall(ctx: C_ExprContext, pos: S_Pos, name: String, args: List<R_Expr>): R_MemberCalculator {
             return R_MemberCalculator_SysFn(R_TextType, R_SysFn_Text_Format, args)
         }
     }
@@ -630,7 +656,7 @@ private class C_SysFunction_Invalid(private val type: R_Type): C_SimpleGlobalFun
 }
 
 private class C_SysMemberFunction_Invalid(private val type: R_Type): C_MemberFuncCaseMatch() {
-    override fun compileCall(pos: S_Pos, name: String, args: List<R_Expr>): R_MemberCalculator {
+    override fun compileCall(ctx: C_ExprContext, pos: S_Pos, name: String, args: List<R_Expr>): R_MemberCalculator {
         val typeStr = type.name
         throw C_Error(pos, "fn:invalid:$typeStr:$name", "Function '$name' not available for type '$typeStr'")
     }

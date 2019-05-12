@@ -1,9 +1,8 @@
 package net.postchain.rell.test
 
-import net.postchain.rell.hexStringToByteArray
+import net.postchain.rell.CommonUtils
 import net.postchain.rell.runtime.Rt_SqlExecutor
 import net.postchain.rell.sql.*
-import net.postchain.rell.toHex
 import java.io.Closeable
 import java.sql.Connection
 
@@ -86,7 +85,7 @@ class RellTestContext(useSql: Boolean = true): Closeable {
         if (blockchains.isEmpty()) return
 
         val inserts = blockchains.entries.map { ( chainId, rid ) ->
-            val ridStr = rid.toHex()
+            val ridStr = CommonUtils.bytesToHex(rid)
             """INSERT INTO blockchains(chain_id, blockchain_rid) VALUES ($chainId, E'\\x$ridStr');"""
         }
 
@@ -100,7 +99,7 @@ class RellTestContext(useSql: Boolean = true): Closeable {
 
     fun blockchain(chainId: Long, rid: String) {
         checkNotInited()
-        val ridArray = rid.hexStringToByteArray()
+        val ridArray = CommonUtils.hexToBytes(rid)
         check(chainId !in blockchains)
         blockchains[chainId] = ridArray
     }

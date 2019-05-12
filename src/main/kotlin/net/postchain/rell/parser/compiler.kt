@@ -1,5 +1,6 @@
 package net.postchain.rell.parser
 
+import com.sun.xml.internal.ws.util.StringUtils
 import net.postchain.rell.TypedKeyMap
 import net.postchain.rell.model.*
 
@@ -11,7 +12,7 @@ class C_Error(
 ): RuntimeException("$pos $errMsg")
 
 abstract class C_GlobalFunction {
-    abstract fun compileCall(name: S_Name, args: List<C_Value>): C_Expr
+    abstract fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Expr
 }
 
 class C_UserFunctionHeader(val params: List<R_ExternalParam>, val type: R_Type)
@@ -23,7 +24,7 @@ class C_UserGlobalFunction(val name: String, val fnKey: Int): C_GlobalFunction()
         headerLate = header
     }
 
-    override fun compileCall(sName: S_Name, args: List<C_Value>): C_Expr {
+    override fun compileCall(ctx: C_ExprContext, sName: S_Name, args: List<C_Value>): C_Expr {
         val header = headerLate
         val params = header.params.map { it.type }
         val rArgs = args.map { it.toRExpr() }
@@ -50,7 +51,7 @@ class C_Message(val type: C_MessageType, val pos: S_Pos, val code: String, val t
     }
 }
 
-class C_GlobalContext(val gtv: Boolean) {
+class C_GlobalContext(val compilerOptions: C_CompilerOptions) {
     private var frameBlockIdCtr = 0L
     private val messages = mutableListOf<C_Message>()
 
@@ -84,23 +85,69 @@ enum class C_ModulePass {
     EXPRESSIONS,
 }
 
+sealed class C_Deprecated {
+    abstract fun detailsCode(): String
+    abstract fun detailsMessage(): String
+}
+
+class C_Deprecated_UseInstead(private val name: String): C_Deprecated() {
+    override fun detailsCode() = ":$name"
+    override fun detailsMessage() = ", use '$name' instead"
+}
+
+abstract class C_Def<T>(private val type: C_DefType, private val def: T, private val deprecated: C_Deprecated?) {
+    fun useDef(nsCtx: C_NamespaceContext, name: List<S_Name>): T {
+        if (deprecated != null) {
+            val name = name.last()
+            deprecatedMessage(nsCtx, type, name.pos, name.str, deprecated)
+        }
+        return def
+    }
+
+    companion object {
+        fun deprecatedMessage(
+                nsCtx: C_NamespaceContext,
+                type: C_DefType,
+                pos: S_Pos,
+                name: String,
+                deprecated: C_Deprecated
+        ) {
+            val typeStr = StringUtils.capitalize(type.description)
+            val depCode = deprecated.detailsCode()
+            val depStr = deprecated.detailsMessage()
+            val code = "deprecated:$type:$name$depCode"
+            val msg = "$typeStr '$name' is deprecated$depStr"
+            val globalCtx = nsCtx.modCtx.globalCtx
+            val msgType = if (globalCtx.compilerOptions.deprecatedError) C_MessageType.ERROR else C_MessageType.WARNING
+            globalCtx.message(msgType, pos, code, msg)
+        }
+    }
+}
+
+class C_TypeDef(type: R_Type, deprecated: C_Deprecated? = null)
+    : C_Def<R_Type>(C_DefType.TYPE, type, deprecated)
+class C_NamespaceDef(namespace: C_Namespace, deprecated: C_Deprecated? = null)
+    : C_Def<C_Namespace>(C_DefType.NAMESPACE, namespace, deprecated)
+
 class C_ModuleContext(val globalCtx: C_GlobalContext) {
-    private val sysTypes = mapOf(
-            "boolean" to R_BooleanType,
-            "text" to R_TextType,
-            "byte_array" to R_ByteArrayType,
-            "integer" to R_IntegerType,
-            "pubkey" to R_ByteArrayType,
-            "name" to R_TextType,
-            "timestamp" to R_IntegerType,
-            "signer" to R_SignerType,
-            "guid" to R_GUIDType,
-            "tuid" to R_TextType,
-            "json" to R_JsonType,
-            "range" to R_RangeType,
-            "GTXValue" to R_GtvType,
-            "gtv" to R_GtvType
-    )
+    companion object {
+        private val SYSTEM_TYPES = mapOf(
+                "boolean" to C_TypeDef(R_BooleanType),
+                "text" to C_TypeDef(R_TextType),
+                "byte_array" to C_TypeDef(R_ByteArrayType),
+                "integer" to C_TypeDef(R_IntegerType),
+                "pubkey" to C_TypeDef(R_ByteArrayType),
+                "name" to C_TypeDef(R_TextType),
+                "timestamp" to C_TypeDef(R_IntegerType),
+                "signer" to C_TypeDef(R_SignerType),
+                "guid" to C_TypeDef(R_GUIDType),
+                "tuid" to C_TypeDef(R_TextType),
+                "json" to C_TypeDef(R_JsonType),
+                "range" to C_TypeDef(R_RangeType),
+                "GTXValue" to C_TypeDef(R_GtvType, C_Deprecated_UseInstead("gtv")),
+                "gtv" to C_TypeDef(R_GtvType)
+        )
+    }
 
     private val blockClass = C_Utils.createBlockClass(null, null)
     private val transactionClass = C_Utils.createTransactionClass(null, null, blockClass)
@@ -126,7 +173,7 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
             null,
             null,
             predefNamespaces = C_LibFunctions.getSystemNamespaces(),
-            predefTypes = sysTypes,
+            predefTypes = SYSTEM_TYPES,
             predefClasses =  listOf(blockClass, transactionClass),
             predefFunctions = C_LibFunctions.getGlobalFunctions()
     )
@@ -299,13 +346,12 @@ class C_NamespaceContext(
         val modCtx: C_ModuleContext,
         private val parentCtx: C_NamespaceContext?,
         val namespaceName: String?,
-        predefNamespaces: Map<String, C_Namespace> = mapOf(),
-        predefTypes: Map<String, R_Type> = mapOf(),
+        predefNamespaces: Map<String, C_NamespaceDef> = mapOf(),
+        predefTypes: Map<String, C_TypeDef> = mapOf(),
         predefClasses: List<R_Class> = listOf(),
         predefFunctions: Map<String, C_GlobalFunction> = mapOf()
 ){
     private val names = mutableMapOf<String, C_DefType>()
-    private val includes = mutableSetOf<String>()
     private val nsBuilder = C_NamespaceBuilder()
 
     private val records = mutableMapOf<String, C_Record>()
@@ -351,26 +397,33 @@ class C_NamespaceContext(
     }
 
     fun getTypeOpt(name: List<S_Name>): R_Type? {
+        val typeDef = getTypeDefOpt(name)
+        val type = typeDef?.useDef(this, name)
+        return type
+    }
+
+    private fun getTypeDefOpt(name: List<S_Name>): C_TypeDef? {
         check(!name.isEmpty())
 
         val name0 = name[0].str
         if (name.size == 1) {
-            val type = getDefOpt { it.namespace.types[name0] }
-            return type
+            val typeDef = getDefOpt { it.namespace.types[name0] }
+            return typeDef
         }
 
-        var ns = getDefOpt { it.namespace.namespaces[name0] }
-        if (ns == null) return null
+        var nsDef = getDefOpt { it.namespace.namespaces[name0] }
+        if (nsDef == null) return null
 
-        var namesTail = name.subList(1, name.size)
-        while (namesTail.size > 1) {
-            ns = ns!!.namespaces[namesTail[0].str]
-            if (ns == null) return null
-            namesTail = namesTail.subList(1, namesTail.size)
+        for (i in 1 .. name.size - 2) {
+            val nsName = name.subList(0, i)
+            val ns = nsDef!!.useDef(this, nsName)
+            nsDef = ns.namespaces[name[i].str]
+            if (nsDef == null) return null
         }
 
-        val type = ns!!.types[namesTail[0].str]
-        return type
+        val nsName = name.subList(0, name.size - 1)
+        val typeDef = nsDef!!.useDef(this, nsName).types[name[name.size - 1].str]
+        return typeDef
     }
 
     fun getClass(name: List<S_Name>): R_Class {
@@ -409,10 +462,10 @@ class C_NamespaceContext(
         return null
     }
 
-    fun addNamespace(name: String, ns: C_Namespace) {
+    fun addNamespace(name: String, nsDef: C_NamespaceDef) {
         modCtx.checkPass(null, C_ModulePass.NAMES)
-        nsBuilder.addNamespace(name, ns)
-        nsBuilder.addValue(name, C_NamespaceValue_Namespace(ns))
+        nsBuilder.addNamespace(name, nsDef)
+        nsBuilder.addValue(name, C_NamespaceValue_Namespace(nsDef))
     }
 
     fun addClass(name: S_Name, cls: R_Class) {
@@ -424,8 +477,9 @@ class C_NamespaceContext(
     fun addClass0(name: String, cls: R_Class) {
         modCtx.checkPass(null, C_ModulePass.NAMES)
         val type = R_ClassType(cls)
-        nsBuilder.addType(name, type)
-        nsBuilder.addValue(name, C_NamespaceValue_Class(type))
+        val typeDef = C_TypeDef(type)
+        nsBuilder.addType(name, typeDef)
+        nsBuilder.addValue(name, C_NamespaceValue_Class(typeDef))
     }
 
     fun addObject(sName: S_Name, obj: R_Object) {
@@ -439,14 +493,14 @@ class C_NamespaceContext(
         val name = rec.name.str
         check(name !in records)
         modCtx.addRecord(rec.type)
-        nsBuilder.addType(name, rec.type)
+        nsBuilder.addType(name, C_TypeDef(rec.type))
         nsBuilder.addValue(name, C_NamespaceValue_Record(rec.type))
         records[name] = rec
     }
 
     fun addEnum(name: String, e: R_EnumType) {
         modCtx.checkPass(null, C_ModulePass.NAMES)
-        nsBuilder.addType(name, e)
+        nsBuilder.addType(name, C_TypeDef(e))
         nsBuilder.addValue(name, C_NamespaceValue_Enum(e))
     }
 
@@ -483,13 +537,6 @@ class C_NamespaceContext(
         }
         names[name.str] = type
         return fullName(name.str)
-    }
-
-    fun checkTopNamespace(pos: S_Pos, type: C_DefType) {
-        if (parentCtx != null) {
-            val s = type.description
-            throw C_Error(pos, "def_ns:$s", "Not allowed to declare $s in a namespace")
-        }
     }
 
     fun createNamespace(): C_Namespace {
@@ -851,9 +898,15 @@ class C_ClassContext(
     }
 }
 
+class C_CompilerOptions(val gtv: Boolean = true, val deprecatedError: Boolean = false)
+
 object C_Compiler {
-    fun compile(includeDir: C_IncludeDir, mainFile: String, gtv: Boolean): C_CompilationResult {
-        val globalCtx = C_GlobalContext(gtv)
+    fun compile(
+            includeDir: C_IncludeDir,
+            mainFile: String,
+            options: C_CompilerOptions = C_CompilerOptions()
+    ): C_CompilationResult {
+        val globalCtx = C_GlobalContext(options)
         var module: R_Module? = null
         var error: C_Error? = null
 
@@ -868,6 +921,12 @@ object C_Compiler {
         }
 
         val messages = globalCtx.messages()
+
+        val errorMessage = messages.firstOrNull { it.type == C_MessageType.ERROR }
+        if (error == null && errorMessage != null) {
+            error = C_Error(errorMessage.pos, errorMessage.code, errorMessage.text)
+        }
+
         return C_CompilationResult(module, error, messages)
     }
 }

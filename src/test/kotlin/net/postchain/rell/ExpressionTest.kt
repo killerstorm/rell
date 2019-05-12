@@ -93,7 +93,7 @@ class ExpressionTest: BaseRellTest(false) {
         tst.defs = listOf("class user { name: text; score: integer; }")
         chkOp("create user('Bob',-5678);")
 
-        chkEx("{ val s = 'Hello'; return user @ {} ( .name.len() + s.len() ); }", "int[8]")
+        chkEx("{ val s = 'Hello'; return user @ {} ( .name.size() + s.size() ); }", "int[8]")
         chkEx("{ val x = -1234; return user @ {} ( abs(x), abs(.score) ); }", "(int[1234],int[5678])")
     }
 
@@ -139,20 +139,20 @@ class ExpressionTest: BaseRellTest(false) {
         """.trimIndent())
 
         chk("((u: user) @ { 'Bill' } ( u )).company.name.size()", "int[9]")
-        chk("((u: user) @ { 'Bill' } ( u )).company.name.upperCase()", "text[MICROSOFT]")
+        chk("((u: user) @ { 'Bill' } ( u )).company.name.upper_case()", "text[MICROSOFT]")
         chk("((u: user) @ { 'Bill' } ( u )).company.name.replace('soft', 'hard')", "text[Microhard]")
         chk("((u: user) @ { 'Bill' } ( u )).company.name.split('o')", "list<text>[text[Micr],text[s],text[ft]]")
         chk("((u: user) @ { 'Bill' } ( u )).company.name.matches('[A-Za-z]+')", "boolean[true]")
         chk("((u: user) @ { 'Bill' } ( u )).company.name.matches('[0-9]+')", "boolean[false]")
-        chk("((u: user) @ { 'Bill' } ( u )).company.name.upperCase().replace('SOFT','HARD').lowerCase()", "text[microhard]")
+        chk("((u: user) @ { 'Bill' } ( u )).company.name.upper_case().replace('SOFT','HARD').lower_case()", "text[microhard]")
 
         chkEx("{ val x = user@{'Bill'}(u=user); return x.u.company.name.size(); }", "int[9]")
-        chkEx("{ val x = user@{'Bill'}(u=user); return x.u.company.name.upperCase(); }", "text[MICROSOFT]")
+        chkEx("{ val x = user@{'Bill'}(u=user); return x.u.company.name.upper_case(); }", "text[MICROSOFT]")
         chkEx("{ val x = user@{'Bill'}(u=user); return x.u.company.name.replace('soft', 'hard'); }", "text[Microhard]")
         chkEx("{ val x = user@{'Bill'}(u=user); return x.u.company.name.split('o'); }", "list<text>[text[Micr],text[s],text[ft]]")
         chkEx("{ val x = user@{'Bill'}(u=user); return x.u.company.name.matches('[A-Za-z]+'); }", "boolean[true]")
         chkEx("{ val x = user@{'Bill'}(u=user); return x.u.company.name.matches('[0-9]+'); }", "boolean[false]")
-        chkEx("{ val x = user@{'Bill'}(u=user); return x.u.company.name.encode().decode().upperCase().replace('SOFT','HARD').lowerCase(); }",
+        chkEx("{ val x = user@{'Bill'}(u=user); return text.from_bytes(x.u.company.name.to_bytes()).upper_case().replace('SOFT','HARD').lower_case(); }",
                 "text[microhard]")
     }
 
@@ -254,7 +254,7 @@ class ExpressionTest: BaseRellTest(false) {
     @Test fun testNamespace() {
         chk("integer", "ct_err:expr_novalue:namespace")
         chk("integer('123')", "int[123]")
-        chk("integer.parseHex('1234')", "int[4660]")
+        chk("integer.from_hex('1234')", "int[4660]")
         chk("integer.MAX_VALUE", "int[9223372036854775807]")
     }
 
@@ -266,8 +266,8 @@ class ExpressionTest: BaseRellTest(false) {
         chk("user @ { .score == integer }", "ct_err:expr_novalue:namespace")
         chk("user @ { .score == integer('-5678') } ( .name )", "text[Bob]")
         chk("user @ { .score == -5678 } ( .name, integer('1234') )", "(name=text[Bob],int[1234])")
-        chk("user @ { .score == -integer.parseHex('162e') } ( .name )", "text[Bob]")
-        chk("user @ { .name == 'Bob' } ( .name, .score + integer.parseHex('1234') )", "(name=text[Bob],int[-1018])")
+        chk("user @ { .score == -integer.from_hex('162e') } ( .name )", "text[Bob]")
+        chk("user @ { .name == 'Bob' } ( .name, .score + integer.from_hex('1234') )", "(name=text[Bob],int[-1018])")
 
         chk("user @ { .score < integer.MAX_VALUE } ( .name )", "text[Bob]")
         chk("user @* { .score < integer.MIN_VALUE } ( .name )", "list<text>[]")
@@ -286,7 +286,7 @@ class ExpressionTest: BaseRellTest(false) {
         """.trimIndent())
 
         chkEx("{ return user @* {} (.id+0, (.name1 + .name2).size()); }", "[(1,9), (2,14), (3,12)]")
-        chkEx("{ return user @* {} (.id+0, (.name1 + .name2).upperCase().lowerCase().size()); }", "[(1,9), (2,14), (3,12)]")
+        chkEx("{ return user @* {} (.id+0, (.name1 + .name2).upper_case().lower_case().size()); }", "[(1,9), (2,14), (3,12)]")
         chkEx("{ return user @* {} (.id+0, (.v1 * (.v2 + 101)).str()); }", "[(1,35853), (2,181485), (3,425685)]")
         chkEx("{ return user @* {} (.id+0, (.v1 * (.v2 + 101)).str().size()); }", "[(1,5), (2,6), (3,6)]")
         chkEx("{ return user @* {} (.id+0, (.name1 + .name2).foo); }", "ct_err:unknown_member:text:foo")
@@ -296,7 +296,7 @@ class ExpressionTest: BaseRellTest(false) {
 
         val c = "val str1 = 'Hello'; val k1 = 777;"
         chkEx("{ $c return user @* {} (.id+0, (str1 + .name2).size()); }", "[(1,10), (2,15), (3,12)]")
-        chkEx("{ $c return user @* {} (.id+0, (str1 + .name2).upperCase().lowerCase().size()); }", "[(1,10), (2,15), (3,12)]")
+        chkEx("{ $c return user @* {} (.id+0, (str1 + .name2).upper_case().lower_case().size()); }", "[(1,10), (2,15), (3,12)]")
         chkEx("{ $c return user @* {} (.id+0, (k1 * (.v2 + 101)).str()); }", "[(1,250971), (2,423465), (3,595959)]")
         chkEx("{ $c return user @* {} (.id+0, (k1 * (.v2 + 101)).str().size()); }", "[(1,6), (2,6), (3,6)]")
         chkEx("{ $c return user @* {} (.id+0, (str1 + .name2).foo); }", "ct_err:unknown_member:text:foo")
@@ -441,5 +441,12 @@ class ExpressionTest: BaseRellTest(false) {
         chk("if (true) 'A' else if (true) 'B' else 'C' + 'D'", "text[A]")
         chk("if (false) 'A' else if (true) 'B' else 'C' + 'D'", "text[B]")
         chk("if (false) 'A' else if (false) 'B' else 'C' + 'D'", "text[CD]")
+    }
+
+    @Test fun testVariables() {
+        chkEx("{ val x = integer; }", "ct_err:expr_novalue:namespace")
+        chkEx("{ val x = chain_context; }", "ct_err:expr_novalue:namespace")
+        chkEx("{ var x: text; x = integer; }", "ct_err:expr_novalue:namespace")
+        chkEx("{ var x: text; x = chain_context; }", "ct_err:expr_novalue:namespace")
     }
 }

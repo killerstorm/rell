@@ -176,7 +176,7 @@ sealed class Db_SysFn_Cast(name: String, val type: String): Db_SysFunction(name)
     }
 }
 
-object Db_SysFn_Int_Str: Db_SysFn_Cast("int.str", "TEXT")
+object Db_SysFn_Int_ToText: Db_SysFn_Cast("int.str", "TEXT")
 object Db_SysFn_Abs: Db_SysFunction_Simple("abs", "ABS")
 object Db_SysFn_Min: Db_SysFunction_Simple("min", "LEAST")
 object Db_SysFn_Max: Db_SysFunction_Simple("max", "GREATEST")

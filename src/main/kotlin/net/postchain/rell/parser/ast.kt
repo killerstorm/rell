@@ -311,7 +311,6 @@ class S_EnumDefinition(val name: S_Name, val attrs: List<S_Name>): S_Definition(
 class S_OpDefinition(val name: S_Name, val params: List<S_NameTypePair>, val body: S_Statement): S_Definition() {
     override fun compile(ctx: C_DefinitionContext, entityIndex: Int) {
         val fullName = ctx.nsCtx.registerName(name, C_DefType.OPERATION)
-        ctx.nsCtx.checkTopNamespace(name.pos, C_DefType.OPERATION)
         ctx.checkNotExternal(name.pos, C_DefType.OPERATION)
 
         ctx.modCtx.onPass(C_ModulePass.EXPRESSIONS) {
@@ -327,7 +326,7 @@ class S_OpDefinition(val name: S_Name, val params: List<S_NameTypePair>, val bod
         val rBody = body.compile(exprCtx).rStmt
         val rCallFrame = entCtx.makeCallFrame()
 
-        if (ctx.modCtx.globalCtx.gtv) {
+        if (ctx.modCtx.globalCtx.compilerOptions.gtv) {
             checkGtvParams(params, rParams, GTV_OPERATION_HUMAN)
         }
 
@@ -350,7 +349,6 @@ class S_QueryDefinition(
 ): S_Definition() {
     override fun compile(ctx: C_DefinitionContext, entityIndex: Int) {
         val fullName = ctx.nsCtx.registerName(name, C_DefType.QUERY)
-        ctx.nsCtx.checkTopNamespace(name.pos, C_DefType.QUERY)
         ctx.checkNotExternal(name.pos, C_DefType.QUERY)
 
         ctx.modCtx.onPass(C_ModulePass.EXPRESSIONS) {
@@ -368,7 +366,7 @@ class S_QueryDefinition(
         val rCallFrame = entCtx.makeCallFrame()
         val rRetType = entCtx.actualReturnType()
 
-        if (ctx.modCtx.globalCtx.gtv) {
+        if (ctx.modCtx.globalCtx.compilerOptions.gtv) {
             checkGtvParams(params, rParams, GTV_QUERY_HUMAN)
             checkGtvResult(rRetType, GTV_QUERY_HUMAN)
         }
@@ -521,7 +519,7 @@ class S_NamespaceDefinition(val name: S_Name, val definitions: List<S_Definition
         }
 
         val ns = subCtx.nsCtx.createNamespace()
-        ctx.nsCtx.addNamespace(name.str, ns)
+        ctx.nsCtx.addNamespace(name.str, C_NamespaceDef(ns))
     }
 
     override fun collectIncludes(

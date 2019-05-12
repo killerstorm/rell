@@ -3,7 +3,7 @@ package net.postchain.rell.module
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvByteArray
 import net.postchain.gtv.GtvString
-import net.postchain.rell.hexStringToByteArray
+import net.postchain.rell.CommonUtils
 import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 import kotlin.test.assertEquals
@@ -259,7 +259,7 @@ class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
     }
 
     private fun gtvBytes(s: String): Gtv {
-        val bytes = s.hexStringToByteArray()
+        val bytes = CommonUtils.hexToBytes(s)
         return GtvByteArray(bytes)
     }
 

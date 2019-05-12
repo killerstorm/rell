@@ -2,6 +2,7 @@ package net.postchain.rell.test
 
 import com.google.common.io.Files
 import net.postchain.gtv.Gtv
+import net.postchain.rell.CommonUtils
 import net.postchain.rell.model.R_Class
 import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_Module
@@ -14,7 +15,6 @@ import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.sql.ROWID_COLUMN
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.sql.SqlUtils
-import net.postchain.rell.toHex
 import org.apache.commons.configuration2.PropertiesConfiguration
 import org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder
 import org.apache.commons.configuration2.builder.fluent.Parameters
@@ -130,7 +130,7 @@ object SqlTestUtils {
             val str = if (value is String) {
                 value
             } else if (value is ByteArray) {
-                "0x" + rs.getBytes(idx).toHex()
+                "0x" + CommonUtils.bytesToHex(rs.getBytes(idx))
             } else if (value is PGobject) {
                 value.value
             } else if (value is Int || value is Long) {

@@ -157,8 +157,8 @@ class AtExprOpTest: AbstractOpTest() {
         }
 
         class Bytes(str: String): AtTstVal("ba") {
-            private val v = str.hexStringToByteArray()
-            override fun sql(): String = "'\\x${v.toHex()}'"
+            private val v = CommonUtils.hexToBytes(str)
+            override fun sql(): String = "'\\x${CommonUtils.bytesToHex(v)}'"
         }
 
         class Json(val v: String): AtTstVal("j") {

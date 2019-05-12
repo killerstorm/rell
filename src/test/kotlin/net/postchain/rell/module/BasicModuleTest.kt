@@ -1,18 +1,18 @@
 package net.postchain.rell.module
 
 import net.postchain.base.SECP256K1CryptoSystem
-import net.postchain.common.hexStringToByteArray
 import net.postchain.devtools.IntegrationTest
 import net.postchain.devtools.KeyPairHelper
 import net.postchain.devtools.PostchainTestNode
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory.gtv
 import net.postchain.gtx.GTXDataBuilder
+import net.postchain.rell.CommonUtils
 import org.junit.Test
 import kotlin.test.assertEquals
 
 class BasicModuleTest : IntegrationTest() {
-    private val testBlockchainRID = "78967baa4768cbcef11c508326ffb13a956689fcb6dc3ba17f4b895cbb1577a3".hexStringToByteArray()
+    private val testBlockchainRID = CommonUtils.hexToBytes("78967baa4768cbcef11c508326ffb13a956689fcb6dc3ba17f4b895cbb1577a3")
     private val myCS = SECP256K1CryptoSystem()
 
     @Test fun testBuildBlock() {

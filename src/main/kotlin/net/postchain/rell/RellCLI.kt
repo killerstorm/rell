@@ -170,7 +170,7 @@ object RellCliUtils {
         val sourceName = sourceFile.name
 
         val includeDir = C_DiskIncludeDir(sourceFile.absoluteFile.parentFile)
-        val res = C_Compiler.compile(includeDir, sourceName, true)
+        val res = C_Compiler.compile(includeDir, sourceName)
 
         var errCnt = 0
         for (message in res.messages) {

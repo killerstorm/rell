@@ -2,9 +2,9 @@ package net.postchain.rell.runtime
 
 import com.google.common.collect.Sets
 import net.postchain.gtv.Gtv
+import net.postchain.rell.CommonUtils
 import net.postchain.rell.model.*
 import net.postchain.rell.sql.SqlExecutor
-import net.postchain.rell.toHex
 
 
 class Rt_GlobalContext(
@@ -51,7 +51,7 @@ class Rt_SqlContext private constructor(
 
             val rids = mutableSetOf<String>()
             for ((name, dep) in dependencies) {
-                val ridStr = dep.rid.toHex()
+                val ridStr = CommonUtils.bytesToHex(dep.rid)
                 if (!rids.add(ridStr)) {
                     throw Rt_Error("external_chain_dup_rid:$name:$ridStr",
                             "Duplicate external chain RID: '$name', 0x$ridStr")
@@ -59,11 +59,11 @@ class Rt_SqlContext private constructor(
             }
 
             val dbChains = loadDatabaseBlockchains(sqlExec)
-            val dbRidMap = dbChains.map { (chainId, rid) -> Pair(rid.toHex(), chainId) }.toMap()
+            val dbRidMap = dbChains.map { (chainId, rid) -> Pair(CommonUtils.bytesToHex(rid), chainId) }.toMap()
 
             val res = mutableMapOf<String, Rt_ExternalChain>()
             for ((name, dep) in dependencies) {
-                val ridStr = dep.rid.toHex()
+                val ridStr = CommonUtils.bytesToHex(dep.rid)
                 val chainId = dbRidMap[ridStr]
                 if (chainId == null) {
                     throw Rt_Error("external_chain_norid:$name:$ridStr",
@@ -94,7 +94,7 @@ class Rt_SqlContext private constructor(
             val chainRids = mutableSetOf<String>()
             for ((name, c) in externalChains) {
                 val id = c.chainId
-                val rid = c.rid.toHex()
+                val rid = CommonUtils.bytesToHex(c.rid)
                 if (!chainIds.add(id)) {
                     throw Rt_Error("external_chain_dup_id:$name:$id", "Duplicate external chain ID: '$name', $id")
                 }

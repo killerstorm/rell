@@ -72,7 +72,7 @@ class GtxModuleTest : BaseGtxTest() {
         val query = """
             query q(cities: set<text>): list<text> {
                 val persons = list<text>();
-                for (locCity in cities) persons.addAll(person @* { person.city.name == locCity }.name);
+                for (locCity in cities) persons.add_all(person @* { person.city.name == locCity }.name);
                 return persons;
             }
         """.trimIndent()
@@ -111,7 +111,7 @@ class GtxModuleTest : BaseGtxTest() {
         val query = """
             query q(cities: set<text>): list<text> {
                 val persons = list<text>();
-                for (locCity in cities) persons.addAll(person @* { person.city.name == locCity }.name);
+                for (locCity in cities) persons.add_all(person @* { person.city.name == locCity }.name);
                 return persons;
             }
         """.trimIndent()

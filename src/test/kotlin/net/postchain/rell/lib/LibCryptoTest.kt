@@ -2,15 +2,14 @@ package net.postchain.rell.lib
 
 import net.postchain.base.secp256k1_derivePubKey
 import net.postchain.base.secp256k1_sign
-import net.postchain.rell.hexStringToByteArray
+import net.postchain.rell.CommonUtils
 import net.postchain.rell.test.BaseRellTest
-import net.postchain.rell.toHex
 import org.junit.Test
 
 class LibCryptoTest: BaseRellTest(false) {
     @Test fun testVerifySignature() {
         val privKeyBytes = ByteArray(32) { it.toByte() }
-        val pubKey = secp256k1_derivePubKey(privKeyBytes).toHex()
+        val pubKey = CommonUtils.bytesToHex(secp256k1_derivePubKey(privKeyBytes))
 
         val sign1 = calcSignature("DEADBEEF", privKeyBytes)
         val sign2 = calcSignature("DEADBEFF", privKeyBytes)
@@ -26,7 +25,7 @@ class LibCryptoTest: BaseRellTest(false) {
     }
 
     private fun calcSignature(messageHex: String, privKeyBytes: ByteArray): String {
-        return secp256k1_sign(messageHex.hexStringToByteArray(), privKeyBytes).toHex()
+        return CommonUtils.bytesToHex(secp256k1_sign(CommonUtils.hexToBytes(messageHex), privKeyBytes))
     }
 
     @Test fun testHashRecord() {

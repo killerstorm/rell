@@ -111,6 +111,8 @@ class NamespaceTest: BaseRellTest() {
                 record r { x: integer; }
                 enum e { A, B, C }
                 namespace bar { function g(): integer = 789; }
+                operation op() {}
+                query q() = 123;
             }
         """.trimIndent())
         tst.insert("c0.foo.user", "x", "0,123")
@@ -128,11 +130,6 @@ class NamespaceTest: BaseRellTest() {
         chk("foo.r", "ct_err:expr_novalue:record")
         chk("foo.e", "ct_err:expr_novalue:enum")
         chk("foo.bar", "ct_err:expr_novalue:namespace")
-    }
-
-    @Test fun testUnallowedDefs() {
-        chkCompile("namespace foo { operation o(){} }", "ct_err:def_ns:operation")
-        chkCompile("namespace foo { query q() = 123; }", "ct_err:def_ns:query")
     }
 
     @Test fun testPredefinedNamespaces() {

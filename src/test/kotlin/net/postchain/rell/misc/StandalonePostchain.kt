@@ -1,9 +1,9 @@
 package net.postchain.rell.misc
 
-import net.postchain.common.hexStringToByteArray
 import net.postchain.devtools.IntegrationTest
 import net.postchain.devtools.PostchainTestNode
 import net.postchain.gtv.Gtv
+import net.postchain.rell.CommonUtils
 import net.postchain.rell.PostchainUtils
 import java.io.File
 
@@ -35,7 +35,7 @@ private class PostchainAccess: IntegrationTest() {
         nodesNames[nodeConfig.pubKey] = "$nodeIndex"
         val blockchainConfig = readBlockchainConfigStub(configFile)
         val chainId = nodeConfig.activeChainIds.first().toLong()
-        val blockchainRid = blockchainRids[chainId]!!.hexStringToByteArray()
+        val blockchainRid = CommonUtils.hexToBytes(blockchainRids[chainId]!!)
 
         return PostchainTestNode(nodeConfigProvider, preWipeDatabase)
                 .apply {

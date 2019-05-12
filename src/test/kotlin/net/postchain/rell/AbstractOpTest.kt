@@ -346,11 +346,11 @@ abstract class AbstractOpTest: BaseResourcefulTest() {
     }
 
     @Test fun testFnSystemMember() {
-        chkExpr("#0.len()", "int[0]", vText(""))
-        chkExpr("#0.len()", "int[5]", vText("Hello"))
+        chkExpr("#0.size()", "int[0]", vText(""))
+        chkExpr("#0.size()", "int[5]", vText("Hello"))
 
-        chkExpr("#0.len()", "int[0]", vBytes(""))
-        chkExpr("#0.len()", "int[5]", vBytes("123456789A"))
+        chkExpr("#0.size()", "int[0]", vBytes(""))
+        chkExpr("#0.size()", "int[5]", vBytes("123456789A"))
     }
 
     @Test fun testIf() {

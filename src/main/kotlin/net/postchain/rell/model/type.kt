@@ -1,7 +1,7 @@
 package net.postchain.rell.model
 
 import net.postchain.gtv.Gtv
-import net.postchain.rell.hexStringToByteArray
+import net.postchain.rell.CommonUtils
 import net.postchain.rell.module.*
 import net.postchain.rell.runtime.*
 import org.jooq.DataType
@@ -186,7 +186,7 @@ private object R_TypeSqlAdapter_Integer: R_TypeSqlAdapter_Primitive("integer") {
 
 object R_ByteArrayType: R_PrimitiveType("byte_array", PostgresDataType.BYTEA) {
     override fun comparator() = Rt_Comparator({ it.asByteArray() }, Comparator { x, y -> Arrays.compareUnsigned(x, y) })
-    override fun fromCli(s: String): Rt_Value = Rt_ByteArrayValue(s.hexStringToByteArray())
+    override fun fromCli(s: String): Rt_Value = Rt_ByteArrayValue(CommonUtils.hexToBytes(s))
 
     override fun createGtvConversion() = GtvRtConversion_ByteArray
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_ByteArray

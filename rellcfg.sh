@@ -1,3 +1,3 @@
 #!/bin/bash
 
-target/rellr-?.?.?-dist/postchain-node/rellcfg.sh $@
+target/rellr-*.*.*-dist/postchain-node/rellcfg.sh $@

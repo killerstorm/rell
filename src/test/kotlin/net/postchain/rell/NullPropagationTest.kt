@@ -157,13 +157,13 @@ class NullPropagationTest: BaseRellTest(false) {
         chkEx("{ val x = _nullable(123); val t = f(1, x!!, 2); return _type_of(x); }", "integer")
         chkEx("{ val x = _nullable(123); val t = f(1, 2, x!!); return _type_of(x); }", "integer")
 
-        chkEx("{ val x = _nullable(123); val t = (x!!).hex(); return _type_of(x); }", "integer")
+        chkEx("{ val x = _nullable(123); val t = (x!!).to_hex(); return _type_of(x); }", "integer")
 
         chkEx("{ val x = _nullable(123); val t = abs(x!!); return _type_of(x); }", "integer")
         chkEx("{ val x = _nullable(123); print(x!!); return _type_of(x); }", "integer")
 
         chkEx("{ val x = _nullable(123); require(_nullable(456 + x!!)); return _type_of(x); }", "integer")
-        chkEx("{ val x = _nullable(123); require(_nullable(456), x!!.hex()); return _type_of(x); }", "integer?")
+        chkEx("{ val x = _nullable(123); require(_nullable(456), x!!.to_hex()); return _type_of(x); }", "integer?")
 
         chkEx("{ val x = _nullable(123); _nullable(x!!); return _type_of(x); }", "integer")
         chkEx("{ val x = _nullable(123); _nullable_int(x!!); return _type_of(x); }", "integer")

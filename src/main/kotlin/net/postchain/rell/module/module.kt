@@ -13,6 +13,7 @@ import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.model.R_Operation
 import net.postchain.rell.model.R_Query
+import net.postchain.rell.parser.C_CompilationResult
 import net.postchain.rell.parser.C_Compiler
 import net.postchain.rell.parser.C_MessageType
 import net.postchain.rell.parser.C_VirtualIncludeDir
@@ -165,7 +166,7 @@ class RellPostchainModule(
     fun makeRtModuleContext(eCtx: EContext, opCtx: Rt_OpContext?): Rt_ModuleContext {
         val sqlExec = DefaultSqlExecutor(eCtx.conn, sqlLogging)
         val sqlMapping = Rt_ChainSqlMapping(eCtx.chainID)
-        val globalCtx = Rt_GlobalContext(StdoutRtPrinter, LogRtPrinter, sqlExec, opCtx, chainCtx)
+        val globalCtx = Rt_GlobalContext(factory.stdoutPrinter, factory.logPrinter, sqlExec, opCtx, chainCtx)
 
         val chainDeps = chainDeps.mapValues { (_, rid) -> Rt_ChainDependency(rid, Long.MAX_VALUE) }
         val sqlCtx = Rt_SqlContext.create(rModule, sqlMapping, chainDeps, sqlExec)
@@ -175,6 +176,8 @@ class RellPostchainModule(
 }
 
 class RellPostchainModuleFactory(
+        val stdoutPrinter: Rt_Printer = StdoutRtPrinter,
+        val logPrinter: Rt_Printer = LogRtPrinter,
         private val wrapCtErrors: Boolean = true,
         private val wrapRtErrors: Boolean = true
 ) : GTXModuleFactory {
@@ -187,9 +190,21 @@ class RellPostchainModuleFactory(
 
         val (sourceCodes, mainFileName) = getModuleCode(rellNode)
         val includeDir = C_VirtualIncludeDir(sourceCodes)
-        val cResult = C_Compiler.compile(includeDir, mainFileName, true)
+        val cResult = C_Compiler.compile(includeDir, mainFileName)
 
-        var failure = false
+        val module = processCompilationResult(cResult)
+        val chainCtx = createChainContext(data, rellNode, module)
+
+        val chainDeps = catchRtErr {
+            getGtvChainDependencies(data)
+        }
+
+        val sqlLogging = (rellNode["sqlLog"]?.asInteger() ?: 0L) != 0L
+
+        return RellPostchainModule(this, module, moduleName, chainCtx, chainDeps, sqlLogging)
+    }
+
+    private fun processCompilationResult(cResult: C_CompilationResult): R_Module {
         for (message in cResult.messages) {
             val str = message.toString()
             val type = message.type
@@ -200,27 +215,18 @@ class RellPostchainModuleFactory(
             } else {
                 logger.info(str)
             }
-            failure = failure || type == C_MessageType.ERROR
         }
 
-        if (cResult.error != null && !wrapCtErrors) {
-            throw cResult.error
+        val cError = cResult.error
+        if (cError != null && !wrapCtErrors) {
+            throw cError
         }
 
-        if (failure || cResult.error != null || cResult.module == null) {
-            throw UserMistake(cResult?.error?.message ?: "Compilation error")
+        if (cError != null || cResult.module == null) {
+            throw UserMistake(cError?.message ?: "Compilation error")
         }
 
-        val module = cResult.module
-        val chainCtx = createChainContext(data, rellNode, module)
-
-        val chainDeps = catchRtErr {
-            getGtvChainDependencies(data)
-        }
-
-        val sqlLogging = (rellNode["sqlLog"]?.asInteger() ?: 0L) != 0L
-
-        return RellPostchainModule(this, module, moduleName, chainCtx, chainDeps, sqlLogging)
+        return cResult.module
     }
 
     private fun getModuleCode(rellNode: Map<String, Gtv>): Pair<Map<String, String>, String> {

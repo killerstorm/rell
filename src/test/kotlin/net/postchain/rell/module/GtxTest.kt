@@ -63,4 +63,15 @@ class GtxTest : BaseGtxTest() {
         tst.defs = listOf("namespace foo { include 'foo'; }")
         tst.chkQuery("foo.f()", "123")
     }
+
+    @Test fun testNamespaceOperation() {
+        tst.defs = listOf("namespace foo { operation bar() {print('Hello');} }")
+        tst.chkCallOperation("foo.bar", listOf())
+        tst.chkStdout("Hello")
+    }
+
+    @Test fun testNamespaceQuery() {
+        tst.defs = listOf("namespace foo { query bar() = 123; }")
+        tst.chkCallQuery("foo.bar", "", "123")
+    }
 }

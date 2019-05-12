@@ -1,8 +1,8 @@
 package net.postchain.rell.model
 
 import net.postchain.core.Signature
+import net.postchain.rell.CommonUtils
 import net.postchain.rell.PostchainUtils
-import net.postchain.rell.hexStringToByteArray
 import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.runtime.*
 import java.util.*
@@ -47,7 +47,7 @@ sealed class R_SysFunction_0: R_SysFunction() {
     }
 }
 
-sealed class R_SysFunction_1: R_SysFunction() {
+abstract class R_SysFunction_1: R_SysFunction() {
     abstract fun call(arg: Rt_Value): Rt_Value
 
     override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
@@ -57,7 +57,7 @@ sealed class R_SysFunction_1: R_SysFunction() {
     }
 }
 
-sealed class R_SysFunction_2: R_SysFunction() {
+abstract class R_SysFunction_2: R_SysFunction() {
     abstract fun call(arg1: Rt_Value, arg2: Rt_Value): Rt_Value
 
     override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
@@ -191,7 +191,7 @@ object R_SysFn_Exists: R_SysFunction_1() {
     }
 }
 
-object R_SysFn_Int_Str: R_SysFunction_Common() {
+object R_SysFn_Int_ToText: R_SysFunction_Common() {
     override fun call(a: Rt_Value): Rt_Value = Rt_TextValue(a.asInteger().toString())
 
     override fun call(a: Rt_Value, b: Rt_Value): Rt_Value {
@@ -205,7 +205,7 @@ object R_SysFn_Int_Str: R_SysFunction_Common() {
     }
 }
 
-object R_SysFn_Int_Hex: R_SysFunction_Common() {
+object R_SysFn_Int_ToHex: R_SysFunction_Common() {
     override fun call(a: Rt_Value): Rt_Value = Rt_TextValue(java.lang.Long.toHexString(a.asInteger()))
 }
 
@@ -213,13 +213,13 @@ object R_SysFn_Int_Signum: R_SysFunction_Common() {
     override fun call(a: Rt_Value): Rt_Value = Rt_IntValue(java.lang.Long.signum(a.asInteger()).toLong())
 }
 
-object R_SysFn_Int_Parse: R_SysFunction_Common() {
+object R_SysFn_Int_FromText: R_SysFunction_Common() {
     override fun call(a: Rt_Value): Rt_Value = parse(a, 10)
 
     override fun call(a: Rt_Value, b: Rt_Value): Rt_Value {
         val r = b.asInteger()
         if (r < Character.MIN_RADIX || r > Character.MAX_RADIX) {
-            throw Rt_Error("fn:integer.parse:radix:$r", "Invalid radix: $r")
+            throw Rt_Error("fn:integer.from_text:radix:$r", "Invalid radix: $r")
         }
         return parse(a, r.toInt())
     }
@@ -229,19 +229,19 @@ object R_SysFn_Int_Parse: R_SysFunction_Common() {
         val r = try {
             java.lang.Long.parseLong(s, radix)
         } catch (e: NumberFormatException) {
-            throw Rt_Error("fn:integer.parse:$s", "Invalid number: '$s'")
+            throw Rt_Error("fn:integer.from_text:$s", "Invalid number: '$s'")
         }
         return Rt_IntValue(r)
     }
 }
 
-object R_SysFn_Int_ParseHex: R_SysFunction_Common() {
+object R_SysFn_Int_FromHex: R_SysFunction_Common() {
     override fun call(a: Rt_Value): Rt_Value {
         val s = a.asString()
         val r = try {
             java.lang.Long.parseUnsignedLong(s, 16)
         } catch (e: NumberFormatException) {
-            throw Rt_Error("fn:integer.parse_hex:$s", "Invalid hex number: '$s'")
+            throw Rt_Error("fn:integer.from_hex:$s", "Invalid hex number: '$s'")
         }
         return Rt_IntValue(r)
     }
@@ -295,25 +295,41 @@ object R_SysFn_ByteArray_ToList: R_SysFn_ByteArray() {
     }
 }
 
-object R_SysFn_ByteArray_New_Text: R_SysFunction_Common() {
-    override fun call(a: Rt_Value): Rt_Value {
-        val s = a.asString()
-        val r = try {
-            s.hexStringToByteArray()
-        } catch (e: IllegalArgumentException) {
-            throw Rt_Error("fn:byte_array.new(text):$s", "Invalid byte_array value: '$s'")
+object R_SysFn_ByteArray_ToHex: R_SysFn_ByteArray() {
+    override fun call(obj: ByteArray): Rt_Value = Rt_TextValue(CommonUtils.bytesToHex(obj))
+}
+
+object R_SysFn_ByteArray_ToBase64: R_SysFn_ByteArray() {
+    override fun call(obj: ByteArray): Rt_Value = Rt_TextValue(Base64.getEncoder().encodeToString(obj))
+}
+
+object R_SysFn_ByteArray_FromHex: R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value {
+        val s = arg.asString()
+        val bytes = Rt_Utils.wrapErr("fn:byte_array.from_hex") {
+            CommonUtils.hexToBytes(s)
         }
-        return Rt_ByteArrayValue(r)
+        return Rt_ByteArrayValue(bytes)
     }
 }
 
-object R_SysFn_ByteArray_New_List: R_SysFunction_Common() {
-    override fun call(a: Rt_Value): Rt_Value {
-        val s = a.asList()
+object R_SysFn_ByteArray_FromBase64: R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value {
+        val s = arg.asString()
+        val bytes = Rt_Utils.wrapErr("fn:byte_array.from_base64") {
+            Base64.getDecoder().decode(s)
+        }
+        return Rt_ByteArrayValue(bytes)
+    }
+}
+
+object R_SysFn_ByteArray_FromList: R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value {
+        val s = arg.asList()
         val r = ByteArray(s.size)
         for (i in s.indices) {
             val b = s[i].asInteger()
-            if (b < 0 || b > 255) throw Rt_Error("fn:byte_array.new(list):$b", "Byte value out of range: $b")
+            if (b < 0 || b > 255) throw Rt_Error("fn:byte_array.from_list:$b", "Byte value out of range: $b")
             r[i] = b.toByte()
         }
         return Rt_ByteArrayValue(r)

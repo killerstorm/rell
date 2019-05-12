@@ -122,10 +122,10 @@ class UserFunctionTest: BaseRellTest(false) {
         tst.defs = listOf("class user { name: text; id: integer; }")
         chkOp("create user('Bob',123); create user('Alice',456);")
 
-        val fn = "function foo(a: text): text = a.upperCase();"
+        val fn = "function foo(a: text): text = a.upper_case();"
 
-        chkFnEx(fn, "= user @ { .name.upperCase() == foo('bob') };", "user[1]")
-        chkFnEx(fn, "= user @ { .name.upperCase() == foo('alice') };", "user[2]")
+        chkFnEx(fn, "= user @ { .name.upper_case() == foo('bob') };", "user[1]")
+        chkFnEx(fn, "= user @ { .name.upper_case() == foo('alice') };", "user[2]")
 
         chkFnEx(fn, "= user @ { foo(.name) == 'BOB' };", "ct_err:expr_sqlnotallowed")
         chkFnEx(fn, "= user @ { .id == 123 } ( foo(.name) );", "ct_err:expr_sqlnotallowed")

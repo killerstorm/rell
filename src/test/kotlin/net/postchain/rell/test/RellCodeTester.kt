@@ -3,10 +3,9 @@ package net.postchain.rell.test
 import com.google.common.collect.Sets
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
-import net.postchain.rell.hexStringToByteArray
+import net.postchain.rell.CommonUtils
 import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_Module
-import net.postchain.rell.parser.C_Message
 import net.postchain.rell.parser.C_MessageType
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlExecutor
@@ -14,7 +13,6 @@ import net.postchain.rell.sql.SqlUtils
 import net.postchain.rell.sql.genSqlForChain
 import org.junit.Assert
 import java.sql.Connection
-import java.util.*
 import kotlin.test.assertEquals
 
 class RellCodeTester(
@@ -25,9 +23,6 @@ class RellCodeTester(
 ): RellBaseTester(tstCtx, classDefs, inserts, gtv)
 {
     private val expectedData = mutableListOf<String>()
-    private val stdoutPrinter = TesterRtPrinter()
-    private val logPrinter = TesterRtPrinter()
-    private val messages = mutableListOf<C_Message>()
 
     var gtvResult: Boolean = gtv
         set(value) {
@@ -72,7 +67,7 @@ class RellCodeTester(
 
     fun chainDependency(name: String, rid: String, height: Long) {
         check(name !in chainDependencies)
-        val ridArray = rid.hexStringToByteArray()
+        val ridArray = CommonUtils.hexToBytes(rid)
         chainDependencies[name] = Rt_ChainDependency(ridArray, height)
     }
 
@@ -165,8 +160,6 @@ class RellCodeTester(
     }
 
     private fun <T> callQuery0(code: String, args: List<T>, decoder: (List<R_ExternalParam>, List<T>) -> List<Rt_Value>): String {
-        messages.clear()
-
         return eval.eval {
             init()
             val moduleCode = moduleCode(code)
@@ -226,9 +219,6 @@ class RellCodeTester(
         return eval.wrapRt { Rt_SqlContext.create(module, sqlMapping, chainDependencies, sqlExec) }
     }
 
-    fun chkStdout(vararg expected: String) = stdoutPrinter.chk(*expected)
-    fun chkLog(vararg expected: String) = logPrinter.chk(*expected)
-
     fun chkWarn(vararg msgs: String) {
         val actual = messages.filter { it.type == C_MessageType.WARNING }.map { it.code }.toSet()
         val expected = msgs.toSet()
@@ -258,26 +248,10 @@ class RellCodeTester(
     }
 
     private fun processModuleCtx(globalCtx: Rt_GlobalContext, code: String, processor: (Rt_ModuleContext) -> String): String {
-        val includeDir = createIncludeDir(code)
-        return RellTestUtils.processModule(includeDir, errMsgPos, gtv) { module ->
-            messages.addAll(module.messages)
-            RellTestUtils.catchRtErr({ createModuleCtx(globalCtx, module.rModule) }) {
-                modCtx -> processor(modCtx) }
-        }
-    }
-
-    private class TesterRtPrinter: Rt_Printer() {
-        private val queue = LinkedList<String>()
-
-        override fun print(str: String) {
-            queue.add(str)
-        }
-
-        fun chk(vararg expected: String) {
-            val expectedList = expected.toList()
-            val actualList = queue.toList()
-            assertEquals(expectedList, actualList)
-            queue.clear()
+        return processModule(code) { module ->
+            RellTestUtils.catchRtErr({ createModuleCtx(globalCtx, module) }) {
+                modCtx -> processor(modCtx)
+            }
         }
     }
 }

@@ -4,7 +4,7 @@ import net.postchain.rell.model.*
 import org.apache.commons.collections4.multimap.ArrayListValuedHashMap
 
 abstract class C_SysMemberFunction {
-    abstract fun compileCall(name: S_Name, base: C_Value, safe: Boolean, args: List<C_Value>): C_Expr
+    abstract fun compileCall(ctx: C_ExprContext, name: S_Name, base: C_Value, safe: Boolean, args: List<C_Value>): C_Expr
 }
 
 sealed class C_ArgTypeMatcher {
@@ -38,6 +38,14 @@ abstract class C_GlobalFuncCase {
     abstract fun match(args: List<C_Value>): C_GlobalFuncCaseMatch?
 }
 
+abstract class C_GlobalFuncCaseMatch {
+    abstract fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Value
+
+    open fun compileCallDb(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Value {
+        throw C_Errors.errFunctionNoSql(name.pos, name.str)
+    }
+}
+
 abstract class C_SimpleGlobalFuncCase: C_GlobalFuncCase() {
     abstract fun matchTypes(args: List<R_Type>): C_GlobalFuncCaseMatch?
 
@@ -47,11 +55,28 @@ abstract class C_SimpleGlobalFuncCase: C_GlobalFuncCase() {
     }
 }
 
-abstract class C_GlobalFuncCaseMatch {
-    abstract fun compileCall(name: S_Name, args: List<C_Value>): C_Value
+class C_DeprecatedGlobalFuncCase(
+        private val case: C_GlobalFuncCase,
+        private val deprecated: C_Deprecated
+): C_GlobalFuncCase() {
+    override fun match(args: List<C_Value>): C_GlobalFuncCaseMatch? {
+        val match = case.match(args)
+        return if (match == null) match else C_DeprecatedGlobalFuncCaseMatch(match, deprecated)
+    }
 
-    open fun compileCallDb(name: S_Name, args: List<C_Value>): C_Value {
-        throw C_Errors.errFunctionNoSql(name.pos, name.str)
+    private class C_DeprecatedGlobalFuncCaseMatch(
+            private val match: C_GlobalFuncCaseMatch,
+            private val deprecated: C_Deprecated
+    ): C_GlobalFuncCaseMatch() {
+        override fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Value {
+            C_Def.deprecatedMessage(ctx.blkCtx.entCtx.nsCtx, C_DefType.FUNCTION, name.pos, name.str, deprecated)
+            return match.compileCall(ctx, name, args)
+        }
+
+        override fun compileCallDb(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Value {
+            C_Def.deprecatedMessage(ctx.blkCtx.entCtx.nsCtx, C_DefType.FUNCTION, name.pos, name.str, deprecated)
+            return match.compileCallDb(ctx, name, args)
+        }
     }
 }
 
@@ -62,14 +87,14 @@ abstract class C_SimpleGlobalFuncCaseMatch: C_GlobalFuncCaseMatch() {
         throw C_Errors.errFunctionNoSql(name.pos, name.str)
     }
 
-    override fun compileCall(name: S_Name, args: List<C_Value>): C_Value {
+    override fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Value {
         val rArgs = args.map { it.toRExpr() }
         val rExpr = compileCallExpr(name, rArgs)
         val facts = C_ExprVarFacts.forSubExpressions(args)
         return C_RValue(name.pos, rExpr, facts)
     }
 
-    override fun compileCallDb(name: S_Name, args: List<C_Value>): C_Value {
+    override fun compileCallDb(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Value {
         val dbArgs = args.map { it.toDbExpr() }
         val dbExpr = compileCallDbExpr(name, dbArgs)
         val facts = C_ExprVarFacts.forSubExpressions(args)
@@ -101,10 +126,35 @@ abstract class C_MemberFuncCase {
 }
 
 abstract class C_MemberFuncCaseMatch {
-    abstract fun compileCall(pos: S_Pos, name: String, args: List<R_Expr>): R_MemberCalculator
+    abstract fun compileCall(ctx: C_ExprContext, pos: S_Pos, name: String, args: List<R_Expr>): R_MemberCalculator
 
-    open fun compileCallDb(pos: S_Pos, name: String, base: Db_Expr, args: List<Db_Expr>): Db_Expr {
+    open fun compileCallDb(ctx: C_ExprContext, pos: S_Pos, name: String, base: Db_Expr, args: List<Db_Expr>): Db_Expr {
         throw C_Errors.errFunctionNoSql(pos, name)
+    }
+}
+
+class C_DeprecatedMemberFuncCase(
+        private val case: C_MemberFuncCase,
+        private val deprecated: C_Deprecated
+): C_MemberFuncCase() {
+    override fun match(args: List<R_Type>): C_MemberFuncCaseMatch? {
+        val match = case.match(args)
+        return if (match == null) match else C_DeprecatedMemberFuncCaseMatch(match, deprecated)
+    }
+
+    private class C_DeprecatedMemberFuncCaseMatch(
+            private val match: C_MemberFuncCaseMatch,
+            private val deprecated: C_Deprecated
+    ): C_MemberFuncCaseMatch() {
+        override fun compileCall(ctx: C_ExprContext, pos: S_Pos, name: String, args: List<R_Expr>): R_MemberCalculator {
+            C_Def.deprecatedMessage(ctx.blkCtx.entCtx.nsCtx, C_DefType.FUNCTION, pos, name, deprecated)
+            return match.compileCall(ctx, pos, name, args)
+        }
+
+        override fun compileCallDb(ctx: C_ExprContext, pos: S_Pos, name: String, base: Db_Expr, args: List<Db_Expr>): Db_Expr {
+            C_Def.deprecatedMessage(ctx.blkCtx.entCtx.nsCtx, C_DefType.FUNCTION, pos, name, deprecated)
+            return match.compileCallDb(ctx, pos, name, base, args)
+        }
     }
 }
 
@@ -116,11 +166,11 @@ class C_StdMemberFuncCase(val params: List<C_ArgTypeMatcher>, val match: C_Membe
 }
 
 class C_StdMemberFuncCaseMatch(val type: R_Type, val rFn: R_SysFunction, val dbFn: Db_SysFunction? = null): C_MemberFuncCaseMatch() {
-    override fun compileCall(pos: S_Pos, name: String, args: List<R_Expr>): R_MemberCalculator {
+    override fun compileCall(ctx: C_ExprContext, pos: S_Pos, name: String, args: List<R_Expr>): R_MemberCalculator {
         return R_MemberCalculator_SysFn(type, rFn, args)
     }
 
-    override fun compileCallDb(pos: S_Pos, name: String, base: Db_Expr, args: List<Db_Expr>): Db_Expr {
+    override fun compileCallDb(ctx: C_ExprContext, pos: S_Pos, name: String, base: Db_Expr, args: List<Db_Expr>): Db_Expr {
         if (dbFn == null) throw C_Errors.errFunctionNoSql(pos, name)
         val fullArgs = listOf(base) + args
         return Db_CallExpr(type, dbFn, fullArgs)
@@ -172,13 +222,13 @@ object C_FuncUtils {
 }
 
 class C_SysGlobalFunction(private val cases: List<C_GlobalFuncCase>): C_GlobalFunction() {
-    override fun compileCall(name: S_Name, args: List<C_Value>): C_Expr {
+    override fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Expr {
         val match = matchCase(name, args)
         val db = args.any { it.isDb() }
         val value = if (db) {
-            match.compileCallDb(name, args)
+            match.compileCallDb(ctx, name, args)
         } else {
-            match.compileCall(name, args)
+            match.compileCall(ctx, name, args)
         }
         return C_ValueExpr(value)
     }
@@ -197,7 +247,7 @@ class C_SysGlobalFunction(private val cases: List<C_GlobalFuncCase>): C_GlobalFu
 }
 
 class C_StdSysMemberFunction(val cases: List<C_MemberFuncCase>): C_SysMemberFunction() {
-    override fun compileCall(name: S_Name, base: C_Value, safe: Boolean, args: List<C_Value>): C_Expr {
+    override fun compileCall(ctx: C_ExprContext, name: S_Name, base: C_Value, safe: Boolean, args: List<C_Value>): C_Expr {
         val fullName = "${base.type().toStrictString()}.${name.str}"
         val match = matchCase(name.pos, fullName, args)
 
@@ -205,13 +255,13 @@ class C_StdSysMemberFunction(val cases: List<C_MemberFuncCase>): C_SysMemberFunc
         if (db) {
             val dbBase = base.toDbExpr()
             val dbArgs = args.map { it.toDbExpr() }
-            val dbExpr = match.compileCallDb(name.pos, fullName, dbBase, dbArgs)
+            val dbExpr = match.compileCallDb(ctx, name.pos, fullName, dbBase, dbArgs)
             return C_DbValue.makeExpr(name.pos, dbExpr)
         }
 
         val rBase = base.toRExpr()
         val rArgs = args.map { it.toRExpr() }
-        val calculator = match.compileCall(name.pos, fullName, rArgs)
+        val calculator = match.compileCall(ctx, name.pos, fullName, rArgs)
         val rExpr = R_MemberExpr(rBase, safe, calculator)
 
         val subValues = listOf(base) + args
@@ -259,10 +309,12 @@ sealed class C_FuncBuilder<BuilderT, CaseT, MatchT, FuncT> {
 
     protected abstract fun makeMatch(result: R_Type, rFn: R_SysFunction, dbFn: Db_SysFunction?): MatchT
     protected abstract fun makeCase(params: List<C_ArgTypeMatcher>, match: MatchT): CaseT
+    protected abstract fun makeDeprecatedCase(case: CaseT, deprecated: C_Deprecated): CaseT
     protected abstract fun makeFunc(cases: List<CaseT>): FuncT
 
-    protected fun addCase(name: String, case: CaseT) {
-        map.put(name, case)
+    protected fun addCase(name: String, case: CaseT, deprecated: C_Deprecated?) {
+        val case2 = if (deprecated == null) case else makeDeprecatedCase(case, deprecated)
+        map.put(name, case2)
     }
 
     protected fun buildMap(): Map<String, FuncT> {
@@ -279,11 +331,20 @@ sealed class C_FuncBuilder<BuilderT, CaseT, MatchT, FuncT> {
             result: R_Type,
             params: List<C_ArgTypeMatcher>,
             rFn: R_SysFunction,
-            dbFn: Db_SysFunction? = null
+            deprecated: C_Deprecated
+    ): BuilderT = addEx(name, result, params, rFn, null, deprecated)
+
+    fun addEx(
+            name: String,
+            result: R_Type,
+            params: List<C_ArgTypeMatcher>,
+            rFn: R_SysFunction,
+            dbFn: Db_SysFunction? = null,
+            deprecated: C_Deprecated? = null
     ): BuilderT {
         val match = makeMatch(result, rFn, dbFn)
         val case = makeCase(params, match)
-        addCase(name, case)
+        addCase(name, case, deprecated)
         return this as BuilderT
     }
 
@@ -292,22 +353,31 @@ sealed class C_FuncBuilder<BuilderT, CaseT, MatchT, FuncT> {
             result: R_Type,
             params: List<R_Type>,
             rFn: R_SysFunction,
-            dbFn: Db_SysFunction? = null
+            deprecated: C_Deprecated
+    ): BuilderT = add(name, result, params, rFn, null, deprecated)
+
+    fun add(
+            name: String,
+            result: R_Type,
+            params: List<R_Type>,
+            rFn: R_SysFunction,
+            dbFn: Db_SysFunction? = null,
+            deprecated: C_Deprecated? = null
     ): BuilderT {
         val matchers = params.map { C_ArgTypeMatcher_Simple(it) }
-        addEx(name, result, matchers, rFn, dbFn)
+        addEx(name, result, matchers, rFn, dbFn, deprecated)
         return this as BuilderT
     }
 
-    fun add(name: String, params: List<R_Type>, match: MatchT): BuilderT {
+    fun add(name: String, params: List<R_Type>, match: MatchT, deprecated: C_Deprecated? = null): BuilderT {
         val matchers = params.map { C_ArgTypeMatcher_Simple(it) }
         val case = makeCase(matchers, match)
-        addCase(name, case)
+        addCase(name, case, deprecated)
         return this as BuilderT
     }
 
-    fun add(name: String, case: CaseT): BuilderT {
-        addCase(name, case)
+    fun add(name: String, case: CaseT, deprecated: C_Deprecated? = null): BuilderT {
+        addCase(name, case, deprecated)
         return this as BuilderT
     }
 
@@ -335,6 +405,10 @@ class C_GlobalFuncBuilder: C_FuncBuilder<C_GlobalFuncBuilder, C_GlobalFuncCase, 
         return C_StdGlobalFuncCase(params, match)
     }
 
+    override fun makeDeprecatedCase(case: C_GlobalFuncCase, deprecated: C_Deprecated): C_GlobalFuncCase {
+        return C_DeprecatedGlobalFuncCase(case, deprecated)
+    }
+
     override fun makeFunc(cases: List<C_GlobalFuncCase>): C_GlobalFunction {
         return C_SysGlobalFunction(cases)
     }
@@ -352,6 +426,10 @@ class C_MemberFuncBuilder: C_FuncBuilder<C_MemberFuncBuilder, C_MemberFuncCase, 
 
     override fun makeCase(params: List<C_ArgTypeMatcher>, match: C_MemberFuncCaseMatch): C_MemberFuncCase {
         return C_StdMemberFuncCase(params, match)
+    }
+
+    override fun makeDeprecatedCase(case: C_MemberFuncCase, deprecated: C_Deprecated): C_MemberFuncCase {
+        return C_DeprecatedMemberFuncCase(case, deprecated)
     }
 
     override fun makeFunc(cases: List<C_MemberFuncCase>): C_SysMemberFunction {

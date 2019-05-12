@@ -149,7 +149,7 @@ class NullAnalysisTest: BaseRellTest(false) {
 
     @Test fun testImplicationsRequire() {
         chkImplicationsExpr("require(x)")
-        chkImplicationsExpr("requireNotEmpty(x)")
+        chkImplicationsExpr("require_not_empty(x)")
     }
 
     private fun chkImplicationsExpr(expr: String) {
@@ -456,7 +456,7 @@ class NullAnalysisTest: BaseRellTest(false) {
 
     @Test fun testDefiniteFactRequire() {
         chkDefiniteFactNullCast("require(x)", "ct_err:expr_call_argtypes:require:integer", "req_err:null")
-        chkDefiniteFactNullCast("requireNotEmpty(x)", "ct_err:expr_call_argtypes:requireNotEmpty:integer", "req_err:null")
+        chkDefiniteFactNullCast("require_not_empty(x)", "ct_err:expr_call_argtypes:require_not_empty:integer", "req_err:null")
     }
 
     private fun chkDefiniteFactNullCast(expr: String, ctErr: String, rtErr: String) {
