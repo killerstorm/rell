@@ -27,7 +27,7 @@ It is not possible to create, modify or delete objects of those classes in code.
 chain_context
 -------------
 
-``chain_context.raw_config: GTXValue`` - blockchain configuration object, e. g. ``{"gtx":{"rellSrcModule":"foo.rell"}}``
+``chain_context.raw_config: gtv`` - blockchain configuration object, e. g. ``{"gtx":{"rellSrcModule":"foo.rell"}}``
 
 ``chain_context.args: module_args?`` - module arguments specified in ``raw_config`` under path ``gtx.rellModuleArgs``.
 The type is ``module_args``, which must be a user-defined record. If no ``module_args`` record is defined in the module,
@@ -91,8 +91,6 @@ Global Functions
 ``is_signer(byte_array): boolean`` - returns ``true`` if a byte array is
 in the list of signers of current operation
 
-``json(text): json`` - parse a JSON
-
 ``log(...)`` - print a message to the log (same usage as ``print``)
 
 ``max(integer, integer): integer`` - maximum of two values
@@ -104,6 +102,9 @@ in the list of signers of current operation
 -  ``print()`` - prints an empty line
 -  ``print('Hello', 123)`` - prints ``"Hello 123"``
 
+``verify_signature(message: byte_array, pubkey: pubkey, signature: byte_array): boolean`` - returns ``true``
+if the given signature is a result of signing the message with a private key corresponding to the given public key
+
 --------------
 
 Require functions
@@ -111,26 +112,25 @@ Require functions
 
 For checking a boolean condition:
 
-``require(boolean[, text])`` - throws an exception if the argument is
-``false``
+``require(boolean[, text])`` - throws an exception if the argument is ``false``
 
 For checking for ``null``:
 
 ``require(T?[, text]): T`` - throws an exception if the argument is
 ``null``, otherwise returns the argument
 
-``requireNotEmpty(T?[, text]): T`` - same as the previous one
+``require_not_empty(T?[, text]): T`` - same as the previous one
 
 For checking for an empty collection:
 
-``requireNotEmpty(list<T>[, text]): list<T>`` - throws an exception if
+``require_not_empty(list<T>[, text]): list<T>`` - throws an exception if
 the argument is an empty collection, otherwise returns the argument
 
-``requireNotEmpty(set<T>[, text]): set<T>`` - same as the previous
+``require_not_empty(set<T>[, text]): set<T>`` - same as the previous
 
-``requireNotEmpty(map<K,V>[, text]): map<K,V>`` - same as the previous
+``require_not_empty(map<K,V>[, text]): map<K,V>`` - same as the previous
 
-When passing a nullable collection to ``requireNotEmpty``, it throws an
+When passing a nullable collection to ``require_not_empty``, it throws an
 exception if the argument is either ``null`` or an empty collection.
 
 Examples:
@@ -140,12 +140,12 @@ Examples:
    val x: integer? = calculate();
    val y = require(x, "x is null"); // type of "y" is "integer", not "integer?"
 
-   val p: list<integer> = getList();
-   requireNotEmpty(p, "List is empty");
+   val p: list<integer> = get_list();
+   require_not_empty(p, "List is empty");
 
-   val q: list<integer>? = tryToGetList();
-   require(q);         // fails if q is null
-   requireNotEmpty(q); // fails if q is null or an empty list
+   val q: list<integer>? = try_to_get_list();
+   require(q);           // fails if q is null
+   require_not_empty(q); // fails if q is null or an empty list
 
 --------------
 
@@ -156,41 +156,43 @@ integer
 
 ``integer.MAX_VALUE`` = maximum value (``2^63-1``)
 
-``integer(s: text, radix: integer = 10)`` - parse a signed
-representation, fail if invalid
+``integer(s: text, radix: integer = 10)`` - parse a signed string representation of an integer, fail if invalid
 
-``integer.parseHex(text): integer`` - parse an unsigned HEX
-representation
+``integer.from_text(s: text, radix: integer = 10): integer`` - same as ``integer(text, integer)``
 
-``.hex(): text`` - convert to an unsigned HEX representation
+``integer.from_hex(text): integer`` - parse an unsigned HEX representation
 
-``.str(radix: integer = 10)`` - convert to a signed string
-representation
+``.to_text(radix: integer = 10)`` - convert to a signed string representation
 
-``.signum(): integer`` - returns ``-1``, ``0`` or ``1`` depending on the
-sign
+``.to_hex(): text`` - convert to an unsigned HEX representation
+
+``.signum(): integer`` - returns ``-1``, ``0`` or ``1`` depending on the sign
 
 --------------
 
 text
 ----
 
+``text.from_bytes(byte_array, ignore_invalid: boolean = false)`` - if ``ignore_invalid`` is ``false``,
+throws an exception when the byte array is not a valid UTF-8 encoded string, otherwise replaces invalid characters
+with a placeholder.
+
 ``.empty(): boolean``
 
 ``.size(): integer``
 
-``.compareTo(text): integer`` - as in Java
+``.compare_to(text): integer`` - as in Java
 
-``.startsWith(text): boolean``
+``.starts_with(text): boolean``
 
-``.endsWith(text): boolean``
+``.ends_with(text): boolean``
 
 ``.contains(text): boolean`` - ``true`` if contains the given substring
 
-``.indexOf(text, start: integer = 0): integer`` - returns ``-1`` if
+``.index_of(text, start: integer = 0): integer`` - returns ``-1`` if
 substring is not found (as in Java)
 
-``.lastIndexOf(text[, start: integer]): integer`` - returns ``-1`` if
+``.last_index_of(text[, start: integer]): integer`` - returns ``-1`` if
 substring is not found (as in Java)
 
 ``.sub(start: integer[, end: integer]): text`` - get a substring
@@ -198,20 +200,19 @@ substring is not found (as in Java)
 
 ``.replace(old: text, new: text)``
 
-``.upperCase(): text``
+``.upper_case(): text``
 
-``.lowerCase(): text``
+``.lower_case(): text``
 
-``.split(text): list<text>`` - strictly split by a separator (not a
-regular expression)
+``.split(text): list<text>`` - strictly split by a separator (not a regular expression)
 
 ``.trim(): text`` - remove leading and trailing whitespace
 
 ``.matches(text): boolean`` - ``true`` if matches a regular expression
 
-``.encode(): byte_array`` - convert to a UTF-8 encoded byte array
+``.to_bytes(): byte_array`` - convert to a UTF-8 encoded byte array
 
-``.charAt(integer): integer`` - get a 16-bit code of a character
+``.char_at(integer): integer`` - get a 16-bit code of a character
 
 ``.format(...)`` - formats a string (as in Java):
 
@@ -227,22 +228,28 @@ Special operators:
 byte_array
 ----------
 
-``byte_array(text)`` - create a ``byte_array`` from a HEX string,
-e.g.\ ``'1234abcd'``
+``byte_array(text)`` - creates a ``byte_array`` from a HEX string, e.g. ``'1234abcd'``, throws an exception if the
+string is not a valid HEX sequence
 
-``byte_array(list<integer>)`` - create a ``byte_array`` from a list;
-values must be 0 - 255
+``byte_array.from_hex(text): byte_array`` - same as ``byte_array(text)``
+
+``byte_array.from_base64(text): byte_array`` - creates a ``byte_array`` from a Base64 string, throws an exception if
+the string is invalid
+
+``byte_array.from_list(list<integer>): byte_array`` - creates a ``byte_array`` from a list; values must be 0 - 255,
+otherwise an exception is thrown
 
 ``.empty(): boolean``
 
 ``.size(): integer``
 
-``.decode(): text`` - decode a UTF-8 encoded text
+``.sub(start: integer[, end: integer]): byte_array`` - sub-array (start-inclusive, end-exclusive)
 
-``.sub(start: integer[, end: integer]): byte_array`` - sub-array
-(start-inclusive, end-exclusive)
+``.to_hex(): text`` - returns a HEX representation of the byte array, e.g. ``'1234abcd'``
 
-``.toList(): list<integer>`` - list of values 0 - 255
+``.to_base64(): text`` - returns a Base64 representation of the byte array
+
+``.to_list(): list<integer>`` - list of values 0 - 255
 
 Special operators:
 
@@ -265,8 +272,7 @@ start-inclusive, end-exclusive (as in Python):
 
 Special operators:
 
--  ``in`` - returns ``true`` if the value is in the range (taking
-   ``step`` into account)
+-  ``in`` - returns ``true`` if the value is in the range (taking ``step`` into account)
 
 --------------
 
@@ -277,48 +283,43 @@ Constructors:
 
 ``list<T>()`` - a new empty list
 
-``list<T>(list<T>)`` - a copy of the given list (list of subtype is
-accepted as well)
+``list<T>(list<T>)`` - a copy of the given list (list of subtype is accepted as well)
 
-``list<T>(set<T>)`` - a copy of the given set (set of subtype is
-accepted)
+``list<T>(set<T>)`` - a copy of the given set (set of subtype is accepted)
 
 Methods:
 
-``.add(T): boolean`` - adds an element to the end, always returns
-``true``
+``.add(T): boolean`` - adds an element to the end, always returns ``true``
 
-``.add(pos: integer, T): boolean`` - inserts an element at a position,
-always returns ``true``
+``.add(pos: integer, T): boolean`` - inserts an element at a position, always returns ``true``
 
-``.addAll(list<T>): boolean``
+``.add_all(list<T>): boolean``
 
-``.addAll(set<T>): boolean``
+``.add_all(set<T>): boolean``
 
-``.addAll(pos: integer, list<T>): boolean``
+``.add_all(pos: integer, list<T>): boolean``
 
-``.addAll(pos: integer, set<T>): boolean``
+``.add_all(pos: integer, set<T>): boolean``
 
 ``.clear()``
 
 ``.contains(T): boolean``
 
-``.containsAll(list<T>): boolean``
+``.contains_all(list<T>): boolean``
 
-``.containsAll(set<T>): boolean``
+``.contains_all(set<T>): boolean``
 
 ``.empty(): boolean``
 
-``.indexOf(T): integer`` - returns ``-1`` if element is not found
+``.index_of(T): integer`` - returns ``-1`` if element is not found
 
-``.remove(T): boolean`` - removes the first occurrence of the value,
-return ``true`` if found
+``.remove(T): boolean`` - removes the first occurrence of the value, return ``true`` if found
 
-``.removeAll(list<T>): boolean``
+``.remove_all(list<T>): boolean``
 
-``.removeAll(set<T>): boolean``
+``.remove_all(set<T>): boolean``
 
-``.removeAt(pos: integer): T`` - removes an element at a given position
+``.remove_at(pos: integer): T`` - removes an element at a given position
 
 ``.size(): integer``
 
@@ -326,7 +327,7 @@ return ``true`` if found
 
 ``.sorted(): list<T>`` - returns a sorted copy of this list
 
-``.str(): text`` - returns e. g. ``'[1, 2, 3, 4, 5]'``
+``.to_text(): text`` - returns e. g. ``'[1, 2, 3, 4, 5]'``
 
 ``.sub(start: integer[, end: integer]): list<T>`` - returns a sub-list (start-inclusive, end-exclusive)
 
@@ -344,8 +345,7 @@ Constructors:
 
 ``set<T>()`` - a new empty set
 
-``set<T>(set<T>)`` - a copy of the given set (set of subtype is accepted
-as well)
+``set<T>(set<T>)`` - a copy of the given set (set of subtype is accepted as well)
 
 ``set<T>(list<T>)`` - a copy of the given list (with duplicates removed)
 
@@ -353,31 +353,31 @@ Methods:
 
 ``.add(T): boolean`` - if the element is not in the set, adds it and returns ``true``
 
-``.addAll(list<T>): boolean`` - adds all elements, returns ``true`` if at least one added
+``.add_all(list<T>): boolean`` - adds all elements, returns ``true`` if at least one added
 
-``.addAll(set<T>): boolean`` - adds all elements, returns ``true`` if at least one added
+``.add_all(set<T>): boolean`` - adds all elements, returns ``true`` if at least one added
 
 ``.clear()``
 
 ``.contains(T): boolean``
 
-``.containsAll(list<T>): boolean``
+``.contains_all(list<T>): boolean``
 
-``.containsAll(set<T>): boolean``
+``.contains_all(set<T>): boolean``
 
 ``.empty(): boolean``
 
 ``.remove(T): boolean`` - removes the element, returns ``true`` if found
 
-``.removeAll(list<T>): boolean`` - returns ``true`` if at least one removed
+``.remove_all(list<T>): boolean`` - returns ``true`` if at least one removed
 
-``.removeAll(set<T>): boolean`` - returns ``true`` if at least one removed
+``.remove_all(set<T>): boolean`` - returns ``true`` if at least one removed
 
 ``.size(): integer``
 
 ``.sorted(): list<T>`` - returns a sorted copy of this set (as a list)
 
-``.str(): text`` - returns e. g. ``'[1, 2, 3, 4, 5]'``
+``.to_text(): text`` - returns e. g. ``'[1, 2, 3, 4, 5]'``
 
 Special operators:
 
@@ -408,13 +408,13 @@ Methods:
 
 ``.keys(): set<K>`` - returns a copy of keys
 
-``.putAll(map<K, V>)`` - adds/replaces all key-value pairs from the given map
+``.put_all(map<K, V>)`` - adds/replaces all key-value pairs from the given map
 
 ``.remove(K): V`` - removes a key-value pair (fails if the key is not in the map)
 
 ``.size(): integer``
 
-``.str(): text`` - returns e. g. ``'{x=123, y=456}'``
+``.to_text(): text`` - returns e. g. ``'{x=123, y=456}'``
 
 ``.values(): list<V>`` - returns a copy of values
 
@@ -444,18 +444,54 @@ Enum value properties:
 
 --------------
 
-GTXValue
+gtv
 --------
 
-``GTXValue.fromJSON(text): GTXValue`` - decode a ``GTXValue`` from a JSON string
+``gtv.from_json(text): gtv`` - decode a ``gtv`` from a JSON string
 
-``GTXValue.fromJSON(json): GTXValue`` - decode a ``GTXValue`` from a ``json`` value
+``gtv.from_json(json): gtv`` - decode a ``gtv`` from a ``json`` value
 
-``GTXValue.fromBytes(byte_array): GTXValue`` - decode a ``GTXValue`` from a binary-encoded form
+``gtv.from_bytes(byte_array): gtv`` - decode a ``gtv`` from a binary-encoded form
 
-``.toJSON(): json`` - encode in JSON format
+``.to_json(): json`` - convert to JSON
 
-``.toBytes(): byte_array`` - encode in binary format
+``.to_bytes(): byte_array`` - convert to bytes
+
+``.hash(): byte_array`` - returns a cryptographic hash of the value
+
+--------------
+
+gtv-related functions
+------
+
+Functions available for all Gtv-compatible types:
+
+``T.from_gtv(gtv): T`` - decode from a ``gtv``
+
+``T.from_gtv_pretty(gtv): T`` - decode from a pretty-encoded ``gtv``
+
+``.to_gtv(): gtv`` - convert to a ``gtv``
+
+``.to_gtv_pretty(): gtv`` - convert to a pretty ``gtv``
+
+``.hash(): byte_array`` - returns a cryptographic hash of the value (same as ``.to_gtv().hash()``)
+
+Examples:
+
+::
+
+    val g = [1, 2, 3].to_gtv();
+    val l = list<integer>.from_gtv(g);   // Returns [1, 2, 3]
+    print(g.hash());
+
+--------------
+
+json
+--------
+
+``json(text)`` - create a ``json`` value from a string; fails if not a valid JSON string
+
+``.to_text(): text`` - convert to string
 
 --------------
 
@@ -464,14 +500,15 @@ record
 
 Functions available for all ``record`` types:
 
-``T.fromBytes(byte_array): T`` - decode from a binary-encoded ``GTXValue``
+``T.from_bytes(byte_array): T`` - decode from a binary-encoded ``gtv``
+(same as ``T.from_gtv(gtv.from_bytes(x))``)
 
-``T.fromGTXValue(GTXValue): T`` - decode from a ``GTXValue``
+``T.from_gtv(gtv): T`` - decode from a ``gtv``
 
-``T.fromPrettyGTXValue(GTXValue): T`` - decode from a pretty-encoded ``GTXValue``
+``T.from_gtv_pretty(gtv): T`` - decode from a pretty-encoded ``gtv``
 
-``.toBytes(): byte_array`` - encode in binary format
+``.to_bytes(): byte_array`` - encode in binary format (same as ``.to_gtv().to_bytes()``)
 
-``.toGTXValue(): GTXValue`` - encode to a ``GTXValue``
+``.to_gtv(): gtv`` - convert to a ``gtv``
 
-``.toPrettyGTXValue(): GTXValue`` - encode to a pretty-encoded ``GTXValue``
+``.to_gtv_pretty(): gtv`` - convert to a pretty ``gtv``

@@ -1,0 +1,149 @@
+RELEASE NOTES 0.8.0 (2019-05-13)
+
+
+1. Upgrade to Postchain 3.0 (was 2.5)
+
+For instance, type "GTXValue" was renamed to "gtv" to follow the naming used in Postchain 3.0. GTX-compatible types
+are now called Gtv-compatible.
+
+
+2. Library: Functions and types renamed
+
+(!) Old names can still be used, but they are deprecated, using them produces compilation warnings, and will be
+    disallowed in the future.
+
+What was renamed:
+
+(a) Type GTXValue -> gtv
+
+(b) All camelCase functions were renamed to snake_case in order to have consistent functions naming:
+
+    requireNotEmpty -> require_not_empty
+
+    byte_array.toList -> .to_list
+
+    text.upperCase -> .upper_case
+    text.lowerCase -> .lower_case
+    text.compareTo -> .compare_to
+    text.startsWith -> .starts_with
+    text.endsWith -> .ends_with
+    text.charAt -> .char_at
+    text.indexOf -> .index_of
+    text.lastIndexOf -> .last_index_of
+
+    list<T>.indexOf -> .index_of
+    list<T>.containsAll -> .contains_all
+    list<T>.removeAt -> .remove_at
+    list<T>.addAll -> .add_all
+    list<T>.removeAll -> .remove_all
+
+    set<T>.containsAll -> .contains_all
+    set<T>.addAll -> .add_all
+    set<T>.removeAll -> .remove_all
+
+    map<K,V>.putAll -> .put_all
+
+    gtv.fromBytes -> .from_bytes
+    gtv.fromJSON -> .from_json
+    gtv.toBytes -> .to_bytes
+    gtv.toJSON -> .to_json
+
+    record.fromBytes -> .from_bytes
+    record.toBytes -> .to_bytes
+
+(c) Gtv-related functions:
+
+    record.fromGTXValue -> .from_gtv
+    record.fromPrettyGTXValue -> .from_gtv_pretty
+    record.toGTXValue -> .to_gtv
+    record.toPrettyGTXValue -> .to_gtv_pretty
+
+(d) Some functions were renamed to be consistent with the to_X and from_X naming:
+
+    integer.parseHex -> integer.from_hex
+    text.encode -> text.to_bytes
+    byte_array.decode -> text.from_bytes
+
+
+3. Library: New general functions
+
+text.from_bytes(byte_array, ignore_invalid: boolean = false)
+        If "ignore_invalid" is false, throws an exception when the byte array is not a valid UTF8-encoded string.
+
+byte_array.to_hex(): text
+byte_array.from_hex(text): byte_array
+        Converts a byte array to/from a hex string.
+
+byte_array.to_base64(): text
+byte_array.from_base64(text): byte_array
+        Converts a byte array to/from a Base64 string.
+
+byte_array.from_list(list<integer>): byte_array
+        To be used instead of old function byte_array(list<integer>), which is now deprecated.
+
+integer.from_text(text, radix: integer = 10): integer
+        Same as integer(text, integer), old function still valid.
+
+integer.to_text(radix: integer = 10): text
+        Same as integer.str(radix), but uses to_X naming, old function still valid.
+
+json.to_text(): text
+list<T>.to_text(): text
+set<T>.to_text(): text
+map<K,V>.to_text(): text
+        Same as .str(), just uses the to_X naming. Old functions are still valid (and not deprecated).
+
+
+4. Library: Functions to convert different types to/from Gtv
+
+T.to_gtv(): gtv - converts a value to a Gtv.
+T.to_gtv_pretty(): gtv - converts a value to a "pretty" Gtv.
+T.from_gtv(gtv): T - converts a Gtv to a value.
+T.from_pretty_gtv(gtv): T - converts a "pretty" Gtv to a value.
+
+Functions exist for all types, except few that are not Gtv-compatible (like range).
+
+Examples:
+
+val g = [1, 2, 3].to_gtv();
+val l = list<integer>.from_gtv(g);   // Returns [1, 2, 3]
+
+
+5. Library: Cryptographic functions verify_signature() and hash()
+
+verify_signature(message: byte_array, pubkey: pubkey, signature: byte_array): boolean
+
+    Returns true if the given signature is a result of signing the message with a private key corresponding to the
+    given public key.
+
+T.hash(): byte_array
+
+    Equivalent of T.to_gtv().hash(). Returns a cryptographic hash of a value. Exists for all types that have to_gtv().
+
+
+6. Run-time: More flexible conversions between Rell types and Gtv
+
+(a) map<K,V> is always Gtv-compatible (given that K and V are Gtv-compatible). In previous versions, only
+    map<text,V> was Gtv-compatible, because a map was always converted to a dictionary which can have only string keys.
+    Now a map is converted to an array of key-value pairs (2-element arrays) if the key type is not text.
+
+(b) Tuples are always Gtv-compatible and pretty-Gtv-compatile (if all fields are Gtv-compatible). In previous versions,
+    tuples were pretty-Gtv-compatible only if either no fields or all fields had names. Now a tuple is converted to
+    a dictionary in a pretty format if all fields have names, and to an array otherwise.
+
+(c) Converting from a pretty-formatted Gtv to a value is more flexible: the value can be either in a pretty or in
+    a compact format. In the past, passing a compact Gtv where a pretty Gtv was expected caused a run-time error.
+
+
+7. Language: Operations and queries in a namespace
+
+It is allowed to define operations and queries in a namespace:
+
+namespace foo {
+    namespace bar {
+        operation o() {}
+        query q() = 123;
+    }
+}
+
+Such operations and queries can be invoked from Postchain using their full names: "foo.bar.o", "foo.bar.q".

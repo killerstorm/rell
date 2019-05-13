@@ -36,14 +36,13 @@ Complex types:
 -  ``set<T>``
 -  ``map<K,V>``
 -  ``range`` (can be used in ``for`` statement)
--  ``GTXValue`` - used to encode parameters and results of operations and queries
+-  ``gtv`` - used to encode parameters and results of operations and queries
 
 Nullable type
 -------------
 
 -  Class attributes cannot be nullable.
--  Can be used with almost any type (except nullable, ``unit``,
-   ``null``).
+-  Can be used with almost any type (except nullable, ``unit``, ``null``).
 -  Nullable nullable (``T??`` is not allowed).
 -  Normal operations of the underlying type cannot be applied directly.
 -  Supports ``?:``, ``?.`` and ``!!`` operators (like in Kotlin).
@@ -52,25 +51,20 @@ Compatibility with other types:
 
 -  Can assign a value of type ``T`` to a variable of type ``T?``, but
    not the other way round.
--  Can assign ``null`` to a variable of type ``T?``, but not to a
-   variable of type ``T``.
--  Can assign a value of type ``(T)`` (tuple) to a variable of type
-   ``(T?)``.
--  Cannot assign a value of type ``list<T>`` to a variable of type
-   ``list<T?>``.
+-  Can assign ``null`` to a variable of type ``T?``, but not to a variable of type ``T``.
+-  Can assign a value of type ``(T)`` (tuple) to a variable of type ``(T?)``.
+-  Cannot assign a value of type ``list<T>`` to a variable of type ``list<T?>``.
 
 Allowed operations:
 
 -  Null comparison: ``x == null``, ``x != null``.
--  ``?:`` - Elvis operator: ``x ?: y`` means ``x`` if ``x`` is not
-   ``null``, otherwise ``y``.
+-  ``?:`` - Elvis operator: ``x ?: y`` means ``x`` if ``x`` is not ``null``, otherwise ``y``.
 -  ``?.`` - safe access: ``x?.y`` results in ``x.y`` if ``x`` is not
    ``null`` and ``null`` otherwise.
--  Operator ``?.`` can be used with function calls, e. g.
-   ``x?.upperCase()``.
+-  Operator ``?.`` can be used with function calls, e. g. ``x?.upper_case()``.
 -  ``!!`` - null check operator: ``x!!`` returns value of ``x`` if ``x``
    is not ``null``, otherwise throws an exception.
--  ``require(x)``, ``requireNotEmpty(x)``: throws an exception if ``x``
+-  ``require(x)``, ``require_not_empty(x)``: throws an exception if ``x``
    is ``null``, otherwise returns value of ``x``.
 
 Examples:
@@ -96,10 +90,8 @@ Examples:
 Tuple types are compatible only if names and types of fields are the
 same:
 
--  ``(x:integer, y:integer)`` and ``(a:integer,b:integer)`` are not
-   compatible.
--  ``(x:integer, y:integer)`` and ``(integer,integer)`` are not
-   compatible.
+-  ``(x:integer, y:integer)`` and ``(a:integer,b:integer)`` are not compatible.
+-  ``(x:integer, y:integer)`` and ``(integer,integer)`` are not compatible.
 
 Collection types
 ----------------
@@ -121,26 +113,19 @@ Following types are mutable:
 -  Record type - if the record has a mutable field, or a field of a mutable type.
 -  Tuple - if a type of an element is mutable.
 
-GTXValue
+gtv
 --------
 
-``GTXValue`` is a type used to repsesent encoded arguments and results of remote operation and query calls.
-It may be a simple value (integer, string, byte array), an array of values or a string-keyed map.
+``gtv`` is a type used to repsesent encoded arguments and results of remote operation and query calls.
+It may be a simple value (integer, string, byte array), an array of values or a string-keyed dictionary.
 
-Some Rell types are not GTX-compatible. Values of such types cannot be converted to/from ``GTXValue``, and the types
+Some Rell types are not Gtv-compatible. Values of such types cannot be converted to/from ``gtv``, and the types
 cannot be used as types of operation/query parameters or result.
 
-Rules of GTX-compatibility:
+Rules of Gtv-compatibility:
 
-- a ``map<K,V>`` is GTX-compatible only if ``K`` is ``text``.
-- ``range`` is not GTX-compatible
-- a complex type is not GTX-compatible if a type of its component is not GTX-compatible
-
-For queries, a type must be pretty-GTX-compatible. Rules are:
-
-- a type must be GTX-compatible
-- for tuples: either all fields have names, or no field has a name
-- component types must be pretty-GTX-compatible as well
+- ``range`` is not Gtv-compatible
+- a complex type is not Gtv-compatible if a type of its component is not Gtv-compatible
 
 Subtypes
 --------
@@ -229,14 +214,13 @@ Class
    }
 
    class user {
-       firstName: text;
-       lastName: text;
-       yearOfBirth: integer;
+       first_name: text;
+       last_name: text;
+       year_of_birth: integer;
        mutable salary: integer;
    }
 
-If attribute type is not specified, it will be the same as attribute
-name:
+If attribute type is not specified, it will be the same as attribute name:
 
 ::
 
@@ -250,7 +234,7 @@ Attributes may have default values:
 ::
 
    class user {
-       homeCity: text = 'New York';
+       home_city: text = 'New York';
    }
 
 Keys and Indices
@@ -272,9 +256,9 @@ Keys and indices may have multiple attributes:
 ::
 
    class user {
-       firstName: text;
-       lastName: text;
-       key firstName, lastName;
+       first_name: text;
+       last_name: text;
+       key first_name, last_name;
    }
 
 Attribute definitions can be combined with ``key`` or ``index`` clauses,
@@ -283,7 +267,7 @@ but such definition has restrictions (e. g. cannot specify ``mutable``):
 ::
 
    class user {
-       key firstName: text, lastName: text;
+       key first_name: text, last_name: text;
        index address: text;
    }
 
@@ -378,7 +362,7 @@ Safe-access operator ``?.`` can be used to read or modify attributes of a nullab
 
 ::
 
-   val u: user? = findUser('Bob');
+   val u: user? = find_user('Bob');
    u?.balance += 100;        // no-op if 'u' is null
 
 Enum
@@ -413,17 +397,16 @@ Enum-specific functions and properties:
    val eur = currency.value('EUR') // Finds enum value by name
    val gbp = currency.value(2) // Finds enum value by index
 
-   val usdStr: text = currency.USD.name // Returns 'USD'
-   val usdValue: integer = currency.USD.value // Returns 0.
+   val usd_str: text = currency.USD.name // Returns 'USD'
+   val usd_value: integer = currency.USD.value // Returns 0.
 
 Query
 -----
 
 -  Cannot modify the data in the database (compile-time check).
 -  Must return a value.
--  If return type is not explicitly specified, it is implicitly
-   deducted.
--  Parameter types and return type must be pretty-GTX-compatible.
+-  If return type is not explicitly specified, it is implicitly deducted.
+-  Parameter types and return type must be Gtv-compatible.
 
 Short form:
 
@@ -444,11 +427,11 @@ Operation
 
 -  Can modify the data in the database.
 -  Does not return a value.
--  Parameter types must be GTX-compatible.
+-  Parameter types must be Gtv-compatible.
 
 ::
 
-   operation createUser(name: text) {
+   operation create_user(name: text) {
        create user(name = name);
    }
 
@@ -456,11 +439,9 @@ Function
 --------
 
 -  Can return nothing or a value.
--  Can modify the data in the database when called from an operation
-   (run-time check).
+-  Can modify the data in the database when called from an operation (run-time check).
 -  Can be called from queries, operations or functions.
--  If return type is not specified explicitly, it is ``unit`` (no return
-   value).
+-  If return type is not specified explicitly, it is ``unit`` (no return value).
 
 Short form:
 
@@ -513,7 +494,6 @@ Definitions can be put in a namespace:
 
 Features of namespaces:
 
-- Operations and queries are not allowed in a namespace.
 - No need to specify a full name within a namespace, i. e. can use ``country`` under namespace ``foo`` directly, not as
   ``foo.country``.
 - Names of tables for classes and objects defined in a namespace contain the full name, e. g. the table for class
@@ -633,20 +613,18 @@ Special:
 ~~~~~~~~
 
 -  ``.`` - member access: ``user.name``, ``s.sub(5, 10)``
--  ``()`` - function call: ``print('Hello')``, ``value.str()``
+-  ``()`` - function call: ``print('Hello')``, ``value.to_text()``
 -  ``[]`` - element access: ``values[i]``
 
 Null handling:
 ~~~~~~~~~~~~~~
 
--  ``?:`` - Elvis operator: ``x ?: y`` returns ``x`` if ``x`` is not
-   ``null``, otherwise returns ``y``.
+-  ``?:`` - Elvis operator: ``x ?: y`` returns ``x`` if ``x`` is not ``null``, otherwise returns ``y``.
 -  ``?.`` - safe access operator: ``x?.y`` returns ``x.y`` if ``x`` is
    not ``null``, otherwise returns ``null``; similarly, ``x?.y()``
    returns either ``x.y()`` or ``null``.
--  ``!!`` - null check: ``x!!`` returns ``x`` if ``x`` is not ``null``,
-   otherwise throws an exception.
-   
+-  ``!!`` - null check: ``x!!`` returns ``x`` if ``x`` is not ``null``, otherwise throws an exception.
+
 Examples:
 
 ::
@@ -658,7 +636,7 @@ Examples:
    val b = y ?: null;      // type of "b" is "integer?"
 
    val p = y!!;            // type of "p" is "integer"
-   val q = y?.hex();       // type of "q" is "text?"
+   val q = y?.to_hex();    // type of "q" is "text?"
 
 Comparison:
 ~~~~~~~~~~~
@@ -676,7 +654,7 @@ Operators ``==`` and ``!=`` compare values. For complex types (collections, tupl
 values, recursively. For ``class`` object values only object IDs are compared.
 
 Operators ``===`` and ``!==`` compare references, not values. They can be used only on types:
-tuple, ``record``, ``list``, ``set``, ``map``, ``GTXValue``, ``range``.
+tuple, ``record``, ``list``, ``set``, ``map``, ``gtv``, ``range``.
 
 Example:
 

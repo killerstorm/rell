@@ -22,10 +22,8 @@ Cardinality
 
 Specifies whether the expression must return one or many objects:
 
--  ``T @? {}`` - returns ``T``, zero or one, fails if more than one
-   found.
--  ``T @ {}`` - returns ``T``, exactly one, fails if zero or more than
-   one found.
+-  ``T @? {}`` - returns ``T``, zero or one, fails if more than one found.
+-  ``T @ {}`` - returns ``T``, exactly one, fails if zero or more than one found.
 -  ``T @* {}`` - returns ``list<T>``, zero or more.
 -  ``T @+ {}`` - returns ``list<T>``, one or more, fails if none found.
 
@@ -49,13 +47,11 @@ Specifying class aliases:
 Where-part
 ----------
 
-Zero or more comma-separated expressions using class attributes, local
-variables or system functions:
+Zero or more comma-separated expressions using class attributes, local variables or system functions:
 
 ``user @* {}`` - returns all users
 
-``user @ { .name == 'Bill', .company == 'Microsoft' }`` - returns a specific
-user (all conditions must match)
+``user @ { .name == 'Bill', .company == 'Microsoft' }`` - returns a specific user (all conditions must match)
 
 Attributes of a class can be accessed with a dot, e. g. ``.name`` or with a class name or alias, ``user.name``.
 
@@ -76,36 +72,32 @@ What-part
 
 Simple example:
 
-``user @ { .name == 'Bob' } ( .company.name )`` - returns a single value
-(name of the user's company)
+``user @ { .name == 'Bob' } ( .company.name )`` - returns a single value (name of the user's company)
 
-``user @ { .name == 'Bob' } ( .company.name, .company.address )`` - returns
-a tuple of two values
+``user @ { .name == 'Bob' } ( .company.name, .company.address )`` - returns a tuple of two values
 
 Specifying names of result tuple fields:
 
-``user @* {} ( x = .company.name, y = .company.address, z = .yearOfBirth )``
+``user @* {} ( x = .company.name, y = .company.address, z = .year_of_birth )``
 - returns a tuple with named fields (``x``, ``y``, ``z``)
 
 Sorting:
 
-``user @* {} ( sort .lastName, sort .firstName )`` - sort by ``lastName``
-first, then by ``firstName``.
+``user @* {} ( sort .last_name, sort .first_name )`` - sort by ``last_name`` first, then by ``first_name``.
 
-``user @* {} ( -sort .yearOfBirth, sort .lastName )`` - sort by
-``yearOfBirth`` desdending, then by ``lastName`` ascending.
+``user @* {} ( -sort .year_of_birth, sort .last_name )`` - sort by ``year_of_birth`` desdending,
+then by ``last_name`` ascending.
 
 Field names can be combined with sorting:
 
-``user @* {} ( sort x = .lastName, -sort y = .yearOfBirth )``
+``user @* {} ( sort x = .last_name, -sort y = .year_of_birth )``
 
-When field names are not specified explicitly, they can be deducted
-implicitly by attribute name:
+When field names are not specified explicitly, they can be deducted implicitly by attribute name:
 
 ::
 
-   val u = user @ { ... } ( .firstName, .lastName, age = 2018 - .yearOfBirth );
-   print(u.firstName, u.lastName, u.age);
+   val u = user @ { ... } ( .first_name, .last_name, age = 2018 - .year_of_birth );
+   print(u.first_name, u.last_name, u.age);
 
 Tail part
 ---------
@@ -126,8 +118,7 @@ Result type
 Depends on the cardinality, from- and what-parts.
 
 -  From- and what-parts define the type of a single record, ``T``.
--  Cardinality defines the type of the @-operator result: ``T?``, ``T``
-   or ``list<T>``.
+-  Cardinality defines the type of the @-operator result: ``T?``, ``T`` or ``list<T>``.
 
 Examples:
 
@@ -136,17 +127,15 @@ Examples:
 -  ``user @* { ... }`` - returns ``list<user>``
 -  ``user @+ { ... }`` - returns ``list<user>``
 -  ``(user, company) @ { ... }`` - returns a tuple ``(user,company)``
--  ``(user, company) @* { ... }`` - returns \`list<(user,company)>``
+-  ``(user, company) @* { ... }`` - returns ``list<(user,company)>``
 -  ``user @ { ... } ( .name )`` - returns ``text``
--  ``user @ { ... } ( .firstName, .lastName )`` - returns ``(text,text)``
--  ``(user, company) @ { ... } ( user.firstName, user.lastName, company )`` 
-- returns ``(text,text,company)``
+-  ``user @ { ... } ( .first_name, .last_name )`` - returns ``(first_name:text,last_name:text)``
+-  ``(user, company) @ { ... } ( user.first_name, user.last_name, company )`` - returns ``(text,text,company)``
 
 Nested At-Operators
 -------------------
 
-A nested at-operator can be used in any expression inside of another
-at-operator:
+A nested at-operator can be used in any expression inside of another at-operator:
 
 ``user @* { .company == company @ { .name == 'Microsoft' } } ( ... )``
 
@@ -179,9 +168,9 @@ Can use the created object:
 
 ::
 
-   val newCompany = create company(name = 'Amazon');
-   val newUser = create user(name = 'Bob', newCompany);
-   print('Created new user:', newUser);
+   val new_company = create company(name = 'Amazon');
+   val new_user = create user(name = 'Bob', new_company);
+   print('Created new user:', new_user);
 
 -------------
 
