@@ -12,19 +12,62 @@ class C_Error(
 ): RuntimeException("$pos $errMsg")
 
 abstract class C_GlobalFunction {
-    abstract fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Expr
+    abstract fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr
+}
+
+abstract class C_RegularGlobalFunction: C_GlobalFunction() {
+    abstract fun compileCallRegular(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Expr
+
+    override final fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
+        val cArgs = compileArgs(ctx, args)
+        return compileCallRegular(ctx, name, cArgs)
+    }
+
+    companion object {
+        fun compileArgs(ctx: C_ExprContext, args: List<S_NameExprPair>): List<C_Value> {
+            val namedArg = args.map { it.name }.filterNotNull().firstOrNull()
+            if (namedArg != null) {
+                val argName = namedArg.str
+                throw C_Error(namedArg.pos, "expr_call_namedarg:$argName", "Named function arguments not supported")
+            }
+
+            val cArgs = args.map {
+                val sArg = it.expr
+                val cArg = sArg.compile(ctx).value()
+                val type = cArg.type()
+                C_Utils.checkUnitType(sArg.startPos, type, "expr_arg_unit", "Argument expression returns nothing")
+                cArg
+            }
+
+            return cArgs
+        }
+    }
+}
+
+class C_RecordGlobalFunction(private val record: R_RecordType): C_GlobalFunction() {
+    override fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
+        return compileCall(record, ctx, name, args)
+    }
+
+    companion object {
+        fun compileCall(record: R_RecordType, ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
+            val attrs = C_AttributeResolver.resolveCreate(ctx, record.attributes, args, name.pos)
+            val rExpr = R_RecordExpr(record, attrs.rAttrs)
+            return C_RValue.makeExpr(name.pos, rExpr, attrs.exprFacts)
+        }
+    }
 }
 
 class C_UserFunctionHeader(val params: List<R_ExternalParam>, val type: R_Type)
 
-class C_UserGlobalFunction(val name: String, val fnKey: Int): C_GlobalFunction() {
+class C_UserGlobalFunction(val name: String, val fnKey: Int): C_RegularGlobalFunction() {
     private lateinit var headerLate: C_UserFunctionHeader
 
     fun setHeader(header: C_UserFunctionHeader) {
         headerLate = header
     }
 
-    override fun compileCall(ctx: C_ExprContext, sName: S_Name, args: List<C_Value>): C_Expr {
+    override fun compileCallRegular(ctx: C_ExprContext, sName: S_Name, args: List<C_Value>): C_Expr {
         val header = headerLate
         val params = header.params.map { it.type }
         val rArgs = args.map { it.toRExpr() }
@@ -495,6 +538,7 @@ class C_NamespaceContext(
         modCtx.addRecord(rec.type)
         nsBuilder.addType(name, C_TypeDef(rec.type))
         nsBuilder.addValue(name, C_NamespaceValue_Record(rec.type))
+        nsBuilder.addFunction(name, C_RecordGlobalFunction(rec.type))
         records[name] = rec
     }
 
@@ -920,7 +964,7 @@ object C_Compiler {
             error = e
         }
 
-        val messages = globalCtx.messages()
+        val messages = globalCtx.messages().sortedBy { it.pos }
 
         val errorMessage = messages.firstOrNull { it.type == C_MessageType.ERROR }
         if (error == null && errorMessage != null) {

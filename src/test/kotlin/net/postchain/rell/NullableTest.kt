@@ -662,6 +662,16 @@ class NullableTest: BaseRellTest(false) {
         chkEx("{ return integer?.MAX_VALUE; }", "ct_err:expr_novalue:namespace")
     }
 
+    @Test fun testSpecOpSafeField2() {
+        tst.defs = listOf("record rec { mutable x: integer; }")
+        chkEx("{ val r: rec? = _nullable(rec(123)); return r?.x; }", "int[123]")
+        chkEx("{ val r: rec? = _nullable(rec(123)); return _type_of(r?.x); }", "text[integer?]")
+        chkEx("{ val r: rec? = _nullable(rec(123)); r?.x = 456; return r; }", "rec[x=int[456]]")
+        chkEx("{ val r: rec? = null; r?.x = 456; return r; }", "null")
+        chkEx("{ val r: rec? = _nullable(rec(123)); r?.x = null; return r; }", "ct_err:stmt_assign_type:integer:null")
+        chkEx("{ val r: rec? = null; r?.x = null; return r; }", "ct_err:stmt_assign_type:integer:null")
+    }
+
     @Test fun testSpecOpSafeCall() {
         chkEx("{ val x: integer? = _nullable(123); return x.to_hex(); }", "ct_err:expr_mem_null:to_hex")
         chkEx("{ val x: integer? = _nullable(123); return x?.to_hex(); }", "text[7b]")

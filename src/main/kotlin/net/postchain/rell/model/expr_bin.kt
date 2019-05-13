@@ -151,7 +151,7 @@ object R_BinaryOp_Or: R_BinaryOp_Logic("or") {
 }
 
 class R_BinaryExpr(type: R_Type, val op: R_BinaryOp, val left: R_Expr, val right: R_Expr): R_Expr(type) {
-    override fun evaluate(frame: Rt_CallFrame): Rt_Value {
+    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         val resValue = op.evaluate(frame, left, right)
         return resValue
     }

@@ -172,7 +172,7 @@ class R_AtExpr(
         val rowType: R_AtExprRowType
 ): R_Expr(type)
 {
-    override fun evaluate(frame: Rt_CallFrame): Rt_Value {
+    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         val records = base.execute(frame, listOf(), limit)
         return decodeResult(records)
     }

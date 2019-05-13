@@ -185,6 +185,11 @@ class IncrementTest: BaseRellTest(false) {
         chkEx("{ $init; ++r?.x; return r; }", "r[x=int[124]]")
         chkEx("{ $init; --r?.x; return r; }", "r[x=int[122]]")
 
+        chkEx("{ $init; return r?.x++; }", "int[123]")
+        chkEx("{ $init; return r?.x--; }", "int[123]")
+        chkEx("{ $init; return ++r?.x; }", "int[124]")
+        chkEx("{ $init; return --r?.x; }", "int[122]")
+
         chkEx("{ val r: r? = null; r?.x++; return r; }", "null")
         chkEx("{ val r: r? = null; r?.x--; return r; }", "null")
         chkEx("{ val r: r? = null; ++r?.x; return r; }", "null")
@@ -194,6 +199,11 @@ class IncrementTest: BaseRellTest(false) {
         chkEx("{ val r: r? = null; return r?.x--; }", "null")
         chkEx("{ val r: r? = null; return ++r?.x; }", "null")
         chkEx("{ val r: r? = null; return --r?.x; }", "null")
+
+        chkEx("{ val r: r? = null; return _type_of(r?.x++); }", "text[integer?]")
+        chkEx("{ val r: r? = null; return _type_of(r?.x--); }", "text[integer?]")
+        chkEx("{ val r: r? = null; return _type_of(++r?.x); }", "text[integer?]")
+        chkEx("{ val r: r? = null; return _type_of(--r?.x); }", "text[integer?]")
     }
 
     @Test fun testSafeAccessClass() {

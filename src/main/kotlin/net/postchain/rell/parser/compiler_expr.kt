@@ -277,7 +277,7 @@ abstract class C_Destination {
     abstract fun type(): R_Type
     open fun effectiveType(): R_Type = type()
     abstract fun compileAssignStatement(srcExpr: R_Expr, op: C_AssignOp?): R_Statement
-    abstract fun compileAssignExpr(startPos: S_Pos, srcExpr: R_Expr, op: C_AssignOp, post: Boolean): R_Expr
+    abstract fun compileAssignExpr(startPos: S_Pos, resType: R_Type, srcExpr: R_Expr, op: C_AssignOp, post: Boolean): R_Expr
 }
 
 class C_SimpleDestination(private val rDstExpr: R_DestinationExpr): C_Destination() {
@@ -287,8 +287,8 @@ class C_SimpleDestination(private val rDstExpr: R_DestinationExpr): C_Destinatio
         return R_AssignStatement(rDstExpr, srcExpr, op?.rOp)
     }
 
-    override fun compileAssignExpr(startPos: S_Pos, srcExpr: R_Expr, op: C_AssignOp, post: Boolean): R_Expr {
-        return R_AssignExpr(rDstExpr.type, op.rOp, rDstExpr, srcExpr, post)
+    override fun compileAssignExpr(startPos: S_Pos, resType: R_Type, srcExpr: R_Expr, op: C_AssignOp, post: Boolean): R_Expr {
+        return R_AssignExpr(resType, op.rOp, rDstExpr, srcExpr, post)
     }
 }
 
@@ -312,7 +312,7 @@ class C_ClassFieldDestination(private val base: C_Value, private val rClass: R_C
         return R_UpdateStatement(rTarget, listOf(rWhat))
     }
 
-    override fun compileAssignExpr(startPos: S_Pos, srcExpr: R_Expr, op: C_AssignOp, post: Boolean): R_Expr {
+    override fun compileAssignExpr(startPos: S_Pos, resType: R_Type, srcExpr: R_Expr, op: C_AssignOp, post: Boolean): R_Expr {
         val rStmt = compileAssignStatement(srcExpr, op)
         return R_StatementExpr(rStmt)
     }
@@ -332,7 +332,7 @@ class C_ObjectFieldDestination(private val rObject: R_Object, private val attr: 
         return R_UpdateStatement(rTarget, listOf(rWhat))
     }
 
-    override fun compileAssignExpr(startPos: S_Pos, srcExpr: R_Expr, op: C_AssignOp, post: Boolean): R_Expr {
+    override fun compileAssignExpr(startPos: S_Pos, resType: R_Type, srcExpr: R_Expr, op: C_AssignOp, post: Boolean): R_Expr {
         val rStmt = compileAssignStatement(srcExpr, op)
         return R_StatementExpr(rStmt)
     }
@@ -503,10 +503,10 @@ private class C_LocalVarValue(
             return R_AssignStatement(rDstExpr, srcExpr, op?.rOp)
         }
 
-        override fun compileAssignExpr(startPos: S_Pos, srcExpr: R_Expr, op: C_AssignOp, post: Boolean): R_Expr {
+        override fun compileAssignExpr(startPos: S_Pos, resType: R_Type, srcExpr: R_Expr, op: C_AssignOp, post: Boolean): R_Expr {
             checkInitialized()
             val rDstExpr = entry.toVarExpr()
-            return R_AssignExpr(rDstExpr.type, op.rOp, rDstExpr, srcExpr, post)
+            return R_AssignExpr(resType, op.rOp, rDstExpr, srcExpr, post)
         }
     }
 }
@@ -666,24 +666,6 @@ sealed class C_Expr {
         throw C_Error(pos, "expr_call_nofn:$typeStr", "Not a function: value of type $typeStr")
     }
 
-    protected fun compileArgs(ctx: C_ExprContext, args: List<S_NameExprPair>): List<C_Value> {
-        val namedArg = args.map { it.name }.filterNotNull().firstOrNull()
-        if (namedArg != null) {
-            val argName = namedArg.str
-            throw C_Error(namedArg.pos, "expr_call_namedarg:$argName", "Named function arguments not supported")
-        }
-
-        val cArgs = args.map {
-            val sArg = it.expr
-            val cArg = sArg.compile(ctx).value()
-            val type = cArg.type()
-            C_Utils.checkUnitType(sArg.startPos, type, "expr_arg_unit", "Argument expression returns nothing")
-            cArg
-        }
-
-        return cArgs
-    }
-
     private fun errNoValue(): C_Error {
         val pos = startPos()
         val kind = kind().code
@@ -743,10 +725,7 @@ class C_RecordExpr(
     }
 
     override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_NameExprPair>): C_Expr {
-        val startPos = startPos()
-        val attrs = C_AttributeResolver.resolveCreate(ctx, record.attributes, args, startPos)
-        val rExpr = R_RecordExpr(record, attrs.rAttrs)
-        return C_RValue.makeExpr(startPos, rExpr, attrs.exprFacts)
+        return C_RecordGlobalFunction.compileCall(record, ctx, name.last(), args)
     }
 }
 
@@ -801,7 +780,7 @@ private class C_MemberFunctionExpr(
     override fun startPos() = startPos
 
     override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_NameExprPair>): C_Expr {
-        val cArgs = compileArgs(ctx, args)
+        val cArgs = C_RegularGlobalFunction.compileArgs(ctx, args)
         return fn.compileCall(ctx, name, base, safe, cArgs)
     }
 }
@@ -811,8 +790,7 @@ class C_FunctionExpr(private val name: S_Name, private val fn: C_GlobalFunction)
     override fun startPos() = name.pos
 
     override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_NameExprPair>): C_Expr {
-        val cArgs = compileArgs(ctx, args)
-        return fn.compileCall(ctx, name, cArgs)
+        return fn.compileCall(ctx, name, args)
     }
 }
 

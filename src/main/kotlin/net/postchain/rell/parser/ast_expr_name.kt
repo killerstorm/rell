@@ -68,14 +68,19 @@ class S_SafeMemberExpr(val base: S_Expr, val name: S_Name): S_Expr(base.startPos
     override fun compile(ctx: C_ExprContext): C_Expr {
         val cBase = base.compile(ctx)
 
-        val baseValue = cBase.value().asNullable()
-        val baseType = baseValue.type()
+        val baseValue = cBase.value()
+        val baseValueNullable = baseValue.asNullable()
+        val baseType = baseValueNullable.type()
         if (baseType !is R_NullableType) {
             throw errWrongType(baseType)
         }
 
-        val cExpr = cBase.member(ctx, name, true)
-        return cExpr
+        val smartType = baseValue.type()
+        if (smartType !is R_NullableType) {
+            return baseValue.member(ctx, name, false)
+        } else {
+            return baseValueNullable.member(ctx, name, true)
+        }
     }
 
     private fun errWrongType(type: R_Type): C_Error {

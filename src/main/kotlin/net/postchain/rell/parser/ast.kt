@@ -6,9 +6,20 @@ import net.postchain.rell.model.*
 import net.postchain.rell.module.GTV_OPERATION_HUMAN
 import net.postchain.rell.module.GTV_QUERY_HUMAN
 
-abstract class S_Pos
+abstract class S_Pos: Comparable<S_Pos> {
+    abstract fun file(): String
+    abstract fun pos(): Long
+
+    override fun compareTo(other: S_Pos): Int {
+        var d = file().compareTo(other.file())
+        if (d == 0) d = pos().compareTo(other.pos())
+        return d
+    }
+}
 
 class S_BasicPos(val file: String, val row: Int, val col: Int): S_Pos() {
+    override fun file() = file
+    override fun pos() = Math.min(row, 1_000_000_000) * 1_000_000_000L + Math.min(col, 1_000_000_000)
     override fun toString() = "$file($row:$col)"
 
     override fun equals(other: Any?): Boolean {

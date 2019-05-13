@@ -122,7 +122,7 @@ object C_LibFunctions {
             .add("ends_with", R_BooleanType, listOf(R_TextType), R_SysFn_Text_EndsWith)
             .add("format", C_SysMemberFunction_Text_Format)
             .add("replace", R_TextType, listOf(R_TextType, R_TextType), R_SysFn_Text_Replace)
-            .add("split", R_TextType, listOf(R_TextType), R_SysFn_Text_Split)
+            .add("split", R_ListType(R_TextType), listOf(R_TextType), R_SysFn_Text_Split)
             .add("trim", R_TextType, listOf(), R_SysFn_Text_Trim)
             .add("matches", R_BooleanType, listOf(R_TextType), R_SysFn_Text_Matches)
             .add("encode", R_ByteArrayType, listOf(), R_SysFn_Text_ToBytes, C_Deprecated_UseInstead("to_bytes"))
@@ -352,7 +352,7 @@ object C_LibFunctions {
     private fun gtvGlobalFn(type: R_Type, human: Boolean, fn: R_SysFunction): C_GlobalFuncCaseMatch {
         val flags = type.completeFlags()
         val flag = if (human) flags.gtvHuman else flags.gtvCompact
-        return if (!flag.compatible) C_SysFunction_Invalid(type) else C_StdGlobalFuncCaseMatch(R_GtvType, fn)
+        return if (!flag.compatible) C_SysFunction_Invalid(type) else C_StdGlobalFuncCaseMatch(type, fn)
     }
 
     private fun getRecordFns(type: R_RecordType): C_MemberFuncTable {

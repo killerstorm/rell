@@ -95,8 +95,9 @@ class S_UnaryOp_IncDec(val inc: Boolean, val post: Boolean): S_UnaryOp(if (inc) 
             throw C_Error(opPos, "expr_incdec_type:$opCode:$dstType", "Bad operand type for '$opCode': $dstType")
         }
 
+        val resType = value.type()
         val srcExpr = R_ConstantExpr.makeInt(1)
-        val rExpr = dst.compileAssignExpr(startPos, srcExpr, op, post)
+        val rExpr = dst.compileAssignExpr(startPos, resType, srcExpr, op, post)
 
         val varFacts = C_ExprVarFacts.of(postFacts = value.varFacts().postFacts)
         return C_RValue.makeExpr(startPos, rExpr, varFacts)

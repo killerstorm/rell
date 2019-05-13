@@ -82,13 +82,15 @@ class RellGTXOperation(val module: RellPostchainModule, val rOperation: R_Operat
     }
 }
 
+class RellPostchainFlags(val sqlLogging: Boolean, val typeCheck: Boolean)
+
 class RellPostchainModule(
         val factory: RellPostchainModuleFactory,
         private val rModule: R_Module,
         private val moduleName: String,
         private val chainCtx: Rt_ChainContext,
         private val chainDeps: Map<String, ByteArray>,
-        private val sqlLogging: Boolean
+        private val flags: RellPostchainFlags
 ) : GTXModule {
     override fun getOperations(): Set<String> {
         return rModule.operations.keys
@@ -164,9 +166,17 @@ class RellPostchainModule(
     }
 
     fun makeRtModuleContext(eCtx: EContext, opCtx: Rt_OpContext?): Rt_ModuleContext {
-        val sqlExec = DefaultSqlExecutor(eCtx.conn, sqlLogging)
+        val sqlExec = DefaultSqlExecutor(eCtx.conn, flags.sqlLogging)
         val sqlMapping = Rt_ChainSqlMapping(eCtx.chainID)
-        val globalCtx = Rt_GlobalContext(factory.stdoutPrinter, factory.logPrinter, sqlExec, opCtx, chainCtx)
+
+        val globalCtx = Rt_GlobalContext(
+                sqlExec = sqlExec,
+                opCtx = opCtx,
+                stdoutPrinter = factory.stdoutPrinter,
+                logPrinter = factory.logPrinter,
+                chainCtx = chainCtx,
+                typeCheck = flags.typeCheck
+        )
 
         val chainDeps = chainDeps.mapValues { (_, rid) -> Rt_ChainDependency(rid, Long.MAX_VALUE) }
         val sqlCtx = Rt_SqlContext.create(rModule, sqlMapping, chainDeps, sqlExec)
@@ -199,9 +209,11 @@ class RellPostchainModuleFactory(
             getGtvChainDependencies(data)
         }
 
-        val sqlLogging = (rellNode["sqlLog"]?.asInteger() ?: 0L) != 0L
+        val sqlLogging = rellNode["sqlLog"]?.asBoolean() ?: false
+        val typeCheck = rellNode["typeCheck"]?.asBoolean() ?: false
+        val flags = RellPostchainFlags(sqlLogging = sqlLogging, typeCheck = typeCheck)
 
-        return RellPostchainModule(this, module, moduleName, chainCtx, chainDeps, sqlLogging)
+        return RellPostchainModule(this, module, moduleName, chainCtx, chainDeps, flags)
     }
 
     private fun processCompilationResult(cResult: C_CompilationResult): R_Module {

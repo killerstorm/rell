@@ -60,7 +60,15 @@ class RellCodeTester(
 
     private fun initSqlObjects(sqlExec: SqlExecutor, sqlCtx: Rt_SqlContext) {
         val chainCtx = Rt_ChainContext(GtvNull, Rt_NullValue)
-        val globalCtx = Rt_GlobalContext(Rt_FailingPrinter, Rt_FailingPrinter, sqlExec, null, chainCtx, logSqlErrors = true)
+        val globalCtx = Rt_GlobalContext(
+                Rt_FailingPrinter,
+                Rt_FailingPrinter,
+                sqlExec,
+                null,
+                chainCtx,
+                logSqlErrors = true,
+                typeCheck = true
+        )
         val modCtx = Rt_ModuleContext(globalCtx, sqlCtx.module, sqlCtx)
         modCtx.insertObjectRecords()
     }
@@ -205,7 +213,8 @@ class RellCodeTester(
                 opContext,
                 chainContext,
                 logSqlErrors = true,
-                sqlUpdatePortionSize = sqlUpdatePortionSize
+                sqlUpdatePortionSize = sqlUpdatePortionSize,
+                typeCheck = true
         )
     }
 

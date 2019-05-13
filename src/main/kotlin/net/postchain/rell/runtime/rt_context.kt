@@ -14,7 +14,8 @@ class Rt_GlobalContext(
         val opCtx: Rt_OpContext?,
         val chainCtx: Rt_ChainContext,
         val logSqlErrors: Boolean = false,
-        val sqlUpdatePortionSize: Int = 1000 // Experimental maximum is 2^15
+        val sqlUpdatePortionSize: Int = 1000, // Experimental maximum is 2^15
+        val typeCheck: Boolean = false
 ){
     val sqlExec: SqlExecutor = Rt_SqlExecutor(sqlExec, logSqlErrors)
 }

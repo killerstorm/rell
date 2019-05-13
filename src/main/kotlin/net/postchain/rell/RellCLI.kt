@@ -49,7 +49,7 @@ private fun getRoutineCaller(args: RellCliArgs, module: R_Module): (SqlExecutor,
     val rtArgs = parseArgs(routine, args.args ?: listOf())
 
     return { sqlExec, sqlCtx ->
-        callRoutine(sqlExec, sqlCtx, routine, opCtx, rtArgs)
+        callRoutine(args, sqlExec, sqlCtx, routine, opCtx, rtArgs)
     }
 }
 
@@ -89,6 +89,9 @@ private class RellCliArgs {
     @CommandLine.Option(names = ["--sqllog"], description = ["Enable SQL logging"])
     var sqlLog = false
 
+    @CommandLine.Option(names = ["--typecheck"], description = ["Run-time type checking (debug)"])
+    var typeCheck = false
+
     @CommandLine.Parameters(index = "0", paramLabel = "FILE", description = ["Rell toExpr file"])
     var rellFile: String = ""
 
@@ -117,6 +120,7 @@ private fun findRoutine(module: R_Module, name: String): Pair<R_Routine, Rt_OpCo
 }
 
 private fun callRoutine(
+        cliArgs: RellCliArgs,
         sqlExec: SqlExecutor,
         sqlCtx: Rt_SqlContext,
         op: R_Routine,
@@ -124,7 +128,16 @@ private fun callRoutine(
         args: List<Rt_Value>
 ) {
     val chainCtx = Rt_ChainContext(GtvNull, Rt_NullValue)
-    val globalCtx = Rt_GlobalContext(StdoutRtPrinter, LogRtPrinter, sqlExec, opCtx, chainCtx)
+
+    val globalCtx = Rt_GlobalContext(
+            sqlExec = sqlExec,
+            opCtx = opCtx,
+            chainCtx = chainCtx,
+            stdoutPrinter = StdoutRtPrinter,
+            logPrinter = LogRtPrinter,
+            typeCheck = cliArgs.typeCheck
+    )
+
     val modCtx = Rt_ModuleContext(globalCtx, sqlCtx.module, sqlCtx)
     op.callTop(modCtx, args)
 }
@@ -172,10 +185,15 @@ object RellCliUtils {
         val includeDir = C_DiskIncludeDir(sourceFile.absoluteFile.parentFile)
         val res = C_Compiler.compile(includeDir, sourceName)
 
-        var errCnt = 0
+        val warnCnt = res.messages.filter { it.type == C_MessageType.WARNING }.size
+        val errCnt = res.messages.filter { it.type == C_MessageType.ERROR }.size
+
         for (message in res.messages) {
             System.err.println(message)
-            if (message.type == C_MessageType.ERROR) ++errCnt
+        }
+
+        if (warnCnt > 0 || errCnt > 0) {
+            System.err.println("Errors: $errCnt Warnings: $warnCnt")
         }
 
         val module = res.module

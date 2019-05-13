@@ -449,4 +449,18 @@ class ExpressionTest: BaseRellTest(false) {
         chkEx("{ var x: text; x = integer; }", "ct_err:expr_novalue:namespace")
         chkEx("{ var x: text; x = chain_context; }", "ct_err:expr_novalue:namespace")
     }
+
+    @Test fun testNameRecordVsLocal() {
+        tst.defs = listOf("record rec {x:integer;}")
+        chkEx("{ return rec(456); }", "rec[x=int[456]]")
+        chkEx("{ val rec = 123; return rec(456); }", "rec[x=int[456]]")
+        chkEx("{ val rec = 123; return rec; }", "int[123]")
+    }
+
+    @Test fun testNameFunctionVsLocal() {
+        tst.defs = listOf("function f(x:integer): integer = x * x;")
+        chkEx("{ val f = 123; return f(456); }", "int[207936]")
+        chkEx("{ val f = 123; return f; }", "int[123]")
+        chkEx("{ val f = 123; return f.to_hex(); }", "text[7b]")
+    }
 }

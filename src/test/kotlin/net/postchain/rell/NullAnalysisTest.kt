@@ -152,6 +152,13 @@ class NullAnalysisTest: BaseRellTest(false) {
         chkImplicationsExpr("require_not_empty(x)")
     }
 
+    @Test fun testSafeAccess() {
+        tst.defs = listOf("record rec { mutable x: integer; }")
+        chkEx("{ val r: rec? = rec(123); return _type_of(r.x); }", "text[integer]")
+        chkEx("{ val r: rec? = rec(123); return _type_of(r?.x); }", "text[integer]")
+        chkEx("{ val r: rec? = _nullable(rec(123)); return _type_of(r?.x); }", "text[integer?]")
+    }
+
     private fun chkImplicationsExpr(expr: String) {
         chkEx("{ val x = _nullable(123); return _type_of(x); }", "text[integer?]")
         chkEx("{ val x = _nullable(123); $expr; return _type_of(x); }", "text[integer]")

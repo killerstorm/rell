@@ -221,8 +221,8 @@ object C_FuncUtils {
     }
 }
 
-class C_SysGlobalFunction(private val cases: List<C_GlobalFuncCase>): C_GlobalFunction() {
-    override fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Expr {
+class C_SysGlobalFunction(private val cases: List<C_GlobalFuncCase>): C_RegularGlobalFunction() {
+    override fun compileCallRegular(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Expr {
         val match = matchCase(name, args)
         val db = args.any { it.isDb() }
         val value = if (db) {

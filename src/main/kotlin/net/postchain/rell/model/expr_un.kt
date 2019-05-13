@@ -38,7 +38,7 @@ object R_UnaryOp_Decrement: R_UnaryOp() {
 }
 
 class R_UnaryExpr(type: R_Type, val op: R_UnaryOp, val expr: R_Expr): R_Expr(type) {
-    override fun evaluate(frame: Rt_CallFrame): Rt_Value {
+    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         val operand = expr.evaluate(frame)
         val resValue = op.evaluate(operand)
         return resValue

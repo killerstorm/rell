@@ -10,7 +10,7 @@ import java.util.*
 sealed class R_CallExpr(type: R_Type, val args: List<R_Expr>): R_Expr(type) {
     abstract fun call(frame: Rt_CallFrame, values: List<Rt_Value>): Rt_Value
 
-    override fun evaluate(frame: Rt_CallFrame): Rt_Value {
+    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         val values = args.map { it.evaluate(frame) }
         val res = call(frame, values)
         return res
