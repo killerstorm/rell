@@ -33,6 +33,14 @@ class NullPropagationTest: BaseRellTest(false) {
         chkEx("{ val x = _nullable(123); val t = f(require(x))!!; return _type_of(x); }", "integer")
     }
 
+    @Test fun testExprUnaryIsNull() {
+        tst.strictToString = false
+        def("function f(x: integer): integer? = x;")
+        chkEx("{ val x = _nullable(123); return _type_of(x); }", "integer?")
+        chkEx("{ val x = _nullable(123); val t = f(x!!)??; return _type_of(x); }", "integer")
+        chkEx("{ val x = _nullable(123); val t = f(require(x))??; return _type_of(x); }", "integer")
+    }
+
     @Test fun testExprBinary() {
         tst.strictToString = false
         def("record rec { a: integer; }")

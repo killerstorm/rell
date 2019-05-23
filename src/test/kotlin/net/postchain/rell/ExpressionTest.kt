@@ -463,4 +463,10 @@ class ExpressionTest: BaseRellTest(false) {
         chkEx("{ val f = 123; return f; }", "int[123]")
         chkEx("{ val f = 123; return f.to_hex(); }", "text[7b]")
     }
+
+    @Test fun testIsNull() {
+        chkEx("{ val x = _nullable_int(123); return x??; }", "boolean[true]")
+        chkEx("{ val x = _nullable_int(null); return x??; }", "boolean[false]")
+        chkEx("{ val x = 123; return x??; }", "ct_err:unop_operand_type:??:integer")
+    }
 }

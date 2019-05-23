@@ -46,8 +46,8 @@ class NullableTest: BaseRellTest(false) {
     }
 
     @Test fun testNullableNullable() {
-        chkFn(": integer?? = 123;", "ct_err:type_nullable_nullable")
-        chkFn("{ val x: integer?? = 123; }", "ct_err:type_nullable_nullable")
+        chkFn(": integer? ? = 123;", "ct_err:type_nullable_nullable")
+        chkFn("{ val x: integer? ? = 123; }", "ct_err:type_nullable_nullable")
     }
 
     @Test fun testAssignment() {

@@ -23,7 +23,24 @@ Following types can be virtual:
 See the Language Guide for more information.
 
 
-3. Language: Operations and queries in a namespace
+3. Language: Null check operator "??"
+
+Operator "??" checks if an expression is null:
+
+val u = user @? {...};
+if (u??) {
+    // "u" is not null
+}
+
+This code is equivalent to:
+
+val u = user @? {...};
+if (u != null) {
+    // "u" is not null
+}
+
+
+4. Language: Operations and queries in a namespace
 
 It is allowed to define operations and queries in a namespace:
 
@@ -37,7 +54,7 @@ namespace foo {
 Such operations and queries can be invoked from Postchain using their full names: "foo.bar.o", "foo.bar.q".
 
 
-4. Library: Functions and types renamed
+5. Library: Functions and types renamed
 
 (!) Old names can still be used, but they are deprecated, using them produces compilation warnings, and will be
     disallowed in the future.
@@ -95,7 +112,7 @@ What was renamed:
     byte_array.decode -> text.from_bytes
 
 
-5. Library: New functions
+6. Library: New functions
 
 text.from_bytes(byte_array, ignore_invalid: boolean = false)
         If "ignore_invalid" is false, throws an exception when the byte array is not a valid UTF8-encoded string.
@@ -124,7 +141,7 @@ map<K,V>.to_text(): text
         Same as .str(), just uses the to_X naming. Old functions are still valid (and not deprecated).
 
 
-6. Library: Functions to convert different types to/from Gtv
+7. Library: Functions to convert different types to/from Gtv
 
 T.to_gtv(): gtv - converts a value to a Gtv.
 T.to_gtv_pretty(): gtv - converts a value to a "pretty" Gtv.
@@ -139,7 +156,7 @@ val g = [1, 2, 3].to_gtv();
 val l = list<integer>.from_gtv(g);   // Returns [1, 2, 3]
 
 
-7. Library: Cryptographic functions verify_signature() and hash()
+8. Library: Cryptographic functions verify_signature() and hash()
 
 verify_signature(message: byte_array, pubkey: pubkey, signature: byte_array): boolean
 
@@ -151,7 +168,7 @@ T.hash(): byte_array
     Equivalent of T.to_gtv().hash(). Returns a cryptographic hash of a value. Exists for all types that have to_gtv().
 
 
-8. Run-time: More flexible conversions between Rell types and Gtv
+9. Run-time: More flexible conversions between Rell types and Gtv
 
 (a) map<K,V> is always Gtv-compatible (given that K and V are Gtv-compatible). In previous versions, only
     map<text,V> was Gtv-compatible, because a map was always converted to a dictionary which can have only string keys.
@@ -165,4 +182,4 @@ T.hash(): byte_array
     a compact format. In the past, passing a compact Gtv where a pretty Gtv was expected caused a run-time error.
 
 
-9. Bug fix: Local variable shadowing a record
+10. Bug fix: Local variable shadowing a record

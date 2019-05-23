@@ -29,6 +29,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val SAFECALL by relltok("?.")
     private val NOTNULL by relltok("!!")
     private val QUESTION by relltok("?")
+    private val DOUBLEQUESTION by relltok("??")
     private val ARROW by relltok("->")
 
     private val EQ by relltok("==")
@@ -211,11 +212,16 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
             or ( MINUSMINUS mapNode { false }  )
     )
 
-    private val unaryOperator = (
+    private val unaryPrefixOperator = (
             ( PLUS mapNode { S_UnaryOp_Plus } )
             or ( MINUS mapNode { S_UnaryOp_Minus }  )
             or ( NOT mapNode { S_UnaryOp_Not }  )
             or ( incrementOperator map { S_Node(it.pos, S_UnaryOp_IncDec(it.value, false)) } )
+    )
+
+    private val unaryPostfixOperator = (
+            ( incrementOperator map { S_Node(it.pos, S_UnaryOp_IncDec(it.value, true)) } )
+            or ( DOUBLEQUESTION mapNode { S_UnaryOp_IsNull } )
     )
 
     private val nameExpr by name map { S_NameExpr(it) }
@@ -364,7 +370,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val baseExprTailLookup by ( LBRACK * expressionRef * -RBRACK ) map { (pos, expr) -> BaseExprTail_Lookup(pos.pos, expr) }
     private val baseExprTailNotNull by ( NOTNULL ) map { BaseExprTail_NotNull(it.pos) }
     private val baseExprTailSafeMember by ( -SAFECALL * name ) map { name -> BaseExprTail_SafeMember(name) }
-    private val baseExprTailIncrement by incrementOperator map { BaseExprTail_IncDec(it.pos, it.value) }
+    private val baseExprTailUnaryPostfixOp by unaryPostfixOperator map { BaseExprTail_UnaryPostfixOp(it.pos, it.value) }
 
     private val baseExprTailCall by callArgs map { args ->
         BaseExprTail_Call(args)
@@ -375,7 +381,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
             or baseExprTailLookup
             or baseExprTailNotNull
             or baseExprTailSafeMember
-            or baseExprTailIncrement
+            or baseExprTailUnaryPostfixOp
     )
 
     private val baseExprTail by ( baseExprTailNoCall or baseExprTailCall )
@@ -411,7 +417,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     private val operandExpr: Parser<S_Expr> by ( baseExpr or ifExpr or whenExpr )
 
-    private val unaryExpr by ( zeroOrMore(unaryOperator) * operandExpr ) map { (ops, expr) ->
+    private val unaryExpr by ( zeroOrMore(unaryPrefixOperator) * operandExpr ) map { (ops, expr) ->
         var res = expr
         for (op in ops.reversed()) {
             res = S_UnaryExpr(op.pos, S_Node(op.pos, op.value), res)
@@ -618,30 +624,27 @@ private sealed class BaseExprTail {
 }
 
 private class BaseExprTail_Member(val name: S_Name): BaseExprTail() {
-    override fun toExpr(base: S_Expr): S_Expr = S_MemberExpr(base, name)
+    override fun toExpr(base: S_Expr) = S_MemberExpr(base, name)
 }
 
 private class BaseExprTail_SafeMember(val name: S_Name): BaseExprTail() {
-    override fun toExpr(base: S_Expr): S_Expr = S_SafeMemberExpr(base, name)
+    override fun toExpr(base: S_Expr) = S_SafeMemberExpr(base, name)
 }
 
 private class BaseExprTail_Lookup(val pos: S_Pos, val expr: S_Expr): BaseExprTail() {
-    override fun toExpr(base: S_Expr): S_Expr = S_LookupExpr(pos, base, expr)
+    override fun toExpr(base: S_Expr) = S_LookupExpr(pos, base, expr)
 }
 
 private class BaseExprTail_Call(val args: List<S_NameExprPair>): BaseExprTail() {
-    override fun toExpr(base: S_Expr): S_Expr = S_RecordOrCallExpr(base, args)
+    override fun toExpr(base: S_Expr) = S_RecordOrCallExpr(base, args)
 }
 
 private class BaseExprTail_NotNull(val pos: S_Pos): BaseExprTail() {
-    override fun toExpr(base: S_Expr): S_Expr = S_UnaryExpr(base.startPos, S_Node(pos, S_UnaryOp_NotNull), base)
+    override fun toExpr(base: S_Expr) = S_UnaryExpr(base.startPos, S_Node(pos, S_UnaryOp_NotNull), base)
 }
 
-private class BaseExprTail_IncDec(val pos: S_Pos, val inc: Boolean): BaseExprTail() {
-    override fun toExpr(base: S_Expr): S_Expr {
-        val op = S_UnaryOp_IncDec(inc, true)
-        return S_UnaryExpr(base.startPos, S_Node(pos, op), base)
-    }
+private class BaseExprTail_UnaryPostfixOp(val pos: S_Pos, val op: S_UnaryOp): BaseExprTail() {
+    override fun toExpr(base: S_Expr) = S_UnaryExpr(base.startPos, S_Node(pos, op), base)
 }
 
 private infix fun <T> Parser<RellTokenMatch>.mapNode(transform: (RellTokenMatch) -> T): Parser<S_Node<T>> = MapCombinator(this) {

@@ -232,6 +232,10 @@ class NullAnalysisTest: BaseRellTest(false) {
         chkQueryEx("query q(x: integer?) = _type_of(x + 1);", 0, "ct_err:binop_operand_type:+:integer?:integer")
         chkQueryEx("query q(x: integer?) = _type_of(if (x == null) 0 else x + 1);", 0, "text[integer]")
         chkQueryEx("query q(x: integer?) = _type_of(if (x == null) null else x + 1);", 0, "text[integer?]")
+        chkQueryEx("query q(x: integer?) = _type_of(if (not x??) 0 else x + 1);", 0, "text[integer]")
+        chkQueryEx("query q(x: integer?) = _type_of(if (not x??) null else x + 1);", 0, "text[integer?]")
+        chkQueryEx("query q(x: integer?) = _type_of(if (x??) x + 1 else 0);", 0, "text[integer]")
+        chkQueryEx("query q(x: integer?) = _type_of(if (x??) x + 1 else null);", 0, "text[integer?]")
 
         var q = "query q(x: integer?) = if (x == null) 0 else x + 1;"
         chkQueryEx(q, null as Long?, "int[0]")
@@ -419,6 +423,12 @@ class NullAnalysisTest: BaseRellTest(false) {
         val resNotNull = "boolean[${!eq}]"
         chkDefiniteFactExpr("x $op null", resNull, resNotNull, "ct_err:binop_operand_type:$op:rec:null")
         chkDefiniteFactExpr("null $op x", resNull, resNotNull, "ct_err:binop_operand_type:$op:null:rec")
+    }
+
+    @Test fun testDefiniteFactIsNull() {
+        def("record rec { a: integer; }")
+        def("function f(r: rec?): rec? = r;")
+        chkDefiniteFactExpr("x??", "boolean[false]", "boolean[true]", "ct_err:unop_operand_type:??:rec")
     }
 
     @Test fun testDefiniteFactElvis() {

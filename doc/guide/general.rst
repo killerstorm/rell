@@ -59,14 +59,15 @@ Compatibility with other types:
 Allowed operations:
 
 -  Null comparison: ``x == null``, ``x != null``.
--  ``?:`` - Elvis operator: ``x ?: y`` means ``x`` if ``x`` is not ``null``, otherwise ``y``.
+-  ``?:`` - Elvis operator: ``x ?: y`` means ``x`` if ``x`` is not ``null``, otherwise ``y``
 -  ``?.`` - safe access: ``x?.y`` results in ``x.y`` if ``x`` is not
-   ``null`` and ``null`` otherwise.
--  Operator ``?.`` can be used with function calls, e. g. ``x?.upper_case()``.
--  ``!!`` - null check operator: ``x!!`` returns value of ``x`` if ``x``
-   is not ``null``, otherwise throws an exception.
+   ``null`` and ``null`` otherwise
+-  Operator ``?.`` can be used with function calls, e. g. ``x?.upper_case()``
+-  ``??`` - null check operator: ``x??`` is equivalent to ``x != null``
+-  ``!!`` - null assertion operator: ``x!!`` returns value of ``x`` if ``x``
+   is not ``null``, otherwise throws an exception
 -  ``require(x)``, ``require_not_empty(x)``: throws an exception if ``x``
-   is ``null``, otherwise returns value of ``x``.
+   is ``null``, otherwise returns value of ``x``
 
 Examples:
 
@@ -665,11 +666,12 @@ Special:
 Null handling:
 ~~~~~~~~~~~~~~
 
--  ``?:`` - Elvis operator: ``x ?: y`` returns ``x`` if ``x`` is not ``null``, otherwise returns ``y``.
+-  ``?:`` - Elvis operator: ``x ?: y`` returns ``x`` if ``x`` is not ``null``, otherwise returns ``y``
 -  ``?.`` - safe access operator: ``x?.y`` returns ``x.y`` if ``x`` is
    not ``null``, otherwise returns ``null``; similarly, ``x?.y()``
-   returns either ``x.y()`` or ``null``.
--  ``!!`` - null check: ``x!!`` returns ``x`` if ``x`` is not ``null``, otherwise throws an exception.
+   returns either ``x.y()`` or ``null``
+-  ``??`` - null check: ``x??`` is equivalent to ``x != null``
+-  ``!!`` - null assertion: ``x!!`` returns ``x`` if ``x`` is not ``null``, otherwise throws an exception
 
 Examples:
 
