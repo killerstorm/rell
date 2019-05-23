@@ -4,7 +4,7 @@ import net.postchain.rell.model.*
 import org.apache.commons.collections4.multimap.ArrayListValuedHashMap
 
 abstract class C_SysMemberFunction {
-    abstract fun compileCall(ctx: C_ExprContext, name: S_Name, base: C_Value, safe: Boolean, args: List<C_Value>): C_Expr
+    abstract fun compileCall(ctx: C_ExprContext, member: C_MemberRef, args: List<C_Value>): C_Expr
 }
 
 sealed class C_ArgTypeMatcher {
@@ -247,7 +247,10 @@ class C_SysGlobalFunction(private val cases: List<C_GlobalFuncCase>): C_RegularG
 }
 
 class C_StdSysMemberFunction(val cases: List<C_MemberFuncCase>): C_SysMemberFunction() {
-    override fun compileCall(ctx: C_ExprContext, name: S_Name, base: C_Value, safe: Boolean, args: List<C_Value>): C_Expr {
+    override fun compileCall(ctx: C_ExprContext, member: C_MemberRef, args: List<C_Value>): C_Expr {
+        val base = member.base
+        val name = member.name
+
         val fullName = "${base.type().toStrictString()}.${name.str}"
         val match = matchCase(name.pos, fullName, args)
 
@@ -262,7 +265,7 @@ class C_StdSysMemberFunction(val cases: List<C_MemberFuncCase>): C_SysMemberFunc
         val rBase = base.toRExpr()
         val rArgs = args.map { it.toRExpr() }
         val calculator = match.compileCall(ctx, name.pos, fullName, rArgs)
-        val rExpr = R_MemberExpr(rBase, safe, calculator)
+        val rExpr = R_MemberExpr(rBase, member.safe, calculator)
 
         val subValues = listOf(base) + args
         val exprFacts = C_ExprVarFacts.forSubExpressions(subValues)

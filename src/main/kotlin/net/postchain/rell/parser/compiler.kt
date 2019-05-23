@@ -124,8 +124,9 @@ class C_Record(val name: S_Name, val type: R_RecordType)
 
 enum class C_ModulePass {
     NAMES,
-    TYPES,
+    MEMBERS,
     EXPRESSIONS,
+    VALIDATION,
 }
 
 sealed class C_Deprecated {
@@ -273,7 +274,7 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
     }
 
     fun onPass(pass: C_ModulePass, code: () -> Unit) {
-        check(currentPass < pass)
+        check(currentPass < pass) { "currentPass: $currentPass targetPass: $pass" }
         val ordinal = currentPass.ordinal
         if (ordinal + 1 == pass.ordinal) {
             passes.getValue(pass).add(code)
@@ -297,15 +298,17 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
 
     fun createModule(): R_Module {
         nsCtx.createNamespace()
-        runPass(C_ModulePass.TYPES)
+        runPass(C_ModulePass.MEMBERS)
         processRecords()
         runPass(C_ModulePass.EXPRESSIONS)
+        runPass(C_ModulePass.VALIDATION)
 
         val topologicalClasses = calcTopologicalClasses()
 
         val moduleArgs = nsCtx.getRecordOpt(C_Defs.MODULE_ARGS_RECORD)
-        if (moduleArgs != null && !moduleArgs.type.flags.typeFlags.gtvHuman.compatible) {
-            throw C_Error(moduleArgs.name.pos, "module_args_nogtv", "Record '${C_Defs.MODULE_ARGS_RECORD}' is not Gtv-compatible")
+        if (moduleArgs != null && !moduleArgs.type.flags.typeFlags.gtv.fromGtv) {
+            throw C_Error(moduleArgs.name.pos, "module_args_nogtv",
+                    "Record '${C_Defs.MODULE_ARGS_RECORD}' is not Gtv-compatible")
         }
 
         return R_Module(
@@ -330,13 +333,13 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
         val cyclicRecs = C_GraphUtils.findCyclicVertices(graph).toSet()
         val infiniteRecs = C_GraphUtils.closure(transGraph, cyclicRecs).toSet()
         val mutableRecs = C_GraphUtils.closure(transGraph, structure.mutable).toSet()
-        val nonGtvHumanRecs = C_GraphUtils.closure(transGraph, structure.nonGtvHuman).toSet()
-        val nonGtvCompactRecs = C_GraphUtils.closure(transGraph, structure.nonGtvCompact).toSet()
+        val nonVirtualableRecs = C_GraphUtils.closure(transGraph, structure.nonVirtualable).toSet()
+        val nonGtvFromRecs = C_GraphUtils.closure(transGraph, structure.nonGtvFrom).toSet()
+        val nonGtvToRecs = C_GraphUtils.closure(transGraph, structure.nonGtvTo).toSet()
 
         for (record in records) {
-            val gtvHuman = R_GtvCompatibility(record !in nonGtvHumanRecs)
-            val gtvCompact = R_GtvCompatibility(record !in nonGtvCompactRecs)
-            val typeFlags = R_TypeFlags(record in mutableRecs, gtvHuman, gtvCompact)
+            val gtv = R_GtvCompatibility(record !in nonGtvFromRecs, record !in nonGtvToRecs)
+            val typeFlags = R_TypeFlags(record in mutableRecs, gtv, record !in nonVirtualableRecs)
             val flags = R_RecordFlags(typeFlags, record in cyclicRecs, record in infiniteRecs)
             record.setFlags(flags)
         }
@@ -495,7 +498,7 @@ class C_NamespaceContext(
     }
 
     private fun <T> getDefOpt(getter: (C_NamespaceContext) -> T?): T? {
-        modCtx.checkPass(C_ModulePass.TYPES, null)
+        modCtx.checkPass(C_ModulePass.MEMBERS, null)
         var ctx: C_NamespaceContext? = this
         while (ctx != null) {
             val def = getter(ctx)
@@ -644,7 +647,7 @@ class C_ExternalChainContext(val nsCtx: C_NamespaceContext, val chain: R_Externa
     }
 
     fun transactionClassType(): R_Type {
-        nsCtx.modCtx.checkPass(C_ModulePass.TYPES, null)
+        nsCtx.modCtx.checkPass(C_ModulePass.MEMBERS, null)
         return transactionClassType
     }
 }

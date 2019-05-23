@@ -90,6 +90,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val LIST by relltok("list")
     private val SET by relltok("set")
     private val MAP by relltok("map")
+    private val VIRTUAL by relltok("virtual")
 
     private val FALSE by relltok("false")
     private val TRUE by relltok("true")
@@ -122,12 +123,15 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         S_MapType(kw.pos, key, value)
     }
 
+    private val virtualType by ( VIRTUAL * -LT * typeRef * -GT ) map { (kw, type) -> S_VirtualType(kw.pos, type) }
+
     private val baseType by (
             nameType
             or tupleType
             or listType
             or setType
             or mapType
+            or virtualType
     )
 
     private val type: Parser<S_Type> by ( baseType * zeroOrMore(QUESTION) ) map { (base, nulls) ->
@@ -332,6 +336,8 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         S_CreateExpr(kw.pos, className, exprs)
     }
 
+    private val virtualExpr by virtualType map { type -> S_VirtualExpr(type) }
+
     private val baseExprHeadNoAt by (
             nameExpr
             or attrExpr
@@ -343,6 +349,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
             or listExpr
             or setExpr
             or mapExpr
+            or virtualExpr
     )
 
     private val baseExprHead by ( atExpr or baseExprHeadNoAt )

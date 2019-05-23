@@ -1,7 +1,6 @@
 package net.postchain.rell.model
 
 import net.postchain.rell.runtime.*
-import java.lang.IllegalStateException
 import java.util.*
 
 class R_ExternalChain(val name: String, val index: Int)
@@ -155,7 +154,7 @@ private fun processArgs(params: List<R_ExternalParam>, args: List<Rt_Value>, fra
     for (i in params.indices) {
         val param = params[i]
         val arg = args[i]
-        frame.set(param.ptr, arg, false)
+        frame.set(param.ptr, param.type, arg, false)
     }
 }
 

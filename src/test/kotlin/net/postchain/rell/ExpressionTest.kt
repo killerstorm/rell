@@ -66,7 +66,7 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testMemberFunctionVsField() {
-        tst.defs = listOf("record foo { to_gtv: integer; }")
+        def("record foo { to_gtv: integer; }")
         chkEx("{ val v = foo(123); return v.to_gtv; }", "int[123]")
         chkEx("{ val v = foo(123); return v.to_gtv.str(); }", "text[123]")
         chkEx("{ val v = foo(123); return v.to_gtv().to_json().str(); }", "text[[123]]")
@@ -74,7 +74,7 @@ class ExpressionTest: BaseRellTest(false) {
 
     @Test fun testListItems() {
         tstCtx.useSql = true
-        tst.defs = listOf("class user { name: text; }")
+        def("class user { name: text; }")
 
         chkOp("create user('Bob');")
         chkOp("create user('Alice');")
@@ -84,13 +84,13 @@ class ExpressionTest: BaseRellTest(false) {
         chkEx("{ val s = user @* {}; return s[1]; }", "user[2]")
         chkEx("{ val s = user @* {}; return s[2]; }", "user[3]")
 
-        chkEx("{ val s = user @* {}; return s[-1]; }", "rt_err:expr_list_lookup_index:3:-1")
-        chkEx("{ val s = user @* {}; return s[3]; }", "rt_err:expr_list_lookup_index:3:3")
+        chkEx("{ val s = user @* {}; return s[-1]; }", "rt_err:list:index:3:-1")
+        chkEx("{ val s = user @* {}; return s[3]; }", "rt_err:list:index:3:3")
     }
 
     @Test fun testFunctionsUnderAt() {
         tstCtx.useSql = true
-        tst.defs = listOf("class user { name: text; score: integer; }")
+        def("class user { name: text; score: integer; }")
         chkOp("create user('Bob',-5678);")
 
         chkEx("{ val s = 'Hello'; return user @ {} ( .name.size() + s.size() ); }", "int[8]")
@@ -109,7 +109,8 @@ class ExpressionTest: BaseRellTest(false) {
 
     @Test fun testDataClassPathExpr() {
         tstCtx.useSql = true
-        tst.defs = listOf("class company { name: text; }", "class user { name: text; company; }")
+        def("class company { name: text; }")
+        def("class user { name: text; company; }")
 
         chkOp("""
             val facebook = create company('Facebook');
@@ -131,7 +132,8 @@ class ExpressionTest: BaseRellTest(false) {
 
     @Test fun testDataClassPathExprMix() {
         tstCtx.useSql = true
-        tst.defs = listOf("class company { name: text; }", "class user { name: text; company; }")
+        def("class company { name: text; }")
+        def("class user { name: text; company; }")
 
         chkOp("""
             val microsoft = create company('Microsoft');
@@ -158,12 +160,10 @@ class ExpressionTest: BaseRellTest(false) {
 
     @Test fun testDataClassPathExprComplex() {
         tstCtx.useSql = true
-        tst.defs = listOf(
-                "class c1 { name: text; }",
-                "class c2 { name: text; c1; }",
-                "class c3 { name: text; c2; }",
-                "class c4 { name: text; c3; }"
-        )
+        def("class c1 { name: text; }")
+        def("class c2 { name: text; c1; }")
+        def("class c3 { name: text; c2; }")
+        def("class c4 { name: text; c3; }")
 
         chkOp("""
             val c1_1 = create c1('c1_1');
@@ -205,7 +205,7 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testTupleAt() {
-        tst.defs = listOf("class user { name: text; street: text; house: integer; }")
+        def("class user { name: text; street: text; house: integer; }")
 
         chk("user @ {} ( x = (.name,) ) ", "ct_err:expr_sqlnotallowed")
         chk("user @ {} ( x = (.name, .street, .house) ) ", "ct_err:expr_sqlnotallowed")
@@ -260,7 +260,7 @@ class ExpressionTest: BaseRellTest(false) {
 
     @Test fun testNamespaceUnderAt() {
         tstCtx.useSql = true
-        tst.defs = listOf("class user { name: text; score: integer; }")
+        def("class user { name: text; score: integer; }")
         chkOp("create user('Bob',-5678);")
 
         chk("user @ { .score == integer }", "ct_err:expr_novalue:namespace")
@@ -278,7 +278,7 @@ class ExpressionTest: BaseRellTest(false) {
     @Test fun testMoreFunctionsUnderAt() {
         tstCtx.useSql = true
         tst.strictToString = false
-        tst.defs = listOf("class user { id: integer; name1: text; name2: text; v1: integer; v2: integer; }")
+        def("class user { id: integer; name1: text; name2: text; v1: integer; v2: integer; }")
         chkOp("""
             create user(id = 1, name1 = 'Bill', name2 = 'Gates', v1 = 111, v2 = 222);
             create user(id = 2, name1 = 'Mark', name2 = 'Zuckerberg', v1 = 333, v2 = 444);
@@ -451,14 +451,14 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testNameRecordVsLocal() {
-        tst.defs = listOf("record rec {x:integer;}")
+        def("record rec {x:integer;}")
         chkEx("{ return rec(456); }", "rec[x=int[456]]")
         chkEx("{ val rec = 123; return rec(456); }", "rec[x=int[456]]")
         chkEx("{ val rec = 123; return rec; }", "int[123]")
     }
 
     @Test fun testNameFunctionVsLocal() {
-        tst.defs = listOf("function f(x:integer): integer = x * x;")
+        def("function f(x:integer): integer = x * x;")
         chkEx("{ val f = 123; return f(456); }", "int[207936]")
         chkEx("{ val f = 123; return f; }", "int[123]")
         chkEx("{ val f = 123; return f.to_hex(); }", "text[7b]")

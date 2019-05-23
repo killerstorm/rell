@@ -37,6 +37,7 @@ Complex types:
 -  ``map<K,V>``
 -  ``range`` (can be used in ``for`` statement)
 -  ``gtv`` - used to encode parameters and results of operations and queries
+-  ``virtual<T>`` - a reduced data structure with Merkle tree
 
 Nullable type
 -------------
@@ -126,6 +127,51 @@ Rules of Gtv-compatibility:
 
 - ``range`` is not Gtv-compatible
 - a complex type is not Gtv-compatible if a type of its component is not Gtv-compatible
+
+Virtual types
+-------
+
+Type ``virtual<T>`` can be used only with following types ``T``:
+
+- ``list<*>``
+- ``set<*>``
+- ``map<text, *>``
+- ``record``
+- tuple
+
+Additionally, types of all internal elements of ``T`` must satisfy following constraints:
+
+- must be Gtv-compatible
+- for a ``map`` type, the key type must be ``text`` (i. e. ``map<text, *>``)
+
+Operations available for all virtual types:
+
+- member access: ``[]`` for ``list`` and ``map``, ``.name`` for ``record`` and tuple
+- ``.to_full(): T`` - converts the virtual value to the original value, if the value is full
+  (all internal elements are present), otherwise throws an exception
+- ``.hash(): byte_array`` - returns the hash of the value, which is the same as the hash of the
+  original value.
+- ``virtual<T>.from_gtv(gtv): virtual<T>`` - decodes a virtual value from a Gtv.
+
+Features of ``virtual<T>``:
+
+- it is immutable
+- reading a member of type ``list<*>``, ``map<*,*>``, ``record`` or tuple returns a value of
+  the corresponding virtual type, not of the actual member type
+- cannot be converted to Gtv, so cannot be used as a return type of a ``query``
+
+Example:
+
+::
+
+    record rec { t: text; s: integer; }
+
+    operation op(recs: virtual<list<rec>>) {
+        for (rec in recs) {                 // type of "rec" is "virtual<rec>", not "rec"
+            val full = rec.to_full();       // type of "full" is "rec", fails if the value is not full
+            print(full.t);
+        }
+    }
 
 Subtypes
 --------

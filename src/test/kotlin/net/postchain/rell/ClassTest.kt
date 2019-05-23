@@ -37,7 +37,8 @@ class ClassTest: BaseRellTest(false) {
 
     @Test fun testIndexWithoutAttr() {
         tstCtx.useSql = true
-        tst.defs = listOf("class foo { index name; }", "class bar { index name: text; }")
+        def("class foo { index name; }")
+        def("class bar { index name: text; }")
         chkOp("create foo(name = 'A');")
         chkOp("create bar(name = 'B');")
         chk("foo @ {} (.name)", "text[A]")
@@ -46,12 +47,10 @@ class ClassTest: BaseRellTest(false) {
 
     @Test fun testIndexWithAttr() {
         tstCtx.useSql = true
-        tst.defs = listOf(
-                "class A { name; index name; }",
-                "class B { index name; name: text; }",
-                "class C { name1: text; index name1, name2: text; }",
-                "class D { mutable name: text; index name; }"
-        )
+        def("class A { name; index name; }")
+        def("class B { index name; name: text; }")
+        def("class C { name1: text; index name1, name2: text; }")
+        def("class D { mutable name: text; index name; }")
 
         chkOp("create A(name = 'A');")
         chkOp("create B(name = 'B');")
@@ -91,7 +90,8 @@ class ClassTest: BaseRellTest(false) {
 
     @Test fun testKeyWithoutAttr() {
         tstCtx.useSql = true
-        tst.defs = listOf("class foo { key name; }", "class bar { key name: text; }")
+        def("class foo { key name; }")
+        def("class bar { key name: text; }")
         chkOp("create foo(name = 'A');")
         chkOp("create bar(name = 'B');")
         chk("foo @ {} (.name)", "text[A]")
@@ -100,12 +100,10 @@ class ClassTest: BaseRellTest(false) {
 
     @Test fun testKeyWithAttr() {
         tstCtx.useSql = true
-        tst.defs = listOf(
-                "class A { name; key name; }",
-                "class B { key name; name: text; }",
-                "class C { name1: text; key name1, name2: text; }",
-                "class D { mutable name: text; key name; }"
-        )
+        def("class A { name; key name; }")
+        def("class B { key name; name: text; }")
+        def("class C { name1: text; key name1, name2: text; }")
+        def("class D { mutable name: text; key name; }")
 
         chkOp("create A(name = 'A');")
         chkOp("create B(name = 'B');")
@@ -123,7 +121,7 @@ class ClassTest: BaseRellTest(false) {
 
     @Test fun testKeyIndexDupValue() {
         tstCtx.useSql = true
-        tst.defs = listOf("class foo { mutable k: text; mutable i: text; key k; index i; }")
+        def("class foo { mutable k: text; mutable i: text; key k; index i; }")
 
         chkOp("create foo(k = 'K1', i = 'I1');")
         chkOp("create foo(k = 'K1', i = 'I2');", "rt_err:sqlerr:0")
@@ -141,10 +139,8 @@ class ClassTest: BaseRellTest(false) {
 
     @Test fun testForwardReferenceInAttributeValue() {
         tstCtx.useSql = true
-        tst.defs = listOf(
-                "class foo { x: integer; k: integer = (bar@*{ .v > 0 }).size(); }",
-                "class bar { v: integer; }"
-        )
+        def("class foo { x: integer; k: integer = (bar@*{ .v > 0 }).size(); }")
+        def("class bar { v: integer; }")
 
         chkOp("""
             create foo(x = 1);
@@ -178,7 +174,8 @@ class ClassTest: BaseRellTest(false) {
 
     @Test fun testBugSqlCreateTableOrder() {
         // Bug: SQL tables must be created in topological order because of foreign key constraints.
-        tst.defs = listOf("class user { name: text; company; }", "class company { name: text; }")
+        def("class user { name: text; company; }")
+        def("class company { name: text; }")
         tstCtx.useSql = true
         chkOp("val c = create company('Amazon'); create user ('Bob', c);")
         chkData("user(2,Bob,1)", "company(1,Amazon)")
@@ -219,7 +216,8 @@ class ClassTest: BaseRellTest(false) {
 
     private fun createTablePrefixTester(chainId: Long, rowid: Long, company: String, user: String): RellCodeTester {
         val t = RellCodeTester(tstCtx)
-        t.defs = listOf("class user { name: text; company; }", "class company { name: text; }")
+        t.def("class user { name: text; company; }")
+        t.def("class company { name: text; }")
         t.chainId = chainId
         t.insert("c${chainId}.company", "name","${rowid},'$company'")
         t.insert("c${chainId}.user", "name,company","${rowid+1},'$user',${rowid}")

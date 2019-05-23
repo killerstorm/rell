@@ -349,8 +349,9 @@ object C_GraphUtils {
 
 class C_RecordsStructure(
         val mutable: Set<R_RecordType>,
-        val nonGtvHuman: Set<R_RecordType>,
-        val nonGtvCompact: Set<R_RecordType>,
+        val nonVirtualable: Set<R_RecordType>,
+        val nonGtvFrom: Set<R_RecordType>,
+        val nonGtvTo: Set<R_RecordType>,
         val graph: Map<R_RecordType, List<R_RecordType>>
 )
 
@@ -359,9 +360,10 @@ object C_RecordUtils {
         val structMap = records.map { Pair(it, calcRecStruct(it)) }.toMap()
         val graph = structMap.mapValues { (_, v) -> v.dependencies.toList() }
         val mutable = structMap.filter { (_, v) -> v.directFlags.mutable }.keys
-        val nonGtvHuman = structMap.filter { (_, v) -> !v.directFlags.gtvHuman.compatible }.keys
-        val nonGtvCompact = structMap.filter { (_, v) -> !v.directFlags.gtvCompact.compatible }.keys
-        return C_RecordsStructure(mutable, nonGtvHuman, nonGtvCompact, graph)
+        val nonVirtualable = structMap.filter { (_, v) -> !v.directFlags.virtualable }.keys
+        val nonGtvFrom = structMap.filter { (_, v) -> !v.directFlags.gtv.fromGtv }.keys
+        val nonGtvTo = structMap.filter { (_, v) -> !v.directFlags.gtv.toGtv }.keys
+        return C_RecordsStructure(mutable, nonVirtualable, nonGtvFrom, nonGtvTo, graph)
     }
 
     private fun calcRecStruct(type: R_Type): RecStruct {

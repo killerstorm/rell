@@ -3,8 +3,6 @@ package net.postchain.rell.parser
 import net.postchain.rell.MutableTypedKeyMap
 import net.postchain.rell.TypedKeyMap
 import net.postchain.rell.model.*
-import net.postchain.rell.module.GTV_OPERATION_HUMAN
-import net.postchain.rell.module.GTV_QUERY_HUMAN
 
 abstract class S_Pos: Comparable<S_Pos> {
     abstract fun file(): String
@@ -149,8 +147,8 @@ class S_ClassDefinition(val name: S_Name, val annotations: List<S_Name>, val bod
         val rClass = R_Class(fullName, rFlags, rMapping, rExternalClass)
         ctx.nsCtx.addClass(name, rClass)
 
-        ctx.modCtx.onPass(C_ModulePass.TYPES) {
-            classesPass(ctx, entityIndex, rClass, body)
+        ctx.modCtx.onPass(C_ModulePass.MEMBERS) {
+            membersPass(ctx, entityIndex, rClass, body)
         }
     }
 
@@ -212,7 +210,7 @@ class S_ClassDefinition(val name: S_Name, val annotations: List<S_Name>, val bod
         )
     }
 
-    private fun classesPass(ctx: C_DefinitionContext, entityIndex: Int, rClass: R_Class, clauses: List<S_RelClause>) {
+    private fun membersPass(ctx: C_DefinitionContext, entityIndex: Int, rClass: R_Class, clauses: List<S_RelClause>) {
         val entCtx = C_EntityContext(ctx.nsCtx, C_EntityType.CLASS, entityIndex, null, TypedKeyMap())
         val clsCtx = C_ClassContext(entCtx, name.str, rClass.flags.log)
 
@@ -259,12 +257,12 @@ class S_ObjectDefinition(val name: S_Name, val clauses: List<S_RelClause>): S_De
         val rObject = R_Object(rClass, entityIndex)
         ctx.nsCtx.addObject(name, rObject)
 
-        ctx.modCtx.onPass(C_ModulePass.TYPES) {
-            classesPass(ctx.nsCtx, entityIndex, rObject)
+        ctx.modCtx.onPass(C_ModulePass.MEMBERS) {
+            membersPass(ctx.nsCtx, entityIndex, rObject)
         }
     }
 
-    private fun classesPass(ctx: C_NamespaceContext, entityIndex: Int, rObject: R_Object) {
+    private fun membersPass(ctx: C_NamespaceContext, entityIndex: Int, rObject: R_Object) {
         val entCtx = C_EntityContext(ctx, C_EntityType.OBJECT, entityIndex, null, TypedKeyMap())
         val clsCtx = C_ClassContext(entCtx, name.str, false)
         S_ClassDefinition.compileClauses(clsCtx, clauses)
@@ -282,12 +280,12 @@ class S_RecordDefinition(val name: S_Name, val attrs: List<S_AttributeClause>): 
         val rType = R_RecordType(fullName)
         ctx.nsCtx.addRecord(C_Record(name, rType))
 
-        ctx.modCtx.onPass(C_ModulePass.TYPES) {
-            classesPass(ctx.nsCtx, entityIndex, rType)
+        ctx.modCtx.onPass(C_ModulePass.MEMBERS) {
+            membersPass(ctx.nsCtx, entityIndex, rType)
         }
     }
 
-    private fun classesPass(ctx: C_NamespaceContext, entityIndex: Int, rType: R_RecordType) {
+    private fun membersPass(ctx: C_NamespaceContext, entityIndex: Int, rType: R_RecordType) {
         val entCtx = C_EntityContext(ctx, C_EntityType.RECORD, entityIndex, null, TypedKeyMap())
         val clsCtx = C_ClassContext(entCtx, name.str, false)
         for (clause in attrs) {
@@ -338,7 +336,7 @@ class S_OpDefinition(val name: S_Name, val params: List<S_NameTypePair>, val bod
         val rCallFrame = entCtx.makeCallFrame()
 
         if (ctx.modCtx.globalCtx.compilerOptions.gtv) {
-            checkGtvParams(params, rParams, GTV_OPERATION_HUMAN)
+            checkGtvParams(params, rParams)
         }
 
         val rOperation = R_Operation(fullName, rParams, rBody, rCallFrame)
@@ -378,32 +376,32 @@ class S_QueryDefinition(
         val rRetType = entCtx.actualReturnType()
 
         if (ctx.modCtx.globalCtx.compilerOptions.gtv) {
-            checkGtvParams(params, rParams, GTV_QUERY_HUMAN)
-            checkGtvResult(rRetType, GTV_QUERY_HUMAN)
+            checkGtvParams(params, rParams)
+            checkGtvResult(rRetType)
         }
 
         val rQuery = R_Query(fullName, rRetType, rParams, rBody, rCallFrame)
         ctx.addQuery(rQuery)
     }
 
-    private fun checkGtvResult(rType: R_Type, human: Boolean) {
-        checkGtvCompatibility(name.pos, rType, human, "result_nogtv:${name.str}", "Return type of query '${name.str}'")
+    private fun checkGtvResult(rType: R_Type) {
+        checkGtvCompatibility(name.pos, rType, false, "result_nogtv:${name.str}", "Return type of query '${name.str}'")
     }
 }
 
-private fun checkGtvParams(params: List<S_NameTypePair>, rParams: List<R_ExternalParam>, human: Boolean) {
+private fun checkGtvParams(params: List<S_NameTypePair>, rParams: List<R_ExternalParam>) {
     params.forEachIndexed { i, param ->
         val type = rParams[i].type
         val name = param.name.str
-        checkGtvCompatibility(param.name.pos, type, human, "param_nogtv:$name", "Type of parameter '$name'")
+        checkGtvCompatibility(param.name.pos, type, true, "param_nogtv:$name", "Type of parameter '$name'")
     }
 }
 
-private fun checkGtvCompatibility(pos: S_Pos, type: R_Type, human: Boolean, errCode: String, errMsg: String) {
+private fun checkGtvCompatibility(pos: S_Pos, type: R_Type, from: Boolean, errCode: String, errMsg: String) {
     val flags = type.completeFlags()
-    val gtv = if (human) flags.gtvHuman else flags.gtvCompact
-    if (!gtv.compatible) {
-        throw C_Errors.errTypeNotGtvCompatible(pos, type, gtv.err, errCode, errMsg)
+    val flag = if (from ) flags.gtv.fromGtv else flags.gtv.toGtv
+    if (!flag) {
+        throw C_Errors.errTypeNotGtvCompatible(pos, type, null, errCode, errMsg)
     }
 }
 
@@ -482,7 +480,7 @@ class S_FunctionDefinition(
         ctx.checkNotExternal(name.pos, C_DefType.FUNCTION)
 
         val fn = ctx.nsCtx.addFunctionDeclaration(name.str)
-        ctx.modCtx.onPass(C_ModulePass.TYPES) {
+        ctx.modCtx.onPass(C_ModulePass.MEMBERS) {
             compileDefinition(ctx.nsCtx, entityIndex, fn)
         }
     }

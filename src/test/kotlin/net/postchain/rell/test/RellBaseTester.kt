@@ -8,6 +8,7 @@ import net.postchain.rell.parser.C_VirtualIncludeDir
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_Printer
 import net.postchain.rell.sql.SqlExecutor
+import org.jooq.tools.jdbc.MockConnection
 import java.sql.Connection
 import java.util.*
 import kotlin.test.assertEquals
@@ -33,6 +34,8 @@ abstract class RellBaseTester(
             checkNotInited()
             field = value
         }
+
+    private val defs0 = mutableListOf<String>()
 
     var chainId: Long = 0
         set(value) {
@@ -79,6 +82,12 @@ abstract class RellBaseTester(
 
     protected fun compilerOptions() = C_CompilerOptions(gtv, deprecatedError)
 
+    fun def(def: String) {
+        checkNotInited()
+        defs0.add(def)
+        defs = defs0
+    }
+
     fun insert(table: String, columns: String, values: String) {
         val ins = SqlTestUtils.mkins(table, columns, values)
         inserts = inserts + listOf(ins)
@@ -112,7 +121,7 @@ abstract class RellBaseTester(
 
     protected abstract fun initSqlReset(conn: Connection, exec: SqlExecutor, moduleCode: String, module: R_Module)
 
-    protected fun createIncludeDir(code: String): C_IncludeDir {
+    private fun createIncludeDir(code: String): C_IncludeDir {
         return C_VirtualIncludeDir(files(code))
     }
 
@@ -128,7 +137,7 @@ abstract class RellBaseTester(
 
     protected fun getSqlConn(): Connection {
         init()
-        return tstCtx.sqlConn()
+        return if (tstCtx.useSql) tstCtx.sqlConn() else MockConnection { TODO() }
     }
 
     fun dumpDatabase(): List<String> {

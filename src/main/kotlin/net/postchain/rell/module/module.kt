@@ -1,10 +1,7 @@
 package net.postchain.rell.module
 
 import mu.KLogging
-import net.postchain.core.EContext
-import net.postchain.core.Transactor
-import net.postchain.core.TxEContext
-import net.postchain.core.UserMistake
+import net.postchain.core.*
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvDictionary
 import net.postchain.gtx.*
@@ -57,7 +54,7 @@ class RellGTXOperation(val module: RellPostchainModule, val rOperation: R_Operat
         }
 
         module.factory.catchRtErr {
-            gtvToRtCtx = GtvToRtContext(GTV_OPERATION_HUMAN)
+            gtvToRtCtx = GtvToRtContext(GTV_OPERATION_PRETTY)
             args = convertArgs(gtvToRtCtx, rOperation.params, data.args.toList())
         }
 
@@ -72,10 +69,8 @@ class RellGTXOperation(val module: RellPostchainModule, val rOperation: R_Operat
             gtvToRtCtx.finish(modCtx)
         }
 
-        try {
+        module.factory.wrapMistake("Operation failed") {
             rOperation.callTopNoTx(modCtx, args)
-        } catch (e: Exception) {
-            throw UserMistake("Query failed: ${e.message}", e)
         }
 
         return true
@@ -134,13 +129,11 @@ class RellPostchainModule(
         val modCtx = makeRtModuleContext(ctx, null)
         val rtArgs = translateQueryArgs(modCtx, rQuery, args)
 
-        val rtResult = try {
+        val rtResult = factory.wrapMistake("Query failed") {
             rQuery.callTopQuery(modCtx, rtArgs)
-        } catch (e: Exception) {
-            throw UserMistake("Query failed: ${e.message}", e)
         }
 
-        val gtvResult = rQuery.type.rtToGtv(rtResult, GTV_QUERY_HUMAN)
+        val gtvResult = rQuery.type.rtToGtv(rtResult, GTV_QUERY_PRETTY)
         return gtvResult
     }
 
@@ -155,7 +148,7 @@ class RellPostchainModule(
         }
 
         val rtArgs = factory.catchRtErr {
-            val gtvToRtCtx = GtvToRtContext(GTV_QUERY_HUMAN)
+            val gtvToRtCtx = GtvToRtContext(GTV_QUERY_PRETTY)
             val args = rQuery.params.map { argMap.getValue(it.name) }
             val res = convertArgs(gtvToRtCtx, rQuery.params, args)
             gtvToRtCtx.finish(modCtx)
@@ -189,7 +182,8 @@ class RellPostchainModuleFactory(
         val stdoutPrinter: Rt_Printer = StdoutRtPrinter,
         val logPrinter: Rt_Printer = LogRtPrinter,
         private val wrapCtErrors: Boolean = true,
-        private val wrapRtErrors: Boolean = true
+        private val wrapRtErrors: Boolean = true,
+        private val forceTypeCheck: Boolean = false
 ) : GTXModuleFactory {
     override fun makeModule(data: Gtv, blockchainRID: ByteArray): GTXModule {
         val gtxNode = data.asDict().getValue("gtx").asDict()
@@ -206,11 +200,11 @@ class RellPostchainModuleFactory(
         val chainCtx = createChainContext(data, rellNode, module)
 
         val chainDeps = catchRtErr {
-            getGtvChainDependencies(data)
+            getGtxChainDependencies(data)
         }
 
         val sqlLogging = rellNode["sqlLog"]?.asBoolean() ?: false
-        val typeCheck = rellNode["typeCheck"]?.asBoolean() ?: false
+        val typeCheck = forceTypeCheck || (rellNode["typeCheck"]?.asBoolean() ?: false)
         val flags = RellPostchainFlags(sqlLogging = sqlLogging, typeCheck = typeCheck)
 
         return RellPostchainModule(this, module, moduleName, chainCtx, chainDeps, flags)
@@ -280,7 +274,7 @@ class RellPostchainModuleFactory(
         return Rt_ChainContext(rawConfig, args)
     }
 
-    private fun getGtvChainDependencies(data: Gtv): Map<String, ByteArray> {
+    private fun getGtxChainDependencies(data: Gtv): Map<String, ByteArray> {
         val gtvDeps = data["dependencies"]
         if (gtvDeps == null) return mapOf()
 
@@ -300,6 +294,16 @@ class RellPostchainModuleFactory(
             return code()
         } catch (e: Rt_BaseError) {
             throw if (wrapRtErrors) UserMistake(e.message ?: "") else e
+        }
+    }
+
+    fun <T> wrapMistake(msg: String, code: () -> T): T {
+        try {
+            return code()
+        } catch (e: Rt_BaseError) {
+            throw if (wrapRtErrors) UserMistake("$msg: ${e.message}" ?: "") else e
+        } catch (e: Exception) {
+            throw ProgrammerMistake("$msg: ${e.message}", e)
         }
     }
 

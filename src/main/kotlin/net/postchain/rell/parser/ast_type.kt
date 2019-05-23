@@ -4,7 +4,11 @@ import net.postchain.rell.model.*
 
 sealed class S_Type {
     abstract fun compile(ctx: C_NamespaceContext): R_Type
-    fun compile(ctx: C_ExprContext): R_Type = compile(ctx.blkCtx.entCtx.nsCtx)
+
+    fun compile(ctx: C_ExprContext): R_Type {
+        ctx.blkCtx.entCtx.nsCtx.modCtx.checkPass(C_ModulePass.EXPRESSIONS, C_ModulePass.EXPRESSIONS)
+        return compile(ctx.blkCtx.entCtx.nsCtx)
+    }
 
     companion object {
         fun match(dstType: R_Type, srcType: R_Type, errPos: S_Pos, errCode: String, errMsg: String) {
@@ -72,5 +76,57 @@ class S_MapType(val pos: S_Pos, val key: S_Type, val value: S_Type): S_Type() {
         C_Utils.checkUnitType(pos, rValue, "type_map_value_unit", "Invalid map value type")
         C_Utils.checkMapKeyType(pos, rKey)
         return R_MapType(rKey, rValue)
+    }
+}
+
+class S_VirtualType(val pos: S_Pos, val innerType: S_Type): S_Type() {
+    override fun compile(ctx: C_NamespaceContext): R_Type {
+        val rInnerType = innerType.compile(ctx)
+
+        val rType = virtualType(rInnerType)
+        if (rType == null) {
+            throw errBadInnerType(rInnerType)
+        }
+
+        ctx.modCtx.onPass(C_ModulePass.VALIDATION) {
+            validate(rInnerType)
+        }
+
+        return rType
+    }
+
+    private fun validate(rInnerType: R_Type) {
+        val flags = rInnerType.completeFlags()
+        if (!flags.virtualable) {
+            throw errBadInnerType(rInnerType)
+        }
+    }
+
+    private fun errBadInnerType(rInnerType: R_Type): C_Error {
+        return C_Error(pos, "type:virtual:bad_inner_type:${rInnerType.name}",
+                "Type ${rInnerType.name} cannot be virtual (allowed types are: list, map, record, tuple)")
+    }
+
+    companion object {
+        private fun virtualType(type: R_Type): R_Type? {
+            return when (type) {
+                is R_ListType -> type.virtualType
+                is R_SetType -> type.virtualType
+                is R_MapType -> type.virtualType
+                is R_TupleType -> type.virtualType
+                is R_RecordType -> type.virtualType
+                else -> null
+            }
+        }
+
+        fun virtualMemberType(type: R_Type): R_Type {
+            return when(type) {
+                is R_NullableType -> {
+                    val subType = virtualMemberType(type.valueType)
+                    R_NullableType(subType)
+                }
+                else -> virtualType(type) ?: type
+            }
+        }
     }
 }

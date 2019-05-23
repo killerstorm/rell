@@ -219,6 +219,23 @@ object R_BinaryOp_In_Collection: R_BinaryOp("in") {
     }
 }
 
+object R_BinaryOp_In_VirtualList: R_BinaryOp("in") {
+    override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value {
+        val index = left.asInteger()
+        val list = right.asVirtualList()
+        val r = list.contains(index)
+        return Rt_BooleanValue(r)
+    }
+}
+
+object R_BinaryOp_In_VirtualSet: R_BinaryOp("in") {
+    override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value {
+        val set = right.asVirtualSet()
+        val r = set.contains(left)
+        return Rt_BooleanValue(r)
+    }
+}
+
 object R_BinaryOp_In_Map: R_BinaryOp("in") {
     override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value {
         val c = right.asMap()

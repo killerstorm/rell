@@ -505,14 +505,14 @@ object C_BinOp_In: C_BinOp_Common() {
     }
 
     private fun matchOp(right: R_Type): Pair<R_BinaryOp, R_Type>? {
-        if (right is R_CollectionType) {
-            return Pair(R_BinaryOp_In_Collection, right.elementType)
-        } else if (right is R_MapType) {
-            return Pair(R_BinaryOp_In_Map, right.keyType)
-        } else if (right is R_RangeType) {
-            return Pair(R_BinaryOp_In_Range, R_IntegerType)
-        } else {
-            return null
+        return when (right) {
+            is R_CollectionType -> Pair(R_BinaryOp_In_Collection, right.elementType)
+            is R_VirtualListType -> Pair(R_BinaryOp_In_VirtualList, R_IntegerType)
+            is R_VirtualSetType -> Pair(R_BinaryOp_In_VirtualSet, S_VirtualType.virtualMemberType(right.innerType.elementType))
+            is R_MapType -> Pair(R_BinaryOp_In_Map, right.keyType)
+            is R_VirtualMapType -> Pair(R_BinaryOp_In_Map, right.innerType.keyType)
+            is R_RangeType -> Pair(R_BinaryOp_In_Range, R_IntegerType)
+            else -> null
         }
     }
 }

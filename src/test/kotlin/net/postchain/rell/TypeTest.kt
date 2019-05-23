@@ -23,7 +23,7 @@ class TypeTest: BaseRellTest() {
     }
 
     @Test fun testByteArraySql() {
-        tst.defs = listOf("class foo { mutable x: byte_array; }")
+        def("class foo { mutable x: byte_array; }")
 
         chkOp("create foo(x'0123456789abcdef');")
         chkData("foo(1,0x0123456789abcdef)")
@@ -45,7 +45,7 @@ class TypeTest: BaseRellTest() {
     }
 
     @Test fun testJsonSql() {
-        tst.defs = listOf("class foo { mutable j: json; }")
+        def("class foo { mutable j: json; }")
 
         chkOp("""create foo(json('{ "a" : 5, "b" : [1,2,3], "c": { "x":10,"y":20 } }'));""")
         chkData("""foo(1,{"a": 5, "b": [1, 2, 3], "c": {"x": 10, "y": 20}})""")
@@ -55,7 +55,7 @@ class TypeTest: BaseRellTest() {
     }
 
     @Test fun testExplicitUnitType() {
-        tst.chkQueryEx("class foo { x: unit; } query q() = 0;", listOf(), "ct_err:unknown_type:unit")
+        chkQueryEx("class foo { x: unit; } query q() = 0;", listOf(), "ct_err:unknown_type:unit")
         chkEx("{ var x: unit; return 123; }", "ct_err:unknown_type:unit")
     }
 
@@ -88,8 +88,7 @@ class TypeTest: BaseRellTest() {
 
     @Test fun testSet() {
         chkEx("{ var x: set<integer>; x = set([1, 2, 3]); return x; }", "set<integer>[int[1],int[2],int[3]]")
-        chkEx("{ var x: set<integer>; x = [1, 2, 3]; return x; }",
-                "ct_err:stmt_assign_type:set<integer>:list<integer>")
+        chkEx("{ var x: set<integer>; x = [1, 2, 3]; return x; }", "ct_err:stmt_assign_type:set<integer>:list<integer>")
         chkEx("{ var x: set<integer>; x = set(['Hello', 'World']); return x; }",
                 "ct_err:stmt_assign_type:set<integer>:set<text>")
         chkEx("{ var x: set<integer>; x = 123; return x; }", "ct_err:stmt_assign_type:set<integer>:integer")
@@ -104,16 +103,9 @@ class TypeTest: BaseRellTest() {
     }
 
     @Test fun testClassAttributeTypeErr() {
-        tst.chkQueryEx("class foo { x: (integer); } query q() = 0;", listOf(),
-                "ct_err:class_attr_type:x:(integer)")
-
-        tst.chkQueryEx("class foo { x: (integer, text); } query q() = 0;", listOf(),
-                "ct_err:class_attr_type:x:(integer,text)")
-
-        tst.chkQueryEx("class foo { x: range; } query q() = 0;", listOf(),
-                "ct_err:class_attr_type:x:range")
-
-        tst.chkQueryEx("class foo { x: list<integer>; } query q() = 0;", listOf(),
-                "ct_err:class_attr_type:x:list<integer>")
+        chkQueryEx("class foo { x: (integer); } query q() = 0;", listOf(), "ct_err:class_attr_type:x:(integer)")
+        chkQueryEx("class foo { x: (integer, text); } query q() = 0;", listOf(), "ct_err:class_attr_type:x:(integer,text)")
+        chkQueryEx("class foo { x: range; } query q() = 0;", listOf(), "ct_err:class_attr_type:x:range")
+        chkQueryEx("class foo { x: list<integer>; } query q() = 0;", listOf(), "ct_err:class_attr_type:x:list<integer>")
     }
 }

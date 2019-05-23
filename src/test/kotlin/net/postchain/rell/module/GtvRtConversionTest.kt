@@ -38,12 +38,13 @@ class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
     }
 
     @Test fun testQueryResultRecord() {
-        tst.defs = listOf("record foo { x: integer; b: bar; } record bar { p: boolean; q: text; }")
+        def("record foo { x: integer; b: bar; }")
+        def("record bar { p: boolean; q: text; }")
         chkQueryRes(" = foo(123, bar(true, 'Hello'));", """{"x":123,"b":{"p":1,"q":"Hello"}}""")
     }
 
     @Test fun testQueryResultCyclicRecord() {
-        tst.defs = listOf("record node { v: integer; left: node? = null; right: node? = null; }")
+        def("record node { v: integer; left: node? = null; right: node? = null; }")
         chkQueryRes("= node(456, left = node(123), right = node(789));",
                 """{"v":456,"left":{"v":123,"left":null,"right":null},"right":{"v":789,"left":null,"right":null}}""")
     }
@@ -157,7 +158,9 @@ class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
     }
 
     @Test fun testArgRecordQuery() {
-        tst.defs = listOf("record foo { x: integer; b: bar; } record bar { p: boolean; q: text; } record qaz { b: bar?; }")
+        def("record foo { x: integer; b: bar; }")
+        def("record bar { p: boolean; q: text; }")
+        def("record qaz { b: bar?; }")
         tst.gtvResult = false
 
         chkQueryArg("foo", """{"x":123,"b":{"p":1,"q":"Hello"}}""", "foo[x=int[123],b=bar[p=boolean[true],q=text[Hello]]]")
@@ -174,7 +177,7 @@ class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
     }
 
     @Test fun testArgRecordQueryCyclic() {
-        tst.defs = listOf("record node { v: integer; left: node? = null; right: node? = null; }")
+        def("record node { v: integer; left: node? = null; right: node? = null; }")
         tst.gtvResult = false
 
         chkQueryArg("node", """{"v":456,"left":{"v":123,"left":null,"right":null},"right":{"v":789,"left":null,"right":null}}""",
@@ -182,7 +185,9 @@ class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
     }
 
     @Test fun testArgRecordOp() {
-        tst.defs = listOf("record foo { x: integer; b: bar; } record bar { p: boolean; q: text; } record qaz { b: bar?; }")
+        def("record foo { x: integer; b: bar; }")
+        def("record bar { p: boolean; q: text; }")
+        def("record qaz { b: bar?; }")
 
         chkOpArg("foo", """[123,[1,"Hello"]]""", "foo[x=int[123],b=bar[p=boolean[true],q=text[Hello]]]")
         chkOpArg("foo", """{"x":123,"b":{"p":1,"q":"Hello"}}""", "gtv_err:type:array:DICT")
@@ -199,14 +204,14 @@ class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
     }
 
     @Test fun testArgRecordOpCyclic() {
-        tst.defs = listOf("record node { v: integer; left: node? = null; right: node? = null; }")
+        def("record node { v: integer; left: node? = null; right: node? = null; }")
 
         chkOpArg("node", """[456,[123,null,null],[789,null,null]]""",
                 "node[v=int[456],left=node[v=int[123],left=null,right=null],right=node[v=int[789],left=null,right=null]]")
     }
 
     @Test fun testEnum() {
-        tst.defs = listOf("enum foo { A, B, C }")
+        def("enum foo { A, B, C }")
 
         chkQueryRes("= foo.A;", "\"A\"")
         chkQueryArg("foo", "\"A\"", "\"A\"")

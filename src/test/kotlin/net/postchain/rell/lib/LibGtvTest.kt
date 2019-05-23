@@ -97,7 +97,7 @@ class LibGtvTest: BaseRellTest(false) {
     }
 
     @Test fun testToFromGtvEnum() {
-        tst.defs = listOf("enum E {A,B,C}")
+        def("enum E {A,B,C}")
 
         chk("E.A.to_gtv()", "gtv[0]")
         chk("E.B.to_gtv()", "gtv[1]")
@@ -202,17 +202,23 @@ class LibGtvTest: BaseRellTest(false) {
         chkFromGtv("[['Hello',123]]", "map<integer,text>.from_gtv(g)", "rt_err:from_gtv")
         chkFromGtv("[[123,'Hello','Bye']]", "map<integer,text>.from_gtv(g)", "rt_err:from_gtv")
         chkFromGtv("[[123,'Hello'],[123,'Bye']]", "map<integer,text>.from_gtv(g)", "rt_err:from_gtv")
+        chkFromGtv("[['Hello',123],['Bye',456]]", "map<text,integer>.from_gtv(g)",
+                "map<text,integer>[text[Hello]=int[123],text[Bye]=int[456]]")
+        chkFromGtv("[['Hello',123],['Bye',456]]", "map<text,integer>.from_gtv_pretty(g)",
+                "map<text,integer>[text[Hello]=int[123],text[Bye]=int[456]]")
+        chkFromGtv("{'Hello':123,'Bye':456}", "map<text,integer>.from_gtv(g)",
+                "map<text,integer>[text[Hello]=int[123],text[Bye]=int[456]]")
+        chkFromGtv("{'Hello':123,'Bye':456}", "map<text,integer>.from_gtv_pretty(g)",
+                "map<text,integer>[text[Hello]=int[123],text[Bye]=int[456]]")
 
         chkFromGtv("[]", "map<integer,text>.from_gtv_pretty(g)", "map<integer,text>[]")
         chkFromGtv("[[123,'Hello']]", "map<integer,text>.from_gtv_pretty(g)", "map<integer,text>[int[123]=text[Hello]]")
     }
 
     @Test fun testToGtvTuple() {
-        tst.defs = listOf(
-                "record A { t: (x: integer, y: text); }",
-                "record B { t: (x: integer, text); }",
-                "record C { t: (s: (x: boolean, y: text), k: integer); }"
-        )
+        def("record A { t: (x: integer, y: text); }")
+        def("record B { t: (x: integer, text); }")
+        def("record C { t: (s: (x: boolean, y: text), k: integer); }")
 
         chk("(123,).to_gtv()", "gtv[[123]]")
         chk("(123,'Hello').to_gtv()", """gtv[[123,"Hello"]]""")
@@ -250,7 +256,8 @@ class LibGtvTest: BaseRellTest(false) {
     }
 
     @Test fun testToFromGtvRecord() {
-        tst.defs = listOf("record rec { x: integer; y: text; }", "record no_gtv { r: range; }")
+        def("record rec { x: integer; y: text; }")
+        def("record no_gtv { r: range; }")
 
         chk("rec(123,'Hello').to_gtv()", """gtv[[123,"Hello"]]""")
         chk("no_gtv(range(10)).to_gtv()", "ct_err:fn:invalid:no_gtv:no_gtv.to_gtv")
@@ -279,8 +286,9 @@ class LibGtvTest: BaseRellTest(false) {
 
     @Test fun testToFromGtvClass() {
         tstCtx.useSql = true
-        tst.defs = listOf("class user { name; }", "object state { mutable value: integer = 0; }")
-        tst.insert("c0.user", "name", "5,'Bob'")
+        def("class user { name; }")
+        def("object state { mutable value: integer = 0; }")
+        insert("c0.user", "name", "5,'Bob'")
 
         chk("(user@{}).to_gtv()", "gtv[5]")
         chk("(user@{}).to_gtv_pretty()", "gtv[5]")

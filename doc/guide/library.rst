@@ -338,6 +338,30 @@ Special operators:
 
 --------------
 
+virtual<list<T>>
+----------------
+
+``virtual<list<T>>.from_gtv(gtv): virtual<list<T>>`` - decodes a Gtv
+
+``.empty(): boolean``
+
+``.get(integer): virtual<T>`` - returns an element, same as ``[]``
+
+``.hash(): byte_array``
+
+``.size(): integer``
+
+``.to_full(): list<T>`` - converts to the original value, fails if the value is not full
+
+``.to_text(): text`` - returns a text representation
+
+Special operators:
+
+-  ``[]`` - element read, returns ``virtual<T>`` (or just ``T`` for simple types)
+-  ``in`` - returns ``true`` if the given integer index is present in the virtual list
+
+--------------
+
 set<T>
 -------
 
@@ -385,6 +409,28 @@ Special operators:
 
 --------------
 
+virtual<set<T>>
+----------------
+
+``virtual<set<T>>.from_gtv(gtv): virtual<set<T>>`` - decodes a Gtv
+
+``.empty(): boolean``
+
+``.hash(): byte_array``
+
+``.size(): integer``
+
+``.to_full(): set<T>`` - converts to the original value, fails if the value is not full
+
+``.to_text(): text`` - returns a text representation
+
+Special operators:
+
+-  ``in`` - returns ``true`` if the given value is present in the virtual set;
+the type of the operand is ``virtual<T>>`` (or just ``T`` for simple types)
+
+--------------
+
 map<K,V>
 --------
 
@@ -421,6 +467,37 @@ Methods:
 Special operators:
 
 -  ``[]`` - get/set value by key
+-  ``in`` - returns ``true`` if a key is in the map
+
+--------------
+
+virtual<map<K,V>>
+----------------
+
+``virtual<map<K,V>>.from_gtv(gtv): virtual<map<K,V>>`` - decodes a Gtv
+
+``.contains(K): boolean`` - same as operator ``in``
+
+``.empty(): boolean``
+
+``.get(K): virtual<V>`` - same as operator ``[]``
+
+``.hash(): byte_array``
+
+``.keys(): set<K>`` - returns a copy of keys
+
+``.size(): integer``
+
+``.to_full(): map<K,V>`` - converts to the original value, fails if the value is not full
+
+``.to_text(): text`` - returns a text representation
+
+``.values(): list<virtual<V>>`` - returns a copy of values
+(if ``V`` is a simple type, returns ``list<V>``)
+
+Special operators:
+
+-  ``[]`` - get value by key, fails if not found, returns ``virtual<V>`` (or just ``V`` for simple types)
 -  ``in`` - returns ``true`` if a key is in the map
 
 --------------
@@ -512,3 +589,14 @@ Functions available for all ``record`` types:
 ``.to_gtv(): gtv`` - convert to a ``gtv``
 
 ``.to_gtv_pretty(): gtv`` - convert to a pretty ``gtv``
+
+--------------
+
+virtual<record>
+----------------
+
+``virtual<R>.from_gtv(gtv): R`` - decodes a Gtv
+
+``.hash(): byte_array``
+
+``.to_full(): R`` - converts to the original value, fails if the value is not full

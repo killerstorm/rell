@@ -81,7 +81,7 @@ class NullableTest: BaseRellTest(false) {
 
     @Test fun testNullableClass() {
         tstCtx.useSql = true
-        tst.defs = listOf("class user { name: text; }")
+        def("class user { name: text; }")
         chkOp("create user (name = 'Bob');")
 
         chkFn(": user = null;", "ct_err:entity_rettype:user:null")
@@ -611,7 +611,7 @@ class NullableTest: BaseRellTest(false) {
 
     @Test fun testSpecOpElvisUnderAt() {
         tstCtx.useSql = true
-        tst.defs = listOf("class user { name: text; }")
+        def("class user { name: text; }")
         chkOp("create user(name = 'Bob'); create user(name = 'Alice');")
 
         chkEx("{ val s: text? = _nullable('Bob'); return user @ { .name == s ?: 'Alice' }; }", "user[1]")
@@ -621,7 +621,7 @@ class NullableTest: BaseRellTest(false) {
     }
 
     @Test fun testSpecOpNotNull() {
-        tst.defs = listOf("function nop(x: integer?): integer? = x;")
+        def("function nop(x: integer?): integer? = x;")
 
         chkEx("{ val x: integer? = nop(123); return _type_of(x); }", "text[integer?]")
         chkEx("{ val x: integer? = nop(123); return _type_of(x!!); }", "text[integer]")
@@ -663,7 +663,7 @@ class NullableTest: BaseRellTest(false) {
     }
 
     @Test fun testSpecOpSafeField2() {
-        tst.defs = listOf("record rec { mutable x: integer; }")
+        def("record rec { mutable x: integer; }")
         chkEx("{ val r: rec? = _nullable(rec(123)); return r?.x; }", "int[123]")
         chkEx("{ val r: rec? = _nullable(rec(123)); return _type_of(r?.x); }", "text[integer?]")
         chkEx("{ val r: rec? = _nullable(rec(123)); r?.x = 456; return r; }", "rec[x=int[456]]")
@@ -699,7 +699,8 @@ class NullableTest: BaseRellTest(false) {
 
     @Test fun testSpecOpSafeDataField() {
         tstCtx.useSql = true
-        tst.defs = listOf("class company { name: text; }", "class user { name: text; company; }")
+        def("class company { name: text; }")
+        def("class user { name: text; company; }")
 
         chkOp("""
             val ms = create company(name = 'Microsoft');

@@ -135,11 +135,9 @@ class IncludeTest: BaseRellTest(false) {
         tst.file("a.rell", "function f(): integer = 123;")
         tst.file("b.rell", "function f(): integer = 456;")
         tst.file("c.rell", "function g(): integer = f();")
-        tst.defs = listOf(
-                "namespace a { include 'a'; include 'c'; }",
-                "namespace b { include 'b'; include 'c'; }",
-                "namespace c { function f(): integer = 789; include 'c'; }"
-        )
+        def("namespace a { include 'a'; include 'c'; }")
+        def("namespace b { include 'b'; include 'c'; }")
+        def("namespace c { function f(): integer = 789; include 'c'; }")
         chk("a.g()", "int[123]")
         chk("b.g()", "int[456]")
         chk("c.g()", "int[789]")
@@ -159,7 +157,7 @@ class IncludeTest: BaseRellTest(false) {
             function f() {}
         """.trimIndent())
 
-        tst.defs = listOf("namespace a { include 'a'; }")
+        def("namespace a { include 'a'; }")
 
         chkCompile("function x(c: a.cls){}", "OK")
         chkCompile("function x(): integer = a.state.p;", "OK")
@@ -194,7 +192,7 @@ class IncludeTest: BaseRellTest(false) {
         tst.file("a.rell", "include 'b';")
         tst.file("b.rell", "include 'c';")
         tst.file("c.rell", "function f(): integer = 123;")
-        tst.defs = listOf("include 'a';")
+        def("include 'a';")
         chk("f()", "int[123]")
     }
 

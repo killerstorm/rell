@@ -62,18 +62,18 @@ class S_LookupExpr(val opPos: S_Pos, val base: S_Expr, val expr: S_Expr): S_Expr
     }
 
     private fun compile0(opPos2: S_Pos, rBase: R_Expr, rExpr: R_Expr, baseType: R_Type): C_LookupInternal {
-        if (baseType == R_TextType) {
-            return compileText(rBase, rExpr)
-        } else if (baseType == R_ByteArrayType) {
-            return compileByteArray(rBase, rExpr)
-        } else if (baseType is R_ListType) {
-            return compileList(rBase, rExpr, baseType.elementType)
-        } else if (baseType is R_MapType) {
-            return compileMap(rBase, rExpr, baseType.keyType, baseType.valueType)
+        return when (baseType) {
+            R_TextType -> compileText(rBase, rExpr)
+            R_ByteArrayType -> compileByteArray(rBase, rExpr)
+            is R_ListType -> compileList(rBase, rExpr, baseType.elementType)
+            is R_VirtualListType -> compileVirtualList(rBase, rExpr, baseType.innerType.elementType)
+            is R_MapType -> compileMap(rBase, rExpr, baseType.keyType, baseType.valueType)
+            is R_VirtualMapType -> compileVirtualMap(rBase, rExpr, baseType.innerType.keyType, baseType.innerType.valueType)
+            else -> {
+                val typeStr = baseType.toStrictString()
+                throw C_Error(opPos2, "expr_lookup_base:$typeStr", "Operator '[]' undefined for type $typeStr")
+            }
         }
-
-        throw C_Error(opPos2, "expr_lookup_base:${baseType.toStrictString()}",
-                "Operator '[]' undefined for type ${baseType.toStrictString()}")
     }
 
     private fun compileList(rBase: R_Expr, rExpr: R_Expr, elementType: R_Type): C_LookupInternal {
@@ -82,10 +82,24 @@ class S_LookupExpr(val opPos: S_Pos, val base: S_Expr, val expr: S_Expr): S_Expr
         return C_LookupInternal(rResExpr, rResExpr)
     }
 
+    private fun compileVirtualList(rBase: R_Expr, rExpr: R_Expr, elementType: R_Type): C_LookupInternal {
+        matchKey(R_IntegerType, rExpr)
+        val virtualElementType = S_VirtualType.virtualMemberType(elementType)
+        val rResExpr = R_VirtualListLookupExpr(virtualElementType, rBase, rExpr)
+        return C_LookupInternal(rResExpr, null)
+    }
+
     private fun compileMap(rBase: R_Expr, rExpr: R_Expr, keyType: R_Type, valueType: R_Type): C_LookupInternal {
         matchKey(keyType, rExpr)
         val rResExpr = R_MapLookupExpr(valueType, rBase, rExpr)
         return C_LookupInternal(rResExpr, rResExpr)
+    }
+
+    private fun compileVirtualMap(rBase: R_Expr, rExpr: R_Expr, keyType: R_Type, valueType: R_Type): C_LookupInternal {
+        matchKey(keyType, rExpr)
+        val virtualValueType = S_VirtualType.virtualMemberType(valueType)
+        val rResExpr = R_VirtualMapLookupExpr(virtualValueType, rBase, rExpr)
+        return C_LookupInternal(rResExpr, null)
     }
 
     private fun compileText(rBase: R_Expr, rExpr: R_Expr): C_LookupInternal {
@@ -852,5 +866,12 @@ class S_RecordOrCallExpr(val base: S_Expr, val args: List<S_NameExprPair>): S_Ex
     override fun compile(ctx: C_ExprContext): C_Expr {
         val cBase = base.compile(ctx)
         return cBase.call(ctx, base.startPos, args)
+    }
+}
+
+class S_VirtualExpr(val type: S_VirtualType): S_Expr(type.pos) {
+    override fun compile(ctx: C_ExprContext): C_Expr {
+        val rType = type.compile(ctx)
+        return C_TypeExpr(type.pos, rType)
     }
 }

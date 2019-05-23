@@ -167,9 +167,9 @@ object GtvTestUtils {
         return decodeGtvArgs(params, args, false)
     }
 
-    private fun decodeGtvArgs(params: List<R_ExternalParam>, args: List<String>, human: Boolean): List<Rt_Value> {
+    private fun decodeGtvArgs(params: List<R_ExternalParam>, args: List<String>, pretty: Boolean): List<Rt_Value> {
         check(params.size == args.size)
-        val ctx = GtvToRtContext(human)
+        val ctx = GtvToRtContext(pretty)
         return args.mapIndexed { i, arg ->
             val gtv = decodeGtvStr(arg)
             params[i].type.gtvToRt(ctx, gtv)
@@ -178,7 +178,7 @@ object GtvTestUtils {
 
     fun gtvToStr(gtv: Gtv): String {
         val s = encodeGtvStr(gtv)
-        return s.replace('"', '\'')
+        return s.replace('"', '\'').replace("\\u003c", "<").replace("\\u003e", ">").replace("\\u003d", "=")
     }
 
     fun strToGtv(s: String): Gtv {

@@ -58,13 +58,13 @@ class LibListTest: BaseRellTest(false) {
     @Test fun testSubscriptGet() {
         chk("list([1, 2, 3, 4, 5])[0]", "int[1]")
         chk("list([1, 2, 3, 4, 5])[4]", "int[5]")
-        chk("list([1, 2, 3, 4, 5])[-1]", "rt_err:expr_list_lookup_index:5:-1")
-        chk("list([1, 2, 3, 4, 5])[5]", "rt_err:expr_list_lookup_index:5:5")
+        chk("list([1, 2, 3, 4, 5])[-1]", "rt_err:list:index:5:-1")
+        chk("list([1, 2, 3, 4, 5])[5]", "rt_err:list:index:5:5")
 
         chk("[1, 2, 3, 4, 5][0]", "int[1]")
         chk("[1, 2, 3, 4, 5][4]", "int[5]")
-        chk("[1, 2, 3, 4, 5][-1]", "rt_err:expr_list_lookup_index:5:-1")
-        chk("[1, 2, 3, 4, 5][5]", "rt_err:expr_list_lookup_index:5:5")
+        chk("[1, 2, 3, 4, 5][-1]", "rt_err:list:index:5:-1")
+        chk("[1, 2, 3, 4, 5][5]", "rt_err:list:index:5:5")
 
         chkEx("{ val x: list<integer>? = if (1>0) [1,2,3] else null; return x[1]; }", "ct_err:expr_lookup_null")
         chkEx("{ val x: list<integer>? = if (1>0) [1,2,3] else null; return x!![1]; }", "int[2]")
@@ -231,8 +231,8 @@ class LibListTest: BaseRellTest(false) {
         chkEx("{ $init x[0] = 5; return x; }", "[5, 2, 3]")
         chkEx("{ $init x[1] = 5; return x; }", "[1, 5, 3]")
         chkEx("{ $init x[2] = 5; return x; }", "[1, 2, 5]")
-        chkEx("{ $init x[-1] = 5; return x; }", "rt_err:expr_list_lookup_index:3:-1")
-        chkEx("{ $init x[3] = 5; return x; }", "rt_err:expr_list_lookup_index:3:3")
+        chkEx("{ $init x[-1] = 5; return x; }", "rt_err:list:index:3:-1")
+        chkEx("{ $init x[3] = 5; return x; }", "rt_err:list:index:3:3")
 
         chkEx("{ val x: list<integer>? = if (1>0) [1,2,3] else null; x[1] = 5; return x; }", "ct_err:expr_lookup_null")
         chkEx("{ val x: list<integer>? = if (1>0) [1,2,3] else null; x!![1] = 5; return x; }", "[1, 5, 3]")
@@ -245,7 +245,7 @@ class LibListTest: BaseRellTest(false) {
 
     @Test fun testSort() {
         tst.strictToString = false
-        tst.defs = listOf("record rec { x: integer; }")
+        def("record rec { x: integer; }")
 
         chkEx("{ val l = [ 5, 4, 3, 2, 1 ]; l._sort(); return l; }", "[1, 2, 3, 4, 5]")
         chkEx("{ val l = [ 5, 4, 3, 2, 1 ]; return l._sort(); }", "ct_err:stmt_return_unit")

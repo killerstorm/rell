@@ -5,7 +5,7 @@ import org.junit.Test
 
 class NamespaceTest: BaseRellTest() {
     @Test fun testSimple() {
-        tst.defs = listOf("namespace foo { function bar(): integer = 123; }")
+        def("namespace foo { function bar(): integer = 123; }")
         chk("foo.bar()", "int[123]")
         chk("foo.bar", "ct_err:expr_novalue:function")
         chk("bar()", "ct_err:unknown_name:bar")
@@ -14,7 +14,7 @@ class NamespaceTest: BaseRellTest() {
     }
 
     @Test fun testNestedNamespace() {
-        tst.defs = listOf("namespace foo { namespace bar { function f(): integer = 123; } }")
+        def("namespace foo { namespace bar { function f(): integer = 123; } }")
         chk("foo.bar.f()", "int[123]")
         chk("f()", "ct_err:unknown_name:f")
         chk("foo.f()", "ct_err:unknown_name:foo.f")
@@ -23,7 +23,7 @@ class NamespaceTest: BaseRellTest() {
     }
 
     @Test fun testNameResolution() {
-        tst.defs = listOf("""
+        def("""
             namespace foo {
                 function f(): integer = 123;
                 function g(): integer = f();
@@ -44,7 +44,7 @@ class NamespaceTest: BaseRellTest() {
     }
 
     @Test fun testNameResolution2() {
-        tst.defs = listOf("""
+        def("""
             function f(): integer = 123;
             namespace foo {
                 function f(): integer = 456;
@@ -70,18 +70,16 @@ class NamespaceTest: BaseRellTest() {
     }
 
     @Test fun testForwardReference() {
-        tst.defs = listOf(
-                "function g(): integer = foo.f();",
-                "object bar { x: integer = foo.f(); }",
-                "namespace foo { function f(): integer = 123; }"
-        )
+        def("function g(): integer = foo.f();")
+        def("object bar { x: integer = foo.f(); }")
+        def("namespace foo { function f(): integer = 123; }")
         chk("g()", "int[123]")
         chk("bar.x", "int[123]")
     }
 
     @Test fun testClasses() {
-        tst.defs = listOf("namespace foo { class bar { x: integer; } }")
-        tst.insert("c0.foo.bar", "x", "0,123")
+        def("namespace foo { class bar { x: integer; } }")
+        insert("c0.foo.bar", "x", "0,123")
         chk("foo.bar @ {} ( foo.bar )", "ct_err:expr_novalue:type")
         chk("foo.bar @ {} ( bar )", "foo.bar[0]")
         chk("foo.bar @ {} ( foo )", "ct_err:expr_novalue:namespace")
@@ -89,13 +87,11 @@ class NamespaceTest: BaseRellTest() {
     }
 
     @Test fun testTableNameConflict() {
-        tst.defs = listOf(
-                "class user { x: integer; }",
-                "namespace foo { class user { y: integer; } }",
-                "namespace bar { object user { z: integer = 789; } }"
-        )
-        tst.insert("c0.user", "x", "0,123")
-        tst.insert("c0.foo.user", "y", "1,456")
+        def("class user { x: integer; }")
+        def("namespace foo { class user { y: integer; } }")
+        def("namespace bar { object user { z: integer = 789; } }")
+        insert("c0.user", "x", "0,123")
+        insert("c0.foo.user", "y", "1,456")
 
         chk("user @ {} ( user, =.x )", "(user[0],int[123])")
         chk("foo.user @ {} ( user, =.y )", "(foo.user[1],int[456])")
@@ -103,7 +99,7 @@ class NamespaceTest: BaseRellTest() {
     }
 
     @Test fun testAllowedDefs() {
-        tst.defs = listOf("""
+        def("""
             namespace foo {
                 function f(): integer = 123;
                 class user { x: integer; }
@@ -115,7 +111,7 @@ class NamespaceTest: BaseRellTest() {
                 query q() = 123;
             }
         """.trimIndent())
-        tst.insert("c0.foo.user", "x", "0,123")
+        insert("c0.foo.user", "x", "0,123")
 
         chk("foo.f()", "int[123]")
         chk("foo.user @ {} ( .x )", "int[123]")
@@ -143,7 +139,7 @@ class NamespaceTest: BaseRellTest() {
     }
 
     @Test fun testNamespacedTypes() {
-        tst.defs = listOf("""
+        def("""
             namespace foo {
                 namespace bar {
                     class c { name; }
@@ -152,7 +148,7 @@ class NamespaceTest: BaseRellTest() {
                 }
             }
         """.trimIndent())
-        tst.insert("c0.foo.bar.c", "name", "0,'Bob'")
+        insert("c0.foo.bar.c", "name", "0,'Bob'")
 
         chkEx("{ val x: foo.bar.c = foo.bar.c @ {}; return x; }", "foo.bar.c[0]")
         chkEx("{ val x: foo.bar.r = foo.bar.r(123); return x; }", "foo.bar.r[x=int[123]]")

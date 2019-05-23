@@ -5,18 +5,19 @@ import org.junit.Test
 
 class ObjectTest: BaseRellTest() {
     @Test fun testInitialization() {
-        tst.defs = listOf("object foo { n: integer = 123; s: text = 'Hello'; }")
+        def("object foo { n: integer = 123; s: text = 'Hello'; }")
         chkData("foo(0,123,Hello)")
     }
 
     @Test fun testRead() {
-        tst.defs = listOf("object foo { n: integer = 123; s: text = 'Hello'; }")
+        def("object foo { n: integer = 123; s: text = 'Hello'; }")
         chk("foo.n", "int[123]")
         chk("foo.s", "text[Hello]")
     }
 
     @Test fun testReadUnderAt() {
-        tst.defs = listOf("object foo { n: integer = 123; s: text = 'Hello'; }", "class user {name;}")
+        def("object foo { n: integer = 123; s: text = 'Hello'; }")
+        def("class user {name;}")
         chkOp("create user('Bob');")
         chk("user @{} ( foo.n )", "int[123]")
         chk("user @{} ( foo.s )", "text[Hello]")
@@ -27,7 +28,7 @@ class ObjectTest: BaseRellTest() {
         chkCompile("object foo { x: integer = 123; s: text; }", "ct_err:object_attr_novalue:foo:s")
         chkCompile("object foo { n = 123; }", "ct_err:unknown_name_type:n")
 
-        tst.defs = listOf("object foo{}")
+        def("object foo{}")
         chk("'' + foo", "text[foo]")
     }
 
@@ -45,7 +46,7 @@ class ObjectTest: BaseRellTest() {
     }
 
     @Test fun testUseAsType() {
-        tst.defs = listOf("object foo { x: integer = 123; }")
+        def("object foo { x: integer = 123; }")
         chkCompile("function g(f: foo){}", "ct_err:unknown_type:foo")
         chkCompile("function g(): foo {}", "ct_err:unknown_type:foo")
         chkCompile("function g() { var f: foo; }", "ct_err:unknown_type:foo")
@@ -58,24 +59,22 @@ class ObjectTest: BaseRellTest() {
     }
 
     @Test fun testCreateDelete() {
-        tst.defs = listOf("object foo { x: integer = 123; }")
+        def("object foo { x: integer = 123; }")
         chkOp("create foo(x=123);", "ct_err:unknown_class:foo")
         chkOp("delete foo @* {};", "ct_err:unknown_class:foo")
         chkOp("delete foo;", "ct_err:stmt_delete_obj:foo")
     }
 
     @Test fun testComplexExpressions() {
-        tst.defs = listOf(
-                "object foo { p: integer = sq(5); }",
-                "object bar { q: integer = sq(foo.p); }",
-                "function sq(x: integer): integer = x * x;"
-        )
+        def("object foo { p: integer = sq(5); }")
+        def("object bar { q: integer = sq(foo.p); }")
+        def("function sq(x: integer): integer = x * x;")
         chk("foo.p", "int[25]")
         chk("bar.q", "int[625]")
     }
 
     @Test fun testObjectValue() {
-        tst.defs = listOf("object foo { x: integer = 123; }")
+        def("object foo { x: integer = 123; }")
 
         chk("'' + foo", "text[foo]")
         chk("_type_of(foo)", "text[foo]")
@@ -98,18 +97,16 @@ class ObjectTest: BaseRellTest() {
     }
 
     @Test fun testGtv() {
-        tst.defs = listOf("object foo { x: integer = 123; }")
+        def("object foo { x: integer = 123; }")
         tst.gtv = true
         chk("foo", "ct_err:result_nogtv:q:foo")
         chkQueryEx("query q() { return foo; }", "ct_err:result_nogtv:q:foo")
     }
 
     @Test fun testForwardReference() {
-        tst.defs = listOf(
-                "function f(): integer = foo.x;",
-                "query q() = foo.x;",
-                "object foo { x: integer = 123; }"
-        )
+        def("function f(): integer = foo.x;")
+        def("query q() = foo.x;")
+        def("object foo { x: integer = 123; }")
         chkQueryEx("", "int[123]")
         chkFnEx("", "int[123]")
     }
@@ -121,17 +118,15 @@ class ObjectTest: BaseRellTest() {
     }
 
     @Test fun testForwardReferenceRt() {
-        tst.defs = listOf(
-                "object foo { x: integer = g(); }",
-                "object bar { y: integer = 123; }",
-                "function g(): integer = bar.y;"
-        )
+        def("object foo { x: integer = g(); }")
+        def("object bar { y: integer = 123; }")
+        def("function g(): integer = bar.y;")
         tst.autoInitObjects = false
         tst.chkInitObjects("rt_err:obj_norec:bar")
     }
 
     @Test fun testUpdate() {
-        tst.defs = listOf("object foo { mutable x: integer = 123; mutable s: text = 'Hello'; c: integer = 999; }")
+        def("object foo { mutable x: integer = 123; mutable s: text = 'Hello'; c: integer = 999; }")
 
         chkData("foo(0,123,Hello,999)")
         chk("(foo.x,foo.s,foo.c)", "(int[123],text[Hello],int[999])")
@@ -160,7 +155,7 @@ class ObjectTest: BaseRellTest() {
     }
 
     @Test fun testUpdateMemory() {
-        tst.defs = listOf("object foo { mutable x: integer = 123; }")
+        def("object foo { mutable x: integer = 123; }")
 
         chkData("foo(0,123)")
 
@@ -176,26 +171,25 @@ class ObjectTest: BaseRellTest() {
     }
 
     @Test fun testInitSideEffects() {
-        tst.defs = listOf(
-                "class journal { n: integer; s: text; }",
-                "object a { x: integer = f('a', 123); }",
-                "object b { x: integer = f('b', 456); }",
-                "object c { x: integer = f('c', 789); }",
-                """
-                    function f(s: text, v: integer): integer {
-                        val n = (journal @* {}).size();
-                        create journal ( n, s );
-                        return v;
-                    }
-                """.trimIndent()
-        )
+        def("class journal { n: integer; s: text; }")
+        def("object a { x: integer = f('a', 123); }")
+        def("object b { x: integer = f('b', 456); }")
+        def("object c { x: integer = f('c', 789); }")
+        def("""
+            function f(s: text, v: integer): integer {
+                val n = (journal @* {}).size();
+                create journal ( n, s );
+                return v;
+            }
+        """.trimIndent())
 
         chkData("journal(1,0,a)", "journal(2,1,b)", "journal(3,2,c)", "a(0,123)", "b(0,456)", "c(0,789)")
     }
 
     @Test fun testNameResolution() {
-        tst.defs = listOf("object foo { x: integer = 123; }", "class user { name; }")
-        tst.insert("c0.user", "name", "1,'Bob'")
+        def("object foo { x: integer = 123; }")
+        def("class user { name; }")
+        insert("c0.user", "name", "1,'Bob'")
 
         // Object vs. local: error.
         chkEx("{ val foo = (s = 'Hello'); return foo.s; }", "text[Hello]")
@@ -208,17 +202,17 @@ class ObjectTest: BaseRellTest() {
     }
 
     @Test fun testMultipleRecords() {
-        tst.defs = listOf("object foo { x: integer = 123; }")
-        tst.insert("c0.foo", "x", "1,123")
-        tst.insert("c0.foo", "x", "2,456")
-        tst.insert("c0.foo", "x", "3,789")
+        def("object foo { x: integer = 123; }")
+        insert("c0.foo", "x", "1,123")
+        insert("c0.foo", "x", "2,456")
+        insert("c0.foo", "x", "3,789")
         tst.autoInitObjects = false
 
         chk("foo.x", "rt_err:obj_multirec:foo:3")
     }
 
     @Test fun testUpdateShortSyntax() {
-        tst.defs = listOf("object foo { mutable x: integer = 100; y: integer = 250; }")
+        def("object foo { mutable x: integer = 100; y: integer = 250; }")
         chkData("foo(0,100,250)")
 
         chkOp("foo.x = 50;")

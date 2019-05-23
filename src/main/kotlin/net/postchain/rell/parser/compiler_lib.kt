@@ -40,6 +40,7 @@ object C_LibFunctions {
             .add("_type_of", C_SysFunction_TypeOf)
             .add("_nullable", C_SysFunction_Nullable(null))
             .add("_nullable_int", C_SysFunction_Nullable(R_IntegerType))
+            .add("_nop", C_SysFunction_Nop)
             .addEx("_strict_str", R_TextType, listOf(C_ArgTypeMatcher_Any), R_SysFn_StrictStr)
 
             .build()
@@ -215,12 +216,17 @@ object C_LibFunctions {
             R_JsonType -> JSON_FNS
             R_GtvType -> GTV_FNS
             is R_ListType -> getListFns(type)
+            is R_VirtualListType -> getVirtualListFns(type)
+            is R_VirtualSetType -> getVirtualSetFns(type)
             is R_SetType -> getSetFns(type)
             is R_MapType -> getMapFns(type)
+            is R_VirtualMapType -> getVirtualMapFns(type)
             is R_ClassType -> getClassFns(type)
             is R_EnumType -> getEnumFns(type)
             is R_TupleType -> getTupleFns(type)
+            is R_VirtualTupleType -> getVirtualTupleFns(type)
             is R_RecordType -> getRecordFns(type)
+            is R_VirtualRecordType -> getVirtualRecordFns(type)
             else -> C_MemberFuncTable(mapOf())
         }
     }
@@ -237,6 +243,12 @@ object C_LibFunctions {
 
     private fun getTupleFns(type: R_TupleType): C_MemberFuncTable {
         return typeMemFuncBuilder(type)
+                .build()
+    }
+
+    private fun getVirtualTupleFns(type: R_VirtualTupleType): C_MemberFuncTable {
+        return typeMemFuncBuilder(type)
+                .add("to_full", type.innerType, listOf(), R_SysFn_Virtual_ToFull)
                 .build()
     }
 
@@ -276,6 +288,28 @@ object C_LibFunctions {
                 .addEx("add_all", R_BooleanType, listOf(matcher(R_IntegerType), matcherColSub(elemType)), R_SysFn_List_AddAll)
                 .addIf(comparator != null, "_sort", R_UnitType, listOf(), R_SysFn_List_Sort(comparator2))
                 .addIf(comparator != null, "sorted", listType, listOf(), R_SysFn_Collection_Sorted(listType, comparator2))
+                .build()
+    }
+
+    private fun getVirtualListFns(type: R_VirtualListType): C_MemberFuncTable {
+        val elemType = type.innerType.elementType
+        return typeMemFuncBuilder(type)
+                .add("str", R_TextType, listOf(), R_SysFn_ToString)
+                .add("to_text", R_TextType, listOf(), R_SysFn_ToString)
+                .add("empty", R_BooleanType, listOf(), R_SysFn_VirtualCollection_Empty)
+                .add("size", R_IntegerType, listOf(), R_SysFn_VirtualCollection_Size)
+                .add("get", elemType, listOf(R_IntegerType), R_SysFn_VirtualList_Get)
+                .add("to_full", type.innerType, listOf(), R_SysFn_Virtual_ToFull)
+                .build()
+    }
+
+    private fun getVirtualSetFns(type: R_VirtualSetType): C_MemberFuncTable {
+        return typeMemFuncBuilder(type)
+                .add("str", R_TextType, listOf(), R_SysFn_ToString)
+                .add("to_text", R_TextType, listOf(), R_SysFn_ToString)
+                .add("empty", R_BooleanType, listOf(), R_SysFn_VirtualCollection_Empty)
+                .add("size", R_IntegerType, listOf(), R_SysFn_VirtualCollection_Size)
+                .add("to_full", type.innerType, listOf(), R_SysFn_Virtual_ToFull)
                 .build()
     }
 
@@ -320,21 +354,40 @@ object C_LibFunctions {
                 .add("len", R_IntegerType, listOf(), R_SysFn_Map_Size, C_Deprecated_UseInstead("size"))
                 .add("get", valueType, listOf(keyType), R_SysFn_Map_Get)
                 .add("contains", R_BooleanType, listOf(keyType), R_SysFn_Map_Contains)
-                .add("clear", R_UnitType, listOf(), R_SysFn_Map_Clear)
-                .add("put", R_UnitType, listOf(keyType, valueType), R_SysFn_Map_Put)
-                .addEx("putAll", R_UnitType, listOf(matcherMapSub(keyType, valueType)), R_SysFn_Map_PutAll,
+                .add("clear", R_UnitType, listOf(), R_SysFn_MutableMap_Clear)
+                .add("put", R_UnitType, listOf(keyType, valueType), R_SysFn_MutableMap_Put)
+                .addEx("putAll", R_UnitType, listOf(matcherMapSub(keyType, valueType)), R_SysFn_MutableMap_PutAll,
                         C_Deprecated_UseInstead("put_all"))
-                .addEx("put_all", R_UnitType, listOf(matcherMapSub(keyType, valueType)), R_SysFn_Map_PutAll)
-                .add("remove", valueType, listOf(keyType), R_SysFn_Map_Remove)
+                .addEx("put_all", R_UnitType, listOf(matcherMapSub(keyType, valueType)), R_SysFn_MutableMap_PutAll)
+                .add("remove", valueType, listOf(keyType), R_SysFn_MutableMap_Remove)
                 .add("keys", keySetType, listOf(), R_SysFn_Map_Keys(keySetType))
                 .add("values", valueListType, listOf(), R_SysFn_Map_Values(valueListType))
                 .build()
     }
 
+    private fun getVirtualMapFns(type: R_VirtualMapType): C_MemberFuncTable {
+        val mapType = type.innerType
+        val keyType = mapType.keyType
+        val valueType = mapType.valueType
+        val keySetType = R_SetType(keyType)
+        val valueListType = R_ListType(S_VirtualType.virtualMemberType(valueType))
+        return typeMemFuncBuilder(type)
+                .add("str", R_TextType, listOf(), R_SysFn_ToString)
+                .add("to_text", R_TextType, listOf(), R_SysFn_ToString)
+                .add("empty", R_BooleanType, listOf(), R_SysFn_Map_Empty)
+                .add("size", R_IntegerType, listOf(), R_SysFn_Map_Size)
+                .add("get", valueType, listOf(keyType), R_SysFn_Map_Get)
+                .add("contains", R_BooleanType, listOf(keyType), R_SysFn_Map_Contains)
+                .add("keys", keySetType, listOf(), R_SysFn_Map_Keys(keySetType))
+                .add("values", valueListType, listOf(), R_SysFn_Map_Values(valueListType))
+                .add("to_full", mapType, listOf(), R_SysFn_Virtual_ToFull)
+                .build()
+    }
+
     fun makeRecordNamespace(type: R_RecordType): C_NamespaceDef {
-        val mFromBytes = gtvGlobalFn(type, false, R_SysFn_Record_FromBytes(type))
-        val mFromGtv = gtvGlobalFn(type, false, R_SysFn_Record_FromGtv(type, false))
-        val mFromGtvPretty = gtvGlobalFn(type, true, R_SysFn_Record_FromGtv(type, true))
+        val mFromBytes = globalFnFromGtv(type, R_SysFn_Record_FromBytes(type))
+        val mFromGtv = globalFnFromGtv(type, R_SysFn_Record_FromGtv(type, false))
+        val mFromGtvPretty = globalFnFromGtv(type, R_SysFn_Record_FromGtv(type, true))
 
         val fns = C_GlobalFuncBuilder()
                 .add("fromBytes", listOf(R_ByteArrayType), mFromBytes, C_Deprecated_UseInstead("from_bytes"))
@@ -349,43 +402,38 @@ object C_LibFunctions {
         return C_NamespaceDef(ns)
     }
 
-    private fun gtvGlobalFn(type: R_Type, human: Boolean, fn: R_SysFunction): C_GlobalFuncCaseMatch {
+    private fun globalFnFromGtv(type: R_Type, fn: R_SysFunction): C_GlobalFuncCaseMatch {
         val flags = type.completeFlags()
-        val flag = if (human) flags.gtvHuman else flags.gtvCompact
-        return if (!flag.compatible) C_SysFunction_Invalid(type) else C_StdGlobalFuncCaseMatch(type, fn)
+        return if (!flags.gtv.fromGtv) C_SysFunction_Invalid(type) else C_StdGlobalFuncCaseMatch(type, fn)
     }
 
     private fun getRecordFns(type: R_RecordType): C_MemberFuncTable {
-        val mToBytes = gtvMemFn(type, false, R_ByteArrayType, R_SysFn_Record_ToBytes(type))
-        val mToGtv = gtvMemFn(type, false, R_GtvType, R_SysFn_Record_ToGtv(type, false))
-        val mToGtvPretty = gtvMemFn(type, true, R_GtvType, R_SysFn_Record_ToGtv(type, true))
-        val mHash = gtvMemFn(type, false, R_ByteArrayType, R_SysFn_Any_Hash(type))
+        val mToBytes = memFnToGtv(type, R_ByteArrayType, R_SysFn_Record_ToBytes(type))
+        val mToGtv = memFnToGtv(type, R_GtvType, R_SysFn_Record_ToGtv(type, false))
+        val mToGtvPretty = memFnToGtv(type, R_GtvType, R_SysFn_Record_ToGtv(type, true))
 
-        return C_MemberFuncBuilder()
+        return typeMemFuncBuilder(type)
                 .add("toBytes", listOf(), mToBytes, C_Deprecated_UseInstead("to_bytes"))
                 .add("to_bytes", listOf(), mToBytes)
                 .add("toGTXValue", listOf(), mToGtv, C_Deprecated_UseInstead("to_gtv"))
-                .add("to_gtv", listOf(), mToGtv)
                 .add("toPrettyGTXValue", listOf(), mToGtvPretty, C_Deprecated_UseInstead("to_gtv_pretty"))
-                .add("to_gtv_pretty", listOf(), mToGtvPretty)
-                .add("hash", listOf(), mHash)
                 .build()
     }
 
-    private fun gtvMemFn(
-            type: R_Type,
-            human: Boolean,
-            resType: R_Type,
-            fn: R_SysFunction
-    ): C_MemberFuncCaseMatch {
+    private fun getVirtualRecordFns(type: R_VirtualRecordType): C_MemberFuncTable {
+        return typeMemFuncBuilder(type)
+                .add("to_full", type.innerType, listOf(), R_SysFn_Virtual_ToFull)
+                .build()
+    }
+
+    private fun memFnToGtv(type: R_Type, resType: R_Type, fn: R_SysFunction): C_MemberFuncCaseMatch {
         val flags = type.completeFlags()
-        val flag = if (human) flags.gtvHuman else flags.gtvCompact
-        return if (!flag.compatible) C_SysMemberFunction_Invalid(type) else C_StdMemberFuncCaseMatch(resType, fn)
+        return if (!flags.gtv.toGtv) C_SysMemberFunction_Invalid(type) else C_StdMemberFuncCaseMatch(resType, fn)
     }
 
     fun getTypeStaticFunction(type: R_Type, name: String): C_GlobalFunction? {
         val b = typeGlobalFuncBuilder(type)
-        when(type) {
+        when (type) {
             is R_EnumType -> getEnumStaticFns(b, type)
         }
         val fns = b.build()
@@ -401,16 +449,28 @@ object C_LibFunctions {
 
     private fun typeGlobalFuncBuilder(type: R_Type): C_GlobalFuncBuilder {
         val b = C_GlobalFuncBuilder()
-        b.add("from_gtv", listOf(R_GtvType), gtvGlobalFn(type, false, R_SysFn_Any_FromGtv(type, false, "from_gtv")))
-        b.add("from_gtv_pretty", listOf(R_GtvType), gtvGlobalFn(type, true, R_SysFn_Any_FromGtv(type, true, "from_gtv_pretty")))
+
+        b.add("from_gtv", listOf(R_GtvType), globalFnFromGtv(type, R_SysFn_Any_FromGtv(type, false, "from_gtv")))
+
+        if (type !is R_VirtualType) {
+            val name = "from_gtv_pretty"
+            b.add(name, listOf(R_GtvType), globalFnFromGtv(type, R_SysFn_Any_FromGtv(type, true, name)))
+        }
+
         return b
     }
 
     private fun typeMemFuncBuilder(type: R_Type): C_MemberFuncBuilder {
         val b = C_MemberFuncBuilder()
-        b.add("hash", listOf(), gtvMemFn(type, false, R_ByteArrayType, R_SysFn_Any_Hash(type)))
-        b.add("to_gtv", listOf(), gtvMemFn(type, false, R_GtvType, R_SysFn_Any_ToGtv(type, false, "to_gtv")))
-        b.add("to_gtv_pretty", listOf(), gtvMemFn(type, true, R_GtvType, R_SysFn_Any_ToGtv(type, true, "to_gtv_pretty")))
+
+        if (type is R_VirtualType) {
+            b.add("hash", R_ByteArrayType, listOf(), R_SysFn_Virtual_Hash)
+        } else {
+            b.add("hash", listOf(), memFnToGtv(type, R_ByteArrayType, R_SysFn_Any_Hash(type)))
+        }
+
+        b.add("to_gtv", listOf(), memFnToGtv(type, R_GtvType, R_SysFn_Any_ToGtv(type, false, "to_gtv")))
+        b.add("to_gtv_pretty", listOf(), memFnToGtv(type, R_GtvType, R_SysFn_Any_ToGtv(type, true, "to_gtv_pretty")))
         return b
     }
 }
@@ -512,6 +572,21 @@ private class C_SysFunction_Nullable(private val baseType: R_Type?): C_SimpleGlo
                 val type = R_NullableType(baseType ?: arg.type)
                 return R_SysCallExpr(type, R_SysFn_Nop, args)
             }
+        }
+    }
+}
+
+private object C_SysFunction_Nop: C_SimpleGlobalFuncCase() {
+    override fun matchTypes(args: List<R_Type>): C_GlobalFuncCaseMatch? {
+        if (args.size != 1) return null
+        return CaseMatch()
+    }
+
+    private class CaseMatch: C_SimpleGlobalFuncCaseMatch() {
+        override fun compileCallExpr(name: S_Name, args: List<R_Expr>): R_Expr {
+            check(args.size == 1)
+            val arg = args[0]
+            return R_SysCallExpr(arg.type, R_SysFn_Nop, args)
         }
     }
 }

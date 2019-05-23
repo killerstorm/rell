@@ -18,7 +18,7 @@ class LogAnnotationTest: BaseRellTest() {
     }
 
     @Test fun testSysAttributes() {
-        tst.defs = listOf("class foo(log) { x: integer; }")
+        def("class foo(log) { x: integer; }")
         tst.inserts = LibBlockTransactionTest.BLOCK_INSERTS
         tst.chainId = 333
         tst.opContext = Rt_OpContext(-1, 444, listOf())
@@ -47,7 +47,7 @@ class LogAnnotationTest: BaseRellTest() {
     }
 
     @Test fun testSysAttributesModify() {
-        tst.defs = listOf("class foo(log) { x: integer; }")
+        def("class foo(log) { x: integer; }")
         tst.inserts = LibBlockTransactionTest.BLOCK_INSERTS
         tst.chainId = 333
         tst.opContext = Rt_OpContext(-1, 444, listOf())
@@ -62,7 +62,8 @@ class LogAnnotationTest: BaseRellTest() {
     }
 
     @Test fun testDelete() {
-        tst.defs = listOf("class foo(log) { x: integer; } class bar { x: integer; }")
+        def("class foo(log) { x: integer; }")
+        def("class bar { x: integer; }")
         chkOp("delete foo @* {};", "ct_err:stmt_delete_cant:foo")
         chkOp("delete bar @* {};")
     }

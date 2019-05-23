@@ -76,7 +76,7 @@ class S_SimpleVarDeclarator(val name: S_Name, val type: S_Type?): S_VarDeclarato
 
         varFacts.putFacts(facts)
 
-        return R_SimpleVarDeclarator(ptr)
+        return R_SimpleVarDeclarator(ptr, rVarType)
     }
 
     override fun discoverVars(vars: MutableSet<String>) {
@@ -445,16 +445,30 @@ class S_ForStatement(pos: S_Pos, val declarator: S_VarDeclarator, val expr: S_Ex
     }
 
     private fun compileForIterator(exprType: R_Type): Pair<R_Type, R_ForIterator> {
-        if (exprType is R_CollectionType) {
-            return Pair(exprType.elementType, R_ForIterator_Collection)
-        } else if (exprType is R_MapType) {
-            val itemType = R_TupleType(listOf(R_TupleField(null, exprType.keyType), R_TupleField(null, exprType.valueType)))
-            return Pair(itemType, R_ForIterator_Map(itemType))
-        } else if (exprType == R_RangeType) {
-            return Pair(R_IntegerType, R_ForIterator_Range)
-        } else {
-            throw C_Error(expr.startPos, "stmt_for_expr_type:${exprType.toStrictString()}",
-                    "Wrong type of for-expression: ${exprType.toStrictString()}")
+        return when (exprType) {
+            is R_CollectionType -> Pair(exprType.elementType, R_ForIterator_Collection)
+            is R_VirtualCollectionType -> Pair(
+                    S_VirtualType.virtualMemberType(exprType.elementType()),
+                    R_ForIterator_VirtualCollection
+            )
+            is R_MapType -> {
+                val keyField = R_TupleField(null, exprType.keyType)
+                val valueField = R_TupleField(null, exprType.valueType)
+                val itemType = R_TupleType(listOf(keyField, valueField))
+                return Pair(itemType, R_ForIterator_Map(itemType))
+            }
+            is R_VirtualMapType -> {
+                val mapType = exprType.innerType
+                val keyField = R_TupleField(null, S_VirtualType.virtualMemberType(mapType.keyType))
+                val valueField = R_TupleField(null, S_VirtualType.virtualMemberType(mapType.valueType))
+                val itemType = R_TupleType(listOf(keyField, valueField))
+                return Pair(itemType, R_ForIterator_Map(itemType))
+            }
+            is R_RangeType -> Pair(R_IntegerType, R_ForIterator_Range)
+            else -> {
+                throw C_Error(expr.startPos, "stmt_for_expr_type:${exprType.toStrictString()}",
+                        "Wrong type of for-expression: ${exprType.toStrictString()}")
+            }
         }
     }
 

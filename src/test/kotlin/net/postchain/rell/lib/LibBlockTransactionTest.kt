@@ -104,7 +104,7 @@ class LibBlockTransactionTest: BaseRellTest() {
     }
 
     @Test fun testBlockRef() {
-        tst.defs = listOf("class foo { x: integer; block; }")
+        def("class foo { x: integer; block; }")
         tst.inserts = BLOCK_INSERTS
         tst.chainId = 333
 
@@ -123,7 +123,7 @@ class LibBlockTransactionTest: BaseRellTest() {
     }
 
     @Test fun testTransactionRef() {
-        tst.defs = listOf("class foo { x: integer; trans: transaction; }")
+        def("class foo { x: integer; trans: transaction; }")
         tst.inserts = BLOCK_INSERTS
         tst.chainId = 333
 
@@ -142,9 +142,9 @@ class LibBlockTransactionTest: BaseRellTest() {
     }
 
     @Test fun testBlockRefChainId() {
-        tst.defs = listOf("class foo { x: integer; b: block; t: transaction; }")
+        def("class foo { x: integer; b: block; t: transaction; }")
         tst.inserts = BLOCK_INSERTS
-        tst.insert("c0.foo", "x,b,t", "1,123,111,444")
+        insert("c0.foo", "x,b,t", "1,123,111,444")
         tst.chainId = 0
 
         val base = "val f = foo@{}"
@@ -255,7 +255,7 @@ class LibBlockTransactionTest: BaseRellTest() {
     }
 
     @Test fun textGtv() {
-        tst.defs = listOf("record r { t: transaction; }")
+        def("record r { t: transaction; }")
         tst.chainId = 333
         tst.inserts = BLOCK_INSERTS
         chk("transaction @ {}", "transaction[444]")
@@ -266,7 +266,7 @@ class LibBlockTransactionTest: BaseRellTest() {
 
     private fun createChainIdTester(chainId: Long, blockIid: Long, txIid: Long): RellCodeTester {
         val t = RellCodeTester(tstCtx)
-        t.defs = listOf("class foo { b: block; t: transaction; mutable value: integer; }")
+        t.def("class foo { b: block; t: transaction; mutable value: integer; }")
         t.insert("c${chainId}.foo", "b,t,value", "1,$blockIid,$txIid,0")
         t.strictToString = false
         t.dropTables = false

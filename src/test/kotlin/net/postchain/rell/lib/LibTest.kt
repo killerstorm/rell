@@ -74,7 +74,7 @@ class LibTest: BaseRellTest(false) {
 
     @Test fun testTypeOf() {
         tst.strictToString = false
-        tst.defs = listOf("class user { name: text; }")
+        def("class user { name: text; }")
 
         chk("_type_of(null)", "null")
         chk("_type_of(true)", "boolean")
@@ -128,11 +128,9 @@ class LibTest: BaseRellTest(false) {
     }
 
     @Test fun testRecord() {
-        tst.defs = listOf(
-                "record foo { a: integer; b: text; }",
-                "record bar { a: (x: integer, text); }",
-                "record qaz { m: map<integer,text>; }"
-        )
+        def("record foo { a: integer; b: text; }")
+        def("record bar { a: (x: integer, text); }")
+        def("record qaz { m: map<integer,text>; }")
 
         chk("foo(123,'Hello').to_gtv()", """gtv[[123,"Hello"]]""")
         chk("foo(123,'Hello').to_gtv_pretty()", """gtv[{"a":123,"b":"Hello"}]""")
@@ -246,7 +244,7 @@ class LibTest: BaseRellTest(false) {
 
     @Test fun testDeprecatedFunctionsGtv() {
         tst.deprecatedError = true
-        tst.defs = listOf("record rec { x: integer; }")
+        def("record rec { x: integer; }")
 
         chk("gtv.fromBytes(x'1234')", "ct_err:deprecated:FUNCTION:fromBytes:from_bytes")
         chk("gtv.fromJSON('{}')", "ct_err:deprecated:FUNCTION:fromJSON:from_json")

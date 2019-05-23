@@ -40,10 +40,8 @@ class UpdateDeleteTest: BaseRellTest() {
     }
 
     @Test fun testUpdateMutable() {
-        tst.defs = listOf(
-                "class city { name: text; }",
-                "class person { name: text; home: city; mutable work: city; base: integer; mutable score: integer; }"
-        )
+        def("class city { name: text; }")
+        def("class person { name: text; home: city; mutable work: city; base: integer; mutable score: integer; }")
 
         chkOp("""
                 val boston = create city('Boston');
@@ -384,7 +382,7 @@ class UpdateDeleteTest: BaseRellTest() {
     }
 
     @Test fun testDeleteNoAttributes() {
-        tst.defs = listOf("class person {}")
+        def("class person {}")
         chkOp("create person();")
         chkData("person(1)")
         chkOp("delete person@*{};")
@@ -483,16 +481,14 @@ class UpdateDeleteTest: BaseRellTest() {
     }
 
     @Test fun testUpdateShortSyntaxPath() {
-        tst.defs = listOf(
-                "class person { name; mutable score: integer; }",
-                "class foo { p: person; }",
-                "class bar { f: foo; }"
-        )
+        def("class person { name; mutable score: integer; }")
+        def("class foo { p: person; }")
+        def("class bar { f: foo; }")
         tst.inserts = listOf()
-        tst.insert("c0.person", "name,score", "1,'James',100")
-        tst.insert("c0.person", "name,score", "2,'Mike',250")
-        tst.insert("c0.foo", "p", "1,1")
-        tst.insert("c0.bar", "f", "1,1")
+        insert("c0.person", "name,score", "1,'James',100")
+        insert("c0.person", "name,score", "2,'Mike',250")
+        insert("c0.foo", "p", "1,1")
+        insert("c0.bar", "f", "1,1")
 
         chkData("person(1,James,100)", "person(2,Mike,250)", "foo(1,1)", "bar(1,1)")
 
@@ -521,13 +517,11 @@ class UpdateDeleteTest: BaseRellTest() {
     }
 
     @Test fun testBugGamePlayerSubExpr() {
-        tst.defs = listOf(
-                "class user { name; mutable games_total: integer; mutable games_won: integer; }",
-                "class game { player_1: user; player_2: user; }"
-        )
-        tst.insert("c0.user", "name,games_total,games_won", "1,'Bob',3,2")
-        tst.insert("c0.user", "name,games_total,games_won", "4,'Alice',6,5")
-        tst.insert("c0.game", "player_1,player_2", "7,1,4")
+        def("class user { name; mutable games_total: integer; mutable games_won: integer; }")
+        def("class game { player_1: user; player_2: user; }")
+        insert("c0.user", "name,games_total,games_won", "1,'Bob',3,2")
+        insert("c0.user", "name,games_total,games_won", "4,'Alice',6,5")
+        insert("c0.game", "player_1,player_2", "7,1,4")
 
         chkOp("""
             val the_game = game @ {};

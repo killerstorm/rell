@@ -84,8 +84,8 @@ class TokenizerTest: BaseRellTest(false) {
         chk("""$nl 'Hello${nl}World'  """, "ct_err:main.rell(2:8):lex:string_unclosed")
         chk("""$nl "Hello\${nl}World"  """, "ct_err:main.rell(2:8):lex:string_esc")
         chk("""$nl 'Hello\${nl}World'  """, "ct_err:main.rell(2:8):lex:string_esc")
-        chk("""$nl "Hello  """, "ct_err:main.rell(2:12):lex:string_unclosed")
-        chk("""$nl 'Hello  """, "ct_err:main.rell(2:12):lex:string_unclosed")
+        chk("""$nl "Hello  """, "ct_err:main.rell(2:11):lex:string_unclosed")
+        chk("""$nl 'Hello  """, "ct_err:main.rell(2:11):lex:string_unclosed")
     }
 
     @Test fun testByteArrayLiteral() {

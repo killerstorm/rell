@@ -14,29 +14,27 @@ import org.spongycastle.util.Arrays
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 
-class R_GtvCompatibility(val compatible: Boolean, val err: String? = null)
+class R_GtvCompatibility(val fromGtv: Boolean, val toGtv: Boolean)
 
-class R_TypeFlags(val mutable: Boolean, val gtvHuman: R_GtvCompatibility, val gtvCompact: R_GtvCompatibility) {
+class R_TypeFlags(val mutable: Boolean, val gtv: R_GtvCompatibility, val virtualable: Boolean) {
     companion object {
         fun combine(flags: Collection<R_TypeFlags>): R_TypeFlags {
             var mutable = false
-            var gtvHuman = true
-            var gtvHumanErr: String? = null
-            var gtvCompact = true
-            var gtvCompactErr: String? = null
+            var fromGtv = true
+            var toGtv = true
+            var virtualable = true
 
             for (f in flags) {
                 mutable = mutable or f.mutable
-                gtvHuman = gtvHuman and f.gtvHuman.compatible
-                gtvHumanErr = gtvHumanErr ?: f.gtvHuman.err
-                gtvCompact = gtvCompact and f.gtvCompact.compatible
-                gtvCompactErr = gtvCompactErr ?: f.gtvCompact.err
+                fromGtv = fromGtv and f.gtv.fromGtv
+                toGtv = toGtv and f.gtv.toGtv
+                virtualable = virtualable and f.virtualable
             }
 
             return R_TypeFlags(
-                    mutable,
-                    R_GtvCompatibility(gtvHuman, gtvHumanErr),
-                    R_GtvCompatibility(gtvCompact, gtvCompactErr)
+                    mutable = mutable,
+                    gtv = R_GtvCompatibility(fromGtv, toGtv),
+                    virtualable = virtualable
             )
         }
     }
@@ -76,10 +74,11 @@ sealed class R_Type(val name: String) {
     open fun isReference(): Boolean = false
     open fun comparator(): Comparator<Rt_Value>? = null
     protected open fun isDirectMutable(): Boolean = false
+    protected open fun isDirectVirtualable(): Boolean = true
 
     fun directFlags(): R_TypeFlags {
         val gtvConv = gtvConversion
-        return R_TypeFlags(isDirectMutable(), gtvConv.directHuman(), gtvConv.directCompact())
+        return R_TypeFlags(isDirectMutable(), gtvConv.directCompatibility(), isDirectVirtualable())
     }
 
     open fun completeFlags(): R_TypeFlags {
@@ -94,7 +93,7 @@ sealed class R_Type(val name: String) {
 
     open fun fromCli(s: String): Rt_Value = throw UnsupportedOperationException()
 
-    fun rtToGtv(rt: Rt_Value, human: Boolean): Gtv = gtvConversion.rtToGtv(rt, human)
+    fun rtToGtv(rt: Rt_Value, pretty: Boolean): Gtv = gtvConversion.rtToGtv(rt, pretty)
     fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv) = gtvConversion.gtvToRt(ctx, gtv)
     protected abstract fun createGtvConversion(): GtvRtConversion
 
@@ -272,6 +271,7 @@ private class R_TypeSqlAdapter_Class(private val type: R_ClassType): R_TypeSqlAd
 }
 
 class R_ObjectType(val rObject: R_Object): R_Type(rObject.rClass.name) {
+    override fun isDirectVirtualable() = false
     override fun toStrictString(): String = name
     override fun equals(other: Any?): Boolean = other is R_ObjectType && other.rObject == rObject
     override fun hashCode(): Int = rObject.hashCode()
@@ -281,18 +281,20 @@ class R_ObjectType(val rObject: R_Object): R_Type(rObject.rClass.name) {
 class R_RecordFlags(val typeFlags: R_TypeFlags, val cyclic: Boolean, val infinite: Boolean)
 
 class R_RecordType(name: String): R_Type(name) {
-    private lateinit var bodyLate: RRecordBody
+    private lateinit var bodyLate: R_RecordBody
     private lateinit var flagsLate: R_RecordFlags
 
     val attributes: Map<String, R_Attrib> get() = bodyLate.attrMap
     val attributesList: List<R_Attrib> get() = bodyLate.attrList
     val flags: R_RecordFlags get() = flagsLate
 
+    val virtualType = R_VirtualRecordType(this)
+
     fun setAttributes(attrs: Map<String, R_Attrib>) {
         val attrsList = attrs.values.toList()
         attrsList.withIndex().forEach { (idx, attr) -> check(attr.index == idx) }
         val attrMutable = attrs.values.any { it.mutable }
-        bodyLate = RRecordBody(attrs, attrsList, attrMutable)
+        bodyLate = R_RecordBody(attrs, attrsList, attrMutable)
     }
 
     fun setFlags(flags: R_RecordFlags) {
@@ -308,7 +310,11 @@ class R_RecordType(name: String): R_Type(name) {
 
     override fun createGtvConversion() = GtvRtConversion_Record(this)
 
-    private class RRecordBody(val attrMap: Map<String, R_Attrib>, val attrList: List<R_Attrib>, val attrMutable: Boolean)
+    private class R_RecordBody(
+            val attrMap: Map<String, R_Attrib>,
+            val attrList: List<R_Attrib>,
+            val attrMutable: Boolean
+    )
 }
 
 class R_EnumAttr(val name: String, val value: Int)
@@ -378,6 +384,7 @@ class R_NullableType(val valueType: R_Type): R_Type(valueType.name + "?") {
 
 // TODO: make this more elaborate
 class R_ClosureType(name: String): R_Type(name) {
+    override fun isDirectVirtualable() = false
     override fun toStrictString() = TODO("TODO")
     override fun createGtvConversion() = GtvRtConversion_None
 }
@@ -390,6 +397,8 @@ sealed class R_CollectionType(val elementType: R_Type, baseName: String): R_Type
 }
 
 class R_ListType(elementType: R_Type): R_CollectionType(elementType, "list") {
+    val virtualType = R_VirtualListType(this)
+
     override fun fromCli(s: String): Rt_Value = Rt_ListValue(this, s.split(",").map { elementType.fromCli(it) }.toMutableList())
     override fun equals(other: Any?): Boolean = other is R_ListType && elementType == other.elementType
     override fun createGtvConversion() = GtvRtConversion_List(this)
@@ -401,14 +410,19 @@ class R_ListType(elementType: R_Type): R_CollectionType(elementType, "list") {
 }
 
 class R_SetType(elementType: R_Type): R_CollectionType(elementType, "set") {
+    val virtualType = R_VirtualSetType(this)
+
     override fun fromCli(s: String): Rt_Value = Rt_SetValue(this, s.split(",").map { elementType.fromCli(it) }.toMutableSet())
     override fun equals(other: Any?): Boolean = other is R_SetType && elementType == other.elementType
     override fun createGtvConversion() = GtvRtConversion_Set(this)
 }
 
 class R_MapType(val keyType: R_Type, val valueType: R_Type): R_Type("map<${keyType.toStrictString()},${valueType.toStrictString()}>") {
+    val virtualType = R_VirtualMapType(this)
+
     override fun isReference() = true
     override fun isDirectMutable() = true
+    override fun isDirectVirtualable() = keyType == R_TextType
 
     override fun toStrictString() = name
     override fun componentTypes() = listOf(keyType, valueType)
@@ -435,6 +449,8 @@ class R_TupleField(val name: String?, val type: R_Type) {
 }
 
 class R_TupleType(val fields: List<R_TupleField>): R_Type("(${fields.joinToString(",") { it.toStrictString() }})") {
+    val virtualType = R_VirtualTupleType(this)
+
     override fun isReference() = true
     override fun isDirectMutable() = false
 
@@ -486,6 +502,7 @@ class R_TupleType(val fields: List<R_TupleField>): R_Type("(${fields.joinToStrin
 }
 
 object R_RangeType: R_Type("range") {
+    override fun isDirectVirtualable() = false
     override fun isReference() = true
     override fun comparator() = Rt_Comparator.create { it.asRange() }
     override fun toStrictString(): String = "range"
@@ -496,4 +513,40 @@ object R_GtvType: R_Type("gtv") {
     override fun isReference() = true
     override fun toStrictString() = name
     override fun createGtvConversion() = GtvRtConversion_Gtv
+}
+
+sealed class R_VirtualType(innerType: R_Type): R_Type("virtual<${innerType.name}>") {
+    final override fun isReference() = true
+    final override fun toStrictString() = name
+}
+
+sealed class R_VirtualCollectionType(innerType: R_Type): R_VirtualType(innerType) {
+    abstract fun elementType(): R_Type
+}
+
+class R_VirtualListType(val innerType: R_ListType): R_VirtualCollectionType(innerType) {
+    override fun createGtvConversion() = GtvRtConversion_VirtualList(this)
+    override fun equals(other: Any?): Boolean = other is R_VirtualListType && innerType == other.innerType
+    override fun elementType() = innerType.elementType
+}
+
+class R_VirtualSetType(val innerType: R_SetType): R_VirtualCollectionType(innerType) {
+    override fun createGtvConversion() = GtvRtConversion_VirtualSet(this)
+    override fun equals(other: Any?): Boolean = other is R_VirtualSetType && innerType == other.innerType
+    override fun elementType() = innerType.elementType
+}
+
+class R_VirtualMapType(val innerType: R_MapType): R_VirtualType(innerType) {
+    override fun createGtvConversion() = GtvRtConversion_VirtualMap(this)
+    override fun equals(other: Any?): Boolean = other is R_VirtualMapType && innerType == other.innerType
+}
+
+class R_VirtualTupleType(val innerType: R_TupleType): R_VirtualType(innerType) {
+    override fun createGtvConversion() = GtvRtConversion_VirtualTuple(this)
+    override fun equals(other: Any?): Boolean = other is R_VirtualTupleType && innerType == other.innerType
+}
+
+class R_VirtualRecordType(val innerType: R_RecordType): R_VirtualType(innerType) {
+    override fun createGtvConversion() = GtvRtConversion_VirtualRecord(this)
+    override fun equals(other: Any?): Boolean = other is R_VirtualRecordType && innerType == other.innerType
 }

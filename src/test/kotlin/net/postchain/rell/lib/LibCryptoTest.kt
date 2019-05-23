@@ -30,7 +30,8 @@ class LibCryptoTest: BaseRellTest(false) {
 
     @Test fun testHashRecord() {
         tst.strictToString = false
-        tst.defs = listOf("record rec { i: integer; t: text; }", "record rec_nogtv { m: range; }")
+        def("record rec { i: integer; t: text; }")
+        def("record rec_nogtv { m: range; }")
         chk("rec(123,'Hello').hash()", "0x74443c7de4d4fee6f6f4d9b0aa5d4749dbfb0965b422e578802701b9ac2e063a")
         chk("rec(456,'Bye').hash()", "0x7758916e7f9f1a9e0a84351f402dbc9c906492879a9d71dc4ff1f5b7d67bdf53")
         chk("rec_nogtv(range(10)).hash()", "ct_err:fn:invalid:rec_nogtv:rec_nogtv.hash")
@@ -41,7 +42,7 @@ class LibCryptoTest: BaseRellTest(false) {
 
     @Test fun testHashSimple() {
         tst.strictToString = false
-        tst.defs = listOf("enum E {A,B,C}")
+        def("enum E {A,B,C}")
         chk("true.hash()", "0x6ccd14b5a877874ddc7ca52bd3aeded5543b73a354779224bbb86b0fd315b418")
         chk("false.hash()", "0x90b136dfc51e08ee70ed929c620c0808d4230ec1015d46c92ccaa30772651dc0")
         chk("''.hash()", "0x36cb80657ea32c81c1985c76ec5930d5d4993093f48b313728c6746e3ea6c79f")
@@ -95,9 +96,10 @@ class LibCryptoTest: BaseRellTest(false) {
     @Test fun testHashClassObject() {
         tstCtx.useSql = true
         tst.strictToString = false
-        tst.defs = listOf("class cls { x: integer; }", "object obj { mutable s: text = 'Hello'; }")
-        tst.insert("c0.cls", "x", "1,123")
-        tst.insert("c0.cls", "x", "2,456")
+        def("class cls { x: integer; }")
+        def("object obj { mutable s: text = 'Hello'; }")
+        insert("c0.cls", "x", "1,123")
+        insert("c0.cls", "x", "2,456")
         chk("(cls@{123}).hash()", "0x6ccd14b5a877874ddc7ca52bd3aeded5543b73a354779224bbb86b0fd315b418")
         chk("(cls@{456}).hash()", "0x4317338211726f61b281d62f0683fd55e355011b6e7495cf56f9e03059a3bc0a")
         chk("obj.hash()", "ct_err:unknown_name:obj.hash")

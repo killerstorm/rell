@@ -137,6 +137,23 @@ class R_SysFn_List_Sort(private val comparator: Comparator<Rt_Value>): R_SysFn_L
     }
 }
 
+object R_SysFn_VirtualCollection_Empty: R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value = Rt_BooleanValue(arg.asVirtualCollection().size() == 0)
+}
+
+object R_SysFn_VirtualCollection_Size: R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value = Rt_IntValue(arg.asVirtualCollection().size().toLong())
+}
+
+object R_SysFn_VirtualList_Get: R_SysFunction_2() {
+    override fun call(arg1: Rt_Value, arg2: Rt_Value): Rt_Value {
+        val list = arg1.asVirtualList()
+        val index = arg2.asInteger()
+        val res = list.get(index)
+        return res
+    }
+}
+
 class R_SysFn_Collection_Sorted(private val type: R_Type, private val comparator: Comparator<Rt_Value>): R_SysFn_Collection() {
     override fun call(obj: MutableCollection<Rt_Value>): Rt_Value {
         val copy = ArrayList(obj)
@@ -145,20 +162,24 @@ class R_SysFn_Collection_Sorted(private val type: R_Type, private val comparator
     }
 }
 
-sealed class R_SysFn_Map: R_SysFunction_Generic<MutableMap<Rt_Value, Rt_Value>>() {
-    override fun extract(v: Rt_Value): MutableMap<Rt_Value, Rt_Value> = v.asMap()
+sealed class R_SysFn_Map: R_SysFunction_Generic<Map<Rt_Value, Rt_Value>>() {
+    override fun extract(v: Rt_Value) = v.asMap()
+}
+
+sealed class R_SysFn_MutableMap: R_SysFunction_Generic<MutableMap<Rt_Value, Rt_Value>>() {
+    override fun extract(v: Rt_Value) = v.asMutableMap()
 }
 
 object R_SysFn_Map_Empty: R_SysFn_Map() {
-    override fun call(obj: MutableMap<Rt_Value, Rt_Value>): Rt_Value = Rt_BooleanValue(obj.isEmpty())
+    override fun call(obj: Map<Rt_Value, Rt_Value>): Rt_Value = Rt_BooleanValue(obj.isEmpty())
 }
 
 object R_SysFn_Map_Size: R_SysFn_Map() {
-    override fun call(obj: MutableMap<Rt_Value, Rt_Value>): Rt_Value = Rt_IntValue(obj.size.toLong())
+    override fun call(obj: Map<Rt_Value, Rt_Value>): Rt_Value = Rt_IntValue(obj.size.toLong())
 }
 
 object R_SysFn_Map_Get: R_SysFn_Map() {
-    override fun call(obj: MutableMap<Rt_Value, Rt_Value>, a: Rt_Value): Rt_Value {
+    override fun call(obj: Map<Rt_Value, Rt_Value>, a: Rt_Value): Rt_Value {
         val r = obj[a]
         if (r == null) {
             throw Rt_Error("fn:map.get:novalue:${a.toStrictString()}", "Key not in map: $a")
@@ -168,31 +189,31 @@ object R_SysFn_Map_Get: R_SysFn_Map() {
 }
 
 object R_SysFn_Map_Contains: R_SysFn_Map() {
-    override fun call(obj: MutableMap<Rt_Value, Rt_Value>, a: Rt_Value): Rt_Value = Rt_BooleanValue(a in obj)
+    override fun call(obj: Map<Rt_Value, Rt_Value>, a: Rt_Value): Rt_Value = Rt_BooleanValue(a in obj)
 }
 
-object R_SysFn_Map_Clear: R_SysFn_Map() {
+object R_SysFn_MutableMap_Clear: R_SysFn_MutableMap() {
     override fun call(obj: MutableMap<Rt_Value, Rt_Value>): Rt_Value {
         obj.clear()
         return Rt_UnitValue
     }
 }
 
-object R_SysFn_Map_Put: R_SysFn_Map() {
+object R_SysFn_MutableMap_Put: R_SysFn_MutableMap() {
     override fun call(obj: MutableMap<Rt_Value, Rt_Value>, a: Rt_Value, b: Rt_Value): Rt_Value {
         obj.put(a, b)
         return Rt_UnitValue
     }
 }
 
-object R_SysFn_Map_PutAll: R_SysFn_Map() {
+object R_SysFn_MutableMap_PutAll: R_SysFn_MutableMap() {
     override fun call(obj: MutableMap<Rt_Value, Rt_Value>, a: Rt_Value): Rt_Value {
         obj.putAll(a.asMap())
         return Rt_UnitValue
     }
 }
 
-object R_SysFn_Map_Remove: R_SysFn_Map() {
+object R_SysFn_MutableMap_Remove: R_SysFn_MutableMap() {
     override fun call(obj: MutableMap<Rt_Value, Rt_Value>, a: Rt_Value): Rt_Value {
         val v = obj.remove(a)
         if (v == null) {
@@ -203,7 +224,7 @@ object R_SysFn_Map_Remove: R_SysFn_Map() {
 }
 
 class R_SysFn_Map_Keys(val type: R_Type): R_SysFn_Map() {
-    override fun call(obj: MutableMap<Rt_Value, Rt_Value>): Rt_Value {
+    override fun call(obj: Map<Rt_Value, Rt_Value>): Rt_Value {
         val r = mutableSetOf<Rt_Value>()
         r.addAll(obj.keys)
         return Rt_SetValue(type, r)
@@ -211,7 +232,7 @@ class R_SysFn_Map_Keys(val type: R_Type): R_SysFn_Map() {
 }
 
 class R_SysFn_Map_Values(val type: R_Type): R_SysFn_Map() {
-    override fun call(obj: MutableMap<Rt_Value, Rt_Value>): Rt_Value {
+    override fun call(obj: Map<Rt_Value, Rt_Value>): Rt_Value {
         val r = mutableListOf<Rt_Value>()
         r.addAll(obj.values)
         return Rt_ListValue(type, r)

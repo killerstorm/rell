@@ -8,16 +8,22 @@ abstract class R_Expr(val type: R_Type) {
 
     fun evaluate(frame: Rt_CallFrame): Rt_Value {
         val res = evaluate0(frame)
-        if (frame.entCtx.modCtx.globalCtx.typeCheck) {
-            val resType = res.type()
-            check(type.isAssignableFrom(resType)) {
-                "${javaClass.simpleName}: expected ${type.name}, actual ${resType.name}"
-            }
-        }
+        typeCheck(frame, type, res)
         return res
     }
 
     open fun constantValue(): Rt_Value? = null
+
+    companion object {
+        fun typeCheck(frame: Rt_CallFrame, type: R_Type, value: Rt_Value) {
+            if (frame.entCtx.modCtx.globalCtx.typeCheck) {
+                val resType = value.type()
+                check(type.isAssignableFrom(resType)) {
+                    "${javaClass.simpleName}: expected ${type.name}, actual ${resType.name}"
+                }
+            }
+        }
+    }
 }
 
 sealed class R_DestinationExpr(type: R_Type): R_Expr(type) {
@@ -32,10 +38,15 @@ sealed class R_DestinationExpr(type: R_Type): R_Expr(type) {
 
 class R_VarExpr(type: R_Type, val ptr: R_VarPtr, val name: String): R_DestinationExpr(type) {
     override fun evaluateRef(frame: Rt_CallFrame): Rt_ValueRef {
-        return Rt_VarValueRef(ptr, name, frame)
+        return Rt_VarValueRef(type, ptr, name, frame)
     }
 
-    private class Rt_VarValueRef(val ptr: R_VarPtr, val name: String, val frame: Rt_CallFrame): Rt_ValueRef() {
+    private class Rt_VarValueRef(
+            val type: R_Type,
+            val ptr: R_VarPtr,
+            val name: String,
+            val frame: Rt_CallFrame
+    ): Rt_ValueRef() {
         override fun get(): Rt_Value {
             val value = frame.getOpt(ptr)
             if (value == null) {
@@ -45,7 +56,7 @@ class R_VarExpr(type: R_Type, val ptr: R_VarPtr, val name: String): R_Destinatio
         }
 
         override fun set(value: Rt_Value) {
-            frame.set(ptr, value, true)
+            frame.set(ptr, type, value, true)
         }
     }
 }
@@ -113,9 +124,24 @@ class R_MemberCalculator_TupleField(type: R_Type, val fieldIndex: Int): R_Member
     }
 }
 
+class R_MemberCalculator_VirtualTupleField(type: R_Type, val fieldIndex: Int): R_MemberCalculator(type) {
+    override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
+        val tuple = baseValue.asVirtualTuple()
+        val res = tuple.get(fieldIndex)
+        return res
+    }
+}
+
 class R_MemberCalculator_RecordAttr(val attr: R_Attrib): R_MemberCalculator(attr.type) {
     override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
         val recordValue = baseValue.asRecord()
+        return recordValue.get(attr.index)
+    }
+}
+
+class R_MemberCalculator_VirtualRecordAttr(type: R_Type, val attr: R_Attrib): R_MemberCalculator(type) {
+    override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
+        val recordValue = baseValue.asVirtualRecord()
         return recordValue.get(attr.index)
     }
 }
@@ -225,12 +251,7 @@ class R_ListLookupExpr(type: R_Type, val base: R_Expr, val expr: R_Expr): R_Dest
         val indexValue = expr.evaluate(frame)
         val list = baseValue.asList()
         val index = indexValue.asInteger()
-
-        if (index < 0 || index >= list.size) {
-            throw Rt_Error("expr_list_lookup_index:${list.size}:$index",
-                    "List index out of bounds: $index (size ${list.size})")
-        }
-
+        Rt_ListValue.checkIndex(list.size, index)
         return Rt_ListValueRef(list, index.toInt())
     }
 
@@ -245,26 +266,51 @@ class R_ListLookupExpr(type: R_Type, val base: R_Expr, val expr: R_Expr): R_Dest
     }
 }
 
+class R_VirtualListLookupExpr(type: R_Type, val base: R_Expr, val expr: R_Expr): R_Expr(type) {
+    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
+        val baseValue = base.evaluate(frame)
+        val indexValue = expr.evaluate(frame)
+        val list = baseValue.asVirtualList()
+        val index = indexValue.asInteger()
+        val res = list.get(index)
+        return res
+    }
+}
+
 class R_MapLookupExpr(type: R_Type, val base: R_Expr, val expr: R_Expr): R_DestinationExpr(type) {
     override fun evaluateRef(frame: Rt_CallFrame): Rt_ValueRef {
         val baseValue = base.evaluate(frame)
         val keyValue = expr.evaluate(frame)
-        val map = baseValue.asMap()
+        val map = baseValue.asMutableMap()
         return Rt_MapValueRef(map, keyValue)
     }
 
     private class Rt_MapValueRef(val map: MutableMap<Rt_Value, Rt_Value>, val key: Rt_Value): Rt_ValueRef() {
-        override fun get(): Rt_Value {
+        override fun get() = getValue(map, key)
+
+        override fun set(value: Rt_Value) {
+            map.put(key, value)
+        }
+    }
+
+    companion object {
+        fun getValue(map: Map<Rt_Value, Rt_Value>, key: Rt_Value): Rt_Value {
             val value = map[key]
             if (value == null) {
                 throw Rt_Error("fn_map_get_novalue:${key.toStrictString()}", "Key not in map: $key")
             }
             return value
         }
+    }
+}
 
-        override fun set(value: Rt_Value) {
-            map.put(key, value)
-        }
+class R_VirtualMapLookupExpr(type: R_Type, val base: R_Expr, val expr: R_Expr): R_Expr(type) {
+    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
+        val baseValue = base.evaluate(frame)
+        val keyValue = expr.evaluate(frame)
+        val map = baseValue.asMap()
+        val res = R_MapLookupExpr.getValue(map, keyValue)
+        return res
     }
 }
 

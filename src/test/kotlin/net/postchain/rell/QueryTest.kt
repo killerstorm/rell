@@ -1,8 +1,9 @@
 package net.postchain.rell
 
-import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.Rt_BooleanValue
+import net.postchain.rell.runtime.Rt_IntValue
+import net.postchain.rell.runtime.Rt_TextValue
 import net.postchain.rell.test.BaseRellTest
-import net.postchain.rell.test.SqlTestUtils
 import org.junit.Test
 
 class QueryTest: BaseRellTest() {
@@ -32,26 +33,26 @@ class QueryTest: BaseRellTest() {
     }
 
     @Test fun testReturnSelectAllNoObjects() {
-        tst.defs = listOf("class user { name: text; }")
-        tst.insert("c0.user", "name", "11, 'Alice'")
+        def("class user { name: text; }")
+        insert("c0.user", "name", "11, 'Alice'")
         chkEx("= user @* { .name == 'Bob' } ;", "list<user>[]")
     }
 
     @Test fun testReturnSelectAllOneObject() {
-        tst.defs = listOf("class user { name: text; }")
-        tst.insert("c0.user", "name", "11,'Alice'")
-        tst.insert("c0.user", "name", "33,'Bob'")
+        def("class user { name: text; }")
+        insert("c0.user", "name", "11,'Alice'")
+        insert("c0.user", "name", "33,'Bob'")
         chkEx("= user @* { .name == \"Bob\" } ;", "list<user>[user[33]]")
     }
 
     @Test fun testReturnSelectAllManyObjects() {
-        tst.defs = listOf("class user { name: text; }")
-        tst.insert("c0.user", "name", "11,'Alice'")
-        tst.insert("c0.user", "name", "33,'Bob'")
-        tst.insert("c0.user", "name", "55,'James'")
-        tst.insert("c0.user", "name", "77,'Bob'")
-        tst.insert("c0.user", "name", "99,'Victor'")
-        tst.insert("c0.user", "name", "111,'Bob'")
+        def("class user { name: text; }")
+        insert("c0.user", "name", "11,'Alice'")
+        insert("c0.user", "name", "33,'Bob'")
+        insert("c0.user", "name", "55,'James'")
+        insert("c0.user", "name", "77,'Bob'")
+        insert("c0.user", "name", "99,'Victor'")
+        insert("c0.user", "name", "111,'Bob'")
         chkEx("= user @* { .name == 'Bob' } ;", "list<user>[user[33],user[77],user[111]]")
     }
 
@@ -99,7 +100,7 @@ class QueryTest: BaseRellTest() {
     }
 
     @Test fun testCreateUpdateDelete() {
-        tst.defs = listOf("class user { mutable name: text; }")
+        def("class user { mutable name: text; }")
         chkEx("{ create user('Bob'); return 0; }", "ct_err:no_db_update")
         chkEx("{ update user @ {} ( name = 'Bob'); return 0; }", "ct_err:no_db_update")
         chkEx("{ delete user @ { .name == 'Bob' }; return 0; }", "ct_err:no_db_update")

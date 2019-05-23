@@ -1,6 +1,9 @@
 package net.postchain.rell
 
 import net.postchain.base.SECP256K1CryptoSystem
+import net.postchain.base.data.PostgreSQLCommands
+import net.postchain.base.data.PostgreSQLDatabaseAccess
+import net.postchain.base.data.SQLDatabaseAccess
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvEncoder
 import net.postchain.gtv.GtvFactory
@@ -51,6 +54,8 @@ object PostchainUtils {
     fun gtvToXml(v: Gtv): String = GtvMLEncoder.encodeXMLGtv(v)
 
     fun merkleHash(v: Gtv): ByteArray = v.merkleHash(merkleCalculator)
+
+    fun createDatabaseAccess(): SQLDatabaseAccess = PostgreSQLDatabaseAccess(PostgreSQLCommands)
 }
 
 class MutableTypedKeyMap {

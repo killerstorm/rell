@@ -5,7 +5,7 @@ import org.junit.Test
 
 class NullAnalysisTest: BaseRellTest(false) {
     @Test fun testInit() {
-        tst.defs = listOf("function f(a: integer?): integer? = a;")
+        def("function f(a: integer?): integer? = a;")
 
         chkEx("{ val x: integer? = null; return x + 1; }", "ct_err:binop_operand_type:+:integer?:integer")
         chkEx("{ val x: integer? = f(123); return x + 1; }", "ct_err:binop_operand_type:+:integer?:integer")
@@ -23,7 +23,7 @@ class NullAnalysisTest: BaseRellTest(false) {
     }
 
     @Test fun testAssignment() {
-        tst.defs = listOf("function f(a: integer?): integer? = a;")
+        def("function f(a: integer?): integer? = a;")
 
         chkEx("{ var x: integer? = null; x = null; return x + 1; }", "ct_err:binop_operand_type:+:integer?:integer")
         chkEx("{ var x: integer? = null; x = f(123); return x + 1; }", "ct_err:binop_operand_type:+:integer?:integer")
@@ -153,7 +153,7 @@ class NullAnalysisTest: BaseRellTest(false) {
     }
 
     @Test fun testSafeAccess() {
-        tst.defs = listOf("record rec { mutable x: integer; }")
+        def("record rec { mutable x: integer; }")
         chkEx("{ val r: rec? = rec(123); return _type_of(r.x); }", "text[integer]")
         chkEx("{ val r: rec? = rec(123); return _type_of(r?.x); }", "text[integer]")
         chkEx("{ val r: rec? = _nullable(rec(123)); return _type_of(r?.x); }", "text[integer?]")
@@ -184,11 +184,9 @@ class NullAnalysisTest: BaseRellTest(false) {
     }
 
     @Test fun testIfType() {
-        tst.defs = listOf(
-                "function f(a: integer?): integer? = a;",
-                "function g(a: integer?): rec? = if (a == null) null else rec(a);",
-                "record rec { a: integer; }"
-        )
+        def("function f(a: integer?): integer? = a;")
+        def("function g(a: integer?): rec? = if (a == null) null else rec(a);")
+        def("record rec { a: integer; }")
 
         chkEx("{ val x = f(123); return _type_of(x); }", "text[integer?]")
 
@@ -368,10 +366,8 @@ class NullAnalysisTest: BaseRellTest(false) {
     }
 
     @Test fun testWhileNull() {
-        tst.defs = listOf(
-                "record node { next: node?; value: integer; }",
-                "function make_nodes(): node? = node(123, node(456, node(789, null)));"
-        )
+        def("record node { next: node?; value: integer; }")
+        def("function make_nodes(): node? = node(123, node(456, node(789, null)));")
 
         chkEx("{ var p = make_nodes(); while (p != null) { p = p.next; } return p; }", "null")
 
@@ -410,7 +406,8 @@ class NullAnalysisTest: BaseRellTest(false) {
     }
 
     @Test fun testDefiniteFactNullEquality() {
-        tst.defs = listOf("record rec { a: integer; }", "function f(r: rec?): rec? = r;")
+        def("record rec { a: integer; }")
+        def("function f(r: rec?): rec? = r;")
         chkDefiniteFactNullEquality("==", true)
         chkDefiniteFactNullEquality("!=", false)
         chkDefiniteFactNullEquality("===", true)
@@ -425,17 +422,20 @@ class NullAnalysisTest: BaseRellTest(false) {
     }
 
     @Test fun testDefiniteFactElvis() {
-        tst.defs = listOf("record rec { a: integer; }", "function f(r: rec?): rec? = r;")
+        def("record rec { a: integer; }")
+        def("function f(r: rec?): rec? = r;")
         chkDefiniteFactExpr("x ?: rec(-1)", "rec[a=int[-1]]", "rec[a=int[123]]", "ct_err:binop_operand_type:?::rec:rec")
     }
 
     @Test fun testDefiniteFactSafeMember() {
-        tst.defs = listOf("record rec { a: integer; }", "function f(r: rec?): rec? = r;")
+        def("record rec { a: integer; }")
+        def("function f(r: rec?): rec? = r;")
         chkDefiniteFactExpr("x?.a", "null", "int[123]", "ct_err:expr_safemem_type:rec")
     }
 
     @Test fun testDefiniteFactExists() {
-        tst.defs = listOf("record rec { a: integer; }", "function f(r: rec?): rec? = r;")
+        def("record rec { a: integer; }")
+        def("function f(r: rec?): rec? = r;")
         chkDefiniteFactExpr("exists(x)", "boolean[false]", "boolean[true]", "ct_err:expr_call_argtypes:exists:rec")
         chkDefiniteFactExpr("not exists(x)", "boolean[true]", "boolean[false]", "ct_err:expr_call_argtypes:exists:rec")
     }

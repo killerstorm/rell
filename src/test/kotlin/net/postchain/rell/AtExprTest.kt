@@ -64,22 +64,20 @@ class AtExprTest: BaseRellTest() {
     }
 
     @Test fun testAttributeByNameAndType() {
-        tst.defs = listOf(
-                "class foo { name: text; }",
-                "class bar { name: text; }",
-                "class foo_owner { name: text; stuff: foo; foo: foo; bar: bar; }",
-                "class bar_owner { name: text; stuff: bar; foo: foo; bar: bar; }"
-        )
+        def("class foo { name: text; }")
+        def("class bar { name: text; }")
+        def("class foo_owner { name: text; stuff: foo; foo: foo; bar: bar; }")
+        def("class bar_owner { name: text; stuff: bar; foo: foo; bar: bar; }")
 
         tst.inserts = listOf()
-        tst.insert("c0.foo", "name", "0,'Foo-1'")
-        tst.insert("c0.foo", "name", "1,'Foo-2'")
-        tst.insert("c0.bar", "name", "2,'Bar-1'")
-        tst.insert("c0.bar", "name", "3,'Bar-2'")
-        tst.insert("c0.foo_owner", "name,stuff,foo,bar", "4,'Bob',0,1,2")
-        tst.insert("c0.foo_owner", "name,stuff,foo,bar", "5,'Alice',1,0,3")
-        tst.insert("c0.bar_owner", "name,stuff,foo,bar", "6,'Trudy',2,1,3")
-        tst.insert("c0.bar_owner", "name,stuff,foo,bar", "7,'Andrew',3,0,2")
+        insert("c0.foo", "name", "0,'Foo-1'")
+        insert("c0.foo", "name", "1,'Foo-2'")
+        insert("c0.bar", "name", "2,'Bar-1'")
+        insert("c0.bar", "name", "3,'Bar-2'")
+        insert("c0.foo_owner", "name,stuff,foo,bar", "4,'Bob',0,1,2")
+        insert("c0.foo_owner", "name,stuff,foo,bar", "5,'Alice',1,0,3")
+        insert("c0.bar_owner", "name,stuff,foo,bar", "6,'Trudy',2,1,3")
+        insert("c0.bar_owner", "name,stuff,foo,bar", "7,'Andrew',3,0,2")
 
         val base = """
             val foo1 = foo @ { .name == 'Foo-1' };
@@ -164,16 +162,14 @@ class AtExprTest: BaseRellTest() {
     }
 
     @Test fun testAttributeAmbiguityName() {
-        tst.defs = listOf(
-                "class user { name: text; }",
-                "class company { name: text; }"
-        )
+        def("class user { name: text; }")
+        def("class company { name: text; }")
 
         tst.inserts = listOf()
-        tst.insert("c0.user", "name", "0,'Bob'")
-        tst.insert("c0.user", "name", "1,'Alice'")
-        tst.insert("c0.company", "name", "2,'Xerox'")
-        tst.insert("c0.company", "name", "3,'Bell'")
+        insert("c0.user", "name", "0,'Bob'")
+        insert("c0.user", "name", "1,'Alice'")
+        insert("c0.company", "name", "2,'Xerox'")
+        insert("c0.company", "name", "3,'Bell'")
 
         chk("(user, company) @ { .name == 'Bob' }", "ct_err:at_attr_name_ambig:name:user.name,company.name")
         chk("(user, company) @ { .name == 'Xerox' }", "ct_err:at_attr_name_ambig:name:user.name,company.name")
@@ -184,21 +180,19 @@ class AtExprTest: BaseRellTest() {
     }
 
     @Test fun testAttributeAmbiguityType() {
-        tst.defs = listOf(
-                "class target { name: text; }",
-                "class single { t: target; }",
-                "class double { t1: target; t2: target; }"
-        )
+        def("class target { name: text; }")
+        def("class single { t: target; }")
+        def("class double { t1: target; t2: target; }")
 
         tst.inserts = listOf()
-        tst.insert("c0.target", "name", "0,'A'")
-        tst.insert("c0.target", "name", "1,'B'")
-        tst.insert("c0.target", "name", "2,'C'")
-        tst.insert("c0.single", "t", "0,0")
-        tst.insert("c0.single", "t", "1,1")
-        tst.insert("c0.double", "t1,t2", "0,0,1")
-        tst.insert("c0.double", "t1,t2", "1,1,2")
-        tst.insert("c0.double", "t1,t2", "2,2,0")
+        insert("c0.target", "name", "0,'A'")
+        insert("c0.target", "name", "1,'B'")
+        insert("c0.target", "name", "2,'C'")
+        insert("c0.single", "t", "0,0")
+        insert("c0.single", "t", "1,1")
+        insert("c0.double", "t1,t2", "0,0,1")
+        insert("c0.double", "t1,t2", "1,1,2")
+        insert("c0.double", "t1,t2", "2,2,0")
 
         val base = """
             val tgt1 = target @ { .name == 'A' };
@@ -224,25 +218,23 @@ class AtExprTest: BaseRellTest() {
     }
 
     @Test fun testMultipleClassesCrossReference() {
-        tst.defs = listOf(
-                "class person { name: text; cityName: text; }",
-                "class city { name: text; countryName: text; }",
-                "class country { name: text; }"
-        )
+        def("class person { name: text; cityName: text; }")
+        def("class city { name: text; countryName: text; }")
+        def("class country { name: text; }")
 
         tst.inserts = listOf()
 
-        tst.insert("c0.person", "name,cityName", "100,'James','New York'")
-        tst.insert("c0.person", "name,cityName", "101,'Phil','London'")
-        tst.insert("c0.person", "name,cityName", "102,'Roman','Kyiv'")
+        insert("c0.person", "name,cityName", "100,'James','New York'")
+        insert("c0.person", "name,cityName", "101,'Phil','London'")
+        insert("c0.person", "name,cityName", "102,'Roman','Kyiv'")
 
-        tst.insert("c0.city", "name,countryName", "200,'New York','USA'")
-        tst.insert("c0.city", "name,countryName", "201,'Kyiv','Ukraine'")
-        tst.insert("c0.city", "name,countryName", "202,'London','England'")
+        insert("c0.city", "name,countryName", "200,'New York','USA'")
+        insert("c0.city", "name,countryName", "201,'Kyiv','Ukraine'")
+        insert("c0.city", "name,countryName", "202,'London','England'")
 
-        tst.insert("c0.country", "name", "300,'England'")
-        tst.insert("c0.country", "name", "301,'Ukraine'")
-        tst.insert("c0.country", "name", "302,'USA'")
+        insert("c0.country", "name", "300,'England'")
+        insert("c0.country", "name", "301,'Ukraine'")
+        insert("c0.country", "name", "302,'USA'")
 
         chk("(person, city, country) @* { city.name == person.cityName, country.name == city.countryName }",
                 "list<(person:person,city:city,country:country)>[" +
@@ -252,25 +244,23 @@ class AtExprTest: BaseRellTest() {
     }
 
     @Test fun testAllFieldKinds() {
-        tst.defs = listOf(
-                """class testee {
-                        key k1: integer, k2: integer;
-                        key k3: integer;
-                        index i1: integer;
-                        index i2: integer, i3: integer;
-                        f1: integer;
-                        f2: integer;
-                }""".trimIndent(),
-                "class proxy { ref: testee; }"
-        )
+        def("""class testee {
+                key k1: integer, k2: integer;
+                key k3: integer;
+                index i1: integer;
+                index i2: integer, i3: integer;
+                f1: integer;
+                f2: integer;
+        }""".trimIndent())
+        def("class proxy { ref: testee; }")
 
         tst.inserts = listOf()
-        tst.insert("c0.testee", "k1,k2,k3,i1,i2,i3,f1,f2", "1,100,101,102,103,104,105,106,107")
-        tst.insert("c0.testee", "k1,k2,k3,i1,i2,i3,f1,f2", "2,200,201,202,203,204,205,206,207")
-        tst.insert("c0.testee", "k1,k2,k3,i1,i2,i3,f1,f2", "3,300,301,302,303,304,305,306,307")
-        tst.insert("c0.proxy", "ref", "1,1")
-        tst.insert("c0.proxy", "ref", "2,2")
-        tst.insert("c0.proxy", "ref", "3,3")
+        insert("c0.testee", "k1,k2,k3,i1,i2,i3,f1,f2", "1,100,101,102,103,104,105,106,107")
+        insert("c0.testee", "k1,k2,k3,i1,i2,i3,f1,f2", "2,200,201,202,203,204,205,206,207")
+        insert("c0.testee", "k1,k2,k3,i1,i2,i3,f1,f2", "3,300,301,302,303,304,305,306,307")
+        insert("c0.proxy", "ref", "1,1")
+        insert("c0.proxy", "ref", "2,2")
+        insert("c0.proxy", "ref", "3,3")
 
         // Direct fields of the query class.
         chk("testee @* { .k1 == 100 }", "list<testee>[testee[1]]")
@@ -499,7 +489,7 @@ class AtExprTest: BaseRellTest() {
     }
 
     @Test fun testOrConditionBug() {
-        tst.defs = listOf("""
+        def("""
             class user_account {
                 key tuid;
                 mutable name;

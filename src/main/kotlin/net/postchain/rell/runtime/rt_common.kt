@@ -1,13 +1,11 @@
 package net.postchain.rell.runtime
 
-import net.postchain.rell.model.R_CallFrame
-import net.postchain.rell.model.R_FrameBlock
-import net.postchain.rell.model.R_VarPtr
+import net.postchain.rell.model.*
 
 sealed class Rt_BaseError(msg: String): Exception(msg)
 class Rt_Error(val code: String, msg: String): Rt_BaseError(msg)
 class Rt_RequireError(val userMsg: String?): Rt_BaseError(userMsg ?: "Requirement error")
-class Rt_ValueTypeError(val expected: String, val actual: String):
+class Rt_ValueTypeError(val expected: Rt_ValueType, val actual: Rt_ValueType):
         Rt_BaseError("Value type mismatch: expected $expected, but was $actual")
 class Rt_GtvError(val code: String, msg: String): Rt_BaseError(msg)
 
@@ -42,7 +40,8 @@ class Rt_CallFrame(val entCtx: Rt_EntityContext, rFrame: R_CallFrame) {
         }
     }
 
-    fun set(ptr: R_VarPtr, value: Rt_Value, overwrite: Boolean) {
+    fun set(ptr: R_VarPtr, varType: R_Type, value: Rt_Value, overwrite: Boolean) {
+        R_Expr.typeCheck(this, varType, value)
         val offset = checkPtr(ptr)
         if (!overwrite) {
             check(values[offset] == null)

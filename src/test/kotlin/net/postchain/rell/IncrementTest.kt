@@ -20,8 +20,8 @@ class IncrementTest: BaseRellTest(false) {
 
     @Test fun testOperandClass() {
         tstCtx.useSql = true
-        tst.defs = listOf("class foo { mutable x: integer; y: integer; }")
-        tst.insert("c0.foo", "x,y", "1,123,456")
+        def("class foo { mutable x: integer; y: integer; }")
+        insert("c0.foo", "x,y", "1,123,456")
 
         val init = "val f = foo@{}"
 
@@ -56,7 +56,7 @@ class IncrementTest: BaseRellTest(false) {
 
     @Test fun testOperandObject() {
         tstCtx.useSql = true
-        tst.defs = listOf("object foo { mutable x: integer = 123; y: integer = 456; }")
+        def("object foo { mutable x: integer = 123; y: integer = 456; }")
 
         chkOp("foo.x++;")
         chkData("foo(0,124,456)")
@@ -87,7 +87,7 @@ class IncrementTest: BaseRellTest(false) {
     }
 
     @Test fun testOperandRecord() {
-        tst.defs = listOf("record foo { mutable x: integer = 123; y: integer = 456; }")
+        def("record foo { mutable x: integer = 123; y: integer = 456; }")
 
         chkEx("{ val f = foo(); f.x++; return f; }", "foo[x=int[124],y=int[456]]")
         chkEx("{ val f = foo(); f.x--; return f; }", "foo[x=int[122],y=int[456]]")
@@ -148,10 +148,8 @@ class IncrementTest: BaseRellTest(false) {
     }
 
     @Test fun testOperandComplex() {
-        tst.defs = listOf(
-                "record rec { mutable x: integer; }",
-                "function f(r: rec): list<map<text,rec>> = [['X' : rec(-1)], ['A' : r]];"
-        )
+        def("record rec { mutable x: integer; }")
+        def("function f(r: rec): list<map<text,rec>> = [['X' : rec(-1)], ['A' : r]];")
 
         chkEx("{ val r = rec(123); f(r)[1]['A'].x++; return r; }", "rec[x=int[124]]")
         chkEx("{ val r = rec(123); f(r)[1]['A'].x--; return r; }", "rec[x=int[122]]")
@@ -172,7 +170,7 @@ class IncrementTest: BaseRellTest(false) {
     }
 
     @Test fun testSafeAccess() {
-        tst.defs = listOf("record r { mutable x: integer; }")
+        def("record r { mutable x: integer; }")
         val init = "val r: r? = _nullable(r(123))"
 
         chkEx("{ $init; r.x++; return r; }", "ct_err:expr_mem_null:x")
@@ -208,8 +206,8 @@ class IncrementTest: BaseRellTest(false) {
 
     @Test fun testSafeAccessClass() {
         tstCtx.useSql = true
-        tst.defs = listOf("class user { mutable x: integer; }")
-        tst.insert("c0.user", "x", "1,123")
+        def("class user { mutable x: integer; }")
+        insert("c0.user", "x", "1,123")
         val init = "val u: user? = user@?{}"
 
         chkOp("$init; val y = u.x++;", "ct_err:expr_mem_null:x")
@@ -270,7 +268,8 @@ class IncrementTest: BaseRellTest(false) {
     }
 
     @Test fun testWrongType() {
-        tst.defs = listOf("class user { name; }", "record rec { mutable v: integer; }")
+        def("class user { name; }")
+        def("record rec { mutable v: integer; }")
         chkWrongType("boolean")
         chkWrongType("text")
         chkWrongType("byte_array")
