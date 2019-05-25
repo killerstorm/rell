@@ -1,5 +1,6 @@
 package net.postchain.rell.runtime
 
+import net.postchain.core.ByteArrayKey
 import net.postchain.rell.model.*
 
 sealed class Rt_BaseError(msg: String): Exception(msg)
@@ -9,7 +10,7 @@ class Rt_ValueTypeError(val expected: Rt_ValueType, val actual: Rt_ValueType):
         Rt_BaseError("Value type mismatch: expected $expected, but was $actual")
 class Rt_GtvError(val code: String, msg: String): Rt_BaseError(msg)
 
-class Rt_ChainDependency(val rid: ByteArray, val height: Long)
+class Rt_ChainDependency(val rid: ByteArray)
 
 class Rt_ExternalChain(val chainId: Long, val rid: ByteArray, val height: Long) {
     val sqlMapping = Rt_ChainSqlMapping(chainId)
@@ -92,4 +93,12 @@ class Rt_ChainSqlMapping(val chainId: Long) {
     fun fullName(baseName: String): String {
         return prefix + baseName
     }
+}
+
+interface Rt_ChainHeightProvider {
+    fun getChainHeight(rid: ByteArrayKey, id: Long): Long?
+}
+
+class Rt_ConstantChainHeightProvider(private val height: Long): Rt_ChainHeightProvider {
+    override fun getChainHeight(rid: ByteArrayKey, id: Long) = height
 }

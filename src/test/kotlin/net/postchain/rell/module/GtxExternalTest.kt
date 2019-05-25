@@ -15,8 +15,8 @@ class GtxExternalTest: BaseGtxTest() {
     @Test fun testUnknownChain2() {
         def("external 'foo' {}")
         tst.wrapRtErrors = false
-        tst.extraModuleConfig["dependencies"] = "{'foo':'deadbeef'}"
-        chk("123", "rt_err:external_chain_norid:foo:deadbeef")
+        tst.extraModuleConfig["dependencies"] = "[['foo','deadbeef']]"
+        chk("123", "rt_err:external_chain_no_rid:foo:deadbeef")
     }
 
     @Test fun testUnknownChain3() {
@@ -31,7 +31,7 @@ class GtxExternalTest: BaseGtxTest() {
 
         def("external 'foo' {}")
         tst.wrapRtErrors = false
-        tst.extraModuleConfig["dependencies"] = "{'foo':'deadbeef'}"
+        tst.extraModuleConfig["dependencies"] = "[['foo','deadbeef']]"
         chk("123", "123")
     }
 
@@ -47,7 +47,7 @@ class GtxExternalTest: BaseGtxTest() {
 
         def("external 'foo' { class user(log) {} }")
         tst.wrapRtErrors = false
-        tst.extraModuleConfig["dependencies"] = "{'foo':'deadbeef'}"
+        tst.extraModuleConfig["dependencies"] = "[['foo','deadbeef']]"
         chk("123", "rt_err:external_meta_nocls:foo:user")
     }
 
@@ -65,7 +65,7 @@ class GtxExternalTest: BaseGtxTest() {
 
         def("external 'foo' { class user(log) { name; } }")
         tst.wrapRtErrors = false
-        tst.extraModuleConfig["dependencies"] = "{'foo':'deadbeef'}"
+        tst.extraModuleConfig["dependencies"] = "[['foo','deadbeef']]"
         chk("_strict_str(user @{} ( =user, =.name ))", "'(user[15],text[Bob])'")
     }
 }

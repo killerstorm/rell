@@ -10,7 +10,7 @@ class GtxTest : BaseGtxTest() {
 
         tst.moduleArgs = "'bar'"
         chk("chain_context.raw_config",
-                "{'gtx':{'rell':{'mainFile':'main.rell','sources_v0.8':{'main.rell':'query q() = chain_context.raw_config;'},'moduleArgs':'bar'}}}")
+                "{'gtx':{'rell':{'mainFile':'main.rell','moduleArgs':'bar','sources_v0.8':{'main.rell':'query q() = chain_context.raw_config;'}}}}")
     }
 
     @Test fun testChainContextModuleArgs() {
@@ -18,7 +18,7 @@ class GtxTest : BaseGtxTest() {
         chk("chain_context.args", "null")
 
         tst.moduleArgs = "{'s':'Hello','n':123}"
-        chk("chain_context.args", "{'s':'Hello','n':123}")
+        chk("chain_context.args", "{'n':123,'s':'Hello'}")
         chk("chain_context.args.s", "ct_err:expr_mem_null:s")
         chk("chain_context.args?.s", "'Hello'")
         chk("chain_context.args?.n", "123")
@@ -37,7 +37,7 @@ class GtxTest : BaseGtxTest() {
         chkUserMistake("", "Type error: ")
 
         tst.moduleArgs = "{'s':'Hello','n':123}"
-        chk("chain_context.args", "{'s':'Hello','n':123}")
+        chk("chain_context.args", "{'n':123,'s':'Hello'}")
     }
 
     @Test fun testChainContextModuleArgsNoRecord() {

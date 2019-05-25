@@ -173,7 +173,7 @@ class LibGtvTest: BaseRellTest(false) {
     @Test fun testToFromGtvMap() {
         chk("map<text,integer>().to_gtv()", "gtv[{}]")
         chk("['Hello':123].to_gtv()", """gtv[{"Hello":123}]""")
-        chk("['Hello':123,'Bye':456].to_gtv()", """gtv[{"Hello":123,"Bye":456}]""")
+        chk("['Hello':123,'Bye':456].to_gtv()", """gtv[{"Bye":456,"Hello":123}]""")
         chk("['Hello':123].to_gtv_pretty()", """gtv[{"Hello":123}]""")
 
         chk("map<integer,text>().to_gtv()", "gtv[[]]")
@@ -207,9 +207,9 @@ class LibGtvTest: BaseRellTest(false) {
         chkFromGtv("[['Hello',123],['Bye',456]]", "map<text,integer>.from_gtv_pretty(g)",
                 "map<text,integer>[text[Hello]=int[123],text[Bye]=int[456]]")
         chkFromGtv("{'Hello':123,'Bye':456}", "map<text,integer>.from_gtv(g)",
-                "map<text,integer>[text[Hello]=int[123],text[Bye]=int[456]]")
+                "map<text,integer>[text[Bye]=int[456],text[Hello]=int[123]]")
         chkFromGtv("{'Hello':123,'Bye':456}", "map<text,integer>.from_gtv_pretty(g)",
-                "map<text,integer>[text[Hello]=int[123],text[Bye]=int[456]]")
+                "map<text,integer>[text[Bye]=int[456],text[Hello]=int[123]]")
 
         chkFromGtv("[]", "map<integer,text>.from_gtv_pretty(g)", "map<integer,text>[]")
         chkFromGtv("[[123,'Hello']]", "map<integer,text>.from_gtv_pretty(g)", "map<integer,text>[int[123]=text[Hello]]")

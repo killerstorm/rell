@@ -60,9 +60,9 @@ class GtxModuleTest : BaseGtxTest() {
         tst.inserts = inserts
 
         val query = "query q(name: text) = person @ { name } ( city_name = .city.name, .street, .house );"
-        chkFull(query, "name:'Bob'", "{'city_name':'Los Angeles','street':'Main St','house':5}")
-        chkFull(query, "name:'Alice'", "{'city_name':'New York','street':'Evergreen Ave','house':11}")
-        chkFull(query, "name:'Trudy'", "{'city_name':'Los Angeles','street':'Mulholland Dr','house':3}")
+        chkFull(query, "name:'Bob'", "{'city_name':'Los Angeles','house':5,'street':'Main St'}")
+        chkFull(query, "name:'Alice'", "{'city_name':'New York','house':11,'street':'Evergreen Ave'}")
+        chkFull(query, "name:'Trudy'", "{'city_name':'Los Angeles','house':3,'street':'Mulholland Dr'}")
     }
 
     @Test fun testQueryGetPersonsByCitySet() {

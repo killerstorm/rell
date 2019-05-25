@@ -1,11 +1,11 @@
 package net.postchain.rell.runtime
 
 import com.google.common.collect.Sets
+import net.postchain.core.ByteArrayKey
 import net.postchain.gtv.Gtv
 import net.postchain.rell.CommonUtils
 import net.postchain.rell.model.*
 import net.postchain.rell.sql.SqlExecutor
-
 
 class Rt_GlobalContext(
         val stdoutPrinter: Rt_Printer,
@@ -35,9 +35,10 @@ class Rt_SqlContext private constructor(
                 module: R_Module,
                 mainChainMapping: Rt_ChainSqlMapping,
                 chainDependencies: Map<String, Rt_ChainDependency>,
-                sqlExec: SqlExecutor
+                sqlExec: SqlExecutor,
+                heightProvider: Rt_ChainHeightProvider
         ): Rt_SqlContext {
-            val externalChains = getExternalChains(sqlExec, chainDependencies)
+            val externalChains = getExternalChains(sqlExec, chainDependencies, heightProvider)
             val linkedExternalChains = calcLinkedExternalChains(module, externalChains)
             val sqlCtx = Rt_SqlContext(module, mainChainMapping, linkedExternalChains)
             checkExternalMetaInfo(sqlCtx, externalChains, sqlExec)
@@ -46,7 +47,8 @@ class Rt_SqlContext private constructor(
 
         private fun getExternalChains(
                 sqlExec: SqlExecutor,
-                dependencies: Map<String, Rt_ChainDependency>
+                dependencies: Map<String, Rt_ChainDependency>,
+                heightProvider: Rt_ChainHeightProvider
         ): Map<String, Rt_ExternalChain> {
             if (dependencies.isEmpty()) return mapOf()
 
@@ -62,15 +64,25 @@ class Rt_SqlContext private constructor(
             val dbChains = loadDatabaseBlockchains(sqlExec)
             val dbRidMap = dbChains.map { (chainId, rid) -> Pair(CommonUtils.bytesToHex(rid), chainId) }.toMap()
 
+
+
             val res = mutableMapOf<String, Rt_ExternalChain>()
             for ((name, dep) in dependencies) {
                 val ridStr = CommonUtils.bytesToHex(dep.rid)
                 val chainId = dbRidMap[ridStr]
                 if (chainId == null) {
-                    throw Rt_Error("external_chain_norid:$name:$ridStr",
+                    throw Rt_Error("external_chain_no_rid:$name:$ridStr",
                             "External chain '$name' not found in the database by RID 0x$ridStr")
                 }
-                res[name] = Rt_ExternalChain(chainId, dep.rid, dep.height)
+
+                val ridKey = ByteArrayKey(dep.rid)
+                val height = heightProvider.getChainHeight(ridKey, chainId)
+                if (height == null) {
+                    throw Rt_Error("external_chain_no_height:$name:$ridStr:$chainId",
+                            "Unknown height of the external chain '$name' (RID: 0x$ridStr, ID: $chainId)")
+                }
+
+                res[name] = Rt_ExternalChain(chainId, dep.rid, height)
             }
 
             return res

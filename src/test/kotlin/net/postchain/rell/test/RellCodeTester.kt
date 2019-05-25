@@ -1,6 +1,7 @@
 package net.postchain.rell.test
 
 import com.google.common.collect.Sets
+import net.postchain.core.ByteArrayKey
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
 import net.postchain.rell.CommonUtils
@@ -37,7 +38,7 @@ class RellCodeTester(
     var opContext: Rt_OpContext? = null
     var sqlUpdatePortionSize = 1000
 
-    private val chainDependencies = mutableMapOf<String, Rt_ChainDependency>()
+    private val chainDependencies = mutableMapOf<String, TestChainDependency>()
 
     override fun initSqlReset(conn: Connection, sqlExec: SqlExecutor, moduleCode: String, module: R_Module) {
         val sqlCtx = createSqlCtx(module, sqlExec)
@@ -76,7 +77,7 @@ class RellCodeTester(
     fun chainDependency(name: String, rid: String, height: Long) {
         check(name !in chainDependencies)
         val ridArray = CommonUtils.hexToBytes(rid)
-        chainDependencies[name] = Rt_ChainDependency(ridArray, height)
+        chainDependencies[name] = TestChainDependency(ridArray, height)
     }
 
     fun chkQuery(bodyCode: String, expected: String) {
@@ -225,7 +226,12 @@ class RellCodeTester(
 
     private fun createSqlCtx(module: R_Module, sqlExec: SqlExecutor): Rt_SqlContext {
         val sqlMapping = createChainSqlMapping()
-        return eval.wrapRt { Rt_SqlContext.create(module, sqlMapping, chainDependencies, sqlExec) }
+        val rtDeps = chainDependencies.mapValues { (k, v) -> Rt_ChainDependency(v.rid) }
+
+        val heightMap = chainDependencies.mapKeys { (k, v) -> ByteArrayKey(v.rid) }.mapValues { (k, v) -> v.height }
+        val heightProvider = TestChainHeightProvider(heightMap)
+
+        return eval.wrapRt { Rt_SqlContext.create(module, sqlMapping, rtDeps, sqlExec, heightProvider) }
     }
 
     fun chkWarn(vararg msgs: String) {
@@ -261,6 +267,15 @@ class RellCodeTester(
             RellTestUtils.catchRtErr({ createModuleCtx(globalCtx, module) }) {
                 modCtx -> processor(modCtx)
             }
+        }
+    }
+
+    private class TestChainDependency(val rid: ByteArray, val height: Long)
+
+    private class TestChainHeightProvider(private val map: Map<ByteArrayKey, Long>): Rt_ChainHeightProvider {
+        override fun getChainHeight(rid: ByteArrayKey, id: Long): Long? {
+            val height = map[rid]
+            return height
         }
     }
 }

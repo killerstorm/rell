@@ -73,10 +73,10 @@ class VirtualTest: BaseGtxTest(false) {
         def("record sub2 { r: integer; }")
 
         val args = GtvTestUtils.decodeGtvStr("[123,'Hello',[456,[789]]]")
-        chkVirtual("rec", "x", args, "{'i':123,'t':'Hello','s':{'q':456,'p':{'r':789}}}")
+        chkVirtual("rec", "x", args, "{'i':123,'s':{'p':{'r':789},'q':456},'t':'Hello'}")
         chkVirtual("rec", "x.i", args, "123")
         chkVirtual("rec", "x.t", args, "'Hello'")
-        chkVirtual("rec", "x.s", args, "{'q':456,'p':{'r':789}}")
+        chkVirtual("rec", "x.s", args, "{'p':{'r':789},'q':456}")
         chkVirtual("rec", "x.s.q", args, "456")
         chkVirtual("rec", "x.s.p", args, "{'r':789}")
         chkVirtual("rec", "x.s.p.r", args, "789")

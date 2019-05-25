@@ -127,7 +127,7 @@ class GtvRtConversion_Record(val type: R_RecordType): GtvRtConversion() {
         if (pretty) {
             val record = rt.asRecord()
             val gtvFields = attrs.mapIndexed { i, attr -> Pair(attr.name, attr.type.rtToGtv(record.get(i), pretty)) }.toMap()
-            return GtvDictionary(gtvFields)
+            return GtvFactory.gtv(gtvFields)
         } else {
             val record = rt.asRecord()
             val gtvFields = attrs.mapIndexed { i, attr -> attr.type.rtToGtv(record.get(i), pretty) }.toTypedArray()
@@ -284,7 +284,7 @@ class GtvRtConversion_Map(val type: R_MapType): GtvRtConversion() {
         if (keyType == R_TextType) {
             val m2 = m.mapKeys { (k, _) -> k.asString() }
                     .mapValues { (_, v) -> valueType.rtToGtv(v, pretty) }
-            return GtvDictionary(m2)
+            return GtvFactory.gtv(m2)
         } else {
             val entries = m.map { (k, v) -> GtvArray(arrayOf(keyType.rtToGtv(k, pretty), valueType.rtToGtv(v, pretty))) }
             return GtvArray(entries.toTypedArray())
@@ -336,7 +336,7 @@ class GtvRtConversion_Tuple(val type: R_TupleType): GtvRtConversion() {
             val field = type.fields[i]
             Pair(field.name!!, field.type.rtToGtv(rtField, true))
         }.toMap()
-        return GtvDictionary(gtv)
+        return GtvFactory.gtv(gtv)
     }
 
     private fun rtToGtvCompact(rt: Rt_Value): Gtv {

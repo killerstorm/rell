@@ -5,7 +5,6 @@ import net.postchain.base.BaseEContext
 import net.postchain.base.BaseTxEContext
 import net.postchain.core.UserMistake
 import net.postchain.gtv.Gtv
-import net.postchain.gtv.GtvDictionary
 import net.postchain.gtv.GtvFactory
 import net.postchain.gtv.GtvString
 import net.postchain.gtx.ExtOpData
@@ -175,18 +174,18 @@ class RellGtxTester(
         rellMap["mainFile"] = GtvString(RellTestUtils.MAIN_FILE)
 
         val sourceCodes = files(moduleCode)
-        rellMap["sources_v0.8"] = GtvDictionary(sourceCodes.mapValues { (_, v) -> GtvString(v) })
+        rellMap["sources_v0.8"] = GtvFactory.gtv(sourceCodes.mapValues { (_, v) -> GtvString(v) })
 
         if (moduleArgs != null) {
             rellMap["moduleArgs"] = GtvTestUtils.decodeGtvStr(moduleArgs!!)
         }
 
         val cfgMap = mutableMapOf<String, Gtv>()
-        cfgMap["gtx"] = GtvDictionary(mapOf("rell" to GtvDictionary(rellMap)))
+        cfgMap["gtx"] = GtvFactory.gtv(mapOf("rell" to GtvFactory.gtv(rellMap)))
         for ((key, value) in extraModuleConfig) {
             cfgMap[key] = GtvTestUtils.decodeGtvStr(value)
         }
 
-        return GtvDictionary(cfgMap)
+        return GtvFactory.gtv(cfgMap)
     }
 }

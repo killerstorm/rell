@@ -63,7 +63,8 @@ class RellGTXOperation(val module: RellPostchainModule, val rOperation: R_Operat
 
     override fun apply(ctx: TxEContext): Boolean {
         val opCtx = Rt_OpContext(ctx.timestamp, ctx.txIID, data.signers.toList())
-        val modCtx = module.makeRtModuleContext(ctx, opCtx)
+        val heightProvider = Rt_TxChainHeightProvider(ctx)
+        val modCtx = module.makeRtModuleContext(ctx, opCtx, heightProvider)
 
         module.factory.catchRtErr {
             gtvToRtCtx.finish(modCtx)
@@ -74,6 +75,16 @@ class RellGTXOperation(val module: RellPostchainModule, val rOperation: R_Operat
         }
 
         return true
+    }
+
+    private class Rt_TxChainHeightProvider(private val ctx: TxEContext): Rt_ChainHeightProvider {
+        override fun getChainHeight(rid: ByteArrayKey, id: Long): Long? {
+            return try {
+                ctx.getChainDependencyHeight(id)
+            } catch (e: Exception) {
+                null
+            }
+        }
     }
 }
 
@@ -104,7 +115,8 @@ class RellPostchainModule(
 
     private fun initDb(ctx: EContext) {
         factory.catchRtErr {
-            val modCtx = makeRtModuleContext(ctx, null)
+            val heightProvider = Rt_ConstantChainHeightProvider(-1)
+            val modCtx = makeRtModuleContext(ctx, null, heightProvider)
 
             val sql = genSqlForChain(modCtx.sqlCtx)
             ctx.conn.createStatement().use {
@@ -126,7 +138,8 @@ class RellPostchainModule(
     override fun query(ctx: EContext, name: String, args: Gtv): Gtv {
         val rQuery = rModule.queries[name] ?: throw UserMistake("Query not found: '$name'")
 
-        val modCtx = makeRtModuleContext(ctx, null)
+        val heightProvider = Rt_ConstantChainHeightProvider(Long.MAX_VALUE)
+        val modCtx = makeRtModuleContext(ctx, null, heightProvider)
         val rtArgs = translateQueryArgs(modCtx, rQuery, args)
 
         val rtResult = factory.wrapMistake("Query failed") {
@@ -158,7 +171,11 @@ class RellPostchainModule(
         return rtArgs
     }
 
-    fun makeRtModuleContext(eCtx: EContext, opCtx: Rt_OpContext?): Rt_ModuleContext {
+    fun makeRtModuleContext(
+            eCtx: EContext,
+            opCtx: Rt_OpContext?,
+            heightProvider: Rt_ChainHeightProvider
+    ): Rt_ModuleContext {
         val sqlExec = DefaultSqlExecutor(eCtx.conn, flags.sqlLogging)
         val sqlMapping = Rt_ChainSqlMapping(eCtx.chainID)
 
@@ -171,9 +188,8 @@ class RellPostchainModule(
                 typeCheck = flags.typeCheck
         )
 
-        val chainDeps = chainDeps.mapValues { (_, rid) -> Rt_ChainDependency(rid, Long.MAX_VALUE) }
-        val sqlCtx = Rt_SqlContext.create(rModule, sqlMapping, chainDeps, sqlExec)
-
+        val chainDeps = chainDeps.mapValues { (_, rid) -> Rt_ChainDependency(rid) }
+        val sqlCtx = Rt_SqlContext.create(rModule, sqlMapping, chainDeps, sqlExec, heightProvider)
         return Rt_ModuleContext(globalCtx, rModule, sqlCtx)
     }
 }
@@ -280,8 +296,11 @@ class RellPostchainModuleFactory(
 
         val deps = mutableMapOf<String, ByteArray>()
 
-        for ((name, ridGtv) in gtvDeps.asDict()) {
-            val rid = ridGtv.asByteArray(true)
+        for (entry in gtvDeps.asArray()) {
+            val entryArray = entry.asArray()
+            check(entryArray.size == 2)
+            val name = entryArray[0].asString()
+            val rid = entryArray[1].asByteArray(true)
             check(name !in deps)
             deps[name] = rid
         }

@@ -40,13 +40,13 @@ class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
     @Test fun testQueryResultRecord() {
         def("record foo { x: integer; b: bar; }")
         def("record bar { p: boolean; q: text; }")
-        chkQueryRes(" = foo(123, bar(true, 'Hello'));", """{"x":123,"b":{"p":1,"q":"Hello"}}""")
+        chkQueryRes(" = foo(123, bar(true, 'Hello'));", """{"b":{"p":1,"q":"Hello"},"x":123}""")
     }
 
     @Test fun testQueryResultCyclicRecord() {
         def("record node { v: integer; left: node? = null; right: node? = null; }")
         chkQueryRes("= node(456, left = node(123), right = node(789));",
-                """{"v":456,"left":{"v":123,"left":null,"right":null},"right":{"v":789,"left":null,"right":null}}""")
+                """{"left":{"left":null,"right":null,"v":123},"right":{"left":null,"right":null,"v":789},"v":456}""")
     }
 
     @Test fun testArgSimple() {

@@ -1,7 +1,7 @@
 package net.postchain.rell
 
 import net.postchain.gtv.Gtv
-import net.postchain.gtv.GtvDictionary
+import net.postchain.gtv.GtvFactory
 import net.postchain.gtv.GtvString
 import net.postchain.gtv.GtvType
 import net.postchain.rell.module.CONFIG_RELL_FILES
@@ -90,7 +90,7 @@ private fun discoverBundleFiles(resolver: C_IncludeResolver, mainFile: String): 
 }
 
 private fun getConfigTemplate(template: String?): Gtv {
-    if (template == null) return GtvDictionary(mapOf())
+    if (template == null) return GtvFactory.gtv(mapOf())
 
     try {
         return PostchainUtils.xmlToGtv(template)
@@ -184,7 +184,7 @@ private class TermGtvNode(path: String?, private val value: Gtv): GtvNode(path) 
 
 private class DictGtvNode(path: String?, private val map: MutableMap<String, GtvNode>): GtvNode(path) {
     override fun type() = GtvType.DICT
-    override fun toValue() = GtvDictionary(map.mapValues { (k, v) -> v.toValue() })
+    override fun toValue() = GtvFactory.gtv(map.mapValues { (k, v) -> v.toValue() })
 
     fun get(key: String) = map[key]
 

@@ -20,6 +20,7 @@ object C_LibFunctions {
             .add("require_not_empty", C_SysFunction_Require_Collection)
             .add("require_not_empty", C_SysFunction_Require_Nullable)
             .add("exists", C_SysFunction_Exists)
+            .add("empty", C_SysFunction_Exists, C_Deprecated_UseInstead("exists"))
 
             .add("integer", R_IntegerType, listOf(R_TextType), R_SysFn_Int_FromText)
             .add("integer", R_IntegerType, listOf(R_TextType, R_IntegerType), R_SysFn_Int_FromText)

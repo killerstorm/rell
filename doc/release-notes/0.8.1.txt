@@ -111,6 +111,10 @@ What was renamed:
     text.encode -> text.to_bytes
     byte_array.decode -> text.from_bytes
 
+(e) Other functions:
+
+    empty -> exists
+
 
 6. Library: New functions
 

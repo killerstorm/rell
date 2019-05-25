@@ -206,6 +206,8 @@ class LibTest: BaseRellTest(false) {
         chkCompile("function f(x: integer?) { requireNotEmpty(x); }",
                 "ct_err:deprecated:FUNCTION:requireNotEmpty:require_not_empty")
 
+        chk("empty(_nullable_int(123))", "ct_err:deprecated:FUNCTION:empty:exists")
+
         chk("byte_array([1,2,3,4])", "ct_err:deprecated:FUNCTION:byte_array:byte_array.from_list")
         chk("byte_array('1234')", "byte_array[1234]")
         chk("x'1234'.len()", "ct_err:deprecated:FUNCTION:byte_array.len:size")
