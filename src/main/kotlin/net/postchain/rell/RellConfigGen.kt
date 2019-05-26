@@ -1,9 +1,6 @@
 package net.postchain.rell
 
-import net.postchain.gtx.DictGTXValue
-import net.postchain.gtx.GTXValue
-import net.postchain.gtx.GTXValueType
-import net.postchain.gtx.StringGTXValue
+import net.postchain.gtx.*
 import net.postchain.gtx.gtxml.GTXMLValueEncoder
 import net.postchain.gtx.gtxml.GTXMLValueParser
 import net.postchain.rell.module.CONFIG_RELL_FILES
@@ -35,14 +32,20 @@ private fun main0(args: RellCfgArgs) {
         readFile(File(args.configTemplateFile))
     }
 
-    val config = makeRellPostchainConfig(resolver, rellFileName, template, true)
+    val gtxConfig = makeRellPostchainConfig(resolver, rellFileName, template, true)
 
     if (args.outputFile != null) {
         val outputFile = File(args.outputFile)
         verifyCfg(outputFile.absoluteFile.parentFile.isDirectory, "Path not found: $outputFile")
-        outputFile.writeText(config)
+
+        if (args.binaryOutput) {
+            outputFile.writeBytes(encodeGTXValue(gtxConfig))
+        } else {
+            val config = generateConfigText(gtxConfig)
+            outputFile.writeText(config)
+        }
     } else {
-        println(config)
+        println(generateConfigText(gtxConfig))
     }
 }
 
@@ -51,7 +54,7 @@ private fun readFile(file: File): String {
     return file.readText()
 }
 
-fun makeRellPostchainConfig(resolver: C_IncludeResolver, mainFile: String, template: String?, pretty: Boolean): String {
+fun makeRellPostchainConfig(resolver: C_IncludeResolver, mainFile: String, template: String?, pretty: Boolean): GTXValue {
     val files = discoverBundleFiles(resolver, mainFile)
 
     val gtxTemplate = getConfigTemplate(template)
@@ -59,9 +62,11 @@ fun makeRellPostchainConfig(resolver: C_IncludeResolver, mainFile: String, templ
     val mutableConfig = GtxNode.create(null, gtxTemplate)
     injectRellFiles(mutableConfig, files, mainFile, pretty)
 
-    val gtxConfig = mutableConfig.toValue()
-    val config = generateConfigText(gtxConfig)
-    return config
+    return mutableConfig.toValue()
+}
+
+fun makeRellPostchainConfigText(resolver: C_IncludeResolver, mainFile: String, template: String?, pretty: Boolean): String {
+    return generateConfigText(makeRellPostchainConfig(resolver, mainFile, template, pretty))
 }
 
 private fun discoverBundleFiles(resolver: C_IncludeResolver, mainFile: String): Map<String, String> {
@@ -217,4 +222,7 @@ private class RellCfgArgs {
 
     @CommandLine.Option(names = ["--template"], paramLabel =  "TEMPLATE_FILE", description =  ["Configuration template file"])
     var configTemplateFile: String? = null
+
+    @CommandLine.Option(names = ["--binary-output"], paramLabel = "BINARY_OUTPUT", description = ["Write output as binary"])
+    var binaryOutput: Boolean = false
 }
