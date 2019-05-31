@@ -174,7 +174,7 @@ class RellGtxTester(
         rellMap["mainFile"] = GtvString(RellTestUtils.MAIN_FILE)
 
         val sourceCodes = files(moduleCode)
-        rellMap["sources_v0.8"] = GtvFactory.gtv(sourceCodes.mapValues { (_, v) -> GtvString(v) })
+        rellMap["sources_v0.9"] = GtvFactory.gtv(sourceCodes.mapValues { (_, v) -> GtvString(v) })
 
         if (moduleArgs != null) {
             rellMap["moduleArgs"] = GtvTestUtils.decodeGtvStr(moduleArgs!!)

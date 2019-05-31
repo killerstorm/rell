@@ -1,7 +1,7 @@
 package net.postchain.rell.misc
 
 import net.postchain.rell.PostchainUtils
-import net.postchain.rell.makeRellPostchainConfig
+import net.postchain.rell.makeRellPostchainConfigText
 import net.postchain.rell.parser.C_SourcePath
 import net.postchain.rell.parser.C_VirtualSourceDir
 import net.postchain.rell.test.GtvTestUtils
@@ -9,74 +9,76 @@ import org.junit.Test
 import kotlin.test.assertEquals
 
 class RellConfigGenTest {
+    private val ver = "v0.9"
+
     @Test fun testNoTemplateSingleFile() {
         val files = mapOf("main.rell" to "class foo {}")
-        chkCfg(files, null, "{'gtx':{'rell':{'mainFile':'main.rell','sources_v0.8':{'main.rell':'class foo {}'}}}}")
+        chkCfg(files, null, "{'gtx':{'rell':{'mainFile':'main.rell','sources_$ver':{'main.rell':'class foo {}'}}}}")
     }
 
     @Test fun testNoTemplateMultipleFiles() {
         val files = mapOf("main.rell" to "class user {}", "foo.rell" to "class foo {}", "bar.rell" to "class bar {}")
-        chkCfg(files, null, "{'gtx':{'rell':{'mainFile':'main.rell','sources_v0.8':{'main.rell':'class user {}'}}}}")
+        chkCfg(files, null, "{'gtx':{'rell':{'mainFile':'main.rell','sources_$ver':{'main.rell':'class user {}'}}}}")
     }
 
     @Test fun testNoTemplateIncludedFiles() {
         val files = mapOf("main.rell" to "include 'foo';", "foo.rell" to "include 'bar';", "bar.rell" to "class bar {}")
         val expFiles = "{'bar.rell':'class bar {}','foo.rell':'include \\u0027bar\\u0027;','main.rell':'include \\u0027foo\\u0027;'}"
-        chkCfg(files, null, "{'gtx':{'rell':{'mainFile':'main.rell','sources_v0.8':$expFiles}}}")
+        chkCfg(files, null, "{'gtx':{'rell':{'mainFile':'main.rell','sources_$ver':$expFiles}}}")
     }
 
     @Test fun testTemplate() {
         val files = mapOf("main.rell" to "class foo {}")
 
-        chkCfg(files, "{}", "{'gtx':{'rell':{'mainFile':'main.rell','sources_v0.8':{'main.rell':'class foo {}'}}}}")
+        chkCfg(files, "{}", "{'gtx':{'rell':{'mainFile':'main.rell','sources_$ver':{'main.rell':'class foo {}'}}}}")
 
         chkCfg(files, "{'foo':'bar'}",
-                "{'foo':'bar','gtx':{'rell':{'mainFile':'main.rell','sources_v0.8':{'main.rell':'class foo {}'}}}}")
+                "{'foo':'bar','gtx':{'rell':{'mainFile':'main.rell','sources_$ver':{'main.rell':'class foo {}'}}}}")
 
         chkCfg(files, "{'gtx':{}}",
-                "{'gtx':{'rell':{'mainFile':'main.rell','sources_v0.8':{'main.rell':'class foo {}'}}}}")
+                "{'gtx':{'rell':{'mainFile':'main.rell','sources_$ver':{'main.rell':'class foo {}'}}}}")
 
         chkCfg(files, "{'gtx':{'foo':'bar'}}",
-                "{'gtx':{'foo':'bar','rell':{'mainFile':'main.rell','sources_v0.8':{'main.rell':'class foo {}'}}}}")
+                "{'gtx':{'foo':'bar','rell':{'mainFile':'main.rell','sources_$ver':{'main.rell':'class foo {}'}}}}")
 
         chkCfg(files, "{'gtx':{'rell':{}}}",
-                "{'gtx':{'rell':{'mainFile':'main.rell','sources_v0.8':{'main.rell':'class foo {}'}}}}")
+                "{'gtx':{'rell':{'mainFile':'main.rell','sources_$ver':{'main.rell':'class foo {}'}}}}")
 
         chkCfg(files, "{'gtx':{'rell':{'foo':'bar'}}}",
-                "{'gtx':{'rell':{'foo':'bar','mainFile':'main.rell','sources_v0.8':{'main.rell':'class foo {}'}}}}")
+                "{'gtx':{'rell':{'foo':'bar','mainFile':'main.rell','sources_$ver':{'main.rell':'class foo {}'}}}}")
 
         chkCfg(files, "{'gtx':{'rell':{'mainFile':'garbage.rell'}}}",
-                "{'gtx':{'rell':{'mainFile':'main.rell','sources_v0.8':{'main.rell':'class foo {}'}}}}")
+                "{'gtx':{'rell':{'mainFile':'main.rell','sources_$ver':{'main.rell':'class foo {}'}}}}")
 
-        chkCfg(files, "{'gtx':{'rell':{'sources_v0.8':{}}}}",
-                "{'gtx':{'rell':{'mainFile':'main.rell','sources_v0.8':{'main.rell':'class foo {}'}}}}")
+        chkCfg(files, "{'gtx':{'rell':{'sources_$ver':{}}}}",
+                "{'gtx':{'rell':{'mainFile':'main.rell','sources_$ver':{'main.rell':'class foo {}'}}}}")
 
-        chkCfg(files, "{'gtx':{'rell':{'sources_v0.8':{'garbage.rell':'garbage'}}}}",
-                "{'gtx':{'rell':{'mainFile':'main.rell','sources_v0.8':{'garbage.rell':'garbage','main.rell':'class foo {}'}}}}")
+        chkCfg(files, "{'gtx':{'rell':{'sources_$ver':{'garbage.rell':'garbage'}}}}",
+                "{'gtx':{'rell':{'mainFile':'main.rell','sources_$ver':{'garbage.rell':'garbage','main.rell':'class foo {}'}}}}")
 
-        chkCfg(files, "{'gtx':{'rell':{'sources_v0.8':{'main.rell':'garbage'}}}}",
-                "{'gtx':{'rell':{'mainFile':'main.rell','sources_v0.8':{'main.rell':'class foo {}'}}}}")
+        chkCfg(files, "{'gtx':{'rell':{'sources_$ver':{'main.rell':'garbage'}}}}",
+                "{'gtx':{'rell':{'mainFile':'main.rell','sources_$ver':{'main.rell':'class foo {}'}}}}")
     }
 
     @Test fun testTemplateXml() {
         val files = mapOf("main.rell" to "class foo {}")
 
-        chkCfg0(files, "<dict/>", "{'gtx':{'rell':{'mainFile':'main.rell','sources_v0.8':{'main.rell':'class foo {}'}}}}")
-        chkCfg0(files, "<dict></dict>", "{'gtx':{'rell':{'mainFile':'main.rell','sources_v0.8':{'main.rell':'class foo {}'}}}}")
+        chkCfg0(files, "<dict/>", "{'gtx':{'rell':{'mainFile':'main.rell','sources_$ver':{'main.rell':'class foo {}'}}}}")
+        chkCfg0(files, "<dict></dict>", "{'gtx':{'rell':{'mainFile':'main.rell','sources_$ver':{'main.rell':'class foo {}'}}}}")
 
         val header = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>"""
 
         chkCfg0(files, """$header<dict></dict>""",
-                "{'gtx':{'rell':{'mainFile':'main.rell','sources_v0.8':{'main.rell':'class foo {}'}}}}")
+                "{'gtx':{'rell':{'mainFile':'main.rell','sources_$ver':{'main.rell':'class foo {}'}}}}")
 
         chkCfg0(files, """$header<dict/>""",
-                "{'gtx':{'rell':{'mainFile':'main.rell','sources_v0.8':{'main.rell':'class foo {}'}}}}")
+                "{'gtx':{'rell':{'mainFile':'main.rell','sources_$ver':{'main.rell':'class foo {}'}}}}")
 
         chkCfg0(files, """$header<dict><entry key="gtx"><dict/></entry></dict>""",
-                "{'gtx':{'rell':{'mainFile':'main.rell','sources_v0.8':{'main.rell':'class foo {}'}}}}")
+                "{'gtx':{'rell':{'mainFile':'main.rell','sources_$ver':{'main.rell':'class foo {}'}}}}")
 
         chkCfg0(files, """$header<dict><entry key="gtx"><dict></dict></entry></dict>""",
-                "{'gtx':{'rell':{'mainFile':'main.rell','sources_v0.8':{'main.rell':'class foo {}'}}}}")
+                "{'gtx':{'rell':{'mainFile':'main.rell','sources_$ver':{'main.rell':'class foo {}'}}}}")
     }
 
     private fun chkCfg(files: Map<String, String>, templateJson: String?, expectedJson: String) {
@@ -88,7 +90,7 @@ class RellConfigGenTest {
         val sourceFiles = files.mapKeys { (k, _) -> C_SourcePath.parse(k) }
         val incDir = C_VirtualSourceDir(sourceFiles)
         val mainPath = C_SourcePath.parse("main.rell")
-        val actualXml = makeRellPostchainConfig(incDir, mainPath, templateXml, pretty)
+        val actualXml = makeRellPostchainConfigText(incDir, mainPath, templateXml, pretty)
         val actualJson = xmlToJson(actualXml)
         assertEquals(expectedJson, actualJson)
     }

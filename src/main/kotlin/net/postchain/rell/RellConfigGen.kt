@@ -9,6 +9,8 @@ import net.postchain.rell.module.CONFIG_RELL_SOURCES
 import net.postchain.rell.parser.*
 import picocli.CommandLine
 import java.io.File
+import java.io.FileOutputStream
+import java.io.OutputStream
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
@@ -36,10 +38,22 @@ private fun main0(args: RellCfgArgs) {
     if (args.outputFile != null) {
         val outputFile = File(args.outputFile)
         verifyCfg(outputFile.absoluteFile.parentFile.isDirectory, "Path not found: $outputFile")
-        outputFile.writeText(config)
+        FileOutputStream(outputFile).use {
+            writeResult(args, it, config)
+        }
     } else {
-        println(config)
+        writeResult(args, System.out, config)
     }
+}
+
+private fun writeResult(args: RellCfgArgs, os: OutputStream, config: Gtv) {
+    val bytes = if (args.binaryOutput) {
+        PostchainUtils.gtvToBytes(config)
+    } else {
+        val text = generateConfigText(config)
+        text.toByteArray()
+    }
+    os.write(bytes)
 }
 
 private fun readFile(file: File): String {
@@ -47,7 +61,13 @@ private fun readFile(file: File): String {
     return file.readText()
 }
 
-fun makeRellPostchainConfig(sourceDir: C_SourceDir, mainFile: C_SourcePath, template: String?, pretty: Boolean): String {
+fun makeRellPostchainConfigText(sourceDir: C_SourceDir, mainFile: C_SourcePath, template: String?, pretty: Boolean): String {
+    val gtvConfig = makeRellPostchainConfig(sourceDir, mainFile, template, pretty)
+    val config = generateConfigText(gtvConfig)
+    return config
+}
+
+private fun makeRellPostchainConfig(sourceDir: C_SourceDir, mainFile: C_SourcePath, template: String?, pretty: Boolean): Gtv {
     val files = discoverBundleFiles(sourceDir, mainFile)
 
     val gtvTemplate = getConfigTemplate(template)
@@ -56,8 +76,7 @@ fun makeRellPostchainConfig(sourceDir: C_SourceDir, mainFile: C_SourcePath, temp
     injectRellFiles(mutableConfig, files, mainFile.str(), pretty)
 
     val gtvConfig = mutableConfig.toValue()
-    val config = generateConfigText(gtvConfig)
-    return config
+    return gtvConfig
 }
 
 private fun discoverBundleFiles(sourceDir: C_SourceDir, mainFile: C_SourcePath): Map<String, String> {
@@ -210,4 +229,7 @@ private class RellCfgArgs {
 
     @CommandLine.Option(names = ["--template"], paramLabel =  "TEMPLATE_FILE", description =  ["Configuration template file"])
     var configTemplateFile: String? = null
+
+    @CommandLine.Option(names = ["--binary-output"], paramLabel = "BINARY_OUTPUT", description = ["Write output as binary"])
+    var binaryOutput: Boolean = false
 }

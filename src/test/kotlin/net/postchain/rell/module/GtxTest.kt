@@ -6,11 +6,11 @@ import org.junit.Test
 class GtxTest : BaseGtxTest() {
     @Test fun testChainContextRawConfig() {
         chk("chain_context.raw_config",
-                "{'gtx':{'rell':{'mainFile':'main.rell','sources_v0.8':{'main.rell':'query q() = chain_context.raw_config;'}}}}")
+                "{'gtx':{'rell':{'mainFile':'main.rell','sources_v0.9':{'main.rell':'query q() = chain_context.raw_config;'}}}}")
 
         tst.moduleArgs = "'bar'"
         chk("chain_context.raw_config",
-                "{'gtx':{'rell':{'mainFile':'main.rell','moduleArgs':'bar','sources_v0.8':{'main.rell':'query q() = chain_context.raw_config;'}}}}")
+                "{'gtx':{'rell':{'mainFile':'main.rell','moduleArgs':'bar','sources_v0.9':{'main.rell':'query q() = chain_context.raw_config;'}}}}")
     }
 
     @Test fun testChainContextModuleArgs() {

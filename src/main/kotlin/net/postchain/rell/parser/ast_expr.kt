@@ -179,18 +179,7 @@ class S_TupleExpr(startPos: S_Pos, val fields: List<Pair<S_Name?, S_Expr>>): S_E
 class S_IfExpr(pos: S_Pos, val cond: S_Expr, val trueExpr: S_Expr, val falseExpr: S_Expr): S_Expr(pos) {
     override fun compile(ctx: C_ExprContext): C_Expr {
         val cCond = cond.compile(ctx).value()
-
-        val condFacts = cCond.varFacts()
-        val trueFacts = condFacts.postFacts.and(condFacts.trueFacts)
-        val falseFacts = condFacts.postFacts.and(condFacts.falseFacts)
-
-        val cTrue = trueExpr.compileWithFacts(ctx, trueFacts).value()
-        val cFalse = falseExpr.compileWithFacts(ctx, falseFacts).value()
-
-        val truePostFacts = trueFacts.and(cTrue.varFacts().postFacts)
-        val falsePostFacts = falseFacts.and(cFalse.varFacts().postFacts)
-        val resPostFacts = condFacts.postFacts.and(C_VarFacts.forBranches(ctx, listOf(truePostFacts, falsePostFacts)))
-        val resFacts = C_ExprVarFacts.of(postFacts = resPostFacts)
+        val (cTrue, cFalse, resFacts) = compileTrueFalse(ctx, cCond)
 
         S_Type.match(R_BooleanType, cCond.type(), cond.startPos, "expr_if_cond_type", "Wrong type of condition expression")
         checkUnitType(trueExpr, cTrue)
@@ -214,6 +203,29 @@ class S_IfExpr(pos: S_Pos, val cond: S_Expr, val trueExpr: S_Expr, val falseExpr
             val rExpr = R_IfExpr(resType, rCond, rTrue, rFalse)
             return C_RValue.makeExpr(startPos, rExpr, resFacts)
         }
+    }
+
+    private fun compileTrueFalse(ctx: C_ExprContext, cCond: C_Value): Triple<C_Value, C_Value, C_ExprVarFacts> {
+        val condFacts = cCond.varFacts()
+        val trueFacts = condFacts.postFacts.and(condFacts.trueFacts)
+        val falseFacts = condFacts.postFacts.and(condFacts.falseFacts)
+
+        val cTrue = trueExpr.compileWithFacts(ctx, trueFacts).value()
+        val cFalse = falseExpr.compileWithFacts(ctx, falseFacts).value()
+        val db = cCond.isDb() || cTrue.isDb() || cFalse.isDb()
+
+        if (!db) {
+            val truePostFacts = trueFacts.and(cTrue.varFacts().postFacts)
+            val falsePostFacts = falseFacts.and(cFalse.varFacts().postFacts)
+            val resPostFacts = condFacts.postFacts.and(C_VarFacts.forBranches(ctx, listOf(truePostFacts, falsePostFacts)))
+            val resFacts = C_ExprVarFacts.of(postFacts = resPostFacts)
+            return Triple(cTrue, cFalse, resFacts)
+        }
+
+        // Db-expression do not support short-circuiting (all R-operands are always evaluated).
+        val cTrue2 = trueExpr.compile(ctx).value()
+        val cFalse2 = falseExpr.compile(ctx).value()
+        return Triple(cTrue2, cFalse2, C_ExprVarFacts.EMPTY)
     }
 
     private fun checkUnitType(expr: S_Expr, cValue: C_Value) {

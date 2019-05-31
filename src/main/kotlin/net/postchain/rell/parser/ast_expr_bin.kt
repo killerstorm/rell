@@ -595,7 +595,11 @@ class S_BinaryExpr(val head: S_Expr, val tail: List<S_BinaryExprTail>): S_Expr(h
             val op = sOp.value
             val rightFacts = op.op.rightVarFacts(leftValue)
             val rightCtx = ctx.updateFacts(rightFacts)
-            val rightValue = right.compile(rightCtx)
+            var rightValue = right.compile(rightCtx)
+
+            if ((leftValue.isDb() || rightValue.isDb()) && !rightFacts.isEmpty()) {
+                rightValue = right.compile(ctx)
+            }
 
             return op.compile(sOp.pos, leftValue, rightValue)
         }

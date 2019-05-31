@@ -15,7 +15,7 @@ import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.DefaultSqlExecutor
 import net.postchain.rell.sql.genSqlForChain
 
-val RELL_VERSION = "v0.8"
+val RELL_VERSION = "v0.9"
 val CONFIG_RELL_FILES = "files_$RELL_VERSION"
 val CONFIG_RELL_SOURCES = "sources_$RELL_VERSION"
 

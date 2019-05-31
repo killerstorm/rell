@@ -493,6 +493,33 @@ class NullAnalysisTest: BaseRellTest(false) {
         chkWarn("expr_var_null:always:x")
     }
 
+    @Test fun testAtExpr() {
+        tstCtx.useSql = true
+        def("class user { name; score: integer; }")
+        insert("c0.user", "name,score", "33,'Bob',1000")
+
+        chkAtExpr("123", "if (x == null) true else .score >= x", "ct_err:expr_nosql:integer?")
+        chkAtExpr("123", "if (x != null) .score >= x else true", "ct_err:expr_nosql:integer?")
+        //chkAtExpr("123", "when { x == null -> true; else -> .score >= x }", "ct_err:expr_nosql:integer?")
+        //chkAtExpr("123", "when { x != null -> .score >= x; else -> true }", "ct_err:expr_nosql:integer?")
+        chkAtExpr("123", ".score >= if (x == null) 0 else x", "user[33]")
+        chkAtExpr("123", ".score >= if (x != null) x else 0", "user[33]")
+        chkAtExpr("123", ".score >= when { x == null -> 0; else -> x }", "user[33]")
+        chkAtExpr("123", ".score >= when { x != null -> x; else -> 0 }", "user[33]")
+        chkAtExpr("123", ".score >= if (x == null) .score else x", "ct_err:expr_nosql:integer?")
+        chkAtExpr("123", ".score >= if (x != null) x else .score", "ct_err:expr_nosql:integer?")
+        //chkAtExpr("123", ".score >= when { x == null -> .score; else -> x }", "error")
+        //chkAtExpr("123", ".score >= when { x != null -> x; else -> .score }", "error")
+        chkAtExpr("123", "x != null and .score >= x", "ct_err:expr_nosql:integer?")
+        chkAtExpr("123", "x == null or .score >= x", "ct_err:expr_nosql:integer?")
+        chkAtExpr("123", ".score >= (x ?: 0)", "user[33]")
+        chkAtExpr("123", ".score >= (x ?: .score)", "ct_err:expr_nosql:integer?")
+    }
+
+    private fun chkAtExpr(v: String, expr: String, expected: String) {
+        chkEx("{ val x = _nullable_int($v); return user @? { $expr }; }", expected)
+    }
+
     // null-dependent: when (x) { null -> }
 
     // contradictory operations:

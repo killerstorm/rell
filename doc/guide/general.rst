@@ -234,7 +234,7 @@ configuration under the path ``gtx.rell``:
        "gtx": {
            "rell": {
                "mainFile": "main.rell",
-               "sources_v0.8": {
+               "sources_v0.9": {
                    "main.rell": "...",
                    "helper.rell": "..."
                }
