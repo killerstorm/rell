@@ -6,10 +6,7 @@ import net.postchain.gtv.GtvString
 import net.postchain.gtv.GtvType
 import net.postchain.rell.module.CONFIG_RELL_FILES
 import net.postchain.rell.module.CONFIG_RELL_SOURCES
-import net.postchain.rell.parser.C_DiskIncludeDir
-import net.postchain.rell.parser.C_Error
-import net.postchain.rell.parser.C_IncludeResolver
-import net.postchain.rell.parser.C_Parser
+import net.postchain.rell.parser.*
 import picocli.CommandLine
 import java.io.File
 import kotlin.system.exitProcess
@@ -27,13 +24,14 @@ fun main(args: Array<String>) {
 private fun main0(args: RellCfgArgs) {
     val rellFile = File(args.rellFile)
     val rellFileName = rellFile.name
-    val resolver = C_IncludeResolver(C_DiskIncludeDir(rellFile.absoluteFile.parentFile))
+    val sourceDir = C_DiskSourceDir(rellFile.absoluteFile.parentFile)
+    val sourcePath = C_SourcePath.parse(rellFileName)
 
     val template = if (args.configTemplateFile == null) null else {
         readFile(File(args.configTemplateFile))
     }
 
-    val config = makeRellPostchainConfig(resolver, rellFileName, template, true)
+    val config = makeRellPostchainConfig(sourceDir, sourcePath, template, true)
 
     if (args.outputFile != null) {
         val outputFile = File(args.outputFile)
@@ -49,38 +47,35 @@ private fun readFile(file: File): String {
     return file.readText()
 }
 
-fun makeRellPostchainConfig(resolver: C_IncludeResolver, mainFile: String, template: String?, pretty: Boolean): String {
-    val files = discoverBundleFiles(resolver, mainFile)
+fun makeRellPostchainConfig(sourceDir: C_SourceDir, mainFile: C_SourcePath, template: String?, pretty: Boolean): String {
+    val files = discoverBundleFiles(sourceDir, mainFile)
 
     val gtvTemplate = getConfigTemplate(template)
 
     val mutableConfig = GtvNode.create(null, gtvTemplate)
-    injectRellFiles(mutableConfig, files, mainFile, pretty)
+    injectRellFiles(mutableConfig, files, mainFile.str(), pretty)
 
     val gtvConfig = mutableConfig.toValue()
     val config = generateConfigText(gtvConfig)
     return config
 }
 
-private fun discoverBundleFiles(resolver: C_IncludeResolver, mainFile: String): Map<String, String> {
-    val mainCode = try {
-        val resource = resolver.resolve(mainFile)
-        resource.file.readText()
+private fun discoverBundleFiles(sourceDir: C_SourceDir, mainFile: C_SourcePath): Map<String, String> {
+    val mainCode: String
+
+    val included = try {
+        mainCode = C_IncludeResolver.resolveFile(sourceDir, mainFile).readText()
+        C_Compiler.getIncludedResources(sourceDir, mainFile, transitive = true, fail = true)
+    } catch (e: C_Error) {
+        throw RellCfgErr(e.message!!)
     } catch (e: Exception) {
         throw RellCfgErr(e.message ?: "unknown")
     }
 
-    val includes = try {
-        val ast = C_Parser.parse(mainFile, mainCode)
-        ast.getIncludes(mainFile, resolver, nested = true, fail = true)
-    } catch (e: C_Error) {
-        throw RellCfgErr(e.message!!)
-    }
-
     val files = mutableMapOf<String, String>()
-    files[mainFile] = mainCode
+    files[mainFile.str()] = mainCode
 
-    for (include in includes) {
+    for (include in included) {
         if (include.path !in files) {
             files[include.path] = include.file.readText()
         }

@@ -469,7 +469,7 @@ private class C_LocalVarValue(
 
         val globCtx = ctx.blkCtx.entCtx.nsCtx.modCtx.globalCtx
         val (freq, msg) = if (nulled == C_VarFact.YES) Pair("always", "is always") else Pair("never", "cannot be")
-        globCtx.warning(name.pos, "expr_var_null:$freq:${name.str}", "Variable '${name.str}' $msg null at this point")
+        globCtx.warning(name.pos, "expr_var_null:$freq:${name.str}", "Variable '${name.str}' $msg null at this location")
 
         return C_LocalVarValue(ctx, name, entry, nulled, entry.type, false)
     }

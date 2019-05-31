@@ -1,15 +1,30 @@
 package net.postchain.rell.parser
 
 import com.sun.xml.internal.ws.util.StringUtils
+import net.postchain.rell.CommonUtils
 import net.postchain.rell.TypedKeyMap
 import net.postchain.rell.model.*
+import java.util.*
 
-class C_Error(
-        val pos: S_Pos,
-        val code: String,
-        val errMsg: String,
-        val posStack: List<S_Pos> = listOf(pos)
-): RuntimeException("$pos $errMsg")
+class C_Error: RuntimeException {
+    val pos: S_Pos
+    val code: String
+    val errMsg: String
+    val posStack: List<S_Pos>
+
+    constructor(pos: S_Pos, code: String, errMsg: String): this(pos, code, errMsg, listOf(pos))
+
+    private constructor(pos: S_Pos, code: String, errMsg: String, posStack: List<S_Pos>): super("$pos $errMsg") {
+        this.pos = pos
+        this.code = code
+        this.errMsg = errMsg
+        this.posStack = posStack
+    }
+
+    fun addStack(outerStack: List<S_Pos>): C_Error {
+        return C_Error(pos, code, errMsg, outerStack + posStack)
+    }
+}
 
 abstract class C_GlobalFunction {
     abstract fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr
@@ -88,7 +103,13 @@ enum class C_MessageType(val text: String) {
     ERROR("ERROR")
 }
 
-class C_Message(val type: C_MessageType, val pos: S_Pos, val code: String, val text: String) {
+class C_Message(
+        val type: C_MessageType,
+        val pos: S_Pos,
+        val code: String,
+        val text: String,
+        val posStack: List<S_Pos> = listOf(pos)
+) {
     override fun toString(): String {
         return "$pos ${type.text}: $text"
     }
@@ -97,18 +118,41 @@ class C_Message(val type: C_MessageType, val pos: S_Pos, val code: String, val t
 class C_GlobalContext(val compilerOptions: C_CompilerOptions) {
     private var frameBlockIdCtr = 0L
     private val messages = mutableListOf<C_Message>()
+    private val includeStack = LinkedList<S_Pos>()
 
     fun nextFrameBlockId(): R_FrameBlockId = R_FrameBlockId(frameBlockIdCtr++)
 
     fun message(type: C_MessageType, pos: S_Pos, code: String, text: String) {
-        messages.add(C_Message(type, pos, code, text))
+        val posStack = includeStack + listOf(pos)
+        messages.add(C_Message(type, pos, code, text, posStack))
     }
 
     fun warning(pos: S_Pos, code: String, text: String) {
         message(C_MessageType.WARNING, pos, code, text)
     }
 
+    fun error(error: C_Error) {
+        val message = C_Message(C_MessageType.ERROR, error.pos, error.code, error.errMsg, error.posStack)
+        messages.add(message)
+    }
+
     fun messages() = messages.toList()
+
+    fun includeStack() = includeStack.toList()
+
+    fun <T> processIncludedFile(pos: S_Pos, code: () -> T) = processIncludedFile(listOf(pos), code)
+
+    fun <T> processIncludedFile(stack: List<S_Pos>, code: () -> T): T {
+        includeStack.addAll(stack)
+        try {
+            val res = code()
+            return res
+        } catch (e: C_Error) {
+            throw e.addStack(stack)
+        } finally {
+            stack.forEach { includeStack.removeLast() }
+        }
+    }
 }
 
 object C_Defs {
@@ -209,7 +253,7 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
 
     private val externalChains = mutableMapOf<String, R_ExternalChain>()
 
-    private val passes = C_ModulePass.values().map { Pair(it, mutableListOf<()->Unit>()) }.toMap()
+    private val passes = C_ModulePass.values().map { Pair(it, mutableListOf<C_PassTask>()) }.toMap()
     private var currentPass = C_ModulePass.NAMES
 
     val nsCtx = C_NamespaceContext(
@@ -275,24 +319,32 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
 
     fun onPass(pass: C_ModulePass, code: () -> Unit) {
         check(currentPass < pass) { "currentPass: $currentPass targetPass: $pass" }
+
+        val stack = globalCtx.includeStack()
+
         val ordinal = currentPass.ordinal
         if (ordinal + 1 == pass.ordinal) {
-            passes.getValue(pass).add(code)
+            val task = C_PassTask(stack, code)
+            passes.getValue(pass).add(task)
         } else {
             // Extra code is needed to maintain execution order:
             // - entity 0 adds code to pass A, that code adds code to pass B
             // - entity 1 adds code to pass B directly
             // -> on pass B entity 0 must be executed before entity 1
             val nextPass = C_ModulePass.values()[ordinal + 1]
-            passes.getValue(nextPass).add { onPass(pass, code) }
+
+            val task = C_PassTask(stack) { onPass(pass, code) }
+            passes.getValue(nextPass).add(task)
         }
     }
 
     private fun runPass(pass: C_ModulePass) {
         check(currentPass < pass)
         currentPass = pass
-        for (code in passes.getValue(pass)) {
-            code()
+        for (task in passes.getValue(pass)) {
+            globalCtx.processIncludedFile(task.stack) {
+                task.code()
+            }
         }
     }
 
@@ -373,6 +425,8 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
         val res = C_GraphUtils.topologicalSort(graph)
         return res
     }
+
+    private class C_PassTask(val stack: List<S_Pos>, val code: () -> Unit)
 }
 
 enum class C_DefType(val description: String) {
@@ -949,8 +1003,8 @@ class C_CompilerOptions(val gtv: Boolean = true, val deprecatedError: Boolean = 
 
 object C_Compiler {
     fun compile(
-            includeDir: C_IncludeDir,
-            mainFile: String,
+            sourceDir: C_SourceDir,
+            mainFile: C_SourcePath,
             options: C_CompilerOptions = C_CompilerOptions()
     ): C_CompilationResult {
         val globalCtx = C_GlobalContext(options)
@@ -958,16 +1012,15 @@ object C_Compiler {
         var error: C_Error? = null
 
         try {
-            val includeResolver = C_IncludeResolver(includeDir)
-            val code = includeResolver.resolve(mainFile).file.readText()
-            val ast = C_Parser.parse(mainFile, code)
-            module = ast.compile(globalCtx, mainFile, includeResolver)
+            val ast = readMainFile(sourceDir, mainFile)
+            val includeResolver = createIncludeResolver(sourceDir, mainFile)
+            module = ast.compile(globalCtx, mainFile.str(), includeResolver)
         } catch (e: C_Error) {
-            globalCtx.message(C_MessageType.ERROR, e.pos, e.code, e.errMsg)
+            globalCtx.error(e)
             error = e
         }
 
-        val messages = globalCtx.messages().sortedBy { it.pos }
+        val messages = CommonUtils.sortedByCopy(globalCtx.messages()) { ComparablePos(it.pos) }
 
         val errorMessage = messages.firstOrNull { it.type == C_MessageType.ERROR }
         if (error == null && errorMessage != null) {
@@ -975,6 +1028,47 @@ object C_Compiler {
         }
 
         return C_CompilationResult(module, error, messages)
+    }
+
+    fun getIncludedResources(
+            sourceDir: C_SourceDir,
+            mainFilePath: C_SourcePath,
+            transitive: Boolean,
+            fail: Boolean
+    ): List<C_IncludeResource> {
+        val ast = readMainFile(sourceDir, mainFilePath)
+        val includeResolver = createIncludeResolver(sourceDir, mainFilePath)
+
+        val globalCtx = C_GlobalContext(C_CompilerOptions())
+        val incCtx = C_IncludeContext.createTop(mainFilePath.str(), includeResolver)
+        val resources = mutableMapOf<String, C_IncludeResource>()
+        ast.collectIncludes(globalCtx, incCtx, transitive, fail, resources)
+
+        val includes = resources.values.toList()
+        return includes
+    }
+
+    private fun readMainFile(sourceDir: C_SourceDir, mainFile: C_SourcePath): S_ModuleDefinition {
+        val mainSourceFile = C_IncludeResolver.resolveFile(sourceDir, mainFile)
+        val ast = mainSourceFile.readAst()
+        return ast
+    }
+
+    private fun createIncludeResolver(sourceDir: C_SourceDir, mainFile: C_SourcePath): C_IncludeResolver {
+        val mainDir = mainFile.parent()
+        val includeResolver = C_IncludeResolver(sourceDir, mainDir)
+        return includeResolver
+    }
+
+    private class ComparablePos(sPos: S_Pos): Comparable<ComparablePos> {
+        private val path: C_SourcePath = sPos.path()
+        private val pos = sPos.pos()
+
+        override fun compareTo(other: ComparablePos): Int {
+            var d = path.compareTo(other.path)
+            if (d == 0) d = pos.compareTo(other.pos)
+            return d
+        }
     }
 }
 

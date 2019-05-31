@@ -93,9 +93,9 @@ object C_Utils {
 }
 
 object C_Parser {
-    private val currentFileLocal = ThreadLocal.withInitial<String> { "?" }
+    private val currentFileLocal = ThreadLocal.withInitial<C_SourcePath> { C_SourcePath(listOf("?")) }
 
-    fun parse(file: String, sourceCode: String): S_ModuleDefinition {
+    fun parse(filePath: C_SourcePath, sourceCode: String): S_ModuleDefinition {
         // The syntax error position returned by the parser library is misleading: if there is an error in the middle
         // of an operation, it returns the position of the beginning of the operation.
         // Following workaround handles this by tracking the position of the farthest reached token (seems to work fine).
@@ -111,17 +111,17 @@ object C_Parser {
         }
 
         try {
-            val ast = overrideCurrentFile(file) {
+            val ast = overrideCurrentFile(filePath) {
                 S_Grammar.parseToEnd(tokenSeq)
             }
             return ast
         } catch (e: ParseException) {
-            val pos = S_BasicPos(file, maxRow, maxCol)
+            val pos = S_BasicPos(filePath, maxRow, maxCol)
             throw C_Error(pos, "syntax", "Syntax error")
         }
     }
 
-    private fun <T> overrideCurrentFile(file: String, code: () -> T): T {
+    private fun <T> overrideCurrentFile(file: C_SourcePath, code: () -> T): T {
         val oldFile = currentFileLocal.get()
         try {
             currentFileLocal.set(file)

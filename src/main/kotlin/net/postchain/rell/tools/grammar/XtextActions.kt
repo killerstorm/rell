@@ -3,7 +3,7 @@ package net.postchain.rell.tools.grammar
 import org.apache.commons.lang3.StringUtils
 
 fun main(args: Array<String>) {
-    println("package net.postchain.rellc;\n")
+    println("package net.postchain.rell.compiler;\n")
     println("import org.eclipse.emf.ecore.EObject;\n")
     println("import net.postchain.rell.RellPackage;\n")
 

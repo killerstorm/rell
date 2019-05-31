@@ -4,19 +4,13 @@ import net.postchain.rell.MutableTypedKeyMap
 import net.postchain.rell.TypedKeyMap
 import net.postchain.rell.model.*
 
-abstract class S_Pos: Comparable<S_Pos> {
-    abstract fun file(): String
+abstract class S_Pos {
+    abstract fun path(): C_SourcePath
     abstract fun pos(): Long
-
-    override fun compareTo(other: S_Pos): Int {
-        var d = file().compareTo(other.file())
-        if (d == 0) d = pos().compareTo(other.pos())
-        return d
-    }
 }
 
-class S_BasicPos(val file: String, val row: Int, val col: Int): S_Pos() {
-    override fun file() = file
+class S_BasicPos(private val file: C_SourcePath, private val row: Int, private val col: Int): S_Pos() {
+    override fun path() = file
     override fun pos() = Math.min(row, 1_000_000_000) * 1_000_000_000L + Math.min(col, 1_000_000_000)
     override fun toString() = "$file($row:$col)"
 
@@ -107,8 +101,9 @@ sealed class S_Definition {
     abstract fun compile(ctx: C_DefinitionContext, entityIndex: Int)
 
     open fun collectIncludes(
-            ctx: C_IncludeContext,
-            nested: Boolean,
+            globalCtx: C_GlobalContext,
+            incCtx: C_IncludeContext,
+            transitive: Boolean,
             fail: Boolean,
             resources: MutableMap<String, C_IncludeResource>
     ){
@@ -532,13 +527,14 @@ class S_NamespaceDefinition(val name: S_Name, val definitions: List<S_Definition
     }
 
     override fun collectIncludes(
-            ctx: C_IncludeContext,
-            nested: Boolean,
+            globalCtx: C_GlobalContext,
+            incCtx: C_IncludeContext,
+            transitive: Boolean,
             fail: Boolean,
             resources: MutableMap<String, C_IncludeResource>
     ){
         for (def in definitions) {
-            def.collectIncludes(ctx, nested, fail, resources)
+            def.collectIncludes(globalCtx, incCtx, transitive, fail, resources)
         }
     }
 }
@@ -560,13 +556,14 @@ class S_ExternalDefinition(val pos: S_Pos, val name: String, val definitions: Li
     }
 
     override fun collectIncludes(
-            ctx: C_IncludeContext,
-            nested: Boolean,
+            globalCtx: C_GlobalContext,
+            incCtx: C_IncludeContext,
+            transitive: Boolean,
             fail: Boolean,
             resources: MutableMap<String, C_IncludeResource>
     ){
         for (def in definitions) {
-            def.collectIncludes(ctx, nested, fail, resources)
+            def.collectIncludes(globalCtx, incCtx, transitive, fail, resources)
         }
     }
 }
@@ -576,25 +573,28 @@ class S_IncludeDefinition(val pos: S_Pos, val pathPos: S_Pos, val path: String):
         val resource = resolve(ctx.incCtx)
         val subIncCtx = ctx.incCtx.subInclude(pathPos, resource)
         if (subIncCtx == null) {
-            // Already included in current namespace (indirectly, so no error)
+            // Already included in current namespace (transitively, so no error).
             return
         }
 
-        wrapError {
-            val module = readAst(resource)
+        val globalCtx = ctx.nsCtx.modCtx.globalCtx
+        val module = readAst(globalCtx, resource)
+
+        globalCtx.processIncludedFile(pos) {
             val subDefCtx = C_DefinitionContext(ctx.nsCtx, ctx.chainCtx, subIncCtx, ctx.namespaceName)
             module.compileDefs(subDefCtx)
         }
     }
 
     override fun collectIncludes(
-            ctx: C_IncludeContext,
-            nested: Boolean,
+            globalCtx: C_GlobalContext,
+            incCtx: C_IncludeContext,
+            transitive: Boolean,
             fail: Boolean,
             resources: MutableMap<String, C_IncludeResource>
     ){
         try {
-            collectIncludes0(ctx, nested, fail, resources)
+            collectIncludes0(globalCtx, incCtx, transitive, fail, resources)
         } catch (e: C_Error) {
             if (fail) {
                 throw e
@@ -603,8 +603,9 @@ class S_IncludeDefinition(val pos: S_Pos, val pathPos: S_Pos, val path: String):
     }
 
     private fun collectIncludes0(
+            globalCtx: C_GlobalContext,
             ctx: C_IncludeContext,
-            nested: Boolean,
+            transitive: Boolean,
             fail: Boolean,
             resources: MutableMap<String, C_IncludeResource>
     ){
@@ -618,25 +619,19 @@ class S_IncludeDefinition(val pos: S_Pos, val pathPos: S_Pos, val path: String):
             resources[resource.path] = resource
         }
 
-        if (nested) {
-            wrapError {
-                val module = readAst(resource)
-                module.collectIncludes(subIncCtx, nested, fail, resources)
-            }
-        }
-    }
-
-    private fun wrapError(code: () -> Unit) {
-        try {
-            code()
-        } catch (e: C_Error) {
-            if (e.pos != pathPos && e.pos != pos) {
-                throw C_Error(e.pos, e.code, e.errMsg, listOf(pos) + e.posStack)
+        if (transitive) {
+            val module = readAst(globalCtx, resource)
+            globalCtx.processIncludedFile(pos) {
+                module.collectIncludes(globalCtx, subIncCtx, transitive, fail, resources)
             }
         }
     }
 
     private fun resolve(ctx: C_IncludeContext): C_IncludeResource {
+        if (path == "" || path == "." || path == ".." || path.endsWith("/") || path.endsWith("\\")) {
+            throw C_Error(pathPos, "include_bad_path:$path", "Invalid path: '$path'")
+        }
+
         val fullPath = path + ".rell"
         try {
             return ctx.resolver.resolve(fullPath, path)
@@ -645,9 +640,11 @@ class S_IncludeDefinition(val pos: S_Pos, val pathPos: S_Pos, val path: String):
         }
     }
 
-    private fun readAst(resource: C_IncludeResource): S_ModuleDefinition {
+    private fun readAst(globalCtx: C_GlobalContext, resource: C_IncludeResource): S_ModuleDefinition {
         try {
-            return resource.file.readAst()
+            return globalCtx.processIncludedFile(pos) {
+                resource.file.readAst()
+            }
         } catch (e: C_CommonError) {
             throw C_Error(pos, e.code, e.msg)
         }
@@ -673,21 +670,15 @@ class S_ModuleDefinition(val definitions: List<S_Definition>) {
         }
     }
 
-    fun getIncludes(path: String, resolver: C_IncludeResolver, nested: Boolean, fail: Boolean): List<C_IncludeResource> {
-        val ctx = C_IncludeContext.createTop(path, resolver)
-        val resources = mutableMapOf<String, C_IncludeResource>()
-        collectIncludes(ctx, nested, fail, resources)
-        return resources.values.toList()
-    }
-
     fun collectIncludes(
-            ctx: C_IncludeContext,
-            nested: Boolean,
+            globalCtx: C_GlobalContext,
+            incCtx: C_IncludeContext,
+            transitive: Boolean,
             fail: Boolean,
             resources: MutableMap<String, C_IncludeResource>
     ){
         for (def in definitions) {
-            def.collectIncludes(ctx, nested, fail, resources)
+            def.collectIncludes(globalCtx, incCtx, transitive, fail, resources)
         }
     }
 }

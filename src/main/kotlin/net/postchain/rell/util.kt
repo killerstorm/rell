@@ -15,6 +15,9 @@ import java.io.File
 import javax.xml.bind.DatatypeConverter
 
 object CommonUtils {
+    fun bytesToHex(bytes: ByteArray): String = DatatypeConverter.printHexBinary(bytes).toLowerCase()
+    fun hexToBytes(hex: String): ByteArray = DatatypeConverter.parseHexBinary(hex)
+
     fun <T> split(lst: MutableList<T>, partSize: Int): List<MutableList<T>> {
         val s = lst.size
         if (s <= partSize) {
@@ -24,6 +27,24 @@ object CommonUtils {
         val parts = (s + partSize - 1) / partSize
         val res = (0 until parts).map { lst.subList(it * partSize, Math.min((it + 1) * partSize, s)) }
         return res
+    }
+
+    fun <T: Comparable<T>> compareLists(l1: List<T>, l2: List<T>): Int {
+        val n1 = l1.size
+        val n2 = l2.size
+        for (i in 0 until Math.min(n1, n2)) {
+            val c = l1[i].compareTo(l2[i])
+            if (c != 0) {
+                return c
+            }
+        }
+        return n1.compareTo(n2)
+    }
+
+    /** Invokes the key getter strictly one time for each item (builds list of pairs (item, key), then sorts). */
+    fun <T, K: Comparable<K>> sortedByCopy(data: Collection<T>, keyGetter: (T) -> K): List<T> {
+        val pairs = data.map { Pair(it, keyGetter(it)) }.sortedBy { it.second }
+        return pairs.map { it.first }
     }
 
     fun readFileContent(filename: String): String {
@@ -38,9 +59,6 @@ object CommonUtils {
             File(filename).readText()
         }
     }
-
-    fun bytesToHex(bytes: ByteArray): String = DatatypeConverter.printHexBinary(bytes).toLowerCase()
-    fun hexToBytes(hex: String): ByteArray = DatatypeConverter.parseHexBinary(hex)
 }
 
 object PostchainUtils {

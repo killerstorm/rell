@@ -4,9 +4,7 @@ import net.postchain.gtv.GtvNull
 import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.model.R_Routine
-import net.postchain.rell.parser.C_Compiler
-import net.postchain.rell.parser.C_DiskIncludeDir
-import net.postchain.rell.parser.C_MessageType
+import net.postchain.rell.parser.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.*
 import org.apache.commons.logging.LogFactory
@@ -180,10 +178,7 @@ private object LogRtPrinter: Rt_Printer() {
 object RellCliUtils {
     fun compileModule(rellPath: String): R_Module {
         val sourceFile = File(rellPath)
-        val sourceName = sourceFile.name
-
-        val includeDir = C_DiskIncludeDir(sourceFile.absoluteFile.parentFile)
-        val res = C_Compiler.compile(includeDir, sourceName)
+        val res = compile(sourceFile)
 
         val warnCnt = res.messages.filter { it.type == C_MessageType.WARNING }.size
         val errCnt = res.messages.filter { it.type == C_MessageType.ERROR }.size
@@ -198,7 +193,7 @@ object RellCliUtils {
 
         val module = res.module
         if (module == null) {
-            if (errCnt == 0) System.err.println("${C_MessageType.ERROR.text}: compilation failed")
+            if (errCnt == 0) System.err.println(errMsg("compilation failed"))
             exitProcess(1)
         } else if (errCnt > 0) {
             exitProcess(1)
@@ -206,4 +201,18 @@ object RellCliUtils {
 
         return module
     }
+
+    private fun compile(file: File): C_CompilationResult {
+        try {
+            val sourcePath = C_SourcePath.parse(file.name)
+            val sourceDir = C_DiskSourceDir(file.absoluteFile.parentFile)
+            val res = C_Compiler.compile(sourceDir, sourcePath)
+            return res
+        } catch (e: C_CommonError) {
+            System.err.println(errMsg(e.msg))
+            exitProcess(1)
+        }
+    }
+
+    private fun errMsg(msg: String) = "${C_MessageType.ERROR.text}: $msg"
 }

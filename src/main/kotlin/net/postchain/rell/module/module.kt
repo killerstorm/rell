@@ -10,10 +10,7 @@ import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.model.R_Operation
 import net.postchain.rell.model.R_Query
-import net.postchain.rell.parser.C_CompilationResult
-import net.postchain.rell.parser.C_Compiler
-import net.postchain.rell.parser.C_MessageType
-import net.postchain.rell.parser.C_VirtualIncludeDir
+import net.postchain.rell.parser.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.DefaultSqlExecutor
 import net.postchain.rell.sql.genSqlForChain
@@ -208,10 +205,10 @@ class RellPostchainModuleFactory(
         val moduleNameNode = rellNode["moduleName"]
         val moduleName = if (moduleNameNode == null) "" else moduleNameNode.asString()
 
-        val (sourceCodes, mainFileName) = getModuleCode(rellNode)
-        val includeDir = C_VirtualIncludeDir(sourceCodes)
-        val cResult = C_Compiler.compile(includeDir, mainFileName)
+        val (sourceCodes, mainFilePath) = getModuleCode(rellNode)
+        val sourceDir = C_VirtualSourceDir(sourceCodes)
 
+        val cResult = C_Compiler.compile(sourceDir, mainFilePath)
         val module = processCompilationResult(cResult)
         val chainCtx = createChainContext(data, rellNode, module)
 
@@ -251,7 +248,7 @@ class RellPostchainModuleFactory(
         return cResult.module
     }
 
-    private fun getModuleCode(rellNode: Map<String, Gtv>): Pair<Map<String, String>, String> {
+    private fun getModuleCode(rellNode: Map<String, Gtv>): Pair<Map<C_SourcePath, String>, C_SourcePath> {
         val filesNode = rellNode[CONFIG_RELL_FILES]
         val sourcesNode = rellNode[CONFIG_RELL_SOURCES]
 
@@ -267,14 +264,21 @@ class RellPostchainModuleFactory(
             filesNode!!.asDict().mapValues { (_, v) -> CommonUtils.readFileContent(v.asString()) }
         }
 
-        val mainFileName = rellNode.getValue("mainFile").asString()
+        val sourcePathsToCodes = sourceCodes.mapKeys { (k, _) -> parseSourcePath(k) }
 
-        if (mainFileName !in sourceCodes) {
-            throw UserMistake("File '$mainFileName' not found in sources")
+        val mainFilePath = parseSourcePath(rellNode.getValue("mainFile").asString())
+        if (mainFilePath !in sourcePathsToCodes) {
+            throw UserMistake("File '$mainFilePath' not found in sources")
         }
 
-        return Pair(sourceCodes, mainFileName)
+        return Pair(sourcePathsToCodes, mainFilePath)
     }
+
+    private fun parseSourcePath(s: String): C_SourcePath {
+        val path = C_SourcePath.parseOpt(s)
+        return path ?: throw UserMistake("Invalid file path: '$s'")
+    }
+
 
     private fun createChainContext(rawConfig: Gtv, rellNode: Map<String, Gtv>, rModule: R_Module): Rt_ChainContext {
         val argsRec = rModule.moduleArgsRecord

@@ -13,18 +13,18 @@ object RellTestUtils {
     val MAIN_FILE = "main.rell"
 
     fun processModule(code: String, processor: (RellTestModule) -> String): String {
-        val includeDir = C_VirtualIncludeDir(mapOf(MAIN_FILE to code))
+        val includeDir = C_VirtualSourceDir(mapOf(C_SourcePath.parse(MAIN_FILE) to code))
         return processModule(includeDir, processor = processor)
     }
 
     fun processModule(
-            includeDir: C_IncludeDir,
+            sourceDir: C_SourceDir,
             errPos: Boolean = false,
             options: C_CompilerOptions = C_CompilerOptions(),
             processor: (RellTestModule) -> String
     ): String {
         val p = catchCtErr0(errPos) {
-            parseModule(includeDir, options)
+            parseModule(sourceDir, options)
         }
         return p.first ?: processor(p.second!!)
     }
@@ -127,9 +127,9 @@ object RellTestUtils {
         }
     }
 
-    fun parseModule(includeDir: C_IncludeDir, options: C_CompilerOptions): RellTestModule {
-        val res = C_Compiler.compile(includeDir, MAIN_FILE, options)
-        saveSource(includeDir, res)
+    fun parseModule(sourceDir: C_SourceDir, options: C_CompilerOptions): RellTestModule {
+        val res = C_Compiler.compile(sourceDir, C_SourcePath.parse(MAIN_FILE), options)
+        saveSource(sourceDir, res)
         if (res.error != null) {
             throw res.error!!
         } else {
@@ -137,10 +137,10 @@ object RellTestUtils {
         }
     }
 
-    private fun saveSource(includeDir: C_IncludeDir, res: C_CompilationResult) {
+    private fun saveSource(sourceDir: C_SourceDir, res: C_CompilationResult) {
         val error = res.error
         val result = if (error == null) "OK" else "ct_err:${error.code}"
-        val includeResolver = C_IncludeResolver(includeDir)
+        val includeResolver = C_IncludeResolver(sourceDir)
         val code = includeResolver.resolve(MAIN_FILE).file.readText()
         TestSourcesRecorder.addSource(code, result)
     }
