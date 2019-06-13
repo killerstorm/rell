@@ -62,7 +62,7 @@ class RellTestContext(useSql: Boolean = true): Closeable {
             realSqlExec.transaction {
                 SqlUtils.dropAll(realSqlExec, true)
 
-                val sql = genSqlCreateSysTables()
+                val sql = SqlGen.genSqlCreateSysTables()
                 realSqlExec.execute(sql)
 
                 initSqlInsertBlockchains(realSqlExec)

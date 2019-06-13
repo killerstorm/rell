@@ -15,7 +15,6 @@ import net.postchain.rell.PostchainUtils
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.module.RellPostchainModuleFactory
 import net.postchain.rell.sql.SqlExecutor
-import java.sql.Connection
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.fail
@@ -24,7 +23,8 @@ class RellGtxTester(
         tstCtx: RellTestContext,
         classDefs: List<String> = listOf(),
         inserts: List<String> = listOf(),
-        gtv: Boolean = false
+        gtv: Boolean = false,
+        chainId: Long = 995511
 ): RellBaseTester(tstCtx, classDefs, inserts, gtv)
 {
     var wrapRtErrors = true
@@ -34,15 +34,16 @@ class RellGtxTester(
     var nodeId: Int = 3377
 
     init {
-        chainId = 995511
+        super.chainId = chainId
     }
 
-    override fun initSqlReset(conn: Connection, sqlExec: SqlExecutor, moduleCode: String, module: R_Module) {
+    override fun initSqlReset(sqlExec: SqlExecutor, moduleCode: String, module: R_Module) {
         val gtxModule = createGtxModule(moduleCode)
 
         sqlExec.transaction {
+            val con = sqlExec.connection()
             val dbAccess = PostchainUtils.createDatabaseAccess()
-            val ctx = BaseEContext(conn, chainId, nodeId, dbAccess)
+            val ctx = BaseEContext(con, chainId, nodeId, dbAccess)
             GTXSchemaManager.initializeDB(ctx)
             gtxModule.initializeDB(ctx)
         }

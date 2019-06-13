@@ -14,7 +14,7 @@ import java.io.OutputStream
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
-    val argsEx = parseArgs(args)
+    val argsEx = parseCliArgs(args)
     try {
         main0(argsEx)
     } catch (e: RellCfgErr) {
@@ -158,7 +158,7 @@ private fun verifyCfg(b: Boolean, msg: String) {
     }
 }
 
-private fun parseArgs(args: Array<String>): RellCfgArgs {
+private fun parseCliArgs(args: Array<String>): RellCfgArgs {
     val argsObj = RellCfgArgs()
     val cl = CommandLine(argsObj)
     try {

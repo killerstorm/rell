@@ -2,6 +2,7 @@ package net.postchain.rell.module
 
 import net.postchain.core.UserMistake
 import net.postchain.rell.test.BaseGtxTest
+import net.postchain.rell.test.RellGtxTester
 import net.postchain.rell.test.SqlTestUtils
 import org.junit.Test
 import kotlin.test.assertFailsWith
@@ -148,6 +149,22 @@ class GtxModuleTest : BaseGtxTest() {
         tst.defs = classDefs
         assertFailsWith<UserMistake> {
             chkFull("query q(a: integer, b: integer) = a / b;", "a:123,b:0", "")
+        }
+    }
+
+    @Test fun testTableStructureUpdate() {
+        run {
+            val t = RellGtxTester(tstCtx, chainId = 0)
+            t.def("class user { name; }")
+            t.insert("c0.user", "name", "100,'Bob'")
+            t.insert("c0.user", "name", "101,'Alice'")
+            t.chkData("user(100,Bob)", "user(101,Alice)")
+        }
+
+        run {
+            val t = RellGtxTester(tstCtx, chainId = 0)
+            t.def("class user { name; mutable score: integer = 123; }")
+            t.chkData("user(100,Bob,123)", "user(101,Alice,123)")
         }
     }
 }

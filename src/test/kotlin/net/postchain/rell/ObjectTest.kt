@@ -121,8 +121,7 @@ class ObjectTest: BaseRellTest() {
         def("object foo { x: integer = g(); }")
         def("object bar { y: integer = 123; }")
         def("function g(): integer = bar.y;")
-        tst.autoInitObjects = false
-        tst.chkInitObjects("rt_err:obj_norec:bar")
+        tst.chkInit("rt_err:obj_norec:bar")
     }
 
     @Test fun testUpdate() {
@@ -206,9 +205,7 @@ class ObjectTest: BaseRellTest() {
         insert("c0.foo", "x", "1,123")
         insert("c0.foo", "x", "2,456")
         insert("c0.foo", "x", "3,789")
-        tst.autoInitObjects = false
-
-        chk("foo.x", "rt_err:obj_multirec:foo:3")
+        chk("foo.x", "rt_err:obj_multirec:foo:4")
     }
 
     @Test fun testUpdateShortSyntax() {

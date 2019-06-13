@@ -4,7 +4,10 @@ import mu.KLogging
 import net.postchain.core.*
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvDictionary
-import net.postchain.gtx.*
+import net.postchain.gtx.ExtOpData
+import net.postchain.gtx.GTXModule
+import net.postchain.gtx.GTXModuleFactory
+import net.postchain.gtx.GTXOperation
 import net.postchain.rell.CommonUtils
 import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_Module
@@ -13,11 +16,13 @@ import net.postchain.rell.model.R_Query
 import net.postchain.rell.parser.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.DefaultSqlExecutor
-import net.postchain.rell.sql.genSqlForChain
+import net.postchain.rell.sql.SqlInit
 
-val RELL_VERSION = "v0.9"
-val CONFIG_RELL_FILES = "files_$RELL_VERSION"
-val CONFIG_RELL_SOURCES = "sources_$RELL_VERSION"
+val RELL_LANG_VERSION = "0.9"
+val RELL_VERSION = "0.9.0"
+
+val CONFIG_RELL_FILES = "files_v$RELL_LANG_VERSION"
+val CONFIG_RELL_SOURCES = "sources_v$RELL_LANG_VERSION"
 
 private object StdoutRtPrinter : Rt_Printer() {
     override fun print(str: String) {
@@ -104,23 +109,10 @@ class RellPostchainModule(
     }
 
     override fun initializeDB(ctx: EContext) {
-        if (GTXSchemaManager.getModuleVersion(ctx, moduleName) == null) {
-            initDb(ctx)
-            GTXSchemaManager.setModuleVersion(ctx, moduleName, 0)
-        }
-    }
-
-    private fun initDb(ctx: EContext) {
         factory.catchRtErr {
             val heightProvider = Rt_ConstantChainHeightProvider(-1)
             val modCtx = makeRtModuleContext(ctx, null, heightProvider)
-
-            val sql = genSqlForChain(modCtx.sqlCtx)
-            ctx.conn.createStatement().use {
-                it.execute(sql)
-            }
-
-            modCtx.insertObjectRecords()
+            SqlInit.init(modCtx, true)
         }
     }
 

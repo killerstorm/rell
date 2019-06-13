@@ -270,7 +270,6 @@ class LibBlockTransactionTest: BaseRellTest() {
         t.insert("c${chainId}.foo", "b,t,value", "1,$blockIid,$txIid,0")
         t.strictToString = false
         t.dropTables = false
-        t.autoInitObjects = false
         t.chainId = chainId
         return t
     }

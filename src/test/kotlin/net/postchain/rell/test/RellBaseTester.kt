@@ -77,6 +77,8 @@ abstract class RellBaseTester(
 
     protected val eval = RellTestEval()
 
+    private val expectedData = mutableListOf<String>()
+
     protected fun compilerOptions() = C_CompilerOptions(gtv, deprecatedError)
 
     fun def(def: String) {
@@ -110,13 +112,12 @@ abstract class RellBaseTester(
     }
 
     private fun initSql(moduleCode: String, module: R_Module) {
-        val sqlConn = tstCtx.sqlConn()
         val sqlExec = tstCtx.sqlExec()
-        initSqlReset(sqlConn, sqlExec, moduleCode, module)
+        initSqlReset(sqlExec, moduleCode, module)
         initSqlInserts(sqlExec)
     }
 
-    protected abstract fun initSqlReset(conn: Connection, exec: SqlExecutor, moduleCode: String, module: R_Module)
+    protected abstract fun initSqlReset(exec: SqlExecutor, moduleCode: String, module: R_Module)
 
     private fun createIncludeDir(code: String): C_SourceDir {
         val files = files(code)
@@ -139,7 +140,32 @@ abstract class RellBaseTester(
         return if (tstCtx.useSql) tstCtx.sqlConn() else MockConnection { TODO() }
     }
 
-    fun dumpDatabase(): List<String> {
+    fun chkData(expected: List<String>) {
+        expectedData.clear()
+        chkDataNew(expected)
+    }
+
+    fun chkData(vararg expected: String) {
+        chkData(expected.toList())
+    }
+
+    fun chkDataNew(expected: List<String>) {
+        expectedData.addAll(expected)
+        val actual = dumpDatabase()
+        assertEquals(expectedData, actual)
+    }
+
+    fun chkDataNew(vararg expected: String) {
+        chkDataNew(expected.toList())
+    }
+
+    fun chkDataSql(sql: String, vararg expected: String) {
+        init()
+        val actual = SqlTestUtils.dumpSql(getSqlExec(), sql)
+        assertEquals(expected.toList(), actual)
+    }
+
+    private fun dumpDatabase(): List<String> {
         init()
         val sqlMapping = createChainSqlMapping()
         return SqlTestUtils.dumpDatabaseClasses(tstCtx.sqlExec(), sqlMapping, moduleProto!!)

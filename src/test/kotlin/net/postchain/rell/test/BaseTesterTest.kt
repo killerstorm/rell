@@ -1,7 +1,6 @@
 package net.postchain.rell.test
 
-abstract class BaseTesterTest(useSql: Boolean): BaseResourcefulTest() {
-    protected val tstCtx = resource(RellTestContext(useSql))
+abstract class BaseTesterTest(useSql: Boolean): BaseContextTest(useSql) {
     protected abstract val tst: RellBaseTester
 
     fun def(def: String) = tst.def(def)

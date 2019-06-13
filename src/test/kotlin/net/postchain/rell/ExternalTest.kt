@@ -517,6 +517,17 @@ class ExternalTest: BaseRellTest() {
         )
     }
 
+    @Test fun testMetaClassObject() {
+        tstCtx.blockchain(333, "deadbeef")
+        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
+
+        chkMetaClass(
+                "object user { name: text = 'Bob'; }",
+                "external 'foo' { class user(log){} }",
+                "rt_err:external_meta_nocls:foo:user"
+        )
+    }
+
     @Test fun testMetaClassNoLog() {
         tstCtx.blockchain(333, "deadbeef")
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)

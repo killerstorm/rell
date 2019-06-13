@@ -10,8 +10,8 @@ import net.postchain.rell.model.R_Module
 import net.postchain.rell.parser.C_MessageType
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlExecutor
+import net.postchain.rell.sql.SqlInit
 import net.postchain.rell.sql.SqlUtils
-import net.postchain.rell.sql.genSqlForChain
 import org.junit.Assert
 import java.sql.Connection
 import kotlin.test.assertEquals
@@ -23,8 +23,6 @@ class RellCodeTester(
         gtv: Boolean = false
 ): RellBaseTester(tstCtx, classDefs, inserts, gtv)
 {
-    private val expectedData = mutableListOf<String>()
-
     var gtvResult: Boolean = gtv
         set(value) {
             checkNotInited()
@@ -33,15 +31,15 @@ class RellCodeTester(
 
     var dropTables = true
     var createTables = true
-    var autoInitObjects = true
     var strictToString = true
     var opContext: Rt_OpContext? = null
     var sqlUpdatePortionSize = 1000
 
     private val chainDependencies = mutableMapOf<String, TestChainDependency>()
 
-    override fun initSqlReset(conn: Connection, sqlExec: SqlExecutor, moduleCode: String, module: R_Module) {
-        val sqlCtx = createSqlCtx(module, sqlExec)
+    override fun initSqlReset(sqlExec: SqlExecutor, moduleCode: String, module: R_Module) {
+        val globalCtx = createInitGlobalCtx(sqlExec)
+        val modCtx = createModuleCtx(globalCtx, module)
 
         sqlExec.transaction {
             if (dropTables) {
@@ -49,19 +47,14 @@ class RellCodeTester(
             }
 
             if (createTables) {
-                val sql = genSqlForChain(sqlCtx)
-                sqlExec.execute(sql)
-            }
-
-            if (autoInitObjects) {
-                initSqlObjects(sqlExec, sqlCtx)
+                SqlInit.init(modCtx, true)
             }
         }
     }
 
-    private fun initSqlObjects(sqlExec: SqlExecutor, sqlCtx: Rt_SqlContext) {
+    fun createInitGlobalCtx(sqlExec: SqlExecutor): Rt_GlobalContext {
         val chainCtx = Rt_ChainContext(GtvNull, Rt_NullValue)
-        val globalCtx = Rt_GlobalContext(
+        return Rt_GlobalContext(
                 Rt_FailingPrinter,
                 Rt_FailingPrinter,
                 sqlExec,
@@ -70,8 +63,15 @@ class RellCodeTester(
                 logSqlErrors = true,
                 typeCheck = true
         )
+    }
+
+    private fun initSqlObjects(sqlExec: SqlExecutor, sqlCtx: Rt_SqlContext) {
+        val globalCtx = createInitGlobalCtx(sqlExec)
         val modCtx = Rt_ModuleContext(globalCtx, sqlCtx.module, sqlCtx)
-        modCtx.insertObjectRecords()
+
+        for (rObject in sqlCtx.module.objects.values) {
+            modCtx.insertObjectRecord(rObject)
+        }
     }
 
     fun chainDependency(name: String, rid: String, height: Long) {
@@ -128,31 +128,6 @@ class RellCodeTester(
     fun chkFnEx(code: String, expected: String) {
         val actual = callFn(code)
         assertEquals(expected, actual)
-    }
-
-    fun chkData(expected: List<String>) {
-        expectedData.clear()
-        chkDataNew(expected)
-    }
-
-    fun chkData(vararg expected: String) {
-        chkData(expected.toList())
-    }
-
-    fun chkDataNew(expected: List<String>) {
-        expectedData.addAll(expected)
-        val actual = dumpDatabase()
-        assertEquals(expectedData, actual)
-    }
-
-    fun chkDataNew(vararg expected: String) {
-        chkDataNew(expected.toList())
-    }
-
-    fun chkDataSql(sql: String, vararg expected: String) {
-        init()
-        val actual = SqlTestUtils.dumpSql(getSqlExec(), sql)
-        assertEquals(expected.toList(), actual)
     }
 
     private fun callFn(code: String): String {
@@ -219,7 +194,7 @@ class RellCodeTester(
         )
     }
 
-    private fun createModuleCtx(globalCtx: Rt_GlobalContext, module: R_Module): Rt_ModuleContext {
+    fun createModuleCtx(globalCtx: Rt_GlobalContext, module: R_Module): Rt_ModuleContext {
         val sqlCtx = createSqlCtx(module, globalCtx.sqlExec)
         return Rt_ModuleContext(globalCtx, module, sqlCtx)
     }
@@ -248,15 +223,9 @@ class RellCodeTester(
         }
     }
 
-    fun chkInitObjects(expected: String) {
-        init()
-        val sqlExec = getSqlExec()
-        val moduleProto = getModuleProto()
-        val sqlCtx = createSqlCtx(moduleProto, sqlExec)
+    fun chkInit(expected: String) {
         val actual = RellTestUtils.catchRtErr {
-            sqlExec.transaction {
-                initSqlObjects(sqlExec, sqlCtx)
-            }
+            init()
             "OK"
         }
         assertEquals(expected, actual)

@@ -1,5 +1,6 @@
 package net.postchain.rell.test
 
+import com.google.common.collect.HashMultimap
 import com.google.common.io.Files
 import net.postchain.gtv.Gtv
 import net.postchain.rell.CommonUtils
@@ -7,7 +8,7 @@ import net.postchain.rell.model.R_Class
 import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.module.GtvToRtContext
-import net.postchain.rell.module.RELL_VERSION
+import net.postchain.rell.module.RELL_LANG_VERSION
 import net.postchain.rell.parser.C_Message
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_GtvValue
@@ -84,21 +85,21 @@ object SqlTestUtils {
 
         for (cls in module.classes.values) {
             if (cls.sqlMapping.autoCreateTable()) {
-                dumpClassTable(sqlExec, chainMapping, cls, list)
+                dumpClass(sqlExec, chainMapping, cls, list)
             }
         }
 
         for (obj in module.objects.values) {
-            dumpClassTable(sqlExec, chainMapping, obj.rClass, list)
+            dumpClass(sqlExec, chainMapping, obj.rClass, list)
         }
 
         return list.toList()
     }
 
-    private fun dumpClassTable(sqlExec: SqlExecutor, chainMapping: Rt_ChainSqlMapping, cls: R_Class, list: MutableList<String>) {
+    private fun dumpClass(sqlExec: SqlExecutor, chainMapping: Rt_ChainSqlMapping, cls: R_Class, list: MutableList<String>) {
         val table = cls.sqlMapping.table(chainMapping)
         val cols = listOf(cls.sqlMapping.rowidColumn()) + cls.attributes.values.map { it.sqlMapping }
-        val sql = getClassDumpSql(table, cols, cls.sqlMapping.rowidColumn())
+        val sql = getTableDumpSql(table, cols, cls.sqlMapping.rowidColumn())
         val rows = dumpSql(sqlExec, sql).map { "${cls.name}($it)" }
         list += rows
     }
@@ -109,7 +110,7 @@ object SqlTestUtils {
         return list
     }
 
-    private fun getClassDumpSql(table: String, columns: List<String>, sortColumn: String?): String {
+    private fun getTableDumpSql(table: String, columns: List<String>, sortColumn: String?): String {
         val buf = StringBuilder()
         buf.append("SELECT")
         columns.joinTo(buf, ", ") { "\"$it\"" }
@@ -144,6 +145,41 @@ object SqlTestUtils {
         }
 
         return values.joinToString(",")
+    }
+
+    fun dumpDatabaseTables(con: Connection, sqlExec: SqlExecutor): Map<String, List<String>> {
+        val res = mutableMapOf<String, List<String>>()
+
+        val struct = dumpTablesStructure(con)
+        for ((table, attrs) in struct) {
+            val columns = attrs.keys.toMutableList()
+            val rowid = columns.remove(ROWID_COLUMN)
+            if (rowid) columns.add(0, ROWID_COLUMN)
+            val sql = getTableDumpSql(table, columns, if (rowid) ROWID_COLUMN else null)
+            val rows = dumpSql(sqlExec, sql)
+            res[table] = rows
+        }
+
+        return res
+    }
+
+    fun dumpTablesStructure(con: Connection): Map<String, Map<String, String>> {
+        val map = HashMultimap.create<String, Pair<String, String>>()
+        con.metaData.getColumns(null, "public", "c0.%", null).use { rs ->
+            while (rs.next()) {
+                val table = rs.getString(3)
+                val column = rs.getString(4)
+                val type = rs.getString(6)
+                map.put(table, Pair(column, type))
+            }
+        }
+
+        val res = mutableMapOf<String, Map<String, String>>()
+        for (table in map.keySet().sorted()) {
+            res[table] = map[table].sortedBy { it.first }.toMap()
+        }
+
+        return res
     }
 }
 
@@ -189,7 +225,7 @@ object GtvTestUtils {
 
 object TestSourcesRecorder {
     private val ENABLED = false
-    private val SOURCES_FILE: String = System.getProperty("user.home") + "/testsources-$RELL_VERSION.rell"
+    private val SOURCES_FILE: String = System.getProperty("user.home") + "/testsources-$RELL_LANG_VERSION.rell"
 
     private val sync = Any()
     private val sources = mutableMapOf<String, String>()

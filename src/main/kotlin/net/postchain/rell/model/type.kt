@@ -72,6 +72,7 @@ sealed class R_Type(val name: String) {
     val sqlAdapter = createSqlAdapter()
 
     open fun isReference(): Boolean = false
+    open fun defaultValue(): Rt_Value? = null
     open fun comparator(): Comparator<Rt_Value>? = null
     protected open fun isDirectMutable(): Boolean = false
     protected open fun isDirectVirtualable(): Boolean = true
@@ -128,6 +129,7 @@ object R_UnitType: R_PrimitiveType("unit", SQLDataType.OTHER) {
 }
 
 object R_BooleanType: R_PrimitiveType("boolean", SQLDataType.BOOLEAN) {
+    override fun defaultValue() = Rt_BooleanValue(false)
     override fun comparator() = Rt_Comparator.create { it.asBoolean() }
 
     override fun fromCli(s: String): Rt_Value {
@@ -153,6 +155,7 @@ private object R_TypeSqlAdapter_Boolean: R_TypeSqlAdapter_Primitive("boolean") {
 }
 
 object R_TextType: R_PrimitiveType("text", PostgresDataType.TEXT) {
+    override fun defaultValue() = Rt_TextValue("")
     override fun comparator() = Rt_Comparator.create { it.asString() }
     override fun fromCli(s: String): Rt_Value = Rt_TextValue(s)
     override fun createGtvConversion() = GtvRtConversion_Text
@@ -168,6 +171,7 @@ private object R_TypeSqlAdapter_Text: R_TypeSqlAdapter_Primitive("text") {
 }
 
 object R_IntegerType: R_PrimitiveType("integer", SQLDataType.BIGINT) {
+    override fun defaultValue() = Rt_IntValue(0)
     override fun comparator() = Rt_Comparator.create { it.asInteger() }
     override fun fromCli(s: String): Rt_Value = Rt_IntValue(s.toLong())
 
@@ -184,6 +188,7 @@ private object R_TypeSqlAdapter_Integer: R_TypeSqlAdapter_Primitive("integer") {
 }
 
 object R_ByteArrayType: R_PrimitiveType("byte_array", PostgresDataType.BYTEA) {
+    override fun defaultValue() = Rt_ByteArrayValue(byteArrayOf())
     override fun comparator() = Rt_Comparator({ it.asByteArray() }, Comparator { x, y -> Arrays.compareUnsigned(x, y) })
     override fun fromCli(s: String): Rt_Value = Rt_ByteArrayValue(CommonUtils.hexToBytes(s))
 
@@ -241,6 +246,7 @@ private object R_TypeSqlAdapter_Json: R_TypeSqlAdapter_Primitive("json") {
 }
 
 object R_NullType: R_Type("null") {
+    override fun defaultValue() = Rt_NullValue
     override fun comparator() = Rt_Comparator.create { 0 }
     override fun toStrictString() = "null"
     override fun calcCommonType(other: R_Type): R_Type? = R_NullableType(other)
@@ -365,6 +371,7 @@ class R_NullableType(val valueType: R_Type): R_Type(valueType.name + "?") {
     override fun isReference() = valueType.isReference()
     override fun isDirectMutable() = false
 
+    override fun defaultValue() = Rt_NullValue
     override fun comparator() = valueType.comparator()
     override fun fromCli(s: String): Rt_Value = if (s == "null") Rt_NullValue else valueType.fromCli(s)
     override fun toStrictString() = name

@@ -1,11 +1,15 @@
 package net.postchain.rell.runtime
 
 import com.google.common.collect.Sets
+import mu.KLogging
 import net.postchain.core.ByteArrayKey
 import net.postchain.gtv.Gtv
 import net.postchain.rell.CommonUtils
 import net.postchain.rell.model.*
+import net.postchain.rell.sql.MetaClass
+import net.postchain.rell.sql.MetaClassType
 import net.postchain.rell.sql.SqlExecutor
+import net.postchain.rell.sql.SqlMeta
 
 class Rt_GlobalContext(
         val stdoutPrinter: Rt_Printer,
@@ -25,7 +29,7 @@ class Rt_SqlContext private constructor(
         val mainChainMapping: Rt_ChainSqlMapping,
         private val linkedExternalChains: List<Rt_ExternalChain>
 ) {
-    companion object {
+    companion object : KLogging() {
         fun createNoExternalChains(module: R_Module, mainChainMapping: Rt_ChainSqlMapping): Rt_SqlContext {
             check(module.externalChains.isEmpty()) { "Module uses external chains" }
             return Rt_SqlContext(module, mainChainMapping, listOf())
@@ -63,8 +67,6 @@ class Rt_SqlContext private constructor(
 
             val dbChains = loadDatabaseBlockchains(sqlExec)
             val dbRidMap = dbChains.map { (chainId, rid) -> Pair(CommonUtils.bytesToHex(rid), chainId) }.toMap()
-
-
 
             val res = mutableMapOf<String, Rt_ExternalChain>()
             for ((name, dep) in dependencies) {
@@ -127,7 +129,7 @@ class Rt_SqlContext private constructor(
         }
 
         private fun checkExternalMetaInfo(sqlCtx: Rt_SqlContext, chains: Map<String, Rt_ExternalChain>, sqlExec: SqlExecutor) {
-            val chainMetaClasses = chains.mapValues { (_, chain) -> loadExternalMetaClasses(chain, sqlExec) }
+            val chainMetaClasses = chains.mapValues { (name, chain) -> loadExternalMetaData(name, chain, sqlExec) }
             val chainExternalClasses = getChainExternalClasses(sqlCtx.module)
 
             for (chain in chainExternalClasses.keys) {
@@ -149,8 +151,9 @@ class Rt_SqlContext private constructor(
             }
         }
 
-        private fun checkMissingClasses(chain: String, extClasses: Map<String, R_Class>, metaClasses: Map<String, Rt_ExternalClass>) {
-            val missingClasses = Sets.difference(extClasses.keys, metaClasses.keys)
+        private fun checkMissingClasses(chain: String, extClasses: Map<String, R_Class>, metaClasses: Map<String, MetaClass>) {
+            val metaClassNames = metaClasses.filter { (_, c) -> c.type == MetaClassType.CLASS }.keys
+            val missingClasses = Sets.difference(extClasses.keys, metaClassNames)
             if (!missingClasses.isEmpty()) {
                 val list = missingClasses.sorted()
                 throw Rt_Error("external_meta_nocls:$chain:${list.joinToString(",")}",
@@ -158,7 +161,7 @@ class Rt_SqlContext private constructor(
             }
         }
 
-        private fun checkMissingAttrs(chain: String, extCls: R_Class, metaCls: Rt_ExternalClass) {
+        private fun checkMissingAttrs(chain: String, extCls: R_Class, metaCls: MetaClass) {
             val metaAttrNames = metaCls.attrs.keys
             val extAttrNames = extCls.attributes.keys
             val missingAttrs = Sets.difference(extAttrNames, metaAttrNames)
@@ -170,7 +173,7 @@ class Rt_SqlContext private constructor(
             }
         }
 
-        private fun checkAttrTypes(sqlCtx: Rt_SqlContext, chain: String, extCls: R_Class, metaCls: Rt_ExternalClass) {
+        private fun checkAttrTypes(sqlCtx: Rt_SqlContext, chain: String, extCls: R_Class, metaCls: MetaClass) {
             for (extAttr in extCls.attributes.values.sortedBy { it.name }) {
                 val attrName = extAttr.name
                 val metaAttr = metaCls.attrs.getValue(attrName)
@@ -197,45 +200,19 @@ class Rt_SqlContext private constructor(
             return res
         }
 
-        private fun loadExternalMetaClasses(chain: Rt_ExternalChain, sqlExec: SqlExecutor): Map<String, Rt_ExternalClass> {
-            val res = mutableMapOf<String, Rt_ExternalClass>()
+        private fun loadExternalMetaData(name: String, chain: Rt_ExternalChain, sqlExec: SqlExecutor): Map<String, MetaClass> {
+            var res = mapOf<String, MetaClass>()
+
             sqlExec.transaction {
-                val clsAttrMap = loadExternalMetaAttrs(sqlExec, chain.sqlMapping.metaAttributesTable)
-                val clsMap = loadExternalMetaClasses(sqlExec, chain.sqlMapping.metaClassTable, clsAttrMap)
-                res.putAll(clsMap)
+                val msgs = Rt_Messages(logger)
+                try {
+                    res = SqlMeta.loadMetaData(sqlExec, chain.sqlMapping, msgs)
+                    msgs.checkErrors()
+                } catch (e: Rt_Error) {
+                    throw Rt_Error(e.code, "Failed to load metadata for external chain '$name' (chain_id = ${chain.chainId})", e)
+                }
             }
-            return res.toMap()
-        }
 
-        private fun loadExternalMetaClasses(
-                sqlExec: SqlExecutor,
-                table: String,
-                clsAttrMap: Map<Int, Map<String, Rt_ExternalAttr>>
-        ): Map<String, Rt_ExternalClass> {
-            val sql = """SELECT "id", "name", "log" FROM "$table";"""
-            val res = mutableMapOf<String, Rt_ExternalClass>()
-            sqlExec.executeQuery(sql, {}) { rs ->
-                val clsId = rs.getInt(1)
-                val name = rs.getString(2)
-                val log = rs.getBoolean(3)
-                check(name !in res)
-                val attrs = clsAttrMap.getOrDefault(clsId, mapOf())
-                res[name] = Rt_ExternalClass(log, attrs)
-            }
-            return res.toMap()
-        }
-
-        private fun loadExternalMetaAttrs(sqlExec: SqlExecutor, table: String): Map<Int, Map<String, Rt_ExternalAttr>> {
-            val sql = """SELECT "class_id", "name", "type" FROM "$table";"""
-            val res = mutableMapOf<Int, MutableMap<String, Rt_ExternalAttr>>()
-            sqlExec.executeQuery(sql, {}) { rs ->
-                val clsId = rs.getInt(1)
-                val name = rs.getString(2)
-                val type = rs.getString(3)
-                val attrMap = res.computeIfAbsent(clsId) { mutableMapOf() }
-                check(name !in attrMap)
-                attrMap[name] = Rt_ExternalAttr(type)
-            }
             return res
         }
 
@@ -253,15 +230,16 @@ class Rt_SqlContext private constructor(
 }
 
 class Rt_ModuleContext(val globalCtx: Rt_GlobalContext, val module: R_Module, val sqlCtx: Rt_SqlContext) {
-    fun insertObjectRecords() {
+    fun createRootFrame(): Rt_CallFrame {
         val rFrameBlock = R_FrameBlock(null, R_FrameBlockId(0), 0, 0)
         val rFrame = R_CallFrame(0, rFrameBlock)
         val entCtx = Rt_EntityContext(this, true)
-        val frame = Rt_CallFrame(entCtx, rFrame)
+        return Rt_CallFrame(entCtx, rFrame)
+    }
 
-        for (rObject in module.objects.values) {
-            rObject.insert(frame)
-        }
+    fun insertObjectRecord(rObject: R_Object) {
+        val frame = createRootFrame()
+        rObject.insert(frame)
     }
 }
 

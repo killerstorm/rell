@@ -3,8 +3,23 @@ package net.postchain.rell.runtime
 import net.postchain.core.ByteArrayKey
 import net.postchain.rell.model.*
 
-sealed class Rt_BaseError(msg: String): Exception(msg)
-class Rt_Error(val code: String, msg: String): Rt_BaseError(msg)
+sealed class Rt_BaseError: Exception {
+    constructor(msg: String): super(msg)
+    constructor(msg: String, cause: Throwable): super(msg, cause)
+}
+
+class Rt_Error: Rt_BaseError {
+    val code: String
+
+    constructor(code: String, msg: String): super(msg) {
+        this.code = code
+    }
+
+    constructor(code: String, msg: String, cause: Throwable): super(msg, cause) {
+        this.code = code
+    }
+}
+
 class Rt_RequireError(val userMsg: String?): Rt_BaseError(userMsg ?: "Requirement error")
 class Rt_ValueTypeError(val expected: Rt_ValueType, val actual: Rt_ValueType):
         Rt_BaseError("Value type mismatch: expected $expected, but was $actual")
@@ -90,8 +105,18 @@ class Rt_ChainSqlMapping(val chainId: Long) {
     val metaClassTable = fullName("sys.classes")
     val metaAttributesTable = fullName("sys.attributes")
 
+    val tableSqlFilter = "$prefix%"
+
     fun fullName(baseName: String): String {
         return prefix + baseName
+    }
+
+    fun tempName(baseName: String): String {
+        return prefix + "sys.temp." + baseName
+    }
+
+    fun isChainTable(table: String): Boolean {
+        return table.startsWith(prefix) && table != rowidTable && table != rowidFunction
     }
 }
 

@@ -461,7 +461,9 @@ class R_CreateExprAttr_Specified(attr: R_Attrib, private val expr: R_Expr): R_Cr
 }
 
 class R_CreateExprAttr_Default(attr: R_Attrib): R_CreateExprAttr(attr) {
-    override fun expr() = attr.expr!!
+    private val expr = attr.expr!!
+
+    override fun expr() = expr
 }
 
 class R_CreateExpr(type: R_Type, val rClass: R_Class, val attrs: List<R_CreateExprAttr>): R_Expr(type) {
@@ -478,35 +480,82 @@ class R_CreateExpr(type: R_Type, val rClass: R_Class, val attrs: List<R_CreateEx
     }
 
     companion object {
-        fun buildSql(sqlCtx: Rt_SqlContext, rClass: R_Class, attrs: List<R_CreateExprAttr>, rowidExpr: String): ParameterizedSql {
-            val builder = SqlBuilder()
+        fun buildSql(
+                sqlCtx: Rt_SqlContext,
+                rClass: R_Class,
+                attrs: List<R_CreateExprAttr>,
+                rowidExpr: String
+        ): ParameterizedSql {
+            val b = SqlBuilder()
 
             val table = rClass.sqlMapping.table(sqlCtx)
             val rowid = rClass.sqlMapping.rowidColumn()
 
-            builder.append("INSERT INTO ")
-            builder.appendName(table)
+            b.append("INSERT INTO ")
+            b.appendName(table)
 
-            builder.append("(")
-            builder.appendName(rowid)
-            builder.append(attrs, "") { attr ->
-                builder.append(", ")
-                builder.appendName(attr.attr.sqlMapping)
+            b.append("(")
+            b.appendName(rowid)
+            b.append(attrs, "") { attr ->
+                b.append(", ")
+                b.appendName(attr.attr.sqlMapping)
             }
-            builder.append(")")
+            b.append(")")
 
-            builder.append(" VALUES (")
-            builder.append(rowidExpr)
-            builder.append(attrs, "") { attr ->
-                builder.append(", ")
-                builder.append(attr.expr())
+            b.append(" VALUES (")
+            b.append(rowidExpr)
+            b.append(attrs, "") { attr ->
+                b.append(", ")
+                b.append(attr.expr())
             }
-            builder.append(")")
+            b.append(")")
 
-            builder.append(" RETURNING ")
-            builder.appendName(rowid)
+            b.append(" RETURNING ")
+            b.appendName(rowid)
 
-            return builder.build()
+            return b.build()
+        }
+
+        fun buildCopySql(
+                sqlCtx: Rt_SqlContext,
+                rClass: R_Class,
+                tempTable: String,
+                attrs: List<R_CreateExprAttr>
+        ): ParameterizedSql {
+            val b = SqlBuilder()
+
+            val table = rClass.sqlMapping.table(sqlCtx)
+            val rowid = rClass.sqlMapping.rowidColumn()
+            val attrMap = attrs.map { Pair(it.attr.name, it) }.toMap()
+
+            b.append("INSERT INTO ")
+            b.appendName(tempTable)
+
+            b.append("(")
+            b.appendName(rowid)
+            b.append(rClass.attributes.values, "") { attr ->
+                b.append(", ")
+                b.appendName(attr.sqlMapping)
+            }
+            b.append(")")
+
+            b.append(" SELECT ")
+
+            b.appendName(rowid)
+            b.append(rClass.attributes.values, "") { attr ->
+                b.append(", ")
+                val exprAttr = attrMap[attr.name]
+                if (exprAttr != null) {
+                    b.append(exprAttr.expr())
+                } else {
+                    b.appendName(attr.sqlMapping)
+                }
+            }
+
+            b.append(" FROM ")
+            b.appendName(table)
+
+            return b.build()
         }
     }
 }
