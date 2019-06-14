@@ -42,20 +42,20 @@ class LibTest: BaseRellTest(false) {
 
     @Test fun testLog() {
         chkEx("{ log('Hello'); return 123; }", "int[123]")
-        chkLog("Hello")
+        chkLog("main.rell(1:13) Hello")
         chkStdout()
 
         chkEx("{ log(12345); return 123; }", "int[123]")
-        chkLog("12345")
+        chkLog("main.rell(1:13) 12345")
         chkStdout()
 
         chkEx("{ log(1, 2, 3, 4, 5); return 123; }", "int[123]")
-        chkLog("1 2 3 4 5")
+        chkLog("main.rell(1:13) 1 2 3 4 5")
         chkStdout()
 
         chkEx("{ log(); return 123; }", "int[123]")
         chkStdout()
-        chkLog("")
+        chkLog("main.rell(1:13)")
     }
 
     @Test fun testIsSigner() {

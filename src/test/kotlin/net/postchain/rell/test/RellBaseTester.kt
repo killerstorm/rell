@@ -44,8 +44,8 @@ abstract class RellBaseTester(
 
     private val files = mutableMapOf<String, String>()
 
-    private val stdoutPrinter0 = TesterRtPrinter()
-    private val logPrinter0 = TesterRtPrinter()
+    private val stdoutPrinter0 = Rt_TesterPrinter()
+    private val logPrinter0 = Rt_TesterPrinter()
 
     val stdoutPrinter: Rt_Printer = stdoutPrinter0
     val logPrinter: Rt_Printer = logPrinter0
@@ -224,7 +224,7 @@ abstract class RellBaseTester(
         return Rt_ChainSqlMapping(chainId)
     }
 
-    private class TesterRtPrinter: Rt_Printer() {
+    private class Rt_TesterPrinter: Rt_Printer {
         private val queue = LinkedList<String>()
 
         override fun print(str: String) {

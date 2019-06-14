@@ -28,13 +28,13 @@ class GtxTest : BaseGtxTest() {
         chk("chain_context.args", "null")
 
         tst.moduleArgs = "12345"
-        chkUserMistake("", "Type error: ")
+        chkUserMistake("", "Module initialization failed: Type error: ")
 
         tst.moduleArgs = "{'p':'Hello','q':123}"
-        chkUserMistake("", "Key missing in Gtv dictionary: ")
+        chkUserMistake("", "Module initialization failed: Key missing in Gtv dictionary: ")
 
         tst.moduleArgs = "{'n':'Hello','s':123}"
-        chkUserMistake("", "Type error: ")
+        chkUserMistake("", "Module initialization failed: Type error: ")
 
         tst.moduleArgs = "{'s':'Hello','n':123}"
         chk("chain_context.args", "{'n':123,'s':'Hello'}")

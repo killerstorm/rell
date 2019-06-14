@@ -1,5 +1,6 @@
 package net.postchain.rell.runtime
 
+import mu.KLogging
 import net.postchain.core.ByteArrayKey
 import net.postchain.rell.model.*
 
@@ -87,14 +88,38 @@ class Rt_CallFrame(val entCtx: Rt_EntityContext, rFrame: R_CallFrame) {
     }
 }
 
-abstract class Rt_Printer {
-    abstract fun print(str: String)
+interface Rt_Printer {
+    fun print(str: String)
 }
 
-object Rt_FailingPrinter: Rt_Printer() {
+object Rt_FailingPrinter: Rt_Printer {
     override fun print(str: String) {
         throw UnsupportedOperationException()
     }
+}
+
+object Rt_NopPrinter: Rt_Printer {
+    override fun print(str: String) {
+        // Do nothing.
+    }
+}
+
+object Rt_StdoutPrinter: Rt_Printer {
+    override fun print(str: String) {
+        println(str)
+    }
+}
+
+object Rt_LogPrinter: Rt_Printer {
+    private val logger = KLogging().logger("Rell")
+
+    override fun print(str: String) {
+        logger.info(str)
+    }
+}
+
+interface Rt_PrinterFactory {
+    fun newPrinter(): Rt_Printer
 }
 
 class Rt_ChainSqlMapping(val chainId: Long) {

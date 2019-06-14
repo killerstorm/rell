@@ -350,7 +350,7 @@ object R_SysFn_ToString: R_SysFunction_1() {
     }
 }
 
-class R_SysFn_Print(val log: Boolean): R_SysFunction() {
+class R_SysFn_Print(private val log: Boolean, private val pos: String): R_SysFunction() {
     override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
         val buf = StringBuilder()
         for (arg in args) {
@@ -364,7 +364,8 @@ class R_SysFn_Print(val log: Boolean): R_SysFunction() {
 
         val ctx = modCtx.globalCtx
         val printer = if (log) ctx.logPrinter else ctx.stdoutPrinter
-        printer.print(str)
+        val fullStr = if (log) (if (str.isEmpty()) pos else "$pos $str") else str
+        printer.print(fullStr)
 
         return Rt_UnitValue
     }

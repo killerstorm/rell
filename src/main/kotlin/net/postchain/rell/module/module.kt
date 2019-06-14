@@ -17,26 +17,13 @@ import net.postchain.rell.parser.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.DefaultSqlExecutor
 import net.postchain.rell.sql.SqlInit
+import org.apache.commons.lang3.time.FastDateFormat
 
 val RELL_LANG_VERSION = "0.9"
 val RELL_VERSION = "0.9.0"
 
 val CONFIG_RELL_FILES = "files_v$RELL_LANG_VERSION"
 val CONFIG_RELL_SOURCES = "sources_v$RELL_LANG_VERSION"
-
-private object StdoutRtPrinter : Rt_Printer() {
-    override fun print(str: String) {
-        println(str)
-    }
-}
-
-private object LogRtPrinter : Rt_Printer() {
-    private val logger = KLogging().logger("Rell")
-
-    override fun print(str: String) {
-        logger.info(str)
-    }
-}
 
 private fun convertArgs(ctx: GtvToRtContext, params: List<R_ExternalParam>, args: List<Gtv>): List<Rt_Value> {
     return args.mapIndexed { index, arg ->
@@ -45,38 +32,117 @@ private fun convertArgs(ctx: GtvToRtContext, params: List<R_ExternalParam>, args
     }
 }
 
-class RellGTXOperation(val module: RellPostchainModule, val rOperation: R_Operation, opData: ExtOpData) : GTXOperation(opData) {
+private class ErrorHandler(val printer: Rt_Printer, private val wrapCtErrors: Boolean, private val wrapRtErrors: Boolean) {
+    private var ignore = false
+
+    fun ignoreError() {
+        ignore = true
+    }
+
+    fun <T> handleError(msgSupplier: () -> String, code: () -> T): T {
+        try {
+            val res = code()
+            return res
+        } catch (e: UserMistake) {
+            val msg = processError(msgSupplier, e)
+            throw UserMistake(msg, e)
+        } catch (e: ProgrammerMistake) {
+            val msg = processError(msgSupplier, e)
+            throw ProgrammerMistake(msg, e)
+        } catch (e: Rt_BaseError) {
+            val msg = processError(msgSupplier, e)
+            throw if (wrapRtErrors) UserMistake(msg, e) else e
+        } catch (e: C_Error){
+            val msg = processError(msgSupplier, e)
+            throw if (wrapCtErrors) UserMistake(msg, e) else e
+        } catch (e: Exception) {
+            val msg = processError(msgSupplier, e)
+            throw ProgrammerMistake(msg, e)
+        } catch (e: Throwable) {
+            val msg = processError(msgSupplier, e)
+            throw ProgrammerMistake(msg)
+        }
+    }
+
+    private fun processError(msgSupplier: () -> String, e: Throwable): String {
+        val subMsg = msgSupplier()
+        val errMsg = e.message ?: e.toString()
+        val fullMsg = "$subMsg: $errMsg"
+
+        if (!ignore) {
+            printer.print("ERROR $fullMsg")
+        }
+        ignore = false
+
+        return fullMsg
+    }
+}
+
+private class Rt_MultiPrinter(private val printers: Collection<Rt_Printer>): Rt_Printer {
+    companion object: KLogging()
+
+    constructor(vararg printers: Rt_Printer): this(printers.toList())
+
+    override fun print(str: String) {
+        for (printer in printers) {
+            try {
+                printer.print(str)
+            } catch (e: Throwable) {
+                logger.error("$e")
+            }
+        }
+    }
+}
+
+class Rt_TimestampPrinter(private val printer: Rt_Printer): Rt_Printer {
+    companion object: KLogging() {
+        private val DATE_FMT = FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss,SSS")
+    }
+
+    override fun print(str: String) {
+        val time = System.currentTimeMillis()
+        val timeStr = DATE_FMT.format(time)
+        val str2 = "$timeStr $str"
+        printer.print(str2)
+    }
+}
+
+private class RellGTXOperation(
+        private val module: RellPostchainModule,
+        private val rOperation: R_Operation,
+        private val errorHandler: ErrorHandler,
+        opData: ExtOpData
+) : GTXOperation(opData) {
     private lateinit var gtvToRtCtx: GtvToRtContext
     private lateinit var args: List<Rt_Value>
 
     override fun isCorrect(): Boolean {
-        if (data.args.size != rOperation.params.size) {
-            throw UserMistake(
-                    "Wrong argument count for op '${rOperation.name}': ${data.args.size} instead of ${rOperation.params.size}")
-        }
+        handleError {
+            if (data.args.size != rOperation.params.size) {
+                throw UserMistake("Wrong argument count: ${data.args.size} instead of ${rOperation.params.size}")
+            }
 
-        module.factory.catchRtErr {
             gtvToRtCtx = GtvToRtContext(GTV_OPERATION_PRETTY)
             args = convertArgs(gtvToRtCtx, rOperation.params, data.args.toList())
         }
-
         return true
     }
 
     override fun apply(ctx: TxEContext): Boolean {
-        val opCtx = Rt_OpContext(ctx.timestamp, ctx.txIID, data.signers.toList())
-        val heightProvider = Rt_TxChainHeightProvider(ctx)
-        val modCtx = module.makeRtModuleContext(ctx, opCtx, heightProvider)
-
-        module.factory.catchRtErr {
+        handleError {
+            val opCtx = Rt_OpContext(ctx.timestamp, ctx.txIID, data.signers.toList())
+            val heightProvider = Rt_TxChainHeightProvider(ctx)
+            val modCtx = module.makeRtModuleContext(ctx, opCtx, heightProvider)
             gtvToRtCtx.finish(modCtx)
-        }
-
-        module.factory.wrapMistake("Operation failed") {
             rOperation.callTopNoTx(modCtx, args)
         }
-
         return true
+    }
+
+    private fun <T> handleError(code: () -> T): T {
+        return errorHandler.handleError({ "Operation '${rOperation.name}' failed" }) {
+            code()
+        }
     }
 
     private class Rt_TxChainHeightProvider(private val ctx: TxEContext): Rt_ChainHeightProvider {
@@ -90,14 +156,17 @@ class RellGTXOperation(val module: RellPostchainModule, val rOperation: R_Operat
     }
 }
 
-class RellPostchainFlags(val sqlLogging: Boolean, val typeCheck: Boolean)
+private class RellPostchainFlags(val sqlLogging: Boolean, val typeCheck: Boolean)
 
-class RellPostchainModule(
+private class RellPostchainModule(
         val factory: RellPostchainModuleFactory,
         private val rModule: R_Module,
         private val moduleName: String,
         private val chainCtx: Rt_ChainContext,
         private val chainDeps: Map<String, ByteArray>,
+        private val stdoutPrinter: Rt_Printer,
+        private val logPrinter: Rt_Printer,
+        private val errorHandler: ErrorHandler,
         private val flags: RellPostchainFlags
 ) : GTXModule {
     override fun getOperations(): Set<String> {
@@ -109,7 +178,7 @@ class RellPostchainModule(
     }
 
     override fun initializeDB(ctx: EContext) {
-        factory.catchRtErr {
+        errorHandler.handleError({ "Database initialization failed" }) {
             val heightProvider = Rt_ConstantChainHeightProvider(-1)
             val modCtx = makeRtModuleContext(ctx, null, heightProvider)
             SqlInit.init(modCtx, true)
@@ -117,24 +186,32 @@ class RellPostchainModule(
     }
 
     override fun makeTransactor(opData: ExtOpData): Transactor {
-        if (opData.opName in rModule.operations) {
-            return RellGTXOperation(this, rModule.operations[opData.opName]!!, opData)
-        } else {
-            throw UserMistake("Operation not found: '${opData.opName}'")
+        return errorHandler.handleError({ "Operation '${opData.opName}' failed" }) {
+            val op = rModule.operations[opData.opName]
+            if (op == null) {
+                throw UserMistake("Operation not found")
+            }
+            RellGTXOperation(this, op, errorHandler, opData)
         }
     }
 
     override fun query(ctx: EContext, name: String, args: Gtv): Gtv {
-        val rQuery = rModule.queries[name] ?: throw UserMistake("Query not found: '$name'")
+        return errorHandler.handleError({ "Query '$name' failed" }) {
+            query0(ctx, name, args)
+        }
+    }
+
+    private fun query0(ctx: EContext, name: String, args: Gtv): Gtv {
+        val rQuery = rModule.queries[name]
+        if (rQuery == null) {
+            throw UserMistake("Query not found")
+        }
 
         val heightProvider = Rt_ConstantChainHeightProvider(Long.MAX_VALUE)
         val modCtx = makeRtModuleContext(ctx, null, heightProvider)
         val rtArgs = translateQueryArgs(modCtx, rQuery, args)
 
-        val rtResult = factory.wrapMistake("Query failed") {
-            rQuery.callTopQuery(modCtx, rtArgs)
-        }
-
+        val rtResult = rQuery.callTopQuery(modCtx, rtArgs)
         val gtvResult = rQuery.type.rtToGtv(rtResult, GTV_QUERY_PRETTY)
         return gtvResult
     }
@@ -146,16 +223,13 @@ class RellPostchainModule(
         val actArgNames = argMap.keys
         val expArgNames = rQuery.params.map { it.name }.toSet()
         if (actArgNames != expArgNames) {
-            throw UserMistake("Wrong arguments for query '${rQuery.name}': $actArgNames instead of $expArgNames")
+            throw UserMistake("Wrong arguments: $actArgNames instead of $expArgNames")
         }
 
-        val rtArgs = factory.catchRtErr {
-            val gtvToRtCtx = GtvToRtContext(GTV_QUERY_PRETTY)
-            val args = rQuery.params.map { argMap.getValue(it.name) }
-            val res = convertArgs(gtvToRtCtx, rQuery.params, args)
-            gtvToRtCtx.finish(modCtx)
-            res
-        }
+        val gtvToRtCtx = GtvToRtContext(GTV_QUERY_PRETTY)
+        val args = rQuery.params.map { argMap.getValue(it.name) }
+        val rtArgs = convertArgs(gtvToRtCtx, rQuery.params, args)
+        gtvToRtCtx.finish(modCtx)
 
         return rtArgs
     }
@@ -171,8 +245,8 @@ class RellPostchainModule(
         val globalCtx = Rt_GlobalContext(
                 sqlExec = sqlExec,
                 opCtx = opCtx,
-                stdoutPrinter = factory.stdoutPrinter,
-                logPrinter = factory.logPrinter,
+                stdoutPrinter = stdoutPrinter,
+                logPrinter = logPrinter,
                 chainCtx = chainCtx,
                 typeCheck = flags.typeCheck
         )
@@ -184,8 +258,8 @@ class RellPostchainModule(
 }
 
 class RellPostchainModuleFactory(
-        val stdoutPrinter: Rt_Printer = StdoutRtPrinter,
-        val logPrinter: Rt_Printer = LogRtPrinter,
+        private val stdoutPrinter: Rt_Printer = Rt_StdoutPrinter,
+        private val logPrinter: Rt_Printer = Rt_LogPrinter,
         private val wrapCtErrors: Boolean = true,
         private val wrapRtErrors: Boolean = true,
         private val forceTypeCheck: Boolean = false
@@ -194,30 +268,69 @@ class RellPostchainModuleFactory(
         val gtxNode = data.asDict().getValue("gtx").asDict()
         val rellNode = gtxNode.getValue("rell").asDict()
 
-        val moduleNameNode = rellNode["moduleName"]
-        val moduleName = if (moduleNameNode == null) "" else moduleNameNode.asString()
+        val moduleName = rellNode["moduleName"]?.asString() ?: ""
 
-        val (sourceCodes, mainFilePath) = getModuleCode(rellNode)
-        val sourceDir = C_VirtualSourceDir(sourceCodes)
+        val combinedPrinter = getCombinedPrinter(rellNode)
+        val errorHandler = ErrorHandler(combinedPrinter, wrapCtErrors, wrapRtErrors)
 
-        val cResult = C_Compiler.compile(sourceDir, mainFilePath)
-        val module = processCompilationResult(cResult)
-        val chainCtx = createChainContext(data, rellNode, module)
+        return errorHandler.handleError({ "Module initialization failed" }) {
+            val (sourceCodes, mainFilePath) = getModuleCode(rellNode)
+            val module = compileModule(sourceCodes, mainFilePath, errorHandler)
 
-        val chainDeps = catchRtErr {
-            getGtxChainDependencies(data)
+            val chainCtx = createChainContext(data, rellNode, module)
+            val chainDeps = getGtxChainDependencies(data)
+
+            val modLogPrinter = Rt_MultiPrinter(logPrinter, Rt_TimestampPrinter(combinedPrinter))
+            val modStdoutPrinter = Rt_MultiPrinter(stdoutPrinter, combinedPrinter)
+
+            val sqlLogging = rellNode["sqlLog"]?.asBoolean() ?: false
+            val typeCheck = forceTypeCheck || (rellNode["typeCheck"]?.asBoolean() ?: false)
+            val flags = RellPostchainFlags(sqlLogging = sqlLogging, typeCheck = typeCheck)
+
+            RellPostchainModule(
+                    this,
+                    module,
+                    moduleName,
+                    chainCtx,
+                    chainDeps,
+                    logPrinter = modLogPrinter,
+                    stdoutPrinter = modStdoutPrinter,
+                    errorHandler = errorHandler,
+                    flags = flags
+            )
         }
-
-        val sqlLogging = rellNode["sqlLog"]?.asBoolean() ?: false
-        val typeCheck = forceTypeCheck || (rellNode["typeCheck"]?.asBoolean() ?: false)
-        val flags = RellPostchainFlags(sqlLogging = sqlLogging, typeCheck = typeCheck)
-
-        return RellPostchainModule(this, module, moduleName, chainCtx, chainDeps, flags)
     }
 
-    private fun processCompilationResult(cResult: C_CompilationResult): R_Module {
+    private fun getCombinedPrinter(rellNode: Map<String, Gtv>): Rt_Printer {
+        val className = rellNode["combinedPrinterFactoryClass"]?.asString()
+        className ?: return Rt_NopPrinter
+
+        try {
+            val cls = Class.forName(className)
+            val factory = cls.newInstance() as Rt_PrinterFactory
+            val printer = factory.newPrinter()
+            return printer
+        } catch (e: Throwable) {
+            logger.error(e) { "Combined printer creation failed" }
+            return Rt_NopPrinter
+        }
+    }
+
+    private fun compileModule(
+            sourceCodes: Map<C_SourcePath, String>,
+            mainFilePath: C_SourcePath,
+            errorHandler: ErrorHandler
+    ): R_Module {
+        val sourceDir = C_VirtualSourceDir(sourceCodes)
+        val cResult = C_Compiler.compile(sourceDir, mainFilePath)
+        val module = processCompilationResult(cResult, errorHandler)
+        return module
+    }
+
+    private fun processCompilationResult(cResult: C_CompilationResult, errorHandler: ErrorHandler): R_Module {
         for (message in cResult.messages) {
             val str = message.toString()
+
             val type = message.type
             if (type == C_MessageType.WARNING) {
                 logger.warn(str)
@@ -226,18 +339,24 @@ class RellPostchainModuleFactory(
             } else {
                 logger.info(str)
             }
+
+            errorHandler.printer.print(str)
         }
 
-        val cError = cResult.error
-        if (cError != null && !wrapCtErrors) {
-            throw cError
+        if (cResult.module == null) {
+            val cError = cResult.error
+            val err = if (cError != null && !wrapCtErrors) {
+                cError
+            } else {
+                UserMistake(cError?.message ?: "Compilation error")
+            }
+
+            errorHandler.printer.print("Compilation failed")
+            errorHandler.ignoreError()
+            throw err
         }
 
-        if (cError != null || cResult.module == null) {
-            throw UserMistake(cError?.message ?: "Compilation error")
-        }
-
-        return cResult.module
+        return cResult.module!!
     }
 
     private fun getModuleCode(rellNode: Map<String, Gtv>): Pair<Map<C_SourcePath, String>, C_SourcePath> {
@@ -278,9 +397,7 @@ class RellPostchainModuleFactory(
 
         val args = if (argsRec == null || gtvArgs == null) Rt_NullValue else {
             val convCtx = GtvToRtContext(true)
-            catchRtErr {
-                argsRec.gtvToRt(convCtx, gtvArgs)
-            }
+            argsRec.gtvToRt(convCtx, gtvArgs)
         }
 
         return Rt_ChainContext(rawConfig, args)
@@ -302,24 +419,6 @@ class RellPostchainModuleFactory(
         }
 
         return deps.toMap()
-    }
-
-    fun <T> catchRtErr(code: () -> T): T {
-        try {
-            return code()
-        } catch (e: Rt_BaseError) {
-            throw if (wrapRtErrors) UserMistake(e.message ?: "") else e
-        }
-    }
-
-    fun <T> wrapMistake(msg: String, code: () -> T): T {
-        try {
-            return code()
-        } catch (e: Rt_BaseError) {
-            throw if (wrapRtErrors) UserMistake("$msg: ${e.message}" ?: "") else e
-        } catch (e: Exception) {
-            throw ProgrammerMistake("$msg: ${e.message}", e)
-        }
     }
 
     companion object : KLogging()

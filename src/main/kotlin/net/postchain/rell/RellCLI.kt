@@ -8,7 +8,6 @@ import net.postchain.rell.module.RELL_VERSION
 import net.postchain.rell.parser.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.*
-import org.apache.commons.logging.LogFactory
 import picocli.CommandLine
 import java.io.File
 import kotlin.system.exitProcess
@@ -136,8 +135,8 @@ private fun createGlobalCtx(args: RellCliArgs, sqlExec: SqlExecutor, opCtx: Rt_O
             sqlExec = sqlExec,
             opCtx = opCtx,
             chainCtx = chainCtx,
-            stdoutPrinter = StdoutRtPrinter,
-            logPrinter = LogRtPrinter,
+            stdoutPrinter = Rt_StdoutPrinter,
+            logPrinter = Rt_LogPrinter,
             typeCheck = args.typeCheck
     )
 }
@@ -165,20 +164,6 @@ private fun parseArg(param: R_ExternalParam, arg: String): Rt_Value {
     } catch (e: Exception) {
         System.err.println("Invalid value for type ${type.toStrictString()}: '$arg'")
         exitProcess(1)
-    }
-}
-
-private object StdoutRtPrinter: Rt_Printer() {
-    override fun print(str: String) {
-        println(str)
-    }
-}
-
-private object LogRtPrinter: Rt_Printer() {
-    private val log = LogFactory.getLog(LogRtPrinter.javaClass)
-
-    override fun print(str: String) {
-        log.info(str)
     }
 }
 

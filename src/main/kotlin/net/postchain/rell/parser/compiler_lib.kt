@@ -33,8 +33,8 @@ object C_LibFunctions {
             .add("range", R_RangeType, listOf(R_IntegerType, R_IntegerType), R_SysFn_Range)
             .add("range", R_RangeType, listOf(R_IntegerType, R_IntegerType, R_IntegerType), R_SysFn_Range)
 
-            .add("print", C_SysFunction_Print(R_SysFn_Print(false)))
-            .add("log", C_SysFunction_Print(R_SysFn_Print(true)))
+            .add("print", C_SysFunction_Print(false))
+            .add("log", C_SysFunction_Print(true))
 
             .add("verify_signature", R_BooleanType, listOf(R_ByteArrayType, R_ByteArrayType, R_ByteArrayType), R_SysFn_VerifySignature)
 
@@ -519,7 +519,7 @@ private object C_NsValue_ChainContext_Args: C_NamespaceValue_RExpr() {
     }
 }
 
-private class C_SysFunction_Print(val rFn: R_SysFunction): C_SimpleGlobalFuncCase() {
+private class C_SysFunction_Print(private val log: Boolean): C_SimpleGlobalFuncCase() {
     override fun matchTypes(args: List<R_Type>): C_GlobalFuncCaseMatch? {
         return CaseMatch()
     }
@@ -527,6 +527,8 @@ private class C_SysFunction_Print(val rFn: R_SysFunction): C_SimpleGlobalFuncCas
     private inner class CaseMatch: C_SimpleGlobalFuncCaseMatch() {
         override fun compileCallExpr(name: S_Name, args: List<R_Expr>): R_Expr {
             // Print supports any number of arguments and any types.
+            val pos = name.pos.toString()
+            val rFn = R_SysFn_Print(log, pos)
             val rExpr = R_SysCallExpr(R_UnitType, rFn, args)
             return rExpr
         }
