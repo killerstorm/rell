@@ -10,50 +10,60 @@ import java.util.concurrent.atomic.AtomicLong
 private val ORD_TABLES = 0
 private val ORD_RECORDS = 1
 
-class SqlInit private constructor(private val modCtx: Rt_ModuleContext, private val logging: Boolean) {
+class SqlInit private constructor(private val modCtx: Rt_ModuleContext, private val logLevel: Int) {
     private val initCtx = SqlInitCtx(logger)
 
     companion object : KLogging() {
-        fun init(modCtx: Rt_ModuleContext, logging: Boolean): List<String> {
-            val obj = SqlInit(modCtx, logging)
+        val LOG_ALL = 0
+        val LOG_PLAN_SIMPLE = 1000
+        val LOG_PLAN_COMPLEX = 2000
+        val LOG_STEP_SIMPLE = 3000
+        val LOG_STEP_COMPLEX = 4000
+        val LOG_NONE = Integer.MAX_VALUE
+
+        fun init(modCtx: Rt_ModuleContext, logLevel: Int): List<String> {
+            val obj = SqlInit(modCtx, logLevel)
             return obj.init()
         }
     }
 
     private fun init(): List<String> {
-        log("Initializing database (chain_id = ${modCtx.sqlCtx.mainChainMapping.chainId})")
+        log(LOG_ALL, "Initializing database (chain_id = ${modCtx.sqlCtx.mainChainMapping.chainId})")
 
-        SqlInitPlanner.plan(modCtx, initCtx)
+        val dbEmpty = SqlInitPlanner.plan(modCtx, initCtx)
         initCtx.checkErrors()
 
-        executePlan()
+        executePlan(dbEmpty)
 
         return initCtx.msgs.warningCodes()
     }
 
-    private fun executePlan() {
+    private fun executePlan(dbEmpty: Boolean) {
         val steps = initCtx.steps()
         if (steps.isEmpty()) {
-            log("Nothing to do")
+            log(LOG_ALL, "Nothing to do")
             return
         }
 
-        log("Plan: ${steps.size} step(s)")
+        val stepLogLevel = if (dbEmpty) LOG_STEP_SIMPLE else LOG_STEP_COMPLEX
+        log(stepLogLevel, "Database init plan: ${steps.size} step(s)")
+
+        val planLogLevel = if (dbEmpty) LOG_PLAN_SIMPLE else LOG_PLAN_COMPLEX
         for (step in steps) {
-            log("    ${step.title}")
+            log(planLogLevel, "    ${step.title}")
         }
 
         val stepCtx = SqlStepCtx(modCtx, modCtx.globalCtx.sqlExec)
         for (step in steps) {
-            log("Step: ${step.title}")
+            log(stepLogLevel, "Step: ${step.title}")
             step.action.run(stepCtx)
         }
 
-        log("Database initialization done")
+        log(LOG_ALL, "Database initialization done")
     }
 
-    private fun log(s: String) {
-        if (logging) {
+    private fun log(level: Int, s: String) {
+        if (level >= logLevel) {
             logger.info(s)
         }
     }
@@ -64,26 +74,27 @@ private class SqlInitPlanner private constructor(private val modCtx: Rt_ModuleCo
     private val mapping = sqlCtx.mainChainMapping
 
     companion object {
-        fun plan(modCtx: Rt_ModuleContext, initCtx: SqlInitCtx) {
+        fun plan(modCtx: Rt_ModuleContext, initCtx: SqlInitCtx): Boolean {
             val obj = SqlInitPlanner(modCtx, initCtx)
-            obj.plan()
+            return obj.plan()
         }
     }
 
-    private fun plan() {
+    private fun plan(): Boolean {
         val con = modCtx.globalCtx.sqlExec.connection()
         val tables = SqlUtils.getExistingChainTables(con, mapping)
 
-        val metaData = processMeta(tables)
-        initCtx.checkErrors()
-
-        SqlClassIniter.processClasses(modCtx, initCtx, metaData)
-    }
-
-    private fun processMeta(tables: Map<String, SqlTable>): Map<String, MetaClass> {
         val metaExists = SqlMeta.checkMetaTablesExisting(mapping, tables, initCtx.msgs)
         initCtx.checkErrors()
 
+        val metaData = processMeta(metaExists, tables)
+        initCtx.checkErrors()
+
+        SqlClassIniter.processClasses(modCtx, initCtx, metaData)
+        return !metaExists
+    }
+
+    private fun processMeta(metaExists: Boolean, tables: Map<String, SqlTable>): Map<String, MetaClass> {
         if (!metaExists) {
             initCtx.step(ORD_TABLES, "Create ROWID table and function", SqlStepAction_ExecSql(SqlGen.genRowidSql(mapping)))
             initCtx.step(ORD_TABLES, "Create meta tables", SqlStepAction_ExecSql(SqlMeta.genMetaTablesCreate(modCtx.sqlCtx)))

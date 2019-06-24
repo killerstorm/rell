@@ -13,7 +13,6 @@ import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.sql.SqlInit
 import net.postchain.rell.sql.SqlUtils
 import org.junit.Assert
-import java.sql.Connection
 import kotlin.test.assertEquals
 
 class RellCodeTester(
@@ -47,7 +46,7 @@ class RellCodeTester(
             }
 
             if (createTables) {
-                SqlInit.init(modCtx, true)
+                SqlInit.init(modCtx, SqlInit.LOG_ALL)
             }
         }
     }

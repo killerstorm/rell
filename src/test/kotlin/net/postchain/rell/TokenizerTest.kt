@@ -147,4 +147,15 @@ class TokenizerTest: BaseRellTest(false) {
         chkEx("{ val x = 5;\nval x = 10; }", "ct_err:main.rell(2:5):var_dupname:x")
         chkEx("{ val x = 5;\nreturn; }", "ct_err:main.rell(2:1):stmt_return_query_novalue")
     }
+
+    @Test fun testCompilationErrorPos() {
+        tst.errMsgPos = true
+        chkEx("{\n    val x = 5;\n    val x = 6;\n    return 0;\n}\n", "ct_err:main.rell(3:9):var_dupname:x")
+        chkEx("{\n\tval x = 5;\n\tval x = 6;\n\treturn 0;\n}\n", "ct_err:main.rell(3:9):var_dupname:x")
+        chkEx("{\n\tval x = 5;\n \tval x = 6;\n\treturn 0;\n}\n", "ct_err:main.rell(3:9):var_dupname:x")
+        chkEx("{\n\tval x = 5;\n  \tval x = 6;\n\treturn 0;\n}\n", "ct_err:main.rell(3:9):var_dupname:x")
+        chkEx("{\n\tval x = 5;\n   \tval x = 6;\n\treturn 0;\n}\n", "ct_err:main.rell(3:9):var_dupname:x")
+        chkEx("{\n\tval x = 5;\n    \tval x = 6;\n\treturn 0;\n}\n", "ct_err:main.rell(3:13):var_dupname:x")
+        chkEx("{\n\tval x = 5;\n\t val x = 6;\n\treturn 0;\n}\n", "ct_err:main.rell(3:10):var_dupname:x")
+    }
 }

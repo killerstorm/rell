@@ -110,8 +110,8 @@ object Rt_StdoutPrinter: Rt_Printer {
     }
 }
 
-object Rt_LogPrinter: Rt_Printer {
-    private val logger = KLogging().logger("Rell")
+class Rt_LogPrinter(name: String = "Rell"): Rt_Printer {
+    private val logger = KLogging().logger(name)
 
     override fun print(str: String) {
         logger.info(str)

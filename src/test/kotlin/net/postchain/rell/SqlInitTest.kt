@@ -475,7 +475,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
             val modCtx = tst.createModuleCtx(globalCtx, module.rModule)
             RellTestUtils.catchRtErr {
                 sqlExec.transaction {
-                    val warnings = SqlInit.init(modCtx, true)
+                    val warnings = SqlInit.init(modCtx, SqlInit.LOG_ALL)
                     actualWarnings = warnings.joinToString(",")
                 }
                 "OK"

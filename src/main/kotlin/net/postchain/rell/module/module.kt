@@ -156,7 +156,11 @@ private class RellGTXOperation(
     }
 }
 
-private class RellPostchainFlags(val sqlLogging: Boolean, val typeCheck: Boolean)
+private class RellModuleConfig(
+        val sqlLogging: Boolean,
+        val typeCheck: Boolean,
+        val dbInitLogLevel: Int
+)
 
 private class RellPostchainModule(
         val factory: RellPostchainModuleFactory,
@@ -167,7 +171,7 @@ private class RellPostchainModule(
         private val stdoutPrinter: Rt_Printer,
         private val logPrinter: Rt_Printer,
         private val errorHandler: ErrorHandler,
-        private val flags: RellPostchainFlags
+        private val config: RellModuleConfig
 ) : GTXModule {
     override fun getOperations(): Set<String> {
         return rModule.operations.keys
@@ -181,7 +185,7 @@ private class RellPostchainModule(
         errorHandler.handleError({ "Database initialization failed" }) {
             val heightProvider = Rt_ConstantChainHeightProvider(-1)
             val modCtx = makeRtModuleContext(ctx, null, heightProvider)
-            SqlInit.init(modCtx, true)
+            SqlInit.init(modCtx, config.dbInitLogLevel)
         }
     }
 
@@ -239,7 +243,7 @@ private class RellPostchainModule(
             opCtx: Rt_OpContext?,
             heightProvider: Rt_ChainHeightProvider
     ): Rt_ModuleContext {
-        val sqlExec = DefaultSqlExecutor(eCtx.conn, flags.sqlLogging)
+        val sqlExec = DefaultSqlExecutor(eCtx.conn, config.sqlLogging)
         val sqlMapping = Rt_ChainSqlMapping(eCtx.chainID)
 
         val globalCtx = Rt_GlobalContext(
@@ -248,7 +252,7 @@ private class RellPostchainModule(
                 stdoutPrinter = stdoutPrinter,
                 logPrinter = logPrinter,
                 chainCtx = chainCtx,
-                typeCheck = flags.typeCheck
+                typeCheck = config.typeCheck
         )
 
         val chainDeps = chainDeps.mapValues { (_, rid) -> Rt_ChainDependency(rid) }
@@ -259,7 +263,7 @@ private class RellPostchainModule(
 
 class RellPostchainModuleFactory(
         private val stdoutPrinter: Rt_Printer = Rt_StdoutPrinter,
-        private val logPrinter: Rt_Printer = Rt_LogPrinter,
+        private val logPrinter: Rt_Printer = Rt_LogPrinter(),
         private val wrapCtErrors: Boolean = true,
         private val wrapRtErrors: Boolean = true,
         private val forceTypeCheck: Boolean = false
@@ -274,18 +278,26 @@ class RellPostchainModuleFactory(
         val errorHandler = ErrorHandler(combinedPrinter, wrapCtErrors, wrapRtErrors)
 
         return errorHandler.handleError({ "Module initialization failed" }) {
+            val copyOutput = rellNode["copyOutputToCombinedPrinter"]?.asBoolean() ?: true
+
             val (sourceCodes, mainFilePath) = getModuleCode(rellNode)
-            val module = compileModule(sourceCodes, mainFilePath, errorHandler)
+            val module = compileModule(sourceCodes, mainFilePath, errorHandler, copyOutput)
 
             val chainCtx = createChainContext(data, rellNode, module)
             val chainDeps = getGtxChainDependencies(data)
 
-            val modLogPrinter = Rt_MultiPrinter(logPrinter, Rt_TimestampPrinter(combinedPrinter))
-            val modStdoutPrinter = Rt_MultiPrinter(stdoutPrinter, combinedPrinter)
+            val modLogPrinter = getModulePrinter(logPrinter, Rt_TimestampPrinter(combinedPrinter), copyOutput)
+            val modStdoutPrinter = getModulePrinter(stdoutPrinter, combinedPrinter, copyOutput)
 
             val sqlLogging = rellNode["sqlLog"]?.asBoolean() ?: false
             val typeCheck = forceTypeCheck || (rellNode["typeCheck"]?.asBoolean() ?: false)
-            val flags = RellPostchainFlags(sqlLogging = sqlLogging, typeCheck = typeCheck)
+            val dbInitLogLevel = rellNode["dbInitLogLevel"]?.asInteger()?.toInt() ?: SqlInit.LOG_ALL
+
+            val config = RellModuleConfig(
+                    sqlLogging = sqlLogging,
+                    typeCheck = typeCheck,
+                    dbInitLogLevel = dbInitLogLevel
+            )
 
             RellPostchainModule(
                     this,
@@ -296,9 +308,13 @@ class RellPostchainModuleFactory(
                     logPrinter = modLogPrinter,
                     stdoutPrinter = modStdoutPrinter,
                     errorHandler = errorHandler,
-                    flags = flags
+                    config = config
             )
         }
+    }
+
+    private fun getModulePrinter(basePrinter: Rt_Printer, combinedPrinter: Rt_Printer, copy: Boolean): Rt_Printer {
+        return if (copy) Rt_MultiPrinter(basePrinter, combinedPrinter) else basePrinter
     }
 
     private fun getCombinedPrinter(rellNode: Map<String, Gtv>): Rt_Printer {
@@ -319,15 +335,16 @@ class RellPostchainModuleFactory(
     private fun compileModule(
             sourceCodes: Map<C_SourcePath, String>,
             mainFilePath: C_SourcePath,
-            errorHandler: ErrorHandler
+            errorHandler: ErrorHandler,
+            copyOutput: Boolean
     ): R_Module {
         val sourceDir = C_VirtualSourceDir(sourceCodes)
         val cResult = C_Compiler.compile(sourceDir, mainFilePath)
-        val module = processCompilationResult(cResult, errorHandler)
+        val module = processCompilationResult(cResult, errorHandler, copyOutput)
         return module
     }
 
-    private fun processCompilationResult(cResult: C_CompilationResult, errorHandler: ErrorHandler): R_Module {
+    private fun processCompilationResult(cResult: C_CompilationResult, errorHandler: ErrorHandler, copyOutput: Boolean): R_Module {
         for (message in cResult.messages) {
             val str = message.toString()
 
@@ -340,7 +357,9 @@ class RellPostchainModuleFactory(
                 logger.info(str)
             }
 
-            errorHandler.printer.print(str)
+            if (copyOutput) {
+                errorHandler.printer.print(str)
+            }
         }
 
         if (cResult.module == null) {
@@ -351,7 +370,10 @@ class RellPostchainModuleFactory(
                 UserMistake(cError?.message ?: "Compilation error")
             }
 
-            errorHandler.printer.print("Compilation failed")
+            if (copyOutput) {
+                errorHandler.printer.print("Compilation failed")
+            }
+
             errorHandler.ignoreError()
             throw err
         }

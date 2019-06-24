@@ -11,29 +11,21 @@ import picocli.CommandLine
 import java.io.File
 import java.io.FileOutputStream
 import java.io.OutputStream
-import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
-    val argsEx = parseCliArgs(args)
-    try {
-        main0(argsEx)
-    } catch (e: RellCfgErr) {
-        System.err.println("ERROR: ${e.message}")
-        exitProcess(2)
+    RellCliUtils.runCli(args, RellCfgArgs()) {
+        main0(it)
     }
 }
 
 private fun main0(args: RellCfgArgs) {
-    val rellFile = File(args.rellFile)
-    val rellFileName = rellFile.name
-    val sourceDir = C_DiskSourceDir(rellFile.absoluteFile.parentFile)
-    val sourcePath = C_SourcePath.parse(rellFileName)
+    val (sourceDir, sourcePath) = RellCliUtils.getSourceDirAndPath(args.sourceDir, args.rellFile)
 
     val template = if (args.configTemplateFile == null) null else {
         readFile(File(args.configTemplateFile))
     }
 
-    val config = makeRellPostchainConfig(sourceDir, sourcePath, template, true)
+    val config = RellConfigGen.makeConfig(sourceDir, sourcePath, template)
 
     if (args.outputFile != null) {
         val outputFile = File(args.outputFile)
@@ -50,7 +42,7 @@ private fun writeResult(args: RellCfgArgs, os: OutputStream, config: Gtv) {
     val bytes = if (args.binaryOutput) {
         PostchainUtils.gtvToBytes(config)
     } else {
-        val text = generateConfigText(config)
+        val text = RellConfigGen.configToText(config)
         text.toByteArray()
     }
     os.write(bytes)
@@ -61,117 +53,101 @@ private fun readFile(file: File): String {
     return file.readText()
 }
 
-fun makeRellPostchainConfigText(sourceDir: C_SourceDir, mainFile: C_SourcePath, template: String?, pretty: Boolean): String {
-    val gtvConfig = makeRellPostchainConfig(sourceDir, mainFile, template, pretty)
-    val config = generateConfigText(gtvConfig)
-    return config
+private fun verifyCfg(b: Boolean, msg: String) {
+    if (!b) {
+        throw RellCliErr(msg)
+    }
 }
 
-private fun makeRellPostchainConfig(sourceDir: C_SourceDir, mainFile: C_SourcePath, template: String?, pretty: Boolean): Gtv {
-    val files = discoverBundleFiles(sourceDir, mainFile)
-
-    val gtvTemplate = getConfigTemplate(template)
-
-    val mutableConfig = GtvNode.create(null, gtvTemplate)
-    injectRellFiles(mutableConfig, files, mainFile.str(), pretty)
-
-    val gtvConfig = mutableConfig.toValue()
-    return gtvConfig
-}
-
-private fun discoverBundleFiles(sourceDir: C_SourceDir, mainFile: C_SourcePath): Map<String, String> {
-    val mainCode: String
-
-    val included = try {
-        mainCode = C_IncludeResolver.resolveFile(sourceDir, mainFile).readText()
-        C_Compiler.getIncludedResources(sourceDir, mainFile, transitive = true, fail = true)
-    } catch (e: C_Error) {
-        throw RellCfgErr(e.message!!)
-    } catch (e: Exception) {
-        throw RellCfgErr(e.message ?: "unknown")
+object RellConfigGen {
+    fun makeConfig(sourceDir: C_SourceDir, mainFile: C_SourcePath, template: String?): Gtv {
+        val gtvTemplate = getConfigTemplate(template)
+        return makeConfig(sourceDir, mainFile, gtvTemplate)
     }
 
-    val files = mutableMapOf<String, String>()
-    files[mainFile.str()] = mainCode
+    fun makeConfig(sourceDir: C_SourceDir, mainFile: C_SourcePath, template: Gtv): Gtv {
+        val sourceModule = getModuleSources(sourceDir, mainFile)
 
-    for (include in included) {
-        if (include.path !in files) {
-            files[include.path] = include.file.readText()
+        val mutableConfig = GtvNode.create(null, template)
+        injectRellFiles(mutableConfig, sourceModule.files, sourceModule.mainFile)
+
+        val gtvConfig = mutableConfig.toValue()
+        return gtvConfig
+    }
+
+    fun getModuleSources(sourceDir: C_SourceDir, mainFile: C_SourcePath): RellModuleSources {
+        val mainCode: String
+
+        val included = try {
+            mainCode = C_IncludeResolver.resolveFile(sourceDir, mainFile).readText()
+            C_Compiler.getIncludedResources(sourceDir, mainFile, transitive = true, fail = true)
+        } catch (e: C_Error) {
+            throw RellCliErr(e.message!!)
+        } catch (e: Exception) {
+            throw RellCliErr(e.message ?: "unknown")
+        }
+
+        val mainFilePath = mainFile.str()
+        val files = mutableMapOf<String, String>()
+        files[mainFilePath] = mainCode
+
+        for (include in included) {
+            if (include.path !in files) {
+                files[include.path] = include.file.readText()
+            }
+        }
+
+        return RellModuleSources(mainFilePath, files)
+    }
+
+    private fun getConfigTemplate(template: String?): Gtv {
+        if (template == null) return GtvFactory.gtv(mapOf())
+
+        try {
+            return PostchainUtils.xmlToGtv(template)
+        } catch (e: Exception) {
+            throw RellCliErr("Failed to parse template XML: ${e.message}")
         }
     }
 
-    return files
-}
+    private fun injectRellFiles(template: GtvNode, files: Map<String, String>, mainFile: String) {
+        val rootDict = asDictNode(template)
+        val gtxDict = getDictByKey(rootDict, "gtx")
+        val rellDict = getDictByKey(gtxDict, "rell")
 
-private fun getConfigTemplate(template: String?): Gtv {
-    if (template == null) return GtvFactory.gtv(mapOf())
+        rellDict.putString("mainFile", mainFile)
 
-    try {
-        return PostchainUtils.xmlToGtv(template)
-    } catch (e: Exception) {
-        throw RellCfgErr("Failed to parse template XML: ${e.message}")
-    }
-}
+        val sourcesDict = getDictByKey(rellDict, CONFIG_RELL_SOURCES)
+        for ((name, source) in files) {
+            sourcesDict.putString(name, source)
+        }
 
-private fun injectRellFiles(template: GtvNode, files: Map<String, String>, mainFile: String, pretty: Boolean) {
-    val rootDict = asDictNode(template)
-    val gtxDict = getDictByKey(rootDict, "gtx")
-    val rellDict = getDictByKey(gtxDict, "rell")
-
-    rellDict.putString("mainFile", mainFile)
-
-    val sourcesDict = getDictByKey(rellDict, CONFIG_RELL_SOURCES)
-    for ((name, source) in files) {
-        val source2 = if (pretty) "\n" + source.trim() + "\n" else source
-        sourcesDict.putString(name, source2)
+        rellDict.remove(CONFIG_RELL_FILES)
     }
 
-    rellDict.remove(CONFIG_RELL_FILES)
-}
+    private fun getDictByKey(dict: DictGtvNode, key: String): DictGtvNode {
+        val node = dict.get(key)
+        return if (node == null) {
+            dict.putDict(key)
+        } else {
+            asDictNode(node)
+        }
+    }
 
-private fun getDictByKey(dict: DictGtvNode, key: String): DictGtvNode {
-    val node = dict.get(key)
-    return if (node == null) {
-        dict.putDict(key)
-    } else {
-        asDictNode(node)
+    private fun asDictNode(node: GtvNode): DictGtvNode {
+        if (node !is DictGtvNode) {
+            val pathStr = if (node.path == null) "<root>" else node.path
+            val type = node.type()
+            throw RellCliErr("Found $type instead of ${GtvType.DICT} ($pathStr)")
+        }
+        return node
+    }
+
+    fun configToText(gtvConfig: Gtv): String {
+        val xml = PostchainUtils.gtvToXml(gtvConfig)
+        return xml
     }
 }
-
-private fun asDictNode(node: GtvNode): DictGtvNode {
-    if (node !is DictGtvNode) {
-        val pathStr = if (node.path == null) "<root>" else node.path
-        val type = node.type()
-        throw RellCfgErr("Found $type instead of ${GtvType.DICT} ($pathStr)")
-    }
-    return node
-}
-
-private fun generateConfigText(gtvConfig: Gtv): String {
-    val xml = PostchainUtils.gtvToXml(gtvConfig)
-    return xml
-}
-
-private fun verifyCfg(b: Boolean, msg: String) {
-    if (!b) {
-        throw RellCfgErr(msg)
-    }
-}
-
-private fun parseCliArgs(args: Array<String>): RellCfgArgs {
-    val argsObj = RellCfgArgs()
-    val cl = CommandLine(argsObj)
-    try {
-        cl.parse(*args)
-    } catch (e: CommandLine.PicocliException) {
-        cl.usageHelpWidth = 1000
-        cl.usage(System.err)
-        exitProcess(1)
-    }
-    return argsObj
-}
-
-private class RellCfgErr(msg: String): RuntimeException(msg)
 
 private sealed class GtvNode(val path: String?) {
     abstract fun type(): GtvType
@@ -226,6 +202,10 @@ private class RellCfgArgs {
 
     @CommandLine.Parameters(index = "1", arity = "0..1", paramLabel = "OUTPUT_FILE", description = ["Output configuration file"])
     var outputFile: String? = null
+
+    @CommandLine.Option(names = ["--source-dir"], paramLabel =  "SOURCE_DIR",
+            description =  ["Source directory used to resolve absolute include paths (default: the directory of the Rell file)"])
+    var sourceDir: String? = null
 
     @CommandLine.Option(names = ["--template"], paramLabel =  "TEMPLATE_FILE", description =  ["Configuration template file"])
     var configTemplateFile: String? = null

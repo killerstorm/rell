@@ -5,30 +5,33 @@ import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.model.R_Routine
 import net.postchain.rell.module.RELL_VERSION
-import net.postchain.rell.parser.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.*
 import picocli.CommandLine
-import java.io.File
 import kotlin.system.exitProcess
 
 private val SQL_MAPPER = Rt_ChainSqlMapping(0)
 
 fun main(args: Array<String>) {
-    val argsEx = parseCliArgs(args)
+    RellCliUtils.initLogging()
+    RellCliUtils.runCli(args, RellCliArgs()) {
+        main0(it)
+    }
+}
 
-    if (argsEx.version) {
+private fun main0(args: RellCliArgs) {
+    if (args.version) {
         System.out.println("Rell version $RELL_VERSION")
         exitProcess(0)
     }
 
-    if (argsEx.resetdb && argsEx.dburl == null) {
+    if (args.resetdb && args.dburl == null) {
         System.err.println("Database URL not specified")
         exitProcess(1)
     }
 
-    if (argsEx.resetdb && argsEx.rellFile == null) {
-        runWithSql(argsEx.dburl, argsEx.sqlLog) { sqlExec ->
+    if (args.resetdb && args.rellFile == null) {
+        runWithSql(args.dburl, args.sqlLog) { sqlExec ->
             sqlExec.transaction {
                 SqlUtils.dropAll(sqlExec, true)
             }
@@ -36,25 +39,25 @@ fun main(args: Array<String>) {
         return
     }
 
-    if (argsEx.rellFile == null) {
+    if (args.rellFile == null) {
         System.err.println("Rell file not specified")
         exitProcess(1)
     }
 
-    val module = RellCliUtils.compileModule(argsEx.rellFile!!)
-    val routine = getRoutineCaller(argsEx, module)
+    val module = RellCliUtils.compileModule(args.rellFile!!, args.sourceDir, args.quiet)
+    val routine = getRoutineCaller(args, module)
 
-    runWithSql(argsEx.dburl, argsEx.sqlLog) { sqlExec ->
+    runWithSql(args.dburl, args.sqlLog) { sqlExec ->
         val sqlCtx = Rt_SqlContext.createNoExternalChains(module, SQL_MAPPER)
 
-        if (argsEx.dburl != null) {
+        if (args.dburl != null) {
             sqlExec.transaction {
-                if (argsEx.resetdb) {
+                if (args.resetdb) {
                     SqlUtils.dropAll(sqlExec, true)
                 }
 
-                val modCtx = createModuleCtx(argsEx, sqlCtx, sqlExec, null)
-                SqlInit.init(modCtx, false)
+                val modCtx = createModuleCtx(args, sqlCtx, sqlExec, null)
+                SqlInit.init(modCtx, SqlInit.LOG_NONE)
             }
         }
 
@@ -66,11 +69,11 @@ private fun getRoutineCaller(args: RellCliArgs, module: R_Module): (SqlExecutor,
     val op = args.op
     if (op == null) return { _, _ -> }
 
-    val (routine, opCtx) = findRoutine(module, op)
-    val rtArgs = parseArgs(routine, args.args ?: listOf())
+    val entryPoint = findEntryPoint(module, op)
+    val rtArgs = parseArgs(entryPoint, args.args ?: listOf())
 
     return { sqlExec, sqlCtx ->
-        callRoutine(args, sqlExec, sqlCtx, routine, opCtx, rtArgs)
+        callEntryPoint(args, sqlExec, sqlCtx, entryPoint, rtArgs)
     }
 }
 
@@ -85,47 +88,40 @@ private fun runWithSql(dbUrl: String?, logging: Boolean, code: (SqlExecutor) -> 
     }
 }
 
-private fun parseCliArgs(args: Array<String>): RellCliArgs {
-    val argsObj = RellCliArgs()
-    val cl = CommandLine(argsObj)
-    try {
-        if (args.size == 0) throw CommandLine.PicocliException("no args")
-        cl.parse(*args)
-    } catch (e: CommandLine.PicocliException) {
-        cl.usageHelpWidth = 1000
-        cl.usage(System.err)
-        exitProcess(1)
-    }
-    return argsObj
-}
+private fun findEntryPoint(module: R_Module, name: String): RellEntryPoint {
+    val eps = mutableListOf<RellEntryPoint>()
 
-private fun findRoutine(module: R_Module, name: String): Pair<R_Routine, Rt_OpContext?> {
-    val oper = module.operations[name]
-    val query = module.queries[name]
-    if (oper != null && query != null) {
-        System.err.println("Found both operation and query with name '$name'")
-        exitProcess(1)
-    } else if (oper != null) {
+    val op = module.operations[name]
+    if (op != null) {
         val time = System.currentTimeMillis() / 1000
-        return Pair(oper, Rt_OpContext(time, -1, listOf()))
-    } else if (query != null) {
-        return Pair(query, null)
-    } else {
-        System.err.println("Found no operation or query with name '$name'")
-        exitProcess(1)
+        eps.add(RellEntryPoint("operation", op, Rt_OpContext(time, -1, listOf())))
     }
+
+    val q = module.queries[name]
+    if (q != null) eps.add(RellEntryPoint("query", q, null))
+
+    val f = module.functions[name]
+    if (f != null) eps.add(RellEntryPoint("function", f, null))
+
+    if (eps.isEmpty()) {
+        throw RellCliErr("Found no operation, query or function with name '$name'")
+    } else if (eps.size > 1) {
+        throw RellCliErr("Found more than one definition with name '$name': ${eps.joinToString { it.kind }}")
+    }
+
+    val ep = eps[0]
+    return ep
 }
 
-private fun callRoutine(
+private fun callEntryPoint(
         cliArgs: RellCliArgs,
         sqlExec: SqlExecutor,
         sqlCtx: Rt_SqlContext,
-        op: R_Routine,
-        opCtx: Rt_OpContext?,
+        entryPoint: RellEntryPoint,
         args: List<Rt_Value>
 ) {
-    val modCtx = createModuleCtx(cliArgs, sqlCtx, sqlExec, opCtx)
-    op.callTop(modCtx, args)
+    val modCtx = createModuleCtx(cliArgs, sqlCtx, sqlExec, entryPoint.opCtx)
+    entryPoint.routine.callTop(modCtx, args)
 }
 
 private fun createGlobalCtx(args: RellCliArgs, sqlExec: SqlExecutor, opCtx: Rt_OpContext?): Rt_GlobalContext {
@@ -136,7 +132,7 @@ private fun createGlobalCtx(args: RellCliArgs, sqlExec: SqlExecutor, opCtx: Rt_O
             opCtx = opCtx,
             chainCtx = chainCtx,
             stdoutPrinter = Rt_StdoutPrinter,
-            logPrinter = Rt_LogPrinter,
+            logPrinter = Rt_LogPrinter(),
             typeCheck = args.typeCheck
     )
 }
@@ -146,12 +142,13 @@ private fun createModuleCtx(args: RellCliArgs, sqlCtx: Rt_SqlContext, sqlExec: S
     return Rt_ModuleContext(globalCtx, sqlCtx.module, sqlCtx)
 }
 
-private fun parseArgs(routine: R_Routine, args: List<String>): List<Rt_Value> {
-    if (args.size != routine.params.size) {
-        System.err.println("Wrong number of arguments: ${args.size} instead of ${routine.params.size}")
+private fun parseArgs(entryPoint: RellEntryPoint, args: List<String>): List<Rt_Value> {
+    val params = entryPoint.routine.params
+    if (args.size != params.size) {
+        System.err.println("Wrong number of arguments: ${args.size} instead of ${params.size}")
         exitProcess(1)
     }
-    return args.withIndex().map { (idx, arg) -> parseArg(routine.params[idx], arg) }
+    return args.withIndex().map { (idx, arg) -> parseArg(params[idx], arg) }
 }
 
 private fun parseArg(param: R_ExternalParam, arg: String): Rt_Value {
@@ -167,47 +164,7 @@ private fun parseArg(param: R_ExternalParam, arg: String): Rt_Value {
     }
 }
 
-object RellCliUtils {
-    fun compileModule(rellPath: String): R_Module {
-        val sourceFile = File(rellPath)
-        val res = compile(sourceFile)
-
-        val warnCnt = res.messages.filter { it.type == C_MessageType.WARNING }.size
-        val errCnt = res.messages.filter { it.type == C_MessageType.ERROR }.size
-
-        for (message in res.messages) {
-            System.err.println(message)
-        }
-
-        if (warnCnt > 0 || errCnt > 0) {
-            System.err.println("Errors: $errCnt Warnings: $warnCnt")
-        }
-
-        val module = res.module
-        if (module == null) {
-            if (errCnt == 0) System.err.println(errMsg("compilation failed"))
-            exitProcess(1)
-        } else if (errCnt > 0) {
-            exitProcess(1)
-        }
-
-        return module
-    }
-
-    private fun compile(file: File): C_CompilationResult {
-        try {
-            val sourcePath = C_SourcePath.parse(file.name)
-            val sourceDir = C_DiskSourceDir(file.absoluteFile.parentFile)
-            val res = C_Compiler.compile(sourceDir, sourcePath)
-            return res
-        } catch (e: C_CommonError) {
-            System.err.println(errMsg(e.msg))
-            exitProcess(1)
-        }
-    }
-
-    private fun errMsg(msg: String) = "${C_MessageType.ERROR.text}: $msg"
-}
+private class RellEntryPoint(val kind: String, val routine: R_Routine, val opCtx: Rt_OpContext?)
 
 @CommandLine.Command(name = "rell", description = ["Executes a rell program"])
 private class RellCliArgs {
@@ -224,8 +181,15 @@ private class RellCliArgs {
     @CommandLine.Option(names = ["--typecheck"], description = ["Run-time type checking (debug)"])
     var typeCheck = false
 
+    @CommandLine.Option(names = ["-q", "--quiet"], description = ["No useless messages"])
+    var quiet = false
+
     @CommandLine.Option(names = ["-v", "--version"], description = ["Print version and quit"])
     var version = false
+
+    @CommandLine.Option(names = ["--source-dir"], paramLabel =  "SOURCE_DIR",
+            description =  ["Source directory used to resolve absolute include paths (default: the directory of the Rell file)"])
+    var sourceDir: String? = null
 
     @CommandLine.Parameters(index = "0", arity = "0..1", paramLabel = "FILE", description = ["Rell source file"])
     var rellFile: String? = null

@@ -1,7 +1,7 @@
 package net.postchain.rell.misc
 
 import net.postchain.rell.PostchainUtils
-import net.postchain.rell.makeRellPostchainConfigText
+import net.postchain.rell.RellConfigGen
 import net.postchain.rell.parser.C_SourcePath
 import net.postchain.rell.parser.C_VirtualSourceDir
 import net.postchain.rell.test.GtvTestUtils
@@ -86,11 +86,12 @@ class RellConfigGenTest {
         chkCfg0(files, templateXml, expectedJson)
     }
 
-    private fun chkCfg0(files: Map<String, String>, templateXml: String?, expectedJson: String, pretty: Boolean = false) {
+    private fun chkCfg0(files: Map<String, String>, templateXml: String?, expectedJson: String) {
         val sourceFiles = files.mapKeys { (k, _) -> C_SourcePath.parse(k) }
         val incDir = C_VirtualSourceDir(sourceFiles)
         val mainPath = C_SourcePath.parse("main.rell")
-        val actualXml = makeRellPostchainConfigText(incDir, mainPath, templateXml, pretty)
+        val actualGtv = RellConfigGen.makeConfig(incDir, mainPath, templateXml)
+        val actualXml = RellConfigGen.configToText(actualGtv)
         val actualJson = xmlToJson(actualXml)
         assertEquals(expectedJson, actualJson)
     }

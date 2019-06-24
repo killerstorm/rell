@@ -98,9 +98,9 @@ class C_UserGlobalFunction(val name: String, val fnKey: Int): C_RegularGlobalFun
     }
 }
 
-enum class C_MessageType(val text: String) {
-    WARNING("Warning"),
-    ERROR("ERROR")
+enum class C_MessageType(val text: String, val ignorable: Boolean) {
+    WARNING("Warning", true),
+    ERROR("ERROR", false)
 }
 
 class C_Message(

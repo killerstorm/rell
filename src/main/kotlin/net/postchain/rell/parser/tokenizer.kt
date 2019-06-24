@@ -301,6 +301,8 @@ class RellTokenizer(private val tokensEx: List<RellToken>) : Tokenizer {
 }
 
 private class CharSeq(private val str: String) {
+    private val tabSize = 4
+
     private var len = str.length
     private var pos = 0
     private var row = 1
@@ -344,6 +346,9 @@ private class CharSeq(private val str: String) {
             if (k == '\n') {
                 ++row
                 col = 1
+            } else if (k == '\t') {
+                val step = tabSize - (col - 1) % tabSize
+                col += step
             } else {
                 ++col
             }
