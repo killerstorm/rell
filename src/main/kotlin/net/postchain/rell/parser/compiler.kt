@@ -713,46 +713,60 @@ class C_ExternalChainContext(val nsCtx: C_NamespaceContext, val chain: R_Externa
 
 class C_IncludeContext private constructor(
         val resolver: C_IncludeResolver,
-        private val pathChain: List<String>,
-        private val namespaceIncludes: MutableSet<String> = mutableSetOf()
+        private val outerBlockPath: List<String>,
+        private val sameBlockPath: List<String>,
+        private val ignoredIncludes: MutableSet<String>,
+        private val uniqueIncludes: MutableSet<String>
 ) {
-    private val includes = mutableSetOf<String>()
-
     fun subInclude(pos: S_Pos, resource: C_IncludeResource): C_IncludeContext? {
         val path = resource.path
 
-        val recIdx = pathChain.indexOf(path)
-        if (recIdx >= 0) {
-            val recChain = pathChain.subList(recIdx, pathChain.size) + listOf(path)
-            throw C_Error(pos, "include_rec:${recChain.joinToString(",")}",
-                    "Recursive file inclusion: ${recChain.joinToString(" -> ") { "'$it'" }}")
+        if (!sameBlockPath.isEmpty() && sameBlockPath.last() == path) {
+            throw C_Error(pos, "include_self:$path", "File includes itself: $path")
         }
 
-        if (!includes.add(path)) {
+        val recIdx = outerBlockPath.indexOf(path)
+        if (recIdx >= 0) {
+            val recPath = outerBlockPath.subList(recIdx, outerBlockPath.size) + sameBlockPath + listOf(path)
+            throw C_Error(pos, "include_rec:${recPath.joinToString(",")}",
+                    "Recursive file inclusion: ${recPath.joinToString(" -> ") { "'$it'" }}")
+        }
+
+        if (!uniqueIncludes.add(path)) {
             throw C_Error(pos, "include_dup:$path", "File already included: '$path'")
         }
 
-        val subChain = pathChain + listOf(path)
-        if (subChain.size >= MAX_DEPTH) {
-            throw C_Error(pos, "include_long:${subChain.size}:${subChain.first()}:${subChain.last()}",
-                    "Inclusion chain is too long (${subChain.size}): ${subChain.joinToString(" -> ") { "'$it'" }}")
+        val subPath = sameBlockPath + listOf(path)
+        if (subPath.size >= MAX_DEPTH) {
+            throw C_Error(pos, "include_long:${subPath.size}:${subPath.first()}:${subPath.last()}",
+                    "Inclusion chain is too long (${subPath.size}): ${subPath.joinToString(" -> ") { "'$it'" }}")
         }
 
-        if (!namespaceIncludes.add(path)) {
+        if (!ignoredIncludes.add(path)) {
             return null
         }
 
-        return C_IncludeContext(resource.innerResolver, subChain, namespaceIncludes)
+        return C_IncludeContext(resource.innerResolver, outerBlockPath, subPath, ignoredIncludes, mutableSetOf())
     }
 
     fun subNamespace(): C_IncludeContext {
-        return C_IncludeContext(resolver, pathChain)
+        return C_IncludeContext(resolver, outerBlockPath + sameBlockPath, listOf(), mutableSetOf(), mutableSetOf())
+    }
+
+    fun subExternal(): C_IncludeContext {
+        return C_IncludeContext(resolver, outerBlockPath + sameBlockPath, listOf(), mutableSetOf(), uniqueIncludes)
     }
 
     companion object {
         private val MAX_DEPTH = 100
 
-        fun createTop(path: String, resolver: C_IncludeResolver) = C_IncludeContext(resolver, listOf(path))
+        fun createTop(path: String, resolver: C_IncludeResolver) = C_IncludeContext(
+                resolver,
+                listOf(),
+                listOf(path),
+                mutableSetOf(),
+                mutableSetOf()
+        )
     }
 }
 

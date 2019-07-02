@@ -549,7 +549,8 @@ class S_ExternalDefinition(val pos: S_Pos, val name: String, val definitions: Li
 
         val chain = ctx.modCtx.addExternalChain(pos, name)
         val subChainCtx = C_ExternalChainContext(ctx.nsCtx, chain)
-        val subCtx = C_DefinitionContext(ctx.nsCtx, subChainCtx, ctx.incCtx, null)
+        val subIncCtx = ctx.incCtx.subExternal()
+        val subCtx = C_DefinitionContext(ctx.nsCtx, subChainCtx, subIncCtx, null)
 
         for (def in definitions) {
             val index = ctx.modCtx.nextEntityIndex()
