@@ -4,6 +4,7 @@ import com.google.common.collect.HashMultimap
 import com.google.common.io.Files
 import net.postchain.gtv.Gtv
 import net.postchain.rell.CommonUtils
+import net.postchain.rell.PostchainUtils
 import net.postchain.rell.model.R_Class
 import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_Module
@@ -11,7 +12,6 @@ import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.module.RELL_LANG_VERSION
 import net.postchain.rell.parser.C_Message
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
-import net.postchain.rell.runtime.Rt_GtvValue
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.sql.ROWID_COLUMN
 import net.postchain.rell.sql.SqlExecutor
@@ -165,7 +165,7 @@ object SqlTestUtils {
 
     fun dumpTablesStructure(con: Connection): Map<String, Map<String, String>> {
         val map = HashMultimap.create<String, Pair<String, String>>()
-        con.metaData.getColumns(null, "public", "c0.%", null).use { rs ->
+        con.metaData.getColumns(null, con.schema, "c0.%", null).use { rs ->
             while (rs.next()) {
                 val table = rs.getString(3)
                 val column = rs.getString(4)
@@ -184,8 +184,8 @@ object SqlTestUtils {
 }
 
 object GtvTestUtils {
-    fun decodeGtvStr(s: String) = Rt_GtvValue.jsonStringToGtv(s)
-    fun encodeGtvStr(gtv: Gtv) = Rt_GtvValue.gtvToJsonString(gtv)
+    fun decodeGtvStr(s: String) = PostchainUtils.jsonToGtv(s)
+    fun encodeGtvStr(gtv: Gtv) = PostchainUtils.gtvToJson(gtv)
 
     fun decodeGtvQueryArgs(params: List<R_ExternalParam>, args: List<String>): List<Rt_Value> {
         return decodeGtvArgs(params, args, true)

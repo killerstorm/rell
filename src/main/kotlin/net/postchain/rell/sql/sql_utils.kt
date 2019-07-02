@@ -33,14 +33,14 @@ object SqlUtils {
     }
 
     fun getExistingTables(sqlExec: SqlExecutor): List<String> {
-        val sql = "SELECT table_name FROM information_schema.tables WHERE table_catalog = CURRENT_DATABASE() AND table_schema = 'public'"
+        val sql = "SELECT table_name FROM information_schema.tables WHERE table_catalog = CURRENT_DATABASE() AND table_schema = CURRENT_SCHEMA();"
         val list = mutableListOf<String>()
         sqlExec.executeQuery(sql, {}) { rs -> list.add(rs.getString(1))}
         return list.toList()
     }
 
     private fun getExistingFunctions(sqlExec: SqlExecutor): List<String> {
-        val sql = "SELECT routine_name FROM information_schema.routines WHERE routine_catalog = CURRENT_DATABASE() AND routine_schema = 'public'"
+        val sql = "SELECT routine_name FROM information_schema.routines WHERE routine_catalog = CURRENT_DATABASE() AND routine_schema = CURRENT_SCHEMA();"
         val list = mutableListOf<String>()
         sqlExec.executeQuery(sql, {}) { rs -> list.add(rs.getString(1))}
         return list.toList()

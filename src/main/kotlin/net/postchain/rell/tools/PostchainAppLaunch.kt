@@ -104,7 +104,7 @@ class Rt_RellAppPrinterFactory: Rt_PrinterFactory {
     override fun newPrinter() = Rt_LogPrinter("RellApp")
 }
 
-@CommandLine.Command(name = "RunPostchainApp", description = ["Runs a Rell Postchain app"])
+@CommandLine.Command(name = "PostchainAppLauncher", description = ["Runs a Rell Postchain app"])
 private class RunPostchainAppArgs {
     @CommandLine.Option(names = ["--node-config"], paramLabel =  "NODE_CONFIG_FILE", required = true,
             description =  ["Node configuration (.properties)"])

@@ -9,6 +9,7 @@ import net.postchain.gtv.GtvNull
 import net.postchain.gtv.GtvVirtual
 import net.postchain.gtv.make_gtv_gson
 import net.postchain.rell.CommonUtils
+import net.postchain.rell.PostchainUtils
 import net.postchain.rell.model.*
 import java.util.*
 
@@ -628,7 +629,7 @@ class Rt_GtvValue(val value: Gtv): Rt_Value() {
 
     override fun toString(): String {
         try {
-            return gtvToJsonString(value)
+            return PostchainUtils.gtvToJson(value)
         } catch (e: Exception) {
             return value.toString() // Fallback, just in case (did not happen).
         }
@@ -636,18 +637,4 @@ class Rt_GtvValue(val value: Gtv): Rt_Value() {
 
     override fun equals(other: Any?): Boolean = other is Rt_GtvValue && value == other.value
     override fun hashCode(): Int = value.hashCode()
-
-    companion object {
-        private val GSON = make_gtv_gson()
-
-        fun gtvToJsonString(v: Gtv): String {
-            val s = GSON.toJson(v, Gtv::class.java)
-            return s
-        }
-
-        fun jsonStringToGtv(s: String): Gtv {
-            val v = GSON.fromJson<Gtv>(s, Gtv::class.java)
-            return v ?: GtvNull
-        }
-    }
 }

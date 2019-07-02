@@ -526,8 +526,8 @@ private class C_SysFunction_Print(private val log: Boolean): C_SimpleGlobalFuncC
 
     private inner class CaseMatch: C_SimpleGlobalFuncCaseMatch() {
         override fun compileCallExpr(name: S_Name, args: List<R_Expr>): R_Expr {
-            // Print supports any number of arguments and any types.
-            val pos = name.pos.toString()
+            // Print supports any number of arguments and any types, so not checking.
+            val pos = name.pos.strLine()
             val rFn = R_SysFn_Print(log, pos)
             val rExpr = R_SysCallExpr(R_UnitType, rFn, args)
             return rExpr

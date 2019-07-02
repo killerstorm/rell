@@ -461,9 +461,7 @@ class R_CreateExprAttr_Specified(attr: R_Attrib, private val expr: R_Expr): R_Cr
 }
 
 class R_CreateExprAttr_Default(attr: R_Attrib): R_CreateExprAttr(attr) {
-    private val expr = attr.expr!!
-
-    override fun expr() = expr
+    override fun expr() = attr.expr!!
 }
 
 class R_CreateExpr(type: R_Type, val rClass: R_Class, val attrs: List<R_CreateExprAttr>): R_Expr(type) {

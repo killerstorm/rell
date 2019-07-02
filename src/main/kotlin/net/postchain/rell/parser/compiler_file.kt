@@ -47,7 +47,7 @@ abstract class C_SourceDir {
     abstract fun file(path: C_SourcePath): C_SourceFile?
 }
 
-private class C_VirtualSourceFile(private val path: C_SourcePath, private val text: String): C_SourceFile() {
+class C_TextSourceFile(private val path: C_SourcePath, private val text: String): C_SourceFile() {
     override fun readAst(): S_ModuleDefinition {
         return C_Parser.parse(path, text)
     }
@@ -55,10 +55,29 @@ private class C_VirtualSourceFile(private val path: C_SourcePath, private val te
     override fun readText() = text
 }
 
-class C_VirtualSourceDir(private val files: Map<C_SourcePath, String>): C_SourceDir() {
+class C_MapSourceDir(private val files: Map<C_SourcePath, C_SourceFile>): C_SourceDir() {
     override fun file(path: C_SourcePath): C_SourceFile? {
-        val text = files[path]
-        return if (text == null) null else C_VirtualSourceFile(path, text)
+        val res = files[path]
+        return res
+    }
+
+    companion object {
+        @JvmField
+        val EMPTY = C_MapSourceDir(mapOf())
+
+        @JvmStatic
+        fun of(files: Map<String, String>): C_SourceDir {
+            val files2 = files
+                    .mapKeys { (k, v) -> C_SourcePath.parse(k) }
+                    .mapValues { (k, v) -> C_TextSourceFile(k, v) }
+            return C_MapSourceDir(files2)
+        }
+
+        @JvmStatic
+        fun of(vararg files: Pair<String, String>): C_SourceDir {
+            val files2 = mapOf(*files)
+            return of(files2)
+        }
     }
 }
 

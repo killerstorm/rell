@@ -2,8 +2,8 @@ package net.postchain.rell.misc
 
 import net.postchain.rell.PostchainUtils
 import net.postchain.rell.RellConfigGen
+import net.postchain.rell.parser.C_MapSourceDir
 import net.postchain.rell.parser.C_SourcePath
-import net.postchain.rell.parser.C_VirtualSourceDir
 import net.postchain.rell.test.GtvTestUtils
 import org.junit.Test
 import kotlin.test.assertEquals
@@ -87,8 +87,7 @@ class RellConfigGenTest {
     }
 
     private fun chkCfg0(files: Map<String, String>, templateXml: String?, expectedJson: String) {
-        val sourceFiles = files.mapKeys { (k, _) -> C_SourcePath.parse(k) }
-        val incDir = C_VirtualSourceDir(sourceFiles)
+        val incDir = C_MapSourceDir.of(files)
         val mainPath = C_SourcePath.parse("main.rell")
         val actualGtv = RellConfigGen.makeConfig(incDir, mainPath, templateXml)
         val actualXml = RellConfigGen.configToText(actualGtv)

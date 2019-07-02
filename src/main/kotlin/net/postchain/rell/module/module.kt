@@ -291,7 +291,7 @@ class RellPostchainModuleFactory(
 
             val sqlLogging = rellNode["sqlLog"]?.asBoolean() ?: false
             val typeCheck = forceTypeCheck || (rellNode["typeCheck"]?.asBoolean() ?: false)
-            val dbInitLogLevel = rellNode["dbInitLogLevel"]?.asInteger()?.toInt() ?: SqlInit.LOG_ALL
+            val dbInitLogLevel = rellNode["dbInitLogLevel"]?.asInteger()?.toInt() ?: SqlInit.LOG_STEP_COMPLEX
 
             val config = RellModuleConfig(
                     sqlLogging = sqlLogging,
@@ -333,12 +333,12 @@ class RellPostchainModuleFactory(
     }
 
     private fun compileModule(
-            sourceCodes: Map<C_SourcePath, String>,
+            sourceCodes: Map<C_SourcePath, C_SourceFile>,
             mainFilePath: C_SourcePath,
             errorHandler: ErrorHandler,
             copyOutput: Boolean
     ): R_Module {
-        val sourceDir = C_VirtualSourceDir(sourceCodes)
+        val sourceDir = C_MapSourceDir(sourceCodes)
         val cResult = C_Compiler.compile(sourceDir, mainFilePath)
         val module = processCompilationResult(cResult, errorHandler, copyOutput)
         return module
@@ -381,7 +381,7 @@ class RellPostchainModuleFactory(
         return cResult.module!!
     }
 
-    private fun getModuleCode(rellNode: Map<String, Gtv>): Pair<Map<C_SourcePath, String>, C_SourcePath> {
+    private fun getModuleCode(rellNode: Map<String, Gtv>): Pair<Map<C_SourcePath, C_SourceFile>, C_SourcePath> {
         val filesNode = rellNode[CONFIG_RELL_FILES]
         val sourcesNode = rellNode[CONFIG_RELL_SOURCES]
 
@@ -397,7 +397,9 @@ class RellPostchainModuleFactory(
             filesNode!!.asDict().mapValues { (_, v) -> CommonUtils.readFileContent(v.asString()) }
         }
 
-        val sourcePathsToCodes = sourceCodes.mapKeys { (k, _) -> parseSourcePath(k) }
+        val sourcePathsToCodes = sourceCodes
+                .mapKeys { (k, _) -> parseSourcePath(k) }
+                .mapValues { (k, v) -> C_TextSourceFile(k, v) }
 
         val mainFilePath = parseSourcePath(rellNode.getValue("mainFile").asString())
         if (mainFilePath !in sourcePathsToCodes) {

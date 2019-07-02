@@ -451,7 +451,7 @@ class C_NamespaceContext(
         predefClasses: List<R_Class> = listOf(),
         predefFunctions: Map<String, C_GlobalFunction> = mapOf()
 ){
-    private val names = mutableMapOf<String, C_DefType>()
+    private val names = mutableMapOf<String, C_DefEntry>()
     private val nsBuilder = C_NamespaceBuilder()
 
     private val records = mutableMapOf<String, C_Record>()
@@ -473,7 +473,7 @@ class C_NamespaceContext(
             check(name !in names)
             modCtx.addClass(cls, null)
             addClass0(name, cls)
-            names[name] = C_DefType.CLASS
+            names[name] = C_DefEntry(C_DefType.CLASS, null)
         }
     }
 
@@ -481,7 +481,7 @@ class C_NamespaceContext(
         for ((name, def) in predefs) {
             adder(name, def)
             // For predefined names, name duplication is allowed (e.g. "integer" is a type, function and namespace)
-            if (name !in names) names[name] = type
+            if (name !in names) names[name] = C_DefEntry(type, null)
         }
     }
 
@@ -631,12 +631,15 @@ class C_NamespaceContext(
 
     fun registerName(name: S_Name, type: C_DefType): String {
         modCtx.checkPass(null, C_ModulePass.NAMES)
-        val oldType = names[name.str]
-        if (oldType != null) {
-            throw C_Error(name.pos, "name_conflict:${oldType.description}:${name.str}",
-                    "Name conflict: ${oldType.description} '${name.str}' exists")
+        val oldEntry = names[name.str]
+        if (oldEntry != null) {
+            var msg = "Name conflict: ${oldEntry.type.description} '${name.str}' exists"
+            if (oldEntry.pos != null) {
+                msg += ", defined at ${oldEntry.pos.strLine()}"
+            }
+            throw C_Error(name.pos, "name_conflict:${oldEntry.type.description}:${name.str}", msg)
         }
-        names[name.str] = type
+        names[name.str] = C_DefEntry(type, name.pos)
         return fullName(name.str)
     }
 
@@ -645,6 +648,8 @@ class C_NamespaceContext(
         namespace = nsBuilder.build()
         return namespace
     }
+
+    private class C_DefEntry(val type: C_DefType, val pos: S_Pos?)
 }
 
 class C_DefinitionContext(

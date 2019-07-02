@@ -27,8 +27,10 @@ object RellCliUtils {
 
         System.out.flush()
 
-        if (!quiet || res.module == null || res.messages.any { !it.type.ignorable }) {
-            // Print all messages only if not quiet or of compilation failed, so warnings are not suppressed by the
+        val haveImportantMessages = res.module == null || res.messages.any { !it.type.ignorable }
+
+        if (haveImportantMessages || (!quiet && !res.messages.isEmpty())) {
+            // Print all messages only if not quiet or if compilation failed, so warnings are not suppressed by the
             // quiet flag if there is an error.
             for (message in res.messages) {
                 System.err.println(message)
@@ -119,6 +121,9 @@ object RellCliUtils {
         } catch (e: RellCliErr) {
             System.err.println("ERROR: ${e.message}")
             exitProcess(2)
+        } catch (e: Throwable) {
+            e.printStackTrace()
+            exitProcess(3)
         }
     }
 
@@ -167,19 +172,27 @@ object RellCliUtils {
         return bytes
     }
 
-    fun check(b: Boolean, genMsg: () -> String) {
+    fun prepareDir(dir: File) {
+        check(dir.isDirectory || dir.mkdirs()) { "Cannot create directory: $dir" }
+    }
+
+    fun check(b: Boolean, msgCode: () -> String) {
         if (!b) {
-            val msg = genMsg()
+            val msg = msgCode()
             throw RellCliErr(msg)
         }
     }
 
-    fun checkDir(path: String) {
-        check(File(path).isDirectory) { "Directory not found: $path" }
+    fun checkDir(path: String): File {
+        val file = File(path)
+        check(file.isDirectory) { "Directory not found: $path" }
+        return file
     }
 
-    fun checkFile(path: String) {
-        check(File(path).isFile) { "File not found: $path" }
+    fun checkFile(path: String): File {
+        val file = File(path)
+        check(file.isFile) { "File not found: $path" }
+        return file
     }
 
     fun <T> calc(calc: () -> T, errType: Class<out Throwable>, msg: () -> String): T {

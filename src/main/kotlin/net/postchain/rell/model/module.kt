@@ -30,7 +30,7 @@ class R_Attrib(
 class R_ExternalParam(val name: String, val type: R_Type, val ptr: R_VarPtr)
 
 sealed class R_Routine(val name: String, val params: List<R_ExternalParam>, val body: R_Statement, val frame: R_CallFrame) {
-    abstract fun callTop(modCtx: Rt_ModuleContext, args: List<Rt_Value>)
+    abstract fun callTop(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value?
 }
 
 class R_Operation(
@@ -40,7 +40,7 @@ class R_Operation(
         frame: R_CallFrame
 ): R_Routine(name, params, body, frame)
 {
-    override fun callTop(modCtx: Rt_ModuleContext, args: List<Rt_Value>) {
+    override fun callTop(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value? {
         val entCtx = Rt_EntityContext(modCtx, true)
         val rtFrame = Rt_CallFrame(entCtx, frame)
 
@@ -50,6 +50,8 @@ class R_Operation(
         modCtx.globalCtx.sqlExec.transaction {
             execute(rtFrame)
         }
+
+        return null
     }
 
     fun callTopNoTx(modCtx: Rt_ModuleContext, args: List<Rt_Value>) {
@@ -76,8 +78,8 @@ class R_Query(
         frame: R_CallFrame
 ): R_Routine(name, params, body, frame)
 {
-    override fun callTop(modCtx: Rt_ModuleContext, args: List<Rt_Value>) {
-        callTopQuery(modCtx, args)
+    override fun callTop(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value? {
+        return callTopQuery(modCtx, args)
     }
 
     fun callTopQuery(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
@@ -109,12 +111,13 @@ class R_Function(
         val fnKey: Int
 ): R_Routine(name, params, body, frame)
 {
-    override fun callTop(modCtx: Rt_ModuleContext, args: List<Rt_Value>) {
-        callTopFunction(modCtx, args)
+    override fun callTop(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value? {
+        val res = callTopFunction(modCtx, args)
+        return if (type != R_UnitType) res else null
     }
 
-    fun callTopFunction(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
-        val entCtx = Rt_EntityContext(modCtx, false)
+    fun callTopFunction(modCtx: Rt_ModuleContext, args: List<Rt_Value>, dbUpdateAllowed: Boolean = false): Rt_Value {
+        val entCtx = Rt_EntityContext(modCtx, dbUpdateAllowed)
         val rtFrame = Rt_CallFrame(entCtx, frame)
         val res = call(rtFrame, args)
         return res

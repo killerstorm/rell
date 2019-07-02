@@ -32,14 +32,24 @@ Simplest way to build:
 Run `rell.sh`:
 
 ```
-Usage: rell [--resetdb] [--dburl=URL] FILE [OP] [ARGS...]
+Usage: rell [-qv] [--json] [--json-args] [--json-result] [--resetdb] [--sqllog] [--typecheck] [--db-properties=DB_PROPERTIES] [--db-url=DB_URL] [--source-dir=SOURCE_DIR] [FILE] [OP] [ARGS...]
 Executes a rell program
-      FILE          Rell source file
-      [OP]          Operation or query name
-      [ARGS...]     Call arguments
-      --dburl=URL   Database JDBC URL, e. g. jdbc:postgresql://localhost/relltestdb?user=relltestuser&password=1234
-      --resetdb     Reset database (drop all and create tables from scratch)
-      --sqllog      Enable SQL logging
+      [FILE]            Rell source file
+      [OP]              Operation or query name
+      [ARGS...]         Call arguments
+      --db-properties=DB_PROPERTIES
+                        Database connection properties file (same format as node-config.properties)
+      --db-url=DB_URL   Database JDBC URL, e. g. jdbc:postgresql://localhost/relltestdb?user=relltestuser&password=1234
+      --json            Equivalent to --json-args --json-result
+      --json-args       Accept Rell program arguments in JSON format
+      --json-result     Print Rell program result in JSON format
+      --resetdb         Reset database (drop everything)
+      --source-dir=SOURCE_DIR
+                        Source directory used to resolve absolute include paths (default: the directory of the Rell file)
+      --sqllog          Enable SQL logging
+      --typecheck       Run-time type checking (debug)
+  -q, --quiet           No useless messages
+  -v, --version         Print version and quit
 ```
 
 To execute an operation without a database connection:
@@ -51,13 +61,13 @@ To execute an operation without a database connection:
 To create database tables (**drops all existing tables**):
 
 ```
-./rell.sh --dburl JDBC_URL --resetdb RELL_FILE
+./rell.sh --db-url JDBC_URL --resetdb RELL_FILE
 ```
 
 To execute an operation with a database connection (using existing tables):
 
 ```
-./rell.sh --dburl JDBC_URL RELL_FILE OPERATION_NAME [ARGS...]
+./rell.sh --db-url JDBC_URL RELL_FILE OPERATION_NAME [ARGS...]
 ```
 
 ## Running Unit Tests

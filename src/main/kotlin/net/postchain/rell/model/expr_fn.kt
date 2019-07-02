@@ -427,7 +427,7 @@ object R_SysFn_Gtv_ToBytes: R_SysFunction_1() {
 object R_SysFn_Gtv_ToJson: R_SysFunction_1() {
     override fun call(arg: Rt_Value): Rt_Value {
         val gtv = arg.asGtv()
-        val json = Rt_GtvValue.gtvToJsonString(gtv)
+        val json = PostchainUtils.gtvToJson(gtv)
         //TODO consider making a separate function toJSONStr() to avoid unnecessary conversion str -> json -> str.
         return Rt_JsonValue.parse(json)
     }
@@ -447,7 +447,7 @@ object R_SysFn_Gtv_FromJson_Text: R_SysFunction_1() {
     override fun call(arg: Rt_Value): Rt_Value {
         val str = arg.asString()
         return Rt_Utils.wrapErr("fn:gtv.from_json(text)") {
-            val gtv = Rt_GtvValue.jsonStringToGtv(str)
+            val gtv = PostchainUtils.jsonToGtv(str)
             Rt_GtvValue(gtv)
         }
     }
@@ -457,7 +457,7 @@ object R_SysFn_Gtv_FromJson_Json: R_SysFunction_1() {
     override fun call(arg: Rt_Value): Rt_Value {
         val str = arg.asJsonString()
         return Rt_Utils.wrapErr("fn:gtv.from_json(json)") {
-            val gtv = Rt_GtvValue.jsonStringToGtv(str)
+            val gtv = PostchainUtils.jsonToGtv(str)
             Rt_GtvValue(gtv)
         }
     }

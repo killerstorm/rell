@@ -1,7 +1,10 @@
 package net.postchain.rell.test
 
 import net.postchain.rell.model.R_Module
-import net.postchain.rell.parser.*
+import net.postchain.rell.parser.C_CompilerOptions
+import net.postchain.rell.parser.C_MapSourceDir
+import net.postchain.rell.parser.C_Message
+import net.postchain.rell.parser.C_SourceDir
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_Printer
 import net.postchain.rell.sql.SqlExecutor
@@ -121,8 +124,7 @@ abstract class RellBaseTester(
 
     private fun createIncludeDir(code: String): C_SourceDir {
         val files = files(code)
-        val sourceFiles = files.mapKeys { (k, _) -> C_SourcePath.parse(k) }
-        return C_VirtualSourceDir(sourceFiles)
+        return C_MapSourceDir.of(files)
     }
 
     private fun initSqlInserts(sqlExecLoc: SqlExecutor) {

@@ -7,12 +7,16 @@ import net.postchain.rell.model.*
 abstract class S_Pos {
     abstract fun path(): C_SourcePath
     abstract fun pos(): Long
+    abstract fun str(): String
+    abstract fun strLine(): String
+    override fun toString() = str()
 }
 
 class S_BasicPos(private val file: C_SourcePath, private val row: Int, private val col: Int): S_Pos() {
     override fun path() = file
     override fun pos() = Math.min(row, 1_000_000_000) * 1_000_000_000L + Math.min(col, 1_000_000_000)
-    override fun toString() = "$file($row:$col)"
+    override fun str() = "$file($row:$col)"
+    override fun strLine() = "$file($row)"
 
     override fun equals(other: Any?): Boolean {
         return other is S_BasicPos && file == other.file && row == other.row && col == other.col

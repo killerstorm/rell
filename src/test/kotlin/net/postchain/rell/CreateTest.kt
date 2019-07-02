@@ -109,4 +109,11 @@ class CreateTest: BaseRellTest() {
         chkOp("create person();")
         chkData("person(1)")
     }
+
+    @Test fun testBugAttrExpr() {
+        tst.def("operation o(){ create user(); }")
+        tst.def("class user { name = 'Bob'; }")
+        chkOpFull("")
+        chkData("user(1,Bob)")
+    }
 }

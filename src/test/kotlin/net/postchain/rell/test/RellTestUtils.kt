@@ -13,7 +13,7 @@ object RellTestUtils {
     val MAIN_FILE = "main.rell"
 
     fun processModule(code: String, processor: (RellTestModule) -> String): String {
-        val includeDir = C_VirtualSourceDir(mapOf(C_SourcePath.parse(MAIN_FILE) to code))
+        val includeDir = C_MapSourceDir.of(MAIN_FILE to code)
         return processModule(includeDir, processor = processor)
     }
 

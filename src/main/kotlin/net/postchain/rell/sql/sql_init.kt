@@ -19,6 +19,7 @@ class SqlInit private constructor(private val modCtx: Rt_ModuleContext, private 
         val LOG_PLAN_COMPLEX = 2000
         val LOG_STEP_SIMPLE = 3000
         val LOG_STEP_COMPLEX = 4000
+        val LOG_TITLE = 5000
         val LOG_NONE = Integer.MAX_VALUE
 
         fun init(modCtx: Rt_ModuleContext, logLevel: Int): List<String> {
@@ -28,7 +29,7 @@ class SqlInit private constructor(private val modCtx: Rt_ModuleContext, private 
     }
 
     private fun init(): List<String> {
-        log(LOG_ALL, "Initializing database (chain_id = ${modCtx.sqlCtx.mainChainMapping.chainId})")
+        log(LOG_TITLE, "Initializing database (chain_id = ${modCtx.sqlCtx.mainChainMapping.chainId})")
 
         val dbEmpty = SqlInitPlanner.plan(modCtx, initCtx)
         initCtx.checkErrors()

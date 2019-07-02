@@ -87,11 +87,14 @@ private fun processResult(res: TestLauncher.TestOutput) {
     }
 
     for (fail in res.transactionFailures) {
-        log.error("Transaction failed: blockHeight = ${fail.blockHeight} txIdx = ${fail.txIdx}, error: $${fail.exception}")
+        log.error("Transaction failed: blockHeight = ${fail.blockHeight}, txIdx = ${fail.txIdx}, error: ${fail.exception}")
+        log.error("    blockHeight: ${fail.blockHeight}")
+        log.error("    txIdx: ${fail.txIdx}")
+        log.error("    error: ${fail.exception}")
     }
 }
 
-@CommandLine.Command(name = "RunPostchainTest", description = ["Runs a Rell Postchain test"])
+@CommandLine.Command(name = "PostchainTestLauncher", description = ["Runs a Rell Postchain test"])
 private class RunPostchainTestArgs {
     @CommandLine.Option(names = ["--node-config"], paramLabel =  "NODE_CONFIG_FILE", required = true,
             description =  ["Node configuration (.properties)"])
