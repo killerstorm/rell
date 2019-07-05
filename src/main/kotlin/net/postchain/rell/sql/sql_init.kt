@@ -307,7 +307,7 @@ private class SqlStepAction_AddColumns_NoRecords(private val cls: R_Class): SqlS
 
         private fun uniqueTag(): String {
             val ctr = TEMP_COUNTER.getAndIncrement()
-            return "${TEMP_TIME}_${TEMP_COUNTER}"
+            return "${TEMP_TIME}_$ctr"
         }
 
         fun addColumns(cls: R_Class, ctx: SqlStepCtx, copier: (String) -> Unit) {

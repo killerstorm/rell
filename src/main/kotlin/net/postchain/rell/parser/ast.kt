@@ -3,6 +3,9 @@ package net.postchain.rell.parser
 import net.postchain.rell.MutableTypedKeyMap
 import net.postchain.rell.TypedKeyMap
 import net.postchain.rell.model.*
+import net.postchain.rell.parser.ide.IdeOutlineNodeType
+import net.postchain.rell.parser.ide.IdeOutlineTreeBuilder
+import java.util.function.Supplier
 
 abstract class S_Pos {
     abstract fun path(): C_SourcePath
@@ -23,15 +26,40 @@ class S_BasicPos(private val file: C_SourcePath, private val row: Int, private v
     }
 }
 
-class S_Node<T>(val pos: S_Pos, val value: T) {
+abstract class S_Node {
+    val attachment: Any? = getAttachment()
+
+    companion object {
+        private val ATTACHMENT_PROVIDER_LOCAL = ThreadLocal<Supplier<Any?>>()
+
+        @JvmStatic
+        fun runWithAttachmentProvider(provider: Supplier<Any?>, code: Runnable) {
+            val oldProvider = ATTACHMENT_PROVIDER_LOCAL.get()
+            ATTACHMENT_PROVIDER_LOCAL.set(provider)
+            try {
+                code.run()
+            } finally {
+                ATTACHMENT_PROVIDER_LOCAL.set(oldProvider)
+            }
+        }
+
+        private fun getAttachment(): Any? {
+            val provider = ATTACHMENT_PROVIDER_LOCAL.get()
+            val res = provider?.get()
+            return res
+        }
+    }
+}
+
+class S_PosValue<T>(val pos: S_Pos, val value: T) {
     constructor(t: RellTokenMatch, value: T): this(t.pos, value)
 }
 
-class S_Name(val pos: S_Pos, val str: String) {
+class S_Name(val pos: S_Pos, val str: String): S_Node() {
     override fun toString() = str
 }
 
-class S_NameTypePair(val name: S_Name, val type: S_Type?) {
+class S_NameTypePair(val name: S_Name, val type: S_Type?): S_Node() {
     fun compileType(ctx: C_NamespaceContext): R_Type {
         if (type != null) {
             return type.compile(ctx)
@@ -47,9 +75,10 @@ class S_NameTypePair(val name: S_Name, val type: S_Type?) {
     }
 }
 
-sealed class S_RelClause {
+sealed class S_RelClause: S_Node() {
     abstract fun compileAttributes(ctx: C_ClassContext)
     abstract fun compileRest(ctx: C_ClassContext)
+    abstract fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder)
 }
 
 class S_AttributeClause(val attr: S_NameTypePair, val mutable: Boolean, val expr: S_Expr?): S_RelClause() {
@@ -58,6 +87,10 @@ class S_AttributeClause(val attr: S_NameTypePair, val mutable: Boolean, val expr
     }
 
     override fun compileRest(ctx: C_ClassContext) {}
+
+    override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
+        b.node(this, attr.name, IdeOutlineNodeType.ATTRIBUTE)
+    }
 }
 
 sealed class S_KeyIndexClause(val pos: S_Pos, val attrs: List<S_NameTypePair>): S_RelClause() {
@@ -87,6 +120,12 @@ sealed class S_KeyIndexClause(val pos: S_Pos, val attrs: List<S_NameTypePair>): 
 
         addToContext(ctx, pos, attrs.map { it.name })
     }
+
+    final override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
+        for (attr in attrs) {
+            b.node(attr, attr.name, IdeOutlineNodeType.KEY_INDEX)
+        }
+    }
 }
 
 class S_KeyClause(pos: S_Pos, attrs: List<S_NameTypePair>): S_KeyIndexClause(pos, attrs) {
@@ -101,8 +140,10 @@ class S_IndexClause(pos: S_Pos, attrs: List<S_NameTypePair>): S_KeyIndexClause(p
     }
 }
 
-sealed class S_Definition {
+sealed class S_Definition: S_Node() {
     abstract fun compile(ctx: C_DefinitionContext, entityIndex: Int)
+
+    abstract fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder)
 
     open fun collectIncludes(
             globalCtx: C_GlobalContext,
@@ -230,6 +271,13 @@ class S_ClassDefinition(val name: S_Name, val annotations: List<S_Name>, val bod
         rClass.setBody(body)
     }
 
+    override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
+        val sub = b.node(this, name, IdeOutlineNodeType.CLASS)
+        for (clause in body ?: listOf()) {
+            clause.ideBuildOutlineTree(sub)
+        }
+    }
+
     companion object {
         fun compileClauses(clsCtx: C_ClassContext, clauses: List<S_RelClause>) {
             for (clause in clauses) {
@@ -269,6 +317,13 @@ class S_ObjectDefinition(val name: S_Name, val clauses: List<S_RelClause>): S_De
         val body = clsCtx.createClassBody()
         rObject.rClass.setBody(body)
     }
+
+    override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
+        val sub = b.node(this, name, IdeOutlineNodeType.OBJECT)
+        for (clause in clauses) {
+            clause.ideBuildOutlineTree(sub)
+        }
+    }
 }
 
 class S_RecordDefinition(val name: S_Name, val attrs: List<S_AttributeClause>): S_Definition() {
@@ -294,6 +349,13 @@ class S_RecordDefinition(val name: S_Name, val attrs: List<S_AttributeClause>): 
         val attributes = clsCtx.createRecordBody()
         rType.setAttributes(attributes)
     }
+
+    override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
+        val sub = b.node(this, name, IdeOutlineNodeType.RECORD)
+        for (attr in attrs) {
+            attr.ideBuildOutlineTree(sub)
+        }
+    }
 }
 
 class S_EnumDefinition(val name: S_Name, val attrs: List<S_Name>): S_Definition() {
@@ -313,6 +375,13 @@ class S_EnumDefinition(val name: S_Name, val attrs: List<S_Name>): S_Definition(
 
         val rEnum = R_EnumType(fullName, rAttrs.toList())
         ctx.nsCtx.addEnum(name.str, rEnum)
+    }
+
+    override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
+        val sub = b.node(this, name, IdeOutlineNodeType.ENUM)
+        for (attr in attrs) {
+            sub.node(attr, attr, IdeOutlineNodeType.ENUM_ATTRIBUTE)
+        }
     }
 }
 
@@ -346,6 +415,10 @@ class S_OpDefinition(val name: S_Name, val params: List<S_NameTypePair>, val bod
         val map = MutableTypedKeyMap()
         body.discoverVars(map)
         return map.immutableCopy()
+    }
+
+    override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
+        b.node(this, name, IdeOutlineNodeType.OPERATION)
     }
 }
 
@@ -385,6 +458,10 @@ class S_QueryDefinition(
 
     private fun checkGtvResult(rType: R_Type) {
         checkGtvCompatibility(name.pos, rType, false, "result_nogtv:${name.str}", "Return type of query '${name.str}'")
+    }
+
+    override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
+        b.node(this, name, IdeOutlineNodeType.QUERY)
     }
 }
 
@@ -509,6 +586,10 @@ class S_FunctionDefinition(
         val rFunction = fn.toRFunction(rBody, rCallFrame)
         ctx.addFunctionBody(rFunction)
     }
+
+    override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
+        b.node(this, name, IdeOutlineNodeType.FUNCTION)
+    }
 }
 
 class S_NamespaceDefinition(val name: S_Name, val definitions: List<S_Definition>): S_Definition() {
@@ -541,6 +622,13 @@ class S_NamespaceDefinition(val name: S_Name, val definitions: List<S_Definition
             def.collectIncludes(globalCtx, incCtx, transitive, fail, resources)
         }
     }
+
+    override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
+        val sub = b.node(this, name, IdeOutlineNodeType.NAMESPACE)
+        for (def in definitions) {
+            def.ideBuildOutlineTree(sub)
+        }
+    }
 }
 
 class S_ExternalDefinition(val pos: S_Pos, val name: String, val definitions: List<S_Definition>): S_Definition() {
@@ -569,6 +657,12 @@ class S_ExternalDefinition(val pos: S_Pos, val name: String, val definitions: Li
     ){
         for (def in definitions) {
             def.collectIncludes(globalCtx, incCtx, transitive, fail, resources)
+        }
+    }
+
+    override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
+        for (def in definitions) {
+            def.ideBuildOutlineTree(b)
         }
     }
 }
@@ -654,9 +748,13 @@ class S_IncludeDefinition(val pos: S_Pos, val pathPos: S_Pos, val path: String):
             throw C_Error(pos, e.code, e.msg)
         }
     }
+
+    override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
+        // Do nothing.
+    }
 }
 
-class S_ModuleDefinition(val definitions: List<S_Definition>) {
+class S_ModuleDefinition(val definitions: List<S_Definition>): S_Node() {
     fun compile(globalCtx: C_GlobalContext, path: String, includeResolver: C_IncludeResolver): R_Module {
         val ctx = C_ModuleContext(globalCtx)
 
@@ -684,6 +782,12 @@ class S_ModuleDefinition(val definitions: List<S_Definition>) {
     ){
         for (def in definitions) {
             def.collectIncludes(globalCtx, incCtx, transitive, fail, resources)
+        }
+    }
+
+    fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
+        for (def in definitions) {
+            def.ideBuildOutlineTree(b)
         }
     }
 }

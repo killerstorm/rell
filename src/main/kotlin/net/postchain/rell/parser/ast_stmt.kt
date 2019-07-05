@@ -230,7 +230,7 @@ class S_ExprStatement(val expr: S_Expr): S_Statement(expr.startPos) {
     }
 }
 
-class S_AssignStatement(val dstExpr: S_Expr, val op: S_Node<S_AssignOpCode>, val srcExpr: S_Expr): S_Statement(dstExpr.startPos) {
+class S_AssignStatement(val dstExpr: S_Expr, val op: S_PosValue<S_AssignOpCode>, val srcExpr: S_Expr): S_Statement(dstExpr.startPos) {
     override fun compile(ctx: C_ExprContext): C_Statement {
         val cDstValue = dstExpr.compile(ctx).value()
         val cSrcValue = srcExpr.compile(ctx).value()

@@ -216,11 +216,11 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
             ( PLUS mapNode { S_UnaryOp_Plus } )
             or ( MINUS mapNode { S_UnaryOp_Minus }  )
             or ( NOT mapNode { S_UnaryOp_Not }  )
-            or ( incrementOperator map { S_Node(it.pos, S_UnaryOp_IncDec(it.value, false)) } )
+            or ( incrementOperator map { S_PosValue(it.pos, S_UnaryOp_IncDec(it.value, false)) } )
     )
 
     private val unaryPostfixOperator = (
-            ( incrementOperator map { S_Node(it.pos, S_UnaryOp_IncDec(it.value, true)) } )
+            ( incrementOperator map { S_PosValue(it.pos, S_UnaryOp_IncDec(it.value, true)) } )
             or ( DOUBLEQUESTION mapNode { S_UnaryOp_IsNull } )
     )
 
@@ -255,14 +255,14 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
         }
     }
 
-    private val atExprFromSingle by fullName map { S_Node(it[0].pos, listOf(S_AtExprFrom(null, it))) }
+    private val atExprFromSingle by fullName map { S_PosValue(it[0].pos, listOf(S_AtExprFrom(null, it))) }
 
     private val atExprFromItem by ( optional( name * -COLON ) * fullName ) map {
         ( alias, className ) -> S_AtExprFrom(alias, className)
     }
 
     private val atExprFromMulti by ( LPAR * separatedTerms( atExprFromItem, COMMA, false ) * -RPAR ) map {
-        ( pos, items ) -> S_Node(pos, items)
+        ( pos, items ) -> S_PosValue(pos, items)
     }
 
     private val atExprFrom by ( atExprFromSingle or atExprFromMulti )
@@ -420,7 +420,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val unaryExpr by ( zeroOrMore(unaryPrefixOperator) * operandExpr ) map { (ops, expr) ->
         var res = expr
         for (op in ops.reversed()) {
-            res = S_UnaryExpr(op.pos, S_Node(op.pos, op.value), res)
+            res = S_UnaryExpr(op.pos, S_PosValue(op.pos, op.value), res)
         }
         res
     }
@@ -436,8 +436,8 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val emptyStmt by SEMI map { S_EmptyStatement(it.pos) }
 
     private val varVal by (
-            ( VAL map { S_Node(it, false) } )
-            or ( VAR map { S_Node(it, true) } )
+            ( VAL map { S_PosValue(it, false) } )
+            or ( VAR map { S_PosValue(it, true) } )
     )
 
     private val simpleVarDeclarator by name * optional( -COLON * type ) map { (name, type) ->
@@ -472,7 +472,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     }
 
     private val incrementStmt by ( incrementOperator * baseExpr * -SEMI ) map {
-        (op, expr) -> S_ExprStatement(S_UnaryExpr(op.pos, S_Node(op.pos, S_UnaryOp_IncDec(op.value, false)), expr))
+        (op, expr) -> S_ExprStatement(S_UnaryExpr(op.pos, S_PosValue(op.pos, S_UnaryOp_IncDec(op.value, false)), expr))
     }
 
     private val blockStmt by ( LCURL * zeroOrMore(statementRef) * -RCURL ) map {
@@ -640,15 +640,15 @@ private class BaseExprTail_Call(val args: List<S_NameExprPair>): BaseExprTail() 
 }
 
 private class BaseExprTail_NotNull(val pos: S_Pos): BaseExprTail() {
-    override fun toExpr(base: S_Expr) = S_UnaryExpr(base.startPos, S_Node(pos, S_UnaryOp_NotNull), base)
+    override fun toExpr(base: S_Expr) = S_UnaryExpr(base.startPos, S_PosValue(pos, S_UnaryOp_NotNull), base)
 }
 
 private class BaseExprTail_UnaryPostfixOp(val pos: S_Pos, val op: S_UnaryOp): BaseExprTail() {
-    override fun toExpr(base: S_Expr) = S_UnaryExpr(base.startPos, S_Node(pos, op), base)
+    override fun toExpr(base: S_Expr) = S_UnaryExpr(base.startPos, S_PosValue(pos, op), base)
 }
 
-private infix fun <T> Parser<RellTokenMatch>.mapNode(transform: (RellTokenMatch) -> T): Parser<S_Node<T>> = MapCombinator(this) {
-    S_Node(it, transform(it))
+private infix fun <T> Parser<RellTokenMatch>.mapNode(transform: (RellTokenMatch) -> T): Parser<S_PosValue<T>> = MapCombinator(this) {
+    S_PosValue(it, transform(it))
 }
 
 class RellToken(val name: String, val token: Token): Parser<RellTokenMatch> {

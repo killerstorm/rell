@@ -545,7 +545,7 @@ object C_BinOp_Elvis: C_BinOp() {
     }
 }
 
-class S_BinaryExprTail(val op: S_Node<S_BinaryOp>, val expr: S_Expr)
+class S_BinaryExprTail(val op: S_PosValue<S_BinaryOp>, val expr: S_Expr)
 
 class S_BinaryExpr(val head: S_Expr, val tail: List<S_BinaryExprTail>): S_Expr(head.startPos) {
     override fun compile(ctx: C_ExprContext): C_Expr {
@@ -585,7 +585,7 @@ class S_BinaryExpr(val head: S_Expr, val tail: List<S_BinaryExprTail>): S_Expr(h
     }
 
     private class C_OpExprNode(
-            private val sOp: S_Node<S_BinaryOp>,
+            private val sOp: S_PosValue<S_BinaryOp>,
             private val left: C_ExprNode,
             private val right: C_ExprNode
     ): C_ExprNode() {

@@ -427,7 +427,7 @@ virtual<set<T>>
 Special operators:
 
 -  ``in`` - returns ``true`` if the given value is present in the virtual set;
-the type of the operand is ``virtual<T>>`` (or just ``T`` for simple types)
+   the type of the operand is ``virtual<T>>`` (or just ``T`` for simple types)
 
 --------------
 
@@ -472,7 +472,7 @@ Special operators:
 --------------
 
 virtual<map<K,V>>
-----------------
+------------------
 
 ``virtual<map<K,V>>.from_gtv(gtv): virtual<map<K,V>>`` - decodes a Gtv
 
@@ -539,7 +539,7 @@ gtv
 --------------
 
 gtv-related functions
-------
+---------------------
 
 Functions available for all Gtv-compatible types:
 

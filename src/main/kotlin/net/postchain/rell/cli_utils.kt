@@ -5,11 +5,8 @@ import net.postchain.common.hexStringToByteArray
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.parser.*
 import net.postchain.rell.tools.RellJavaLoggingInit
-import org.slf4j.impl.SimpleLogger
 import picocli.CommandLine
 import java.io.File
-import java.io.OutputStream
-import java.io.PrintStream
 import kotlin.system.exitProcess
 
 object RellCliUtils {
@@ -142,28 +139,11 @@ object RellCliUtils {
 
     fun initLogging() {
         System.setProperty("java.util.logging.config.class", RellJavaLoggingInit::class.java.name)
-        System.setProperty(SimpleLogger.LOG_FILE_KEY, "System.out")
-        initLoggingStdOutErr()
-    }
 
-    private fun initLoggingStdOutErr() {
-        fun suppressMessage(s: String): Boolean {
-            return s.startsWith("SLF4J: ")
-                    || s.endsWith(" org.apache.commons.beanutils.FluentPropertyBeanIntrospector introspect")
-                    || s.startsWith("INFO: Error when creating PropertyDescriptor for public final void org.apache.commons.configuration2.AbstractConfiguration.")
+        val log4jKey = "log4j.configurationFile"
+        if (System.getProperty(log4jKey) == null) {
+            System.setProperty(log4jKey, "log4j2-rell-console.xml")
         }
-
-        fun filterStream(outs: OutputStream): PrintStream {
-            return object : PrintStream(outs, true) {
-                override fun println(s: String?) {
-                    if (s != null && suppressMessage(s)) return
-                    super.println(s)
-                }
-            }
-        }
-
-        System.setOut(filterStream(System.out))
-        System.setErr(filterStream(System.err))
     }
 
     fun parseHex(s: String, sizeBytes: Int, msg: String): ByteArray {

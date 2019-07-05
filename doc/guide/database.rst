@@ -2,8 +2,6 @@
 Database Operations
 ===================
 
--------------
-
 At-Operator
 ===========
 

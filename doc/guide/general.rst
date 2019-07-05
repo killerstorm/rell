@@ -2,8 +2,6 @@
 General Language Features
 =========================
 
---------------
-
 Types
 =====
 
@@ -130,7 +128,7 @@ Rules of Gtv-compatibility:
 - a complex type is not Gtv-compatible if a type of its component is not Gtv-compatible
 
 Virtual types
--------
+-------------
 
 Type ``virtual<T>`` can be used only with following types ``T``:
 
@@ -253,6 +251,11 @@ More details:
 Class
 -----
 
+Instances of a class in Rell are stored in a database, not in memory. They have to be created and deleted explicitly
+using Rell ``create`` and ``delete`` expressions. An in-memory equivalent of a class in Rell is a record.
+
+A variable of a class type holds an ID (primary key) of the corresponding database record, but not its attribute values.
+
 ::
 
    class company {
@@ -370,7 +373,7 @@ Features of objects:
 Record
 ------
 
-Record declaration:
+A record is similar to a class, but its instances exist in memory, not in a database.
 
 ::
 
@@ -380,8 +383,12 @@ Record declaration:
        mutable balance: integer = 0;
    }
 
+Features of records:
+
 - Attributes are immutable by default, and only mutable when declared with ``mutable`` keyword.
+- Attributes can have
 - An attribute may have a default value, which is used if the attribute is not specified during construction.
+- Records are deleted from memory implicitly by a garbage collector.
 
 Creating record values:
 

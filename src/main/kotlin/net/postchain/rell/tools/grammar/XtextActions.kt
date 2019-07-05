@@ -18,7 +18,7 @@ fun main(args: Array<String>) {
     }
     if (!transforms.isEmpty()) println()
 
-    println("    public static Object process(EObject obj) {")
+    println("    public static Object process(XtextToRellContext ctx, EObject obj) {")
     println("        if (obj == null) return null;\n")
 
     println("        switch (obj.eClass().getClassifierID()) {")
@@ -35,7 +35,7 @@ fun main(args: Array<String>) {
         val expr = if (action.transform == null) tupleExpr else {
             println("                Object tup = $tupleExpr;")
             val transformName = typeToTransform(type)
-            "$transformName.transform(tup)"
+            "$transformName.transform(ctx, obj, tup)"
         }
 
         println("                return $expr;")
@@ -73,9 +73,9 @@ class XtextAction_General(private val attrs: List<XtextAttr>): XtextAction() {
         for (attr in attrs) {
             val getter = "get" + attr.name.toUpperCase()
             val expr = if (attr.many) {
-                "RellcUtils.processList(node.$getter())"
+                "RellcUtils.processList(ctx, node.$getter())"
             } else {
-                "RellcUtils.processObject(node.$getter())"
+                "RellcUtils.processObject(ctx, node.$getter())"
             }
             println("                Object ${attr.name} = $expr;")
         }

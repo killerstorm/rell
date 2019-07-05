@@ -3,9 +3,10 @@ package net.postchain.rell
 import net.postchain.rell.lib.*
 import net.postchain.rell.misc.*
 import net.postchain.rell.module.*
-import org.junit.Ignore
-import org.junit.runner.RunWith
 import org.junit.runners.Suite
+
+// There is a bug in the IntelliJ Kotlin plugin 1.3.40, which makes impossible to run a test folder, so need a
+// test suite as a workaround. To be deleted when the plugin is fixed.
 
 @Suite.SuiteClasses(
         AtExprOpTest::class,
@@ -67,6 +68,5 @@ import org.junit.runners.Suite
         GtxModuleTest::class,
         GtxTest::class
 )
-@RunWith(Suite::class)
-@Ignore
+//@RunWith(Suite::class)
 class RellSuite

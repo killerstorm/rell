@@ -4,6 +4,7 @@ import mu.KotlinLogging
 import net.postchain.common.toHex
 import net.postchain.config.app.AppConfig
 import net.postchain.config.node.NodeConfigurationProviderFactory
+import net.postchain.core.UserMistake
 import net.postchain.devtools.TestLauncher
 import net.postchain.gtv.gtvml.GtvMLEncoder
 import net.postchain.rell.RellCliUtils
@@ -87,10 +88,13 @@ private fun processResult(res: TestLauncher.TestOutput) {
     }
 
     for (fail in res.transactionFailures) {
-        log.error("Transaction failed: blockHeight = ${fail.blockHeight}, txIdx = ${fail.txIdx}, error: ${fail.exception}")
+        val ex = fail.exception
+        val errorMsg = if (ex is UserMistake) ex.message else "$ex"
+        log.error("")
+        log.error("Transaction failed:")
         log.error("    blockHeight: ${fail.blockHeight}")
         log.error("    txIdx: ${fail.txIdx}")
-        log.error("    error: ${fail.exception}")
+        log.error("    error: $errorMsg")
     }
 }
 
