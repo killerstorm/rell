@@ -27,7 +27,7 @@ class InterpOpTest: AbstractOpTest() {
         val args2 = args.map { it as InterpTstVal }
         val types = args2.map { it.type }
 
-        val chainCtx = Rt_ChainContext(GtvNull, Rt_NullValue)
+        val chainCtx = Rt_ChainContext(GtvNull, Rt_NullValue, ByteArray(32))
 
         val globalCtx = Rt_GlobalContext(
                 Rt_FailingPrinter,

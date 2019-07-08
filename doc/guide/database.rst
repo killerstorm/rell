@@ -240,3 +240,7 @@ Can specify an arbitrary expression returning a class, a nullable class or a col
 
    val u = user @? { .name == 'Bob' };
    delete u;
+
+--------------
+
+*Rell v0.9.0*

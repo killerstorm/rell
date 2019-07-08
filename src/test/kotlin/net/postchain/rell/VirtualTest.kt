@@ -1253,6 +1253,8 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testOperation() {
+        tstCtx.useSql = true
+
         val code = "operation o(x: virtual<list<integer>>) { print(_strict_str(x)); }"
 
         chkOpFull(code, listOf(argToGtv("[123,456]", "[[0],[1]]")))

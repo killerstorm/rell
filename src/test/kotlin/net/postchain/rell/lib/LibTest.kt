@@ -63,7 +63,7 @@ class LibTest: BaseRellTest(false) {
     }
 
     @Test fun testIsSigner() {
-        tst.opContext = Rt_OpContext(-1, -1, listOf(CommonUtils.hexToBytes("1234"), CommonUtils.hexToBytes("abcd")))
+        tst.opContext = Rt_OpContext(-1, -1, -1, listOf(CommonUtils.hexToBytes("1234"), CommonUtils.hexToBytes("abcd")))
 
         chk("is_signer(x'1234')", "boolean[true]")
         chk("is_signer(x'abcd')", "boolean[true]")

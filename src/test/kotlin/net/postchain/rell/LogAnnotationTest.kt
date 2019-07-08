@@ -21,7 +21,7 @@ class LogAnnotationTest: BaseRellTest() {
         def("class foo(log) { x: integer; }")
         tst.inserts = LibBlockTransactionTest.BLOCK_INSERTS
         tst.chainId = 333
-        tst.opContext = Rt_OpContext(-1, 444, listOf())
+        tst.opContext = Rt_OpContext(-1, 444, -1, listOf())
 
         chkOp("create foo(x = 123);")
         tst.chkData("foo(1,444,123)")
@@ -50,7 +50,7 @@ class LogAnnotationTest: BaseRellTest() {
         def("class foo(log) { x: integer; }")
         tst.inserts = LibBlockTransactionTest.BLOCK_INSERTS
         tst.chainId = 333
-        tst.opContext = Rt_OpContext(-1, 444, listOf())
+        tst.opContext = Rt_OpContext(-1, 444, -1, listOf())
 
         chkOp("create foo(x = 123, transaction@{});", "ct_err:create_attr_cantset:transaction")
         tst.chkData()

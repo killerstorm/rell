@@ -2,15 +2,21 @@ package net.postchain.rell.tools.grammar
 
 import com.github.h0tk3y.betterParse.combinators.*
 import com.github.h0tk3y.betterParse.grammar.ParserReference
-import net.postchain.rell.parser.S_Grammar
+import net.postchain.rell.module.RELL_VERSION
 import net.postchain.rell.parser.RellToken
+import net.postchain.rell.parser.S_Grammar
 import org.apache.commons.collections4.MapUtils
 
 fun main(args: Array<String>) {
+    val timestamp = System.currentTimeMillis()
+
     println("var RELL_GRAMMAR = {")
 
     val tokenizer = S_Grammar.tokenizer
 
+    println("    \"version\": \"${RELL_VERSION}\",")
+    println("    \"timestamp\": \"$timestamp\",")
+    println("    \"timestampStr\": \"${GrammarUtils.timestampToString(timestamp)}\",")
     println("    \"lex\": {")
     println("        \"generals\": {")
     println("            \"IDENTIFIER\": \"${tokenizer.tkIdentifier.name}\",")

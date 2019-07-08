@@ -1,9 +1,9 @@
 package net.postchain.rell.parser
 
-import com.sun.xml.internal.ws.util.StringUtils
 import net.postchain.rell.CommonUtils
 import net.postchain.rell.TypedKeyMap
 import net.postchain.rell.model.*
+import org.apache.commons.lang3.StringUtils
 import java.util.*
 
 class C_Error: RuntimeException {

@@ -4,10 +4,9 @@ import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.google.common.collect.Iterables
 import com.google.common.math.LongMath
+import net.postchain.core.ByteArrayKey
 import net.postchain.gtv.Gtv
-import net.postchain.gtv.GtvNull
 import net.postchain.gtv.GtvVirtual
-import net.postchain.gtv.make_gtv_gson
 import net.postchain.rell.CommonUtils
 import net.postchain.rell.PostchainUtils
 import net.postchain.rell.model.*
@@ -552,6 +551,10 @@ class Rt_JsonValue private constructor(private val str: String): Rt_Value() {
 
             val json = try { mapper.readTree(s) }
             catch (e: JsonProcessingException) {
+                throw IllegalArgumentException(s)
+            }
+
+            if (json == null) {
                 throw IllegalArgumentException(s)
             }
 

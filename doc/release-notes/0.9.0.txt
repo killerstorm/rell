@@ -1,4 +1,4 @@
-RELEASE NOTES 0.9.0 (2019-05-31)
+RELEASE NOTES 0.9.0 (2019-07-08)
 
 
 1. Upgrade to Postchain 3.0 (was 2.5)
@@ -187,3 +187,12 @@ T.hash(): byte_array
 
 
 10. Bug fix: Local variable shadowing a record
+
+
+11. Library: Chain and Operation contexts
+
+chain_context.args: module_args - the type of the attribute is now not nullable, arguments must always be specified
+
+chain_context.blockchain_rid: byte_array - new attribute, returns the blockchain RID
+
+op_context.block_height: integer - the height of the block being built

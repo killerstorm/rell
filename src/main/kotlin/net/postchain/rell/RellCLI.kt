@@ -124,7 +124,7 @@ private fun findEntryPoint(module: R_Module, name: String): RellEntryPoint {
     val op = module.operations[name]
     if (op != null) {
         val time = System.currentTimeMillis() / 1000
-        eps.add(RellEntryPoint_Operation(op, Rt_OpContext(time, -1, listOf())))
+        eps.add(RellEntryPoint_Operation(op, Rt_OpContext(time, -1, -1, listOf())))
     }
 
     val q = module.queries[name]
@@ -144,7 +144,8 @@ private fun findEntryPoint(module: R_Module, name: String): RellEntryPoint {
 }
 
 private fun createGlobalCtx(args: RellCliArgs, sqlExec: SqlExecutor, opCtx: Rt_OpContext?): Rt_GlobalContext {
-    val chainCtx = Rt_ChainContext(GtvNull, Rt_NullValue)
+    val bcRid = ByteArray(32)
+    val chainCtx = Rt_ChainContext(GtvNull, Rt_NullValue, bcRid)
 
     return Rt_GlobalContext(
             sqlExec = sqlExec,

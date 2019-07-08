@@ -91,12 +91,14 @@ object C_LibFunctions {
     private val CHAIN_CONTEXT_NAMESPACE = makeNamespace(
             C_GlobalFuncTable.EMPTY,
             stdFnValue("raw_config", R_GtvType, R_SysFn_ChainContext_RawConfig),
+            stdFnValue("blockchain_rid", R_ByteArrayType, R_SysFn_ChainContext_BlockchainRid),
             Pair("args", C_NsValue_ChainContext_Args)
     )
 
     private val OP_CONTEXT_NAMESPACE = makeNamespace(
             C_GlobalFuncTable.EMPTY,
             Pair("last_block_time", C_Ns_OpContext.Value_LastBlockTime),
+            Pair("block_height", C_Ns_OpContext.Value_BlockHeight),
             Pair("transaction", C_Ns_OpContext.Value_Transaction)
     )
 
@@ -498,6 +500,13 @@ object C_Ns_OpContext {
         }
     }
 
+    object Value_BlockHeight: C_NamespaceValue_RExpr() {
+        override fun get0(entCtx: C_EntityContext, name: List<S_Name>): R_Expr {
+            checkCtx(entCtx, name)
+            return R_SysCallExpr(R_IntegerType, R_SysFn_OpContext_BlockHeight, listOf())
+        }
+    }
+
     object Value_Transaction: C_NamespaceValue_RExpr() {
         override fun get0(entCtx: C_EntityContext, name: List<S_Name>): R_Expr {
             checkCtx(entCtx, name)
@@ -514,8 +523,7 @@ private object C_NsValue_ChainContext_Args: C_NamespaceValue_RExpr() {
             throw C_Error(name[0].pos, "expr_chainctx_args_norec",
                     "To use '$nameStr', define a record '${C_Defs.MODULE_ARGS_RECORD}'")
         }
-        val type = R_NullableType(record)
-        return R_SysCallExpr(type, R_SysFn_ChainContext_Args, listOf())
+        return R_SysCallExpr(record, R_SysFn_ChainContext_Args, listOf())
     }
 }
 

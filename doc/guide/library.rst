@@ -27,11 +27,9 @@ It is not possible to create, modify or delete objects of those classes in code.
 chain_context
 -------------
 
-``chain_context.raw_config: gtv`` - blockchain configuration object, e. g. ``{"gtx":{"rellSrcModule":"foo.rell"}}``
-
-``chain_context.args: module_args?`` - module arguments specified in ``raw_config`` under path ``gtx.rellModuleArgs``.
+``chain_context.args: module_args`` - module arguments specified in ``raw_config`` under path ``gtx.rellModuleArgs``.
 The type is ``module_args``, which must be a user-defined record. If no ``module_args`` record is defined in the module,
-the ``args`` field cannot be accessed. The value is ``null`` if arguments are not specified in the module configuration.
+the ``args`` field cannot be accessed.
 
 Example of ``module_args``:
 
@@ -48,10 +46,11 @@ Corresponding module configuration:
 
     {
         "gtx": {
-            "rellSrcModule": "foo.rell",
-            "rellModuleArgs": {
-                "s": "Hello",
-                "n": 123
+            "rell": {
+                "moduleArgs": {
+                    "s": "Hello",
+                    "n": 123
+                }
             }
         }
     }
@@ -61,20 +60,27 @@ Code that reads ``module_args``:
 ::
 
     function f() {
-        print(chain_context.args?.s);
-        print(chain_context.args?.n);
+        print(chain_context.args.s);
+        print(chain_context.args.n);
     }
+
+``chain_context.blockchain_rid: byte_array`` - blockchain RID
+
+``chain_context.raw_config: gtv`` - blockchain configuration object, e. g. ``{"gtx":{"rell":{"mainFile":"main.rell"}}}``
 
 op_context
 ----------
 
+System namespace ``op_context`` can be used only in an operation or a function called from an operation, but not in a query.
+
+``op_context.block_height: integer`` - the height of the block currently being built
+(equivalent of ``op_context.transaction.block.block_height``).
+
 ``op_context.last_block_time: integer`` - the timestamp of the last block, in milliseconds
 (like ``System.currentTimeMillis()`` in Java). Returns ``-1`` if there is no last block (the block currently being built
 is the first block).
-Can be used only in an operation or a function called from an operation, but not in a query.
 
 ``op_context.transaction: transaction`` - the transaction currently being built.
-Can be used only in an operation or a function called from an operation, but not in a query.
 
 --------------
 
@@ -600,3 +606,7 @@ virtual<record>
 ``.hash(): byte_array``
 
 ``.to_full(): R`` - converts to the original value, fails if the value is not full
+
+--------------
+
+*Rell v0.9.0*

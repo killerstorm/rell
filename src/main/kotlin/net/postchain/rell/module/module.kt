@@ -1,6 +1,7 @@
 package net.postchain.rell.module
 
 import mu.KLogging
+import net.postchain.base.data.DatabaseAccess
 import net.postchain.core.*
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvDictionary
@@ -130,7 +131,8 @@ private class RellGTXOperation(
 
     override fun apply(ctx: TxEContext): Boolean {
         handleError {
-            val opCtx = Rt_OpContext(ctx.timestamp, ctx.txIID, data.signers.toList())
+            val blockHeight = DatabaseAccess.of(ctx).getLastBlockHeight(ctx)
+            val opCtx = Rt_OpContext(ctx.timestamp, ctx.txIID, blockHeight, data.signers.toList())
             val heightProvider = Rt_TxChainHeightProvider(ctx)
             val modCtx = module.makeRtModuleContext(ctx, opCtx, heightProvider)
             gtvToRtCtx.finish(modCtx)
@@ -163,7 +165,6 @@ private class RellModuleConfig(
 )
 
 private class RellPostchainModule(
-        val factory: RellPostchainModuleFactory,
         private val rModule: R_Module,
         private val moduleName: String,
         private val chainCtx: Rt_ChainContext,
@@ -283,7 +284,7 @@ class RellPostchainModuleFactory(
             val (sourceCodes, mainFilePath) = getModuleCode(rellNode)
             val module = compileModule(sourceCodes, mainFilePath, errorHandler, copyOutput)
 
-            val chainCtx = createChainContext(data, rellNode, module)
+            val chainCtx = createChainContext(data, rellNode, module, blockchainRID)
             val chainDeps = getGtxChainDependencies(data)
 
             val modLogPrinter = getModulePrinter(logPrinter, Rt_TimestampPrinter(combinedPrinter), copyOutput)
@@ -300,7 +301,6 @@ class RellPostchainModuleFactory(
             )
 
             RellPostchainModule(
-                    this,
                     module,
                     moduleName,
                     chainCtx,
@@ -415,16 +415,24 @@ class RellPostchainModuleFactory(
     }
 
 
-    private fun createChainContext(rawConfig: Gtv, rellNode: Map<String, Gtv>, rModule: R_Module): Rt_ChainContext {
+    private fun createChainContext(
+            rawConfig: Gtv,
+            rellNode: Map<String, Gtv>,
+            rModule: R_Module,
+            blockchainRid: ByteArray
+    ): Rt_ChainContext {
         val argsRec = rModule.moduleArgsRecord
         val gtvArgs = rellNode["moduleArgs"]
 
-        val args = if (argsRec == null || gtvArgs == null) Rt_NullValue else {
+        val args = if (argsRec == null) null else {
+            if (gtvArgs == null) {
+                throw UserMistake("No moduleArgs in blockchain configuration, but type ${argsRec} defined in the code")
+            }
             val convCtx = GtvToRtContext(true)
             argsRec.gtvToRt(convCtx, gtvArgs)
         }
 
-        return Rt_ChainContext(rawConfig, args)
+        return Rt_ChainContext(rawConfig, args, blockchainRid)
     }
 
     private fun getGtxChainDependencies(data: Gtv): Map<String, ByteArray> {

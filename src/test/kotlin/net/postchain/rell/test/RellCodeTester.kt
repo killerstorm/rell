@@ -52,7 +52,7 @@ class RellCodeTester(
     }
 
     fun createInitGlobalCtx(sqlExec: SqlExecutor): Rt_GlobalContext {
-        val chainCtx = Rt_ChainContext(GtvNull, Rt_NullValue)
+        val chainCtx = createChainContext()
         return Rt_GlobalContext(
                 Rt_FailingPrinter,
                 Rt_FailingPrinter,
@@ -180,7 +180,7 @@ class RellCodeTester(
     }
 
     private fun createGlobalCtx(): Rt_GlobalContext {
-        val chainContext = Rt_ChainContext(GtvNull, Rt_NullValue)
+        val chainContext = createChainContext()
         return Rt_GlobalContext(
                 stdoutPrinter,
                 logPrinter,
@@ -191,6 +191,11 @@ class RellCodeTester(
                 sqlUpdatePortionSize = sqlUpdatePortionSize,
                 typeCheck = true
         )
+    }
+
+    private fun createChainContext(): Rt_ChainContext {
+        val bcRid = ByteArray(32)
+        return Rt_ChainContext(GtvNull, Rt_NullValue, bcRid)
     }
 
     fun createModuleCtx(globalCtx: Rt_GlobalContext, module: R_Module): Rt_ModuleContext {

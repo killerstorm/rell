@@ -6,7 +6,7 @@ import org.junit.Test
 
 class LibOpContextTest: BaseRellTest(false) {
     @Test fun testLastBlockTime() {
-        tst.opContext = Rt_OpContext(12345, -1, listOf())
+        tst.opContext = Rt_OpContext(12345, -1, -1, listOf())
         chkOp("print(op_context.last_block_time);")
         chkStdout("12345")
 
@@ -29,17 +29,23 @@ class LibOpContextTest: BaseRellTest(false) {
     @Test fun testLastBlockTimeAsDefaultValue() {
         tstCtx.useSql = true
         def("class foo { t: integer = op_context.last_block_time; }")
-        tst.opContext = Rt_OpContext(12345, -1, listOf())
+        tst.opContext = Rt_OpContext(12345, -1, -1, listOf())
 
         chkOp("create foo();")
         chkData("foo(1,12345)")
+    }
+
+    @Test fun testBlockHeight() {
+        tst.opContext = Rt_OpContext(12345, -1, 98765, listOf())
+        chkOp("print(op_context.block_height);")
+        chkStdout("98765")
     }
 
     @Test fun testTransaction() {
         tstCtx.useSql = true
         tst.inserts = LibBlockTransactionTest.BLOCK_INSERTS
         tst.chainId = 333
-        tst.opContext = Rt_OpContext(-1, 444, listOf())
+        tst.opContext = Rt_OpContext(-1, 444, -1, listOf())
 
         chkOp("print(_type_of(op_context.transaction));")
         chkStdout("transaction")
@@ -53,7 +59,7 @@ class LibOpContextTest: BaseRellTest(false) {
         def("class foo { t: transaction = op_context.transaction; }")
         tst.inserts = LibBlockTransactionTest.BLOCK_INSERTS
         tst.chainId = 333
-        tst.opContext = Rt_OpContext(-1, 444, listOf())
+        tst.opContext = Rt_OpContext(-1, 444, -1, listOf())
 
         chkOp("create foo();")
         chkData("foo(1,444)")

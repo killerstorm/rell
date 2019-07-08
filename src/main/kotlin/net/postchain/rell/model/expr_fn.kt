@@ -371,22 +371,27 @@ class R_SysFn_Print(private val log: Boolean, private val pos: String): R_SysFun
     }
 }
 
-object R_SysFn_OpContext_LastBlockTime: R_SysFunction() {
-    override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
+sealed class R_SysFn_OpContext(private val name: String): R_SysFunction() {
+    abstract fun call(opCtx: Rt_OpContext): Rt_Value
+
+    final override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
         check(args.size == 0)
         val opCtx = modCtx.globalCtx.opCtx
-        if (opCtx == null) throw Rt_Error("fn:op_context.last_block_time:noop", "Operation context not available")
-        return Rt_IntValue(opCtx.lastBlockTime)
+        if (opCtx == null) throw Rt_Error("fn:op_context.$name:noop", "Operation context not available")
+        return call(opCtx)
     }
 }
 
-class R_SysFn_OpContext_Transaction(private val type: R_ClassType): R_SysFunction() {
-    override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
-        check(args.size == 0)
-        val opCtx = modCtx.globalCtx.opCtx
-        if (opCtx == null) throw Rt_Error("fn:op_context.transaction:noop", "Operation context not available")
-        return Rt_ClassValue(type, opCtx.transactionIid)
-    }
+object R_SysFn_OpContext_LastBlockTime: R_SysFn_OpContext("last_block_time") {
+    override fun call(opCtx: Rt_OpContext) = Rt_IntValue(opCtx.lastBlockTime)
+}
+
+class R_SysFn_OpContext_Transaction(private val type: R_ClassType): R_SysFn_OpContext("transaction") {
+    override fun call(opCtx: Rt_OpContext) = Rt_ClassValue(type, opCtx.transactionIid)
+}
+
+object R_SysFn_OpContext_BlockHeight: R_SysFn_OpContext("block_height") {
+    override fun call(opCtx: Rt_OpContext) = Rt_IntValue(opCtx.blockHeight)
 }
 
 object R_SysFn_ChainContext_RawConfig: R_SysFunction() {
@@ -396,10 +401,19 @@ object R_SysFn_ChainContext_RawConfig: R_SysFunction() {
     }
 }
 
+object R_SysFn_ChainContext_BlockchainRid: R_SysFunction() {
+    override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
+        check(args.size == 0)
+        val bcRid = modCtx.globalCtx.chainCtx.blockchainRid
+        return Rt_ByteArrayValue(bcRid)
+    }
+}
+
 object R_SysFn_ChainContext_Args: R_SysFunction() {
     override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
         check(args.size == 0)
-        return modCtx.globalCtx.chainCtx.args
+        val args = modCtx.globalCtx.chainCtx.args
+        return args ?: throw Rt_Error("chain_context.args:no_module_args", "No module args")
     }
 }
 

@@ -251,6 +251,6 @@ class Rt_EntityContext(val modCtx: Rt_ModuleContext, val dbUpdateAllowed: Boolea
     }
 }
 
-class Rt_OpContext(val lastBlockTime: Long, val transactionIid: Long, val signers: List<ByteArray>)
+class Rt_OpContext(val lastBlockTime: Long, val transactionIid: Long, val blockHeight: Long, val signers: List<ByteArray>)
 
-class Rt_ChainContext(val rawConfig: Gtv, val args: Rt_Value)
+class Rt_ChainContext(val rawConfig: Gtv, val args: Rt_Value?, val blockchainRid: ByteArray)
