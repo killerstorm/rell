@@ -596,19 +596,12 @@ class S_NamespaceDefinition(val name: S_Name, val definitions: List<S_Definition
     override fun compile(ctx: C_DefinitionContext, entityIndex: Int) {
         ctx.nsCtx.registerName(name, C_DefType.NAMESPACE)
 
-        val nsSubName = ctx.nsCtx.fullName(name.str)
-        val subNsCtx = C_NamespaceContext(ctx.modCtx, ctx.nsCtx, nsSubName)
-        val subIncCtx = ctx.incCtx.subNamespace()
-        val defSubName = ctx.fullName(name.str)
-        val subCtx = C_DefinitionContext(subNsCtx, ctx.chainCtx, subIncCtx, defSubName)
+        val subCtx = ctx.nsCtx.addNamespace(ctx, name.str)
 
         for (def in definitions) {
             val index = ctx.modCtx.nextEntityIndex()
             def.compile(subCtx, index)
         }
-
-        val ns = subCtx.nsCtx.createNamespace()
-        ctx.nsCtx.addNamespace(name.str, C_NamespaceDef(ns))
     }
 
     override fun collectIncludes(

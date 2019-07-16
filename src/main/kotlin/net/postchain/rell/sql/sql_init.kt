@@ -11,7 +11,7 @@ private val ORD_TABLES = 0
 private val ORD_RECORDS = 1
 
 class SqlInit private constructor(private val modCtx: Rt_ModuleContext, private val logLevel: Int) {
-    private val initCtx = SqlInitCtx(logger)
+    private val initCtx = SqlInitCtx(logger, logLevel)
 
     companion object : KLogging() {
         val LOG_ALL = 0
@@ -119,6 +119,8 @@ private class SqlClassIniter private constructor(
     private val sqlCtx = modCtx.sqlCtx
     private var nextMetaClsId = 1 + (metaData.values.map { it.id }.max() ?: -1)
 
+    private val warnUnexpectedSqlStructure = initCtx.logLevel < SqlInit.LOG_NONE
+
     private fun processClasses() {
         val sqlCtx = modCtx.sqlCtx
 
@@ -141,8 +143,11 @@ private class SqlClassIniter private constructor(
                 .toSet()
 
         for (metaCls in metaData.values.filter { it.name !in codeClasses }) {
-            initCtx.msgs.warning("dbinit:no_code:${metaCls.type}:${metaCls.name}",
-                    "Table for undefined ${metaCls.type.en} '${metaCls.name}' found")
+            if (warnUnexpectedSqlStructure) {
+                // No need to print this warning in a Console App.
+                initCtx.msgs.warning("dbinit:no_code:${metaCls.type}:${metaCls.name}",
+                        "Table for undefined ${metaCls.type.en} '${metaCls.name}' found")
+            }
         }
     }
 
@@ -200,8 +205,10 @@ private class SqlClassIniter private constructor(
         if (!oldAttrs.isEmpty()) {
             val codeList = oldAttrs.joinToString(",")
             val msgList = oldAttrs.joinToString(", ")
-            initCtx.msgs.warning("dbinit:no_code:attrs:${cls.name}:$codeList",
-                    "Table columns for undefined attributes of ${metaCls.type.en} '${cls.name}' found: $msgList")
+            if (warnUnexpectedSqlStructure) {
+                initCtx.msgs.warning("dbinit:no_code:attrs:${cls.name}:$codeList",
+                        "Table columns for undefined attributes of ${metaCls.type.en} '${cls.name}' found: $msgList")
+            }
         }
     }
 
@@ -255,7 +262,7 @@ private class SqlClassIniter private constructor(
     }
 }
 
-private class SqlInitCtx(logger: KLogger) {
+private class SqlInitCtx(logger: KLogger, val logLevel: Int) {
     val msgs = Rt_Messages(logger)
 
     private val steps = mutableListOf<SqlInitStep>()

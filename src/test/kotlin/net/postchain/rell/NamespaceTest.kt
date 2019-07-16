@@ -59,12 +59,12 @@ class NamespaceTest: BaseRellTest() {
     }
 
     @Test fun testNameConflict() {
-        chkCompile("namespace foo {} namespace foo {}", "ct_err:name_conflict:namespace:foo")
+        chkCompile("namespace foo {} namespace foo {}", "OK")
         chkCompile("namespace foo {} class foo {}", "ct_err:name_conflict:namespace:foo")
         chkCompile("namespace foo {} object foo {}", "ct_err:name_conflict:namespace:foo")
         chkCompile("namespace foo {} function foo(): integer = 123;", "ct_err:name_conflict:namespace:foo")
 
-        chkCompile("namespace foo { namespace bar {} namespace bar {} }", "ct_err:name_conflict:namespace:bar")
+        chkCompile("namespace foo { namespace bar {} namespace bar {} }", "OK")
         chkCompile("namespace foo { namespace bar {} function bar(): integer = 123; }", "ct_err:name_conflict:namespace:bar")
         chkCompile("namespace foo { class bar {} object bar {} }", "ct_err:name_conflict:class:bar")
     }
@@ -153,5 +153,31 @@ class NamespaceTest: BaseRellTest() {
         chkEx("{ val x: foo.bar.c = foo.bar.c @ {}; return x; }", "foo.bar.c[0]")
         chkEx("{ val x: foo.bar.r = foo.bar.r(123); return x; }", "foo.bar.r[x=int[123]]")
         chkEx("{ val x: foo.bar.e = foo.bar.e.B; return x; }", "foo.bar.e[B]")
+    }
+
+    @Test fun testMultipleNamespacesWithSameName() {
+        def("""
+            namespace foo { function f(): integer = 123; }
+            namespace foo { namespace bar { function g(): integer = 456; } }
+            namespace foo { namespace bar { function h(): integer = 789; } }
+        """.trimIndent())
+
+        chk("foo.f()", "int[123]")
+        chk("foo.bar.g()", "int[456]")
+        chk("foo.bar.h()", "int[789]")
+    }
+
+    @Test fun testMultipleNamespacesWithSameName2() {
+        def("""
+            namespace foo { function f(): integer = g() * 2; }
+            function p(): integer = foo.f() + foo.g() + foo.h();
+            namespace foo { function g(): integer = h() * 3; }
+            namespace foo { function h(): integer = 123; }
+        """.trimIndent())
+
+        chk("foo.f()", "int[738]")
+        chk("foo.g()", "int[369]")
+        chk("foo.h()", "int[123]")
+        chk("p()", "int[1230]")
     }
 }

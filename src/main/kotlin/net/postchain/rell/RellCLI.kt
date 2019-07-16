@@ -11,10 +11,13 @@ import net.postchain.rell.sql.*
 import picocli.CommandLine
 import kotlin.system.exitProcess
 
+private val INIT = run {
+    RellCliUtils.initLogging()
+}
+
 private val SQL_MAPPER = Rt_ChainSqlMapping(0)
 
 fun main(args: Array<String>) {
-    RellCliUtils.initLogging()
     RellCliUtils.runCli(args, RellCliArgs()) {
         main0(it)
     }

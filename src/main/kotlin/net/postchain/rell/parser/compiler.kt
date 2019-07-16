@@ -455,6 +455,7 @@ class C_NamespaceContext(
     private val nsBuilder = C_NamespaceBuilder()
 
     private val records = mutableMapOf<String, C_Record>()
+    private val namespaces = mutableMapOf<String, C_DefinitionContext>()
 
     private lateinit var namespace: C_Namespace
 
@@ -562,10 +563,22 @@ class C_NamespaceContext(
         return null
     }
 
-    fun addNamespace(name: String, nsDef: C_NamespaceDef) {
-        modCtx.checkPass(null, C_ModulePass.NAMES)
-        nsBuilder.addNamespace(name, nsDef)
-        nsBuilder.addValue(name, C_NamespaceValue_Namespace(nsDef))
+    fun addNamespace(ctx: C_DefinitionContext, name: String): C_DefinitionContext {
+        check(ctx.nsCtx === this)
+
+        val res = namespaces[name]
+        if (res != null) {
+            return res
+        }
+
+        val nsSubName = ctx.nsCtx.fullName(name)
+        val subNsCtx = C_NamespaceContext(ctx.modCtx, ctx.nsCtx, nsSubName)
+        val subIncCtx = ctx.incCtx.subNamespace()
+        val defSubName = ctx.fullName(name)
+        val subCtx = C_DefinitionContext(subNsCtx, ctx.chainCtx, subIncCtx, defSubName)
+        namespaces[name] = subCtx
+
+        return subCtx
     }
 
     fun addClass(name: S_Name, cls: R_Class) {
@@ -631,20 +644,41 @@ class C_NamespaceContext(
 
     fun registerName(name: S_Name, type: C_DefType): String {
         modCtx.checkPass(null, C_ModulePass.NAMES)
-        val oldEntry = names[name.str]
-        if (oldEntry != null) {
-            var msg = "Name conflict: ${oldEntry.type.description} '${name.str}' exists"
-            if (oldEntry.pos != null) {
-                msg += ", defined at ${oldEntry.pos.strLine()}"
-            }
-            throw C_Error(name.pos, "name_conflict:${oldEntry.type.description}:${name.str}", msg)
+        checkNameConflict(name, type)
+        if (name.str !in names) {
+            names[name.str] = C_DefEntry(type, name.pos)
         }
-        names[name.str] = C_DefEntry(type, name.pos)
         return fullName(name.str)
+    }
+
+    private fun checkNameConflict(name: S_Name, type: C_DefType) {
+        val oldEntry = names[name.str]
+        if (oldEntry == null) {
+            return
+        }
+
+        if (type == C_DefType.NAMESPACE && oldEntry.type == C_DefType.NAMESPACE && name.str in namespaces) {
+            // Duplicate namespaces are allowed, but only user namespaces, not system namespaces.
+            return
+        }
+
+        var msg = "Name conflict: ${oldEntry.type.description} '${name.str}' exists"
+        if (oldEntry.pos != null) {
+            msg += ", defined at ${oldEntry.pos.strLine()}"
+        }
+        throw C_Error(name.pos, "name_conflict:${oldEntry.type.description}:${name.str}", msg)
     }
 
     fun createNamespace(): C_Namespace {
         modCtx.checkPass(null, C_ModulePass.NAMES)
+
+        for ((name, subCtx) in namespaces) {
+            val ns = subCtx.nsCtx.createNamespace()
+            val nsDef = C_NamespaceDef(ns)
+            nsBuilder.addNamespace(name, nsDef)
+            nsBuilder.addValue(name, C_NamespaceValue_Namespace(nsDef))
+        }
+
         namespace = nsBuilder.build()
         return namespace
     }

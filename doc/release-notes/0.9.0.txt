@@ -196,3 +196,16 @@ chain_context.args: module_args - the type of the attribute is now not nullable,
 chain_context.blockchain_rid: byte_array - new attribute, returns the blockchain RID
 
 op_context.block_height: integer - the height of the block being built
+
+
+12. Language: Multiple definitions of same namespace
+
+Following code will compile:
+
+namespace foo {
+    function f(): integer = 123;
+}
+
+namespace foo {
+    function g(): integer = 456;
+}
