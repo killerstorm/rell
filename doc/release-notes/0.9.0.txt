@@ -209,3 +209,14 @@ namespace foo {
 namespace foo {
     function g(): integer = 456;
 }
+
+
+13. Language: Partial evaluation of conditional database expressions
+
+Summary. Following code that did not work (or compile) in earlier versions now will work fine:
+
+query get_next_portion(last: foo?) = foo @* { if (last == null) true else foo > last } limit 1000;
+
+The changes affect "if", "when", "and", "or", "?:". Same code could be also written like that:
+
+query get_next_portion(last: foo?) = foo @* { last == null or foo > last } limit 1000;

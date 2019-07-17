@@ -303,7 +303,7 @@ class C_ClassFieldDestination(private val base: C_Value, private val rClass: R_C
         val atClass = R_AtClass(rClass, 0)
         val whereLeft = Db_ClassExpr(atClass)
         val whereRight = Db_ParameterExpr(atClass.type, 0)
-        val where = Db_BinaryExpr(R_BooleanType, Db_BinaryOp_Eq, whereLeft, whereRight)
+        val where = C_Utils.makeDbBinaryExprEq(whereLeft, whereRight)
 
         val rBase = base.toRExpr()
         val rTarget = R_UpdateTarget_Expr_One(atClass, where, rBase)

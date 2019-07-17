@@ -242,7 +242,9 @@ class WhenTest: BaseRellTest(false) {
     @Test fun testAtExprFullCoverageBoolean() {
         initWhenAt("boolean", "false")
         chkWhenAt("when(.x) { false -> 'A'; true -> 'B'; else -> 'C'; }", "false" to "ct_err:when_else_allvalues:boolean")
-        chkWhenAt("when(.x) { false -> 'A'; true -> 'B'; }", "false" to "text[A]", "true" to "text[B]")
+        chkWhenAt("when(.x) { false -> 'A'; true -> 'B'; }", "false" to "ct_err:expr_when:no_else")
+        chkWhenAt("when(.x) { false -> 'A'; else -> 'B'; }", "false" to "text[A]", "true" to "text[B]")
+        chkWhenAt("when(.x) { true -> 'A'; else -> 'B'; }", "false" to "text[B]", "true" to "text[A]")
         chkWhenAt("when(.x) { false -> 'A'; }", "true" to "ct_err:when_no_else")
         chkWhenAt("when(.x) { true -> 'B'; }", "true" to "ct_err:when_no_else")
     }
@@ -251,10 +253,9 @@ class WhenTest: BaseRellTest(false) {
         def("enum E { A, B, C }")
         initWhenAt("E", "0")
 
-        chkWhenAt("when(.x) { A -> 'A'; B -> 'B'; C -> 'C'; else -> '?'; }",
-                "E.A" to "ct_err:when_else_allvalues:E")
-        chkWhenAt("when(.x) { A -> 'A'; B -> 'B'; C -> 'C'; }",
-                "E.A" to "text[A]", "E.B" to "text[B]", "E.C" to "text[C]")
+        chkWhenAt("when(.x) { A -> 'A'; B -> 'B'; C -> 'C'; else -> '?'; }", "E.A" to "ct_err:when_else_allvalues:E")
+        chkWhenAt("when(.x) { A -> 'A'; B -> 'B'; C -> 'C'; }", "E.A" to "ct_err:expr_when:no_else")
+        chkWhenAt("when(.x) { A -> 'A'; B -> 'B'; else -> 'C'; }", "E.A" to "text[A]", "E.B" to "text[B]", "E.C" to "text[C]")
         chkWhenAt("when(.x) { B -> 'B'; C -> 'C'; }", "E.A" to "ct_err:when_no_else")
         chkWhenAt("when(.x) { A -> 'A'; C -> 'C'; }", "E.A" to "ct_err:when_no_else")
         chkWhenAt("when(.x) { A -> 'A'; B -> 'B'; }", "E.A" to "ct_err:when_no_else")

@@ -118,7 +118,7 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
         val clsExpr = attr.cls.compileExpr()
         val attrExpr = Db_AttrExpr(clsExpr, attr.attr)
 
-        val dbEqExpr = Db_BinaryExpr(R_BooleanType, Db_BinaryOp_Eq, attrExpr, dbExpr)
+        val dbEqExpr = C_Utils.makeDbBinaryExprEq(attrExpr, dbExpr)
         return C_DbValue.makeExpr(expr.startPos, dbEqExpr)
     }
 
@@ -140,7 +140,7 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
         }
 
         if (dbTree != null && dbRTree != null) {
-            return Db_BinaryExpr(R_BooleanType, Db_BinaryOp_And, dbTree, dbRTree)
+            return C_Utils.makeDbBinaryExpr(R_BooleanType, R_BinaryOp_And, Db_BinaryOp_And, dbTree, dbRTree)
         } else if (dbTree != null) {
             return dbTree
         } else if (dbRTree != null) {
@@ -151,15 +151,11 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
     }
 
     private fun exprsToTree(exprs: List<Db_Expr>): Db_Expr? {
-        if (exprs.isEmpty()) {
-            return null
+        return if (exprs.isEmpty()) {
+            null
+        } else {
+            C_Utils.makeDbBinaryExprChain(R_BooleanType, R_BinaryOp_And, Db_BinaryOp_And, exprs)
         }
-
-        var left = exprs[0]
-        for (right in exprs.subList(1, exprs.size)) {
-            left = Db_BinaryExpr(R_BooleanType, Db_BinaryOp_And, left, right)
-        }
-        return left
     }
 
     private fun exprsToTree(exprs: List<R_Expr>): R_Expr? {

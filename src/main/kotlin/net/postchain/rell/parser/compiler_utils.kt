@@ -2,6 +2,7 @@ package net.postchain.rell.parser
 
 import com.github.h0tk3y.betterParse.parser.ParseException
 import com.github.h0tk3y.betterParse.parser.parseToEnd
+import net.postchain.rell.CommonUtils
 import net.postchain.rell.model.*
 import java.util.*
 
@@ -14,6 +15,23 @@ object C_Utils {
             throw C_Errors.errExprNoDb(pos, type)
         }
         return Db_InterpretedExpr(rExpr)
+    }
+
+    fun makeDbBinaryExpr(type: R_Type, rOp: R_BinaryOp, dbOp: Db_BinaryOp, left: Db_Expr, right: Db_Expr): Db_Expr {
+        return if (left is Db_InterpretedExpr && right is Db_InterpretedExpr) {
+            val rExpr = R_BinaryExpr(type, rOp, left.expr, right.expr)
+            Db_InterpretedExpr(rExpr)
+        } else {
+            Db_BinaryExpr(type, dbOp, left, right)
+        }
+    }
+
+    fun makeDbBinaryExprEq(left: Db_Expr, right: Db_Expr): Db_Expr {
+        return makeDbBinaryExpr(R_BooleanType, R_BinaryOp_Eq, Db_BinaryOp_Eq, left, right)
+    }
+
+    fun makeDbBinaryExprChain(type: R_Type, rOp: R_BinaryOp, dbOp: Db_BinaryOp, exprs: List<Db_Expr>): Db_Expr {
+        return CommonUtils.foldSimple(exprs) { left, right -> makeDbBinaryExpr(type, rOp, dbOp, left, right) }
     }
 
     fun effectiveMemberType(formalType: R_Type, safe: Boolean): R_Type {

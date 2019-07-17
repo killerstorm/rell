@@ -1,7 +1,10 @@
 package net.postchain.rell.model
 
 import net.postchain.rell.CommonUtils
-import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.Rt_CallFrame
+import net.postchain.rell.runtime.Rt_ListValue
+import net.postchain.rell.runtime.Rt_NullValue
+import net.postchain.rell.runtime.Rt_SqlContext
 
 sealed class R_UpdateTarget {
     abstract fun cls(): R_AtClass
@@ -27,7 +30,7 @@ class R_UpdateTarget_Simple(
     override fun where() = where
 
     override fun execute(stmt: R_BaseUpdateStatement, frame: Rt_CallFrame) {
-        val ctx = SqlGenContext(frame.entCtx.modCtx.sqlCtx, listOf(cls) + extraClasses, listOf())
+        val ctx = SqlGenContext.create(frame, listOf(cls) + extraClasses, listOf())
         execute(stmt, frame, ctx, cardinality)
     }
 
@@ -38,7 +41,7 @@ class R_UpdateTarget_Simple(
                 ctx: SqlGenContext,
                 cardinality: R_AtCardinality
         ) {
-            val pSql = stmt.buildSql(ctx, true)
+            val pSql = stmt.buildSql(frame, ctx, true)
 
             var count = 0
             pSql.executeQuery(frame) { rs ->
@@ -60,7 +63,7 @@ sealed class R_UpdateTarget_Expr(val cls: R_AtClass, val where: Db_Expr, val exp
     final override fun where() = where
 
     protected fun execute0(stmt: R_BaseUpdateStatement, frame: Rt_CallFrame, ctx: SqlGenContext) {
-        val pSql = stmt.buildSql(ctx, false)
+        val pSql = stmt.buildSql(frame, ctx, false)
         pSql.execute(frame)
     }
 }
@@ -72,7 +75,7 @@ class R_UpdateTarget_Expr_One(cls: R_AtClass, where: Db_Expr, expr: R_Expr): R_U
             return
         }
 
-        val ctx = SqlGenContext(frame.entCtx.modCtx.sqlCtx, listOf(cls), listOf(value))
+        val ctx = SqlGenContext.create(frame, listOf(cls), listOf(value))
         execute0(stmt, frame, ctx)
     }
 }
@@ -102,7 +105,7 @@ class R_UpdateTarget_Expr_Many(
 
         for (part in CommonUtils.split(lst, partSize)) {
             val partValue = Rt_ListValue(listType, part)
-            val ctx = SqlGenContext(frame.entCtx.modCtx.sqlCtx, listOf(cls), listOf(partValue))
+            val ctx = SqlGenContext.create(frame, listOf(cls), listOf(partValue))
             execute0(stmt, frame, ctx)
         }
     }
@@ -116,7 +119,7 @@ class R_UpdateTarget_Object(rObject: R_Object): R_UpdateTarget() {
     override fun where() = null
 
     override fun execute(stmt: R_BaseUpdateStatement, frame: Rt_CallFrame) {
-        val ctx = SqlGenContext(frame.entCtx.modCtx.sqlCtx, listOf(cls), listOf())
+        val ctx = SqlGenContext.create(frame, listOf(cls), listOf())
         R_UpdateTarget_Simple.execute(stmt, frame, ctx, R_AtCardinality.ONE)
     }
 }
@@ -124,7 +127,7 @@ class R_UpdateTarget_Object(rObject: R_Object): R_UpdateTarget() {
 class R_UpdateStatementWhat(val attr: R_Attrib, val expr: Db_Expr, val op: Db_BinaryOp?)
 
 sealed class R_BaseUpdateStatement(val target: R_UpdateTarget): R_Statement() {
-    abstract fun buildSql(ctx: SqlGenContext, returning: Boolean): ParameterizedSql
+    abstract fun buildSql(frame: Rt_CallFrame, ctx: SqlGenContext, returning: Boolean): ParameterizedSql
 
     final override fun execute(frame: Rt_CallFrame): R_StatementResult? {
         frame.entCtx.checkDbUpdateAllowed()
@@ -169,16 +172,15 @@ sealed class R_BaseUpdateStatement(val target: R_UpdateTarget): R_Statement() {
         }
     }
 
-    fun appendWhere(b: SqlBuilder, ctx: SqlGenContext, fromInfo: SqlFromInfo) {
+    fun appendWhere(b: SqlBuilder, ctx: SqlGenContext, fromInfo: SqlFromInfo, redWhere: RedDb_Expr?) {
         val allJoins = fromInfo.classes.flatMap { it.joins }
-        val where = target.where()
 
         val whereB = SqlBuilder()
         appendWhereJoins(whereB, allJoins)
 
-        if (where != null) {
+        if (redWhere != null) {
             whereB.appendSep(" AND ")
-            where.toSql(ctx, whereB)
+            redWhere.toSql(ctx, whereB)
         }
 
         R_AtExprBase.appendExtraWhere(whereB, ctx.sqlCtx, fromInfo)
@@ -207,67 +209,73 @@ sealed class R_BaseUpdateStatement(val target: R_UpdateTarget): R_Statement() {
 }
 
 class R_UpdateStatement(target: R_UpdateTarget, val what: List<R_UpdateStatementWhat>): R_BaseUpdateStatement(target) {
-    override fun buildSql(ctx: SqlGenContext, returning: Boolean): ParameterizedSql {
-        val fromInfo = buildFromInfo(ctx)
-        val builder = SqlBuilder()
+    override fun buildSql(frame: Rt_CallFrame, ctx: SqlGenContext, returning: Boolean): ParameterizedSql {
+        val redWhere = target.where()?.toRedExpr(frame)
+        val redWhat = what.map { it.expr.toRedExpr(frame) }
 
-        builder.append("UPDATE ")
-        appendMainTable(builder, ctx.sqlCtx, fromInfo)
-        appendSet(ctx, builder)
-        appendExtraTables(builder, ctx.sqlCtx, fromInfo, "FROM")
-        appendWhere(builder, ctx, fromInfo)
+        val fromInfo = buildFromInfo(ctx, redWhere, redWhat)
+        val b = SqlBuilder()
+
+        b.append("UPDATE ")
+        appendMainTable(b, ctx.sqlCtx, fromInfo)
+        appendSet(ctx, b, redWhat)
+        appendExtraTables(b, ctx.sqlCtx, fromInfo, "FROM")
+        appendWhere(b, ctx, fromInfo, redWhere)
 
         if (returning) {
-            appendReturning(builder, fromInfo)
+            appendReturning(b, fromInfo)
         }
 
-        return builder.build()
+        return b.build()
     }
 
-    private fun buildFromInfo(ctx: SqlGenContext): SqlFromInfo {
+    private fun buildFromInfo(ctx: SqlGenContext, redWhere: RedDb_Expr?, redWhat: List<RedDb_Expr>): SqlFromInfo {
         val b = SqlBuilder()
-        what.forEach { it.expr.toSql(ctx, b) }
-        target.where()?.toSql(ctx, b)
+        redWhat.forEach { it.toSql(ctx, b) }
+        redWhere?.toSql(ctx, b)
         return ctx.getFromInfo()
     }
 
-    private fun appendSet(ctx: SqlGenContext, builder: SqlBuilder) {
-        builder.append(" SET ")
+    private fun appendSet(ctx: SqlGenContext, b: SqlBuilder, redWhat: List<RedDb_Expr>) {
+        b.append(" SET ")
 
-        builder.append(what, ", ") { whatExpr ->
-            builder.appendName(whatExpr.attr.sqlMapping)
-            builder.append(" = ")
+        b.append(redWhat.withIndex(), ", ") { (i, redExpr) ->
+            val whatExpr = what[i]
+            b.appendName(whatExpr.attr.sqlMapping)
+            b.append(" = ")
             if (whatExpr.op != null) {
-                builder.appendName(whatExpr.attr.sqlMapping)
-                builder.append(" ")
-                builder.append(whatExpr.op.sql)
-                builder.append(" ")
+                b.appendName(whatExpr.attr.sqlMapping)
+                b.append(" ")
+                b.append(whatExpr.op.sql)
+                b.append(" ")
             }
-            whatExpr.expr.toSql(ctx, builder)
+            redExpr.toSql(ctx, b)
         }
     }
 }
 
 class R_DeleteStatement(target: R_UpdateTarget): R_BaseUpdateStatement(target) {
-    override fun buildSql(ctx: SqlGenContext, returning: Boolean): ParameterizedSql {
-        val fromInfo = buildFromInfo(ctx)
-        val builder = SqlBuilder()
+    override fun buildSql(frame: Rt_CallFrame, ctx: SqlGenContext, returning: Boolean): ParameterizedSql {
+        val redWhere = target.where()?.toRedExpr(frame)
 
-        builder.append("DELETE FROM ")
-        appendMainTable(builder, ctx.sqlCtx, fromInfo)
-        appendExtraTables(builder, ctx.sqlCtx, fromInfo, "USING")
-        appendWhere(builder, ctx, fromInfo)
+        val fromInfo = buildFromInfo(ctx, redWhere)
+        val b = SqlBuilder()
+
+        b.append("DELETE FROM ")
+        appendMainTable(b, ctx.sqlCtx, fromInfo)
+        appendExtraTables(b, ctx.sqlCtx, fromInfo, "USING")
+        appendWhere(b, ctx, fromInfo, redWhere)
 
         if (returning) {
-            appendReturning(builder, fromInfo)
+            appendReturning(b, fromInfo)
         }
 
-        return builder.build()
+        return b.build()
     }
 
-    private fun buildFromInfo(ctx: SqlGenContext): SqlFromInfo {
+    private fun buildFromInfo(ctx: SqlGenContext, redWhere: RedDb_Expr?): SqlFromInfo {
         val b = SqlBuilder()
-        target.where()?.toSql(ctx, b)
+        redWhere?.toSql(ctx, b)
         return ctx.getFromInfo()
     }
 }

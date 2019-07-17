@@ -46,7 +46,7 @@ class RellCodeTester(
             }
 
             if (createTables) {
-                SqlInit.init(modCtx, SqlInit.LOG_ALL)
+                SqlInit.init(modCtx, SqlInit.LOG_NONE)
             }
         }
     }

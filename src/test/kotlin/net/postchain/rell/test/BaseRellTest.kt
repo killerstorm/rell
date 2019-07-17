@@ -25,6 +25,12 @@ abstract class BaseRellTest(useSql: Boolean = true, gtv: Boolean = false): BaseT
         chkFull("query q(a: boolean) $code", listOf(Rt_BooleanValue(arg)), expected)
     }
 
+    fun chkArgs(header: String, code: String, tester: (QueryChecker) -> Unit) {
+        val fullCode = "query q($header) $code"
+        val checker = QueryChecker(fullCode)
+        tester(checker)
+    }
+
     fun chkFull(code: String, args: List<Rt_Value>, expected: String) {
         tst.chkQueryEx(code, args, expected)
     }
@@ -60,4 +66,37 @@ abstract class BaseRellTest(useSql: Boolean = true, gtv: Boolean = false): BaseT
     private fun rtVal(v: Long?) = if (v == null) Rt_NullValue else Rt_IntValue(v)
     private fun rtVal(v: String?) = if (v == null) Rt_NullValue else Rt_TextValue(v)
     private fun rtVal(v: Boolean?) = if (v == null) Rt_NullValue else Rt_BooleanValue(v)
+
+    inner class QueryChecker(private val code: String) {
+        fun chk(arg: Any?, expected: String): QueryChecker {
+            chk0(expected, arg)
+            return this
+        }
+
+        fun chk(arg1: Any?, arg2: Any?, expected: String): QueryChecker {
+            chk0(expected, arg1, arg2)
+            return this
+        }
+
+        fun stdout(vararg expected: String): QueryChecker {
+            chkStdout(*expected)
+            return this
+        }
+
+        private fun chk0(expected: String, vararg args: Any?) {
+            val rtArgs = args.map { argToRt(it) }.toList()
+            chkFull(code, rtArgs, expected)
+        }
+
+        private fun argToRt(arg: Any?): Rt_Value {
+            return when (arg) {
+                is Boolean -> Rt_BooleanValue(arg)
+                is Int -> Rt_IntValue(arg.toLong())
+                is Long -> Rt_IntValue(arg)
+                is String -> Rt_TextValue(arg)
+                null -> Rt_NullValue
+                else -> throw IllegalArgumentException(arg.javaClass.canonicalName)
+            }
+        }
+    }
 }

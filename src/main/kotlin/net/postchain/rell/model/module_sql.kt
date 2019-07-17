@@ -26,7 +26,7 @@ abstract class R_ClassSqlMapping {
         fun makeBlockHeightExpr(blockCls: R_Class, blockExpr: Db_TableExpr, chain: R_ExternalChain): Db_Expr {
             val heightAttr = blockCls.attribute("block_height")
             val blockHeightExpr = Db_AttrExpr(blockExpr, heightAttr)
-            val chainHeightExpr = Db_ChainHeightExpr(chain)
+            val chainHeightExpr = Db_InterpretedExpr(R_ChainHeightExpr(chain))
             return Db_BinaryExpr(R_BooleanType, Db_BinaryOp_Le, blockHeightExpr, chainHeightExpr)
         }
     }

@@ -41,6 +41,7 @@ object C_LibFunctions {
             .add("_type_of", C_SysFunction_TypeOf)
             .add("_nullable", C_SysFunction_Nullable(null))
             .add("_nullable_int", C_SysFunction_Nullable(R_IntegerType))
+            .add("_nullable_text", C_SysFunction_Nullable(R_TextType))
             .add("_nop", C_SysFunction_Nop)
             .addEx("_strict_str", R_TextType, listOf(C_ArgTypeMatcher_Any), R_SysFn_StrictStr)
 

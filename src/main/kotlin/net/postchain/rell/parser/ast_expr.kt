@@ -193,8 +193,8 @@ class S_IfExpr(pos: S_Pos, val cond: S_Expr, val trueExpr: S_Expr, val falseExpr
             val dbCond = cCond.toDbExpr()
             val dbTrue = cTrue.toDbExpr()
             val dbFalse = cFalse.toDbExpr()
-            val cases = listOf(Db_WhenCase(dbCond, dbTrue))
-            val dbExpr = Db_WhenExpr(resType, cases, dbFalse)
+            val cases = listOf(Db_WhenCase(listOf(dbCond), dbTrue))
+            val dbExpr = Db_WhenExpr(resType, null, cases, dbFalse)
             return C_DbValue.makeExpr(startPos, dbExpr, resFacts)
         } else {
             val rCond = cCond.toRExpr()
@@ -212,20 +212,12 @@ class S_IfExpr(pos: S_Pos, val cond: S_Expr, val trueExpr: S_Expr, val falseExpr
 
         val cTrue = trueExpr.compileWithFacts(ctx, trueFacts).value()
         val cFalse = falseExpr.compileWithFacts(ctx, falseFacts).value()
-        val db = cCond.isDb() || cTrue.isDb() || cFalse.isDb()
 
-        if (!db) {
-            val truePostFacts = trueFacts.and(cTrue.varFacts().postFacts)
-            val falsePostFacts = falseFacts.and(cFalse.varFacts().postFacts)
-            val resPostFacts = condFacts.postFacts.and(C_VarFacts.forBranches(ctx, listOf(truePostFacts, falsePostFacts)))
-            val resFacts = C_ExprVarFacts.of(postFacts = resPostFacts)
-            return Triple(cTrue, cFalse, resFacts)
-        }
-
-        // Db-expression do not support short-circuiting (all R-operands are always evaluated).
-        val cTrue2 = trueExpr.compile(ctx).value()
-        val cFalse2 = falseExpr.compile(ctx).value()
-        return Triple(cTrue2, cFalse2, C_ExprVarFacts.EMPTY)
+        val truePostFacts = trueFacts.and(cTrue.varFacts().postFacts)
+        val falsePostFacts = falseFacts.and(cFalse.varFacts().postFacts)
+        val resPostFacts = condFacts.postFacts.and(C_VarFacts.forBranches(ctx, listOf(truePostFacts, falsePostFacts)))
+        val resFacts = C_ExprVarFacts.of(postFacts = resPostFacts)
+        return Triple(cTrue, cFalse, resFacts)
     }
 
     private fun checkUnitType(expr: S_Expr, cValue: C_Value) {
@@ -426,33 +418,16 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
         val caseExprs = caseCondMap.keys.sorted().map { idx ->
             val conds = caseCondMap.getValue(idx)
             val value = cValues[idx]
-            val dbCond = compileDbCondition(keyExpr, conds)
-            Db_WhenCase(dbCond, value.toDbExpr())
+            Db_WhenCase(conds, value.toDbExpr())
         }
 
         val elseIdx = builder.elseCase
-        val elseExpr = if (elseIdx == null) null else cValues[elseIdx.second].toDbExpr()
-
-        return Db_WhenExpr(type, caseExprs, elseExpr)
-    }
-
-    private fun compileDbCondition(keyExpr: Db_Expr?, conds: List<Db_Expr>): Db_Expr {
-        check(!conds.isEmpty())
-
-        if (keyExpr != null) {
-            if (conds.size == 1) {
-                return Db_BinaryExpr(R_BooleanType, Db_BinaryOp_Eq, keyExpr, conds[0])
-            } else {
-                return Db_InExpr(keyExpr, conds)
-            }
+        if (elseIdx == null) {
+            throw C_Error(startPos, "expr_when:no_else", "When must have an 'else' in a database expression")
         }
+        val elseExpr = cValues[elseIdx.second].toDbExpr()
 
-        var res = conds[0]
-        for (cond in conds.subList(1, conds.size)) {
-            res = Db_BinaryExpr(R_BooleanType, Db_BinaryOp_Or, res, cond)
-        }
-
-        return res
+        return Db_WhenExpr(type, keyExpr, caseExprs, elseExpr)
     }
 
     companion object {

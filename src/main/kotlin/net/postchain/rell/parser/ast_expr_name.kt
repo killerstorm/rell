@@ -1,6 +1,8 @@
 package net.postchain.rell.parser
 
-import net.postchain.rell.model.*
+import net.postchain.rell.model.Db_AttrExpr
+import net.postchain.rell.model.R_NullableType
+import net.postchain.rell.model.R_Type
 
 class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
     override fun asName(): S_Name? = name
@@ -44,7 +46,7 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
         val localAttrExpr = localVar.toVarExpr()
         val dbLocalAttrExpr = C_Utils.toDbExpr(startPos, localAttrExpr)
 
-        val dbExpr = Db_BinaryExpr(R_BooleanType, Db_BinaryOp_Eq, clsAttrExpr, dbLocalAttrExpr)
+        val dbExpr = C_Utils.makeDbBinaryExprEq(clsAttrExpr, dbLocalAttrExpr)
         return C_DbValue.makeExpr(startPos, dbExpr)
     }
 }

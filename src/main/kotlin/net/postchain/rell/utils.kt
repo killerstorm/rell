@@ -67,6 +67,19 @@ object CommonUtils {
             return null
         }
     }
+
+    fun <T> foldSimple(items: Iterable<T>, op: (T, T) -> T): T {
+        val iter = items.iterator()
+        check(iter.hasNext())
+
+        var res = iter.next()
+        while (iter.hasNext()) {
+            var item = iter.next()
+            res = op(res, item)
+        }
+
+        return res
+    }
 }
 
 object PostchainUtils {

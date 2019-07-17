@@ -1,5 +1,6 @@
 package net.postchain.rell.model
 
+import net.postchain.rell.parser.C_Utils
 import net.postchain.rell.runtime.*
 
 enum class R_AtCardinality(val zero: Boolean, val many: Boolean) {
@@ -52,32 +53,34 @@ class R_AtExprBase(
     }
 
     fun execute(frame: Rt_CallFrame, params: List<Rt_Value>, limit: R_Expr?): List<Array<Rt_Value>> {
-        val rtSql = buildSql(frame.entCtx.modCtx.sqlCtx, params, limit)
+        val rtSql = buildSql(frame, params, limit)
         val resultTypes = what.map { it.type }
         val select = SqlSelect(rtSql, resultTypes)
         val records = select.execute(frame)
         return records
     }
 
-    private fun buildSql(sqlCtx: Rt_SqlContext, params: List<Rt_Value>, limit: R_Expr?): ParameterizedSql {
-        val fullWhere = makeFullWhere()
+    private fun buildSql(frame: Rt_CallFrame, params: List<Rt_Value>, limit: R_Expr?): ParameterizedSql {
+        val redWhere = makeFullWhere(frame)
+        val redWhat = what.map { it.toRedExpr(frame) }
+        val redSort = sort.map { (s, b) -> Pair(s.toRedExpr(frame), b) }
 
-        val ctx = SqlGenContext(sqlCtx, from, params)
-        val fromInfo = buildFromInfo(ctx, fullWhere)
+        val ctx = SqlGenContext.create(frame, from, params)
+        val fromInfo = buildFromInfo(ctx, redWhere, redWhat, redSort)
 
         val b = SqlBuilder()
 
         b.append("SELECT ")
-        b.append(what, ", ") {
+        b.append(redWhat, ", ") {
             it.toSql(ctx, b)
         }
 
-        appendFrom(b, sqlCtx, fromInfo)
-        appendWhere(b, ctx, fullWhere, fromInfo)
+        appendFrom(b, ctx.sqlCtx, fromInfo)
+        appendWhere(b, ctx, redWhere, fromInfo)
 
         b.append(" ORDER BY ")
         val orderByList = b.listBuilder()
-        for ((expr, asc) in sort) {
+        for ((expr, asc) in redSort) {
             orderByList.nextItem()
             expr.toSql(ctx, b)
             if (!asc) {
@@ -98,13 +101,18 @@ class R_AtExprBase(
         return b.build()
     }
 
-    private fun buildFromInfo(ctx: SqlGenContext, fullWhere: Db_Expr?): SqlFromInfo {
+    private fun buildFromInfo(
+            ctx: SqlGenContext,
+            redWhere: RedDb_Expr?,
+            redWhat: List<RedDb_Expr>,
+            redSort: List<Pair<RedDb_Expr, Boolean>>
+    ): SqlFromInfo {
         val b = SqlBuilder()
-        for (w in what) {
+        for (w in redWhat) {
             w.toSql(ctx, b)
         }
-        fullWhere?.toSql(ctx, b)
-        for ((expr, _) in sort) {
+        redWhere?.toSql(ctx, b)
+        for ((expr, _) in redSort) {
             expr.toSql(ctx, b)
         }
         for (cls in from) {
@@ -135,9 +143,9 @@ class R_AtExprBase(
         }
     }
 
-    private fun appendWhere(b: SqlBuilder, ctx: SqlGenContext, fullWhere: Db_Expr?, fromInfo: SqlFromInfo) {
+    private fun appendWhere(b: SqlBuilder, ctx: SqlGenContext, redWhere: RedDb_Expr?, fromInfo: SqlFromInfo) {
         val whereB = SqlBuilder()
-        fullWhere?.toSql(ctx, whereB)
+        redWhere?.toSql(ctx, whereB)
         appendExtraWhere(whereB, ctx.sqlCtx, fromInfo)
 
         if (!whereB.isEmpty()) {
@@ -146,13 +154,23 @@ class R_AtExprBase(
         }
     }
 
-    private fun makeFullWhere(): Db_Expr? {
-        var res = where
+    private fun makeFullWhere(frame: Rt_CallFrame): RedDb_Expr? {
+        val exprs = mutableListOf<Db_Expr?>()
+        exprs.add(where)
+
         for (atCls in from) {
             val expr = atCls.rClass.sqlMapping.extraWhereExpr(atCls)
-            res = if (res != null && expr != null) Db_BinaryExpr(R_BooleanType, Db_BinaryOp_And, res, expr) else (res ?: expr)
+            exprs.add(expr)
         }
-        return res
+
+        val validExprs = exprs.filterNotNull()
+        val expr = if (validExprs.isEmpty()) {
+            null
+        } else {
+            C_Utils.makeDbBinaryExprChain(R_BooleanType, R_BinaryOp_And, Db_BinaryOp_And, validExprs)
+        }
+
+        return expr?.toRedExpr(frame)
     }
 
     companion object {

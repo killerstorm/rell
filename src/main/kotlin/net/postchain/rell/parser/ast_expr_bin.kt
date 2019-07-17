@@ -168,10 +168,21 @@ class S_AssignOp_Op(val code: String, val op: C_BinOp_Common): S_AssignOp() {
 }
 
 sealed class C_BinOp {
-    protected abstract fun compileR(pos: S_Pos, left: R_Expr, right: R_Expr): R_Expr?
-    protected abstract fun compileDb(pos: S_Pos, left: Db_Expr, right: Db_Expr): Db_Expr?
+    abstract fun compile(pos: S_Pos, left: C_Value, right: C_Value): C_Value?
+    open fun rightVarFacts(left: C_Value): C_VarFacts = C_VarFacts.EMPTY
 
-    fun compile(pos: S_Pos, left: C_Value, right: C_Value): C_Value? {
+    companion object {
+        fun errTypeMismatch(pos: S_Pos, op: String, leftType: R_Type, rightType: R_Type): C_Error {
+            return C_Error(pos, "binop_operand_type:$op:$leftType:$rightType",
+                    "Wrong operand types for '$op': $leftType, $rightType")
+        }
+    }
+}
+
+sealed class C_BinOp_Common: C_BinOp() {
+    abstract fun compileOp(left: R_Type, right: R_Type): C_BinOpType?
+
+    final override fun compile(pos: S_Pos, left: C_Value, right: C_Value): C_Value? {
         val (left2, right2) = adaptLeftRight(left, right)
         return compile0(pos, left2, right2)
     }
@@ -198,8 +209,6 @@ sealed class C_BinOp {
         }
     }
 
-    open fun rightVarFacts(left: C_Value): C_VarFacts = C_VarFacts.EMPTY
-
     open fun adaptLeftRight(left: C_Value, right: C_Value) = Pair(left, right)
     open fun adaptRight(leftType: R_Type, right: C_Value) = right
 
@@ -208,18 +217,7 @@ sealed class C_BinOp {
         return C_ExprVarFacts.of(postFacts = postFacts)
     }
 
-    companion object {
-        fun errTypeMismatch(pos: S_Pos, op: String, leftType: R_Type, rightType: R_Type): C_Error {
-            return C_Error(pos, "binop_operand_type:$op:$leftType:$rightType",
-                    "Wrong operand types for '$op': $leftType, $rightType")
-        }
-    }
-}
-
-sealed class C_BinOp_Common: C_BinOp() {
-    abstract fun compileOp(left: R_Type, right: R_Type): C_BinOpType?
-
-    override fun compileR(pos: S_Pos, left: R_Expr, right: R_Expr): R_Expr? {
+    private fun compileR(pos: S_Pos, left: R_Expr, right: R_Expr): R_Expr? {
         val op = compileOp(left.type, right.type)
         if (op?.rOp == null) {
             return null
@@ -227,7 +225,7 @@ sealed class C_BinOp_Common: C_BinOp() {
         return R_BinaryExpr(op.resType, op.rOp, left, right)
     }
 
-    override fun compileDb(pos: S_Pos, left: Db_Expr, right: Db_Expr): Db_Expr? {
+    private fun compileDb(pos: S_Pos, left: Db_Expr, right: Db_Expr): Db_Expr? {
         val op = compileOp(left.type, right.type)
         if (op?.dbOp == null) {
             return null
@@ -518,8 +516,13 @@ object C_BinOp_In: C_BinOp_Common() {
 }
 
 object C_BinOp_Elvis: C_BinOp() {
-    override fun compileR(pos: S_Pos, left: R_Expr, right: R_Expr): R_Expr? {
-        val leftType = left.type
+    override fun compile(pos: S_Pos, left: C_Value, right: C_Value): C_Value? {
+        val left2 = left.asNullable()
+        return compile0(pos, left2, right)
+    }
+
+    private fun compile0(pos: S_Pos, left: C_Value, right: C_Value): C_Value? {
+        val leftType = left.type()
         if (leftType == R_NullType) {
             return right
         }
@@ -528,20 +531,30 @@ object C_BinOp_Elvis: C_BinOp() {
             return null
         }
 
-        val resType = R_Type.commonTypeOpt(leftType.valueType, right.type)
+        val resType = R_Type.commonTypeOpt(leftType.valueType, right.type())
         if (resType == null) {
             return null
         }
 
-        return R_ElvisExpr(resType, left, right)
-    }
+        if (left.isDb()) {
+            // Must not happen, as database values cannot be nullable.
+            return null
+        }
 
-    override fun compileDb(pos: S_Pos, left: Db_Expr, right: Db_Expr) = null
+        val rLeft = left.toRExpr()
+        val resVarFacts = C_ExprVarFacts.of(postFacts = left.varFacts().postFacts)
 
-    override fun adaptLeftRight(left: C_Value, right: C_Value) = Pair(left.asNullable(), right)
+        val db = right.isDb()
 
-    override fun compileExprVarFacts(left: C_Value, right: C_Value): C_ExprVarFacts {
-        return C_ExprVarFacts.of(postFacts = left.varFacts().postFacts)
+        if (db) {
+            val dbRight = right.toDbExpr()
+            val dbExpr = Db_ElvisExpr(resType, rLeft, dbRight)
+            return C_DbValue(left.pos, dbExpr, resVarFacts)
+        } else {
+            val rRight = right.toRExpr()
+            val rExpr = R_ElvisExpr(resType, rLeft, rRight)
+            return C_RValue(left.pos, rExpr, resVarFacts)
+        }
     }
 }
 
@@ -595,11 +608,7 @@ class S_BinaryExpr(val head: S_Expr, val tail: List<S_BinaryExprTail>): S_Expr(h
             val op = sOp.value
             val rightFacts = op.op.rightVarFacts(leftValue)
             val rightCtx = ctx.updateFacts(rightFacts)
-            var rightValue = right.compile(rightCtx)
-
-            if ((leftValue.isDb() || rightValue.isDb()) && !rightFacts.isEmpty()) {
-                rightValue = right.compile(ctx)
-            }
+            val rightValue = right.compile(rightCtx)
 
             return op.compile(sOp.pos, leftValue, rightValue)
         }

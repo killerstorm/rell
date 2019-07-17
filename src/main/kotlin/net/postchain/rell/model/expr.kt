@@ -627,3 +627,10 @@ class R_StatementExpr(val stmt: R_Statement): R_Expr(R_UnitType) {
         return Rt_UnitValue
     }
 }
+
+class R_ChainHeightExpr(val chain: R_ExternalChain): R_Expr(R_IntegerType) {
+    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
+        val rtChain = frame.entCtx.modCtx.sqlCtx.linkedChain(chain)
+        return Rt_IntValue(rtChain.height)
+    }
+}
