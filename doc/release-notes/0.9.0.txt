@@ -220,3 +220,16 @@ query get_next_portion(last: foo?) = foo @* { if (last == null) true else foo > 
 The changes affect "if", "when", "and", "or", "?:". Same code could be also written like that:
 
 query get_next_portion(last: foo?) = foo @* { last == null or foo > last } limit 1000;
+
+
+14. Tools: XML configuration launcher
+
+Run.xml is a new format for describing Rell app configuration. It allows to configure a multi-chain application
+in a single file.
+
+Utilities to work with run.xml:
+
+multirun.sh - run a Rell app described by a run.xml configuration
+multigen.sh - generate a Postchain blockchain XML configuration
+
+See /RunXML.md for the description of the format.

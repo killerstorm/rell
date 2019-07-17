@@ -6,6 +6,10 @@
 
 [Library](doc/guide/library.rst)
 
+## Other Resources
+
+[Run.XML format](RunXML.md)
+
 ## Build
 
 Simplest way to build:
