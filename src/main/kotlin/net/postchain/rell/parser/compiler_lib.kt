@@ -60,6 +60,9 @@ object C_LibFunctions {
             .add("signum", R_IntegerType, listOf(), R_SysFn_Int_Signum)
             .build()
 
+    private val ROWID_FNS = typeMemFuncBuilder(R_RowidType)
+            .build()
+
     private val BOOLEAN_NAMESPACE_FNS = typeGlobalFuncBuilder(R_BooleanType)
             .build()
 
@@ -77,6 +80,11 @@ object C_LibFunctions {
             stdConstValue("MIN_VALUE", Long.MIN_VALUE),
             stdConstValue("MAX_VALUE", Long.MAX_VALUE)
     )
+
+    private val ROWID_NAMESPACE_FNS = typeGlobalFuncBuilder(R_RowidType)
+            .build()
+
+    private val ROWID_NAMESPACE = makeNamespace(ROWID_NAMESPACE_FNS)
 
     private val GTV_NAMESPACE_FNS = C_GlobalFuncBuilder()
             .add("fromBytes", R_GtvType, listOf(R_ByteArrayType), R_SysFn_Gtv_FromBytes, C_Deprecated_UseInstead("from_bytes"))
@@ -194,6 +202,7 @@ object C_LibFunctions {
             "integer" to C_NamespaceDef(INTEGER_NAMESPACE),
             "text" to C_NamespaceDef(TEXT_NAMESPACE),
             "byte_array" to C_NamespaceDef(BYTEARRAY_NAMESPACE),
+            "rowid" to C_NamespaceDef(ROWID_NAMESPACE),
             "json" to C_NamespaceDef(JSON_NAMESPACE),
             "range" to C_NamespaceDef(RANGE_NAMESPACE),
             "GTXValue" to C_NamespaceDef(GTV_NAMESPACE, C_Deprecated_UseInstead("gtv")),
@@ -217,6 +226,7 @@ object C_LibFunctions {
             R_IntegerType -> INTEGER_FNS
             R_TextType -> TEXT_FNS
             R_ByteArrayType -> BYTEARRAY_FNS
+            R_RowidType -> ROWID_FNS
             R_JsonType -> JSON_FNS
             R_GtvType -> GTV_FNS
             is R_ListType -> getListFns(type)

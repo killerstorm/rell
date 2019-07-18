@@ -7,18 +7,18 @@ System classes
 
 ::
 
-   class block {
-       block_height: integer;
-       block_rid: byte_array;
-       timestamp;
-   }
+    class block {
+        block_height: integer;
+        block_rid: byte_array;
+        timestamp;
+    }
 
-   class transaction {
-       tx_rid: byte_array;
-       tx_hash: byte_array;
-       tx_data: byte_array;
-       block;
-   }
+    class transaction {
+        tx_rid: byte_array;
+        tx_hash: byte_array;
+        tx_data: byte_array;
+        block;
+    }
 
 It is not possible to create, modify or delete objects of those classes in code.
 
@@ -143,15 +143,15 @@ Examples:
 
 ::
 
-   val x: integer? = calculate();
-   val y = require(x, "x is null"); // type of "y" is "integer", not "integer?"
+    val x: integer? = calculate();
+    val y = require(x, "x is null"); // type of "y" is "integer", not "integer?"
 
-   val p: list<integer> = get_list();
-   require_not_empty(p, "List is empty");
+    val p: list<integer> = get_list();
+    require_not_empty(p, "List is empty");
 
-   val q: list<integer>? = try_to_get_list();
-   require(q);           // fails if q is null
-   require_not_empty(q); // fails if q is null or an empty list
+    val q: list<integer>? = try_to_get_list();
+    require(q);           // fails if q is null
+    require_not_empty(q); // fails if q is null or an empty list
 
 --------------
 

@@ -530,6 +530,18 @@ class UpdateDeleteTest: BaseRellTest() {
         """.trimIndent())
     }
 
+    @Test fun testDeleteAndAccess() {
+        createCitiesAndPersons()
+
+        val code = """
+            val u = person @ { .name == 'James' };
+            delete u;
+            print(u.score);
+        """.trimIndent()
+
+        chkOp(code, "rt_err:expr_clsattr_count:0")
+    }
+
     private fun resetChkOp(code: String, expected: String = "OK") {
         resetData()
         chkOp(code, expected)

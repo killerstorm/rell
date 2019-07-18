@@ -71,6 +71,29 @@ class LibGtvTest: BaseRellTest(false) {
         chkFromGtv("123", "byte_array.from_gtv(g)", "rt_err:from_gtv")
         chkFromGtv("123", "byte_array.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
     }
+    @Test fun testToFromGtvRowid() {
+        tstCtx.useSql = true
+        def("class user { name; }")
+        insert("c0.user", "name", "0,'Bob'")
+        insert("c0.user", "name", "123,'Alice'")
+
+        chk("(user@{'Bob'}).to_gtv()", "gtv[0]")
+        chk("(user@{'Alice'}).to_gtv()", "gtv[123]")
+        chk("(user@{'Bob'}).to_gtv_pretty()", "gtv[0]")
+
+        chkFromGtv("0", "rowid.from_gtv(g)", "rowid[0]")
+        chkFromGtv("123", "rowid.from_gtv(g)", "rowid[123]")
+        chkFromGtv("-456", "rowid.from_gtv(g)", "rt_err:from_gtv")
+        chkFromGtv("123", "rowid.from_gtv_pretty(g)", "rowid[123]")
+        chkFromGtv("-456", "rowid.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
+
+        chkFromGtv("'Hello'", "rowid.from_gtv(g)", "rt_err:from_gtv")
+        chkFromGtv("'Hello'", "rowid.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
+        chkFromGtv("[]", "rowid.from_gtv(g)", "rt_err:from_gtv")
+        chkFromGtv("[]", "rowid.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
+        chkFromGtv("[123]", "rowid.from_gtv(g)", "rt_err:from_gtv")
+        chkFromGtv("[123]", "rowid.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
+    }
 
     @Test fun testToFromGtvJson() {
         chk("json('123').to_gtv()", """gtv["123"]""")

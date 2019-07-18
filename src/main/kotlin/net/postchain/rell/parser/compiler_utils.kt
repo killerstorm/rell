@@ -158,8 +158,8 @@ object C_Errors {
                 "$errMsg: ${srcType.toStrictString()} instead of ${dstType.toStrictString()}")
     }
 
-    fun errMutlipleAttrs(pos: S_Pos, attrs: List<C_ClassAttr>, errCode: String, errMsg: String): C_Error {
-        val attrsLst = attrs.map { it.cls.alias + "." + it.attr.name }
+    fun errMutlipleAttrs(pos: S_Pos, attrs: List<C_ExprContextAttr>, errCode: String, errMsg: String): C_Error {
+        val attrsLst = attrs.map { it.cls.alias + "." + it.attrRef.name }
         return C_Error(pos, "$errCode:${attrsLst.joinToString(",")}", "$errMsg: ${attrsLst.joinToString()}")
     }
 

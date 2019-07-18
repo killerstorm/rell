@@ -1,4 +1,4 @@
-RELEASE NOTES 0.9.0 (2019-07-08)
+RELEASE NOTES 0.9.0 (2019-07-18)
 
 
 1. Upgrade to Postchain 3.0 (was 2.5)
@@ -222,7 +222,32 @@ The changes affect "if", "when", "and", "or", "?:". Same code could be also writ
 query get_next_portion(last: foo?) = foo @* { last == null or foo > last } limit 1000;
 
 
-14. Tools: XML configuration launcher
+14. Language: "rowid" type and attribute
+
+Database primary key of a class object can be accessed via the "rowid" attribute available in any class.
+
+The type of the "rowid" attribute is a new type "rowid". Internally it is a 64-bit integer, but for the compiler the
+type is not compatible with any other type, including integer (i. e. cannot assign "integer" to "rowid" or "rowid" to
+"integer").
+
+Operations supported by the "rowid" type:
+- comparison operators: ==, !=, <, >, <=, >=
+- converting to/from Gtv
+
+Examples of "rowid" usage:
+
+val u = user @ { ... };
+return u.rowid;
+
+return user @ { ... } ( .rowid );
+
+return user @* { .rowid >= min_rowid };
+
+NOTE. Class type is a recommended way to reference database objects. The "rowid" shall be used only in rare cases,
+when there is no other possibility to implement what is needed.
+
+
+15. Tools: XML configuration launcher
 
 Run.xml is a new format for describing Rell app configuration. It allows to configure a multi-chain application
 in a single file.

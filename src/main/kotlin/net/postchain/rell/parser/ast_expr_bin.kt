@@ -253,6 +253,7 @@ sealed class C_BinOp_EqNe(private val eq: Boolean): C_BinOp_Common() {
                 || type == R_IntegerType
                 || type == R_TextType
                 || type == R_ByteArrayType
+                || type == R_RowidType
                 || type is R_ClassType
                 || type is R_EnumType
     }
@@ -361,6 +362,8 @@ sealed class C_BinOp_LtGt(cmpOp: R_CmpOp, dbOp: Db_BinaryOp): C_BinOp_Cmp(cmpOp,
             return R_CmpType_Text
         } else if (type == R_ByteArrayType) {
             return R_CmpType_ByteArray
+        } else if (type == R_RowidType) {
+            return R_CmpType_Rowid
         } else if (type is R_ClassType) {
             return R_CmpType_Class
         } else if (type is R_EnumType) {

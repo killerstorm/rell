@@ -104,9 +104,14 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
             return cExpr
         }
 
+        if (cValue.isDb()) {
+            throw C_Errors.errTypeMismatch(cValue.pos, type, R_BooleanType, "at_where:type:$idx",
+                    "Wrong type of where-expression #${idx+1}")
+        }
+
         val dbExpr = cValue.toDbExpr()
 
-        val attrs = ctx.nameCtx.findAttributesByType(type)
+        val attrs = S_AtExpr.findWhereContextAttrsByType(ctx, type)
         if (attrs.isEmpty()) {
             throw C_Error(expr.startPos, "at_where_type:$idx:$type", "No attribute matches type of where-expression #${idx+1}: $type")
         } else if (attrs.size > 1) {
@@ -115,8 +120,7 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
         }
 
         val attr = attrs[0]
-        val clsExpr = attr.cls.compileExpr()
-        val attrExpr = Db_AttrExpr(clsExpr, attr.attr)
+        val attrExpr = attr.compile()
 
         val dbEqExpr = C_Utils.makeDbBinaryExprEq(attrExpr, dbExpr)
         return C_DbValue.makeExpr(expr.startPos, dbEqExpr)
@@ -281,6 +285,14 @@ class S_AtExpr(
             val alias = from.alias ?: from.className[from.className.size - 1]
             val cls = ctx.blkCtx.entCtx.nsCtx.getClass(from.className)
             return Pair(alias, C_AtClass(cls, alias.str, idx))
+        }
+
+        fun findWhereContextAttrsByType(ctx: C_ExprContext, type: R_Type): List<C_ExprContextAttr> {
+            return if (type == R_BooleanType) {
+                listOf()
+            } else {
+                ctx.nameCtx.findAttributesByType(type)
+            }
         }
 
         private class AtBase(

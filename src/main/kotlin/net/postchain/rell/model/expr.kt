@@ -1,5 +1,6 @@
 package net.postchain.rell.model
 
+import net.postchain.rell.parser.C_ClassAttrRef
 import net.postchain.rell.parser.C_Utils
 import net.postchain.rell.runtime.*
 
@@ -117,14 +118,14 @@ sealed class R_MemberCalculator(val type: R_Type) {
     abstract fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value
 }
 
-class R_MemberCalculator_TupleField(type: R_Type, val fieldIndex: Int): R_MemberCalculator(type) {
+class R_MemberCalculator_TupleAttr(type: R_Type, val attrIndex: Int): R_MemberCalculator(type) {
     override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
         val values = baseValue.asTuple()
-        return values[fieldIndex]
+        return values[attrIndex]
     }
 }
 
-class R_MemberCalculator_VirtualTupleField(type: R_Type, val fieldIndex: Int): R_MemberCalculator(type) {
+class R_MemberCalculator_VirtualTupleAttr(type: R_Type, val fieldIndex: Int): R_MemberCalculator(type) {
     override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
         val tuple = baseValue.asVirtualTuple()
         val res = tuple.get(fieldIndex)
@@ -149,7 +150,15 @@ class R_MemberCalculator_VirtualRecordAttr(type: R_Type, val attr: R_Attrib): R_
 class R_MemberCalculator_DataAttribute(type: R_Type, val atBase: R_AtExprBase): R_MemberCalculator(type) {
     override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
         val list = atBase.execute(frame, listOf(baseValue), null)
-        R_AtExpr.checkCount(R_AtCardinality.ONE, list.size)
+
+        if (list.size != 1) {
+            val msg = if (list.size == 0) {
+                "Object not found in the database: $baseValue (was deleted?)"
+            } else {
+                "Found more than one object $baseValue in the database: ${list.size}"
+            }
+            throw Rt_Error("expr_clsattr_count:${list.size}", msg)
+        }
 
         check(list[0].size == 1)
         val res = list[0][0]
@@ -162,6 +171,13 @@ class R_MemberCalculator_SysFn(type: R_Type, val fn: R_SysFunction, val args: Li
         val vArgs = args.map { it.evaluate(frame) }
         val vFullArgs = listOf(baseValue) + vArgs
         return fn.call(frame.entCtx.modCtx, vFullArgs)
+    }
+}
+
+object R_MemberCalculator_Rowid: R_MemberCalculator(C_ClassAttrRef.ROWID_TYPE) {
+    override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
+        val id = baseValue.asObjectId()
+        return Rt_RowidValue(id)
     }
 }
 

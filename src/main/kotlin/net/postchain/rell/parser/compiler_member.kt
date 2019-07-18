@@ -23,7 +23,7 @@ object C_MemberResolver {
             return null
         }
 
-        val field = C_MemberField_TupleField(type.fields[idx].type, idx)
+        val field = C_MemberAttr_TupleAttr(type.fields[idx].type, idx)
         return makeMemberExpr(ref, field)
     }
 
@@ -36,7 +36,7 @@ object C_MemberResolver {
 
         val field = tupleType.fields[idx]
         val virtualType = S_VirtualType.virtualMemberType(field.type)
-        val memberField = C_MemberField_VirtualTupleField(virtualType, idx)
+        val memberField = C_MemberAttr_VirtualTupleAttr(virtualType, idx)
         return makeMemberExpr(ref, memberField)
     }
 
@@ -46,7 +46,7 @@ object C_MemberResolver {
             return null
         }
 
-        val field = C_MemberField_RecordAttr(attr)
+        val field = C_MemberAttr_RecordAttr(attr)
         return makeMemberExpr(ref, field)
     }
 
@@ -57,12 +57,13 @@ object C_MemberResolver {
         }
 
         val virtualType = S_VirtualType.virtualMemberType(attr.type)
-        val field = C_MemberField_VirtualRecordAttr(virtualType, attr)
+        val field = C_MemberAttr_VirtualRecordAttr(virtualType, attr)
         return makeMemberExpr(ref, field)
     }
 
     private fun valueForClass(type: R_ClassType, ref: C_MemberRef): C_Expr? {
-        return C_ClassFieldValue.createExpr(type, ref)
+        val attrRef = C_ClassAttrRef.resolveByName(type.rClass, ref.name.str)
+        return attrRef?.createIpMemberExpr(ref)
     }
 
     private fun valueForEnum(ref: C_MemberRef): C_Expr? {
@@ -73,16 +74,8 @@ object C_MemberResolver {
         } else {
             return null
         }
-        val field = C_MemberField_SimpleReadOnly(ref.name, calculator)
+        val field = C_MemberAttr_SimpleReadOnly(ref.name, calculator)
         return makeMemberExpr(ref, field)
-    }
-
-    private fun makeMemberExpr(ref: C_MemberRef, field: C_MemberField): C_Expr {
-        val fieldType = field.type
-        val effectiveType = C_Utils.effectiveMemberType(fieldType, ref.safe)
-        val exprFacts = C_ExprVarFacts.of(postFacts = ref.base.varFacts().postFacts)
-        val value = C_MemberFieldValue(ref, field, effectiveType, exprFacts)
-        return C_ValueExpr(value)
     }
 
     fun functionForType(type: R_Type, ref: C_MemberRef): C_Expr? {
@@ -97,22 +90,22 @@ object C_MemberResolver {
     }
 }
 
-private sealed class C_MemberField(val type: R_Type) {
+private sealed class C_MemberAttr(val type: R_Type) {
     abstract fun calculator(): R_MemberCalculator
     abstract fun destination(pos: S_Pos, base: R_Expr): R_DestinationExpr
 }
 
-private class C_MemberField_TupleField(type: R_Type, private val fieldIndex: Int): C_MemberField(type) {
-    override fun calculator() = R_MemberCalculator_TupleField(type, fieldIndex)
+private class C_MemberAttr_TupleAttr(type: R_Type, private val fieldIndex: Int): C_MemberAttr(type) {
+    override fun calculator() = R_MemberCalculator_TupleAttr(type, fieldIndex)
     override fun destination(pos: S_Pos, base: R_Expr) = throw C_Errors.errBadDestination(pos)
 }
 
-private class C_MemberField_VirtualTupleField(type: R_Type, private val fieldIndex: Int): C_MemberField(type) {
-    override fun calculator() = R_MemberCalculator_VirtualTupleField(type, fieldIndex)
+private class C_MemberAttr_VirtualTupleAttr(type: R_Type, private val fieldIndex: Int): C_MemberAttr(type) {
+    override fun calculator() = R_MemberCalculator_VirtualTupleAttr(type, fieldIndex)
     override fun destination(pos: S_Pos, base: R_Expr) = throw C_Errors.errBadDestination(pos)
 }
 
-private class C_MemberField_RecordAttr(private val attr: R_Attrib): C_MemberField(attr.type) {
+private class C_MemberAttr_RecordAttr(private val attr: R_Attrib): C_MemberAttr(attr.type) {
     override fun calculator() = R_MemberCalculator_RecordAttr(attr)
 
     override fun destination(pos: S_Pos, base: R_Expr): R_DestinationExpr {
@@ -123,22 +116,22 @@ private class C_MemberField_RecordAttr(private val attr: R_Attrib): C_MemberFiel
     }
 }
 
-private class C_MemberField_VirtualRecordAttr(type: R_Type, private val attr: R_Attrib): C_MemberField(type) {
+private class C_MemberAttr_VirtualRecordAttr(type: R_Type, private val attr: R_Attrib): C_MemberAttr(type) {
     override fun calculator() = R_MemberCalculator_VirtualRecordAttr(type, attr)
     override fun destination(pos: S_Pos, base: R_Expr) = throw C_Errors.errAttrNotMutable(pos, attr.name)
 }
 
-private class C_MemberField_SimpleReadOnly(
+private class C_MemberAttr_SimpleReadOnly(
         private val name: S_Name,
         private val calculator: R_MemberCalculator
-): C_MemberField(calculator.type) {
+): C_MemberAttr(calculator.type) {
     override fun calculator() = calculator
     override fun destination(pos: S_Pos, base: R_Expr) = throw C_Errors.errBadDestination(name)
 }
 
-private class C_MemberFieldValue(
+private class C_MemberAttrValue(
         private val memberRef: C_MemberRef,
-        private val field: C_MemberField,
+        private val memAttr: C_MemberAttr,
         private val type: R_Type,
         private val varFacts: C_ExprVarFacts
 ): C_Value(memberRef.pos) {
@@ -147,7 +140,7 @@ private class C_MemberFieldValue(
 
     override fun toRExpr(): R_Expr {
         val rBase = memberRef.base.toRExpr()
-        val calculator = field.calculator()
+        val calculator = memAttr.calculator()
         return R_MemberExpr(rBase, memberRef.safe, calculator)
     }
 
@@ -160,26 +153,120 @@ private class C_MemberFieldValue(
 
     override fun destination(ctx: C_ExprContext): C_Destination {
         val rBase = memberRef.base.toRExpr()
-        val rDstExpr = field.destination(memberRef.name.pos, rBase)
+        val rDstExpr = memAttr.destination(memberRef.name.pos, rBase)
         return C_SimpleDestination(rDstExpr)
     }
 }
 
-private class C_ClassFieldValueBase(
+sealed class C_ClassAttrRef(protected val rClass: R_Class, val name: String) {
+    abstract fun type(): R_Type
+    abstract fun createDbContextAttrExpr(baseExpr: Db_TableExpr): Db_Expr
+    abstract fun createIpMemberExpr(ref: C_MemberRef): C_Expr
+    abstract fun createDbMemberExpr(base: Db_TableExpr, pos: S_Pos, sName: S_Name): C_Expr
+    abstract fun createIpClassMemberExpr(baseValue: C_ClassAttrValueLike, baseExpr: Db_TableExpr, ref: C_MemberRef): C_Expr
+
+    companion object {
+        const val ROWID_NAME = "rowid"
+        val ROWID_TYPE: R_Type = R_RowidType
+
+        fun isAllowedRegularAttrName(name: String) = name != ROWID_NAME
+
+        fun resolveByName(rClass: R_Class, name: String): C_ClassAttrRef? {
+            return if (name == ROWID_NAME) {
+                C_ClassAttrRef_Rowid(rClass)
+            } else {
+                val attr = rClass.attributes[name]
+                if (attr == null) null else C_ClassAttrRef_Regular(rClass, attr)
+            }
+        }
+
+        fun resolveByType(rClass: R_Class, type: R_Type): List<C_ClassAttrRef> {
+            val res = mutableListOf<C_ClassAttrRef>()
+            if (type == ROWID_TYPE) {
+                res.add(C_ClassAttrRef_Rowid(rClass))
+            }
+            for (attr in rClass.attributes.values) {
+                if (attr.type == type) {
+                    res.add(C_ClassAttrRef_Regular(rClass, attr))
+                }
+            }
+            return res
+        }
+    }
+}
+
+private class C_ClassAttrRef_Regular(rClass: R_Class, private val attr: R_Attrib): C_ClassAttrRef(rClass, attr.name) {
+    override fun type() = attr.type
+
+    override fun createDbContextAttrExpr(baseExpr: Db_TableExpr): Db_Expr {
+        return makeDbAttrExpr(baseExpr, attr)
+    }
+
+    override fun createIpMemberExpr(ref: C_MemberRef): C_Expr {
+        val atClass = R_AtClass(rClass, 0)
+        val baseDbExpr = Db_ClassExpr(atClass)
+        val attrInfo = createAttrInfo(baseDbExpr, ref.name)
+        return C_ClassAttrValue.createIpMemberExpr(ref, atClass, attrInfo)
+    }
+
+    override fun createDbMemberExpr(base: Db_TableExpr, pos: S_Pos, sName: S_Name): C_Expr {
+        val dbExpr = makeDbAttrExpr(base, attr)
+        return C_DbValue.makeExpr(pos, dbExpr)
+    }
+
+    override fun createIpClassMemberExpr(baseValue: C_ClassAttrValueLike, baseExpr: Db_TableExpr, ref: C_MemberRef): C_Expr {
+        val attrInfo = createAttrInfo(baseExpr, ref.name)
+        return baseValue.memberAttr(ref, attrInfo)
+    }
+
+    private fun createAttrInfo(baseExpr: Db_TableExpr, sName: S_Name): C_DbAttrInfo {
+        val dbExpr = makeDbAttrExpr(baseExpr, attr)
+        return C_DbAttrInfo(rClass, sName, attr, dbExpr)
+    }
+}
+
+private class C_ClassAttrRef_Rowid(rClass: R_Class): C_ClassAttrRef(rClass, ROWID_NAME) {
+    override fun type() = ROWID_TYPE
+
+    override fun createDbContextAttrExpr(baseExpr: Db_TableExpr): Db_Expr {
+        return Db_RowidExpr(baseExpr)
+    }
+
+    override fun createIpMemberExpr(ref: C_MemberRef): C_Expr {
+        val field = C_MemberAttr_SimpleReadOnly(ref.name, R_MemberCalculator_Rowid)
+        return makeMemberExpr(ref, field)
+    }
+
+    override fun createDbMemberExpr(base: Db_TableExpr, pos: S_Pos, sName: S_Name): C_Expr {
+        val dbExpr = Db_RowidExpr(base)
+        val memExpr = C_DbAttrInfo(base.rClass, sName, null, dbExpr)
+        return C_DbValue.makeExpr(pos, memExpr.dbExpr)
+    }
+
+    override fun createIpClassMemberExpr(baseValue: C_ClassAttrValueLike, baseExpr: Db_TableExpr, ref: C_MemberRef): C_Expr {
+        return createIpMemberExpr(ref)
+    }
+}
+
+private class C_ClassAttrValueBase(
         val value: C_Value,
         val safe: Boolean,
         val atClass: R_AtClass
 )
 
-private class C_ClassFieldValue private constructor(
+interface C_ClassAttrValueLike {
+    fun memberAttr(ref: C_MemberRef, memAttrInfo: C_DbAttrInfo): C_Expr
+}
+
+private class C_ClassAttrValue private constructor(
         pos: S_Pos,
-        private val base: C_ClassFieldValueBase,
+        private val base: C_ClassAttrValueBase,
         private val parent: C_Value,
-        private val memberInfo: C_DbMemberInfo,
+        private val attrInfo: C_DbAttrInfo,
         private val resultType: R_Type
-): C_Value(pos) {
+): C_Value(pos), C_ClassAttrValueLike {
     override fun type() = resultType
-    override fun isDb() = false // Important: node does not belong to an outer @-expression
+    override fun isDb() = false // Important: value does not belong to an outer @-expression
 
     override fun toRExpr(): R_Expr {
         val from = listOf(base.atClass)
@@ -188,8 +275,8 @@ private class C_ClassFieldValue private constructor(
         val whereRight = Db_ParameterExpr(base.atClass.type, 0)
         val where = C_Utils.makeDbBinaryExprEq(whereLeft, whereRight)
 
-        val atBase = R_AtExprBase(from, listOf(memberInfo.dbExpr), where, listOf())
-        val calculator = R_MemberCalculator_DataAttribute(memberInfo.dbExpr.type, atBase)
+        val atBase = R_AtExprBase(from, listOf(attrInfo.dbExpr), where, listOf())
+        val calculator = R_MemberCalculator_DataAttribute(attrInfo.dbExpr.type, atBase)
 
         val rBase = base.value.toRExpr()
         val rExpr = R_MemberExpr(rBase, base.safe, calculator)
@@ -200,39 +287,47 @@ private class C_ClassFieldValue private constructor(
     override fun toDbExpr() = C_Utils.toDbExpr(pos, toRExpr())
 
     override fun destination(ctx: C_ExprContext): C_Destination {
-        if (!memberInfo.attr.mutable) {
-            throw C_Errors.errAttrNotMutable(memberInfo.name.pos, memberInfo.attr.name)
+        if (attrInfo.attr == null || !attrInfo.attr.mutable) {
+            throw C_Errors.errAttrNotMutable(attrInfo.name.pos, attrInfo.name.str)
         }
         ctx.blkCtx.entCtx.checkDbUpdateAllowed(pos)
-        return C_ClassFieldDestination(parent, memberInfo.rClass, memberInfo.attr)
+        return C_ClassAttrDestination(parent, attrInfo.rClass, attrInfo.attr)
     }
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
         val memberRef = C_MemberRef(pos, this, memberName, safe)
-        val valueExpr = create0(base, memberInfo.dbExpr, memberRef)
-        val fnExpr = C_MemberResolver.functionForType(memberInfo.dbExpr.type, memberRef)
+        val valueExpr = createDbMemberExpr(memberRef)
+        val fnExpr = C_MemberResolver.functionForType(attrInfo.dbExpr.type, memberRef)
 
         val res = C_ValueFunctionExpr.create(memberName, valueExpr, fnExpr)
-        res ?: throw C_Errors.errUnknownMember(memberInfo.dbExpr.type, memberName)
+        res ?: throw C_Errors.errUnknownMember(attrInfo.dbExpr.type, memberName)
 
         C_MemberResolver.checkNullAccess(resultType, memberName, safe)
         return res
     }
 
+    private fun createDbMemberExpr(ref: C_MemberRef): C_Expr? {
+        val baseDbExpr = attrInfo.dbExpr
+        if (baseDbExpr !is Db_TableExpr) return null
+        val attrRef = C_ClassAttrRef.resolveByName(baseDbExpr.rClass, ref.name.str)
+        attrRef ?: return null
+        return attrRef.createIpClassMemberExpr(this, baseDbExpr, ref)
+    }
+
+    override fun memberAttr(ref: C_MemberRef, memAttrInfo: C_DbAttrInfo): C_Expr {
+        return create0(base, memAttrInfo, ref)
+    }
+
     companion object {
-        fun createExpr(type: R_ClassType, ref: C_MemberRef): C_Expr? {
-            val atClass = R_AtClass(type.rClass, 0)
-            val baseDbExpr = Db_ClassExpr(atClass)
-            val base = C_ClassFieldValueBase(ref.base, ref.safe, atClass)
-            return create0(base, baseDbExpr, ref)
+        fun createIpMemberExpr(ref: C_MemberRef, atClass: R_AtClass, memExpr: C_DbAttrInfo): C_Expr {
+            val base = C_ClassAttrValueBase(ref.base, ref.safe, atClass)
+            return create0(base, memExpr, ref)
         }
 
-        private fun create0(base: C_ClassFieldValueBase, baseDbExpr: Db_Expr, ref: C_MemberRef): C_Expr? {
-            val memExpr = C_DbMemberInfo.create(baseDbExpr, ref.name)
-            memExpr ?: return null
+        private fun create0(base: C_ClassAttrValueBase, memAttrInfo: C_DbAttrInfo, ref: C_MemberRef): C_Expr {
             C_MemberResolver.checkNullAccess(ref.base.type(), ref.name, ref.safe)
-            val resultType = C_Utils.effectiveMemberType(memExpr.dbExpr.type, ref.safe)
-            val value = C_ClassFieldValue(ref.pos, base, ref.base, memExpr, resultType)
+            val resultType = C_Utils.effectiveMemberType(memAttrInfo.dbExpr.type, ref.safe)
+            val value = C_ClassAttrValue(ref.pos, base, ref.base, memAttrInfo, resultType)
             return C_ValueExpr(value)
         }
     }
@@ -248,19 +343,18 @@ private class C_MemberFunctionExpr(private val memberRef: C_MemberRef, private v
     }
 }
 
-class C_DbMemberInfo private constructor(val rClass: R_Class, val name: S_Name, val attr: R_Attrib, val dbExpr: Db_Expr) {
-    companion object {
-        fun create(base: Db_Expr, name: S_Name): C_DbMemberInfo? {
-            if (base !is Db_TableExpr) return null
-            val attr = base.rClass.attributes[name.str]
-            if (attr == null) {
-                return null
-            }
+class C_DbAttrInfo(val rClass: R_Class, val name: S_Name, val attr: R_Attrib?, val dbExpr: Db_Expr)
 
-            val resultType = attr.type
-            val resultClass = if (resultType is R_ClassType) resultType.rClass else null
-            val dbExpr = if (resultClass == null) Db_AttrExpr(base, attr) else Db_RelExpr(base, attr, resultClass)
-            return C_DbMemberInfo(base.rClass, name, attr, dbExpr)
-        }
-    }
+private fun makeDbAttrExpr(base: Db_TableExpr, attr: R_Attrib): Db_Expr {
+    val resultType = attr.type
+    val resultClass = (resultType as? R_ClassType)?.rClass
+    return if (resultClass == null) Db_AttrExpr(base, attr) else Db_RelExpr(base, attr, resultClass)
+}
+
+private fun makeMemberExpr(ref: C_MemberRef, memAttr: C_MemberAttr): C_Expr {
+    val fieldType = memAttr.type
+    val effectiveType = C_Utils.effectiveMemberType(fieldType, ref.safe)
+    val exprFacts = C_ExprVarFacts.of(postFacts = ref.base.varFacts().postFacts)
+    val value = C_MemberAttrValue(ref, memAttr, effectiveType, exprFacts)
+    return C_ValueExpr(value)
 }

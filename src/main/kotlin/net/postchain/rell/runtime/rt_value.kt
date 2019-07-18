@@ -4,7 +4,6 @@ import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.google.common.collect.Iterables
 import com.google.common.math.LongMath
-import net.postchain.core.ByteArrayKey
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvVirtual
 import net.postchain.rell.CommonUtils
@@ -23,6 +22,7 @@ enum class Rt_ValueType {
     INTEGER,
     TEXT,
     BYTE_ARRAY,
+    ROWID,
     CLASS,
     NULL,
     COLLECTION,
@@ -52,6 +52,7 @@ sealed class Rt_Value {
 
     open fun asBoolean(): Boolean = throw errType(Rt_ValueType.BOOLEAN)
     open fun asInteger(): Long = throw errType(Rt_ValueType.INTEGER)
+    open fun asRowid(): Long = throw errType(Rt_ValueType.ROWID)
     open fun asString(): String = throw errType(Rt_ValueType.TEXT)
     open fun asByteArray(): ByteArray = throw errType(Rt_ValueType.BYTE_ARRAY)
     open fun asJsonString(): String = throw errType(Rt_ValueType.JSON)
@@ -182,6 +183,21 @@ class Rt_ByteArrayValue(val value: ByteArray): Rt_Value() {
     override fun toString(): String = "0x" + CommonUtils.bytesToHex(value)
     override fun equals(other: Any?): Boolean = other is Rt_ByteArrayValue && Arrays.equals(value, other.value)
     override fun hashCode(): Int = Arrays.hashCode(value)
+}
+
+class Rt_RowidValue(val value: Long): Rt_Value() {
+    init {
+        check(value >= 0) { "Negative rowid value: $value" }
+    }
+
+    override fun type() = R_RowidType
+    override fun valueType() = Rt_ValueType.ROWID
+    override fun asRowid(): Long = value
+    override fun asFormatArg(): Any = value
+    override fun toStrictString(showTupleFieldNames: Boolean): String = "rowid[$value]"
+    override fun toString(): String = "" + value
+    override fun equals(other: Any?): Boolean = other is Rt_RowidValue && value == other.value
+    override fun hashCode(): Int = java.lang.Long.hashCode(value)
 }
 
 class Rt_ClassValue(val type: R_ClassType, val rowid: Long): Rt_Value() {

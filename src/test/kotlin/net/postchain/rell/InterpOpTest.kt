@@ -82,6 +82,7 @@ class InterpOpTest: AbstractOpTest() {
     override fun vInt(v: Long): TstVal = InterpTstVal.Integer(v)
     override fun vText(v: String): TstVal = InterpTstVal.Text(v)
     override fun vBytes(v: String): TstVal = InterpTstVal.Bytes(v)
+    override fun vRowid(v: Long): TstVal = InterpTstVal.Rowid(v)
     override fun vJson(v: String): TstVal = InterpTstVal.Json(v)
     override fun vObj(cls: String, id: Long): TstVal = InterpTstVal.Obj(cls, id)
 
@@ -103,6 +104,10 @@ class InterpOpTest: AbstractOpTest() {
         class Bytes(str: String): InterpTstVal("byte_array") {
             private val v = CommonUtils.hexToBytes(str)
             override fun rt(m: R_Module): Rt_Value = Rt_ByteArrayValue(v)
+        }
+
+        class Rowid(val v: Long): InterpTstVal("rowid") {
+            override fun rt(m: R_Module): Rt_Value = Rt_RowidValue(v)
         }
 
         class Json(val v: String): InterpTstVal("json") {

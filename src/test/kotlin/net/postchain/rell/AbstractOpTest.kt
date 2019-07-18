@@ -23,145 +23,102 @@ abstract class AbstractOpTest: BaseResourcefulTest() {
     }
 
     @Test fun testCmpInteger() {
-        chkOpBool("==", vInt(123), vInt(123), true)
-        chkOpBool("==", vInt(123), vInt(456), false)
-        chkOpBool("==", vInt(123), vInt(122), false)
-        chkOpBool("==", vInt(123), vInt(124), false)
+        chkCmpCommon(vInt(55), vInt(122), vInt(123), vInt(124), vInt(456))
+    }
 
-        chkOpBool("!=", vInt(123), vInt(123), false)
-        chkOpBool("!=", vInt(123), vInt(456), true)
-        chkOpBool("!=", vInt(123), vInt(122), true)
-        chkOpBool("!=", vInt(123), vInt(124), true)
-
-        chkOpBool("<", vInt(123), vInt(55), false)
-        chkOpBool("<", vInt(123), vInt(123), false)
-        chkOpBool("<", vInt(123), vInt(124), true)
-        chkOpBool("<", vInt(123), vInt(456), true)
-
-        chkOpBool("<=", vInt(123), vInt(55), false)
-        chkOpBool("<=", vInt(123), vInt(123), true)
-        chkOpBool("<=", vInt(123), vInt(124), true)
-        chkOpBool("<=", vInt(123), vInt(456), true)
-
-        chkOpBool(">", vInt(123), vInt(55), true)
-        chkOpBool(">", vInt(123), vInt(122), true)
-        chkOpBool(">", vInt(123), vInt(123), false)
-        chkOpBool(">", vInt(123), vInt(456), false)
-
-        chkOpBool(">=", vInt(123), vInt(55), true)
-        chkOpBool(">=", vInt(123), vInt(122), true)
-        chkOpBool(">=", vInt(123), vInt(123), true)
-        chkOpBool(">=", vInt(123), vInt(456), false)
+    @Test fun testCmpRowid() {
+        chkCmpCommon(vRowid(55), vRowid(122), vRowid(123), vRowid(124), vRowid(456))
     }
 
     @Test fun testCmpText() {
-        chkOpBool("==", vText("Hello"), vText("Hello"), true)
-        chkOpBool("==", vText("Hello"), vText("HELLO"), false)
-        chkOpBool("==", vText("Hello"), vText("hello"), false)
-        chkOpBool("==", vText("Hello"), vText("World"), false)
-
-        chkOpBool("!=", vText("Hello"), vText("Hello"), false)
-        chkOpBool("!=", vText("Hello"), vText("HELLO"), true)
-        chkOpBool("!=", vText("Hello"), vText("hello"), true)
-        chkOpBool("!=", vText("Hello"), vText("World"), true)
-
-        chkOpBool("<", vText("Hello"), vText("hello"), true)
-        chkOpBool("<", vText("Hello"), vText("HELLO"), false)
-        chkOpBool("<", vText("Hello"), vText("Apple"), false)
-        chkOpBool("<", vText("Hello"), vText("Hello"), false)
-        chkOpBool("<", vText("Hello"), vText("Hellp"), true)
-        chkOpBool("<", vText("Hello"), vText("World"), true)
-
-        chkOpBool("<=", vText("Hello"), vText("hello"), true)
-        chkOpBool("<=", vText("Hello"), vText("HELLO"), false)
-        chkOpBool("<=", vText("Hello"), vText("Apple"), false)
-        chkOpBool("<=", vText("Hello"), vText("Hello"), true)
-        chkOpBool("<=", vText("Hello"), vText("Hellp"), true)
-        chkOpBool("<=", vText("Hello"), vText("World"), true)
-
-        chkOpBool(">", vText("Hello"), vText("hello"), false)
-        chkOpBool(">", vText("Hello"), vText("HELLO"), true)
-        chkOpBool(">", vText("Hello"), vText("Apple"), true)
-        chkOpBool(">", vText("Hello"), vText("Helln"), true)
-        chkOpBool(">", vText("Hello"), vText("Hello"), false)
-        chkOpBool(">", vText("Hello"), vText("Hellp"), false)
-        chkOpBool(">", vText("Hello"), vText("World"), false)
-
-        chkOpBool(">=", vText("Hello"), vText("hello"), false)
-        chkOpBool(">=", vText("Hello"), vText("HELLO"), true)
-        chkOpBool(">=", vText("Hello"), vText("Apple"), true)
-        chkOpBool(">=", vText("Hello"), vText("Helln"), true)
-        chkOpBool(">=", vText("Hello"), vText("Hello"), true)
-        chkOpBool(">=", vText("Hello"), vText("Hellp"), false)
-        chkOpBool(">=", vText("Hello"), vText("World"), false)
+        chkCmpCommon(vText("Apple"), vText("Helln"), vText("Hello"), vText("Hellp"), vText("World"))
+        chkCmpCommon(vText("HELLO"), vText("Hello"))
+        chkCmpCommon(vText("Hello"), vText("hello"))
     }
 
     @Test fun testCmpByteArray() {
-        chkOpBool("==", vBytes("0123abcd"), vBytes("0123abcd"), true)
-        chkOpBool("==", vBytes("0123"), vBytes("abcd"), false)
-
-        chkOpBool("!=", vBytes("0123abcd"), vBytes("0123abcd"), false)
-        chkOpBool("!=", vBytes("0123"), vBytes("abcd"), true)
-
-        chkOpBool("<", vBytes("0123"), vBytes("abcd"), true)
-        chkOpBool("<", vBytes("0123"), vBytes("0124"), true)
-        chkOpBool("<", vBytes("0123"), vBytes("0123"), false)
-        chkOpBool("<", vBytes("0123"), vBytes("01"), false)
-        chkOpBool("<", vBytes("0123"), vBytes("02"), true)
-        chkOpBool("<", vBytes("00"), vBytes("ff"), true)
-        chkOpBool("<", vBytes("ff"), vBytes("00"), false)
-        chkOpBool("<", vBytes(""), vBytes("0123abcd"), true)
-        chkOpBool("<", vBytes("0123abcd"), vBytes(""), false)
-
-        chkOpBool("<=", vBytes("0123"), vBytes("abcd"), true)
-        chkOpBool("<=", vBytes("0123"), vBytes("0124"), true)
-        chkOpBool("<=", vBytes("0123"), vBytes("0123"), true)
-        chkOpBool("<=", vBytes("0123"), vBytes("01"), false)
-        chkOpBool("<=", vBytes("0123"), vBytes("02"), true)
-
-        chkOpBool(">", vBytes("0123"), vBytes("abcd"), false)
-        chkOpBool(">", vBytes("0123"), vBytes("0122"), true)
-        chkOpBool(">", vBytes("0123"), vBytes("0123"), false)
-        chkOpBool(">", vBytes("0123"), vBytes("00ff"), true)
-        chkOpBool(">", vBytes("0123"), vBytes("01"), true)
-        chkOpBool(">", vBytes("0123"), vBytes("02"), false)
-        chkOpBool(">", vBytes("00"), vBytes("ff"), false)
-        chkOpBool(">", vBytes("ff"), vBytes("00"), true)
-        chkOpBool(">", vBytes(""), vBytes("0123abcd"), false)
-        chkOpBool(">", vBytes("0123abcd"), vBytes(""), true)
-
-        chkOpBool(">=", vBytes("0123"), vBytes("abcd"), false)
-        chkOpBool(">=", vBytes("0123"), vBytes("0122"), true)
-        chkOpBool(">=", vBytes("0123"), vBytes("0123"), true)
-        chkOpBool(">=", vBytes("0123"), vBytes("00ff"), true)
-        chkOpBool(">=", vBytes("0123"), vBytes("01"), true)
-        chkOpBool(">=", vBytes("0123"), vBytes("02"), false)
+        chkCmpCommon(vBytes("0000"), vBytes("0122"), vBytes("0123"), vBytes("0124"), vBytes("abcd"))
+        chkCmpCommon(vBytes("beef"), vBytes("cafd"), vBytes("cafe"), vBytes("caff"), vBytes("dead"))
+        chkCmpCommon(vBytes("0123"), vBytes("abcd"))
+        chkCmpCommon(vBytes("0123"), vBytes("0123abcd"))
+        chkCmpCommon(vBytes("0123"), vBytes("02"))
+        chkCmpCommon(vBytes("01"), vBytes("0123"))
+        chkCmpCommon(vBytes("00"), vBytes("ff"))
+        chkCmpCommon(vBytes(""), vBytes("0123abcd"))
     }
 
     @Test fun testCmpObject() {
-        chkOpBool("==", vObj("user", 1000), vObj("user", 1000), true)
-        chkOpBool("==", vObj("user", 1000), vObj("user", 2000), false)
-        chkOpBool("==", vObj("user", 2000), vObj("user", 1000), false)
+        chkCmpCommon(vObj("user", 1000), vObj("user", 2000))
+    }
 
-        chkOpBool("!=", vObj("user", 1000), vObj("user", 1000), false)
-        chkOpBool("!=", vObj("user", 1000), vObj("user", 2000), true)
-        chkOpBool("!=", vObj("user", 2000), vObj("user", 1000), true)
+    private fun chkCmpCommon(vLow: TstVal, vMinusOne: TstVal, v: TstVal, vPlusOne: TstVal, vHigh: TstVal) {
+        chkOpBool("==", v, v, true)
+        chkOpBool("==", v, vLow, false)
+        chkOpBool("==", v, vHigh, false)
+        chkOpBool("==", v, vMinusOne, false)
+        chkOpBool("==", v, vPlusOne, false)
 
-        chkOpBool("<", vObj("user", 1000), vObj("user", 1000), false)
-        chkOpBool("<", vObj("user", 1000), vObj("user", 2000), true)
-        chkOpBool("<", vObj("user", 2000), vObj("user", 1000), false)
+        chkOpBool("!=", v, v, false)
+        chkOpBool("!=", v, vLow, true)
+        chkOpBool("!=", v, vHigh, true)
+        chkOpBool("!=", v, vMinusOne, true)
+        chkOpBool("!=", v, vPlusOne, true)
 
-        chkOpBool("<=", vObj("user", 1000), vObj("user", 1000), true)
-        chkOpBool("<=", vObj("user", 1000), vObj("user", 2000), true)
-        chkOpBool("<=", vObj("user", 2000), vObj("user", 1000), false)
+        chkOpBool("<", v, vLow, false)
+        chkOpBool("<", v, vMinusOne, false)
+        chkOpBool("<", v, v, false)
+        chkOpBool("<", v, vPlusOne, true)
+        chkOpBool("<", v, vHigh, true)
 
-        chkOpBool(">", vObj("user", 1000), vObj("user", 1000), false)
-        chkOpBool(">", vObj("user", 1000), vObj("user", 2000), false)
-        chkOpBool(">", vObj("user", 2000), vObj("user", 1000), true)
+        chkOpBool("<=", v, vLow, false)
+        chkOpBool("<=", v, vMinusOne, false)
+        chkOpBool("<=", v, v, true)
+        chkOpBool("<=", v, vPlusOne, true)
+        chkOpBool("<=", v, vHigh, true)
 
-        chkOpBool(">=", vObj("user", 1000), vObj("user", 1000), true)
-        chkOpBool(">=", vObj("user", 1000), vObj("user", 2000), false)
-        chkOpBool(">=", vObj("user", 2000), vObj("user", 1000), true)
+        chkOpBool(">", v, vLow, true)
+        chkOpBool(">", v, vMinusOne, true)
+        chkOpBool(">", v, v, false)
+        chkOpBool(">", v, vPlusOne, false)
+        chkOpBool(">", v, vHigh, false)
+
+        chkOpBool(">=", v, vLow, true)
+        chkOpBool(">=", v, vMinusOne, true)
+        chkOpBool(">=", v, v, true)
+        chkOpBool(">=", v, vPlusOne, false)
+        chkOpBool(">=", v, vHigh, false)
+    }
+
+    private fun chkCmpCommon(v1: TstVal, v2: TstVal) {
+        chkOpBool("==", v1, v1, true)
+        chkOpBool("==", v2, v2, true)
+        chkOpBool("==", v1, v2, false)
+        chkOpBool("==", v2, v1, false)
+
+        chkOpBool("!=", v1, v1, false)
+        chkOpBool("!=", v2, v2, false)
+        chkOpBool("!=", v1, v2, true)
+        chkOpBool("!=", v2, v1, true)
+
+        chkOpBool("<", v1, v1, false)
+        chkOpBool("<", v2, v2, false)
+        chkOpBool("<", v1, v2, true)
+        chkOpBool("<", v2, v1, false)
+
+        chkOpBool("<=", v1, v1, true)
+        chkOpBool("<=", v2, v2, true)
+        chkOpBool("<=", v1, v2, true)
+        chkOpBool("<=", v2, v1, false)
+
+        chkOpBool(">", v1, v1, false)
+        chkOpBool(">", v2, v2, false)
+        chkOpBool(">", v1, v2, false)
+        chkOpBool(">", v2, v1, true)
+
+        chkOpBool(">=", v1, v1, true)
+        chkOpBool(">=", v2, v2, true)
+        chkOpBool(">=", v1, v2, false)
+        chkOpBool(">=", v2, v1, true)
     }
 
     @Test fun testCmpErr() {
@@ -284,42 +241,56 @@ abstract class AbstractOpTest: BaseResourcefulTest() {
         chkErrSub("and")
         chkErrSub("or")
 
-        chkErrSub2("+", "boolean", "user")
-        chkErrSub2("-", "boolean", "text", "user")
-        chkErrSub2("*", "boolean", "text", "user")
-        chkErrSub2("/", "boolean", "text", "user")
-        chkErrSub2("%", "boolean", "text", "user")
-        chkErrSub2("and", "integer", "text", "user")
-        chkErrSub2("or", "integer", "text", "user")
+        chkErrSubBin("+", "integer", "boolean", "user")
+        chkErrSubBin("-", "integer", "boolean", "text", "user")
+        chkErrSubBin("*", "integer", "boolean", "text", "user")
+        chkErrSubBin("/", "integer", "boolean", "text", "user")
+        chkErrSubBin("%", "integer", "boolean", "text", "user")
+        chkErrSubBin("and", "boolean", "integer", "text", "user")
+        chkErrSubBin("or", "boolean", "integer", "text", "user")
 
-        chkErrSub3("+", "boolean", "text", "user")
-        chkErrSub3("-", "boolean", "text", "user")
-        chkErrSub3("not", "integer", "text", "user")
+        chkErrSubUn("+", "boolean", "text", "user", "rowid")
+        chkErrSubUn("-", "boolean", "text", "user", "rowid")
+        chkErrSubUn("not", "integer", "text", "user", "rowid")
     }
 
     private fun chkErrSub(op: String) {
         chkOpErr("boolean $op integer")
         chkOpErr("boolean $op text")
+        chkOpErr("boolean $op rowid")
         chkOpErr("boolean $op user")
+
         chkOpErr("integer $op boolean")
         chkOpErr("integer $op text")
+        chkOpErr("integer $op rowid")
         chkOpErr("integer $op user")
+
         chkOpErr("text $op boolean")
         chkOpErr("text $op integer")
+        chkOpErr("text $op rowid")
         chkOpErr("text $op user")
+
         chkOpErr("user $op boolean")
         chkOpErr("user $op integer")
+        chkOpErr("user $op rowid")
         chkOpErr("user $op text")
         chkOpErr("user $op company")
+
+        chkOpErr("rowid $op boolean")
+        chkOpErr("rowid $op integer")
+        chkOpErr("rowid $op text")
+        chkOpErr("rowid $op user")
     }
 
-    private fun chkErrSub2(op: String, vararg types: String) {
-        for (type in types) {
-            chkOpErr(op, type, type)
+    private fun chkErrSubBin(op: String, goodType: String, vararg badTypes: String) {
+        for (badType in badTypes) {
+            chkOpErr(op, goodType, badType)
+            chkOpErr(op, badType, goodType)
+            chkOpErr(op, badType, badType)
         }
     }
 
-    private fun chkErrSub3(op: String, vararg types: String) {
+    private fun chkErrSubUn(op: String, vararg types: String) {
         for (type in types) {
             chkOpErr(op, type)
         }
@@ -418,6 +389,7 @@ abstract class AbstractOpTest: BaseResourcefulTest() {
     abstract fun vInt(v: Long): TstVal
     abstract fun vText(v: String): TstVal
     abstract fun vBytes(v: String): TstVal
+    abstract fun vRowid(v: Long): TstVal
     abstract fun vJson(v: String): TstVal
     abstract fun vObj(cls: String, id: Long): TstVal
 

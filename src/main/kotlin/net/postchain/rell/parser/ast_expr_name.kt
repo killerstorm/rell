@@ -1,6 +1,5 @@
 package net.postchain.rell.parser
 
-import net.postchain.rell.model.Db_AttrExpr
 import net.postchain.rell.model.R_NullableType
 import net.postchain.rell.model.R_Type
 
@@ -15,33 +14,47 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
         val clsAttrs = ctx.nameCtx.findAttributesByName(name.str)
         val localVar = ctx.blkCtx.lookupLocalVar(name.str)
 
-        if (clsAttrs.isEmpty() || localVar == null) {
+        if (localVar == null) {
             return compile(ctx)
         }
 
-        // There is a class attribute and a local variable with such name -> implicit where condition.
+        val varType = localVar.type
 
-        val argType = localVar.type
-        val clsAttrsByType = clsAttrs.filter { C_BinOp_EqNe.checkTypesDb(it.attr.type, argType) }
+        val clsAttrsByType = if (!clsAttrs.isEmpty()) {
+            clsAttrs.filter { C_BinOp_EqNe.checkTypesDb(it.attrRef.type(), varType) }
+        } else {
+            S_AtExpr.findWhereContextAttrsByType(ctx, varType)
+        }
 
         if (clsAttrsByType.isEmpty()) {
-            val typeStr = argType.toStrictString()
-            throw C_Error(name.pos, "at_attr_type:$idx:${name.str}:$typeStr",
-                    "No attribute '${name.str}' of type $typeStr")
+            throw C_Error(name.pos, "at_where:var_noattrs:$idx:${name.str}:$varType",
+                    "No attribute matches variable '${name.str}' by name or type ($varType)")
         } else if (clsAttrsByType.size > 1) {
-            throw C_Errors.errMutlipleAttrs(name.pos, clsAttrsByType, "at_attr_name_ambig:$idx:${name.str}",
-                    "Multiple attributes match '${name.str}'")
+            if (clsAttrs.isEmpty()) {
+                throw C_Errors.errMutlipleAttrs(
+                        name.pos,
+                        clsAttrsByType,
+                        "at_where:var_manyattrs_name:$idx:${name.str}:$varType",
+                        "Multiple attributes match variable '${name.str}' by type ($varType)"
+                )
+            } else {
+                throw C_Errors.errMutlipleAttrs(
+                        name.pos,
+                        clsAttrsByType,
+                        "at_where:var_manyattrs_nametype:$idx:${name.str}:$varType",
+                        "Multiple attributes match variable '${name.str}' by name and type ($varType)"
+                )
+            }
         }
 
         val clsAttr = clsAttrsByType[0]
-        val attrType = clsAttr.attr.type
-        if (!C_BinOp_EqNe.checkTypesDb(attrType, argType)) {
-            throw C_Error(name.pos, "at_param_attr_type_mismatch:$name:$attrType:$argType",
-                    "Parameter type does not match attribute type for '$name': $argType instead of $attrType")
+        val attrType = clsAttr.attrRef.type()
+        if (!C_BinOp_EqNe.checkTypesDb(attrType, varType)) {
+            throw C_Error(name.pos, "at_param_attr_type_mismatch:$name:$attrType:$varType",
+                    "Parameter type does not match attribute type for '$name': $varType instead of $attrType")
         }
 
-        val clsExpr = clsAttr.cls.compileExpr()
-        val clsAttrExpr = Db_AttrExpr(clsExpr, clsAttr.attr)
+        val clsAttrExpr = clsAttr.compile()
 
         val localAttrExpr = localVar.toVarExpr()
         val dbLocalAttrExpr = C_Utils.toDbExpr(startPos, localAttrExpr)

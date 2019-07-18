@@ -101,6 +101,19 @@ object GtvRtConversion_ByteArray: GtvRtConversion() {
     override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv) = Rt_ByteArrayValue(gtvToByteArray(gtv))
 }
 
+object GtvRtConversion_Rowid: GtvRtConversion() {
+    override fun directCompatibility() = R_GtvCompatibility(true, true)
+    override fun rtToGtv(rt: Rt_Value, pretty: Boolean) = GtvInteger(rt.asRowid())
+
+    override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
+        val v = gtvToInteger(gtv)
+        if (v < 0) {
+            throw Rt_GtvError("rowid:negative:$v", "Negative value of $R_RowidType type: $v")
+        }
+        return Rt_RowidValue(v)
+    }
+}
+
 object GtvRtConversion_Json: GtvRtConversion() {
     override fun directCompatibility() = R_GtvCompatibility(true, true)
     override fun rtToGtv(rt: Rt_Value, pretty: Boolean) = GtvString(rt.asJsonString())

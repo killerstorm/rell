@@ -67,6 +67,10 @@ private sealed class R_TypeSqlAdapter_Some: R_TypeSqlAdapter() {
     final override fun isSqlCompatible() = true
 }
 
+private abstract class R_TypeSqlAdapter_Primitive(private val name: String): R_TypeSqlAdapter_Some() {
+    override final fun metaName(sqlCtx: Rt_SqlContext): String = "sys:$name"
+}
+
 sealed class R_Type(val name: String) {
     private val gtvConversion by lazy { createGtvConversion() }
     val sqlAdapter = createSqlAdapter()
@@ -140,18 +144,14 @@ object R_BooleanType: R_PrimitiveType("boolean", SQLDataType.BOOLEAN) {
 
     override fun createGtvConversion() = GtvRtConversion_Boolean
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Boolean
-}
 
-private sealed class R_TypeSqlAdapter_Primitive(private val name: String): R_TypeSqlAdapter_Some() {
-    override final fun metaName(sqlCtx: Rt_SqlContext): String = "sys:$name"
-}
+    private object R_TypeSqlAdapter_Boolean: R_TypeSqlAdapter_Primitive("boolean") {
+        override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
+            stmt.setBoolean(idx, value.asBoolean())
+        }
 
-private object R_TypeSqlAdapter_Boolean: R_TypeSqlAdapter_Primitive("boolean") {
-    override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
-        stmt.setBoolean(idx, value.asBoolean())
+        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_BooleanValue(rs.getBoolean(idx))
     }
-
-    override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_BooleanValue(rs.getBoolean(idx))
 }
 
 object R_TextType: R_PrimitiveType("text", PostgresDataType.TEXT) {
@@ -160,14 +160,14 @@ object R_TextType: R_PrimitiveType("text", PostgresDataType.TEXT) {
     override fun fromCli(s: String): Rt_Value = Rt_TextValue(s)
     override fun createGtvConversion() = GtvRtConversion_Text
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Text
-}
 
-private object R_TypeSqlAdapter_Text: R_TypeSqlAdapter_Primitive("text") {
-    override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
-        stmt.setString(idx, value.asString())
+    private object R_TypeSqlAdapter_Text: R_TypeSqlAdapter_Primitive("text") {
+        override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
+            stmt.setString(idx, value.asString())
+        }
+
+        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_TextValue(rs.getString(idx))
     }
-
-    override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_TextValue(rs.getString(idx))
 }
 
 object R_IntegerType: R_PrimitiveType("integer", SQLDataType.BIGINT) {
@@ -177,14 +177,14 @@ object R_IntegerType: R_PrimitiveType("integer", SQLDataType.BIGINT) {
 
     override fun createGtvConversion() = GtvRtConversion_Integer
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Integer
-}
 
-private object R_TypeSqlAdapter_Integer: R_TypeSqlAdapter_Primitive("integer") {
-    override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
-        stmt.setLong(idx, value.asInteger())
+    private object R_TypeSqlAdapter_Integer: R_TypeSqlAdapter_Primitive("integer") {
+        override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
+            stmt.setLong(idx, value.asInteger())
+        }
+
+        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_IntValue(rs.getLong(idx))
     }
-
-    override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_IntValue(rs.getLong(idx))
 }
 
 object R_ByteArrayType: R_PrimitiveType("byte_array", PostgresDataType.BYTEA) {
@@ -194,11 +194,28 @@ object R_ByteArrayType: R_PrimitiveType("byte_array", PostgresDataType.BYTEA) {
 
     override fun createGtvConversion() = GtvRtConversion_ByteArray
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_ByteArray
+
+    private object R_TypeSqlAdapter_ByteArray: R_TypeSqlAdapter_Primitive("byte_array") {
+        override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = stmt.setBytes(idx, value.asByteArray())
+        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_ByteArrayValue(rs.getBytes(idx))
+    }
 }
 
-private object R_TypeSqlAdapter_ByteArray: R_TypeSqlAdapter_Primitive("byte_array") {
-    override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = stmt.setBytes(idx, value.asByteArray())
-    override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_ByteArrayValue(rs.getBytes(idx))
+object R_RowidType: R_PrimitiveType("rowid", SQLDataType.BIGINT) {
+    override fun defaultValue() = Rt_RowidValue(0)
+    override fun comparator() = Rt_Comparator.create { it.asRowid() }
+    override fun fromCli(s: String): Rt_Value = Rt_RowidValue(s.toLong())
+
+    override fun createGtvConversion() = GtvRtConversion_Rowid
+    override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Rowid
+
+    private object R_TypeSqlAdapter_Rowid: R_TypeSqlAdapter_Primitive("rowid") {
+        override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
+            stmt.setLong(idx, value.asRowid())
+        }
+
+        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_RowidValue(rs.getLong(idx))
+    }
 }
 
 object R_TimestampType: R_PrimitiveType("timestamp", SQLDataType.BIGINT) {
@@ -228,20 +245,20 @@ object R_JsonType: R_PrimitiveType("json", JSON_SQL_DATA_TYPE) {
     override fun createGtvConversion() = GtvRtConversion_Json
 
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Json
-}
 
-private object R_TypeSqlAdapter_Json: R_TypeSqlAdapter_Primitive("json") {
-    override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
-        val str = value.asJsonString()
-        val obj = PGobject()
-        obj.type = "json"
-        obj.value = str
-        stmt.setObject(idx, obj)
-    }
+    private object R_TypeSqlAdapter_Json: R_TypeSqlAdapter_Primitive("json") {
+        override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
+            val str = value.asJsonString()
+            val obj = PGobject()
+            obj.type = "json"
+            obj.value = str
+            stmt.setObject(idx, obj)
+        }
 
-    override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
-        val str = rs.getString(idx)
-        return Rt_JsonValue.parse(str)
+        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+            val str = rs.getString(idx)
+            return Rt_JsonValue.parse(str)
+        }
     }
 }
 

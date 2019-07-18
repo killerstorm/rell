@@ -235,7 +235,7 @@ class LibBlockTransactionTest: BaseRellTest() {
 
         t.chkQuery(expr, "[(transaction[4],0xceed,0xf00d,0xcdef,block[3],46,0xbadbad,1300000000000)]")
         t.chkQuery("transaction @* {} ( =transaction, =.tx_rid, =.tx_hash, =.tx_data )", "[(transaction[4],0xceed,0xf00d,0xcdef)]")
-        t.chkQuery("transaction @* { .block }", "[transaction[4]]")
+        t.chkQuery("transaction @* { .block == .block }", "[transaction[4]]")
         t.chkQuery("block @* {}", "[]")
         t.chkQuery("(b: block, t: transaction) @* {}", "[]")
 

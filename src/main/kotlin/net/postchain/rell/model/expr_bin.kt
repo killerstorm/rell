@@ -55,6 +55,14 @@ object R_CmpType_ByteArray: R_CmpType() {
     }
 }
 
+object R_CmpType_Rowid: R_CmpType() {
+    override fun compare(left: Rt_Value, right: Rt_Value): Int {
+        val l = left.asRowid()
+        val r = right.asRowid()
+        return l.compareTo(r)
+    }
+}
+
 object R_CmpType_Class: R_CmpType() {
     override fun compare(left: Rt_Value, right: Rt_Value): Int {
         val l = left.asObjectId()

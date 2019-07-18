@@ -1,6 +1,7 @@
 package net.postchain.rell.model
 
 import net.postchain.rell.CommonUtils
+import net.postchain.rell.parser.C_ClassAttrRef
 import net.postchain.rell.runtime.Rt_BooleanValue
 import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_NullValue
@@ -176,6 +177,24 @@ class Db_AttrExpr(val base: Db_TableExpr, val attr: R_Attrib): Db_Expr(attr.type
         override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
             val alias = base.alias(ctx)
             bld.appendColumn(alias, attr.sqlMapping)
+        }
+    }
+}
+
+class Db_RowidExpr(val base: Db_TableExpr): Db_Expr(C_ClassAttrRef.ROWID_TYPE) {
+    override fun implicitName(): String? {
+        return if (base is Db_ClassExpr) C_ClassAttrRef.ROWID_NAME else null
+    }
+
+    override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
+        return RedDb_RowidExpr(base)
+    }
+
+    private class RedDb_RowidExpr(val base: Db_TableExpr): RedDb_Expr() {
+        override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
+            val alias = base.alias(ctx)
+            val col = alias.cls.sqlMapping.rowidColumn()
+            bld.appendColumn(alias, col)
         }
     }
 }

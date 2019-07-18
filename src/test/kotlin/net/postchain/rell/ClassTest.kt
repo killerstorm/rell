@@ -214,6 +214,84 @@ class ClassTest: BaseRellTest(false) {
         tst2.chkQuery("user @* {}( =user, =.name, =.company.name )", "[(user[2],James,Microsoft), (user[201],Alice,Google)]")
     }
 
+    @Test fun testRowidAttr() {
+        tstCtx.useSql = false
+
+        chkCompile("class foo { rowid: integer; }", "ct_err:unallowed_attr_name:rowid")
+        chkCompile("class foo { rowid: text; }", "ct_err:unallowed_attr_name:rowid")
+        chkCompile("class foo { index rowid: integer; }", "ct_err:unallowed_attr_name:rowid")
+        chkCompile("class foo { key rowid: integer; }", "ct_err:unallowed_attr_name:rowid")
+
+        chkCompile("object foo { rowid: integer; }", "ct_err:unallowed_attr_name:rowid")
+        chkCompile("object foo { rowid: text; }", "ct_err:unallowed_attr_name:rowid")
+
+        chkCompile("record foo { rowid: integer; }", "OK")
+        chkCompile("record foo { rowid: text; }", "OK")
+    }
+
+    @Test fun testClassRowidAttr() {
+        initClassRowidAttr()
+
+        chkEx("{ return _type_of((user @ { 'Bob' }).rowid); }", "text[rowid]")
+        chkEx("{ val u = user @ { 'Bob' }; return _type_of(u.rowid); }", "text[rowid]")
+
+        chkEx("{ val u = user @ { 'Bob' }; return u.rowid; }", "rowid[100]")
+        chkEx("{ val u = user @ { 'Alice' }; return u.rowid; }", "rowid[200]")
+        chkEx("{ val c = company @ { 'BobCorp' }; return c.boss.rowid; }", "rowid[100]")
+        chkEx("{ val c = company @ { 'AliceCorp' }; return c.boss.rowid; }", "rowid[200]")
+
+        chkEx("{ val u = user @? { 'Bob' }; return u.rowid; }", "ct_err:expr_mem_null:rowid")
+        chkEx("{ val u = user @? { 'Bob' }; return u?.rowid; }", "rowid[100]")
+        chkEx("{ val u = user @? { 'Alice' }; return u?.rowid; }", "rowid[200]")
+        chkEx("{ val u = user @? { 'Trudy' }; return u?.rowid; }", "null")
+
+        chkEx("{ val u = user @ { 'Bob' }; u.rowid = 999; return 0; }", "ct_err:expr_bad_dst:rowid")
+    }
+
+    @Test fun testClassRowidAttrAt() {
+        initClassRowidAttr()
+
+        chk("user @ { 'Bob' } ( _type_of(.rowid) )", "text[rowid]")
+        chk("company @ { 'BobCorp' } ( _type_of(.boss.rowid) )", "text[rowid]")
+
+        chk("user @ { 'Bob' } ( .rowid )", "rowid[100]")
+        chk("user @ { 'Alice' } ( .rowid )", "rowid[200]")
+        chk("user @ { 'Bob' } ( user.rowid )", "rowid[100]")
+        chk("user @ { 'Alice' } ( user.rowid )", "rowid[200]")
+        chk("company @ { 'BobCorp' } ( .boss.rowid )", "rowid[100]")
+        chk("company @ { 'AliceCorp' } ( .boss.rowid )", "rowid[200]")
+
+        chk("user @ { .rowid == to_rowid(100) } ( .name )", "text[Bob]")
+        chk("user @ { .rowid == to_rowid(200) } ( .name )", "text[Alice]")
+        chk("company @ { .boss.rowid == to_rowid(100) } ( .name )", "text[BobCorp]")
+        chk("company @ { .boss.rowid == to_rowid(200) } ( .name )", "text[AliceCorp]")
+
+        chk("user @ { 100 }", "ct_err:at_where_type:0:integer")
+        chkEx("{ val x = 100; return user @ { x }; }", "ct_err:at_where:var_noattrs:0:x:integer")
+        chkEx("{ val x = to_rowid(100); return user @ { x }; }", "user[100]")
+        chkEx("{ val rowid = to_rowid(100); return user @ { rowid }; }", "user[100]")
+        chkEx("{ val rowid = 100; return user @ { rowid }; }", "ct_err:at_where:var_noattrs:0:rowid:integer")
+        chkEx("{ val rowid = 'Alice'; return user @ { rowid }; }", "ct_err:at_where:var_noattrs:0:rowid:text")
+        chkEx("{ val x = 'Alice'; return user @ { x }; }", "user[200]")
+    }
+
+    private fun initClassRowidAttr() {
+        tstCtx.useSql = true
+        def("class user { name; }")
+        def("class company { name; boss: user; }")
+        def("function to_rowid(i: integer): rowid = rowid.from_gtv(i.to_gtv());")
+        insert("c0.user", "name", "100,'Bob'")
+        insert("c0.user", "name", "200,'Alice'")
+        insert("c0.company", "name,boss", "300,'BobCorp',100")
+        insert("c0.company", "name,boss", "400,'AliceCorp',200")
+    }
+
+    @Test fun testObjectRowidAttr() {
+        tstCtx.useSql = true
+        def("object state { mutable value: text = 'Unknown'; }")
+        chk("state.rowid", "ct_err:unknown_name:state.rowid")
+    }
+
     private fun createTablePrefixTester(chainId: Long, rowid: Long, company: String, user: String): RellCodeTester {
         val t = RellCodeTester(tstCtx)
         t.def("class user { name: text; company; }")

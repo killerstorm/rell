@@ -53,8 +53,9 @@ class AtExprTest: BaseRellTest() {
         chkEx("{ val firstName = 'Bill'; return user @ { firstName }; }", "user[40]")
         chkEx("{ val lastName = 'Gates'; return user @ { lastName }; }", "user[40]")
         chkEx("{ val name = 'Microsoft'; return company @ { name }; }", "company[400]")
-        chkEx("{ val name = 'Bill'; return user @ { name }; }", "ct_err:at_attr_type_ambig:0:text:user.firstName,user.lastName")
-        chkEx("{ val name = 12345; return company @ { name }; }", "ct_err:at_attr_type:0:name:integer")
+        chkEx("{ val name = 'Bill'; return user @ { name }; }",
+                "ct_err:at_where:var_manyattrs_name:0:name:text:user.firstName,user.lastName")
+        chkEx("{ val name = 12345; return company @ { name }; }", "ct_err:at_where:var_noattrs:0:name:integer")
         chkEx("{ val company = company @ { .name == 'Facebook' }; return user @ { company }; }", "user[10]")
     }
 
@@ -87,11 +88,11 @@ class AtExprTest: BaseRellTest() {
         """.trimIndent()
 
         chkEx("{ $base val name = 'Bob'; return (foo_owner, bar_owner) @* { name }; }",
-                "ct_err:at_attr_name_ambig:0:name:foo_owner.name,bar_owner.name")
+                "ct_err:at_where:var_manyattrs_nametype:0:name:text:foo_owner.name,bar_owner.name")
         chkEx("{ $base val garbage = foo1; return (foo_owner, bar_owner) @* { garbage }; }",
-                "ct_err:at_attr_type_ambig:0:foo:foo_owner.stuff,foo_owner.foo,bar_owner.foo")
+                "ct_err:at_where:var_manyattrs_name:0:garbage:foo:foo_owner.stuff,foo_owner.foo,bar_owner.foo")
         chkEx("{ $base val garbage = bar1; return (foo_owner, bar_owner) @* { garbage }; }",
-                "ct_err:at_attr_type_ambig:0:bar:foo_owner.bar,bar_owner.stuff,bar_owner.bar")
+                "ct_err:at_where:var_manyattrs_name:0:garbage:bar:foo_owner.bar,bar_owner.stuff,bar_owner.bar")
 
         chkEx("{ $base val stuff = foo1; return (foo_owner, bar_owner) @* { stuff }; }",
                 "list<(foo_owner:foo_owner,bar_owner:bar_owner)>[(foo_owner[4],bar_owner[6]),(foo_owner[4],bar_owner[7])]")
@@ -205,15 +206,15 @@ class AtExprTest: BaseRellTest() {
         chkEx("{ $base return single @ { tgt2 }; }", "single[1]")
 
         // Ambiguity between attributes of the same class.
-        chkEx("{ $base return double @ { tgt1 }; }", "ct_err:at_attr_type_ambig:0:target:double.t1,double.t2")
-        chkEx("{ $base return double @ { .t1 == tgt1, tgt2 }; }", "ct_err:at_attr_type_ambig:1:target:double.t1,double.t2")
+        chkEx("{ $base return double @ { tgt1 }; }", "ct_err:at_where:var_manyattrs_name:0:tgt1:target:double.t1,double.t2")
+        chkEx("{ $base return double @ { .t1 == tgt1, tgt2 }; }", "ct_err:at_where:var_manyattrs_name:1:tgt2:target:double.t1,double.t2")
         chkEx("{ $base return double @ { .t1 == tgt1, .t2 == tgt2 }; }", "double[0]")
         chkEx("{ $base return double @ { .t1 == tgt3, .t2 == tgt1 }; }", "double[2]")
 
         // Ambiguity between attributes of different classes.
-        chkEx("{ $base return (s1: single, s2: single) @ { tgt1 }; }", "ct_err:at_attr_type_ambig:0:target:s1.t,s2.t")
-        chkEx("{ $base return (s1: single, s2: single) @ { tgt1, tgt2 }; }", "ct_err:at_attr_type_ambig:0:target:s1.t,s2.t")
-        chkEx("{ $base return (s1: single, s2: single) @ { s1.t == tgt1, tgt2 }; }", "ct_err:at_attr_type_ambig:1:target:s1.t,s2.t")
+        chkEx("{ $base return (s1: single, s2: single) @ { tgt1 }; }", "ct_err:at_where:var_manyattrs_name:0:tgt1:target:s1.t,s2.t")
+        chkEx("{ $base return (s1: single, s2: single) @ { tgt1, tgt2 }; }", "ct_err:at_where:var_manyattrs_name:0:tgt1:target:s1.t,s2.t")
+        chkEx("{ $base return (s1: single, s2: single) @ { s1.t == tgt1, tgt2 }; }", "ct_err:at_where:var_manyattrs_name:1:tgt2:target:s1.t,s2.t")
         chkEx("{ $base return (s1: single, s2: single) @ { s1.t == tgt1, s2.t == tgt2 }; }", "(s1=single[0],s2=single[1])")
     }
 
@@ -545,6 +546,26 @@ class AtExprTest: BaseRellTest() {
             }
         """.trimIndent()
         chkEx(code, "text[Bill]")
+    }
+
+    @Test fun testWhereDbExpr() {
+        tst.defs = listOf()
+        tst.inserts = listOf()
+        def("class company { name; }")
+        def("class user { name; company; flag: boolean; }")
+        insert("c0.company", "name", "33,'Apple'")
+        insert("c0.user", "name,company,flag", "100,'Jobs',33,true")
+        insert("c0.user", "name,company,flag", "101,'Wozniak',33,false")
+
+        chk("user @* { .company }", "ct_err:at_where:type:0:boolean:company")
+        chk("user @* { .name }", "ct_err:at_where:type:0:boolean:text")
+        chk("user @* { .name + .company.name }", "ct_err:at_where:type:0:boolean:text")
+        chk("user @* { 'Steve ' + .name }", "ct_err:at_where:type:0:boolean:text")
+
+        chk("user @* { 'Jobs' }", "list<user>[user[100]]")
+        chk("user @* { 'Wozniak' }", "list<user>[user[101]]")
+        chk("user @* { .flag }", "list<user>[user[100]]")
+        chk("user @* { not .flag }", "list<user>[user[101]]")
     }
 
     private object Ins {

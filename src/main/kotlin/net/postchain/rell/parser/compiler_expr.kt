@@ -11,7 +11,12 @@ class C_AtClass(val rClass: R_Class, val alias: String, val index: Int) {
     fun compileExpr() = Db_ClassExpr(rAtClass)
 }
 
-class C_ClassAttr(val cls: C_AtClass, val attr: R_Attrib)
+class C_ExprContextAttr(val cls: C_AtClass, val attrRef: C_ClassAttrRef) {
+    fun compile(): Db_Expr {
+        val clsExpr = cls.compileExpr()
+        return attrRef.createDbContextAttrExpr(clsExpr)
+    }
+}
 
 class C_BlockContext(val entCtx: C_EntityContext, private val parent: C_BlockContext?, val loop: C_LoopId?) {
     private val startOffset: Int = if (parent == null) 0 else parent.startOffset + parent.locals.size
@@ -120,8 +125,8 @@ sealed class C_NameContext(protected val blkCtx: C_BlockContext) {
         return expr ?: throw C_Errors.errUnknownName(name)
     }
 
-    abstract fun findAttributesByName(name: String): List<C_ClassAttr>
-    abstract fun findAttributesByType(type: R_Type): List<C_ClassAttr>
+    abstract fun findAttributesByName(name: String): List<C_ExprContextAttr>
+    abstract fun findAttributesByType(type: R_Type): List<C_ExprContextAttr>
 
     abstract fun createDefaultAtWhat(): C_AtWhat
 }
@@ -141,8 +146,8 @@ class C_RNameContext(blkCtx: C_BlockContext): C_NameContext(blkCtx) {
         throw C_Errors.errUnknownAttr(name)
     }
 
-    override fun findAttributesByName(name: String): List<C_ClassAttr> = listOf()
-    override fun findAttributesByType(type: R_Type): List<C_ClassAttr> = listOf()
+    override fun findAttributesByName(name: String): List<C_ExprContextAttr> = listOf()
+    override fun findAttributesByType(type: R_Type): List<C_ExprContextAttr> = listOf()
 
     override fun createDefaultAtWhat() = C_AtWhat(listOf(), listOf()) // Must not be called
 }
@@ -188,15 +193,8 @@ class C_DbNameContext(blkCtx: C_BlockContext, private val classes: List<C_AtClas
         }
 
         val attr = attrs[0]
-        val dbExpr = makeDbAttrExpr(attr)
+        val dbExpr = attr.compile()
         return C_DbValue.makeExpr(name.pos, dbExpr)
-    }
-
-    private fun makeDbAttrExpr(attr: C_ClassAttr): Db_Expr {
-        val clsExpr = attr.cls.compileExpr()
-        val resultType = attr.attr.type
-        val resultClass = if (resultType is R_ClassType) resultType.rClass else null
-        return if (resultClass == null) Db_AttrExpr(clsExpr, attr.attr) else Db_RelExpr(clsExpr, attr.attr, resultClass)
     }
 
     override fun createDefaultAtWhat(): C_AtWhat {
@@ -208,26 +206,29 @@ class C_DbNameContext(blkCtx: C_BlockContext, private val classes: List<C_AtClas
         return C_AtWhat(exprs, listOf())
     }
 
-    override fun findAttributesByName(name: String): List<C_ClassAttr> {
-        return findAttrsInChain { it.name == name }
+    override fun findAttributesByName(name: String): List<C_ExprContextAttr> {
+        return findContextAttrs { rClass ->
+            val attrRef = C_ClassAttrRef.resolveByName(rClass, name)
+            if (attrRef == null) listOf() else listOf(attrRef)
+        }
     }
 
-    override fun findAttributesByType(type: R_Type): List<C_ClassAttr> {
-        return findAttrsInChain { it.type == type }
+    override fun findAttributesByType(type: R_Type): List<C_ExprContextAttr> {
+        return findContextAttrs { rClass ->
+            C_ClassAttrRef.resolveByType(rClass, type)
+        }
     }
 
-    private fun findAttrsInChain(matcher: (R_Attrib) -> Boolean): List<C_ClassAttr> {
-        val attrs = mutableListOf<C_ClassAttr>()
+    private fun findContextAttrs(resolver: (R_Class) -> List<C_ClassAttrRef>): List<C_ExprContextAttr> {
+        val attrs = mutableListOf<C_ExprContextAttr>()
 
         //TODO take other kinds of fields into account
         //TODO fail when there is more than one match
         //TODO use a table lookup
         for (cls in classes) {
-            for (attr in cls.rClass.attributes.values) {
-                if (matcher(attr)) {
-                    attrs.add(C_ClassAttr(cls, attr))
-                }
-            }
+            val clsAttrs = resolver(cls.rClass)
+            val ctxAttrs = clsAttrs.map { C_ExprContextAttr(cls, it) }
+            attrs.addAll(ctxAttrs)
         }
 
         return attrs.toList()
@@ -292,7 +293,7 @@ class C_SimpleDestination(private val rDstExpr: R_DestinationExpr): C_Destinatio
     }
 }
 
-class C_ClassFieldDestination(private val base: C_Value, private val rClass: R_Class, private val attr: R_Attrib): C_Destination() {
+class C_ClassAttrDestination(private val base: C_Value, private val rClass: R_Class, private val attr: R_Attrib): C_Destination() {
     override fun type() = attr.type
 
     override fun compileAssignStatement(srcExpr: R_Expr, op: C_AssignOp?): R_Statement {
@@ -318,7 +319,7 @@ class C_ClassFieldDestination(private val base: C_Value, private val rClass: R_C
     }
 }
 
-class C_ObjectFieldDestination(private val rObject: R_Object, private val attr: R_Attrib): C_Destination() {
+class C_ObjectAttrDestination(private val rObject: R_Object, private val attr: R_Attrib): C_Destination() {
     override fun type() = attr.type
 
     override fun compileAssignStatement(srcExpr: R_Expr, op: C_AssignOp?): R_Statement {
@@ -403,9 +404,9 @@ class C_DbValue(pos: S_Pos, private val dbExpr: Db_Expr, private val varFacts: C
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
         if (dbExpr is Db_TableExpr) {
-            val memExpr = C_DbMemberInfo.create(dbExpr, memberName)
-            memExpr ?: throw C_Errors.errUnknownMember(dbExpr.type, memberName)
-            return makeExpr(pos, memExpr.dbExpr)
+            val attrRef = C_ClassAttrRef.resolveByName(dbExpr.rClass, memberName.str)
+            attrRef ?: throw C_Errors.errUnknownMember(dbExpr.type, memberName)
+            return attrRef.createDbMemberExpr(dbExpr, pos, memberName)
         }
         return super.member(ctx, memberName, safe)
     }
@@ -521,12 +522,12 @@ private class C_ObjectValue(private val name: List<S_Name>, private val rObject:
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
         val attr = rObject.rClass.attributes[memberName.str]
         attr ?: throw C_Errors.errUnknownName(name, memberName)
-        val value = C_ObjectFieldValue(memberName.pos, rObject, attr)
+        val value = C_ObjectAttrValue(memberName.pos, rObject, attr)
         return C_ValueExpr(value)
     }
 }
 
-private class C_ObjectFieldValue(pos: S_Pos, private val rObject: R_Object, private val attr: R_Attrib): C_Value(pos) {
+private class C_ObjectAttrValue(pos: S_Pos, private val rObject: R_Object, private val attr: R_Attrib): C_Value(pos) {
     override fun type() = attr.type
     override fun isDb() = false
     override fun toRExpr() = createAccessExpr()
@@ -537,7 +538,7 @@ private class C_ObjectFieldValue(pos: S_Pos, private val rObject: R_Object, priv
             throw C_Errors.errAttrNotMutable(pos, attr.name)
         }
         ctx.blkCtx.entCtx.checkDbUpdateAllowed(pos)
-        return C_ObjectFieldDestination(rObject, attr)
+        return C_ObjectAttrDestination(rObject, attr)
     }
 
     private fun createAccessExpr(): R_Expr {

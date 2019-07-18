@@ -224,6 +224,7 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
                 "text" to C_TypeDef(R_TextType),
                 "byte_array" to C_TypeDef(R_ByteArrayType),
                 "integer" to C_TypeDef(R_IntegerType),
+                "rowid" to C_TypeDef(R_RowidType),
                 "pubkey" to C_TypeDef(R_ByteArrayType),
                 "name" to C_TypeDef(R_TextType),
                 "timestamp" to C_TypeDef(R_IntegerType),
@@ -966,7 +967,13 @@ class C_ClassContext(
         }
 
         val rType = attr.compileType(entCtx.nsCtx)
+
         val insideClass = entityType == C_EntityType.CLASS || entityType == C_EntityType.OBJECT
+
+        if (insideClass && !C_ClassAttrRef.isAllowedRegularAttrName(nameStr)) {
+            throw C_Error(name.pos, "unallowed_attr_name:$nameStr", "Unallowed attribute name: '$nameStr'")
+        }
+
         if (insideClass && !rType.sqlAdapter.isSqlCompatible()) {
             throw C_Error(name.pos, "class_attr_type:$nameStr:${rType.toStrictString()}",
                     "Attribute '$nameStr' has unallowed type: ${rType.toStrictString()}")
