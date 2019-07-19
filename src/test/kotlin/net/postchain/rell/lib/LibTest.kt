@@ -90,7 +90,7 @@ class LibTest: BaseRellTest(false) {
         chk("_type_of(set<integer>())", "set<integer>")
         chk("_type_of(map<integer,text>())", "map<integer,text>")
 
-        chk("1/0", "rt_err:expr_div_by_zero")
+        chk("1/0", "rt_err:expr:/:div0:1")
         chk("_type_of(1/0)", "integer")
 
         chk("_type_of(user @ {})", "user")

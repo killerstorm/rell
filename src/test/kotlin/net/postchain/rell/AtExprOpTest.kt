@@ -133,6 +133,9 @@ class AtExprOpTest: AbstractOpTest() {
         return this.inserts + insert
     }
 
+    override fun integerOverflowMsg(op: String, left: Long, right: Long) = "rt_err:sqlerr:0"
+    override fun integerDivZeroMsg(left: Long) = "rt_err:sqlerr:0"
+
     override fun vBool(v: Boolean): TstVal = AtTstVal.Bool(v)
     override fun vInt(v: Long): TstVal = AtTstVal.Integer(v)
     override fun vText(v: String): TstVal = AtTstVal.Text(v)

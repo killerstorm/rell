@@ -3,6 +3,8 @@ package net.postchain.rell
 import net.postchain.rell.runtime.Rt_BooleanValue
 import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
+import java.math.BigInteger
+import kotlin.math.sign
 
 class ExpressionTest: BaseRellTest(false) {
     @Test fun testPrecedence() {
@@ -49,7 +51,7 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testShortCircuitEvaluation() {
-        chk("1 / 0", "rt_err:expr_div_by_zero")
+        chk("1 / 0", "rt_err:expr:/:div0:1")
         chk("a != 0 and 15 / a > 3", 0, "boolean[false]")
         chk("a != 0 and 15 / a > 3", 5, "boolean[false]")
         chk("a != 0 and 15 / a > 3", 3, "boolean[true]")
@@ -468,5 +470,82 @@ class ExpressionTest: BaseRellTest(false) {
         chkEx("{ val x = _nullable_int(123); return x??; }", "boolean[true]")
         chkEx("{ val x = _nullable_int(null); return x??; }", "boolean[false]")
         chkEx("{ val x = 123; return x??; }", "ct_err:unop_operand_type:??:integer")
+    }
+
+    @Test fun testIntegerOverflow() {
+        tst.strictToString = false
+        def("function i(x: integer): integer = integer.from_gtv(x.to_gtv());")
+        def("function t(x: text): integer = integer(x);")
+
+        val i63_1 = bigint(2, 63, -1)
+
+        chkIntegerOver2("+", bigint(2, 63, -1), "1")
+        chkIntegerOp2("+", bigint(2, 63, -2), "1")
+        chkIntegerOver2("+", bigint(2, 63, -2), "2")
+        chkIntegerOp2("+", bigint(2, 62, -1), bigint(2, 62))
+        chkIntegerOver2("+", bigint(2, 62), bigint(2, 62))
+        chkIntegerOver2("+", bigint(-2, 63), "-1")
+        chkIntegerOp2("+", bigint(-2, 63, 1), "-1")
+        chk("i($i63_1) + 1 - 1", "rt_err:expr:+:overflow:9223372036854775807:1")
+        chk("i($i63_1) - 1 + 1", "9223372036854775807")
+
+        chkIntegerOp("-", bigint(-2, 63, 1), "1")
+        chkIntegerOver("-", bigint(-2, 63, 1), "2")
+        chkIntegerOp("-", "-1", bigint(2, 63, -1))
+        chkIntegerOver("-", "-2", bigint(2, 63, -1))
+        chkIntegerOp("-", bigint(-2, 62), bigint(2, 62))
+        chkIntegerOver("-", bigint(-2, 62), bigint(2, 62, +1))
+
+        chkIntegerOp2("*", bigint(2, 31), bigint(2, 31))
+        chkIntegerOver2("*", bigint(2, 31), bigint(2, 32))
+        chkIntegerOp2("*", bigint(2, 32, -1), bigint(2, 31))
+        chkIntegerOp2("*", bigint(2, 31, -1), bigint(2, 32))
+        chkIntegerOp2("*", bigint(2, 61), "2")
+        chkIntegerOp2("*", bigint(2, 61), "3")
+        chkIntegerOver2("*", bigint(2, 61), "4")
+        chkIntegerOver2("*", bigint(2, 62), "2")
+        chkIntegerOver2("*", bigint(2, 62), bigint(2, 31))
+        chkIntegerOver2("*", bigint(2, 62), bigint(2, 32))
+        chkIntegerOver2("*", bigint(2, 62), bigint(2, 61))
+        chkIntegerOver2("*", bigint(2, 62), bigint(2, 62))
+        chkIntegerOver2("*", bigint(2, 62), bigint(2, 63, -1))
+        chkIntegerOver2("*", bigint(2, 63, -1), bigint(2, 63, -1))
+    }
+
+    private fun bigint(base: Int, exp: Int, add: Int = 0): String {
+        return BigInteger.valueOf(base.toLong())
+                .abs()
+                .pow(exp)
+                .multiply(BigInteger.valueOf(base.sign.toLong()))
+                .add(BigInteger.valueOf(add.toLong()))
+                .toString()
+    }
+
+    private fun chkIntegerOp(op: String, left: String, right: String) {
+        val bLeft = BigInteger(left)
+        val bRight = BigInteger(right)
+        val bExpected = when (op) {
+            "+" -> bLeft + bRight
+            "-" -> bLeft - bRight
+            "*" -> bLeft * bRight
+            "/" -> bLeft / bRight
+            else -> throw IllegalArgumentException(op)
+        }
+        val expected = bExpected.toString()
+        chk("t('$left') $op t('$right')", expected)
+    }
+
+    private fun chkIntegerOp2(op: String, left: String, right: String) {
+        chkIntegerOp(op, left, right)
+        chkIntegerOp(op, right, left)
+    }
+
+    private fun chkIntegerOver(op: String, left: String, right: String) {
+        chk("t('$left') $op t('$right')", "rt_err:expr:$op:overflow:$left:$right")
+    }
+
+    private fun chkIntegerOver2(op: String, left: String, right: String) {
+        chkIntegerOver(op, left, right)
+        chkIntegerOver(op, right, left)
     }
 }

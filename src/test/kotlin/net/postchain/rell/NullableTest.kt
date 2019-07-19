@@ -606,7 +606,7 @@ class NullableTest: BaseRellTest(false) {
 
         // Short-circuit evaluation
         chkEx("{ val x: integer? = _nullable(123); return x ?: 1/0; }", "int[123]")
-        chkEx("{ val x: integer? = null; return x ?: 1/0; }", "rt_err:expr_div_by_zero")
+        chkEx("{ val x: integer? = null; return x ?: 1/0; }", "rt_err:expr:/:div0:1")
     }
 
     @Test fun testSpecOpElvisUnderAt() {

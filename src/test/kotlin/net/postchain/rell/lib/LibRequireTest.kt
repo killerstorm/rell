@@ -12,7 +12,7 @@ class LibRequireTest: BaseRellTest(false) {
         chkEx("{ val x = require(true); return 0; }", "ct_err:stmt_var_unit:x")
 
         chkEx("{ require(true, ''+(1/0)); return 0; }", "int[0]")
-        chkEx("{ require(false, ''+(1/0)); return 0; }", "rt_err:expr_div_by_zero")
+        chkEx("{ require(false, ''+(1/0)); return 0; }", "rt_err:expr:/:div0:1")
     }
 
     @Test fun testRequireNullable() {

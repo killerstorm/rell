@@ -78,6 +78,9 @@ class InterpOpTest: AbstractOpTest() {
 
     private fun paramName(idx: Int) = "" + ('a' + idx)
 
+    override fun integerOverflowMsg(op: String, left: Long, right: Long) = "rt_err:expr:$op:overflow:$left:$right"
+    override fun integerDivZeroMsg(left: Long) = "rt_err:expr:/:div0:$left"
+
     override fun vBool(v: Boolean): TstVal = InterpTstVal.Bool(v)
     override fun vInt(v: Long): TstVal = InterpTstVal.Integer(v)
     override fun vText(v: String): TstVal = InterpTstVal.Text(v)

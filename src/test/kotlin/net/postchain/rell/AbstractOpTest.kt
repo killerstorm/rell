@@ -181,6 +181,9 @@ abstract class AbstractOpTest: BaseResourcefulTest() {
         chkOp("+", vText("Hello"), vInt(123), "text[Hello123]")
         chkOp("+", vJson("[{}]"), vText("Hello"), "text[[{}]Hello]")
         chkOp("+", vText("Hello"), vJson("[{}]"), "text[Hello[{}]]")
+
+        chkOp("+", vInt(9223372036854775806), vInt(1), "int[9223372036854775807]")
+        chkIntOverflow("+", 9223372036854775807, 1)
     }
 
     @Test fun testMinus() {
@@ -191,6 +194,9 @@ abstract class AbstractOpTest: BaseResourcefulTest() {
 
         chkOp("-", vInt(123), "int[-123]")
         chkOp("-", vInt(-123), "int[123]")
+
+        chkOp("-", vInt(-9223372036854775807), vInt(1), "int[-9223372036854775808]")
+        chkIntOverflow("-", -9223372036854775807-1, 1)
     }
 
     @Test fun testDiv() {
@@ -206,6 +212,8 @@ abstract class AbstractOpTest: BaseResourcefulTest() {
         chkOp("/", vInt(1000000), vInt(499999), "int[2]")
         chkOp("/", vInt(1000000), vInt(500000), "int[2]")
         chkOp("/", vInt(1000000), vInt(500001), "int[1]")
+        chkOp("/", vInt(1), vInt(0), integerDivZeroMsg(1))
+        chkOp("/", vInt(123456789), vInt(0), integerDivZeroMsg(123456789))
     }
 
     @Test fun testMul() {
@@ -215,6 +223,9 @@ abstract class AbstractOpTest: BaseResourcefulTest() {
         chkOp("*", vInt(123), vInt(1), "int[123]")
         chkOp("*", vInt(1), vInt(456), "int[456]")
         chkOp("*", vInt(-1), vInt(456), "int[-456]")
+
+        chkOp("*", vInt(4294967296-1), vInt(2147483648), "int[9223372034707292160]")
+        chkIntOverflow("*", 4294967296, 2147483648)
     }
 
     @Test fun testMod() {
@@ -223,6 +234,11 @@ abstract class AbstractOpTest: BaseResourcefulTest() {
         chkOp("%", vInt(1000000), vInt(2), "int[0]")
         chkOp("%", vInt(1000000), vInt(3), "int[1]")
         chkOp("%", vInt(1000000), vInt(9999), "int[100]")
+    }
+
+    private fun chkIntOverflow(op: String, left: Long, right: Long) {
+        chkOp(op, vInt(left), vInt(right), integerOverflowMsg(op, left, right))
+        chkOp(op, vInt(right), vInt(left), integerOverflowMsg(op, right, left))
     }
 
     @Test fun testErr() {
@@ -384,6 +400,9 @@ abstract class AbstractOpTest: BaseResourcefulTest() {
     abstract fun chkExpr(expr: String, args: List<TstVal>, expected: Boolean)
     abstract fun calcExpr(expr: String, args: List<TstVal>): String
     abstract fun compileExpr(expr: String, types: List<String>): String
+
+    abstract fun integerOverflowMsg(op: String, left: Long, right: Long): String
+    abstract fun integerDivZeroMsg(left: Long): String
 
     abstract fun vBool(v: Boolean): TstVal
     abstract fun vInt(v: Long): TstVal

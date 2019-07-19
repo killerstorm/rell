@@ -1,5 +1,6 @@
 package net.postchain.rell.model
 
+import com.google.common.math.LongMath
 import net.postchain.rell.runtime.*
 
 sealed class R_CmpOp(val code: String, val checker: (Int) -> Boolean) {
@@ -177,28 +178,51 @@ sealed class R_BinaryOp_Arith(code: String): R_BinaryOp(code) {
 }
 
 object R_BinaryOp_Add: R_BinaryOp_Arith("+") {
-    override fun evaluate(left: Long, right: Long): Long = left + right
+    override fun evaluate(left: Long, right: Long): Long {
+        try {
+            return LongMath.checkedAdd(left, right)
+        } catch (e: ArithmeticException) {
+            throw Rt_Error("expr:+:overflow:$left:$right", "Integer overflow: $left + $right")
+        }
+    }
 }
 
 object R_BinaryOp_Sub: R_BinaryOp_Arith("-") {
-    override fun evaluate(left: Long, right: Long): Long = left - right
+    override fun evaluate(left: Long, right: Long): Long {
+        try {
+            return LongMath.checkedSubtract(left, right)
+        } catch (e: ArithmeticException) {
+            throw Rt_Error("expr:-:overflow:$left:$right", "Integer overflow: $left - $right")
+        }
+    }
 }
 
 object R_BinaryOp_Mul: R_BinaryOp_Arith("*") {
-    override fun evaluate(left: Long, right: Long): Long = left * right
+    override fun evaluate(left: Long, right: Long): Long {
+        try {
+            return LongMath.checkedMultiply(left, right)
+        } catch (e: ArithmeticException) {
+            throw Rt_Error("expr:*:overflow:$left:$right", "Integer overflow: $left * $right")
+        }
+    }
 }
 
 object R_BinaryOp_Div: R_BinaryOp_Arith("/") {
     override fun evaluate(left: Long, right: Long): Long {
         if (right == 0L) {
-            throw Rt_Error("expr_div_by_zero", "Division by zero")
+            throw Rt_Error("expr:/:div0:$left", "Division by zero: $left / $right")
         }
         return left / right
     }
 }
 
 object R_BinaryOp_Mod: R_BinaryOp_Arith("%") {
-    override fun evaluate(left: Long, right: Long): Long = left % right
+    override fun evaluate(left: Long, right: Long): Long {
+        if (right == 0L) {
+            throw Rt_Error("expr:%:div0:$left", "Division by zero: $left % $right")
+        }
+        return left % right
+    }
 }
 
 object R_BinaryOp_Concat_Text: R_BinaryOp("+") {

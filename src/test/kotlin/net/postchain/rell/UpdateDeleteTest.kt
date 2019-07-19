@@ -230,7 +230,7 @@ class UpdateDeleteTest: BaseRellTest() {
             update person @ { .name == 'James' } ( score += 1000 );
             val x = 1 / 0;
             update person @ { .name == 'Mike' } ( score += 500 );
-        """.trimIndent(), "rt_err:expr_div_by_zero")
+        """.trimIndent(), "rt_err:expr:/:div0:1")
 
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,250)")
 
@@ -238,7 +238,7 @@ class UpdateDeleteTest: BaseRellTest() {
             update person @ { .name == 'James' } ( score += 1000 );
             update person @ { .name == 'Mike' } ( score += 500 );
             val x = 1 / 0;
-        """.trimIndent(), "rt_err:expr_div_by_zero")
+        """.trimIndent(), "rt_err:expr:/:div0:1")
 
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,250)")
 
