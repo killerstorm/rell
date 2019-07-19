@@ -118,7 +118,7 @@ object SqlGen {
     private fun genAttrColumns(attrs: Collection<R_Attrib>, step: CreateTableColumnStep): CreateTableColumnStep {
         var q = step
         for (attr in attrs) {
-            q = q.column(attr.sqlMapping, getSQLType(attr.type).nullable(false))
+            q = q.column(attr.sqlMapping, getSqlType(attr.type))
         }
         return q
     }
@@ -140,14 +140,39 @@ object SqlGen {
         return constraints
     }
 
+    fun genAddColumnSql(table: String, attr: R_Attrib, nullable: Boolean): String {
+        val type = getSqlType(attr.type).nullable(nullable)
+        val b = DSL_CTX.alterTable(table).addColumn(attr.sqlMapping, type)
+        return b.toString()
+    }
+
+    fun genAddAttrConstraintsSql(sqlCtx: Rt_SqlContext, table: String, attrs: List<R_Attrib>): String {
+        val constraints = genAttrConstraints(sqlCtx, table, attrs)
+        if (constraints.isEmpty()) {
+            return ""
+        }
+
+        val b = DSL_CTX.alterTable(table)
+        for (c in constraints) {
+            b.add(c)
+        }
+
+        return b.toString()
+    }
+
     fun joinSqls(sqls: List<String>) = sqls.joinToString("\n") + "\n"
 }
 
-private fun getSQLType(t: R_Type): DataType<*> {
+private fun getSqlType(t: R_Type): DataType<*> {
+    val st = getSqlType0(t)
+    return st.nullable(false)
+}
+
+private fun getSqlType0(t: R_Type): DataType<*> {
     when (t) {
         is R_PrimitiveType -> return t.sqlType
         is R_ClassType -> return SQLDataType.BIGINT
         is R_EnumType -> return SQLDataType.INTEGER
-        else -> throw Exception("SQL Type not implemented")
+        else -> throw Exception("SQL type not implemented for $t")
     }
 }

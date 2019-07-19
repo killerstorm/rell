@@ -42,6 +42,7 @@ class R_TypeFlags(val mutable: Boolean, val gtv: R_GtvCompatibility, val virtual
 
 sealed class R_TypeSqlAdapter {
     abstract fun isSqlCompatible(): Boolean
+    abstract fun toSqlValue(value: Rt_Value): Any
     abstract fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value)
     abstract fun fromSql(rs: ResultSet, idx: Int): Rt_Value
     abstract fun metaName(sqlCtx: Rt_SqlContext): String
@@ -49,6 +50,10 @@ sealed class R_TypeSqlAdapter {
 
 private class R_TypeSqlAdapter_None(private val type: R_Type): R_TypeSqlAdapter() {
     override fun isSqlCompatible(): Boolean = false
+
+    override fun toSqlValue(value: Rt_Value): Any {
+        throw Rt_Utils.errNotSupported("Type cannot be converted to SQL: ${type.toStrictString()}")
+    }
 
     override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
         throw Rt_Utils.errNotSupported("Type cannot be converted to SQL: ${type.toStrictString()}")
@@ -146,6 +151,8 @@ object R_BooleanType: R_PrimitiveType("boolean", SQLDataType.BOOLEAN) {
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Boolean
 
     private object R_TypeSqlAdapter_Boolean: R_TypeSqlAdapter_Primitive("boolean") {
+        override fun toSqlValue(value: Rt_Value) = value.asBoolean()
+
         override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
             stmt.setBoolean(idx, value.asBoolean())
         }
@@ -162,6 +169,8 @@ object R_TextType: R_PrimitiveType("text", PostgresDataType.TEXT) {
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Text
 
     private object R_TypeSqlAdapter_Text: R_TypeSqlAdapter_Primitive("text") {
+        override fun toSqlValue(value: Rt_Value) = value.asString()
+
         override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
             stmt.setString(idx, value.asString())
         }
@@ -179,6 +188,8 @@ object R_IntegerType: R_PrimitiveType("integer", SQLDataType.BIGINT) {
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Integer
 
     private object R_TypeSqlAdapter_Integer: R_TypeSqlAdapter_Primitive("integer") {
+        override fun toSqlValue(value: Rt_Value) = value.asInteger()
+
         override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
             stmt.setLong(idx, value.asInteger())
         }
@@ -196,6 +207,7 @@ object R_ByteArrayType: R_PrimitiveType("byte_array", PostgresDataType.BYTEA) {
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_ByteArray
 
     private object R_TypeSqlAdapter_ByteArray: R_TypeSqlAdapter_Primitive("byte_array") {
+        override fun toSqlValue(value: Rt_Value) = value.asByteArray()
         override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = stmt.setBytes(idx, value.asByteArray())
         override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_ByteArrayValue(rs.getBytes(idx))
     }
@@ -210,6 +222,8 @@ object R_RowidType: R_PrimitiveType("rowid", SQLDataType.BIGINT) {
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Rowid
 
     private object R_TypeSqlAdapter_Rowid: R_TypeSqlAdapter_Primitive("rowid") {
+        override fun toSqlValue(value: Rt_Value) = value.asRowid()
+
         override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
             stmt.setLong(idx, value.asRowid())
         }
@@ -247,11 +261,16 @@ object R_JsonType: R_PrimitiveType("json", JSON_SQL_DATA_TYPE) {
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Json
 
     private object R_TypeSqlAdapter_Json: R_TypeSqlAdapter_Primitive("json") {
-        override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
+        override fun toSqlValue(value: Rt_Value): Any {
             val str = value.asJsonString()
             val obj = PGobject()
             obj.type = "json"
             obj.value = str
+            return obj
+        }
+
+        override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
+            val obj = toSqlValue(value)
             stmt.setObject(idx, obj)
         }
 
@@ -282,6 +301,7 @@ class R_ClassType(val rClass: R_Class): R_Type(rClass.name) {
 }
 
 private class R_TypeSqlAdapter_Class(private val type: R_ClassType): R_TypeSqlAdapter_Some() {
+    override fun toSqlValue(value: Rt_Value) = value.asObjectId()
     override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = stmt.setLong(idx, value.asObjectId())
     override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_ClassValue(type, rs.getLong(idx))
 
@@ -370,6 +390,7 @@ class R_EnumType(name: String, val attrs: List<R_EnumAttr>): R_Type(name) {
 }
 
 private class R_TypeSqlAdapter_Enum(private val type: R_EnumType): R_TypeSqlAdapter_Some() {
+    override fun toSqlValue(value: Rt_Value) = value.asEnum().value
     override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = stmt.setInt(idx, value.asEnum().value)
     override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_EnumValue(type, type.attrs[rs.getInt(idx)])
 

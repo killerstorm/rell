@@ -2,14 +2,13 @@ package net.postchain.rell
 
 import net.postchain.rell.sql.SqlInit
 import net.postchain.rell.sql.SqlUtils
-import net.postchain.rell.test.BaseContextTest
-import net.postchain.rell.test.RellCodeTester
-import net.postchain.rell.test.RellTestUtils
-import net.postchain.rell.test.SqlTestUtils
+import net.postchain.rell.test.*
 import org.junit.Test
 import kotlin.test.assertEquals
 
 class SqlInitTest: BaseContextTest(useSql = true) {
+    private var lastDefs = ""
+
     @Test fun testNoMeta() {
         chkTables()
         chkInit("class user { name; score: integer; }")
@@ -346,9 +345,13 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         insert("c0.user", "name", "101,'Alice'")
         chkData("c0.user(100,Bob)", "c0.user(101,Alice)")
 
-        chkInit("class user { name; score: integer; }")
+        chkInit("class user { name; score: integer; }", "rt_err:meta:attr:new_no_def_value:user:score")
+        chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
+        chkData("c0.user(100,Bob)", "c0.user(101,Alice)")
+
+        chkInit("class user { name; score: integer = -123; }")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer", "c0.user(name:text,rowid:int8,score:int8)")
-        chkData("c0.user(100,Bob,0)", "c0.user(101,Alice,0)")
+        chkData("c0.user(100,Bob,-123)", "c0.user(101,Alice,-123)")
     }
 
     @Test fun testAddClassAttrDefValue() {
@@ -402,7 +405,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         insert("c0.user", "name", "101,'Alice'")
         chkData("c0.user(100,Bob)", "c0.user(101,Alice)")
 
-        chkInit("class company { name; } class user { name; company; }", "rt_err:meta:attr:new_no_def_value:user:company:company")
+        chkInit("class company { name; } class user { name; company; }", "rt_err:meta:attr:new_no_def_value:user:company")
         chkAll("0,company,class,false 1,user,class,false", "0,name,sys:text 1,name,sys:text")
         chkColumns("c0.company(name:text,rowid:int8)", "c0.user(name:text,rowid:int8)")
         chkData("c0.user(100,Bob)", "c0.user(101,Alice)")
@@ -416,6 +419,26 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         chkInit("class company { name; } class user { name; company; }")
         chkAll("0,user,class,false 1,company,class,false", "0,company,class:0:company 0,name,sys:text 1,name,sys:text")
         chkColumns("c0.company(name:text,rowid:int8)", "c0.user(company:int8,name:text,rowid:int8)")
+        chkData()
+    }
+
+    @Test fun testAddClassAttrKey() {
+        chkInit("class user { name; }")
+        chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
+        chkData()
+
+        chkInit("class user { name; key id: integer; }", "rt_err:dbinit:index_diff:user:code:key:id,meta:attr:new_key:user:id")
+        chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
+        chkData()
+    }
+
+    @Test fun testAddClassAttrIndex() {
+        chkInit("class user { name; }")
+        chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
+        chkData()
+
+        chkInit("class user { name; index id: integer; }", "rt_err:dbinit:index_diff:user:code:index:id,meta:attr:new_index:user:id")
+        chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
         chkData()
     }
 
@@ -451,15 +474,120 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer", "c0.user(name:text,rowid:int8,score:int8)")
         chkData("c0.user(100,Bob,123)")
 
-        chkInit("class user { name; score: integer = 123; u: integer = 456; index u; }")
+        chkInit("class user { name; score: integer = 123; u: integer = 456; }")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer 0,u,sys:integer")
         chkColumns("c0.user(name:text,rowid:int8,score:int8,u:int8)")
         chkData("c0.user(100,Bob,123,456)")
 
-        chkInit("class user { name; score: integer = 123; u: integer = 456; index u; v: integer = 789; index v; }")
+        chkInit("class user { name; score: integer = 123; u: integer = 456; v: integer = 789; }")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer 0,u,sys:integer 0,v,sys:integer")
         chkColumns("c0.user(name:text,rowid:int8,score:int8,u:int8,v:int8)")
         chkData("c0.user(100,Bob,123,456,789)")
+    }
+
+    @Test fun testAddColumnToReferencedTable() {
+        chkInit("class company { name; } class user { name; company; }")
+        chkAll(
+                "0,company,class,false 1,user,class,false",
+                "0,name,sys:text 1,company,class:0:company 1,name,sys:text",
+                "c0.company(name:text,rowid:int8) c0.user(company:int8,name:text,rowid:int8)"
+        )
+
+        insert("c0.company", "name", "100,'Apple'")
+        insert("c0.user", "name,company", "200,'Steve',100")
+        chkData("c0.company(100,Apple)", "c0.user(200,100,Steve)")
+
+        chkInit("class company { name; address: text = '?'; } class user { name; company; }")
+        chkAll(
+                "0,company,class,false 1,user,class,false",
+                "0,address,sys:text 0,name,sys:text 1,company,class:0:company 1,name,sys:text",
+                "c0.company(address:text,name:text,rowid:int8) c0.user(company:int8,name:text,rowid:int8)"
+        )
+        chkData("c0.company(100,?,Apple)", "c0.user(200,100,Steve)")
+    }
+
+    @Test fun testAddColumnReference() {
+        chkInit("class company { name; } class user { name; }")
+        chkAll(
+                "0,company,class,false 1,user,class,false",
+                "0,name,sys:text 1,name,sys:text",
+                "c0.company(name:text,rowid:int8) c0.user(name:text,rowid:int8)"
+        )
+
+        insert("c0.company", "name", "100,'Apple'")
+        insert("c0.user", "name", "200,'Steve'")
+        chkData("c0.company(100,Apple)", "c0.user(200,Steve)")
+
+        chkInit("class company { name; } class user { name; company = company @ { 'Apple' }; }")
+        chkAll(
+                "0,company,class,false 1,user,class,false",
+                "0,name,sys:text 1,company,class:0:company 1,name,sys:text",
+                "c0.company(name:text,rowid:int8) c0.user(company:int8,name:text,rowid:int8)"
+        )
+        chkData("c0.company(100,Apple)", "c0.user(200,100,Steve)")
+
+        chk("company @* {} ( .name )", "list<text>[text[Apple]]")
+        chkOp("delete company @ { .name == 'Apple' };", "rt_err:sqlerr:0") // Foreign key constraint violation.
+        chkOp("delete user @ { .name == 'Steve' };", "OK")
+        chkOp("delete company @ { .name == 'Apple' };", "OK")
+    }
+
+    @Test fun testKeyChange() {
+        chkKeyIndexChange("key", "index")
+    }
+
+    @Test fun testIndexChange() {
+        chkKeyIndexChange("index", "key")
+    }
+
+    private fun chkKeyIndexChange(key: String, index: String) {
+        val attrs = "first_name: text; last_name: text; address: text; year_ob: integer;"
+        chkKeyIndex(attrs, "$key last_name, first_name;", "OK")
+
+        val errPref = "dbinit:index_diff:user"
+        val err1 = "rt_err:$errPref:database:$key:last_name,first_name"
+        val errBase = "$err1,$errPref"
+
+        chkKeyIndex(attrs, "$key first_name, last_name;", "$errBase:code:$key:first_name,last_name")
+        chkKeyIndex(attrs, "$key first_name;", "$errBase:code:$key:first_name")
+        chkKeyIndex(attrs, "$key last_name;", "$errBase:code:$key:last_name")
+        chkKeyIndex(attrs, "", "$err1")
+        chkKeyIndex(attrs, "$key last_name, address;", "$errBase:code:$key:last_name,address")
+        chkKeyIndex(attrs, "$key last_name, first_name, address;", "$errBase:code:$key:last_name,first_name,address")
+        chkKeyIndex(attrs, "$key address, last_name, first_name;", "$errBase:code:$key:address,last_name,first_name")
+        chkKeyIndex(attrs, "$key year_ob, last_name, first_name;", "$errBase:code:$key:year_ob,last_name,first_name")
+
+        chkKeyIndex(attrs, "$index last_name, first_name;", "$errBase:code:$index:last_name,first_name")
+        chkKeyIndex(attrs, "$key last_name, first_name; $key address;", "rt_err:$errPref:code:$key:address")
+        chkKeyIndex(attrs, "$key last_name, first_name; $key address, year_ob;", "rt_err:$errPref:code:$key:address,year_ob")
+        chkKeyIndex(attrs, "$key last_name, first_name; $key address, last_name;", "rt_err:$errPref:code:$key:address,last_name")
+        chkKeyIndex(attrs, "$key last_name, first_name; $index address;", "rt_err:$errPref:code:$index:address")
+        chkKeyIndex(attrs, "$key last_name, first_name; $index address, year_ob;", "rt_err:$errPref:code:$index:address,year_ob")
+        chkKeyIndex(attrs, "$key last_name, first_name; $index address, last_name;", "rt_err:$errPref:code:$index:address,last_name")
+    }
+
+    private fun chkKeyIndex(attrs: String, extra: String, expected: String) {
+        chkInit("class user { $attrs $extra }", expected)
+    }
+
+    @Test fun testDropAll() {
+        RellTestContext().use { ctx ->
+            val t = RellCodeTester(ctx)
+            t.def("class company { name; }")
+            t.def("class user { name; company; }")
+            t.insert("c0.company", "name", "100,'Apple'")
+            t.insert("c0.user", "name,company", "200,'Steve',100")
+            t.chkQuery("company @*{} ( .name )", "list<text>[text[Apple]]")
+            t.chkQuery("user @*{} ( .name )", "list<text>[text[Steve]]")
+        }
+
+        RellTestContext().use { ctx ->
+            val t = RellCodeTester(ctx)
+            t.def("class company { name; boss: user; }")
+            t.def("class user { name; }")
+            t.chkQuery("company @*{} ( .name )", "list<text>[]")
+            t.chkQuery("user @*{} ( .name )", "list<text>[]")
+        }
     }
 
     private fun chkInit(code: String, expected: String = "OK", expectedWarnings: String = "") {
@@ -484,6 +612,8 @@ class SqlInitTest: BaseContextTest(useSql = true) {
 
         assertEquals(expected, actual)
         assertEquals(expectedWarnings, actualWarnings)
+
+        lastDefs = code
     }
 
     private fun chkAll(metaCls: String, metaAttrs: String, cols: String? = null) {
@@ -554,6 +684,23 @@ class SqlInitTest: BaseContextTest(useSql = true) {
                 .flatMap { table -> actualMap.getValue(table).map { "$table($it)" } }
 
         assertEquals(expected.toList(), actual)
+    }
+
+    private fun chk(expr: String, expected: String) {
+        val t = createChkTester()
+        t.chkQuery(expr, expected)
+    }
+
+    private fun chkOp(code: String, expected: String) {
+        val t = createChkTester()
+        t.chkOp(code, expected)
+    }
+
+    private fun createChkTester(): RellCodeTester {
+        val t = RellCodeTester(tstCtx)
+        t.def(lastDefs)
+        t.dropTables = false
+        return t
     }
 
     private fun execSql(sql: String) {

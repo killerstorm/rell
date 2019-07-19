@@ -66,7 +66,8 @@ private fun main0(args: RellCliArgs) {
                 }
 
                 val modCtx = createModuleCtx(args, sqlCtx, sqlExec, null)
-                SqlInit.init(modCtx, SqlInit.LOG_NONE)
+                val logLevel = if (args.sqlInitLog) SqlInit.LOG_ALL else SqlInit.LOG_NONE
+                SqlInit.init(modCtx, logLevel)
             }
         }
 
@@ -260,6 +261,9 @@ private class RellCliArgs {
 
     @CommandLine.Option(names = ["--sqllog"], description = ["Enable SQL logging"])
     var sqlLog = false
+
+    @CommandLine.Option(names = ["--sqlinitlog"], description = ["Enable SQL tables structure update logging"])
+    var sqlInitLog = false
 
     @CommandLine.Option(names = ["--typecheck"], description = ["Run-time type checking (debug)"])
     var typeCheck = false

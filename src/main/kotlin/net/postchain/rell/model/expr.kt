@@ -3,6 +3,7 @@ package net.postchain.rell.model
 import net.postchain.rell.parser.C_ClassAttrRef
 import net.postchain.rell.parser.C_Utils
 import net.postchain.rell.runtime.*
+import net.postchain.rell.sql.SqlGen
 
 abstract class R_Expr(val type: R_Type) {
     protected abstract fun evaluate0(frame: Rt_CallFrame): Rt_Value
@@ -530,44 +531,47 @@ class R_CreateExpr(type: R_Type, val rClass: R_Class, val attrs: List<R_CreateEx
             return b.build()
         }
 
-        fun buildCopySql(
+        fun buildAddColumnsSql(
                 sqlCtx: Rt_SqlContext,
                 rClass: R_Class,
-                tempTable: String,
-                attrs: List<R_CreateExprAttr>
+                attrs: List<R_CreateExprAttr>,
+                existingRecs: Boolean
         ): ParameterizedSql {
+            val table = rClass.sqlMapping.table(sqlCtx)
+
             val b = SqlBuilder()
 
-            val table = rClass.sqlMapping.table(sqlCtx)
-            val rowid = rClass.sqlMapping.rowidColumn()
-            val attrMap = attrs.map { Pair(it.attr.name, it) }.toMap()
-
-            b.append("INSERT INTO ")
-            b.appendName(tempTable)
-
-            b.append("(")
-            b.appendName(rowid)
-            b.append(rClass.attributes.values, "") { attr ->
-                b.append(", ")
-                b.appendName(attr.sqlMapping)
+            for (attr in attrs) {
+                val columnSql = SqlGen.genAddColumnSql(table, attr.attr, existingRecs)
+                b.append(columnSql)
+                b.append(";\n")
             }
-            b.append(")")
 
-            b.append(" SELECT ")
+            if (existingRecs) {
+                b.append("UPDATE ")
+                b.appendName(table)
+                b.append(" SET ")
+                b.append(attrs, ", ") { attr ->
+                    b.appendName(attr.attr.sqlMapping)
+                    b.append(" = ")
+                    b.append(attr.expr())
+                }
+                b.append(";\n")
 
-            b.appendName(rowid)
-            b.append(rClass.attributes.values, "") { attr ->
-                b.append(", ")
-                val exprAttr = attrMap[attr.name]
-                if (exprAttr != null) {
-                    b.append(exprAttr.expr())
-                } else {
-                    b.appendName(attr.sqlMapping)
+                for (attr in attrs) {
+                    b.append("ALTER TABLE ")
+                    b.appendName(table)
+                    b.append(" ALTER COLUMN ")
+                    b.appendName(attr.attr.sqlMapping)
+                    b.append(" SET NOT NULL;\n")
                 }
             }
 
-            b.append(" FROM ")
-            b.appendName(table)
+            val constraintsSql = SqlGen.genAddAttrConstraintsSql(sqlCtx, table, attrs.map { it.attr })
+            if (!constraintsSql.isEmpty()) {
+                b.append(constraintsSql)
+                b.append(";\n")
+            }
 
             return b.build()
         }

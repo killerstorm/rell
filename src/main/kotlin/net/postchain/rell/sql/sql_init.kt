@@ -1,11 +1,11 @@
 package net.postchain.rell.sql
 
+import com.google.common.collect.Sets
 import mu.KLogger
 import mu.KLogging
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Messages
 import net.postchain.rell.runtime.Rt_ModuleContext
-import java.util.concurrent.atomic.AtomicLong
 
 private val ORD_TABLES = 0
 private val ORD_RECORDS = 1
@@ -91,7 +91,7 @@ private class SqlInitPlanner private constructor(private val modCtx: Rt_ModuleCo
         val metaData = processMeta(metaExists, tables)
         initCtx.checkErrors()
 
-        SqlClassIniter.processClasses(modCtx, initCtx, metaData)
+        SqlClassIniter.processClasses(modCtx, initCtx, metaData, tables)
         return !metaExists
     }
 
@@ -114,7 +114,8 @@ private class SqlInitPlanner private constructor(private val modCtx: Rt_ModuleCo
 private class SqlClassIniter private constructor(
         private val modCtx: Rt_ModuleContext,
         private val initCtx: SqlInitCtx,
-        private val metaData: Map<String, MetaClass>
+        private val metaData: Map<String, MetaClass>,
+        private val sqlTables: Map<String, SqlTable>
 ) {
     private val sqlCtx = modCtx.sqlCtx
     private var nextMetaClsId = 1 + (metaData.values.map { it.id }.max() ?: -1)
@@ -184,6 +185,17 @@ private class SqlClassIniter private constructor(
                     "Log annotation of '${cls.name}' was ${metaCls.log}, now $newLog")
         }
 
+        checkAttrTypes(cls, metaCls)
+        checkOldAttrs(cls, metaCls)
+        checkSqlIndexes(cls)
+
+        val newAttrs = cls.attributes.keys.filter { it !in metaCls.attrs }
+        if (!newAttrs.isEmpty()) {
+            processNewAttrs(cls, metaCls.id, newAttrs)
+        }
+    }
+
+    private fun checkAttrTypes(cls: R_Class, metaCls: MetaClass) {
         for (attr in cls.attributes.values) {
             val metaAttr = metaCls.attrs[attr.name]
             if (metaAttr != null) {
@@ -195,12 +207,9 @@ private class SqlClassIniter private constructor(
                 }
             }
         }
+    }
 
-        val newAttrs = cls.attributes.keys.filter { it !in metaCls.attrs }
-        if (!newAttrs.isEmpty()) {
-            processNewAttrs(cls, metaCls.id, newAttrs)
-        }
-
+    private fun checkOldAttrs(cls: R_Class, metaCls: MetaClass) {
         val oldAttrs = metaCls.attrs.keys.filter { it !in cls.attributes }.sorted()
         if (!oldAttrs.isEmpty()) {
             val codeList = oldAttrs.joinToString(",")
@@ -212,15 +221,51 @@ private class SqlClassIniter private constructor(
         }
     }
 
+    private fun checkSqlIndexes(cls: R_Class) {
+        val table = sqlTables.getValue(cls.sqlMapping.table(sqlCtx))
+        val sqlIndexes = table.indexes.filter { !(it.unique && it.cols == listOf(ROWID_COLUMN)) }
+
+        val codeIndexes = mutableListOf<SqlIndex>()
+        codeIndexes.addAll(cls.keys.map { SqlIndex("", true, it.attribs) })
+        codeIndexes.addAll(cls.indexes.map { SqlIndex("", false, it.attribs) })
+
+        compareSqlIndexes(cls, "database", sqlIndexes, "code", codeIndexes, true)
+        compareSqlIndexes(cls, "database", sqlIndexes, "code", codeIndexes, false)
+        compareSqlIndexes(cls, "code", codeIndexes, "database", sqlIndexes, true)
+        compareSqlIndexes(cls, "code", codeIndexes, "database", sqlIndexes, false)
+    }
+
+    private fun compareSqlIndexes(
+            cls: R_Class,
+            aPlace: String,
+            aIndexes: List<SqlIndex>,
+            bPlace: String,
+            bIndexes: List<SqlIndex>,
+            unique: Boolean
+    ) {
+        val a = aIndexes.filter { it.unique == unique }.map { it.cols }.toSet()
+        val b = bIndexes.filter { it.unique == unique }.map { it.cols }.toSet()
+        val indexType = if (unique) "key" else "index"
+
+        val aOnly = Sets.difference(a, b)
+        for (cols in aOnly) {
+            val colsShort = cols.joinToString(",")
+            initCtx.msgs.error("dbinit:index_diff:${cls.name}:$aPlace:$indexType:$colsShort",
+                    "Class ${cls.name}: $indexType $cols exists in $aPlace, but not in $bPlace")
+        }
+    }
+
     private fun processNewAttrs(cls: R_Class, metaClsId: Int, newAttrs: List<String>) {
         val attrsStr = newAttrs.joinToString()
 
         val recs = SqlUtils.recordsExist(modCtx.globalCtx.sqlExec, sqlCtx, cls)
-        if (!recs) {
-            val action = SqlStepAction_AddColumns_NoRecords(cls)
-            initCtx.step(ORD_TABLES, "Add table columns for '${cls.name}' (no records): $attrsStr", action)
-        } else {
-            processNewAttrsExistingRecords(cls, newAttrs)
+
+        val exprAttrs = makeCreateExprAttrs(cls, newAttrs, recs)
+        if (exprAttrs.size == newAttrs.size) {
+            val attrsStr = newAttrs.joinToString()
+            val action = SqlStepAction_AddColumns_AlterTable(cls, exprAttrs, recs)
+            val details = if (recs) "records exist" else "no records"
+            initCtx.step(ORD_RECORDS, "Add table columns for '${cls.name}' ($details): $attrsStr", action)
         }
 
         val rAttrs = newAttrs.map { cls.attributes.getValue(it) }
@@ -228,35 +273,42 @@ private class SqlClassIniter private constructor(
         initCtx.step(ORD_TABLES, "Add meta attributes for '${cls.name}': $attrsStr", SqlStepAction_ExecSql(metaSql))
     }
 
-    private fun processNewAttrsExistingRecords(cls: R_Class, newAttrs: List<String>) {
-        val exprAttrs = mutableListOf<R_CreateExprAttr>()
+    private fun makeCreateExprAttrs(cls: R_Class, newAttrs: List<String>, existingRecs: Boolean): List<R_CreateExprAttr> {
+        val res = mutableListOf<R_CreateExprAttr>()
+
+        val keys = cls.keys.flatMap { it.attribs }.toSet()
+        val indexes = cls.indexes.flatMap { it.attribs }.toSet()
+
         for (name in newAttrs) {
             val attr = cls.attributes.getValue(name)
-            if (attr.expr != null) {
-                exprAttrs.add(R_CreateExprAttr_Default(attr))
+            if (attr.expr != null || !existingRecs) {
+                res.add(R_CreateExprAttr_Default(attr))
             } else {
-                val type = attr.type
-                val value = type.defaultValue()
-                if (value != null) {
-                    val expr = R_ConstantExpr(value)
-                    exprAttrs.add(R_CreateExprAttr_Specified(attr, expr))
-                } else {
-                    initCtx.msgs.error("meta:attr:new_no_def_value:${cls.name}:$name:$type",
-                            "New attribute '${cls.name}.$name' has no default value")
-                }
+                initCtx.msgs.error("meta:attr:new_no_def_value:${cls.name}:$name",
+                        "New attribute '${cls.name}.$name' has no default value")
+            }
+
+            if (name in keys) {
+                initCtx.msgs.error("meta:attr:new_key:${cls.name}:$name",
+                        "New attribute '${cls.name}.$name' is a key, adding key attributes not supported")
+            }
+            if (name in indexes) {
+                initCtx.msgs.error("meta:attr:new_index:${cls.name}:$name",
+                        "New attribute '${cls.name}.$name' is an index, adding index attributes not supported")
             }
         }
 
-        if (exprAttrs.size == newAttrs.size) {
-            val attrsStr = newAttrs.joinToString()
-            val action = SqlStepAction_AddColumns_CopyRecords(cls, exprAttrs)
-            initCtx.step(ORD_RECORDS, "Add table columns for '${cls.name}' (copy existing records): $attrsStr", action)
-        }
+        return res
     }
 
     companion object {
-        fun processClasses(modCtx: Rt_ModuleContext, initCtx: SqlInitCtx, metaData: Map<String, MetaClass>) {
-            val obj = SqlClassIniter(modCtx, initCtx, metaData)
+        fun processClasses(
+                modCtx: Rt_ModuleContext,
+                initCtx: SqlInitCtx,
+                metaData: Map<String, MetaClass>,
+                sqlTables: Map<String, SqlTable>
+        ) {
+            val obj = SqlClassIniter(modCtx, initCtx, metaData, sqlTables)
             obj.processClasses()
         }
     }
@@ -303,54 +355,14 @@ private class SqlStepAction_InsertObject(private val rObject: R_Object): SqlStep
     }
 }
 
-private class SqlStepAction_AddColumns_NoRecords(private val cls: R_Class): SqlStepAction() {
-    override fun run(ctx: SqlStepCtx) {
-        addColumns(cls, ctx) {}
-    }
-
-    companion object {
-        private val TEMP_TIME = System.currentTimeMillis()
-        private val TEMP_COUNTER = AtomicLong(0)
-
-        private fun uniqueTag(): String {
-            val ctr = TEMP_COUNTER.getAndIncrement()
-            return "${TEMP_TIME}_$ctr"
-        }
-
-        fun addColumns(cls: R_Class, ctx: SqlStepCtx, copier: (String) -> Unit) {
-            val sqlCtx = ctx.modCtx.sqlCtx
-
-            val table = cls.sqlMapping.table(sqlCtx)
-
-            // Using a unique tag for the "new" name to avoid index/constraint name conflict: the new table will be
-            // called "c0.sys.temp.new_A.X" and then renamed to "c0.X", but indexes and constraints will not be
-            // renamed and will remain "c0.sys.temp.new_A.X", so running database initialization for the second time
-            // for the same class would cause a name conflict if not using a unique tag.
-            val newTable = cls.sqlMapping.table(sqlCtx) + "." + uniqueTag()
-
-            val oldTable = cls.sqlMapping.tempTable(sqlCtx, "old")
-
-            val createTableSql = SqlGen.genClass(sqlCtx, cls, newTable)
-            ctx.sqlExec.execute(createTableSql)
-
-            copier(newTable)
-
-            ctx.sqlExec.execute("""ALTER TABLE "$table" RENAME TO "$oldTable";""")
-            ctx.sqlExec.execute("""ALTER TABLE "$newTable" RENAME TO "$table";""")
-            ctx.sqlExec.execute("""DROP TABLE "$oldTable";""")
-        }
-    }
-}
-
-private class SqlStepAction_AddColumns_CopyRecords(
+private class SqlStepAction_AddColumns_AlterTable(
         private val cls: R_Class,
-        private val attrs: List<R_CreateExprAttr>
+        private val attrs: List<R_CreateExprAttr>,
+        private val existingRecs: Boolean
 ): SqlStepAction() {
     override fun run(ctx: SqlStepCtx) {
-        SqlStepAction_AddColumns_NoRecords.addColumns(cls, ctx) { newTable ->
-            val frame = ctx.modCtx.createRootFrame()
-            val copySql = R_CreateExpr.buildCopySql(ctx.modCtx.sqlCtx, cls, newTable, attrs)
-            copySql.execute(frame)
-        }
+        val sql = R_CreateExpr.buildAddColumnsSql(ctx.modCtx.sqlCtx, cls, attrs, existingRecs)
+        val frame = ctx.modCtx.createRootFrame()
+        sql.execute(frame)
     }
 }

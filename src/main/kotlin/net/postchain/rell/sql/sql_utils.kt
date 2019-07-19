@@ -1,12 +1,14 @@
 package net.postchain.rell.sql
 
+import com.google.common.collect.HashMultimap
 import net.postchain.rell.model.R_Class
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_SqlContext
 import java.sql.Connection
 
 class SqlCol(val type: String)
-class SqlTable(val cols: Map<String, SqlCol>)
+class SqlIndex(val name: String, val unique: Boolean, val cols: List<String>)
+class SqlTable(val cols: Map<String, SqlCol>, val indexes: List<SqlIndex>)
 
 object SqlUtils {
     fun dropAll(sqlExec: SqlExecutor, sysTables: Boolean) {
@@ -50,6 +52,7 @@ object SqlUtils {
         val tables = mutableMapOf<String, MutableMap<String, SqlCol>>()
 
         val schema = con.schema
+
         con.metaData.getColumns(null, schema, mapping.tableSqlFilter, null).use { rs ->
             while (rs.next()) {
                 val table = rs.getString(3)
@@ -67,7 +70,48 @@ object SqlUtils {
         for (table in tables.keys.sorted()) {
             val colsMap = tables.getValue(table)
             val cols = colsMap.keys.sorted().map { Pair(it, colsMap.getValue(it) ) }.toMap()
-            res[table] = SqlTable(cols)
+            val indexes = getTableIndexes(con, schema, table)
+            res[table] = SqlTable(cols, indexes)
+        }
+
+        return res
+    }
+
+    private fun getTableIndexes(con: Connection, schema: String, table: String): List<SqlIndex> {
+        class IndexRec(val unique: Boolean, val ordinal: Int, val column: String)
+        val map = HashMultimap.create<String, IndexRec>()
+
+        con.metaData.getIndexInfo(null, schema, table, false, false).use { rs ->
+            while (rs.next()) {
+                val indexTable = rs.getString(3)
+                check(indexTable == table) { "Wrong table: $indexTable != $table" }
+                val unique = !rs.getBoolean(4)
+                val name = rs.getString(6)
+                val ordinal = rs.getInt(8)
+                val column = rs.getString(9)
+                map.put(name, IndexRec(unique, ordinal, column))
+            }
+        }
+
+        val res = mutableListOf<SqlIndex>()
+
+        for (name in map.keySet().sorted()) {
+            val recs = map.get(name)
+            val sortedRecs = recs.toList().sortedBy { it.ordinal }
+            val n = sortedRecs.size
+
+            val ordinals = sortedRecs.map { it.ordinal }
+            val expOrdinals = (1 .. n).toList()
+            check(ordinals == expOrdinals) { "Table $table, index $name: ordinals = $ordinals" }
+
+            val cols = sortedRecs.map { it.column }
+            check(cols.toSet().size == cols.size) { "Table $table, index $name: duplicate column(s): $cols" }
+
+            val uniques = sortedRecs.map { it.unique }.toSet()
+            check(uniques.size == 1) { "Table $table, index $name: conflicting unique flag" }
+            val unique = uniques.iterator().next()
+
+            res.add(SqlIndex(name, unique, cols))
         }
 
         return res
