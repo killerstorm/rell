@@ -37,7 +37,8 @@ class ClassTest: BaseRellTest(false) {
 
     @Test fun testIndexWithoutAttr() {
         tstCtx.useSql = true
-        tst.defs = listOf("class foo { index name; }", "class bar { index name: text; }")
+        def("class foo { index name; }")
+        def("class bar { index name: text; }")
         chkOp("create foo(name = 'A');")
         chkOp("create bar(name = 'B');")
         chk("foo @ {} (.name)", "text[A]")
@@ -46,12 +47,10 @@ class ClassTest: BaseRellTest(false) {
 
     @Test fun testIndexWithAttr() {
         tstCtx.useSql = true
-        tst.defs = listOf(
-                "class A { name; index name; }",
-                "class B { index name; name: text; }",
-                "class C { name1: text; index name1, name2: text; }",
-                "class D { mutable name: text; index name; }"
-        )
+        def("class A { name; index name; }")
+        def("class B { index name; name: text; }")
+        def("class C { name1: text; index name1, name2: text; }")
+        def("class D { mutable name: text; index name; }")
 
         chkOp("create A(name = 'A');")
         chkOp("create B(name = 'B');")
@@ -91,7 +90,8 @@ class ClassTest: BaseRellTest(false) {
 
     @Test fun testKeyWithoutAttr() {
         tstCtx.useSql = true
-        tst.defs = listOf("class foo { key name; }", "class bar { key name: text; }")
+        def("class foo { key name; }")
+        def("class bar { key name: text; }")
         chkOp("create foo(name = 'A');")
         chkOp("create bar(name = 'B');")
         chk("foo @ {} (.name)", "text[A]")
@@ -100,12 +100,10 @@ class ClassTest: BaseRellTest(false) {
 
     @Test fun testKeyWithAttr() {
         tstCtx.useSql = true
-        tst.defs = listOf(
-                "class A { name; key name; }",
-                "class B { key name; name: text; }",
-                "class C { name1: text; key name1, name2: text; }",
-                "class D { mutable name: text; key name; }"
-        )
+        def("class A { name; key name; }")
+        def("class B { key name; name: text; }")
+        def("class C { name1: text; key name1, name2: text; }")
+        def("class D { mutable name: text; key name; }")
 
         chkOp("create A(name = 'A');")
         chkOp("create B(name = 'B');")
@@ -123,7 +121,7 @@ class ClassTest: BaseRellTest(false) {
 
     @Test fun testKeyIndexDupValue() {
         tstCtx.useSql = true
-        tst.defs = listOf("class foo { mutable k: text; mutable i: text; key k; index i; }")
+        def("class foo { mutable k: text; mutable i: text; key k; index i; }")
 
         chkOp("create foo(k = 'K1', i = 'I1');")
         chkOp("create foo(k = 'K1', i = 'I2');", "rt_err:sqlerr:0")
@@ -141,10 +139,8 @@ class ClassTest: BaseRellTest(false) {
 
     @Test fun testForwardReferenceInAttributeValue() {
         tstCtx.useSql = true
-        tst.defs = listOf(
-                "class foo { x: integer; k: integer = (bar@*{ .v > 0 }).size(); }",
-                "class bar { v: integer; }"
-        )
+        def("class foo { x: integer; k: integer = (bar@*{ .v > 0 }).size(); }")
+        def("class bar { v: integer; }")
 
         chkOp("""
             create foo(x = 1);
@@ -178,7 +174,8 @@ class ClassTest: BaseRellTest(false) {
 
     @Test fun testBugSqlCreateTableOrder() {
         // Bug: SQL tables must be created in topological order because of foreign key constraints.
-        tst.defs = listOf("class user { name: text; company; }", "class company { name: text; }")
+        def("class user { name: text; company; }")
+        def("class company { name: text; }")
         tstCtx.useSql = true
         chkOp("val c = create company('Amazon'); create user ('Bob', c);")
         chkData("user(2,Bob,1)", "company(1,Amazon)")
@@ -217,9 +214,88 @@ class ClassTest: BaseRellTest(false) {
         tst2.chkQuery("user @* {}( =user, =.name, =.company.name )", "[(user[2],James,Microsoft), (user[201],Alice,Google)]")
     }
 
+    @Test fun testRowidAttr() {
+        tstCtx.useSql = false
+
+        chkCompile("class foo { rowid: integer; }", "ct_err:unallowed_attr_name:rowid")
+        chkCompile("class foo { rowid: text; }", "ct_err:unallowed_attr_name:rowid")
+        chkCompile("class foo { index rowid: integer; }", "ct_err:unallowed_attr_name:rowid")
+        chkCompile("class foo { key rowid: integer; }", "ct_err:unallowed_attr_name:rowid")
+
+        chkCompile("object foo { rowid: integer; }", "ct_err:unallowed_attr_name:rowid")
+        chkCompile("object foo { rowid: text; }", "ct_err:unallowed_attr_name:rowid")
+
+        chkCompile("record foo { rowid: integer; }", "OK")
+        chkCompile("record foo { rowid: text; }", "OK")
+    }
+
+    @Test fun testClassRowidAttr() {
+        initClassRowidAttr()
+
+        chkEx("{ return _type_of((user @ { 'Bob' }).rowid); }", "text[rowid]")
+        chkEx("{ val u = user @ { 'Bob' }; return _type_of(u.rowid); }", "text[rowid]")
+
+        chkEx("{ val u = user @ { 'Bob' }; return u.rowid; }", "rowid[100]")
+        chkEx("{ val u = user @ { 'Alice' }; return u.rowid; }", "rowid[200]")
+        chkEx("{ val c = company @ { 'BobCorp' }; return c.boss.rowid; }", "rowid[100]")
+        chkEx("{ val c = company @ { 'AliceCorp' }; return c.boss.rowid; }", "rowid[200]")
+
+        chkEx("{ val u = user @? { 'Bob' }; return u.rowid; }", "ct_err:expr_mem_null:rowid")
+        chkEx("{ val u = user @? { 'Bob' }; return u?.rowid; }", "rowid[100]")
+        chkEx("{ val u = user @? { 'Alice' }; return u?.rowid; }", "rowid[200]")
+        chkEx("{ val u = user @? { 'Trudy' }; return u?.rowid; }", "null")
+
+        chkEx("{ val u = user @ { 'Bob' }; u.rowid = 999; return 0; }", "ct_err:expr_bad_dst:rowid")
+    }
+
+    @Test fun testClassRowidAttrAt() {
+        initClassRowidAttr()
+
+        chk("user @ { 'Bob' } ( _type_of(.rowid) )", "text[rowid]")
+        chk("company @ { 'BobCorp' } ( _type_of(.boss.rowid) )", "text[rowid]")
+
+        chk("user @ { 'Bob' } ( .rowid )", "rowid[100]")
+        chk("user @ { 'Alice' } ( .rowid )", "rowid[200]")
+        chk("user @ { 'Bob' } ( user.rowid )", "rowid[100]")
+        chk("user @ { 'Alice' } ( user.rowid )", "rowid[200]")
+        chk("company @ { 'BobCorp' } ( .boss.rowid )", "rowid[100]")
+        chk("company @ { 'AliceCorp' } ( .boss.rowid )", "rowid[200]")
+
+        chk("user @ { .rowid == to_rowid(100) } ( .name )", "text[Bob]")
+        chk("user @ { .rowid == to_rowid(200) } ( .name )", "text[Alice]")
+        chk("company @ { .boss.rowid == to_rowid(100) } ( .name )", "text[BobCorp]")
+        chk("company @ { .boss.rowid == to_rowid(200) } ( .name )", "text[AliceCorp]")
+
+        chk("user @ { 100 }", "ct_err:at_where_type:0:integer")
+        chkEx("{ val x = 100; return user @ { x }; }", "ct_err:at_where:var_noattrs:0:x:integer")
+        chkEx("{ val x = to_rowid(100); return user @ { x }; }", "user[100]")
+        chkEx("{ val rowid = to_rowid(100); return user @ { rowid }; }", "user[100]")
+        chkEx("{ val rowid = 100; return user @ { rowid }; }", "ct_err:at_where:var_noattrs:0:rowid:integer")
+        chkEx("{ val rowid = 'Alice'; return user @ { rowid }; }", "ct_err:at_where:var_noattrs:0:rowid:text")
+        chkEx("{ val x = 'Alice'; return user @ { x }; }", "user[200]")
+    }
+
+    private fun initClassRowidAttr() {
+        tstCtx.useSql = true
+        def("class user { name; }")
+        def("class company { name; boss: user; }")
+        def("function to_rowid(i: integer): rowid = rowid.from_gtv(i.to_gtv());")
+        insert("c0.user", "name", "100,'Bob'")
+        insert("c0.user", "name", "200,'Alice'")
+        insert("c0.company", "name,boss", "300,'BobCorp',100")
+        insert("c0.company", "name,boss", "400,'AliceCorp',200")
+    }
+
+    @Test fun testObjectRowidAttr() {
+        tstCtx.useSql = true
+        def("object state { mutable value: text = 'Unknown'; }")
+        chk("state.rowid", "ct_err:unknown_name:state.rowid")
+    }
+
     private fun createTablePrefixTester(chainId: Long, rowid: Long, company: String, user: String): RellCodeTester {
         val t = RellCodeTester(tstCtx)
-        t.defs = listOf("class user { name: text; company; }", "class company { name: text; }")
+        t.def("class user { name: text; company; }")
+        t.def("class company { name: text; }")
         t.chainId = chainId
         t.insert("c${chainId}.company", "name","${rowid},'$company'")
         t.insert("c${chainId}.user", "name,company","${rowid+1},'$user',${rowid}")

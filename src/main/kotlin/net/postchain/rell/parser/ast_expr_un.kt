@@ -95,8 +95,9 @@ class S_UnaryOp_IncDec(val inc: Boolean, val post: Boolean): S_UnaryOp(if (inc) 
             throw C_Error(opPos, "expr_incdec_type:$opCode:$dstType", "Bad operand type for '$opCode': $dstType")
         }
 
+        val resType = value.type()
         val srcExpr = R_ConstantExpr.makeInt(1)
-        val rExpr = dst.compileAssignExpr(startPos, srcExpr, op, post)
+        val rExpr = dst.compileAssignExpr(startPos, resType, srcExpr, op, post)
 
         val varFacts = C_ExprVarFacts.of(postFacts = value.varFacts().postFacts)
         return C_RValue.makeExpr(startPos, rExpr, varFacts)
@@ -120,7 +121,25 @@ object S_UnaryOp_NotNull: S_UnaryOp("!!") {
     }
 }
 
-class S_UnaryExpr(startPos: S_Pos, val op: S_Node<S_UnaryOp>, val expr: S_Expr): S_Expr(startPos) {
+object S_UnaryOp_IsNull: S_UnaryOp("??") {
+    override fun compile(ctx: C_ExprContext, startPos: S_Pos, opPos: S_Pos, expr: C_Expr): C_Expr {
+        val value = expr.value().asNullable()
+        val type = value.type()
+        if (type !is R_NullableType) {
+            throw errTypeMismatch(opPos, type)
+        }
+
+        val rSubExpr = value.toRExpr()
+        val rExpr = R_BinaryExpr(R_BooleanType, R_BinaryOp_Ne, rSubExpr, R_ConstantExpr.makeNull())
+
+        val preFacts = value.varFacts()
+        val varFacts = C_ExprVarFacts.forNullCheck(value, false).update(postFacts = preFacts.postFacts)
+
+        return C_RValue.makeExpr(startPos, rExpr, varFacts)
+    }
+}
+
+class S_UnaryExpr(startPos: S_Pos, val op: S_PosValue<S_UnaryOp>, val expr: S_Expr): S_Expr(startPos) {
     override fun compile(ctx: C_ExprContext): C_Expr {
         val cExpr = expr.compile(ctx)
         checkUnitType(cExpr.value().type())

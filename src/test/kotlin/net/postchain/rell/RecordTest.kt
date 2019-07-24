@@ -6,14 +6,14 @@ import kotlin.test.assertEquals
 
 class RecordTest: BaseRellTest(false) {
     @Test fun testGeneral() {
-        tst.defs = listOf("record foo { x: integer; s: text; }")
+        def("record foo { x: integer; s: text; }")
         chkEx("{ val r = foo(x = 123, s = 'Hello'); return r.x; }", "int[123]")
         chkEx("{ val r = foo(x = 123, s = 'Hello'); return r.s; }", "text[Hello]")
         chkEx("{ return foo(x = 123, s = 'Hello'); }", "foo[x=int[123],s=text[Hello]]")
     }
 
     @Test fun testConstruct() {
-        tst.defs = listOf("record foo { i: integer; s: text; q: text = 'Unknown'; t: (integer, text); }")
+        def("record foo { i: integer; s: text; q: text = 'Unknown'; t: (integer, text); }")
 
         chkEx("{ return foo(i = 123, s = 'Hello', q = 'Foo', t = (456, 'Bye')); }",
                 "foo[i=int[123],s=text[Hello],q=text[Foo],t=(int[456],text[Bye])]")
@@ -28,7 +28,7 @@ class RecordTest: BaseRellTest(false) {
     }
 
     @Test fun testConstructResolveAttrByName() {
-        tst.defs = listOf("record foo { i: integer; s: text; q: text = 'Unknown'; }")
+        def("record foo { i: integer; s: text; q: text = 'Unknown'; }")
 
         chkEx("{ val s = 'Hello'; val q = 'Bye'; return foo(i = 123, q, s); }",
                 "foo[i=int[123],s=text[Hello],q=text[Bye]]")
@@ -40,13 +40,13 @@ class RecordTest: BaseRellTest(false) {
     }
 
     @Test fun testConstructResolveAttrByType() {
-        tst.defs = listOf("record foo { i: integer; s: text; q: text = 'Unknown'; }")
+        def("record foo { i: integer; s: text; q: text = 'Unknown'; }")
         chkEx("{ val v = 123; return foo(v, s = 'Hello'); }", "foo[i=int[123],s=text[Hello],q=text[Unknown]]")
         chkEx("{ val v = 'Hello'; return foo(i = 123, v); }", "ct_err:attr_implic_multi:1:s,q")
     }
 
     @Test fun testConstructNoArgs() {
-        tst.defs = listOf("record foo { x: integer = 123; } record bar { f: foo; }")
+        def("record foo { x: integer = 123; } record bar { f: foo; }")
         chk("foo()", "foo[x=int[123]]")
         chk("bar(foo())", "bar[f=foo[x=int[123]]]")
     }
@@ -57,7 +57,7 @@ class RecordTest: BaseRellTest(false) {
     }
 
     @Test fun testMutableAttributes() {
-        tst.defs = listOf("record foo { mutable a: integer; b: integer; }")
+        def("record foo { mutable a: integer; b: integer; }")
         chkEx("{ val r = foo(a = 123, b = 456); return r; }", "foo[a=int[123],b=int[456]]")
         chkEx("{ val r = foo(a = 123, b = 456); r.a = 789; return r; }", "foo[a=int[789],b=int[456]]")
         chkEx("{ val r = foo(a = 123, b = 456); r.b = 789; return r; }", "ct_err:update_attr_not_mutable:b")
@@ -65,7 +65,7 @@ class RecordTest: BaseRellTest(false) {
     }
 
     @Test fun testAttributeTypeNullable() {
-        tst.defs = listOf("record foo { a: integer?; b: text?; }")
+        def("record foo { a: integer?; b: text?; }")
         chk("foo(a = 123, b = 'Hello')", "foo[a=int[123],b=text[Hello]]")
         chk("foo(a = null, b = 'Hello')", "foo[a=null,b=text[Hello]]")
         chk("foo(a = 123, b = null)", "foo[a=int[123],b=null]")
@@ -73,18 +73,18 @@ class RecordTest: BaseRellTest(false) {
     }
 
     @Test fun testAttributeTypeTuple() {
-        tst.defs = listOf("record foo { a: (integer, text); }")
+        def("record foo { a: (integer, text); }")
         chk("foo((123, 'Hello'))", "foo[a=(int[123],text[Hello])]")
     }
 
     @Test fun testAttributeTypeCollection() {
-        tst.defs = listOf("record foo { l: list<integer>; s: set<text>; m: map<integer, text>; }")
+        def("record foo { l: list<integer>; s: set<text>; m: map<integer, text>; }")
         chk("foo([123], set(['Hello']), [123:'Hello'])",
                 "foo[l=list<integer>[int[123]],s=set<text>[text[Hello]],m=map<integer,text>[int[123]=text[Hello]]]")
     }
 
     @Test fun testTypeCompatibility() {
-        tst.defs = listOf("record foo { x: integer; } record bar { x: integer; }")
+        def("record foo { x: integer; } record bar { x: integer; }")
         chkEx("{ val r: foo = foo(123); return r; }", "foo[x=int[123]]")
         chkEx("{ val r: bar = bar(123); return r; }", "bar[x=int[123]]")
         chkEx("{ val r: foo = bar(123); return r; }", "ct_err:stmt_var_type:r:foo:bar")
@@ -96,7 +96,8 @@ class RecordTest: BaseRellTest(false) {
     }
 
     @Test fun testAttributeOfNullableRecord() {
-        tst.defs = listOf("record foo { mutable x: integer; }", "function nop(x: foo?): foo? = x;")
+        def("record foo { mutable x: integer; }")
+        def("function nop(x: foo?): foo? = x;")
 
         chkEx("{ val r: foo? = nop(foo(123)); return r.x; }", "ct_err:expr_mem_null:x")
         chkEx("{ val r: foo? = nop(foo(123)); return r!!.x; }", "int[123]")
@@ -121,7 +122,7 @@ class RecordTest: BaseRellTest(false) {
     }
 
     @Test fun testAttributeOfNullableRecord2() {
-        tst.defs = listOf("record foo { b: bar?; } record bar { mutable x: integer; }")
+        def("record foo { b: bar?; } record bar { mutable x: integer; }")
         chkEx("{ val r: foo? = _nullable(foo(bar(123))); return r?.b?.x; }", "int[123]")
         chkEx("{ val r: foo? = _nullable(foo(null)); return r?.b?.x; }", "null")
         chkEx("{ val r: foo? = null; return r?.b?.x; }", "null")
@@ -137,7 +138,7 @@ class RecordTest: BaseRellTest(false) {
 
     @Test fun testConstructUnderAt() {
         tstCtx.useSql = true
-        tst.defs = listOf("class user { name; value: integer; } record foo { x: integer; }")
+        def("class user { name; value: integer; } record foo { x: integer; }")
         chkOp("create user('Bob', 123); create user('Alice', 456);")
         chk("user @ { .value == foo(x = 123).x }(.name)", "text[Bob]")
         chk("user @ { .value == foo(x = 456).x }(.name)", "text[Alice]")
@@ -145,72 +146,74 @@ class RecordTest: BaseRellTest(false) {
 
     @Test fun testAccessUnderAt() {
         tstCtx.useSql = true
-        tst.defs = listOf("class user { name; value: integer; } record foo { x: integer; }")
+        def("class user { name; value: integer; } record foo { x: integer; }")
         chkOp("create user('Bob', 123); create user('Alice', 456);")
         chkEx("{ var r = foo(123); return user @ { .value == r.x }(.name); }", "text[Bob]")
         chkEx("{ var r = foo(456); return user @ { .value == r.x }(.name); }", "text[Alice]")
     }
 
     @Test fun testRecordFlags() {
-        chkFlags("record foo { x: integer; }", "foo[hum,com]")
-        chkFlags("record foo { mutable x: integer; }", "foo[mut,hum,com]")
-        chkFlags("record foo { x: integer; next: foo?; }", "foo[hum,com,cyc,inf]")
-        chkFlags("record foo { mutable x: integer; next: foo?; }", "foo[mut,hum,com,cyc,inf]")
+        chkFlags("record foo { x: integer; }", "foo[gtv]")
+        chkFlags("record foo { mutable x: integer; }", "foo[mut,gtv]")
+        chkFlags("record foo { x: integer; next: foo?; }", "foo[gtv,cyc,inf]")
+        chkFlags("record foo { mutable x: integer; next: foo?; }", "foo[mut,gtv,cyc,inf]")
+        chkFlags("record foo { x: virtual<list<integer>>; }", "foo[from_gtv]")
 
-        chkFlags("record foo { x: integer; }", "foo[hum,com]")
-        chkFlags("record foo { x: integer?; }", "foo[hum,com]")
-        chkFlags("record foo { x: text; }", "foo[hum,com]")
-        chkFlags("record foo { x: byte_array; }", "foo[hum,com]")
-        chkFlags("record foo { x: boolean; }", "foo[hum,com]")
-        chkFlags("record foo { x: (x: integer, text); }", "foo[com]")
+        chkFlags("record foo { x: integer; }", "foo[gtv]")
+        chkFlags("record foo { x: integer?; }", "foo[gtv]")
+        chkFlags("record foo { x: text; }", "foo[gtv]")
+        chkFlags("record foo { x: byte_array; }", "foo[gtv]")
+        chkFlags("record foo { x: boolean; }", "foo[gtv]")
+        chkFlags("record foo { x: (x: integer, text); }", "foo[gtv]")
         chkFlags("record foo { x: range; }", "foo[]")
-        chkFlags("class user { name; } record foo { x: user; }", "foo[hum,com]")
-        chkFlags("record foo { x: list<integer>; }", "foo[mut,hum,com]")
-        chkFlags("record foo { x: set<integer>; }", "foo[mut,hum,com]")
-        chkFlags("record foo { x: map<integer,text>; }", "foo[mut]")
+        chkFlags("class user { name; } record foo { x: user; }", "foo[gtv]")
+        chkFlags("record foo { x: list<integer>; }", "foo[mut,gtv]")
+        chkFlags("record foo { x: set<integer>; }", "foo[mut,gtv]")
+        chkFlags("record foo { x: map<integer,text>; }", "foo[mut,gtv]")
 
-        chkFlags("record bar { x: integer; } record foo { y: bar; }", "bar[hum,com],foo[hum,com]")
-        chkFlags("record bar { x: integer; } record foo { mutable y: bar; }", "bar[hum,com],foo[mut,hum,com]")
-        chkFlags("record bar { mutable x: integer; } record foo { y: bar; }", "bar[mut,hum,com],foo[mut,hum,com]")
-        chkFlags("record bar { mutable x: integer?; } record foo { y: bar; }", "bar[mut,hum,com],foo[mut,hum,com]")
+        chkFlags("record bar { x: integer; } record foo { y: bar; }", "bar[gtv],foo[gtv]")
+        chkFlags("record bar { x: integer; } record foo { mutable y: bar; }", "bar[gtv],foo[mut,gtv]")
+        chkFlags("record bar { mutable x: integer; } record foo { y: bar; }", "bar[mut,gtv],foo[mut,gtv]")
+        chkFlags("record bar { mutable x: integer?; } record foo { y: bar; }", "bar[mut,gtv],foo[mut,gtv]")
 
-        chkFlags("record bar { x: foo?; } record foo { y: bar?; }", "bar[hum,com,cyc,inf],foo[hum,com,cyc,inf]")
-        chkFlags("record bar { mutable x: foo?; } record foo { y: bar?; }", "bar[mut,hum,com,cyc,inf],foo[mut,hum,com,cyc,inf]")
-        chkFlags("record bar { x: foo?; } record foo { mutable y: bar?; }", "bar[mut,hum,com,cyc,inf],foo[mut,hum,com,cyc,inf]")
+        chkFlags("record bar { x: foo?; } record foo { y: bar?; }", "bar[gtv,cyc,inf],foo[gtv,cyc,inf]")
+        chkFlags("record bar { mutable x: foo?; } record foo { y: bar?; }", "bar[mut,gtv,cyc,inf],foo[mut,gtv,cyc,inf]")
+        chkFlags("record bar { x: foo?; } record foo { mutable y: bar?; }", "bar[mut,gtv,cyc,inf],foo[mut,gtv,cyc,inf]")
 
-        chkFlags("record bar { x: bar?; } record foo { y: bar?; }", "bar[hum,com,cyc,inf],foo[hum,com,inf]")
-        chkFlags("record bar { mutable x: bar?; } record foo { y: bar?; }", "bar[mut,hum,com,cyc,inf],foo[mut,hum,com,inf]")
-        chkFlags("record bar { x: bar?; } record foo { mutable y: bar?; }", "bar[hum,com,cyc,inf],foo[mut,hum,com,inf]")
+        chkFlags("record bar { x: bar?; } record foo { y: bar?; }", "bar[gtv,cyc,inf],foo[gtv,inf]")
+        chkFlags("record bar { mutable x: bar?; } record foo { y: bar?; }", "bar[mut,gtv,cyc,inf],foo[mut,gtv,inf]")
+        chkFlags("record bar { x: bar?; } record foo { mutable y: bar?; }", "bar[gtv,cyc,inf],foo[mut,gtv,inf]")
 
         chkFlags("record bar { x: foo?; } record foo { y: (q: boolean, list<map<text,bar>>); }",
-                "bar[mut,com,cyc,inf],foo[mut,com,cyc,inf]")
-        chkFlags("record bar { x: integer; } record foo { y: (q: boolean, list<map<text,bar>>); }", "bar[hum,com],foo[mut,com]")
+                "bar[mut,gtv,cyc,inf],foo[mut,gtv,cyc,inf]")
+        chkFlags("record bar { x: integer; } record foo { y: (q: boolean, list<map<text,bar>>); }",
+                "bar[gtv],foo[mut,gtv]")
     }
 
-    @Test fun testRecordFlagsGtx() {
-        chkFlags("record foo { x: integer; }", "foo[hum,com]")
-        chkFlags("record foo { x: (a: text, b: integer); }", "foo[hum,com]")
-        chkFlags("record foo { x: (a: integer, b: text); }", "foo[hum,com]")
-        chkFlags("record foo { x: (x: text, integer); }", "foo[com]")
+    @Test fun testRecordFlagsGtv() {
+        chkFlags("record foo { x: integer; }", "foo[gtv]")
+        chkFlags("record foo { x: (a: text, b: integer); }", "foo[gtv]")
+        chkFlags("record foo { x: (a: integer, b: text); }", "foo[gtv]")
+        chkFlags("record foo { x: (x: text, integer); }", "foo[gtv]")
 
-        chkFlags("record foo { x: map<text,integer>; }", "foo[mut,hum,com]")
-        chkFlags("record foo { x: map<integer,text>; }", "foo[mut]")
+        chkFlags("record foo { x: map<text,integer>; }", "foo[mut,gtv]")
+        chkFlags("record foo { x: map<integer,text>; }", "foo[mut,gtv]")
 
-        chkFlags("record foo { x: list<set<(a: text, b: integer)>>; }", "foo[mut,hum,com]")
-        chkFlags("record foo { x: list<set<(q: text, integer)>>; }", "foo[mut,com]")
-        chkFlags("record foo { x: list<map<text,integer>>; }", "foo[mut,hum,com]")
-        chkFlags("record foo { x: list<map<integer,text>>; }", "foo[mut]")
+        chkFlags("record foo { x: list<set<(a: text, b: integer)>>; }", "foo[mut,gtv]")
+        chkFlags("record foo { x: list<set<(q: text, integer)>>; }", "foo[mut,gtv]")
+        chkFlags("record foo { x: list<map<text,integer>>; }", "foo[mut,gtv]")
+        chkFlags("record foo { x: list<map<integer,text>>; }", "foo[mut,gtv]")
 
-        chkFlags("record foo { x: (a:text,b:integer); } record bar { y: map<integer,text>; }", "bar[mut],foo[hum,com]")
-        chkFlags("record foo { x: (a:text,b:integer); p: bar; } record bar { y: map<integer,text>; }", "bar[mut],foo[mut]")
-        chkFlags("record foo { x: (a:text,b:integer); } record bar { y: map<integer,text>; q: foo; }", "bar[mut],foo[hum,com]")
-        chkFlags("record foo { x: (a:text,b:integer); p: bar; } record bar { y: map<integer,text>; q: foo; }",
+        chkFlags("record foo { x: (a:text,b:integer); } record bar { mutable y: range; }", "bar[mut],foo[gtv]")
+        chkFlags("record foo { x: (a:text,b:integer); p: bar; } record bar { mutable y: range; }", "bar[mut],foo[mut]")
+        chkFlags("record foo { x: (a:text,b:integer); } record bar { mutable y: range; q: foo; }", "bar[mut],foo[gtv]")
+        chkFlags("record foo { x: (a:text,b:integer); p: bar; } record bar { mutable y: range; q: foo; }",
                 "bar[mut,cyc,inf],foo[mut,cyc,inf]")
 
-        chkFlags("record foo { x: (t:text,integer); } record bar { y: map<integer,text>; }", "bar[mut],foo[com]")
-        chkFlags("record foo { x: (t:text,integer); p: bar; } record bar { y: map<integer,text>; }", "bar[mut],foo[mut]")
-        chkFlags("record foo { x: (t:text,integer); } record bar { y: map<integer,text>; q: foo; }", "bar[mut],foo[com]")
-        chkFlags("record foo { x: (t:text,integer); p: bar; } record bar { y: map<integer,text>; q: foo; }",
+        chkFlags("record foo { x: (t:text,integer); } record bar { mutable y: range; }", "bar[mut],foo[gtv]")
+        chkFlags("record foo { x: (t:text,integer); p: bar; } record bar { mutable y: range; }", "bar[mut],foo[mut]")
+        chkFlags("record foo { x: (t:text,integer); } record bar { mutable y: range; q: foo; }", "bar[mut],foo[gtv]")
+        chkFlags("record foo { x: (t:text,integer); p: bar; } record bar { mutable y: range; q: foo; }",
                 "bar[mut,cyc,inf],foo[mut,cyc,inf]")
     }
 
@@ -220,8 +223,13 @@ class RecordTest: BaseRellTest(false) {
             for (rec in module.records.values.sortedBy { it.name }) {
                 val flags = mutableListOf<String>()
                 if (rec.flags.typeFlags.mutable) flags.add("mut")
-                if (rec.flags.typeFlags.gtxHuman.compatible) flags.add("hum")
-                if (rec.flags.typeFlags.gtxCompact.compatible) flags.add("com")
+
+                val gtv = rec.flags.typeFlags.gtv
+                if (gtv.fromGtv && gtv.toGtv) flags.add("gtv") else {
+                    if (gtv.fromGtv) flags.add("from_gtv")
+                    if (gtv.toGtv) flags.add("to_gtv")
+                }
+
                 if (rec.flags.cyclic) flags.add("cyc")
                 if (rec.flags.infinite) flags.add("inf")
                 lst.add("${rec.name}[${flags.joinToString(",")}]")
@@ -232,7 +240,7 @@ class RecordTest: BaseRellTest(false) {
     }
 
     @Test fun testMutableRecordAsMapSetKey() {
-        tst.defs = listOf("record foo { mutable x: integer; }")
+        def("record foo { mutable x: integer; }")
         chk("set<foo>()", "ct_err:expr_set_type:foo")
         chk("map<foo,text>()", "ct_err:expr_map_keytype:foo")
         chk("map<text,foo>()", "map<text,foo>[]")
@@ -243,7 +251,7 @@ class RecordTest: BaseRellTest(false) {
     }
 
     @Test fun testRecordAsMapSetKeySimple() {
-        tst.defs = listOf("record foo { x: integer; }")
+        def("record foo { x: integer; }")
 
         chkEx("{ var s = set([foo(123)]); return s; }", "set<foo>[foo[x=int[123]]]")
         chkEx("{ var s = set([foo(123)]); return s.contains(foo(123)); }", "boolean[true]")
@@ -255,7 +263,7 @@ class RecordTest: BaseRellTest(false) {
     }
 
     @Test fun testRecordAsMapSetKeyComplex() {
-        tst.defs = listOf("record foo { x: text; b: bar; } record bar { p: integer; q: integer; }")
+        def("record foo { x: text; b: bar; } record bar { p: integer; q: integer; }")
 
         chkEx("{ var s = set([foo('ABC', bar(p=123,q=456))]); return s; }",
                 "set<foo>[foo[x=text[ABC],b=bar[p=int[123],q=int[456]]]]")
@@ -277,7 +285,7 @@ class RecordTest: BaseRellTest(false) {
     }
 
     @Test fun testEqSimple() {
-        tst.defs = listOf("record foo { x: integer; y: text; } record bar { x: integer; y: text; }")
+        def("record foo { x: integer; y: text; } record bar { x: integer; y: text; }")
 
         chkEx("{ val f = foo(123, 'Hello'); return f == foo(123, 'Hello'); }", "boolean[true]")
         chkEx("{ val f = foo(123, 'Hello'); return f != foo(123, 'Hello'); }", "boolean[false]")
@@ -291,7 +299,7 @@ class RecordTest: BaseRellTest(false) {
     }
 
     @Test fun testEqComplex() {
-        tst.defs = listOf("record foo { x: integer; b: list<bar>; } record bar { s: list<text>; q: boolean; }")
+        def("record foo { x: integer; b: list<bar>; } record bar { s: list<text>; q: boolean; }")
 
         chkEx("{ val f = foo(123, [bar(['Hello'], true)]); return f == foo(123, [bar(['Hello'], true)]); }",
                 "boolean[true]")
@@ -308,7 +316,7 @@ class RecordTest: BaseRellTest(false) {
     }
 
     @Test fun testEqTree() {
-        tst.defs = listOf("record node { left: node?; right: node?; value: integer; }")
+        def("record node { left: node?; right: node?; value: integer; }")
 
         chkEx("""{
             val p = node(
@@ -340,7 +348,7 @@ class RecordTest: BaseRellTest(false) {
     }
 
     @Test fun testRefEq() {
-        tst.defs = listOf("record foo { a: integer; b: text; }")
+        def("record foo { a: integer; b: text; }")
 
         chkEx("{ val x = foo(123, 'Hello'); val y = foo(123, 'Hello'); return x == y; }", "boolean[true]")
         chkEx("{ val x = foo(123, 'Hello'); val y = foo(123, 'Hello'); return x != y; }", "boolean[false]")
@@ -351,12 +359,12 @@ class RecordTest: BaseRellTest(false) {
     }
 
     @Test fun testToString() {
-        tst.defs = listOf("record foo { a: integer; b: bar; } record bar { s: text; }")
+        def("record foo { a: integer; b: bar; } record bar { s: text; }")
         chk("'' + foo(123, bar('Hello'))", "text[foo{a=123,b=bar{s=Hello}}]")
     }
 
     @Test fun testFunctionNamedArgument() {
-        tst.defs = listOf("function foo(x: integer): integer = x * x;")
+        def("function foo(x: integer): integer = x * x;")
         chk("foo(x = 123)", "ct_err:expr_call_namedarg:x")
     }
 

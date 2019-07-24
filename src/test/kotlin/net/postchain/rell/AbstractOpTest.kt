@@ -23,145 +23,102 @@ abstract class AbstractOpTest: BaseResourcefulTest() {
     }
 
     @Test fun testCmpInteger() {
-        chkOpBool("==", vInt(123), vInt(123), true)
-        chkOpBool("==", vInt(123), vInt(456), false)
-        chkOpBool("==", vInt(123), vInt(122), false)
-        chkOpBool("==", vInt(123), vInt(124), false)
+        chkCmpCommon(vInt(55), vInt(122), vInt(123), vInt(124), vInt(456))
+    }
 
-        chkOpBool("!=", vInt(123), vInt(123), false)
-        chkOpBool("!=", vInt(123), vInt(456), true)
-        chkOpBool("!=", vInt(123), vInt(122), true)
-        chkOpBool("!=", vInt(123), vInt(124), true)
-
-        chkOpBool("<", vInt(123), vInt(55), false)
-        chkOpBool("<", vInt(123), vInt(123), false)
-        chkOpBool("<", vInt(123), vInt(124), true)
-        chkOpBool("<", vInt(123), vInt(456), true)
-
-        chkOpBool("<=", vInt(123), vInt(55), false)
-        chkOpBool("<=", vInt(123), vInt(123), true)
-        chkOpBool("<=", vInt(123), vInt(124), true)
-        chkOpBool("<=", vInt(123), vInt(456), true)
-
-        chkOpBool(">", vInt(123), vInt(55), true)
-        chkOpBool(">", vInt(123), vInt(122), true)
-        chkOpBool(">", vInt(123), vInt(123), false)
-        chkOpBool(">", vInt(123), vInt(456), false)
-
-        chkOpBool(">=", vInt(123), vInt(55), true)
-        chkOpBool(">=", vInt(123), vInt(122), true)
-        chkOpBool(">=", vInt(123), vInt(123), true)
-        chkOpBool(">=", vInt(123), vInt(456), false)
+    @Test fun testCmpRowid() {
+        chkCmpCommon(vRowid(55), vRowid(122), vRowid(123), vRowid(124), vRowid(456))
     }
 
     @Test fun testCmpText() {
-        chkOpBool("==", vText("Hello"), vText("Hello"), true)
-        chkOpBool("==", vText("Hello"), vText("HELLO"), false)
-        chkOpBool("==", vText("Hello"), vText("hello"), false)
-        chkOpBool("==", vText("Hello"), vText("World"), false)
-
-        chkOpBool("!=", vText("Hello"), vText("Hello"), false)
-        chkOpBool("!=", vText("Hello"), vText("HELLO"), true)
-        chkOpBool("!=", vText("Hello"), vText("hello"), true)
-        chkOpBool("!=", vText("Hello"), vText("World"), true)
-
-        chkOpBool("<", vText("Hello"), vText("hello"), true)
-        chkOpBool("<", vText("Hello"), vText("HELLO"), false)
-        chkOpBool("<", vText("Hello"), vText("Apple"), false)
-        chkOpBool("<", vText("Hello"), vText("Hello"), false)
-        chkOpBool("<", vText("Hello"), vText("Hellp"), true)
-        chkOpBool("<", vText("Hello"), vText("World"), true)
-
-        chkOpBool("<=", vText("Hello"), vText("hello"), true)
-        chkOpBool("<=", vText("Hello"), vText("HELLO"), false)
-        chkOpBool("<=", vText("Hello"), vText("Apple"), false)
-        chkOpBool("<=", vText("Hello"), vText("Hello"), true)
-        chkOpBool("<=", vText("Hello"), vText("Hellp"), true)
-        chkOpBool("<=", vText("Hello"), vText("World"), true)
-
-        chkOpBool(">", vText("Hello"), vText("hello"), false)
-        chkOpBool(">", vText("Hello"), vText("HELLO"), true)
-        chkOpBool(">", vText("Hello"), vText("Apple"), true)
-        chkOpBool(">", vText("Hello"), vText("Helln"), true)
-        chkOpBool(">", vText("Hello"), vText("Hello"), false)
-        chkOpBool(">", vText("Hello"), vText("Hellp"), false)
-        chkOpBool(">", vText("Hello"), vText("World"), false)
-
-        chkOpBool(">=", vText("Hello"), vText("hello"), false)
-        chkOpBool(">=", vText("Hello"), vText("HELLO"), true)
-        chkOpBool(">=", vText("Hello"), vText("Apple"), true)
-        chkOpBool(">=", vText("Hello"), vText("Helln"), true)
-        chkOpBool(">=", vText("Hello"), vText("Hello"), true)
-        chkOpBool(">=", vText("Hello"), vText("Hellp"), false)
-        chkOpBool(">=", vText("Hello"), vText("World"), false)
+        chkCmpCommon(vText("Apple"), vText("Helln"), vText("Hello"), vText("Hellp"), vText("World"))
+        chkCmpCommon(vText("HELLO"), vText("Hello"))
+        chkCmpCommon(vText("Hello"), vText("hello"))
     }
 
     @Test fun testCmpByteArray() {
-        chkOpBool("==", vBytes("0123abcd"), vBytes("0123abcd"), true)
-        chkOpBool("==", vBytes("0123"), vBytes("abcd"), false)
-
-        chkOpBool("!=", vBytes("0123abcd"), vBytes("0123abcd"), false)
-        chkOpBool("!=", vBytes("0123"), vBytes("abcd"), true)
-
-        chkOpBool("<", vBytes("0123"), vBytes("abcd"), true)
-        chkOpBool("<", vBytes("0123"), vBytes("0124"), true)
-        chkOpBool("<", vBytes("0123"), vBytes("0123"), false)
-        chkOpBool("<", vBytes("0123"), vBytes("01"), false)
-        chkOpBool("<", vBytes("0123"), vBytes("02"), true)
-        chkOpBool("<", vBytes("00"), vBytes("ff"), true)
-        chkOpBool("<", vBytes("ff"), vBytes("00"), false)
-        chkOpBool("<", vBytes(""), vBytes("0123abcd"), true)
-        chkOpBool("<", vBytes("0123abcd"), vBytes(""), false)
-
-        chkOpBool("<=", vBytes("0123"), vBytes("abcd"), true)
-        chkOpBool("<=", vBytes("0123"), vBytes("0124"), true)
-        chkOpBool("<=", vBytes("0123"), vBytes("0123"), true)
-        chkOpBool("<=", vBytes("0123"), vBytes("01"), false)
-        chkOpBool("<=", vBytes("0123"), vBytes("02"), true)
-
-        chkOpBool(">", vBytes("0123"), vBytes("abcd"), false)
-        chkOpBool(">", vBytes("0123"), vBytes("0122"), true)
-        chkOpBool(">", vBytes("0123"), vBytes("0123"), false)
-        chkOpBool(">", vBytes("0123"), vBytes("00ff"), true)
-        chkOpBool(">", vBytes("0123"), vBytes("01"), true)
-        chkOpBool(">", vBytes("0123"), vBytes("02"), false)
-        chkOpBool(">", vBytes("00"), vBytes("ff"), false)
-        chkOpBool(">", vBytes("ff"), vBytes("00"), true)
-        chkOpBool(">", vBytes(""), vBytes("0123abcd"), false)
-        chkOpBool(">", vBytes("0123abcd"), vBytes(""), true)
-
-        chkOpBool(">=", vBytes("0123"), vBytes("abcd"), false)
-        chkOpBool(">=", vBytes("0123"), vBytes("0122"), true)
-        chkOpBool(">=", vBytes("0123"), vBytes("0123"), true)
-        chkOpBool(">=", vBytes("0123"), vBytes("00ff"), true)
-        chkOpBool(">=", vBytes("0123"), vBytes("01"), true)
-        chkOpBool(">=", vBytes("0123"), vBytes("02"), false)
+        chkCmpCommon(vBytes("0000"), vBytes("0122"), vBytes("0123"), vBytes("0124"), vBytes("abcd"))
+        chkCmpCommon(vBytes("beef"), vBytes("cafd"), vBytes("cafe"), vBytes("caff"), vBytes("dead"))
+        chkCmpCommon(vBytes("0123"), vBytes("abcd"))
+        chkCmpCommon(vBytes("0123"), vBytes("0123abcd"))
+        chkCmpCommon(vBytes("0123"), vBytes("02"))
+        chkCmpCommon(vBytes("01"), vBytes("0123"))
+        chkCmpCommon(vBytes("00"), vBytes("ff"))
+        chkCmpCommon(vBytes(""), vBytes("0123abcd"))
     }
 
     @Test fun testCmpObject() {
-        chkOpBool("==", vObj("user", 1000), vObj("user", 1000), true)
-        chkOpBool("==", vObj("user", 1000), vObj("user", 2000), false)
-        chkOpBool("==", vObj("user", 2000), vObj("user", 1000), false)
+        chkCmpCommon(vObj("user", 1000), vObj("user", 2000))
+    }
 
-        chkOpBool("!=", vObj("user", 1000), vObj("user", 1000), false)
-        chkOpBool("!=", vObj("user", 1000), vObj("user", 2000), true)
-        chkOpBool("!=", vObj("user", 2000), vObj("user", 1000), true)
+    private fun chkCmpCommon(vLow: TstVal, vMinusOne: TstVal, v: TstVal, vPlusOne: TstVal, vHigh: TstVal) {
+        chkOpBool("==", v, v, true)
+        chkOpBool("==", v, vLow, false)
+        chkOpBool("==", v, vHigh, false)
+        chkOpBool("==", v, vMinusOne, false)
+        chkOpBool("==", v, vPlusOne, false)
 
-        chkOpBool("<", vObj("user", 1000), vObj("user", 1000), false)
-        chkOpBool("<", vObj("user", 1000), vObj("user", 2000), true)
-        chkOpBool("<", vObj("user", 2000), vObj("user", 1000), false)
+        chkOpBool("!=", v, v, false)
+        chkOpBool("!=", v, vLow, true)
+        chkOpBool("!=", v, vHigh, true)
+        chkOpBool("!=", v, vMinusOne, true)
+        chkOpBool("!=", v, vPlusOne, true)
 
-        chkOpBool("<=", vObj("user", 1000), vObj("user", 1000), true)
-        chkOpBool("<=", vObj("user", 1000), vObj("user", 2000), true)
-        chkOpBool("<=", vObj("user", 2000), vObj("user", 1000), false)
+        chkOpBool("<", v, vLow, false)
+        chkOpBool("<", v, vMinusOne, false)
+        chkOpBool("<", v, v, false)
+        chkOpBool("<", v, vPlusOne, true)
+        chkOpBool("<", v, vHigh, true)
 
-        chkOpBool(">", vObj("user", 1000), vObj("user", 1000), false)
-        chkOpBool(">", vObj("user", 1000), vObj("user", 2000), false)
-        chkOpBool(">", vObj("user", 2000), vObj("user", 1000), true)
+        chkOpBool("<=", v, vLow, false)
+        chkOpBool("<=", v, vMinusOne, false)
+        chkOpBool("<=", v, v, true)
+        chkOpBool("<=", v, vPlusOne, true)
+        chkOpBool("<=", v, vHigh, true)
 
-        chkOpBool(">=", vObj("user", 1000), vObj("user", 1000), true)
-        chkOpBool(">=", vObj("user", 1000), vObj("user", 2000), false)
-        chkOpBool(">=", vObj("user", 2000), vObj("user", 1000), true)
+        chkOpBool(">", v, vLow, true)
+        chkOpBool(">", v, vMinusOne, true)
+        chkOpBool(">", v, v, false)
+        chkOpBool(">", v, vPlusOne, false)
+        chkOpBool(">", v, vHigh, false)
+
+        chkOpBool(">=", v, vLow, true)
+        chkOpBool(">=", v, vMinusOne, true)
+        chkOpBool(">=", v, v, true)
+        chkOpBool(">=", v, vPlusOne, false)
+        chkOpBool(">=", v, vHigh, false)
+    }
+
+    private fun chkCmpCommon(v1: TstVal, v2: TstVal) {
+        chkOpBool("==", v1, v1, true)
+        chkOpBool("==", v2, v2, true)
+        chkOpBool("==", v1, v2, false)
+        chkOpBool("==", v2, v1, false)
+
+        chkOpBool("!=", v1, v1, false)
+        chkOpBool("!=", v2, v2, false)
+        chkOpBool("!=", v1, v2, true)
+        chkOpBool("!=", v2, v1, true)
+
+        chkOpBool("<", v1, v1, false)
+        chkOpBool("<", v2, v2, false)
+        chkOpBool("<", v1, v2, true)
+        chkOpBool("<", v2, v1, false)
+
+        chkOpBool("<=", v1, v1, true)
+        chkOpBool("<=", v2, v2, true)
+        chkOpBool("<=", v1, v2, true)
+        chkOpBool("<=", v2, v1, false)
+
+        chkOpBool(">", v1, v1, false)
+        chkOpBool(">", v2, v2, false)
+        chkOpBool(">", v1, v2, false)
+        chkOpBool(">", v2, v1, true)
+
+        chkOpBool(">=", v1, v1, true)
+        chkOpBool(">=", v2, v2, true)
+        chkOpBool(">=", v1, v2, false)
+        chkOpBool(">=", v2, v1, true)
     }
 
     @Test fun testCmpErr() {
@@ -224,6 +181,9 @@ abstract class AbstractOpTest: BaseResourcefulTest() {
         chkOp("+", vText("Hello"), vInt(123), "text[Hello123]")
         chkOp("+", vJson("[{}]"), vText("Hello"), "text[[{}]Hello]")
         chkOp("+", vText("Hello"), vJson("[{}]"), "text[Hello[{}]]")
+
+        chkOp("+", vInt(9223372036854775806), vInt(1), "int[9223372036854775807]")
+        chkIntOverflow("+", 9223372036854775807, 1)
     }
 
     @Test fun testMinus() {
@@ -234,6 +194,9 @@ abstract class AbstractOpTest: BaseResourcefulTest() {
 
         chkOp("-", vInt(123), "int[-123]")
         chkOp("-", vInt(-123), "int[123]")
+
+        chkOp("-", vInt(-9223372036854775807), vInt(1), "int[-9223372036854775808]")
+        chkIntOverflow("-", -9223372036854775807-1, 1)
     }
 
     @Test fun testDiv() {
@@ -249,6 +212,8 @@ abstract class AbstractOpTest: BaseResourcefulTest() {
         chkOp("/", vInt(1000000), vInt(499999), "int[2]")
         chkOp("/", vInt(1000000), vInt(500000), "int[2]")
         chkOp("/", vInt(1000000), vInt(500001), "int[1]")
+        chkOp("/", vInt(1), vInt(0), integerDivZeroMsg(1))
+        chkOp("/", vInt(123456789), vInt(0), integerDivZeroMsg(123456789))
     }
 
     @Test fun testMul() {
@@ -258,6 +223,9 @@ abstract class AbstractOpTest: BaseResourcefulTest() {
         chkOp("*", vInt(123), vInt(1), "int[123]")
         chkOp("*", vInt(1), vInt(456), "int[456]")
         chkOp("*", vInt(-1), vInt(456), "int[-456]")
+
+        chkOp("*", vInt(4294967296-1), vInt(2147483648), "int[9223372034707292160]")
+        chkIntOverflow("*", 4294967296, 2147483648)
     }
 
     @Test fun testMod() {
@@ -266,6 +234,11 @@ abstract class AbstractOpTest: BaseResourcefulTest() {
         chkOp("%", vInt(1000000), vInt(2), "int[0]")
         chkOp("%", vInt(1000000), vInt(3), "int[1]")
         chkOp("%", vInt(1000000), vInt(9999), "int[100]")
+    }
+
+    private fun chkIntOverflow(op: String, left: Long, right: Long) {
+        chkOp(op, vInt(left), vInt(right), integerOverflowMsg(op, left, right))
+        chkOp(op, vInt(right), vInt(left), integerOverflowMsg(op, right, left))
     }
 
     @Test fun testErr() {
@@ -284,42 +257,56 @@ abstract class AbstractOpTest: BaseResourcefulTest() {
         chkErrSub("and")
         chkErrSub("or")
 
-        chkErrSub2("+", "boolean", "user")
-        chkErrSub2("-", "boolean", "text", "user")
-        chkErrSub2("*", "boolean", "text", "user")
-        chkErrSub2("/", "boolean", "text", "user")
-        chkErrSub2("%", "boolean", "text", "user")
-        chkErrSub2("and", "integer", "text", "user")
-        chkErrSub2("or", "integer", "text", "user")
+        chkErrSubBin("+", "integer", "boolean", "user")
+        chkErrSubBin("-", "integer", "boolean", "text", "user")
+        chkErrSubBin("*", "integer", "boolean", "text", "user")
+        chkErrSubBin("/", "integer", "boolean", "text", "user")
+        chkErrSubBin("%", "integer", "boolean", "text", "user")
+        chkErrSubBin("and", "boolean", "integer", "text", "user")
+        chkErrSubBin("or", "boolean", "integer", "text", "user")
 
-        chkErrSub3("+", "boolean", "text", "user")
-        chkErrSub3("-", "boolean", "text", "user")
-        chkErrSub3("not", "integer", "text", "user")
+        chkErrSubUn("+", "boolean", "text", "user", "rowid")
+        chkErrSubUn("-", "boolean", "text", "user", "rowid")
+        chkErrSubUn("not", "integer", "text", "user", "rowid")
     }
 
     private fun chkErrSub(op: String) {
         chkOpErr("boolean $op integer")
         chkOpErr("boolean $op text")
+        chkOpErr("boolean $op rowid")
         chkOpErr("boolean $op user")
+
         chkOpErr("integer $op boolean")
         chkOpErr("integer $op text")
+        chkOpErr("integer $op rowid")
         chkOpErr("integer $op user")
+
         chkOpErr("text $op boolean")
         chkOpErr("text $op integer")
+        chkOpErr("text $op rowid")
         chkOpErr("text $op user")
+
         chkOpErr("user $op boolean")
         chkOpErr("user $op integer")
+        chkOpErr("user $op rowid")
         chkOpErr("user $op text")
         chkOpErr("user $op company")
+
+        chkOpErr("rowid $op boolean")
+        chkOpErr("rowid $op integer")
+        chkOpErr("rowid $op text")
+        chkOpErr("rowid $op user")
     }
 
-    private fun chkErrSub2(op: String, vararg types: String) {
-        for (type in types) {
-            chkOpErr(op, type, type)
+    private fun chkErrSubBin(op: String, goodType: String, vararg badTypes: String) {
+        for (badType in badTypes) {
+            chkOpErr(op, goodType, badType)
+            chkOpErr(op, badType, goodType)
+            chkOpErr(op, badType, badType)
         }
     }
 
-    private fun chkErrSub3(op: String, vararg types: String) {
+    private fun chkErrSubUn(op: String, vararg types: String) {
         for (type in types) {
             chkOpErr(op, type)
         }
@@ -346,11 +333,11 @@ abstract class AbstractOpTest: BaseResourcefulTest() {
     }
 
     @Test fun testFnSystemMember() {
-        chkExpr("#0.len()", "int[0]", vText(""))
-        chkExpr("#0.len()", "int[5]", vText("Hello"))
+        chkExpr("#0.size()", "int[0]", vText(""))
+        chkExpr("#0.size()", "int[5]", vText("Hello"))
 
-        chkExpr("#0.len()", "int[0]", vBytes(""))
-        chkExpr("#0.len()", "int[5]", vBytes("123456789A"))
+        chkExpr("#0.size()", "int[0]", vBytes(""))
+        chkExpr("#0.size()", "int[5]", vBytes("123456789A"))
     }
 
     @Test fun testIf() {
@@ -414,10 +401,14 @@ abstract class AbstractOpTest: BaseResourcefulTest() {
     abstract fun calcExpr(expr: String, args: List<TstVal>): String
     abstract fun compileExpr(expr: String, types: List<String>): String
 
+    abstract fun integerOverflowMsg(op: String, left: Long, right: Long): String
+    abstract fun integerDivZeroMsg(left: Long): String
+
     abstract fun vBool(v: Boolean): TstVal
     abstract fun vInt(v: Long): TstVal
     abstract fun vText(v: String): TstVal
     abstract fun vBytes(v: String): TstVal
+    abstract fun vRowid(v: Long): TstVal
     abstract fun vJson(v: String): TstVal
     abstract fun vObj(cls: String, id: Long): TstVal
 

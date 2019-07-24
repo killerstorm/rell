@@ -3,7 +3,7 @@ package net.postchain.rell.parser
 import com.github.h0tk3y.betterParse.lexer.TokenMatch
 import com.github.h0tk3y.betterParse.lexer.Tokenizer
 import com.github.h0tk3y.betterParse.utils.cached
-import net.postchain.rell.hexStringToByteArray
+import net.postchain.rell.CommonUtils
 import java.io.InputStream
 import java.util.*
 import kotlin.coroutines.experimental.buildSequence
@@ -290,7 +290,7 @@ class RellTokenizer(private val tokensEx: List<RellToken>) : Tokenizer {
 
         fun decodeByteArray(pos: S_Pos, s: String): ByteArray {
             try {
-                return s.hexStringToByteArray()
+                return CommonUtils.hexToBytes(s)
             } catch (e: IllegalArgumentException) {
                 val maxlen = 64
                 val p = if (s.length <= maxlen) s else (s.substring(0, maxlen) + "...")
@@ -301,6 +301,8 @@ class RellTokenizer(private val tokensEx: List<RellToken>) : Tokenizer {
 }
 
 private class CharSeq(private val str: String) {
+    private val tabSize = 4
+
     private var len = str.length
     private var pos = 0
     private var row = 1
@@ -344,6 +346,9 @@ private class CharSeq(private val str: String) {
             if (k == '\n') {
                 ++row
                 col = 1
+            } else if (k == '\t') {
+                val step = tabSize - (col - 1) % tabSize
+                col += step
             } else {
                 ++col
             }

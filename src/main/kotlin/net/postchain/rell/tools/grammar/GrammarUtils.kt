@@ -5,6 +5,8 @@ import com.github.h0tk3y.betterParse.combinators.OrCombinator
 import com.github.h0tk3y.betterParse.parser.Parser
 import net.postchain.rell.parser.RellToken
 import net.postchain.rell.parser.S_Grammar
+import org.apache.commons.lang3.time.FastDateFormat
+import java.util.*
 import kotlin.reflect.full.memberProperties
 import kotlin.reflect.jvm.isAccessible
 
@@ -44,5 +46,10 @@ object GrammarUtils {
         } else {
             return listOf(p)
         }
+    }
+
+    fun timestampToString(timestamp: Long): String {
+        val tz = TimeZone.getTimeZone("UTC")
+        return FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ssZ", tz).format(timestamp)
     }
 }

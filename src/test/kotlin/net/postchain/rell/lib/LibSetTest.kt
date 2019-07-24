@@ -60,18 +60,18 @@ class LibSetTest: BaseRellTest(false) {
     }
 
     @Test fun testContainsAll() {
-        chk("set<integer>().containsAll(list<integer>())", "boolean[true]")
-        chk("set<integer>().containsAll(set<integer>())", "boolean[true]")
-        chk("set<integer>().containsAll(list<text>())", "ct_err:expr_call_argtypes:set<integer>.containsAll:list<text>")
-        chk("set<integer>([1, 2, 3]).containsAll([1, 2, 3])", "boolean[true]")
-        chk("set<integer>([1, 2, 3]).containsAll(set([1, 2, 3]))", "boolean[true]")
-        chk("set<integer>([1, 2, 3]).containsAll([0])", "boolean[false]")
-        chk("set<integer>([1, 2, 3]).containsAll([2])", "boolean[true]")
-        chk("set<integer>([1, 2, 3]).containsAll(set([0]))", "boolean[false]")
-        chk("set<integer>([1, 2, 3]).containsAll(set([2]))", "boolean[true]")
-        chk("set<integer>([1, 2, 3]).containsAll([1, 3])", "boolean[true]")
-        chk("set<integer>([1, 2, 3]).containsAll([0, 1])", "boolean[false]")
-        chk("set<integer>([1, 2, 3]).containsAll([1, 2, 3, 4])", "boolean[false]")
+        chk("set<integer>().contains_all(list<integer>())", "boolean[true]")
+        chk("set<integer>().contains_all(set<integer>())", "boolean[true]")
+        chk("set<integer>().contains_all(list<text>())", "ct_err:expr_call_argtypes:set<integer>.contains_all:list<text>")
+        chk("set<integer>([1, 2, 3]).contains_all([1, 2, 3])", "boolean[true]")
+        chk("set<integer>([1, 2, 3]).contains_all(set([1, 2, 3]))", "boolean[true]")
+        chk("set<integer>([1, 2, 3]).contains_all([0])", "boolean[false]")
+        chk("set<integer>([1, 2, 3]).contains_all([2])", "boolean[true]")
+        chk("set<integer>([1, 2, 3]).contains_all(set([0]))", "boolean[false]")
+        chk("set<integer>([1, 2, 3]).contains_all(set([2]))", "boolean[true]")
+        chk("set<integer>([1, 2, 3]).contains_all([1, 3])", "boolean[true]")
+        chk("set<integer>([1, 2, 3]).contains_all([0, 1])", "boolean[false]")
+        chk("set<integer>([1, 2, 3]).contains_all([1, 2, 3, 4])", "boolean[false]")
     }
 
     @Test fun testStr() {
@@ -94,16 +94,16 @@ class LibSetTest: BaseRellTest(false) {
     @Test fun testAddAll() {
         tst.strictToString = false
         val init = "val x = set([1, 2, 3]);"
-        chkEx("{ $init val r = x.addAll(set<integer>()); return r+' '+x; }", "false [1, 2, 3]")
-        chkEx("{ $init val r = x.addAll(list<integer>()); return r+' '+x; }", "false [1, 2, 3]")
-        chkEx("{ $init val r = x.addAll(set<integer>([1, 2, 3])); return r+' '+x; }", "false [1, 2, 3]")
-        chkEx("{ $init val r = x.addAll(list<integer>([1, 2, 3])); return r+' '+x; }", "false [1, 2, 3]")
-        chkEx("{ $init val r = x.addAll(set<integer>([3, 4, 5])); return r+' '+x; }", "true [1, 2, 3, 4, 5]")
-        chkEx("{ $init val r = x.addAll(list<integer>([3, 4, 5])); return r+' '+x; }", "true [1, 2, 3, 4, 5]")
-        chkEx("{ $init val r = x.addAll([4, 5, 6]); return r+' '+x; }", "true [1, 2, 3, 4, 5, 6]")
-        chkEx("{ $init val r = x.addAll(set(['Hello'])); return r+' '+x; }", "ct_err:expr_call_argtypes:set<integer>.addAll:set<text>")
-        chkEx("{ $init val r = x.addAll(['Hello']); return r+' '+x; }", "ct_err:expr_call_argtypes:set<integer>.addAll:list<text>")
-        chkEx("{ $init val r = x.addAll(0, [4, 5, 6]); return r+' '+x; }", "ct_err:expr_call_argtypes:set<integer>.addAll:integer,list<integer>")
+        chkEx("{ $init val r = x.add_all(set<integer>()); return r+' '+x; }", "false [1, 2, 3]")
+        chkEx("{ $init val r = x.add_all(list<integer>()); return r+' '+x; }", "false [1, 2, 3]")
+        chkEx("{ $init val r = x.add_all(set<integer>([1, 2, 3])); return r+' '+x; }", "false [1, 2, 3]")
+        chkEx("{ $init val r = x.add_all(list<integer>([1, 2, 3])); return r+' '+x; }", "false [1, 2, 3]")
+        chkEx("{ $init val r = x.add_all(set<integer>([3, 4, 5])); return r+' '+x; }", "true [1, 2, 3, 4, 5]")
+        chkEx("{ $init val r = x.add_all(list<integer>([3, 4, 5])); return r+' '+x; }", "true [1, 2, 3, 4, 5]")
+        chkEx("{ $init val r = x.add_all([4, 5, 6]); return r+' '+x; }", "true [1, 2, 3, 4, 5, 6]")
+        chkEx("{ $init val r = x.add_all(set(['Hello'])); return r+' '+x; }", "ct_err:expr_call_argtypes:set<integer>.add_all:set<text>")
+        chkEx("{ $init val r = x.add_all(['Hello']); return r+' '+x; }", "ct_err:expr_call_argtypes:set<integer>.add_all:list<text>")
+        chkEx("{ $init val r = x.add_all(0, [4, 5, 6]); return r+' '+x; }", "ct_err:expr_call_argtypes:set<integer>.add_all:integer,list<integer>")
     }
 
     @Test fun testRemove() {
@@ -119,16 +119,16 @@ class LibSetTest: BaseRellTest(false) {
     @Test fun testRemoveAll() {
         tst.strictToString = false
         val init = "val x = set([1, 2, 3]);"
-        chkEx("{ $init val r = x.removeAll(set([0])); return ''+r+' '+x; }", "false [1, 2, 3]")
-        chkEx("{ $init val r = x.removeAll(set([1])); return ''+r+' '+x; }", "true [2, 3]")
-        chkEx("{ $init val r = x.removeAll(set([2])); return ''+r+' '+x; }", "true [1, 3]")
-        chkEx("{ $init val r = x.removeAll(set([3])); return ''+r+' '+x; }", "true [1, 2]")
-        chkEx("{ $init val r = x.removeAll([0]); return ''+r+' '+x; }", "false [1, 2, 3]")
-        chkEx("{ $init val r = x.removeAll([2]); return ''+r+' '+x; }", "true [1, 3]")
-        chkEx("{ $init val r = x.removeAll([1, 2, 3]); return ''+r+' '+x; }", "true []")
-        chkEx("{ $init val r = x.removeAll([1, 3]); return ''+r+' '+x; }", "true [2]")
-        chkEx("{ $init val r = x.removeAll(['Hello']); return ''+r+' '+x; }", "ct_err:expr_call_argtypes:set<integer>.removeAll:list<text>")
-        chkEx("{ $init val r = x.removeAll(set(['Hello'])); return ''+r+' '+x; }", "ct_err:expr_call_argtypes:set<integer>.removeAll:set<text>")
+        chkEx("{ $init val r = x.remove_all(set([0])); return ''+r+' '+x; }", "false [1, 2, 3]")
+        chkEx("{ $init val r = x.remove_all(set([1])); return ''+r+' '+x; }", "true [2, 3]")
+        chkEx("{ $init val r = x.remove_all(set([2])); return ''+r+' '+x; }", "true [1, 3]")
+        chkEx("{ $init val r = x.remove_all(set([3])); return ''+r+' '+x; }", "true [1, 2]")
+        chkEx("{ $init val r = x.remove_all([0]); return ''+r+' '+x; }", "false [1, 2, 3]")
+        chkEx("{ $init val r = x.remove_all([2]); return ''+r+' '+x; }", "true [1, 3]")
+        chkEx("{ $init val r = x.remove_all([1, 2, 3]); return ''+r+' '+x; }", "true []")
+        chkEx("{ $init val r = x.remove_all([1, 3]); return ''+r+' '+x; }", "true [2]")
+        chkEx("{ $init val r = x.remove_all(['Hello']); return ''+r+' '+x; }", "ct_err:expr_call_argtypes:set<integer>.remove_all:list<text>")
+        chkEx("{ $init val r = x.remove_all(set(['Hello'])); return ''+r+' '+x; }", "ct_err:expr_call_argtypes:set<integer>.remove_all:set<text>")
     }
 
     @Test fun testClear() {
@@ -148,7 +148,7 @@ class LibSetTest: BaseRellTest(false) {
 
     @Test fun testSort() {
         tst.strictToString = false
-        tst.defs = listOf("record rec { x: integer; }")
+        def("record rec { x: integer; }")
 
         chkEx("{ val s = set([ 5, 4, 3, 2, 1 ]); s._sort(); return s; }", "ct_err:unknown_member:set<integer>:_sort")
 

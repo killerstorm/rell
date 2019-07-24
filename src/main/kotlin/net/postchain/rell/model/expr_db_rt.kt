@@ -13,7 +13,11 @@ class SqlFromInfo(val classes: List<SqlFromClass>)
 class SqlFromClass(val alias: SqlTableAlias, val joins: List<SqlFromJoin>)
 class SqlFromJoin(val baseAlias: SqlTableAlias, val attr: String, val alias: SqlTableAlias)
 
-class SqlGenContext(val sqlCtx: Rt_SqlContext, classes: List<R_AtClass>, private val parameters: List<Rt_Value>) {
+class SqlGenContext private constructor(
+        val sqlCtx: Rt_SqlContext,
+        classes: List<R_AtClass>,
+        private val parameters: List<Rt_Value>
+) {
     private var aliasCtr = 0
     private val clsAliasMap = mutableMapOf<R_AtClass, ClassAliasTbl>()
     private val aliasTblMap = mutableMapOf<SqlTableAlias, ClassAliasTbl>()
@@ -64,6 +68,13 @@ class SqlGenContext(val sqlCtx: Rt_SqlContext, classes: List<R_AtClass>, private
     private class ClassAliasTbl(val alias: SqlTableAlias) {
         val subAliases = mutableMapOf<SqlTableAlias, MutableMap<String, SqlTableJoin>>()
     }
+
+    companion object {
+        fun create(frame: Rt_CallFrame, classes: List<R_AtClass>, parameters: List<Rt_Value>): SqlGenContext {
+            val sqlCtx = frame.entCtx.modCtx.sqlCtx
+            return SqlGenContext(sqlCtx, classes, parameters)
+        }
+    }
 }
 
 sealed class SqlParam {
@@ -89,7 +100,7 @@ class SqlBuilder {
         return sqlBuf.isEmpty() && paramsBuf.isEmpty()
     }
 
-    fun <T> append(list: Collection<T>, sep: String, block: (T) -> Unit) {
+    fun <T> append(list: Iterable<T>, sep: String, block: (T) -> Unit) {
         var s = ""
         for (t in list) {
             append(s)

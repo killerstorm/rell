@@ -1,6 +1,8 @@
 package net.postchain.rell.runtime
 
+import mu.KLogger
 import net.postchain.rell.sql.SqlExecutor
+import java.sql.Connection
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.sql.SQLException
@@ -57,6 +59,10 @@ class Rt_TupleComparator(private val elemComparators: List<Comparator<Rt_Value>>
 }
 
 class Rt_SqlExecutor(private val sqlExec: SqlExecutor, private val logErrors: Boolean): SqlExecutor() {
+    override fun connection(): Connection {
+        return sqlExec.connection()
+    }
+
     override fun transaction(code: () -> Unit) {
         wrapErr("(transaction)") {
             sqlExec.transaction(code)
@@ -93,6 +99,44 @@ class Rt_SqlExecutor(private val sqlExec: SqlExecutor, private val logErrors: Bo
             throw Rt_Error("sqlerr:${e.errorCode}", "SQL Error: ${e.message}")
         }
     }
+}
+
+class Rt_Messages(private val logger: KLogger) {
+    private val warningCodes = mutableListOf<String>()
+    private val errors = mutableListOf<Rt_Error>()
+
+    fun warning(code: String, msg: String) {
+        warningCodes.add(code)
+        logger.warn(msg)
+    }
+
+    fun error(code: String, msg: String) {
+        errors.add(Rt_Error(code, msg))
+    }
+
+    fun errorIfNotEmpty(list: Collection<String>, code: String, msg: String) {
+        if (!list.isEmpty()) {
+            val codeList = list.joinToString(",")
+            val msgList = list.joinToString(", ")
+            error("$code:$codeList", "$msg: $msgList")
+        }
+    }
+
+    fun checkErrors() {
+        if (errors.isEmpty()) {
+            return
+        }
+
+        if (errors.size == 1) {
+            throw errors[0]
+        }
+
+        val code = errors.joinToString(",") { it.code }
+        val msg = errors.joinToString("\n") { it.message ?: "" }
+        throw Rt_Error(code, msg)
+    }
+
+    fun warningCodes() = warningCodes.toList()
 }
 
 object Rt_Utils {

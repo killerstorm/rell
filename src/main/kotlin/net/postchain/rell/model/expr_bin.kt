@@ -1,5 +1,6 @@
 package net.postchain.rell.model
 
+import com.google.common.math.LongMath
 import net.postchain.rell.runtime.*
 
 sealed class R_CmpOp(val code: String, val checker: (Int) -> Boolean) {
@@ -52,6 +53,14 @@ object R_CmpType_ByteArray: R_CmpType() {
         }
 
         return Integer.compare(ln, rn)
+    }
+}
+
+object R_CmpType_Rowid: R_CmpType() {
+    override fun compare(left: Rt_Value, right: Rt_Value): Int {
+        val l = left.asRowid()
+        val r = right.asRowid()
+        return l.compareTo(r)
     }
 }
 
@@ -151,7 +160,7 @@ object R_BinaryOp_Or: R_BinaryOp_Logic("or") {
 }
 
 class R_BinaryExpr(type: R_Type, val op: R_BinaryOp, val left: R_Expr, val right: R_Expr): R_Expr(type) {
-    override fun evaluate(frame: Rt_CallFrame): Rt_Value {
+    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         val resValue = op.evaluate(frame, left, right)
         return resValue
     }
@@ -169,28 +178,51 @@ sealed class R_BinaryOp_Arith(code: String): R_BinaryOp(code) {
 }
 
 object R_BinaryOp_Add: R_BinaryOp_Arith("+") {
-    override fun evaluate(left: Long, right: Long): Long = left + right
+    override fun evaluate(left: Long, right: Long): Long {
+        try {
+            return LongMath.checkedAdd(left, right)
+        } catch (e: ArithmeticException) {
+            throw Rt_Error("expr:+:overflow:$left:$right", "Integer overflow: $left + $right")
+        }
+    }
 }
 
 object R_BinaryOp_Sub: R_BinaryOp_Arith("-") {
-    override fun evaluate(left: Long, right: Long): Long = left - right
+    override fun evaluate(left: Long, right: Long): Long {
+        try {
+            return LongMath.checkedSubtract(left, right)
+        } catch (e: ArithmeticException) {
+            throw Rt_Error("expr:-:overflow:$left:$right", "Integer overflow: $left - $right")
+        }
+    }
 }
 
 object R_BinaryOp_Mul: R_BinaryOp_Arith("*") {
-    override fun evaluate(left: Long, right: Long): Long = left * right
+    override fun evaluate(left: Long, right: Long): Long {
+        try {
+            return LongMath.checkedMultiply(left, right)
+        } catch (e: ArithmeticException) {
+            throw Rt_Error("expr:*:overflow:$left:$right", "Integer overflow: $left * $right")
+        }
+    }
 }
 
 object R_BinaryOp_Div: R_BinaryOp_Arith("/") {
     override fun evaluate(left: Long, right: Long): Long {
         if (right == 0L) {
-            throw Rt_Error("expr_div_by_zero", "Division by zero")
+            throw Rt_Error("expr:/:div0:$left", "Division by zero: $left / $right")
         }
         return left / right
     }
 }
 
 object R_BinaryOp_Mod: R_BinaryOp_Arith("%") {
-    override fun evaluate(left: Long, right: Long): Long = left % right
+    override fun evaluate(left: Long, right: Long): Long {
+        if (right == 0L) {
+            throw Rt_Error("expr:%:div0:$left", "Division by zero: $left % $right")
+        }
+        return left % right
+    }
 }
 
 object R_BinaryOp_Concat_Text: R_BinaryOp("+") {
@@ -215,6 +247,23 @@ object R_BinaryOp_In_Collection: R_BinaryOp("in") {
     override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value {
         val c = right.asCollection()
         val r = c.contains(left)
+        return Rt_BooleanValue(r)
+    }
+}
+
+object R_BinaryOp_In_VirtualList: R_BinaryOp("in") {
+    override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value {
+        val index = left.asInteger()
+        val list = right.asVirtualList()
+        val r = list.contains(index)
+        return Rt_BooleanValue(r)
+    }
+}
+
+object R_BinaryOp_In_VirtualSet: R_BinaryOp("in") {
+    override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value {
+        val set = right.asVirtualSet()
+        val r = set.contains(left)
         return Rt_BooleanValue(r)
     }
 }

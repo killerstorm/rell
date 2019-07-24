@@ -11,6 +11,7 @@ class AtExprOpTest: AbstractOpTest() {
             Triple("i", "integer", "0"),
             Triple("t", "text", "''"),
             Triple("ba", "byte_array", "''"),
+            Triple("r", "rowid", "0"),
             Triple("j", "json", "'{}'"),
             Triple("user", "user", "1000"),
             Triple("company", "company", "100")
@@ -132,10 +133,14 @@ class AtExprOpTest: AbstractOpTest() {
         return this.inserts + insert
     }
 
+    override fun integerOverflowMsg(op: String, left: Long, right: Long) = "rt_err:sqlerr:0"
+    override fun integerDivZeroMsg(left: Long) = "rt_err:sqlerr:0"
+
     override fun vBool(v: Boolean): TstVal = AtTstVal.Bool(v)
     override fun vInt(v: Long): TstVal = AtTstVal.Integer(v)
     override fun vText(v: String): TstVal = AtTstVal.Text(v)
     override fun vBytes(v: String): TstVal = AtTstVal.Bytes(v)
+    override fun vRowid(v: Long): TstVal = AtTstVal.Rowid(v)
     override fun vJson(v: String): TstVal = AtTstVal.Json(v)
     override fun vObj(cls: String, id: Long): TstVal = AtTstVal.Obj(cls, id)
 
@@ -157,8 +162,12 @@ class AtExprOpTest: AbstractOpTest() {
         }
 
         class Bytes(str: String): AtTstVal("ba") {
-            private val v = str.hexStringToByteArray()
-            override fun sql(): String = "'\\x${v.toHex()}'"
+            private val v = CommonUtils.hexToBytes(str)
+            override fun sql(): String = "'\\x${CommonUtils.bytesToHex(v)}'"
+        }
+
+        class Rowid(val v: Long): AtTstVal("r") {
+            override fun sql(): String = "$v"
         }
 
         class Json(val v: String): AtTstVal("j") {

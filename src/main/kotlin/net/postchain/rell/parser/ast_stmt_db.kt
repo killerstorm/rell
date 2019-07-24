@@ -64,7 +64,7 @@ class S_UpdateTarget_Expr(val expr: S_Expr): S_UpdateTarget() {
         val cls = R_AtClass(rClass, 0)
         val whereLeft = Db_ClassExpr(cls)
         val whereRight = Db_ParameterExpr(R_ClassType(rClass), 0)
-        val where = Db_BinaryExpr(R_BooleanType, Db_BinaryOp_Eq, whereLeft, whereRight)
+        val where = C_Utils.makeDbBinaryExprEq(whereLeft, whereRight)
         return R_UpdateTarget_Expr_One(cls, where, rExpr)
     }
 

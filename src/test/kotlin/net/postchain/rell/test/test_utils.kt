@@ -1,20 +1,21 @@
 package net.postchain.rell.test
 
+import com.google.common.collect.HashMultimap
 import com.google.common.io.Files
-import net.postchain.gtx.GTXValue
+import net.postchain.gtv.Gtv
+import net.postchain.rell.CommonUtils
+import net.postchain.rell.PostchainUtils
 import net.postchain.rell.model.R_Class
 import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_Module
-import net.postchain.rell.module.GtxToRtContext
-import net.postchain.rell.module.RELL_VERSION
+import net.postchain.rell.module.GtvToRtContext
+import net.postchain.rell.module.RELL_LANG_VERSION
 import net.postchain.rell.parser.C_Message
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
-import net.postchain.rell.runtime.Rt_GtxValue
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.sql.ROWID_COLUMN
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.sql.SqlUtils
-import net.postchain.rell.toHex
 import org.apache.commons.configuration2.PropertiesConfiguration
 import org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder
 import org.apache.commons.configuration2.builder.fluent.Parameters
@@ -84,21 +85,21 @@ object SqlTestUtils {
 
         for (cls in module.classes.values) {
             if (cls.sqlMapping.autoCreateTable()) {
-                dumpClassTable(sqlExec, chainMapping, cls, list)
+                dumpClass(sqlExec, chainMapping, cls, list)
             }
         }
 
         for (obj in module.objects.values) {
-            dumpClassTable(sqlExec, chainMapping, obj.rClass, list)
+            dumpClass(sqlExec, chainMapping, obj.rClass, list)
         }
 
         return list.toList()
     }
 
-    private fun dumpClassTable(sqlExec: SqlExecutor, chainMapping: Rt_ChainSqlMapping, cls: R_Class, list: MutableList<String>) {
+    private fun dumpClass(sqlExec: SqlExecutor, chainMapping: Rt_ChainSqlMapping, cls: R_Class, list: MutableList<String>) {
         val table = cls.sqlMapping.table(chainMapping)
         val cols = listOf(cls.sqlMapping.rowidColumn()) + cls.attributes.values.map { it.sqlMapping }
-        val sql = getClassDumpSql(table, cols, cls.sqlMapping.rowidColumn())
+        val sql = getTableDumpSql(table, cols, cls.sqlMapping.rowidColumn())
         val rows = dumpSql(sqlExec, sql).map { "${cls.name}($it)" }
         list += rows
     }
@@ -109,7 +110,7 @@ object SqlTestUtils {
         return list
     }
 
-    private fun getClassDumpSql(table: String, columns: List<String>, sortColumn: String?): String {
+    private fun getTableDumpSql(table: String, columns: List<String>, sortColumn: String?): String {
         val buf = StringBuilder()
         buf.append("SELECT")
         columns.joinTo(buf, ", ") { "\"$it\"" }
@@ -130,7 +131,7 @@ object SqlTestUtils {
             val str = if (value is String) {
                 value
             } else if (value is ByteArray) {
-                "0x" + rs.getBytes(idx).toHex()
+                "0x" + CommonUtils.bytesToHex(rs.getBytes(idx))
             } else if (value is PGobject) {
                 value.value
             } else if (value is Int || value is Long) {
@@ -145,51 +146,86 @@ object SqlTestUtils {
 
         return values.joinToString(",")
     }
+
+    fun dumpDatabaseTables(con: Connection, sqlExec: SqlExecutor): Map<String, List<String>> {
+        val res = mutableMapOf<String, List<String>>()
+
+        val struct = dumpTablesStructure(con)
+        for ((table, attrs) in struct) {
+            val columns = attrs.keys.toMutableList()
+            val rowid = columns.remove(ROWID_COLUMN)
+            if (rowid) columns.add(0, ROWID_COLUMN)
+            val sql = getTableDumpSql(table, columns, if (rowid) ROWID_COLUMN else null)
+            val rows = dumpSql(sqlExec, sql)
+            res[table] = rows
+        }
+
+        return res
+    }
+
+    fun dumpTablesStructure(con: Connection): Map<String, Map<String, String>> {
+        val map = HashMultimap.create<String, Pair<String, String>>()
+        con.metaData.getColumns(null, con.schema, "c0.%", null).use { rs ->
+            while (rs.next()) {
+                val table = rs.getString(3)
+                val column = rs.getString(4)
+                val type = rs.getString(6)
+                map.put(table, Pair(column, type))
+            }
+        }
+
+        val res = mutableMapOf<String, Map<String, String>>()
+        for (table in map.keySet().sorted()) {
+            res[table] = map[table].sortedBy { it.first }.toMap()
+        }
+
+        return res
+    }
 }
 
-object GtxTestUtils {
-    fun decodeGtxStr(s: String) = Rt_GtxValue.jsonStringToGtxValue(s)
-    fun encodeGtxStr(gtx: GTXValue) = Rt_GtxValue.gtxValueToJsonString(gtx)
+object GtvTestUtils {
+    fun decodeGtvStr(s: String) = PostchainUtils.jsonToGtv(s)
+    fun encodeGtvStr(gtv: Gtv) = PostchainUtils.gtvToJson(gtv)
 
-    fun decodeGtxQueryArgs(params: List<R_ExternalParam>, args: List<String>): List<Rt_Value> {
-        return decodeGtxArgs(params, args, true)
+    fun decodeGtvQueryArgs(params: List<R_ExternalParam>, args: List<String>): List<Rt_Value> {
+        return decodeGtvArgs(params, args, true)
     }
 
-    fun decodeGtxOpArgs(params: List<R_ExternalParam>, args: List<GTXValue>): List<Rt_Value> {
+    fun decodeGtvOpArgs(params: List<R_ExternalParam>, args: List<Gtv>): List<Rt_Value> {
         check(params.size == args.size)
-        val ctx = GtxToRtContext()
-        return args.mapIndexed { i, gtx ->
-            params[i].type.gtxToRt(ctx, gtx, false)
+        val ctx = GtvToRtContext(false)
+        return args.mapIndexed { i, gtv ->
+            params[i].type.gtvToRt(ctx, gtv)
         }
     }
 
-    fun decodeGtxOpArgsStr(params: List<R_ExternalParam>, args: List<String>): List<Rt_Value> {
-        return decodeGtxArgs(params, args, false)
+    fun decodeGtvOpArgsStr(params: List<R_ExternalParam>, args: List<String>): List<Rt_Value> {
+        return decodeGtvArgs(params, args, false)
     }
 
-    private fun decodeGtxArgs(params: List<R_ExternalParam>, args: List<String>, human: Boolean): List<Rt_Value> {
+    private fun decodeGtvArgs(params: List<R_ExternalParam>, args: List<String>, pretty: Boolean): List<Rt_Value> {
         check(params.size == args.size)
-        val ctx = GtxToRtContext()
+        val ctx = GtvToRtContext(pretty)
         return args.mapIndexed { i, arg ->
-            val gtx = decodeGtxStr(arg)
-            params[i].type.gtxToRt(ctx, gtx, human)
+            val gtv = decodeGtvStr(arg)
+            params[i].type.gtvToRt(ctx, gtv)
         }
     }
 
-    fun gtxToStr(gtx: GTXValue): String {
-        val s = encodeGtxStr(gtx)
-        return s.replace('"', '\'')
+    fun gtvToStr(gtv: Gtv): String {
+        val s = encodeGtvStr(gtv)
+        return s.replace('"', '\'').replace("\\u003c", "<").replace("\\u003e", ">").replace("\\u003d", "=")
     }
 
-    fun strToGtx(s: String): GTXValue {
+    fun strToGtv(s: String): Gtv {
         val s2 = s.replace('\'', '"')
-        return decodeGtxStr(s2)
+        return decodeGtvStr(s2)
     }
 }
 
 object TestSourcesRecorder {
     private val ENABLED = false
-    private val SOURCES_FILE: String = System.getProperty("user.home") + "/testsources-$RELL_VERSION.rell"
+    private val SOURCES_FILE: String = System.getProperty("user.home") + "/testsources-$RELL_LANG_VERSION.rell"
 
     private val sync = Any()
     private val sources = mutableMapOf<String, String>()

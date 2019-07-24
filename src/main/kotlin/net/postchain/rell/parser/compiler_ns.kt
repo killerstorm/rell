@@ -4,24 +4,24 @@ import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Value
 
 class C_Namespace(
-        val namespaces: Map<String, C_Namespace>,
-        val types: Map<String, R_Type>,
+        val namespaces: Map<String, C_NamespaceDef>,
+        val types: Map<String, C_TypeDef>,
         val values: Map<String, C_NamespaceValue>,
         val functions: Map<String, C_GlobalFunction>
 )
 
 class C_NamespaceBuilder {
-    private val namespaces = mutableMapOf<String, C_Namespace>()
-    private val types = mutableMapOf<String, R_Type>()
+    private val namespaces = mutableMapOf<String, C_NamespaceDef>()
+    private val types = mutableMapOf<String, C_TypeDef>()
     private val values = mutableMapOf<String, C_NamespaceValue>()
     private val functions = mutableMapOf<String, C_GlobalFunction>()
 
-    fun addNamespace(name: String, ns: C_Namespace) {
+    fun addNamespace(name: String, ns: C_NamespaceDef) {
         check(name !in namespaces)
         namespaces[name] = ns
     }
 
-    fun addType(name: String, type: R_Type) {
+    fun addType(name: String, type: C_TypeDef) {
         check(name !in types)
         types[name] = type
     }
@@ -65,12 +65,16 @@ class C_NamespaceValue_SysFunction(
     override fun get0(entCtx: C_EntityContext, name: List<S_Name>) = R_SysCallExpr(resultType, fn, listOf())
 }
 
+class C_NamespaceValue_Class(private val typeDef: C_TypeDef): C_NamespaceValue() {
+    override fun get(entCtx: C_EntityContext, name: List<S_Name>) = C_TypeNameExpr(name.last().pos, name, typeDef)
+}
+
 class C_NamespaceValue_Enum(private val rEnum: R_EnumType): C_NamespaceValue() {
     override fun get(entCtx: C_EntityContext, name: List<S_Name>) = C_EnumExpr(name, rEnum)
 }
 
-class C_NamespaceValue_Namespace(private val ns: C_Namespace): C_NamespaceValue() {
-    override fun get(entCtx: C_EntityContext, name: List<S_Name>) = C_NamespaceExpr(name, ns)
+class C_NamespaceValue_Namespace(private val nsDef: C_NamespaceDef): C_NamespaceValue() {
+    override fun get(entCtx: C_EntityContext, name: List<S_Name>) = C_NamespaceExpr(name, nsDef)
 }
 
 class C_NamespaceValue_Object(private val rObject: R_Object): C_NamespaceValue() {
@@ -85,7 +89,7 @@ class C_NamespaceValue_Object(private val rObject: R_Object): C_NamespaceValue()
 
 class C_NamespaceValue_Record(private val record: R_RecordType): C_NamespaceValue() {
     override fun get(entCtx: C_EntityContext, name: List<S_Name>): C_Expr {
-        val ns = C_LibFunctions.makeRecordNamespace(record)
-        return C_RecordExpr(name, record, ns)
+        val nsDef = C_LibFunctions.makeRecordNamespace(record)
+        return C_RecordExpr(name, record, nsDef)
     }
 }

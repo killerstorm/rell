@@ -1,26 +1,31 @@
 package net.postchain.rell.test
 
-import net.postchain.core.EContext
-import net.postchain.core.UserMistake
+import net.postchain.base.BaseBlockEContext
 import net.postchain.base.BaseEContext
-import net.postchain.base.data.SQLDatabaseAccess
-import net.postchain.gtx.*
-import net.postchain.rell.hexStringToByteArray
+import net.postchain.base.BaseTxEContext
+import net.postchain.core.UserMistake
+import net.postchain.gtv.Gtv
+import net.postchain.gtv.GtvFactory
+import net.postchain.gtv.GtvString
+import net.postchain.gtx.ExtOpData
+import net.postchain.gtx.GTXModule
+import net.postchain.gtx.GTXSchemaManager
+import net.postchain.rell.CommonUtils
+import net.postchain.rell.PostchainUtils
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.module.RellPostchainModuleFactory
 import net.postchain.rell.sql.SqlExecutor
-import java.sql.Connection
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.fail
-
 
 class RellGtxTester(
         tstCtx: RellTestContext,
         classDefs: List<String> = listOf(),
         inserts: List<String> = listOf(),
-        gtx: Boolean = false
-): RellBaseTester(tstCtx, classDefs, inserts, gtx)
+        gtv: Boolean = false,
+        chainId: Long = 995511
+): RellBaseTester(tstCtx, classDefs, inserts, gtv)
 {
     var wrapRtErrors = true
     var moduleArgs: String? = null
@@ -29,14 +34,16 @@ class RellGtxTester(
     var nodeId: Int = 3377
 
     init {
-        chainId = 995511
+        super.chainId = chainId
     }
 
-    override fun initSqlReset(conn: Connection, sqlExec: SqlExecutor, moduleCode: String, module: R_Module) {
+    override fun initSqlReset(sqlExec: SqlExecutor, moduleCode: String, module: R_Module) {
         val gtxModule = createGtxModule(moduleCode)
 
         sqlExec.transaction {
-            val ctx = BaseEContext(conn, chainId, nodeId, SQLDatabaseAccess())
+            val con = sqlExec.connection()
+            val dbAccess = PostchainUtils.createDatabaseAccess()
+            val ctx = BaseEContext(con, chainId, nodeId, dbAccess)
             GTXSchemaManager.initializeDB(ctx)
             gtxModule.initializeDB(ctx)
         }
@@ -47,26 +54,93 @@ class RellGtxTester(
     }
 
     fun chkQueryEx(code: String, args: String, expected: String) {
+        val gtvArgs = strToArgs(args)
+        val actual = callQueryEx(code, gtvArgs)
+        assertEquals(expected, actual)
+    }
+
+    fun chkQueryEx(code: String, args: Map<String, Gtv>, expected: String) {
         val actual = callQueryEx(code, args)
         assertEquals(expected, actual)
     }
 
-    private fun callQueryEx(code: String, args: String): String {
+    private fun callQueryEx(code: String, args: Map<String, Gtv>): String {
+        val moduleCode = moduleCode(code)
+        return callQuery0(moduleCode, "q", args)
+    }
+
+    fun callQuery(name: String, args: Map<String, Gtv>): String {
+        val moduleCode = defsCode()
+        return callQuery0(moduleCode, name, args)
+    }
+
+    fun chkCallQuery(name: String, args: String, expected: String) {
+        val gtvArgs = strToArgs(args)
+        val actual = callQuery(name, gtvArgs)
+        assertEquals(expected, actual)
+    }
+
+    private fun strToArgs(args: String): Map<String, Gtv> {
+        val str = "{$args}"
+        val gtv = GtvTestUtils.decodeGtvStr(str)
+        return gtv.asDict()
+    }
+
+    private fun callQuery0(moduleCode: String, name: String, args: Map<String, Gtv>): String {
         return eval.eval {
             eval.wrapRt { init() }
 
-            val argsExtra = if (args.isEmpty()) "" else ",$args"
-            val argsStr = "{'type':'q'$argsExtra}"
-            val argsGtx = GtxTestUtils.decodeGtxStr(argsStr.replace('\'', '"'))
+            val queryMap = mutableMapOf<String, Gtv>("type" to GtvFactory.gtv("q"))
+            queryMap.putAll(args)
+            val queryGtv = GtvFactory.gtv(queryMap)
 
-            val moduleCode = moduleCode(code)
             val module = eval.wrapCt { createGtxModule(moduleCode) }
 
             val conn = getSqlConn()
-            val ctx = BaseEContext(conn, chainId, nodeId, SQLDatabaseAccess())
+            val dbAccess = PostchainUtils.createDatabaseAccess()
+            val ctx = BaseEContext(conn, chainId, nodeId, dbAccess)
 
-            val res = module.query(ctx, "q", argsGtx)
-            GtxTestUtils.gtxToStr(res)
+            val res = eval.wrapRt {
+                module.query(ctx, name, queryGtv)
+            }
+
+            GtvTestUtils.gtvToStr(res)
+        }
+    }
+
+    fun chkCallOperation(name: String, args: List<String>, expected: String = "OK") {
+        val gtvArgs = args.map { GtvTestUtils.decodeGtvStr(it.replace('\'', '"')) }
+        val moduleCode = defsCode()
+        val actual = callOperation0(moduleCode, name, gtvArgs)
+        assertEquals(expected, actual)
+    }
+
+    fun chkOpEx(code: String, args: List<Gtv>, expected: String = "OK") {
+        val moduleCode = moduleCode(code)
+        val actual = callOperation0(moduleCode, "o", args)
+        assertEquals(expected, actual)
+    }
+
+    private fun callOperation0(moduleCode: String, name: String, args: List<Gtv>): String {
+        return eval.eval {
+            eval.wrapRt { init() }
+
+            val module = eval.wrapCt { createGtxModule(moduleCode) }
+
+            val conn = getSqlConn()
+            val dbAccess = PostchainUtils.createDatabaseAccess()
+            val ctx = BaseEContext(conn, chainId, nodeId, dbAccess)
+            val blkCtx = BaseBlockEContext(ctx, 0, 0, mapOf())
+            val txCtx = BaseTxEContext(blkCtx, 0)
+
+            val bcRid = CommonUtils.hexToBytes(blockchainRID)
+            val opData = ExtOpData(name, 0, bcRid, arrayOf(), args.toTypedArray())
+            val tx = module.makeTransactor(opData)
+            check(tx.isCorrect())
+
+            val res = tx.apply(txCtx)
+            check(res)
+            "OK"
         }
     }
 
@@ -82,30 +156,37 @@ class RellGtxTester(
     }
 
     private fun createGtxModule(moduleCode: String): GTXModule {
-        val factory = RellPostchainModuleFactory(false, wrapRtErrors)
+        val factory = RellPostchainModuleFactory(
+                stdoutPrinter = stdoutPrinter,
+                logPrinter = logPrinter,
+                wrapCtErrors = false,
+                wrapRtErrors = wrapRtErrors,
+                forceTypeCheck = true
+        )
+
         val moduleCfg = moduleConfig(moduleCode)
-        val bcRidBytes = blockchainRID.hexStringToByteArray()
+        val bcRidBytes = CommonUtils.hexToBytes(blockchainRID)
         val module = factory.makeModule(moduleCfg, bcRidBytes)
         return module
     }
 
-    private fun moduleConfig(moduleCode: String): GTXValue {
-        val rellMap = mutableMapOf<String, GTXValue>()
-        rellMap["mainFile"] = StringGTXValue(RellTestUtils.MAIN_FILE)
+    private fun moduleConfig(moduleCode: String): Gtv {
+        val rellMap = mutableMapOf<String, Gtv>()
+        rellMap["mainFile"] = GtvString(RellTestUtils.MAIN_FILE)
 
         val sourceCodes = files(moduleCode)
-        rellMap["sources_v0.8"] = DictGTXValue(sourceCodes.mapValues { (_, v) -> StringGTXValue(v) })
+        rellMap["sources_v0.9"] = GtvFactory.gtv(sourceCodes.mapValues { (_, v) -> GtvString(v) })
 
         if (moduleArgs != null) {
-            rellMap["moduleArgs"] = GtxTestUtils.decodeGtxStr(moduleArgs!!)
+            rellMap["moduleArgs"] = GtvTestUtils.decodeGtvStr(moduleArgs!!)
         }
 
-        val cfgMap = mutableMapOf<String, GTXValue>()
-        cfgMap["gtx"] = DictGTXValue(mapOf("rell" to DictGTXValue(rellMap)))
+        val cfgMap = mutableMapOf<String, Gtv>()
+        cfgMap["gtx"] = GtvFactory.gtv(mapOf("rell" to GtvFactory.gtv(rellMap)))
         for ((key, value) in extraModuleConfig) {
-            cfgMap[key] = GtxTestUtils.decodeGtxStr(value)
+            cfgMap[key] = GtvTestUtils.decodeGtvStr(value)
         }
 
-        return DictGTXValue(cfgMap)
+        return GtvFactory.gtv(cfgMap)
     }
 }

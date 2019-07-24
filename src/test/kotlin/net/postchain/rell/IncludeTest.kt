@@ -1,6 +1,7 @@
 package net.postchain.rell
 
 import net.postchain.rell.test.BaseRellTest
+import net.postchain.rell.test.RellCodeTester
 import org.junit.Test
 
 class IncludeTest: BaseRellTest(false) {
@@ -18,15 +19,118 @@ class IncludeTest: BaseRellTest(false) {
     }
 
     @Test fun testRecursiveInclude() {
-        tst.file("a.rell", "include 'b';")
-        tst.file("b.rell", "include 'a';")
-        tst.file("c.rell", "include 'main';")
-        tst.file("d.rell", "include 'd';")
+        chkInclude("OK",
+                "main.rell" to "include 'a';",
+                "a.rell" to "include 'b';",
+                "b.rell" to "include 'a';"
+        )
 
-        chkCompile("include 'a';", "ct_err:include_rec:a.rell,b.rell,a.rell")
-        chkCompile("include 'b';", "ct_err:include_rec:b.rell,a.rell,b.rell")
-        chkCompile("include 'c';", "ct_err:include_rec:main.rell,c.rell,main.rell")
-        chkCompile("include 'd';", "ct_err:include_rec:d.rell,d.rell")
+        chkInclude("OK",
+                "main.rell" to "include 'a';",
+                "a.rell" to "include 'b';",
+                "b.rell" to "include 'main';"
+        )
+
+        chkInclude("OK",
+                "main.rell" to "include 'a';",
+                "a.rell" to "include 'main';"
+        )
+
+        chkInclude("ct_err:include_self:a.rell",
+                "main.rell" to "include 'a';",
+                "a.rell" to "include 'a';"
+        )
+
+        chkInclude("ct_err:include_self:main.rell", "main.rell" to "include 'main';")
+    }
+
+    @Test fun testRecursiveIncludeNamespace() {
+        chkInclude("OK",
+                "main.rell" to "include 'a';",
+                "a.rell" to "include 'main';"
+        )
+
+        chkInclude("ct_err:include_rec:main.rell,a.rell,main.rell",
+                "main.rell" to "namespace foo { include 'a'; }",
+                "a.rell" to "include 'main';"
+        )
+
+        chkInclude("ct_err:include_rec:main.rell,a.rell,main.rell",
+                "main.rell" to "include 'a';",
+                "a.rell" to "namespace foo { include 'main'; }"
+        )
+
+        val files = mapOf(
+                "main.rell" to "include 'a';",
+                "a.rell" to "include 'b';",
+                "b.rell" to "include 'c';",
+                "c.rell" to "namespace foo { include 'd'; }",
+                "d.rell" to "include 'e';",
+                "e.rell" to "include 'f';"
+        )
+
+        chkInclude(files, "f.rell", "include 'main';", "ct_err:include_rec:main.rell,a.rell,b.rell,c.rell,d.rell,e.rell,f.rell,main.rell")
+        chkInclude(files, "f.rell", "include 'a';", "ct_err:include_rec:a.rell,b.rell,c.rell,d.rell,e.rell,f.rell,a.rell")
+        chkInclude(files, "f.rell", "include 'b';", "ct_err:include_rec:b.rell,c.rell,d.rell,e.rell,f.rell,b.rell")
+        chkInclude(files, "f.rell", "include 'c';", "ct_err:include_rec:c.rell,d.rell,e.rell,f.rell,c.rell")
+        chkInclude(files, "f.rell", "include 'd';", "OK")
+        chkInclude(files, "f.rell", "include 'e';", "OK")
+        chkInclude(files, "f.rell", "include 'f';", "ct_err:include_self:f.rell")
+    }
+
+    @Test fun testRecursiveIncludeNamespace2() {
+        val files = mapOf(
+                "main.rell" to "include 'a';",
+                "a.rell" to "include 'b';",
+                "b.rell" to "namespace foo { include 'c'; }",
+                "c.rell" to "include 'd';",
+                "d.rell" to "namespace bar { include 'e'; }",
+                "e.rell" to "include 'f';",
+                "f.rell" to "include 'g';"
+        )
+
+        chkInclude(files, "g.rell", "include 'main';", "ct_err:include_rec:main.rell,a.rell,b.rell,c.rell,d.rell,e.rell,f.rell,g.rell,main.rell")
+        chkInclude(files, "g.rell", "include 'a';", "ct_err:include_rec:a.rell,b.rell,c.rell,d.rell,e.rell,f.rell,g.rell,a.rell")
+        chkInclude(files, "g.rell", "include 'b';", "ct_err:include_rec:b.rell,c.rell,d.rell,e.rell,f.rell,g.rell,b.rell")
+        chkInclude(files, "g.rell", "include 'c';", "ct_err:include_rec:c.rell,d.rell,e.rell,f.rell,g.rell,c.rell")
+        chkInclude(files, "g.rell", "include 'd';", "ct_err:include_rec:d.rell,e.rell,f.rell,g.rell,d.rell")
+        chkInclude(files, "g.rell", "include 'e';", "OK")
+        chkInclude(files, "g.rell", "include 'f';", "OK")
+        chkInclude(files, "g.rell", "include 'g';", "ct_err:include_self:g.rell")
+    }
+
+    @Test fun testRecursiveIncludeExternal() {
+        chkInclude("OK",
+                "main.rell" to "include 'a';",
+                "a.rell" to "include 'main';"
+        )
+
+        chkInclude("ct_err:include_rec:main.rell,a.rell,main.rell",
+                "main.rell" to "external 'foo' { include 'a'; }",
+                "a.rell" to "include 'main';"
+        )
+
+        chkInclude("ct_err:include_rec:main.rell,a.rell,main.rell",
+                "main.rell" to "include 'a';",
+                "a.rell" to "external 'foo' { include 'main'; }"
+        )
+
+        val files = mapOf(
+                "main.rell" to "include 'a';",
+                "a.rell" to "include 'b';",
+                "b.rell" to "include 'c';",
+                "c.rell" to "external 'foo' { include 'd'; }",
+                "d.rell" to "include 'e';",
+                "e.rell" to "include 'f';"
+        )
+
+        chkInclude(files, "f.rell", "include 'main';", "ct_err:include_rec:main.rell,a.rell,b.rell,c.rell,d.rell,e.rell,f.rell,main.rell")
+        chkInclude(files, "f.rell", "include 'a';", "ct_err:include_rec:a.rell,b.rell,c.rell,d.rell,e.rell,f.rell,a.rell")
+        chkInclude(files, "f.rell", "include 'b';", "ct_err:include_rec:b.rell,c.rell,d.rell,e.rell,f.rell,b.rell")
+        chkInclude(files, "f.rell", "include 'c';", "ct_err:include_rec:c.rell,d.rell,e.rell,f.rell,c.rell")
+        chkInclude(files, "f.rell", "include 'd';", "OK")
+        chkInclude(files, "f.rell", "include 'e';", "OK")
+        chkInclude(files, "f.rell", "include 'f';", "ct_err:include_self:f.rell")
     }
 
     @Test fun testPaths() {
@@ -135,11 +239,9 @@ class IncludeTest: BaseRellTest(false) {
         tst.file("a.rell", "function f(): integer = 123;")
         tst.file("b.rell", "function f(): integer = 456;")
         tst.file("c.rell", "function g(): integer = f();")
-        tst.defs = listOf(
-                "namespace a { include 'a'; include 'c'; }",
-                "namespace b { include 'b'; include 'c'; }",
-                "namespace c { function f(): integer = 789; include 'c'; }"
-        )
+        def("namespace a { include 'a'; include 'c'; }")
+        def("namespace b { include 'b'; include 'c'; }")
+        def("namespace c { function f(): integer = 789; include 'c'; }")
         chk("a.g()", "int[123]")
         chk("b.g()", "int[456]")
         chk("c.g()", "int[789]")
@@ -159,7 +261,7 @@ class IncludeTest: BaseRellTest(false) {
             function f() {}
         """.trimIndent())
 
-        tst.defs = listOf("namespace a { include 'a'; }")
+        def("namespace a { include 'a'; }")
 
         chkCompile("function x(c: a.cls){}", "OK")
         chkCompile("function x(): integer = a.state.p;", "OK")
@@ -194,7 +296,7 @@ class IncludeTest: BaseRellTest(false) {
         tst.file("a.rell", "include 'b';")
         tst.file("b.rell", "include 'c';")
         tst.file("c.rell", "function f(): integer = 123;")
-        tst.defs = listOf("include 'a';")
+        def("include 'a';")
         chk("f()", "int[123]")
     }
 
@@ -205,5 +307,29 @@ class IncludeTest: BaseRellTest(false) {
 
         chkCompile("include 'a';", "ct_err:a.rell(2:7):name_conflict:class:user")
         chkCompile("include 'b';", "ct_err:b.rell(2:1):syntax")
+    }
+
+    private fun chkInclude(expected: String, vararg files: Pair<String, String>) {
+        val map = files.toMap()
+        chkInclude(map, expected)
+    }
+
+    private fun chkInclude(files: Map<String, String>, name: String, text: String, expected: String) {
+        val files2 = files + mapOf(name to text)
+        chkInclude(files2, expected)
+    }
+
+    private fun chkInclude(files: Map<String, String>, expected: String) {
+        val t = RellCodeTester(tstCtx)
+        t.chainDependency("foo", "abcd", 123)
+
+        for ((file, code) in files) {
+            if (file != "main.rell") {
+                t.file(file, code)
+            }
+        }
+
+        val mainCode = files.getValue("main.rell")
+        t.chkCompile(mainCode, expected)
     }
 }

@@ -2,6 +2,7 @@ package net.postchain.rell.module
 
 import net.postchain.core.UserMistake
 import net.postchain.rell.test.BaseGtxTest
+import net.postchain.rell.test.RellGtxTester
 import net.postchain.rell.test.SqlTestUtils
 import org.junit.Test
 import kotlin.test.assertFailsWith
@@ -25,24 +26,24 @@ class GtxModuleTest : BaseGtxTest() {
 
     @Test fun testQueryNoObjects() {
         tst.defs = classDefs
-        tst.chkQuery("city @* {}", "[]")
-        tst.chkQuery("city @* {}.name", "[]")
+        chk("city @* {}", "[]")
+        chk("city @* {}.name", "[]")
     }
 
     @Test fun testQuerySimple() {
         tst.defs = classDefs
         tst.inserts = inserts
 
-        tst.chkQuery("city @* {}", "[1,2,3]")
-        tst.chkQuery("city @* {}.name", "['New York','Los Angeles','Seattle']")
+        chk("city @* {}", "[1,2,3]")
+        chk("city @* {}.name", "['New York','Los Angeles','Seattle']")
 
-        tst.chkQueryEx("query q(city) = person @* { city };", "city:1", "[5]")
-        tst.chkQueryEx("query q(city) = person @* { city };", "city:2", "[4,6]")
-        tst.chkQueryEx("query q(city) = person @* { city };", "city:3", "[]")
+        chkFull("query q(city) = person @* { city };", "city:1", "[5]")
+        chkFull("query q(city) = person @* { city };", "city:2", "[4,6]")
+        chkFull("query q(city) = person @* { city };", "city:3", "[]")
 
-        tst.chkQueryEx("query q(name) = city @ { name };", "name:'New York'", "1")
-        tst.chkQueryEx("query q(name) = city @ { name };", "name:'Los Angeles'", "2")
-        tst.chkQueryEx("query q(name) = city @ { name };", "name:'Seattle'", "3")
+        chkFull("query q(name) = city @ { name };", "name:'New York'", "1")
+        chkFull("query q(name) = city @ { name };", "name:'Los Angeles'", "2")
+        chkFull("query q(name) = city @ { name };", "name:'Seattle'", "3")
     }
 
     @Test fun testQueryGetPersonsNamesByCityName() {
@@ -50,9 +51,9 @@ class GtxModuleTest : BaseGtxTest() {
         tst.inserts = inserts
 
         val query = "query q(cityName: text) = person @* { .city.name == cityName }.name;"
-        tst.chkQueryEx(query, "cityName:'Los Angeles'", "['Bob','Trudy']")
-        tst.chkQueryEx(query, "cityName:'New York'", "['Alice']")
-        tst.chkQueryEx(query, "cityName:'Seattle'", "[]")
+        chkFull(query, "cityName:'Los Angeles'", "['Bob','Trudy']")
+        chkFull(query, "cityName:'New York'", "['Alice']")
+        chkFull(query, "cityName:'Seattle'", "[]")
     }
 
     @Test fun testQueryGetPersonAddressByName() {
@@ -60,9 +61,9 @@ class GtxModuleTest : BaseGtxTest() {
         tst.inserts = inserts
 
         val query = "query q(name: text) = person @ { name } ( city_name = .city.name, .street, .house );"
-        tst.chkQueryEx(query, "name:'Bob'", "{'city_name':'Los Angeles','street':'Main St','house':5}")
-        tst.chkQueryEx(query, "name:'Alice'", "{'city_name':'New York','street':'Evergreen Ave','house':11}")
-        tst.chkQueryEx(query, "name:'Trudy'", "{'city_name':'Los Angeles','street':'Mulholland Dr','house':3}")
+        chkFull(query, "name:'Bob'", "{'city_name':'Los Angeles','house':5,'street':'Main St'}")
+        chkFull(query, "name:'Alice'", "{'city_name':'New York','house':11,'street':'Evergreen Ave'}")
+        chkFull(query, "name:'Trudy'", "{'city_name':'Los Angeles','house':3,'street':'Mulholland Dr'}")
     }
 
     @Test fun testQueryGetPersonsByCitySet() {
@@ -72,36 +73,36 @@ class GtxModuleTest : BaseGtxTest() {
         val query = """
             query q(cities: set<text>): list<text> {
                 val persons = list<text>();
-                for (locCity in cities) persons.addAll(person @* { person.city.name == locCity }.name);
+                for (locCity in cities) persons.add_all(person @* { person.city.name == locCity }.name);
                 return persons;
             }
         """.trimIndent()
 
-        tst.chkQueryEx(query, "cities:[]", "[]")
-        tst.chkQueryEx(query, "cities:['New York']", "['Alice']")
-        tst.chkQueryEx(query, "cities:['Los Angeles']", "['Bob','Trudy']")
-        tst.chkQueryEx(query, "cities:['New York','Los Angeles']", "['Alice','Bob','Trudy']")
-        tst.chkQueryEx(query, "cities:['Seattle','New York']", "['Alice']")
+        chkFull(query, "cities:[]", "[]")
+        chkFull(query, "cities:['New York']", "['Alice']")
+        chkFull(query, "cities:['Los Angeles']", "['Bob','Trudy']")
+        chkFull(query, "cities:['New York','Los Angeles']", "['Alice','Bob','Trudy']")
+        chkFull(query, "cities:['Seattle','New York']", "['Alice']")
     }
 
     @Test fun testQueryErrArgMissing() {
         tst.defs = classDefs
         assertFailsWith<UserMistake> {
-            tst.chkQueryEx("query q(name: text) = city @ { name };", "", "")
+            chkFull("query q(name: text) = city @ { name };", "", "")
         }
     }
 
     @Test fun testQueryErrArgExtra() {
         tst.defs = classDefs
         assertFailsWith<UserMistake> {
-            tst.chkQueryEx("query q(name: text) = city @ { name };", "name:'New York',foo:12345", "")
+            chkFull("query q(name: text) = city @ { name };", "name:'New York',foo:12345", "")
         }
     }
 
     @Test fun testQueryErrArgWrongType() {
         tst.defs = classDefs
         assertFailsWith<UserMistake> {
-            tst.chkQueryEx("query q(name: text) = city @ { name };", "name:12345", "")
+            chkFull("query q(name: text) = city @ { name };", "name:12345", "")
         }
     }
 
@@ -111,13 +112,13 @@ class GtxModuleTest : BaseGtxTest() {
         val query = """
             query q(cities: set<text>): list<text> {
                 val persons = list<text>();
-                for (locCity in cities) persons.addAll(person @* { person.city.name == locCity }.name);
+                for (locCity in cities) persons.add_all(person @* { person.city.name == locCity }.name);
                 return persons;
             }
         """.trimIndent()
-        tst.chkQueryEx(query, "cities:['New York']", "['Alice']")
+        chkFull(query, "cities:['New York']", "['Alice']")
         assertFailsWith<UserMistake> {
-            tst.chkQueryEx(query, "cities:['New York','New York']", "")
+            chkFull(query, "cities:['New York','New York']", "")
         }
     }
 
@@ -125,14 +126,14 @@ class GtxModuleTest : BaseGtxTest() {
         tst.defs = classDefs
         tst.inserts = inserts
         assertFailsWith<UserMistake> {
-            tst.chkQueryEx("query q(city) = person @* { city };", "city:999", "")
+            chkFull("query q(city) = person @* { city };", "city:999", "")
         }
     }
 
     @Test fun testQueryErrArgObjectIdOfWrongClass() {
         tst.defs = classDefs
         assertFailsWith<UserMistake> {
-            tst.chkQueryEx("query q(city) = person @* { city };", "city:5", "")
+            chkFull("query q(city) = person @* { city };", "city:5", "")
         }
     }
 
@@ -140,14 +141,30 @@ class GtxModuleTest : BaseGtxTest() {
         tst.defs = classDefs
         tst.inserts = inserts
         assertFailsWith<UserMistake> {
-            tst.chkQueryEx("query q(name: text) = city @ { name };", "city:'Den Helder'", "")
+            chkFull("query q(name: text) = city @ { name };", "city:'Den Helder'", "")
         }
     }
 
     @Test fun testQueryErrRuntimeErrorOther() {
         tst.defs = classDefs
         assertFailsWith<UserMistake> {
-            tst.chkQueryEx("query q(a: integer, b: integer) = a / b;", "a:123,b:0", "")
+            chkFull("query q(a: integer, b: integer) = a / b;", "a:123,b:0", "")
+        }
+    }
+
+    @Test fun testTableStructureUpdate() {
+        run {
+            val t = RellGtxTester(tstCtx, chainId = 0)
+            t.def("class user { name; }")
+            t.insert("c0.user", "name", "100,'Bob'")
+            t.insert("c0.user", "name", "101,'Alice'")
+            t.chkData("user(100,Bob)", "user(101,Alice)")
+        }
+
+        run {
+            val t = RellGtxTester(tstCtx, chainId = 0)
+            t.def("class user { name; mutable score: integer = 123; }")
+            t.chkData("user(100,Bob,123)", "user(101,Alice,123)")
         }
     }
 }

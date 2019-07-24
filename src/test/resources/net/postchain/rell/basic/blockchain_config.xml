@@ -43,7 +43,7 @@
             <entry key="rell">
                 <dict>
                     <entry key = "mainFile"><string>mymodule.rell</string></entry>
-                    <entry key = "files_v0.8">
+                    <entry key = "files_v0.9">
                         <dict>
                             <entry key = "mymodule.rell">
                                 <string>classpath:/net/postchain/rell/module/mymodule.rell</string>

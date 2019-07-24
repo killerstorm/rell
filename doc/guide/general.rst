@@ -2,8 +2,6 @@
 General Language Features
 =========================
 
---------------
-
 Types
 =====
 
@@ -14,9 +12,10 @@ Simple types:
 -  ``integer``
 -  ``text``
 -  ``byte_array``
+-  ``rowid`` - primary key of a database record, 64-bit integer, supports only comparison operations
 -  ``json``
--  ``unit`` (no value; cannot be used explicitly)
--  ``null`` (type of ``null`` expression; cannot be used explicitly)
+-  ``unit`` - no value; cannot be used explicitly
+-  ``null`` - type of ``null`` expression; cannot be used explicitly
 
 Simple type aliases:
 
@@ -36,14 +35,14 @@ Complex types:
 -  ``set<T>``
 -  ``map<K,V>``
 -  ``range`` (can be used in ``for`` statement)
--  ``GTXValue`` - used to encode parameters and results of operations and queries
+-  ``gtv`` - used to encode parameters and results of operations and queries
+-  ``virtual<T>`` - a reduced data structure with Merkle tree
 
 Nullable type
 -------------
 
 -  Class attributes cannot be nullable.
--  Can be used with almost any type (except nullable, ``unit``,
-   ``null``).
+-  Can be used with almost any type (except nullable, ``unit``, ``null``).
 -  Nullable nullable (``T??`` is not allowed).
 -  Normal operations of the underlying type cannot be applied directly.
 -  Supports ``?:``, ``?.`` and ``!!`` operators (like in Kotlin).
@@ -52,35 +51,43 @@ Compatibility with other types:
 
 -  Can assign a value of type ``T`` to a variable of type ``T?``, but
    not the other way round.
--  Can assign ``null`` to a variable of type ``T?``, but not to a
-   variable of type ``T``.
--  Can assign a value of type ``(T)`` (tuple) to a variable of type
-   ``(T?)``.
--  Cannot assign a value of type ``list<T>`` to a variable of type
-   ``list<T?>``.
+-  Can assign ``null`` to a variable of type ``T?``, but not to a variable of type ``T``.
+-  Can assign a value of type ``(T)`` (tuple) to a variable of type ``(T?)``.
+-  Cannot assign a value of type ``list<T>`` to a variable of type ``list<T?>``.
 
 Allowed operations:
 
 -  Null comparison: ``x == null``, ``x != null``.
--  ``?:`` - Elvis operator: ``x ?: y`` means ``x`` if ``x`` is not
-   ``null``, otherwise ``y``.
--  ``?.`` - safe access: ``x?.y`` results in ``x.y`` if ``x`` is not
-   ``null`` and ``null`` otherwise.
--  Operator ``?.`` can be used with function calls, e. g.
-   ``x?.upperCase()``.
--  ``!!`` - null check operator: ``x!!`` returns value of ``x`` if ``x``
-   is not ``null``, otherwise throws an exception.
--  ``require(x)``, ``requireNotEmpty(x)``: throws an exception if ``x``
-   is ``null``, otherwise returns value of ``x``.
+-  ``??`` - null check operator: ``x??`` is equivalent to ``x != null``
+-  ``!!`` - null assertion operator: ``x!!`` returns value of ``x`` if ``x`` is not ``null``, otherwise throws an exception
+-  ``?:`` - Elvis operator: ``x ?: y`` means ``x`` if ``x`` is not ``null``, otherwise ``y``
+-  ``?.`` - safe access: ``x?.y`` results in ``x.y`` if ``x`` is not ``null`` and ``null`` otherwise;
+   similarly, ``x?.y()`` either evaluates and returns ``x.y()`` or returns ``null``
+-  ``require(x)``, ``require_not_empty(x)``: throws an exception if ``x`` is ``null``, otherwise returns value of ``x``
 
 Examples:
 
 ::
 
-   val x: integer? = 123;
-   val y = x;            // type of "y" is "integer?"
-   val z = y!!;          // type of "z" is "integer"
-   val p = require(y);   // type of "p" is "integer"
+    function f(): integer? { ... }
+
+    val x: integer? = f();  // type of "x" is "integer?"
+    val y = x;              // type of "y" is "integer?"
+
+    val i = y!!;            // type of "i" is "integer"
+    val j = require(y);     // type of "j" is "integer"
+
+    val a = y ?: 456;       // type of "a" is "integer"
+    val b = y ?: null;      // type of "b" is "integer?"
+
+    val p = y!!;            // type of "p" is "integer"
+    val q = y?.to_hex();    // type of "q" is "text?"
+
+    if (x != null) {
+        val u = x;          // type of "u" is "integer" - smart cast is applied to "x"
+    } else {
+        val v = x;          // type of "v" is "integer?"
+    }
 
 Tuple type
 ----------
@@ -96,10 +103,8 @@ Examples:
 Tuple types are compatible only if names and types of fields are the
 same:
 
--  ``(x:integer, y:integer)`` and ``(a:integer,b:integer)`` are not
-   compatible.
--  ``(x:integer, y:integer)`` and ``(integer,integer)`` are not
-   compatible.
+-  ``(x:integer, y:integer)`` and ``(a:integer,b:integer)`` are not compatible.
+-  ``(x:integer, y:integer)`` and ``(integer,integer)`` are not compatible.
 
 Collection types
 ----------------
@@ -121,26 +126,64 @@ Following types are mutable:
 -  Record type - if the record has a mutable field, or a field of a mutable type.
 -  Tuple - if a type of an element is mutable.
 
-GTXValue
+gtv
 --------
 
-``GTXValue`` is a type used to repsesent encoded arguments and results of remote operation and query calls.
-It may be a simple value (integer, string, byte array), an array of values or a string-keyed map.
+``gtv`` is a type used to repsesent encoded arguments and results of remote operation and query calls.
+It may be a simple value (integer, string, byte array), an array of values or a string-keyed dictionary.
 
-Some Rell types are not GTX-compatible. Values of such types cannot be converted to/from ``GTXValue``, and the types
+Some Rell types are not Gtv-compatible. Values of such types cannot be converted to/from ``gtv``, and the types
 cannot be used as types of operation/query parameters or result.
 
-Rules of GTX-compatibility:
+Rules of Gtv-compatibility:
 
-- a ``map<K,V>`` is GTX-compatible only if ``K`` is ``text``.
-- ``range`` is not GTX-compatible
-- a complex type is not GTX-compatible if a type of its component is not GTX-compatible
+- ``range`` is not Gtv-compatible
+- a complex type is not Gtv-compatible if a type of its component is not Gtv-compatible
 
-For queries, a type must be pretty-GTX-compatible. Rules are:
+Virtual types
+-------------
 
-- a type must be GTX-compatible
-- for tuples: either all fields have names, or no field has a name
-- component types must be pretty-GTX-compatible as well
+Type ``virtual<T>`` can be used only with following types ``T``:
+
+- ``list<*>``
+- ``set<*>``
+- ``map<text, *>``
+- ``record``
+- tuple
+
+Additionally, types of all internal elements of ``T`` must satisfy following constraints:
+
+- must be Gtv-compatible
+- for a ``map`` type, the key type must be ``text`` (i. e. ``map<text, *>``)
+
+Operations available for all virtual types:
+
+- member access: ``[]`` for ``list`` and ``map``, ``.name`` for ``record`` and tuple
+- ``.to_full(): T`` - converts the virtual value to the original value, if the value is full
+  (all internal elements are present), otherwise throws an exception
+- ``.hash(): byte_array`` - returns the hash of the value, which is the same as the hash of the
+  original value.
+- ``virtual<T>.from_gtv(gtv): virtual<T>`` - decodes a virtual value from a Gtv.
+
+Features of ``virtual<T>``:
+
+- it is immutable
+- reading a member of type ``list<*>``, ``map<*,*>``, ``record`` or tuple returns a value of
+  the corresponding virtual type, not of the actual member type
+- cannot be converted to Gtv, so cannot be used as a return type of a ``query``
+
+Example:
+
+::
+
+    record rec { t: text; s: integer; }
+
+    operation op(recs: virtual<list<rec>>) {
+        for (rec in recs) {                 // type of "rec" is "virtual<rec>", not "rec"
+            val full = rec.to_full();       // type of "full" is "rec", fails if the value is not full
+            print(full.t);
+        }
+    }
 
 Subtypes
 --------
@@ -167,28 +210,28 @@ Suppose file ``helper.rell`` contains:
 
 ::
 
-   class user { name; }
-   function square(x: integer): integer = x * x;
+    class user { name; }
+    function square(x: integer): integer = x * x;
 
 Definitions from ``helper.rell`` can be included using the ``include`` directive:
 
 ::
 
-   include 'helper';
+    include 'helper';
 
-   query get_all_users() = user @* {};
-   query my_query() = square(33);
+    query get_all_users() = user @* {};
+    query my_query() = square(33);
 
 Included directive can be put in a namespace or an external block:
 
 ::
 
-   namespace helper {
-       include 'helper';
-   }
+    namespace helper {
+        include 'helper';
+    }
 
-   query get_all_users() = helper.user @* {};
-   query my_query() = helper.square(33);
+    query get_all_users() = helper.user @* {};
+    query my_query() = helper.square(33);
 
 All definitions from the included file are visible in the including file, and vice versa, i. e. the code in the
 included file can access all definitions of the including file.
@@ -198,17 +241,17 @@ configuration under the path ``gtx.rell``:
 
 ::
 
-   {
-       "gtx": {
-           "rell": {
-               "mainFile": "main.rell",
-               "sources_v0.8": {
-                   "main.rell": "...",
-                   "helper.rell": "..."
-               }
-           }
-       }
-   }
+    {
+        "gtx": {
+            "rell": {
+                "mainFile": "main.rell",
+                "sources_v0.9": {
+                    "main.rell": "...",
+                    "helper.rell": "..."
+                }
+            }
+        }
+    }
 
 More details:
 
@@ -221,37 +264,51 @@ More details:
 Class
 -----
 
-::
+Instances of a class in Rell are stored in a database, not in memory. They have to be created and deleted explicitly
+using Rell ``create`` and ``delete`` expressions. An in-memory equivalent of a class in Rell is a record.
 
-   class company {
-       name: text;
-       address: text;
-   }
-
-   class user {
-       firstName: text;
-       lastName: text;
-       yearOfBirth: integer;
-       mutable salary: integer;
-   }
-
-If attribute type is not specified, it will be the same as attribute
-name:
+A variable of a class type holds an ID (primary key) of the corresponding database record, but not its attribute values.
 
 ::
 
-   class user {
-       name;       // built-in type "name"
-       company;    // user-defined type "company" (error if no such type)
-   }
+    class company {
+        name: text;
+        address: text;
+    }
+
+    class user {
+        first_name: text;
+        last_name: text;
+        year_of_birth: integer;
+        mutable salary: integer;
+    }
+
+If attribute type is not specified, it will be the same as attribute name:
+
+::
+
+    class user {
+        name;       // built-in type "name"
+        company;    // user-defined type "company" (error if no such type)
+    }
 
 Attributes may have default values:
 
 ::
 
-   class user {
-       homeCity: text = 'New York';
-   }
+    class user {
+        home_city: text = 'New York';
+    }
+
+An ID (database primary key) of a class object can be accessed via the ``rowid`` implicit attribute (of type ``rowid``):
+
+::
+
+    val u = user @ { .name == 'Bob' };
+    print(u.rowid);
+
+    val alice_id = user @ { .name == 'Alice' } ( .rowid );
+    print(alice_id);
 
 Keys and Indices
 ~~~~~~~~~~~~~~~~
@@ -260,41 +317,41 @@ Classes can have ``key`` and ``index`` clauses:
 
 ::
 
-   class user {
-       name: text;
-       address: text;
-       key name;
-       index address;
-   }
+    class user {
+        name: text;
+        address: text;
+        key name;
+        index address;
+    }
 
 Keys and indices may have multiple attributes:
 
 ::
 
-   class user {
-       firstName: text;
-       lastName: text;
-       key firstName, lastName;
-   }
+    class user {
+        first_name: text;
+        last_name: text;
+        key first_name, last_name;
+    }
 
 Attribute definitions can be combined with ``key`` or ``index`` clauses,
 but such definition has restrictions (e. g. cannot specify ``mutable``):
 
 ::
 
-   class user {
-       key firstName: text, lastName: text;
-       index address: text;
-   }
+    class user {
+        key first_name: text, last_name: text;
+        index address: text;
+    }
 
 Class annotations
 ~~~~~~~~~~~~~~~~~
 
 ::
 
-   class user (log) {
-       name: text;
-   }
+    class user (log) {
+        name: text;
+    }
 
 The ``log`` annotation has following effects:
 
@@ -310,24 +367,24 @@ Object is similar to class, but there can be only one instance of an object:
 
 ::
 
-   object event_stats {
-       mutable event_count: integer = 0;
-       mutable last_event: text = 'n/a';
-   }
+    object event_stats {
+        mutable event_count: integer = 0;
+        mutable last_event: text = 'n/a';
+    }
 
 Reading object attributes:
 
 ::
 
-   query get_event_count() = event_stats.event_count;
+    query get_event_count() = event_stats.event_count;
 
 Modifying an object:
 
 ::
 
-   operation process_event(event: text) {
-       update event_stats ( event_count += 1, last_event = event );
-   }
+    operation process_event(event: text) {
+        update event_stats ( event_count += 1, last_event = event );
+    }
 
 Features of objects:
 
@@ -339,47 +396,51 @@ Features of objects:
 Record
 ------
 
-Record declaration:
+A record is similar to a class, but its instances exist in memory, not in a database.
 
 ::
 
-   record user {
-       name: text;
-       address: text;
-       mutable balance: integer = 0;
-   }
+    record user {
+        name: text;
+        address: text;
+        mutable balance: integer = 0;
+    }
+
+Features of records:
 
 - Attributes are immutable by default, and only mutable when declared with ``mutable`` keyword.
+- Attributes can have
 - An attribute may have a default value, which is used if the attribute is not specified during construction.
+- Records are deleted from memory implicitly by a garbage collector.
 
 Creating record values:
 
 ::
 
-   val u = user(name = 'Bob', address = 'New York');
+    val u = user(name = 'Bob', address = 'New York');
 
 Same rules as for the ``create`` expression apply: no need to specify attribute name if it can be resolved implicitly
 by name or type:
 
 ::
 
-   val name = 'Bob';
-   val address = 'New York';
-   val u = user(name, address);
-   val u2 = user(address, name); // Order does not matter - same record object is created.
+    val name = 'Bob';
+    val address = 'New York';
+    val u = user(name, address);
+    val u2 = user(address, name); // Order does not matter - same record object is created.
 
 Record attributes can be accessed using operator ``.``:
 
 ::
 
-   print(u.name, u.address);
+    print(u.name, u.address);
 
 Safe-access operator ``?.`` can be used to read or modify attributes of a nullable record:
 
 ::
 
-   val u: user? = findUser('Bob');
-   u?.balance += 100;        // no-op if 'u' is null
+    val u: user? = find_user('Bob');
+    u?.balance += 100;        // no-op if 'u' is null
 
 Enum
 -----
@@ -388,11 +449,11 @@ Enum declaration:
 
 ::
 
-   enum currency {
-       USD,
-       EUR,
-       GBP
-   }
+    enum currency {
+        USD,
+        EUR,
+        GBP
+    }
 
 Values are stored in a database as integers. Each constant has a numeric value equal to its position in the enum
 (the first value is 0).
@@ -401,88 +462,85 @@ Usage:
 
 ::
 
-   var c: currency;
-   c = currency.USD;
+    var c: currency;
+    c = currency.USD;
 
 Enum-specific functions and properties:
 
 ::
 
-   val cs: list<currency> = currency.values() // Returns all values (in the order in which they are declared)
+    val cs: list<currency> = currency.values() // Returns all values (in the order in which they are declared)
 
-   val eur = currency.value('EUR') // Finds enum value by name
-   val gbp = currency.value(2) // Finds enum value by index
+    val eur = currency.value('EUR') // Finds enum value by name
+    val gbp = currency.value(2) // Finds enum value by index
 
-   val usdStr: text = currency.USD.name // Returns 'USD'
-   val usdValue: integer = currency.USD.value // Returns 0.
+    val usd_str: text = currency.USD.name // Returns 'USD'
+    val usd_value: integer = currency.USD.value // Returns 0.
 
 Query
 -----
 
 -  Cannot modify the data in the database (compile-time check).
 -  Must return a value.
--  If return type is not explicitly specified, it is implicitly
-   deducted.
--  Parameter types and return type must be pretty-GTX-compatible.
+-  If return type is not explicitly specified, it is implicitly deducted.
+-  Parameter types and return type must be Gtv-compatible.
 
 Short form:
 
 ::
 
-   query q(x: integer): integer = x * x;
+    query q(x: integer): integer = x * x;
 
 Full form:
 
 ::
 
-   query q(x: integer): integer {
-       return x * x;
-   }
+    query q(x: integer): integer {
+        return x * x;
+    }
 
 Operation
 ---------
 
 -  Can modify the data in the database.
 -  Does not return a value.
--  Parameter types must be GTX-compatible.
+-  Parameter types must be Gtv-compatible.
 
 ::
 
-   operation createUser(name: text) {
-       create user(name = name);
-   }
+    operation create_user(name: text) {
+        create user(name = name);
+    }
 
 Function
 --------
 
 -  Can return nothing or a value.
--  Can modify the data in the database when called from an operation
-   (run-time check).
+-  Can modify the data in the database when called from an operation (run-time check).
 -  Can be called from queries, operations or functions.
--  If return type is not specified explicitly, it is ``unit`` (no return
-   value).
+-  If return type is not specified explicitly, it is ``unit`` (no return value).
 
 Short form:
 
 ::
 
-   function f(x: integer): integer = x * x;
+    function f(x: integer): integer = x * x;
 
 Full form:
 
 ::
 
-   function f(x: integer): integer {
-       return x * x;
-   }
+    function f(x: integer): integer {
+        return x * x;
+    }
 
 When return type is not specified, it is considered ``unit``:
 
 ::
 
-   function f(x: integer) {
-       print(x);
-   }
+    function f(x: integer) {
+        print(x);
+    }
 
 Namespace
 ---------
@@ -491,33 +549,33 @@ Definitions can be put in a namespace:
 
 ::
 
-   namespace foo {
-       class user {
-           name;
-           country;
-       }
+    namespace foo {
+        class user {
+            name;
+            country;
+        }
 
-       record point {
-           x: integer;
-           y: integer;
-       }
+        record point {
+            x: integer;
+            y: integer;
+        }
 
-       enum country {
-           USA,
-           DE,
-           FR
-       }
-   }
+        enum country {
+            USA,
+            DE,
+            FR
+        }
+    }
 
-   query get_users_by_country(c: foo.country) = foo.user @* { .country == c };
+    query get_users_by_country(c: foo.country) = foo.user @* { .country == c };
 
 Features of namespaces:
 
-- Operations and queries are not allowed in a namespace.
 - No need to specify a full name within a namespace, i. e. can use ``country`` under namespace ``foo`` directly, not as
   ``foo.country``.
 - Names of tables for classes and objects defined in a namespace contain the full name, e. g. the table for class
-  ``foo.user`` will be called ``c0.foo.user``.
+  ``foo.user`` will be named ``c0.foo.user``.
+- It is allowed to define namespace with same name multiple times with different inner definitions.
 
 External
 --------
@@ -526,13 +584,13 @@ External blocks are used to access classes defined in other blockchains:
 
 ::
 
-   external 'foo' {
-       class user(log) {
-           name;
-       }
-   }
+    external 'foo' {
+        class user(log) {
+            name;
+        }
+    }
 
-   query get_all_users() = user @* {};
+    query get_all_users() = user @* {};
 
 In this example, ``'foo'`` is the name of an external blockchain. To be used in an external block, a blockchain
 must be defined in the blockchain configuration (``dependencies`` node).
@@ -544,9 +602,9 @@ Can use ``include`` within an external block:
 
 ::
 
-   external 'foo' {
-       include 'foo_defs';
-   }
+    external 'foo' {
+        include 'foo_defs';
+    }
 
 Other features:
 
@@ -568,12 +626,12 @@ To access blocks and transactions of an external blockchian, a special syntax is
 
 ::
 
-   namespace foo {
-       external 'foo' {
-           class transaction;
-           class block;
-       }
-   }
+    namespace foo {
+        external 'foo' {
+            class transaction;
+            class block;
+        }
+    }
 
    function get_foo_transactions(): list<foo.transaction> = foo.transaction @* {};
    function get_foo_blocks(): list<foo.block> = foo.block @* {};
@@ -618,13 +676,13 @@ List:
 
 ::
 
-   [ 1, 2, 3, 4, 5 ]
+    [ 1, 2, 3, 4, 5 ]
 
 Map:
 
 ::
 
-   [ 'Bob' : 123, 'Alice' : 456 ]
+    [ 'Bob' : 123, 'Alice' : 456 ]
 
 Operators
 ---------
@@ -633,32 +691,8 @@ Special:
 ~~~~~~~~
 
 -  ``.`` - member access: ``user.name``, ``s.sub(5, 10)``
--  ``()`` - function call: ``print('Hello')``, ``value.str()``
+-  ``()`` - function call: ``print('Hello')``, ``value.to_text()``
 -  ``[]`` - element access: ``values[i]``
-
-Null handling:
-~~~~~~~~~~~~~~
-
--  ``?:`` - Elvis operator: ``x ?: y`` returns ``x`` if ``x`` is not
-   ``null``, otherwise returns ``y``.
--  ``?.`` - safe access operator: ``x?.y`` returns ``x.y`` if ``x`` is
-   not ``null``, otherwise returns ``null``; similarly, ``x?.y()``
-   returns either ``x.y()`` or ``null``.
--  ``!!`` - null check: ``x!!`` returns ``x`` if ``x`` is not ``null``,
-   otherwise throws an exception.
-   
-Examples:
-
-::
-
-   val x: integer? = 123;
-   val y = x;              // type of "y" is "integer?"
-
-   val a = y ?: 456;       // type of "a" is "integer"
-   val b = y ?: null;      // type of "b" is "integer?"
-
-   val p = y!!;            // type of "p" is "integer"
-   val q = y?.hex();       // type of "q" is "text?"
 
 Comparison:
 ~~~~~~~~~~~
@@ -676,26 +710,16 @@ Operators ``==`` and ``!=`` compare values. For complex types (collections, tupl
 values, recursively. For ``class`` object values only object IDs are compared.
 
 Operators ``===`` and ``!==`` compare references, not values. They can be used only on types:
-tuple, ``record``, ``list``, ``set``, ``map``, ``GTXValue``, ``range``.
+tuple, ``record``, ``list``, ``set``, ``map``, ``gtv``, ``range``.
 
 Example:
 
 ::
 
-   val x = [1, 2, 3];
-   val y = list(x);
-   print(x == y);      // true - values are equal
-   print(x === y);     // false - two different objects
-
-If:
-~~~~~~~~~~~
-
-Operator ``if`` is used for conditional evaluation:
-
-::
-
-   val max = if (a >= b) a else b;
-   return max;
+    val x = [1, 2, 3];
+    val y = list(x);
+    print(x == y);      // true - values are equal
+    print(x === y);     // false - two different objects
 
 Arithmetical:
 ~~~~~~~~~~~~~
@@ -715,6 +739,16 @@ Logical:
 -  ``or``
 -  ``not``
 
+If:
+~~~~~~~~~~~
+
+Operator ``if`` is used for conditional evaluation:
+
+::
+
+    val max = if (a >= b) a else b;
+    return max;
+
 Other:
 ~~~~~~
 
@@ -732,16 +766,16 @@ Constants:
 
 ::
 
-   val x = 123;
-   val y: text = 'Hello';
+    val x = 123;
+    val y: text = 'Hello';
 
 Variables:
 
 ::
 
-   var x: integer;
-   var y = 123;
-   var z: text = 'Hello';
+    var x: integer;
+    var y = 123;
+    var z: text = 'Hello';
 
 Tuple unpacking
 ~~~~~~~~~~~~~~~
@@ -776,58 +810,58 @@ Assignment:
 
 ::
 
-   x = 123;
-   values[i] = z;
-   y += 15;
+    x = 123;
+    values[i] = z;
+    y += 15;
 
 Function call:
 
 ::
 
-   print('Hello');
+    print('Hello');
 
 Return:
 
 ::
 
-   return;
-   return 123;
+    return;
+    return 123;
 
 Block:
 
 ::
 
-   {
-       val x = calc();
-       print(x);
-   }
+    {
+        val x = calc();
+        print(x);
+    }
 
 If statement
 ------------
 
 ::
 
-   if (x == 5) print('Hello');
+    if (x == 5) print('Hello');
 
-   if (y == 10) {
-       print('Hello');
-   } else {
-       print('Bye');
-   }
+    if (y == 10) {
+        print('Hello');
+    } else {
+        print('Bye');
+    }
 
-   if (x == 0) {
-       return 'Zero';
-   } else if (x == 1) {
-       return 'One';
-   } else {
-       return 'Many';
-   }
+    if (x == 0) {
+        return 'Zero';
+    } else if (x == 1) {
+        return 'One';
+    } else {
+        return 'Many';
+    }
 
 Can also be used as an expression:
 
 ::
 
-   function my_abs(x: integer): integer = if (x >= 0) x else -x;
+    function my_abs(x: integer): integer = if (x >= 0) x else -x;
 
 When statement
 --------------
@@ -836,14 +870,14 @@ Similar to ``switch`` in C++ or Java, but using the syntax of ``when`` in Kotlin
 
 ::
 
-   when(x) {
-       1 -> return 'One';
-       2, 3 -> return 'Few';
-       else -> {
-           val res = 'Many: ' + x;
-           return res;
-       }
-   }
+    when(x) {
+        1 -> return 'One';
+        2, 3 -> return 'Few';
+        else -> {
+            val res = 'Many: ' + x;
+            return res;
+        }
+    }
 
 Features:
 
@@ -855,13 +889,13 @@ A form of ``when`` without an argument is equivalent to a chain of ``if`` ... ``
 
 ::
 
-   when {
-       x == 1 -> return 'One';
-       x >= 2 and x <= 7 -> return 'Several';
-       x == 11, x == 111 -> return 'Magic number';
-       some_value > 1000 -> return 'Special case';
-       else -> return 'Unknown';
-   }
+    when {
+        x == 1 -> return 'One';
+        x >= 2 and x <= 7 -> return 'Several';
+        x == 11, x == 111 -> return 'Magic number';
+        some_value > 1000 -> return 'Special case';
+        else -> return 'Unknown';
+    }
 
 - Can use arbitrary boolean expressions.
 - When multiple comma-separated expressions are specified, any of them triggers the block (i. e. they are combined via OR).
@@ -870,11 +904,11 @@ Both forms of ``when`` (with and without an argument) can be used as an expressi
 
 ::
 
-   return when(x) {
-       1 -> 'One';
-       2, 3 -> 'Few';
-       else -> 'Many';
-   }
+    return when(x) {
+        1 -> 'One';
+        2, 3 -> 'Few';
+        else -> 'Many';
+    }
 
 - ``else`` must always be specified, unless all possible values of the argument are specified (possible for boolean
   and enum types).
@@ -887,13 +921,13 @@ For:
 
 ::
 
-   for (x in range(10)) {
-       print(x);
-   }
+    for (x in range(10)) {
+        print(x);
+    }
 
-   for (u in user @* {}) {
-       print(u.name);
-   }
+    for (u in user @* {}) {
+        print(u.name);
+    }
 
 The expression after ``in`` may return a ``range`` or a collection
 (``list``, ``set``, ``map``).
@@ -909,26 +943,26 @@ While:
 
 ::
 
-   while (x < 10) {
-       print(x);
-       x = x + 1;
-   }
+    while (x < 10) {
+        print(x);
+        x = x + 1;
+    }
 
 Break:
 
 ::
 
-   for (u in user @* {}) {
-       if (u.company == 'Facebook') {
-           print(u.name);
-           break;
-       }
-   }
+    for (u in user @* {}) {
+        if (u.company == 'Facebook') {
+            print(u.name);
+            break;
+        }
+    }
 
-   while (x < 5) {
-       if (values[x] == 3) break;
-       x = x + 1;
-   }
+    while (x < 5) {
+        if (values[x] == 3) break;
+        x = x + 1;
+    }
 
 Miscellaneous
 =============
@@ -940,13 +974,17 @@ Single-line comment:
 
 ::
 
-   print("Hello"); // Some comment
+    print("Hello"); // Some comment
 
 Multiline comment:
 
 ::
 
-   print("Hello"/*, "World"*/);
-   /*
-   print("Bye");
-   */
+    print("Hello"/*, "World"*/);
+    /*
+    print("Bye");
+    */
+
+--------------
+
+*Rell v0.9.0*

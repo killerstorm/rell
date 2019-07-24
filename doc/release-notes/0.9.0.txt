@@ -1,0 +1,273 @@
+RELEASE NOTES 0.9.0 (2019-07-24)
+
+
+1. Upgrade to Postchain 3.0 (was 2.5)
+
+For instance, type "GTXValue" was renamed to "gtv" to follow the naming used in Postchain 3.0. GTX-compatible types
+are now called Gtv-compatible.
+
+
+2. Language: Virtual type
+
+Type virtual<T> is used to store a small part of a data structure T with some elements removed. It contains the Merkle
+tree of the original structure, which can be used to verify its integrity.
+
+Following types can be virtual:
+
+- list<T>
+- set<T>
+- map<text, V>
+- record
+- tuple
+
+See the Language Guide for more information.
+
+
+3. Language: Null check operator "??"
+
+Operator "??" checks if an expression is null:
+
+val u = user @? {...};
+if (u??) {
+    // "u" is not null
+}
+
+This code is equivalent to:
+
+val u = user @? {...};
+if (u != null) {
+    // "u" is not null
+}
+
+
+4. Language: Operations and queries in a namespace
+
+It is allowed to define operations and queries in a namespace:
+
+namespace foo {
+    namespace bar {
+        operation o() {}
+        query q() = 123;
+    }
+}
+
+Such operations and queries can be invoked from Postchain using their full names: "foo.bar.o", "foo.bar.q".
+
+
+5. Library: Functions and types renamed
+
+(!) Old names can still be used, but they are deprecated, using them produces compilation warnings, and will be
+    disallowed in the future.
+
+What was renamed:
+
+(a) Type GTXValue -> gtv
+
+(b) All camelCase functions were renamed to snake_case in order to have consistent functions naming:
+
+    requireNotEmpty -> require_not_empty
+
+    byte_array.toList -> .to_list
+
+    text.upperCase -> .upper_case
+    text.lowerCase -> .lower_case
+    text.compareTo -> .compare_to
+    text.startsWith -> .starts_with
+    text.endsWith -> .ends_with
+    text.charAt -> .char_at
+    text.indexOf -> .index_of
+    text.lastIndexOf -> .last_index_of
+
+    list<T>.indexOf -> .index_of
+    list<T>.containsAll -> .contains_all
+    list<T>.removeAt -> .remove_at
+    list<T>.addAll -> .add_all
+    list<T>.removeAll -> .remove_all
+
+    set<T>.containsAll -> .contains_all
+    set<T>.addAll -> .add_all
+    set<T>.removeAll -> .remove_all
+
+    map<K,V>.putAll -> .put_all
+
+    gtv.fromBytes -> .from_bytes
+    gtv.fromJSON -> .from_json
+    gtv.toBytes -> .to_bytes
+    gtv.toJSON -> .to_json
+
+    record.fromBytes -> .from_bytes
+    record.toBytes -> .to_bytes
+
+(c) Gtv-related functions:
+
+    record.fromGTXValue -> .from_gtv
+    record.fromPrettyGTXValue -> .from_gtv_pretty
+    record.toGTXValue -> .to_gtv
+    record.toPrettyGTXValue -> .to_gtv_pretty
+
+(d) Some functions were renamed to be consistent with the to_X and from_X naming:
+
+    integer.parseHex -> integer.from_hex
+    text.encode -> text.to_bytes
+    byte_array.decode -> text.from_bytes
+
+(e) Other functions:
+
+    empty -> exists
+
+
+6. Library: New functions
+
+text.from_bytes(byte_array, ignore_invalid: boolean = false)
+        If "ignore_invalid" is false, throws an exception when the byte array is not a valid UTF8-encoded string.
+
+byte_array.to_hex(): text
+byte_array.from_hex(text): byte_array
+        Converts a byte array to/from a hex string.
+
+byte_array.to_base64(): text
+byte_array.from_base64(text): byte_array
+        Converts a byte array to/from a Base64 string.
+
+byte_array.from_list(list<integer>): byte_array
+        To be used instead of old function byte_array(list<integer>), which is now deprecated.
+
+integer.from_text(text, radix: integer = 10): integer
+        Same as integer(text, integer), old function still valid.
+
+integer.to_text(radix: integer = 10): text
+        Same as integer.str(radix), but uses to_X naming, old function still valid.
+
+json.to_text(): text
+list<T>.to_text(): text
+set<T>.to_text(): text
+map<K,V>.to_text(): text
+        Same as .str(), just uses the to_X naming. Old functions are still valid (and not deprecated).
+
+
+7. Library: Functions to convert different types to/from Gtv
+
+T.to_gtv(): gtv - converts a value to a Gtv.
+T.to_gtv_pretty(): gtv - converts a value to a "pretty" Gtv.
+T.from_gtv(gtv): T - converts a Gtv to a value.
+T.from_pretty_gtv(gtv): T - converts a "pretty" Gtv to a value.
+
+Functions exist for all types, except few that are not Gtv-compatible (like range).
+
+Examples:
+
+val g = [1, 2, 3].to_gtv();
+val l = list<integer>.from_gtv(g);   // Returns [1, 2, 3]
+
+
+8. Library: Cryptographic functions verify_signature() and hash()
+
+verify_signature(message: byte_array, pubkey: pubkey, signature: byte_array): boolean
+
+    Returns true if the given signature is a result of signing the message with a private key corresponding to the
+    given public key.
+
+T.hash(): byte_array
+
+    Equivalent of T.to_gtv().hash(). Returns a cryptographic hash of a value. Exists for all types that have to_gtv().
+
+
+9. Run-time: More flexible conversions between Rell types and Gtv
+
+(a) map<K,V> is always Gtv-compatible (given that K and V are Gtv-compatible). In previous versions, only
+    map<text,V> was Gtv-compatible, because a map was always converted to a dictionary which can have only string keys.
+    Now a map is converted to an array of key-value pairs (2-element arrays) if the key type is not text.
+
+(b) Tuples are always Gtv-compatible and pretty-Gtv-compatile (if all fields are Gtv-compatible). In previous versions,
+    tuples were pretty-Gtv-compatible only if either no fields or all fields had names. Now a tuple is converted to
+    a dictionary in a pretty format if all fields have names, and to an array otherwise.
+
+(c) Converting from a pretty-formatted Gtv to a value is more flexible: the value can be either in a pretty or in
+    a compact format. In the past, passing a compact Gtv where a pretty Gtv was expected caused a run-time error.
+
+
+10. Bug fix: Local variable shadowing a record
+
+
+11. Library: Chain and Operation contexts
+
+chain_context.args: module_args - the type of the attribute is now not nullable, arguments must always be specified
+
+chain_context.blockchain_rid: byte_array - new attribute, returns the blockchain RID
+
+op_context.block_height: integer - the height of the block being built
+
+
+12. Language: Multiple definitions of same namespace
+
+Following code will compile:
+
+namespace foo {
+    function f(): integer = 123;
+}
+
+namespace foo {
+    function g(): integer = 456;
+}
+
+
+13. Language: Partial evaluation of conditional database expressions
+
+Summary. Following code that did not work (or compile) in earlier versions now will work fine:
+
+query get_next_portion(last: foo?) = foo @* { if (last == null) true else foo > last } limit 1000;
+
+The changes affect "if", "when", "and", "or", "?:". Same code could be also written like that:
+
+query get_next_portion(last: foo?) = foo @* { last == null or foo > last } limit 1000;
+
+
+14. Language: "rowid" type and attribute
+
+Database primary key of a class object can be accessed via the "rowid" attribute available in any class.
+
+The type of the "rowid" attribute is a new type "rowid". Internally it is a 64-bit integer, but for the compiler the
+type is not compatible with any other type, including integer (i. e. cannot assign "integer" to "rowid" or "rowid" to
+"integer").
+
+Operations supported by the "rowid" type:
+- comparison operators: ==, !=, <, >, <=, >=
+- converting to/from Gtv
+
+Examples of "rowid" usage:
+
+val u = user @ { ... };
+return u.rowid;
+
+return user @ { ... } ( .rowid );
+
+return user @* { .rowid >= min_rowid };
+
+NOTE. Class type is a recommended way to reference database objects. The "rowid" shall be used only in rare cases,
+when there is no other possibility to implement what is needed.
+
+
+15. Run-time: Integer overflow causes an exception
+
+Operators "+", "-", "*" now throw an exception in case of an overflow, i. e. when the result is out of range of a
+64-bit signed integer number, which is:
+
+-9223372036854775808 to 9223372036854775807
+or 0x8000000000000000 to 0x7FFFFFFFFFFFFFFF
+or -2^63 to 2^63-1
+(inclusive)
+
+In older versions, a result was truncated to 64 bits in case of an overflow (standard behavior in Java).
+
+
+16. Tools: XML configuration launcher
+
+Run.xml is a new format for describing Rell app configuration. It allows to configure a multi-chain application
+in a single file.
+
+Utilities to work with run.xml:
+
+multirun.sh - run a Rell app described by a run.xml configuration
+multigen.sh - generate a Postchain blockchain XML configuration
+
+See /RunXML.md for the description of the format.

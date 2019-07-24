@@ -5,7 +5,7 @@ import org.junit.Test
 
 class EnumTest: BaseRellTest() {
     @Test fun testBasics() {
-        tst.defs = listOf("enum foo { A, B, C }")
+        def("enum foo { A, B, C }")
         chk("foo.A", "foo[A]")
         chk("foo.B", "foo[B]")
         chk("foo.C", "foo[C]")
@@ -13,12 +13,12 @@ class EnumTest: BaseRellTest() {
 
         chk("foo", "ct_err:expr_novalue:enum")
         chk("'' + foo", "ct_err:expr_novalue:enum")
-        chk("_typeOf(foo.A)", "text[foo]")
-        chk("_typeOf(foo)", "ct_err:expr_novalue:enum")
+        chk("_type_of(foo.A)", "text[foo]")
+        chk("_type_of(foo)", "ct_err:expr_novalue:enum")
     }
 
     @Test fun testOperators() {
-        tst.defs = listOf("enum foo { A, B, C }")
+        def("enum foo { A, B, C }")
         chk("foo.A == foo.A", "boolean[true]")
         chk("foo.A == foo.B", "boolean[false]")
         chk("foo.A != foo.A", "boolean[false]")
@@ -52,7 +52,8 @@ class EnumTest: BaseRellTest() {
     }
 
     @Test fun testTypeCompatibility() {
-        tst.defs = listOf("enum foo { A, B, C }", "enum bar { A, B, C }")
+        def("enum foo { A, B, C }")
+        def("enum bar { A, B, C }")
         chkEx(": foo = bar.A;", "ct_err:entity_rettype:foo:bar")
         chkEx(": bar = foo.A;", "ct_err:entity_rettype:bar:foo")
         chkEx(": foo = null;", "ct_err:entity_rettype:foo:null")
@@ -65,12 +66,10 @@ class EnumTest: BaseRellTest() {
     }
 
     @Test fun testClassAttribute() {
-        tst.defs = listOf(
-                "enum foo { A, B, C }",
-                "class cls { name; f: foo; }",
-                "object obj { mutable f: foo = foo.A; }"
-        )
-        tst.insert("c0.cls", "name,f", "0,'Bob',0")
+        def("enum foo { A, B, C }")
+        def("class cls { name; f: foo; }")
+        def("object obj { mutable f: foo = foo.A; }")
+        insert("c0.cls", "name,f", "0,'Bob',0")
 
         chk("cls @* {} ( =.name, =.f )", "list<(text,foo)>[(text[Bob],foo[A])]")
         chkData("cls(0,Bob,0)", "obj(0,0)")
@@ -90,8 +89,9 @@ class EnumTest: BaseRellTest() {
     }
 
     @Test fun testNameConflicts() {
-        tst.defs = listOf("enum foo { A, B, C }", "class user { name: text; f: foo; }")
-        tst.insert("c0.user", "name,f", "0,'Bob',1")
+        def("enum foo { A, B, C }")
+        def("class user { name: text; f: foo; }")
+        insert("c0.user", "name,f", "0,'Bob',1")
 
         chkEx("{ return user @ {} ( =.f ); }", "foo[B]")
         chkEx("{ val foo = 'Bob'; return user @? { .name == foo }; }", "user[0]")
@@ -101,7 +101,7 @@ class EnumTest: BaseRellTest() {
     }
 
     @Test fun testStaticFunctions() {
-        tst.defs = listOf("enum foo { A, B, C }")
+        def("enum foo { A, B, C }")
 
         chk("foo.values()", "list<foo>[foo[A],foo[B],foo[C]]")
 
@@ -121,7 +121,7 @@ class EnumTest: BaseRellTest() {
     }
 
     @Test fun testMemberFunctions() {
-        tst.defs = listOf("enum foo { A, B, C }")
+        def("enum foo { A, B, C }")
 
         chk("foo.A.name", "text[A]")
         chk("foo.B.name", "text[B]")
@@ -133,7 +133,8 @@ class EnumTest: BaseRellTest() {
     }
 
     @Test fun testNullable() {
-        tst.defs = listOf("enum foo { A, B, C }", "function nop(x: foo?): foo? = x;")
+        def("enum foo { A, B, C }")
+        def("function nop(x: foo?): foo? = x;")
 
         chkEx("{ val f: foo = foo.A; return f.name; }", "text[A]")
         chkEx("{ val f: foo = foo.A; return f?.name; }", "ct_err:expr_safemem_type:foo")

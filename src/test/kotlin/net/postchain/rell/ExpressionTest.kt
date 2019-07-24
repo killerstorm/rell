@@ -3,6 +3,8 @@ package net.postchain.rell
 import net.postchain.rell.runtime.Rt_BooleanValue
 import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
+import java.math.BigInteger
+import kotlin.math.sign
 
 class ExpressionTest: BaseRellTest(false) {
     @Test fun testPrecedence() {
@@ -49,7 +51,7 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testShortCircuitEvaluation() {
-        chk("1 / 0", "rt_err:expr_div_by_zero")
+        chk("1 / 0", "rt_err:expr:/:div0:1")
         chk("a != 0 and 15 / a > 3", 0, "boolean[false]")
         chk("a != 0 and 15 / a > 3", 5, "boolean[false]")
         chk("a != 0 and 15 / a > 3", 3, "boolean[true]")
@@ -66,15 +68,15 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testMemberFunctionVsField() {
-        tst.defs = listOf("record foo { toGTXValue: integer; }")
-        chkEx("{ val v = foo(123); return v.toGTXValue; }", "int[123]")
-        chkEx("{ val v = foo(123); return v.toGTXValue.str(); }", "text[123]")
-        chkEx("{ val v = foo(123); return v.toGTXValue().toJSON().str(); }", "text[[123]]")
+        def("record foo { to_gtv: integer; }")
+        chkEx("{ val v = foo(123); return v.to_gtv; }", "int[123]")
+        chkEx("{ val v = foo(123); return v.to_gtv.str(); }", "text[123]")
+        chkEx("{ val v = foo(123); return v.to_gtv().to_json().str(); }", "text[[123]]")
     }
 
     @Test fun testListItems() {
         tstCtx.useSql = true
-        tst.defs = listOf("class user { name: text; }")
+        def("class user { name: text; }")
 
         chkOp("create user('Bob');")
         chkOp("create user('Alice');")
@@ -84,16 +86,16 @@ class ExpressionTest: BaseRellTest(false) {
         chkEx("{ val s = user @* {}; return s[1]; }", "user[2]")
         chkEx("{ val s = user @* {}; return s[2]; }", "user[3]")
 
-        chkEx("{ val s = user @* {}; return s[-1]; }", "rt_err:expr_list_lookup_index:3:-1")
-        chkEx("{ val s = user @* {}; return s[3]; }", "rt_err:expr_list_lookup_index:3:3")
+        chkEx("{ val s = user @* {}; return s[-1]; }", "rt_err:list:index:3:-1")
+        chkEx("{ val s = user @* {}; return s[3]; }", "rt_err:list:index:3:3")
     }
 
     @Test fun testFunctionsUnderAt() {
         tstCtx.useSql = true
-        tst.defs = listOf("class user { name: text; score: integer; }")
+        def("class user { name: text; score: integer; }")
         chkOp("create user('Bob',-5678);")
 
-        chkEx("{ val s = 'Hello'; return user @ {} ( .name.len() + s.len() ); }", "int[8]")
+        chkEx("{ val s = 'Hello'; return user @ {} ( .name.size() + s.size() ); }", "int[8]")
         chkEx("{ val x = -1234; return user @ {} ( abs(x), abs(.score) ); }", "(int[1234],int[5678])")
     }
 
@@ -109,7 +111,8 @@ class ExpressionTest: BaseRellTest(false) {
 
     @Test fun testDataClassPathExpr() {
         tstCtx.useSql = true
-        tst.defs = listOf("class company { name: text; }", "class user { name: text; company; }")
+        def("class company { name: text; }")
+        def("class user { name: text; company; }")
 
         chkOp("""
             val facebook = create company('Facebook');
@@ -131,7 +134,8 @@ class ExpressionTest: BaseRellTest(false) {
 
     @Test fun testDataClassPathExprMix() {
         tstCtx.useSql = true
-        tst.defs = listOf("class company { name: text; }", "class user { name: text; company; }")
+        def("class company { name: text; }")
+        def("class user { name: text; company; }")
 
         chkOp("""
             val microsoft = create company('Microsoft');
@@ -139,31 +143,29 @@ class ExpressionTest: BaseRellTest(false) {
         """.trimIndent())
 
         chk("((u: user) @ { 'Bill' } ( u )).company.name.size()", "int[9]")
-        chk("((u: user) @ { 'Bill' } ( u )).company.name.upperCase()", "text[MICROSOFT]")
+        chk("((u: user) @ { 'Bill' } ( u )).company.name.upper_case()", "text[MICROSOFT]")
         chk("((u: user) @ { 'Bill' } ( u )).company.name.replace('soft', 'hard')", "text[Microhard]")
         chk("((u: user) @ { 'Bill' } ( u )).company.name.split('o')", "list<text>[text[Micr],text[s],text[ft]]")
         chk("((u: user) @ { 'Bill' } ( u )).company.name.matches('[A-Za-z]+')", "boolean[true]")
         chk("((u: user) @ { 'Bill' } ( u )).company.name.matches('[0-9]+')", "boolean[false]")
-        chk("((u: user) @ { 'Bill' } ( u )).company.name.upperCase().replace('SOFT','HARD').lowerCase()", "text[microhard]")
+        chk("((u: user) @ { 'Bill' } ( u )).company.name.upper_case().replace('SOFT','HARD').lower_case()", "text[microhard]")
 
         chkEx("{ val x = user@{'Bill'}(u=user); return x.u.company.name.size(); }", "int[9]")
-        chkEx("{ val x = user@{'Bill'}(u=user); return x.u.company.name.upperCase(); }", "text[MICROSOFT]")
+        chkEx("{ val x = user@{'Bill'}(u=user); return x.u.company.name.upper_case(); }", "text[MICROSOFT]")
         chkEx("{ val x = user@{'Bill'}(u=user); return x.u.company.name.replace('soft', 'hard'); }", "text[Microhard]")
         chkEx("{ val x = user@{'Bill'}(u=user); return x.u.company.name.split('o'); }", "list<text>[text[Micr],text[s],text[ft]]")
         chkEx("{ val x = user@{'Bill'}(u=user); return x.u.company.name.matches('[A-Za-z]+'); }", "boolean[true]")
         chkEx("{ val x = user@{'Bill'}(u=user); return x.u.company.name.matches('[0-9]+'); }", "boolean[false]")
-        chkEx("{ val x = user@{'Bill'}(u=user); return x.u.company.name.encode().decode().upperCase().replace('SOFT','HARD').lowerCase(); }",
+        chkEx("{ val x = user@{'Bill'}(u=user); return text.from_bytes(x.u.company.name.to_bytes()).upper_case().replace('SOFT','HARD').lower_case(); }",
                 "text[microhard]")
     }
 
     @Test fun testDataClassPathExprComplex() {
         tstCtx.useSql = true
-        tst.defs = listOf(
-                "class c1 { name: text; }",
-                "class c2 { name: text; c1; }",
-                "class c3 { name: text; c2; }",
-                "class c4 { name: text; c3; }"
-        )
+        def("class c1 { name: text; }")
+        def("class c2 { name: text; c1; }")
+        def("class c3 { name: text; c2; }")
+        def("class c4 { name: text; c3; }")
 
         chkOp("""
             val c1_1 = create c1('c1_1');
@@ -205,7 +207,7 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testTupleAt() {
-        tst.defs = listOf("class user { name: text; street: text; house: integer; }")
+        def("class user { name: text; street: text; house: integer; }")
 
         chk("user @ {} ( x = (.name,) ) ", "ct_err:expr_sqlnotallowed")
         chk("user @ {} ( x = (.name, .street, .house) ) ", "ct_err:expr_sqlnotallowed")
@@ -254,20 +256,20 @@ class ExpressionTest: BaseRellTest(false) {
     @Test fun testNamespace() {
         chk("integer", "ct_err:expr_novalue:namespace")
         chk("integer('123')", "int[123]")
-        chk("integer.parseHex('1234')", "int[4660]")
+        chk("integer.from_hex('1234')", "int[4660]")
         chk("integer.MAX_VALUE", "int[9223372036854775807]")
     }
 
     @Test fun testNamespaceUnderAt() {
         tstCtx.useSql = true
-        tst.defs = listOf("class user { name: text; score: integer; }")
+        def("class user { name: text; score: integer; }")
         chkOp("create user('Bob',-5678);")
 
         chk("user @ { .score == integer }", "ct_err:expr_novalue:namespace")
         chk("user @ { .score == integer('-5678') } ( .name )", "text[Bob]")
         chk("user @ { .score == -5678 } ( .name, integer('1234') )", "(name=text[Bob],int[1234])")
-        chk("user @ { .score == -integer.parseHex('162e') } ( .name )", "text[Bob]")
-        chk("user @ { .name == 'Bob' } ( .name, .score + integer.parseHex('1234') )", "(name=text[Bob],int[-1018])")
+        chk("user @ { .score == -integer.from_hex('162e') } ( .name )", "text[Bob]")
+        chk("user @ { .name == 'Bob' } ( .name, .score + integer.from_hex('1234') )", "(name=text[Bob],int[-1018])")
 
         chk("user @ { .score < integer.MAX_VALUE } ( .name )", "text[Bob]")
         chk("user @* { .score < integer.MIN_VALUE } ( .name )", "list<text>[]")
@@ -278,7 +280,7 @@ class ExpressionTest: BaseRellTest(false) {
     @Test fun testMoreFunctionsUnderAt() {
         tstCtx.useSql = true
         tst.strictToString = false
-        tst.defs = listOf("class user { id: integer; name1: text; name2: text; v1: integer; v2: integer; }")
+        def("class user { id: integer; name1: text; name2: text; v1: integer; v2: integer; }")
         chkOp("""
             create user(id = 1, name1 = 'Bill', name2 = 'Gates', v1 = 111, v2 = 222);
             create user(id = 2, name1 = 'Mark', name2 = 'Zuckerberg', v1 = 333, v2 = 444);
@@ -286,7 +288,7 @@ class ExpressionTest: BaseRellTest(false) {
         """.trimIndent())
 
         chkEx("{ return user @* {} (.id+0, (.name1 + .name2).size()); }", "[(1,9), (2,14), (3,12)]")
-        chkEx("{ return user @* {} (.id+0, (.name1 + .name2).upperCase().lowerCase().size()); }", "[(1,9), (2,14), (3,12)]")
+        chkEx("{ return user @* {} (.id+0, (.name1 + .name2).upper_case().lower_case().size()); }", "[(1,9), (2,14), (3,12)]")
         chkEx("{ return user @* {} (.id+0, (.v1 * (.v2 + 101)).str()); }", "[(1,35853), (2,181485), (3,425685)]")
         chkEx("{ return user @* {} (.id+0, (.v1 * (.v2 + 101)).str().size()); }", "[(1,5), (2,6), (3,6)]")
         chkEx("{ return user @* {} (.id+0, (.name1 + .name2).foo); }", "ct_err:unknown_member:text:foo")
@@ -296,7 +298,7 @@ class ExpressionTest: BaseRellTest(false) {
 
         val c = "val str1 = 'Hello'; val k1 = 777;"
         chkEx("{ $c return user @* {} (.id+0, (str1 + .name2).size()); }", "[(1,10), (2,15), (3,12)]")
-        chkEx("{ $c return user @* {} (.id+0, (str1 + .name2).upperCase().lowerCase().size()); }", "[(1,10), (2,15), (3,12)]")
+        chkEx("{ $c return user @* {} (.id+0, (str1 + .name2).upper_case().lower_case().size()); }", "[(1,10), (2,15), (3,12)]")
         chkEx("{ $c return user @* {} (.id+0, (k1 * (.v2 + 101)).str()); }", "[(1,250971), (2,423465), (3,595959)]")
         chkEx("{ $c return user @* {} (.id+0, (k1 * (.v2 + 101)).str().size()); }", "[(1,6), (2,6), (3,6)]")
         chkEx("{ $c return user @* {} (.id+0, (str1 + .name2).foo); }", "ct_err:unknown_member:text:foo")
@@ -441,5 +443,109 @@ class ExpressionTest: BaseRellTest(false) {
         chk("if (true) 'A' else if (true) 'B' else 'C' + 'D'", "text[A]")
         chk("if (false) 'A' else if (true) 'B' else 'C' + 'D'", "text[B]")
         chk("if (false) 'A' else if (false) 'B' else 'C' + 'D'", "text[CD]")
+    }
+
+    @Test fun testVariables() {
+        chkEx("{ val x = integer; }", "ct_err:expr_novalue:namespace")
+        chkEx("{ val x = chain_context; }", "ct_err:expr_novalue:namespace")
+        chkEx("{ var x: text; x = integer; }", "ct_err:expr_novalue:namespace")
+        chkEx("{ var x: text; x = chain_context; }", "ct_err:expr_novalue:namespace")
+    }
+
+    @Test fun testNameRecordVsLocal() {
+        def("record rec {x:integer;}")
+        chkEx("{ return rec(456); }", "rec[x=int[456]]")
+        chkEx("{ val rec = 123; return rec(456); }", "rec[x=int[456]]")
+        chkEx("{ val rec = 123; return rec; }", "int[123]")
+    }
+
+    @Test fun testNameFunctionVsLocal() {
+        def("function f(x:integer): integer = x * x;")
+        chkEx("{ val f = 123; return f(456); }", "int[207936]")
+        chkEx("{ val f = 123; return f; }", "int[123]")
+        chkEx("{ val f = 123; return f.to_hex(); }", "text[7b]")
+    }
+
+    @Test fun testIsNull() {
+        chkEx("{ val x = _nullable_int(123); return x??; }", "boolean[true]")
+        chkEx("{ val x = _nullable_int(null); return x??; }", "boolean[false]")
+        chkEx("{ val x = 123; return x??; }", "ct_err:unop_operand_type:??:integer")
+    }
+
+    @Test fun testIntegerOverflow() {
+        tst.strictToString = false
+        def("function i(x: integer): integer = integer.from_gtv(x.to_gtv());")
+        def("function t(x: text): integer = integer(x);")
+
+        val i63_1 = bigint(2, 63, -1)
+
+        chkIntegerOver2("+", bigint(2, 63, -1), "1")
+        chkIntegerOp2("+", bigint(2, 63, -2), "1")
+        chkIntegerOver2("+", bigint(2, 63, -2), "2")
+        chkIntegerOp2("+", bigint(2, 62, -1), bigint(2, 62))
+        chkIntegerOver2("+", bigint(2, 62), bigint(2, 62))
+        chkIntegerOver2("+", bigint(-2, 63), "-1")
+        chkIntegerOp2("+", bigint(-2, 63, 1), "-1")
+        chk("i($i63_1) + 1 - 1", "rt_err:expr:+:overflow:9223372036854775807:1")
+        chk("i($i63_1) - 1 + 1", "9223372036854775807")
+
+        chkIntegerOp("-", bigint(-2, 63, 1), "1")
+        chkIntegerOver("-", bigint(-2, 63, 1), "2")
+        chkIntegerOp("-", "-1", bigint(2, 63, -1))
+        chkIntegerOver("-", "-2", bigint(2, 63, -1))
+        chkIntegerOp("-", bigint(-2, 62), bigint(2, 62))
+        chkIntegerOver("-", bigint(-2, 62), bigint(2, 62, +1))
+
+        chkIntegerOp2("*", bigint(2, 31), bigint(2, 31))
+        chkIntegerOver2("*", bigint(2, 31), bigint(2, 32))
+        chkIntegerOp2("*", bigint(2, 32, -1), bigint(2, 31))
+        chkIntegerOp2("*", bigint(2, 31, -1), bigint(2, 32))
+        chkIntegerOp2("*", bigint(2, 61), "2")
+        chkIntegerOp2("*", bigint(2, 61), "3")
+        chkIntegerOver2("*", bigint(2, 61), "4")
+        chkIntegerOver2("*", bigint(2, 62), "2")
+        chkIntegerOver2("*", bigint(2, 62), bigint(2, 31))
+        chkIntegerOver2("*", bigint(2, 62), bigint(2, 32))
+        chkIntegerOver2("*", bigint(2, 62), bigint(2, 61))
+        chkIntegerOver2("*", bigint(2, 62), bigint(2, 62))
+        chkIntegerOver2("*", bigint(2, 62), bigint(2, 63, -1))
+        chkIntegerOver2("*", bigint(2, 63, -1), bigint(2, 63, -1))
+    }
+
+    private fun bigint(base: Int, exp: Int, add: Int = 0): String {
+        return BigInteger.valueOf(base.toLong())
+                .abs()
+                .pow(exp)
+                .multiply(BigInteger.valueOf(base.sign.toLong()))
+                .add(BigInteger.valueOf(add.toLong()))
+                .toString()
+    }
+
+    private fun chkIntegerOp(op: String, left: String, right: String) {
+        val bLeft = BigInteger(left)
+        val bRight = BigInteger(right)
+        val bExpected = when (op) {
+            "+" -> bLeft + bRight
+            "-" -> bLeft - bRight
+            "*" -> bLeft * bRight
+            "/" -> bLeft / bRight
+            else -> throw IllegalArgumentException(op)
+        }
+        val expected = bExpected.toString()
+        chk("t('$left') $op t('$right')", expected)
+    }
+
+    private fun chkIntegerOp2(op: String, left: String, right: String) {
+        chkIntegerOp(op, left, right)
+        chkIntegerOp(op, right, left)
+    }
+
+    private fun chkIntegerOver(op: String, left: String, right: String) {
+        chk("t('$left') $op t('$right')", "rt_err:expr:$op:overflow:$left:$right")
+    }
+
+    private fun chkIntegerOver2(op: String, left: String, right: String) {
+        chkIntegerOver(op, left, right)
+        chkIntegerOver(op, right, left)
     }
 }

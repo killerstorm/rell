@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicLong
 val ROWID_COLUMN = "rowid"
 
 abstract class SqlExecutor {
+    abstract fun connection(): Connection
     abstract fun transaction(code: () -> Unit)
     abstract fun execute(sql: String)
     abstract fun execute(sql: String, preparator: (PreparedStatement) -> Unit)
@@ -18,6 +19,10 @@ abstract class SqlExecutor {
 
 class DefaultSqlExecutor(private val con: Connection, private val logging: Boolean): SqlExecutor(), Closeable {
     private val conId = idCounter.getAndIncrement()
+
+    override fun connection(): Connection {
+        return con
+    }
 
     override fun transaction(code: () -> Unit) {
         val autoCommit = con.autoCommit
@@ -102,6 +107,8 @@ class DefaultSqlExecutor(private val con: Connection, private val logging: Boole
 }
 
 object NoConnSqlExecutor: SqlExecutor() {
+    override fun connection() = throw err()
+
     override fun transaction(code: () -> Unit) {
         code()
     }
@@ -111,51 +118,4 @@ object NoConnSqlExecutor: SqlExecutor() {
     override fun executeQuery(sql: String, preparator: (PreparedStatement) -> Unit, consumer: (ResultSet) -> Unit) = throw err()
 
     private fun err() = IllegalStateException("No database connection")
-}
-
-object SqlUtils {
-    fun dropAll(sqlExec: SqlExecutor, sysTables: Boolean) {
-        dropTables(sqlExec, sysTables)
-        dropFunctions(sqlExec)
-    }
-
-    private fun dropTables(sqlExec: SqlExecutor, sysTables: Boolean) {
-        val tables = getExistingTables(sqlExec)
-
-        val delTables = if (sysTables) tables else {
-            val sys = setOf("blocks", "transactions", "blockchains")
-            tables.filter { it !in sys }
-        }
-
-        val sql = delTables.joinToString("\n") { "DROP TABLE \"$it\" CASCADE;" }
-        sqlExec.execute(sql)
-    }
-
-    private fun dropFunctions(sqlExec: SqlExecutor) {
-        val functions = getExistingFunctions(sqlExec)
-        val sql = functions.joinToString("\n") { "DROP FUNCTION \"$it\"();" }
-        sqlExec.execute(sql)
-    }
-
-    fun getExistingTables(sqlExec: SqlExecutor): List<String> {
-        val sql = "SELECT table_name FROM information_schema.tables WHERE table_catalog = CURRENT_DATABASE() AND table_schema = 'public'"
-        val list = mutableListOf<String>()
-        sqlExec.executeQuery(sql, {}) { rs -> list.add(rs.getString(1))}
-        return list.toList()
-    }
-
-    private fun getExistingFunctions(sqlExec: SqlExecutor): List<String> {
-        val sql = "SELECT routine_name FROM information_schema.routines WHERE routine_catalog = CURRENT_DATABASE() AND routine_schema = 'public'"
-        val list = mutableListOf<String>()
-        sqlExec.executeQuery(sql, {}) { rs -> list.add(rs.getString(1))}
-        return list.toList()
-    }
-}
-
-private inline fun <T:AutoCloseable, R> T.use(block: (T) -> R): R {
-    try {
-        return block(this);
-    } finally {
-        close()
-    }
 }

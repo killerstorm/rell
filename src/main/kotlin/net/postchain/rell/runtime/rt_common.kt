@@ -1,17 +1,32 @@
 package net.postchain.rell.runtime
 
-import net.postchain.rell.model.R_CallFrame
-import net.postchain.rell.model.R_FrameBlock
-import net.postchain.rell.model.R_VarPtr
+import mu.KLogging
+import net.postchain.core.ByteArrayKey
+import net.postchain.rell.model.*
 
-sealed class Rt_BaseError(msg: String): Exception(msg)
-class Rt_Error(val code: String, msg: String): Rt_BaseError(msg)
+sealed class Rt_BaseError: Exception {
+    constructor(msg: String): super(msg)
+    constructor(msg: String, cause: Throwable): super(msg, cause)
+}
+
+class Rt_Error: Rt_BaseError {
+    val code: String
+
+    constructor(code: String, msg: String): super(msg) {
+        this.code = code
+    }
+
+    constructor(code: String, msg: String, cause: Throwable): super(msg, cause) {
+        this.code = code
+    }
+}
+
 class Rt_RequireError(val userMsg: String?): Rt_BaseError(userMsg ?: "Requirement error")
-class Rt_ValueTypeError(val expected: String, val actual: String):
+class Rt_ValueTypeError(val expected: Rt_ValueType, val actual: Rt_ValueType):
         Rt_BaseError("Value type mismatch: expected $expected, but was $actual")
-class Rt_GtxValueError(val code: String, msg: String): Rt_BaseError(msg)
+class Rt_GtvError(val code: String, msg: String): Rt_BaseError(msg)
 
-class Rt_ChainDependency(val rid: ByteArray, val height: Long)
+class Rt_ChainDependency(val rid: ByteArray)
 
 class Rt_ExternalChain(val chainId: Long, val rid: ByteArray, val height: Long) {
     val sqlMapping = Rt_ChainSqlMapping(chainId)
@@ -42,7 +57,8 @@ class Rt_CallFrame(val entCtx: Rt_EntityContext, rFrame: R_CallFrame) {
         }
     }
 
-    fun set(ptr: R_VarPtr, value: Rt_Value, overwrite: Boolean) {
+    fun set(ptr: R_VarPtr, varType: R_Type, value: Rt_Value, overwrite: Boolean) {
+        R_Expr.typeCheck(this, varType, value)
         val offset = checkPtr(ptr)
         if (!overwrite) {
             check(values[offset] == null)
@@ -72,14 +88,38 @@ class Rt_CallFrame(val entCtx: Rt_EntityContext, rFrame: R_CallFrame) {
     }
 }
 
-abstract class Rt_Printer {
-    abstract fun print(str: String)
+interface Rt_Printer {
+    fun print(str: String)
 }
 
-object Rt_FailingPrinter: Rt_Printer() {
+object Rt_FailingPrinter: Rt_Printer {
     override fun print(str: String) {
         throw UnsupportedOperationException()
     }
+}
+
+object Rt_NopPrinter: Rt_Printer {
+    override fun print(str: String) {
+        // Do nothing.
+    }
+}
+
+object Rt_StdoutPrinter: Rt_Printer {
+    override fun print(str: String) {
+        println(str)
+    }
+}
+
+class Rt_LogPrinter(name: String = "Rell"): Rt_Printer {
+    private val logger = KLogging().logger(name)
+
+    override fun print(str: String) {
+        logger.info(str)
+    }
+}
+
+interface Rt_PrinterFactory {
+    fun newPrinter(): Rt_Printer
 }
 
 class Rt_ChainSqlMapping(val chainId: Long) {
@@ -90,7 +130,25 @@ class Rt_ChainSqlMapping(val chainId: Long) {
     val metaClassTable = fullName("sys.classes")
     val metaAttributesTable = fullName("sys.attributes")
 
+    val tableSqlFilter = "$prefix%"
+
     fun fullName(baseName: String): String {
         return prefix + baseName
     }
+
+    fun tempName(baseName: String): String {
+        return prefix + "sys.temp." + baseName
+    }
+
+    fun isChainTable(table: String): Boolean {
+        return table.startsWith(prefix) && table != rowidTable && table != rowidFunction
+    }
+}
+
+interface Rt_ChainHeightProvider {
+    fun getChainHeight(rid: ByteArrayKey, id: Long): Long?
+}
+
+class Rt_ConstantChainHeightProvider(private val height: Long): Rt_ChainHeightProvider {
+    override fun getChainHeight(rid: ByteArrayKey, id: Long) = height
 }

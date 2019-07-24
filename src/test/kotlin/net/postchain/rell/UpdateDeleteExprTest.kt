@@ -233,10 +233,8 @@ class UpdateDeleteExprTest: BaseRellTest() {
     }
 
     private fun initUserCompany() {
-        tst.defs = listOf(
-                "class user { name: text; company: text; mutable score: integer; }",
-                "class company { name: text; score: integer; }"
-        )
+        def("class user { name: text; company: text; mutable score: integer; }")
+        def("class company { name: text; score: integer; }")
         tst.inserts = listOf()
 
         chkOp("""

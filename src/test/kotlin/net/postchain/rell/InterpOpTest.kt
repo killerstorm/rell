@@ -1,6 +1,6 @@
 package net.postchain.rell
 
-import net.postchain.gtx.GTXNull
+import net.postchain.gtv.GtvNull
 import net.postchain.rell.model.R_ClassType
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.runtime.*
@@ -27,8 +27,16 @@ class InterpOpTest: AbstractOpTest() {
         val args2 = args.map { it as InterpTstVal }
         val types = args2.map { it.type }
 
-        val chainCtx = Rt_ChainContext(GTXNull, Rt_NullValue)
-        val globalCtx = Rt_GlobalContext(Rt_FailingPrinter, Rt_FailingPrinter, NoConnSqlExecutor, null, chainCtx)
+        val chainCtx = Rt_ChainContext(GtvNull, Rt_NullValue, ByteArray(32))
+
+        val globalCtx = Rt_GlobalContext(
+                Rt_FailingPrinter,
+                Rt_FailingPrinter,
+                NoConnSqlExecutor,
+                null,
+                chainCtx,
+                typeCheck = true
+        )
 
         val res = processExpr0(expr2, types) { module ->
             val rtArgs = args2.map { it.rt(module) }
@@ -70,10 +78,14 @@ class InterpOpTest: AbstractOpTest() {
 
     private fun paramName(idx: Int) = "" + ('a' + idx)
 
+    override fun integerOverflowMsg(op: String, left: Long, right: Long) = "rt_err:expr:$op:overflow:$left:$right"
+    override fun integerDivZeroMsg(left: Long) = "rt_err:expr:/:div0:$left"
+
     override fun vBool(v: Boolean): TstVal = InterpTstVal.Bool(v)
     override fun vInt(v: Long): TstVal = InterpTstVal.Integer(v)
     override fun vText(v: String): TstVal = InterpTstVal.Text(v)
     override fun vBytes(v: String): TstVal = InterpTstVal.Bytes(v)
+    override fun vRowid(v: Long): TstVal = InterpTstVal.Rowid(v)
     override fun vJson(v: String): TstVal = InterpTstVal.Json(v)
     override fun vObj(cls: String, id: Long): TstVal = InterpTstVal.Obj(cls, id)
 
@@ -93,8 +105,12 @@ class InterpOpTest: AbstractOpTest() {
         }
 
         class Bytes(str: String): InterpTstVal("byte_array") {
-            private val v = str.hexStringToByteArray()
+            private val v = CommonUtils.hexToBytes(str)
             override fun rt(m: R_Module): Rt_Value = Rt_ByteArrayValue(v)
+        }
+
+        class Rowid(val v: Long): InterpTstVal("rowid") {
+            override fun rt(m: R_Module): Rt_Value = Rt_RowidValue(v)
         }
 
         class Json(val v: String): InterpTstVal("json") {

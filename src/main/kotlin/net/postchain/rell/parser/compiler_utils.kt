@@ -2,6 +2,7 @@ package net.postchain.rell.parser
 
 import com.github.h0tk3y.betterParse.parser.ParseException
 import com.github.h0tk3y.betterParse.parser.parseToEnd
+import net.postchain.rell.CommonUtils
 import net.postchain.rell.model.*
 import java.util.*
 
@@ -14,6 +15,23 @@ object C_Utils {
             throw C_Errors.errExprNoDb(pos, type)
         }
         return Db_InterpretedExpr(rExpr)
+    }
+
+    fun makeDbBinaryExpr(type: R_Type, rOp: R_BinaryOp, dbOp: Db_BinaryOp, left: Db_Expr, right: Db_Expr): Db_Expr {
+        return if (left is Db_InterpretedExpr && right is Db_InterpretedExpr) {
+            val rExpr = R_BinaryExpr(type, rOp, left.expr, right.expr)
+            Db_InterpretedExpr(rExpr)
+        } else {
+            Db_BinaryExpr(type, dbOp, left, right)
+        }
+    }
+
+    fun makeDbBinaryExprEq(left: Db_Expr, right: Db_Expr): Db_Expr {
+        return makeDbBinaryExpr(R_BooleanType, R_BinaryOp_Eq, Db_BinaryOp_Eq, left, right)
+    }
+
+    fun makeDbBinaryExprChain(type: R_Type, rOp: R_BinaryOp, dbOp: Db_BinaryOp, exprs: List<Db_Expr>): Db_Expr {
+        return CommonUtils.foldSimple(exprs) { left, right -> makeDbBinaryExpr(type, rOp, dbOp, left, right) }
     }
 
     fun effectiveMemberType(formalType: R_Type, safe: Boolean): R_Type {
@@ -93,9 +111,9 @@ object C_Utils {
 }
 
 object C_Parser {
-    private val currentFileLocal = ThreadLocal.withInitial<String> { "?" }
+    private val currentFileLocal = ThreadLocal.withInitial<C_SourcePath> { C_SourcePath(listOf("?")) }
 
-    fun parse(file: String, sourceCode: String): S_ModuleDefinition {
+    fun parse(filePath: C_SourcePath, sourceCode: String): S_ModuleDefinition {
         // The syntax error position returned by the parser library is misleading: if there is an error in the middle
         // of an operation, it returns the position of the beginning of the operation.
         // Following workaround handles this by tracking the position of the farthest reached token (seems to work fine).
@@ -111,17 +129,17 @@ object C_Parser {
         }
 
         try {
-            val ast = overrideCurrentFile(file) {
+            val ast = overrideCurrentFile(filePath) {
                 S_Grammar.parseToEnd(tokenSeq)
             }
             return ast
         } catch (e: ParseException) {
-            val pos = S_BasicPos(file, maxRow, maxCol)
+            val pos = S_BasicPos(filePath, maxRow, maxCol)
             throw C_Error(pos, "syntax", "Syntax error")
         }
     }
 
-    private fun <T> overrideCurrentFile(file: String, code: () -> T): T {
+    private fun <T> overrideCurrentFile(file: C_SourcePath, code: () -> T): T {
         val oldFile = currentFileLocal.get()
         try {
             currentFileLocal.set(file)
@@ -140,13 +158,17 @@ object C_Errors {
                 "$errMsg: ${srcType.toStrictString()} instead of ${dstType.toStrictString()}")
     }
 
-    fun errMutlipleAttrs(pos: S_Pos, attrs: List<C_ClassAttr>, errCode: String, errMsg: String): C_Error {
-        val attrsLst = attrs.map { it.cls.alias + "." + it.attr.name }
+    fun errMutlipleAttrs(pos: S_Pos, attrs: List<C_ExprContextAttr>, errCode: String, errMsg: String): C_Error {
+        val attrsLst = attrs.map { it.cls.alias + "." + it.attrRef.name }
         return C_Error(pos, "$errCode:${attrsLst.joinToString(",")}", "$errMsg: ${attrsLst.joinToString()}")
     }
 
     fun errUnknownName(name: S_Name): C_Error {
         return C_Error(name.pos, "unknown_name:${name.str}", "Unknown name: '${name.str}'")
+    }
+
+    fun errUnknownName(baseName: String, name: S_Name): C_Error {
+        return C_Error(name.pos, "unknown_name:$baseName.${name.str}", "Unknown name: '$baseName.${name.str}'")
     }
 
     fun errUnknownName(baseName: List<S_Name>, name: S_Name): C_Error {
@@ -203,27 +225,15 @@ object C_Errors {
         return C_Error(pos, "stmt_delete_cant:$name", "Not allowed to delete objects of class '$name'")
     }
 
-    fun errNameConflictLocalGlobal(name: S_Name): C_Error {
-        val nameStr = name.str
-        throw C_Error(name.pos, "expr_name_locglob:$nameStr",
-                "Name '$nameStr' is ambiguous: can be type or local variable")
-    }
-
-    fun errNameConflictClassGlobal(name: S_Name): C_Error {
-        val nameStr = name.str
-        throw C_Error(name.pos, "expr_name_clsglob:$nameStr",
-                "Name '$nameStr' is ambiguous: can be type or class alias")
-    }
-
     fun errNameConflictAliasLocal(name: S_Name): C_Error {
         val nameStr = name.str
         throw C_Error(name.pos, "expr_name_clsloc:$nameStr",
                 "Name '$nameStr' is ambiguous: can be class alias or local variable")
     }
 
-    fun errTypeNotGtxCompatible(pos: S_Pos, type: R_Type, reason: String?, code: String, msg: String): C_Error {
+    fun errTypeNotGtvCompatible(pos: S_Pos, type: R_Type, reason: String?, code: String, msg: String): C_Error {
         val extra = if (reason == null) "" else "; reason: $reason"
-        val fullMsg = "$msg is not GTX-compatible: ${type.toStrictString()}$extra"
+        val fullMsg = "$msg is not Gtv-compatible: ${type.toStrictString()}$extra"
         throw C_Error(pos, "$code:${type.toStrictString()}", fullMsg)
     }
 }
@@ -357,8 +367,9 @@ object C_GraphUtils {
 
 class C_RecordsStructure(
         val mutable: Set<R_RecordType>,
-        val nonGtxHuman: Set<R_RecordType>,
-        val nonGtxCompact: Set<R_RecordType>,
+        val nonVirtualable: Set<R_RecordType>,
+        val nonGtvFrom: Set<R_RecordType>,
+        val nonGtvTo: Set<R_RecordType>,
         val graph: Map<R_RecordType, List<R_RecordType>>
 )
 
@@ -367,9 +378,10 @@ object C_RecordUtils {
         val structMap = records.map { Pair(it, calcRecStruct(it)) }.toMap()
         val graph = structMap.mapValues { (_, v) -> v.dependencies.toList() }
         val mutable = structMap.filter { (_, v) -> v.directFlags.mutable }.keys
-        val nonGtxHuman = structMap.filter { (_, v) -> !v.directFlags.gtxHuman.compatible }.keys
-        val nonGtxCompact = structMap.filter { (_, v) -> !v.directFlags.gtxCompact.compatible }.keys
-        return C_RecordsStructure(mutable, nonGtxHuman, nonGtxCompact, graph)
+        val nonVirtualable = structMap.filter { (_, v) -> !v.directFlags.virtualable }.keys
+        val nonGtvFrom = structMap.filter { (_, v) -> !v.directFlags.gtv.fromGtv }.keys
+        val nonGtvTo = structMap.filter { (_, v) -> !v.directFlags.gtv.toGtv }.keys
+        return C_RecordsStructure(mutable, nonVirtualable, nonGtvFrom, nonGtvTo, graph)
     }
 
     private fun calcRecStruct(type: R_Type): RecStruct {

@@ -1,29 +1,88 @@
 package net.postchain.rell.parser
 
+import net.postchain.rell.CommonUtils
 import net.postchain.rell.TypedKeyMap
 import net.postchain.rell.model.*
+import org.apache.commons.lang3.StringUtils
+import java.util.*
 
-class C_Error(
-        val pos: S_Pos,
-        val code: String,
-        val errMsg: String,
-        val posStack: List<S_Pos> = listOf(pos)
-): RuntimeException("$pos $errMsg")
+class C_Error: RuntimeException {
+    val pos: S_Pos
+    val code: String
+    val errMsg: String
+    val posStack: List<S_Pos>
+
+    constructor(pos: S_Pos, code: String, errMsg: String): this(pos, code, errMsg, listOf(pos))
+
+    private constructor(pos: S_Pos, code: String, errMsg: String, posStack: List<S_Pos>): super("$pos $errMsg") {
+        this.pos = pos
+        this.code = code
+        this.errMsg = errMsg
+        this.posStack = posStack
+    }
+
+    fun addStack(outerStack: List<S_Pos>): C_Error {
+        return C_Error(pos, code, errMsg, outerStack + posStack)
+    }
+}
 
 abstract class C_GlobalFunction {
-    abstract fun compileCall(name: S_Name, args: List<C_Value>): C_Expr
+    abstract fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr
+}
+
+abstract class C_RegularGlobalFunction: C_GlobalFunction() {
+    abstract fun compileCallRegular(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Expr
+
+    override final fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
+        val cArgs = compileArgs(ctx, args)
+        return compileCallRegular(ctx, name, cArgs)
+    }
+
+    companion object {
+        fun compileArgs(ctx: C_ExprContext, args: List<S_NameExprPair>): List<C_Value> {
+            val namedArg = args.map { it.name }.filterNotNull().firstOrNull()
+            if (namedArg != null) {
+                val argName = namedArg.str
+                throw C_Error(namedArg.pos, "expr_call_namedarg:$argName", "Named function arguments not supported")
+            }
+
+            val cArgs = args.map {
+                val sArg = it.expr
+                val cArg = sArg.compile(ctx).value()
+                val type = cArg.type()
+                C_Utils.checkUnitType(sArg.startPos, type, "expr_arg_unit", "Argument expression returns nothing")
+                cArg
+            }
+
+            return cArgs
+        }
+    }
+}
+
+class C_RecordGlobalFunction(private val record: R_RecordType): C_GlobalFunction() {
+    override fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
+        return compileCall(record, ctx, name, args)
+    }
+
+    companion object {
+        fun compileCall(record: R_RecordType, ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
+            val attrs = C_AttributeResolver.resolveCreate(ctx, record.attributes, args, name.pos)
+            val rExpr = R_RecordExpr(record, attrs.rAttrs)
+            return C_RValue.makeExpr(name.pos, rExpr, attrs.exprFacts)
+        }
+    }
 }
 
 class C_UserFunctionHeader(val params: List<R_ExternalParam>, val type: R_Type)
 
-class C_UserGlobalFunction(val name: String, val fnKey: Int): C_GlobalFunction() {
+class C_UserGlobalFunction(val name: String, val fnKey: Int): C_RegularGlobalFunction() {
     private lateinit var headerLate: C_UserFunctionHeader
 
     fun setHeader(header: C_UserFunctionHeader) {
         headerLate = header
     }
 
-    override fun compileCall(sName: S_Name, args: List<C_Value>): C_Expr {
+    override fun compileCallRegular(ctx: C_ExprContext, sName: S_Name, args: List<C_Value>): C_Expr {
         val header = headerLate
         val params = header.params.map { it.type }
         val rArgs = args.map { it.toRExpr() }
@@ -39,32 +98,61 @@ class C_UserGlobalFunction(val name: String, val fnKey: Int): C_GlobalFunction()
     }
 }
 
-enum class C_MessageType(val text: String) {
-    WARNING("Warning"),
-    ERROR("ERROR")
+enum class C_MessageType(val text: String, val ignorable: Boolean) {
+    WARNING("Warning", true),
+    ERROR("ERROR", false)
 }
 
-class C_Message(val type: C_MessageType, val pos: S_Pos, val code: String, val text: String) {
+class C_Message(
+        val type: C_MessageType,
+        val pos: S_Pos,
+        val code: String,
+        val text: String,
+        val posStack: List<S_Pos> = listOf(pos)
+) {
     override fun toString(): String {
         return "$pos ${type.text}: $text"
     }
 }
 
-class C_GlobalContext(val gtx: Boolean) {
+class C_GlobalContext(val compilerOptions: C_CompilerOptions) {
     private var frameBlockIdCtr = 0L
     private val messages = mutableListOf<C_Message>()
+    private val includeStack = LinkedList<S_Pos>()
 
     fun nextFrameBlockId(): R_FrameBlockId = R_FrameBlockId(frameBlockIdCtr++)
 
     fun message(type: C_MessageType, pos: S_Pos, code: String, text: String) {
-        messages.add(C_Message(type, pos, code, text))
+        val posStack = includeStack + listOf(pos)
+        messages.add(C_Message(type, pos, code, text, posStack))
     }
 
     fun warning(pos: S_Pos, code: String, text: String) {
         message(C_MessageType.WARNING, pos, code, text)
     }
 
+    fun error(error: C_Error) {
+        val message = C_Message(C_MessageType.ERROR, error.pos, error.code, error.errMsg, error.posStack)
+        messages.add(message)
+    }
+
     fun messages() = messages.toList()
+
+    fun includeStack() = includeStack.toList()
+
+    fun <T> processIncludedFile(pos: S_Pos, code: () -> T) = processIncludedFile(listOf(pos), code)
+
+    fun <T> processIncludedFile(stack: List<S_Pos>, code: () -> T): T {
+        includeStack.addAll(stack)
+        try {
+            val res = code()
+            return res
+        } catch (e: C_Error) {
+            throw e.addStack(stack)
+        } finally {
+            stack.forEach { includeStack.removeLast() }
+        }
+    }
 }
 
 object C_Defs {
@@ -80,26 +168,75 @@ class C_Record(val name: S_Name, val type: R_RecordType)
 
 enum class C_ModulePass {
     NAMES,
-    TYPES,
+    MEMBERS,
     EXPRESSIONS,
+    VALIDATION,
 }
 
+sealed class C_Deprecated {
+    abstract fun detailsCode(): String
+    abstract fun detailsMessage(): String
+}
+
+class C_Deprecated_UseInstead(private val name: String): C_Deprecated() {
+    override fun detailsCode() = ":$name"
+    override fun detailsMessage() = ", use '$name' instead"
+}
+
+abstract class C_Def<T>(private val type: C_DefType, private val def: T, private val deprecated: C_Deprecated?) {
+    fun useDef(nsCtx: C_NamespaceContext, name: List<S_Name>): T {
+        if (deprecated != null) {
+            val name = name.last()
+            deprecatedMessage(nsCtx, type, name.pos, name.str, deprecated)
+        }
+        return def
+    }
+
+    companion object {
+        fun deprecatedMessage(
+                nsCtx: C_NamespaceContext,
+                type: C_DefType,
+                pos: S_Pos,
+                name: String,
+                deprecated: C_Deprecated
+        ) {
+            val typeStr = StringUtils.capitalize(type.description)
+            val depCode = deprecated.detailsCode()
+            val depStr = deprecated.detailsMessage()
+            val code = "deprecated:$type:$name$depCode"
+            val msg = "$typeStr '$name' is deprecated$depStr"
+            val globalCtx = nsCtx.modCtx.globalCtx
+            val msgType = if (globalCtx.compilerOptions.deprecatedError) C_MessageType.ERROR else C_MessageType.WARNING
+            globalCtx.message(msgType, pos, code, msg)
+        }
+    }
+}
+
+class C_TypeDef(type: R_Type, deprecated: C_Deprecated? = null)
+    : C_Def<R_Type>(C_DefType.TYPE, type, deprecated)
+class C_NamespaceDef(namespace: C_Namespace, deprecated: C_Deprecated? = null)
+    : C_Def<C_Namespace>(C_DefType.NAMESPACE, namespace, deprecated)
+
 class C_ModuleContext(val globalCtx: C_GlobalContext) {
-    private val sysTypes = mapOf(
-            "boolean" to R_BooleanType,
-            "text" to R_TextType,
-            "byte_array" to R_ByteArrayType,
-            "integer" to R_IntegerType,
-            "pubkey" to R_ByteArrayType,
-            "name" to R_TextType,
-            "timestamp" to R_IntegerType,
-            "signer" to R_SignerType,
-            "guid" to R_GUIDType,
-            "tuid" to R_TextType,
-            "json" to R_JSONType,
-            "range" to R_RangeType,
-            "GTXValue" to R_GtxValueType
-    )
+    companion object {
+        private val SYSTEM_TYPES = mapOf(
+                "boolean" to C_TypeDef(R_BooleanType),
+                "text" to C_TypeDef(R_TextType),
+                "byte_array" to C_TypeDef(R_ByteArrayType),
+                "integer" to C_TypeDef(R_IntegerType),
+                "rowid" to C_TypeDef(R_RowidType),
+                "pubkey" to C_TypeDef(R_ByteArrayType),
+                "name" to C_TypeDef(R_TextType),
+                "timestamp" to C_TypeDef(R_IntegerType),
+                "signer" to C_TypeDef(R_SignerType),
+                "guid" to C_TypeDef(R_GUIDType),
+                "tuid" to C_TypeDef(R_TextType),
+                "json" to C_TypeDef(R_JsonType),
+                "range" to C_TypeDef(R_RangeType),
+                "GTXValue" to C_TypeDef(R_GtvType, C_Deprecated_UseInstead("gtv")),
+                "gtv" to C_TypeDef(R_GtvType)
+        )
+    }
 
     private val blockClass = C_Utils.createBlockClass(null, null)
     private val transactionClass = C_Utils.createTransactionClass(null, null, blockClass)
@@ -117,7 +254,7 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
 
     private val externalChains = mutableMapOf<String, R_ExternalChain>()
 
-    private val passes = C_ModulePass.values().map { Pair(it, mutableListOf<()->Unit>()) }.toMap()
+    private val passes = C_ModulePass.values().map { Pair(it, mutableListOf<C_PassTask>()) }.toMap()
     private var currentPass = C_ModulePass.NAMES
 
     val nsCtx = C_NamespaceContext(
@@ -125,7 +262,7 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
             null,
             null,
             predefNamespaces = C_LibFunctions.getSystemNamespaces(),
-            predefTypes = sysTypes,
+            predefTypes = SYSTEM_TYPES,
             predefClasses =  listOf(blockClass, transactionClass),
             predefFunctions = C_LibFunctions.getGlobalFunctions()
     )
@@ -182,39 +319,49 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
     }
 
     fun onPass(pass: C_ModulePass, code: () -> Unit) {
-        check(currentPass < pass)
+        check(currentPass < pass) { "currentPass: $currentPass targetPass: $pass" }
+
+        val stack = globalCtx.includeStack()
+
         val ordinal = currentPass.ordinal
         if (ordinal + 1 == pass.ordinal) {
-            passes.getValue(pass).add(code)
+            val task = C_PassTask(stack, code)
+            passes.getValue(pass).add(task)
         } else {
             // Extra code is needed to maintain execution order:
             // - entity 0 adds code to pass A, that code adds code to pass B
             // - entity 1 adds code to pass B directly
             // -> on pass B entity 0 must be executed before entity 1
             val nextPass = C_ModulePass.values()[ordinal + 1]
-            passes.getValue(nextPass).add { onPass(pass, code) }
+
+            val task = C_PassTask(stack) { onPass(pass, code) }
+            passes.getValue(nextPass).add(task)
         }
     }
 
     private fun runPass(pass: C_ModulePass) {
         check(currentPass < pass)
         currentPass = pass
-        for (code in passes.getValue(pass)) {
-            code()
+        for (task in passes.getValue(pass)) {
+            globalCtx.processIncludedFile(task.stack) {
+                task.code()
+            }
         }
     }
 
     fun createModule(): R_Module {
         nsCtx.createNamespace()
-        runPass(C_ModulePass.TYPES)
+        runPass(C_ModulePass.MEMBERS)
         processRecords()
         runPass(C_ModulePass.EXPRESSIONS)
+        runPass(C_ModulePass.VALIDATION)
 
         val topologicalClasses = calcTopologicalClasses()
 
         val moduleArgs = nsCtx.getRecordOpt(C_Defs.MODULE_ARGS_RECORD)
-        if (moduleArgs != null && !moduleArgs.type.flags.typeFlags.gtxHuman.compatible) {
-            throw C_Error(moduleArgs.name.pos, "module_args_nogtx", "Record '${C_Defs.MODULE_ARGS_RECORD}' is not GTX-compatible")
+        if (moduleArgs != null && !moduleArgs.type.flags.typeFlags.gtv.fromGtv) {
+            throw C_Error(moduleArgs.name.pos, "module_args_nogtv",
+                    "Record '${C_Defs.MODULE_ARGS_RECORD}' is not Gtv-compatible")
         }
 
         return R_Module(
@@ -239,13 +386,13 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
         val cyclicRecs = C_GraphUtils.findCyclicVertices(graph).toSet()
         val infiniteRecs = C_GraphUtils.closure(transGraph, cyclicRecs).toSet()
         val mutableRecs = C_GraphUtils.closure(transGraph, structure.mutable).toSet()
-        val nonGtxHumanRecs = C_GraphUtils.closure(transGraph, structure.nonGtxHuman).toSet()
-        val nonGtxCompactRecs = C_GraphUtils.closure(transGraph, structure.nonGtxCompact).toSet()
+        val nonVirtualableRecs = C_GraphUtils.closure(transGraph, structure.nonVirtualable).toSet()
+        val nonGtvFromRecs = C_GraphUtils.closure(transGraph, structure.nonGtvFrom).toSet()
+        val nonGtvToRecs = C_GraphUtils.closure(transGraph, structure.nonGtvTo).toSet()
 
         for (record in records) {
-            val gtxHuman = R_GtxCompatibility(record !in nonGtxHumanRecs)
-            val gtxCompact = R_GtxCompatibility(record !in nonGtxCompactRecs)
-            val typeFlags = R_TypeFlags(record in mutableRecs, gtxHuman, gtxCompact)
+            val gtv = R_GtvCompatibility(record !in nonGtvFromRecs, record !in nonGtvToRecs)
+            val typeFlags = R_TypeFlags(record in mutableRecs, gtv, record !in nonVirtualableRecs)
             val flags = R_RecordFlags(typeFlags, record in cyclicRecs, record in infiniteRecs)
             record.setFlags(flags)
         }
@@ -279,6 +426,8 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
         val res = C_GraphUtils.topologicalSort(graph)
         return res
     }
+
+    private class C_PassTask(val stack: List<S_Pos>, val code: () -> Unit)
 }
 
 enum class C_DefType(val description: String) {
@@ -298,16 +447,16 @@ class C_NamespaceContext(
         val modCtx: C_ModuleContext,
         private val parentCtx: C_NamespaceContext?,
         val namespaceName: String?,
-        predefNamespaces: Map<String, C_Namespace> = mapOf(),
-        predefTypes: Map<String, R_Type> = mapOf(),
+        predefNamespaces: Map<String, C_NamespaceDef> = mapOf(),
+        predefTypes: Map<String, C_TypeDef> = mapOf(),
         predefClasses: List<R_Class> = listOf(),
         predefFunctions: Map<String, C_GlobalFunction> = mapOf()
 ){
-    private val names = mutableMapOf<String, C_DefType>()
-    private val includes = mutableSetOf<String>()
+    private val names = mutableMapOf<String, C_DefEntry>()
     private val nsBuilder = C_NamespaceBuilder()
 
     private val records = mutableMapOf<String, C_Record>()
+    private val namespaces = mutableMapOf<String, C_DefinitionContext>()
 
     private lateinit var namespace: C_Namespace
 
@@ -326,7 +475,7 @@ class C_NamespaceContext(
             check(name !in names)
             modCtx.addClass(cls, null)
             addClass0(name, cls)
-            names[name] = C_DefType.CLASS
+            names[name] = C_DefEntry(C_DefType.CLASS, null)
         }
     }
 
@@ -334,7 +483,7 @@ class C_NamespaceContext(
         for ((name, def) in predefs) {
             adder(name, def)
             // For predefined names, name duplication is allowed (e.g. "integer" is a type, function and namespace)
-            if (name !in names) names[name] = type
+            if (name !in names) names[name] = C_DefEntry(type, null)
         }
     }
 
@@ -350,26 +499,33 @@ class C_NamespaceContext(
     }
 
     fun getTypeOpt(name: List<S_Name>): R_Type? {
+        val typeDef = getTypeDefOpt(name)
+        val type = typeDef?.useDef(this, name)
+        return type
+    }
+
+    private fun getTypeDefOpt(name: List<S_Name>): C_TypeDef? {
         check(!name.isEmpty())
 
         val name0 = name[0].str
         if (name.size == 1) {
-            val type = getDefOpt { it.namespace.types[name0] }
-            return type
+            val typeDef = getDefOpt { it.namespace.types[name0] }
+            return typeDef
         }
 
-        var ns = getDefOpt { it.namespace.namespaces[name0] }
-        if (ns == null) return null
+        var nsDef = getDefOpt { it.namespace.namespaces[name0] }
+        if (nsDef == null) return null
 
-        var namesTail = name.subList(1, name.size)
-        while (namesTail.size > 1) {
-            ns = ns!!.namespaces[namesTail[0].str]
-            if (ns == null) return null
-            namesTail = namesTail.subList(1, namesTail.size)
+        for (i in 1 .. name.size - 2) {
+            val nsName = name.subList(0, i)
+            val ns = nsDef!!.useDef(this, nsName)
+            nsDef = ns.namespaces[name[i].str]
+            if (nsDef == null) return null
         }
 
-        val type = ns!!.types[namesTail[0].str]
-        return type
+        val nsName = name.subList(0, name.size - 1)
+        val typeDef = nsDef!!.useDef(this, nsName).types[name[name.size - 1].str]
+        return typeDef
     }
 
     fun getClass(name: List<S_Name>): R_Class {
@@ -398,7 +554,7 @@ class C_NamespaceContext(
     }
 
     private fun <T> getDefOpt(getter: (C_NamespaceContext) -> T?): T? {
-        modCtx.checkPass(C_ModulePass.TYPES, null)
+        modCtx.checkPass(C_ModulePass.MEMBERS, null)
         var ctx: C_NamespaceContext? = this
         while (ctx != null) {
             val def = getter(ctx)
@@ -408,10 +564,22 @@ class C_NamespaceContext(
         return null
     }
 
-    fun addNamespace(name: String, ns: C_Namespace) {
-        modCtx.checkPass(null, C_ModulePass.NAMES)
-        nsBuilder.addNamespace(name, ns)
-        nsBuilder.addValue(name, C_NamespaceValue_Namespace(ns))
+    fun addNamespace(ctx: C_DefinitionContext, name: String): C_DefinitionContext {
+        check(ctx.nsCtx === this)
+
+        val res = namespaces[name]
+        if (res != null) {
+            return res
+        }
+
+        val nsSubName = ctx.nsCtx.fullName(name)
+        val subNsCtx = C_NamespaceContext(ctx.modCtx, ctx.nsCtx, nsSubName)
+        val subIncCtx = ctx.incCtx.subNamespace()
+        val defSubName = ctx.fullName(name)
+        val subCtx = C_DefinitionContext(subNsCtx, ctx.chainCtx, subIncCtx, defSubName)
+        namespaces[name] = subCtx
+
+        return subCtx
     }
 
     fun addClass(name: S_Name, cls: R_Class) {
@@ -422,7 +590,10 @@ class C_NamespaceContext(
 
     fun addClass0(name: String, cls: R_Class) {
         modCtx.checkPass(null, C_ModulePass.NAMES)
-        nsBuilder.addType(name, R_ClassType(cls))
+        val type = R_ClassType(cls)
+        val typeDef = C_TypeDef(type)
+        nsBuilder.addType(name, typeDef)
+        nsBuilder.addValue(name, C_NamespaceValue_Class(typeDef))
     }
 
     fun addObject(sName: S_Name, obj: R_Object) {
@@ -436,14 +607,15 @@ class C_NamespaceContext(
         val name = rec.name.str
         check(name !in records)
         modCtx.addRecord(rec.type)
-        nsBuilder.addType(name, rec.type)
+        nsBuilder.addType(name, C_TypeDef(rec.type))
         nsBuilder.addValue(name, C_NamespaceValue_Record(rec.type))
+        nsBuilder.addFunction(name, C_RecordGlobalFunction(rec.type))
         records[name] = rec
     }
 
     fun addEnum(name: String, e: R_EnumType) {
         modCtx.checkPass(null, C_ModulePass.NAMES)
-        nsBuilder.addType(name, e)
+        nsBuilder.addType(name, C_TypeDef(e))
         nsBuilder.addValue(name, C_NamespaceValue_Enum(e))
     }
 
@@ -473,27 +645,46 @@ class C_NamespaceContext(
 
     fun registerName(name: S_Name, type: C_DefType): String {
         modCtx.checkPass(null, C_ModulePass.NAMES)
-        val oldType = names[name.str]
-        if (oldType != null) {
-            throw C_Error(name.pos, "name_conflict:${oldType.description}:${name.str}",
-                    "Name conflict: ${oldType.description} '${name.str}' exists")
+        checkNameConflict(name, type)
+        if (name.str !in names) {
+            names[name.str] = C_DefEntry(type, name.pos)
         }
-        names[name.str] = type
         return fullName(name.str)
     }
 
-    fun checkTopNamespace(pos: S_Pos, type: C_DefType) {
-        if (parentCtx != null) {
-            val s = type.description
-            throw C_Error(pos, "def_ns:$s", "Not allowed to declare $s in a namespace")
+    private fun checkNameConflict(name: S_Name, type: C_DefType) {
+        val oldEntry = names[name.str]
+        if (oldEntry == null) {
+            return
         }
+
+        if (type == C_DefType.NAMESPACE && oldEntry.type == C_DefType.NAMESPACE && name.str in namespaces) {
+            // Duplicate namespaces are allowed, but only user namespaces, not system namespaces.
+            return
+        }
+
+        var msg = "Name conflict: ${oldEntry.type.description} '${name.str}' exists"
+        if (oldEntry.pos != null) {
+            msg += ", defined at ${oldEntry.pos.strLine()}"
+        }
+        throw C_Error(name.pos, "name_conflict:${oldEntry.type.description}:${name.str}", msg)
     }
 
     fun createNamespace(): C_Namespace {
         modCtx.checkPass(null, C_ModulePass.NAMES)
+
+        for ((name, subCtx) in namespaces) {
+            val ns = subCtx.nsCtx.createNamespace()
+            val nsDef = C_NamespaceDef(ns)
+            nsBuilder.addNamespace(name, nsDef)
+            nsBuilder.addValue(name, C_NamespaceValue_Namespace(nsDef))
+        }
+
         namespace = nsBuilder.build()
         return namespace
     }
+
+    private class C_DefEntry(val type: C_DefType, val pos: S_Pos?)
 }
 
 class C_DefinitionContext(
@@ -550,53 +741,67 @@ class C_ExternalChainContext(val nsCtx: C_NamespaceContext, val chain: R_Externa
     }
 
     fun transactionClassType(): R_Type {
-        nsCtx.modCtx.checkPass(C_ModulePass.TYPES, null)
+        nsCtx.modCtx.checkPass(C_ModulePass.MEMBERS, null)
         return transactionClassType
     }
 }
 
 class C_IncludeContext private constructor(
         val resolver: C_IncludeResolver,
-        private val pathChain: List<String>,
-        private val namespaceIncludes: MutableSet<String> = mutableSetOf()
+        private val outerBlockPath: List<String>,
+        private val sameBlockPath: List<String>,
+        private val ignoredIncludes: MutableSet<String>,
+        private val uniqueIncludes: MutableSet<String>
 ) {
-    private val includes = mutableSetOf<String>()
-
     fun subInclude(pos: S_Pos, resource: C_IncludeResource): C_IncludeContext? {
         val path = resource.path
 
-        val recIdx = pathChain.indexOf(path)
-        if (recIdx >= 0) {
-            val recChain = pathChain.subList(recIdx, pathChain.size) + listOf(path)
-            throw C_Error(pos, "include_rec:${recChain.joinToString(",")}",
-                    "Recursive file inclusion: ${recChain.joinToString(" -> ") { "'$it'" }}")
+        if (!sameBlockPath.isEmpty() && sameBlockPath.last() == path) {
+            throw C_Error(pos, "include_self:$path", "File includes itself: $path")
         }
 
-        if (!includes.add(path)) {
+        val recIdx = outerBlockPath.indexOf(path)
+        if (recIdx >= 0) {
+            val recPath = outerBlockPath.subList(recIdx, outerBlockPath.size) + sameBlockPath + listOf(path)
+            throw C_Error(pos, "include_rec:${recPath.joinToString(",")}",
+                    "Recursive file inclusion: ${recPath.joinToString(" -> ") { "'$it'" }}")
+        }
+
+        if (!uniqueIncludes.add(path)) {
             throw C_Error(pos, "include_dup:$path", "File already included: '$path'")
         }
 
-        val subChain = pathChain + listOf(path)
-        if (subChain.size >= MAX_DEPTH) {
-            throw C_Error(pos, "include_long:${subChain.size}:${subChain.first()}:${subChain.last()}",
-                    "Inclusion chain is too long (${subChain.size}): ${subChain.joinToString(" -> ") { "'$it'" }}")
+        val subPath = sameBlockPath + listOf(path)
+        if (subPath.size >= MAX_DEPTH) {
+            throw C_Error(pos, "include_long:${subPath.size}:${subPath.first()}:${subPath.last()}",
+                    "Inclusion chain is too long (${subPath.size}): ${subPath.joinToString(" -> ") { "'$it'" }}")
         }
 
-        if (!namespaceIncludes.add(path)) {
+        if (!ignoredIncludes.add(path)) {
             return null
         }
 
-        return C_IncludeContext(resource.innerResolver, subChain, namespaceIncludes)
+        return C_IncludeContext(resource.innerResolver, outerBlockPath, subPath, ignoredIncludes, mutableSetOf())
     }
 
     fun subNamespace(): C_IncludeContext {
-        return C_IncludeContext(resolver, pathChain)
+        return C_IncludeContext(resolver, outerBlockPath + sameBlockPath, listOf(), mutableSetOf(), mutableSetOf())
+    }
+
+    fun subExternal(): C_IncludeContext {
+        return C_IncludeContext(resolver, outerBlockPath + sameBlockPath, listOf(), mutableSetOf(), uniqueIncludes)
     }
 
     companion object {
         private val MAX_DEPTH = 100
 
-        fun createTop(path: String, resolver: C_IncludeResolver) = C_IncludeContext(resolver, listOf(path))
+        fun createTop(path: String, resolver: C_IncludeResolver) = C_IncludeContext(
+                resolver,
+                listOf(),
+                listOf(path),
+                mutableSetOf(),
+                mutableSetOf()
+        )
     }
 }
 
@@ -762,7 +967,13 @@ class C_ClassContext(
         }
 
         val rType = attr.compileType(entCtx.nsCtx)
+
         val insideClass = entityType == C_EntityType.CLASS || entityType == C_EntityType.OBJECT
+
+        if (insideClass && !C_ClassAttrRef.isAllowedRegularAttrName(nameStr)) {
+            throw C_Error(name.pos, "unallowed_attr_name:$nameStr", "Unallowed attribute name: '$nameStr'")
+        }
+
         if (insideClass && !rType.sqlAdapter.isSqlCompatible()) {
             throw C_Error(name.pos, "class_attr_type:$nameStr:${rType.toStrictString()}",
                     "Attribute '$nameStr' has unallowed type: ${rType.toStrictString()}")
@@ -848,24 +1059,76 @@ class C_ClassContext(
     }
 }
 
+class C_CompilerOptions(val gtv: Boolean = true, val deprecatedError: Boolean = false)
+
 object C_Compiler {
-    fun compile(includeDir: C_IncludeDir, mainFile: String, gtx: Boolean): C_CompilationResult {
-        val globalCtx = C_GlobalContext(gtx)
+    fun compile(
+            sourceDir: C_SourceDir,
+            mainFile: C_SourcePath,
+            options: C_CompilerOptions = C_CompilerOptions()
+    ): C_CompilationResult {
+        val globalCtx = C_GlobalContext(options)
         var module: R_Module? = null
         var error: C_Error? = null
 
         try {
-            val includeResolver = C_IncludeResolver(includeDir)
-            val code = includeResolver.resolve(mainFile).file.readText()
-            val ast = C_Parser.parse(mainFile, code)
-            module = ast.compile(globalCtx, mainFile, includeResolver)
+            val ast = readMainFile(sourceDir, mainFile)
+            val includeResolver = createIncludeResolver(sourceDir, mainFile)
+            module = ast.compile(globalCtx, mainFile.str(), includeResolver)
         } catch (e: C_Error) {
-            globalCtx.message(C_MessageType.ERROR, e.pos, e.code, e.errMsg)
+            globalCtx.error(e)
             error = e
         }
 
-        val messages = globalCtx.messages()
+        val messages = CommonUtils.sortedByCopy(globalCtx.messages()) { ComparablePos(it.pos) }
+
+        val errorMessage = messages.firstOrNull { it.type == C_MessageType.ERROR }
+        if (error == null && errorMessage != null) {
+            error = C_Error(errorMessage.pos, errorMessage.code, errorMessage.text)
+        }
+
         return C_CompilationResult(module, error, messages)
+    }
+
+    fun getIncludedResources(
+            sourceDir: C_SourceDir,
+            mainFilePath: C_SourcePath,
+            transitive: Boolean,
+            fail: Boolean
+    ): List<C_IncludeResource> {
+        val ast = readMainFile(sourceDir, mainFilePath)
+        val includeResolver = createIncludeResolver(sourceDir, mainFilePath)
+
+        val globalCtx = C_GlobalContext(C_CompilerOptions())
+        val incCtx = C_IncludeContext.createTop(mainFilePath.str(), includeResolver)
+        val resources = mutableMapOf<String, C_IncludeResource>()
+        ast.collectIncludes(globalCtx, incCtx, transitive, fail, resources)
+
+        val includes = resources.values.toList()
+        return includes
+    }
+
+    private fun readMainFile(sourceDir: C_SourceDir, mainFile: C_SourcePath): S_ModuleDefinition {
+        val mainSourceFile = C_IncludeResolver.resolveFile(sourceDir, mainFile)
+        val ast = mainSourceFile.readAst()
+        return ast
+    }
+
+    private fun createIncludeResolver(sourceDir: C_SourceDir, mainFile: C_SourcePath): C_IncludeResolver {
+        val mainDir = mainFile.parent()
+        val includeResolver = C_IncludeResolver(sourceDir, mainDir)
+        return includeResolver
+    }
+
+    private class ComparablePos(sPos: S_Pos): Comparable<ComparablePos> {
+        private val path: C_SourcePath = sPos.path()
+        private val pos = sPos.pos()
+
+        override fun compareTo(other: ComparablePos): Int {
+            var d = path.compareTo(other.path)
+            if (d == 0) d = pos.compareTo(other.pos)
+            return d
+        }
     }
 }
 

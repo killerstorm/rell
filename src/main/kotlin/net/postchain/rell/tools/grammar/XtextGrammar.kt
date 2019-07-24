@@ -8,7 +8,9 @@ import org.apache.commons.collections4.MapUtils
 import org.apache.commons.lang3.StringUtils
 
 fun main(args: Array<String>) {
-    println("grammar net.postchain.Rell hidden(WS, ML_COMMENT, SL_COMMENT)\n")
+    XtextGenUtils.printHeader()
+
+    println("grammar net.postchain.rellide.xtext.Rell hidden(WS, ML_COMMENT, SL_COMMENT)\n")
     println("import 'http://www.eclipse.org/emf/2002/Ecore' as ecore\n")
     println("generate rell 'http://www.postchain.net/Rell'")
 

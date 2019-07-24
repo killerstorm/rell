@@ -5,7 +5,7 @@ import org.junit.Test
 
 class NamespaceTest: BaseRellTest() {
     @Test fun testSimple() {
-        tst.defs = listOf("namespace foo { function bar(): integer = 123; }")
+        def("namespace foo { function bar(): integer = 123; }")
         chk("foo.bar()", "int[123]")
         chk("foo.bar", "ct_err:expr_novalue:function")
         chk("bar()", "ct_err:unknown_name:bar")
@@ -14,7 +14,7 @@ class NamespaceTest: BaseRellTest() {
     }
 
     @Test fun testNestedNamespace() {
-        tst.defs = listOf("namespace foo { namespace bar { function f(): integer = 123; } }")
+        def("namespace foo { namespace bar { function f(): integer = 123; } }")
         chk("foo.bar.f()", "int[123]")
         chk("f()", "ct_err:unknown_name:f")
         chk("foo.f()", "ct_err:unknown_name:foo.f")
@@ -23,7 +23,7 @@ class NamespaceTest: BaseRellTest() {
     }
 
     @Test fun testNameResolution() {
-        tst.defs = listOf("""
+        def("""
             namespace foo {
                 function f(): integer = 123;
                 function g(): integer = f();
@@ -44,7 +44,7 @@ class NamespaceTest: BaseRellTest() {
     }
 
     @Test fun testNameResolution2() {
-        tst.defs = listOf("""
+        def("""
             function f(): integer = 123;
             namespace foo {
                 function f(): integer = 456;
@@ -59,29 +59,27 @@ class NamespaceTest: BaseRellTest() {
     }
 
     @Test fun testNameConflict() {
-        chkCompile("namespace foo {} namespace foo {}", "ct_err:name_conflict:namespace:foo")
+        chkCompile("namespace foo {} namespace foo {}", "OK")
         chkCompile("namespace foo {} class foo {}", "ct_err:name_conflict:namespace:foo")
         chkCompile("namespace foo {} object foo {}", "ct_err:name_conflict:namespace:foo")
         chkCompile("namespace foo {} function foo(): integer = 123;", "ct_err:name_conflict:namespace:foo")
 
-        chkCompile("namespace foo { namespace bar {} namespace bar {} }", "ct_err:name_conflict:namespace:bar")
+        chkCompile("namespace foo { namespace bar {} namespace bar {} }", "OK")
         chkCompile("namespace foo { namespace bar {} function bar(): integer = 123; }", "ct_err:name_conflict:namespace:bar")
         chkCompile("namespace foo { class bar {} object bar {} }", "ct_err:name_conflict:class:bar")
     }
 
     @Test fun testForwardReference() {
-        tst.defs = listOf(
-                "function g(): integer = foo.f();",
-                "object bar { x: integer = foo.f(); }",
-                "namespace foo { function f(): integer = 123; }"
-        )
+        def("function g(): integer = foo.f();")
+        def("object bar { x: integer = foo.f(); }")
+        def("namespace foo { function f(): integer = 123; }")
         chk("g()", "int[123]")
         chk("bar.x", "int[123]")
     }
 
     @Test fun testClasses() {
-        tst.defs = listOf("namespace foo { class bar { x: integer; } }")
-        tst.insert("c0.foo.bar", "x", "0,123")
+        def("namespace foo { class bar { x: integer; } }")
+        insert("c0.foo.bar", "x", "0,123")
         chk("foo.bar @ {} ( foo.bar )", "ct_err:expr_novalue:type")
         chk("foo.bar @ {} ( bar )", "foo.bar[0]")
         chk("foo.bar @ {} ( foo )", "ct_err:expr_novalue:namespace")
@@ -89,13 +87,11 @@ class NamespaceTest: BaseRellTest() {
     }
 
     @Test fun testTableNameConflict() {
-        tst.defs = listOf(
-                "class user { x: integer; }",
-                "namespace foo { class user { y: integer; } }",
-                "namespace bar { object user { z: integer = 789; } }"
-        )
-        tst.insert("c0.user", "x", "0,123")
-        tst.insert("c0.foo.user", "y", "1,456")
+        def("class user { x: integer; }")
+        def("namespace foo { class user { y: integer; } }")
+        def("namespace bar { object user { z: integer = 789; } }")
+        insert("c0.user", "x", "0,123")
+        insert("c0.foo.user", "y", "1,456")
 
         chk("user @ {} ( user, =.x )", "(user[0],int[123])")
         chk("foo.user @ {} ( user, =.y )", "(foo.user[1],int[456])")
@@ -103,7 +99,7 @@ class NamespaceTest: BaseRellTest() {
     }
 
     @Test fun testAllowedDefs() {
-        tst.defs = listOf("""
+        def("""
             namespace foo {
                 function f(): integer = 123;
                 class user { x: integer; }
@@ -111,9 +107,11 @@ class NamespaceTest: BaseRellTest() {
                 record r { x: integer; }
                 enum e { A, B, C }
                 namespace bar { function g(): integer = 789; }
+                operation op() {}
+                query q() = 123;
             }
         """.trimIndent())
-        tst.insert("c0.foo.user", "x", "0,123")
+        insert("c0.foo.user", "x", "0,123")
 
         chk("foo.f()", "int[123]")
         chk("foo.user @ {} ( .x )", "int[123]")
@@ -130,11 +128,6 @@ class NamespaceTest: BaseRellTest() {
         chk("foo.bar", "ct_err:expr_novalue:namespace")
     }
 
-    @Test fun testUnallowedDefs() {
-        chkCompile("namespace foo { operation o(){} }", "ct_err:def_ns:operation")
-        chkCompile("namespace foo { query q() = 123; }", "ct_err:def_ns:query")
-    }
-
     @Test fun testPredefinedNamespaces() {
         chkCompile("namespace integer {}", "ct_err:name_conflict:type:integer")
         chkCompile("namespace text {}", "ct_err:name_conflict:type:text")
@@ -146,7 +139,7 @@ class NamespaceTest: BaseRellTest() {
     }
 
     @Test fun testNamespacedTypes() {
-        tst.defs = listOf("""
+        def("""
             namespace foo {
                 namespace bar {
                     class c { name; }
@@ -155,10 +148,36 @@ class NamespaceTest: BaseRellTest() {
                 }
             }
         """.trimIndent())
-        tst.insert("c0.foo.bar.c", "name", "0,'Bob'")
+        insert("c0.foo.bar.c", "name", "0,'Bob'")
 
         chkEx("{ val x: foo.bar.c = foo.bar.c @ {}; return x; }", "foo.bar.c[0]")
         chkEx("{ val x: foo.bar.r = foo.bar.r(123); return x; }", "foo.bar.r[x=int[123]]")
         chkEx("{ val x: foo.bar.e = foo.bar.e.B; return x; }", "foo.bar.e[B]")
+    }
+
+    @Test fun testMultipleNamespacesWithSameName() {
+        def("""
+            namespace foo { function f(): integer = 123; }
+            namespace foo { namespace bar { function g(): integer = 456; } }
+            namespace foo { namespace bar { function h(): integer = 789; } }
+        """.trimIndent())
+
+        chk("foo.f()", "int[123]")
+        chk("foo.bar.g()", "int[456]")
+        chk("foo.bar.h()", "int[789]")
+    }
+
+    @Test fun testMultipleNamespacesWithSameName2() {
+        def("""
+            namespace foo { function f(): integer = g() * 2; }
+            function p(): integer = foo.f() + foo.g() + foo.h();
+            namespace foo { function g(): integer = h() * 3; }
+            namespace foo { function h(): integer = 123; }
+        """.trimIndent())
+
+        chk("foo.f()", "int[738]")
+        chk("foo.g()", "int[369]")
+        chk("foo.h()", "int[123]")
+        chk("p()", "int[1230]")
     }
 }

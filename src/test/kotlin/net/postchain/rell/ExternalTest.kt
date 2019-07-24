@@ -12,7 +12,7 @@ class ExternalTest: BaseRellTest() {
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         initExternalChain()
-        tst.defs = listOf("external 'foo' { class user(log) { name; } }")
+        def("external 'foo' { class user(log) { name; } }")
         tst.chainDependency("foo", "deadbeef", 1000)
         chk("user @ {} ( =user, =.name )", "(user[1],text[Bob])")
     }
@@ -22,7 +22,7 @@ class ExternalTest: BaseRellTest() {
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         initExternalChain()
-        tst.defs = listOf("namespace bar { external 'foo' { class user(log) { name; } } }")
+        def("namespace bar { external 'foo' { class user(log) { name; } } }")
         tst.chainDependency("foo", "deadbeef", 1000)
         chk("bar.user @ {} ( =user, =.name )", "(bar.user[1],text[Bob])")
         chk("user @ {} ( =user, =.name )", "ct_err:unknown_class:user")
@@ -33,7 +33,7 @@ class ExternalTest: BaseRellTest() {
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         initExternalChain(333, "foo.bar.user", "namespace foo { namespace bar { class user(log) { name; } } }")
-        tst.defs = listOf("namespace abc { external 'ext' { namespace foo { namespace bar { class user(log) { name; } } } } }")
+        def("namespace abc { external 'ext' { namespace foo { namespace bar { class user(log) { name; } } } } }")
         tst.chainDependency("ext", "deadbeef", 1000)
         chk("abc.foo.bar.user @ {} ( =user, =.name )", "(abc.foo.bar.user[1],text[Bob])")
         chk("foo.bar.user @ {} ( =user, =.name )", "ct_err:unknown_class:foo.bar.user")
@@ -98,8 +98,9 @@ class ExternalTest: BaseRellTest() {
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         initExternalChain()
-        tst.defs = listOf("external 'foo' { class user(log) { name; } }", "class local { user; }")
-        tst.insert("c0.local", "user", "1,1")
+        def("external 'foo' { class user(log) { name; } }")
+        def("class local { user; }")
+        insert("c0.local", "user", "1,1")
         tst.chainDependency("foo", "deadbeef", 1000)
         chk("local @ {} ( =local, =.user, =.user.name )", "(local[1],user[1],text[Bob])")
     }
@@ -111,7 +112,7 @@ class ExternalTest: BaseRellTest() {
         // Init chain "bar" (create meta info)
         run {
             val t = RellCodeTester(tstCtx)
-            t.defs = listOf("class company(log) { name; }")
+            t.def("class company(log) { name; }")
             t.chainId = 555
             t.insert(LibBlockTransactionTest.BLOCK_INSERTS)
             t.init()
@@ -120,23 +121,22 @@ class ExternalTest: BaseRellTest() {
         // Init chain "foo" (create meta info)
         run {
             val t = RellCodeTester(tstCtx)
-            t.defs = listOf("external 'bar' { class company(log) { name; } }", "class user(log) { name; company; }")
+            t.def("external 'bar' { class company(log) { name; } }")
+            t.def("class user(log) { name; company; }")
             t.chainId = 333
             t.dropTables = false
             t.chainDependency("bar", "cafebabe", 1000)
             t.init()
         }
 
-        tst.defs = listOf(
-                "class company(log) { name; }",
-                "external 'foo' { class user(log) { name; company; } }"
-        )
+        def("class company(log) { name; }")
+        def("external 'foo' { class user(log) { name; company; } }")
         tst.chainId = 555
         tst.createTables = false
         tst.dropTables = false
         tst.chainDependency("foo", "deadbeef", 1000)
-        tst.insert("c555.company", "name,transaction", "33,'Google',444")
-        tst.insert("c333.user", "name,transaction,company", "17,'Bob',2,33")
+        insert("c555.company", "name,transaction", "33,'Google',444")
+        insert("c333.user", "name,transaction,company", "17,'Bob',2,33")
 
         chk("user @ {} ( =user, =.name, =.company, =.company.name )", "(user[17],text[Bob],company[33],text[Google])")
     }
@@ -146,7 +146,7 @@ class ExternalTest: BaseRellTest() {
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         initExternalChain()
-        tst.defs = listOf("external 'foo' { class user(log) { name; } }")
+        def("external 'foo' { class user(log) { name; } }")
         tst.chainDependency("foo", "deadbeef", 1000)
 
         chk("user@{} ( .name )", "text[Bob]")
@@ -165,7 +165,8 @@ class ExternalTest: BaseRellTest() {
 
         run {
             val t = RellCodeTester(tstCtx)
-            t.defs = listOf("class company(log) { name; }", "class user(log) { name; company; }")
+            t.def("class company(log) { name; }")
+            t.def("class user(log) { name; company; }")
             t.chainId = 333
             t.insert(LibBlockTransactionTest.BLOCK_INSERTS)
             t.insert("c333.company", "name,transaction", "1,'Google',444")
@@ -175,7 +176,7 @@ class ExternalTest: BaseRellTest() {
         }
         tst.dropTables = false
 
-        tst.defs = listOf("external 'foo' { class company(log) { name; } class user(log) { name; company; } }")
+        def("external 'foo' { class company(log) { name; } class user(log) { name; company; } }")
         tst.chainDependency("foo", "deadbeef", 1000)
         chk("user @ {} ( =user, =.name, =.company, =.company.name )", "(user[1],text[Bob],company[1],text[Google])")
         chk("company @ {} ( =company, =.name )", "(company[1],text[Google])")
@@ -202,7 +203,8 @@ class ExternalTest: BaseRellTest() {
         run {
             val t = RellCodeTester(tstCtx)
             t.dropTables = false
-            t.defs = listOf("external 'foo' { class user(log) { name; } }", "class local { user; }")
+            t.def("external 'foo' { class user(log) { name; } }")
+            t.def("class local { user; }")
             t.insert("c0.local", "user", "1,1")
             t.chainDependency("foo", "deadbeef", height)
             t.chkQuery(code, expected)
@@ -226,21 +228,19 @@ class ExternalTest: BaseRellTest() {
 
         initExternalChain(chainId = 333)
         initExternalChain(chainId = 555, resetDatabase = false)
-        tst.defs = listOf(
-                "namespace foo { external 'foo' { class user(log) { name; } } }",
-                "namespace bar { external 'bar' { class user(log) { name; } } }",
-                "class local_user(log) { name; }"
-        )
+        def("namespace foo { external 'foo' { class user(log) { name; } } }")
+        def("namespace bar { external 'bar' { class user(log) { name; } } }")
+        def("class local_user(log) { name; }")
         tst.chainDependency("foo", "deadbeef", 1000)
         tst.chainDependency("bar", "beefdead", 1000)
-        tst.insert("c0.local_user", "name,transaction", "1,'Bob',2")
+        insert("c0.local_user", "name,transaction", "1,'Bob',2")
 
-        chk("_typeOf((foo.user @ {}).transaction)", "text[external[foo].transaction]")
-        chk("_typeOf((foo.user @ {}).transaction.block)", "text[external[foo].block]")
-        chk("_typeOf((bar.user @ {}).transaction)", "text[external[bar].transaction]")
-        chk("_typeOf((bar.user @ {}).transaction.block)", "text[external[bar].block]")
-        chk("_typeOf((local_user @ {}).transaction)", "text[transaction]")
-        chk("_typeOf((local_user @ {}).transaction.block)", "text[block]")
+        chk("_type_of((foo.user @ {}).transaction)", "text[external[foo].transaction]")
+        chk("_type_of((foo.user @ {}).transaction.block)", "text[external[foo].block]")
+        chk("_type_of((bar.user @ {}).transaction)", "text[external[bar].transaction]")
+        chk("_type_of((bar.user @ {}).transaction.block)", "text[external[bar].block]")
+        chk("_type_of((local_user @ {}).transaction)", "text[transaction]")
+        chk("_type_of((local_user @ {}).transaction.block)", "text[block]")
 
         chkEx("{ val t: transaction = (foo.user @ {}).transaction; return 0; }",
                 "ct_err:stmt_var_type:t:transaction:external[foo].transaction")
@@ -294,11 +294,9 @@ class ExternalTest: BaseRellTest() {
     @Test fun testTxExplicitTypeCompatibility() {
         tstCtx.blockchain(333, "deadbeef")
         tstCtx.blockchain(555, "beefdead")
-        tst.defs = listOf(
-                "class user(log){ name; }",
-                "namespace foo { external 'foo' { class transaction; class block; class user(log) {name;} } }",
-                "namespace bar { external 'bar' { class transaction; class block; class user(log) {name;} } }"
-        )
+        def("class user(log){ name; }")
+        def("namespace foo { external 'foo' { class transaction; class block; class user(log) {name;} } }")
+        def("namespace bar { external 'bar' { class transaction; class block; class user(log) {name;} } }")
         tst.chainDependency("foo", "deadbeef", 1000)
         tst.chainDependency("bar", "beefdead", 1000)
 
@@ -316,11 +314,9 @@ class ExternalTest: BaseRellTest() {
     @Test fun testTxExplicitTypeCompatibility2() {
         tstCtx.blockchain(333, "deadbeef")
         tstCtx.blockchain(555, "beefdead")
-        tst.defs = listOf(
-                "class user(log){ name; }",
-                "namespace foo { external 'foo' { class transaction; class block; class user(log) {name;} } }",
-                "namespace bar { external 'bar' { class transaction; class block; class user(log) {name;} } }"
-        )
+        def("class user(log){ name; }")
+        def("namespace foo { external 'foo' { class transaction; class block; class user(log) {name;} } }")
+        def("namespace bar { external 'bar' { class transaction; class block; class user(log) {name;} } }")
         tst.chainDependency("foo", "deadbeef", 1000)
         tst.chainDependency("bar", "beefdead", 1000)
 
@@ -349,7 +345,7 @@ class ExternalTest: BaseRellTest() {
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         initExternalChain()
-        tst.defs = listOf("namespace foo { external 'foo' { class transaction; class block; class user(log) { name; } } }")
+        def("namespace foo { external 'foo' { class transaction; class block; class user(log) { name; } } }")
         tst.chainDependency("foo", "deadbeef", 1000)
 
         val tx = "val t: foo.transaction = foo.user @ {} (.transaction);"
@@ -369,10 +365,8 @@ class ExternalTest: BaseRellTest() {
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         initExternalChain()
-        tst.defs = listOf(
-                "namespace foo { external 'foo' { class transaction; class block; class user(log) { name; } } }",
-                "class local { tx: foo.transaction; blk: foo.block; }"
-        )
+        def("namespace foo { external 'foo' { class transaction; class block; class user(log) { name; } } }")
+        def("class local { tx: foo.transaction; blk: foo.block; }")
         tst.chainDependency("foo", "deadbeef", 1000)
 
         chkOp("val u = foo.user @ {}; create local(u.transaction, u.transaction.block);")
@@ -399,7 +393,7 @@ class ExternalTest: BaseRellTest() {
         run {
             val t = RellCodeTester(tstCtx)
             t.dropTables = false
-            t.defs = listOf("namespace foo { external 'foo' { class block; class transaction; } }")
+            t.def("namespace foo { external 'foo' { class block; class transaction; } }")
             t.strictToString = false
             t.chainDependency("foo", "deadbeef", height)
             t.chkQuery("transaction @* {}", "[]")
@@ -409,7 +403,7 @@ class ExternalTest: BaseRellTest() {
         }
     }
 
-    @Test fun testGtxExternalClass() {
+    @Test fun testGtvExternalClass() {
         val blockInserts = RellTestContext.BlockBuilder()
                 .block(1001, 123, 1, "DEAD01", "1001", 1510000000000)
                 .block(1002, 123, 2, "DEAD02", "1002", 1520000000000)
@@ -427,7 +421,7 @@ class ExternalTest: BaseRellTest() {
 
         run {
             val t = RellCodeTester(tstCtx)
-            t.defs = listOf("class user(log) { name; }")
+            t.def("class user(log) { name; }")
             t.chainId = 123
             t.insert(blockInserts)
             t.insert("c123.user", "name,transaction", "1,'Alice',2001")
@@ -439,47 +433,46 @@ class ExternalTest: BaseRellTest() {
         }
 
         tst.dropTables = false
-        tst.defs = listOf("external 'foo' { class user(log) { name; } }", "record rec { u: user; }")
+        def("external 'foo' { class user(log) { name; } }")
+        def("record rec { u: user; }")
         tst.chainDependency("foo", "deadbeef", 3)
 
-        fun code(id: Long) = """rec.fromPrettyGTXValue(GTXValue.fromJSON('{"u":$id}'))"""
+        fun code(id: Long) = """rec.from_gtv_pretty(gtv.from_json('{"u":$id}'))"""
         chk(code(1), "rec[u=user[1]]")
         chk(code(2), "rec[u=user[2]]")
         chk(code(3), "rec[u=user[3]]")
-        chk(code(4), "gtx_err:obj_missing:user:4")
-        chk(code(5), "gtx_err:obj_missing:user:5")
-        chk(code(321), "gtx_err:obj_missing:user:321")
+        chk(code(4), "gtv_err:obj_missing:user:4")
+        chk(code(5), "gtv_err:obj_missing:user:5")
+        chk(code(321), "gtv_err:obj_missing:user:321")
     }
 
-    @Test fun testGtxExternalTransaction() {
-        tst.defs = listOf(
-                "namespace foo { external 'foo' { class block; class transaction; } }",
-                "record r_tx { t: transaction; }",
-                "record r_block { b: block; }",
-                "record r_foo_tx { t: foo.transaction; }",
-                "record r_foo_block { b: foo.block; }"
-        )
-        tst.gtx = true
+    @Test fun testGtvExternalTransaction() {
+        def("namespace foo { external 'foo' { class block; class transaction; } }")
+        def("record r_tx { t: transaction; }")
+        def("record r_block { b: block; }")
+        def("record r_foo_tx { t: foo.transaction; }")
+        def("record r_foo_block { b: foo.block; }")
+        tst.gtv = true
 
         fun chkType(type: String) {
             chkCompile("function nop(x: $type?): $type? = x; query q(): $type { var t: $type? = nop(null); return t!!; }",
-                    "ct_err:result_nogtx:q:$type")
-            chkCompile("query q(x: $type) = 0;", "ct_err:param_nogtx:x:$type")
-            chkCompile("operation o(x: $type) {}", "ct_err:param_nogtx:x:$type")
+                    "ct_err:result_nogtv:q:$type")
+            chkCompile("query q(x: $type) = 0;", "ct_err:param_nogtv:x:$type")
+            chkCompile("operation o(x: $type) {}", "ct_err:param_nogtv:x:$type")
         }
 
         fun chkRecType(type: String) {
             chkType(type)
 
-            val err1 = "ct_err:fn_record_invalid:$type:$type"
-            chkCompile("function f(x: $type) { x.toBytes(); }", "$err1.toBytes")
-            chkCompile("function f(x: $type) { x.toGTXValue(); }", "$err1.toGTXValue")
-            chkCompile("function f(x: $type) { x.toPrettyGTXValue(); }", "$err1.toPrettyGTXValue")
+            val err1 = "ct_err:fn:invalid:$type:$type"
+            chkCompile("function f(x: $type) { x.to_bytes(); }", "$err1.to_bytes")
+            chkCompile("function f(x: $type) { x.to_gtv(); }", "$err1.to_gtv")
+            chkCompile("function f(x: $type) { x.to_gtv_pretty(); }", "$err1.to_gtv_pretty")
 
-            val err2 = "ct_err:fn_record_invalid:$type"
-            chkCompile("function f() { $type.fromBytes(x''); }", "$err2:fromBytes")
-            chkCompile("function f() { $type.fromGTXValue(GTXValue.fromBytes(x'')); }", "$err2:fromGTXValue")
-            chkCompile("function f() { $type.fromPrettyGTXValue(GTXValue.fromBytes(x'')); }", "$err2:fromPrettyGTXValue")
+            val err2 = "ct_err:fn:invalid:$type"
+            chkCompile("function f() { $type.from_bytes(x''); }", "$err2:from_bytes")
+            chkCompile("function f() { $type.from_gtv(gtv.from_bytes(x'')); }", "$err2:from_gtv")
+            chkCompile("function f() { $type.from_gtv_pretty(gtv.from_bytes(x'')); }", "$err2:from_gtv_pretty")
         }
 
         chkType("transaction")
@@ -498,7 +491,7 @@ class ExternalTest: BaseRellTest() {
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         initExternalChain()
-        tst.defs = listOf("external 'foo' { class user(log) { name; } }")
+        def("external 'foo' { class user(log) { name; } }")
         tst.chainDependency("foo", "deadbeef", 1000)
         chkOp("create user (name = 'Alice');", "ct_err:expr_create_cant:user")
     }
@@ -508,7 +501,7 @@ class ExternalTest: BaseRellTest() {
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         initExternalChain()
-        tst.defs = listOf("external 'foo' { class user(log) { name; } }")
+        def("external 'foo' { class user(log) { name; } }")
         tst.chainDependency("foo", "deadbeef", 1000)
         chkOp("delete user @* {};", "ct_err:stmt_delete_cant:user")
     }
@@ -519,6 +512,17 @@ class ExternalTest: BaseRellTest() {
 
         chkMetaClass(
                 "class company(log){}",
+                "external 'foo' { class user(log){} }",
+                "rt_err:external_meta_nocls:foo:user"
+        )
+    }
+
+    @Test fun testMetaClassObject() {
+        tstCtx.blockchain(333, "deadbeef")
+        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
+
+        chkMetaClass(
+                "object user { name: text = 'Bob'; }",
                 "external 'foo' { class user(log){} }",
                 "rt_err:external_meta_nocls:foo:user"
         )
@@ -662,17 +666,16 @@ class ExternalTest: BaseRellTest() {
 
         run {
             val t = RellCodeTester(tstCtx)
-            t.defs = listOf("class ext_a(log) { value: integer; }", "namespace y { class ext_b(log) {} }")
+            t.def("class ext_a(log) { value: integer; }")
+            t.def("namespace y { class ext_b(log) {} }")
             t.chainId = 333
             t.insert(LibBlockTransactionTest.BLOCK_INSERTS)
             t.init()
         }
 
-        tst.defs = listOf(
-                "class helper(log) { id: integer; data: byte_array; }",
-                "namespace x { external 'foo' { class ext_a(log) { value: integer; } namespace y { class ext_b(log) {} } } }",
-                "class my_class { b: boolean; i: integer; t: text; n: name; h: helper; ea: x.ext_a; eb: x.y.ext_b; }"
-        )
+        def("class helper(log) { id: integer; data: byte_array; }")
+        def("namespace x { external 'foo' { class ext_a(log) { value: integer; } namespace y { class ext_b(log) {} } } }")
+        def("class my_class { b: boolean; i: integer; t: text; n: name; h: helper; ea: x.ext_a; eb: x.y.ext_b; }")
         tst.dropTables = false
         tst.chainDependency("foo", "deadbeef", 1000)
         tst.init()
@@ -703,14 +706,14 @@ class ExternalTest: BaseRellTest() {
     private fun chkMetaClass(externalDefs: String, localDefs: String, expected: String) {
         run {
             val t = RellCodeTester(tstCtx)
-            t.defs = listOf(externalDefs)
+            t.def(externalDefs)
             t.chainId = 333
             t.chkQuery("123", "int[123]") // Initializes database
         }
 
         run {
             val t = RellCodeTester(tstCtx)
-            t.defs = listOf(localDefs)
+            t.def(localDefs)
             t.dropTables = false
             t.strictToString = false
             t.chainDependency("foo", "deadbeef", 1000)
@@ -726,7 +729,7 @@ class ExternalTest: BaseRellTest() {
     ) {
         run {
             val t = RellCodeTester(tstCtx)
-            t.defs = listOf(def)
+            t.def(def)
             t.chainId = chainId
             t.dropTables = resetDatabase
             t.insert("c$chainId.$className", "name,transaction", "1,'Bob',444")

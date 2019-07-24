@@ -8,23 +8,23 @@ import net.postchain.rell.runtime.*
 object RellTestUtils {
     val ENCODER_PLAIN = { t: R_Type, v: Rt_Value -> v.toString() }
     val ENCODER_STRICT = { t: R_Type, v: Rt_Value -> v.toStrictString() }
-    val ENCODER_GTX = { t: R_Type, v: Rt_Value -> GtxTestUtils.encodeGtxStr(t.rtToGtx(v, true)) }
+    val ENCODER_GTV = { t: R_Type, v: Rt_Value -> GtvTestUtils.encodeGtvStr(t.rtToGtv(v, true)) }
 
     val MAIN_FILE = "main.rell"
 
     fun processModule(code: String, processor: (RellTestModule) -> String): String {
-        val includeDir = C_VirtualIncludeDir(mapOf(MAIN_FILE to code))
+        val includeDir = C_MapSourceDir.of(MAIN_FILE to code)
         return processModule(includeDir, processor = processor)
     }
 
     fun processModule(
-            includeDir: C_IncludeDir,
+            sourceDir: C_SourceDir,
             errPos: Boolean = false,
-            gtx: Boolean = false,
+            options: C_CompilerOptions = C_CompilerOptions(),
             processor: (RellTestModule) -> String
     ): String {
         val p = catchCtErr0(errPos) {
-            parseModule(includeDir, gtx)
+            parseModule(sourceDir, options)
         }
         return p.first ?: processor(p.second!!)
     }
@@ -58,8 +58,8 @@ object RellTestUtils {
             return Pair("rt_err:" + e.code, null)
         } catch (e: Rt_RequireError) {
             return Pair("req_err:" + if (e.userMsg != null) "[${e.userMsg}]" else "null", null)
-        } catch (e: Rt_GtxValueError) {
-            return Pair("gtx_err:" + e.code, null)
+        } catch (e: Rt_GtvError) {
+            return Pair("gtv_err:" + e.code, null)
         }
     }
 
@@ -127,8 +127,9 @@ object RellTestUtils {
         }
     }
 
-    fun parseModule(includeDir: C_IncludeDir, gtx: Boolean): RellTestModule {
-        val res = C_Compiler.compile(includeDir, MAIN_FILE, gtx)
+    fun parseModule(sourceDir: C_SourceDir, options: C_CompilerOptions): RellTestModule {
+        val res = C_Compiler.compile(sourceDir, C_SourcePath.parse(MAIN_FILE), options)
+        saveSource(sourceDir, res)
         if (res.error != null) {
             throw res.error!!
         } else {
@@ -136,10 +137,10 @@ object RellTestUtils {
         }
     }
 
-    private fun saveSource(includeDir: C_IncludeDir, gtx: Boolean, res: C_CompilationResult) {
+    private fun saveSource(sourceDir: C_SourceDir, res: C_CompilationResult) {
         val error = res.error
         val result = if (error == null) "OK" else "ct_err:${error.code}"
-        val includeResolver = C_IncludeResolver(includeDir)
+        val includeResolver = C_IncludeResolver(sourceDir)
         val code = includeResolver.resolve(MAIN_FILE).file.readText()
         TestSourcesRecorder.addSource(code, result)
     }

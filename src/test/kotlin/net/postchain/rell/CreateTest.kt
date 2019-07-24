@@ -40,7 +40,7 @@ class CreateTest: BaseRellTest() {
     }
 
     @Test fun testDefaultValues() {
-        tst.defs = listOf("class person { name: text; year: integer; score: integer = 777; status: text = 'Unknown'; }")
+        def("class person { name: text; year: integer; score: integer = 777; status: text = 'Unknown'; }")
         chkData()
 
         chkOp("create person();", "ct_err:attr_missing:name,year")
@@ -68,10 +68,8 @@ class CreateTest: BaseRellTest() {
     }
 
     @Test fun testDefaultValueVariable() {
-        tst.defs = listOf(
-                "class default_score { mutable value: integer; }",
-                "class person { name: text; score: integer = default_score@{}.value; }"
-        )
+        def("class default_score { mutable value: integer; }")
+        def("class person { name: text; score: integer = default_score@{}.value; }")
         chkData()
 
         chkOp("create default_score( 100 );")
@@ -97,7 +95,7 @@ class CreateTest: BaseRellTest() {
     }
 
     @Test fun testDotAttribute() {
-        tst.defs = listOf("class person { name: text; year: integer; score: integer = 777; status: text = 'Unknown'; }")
+        def("class person { name: text; year: integer; score: integer = 777; status: text = 'Unknown'; }")
         chkData()
 
         chkOp("create person(.name = 'Bob', .year = 1980);")
@@ -105,10 +103,17 @@ class CreateTest: BaseRellTest() {
     }
 
     @Test fun testNoAttributes() {
-        tst.defs = listOf("class person {}")
+        def("class person {}")
         chkData()
 
         chkOp("create person();")
         chkData("person(1)")
+    }
+
+    @Test fun testBugAttrExpr() {
+        tst.def("operation o(){ create user(); }")
+        tst.def("class user { name = 'Bob'; }")
+        chkOpFull("")
+        chkData("user(1,Bob)")
     }
 }

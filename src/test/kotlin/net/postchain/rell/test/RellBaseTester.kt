@@ -1,31 +1,41 @@
 package net.postchain.rell.test
 
 import net.postchain.rell.model.R_Module
-import net.postchain.rell.parser.C_IncludeDir
-import net.postchain.rell.parser.C_VirtualIncludeDir
+import net.postchain.rell.parser.C_CompilerOptions
+import net.postchain.rell.parser.C_MapSourceDir
+import net.postchain.rell.parser.C_Message
+import net.postchain.rell.parser.C_SourceDir
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
+import net.postchain.rell.runtime.Rt_Printer
 import net.postchain.rell.sql.SqlExecutor
+import org.jooq.tools.jdbc.MockConnection
 import java.sql.Connection
+import java.util.*
 import kotlin.test.assertEquals
 
 abstract class RellBaseTester(
         private val tstCtx: RellTestContext,
         classDefs: List<String> = listOf(),
         inserts: List<String> = listOf(),
-        gtx: Boolean = false
+        gtv: Boolean = false
 ){
     private var inited = false
     private var lastInserts = listOf<String>()
     private var moduleProto: R_Module? = null
 
+    protected val messages = mutableListOf<C_Message>()
+
     var errMsgPos = false
-    var gtx = gtx
+    var gtv = gtv
+    var deprecatedError = false
 
     var defs: List<String> = classDefs
         set(value) {
             checkNotInited()
             field = value
         }
+
+    private val defs0 = mutableListOf<String>()
 
     var chainId: Long = 0
         set(value) {
@@ -37,6 +47,12 @@ abstract class RellBaseTester(
 
     private val files = mutableMapOf<String, String>()
 
+    private val stdoutPrinter0 = Rt_TesterPrinter()
+    private val logPrinter0 = Rt_TesterPrinter()
+
+    val stdoutPrinter: Rt_Printer = stdoutPrinter0
+    val logPrinter: Rt_Printer = logPrinter0
+
     fun init() {
         tstCtx.init()
 
@@ -44,7 +60,8 @@ abstract class RellBaseTester(
             val code = defsCode()
 
             val includeDir = createIncludeDir(code)
-            val module = RellTestUtils.parseModule(includeDir, gtx).rModule
+            val options = compilerOptions()
+            val module = RellTestUtils.parseModule(includeDir, options).rModule
 
             if (tstCtx.useSql) {
                 initSql(code, module)
@@ -62,6 +79,16 @@ abstract class RellBaseTester(
     }
 
     protected val eval = RellTestEval()
+
+    private val expectedData = mutableListOf<String>()
+
+    protected fun compilerOptions() = C_CompilerOptions(gtv, deprecatedError)
+
+    fun def(def: String) {
+        checkNotInited()
+        defs0.add(def)
+        defs = defs0
+    }
 
     fun insert(table: String, columns: String, values: String) {
         val ins = SqlTestUtils.mkins(table, columns, values)
@@ -88,16 +115,16 @@ abstract class RellBaseTester(
     }
 
     private fun initSql(moduleCode: String, module: R_Module) {
-        val sqlConn = tstCtx.sqlConn()
         val sqlExec = tstCtx.sqlExec()
-        initSqlReset(sqlConn, sqlExec, moduleCode, module)
+        initSqlReset(sqlExec, moduleCode, module)
         initSqlInserts(sqlExec)
     }
 
-    protected abstract fun initSqlReset(conn: Connection, exec: SqlExecutor, moduleCode: String, module: R_Module)
+    protected abstract fun initSqlReset(exec: SqlExecutor, moduleCode: String, module: R_Module)
 
-    protected fun createIncludeDir(code: String): C_IncludeDir {
-        return C_VirtualIncludeDir(files(code))
+    private fun createIncludeDir(code: String): C_SourceDir {
+        val files = files(code)
+        return C_MapSourceDir.of(files)
     }
 
     private fun initSqlInserts(sqlExecLoc: SqlExecutor) {
@@ -112,10 +139,35 @@ abstract class RellBaseTester(
 
     protected fun getSqlConn(): Connection {
         init()
-        return tstCtx.sqlConn()
+        return if (tstCtx.useSql) tstCtx.sqlConn() else MockConnection { TODO() }
     }
 
-    fun dumpDatabase(): List<String> {
+    fun chkData(expected: List<String>) {
+        expectedData.clear()
+        chkDataNew(expected)
+    }
+
+    fun chkData(vararg expected: String) {
+        chkData(expected.toList())
+    }
+
+    fun chkDataNew(expected: List<String>) {
+        expectedData.addAll(expected)
+        val actual = dumpDatabase()
+        assertEquals(expectedData, actual)
+    }
+
+    fun chkDataNew(vararg expected: String) {
+        chkDataNew(expected.toList())
+    }
+
+    fun chkDataSql(sql: String, vararg expected: String) {
+        init()
+        val actual = SqlTestUtils.dumpSql(getSqlExec(), sql)
+        assertEquals(expected.toList(), actual)
+    }
+
+    private fun dumpDatabase(): List<String> {
         init()
         val sqlMapping = createChainSqlMapping()
         return SqlTestUtils.dumpDatabaseClasses(tstCtx.sqlExec(), sqlMapping, moduleProto!!)
@@ -143,6 +195,9 @@ abstract class RellBaseTester(
         assertEquals(expected, actual)
     }
 
+    fun chkStdout(vararg expected: String) = stdoutPrinter0.chk(*expected)
+    fun chkLog(vararg expected: String) = logPrinter0.chk(*expected)
+
     fun compileModule(code: String): String {
         val moduleCode = moduleCode(code)
         return processModule(moduleCode) { "OK" }
@@ -159,11 +214,30 @@ abstract class RellBaseTester(
     }
 
     fun processModule(code: String, processor: (R_Module) -> String): String {
+        messages.clear()
         val includeDir = createIncludeDir(code)
-        return RellTestUtils.processModule(includeDir, errMsgPos, gtx) { processor(it.rModule) }
+        return RellTestUtils.processModule(includeDir, errMsgPos, compilerOptions()) {
+            messages.addAll(it.messages)
+            processor(it.rModule)
+        }
     }
 
     protected fun createChainSqlMapping(): Rt_ChainSqlMapping {
         return Rt_ChainSqlMapping(chainId)
+    }
+
+    private class Rt_TesterPrinter: Rt_Printer {
+        private val queue = LinkedList<String>()
+
+        override fun print(str: String) {
+            queue.add(str)
+        }
+
+        fun chk(vararg expected: String) {
+            val expectedList = expected.toList()
+            val actualList = queue.toList()
+            assertEquals(expectedList, actualList)
+            queue.clear()
+        }
     }
 }

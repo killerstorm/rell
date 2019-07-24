@@ -25,9 +25,9 @@ sealed class R_VarDeclarator {
     abstract fun initialize(frame: Rt_CallFrame, value: Rt_Value, overwrite: Boolean)
 }
 
-class R_SimpleVarDeclarator(val ptr: R_VarPtr): R_VarDeclarator() {
+class R_SimpleVarDeclarator(val ptr: R_VarPtr, val type: R_Type): R_VarDeclarator() {
     override fun initialize(frame: Rt_CallFrame, value: Rt_Value, overwrite: Boolean) {
-        frame.set(ptr, value, overwrite)
+        frame.set(ptr, type, value, overwrite)
     }
 }
 
@@ -156,6 +156,10 @@ sealed class R_ForIterator {
 
 object R_ForIterator_Collection: R_ForIterator() {
     override fun list(v: Rt_Value): Iterable<Rt_Value> = v.asCollection()
+}
+
+object R_ForIterator_VirtualCollection: R_ForIterator() {
+    override fun list(v: Rt_Value): Iterable<Rt_Value> = v.asVirtualCollection().iterable()
 }
 
 class R_ForIterator_Map(private val tupleType: R_TupleType): R_ForIterator() {

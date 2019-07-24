@@ -109,7 +109,7 @@ class WhenTest: BaseRellTest(false) {
     }
 
     @Test fun testExprFullCoverageEnum() {
-        tst.defs = listOf("enum E { A, B, C, D }")
+        def("enum E { A, B, C, D }")
         chkWhen("E", "= when(a) { A -> 'A'; B -> 'B'; C -> 'C'; D -> 'D'; else -> '?'; };",
                 "E.A" to "ct_err:when_else_allvalues:E")
         chkWhen("E", "= when(a) { A -> 'A'; B -> 'B'; C -> 'C'; D -> 'D'; };",
@@ -133,7 +133,7 @@ class WhenTest: BaseRellTest(false) {
     }
 
     @Test fun testExprFullCoverageNullableEnum() {
-        tst.defs = listOf("enum E { A, B, C }")
+        def("enum E { A, B, C }")
         chkWhen("E?", "= when(a) { A -> 'A'; B -> 'B'; C -> 'C'; null -> '0'; else -> '?'; };",
                 "E.A" to "ct_err:when_else_allvalues:E?")
         chkWhen("E?", "= when(a) { A -> 'A'; B -> 'B'; C -> 'C'; null -> '0'; };",
@@ -185,7 +185,7 @@ class WhenTest: BaseRellTest(false) {
     }
 
     @Test fun testStmtFullCoverageEnum() {
-        tst.defs = listOf("enum E { A, B, C }")
+        def("enum E { A, B, C }")
         chkWhen("E", "{ when(a) { A -> return 'A'; B -> return 'B'; C -> return 'C'; else -> return '?'; } }",
                 "E.A" to "ct_err:when_else_allvalues:E")
         chkWhen("E", "{ when(a) { A -> return 'A'; B -> return 'B'; C -> return 'C'; } }",
@@ -242,19 +242,20 @@ class WhenTest: BaseRellTest(false) {
     @Test fun testAtExprFullCoverageBoolean() {
         initWhenAt("boolean", "false")
         chkWhenAt("when(.x) { false -> 'A'; true -> 'B'; else -> 'C'; }", "false" to "ct_err:when_else_allvalues:boolean")
-        chkWhenAt("when(.x) { false -> 'A'; true -> 'B'; }", "false" to "text[A]", "true" to "text[B]")
+        chkWhenAt("when(.x) { false -> 'A'; true -> 'B'; }", "false" to "ct_err:expr_when:no_else")
+        chkWhenAt("when(.x) { false -> 'A'; else -> 'B'; }", "false" to "text[A]", "true" to "text[B]")
+        chkWhenAt("when(.x) { true -> 'A'; else -> 'B'; }", "false" to "text[B]", "true" to "text[A]")
         chkWhenAt("when(.x) { false -> 'A'; }", "true" to "ct_err:when_no_else")
         chkWhenAt("when(.x) { true -> 'B'; }", "true" to "ct_err:when_no_else")
     }
 
     @Test fun testAtExprFullCoverageEnum() {
-        tst.defs = listOf("enum E { A, B, C }")
+        def("enum E { A, B, C }")
         initWhenAt("E", "0")
 
-        chkWhenAt("when(.x) { A -> 'A'; B -> 'B'; C -> 'C'; else -> '?'; }",
-                "E.A" to "ct_err:when_else_allvalues:E")
-        chkWhenAt("when(.x) { A -> 'A'; B -> 'B'; C -> 'C'; }",
-                "E.A" to "text[A]", "E.B" to "text[B]", "E.C" to "text[C]")
+        chkWhenAt("when(.x) { A -> 'A'; B -> 'B'; C -> 'C'; else -> '?'; }", "E.A" to "ct_err:when_else_allvalues:E")
+        chkWhenAt("when(.x) { A -> 'A'; B -> 'B'; C -> 'C'; }", "E.A" to "ct_err:expr_when:no_else")
+        chkWhenAt("when(.x) { A -> 'A'; B -> 'B'; else -> 'C'; }", "E.A" to "text[A]", "E.B" to "text[B]", "E.C" to "text[C]")
         chkWhenAt("when(.x) { B -> 'B'; C -> 'C'; }", "E.A" to "ct_err:when_no_else")
         chkWhenAt("when(.x) { A -> 'A'; C -> 'C'; }", "E.A" to "ct_err:when_no_else")
         chkWhenAt("when(.x) { A -> 'A'; B -> 'B'; }", "E.A" to "ct_err:when_no_else")
@@ -275,8 +276,8 @@ class WhenTest: BaseRellTest(false) {
 
     private fun initWhenAt(type: String, value: String) {
         tstCtx.useSql = true
-        tst.defs += listOf("class foo { mutable x: $type; s1: text; s2: text; }")
-        tst.insert("c0.foo", "x,s1,s2", "100,$value,'Yes','No'")
+        def("class foo { mutable x: $type; s1: text; s2: text; }")
+        insert("c0.foo", "x,s1,s2", "100,$value,'Yes','No'")
     }
 
     private fun chkWhenAt(expr: String, vararg cases: Pair<String, String>) {

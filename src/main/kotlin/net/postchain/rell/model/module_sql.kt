@@ -4,12 +4,12 @@ import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_IntValue
 import net.postchain.rell.runtime.Rt_SqlContext
 import net.postchain.rell.sql.ROWID_COLUMN
-import java.lang.UnsupportedOperationException
 
 abstract class R_ClassSqlMapping {
     abstract fun rowidColumn(): String
     abstract fun autoCreateTable(): Boolean
     abstract fun table(sqlCtx: Rt_SqlContext): String
+    open fun tempTable(sqlCtx: Rt_SqlContext, subName: String): String = throw UnsupportedOperationException()
     abstract fun table(chainMapping: Rt_ChainSqlMapping): String
     abstract fun appendExtraWhere(b: SqlBuilder, sqlCtx: Rt_SqlContext, alias: SqlTableAlias)
     abstract fun extraWhereExpr(atCls: R_AtClass): Db_Expr?
@@ -26,7 +26,7 @@ abstract class R_ClassSqlMapping {
         fun makeBlockHeightExpr(blockCls: R_Class, blockExpr: Db_TableExpr, chain: R_ExternalChain): Db_Expr {
             val heightAttr = blockCls.attribute("block_height")
             val blockHeightExpr = Db_AttrExpr(blockExpr, heightAttr)
-            val chainHeightExpr = Db_ChainHeightExpr(chain)
+            val chainHeightExpr = Db_InterpretedExpr(R_ChainHeightExpr(chain))
             return Db_BinaryExpr(R_BooleanType, Db_BinaryOp_Le, blockHeightExpr, chainHeightExpr)
         }
     }
@@ -42,6 +42,10 @@ class R_ClassSqlMapping_Regular(private val tableBaseName: String): R_ClassSqlMa
 
     override fun table(chainMapping: Rt_ChainSqlMapping): String {
         return chainMapping.fullName(tableBaseName)
+    }
+
+    override fun tempTable(sqlCtx: Rt_SqlContext, subName: String): String {
+        return sqlCtx.mainChainMapping.tempName(subName + "." + tableBaseName)
     }
 
     override fun appendExtraWhere(b: SqlBuilder, sqlCtx: Rt_SqlContext, alias: SqlTableAlias) {}
@@ -106,7 +110,7 @@ abstract class R_ClassSqlMapping_TxBlk(
         val chainMapping = sqlCtx.chainMapping(chain)
         b.appendSep(" AND ")
         b.append("(")
-        b.appendColumn(alias, "chain_id")
+        b.appendColumn(alias, "chain_iid")
         b.append(" = ")
         b.append(R_IntegerType, Rt_IntValue(chainMapping.chainId))
         b.append(")")

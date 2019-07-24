@@ -104,7 +104,7 @@ class LibBlockTransactionTest: BaseRellTest() {
     }
 
     @Test fun testBlockRef() {
-        tst.defs = listOf("class foo { x: integer; block; }")
+        def("class foo { x: integer; block; }")
         tst.inserts = BLOCK_INSERTS
         tst.chainId = 333
 
@@ -123,7 +123,7 @@ class LibBlockTransactionTest: BaseRellTest() {
     }
 
     @Test fun testTransactionRef() {
-        tst.defs = listOf("class foo { x: integer; trans: transaction; }")
+        def("class foo { x: integer; trans: transaction; }")
         tst.inserts = BLOCK_INSERTS
         tst.chainId = 333
 
@@ -142,9 +142,9 @@ class LibBlockTransactionTest: BaseRellTest() {
     }
 
     @Test fun testBlockRefChainId() {
-        tst.defs = listOf("class foo { x: integer; b: block; t: transaction; }")
+        def("class foo { x: integer; b: block; t: transaction; }")
         tst.inserts = BLOCK_INSERTS
-        tst.insert("c0.foo", "x,b,t", "1,123,111,444")
+        insert("c0.foo", "x,b,t", "1,123,111,444")
         tst.chainId = 0
 
         val base = "val f = foo@{}"
@@ -235,7 +235,7 @@ class LibBlockTransactionTest: BaseRellTest() {
 
         t.chkQuery(expr, "[(transaction[4],0xceed,0xf00d,0xcdef,block[3],46,0xbadbad,1300000000000)]")
         t.chkQuery("transaction @* {} ( =transaction, =.tx_rid, =.tx_hash, =.tx_data )", "[(transaction[4],0xceed,0xf00d,0xcdef)]")
-        t.chkQuery("transaction @* { .block }", "[transaction[4]]")
+        t.chkQuery("transaction @* { .block == .block }", "[transaction[4]]")
         t.chkQuery("block @* {}", "[]")
         t.chkQuery("(b: block, t: transaction) @* {}", "[]")
 
@@ -254,23 +254,22 @@ class LibBlockTransactionTest: BaseRellTest() {
         t.chkQuery("foo @* {} (=.value)", "[]")
     }
 
-    @Test fun textGtx() {
-        tst.defs = listOf("record r { t: transaction; }")
+    @Test fun textGtv() {
+        def("record r { t: transaction; }")
         tst.chainId = 333
         tst.inserts = BLOCK_INSERTS
         chk("transaction @ {}", "transaction[444]")
         chk("r(transaction @ {})", "r[t=transaction[444]]")
-        chkEx("{ val r = r(transaction @ {}); return r.toPrettyGTXValue(); }", "ct_err:fn_record_invalid:r:r.toPrettyGTXValue")
-        chk("""r.fromPrettyGTXValue(GTXValue.fromJSON('{"t":444}'))""", "ct_err:fn_record_invalid:r:fromPrettyGTXValue")
+        chkEx("{ val r = r(transaction @ {}); return r.to_gtv_pretty(); }", "ct_err:fn:invalid:r:r.to_gtv_pretty")
+        chk("""r.from_gtv_pretty(gtv.from_json('{"t":444}'))""", "ct_err:fn:invalid:r:from_gtv_pretty")
     }
 
     private fun createChainIdTester(chainId: Long, blockIid: Long, txIid: Long): RellCodeTester {
         val t = RellCodeTester(tstCtx)
-        t.defs = listOf("class foo { b: block; t: transaction; mutable value: integer; }")
+        t.def("class foo { b: block; t: transaction; mutable value: integer; }")
         t.insert("c${chainId}.foo", "b,t,value", "1,$blockIid,$txIid,0")
         t.strictToString = false
         t.dropTables = false
-        t.autoInitObjects = false
         t.chainId = chainId
         return t
     }

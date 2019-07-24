@@ -1,11 +1,15 @@
 package net.postchain.rell.runtime
 
 import com.google.common.collect.Sets
-import net.postchain.gtx.GTXValue
+import mu.KLogging
+import net.postchain.core.ByteArrayKey
+import net.postchain.gtv.Gtv
+import net.postchain.rell.CommonUtils
 import net.postchain.rell.model.*
+import net.postchain.rell.sql.MetaClass
+import net.postchain.rell.sql.MetaClassType
 import net.postchain.rell.sql.SqlExecutor
-import net.postchain.rell.toHex
-
+import net.postchain.rell.sql.SqlMeta
 
 class Rt_GlobalContext(
         val stdoutPrinter: Rt_Printer,
@@ -14,7 +18,8 @@ class Rt_GlobalContext(
         val opCtx: Rt_OpContext?,
         val chainCtx: Rt_ChainContext,
         val logSqlErrors: Boolean = false,
-        val sqlUpdatePortionSize: Int = 1000 // Experimental maximum is 2^15
+        val sqlUpdatePortionSize: Int = 1000, // Experimental maximum is 2^15
+        val typeCheck: Boolean = false
 ){
     val sqlExec: SqlExecutor = Rt_SqlExecutor(sqlExec, logSqlErrors)
 }
@@ -24,7 +29,7 @@ class Rt_SqlContext private constructor(
         val mainChainMapping: Rt_ChainSqlMapping,
         private val linkedExternalChains: List<Rt_ExternalChain>
 ) {
-    companion object {
+    companion object : KLogging() {
         fun createNoExternalChains(module: R_Module, mainChainMapping: Rt_ChainSqlMapping): Rt_SqlContext {
             check(module.externalChains.isEmpty()) { "Module uses external chains" }
             return Rt_SqlContext(module, mainChainMapping, listOf())
@@ -34,9 +39,10 @@ class Rt_SqlContext private constructor(
                 module: R_Module,
                 mainChainMapping: Rt_ChainSqlMapping,
                 chainDependencies: Map<String, Rt_ChainDependency>,
-                sqlExec: SqlExecutor
+                sqlExec: SqlExecutor,
+                heightProvider: Rt_ChainHeightProvider
         ): Rt_SqlContext {
-            val externalChains = getExternalChains(sqlExec, chainDependencies)
+            val externalChains = getExternalChains(sqlExec, chainDependencies, heightProvider)
             val linkedExternalChains = calcLinkedExternalChains(module, externalChains)
             val sqlCtx = Rt_SqlContext(module, mainChainMapping, linkedExternalChains)
             checkExternalMetaInfo(sqlCtx, externalChains, sqlExec)
@@ -45,13 +51,14 @@ class Rt_SqlContext private constructor(
 
         private fun getExternalChains(
                 sqlExec: SqlExecutor,
-                dependencies: Map<String, Rt_ChainDependency>
+                dependencies: Map<String, Rt_ChainDependency>,
+                heightProvider: Rt_ChainHeightProvider
         ): Map<String, Rt_ExternalChain> {
             if (dependencies.isEmpty()) return mapOf()
 
             val rids = mutableSetOf<String>()
             for ((name, dep) in dependencies) {
-                val ridStr = dep.rid.toHex()
+                val ridStr = CommonUtils.bytesToHex(dep.rid)
                 if (!rids.add(ridStr)) {
                     throw Rt_Error("external_chain_dup_rid:$name:$ridStr",
                             "Duplicate external chain RID: '$name', 0x$ridStr")
@@ -59,17 +66,25 @@ class Rt_SqlContext private constructor(
             }
 
             val dbChains = loadDatabaseBlockchains(sqlExec)
-            val dbRidMap = dbChains.map { (chainId, rid) -> Pair(rid.toHex(), chainId) }.toMap()
+            val dbRidMap = dbChains.map { (chainId, rid) -> Pair(CommonUtils.bytesToHex(rid), chainId) }.toMap()
 
             val res = mutableMapOf<String, Rt_ExternalChain>()
             for ((name, dep) in dependencies) {
-                val ridStr = dep.rid.toHex()
+                val ridStr = CommonUtils.bytesToHex(dep.rid)
                 val chainId = dbRidMap[ridStr]
                 if (chainId == null) {
-                    throw Rt_Error("external_chain_norid:$name:$ridStr",
+                    throw Rt_Error("external_chain_no_rid:$name:$ridStr",
                             "External chain '$name' not found in the database by RID 0x$ridStr")
                 }
-                res[name] = Rt_ExternalChain(chainId, dep.rid, dep.height)
+
+                val ridKey = ByteArrayKey(dep.rid)
+                val height = heightProvider.getChainHeight(ridKey, chainId)
+                if (height == null) {
+                    throw Rt_Error("external_chain_no_height:$name:$ridStr:$chainId",
+                            "Unknown height of the external chain '$name' (RID: 0x$ridStr, ID: $chainId)")
+                }
+
+                res[name] = Rt_ExternalChain(chainId, dep.rid, height)
             }
 
             return res
@@ -77,7 +92,7 @@ class Rt_SqlContext private constructor(
 
         private fun loadDatabaseBlockchains(sqlExec: SqlExecutor): Map<Long, ByteArray> {
             val res = mutableMapOf<Long, ByteArray>()
-            sqlExec.executeQuery("SELECT chain_id, blockchain_rid FROM blockchains ORDER BY chain_id;", {}) { rs ->
+            sqlExec.executeQuery("SELECT chain_iid, blockchain_rid FROM blockchains ORDER BY chain_iid;", {}) { rs ->
                 val chainId = rs.getLong(1)
                 val rid = rs.getBytes(2)
                 check(chainId !in res)
@@ -94,7 +109,7 @@ class Rt_SqlContext private constructor(
             val chainRids = mutableSetOf<String>()
             for ((name, c) in externalChains) {
                 val id = c.chainId
-                val rid = c.rid.toHex()
+                val rid = CommonUtils.bytesToHex(c.rid)
                 if (!chainIds.add(id)) {
                     throw Rt_Error("external_chain_dup_id:$name:$id", "Duplicate external chain ID: '$name', $id")
                 }
@@ -114,7 +129,7 @@ class Rt_SqlContext private constructor(
         }
 
         private fun checkExternalMetaInfo(sqlCtx: Rt_SqlContext, chains: Map<String, Rt_ExternalChain>, sqlExec: SqlExecutor) {
-            val chainMetaClasses = chains.mapValues { (_, chain) -> loadExternalMetaClasses(chain, sqlExec) }
+            val chainMetaClasses = chains.mapValues { (name, chain) -> loadExternalMetaData(name, chain, sqlExec) }
             val chainExternalClasses = getChainExternalClasses(sqlCtx.module)
 
             for (chain in chainExternalClasses.keys) {
@@ -136,8 +151,9 @@ class Rt_SqlContext private constructor(
             }
         }
 
-        private fun checkMissingClasses(chain: String, extClasses: Map<String, R_Class>, metaClasses: Map<String, Rt_ExternalClass>) {
-            val missingClasses = Sets.difference(extClasses.keys, metaClasses.keys)
+        private fun checkMissingClasses(chain: String, extClasses: Map<String, R_Class>, metaClasses: Map<String, MetaClass>) {
+            val metaClassNames = metaClasses.filter { (_, c) -> c.type == MetaClassType.CLASS }.keys
+            val missingClasses = Sets.difference(extClasses.keys, metaClassNames)
             if (!missingClasses.isEmpty()) {
                 val list = missingClasses.sorted()
                 throw Rt_Error("external_meta_nocls:$chain:${list.joinToString(",")}",
@@ -145,7 +161,7 @@ class Rt_SqlContext private constructor(
             }
         }
 
-        private fun checkMissingAttrs(chain: String, extCls: R_Class, metaCls: Rt_ExternalClass) {
+        private fun checkMissingAttrs(chain: String, extCls: R_Class, metaCls: MetaClass) {
             val metaAttrNames = metaCls.attrs.keys
             val extAttrNames = extCls.attributes.keys
             val missingAttrs = Sets.difference(extAttrNames, metaAttrNames)
@@ -157,7 +173,7 @@ class Rt_SqlContext private constructor(
             }
         }
 
-        private fun checkAttrTypes(sqlCtx: Rt_SqlContext, chain: String, extCls: R_Class, metaCls: Rt_ExternalClass) {
+        private fun checkAttrTypes(sqlCtx: Rt_SqlContext, chain: String, extCls: R_Class, metaCls: MetaClass) {
             for (extAttr in extCls.attributes.values.sortedBy { it.name }) {
                 val attrName = extAttr.name
                 val metaAttr = metaCls.attrs.getValue(attrName)
@@ -184,45 +200,17 @@ class Rt_SqlContext private constructor(
             return res
         }
 
-        private fun loadExternalMetaClasses(chain: Rt_ExternalChain, sqlExec: SqlExecutor): Map<String, Rt_ExternalClass> {
-            val res = mutableMapOf<String, Rt_ExternalClass>()
-            sqlExec.transaction {
-                val clsAttrMap = loadExternalMetaAttrs(sqlExec, chain.sqlMapping.metaAttributesTable)
-                val clsMap = loadExternalMetaClasses(sqlExec, chain.sqlMapping.metaClassTable, clsAttrMap)
-                res.putAll(clsMap)
-            }
-            return res.toMap()
-        }
+        private fun loadExternalMetaData(name: String, chain: Rt_ExternalChain, sqlExec: SqlExecutor): Map<String, MetaClass> {
+            val res: Map<String, MetaClass>
 
-        private fun loadExternalMetaClasses(
-                sqlExec: SqlExecutor,
-                table: String,
-                clsAttrMap: Map<Int, Map<String, Rt_ExternalAttr>>
-        ): Map<String, Rt_ExternalClass> {
-            val sql = """SELECT "id", "name", "log" FROM "$table";"""
-            val res = mutableMapOf<String, Rt_ExternalClass>()
-            sqlExec.executeQuery(sql, {}) { rs ->
-                val clsId = rs.getInt(1)
-                val name = rs.getString(2)
-                val log = rs.getBoolean(3)
-                check(name !in res)
-                val attrs = clsAttrMap.getOrDefault(clsId, mapOf())
-                res[name] = Rt_ExternalClass(log, attrs)
+            val msgs = Rt_Messages(logger)
+            try {
+                res = SqlMeta.loadMetaData(sqlExec, chain.sqlMapping, msgs)
+                msgs.checkErrors()
+            } catch (e: Rt_Error) {
+                throw Rt_Error(e.code, "Failed to load metadata for external chain '$name' (chain_iid = ${chain.chainId})", e)
             }
-            return res.toMap()
-        }
 
-        private fun loadExternalMetaAttrs(sqlExec: SqlExecutor, table: String): Map<Int, Map<String, Rt_ExternalAttr>> {
-            val sql = """SELECT "class_id", "name", "type" FROM "$table";"""
-            val res = mutableMapOf<Int, MutableMap<String, Rt_ExternalAttr>>()
-            sqlExec.executeQuery(sql, {}) { rs ->
-                val clsId = rs.getInt(1)
-                val name = rs.getString(2)
-                val type = rs.getString(3)
-                val attrMap = res.computeIfAbsent(clsId) { mutableMapOf() }
-                check(name !in attrMap)
-                attrMap[name] = Rt_ExternalAttr(type)
-            }
             return res
         }
 
@@ -240,15 +228,16 @@ class Rt_SqlContext private constructor(
 }
 
 class Rt_ModuleContext(val globalCtx: Rt_GlobalContext, val module: R_Module, val sqlCtx: Rt_SqlContext) {
-    fun insertObjectRecords() {
+    fun createRootFrame(): Rt_CallFrame {
         val rFrameBlock = R_FrameBlock(null, R_FrameBlockId(0), 0, 0)
         val rFrame = R_CallFrame(0, rFrameBlock)
         val entCtx = Rt_EntityContext(this, true)
-        val frame = Rt_CallFrame(entCtx, rFrame)
+        return Rt_CallFrame(entCtx, rFrame)
+    }
 
-        for (rObject in module.objects.values) {
-            rObject.insert(frame)
-        }
+    fun insertObjectRecord(rObject: R_Object) {
+        val frame = createRootFrame()
+        rObject.insert(frame)
     }
 }
 
@@ -260,6 +249,6 @@ class Rt_EntityContext(val modCtx: Rt_ModuleContext, val dbUpdateAllowed: Boolea
     }
 }
 
-class Rt_OpContext(val lastBlockTime: Long, val transactionIid: Long, val signers: List<ByteArray>)
+class Rt_OpContext(val lastBlockTime: Long, val transactionIid: Long, val blockHeight: Long, val signers: List<ByteArray>)
 
-class Rt_ChainContext(val rawConfig: GTXValue, val args: Rt_Value)
+class Rt_ChainContext(val rawConfig: Gtv, val args: Rt_Value?, val blockchainRid: ByteArray)

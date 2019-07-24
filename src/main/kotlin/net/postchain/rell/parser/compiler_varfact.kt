@@ -274,6 +274,19 @@ class C_ExprVarFacts private constructor(
         return if (trueFacts.isEmpty() && falseFacts.isEmpty()) this else of(postFacts = postFacts)
     }
 
+    fun update(
+            trueFacts: C_VarFacts? = null,
+            falseFacts: C_VarFacts? = null,
+            postFacts: C_VarFacts? = null
+    ): C_ExprVarFacts {
+        if (trueFacts == null && falseFacts == null && postFacts == null) return this
+        return of(
+                trueFacts = trueFacts ?: this.trueFacts,
+                falseFacts = falseFacts ?: this.falseFacts,
+                postFacts = postFacts ?: this.postFacts
+        )
+    }
+
     companion object {
         val EMPTY = C_ExprVarFacts(C_VarFacts.EMPTY, C_VarFacts.EMPTY, C_VarFacts.EMPTY)
 
