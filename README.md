@@ -20,7 +20,7 @@ Simplest way to build:
     ```  
     Switch to the right branch:  
     ```
-    git checkout v3.0
+    git checkout ver-3.0.0
     ```
 2. Build `postchain2`:  
     ```
@@ -28,7 +28,7 @@ Simplest way to build:
     ```
 3. Build `rellr`:  
     ```
-    mvn -Pconsole clean package -DskipTests
+    mvn clean package -DskipTests
     ```
 
 ## Command Line Interpreter
@@ -72,6 +72,43 @@ To execute an operation with a database connection (using existing tables):
 
 ```
 ./rell.sh --db-url JDBC_URL RELL_FILE OPERATION_NAME [ARGS...]
+```
+
+Argument `--db-properties` can be used istead of `--db-url` in the above examples.
+
+## Run a Simple Poschain Node
+
+Start a single-chain Postchain Node with a Rell app. This utility is used by the `Run As` - `Rell Simple Postchain App` command in Eclipse IDE.
+
+A `node-config.properties` and a Rell file must be specified.
+
+```
+$ ./singlerun.sh
+
+Usage: PostchainAppLauncher --blockchain-rid=BLOCKCHAIN_RID --node-config=NODE_CONFIG_FILE [--source-dir=SOURCE_DIR] RELL_FILE
+Runs a Rell Postchain app
+      RELL_FILE   Rell main file
+      --blockchain-rid=BLOCKCHAIN_RID
+                  Blockchain RID (hex, 32 bytes)
+      --node-config=NODE_CONFIG_FILE
+                  Node configuration (.properties)
+      --source-dir=SOURCE_DIR
+                  Source directory used to resolve absolute include paths (default: the directory of the Rell file)
+```
+
+## Run a Mutli-Chain Postchain Node (Run.XML)
+
+Runs a Postchain node with one or multiple blockchains. The configuration is specified
+in the [Run.XML](RunXML.md) format. This utility is used by the `Run As` - `Rell Postchain App` command in the Eclipse IDE.
+
+```
+./multirun.sh
+
+Usage: RellRunConfigLaunch --source-dir=SOURCE_DIR RUN_CONFIG
+Launch a run config
+      RUN_CONFIG   Run config file
+      --source-dir=SOURCE_DIR
+                   Rell source directory
 ```
 
 ## Running Unit Tests

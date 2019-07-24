@@ -13,14 +13,14 @@ class RellTestContext(useSql: Boolean = true): Closeable {
         fun list() = list.toList()
 
         fun block(iid: Long, chainId: Long, height: Long, rid: String, header: String, timestamp: Long): BlockBuilder {
-            val s = """INSERT INTO "blocks"(block_iid,block_height,block_rid,chain_id,block_header_data,block_witness,timestamp)
+            val s = """INSERT INTO "blocks"(block_iid,block_height,block_rid,chain_iid,block_header_data,block_witness,timestamp)
                 VALUES($iid,$height,E'\\x$rid',$chainId,E'\\x$header',NULL,$timestamp);""".trimIndent()
             list.add(s)
             return this
         }
 
         fun tx(iid: Long, chainId: Long, block: Long, rid: String, data: String, hash: String): BlockBuilder {
-            val s = """INSERT INTO "transactions"(tx_iid,chain_id,tx_rid,tx_data,tx_hash,block_iid)
+            val s = """INSERT INTO "transactions"(tx_iid,chain_iid,tx_rid,tx_data,tx_hash,block_iid)
                 VALUES($iid,$chainId,E'\\x$rid',E'\\x$data',E'\\x$hash',$block);""".trimIndent()
             list.add(s)
             return this
@@ -86,7 +86,7 @@ class RellTestContext(useSql: Boolean = true): Closeable {
 
         val inserts = blockchains.entries.map { ( chainId, rid ) ->
             val ridStr = CommonUtils.bytesToHex(rid)
-            """INSERT INTO blockchains(chain_id, blockchain_rid) VALUES ($chainId, E'\\x$ridStr');"""
+            """INSERT INTO blockchains(chain_iid, blockchain_rid) VALUES ($chainId, E'\\x$ridStr');"""
         }
 
         val insertSql = inserts.joinToString("\n") { it }

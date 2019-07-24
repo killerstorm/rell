@@ -56,7 +56,9 @@ private fun startPostchainNode(rellAppConf: RellPostAppCliConfig): NodeConfig {
 
     val node = PostchainTestNode(nodeConfPro, rellAppConf.config.wipeDb)
 
-    for (chain in rellAppConf.config.chains) {
+    val chainsSorted = rellAppConf.config.chains.sortedBy { it.iid }
+
+    for (chain in chainsSorted) {
         val genesisConfig = chain.configs.getValue(0)
         node.addBlockchain(chain.iid, chain.brid.toByteArray(), genesisConfig)
 
@@ -67,7 +69,7 @@ private fun startPostchainNode(rellAppConf: RellPostAppCliConfig): NodeConfig {
         }
     }
 
-    for (chain in rellAppConf.config.chains) {
+    for (chain in chainsSorted) {
         try {
             node.startBlockchain(chain.iid)
         } catch (e: UserMistake) {

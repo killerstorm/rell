@@ -110,7 +110,7 @@ abstract class R_ClassSqlMapping_TxBlk(
         val chainMapping = sqlCtx.chainMapping(chain)
         b.appendSep(" AND ")
         b.append("(")
-        b.appendColumn(alias, "chain_id")
+        b.appendColumn(alias, "chain_iid")
         b.append(" = ")
         b.append(R_IntegerType, Rt_IntValue(chainMapping.chainId))
         b.append(")")

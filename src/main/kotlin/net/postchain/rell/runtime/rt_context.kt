@@ -92,7 +92,7 @@ class Rt_SqlContext private constructor(
 
         private fun loadDatabaseBlockchains(sqlExec: SqlExecutor): Map<Long, ByteArray> {
             val res = mutableMapOf<Long, ByteArray>()
-            sqlExec.executeQuery("SELECT chain_id, blockchain_rid FROM blockchains ORDER BY chain_id;", {}) { rs ->
+            sqlExec.executeQuery("SELECT chain_iid, blockchain_rid FROM blockchains ORDER BY chain_iid;", {}) { rs ->
                 val chainId = rs.getLong(1)
                 val rid = rs.getBytes(2)
                 check(chainId !in res)
@@ -201,16 +201,14 @@ class Rt_SqlContext private constructor(
         }
 
         private fun loadExternalMetaData(name: String, chain: Rt_ExternalChain, sqlExec: SqlExecutor): Map<String, MetaClass> {
-            var res = mapOf<String, MetaClass>()
+            val res: Map<String, MetaClass>
 
-            sqlExec.transaction {
-                val msgs = Rt_Messages(logger)
-                try {
-                    res = SqlMeta.loadMetaData(sqlExec, chain.sqlMapping, msgs)
-                    msgs.checkErrors()
-                } catch (e: Rt_Error) {
-                    throw Rt_Error(e.code, "Failed to load metadata for external chain '$name' (chain_id = ${chain.chainId})", e)
-                }
+            val msgs = Rt_Messages(logger)
+            try {
+                res = SqlMeta.loadMetaData(sqlExec, chain.sqlMapping, msgs)
+                msgs.checkErrors()
+            } catch (e: Rt_Error) {
+                throw Rt_Error(e.code, "Failed to load metadata for external chain '$name' (chain_iid = ${chain.chainId})", e)
             }
 
             return res

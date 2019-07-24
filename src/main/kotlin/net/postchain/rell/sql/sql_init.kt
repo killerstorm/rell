@@ -29,7 +29,7 @@ class SqlInit private constructor(private val modCtx: Rt_ModuleContext, private 
     }
 
     private fun init(): List<String> {
-        log(LOG_TITLE, "Initializing database (chain_id = ${modCtx.sqlCtx.mainChainMapping.chainId})")
+        log(LOG_TITLE, "Initializing database (chain_iid = ${modCtx.sqlCtx.mainChainMapping.chainId})")
 
         val dbEmpty = SqlInitPlanner.plan(modCtx, initCtx)
         initCtx.checkErrors()

@@ -1,5 +1,6 @@
 package net.postchain.rell.sql
 
+import net.postchain.base.data.PostgreSQLCommands
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_SqlContext
@@ -20,44 +21,15 @@ object SqlGen {
 
     val DSL_CTX = DSL.using(SQLDialect.POSTGRES)
 
-    private val CREATE_TABLE_BLOCKS = """
-    CREATE TABLE "blocks"(
-        block_iid BIGSERIAL PRIMARY KEY,
-        block_height BIGINT NOT NULL,
-        block_rid BYTEA,
-        chain_id BIGINT NOT NULL,
-        block_header_data BYTEA,
-        block_witness BYTEA,
-        timestamp BIGINT,
-        UNIQUE (chain_id, block_rid),
-        UNIQUE (chain_id, block_height)
-    );
-    """.trimIndent()
-
-    private val CREATE_TABLE_TRANSACTIONS = """
-    CREATE TABLE "transactions"(
-        tx_iid BIGSERIAL PRIMARY KEY,
-        chain_id BIGINT NOT NULL,
-        tx_rid BYTEA NOT NULL,
-        tx_data BYTEA NOT NULL,
-        tx_hash BYTEA NOT NULL,
-        block_iid BIGINT NOT NULL REFERENCES blocks(block_iid),
-        UNIQUE (chain_id, tx_rid)
-    );
-    """.trimIndent()
-
-    private val CREATE_TABLE_BLOCKCHAINS = """
-    CREATE TABLE "blockchains"(
-        chain_id BIGINT NOT NULL PRIMARY KEY,
-        blockchain_rid BYTEA NOT NULL UNIQUE
-    );
-    """.trimIndent()
+    private val CREATE_TABLE_BLOCKS = PostgreSQLCommands.createTableBlocks
+    private val CREATE_TABLE_TRANSACTIONS = PostgreSQLCommands.createTableTransactions
+    private val CREATE_TABLE_BLOCKCHAINS = PostgreSQLCommands.createTableBlockChains
 
     fun genSqlCreateSysTables(): String {
         val sqls = mutableListOf<String>()
-        sqls += CREATE_TABLE_BLOCKS
-        sqls += CREATE_TABLE_TRANSACTIONS
-        sqls += CREATE_TABLE_BLOCKCHAINS
+        sqls += "$CREATE_TABLE_BLOCKS;"
+        sqls += "$CREATE_TABLE_TRANSACTIONS;"
+        sqls += "$CREATE_TABLE_BLOCKCHAINS;"
         return joinSqls(sqls)
     }
 
