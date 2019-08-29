@@ -654,3 +654,63 @@ class R_ChainHeightExpr(val chain: R_ExternalChain): R_Expr(R_IntegerType) {
         return Rt_IntValue(rtChain.height)
     }
 }
+
+class R_TypeAdapterExpr(type: R_Type, private val expr: R_Expr, private val adapter: R_TypeAdapter): R_Expr(type) {
+    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
+        val value = expr.evaluate(frame)
+        val value2 = adapter.adaptValue(value)
+        return value2
+    }
+
+    override fun constantValue(): Rt_Value? {
+        val value = expr.constantValue()
+        val value2 = if (value == null) null else adapter.adaptValue(value)
+        return value2
+    }
+}
+
+sealed class R_TypeAdapter {
+    abstract fun adaptValue(value: Rt_Value): Rt_Value
+    abstract fun adaptExpr(expr: R_Expr): R_Expr
+    abstract fun adaptExpr(expr: Db_Expr): Db_Expr
+}
+
+object R_TypeAdapter_Direct: R_TypeAdapter() {
+    override fun adaptValue(value: Rt_Value) = value
+    override fun adaptExpr(expr: R_Expr) = expr
+    override fun adaptExpr(expr: Db_Expr) = expr
+}
+
+object R_TypeAdapter_IntegerToDecimal: R_TypeAdapter() {
+    override fun adaptValue(value: Rt_Value): Rt_Value {
+        val r = R_SysFn_Decimal.FromInteger.call(value)
+        return r
+    }
+
+    override fun adaptExpr(expr: R_Expr): R_Expr {
+        return R_TypeAdapterExpr(R_DecimalType, expr, this)
+    }
+
+    override fun adaptExpr(expr: Db_Expr): Db_Expr {
+        return Db_CallExpr(R_DecimalType, Db_SysFn_Decimal.FromInteger, listOf(expr))
+    }
+}
+
+class R_TypeAdapter_Nullable(private val dstType: R_Type, private val innerAdapter: R_TypeAdapter): R_TypeAdapter() {
+    override fun adaptValue(value: Rt_Value): Rt_Value {
+        return if (value == Rt_NullValue) {
+            Rt_NullValue
+        } else {
+            innerAdapter.adaptValue(value)
+        }
+    }
+
+    override fun adaptExpr(expr: R_Expr): R_Expr {
+        return R_TypeAdapterExpr(dstType, expr, this)
+    }
+
+    override fun adaptExpr(expr: Db_Expr): Db_Expr {
+        // Not completely right, but Db_Exprs do not support nullable anyway.
+        return Db_CallExpr(R_DecimalType, Db_SysFn_Decimal.FromInteger, listOf(expr))
+    }
+}

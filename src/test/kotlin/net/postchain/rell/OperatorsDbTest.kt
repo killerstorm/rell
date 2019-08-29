@@ -1,14 +1,17 @@
 package net.postchain.rell
 
+import net.postchain.rell.parser.C_Constants
 import net.postchain.rell.test.RellCodeTester
 import net.postchain.rell.test.RellTestContext
 import net.postchain.rell.test.SqlTestUtils
+import java.math.BigDecimal
 import kotlin.test.assertEquals
 
-class AtExprOpTest: AbstractOpTest() {
+class OperatorsDbTest: OperatorsBaseTest() {
     private val dataAttrs = listOf(
             Triple("b", "boolean", "false"),
             Triple("i", "integer", "0"),
+            Triple("d", "decimal", "0"),
             Triple("t", "text", "''"),
             Triple("ba", "byte_array", "''"),
             Triple("r", "rowid", "0"),
@@ -17,7 +20,7 @@ class AtExprOpTest: AbstractOpTest() {
             Triple("company", "company", "100")
     )
 
-    private val dataAttrCount = 3
+    private val dataAttrCount = 4
 
     private val defaultValues = dataAttrs
             .flatMap { attr -> ( 1 .. dataAttrCount ).map { Pair(attr, it) } }
@@ -133,11 +136,11 @@ class AtExprOpTest: AbstractOpTest() {
         return this.inserts + insert
     }
 
-    override fun integerOverflowMsg(op: String, left: Long, right: Long) = "rt_err:sqlerr:0"
-    override fun integerDivZeroMsg(left: Long) = "rt_err:sqlerr:0"
+    override fun errRt(code: String) = "rt_err:sqlerr:0"
 
     override fun vBool(v: Boolean): TstVal = AtTstVal.Bool(v)
     override fun vInt(v: Long): TstVal = AtTstVal.Integer(v)
+    override fun vDec(v: BigDecimal): TstVal = AtTstVal.Decimal(v)
     override fun vText(v: String): TstVal = AtTstVal.Text(v)
     override fun vBytes(v: String): TstVal = AtTstVal.Bytes(v)
     override fun vRowid(v: Long): TstVal = AtTstVal.Rowid(v)
@@ -155,6 +158,10 @@ class AtExprOpTest: AbstractOpTest() {
 
         class Integer(val v: Long): AtTstVal("i") {
             override fun sql(): String = "$v"
+        }
+
+        class Decimal(val v: BigDecimal): AtTstVal("d") {
+            override fun sql(): String = "('${v.toPlainString()}' :: ${C_Constants.DECIMAL_SQL_TYPE_STR})"
         }
 
         class Text(val v: String): AtTstVal("t") {

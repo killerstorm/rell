@@ -95,6 +95,21 @@ object GtvRtConversion_Integer: GtvRtConversion() {
     override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv) = Rt_IntValue(gtvToInteger(gtv))
 }
 
+object GtvRtConversion_Decimal: GtvRtConversion() {
+    override fun directCompatibility() = R_GtvCompatibility(true, true)
+    override fun rtToGtv(rt: Rt_Value, pretty: Boolean) = GtvFactory.gtv(Rt_DecimalUtils.toString(rt.asDecimal()))
+
+    override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
+        return if (gtv.type == GtvType.INTEGER) {
+            val v = gtvToInteger(gtv)
+            Rt_DecimalValue.of(v)
+        } else {
+            val s = gtvToString(gtv)
+            Rt_DecimalValue.of(s)
+        }
+    }
+}
+
 object GtvRtConversion_ByteArray: GtvRtConversion() {
     override fun directCompatibility() = R_GtvCompatibility(true, true)
     override fun rtToGtv(rt: Rt_Value, pretty: Boolean) = GtvByteArray(rt.asByteArray())

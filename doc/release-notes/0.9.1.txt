@@ -1,0 +1,58 @@
+RELEASE NOTES 0.9.1 (2019-08-30)
+
+
+1. Language: Decimal type
+
+A new type "decimal" allows to use non-integer (real) numbers. Not a complete equivalent of floating-point types used
+in other languages (typically called "float", "double").
+
+The type has a variable precision, can hold up to 131072 digits before the decimal point and up to 20 digits after the
+decimal point. The smallest nonzero absolute value is 1E-20, or 0.00000000000000000001.
+
+Internally the type is implemented as java.math.BigDecimal in the interpreter and NUMERIC in SQL.
+
+Code examples:
+
+val x = 123.456;
+val y = .789;
+val z = 7e+33;
+val k = decimal('123456789.98765');
+val q = integer(x);
+
+
+2. Library: Functions for the decimal type
+
+(a) Global functions:
+
+    integer(decimal): integer
+    decimal(integer): decimal
+    decimal(text): decimal
+
+    abs(decimal): decimal
+    min(decimal, decimal): decimal
+    max(decimal, decimal): decimal
+
+(b) Member functions:
+
+    .abs(): decimal
+    .ceil(): decimal
+    .floor(): decimal
+    .min(decimal): decimal
+    .max(decimal): decimal
+    .round(scale: integer = 0): decimal
+    .sign(): integer
+    .to_integer(): integer
+    .to_text(scientific: boolean = false): text
+
+(c) Constants:
+
+    decimal.PRECISION: integer = 131072 + 20
+    decimal.SCALE: integer = 20
+    decimal.INT_DIGITS: integer = 131072
+    decimal.MIN_VALUE: decimal = 1E-20
+    decimal.MAX_VALUE: decimal = 1E+131072 - 1
+
+
+3. Library: Renaming and deprecation
+
+Function integer.signum() made deprecated, a new function integer.sign() shall be used instead.

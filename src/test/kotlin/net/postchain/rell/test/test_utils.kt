@@ -9,7 +9,7 @@ import net.postchain.rell.model.R_Class
 import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.module.GtvToRtContext
-import net.postchain.rell.module.RELL_LANG_VERSION
+import net.postchain.rell.module.RELL_VERSION
 import net.postchain.rell.parser.C_Message
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_Value
@@ -32,9 +32,15 @@ import java.util.zip.ZipOutputStream
 class RellTestModule(val rModule: R_Module, val messages: List<C_Message>)
 
 object SqlTestUtils {
-    fun createSqlConnection(): Connection {
+    fun createSqlConnection(schema: String? = null): Connection {
         val prop = readDbProperties()
-        return DriverManager.getConnection(prop.url, prop.user, prop.password)
+
+        var url = prop.url
+        if (schema != null) {
+            url += (if ("?" in url) "&" else "?") + "currentSchema=$schema"
+        }
+
+        return DriverManager.getConnection(url, prop.user, prop.password)
     }
 
     private fun readDbProperties(): DbConnProps {
@@ -225,7 +231,7 @@ object GtvTestUtils {
 
 object TestSourcesRecorder {
     private val ENABLED = false
-    private val SOURCES_FILE: String = System.getProperty("user.home") + "/testsources-$RELL_LANG_VERSION.rell"
+    private val SOURCES_FILE: String = System.getProperty("user.home") + "/testsources-$RELL_VERSION.rell"
 
     private val sync = Any()
     private val sources = mutableMapOf<String, String>()

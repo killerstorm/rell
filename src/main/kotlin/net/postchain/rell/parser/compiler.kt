@@ -84,9 +84,8 @@ class C_UserGlobalFunction(val name: String, val fnKey: Int): C_RegularGlobalFun
 
     override fun compileCallRegular(ctx: C_ExprContext, sName: S_Name, args: List<C_Value>): C_Expr {
         val header = headerLate
-        val params = header.params.map { it.type }
-        val rArgs = args.map { it.toRExpr() }
-        C_FuncUtils.checkArgs(sName, params, rArgs)
+        val effArgs = C_FuncUtils.checkArgs(sName, header.params, args)
+        val rArgs = effArgs.map { it.toRExpr() }
         val rExpr = R_UserCallExpr(header.type, name, fnKey, rArgs)
         val exprFacts = C_ExprVarFacts.forSubExpressions(args)
         return C_RValue.makeExpr(sName.pos, rExpr, exprFacts)
@@ -224,6 +223,7 @@ class C_ModuleContext(val globalCtx: C_GlobalContext) {
                 "text" to C_TypeDef(R_TextType),
                 "byte_array" to C_TypeDef(R_ByteArrayType),
                 "integer" to C_TypeDef(R_IntegerType),
+                "decimal" to C_TypeDef(R_DecimalType),
                 "rowid" to C_TypeDef(R_RowidType),
                 "pubkey" to C_TypeDef(R_ByteArrayType),
                 "name" to C_TypeDef(R_TextType),
@@ -992,8 +992,8 @@ class C_ClassContext(
 
         val exprCreator: (() -> R_Expr)? = if (expr == null) null else { ->
             val rExpr = expr.compile(entCtx.rootExprCtx).value().toRExpr()
-            S_Type.match(rType, rExpr.type, name.pos, "attr_type:$nameStr", "Default value type mismatch for '$nameStr'")
-            rExpr
+            val adapter = S_Type.adapt(rType, rExpr.type, name.pos, "attr_type:$nameStr", "Default value type mismatch for '$nameStr'")
+            adapter.adaptExpr(rExpr)
         }
 
         addAttribute0(nameStr, rType, mutable, true, exprCreator)
@@ -1059,6 +1059,7 @@ class C_ClassContext(
     }
 }
 
+// Instantiated in Eclipse IDE, change parameters carefully.
 class C_CompilerOptions(val gtv: Boolean = true, val deprecatedError: Boolean = false)
 
 object C_Compiler {

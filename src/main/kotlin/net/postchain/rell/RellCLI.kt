@@ -101,7 +101,11 @@ private fun runWithSql(args: RellCliArgs, code: (SqlExecutor) -> Unit) {
     val dbProperties = args.dbProperties
 
     if (dbUrl != null) {
+        val schema = SqlUtils.extractDatabaseSchema(dbUrl)
         DefaultSqlExecutor.connect(dbUrl).use { con ->
+            if (schema != null) {
+                SqlUtils.prepareSchema(con, schema)
+            }
             val exec = Rt_SqlExecutor(DefaultSqlExecutor(con, args.sqlLog), true)
             code(exec)
         }
@@ -111,6 +115,7 @@ private fun runWithSql(args: RellCliArgs, code: (SqlExecutor) -> Unit) {
         val con = connector.openWriteConnection()
         var commit = false
         try {
+            SqlUtils.prepareSchema(con, appCfg.databaseSchema)
             val exec = Rt_SqlExecutor(DefaultSqlExecutor(con, args.sqlLog), true)
             code(exec)
             commit = true

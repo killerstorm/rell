@@ -90,7 +90,8 @@ Functions
 Global Functions
 ----------------
 
-``abs(integer): integer`` - absolute value
+| ``abs(integer): integer`` - absolute value
+| ``abs(decimal): decimal``
 
 ``exists(T?): boolean`` - returns ``true`` if the argument is ``null`` and ``false`` otherwise
 
@@ -99,9 +100,11 @@ in the list of signers of current operation
 
 ``log(...)`` - print a message to the log (same usage as ``print``)
 
-``max(integer, integer): integer`` - maximum of two values
+| ``max(integer, integer): integer`` - maximum of two values
+| ``max(decimal, decimal): decimal``
 
-``min(integer, integer): integer`` - minimum of two values
+| ``min(integer, integer): integer`` - minimum of two values
+| ``min(decimal, decimal): decimal``
 
 ``print(...)`` - print a message to STDOUT:
 
@@ -164,15 +167,71 @@ integer
 
 ``integer(s: text, radix: integer = 10)`` - parse a signed string representation of an integer, fail if invalid
 
+``integer(decimal): integer`` - converts a decimal to an integer, rounding towards 0 (5.99 becomes 5, -5.99 becomes -5),
+throws an exception if the resulting value is out of range
+
 ``integer.from_text(s: text, radix: integer = 10): integer`` - same as ``integer(text, integer)``
 
 ``integer.from_hex(text): integer`` - parse an unsigned HEX representation
+
+``.abs(): integer`` - absolute value
+
+``.max(integer): integer`` - maximum of two values
+
+``.max(decimal): decimal`` - maximum of two values (converts this ``integer`` to ``decimal``)
+
+``.min(integer): integer`` - minimum of two values
+
+``.min(decimal): decimal`` - minimum of two values (converts this ``integer`` to ``decimal``)
 
 ``.to_text(radix: integer = 10)`` - convert to a signed string representation
 
 ``.to_hex(): text`` - convert to an unsigned HEX representation
 
-``.signum(): integer`` - returns ``-1``, ``0`` or ``1`` depending on the sign
+``.sign(): integer`` - returns ``-1``, ``0`` or ``1`` depending on the sign
+
+--------------
+
+
+decimal
+-------
+
+``decimal.PRECISION: integer`` = the maximum number of decimal digits in a ``decimal`` number (131072 + 20)
+
+``decimal.SCALE: integer`` = the maximum number of decimal digits after the decimal point (20)
+
+``decimal.INT_DIGITS: integer`` = the maximum number of decimal digits before the decimal point (131072)
+
+``decimal.MIN_VALUE: decimal`` = the smallest nonzero absolute value that can be accurately stored in a ``decimal`` (1E-20)
+
+``decimal.MAX_VALUE: decimal`` = the largest value that can be stored in a ``decimal`` (1E+131072 - 1)
+
+``decimal(integer): decimal`` - converts ``integer`` to ``decimal``
+
+``decimal(text): decimal`` - converts a text representation of a number to ``decimal``.
+Exponential notation is allowed. Rounds the number to 20 decimal places, if necessary.
+Throws an exception if the number is out of range or not a valid number.
+
+``.abs(): decimal`` - absolute value
+
+``.ceil(): decimal`` - ceiling value: rounds 1.0 to 1.0, 1.00001 to 2.0, -1.99999 to -1.0, etc.
+
+``.floor(): decimal`` - floor value: rounds 1.0 to 1.0, 1.9999 to 1.0, -1.0001 to -2.0, etc.
+
+``.min(decimal): decimal`` - minimum of two values
+
+``.max(decimal): decimal`` - maximum of two values
+
+``.round(scale: integer = 0): decimal`` - rounds to a specific number of decimal places, to a closer value.
+Example: ``round(2.49)`` = 2.0, ``round(2.50)`` = 3.0, ``round(0.12345, 3)`` = 0.123.
+Negative scales are allowed too: ``round(12345, -3)`` = 12000.
+
+``.sign(): integer`` - returns ``-1``, ``0`` or ``1`` depending on the sign
+
+``.to_integer(): integer`` - converts a decimal to an integer, rounding towards 0 (5.99 becomes 5, -5.99 becomes -5),
+throws an exception if the resulting value is out of range
+
+``.to_text(scientific: boolean = false): text``
 
 --------------
 
@@ -609,4 +668,4 @@ virtual<record>
 
 --------------
 
-*Rell v0.9.0*
+*Rell v0.9.1*

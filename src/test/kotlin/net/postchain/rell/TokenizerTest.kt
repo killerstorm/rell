@@ -12,8 +12,9 @@ class TokenizerTest: BaseRellTest(false) {
         chk("9223372036854775807", "int[9223372036854775807]")
         chk("01234567", "int[1234567]")
         chk("\n9223372036854775808", "ct_err:main.rell(2:1):lex:int:9223372036854775808")
-        chk("\n1a", "ct_err:main.rell(2:1):lex:int:1a")
-        chk("\n1e", "ct_err:main.rell(2:1):lex:int:1e")
+        chk("\n1a", "ct_err:main.rell(2:2):lex:number_end")
+        chk("\n1f", "ct_err:main.rell(2:2):lex:number_end")
+        chk("\n1z", "ct_err:main.rell(2:2):lex:number_end")
 
         chk("0x0", "int[0]")
         chk("0xA", "int[10]")
@@ -31,10 +32,51 @@ class TokenizerTest: BaseRellTest(false) {
         chk("0xFed", "int[4077]")
         chk("0xfed", "int[4077]")
         chk("\n0x", "ct_err:main.rell(2:1):lex:int:0x")
-        chk("\n0X0", "ct_err:main.rell(2:1):lex:int:0X0")
-        chk("\n0xg", "ct_err:main.rell(2:1):lex:int:0xg")
-        chk("\n0x0g", "ct_err:main.rell(2:1):lex:int:0x0g")
-        chk("\n0xz", "ct_err:main.rell(2:1):lex:int:0xz")
+        chk("\n0X0", "ct_err:main.rell(2:2):lex:number_end")
+        chk("\n0xg", "ct_err:main.rell(2:3):lex:number_end")
+        chk("\n0x0g", "ct_err:main.rell(2:4):lex:number_end")
+        chk("\n0xz", "ct_err:main.rell(2:3):lex:number_end")
+    }
+
+    @Test fun testDecimalLiteral() {
+        tst.errMsgPos = true
+
+        chk("0.0", "dec[0]")
+        chk("12345.6789", "dec[12345.6789]")
+        chk("922337203685477580.7", "dec[922337203685477580.7]")
+        chk("01234567.8", "dec[1234567.8]")
+        chk("9223372036854775808.0", "dec[9223372036854775808]")
+
+        chk("12.34E0", "dec[12.34]")
+        chk("12.34E+0", "dec[12.34]")
+        chk("12.34E-0", "dec[12.34]")
+        chk("12.34E5", "dec[1234000]")
+        chk("12.34E+5", "dec[1234000]")
+        chk("12.34E-5", "dec[0.0001234]")
+
+        chk(".12345", "dec[0.12345]")
+        chk(".0", "dec[0]")
+        chk(".1E3", "dec[100]")
+
+        chk("\n123.", "ct_err:main.rell(2:5):lex:number:no_digit_after_point")
+        chk("\n123. 4", "ct_err:main.rell(2:5):lex:number:no_digit_after_point")
+        chk("\n0.", "ct_err:main.rell(2:3):lex:number:no_digit_after_point")
+        chk("\n123y.456", "ct_err:main.rell(2:4):lex:number_end")
+        chk("\n0.123z", "ct_err:main.rell(2:6):lex:number_end")
+        chk("\n0.a", "ct_err:main.rell(2:3):lex:number:no_digit_after_point")
+        chk("\n1E", "ct_err:main.rell(2:3):lex:number:no_digit_after_exp")
+        chk("\n1e", "ct_err:main.rell(2:3):lex:number:no_digit_after_exp")
+        chk("\n1E+", "ct_err:main.rell(2:4):lex:number:no_digit_after_exp")
+        chk("\n1E-", "ct_err:main.rell(2:4):lex:number:no_digit_after_exp")
+        chk("\n1E 5", "ct_err:main.rell(2:3):lex:number:no_digit_after_exp")
+        chk("\n1E+ 5", "ct_err:main.rell(2:4):lex:number:no_digit_after_exp")
+        chk("\n1E- 6", "ct_err:main.rell(2:4):lex:number:no_digit_after_exp")
+        chk("\n1E +5", "ct_err:main.rell(2:3):lex:number:no_digit_after_exp")
+        chk("\n1E -6", "ct_err:main.rell(2:3):lex:number:no_digit_after_exp")
+        chk("\n1E+A", "ct_err:main.rell(2:4):lex:number:no_digit_after_exp")
+        chk("\n1E-B", "ct_err:main.rell(2:4):lex:number:no_digit_after_exp")
+        chk("\n1E+10F", "ct_err:main.rell(2:6):lex:number_end")
+        chk("\n1E-10g", "ct_err:main.rell(2:6):lex:number_end")
     }
 
     @Test fun testStringLiteral() {

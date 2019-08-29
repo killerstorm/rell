@@ -258,4 +258,4 @@ Can specify an arbitrary expression returning a class, a nullable class or a col
 
 --------------
 
-*Rell v0.9.0*
+*Rell v0.9.1*

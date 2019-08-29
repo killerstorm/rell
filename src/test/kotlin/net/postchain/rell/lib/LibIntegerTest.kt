@@ -9,6 +9,20 @@ class LibIntegerTest: BaseRellTest(false) {
         chk("integer.MAX_VALUE", "int[9223372036854775807]")
     }
 
+    @Test fun testConstructorDecimal() {
+        chk("integer(decimal('0'))", "int[0]")
+        chk("integer(decimal('123456'))", "int[123456]")
+        chk("integer(decimal('-123456'))", "int[-123456]")
+        chk("integer(decimal('123.456'))", "int[123]")
+        chk("integer(decimal('-123.456'))", "int[-123]")
+        chk("integer(decimal('123.789'))", "int[123]")
+        chk("integer(decimal('-123.789'))", "int[-123]")
+        chk("integer(decimal('9223372036854775807'))", "int[9223372036854775807]")
+        chk("integer(decimal('9223372036854775808'))", "rt_err:decimal.to_integer:overflow:9223372036854775808")
+        chk("integer(decimal('-9223372036854775808'))", "int[-9223372036854775808]")
+        chk("integer(decimal('-9223372036854775809'))", "rt_err:decimal.to_integer:overflow:-9223372036854775809")
+    }
+
     @Test fun testFromText() {
         chk("integer.from_text('0')", "int[0]")
         chk("integer.from_text('123456789')", "int[123456789]")
@@ -88,6 +102,13 @@ class LibIntegerTest: BaseRellTest(false) {
         chk("integer.from_hex(123)", "ct_err:expr_call_argtypes:from_hex:integer")
         chk("integer.from_hex('')", "rt_err:fn:integer.from_hex:")
         chk("integer.from_hex('ghi')", "rt_err:fn:integer.from_hex:ghi")
+    }
+
+    @Test fun testToDecimal() {
+        chk("(0).to_decimal()", "dec[0]")
+        chk("(123456).to_decimal()", "dec[123456]")
+        chk("(9223372036854775807).to_decimal()", "dec[9223372036854775807]")
+        chk("(-9223372036854775807-1).to_decimal()", "dec[-9223372036854775808]")
     }
 
     @Test fun testToHex() {
