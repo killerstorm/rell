@@ -3,6 +3,7 @@ package net.postchain.rell.model
 import net.postchain.gtv.Gtv
 import net.postchain.rell.CommonUtils
 import net.postchain.rell.module.*
+import net.postchain.rell.parser.C_Constants
 import net.postchain.rell.runtime.*
 import org.jooq.DataType
 import org.jooq.SQLDialect
@@ -115,6 +116,11 @@ sealed class R_Type(val name: String) {
     open fun isAssignableFrom(type: R_Type): Boolean = type == this
     protected open fun calcCommonType(other: R_Type): R_Type? = null
 
+    open fun getTypeAdapter(sourceType: R_Type): R_TypeAdapter? {
+        val assignable = isAssignableFrom(sourceType)
+        return if (assignable) R_TypeAdapter_Direct else null
+    }
+
     companion object {
         fun commonTypeOpt(a: R_Type, b: R_Type): R_Type? {
             if (a.isAssignableFrom(b)) {
@@ -195,6 +201,33 @@ object R_IntegerType: R_PrimitiveType("integer", SQLDataType.BIGINT) {
         }
 
         override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_IntValue(rs.getLong(idx))
+    }
+}
+
+object R_DecimalType: R_PrimitiveType("decimal", C_Constants.DECIMAL_SQL_TYPE) {
+    override fun defaultValue() = Rt_DecimalValue.ZERO
+    override fun comparator() = Rt_Comparator.create { it.asDecimal() }
+    override fun fromCli(s: String): Rt_Value = Rt_DecimalValue.of(s)
+
+    override fun createGtvConversion() = GtvRtConversion_Decimal
+    override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Decimal
+
+    override fun getTypeAdapter(sourceType: R_Type): R_TypeAdapter? {
+        return if (sourceType == R_IntegerType) {
+            R_TypeAdapter_IntegerToDecimal
+        } else {
+            super.getTypeAdapter(sourceType)
+        }
+    }
+
+    private object R_TypeSqlAdapter_Decimal: R_TypeSqlAdapter_Primitive("decimal") {
+        override fun toSqlValue(value: Rt_Value) = value.asDecimal()
+
+        override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
+            stmt.setBigDecimal(idx, value.asDecimal())
+        }
+
+        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_DecimalValue.of(rs.getBigDecimal(idx))
     }
 }
 
@@ -422,6 +455,20 @@ class R_NullableType(val valueType: R_Type): R_Type(valueType.name + "?") {
                 || type == R_NullType
                 || (type is R_NullableType && valueType.isAssignableFrom(type.valueType))
                 || valueType.isAssignableFrom(type)
+    }
+
+    override fun getTypeAdapter(sourceType: R_Type): R_TypeAdapter? {
+        var adapter = super.getTypeAdapter(sourceType)
+        if (adapter != null) {
+            return adapter
+        }
+
+        if (sourceType is R_NullableType) {
+            adapter = valueType.getTypeAdapter(sourceType.valueType)
+            return if (adapter == null) null else R_TypeAdapter_Nullable(this, adapter)
+        } else {
+            return valueType.getTypeAdapter(sourceType)
+        }
     }
 
     override fun createGtvConversion() = GtvRtConversion_Nullable(this)

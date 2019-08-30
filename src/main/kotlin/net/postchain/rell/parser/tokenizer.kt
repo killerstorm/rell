@@ -4,6 +4,9 @@ import com.github.h0tk3y.betterParse.lexer.TokenMatch
 import com.github.h0tk3y.betterParse.lexer.Tokenizer
 import com.github.h0tk3y.betterParse.utils.cached
 import net.postchain.rell.CommonUtils
+import net.postchain.rell.runtime.Rt_DecimalUtils
+import net.postchain.rell.runtime.Rt_DecimalValue
+import net.postchain.rell.runtime.Rt_Value
 import java.io.InputStream
 import java.util.*
 import kotlin.coroutines.experimental.buildSequence
@@ -11,6 +14,7 @@ import kotlin.coroutines.experimental.buildSequence
 class RellTokenizer(private val tokensEx: List<RellToken>) : Tokenizer {
     val tkIdentifier: RellToken
     val tkInteger: RellToken
+    val tkDecimal: RellToken
     val tkString: RellToken
     val tkByteArray: RellToken
 
@@ -18,6 +22,8 @@ class RellTokenizer(private val tokensEx: List<RellToken>) : Tokenizer {
     val tkDelims: List<RellToken>
 
     override val tokens = tokensEx.map { it.token }
+
+    private val buffer = StringBuilder()
 
     init {
         require(tokens.isNotEmpty()) { "The tokens list should not be empty" }
@@ -44,6 +50,7 @@ class RellTokenizer(private val tokensEx: List<RellToken>) : Tokenizer {
 
         tkIdentifier = generals.getValue(IDENTIFIER)
         tkInteger = generals.getValue(INTEGER)
+        tkDecimal = generals.getValue(DECIMAL)
         tkString = generals.getValue(STRING)
         tkByteArray = generals.getValue(BYTEARRAY)
 
@@ -79,18 +86,17 @@ class RellTokenizer(private val tokensEx: List<RellToken>) : Tokenizer {
 
         seq.keepPos()
 
-        if (isDigit(k) || (k == '0' && seq.afterCur() == 'x')) {
-            scanWhileTrue(seq) { isDigit(it) || (it >= 'A' && it <= 'Z') || (it >= 'a' && it <= 'z') }
-            val s = seq.text(0, 0)
-            val pos = seq.startPos()
-            val tk = seq.tokenMatch(tkInteger, s)
-            decodeInteger(pos, tk.text) // Fail early - will throw an exception is the number is wrong
+        if (k == '0' && seq.afterCur() == 'x') {
+            val tk = scanHexLiteral(seq)
+            return tk
+        } else if (isDigit(k) || k == '.' && isDigit(seq.afterCur())) {
+            val tk = scanNumericLiteral(seq)
             return tk
         } else if (k == 'x' && (seq.afterCur() == '\'' || seq.afterCur() == '"')) {
             val s = scanByteArrayLiteral(seq)
             val pos = seq.startPos()
             val tk = seq.tokenMatch(tkByteArray, s)
-            decodeByteArray(pos, tk.text) // Fail early - will throw an exception is the number is wrong
+            decodeByteArray(pos, tk.text) // Fail early - will throw an exception if the token is invalid.
             return tk
         } else if (Character.isJavaIdentifierStart(k)) {
             scanWhileTrue(seq, Character::isJavaIdentifierPart)
@@ -153,11 +159,89 @@ class RellTokenizer(private val tokensEx: List<RellToken>) : Tokenizer {
         }
     }
 
+    private fun scanHexLiteral(seq: CharSeq): TokenMatch {
+        seq.next()
+        seq.next()
+        scanWhileTrue(seq) { isHexDigit(it) }
+        scanNumberEnd(seq)
+
+        val s = seq.text(0, 0)
+        val pos = seq.startPos()
+        val tk = seq.tokenMatch(tkInteger, s)
+        decodeInteger(pos, tk.text) // Fail early - will throw an exception if the number is invalid.
+
+        return tk
+    }
+
+    private fun scanNumericLiteral(seq: CharSeq): TokenMatch {
+        val decimal = scanNumericLiteral0(seq)
+
+        val pos = seq.startPos()
+
+        if (decimal) {
+            val s = seq.text(0, 0)
+            val tk = seq.tokenMatch(tkDecimal, s)
+            decodeDecimal(pos, tk.text) // Fail early - will throw an exception if the number is invalid.
+            return tk
+        } else {
+            val s = seq.text(0, 0)
+            val tk = seq.tokenMatch(tkInteger, s)
+            decodeInteger(pos, tk.text) // Fail early - will throw an exception if the number is invalid.
+            return tk
+        }
+    }
+
+    private fun scanNumericLiteral0(seq: CharSeq): Boolean {
+        scanWhileTrue(seq) { isDigit(it) }
+
+        var decimal = false
+
+        var k = seq.cur()
+        if (k == null) {
+            return false
+        }
+
+        if (k == '.') {
+            seq.next()
+            if (!isDigit(seq.cur())) {
+                throw seq.err("lex:number:no_digit_after_point", "Invalid number: no digit after decimal point")
+            }
+            scanWhileTrue(seq) { isDigit(it) }
+            decimal = true
+        }
+
+        k = seq.cur()
+        if (k == 'E' || k == 'e') {
+            seq.next()
+            k = seq.cur()
+            if (k == '+' || k == '-') {
+                seq.next()
+                k = seq.cur()
+            }
+            if (!isDigit(k)) {
+                throw seq.err("lex:number:no_digit_after_exp", "Invalid number: no digit after E")
+            }
+            scanWhileTrue(seq) { isDigit(it) }
+            decimal = true
+        }
+
+        scanNumberEnd(seq)
+        return decimal
+    }
+
+    private fun scanNumberEnd(seq: CharSeq) {
+        var r = seq.cur()
+        if (r != null && Character.isJavaIdentifierPart(r)) {
+            throw seq.err("lex:number_end", "Invalid numeric literal")
+        }
+    }
+
     private fun scanStringLiteral(seq: CharSeq): String {
         val q = seq.cur()
         seq.next()
 
-        val buf = StringBuilder()
+        val buf = buffer
+        buf.setLength(0)
 
         while (true) {
             val k = seq.cur()
@@ -224,7 +308,8 @@ class RellTokenizer(private val tokensEx: List<RellToken>) : Tokenizer {
         val q = seq.cur()
         seq.next()
 
-        val buf = StringBuilder()
+        val buf = buffer
+        buf.setLength(0)
 
         while (true) {
             val c = seq.cur()
@@ -253,7 +338,6 @@ class RellTokenizer(private val tokensEx: List<RellToken>) : Tokenizer {
     }
 
     private fun scanWhileTrue(seq: CharSeq, predicate: (Char) -> Boolean) {
-        seq.next()
         while (true) {
             val k = seq.cur()
             if (k == null || !predicate(k)) break
@@ -263,14 +347,18 @@ class RellTokenizer(private val tokensEx: List<RellToken>) : Tokenizer {
 
     private fun isGeneralToken(s: String) = s.matches(Regex("<[A-Z0-9_]+>"))
 
-    private fun isDigit(c: Char) = c >= '0' && c <= '9'
+    private fun isDigit(c: Char?) = c != null && c >= '0' && c <= '9'
+    private fun isHexDigit(c: Char) = isDigit(c) || c >= 'A' && c <= 'F' || c >= 'a' && c <= 'f'
     private fun isDelim(c: Char) = "~!@#$%^&*()-=+[]{}|;:,.<>/?".contains(c)
 
     companion object {
-        val IDENTIFIER = "<IDENTIFIER>"
-        val INTEGER = "<INTEGER>"
-        val STRING = "<STRING>"
-        val BYTEARRAY = "<BYTEARRAY>"
+        const val IDENTIFIER = "<IDENTIFIER>"
+        const val INTEGER = "<INTEGER>"
+        const val DECIMAL = "<DECIMAL>"
+        const val STRING = "<STRING>"
+        const val BYTEARRAY = "<BYTEARRAY>"
+
+        private const val MAX_DECIMAL_LITERAL_LENGTH = 1000
 
         fun decodeInteger(pos: S_Pos, s: String): Long {
             return try {
@@ -282,6 +370,27 @@ class RellTokenizer(private val tokensEx: List<RellToken>) : Tokenizer {
             } catch (e: NumberFormatException) {
                 throw C_Error(pos, "lex:int:$s", "Invalid integer literal: '$s'")
             }
+        }
+
+        fun decodeDecimal(pos: S_Pos, s: String): Rt_Value {
+            val len = s.length
+            if (len > MAX_DECIMAL_LITERAL_LENGTH) {
+                throw C_Error(pos, "lex:decimal:length:$len",
+                        "Decimal literal is too long: $len (max: $MAX_DECIMAL_LITERAL_LENGTH)")
+            }
+
+            val bd = try {
+                Rt_DecimalUtils.parse(s)
+            } catch (e: NumberFormatException) {
+                throw C_Error(pos, "lex:decimal:invalid:$s", "Invalid decimal literal: '$s'")
+            }
+
+            val v = Rt_DecimalValue.ofTry(bd)
+            if (v == null) {
+                throw C_Error(pos, "lex:decimal:range:$s", "Decimal literal value out of range")
+            }
+
+            return v
         }
 
         fun decodeString(pos: S_Pos, s: String): String {

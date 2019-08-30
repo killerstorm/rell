@@ -246,6 +246,9 @@ class LibTest: BaseRellTest(false) {
 
         chk("[123:'Hello'].len()", "ct_err:deprecated:FUNCTION:map<integer,text>.len:size")
         chkEx("{ [123:'Hello'].putAll([456:'Bye']); return 0; }", "ct_err:deprecated:FUNCTION:map<integer,text>.putAll:put_all")
+
+        chk("(123).signum()", "ct_err:deprecated:FUNCTION:integer.signum:sign")
+        chk("(123.0).signum()", "ct_err:deprecated:FUNCTION:decimal.signum:sign")
     }
 
     @Test fun testDeprecatedFunctionsGtv() {

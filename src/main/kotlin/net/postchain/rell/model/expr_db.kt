@@ -2,6 +2,7 @@ package net.postchain.rell.model
 
 import net.postchain.rell.CommonUtils
 import net.postchain.rell.parser.C_ClassAttrRef
+import net.postchain.rell.parser.C_Constants
 import net.postchain.rell.runtime.Rt_BooleanValue
 import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_NullValue
@@ -22,7 +23,8 @@ sealed class Db_BinaryOp(val code: String, val sql: String) {
             }
         }
 
-        return RedDb_BinaryExpr(this, redLeft, redRight)
+        val redExpr = RedDb_BinaryExpr(this, redLeft, redRight)
+        return RedDb_Utils.wrapDecimalExpr(type, redExpr)
     }
 }
 
@@ -38,11 +40,16 @@ object Db_BinaryOp_Lt: Db_BinaryOp("<", "<")
 object Db_BinaryOp_Gt: Db_BinaryOp(">", ">")
 object Db_BinaryOp_Le: Db_BinaryOp("<=", "<=")
 object Db_BinaryOp_Ge: Db_BinaryOp(">=", ">=")
-object Db_BinaryOp_Add: Db_BinaryOp("+", "+")
-object Db_BinaryOp_Sub: Db_BinaryOp("-", "-")
-object Db_BinaryOp_Mul: Db_BinaryOp("*", "*")
-object Db_BinaryOp_Div: Db_BinaryOp("/", "/")
-object Db_BinaryOp_Mod: Db_BinaryOp("%", "%")
+object Db_BinaryOp_Add_Integer: Db_BinaryOp("+", "+")
+object Db_BinaryOp_Add_Decimal: Db_BinaryOp("+", "+")
+object Db_BinaryOp_Sub_Integer: Db_BinaryOp("-", "-")
+object Db_BinaryOp_Sub_Decimal: Db_BinaryOp("-", "-")
+object Db_BinaryOp_Mul_Integer: Db_BinaryOp("*", "*")
+object Db_BinaryOp_Mul_Decimal: Db_BinaryOp("*", "*")
+object Db_BinaryOp_Div_Integer: Db_BinaryOp("/", "/")
+object Db_BinaryOp_Div_Decimal: Db_BinaryOp("/", "/")
+object Db_BinaryOp_Mod_Integer: Db_BinaryOp("%", "%")
+object Db_BinaryOp_Mod_Decimal: Db_BinaryOp("%", "%")
 object Db_BinaryOp_Concat: Db_BinaryOp("+", "||")
 object Db_BinaryOp_In: Db_BinaryOp("in", "IN")
 
@@ -66,7 +73,8 @@ object Db_BinaryOp_And: Db_BinaryOp_AndOr("and", "AND", false)
 object Db_BinaryOp_Or: Db_BinaryOp_AndOr("or", "OR", true)
 
 sealed class Db_UnaryOp(val code: String, val sql: String)
-object Db_UnaryOp_Minus: Db_UnaryOp("-", "-")
+object Db_UnaryOp_Minus_Integer: Db_UnaryOp("-", "-")
+object Db_UnaryOp_Minus_Decimal: Db_UnaryOp("-", "-")
 object Db_UnaryOp_Not: Db_UnaryOp("not", "NOT")
 
 sealed class Db_Expr(val type: R_Type) {
@@ -170,7 +178,8 @@ class Db_AttrExpr(val base: Db_TableExpr, val attr: R_Attrib): Db_Expr(attr.type
     }
 
     override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
-        return RedDb_AttrExpr(base, attr)
+        val redExpr = RedDb_AttrExpr(base, attr)
+        return RedDb_Utils.wrapDecimalExpr(type, redExpr)
     }
 
     private class RedDb_AttrExpr(val base: Db_TableExpr, val attr: R_Attrib): RedDb_Expr() {
@@ -397,11 +406,11 @@ class Db_ElvisExpr(type: R_Type, val left: R_Expr, val right: Db_Expr): Db_Expr(
     }
 }
 
-sealed class Db_SysFunction(val name: String) {
+abstract class Db_SysFunction(val name: String) {
     abstract fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<RedDb_Expr>)
 }
 
-sealed class Db_SysFunction_Simple(name: String, val sql: String): Db_SysFunction(name) {
+abstract class Db_SysFn_Simple(name: String, val sql: String): Db_SysFunction(name) {
     override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<RedDb_Expr>) {
         bld.append(sql)
         bld.append("(")
@@ -412,7 +421,7 @@ sealed class Db_SysFunction_Simple(name: String, val sql: String): Db_SysFunctio
     }
 }
 
-sealed class Db_SysFn_Cast(name: String, val type: String): Db_SysFunction(name) {
+abstract class Db_SysFn_Cast(name: String, val type: String): Db_SysFunction(name) {
     override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<RedDb_Expr>) {
         check(args.size == 1)
         bld.append("((")
@@ -421,22 +430,74 @@ sealed class Db_SysFn_Cast(name: String, val type: String): Db_SysFunction(name)
     }
 }
 
-object Db_SysFn_Int_ToText: Db_SysFn_Cast("int.str", "TEXT")
-object Db_SysFn_Abs: Db_SysFunction_Simple("abs", "ABS")
-object Db_SysFn_Min: Db_SysFunction_Simple("min", "LEAST")
-object Db_SysFn_Max: Db_SysFunction_Simple("max", "GREATEST")
-object Db_SysFn_Text_Size: Db_SysFunction_Simple("text.len", "LENGTH")
-object Db_SysFn_Text_UpperCase: Db_SysFunction_Simple("text.len", "UPPER")
-object Db_SysFn_Text_LowerCase: Db_SysFunction_Simple("text.len", "LOWER")
-object Db_SysFn_ByteArray_Size: Db_SysFunction_Simple("byte_array.len", "LENGTH")
+object Db_SysFn_Int_ToText: Db_SysFn_Cast("int.to_text", "TEXT")
+object Db_SysFn_Abs_Integer: Db_SysFn_Simple("abs", "ABS")
+object Db_SysFn_Abs_Decimal: Db_SysFn_Simple("abs", "ABS")
+object Db_SysFn_Min_Integer: Db_SysFn_Simple("min", "LEAST")
+object Db_SysFn_Min_Decimal: Db_SysFn_Simple("min", "LEAST")
+object Db_SysFn_Max_Integer: Db_SysFn_Simple("max", "GREATEST")
+object Db_SysFn_Max_Decimal: Db_SysFn_Simple("max", "GREATEST")
+object Db_SysFn_Sign: Db_SysFn_Simple("sign", "SIGN")
+object Db_SysFn_Text_Size: Db_SysFn_Simple("text.len", "LENGTH")
+object Db_SysFn_Text_UpperCase: Db_SysFn_Simple("text.len", "UPPER")
+object Db_SysFn_Text_LowerCase: Db_SysFn_Simple("text.len", "LOWER")
+object Db_SysFn_ByteArray_Size: Db_SysFn_Simple("byte_array.len", "LENGTH")
 object Db_SysFn_Json: Db_SysFn_Cast("json", "JSONB")
-object Db_SysFn_Json_Str: Db_SysFn_Cast("json.str", "TEXT")
-object Db_SysFn_ToString: Db_SysFn_Cast("toString", "TEXT")
+object Db_SysFn_Json_ToText: Db_SysFn_Cast("json.to_text", "TEXT")
+object Db_SysFn_ToText: Db_SysFn_Cast("to_text", "TEXT")
+
+object Db_SysFn_Decimal {
+    object FromInteger: Db_SysFn_Cast("decimal(integer)", C_Constants.DECIMAL_SQL_TYPE_STR)
+    object FromText: Db_SysFn_Cast("decimal(text)", C_Constants.DECIMAL_SQL_TYPE_STR)
+
+    object Ceil: Db_SysFn_Simple("decimal.ceil", "CEIL")
+    object Floor: Db_SysFn_Simple("decimal.floor", "FLOOR")
+
+    object Round: Db_SysFunction("decimal.round") {
+        override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<RedDb_Expr>) {
+            check(args.size == 1 || args.size == 2)
+            bld.append("ROUND(")
+            args[0].toSql(ctx, bld)
+            if (args.size == 2) {
+                // Argument #2 has to be casted to INT, PostgreSQL doesn't allow BIGINT.
+                bld.append(", (")
+                args[1].toSql(ctx, bld)
+                bld.append(")::INT")
+            }
+            bld.append(")")
+        }
+    }
+
+    object Pow: Db_SysFn_Simple("decimal.pow", "POW")
+    object Sign: Db_SysFn_Simple("decimal.sign", "SIGN")
+    object Sqrt: Db_SysFn_Simple("decimal.sqrt", "SQRT")
+
+    object ToInteger: Db_SysFunction("decimal.to_integer") {
+        override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<RedDb_Expr>) {
+            check(args.size == 1)
+            bld.append("TRUNC(")
+            args[0].toSql(ctx, bld)
+            bld.append(")::BIGINT")
+        }
+    }
+
+    object ToText: Db_SysFunction("decimal.to_text") {
+        override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<RedDb_Expr>) {
+            // Using regexp to remove trailing zeros.
+            check(args.size == 1)
+            bld.append("REGEXP_REPLACE(")
+            args[0].toSql(ctx, bld)
+            // Clever regexp: can handle special cases like "0.0", "0.000000", etc.
+            bld.append(" :: TEXT, '(([.][0-9]*[1-9])(0+)\$)|([.]0+\$)', '\\2')")
+        }
+    }
+}
 
 class Db_CallExpr(type: R_Type, val fn: Db_SysFunction, val args: List<Db_Expr>): Db_Expr(type) {
     override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
         val redArgs = args.map { it.toRedExpr(frame) }
-        return RedDb_CallExpr(fn, redArgs)
+        val redExpr = RedDb_CallExpr(fn, redArgs)
+        return RedDb_Utils.wrapDecimalExpr(type, redExpr)
     }
 
     private class RedDb_CallExpr(val fn: Db_SysFunction, val args: List<RedDb_Expr>): RedDb_Expr() {
@@ -444,7 +505,7 @@ class Db_CallExpr(type: R_Type, val fn: Db_SysFunction, val args: List<Db_Expr>)
     }
 }
 
-private object RedDb_Utils {
+object RedDb_Utils {
     fun makeRedDbBinaryExprChain(op: Db_BinaryOp, exprs: List<RedDb_Expr>): RedDb_Expr {
         return CommonUtils.foldSimple(exprs) { left, right -> RedDb_BinaryExpr(op, left, right) }
     }
@@ -456,6 +517,24 @@ private object RedDb_Utils {
             RedDb_BinaryExpr(Db_BinaryOp_Eq, left, right[0])
         } else {
             RedDb_InExpr(left, right)
+        }
+    }
+
+    fun wrapDecimalExpr(type: R_Type, redExpr: RedDb_Expr): RedDb_Expr {
+        return if (type != R_DecimalType || redExpr is RedDb_DecimalRoundExpr) {
+            redExpr
+        } else {
+            RedDb_DecimalRoundExpr(redExpr)
+        }
+    }
+
+    private class RedDb_DecimalRoundExpr(private val expr: RedDb_Expr): RedDb_Expr() {
+        override fun constantValue(): Rt_Value? = expr.constantValue()
+
+        override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
+            bld.append("ROUND(")
+            expr.toSql(ctx, bld)
+            bld.append(", ${C_Constants.DECIMAL_FRAC_DIGITS})")
         }
     }
 }

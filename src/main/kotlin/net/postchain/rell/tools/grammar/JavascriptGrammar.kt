@@ -21,6 +21,7 @@ fun main(args: Array<String>) {
     println("        \"generals\": {")
     println("            \"IDENTIFIER\": \"${tokenizer.tkIdentifier.name}\",")
     println("            \"INTEGER\": \"${tokenizer.tkInteger.name}\",")
+    println("            \"DECIMAL\": \"${tokenizer.tkDecimal.name}\",")
     println("            \"STRING\": \"${tokenizer.tkString.name}\",")
     println("            \"BYTE_ARRAY\": \"${tokenizer.tkByteArray.name}\",")
     println("        },")
@@ -36,11 +37,13 @@ fun main(args: Array<String>) {
     println("        },")
     println("    },")
 
-    val parsers = MapUtils.invertMap(GrammarUtils.getParsers())
+    val nameToParser = GrammarUtils.getParsers()
+    val parserToName = MapUtils.invertMap(nameToParser)
 
     println("    \"syntax\": {")
-    for ((parser, name) in parsers) {
-        val js = parserToJavascript(parsers, parser, true)
+    for (name in nameToParser.keys.sorted()) {
+        val parser = nameToParser.getValue(name)
+        val js = parserToJavascript(parserToName, parser, true)
         println("        \"$name\": $js,")
     }
     println("    },")

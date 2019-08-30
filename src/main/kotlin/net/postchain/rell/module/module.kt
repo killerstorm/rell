@@ -21,7 +21,7 @@ import net.postchain.rell.sql.SqlInit
 import org.apache.commons.lang3.time.FastDateFormat
 
 val RELL_LANG_VERSION = "0.9"
-val RELL_VERSION = "0.9.0"
+val RELL_VERSION = "0.9.1"
 
 val CONFIG_RELL_FILES = "files_v$RELL_LANG_VERSION"
 val CONFIG_RELL_SOURCES = "sources_v$RELL_LANG_VERSION"

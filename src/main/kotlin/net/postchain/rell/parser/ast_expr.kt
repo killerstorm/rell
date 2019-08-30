@@ -25,8 +25,12 @@ class S_ByteArrayLiteralExpr(pos: S_Pos, val bytes: ByteArray): S_Expr(pos) {
     override fun compile(ctx: C_ExprContext): C_Expr = C_RValue.makeExpr(startPos, R_ConstantExpr.makeBytes(bytes))
 }
 
-class S_IntLiteralExpr(pos: S_Pos, val value: Long): S_Expr(pos) {
+class S_IntegerLiteralExpr(pos: S_Pos, val value: Long): S_Expr(pos) {
     override fun compile(ctx: C_ExprContext): C_Expr = C_RValue.makeExpr(startPos, R_ConstantExpr.makeInt(value))
+}
+
+class S_DecimalLiteralExpr(pos: S_Pos, val value: Rt_Value): S_Expr(pos) {
+    override fun compile(ctx: C_ExprContext): C_Expr = C_RValue.makeExpr(startPos, R_ConstantExpr(value))
 }
 
 class S_BooleanLiteralExpr(pos: S_Pos, val value: Boolean): S_Expr(pos) {
@@ -210,13 +214,15 @@ class S_IfExpr(pos: S_Pos, val cond: S_Expr, val trueExpr: S_Expr, val falseExpr
         val trueFacts = condFacts.postFacts.and(condFacts.trueFacts)
         val falseFacts = condFacts.postFacts.and(condFacts.falseFacts)
 
-        val cTrue = trueExpr.compileWithFacts(ctx, trueFacts).value()
-        val cFalse = falseExpr.compileWithFacts(ctx, falseFacts).value()
+        val cTrue0 = trueExpr.compileWithFacts(ctx, trueFacts).value()
+        val cFalse0 = falseExpr.compileWithFacts(ctx, falseFacts).value()
+        val (cTrue, cFalse) = C_BinOp_Common.promoteNumeric(cTrue0, cFalse0)
 
         val truePostFacts = trueFacts.and(cTrue.varFacts().postFacts)
         val falsePostFacts = falseFacts.and(cFalse.varFacts().postFacts)
         val resPostFacts = condFacts.postFacts.and(C_VarFacts.forBranches(ctx, listOf(truePostFacts, falsePostFacts)))
         val resFacts = C_ExprVarFacts.of(postFacts = resPostFacts)
+
         return Triple(cTrue, cFalse, resFacts)
     }
 
@@ -397,14 +403,17 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
     }
 
     private fun compileExprs(ctx: C_ExprContext, caseFacts: List<C_VarFacts>): Pair<R_Type, List<C_Value>> {
-        val cValues = cases.mapIndexed { i, case ->
+        val cValuesRaw = cases.mapIndexed { i, case ->
             case.expr.compileWithFacts(ctx, caseFacts[i]).value()
         }
+
+        val cValues = C_BinOp_Common.promoteNumeric(cValuesRaw)
 
         val type = cValues.withIndex().fold(cValues[0].type()) { t, (i, value) ->
             S_Type.commonType(t, value.type(), cases[i].expr.startPos, "expr_when_incompatible_type",
                     "When case expressions have incompatible types")
         }
+
         return Pair(type, cValues)
     }
 

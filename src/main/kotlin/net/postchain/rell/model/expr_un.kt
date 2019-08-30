@@ -1,18 +1,22 @@
 package net.postchain.rell.model
 
-import net.postchain.rell.runtime.Rt_BooleanValue
-import net.postchain.rell.runtime.Rt_CallFrame
-import net.postchain.rell.runtime.Rt_IntValue
-import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.runtime.*
 
 sealed class R_UnaryOp {
     abstract fun evaluate(operand: Rt_Value): Rt_Value
 }
 
-object R_UnaryOp_Minus: R_UnaryOp() {
+object R_UnaryOp_Minus_Integer: R_UnaryOp() {
     override fun evaluate(operand: Rt_Value): Rt_Value {
         val v = operand.asInteger()
         return Rt_IntValue(-v)
+    }
+}
+
+object R_UnaryOp_Minus_Decimal: R_UnaryOp() {
+    override fun evaluate(operand: Rt_Value): Rt_Value {
+        val v = operand.asDecimal()
+        return Rt_DecimalValue.of(v.negate())
     }
 }
 
@@ -20,20 +24,6 @@ object R_UnaryOp_Not: R_UnaryOp() {
     override fun evaluate(operand: Rt_Value): Rt_Value {
         val v = operand.asBoolean()
         return Rt_BooleanValue(!v)
-    }
-}
-
-object R_UnaryOp_Increment: R_UnaryOp() {
-    override fun evaluate(operand: Rt_Value): Rt_Value {
-        val v = operand.asInteger()
-        return Rt_IntValue(v + 1)
-    }
-}
-
-object R_UnaryOp_Decrement: R_UnaryOp() {
-    override fun evaluate(operand: Rt_Value): Rt_Value {
-        val v = operand.asInteger()
-        return Rt_IntValue(v - 1)
     }
 }
 

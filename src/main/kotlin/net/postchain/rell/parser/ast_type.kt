@@ -17,6 +17,14 @@ sealed class S_Type {
             }
         }
 
+        fun adapt(dstType: R_Type, srcType: R_Type, errPos: S_Pos, errCode: String, errMsg: String): R_TypeAdapter {
+            val adapter = dstType.getTypeAdapter(srcType)
+            if (adapter == null) {
+                throw C_Errors.errTypeMismatch(errPos, srcType, dstType, errCode, errMsg)
+            }
+            return adapter
+        }
+
         fun commonType(a: R_Type, b: R_Type, errPos: S_Pos, errCode: String, errMsg: String): R_Type {
             val res = R_Type.commonTypeOpt(a, b)
             return res ?: throw C_Errors.errTypeMismatch(errPos, b, a, errCode, errMsg)

@@ -15,7 +15,10 @@ object C_AttributeResolver {
         val types = rExprs.map { it.type }
 
         val attrs = matchCreateAttrs(attributes, exprs, types)
-        val attrExprs = attrs.mapIndexed { idx, attr -> R_CreateExprAttr_Specified(attr, rExprs[idx]) }
+        val attrExprs = attrs.mapIndexed { idx, attr ->
+            val rExpr = rExprs[idx]
+            R_CreateExprAttr_Specified(attr, rExpr)
+        }
 
         val attrExprsDef = attrExprs + matchDefaultExprs(attributes, attrExprs)
         checkMissingAttrs(attributes, attrExprsDef, pos)
@@ -32,7 +35,11 @@ object C_AttributeResolver {
         return C_CreateAttributes(attrExprsDef, exprFacts)
     }
 
-    private fun matchCreateAttrs(attributes: Map<String, R_Attrib>, exprs: List<S_NameExprPair>, types: List<R_Type>): List<R_Attrib> {
+    private fun matchCreateAttrs(
+            attributes: Map<String, R_Attrib>,
+            exprs: List<S_NameExprPair>,
+            types: List<R_Type>
+    ): List<R_Attrib> {
         val explicitExprs = matchExplicitExprs(attributes, exprs, false)
         checkExplicitExprTypes(exprs, explicitExprs, types)
         return matchImplicitExprs(attributes, exprs, types, explicitExprs, false)

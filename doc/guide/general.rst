@@ -10,6 +10,7 @@ Simple types:
 
 -  ``boolean``
 -  ``integer``
+-  ``decimal``
 -  ``text``
 -  ``byte_array``
 -  ``rowid`` - primary key of a database record, 64-bit integer, supports only comparison operations
@@ -125,6 +126,57 @@ Following types are mutable:
 -  Nullable type - only if the underlying type is mutable.
 -  Record type - if the record has a mutable field, or a field of a mutable type.
 -  Tuple - if a type of an element is mutable.
+
+decimal
+-------------
+
+A real number of up to 20 digits after the decimal point and up to 131072 digits before the decimal point.
+
+It is not a normal floating-point type found in many other languages (like ``float`` and ``double`` in
+C/C++/Java):
+
+- ``decimal`` type is accurate when working with numbers within its range. For example, in Java and Javascript,
+  expressions ``1E+20 + 1 - 1E+20`` and ``1.0 - 0.1 - 0.1 - 0.1`` return an inaccurate result, while ``decimal`` result
+  is accurate.
+- Numbers are stored in a decimal form, not in a binary form, so conversions to and from a string are lossless (except when
+  rounding occurs if there are more than 20 digits after the point).
+- Floating-point types allow to store much smaller numbers, like ``1E-300``; ``decimal`` can only store ``1E-20``,
+  but not a smaller nonzero number.
+- ``decimal`` operations are way slower (10 times and more).
+- Floating-point types have fixed size (8 bytes for ``double``), while ``decimal`` has a variable size and needs a lot of
+  space for large numbers (~120B for ``1E+300 - 1`` or ~54KiB for ``1E+131071 - 1``).
+
+In the code one can use decimal literals:
+
+::
+
+    123.456
+    0.123
+    .456
+    33E+10
+    55.77e-5
+
+Such numbers have ``decimal`` type. Simple numbers without a decimal point and exponent, like 12345, have ``integer``
+type.
+
+Common operations:
+
+- Conversions: functions ``decimal(text)``, ``decimal(integer)``, ``integer(decimal)``, ``decimal.to_integer()``.
+- Arithmetic: ``+``, ``-``, ``*``, ``/``, ``%``.
+- Rounding: ``decimal.ceil()``, ``decimal.floor()``, ``decimal.round()``.
+
+See the `Library <library.html>`_ page for the full list.
+
+Some features:
+
+- All decimal numbers (results of decimal operations) are implicitly rounded to 20 decimal places. For instance,
+  ``decimal('1E-20')`` returns a non-zero, while ``decimal('1E-21')`` returns a zero value.
+- Operations on decimal numbers may be considerably slower than integer operations (at least 10 times slower for
+  same integer numbers).
+- Large decimal numbers may require a lot of space: ~0.41 bytes per decimal digit (~54KiB for 1E+131071) in memory and
+  ~0.5 bytes per digit in a database.
+- Internally, the type ``java.lang.BigDecimal`` is used in the interpreter, and ``NUMERIC`` in SQL.
+
 
 gtv
 --------
@@ -987,4 +1039,4 @@ Multiline comment:
 
 --------------
 
-*Rell v0.9.0*
+*Rell v0.9.1*

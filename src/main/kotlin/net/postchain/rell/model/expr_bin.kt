@@ -2,6 +2,7 @@ package net.postchain.rell.model
 
 import com.google.common.math.LongMath
 import net.postchain.rell.runtime.*
+import java.math.BigDecimal
 
 sealed class R_CmpOp(val code: String, val checker: (Int) -> Boolean) {
     fun check(cmp: Int): Boolean = checker(cmp)
@@ -20,6 +21,14 @@ object R_CmpType_Integer: R_CmpType() {
     override fun compare(left: Rt_Value, right: Rt_Value): Int {
         val l = left.asInteger()
         val r = right.asInteger()
+        return l.compareTo(r)
+    }
+}
+
+object R_CmpType_Decimal: R_CmpType() {
+    override fun compare(left: Rt_Value, right: Rt_Value): Int {
+        val l = left.asDecimal()
+        val r = right.asDecimal()
         return l.compareTo(r)
     }
 }
@@ -166,48 +175,59 @@ class R_BinaryExpr(type: R_Type, val op: R_BinaryOp, val left: R_Expr, val right
     }
 }
 
-sealed class R_BinaryOp_Arith(code: String): R_BinaryOp(code) {
+sealed class R_BinaryOp_Arith_Integer(code: String): R_BinaryOp(code) {
     abstract fun evaluate(left: Long, right: Long): Long
 
     override final fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value {
         val leftVal = left.asInteger()
         val rightVal = right.asInteger()
-        val resVal = evaluate(leftVal, rightVal)
+
+        val resVal = try {
+            evaluate(leftVal, rightVal)
+        } catch (e: ArithmeticException) {
+            throw errIntOverflow(code, leftVal, rightVal)
+        }
+
         return Rt_IntValue(resVal)
     }
 }
 
-object R_BinaryOp_Add: R_BinaryOp_Arith("+") {
-    override fun evaluate(left: Long, right: Long): Long {
-        try {
-            return LongMath.checkedAdd(left, right)
-        } catch (e: ArithmeticException) {
-            throw Rt_Error("expr:+:overflow:$left:$right", "Integer overflow: $left + $right")
-        }
+sealed class R_BinaryOp_Arith_Decimal(code: String): R_BinaryOp(code) {
+    abstract fun evaluate(left: BigDecimal, right: BigDecimal): BigDecimal
+
+    override final fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value {
+        val leftVal = left.asDecimal()
+        val rightVal = right.asDecimal()
+        val resVal = evaluate(leftVal, rightVal)
+        return Rt_DecimalValue.ofTry(resVal) ?: throw errDecOverflow(code)
     }
 }
 
-object R_BinaryOp_Sub: R_BinaryOp_Arith("-") {
-    override fun evaluate(left: Long, right: Long): Long {
-        try {
-            return LongMath.checkedSubtract(left, right)
-        } catch (e: ArithmeticException) {
-            throw Rt_Error("expr:-:overflow:$left:$right", "Integer overflow: $left - $right")
-        }
-    }
+object R_BinaryOp_Add_Integer: R_BinaryOp_Arith_Integer("+") {
+    override fun evaluate(left: Long, right: Long) = LongMath.checkedAdd(left, right)
 }
 
-object R_BinaryOp_Mul: R_BinaryOp_Arith("*") {
-    override fun evaluate(left: Long, right: Long): Long {
-        try {
-            return LongMath.checkedMultiply(left, right)
-        } catch (e: ArithmeticException) {
-            throw Rt_Error("expr:*:overflow:$left:$right", "Integer overflow: $left * $right")
-        }
-    }
+object R_BinaryOp_Add_Decimal: R_BinaryOp_Arith_Decimal("+") {
+    override fun evaluate(left: BigDecimal, right: BigDecimal) = Rt_DecimalUtils.add(left, right)
 }
 
-object R_BinaryOp_Div: R_BinaryOp_Arith("/") {
+object R_BinaryOp_Sub_Integer: R_BinaryOp_Arith_Integer("-") {
+    override fun evaluate(left: Long, right: Long) = LongMath.checkedSubtract(left, right)
+}
+
+object R_BinaryOp_Sub_Decimal: R_BinaryOp_Arith_Decimal("-") {
+    override fun evaluate(left: BigDecimal, right: BigDecimal) = Rt_DecimalUtils.subtract(left, right)
+}
+
+object R_BinaryOp_Mul_Integer: R_BinaryOp_Arith_Integer("*") {
+    override fun evaluate(left: Long, right: Long) = LongMath.checkedMultiply(left, right)
+}
+
+object R_BinaryOp_Mul_Decimal: R_BinaryOp_Arith_Decimal("*") {
+    override fun evaluate(left: BigDecimal, right: BigDecimal) = Rt_DecimalUtils.multiply(left, right)
+}
+
+object R_BinaryOp_Div_Integer: R_BinaryOp_Arith_Integer("/") {
     override fun evaluate(left: Long, right: Long): Long {
         if (right == 0L) {
             throw Rt_Error("expr:/:div0:$left", "Division by zero: $left / $right")
@@ -216,12 +236,30 @@ object R_BinaryOp_Div: R_BinaryOp_Arith("/") {
     }
 }
 
-object R_BinaryOp_Mod: R_BinaryOp_Arith("%") {
+object R_BinaryOp_Div_Decimal: R_BinaryOp_Arith_Decimal("/") {
+    override fun evaluate(left: BigDecimal, right: BigDecimal): BigDecimal {
+        if (right.signum() == 0) {
+            throw Rt_Error("expr:/:div0", "Decimal division by zero: operator '/'")
+        }
+        return Rt_DecimalUtils.divide(left, right)
+    }
+}
+
+object R_BinaryOp_Mod_Integer: R_BinaryOp_Arith_Integer("%") {
     override fun evaluate(left: Long, right: Long): Long {
         if (right == 0L) {
             throw Rt_Error("expr:%:div0:$left", "Division by zero: $left % $right")
         }
         return left % right
+    }
+}
+
+object R_BinaryOp_Mod_Decimal: R_BinaryOp_Arith_Decimal("%") {
+    override fun evaluate(left: BigDecimal, right: BigDecimal): BigDecimal {
+        if (right.signum() == 0) {
+            throw Rt_Error("expr:%:div0", "Decimal division by zero: operator '%'")
+        }
+        return Rt_DecimalUtils.remainder(left, right)
     }
 }
 
@@ -283,4 +321,12 @@ object R_BinaryOp_In_Range: R_BinaryOp("in") {
         val r = c.contains(x)
         return Rt_BooleanValue(r)
     }
+}
+
+private fun errIntOverflow(op: String, left: Long, right: Long): Rt_Error {
+    return Rt_Error("expr:$op:overflow:$left:$right", "Integer overflow: $left $op $right")
+}
+
+private fun errDecOverflow(op: String): Rt_Error {
+    return Rt_DecimalValue.errOverflow("expr:$op:overflow", "Decimal overflow in operator '$op'")
 }

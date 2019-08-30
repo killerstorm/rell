@@ -9,7 +9,7 @@ import org.junit.runners.Suite
 // test suite as a workaround. To be deleted when the plugin is fixed.
 
 @Suite.SuiteClasses(
-        AtExprOpTest::class,
+        OperatorsDbTest::class,
         AtExprPathTest::class,
         AtExprTest::class,
         ClassTest::class,
@@ -19,7 +19,7 @@ import org.junit.runners.Suite
         ExternalTest::class,
         IncludeTest::class,
         IncrementTest::class,
-        InterpOpTest::class,
+        OperatorsInterpretedTest::class,
         LogAnnotationTest::class,
         ModuleTest::class,
         NamespaceTest::class,

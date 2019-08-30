@@ -4,9 +4,24 @@ import com.github.h0tk3y.betterParse.parser.ParseException
 import com.github.h0tk3y.betterParse.parser.parseToEnd
 import net.postchain.rell.CommonUtils
 import net.postchain.rell.model.*
+import org.jooq.impl.SQLDataType
+import java.math.BigDecimal
 import java.util.*
 
 class C_CommonError(val code: String, val msg: String): RuntimeException(msg)
+
+object C_Constants {
+    const val DECIMAL_INT_DIGITS = 131072
+    const val DECIMAL_FRAC_DIGITS = 20
+    const val DECIMAL_SQL_TYPE_STR = "NUMERIC"
+    val DECIMAL_SQL_TYPE = SQLDataType.DECIMAL
+
+    const val DECIMAL_PRECISION = DECIMAL_INT_DIGITS + DECIMAL_FRAC_DIGITS
+
+    val DECIMAL_MIN_VALUE = BigDecimal.ONE.divide(BigDecimal.TEN.pow(DECIMAL_FRAC_DIGITS))
+    val DECIMAL_MAX_VALUE = BigDecimal.TEN.pow(DECIMAL_PRECISION).subtract(BigDecimal.ONE)
+            .divide(BigDecimal.TEN.pow(DECIMAL_FRAC_DIGITS))
+}
 
 object C_Utils {
     fun toDbExpr(pos: S_Pos, rExpr: R_Expr): Db_Expr {
@@ -101,8 +116,26 @@ object C_Utils {
     }
 
     fun crashExpr(type: R_Type, msg: String): R_Expr {
-        val fn = R_SysFn_ThrowCrash(msg)
+        val fn = R_SysFn_Internal.ThrowCrash(msg)
         return R_SysCallExpr(type, fn, listOf())
+    }
+
+    fun integerToDecimalPromotion(value: C_Value): C_Value {
+        val type = value.type()
+        if (type == R_DecimalType) {
+            return value
+        }
+        check(type == R_IntegerType) { "Expected $R_DecimalType, but was $type" }
+
+        if (value.isDb()) {
+            val dbExpr = value.toDbExpr()
+            val dbResExpr = Db_CallExpr(R_DecimalType, Db_SysFn_Decimal.FromInteger, listOf(dbExpr))
+            return C_DbValue(value.pos, dbResExpr, value.varFacts())
+        } else {
+            val rExpr = value.toRExpr()
+            val rResExpr = R_SysCallExpr(R_DecimalType, R_SysFn_Decimal.FromInteger, listOf(rExpr))
+            return C_RValue(value.pos, rResExpr, value.varFacts())
+        }
     }
 
     fun fullName(namespaceName: String?, name: String) = if (namespaceName == null) name else (namespaceName + "." + name)

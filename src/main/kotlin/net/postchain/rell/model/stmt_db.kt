@@ -211,7 +211,11 @@ sealed class R_BaseUpdateStatement(val target: R_UpdateTarget): R_Statement() {
 class R_UpdateStatement(target: R_UpdateTarget, val what: List<R_UpdateStatementWhat>): R_BaseUpdateStatement(target) {
     override fun buildSql(frame: Rt_CallFrame, ctx: SqlGenContext, returning: Boolean): ParameterizedSql {
         val redWhere = target.where()?.toRedExpr(frame)
-        val redWhat = what.map { it.expr.toRedExpr(frame) }
+
+        val redWhat = what.map {
+            val redExpr = it.expr.toRedExpr(frame)
+            RedDb_Utils.wrapDecimalExpr(it.expr.type, redExpr)
+        }
 
         val fromInfo = buildFromInfo(ctx, redWhere, redWhat)
         val b = SqlBuilder()

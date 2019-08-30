@@ -7,9 +7,10 @@ import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.NoConnSqlExecutor
 import net.postchain.rell.test.RellTestUtils
 import org.junit.Test
+import java.math.BigDecimal
 import kotlin.test.assertEquals
 
-class InterpOpTest: AbstractOpTest() {
+class OperatorsInterpretedTest: OperatorsBaseTest() {
     @Test fun testPlus2() {
         chkOp("+", vBytes("0123ABCD"), vText("Hello"), "text[0x0123abcdHello]")
         chkOp("+", vText("Hello"), vBytes("0123ABCD"), "text[Hello0x0123abcd]")
@@ -78,11 +79,11 @@ class InterpOpTest: AbstractOpTest() {
 
     private fun paramName(idx: Int) = "" + ('a' + idx)
 
-    override fun integerOverflowMsg(op: String, left: Long, right: Long) = "rt_err:expr:$op:overflow:$left:$right"
-    override fun integerDivZeroMsg(left: Long) = "rt_err:expr:/:div0:$left"
+    override fun errRt(code: String) = "rt_err:$code"
 
     override fun vBool(v: Boolean): TstVal = InterpTstVal.Bool(v)
     override fun vInt(v: Long): TstVal = InterpTstVal.Integer(v)
+    override fun vDec(v: BigDecimal): TstVal = InterpTstVal.Decimal(v)
     override fun vText(v: String): TstVal = InterpTstVal.Text(v)
     override fun vBytes(v: String): TstVal = InterpTstVal.Bytes(v)
     override fun vRowid(v: Long): TstVal = InterpTstVal.Rowid(v)
@@ -98,6 +99,10 @@ class InterpOpTest: AbstractOpTest() {
 
         class Integer(val v: Long): InterpTstVal("integer") {
             override fun rt(m: R_Module): Rt_Value = Rt_IntValue(v)
+        }
+
+        class Decimal(val v: BigDecimal): InterpTstVal("decimal") {
+            override fun rt(m: R_Module): Rt_Value = Rt_DecimalValue.of(v)
         }
 
         class Text(val v: String): InterpTstVal("text") {

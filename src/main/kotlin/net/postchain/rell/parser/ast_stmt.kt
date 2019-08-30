@@ -58,8 +58,10 @@ class S_SimpleVarDeclarator(val name: S_Name, val type: S_Type?): S_VarDeclarato
             C_Utils.checkUnitType(name.pos, rExprType, "stmt_var_unit:${name.str}", "Expression for '${name.str}' returns nothing")
         }
 
-        if (rExprType != null && rType != null) {
-            S_Type.match(rType, rExprType, name.pos, "stmt_var_type:${name.str}", "Type mismatch for '${name.str}'")
+        val typeAdapter = if (rExprType != null && rType != null) {
+            S_Type.adapt(rType, rExprType, name.pos, "stmt_var_type:${name.str}", "Type mismatch for '${name.str}'")
+        } else {
+            R_TypeAdapter_Direct
         }
 
         val rVarType = rType ?: rExprType!!
@@ -76,7 +78,7 @@ class S_SimpleVarDeclarator(val name: S_Name, val type: S_Type?): S_VarDeclarato
 
         varFacts.putFacts(facts)
 
-        return R_SimpleVarDeclarator(ptr, rVarType)
+        return R_SimpleVarDeclarator(ptr, rVarType, typeAdapter)
     }
 
     override fun discoverVars(vars: MutableSet<String>) {

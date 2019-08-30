@@ -98,6 +98,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val NULL by relltok("null")
 
     private val NUMBER by relltok(RellTokenizer.INTEGER) // Must be exactly INT for Eclipse coloring, but then Xtext assumes it's a decimal Integer
+    private val DECIMAL by relltok(RellTokenizer.DECIMAL)
     private val BYTES by relltok(RellTokenizer.BYTEARRAY)
     private val STRING by relltok(RellTokenizer.STRING) // Must be exactly STRING for Eclipse coloring
     private val ID by relltok(RellTokenizer.IDENTIFIER)
@@ -227,7 +228,9 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
     private val nameExpr by name map { S_NameExpr(it) }
     private val attrExpr by ( DOT * name ) map { (pos, name) -> S_AttrExpr(pos.pos, name) }
 
-    private val intExpr by NUMBER map { S_IntLiteralExpr(it.pos, RellTokenizer.decodeInteger(it.pos, it.text)) }
+    private val intExpr by NUMBER map { S_IntegerLiteralExpr(it.pos, RellTokenizer.decodeInteger(it.pos, it.text)) }
+
+    private val decimalExpr by DECIMAL map { S_DecimalLiteralExpr(it.pos, RellTokenizer.decodeDecimal(it.pos, it.text)) }
 
     private val stringExpr = STRING map { S_StringLiteralExpr(it.pos, RellTokenizer.decodeString(it.pos, it.text)) }
 
@@ -239,7 +242,7 @@ object S_Grammar : Grammar<S_ModuleDefinition>() {
 
     private val nullLiteralExpr by NULL map { S_NullLiteralExpr(it.pos) }
 
-    private val literalExpr by ( intExpr or stringExpr or bytesExpr or booleanLiteralExpr or nullLiteralExpr )
+    private val literalExpr by ( intExpr or decimalExpr or stringExpr or bytesExpr or booleanLiteralExpr or nullLiteralExpr )
 
     private val tupleExprField by ( optional(name * -ASSIGN) * expressionRef ) map { ( name, expr ) -> Pair(name, expr)  }
 

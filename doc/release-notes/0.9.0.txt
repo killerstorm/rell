@@ -253,7 +253,7 @@ Operators "+", "-", "*" now throw an exception in case of an overflow, i. e. whe
 64-bit signed integer number, which is:
 
 -9223372036854775808 to 9223372036854775807
-or 0x8000000000000000 to 0x7FFFFFFFFFFFFFFF
+or -0x8000000000000000 to 0x7FFFFFFFFFFFFFFF
 or -2^63 to 2^63-1
 (inclusive)
 

@@ -25,9 +25,10 @@ sealed class R_VarDeclarator {
     abstract fun initialize(frame: Rt_CallFrame, value: Rt_Value, overwrite: Boolean)
 }
 
-class R_SimpleVarDeclarator(val ptr: R_VarPtr, val type: R_Type): R_VarDeclarator() {
+class R_SimpleVarDeclarator(val ptr: R_VarPtr, val type: R_Type, val adapter: R_TypeAdapter): R_VarDeclarator() {
     override fun initialize(frame: Rt_CallFrame, value: Rt_Value, overwrite: Boolean) {
-        frame.set(ptr, type, value, overwrite)
+        val value2 = adapter.adaptValue(value)
+        frame.set(ptr, type, value2, overwrite)
     }
 }
 

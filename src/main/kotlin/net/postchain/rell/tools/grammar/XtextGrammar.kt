@@ -23,24 +23,28 @@ fun main(args: Array<String>) {
 private fun generateTerminals() {
     val tokenizer = S_Grammar.tokenizer
 
-    println("terminal ML_COMMENT: '/*' -> '*/';")
-    println("terminal SL_COMMENT: '//' !('\\n'|'\\r')* ('\\r'? '\\n')?;")
-    println("terminal WS: (' '|'\\t'|'\\r'|'\\n')+;")
-    println()
+    val text = """
+            terminal ML_COMMENT: '/*' -> '*/';
+            terminal SL_COMMENT: '//' !('\n'|'\r')* ('\r'? '\n')?;
+            terminal WS: (' '|'\t'|'\r'|'\n')+;
 
-    println("terminal ${tokenizer.tkIdentifier.name}: ('A'..'Z'|'a'..'z'|'_') ('A'..'Z'|'a'..'z'|'_'|'0'..'9')*;")
-    println()
+            terminal ${tokenizer.tkIdentifier.name}: ('A'..'Z'|'a'..'z'|'_') ('A'..'Z'|'a'..'z'|'_'|'0'..'9')*;
 
-    println("terminal HEXDIG: '0'..'9'|'A'..'F'|'a'..'f';")
-    println("terminal ${tokenizer.tkInteger.name}: ('0'..'9')+ | '0' 'x' HEXDIG+;")
-    println()
+            terminal DECNUM: ('0'..'9')+;
+            terminal EXPONENT: ('E'|'e') ('+'|'-')? DECNUM ;
+            terminal ${tokenizer.tkDecimal.name}: DECNUM? '.' DECNUM EXPONENT? | DECNUM EXPONENT ;
 
-    println("terminal ${tokenizer.tkByteArray.name}: 'x' (('\\'' (HEXDIG HEXDIG)* '\\'') | ('\"' (HEXDIG HEXDIG)* '\"'));")
-    println()
+            terminal HEXDIG: '0'..'9'|'A'..'F'|'a'..'f';
+            terminal ${tokenizer.tkInteger.name}: DECNUM | '0' 'x' HEXDIG+;
 
-    println("terminal STRCHAR: '\\t' | '\\\\' ('b'|'t'|'n'|'f'|'r'|'\"'|\"'\"|'\\\\' | 'u' HEXDIG HEXDIG HEXDIG HEXDIG);")
-    println("terminal STRBAD: '\\\\' | '\\u0000' .. '\\u001F';")
-    println("terminal ${tokenizer.tkString.name}: '\"' ( STRCHAR | !('\"'|STRBAD) )*  '\"' | \"'\" ( STRCHAR | !(\"'\"|STRBAD) )* \"'\";")
+            terminal ${tokenizer.tkByteArray.name}: 'x' (('\'' (HEXDIG HEXDIG)* '\'') | ('"' (HEXDIG HEXDIG)* '"'));
+
+            terminal STRCHAR: '\t' | '\\' ('b'|'t'|'n'|'f'|'r'|'"'|"'"|'\\' | 'u' HEXDIG HEXDIG HEXDIG HEXDIG);
+            terminal STRBAD: '\\' | '\u0000' .. '\u001F';
+            terminal ${tokenizer.tkString.name}: '"' ( STRCHAR | !('"'|STRBAD) )*  '"' | "'" ( STRCHAR | !("'"|STRBAD) )* "'";
+    """.trimIndent()
+
+    println(text.trim())
 }
 
 private fun generateNonterminals() {

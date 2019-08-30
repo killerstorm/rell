@@ -40,6 +40,49 @@ class LibGtvTest: BaseRellTest(false) {
         chkFromGtv("[123]", "integer.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
     }
 
+    @Test fun testToFromGtvDecimal() {
+        chk("(0.0).to_gtv()", """gtv["0"]""")
+        chk("(123.456).to_gtv()", """gtv["123.456"]""")
+        chk("(-456.789).to_gtv()", """gtv["-456.789"]""")
+        chk("(0.0).to_gtv_pretty()", """gtv["0"]""")
+        chk("(123.456e+53).to_gtv_pretty()", """gtv["12345600000000000000000000000000000000000000000000000000"]""")
+        chk("(123.456e-17).to_gtv_pretty()", """gtv["0.00000000000000123456"]""")
+
+        chkFromGtv("'0'", "decimal.from_gtv(g)", "dec[0]")
+        chkFromGtv("'0.0000'", "decimal.from_gtv(g)", "dec[0]")
+        chkFromGtv("'123.456'", "decimal.from_gtv(g)", "dec[123.456]")
+        chkFromGtv("'-456.789'", "decimal.from_gtv(g)", "dec[-456.789]")
+        chkFromGtv("'123.456'", "decimal.from_gtv_pretty(g)", "dec[123.456]")
+        chkFromGtv("'-456.789'", "decimal.from_gtv_pretty(g)", "dec[-456.789]")
+
+        chkFromGtv("'123.456E10'", "decimal.from_gtv(g)", "dec[1234560000000]")
+        chkFromGtv("'123.456E+10'", "decimal.from_gtv(g)", "dec[1234560000000]")
+        chkFromGtv("'123.456E-10'", "decimal.from_gtv(g)", "dec[0.0000000123456]")
+        chkFromGtv("'123.456e10'", "decimal.from_gtv(g)", "dec[1234560000000]")
+        chkFromGtv("'123.456e+10'", "decimal.from_gtv(g)", "dec[1234560000000]")
+        chkFromGtv("'123.456e-10'", "decimal.from_gtv(g)", "dec[0.0000000123456]")
+        chkFromGtv("'-123.456E10'", "decimal.from_gtv(g)", "dec[-1234560000000]")
+        chkFromGtv("'-123.456E+10'", "decimal.from_gtv(g)", "dec[-1234560000000]")
+        chkFromGtv("'-123.456E-10'", "decimal.from_gtv(g)", "dec[-0.0000000123456]")
+        chkFromGtv("'123E10'", "decimal.from_gtv(g)", "dec[1230000000000]")
+        chkFromGtv("'123E+10'", "decimal.from_gtv(g)", "dec[1230000000000]")
+        chkFromGtv("'123E-10'", "decimal.from_gtv(g)", "dec[0.0000000123]")
+        chkFromGtv("'-123E10'", "decimal.from_gtv(g)", "dec[-1230000000000]")
+        chkFromGtv("'-123E+10'", "decimal.from_gtv(g)", "dec[-1230000000000]")
+        chkFromGtv("'-123E-10'", "decimal.from_gtv(g)", "dec[-0.0000000123]")
+
+        chkFromGtv("0", "decimal.from_gtv(g)", "dec[0]")
+        chkFromGtv("123", "decimal.from_gtv(g)", "dec[123]")
+        chkFromGtv("-456", "decimal.from_gtv(g)", "dec[-456]")
+
+        chkFromGtv("'Hello'", "decimal.from_gtv(g)", "rt_err:from_gtv")
+        chkFromGtv("'Hello'", "decimal.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
+        chkFromGtv("[]", "decimal.from_gtv(g)", "rt_err:from_gtv")
+        chkFromGtv("[]", "decimal.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
+        chkFromGtv("[123]", "decimal.from_gtv(g)", "rt_err:from_gtv")
+        chkFromGtv("[123]", "decimal.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
+    }
+
     @Test fun testToFromGtvText() {
         chk("''.to_gtv()", """gtv[""]""")
         chk("'Hello'.to_gtv()", """gtv["Hello"]""")

@@ -4,11 +4,14 @@ import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.google.common.collect.Iterables
 import com.google.common.math.LongMath
+import mu.KLogging
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvVirtual
 import net.postchain.rell.CommonUtils
 import net.postchain.rell.PostchainUtils
 import net.postchain.rell.model.*
+import net.postchain.rell.parser.C_Constants
+import java.math.BigDecimal
 import java.util.*
 
 abstract class Rt_ValueRef {
@@ -20,6 +23,7 @@ enum class Rt_ValueType {
     UNIT,
     BOOLEAN,
     INTEGER,
+    DECIMAL,
     TEXT,
     BYTE_ARRAY,
     ROWID,
@@ -52,6 +56,7 @@ sealed class Rt_Value {
 
     open fun asBoolean(): Boolean = throw errType(Rt_ValueType.BOOLEAN)
     open fun asInteger(): Long = throw errType(Rt_ValueType.INTEGER)
+    open fun asDecimal(): BigDecimal = throw errType(Rt_ValueType.DECIMAL)
     open fun asRowid(): Long = throw errType(Rt_ValueType.ROWID)
     open fun asString(): String = throw errType(Rt_ValueType.TEXT)
     open fun asByteArray(): ByteArray = throw errType(Rt_ValueType.BYTE_ARRAY)
@@ -104,37 +109,86 @@ sealed class Rt_VirtualValue(val gtv: Gtv): Rt_Value() {
 object Rt_UnitValue: Rt_Value() {
     override fun type() = R_UnitType
     override fun valueType() = Rt_ValueType.UNIT
-    override fun toStrictString(showTupleFieldNames: Boolean): String = "unit"
-    override fun toString(): String = "unit"
+    override fun toStrictString(showTupleFieldNames: Boolean) = "unit"
+    override fun toString() = "unit"
 }
 
 class Rt_BooleanValue(val value: Boolean): Rt_Value() {
     override fun type() = R_BooleanType
     override fun valueType() = Rt_ValueType.BOOLEAN
-    override fun asBoolean(): Boolean = value
-    override fun asFormatArg(): Any = value
-    override fun toStrictString(showTupleFieldNames: Boolean): String = "boolean[$value]"
-    override fun toString(): String = "" + value
-    override fun equals(other: Any?): Boolean = other is Rt_BooleanValue && value == other.value
-    override fun hashCode(): Int = java.lang.Boolean.hashCode(value)
+    override fun asBoolean() = value
+    override fun asFormatArg() = value
+    override fun toStrictString(showTupleFieldNames: Boolean) = "boolean[$value]"
+    override fun toString() = "" + value
+    override fun equals(other: Any?) = other is Rt_BooleanValue && value == other.value
+    override fun hashCode() = java.lang.Boolean.hashCode(value)
 }
 
 class Rt_IntValue(val value: Long): Rt_Value() {
     override fun type() = R_IntegerType
     override fun valueType() = Rt_ValueType.INTEGER
-    override fun asInteger(): Long = value
-    override fun asFormatArg(): Any = value
-    override fun toStrictString(showTupleFieldNames: Boolean): String = "int[$value]"
-    override fun toString(): String = "" + value
-    override fun equals(other: Any?): Boolean = other is Rt_IntValue && value == other.value
-    override fun hashCode(): Int = java.lang.Long.hashCode(value)
+    override fun asInteger() = value
+    override fun asFormatArg() = value
+    override fun toStrictString(showTupleFieldNames: Boolean) = "int[$value]"
+    override fun toString() = "" + value
+    override fun equals(other: Any?) = other is Rt_IntValue && value == other.value
+    override fun hashCode() = java.lang.Long.hashCode(value)
+}
+
+class Rt_DecimalValue private constructor(val value: BigDecimal): Rt_Value() {
+    override fun type() = R_DecimalType
+    override fun valueType() = Rt_ValueType.DECIMAL
+    override fun asDecimal() = value
+    override fun asFormatArg() = value
+    override fun toStrictString(showTupleFieldNames: Boolean) = "dec[$this]"
+    override fun toString() = Rt_DecimalUtils.toString(value)
+    override fun equals(other: Any?) = other is Rt_DecimalValue && value == other.value
+    override fun hashCode() = value.hashCode()
+
+    companion object : KLogging() {
+        val ZERO = Rt_DecimalValue(BigDecimal.ZERO)
+
+        fun of(v: BigDecimal): Rt_Value {
+            val t = v.unscaledValue()
+            if (t.signum() == 0) {
+                return ZERO
+            }
+
+            val res = ofTry(v)
+            return res ?: throw errOverflow("decimal:overflow", "Decimal value overflow")
+        }
+
+        fun ofTry(v: BigDecimal): Rt_Value? {
+            val t = Rt_DecimalUtils.scale(v)
+            return if (t == null) null else Rt_DecimalValue(t)
+        }
+
+        fun of(s: String): Rt_Value {
+            val v = try {
+                Rt_DecimalUtils.parse(s)
+            } catch (e: NumberFormatException) {
+                throw Rt_Error("decimal:invalid:$s", "Invalid decimal value: '$s'")
+            }
+            return of(v)
+        }
+
+        fun of(v: Long): Rt_Value {
+            val bd = BigDecimal(v)
+            return of(bd)
+        }
+
+        fun errOverflow(code: String, msg: String): Rt_Error {
+            val p = C_Constants.DECIMAL_INT_DIGITS
+            return Rt_Error(code, "$msg (allowed range is -10^$p..10^$p, exclusive)")
+        }
+    }
 }
 
 class Rt_TextValue(val value: String): Rt_Value() {
     override fun type() = R_TextType
     override fun valueType() = Rt_ValueType.TEXT
-    override fun asString(): String = value
-    override fun asFormatArg(): Any = value
+    override fun asString() = value
+    override fun asFormatArg() = value
 
     override fun toStrictString(showTupleFieldNames: Boolean): String {
         val esc = escape(value)
@@ -142,8 +196,8 @@ class Rt_TextValue(val value: String): Rt_Value() {
     }
 
     override fun toString(): String = value
-    override fun equals(other: Any?): Boolean = other is Rt_TextValue && value == other.value
-    override fun hashCode(): Int = value.hashCode()
+    override fun equals(other: Any?) = other is Rt_TextValue && value == other.value
+    override fun hashCode() = value.hashCode()
 
     companion object {
         private fun escape(s: String): String {
@@ -177,12 +231,12 @@ class Rt_TextValue(val value: String): Rt_Value() {
 class Rt_ByteArrayValue(val value: ByteArray): Rt_Value() {
     override fun type() = R_ByteArrayType
     override fun valueType() = Rt_ValueType.BYTE_ARRAY
-    override fun asByteArray(): ByteArray = value
-    override fun asFormatArg(): Any = toString()
-    override fun toStrictString(showTupleFieldNames: Boolean): String = "byte_array[${CommonUtils.bytesToHex(value)}]"
-    override fun toString(): String = "0x" + CommonUtils.bytesToHex(value)
-    override fun equals(other: Any?): Boolean = other is Rt_ByteArrayValue && Arrays.equals(value, other.value)
-    override fun hashCode(): Int = Arrays.hashCode(value)
+    override fun asByteArray() = value
+    override fun asFormatArg() = toString()
+    override fun toStrictString(showTupleFieldNames: Boolean) = "byte_array[${CommonUtils.bytesToHex(value)}]"
+    override fun toString() = "0x" + CommonUtils.bytesToHex(value)
+    override fun equals(other: Any?) = other is Rt_ByteArrayValue && Arrays.equals(value, other.value)
+    override fun hashCode() = Arrays.hashCode(value)
 }
 
 class Rt_RowidValue(val value: Long): Rt_Value() {
@@ -192,44 +246,44 @@ class Rt_RowidValue(val value: Long): Rt_Value() {
 
     override fun type() = R_RowidType
     override fun valueType() = Rt_ValueType.ROWID
-    override fun asRowid(): Long = value
-    override fun asFormatArg(): Any = value
-    override fun toStrictString(showTupleFieldNames: Boolean): String = "rowid[$value]"
-    override fun toString(): String = "" + value
-    override fun equals(other: Any?): Boolean = other is Rt_RowidValue && value == other.value
-    override fun hashCode(): Int = java.lang.Long.hashCode(value)
+    override fun asRowid() = value
+    override fun asFormatArg() = value
+    override fun toStrictString(showTupleFieldNames: Boolean) = "rowid[$value]"
+    override fun toString() = "" + value
+    override fun equals(other: Any?) = other is Rt_RowidValue && value == other.value
+    override fun hashCode() = java.lang.Long.hashCode(value)
 }
 
 class Rt_ClassValue(val type: R_ClassType, val rowid: Long): Rt_Value() {
     override fun type() = type
     override fun valueType() = Rt_ValueType.CLASS
-    override fun asObjectId(): Long = rowid
-    override fun asFormatArg(): Any = toString()
-    override fun toStrictString(showTupleFieldNames: Boolean): String = "${type.name}[$rowid]"
-    override fun toString(): String = toStrictString()
-    override fun equals(other: Any?): Boolean = other is Rt_ClassValue && type == other.type && rowid == other.rowid
-    override fun hashCode(): Int = Objects.hash(type, rowid)
+    override fun asObjectId() = rowid
+    override fun asFormatArg() = toString()
+    override fun toStrictString(showTupleFieldNames: Boolean) = "${type.name}[$rowid]"
+    override fun toString() = toStrictString()
+    override fun equals(other: Any?) = other is Rt_ClassValue && type == other.type && rowid == other.rowid
+    override fun hashCode() = Objects.hash(type, rowid)
 }
 
 object Rt_NullValue: Rt_Value() {
     override fun type() = R_NullType
     override fun valueType() = Rt_ValueType.NULL
-    override fun asFormatArg(): Any = toString()
-    override fun toStrictString(showTupleFieldNames: Boolean): String = "null"
-    override fun toString(): String = "null"
+    override fun asFormatArg() = toString()
+    override fun toStrictString(showTupleFieldNames: Boolean) = "null"
+    override fun toString() = "null"
 }
 
 class Rt_ListValue(private val type: R_Type, private val elements: MutableList<Rt_Value>): Rt_Value() {
     override fun type() = type
     override fun valueType() = Rt_ValueType.LIST
-    override fun asCollection(): MutableCollection<Rt_Value> = elements
-    override fun asList(): MutableList<Rt_Value> = elements
-    override fun asFormatArg(): Any = elements
+    override fun asCollection() = elements
+    override fun asList() = elements
+    override fun asFormatArg() = elements
 
     override fun toStrictString(showTupleFieldNames: Boolean) = toStrictString(type, elements)
-    override fun toString(): String = elements.toString()
-    override fun equals(other: Any?): Boolean = other is Rt_ListValue && elements == other.elements
-    override fun hashCode(): Int = elements.hashCode()
+    override fun toString() = elements.toString()
+    override fun equals(other: Any?) = other is Rt_ListValue && elements == other.elements
+    override fun hashCode() = elements.hashCode()
 
     companion object {
         fun checkIndex(size: Int, index: Long) {
@@ -260,11 +314,11 @@ class Rt_VirtualListValue(
     override fun valueType() = Rt_ValueType.VIRTUAL_LIST
     override fun asVirtualCollection() = this
     override fun asVirtualList() = this
-    override fun asFormatArg(): Any = elements
+    override fun asFormatArg() = elements
     override fun toStrictString(showTupleFieldNames: Boolean) = Rt_ListValue.toStrictString(type, elements)
-    override fun toString(): String = elements.toString()
-    override fun equals(other: Any?): Boolean = other is Rt_VirtualListValue && elements == other.elements
-    override fun hashCode(): Int = elements.hashCode()
+    override fun toString() = elements.toString()
+    override fun equals(other: Any?) = other is Rt_VirtualListValue && elements == other.elements
+    override fun hashCode() = elements.hashCode()
 
     override fun toFull0(): Rt_Value {
         val resElements = elements.map { toFull(it!!) }.toMutableList()
@@ -272,7 +326,7 @@ class Rt_VirtualListValue(
     }
 
     override fun size() = elements.size
-    override fun iterable(): Iterable<Rt_Value> = Iterables.filter(elements) { it != null } as Iterable<Rt_Value>
+    override fun iterable() = Iterables.filter(elements) { it != null } as Iterable<Rt_Value>
 
     fun contains(index: Long) = index >= 0 && index < elements.size && elements[index.toInt()] != null
 
@@ -289,13 +343,13 @@ class Rt_VirtualListValue(
 class Rt_SetValue(private val type: R_Type, private val elements: MutableSet<Rt_Value>): Rt_Value() {
     override fun type() = type
     override fun valueType() = Rt_ValueType.SET
-    override fun asCollection(): MutableCollection<Rt_Value> = elements
-    override fun asSet(): MutableSet<Rt_Value> = elements
-    override fun asFormatArg(): Any = elements
+    override fun asCollection() = elements
+    override fun asSet() = elements
+    override fun asFormatArg() = elements
     override fun toStrictString(showTupleFieldNames: Boolean) = toStrictString(type, elements, showTupleFieldNames)
-    override fun toString(): String = elements.toString()
-    override fun equals(other: Any?): Boolean = other is Rt_SetValue && elements == other.elements
-    override fun hashCode(): Int = elements.hashCode()
+    override fun toString() = elements.toString()
+    override fun equals(other: Any?) = other is Rt_SetValue && elements == other.elements
+    override fun hashCode() = elements.hashCode()
 
     companion object {
         fun toStrictString(type: R_Type, elements: Set<Rt_Value>, showTupleFieldNames: Boolean): String =
@@ -312,11 +366,11 @@ class Rt_VirtualSetValue(
     override fun valueType() = Rt_ValueType.VIRTUAL_LIST
     override fun asVirtualCollection() = this
     override fun asVirtualSet() = this
-    override fun asFormatArg(): Any = elements
+    override fun asFormatArg() = elements
     override fun toStrictString(showTupleFieldNames: Boolean) = Rt_SetValue.toStrictString(type, elements, showTupleFieldNames)
-    override fun toString(): String = elements.toString()
-    override fun equals(other: Any?): Boolean = other is Rt_VirtualSetValue && elements == other.elements
-    override fun hashCode(): Int = elements.hashCode()
+    override fun toString() = elements.toString()
+    override fun equals(other: Any?) = other is Rt_VirtualSetValue && elements == other.elements
+    override fun hashCode() = elements.hashCode()
 
     override fun toFull0(): Rt_Value {
         val resElements = elements.map { toFull(it!!) }.toMutableSet()
@@ -324,9 +378,9 @@ class Rt_VirtualSetValue(
     }
 
     override fun size() = elements.size
-    override fun iterable(): Iterable<Rt_Value> = elements
+    override fun iterable() = elements
 
-    fun contains(value: Rt_Value): Boolean = elements.contains(value)
+    fun contains(value: Rt_Value) = elements.contains(value)
 }
 
 class Rt_MapValue(private val type: R_Type, private val map: MutableMap<Rt_Value, Rt_Value>): Rt_Value() {
@@ -334,11 +388,11 @@ class Rt_MapValue(private val type: R_Type, private val map: MutableMap<Rt_Value
     override fun valueType() = Rt_ValueType.MAP
     override fun asMap() = map
     override fun asMutableMap() = map
-    override fun asFormatArg(): Any = map
+    override fun asFormatArg() = map
     override fun toStrictString(showTupleFieldNames: Boolean) = toStrictString(type, showTupleFieldNames, map)
-    override fun toString(): String = map.toString()
-    override fun equals(other: Any?): Boolean = other is Rt_MapValue && map == other.map
-    override fun hashCode(): Int = map.hashCode()
+    override fun toString() = map.toString()
+    override fun equals(other: Any?) = other is Rt_MapValue && map == other.map
+    override fun hashCode() = map.hashCode()
 
     companion object {
         fun toStrictString(type: R_Type, showTupleFieldNames: Boolean, map: Map<Rt_Value, Rt_Value>): String {
@@ -358,11 +412,11 @@ class Rt_VirtualMapValue(
     override fun type() = type
     override fun valueType() = Rt_ValueType.VIRTUAL_MAP
     override fun asMap() = map
-    override fun asFormatArg(): Any = map
+    override fun asFormatArg() = map
     override fun toStrictString(showTupleFieldNames: Boolean) = Rt_MapValue.toStrictString(type, showTupleFieldNames, map)
-    override fun toString(): String = map.toString()
-    override fun equals(other: Any?): Boolean = other is Rt_VirtualMapValue && map == other.map
-    override fun hashCode(): Int = map.hashCode()
+    override fun toString() = map.toString()
+    override fun equals(other: Any?) = other is Rt_VirtualMapValue && map == other.map
+    override fun hashCode() = map.hashCode()
 
     override fun toFull0(): Rt_Value {
         val resMap = map
@@ -376,10 +430,10 @@ class Rt_VirtualMapValue(
 class Rt_TupleValue(val type: R_TupleType, val elements: List<Rt_Value>): Rt_Value() {
     override fun type() = type
     override fun valueType() = Rt_ValueType.TUPLE
-    override fun asTuple(): List<Rt_Value> = elements
-    override fun asFormatArg(): Any = toString()
-    override fun equals(other: Any?): Boolean = other is Rt_TupleValue && elements == other.elements
-    override fun hashCode(): Int = elements.hashCode()
+    override fun asTuple() = elements
+    override fun asFormatArg() = toString()
+    override fun equals(other: Any?) = other is Rt_TupleValue && elements == other.elements
+    override fun hashCode() = elements.hashCode()
 
     override fun toString() = toString("", type, elements)
     override fun toStrictString(showTupleFieldNames: Boolean) = toStrictString("", type, elements, showTupleFieldNames)
@@ -426,9 +480,9 @@ class Rt_VirtualTupleValue(
     override fun type() = type
     override fun valueType() = Rt_ValueType.VIRTUAL_TUPLE
     override fun asVirtualTuple() = this
-    override fun asFormatArg(): Any = toString()
-    override fun equals(other: Any?): Boolean = other is Rt_VirtualTupleValue && elements == other.elements
-    override fun hashCode(): Int = elements.hashCode()
+    override fun asFormatArg() = toString()
+    override fun equals(other: Any?) = other is Rt_VirtualTupleValue && elements == other.elements
+    override fun hashCode() = elements.hashCode()
 
     override fun toString() = Rt_TupleValue.toString("virtual", type.innerType, elements)
     override fun toStrictString(showTupleFieldNames: Boolean) =
@@ -447,18 +501,15 @@ class Rt_VirtualTupleValue(
         }
         return value
     }
-
-    private fun errNoValue(op: String, attr: String) =
-            Rt_Error("virtual_tuple:$op:novalue:$attr", "Field '$attr' has no value")
 }
 
 class Rt_RecordValue(private val type: R_RecordType, private val attributes: MutableList<Rt_Value>): Rt_Value() {
     override fun type() = type
     override fun valueType() = Rt_ValueType.RECORD
     override fun asRecord() = this
-    override fun asFormatArg(): Any = toString()
-    override fun equals(other: Any?): Boolean = other is Rt_RecordValue && attributes == other.attributes
-    override fun hashCode(): Int = type.hashCode() * 31 + attributes.hashCode()
+    override fun asFormatArg() = toString()
+    override fun equals(other: Any?) = other is Rt_RecordValue && attributes == other.attributes
+    override fun hashCode() = type.hashCode() * 31 + attributes.hashCode()
 
     override fun toString() = toString(type, attributes)
     override fun toStrictString(showTupleFieldNames: Boolean) = toStrictString(type, type, attributes)
@@ -503,9 +554,9 @@ class Rt_VirtualRecordValue(
     override fun type() = type
     override fun valueType() = Rt_ValueType.VIRTUAL_RECORD
     override fun asVirtualRecord() = this
-    override fun asFormatArg(): Any = toString()
-    override fun equals(other: Any?): Boolean = other is Rt_VirtualRecordValue && attributes == other.attributes
-    override fun hashCode(): Int = type.hashCode() * 31 + attributes.hashCode()
+    override fun asFormatArg() = toString()
+    override fun equals(other: Any?) = other is Rt_VirtualRecordValue && attributes == other.attributes
+    override fun hashCode() = type.hashCode() * 31 + attributes.hashCode()
 
     override fun toString() = Rt_RecordValue.toString(type.innerType, attributes)
     override fun toStrictString(showTupleFieldNames: Boolean) =
@@ -531,9 +582,9 @@ class Rt_EnumValue(private val type: R_EnumType, private val attr: R_EnumAttr): 
     override fun type() = type
     override fun valueType() = Rt_ValueType.ENUM
     override fun asEnum() = attr
-    override fun asFormatArg(): Any = attr.name
-    override fun equals(other: Any?): Boolean = other is Rt_EnumValue && attr == other.attr
-    override fun hashCode(): Int = type.hashCode() * 31 + attr.value
+    override fun asFormatArg() = attr.name
+    override fun equals(other: Any?) = other is Rt_EnumValue && attr == other.attr
+    override fun hashCode() = type.hashCode() * 31 + attr.value
 
     override fun toString(): String {
         return attr.name
@@ -554,12 +605,12 @@ class Rt_ObjectValue(private val type: R_ObjectType): Rt_Value() {
 class Rt_JsonValue private constructor(private val str: String): Rt_Value() {
     override fun type() = R_JsonType
     override fun valueType() = Rt_ValueType.JSON
-    override fun asJsonString(): String = str
-    override fun asFormatArg(): Any = str
-    override fun toString(): String = str
-    override fun toStrictString(showTupleFieldNames: Boolean): String = "json[$str]"
-    override fun equals(other: Any?): Boolean = other is Rt_JsonValue && str == other.str
-    override fun hashCode(): Int = str.hashCode()
+    override fun asJsonString() = str
+    override fun asFormatArg() = str
+    override fun toString() = str
+    override fun toStrictString(showTupleFieldNames: Boolean) = "json[$str]"
+    override fun equals(other: Any?) = other is Rt_JsonValue && str == other.str
+    override fun hashCode() = str.hashCode()
 
     companion object {
         fun parse(s: String): Rt_Value {
@@ -583,15 +634,15 @@ class Rt_JsonValue private constructor(private val str: String): Rt_Value() {
 class Rt_RangeValue(val start: Long, val end: Long, val step: Long): Rt_Value(), Iterable<Rt_Value>, Comparable<Rt_RangeValue> {
     override fun type() = R_RangeType
     override fun valueType() = Rt_ValueType.RANGE
-    override fun asRange(): Rt_RangeValue = this
-    override fun asFormatArg(): Any = toString()
-    override fun toString(): String = "range($start,$end,$step)"
-    override fun toStrictString(showTupleFieldNames: Boolean): String = "range[$start,$end,$step]"
+    override fun asRange() = this
+    override fun asFormatArg() = toString()
+    override fun toString() = "range($start,$end,$step)"
+    override fun toStrictString(showTupleFieldNames: Boolean) = "range[$start,$end,$step]"
 
     override fun iterator(): Iterator<Rt_Value> = RangeIterator(this)
 
-    override fun equals(other: Any?): Boolean = other is Rt_RangeValue && start == other.start && end == other.end && step == other.step
-    override fun hashCode(): Int = Objects.hash(start, end, step)
+    override fun equals(other: Any?) = other is Rt_RangeValue && start == other.start && end == other.end && step == other.step
+    override fun hashCode() = Objects.hash(start, end, step)
 
     fun contains(v: Long): Boolean {
         if (step > 0) {
@@ -644,7 +695,7 @@ class Rt_GtvValue(val value: Gtv): Rt_Value() {
     override fun valueType() = Rt_ValueType.GTV
     override fun asGtv() = value
 
-    override fun toStrictString(showTupleFieldNames: Boolean): String = "gtv[$this]"
+    override fun toStrictString(showTupleFieldNames: Boolean) = "gtv[$this]"
 
     override fun toString(): String {
         try {
@@ -654,6 +705,6 @@ class Rt_GtvValue(val value: Gtv): Rt_Value() {
         }
     }
 
-    override fun equals(other: Any?): Boolean = other is Rt_GtvValue && value == other.value
-    override fun hashCode(): Int = value.hashCode()
+    override fun equals(other: Any?) = other is Rt_GtvValue && value == other.value
+    override fun hashCode() = value.hashCode()
 }

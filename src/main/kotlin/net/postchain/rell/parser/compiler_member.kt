@@ -2,7 +2,9 @@ package net.postchain.rell.parser
 
 import net.postchain.rell.model.*
 
-class C_MemberRef(val pos: S_Pos, val base: C_Value, val name: S_Name, val safe: Boolean)
+class C_MemberRef(val pos: S_Pos, val base: C_Value, val name: S_Name, val safe: Boolean) {
+    fun qualifiedName() = "${base.type().toStrictString()}.${name.str}"
+}
 
 object C_MemberResolver {
     fun valueForType(type: R_Type, ref: C_MemberRef): C_Expr? {
@@ -68,9 +70,9 @@ object C_MemberResolver {
 
     private fun valueForEnum(ref: C_MemberRef): C_Expr? {
         val calculator = if (ref.name.str == "name") {
-            R_MemberCalculator_SysFn(R_TextType, R_SysFn_Enum_Name, listOf())
+            R_MemberCalculator_SysFn(R_TextType, R_SysFn_Enum.Name, listOf())
         } else if (ref.name.str == "value") {
-            R_MemberCalculator_SysFn(R_IntegerType, R_SysFn_Enum_Value, listOf())
+            R_MemberCalculator_SysFn(R_IntegerType, R_SysFn_Enum.Value, listOf())
         } else {
             return null
         }

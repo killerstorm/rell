@@ -56,7 +56,7 @@ enum class S_BinaryOp(private val code: String, val op: C_BinOp) {
     fun precedence(): Int = PRECEDENCE_MAP.getValue(this)
 
     fun compile(pos: S_Pos, left: C_Value, right: C_Value): C_Value {
-        val value = op.compile(pos, left, right)
+        val value = op.compile(left, right)
         if (value != null) {
             return value
         }
@@ -93,9 +93,10 @@ object S_AssignOp_Eq: S_AssignOp() {
         val dstExpr = dstValue.destination(ctx)
         val dstType = dstExpr.type()
         val rSrcExpr = srcValue.toRExpr()
-        S_Type.match(dstType, rSrcExpr.type, pos, "stmt_assign_type", "Assignment type mismatch")
 
-        val rStmt = dstExpr.compileAssignStatement(rSrcExpr, null)
+        val adapter = S_Type.adapt(dstType, rSrcExpr.type, pos, "stmt_assign_type", "Assignment type mismatch")
+        val rSrcAdapterExpr = adapter.adaptExpr(rSrcExpr)
+        val rStmt = dstExpr.compileAssignStatement(rSrcAdapterExpr, null)
 
         val varFacts = compileVarFacts(dstValue, dstExpr, srcValue, rSrcExpr.type)
         return C_Statement(rStmt, false, varFacts)
@@ -115,12 +116,14 @@ object S_AssignOp_Eq: S_AssignOp() {
 
     override fun compileDbUpdate(pos: S_Pos, attr: R_Attrib, srcValue: C_Value): R_UpdateStatementWhat {
         val expr = srcValue.toDbExpr()
-        if (!attr.type.isAssignableFrom(expr.type)) {
+        val adapter = attr.type.getTypeAdapter(expr.type)
+        if (adapter == null) {
             val name = attr.name
             throw C_Error(pos, "stmt_assign_type:$name:${attr.type.toStrictString()}:${expr.type.toStrictString()}",
                     "Type mismatch for '$name': ${expr.type.toStrictString()} instead of ${attr.type.toStrictString()}")
         }
-        return R_UpdateStatementWhat(attr, expr, null)
+        val expr2 = adapter.adaptExpr(expr)
+        return R_UpdateStatementWhat(attr, expr2, null)
     }
 }
 
@@ -168,8 +171,13 @@ class S_AssignOp_Op(val code: String, val op: C_BinOp_Common): S_AssignOp() {
 }
 
 sealed class C_BinOp {
-    abstract fun compile(pos: S_Pos, left: C_Value, right: C_Value): C_Value?
+    abstract fun compile(left: C_Value, right: C_Value): C_Value?
     open fun rightVarFacts(left: C_Value): C_VarFacts = C_VarFacts.EMPTY
+
+    protected open fun compileExprVarFacts(left: C_Value, right: C_Value): C_ExprVarFacts {
+        val postFacts = left.varFacts().postFacts.and(right.varFacts().postFacts)
+        return C_ExprVarFacts.of(postFacts = postFacts)
+    }
 
     companion object {
         fun errTypeMismatch(pos: S_Pos, op: String, leftType: R_Type, rightType: R_Type): C_Error {
@@ -182,12 +190,12 @@ sealed class C_BinOp {
 sealed class C_BinOp_Common: C_BinOp() {
     abstract fun compileOp(left: R_Type, right: R_Type): C_BinOpType?
 
-    final override fun compile(pos: S_Pos, left: C_Value, right: C_Value): C_Value? {
+    final override fun compile(left: C_Value, right: C_Value): C_Value? {
         val (left2, right2) = adaptLeftRight(left, right)
-        return compile0(pos, left2, right2)
+        return compile0(left2, right2)
     }
 
-    private fun compile0(pos: S_Pos, left: C_Value, right: C_Value): C_Value? {
+    private fun compile0(left: C_Value, right: C_Value): C_Value? {
         val exprVarFacts = compileExprVarFacts(left, right)
 
         val leftDb = left.isDb()
@@ -197,27 +205,32 @@ sealed class C_BinOp_Common: C_BinOp() {
         if (db) {
             val dbLeft = left.toDbExpr()
             val dbRight = right.toDbExpr()
-            val dbExpr = compileDb(pos, dbLeft, dbRight)
+            val dbExpr = compileDb(dbLeft, dbRight)
             dbExpr ?: return null
             return C_DbValue(left.pos, dbExpr, exprVarFacts)
         } else {
             val rLeft = left.toRExpr()
             val rRight = right.toRExpr()
-            val rExpr = compileR(pos, rLeft, rRight)
+            val rExpr = compileR(rLeft, rRight)
             rExpr ?: return null
             return C_RValue(left.pos, rExpr, exprVarFacts)
         }
     }
 
-    open fun adaptLeftRight(left: C_Value, right: C_Value) = Pair(left, right)
-    open fun adaptRight(leftType: R_Type, right: C_Value) = right
-
-    protected open fun compileExprVarFacts(left: C_Value, right: C_Value): C_ExprVarFacts {
-        val postFacts = left.varFacts().postFacts.and(right.varFacts().postFacts)
-        return C_ExprVarFacts.of(postFacts = postFacts)
+    open fun adaptLeftRight(left: C_Value, right: C_Value): Pair<C_Value, C_Value> {
+        return promoteNumeric(left, right)
     }
 
-    private fun compileR(pos: S_Pos, left: R_Expr, right: R_Expr): R_Expr? {
+    open fun adaptRight(leftType: R_Type, right: C_Value): C_Value {
+        val rightType = right.type()
+        return if (leftType == R_DecimalType && rightType == R_IntegerType) {
+            promoteNumeric(right)
+        } else {
+            right
+        }
+    }
+
+    private fun compileR(left: R_Expr, right: R_Expr): R_Expr? {
         val op = compileOp(left.type, right.type)
         if (op?.rOp == null) {
             return null
@@ -225,12 +238,48 @@ sealed class C_BinOp_Common: C_BinOp() {
         return R_BinaryExpr(op.resType, op.rOp, left, right)
     }
 
-    private fun compileDb(pos: S_Pos, left: Db_Expr, right: Db_Expr): Db_Expr? {
+    private fun compileDb(left: Db_Expr, right: Db_Expr): Db_Expr? {
         val op = compileOp(left.type, right.type)
         if (op?.dbOp == null) {
             return null
         }
         return Db_BinaryExpr(op.resType, op.dbOp, left, right)
+    }
+
+    companion object {
+        fun promoteNumeric(left: C_Value, right: C_Value): Pair<C_Value, C_Value> {
+            val leftType = left.type()
+            val rightType = right.type()
+
+            if (leftType == R_IntegerType && rightType == R_DecimalType) {
+                return Pair(promoteNumeric(left), right)
+            } else if (leftType == R_DecimalType && rightType == R_IntegerType) {
+                return Pair(left, promoteNumeric(right))
+            } else {
+                return Pair(left, right)
+            }
+        }
+
+        fun promoteNumeric(values: List<C_Value>): List<C_Value> {
+            val hasOther = values.any { it.type() != R_IntegerType && it.type() != R_DecimalType }
+            val hasInteger = values.any { it.type() == R_IntegerType }
+            val hasDecimal = values.any { it.type() == R_DecimalType }
+
+            return if (hasInteger && hasDecimal && !hasOther) {
+                values.map { promoteNumeric(it) }
+            } else {
+                values
+            }
+        }
+
+        private fun promoteNumeric(value: C_Value): C_Value {
+            val type = value.type()
+            return if (type != R_IntegerType) {
+                value
+            } else {
+                C_Utils.integerToDecimalPromotion(value)
+            }
+        }
     }
 }
 
@@ -251,6 +300,7 @@ sealed class C_BinOp_EqNe(private val eq: Boolean): C_BinOp_Common() {
     private fun dbOpSupported(type: R_Type): Boolean {
         return type == R_BooleanType
                 || type == R_IntegerType
+                || type == R_DecimalType
                 || type == R_TextType
                 || type == R_ByteArrayType
                 || type == R_RowidType
@@ -259,7 +309,11 @@ sealed class C_BinOp_EqNe(private val eq: Boolean): C_BinOp_Common() {
     }
 
     override fun compileExprVarFacts(left: C_Value, right: C_Value) = compileExprVarFacts(eq, left, right)
-    override fun adaptLeftRight(left: C_Value, right: C_Value) = adaptOperands(left, right)
+
+    override fun adaptLeftRight(left: C_Value, right: C_Value): Pair<C_Value, C_Value> {
+        val p = adaptOperands(left, right)
+        return p ?: super.adaptLeftRight(left, right)
+    }
 
     companion object {
         fun checkTypes(left: R_Type, right: R_Type): Boolean {
@@ -302,19 +356,19 @@ sealed class C_BinOp_EqNe(private val eq: Boolean): C_BinOp_Common() {
             return if (facts.isEmpty()) null else facts
         }
 
-        fun adaptOperands(left: C_Value, right: C_Value): Pair<C_Value, C_Value> {
-            var left2 = left
-            var right2 = right
-
+        fun adaptOperands(left: C_Value, right: C_Value): Pair<C_Value, C_Value>? {
             val leftType = left.type()
             val rightType = right.type()
-            if (leftType == R_NullType) {
-                right2 = right.asNullable()
-            } else if (rightType == R_NullType) {
-                left2 = left.asNullable()
-            }
 
-            return Pair(left2, right2)
+            if (leftType == R_NullType) {
+                val right2 = right.asNullable()
+                return Pair(left, right2)
+            } else if (rightType == R_NullType) {
+                val left2 = left.asNullable()
+                return Pair(left2, right)
+            } else {
+                return null
+            }
         }
     }
 }
@@ -331,15 +385,17 @@ sealed class C_BinOp_EqNeRef(val eq: Boolean): C_BinOp_Common() {
     }
 
     override fun compileExprVarFacts(left: C_Value, right: C_Value)= C_BinOp_EqNe.compileExprVarFacts(eq, left, right)
-    override fun adaptLeftRight(left: C_Value, right: C_Value) = C_BinOp_EqNe.adaptOperands(left, right)
+
+    override fun adaptLeftRight(left: C_Value, right: C_Value): Pair<C_Value, C_Value> {
+        val p = C_BinOp_EqNe.adaptOperands(left, right)
+        return p ?: super.adaptLeftRight(left, right)
+    }
 }
 
 object C_BinOp_EqRef: C_BinOp_EqNeRef(true)
 object C_BinOp_NeRef: C_BinOp_EqNeRef(false)
 
 sealed class C_BinOp_Cmp(val cmpOp: R_CmpOp, val dbOp: Db_BinaryOp): C_BinOp_Common() {
-    abstract fun compileType(type: R_Type): R_CmpType?
-
     override final fun compileOp(left: R_Type, right: R_Type): C_BinOpType? {
         if (left != right) {
             return null
@@ -352,32 +408,25 @@ sealed class C_BinOp_Cmp(val cmpOp: R_CmpOp, val dbOp: Db_BinaryOp): C_BinOp_Com
 
         return C_BinOpType(R_BooleanType, R_BinaryOp_Cmp(cmpOp, rCmpType), dbOp)
     }
-}
 
-sealed class C_BinOp_LtGt(cmpOp: R_CmpOp, dbOp: Db_BinaryOp): C_BinOp_Cmp(cmpOp, dbOp) {
-    override fun compileType(type: R_Type): R_CmpType? {
-        if (type == R_IntegerType) {
-            return R_CmpType_Integer
-        } else if (type == R_TextType) {
-            return R_CmpType_Text
-        } else if (type == R_ByteArrayType) {
-            return R_CmpType_ByteArray
-        } else if (type == R_RowidType) {
-            return R_CmpType_Rowid
-        } else if (type is R_ClassType) {
-            return R_CmpType_Class
-        } else if (type is R_EnumType) {
-            return R_CmpType_Enum
-        } else {
-            return null
+    private fun compileType(type: R_Type): R_CmpType? {
+        return when (type) {
+            R_IntegerType -> R_CmpType_Integer
+            R_DecimalType -> R_CmpType_Decimal
+            R_TextType -> R_CmpType_Text
+            R_ByteArrayType -> R_CmpType_ByteArray
+            R_RowidType -> R_CmpType_Rowid
+            is R_ClassType -> R_CmpType_Class
+            is R_EnumType -> R_CmpType_Enum
+            else -> null
         }
     }
 }
 
-object C_BinOp_Lt: C_BinOp_LtGt(R_CmpOp_Lt, Db_BinaryOp_Lt)
-object C_BinOp_Gt: C_BinOp_LtGt(R_CmpOp_Gt, Db_BinaryOp_Gt)
-object C_BinOp_Le: C_BinOp_LtGt(R_CmpOp_Le, Db_BinaryOp_Le)
-object C_BinOp_Ge: C_BinOp_LtGt(R_CmpOp_Ge, Db_BinaryOp_Ge)
+object C_BinOp_Lt: C_BinOp_Cmp(R_CmpOp_Lt, Db_BinaryOp_Lt)
+object C_BinOp_Gt: C_BinOp_Cmp(R_CmpOp_Gt, Db_BinaryOp_Gt)
+object C_BinOp_Le: C_BinOp_Cmp(R_CmpOp_Le, Db_BinaryOp_Le)
+object C_BinOp_Ge: C_BinOp_Cmp(R_CmpOp_Ge, Db_BinaryOp_Ge)
 
 object C_BinOp_Plus: C_BinOp_Common() {
     override fun compileOp(left: R_Type, right: R_Type): C_BinOpType? {
@@ -385,67 +434,90 @@ object C_BinOp_Plus: C_BinOp_Common() {
             return null
         }
 
-        if (left == R_IntegerType) {
-            return C_BinOpType(R_IntegerType, R_BinaryOp_Add, Db_BinaryOp_Add)
-        } else if (left == R_TextType) {
-            return C_BinOpType(R_TextType, R_BinaryOp_Concat_Text, Db_BinaryOp_Concat)
-        } else if (left == R_ByteArrayType) {
-            return C_BinOpType(R_ByteArrayType, R_BinaryOp_Concat_ByteArray, Db_BinaryOp_Concat)
-        } else {
-            return null
+        return when (left) {
+            R_IntegerType -> C_BinOpType(R_IntegerType, R_BinaryOp_Add_Integer, Db_BinaryOp_Add_Integer)
+            R_DecimalType -> C_BinOpType(R_DecimalType, R_BinaryOp_Add_Decimal, Db_BinaryOp_Add_Decimal)
+            R_TextType -> C_BinOpType(R_TextType, R_BinaryOp_Concat_Text, Db_BinaryOp_Concat)
+            R_ByteArrayType -> C_BinOpType(R_ByteArrayType, R_BinaryOp_Concat_ByteArray, Db_BinaryOp_Concat)
+            else -> null
         }
     }
 
     override fun adaptLeftRight(left: C_Value, right: C_Value): Pair<C_Value, C_Value> {
-        var resLeft = left
-        var resRight = right
-
         val leftType = left.type()
         val rightType = right.type()
 
         if (leftType == R_TextType && rightType != R_TextType) {
-            resRight = convertToText(right, rightType)
+            val right2 = adaptToText(right, rightType)
+            return Pair(left, right2)
         } else if (leftType != R_TextType && rightType == R_TextType) {
-            resLeft = convertToText(left, leftType)
+            val left2 = adaptToText(left, leftType)
+            return Pair(left2, right)
+        } else {
+            return super.adaptLeftRight(left, right)
         }
-
-        return Pair(resLeft, resRight)
     }
 
     override fun adaptRight(leftType: R_Type, right: C_Value): C_Value {
         val rightType = right.type()
-        return if (leftType == R_TextType && rightType != R_TextType) convertToText(right, rightType) else right
+        return if (leftType == R_TextType && rightType != R_TextType) {
+            adaptToText(right, rightType)
+        } else {
+            super.adaptRight(leftType, right)
+        }
     }
 
-    private fun convertToText(value: C_Value, type: R_Type): C_Value {
+    private fun adaptToText(value: C_Value, type: R_Type): C_Value {
         val db = value.isDb()
         if (!db) {
             val rExpr = value.toRExpr()
-            val rResExpr = R_SysCallExpr(R_TextType, R_SysFn_ToString, listOf(rExpr))
+            val rResExpr = R_SysCallExpr(R_TextType, R_SysFn_Any.ToText, listOf(rExpr))
             return C_RValue(value.pos, rResExpr, value.varFacts().copyPostFacts())
-        } else if (type == R_BooleanType || type == R_IntegerType || type == R_JsonType || type is R_ClassType) {
-            val dbExpr = value.toDbExpr()
-            val dbResExpr = Db_CallExpr(R_TextType, Db_SysFn_ToString, listOf(dbExpr))
-            return C_DbValue(value.pos, dbResExpr, value.varFacts().copyPostFacts())
-        } else {
+        }
+
+        val dbFn = getDbToStringFunction(type)
+        if (dbFn == null) {
             return value
         }
+
+        val dbExpr = value.toDbExpr()
+        val dbResExpr = Db_CallExpr(R_TextType, dbFn, listOf(dbExpr))
+        return C_DbValue(value.pos, dbResExpr, value.varFacts().copyPostFacts())
+    }
+
+    private fun getDbToStringFunction(type: R_Type): Db_SysFunction? {
+        return when (type) {
+            R_BooleanType, R_IntegerType, R_RowidType, R_JsonType -> Db_SysFn_ToText
+            R_DecimalType -> Db_SysFn_Decimal.ToText
+            is R_ClassType -> Db_SysFn_ToText
+            else -> null
+        }
     }
 }
 
-sealed class C_BinOp_Arith(val rOp: R_BinaryOp, val dbOp: Db_BinaryOp): C_BinOp_Common() {
+sealed class C_BinOp_Arith(
+        val rOpInt: R_BinaryOp,
+        val dbOpInt: Db_BinaryOp,
+        val rOpDec: R_BinaryOp,
+        val dbOpDec: Db_BinaryOp
+): C_BinOp_Common() {
     override fun compileOp(left: R_Type, right: R_Type): C_BinOpType? {
-        if (left != R_IntegerType || right != R_IntegerType) {
+        if (left != right) {
             return null
         }
-        return C_BinOpType(R_IntegerType, rOp, dbOp)
+
+        return when (left) {
+            R_IntegerType -> C_BinOpType(R_IntegerType, rOpInt, dbOpInt)
+            R_DecimalType -> C_BinOpType(R_DecimalType, rOpDec, dbOpDec)
+            else -> null
+        }
     }
 }
 
-object C_BinOp_Minus: C_BinOp_Arith(R_BinaryOp_Sub, Db_BinaryOp_Sub)
-object C_BinOp_Mul: C_BinOp_Arith(R_BinaryOp_Mul, Db_BinaryOp_Mul)
-object C_BinOp_Div: C_BinOp_Arith(R_BinaryOp_Div, Db_BinaryOp_Div)
-object C_BinOp_Mod: C_BinOp_Arith(R_BinaryOp_Mod, Db_BinaryOp_Mod)
+object C_BinOp_Minus: C_BinOp_Arith(R_BinaryOp_Sub_Integer, Db_BinaryOp_Sub_Integer, R_BinaryOp_Sub_Decimal, Db_BinaryOp_Sub_Decimal)
+object C_BinOp_Mul: C_BinOp_Arith(R_BinaryOp_Mul_Integer, Db_BinaryOp_Mul_Integer, R_BinaryOp_Mul_Decimal, Db_BinaryOp_Mul_Decimal)
+object C_BinOp_Div: C_BinOp_Arith(R_BinaryOp_Div_Integer, Db_BinaryOp_Div_Integer, R_BinaryOp_Div_Decimal, Db_BinaryOp_Div_Decimal)
+object C_BinOp_Mod: C_BinOp_Arith(R_BinaryOp_Mod_Integer, Db_BinaryOp_Mod_Integer, R_BinaryOp_Mod_Decimal, Db_BinaryOp_Mod_Decimal)
 
 sealed class C_BinOp_Logic(val rOp: R_BinaryOp, val dbOp: Db_BinaryOp): C_BinOp_Common() {
     override fun compileOp(left: R_Type, right: R_Type): C_BinOpType? {
@@ -490,8 +562,27 @@ object C_BinOp_Or: C_BinOp_Logic(R_BinaryOp_Or, Db_BinaryOp_Or) {
     }
 }
 
-object C_BinOp_In: C_BinOp_Common() {
-    override fun compileOp(left: R_Type, right: R_Type): C_BinOpType? {
+object C_BinOp_In: C_BinOp() {
+    override fun compile(left: C_Value, right: C_Value): C_Value? {
+        if (left.isDb() || right.isDb()) {
+            return null
+        }
+
+        val exprVarFacts = compileExprVarFacts(left, right)
+
+        val rLeft = left.toRExpr()
+        val rRight = right.toRExpr()
+
+        val op = compileOp(rLeft.type, rRight.type)
+        if (op?.rOp == null) {
+            return null
+        }
+
+        val rExpr = R_BinaryExpr(op.resType, op.rOp, rLeft, rRight)
+        return C_RValue(left.pos, rExpr, exprVarFacts)
+    }
+
+    private fun compileOp(left: R_Type, right: R_Type): C_BinOpType? {
         val pair = matchOp(right)
         if (pair == null) {
             return null
@@ -519,12 +610,12 @@ object C_BinOp_In: C_BinOp_Common() {
 }
 
 object C_BinOp_Elvis: C_BinOp() {
-    override fun compile(pos: S_Pos, left: C_Value, right: C_Value): C_Value? {
+    override fun compile(left: C_Value, right: C_Value): C_Value? {
         val left2 = left.asNullable()
-        return compile0(pos, left2, right)
+        return compile0(left2, right)
     }
 
-    private fun compile0(pos: S_Pos, left: C_Value, right: C_Value): C_Value? {
+    private fun compile0(left: C_Value, right: C_Value): C_Value? {
         val leftType = left.type()
         if (leftType == R_NullType) {
             return right
