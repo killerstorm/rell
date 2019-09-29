@@ -25,6 +25,55 @@ class UserFunctionTest: BaseRellTest(false) {
         chkFn("function f() = 123;", "f()", "int[123]")
         chkFn("function f() { return 123; }", "f()", "int[123]")
         chkFn("function f() { return 'foobar'; }", "f()", "text[foobar]")
+
+        // _type_of()
+        chkFn("function f() = 123;", "_type_of(f())", "text[integer]")
+        chkFn("function f() = 'Hello';", "_type_of(f())", "text[text]")
+        chkFn("function f() { return 123; }", "_type_of(f())", "text[integer]")
+        chkFn("function f(x: integer) = null;", "_type_of(f(0))", "text[null]")
+        chkFn("function f(x: integer) { return null; }", "_type_of(f(0))", "text[null]")
+
+        // Multiple return statements.
+        chkFn("function f(x: integer) { if (x > 0) return 123; return 456; }", "_type_of(f(0))", "text[integer]")
+        chkFn("function f(x: integer) { if (x > 0) return 123; return null; }", "_type_of(f(0))", "text[integer?]")
+        chkFn("function f(x: integer) { if (x > 0) return null; return 123; }", "_type_of(f(0))", "text[integer?]")
+        chkFn("function f(x: integer) { if (x > 0) return 123; return 'Hello'; }", "_type_of(f(0))", "ct_err:entity_rettype:integer:text")
+        chkFn("function f(x: integer) { if (x > 0) return 'Hello'; return 123; }", "_type_of(f(0))", "ct_err:entity_rettype:text:integer")
+        chkFn("function f(x: integer) { if (x > 0) return 123; return; }", "_type_of(f(0))", "ct_err:entity_rettype:integer:unit")
+        chkFn("function f(x: integer) { if (x > 0) return; return 123; }", "_type_of(f(0))", "ct_err:entity_rettype:unit:integer")
+        chkFn("function f(x: integer) { if (x > 0) return 123; }", "_type_of(f(0))", "ct_err:fun_noreturn:f")
+        chkFn("function f(x: integer) { if (x > 0) return; }", "f(0)", "ct_err:query_exprtype_unit")
+        chkFn("function f(x: integer) { }", "f(0)", "ct_err:query_exprtype_unit")
+
+        // Backward reference.
+        chkFn("function f() = 123; function g(): text = _type_of(f());", "g()", "text[integer]")
+        chkFn("function f() = 123; function g(): integer = f();", "g()", "int[123]")
+        chkFn("function f() = 123; function g() = _type_of(f());", "g()", "text[integer]")
+        chkFn("function f() = 123; function g() = f();", "_type_of(g())", "text[integer]")
+        chkFn("function f() = 123; function g() = f();", "g()", "int[123]")
+
+        // Forward reference.
+//        chkFn("function g(): text = _type_of(f()); function f() = 123;", "g()", "text[integer]")
+//        chkFn("function g(): integer = f(); function f() = 123;", "g()", "int[123]")
+//        chkFn("function g() = _type_of(f()); function f() = 123;", "g()", "text[integer]")
+//        chkFn("function g() = f(); function f() = 123;", "_type_of(g())", "text[integer]")
+//        chkFn("function g() = f(); function f() = 123;", "g()", "int[123]")
+
+        // Direct recursion.
+//        chkFn("function f(x: integer) { if (x > 0) return f(x - 1); return 0; }", "_type_of(f(0))", "text[integer]")
+//        chkFn("function f(x: integer) { if (x > 0) return f(x - 1); return 0; }", "f(0)", "int[0]")
+//        chkFn("function f(x: integer) { if (x > 0) return f(x - 1) + 1; return 0; }", "f(3)", "int[3]")
+//        chkFn("function f(x: integer) = if (x > 0) f(x - 1) else 0;", "_type_of(f(0))", "text[integer]")
+//        chkFn("function f(x: integer) = if (x > 0) f(x - 1) else 0;", "f(0)", "int[0]")
+//        chkFn("function f(x: integer) = if (x > 0) f(x - 1) + 1 else 0;", "f(3)", "int[3]")
+
+        // Indirect recursion.
+//        chkFn("function g(x: integer) = f(x); function f(x: integer) { if (x > 0) return g(x - 1); return 0; }", "_type_of(f(0))", "text[integer]")
+//        chkFn("function g(x: integer) = f(x); function f(x: integer) { if (x > 0) return g(x - 1); return 0; }", "f(0)", "int[0]")
+//        chkFn("function g(x: integer) = f(x); function f(x: integer) { if (x > 0) return g(x - 1); return 0; }", "f(3)", "int[3]")
+//        chkFn("function f(x: integer) { if (x > 0) return g(x - 1); return 0; } function g(x: integer) = f(x);", "_type_of(f(0))", "text[integer]")
+//        chkFn("function f(x: integer) { if (x > 0) return g(x - 1); return 0; } function g(x: integer) = f(x);", "f(0)", "int[0]")
+//        chkFn("function f(x: integer) { if (x > 0) return g(x - 1); return 0; } function g(x: integer) = f(x);", "f(3)", "int[3]")
     }
 
     @Test fun testReturnType() {
