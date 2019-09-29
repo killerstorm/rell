@@ -562,16 +562,16 @@ class S_FunctionDefinition(
     }
 
     private fun compileDefinition(ctx: C_NamespaceContext, entityIndex: Int, fn: C_UserGlobalFunction) {
-        val rRetType = if (retType != null) retType.compile(ctx) else R_UnitType
+        val rRetType = retType?.compile(ctx)
         val statementVars = body.processStatementVars()
         val entCtx = C_EntityContext(ctx, C_EntityType.FUNCTION, entityIndex, rRetType, statementVars)
 
         val (exprCtx, rParams) = compileExternalParams(ctx, entCtx, params)
-        val header = C_UserFunctionHeader(rParams, rRetType)
+        val header = C_UserFunctionHeader(rParams, rRetType ?: R_UnitType)
         fn.setHeader(header)
 
         ctx.modCtx.onPass(C_ModulePass.EXPRESSIONS) {
-            compileFinish(ctx, entCtx, exprCtx, fn)
+            compileFinish(ctx, entCtx, exprCtx, fn, rParams)
         }
     }
 
@@ -579,9 +579,14 @@ class S_FunctionDefinition(
             ctx: C_NamespaceContext,
             entCtx: C_EntityContext,
             exprCtx: C_ExprContext,
-            fn: C_UserGlobalFunction
+            fn: C_UserGlobalFunction,
+            rParams: List<R_ExternalParam>
     ){
         val rBody = body.compileFunction(name, exprCtx)
+        // After compiling the body of the function we know the actual return type, hence update the function header
+        // with the inferred type.
+        fn.setHeader(C_UserFunctionHeader(rParams, entCtx.actualReturnType()))
+
         val rCallFrame = entCtx.makeCallFrame()
         val rFunction = fn.toRFunction(rBody, rCallFrame)
         ctx.addFunctionBody(rFunction)

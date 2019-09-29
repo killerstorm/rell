@@ -21,13 +21,19 @@ class UserFunctionTest: BaseRellTest(false) {
         chkStdout("Hello")
     }
 
+    @Test fun testInferReturnType() {
+        chkFn("function f() = 123;", "f()", "int[123]")
+        chkFn("function f() { return 123; }", "f()", "int[123]")
+        chkFn("function f() { return 'foobar'; }", "f()", "text[foobar]")
+    }
+
     @Test fun testReturnType() {
         chkFn("function f(): integer = 123;", "f()", "int[123]")
         chkFn("function f(): integer = 'Hello';", "f()", "ct_err:entity_rettype:integer:text")
         chkFn("function f(): integer { return 'Hello'; }", "f()", "ct_err:entity_rettype:integer:text")
         chkFn("function f(): integer { if (1 > 0) return 123; return 'Hello'; }", "f()", "ct_err:entity_rettype:integer:text")
         chkFn("function f(): integer { if (1 > 0) return 123; return 456; }", "f()", "int[123]")
-        chkFn("function g(x: integer): integer = 123; function f(x: integer) = g(x);", "f(123)", "ct_err:entity_rettype:unit:integer")
+        chkFn("function g(x: integer): integer = 123; function f(x: integer) = g(x);", "f(123)", "int[123]")
     }
 
     @Test fun testDbSelect() {

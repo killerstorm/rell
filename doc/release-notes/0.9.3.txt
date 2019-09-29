@@ -1,0 +1,11 @@
+RELEASE NOTES 0.9.3 (2019-09-29)
+
+
+1. Language: Inferred function return types
+
+The return type of functions are now inferred and should not be explicitly declared.
+
+Code examples:
+
+function foo() = 123; => inferred type integer[123]
+function bar() { return "bar"; } => inferred type text[bar]
