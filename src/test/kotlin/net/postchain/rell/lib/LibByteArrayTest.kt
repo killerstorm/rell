@@ -13,6 +13,11 @@ class LibByteArrayTest: BaseRellTest(false) {
         chk("byte_array(123)", "ct_err:expr_call_argtypes:byte_array:integer")
     }
 
+    @Test fun testSha256() {
+        chk("'foo'.to_bytes().sha256()", "byte_array[2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae]")
+        chk("'bar'.to_bytes().sha256()", "byte_array[fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9]")
+    }
+
     @Test fun testFromList() {
         chk("byte_array.from_list(list<integer>())", "byte_array[]")
         chk("byte_array.from_list([123])", "byte_array[7b]")

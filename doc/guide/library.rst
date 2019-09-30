@@ -316,6 +316,8 @@ otherwise an exception is thrown
 
 ``.to_list(): list<integer>`` - list of values 0 - 255
 
+``.sha256(): byte_array`` - returns the sha256 digest as a byte_array
+
 Special operators:
 
 -  ``+`` : concatenation

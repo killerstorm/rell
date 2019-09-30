@@ -10,6 +10,7 @@ import java.math.BigDecimal
 import java.math.BigInteger
 import java.math.MathContext
 import java.math.RoundingMode
+import java.security.MessageDigest
 import java.util.*
 
 sealed class R_CallExpr(type: R_Type, val args: List<R_Expr>): R_Expr(type) {
@@ -309,6 +310,13 @@ object R_SysFn_Decimal {
 object R_SysFn_ByteArray {
     abstract class MemFn: R_SysFunction_Generic<ByteArray>() {
         override fun extract(v: Rt_Value): ByteArray = v.asByteArray()
+    }
+
+    object Sha256: MemFn() {
+        override fun call(obj: ByteArray): Rt_Value {
+            val md = MessageDigest.getInstance("SHA-256")
+            return Rt_ByteArrayValue(md.digest(obj))
+        }
     }
 
     object Empty: MemFn() {

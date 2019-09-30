@@ -220,6 +220,7 @@ object C_LibFunctions {
             .add("sub", R_ByteArrayType, listOf(R_IntegerType, R_IntegerType), R_SysFn_ByteArray.Sub)
             .add("to_hex", R_TextType, listOf(), R_SysFn_ByteArray.ToHex)
             .add("to_base64", R_TextType, listOf(), R_SysFn_ByteArray.ToBase64)
+            .add("sha256", R_ByteArrayType, listOf(), R_SysFn_ByteArray.Sha256)
             .build()
 
     private val JSON_NAMESPACE_FNS = typeGlobalFuncBuilder(R_JsonType)
