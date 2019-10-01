@@ -4,6 +4,7 @@ import net.postchain.gtv.Gtv
 import net.postchain.rell.CommonUtils
 import net.postchain.rell.module.*
 import net.postchain.rell.parser.C_Constants
+import net.postchain.rell.LateInit
 import net.postchain.rell.runtime.*
 import org.jooq.DataType
 import org.jooq.SQLDialect
@@ -357,12 +358,12 @@ class R_ObjectType(val rObject: R_Object): R_Type(rObject.rClass.name) {
 class R_RecordFlags(val typeFlags: R_TypeFlags, val cyclic: Boolean, val infinite: Boolean)
 
 class R_RecordType(name: String): R_Type(name) {
-    private lateinit var bodyLate: R_RecordBody
-    private lateinit var flagsLate: R_RecordFlags
+    private val bodyLate = LateInit<R_RecordBody>()
+    private val flagsLate = LateInit<R_RecordFlags>()
 
-    val attributes: Map<String, R_Attrib> get() = bodyLate.attrMap
-    val attributesList: List<R_Attrib> get() = bodyLate.attrList
-    val flags: R_RecordFlags get() = flagsLate
+    val attributes: Map<String, R_Attrib> get() = bodyLate.get().attrMap
+    val attributesList: List<R_Attrib> get() = bodyLate.get().attrList
+    val flags: R_RecordFlags get() = flagsLate.get()
 
     val virtualType = R_VirtualRecordType(this)
 
@@ -370,16 +371,16 @@ class R_RecordType(name: String): R_Type(name) {
         val attrsList = attrs.values.toList()
         attrsList.withIndex().forEach { (idx, attr) -> check(attr.index == idx) }
         val attrMutable = attrs.values.any { it.mutable }
-        bodyLate = R_RecordBody(attrs, attrsList, attrMutable)
+        bodyLate.set(R_RecordBody(attrs, attrsList, attrMutable))
     }
 
     fun setFlags(flags: R_RecordFlags) {
-        flagsLate = flags
+        flagsLate.set(flags)
     }
 
     override fun isReference() = true
-    override fun isDirectMutable() = bodyLate.attrMutable
-    override fun completeFlags() = flagsLate.typeFlags
+    override fun isDirectMutable() = bodyLate.get().attrMutable
+    override fun completeFlags() = flagsLate.get().typeFlags
 
     override fun toStrictString(): String = name
     override fun componentTypes() = attributesList.map { it.type }.toList()

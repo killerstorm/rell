@@ -248,3 +248,18 @@ class DirBuilder {
 
     fun toFileMap() = files.toMap()
 }
+
+class LateInit<T> {
+    private var t: T? = null
+
+    fun isSet(): Boolean = t != null
+
+    fun get(): T = t!!
+
+    fun set(v: T) {
+        check(t == null) { "value already initialized with: <$t>" }
+
+        t = v
+    }
+}
+

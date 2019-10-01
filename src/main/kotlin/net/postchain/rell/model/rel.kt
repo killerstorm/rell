@@ -1,5 +1,6 @@
 package net.postchain.rell.model
 
+import net.postchain.rell.LateInit
 import net.postchain.rell.runtime.Rt_CallFrame
 
 class R_Key(val attribs: List<String>)
@@ -20,13 +21,13 @@ class R_ClassBody(val keys: List<R_Key>, val indexes: List<R_Index>, val attribu
 class R_ExternalClass(val chain: R_ExternalChain, val externalName: String, val metaCheck: Boolean)
 
 class R_Class(val name: String, val flags: R_ClassFlags, val sqlMapping: R_ClassSqlMapping, val external: R_ExternalClass?) {
-    private lateinit var body: R_ClassBody
-    val keys: List<R_Key> get() = body.keys
-    val indexes: List<R_Index> get() = body.indexes
-    val attributes: Map<String, R_Attrib> get() = body.attributes
+    private val body = LateInit<R_ClassBody>()
+    val keys: List<R_Key> get() = body.get().keys
+    val indexes: List<R_Index> get() = body.get().indexes
+    val attributes: Map<String, R_Attrib> get() = body.get().attributes
 
     fun setBody(body: R_ClassBody) {
-        this.body = body
+        this.body.set(body)
     }
 
     fun attribute(name: String): R_Attrib {

@@ -10,6 +10,7 @@ import net.postchain.gtx.GTXModule
 import net.postchain.gtx.GTXModuleFactory
 import net.postchain.gtx.GTXOperation
 import net.postchain.rell.CommonUtils
+import net.postchain.rell.LateInit
 import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.model.R_Operation
@@ -114,17 +115,21 @@ private class RellGTXOperation(
         private val errorHandler: ErrorHandler,
         opData: ExtOpData
 ) : GTXOperation(opData) {
-    private lateinit var gtvToRtCtx: GtvToRtContext
-    private lateinit var args: List<Rt_Value>
+    private val gtvToRtCtx = LateInit<GtvToRtContext>()
+    private val args = LateInit<List<Rt_Value>>()
 
     override fun isCorrect(): Boolean {
         handleError {
             if (data.args.size != rOperation.params.size) {
                 throw UserMistake("Wrong argument count: ${data.args.size} instead of ${rOperation.params.size}")
             }
+            if (!gtvToRtCtx.isSet()) {
+                gtvToRtCtx.set(GtvToRtContext(GTV_OPERATION_PRETTY))
+            }
+            if (!args.isSet()) {
+                args.set(convertArgs(gtvToRtCtx.get(), rOperation.params, data.args.toList()))
+            }
 
-            gtvToRtCtx = GtvToRtContext(GTV_OPERATION_PRETTY)
-            args = convertArgs(gtvToRtCtx, rOperation.params, data.args.toList())
         }
         return true
     }
@@ -135,8 +140,8 @@ private class RellGTXOperation(
             val opCtx = Rt_OpContext(ctx.timestamp, ctx.txIID, blockHeight, data.signers.toList())
             val heightProvider = Rt_TxChainHeightProvider(ctx)
             val modCtx = module.makeRtModuleContext(ctx, opCtx, heightProvider)
-            gtvToRtCtx.finish(modCtx)
-            rOperation.callTopNoTx(modCtx, args)
+            gtvToRtCtx.get().finish(modCtx)
+            rOperation.callTopNoTx(modCtx, args.get())
         }
         return true
     }

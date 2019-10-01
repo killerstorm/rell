@@ -1,5 +1,6 @@
 package net.postchain.rell.model
 
+import net.postchain.rell.LateInit
 import net.postchain.rell.runtime.*
 import java.util.*
 
@@ -19,11 +20,11 @@ class R_Attrib(
         val canSetInCreate: Boolean = true,
         val sqlMapping: String = name
 ){
-    private lateinit var expr0: Optional<R_Expr>
-    val expr: R_Expr? get() = expr0.orElse(null)
+    private val expr0 = LateInit<Optional<R_Expr>>()
+    val expr: R_Expr? get() = expr0.get().orElse(null)
 
     fun setExpr(expr: R_Expr?) {
-        expr0 = Optional.ofNullable(expr)
+        expr0.set(Optional.ofNullable(expr))
     }
 }
 

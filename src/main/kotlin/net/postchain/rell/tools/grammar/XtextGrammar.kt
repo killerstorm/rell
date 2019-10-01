@@ -2,6 +2,7 @@ package net.postchain.rell.tools.grammar
 
 import com.github.h0tk3y.betterParse.combinators.*
 import com.github.h0tk3y.betterParse.grammar.ParserReference
+import net.postchain.rell.LateInit
 import net.postchain.rell.parser.RellToken
 import net.postchain.rell.parser.S_Grammar
 import org.apache.commons.collections4.MapUtils
@@ -93,7 +94,7 @@ private object XtextNontermGen {
 
             val xNt = XtextNonterm(name)
             xNonterms[name] = xNt
-            xNt.prods = convertProds(name, gram)
+            xNt.prods.set(convertProds(name, gram))
         }
 
         return XtextExpr_Symbol(name)
@@ -192,7 +193,7 @@ private object XtextNontermGen {
             val type = createTokenType(name)
             val prod = XtextProd(type, expr)
             val nonterm = XtextNonterm(ntName)
-            nonterm.prods = listOf(prod)
+            nonterm.prods.set(listOf(prod))
             xTokenNonterms[name] = nonterm
             xNonterms[ntName] = nonterm
         }
@@ -274,10 +275,10 @@ private object GramExprGen {
 }
 
 private class XtextNonterm(val name: String) {
-    lateinit var prods: List<XtextProd>
+    val prods = LateInit<List<XtextProd>>()
 
     fun generate(): String {
-        val ps = prods.joinToString("\n   | ") { it.generate() }
+        val ps = prods.get().joinToString("\n   | ") { it.generate() }
         return "\n$name\n   : $ps\n   ;"
     }
 }

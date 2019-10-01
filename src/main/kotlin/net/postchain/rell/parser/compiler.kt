@@ -1,6 +1,7 @@
 package net.postchain.rell.parser
 
 import net.postchain.rell.CommonUtils
+import net.postchain.rell.LateInit
 import net.postchain.rell.TypedKeyMap
 import net.postchain.rell.model.*
 import org.apache.commons.lang3.StringUtils
@@ -76,14 +77,14 @@ class C_RecordGlobalFunction(private val record: R_RecordType): C_GlobalFunction
 class C_UserFunctionHeader(val params: List<R_ExternalParam>, val type: R_Type)
 
 class C_UserGlobalFunction(val name: String, val fnKey: Int): C_RegularGlobalFunction() {
-    private lateinit var headerLate: C_UserFunctionHeader
+    private val headerLate = LateInit<C_UserFunctionHeader>()
 
     fun setHeader(header: C_UserFunctionHeader) {
-        headerLate = header
+        headerLate.set(header)
     }
 
     override fun compileCallRegular(ctx: C_ExprContext, sName: S_Name, args: List<C_Value>): C_Expr {
-        val header = headerLate
+        val header = headerLate.get()
         val effArgs = C_FuncUtils.checkArgs(sName, header.params, args)
         val rArgs = effArgs.map { it.toRExpr() }
         val rExpr = R_UserCallExpr(header.type, name, fnKey, rArgs)
@@ -92,7 +93,7 @@ class C_UserGlobalFunction(val name: String, val fnKey: Int): C_RegularGlobalFun
     }
 
     fun toRFunction(body: R_Statement, frame: R_CallFrame): R_Function {
-        val header = headerLate
+        val header = headerLate.get()
         return R_Function(name, header.params, body, frame, header.type, fnKey)
     }
 }
@@ -458,7 +459,7 @@ class C_NamespaceContext(
     private val records = mutableMapOf<String, C_Record>()
     private val namespaces = mutableMapOf<String, C_DefinitionContext>()
 
-    private lateinit var namespace: C_Namespace
+    private val namespace = LateInit<C_Namespace>()
 
     init {
         val predefValues = predefNamespaces.mapValues { C_NamespaceValue_Namespace(it.value) }
@@ -509,11 +510,11 @@ class C_NamespaceContext(
 
         val name0 = name[0].str
         if (name.size == 1) {
-            val typeDef = getDefOpt { it.namespace.types[name0] }
+            val typeDef = getDefOpt { it.namespace.get().types[name0] }
             return typeDef
         }
 
-        var nsDef = getDefOpt { it.namespace.namespaces[name0] }
+        var nsDef = getDefOpt { it.namespace.get().namespaces[name0] }
         if (nsDef == null) return null
 
         for (i in 1 .. name.size - 2) {
@@ -543,13 +544,13 @@ class C_NamespaceContext(
     }
 
     fun getValueOpt(name: String): C_NamespaceValue? {
-        val e = getDefOpt { it.namespace.values[name] }
+        val e = getDefOpt { it.namespace.get().values[name] }
         return e
     }
 
     fun getFunctionOpt(name: String): C_GlobalFunction? {
         modCtx.checkPass(C_ModulePass.EXPRESSIONS, null)
-        val fn = getDefOpt { it.namespace.functions[name] }
+        val fn = getDefOpt { it.namespace.get().functions[name] }
         return fn
     }
 
@@ -680,8 +681,8 @@ class C_NamespaceContext(
             nsBuilder.addValue(name, C_NamespaceValue_Namespace(nsDef))
         }
 
-        namespace = nsBuilder.build()
-        return namespace
+        namespace.set(nsBuilder.build())
+        return namespace.get()
     }
 
     private class C_DefEntry(val type: C_DefType, val pos: S_Pos?)
@@ -708,7 +709,7 @@ class C_DefinitionContext(
 class C_ExternalChainContext(val nsCtx: C_NamespaceContext, val chain: R_ExternalChain) {
     private var classDeclaredBlock = false
     private var classDeclaredTx = false
-    private lateinit var transactionClassType: R_Type
+    private  val transactionClassType = LateInit<R_Type>()
 
     fun declareClassBlock() {
         check(!classDeclaredBlock)
@@ -733,7 +734,7 @@ class C_ExternalChainContext(val nsCtx: C_NamespaceContext, val chain: R_Externa
         if (classDeclaredBlock) nsCtx.addClass0(C_Defs.BLOCK_CLASS, blkClass)
         if (classDeclaredTx) nsCtx.addClass0(C_Defs.TRANSACTION_CLASS, txClass)
 
-        transactionClassType = R_ClassType(txClass)
+        transactionClassType.set(R_ClassType(txClass))
     }
 
     private fun sysClassNamespace(defined: Boolean): String {
@@ -742,7 +743,7 @@ class C_ExternalChainContext(val nsCtx: C_NamespaceContext, val chain: R_Externa
 
     fun transactionClassType(): R_Type {
         nsCtx.modCtx.checkPass(C_ModulePass.MEMBERS, null)
-        return transactionClassType
+        return transactionClassType.get()
     }
 }
 
