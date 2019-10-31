@@ -1,0 +1,61 @@
+RELEASE NOTES 0.10.0 (2019-10-31)
+
+
+1. Language: Module system
+
+The new module system replaces the "include" directive as a way to combine multiple .rell files into an application.
+
+Highlights:
+
+- A Rell application is a set of modules
+- A module can be either a single .rell file or a directory with multiple .rell files
+- Modules can import each other
+- Rell files within a directory-module see each other's definitions and are imported as a single module
+
+
+2. Language: @mount annotation
+
+Mount names are defined for classes, objects, operations and queries:
+
+- for classes and objects, that's the name of an SQL table where the data is stored
+- for operations and queries, that's a name used to invoke an operation or a query from the outside
+
+By default, a mount name of a definition is defined by its fully-qualified name (namespace path + definition name).
+
+The new @mount annotation is used to specify an arbitrary mount name for a definition:
+
+@mount('foo.bar.user') class user {}
+
+
+3. Language: Annotations syntax
+
+Following the example of the @mount annotation, the old log annotation is now written the same way:
+
+@log class user {}
+
+instead of
+
+class user (log) {}
+
+(the old syntax is still allowed, but deprecated)
+
+
+4. Language: Anonymous namespace
+
+An anonymous (without a name) namespace allows to apply an annotation to a set of definitions:
+
+@mount('foo'bar')
+namespace {
+    class user {}
+    class company {}
+}
+
+
+5. Library: byte_array.sha256() function
+
+A new member function sha256() for the byte_array type has been added.
+
+Code examples:
+
+'foo'.to_bytes().sha256() => byte_array[2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae]
+'bar'.to_bytes().sha256() => byte_array[fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9]

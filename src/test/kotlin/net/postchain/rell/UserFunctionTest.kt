@@ -27,7 +27,8 @@ class UserFunctionTest: BaseRellTest(false) {
         chkFn("function f(): integer { return 'Hello'; }", "f()", "ct_err:entity_rettype:integer:text")
         chkFn("function f(): integer { if (1 > 0) return 123; return 'Hello'; }", "f()", "ct_err:entity_rettype:integer:text")
         chkFn("function f(): integer { if (1 > 0) return 123; return 456; }", "f()", "int[123]")
-        chkFn("function g(x: integer): integer = 123; function f(x: integer) = g(x);", "f(123)", "ct_err:entity_rettype:unit:integer")
+        chkFn("function g(x: integer): integer = 123; function f(x: integer) = g(x);", "f(123)",
+                "ct_err:[entity_rettype:unit:integer][query_exprtype_unit]")
     }
 
     @Test fun testDbSelect() {
@@ -137,11 +138,11 @@ class UserFunctionTest: BaseRellTest(false) {
 
     private fun chkFnEx(fnCode: String, queryCode: String, expected: String) {
         val code = "$fnCode query q() $queryCode"
-        tst.chkQueryEx(code, listOf(), expected)
+        tst.chkQueryEx(code, "q", listOf(), expected)
     }
 
     private fun chkFnOp(fnCode: String, callCode: String, expected: String = "OK") {
         val code = "$fnCode operation o() { $callCode }"
-        tst.chkOpEx(code, expected)
+        chkOpFull(code, expected)
     }
 }

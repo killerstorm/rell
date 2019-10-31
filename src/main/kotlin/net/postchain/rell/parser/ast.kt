@@ -1,10 +1,12 @@
 package net.postchain.rell.parser
 
 import net.postchain.rell.MutableTypedKeyMap
+import net.postchain.rell.ThreadLocalContext
 import net.postchain.rell.TypedKeyMap
 import net.postchain.rell.model.*
-import net.postchain.rell.parser.ide.IdeOutlineNodeType
-import net.postchain.rell.parser.ide.IdeOutlineTreeBuilder
+import net.postchain.rell.module.RELL_VERSION_MODULE_SYSTEM
+import net.postchain.rell.tools.api.IdeOutlineNodeType
+import net.postchain.rell.tools.api.IdeOutlineTreeBuilder
 import java.util.function.Supplier
 
 abstract class S_Pos {
@@ -19,10 +21,10 @@ class S_BasicPos(private val file: C_SourcePath, private val row: Int, private v
     override fun path() = file
     override fun pos() = Math.min(row, 1_000_000_000) * 1_000_000_000L + Math.min(col, 1_000_000_000)
     override fun str() = "$file($row:$col)"
-    override fun strLine() = "$file($row)"
+    override fun strLine() = "$file:$row"
 
     override fun equals(other: Any?): Boolean {
-        return other is S_BasicPos && file == other.file && row == other.row && col == other.col
+        return other is S_BasicPos && row == other.row && col == other.col && file == other.file
     }
 }
 
@@ -30,22 +32,18 @@ abstract class S_Node {
     val attachment: Any? = getAttachment()
 
     companion object {
-        private val ATTACHMENT_PROVIDER_LOCAL = ThreadLocal<Supplier<Any?>>()
+        private val ATTACHMENT_PROVIDER_LOCAL = ThreadLocalContext<Supplier<Any?>>(Supplier { null })
 
         @JvmStatic
         fun runWithAttachmentProvider(provider: Supplier<Any?>, code: Runnable) {
-            val oldProvider = ATTACHMENT_PROVIDER_LOCAL.get()
-            ATTACHMENT_PROVIDER_LOCAL.set(provider)
-            try {
+            ATTACHMENT_PROVIDER_LOCAL.set(provider) {
                 code.run()
-            } finally {
-                ATTACHMENT_PROVIDER_LOCAL.set(oldProvider)
             }
         }
 
         private fun getAttachment(): Any? {
             val provider = ATTACHMENT_PROVIDER_LOCAL.get()
-            val res = provider?.get()
+            val res = provider.get()
             return res
         }
     }
@@ -57,17 +55,28 @@ class S_PosValue<T>(val pos: S_Pos, val value: T) {
 
 class S_Name(val pos: S_Pos, val str: String): S_Node() {
     override fun toString() = str
+
+    fun toRName(): R_Name {
+        val rName = R_Name.ofOpt(str)
+        check(rName != null) { "Invalid name: '$str' ($pos)" }
+        return rName
+    }
+}
+
+class S_String(val pos: S_Pos, val str: String): S_Node() {
+    constructor(name: S_Name): this(name.pos, name.str)
+    override fun toString() = str
 }
 
 class S_NameTypePair(val name: S_Name, val type: S_Type?): S_Node() {
-    fun compileType(ctx: C_NamespaceContext): R_Type {
+    fun compileType(ctx: C_NamespaceContext): R_Type? {
         if (type != null) {
-            return type.compile(ctx)
+            return type.compileOpt(ctx)
         }
 
         val rType = ctx.getTypeOpt(listOf(name))
         if (rType == null) {
-            throw C_Error(name.pos, "unknown_name_type:${name.str}",
+            ctx.globalCtx.error(name.pos, "unknown_name_type:${name.str}",
                     "Type for '${name.str}' not specified and no type called '${name.str}'")
         }
 
@@ -140,103 +149,140 @@ class S_IndexClause(pos: S_Pos, attrs: List<S_NameTypePair>): S_KeyIndexClause(p
     }
 }
 
-sealed class S_Definition: S_Node() {
-    abstract fun compile(ctx: C_DefinitionContext, entityIndex: Int)
+sealed class S_Modifier(val pos: S_Pos) {
+    abstract fun compile(ctx: C_ModifierContext, target: C_ModifierTarget)
+}
 
-    abstract fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder)
-
-    open fun collectIncludes(
-            globalCtx: C_GlobalContext,
-            incCtx: C_IncludeContext,
-            transitive: Boolean,
-            fail: Boolean,
-            resources: MutableMap<String, C_IncludeResource>
-    ){
+class S_Annotation(val name: S_Name, val args: List<S_LiteralExpr>): S_Modifier(name.pos) {
+    override fun compile(ctx: C_ModifierContext, target: C_ModifierTarget) {
+        val argValues = args.map { it.value() }
+        C_Annotation.compile(ctx, name, argValues, target)
     }
 }
 
-class S_ClassDefinition(val name: S_Name, val annotations: List<S_Name>, val body: List<S_RelClause>?): S_Definition() {
-    override fun compile(ctx: C_DefinitionContext, entityIndex: Int) {
+class S_Modifiers(val modifiers: List<S_Modifier>) {
+    fun compile(modifierCtx: C_ModifierContext, target: C_ModifierTarget) {
+        for (modifier in modifiers) {
+            modifier.compile(modifierCtx, target)
+        }
+    }
+
+    fun compile(ctx: C_DefinitionContext, target: C_ModifierTarget) {
+        val modifierCtx = C_ModifierContext(ctx.globalCtx, ctx.mountName)
+        compile(modifierCtx, target)
+    }
+}
+
+sealed class S_Definition(val modifiers: S_Modifiers): S_Node() {
+    abstract fun compile(ctx: C_DefinitionContext)
+
+    abstract fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder)
+
+    open fun getImportedModules(moduleName: R_ModuleName, res: MutableSet<R_ModuleName>) {
+    }
+}
+
+class S_ClassDefinition(
+        modifiers: S_Modifiers,
+        val name: S_Name,
+        val annotations: List<S_Name>,
+        val body: List<S_RelClause>?
+): S_Definition(modifiers) {
+    override fun compile(ctx: C_DefinitionContext) {
         if (body == null) {
             compileHeader(ctx)
             return
         }
 
-        val fullName = ctx.nsCtx.registerName(name, C_DefType.CLASS)
+        val modTarget = C_ModifierTarget(C_DefType.CLASS, name, mount = true, log = true)
+        modifiers.compile(ctx, modTarget)
 
-        val chain = ctx.chainCtx?.chain
-        val external = chain != null
-        val rFlags = compileFlags(external)
+        val names = ctx.nsCtx.defNames(name.str)
+        val extChain = ctx.extChain
+        val extChainRef = extChain?.ref
+        val external = extChainRef != null
+        val rFlags = compileFlags(ctx, external, modTarget)
 
-        if (external && !rFlags.log) {
-            throw C_Error(name.pos, "def_class_external_nolog:$fullName",
-                    "External class '$fullName' must have '${C_Defs.LOG_ANNOTATION}' annotation")
-        }
-
-        if (external && ctx.namespaceName == null && (name.str == C_Defs.BLOCK_CLASS || name.str == C_Defs.TRANSACTION_CLASS)) {
+        if (external && ctx.mountName.isEmpty() && name.str in HEADER_CLASSES) {
             throw C_Error(name.pos, "def_class_external_unallowed:${name.str}",
                     "External class '${name.str}' can be declared only without body (as class header)")
         }
 
-        val physicalFullName = ctx.fullName(name.str)
-        val sqlTable = classNameToSqlTable(physicalFullName)
-        val rMapping = if (chain == null) R_ClassSqlMapping_Regular(sqlTable) else R_ClassSqlMapping_External(sqlTable, chain)
+        if (external && !rFlags.log) {
+            throw C_Error(name.pos, "def_class_external_nolog:${names.simpleName}",
+                    "External class '${names.simpleName}' must have '${C_Constants.LOG_ANNOTATION}' annotation")
+        }
 
-        val rExternalClass = if (chain == null) null else R_ExternalClass(chain, physicalFullName, true)
+        val mountName = ctx.mountName(modTarget, name)
+        val rMapping = if (extChainRef == null) R_ClassSqlMapping_Regular(mountName) else R_ClassSqlMapping_External(mountName, extChainRef)
 
-        val rClass = R_Class(fullName, rFlags, rMapping, rExternalClass)
-        ctx.nsCtx.addClass(name, rClass)
+        val rExternalClass = if (extChainRef == null) null else R_ExternalClass(extChainRef, true)
 
-        ctx.modCtx.onPass(C_ModulePass.MEMBERS) {
-            membersPass(ctx, entityIndex, rClass, body)
+        val rClass = R_Class(names, mountName, rFlags, rMapping, rExternalClass)
+
+        ctx.appCtx.defsBuilder.classes.add(C_Class(name.pos, rClass))
+        ctx.nsBuilder.addClass(name, rClass)
+        ctx.mntBuilder.addClass(name.pos, rClass)
+
+        ctx.executor.onPass(C_CompilerPass.MEMBERS) {
+            membersPass(ctx, rClass, body)
         }
     }
 
     private fun compileHeader(ctx: C_DefinitionContext) {
-        ctx.nsCtx.registerName(name, C_DefType.CLASS)
+        var err = false
+
+        val modTarget = C_ModifierTarget(C_DefType.CLASS, name, mount = true, mountAllowed = false, log = true, logAllowed = false)
+        modifiers.compile(ctx, modTarget)
 
         if (!annotations.isEmpty()) {
-            throw C_Error(name.pos, "def_class_hdr_annotations:${name.str}",
+            ctx.globalCtx.error(name.pos, "def_class_hdr_annotations:${name.str}",
                     "Annotations not allowed for class header '${name.str}'")
+            err = true
         }
 
-        if (name.str != C_Defs.BLOCK_CLASS && name.str != C_Defs.TRANSACTION_CLASS) {
-            val classes = listOf(C_Defs.BLOCK_CLASS, C_Defs.TRANSACTION_CLASS).joinToString()
-            throw C_Error(name.pos, "def_class_hdr_name:${name.str}",
+        val clsGetter = HEADER_CLASSES[name.str]
+        if (clsGetter == null) {
+            val classes = HEADER_CLASSES.keys.joinToString()
+            ctx.globalCtx.error(name.pos, "def_class_hdr_name:${name.str}",
                     "Class header declarations allowed only for classes: $classes")
+            err = true
         }
 
-        if (ctx.chainCtx == null) {
-            throw C_Error(name.pos, "def_class_hdr_noexternal:${name.str}",
+        if (ctx.extChain == null) {
+            ctx.globalCtx.error(name.pos, "def_class_hdr_noexternal:${name.str}",
                     "Class header must be declared in external block")
+            return
         }
 
-        if (ctx.namespaceName != null) {
-            throw C_Error(name.pos, "def_class_hdr_ns:${name.str}",
-                    "Class header '${name.str}' cannot be declared in a namespace")
+        if (err || clsGetter == null) {
+            return
         }
 
-        if (name.str == C_Defs.BLOCK_CLASS) {
-            ctx.chainCtx.declareClassBlock()
-        } else {
-            ctx.chainCtx.declareClassTransaction()
-        }
+        val rClass = clsGetter(ctx.extChain)
+        ctx.nsBuilder.addClass(name, rClass, addToModule = false)
     }
 
-    private fun compileFlags(external: Boolean): R_ClassFlags {
+    private fun compileFlags(ctx: C_DefinitionContext, external: Boolean, modTarget: C_ModifierTarget): R_ClassFlags {
         val set = mutableSetOf<String>()
-        var log = false
+        var log = modTarget.log?.get() ?: false
+
+        if (log) {
+            set.add(C_Constants.LOG_ANNOTATION)
+        }
 
         for (ann in annotations) {
+            ctx.globalCtx.warning(ann.pos, "ann:legacy:${ann.str}", "Deprecated annotation syntax; use @${ann.str} instead")
+
             val annStr = ann.str
             if (!set.add(annStr)) {
-                throw C_Error(ann.pos, "class_ann_dup:$annStr", "Duplicate annotation: '$annStr'")
+                ctx.globalCtx.error(ann.pos, "class_ann_dup:$annStr", "Duplicate annotation: '$annStr'")
             }
 
-            if (annStr == C_Defs.LOG_ANNOTATION) {
+            if (annStr == C_Constants.LOG_ANNOTATION) {
                 log = true
             } else {
-                throw C_Error(ann.pos, "class_ann_bad:$annStr", "Invalid annotation: '$annStr'")
+                ctx.globalCtx.error(ann.pos, "class_ann_bad:$annStr", "Invalid annotation: '$annStr'")
             }
         }
 
@@ -250,17 +296,18 @@ class S_ClassDefinition(val name: S_Name, val annotations: List<S_Name>, val bod
         )
     }
 
-    private fun membersPass(ctx: C_DefinitionContext, entityIndex: Int, rClass: R_Class, clauses: List<S_RelClause>) {
-        val entCtx = C_EntityContext(ctx.nsCtx, C_EntityType.CLASS, entityIndex, null, TypedKeyMap())
+    private fun membersPass(ctx: C_DefinitionContext, rClass: R_Class, clauses: List<S_RelClause>) {
+        val entCtx = C_EntityContext(ctx.nsCtx, C_EntityType.CLASS, null, TypedKeyMap())
         val clsCtx = C_ClassContext(entCtx, name.str, rClass.flags.log)
 
         if (rClass.flags.log) {
-            val txType = if (ctx.chainCtx == null) ctx.modCtx.transactionClassType else ctx.chainCtx.transactionClassType()
+            val txCls = if (ctx.extChain == null) ctx.modCtx.appCtx.sysDefs.transactionClass else ctx.extChain.transactionClass
+            val txType = txCls.type
             clsCtx.addAttribute0("transaction", txType, false, false) {
-                if (ctx.chainCtx == null) {
+                if (ctx.extChain == null) {
                     C_Ns_OpContext.transactionExpr(clsCtx.entCtx)
                 } else {
-                    C_Utils.crashExpr(txType, "Trying to initialize transaction for external class '${rClass.name}'")
+                    C_Utils.crashExpr(txType, "Trying to initialize transaction for external class '${rClass.appLevelName}'")
                 }
             }
         }
@@ -279,6 +326,11 @@ class S_ClassDefinition(val name: S_Name, val annotations: List<S_Name>, val bod
     }
 
     companion object {
+        private val HEADER_CLASSES = mutableMapOf(
+            C_Constants.BLOCK_CLASS to { c: C_ExternalChain -> c.blockClass },
+            C_Constants.TRANSACTION_CLASS to { c: C_ExternalChain -> c.transactionClass }
+        )
+
         fun compileClauses(clsCtx: C_ClassContext, clauses: List<S_RelClause>) {
             for (clause in clauses) {
                 clause.compileAttributes(clsCtx)
@@ -290,27 +342,43 @@ class S_ClassDefinition(val name: S_Name, val annotations: List<S_Name>, val bod
     }
 }
 
-class S_ObjectDefinition(val name: S_Name, val clauses: List<S_RelClause>): S_Definition() {
-    override fun compile(ctx: C_DefinitionContext, entityIndex: Int) {
-        val fullName = ctx.nsCtx.registerName(name, C_DefType.OBJECT)
+class S_ObjectDefinition(
+        modifiers: S_Modifiers,
+        val name: S_Name,
+        val clauses: List<S_RelClause>
+): S_Definition(modifiers) {
+    override fun compile(ctx: C_DefinitionContext) {
         ctx.checkNotExternal(name.pos, C_DefType.OBJECT)
 
-        val classFlags = R_ClassFlags(true, false, true, false, false, false)
+        val classFlags = R_ClassFlags(
+                isObject = true,
+                canCreate = false,
+                canUpdate = true,
+                canDelete = false,
+                gtv = false,
+                log = false
+        )
 
-        val sqlTable = classNameToSqlTable(fullName)
-        val sqlMapping = R_ClassSqlMapping_Regular(sqlTable)
+        val modTarget = C_ModifierTarget(C_DefType.OBJECT, name, mount = true)
+        modifiers.compile(ctx, modTarget)
 
-        val rClass = R_Class(fullName, classFlags, sqlMapping, null)
-        val rObject = R_Object(rClass, entityIndex)
-        ctx.nsCtx.addObject(name, rObject)
+        val names = ctx.nsCtx.defNames(name.str)
+        val mountName = ctx.mountName(modTarget, name)
+        val sqlMapping = R_ClassSqlMapping_Regular(mountName)
 
-        ctx.modCtx.onPass(C_ModulePass.MEMBERS) {
-            membersPass(ctx.nsCtx, entityIndex, rObject)
+        val rClass = R_Class(names, mountName, classFlags, sqlMapping, null)
+        val rObject = R_Object(names, rClass)
+        ctx.appCtx.defsBuilder.objects.add(rObject)
+        ctx.nsBuilder.addObject(name, rObject)
+        ctx.mntBuilder.addObject(name, rObject)
+
+        ctx.executor.onPass(C_CompilerPass.MEMBERS) {
+            membersPass(ctx.nsCtx, rObject)
         }
     }
 
-    private fun membersPass(ctx: C_NamespaceContext, entityIndex: Int, rObject: R_Object) {
-        val entCtx = C_EntityContext(ctx, C_EntityType.OBJECT, entityIndex, null, TypedKeyMap())
+    private fun membersPass(ctx: C_NamespaceContext, rObject: R_Object) {
+        val entCtx = C_EntityContext(ctx, C_EntityType.OBJECT, null, TypedKeyMap())
         val clsCtx = C_ClassContext(entCtx, name.str, false)
         S_ClassDefinition.compileClauses(clsCtx, clauses)
 
@@ -326,28 +394,36 @@ class S_ObjectDefinition(val name: S_Name, val clauses: List<S_RelClause>): S_De
     }
 }
 
-class S_RecordDefinition(val name: S_Name, val attrs: List<S_AttributeClause>): S_Definition() {
-    override fun compile(ctx: C_DefinitionContext, entityIndex: Int) {
-        val fullName = ctx.nsCtx.registerName(name, C_DefType.RECORD)
+class S_RecordDefinition(
+        modifiers: S_Modifiers,
+        val name: S_Name,
+        val attrs: List<S_AttributeClause>
+): S_Definition(modifiers) {
+    override fun compile(ctx: C_DefinitionContext) {
         ctx.checkNotExternal(name.pos, C_DefType.RECORD)
 
-        val rType = R_RecordType(fullName)
-        ctx.nsCtx.addRecord(C_Record(name, rType))
+        val modTarget = C_ModifierTarget(C_DefType.RECORD, name)
+        modifiers.compile(ctx, modTarget)
 
-        ctx.modCtx.onPass(C_ModulePass.MEMBERS) {
-            membersPass(ctx.nsCtx, entityIndex, rType)
+        val names = ctx.nsCtx.defNames(name.str)
+        val rRecord = R_Record(names)
+        ctx.appCtx.defsBuilder.records.add(rRecord)
+        ctx.nsBuilder.addRecord(name, rRecord)
+
+        ctx.executor.onPass(C_CompilerPass.MEMBERS) {
+            membersPass(ctx.nsCtx, rRecord)
         }
     }
 
-    private fun membersPass(ctx: C_NamespaceContext, entityIndex: Int, rType: R_RecordType) {
-        val entCtx = C_EntityContext(ctx, C_EntityType.RECORD, entityIndex, null, TypedKeyMap())
+    private fun membersPass(ctx: C_NamespaceContext, rRecord: R_Record) {
+        val entCtx = C_EntityContext(ctx, C_EntityType.RECORD, null, TypedKeyMap())
         val clsCtx = C_ClassContext(entCtx, name.str, false)
         for (clause in attrs) {
             clause.compileAttributes(clsCtx)
         }
 
         val attributes = clsCtx.createRecordBody()
-        rType.setAttributes(attributes)
+        rRecord.setAttributes(attributes)
     }
 
     override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
@@ -358,23 +434,31 @@ class S_RecordDefinition(val name: S_Name, val attrs: List<S_AttributeClause>): 
     }
 }
 
-class S_EnumDefinition(val name: S_Name, val attrs: List<S_Name>): S_Definition() {
-    override fun compile(ctx: C_DefinitionContext, entityIndex: Int) {
-        val fullName = ctx.nsCtx.registerName(name, C_DefType.ENUM)
+class S_EnumDefinition(
+        modifiers: S_Modifiers,
+        val name: S_Name,
+        val attrs: List<S_Name>
+): S_Definition(modifiers) {
+    override fun compile(ctx: C_DefinitionContext) {
         ctx.checkNotExternal(name.pos, C_DefType.ENUM)
+
+        val modTarget = C_ModifierTarget(C_DefType.ENUM, name)
+        modifiers.compile(ctx, modTarget)
 
         val set = mutableSetOf<String>()
         val rAttrs = mutableListOf<R_EnumAttr>()
 
         for (attr in attrs) {
-            if (!set.add(attr.str)) {
-                throw C_Error(attr.pos, "enum_dup:${attr.str}", "Duplicate enum constant: '${attr.str}'")
+            if (set.add(attr.str)) {
+                rAttrs.add(R_EnumAttr(attr.str, rAttrs.size))
+            } else {
+                ctx.globalCtx.error(attr.pos, "enum_dup:${attr.str}", "Duplicate enum constant: '${attr.str}'")
             }
-            rAttrs.add(R_EnumAttr(attr.str, rAttrs.size))
         }
 
-        val rEnum = R_EnumType(fullName, rAttrs.toList())
-        ctx.nsCtx.addEnum(name.str, rEnum)
+        val names = ctx.nsCtx.defNames(name.str)
+        val rEnum = R_Enum(names, rAttrs.toList())
+        ctx.nsBuilder.addEnum(name, rEnum)
     }
 
     override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
@@ -385,30 +469,44 @@ class S_EnumDefinition(val name: S_Name, val attrs: List<S_Name>): S_Definition(
     }
 }
 
-class S_OpDefinition(val name: S_Name, val params: List<S_NameTypePair>, val body: S_Statement): S_Definition() {
-    override fun compile(ctx: C_DefinitionContext, entityIndex: Int) {
-        val fullName = ctx.nsCtx.registerName(name, C_DefType.OPERATION)
+class S_OperationDefinition(
+        modifiers: S_Modifiers,
+        val name: S_Name,
+        val params: List<S_NameTypePair>,
+        val body: S_Statement
+): S_Definition(modifiers) {
+    override fun compile(ctx: C_DefinitionContext) {
         ctx.checkNotExternal(name.pos, C_DefType.OPERATION)
 
-        ctx.modCtx.onPass(C_ModulePass.EXPRESSIONS) {
-            doCompile(ctx.nsCtx, entityIndex, fullName)
+        val modTarget = C_ModifierTarget(C_DefType.OPERATION, name, mount = true)
+        modifiers.compile(ctx, modTarget)
+
+        val names = ctx.nsCtx.defNames(name.str)
+        val mountName = ctx.mountName(modTarget, name)
+
+        val rOperation = R_Operation(names, mountName)
+        ctx.appCtx.defsBuilder.operations.add(rOperation)
+        ctx.nsBuilder.addOperation(name, rOperation)
+        ctx.mntBuilder.addOperation(name, rOperation)
+
+        ctx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
+            doCompile(ctx.nsCtx, rOperation)
         }
     }
 
-    private fun doCompile(ctx: C_NamespaceContext, entityIndex: Int, fullName: String) {
+    private fun doCompile(ctx: C_NamespaceContext, rOperation: R_Operation) {
         val statementVars = processStatementVars()
-        val entCtx = C_EntityContext(ctx, C_EntityType.OPERATION, entityIndex, null, statementVars)
+        val entCtx = C_EntityContext(ctx, C_EntityType.OPERATION, null, statementVars)
 
         val (exprCtx, rParams) = compileExternalParams(ctx, entCtx, params)
         val rBody = body.compile(exprCtx).rStmt
         val rCallFrame = entCtx.makeCallFrame()
 
-        if (ctx.modCtx.globalCtx.compilerOptions.gtv) {
+        if (ctx.globalCtx.compilerOptions.gtv) {
             checkGtvParams(params, rParams)
         }
 
-        val rOperation = R_Operation(fullName, rParams, rBody, rCallFrame)
-        ctx.addOperation(rOperation)
+        rOperation.setInternals(rParams, rBody, rCallFrame)
     }
 
     private fun processStatementVars(): TypedKeyMap {
@@ -423,37 +521,47 @@ class S_OpDefinition(val name: S_Name, val params: List<S_NameTypePair>, val bod
 }
 
 class S_QueryDefinition(
+        modifiers: S_Modifiers,
         val name: S_Name,
         val params: List<S_NameTypePair>,
         val retType: S_Type?,
         val body: S_FunctionBody
-): S_Definition() {
-    override fun compile(ctx: C_DefinitionContext, entityIndex: Int) {
-        val fullName = ctx.nsCtx.registerName(name, C_DefType.QUERY)
+): S_Definition(modifiers) {
+    override fun compile(ctx: C_DefinitionContext) {
         ctx.checkNotExternal(name.pos, C_DefType.QUERY)
 
-        ctx.modCtx.onPass(C_ModulePass.EXPRESSIONS) {
-            doCompile(ctx.nsCtx, entityIndex, fullName)
+        val modTarget = C_ModifierTarget(C_DefType.QUERY, name, mount = true)
+        modifiers.compile(ctx, modTarget)
+
+        val names = ctx.nsCtx.defNames(name.str)
+        val mountName = ctx.mountName(modTarget, name)
+
+        val rQuery = R_Query(names, mountName)
+        ctx.appCtx.defsBuilder.queries.add(rQuery)
+        ctx.nsBuilder.addQuery(name, rQuery)
+        ctx.mntBuilder.addQuery(name, rQuery)
+
+        ctx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
+            doCompile(ctx.nsCtx, rQuery)
         }
     }
 
-    private fun doCompile(ctx: C_NamespaceContext, entityIndex: Int, fullName: String) {
+    private fun doCompile(ctx: C_NamespaceContext, rQuery: R_Query) {
         val rExplicitRetType = retType?.compile(ctx)
         val statementVars = body.processStatementVars()
-        val entCtx = C_EntityContext(ctx, C_EntityType.QUERY, entityIndex, rExplicitRetType, statementVars)
+        val entCtx = C_EntityContext(ctx, C_EntityType.QUERY, rExplicitRetType, statementVars)
 
         val (exprCtx, rParams) = compileExternalParams(ctx, entCtx, params)
         val rBody = body.compileQuery(name, exprCtx)
         val rCallFrame = entCtx.makeCallFrame()
         val rRetType = entCtx.actualReturnType()
 
-        if (ctx.modCtx.globalCtx.compilerOptions.gtv) {
+        if (ctx.globalCtx.compilerOptions.gtv) {
             checkGtvParams(params, rParams)
             checkGtvResult(rRetType)
         }
 
-        val rQuery = R_Query(fullName, rRetType, rParams, rBody, rCallFrame)
-        ctx.addQuery(rQuery)
+        rQuery.setInternals(rRetType, rParams, rBody, rCallFrame)
     }
 
     private fun checkGtvResult(rType: R_Type) {
@@ -546,45 +654,44 @@ class S_FunctionBodyFull(val body: S_Statement): S_FunctionBody() {
 }
 
 class S_FunctionDefinition(
+        modifiers: S_Modifiers,
         val name: S_Name,
         val params: List<S_NameTypePair>,
         val retType: S_Type?,
         val body: S_FunctionBody
-): S_Definition() {
-    override fun compile(ctx: C_DefinitionContext, entityIndex: Int) {
-        ctx.nsCtx.registerName(name, C_DefType.FUNCTION)
+): S_Definition(modifiers) {
+    override fun compile(ctx: C_DefinitionContext) {
         ctx.checkNotExternal(name.pos, C_DefType.FUNCTION)
 
-        val fn = ctx.nsCtx.addFunctionDeclaration(name.str)
-        ctx.modCtx.onPass(C_ModulePass.MEMBERS) {
-            compileDefinition(ctx.nsCtx, entityIndex, fn)
+        val modTarget = C_ModifierTarget(C_DefType.FUNCTION, name)
+        modifiers.compile(ctx, modTarget)
+
+        val names = ctx.nsCtx.defNames(name.str)
+        val rFn = R_Function(names)
+        ctx.nsBuilder.addFunction(name, rFn)
+
+        ctx.executor.onPass(C_CompilerPass.MEMBERS) {
+            compileDefinition(ctx.nsCtx, rFn)
         }
     }
 
-    private fun compileDefinition(ctx: C_NamespaceContext, entityIndex: Int, fn: C_UserGlobalFunction) {
+    private fun compileDefinition(ctx: C_NamespaceContext, rFn: R_Function) {
         val rRetType = if (retType != null) retType.compile(ctx) else R_UnitType
         val statementVars = body.processStatementVars()
-        val entCtx = C_EntityContext(ctx, C_EntityType.FUNCTION, entityIndex, rRetType, statementVars)
+        val entCtx = C_EntityContext(ctx, C_EntityType.FUNCTION, rRetType, statementVars)
 
         val (exprCtx, rParams) = compileExternalParams(ctx, entCtx, params)
-        val header = C_UserFunctionHeader(rParams, rRetType)
-        fn.setHeader(header)
+        rFn.setHeader(rRetType, rParams)
 
-        ctx.modCtx.onPass(C_ModulePass.EXPRESSIONS) {
-            compileFinish(ctx, entCtx, exprCtx, fn)
+        ctx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
+            compileFinish(entCtx, exprCtx, rFn)
         }
     }
 
-    private fun compileFinish(
-            ctx: C_NamespaceContext,
-            entCtx: C_EntityContext,
-            exprCtx: C_ExprContext,
-            fn: C_UserGlobalFunction
-    ){
+    private fun compileFinish(entCtx: C_EntityContext, exprCtx: C_ExprContext, rFn: R_Function) {
         val rBody = body.compileFunction(name, exprCtx)
         val rCallFrame = entCtx.makeCallFrame()
-        val rFunction = fn.toRFunction(rBody, rCallFrame)
-        ctx.addFunctionBody(rFunction)
+        rFn.setBody(rBody, rCallFrame)
     }
 
     override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
@@ -592,64 +699,80 @@ class S_FunctionDefinition(
     }
 }
 
-class S_NamespaceDefinition(val name: S_Name, val definitions: List<S_Definition>): S_Definition() {
-    override fun compile(ctx: C_DefinitionContext, entityIndex: Int) {
-        ctx.nsCtx.registerName(name, C_DefType.NAMESPACE)
+class S_NamespaceDefinition(
+        modifiers: S_Modifiers,
+        val name: S_Name?,
+        val definitions: List<S_Definition>
+): S_Definition(modifiers) {
+    override fun compile(ctx: C_DefinitionContext) {
+        val modTarget = C_ModifierTarget(C_DefType.NAMESPACE, name, mount = true, emptyMountAllowed = true)
+        modifiers.compile(ctx, modTarget)
 
-        val subCtx = ctx.nsCtx.addNamespace(ctx, name.str)
-
+        val subDefCtx = createSubDefCtx(ctx, modTarget)
         for (def in definitions) {
-            val index = ctx.modCtx.nextEntityIndex()
-            def.compile(subCtx, index)
+            def.compile(subDefCtx)
         }
     }
 
-    override fun collectIncludes(
-            globalCtx: C_GlobalContext,
-            incCtx: C_IncludeContext,
-            transitive: Boolean,
-            fail: Boolean,
-            resources: MutableMap<String, C_IncludeResource>
-    ){
+    private fun createSubDefCtx(ctx: C_DefinitionContext, modTarget: C_ModifierTarget): C_DefinitionContext {
+        if (name == null) {
+            val subMountName = modTarget.mount?.get() ?: ctx.mountName
+            return C_DefinitionContext(ctx.fileCtx, ctx.nsCtx, ctx.extChain, ctx.nsBuilder, subMountName)
+        }
+
+        val (subNsBuilder, subNsGetter) = ctx.nsBuilder.addNamespace(name)
+
+        val names = ctx.nsCtx.defNames(name.str)
+        val subNsCtx = C_NamespaceContext(ctx.modCtx, ctx.nsCtx, names.moduleLevelName, subNsGetter)
+
+        val subMountName = ctx.mountName(modTarget, name)
+        return C_DefinitionContext(ctx.fileCtx, subNsCtx, ctx.extChain, subNsBuilder, subMountName)
+    }
+
+    override fun getImportedModules(moduleName: R_ModuleName, res: MutableSet<R_ModuleName>) {
         for (def in definitions) {
-            def.collectIncludes(globalCtx, incCtx, transitive, fail, resources)
+            def.getImportedModules(moduleName, res)
         }
     }
 
     override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
-        val sub = b.node(this, name, IdeOutlineNodeType.NAMESPACE)
+        val sub = if (name == null) b else b.node(this, name, IdeOutlineNodeType.NAMESPACE)
         for (def in definitions) {
             def.ideBuildOutlineTree(sub)
         }
     }
 }
 
-class S_ExternalDefinition(val pos: S_Pos, val name: String, val definitions: List<S_Definition>): S_Definition() {
-    override fun compile(ctx: C_DefinitionContext, entityIndex: Int) {
+class S_ExternalDefinition(
+        modifiers: S_Modifiers,
+        val pos: S_Pos,
+        val name: S_String,
+        val definitions: List<S_Definition>
+): S_Definition(modifiers) {
+    override fun compile(ctx: C_DefinitionContext) {
         ctx.checkNotExternal(pos, C_DefType.EXTERNAL)
 
-        val chain = ctx.modCtx.addExternalChain(pos, name)
-        val subChainCtx = C_ExternalChainContext(ctx.nsCtx, chain)
-        val subIncCtx = ctx.incCtx.subExternal()
-        val subCtx = C_DefinitionContext(ctx.nsCtx, subChainCtx, subIncCtx, null)
+        val modTarget = C_ModifierTarget(C_DefType.EXTERNAL, null, mount = true, emptyMountAllowed = true)
+        modifiers.compile(ctx, modTarget)
 
-        for (def in definitions) {
-            val index = ctx.modCtx.nextEntityIndex()
-            def.compile(subCtx, index)
+        if (name.str.isEmpty()) {
+            ctx.globalCtx.error(name.pos, "def_external_invalid:$name", "Invalid chain name: '$name'")
+            return
         }
 
-        subChainCtx.registerSysClasses()
+        val mountName = modTarget.mount?.get() ?: R_MountName.EMPTY
+
+        val extChain = ctx.appCtx.addExternalChain(name)
+        val subCtx = C_DefinitionContext(ctx.fileCtx, ctx.nsCtx, extChain, ctx.nsBuilder, mountName)
+
+        for (def in definitions) {
+            def.compile(subCtx)
+        }
     }
 
-    override fun collectIncludes(
-            globalCtx: C_GlobalContext,
-            incCtx: C_IncludeContext,
-            transitive: Boolean,
-            fail: Boolean,
-            resources: MutableMap<String, C_IncludeResource>
-    ){
+    override fun getImportedModules(moduleName: R_ModuleName, res: MutableSet<R_ModuleName>) {
         for (def in definitions) {
-            def.collectIncludes(globalCtx, incCtx, transitive, fail, resources)
+            def.getImportedModules(moduleName, res)
         }
     }
 
@@ -660,86 +783,90 @@ class S_ExternalDefinition(val pos: S_Pos, val name: String, val definitions: Li
     }
 }
 
-class S_IncludeDefinition(val pos: S_Pos, val pathPos: S_Pos, val path: String): S_Definition() {
-    override fun compile(ctx: C_DefinitionContext, entityIndex: Int) {
-        val resource = resolve(ctx.incCtx)
-        val subIncCtx = ctx.incCtx.subInclude(pathPos, resource)
-        if (subIncCtx == null) {
-            // Already included in current namespace (transitively, so no error).
-            return
+class S_RelativeImportPath(val pos: S_Pos, val ups: Int)
+
+class S_ImportPath(val relative: S_RelativeImportPath?, val path: List<S_Name>) {
+    fun compile(importPos: S_Pos, currentModule: R_ModuleName): R_ModuleName {
+        val rPath = path.map { it.toRName() }
+
+        if (relative == null) {
+            if (path.isEmpty()) {
+                throw C_Error(importPos, "import:no_path", "Module not specified")
+            }
+            return R_ModuleName(rPath)
         }
 
-        val globalCtx = ctx.nsCtx.modCtx.globalCtx
-        val module = readAst(globalCtx, resource)
-
-        globalCtx.processIncludedFile(pos) {
-            val subDefCtx = C_DefinitionContext(ctx.nsCtx, ctx.chainCtx, subIncCtx, ctx.namespaceName)
-            module.compileDefs(subDefCtx)
+        if (relative.ups > currentModule.parts.size) {
+            throw C_Error(relative.pos, "import:up:${currentModule.parts.size}:${relative.ups}",
+                    "Cannot go up by ${relative.ups}, current module is '${currentModule}'")
         }
+
+        val base = currentModule.parts.subList(0, currentModule.parts.size - relative.ups)
+        val full = base + rPath
+        return R_ModuleName(full)
     }
 
-    override fun collectIncludes(
-            globalCtx: C_GlobalContext,
-            incCtx: C_IncludeContext,
-            transitive: Boolean,
-            fail: Boolean,
-            resources: MutableMap<String, C_IncludeResource>
-    ){
-        try {
-            collectIncludes0(globalCtx, incCtx, transitive, fail, resources)
+    fun getAlias(): S_Name? {
+        return if (path.isEmpty()) null else path[path.size - 1]
+    }
+}
+
+class S_ImportDefinition(
+        modifiers: S_Modifiers,
+        val pos: S_Pos,
+        val alias: S_Name?,
+        val modulePath: S_ImportPath
+): S_Definition(modifiers) {
+    override fun compile(ctx: C_DefinitionContext) {
+        val moduleName = try {
+            modulePath.compile(pos, ctx.modCtx.module.name)
         } catch (e: C_Error) {
-            if (fail) {
-                throw e
-            }
-        }
-    }
-
-    private fun collectIncludes0(
-            globalCtx: C_GlobalContext,
-            ctx: C_IncludeContext,
-            transitive: Boolean,
-            fail: Boolean,
-            resources: MutableMap<String, C_IncludeResource>
-    ){
-        val resource = resolve(ctx)
-        val subIncCtx = ctx.subInclude(pathPos, resource)
-        if (subIncCtx == null) {
+            ctx.globalCtx.error(e)
             return
         }
 
-        if (resource.path !in resources) {
-            resources[resource.path] = resource
+        val modTarget = C_ModifierTarget(C_DefType.IMPORT, null)
+        modifiers.compile(ctx, modTarget)
+
+        val module = try {
+            ctx.modCtx.modMgr.linkModule(moduleName)
+        } catch (e: C_CommonError) {
+            ctx.globalCtx.error(pos, e.code, e.msg)
+            return
         }
 
-        if (transitive) {
-            val module = readAst(globalCtx, resource)
-            globalCtx.processIncludedFile(pos) {
-                module.collectIncludes(globalCtx, subIncCtx, transitive, fail, resources)
-            }
+        val actualAlias = getActualAlias()
+        if (actualAlias == null) {
+            ctx.globalCtx.error(pos, "import:no_alias", "Cannot infer an alias, specify import alias explicitly")
+            return
+        }
+
+        ctx.nsBuilder.addImport(actualAlias, module)
+    }
+
+    override fun getImportedModules(moduleName: R_ModuleName, res: MutableSet<R_ModuleName>) {
+        val impModuleName = try {
+            modulePath.compile(pos, moduleName)
+        } catch (e: C_Error) {
+            return
+        }
+        res.add(impModuleName)
+    }
+
+    override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
+        val alias = getActualAlias()
+        if (alias != null) {
+            b.node(this, alias, IdeOutlineNodeType.IMPORT)
         }
     }
 
-    private fun resolve(ctx: C_IncludeContext): C_IncludeResource {
-        if (path == "" || path == "." || path == ".." || path.endsWith("/") || path.endsWith("\\")) {
-            throw C_Error(pathPos, "include_bad_path:$path", "Invalid path: '$path'")
-        }
+    private fun getActualAlias() = alias ?: modulePath.getAlias()
+}
 
-        val fullPath = path + ".rell"
-        try {
-            return ctx.resolver.resolve(fullPath, path)
-        } catch (e: C_CommonError) {
-            throw C_Error(pathPos, e.code, e.msg)
-        }
-    }
-
-    private fun readAst(globalCtx: C_GlobalContext, resource: C_IncludeResource): S_ModuleDefinition {
-        try {
-            return globalCtx.processIncludedFile(pos) {
-                resource.file.readAst()
-            }
-        } catch (e: C_CommonError) {
-            throw C_Error(pos, e.code, e.msg)
-        }
+class S_IncludeDefinition(val pos: S_Pos): S_Definition(S_Modifiers(listOf())) {
+    override fun compile(ctx: C_DefinitionContext) {
+        val globalCtx = ctx.globalCtx
+        globalCtx.error(pos, "include", "Include not supported since Rell $RELL_VERSION_MODULE_SYSTEM")
     }
 
     override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
@@ -747,34 +874,53 @@ class S_IncludeDefinition(val pos: S_Pos, val pathPos: S_Pos, val path: String):
     }
 }
 
-class S_ModuleDefinition(val definitions: List<S_Definition>): S_Node() {
-    fun compile(globalCtx: C_GlobalContext, path: String, includeResolver: C_IncludeResolver): R_Module {
-        val ctx = C_ModuleContext(globalCtx)
+class S_ModuleHeader(val modifiers: S_Modifiers, val pos: S_Pos) {
+    fun compile(globalCtx: C_GlobalContext, parentMountName: R_MountName): R_MountName? {
+        val modifierCtx = C_ModifierContext(globalCtx, parentMountName)
+        val modTarget = C_ModifierTarget(C_DefType.MODULE, null, mount = true, emptyMountAllowed = true)
+        modifiers.compile(modifierCtx, modTarget)
+        return modTarget.mount?.get()
+    }
+}
 
-        val incCtx = C_IncludeContext.createTop(path, includeResolver)
-        val defCtx = C_DefinitionContext(ctx.nsCtx, null, incCtx, null)
+class S_RellFile(val header: S_ModuleHeader?, val definitions: List<S_Definition>): S_Node() {
+    fun compileHeader(globalCtx: C_GlobalContext, parentMountName: R_MountName): R_MountName {
+        val res = header?.compile(globalCtx, parentMountName)
+        return res ?: parentMountName
+    }
+
+    fun compile(modCtx: C_ModuleContext): C_CompiledRellFile {
+        modCtx.executor.checkPass(C_CompilerPass.DEFINITIONS)
+
+        val mountName = modCtx.module.mountName()
+
+        val fileCtx = C_FileContext(modCtx)
+
+        val nsBuilder = C_UserNsProtoBuilder()
+        val nsLate = C_LateInit(C_CompilerPass.NAMESPACES, C_Namespace.EMPTY)
+
+        val nsCtx = C_NamespaceContext(modCtx, modCtx.rootNsCtx, null, nsLate.getter)
+        val defCtx = C_DefinitionContext(fileCtx, nsCtx, null, nsBuilder, mountName)
+
         compileDefs(defCtx)
 
-        val rModule = ctx.createModule()
-        return rModule
+        val nsProto = nsBuilder.build()
+        val mntTables = fileCtx.mntBuilder.build()
+
+        return C_CompiledRellFile(nsProto, mntTables, nsLate.setter)
     }
 
     fun compileDefs(defCtx: C_DefinitionContext) {
         for (def in definitions) {
-            val index = defCtx.nsCtx.modCtx.nextEntityIndex()
-            def.compile(defCtx, index)
+            defCtx.modCtx.globalCtx.consumeError {
+                def.compile(defCtx)
+            }
         }
     }
 
-    fun collectIncludes(
-            globalCtx: C_GlobalContext,
-            incCtx: C_IncludeContext,
-            transitive: Boolean,
-            fail: Boolean,
-            resources: MutableMap<String, C_IncludeResource>
-    ){
+    fun getImportedModules(moduleName: R_ModuleName, res: MutableSet<R_ModuleName>) {
         for (def in definitions) {
-            def.collectIncludes(globalCtx, incCtx, transitive, fail, resources)
+            def.getImportedModules(moduleName, res)
         }
     }
 
@@ -811,17 +957,18 @@ private fun compileExternalParams(
 
 private fun compileParams(ctx: C_NamespaceContext, params: List<S_NameTypePair>): List<Pair<S_Name, R_Variable>> {
     val names = mutableSetOf<String>()
+    val res = mutableListOf<Pair<S_Name, R_Variable>>()
 
-    val res = params.map { param ->
+    for (param in params) {
         val nameStr = param.name.str
-        if (!names.add(nameStr)) {
-            throw C_Error(param.name.pos, "dup_param_name:$nameStr", "Duplicate parameter: '$nameStr'")
-        }
         val rType = param.compileType(ctx)
-        Pair(param.name, R_Variable(nameStr, rType))
+        if (rType == null) continue
+        if (names.add(nameStr)) {
+            res.add(Pair(param.name, R_Variable(nameStr, rType)))
+        } else {
+            ctx.globalCtx.error(param.name.pos, "dup_param_name:$nameStr", "Duplicate parameter: '$nameStr'")
+        }
     }
 
     return res
 }
-
-private fun classNameToSqlTable(className: String) = className

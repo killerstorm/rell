@@ -1,0 +1,14 @@
+<test>
+    <block>
+        <transaction>
+                <signers>
+                        <param type="bytea" key="Alice" />
+                </signers>
+                <operations>
+                        <operation name="legacy_test.cube">
+                                <string>123456789.987654321</string>
+                        </operation>
+                </operations>
+        </transaction>
+    </block>
+</test>

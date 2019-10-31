@@ -32,7 +32,7 @@ class S_UpdateTarget_Expr(val expr: S_Expr): S_UpdateTarget() {
 
         val rTarget = compileTarget(cValue)
         val rCls = rTarget.cls()
-        val cCls = C_AtClass(rCls.rClass, rCls.rClass.name, rCls.index)
+        val cCls = C_AtClass(rCls.rClass, rCls.rClass.simpleName, rCls.index)
         val dbCtx = ctx.update(nameCtx = C_DbNameContext(ctx.blkCtx, listOf(cCls)))
 
         return C_UpdateTarget(dbCtx, rTarget)
@@ -63,7 +63,7 @@ class S_UpdateTarget_Expr(val expr: S_Expr): S_UpdateTarget() {
     private fun compileTargetClass(rExpr: R_Expr, rClass: R_Class): R_UpdateTarget {
         val cls = R_AtClass(rClass, 0)
         val whereLeft = Db_ClassExpr(cls)
-        val whereRight = Db_ParameterExpr(R_ClassType(rClass), 0)
+        val whereRight = Db_ParameterExpr(rClass.type, 0)
         val where = C_Utils.makeDbBinaryExprEq(whereLeft, whereRight)
         return R_UpdateTarget_Expr_One(cls, where, rExpr)
     }
@@ -94,7 +94,7 @@ class S_UpdateStatement(pos: S_Pos, val target: S_UpdateTarget, val what: List<S
 
         val rClass = cTarget.rTarget.cls().rClass
         if (!rClass.flags.canUpdate) {
-            throw C_Errors.errCannotUpdate(pos, rClass.name)
+            throw C_Errors.errCannotUpdate(pos, rClass.simpleName)
         }
 
         val dbWhat = compileWhat(rClass, cTarget.ctx, subValues)
@@ -144,10 +144,12 @@ class S_DeleteStatement(pos: S_Pos, val target: S_UpdateTarget): S_Statement(pos
         val cTarget = target.compile(ctx, subValues)
 
         val rClass = cTarget.rTarget.cls().rClass
+        val msgName = rClass.simpleName
+
         if (rClass.flags.isObject) {
-            throw C_Error(pos, "stmt_delete_obj:${rClass.name}", "Cannot delete object '${rClass.name}' (not a class)")
+            throw C_Error(pos, "stmt_delete_obj:$msgName", "Cannot delete object '$msgName' (not a class)")
         } else if (!rClass.flags.canDelete) {
-            throw C_Errors.errCannotDelete(pos, rClass.name)
+            throw C_Errors.errCannotDelete(pos, msgName)
         }
 
         val rStmt = R_DeleteStatement(cTarget.rTarget)

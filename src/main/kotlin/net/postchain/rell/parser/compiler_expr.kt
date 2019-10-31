@@ -18,11 +18,21 @@ class C_ExprContextAttr(val cls: C_AtClass, val attrRef: C_ClassAttrRef) {
     }
 }
 
+class C_ScopeEntry(
+        val name: String,
+        val type: R_Type,
+        val modifiable: Boolean,
+        val varId: C_VarId,
+        val ptr: R_VarPtr
+) {
+    fun toVarExpr(): R_VarExpr = R_VarExpr(type, ptr, name)
+}
+
 class C_BlockContext(val entCtx: C_EntityContext, private val parent: C_BlockContext?, val loop: C_LoopId?) {
     private val startOffset: Int = if (parent == null) 0 else parent.startOffset + parent.locals.size
     private val locals = mutableMapOf<String, C_ScopeEntry0>()
 
-    private val blockId = entCtx.nsCtx.modCtx.globalCtx.nextFrameBlockId()
+    private val blockId = entCtx.globalCtx.nextFrameBlockId()
 
     fun add(name: S_Name, type: R_Type, modifiable: Boolean): Pair<C_VarId, R_VarPtr> {
         val nameStr = name.str
@@ -85,6 +95,10 @@ class C_BlockContext(val entCtx: C_EntityContext, private val parent: C_BlockCon
 }
 
 class C_ExprContext(val blkCtx: C_BlockContext, val nameCtx: C_NameContext, val factsCtx: C_VarFactsContext) {
+    val entCtx = blkCtx.entCtx
+    val modCtx = entCtx.modCtx
+    val globalCtx = entCtx.globalCtx
+
     fun update(
             blkCtx: C_BlockContext? = null,
             nameCtx: C_NameContext? = null,
@@ -303,7 +317,7 @@ class C_ClassAttrDestination(private val base: C_Value, private val rClass: R_Cl
 
         val atClass = R_AtClass(rClass, 0)
         val whereLeft = Db_ClassExpr(atClass)
-        val whereRight = Db_ParameterExpr(atClass.type, 0)
+        val whereRight = Db_ParameterExpr(atClass.rClass.type, 0)
         val where = C_Utils.makeDbBinaryExprEq(whereLeft, whereRight)
 
         val rBase = base.toRExpr()
@@ -468,7 +482,7 @@ private class C_LocalVarValue(
             return this
         }
 
-        val globCtx = ctx.blkCtx.entCtx.nsCtx.modCtx.globalCtx
+        val globCtx = ctx.globalCtx
         val (freq, msg) = if (nulled == C_VarFact.YES) Pair("always", "is always") else Pair("never", "cannot be")
         globCtx.warning(name.pos, "expr_var_null:$freq:${name.str}", "Variable '${name.str}' $msg null at this location")
 
@@ -599,8 +613,9 @@ class C_NamespaceExpr(private val name: List<S_Name>, private val nsDef: C_Names
     override fun startPos() = name[0].pos
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
-        val ns = nsDef.useDef(ctx.blkCtx.entCtx.nsCtx, name)
-        val valueExpr = memberValue(ctx.blkCtx.entCtx, memberName, ns)
+        val entCtx = ctx.blkCtx.entCtx
+        val ns = nsDef.useDef(entCtx.modCtx, name)
+        val valueExpr = memberValue(entCtx, memberName, ns)
 
         val fn = ns.functions[memberName.str]
         val fnExpr = if (fn != null) C_FunctionExpr(memberName, fn) else null
@@ -624,7 +639,7 @@ class C_NamespaceExpr(private val name: List<S_Name>, private val nsDef: C_Names
 
 class C_RecordExpr(
         private val name: List<S_Name>,
-        private val record: R_RecordType,
+        private val record: R_Record,
         private val nsDef: C_NamespaceDef
 ): C_Expr() {
     override fun kind() = C_ExprKind.RECORD
@@ -652,7 +667,7 @@ class C_ObjectExpr(name: List<S_Name>, rObject: R_Object): C_Expr() {
     }
 }
 
-class C_EnumExpr(private val name: List<S_Name>, private val rEnum: R_EnumType): C_Expr() {
+class C_EnumExpr(private val name: List<S_Name>, private val rEnum: R_Enum): C_Expr() {
     override fun kind() = C_ExprKind.ENUM
     override fun startPos() = name[0].pos
 
@@ -669,13 +684,13 @@ class C_EnumExpr(private val name: List<S_Name>, private val rEnum: R_EnumType):
             return null
         }
 
-        val rValue = Rt_EnumValue(rEnum, attr)
+        val rValue = Rt_EnumValue(rEnum.type, attr)
         val rExpr = R_ConstantExpr(rValue)
         return C_RValue.makeExpr(startPos(), rExpr)
     }
 
     private fun memberFn(memberName: S_Name): C_Expr? {
-        val fn = C_LibFunctions.getTypeStaticFunction(rEnum, memberName.str)
+        val fn = C_LibFunctions.getTypeStaticFunction(rEnum.type, memberName.str)
         return if (fn == null) null else C_FunctionExpr(memberName, fn)
     }
 }
@@ -694,9 +709,9 @@ class C_TypeNameExpr(private val pos: S_Pos, private val name: List<S_Name>, pri
     override fun startPos() = pos
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
-        val type = typeDef.useDef(ctx.blkCtx.entCtx.nsCtx, name)
+        val type = typeDef.useDef(ctx.modCtx, name)
         val fn = C_LibFunctions.getTypeStaticFunction(type, memberName.str)
-        if (fn == null) throw C_Errors.errUnknownName(type.name, memberName)
+        if (fn == null) throw C_Errors.errUnknownName(type, memberName)
         return C_FunctionExpr(memberName, fn)
     }
 }
@@ -707,7 +722,7 @@ class C_TypeExpr(private val pos: S_Pos, private val type: R_Type): C_Expr() {
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
         val fn = C_LibFunctions.getTypeStaticFunction(type, memberName.str)
-        if (fn == null) throw C_Errors.errUnknownName(type.name, memberName)
+        if (fn == null) throw C_Errors.errUnknownName(type, memberName)
         return C_FunctionExpr(memberName, fn)
     }
 }

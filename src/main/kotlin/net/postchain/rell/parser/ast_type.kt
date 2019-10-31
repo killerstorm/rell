@@ -6,8 +6,17 @@ sealed class S_Type {
     abstract fun compile(ctx: C_NamespaceContext): R_Type
 
     fun compile(ctx: C_ExprContext): R_Type {
-        ctx.blkCtx.entCtx.nsCtx.modCtx.checkPass(C_ModulePass.EXPRESSIONS, C_ModulePass.EXPRESSIONS)
+        ctx.blkCtx.entCtx.executor.checkPass(C_CompilerPass.EXPRESSIONS)
         return compile(ctx.blkCtx.entCtx.nsCtx)
+    }
+
+    fun compileOpt(ctx: C_NamespaceContext): R_Type? {
+        try {
+            return compile(ctx)
+        } catch (e: C_Error) {
+            ctx.globalCtx.error(e)
+            return null
+        }
     }
 
     companion object {
@@ -96,7 +105,7 @@ class S_VirtualType(val pos: S_Pos, val innerType: S_Type): S_Type() {
             throw errBadInnerType(rInnerType)
         }
 
-        ctx.modCtx.onPass(C_ModulePass.VALIDATION) {
+        ctx.executor.onPass(C_CompilerPass.VALIDATION) {
             validate(rInnerType)
         }
 
@@ -112,7 +121,7 @@ class S_VirtualType(val pos: S_Pos, val innerType: S_Type): S_Type() {
 
     private fun errBadInnerType(rInnerType: R_Type): C_Error {
         return C_Error(pos, "type:virtual:bad_inner_type:${rInnerType.name}",
-                "Type ${rInnerType.name} cannot be virtual (allowed types are: list, map, record, tuple)")
+                "Type '${rInnerType.name}' cannot be virtual (allowed types are: list, set, map, record, tuple)")
     }
 
     companion object {
@@ -122,7 +131,7 @@ class S_VirtualType(val pos: S_Pos, val innerType: S_Type): S_Type() {
                 is R_SetType -> type.virtualType
                 is R_MapType -> type.virtualType
                 is R_TupleType -> type.virtualType
-                is R_RecordType -> type.virtualType
+                is R_RecordType -> type.record.virtualType
                 else -> null
             }
         }

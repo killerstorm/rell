@@ -48,8 +48,10 @@ Corresponding module configuration:
         "gtx": {
             "rell": {
                 "moduleArgs": {
-                    "s": "Hello",
-                    "n": 123
+                    "module_name": {
+                        "s": "Hello",
+                        "n": 123
+                    }
                 }
             }
         }

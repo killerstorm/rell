@@ -4,7 +4,6 @@ import net.postchain.rell.model.R_Attrib
 import net.postchain.rell.model.R_Class
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_Messages
-import net.postchain.rell.runtime.Rt_ModuleContext
 import net.postchain.rell.runtime.Rt_SqlContext
 import org.jooq.conf.ParamType
 import org.jooq.impl.DSL
@@ -140,12 +139,12 @@ object SqlMeta {
     }
 
     fun checkDataTables(
-            modCtx: Rt_ModuleContext,
+            sqlCtx: Rt_SqlContext,
             tables: Map<String, SqlTable>,
             metaData: Map<String, MetaClass>,
             msgs: Rt_Messages
     ) {
-        val mapping = modCtx.sqlCtx.mainChainMapping
+        val mapping = sqlCtx.mainChainMapping
 
         val metaTables = metaData.keys.map { mapping.fullName(it) }.toSet()
         val missingTables = metaTables.filter { it !in tables }
@@ -166,8 +165,8 @@ object SqlMeta {
     }
 
     private fun checkDataTable(table: String, sqlTable: SqlTable, metaCls: MetaClass, msgs: Rt_Messages) {
-        val missingCols = (metaCls.attrs.keys + listOf(ROWID_COLUMN)).filter { it !in sqlTable.cols }
-        val missingAttrs = (sqlTable.cols.keys - listOf(ROWID_COLUMN)).filter { it !in metaCls.attrs }
+        val missingCols = (metaCls.attrs.keys + listOf(SqlConstants.ROWID_COLUMN)).filter { it !in sqlTable.cols }
+        val missingAttrs = (sqlTable.cols.keys - listOf(SqlConstants.ROWID_COLUMN)).filter { it !in metaCls.attrs }
 
         msgs.errorIfNotEmpty(missingCols, "meta:no_data_columns:$table",
                 "Missing columns for existing meta attributes in table $table")
@@ -180,7 +179,7 @@ object SqlMeta {
         val sqls = mutableListOf<String>()
         sqls += genMetaTablesCreate(sqlCtx)
 
-        val metaClasses = sqlCtx.module.topologicalClasses.filter { it.sqlMapping.autoCreateTable() }
+        val metaClasses = sqlCtx.topologicalClasses.filter { it.sqlMapping.autoCreateTable() }
         for ((i, cls) in metaClasses.withIndex()) {
             sqls += genMetaClassInserts(sqlCtx, i, cls, MetaClassType.CLASS)
         }
@@ -207,7 +206,7 @@ object SqlMeta {
                 DSL.field("log")
         ).values(
                 classId,
-                cls.name,
+                cls.metaName,
                 clsType.code,
                 cls.flags.log
         ).getSQL(ParamType.INLINED) + ";"

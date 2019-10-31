@@ -6,6 +6,7 @@ import net.postchain.config.node.NodeConfig
 import net.postchain.config.node.NodeConfigurationProviderFactory
 import net.postchain.core.UserMistake
 import net.postchain.devtools.PostchainTestNode
+import net.postchain.rell.RellBaseCliArgs
 import net.postchain.rell.RellCliUtils
 import org.apache.commons.configuration2.PropertiesConfiguration
 import picocli.CommandLine
@@ -25,21 +26,18 @@ fun main(args: Array<String>) {
 
 private fun main0(args: RellRunConfigLaunchArgs) {
     val runConfigFile = RellCliUtils.checkFile(args.runConfigFile)
-    val sourceDir = RellCliUtils.checkDir(args.sourceDir)
+    val sourceDir = RellCliUtils.checkDir(args.sourceDir ?: ".").absoluteFile
 
     log.info("STARTING POSTCHAIN APP")
-    log.info("    run config file: ${runConfigFile.absolutePath}")
     log.info("    source directory: ${sourceDir.absolutePath}")
+    log.info("    run config file: ${runConfigFile.absolutePath}")
     log.info("")
 
     val rellAppConf = RellRunConfigGenerator.generateCli(sourceDir, runConfigFile)
 
     // Make sure that all sources compile before trying to start a node.
-    for (chain in rellAppConf.config.chains) {
-        for (sourcePath in chain.sourcePaths) {
-            RellCliUtils.compileModule(rellAppConf.sourceDir, sourcePath, true)
-        }
-    }
+    val allModules = rellAppConf.config.chains.flatMap { it.modules }.toSet().toList()
+    RellCliUtils.compileApp(rellAppConf.sourceDir, allModules, true)
 
     val nodeConf = startPostchainNode(rellAppConf)
 
@@ -97,10 +95,7 @@ private fun getNodeConfig(configDir: File, node: RellPostAppNode): AppConfig {
 }
 
 @CommandLine.Command(name = "RellRunConfigLaunch", description = ["Launch a run config"])
-private class RellRunConfigLaunchArgs {
-    @CommandLine.Option(names = ["--source-dir"], paramLabel =  "SOURCE_DIR", description = ["Rell source directory"], required = true)
-    var sourceDir: String = ""
-
+private class RellRunConfigLaunchArgs: RellBaseCliArgs() {
     @CommandLine.Parameters(index = "0", paramLabel = "RUN_CONFIG", description = ["Run config file"])
     var runConfigFile: String = ""
 }

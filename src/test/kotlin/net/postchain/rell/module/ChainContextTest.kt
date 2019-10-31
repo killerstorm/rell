@@ -1,42 +1,48 @@
 package net.postchain.rell.module
 
 import net.postchain.rell.test.BaseGtxTest
+import net.postchain.rell.test.RellTestUtils
 import org.junit.Test
 
 class ChainContextTest : BaseGtxTest() {
     @Test fun testRawConfig() {
-        chk("chain_context.raw_config",
-                "{'gtx':{'rell':{'mainFile':'main.rell','sources_v0.9':{'main.rell':'query q() = chain_context.raw_config;'}}}}")
+        val ver = "v${RellTestUtils.RELL_VER}"
 
-        tst.moduleArgs = "'bar'"
         chk("chain_context.raw_config",
-                "{'gtx':{'rell':{'mainFile':'main.rell','moduleArgs':'bar','sources_v0.9':{'main.rell':'query q() = chain_context.raw_config;'}}}}")
+                "{'gtx':{'rell':{'moduleArgs':{},'modules':[''],'sources_$ver':{'main.rell':'query q() = chain_context.raw_config;'}}}}")
+
+        tst.moduleArgs("" to "'bar'")
+        chk("chain_context.raw_config",
+                "{'gtx':{'rell':{'moduleArgs':{'':'bar'},'modules':[''],'sources_$ver':{'main.rell':'query q() = chain_context.raw_config;'}}}}")
     }
 
     @Test fun testModuleArgs() {
         def("record module_args { s: text; n: integer; }")
         chkUserMistake("", "Module initialization failed: No moduleArgs in blockchain configuration")
 
-        tst.moduleArgs = "{'s':'Hello','n':123}"
+        tst.moduleArgs("" to "{'s':'Hello','n':123}")
         chk("_type_of(chain_context.args)", "'module_args'")
         chk("chain_context.args", "{'n':123,'s':'Hello'}")
         chk("chain_context.args.s", "'Hello'")
         chk("chain_context.args.n", "123")
         chk("chain_context.args.x", "ct_err:unknown_member:module_args:x")
 
-        tst.moduleArgs = null
+        tst.moduleArgs()
         chkUserMistake("", "Module initialization failed: No moduleArgs in blockchain configuration")
 
-        tst.moduleArgs = "12345"
+        tst.moduleArgs("" to "12345")
         chkUserMistake("", "Module initialization failed: Type error: ")
 
-        tst.moduleArgs = "{'p':'Hello','q':123}"
+        tst.moduleArgs("" to "{'p':'Hello','q':123}")
         chkUserMistake("", "Module initialization failed: Key missing in Gtv dictionary: ")
 
-        tst.moduleArgs = "{'n':'Hello','s':123}"
+        tst.moduleArgs("" to "{'n':'Hello','s':123}")
         chkUserMistake("", "Module initialization failed: Type error: ")
 
-        tst.moduleArgs = "{'s':'Hello','n':123}"
+        tst.moduleArgs("" to "{'s':'Hello','n':123}")
+        chk("chain_context.args", "{'n':123,'s':'Hello'}")
+
+        tst.moduleArgs("" to "{'s':'Hello','n':123}", "foo.bar" to "{'x':123}")
         chk("chain_context.args", "{'n':123,'s':'Hello'}")
     }
 
@@ -51,6 +57,29 @@ class ChainContextTest : BaseGtxTest() {
         chkCompile("record module_args { x: (a: integer, text); }", "OK")
         chkCompile("class module_args {}", "OK")
         chkCompile("record module_args { x: virtual<list<integer>>; }", "OK")
+    }
+
+    @Test fun testModuleArgsMultiModule() {
+        file("lib/a.rell", "module; record module_args { x: text; } function f(): module_args = chain_context.args;")
+        file("lib/b.rell", "module; record module_args { y: integer; } function f(): module_args = chain_context.args;")
+        file("lib/c.rell", "module; record module_args { z: decimal; } function f(): module_args = chain_context.args;")
+        def("import lib.a; import lib.b; import lib.c;")
+
+        tst.moduleArgs("lib.a" to "{x:'Hello'}", "lib.b" to "{'y':123}", "lib.c" to "{'z':'456.789'}")
+        chk("a.f()", "{'x':'Hello'}")
+        chk("b.f()", "{'y':123}")
+        chk("c.f()", "{'z':'456.789'}")
+        chk("a.chain_context", "ct_err:unknown_name:a.chain_context")
+        chk("a.chain_context.args", "ct_err:unknown_name:a.chain_context")
+
+        tst.moduleArgs("lib.a" to "{x:'Hello'}", "lib.b" to "{'y':123}", "lib.c" to "{'q':456.789}")
+        chkUserMistake("", "Module initialization failed: Key missing in Gtv dictionary")
+
+        tst.moduleArgs()
+        chkUserMistake("", "Module initialization failed: No moduleArgs in blockchain configuration for module 'lib.a'")
+
+        tst.moduleArgs("lib.a" to "{x:'Hello'}", "lib.b" to "{'y':123}", "lib.d" to "{'z':456.789}")
+        chkUserMistake("", "Module initialization failed: No moduleArgs in blockchain configuration for module 'lib.c'")
     }
 
     @Test fun testBlockchainRid() {

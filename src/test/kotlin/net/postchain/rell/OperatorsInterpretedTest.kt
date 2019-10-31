@@ -1,8 +1,9 @@
 package net.postchain.rell
 
 import net.postchain.gtv.GtvNull
+import net.postchain.rell.model.R_App
+import net.postchain.rell.model.R_Class
 import net.postchain.rell.model.R_ClassType
-import net.postchain.rell.model.R_Module
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.NoConnSqlExecutor
 import net.postchain.rell.test.RellTestUtils
@@ -28,7 +29,7 @@ class OperatorsInterpretedTest: OperatorsBaseTest() {
         val args2 = args.map { it as InterpTstVal }
         val types = args2.map { it.type }
 
-        val chainCtx = Rt_ChainContext(GtvNull, Rt_NullValue, ByteArray(32))
+        val chainCtx = Rt_ChainContext(GtvNull, mapOf(), ByteArray(32))
 
         val globalCtx = Rt_GlobalContext(
                 Rt_FailingPrinter,
@@ -39,10 +40,11 @@ class OperatorsInterpretedTest: OperatorsBaseTest() {
                 typeCheck = true
         )
 
-        val res = processExpr0(expr2, types) { module ->
-            val rtArgs = args2.map { it.rt(module) }
-            val sqlCtx = Rt_SqlContext.createNoExternalChains(module, Rt_ChainSqlMapping(0))
-            val modCtx = Rt_ModuleContext(globalCtx, module, sqlCtx)
+        val res = processExpr0(expr2, types) { app ->
+            val ctx = ValCtx(app)
+            val rtArgs = args2.map { it.rt(ctx) }
+            val sqlCtx = Rt_SqlContext.createNoExternalChains(app, Rt_ChainSqlMapping(0))
+            val modCtx = Rt_AppContext(globalCtx, sqlCtx, app)
             RellTestUtils.callQuery(modCtx, "q", rtArgs, RellTestUtils.ENCODER_STRICT)
         }
         return res
@@ -65,7 +67,7 @@ class OperatorsInterpretedTest: OperatorsBaseTest() {
         return processExpr0(expr, types) { "OK" }
     }
 
-    private fun processExpr0(expr: String, types: List<String>, block: (R_Module) -> String): String {
+    private fun processExpr0(expr: String, types: List<String>, block: (R_App) -> String): String {
         val params = types.withIndex().joinToString(", ") { (idx, type) -> "${paramName(idx)}: $type" }
         val code = """
             class company { name: text; }
@@ -73,7 +75,7 @@ class OperatorsInterpretedTest: OperatorsBaseTest() {
             query q($params) = $expr;
         """.trimIndent()
 
-        val res = RellTestUtils.processModule(code, processor = { block(it.rModule) })
+        val res = RellTestUtils.processApp(code, processor = { block(it.rApp) })
         return res
     }
 
@@ -90,43 +92,53 @@ class OperatorsInterpretedTest: OperatorsBaseTest() {
     override fun vJson(v: String): TstVal = InterpTstVal.Json(v)
     override fun vObj(cls: String, id: Long): TstVal = InterpTstVal.Obj(cls, id)
 
+    private class ValCtx(val app: R_App)
+
     private sealed class InterpTstVal(val type: String): TstVal() {
-        abstract fun rt(m: R_Module): Rt_Value
+        abstract fun rt(c: ValCtx): Rt_Value
 
         class Bool(val v: Boolean): InterpTstVal("boolean") {
-            override fun rt(m: R_Module): Rt_Value = Rt_BooleanValue(v)
+            override fun rt(c: ValCtx): Rt_Value = Rt_BooleanValue(v)
         }
 
         class Integer(val v: Long): InterpTstVal("integer") {
-            override fun rt(m: R_Module): Rt_Value = Rt_IntValue(v)
+            override fun rt(c: ValCtx): Rt_Value = Rt_IntValue(v)
         }
 
         class Decimal(val v: BigDecimal): InterpTstVal("decimal") {
-            override fun rt(m: R_Module): Rt_Value = Rt_DecimalValue.of(v)
+            override fun rt(c: ValCtx): Rt_Value = Rt_DecimalValue.of(v)
         }
 
         class Text(val v: String): InterpTstVal("text") {
-            override fun rt(m: R_Module): Rt_Value = Rt_TextValue(v)
+            override fun rt(c: ValCtx): Rt_Value = Rt_TextValue(v)
         }
 
         class Bytes(str: String): InterpTstVal("byte_array") {
             private val v = CommonUtils.hexToBytes(str)
-            override fun rt(m: R_Module): Rt_Value = Rt_ByteArrayValue(v)
+            override fun rt(c: ValCtx): Rt_Value = Rt_ByteArrayValue(v)
         }
 
         class Rowid(val v: Long): InterpTstVal("rowid") {
-            override fun rt(m: R_Module): Rt_Value = Rt_RowidValue(v)
+            override fun rt(c: ValCtx): Rt_Value = Rt_RowidValue(v)
         }
 
         class Json(val v: String): InterpTstVal("json") {
-            override fun rt(m: R_Module): Rt_Value = Rt_JsonValue.parse(v)
+            override fun rt(c: ValCtx): Rt_Value = Rt_JsonValue.parse(v)
         }
 
         class Obj(val cls: String, val id: Long): InterpTstVal(cls) {
-            override fun rt(m: R_Module): Rt_Value {
-                val c = m.classes[cls]
-                val t = R_ClassType(c!!)
+            override fun rt(c: ValCtx): Rt_Value {
+                val cls = findClass(c.app, cls)
+                val t = R_ClassType(cls)
                 return Rt_ClassValue(t, id)
+            }
+
+            private fun findClass(app: R_App, name: String): R_Class {
+                for (module in app.modules) {
+                    val c = module.classes[name]
+                    if (c != null) return c
+                }
+                throw IllegalStateException("Class not found: '$name'")
             }
         }
     }

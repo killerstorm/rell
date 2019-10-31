@@ -141,7 +141,7 @@ class Db_UnaryExpr(type: R_Type, val op: Db_UnaryOp, val expr: Db_Expr): Db_Expr
     }
 }
 
-sealed class Db_TableExpr(val rClass: R_Class): Db_Expr(R_ClassType(rClass)) {
+sealed class Db_TableExpr(val rClass: R_Class): Db_Expr(rClass.type) {
     abstract fun alias(ctx: SqlGenContext): SqlTableAlias
 
     final override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {

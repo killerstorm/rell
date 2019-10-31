@@ -42,13 +42,41 @@ class EnumTest: BaseRellTest() {
         chkCompile("enum foo { A, B, C, }", "OK")
         chkCompile("enum foo {}", "OK")
         chkCompile("enum foo { A, B, C, A }", "ct_err:enum_dup:A")
-        chkCompile("enum foo {} enum foo {}", "ct_err:name_conflict:enum:foo")
-        chkCompile("object foo {} enum foo {}", "ct_err:name_conflict:object:foo")
-        chkCompile("class foo {} enum foo {}", "ct_err:name_conflict:class:foo")
-        chkCompile("record foo {} enum foo {}", "ct_err:name_conflict:record:foo")
-        chkCompile("enum foo {} object foo {}", "ct_err:name_conflict:enum:foo")
-        chkCompile("enum foo {} class foo {}", "ct_err:name_conflict:enum:foo")
-        chkCompile("enum foo {} record foo {}", "ct_err:name_conflict:enum:foo")
+
+        chkCompile("enum foo {} enum foo {}", """ct_err:
+            [name_conflict:user:foo:ENUM:main.rell(1:18)]
+            [name_conflict:user:foo:ENUM:main.rell(1:6)]
+        """)
+
+        chkCompile("object foo {} enum foo {}", """ct_err:
+            [name_conflict:user:foo:ENUM:main.rell(1:20)]
+            [name_conflict:user:foo:OBJECT:main.rell(1:8)]
+        """)
+
+        chkCompile("class foo {} enum foo {}", """ct_err:
+            [name_conflict:user:foo:ENUM:main.rell(1:19)]
+            [name_conflict:user:foo:CLASS:main.rell(1:7)]
+        """)
+
+        chkCompile("record foo {} enum foo {}", """ct_err:
+            [name_conflict:user:foo:ENUM:main.rell(1:20)]
+            [name_conflict:user:foo:RECORD:main.rell(1:8)]
+        """)
+
+        chkCompile("enum foo {} object foo {}", """ct_err:
+            [name_conflict:user:foo:OBJECT:main.rell(1:20)]
+            [name_conflict:user:foo:ENUM:main.rell(1:6)]
+        """)
+
+        chkCompile("enum foo {} class foo {}", """ct_err:
+            [name_conflict:user:foo:CLASS:main.rell(1:19)]
+            [name_conflict:user:foo:ENUM:main.rell(1:6)]
+        """)
+
+        chkCompile("enum foo {} record foo {}", """ct_err:
+            [name_conflict:user:foo:RECORD:main.rell(1:20)]
+            [name_conflict:user:foo:ENUM:main.rell(1:6)]
+        """)
     }
 
     @Test fun testTypeCompatibility() {

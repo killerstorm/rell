@@ -54,7 +54,7 @@ class SqlGenContext private constructor(
     }
 
     fun getFromInfo(): SqlFromInfo {
-        val classes = clsAliasMap.entries.map { (cls, tbl) ->
+        val classes = clsAliasMap.entries.map { (_, tbl) ->
             val joins = tbl.subAliases.entries.flatMap { (alias, map) ->
                 map.values.map { tblJoin -> SqlFromJoin(alias, tblJoin.attr.sqlMapping, tblJoin.alias) }
             }
@@ -71,7 +71,7 @@ class SqlGenContext private constructor(
 
     companion object {
         fun create(frame: Rt_CallFrame, classes: List<R_AtClass>, parameters: List<Rt_Value>): SqlGenContext {
-            val sqlCtx = frame.entCtx.modCtx.sqlCtx
+            val sqlCtx = frame.entCtx.sqlCtx
             return SqlGenContext(sqlCtx, classes, parameters)
         }
     }
@@ -174,13 +174,13 @@ class SqlListBuilder(private val builder: SqlBuilder, private val sep: String) {
 class ParameterizedSql(val sql: String, val params: List<SqlParam>) {
     fun execute(frame: Rt_CallFrame) {
         val args = calcArgs(frame)
-        val sqlExec = frame.entCtx.modCtx.globalCtx.sqlExec
+        val sqlExec = frame.entCtx.globalCtx.sqlExec
         sqlExec.execute(sql, args::bind)
     }
 
     fun executeQuery(frame: Rt_CallFrame, consumer: (ResultSet) -> Unit) {
         val args = calcArgs(frame)
-        val sqlExec = frame.entCtx.modCtx.globalCtx.sqlExec
+        val sqlExec = frame.entCtx.globalCtx.sqlExec
         sqlExec.executeQuery(sql, args::bind, consumer)
     }
 

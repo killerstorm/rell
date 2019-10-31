@@ -25,28 +25,26 @@ sealed class R_CallExpr(type: R_Type, val args: List<R_Expr>): R_Expr(type) {
 
 class R_SysCallExpr(type: R_Type, val fn: R_SysFunction, args: List<R_Expr>): R_CallExpr(type, args) {
     override fun call(frame: Rt_CallFrame, values: List<Rt_Value>): Rt_Value {
-        val res = fn.call(frame.entCtx.modCtx, values)
+        val res = fn.call(frame.entCtx.callCtx, values)
         return res
     }
 }
 
-class R_UserCallExpr(type: R_Type, val name: String, val fnKey: Int, args: List<R_Expr>): R_CallExpr(type, args) {
+class R_UserCallExpr(type: R_Type, private val fn: R_Function, args: List<R_Expr>): R_CallExpr(type, args) {
     override fun call(frame: Rt_CallFrame, values: List<Rt_Value>): Rt_Value {
-        val fn = frame.entCtx.modCtx.module.functionsTable[fnKey]
-        check(fn.fnKey == fnKey)
         val res = fn.call(frame, values)
         return res
     }
 }
 
 abstract class R_SysFunction {
-    abstract fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value
+    abstract fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value
 }
 
 abstract class R_SysFunction_0: R_SysFunction() {
     abstract fun call(): Rt_Value
 
-    override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
+    override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
         check(args.size == 0)
         val res = call()
         return res
@@ -56,7 +54,7 @@ abstract class R_SysFunction_0: R_SysFunction() {
 abstract class R_SysFunction_1: R_SysFunction() {
     abstract fun call(arg: Rt_Value): Rt_Value
 
-    override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
+    override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
         check(args.size == 1)
         val res = call(args[0])
         return res
@@ -66,7 +64,7 @@ abstract class R_SysFunction_1: R_SysFunction() {
 abstract class R_SysFunction_2: R_SysFunction() {
     abstract fun call(arg1: Rt_Value, arg2: Rt_Value): Rt_Value
 
-    override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
+    override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
         check(args.size == 2)
         val res = call(args[0], args[1])
         return res
@@ -76,7 +74,7 @@ abstract class R_SysFunction_2: R_SysFunction() {
 abstract class R_SysFunction_3: R_SysFunction() {
     abstract fun call(arg1: Rt_Value, arg2: Rt_Value, arg3: Rt_Value): Rt_Value
 
-    override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
+    override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
         check(args.size == 3)
         val res = call(args[0], args[1], args[2])
         return res
@@ -96,7 +94,7 @@ abstract class R_SysFunction_Generic<T>: R_SysFunction() {
 
     open fun call(obj: T, args: List<Rt_Value>): Rt_Value = throw errArgCnt(args.size)
 
-    final override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
+    final override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
         check(args.size >= 1)
 
         val objVal = args[0]
@@ -141,28 +139,28 @@ object R_SysFn_Integer {
     }
 
     object ToText: MemFn() {
-        override fun call(a: Long) = Rt_TextValue(a.toString())
+        override fun call(obj: Long) = Rt_TextValue(obj.toString())
 
-        override fun call(a: Long, b: Rt_Value): Rt_Value {
-            val r = b.asInteger()
+        override fun call(obj: Long, a: Rt_Value): Rt_Value {
+            val r = a.asInteger()
             if (r < Character.MIN_RADIX || r > Character.MAX_RADIX) {
                 throw Rt_Error("fn_int_str_radix:$r", "Invalid radix: $r")
             }
-            val s = a.toString(r.toInt())
+            val s = obj.toString(r.toInt())
             return Rt_TextValue(s)
         }
     }
 
     object ToHex: MemFn() {
-        override fun call(a: Long) = Rt_TextValue(java.lang.Long.toHexString(a))
+        override fun call(obj: Long) = Rt_TextValue(java.lang.Long.toHexString(obj))
     }
 
     object Sign: MemFn() {
-        override fun call(a: Long) = Rt_IntValue(java.lang.Long.signum(a).toLong())
+        override fun call(obj: Long) = Rt_IntValue(java.lang.Long.signum(obj).toLong())
     }
 
     object FromText: R_SysFunction_Common() {
-        override fun call(a: Rt_Value): Rt_Value = parse(a, 10)
+        override fun call(obj: Rt_Value): Rt_Value = parse(obj, 10)
 
         override fun call(a: Rt_Value, b: Rt_Value): Rt_Value {
             val r = b.asInteger()
@@ -432,9 +430,9 @@ object R_SysFn_OpContext {
     abstract class BaseFn(private val name: String): R_SysFunction() {
         abstract fun call(opCtx: Rt_OpContext): Rt_Value
 
-        final override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
+        final override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             check(args.size == 0)
-            val opCtx = modCtx.globalCtx.opCtx
+            val opCtx = ctx.globalCtx.opCtx
             if (opCtx == null) throw Rt_Error("fn:op_context.$name:noop", "Operation context not available")
             return call(opCtx)
         }
@@ -455,25 +453,25 @@ object R_SysFn_OpContext {
 
 object R_SysFn_ChainContext {
     object RawConfig: R_SysFunction() {
-        override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
+        override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             check(args.size == 0)
-            return Rt_GtvValue(modCtx.globalCtx.chainCtx.rawConfig)
+            return Rt_GtvValue(ctx.chainCtx.rawConfig)
         }
     }
 
     object BlockchainRid: R_SysFunction() {
-        override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
+        override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             check(args.size == 0)
-            val bcRid = modCtx.globalCtx.chainCtx.blockchainRid
+            val bcRid = ctx.chainCtx.blockchainRid
             return Rt_ByteArrayValue(bcRid)
         }
     }
 
-    object Args: R_SysFunction() {
-        override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
+    class Args(private val moduleName: R_ModuleName): R_SysFunction() {
+        override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             check(args.size == 0)
-            val args = modCtx.globalCtx.chainCtx.args
-            return args ?: throw Rt_Error("chain_context.args:no_module_args", "No module args")
+            val res = ctx.chainCtx.args[moduleName]
+            return res ?: throw Rt_Error("chain_context.args:no_module_args", "No module args")
         }
     }
 }
@@ -528,45 +526,45 @@ object R_SysFn_Gtv {
 }
 
 object R_SysFn_Record {
-    class ToBytes(val type: R_RecordType): R_SysFunction_1() {
+    class ToBytes(private val record: R_Record): R_SysFunction_1() {
         override fun call(arg: Rt_Value): Rt_Value {
-            val gtv = type.rtToGtv(arg, false)
+            val gtv = record.type.rtToGtv(arg, false)
             val bytes = PostchainUtils.gtvToBytes(gtv)
             return Rt_ByteArrayValue(bytes)
         }
     }
 
-    class ToGtv(val type: R_RecordType, val pretty: Boolean): R_SysFunction_1() {
+    class ToGtv(private val record: R_Record, private val pretty: Boolean): R_SysFunction_1() {
         override fun call(arg: Rt_Value): Rt_Value {
-            val gtv = type.rtToGtv(arg, pretty)
+            val gtv = record.type.rtToGtv(arg, pretty)
             return Rt_GtvValue(gtv)
         }
     }
 
-    class FromBytes(val type: R_RecordType): R_SysFunction() {
-        override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
+    class FromBytes(private val record: R_Record): R_SysFunction() {
+        override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             check(args.size == 1)
             val arg = args[0]
             val bytes = arg.asByteArray()
             return Rt_Utils.wrapErr("fn:record:from_bytes") {
                 val gtv = PostchainUtils.bytesToGtv(bytes)
                 val convCtx = GtvToRtContext(false)
-                val res = type.gtvToRt(convCtx, gtv)
-                convCtx.finish(modCtx)
+                val res = record.type.gtvToRt(convCtx, gtv)
+                convCtx.finish(ctx.appCtx)
                 res
             }
         }
     }
 
-    class FromGtv(val type: R_RecordType, val pretty: Boolean): R_SysFunction() {
-        override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
+    class FromGtv(private val record: R_Record, private val pretty: Boolean): R_SysFunction() {
+        override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             check(args.size == 1)
             val arg = args[0]
             val gtv = arg.asGtv()
             return Rt_Utils.wrapErr("fn:record:from_gtv:$pretty") {
                 val convCtx = GtvToRtContext(pretty)
-                val res = type.gtvToRt(convCtx, gtv)
-                convCtx.finish(modCtx)
+                val res = record.type.gtvToRt(convCtx, gtv)
+                convCtx.finish(ctx.appCtx)
                 res
             }
         }
@@ -574,34 +572,34 @@ object R_SysFn_Record {
 }
 
 object R_SysFn_Enum {
-    class Values(private val type: R_EnumType): R_SysFunction_0() {
-        private val listType = R_ListType(type)
+    class Values(private val enum: R_Enum): R_SysFunction_0() {
+        private val listType = R_ListType(enum.type)
 
         override fun call(): Rt_Value {
-            val list = ArrayList(type.values())
+            val list = ArrayList(enum.values())
             return Rt_ListValue(listType, list)
         }
     }
 
-    class Value_Text(private val type: R_EnumType): R_SysFunction_1() {
+    class Value_Text(private val enum: R_Enum): R_SysFunction_1() {
         override fun call(arg: Rt_Value): Rt_Value {
             val name = arg.asString()
-            val attr = type.attr(name)
+            val attr = enum.attr(name)
             if (attr == null) {
-                throw Rt_Error("enum_badname:${type.name}:$name", "Enum '${type.name}' has no value '$name'")
+                throw Rt_Error("enum_badname:${enum.appLevelName}:$name", "Enum '${enum.simpleName}' has no value '$name'")
             }
-            return Rt_EnumValue(type, attr)
+            return Rt_EnumValue(enum.type, attr)
         }
     }
 
-    class Value_Int(private val type: R_EnumType): R_SysFunction_1() {
+    class Value_Int(private val enum: R_Enum): R_SysFunction_1() {
         override fun call(arg: Rt_Value): Rt_Value {
             val value = arg.asInteger()
-            val attr = type.attr(value)
+            val attr = enum.attr(value)
             if (attr == null) {
-                throw Rt_Error("enum_badvalue:${type.name}:$value", "Enum '${type.name}' has no value $value")
+                throw Rt_Error("enum_badvalue:${enum.appLevelName}:$value", "Enum '${enum.simpleName}' has no value $value")
             }
-            return Rt_EnumValue(type, attr)
+            return Rt_EnumValue(enum.type, attr)
         }
     }
 
@@ -671,13 +669,13 @@ object R_SysFn_Any {
     }
 
     class FromGtv(val type: R_Type, val pretty: Boolean, val name: String): R_SysFunction() {
-        override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
+        override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             check(args.size == 1)
             val gtv = args[0].asGtv()
             val res = try {
                 val gtvCtx = GtvToRtContext(pretty)
                 val rt = type.gtvToRt(gtvCtx, gtv)
-                gtvCtx.finish(modCtx)
+                gtvCtx.finish(ctx.appCtx)
                 rt
             } catch (e: Exception) {
                 throw Rt_Error(name, e.message ?: "")
@@ -716,7 +714,7 @@ object R_SysFn_General {
     }
 
     class Print(private val log: Boolean, private val pos: String): R_SysFunction() {
-        override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
+        override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             val buf = StringBuilder()
             for (arg in args) {
                 if (!buf.isEmpty()) {
@@ -727,12 +725,17 @@ object R_SysFn_General {
 
             val str = buf.toString()
 
-            val ctx = modCtx.globalCtx
+            val ctx = ctx.globalCtx
             val printer = if (log) ctx.logPrinter else ctx.stdoutPrinter
-            val fullStr = if (log) (if (str.isEmpty()) pos else "$pos $str") else str
+            val fullStr = if (log) logStr(str) else str
             printer.print(fullStr)
 
             return Rt_UnitValue
+        }
+
+        private fun logStr(str: String): String {
+            val posStr = "[$pos]"
+            return if (str.isEmpty()) posStr else "$posStr $str"
         }
     }
 }
@@ -796,10 +799,10 @@ object R_SysFn_Math {
 
 object R_SysFn_Crypto {
     object IsSigner: R_SysFunction() {
-        override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value {
+        override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             check(args.size == 1)
             val a = args[0].asByteArray()
-            val opCtx = modCtx.globalCtx.opCtx
+            val opCtx = ctx.globalCtx.opCtx
             val r = if (opCtx == null) false else opCtx.signers.any { Arrays.equals(it, a) }
             return Rt_BooleanValue(r)
         }

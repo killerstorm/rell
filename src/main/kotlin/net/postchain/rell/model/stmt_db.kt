@@ -44,7 +44,7 @@ class R_UpdateTarget_Simple(
             val pSql = stmt.buildSql(frame, ctx, true)
 
             var count = 0
-            pSql.executeQuery(frame) { rs ->
+            pSql.executeQuery(frame) {
                 ++count
             }
 
@@ -101,7 +101,7 @@ class R_UpdateTarget_Expr_Many(
         }
 
         // Experimental maximum is 2^15
-        val partSize = frame.entCtx.modCtx.globalCtx.sqlUpdatePortionSize
+        val partSize = frame.entCtx.globalCtx.sqlUpdatePortionSize
 
         for (part in CommonUtils.split(lst, partSize)) {
             val partValue = Rt_ListValue(listType, part)

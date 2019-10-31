@@ -1,0 +1,158 @@
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./multigen.sh -d test-cli/src -o out test-cli/config/run-simple.xml
+
+tree out
+
+out/
+├── blockchains
+│   └── 1
+│       ├── 0.xml
+│       └── brid.txt
+├── node-config.properties
+└── private.properties
+
+2 directories, 4 files
+
+cat out/blockchains/1/0.xml
+
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<dict>
+    <entry key="blockstrategy">
+        <dict>
+            <entry key="name">
+                <string>net.postchain.base.BaseBlockBuildingStrategy</string>
+            </entry>
+        </dict>
+    </entry>
+    <entry key="configurationfactory">
+        <string>net.postchain.gtx.GTXBlockchainConfigurationFactory</string>
+    </entry>
+    <entry key="gtx">
+        <dict>
+            <entry key="modules">
+                <array>
+                    <string>net.postchain.rell.module.RellPostchainModuleFactory</string>
+                    <string>net.postchain.gtx.StandardOpsGTXModule</string>
+                </array>
+            </entry>
+            <entry key="rell">
+                <dict>
+                    <entry key="moduleArgs">
+                        <dict>
+                            <entry key="run_common">
+                                <dict>
+                                    <entry key="message">
+                                        <string>Some common message...</string>
+                                    </entry>
+                                </dict>
+                            </entry>
+                            <entry key="run_simple">
+                                <dict>
+                                    <entry key="x">
+                                        <int>123456</int>
+                                    </entry>
+                                    <entry key="y">
+                                        <string>Hello!</string>
+                                    </entry>
+                                </dict>
+                            </entry>
+                        </dict>
+                    </entry>
+                    <entry key="modules">
+                        <array>
+                            <string>run_simple</string>
+                        </array>
+                    </entry>
+                    <entry key="sources_v0.9">
+                        <dict>
+                            <entry key="calc.rell">
+                                <string>module;
+
+function sum_digits_integer(n: integer): text {
+    var x = 1;
+    var res = 0;
+    for (i in range(n)) {
+        var t = x;
+        while (t &gt; 0) {
+            res = (res * 7 + (t % 10)) % 281474976710655;
+            t /= 10;
+        }
+        ++x;
+    }
+    return res.to_hex();
+}
+
+function sum_digits_decimal(n: integer): text {
+    var x = 1.0;
+    var res = 0.0;
+    for (i in range(n)) {
+        var t = x;
+        while (t &gt; 0) {
+            res = (res * 7 + (t % 10)) % 281474976710655;
+            t = (t / 10).floor();
+        }
+        ++x;
+    }
+    return integer(res).to_hex();
+}
+</string>
+                            </entry>
+                            <entry key="run_common.rell">
+                                <string>module;
+
+record module_args {
+    message: text;
+}
+
+query get_common_args() = chain_context.args;
+</string>
+                            </entry>
+                            <entry key="run_simple.rell">
+                                <string>module;
+
+import run_common;
+import calc;
+
+record module_args {
+    x: integer;
+    y: text;
+}
+
+query sum_digits_int(n: integer) = calc.sum_digits_integer(n);
+query sum_digits_dec(n: integer) = calc.sum_digits_decimal(n);
+
+query get_raw_config() = chain_context.raw_config;
+query get_module_args() = chain_context.args;
+</string>
+                            </entry>
+                        </dict>
+                    </entry>
+                </dict>
+            </entry>
+        </dict>
+    </entry>
+    <entry key="signers">
+        <array>
+            <bytea>0350FE40766BC0CE8D08B3F5B810E49A8352FDD458606BD5FAFE5ACDCDC8FF3F57</bytea>
+        </array>
+    </entry>
+</dict>
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./postchain.sh run-node-auto -d out
+
+curl "http://localhost:7740/query/01234567abcdef01234567abcdef01234567abcdef01234567abcdef01234567" -X POST -d '{"type":"sum_digits_int","n":1000}'
+
+"73fb9a5de29b"
+
+curl "http://localhost:7740/query/01234567abcdef01234567abcdef01234567abcdef01234567abcdef01234567" -X POST -d '{"type":"sum_digits_dec","n":1000}'
+
+"73fb9a5de29b"
+
+curl "http://localhost:7740/query/01234567abcdef01234567abcdef01234567abcdef01234567abcdef01234567" -X POST -d '{"type":"get_module_args"}'
+
+{"x":123456,"y":"Hello!"}
+
+curl "http://localhost:7740/query/01234567abcdef01234567abcdef01234567abcdef01234567abcdef01234567" -X POST -d '{"type":"get_common_args"}'
+
+{"message":"Some common message..."}

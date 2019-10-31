@@ -137,7 +137,7 @@ class S_AssignOp_Op(val code: String, val op: C_BinOp_Common): S_AssignOp() {
         val srcType = rSrcExpr.type
 
         val binOp = compileBinOp(pos, dstType, srcType)
-        if (binOp?.rOp == null) {
+        if (binOp.rOp == null) {
             throw C_BinOp.errTypeMismatch(pos, code, dstType, srcType)
         }
 

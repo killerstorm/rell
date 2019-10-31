@@ -1,0 +1,10 @@
+module;
+
+import ^.support;
+
+function helper() {
+    print('And this is helper!');
+    support.support();
+}
+
+query q() = 'Hello!';

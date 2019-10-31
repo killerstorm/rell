@@ -60,13 +60,33 @@ class NamespaceTest: BaseRellTest() {
 
     @Test fun testNameConflict() {
         chkCompile("namespace foo {} namespace foo {}", "OK")
-        chkCompile("namespace foo {} class foo {}", "ct_err:name_conflict:namespace:foo")
-        chkCompile("namespace foo {} object foo {}", "ct_err:name_conflict:namespace:foo")
-        chkCompile("namespace foo {} function foo(): integer = 123;", "ct_err:name_conflict:namespace:foo")
+
+        chkCompile("namespace foo {} class foo {}", """ct_err:
+            [name_conflict:user:foo:CLASS:main.rell(1:24)]
+            [name_conflict:user:foo:NAMESPACE:main.rell(1:11)]
+        """)
+
+        chkCompile("namespace foo {} object foo {}", """ct_err:
+            [name_conflict:user:foo:OBJECT:main.rell(1:25)]
+            [name_conflict:user:foo:NAMESPACE:main.rell(1:11)]
+        """)
+
+        chkCompile("namespace foo {} function foo(): integer = 123;", """ct_err:
+            [name_conflict:user:foo:FUNCTION:main.rell(1:27)]
+            [name_conflict:user:foo:NAMESPACE:main.rell(1:11)]
+        """)
 
         chkCompile("namespace foo { namespace bar {} namespace bar {} }", "OK")
-        chkCompile("namespace foo { namespace bar {} function bar(): integer = 123; }", "ct_err:name_conflict:namespace:bar")
-        chkCompile("namespace foo { class bar {} object bar {} }", "ct_err:name_conflict:class:bar")
+
+        chkCompile("namespace foo { namespace bar {} function bar(): integer = 123; }", """ct_err:
+            [name_conflict:user:bar:FUNCTION:main.rell(1:43)]
+            [name_conflict:user:bar:NAMESPACE:main.rell(1:27)]
+        """)
+
+        chkCompile("namespace foo { class bar {} object bar {} }", """ct_err:
+            [name_conflict:user:bar:OBJECT:main.rell(1:37)]
+            [name_conflict:user:bar:CLASS:main.rell(1:23)]
+        """)
     }
 
     @Test fun testForwardReference() {
@@ -129,13 +149,13 @@ class NamespaceTest: BaseRellTest() {
     }
 
     @Test fun testPredefinedNamespaces() {
-        chkCompile("namespace integer {}", "ct_err:name_conflict:type:integer")
-        chkCompile("namespace text {}", "ct_err:name_conflict:type:text")
-        chkCompile("namespace abs {}", "ct_err:name_conflict:function:abs")
-        chkCompile("class abs {}", "ct_err:name_conflict:function:abs")
-        chkCompile("namespace chain_context {}", "ct_err:name_conflict:namespace:chain_context")
-        chkCompile("function chain_context() {}", "ct_err:name_conflict:namespace:chain_context")
-        chkCompile("class chain_context {}", "ct_err:name_conflict:namespace:chain_context")
+        chkCompile("namespace integer {}", "ct_err:name_conflict:sys:integer:TYPE")
+        chkCompile("namespace text {}", "ct_err:name_conflict:sys:text:TYPE")
+        chkCompile("namespace abs {}", "ct_err:name_conflict:sys:abs:FUNCTION")
+        chkCompile("class abs {}", "ct_err:name_conflict:sys:abs:FUNCTION")
+        chkCompile("namespace chain_context {}", "ct_err:name_conflict:sys:chain_context:NAMESPACE")
+        chkCompile("function chain_context() {}", "ct_err:name_conflict:sys:chain_context:NAMESPACE")
+        chkCompile("class chain_context {}", "ct_err:name_conflict:sys:chain_context:NAMESPACE")
     }
 
     @Test fun testNamespacedTypes() {
@@ -179,5 +199,29 @@ class NamespaceTest: BaseRellTest() {
         chk("foo.g()", "int[369]")
         chk("foo.h()", "int[123]")
         chk("p()", "int[1230]")
+    }
+
+    @Test fun testMultipleNamespacesWithSameName3() {
+        val code = """
+            namespace foo { namespace bar { function f(): integer = 123; }}
+            namespace foo { namespace bar {    function f(): integer = 123; }}
+        """.trimIndent()
+
+        chkCompile(code, """ct_err:
+            [name_conflict:user:f:FUNCTION:main.rell(2:45)]
+            [name_conflict:user:f:FUNCTION:main.rell(1:42)]
+        """)
+    }
+
+    @Test fun testAnonymousNamespace() {
+        chkQueryEx("namespace { query q() = 123; }", "int[123]")
+        chkQueryEx("namespace { function f(): integer = 123; } query q() = f();", "int[123]")
+        chkQueryEx("namespace { function f(): integer = g(); } query q() = f(); namespace { function g(): integer = 123; }", "int[123]")
+        chkCompile("namespace { function f(): integer = 123; } namespace ns { function f(): integer = 456; }", "OK")
+
+        chkCompile("namespace { function f(): integer = 123; } namespace { function f(): integer = 456; }", """ct_err:
+            [name_conflict:user:f:FUNCTION:main.rell(1:65)]
+            [name_conflict:user:f:FUNCTION:main.rell(1:22)]
+        """)
     }
 }

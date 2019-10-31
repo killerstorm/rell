@@ -5,8 +5,9 @@ import net.postchain.core.ByteArrayKey
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
 import net.postchain.rell.CommonUtils
+import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_ExternalParam
-import net.postchain.rell.model.R_Module
+import net.postchain.rell.model.R_MountName
 import net.postchain.rell.parser.C_MessageType
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlExecutor
@@ -30,23 +31,24 @@ class RellCodeTester(
 
     var dropTables = true
     var createTables = true
+    var wrapInit = false
     var strictToString = true
     var opContext: Rt_OpContext? = null
     var sqlUpdatePortionSize = 1000
 
     private val chainDependencies = mutableMapOf<String, TestChainDependency>()
 
-    override fun initSqlReset(sqlExec: SqlExecutor, moduleCode: String, module: R_Module) {
-        val globalCtx = createInitGlobalCtx(sqlExec)
-        val modCtx = createModuleCtx(globalCtx, module)
+    override fun initSqlReset(exec: SqlExecutor, moduleCode: String, app: R_App) {
+        val globalCtx = createInitGlobalCtx(exec)
+        val appCtx = createAppCtx(globalCtx, app)
 
-        sqlExec.transaction {
+        exec.transaction {
             if (dropTables) {
-                SqlUtils.dropAll(sqlExec, false)
+                SqlUtils.dropAll(exec, false)
             }
 
             if (createTables) {
-                SqlInit.init(modCtx, SqlInit.LOG_NONE)
+                SqlInit.init(appCtx, SqlInit.LOG_NONE)
             }
         }
     }
@@ -64,15 +66,6 @@ class RellCodeTester(
         )
     }
 
-    private fun initSqlObjects(sqlExec: SqlExecutor, sqlCtx: Rt_SqlContext) {
-        val globalCtx = createInitGlobalCtx(sqlExec)
-        val modCtx = Rt_ModuleContext(globalCtx, sqlCtx.module, sqlCtx)
-
-        for (rObject in sqlCtx.module.objects.values) {
-            modCtx.insertObjectRecord(rObject)
-        }
-    }
-
     fun chainDependency(name: String, rid: String, height: Long) {
         check(name !in chainDependencies)
         val ridArray = CommonUtils.hexToBytes(rid)
@@ -81,46 +74,46 @@ class RellCodeTester(
 
     fun chkQuery(bodyCode: String, expected: String) {
         val queryCode = "query q() = $bodyCode;"
-        chkQueryEx(queryCode, listOf(), expected)
+        chkQueryEx(queryCode, "q", listOf(), expected)
     }
 
-    fun chkQueryEx(code: String, args: List<Rt_Value>, expected: String) {
-        val actual = callQuery(code, args)
+    fun chkQueryEx(code: String, name: String, args: List<Rt_Value>, expected: String) {
+        val actual = callQuery(code, name, args)
         assertEquals(expected, actual)
     }
 
     fun chkQueryGtv(code: String, expected: String) {
         val queryCode = "query q() $code"
-        val actual = callQuery0(queryCode, listOf(), GtvTestUtils::decodeGtvQueryArgs)
+        val actual = callQuery0(queryCode, "q", listOf(), GtvTestUtils::decodeGtvQueryArgs)
         assertEquals(expected, actual)
     }
 
     fun chkQueryGtvEx(code: String, args: List<String>, expected: String) {
-        val actual = callQuery0(code, args, GtvTestUtils::decodeGtvQueryArgs)
+        val actual = callQuery0(code, "q", args, GtvTestUtils::decodeGtvQueryArgs)
         assertEquals(expected, actual)
     }
 
     fun chkQueryType(bodyCode: String, expected: String) {
         val queryCode = "query q() $bodyCode"
         val moduleCode = moduleCode(queryCode)
-        val actual = processModule(moduleCode) { module ->
-            module.queries.getValue("q").type.toStrictString()
+        val actual = processApp(moduleCode) { module ->
+            module.queries.getValue(R_MountName.of("q")).type().toStrictString()
         }
         assertEquals(expected, actual)
     }
 
     fun chkOp(bodyCode: String, expected: String = "OK") {
         val opCode = "operation o() { $bodyCode }"
-        chkOpEx(opCode, expected)
+        chkOpEx(opCode, "o", expected)
     }
 
-    fun chkOpEx(opCode: String, expected: String) {
-        val actual = callOp(opCode, listOf())
+    fun chkOpEx(opCode: String, name: String, expected: String) {
+        val actual = callOp(opCode, name, listOf())
         assertEquals(expected, actual)
     }
 
     fun chkOpGtvEx(code: String, args: List<String>, expected: String) {
-        val actual = callOp0(code, args, GtvTestUtils::decodeGtvOpArgsStr)
+        val actual = callOp0(code, "o", args, GtvTestUtils::decodeGtvOpArgsStr)
         assertEquals(expected, actual)
     }
 
@@ -133,18 +126,23 @@ class RellCodeTester(
         init()
         val moduleCode = moduleCode(code)
         val globalCtx = createGlobalCtx()
-        return processModuleCtx(globalCtx, moduleCode) { modCtx ->
+        return processAppCtx(globalCtx, moduleCode) { modCtx ->
             RellTestUtils.callFn(modCtx, "f", listOf(), strictToString)
         }
     }
 
-    fun callQuery(code: String, args: List<Rt_Value>): String {
-        return callQuery0(code, args) { _, v -> v }
+    fun callQuery(code: String, name: String, args: List<Rt_Value>): String {
+        return callQuery0(code, name, args) { _, v -> v }
     }
 
-    private fun <T> callQuery0(code: String, args: List<T>, decoder: (List<R_ExternalParam>, List<T>) -> List<Rt_Value>): String {
+    private fun <T> callQuery0(code: String, name: String, args: List<T>, decoder: (List<R_ExternalParam>, List<T>) -> List<Rt_Value>): String {
         return eval.eval {
-            init()
+            if (wrapInit) {
+                eval.wrapCt { init() }
+            } else {
+                init()
+            }
+
             val moduleCode = moduleCode(code)
             val globalCtx = createGlobalCtx()
 
@@ -152,30 +150,30 @@ class RellCodeTester(
             else if (strictToString) RellTestUtils.ENCODER_STRICT
             else RellTestUtils.ENCODER_PLAIN
 
-            processModuleCtx(globalCtx, moduleCode) { modCtx ->
-                RellTestUtils.callQueryGeneric(modCtx, "q", args, decoder, encoder)
+            processAppCtx(globalCtx, moduleCode) { appCtx ->
+                RellTestUtils.callQueryGeneric(appCtx, name, args, decoder, encoder)
             }
         }
     }
 
-    fun callOp(code: String, args: List<Rt_Value>): String {
-        return callOp0(code, args) { _, v -> v }
+    private fun callOp(code: String, name: String, args: List<Rt_Value>): String {
+        return callOp0(code, name, args) { _, v -> v }
     }
 
     fun callOpGtv(code: String, args: List<Gtv>): String {
-        return callOp0(code, args, GtvTestUtils::decodeGtvOpArgs)
+        return callOp0(code, "o", args, GtvTestUtils::decodeGtvOpArgs)
     }
 
     fun callOpGtvStr(code: String, args: List<String>): String {
-        return callOp0(code, args, GtvTestUtils::decodeGtvOpArgsStr)
+        return callOp0(code, "o", args, GtvTestUtils::decodeGtvOpArgsStr)
     }
 
-    private fun <T> callOp0(code: String, args: List<T>, decoder: (List<R_ExternalParam>, List<T>) -> List<Rt_Value>): String {
+    private fun <T> callOp0(code: String, name: String, args: List<T>, decoder: (List<R_ExternalParam>, List<T>) -> List<Rt_Value>): String {
         init()
         val moduleCode = moduleCode(code)
         val globalCtx = createGlobalCtx()
-        return processModuleCtx(globalCtx, moduleCode) { modCtx ->
-            RellTestUtils.callOpGeneric(modCtx, "o", args, decoder)
+        return processAppCtx(globalCtx, moduleCode) { modCtx ->
+            RellTestUtils.callOpGeneric(modCtx, name, args, decoder)
         }
     }
 
@@ -195,22 +193,22 @@ class RellCodeTester(
 
     private fun createChainContext(): Rt_ChainContext {
         val bcRid = ByteArray(32)
-        return Rt_ChainContext(GtvNull, Rt_NullValue, bcRid)
+        return Rt_ChainContext(GtvNull, mapOf(), bcRid)
     }
 
-    fun createModuleCtx(globalCtx: Rt_GlobalContext, module: R_Module): Rt_ModuleContext {
-        val sqlCtx = createSqlCtx(module, globalCtx.sqlExec)
-        return Rt_ModuleContext(globalCtx, module, sqlCtx)
+    fun createAppCtx(globalCtx: Rt_GlobalContext, app: R_App): Rt_AppContext {
+        val sqlCtx = createSqlCtx(app, globalCtx.sqlExec)
+        return Rt_AppContext(globalCtx, sqlCtx, app)
     }
 
-    private fun createSqlCtx(module: R_Module, sqlExec: SqlExecutor): Rt_SqlContext {
+    private fun createSqlCtx(app: R_App, sqlExec: SqlExecutor): Rt_SqlContext {
         val sqlMapping = createChainSqlMapping()
-        val rtDeps = chainDependencies.mapValues { (k, v) -> Rt_ChainDependency(v.rid) }
+        val rtDeps = chainDependencies.mapValues { (_, v) -> Rt_ChainDependency(v.rid) }
 
-        val heightMap = chainDependencies.mapKeys { (k, v) -> ByteArrayKey(v.rid) }.mapValues { (k, v) -> v.height }
+        val heightMap = chainDependencies.mapKeys { (_, v) -> ByteArrayKey(v.rid) }.mapValues { (_, v) -> v.height }
         val heightProvider = TestChainHeightProvider(heightMap)
 
-        return eval.wrapRt { Rt_SqlContext.create(module, sqlMapping, rtDeps, sqlExec, heightProvider) }
+        return eval.wrapRt { Rt_SqlContext.create(app, sqlMapping, rtDeps, sqlExec, heightProvider) }
     }
 
     fun chkWarn(vararg msgs: String) {
@@ -235,10 +233,10 @@ class RellCodeTester(
         assertEquals(expected, actual)
     }
 
-    private fun processModuleCtx(globalCtx: Rt_GlobalContext, code: String, processor: (Rt_ModuleContext) -> String): String {
-        return processModule(code) { module ->
-            RellTestUtils.catchRtErr({ createModuleCtx(globalCtx, module) }) {
-                modCtx -> processor(modCtx)
+    private fun processAppCtx(globalCtx: Rt_GlobalContext, code: String, processor: (Rt_AppContext) -> String): String {
+        return processApp(code) { app ->
+            RellTestUtils.catchRtErr({ createAppCtx(globalCtx, app) }) {
+                appCtx -> processor(appCtx)
             }
         }
     }

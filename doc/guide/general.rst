@@ -253,66 +253,6 @@ assigned to a variable of type ``A`` (or passed as a parameter of type
 Module definitions
 ==================
 
-Include
--------
-
-A Rell file can include contents of other Rell files.
-
-Suppose file ``helper.rell`` contains:
-
-::
-
-    class user { name; }
-    function square(x: integer): integer = x * x;
-
-Definitions from ``helper.rell`` can be included using the ``include`` directive:
-
-::
-
-    include 'helper';
-
-    query get_all_users() = user @* {};
-    query my_query() = square(33);
-
-Included directive can be put in a namespace or an external block:
-
-::
-
-    namespace helper {
-        include 'helper';
-    }
-
-    query get_all_users() = helper.user @* {};
-    query my_query() = helper.square(33);
-
-All definitions from the included file are visible in the including file, and vice versa, i. e. the code in the
-included file can access all definitions of the including file.
-
-In a standard operational mode, when Rell is run via Postchain, available files are defined in the blockchain
-configuration under the path ``gtx.rell``:
-
-::
-
-    {
-        "gtx": {
-            "rell": {
-                "mainFile": "main.rell",
-                "sources_v0.9": {
-                    "main.rell": "...",
-                    "helper.rell": "..."
-                }
-            }
-        }
-    }
-
-More details:
-
-- File name is specified without extension.
-- An absolute or relative path can be specified. Absolute path starts with ``/``, and points to the Rell sources root,
-  not to the file system root.
-- Not allowed to include the same file twice within the same namespace. But if the same file is included indirectly
-  (via another included file), the include directive has no effect.
-
 Class
 -----
 
@@ -401,11 +341,11 @@ Class annotations
 
 ::
 
-    class user (log) {
+    @log class user {
         name: text;
     }
 
-The ``log`` annotation has following effects:
+The ``@log`` annotation has following effects:
 
 - Special attribute ``transaction`` of type ``transaction`` is added to the class.
 - When an object is created, ``transaction`` is set to the result of ``op_context.transaction`` (current transaction).
@@ -629,6 +569,24 @@ Features of namespaces:
   ``foo.user`` will be named ``c0.foo.user``.
 - It is allowed to define namespace with same name multiple times with different inner definitions.
 
+Anonymous namespace:
+
+::
+
+    namespace {
+        // some definitions
+    }
+
+Can be used to apply an annotation to a set of definitions:
+
+::
+
+    @mount('foo.bar')
+    namespace {
+        class user {}
+        class company {}
+    }
+
 External
 --------
 
@@ -637,7 +595,7 @@ External blocks are used to access classes defined in other blockchains:
 ::
 
     external 'foo' {
-        class user(log) {
+        @log class user {
             name;
         }
     }
@@ -650,17 +608,9 @@ must be defined in the blockchain configuration (``dependencies`` node).
 Every blockchain has its ``chain_id``, which is included in table names for classes and objects of that chain. If the
 blockchain ``'foo'`` has ``chain_id`` = 123, the table for the class ``user`` will be called ``c123.user``.
 
-Can use ``include`` within an external block:
-
-::
-
-    external 'foo' {
-        include 'foo_defs';
-    }
-
 Other features:
 
-- External classes must be annotated with the ``log`` annotation. This implies that those classes cannot have mutable
+- External classes must be annotated with the ``@log`` annotation. This implies that those classes cannot have mutable
   attributes.
 - Objects of external classes cannot be created or deleted.
 - Only classes and namespaces are allowed inside of an external block.
@@ -693,6 +643,78 @@ To access blocks and transactions of an external blockchian, a special syntax is
 - Namespace name can be arbitrary.
 - External and non-external transactions/blocks are distinct, incompatible types.
 - When selecting external transactions or blocks, an implicit height filter is applied (like for external classes).
+
+Mount names
+-----------
+
+Classes, objects, operations and queries have mount names:
+
+- for classes and objects, those names are the SQL table names where the data is stored
+- for operations and queries, a mount name is used to invoke an operation or a query from the outside
+
+By default, a mount name is defined by a fully-qualified name of a definition:
+
+::
+
+    namespace foo {
+        namespace bar {
+            class user {}
+        }
+    }
+
+The mount name for the class ``user`` is ``foo.bar.user``.
+
+To specify a custom mount name, ``@mount`` annotation is used:
+
+::
+
+    @mount('foo.bar.user')
+    class user {}
+
+The ``@mount`` annotation can be specified for classes, objects, operations and queries.
+
+In addition, it can be specified for a namespace:
+
+::
+
+    @mount('foo.bar')
+    namespace ns {
+        class user {}
+    }
+
+or a module:
+
+::
+
+    @mount('foo.bar')
+    module;
+
+    class user {}
+
+In both cases, the mount name of ``user`` is ``foo.bar.user``.
+
+A mount name can be relative to the context mount name. For example, when defined in a namespace
+
+::
+
+    @mount('a.b.c')
+    namespace ns {
+        class user {}
+    }
+
+class ``user`` will have following mount names when annotated with ``@mount``:
+
+- ``@mount('.d.user')`` -> ``a.b.c.d.user``
+- ``@mount('^.user')`` -> ``a.b.user``
+- ``@mount('^^.x.user')`` -> ``a.x.user``
+
+Special character ``.`` appends names to the context mount name, and ``^`` removes the last part from the context
+mount name.
+
+A mount name can end with ``.``, in that case the name of the definition is appended to the mount name:
+
+- ``@mount('foo.') class user {}`` gives mount name ``foo.user``, while
+- ``@mount('foo') class user {}`` gives mount name ``foo``.
 
 --------------
 

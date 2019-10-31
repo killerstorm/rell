@@ -1,6 +1,5 @@
 package net.postchain.rell.model
 
-import com.google.common.collect.Iterables
 import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_TupleValue
 import net.postchain.rell.runtime.Rt_Value
@@ -165,11 +164,7 @@ object R_ForIterator_VirtualCollection: R_ForIterator() {
 
 class R_ForIterator_Map(private val tupleType: R_TupleType): R_ForIterator() {
     override fun list(v: Rt_Value): Iterable<Rt_Value> {
-        return Iterables.transform(v.asMap().entries) {
-            val key = it!!.key
-            val value = it!!.value
-            Rt_TupleValue(tupleType, listOf(key, value))
-        }
+        return v.asMap().entries.map { Rt_TupleValue(tupleType, listOf(it.key, it.value)) }
     }
 }
 

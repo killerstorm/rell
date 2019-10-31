@@ -159,16 +159,18 @@ class ClassTest: BaseRellTest(false) {
     }
 
     @Test fun testAnnotations() {
-        chkCompile("class user (log) {}", "OK")
+        chkCompile("@log class user {}", "OK")
         chkCompile("class user (foo) {}", "ct_err:class_ann_bad:foo")
+        chkCompile("@foo class user {}", "ct_err:ann:invalid:foo")
+        chkCompile("@log @log class user {}", "ct_err:ann:log:dup")
         chkCompile("class user (log, log) {}", "ct_err:class_ann_dup:log")
 
-        val m1 = tst.compileModuleEx("class user {}")
-        val c1 = m1.classes["user"]!!
+        val a1 = tst.compileAppEx("class user {}")
+        val c1 = a1.classes.first { it.simpleName == "user" }
         assertEquals(false, c1.flags.log)
 
-        val m2 = tst.compileModuleEx("class user (log) {}")
-        val c2 = m2.classes["user"]!!
+        val a2 = tst.compileAppEx("@log class user {}")
+        val c2 = a2.classes.first { it.simpleName == "user" }
         assertEquals(true, c2.flags.log)
     }
 
@@ -222,8 +224,8 @@ class ClassTest: BaseRellTest(false) {
         chkCompile("class foo { index rowid: integer; }", "ct_err:unallowed_attr_name:rowid")
         chkCompile("class foo { key rowid: integer; }", "ct_err:unallowed_attr_name:rowid")
 
-        chkCompile("object foo { rowid: integer; }", "ct_err:unallowed_attr_name:rowid")
-        chkCompile("object foo { rowid: text; }", "ct_err:unallowed_attr_name:rowid")
+        chkCompile("object foo { rowid: integer; }", "ct_err:[object_attr_novalue:foo:rowid][unallowed_attr_name:rowid]")
+        chkCompile("object foo { rowid: text; }", "ct_err:[object_attr_novalue:foo:rowid][unallowed_attr_name:rowid]")
 
         chkCompile("record foo { rowid: integer; }", "OK")
         chkCompile("record foo { rowid: text; }", "OK")

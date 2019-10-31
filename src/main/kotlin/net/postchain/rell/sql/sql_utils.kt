@@ -22,7 +22,7 @@ object SqlUtils {
         val tables = getExistingTables(sqlExec)
 
         val delTables = if (sysTables) tables else {
-            val sys = setOf("blocks", "transactions", "blockchains")
+            val sys = setOf(SqlConstants.BLOCKS_TABLE, SqlConstants.TRANSACTIONS_TABLE, SqlConstants.BLOCKCHAINS_TABLE)
             tables.filter { it !in sys }
         }
 
@@ -121,7 +121,7 @@ object SqlUtils {
 
     fun recordsExist(sqlExec: SqlExecutor, sqlCtx: Rt_SqlContext, cls: R_Class): Boolean {
         val table = cls.sqlMapping.table(sqlCtx)
-        val sql = """SELECT "$ROWID_COLUMN" FROM "$table" LIMIT 1;"""
+        val sql = """SELECT "${SqlConstants.ROWID_COLUMN}" FROM "$table" LIMIT 1;"""
         var res: Boolean = false
         sqlExec.executeQuery(sql, {}) { res = true }
         return res

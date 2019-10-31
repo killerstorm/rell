@@ -12,7 +12,7 @@ class ExternalTest: BaseRellTest() {
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         initExternalChain()
-        def("external 'foo' { class user(log) { name; } }")
+        def("external 'foo' { @log class user { name; } }")
         tst.chainDependency("foo", "deadbeef", 1000)
         chk("user @ {} ( =user, =.name )", "(user[1],text[Bob])")
     }
@@ -22,7 +22,7 @@ class ExternalTest: BaseRellTest() {
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         initExternalChain()
-        def("namespace bar { external 'foo' { class user(log) { name; } } }")
+        def("namespace bar { external 'foo' { @log class user { name; } } }")
         tst.chainDependency("foo", "deadbeef", 1000)
         chk("bar.user @ {} ( =user, =.name )", "(bar.user[1],text[Bob])")
         chk("user @ {} ( =user, =.name )", "ct_err:unknown_class:user")
@@ -32,8 +32,8 @@ class ExternalTest: BaseRellTest() {
         tstCtx.blockchain(333, "deadbeef")
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
-        initExternalChain(333, "foo.bar.user", "namespace foo { namespace bar { class user(log) { name; } } }")
-        def("namespace abc { external 'ext' { namespace foo { namespace bar { class user(log) { name; } } } } }")
+        initExternalChain(333, "foo.bar.user", "namespace foo { namespace bar { @log class user { name; } } }")
+        def("namespace abc { external 'ext' { namespace foo { namespace bar { @log class user { name; } } } } }")
         tst.chainDependency("ext", "deadbeef", 1000)
         chk("abc.foo.bar.user @ {} ( =user, =.name )", "(abc.foo.bar.user[1],text[Bob])")
         chk("foo.bar.user @ {} ( =user, =.name )", "ct_err:unknown_class:foo.bar.user")
@@ -65,15 +65,6 @@ class ExternalTest: BaseRellTest() {
         chkCompile("external 'foo' { class user { name; } }", "ct_err:def_class_external_nolog:user")
     }
 
-    @Test fun testDuplicateExternalBlock() {
-        tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
-
-        initExternalChain()
-        tst.chainDependency("foo", "deadbeef", 1000)
-        chkCompile("external 'foo' { class user(log) { name; } } external 'foo' {}", "ct_err:def_external_dup:foo")
-    }
-
     @Test fun testDuplicateChainRID() {
         tstCtx.blockchain(333, "deadbeef")
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
@@ -90,7 +81,7 @@ class ExternalTest: BaseRellTest() {
 
         initExternalChain()
         tst.chainDependency("foo", "deadbeef", 1000)
-        chkQueryEx("external 'bar' { class user(log) { name; } } query q() = 123;", "rt_err:external_chain_unknown:bar")
+        chkQueryEx("external 'bar' { @log class user { name; } } query q() = 123;", "rt_err:external_chain_unknown:bar")
     }
 
     @Test fun testReferenceInternalToExternal() {
@@ -98,7 +89,7 @@ class ExternalTest: BaseRellTest() {
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         initExternalChain()
-        def("external 'foo' { class user(log) { name; } }")
+        def("external 'foo' { @log class user { name; } }")
         def("class local { user; }")
         insert("c0.local", "user", "1,1")
         tst.chainDependency("foo", "deadbeef", 1000)
@@ -112,7 +103,7 @@ class ExternalTest: BaseRellTest() {
         // Init chain "bar" (create meta info)
         run {
             val t = RellCodeTester(tstCtx)
-            t.def("class company(log) { name; }")
+            t.def("@log class company { name; }")
             t.chainId = 555
             t.insert(LibBlockTransactionTest.BLOCK_INSERTS)
             t.init()
@@ -121,16 +112,16 @@ class ExternalTest: BaseRellTest() {
         // Init chain "foo" (create meta info)
         run {
             val t = RellCodeTester(tstCtx)
-            t.def("external 'bar' { class company(log) { name; } }")
-            t.def("class user(log) { name; company; }")
+            t.def("external 'bar' { @log class company { name; } }")
+            t.def("@log class user { name; company; }")
             t.chainId = 333
             t.dropTables = false
             t.chainDependency("bar", "cafebabe", 1000)
             t.init()
         }
 
-        def("class company(log) { name; }")
-        def("external 'foo' { class user(log) { name; company; } }")
+        def("@log class company { name; }")
+        def("external 'foo' { @log class user { name; company; } }")
         tst.chainId = 555
         tst.createTables = false
         tst.dropTables = false
@@ -146,7 +137,7 @@ class ExternalTest: BaseRellTest() {
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         initExternalChain()
-        def("external 'foo' { class user(log) { name; } }")
+        def("external 'foo' { @log class user { name; } }")
         tst.chainDependency("foo", "deadbeef", 1000)
 
         chk("user@{} ( .name )", "text[Bob]")
@@ -165,8 +156,8 @@ class ExternalTest: BaseRellTest() {
 
         run {
             val t = RellCodeTester(tstCtx)
-            t.def("class company(log) { name; }")
-            t.def("class user(log) { name; company; }")
+            t.def("@log class company { name; }")
+            t.def("@log class user { name; company; }")
             t.chainId = 333
             t.insert(LibBlockTransactionTest.BLOCK_INSERTS)
             t.insert("c333.company", "name,transaction", "1,'Google',444")
@@ -176,7 +167,7 @@ class ExternalTest: BaseRellTest() {
         }
         tst.dropTables = false
 
-        def("external 'foo' { class company(log) { name; } class user(log) { name; company; } }")
+        def("external 'foo' { @log class company { name; } @log class user { name; company; } }")
         tst.chainDependency("foo", "deadbeef", 1000)
         chk("user @ {} ( =user, =.name, =.company, =.company.name )", "(user[1],text[Bob],company[1],text[Google])")
         chk("company @ {} ( =company, =.name )", "(company[1],text[Google])")
@@ -203,7 +194,7 @@ class ExternalTest: BaseRellTest() {
         run {
             val t = RellCodeTester(tstCtx)
             t.dropTables = false
-            t.def("external 'foo' { class user(log) { name; } }")
+            t.def("external 'foo' { @log class user { name; } }")
             t.def("class local { user; }")
             t.insert("c0.local", "user", "1,1")
             t.chainDependency("foo", "deadbeef", height)
@@ -228,9 +219,9 @@ class ExternalTest: BaseRellTest() {
 
         initExternalChain(chainId = 333)
         initExternalChain(chainId = 555, resetDatabase = false)
-        def("namespace foo { external 'foo' { class user(log) { name; } } }")
-        def("namespace bar { external 'bar' { class user(log) { name; } } }")
-        def("class local_user(log) { name; }")
+        def("namespace foo { external 'foo' { @log class user { name; } } }")
+        def("namespace bar { external 'bar' { @log class user { name; } } }")
+        def("@log class local_user { name; }")
         tst.chainDependency("foo", "deadbeef", 1000)
         tst.chainDependency("bar", "beefdead", 1000)
         insert("c0.local_user", "name,transaction", "1,'Bob',2")
@@ -261,83 +252,129 @@ class ExternalTest: BaseRellTest() {
     }
 
     @Test fun testTxExplicitTypeDeclaration() {
-        chkCompile("class transaction;", "ct_err:name_conflict:class:transaction")
-        chkCompile("class block;", "ct_err:name_conflict:class:block")
-        chkCompile("class foo;", "ct_err:def_class_hdr_name:foo")
-        chkCompile("external 'foo' { class transaction {} }", "ct_err:name_conflict:class:transaction")
-        chkCompile("external 'foo' { class block {} }", "ct_err:name_conflict:class:block")
+        chkCompile("class transaction;", "ct_err:def_class_hdr_noexternal:transaction")
+        chkCompile("class block;", "ct_err:def_class_hdr_noexternal:block")
+        chkCompile("class foo;", "ct_err:[def_class_hdr_name:foo][def_class_hdr_noexternal:foo]")
+        chkCompile("external 'foo' { class transaction {} }", "ct_err:def_class_external_unallowed:transaction")
+        chkCompile("external 'foo' { class block {} }", "ct_err:def_class_external_unallowed:block")
 
         chkCompile("namespace abc { external 'foo' { class transaction; } }", "OK")
         chkCompile("namespace abc { external 'foo' { class block; } }", "OK")
         chkCompile("namespace abc { external 'foo' { class transaction; class block; } }", "OK")
-        chkCompile("namespace abc { external 'foo' { class transaction; class transaction; } }",
-                "ct_err:name_conflict:class:transaction")
-        chkCompile("namespace abc { external 'foo' { class block; class block; } }", "ct_err:name_conflict:class:block")
+
+        chkCompile("namespace abc { external 'foo' { class transaction; class transaction; } }", """ct_err:
+            [name_conflict:user:transaction:CLASS:main.rell(1:59)]
+            [name_conflict:user:transaction:CLASS:main.rell(1:40)]
+        """)
+
+        chkCompile("namespace abc { external 'foo' { class block; class block; } }", """ct_err:
+            [name_conflict:user:block:CLASS:main.rell(1:53)]
+            [name_conflict:user:block:CLASS:main.rell(1:40)]
+        """)
+
         chkCompile("external 'foo' { class foo; }", "ct_err:def_class_hdr_name:foo")
         chkCompile("namespace abc { external 'foo' { class foo; } }", "ct_err:def_class_hdr_name:foo")
 
+        chkCompile("namespace abc { external 'foo' { @log class transaction; } }", "ct_err:ann:log:not_allowed:CLASS:transaction")
+        chkCompile("namespace abc { external 'foo' { @log class block; } }", "ct_err:ann:log:not_allowed:CLASS:block")
+        chkCompile("namespace abc { external 'foo' { @aaa class block; } }", "ct_err:ann:invalid:aaa")
         chkCompile("namespace abc { external 'foo' { class transaction(log); } }", "ct_err:def_class_hdr_annotations:transaction")
         chkCompile("namespace abc { external 'foo' { class block(log); } }", "ct_err:def_class_hdr_annotations:block")
         chkCompile("namespace abc { external 'foo' { class block(aaa); } }", "ct_err:def_class_hdr_annotations:block")
 
-        chkCompile("namespace abc { external 'foo' { class transaction(log) {} } }", "ct_err:def_class_external_unallowed:transaction")
-        chkCompile("namespace abc { external 'foo' { class block(log) {} } }", "ct_err:def_class_external_unallowed:block")
-        chkCompile("namespace abc { external 'foo' { namespace xyz { class transaction(log) {} } } }", "OK")
-        chkCompile("namespace abc { external 'foo' { namespace xyz { class block(log) {} } } }", "OK")
+        chkCompile("namespace abc { external 'foo' { @log class transaction {} } }", "ct_err:def_class_external_unallowed:transaction")
+        chkCompile("namespace abc { external 'foo' { @log class block {} } }", "ct_err:def_class_external_unallowed:block")
+        chkCompile("namespace abc { external 'foo' { namespace xyz { @log class transaction {} } } }", "OK")
+        chkCompile("namespace abc { external 'foo' { namespace xyz { @log class block {} } } }", "OK")
 
-        chkCompile("external 'foo' { namespace xyz { class transaction; } }", "ct_err:def_class_hdr_ns:transaction")
-        chkCompile("external 'foo' { namespace xyz { class block; } }", "ct_err:def_class_hdr_ns:block")
+        chkCompile("external 'foo' { namespace xyz { class transaction; } }", "OK")
+        chkCompile("external 'foo' { namespace xyz { class block; } }", "OK")
         chkCompile("namespace abc { external 'foo' { class transaction; } }", "OK")
         chkCompile("namespace abc { external 'foo' { class block; } }", "OK")
+    }
+
+    @Test fun testTxExplicitTypeMount() {
+        tstCtx.blockchain(333, "deadbeef")
+        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
+        tst.chainDependency("foo", "deadbeef", 1000)
+        initExternalChain()
+
+        chkCompile("namespace ns { external 'foo' { @mount('') class transaction; } }", "ct_err:ann:mount:not_allowed:CLASS:transaction")
+        chkCompile("namespace ns { external 'foo' { @mount('') class block; } }", "ct_err:ann:mount:not_allowed:CLASS:block")
+        chkCompile("namespace ns { external 'foo' { @mount('bar') class transaction; } }", "ct_err:ann:mount:not_allowed:CLASS:transaction")
+        chkCompile("namespace ns { external 'foo' { @mount('bar') class block; } }", "ct_err:ann:mount:not_allowed:CLASS:block")
+
+        def("namespace ns1 { @mount('bar') external 'foo' { class transaction; class block; } }")
+        def("@mount('bar') namespace ns2 { external 'foo' { class transaction; class block; } }")
+
+        chk("ns1.transaction @ {}", "external[foo].transaction[444]")
+        chk("ns2.transaction @ {}", "external[foo].transaction[444]")
+        chk("ns1.block @ {}", "external[foo].block[111]")
+        chk("ns2.block @ {}", "external[foo].block[111]")
     }
 
     @Test fun testTxExplicitTypeCompatibility() {
         tstCtx.blockchain(333, "deadbeef")
         tstCtx.blockchain(555, "beefdead")
-        def("class user(log){ name; }")
-        def("namespace foo { external 'foo' { class transaction; class block; class user(log) {name;} } }")
-        def("namespace bar { external 'bar' { class transaction; class block; class user(log) {name;} } }")
+        def("@log class user{ name; }")
+        def("namespace foo { external 'foo' { class transaction; class block; @log class user {name;} } }")
+        def("namespace bar { external 'bar' { class transaction; class block; @log class user {name;} } }")
         tst.chainDependency("foo", "deadbeef", 1000)
         tst.chainDependency("bar", "beefdead", 1000)
 
-        chkCompile("function f(u: foo.user): transaction = u.transaction;", "ct_err:entity_rettype:transaction:foo.transaction")
-        chkCompile("function f(u: user): foo.transaction = u.transaction;", "ct_err:entity_rettype:foo.transaction:transaction")
-        chkCompile("function f(u: foo.user): block = u.transaction.block;", "ct_err:entity_rettype:block:foo.block")
-        chkCompile("function f(u: user): foo.block = u.transaction.block;", "ct_err:entity_rettype:foo.block:block")
+        chkCompile("function f(u: foo.user): transaction = u.transaction;", "ct_err:entity_rettype:transaction:external[foo].transaction")
+        chkCompile("function f(u: user): foo.transaction = u.transaction;", "ct_err:entity_rettype:external[foo].transaction:transaction")
+        chkCompile("function f(u: foo.user): block = u.transaction.block;", "ct_err:entity_rettype:block:external[foo].block")
+        chkCompile("function f(u: user): foo.block = u.transaction.block;", "ct_err:entity_rettype:external[foo].block:block")
 
-        chkCompile("function f(u: bar.user): foo.transaction = u.transaction;", "ct_err:entity_rettype:foo.transaction:bar.transaction")
-        chkCompile("function f(u: foo.user): bar.transaction = u.transaction;", "ct_err:entity_rettype:bar.transaction:foo.transaction")
-        chkCompile("function f(u: bar.user): foo.block = u.transaction.block;", "ct_err:entity_rettype:foo.block:bar.block")
-        chkCompile("function f(u: foo.user): bar.block = u.transaction.block;", "ct_err:entity_rettype:bar.block:foo.block")
+        chkCompile("function f(u: bar.user): foo.transaction = u.transaction;", "ct_err:entity_rettype:external[foo].transaction:external[bar].transaction")
+        chkCompile("function f(u: foo.user): bar.transaction = u.transaction;", "ct_err:entity_rettype:external[bar].transaction:external[foo].transaction")
+        chkCompile("function f(u: bar.user): foo.block = u.transaction.block;", "ct_err:entity_rettype:external[foo].block:external[bar].block")
+        chkCompile("function f(u: foo.user): bar.block = u.transaction.block;", "ct_err:entity_rettype:external[bar].block:external[foo].block")
     }
 
     @Test fun testTxExplicitTypeCompatibility2() {
         tstCtx.blockchain(333, "deadbeef")
         tstCtx.blockchain(555, "beefdead")
-        def("class user(log){ name; }")
-        def("namespace foo { external 'foo' { class transaction; class block; class user(log) {name;} } }")
-        def("namespace bar { external 'bar' { class transaction; class block; class user(log) {name;} } }")
+        def("@log class user { name; }")
+        def("namespace foo { external 'foo' { class transaction; class block; @log class user {name;} } }")
+        def("namespace bar { external 'bar' { class transaction; class block; @log class user {name;} } }")
         tst.chainDependency("foo", "deadbeef", 1000)
         tst.chainDependency("bar", "beefdead", 1000)
 
-        fun chkOpErr(type1: String, type2: String, op: String) {
+        fun chkOpErr(type1: String, typeStr1: String, type2: String, typeStr2: String, op: String) {
             chkCompile("function f(x: $type1, y: $type2): boolean = (x $op y);",
-                    "ct_err:binop_operand_type:$op:$type1:$type2")
+                    "ct_err:binop_operand_type:$op:$typeStr1:$typeStr2")
         }
 
-        fun chkTypes(type1: String, type2: String) {
-            chkOpErr(type1, type2, "==")
-            chkOpErr(type1, type2, "!=")
-            chkOpErr(type1, type2, "<")
-            chkOpErr(type1, type2, ">")
+        fun chkTypes(type1: String, typeStr1: String, type2: String, typeStr2: String) {
+            chkOpErr(type1, typeStr1, type2, typeStr2, "==")
+            chkOpErr(type1, typeStr1, type2, typeStr2, "!=")
+            chkOpErr(type1, typeStr1, type2, typeStr2, "<")
+            chkOpErr(type1, typeStr1, type2, typeStr2, ">")
         }
 
-        chkTypes("transaction", "foo.transaction")
-        chkTypes("foo.transaction", "transaction")
-        chkTypes("foo.transaction", "bar.transaction")
-        chkTypes("block", "foo.block")
-        chkTypes("foo.block", "block")
-        chkTypes("foo.block", "bar.block")
+        chkTypes("transaction", "transaction", "foo.transaction", "external[foo].transaction")
+        chkTypes("foo.transaction", "external[foo].transaction", "transaction", "transaction")
+        chkTypes("foo.transaction", "external[foo].transaction", "bar.transaction", "external[bar].transaction")
+        chkTypes("block", "block", "foo.block", "external[foo].block")
+        chkTypes("foo.block", "external[foo].block", "block", "block")
+        chkTypes("foo.block", "external[foo].block", "bar.block", "external[bar].block")
+    }
+
+    @Test fun testTxExplicitTypeCompatibility3() {
+        tstCtx.blockchain(333, "deadbeef")
+        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
+        tst.chainDependency("foo", "deadbeef", 1000)
+        initExternalChain()
+
+        def("namespace ns1 { @mount('bar') external 'foo' { class transaction; class block; } }")
+        def("@mount('bar') namespace ns2 { external 'foo' { class transaction; class block; } }")
+
+        chkEx("{ val tx: ns1.transaction = ns2.transaction @ {}; return tx; }", "external[foo].transaction[444]")
+        chkEx("{ val tx: ns2.transaction = ns1.transaction @ {}; return tx; }", "external[foo].transaction[444]")
+        chkEx("{ val b: ns1.block = ns2.block @ {}; return b; }", "external[foo].block[111]")
+        chkEx("{ val b: ns2.block = ns1.block @ {}; return b; }", "external[foo].block[111]")
     }
 
     @Test fun testTxExplicitTypeLocalVar() {
@@ -345,16 +382,16 @@ class ExternalTest: BaseRellTest() {
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         initExternalChain()
-        def("namespace foo { external 'foo' { class transaction; class block; class user(log) { name; } } }")
+        def("namespace foo { external 'foo' { class transaction; class block; @log class user { name; } } }")
         tst.chainDependency("foo", "deadbeef", 1000)
 
         val tx = "val t: foo.transaction = foo.user @ {} (.transaction);"
         val block = "$tx; val b: foo.block = t.block;"
-        chkEx("{ $tx; return t; }", "foo.transaction[444]")
+        chkEx("{ $tx; return t; }", "external[foo].transaction[444]")
         chkEx("{ $tx; return t.tx_rid; }", "byte_array[fade]")
         chkEx("{ $tx; return t.tx_hash; }", "byte_array[1234]")
         chkEx("{ $tx; return t.tx_data; }", "byte_array[edaf]")
-        chkEx("{ $block; return b; }", "foo.block[111]")
+        chkEx("{ $block; return b; }", "external[foo].block[111]")
         chkEx("{ $block; return b.block_height; }", "int[222]")
         chkEx("{ $block; return b.block_rid; }", "byte_array[deadbeef]")
         chkEx("{ $block; return b.timestamp; }", "int[1500000000000]")
@@ -365,15 +402,15 @@ class ExternalTest: BaseRellTest() {
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         initExternalChain()
-        def("namespace foo { external 'foo' { class transaction; class block; class user(log) { name; } } }")
+        def("namespace foo { external 'foo' { class transaction; class block; @log class user { name; } } }")
         def("class local { tx: foo.transaction; blk: foo.block; }")
         tst.chainDependency("foo", "deadbeef", 1000)
 
         chkOp("val u = foo.user @ {}; create local(u.transaction, u.transaction.block);")
         chkData("local(1,444,111)")
 
-        chk("(local @ {}).tx", "foo.transaction[444]")
-        chk("(local @ {}).blk", "foo.block[111]")
+        chk("(local @ {}).tx", "external[foo].transaction[444]")
+        chk("(local @ {}).blk", "external[foo].block[111]")
     }
 
     @Test fun testTxExplicitTypeSelect() {
@@ -382,9 +419,9 @@ class ExternalTest: BaseRellTest() {
 
         chkTxExplicitTypeSelect(10, "[]", "[]")
         chkTxExplicitTypeSelect(221, "[]", "[]")
-        chkTxExplicitTypeSelect(222, "[foo.transaction[444]]", "[foo.block[111]]")
-        chkTxExplicitTypeSelect(1000, "[foo.transaction[444]]", "[foo.block[111]]")
-        chkTxExplicitTypeSelect(1000000, "[foo.transaction[444]]", "[foo.block[111]]")
+        chkTxExplicitTypeSelect(222, "[external[foo].transaction[444]]", "[external[foo].block[111]]")
+        chkTxExplicitTypeSelect(1000, "[external[foo].transaction[444]]", "[external[foo].block[111]]")
+        chkTxExplicitTypeSelect(1000000, "[external[foo].transaction[444]]", "[external[foo].block[111]]")
     }
 
     private fun chkTxExplicitTypeSelect(height: Long, expectedTx: String, expectedBlock: String) {
@@ -421,7 +458,7 @@ class ExternalTest: BaseRellTest() {
 
         run {
             val t = RellCodeTester(tstCtx)
-            t.def("class user(log) { name; }")
+            t.def("@log class user { name; }")
             t.chainId = 123
             t.insert(blockInserts)
             t.insert("c123.user", "name,transaction", "1,'Alice',2001")
@@ -433,7 +470,7 @@ class ExternalTest: BaseRellTest() {
         }
 
         tst.dropTables = false
-        def("external 'foo' { class user(log) { name; } }")
+        def("external 'foo' { @log class user { name; } }")
         def("record rec { u: user; }")
         tst.chainDependency("foo", "deadbeef", 3)
 
@@ -454,11 +491,11 @@ class ExternalTest: BaseRellTest() {
         def("record r_foo_block { b: foo.block; }")
         tst.gtv = true
 
-        fun chkType(type: String) {
+        fun chkType(type: String, typeStr: String = type) {
             chkCompile("function nop(x: $type?): $type? = x; query q(): $type { var t: $type? = nop(null); return t!!; }",
-                    "ct_err:result_nogtv:q:$type")
-            chkCompile("query q(x: $type) = 0;", "ct_err:param_nogtv:x:$type")
-            chkCompile("operation o(x: $type) {}", "ct_err:param_nogtv:x:$type")
+                    "ct_err:result_nogtv:q:$typeStr")
+            chkCompile("query q(x: $type) = 0;", "ct_err:param_nogtv:x:$typeStr")
+            chkCompile("operation o(x: $type) {}", "ct_err:param_nogtv:x:$typeStr")
         }
 
         fun chkRecType(type: String) {
@@ -477,8 +514,8 @@ class ExternalTest: BaseRellTest() {
 
         chkType("transaction")
         chkType("block")
-        chkType("foo.transaction")
-        chkType("foo.block")
+        chkType("foo.transaction", "external[foo].transaction")
+        chkType("foo.block", "external[foo].block")
 
         chkRecType("r_tx")
         chkRecType("r_block")
@@ -491,7 +528,7 @@ class ExternalTest: BaseRellTest() {
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         initExternalChain()
-        def("external 'foo' { class user(log) { name; } }")
+        def("external 'foo' { @log class user { name; } }")
         tst.chainDependency("foo", "deadbeef", 1000)
         chkOp("create user (name = 'Alice');", "ct_err:expr_create_cant:user")
     }
@@ -501,7 +538,7 @@ class ExternalTest: BaseRellTest() {
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         initExternalChain()
-        def("external 'foo' { class user(log) { name; } }")
+        def("external 'foo' { @log class user { name; } }")
         tst.chainDependency("foo", "deadbeef", 1000)
         chkOp("delete user @* {};", "ct_err:stmt_delete_cant:user")
     }
@@ -511,8 +548,8 @@ class ExternalTest: BaseRellTest() {
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         chkMetaClass(
-                "class company(log){}",
-                "external 'foo' { class user(log){} }",
+                "@log class company {}",
+                "external 'foo' { @log class user {} }",
                 "rt_err:external_meta_nocls:foo:user"
         )
     }
@@ -523,7 +560,7 @@ class ExternalTest: BaseRellTest() {
 
         chkMetaClass(
                 "object user { name: text = 'Bob'; }",
-                "external 'foo' { class user(log){} }",
+                "external 'foo' { @log class user {} }",
                 "rt_err:external_meta_nocls:foo:user"
         )
     }
@@ -534,7 +571,7 @@ class ExternalTest: BaseRellTest() {
 
         chkMetaClass(
                 "class user {}",
-                "external 'foo' { class user(log){} }",
+                "external 'foo' { @log class user {} }",
                 "rt_err:external_meta_nolog:foo:user"
         )
     }
@@ -544,8 +581,8 @@ class ExternalTest: BaseRellTest() {
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         chkMetaClass(
-                "class user(log) { name: text; }",
-                "external 'foo' { class user(log){ fullName: text; } }",
+                "@log class user { name: text; }",
+                "external 'foo' { @log class user { fullName: text; } }",
                 "rt_err:external_meta_noattrs:foo:user:fullName"
         )
     }
@@ -555,26 +592,26 @@ class ExternalTest: BaseRellTest() {
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         chkMetaClass(
-                "class user(log) { attr: integer; }",
-                "external 'foo' { class user(log){ attr: text; } }",
+                "@log class user { attr: integer; }",
+                "external 'foo' { @log class user { attr: text; } }",
                 "rt_err:external_meta_attrtype:foo:user:attr:[sys:text]:[sys:integer]"
         )
 
         chkMetaClass(
-                "class user(log) { attr: text; }",
-                "external 'foo' { class user(log){ attr: byte_array; } }",
+                "@log class user { attr: text; }",
+                "external 'foo' { @log class user { attr: byte_array; } }",
                 "rt_err:external_meta_attrtype:foo:user:attr:[sys:byte_array]:[sys:text]"
         )
 
         chkMetaClass(
-                "class user(log) { name: text; }",
-                "external 'foo' { class user(log){ name; } }",
+                "@log class user { name: text; }",
+                "external 'foo' { @log class user { name; } }",
                 "OK"
         )
 
         chkMetaClass(
-                "class user(log) { name; }",
-                "external 'foo' { class user(log){ name: text; } }",
+                "@log class user { name; }",
+                "external 'foo' { @log class user { name: text; } }",
                 "OK"
         )
     }
@@ -584,8 +621,8 @@ class ExternalTest: BaseRellTest() {
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         chkMetaClass(
-                "class company(log){} class user(log) { company; }",
-                "class company(log){} external 'foo' { class user(log){ company; } }",
+                "@log class company {} @log class user { company; }",
+                "@log class company {} external 'foo' { @log class user { company; } }",
                 "rt_err:external_meta_attrtype:foo:user:company:[class:0:company]:[class:333:company]"
         )
     }
@@ -595,14 +632,14 @@ class ExternalTest: BaseRellTest() {
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         chkMetaClass(
-                "class user(log) { x: integer; y: text; z: boolean; }",
-                "external 'foo' { class user(log){ x: integer; z: boolean; } }",
+                "@log class user { x: integer; y: text; z: boolean; }",
+                "external 'foo' { @log class user { x: integer; z: boolean; } }",
                 "OK"
         )
 
         chkMetaClass(
-                "class user(log) { x: integer; y: text; z: boolean; }",
-                "external 'foo' { class user(log){ y: text; } }",
+                "@log class user { x: integer; y: text; z: boolean; }",
+                "external 'foo' { @log class user { y: text; } }",
                 "OK"
         )
     }
@@ -612,20 +649,20 @@ class ExternalTest: BaseRellTest() {
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         chkMetaClass(
-                "namespace x { class user(log) {} }",
-                "external 'foo' { class user(log){} }",
+                "namespace x { @log class user {} }",
+                "external 'foo' { @log class user {} }",
                 "rt_err:external_meta_nocls:foo:user"
         )
 
         chkMetaClass(
-                "namespace x { class user(log) {} }",
-                "external 'foo' { namespace x { class user(log){} } }",
+                "namespace x { @log class user {} }",
+                "external 'foo' { namespace x { @log class user {} } }",
                 "OK"
         )
 
         chkMetaClass(
-                "namespace x { class user(log) {} }",
-                "namespace y { external 'foo' { namespace x { class user(log){} } } }",
+                "namespace x { @log class user {} }",
+                "namespace y { external 'foo' { namespace x { @log class user {} } } }",
                 "OK"
         )
     }
@@ -634,29 +671,29 @@ class ExternalTest: BaseRellTest() {
         tstCtx.blockchain(333, "deadbeef")
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
-        val extDefs = "namespace x { class company(log){} } namespace y { class user(log){ c: x.company; } }"
+        val extDefs = "namespace x { @log class company {} } namespace y { @log class user { c: x.company; } }"
 
         chkMetaClass(
                 extDefs,
-                "namespace z { external 'foo' { namespace x { class company(log){} } namespace y { class user(log){ c: z.x.company; } } } }",
+                "namespace z { external 'foo' { namespace x { @log class company {} } namespace y { @log class user { c: z.x.company; } } } }",
                 "OK"
         )
 
         chkMetaClass(
                 extDefs,
-                "namespace z { external 'foo' { namespace x { class company(log){} class user(log){ c: company; } } } }",
+                "namespace z { external 'foo' { namespace x { @log class company {} @log class user { c: company; } } } }",
                 "rt_err:external_meta_nocls:foo:x.user"
         )
 
         chkMetaClass(
                 extDefs,
-                "namespace z { external 'foo' { namespace x { class company(log){} } class user(log){ c: x.company; } } }",
+                "namespace z { external 'foo' { namespace x { @log class company {} } @log class user { c: x.company; } } }",
                 "rt_err:external_meta_nocls:foo:user"
         )
 
         chkMetaClass(
                 extDefs,
-                "namespace z { external 'foo' { class company(log){} namespace y { class user(log){ c: company; } } } }",
+                "namespace z { external 'foo' { @log class company {} namespace y { @log class user { c: company; } } } }",
                 "rt_err:external_meta_nocls:foo:company"
         )
     }
@@ -666,15 +703,15 @@ class ExternalTest: BaseRellTest() {
 
         run {
             val t = RellCodeTester(tstCtx)
-            t.def("class ext_a(log) { value: integer; }")
-            t.def("namespace y { class ext_b(log) {} }")
+            t.def("@log class ext_a { value: integer; }")
+            t.def("namespace y { @log class ext_b {} }")
             t.chainId = 333
             t.insert(LibBlockTransactionTest.BLOCK_INSERTS)
             t.init()
         }
 
-        def("class helper(log) { id: integer; data: byte_array; }")
-        def("namespace x { external 'foo' { class ext_a(log) { value: integer; } namespace y { class ext_b(log) {} } } }")
+        def("@log class helper { id: integer; data: byte_array; }")
+        def("namespace x { external 'foo' { @log class ext_a { value: integer; } namespace y { @log class ext_b {} } } }")
         def("class my_class { b: boolean; i: integer; t: text; n: name; h: helper; ea: x.ext_a; eb: x.y.ext_b; }")
         tst.dropTables = false
         tst.chainDependency("foo", "deadbeef", 1000)
@@ -721,10 +758,57 @@ class ExternalTest: BaseRellTest() {
         }
     }
 
+    @Test fun testMountClass() {
+        tstCtx.blockchain(333, "deadbeef")
+        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
+
+        initExternalChain(333, "foo.bar.user", "namespace foo { namespace bar { @log class user { name; } } }")
+
+        tst.chainDependency("foo", "deadbeef", 1000)
+
+        chkQueryEx("external 'foo' { @log class user { name; } } query q() = user @ {} ( =user, =.name );",
+                "rt_err:external_meta_nocls:foo:user")
+
+        chkQueryEx("external 'foo' { namespace foo { namespace bar { @log class user { name; } } } } " +
+                "query q() = foo.bar.user @ {} ( =user, =.name );",
+                "(foo.bar.user[1],text[Bob])")
+
+        chkQueryEx("external 'foo' { @mount('foo.bar.user') @log class admin { name; } } " +
+                "query q() = admin @ {} ( =admin, =.name );",
+                "(admin[1],text[Bob])")
+
+        chkQueryEx("@mount('foo.bar') external 'foo' { @log class user { name; } } " +
+                "query q() = user @ {} ( =user, =.name );",
+                "(user[1],text[Bob])")
+
+        chkQueryEx("external 'foo' { @mount('foo.bar') namespace ns { @log class user { name; } } } " +
+                "query q() = ns.user @ {} ( =user, =.name );",
+                "(ns.user[1],text[Bob])")
+
+        chkQueryEx("@mount('junk') external 'foo' { @mount('foo.bar') namespace ns { @log class user { name; } } } " +
+                "query q() = ns.user @ {} ( =user, =.name );",
+                "(ns.user[1],text[Bob])")
+
+        chkQueryEx("@mount('junk') external 'foo' { @mount('trash') namespace ns { @mount('foo.bar.user') @log class user { name; } } } " +
+                "query q() = ns.user @ {} ( =user, =.name );",
+                "(ns.user[1],text[Bob])")
+    }
+
+    @Test fun testDuplicateExternalBlock() {
+        chkCompile("namespace ns1 { external 'foo' { class transaction; } } namespace ns2 { external 'foo' { class transaction; } }", "OK")
+        chkCompile("namespace ns1 { external 'foo' { class block; } } namespace ns2 { external 'foo' { class block; } }", "OK")
+        chkCompile("namespace ns1 { external 'foo' { @log class user {} } } namespace ns2 { external 'foo' { @log class company {} } }", "OK")
+
+        chkCompile("namespace ns1 { external 'foo' { @log class user {} } } namespace ns2 { external 'foo' { @log class user {} } }", """ct_err:
+            [mnt_conflict:user:ns1.user:user:CLASS:ns2.user:main.rell(1:101)]
+            [mnt_conflict:user:ns2.user:user:CLASS:ns1.user:main.rell(1:45)]
+        """)
+    }
+
     private fun initExternalChain(
             chainId: Long = 333,
             className: String = "user",
-            def: String = "class user(log) { name; }",
+            def: String = "@log class user { name; }",
             resetDatabase: Boolean = true
     ) {
         run {

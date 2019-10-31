@@ -10,9 +10,9 @@ class GtxTest : BaseGtxTest() {
         chk("foo.s", "'Hello'")
     }
 
-    @Test fun testInclude() {
-        tst.file("foo.rell", "function f(): integer = 123;")
-        def("namespace foo { include 'foo'; }")
+    @Test fun testImport() {
+        file("lib/foo.rell", "module; function f(): integer = 123;")
+        def("import lib.foo;")
         chk("foo.f()", "123")
     }
 
@@ -25,5 +25,12 @@ class GtxTest : BaseGtxTest() {
     @Test fun testNamespaceQuery() {
         def("namespace foo { query bar() = 123; }")
         chkCallQuery("foo.bar", "", "123")
+    }
+
+    @Test fun testModules() {
+        file("lib/foo.rell", "module; function f(): integer = 123;")
+        def("import lib.foo;")
+        tst.modules = null
+        chk("foo.f()", "123")
     }
 }

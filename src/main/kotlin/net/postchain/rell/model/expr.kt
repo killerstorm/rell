@@ -18,10 +18,10 @@ abstract class R_Expr(val type: R_Type) {
 
     companion object {
         fun typeCheck(frame: Rt_CallFrame, type: R_Type, value: Rt_Value) {
-            if (frame.entCtx.modCtx.globalCtx.typeCheck) {
+            if (frame.entCtx.globalCtx.typeCheck) {
                 val resType = value.type()
                 check(type.isAssignableFrom(resType)) {
-                    "${javaClass.simpleName}: expected ${type.name}, actual ${resType.name}"
+                    "${R_Expr::class.java.simpleName}: expected ${type.name}, actual ${resType.name}"
                 }
             }
         }
@@ -171,7 +171,7 @@ class R_MemberCalculator_SysFn(type: R_Type, val fn: R_SysFunction, val args: Li
     override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
         val vArgs = args.map { it.evaluate(frame) }
         val vFullArgs = listOf(baseValue) + vArgs
-        return fn.call(frame.entCtx.modCtx, vFullArgs)
+        return fn.call(frame.entCtx.callCtx, vFullArgs)
     }
 }
 
@@ -429,7 +429,7 @@ class R_WhenExpr(type: R_Type, val chooser: R_WhenChooser, val exprs: List<R_Exp
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         val choice = chooser.choose(frame)
         check(choice != null)
-        val expr = exprs[choice!!]
+        val expr = exprs[choice]
         val res = expr.evaluate(frame)
         return res
     }
@@ -481,10 +481,10 @@ class R_CreateExprAttr_Default(attr: R_Attrib): R_CreateExprAttr(attr) {
     override fun expr() = attr.expr!!
 }
 
-class R_CreateExpr(type: R_Type, val rClass: R_Class, val attrs: List<R_CreateExprAttr>): R_Expr(type) {
+class R_CreateExpr(val rClass: R_Class, val attrs: List<R_CreateExprAttr>): R_Expr(rClass.type) {
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         frame.entCtx.checkDbUpdateAllowed()
-        val sqlCtx = frame.entCtx.modCtx.sqlCtx
+        val sqlCtx = frame.entCtx.sqlCtx
         val rowidFunc = sqlCtx.mainChainMapping.rowidFunction
         val rtSql = buildSql(sqlCtx, rClass, attrs, "\"$rowidFunc\"()")
         val rtSel = SqlSelect(rtSql, listOf(type))
@@ -578,7 +578,7 @@ class R_CreateExpr(type: R_Type, val rClass: R_Class, val attrs: List<R_CreateEx
     }
 }
 
-class R_RecordExpr(val record: R_RecordType, val attrs: List<R_CreateExprAttr>): R_Expr(record) {
+class R_RecordExpr(private val record: R_Record, private val attrs: List<R_CreateExprAttr>): R_Expr(record.type) {
     init {
         check(attrs.size == record.attributesList.size)
         check(attrs.map { it.attr.index }.toSet() == record.attributesList.indices.toSet())
@@ -590,7 +590,7 @@ class R_RecordExpr(val record: R_RecordType, val attrs: List<R_CreateExprAttr>):
             val value = attr.expr().evaluate(frame)
             values[attr.attr.index] = value
         }
-        return Rt_RecordValue(record, values)
+        return Rt_RecordValue(record.type, values)
     }
 }
 
@@ -602,14 +602,22 @@ class R_ObjectExpr(val objType: R_ObjectType): R_Expr(objType) {
 
 class R_ObjectAttrExpr(type: R_Type, val rObject: R_Object, val atBase: R_AtExprBase): R_Expr(type) {
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        val records = atBase.execute(frame, listOf(), null)
+        var records = atBase.execute(frame, listOf(), null)
+
+        if (records.isEmpty()) {
+            val forced = frame.entCtx.appCtx.forceObjectInit(rObject)
+            if (forced) {
+                records = atBase.execute(frame, listOf(), null)
+            }
+        }
+
         val count = records.size
 
         if (count == 0) {
-            val name = rObject.rClass.name
+            val name = rObject.appLevelName
             throw Rt_Error("obj_norec:$name", "No record for object '$name' in database")
         } else if (count > 1) {
-            val name = rObject.rClass.name
+            val name = rObject.appLevelName
             throw Rt_Error("obj_multirec:$name:$count", "Multiple records for object '$name' in database: $count")
         }
 
@@ -648,9 +656,9 @@ class R_StatementExpr(val stmt: R_Statement): R_Expr(R_UnitType) {
     }
 }
 
-class R_ChainHeightExpr(val chain: R_ExternalChain): R_Expr(R_IntegerType) {
+class R_ChainHeightExpr(val chain: R_ExternalChainRef): R_Expr(R_IntegerType) {
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        val rtChain = frame.entCtx.modCtx.sqlCtx.linkedChain(chain)
+        val rtChain = frame.entCtx.sqlCtx.linkedChain(chain)
         return Rt_IntValue(rtChain.height)
     }
 }

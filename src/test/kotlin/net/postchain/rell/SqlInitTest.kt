@@ -232,11 +232,11 @@ class SqlInitTest: BaseContextTest(useSql = true) {
     }
 
     @Test fun testMetaClassCodeDiff() {
-        chkInit("class user(log) { name; }")
+        chkInit("@log class user { name; }")
         chkAll("0,user,class,true", "0,name,sys:text 0,transaction,class:0:transaction")
         chkColumns("c0.user(name:text,rowid:int8,transaction:int8)")
 
-        chkInit("class user { name; }", "rt_err:meta:cls:diff_log:true:false")
+        chkInit("class user { name; }", "rt_err:meta:cls:diff_log:user:true:false")
         chkAll("0,user,class,true", "0,name,sys:text 0,transaction,class:0:transaction")
         chkColumns("c0.user(name:text,rowid:int8,transaction:int8)")
     }
@@ -245,7 +245,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         chkInit("class user { name; }")
         chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
 
-        chkInit("class user(log) { name; }", "rt_err:meta:cls:diff_log:false:true")
+        chkInit("@log class user { name; }", "rt_err:meta:cls:diff_log:user:false:true")
         chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
     }
 
@@ -323,7 +323,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         chkInit("class user { name; score: integer; }")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer", "c0.user(name:text,rowid:int8,score:int8)")
 
-        chkInit("object user { mutable name = 'Bob'; mutable score: integer = 123; }", "rt_err:meta:cls:diff_type:CLASS:OBJECT")
+        chkInit("object user { mutable name = 'Bob'; mutable score: integer = 123; }", "rt_err:meta:cls:diff_type:user:CLASS:OBJECT")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer", "c0.user(name:text,rowid:int8,score:int8)")
     }
 
@@ -332,7 +332,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         chkAll("0,state,object,false", "0,value,sys:integer", "c0.state(rowid:int8,value:int8)")
         chkData("c0.state(0,123)")
 
-        chkInit("class state { value: integer; }", "rt_err:meta:cls:diff_type:OBJECT:CLASS")
+        chkInit("class state { value: integer; }", "rt_err:meta:cls:diff_type:state:OBJECT:CLASS")
         chkAll("0,state,object,false", "0,value,sys:integer", "c0.state(rowid:int8,value:int8)")
         chkData("c0.state(0,123)")
     }
@@ -599,11 +599,11 @@ class SqlInitTest: BaseContextTest(useSql = true) {
 
         var actualWarnings = ""
 
-        val actual = RellTestUtils.processModule(code) { module ->
-            val modCtx = tst.createModuleCtx(globalCtx, module.rModule)
+        val actual = RellTestUtils.processApp(code) { app ->
+            val appCtx = tst.createAppCtx(globalCtx, app.rApp)
             RellTestUtils.catchRtErr {
                 sqlExec.transaction {
-                    val warnings = SqlInit.init(modCtx, SqlInit.LOG_ALL)
+                    val warnings = SqlInit.init(appCtx, SqlInit.LOG_ALL)
                     actualWarnings = warnings.joinToString(",")
                 }
                 "OK"

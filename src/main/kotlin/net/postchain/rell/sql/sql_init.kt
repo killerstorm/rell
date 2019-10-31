@@ -4,14 +4,17 @@ import com.google.common.collect.Sets
 import mu.KLogger
 import mu.KLogging
 import net.postchain.rell.model.*
+import net.postchain.rell.runtime.Rt_AppContext
 import net.postchain.rell.runtime.Rt_Messages
-import net.postchain.rell.runtime.Rt_ModuleContext
 
 private val ORD_TABLES = 0
 private val ORD_RECORDS = 1
 
-class SqlInit private constructor(private val modCtx: Rt_ModuleContext, private val logLevel: Int) {
-    private val initCtx = SqlInitCtx(logger, logLevel)
+class SqlInit private constructor(private val appCtx: Rt_AppContext, private val logLevel: Int) {
+    private val sqlCtx = appCtx.sqlCtx
+    private val globalCtx = appCtx.globalCtx
+
+    private val initCtx = SqlInitCtx(logger, logLevel, SqlObjectsInit(appCtx))
 
     companion object : KLogging() {
         val LOG_ALL = 0
@@ -22,19 +25,21 @@ class SqlInit private constructor(private val modCtx: Rt_ModuleContext, private 
         val LOG_TITLE = 5000
         val LOG_NONE = Integer.MAX_VALUE
 
-        fun init(modCtx: Rt_ModuleContext, logLevel: Int): List<String> {
-            val obj = SqlInit(modCtx, logLevel)
+        fun init(appCtx: Rt_AppContext, logLevel: Int): List<String> {
+            val obj = SqlInit(appCtx, logLevel)
             return obj.init()
         }
     }
 
     private fun init(): List<String> {
-        log(LOG_TITLE, "Initializing database (chain_iid = ${modCtx.sqlCtx.mainChainMapping.chainId})")
+        log(LOG_TITLE, "Initializing database (chain_iid = ${sqlCtx.mainChainMapping.chainId})")
 
-        val dbEmpty = SqlInitPlanner.plan(modCtx, initCtx)
+        val dbEmpty = SqlInitPlanner.plan(appCtx, initCtx)
         initCtx.checkErrors()
 
-        executePlan(dbEmpty)
+        appCtx.objectsInitialization(initCtx.objsInit) {
+            executePlan(dbEmpty)
+        }
 
         return initCtx.msgs.warningCodes()
     }
@@ -54,7 +59,7 @@ class SqlInit private constructor(private val modCtx: Rt_ModuleContext, private 
             log(planLogLevel, "    ${step.title}")
         }
 
-        val stepCtx = SqlStepCtx(modCtx, modCtx.globalCtx.sqlExec)
+        val stepCtx = SqlStepCtx(appCtx, initCtx.objsInit, globalCtx.sqlExec)
         for (step in steps) {
             log(stepLogLevel, "Step: ${step.title}")
             step.action.run(stepCtx)
@@ -70,19 +75,20 @@ class SqlInit private constructor(private val modCtx: Rt_ModuleContext, private 
     }
 }
 
-private class SqlInitPlanner private constructor(private val modCtx: Rt_ModuleContext, private val initCtx: SqlInitCtx) {
-    private val sqlCtx = modCtx.sqlCtx
+private class SqlInitPlanner private constructor(private val appCtx: Rt_AppContext, private val initCtx: SqlInitCtx) {
+    private val globalCtx = appCtx.globalCtx
+    private val sqlCtx = appCtx.sqlCtx
     private val mapping = sqlCtx.mainChainMapping
 
     companion object {
-        fun plan(modCtx: Rt_ModuleContext, initCtx: SqlInitCtx): Boolean {
-            val obj = SqlInitPlanner(modCtx, initCtx)
+        fun plan(appCtx: Rt_AppContext, initCtx: SqlInitCtx): Boolean {
+            val obj = SqlInitPlanner(appCtx, initCtx)
             return obj.plan()
         }
     }
 
     private fun plan(): Boolean {
-        val con = modCtx.globalCtx.sqlExec.connection()
+        val con = globalCtx.sqlExec.connection()
         val tables = SqlUtils.getExistingChainTables(con, mapping)
 
         val metaExists = SqlMeta.checkMetaTablesExisting(mapping, tables, initCtx.msgs)
@@ -91,20 +97,20 @@ private class SqlInitPlanner private constructor(private val modCtx: Rt_ModuleCo
         val metaData = processMeta(metaExists, tables)
         initCtx.checkErrors()
 
-        SqlClassIniter.processClasses(modCtx, initCtx, metaData, tables)
+        SqlClassIniter.processClasses(appCtx, initCtx, metaData, tables)
         return !metaExists
     }
 
     private fun processMeta(metaExists: Boolean, tables: Map<String, SqlTable>): Map<String, MetaClass> {
         if (!metaExists) {
             initCtx.step(ORD_TABLES, "Create ROWID table and function", SqlStepAction_ExecSql(SqlGen.genRowidSql(mapping)))
-            initCtx.step(ORD_TABLES, "Create meta tables", SqlStepAction_ExecSql(SqlMeta.genMetaTablesCreate(modCtx.sqlCtx)))
+            initCtx.step(ORD_TABLES, "Create meta tables", SqlStepAction_ExecSql(SqlMeta.genMetaTablesCreate(sqlCtx)))
         }
 
-        val metaData = if (!metaExists) mapOf() else SqlMeta.loadMetaData(modCtx.globalCtx.sqlExec, mapping, initCtx.msgs)
+        val metaData = if (!metaExists) mapOf() else SqlMeta.loadMetaData(globalCtx.sqlExec, mapping, initCtx.msgs)
         initCtx.checkErrors()
 
-        SqlMeta.checkDataTables(modCtx, tables, metaData, initCtx.msgs)
+        SqlMeta.checkDataTables(appCtx.sqlCtx, tables, metaData, initCtx.msgs)
         initCtx.checkErrors()
 
         return metaData
@@ -112,35 +118,37 @@ private class SqlInitPlanner private constructor(private val modCtx: Rt_ModuleCo
 }
 
 private class SqlClassIniter private constructor(
-        private val modCtx: Rt_ModuleContext,
+        appCtx: Rt_AppContext,
         private val initCtx: SqlInitCtx,
         private val metaData: Map<String, MetaClass>,
         private val sqlTables: Map<String, SqlTable>
 ) {
-    private val sqlCtx = modCtx.sqlCtx
+    private val sqlCtx = appCtx.sqlCtx
+    private val globalCtx = appCtx.globalCtx
+
     private var nextMetaClsId = 1 + (metaData.values.map { it.id }.max() ?: -1)
 
     private val warnUnexpectedSqlStructure = initCtx.logLevel < SqlInit.LOG_NONE
 
     private fun processClasses() {
-        val sqlCtx = modCtx.sqlCtx
-
-        for (cls in sqlCtx.module.topologicalClasses) {
+        for (cls in sqlCtx.topologicalClasses) {
             if (cls.sqlMapping.autoCreateTable()) {
                 processClass(cls, MetaClassType.CLASS)
             }
         }
 
-        for (obj in sqlCtx.module.objects.values) {
+        for (obj in sqlCtx.objects) {
             val ins = processClass(obj.rClass, MetaClassType.OBJECT)
             if (ins) {
-                initCtx.step(ORD_RECORDS, "Create record for object '${obj.rClass.name}'", SqlStepAction_InsertObject(obj))
+                val clsName = msgClassName(obj.rClass)
+                initCtx.step(ORD_RECORDS, "Create record for object $clsName", SqlStepAction_InsertObject(obj))
+                initCtx.objsInit.addObject(obj)
             }
         }
 
-        val codeClasses = sqlCtx.module.topologicalClasses
-                .plus(sqlCtx.module.objects.values.map { it.rClass })
-                .map { it.name }
+        val codeClasses = sqlCtx.classes
+                .plus(sqlCtx.objects.map { it.rClass })
+                .map { it.metaName }
                 .toSet()
 
         for (metaCls in metaData.values.filter { it.name !in codeClasses }) {
@@ -153,7 +161,7 @@ private class SqlClassIniter private constructor(
     }
 
     private fun processClass(cls: R_Class, type: MetaClassType): Boolean {
-        val metaCls = metaData[cls.name]
+        val metaCls = metaData[cls.metaName]
         if (metaCls == null) {
             processNewClass(cls, type)
             return true
@@ -170,19 +178,23 @@ private class SqlClassIniter private constructor(
         val id = nextMetaClsId++
         sqls += SqlMeta.genMetaClassInserts(sqlCtx, id, cls, type)
 
-        initCtx.step(ORD_TABLES, "Create table and meta for '${cls.name}'", SqlStepAction_ExecSql(sqls))
+        val clsName = msgClassName(cls)
+        initCtx.step(ORD_TABLES, "Create table and meta for $clsName", SqlStepAction_ExecSql(sqls))
     }
 
     private fun processExistingClass(cls: R_Class, type: MetaClassType, metaCls: MetaClass) {
         if (type != metaCls.type) {
-            initCtx.msgs.error("meta:cls:diff_type:${metaCls.type}:$type",
-                    "Cannot initialize database: '${cls.name}' was ${metaCls.type}, now $type")
+            val clsName = msgClassName(cls)
+            initCtx.msgs.error("meta:cls:diff_type:${cls.metaName}:${metaCls.type}:$type",
+                    "Cannot initialize database: $clsName was ${metaCls.type.en}, now ${type.en}")
         }
 
         val newLog = cls.flags.log
         if (newLog != metaCls.log) {
-            initCtx.msgs.error("meta:cls:diff_log:${metaCls.log}:$newLog",
-                    "Log annotation of '${cls.name}' was ${metaCls.log}, now $newLog")
+            val oldLog = metaCls.log
+            val clsName = msgClassName(cls)
+            initCtx.msgs.error("meta:cls:diff_log:${cls.metaName}:$oldLog:$newLog",
+                    "Log annotation of $clsName was $oldLog, now $newLog")
         }
 
         checkAttrTypes(cls, metaCls)
@@ -202,8 +214,9 @@ private class SqlClassIniter private constructor(
                 val oldType = metaAttr.type
                 val newType = attr.type.sqlAdapter.metaName(sqlCtx)
                 if (newType != oldType) {
-                    initCtx.msgs.error("meta:attr:diff_type:${cls.name}:${attr.name}:${metaAttr.type}:$newType",
-                            "Type of attribute '${cls.name}.${attr.name}' changed: was $oldType, now $newType")
+                    val clsName = msgClassName(cls)
+                    initCtx.msgs.error("meta:attr:diff_type:${cls.metaName}:${attr.name}:$oldType:$newType",
+                            "Type of attribute '${attr.name}' of class $clsName changed: was $oldType, now $newType")
                 }
             }
         }
@@ -215,15 +228,16 @@ private class SqlClassIniter private constructor(
             val codeList = oldAttrs.joinToString(",")
             val msgList = oldAttrs.joinToString(", ")
             if (warnUnexpectedSqlStructure) {
-                initCtx.msgs.warning("dbinit:no_code:attrs:${cls.name}:$codeList",
-                        "Table columns for undefined attributes of ${metaCls.type.en} '${cls.name}' found: $msgList")
+                val clsName = msgClassName(cls)
+                initCtx.msgs.warning("dbinit:no_code:attrs:${cls.metaName}:$codeList",
+                        "Table columns for undefined attributes of ${metaCls.type.en} $clsName found: $msgList")
             }
         }
     }
 
     private fun checkSqlIndexes(cls: R_Class) {
         val table = sqlTables.getValue(cls.sqlMapping.table(sqlCtx))
-        val sqlIndexes = table.indexes.filter { !(it.unique && it.cols == listOf(ROWID_COLUMN)) }
+        val sqlIndexes = table.indexes.filter { !(it.unique && it.cols == listOf(SqlConstants.ROWID_COLUMN)) }
 
         val codeIndexes = mutableListOf<SqlIndex>()
         codeIndexes.addAll(cls.keys.map { SqlIndex("", true, it.attribs) })
@@ -250,27 +264,29 @@ private class SqlClassIniter private constructor(
         val aOnly = Sets.difference(a, b)
         for (cols in aOnly) {
             val colsShort = cols.joinToString(",")
-            initCtx.msgs.error("dbinit:index_diff:${cls.name}:$aPlace:$indexType:$colsShort",
-                    "Class ${cls.name}: $indexType $cols exists in $aPlace, but not in $bPlace")
+            val clsName = msgClassName(cls)
+            initCtx.msgs.error("dbinit:index_diff:${cls.metaName}:$aPlace:$indexType:$colsShort",
+                    "Class $clsName: $indexType $cols exists in $aPlace, but not in $bPlace")
         }
     }
 
     private fun processNewAttrs(cls: R_Class, metaClsId: Int, newAttrs: List<String>) {
         val attrsStr = newAttrs.joinToString()
 
-        val recs = SqlUtils.recordsExist(modCtx.globalCtx.sqlExec, sqlCtx, cls)
+        val recs = SqlUtils.recordsExist(globalCtx.sqlExec, sqlCtx, cls)
+
+        val clsName = msgClassName(cls)
 
         val exprAttrs = makeCreateExprAttrs(cls, newAttrs, recs)
         if (exprAttrs.size == newAttrs.size) {
-            val attrsStr = newAttrs.joinToString()
             val action = SqlStepAction_AddColumns_AlterTable(cls, exprAttrs, recs)
             val details = if (recs) "records exist" else "no records"
-            initCtx.step(ORD_RECORDS, "Add table columns for '${cls.name}' ($details): $attrsStr", action)
+            initCtx.step(ORD_RECORDS, "Add table columns for $clsName ($details): $attrsStr", action)
         }
 
         val rAttrs = newAttrs.map { cls.attributes.getValue(it) }
         val metaSql = SqlMeta.genMetaAttrsInserts(sqlCtx, metaClsId, rAttrs)
-        initCtx.step(ORD_TABLES, "Add meta attributes for '${cls.name}': $attrsStr", SqlStepAction_ExecSql(metaSql))
+        initCtx.step(ORD_TABLES, "Add meta attributes for $clsName: $attrsStr", SqlStepAction_ExecSql(metaSql))
     }
 
     private fun makeCreateExprAttrs(cls: R_Class, newAttrs: List<String>, existingRecs: Boolean): List<R_CreateExprAttr> {
@@ -279,22 +295,24 @@ private class SqlClassIniter private constructor(
         val keys = cls.keys.flatMap { it.attribs }.toSet()
         val indexes = cls.indexes.flatMap { it.attribs }.toSet()
 
+        val clsName = msgClassName(cls)
+
         for (name in newAttrs) {
             val attr = cls.attributes.getValue(name)
             if (attr.expr != null || !existingRecs) {
                 res.add(R_CreateExprAttr_Default(attr))
             } else {
-                initCtx.msgs.error("meta:attr:new_no_def_value:${cls.name}:$name",
-                        "New attribute '${cls.name}.$name' has no default value")
+                initCtx.msgs.error("meta:attr:new_no_def_value:${cls.metaName}:$name",
+                        "New attribute '$name' of class $clsName has no default value")
             }
 
             if (name in keys) {
-                initCtx.msgs.error("meta:attr:new_key:${cls.name}:$name",
-                        "New attribute '${cls.name}.$name' is a key, adding key attributes not supported")
+                initCtx.msgs.error("meta:attr:new_key:${cls.metaName}:$name",
+                        "New attribute '$name' of class $clsName is a key, adding key attributes not supported")
             }
             if (name in indexes) {
-                initCtx.msgs.error("meta:attr:new_index:${cls.name}:$name",
-                        "New attribute '${cls.name}.$name' is an index, adding index attributes not supported")
+                initCtx.msgs.error("meta:attr:new_index:${cls.metaName}:$name",
+                        "New attribute '$name' of class $clsName is an index, adding index attributes not supported")
             }
         }
 
@@ -303,18 +321,18 @@ private class SqlClassIniter private constructor(
 
     companion object {
         fun processClasses(
-                modCtx: Rt_ModuleContext,
+                appCtx: Rt_AppContext,
                 initCtx: SqlInitCtx,
                 metaData: Map<String, MetaClass>,
                 sqlTables: Map<String, SqlTable>
         ) {
-            val obj = SqlClassIniter(modCtx, initCtx, metaData, sqlTables)
+            val obj = SqlClassIniter(appCtx, initCtx, metaData, sqlTables)
             obj.processClasses()
         }
     }
 }
 
-private class SqlInitCtx(logger: KLogger, val logLevel: Int) {
+private class SqlInitCtx(logger: KLogger, val logLevel: Int, val objsInit: SqlObjectsInit) {
     val msgs = Rt_Messages(logger)
 
     private val steps = mutableListOf<SqlInitStep>()
@@ -332,7 +350,9 @@ private class SqlInitStep(val order: Int, val order2: Int, val title: String, va
     }
 }
 
-private class SqlStepCtx(val modCtx: Rt_ModuleContext, val sqlExec: SqlExecutor)
+private class SqlStepCtx(val appCtx: Rt_AppContext, val objsInit: SqlObjectsInit, val sqlExec: SqlExecutor) {
+    val sqlCtx = appCtx.sqlCtx
+}
 
 private sealed class SqlStepAction {
     abstract fun run(ctx: SqlStepCtx)
@@ -351,7 +371,7 @@ private class SqlStepAction_ExecSql(sqls: List<String>): SqlStepAction() {
 
 private class SqlStepAction_InsertObject(private val rObject: R_Object): SqlStepAction() {
     override fun run(ctx: SqlStepCtx) {
-        ctx.modCtx.insertObjectRecord(rObject)
+        ctx.objsInit.initObject(rObject)
     }
 }
 
@@ -361,8 +381,18 @@ private class SqlStepAction_AddColumns_AlterTable(
         private val existingRecs: Boolean
 ): SqlStepAction() {
     override fun run(ctx: SqlStepCtx) {
-        val sql = R_CreateExpr.buildAddColumnsSql(ctx.modCtx.sqlCtx, cls, attrs, existingRecs)
-        val frame = ctx.modCtx.createRootFrame()
+        val sql = R_CreateExpr.buildAddColumnsSql(ctx.sqlCtx, cls, attrs, existingRecs)
+        val frame = ctx.appCtx.createRootFrame()
         sql.execute(frame)
+    }
+}
+
+private fun msgClassName(rClass: R_Class): String {
+    val meta = rClass.metaName
+    val app = rClass.appLevelName
+    return if (meta == app) {
+        "'$app'"
+    } else {
+        "'$app' (meta: $meta)"
     }
 }

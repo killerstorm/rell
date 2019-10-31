@@ -12,7 +12,7 @@ import net.postchain.gtx.GTXModule
 import net.postchain.gtx.GTXSchemaManager
 import net.postchain.rell.CommonUtils
 import net.postchain.rell.PostchainUtils
-import net.postchain.rell.model.R_Module
+import net.postchain.rell.model.R_App
 import net.postchain.rell.module.RellPostchainModuleFactory
 import net.postchain.rell.sql.SqlExecutor
 import kotlin.test.assertEquals
@@ -25,23 +25,24 @@ class RellGtxTester(
         inserts: List<String> = listOf(),
         gtv: Boolean = false,
         chainId: Long = 995511
-): RellBaseTester(tstCtx, classDefs, inserts, gtv)
-{
+): RellBaseTester(tstCtx, classDefs, inserts, gtv) {
     var wrapRtErrors = true
-    var moduleArgs: String? = null
     val extraModuleConfig = mutableMapOf<String, String>()
     var blockchainRID = "DEADBEEF"
     var nodeId: Int = 3377
+    var modules: List<String>? = listOf("")
+
+    private var moduleArgs = mapOf<String, String>()
 
     init {
         super.chainId = chainId
     }
 
-    override fun initSqlReset(sqlExec: SqlExecutor, moduleCode: String, module: R_Module) {
+    override fun initSqlReset(exec: SqlExecutor, moduleCode: String, app: R_App) {
         val gtxModule = createGtxModule(moduleCode)
 
-        sqlExec.transaction {
-            val con = sqlExec.connection()
+        exec.transaction {
+            val con = exec.connection()
             val dbAccess = PostchainUtils.createDatabaseAccess()
             val ctx = BaseEContext(con, chainId, nodeId, dbAccess)
             GTXSchemaManager.initializeDB(ctx)
@@ -49,8 +50,8 @@ class RellGtxTester(
         }
     }
 
-    fun chkQuery(code: String, expected: String) {
-        chkQueryEx("query q() = $code;", "", expected)
+    fun moduleArgs(vararg args: Pair<String, String>) {
+        moduleArgs = args.toMap()
     }
 
     fun chkQueryEx(code: String, args: String, expected: String) {
@@ -172,14 +173,16 @@ class RellGtxTester(
 
     private fun moduleConfig(moduleCode: String): Gtv {
         val rellMap = mutableMapOf<String, Gtv>()
-        rellMap["mainFile"] = GtvString(RellTestUtils.MAIN_FILE)
+
+        val modules = modules
+        if (modules != null) {
+            rellMap["modules"] = GtvFactory.gtv(modules.map { GtvFactory.gtv(it) })
+        }
 
         val sourceCodes = files(moduleCode)
-        rellMap["sources_v0.9"] = GtvFactory.gtv(sourceCodes.mapValues { (_, v) -> GtvString(v) })
+        rellMap["sources_v${RellTestUtils.RELL_VER}"] = GtvFactory.gtv(sourceCodes.mapValues { (_, v) -> GtvString(v) })
 
-        if (moduleArgs != null) {
-            rellMap["moduleArgs"] = GtvTestUtils.decodeGtvStr(moduleArgs!!)
-        }
+        rellMap["moduleArgs"] = GtvFactory.gtv(moduleArgs.mapValues { (_, v) -> GtvTestUtils.decodeGtvStr(v) })
 
         val cfgMap = mutableMapOf<String, Gtv>()
         cfgMap["gtx"] = GtvFactory.gtv(mapOf("rell" to GtvFactory.gtv(rellMap)))

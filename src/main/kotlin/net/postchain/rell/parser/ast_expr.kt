@@ -17,28 +17,37 @@ abstract class S_Expr(val startPos: S_Pos) {
     }
 }
 
-class S_StringLiteralExpr(pos: S_Pos, val literal: String): S_Expr(pos) {
-    override fun compile(ctx: C_ExprContext): C_Expr = C_RValue.makeExpr(startPos, R_ConstantExpr.makeText(literal))
+sealed class S_LiteralExpr(pos: S_Pos): S_Expr(pos) {
+    abstract fun value(): Rt_Value
+
+    final override fun compile(ctx: C_ExprContext): C_Expr {
+        val v = value()
+        return C_RValue.makeExpr(startPos, R_ConstantExpr(v))
+    }
 }
 
-class S_ByteArrayLiteralExpr(pos: S_Pos, val bytes: ByteArray): S_Expr(pos) {
-    override fun compile(ctx: C_ExprContext): C_Expr = C_RValue.makeExpr(startPos, R_ConstantExpr.makeBytes(bytes))
+class S_StringLiteralExpr(pos: S_Pos, val literal: String): S_LiteralExpr(pos) {
+    override fun value() = Rt_TextValue(literal)
 }
 
-class S_IntegerLiteralExpr(pos: S_Pos, val value: Long): S_Expr(pos) {
-    override fun compile(ctx: C_ExprContext): C_Expr = C_RValue.makeExpr(startPos, R_ConstantExpr.makeInt(value))
+class S_ByteArrayLiteralExpr(pos: S_Pos, val bytes: ByteArray): S_LiteralExpr(pos) {
+    override fun value() = Rt_ByteArrayValue(bytes)
 }
 
-class S_DecimalLiteralExpr(pos: S_Pos, val value: Rt_Value): S_Expr(pos) {
-    override fun compile(ctx: C_ExprContext): C_Expr = C_RValue.makeExpr(startPos, R_ConstantExpr(value))
+class S_IntegerLiteralExpr(pos: S_Pos, val value: Long): S_LiteralExpr(pos) {
+    override fun value() = Rt_IntValue(value)
 }
 
-class S_BooleanLiteralExpr(pos: S_Pos, val value: Boolean): S_Expr(pos) {
-    override fun compile(ctx: C_ExprContext): C_Expr = C_RValue.makeExpr(startPos, R_ConstantExpr.makeBool(value))
+class S_DecimalLiteralExpr(pos: S_Pos, val value: Rt_Value): S_LiteralExpr(pos) {
+    override fun value() = value
 }
 
-class S_NullLiteralExpr(pos: S_Pos): S_Expr(pos) {
-    override fun compile(ctx: C_ExprContext): C_Expr = C_RValue.makeExpr(startPos, R_ConstantExpr.makeNull())
+class S_BooleanLiteralExpr(pos: S_Pos, val value: Boolean): S_LiteralExpr(pos) {
+    override fun value() = Rt_BooleanValue(value)
+}
+
+class S_NullLiteralExpr(pos: S_Pos): S_LiteralExpr(pos) {
+    override fun value() = Rt_NullValue
 }
 
 class S_LookupExpr(val opPos: S_Pos, val base: S_Expr, val expr: S_Expr): S_Expr(base.startPos) {
@@ -139,8 +148,7 @@ class S_CreateExpr(pos: S_Pos, val className: List<S_Name>, val exprs: List<S_Na
                     "Not allowed to create instances of class '$classNameStr'")
         }
 
-        val type = R_ClassType(cls)
-        val rExpr = R_CreateExpr(type, cls, attrs.rAttrs)
+        val rExpr = R_CreateExpr(cls, attrs.rAttrs)
         return C_RValue.makeExpr(startPos, rExpr, attrs.exprFacts)
     }
 }
@@ -310,7 +318,7 @@ class S_WhenConditionExpr(val exprs: List<S_Expr>): S_WhenCondition() {
         val name = expr.asName()
 
         if (valueType is R_EnumType && name != null) {
-            val attr = valueType.attr(name.str)
+            val attr = valueType.enum.attr(name.str)
             if (attr != null) {
                 val value = Rt_EnumValue(valueType, attr)
                 val rExpr = R_ConstantExpr(value)
@@ -559,7 +567,7 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
             if (type == R_BooleanType) {
                 return setOf(Rt_BooleanValue(false), Rt_BooleanValue(true))
             } else if (type is R_EnumType) {
-                return type.values().toSet()
+                return type.enum.values().toSet()
             } else if (type is R_NullableType) {
                 val values = allTypeValues(type.valueType)
                 return if (values.isEmpty()) values else (values + setOf(Rt_NullValue))

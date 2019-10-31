@@ -1,0 +1,6 @@
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./singletest.sh -d test-cli/src --blockchain-rid=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef --node-config test-cli/config/node-config.properties legacy_test test-cli/test/legacy_test.xml
+
+2019-10-24 21:08:23.623 INFO  Rell - legacy_test.rell(5) x = 123456789.987654321
+2019-10-24 21:08:23.623 INFO  Rell - legacy_test.rell(6) x^2 = 15241578994055784.200731595789971041
+2019-10-24 21:08:23.623 INFO  Rell - legacy_test.rell(7) x^3 = 1881676416949388556641282.84797183506803765611

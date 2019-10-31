@@ -52,8 +52,15 @@ class RecordTest: BaseRellTest(false) {
     }
 
     @Test fun testRecordVsFunctionNameConflict() {
-        chkCompile("function foo(x: integer){} record foo {s:text;}", "ct_err:name_conflict:function:foo")
-        chkCompile("record foo {s:text;} function foo(x: integer){}", "ct_err:name_conflict:record:foo")
+        chkCompile("function foo(x: integer){} record foo {s:text;}", """ct_err:
+            [name_conflict:user:foo:RECORD:main.rell(1:35)]
+            [name_conflict:user:foo:FUNCTION:main.rell(1:10)]
+        """)
+
+        chkCompile("record foo {s:text;} function foo(x: integer){}", """ct_err:
+            [name_conflict:user:foo:FUNCTION:main.rell(1:31)]
+            [name_conflict:user:foo:RECORD:main.rell(1:8)]
+        """)
     }
 
     @Test fun testMutableAttributes() {
@@ -218,9 +225,10 @@ class RecordTest: BaseRellTest(false) {
     }
 
     private fun chkFlags(code: String, expected: String) {
-        val actual = tst.processModule(code) { module ->
+        val actual = tst.processApp(code) { app ->
             val lst = mutableListOf<String>()
-            for (rec in module.records.values.sortedBy { it.name }) {
+            val recs = app.modules.flatMap { it.records.values }
+            for (rec in recs.sortedBy { it.simpleName }) {
                 val flags = mutableListOf<String>()
                 if (rec.flags.typeFlags.mutable) flags.add("mut")
 
@@ -232,7 +240,7 @@ class RecordTest: BaseRellTest(false) {
 
                 if (rec.flags.cyclic) flags.add("cyc")
                 if (rec.flags.infinite) flags.add("inf")
-                lst.add("${rec.name}[${flags.joinToString(",")}]")
+                lst.add("${rec.simpleName}[${flags.joinToString(",")}]")
             }
             lst.joinToString(",")
         }

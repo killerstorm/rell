@@ -7,7 +7,26 @@ import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.util.concurrent.atomic.AtomicLong
 
-val ROWID_COLUMN = "rowid"
+object SqlConstants {
+    const val ROWID_COLUMN = "rowid"
+    const val ROWID_GEN = "rowid_gen"
+    const val MAKE_ROWID = "make_rowid"
+
+    const val BLOCKS_TABLE = "blocks"
+    const val BLOCKCHAINS_TABLE = "blockchains"
+    const val TRANSACTIONS_TABLE = "transactions"
+
+    val SYSTEM_OBJECTS = setOf(
+            ROWID_GEN,
+            MAKE_ROWID,
+            BLOCKS_TABLE,
+            BLOCKCHAINS_TABLE,
+            TRANSACTIONS_TABLE,
+            "configurations",
+            "meta",
+            "peerinfos"
+    )
+}
 
 abstract class SqlExecutor {
     abstract fun connection(): Connection

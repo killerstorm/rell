@@ -16,6 +16,8 @@ class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
         chkQueryRes("= x'12EF';", """"12EF"""")
         chkQueryRes("""= json('{"x":123,"y":"Hello"}');""", """"{\"x\":123,\"y\":\"Hello\"}"""")
         chkQueryRes("= null;", "null")
+        chkQueryRes("= 123.456;", "\"123.456\"")
+        chkQueryRes("= 123.0;", "\"123\"")
     }
 
     @Test fun testQueryResultTuple() {
@@ -75,6 +77,9 @@ class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
         chkArg("json", """"{\"x\":123,\"y\":\"Hello\"}"""", """json[{"x":123,"y":"Hello"}]""")
         chkArg("json", """{"x":123,"y":"Hello"}""", "gtv_err:type:json:DICT")
         chkArg("json", """"{"""", "gtv_err:type:json:STRING")
+
+        chkArg("decimal", "123", "dec[123]")
+        chkArg("decimal", "'123.456'", "dec[123.456]")
     }
 
     @Test fun testArgByteArray() {

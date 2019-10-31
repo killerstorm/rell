@@ -246,18 +246,18 @@ object C_LibFunctions {
             .build()
 
     private val NAMESPACES = mapOf(
-            "boolean" to C_NamespaceDef(BOOLEAN_NAMESPACE),
-            "integer" to C_NamespaceDef(INTEGER_NAMESPACE),
-            "decimal" to C_NamespaceDef(DECIMAL_NAMESPACE),
-            "text" to C_NamespaceDef(TEXT_NAMESPACE),
-            "byte_array" to C_NamespaceDef(BYTEARRAY_NAMESPACE),
-            "rowid" to C_NamespaceDef(ROWID_NAMESPACE),
-            "json" to C_NamespaceDef(JSON_NAMESPACE),
-            "range" to C_NamespaceDef(RANGE_NAMESPACE),
-            "GTXValue" to C_NamespaceDef(GTV_NAMESPACE, C_Deprecated_UseInstead("gtv")),
-            "gtv" to C_NamespaceDef(GTV_NAMESPACE),
-            "chain_context" to C_NamespaceDef(CHAIN_CONTEXT_NAMESPACE),
-            C_Ns_OpContext.NAME to C_NamespaceDef(OP_CONTEXT_NAMESPACE)
+            "boolean" to C_RegularNamespaceDef(BOOLEAN_NAMESPACE),
+            "integer" to C_RegularNamespaceDef(INTEGER_NAMESPACE),
+            "decimal" to C_RegularNamespaceDef(DECIMAL_NAMESPACE),
+            "text" to C_RegularNamespaceDef(TEXT_NAMESPACE),
+            "byte_array" to C_RegularNamespaceDef(BYTEARRAY_NAMESPACE),
+            "rowid" to C_RegularNamespaceDef(ROWID_NAMESPACE),
+            "json" to C_RegularNamespaceDef(JSON_NAMESPACE),
+            "range" to C_RegularNamespaceDef(RANGE_NAMESPACE),
+            "GTXValue" to C_RegularNamespaceDef(GTV_NAMESPACE, C_Deprecated_UseInstead("gtv")),
+            "gtv" to C_RegularNamespaceDef(GTV_NAMESPACE),
+            "chain_context" to C_RegularNamespaceDef(CHAIN_CONTEXT_NAMESPACE),
+            C_Ns_OpContext.NAME to C_RegularNamespaceDef(OP_CONTEXT_NAMESPACE)
     )
 
     fun getGlobalFunctions(): Map<String, C_GlobalFunction> = GLOBAL_FNS.toMap()
@@ -289,7 +289,7 @@ object C_LibFunctions {
             is R_EnumType -> getEnumFns(type)
             is R_TupleType -> getTupleFns(type)
             is R_VirtualTupleType -> getVirtualTupleFns(type)
-            is R_RecordType -> getRecordFns(type)
+            is R_RecordType -> getRecordFns(type.record)
             is R_VirtualRecordType -> getVirtualRecordFns(type)
             else -> C_MemberFuncTable(mapOf())
         }
@@ -448,10 +448,11 @@ object C_LibFunctions {
                 .build()
     }
 
-    fun makeRecordNamespace(type: R_RecordType): C_NamespaceDef {
-        val mFromBytes = globalFnFromGtv(type, R_SysFn_Record.FromBytes(type))
-        val mFromGtv = globalFnFromGtv(type, R_SysFn_Record.FromGtv(type, false))
-        val mFromGtvPretty = globalFnFromGtv(type, R_SysFn_Record.FromGtv(type, true))
+    fun makeRecordNamespace(record: R_Record): C_NamespaceDef {
+        val type = record.type
+        val mFromBytes = globalFnFromGtv(type, R_SysFn_Record.FromBytes(record))
+        val mFromGtv = globalFnFromGtv(type, R_SysFn_Record.FromGtv(record, false))
+        val mFromGtvPretty = globalFnFromGtv(type, R_SysFn_Record.FromGtv(record, true))
 
         val fns = C_GlobalFuncBuilder()
                 .add("fromBytes", listOf(R_ByteArrayType), mFromBytes, C_Deprecated_UseInstead("from_bytes"))
@@ -463,7 +464,7 @@ object C_LibFunctions {
                 .build()
 
         val ns = makeNamespace(fns)
-        return C_NamespaceDef(ns)
+        return C_RegularNamespaceDef(ns)
     }
 
     private fun globalFnFromGtv(type: R_Type, fn: R_SysFunction): C_GlobalFormalParamsFuncBody {
@@ -471,10 +472,11 @@ object C_LibFunctions {
         return if (!flags.gtv.fromGtv) C_SysFunction_Invalid(type) else C_SysGlobalFormalParamsFuncBody(type, fn)
     }
 
-    private fun getRecordFns(type: R_RecordType): C_MemberFuncTable {
-        val mToBytes = memFnToGtv(type, R_ByteArrayType, R_SysFn_Record.ToBytes(type))
-        val mToGtv = memFnToGtv(type, R_GtvType, R_SysFn_Record.ToGtv(type, false))
-        val mToGtvPretty = memFnToGtv(type, R_GtvType, R_SysFn_Record.ToGtv(type, true))
+    private fun getRecordFns(record: R_Record): C_MemberFuncTable {
+        val type = record.type
+        val mToBytes = memFnToGtv(type, R_ByteArrayType, R_SysFn_Record.ToBytes(record))
+        val mToGtv = memFnToGtv(type, R_GtvType, R_SysFn_Record.ToGtv(record, false))
+        val mToGtvPretty = memFnToGtv(type, R_GtvType, R_SysFn_Record.ToGtv(record, true))
 
         return typeMemFuncBuilder(type)
                 .add("toBytes", listOf(), mToBytes, C_Deprecated_UseInstead("to_bytes"))
@@ -498,17 +500,18 @@ object C_LibFunctions {
     fun getTypeStaticFunction(type: R_Type, name: String): C_GlobalFunction? {
         val b = typeGlobalFuncBuilder(type)
         when (type) {
-            is R_EnumType -> getEnumStaticFns(b, type)
+            is R_EnumType -> getEnumStaticFns(b, type.enum)
         }
         val fns = b.build()
         val fn = fns.get(name)
         return fn
     }
 
-    private fun getEnumStaticFns(b: C_GlobalFuncBuilder, type: R_EnumType) {
-        b.add("values", R_ListType(type), listOf(), R_SysFn_Enum.Values(type))
-        b.add("value", type, listOf(R_TextType), R_SysFn_Enum.Value_Text(type))
-        b.add("value", type, listOf(R_IntegerType), R_SysFn_Enum.Value_Int(type))
+    private fun getEnumStaticFns(b: C_GlobalFuncBuilder, enum: R_Enum) {
+        val type = enum.type
+        b.add("values", R_ListType(type), listOf(), R_SysFn_Enum.Values(enum))
+        b.add("value", type, listOf(R_TextType), R_SysFn_Enum.Value_Text(enum))
+        b.add("value", type, listOf(R_IntegerType), R_SysFn_Enum.Value_Int(enum))
     }
 
     private fun typeGlobalFuncBuilder(type: R_Type): C_GlobalFuncBuilder {
@@ -543,7 +546,7 @@ object C_Ns_OpContext {
     val NAME = "op_context"
 
     fun transactionExpr(entCtx: C_EntityContext): R_Expr {
-        val type = entCtx.nsCtx.modCtx.transactionClassType
+        val type = entCtx.appCtx.sysDefs.transactionClass.type
         return R_SysCallExpr(type, R_SysFn_OpContext.Transaction(type), listOf())
     }
 
@@ -578,13 +581,15 @@ object C_Ns_OpContext {
 
 private object C_NsValue_ChainContext_Args: C_NamespaceValue_RExpr() {
     override fun get0(entCtx: C_EntityContext, name: List<S_Name>): R_Expr {
-        val record = entCtx.nsCtx.modCtx.getModuleArgsRecord()
+        val record = entCtx.modCtx.getModuleArgsRecord()
         if (record == null) {
             val nameStr = C_Utils.nameStr(name)
             throw C_Error(name[0].pos, "expr_chainctx_args_norec",
-                    "To use '$nameStr', define a record '${C_Defs.MODULE_ARGS_RECORD}'")
+                    "To use '$nameStr', define a record '${C_Constants.MODULE_ARGS_RECORD}'")
         }
-        return R_SysCallExpr(record, R_SysFn_ChainContext.Args, listOf())
+
+        val moduleName = entCtx.modCtx.module.name
+        return R_SysCallExpr(record.type, R_SysFn_ChainContext.Args(moduleName), listOf())
     }
 }
 
@@ -595,8 +600,8 @@ private class C_SysFn_Print(private val log: Boolean): C_GlobalSysFuncCase() {
     }
 
     private inner class CaseMatch(args: List<C_Value>): C_BasicGlobalFuncCaseMatch(args) {
-        override fun compileCallExpr(name: S_Name, args: List<R_Expr>): R_Expr {
-            val pos = name.pos.strLine()
+        override fun compileCallExpr(fullName: S_String, args: List<R_Expr>): R_Expr {
+            val pos = fullName.pos.strLine()
             val rFn = R_SysFn_General.Print(log, pos)
             val rExpr = R_SysCallExpr(R_UnitType, rFn, args)
             return rExpr
@@ -613,14 +618,14 @@ private object C_SysFn_TypeOf: C_GlobalSysFuncCase() {
     }
 
     private class CaseMatch(private val str: String): C_BasicGlobalFuncCaseMatch(listOf()) {
-        override fun compileCallExpr(name: S_Name, args: List<R_Expr>): R_Expr {
+        override fun compileCallExpr(fullName: S_String, args: List<R_Expr>): R_Expr {
             var rExpr = R_ConstantExpr.makeText(str)
             return rExpr
         }
 
-        override fun compileCallDbExpr(name: S_Name, args: List<Db_Expr>): Db_Expr {
+        override fun compileCallDbExpr(fullName: S_String, args: List<Db_Expr>): Db_Expr {
             var rExpr = R_ConstantExpr.makeText(str)
-            return C_Utils.toDbExpr(name.pos, rExpr)
+            return C_Utils.toDbExpr(fullName.pos, rExpr)
         }
     }
 }
@@ -641,7 +646,7 @@ private class C_SysFn_Nullable(private val baseType: R_Type?): C_GlobalSysFuncCa
             args: List<C_Value>,
             private val resType: R_Type
     ): C_BasicGlobalFuncCaseMatch(args) {
-        override fun compileCallExpr(name: S_Name, args: List<R_Expr>): R_Expr {
+        override fun compileCallExpr(fullName: S_String, args: List<R_Expr>): R_Expr {
             check(args.size == 1)
             return R_SysCallExpr(resType, R_SysFn_Internal.Nop, args)
         }
@@ -655,7 +660,7 @@ private object C_SysFn_Nop: C_GlobalSysFuncCase() {
     }
 
     private class CaseMatch(args: List<C_Value>): C_BasicGlobalFuncCaseMatch(args) {
-        override fun compileCallExpr(name: S_Name, args: List<R_Expr>): R_Expr {
+        override fun compileCallExpr(fullName: S_String, args: List<R_Expr>): R_Expr {
             check(args.size == 1)
             val arg = args[0]
             return R_SysCallExpr(arg.type, R_SysFn_Internal.Nop, args)
@@ -677,7 +682,7 @@ private object C_SysFn_Require_Boolean: C_GlobalSysFuncCase() {
     }
 
     private class CaseMatch(args: List<C_Value>): C_BasicGlobalFuncCaseMatch(args) {
-        override fun compileCallExpr(name: S_Name, args: List<R_Expr>): R_Expr {
+        override fun compileCallExpr(fullName: S_String, args: List<R_Expr>): R_Expr {
             val rExpr = args[0]
             val rMsgExpr = if (args.size < 2) null else args[1]
             return R_RequireExpr_Boolean(rExpr, rMsgExpr)
@@ -735,7 +740,7 @@ private object C_SysFn_Require_Collection: C_GlobalSysFuncCase() {
     }
 
     private class CaseMatch_Collection(args: List<C_Value>, val valueType: R_Type): C_BasicGlobalFuncCaseMatch(args) {
-        override fun compileCallExpr(name: S_Name, args: List<R_Expr>): R_Expr {
+        override fun compileCallExpr(fullName: S_String, args: List<R_Expr>): R_Expr {
             val rExpr = args[0]
             val rMsgExpr = if (args.size < 2) null else args[1]
             return R_RequireExpr_Collection(valueType, rExpr, rMsgExpr)
@@ -743,7 +748,7 @@ private object C_SysFn_Require_Collection: C_GlobalSysFuncCase() {
     }
 
     private class CaseMatch_Map(args: List<C_Value>, val valueType: R_Type): C_BasicGlobalFuncCaseMatch(args) {
-        override fun compileCallExpr(name: S_Name, args: List<R_Expr>): R_Expr {
+        override fun compileCallExpr(fullName: S_String, args: List<R_Expr>): R_Expr {
             val rExpr = args[0]
             val rMsgExpr = if (args.size < 2) null else args[1]
             return R_RequireExpr_Map(valueType, rExpr, rMsgExpr)
@@ -795,10 +800,10 @@ private class C_SysFunction_Invalid(private val type: R_Type): C_GlobalFormalPar
         throw err(caseCtx.fullName)
     }
 
-    private fun err(name: S_Name): C_Error {
+    private fun err(fullName: S_String): C_Error {
         val typeStr = type.name
-        val nameStr = name.str
-        return C_Error(name.pos, "fn:invalid:$typeStr:$nameStr", "Function '$nameStr' not available for type '$typeStr'")
+        val nameStr = fullName.str
+        return C_Error(fullName.pos, "fn:invalid:$typeStr:$nameStr", "Function '$nameStr' not available for type '$typeStr'")
     }
 }
 

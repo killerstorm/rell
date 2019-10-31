@@ -1,0 +1,8 @@
+module;
+
+import .sub.helper;
+
+operation main() {
+    print('This is main!');
+    helper.helper();
+}

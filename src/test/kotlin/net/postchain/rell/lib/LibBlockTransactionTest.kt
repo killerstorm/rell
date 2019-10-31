@@ -94,8 +94,8 @@ class LibBlockTransactionTest: BaseRellTest() {
         tst.inserts = BLOCK_INSERTS
         tst.chainId = 333
 
-        chkCompile("class transaction{}", "ct_err:name_conflict:class:transaction")
-        chkCompile("class block{}", "ct_err:name_conflict:class:block")
+        chkCompile("class transaction{}", "ct_err:name_conflict:sys:transaction:CLASS")
+        chkCompile("class block{}", "ct_err:name_conflict:sys:block:CLASS")
 
         chk("block @* {}", "list<block>[block[111]]")
         chk("transaction @* {}", "list<transaction>[transaction[444]]")

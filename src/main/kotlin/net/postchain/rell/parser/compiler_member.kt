@@ -43,7 +43,7 @@ object C_MemberResolver {
     }
 
     private fun valueForRecord(type: R_RecordType, ref: C_MemberRef): C_Expr? {
-        val attr = type.attributes[ref.name.str]
+        val attr = type.record.attributes[ref.name.str]
         if (attr == null) {
             return null
         }
@@ -53,7 +53,7 @@ object C_MemberResolver {
     }
 
     private fun valueForVirtualRecord(type: R_VirtualRecordType, ref: C_MemberRef): C_Expr? {
-        val attr = type.innerType.attributes[ref.name.str]
+        val attr = type.innerType.record.attributes[ref.name.str]
         if (attr == null) {
             return null
         }
@@ -274,7 +274,7 @@ private class C_ClassAttrValue private constructor(
         val from = listOf(base.atClass)
 
         val whereLeft = Db_ClassExpr(base.atClass)
-        val whereRight = Db_ParameterExpr(base.atClass.type, 0)
+        val whereRight = Db_ParameterExpr(base.atClass.rClass.type, 0)
         val where = C_Utils.makeDbBinaryExprEq(whereLeft, whereRight)
 
         val atBase = R_AtExprBase(from, listOf(attrInfo.dbExpr), where, listOf())

@@ -39,7 +39,7 @@ private fun main0(args: RellCliArgs) {
         throw RellCliErr("Database connection URL not specified")
     }
 
-    if (args.resetdb && args.rellFile == null) {
+    if (args.resetdb && args.module == null) {
         runWithSql(args) { sqlExec ->
             sqlExec.transaction {
                 SqlUtils.dropAll(sqlExec, true)
@@ -49,15 +49,13 @@ private fun main0(args: RellCliArgs) {
         return
     }
 
-    if (args.rellFile == null) {
-        throw RellCliErr("Rell file not specified")
-    }
+    val (entryModule, entryRoutine) = parseEntryPoint(args)
 
-    val module = RellCliUtils.compileModule(args.rellFile!!, args.sourceDir, args.quiet)
-    val routine = getRoutineCaller(args, module)
+    val app = RellCliUtils.compileApp(args.sourceDir, entryModule, args.quiet)
+    val routine = getRoutineCaller(app, args, entryModule, entryRoutine)
 
     runWithSql(args) { sqlExec ->
-        val sqlCtx = Rt_SqlContext.createNoExternalChains(module, SQL_MAPPER)
+        val sqlCtx = Rt_SqlContext.createNoExternalChains(app, SQL_MAPPER)
 
         if (dbSpecified) {
             sqlExec.transaction {
@@ -65,7 +63,7 @@ private fun main0(args: RellCliArgs) {
                     SqlUtils.dropAll(sqlExec, true)
                 }
 
-                val modCtx = createModuleCtx(args, sqlCtx, sqlExec, null)
+                val modCtx = createAppContext(args, app, sqlCtx, sqlExec, null)
                 val logLevel = if (args.sqlInitLog) SqlInit.LOG_ALL else SqlInit.LOG_NONE
                 SqlInit.init(modCtx, logLevel)
             }
@@ -75,20 +73,44 @@ private fun main0(args: RellCliArgs) {
     }
 }
 
-private fun getRoutineCaller(args: RellCliArgs, module: R_Module): (SqlExecutor, Rt_SqlContext) -> Unit {
-    val op = args.op
-    if (op == null) return { _, _ -> }
+private fun parseEntryPoint(args: RellCliArgs): Pair<R_ModuleName, R_QualifiedName?> {
+    val m = args.module
+    val e = args.entry
 
-    val entryPoint = findEntryPoint(module, op)
+    if (m == null) {
+        throw RellCliErr("Module not specified")
+    }
+
+    val moduleName = R_ModuleName.ofOpt(m)
+    if (moduleName == null) throw RellCliErr("Invalid module name: '$m'")
+
+    var routineName: R_QualifiedName? = null
+    if (e != null) {
+        routineName = R_QualifiedName.ofOpt(e)
+        if (routineName == null || routineName.isEmpty()) throw RellCliErr("Invalid entry point name: '$e'")
+    }
+
+    return Pair(moduleName, routineName)
+}
+
+private fun getRoutineCaller(
+        app: R_App,
+        args: RellCliArgs,
+        entryModule: R_ModuleName,
+        entryRoutine: R_QualifiedName?
+): (SqlExecutor, Rt_SqlContext) -> Unit {
+    if (entryRoutine == null) return { _, _ -> }
+
+    val entryPoint = findEntryPoint(app, entryModule, entryRoutine)
 
     return { sqlExec, sqlCtx ->
-        val modCtx = createModuleCtx(args, sqlCtx, sqlExec, entryPoint.opContext())
+        val appCtx = createAppContext(args, app, sqlCtx, sqlExec, entryPoint.opContext())
 
         val gtvCtx = GtvToRtContext(true)
         val rtArgs = parseArgs(entryPoint, gtvCtx, args.args ?: listOf(), args.json || args.jsonArgs)
-        gtvCtx.finish(modCtx)
+        gtvCtx.finish(appCtx)
 
-        val rtRes = entryPoint.call(modCtx, rtArgs)
+        val rtRes = entryPoint.call(appCtx, rtArgs)
         if (rtRes != null && rtRes != Rt_UnitValue) {
             val strRes = resultToString(rtRes, args.jsonResult || args.json)
             println(strRes)
@@ -127,7 +149,13 @@ private fun runWithSql(args: RellCliArgs, code: (SqlExecutor) -> Unit) {
     }
 }
 
-private fun findEntryPoint(module: R_Module, name: String): RellEntryPoint {
+private fun findEntryPoint(app: R_App, moduleName: R_ModuleName, routineName: R_QualifiedName): RellEntryPoint {
+    val module = app.modules.find { it.name == moduleName }
+    if (module == null) {
+        throw RellCliErr("Module not found: '$moduleName'")
+    }
+
+    val name = routineName.str()
     val eps = mutableListOf<RellEntryPoint>()
 
     val op = module.operations[name]
@@ -154,7 +182,7 @@ private fun findEntryPoint(module: R_Module, name: String): RellEntryPoint {
 
 private fun createGlobalCtx(args: RellCliArgs, sqlExec: SqlExecutor, opCtx: Rt_OpContext?): Rt_GlobalContext {
     val bcRid = ByteArray(32)
-    val chainCtx = Rt_ChainContext(GtvNull, Rt_NullValue, bcRid)
+    val chainCtx = Rt_ChainContext(GtvNull, mapOf(), bcRid)
 
     return Rt_GlobalContext(
             sqlExec = sqlExec,
@@ -166,13 +194,19 @@ private fun createGlobalCtx(args: RellCliArgs, sqlExec: SqlExecutor, opCtx: Rt_O
     )
 }
 
-private fun createModuleCtx(args: RellCliArgs, sqlCtx: Rt_SqlContext, sqlExec: SqlExecutor, opCtx: Rt_OpContext?): Rt_ModuleContext {
+private fun createAppContext(
+        args: RellCliArgs,
+        app: R_App,
+        sqlCtx: Rt_SqlContext,
+        sqlExec: SqlExecutor,
+        opCtx: Rt_OpContext?
+): Rt_AppContext {
     val globalCtx = createGlobalCtx(args, sqlExec, opCtx)
-    return Rt_ModuleContext(globalCtx, sqlCtx.module, sqlCtx)
+    return Rt_AppContext(globalCtx, sqlCtx, app)
 }
 
 private fun parseArgs(entryPoint: RellEntryPoint, gtvCtx: GtvToRtContext, args: List<String>, json: Boolean): List<Rt_Value> {
-    val params = entryPoint.routine().params
+    val params = entryPoint.routine().params()
     if (args.size != params.size) {
         System.err.println("Wrong number of arguments: ${args.size} instead of ${params.size}")
         exitProcess(1)
@@ -217,7 +251,7 @@ private sealed class RellEntryPoint {
     abstract val kind: String
     abstract fun routine(): R_Routine
     abstract fun opContext(): Rt_OpContext?
-    abstract fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value?
+    abstract fun call(appCtx: Rt_AppContext, args: List<Rt_Value>): Rt_Value?
 }
 
 private class RellEntryPoint_Function(private val f: R_Function): RellEntryPoint() {
@@ -225,8 +259,8 @@ private class RellEntryPoint_Function(private val f: R_Function): RellEntryPoint
     override fun routine() = f
     override fun opContext() = null
 
-    override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value? {
-        return f.callTopFunction(modCtx, args, true)
+    override fun call(appCtx: Rt_AppContext, args: List<Rt_Value>): Rt_Value? {
+        return f.callTopFunction(appCtx, args, true)
     }
 }
 
@@ -235,8 +269,8 @@ private class RellEntryPoint_Operation(private val o: R_Operation, private val o
     override fun routine() = o
     override fun opContext() = opCtx
 
-    override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value? {
-        o.callTop(modCtx, args)
+    override fun call(appCtx: Rt_AppContext, args: List<Rt_Value>): Rt_Value? {
+        o.callTop(appCtx, args)
         return null
     }
 }
@@ -246,13 +280,13 @@ private class RellEntryPoint_Query(private val q: R_Query): RellEntryPoint() {
     override fun routine() = q
     override fun opContext() = null
 
-    override fun call(modCtx: Rt_ModuleContext, args: List<Rt_Value>): Rt_Value? {
-        return q.callTopQuery(modCtx, args)
+    override fun call(appCtx: Rt_AppContext, args: List<Rt_Value>): Rt_Value? {
+        return q.callTopQuery(appCtx, args)
     }
 }
 
 @CommandLine.Command(name = "rell", description = ["Executes a rell program"])
-private class RellCliArgs {
+private class RellCliArgs: RellBaseCliArgs() {
     @CommandLine.Option(names = ["--db-url"], paramLabel =  "DB_URL",
             description =  ["Database JDBC URL, e. g. jdbc:postgresql://localhost/relltestdb?user=relltestuser&password=1234"])
     var dbUrl: String? = null
@@ -279,10 +313,6 @@ private class RellCliArgs {
     @CommandLine.Option(names = ["-v", "--version"], description = ["Print version and quit"])
     var version = false
 
-    @CommandLine.Option(names = ["--source-dir"], paramLabel =  "SOURCE_DIR",
-            description =  ["Source directory used to resolve absolute include paths (default: the directory of the Rell file)"])
-    var sourceDir: String? = null
-
     @CommandLine.Option(names = ["--json-args"], description = ["Accept Rell program arguments in JSON format"])
     var jsonArgs = false
 
@@ -292,11 +322,11 @@ private class RellCliArgs {
     @CommandLine.Option(names = ["--json"], description = ["Equivalent to --json-args --json-result"])
     var json = false
 
-    @CommandLine.Parameters(index = "0", arity = "0..1", paramLabel = "FILE", description = ["Rell source file"])
-    var rellFile: String? = null
+    @CommandLine.Parameters(index = "0", arity = "0..1", paramLabel = "MODULE", description = ["Module name"])
+    var module: String? = null
 
-    @CommandLine.Parameters(index = "1", arity = "0..1", paramLabel = "OP", description = ["Operation or query name"])
-    var op: String? = null
+    @CommandLine.Parameters(index = "1", arity = "0..1", paramLabel = "ENTRY", description = ["Entry point (operation/query/function name)"])
+    var entry: String? = null
 
     @CommandLine.Parameters(index = "2..*", paramLabel = "ARGS", description = ["Call arguments"])
     var args: List<String>? = null

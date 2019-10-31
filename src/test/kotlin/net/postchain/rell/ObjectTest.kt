@@ -113,15 +113,70 @@ class ObjectTest: BaseRellTest() {
 
     @Test fun testForwardReferenceErr() {
         chkCompile("object foo { x: integer = 123; y: integer = x; }", "ct_err:unknown_name:x")
-        chkCompile("object foo { x: integer = 123; y: integer = foo.x; }", "ct_err:object_fwdref:foo")
-        chkCompile("object foo { x: integer = bar.y; } object bar { y: integer = 123; }", "ct_err:object_fwdref:bar")
+        chkCompile("object foo { x: integer = bar.y; } object bar { y: integer = 123; }", "OK")
+
+        def("object foo { x: integer = 123; y: integer = foo.x; }")
+        tst.chkInit("rt_err:obj:init_cycle:foo,foo")
     }
 
     @Test fun testForwardReferenceRt() {
         def("object foo { x: integer = g(); }")
         def("object bar { y: integer = 123; }")
         def("function g(): integer = bar.y;")
-        tst.chkInit("rt_err:obj_norec:bar")
+        chk("foo.x", "int[123]")
+        chk("bar.y", "int[123]")
+    }
+
+    @Test fun testCycle() {
+        def("""
+            object o1 { x: integer = f3(); }
+            object o2 { x: integer = f4(); }
+            object o3 { x: integer = f2(); }
+            object o4 { x: integer = f1(); }
+            function f1(): integer = o1.x;
+            function f2(): integer = o2.x;
+            function f3(): integer = o3.x;
+            function f4(): integer = o4.x;
+        """.trimIndent())
+        tst.chkInit("rt_err:obj:init_cycle:o1,o3,o2,o4,o1")
+    }
+
+    @Test fun testInterModuleDependencies() {
+        file("a1.rell", "module; import b; object o1 { x: integer = b.f3() + 1; }")
+        file("a2.rell", "module; import b; object o2 { x: integer = b.f4() + 10; }")
+        file("a3.rell", "module; import b; object o3 { x: integer = b.f2() + 100; }")
+        file("a4.rell", "module; import b; object o4 { x: integer = 123; }")
+        file("b.rell", """
+            module;
+            import a1; import a2; import a3; import a4;
+            function f1(): integer = a1.o1.x;
+            function f2(): integer = a2.o2.x;
+            function f3(): integer = a3.o3.x;
+            function f4(): integer = a4.o4.x;
+        """.trimIndent())
+        def("import a1; import a2; import a3; import a4;")
+
+        chk("a1.o1.x", "int[234]")
+        chk("a2.o2.x", "int[133]")
+        chk("a3.o3.x", "int[233]")
+        chk("a4.o4.x", "int[123]")
+    }
+
+    @Test fun testInterModuleCycle() {
+        file("a1.rell", "module; import b; object o1 { x: integer = b.f3(); }")
+        file("a2.rell", "module; import b; object o2 { x: integer = b.f4(); }")
+        file("a3.rell", "module; import b; object o3 { x: integer = b.f2(); }")
+        file("a4.rell", "module; import b; object o4 { x: integer = b.f1(); }")
+        file("b.rell", """
+            module;
+            import a1; import a2; import a3; import a4;
+            function f1(): integer = a1.o1.x;
+            function f2(): integer = a2.o2.x;
+            function f3(): integer = a3.o3.x;
+            function f4(): integer = a4.o4.x;
+        """.trimIndent())
+        def("import a1; import a2; import a3; import a4;")
+        tst.chkInit("rt_err:obj:init_cycle:a1#o1,a3#o3,a2#o2,a4#o4,a1#o1")
     }
 
     @Test fun testUpdate() {

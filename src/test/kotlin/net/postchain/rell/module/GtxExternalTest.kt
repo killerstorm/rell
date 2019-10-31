@@ -45,7 +45,7 @@ class GtxExternalTest: BaseGtxTest() {
             t.init()
         }
 
-        def("external 'foo' { class user(log) {} }")
+        def("external 'foo' { @log class user {} }")
         tst.wrapRtErrors = false
         tst.extraModuleConfig["dependencies"] = "[['foo','deadbeef']]"
         chk("123", "rt_err:external_meta_nocls:foo:user")
@@ -57,13 +57,13 @@ class GtxExternalTest: BaseGtxTest() {
 
         run {
             val t = RellCodeTester(tstCtx)
-            t.def("class user(log) { name; }")
+            t.def("@log class user { name; }")
             t.chainId = 333
             t.insert("c333.user", "name,transaction", "15,'Bob',444")
             t.init()
         }
 
-        def("external 'foo' { class user(log) { name; } }")
+        def("external 'foo' { @log class user { name; } }")
         tst.wrapRtErrors = false
         tst.extraModuleConfig["dependencies"] = "[['foo','deadbeef']]"
         chk("_strict_str(user @{} ( =user, =.name ))", "'(user[15],text[Bob])'")

@@ -7,6 +7,7 @@ import net.postchain.config.node.NodeConfigurationProviderFactory
 import net.postchain.core.UserMistake
 import net.postchain.devtools.TestLauncher
 import net.postchain.gtv.gtvml.GtvMLEncoder
+import net.postchain.rell.RellBaseCliArgs
 import net.postchain.rell.RellCliUtils
 import net.postchain.rell.RellConfigGen
 import picocli.CommandLine
@@ -24,29 +25,27 @@ fun main(args: Array<String>) {
 }
 
 private fun main0(args: RunPostchainTestArgs) {
-    RellCliUtils.checkFile(args.rellFile)
+    val target = RellCliUtils.getTarget(args.sourceDir, args.module)
     RellCliUtils.checkFile(args.testFile)
     RellCliUtils.checkFile(args.nodeConfigFile)
-    if (args.sourceDir != null) RellCliUtils.checkDir(args.sourceDir!!)
 
     val bcRid = RellCliUtils.parseHex(args.blockchainRid, 32, "blockchain RID")
 
     log.info("STARTING POSTCHAIN TEST")
-    log.info("    rell file: ${File(args.rellFile).absolutePath}")
-    log.info("    test file: ${File(args.testFile).absolutePath}")
+    log.info("    source directory: ${target.sourcePath.absolutePath}")
+    log.info("    module:           ${args.module}")
+    log.info("    test file:        ${File(args.testFile).absolutePath}")
     log.info("    node config file: ${File(args.nodeConfigFile).absolutePath}")
-    log.info("    source directory: ${if (args.sourceDir == null) "" else File(args.sourceDir).absolutePath}")
-    log.info("    blockchain RID: ${args.blockchainRid}")
+    log.info("    blockchain RID:   ${args.blockchainRid}")
     log.info("")
 
-    val (sourceDir, sourcePath) = RellCliUtils.getSourceDirAndPath(args.sourceDir, args.rellFile)
-    RellCliUtils.compileModule(sourceDir, sourcePath, true)
+    val configGen = RellConfigGen.create(target)
 
     val nodeAppConf = AppConfig.fromPropertiesFile(args.nodeConfigFile)
     val nodeConfPro = NodeConfigurationProviderFactory.createProvider(nodeAppConf)
     val nodeConf = nodeConfPro.getConfiguration()
     val template = RunPostchainApp.genBlockchainConfigTemplate(nodeConf.pubKeyByteArray)
-    val bcConf = RellConfigGen.makeConfig(sourceDir, sourcePath, template)
+    val bcConf = configGen.makeConfig(template)
 
     val tests = File(args.testFile).readText()
 
@@ -98,8 +97,8 @@ private fun processResult(res: TestLauncher.TestOutput) {
     }
 }
 
-@CommandLine.Command(name = "PostchainTestLauncher", description = ["Runs a Rell Postchain test"])
-private class RunPostchainTestArgs {
+@CommandLine.Command(name = "PostchainTestLaunch", description = ["Runs a Rell Postchain test"])
+private class RunPostchainTestArgs: RellBaseCliArgs() {
     @CommandLine.Option(names = ["--node-config"], paramLabel =  "NODE_CONFIG_FILE", required = true,
             description =  ["Node configuration (.properties)"])
     var nodeConfigFile: String = ""
@@ -108,12 +107,8 @@ private class RunPostchainTestArgs {
             description =  ["Blockchain RID (hex, 32 bytes)"])
     var blockchainRid: String = ""
 
-    @CommandLine.Option(names = ["--source-dir"], paramLabel =  "SOURCE_DIR",
-            description =  ["Source directory used to resolve absolute include paths (default: the directory of the Rell file)"])
-    var sourceDir: String? = null
-
-    @CommandLine.Parameters(index = "0", paramLabel = "RELL_FILE", description = ["Rell main file"])
-    var rellFile: String = ""
+    @CommandLine.Parameters(index = "0", paramLabel = "MODULE", description = ["Module name"])
+    var module: String = ""
 
     @CommandLine.Parameters(index = "1", paramLabel = "TEST_FILE", description = ["Test file (XML)"])
     var testFile: String = ""

@@ -1,21 +1,24 @@
 package net.postchain.rell.test
 
 import com.google.common.collect.HashMultimap
-import com.google.common.io.Files
 import net.postchain.gtv.Gtv
 import net.postchain.rell.CommonUtils
 import net.postchain.rell.PostchainUtils
+import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_Class
 import net.postchain.rell.model.R_ExternalParam
-import net.postchain.rell.model.R_Module
+import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.module.RELL_VERSION
-import net.postchain.rell.parser.C_Message
+import net.postchain.rell.parser.*
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_Value
-import net.postchain.rell.sql.ROWID_COLUMN
+import net.postchain.rell.sql.SqlConstants
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.sql.SqlUtils
+import net.postchain.rell.toImmMap
+import net.postchain.rell.tools.api.IdeCodeSnippet
+import net.postchain.rell.tools.api.IdeSnippetMessage
 import org.apache.commons.configuration2.PropertiesConfiguration
 import org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder
 import org.apache.commons.configuration2.builder.fluent.Parameters
@@ -29,7 +32,7 @@ import java.sql.ResultSet
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
-class RellTestModule(val rModule: R_Module, val messages: List<C_Message>)
+class T_App(val rApp: R_App, val messages: List<C_Message>)
 
 object SqlTestUtils {
     fun createSqlConnection(schema: String? = null): Connection {
@@ -40,7 +43,16 @@ object SqlTestUtils {
             url += (if ("?" in url) "&" else "?") + "currentSchema=$schema"
         }
 
-        return DriverManager.getConnection(url, prop.user, prop.password)
+        val con = DriverManager.getConnection(url, prop.user, prop.password)
+        var resource: AutoCloseable? = con
+        try {
+            freeDiskSpace(con)
+            resource = null
+        } finally {
+            resource?.close()
+        }
+
+        return con
     }
 
     private fun readDbProperties(): DbConnProps {
@@ -68,6 +80,20 @@ object SqlTestUtils {
 
     private data class DbConnProps(val url: String, val user: String, val password: String)
 
+    private var freeDiskSpace = true
+
+    // When running all tests multiple times in a row, sometimes Postgres starts failing with "no space left on device"
+    // error. Executing VACUUM shall fix this.
+    // https://www.postgresql.org/docs/current/sql-vacuum.html
+    // https://dba.stackexchange.com/questions/37028/vacuum-returning-disk-space-to-operating-system
+    private fun freeDiskSpace(con: Connection) {
+        if (!freeDiskSpace) return
+        freeDiskSpace = false
+        con.createStatement().use { stmt ->
+            stmt.execute("VACUUM;")
+        }
+    }
+
     fun resetRowid(sqlExec: SqlExecutor, chainMapping: Rt_ChainSqlMapping) {
         val table = chainMapping.rowidTable
         sqlExec.execute("""UPDATE "$table" SET last_value = 0;""")
@@ -83,19 +109,19 @@ object SqlTestUtils {
 
     fun mkins(table: String, columns: String, values: String): String {
         val quotedColumns = columns.split(",").joinToString { "\"$it\"" }
-        return "INSERT INTO \"$table\"(\"$ROWID_COLUMN\",$quotedColumns) VALUES ($values);"
+        return "INSERT INTO \"$table\"(\"${SqlConstants.ROWID_COLUMN}\",$quotedColumns) VALUES ($values);"
     }
 
-    fun dumpDatabaseClasses(sqlExec: SqlExecutor, chainMapping: Rt_ChainSqlMapping, module: R_Module): List<String> {
+    fun dumpDatabaseClasses(sqlExec: SqlExecutor, chainMapping: Rt_ChainSqlMapping, app: R_App): List<String> {
         val list = mutableListOf<String>()
 
-        for (cls in module.classes.values) {
+        for (cls in app.classes) {
             if (cls.sqlMapping.autoCreateTable()) {
                 dumpClass(sqlExec, chainMapping, cls, list)
             }
         }
 
-        for (obj in module.objects.values) {
+        for (obj in app.objects) {
             dumpClass(sqlExec, chainMapping, obj.rClass, list)
         }
 
@@ -106,7 +132,7 @@ object SqlTestUtils {
         val table = cls.sqlMapping.table(chainMapping)
         val cols = listOf(cls.sqlMapping.rowidColumn()) + cls.attributes.values.map { it.sqlMapping }
         val sql = getTableDumpSql(table, cols, cls.sqlMapping.rowidColumn())
-        val rows = dumpSql(sqlExec, sql).map { "${cls.name}($it)" }
+        val rows = dumpSql(sqlExec, sql).map { "${cls.moduleLevelName}($it)" }
         list += rows
     }
 
@@ -159,9 +185,9 @@ object SqlTestUtils {
         val struct = dumpTablesStructure(con)
         for ((table, attrs) in struct) {
             val columns = attrs.keys.toMutableList()
-            val rowid = columns.remove(ROWID_COLUMN)
-            if (rowid) columns.add(0, ROWID_COLUMN)
-            val sql = getTableDumpSql(table, columns, if (rowid) ROWID_COLUMN else null)
+            val rowid = columns.remove(SqlConstants.ROWID_COLUMN)
+            if (rowid) columns.add(0, SqlConstants.ROWID_COLUMN)
+            val sql = getTableDumpSql(table, columns, if (rowid) SqlConstants.ROWID_COLUMN else null)
             val rows = dumpSql(sqlExec, sql)
             res[table] = rows
         }
@@ -229,21 +255,52 @@ object GtvTestUtils {
     }
 }
 
-object TestSourcesRecorder {
+object TestSnippetsRecorder {
     private val ENABLED = false
-    private val SOURCES_FILE: String = System.getProperty("user.home") + "/testsources-$RELL_VERSION.rell"
+    private val SOURCES_FILE: String = System.getProperty("user.home") + "/testsources-$RELL_VERSION.zip"
 
     private val sync = Any()
-    private val sources = mutableMapOf<String, String>()
+    private val snippets = mutableListOf<IdeCodeSnippet>()
     private var shutdownHookInstalled = false
 
-    fun addSource(code: String, result: String) {
+    fun record(
+            sourceDir: C_SourceDir,
+            modules: List<R_ModuleName>,
+            options: C_CompilerOptions,
+            res: C_CompilationResult
+    ) {
         if (!ENABLED) return
 
+        val files = sourceDirToMap(sourceDir)
+        val messages = res.messages.map { IdeSnippetMessage(it.pos.str(), it.type, it.code, it.text) }
+        val parsing = makeParsing(files)
+
+        val snippet = IdeCodeSnippet(files, modules.map { it.str() }, options, messages, parsing)
+        addSnippet(snippet)
+    }
+
+    private fun makeParsing(files: Map<String, String>): Map<String, List<IdeSnippetMessage>> {
+        val res = mutableMapOf<String, List<IdeSnippetMessage>>()
+
+        for ((file, code) in files) {
+            val path = C_SourcePath.parse(file)
+            val messages = try {
+                C_Parser.parse(path, code)
+                listOf<IdeSnippetMessage>()
+            } catch (e: C_Error) {
+                listOf(IdeSnippetMessage(e.pos.str(), C_MessageType.ERROR, e.code, e.errMsg))
+            }
+            res[file] = messages
+        }
+
+        return res.toImmMap()
+    }
+
+    private fun addSnippet(snippet: IdeCodeSnippet) {
         synchronized (sync) {
-            sources[code.trim()] = result
+            snippets.add(snippet)
             if (!shutdownHookInstalled) {
-                val thread = Thread(TestSourcesRecorder::saveSources)
+                val thread = Thread(TestSnippetsRecorder::saveSources)
                 thread.name = "SaveSources"
                 thread.isDaemon = false
                 Runtime.getRuntime().addShutdownHook(thread)
@@ -252,45 +309,55 @@ object TestSourcesRecorder {
         }
     }
 
-    private fun saveSources() {
-        synchronized (sync) {
-            saveSourcesSingleFile(File(SOURCES_FILE))
-            saveSourcesZipFile(File(SOURCES_FILE + ".zip"))
+    private fun sourceDirToMap(sourceDir: C_SourceDir): Map<String, String> {
+        val map = mutableMapOf<C_SourcePath, String>()
+        sourceDirToMap0(sourceDir, C_SourcePath(), map)
+        return map.mapKeys { (k, _) -> k.str() }.toImmMap()
+    }
+
+    private fun sourceDirToMap0(sourceDir: C_SourceDir, path: C_SourcePath, map: MutableMap<C_SourcePath, String>) {
+        for (file in sourceDir.files(path)) {
+            val subPath = path.add(file)
+            check(subPath !in map) { "File already in the map: $subPath" }
+            val text = sourceDir.file(subPath)!!.readText()
+            map[subPath] = text
+        }
+
+        for (dir in sourceDir.dirs(path)) {
+            val subPath = path.add(dir)
+            sourceDirToMap0(sourceDir, subPath, map)
         }
     }
 
-    private fun saveSourcesSingleFile(f: File) {
-        val buf = StringBuilder()
-        for ((code, result) in sources) {
-            if (result == "OK") {
-                buf.append(code + "\n")
+    private fun saveSources() {
+        synchronized (sync) {
+            try {
+                saveSourcesZipFile(File(SOURCES_FILE))
+            } catch (e: Throwable) {
+                System.err.println("Snippets saving failed")
+                e.printStackTrace()
             }
         }
-        Files.write(buf.toString(), f, Charsets.UTF_8)
-        printNotice(sources.size, f)
     }
 
     private fun saveSourcesZipFile(f: File) {
         FileOutputStream(f).use { fout ->
             ZipOutputStream(fout).use { zout ->
                 var i = 0
-                for ((code, result) in sources) {
-                    val str = codeToString(code, result)
-                    zout.putNextEntry(ZipEntry(String.format("%04d.rell", i)))
+                for (snippet in snippets) {
+                    val str = snippet.serialize()
+                    IdeCodeSnippet.deserialize(str) // Verification
+                    zout.putNextEntry(ZipEntry(String.format("%04d.json", i)))
                     zout.write(str.toByteArray())
                     i++
                 }
             }
         }
-        printNotice(sources.size, f)
-    }
-
-    private fun codeToString(code: String, result: String): String {
-        return "$code\n--==[RESULT]==--\n$result"
+        printNotice(snippets.size, f)
     }
 
     private fun printNotice(count: Int, f: File) {
-        println("Test sources ($count) written to file: $f")
+        println("Test snippets ($count) written to file: $f")
     }
 }
 
@@ -324,13 +391,6 @@ class RellTestEval() {
             return result(p)
         } else {
             return code()
-        }
-    }
-
-    fun <T> wrap(code: () -> T): T {
-        check(wrapping)
-        return wrapRt {
-            wrapCt(code)
         }
     }
 

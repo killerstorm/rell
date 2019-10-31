@@ -24,14 +24,14 @@ class OperatorsDbTest: OperatorsBaseTest() {
 
     private val defaultValues = dataAttrs
             .flatMap { attr -> ( 1 .. dataAttrCount ).map { Pair(attr, it) } }
-            .map { (attr, i) -> ""
+            .map { (attr, i) ->
                 val (field, _, value) = attr
                 Pair(field + i, value)
             }
             .toMap()
 
     private val typeToField = dataAttrs
-            .map { attr -> ""
+            .map { attr ->
                 val (field, type, _) = attr
                 Pair(type, field)
             }
@@ -39,7 +39,7 @@ class OperatorsDbTest: OperatorsBaseTest() {
 
     private val dataAttrDefs = dataAttrs
             .flatMap { attr -> ( 1 .. dataAttrCount ).map { Pair(attr, it) } }
-            .map { (attr, i) -> ""
+            .map { (attr, i) ->
                 val (field, type, _) = attr
                 "$field$i: $type;"
             }
@@ -116,7 +116,7 @@ class OperatorsDbTest: OperatorsBaseTest() {
 
     private fun calc(values: Map<String, String>, code: String): String {
         tst.inserts = makeInserts(values)
-        return tst.callQuery("query q() $code", listOf())
+        return tst.callQuery("query q() $code", "q", listOf())
     }
 
     private fun makeValues(args: List<Pair<String, String>>): Map<String, String> {

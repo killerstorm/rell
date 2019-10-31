@@ -3,6 +3,66 @@ package net.postchain.rell.parser
 import net.postchain.rell.model.*
 import org.apache.commons.collections4.multimap.ArrayListValuedHashMap
 
+
+abstract class C_GlobalFunction {
+    abstract fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr
+}
+
+abstract class C_RegularGlobalFunction: C_GlobalFunction() {
+    abstract fun compileCallRegular(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Expr
+
+    override final fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
+        val cArgs = compileArgs(ctx, args)
+        return compileCallRegular(ctx, name, cArgs)
+    }
+
+    companion object {
+        fun compileArgs(ctx: C_ExprContext, args: List<S_NameExprPair>): List<C_Value> {
+            val namedArg = args.map { it.name }.filterNotNull().firstOrNull()
+            if (namedArg != null) {
+                val argName = namedArg.str
+                throw C_Error(namedArg.pos, "expr_call_namedarg:$argName", "Named function arguments not supported")
+            }
+
+            val cArgs = args.map {
+                val sArg = it.expr
+                val cArg = sArg.compile(ctx).value()
+                val type = cArg.type()
+                C_Utils.checkUnitType(sArg.startPos, type, "expr_arg_unit", "Argument expression returns nothing")
+                cArg
+            }
+
+            return cArgs
+        }
+    }
+}
+
+class C_RecordGlobalFunction(private val record: R_Record): C_GlobalFunction() {
+    override fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
+        return compileCall(record, ctx, name, args)
+    }
+
+    companion object {
+        fun compileCall(record: R_Record, ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
+            val attrs = C_AttributeResolver.resolveCreate(ctx, record.attributes, args, name.pos)
+            val rExpr = R_RecordExpr(record, attrs.rAttrs)
+            return C_RValue.makeExpr(name.pos, rExpr, attrs.exprFacts)
+        }
+    }
+}
+
+class C_UserGlobalFunction(private val rFunction: R_Function): C_RegularGlobalFunction() {
+    override fun compileCallRegular(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Expr {
+        val type = rFunction.type()
+        val params = rFunction.params()
+        val effArgs = C_FuncUtils.checkArgs(name, params, args)
+        val rArgs = effArgs.map { it.toRExpr() }
+        val rExpr = R_UserCallExpr(type, rFunction, rArgs)
+        val exprFacts = C_ExprVarFacts.forSubExpressions(args)
+        return C_RValue.makeExpr(name.pos, rExpr, exprFacts)
+    }
+}
+
 sealed class C_ArgTypeMatcher {
     abstract fun match(type: R_Type): C_ArgTypeMatch?
 }
@@ -82,15 +142,15 @@ class C_ArgTypesMatch(private val match: List<C_ArgTypeMatch>) {
 }
 
 sealed class C_FuncCaseCtx {
-    abstract val fullName: S_Name
+    abstract val fullName: S_String
 }
 
 class C_GlobalFuncCaseCtx(name: S_Name): C_FuncCaseCtx() {
-    override val fullName = name
+    override val fullName = S_String(name)
 }
 
 class C_MemberFuncCaseCtx(val member: C_MemberRef): C_FuncCaseCtx() {
-    override val fullName = S_Name(member.name.pos, member.qualifiedName())
+    override val fullName = S_String(member.name.pos, member.qualifiedName())
 }
 
 abstract class C_FuncCase<CtxT: C_FuncCaseCtx> {
@@ -138,16 +198,16 @@ class C_DeprecatedFuncCase<CtxT: C_FuncCaseCtx>(
 
         private fun deprecatedMessage(ctx: C_ExprContext, caseCtx: CtxT) {
             val name = caseCtx.fullName
-            C_Def.deprecatedMessage(ctx.blkCtx.entCtx.nsCtx, C_DefType.FUNCTION, name.pos, name.str, deprecated)
+            C_Def.deprecatedMessage(ctx.modCtx, C_DefType.FUNCTION, name.pos, name.str, deprecated)
         }
     }
 }
 
 abstract class C_BasicGlobalFuncCaseMatch(private val args: List<C_Value>): C_GlobalFuncCaseMatch() {
-    abstract fun compileCallExpr(name: S_Name, args: List<R_Expr>): R_Expr
+    abstract fun compileCallExpr(fullName: S_String, args: List<R_Expr>): R_Expr
 
-    open fun compileCallDbExpr(name: S_Name, args: List<Db_Expr>): Db_Expr {
-        throw C_Errors.errFunctionNoSql(name.pos, name.str)
+    open fun compileCallDbExpr(fullName: S_String, args: List<Db_Expr>): Db_Expr {
+        throw C_Errors.errFunctionNoSql(fullName.pos, fullName.str)
     }
 
     final override fun compileCall(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): C_Value {
@@ -162,25 +222,25 @@ abstract class C_BasicGlobalFuncCaseMatch(private val args: List<C_Value>): C_Gl
         fun compileCall(
                 caseCtx: C_GlobalFuncCaseCtx,
                 args: List<C_Value>,
-                rFactory: (S_Name, List<R_Expr>) -> R_Expr
+                rFactory: (S_String, List<R_Expr>) -> R_Expr
         ): C_Value {
-            val name = caseCtx.fullName
+            val fullName = caseCtx.fullName
             val rArgs = args.map { it.toRExpr() }
-            val rExpr = rFactory(name, rArgs)
+            val rExpr = rFactory(fullName, rArgs)
             val facts = C_ExprVarFacts.forSubExpressions(args)
-            return C_RValue(name.pos, rExpr, facts)
+            return C_RValue(fullName.pos, rExpr, facts)
         }
 
         fun compileCallDb(
                 caseCtx: C_GlobalFuncCaseCtx,
                 args: List<C_Value>,
-                dbFactory: (S_Name, List<Db_Expr>) -> Db_Expr
+                dbFactory: (S_String, List<Db_Expr>) -> Db_Expr
         ): C_Value {
-            val name = caseCtx.fullName
+            val fullName = caseCtx.fullName
             val dbArgs = args.map { it.toDbExpr() }
-            val dbExpr = dbFactory(name, dbArgs)
+            val dbExpr = dbFactory(fullName, dbArgs)
             val facts = C_ExprVarFacts.forSubExpressions(args)
-            return C_DbValue(name.pos, dbExpr, facts)
+            return C_DbValue(fullName.pos, dbExpr, facts)
         }
     }
 }
@@ -248,7 +308,7 @@ class C_SysGlobalFormalParamsFuncBody(
             throw C_Errors.errFunctionNoSql(name.pos, name.str)
         }
 
-        return C_BasicGlobalFuncCaseMatch.compileCallDb(caseCtx, args) { name, dbArgs ->
+        return C_BasicGlobalFuncCaseMatch.compileCallDb(caseCtx, args) { _, dbArgs ->
             Db_CallExpr(type, dbFn, dbArgs)
         }
     }

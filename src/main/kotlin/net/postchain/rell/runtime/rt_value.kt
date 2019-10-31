@@ -2,7 +2,6 @@ package net.postchain.rell.runtime
 
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.google.common.collect.Iterables
 import com.google.common.math.LongMath
 import mu.KLogging
 import net.postchain.gtv.Gtv
@@ -326,7 +325,7 @@ class Rt_VirtualListValue(
     }
 
     override fun size() = elements.size
-    override fun iterable() = Iterables.filter(elements) { it != null } as Iterable<Rt_Value>
+    override fun iterable() = elements.filterNotNull()
 
     fun contains(index: Long) = index >= 0 && index < elements.size && elements[index.toInt()] != null
 
@@ -373,7 +372,7 @@ class Rt_VirtualSetValue(
     override fun hashCode() = elements.hashCode()
 
     override fun toFull0(): Rt_Value {
-        val resElements = elements.map { toFull(it!!) }.toMutableSet()
+        val resElements = elements.map { toFull(it) }.toMutableSet()
         return Rt_SetValue(type.innerType, resElements)
     }
 
@@ -420,8 +419,8 @@ class Rt_VirtualMapValue(
 
     override fun toFull0(): Rt_Value {
         val resMap = map
-                .mapKeys { (k, v) -> toFull(k) }
-                .mapValues { (k, v) -> toFull(v) }
+                .mapKeys { (k, _) -> toFull(k) }
+                .mapValues { (_, v) -> toFull(v) }
                 .toMutableMap()
         return Rt_MapValue(type.innerType, resMap)
     }
@@ -511,8 +510,8 @@ class Rt_RecordValue(private val type: R_RecordType, private val attributes: Mut
     override fun equals(other: Any?) = other is Rt_RecordValue && attributes == other.attributes
     override fun hashCode() = type.hashCode() * 31 + attributes.hashCode()
 
-    override fun toString() = toString(type, attributes)
-    override fun toStrictString(showTupleFieldNames: Boolean) = toStrictString(type, type, attributes)
+    override fun toString() = toString(type.record, attributes)
+    override fun toStrictString(showTupleFieldNames: Boolean) = toStrictString(type, type.record, attributes)
 
     fun get(index: Int): Rt_Value {
         return attributes[index]
@@ -523,22 +522,22 @@ class Rt_RecordValue(private val type: R_RecordType, private val attributes: Mut
     }
 
     companion object {
-        fun toString(type: R_RecordType, attributes: List<out Rt_Value?>): String {
+        fun toString(record: R_Record, attributes: List<out Rt_Value?>): String {
             val attrs = attributes.withIndex().joinToString(",") { (i, attr) ->
-                val n = type.attributesList[i].name
+                val n = record.attributesList[i].name
                 val v = attr?.toString()
                 "$n=$v"
             }
-            return "${type.name}{$attrs}"
+            return "${record.appLevelName}{$attrs}"
         }
 
-        fun toStrictString(type: R_Type, recordType: R_RecordType, attributes: List<out Rt_Value?>): String {
-            val attrs = attributes.indices.joinToString(",") {attributeToStrictString(recordType, attributes, it) }
+        fun toStrictString(type: R_Type, record: R_Record, attributes: List<out Rt_Value?>): String {
+            val attrs = attributes.indices.joinToString(",") { attributeToStrictString(record, attributes, it) }
             return "${type.name}[$attrs]"
         }
 
-        private fun attributeToStrictString(type: R_RecordType, attributes: List<out Rt_Value?>, idx: Int): String {
-            val name = type.attributesList[idx].name
+        private fun attributeToStrictString(record: R_Record, attributes: List<out Rt_Value?>, idx: Int): String {
+            val name = record.attributesList[idx].name
             val value = attributes[idx]
             val valueStr = value?.toStrictString()
             return "$name=$valueStr"
@@ -558,15 +557,15 @@ class Rt_VirtualRecordValue(
     override fun equals(other: Any?) = other is Rt_VirtualRecordValue && attributes == other.attributes
     override fun hashCode() = type.hashCode() * 31 + attributes.hashCode()
 
-    override fun toString() = Rt_RecordValue.toString(type.innerType, attributes)
+    override fun toString() = Rt_RecordValue.toString(type.innerType.record, attributes)
     override fun toStrictString(showTupleFieldNames: Boolean) =
-            Rt_RecordValue.toStrictString(type, type.innerType, attributes)
+            Rt_RecordValue.toStrictString(type, type.innerType.record, attributes)
 
     fun get(index: Int): Rt_Value {
         val value = attributes[index]
         if (value == null) {
             val typeName = type.innerType.name
-            val attr = type.innerType.attributesList[index].name
+            val attr = type.innerType.record.attributesList[index].name
             throw Rt_Error("virtual_record:get:novalue:$typeName:$attr", "Attribute '$typeName.$attr' has no value")
         }
         return value

@@ -2,13 +2,99 @@ package net.postchain.rell.parser
 
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.toImmMap
+import org.apache.commons.lang3.StringUtils
+
+sealed class C_Deprecated {
+    abstract fun detailsCode(): String
+    abstract fun detailsMessage(): String
+}
+
+class C_Deprecated_UseInstead(private val name: String): C_Deprecated() {
+    override fun detailsCode() = ":$name"
+    override fun detailsMessage() = ", use '$name' instead"
+}
+
+enum class C_DefType(val description: String) {
+    MODULE("module"),
+    NAMESPACE("namespace"),
+    TYPE("type"),
+    CLASS("class"),
+    RECORD("record"),
+    ENUM("enum"),
+    OBJECT("object"),
+    FUNCTION("function"),
+    OPERATION("operation"),
+    QUERY("query"),
+    EXTERNAL("external"),
+    IMPORT("import")
+}
+
+abstract class C_Def<T>(private val type: C_DefType, private val deprecated: C_Deprecated?) {
+    protected abstract fun def(): T
+
+    fun useDef(modCtx: C_ModuleContext, name: List<S_Name>): T {
+        if (deprecated != null) {
+            val simpleName = name.last()
+            deprecatedMessage(modCtx, type, simpleName.pos, simpleName.str, deprecated)
+        }
+        val res = def()
+        return res
+    }
+
+    companion object {
+        fun deprecatedMessage(
+                modCtx: C_ModuleContext,
+                type: C_DefType,
+                pos: S_Pos,
+                name: String,
+                deprecated: C_Deprecated
+        ) {
+            val typeStr = StringUtils.capitalize(type.description)
+            val depCode = deprecated.detailsCode()
+            val depStr = deprecated.detailsMessage()
+            val code = "deprecated:$type:$name$depCode"
+            val msg = "$typeStr '$name' is deprecated$depStr"
+            val globalCtx = modCtx.globalCtx
+            val msgType = if (globalCtx.compilerOptions.deprecatedError) C_MessageType.ERROR else C_MessageType.WARNING
+            globalCtx.message(msgType, pos, code, msg)
+        }
+    }
+}
+
+class C_TypeDef(private val type: R_Type, deprecated: C_Deprecated? = null)
+    : C_Def<R_Type>(C_DefType.TYPE, deprecated)
+{
+    override fun def() = type
+}
+
+abstract class C_NamespaceDef(deprecated: C_Deprecated?): C_Def<C_Namespace>(C_DefType.NAMESPACE, deprecated)
+
+class C_RegularNamespaceDef(private val namespace: C_Namespace, deprecated: C_Deprecated? = null)
+    : C_NamespaceDef(deprecated)
+{
+    override fun def() = namespace
+}
+
+class C_ImportNamespaceDef(private val module: C_Module): C_NamespaceDef(null) {
+    override fun def() = module.content().namespace
+}
 
 class C_Namespace(
-        val namespaces: Map<String, C_NamespaceDef>,
-        val types: Map<String, C_TypeDef>,
-        val values: Map<String, C_NamespaceValue>,
-        val functions: Map<String, C_GlobalFunction>
-)
+        namespaces: Map<String, C_NamespaceDef>,
+        types: Map<String, C_TypeDef>,
+        values: Map<String, C_NamespaceValue>,
+        functions: Map<String, C_GlobalFunction>
+) {
+    val namespaces = namespaces.toImmMap()
+    val types = types.toImmMap()
+    val values = values.toImmMap()
+    val functions = functions.toImmMap()
+
+    companion object {
+        val EMPTY = C_Namespace(namespaces = mapOf(), types = mapOf(), values = mapOf(), functions = mapOf())
+    }
+}
 
 class C_NamespaceBuilder {
     private val namespaces = mutableMapOf<String, C_NamespaceDef>()
@@ -69,7 +155,7 @@ class C_NamespaceValue_Class(private val typeDef: C_TypeDef): C_NamespaceValue()
     override fun get(entCtx: C_EntityContext, name: List<S_Name>) = C_TypeNameExpr(name.last().pos, name, typeDef)
 }
 
-class C_NamespaceValue_Enum(private val rEnum: R_EnumType): C_NamespaceValue() {
+class C_NamespaceValue_Enum(private val rEnum: R_Enum): C_NamespaceValue() {
     override fun get(entCtx: C_EntityContext, name: List<S_Name>) = C_EnumExpr(name, rEnum)
 }
 
@@ -79,15 +165,11 @@ class C_NamespaceValue_Namespace(private val nsDef: C_NamespaceDef): C_Namespace
 
 class C_NamespaceValue_Object(private val rObject: R_Object): C_NamespaceValue() {
     override fun get(entCtx: C_EntityContext, name: List<S_Name>): C_Expr {
-        if (rObject.entityIndex >= entCtx.entityIndex && entCtx.entityType == C_EntityType.OBJECT) {
-            val nameStr = C_Utils.nameStr(name)
-            throw C_Error(name[0].pos, "object_fwdref:$nameStr", "Object '$nameStr' must be defined before using")
-        }
         return C_ObjectExpr(name, rObject)
     }
 }
 
-class C_NamespaceValue_Record(private val record: R_RecordType): C_NamespaceValue() {
+class C_NamespaceValue_Record(private val record: R_Record): C_NamespaceValue() {
     override fun get(entCtx: C_EntityContext, name: List<S_Name>): C_Expr {
         val nsDef = C_LibFunctions.makeRecordNamespace(record)
         return C_RecordExpr(name, record, nsDef)

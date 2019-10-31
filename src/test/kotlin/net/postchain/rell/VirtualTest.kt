@@ -663,8 +663,8 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     private fun chkListElementType(type: String, arg: String, expected: String) {
-        val arg = argToGtv(arg, "[[0],[1]]")
-        chkVirtual("virtual<list<$type>>", "_strict_str(x)", arg, "'virtual<list<$type>>[$expected]'")
+        val gtvArg = argToGtv(arg, "[[0],[1]]")
+        chkVirtual("virtual<list<$type>>", "_strict_str(x)", gtvArg, "'virtual<list<$type>>[$expected]'")
     }
 
     @Test fun testSetType() {

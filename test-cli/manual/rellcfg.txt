@@ -1,0 +1,185 @@
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rellcfg.sh -d test-cli/src stair
+
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<dict>
+    <entry key="gtx">
+        <dict>
+            <entry key="rell">
+                <dict>
+                    <entry key="modules">
+                        <array>
+                            <string>stair</string>
+                        </array>
+                    </entry>
+                    <entry key="sources_v0.9">
+                        <dict>
+                            <entry key="stair.rell">
+                                <string>module;
+
+query stairq(n: integer) {
+    stairf(n);
+    return 0;
+}
+
+function stairf(n: integer) {
+    var i = 0;
+    while (i &lt; n) {
+        var j = 0;
+        var s = "";
+        while (j &lt; i) {
+            s = s + " ";
+            j = j + 1;
+        }
+        s = s + i.str();
+        print(s);
+        i = i + 1;
+    }
+}
+</string>
+                            </entry>
+                        </dict>
+                    </entry>
+                </dict>
+            </entry>
+        </dict>
+    </entry>
+</dict>
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rellcfg.sh -d test-cli/src mod
+
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<dict>
+    <entry key="gtx">
+        <dict>
+            <entry key="rell">
+                <dict>
+                    <entry key="modules">
+                        <array>
+                            <string>mod</string>
+                        </array>
+                    </entry>
+                    <entry key="sources_v0.9">
+                        <dict>
+                            <entry key="mod/module.rell">
+                                <string>module;
+
+import .sub.helper;
+
+operation main() {
+    print('This is main!');
+    helper.helper();
+}
+</string>
+                            </entry>
+                            <entry key="mod/sub/helper.rell">
+                                <string>module;
+
+import ^.support;
+
+function helper() {
+    print('And this is helper!');
+    support.support();
+}
+
+query q() = 'Hello!';
+</string>
+                            </entry>
+                            <entry key="mod/sub/support.rell">
+                                <string>module;
+
+function support() {
+    print('Hello from support!');
+}
+</string>
+                            </entry>
+                        </dict>
+                    </entry>
+                </dict>
+            </entry>
+        </dict>
+    </entry>
+</dict>
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rellcfg.sh -d test-cli/src mod.complex.foo
+
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<dict>
+    <entry key="gtx">
+        <dict>
+            <entry key="rell">
+                <dict>
+                    <entry key="modules">
+                        <array>
+                            <string>mod.complex.foo</string>
+                        </array>
+                    </entry>
+                    <entry key="sources_v0.9">
+                        <dict>
+                            <entry key="mod/complex/bar/bar.rell">
+                                <string>import ^.sub;
+
+function bar() {
+    log('bar start');
+    sub.helper();
+    log('bar end');
+}
+</string>
+                            </entry>
+                            <entry key="mod/complex/foo/foo.rell">
+                                <string>import ^.bar;
+
+operation foo() {
+    log('foo start');
+    bar.bar();
+    log('foo end');
+}
+</string>
+                            </entry>
+                            <entry key="mod/complex/sub/helper.rell">
+                                <string>function helper() {
+    log('helper');
+}
+</string>
+                            </entry>
+                            <entry key="mod/module.rell">
+                                <string>module;
+
+import .sub.helper;
+
+operation main() {
+    print('This is main!');
+    helper.helper();
+}
+</string>
+                            </entry>
+                            <entry key="mod/sub/helper.rell">
+                                <string>module;
+
+import ^.support;
+
+function helper() {
+    print('And this is helper!');
+    support.support();
+}
+
+query q() = 'Hello!';
+</string>
+                            </entry>
+                            <entry key="mod/sub/support.rell">
+                                <string>module;
+
+function support() {
+    print('Hello from support!');
+}
+</string>
+                            </entry>
+                        </dict>
+                    </entry>
+                </dict>
+            </entry>
+        </dict>
+    </entry>
+</dict>
