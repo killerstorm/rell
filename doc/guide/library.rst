@@ -27,7 +27,7 @@ It is not possible to create, modify or delete objects of those classes in code.
 chain_context
 -------------
 
-``chain_context.args: module_args`` - module arguments specified in ``raw_config`` under path ``gtx.rellModuleArgs``.
+``chain_context.args: module_args`` - module arguments specified in ``raw_config`` under path ``gtx.rell.moduleArgs.<module name>``.
 The type is ``module_args``, which must be a user-defined record. If no ``module_args`` record is defined in the module,
 the ``args`` field cannot be accessed.
 
@@ -65,6 +65,9 @@ Code that reads ``module_args``:
         print(chain_context.args.s);
         print(chain_context.args.n);
     }
+
+Every module can have its own ``module_args``. Reading ``chain_context.args`` returns the args for the current module, and
+the type of ``chain_context.args`` is different for different modules: it is the ``module_args`` record defined in that module.
 
 ``chain_context.blockchain_rid: byte_array`` - blockchain RID
 

@@ -56,6 +56,8 @@ object C_Constants {
             .divide(BigDecimal.TEN.pow(DECIMAL_FRAC_DIGITS))
 }
 
+class C_ExternalParam(val name: S_Name, val rParam: R_ExternalParam)
+
 object C_Utils {
     fun toDbExpr(pos: S_Pos, rExpr: R_Expr): Db_Expr {
         val type = rExpr.type

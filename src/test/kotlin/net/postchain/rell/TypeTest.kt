@@ -121,4 +121,76 @@ class TypeTest: BaseRellTest() {
         chkCompile("function f(x: user): rowid = x.rowid;", "OK")
         chkCompile("function f(x: rowid): user = user @ { .rowid == x };", "OK")
     }
+
+    @Test fun testInferNameLocalVar() {
+        def("record foo { x: integer = 123; }")
+        def("namespace ns { record bar { y: integer = 456; } }")
+
+        chkEx("{ val foo; return _type_of(foo); }", "text[foo]")
+        chkEx("{ val foo?; return _type_of(foo); }", "text[foo?]")
+        chkEx("{ val ns.bar; return _type_of(bar); }", "text[ns.bar]")
+        chkEx("{ val ns.bar?; return _type_of(bar); }", "text[ns.bar?]")
+        chkEx("{ val ns.bar?; bar = ns.bar(); return bar; }", "ns.bar[y=int[456]]")
+
+        chkEx("{ val foo = 123; return foo; }", "int[123]")
+        chkEx("{ val foo = ns.bar(); return foo; }", "ns.bar[y=int[456]]")
+
+        chkEx("{ val foo: integer = 123; return foo; }", "int[123]")
+        chkEx("{ val foo: ns.bar = ns.bar(); return foo; }", "ns.bar[y=int[456]]")
+    }
+
+    @Test fun testInferNameParameter() {
+        def("record foo { x: integer = 123; }")
+        def("namespace ns { record bar { y: integer = 456; } }")
+
+        chkQueryEx("function f(foo): text = _type_of(foo); query q() = f(foo());", "text[foo]")
+        chkQueryEx("function f(foo): foo = foo; query q() = f(foo());", "foo[x=int[123]]")
+        chkQueryEx("function f(foo?): text = _type_of(foo); query q() = f(foo());", "text[foo?]")
+        chkQueryEx("function f(foo?): foo? = foo; query q() = f(foo());", "foo[x=int[123]]")
+
+        chkQueryEx("function f(ns.bar): text = _type_of(bar); query q() = f(ns.bar());", "text[ns.bar]")
+        chkQueryEx("function f(ns.bar): ns.bar = bar; query q() = f(ns.bar());", "ns.bar[y=int[456]]")
+        chkQueryEx("function f(ns.bar?): text = _type_of(bar); query q() = f(ns.bar());", "text[ns.bar?]")
+        chkQueryEx("function f(ns.bar?): ns.bar? = bar; query q() = f(ns.bar());", "ns.bar[y=int[456]]")
+
+        chkQueryEx("function f(foo: integer): text = _type_of(foo); query q() = f(789);", "text[integer]")
+        chkQueryEx("function f(foo: integer): integer = foo; query q() = f(789);", "int[789]")
+        chkQueryEx("function f(foo: ns.bar): text = _type_of(foo); query q() = f(ns.bar());", "text[ns.bar]")
+        chkQueryEx("function f(foo: ns.bar): ns.bar = foo; query q() = f(ns.bar());", "ns.bar[y=int[456]]")
+    }
+
+    @Test fun testInferNameRecordAttr() {
+        def("record foo { x: integer = 123; }")
+        def("namespace ns { record bar { y: integer = 456; } }")
+
+        chkQueryEx("record rec { foo; } query q() = _type_of(rec(foo()).foo);", "text[foo]")
+        chkQueryEx("record rec { foo; } query q() = rec(foo()).foo;", "foo[x=int[123]]")
+        chkQueryEx("record rec { foo?; } query q() = _type_of(rec(foo()).foo);", "text[foo?]")
+        chkQueryEx("record rec { foo?; } query q() = rec(foo()).foo;", "foo[x=int[123]]")
+
+        chkQueryEx("record rec { ns.bar; } query q() = _type_of(rec(ns.bar()).bar);", "text[ns.bar]")
+        chkQueryEx("record rec { ns.bar; } query q() = rec(ns.bar()).bar;", "ns.bar[y=int[456]]")
+        chkQueryEx("record rec { ns.bar?; } query q() = _type_of(rec(ns.bar()).bar);", "text[ns.bar?]")
+        chkQueryEx("record rec { ns.bar?; } query q() = rec(ns.bar()).bar;", "ns.bar[y=int[456]]")
+
+        chkQueryEx("record rec { foo: integer; } query q() = _type_of(rec(789).foo);", "text[integer]")
+        chkQueryEx("record rec { foo: integer; } query q() = rec(789).foo;", "int[789]")
+    }
+
+    @Test fun testInferNameClassAttr() {
+        def("class foo { x: integer = 123; }")
+        def("namespace ns { class bar { y: integer = 456; } }")
+        def("class cls_foo { foo; }")
+        def("class cls_bar { ns.bar; }")
+        def("class mixed { index foo, ns.bar; }")
+
+        chk("_type_of((cls_foo@{}).foo)", "text[foo]")
+        chk("_type_of((cls_bar@{}).bar)", "text[ns.bar]")
+        chk("_type_of((mixed@{}).foo)", "text[foo]")
+        chk("_type_of((mixed@{}).bar)", "text[ns.bar]")
+
+        chkCompile("class bad { foo; index foo; }", "OK")
+        chkCompile("class bad { ns.bar; index ns.bar; }", "ct_err:class_keyindex_def:bar")
+        chkCompile("class bad { ns.bar; index bar; }", "OK")
+    }
 }

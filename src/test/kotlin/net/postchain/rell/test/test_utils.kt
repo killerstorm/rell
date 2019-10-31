@@ -90,7 +90,7 @@ object SqlTestUtils {
         if (!freeDiskSpace) return
         freeDiskSpace = false
         con.createStatement().use { stmt ->
-            stmt.execute("VACUUM;")
+            stmt.execute("VACUUM FULL;")
         }
     }
 

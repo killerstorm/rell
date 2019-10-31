@@ -9,6 +9,8 @@ import net.postchain.rell.toImmMap
 
 @Suppress("UNUSED")
 object IdeApi {
+    const val RELL_VERSION = net.postchain.rell.module.RELL_VERSION
+
     @JvmStatic fun parseSourcePath(s: String): C_SourcePath? {
         return C_SourcePath.parseOpt(s)
     }

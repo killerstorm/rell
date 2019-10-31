@@ -141,9 +141,7 @@ object S_Grammar : Grammar<S_RellFile>() {
 
     private val type: Parser<S_Type> by ( baseType * zeroOrMore(QUESTION) ) map { (base, nulls) ->
         var res = base
-        for (n in nulls) {
-            res = S_NullableType(n.pos, res)
-        }
+        for (n in nulls) res = S_NullableType(n.pos, res)
         res
     }
 
@@ -155,15 +153,26 @@ object S_Grammar : Grammar<S_RellFile>() {
 
     private val modifier: Parser<S_Modifier> by annotation
 
-    private val relAutoField by ( name ) map { S_NameTypePair(it, null) }
-    private val relNamedField by ( name * -COLON * type ) map { (name, type) -> S_NameTypePair(name, type) }
-    private val relField by ( relNamedField or relAutoField )
-    private val relFields by separatedTerms(relField, COMMA, false)
+    private val nameTypeAttrHeader by name * -COLON * type map { (name, type) -> S_NameTypeAttrHeader(name, type) }
+
+    private val anonAttrHeader by fullName * optional(QUESTION) map { (name, nullable) ->
+        if (name.size == 1 && nullable == null) {
+            S_NameAttrHeader(name[0])
+        } else {
+            val type = S_NameType(name)
+            val resultType = if (nullable == null) type else S_NullableType(nullable.pos, type)
+            S_TypeAttrHeader(resultType)
+        }
+    }
+
+    private val attrHeader by ( nameTypeAttrHeader or anonAttrHeader )
+
+    private val relFields by separatedTerms(attrHeader, COMMA, false)
 
     private val relKeyClause by ( KEY * relFields * -SEMI ) map { (kw, attrs) -> S_KeyClause(kw.pos, attrs) }
     private val relIndexClause by ( INDEX * relFields * -SEMI ) map { (kw, attrs) -> S_IndexClause(kw.pos, attrs) }
 
-    private val relAttributeClause by ( optional(MUTABLE) * relField * optional(-ASSIGN * expressionRef) * -SEMI ) map {
+    private val relAttributeClause by ( optional(MUTABLE) * attrHeader * optional(-ASSIGN * expressionRef) * -SEMI ) map {
         ( mutable, field, expr ) ->
         S_AttributeClause(field, mutable != null, expr)
     }
@@ -452,9 +461,7 @@ object S_Grammar : Grammar<S_RellFile>() {
             or ( VAR map { S_PosValue(it, true) } )
     )
 
-    private val simpleVarDeclarator by name * optional( -COLON * type ) map { (name, type) ->
-        S_SimpleVarDeclarator(name, type)
-    }
+    private val simpleVarDeclarator by attrHeader map { S_SimpleVarDeclarator(it) }
 
     private val tupleVarDeclarator by LPAR * separatedTerms(parser(this::varDeclarator), COMMA, false) * -RPAR map {
         (pos, decls) -> S_TupleVarDeclarator(pos.pos, decls)
@@ -565,7 +572,7 @@ object S_Grammar : Grammar<S_RellFile>() {
             or deleteStmt
     )
 
-    private val formalParameters by ( -LPAR * separatedTerms(relField, COMMA, true) * -RPAR )
+    private val formalParameters by ( -LPAR * separatedTerms(attrHeader, COMMA, true) * -RPAR )
 
     private val opDef by ( -OPERATION * name * formalParameters * blockStmt ) map {
         (name, params, body) -> annotatedDef { S_OperationDefinition(it, name, params, body) }

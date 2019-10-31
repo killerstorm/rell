@@ -41,18 +41,20 @@ sealed class S_VarDeclarator {
     abstract fun discoverVars(vars: MutableSet<String>)
 }
 
-class S_SimpleVarDeclarator(val name: S_Name, val type: S_Type?): S_VarDeclarator() {
+class S_SimpleVarDeclarator(private val attrHeader: S_AttrHeader): S_VarDeclarator() {
     override fun compile(ctx: C_ExprContext, mutable: Boolean, rExprType: R_Type?, varFacts: C_MutableVarFacts): R_VarDeclarator {
-        val rType = type?.compile(ctx)
+        val name = attrHeader.compileName()
 
         if (name.str == "_") {
-            if (rType != null) {
+            if (attrHeader.hasExplicitType()) {
                 throw C_Error(name.pos, "var_wildcard_type", "Name '${name.str}' is a wildcard, it cannot have a type")
             }
             return R_WildcardVarDeclarator
         }
 
-        if (type == null && rExprType == null) {
+        val rType = if (attrHeader.hasExplicitType() || rExprType == null) attrHeader.compileType(ctx.entCtx.nsCtx) else null
+
+        if (rType == null && rExprType == null) {
             throw C_Error(name.pos, "stmt_var_notypeexpr:${name.str}", "Neither type nor expression specified for '${name.str}'")
         } else if (rExprType != null) {
             C_Utils.checkUnitType(name.pos, rExprType, "stmt_var_unit:${name.str}", "Expression for '${name.str}' returns nothing")
@@ -82,7 +84,10 @@ class S_SimpleVarDeclarator(val name: S_Name, val type: S_Type?): S_VarDeclarato
     }
 
     override fun discoverVars(vars: MutableSet<String>) {
-        vars.add(name.str)
+        val name = attrHeader.nameOpt()
+        if (name != null) {
+            vars.add(name.str)
+        }
     }
 }
 

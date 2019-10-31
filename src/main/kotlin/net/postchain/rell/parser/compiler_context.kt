@@ -29,11 +29,12 @@ class C_GlobalContext(val compilerOptions: C_CompilerOptions) {
 
     fun messages() = messages.toList()
 
-    fun consumeError(code: () -> Unit) {
+    fun <T> consumeError(code: () -> T): T? {
         try {
-            code()
+            return code()
         } catch (e: C_Error) {
             error(e)
+            return null
         }
     }
 }
@@ -324,11 +325,10 @@ class C_ClassContext(
 
     fun hasAttribute(name: String): Boolean = name in attributes
 
-    fun addAttribute(attr: S_NameTypePair, mutable: Boolean, expr: S_Expr?) {
-        val name = attr.name
+    fun addAttribute(name: S_Name, attr: S_AttrHeader, mutable: Boolean, expr: S_Expr?) {
         val entityType = entCtx.entityType
 
-        val rType = attr.compileType(entCtx.nsCtx)
+        val rType = attr.compileTypeOpt(entCtx.nsCtx)
 
         val nameStr = name.str
         if (nameStr in attributes) {

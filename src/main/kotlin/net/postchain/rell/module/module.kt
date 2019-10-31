@@ -20,12 +20,12 @@ import net.postchain.rell.toImmMap
 import net.postchain.rell.toImmSet
 import org.apache.commons.lang3.time.FastDateFormat
 
-val RELL_LANG_VERSION = "0.10"
-val RELL_VERSION = "0.10.0"
-val RELL_VERSION_MODULE_SYSTEM = "0.10.0"
+const val RELL_LANG_VERSION = "0.10"
+const val RELL_VERSION = "0.10.0"
+const val RELL_VERSION_MODULE_SYSTEM = "0.10.0"
 
-val CONFIG_RELL_FILES = "files_v$RELL_LANG_VERSION"
-val CONFIG_RELL_SOURCES = "sources_v$RELL_LANG_VERSION"
+const val CONFIG_RELL_FILES = "files_v$RELL_LANG_VERSION"
+const val CONFIG_RELL_SOURCES = "sources_v$RELL_LANG_VERSION"
 
 private fun convertArgs(ctx: GtvToRtContext, params: List<R_ExternalParam>, args: List<Gtv>): List<Rt_Value> {
     return args.mapIndexed { index, arg ->

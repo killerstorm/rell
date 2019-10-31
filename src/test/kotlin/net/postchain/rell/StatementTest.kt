@@ -19,7 +19,7 @@ class StatementTest: BaseRellTest() {
     @Test fun testVar() {
         chkEx("{ var x = 123; return x; }", "int[123]")
         chkEx("{ var x = 123; x = 456; return x; }", "int[456]")
-        chkEx("{ var x; }", "ct_err:stmt_var_notypeexpr:x")
+        chkEx("{ var x; }", "ct_err:unknown_name_type:x")
         chkEx("{ var x: integer = 123; return x; }", "int[123]")
         chkEx("{ var x: integer; x = 123; return x; }", "int[123]")
         chkEx("{ var x: integer; x = 'Hello'; return x; }", "ct_err:stmt_assign_type:integer:text")

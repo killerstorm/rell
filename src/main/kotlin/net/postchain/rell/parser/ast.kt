@@ -68,20 +68,52 @@ class S_String(val pos: S_Pos, val str: String): S_Node() {
     override fun toString() = str
 }
 
-class S_NameTypePair(val name: S_Name, val type: S_Type?): S_Node() {
-    fun compileType(ctx: C_NamespaceContext): R_Type? {
-        if (type != null) {
-            return type.compileOpt(ctx)
-        }
+sealed class S_AttrHeader: S_Node() {
+    abstract fun nameOpt(): S_Name?
+    abstract fun hasExplicitType(): Boolean
+    abstract fun compileName(): S_Name
+    abstract fun compileType(ctx: C_NamespaceContext): R_Type
 
+    fun compileTypeOpt(ctx: C_NamespaceContext): R_Type? {
+        return ctx.globalCtx.consumeError { compileType(ctx) }
+    }
+}
+
+class S_NameTypeAttrHeader(private val name: S_Name, private val type: S_Type): S_AttrHeader() {
+    override fun nameOpt() = name
+    override fun hasExplicitType() = true
+    override fun compileName() = name
+    override fun compileType(ctx: C_NamespaceContext) = type.compile(ctx)
+}
+
+class S_NameAttrHeader(private val name: S_Name): S_AttrHeader() {
+    override fun nameOpt() = name
+    override fun hasExplicitType() = false
+    override fun compileName() = name
+
+    override fun compileType(ctx: C_NamespaceContext): R_Type {
         val rType = ctx.getTypeOpt(listOf(name))
         if (rType == null) {
-            ctx.globalCtx.error(name.pos, "unknown_name_type:${name.str}",
-                    "Type for '${name.str}' not specified and no type called '${name.str}'")
+            throw C_Error(name.pos, "unknown_name_type:${name.str}",
+                    "Cannot infer type for '${name.str}'; specify type explicitly")
         }
-
         return rType
     }
+}
+
+class S_TypeAttrHeader(private val type: S_Type): S_AttrHeader() {
+    override fun nameOpt() = type.inferName()
+    override fun hasExplicitType() = true
+
+    override fun compileName(): S_Name {
+        val name = type.inferName()
+        if (name == null) {
+            TODO()
+        }
+        return name
+    }
+
+    override fun compileType(ctx: C_NamespaceContext) = type.compile(ctx)
 }
 
 sealed class S_RelClause: S_Node() {
@@ -90,60 +122,69 @@ sealed class S_RelClause: S_Node() {
     abstract fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder)
 }
 
-class S_AttributeClause(val attr: S_NameTypePair, val mutable: Boolean, val expr: S_Expr?): S_RelClause() {
+class S_AttributeClause(val attr: S_AttrHeader, val mutable: Boolean, val expr: S_Expr?): S_RelClause() {
     override fun compileAttributes(ctx: C_ClassContext) {
-        ctx.addAttribute(attr, mutable, expr)
+        val name = attr.compileName()
+        ctx.addAttribute(name, attr, mutable, expr)
     }
 
     override fun compileRest(ctx: C_ClassContext) {}
 
     override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
-        b.node(this, attr.name, IdeOutlineNodeType.ATTRIBUTE)
+        val name = attr.nameOpt()
+        if (name != null) {
+            b.node(this, name, IdeOutlineNodeType.ATTRIBUTE)
+        }
     }
 }
 
-sealed class S_KeyIndexClause(val pos: S_Pos, val attrs: List<S_NameTypePair>): S_RelClause() {
+sealed class S_KeyIndexClause(val pos: S_Pos, val attrs: List<S_AttrHeader>): S_RelClause() {
     final override fun compileAttributes(ctx: C_ClassContext) {}
 
     abstract fun addToContext(ctx: C_ClassContext, pos: S_Pos, names: List<S_Name>)
 
     final override fun compileRest(ctx: C_ClassContext) {
+        val namedAttrs = attrs.map { Pair(it.compileName(), it) }
+
         val names = mutableSetOf<String>()
-        for (attr in attrs) {
-            if (!names.add(attr.name.str)) {
-                throw C_Error(attr.name.pos, "class_keyindex_dup:${attr.name.str}",
-                        "Duplicate attribute: '${attr.name.str}'")
+        for ((name, _) in namedAttrs) {
+            if (!names.add(name.str)) {
+                throw C_Error(name.pos, "class_keyindex_dup:${name.str}",
+                        "Duplicate attribute: '${name.str}'")
             }
         }
 
-        for (attr in attrs) {
-            if (ctx.hasAttribute(attr.name.str)) {
-                if (attr.type != null) {
-                    throw C_Error(attr.name.pos, "class_keyindex_def:${attr.name.str}",
-                            "Attribute '${attr.name.str}' is defined elsewhere, cannot specify type")
+        for ((name, attr) in namedAttrs) {
+            if (ctx.hasAttribute(name.str)) {
+                if (attr.hasExplicitType()) {
+                    throw C_Error(name.pos, "class_keyindex_def:${name.str}",
+                            "Attribute '${name.str}' is defined elsewhere, cannot specify type")
                 }
             } else {
-                ctx.addAttribute(attr, false, null)
+                ctx.addAttribute(name, attr, false, null)
             }
         }
 
-        addToContext(ctx, pos, attrs.map { it.name })
+        addToContext(ctx, pos, namedAttrs.map { (name, _) -> name })
     }
 
     final override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
         for (attr in attrs) {
-            b.node(attr, attr.name, IdeOutlineNodeType.KEY_INDEX)
+            val name = attr.nameOpt()
+            if (name != null) {
+                b.node(attr, name, IdeOutlineNodeType.KEY_INDEX)
+            }
         }
     }
 }
 
-class S_KeyClause(pos: S_Pos, attrs: List<S_NameTypePair>): S_KeyIndexClause(pos, attrs) {
+class S_KeyClause(pos: S_Pos, attrs: List<S_AttrHeader>): S_KeyIndexClause(pos, attrs) {
     override fun addToContext(ctx: C_ClassContext, pos: S_Pos, names: List<S_Name>) {
         ctx.addKey(pos, names)
     }
 }
 
-class S_IndexClause(pos: S_Pos, attrs: List<S_NameTypePair>): S_KeyIndexClause(pos, attrs) {
+class S_IndexClause(pos: S_Pos, attrs: List<S_AttrHeader>): S_KeyIndexClause(pos, attrs) {
     override fun addToContext(ctx: C_ClassContext, pos: S_Pos, names: List<S_Name>) {
         ctx.addIndex(pos, names)
     }
@@ -472,7 +513,7 @@ class S_EnumDefinition(
 class S_OperationDefinition(
         modifiers: S_Modifiers,
         val name: S_Name,
-        val params: List<S_NameTypePair>,
+        val params: List<S_AttrHeader>,
         val body: S_Statement
 ): S_Definition(modifiers) {
     override fun compile(ctx: C_DefinitionContext) {
@@ -498,14 +539,15 @@ class S_OperationDefinition(
         val statementVars = processStatementVars()
         val entCtx = C_EntityContext(ctx, C_EntityType.OPERATION, null, statementVars)
 
-        val (exprCtx, rParams) = compileExternalParams(ctx, entCtx, params)
+        val (exprCtx, cParams) = compileExternalParams(ctx, entCtx, params)
         val rBody = body.compile(exprCtx).rStmt
         val rCallFrame = entCtx.makeCallFrame()
 
         if (ctx.globalCtx.compilerOptions.gtv) {
-            checkGtvParams(params, rParams)
+            checkGtvParams(cParams)
         }
 
+        val rParams = cParams.map { it.rParam }
         rOperation.setInternals(rParams, rBody, rCallFrame)
     }
 
@@ -523,7 +565,7 @@ class S_OperationDefinition(
 class S_QueryDefinition(
         modifiers: S_Modifiers,
         val name: S_Name,
-        val params: List<S_NameTypePair>,
+        val params: List<S_AttrHeader>,
         val retType: S_Type?,
         val body: S_FunctionBody
 ): S_Definition(modifiers) {
@@ -551,16 +593,17 @@ class S_QueryDefinition(
         val statementVars = body.processStatementVars()
         val entCtx = C_EntityContext(ctx, C_EntityType.QUERY, rExplicitRetType, statementVars)
 
-        val (exprCtx, rParams) = compileExternalParams(ctx, entCtx, params)
+        val (exprCtx, cParams) = compileExternalParams(ctx, entCtx, params)
         val rBody = body.compileQuery(name, exprCtx)
         val rCallFrame = entCtx.makeCallFrame()
         val rRetType = entCtx.actualReturnType()
 
         if (ctx.globalCtx.compilerOptions.gtv) {
-            checkGtvParams(params, rParams)
+            checkGtvParams(cParams)
             checkGtvResult(rRetType)
         }
 
+        val rParams = cParams.map { it.rParam }
         rQuery.setInternals(rRetType, rParams, rBody, rCallFrame)
     }
 
@@ -573,10 +616,10 @@ class S_QueryDefinition(
     }
 }
 
-private fun checkGtvParams(params: List<S_NameTypePair>, rParams: List<R_ExternalParam>) {
-    params.forEachIndexed { i, param ->
-        val type = rParams[i].type
+private fun checkGtvParams(params: List<C_ExternalParam>) {
+    params.forEach { param ->
         val name = param.name.str
+        val type = param.rParam.type
         checkGtvCompatibility(param.name.pos, type, true, "param_nogtv:$name", "Type of parameter '$name'")
     }
 }
@@ -656,7 +699,7 @@ class S_FunctionBodyFull(val body: S_Statement): S_FunctionBody() {
 class S_FunctionDefinition(
         modifiers: S_Modifiers,
         val name: S_Name,
-        val params: List<S_NameTypePair>,
+        val params: List<S_AttrHeader>,
         val retType: S_Type?,
         val body: S_FunctionBody
 ): S_Definition(modifiers) {
@@ -680,7 +723,9 @@ class S_FunctionDefinition(
         val statementVars = body.processStatementVars()
         val entCtx = C_EntityContext(ctx, C_EntityType.FUNCTION, rRetType, statementVars)
 
-        val (exprCtx, rParams) = compileExternalParams(ctx, entCtx, params)
+        val (exprCtx, cParams) = compileExternalParams(ctx, entCtx, params)
+
+        val rParams = cParams.map { it.rParam }
         rFn.setHeader(rRetType, rParams)
 
         ctx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
@@ -934,39 +979,44 @@ class S_RellFile(val header: S_ModuleHeader?, val definitions: List<S_Definition
 private fun compileExternalParams(
         ctx: C_NamespaceContext,
         entCtx: C_EntityContext,
-        params: List<S_NameTypePair>
-): Pair<C_ExprContext, List<R_ExternalParam>>
+        params: List<S_AttrHeader>
+): Pair<C_ExprContext, List<C_ExternalParam>>
 {
     val blkCtx = entCtx.rootExprCtx.blkCtx
     val rParams = compileParams(ctx, params)
 
     val inited = mutableMapOf<C_VarId, C_VarFact>()
 
-    val rExtParams = rParams.map { (name, rParam) ->
+    val cExtParams = rParams.map { (name, rParam) ->
         val (cId, ptr) = blkCtx.add(name, rParam.type, false)
         inited[cId] = C_VarFact.YES
-        R_ExternalParam(name.str, rParam.type, ptr)
+        C_ExternalParam(name, R_ExternalParam(name.str, rParam.type, ptr))
     }
 
     val varFacts = C_VarFacts.of(inited = inited.toMap())
     val exprCtx = entCtx.rootExprCtx
     val exprCtx2 = exprCtx.update(factsCtx = exprCtx.factsCtx.sub(varFacts))
 
-    return Pair(exprCtx2, rExtParams.toList())
+    return Pair(exprCtx2, cExtParams.toList())
 }
 
-private fun compileParams(ctx: C_NamespaceContext, params: List<S_NameTypePair>): List<Pair<S_Name, R_Variable>> {
+private fun compileParams(ctx: C_NamespaceContext, params: List<S_AttrHeader>): List<Pair<S_Name, R_Variable>> {
+    val cParams = params.map {
+        val name = it.compileName()
+        val rType = it.compileTypeOpt(ctx)
+        Pair(name, rType)
+    }
+
     val names = mutableSetOf<String>()
     val res = mutableListOf<Pair<S_Name, R_Variable>>()
 
-    for (param in params) {
-        val nameStr = param.name.str
-        val rType = param.compileType(ctx)
-        if (rType == null) continue
+    for ((name, type) in cParams) {
+        val nameStr = name.str
+        if (type == null) continue
         if (names.add(nameStr)) {
-            res.add(Pair(param.name, R_Variable(nameStr, rType)))
+            res.add(Pair(name, R_Variable(nameStr, type)))
         } else {
-            ctx.globalCtx.error(param.name.pos, "dup_param_name:$nameStr", "Duplicate parameter: '$nameStr'")
+            ctx.globalCtx.error(name.pos, "dup_param_name:$nameStr", "Duplicate parameter: '$nameStr'")
         }
     }
 
