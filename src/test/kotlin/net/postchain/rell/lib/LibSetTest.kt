@@ -26,11 +26,7 @@ class LibSetTest: BaseRellTest(false) {
         chk("set([1]).size()", "int[1]")
         chk("set([1, 2, 3, 4, 5]).size()", "int[5]")
         chk("set([1, 2, 3, 2, 3, 4, 5]).size()", "int[5]")
-
-        chk("set<integer>().len()", "int[0]")
-        chk("set([1]).len()", "int[1]")
-        chk("set([1, 2, 3, 4, 5]).len()", "int[5]")
-        chk("set([1, 2, 3, 2, 3, 4, 5]).len()", "int[5]")
+        chk("set<integer>().len()", "ct_err:deprecated:FUNCTION:set<integer>.len:size")
     }
 
     @Test fun testEquals() {

@@ -1,4 +1,4 @@
-RELEASE NOTES 0.10.0 (2019-10-31)
+RELEASE NOTES 0.10.0 (2019-11-04)
 
 
 1. Language: Module system
@@ -25,6 +25,12 @@ entity user {
 struct module_args {
     chain_name: text;
 }
+
+Existing code with classes and records will not compile.
+
+To help fixing the code, there is a tool migrate-v0.10.sh. The tool replaces class/record by entity/struct, as well
+as replaces most of deprecated library functions. The tool could be found in the postchain-node directory of
+a Rell distribution.
 
 
 3. Language: @mount annotation
@@ -88,7 +94,7 @@ Works also for variables, parameters and nullable types:
 operation o(foo.user?) {} // same as "user: foo.user?"
 
 
-7. Library: byte_array.sha256() function
+7. Library: Function byte_array.sha256()
 
 A new member function sha256() for the byte_array type has been added.
 
@@ -96,3 +102,10 @@ Code examples:
 
 'foo'.to_bytes().sha256() => byte_array[2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae]
 'bar'.to_bytes().sha256() => byte_array[fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9]
+
+
+8. Library: Retirement of deprecated functions
+
+Previously deprecated functions and types now are completely deprecated and cannot be used.
+
+Existing code can be (partially) fixed with the migrate-v0.10.sh tool.

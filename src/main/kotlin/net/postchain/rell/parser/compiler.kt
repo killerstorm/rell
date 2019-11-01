@@ -79,7 +79,7 @@ class C_SystemDefs private constructor(
                 "tuid" to C_TypeDef(R_TextType),
                 "json" to C_TypeDef(R_JsonType),
                 "range" to C_TypeDef(R_RangeType),
-                "GTXValue" to C_TypeDef(R_GtvType, C_Deprecated_UseInstead("gtv")),
+                "GTXValue" to C_TypeDef(R_GtvType, C_Deprecated("gtv", error = true)),
                 "gtv" to C_TypeDef(R_GtvType)
         )
 

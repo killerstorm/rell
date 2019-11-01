@@ -5,14 +5,17 @@ import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.toImmMap
 import org.apache.commons.lang3.StringUtils
 
-sealed class C_Deprecated {
-    abstract fun detailsCode(): String
-    abstract fun detailsMessage(): String
-}
+class C_Deprecated(
+        private val useInstead: String,
+        val error: Boolean = false
+) {
+    fun detailsCode(): String {
+        return ":$useInstead"
+    }
 
-class C_Deprecated_UseInstead(private val name: String): C_Deprecated() {
-    override fun detailsCode() = ":$name"
-    override fun detailsMessage() = ", use '$name' instead"
+    fun detailsMessage(): String {
+        return ", use '$useInstead' instead"
+    }
 }
 
 enum class C_DeclarationType(val description: String) {
@@ -55,8 +58,11 @@ abstract class C_Def<T>(private val type: C_DeclarationType, private val depreca
             val depStr = deprecated.detailsMessage()
             val code = "deprecated:$type:$name$depCode"
             val msg = "$typeStr '$name' is deprecated$depStr"
+
             val globalCtx = modCtx.globalCtx
-            val msgType = if (globalCtx.compilerOptions.deprecatedError) C_MessageType.ERROR else C_MessageType.WARNING
+            val error = deprecated.error || globalCtx.compilerOptions.deprecatedError
+            val msgType = if (error) C_MessageType.ERROR else C_MessageType.WARNING
+
             globalCtx.message(msgType, pos, code, msg)
         }
     }

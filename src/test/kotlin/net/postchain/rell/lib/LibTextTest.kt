@@ -172,11 +172,6 @@ class LibTextTest: BaseRellTest(false) {
         chk("'Hello'.matches('[0-9]+')", "boolean[false]")
     }
 
-    @Test fun testEncode() {
-        chk("'Hello'.encode()", "byte_array[48656c6c6f]")
-        chk("'\u041f\u0440\u0438\u0432\u0435\u0442'.encode()", "byte_array[d09fd180d0b8d0b2d0b5d182]")
-    }
-
     @Test fun testCharAt() {
         chk("'Hello'.char_at(0)", "int[72]")
         chk("'Hello'.char_at(1)", "int[101]")

@@ -60,13 +60,6 @@ class LibByteArrayTest: BaseRellTest(false) {
         chkEx("{ val x = x'0123ABCD'; x[1] = 123; return x; }", "ct_err:expr_unmodifiable:byte_array")
     }
 
-    @Test fun testDecode() {
-        chk("x''.decode()", "text[]")
-        chk("x'48656c6c6f'.decode()", "text[Hello]")
-        chk("x'd09fd180d0b8d0b2d0b5d182'.decode()", """text[\u041f\u0440\u0438\u0432\u0435\u0442]""")
-        chk("x'fefeffff'.decode()", """text[\ufffd\ufffd\ufffd\ufffd]""")
-    }
-
     @Test fun testSub() {
         chk("x'0123ABCD'.sub(0)", "byte_array[0123abcd]")
         chk("x'0123ABCD'.sub(2)", "byte_array[abcd]")

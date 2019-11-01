@@ -37,10 +37,7 @@ class LibListTest: BaseRellTest(false) {
         chk("list<integer>().size()", "int[0]")
         chk("list([1]).size()", "int[1]")
         chk("list([1, 2, 3, 4, 5]).size()", "int[5]")
-
-        chk("list<integer>().len()", "int[0]")
-        chk("list([1]).len()", "int[1]")
-        chk("list([1, 2, 3, 4, 5]).len()", "int[5]")
+        chk("list<integer>().len()", "ct_err:deprecated:FUNCTION:list<integer>.len:size")
     }
 
     @Test fun testGet() {
