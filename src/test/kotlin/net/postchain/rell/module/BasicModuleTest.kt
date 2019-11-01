@@ -50,7 +50,7 @@ class BasicModuleTest : IntegrationTest() {
         buildBlockAndCommit(node)
     }
 
-    @Test fun testOpErrObjectIdOfWrongClass() {
+    @Test fun testOpErrObjectIdOfWrongEntity() {
         val node = setupNodeAndObjects()
         enqueueTx(node, makeTx_insertPerson(0, "James", 5, "Foo St", 1, 1000), 0)
         buildBlockAndCommit(node)

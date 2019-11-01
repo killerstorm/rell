@@ -74,8 +74,8 @@ class LibBlockTransactionTest: BaseRellTest() {
 
         chkOp("create block(block_height = 123, block_rid = x'deadbeef', timestamp = 456);", "ct_err:expr_create_cant:block")
         chkOp("create transaction(tx_rid = x'dead', tx_hash = x'beef', tx_data = x'cafe', block = block@{});", "ct_err:expr_create_cant:transaction")
-        chkOp("create blocks(block_height = 123, block_rid = x'deadbeef', timestamp = 456);", "ct_err:unknown_class:blocks")
-        chkOp("create transactions(tx_rid = x'dead', tx_hash = x'beef', tx_data = x'cafe', block = block@{});", "ct_err:unknown_class:transactions")
+        chkOp("create blocks(block_height = 123, block_rid = x'deadbeef', timestamp = 456);", "ct_err:unknown_entity:blocks")
+        chkOp("create transactions(tx_rid = x'dead', tx_hash = x'beef', tx_data = x'cafe', block = block@{});", "ct_err:unknown_entity:transactions")
 
         chkOp("update block@{}( block_height = 999 );", "ct_err:stmt_update_cant:block")
         chkOp("update block@{}( block_rid = x'cafe' );", "ct_err:stmt_update_cant:block")
@@ -94,17 +94,17 @@ class LibBlockTransactionTest: BaseRellTest() {
         tst.inserts = BLOCK_INSERTS
         tst.chainId = 333
 
-        chkCompile("class transaction{}", "ct_err:name_conflict:sys:transaction:CLASS")
-        chkCompile("class block{}", "ct_err:name_conflict:sys:block:CLASS")
+        chkCompile("entity transaction{}", "ct_err:name_conflict:sys:transaction:ENTITY")
+        chkCompile("entity block{}", "ct_err:name_conflict:sys:block:ENTITY")
 
         chk("block @* {}", "list<block>[block[111]]")
         chk("transaction @* {}", "list<transaction>[transaction[444]]")
-        chk("blocks @* {}", "ct_err:unknown_class:blocks")
-        chk("transactions @* {}", "ct_err:unknown_class:transactions")
+        chk("blocks @* {}", "ct_err:unknown_entity:blocks")
+        chk("transactions @* {}", "ct_err:unknown_entity:transactions")
     }
 
     @Test fun testBlockRef() {
-        def("class foo { x: integer; block; }")
+        def("entity foo { x: integer; block; }")
         tst.inserts = BLOCK_INSERTS
         tst.chainId = 333
 
@@ -123,7 +123,7 @@ class LibBlockTransactionTest: BaseRellTest() {
     }
 
     @Test fun testTransactionRef() {
-        def("class foo { x: integer; trans: transaction; }")
+        def("entity foo { x: integer; trans: transaction; }")
         tst.inserts = BLOCK_INSERTS
         tst.chainId = 333
 
@@ -142,7 +142,7 @@ class LibBlockTransactionTest: BaseRellTest() {
     }
 
     @Test fun testBlockRefChainId() {
-        def("class foo { x: integer; b: block; t: transaction; }")
+        def("entity foo { x: integer; b: block; t: transaction; }")
         tst.inserts = BLOCK_INSERTS
         insert("c0.foo", "x,b,t", "1,123,111,444")
         tst.chainId = 0
@@ -255,7 +255,7 @@ class LibBlockTransactionTest: BaseRellTest() {
     }
 
     @Test fun textGtv() {
-        def("record r { t: transaction; }")
+        def("struct r { t: transaction; }")
         tst.chainId = 333
         tst.inserts = BLOCK_INSERTS
         chk("transaction @ {}", "transaction[444]")
@@ -266,7 +266,7 @@ class LibBlockTransactionTest: BaseRellTest() {
 
     private fun createChainIdTester(chainId: Long, blockIid: Long, txIid: Long): RellCodeTester {
         val t = RellCodeTester(tstCtx)
-        t.def("class foo { b: block; t: transaction; mutable value: integer; }")
+        t.def("entity foo { b: block; t: transaction; mutable value: integer; }")
         t.insert("c${chainId}.foo", "b,t,value", "1,$blockIid,$txIid,0")
         t.strictToString = false
         t.dropTables = false

@@ -91,7 +91,7 @@ class C_NsEntry(val name: String, val sName: S_Name?, val privateAccess: Boolean
 }
 
 abstract class C_NsDef {
-    abstract fun type(): C_DefType
+    abstract fun type(): C_DeclarationType
     abstract fun addToNamespace(b: C_NamespaceBuilder, name: String)
 
     open fun addToDefs(b: C_ModuleDefsBuilder) {
@@ -99,7 +99,7 @@ abstract class C_NsDef {
 }
 
 private class C_NsDef_Import(private val module: C_Module): C_NsDef() {
-    override fun type() = C_DefType.IMPORT
+    override fun type() = C_DeclarationType.IMPORT
 
     override fun addToNamespace(b: C_NamespaceBuilder, name: String) {
         val nsDef = C_ImportNamespaceDef(module)
@@ -109,7 +109,7 @@ private class C_NsDef_Import(private val module: C_Module): C_NsDef() {
 }
 
 private sealed class C_NsDef_Namespace(private val ns: C_NamespaceDef): C_NsDef() {
-    final override fun type() = C_DefType.NAMESPACE
+    final override fun type() = C_DeclarationType.NAMESPACE
 
     final override fun addToNamespace(b: C_NamespaceBuilder, name: String) {
         val nsValue = C_NamespaceValue_Namespace(ns)
@@ -127,35 +127,35 @@ private class C_NsDef_UserNamespace(ns: C_NamespaceDef, private val defs: C_Modu
 }
 
 private class C_NsDef_Type(private val type: C_TypeDef): C_NsDef() {
-    override fun type() = C_DefType.TYPE
+    override fun type() = C_DeclarationType.TYPE
 
     override fun addToNamespace(b: C_NamespaceBuilder, name: String) {
         b.addType(name, type)
     }
 }
 
-private sealed class C_NsDef_Class(private val cls: R_Class): C_NsDef() {
-    final override fun type() = C_DefType.CLASS
+private sealed class C_NsDef_Entity(private val cls: R_Entity): C_NsDef() {
+    final override fun type() = C_DeclarationType.ENTITY
 
     final override fun addToNamespace(b: C_NamespaceBuilder, name: String) {
         val typeDef = C_TypeDef(cls.type)
         b.addType(name, typeDef)
-        b.addValue(name, C_NamespaceValue_Class(typeDef))
+        b.addValue(name, C_NamespaceValue_Entity(typeDef))
     }
 }
 
-private class C_NsDef_SysClass(cls: R_Class): C_NsDef_Class(cls)
+private class C_NsDef_SysEntity(cls: R_Entity): C_NsDef_Entity(cls)
 
-private class C_NsDef_UserClass(private val cls: C_Class, private val addToModule: Boolean): C_NsDef_Class(cls.cls) {
+private class C_NsDef_UserEntity(private val cls: C_Entity, private val addToModule: Boolean): C_NsDef_Entity(cls.cls) {
     override fun addToDefs(b: C_ModuleDefsBuilder) {
         if (addToModule) {
-            b.classes.add(cls.cls.moduleLevelName, cls.cls)
+            b.entities.add(cls.cls.moduleLevelName, cls.cls)
         }
     }
 }
 
 private class C_NsDef_Object(private val obj: R_Object): C_NsDef() {
-    override fun type() = C_DefType.OBJECT
+    override fun type() = C_DeclarationType.OBJECT
 
     override fun addToNamespace(b: C_NamespaceBuilder, name: String) {
         b.addValue(name, C_NamespaceValue_Object(obj))
@@ -166,22 +166,22 @@ private class C_NsDef_Object(private val obj: R_Object): C_NsDef() {
     }
 }
 
-private class C_NsDef_Record(private val rec: C_Record): C_NsDef() {
-    override fun type() = C_DefType.RECORD
+private class C_NsDef_Struct(private val struct: C_Struct): C_NsDef() {
+    override fun type() = C_DeclarationType.STRUCT
 
     override fun addToNamespace(b: C_NamespaceBuilder, name: String) {
-        b.addType(name, C_TypeDef(rec.record.type))
-        b.addValue(name, C_NamespaceValue_Record(rec.record))
-        b.addFunction(name, C_RecordGlobalFunction(rec.record))
+        b.addType(name, C_TypeDef(struct.struct.type))
+        b.addValue(name, C_NamespaceValue_Struct(struct.struct))
+        b.addFunction(name, C_StructGlobalFunction(struct.struct))
     }
 
     override fun addToDefs(b: C_ModuleDefsBuilder) {
-        b.records.add(rec.record.moduleLevelName, rec)
+        b.structs.add(struct.struct.moduleLevelName, struct)
     }
 }
 
 private class C_NsDef_Enum(private val e: R_Enum): C_NsDef() {
-    override fun type() = C_DefType.ENUM
+    override fun type() = C_DeclarationType.ENUM
 
     override fun addToNamespace(b: C_NamespaceBuilder, name: String) {
         b.addType(name, C_TypeDef(e.type))
@@ -190,7 +190,7 @@ private class C_NsDef_Enum(private val e: R_Enum): C_NsDef() {
 }
 
 private class C_NsDef_SysFunction(private val fn: C_GlobalFunction): C_NsDef() {
-    override fun type() = C_DefType.FUNCTION
+    override fun type() = C_DeclarationType.FUNCTION
 
     override fun addToNamespace(b: C_NamespaceBuilder, name: String) {
         b.addFunction(name, fn)
@@ -198,7 +198,7 @@ private class C_NsDef_SysFunction(private val fn: C_GlobalFunction): C_NsDef() {
 }
 
 private class C_NsDef_UserFunction(private val fn: R_Function): C_NsDef() {
-    override fun type() = C_DefType.FUNCTION
+    override fun type() = C_DeclarationType.FUNCTION
 
     override fun addToNamespace(b: C_NamespaceBuilder, name: String) {
         val cFn = C_UserGlobalFunction(fn)
@@ -211,7 +211,7 @@ private class C_NsDef_UserFunction(private val fn: R_Function): C_NsDef() {
 }
 
 private class C_NsDef_Operation(private val op: R_Operation): C_NsDef() {
-    override fun type() = C_DefType.OPERATION
+    override fun type() = C_DeclarationType.OPERATION
 
     override fun addToNamespace(b: C_NamespaceBuilder, name: String) {
         // Do nothing.
@@ -223,7 +223,7 @@ private class C_NsDef_Operation(private val op: R_Operation): C_NsDef() {
 }
 
 private class C_NsDef_Query(private val q: R_Query): C_NsDef() {
-    override fun type() = C_DefType.QUERY
+    override fun type() = C_DeclarationType.QUERY
 
     override fun addToNamespace(b: C_NamespaceBuilder, name: String) {
         // Do nothing.
@@ -273,8 +273,8 @@ class C_SysNsProtoBuilder: C_NsProtoBuilder() {
         addDef(name, C_NsDef_Type(type))
     }
 
-    fun addClass(name: String, cls: R_Class) {
-        addDef(name, C_NsDef_SysClass(cls))
+    fun addEntity(name: String, cls: R_Entity) {
+        addDef(name, C_NsDef_SysEntity(cls))
     }
 
     fun addFunction(name: String, fn: C_GlobalFunction) {
@@ -346,16 +346,16 @@ class C_UserNsProtoBuilder: C_NsProtoBuilder() {
         return Pair(subNs.builder, subNs.namespace.getter)
     }
 
-    fun addClass(name: S_Name, cls: R_Class, addToModule: Boolean = true) {
-        addDef(name, C_NsDef_UserClass(C_Class(name.pos, cls), addToModule))
+    fun addEntity(name: S_Name, cls: R_Entity, addToModule: Boolean = true) {
+        addDef(name, C_NsDef_UserEntity(C_Entity(name.pos, cls), addToModule))
     }
 
     fun addObject(name: S_Name, obj: R_Object) {
         addDef(name, C_NsDef_Object(obj))
     }
 
-    fun addRecord(name: S_Name, rec: R_Record) {
-        addDef(name, C_NsDef_Record(C_Record(name, rec)))
+    fun addStruct(name: S_Name, struct: R_Struct) {
+        addDef(name, C_NsDef_Struct(C_Struct(name, struct)))
     }
 
     fun addEnum(name: S_Name, e: R_Enum) {

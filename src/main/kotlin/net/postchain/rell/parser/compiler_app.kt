@@ -26,20 +26,20 @@ class C_AppContext(val globalCtx: C_GlobalContext, controller: C_CompilerControl
     private fun createExternalChain(name: S_String): C_ExternalChain {
         val ref = R_ExternalChainRef(externalChainsRoot, name.str, externalChains.size)
 
-        val blockClass = C_Utils.createBlockClass(executor, ref)
-        val transactionClass = C_Utils.createTransactionClass(executor, ref, blockClass)
+        val blockEntity = C_Utils.createBlockEntity(executor, ref)
+        val transactionEntity = C_Utils.createTransactionEntity(executor, ref, blockEntity)
 
-        val sysClasses = listOf(blockClass, transactionClass)
+        val sysEntities = listOf(blockEntity, transactionEntity)
 
         val mntBuilder = C_MountTablesBuilder()
-        for (cls in sysClasses) {
-            defsBuilder.classes.add(C_Class(null, cls))
-            mntBuilder.addClass(null, cls)
+        for (cls in sysEntities) {
+            defsBuilder.entities.add(C_Entity(null, cls))
+            mntBuilder.addEntity(null, cls)
         }
 
         val mntTables = mntBuilder.build()
 
-        return C_ExternalChain(name, ref, blockClass, transactionClass, mntTables)
+        return C_ExternalChain(name, ref, blockEntity, transactionEntity, mntTables)
     }
 
     fun addModule(module: C_CompiledModule) {
@@ -53,21 +53,21 @@ class C_AppContext(val globalCtx: C_GlobalContext, controller: C_CompilerControl
         check(!createAppCalled)
         createAppCalled = true
 
-        executor.onPass(C_CompilerPass.RECORDS) {
-            val appRecords = defsBuilder.records.build()
-            processRecords(appRecords)
+        executor.onPass(C_CompilerPass.STRUCTS) {
+            val appStructs = defsBuilder.structs.build()
+            processStructs(appStructs)
         }
 
         controller.run()
 
         processAppMountsConflicts()
 
-        val appClasses = defsBuilder.classes.build()
+        val appEntities = defsBuilder.entities.build()
         val appObjects = defsBuilder.objects.build()
         val appOperations = defsBuilder.operations.build()
         val appQueries = defsBuilder.queries.build()
 
-        val topologicalClasses = calcTopologicalClasses(appClasses)
+        val topologicalEntities = calcTopologicalEntities(appEntities)
 
         val appOperationsMap = routinesToMap(appOperations)
         val appQueriesMap = routinesToMap(appQueries)
@@ -77,33 +77,33 @@ class C_AppContext(val globalCtx: C_GlobalContext, controller: C_CompilerControl
         return R_App(
                 valid = valid,
                 modules = modules.map { it.rModule },
-                classes = appClasses.map { it.cls },
+                entities = appEntities.map { it.cls },
                 objects = appObjects,
                 operations = appOperationsMap,
                 queries = appQueriesMap,
-                topologicalClasses = topologicalClasses,
+                topologicalEntities = topologicalEntities,
                 externalChainsRoot = externalChainsRoot,
                 externalChains = externalChains.values.map { it.ref }
         )
     }
 
-    private fun processRecords(records: List<R_Record>) {
-        val structure = C_RecordUtils.buildRecordsStructure(records)
-        val graph = structure.graph
+    private fun processStructs(structs: List<R_Struct>) {
+        val info = C_StructUtils.buildStructsInfo(structs)
+        val graph = info.graph
         val transGraph = C_GraphUtils.transpose(graph)
 
-        val cyclicRecs = C_GraphUtils.findCyclicVertices(graph).toSet()
-        val infiniteRecs = C_GraphUtils.closure(transGraph, cyclicRecs).toSet()
-        val mutableRecs = C_GraphUtils.closure(transGraph, structure.mutable).toSet()
-        val nonVirtualableRecs = C_GraphUtils.closure(transGraph, structure.nonVirtualable).toSet()
-        val nonGtvFromRecs = C_GraphUtils.closure(transGraph, structure.nonGtvFrom).toSet()
-        val nonGtvToRecs = C_GraphUtils.closure(transGraph, structure.nonGtvTo).toSet()
+        val cyclicStructs = C_GraphUtils.findCyclicVertices(graph).toSet()
+        val infiniteStructs = C_GraphUtils.closure(transGraph, cyclicStructs).toSet()
+        val mutableStructs = C_GraphUtils.closure(transGraph, info.mutable).toSet()
+        val nonVirtualableStructs = C_GraphUtils.closure(transGraph, info.nonVirtualable).toSet()
+        val nonGtvFromStructs = C_GraphUtils.closure(transGraph, info.nonGtvFrom).toSet()
+        val nonGtvToStructs = C_GraphUtils.closure(transGraph, info.nonGtvTo).toSet()
 
-        for (record in records) {
-            val gtv = R_GtvCompatibility(record !in nonGtvFromRecs, record !in nonGtvToRecs)
-            val typeFlags = R_TypeFlags(record in mutableRecs, gtv, record !in nonVirtualableRecs)
-            val flags = R_RecordFlags(typeFlags, record in cyclicRecs, record in infiniteRecs)
-            record.setFlags(flags)
+        for (struct in structs) {
+            val gtv = R_GtvCompatibility(struct !in nonGtvFromStructs, struct !in nonGtvToStructs)
+            val typeFlags = R_TypeFlags(struct in mutableStructs, gtv, struct !in nonVirtualableStructs)
+            val flags = R_StructFlags(typeFlags, struct in cyclicStructs, struct in infiniteStructs)
+            struct.setFlags(flags)
         }
     }
 
@@ -122,19 +122,19 @@ class C_AppContext(val globalCtx: C_GlobalContext, controller: C_CompilerControl
         C_MntEntry.processMountConflicts(globalCtx, tables)
     }
 
-    private fun calcTopologicalClasses(classes: List<C_Class>): List<R_Class> {
-        val graph = mutableMapOf<R_Class, Collection<R_Class>>()
-        for (cls in classes) {
-            val deps = mutableSetOf<R_Class>()
+    private fun calcTopologicalEntities(entities: List<C_Entity>): List<R_Entity> {
+        val graph = mutableMapOf<R_Entity, Collection<R_Entity>>()
+        for (cls in entities) {
+            val deps = mutableSetOf<R_Entity>()
             for (attr in cls.cls.attributes.values) {
-                if (attr.type is R_ClassType) {
-                    deps.add(attr.type.rClass)
+                if (attr.type is R_EntityType) {
+                    deps.add(attr.type.rEntity)
                 }
             }
             graph[cls.cls] = deps
         }
 
-        val classToPos = classes.filter { it.defPos != null }.map { Pair(it.cls, it.defPos!!) }.toMap()
+        val entityToPos = entities.filter { it.defPos != null }.map { Pair(it.cls, it.defPos!!) }.toMap()
 
         val cycles = C_GraphUtils.findCycles(graph)
         if (!cycles.isEmpty()) {
@@ -142,9 +142,9 @@ class C_AppContext(val globalCtx: C_GlobalContext, controller: C_CompilerControl
             val shortStr = cycle.joinToString(",") { it.appLevelName }
             val str = cycle.joinToString { it.appLevelName }
             val cls = cycle[0]
-            val pos = classToPos[cls]
+            val pos = entityToPos[cls]
             check(pos != null) { cls.appLevelName }
-            throw C_Error(pos, "class_cycle:$shortStr", "Class cycle, not allowed: $str")
+            throw C_Error(pos, "entity_cycle:$shortStr", "Entity cycle, not allowed: $str")
         }
 
         val res = C_GraphUtils.topologicalSort(graph)
@@ -181,9 +181,9 @@ class C_AppDefsTableBuilder<T, K>(private val executor: C_CompilerExecutor, priv
 }
 
 class C_AppDefsBuilder(executor: C_CompilerExecutor) {
-    val classes = C_AppDefsTableBuilder<C_Class, R_Class>(executor) { it.cls }
+    val entities = C_AppDefsTableBuilder<C_Entity, R_Entity>(executor) { it.cls }
     val objects = C_AppDefsTableBuilder<R_Object, R_Object>(executor) { it }
-    val records = C_AppDefsTableBuilder<R_Record, R_Record>(executor) { it }
+    val structs = C_AppDefsTableBuilder<R_Struct, R_Struct>(executor) { it }
     val operations = C_AppDefsTableBuilder<R_Operation, R_Operation>(executor) { it }
     val queries = C_AppDefsTableBuilder<R_Query, R_Query>(executor) { it }
 }
@@ -203,7 +203,7 @@ private class C_NameConflictsProcessor_MntEntry(private val chain: String?): C_N
     }
 }
 
-class C_MntEntry(val type: C_DefType, val def: R_Definition, val pos: S_Pos?, val mountName: R_MountName) {
+class C_MntEntry(val type: C_DeclarationType, val def: R_Definition, val pos: S_Pos?, val mountName: R_MountName) {
     companion object {
         private val SYSTEM_MOUNT_NAMES = SqlConstants.SYSTEM_OBJECTS.map { R_MountName.of(it) }
         private val SYSTEM_MOUNT_PREFIX = R_MountName.of("sys")
@@ -212,10 +212,10 @@ class C_MntEntry(val type: C_DefType, val def: R_Definition, val pos: S_Pos?, va
             val resChains = mntTables.chains.mapValues { (chain, t) ->
                 val nullableChain = if (chain == "") null else chain
 
-                val classes = processSystemMountConflicts(globalCtx, t.classes)
+                val entities = processSystemMountConflicts(globalCtx, t.entities)
 
                 C_ChainMountTables(
-                        processMountConflicts0(globalCtx, nullableChain, classes),
+                        processMountConflicts0(globalCtx, nullableChain, entities),
                         processMountConflicts0(globalCtx, nullableChain, t.operations),
                         processMountConflicts0(globalCtx, nullableChain, t.queries)
                 )
@@ -251,41 +251,41 @@ class C_MountTablesBuilder {
     fun add(tables: C_MountTables) {
         for ((chain, t) in tables.chains) {
             val b = chainBuilder(chain)
-            b.classes.add(t.classes)
+            b.entities.add(t.entities)
             b.operations.add(t.operations)
             b.queries.add(t.queries)
         }
     }
 
-    fun addClass(namePos: S_Pos?, rClass: R_Class) {
-        addClass0(C_DefType.CLASS, namePos, rClass, rClass)
+    fun addEntity(namePos: S_Pos?, rEntity: R_Entity) {
+        addEntity0(C_DeclarationType.ENTITY, namePos, rEntity, rEntity)
     }
 
     fun addObject(name: S_Name, rObject: R_Object) {
-        addClass0(C_DefType.OBJECT, name.pos, rObject, rObject.rClass)
+        addEntity0(C_DeclarationType.OBJECT, name.pos, rObject, rObject.rEntity)
     }
 
-    private fun addClass0(type: C_DefType, namePos: S_Pos?, def: R_Definition, rClass: R_Class) {
-        val chain = rClass.external?.chain?.name ?: ""
+    private fun addEntity0(type: C_DeclarationType, namePos: S_Pos?, def: R_Definition, rEntity: R_Entity) {
+        val chain = rEntity.external?.chain?.name ?: ""
         val b = chainBuilder(chain)
-        b.classes.add(type, def, namePos, rClass.mountName)
+        b.entities.add(type, def, namePos, rEntity.mountName)
     }
 
     fun addOperation(name: S_Name, o: R_Operation) {
         val b = chainBuilder("")
-        b.operations.add(C_DefType.OPERATION, o, name.pos, o.mountName)
+        b.operations.add(C_DeclarationType.OPERATION, o, name.pos, o.mountName)
     }
 
     fun addQuery(name: S_Name, q: R_Query) {
         val b = chainBuilder("")
-        b.queries.add(C_DefType.QUERY, q, name.pos, q.mountName)
+        b.queries.add(C_DeclarationType.QUERY, q, name.pos, q.mountName)
     }
 
     private fun chainBuilder(chain: String) = chains.computeIfAbsent(chain) { C_ChainMountTablesBuilder() }
 
     fun build(): C_MountTables {
         val resChains = chains.mapValues { (_, v) ->
-            C_ChainMountTables(v.classes.build(), v.operations.build(), v.queries.build())
+            C_ChainMountTables(v.entities.build(), v.operations.build(), v.queries.build())
         }
         return C_MountTables(resChains)
     }
@@ -299,10 +299,10 @@ class C_MountTables(chains: Map<String, C_ChainMountTables>) {
     }
 }
 
-class C_ChainMountTables(val classes: C_MntTable, val operations: C_MntTable, val queries: C_MntTable)
+class C_ChainMountTables(val entities: C_MntTable, val operations: C_MntTable, val queries: C_MntTable)
 
 class C_ChainMountTablesBuilder {
-    val classes = C_MntTableBuilder()
+    val entities = C_MntTableBuilder()
     val operations = C_MntTableBuilder()
     val queries = C_MntTableBuilder()
 }
@@ -321,7 +321,7 @@ class C_MntTableBuilder {
         entries.add(entry)
     }
 
-    fun add(type: C_DefType, def: R_Definition, namePos: S_Pos?, mountName: R_MountName) {
+    fun add(type: C_DeclarationType, def: R_Definition, namePos: S_Pos?, mountName: R_MountName) {
         check(!finished)
         entries.add(C_MntEntry(type, def, namePos, mountName))
     }

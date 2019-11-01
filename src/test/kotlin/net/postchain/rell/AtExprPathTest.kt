@@ -5,13 +5,13 @@ import net.postchain.rell.test.SqlTestUtils
 import org.junit.Test
 
 class AtExprPathTest: BaseRellTest() {
-    override fun classDefs() = listOf(
-            "class country { name: text; }",
-            "class state { name: text; country; }",
-            "class city { name: text; state; }",
-            "class company { name: text; hq: city; }",
-            "class department { name: text; company; }",
-            "class person { name: text; city; department; }"
+    override fun entityDefs() = listOf(
+            "entity country { name: text; }",
+            "entity state { name: text; country; }",
+            "entity city { name: text; state; }",
+            "entity company { name: text; hq: city; }",
+            "entity department { name: text; company; }",
+            "entity person { name: text; city; department; }"
     )
 
     override fun objInserts() = listOf(
@@ -144,7 +144,7 @@ class AtExprPathTest: BaseRellTest() {
                 "list<person>[person[602],person[603],person[605],person[606],person[607],person[610]]")
     }
 
-    @Test fun testMultiClass() {
+    @Test fun testMultiEntity() {
         chk("(p1: person, p2: person) @* { p1.city.name == 'San Francisco', p2.department.company.name == 'Amazon' }",
                 "list<(p1:person,p2:person)>[" +
                         "(person[607],person[607])," +

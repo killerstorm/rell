@@ -61,8 +61,8 @@ class NamespaceTest: BaseRellTest() {
     @Test fun testNameConflict() {
         chkCompile("namespace foo {} namespace foo {}", "OK")
 
-        chkCompile("namespace foo {} class foo {}", """ct_err:
-            [name_conflict:user:foo:CLASS:main.rell(1:24)]
+        chkCompile("namespace foo {} entity foo {}", """ct_err:
+            [name_conflict:user:foo:ENTITY:main.rell(1:25)]
             [name_conflict:user:foo:NAMESPACE:main.rell(1:11)]
         """)
 
@@ -83,9 +83,9 @@ class NamespaceTest: BaseRellTest() {
             [name_conflict:user:bar:NAMESPACE:main.rell(1:27)]
         """)
 
-        chkCompile("namespace foo { class bar {} object bar {} }", """ct_err:
-            [name_conflict:user:bar:OBJECT:main.rell(1:37)]
-            [name_conflict:user:bar:CLASS:main.rell(1:23)]
+        chkCompile("namespace foo { entity bar {} object bar {} }", """ct_err:
+            [name_conflict:user:bar:OBJECT:main.rell(1:38)]
+            [name_conflict:user:bar:ENTITY:main.rell(1:24)]
         """)
     }
 
@@ -97,8 +97,8 @@ class NamespaceTest: BaseRellTest() {
         chk("bar.x", "int[123]")
     }
 
-    @Test fun testClasses() {
-        def("namespace foo { class bar { x: integer; } }")
+    @Test fun testEntities() {
+        def("namespace foo { entity bar { x: integer; } }")
         insert("c0.foo.bar", "x", "0,123")
         chk("foo.bar @ {} ( foo.bar )", "ct_err:expr_novalue:type")
         chk("foo.bar @ {} ( bar )", "foo.bar[0]")
@@ -107,8 +107,8 @@ class NamespaceTest: BaseRellTest() {
     }
 
     @Test fun testTableNameConflict() {
-        def("class user { x: integer; }")
-        def("namespace foo { class user { y: integer; } }")
+        def("entity user { x: integer; }")
+        def("namespace foo { entity user { y: integer; } }")
         def("namespace bar { object user { z: integer = 789; } }")
         insert("c0.user", "x", "0,123")
         insert("c0.foo.user", "y", "1,456")
@@ -122,9 +122,9 @@ class NamespaceTest: BaseRellTest() {
         def("""
             namespace foo {
                 function f(): integer = 123;
-                class user { x: integer; }
+                entity user { x: integer; }
                 object state { v: integer = 456; }
-                record r { x: integer; }
+                struct r { x: integer; }
                 enum e { A, B, C }
                 namespace bar { function g(): integer = 789; }
                 operation op() {}
@@ -143,7 +143,7 @@ class NamespaceTest: BaseRellTest() {
         chk("foo.f", "ct_err:expr_novalue:function")
         chk("foo.user", "ct_err:expr_novalue:type")
         chk("foo.state", "foo.state")
-        chk("foo.r", "ct_err:expr_novalue:record")
+        chk("foo.r", "ct_err:expr_novalue:struct")
         chk("foo.e", "ct_err:expr_novalue:enum")
         chk("foo.bar", "ct_err:expr_novalue:namespace")
     }
@@ -152,18 +152,18 @@ class NamespaceTest: BaseRellTest() {
         chkCompile("namespace integer {}", "ct_err:name_conflict:sys:integer:TYPE")
         chkCompile("namespace text {}", "ct_err:name_conflict:sys:text:TYPE")
         chkCompile("namespace abs {}", "ct_err:name_conflict:sys:abs:FUNCTION")
-        chkCompile("class abs {}", "ct_err:name_conflict:sys:abs:FUNCTION")
+        chkCompile("entity abs {}", "ct_err:name_conflict:sys:abs:FUNCTION")
         chkCompile("namespace chain_context {}", "ct_err:name_conflict:sys:chain_context:NAMESPACE")
         chkCompile("function chain_context() {}", "ct_err:name_conflict:sys:chain_context:NAMESPACE")
-        chkCompile("class chain_context {}", "ct_err:name_conflict:sys:chain_context:NAMESPACE")
+        chkCompile("entity chain_context {}", "ct_err:name_conflict:sys:chain_context:NAMESPACE")
     }
 
     @Test fun testNamespacedTypes() {
         def("""
             namespace foo {
                 namespace bar {
-                    class c { name; }
-                    record r { x: integer; }
+                    entity c { name; }
+                    struct r { x: integer; }
                     enum e { A, B, C }
                 }
             }

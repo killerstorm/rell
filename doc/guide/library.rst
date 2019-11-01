@@ -2,25 +2,25 @@
 Library
 =======
 
-System classes
-==============
+System entities
+===============
 
 ::
 
-    class block {
+    entity block {
         block_height: integer;
         block_rid: byte_array;
         timestamp;
     }
 
-    class transaction {
+    entity transaction {
         tx_rid: byte_array;
         tx_hash: byte_array;
         tx_data: byte_array;
         block;
     }
 
-It is not possible to create, modify or delete objects of those classes in code.
+It is not possible to create, modify or delete values of those entities in code.
 
 --------------
 
@@ -28,14 +28,14 @@ chain_context
 -------------
 
 ``chain_context.args: module_args`` - module arguments specified in ``raw_config`` under path ``gtx.rell.moduleArgs.<module name>``.
-The type is ``module_args``, which must be a user-defined record. If no ``module_args`` record is defined in the module,
+The type is ``module_args``, which must be a user-defined struct. If no ``module_args`` struct is defined in the module,
 the ``args`` field cannot be accessed.
 
 Example of ``module_args``:
 
 ::
 
-    record module_args {
+    struct module_args {
         s: text;
         n: integer;
     }
@@ -67,7 +67,7 @@ Code that reads ``module_args``:
     }
 
 Every module can have its own ``module_args``. Reading ``chain_context.args`` returns the args for the current module, and
-the type of ``chain_context.args`` is different for different modules: it is the ``module_args`` record defined in that module.
+the type of ``chain_context.args`` is different for different modules: it is the ``module_args`` struct defined in that module.
 
 ``chain_context.blockchain_rid: byte_array`` - blockchain RID
 
@@ -644,10 +644,10 @@ json
 
 --------------
 
-record
+struct
 ------
 
-Functions available for all ``record`` types:
+Functions available for all ``struct`` types:
 
 ``T.from_bytes(byte_array): T`` - decode from a binary-encoded ``gtv``
 (same as ``T.from_gtv(gtv.from_bytes(x))``)
@@ -664,7 +664,7 @@ Functions available for all ``record`` types:
 
 --------------
 
-virtual<record>
+virtual<struct>
 ----------------
 
 ``virtual<R>.from_gtv(gtv): R`` - decodes a Gtv

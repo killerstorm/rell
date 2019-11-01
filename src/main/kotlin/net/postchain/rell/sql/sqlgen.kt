@@ -45,15 +45,15 @@ object SqlGen {
         """.trimIndent()
     }
 
-    fun genClass(sqlCtx: Rt_SqlContext, rClass: R_Class): String {
-        val tableName = rClass.sqlMapping.table(sqlCtx)
-        return genClass(sqlCtx, rClass, tableName)
+    fun genEntity(sqlCtx: Rt_SqlContext, rEntity: R_Entity): String {
+        val tableName = rEntity.sqlMapping.table(sqlCtx)
+        return genEntity(sqlCtx, rEntity, tableName)
     }
 
-    fun genClass(sqlCtx: Rt_SqlContext, rClass: R_Class, tableName: String): String {
-        val mapping = rClass.sqlMapping
+    fun genEntity(sqlCtx: Rt_SqlContext, rEntity: R_Entity, tableName: String): String {
+        val mapping = rEntity.sqlMapping
         val rowid = mapping.rowidColumn()
-        val attrs = rClass.attributes.values
+        val attrs = rEntity.attributes.values
 
         val t = SqlGen.DSL_CTX.createTable(tableName)
 
@@ -64,7 +64,7 @@ object SqlGen {
         var q = t.column(rowid, SQLDataType.BIGINT.nullable(false))
         q = genAttrColumns(attrs, q)
 
-        for ((kidx, key) in rClass.keys.withIndex()) {
+        for ((kidx, key) in rEntity.keys.withIndex()) {
             constraints.add(constraint("K_${tableName}_${kidx}").unique(*key.attribs.toTypedArray()))
         }
 
@@ -72,7 +72,7 @@ object SqlGen {
 
         val jsonAttribSet = attrs.filter { it.type is R_JsonType }.map { it.name }.toSet()
 
-        for ((iidx, index) in rClass.indexes.withIndex()) {
+        for ((iidx, index) in rEntity.indexes.withIndex()) {
             val indexName = "IDX_${tableName}_${iidx}"
             val indexSql : String
             if (index.attribs.size == 1 && jsonAttribSet.contains(index.attribs[0])) {
@@ -99,8 +99,8 @@ object SqlGen {
         val constraints = mutableListOf<Constraint>()
 
         for (attr in attrs) {
-            if (attr.type is R_ClassType) {
-                val refCls = attr.type.rClass
+            if (attr.type is R_EntityType) {
+                val refCls = attr.type.rEntity
                 val refTable = refCls.sqlMapping.table(sqlCtx)
                 val constraint = constraint("${sqlTable}_${attr.sqlMapping}_FK")
                         .foreignKey(attr.sqlMapping)
@@ -143,7 +143,7 @@ private fun getSqlType(t: R_Type): DataType<*> {
 private fun getSqlType0(t: R_Type): DataType<*> {
     when (t) {
         is R_PrimitiveType -> return t.sqlType
-        is R_ClassType -> return SQLDataType.BIGINT
+        is R_EntityType -> return SQLDataType.BIGINT
         is R_EnumType -> return SQLDataType.INTEGER
         else -> throw Exception("SQL type not implemented for $t")
     }

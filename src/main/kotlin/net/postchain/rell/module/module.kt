@@ -450,17 +450,17 @@ class RellPostchainModuleFactory(
         val moduleArgs = mutableMapOf<R_ModuleName, Rt_Value>()
 
         for (rModule in rApp.modules) {
-            val argsRec = rModule.moduleArgs
+            val argsStruct = rModule.moduleArgs
 
-            if (argsRec != null) {
+            if (argsStruct != null) {
                 val gtvArgs = gtvArgsDict[rModule.name.str()]
                 if (gtvArgs == null) {
                     throw UserMistake("No moduleArgs in blockchain configuration for module '${rModule.name}', " +
-                            "but type ${argsRec.moduleLevelName} defined in the code")
+                            "but type ${argsStruct.moduleLevelName} defined in the code")
                 }
 
                 val convCtx = GtvToRtContext(true)
-                val rtArgs = argsRec.type.gtvToRt(convCtx, gtvArgs)
+                val rtArgs = argsStruct.type.gtvToRt(convCtx, gtvArgs)
                 moduleArgs[rModule.name] = rtArgs
             }
         }

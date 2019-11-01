@@ -304,7 +304,7 @@ sealed class C_BinOp_EqNe(private val eq: Boolean): C_BinOp_Common() {
                 || type == R_TextType
                 || type == R_ByteArrayType
                 || type == R_RowidType
-                || type is R_ClassType
+                || type is R_EntityType
                 || type is R_EnumType
     }
 
@@ -416,7 +416,7 @@ sealed class C_BinOp_Cmp(val cmpOp: R_CmpOp, val dbOp: Db_BinaryOp): C_BinOp_Com
             R_TextType -> R_CmpType_Text
             R_ByteArrayType -> R_CmpType_ByteArray
             R_RowidType -> R_CmpType_Rowid
-            is R_ClassType -> R_CmpType_Class
+            is R_EntityType -> R_CmpType_Entity
             is R_EnumType -> R_CmpType_Enum
             else -> null
         }
@@ -489,7 +489,7 @@ object C_BinOp_Plus: C_BinOp_Common() {
         return when (type) {
             R_BooleanType, R_IntegerType, R_RowidType, R_JsonType -> Db_SysFn_ToText
             R_DecimalType -> Db_SysFn_Decimal.ToText
-            is R_ClassType -> Db_SysFn_ToText
+            is R_EntityType -> Db_SysFn_ToText
             else -> null
         }
     }

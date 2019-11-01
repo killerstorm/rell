@@ -73,7 +73,7 @@ object R_CmpType_Rowid: R_CmpType() {
     }
 }
 
-object R_CmpType_Class: R_CmpType() {
+object R_CmpType_Entity: R_CmpType() {
     override fun compare(left: Rt_Value, right: Rt_Value): Int {
         val l = left.asObjectId()
         val r = right.asObjectId()

@@ -11,8 +11,8 @@ import kotlin.test.assertEquals
 
 class MountTest: BaseRellTest() {
     @Test fun testInvalidAnnotation() {
-        chkCompile("@foo class user { x: integer; }", "ct_err:ann:invalid:foo")
-        chkCompile("@foo record rec { x: integer; }", "ct_err:ann:invalid:foo")
+        chkCompile("@foo entity user { x: integer; }", "ct_err:ann:invalid:foo")
+        chkCompile("@foo struct rec { x: integer; }", "ct_err:ann:invalid:foo")
         chkCompile("@foo function f(){}", "ct_err:ann:invalid:foo")
     }
 
@@ -20,14 +20,14 @@ class MountTest: BaseRellTest() {
         file("sub.rell", "@mount('foo') module;")
 
         chkCompile("import sub;", "OK")
-        chkCompile("@mount('foo') class user { x: integer; }", "OK")
+        chkCompile("@mount('foo') entity user { x: integer; }", "OK")
         chkCompile("@mount('foo') object state { mutable x: integer = 0; }", "OK")
         chkCompile("@mount('foo') operation o(){}", "OK")
         chkCompile("@mount('foo') query q() = 123;", "OK")
         chkCompile("@mount('foo') namespace ns {}", "OK")
         chkCompile("@mount('foo') external 'bar' {}", "OK")
 
-        chkCompile("@mount('foo') record rec { x: integer; }", "ct_err:ann:mount:target_type:RECORD")
+        chkCompile("@mount('foo') struct rec { x: integer; }", "ct_err:ann:mount:target_type:STRUCT")
         chkCompile("@mount('foo') enum en { A, B, C }", "ct_err:ann:mount:target_type:ENUM")
         chkCompile("@mount('foo') function f(){}", "ct_err:ann:mount:target_type:FUNCTION")
         chkCompile("@mount('foo') import sub;", "ct_err:ann:mount:target_type:IMPORT")
@@ -65,8 +65,8 @@ class MountTest: BaseRellTest() {
         chkCompile("@mount('$s') query q() = 123;", "ct_err:ann:mount:invalid:$s")
     }
 
-    @Test fun testClass() {
-        def("@mount('foo.bar') class user { name; }")
+    @Test fun testEntity() {
+        def("@mount('foo.bar') entity user { name; }")
         insert("c0.foo.bar", "name", "0,'Bob'")
         chk("user @* {} ( .name )", "list<text>[text[Bob]]")
         chkOp("create user('Alice');")
@@ -92,7 +92,7 @@ class MountTest: BaseRellTest() {
 
     @Test fun testEmptyMount() {
         file("sub.rell", "@mount('') module;")
-        chkCompile("@mount('') class user { x: integer; }", "ct_err:ann:mount:empty:CLASS")
+        chkCompile("@mount('') entity user { x: integer; }", "ct_err:ann:mount:empty:ENTITY")
         chkCompile("@mount('') object state { mutable x: integer = 0; }", "ct_err:ann:mount:empty:OBJECT")
         chkCompile("@mount('') operation o(){}", "ct_err:ann:mount:empty:OPERATION")
         chkCompile("@mount('') query q() = 123;", "ct_err:ann:mount:empty:QUERY")
@@ -104,7 +104,7 @@ class MountTest: BaseRellTest() {
     // Module path does not affect mount names.
     @Test fun testSubmodules() {
         file("lib/module.rell", "module;")
-        file("lib/foo/bar.rell", "class user { name; }")
+        file("lib/foo/bar.rell", "entity user { name; }")
         def("import lib; import lib.foo;")
 
         insert("c0.user", "name", "0,'Bob'")
@@ -271,16 +271,16 @@ class MountTest: BaseRellTest() {
     private fun chkConflictGeneric(fooFile: String, barFile: String, testFn: (String, String, String) -> Unit) {
         val td = ConflictTestData(fooFile, barFile, testFn)
 
-        chkConflictGenericErr(td, "CLASS", "class foo {}")
+        chkConflictGenericErr(td, "ENTITY", "entity foo {}")
         chkConflictGenericErr(td, "OBJECT", "object foo {}")
         chkConflictGenericErr(td, "OPERATION", "operation foo(){}")
         chkConflictGenericErr(td, "QUERY", "query foo()=0;")
 
-        chkConflictGenericErr(td, "CLASS", "class foo {}", "OBJECT", "object bar {}")
-        chkConflictGenericErr(td, "OBJECT", "object foo {}", "CLASS", "class bar {}")
+        chkConflictGenericErr(td, "ENTITY", "entity foo {}", "OBJECT", "object bar {}")
+        chkConflictGenericErr(td, "OBJECT", "object foo {}", "ENTITY", "entity bar {}")
 
-        chkConflictGenericOk(td, "class foo {}", "operation bar() {}")
-        chkConflictGenericOk(td, "class foo {}", "query bar()=0;")
+        chkConflictGenericOk(td, "entity foo {}", "operation bar() {}")
+        chkConflictGenericOk(td, "entity foo {}", "query bar()=0;")
         chkConflictGenericOk(td, "object foo {}", "operation bar() {}")
         chkConflictGenericOk(td, "object foo {}", "query bar()=0;")
         chkConflictGenericOk(td, "operation foo() {}", "query bar()=0;")
@@ -366,7 +366,7 @@ class MountTest: BaseRellTest() {
 
         chkMountConflictErr("import a.obj1; import a.cls2;", """ct_err:
             [a/cls2.rell:mnt_conflict:user:a.cls2#foo:foo:OBJECT:a.obj1#foo:a/obj1.rell(1:16)]
-            [a/obj1.rell:mnt_conflict:user:a.obj1#foo:foo:CLASS:a.cls2#foo:a/cls2.rell(1:15)]
+            [a/obj1.rell:mnt_conflict:user:a.obj1#foo:foo:ENTITY:a.cls2#foo:a/cls2.rell(1:16)]
         """)
 
         chkMountConflict("import a.cls1;", "123", "int[123]")
@@ -374,13 +374,13 @@ class MountTest: BaseRellTest() {
         chkMountConflict("import a.cls1; import a.q2;", "123", "int[123]")
 
         chkMountConflictErr("import a.cls1; import a.cls2;", """ct_err:
-            [a/cls1.rell:mnt_conflict:user:a.cls1#foo:foo:CLASS:a.cls2#foo:a/cls2.rell(1:15)]
-            [a/cls2.rell:mnt_conflict:user:a.cls2#foo:foo:CLASS:a.cls1#foo:a/cls1.rell(1:15)]
+            [a/cls1.rell:mnt_conflict:user:a.cls1#foo:foo:ENTITY:a.cls2#foo:a/cls2.rell(1:16)]
+            [a/cls2.rell:mnt_conflict:user:a.cls2#foo:foo:ENTITY:a.cls1#foo:a/cls1.rell(1:16)]
         """)
 
         chkMountConflictErr("import a.cls1; import a.obj2;", """ct_err:
             [a/cls1.rell:mnt_conflict:user:a.cls1#foo:foo:OBJECT:a.obj2#foo:a/obj2.rell(1:16)]
-            [a/obj2.rell:mnt_conflict:user:a.obj2#foo:foo:CLASS:a.cls1#foo:a/cls1.rell(1:15)]
+            [a/obj2.rell:mnt_conflict:user:a.obj2#foo:foo:ENTITY:a.cls1#foo:a/cls1.rell(1:16)]
         """)
 
         chkMountConflict("import a.op1;", "123", "int[123]")
@@ -419,8 +419,8 @@ class MountTest: BaseRellTest() {
         val t = RellCodeTester(c)
         t.file("a/obj1.rell", "module; object foo { x: text = 'obj1'; }")
         t.file("a/obj2.rell", "module; object foo { x: text = 'obj2'; }")
-        t.file("a/cls1.rell", "module; class foo { x: text = 'cls1'; }")
-        t.file("a/cls2.rell", "module; class foo { x: text = 'cls2'; }")
+        t.file("a/cls1.rell", "module; entity foo { x: text = 'cls1'; }")
+        t.file("a/cls2.rell", "module; entity foo { x: text = 'cls2'; }")
         t.file("a/op1.rell", "module; operation foo() {}")
         t.file("a/op2.rell", "module; operation foo() {}")
         t.file("a/q1.rell", "module; query foo() = 'q1';")
@@ -449,63 +449,63 @@ class MountTest: BaseRellTest() {
     }
 
     private fun chkConflictSystemTable(table: String) {
-        chkCompile("@mount('') namespace foo { class $table {} }", "ct_err:mnt_conflict:sys:foo.$table:$table")
-        chkCompile("namespace foo { @mount('$table') class user {} }", "ct_err:mnt_conflict:sys:foo.user:$table")
-        chkCompile("namespace foo { external 'bar' { @log class $table {} } }", "ct_err:mnt_conflict:sys:foo.$table:$table")
-        chkCompile("external 'bar' { @mount('$table') @log class user {} }", "ct_err:mnt_conflict:sys:user:$table")
+        chkCompile("@mount('') namespace foo { entity $table {} }", "ct_err:mnt_conflict:sys:foo.$table:$table")
+        chkCompile("namespace foo { @mount('$table') entity user {} }", "ct_err:mnt_conflict:sys:foo.user:$table")
+        chkCompile("namespace foo { external 'bar' { @log entity $table {} } }", "ct_err:mnt_conflict:sys:foo.$table:$table")
+        chkCompile("external 'bar' { @mount('$table') @log entity user {} }", "ct_err:mnt_conflict:sys:user:$table")
         chkCompile("namespace foo { @mount('$table') object user {} }", "ct_err:mnt_conflict:sys:foo.user:$table")
         chkCompile("namespace foo { @mount('$table') operation user() {} }", "OK")
         chkCompile("namespace foo { @mount('$table') query user() = 0; }", "OK")
     }
 
     private fun chkConflictSysTable(table: String) {
-        chkCompile("@mount('sys.$table') class user {}", "ct_err:mnt_conflict:sys:user:sys.$table")
-        chkCompile("namespace sys { class $table {} }", "ct_err:mnt_conflict:sys:sys.$table:sys.$table")
-        chkCompile("external 'foo' { @mount('sys.$table') @log class user {} }", "ct_err:mnt_conflict:sys:user:sys.$table")
-        chkCompile("external 'foo' { namespace sys { @log class $table {} } }", "ct_err:mnt_conflict:sys:sys.$table:sys.$table")
+        chkCompile("@mount('sys.$table') entity user {}", "ct_err:mnt_conflict:sys:user:sys.$table")
+        chkCompile("namespace sys { entity $table {} }", "ct_err:mnt_conflict:sys:sys.$table:sys.$table")
+        chkCompile("external 'foo' { @mount('sys.$table') @log entity user {} }", "ct_err:mnt_conflict:sys:user:sys.$table")
+        chkCompile("external 'foo' { namespace sys { @log entity $table {} } }", "ct_err:mnt_conflict:sys:sys.$table:sys.$table")
     }
 
     @Test fun testConflictDifferentChains() {
-        chkCompile("namespace ns1 { external 'foo' { @log class user {} } } namespace ns2 { external 'bar' { @log class user {} } }", "OK")
-        chkCompile("namespace ns1 { external 'foo' { @log class user {} } } namespace ns2 { class user {} }", "OK")
-        chkCompile("external 'foo' { @mount('some') @log class user {} } external 'bar' { @mount('some') @log class company {} }", "OK")
-        chkCompile("external 'foo' { @mount('some') @log class user {} } @mount('some') class company {}", "OK")
+        chkCompile("namespace ns1 { external 'foo' { @log entity user {} } } namespace ns2 { external 'bar' { @log entity user {} } }", "OK")
+        chkCompile("namespace ns1 { external 'foo' { @log entity user {} } } namespace ns2 { entity user {} }", "OK")
+        chkCompile("external 'foo' { @mount('some') @log entity user {} } external 'bar' { @mount('some') @log entity company {} }", "OK")
+        chkCompile("external 'foo' { @mount('some') @log entity user {} } @mount('some') entity company {}", "OK")
     }
 
     @Test fun testConflictFileLevelAndModuleLevel() {
-        file("foo/a.rell", "@mount('some') class user {} @mount('some') class company {}")
-        file("foo/b.rell", "@mount('some') class department {}")
+        file("foo/a.rell", "@mount('some') entity user {} @mount('some') entity company {}")
+        file("foo/b.rell", "@mount('some') entity department {}")
 
         chkCompile("import foo;", """ct_err:
-            [foo/a.rell:mnt_conflict:user:foo#user:some:CLASS:foo#company:foo/a.rell(1:51)]
-            [foo/a.rell:mnt_conflict:user:foo#user:some:CLASS:foo#department:foo/b.rell(1:22)]
-            [foo/a.rell:mnt_conflict:user:foo#company:some:CLASS:foo#user:foo/a.rell(1:22)]
-            [foo/b.rell:mnt_conflict:user:foo#department:some:CLASS:foo#user:foo/a.rell(1:22)]
+            [foo/a.rell:mnt_conflict:user:foo#user:some:ENTITY:foo#company:foo/a.rell(1:53)]
+            [foo/a.rell:mnt_conflict:user:foo#user:some:ENTITY:foo#department:foo/b.rell(1:23)]
+            [foo/a.rell:mnt_conflict:user:foo#company:some:ENTITY:foo#user:foo/a.rell(1:23)]
+            [foo/b.rell:mnt_conflict:user:foo#department:some:ENTITY:foo#user:foo/a.rell(1:23)]
         """)
     }
 
     @Test fun testConflictFileLevelAndAppLevel() {
-        file("foo/a.rell", "module; @mount('some') class user {} @mount('some') class company {}")
-        file("bar/b.rell", "module; @mount('some') class department {}")
+        file("foo/a.rell", "module; @mount('some') entity user {} @mount('some') entity company {}")
+        file("bar/b.rell", "module; @mount('some') entity department {}")
 
         chkCompile("import foo.a; import bar.b;", """ct_err:
-            [bar/b.rell:mnt_conflict:user:bar.b#department:some:CLASS:foo.a#user:foo/a.rell(1:30)]
-            [foo/a.rell:mnt_conflict:user:foo.a#user:some:CLASS:bar.b#department:bar/b.rell(1:30)]
-            [foo/a.rell:mnt_conflict:user:foo.a#user:some:CLASS:foo.a#company:foo/a.rell(1:59)]
-            [foo/a.rell:mnt_conflict:user:foo.a#company:some:CLASS:foo.a#user:foo/a.rell(1:30)]
+            [bar/b.rell:mnt_conflict:user:bar.b#department:some:ENTITY:foo.a#user:foo/a.rell(1:31)]
+            [foo/a.rell:mnt_conflict:user:foo.a#user:some:ENTITY:bar.b#department:bar/b.rell(1:31)]
+            [foo/a.rell:mnt_conflict:user:foo.a#user:some:ENTITY:foo.a#company:foo/a.rell(1:61)]
+            [foo/a.rell:mnt_conflict:user:foo.a#company:some:ENTITY:foo.a#user:foo/a.rell(1:31)]
         """)
     }
 
     @Test fun testConflictModuleLevelAndAppLevel() {
-        file("foo/a.rell", "@mount('some') class user {}")
-        file("foo/b.rell", "@mount('some') class company {}")
-        file("bar/c.rell", "@mount('some') class department {}")
+        file("foo/a.rell", "@mount('some') entity user {}")
+        file("foo/b.rell", "@mount('some') entity company {}")
+        file("bar/c.rell", "@mount('some') entity department {}")
 
         chkCompile("import foo; import bar;", """ct_err:
-            [bar/c.rell:mnt_conflict:user:bar#department:some:CLASS:foo#user:foo/a.rell(1:22)]
-            [foo/a.rell:mnt_conflict:user:foo#user:some:CLASS:bar#department:bar/c.rell(1:22)]
-            [foo/a.rell:mnt_conflict:user:foo#user:some:CLASS:foo#company:foo/b.rell(1:22)]
-            [foo/b.rell:mnt_conflict:user:foo#company:some:CLASS:foo#user:foo/a.rell(1:22)]
+            [bar/c.rell:mnt_conflict:user:bar#department:some:ENTITY:foo#user:foo/a.rell(1:23)]
+            [foo/a.rell:mnt_conflict:user:foo#user:some:ENTITY:bar#department:bar/c.rell(1:23)]
+            [foo/a.rell:mnt_conflict:user:foo#user:some:ENTITY:foo#company:foo/b.rell(1:23)]
+            [foo/b.rell:mnt_conflict:user:foo#company:some:ENTITY:foo#user:foo/a.rell(1:23)]
         """)
     }
 
@@ -570,41 +570,41 @@ class MountTest: BaseRellTest() {
         chkRelativePathNs("^^^.a.b.c", "c0.a.b.c.foo")
     }
 
-    @Test fun testRelativePathSyntaxClass() {
-        chkRelativePathCls(".", "ct_err:ann:mount:invalid:.")
+    @Test fun testRelativePathSyntaxEntity() {
+        chkRelativePathEnt(".", "ct_err:ann:mount:invalid:.")
 
-        chkRelativePathCls(".d", "c0.a.b.c.d")
-        chkRelativePathCls(".d.", "c0.a.b.c.d.foo")
+        chkRelativePathEnt(".d", "c0.a.b.c.d")
+        chkRelativePathEnt(".d.", "c0.a.b.c.d.foo")
 
-        chkRelativePathCls("^", "ct_err:ann:mount:invalid:^:OBJECT")
-        chkRelativePathCls("^^", "ct_err:ann:mount:invalid:^^:OBJECT")
-        chkRelativePathCls("^^^", "ct_err:ann:mount:invalid:^^^:OBJECT")
-        chkRelativePathCls("^^^^", "ct_err:ann:mount:up:3:4")
+        chkRelativePathEnt("^", "ct_err:ann:mount:invalid:^:OBJECT")
+        chkRelativePathEnt("^^", "ct_err:ann:mount:invalid:^^:OBJECT")
+        chkRelativePathEnt("^^^", "ct_err:ann:mount:invalid:^^^:OBJECT")
+        chkRelativePathEnt("^^^^", "ct_err:ann:mount:up:3:4")
 
-        chkRelativePathCls("^.", "c0.a.b.foo")
-        chkRelativePathCls("^^.", "c0.a.foo")
-        chkRelativePathCls("^^^.", "c0.foo")
-        chkRelativePathCls("^^^^.", "ct_err:ann:mount:up:3:4")
+        chkRelativePathEnt("^.", "c0.a.b.foo")
+        chkRelativePathEnt("^^.", "c0.a.foo")
+        chkRelativePathEnt("^^^.", "c0.foo")
+        chkRelativePathEnt("^^^^.", "ct_err:ann:mount:up:3:4")
 
-        chkRelativePathCls("^.z", "c0.a.b.z")
-        chkRelativePathCls("^^.y", "c0.a.y")
-        chkRelativePathCls("^^^.x", "c0.x")
-        chkRelativePathCls("^^^^.x", "ct_err:ann:mount:up:3:4")
+        chkRelativePathEnt("^.z", "c0.a.b.z")
+        chkRelativePathEnt("^^.y", "c0.a.y")
+        chkRelativePathEnt("^^^.x", "c0.x")
+        chkRelativePathEnt("^^^^.x", "ct_err:ann:mount:up:3:4")
 
-        chkRelativePathCls("^.z.", "c0.a.b.z.foo")
-        chkRelativePathCls("^^^^.x.", "ct_err:ann:mount:up:3:4")
+        chkRelativePathEnt("^.z.", "c0.a.b.z.foo")
+        chkRelativePathEnt("^^^^.x.", "ct_err:ann:mount:up:3:4")
 
-        chkRelativePathCls("^.c", "c0.a.b.c")
-        chkRelativePathCls("^^.b.c", "c0.a.b.c")
-        chkRelativePathCls("^^^.a.b.c", "c0.a.b.c")
-        chkRelativePathCls("^.c.foo", "c0.a.b.c.foo")
+        chkRelativePathEnt("^.c", "c0.a.b.c")
+        chkRelativePathEnt("^^.b.c", "c0.a.b.c")
+        chkRelativePathEnt("^^^.a.b.c", "c0.a.b.c")
+        chkRelativePathEnt("^.c.foo", "c0.a.b.c.foo")
     }
 
     private fun chkRelativePathNs(path: String, expTable: String) {
         chkRelativePath0("@mount('a.b.c') namespace top { @mount('$path') namespace sub { object foo { p: integer = 123; } } }", expTable)
     }
 
-    private fun chkRelativePathCls(path: String, expTable: String) {
+    private fun chkRelativePathEnt(path: String, expTable: String) {
         chkRelativePath0("@mount('a.b.c') namespace ns { @mount('$path') object foo { p: integer = 123; } }", expTable)
     }
 

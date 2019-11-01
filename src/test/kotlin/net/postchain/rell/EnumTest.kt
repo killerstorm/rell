@@ -53,14 +53,14 @@ class EnumTest: BaseRellTest() {
             [name_conflict:user:foo:OBJECT:main.rell(1:8)]
         """)
 
-        chkCompile("class foo {} enum foo {}", """ct_err:
-            [name_conflict:user:foo:ENUM:main.rell(1:19)]
-            [name_conflict:user:foo:CLASS:main.rell(1:7)]
+        chkCompile("entity foo {} enum foo {}", """ct_err:
+            [name_conflict:user:foo:ENUM:main.rell(1:20)]
+            [name_conflict:user:foo:ENTITY:main.rell(1:8)]
         """)
 
-        chkCompile("record foo {} enum foo {}", """ct_err:
+        chkCompile("struct foo {} enum foo {}", """ct_err:
             [name_conflict:user:foo:ENUM:main.rell(1:20)]
-            [name_conflict:user:foo:RECORD:main.rell(1:8)]
+            [name_conflict:user:foo:STRUCT:main.rell(1:8)]
         """)
 
         chkCompile("enum foo {} object foo {}", """ct_err:
@@ -68,13 +68,13 @@ class EnumTest: BaseRellTest() {
             [name_conflict:user:foo:ENUM:main.rell(1:6)]
         """)
 
-        chkCompile("enum foo {} class foo {}", """ct_err:
-            [name_conflict:user:foo:CLASS:main.rell(1:19)]
+        chkCompile("enum foo {} entity foo {}", """ct_err:
+            [name_conflict:user:foo:ENTITY:main.rell(1:20)]
             [name_conflict:user:foo:ENUM:main.rell(1:6)]
         """)
 
-        chkCompile("enum foo {} record foo {}", """ct_err:
-            [name_conflict:user:foo:RECORD:main.rell(1:20)]
+        chkCompile("enum foo {} struct foo {}", """ct_err:
+            [name_conflict:user:foo:STRUCT:main.rell(1:20)]
             [name_conflict:user:foo:ENUM:main.rell(1:6)]
         """)
     }
@@ -93,9 +93,9 @@ class EnumTest: BaseRellTest() {
         chkEx(": foo? = null;", "null")
     }
 
-    @Test fun testClassAttribute() {
+    @Test fun testEntityAttribute() {
         def("enum foo { A, B, C }")
-        def("class cls { name; f: foo; }")
+        def("entity cls { name; f: foo; }")
         def("object obj { mutable f: foo = foo.A; }")
         insert("c0.cls", "name,f", "0,'Bob',0")
 
@@ -118,7 +118,7 @@ class EnumTest: BaseRellTest() {
 
     @Test fun testNameConflicts() {
         def("enum foo { A, B, C }")
-        def("class user { name: text; f: foo; }")
+        def("entity user { name: text; f: foo; }")
         insert("c0.user", "name,f", "0,'Bob',1")
 
         chkEx("{ return user @ {} ( =.f ); }", "foo[B]")

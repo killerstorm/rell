@@ -10,7 +10,7 @@ A single-file Rell module must have a module header:
 
     module;
 
-    // classes, operations, queries, functions and other definitions
+    // entities, operations, queries, functions and other definitions
 
 If a ``.rell`` file has no module header, it is a part of a directory-module. All such ``.rell`` files in a directory
 belong to the same directory-module. An exception is a file called ``module.rell``: it always belongs to a directory-module,
@@ -112,7 +112,7 @@ At run-time, not all modules defined in a source directory tree are active.
 There is a main module which is specified when starting a Rell application.
 Only the main module and all modules imported by it (directly or indirectly) are active.
 
-When a module is active, its operations and queries can be invoked, and tables for its classes and objects are added to the
+When a module is active, its operations and queries can be invoked, and tables for its entities and objects are added to the
 database on initialization.
 
 --------------

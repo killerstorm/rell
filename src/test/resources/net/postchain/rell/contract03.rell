@@ -1,5 +1,4 @@
-
-class balance {
+entity balance {
     guid;
     value: integer;
 }
@@ -12,9 +11,10 @@ operation pomp_eet (guid) {
     require( balance@{guid} );
 }
 
-class user {
+entity user {
     key tuid;
 }
+
 operation create_user (admin_pubkey: signer, tuid ) {
         require((admin_pubkey == x"0373599a61cc6b3bc02a78c34313e1737ae9cfd56b9bb24360b437d469efdf3b15"),
               "Admin pubkey doesnt match");

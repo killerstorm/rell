@@ -4,9 +4,9 @@ import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 
 class CreateTest: BaseRellTest() {
-    override fun classDefs() = listOf(
-            "class city { name: text; }",
-            "class person { name: text; city; street: text; house: integer; score: integer; }"
+    override fun entityDefs() = listOf(
+            "entity city { name: text; }",
+            "entity person { name: text; city; street: text; house: integer; score: integer; }"
     )
 
     @Test fun testCreateCity() {
@@ -40,7 +40,7 @@ class CreateTest: BaseRellTest() {
     }
 
     @Test fun testDefaultValues() {
-        def("class person { name: text; year: integer; score: integer = 777; status: text = 'Unknown'; }")
+        def("entity person { name: text; year: integer; score: integer = 777; status: text = 'Unknown'; }")
         chkData()
 
         chkOp("create person();", "ct_err:attr_missing:name,year")
@@ -63,13 +63,13 @@ class CreateTest: BaseRellTest() {
 
     @Test fun testDefaultValueTypeErr() {
         tst.defs = listOf()
-        chkCompile("class person { name: text; year: integer = 'Hello'; }", "ct_err:attr_type:year:integer:text")
-        chkCompile("class person { name: text = 12345; year: integer; }", "ct_err:attr_type:name:text:integer")
+        chkCompile("entity person { name: text; year: integer = 'Hello'; }", "ct_err:attr_type:year:integer:text")
+        chkCompile("entity person { name: text = 12345; year: integer; }", "ct_err:attr_type:name:text:integer")
     }
 
     @Test fun testDefaultValueVariable() {
-        def("class default_score { mutable value: integer; }")
-        def("class person { name: text; score: integer = default_score@{}.value; }")
+        def("entity default_score { mutable value: integer; }")
+        def("entity person { name: text; score: integer = default_score@{}.value; }")
         chkData()
 
         chkOp("create default_score( 100 );")
@@ -86,7 +86,7 @@ class CreateTest: BaseRellTest() {
     }
 
     @Test fun testErr() {
-        chkOp("create foo(x = 123);", "ct_err:unknown_class:foo")
+        chkOp("create foo(x = 123);", "ct_err:unknown_entity:foo")
 
         chkOp("create city(foo = 123);", "ct_err:attr_unknown_name:foo")
 
@@ -95,7 +95,7 @@ class CreateTest: BaseRellTest() {
     }
 
     @Test fun testDotAttribute() {
-        def("class person { name: text; year: integer; score: integer = 777; status: text = 'Unknown'; }")
+        def("entity person { name: text; year: integer; score: integer = 777; status: text = 'Unknown'; }")
         chkData()
 
         chkOp("create person(.name = 'Bob', .year = 1980);")
@@ -103,7 +103,7 @@ class CreateTest: BaseRellTest() {
     }
 
     @Test fun testNoAttributes() {
-        def("class person {}")
+        def("entity person {}")
         chkData()
 
         chkOp("create person();")
@@ -112,7 +112,7 @@ class CreateTest: BaseRellTest() {
 
     @Test fun testBugAttrExpr() {
         tst.def("operation o(){ create user(); }")
-        tst.def("class user { name = 'Bob'; }")
+        tst.def("entity user { name = 'Bob'; }")
         chkOpFull("")
         chkData("user(1,Bob)")
     }

@@ -16,10 +16,10 @@ class S_UpdateTarget_Simple(
     override fun compile(ctx: C_ExprContext, subValues: MutableList<C_Value>): C_UpdateTarget {
         val cFrom = S_AtExpr.compileFrom(ctx, from)
         val cls = cFrom[0].compile()
-        val extraClasses = cFrom.subList(1, cFrom.size).map { it.compile() }
+        val extraEntities = cFrom.subList(1, cFrom.size).map { it.compile() }
         val dbCtx = ctx.update(nameCtx = C_DbNameContext(ctx.blkCtx, cFrom))
         val dbWhere = where.compile(dbCtx, subValues)
-        val rTarget = R_UpdateTarget_Simple(cls, extraClasses, cardinality.rCardinality, dbWhere)
+        val rTarget = R_UpdateTarget_Simple(cls, extraEntities, cardinality.rCardinality, dbWhere)
         return C_UpdateTarget(dbCtx, rTarget)
     }
 }
@@ -31,8 +31,8 @@ class S_UpdateTarget_Expr(val expr: S_Expr): S_UpdateTarget() {
         subValues.add(cValue)
 
         val rTarget = compileTarget(cValue)
-        val rCls = rTarget.cls()
-        val cCls = C_AtClass(rCls.rClass, rCls.rClass.simpleName, rCls.index)
+        val rCls = rTarget.entity()
+        val cCls = C_AtEntity(rCls.rEntity, rCls.rEntity.simpleName, rCls.index)
         val dbCtx = ctx.update(nameCtx = C_DbNameContext(ctx.blkCtx, listOf(cCls)))
 
         return C_UpdateTarget(dbCtx, rTarget)
@@ -42,28 +42,28 @@ class S_UpdateTarget_Expr(val expr: S_Expr): S_UpdateTarget() {
         val rExpr = cValue.toRExpr()
         val type = rExpr.type
 
-        val rTarget = if (type is R_ClassType) {
-            compileTargetClass(rExpr, type.rClass)
-        } else if (type is R_NullableType && type.valueType is R_ClassType) {
-            compileTargetClass(rExpr, type.valueType.rClass)
+        val rTarget = if (type is R_EntityType) {
+            compileTargetEntity(rExpr, type.rEntity)
+        } else if (type is R_NullableType && type.valueType is R_EntityType) {
+            compileTargetEntity(rExpr, type.valueType.rEntity)
         } else if (type is R_ObjectType) {
             compileTargetObject(type.rObject)
-        } else if (type is R_SetType && type.elementType is R_ClassType) {
+        } else if (type is R_SetType && type.elementType is R_EntityType) {
             compileTargetCollection(rExpr, type, type.elementType, true)
-        } else if (type is R_ListType && type.elementType is R_ClassType) {
+        } else if (type is R_ListType && type.elementType is R_EntityType) {
             compileTargetCollection(rExpr, type, type.elementType, false)
         } else {
             throw C_Error(expr.startPos, "stmt_update_expr_type:${type.toStrictString()}",
-                    "Invalid expression type: ${type.toStrictString()}; must be a class or a collection of a class")
+                    "Invalid expression type: ${type.toStrictString()}; must be an entity or a collection of an entity")
         }
 
         return rTarget
     }
 
-    private fun compileTargetClass(rExpr: R_Expr, rClass: R_Class): R_UpdateTarget {
-        val cls = R_AtClass(rClass, 0)
-        val whereLeft = Db_ClassExpr(cls)
-        val whereRight = Db_ParameterExpr(rClass.type, 0)
+    private fun compileTargetEntity(rExpr: R_Expr, rEntity: R_Entity): R_UpdateTarget {
+        val cls = R_AtEntity(rEntity, 0)
+        val whereLeft = Db_EntityExpr(cls)
+        val whereRight = Db_ParameterExpr(rEntity.type, 0)
         val where = C_Utils.makeDbBinaryExprEq(whereLeft, whereRight)
         return R_UpdateTarget_Expr_One(cls, where, rExpr)
     }
@@ -72,10 +72,10 @@ class S_UpdateTarget_Expr(val expr: S_Expr): S_UpdateTarget() {
         return R_UpdateTarget_Object(rObject)
     }
 
-    private fun compileTargetCollection(rExpr: R_Expr, type: R_Type, clsType: R_ClassType, set: Boolean): R_UpdateTarget {
-        val rClass = clsType.rClass
-        val cls = R_AtClass(rClass, 0)
-        val whereLeft = Db_ClassExpr(cls)
+    private fun compileTargetCollection(rExpr: R_Expr, type: R_Type, clsType: R_EntityType, set: Boolean): R_UpdateTarget {
+        val rEntity = clsType.rEntity
+        val cls = R_AtEntity(rEntity, 0)
+        val whereLeft = Db_EntityExpr(cls)
         val whereRight = Db_ArrayParameterExpr(type, clsType, 0)
         val where = Db_BinaryExpr(R_BooleanType, Db_BinaryOp_In, whereLeft, whereRight)
         val setType = R_SetType(clsType)
@@ -87,24 +87,24 @@ class S_UpdateWhat(val pos: S_Pos, val name: S_Name?, val op: S_AssignOpCode?, v
 
 class S_UpdateStatement(pos: S_Pos, val target: S_UpdateTarget, val what: List<S_UpdateWhat>): S_Statement(pos) {
     override fun compile(ctx: C_ExprContext): C_Statement {
-        ctx.blkCtx.entCtx.checkDbUpdateAllowed(pos)
+        ctx.blkCtx.defCtx.checkDbUpdateAllowed(pos)
 
         val subValues = mutableListOf<C_Value>()
         val cTarget = target.compile(ctx, subValues)
 
-        val rClass = cTarget.rTarget.cls().rClass
-        if (!rClass.flags.canUpdate) {
-            throw C_Errors.errCannotUpdate(pos, rClass.simpleName)
+        val rEntity = cTarget.rTarget.entity().rEntity
+        if (!rEntity.flags.canUpdate) {
+            throw C_Errors.errCannotUpdate(pos, rEntity.simpleName)
         }
 
-        val dbWhat = compileWhat(rClass, cTarget.ctx, subValues)
+        val dbWhat = compileWhat(rEntity, cTarget.ctx, subValues)
         val rStmt = R_UpdateStatement(cTarget.rTarget, dbWhat)
 
         val resFacts = C_ExprVarFacts.forSubExpressions(subValues)
         return C_Statement(rStmt, false, resFacts.postFacts)
     }
 
-    private fun compileWhat(cls: R_Class, ctx: C_ExprContext, subValues: MutableList<C_Value>): List<R_UpdateStatementWhat> {
+    private fun compileWhat(cls: R_Entity, ctx: C_ExprContext, subValues: MutableList<C_Value>): List<R_UpdateStatementWhat> {
         val dbWhat = what.map { compileWhatExpr(cls, ctx, it) }
         subValues.addAll(dbWhat)
 
@@ -121,7 +121,7 @@ class S_UpdateStatement(pos: S_Pos, val target: S_UpdateTarget, val what: List<S
         return updAttrs
     }
 
-    private fun compileWhatExpr(cls: R_Class, ctx: C_ExprContext, pair: S_UpdateWhat): C_Value {
+    private fun compileWhatExpr(cls: R_Entity, ctx: C_ExprContext, pair: S_UpdateWhat): C_Value {
         val impName = pair.expr.asName()
         if (impName != null && pair.name == null) {
             val clsAttr = cls.attributes[impName.str]
@@ -138,17 +138,17 @@ class S_UpdateStatement(pos: S_Pos, val target: S_UpdateTarget, val what: List<S
 
 class S_DeleteStatement(pos: S_Pos, val target: S_UpdateTarget): S_Statement(pos) {
     override fun compile(ctx: C_ExprContext): C_Statement {
-        ctx.blkCtx.entCtx.checkDbUpdateAllowed(pos)
+        ctx.blkCtx.defCtx.checkDbUpdateAllowed(pos)
 
         val subValues = mutableListOf<C_Value>()
         val cTarget = target.compile(ctx, subValues)
 
-        val rClass = cTarget.rTarget.cls().rClass
-        val msgName = rClass.simpleName
+        val rEntity = cTarget.rTarget.entity().rEntity
+        val msgName = rEntity.simpleName
 
-        if (rClass.flags.isObject) {
-            throw C_Error(pos, "stmt_delete_obj:$msgName", "Cannot delete object '$msgName' (not a class)")
-        } else if (!rClass.flags.canDelete) {
+        if (rEntity.flags.isObject) {
+            throw C_Error(pos, "stmt_delete_obj:$msgName", "Cannot delete object '$msgName' (not an entity)")
+        } else if (!rEntity.flags.canDelete) {
             throw C_Errors.errCannotDelete(pos, msgName)
         }
 

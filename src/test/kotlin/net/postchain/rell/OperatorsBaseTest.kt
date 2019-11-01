@@ -1065,7 +1065,7 @@ abstract class OperatorsBaseTest: BaseResourcefulTest() {
     abstract fun vBytes(v: String): TstVal
     abstract fun vRowid(v: Long): TstVal
     abstract fun vJson(v: String): TstVal
-    abstract fun vObj(cls: String, id: Long): TstVal
+    abstract fun vObj(ent: String, id: Long): TstVal
 
     fun vDec(s: String) = vDec(parseDec(s))
     fun vDec(v: Long) = vDec(BigDecimal(v))

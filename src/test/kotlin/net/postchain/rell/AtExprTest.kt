@@ -5,9 +5,9 @@ import net.postchain.rell.test.SqlTestUtils
 import org.junit.Test
 
 class AtExprTest: BaseRellTest() {
-    override fun classDefs() = listOf(
-            "class company { name: text; }",
-            "class user { firstName: text; lastName: text; company; }"
+    override fun entityDefs() = listOf(
+            "entity company { name: text; }",
+            "entity user { firstName: text; lastName: text; company; }"
     )
 
     override fun objInserts() = listOf(
@@ -65,10 +65,10 @@ class AtExprTest: BaseRellTest() {
     }
 
     @Test fun testAttributeByNameAndType() {
-        def("class foo { name: text; }")
-        def("class bar { name: text; }")
-        def("class foo_owner { name: text; stuff: foo; foo: foo; bar: bar; }")
-        def("class bar_owner { name: text; stuff: bar; foo: foo; bar: bar; }")
+        def("entity foo { name: text; }")
+        def("entity bar { name: text; }")
+        def("entity foo_owner { name: text; stuff: foo; foo: foo; bar: bar; }")
+        def("entity bar_owner { name: text; stuff: bar; foo: foo; bar: bar; }")
 
         tst.inserts = listOf()
         insert("c0.foo", "name", "0,'Foo-1'")
@@ -104,19 +104,19 @@ class AtExprTest: BaseRellTest() {
                 "list<(foo_owner:foo_owner,bar_owner:bar_owner)>[(foo_owner[4],bar_owner[7]),(foo_owner[5],bar_owner[7])]")
     }
 
-    @Test fun testSingleClassAlias() {
+    @Test fun testSingleEntityAlias() {
         chk("(u: user) @ { u.firstName == 'Bill' }", "user[40]")
         chk("(u: user) @ { user.firstName == 'Bill' }", "ct_err:unknown_name:user.firstName")
     }
 
-    @Test fun testMultipleClassesBadAlias() {
+    @Test fun testMultipleEntitiesBadAlias() {
         chk("(user: company, user) @ {}", "ct_err:at_dup_alias:user")
         chk("(user, user) @ {}", "ct_err:at_dup_alias:user")
         chk("(u: user, u: user) @ {}", "ct_err:at_dup_alias:u")
         chk("(user, u: user, user) @ {}", "ct_err:at_dup_alias:user")
     }
 
-    @Test fun testMultipleClassesSimple() {
+    @Test fun testMultipleEntitiesSimple() {
         chk("(user, company) @ { user.firstName == 'Mark', company.name == 'Microsoft' }",
                 "(user=user[10],company=company[400])")
 
@@ -129,7 +129,7 @@ class AtExprTest: BaseRellTest() {
                 "(u1=user[10],u2=user[40],user=user[50])")
     }
 
-    @Test fun testNameResolutionClassVsAlias() {
+    @Test fun testNameResolutionEntityVsAlias() {
         chk("(user) @ { user.firstName == 'Bill' }", "user[40]")
         chk("(u: user) @ { u.firstName == 'Bill' }", "user[40]")
         chk("(u: user) @ { user.firstName == 'Bill' }", "ct_err:unknown_name:user.firstName")
@@ -163,8 +163,8 @@ class AtExprTest: BaseRellTest() {
     }
 
     @Test fun testAttributeAmbiguityName() {
-        def("class user { name: text; }")
-        def("class company { name: text; }")
+        def("entity user { name: text; }")
+        def("entity company { name: text; }")
 
         tst.inserts = listOf()
         insert("c0.user", "name", "0,'Bob'")
@@ -181,9 +181,9 @@ class AtExprTest: BaseRellTest() {
     }
 
     @Test fun testAttributeAmbiguityType() {
-        def("class target { name: text; }")
-        def("class single { t: target; }")
-        def("class double { t1: target; t2: target; }")
+        def("entity target { name: text; }")
+        def("entity single { t: target; }")
+        def("entity double { t1: target; t2: target; }")
 
         tst.inserts = listOf()
         insert("c0.target", "name", "0,'A'")
@@ -205,23 +205,23 @@ class AtExprTest: BaseRellTest() {
         chkEx("{ $base return single @ { tgt1 }; }", "single[0]")
         chkEx("{ $base return single @ { tgt2 }; }", "single[1]")
 
-        // Ambiguity between attributes of the same class.
+        // Ambiguity between attributes of the same entity.
         chkEx("{ $base return double @ { tgt1 }; }", "ct_err:at_where:var_manyattrs_name:0:tgt1:target:double.t1,double.t2")
         chkEx("{ $base return double @ { .t1 == tgt1, tgt2 }; }", "ct_err:at_where:var_manyattrs_name:1:tgt2:target:double.t1,double.t2")
         chkEx("{ $base return double @ { .t1 == tgt1, .t2 == tgt2 }; }", "double[0]")
         chkEx("{ $base return double @ { .t1 == tgt3, .t2 == tgt1 }; }", "double[2]")
 
-        // Ambiguity between attributes of different classes.
+        // Ambiguity between attributes of different entities.
         chkEx("{ $base return (s1: single, s2: single) @ { tgt1 }; }", "ct_err:at_where:var_manyattrs_name:0:tgt1:target:s1.t,s2.t")
         chkEx("{ $base return (s1: single, s2: single) @ { tgt1, tgt2 }; }", "ct_err:at_where:var_manyattrs_name:0:tgt1:target:s1.t,s2.t")
         chkEx("{ $base return (s1: single, s2: single) @ { s1.t == tgt1, tgt2 }; }", "ct_err:at_where:var_manyattrs_name:1:tgt2:target:s1.t,s2.t")
         chkEx("{ $base return (s1: single, s2: single) @ { s1.t == tgt1, s2.t == tgt2 }; }", "(s1=single[0],s2=single[1])")
     }
 
-    @Test fun testMultipleClassesCrossReference() {
-        def("class person { name: text; cityName: text; }")
-        def("class city { name: text; countryName: text; }")
-        def("class country { name: text; }")
+    @Test fun testMultipleEntitiesCrossReference() {
+        def("entity person { name: text; cityName: text; }")
+        def("entity city { name: text; countryName: text; }")
+        def("entity country { name: text; }")
 
         tst.inserts = listOf()
 
@@ -245,7 +245,7 @@ class AtExprTest: BaseRellTest() {
     }
 
     @Test fun testAllFieldKinds() {
-        def("""class testee {
+        def("""entity testee {
                 key k1: integer, k2: integer;
                 key k3: integer;
                 index i1: integer;
@@ -253,7 +253,7 @@ class AtExprTest: BaseRellTest() {
                 f1: integer;
                 f2: integer;
         }""".trimIndent())
-        def("class proxy { ref: testee; }")
+        def("entity proxy { ref: testee; }")
 
         tst.inserts = listOf()
         insert("c0.testee", "k1,k2,k3,i1,i2,i3,f1,f2", "1,100,101,102,103,104,105,106,107")
@@ -263,7 +263,7 @@ class AtExprTest: BaseRellTest() {
         insert("c0.proxy", "ref", "2,2")
         insert("c0.proxy", "ref", "3,3")
 
-        // Direct fields of the query class.
+        // Direct fields of the query entity.
         chk("testee @* { .k1 == 100 }", "list<testee>[testee[1]]")
         chk("testee @* { .k2 == 201 }", "list<testee>[testee[2]]")
         chk("testee @* { .k3 == 302 }", "list<testee>[testee[3]]")
@@ -281,7 +281,7 @@ class AtExprTest: BaseRellTest() {
         chk("testee @* { .f1 == 306 }", "list<testee>[testee[3]]")
         chk("testee @* { .f2 == 107 }", "list<testee>[testee[1]]")
 
-        // Fields of a referenced class.
+        // Fields of a referenced entity.
         chk("proxy @* { .ref.k1 == 100 }", "list<proxy>[proxy[1]]")
         chk("proxy @* { .ref.k2 == 201 }", "list<proxy>[proxy[2]]")
         chk("proxy @* { .ref.k3 == 302 }", "list<proxy>[proxy[3]]")
@@ -491,7 +491,7 @@ class AtExprTest: BaseRellTest() {
 
     @Test fun testOrConditionBug() {
         def("""
-            class user_account {
+            entity user_account {
                 key tuid;
                 mutable name;
                 mutable login: text;
@@ -539,7 +539,7 @@ class AtExprTest: BaseRellTest() {
         chk("user @* { .firstName == 'Bill' } ( x = (123, 'Hello') )", "ct_err:expr_nosql:(integer,text)")
     }
 
-    @Test fun testIndependentClassFieldExpression() {
+    @Test fun testIndependentEntityFieldExpression() {
         val code = """
             { val u = user @ { .firstName == 'Paul' };
               return user @ { .company == u.company, .firstName != 'Paul' } ( .firstName );
@@ -551,8 +551,8 @@ class AtExprTest: BaseRellTest() {
     @Test fun testWhereDbExpr() {
         tst.defs = listOf()
         tst.inserts = listOf()
-        def("class company { name; }")
-        def("class user { name; company; flag: boolean; }")
+        def("entity company { name; }")
+        def("entity user { name; company; flag: boolean; }")
         insert("c0.company", "name", "33,'Apple'")
         insert("c0.user", "name,company,flag", "100,'Jobs',33,true")
         insert("c0.user", "name,company,flag", "101,'Wozniak',33,false")

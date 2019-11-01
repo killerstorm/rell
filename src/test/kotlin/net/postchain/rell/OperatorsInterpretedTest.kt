@@ -2,8 +2,8 @@ package net.postchain.rell
 
 import net.postchain.gtv.GtvNull
 import net.postchain.rell.model.R_App
-import net.postchain.rell.model.R_Class
-import net.postchain.rell.model.R_ClassType
+import net.postchain.rell.model.R_Entity
+import net.postchain.rell.model.R_EntityType
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.NoConnSqlExecutor
 import net.postchain.rell.test.RellTestUtils
@@ -70,8 +70,8 @@ class OperatorsInterpretedTest: OperatorsBaseTest() {
     private fun processExpr0(expr: String, types: List<String>, block: (R_App) -> String): String {
         val params = types.withIndex().joinToString(", ") { (idx, type) -> "${paramName(idx)}: $type" }
         val code = """
-            class company { name: text; }
-            class user { name: text; company; }
+            entity company { name: text; }
+            entity user { name: text; company; }
             query q($params) = $expr;
         """.trimIndent()
 
@@ -90,7 +90,7 @@ class OperatorsInterpretedTest: OperatorsBaseTest() {
     override fun vBytes(v: String): TstVal = InterpTstVal.Bytes(v)
     override fun vRowid(v: Long): TstVal = InterpTstVal.Rowid(v)
     override fun vJson(v: String): TstVal = InterpTstVal.Json(v)
-    override fun vObj(cls: String, id: Long): TstVal = InterpTstVal.Obj(cls, id)
+    override fun vObj(ent: String, id: Long): TstVal = InterpTstVal.Obj(ent, id)
 
     private class ValCtx(val app: R_App)
 
@@ -126,19 +126,19 @@ class OperatorsInterpretedTest: OperatorsBaseTest() {
             override fun rt(c: ValCtx): Rt_Value = Rt_JsonValue.parse(v)
         }
 
-        class Obj(val cls: String, val id: Long): InterpTstVal(cls) {
+        class Obj(val ent: String, val id: Long): InterpTstVal(ent) {
             override fun rt(c: ValCtx): Rt_Value {
-                val cls = findClass(c.app, cls)
-                val t = R_ClassType(cls)
-                return Rt_ClassValue(t, id)
+                val entity = findEntity(c.app, ent)
+                val t = R_EntityType(entity)
+                return Rt_EntityValue(t, id)
             }
 
-            private fun findClass(app: R_App, name: String): R_Class {
+            private fun findEntity(app: R_App, name: String): R_Entity {
                 for (module in app.modules) {
-                    val c = module.classes[name]
+                    val c = module.entities[name]
                     if (c != null) return c
                 }
-                throw IllegalStateException("Class not found: '$name'")
+                throw IllegalStateException("Entity not found: '$name'")
             }
         }
     }

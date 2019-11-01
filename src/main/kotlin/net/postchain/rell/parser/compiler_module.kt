@@ -150,27 +150,27 @@ class C_ModuleCompiler private constructor(private val appCtx: C_AppContext) {
 
         val rModule = R_Module(
                 modName,
-                classes = defs.classes,
+                entities = defs.entities,
                 objects = defs.objects,
-                records = defs.records.mapValues { (_, v) -> v.record },
+                structs = defs.structs.mapValues { (_, v) -> v.struct },
                 operations = defs.operations,
                 queries = defs.queries,
                 functions = defs.functions,
-                moduleArgs = moduleArgs?.record
+                moduleArgs = moduleArgs?.struct
         )
 
         val content = C_ModuleContent(modNames.outerNs, modMounts, defs)
         return C_CompiledModule(rModule, content)
     }
 
-    private fun processModuleArgs(defs: C_ModuleDefs): C_Record? {
-        val moduleArgs = defs.records[C_Constants.MODULE_ARGS_RECORD]
+    private fun processModuleArgs(defs: C_ModuleDefs): C_Struct? {
+        val moduleArgs = defs.structs[C_Constants.MODULE_ARGS_STRUCT]
 
         if (moduleArgs != null) {
             appCtx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
-                if (!moduleArgs.record.flags.typeFlags.gtv.fromGtv) {
+                if (!moduleArgs.struct.flags.typeFlags.gtv.fromGtv) {
                     throw C_Error(moduleArgs.name.pos, "module_args_nogtv",
-                            "Record '${moduleArgs.record.moduleLevelName}' is not Gtv-compatible")
+                            "Struct '${moduleArgs.struct.moduleLevelName}' is not Gtv-compatible")
                 }
             }
         }
@@ -225,17 +225,17 @@ class C_ModuleCompiler private constructor(private val appCtx: C_AppContext) {
 }
 
 class C_ModuleDefsBuilder {
-    val classes = C_ModuleDefTableBuilder<R_Class>()
+    val entities = C_ModuleDefTableBuilder<R_Entity>()
     val objects = C_ModuleDefTableBuilder<R_Object>()
-    val records = C_ModuleDefTableBuilder<C_Record>()
+    val structs = C_ModuleDefTableBuilder<C_Struct>()
     val functions = C_ModuleDefTableBuilder<R_Function>()
     val operations = C_ModuleDefTableBuilder<R_Operation>()
     val queries = C_ModuleDefTableBuilder<R_Query>()
 
     fun addDefs(defs: C_ModuleDefs) {
-        classes.add(defs.classes)
+        entities.add(defs.entities)
         objects.add(defs.objects)
-        records.add(defs.records)
+        structs.add(defs.structs)
         functions.add(defs.functions)
         operations.add(defs.operations)
         queries.add(defs.queries)
@@ -243,9 +243,9 @@ class C_ModuleDefsBuilder {
 
     fun build(): C_ModuleDefs {
         return C_ModuleDefs(
-                classes = classes.build(),
+                entities = entities.build(),
                 objects = objects.build(),
-                records = records.build(),
+                structs = structs.build(),
                 functions = functions.build(),
                 operations = operations.build(),
                 queries = queries.build()
@@ -254,18 +254,18 @@ class C_ModuleDefsBuilder {
 }
 
 class C_ModuleDefs(
-        val classes: Map<String, R_Class>,
+        val entities: Map<String, R_Entity>,
         val objects: Map<String, R_Object>,
-        val records: Map<String, C_Record>,
+        val structs: Map<String, C_Struct>,
         val functions: Map<String, R_Function>,
         val operations: Map<String, R_Operation>,
         val queries: Map<String, R_Query>
 ){
     companion object {
         val EMPTY = C_ModuleDefs(
-                classes = ImmutableMap.of(),
+                entities = ImmutableMap.of(),
                 objects = ImmutableMap.of(),
-                records = ImmutableMap.of(),
+                structs = ImmutableMap.of(),
                 functions = ImmutableMap.of(),
                 operations = ImmutableMap.of(),
                 queries = ImmutableMap.of()

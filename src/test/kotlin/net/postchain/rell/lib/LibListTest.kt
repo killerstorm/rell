@@ -245,7 +245,7 @@ class LibListTest: BaseRellTest(false) {
 
     @Test fun testSort() {
         tst.strictToString = false
-        def("record rec { x: integer; }")
+        def("struct rec { x: integer; }")
 
         chkEx("{ val l = [ 5, 4, 3, 2, 1 ]; l._sort(); return l; }", "[1, 2, 3, 4, 5]")
         chkEx("{ val l = [ 5, 4, 3, 2, 1 ]; return l._sort(); }", "ct_err:stmt_return_unit")

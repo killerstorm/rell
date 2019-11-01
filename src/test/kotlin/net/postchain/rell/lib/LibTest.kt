@@ -78,7 +78,7 @@ class LibTest: BaseRellTest(false) {
 
     @Test fun testTypeOf() {
         tst.strictToString = false
-        def("class user { name: text; }")
+        def("entity user { name: text; }")
 
         chk("_type_of(null)", "null")
         chk("_type_of(true)", "boolean")
@@ -131,10 +131,10 @@ class LibTest: BaseRellTest(false) {
                 "byte_array[a424302230080c0178a30302017b30160c0179a511300fa303020104a303020105a303020106]")
     }
 
-    @Test fun testRecord() {
-        def("record foo { a: integer; b: text; }")
-        def("record bar { a: (x: integer, text); }")
-        def("record qaz { m: map<integer,text>; }")
+    @Test fun testStruct() {
+        def("struct foo { a: integer; b: text; }")
+        def("struct bar { a: (x: integer, text); }")
+        def("struct qaz { m: map<integer,text>; }")
 
         chk("foo(123,'Hello').to_gtv()", """gtv[[123,"Hello"]]""")
         chk("foo(123,'Hello').to_gtv_pretty()", """gtv[{"a":123,"b":"Hello"}]""")
@@ -184,10 +184,10 @@ class LibTest: BaseRellTest(false) {
 
         chkCompile("function f(v: GTXValue){}", "ct_err:deprecated:TYPE:GTXValue:gtv")
         chkCompile("function f(v: list<GTXValue>){}", "ct_err:deprecated:TYPE:GTXValue:gtv")
-        chkCompile("record rec { v: GTXValue; }", "ct_err:deprecated:TYPE:GTXValue:gtv")
-        chkCompile("record rec { v: list<GTXValue>; }", "ct_err:deprecated:TYPE:GTXValue:gtv")
-        chkCompile("record rec { v: map<text,GTXValue>; }", "ct_err:deprecated:TYPE:GTXValue:gtv")
-        chkCompile("record rec { v: map<text,list<GTXValue?>>?; }", "ct_err:deprecated:TYPE:GTXValue:gtv")
+        chkCompile("struct rec { v: GTXValue; }", "ct_err:deprecated:TYPE:GTXValue:gtv")
+        chkCompile("struct rec { v: list<GTXValue>; }", "ct_err:deprecated:TYPE:GTXValue:gtv")
+        chkCompile("struct rec { v: map<text,GTXValue>; }", "ct_err:deprecated:TYPE:GTXValue:gtv")
+        chkCompile("struct rec { v: map<text,list<GTXValue?>>?; }", "ct_err:deprecated:TYPE:GTXValue:gtv")
 
         chkCompile("function f() { GTXValue.from_bytes(x''); }", "ct_err:deprecated:NAMESPACE:GTXValue:gtv")
         chkCompile("function f() { GTXValue.from_json(''); }", "ct_err:deprecated:NAMESPACE:GTXValue:gtv")
@@ -197,7 +197,7 @@ class LibTest: BaseRellTest(false) {
         chkCompile("function f(v: GTXValue){}", "OK")
         chkWarn("deprecated:TYPE:GTXValue:gtv")
 
-        chkCompile("record rec { v: list<GTXValue>; }", "OK")
+        chkCompile("struct rec { v: list<GTXValue>; }", "OK")
         chkWarn("deprecated:TYPE:GTXValue:gtv")
 
         chkCompile("function f() { GTXValue.from_bytes(x''); }", "OK")
@@ -253,7 +253,7 @@ class LibTest: BaseRellTest(false) {
 
     @Test fun testDeprecatedFunctionsGtv() {
         tst.deprecatedError = true
-        def("record rec { x: integer; }")
+        def("struct rec { x: integer; }")
 
         chk("gtv.fromBytes(x'1234')", "ct_err:deprecated:FUNCTION:fromBytes:from_bytes")
         chk("gtv.fromJSON('{}')", "ct_err:deprecated:FUNCTION:fromJSON:from_json")

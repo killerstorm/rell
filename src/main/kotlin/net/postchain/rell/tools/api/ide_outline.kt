@@ -4,9 +4,9 @@ import net.postchain.rell.parser.S_Name
 import net.postchain.rell.parser.S_Node
 
 enum class IdeOutlineNodeType {
-    CLASS,
+    ENTITY,
     OBJECT,
-    RECORD,
+    STRUCT,
     ATTRIBUTE,
     KEY_INDEX,
     ENUM,

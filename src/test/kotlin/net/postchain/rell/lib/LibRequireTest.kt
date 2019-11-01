@@ -23,7 +23,7 @@ class LibRequireTest: BaseRellTest(false) {
 
     @Test fun testRequireAt() {
         tstCtx.useSql = true
-        def("class user { name: text; }")
+        def("entity user { name: text; }")
         chkOp("create user(name = 'Bob'); create user(name = 'Alice');")
 
         chkEx("{ return require(user @? { .name == 'Bob' }, 'User not found'); }", "user[1]")

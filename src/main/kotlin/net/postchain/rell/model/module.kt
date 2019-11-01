@@ -75,8 +75,8 @@ class R_Operation(names: R_DefinitionNames, mountName: R_MountName): R_MountedRo
     override fun callTop(appCtx: Rt_AppContext, args: List<Rt_Value>): Rt_Value? {
         val ints = internals.get()
 
-        val entCtx = Rt_EntityContext(appCtx, true)
-        val rtFrame = Rt_CallFrame(entCtx, ints.frame)
+        val defCtx = Rt_DefinitionContext(appCtx, true)
+        val rtFrame = Rt_CallFrame(defCtx, ints.frame)
 
         checkCallArgs(this, ints.params, args)
         processArgs(ints.params, args, rtFrame)
@@ -91,8 +91,8 @@ class R_Operation(names: R_DefinitionNames, mountName: R_MountName): R_MountedRo
     fun callTopNoTx(appCtx: Rt_AppContext, args: List<Rt_Value>) {
         val ints = internals.get()
 
-        val entCtx = Rt_EntityContext(appCtx, true)
-        val rtFrame = Rt_CallFrame(entCtx, ints.frame)
+        val defCtx = Rt_DefinitionContext(appCtx, true)
+        val rtFrame = Rt_CallFrame(defCtx, ints.frame)
 
         checkCallArgs(this, ints.params, args)
         processArgs(ints.params, args, rtFrame)
@@ -132,8 +132,8 @@ class R_Query(names: R_DefinitionNames, mountName: R_MountName): R_MountedRoutin
     fun callTopQuery(appCtx: Rt_AppContext, args: List<Rt_Value>): Rt_Value {
         val ints = internals.get()
 
-        val entCtx = Rt_EntityContext(appCtx, false)
-        val rtFrame = Rt_CallFrame(entCtx, ints.frame)
+        val defCtx = Rt_DefinitionContext(appCtx, false)
+        val rtFrame = Rt_CallFrame(defCtx, ints.frame)
 
         checkCallArgs(this, ints.params, args)
         processArgs(ints.params, args, rtFrame)
@@ -201,7 +201,7 @@ class R_Function(names: R_DefinitionNames): R_Routine(names) {
     }
 
     fun call(rtFrame: Rt_CallFrame, args: List<Rt_Value>): Rt_Value {
-        val rtSubFrame = createRtFrame(rtFrame.entCtx.appCtx, rtFrame.entCtx.dbUpdateAllowed)
+        val rtSubFrame = createRtFrame(rtFrame.defCtx.appCtx, rtFrame.defCtx.dbUpdateAllowed)
 
         val params = params()
         processArgs(params, args, rtSubFrame)
@@ -215,8 +215,8 @@ class R_Function(names: R_DefinitionNames): R_Routine(names) {
 
     private fun createRtFrame(appCtx: Rt_AppContext, dbUpdateAllowed: Boolean): Rt_CallFrame {
         val frame = bodyLate.get().frame
-        val entCtx = Rt_EntityContext(appCtx, dbUpdateAllowed)
-        return Rt_CallFrame(entCtx, frame)
+        val defCtx = Rt_DefinitionContext(appCtx, dbUpdateAllowed)
+        return Rt_CallFrame(defCtx, frame)
     }
 }
 
@@ -251,24 +251,24 @@ private fun processArgs(params: List<R_ExternalParam>, args: List<Rt_Value>, fra
 class R_App(
         val valid: Boolean,
         modules: List<R_Module>,
-        classes: List<R_Class>,
+        entities: List<R_Entity>,
         objects: List<R_Object>,
         operations: Map<R_MountName, R_Operation>,
         queries: Map<R_MountName, R_Query>,
-        topologicalClasses: List<R_Class>,
+        topologicalEntities: List<R_Entity>,
         val externalChainsRoot: R_ExternalChainsRoot,
         externalChains: List<R_ExternalChainRef>
 ) {
     val modules = modules.toImmList()
-    val classes = classes.toImmList()
+    val entities = entities.toImmList()
     val objects = objects.toImmList()
     val operations = operations.toImmMap()
     val queries = queries.toImmMap()
-    val topologicalClasses = topologicalClasses.toImmList()
+    val topologicalEntities = topologicalEntities.toImmList()
     val externalChains = externalChains.toImmList()
 
     init {
-        check(topologicalClasses.size == classes.size) { "${topologicalClasses.size} != ${classes.size}" }
+        check(topologicalEntities.size == entities.size) { "${topologicalEntities.size} != ${entities.size}" }
 
         for ((i, c) in externalChains.withIndex()) {
             check(c.root === externalChainsRoot)
@@ -279,13 +279,13 @@ class R_App(
 
 class R_Module(
         val name: R_ModuleName,
-        val classes: Map<String, R_Class>,
+        val entities: Map<String, R_Entity>,
         val objects: Map<String, R_Object>,
-        val records: Map<String, R_Record>,
+        val structs: Map<String, R_Struct>,
         val operations: Map<String, R_Operation>,
         val queries: Map<String, R_Query>,
         val functions: Map<String, R_Function>,
-        val moduleArgs: R_Record?
+        val moduleArgs: R_Struct?
 ){
     override fun toString() = name.toString()
 }

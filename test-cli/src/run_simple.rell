@@ -3,7 +3,7 @@ module;
 import run_common;
 import calc;
 
-record module_args {
+struct module_args {
     x: integer;
     y: text;
 }

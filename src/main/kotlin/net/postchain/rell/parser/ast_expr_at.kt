@@ -2,7 +2,7 @@ package net.postchain.rell.parser
 
 import net.postchain.rell.model.*
 
-class S_AtExprFrom(val alias: S_Name?, val className: List<S_Name>)
+class S_AtExprFrom(val alias: S_Name?, val entityName: List<S_Name>)
 
 class C_AtWhat(val exprs: List<Pair<String?, Db_Expr>>, val sort: List<Pair<Db_Expr, Boolean>>)
 
@@ -260,20 +260,20 @@ class S_AtExpr(
     private class AtResultType(val type: R_Type, val rowDecoder: R_AtExprRowType)
 
     companion object {
-        fun compileFrom(ctx: C_ExprContext, from: List<S_AtExprFrom>): List<C_AtClass> {
-            val cFrom = from.mapIndexed { i, f -> compileFromClass(ctx, i, f) }
+        fun compileFrom(ctx: C_ExprContext, from: List<S_AtExprFrom>): List<C_AtEntity> {
+            val cFrom = from.mapIndexed { i, f -> compileFromEntity(ctx, i, f) }
 
             val names = mutableSetOf<String>()
             for ((alias, cls) in cFrom) {
                 if (!names.add(cls.alias)) {
-                    throw C_Error(alias.pos, "at_dup_alias:${cls.alias}", "Duplicate class alias: ${cls.alias}")
+                    throw C_Error(alias.pos, "at_dup_alias:${cls.alias}", "Duplicate entity alias: ${cls.alias}")
                 }
             }
 
             return cFrom.map { ( _, cls ) -> cls }
         }
 
-        private fun compileFromClass(ctx: C_ExprContext, idx: Int, from: S_AtExprFrom): Pair<S_Name, C_AtClass> {
+        private fun compileFromEntity(ctx: C_ExprContext, idx: Int, from: S_AtExprFrom): Pair<S_Name, C_AtEntity> {
             if (from.alias != null) {
                 val name = from.alias
                 val entry = ctx.blkCtx.lookupLocalVar(name.str)
@@ -282,9 +282,9 @@ class S_AtExpr(
                 }
             }
 
-            val alias = from.alias ?: from.className[from.className.size - 1]
-            val cls = ctx.blkCtx.entCtx.nsCtx.getClass(from.className)
-            return Pair(alias, C_AtClass(cls, alias.str, idx))
+            val alias = from.alias ?: from.entityName[from.entityName.size - 1]
+            val cls = ctx.blkCtx.defCtx.nsCtx.getEntity(from.entityName)
+            return Pair(alias, C_AtEntity(cls, alias.str, idx))
         }
 
         fun findWhereContextAttrsByType(ctx: C_ExprContext, type: R_Type): List<C_ExprContextAttr> {

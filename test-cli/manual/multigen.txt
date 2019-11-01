@@ -100,7 +100,7 @@ function sum_digits_decimal(n: integer): text {
                             <entry key="run_common.rell">
                                 <string>module;
 
-record module_args {
+struct module_args {
     message: text;
 }
 
@@ -113,7 +113,7 @@ query get_common_args() = chain_context.args;
 import run_common;
 import calc;
 
-record module_args {
+struct module_args {
     x: integer;
     y: text;
 }

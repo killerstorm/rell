@@ -148,7 +148,7 @@ class LibSetTest: BaseRellTest(false) {
 
     @Test fun testSort() {
         tst.strictToString = false
-        def("record rec { x: integer; }")
+        def("struct rec { x: integer; }")
 
         chkEx("{ val s = set([ 5, 4, 3, 2, 1 ]); s._sort(); return s; }", "ct_err:unknown_member:set<integer>:_sort")
 

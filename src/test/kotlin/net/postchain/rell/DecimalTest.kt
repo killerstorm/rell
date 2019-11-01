@@ -360,8 +360,8 @@ class DecimalTest: BaseRellTest(false) {
         chk("g(decimal(123), decimal(456))", "dec[56088]")
     }
 
-    @Test fun testPromotionRecord() {
-        def("record rec { mutable x: decimal = 123; mutable y: decimal? = _nullable_int(789); }")
+    @Test fun testPromotionStruct() {
+        def("struct rec { mutable x: decimal = 123; mutable y: decimal? = _nullable_int(789); }")
 
         chkEx("{ val r = rec(); return r.x; }", "dec[123]")
         chkEx("{ val r = rec(x = decimal(456)); return r.x; }", "dec[456]")
@@ -390,7 +390,7 @@ class DecimalTest: BaseRellTest(false) {
 
     @Test fun testPromotionCreateUpdate() {
         tstCtx.useSql = true
-        def("class user { name; mutable x: decimal = 123; }")
+        def("entity user { name; mutable x: decimal = 123; }")
         insert("c0.user", "name,x", "333,'Bob',789")
 
         chk("(user @ { 'Bob' }).x", "dec[789]")

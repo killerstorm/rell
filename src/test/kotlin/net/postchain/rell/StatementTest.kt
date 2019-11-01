@@ -121,7 +121,7 @@ class StatementTest: BaseRellTest() {
     }
 
     @Test fun testFor() {
-        def("class user { name: text; }")
+        def("entity user { name: text; }")
         chkOp("create user('Bob'); create user('Alice'); create user('Trudy');")
 
         val code = """{
@@ -137,7 +137,7 @@ class StatementTest: BaseRellTest() {
     }
 
     @Test fun testForBreak() {
-        def("class user { name: text; }")
+        def("entity user { name: text; }")
         chkOp("create user('Bob'); create user('Alice'); create user('Trudy');")
 
         val code = """{
@@ -156,7 +156,7 @@ class StatementTest: BaseRellTest() {
     }
 
     @Test fun testForReturn() {
-        def("class user { name: text; }")
+        def("entity user { name: text; }")
         chkOp("create user('Bob'); create user('Alice'); create user('Trudy');")
 
         val code = """{

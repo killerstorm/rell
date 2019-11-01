@@ -64,12 +64,14 @@ object S_Grammar : Grammar<S_RellFile>() {
     private val CREATE by relltok("create")
     private val UPDATE by relltok("update")
     private val DELETE by relltok("delete")
+    private val ENTITY by relltok("entity")
     private val CLASS by relltok("class")
     private val KEY by relltok("key")
     private val INDEX by relltok("index")
     private val OBJECT by relltok("object")
     private val OPERATION by relltok("operation")
     private val QUERY by relltok("query")
+    private val STRUCT by relltok("struct")
     private val RECORD by relltok("record")
     private val ENUM by relltok("enum")
     private val FUNCTION by relltok("function")
@@ -181,22 +183,27 @@ object S_Grammar : Grammar<S_RellFile>() {
 
     private val relClauses by zeroOrMore(anyRelClause)
 
-    private val classAnnotations by -LPAR * separatedTerms(name, COMMA, false) * -RPAR
+    private val entityAnnotations by -LPAR * separatedTerms(name, COMMA, false) * -RPAR
 
-    private val classBodyFull by ( -LCURL * relClauses * -RCURL )
-    private val classBodyShort by ( SEMI ) map { _ -> null }
-    private val classBody by ( classBodyFull or classBodyShort )
+    private val entityBodyFull by ( -LCURL * relClauses * -RCURL )
+    private val entityBodyShort by ( SEMI ) map { _ -> null }
+    private val entityBody by ( entityBodyFull or entityBodyShort )
 
-    private val classDef by ( -CLASS * name * optional(classAnnotations) * optional(classBody) ) map {
-        (name, annotations2, clauses) -> annotatedDef { S_ClassDefinition(it, name, annotations2 ?: listOf(), clauses) }
+    private val entityKeyword by (ENTITY map { null }) or (CLASS map { it.pos })
+
+    private val entityDef by ( entityKeyword * name * optional(entityAnnotations) * optional(entityBody) ) map {
+        (deprecatedKwPos, name, annotations2, clauses) ->
+        annotatedDef { S_EntityDefinition(it, deprecatedKwPos, name, annotations2 ?: listOf(), clauses) }
     }
 
     private val objectDef by ( -OBJECT * name * -LCURL * zeroOrMore(anyRelClause) * -RCURL ) map {
         (name, clauses) -> annotatedDef { S_ObjectDefinition(it, name, clauses) }
     }
 
-    private val recordDef by ( -RECORD * name * -LCURL * zeroOrMore(relAttributeClause) * -RCURL ) map {
-        (name, attrs) -> annotatedDef { S_RecordDefinition(it, name, attrs) }
+    private val structKeyword by (STRUCT map { null }) or (RECORD map { it.pos })
+
+    private val structDef by ( structKeyword * name * -LCURL * zeroOrMore(relAttributeClause) * -RCURL ) map {
+        (deprecatedKwPos, name, attrs) -> annotatedDef { S_StructDefinition(it, deprecatedKwPos, name, attrs) }
     }
 
     private val enumDef by ( -ENUM * name * -LCURL * separatedTerms(name, COMMA, true) * optional(COMMA) * -RCURL ) map {
@@ -279,7 +286,7 @@ object S_Grammar : Grammar<S_RellFile>() {
     private val atExprFromSingle by fullName map { S_PosValue(it[0].pos, listOf(S_AtExprFrom(null, it))) }
 
     private val atExprFromItem by ( optional( name * -COLON ) * fullName ) map {
-        ( alias, className ) -> S_AtExprFrom(alias, className)
+        ( alias, entityName ) -> S_AtExprFrom(alias, entityName)
     }
 
     private val atExprFromMulti by ( LPAR * separatedTerms( atExprFromItem, COMMA, false ) * -RPAR ) map {
@@ -359,8 +366,8 @@ object S_Grammar : Grammar<S_RellFile>() {
     private val createExprArgs by ( -LPAR * separatedTerms(createExprArg, COMMA, true) * -RPAR )
 
     private val createExpr by (CREATE * fullName * createExprArgs) map {
-        (kw, className, exprs) ->
-        S_CreateExpr(kw.pos, className, exprs)
+        (kw, entityName, exprs) ->
+        S_CreateExpr(kw.pos, entityName, exprs)
     }
 
     private val virtualExpr by virtualType map { type -> S_VirtualExpr(type) }
@@ -619,9 +626,9 @@ object S_Grammar : Grammar<S_RellFile>() {
     }
 
     private val anyDef: Parser<AnnotatedDef> by (
-            classDef
+            entityDef
             or objectDef
-            or recordDef
+            or structDef
             or enumDef
             or opDef
             or queryDef
@@ -687,7 +694,7 @@ private class BaseExprTail_Lookup(val pos: S_Pos, val expr: S_Expr): BaseExprTai
 }
 
 private class BaseExprTail_Call(val args: List<S_NameExprPair>): BaseExprTail() {
-    override fun toExpr(base: S_Expr) = S_RecordOrCallExpr(base, args)
+    override fun toExpr(base: S_Expr) = S_StructOrCallExpr(base, args)
 }
 
 private class BaseExprTail_NotNull(val pos: S_Pos): BaseExprTail() {

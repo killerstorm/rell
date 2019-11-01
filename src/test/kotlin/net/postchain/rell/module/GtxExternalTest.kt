@@ -35,7 +35,7 @@ class GtxExternalTest: BaseGtxTest() {
         chk("123", "123")
     }
 
-    @Test fun testUnknownExternalClass() {
+    @Test fun testUnknownExternalEntity() {
         tstCtx.blockchain(333, "deadbeef")
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
@@ -45,25 +45,25 @@ class GtxExternalTest: BaseGtxTest() {
             t.init()
         }
 
-        def("external 'foo' { @log class user {} }")
+        def("external 'foo' { @log entity user {} }")
         tst.wrapRtErrors = false
         tst.extraModuleConfig["dependencies"] = "[['foo','deadbeef']]"
-        chk("123", "rt_err:external_meta_nocls:foo:user")
+        chk("123", "rt_err:external_meta_no_entity:foo:user")
     }
 
-    @Test fun testExternalClassOK() {
+    @Test fun testExternalEntityOK() {
         tstCtx.blockchain(333, "deadbeef")
         tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         run {
             val t = RellCodeTester(tstCtx)
-            t.def("@log class user { name; }")
+            t.def("@log entity user { name; }")
             t.chainId = 333
             t.insert("c333.user", "name,transaction", "15,'Bob',444")
             t.init()
         }
 
-        def("external 'foo' { @log class user { name; } }")
+        def("external 'foo' { @log entity user { name; } }")
         tst.wrapRtErrors = false
         tst.extraModuleConfig["dependencies"] = "[['foo','deadbeef']]"
         chk("_strict_str(user @{} ( =user, =.name ))", "'(user[15],text[Bob])'")

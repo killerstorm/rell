@@ -18,10 +18,10 @@ import kotlin.test.assertEquals
 
 class RellCodeTester(
         tstCtx: RellTestContext,
-        classDefs: List<String> = listOf(),
+        entityDefs: List<String> = listOf(),
         inserts: List<String> = listOf(),
         gtv: Boolean = false
-): RellBaseTester(tstCtx, classDefs, inserts, gtv)
+): RellBaseTester(tstCtx, entityDefs, inserts, gtv)
 {
     var gtvResult: Boolean = gtv
         set(value) {

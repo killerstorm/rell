@@ -17,7 +17,7 @@ class ObjectTest: BaseRellTest() {
 
     @Test fun testReadUnderAt() {
         def("object foo { n: integer = 123; s: text = 'Hello'; }")
-        def("class user {name;}")
+        def("entity user {name;}")
         chkOp("create user('Bob');")
         chk("user @{} ( foo.n )", "int[123]")
         chk("user @{} ( foo.s )", "text[Hello]")
@@ -33,11 +33,11 @@ class ObjectTest: BaseRellTest() {
     }
 
     @Test fun testBadType() {
-        chkCompile("object foo { x: list<integer> = list<integer>(); }", "ct_err:class_attr_type:x:list<integer>")
-        chkCompile("object foo { x: set<integer> = set<integer>(); }", "ct_err:class_attr_type:x:set<integer>")
-        chkCompile("object foo { x: map<integer,text> = map<integer, text>(); }", "ct_err:class_attr_type:x:map<integer,text>")
-        chkCompile("object foo { x: (integer,text) = (123,'Hello'); }", "ct_err:class_attr_type:x:(integer,text)")
-        chkCompile("object foo { x: integer? = 123; }", "ct_err:class_attr_type:x:integer?")
+        chkCompile("object foo { x: list<integer> = list<integer>(); }", "ct_err:entity_attr_type:x:list<integer>")
+        chkCompile("object foo { x: set<integer> = set<integer>(); }", "ct_err:entity_attr_type:x:set<integer>")
+        chkCompile("object foo { x: map<integer,text> = map<integer, text>(); }", "ct_err:entity_attr_type:x:map<integer,text>")
+        chkCompile("object foo { x: (integer,text) = (123,'Hello'); }", "ct_err:entity_attr_type:x:(integer,text)")
+        chkCompile("object foo { x: integer? = 123; }", "ct_err:entity_attr_type:x:integer?")
     }
 
     @Test fun testKeyIndex() {
@@ -50,18 +50,18 @@ class ObjectTest: BaseRellTest() {
         chkCompile("function g(f: foo){}", "ct_err:unknown_type:foo")
         chkCompile("function g(): foo {}", "ct_err:unknown_type:foo")
         chkCompile("function g() { var f: foo; }", "ct_err:unknown_type:foo")
-        chkCompile("class bar { f: foo; }", "ct_err:unknown_type:foo")
+        chkCompile("entity bar { f: foo; }", "ct_err:unknown_type:foo")
         chkCompile("function g() { var l: list<foo>; }", "ct_err:unknown_type:foo")
         chkCompile("function g() { var l: set<foo>; }", "ct_err:unknown_type:foo")
         chkCompile("function g() { var l: map<integer, foo>; }", "ct_err:unknown_type:foo")
         chkCompile("function g() { var l: map<foo, integer>; }", "ct_err:unknown_type:foo")
-        chkCompile("record bar { foo; }", "ct_err:unknown_name_type:foo")
+        chkCompile("struct bar { foo; }", "ct_err:unknown_name_type:foo")
     }
 
     @Test fun testCreateDelete() {
         def("object foo { x: integer = 123; }")
-        chkOp("create foo(x=123);", "ct_err:unknown_class:foo")
-        chkOp("delete foo @* {};", "ct_err:unknown_class:foo")
+        chkOp("create foo(x=123);", "ct_err:unknown_entity:foo")
+        chkOp("delete foo @* {};", "ct_err:unknown_entity:foo")
         chkOp("delete foo;", "ct_err:stmt_delete_obj:foo")
     }
 
@@ -225,7 +225,7 @@ class ObjectTest: BaseRellTest() {
     }
 
     @Test fun testInitSideEffects() {
-        def("class journal { n: integer; s: text; }")
+        def("entity journal { n: integer; s: text; }")
         def("object a { x: integer = f('a', 123); }")
         def("object b { x: integer = f('b', 456); }")
         def("object c { x: integer = f('c', 789); }")
@@ -242,7 +242,7 @@ class ObjectTest: BaseRellTest() {
 
     @Test fun testNameResolution() {
         def("object foo { x: integer = 123; }")
-        def("class user { name; }")
+        def("entity user { name; }")
         insert("c0.user", "name", "1,'Bob'")
 
         // Object vs. local: error.

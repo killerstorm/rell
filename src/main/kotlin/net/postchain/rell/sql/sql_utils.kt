@@ -1,7 +1,7 @@
 package net.postchain.rell.sql
 
 import com.google.common.collect.HashMultimap
-import net.postchain.rell.model.R_Class
+import net.postchain.rell.model.R_Entity
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_SqlContext
 import org.apache.http.client.utils.URLEncodedUtils
@@ -119,7 +119,7 @@ object SqlUtils {
         return res
     }
 
-    fun recordsExist(sqlExec: SqlExecutor, sqlCtx: Rt_SqlContext, cls: R_Class): Boolean {
+    fun recordsExist(sqlExec: SqlExecutor, sqlCtx: Rt_SqlContext, cls: R_Entity): Boolean {
         val table = cls.sqlMapping.table(sqlCtx)
         val sql = """SELECT "${SqlConstants.ROWID_COLUMN}" FROM "$table" LIMIT 1;"""
         var res: Boolean = false

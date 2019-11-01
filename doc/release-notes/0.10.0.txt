@@ -13,68 +13,82 @@ Highlights:
 - Rell files within a directory-module see each other's definitions and are imported as a single module
 
 
-2. Language: @mount annotation
+2. Language: Entities and structs
 
-Mount names are defined for classes, objects, operations and queries:
+Classes renamed to entities and records renamed to structs:
 
-- for classes and objects, that's the name of an SQL table where the data is stored
+entity user {
+    name;
+    company;
+}
+
+struct module_args {
+    chain_name: text;
+}
+
+
+3. Language: @mount annotation
+
+Mount names are defined for entities, objects, operations and queries:
+
+- for entities and objects, that's the name of an SQL table where the data is stored
 - for operations and queries, that's a name used to invoke an operation or a query from the outside
 
 By default, a mount name of a definition is defined by its fully-qualified name (namespace path + definition name).
 
 The new @mount annotation is used to specify an arbitrary mount name for a definition:
 
-@mount('foo.bar.user') class user {}
+@mount('foo.bar.user') entity user {}
 
 
-3. Language: Annotations syntax
+4. Language: Annotations syntax
 
 Following the example of the @mount annotation, the old log annotation is now written the same way:
 
-@log class user {}
+@log entity user {}
 
 instead of
 
-class user (log) {}
+entity user (log) {}
 
 (the old syntax is still allowed, but deprecated)
 
 
-4. Language: Anonymous namespace
+5. Language: Anonymous namespace
 
 An anonymous (without a name) namespace allows to apply an annotation to a set of definitions:
 
 @mount('foo'bar')
 namespace {
-    class user {}
-    class company {}
+    entity user {}
+    entity company {}
 }
 
 
-5. Language: Name inference from qualified type name
+6. Language: Name inference from qualified type name
 
 Rell always allowed to not specify a type or a name if they are the same:
 
-class balance { account; asset; }
+entity balance { account; asset; }
 
 is equivalent to
 
-class balance { account: account; asset: asset; }
+entity balance { account: account; asset: asset; }
 
 However, sometimes a type is defined in a namespace or in another module, so the code becomes:
 
-class balance { foo.account; bar.asset; }
+entity balance { foo.account; bar.asset; }
 
 Now such notation is also supported, and the code is equivalent to
 
-class balance { account: foo.account; asset: bar.asset; }
+entity balance { account: foo.account; asset: bar.asset; }
 
 Works also for variables, parameters and nullable types:
 
 operation o(foo.user?) {} // same as "user: foo.user?"
 
 
-6. Library: byte_array.sha256() function
+7. Library: byte_array.sha256() function
 
 A new member function sha256() for the byte_array type has been added.
 

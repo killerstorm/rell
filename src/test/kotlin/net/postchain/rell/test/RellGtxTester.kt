@@ -21,11 +21,11 @@ import kotlin.test.fail
 
 class RellGtxTester(
         tstCtx: RellTestContext,
-        classDefs: List<String> = listOf(),
+        entityDefs: List<String> = listOf(),
         inserts: List<String> = listOf(),
         gtv: Boolean = false,
         chainId: Long = 995511
-): RellBaseTester(tstCtx, classDefs, inserts, gtv) {
+): RellBaseTester(tstCtx, entityDefs, inserts, gtv) {
     var wrapRtErrors = true
     val extraModuleConfig = mutableMapOf<String, String>()
     var blockchainRID = "DEADBEEF"

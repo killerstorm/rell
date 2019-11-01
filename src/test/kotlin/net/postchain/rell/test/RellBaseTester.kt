@@ -15,7 +15,7 @@ import kotlin.test.assertEquals
 
 abstract class RellBaseTester(
         private val tstCtx: RellTestContext,
-        classDefs: List<String> = listOf(),
+        entityDefs: List<String> = listOf(),
         inserts: List<String> = listOf(),
         gtv: Boolean = false
 ){
@@ -29,7 +29,7 @@ abstract class RellBaseTester(
     var gtv = gtv
     var deprecatedError = false
 
-    var defs: List<String> = classDefs
+    var defs: List<String> = entityDefs
         set(value) {
             checkNotInited()
             field = value
@@ -163,7 +163,7 @@ abstract class RellBaseTester(
 
     fun chkDataNew(expected: List<String>) {
         expectedData.addAll(expected)
-        val actual = dumpDatabaseClasses()
+        val actual = dumpDatabaseEntities()
         assertEquals(expectedData, actual)
     }
 
@@ -186,10 +186,10 @@ abstract class RellBaseTester(
         assertEquals(expected.toList(), actual)
     }
 
-    private fun dumpDatabaseClasses(): List<String> {
+    private fun dumpDatabaseEntities(): List<String> {
         init()
         val sqlMapping = createChainSqlMapping()
-        return SqlTestUtils.dumpDatabaseClasses(tstCtx.sqlExec(), sqlMapping, appProto!!)
+        return SqlTestUtils.dumpDatabaseEntity(tstCtx.sqlExec(), sqlMapping, appProto!!)
     }
 
     fun dumpDatabaseTables(): List<String> {

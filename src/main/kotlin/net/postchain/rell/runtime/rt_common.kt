@@ -33,7 +33,7 @@ class Rt_ExternalChain(val chainId: Long, val rid: ByteArray, val height: Long) 
     val sqlMapping = Rt_ChainSqlMapping(chainId)
 }
 
-class Rt_CallFrame(val entCtx: Rt_EntityContext, rFrame: R_CallFrame) {
+class Rt_CallFrame(val defCtx: Rt_DefinitionContext, rFrame: R_CallFrame) {
     private var curBlock = rFrame.rootBlock
     private val values = Array<Rt_Value?>(rFrame.size) { null }
 
@@ -128,7 +128,7 @@ class Rt_ChainSqlMapping(val chainId: Long) {
 
     val rowidTable = fullName(SqlConstants.ROWID_GEN)
     val rowidFunction = fullName(SqlConstants.MAKE_ROWID)
-    val metaClassTable = fullName("sys.classes")
+    val metaEntitiesTable = fullName("sys.classes")
     val metaAttributesTable = fullName("sys.attributes")
 
     val tableSqlFilter = "$prefix%"

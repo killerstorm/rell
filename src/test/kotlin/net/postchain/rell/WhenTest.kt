@@ -276,7 +276,7 @@ class WhenTest: BaseRellTest(false) {
 
     private fun initWhenAt(type: String, value: String) {
         tstCtx.useSql = true
-        def("class foo { mutable x: $type; s1: text; s2: text; }")
+        def("entity foo { mutable x: $type; s1: text; s2: text; }")
         insert("c0.foo", "x,s1,s2", "100,$value,'Yes','No'")
     }
 

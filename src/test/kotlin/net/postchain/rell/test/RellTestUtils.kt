@@ -176,10 +176,10 @@ object RellTestUtils {
 
     fun compileApp(sourceDir: C_SourceDir, options: C_CompilerOptions): C_CompilationResult {
         val modules = listOf(R_ModuleName.EMPTY)
-        return compileApp0(sourceDir, modules, options)
+        return compileApp(sourceDir, modules, options)
     }
 
-    private fun compileApp0(sourceDir: C_SourceDir, modules: List<R_ModuleName>, options: C_CompilerOptions): C_CompilationResult {
+    fun compileApp(sourceDir: C_SourceDir, modules: List<R_ModuleName>, options: C_CompilerOptions): C_CompilationResult {
         val res = C_Compiler.compile(sourceDir, modules, options)
         TestSnippetsRecorder.record(sourceDir, modules, options, res)
         return res

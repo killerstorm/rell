@@ -33,20 +33,20 @@ class QueryTest: BaseRellTest() {
     }
 
     @Test fun testReturnSelectAllNoObjects() {
-        def("class user { name: text; }")
+        def("entity user { name: text; }")
         insert("c0.user", "name", "11, 'Alice'")
         chkEx("= user @* { .name == 'Bob' } ;", "list<user>[]")
     }
 
     @Test fun testReturnSelectAllOneObject() {
-        def("class user { name: text; }")
+        def("entity user { name: text; }")
         insert("c0.user", "name", "11,'Alice'")
         insert("c0.user", "name", "33,'Bob'")
         chkEx("= user @* { .name == \"Bob\" } ;", "list<user>[user[33]]")
     }
 
     @Test fun testReturnSelectAllManyObjects() {
-        def("class user { name: text; }")
+        def("entity user { name: text; }")
         insert("c0.user", "name", "11,'Alice'")
         insert("c0.user", "name", "33,'Bob'")
         insert("c0.user", "name", "55,'James'")
@@ -100,7 +100,7 @@ class QueryTest: BaseRellTest() {
     }
 
     @Test fun testCreateUpdateDelete() {
-        def("class user { mutable name: text; }")
+        def("entity user { mutable name: text; }")
         chkEx("{ create user('Bob'); return 0; }", "ct_err:no_db_update")
         chkEx("{ update user @ {} ( name = 'Bob'); return 0; }", "ct_err:no_db_update")
         chkEx("{ delete user @ { .name == 'Bob' }; return 0; }", "ct_err:no_db_update")

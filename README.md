@@ -1,5 +1,7 @@
 ## Language Guide
 
+[Modules](doc/guide/modules.rst)
+
 [General Language Features](doc/guide/general.rst)
 
 [Database Operations](doc/guide/database.rst)

@@ -7,32 +7,32 @@ import org.junit.Test
 
 class LogAnnotationTest: BaseRellTest() {
     @Test fun testLegacyAnnotation() {
-        chkCompile("class foo (log) { x: integer; }", "OK")
+        chkCompile("entity foo (log) { x: integer; }", "OK")
         tst.chkWarn("ann:legacy:log")
 
-        chkCompile("class foo (log) { x: integer; transaction: integer; }", "ct_err:dup_attr:transaction")
-        chkCompile("class foo (log) { x: integer; transaction; }", "ct_err:dup_attr:transaction")
+        chkCompile("entity foo (log) { x: integer; transaction: integer; }", "ct_err:dup_attr:transaction")
+        chkCompile("entity foo (log) { x: integer; transaction; }", "ct_err:dup_attr:transaction")
 
-        chkCompile("@log class foo (log) { x: integer; }", "ct_err:class_ann_dup:log")
+        chkCompile("@log entity foo (log) { x: integer; }", "ct_err:entity_ann_dup:log")
         tst.chkWarn("ann:legacy:log")
     }
 
     @Test fun testGeneral() {
-        chkCompile("class foo { mutable x: integer; }", "OK")
-        chkCompile("@log class foo { mutable x: integer; }", "ct_err:class_attr_mutable_log:foo:x")
+        chkCompile("entity foo { mutable x: integer; }", "OK")
+        chkCompile("@log entity foo { mutable x: integer; }", "ct_err:entity_attr_mutable_log:foo:x")
 
-        chkCompile("@log class foo { x: integer; }", "OK")
-        chkCompile("@log class foo { x: integer; transaction: integer; }", "ct_err:dup_attr:transaction")
-        chkCompile("@log class foo { x: integer; transaction; }", "ct_err:dup_attr:transaction")
+        chkCompile("@log entity foo { x: integer; }", "OK")
+        chkCompile("@log entity foo { x: integer; transaction: integer; }", "ct_err:dup_attr:transaction")
+        chkCompile("@log entity foo { x: integer; transaction; }", "ct_err:dup_attr:transaction")
 
-        chkCompile("@log @log class foo { x: integer; }", "ct_err:ann:log:dup")
+        chkCompile("@log @log entity foo { x: integer; }", "ct_err:ann:log:dup")
 
-        chkCompile("@log() class foo { x: integer; }", "OK")
-        chkCompile("@log(123) class foo { x: integer; }", "ct_err:ann:log:args:1")
+        chkCompile("@log() entity foo { x: integer; }", "OK")
+        chkCompile("@log(123) entity foo { x: integer; }", "ct_err:ann:log:args:1")
     }
 
     @Test fun testSysAttributes() {
-        def("@log class foo { x: integer; }")
+        def("@log entity foo { x: integer; }")
         tst.inserts = LibBlockTransactionTest.BLOCK_INSERTS
         tst.chainId = 333
         tst.opContext = Rt_OpContext(-1, 444, -1, listOf())
@@ -61,7 +61,7 @@ class LogAnnotationTest: BaseRellTest() {
     }
 
     @Test fun testSysAttributesModify() {
-        def("@log class foo { x: integer; }")
+        def("@log entity foo { x: integer; }")
         tst.inserts = LibBlockTransactionTest.BLOCK_INSERTS
         tst.chainId = 333
         tst.opContext = Rt_OpContext(-1, 444, -1, listOf())
@@ -76,8 +76,8 @@ class LogAnnotationTest: BaseRellTest() {
     }
 
     @Test fun testDelete() {
-        def("@log class foo { x: integer; }")
-        def("class bar { x: integer; }")
+        def("@log entity foo { x: integer; }")
+        def("entity bar { x: integer; }")
         chkOp("delete foo @* {};", "ct_err:stmt_delete_cant:foo")
         chkOp("delete bar @* {};")
     }

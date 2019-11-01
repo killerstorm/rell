@@ -40,10 +40,10 @@ class C_Message(
 
 object C_Constants {
     const val LOG_ANNOTATION = "log"
-    const val MODULE_ARGS_RECORD = "module_args"
+    const val MODULE_ARGS_STRUCT = "module_args"
 
-    const val TRANSACTION_CLASS = "transaction"
-    const val BLOCK_CLASS = "block"
+    const val TRANSACTION_ENTITY = "transaction"
+    const val BLOCK_ENTITY = "block"
 
     const val DECIMAL_INT_DIGITS = 131072
     const val DECIMAL_FRAC_DIGITS = 20
@@ -113,39 +113,39 @@ object C_Utils {
         }
     }
 
-    fun createBlockClass(executor: C_CompilerExecutor, chain: R_ExternalChainRef?): R_Class {
+    fun createBlockEntity(executor: C_CompilerExecutor, chain: R_ExternalChainRef?): R_Entity {
         val attrs = listOf(
                 R_Attrib(0, "block_height", R_IntegerType, false, false),
                 R_Attrib(1, "block_rid", R_ByteArrayType, false, false),
                 R_Attrib(2, "timestamp", R_IntegerType, false, false)
         )
-        val sqlMapping = R_ClassSqlMapping_Block(chain)
-        return createSysClass(executor, C_Constants.BLOCK_CLASS, chain, sqlMapping, attrs)
+        val sqlMapping = R_EntitySqlMapping_Block(chain)
+        return createSysEntity(executor, C_Constants.BLOCK_ENTITY, chain, sqlMapping, attrs)
     }
 
-    fun createTransactionClass(executor: C_CompilerExecutor, chain: R_ExternalChainRef?, blockClass: R_Class): R_Class {
+    fun createTransactionEntity(executor: C_CompilerExecutor, chain: R_ExternalChainRef?, blockEntity: R_Entity): R_Entity {
         val attrs = listOf(
                 R_Attrib(0, "tx_rid", R_ByteArrayType, false, false),
                 R_Attrib(1, "tx_hash", R_ByteArrayType, false, false),
                 R_Attrib(2, "tx_data", R_ByteArrayType, false, false),
-                R_Attrib(3, "block", blockClass.type, false, false, true, "block_iid")
+                R_Attrib(3, "block", blockEntity.type, false, false, true, "block_iid")
         )
-        val sqlMapping = R_ClassSqlMapping_Transaction(chain)
-        return createSysClass(executor, C_Constants.TRANSACTION_CLASS, chain, sqlMapping, attrs)
+        val sqlMapping = R_EntitySqlMapping_Transaction(chain)
+        return createSysEntity(executor, C_Constants.TRANSACTION_ENTITY, chain, sqlMapping, attrs)
     }
 
-    private fun createSysClass(
+    private fun createSysEntity(
             executor: C_CompilerExecutor,
             simpleName: String,
             chain: R_ExternalChainRef?,
-            sqlMapping: R_ClassSqlMapping,
+            sqlMapping: R_EntitySqlMapping,
             attrs: List<R_Attrib>
-    ): R_Class {
+    ): R_Entity {
         val fullName = if (chain == null) simpleName else "external[${chain.name}].$simpleName"
         val names = R_DefinitionNames(simpleName, fullName, fullName)
         val mountName = R_MountName.of(simpleName)
 
-        val flags = R_ClassFlags(
+        val flags = R_EntityFlags(
                 isObject = false,
                 canCreate = false,
                 canUpdate = false,
@@ -154,12 +154,12 @@ object C_Utils {
                 log = false
         )
 
-        val externalCls = if (chain == null) null else R_ExternalClass(chain, false)
-        val cls = R_Class(names, mountName, flags, sqlMapping, externalCls)
+        val externalCls = if (chain == null) null else R_ExternalEntity(chain, false)
+        val cls = R_Entity(names, mountName, flags, sqlMapping, externalCls)
 
         val attrMap = attrs.map { it.name to it }.toMap()
         executor.onPass(C_CompilerPass.MEMBERS) {
-            cls.setBody(R_ClassBody(listOf(), listOf(), attrMap))
+            cls.setBody(R_EntityBody(listOf(), listOf(), attrMap))
         }
 
         return cls
@@ -304,20 +304,20 @@ object C_Errors {
     }
 
     fun errCannotUpdate(pos: S_Pos, name: String): C_Error {
-        return C_Error(pos, "stmt_update_cant:$name", "Not allowed to update objects of class '$name'")
+        return C_Error(pos, "stmt_update_cant:$name", "Not allowed to update objects of entity '$name'")
     }
 
     fun errCannotDelete(pos: S_Pos, name: String): C_Error {
-        return C_Error(pos, "stmt_delete_cant:$name", "Not allowed to delete objects of class '$name'")
+        return C_Error(pos, "stmt_delete_cant:$name", "Not allowed to delete objects of entity '$name'")
     }
 
     fun errNameConflictAliasLocal(name: S_Name): C_Error {
         val nameStr = name.str
-        throw C_Error(name.pos, "expr_name_clsloc:$nameStr",
-                "Name '$nameStr' is ambiguous: can be class alias or local variable")
+        throw C_Error(name.pos, "expr_name_entity_local:$nameStr",
+                "Name '$nameStr' is ambiguous: can be entity alias or local variable")
     }
 
-    fun errNameConflict(name: S_Name, otherType: C_DefType, otherPos: S_Pos?): C_Error {
+    fun errNameConflict(name: S_Name, otherType: C_DeclarationType, otherPos: S_Pos?): C_Error {
         val baseCode = "name_conflict"
         val baseMsg = "Name conflict"
         return if (otherPos != null) {
@@ -497,47 +497,47 @@ object C_GraphUtils {
     }
 }
 
-class C_RecordsStructure(
-        val mutable: Set<R_Record>,
-        val nonVirtualable: Set<R_Record>,
-        val nonGtvFrom: Set<R_Record>,
-        val nonGtvTo: Set<R_Record>,
-        val graph: Map<R_Record, List<R_Record>>
+class C_StructsInfo(
+        val mutable: Set<R_Struct>,
+        val nonVirtualable: Set<R_Struct>,
+        val nonGtvFrom: Set<R_Struct>,
+        val nonGtvTo: Set<R_Struct>,
+        val graph: Map<R_Struct, List<R_Struct>>
 )
 
-object C_RecordUtils {
-    fun buildRecordsStructure(records: Collection<R_Record>): C_RecordsStructure {
-        val structMap = records.map { Pair(it, calcRecStruct(it.type)) }.toMap()
-        val graph = structMap.mapValues { (_, v) -> v.dependencies.toList() }
-        val mutable = structMap.filter { (_, v) -> v.directFlags.mutable }.keys
-        val nonVirtualable = structMap.filter { (_, v) -> !v.directFlags.virtualable }.keys
-        val nonGtvFrom = structMap.filter { (_, v) -> !v.directFlags.gtv.fromGtv }.keys
-        val nonGtvTo = structMap.filter { (_, v) -> !v.directFlags.gtv.toGtv }.keys
-        return C_RecordsStructure(mutable, nonVirtualable, nonGtvFrom, nonGtvTo, graph)
+object C_StructUtils {
+    fun buildStructsInfo(structs: Collection<R_Struct>): C_StructsInfo {
+        val infoMap = structs.map { Pair(it, calcStructInfo(it.type)) }.toMap()
+        val graph = infoMap.mapValues { (_, v) -> v.dependencies.toList() }
+        val mutable = infoMap.filter { (_, v) -> v.directFlags.mutable }.keys
+        val nonVirtualable = infoMap.filter { (_, v) -> !v.directFlags.virtualable }.keys
+        val nonGtvFrom = infoMap.filter { (_, v) -> !v.directFlags.gtv.fromGtv }.keys
+        val nonGtvTo = infoMap.filter { (_, v) -> !v.directFlags.gtv.toGtv }.keys
+        return C_StructsInfo(mutable, nonVirtualable, nonGtvFrom, nonGtvTo, graph)
     }
 
-    private fun calcRecStruct(type: R_Type): RecStruct {
+    private fun calcStructInfo(type: R_Type): StructInfo {
         val flags = mutableListOf(type.directFlags())
-        val deps = mutableSetOf<R_Record>()
+        val deps = mutableSetOf<R_Struct>()
 
         for (subType in type.componentTypes()) {
-            val subStruct = discoverRecStruct(subType)
+            val subStruct = discoverStructInfo(subType)
             flags.add(subStruct.directFlags)
             deps.addAll(subStruct.dependencies)
         }
 
         val resFlags = R_TypeFlags.combine(flags)
-        return RecStruct(resFlags, deps.toImmSet())
+        return StructInfo(resFlags, deps.toImmSet())
     }
 
-    private fun discoverRecStruct(type: R_Type): RecStruct {
-        if (type is R_RecordType) {
-            return RecStruct(type.directFlags(), setOf(type.record))
+    private fun discoverStructInfo(type: R_Type): StructInfo {
+        if (type is R_StructType) {
+            return StructInfo(type.directFlags(), setOf(type.struct))
         }
-        return calcRecStruct(type)
+        return calcStructInfo(type)
     }
 
-    private class RecStruct(val directFlags: R_TypeFlags, val dependencies: Set<R_Record>)
+    private class StructInfo(val directFlags: R_TypeFlags, val dependencies: Set<R_Struct>)
 }
 
 private class C_LateInitContext(executor: C_CompilerExecutor) {

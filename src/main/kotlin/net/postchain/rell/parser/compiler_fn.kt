@@ -37,15 +37,15 @@ abstract class C_RegularGlobalFunction: C_GlobalFunction() {
     }
 }
 
-class C_RecordGlobalFunction(private val record: R_Record): C_GlobalFunction() {
+class C_StructGlobalFunction(private val struct: R_Struct): C_GlobalFunction() {
     override fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
-        return compileCall(record, ctx, name, args)
+        return compileCall(struct, ctx, name, args)
     }
 
     companion object {
-        fun compileCall(record: R_Record, ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
-            val attrs = C_AttributeResolver.resolveCreate(ctx, record.attributes, args, name.pos)
-            val rExpr = R_RecordExpr(record, attrs.rAttrs)
+        fun compileCall(struct: R_Struct, ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
+            val attrs = C_AttributeResolver.resolveCreate(ctx, struct.attributes, args, name.pos)
+            val rExpr = R_StructExpr(struct, attrs.rAttrs)
             return C_RValue.makeExpr(name.pos, rExpr, attrs.exprFacts)
         }
     }
@@ -198,7 +198,7 @@ class C_DeprecatedFuncCase<CtxT: C_FuncCaseCtx>(
 
         private fun deprecatedMessage(ctx: C_ExprContext, caseCtx: CtxT) {
             val name = caseCtx.fullName
-            C_Def.deprecatedMessage(ctx.modCtx, C_DefType.FUNCTION, name.pos, name.str, deprecated)
+            C_Def.deprecatedMessage(ctx.modCtx, C_DeclarationType.FUNCTION, name.pos, name.str, deprecated)
         }
     }
 }

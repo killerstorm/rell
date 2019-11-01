@@ -15,82 +15,82 @@ class RellConfigGenTest {
     private val ver = "v${RellTestUtils.RELL_VER}"
 
     @Test fun testNoTemplateSingleFile() {
-        val files = mapOf("main.rell" to "class foo {}")
-        chkCfg(files, null, "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'class foo {}'}}}}")
+        val files = mapOf("main.rell" to "entity foo {}")
+        chkCfg(files, null, "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
     }
 
     @Test fun testNoTemplateMultipleFiles() {
-        val files = mapOf("main.rell" to "class user {}", "foo.rell" to "module; class foo {}", "bar.rell" to "module; class bar {}")
-        chkCfg(files, null, "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'class user {}'}}}}")
+        val files = mapOf("main.rell" to "entity user {}", "foo.rell" to "module; entity foo {}", "bar.rell" to "module; entity bar {}")
+        chkCfg(files, null, "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity user {}'}}}}")
     }
 
     @Test fun testNoTemplateImportedModules() {
-        val files = mapOf("main.rell" to "import foo;", "foo.rell" to "module; import bar;", "bar.rell" to "module; class bar {}")
-        val expFiles = "{'bar.rell':'module; class bar {}','foo.rell':'module; import bar;','main.rell':'import foo;'}"
+        val files = mapOf("main.rell" to "import foo;", "foo.rell" to "module; import bar;", "bar.rell" to "module; entity bar {}")
+        val expFiles = "{'bar.rell':'module; entity bar {}','foo.rell':'module; import bar;','main.rell':'import foo;'}"
         chkCfg(files, null, "{'gtx':{'rell':{'modules':[''],'sources_$ver':$expFiles}}}")
     }
 
     @Test fun testTemplate() {
-        val files = mapOf("main.rell" to "class foo {}")
+        val files = mapOf("main.rell" to "entity foo {}")
 
-        chkCfg(files, "{}", "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'class foo {}'}}}}")
+        chkCfg(files, "{}", "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
 
         chkCfg(files, "{'foo':'bar'}",
-                "{'foo':'bar','gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'class foo {}'}}}}")
+                "{'foo':'bar','gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
 
         chkCfg(files, "{'gtx':{}}",
-                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'class foo {}'}}}}")
+                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
 
         chkCfg(files, "{'gtx':{'foo':'bar'}}",
-                "{'gtx':{'foo':'bar','rell':{'modules':[''],'sources_$ver':{'main.rell':'class foo {}'}}}}")
+                "{'gtx':{'foo':'bar','rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
 
         chkCfg(files, "{'gtx':{'rell':{}}}",
-                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'class foo {}'}}}}")
+                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
 
         chkCfg(files, "{'gtx':{'rell':{'foo':'bar'}}}",
-                "{'gtx':{'rell':{'foo':'bar','modules':[''],'sources_$ver':{'main.rell':'class foo {}'}}}}")
+                "{'gtx':{'rell':{'foo':'bar','modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
 
         chkCfg(files, "{'gtx':{'rell':{'modules':['junk','trash','garbage']}}}",
-                "{'gtx':{'rell':{'modules':['junk','trash','garbage',''],'sources_$ver':{'main.rell':'class foo {}'}}}}")
+                "{'gtx':{'rell':{'modules':['junk','trash','garbage',''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
 
         chkCfg(files, "{'gtx':{'rell':{'modules':['','','']}}}",
-                "{'gtx':{'rell':{'modules':['','',''],'sources_$ver':{'main.rell':'class foo {}'}}}}")
+                "{'gtx':{'rell':{'modules':['','',''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
 
         chkCfg(files, "{'gtx':{'rell':{'modules':['']}}}",
-                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'class foo {}'}}}}")
+                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
 
         chkCfg(files, "{'gtx':{'rell':{'modules':[]}}}",
-                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'class foo {}'}}}}")
+                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
 
         chkCfg(files, "{'gtx':{'rell':{'sources_$ver':{}}}}",
-                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'class foo {}'}}}}")
+                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
 
         chkCfg(files, "{'gtx':{'rell':{'sources_$ver':{'garbage.rell':'garbage'}}}}",
-                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'garbage.rell':'garbage','main.rell':'class foo {}'}}}}")
+                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'garbage.rell':'garbage','main.rell':'entity foo {}'}}}}")
 
         chkCfg(files, "{'gtx':{'rell':{'sources_$ver':{'main.rell':'garbage'}}}}",
-                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'class foo {}'}}}}")
+                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
     }
 
     @Test fun testTemplateXml() {
-        val files = mapOf("main.rell" to "class foo {}")
+        val files = mapOf("main.rell" to "entity foo {}")
 
-        chkCfg0(files, "<dict/>", "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'class foo {}'}}}}")
-        chkCfg0(files, "<dict></dict>", "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'class foo {}'}}}}")
+        chkCfg0(files, "<dict/>", "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
+        chkCfg0(files, "<dict></dict>", "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
 
         val header = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>"""
 
         chkCfg0(files, """$header<dict></dict>""",
-                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'class foo {}'}}}}")
+                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
 
         chkCfg0(files, """$header<dict/>""",
-                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'class foo {}'}}}}")
+                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
 
         chkCfg0(files, """$header<dict><entry key="gtx"><dict/></entry></dict>""",
-                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'class foo {}'}}}}")
+                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
 
         chkCfg0(files, """$header<dict><entry key="gtx"><dict></dict></entry></dict>""",
-                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'class foo {}'}}}}")
+                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
     }
 
     private fun chkCfg(files: Map<String, String>, templateJson: String?, expectedJson: String) {

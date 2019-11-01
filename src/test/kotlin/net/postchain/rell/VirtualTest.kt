@@ -10,13 +10,13 @@ import org.junit.Test
 
 class VirtualTest: BaseGtxTest(false) {
     @Test fun testAllowedTypes() {
-        def("record rec { x: integer; }")
-        def("record vir { y: virtual<rec>; }")
-        def("record nogtv { z: range; }")
+        def("struct rec { x: integer; }")
+        def("struct vir { y: virtual<rec>; }")
+        def("struct nogtv { z: range; }")
         def("enum E {A,B,C}")
-        def("class user { name; }")
-        def("record novir { m: map<integer,text>; }")
-        def("record cycle { mutable next: cycle?; m: map<integer,text>; }")
+        def("entity user { name; }")
+        def("struct novir { m: map<integer,text>; }")
+        def("struct cycle { mutable next: cycle?; m: map<integer,text>; }")
 
         chkAllowedType("virtual<list<integer>>", "OK")
         chkAllowedType("virtual<set<integer>>", "OK")
@@ -67,10 +67,10 @@ class VirtualTest: BaseGtxTest(false) {
         chkCompile("operation o(a: $type){}", expected)
     }
 
-    @Test fun testRecordType() {
-        def("record rec { i: integer; t: text; s: sub; }")
-        def("record sub { q: integer; p: sub2; }")
-        def("record sub2 { r: integer; }")
+    @Test fun testStructType() {
+        def("struct rec { i: integer; t: text; s: sub; }")
+        def("struct sub { q: integer; p: sub2; }")
+        def("struct sub2 { r: integer; }")
 
         val args = GtvTestUtils.decodeGtvStr("[123,'Hello',[456,[789]]]")
         chkVirtual("rec", "x", args, "{'i':123,'s':{'p':{'r':789},'q':456},'t':'Hello'}")
@@ -102,10 +102,10 @@ class VirtualTest: BaseGtxTest(false) {
         chkVirtual("virtual<rec>?", "_type_of(x!!.s)", virArgs, "'virtual<sub>'")
     }
 
-    @Test fun testRecordAttrsFull() {
-        def("record rec { i: integer; t: text; s: sub; }")
-        def("record sub { q: integer; p: sub2; }")
-        def("record sub2 { r: integer; }")
+    @Test fun testStructAttrsFull() {
+        def("struct rec { i: integer; t: text; s: sub; }")
+        def("struct sub { q: integer; p: sub2; }")
+        def("struct sub2 { r: integer; }")
 
         val args = argToGtv("[123,'Hello',[456,[789]]]", "[[0],[1],[2]]")
         chkVirtual("virtual<rec>", "_strict_str(x)", args,
@@ -118,72 +118,72 @@ class VirtualTest: BaseGtxTest(false) {
         chkVirtual("virtual<rec>", "_strict_str(x.s.p.r)", args, "'int[789]'")
     }
 
-    @Test fun testRecordAttrsPart() {
+    @Test fun testStructAttrsPart() {
         tst.wrapRtErrors = false
-        def("record rec { i: integer; t: text; s: sub; }")
-        def("record sub { q: integer; p: sub2; }")
-        def("record sub2 { r: integer; }")
+        def("struct rec { i: integer; t: text; s: sub; }")
+        def("struct sub { q: integer; p: sub2; }")
+        def("struct sub2 { r: integer; }")
 
         var args = argToGtv("[123,'Hello',[456,[789]]]", "[[0]]")
         chkVirtual("virtual<rec>", "_strict_str(x)", args, "'virtual<rec>[i=int[123],t=null,s=null]'")
         chkVirtual("virtual<rec>", "_strict_str(x.i)", args, "'int[123]'")
-        chkVirtual("virtual<rec>", "_strict_str(x.t)", args, "rt_err:virtual_record:get:novalue:rec:t")
-        chkVirtual("virtual<rec>", "_strict_str(x.s)", args, "rt_err:virtual_record:get:novalue:rec:s")
+        chkVirtual("virtual<rec>", "_strict_str(x.t)", args, "rt_err:virtual_struct:get:novalue:rec:t")
+        chkVirtual("virtual<rec>", "_strict_str(x.s)", args, "rt_err:virtual_struct:get:novalue:rec:s")
 
         args = argToGtv("[123,'Hello',[456,[789]]]", "[[1]]")
         chkVirtual("virtual<rec>", "_strict_str(x)", args, "'virtual<rec>[i=null,t=text[Hello],s=null]'")
-        chkVirtual("virtual<rec>", "_strict_str(x.i)", args, "rt_err:virtual_record:get:novalue:rec:i")
+        chkVirtual("virtual<rec>", "_strict_str(x.i)", args, "rt_err:virtual_struct:get:novalue:rec:i")
         chkVirtual("virtual<rec>", "_strict_str(x.t)", args, "'text[Hello]'")
-        chkVirtual("virtual<rec>", "_strict_str(x.s)", args, "rt_err:virtual_record:get:novalue:rec:s")
+        chkVirtual("virtual<rec>", "_strict_str(x.s)", args, "rt_err:virtual_struct:get:novalue:rec:s")
 
         args = argToGtv("[123,'Hello',[456,[789]]]", "[[2]]")
         chkVirtual("virtual<rec>", "_strict_str(x)", args,
                 "'virtual<rec>[i=null,t=null,s=virtual<sub>[q=int[456],p=virtual<sub2>[r=int[789]]]]'")
-        chkVirtual("virtual<rec>", "_strict_str(x.i)", args, "rt_err:virtual_record:get:novalue:rec:i")
-        chkVirtual("virtual<rec>", "_strict_str(x.t)", args, "rt_err:virtual_record:get:novalue:rec:t")
+        chkVirtual("virtual<rec>", "_strict_str(x.i)", args, "rt_err:virtual_struct:get:novalue:rec:i")
+        chkVirtual("virtual<rec>", "_strict_str(x.t)", args, "rt_err:virtual_struct:get:novalue:rec:t")
         chkVirtual("virtual<rec>", "_strict_str(x.s)", args, "'virtual<sub>[q=int[456],p=virtual<sub2>[r=int[789]]]'")
 
         args = argToGtv("[123,'Hello',[456,[789]]]", "[[0],[1]]")
         chkVirtual("virtual<rec>", "_strict_str(x)", args, "'virtual<rec>[i=int[123],t=text[Hello],s=null]'")
         chkVirtual("virtual<rec>", "_strict_str(x.i)", args, "'int[123]'")
         chkVirtual("virtual<rec>", "_strict_str(x.t)", args, "'text[Hello]'")
-        chkVirtual("virtual<rec>", "_strict_str(x.s)", args, "rt_err:virtual_record:get:novalue:rec:s")
+        chkVirtual("virtual<rec>", "_strict_str(x.s)", args, "rt_err:virtual_struct:get:novalue:rec:s")
 
         args = argToGtv("[123,'Hello',[456,[789]]]", "[[0],[2]]")
         chkVirtual("virtual<rec>", "_strict_str(x)", args,
                 "'virtual<rec>[i=int[123],t=null,s=virtual<sub>[q=int[456],p=virtual<sub2>[r=int[789]]]]'")
         chkVirtual("virtual<rec>", "_strict_str(x.i)", args, "'int[123]'")
-        chkVirtual("virtual<rec>", "_strict_str(x.t)", args, "rt_err:virtual_record:get:novalue:rec:t")
+        chkVirtual("virtual<rec>", "_strict_str(x.t)", args, "rt_err:virtual_struct:get:novalue:rec:t")
         chkVirtual("virtual<rec>", "_strict_str(x.s)", args, "'virtual<sub>[q=int[456],p=virtual<sub2>[r=int[789]]]'")
 
         args = argToGtv("[123,'Hello',[456,[789]]]", "[[1],[2]]")
         chkVirtual("virtual<rec>", "_strict_str(x)", args,
                 "'virtual<rec>[i=null,t=text[Hello],s=virtual<sub>[q=int[456],p=virtual<sub2>[r=int[789]]]]'")
-        chkVirtual("virtual<rec>", "_strict_str(x.i)", args, "rt_err:virtual_record:get:novalue:rec:i")
+        chkVirtual("virtual<rec>", "_strict_str(x.i)", args, "rt_err:virtual_struct:get:novalue:rec:i")
         chkVirtual("virtual<rec>", "_strict_str(x.t)", args, "'text[Hello]'")
         chkVirtual("virtual<rec>", "_strict_str(x.s)", args, "'virtual<sub>[q=int[456],p=virtual<sub2>[r=int[789]]]'")
     }
 
-    @Test fun testRecordAttrsPartNested() {
+    @Test fun testStructAttrsPartNested() {
         tst.wrapRtErrors = false
-        def("record rec { i: integer; t: text; s: sub; }")
-        def("record sub { q: integer; p: sub2; }")
-        def("record sub2 { r: integer; }")
+        def("struct rec { i: integer; t: text; s: sub; }")
+        def("struct sub { q: integer; p: sub2; }")
+        def("struct sub2 { r: integer; }")
 
         var args = argToGtv("[123,'Hello',[456,[789]]]", "[[2,0]]")
         chkVirtual("virtual<rec>", "_strict_str(x)", args,
                 "'virtual<rec>[i=null,t=null,s=virtual<sub>[q=int[456],p=null]]'")
-        chkVirtual("virtual<rec>", "_strict_str(x.i)", args, "rt_err:virtual_record:get:novalue:rec:i")
-        chkVirtual("virtual<rec>", "_strict_str(x.t)", args, "rt_err:virtual_record:get:novalue:rec:t")
+        chkVirtual("virtual<rec>", "_strict_str(x.i)", args, "rt_err:virtual_struct:get:novalue:rec:i")
+        chkVirtual("virtual<rec>", "_strict_str(x.t)", args, "rt_err:virtual_struct:get:novalue:rec:t")
         chkVirtual("virtual<rec>", "_strict_str(x.s)", args, "'virtual<sub>[q=int[456],p=null]'")
         chkVirtual("virtual<rec>", "_strict_str(x.s.q)", args, "'int[456]'")
-        chkVirtual("virtual<rec>", "_strict_str(x.s.p)", args, "rt_err:virtual_record:get:novalue:sub:p")
+        chkVirtual("virtual<rec>", "_strict_str(x.s.p)", args, "rt_err:virtual_struct:get:novalue:sub:p")
 
         args = argToGtv("[123,'Hello',[456,[789]]]", "[[2,1]]")
         chkVirtual("virtual<rec>", "_strict_str(x)", args,
                 "'virtual<rec>[i=null,t=null,s=virtual<sub>[q=null,p=virtual<sub2>[r=int[789]]]]'")
         chkVirtual("virtual<rec>", "_strict_str(x.s)", args, "'virtual<sub>[q=null,p=virtual<sub2>[r=int[789]]]'")
-        chkVirtual("virtual<rec>", "_strict_str(x.s.q)", args, "rt_err:virtual_record:get:novalue:sub:q")
+        chkVirtual("virtual<rec>", "_strict_str(x.s.q)", args, "rt_err:virtual_struct:get:novalue:sub:q")
         chkVirtual("virtual<rec>", "_strict_str(x.s.p)", args, "'virtual<sub2>[r=int[789]]'")
         chkVirtual("virtual<rec>", "_strict_str(x.s.p.r)", args, "'int[789]'")
 
@@ -196,11 +196,11 @@ class VirtualTest: BaseGtxTest(false) {
         chkVirtual("virtual<rec>", "_strict_str(x.s.p.r)", args, "'int[789]'")
     }
 
-    @Test fun testRecordToFull() {
+    @Test fun testStructToFull() {
         tst.wrapRtErrors = false
-        def("record rec { i: integer; t: text; s: sub; }")
-        def("record sub { q: integer; p: sub2; }")
-        def("record sub2 { r: integer; }")
+        def("struct rec { i: integer; t: text; s: sub; }")
+        def("struct sub { q: integer; p: sub2; }")
+        def("struct sub2 { r: integer; }")
 
         var args = argToGtv("[123,'Hello',[456,[789]]]", "[[0],[1],[2]]")
         chkVirtual("virtual<rec>", "_strict_str(x.to_full())", args, "rt_err:virtual:to_full:notfull:virtual<rec>")
@@ -215,7 +215,7 @@ class VirtualTest: BaseGtxTest(false) {
         args = argToGtv("[123,'Hello',[456,[789]]]", "[[2,0]]")
         chkVirtual("virtual<rec>", "_strict_str(x.to_full())", args, "rt_err:virtual:to_full:notfull:virtual<rec>")
         chkVirtual("virtual<rec>", "_strict_str(x.s.to_full())", args, "rt_err:virtual:to_full:notfull:virtual<sub>")
-        chkVirtual("virtual<rec>", "_strict_str(x.s.p.to_full())", args, "rt_err:virtual_record:get:novalue:sub:p")
+        chkVirtual("virtual<rec>", "_strict_str(x.s.p.to_full())", args, "rt_err:virtual_struct:get:novalue:sub:p")
 
         args = argToGtv("[123,'Hello',[456,[789]]]", "[[2,1]]")
         chkVirtual("virtual<rec>", "_strict_str(x.to_full())", args, "rt_err:virtual:to_full:notfull:virtual<rec>")
@@ -233,10 +233,10 @@ class VirtualTest: BaseGtxTest(false) {
         chkVirtual("virtual<rec>", "_strict_str(x.s.p.to_full())", args, "rt_err:virtual:to_full:notfull:virtual<sub2>")
     }
 
-    @Test fun testRecordNullableType() {
-        def("record rec { i: integer; t: text; s: sub?; }")
-        def("record sub { q: integer; p: sub2; }")
-        def("record sub2 { r: integer; }")
+    @Test fun testStructNullableType() {
+        def("struct rec { i: integer; t: text; s: sub?; }")
+        def("struct sub { q: integer; p: sub2; }")
+        def("struct sub2 { r: integer; }")
 
         var args = argToGtv("[123,'Hello',[456,[789]]]", "[[0],[1],[2]]")
 
@@ -272,11 +272,11 @@ class VirtualTest: BaseGtxTest(false) {
         chkVirtual("virtual<rec>", "_type_of(x.s?.p?.r)", args, "'integer?'")
     }
 
-    @Test fun testRecordNullableValue() {
+    @Test fun testStructNullableValue() {
         tst.wrapRtErrors = false
-        def("record rec { i: integer; t: text; s: sub?; }")
-        def("record sub { q: integer; p: sub2; }")
-        def("record sub2 { r: integer; }")
+        def("struct rec { i: integer; t: text; s: sub?; }")
+        def("struct sub { q: integer; p: sub2; }")
+        def("struct sub2 { r: integer; }")
 
         var args: Gtv = GtvNull
         chkVirtual("virtual<rec>?", "_strict_str(x)", args, "'null'")
@@ -286,8 +286,8 @@ class VirtualTest: BaseGtxTest(false) {
         args = argToGtv("[123,'Hello',[456,[789]]]", "[[2]]")
         chkVirtual("virtual<rec>?", "_strict_str(x)", args,
                 "'virtual<rec>[i=null,t=null,s=virtual<sub>[q=int[456],p=virtual<sub2>[r=int[789]]]]'")
-        chkVirtual("virtual<rec>?", "x?.i", args, "rt_err:virtual_record:get:novalue:rec:i")
-        chkVirtual("virtual<rec>?", "x?.t", args, "rt_err:virtual_record:get:novalue:rec:t")
+        chkVirtual("virtual<rec>?", "x?.i", args, "rt_err:virtual_struct:get:novalue:rec:i")
+        chkVirtual("virtual<rec>?", "x?.t", args, "rt_err:virtual_struct:get:novalue:rec:t")
         chkVirtual("virtual<rec>?", "_strict_str(x?.s)", args, "'virtual<sub>[q=int[456],p=virtual<sub2>[r=int[789]]]'")
         chkVirtual("virtual<rec>?", "_strict_str(x?.s.q)", args, "ct_err:expr_mem_null:q")
         chkVirtual("virtual<rec>?", "_strict_str(x?.s.p)", args, "ct_err:expr_mem_null:p")
@@ -298,15 +298,15 @@ class VirtualTest: BaseGtxTest(false) {
         chkVirtual("virtual<rec>?", "_strict_str(x)", args, "'virtual<rec>[i=int[123],t=text[Hello],s=null]'")
         chkVirtual("virtual<rec>?", "_strict_str(x?.i)", args, "'int[123]'")
         chkVirtual("virtual<rec>?", "_strict_str(x?.t)", args, "'text[Hello]'")
-        chkVirtual("virtual<rec>?", "_strict_str(x?.s)", args, "rt_err:virtual_record:get:novalue:rec:s")
-        chkVirtual("virtual<rec>?", "_strict_str(x?.s?.q)", args, "rt_err:virtual_record:get:novalue:rec:s")
-        chkVirtual("virtual<rec>?", "_strict_str(x?.s?.p)", args, "rt_err:virtual_record:get:novalue:rec:s")
-        chkVirtual("virtual<rec>?", "_strict_str(x?.s?.p?.r)", args, "rt_err:virtual_record:get:novalue:rec:s")
+        chkVirtual("virtual<rec>?", "_strict_str(x?.s)", args, "rt_err:virtual_struct:get:novalue:rec:s")
+        chkVirtual("virtual<rec>?", "_strict_str(x?.s?.q)", args, "rt_err:virtual_struct:get:novalue:rec:s")
+        chkVirtual("virtual<rec>?", "_strict_str(x?.s?.p)", args, "rt_err:virtual_struct:get:novalue:rec:s")
+        chkVirtual("virtual<rec>?", "_strict_str(x?.s?.p?.r)", args, "rt_err:virtual_struct:get:novalue:rec:s")
     }
 
-    @Test fun testRecordAttrType() {
+    @Test fun testStructAttrType() {
         tst.wrapRtErrors = false
-        def("record rec { i: integer; l: list<integer>; }")
+        def("struct rec { i: integer; l: list<integer>; }")
 
         var args = argToGtv("[123,[456,789]]", "[[0],[1]]")
         chkVirtual("virtual<rec>", "_type_of(x)", args, "'virtual<rec>'")
@@ -317,15 +317,15 @@ class VirtualTest: BaseGtxTest(false) {
 
         args = argToGtv("[123,[456,789]]", "[[0]]")
         chkVirtual("virtual<rec>", "_strict_str(x.i)", args, "'int[123]'")
-        chkVirtual("virtual<rec>", "_strict_str(x.l)", args, "rt_err:virtual_record:get:novalue:rec:l")
+        chkVirtual("virtual<rec>", "_strict_str(x.l)", args, "rt_err:virtual_struct:get:novalue:rec:l")
 
         args = argToGtv("[123,[456,789]]", "[[1]]")
-        chkVirtual("virtual<rec>", "_strict_str(x.i)", args, "rt_err:virtual_record:get:novalue:rec:i")
+        chkVirtual("virtual<rec>", "_strict_str(x.i)", args, "rt_err:virtual_struct:get:novalue:rec:i")
         chkVirtual("virtual<rec>", "_strict_str(x.l)", args, "'virtual<list<integer>>[int[456],int[789]]'")
     }
 
-    @Test fun testRecordAttrMutable() {
-        def("record rec { mutable i: integer; mutable t: text; }")
+    @Test fun testStructAttrMutable() {
+        def("struct rec { mutable i: integer; mutable t: text; }")
         var args = argToGtv("[123,'Hello']", "[[0],[1]]")
         chkVirtualEx("virtual<rec>", "{ x.i = 456; return 0; }", args, "ct_err:update_attr_not_mutable:i")
         chkVirtualEx("virtual<rec>", "{ x.t = 'Bye'; return 0; }", args, "ct_err:update_attr_not_mutable:t")
@@ -426,7 +426,7 @@ class VirtualTest: BaseGtxTest(false) {
 
     @Test fun testListIterator() {
         tst.wrapRtErrors = false
-        def("record rec { i: integer; }")
+        def("struct rec { i: integer; }")
 
         val type = "virtual<list<rec>>"
 
@@ -441,9 +441,9 @@ class VirtualTest: BaseGtxTest(false) {
         chkVirtualEx(type, "{ for (v in x) return _strict_str(v); return ''; }", args, "'virtual<rec>[i=int[456]]'")
     }
 
-    @Test fun testListOfRecord() {
+    @Test fun testListOfStruct() {
         tst.wrapRtErrors = false
-        def("record rec { i: integer; t: text; }")
+        def("struct rec { i: integer; t: text; }")
 
         val type = "virtual<list<rec>>"
 
@@ -638,8 +638,8 @@ class VirtualTest: BaseGtxTest(false) {
     @Test fun testListElementType() {
         tstCtx.useSql = true
         tst.chainId = 0
-        def("class user { name; }")
-        def("record rec { i: integer; t: text; }")
+        def("entity user { name; }")
+        def("struct rec { i: integer; t: text; }")
         def("enum myenum { A, B, C }")
         insert("c0.user", "name", "101,'Bob'")
         insert("c0.user", "name", "102,'Alice'")
@@ -770,7 +770,7 @@ class VirtualTest: BaseGtxTest(false) {
 
     @Test fun testSetIterator() {
         tst.wrapRtErrors = false
-        def("record rec { i: integer; }")
+        def("struct rec { i: integer; }")
 
         val type = "virtual<set<rec>>"
 
@@ -904,7 +904,7 @@ class VirtualTest: BaseGtxTest(false) {
 
     @Test fun testMapIterator() {
         tst.wrapRtErrors = false
-        def("record rec { i: integer; }")
+        def("struct rec { i: integer; }")
 
         val type = "virtual<map<text, rec>>"
         var args = argToGtv("{'Hello':[123],'Bye':[456]}", "[['Hello'],['Bye']]")
@@ -923,9 +923,9 @@ class VirtualTest: BaseGtxTest(false) {
         chkVirtualEx(type, "{ for ((k, v) in x) return _strict_str(v); return ''; }", args, "'virtual<rec>[i=int[456]]'")
     }
 
-    @Test fun testMapOfRecord() {
+    @Test fun testMapOfStruct() {
         tst.wrapRtErrors = false
-        def("record rec { i: integer; t: text; }")
+        def("struct rec { i: integer; t: text; }")
 
         val type = "virtual<map<text,rec>>"
         var args = argToGtv("{'A':[123,'Hello'],'B':[456,'Bye']}", "[['A'],['B']]")
@@ -940,7 +940,7 @@ class VirtualTest: BaseGtxTest(false) {
         chkVirtual(type, "_strict_str(x['A'])", args, "rt_err:fn_map_get_novalue:text[A]")
         chkVirtual(type, "_strict_str(x['B'])", args, "'virtual<rec>[i=int[456],t=null]'")
         chkVirtual(type, "_strict_str(x['B'].i)", args, "'int[456]'")
-        chkVirtual(type, "_strict_str(x['B'].t)", args, "rt_err:virtual_record:get:novalue:rec:t")
+        chkVirtual(type, "_strict_str(x['B'].t)", args, "rt_err:virtual_struct:get:novalue:rec:t")
     }
 
     @Test fun testTupleType() {
@@ -987,9 +987,9 @@ class VirtualTest: BaseGtxTest(false) {
         chkVirtual(type, "_strict_str(x.to_full())", args, "rt_err:virtual:to_full:notfull:virtual<(a:integer,b:text)>")
     }
 
-    @Test fun testTupleOfRecord() {
+    @Test fun testTupleOfStruct() {
         tst.wrapRtErrors = false
-        def("record rec { i: integer; t: text; }")
+        def("struct rec { i: integer; t: text; }")
 
         val type = "virtual<(a:integer,b:rec)>"
 
@@ -1007,13 +1007,13 @@ class VirtualTest: BaseGtxTest(false) {
         chkVirtual(type, "_strict_str(x.a)", args, "rt_err:virtual_tuple:get:novalue:a")
         chkVirtual(type, "_strict_str(x.b)", args, "'virtual<rec>[i=int[123],t=null]'")
         chkVirtual(type, "_strict_str(x.b.i)", args, "'int[123]'")
-        chkVirtual(type, "_strict_str(x.b.t)", args, "rt_err:virtual_record:get:novalue:rec:t")
+        chkVirtual(type, "_strict_str(x.b.t)", args, "rt_err:virtual_struct:get:novalue:rec:t")
     }
 
     @Test fun testVirtual() {
         tst.wrapRtErrors = false
-        def("record sub { i: integer; t: text; }")
-        def("record top { k: integer; s: virtual<sub>; }")
+        def("struct sub { i: integer; t: text; }")
+        def("struct top { k: integer; s: virtual<sub>; }")
 
         val type = "virtual<top>"
         val sub = GtvTestUtils.decodeGtvStr("[123,'Hello']")
@@ -1039,9 +1039,9 @@ class VirtualTest: BaseGtxTest(false) {
 
         chkVirtual(type, "_strict_str(x.to_full())", virArgs, "rt_err:virtual:to_full:notfull:virtual<top>")
         chkVirtual(type, "_strict_str(x.s.to_full())", virArgs, "rt_err:virtual:to_full:notfull:virtual<sub>")
-        chkVirtual(type, "_strict_str(x.k)", virArgs, "rt_err:virtual_record:get:novalue:top:k")
+        chkVirtual(type, "_strict_str(x.k)", virArgs, "rt_err:virtual_struct:get:novalue:top:k")
         chkVirtual(type, "_strict_str(x.s)", virArgs, "'virtual<sub>[i=null,t=text[Hello]]'")
-        chkVirtual(type, "_strict_str(x.s.i)", virArgs, "rt_err:virtual_record:get:novalue:sub:i")
+        chkVirtual(type, "_strict_str(x.s.i)", virArgs, "rt_err:virtual_struct:get:novalue:sub:i")
         chkVirtual(type, "_strict_str(x.s.t)", virArgs, "'text[Hello]'")
 
         args = GtvFactory.gtv(GtvFactory.gtv(456), argToGtv(sub, "[[1]]"))
@@ -1051,7 +1051,7 @@ class VirtualTest: BaseGtxTest(false) {
         chkVirtual(type, "_strict_str(x.s.to_full())", virArgs, "rt_err:virtual:to_full:notfull:virtual<sub>")
         chkVirtual(type, "_strict_str(x.k)", virArgs, "'int[456]'")
         chkVirtual(type, "_strict_str(x.s)", virArgs, "'virtual<sub>[i=null,t=text[Hello]]'")
-        chkVirtual(type, "_strict_str(x.s.i)", virArgs, "rt_err:virtual_record:get:novalue:sub:i")
+        chkVirtual(type, "_strict_str(x.s.i)", virArgs, "rt_err:virtual_struct:get:novalue:sub:i")
         chkVirtual(type, "_strict_str(x.s.t)", virArgs, "'text[Hello]'")
 
         args = GtvFactory.gtv(GtvFactory.gtv(456), argToGtv(sub, "[[0],[1]]"))
@@ -1059,7 +1059,7 @@ class VirtualTest: BaseGtxTest(false) {
 
         chkVirtual(type, "_strict_str(x.to_full())", virArgs, "rt_err:virtual:to_full:notfull:virtual<top>")
         chkVirtual(type, "_strict_str(x.s.to_full())", virArgs, "rt_err:virtual:to_full:notfull:virtual<sub>")
-        chkVirtual(type, "_strict_str(x.k)", virArgs, "rt_err:virtual_record:get:novalue:top:k")
+        chkVirtual(type, "_strict_str(x.k)", virArgs, "rt_err:virtual_struct:get:novalue:top:k")
         chkVirtual(type, "_strict_str(x.s)", virArgs, "'virtual<sub>[i=int[123],t=text[Hello]]'")
         chkVirtual(type, "_strict_str(x.s.i)", virArgs, "'int[123]'")
         chkVirtual(type, "_strict_str(x.s.t)", virArgs, "'text[Hello]'")
@@ -1067,12 +1067,12 @@ class VirtualTest: BaseGtxTest(false) {
 
     @Test fun testToGtv() {
         tst.gtv = true
-        def("record rec { x: integer; }")
-        def("record vir { v: virtual<rec>; }")
-        def("record ind1 { r: vir?; }")
-        def("record ind2 { q: list<ind1>; }")
-        def("record ind3 { p: map<text,ind2>; }")
-        def("record cycle { mutable next: cycle?; v: ind3; }")
+        def("struct rec { x: integer; }")
+        def("struct vir { v: virtual<rec>; }")
+        def("struct ind1 { r: vir?; }")
+        def("struct ind2 { q: list<ind1>; }")
+        def("struct ind3 { p: map<text,ind2>; }")
+        def("struct cycle { mutable next: cycle?; v: ind3; }")
 
         chkCompile("function f(a: virtual<rec>) { a.to_gtv(); }", "ct_err:fn:invalid:virtual<rec>:virtual<rec>.to_gtv")
         chkCompile("function f(a: virtual<list<integer>>) { a.to_gtv(); }",
@@ -1110,7 +1110,7 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testFromGtv() {
-        def("record rec { i: integer; t: text; }")
+        def("struct rec { i: integer; t: text; }")
 
         chkVirtual("gtv", "_strict_str(virtual<rec>.from_gtv_pretty(x))", argToGtv("[123,'Hello']", "[[0],[1]]"),
                 "ct_err:unknown_name:virtual<rec>.from_gtv_pretty")
@@ -1163,7 +1163,7 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testOperatorsErr() {
-        def("record rec { i: integer; t: text; }")
+        def("struct rec { i: integer; t: text; }")
 
         chkOperatorErr("virtual<list<integer>>", "virtual<list<text>>", "==", "!=", "===", "!==")
         chkOperatorErr("virtual<list<integer>>", "virtual<rec>", "==", "!=", "===", "!==")
@@ -1186,7 +1186,7 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testOperatorsEq() {
-        def("record rec { i: integer; t: text; }")
+        def("struct rec { i: integer; t: text; }")
 
         chkOperatorEq("virtual<list<integer>>", "[123,456]", "[[0],[1]]", "[123,456]", "[[0],[1]]", true)
         chkOperatorEq("virtual<list<integer>>", "[123,456]", "[[0],[1]]", "[123,457]", "[[0],[1]]", false)
@@ -1229,7 +1229,7 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testOperatorsRefEq() {
-        def("record rec { i: integer; t: text; }")
+        def("struct rec { i: integer; t: text; }")
         chkOperatorRefEq("virtual<list<integer>>", "[123,456]", "[[0],[1]]")
         chkOperatorRefEq("virtual<map<text,integer>>", "{'A':123,'B':456}", "[['A'],['B']]")
         chkOperatorRefEq("virtual<rec>", "[123,'Hello']", "[[0],[1]]")
@@ -1269,7 +1269,7 @@ class VirtualTest: BaseGtxTest(false) {
 
     @Test fun testHash() {
         tst.wrapRtErrors = false
-        def("record rec { i: integer; t: text; }")
+        def("struct rec { i: integer; t: text; }")
 
         var t = "virtual<list<integer>>"
         chkHash(t, "[123,456]", "[[0],[1]]", "B3E8532E5A7DAD8C8B159CC47A894263D45975527AFCF72746CCB600716B34A1")

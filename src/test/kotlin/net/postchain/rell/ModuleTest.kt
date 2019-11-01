@@ -8,8 +8,8 @@ class ModuleTest: BaseRellTest(false) {
     @Test fun testForwardTypeReferenceFunction() {
         val code = """
             function f(x: foo): bar = bar(x);
-            record foo { p: integer; }
-            record bar { x: foo; }
+            struct foo { p: integer; }
+            struct bar { x: foo; }
             query q() = f(foo(123));
         """.trimIndent()
         chkQueryEx(code, "bar[x=foo[p=int[123]]]")
@@ -18,8 +18,8 @@ class ModuleTest: BaseRellTest(false) {
     @Test fun testForwardTypeReferenceOperation() {
         val code = """
             operation o(x: foo) { print(_strict_str(bar(x))); }
-            record foo { p: integer; }
-            record bar { x: foo; }
+            struct foo { p: integer; }
+            struct bar { x: foo; }
         """.trimIndent()
         tst.chkOpGtvEx(code, listOf("""[123]"""), "OK")
         chkStdout("bar[x=foo[p=int[123]]]")
@@ -28,8 +28,8 @@ class ModuleTest: BaseRellTest(false) {
     @Test fun testForwardTypeReferenceQuery() {
         val code = """
             query q(x: foo): bar = bar(x);
-            record foo { p: integer; }
-            record bar { x: foo; }
+            struct foo { p: integer; }
+            struct bar { x: foo; }
         """.trimIndent()
         tst.chkQueryGtvEx(code, listOf("""{"p":123}"""), "bar[x=foo[p=int[123]]]")
     }
@@ -76,7 +76,7 @@ class ModuleTest: BaseRellTest(false) {
     }
 
     @Test fun testImportCompilationError2() {
-        file("lib/a.rell", "module; class user { a: integer; b: text; c: boolean; x: ERROR; }")
+        file("lib/a.rell", "module; entity user { a: integer; b: text; c: boolean; x: ERROR; }")
         chkCompile("import lib.a; query q() = (a.user@{}).a;", "ct_err:lib/a.rell:unknown_type:ERROR")
         chkCompile("import lib.a; query q() = (a.user@{}).b;", "ct_err:lib/a.rell:unknown_type:ERROR")
         chkCompile("import lib.a; query q() = (a.user@{}).c;", "ct_err:lib/a.rell:unknown_type:ERROR")
@@ -114,7 +114,7 @@ class ModuleTest: BaseRellTest(false) {
         chkCompile("import integer: a.foo;", "ct_err:name_conflict:sys:integer:TYPE")
         chkCompile("import text: a.foo;", "ct_err:name_conflict:sys:text:TYPE")
         chkCompile("import abs: a.foo;", "ct_err:name_conflict:sys:abs:FUNCTION")
-        chkCompile("import block: a.foo;", "ct_err:name_conflict:sys:block:CLASS")
+        chkCompile("import block: a.foo;", "ct_err:name_conflict:sys:block:ENTITY")
 
         chkCompile("namespace a { import a.foo; } import b.foo;", "OK")
         chkCompile("import a.foo; namespace b { import b.foo; }", "OK")
@@ -138,12 +138,12 @@ class ModuleTest: BaseRellTest(false) {
         chkImp("import a.bar;", "bar.g(5)", "g(5),f(4),g(3),f(2),g(1),f(0)")
     }
 
-    @Test fun testInterModuleClassCycle() {
-        file("a/foo.rell", "module; import a.bar; class company { user: bar.user; }")
-        file("a/bar.rell", "module; import a.foo; class user { company: foo.company; }")
+    @Test fun testInterModuleEntityCycle() {
+        file("a/foo.rell", "module; import a.bar; entity company { user: bar.user; }")
+        file("a/bar.rell", "module; import a.foo; entity user { company: foo.company; }")
         chkCompile("", "OK")
-        chkCompile("import a.foo;", "ct_err:a/foo.rell:class_cycle:a.foo#company,a.bar#user")
-        chkCompile("import a.bar;", "ct_err:a/bar.rell:class_cycle:a.bar#user,a.foo#company")
+        chkCompile("import a.foo;", "ct_err:a/foo.rell:entity_cycle:a.foo#company,a.bar#user")
+        chkCompile("import a.bar;", "ct_err:a/bar.rell:entity_cycle:a.bar#user,a.foo#company")
     }
 
     @Test fun testImportInNamespace() {
@@ -155,10 +155,10 @@ class ModuleTest: BaseRellTest(false) {
 
     @Test fun testImportInWrongPlace() {
         file("a/foo.rell", "module;")
-        chkCompile("class user { import a.foo; }", "ct_err:syntax")
+        chkCompile("entity user { import a.foo; }", "ct_err:syntax")
         chkCompile("object state { import a.foo; }", "ct_err:syntax")
         chkCompile("enum e { import a.foo; }", "ct_err:syntax")
-        chkCompile("record rec { import a.foo; }", "ct_err:syntax")
+        chkCompile("struct rec { import a.foo; }", "ct_err:syntax")
         chkCompile("function f() { import a.foo; }", "ct_err:syntax")
         chkCompile("operation o() { import a.foo; }", "ct_err:syntax")
         chkCompile("query q() { import a.foo; }", "ct_err:syntax")
@@ -174,9 +174,9 @@ class ModuleTest: BaseRellTest(false) {
     @Test fun testImportVariousDefs() {
         file("lib/a.rell", """
             module;
-            class cls {}
+            entity cls {}
             object state { p: integer = 123; }
-            record rec {}
+            struct rec {}
             enum e { A }
             function f() {}
         """.trimIndent())
@@ -210,7 +210,7 @@ class ModuleTest: BaseRellTest(false) {
     }
 
     @Test fun testImportSameModuleMultipleTimes() {
-        file("lib/a.rell", "module; record rec { x: integer; }")
+        file("lib/a.rell", "module; struct rec { x: integer; }")
         file("lib/b.rell", "module; import lib.a; function f(r: a.rec): integer = r.x * 2;")
 
         val imports = "import lib.b; import lib.a; import a2: lib.a; namespace ns { import lib.a; }"
@@ -223,7 +223,7 @@ class ModuleTest: BaseRellTest(false) {
     }
 
     /*@Test*/ fun testImportSameModuleMultipleTimes2() {
-        file("lib/a.rell", "module; record rec { x: integer; }")
+        file("lib/a.rell", "module; struct rec { x: integer; }")
         file("lib/b.rell", "module; public import lib.a; public import a2: lib.a; namespace ns { public import lib.a; }")
         file("lib/c.rell", "module; import lib.a; function f(r: a.rec): integer = r.x * 2;")
 
@@ -303,12 +303,12 @@ class ModuleTest: BaseRellTest(false) {
     }
 
     @Test fun testSystemDefsNotVisibleFromOutside() {
-        file("a.rell", "module; record rec { x: integer = 123; }")
+        file("a.rell", "module; struct rec { x: integer = 123; }")
         chkSystemDefsNotVisibleFromOutside()
     }
 
     @Test fun testSystemDefsNotVisibleFromOutside2() {
-        file("a/a1.rell", "record rec { x: integer = 123; }")
+        file("a/a1.rell", "struct rec { x: integer = 123; }")
         chkSystemDefsNotVisibleFromOutside()
     }
 

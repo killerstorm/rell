@@ -6,10 +6,10 @@ import org.junit.Test
 // Purpose: make sure that complex combinations of path expressions work (i. e. translated into proper JOINs).
 
 class UpdateDeletePathTest: BaseRellTest() {
-    override fun classDefs() = listOf(
-            "class country { name: text; }",
-            "class city { name: text; country; }",
-            "class person { name: text; homeCity: city; workCity: city; mutable score: integer; }"
+    override fun entityDefs() = listOf(
+            "entity country { name: text; }",
+            "entity city { name: text; country; }",
+            "entity person { name: text; homeCity: city; workCity: city; mutable score: integer; }"
     )
 
     @Test fun testSimplePathUpdate() {
@@ -96,7 +96,7 @@ class UpdateDeletePathTest: BaseRellTest() {
         chkDataCommon()
     }
 
-    @Test fun testExtraClassesUpdate() {
+    @Test fun testExtraEntitiesUpdate() {
         createObjects()
 
         chkOp("""
@@ -122,7 +122,7 @@ class UpdateDeletePathTest: BaseRellTest() {
         chkDataCommon("person(7,John,4,5,100)", "person(8,Mike,5,6,200)", "person(9,Hans,6,4,999)")
     }
 
-    @Test fun testExtraClassesDelete() {
+    @Test fun testExtraEntitiesDelete() {
         createObjects()
 
         chkOp("""
@@ -148,7 +148,7 @@ class UpdateDeletePathTest: BaseRellTest() {
         chkDataCommon("person(7,John,4,5,100)", "person(8,Mike,5,6,200)")
     }
 
-    @Test fun testExtraClassesMixUpdate() {
+    @Test fun testExtraEntitiesMixUpdate() {
         createObjects()
         chkOp("update (p1: person, p2: person) @* { p1.homeCity == p2.workCity } ( score = p1.score * 3 + p2.score );")
         chkDataCommon("person(7,John,4,5,600)", "person(8,Mike,5,6,700)", "person(9,Hans,6,4,1100)")

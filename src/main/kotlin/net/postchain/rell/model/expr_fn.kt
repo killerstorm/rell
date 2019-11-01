@@ -25,7 +25,7 @@ sealed class R_CallExpr(type: R_Type, val args: List<R_Expr>): R_Expr(type) {
 
 class R_SysCallExpr(type: R_Type, val fn: R_SysFunction, args: List<R_Expr>): R_CallExpr(type, args) {
     override fun call(frame: Rt_CallFrame, values: List<Rt_Value>): Rt_Value {
-        val res = fn.call(frame.entCtx.callCtx, values)
+        val res = fn.call(frame.defCtx.callCtx, values)
         return res
     }
 }
@@ -442,8 +442,8 @@ object R_SysFn_OpContext {
         override fun call(opCtx: Rt_OpContext) = Rt_IntValue(opCtx.lastBlockTime)
     }
 
-    class Transaction(private val type: R_ClassType): BaseFn("transaction") {
-        override fun call(opCtx: Rt_OpContext) = Rt_ClassValue(type, opCtx.transactionIid)
+    class Transaction(private val type: R_EntityType): BaseFn("transaction") {
+        override fun call(opCtx: Rt_OpContext) = Rt_EntityValue(type, opCtx.transactionIid)
     }
 
     object BlockHeight: BaseFn("block_height") {
@@ -525,45 +525,45 @@ object R_SysFn_Gtv {
     }
 }
 
-object R_SysFn_Record {
-    class ToBytes(private val record: R_Record): R_SysFunction_1() {
+object R_SysFn_Struct {
+    class ToBytes(private val struct: R_Struct): R_SysFunction_1() {
         override fun call(arg: Rt_Value): Rt_Value {
-            val gtv = record.type.rtToGtv(arg, false)
+            val gtv = struct.type.rtToGtv(arg, false)
             val bytes = PostchainUtils.gtvToBytes(gtv)
             return Rt_ByteArrayValue(bytes)
         }
     }
 
-    class ToGtv(private val record: R_Record, private val pretty: Boolean): R_SysFunction_1() {
+    class ToGtv(private val struct: R_Struct, private val pretty: Boolean): R_SysFunction_1() {
         override fun call(arg: Rt_Value): Rt_Value {
-            val gtv = record.type.rtToGtv(arg, pretty)
+            val gtv = struct.type.rtToGtv(arg, pretty)
             return Rt_GtvValue(gtv)
         }
     }
 
-    class FromBytes(private val record: R_Record): R_SysFunction() {
+    class FromBytes(private val struct: R_Struct): R_SysFunction() {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             check(args.size == 1)
             val arg = args[0]
             val bytes = arg.asByteArray()
-            return Rt_Utils.wrapErr("fn:record:from_bytes") {
+            return Rt_Utils.wrapErr("fn:struct:from_bytes") {
                 val gtv = PostchainUtils.bytesToGtv(bytes)
                 val convCtx = GtvToRtContext(false)
-                val res = record.type.gtvToRt(convCtx, gtv)
+                val res = struct.type.gtvToRt(convCtx, gtv)
                 convCtx.finish(ctx.appCtx)
                 res
             }
         }
     }
 
-    class FromGtv(private val record: R_Record, private val pretty: Boolean): R_SysFunction() {
+    class FromGtv(private val struct: R_Struct, private val pretty: Boolean): R_SysFunction() {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             check(args.size == 1)
             val arg = args[0]
             val gtv = arg.asGtv()
-            return Rt_Utils.wrapErr("fn:record:from_gtv:$pretty") {
+            return Rt_Utils.wrapErr("fn:struct:from_gtv:$pretty") {
                 val convCtx = GtvToRtContext(pretty)
-                val res = record.type.gtvToRt(convCtx, gtv)
+                val res = struct.type.gtvToRt(convCtx, gtv)
                 convCtx.finish(ctx.appCtx)
                 res
             }

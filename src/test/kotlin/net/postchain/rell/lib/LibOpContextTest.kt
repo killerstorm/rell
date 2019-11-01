@@ -28,7 +28,7 @@ class LibOpContextTest: BaseRellTest(false) {
 
     @Test fun testLastBlockTimeAsDefaultValue() {
         tstCtx.useSql = true
-        def("class foo { t: integer = op_context.last_block_time; }")
+        def("entity foo { t: integer = op_context.last_block_time; }")
         tst.opContext = Rt_OpContext(12345, -1, -1, listOf())
 
         chkOp("create foo();")
@@ -56,7 +56,7 @@ class LibOpContextTest: BaseRellTest(false) {
 
     @Test fun testTransactionAsDefaultValue() {
         tstCtx.useSql = true
-        def("class foo { t: transaction = op_context.transaction; }")
+        def("entity foo { t: transaction = op_context.transaction; }")
         tst.inserts = LibBlockTransactionTest.BLOCK_INSERTS
         tst.chainId = 333
         tst.opContext = Rt_OpContext(-1, 444, -1, listOf())

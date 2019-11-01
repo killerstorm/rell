@@ -45,10 +45,10 @@ class OperatorsDbTest: OperatorsBaseTest() {
             }
             .joinToString("")
 
-    private val classDefs = listOf(
-            "class company { name: text; }",
-            "class user { name: text; company; }",
-            "class optest { $dataAttrDefs }"
+    private val entityDefs = listOf(
+            "entity company { name: text; }",
+            "entity user { name: text; company; }",
+            "entity optest { $dataAttrDefs }"
     )
 
     private val inserts = listOf(
@@ -60,7 +60,7 @@ class OperatorsDbTest: OperatorsBaseTest() {
     )
 
     private val tstCtx = resource(RellTestContext())
-    private val tst = RellCodeTester(tstCtx, classDefs = classDefs, inserts = inserts)
+    private val tst = RellCodeTester(tstCtx, entityDefs = entityDefs, inserts = inserts)
 
     override fun chkExpr(expr: String, args: List<TstVal>, expected: Boolean) {
         val (expr2, values) = transformExpr(expr, args)
@@ -145,7 +145,7 @@ class OperatorsDbTest: OperatorsBaseTest() {
     override fun vBytes(v: String): TstVal = AtTstVal.Bytes(v)
     override fun vRowid(v: Long): TstVal = AtTstVal.Rowid(v)
     override fun vJson(v: String): TstVal = AtTstVal.Json(v)
-    override fun vObj(cls: String, id: Long): TstVal = AtTstVal.Obj(cls, id)
+    override fun vObj(ent: String, id: Long): TstVal = AtTstVal.Obj(ent, id)
 
     private sealed class AtTstVal(val field: String): TstVal() {
         abstract fun sql(): String
@@ -181,7 +181,7 @@ class OperatorsDbTest: OperatorsBaseTest() {
             override fun sql(): String = "'$v'"
         }
 
-        class Obj(cls: String, val id: Long): AtTstVal(cls) {
+        class Obj(ent: String, val id: Long): AtTstVal(ent) {
             override fun sql(): String = "$id"
         }
     }

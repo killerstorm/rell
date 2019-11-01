@@ -5,14 +5,14 @@ import net.postchain.rell.model.*
 import net.postchain.rell.toImmList
 import java.util.*
 
-class C_Class(val defPos: S_Pos?, val cls: R_Class)
-class C_Record(val name: S_Name, val record: R_Record)
+class C_Entity(val defPos: S_Pos?, val cls: R_Entity)
+class C_Struct(val name: S_Name, val struct: R_Struct)
 
 enum class C_CompilerPass {
     DEFINITIONS,
     NAMESPACES,
     MEMBERS,
-    RECORDS,
+    STRUCTS,
     EXPRESSIONS,
     VALIDATION,
     ;
@@ -58,8 +58,8 @@ class C_StatementVarsBlock {
 }
 
 class C_SystemDefs private constructor(
-        val blockClass: R_Class,
-        val transactionClass: R_Class,
+        val blockEntity: R_Entity,
+        val transactionEntity: R_Entity,
         val nsProto: C_SysNsProto,
         val mntTables: C_MountTables
 ) {
@@ -84,30 +84,30 @@ class C_SystemDefs private constructor(
         )
 
         fun create(executor: C_CompilerExecutor, appDefsBuilder: C_AppDefsBuilder): C_SystemDefs {
-            val blockClass = C_Utils.createBlockClass(executor, null)
-            val transactionClass = C_Utils.createTransactionClass(executor, null, blockClass)
+            val blockEntity = C_Utils.createBlockEntity(executor, null)
+            val transactionEntity = C_Utils.createTransactionEntity(executor, null, blockEntity)
 
             val sysNamespaces = C_LibFunctions.getSystemNamespaces()
             val sysTypes = SYSTEM_TYPES
-            val sysClasses =  listOf(blockClass, transactionClass)
+            val sysEntities =  listOf(blockEntity, transactionEntity)
             val sysFunctions = C_LibFunctions.getGlobalFunctions()
 
             val nsBuilder = C_SysNsProtoBuilder()
             val mntBuilder = C_MountTablesBuilder()
 
             for ((name, type) in sysTypes) nsBuilder.addType(name, type)
-            for (cls in sysClasses) nsBuilder.addClass(cls.simpleName, cls)
+            for (cls in sysEntities) nsBuilder.addEntity(cls.simpleName, cls)
             for ((name, fn) in sysFunctions) nsBuilder.addFunction(name, fn)
             for ((name, ns) in sysNamespaces) nsBuilder.addNamespace(name, ns)
 
-            for (cls in sysClasses) {
-                appDefsBuilder.classes.add(C_Class(null, cls))
-                mntBuilder.addClass(null, cls)
+            for (cls in sysEntities) {
+                appDefsBuilder.entities.add(C_Entity(null, cls))
+                mntBuilder.addEntity(null, cls)
             }
 
             val nsProto = nsBuilder.build()
             val mntTables = mntBuilder.build()
-            return C_SystemDefs(blockClass, transactionClass, nsProto, mntTables)
+            return C_SystemDefs(blockEntity, transactionEntity, nsProto, mntTables)
         }
     }
 }

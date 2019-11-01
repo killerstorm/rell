@@ -1,7 +1,7 @@
 package net.postchain.rell.model
 
 import net.postchain.rell.CommonUtils
-import net.postchain.rell.parser.C_ClassAttrRef
+import net.postchain.rell.parser.C_EntityAttrRef
 import net.postchain.rell.parser.C_Constants
 import net.postchain.rell.runtime.Rt_BooleanValue
 import net.postchain.rell.runtime.Rt_CallFrame
@@ -141,7 +141,7 @@ class Db_UnaryExpr(type: R_Type, val op: Db_UnaryOp, val expr: Db_Expr): Db_Expr
     }
 }
 
-sealed class Db_TableExpr(val rClass: R_Class): Db_Expr(rClass.type) {
+sealed class Db_TableExpr(val rEntity: R_Entity): Db_Expr(rEntity.type) {
     abstract fun alias(ctx: SqlGenContext): SqlTableAlias
 
     final override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
@@ -151,30 +151,30 @@ sealed class Db_TableExpr(val rClass: R_Class): Db_Expr(rClass.type) {
     private class RedDb_TableExpr(val tableExpr: Db_TableExpr): RedDb_Expr() {
         override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
             val alias = tableExpr.alias(ctx)
-            val rowidCol = tableExpr.rClass.sqlMapping.rowidColumn()
+            val rowidCol = tableExpr.rEntity.sqlMapping.rowidColumn()
             bld.appendColumn(alias, rowidCol)
         }
     }
 }
 
-class Db_ClassExpr(val cls: R_AtClass): Db_TableExpr(cls.rClass) {
-    override fun alias(ctx: SqlGenContext) = ctx.getClassAlias(cls)
+class Db_EntityExpr(val cls: R_AtEntity): Db_TableExpr(cls.rEntity) {
+    override fun alias(ctx: SqlGenContext) = ctx.getEntityAlias(cls)
 }
 
-class Db_RelExpr(val base: Db_TableExpr, val attr: R_Attrib, targetClass: R_Class): Db_TableExpr(targetClass) {
+class Db_RelExpr(val base: Db_TableExpr, val attr: R_Attrib, targetEntity: R_Entity): Db_TableExpr(targetEntity) {
     override fun implicitName(): String? {
-        return if (base is Db_ClassExpr) attr.name else null
+        return if (base is Db_EntityExpr) attr.name else null
     }
 
     override fun alias(ctx: SqlGenContext): SqlTableAlias {
         val baseAlias = base.alias(ctx)
-        return ctx.getRelAlias(baseAlias, attr, rClass)
+        return ctx.getRelAlias(baseAlias, attr, rEntity)
     }
 }
 
 class Db_AttrExpr(val base: Db_TableExpr, val attr: R_Attrib): Db_Expr(attr.type) {
     override fun implicitName(): String? {
-        return if (base is Db_ClassExpr) attr.name else null
+        return if (base is Db_EntityExpr) attr.name else null
     }
 
     override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
@@ -190,9 +190,9 @@ class Db_AttrExpr(val base: Db_TableExpr, val attr: R_Attrib): Db_Expr(attr.type
     }
 }
 
-class Db_RowidExpr(val base: Db_TableExpr): Db_Expr(C_ClassAttrRef.ROWID_TYPE) {
+class Db_RowidExpr(val base: Db_TableExpr): Db_Expr(C_EntityAttrRef.ROWID_TYPE) {
     override fun implicitName(): String? {
-        return if (base is Db_ClassExpr) C_ClassAttrRef.ROWID_NAME else null
+        return if (base is Db_EntityExpr) C_EntityAttrRef.ROWID_NAME else null
     }
 
     override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {

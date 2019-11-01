@@ -153,7 +153,7 @@ private object C_Annotation_Log {
 }
 
 class C_ModifierTarget(
-        val type: C_DefType,
+        val type: C_DeclarationType,
         val name: S_Name?,
         mount: Boolean = false,
         log: Boolean = false,

@@ -134,21 +134,21 @@ class S_LookupExpr(val opPos: S_Pos, val base: S_Expr, val expr: S_Expr): S_Expr
     private class C_LookupInternal(val expr: R_Expr, val dstExpr: R_DestinationExpr?)
 }
 
-class S_CreateExpr(pos: S_Pos, val className: List<S_Name>, val exprs: List<S_NameExprPair>): S_Expr(pos) {
+class S_CreateExpr(pos: S_Pos, val entityName: List<S_Name>, val exprs: List<S_NameExprPair>): S_Expr(pos) {
     override fun compile(ctx: C_ExprContext): C_Expr {
-        ctx.blkCtx.entCtx.checkDbUpdateAllowed(startPos)
+        ctx.blkCtx.defCtx.checkDbUpdateAllowed(startPos)
 
-        val nsCtx = ctx.blkCtx.entCtx.nsCtx
-        val cls = nsCtx.getClass(className)
-        val attrs = C_AttributeResolver.resolveCreate(ctx, cls.attributes, exprs, startPos)
+        val nsCtx = ctx.blkCtx.defCtx.nsCtx
+        val entity = nsCtx.getEntity(entityName)
+        val attrs = C_AttributeResolver.resolveCreate(ctx, entity.attributes, exprs, startPos)
 
-        if (!cls.flags.canCreate) {
-            val classNameStr = C_Utils.nameStr(className)
-            throw C_Error(startPos, "expr_create_cant:$classNameStr",
-                    "Not allowed to create instances of class '$classNameStr'")
+        if (!entity.flags.canCreate) {
+            val entityNameStr = C_Utils.nameStr(entityName)
+            throw C_Error(startPos, "expr_create_cant:$entityNameStr",
+                    "Not allowed to create instances of entity '$entityNameStr'")
         }
 
-        val rExpr = R_CreateExpr(cls, attrs.rAttrs)
+        val rExpr = R_CreateExpr(entity, attrs.rAttrs)
         return C_RValue.makeExpr(startPos, rExpr, attrs.exprFacts)
     }
 }
@@ -866,7 +866,7 @@ class S_MapExpr(pos: S_Pos, val keyValueTypes: Pair<S_Type, S_Type>?, val args: 
     }
 }
 
-class S_RecordOrCallExpr(val base: S_Expr, val args: List<S_NameExprPair>): S_Expr(base.startPos) {
+class S_StructOrCallExpr(val base: S_Expr, val args: List<S_NameExprPair>): S_Expr(base.startPos) {
     override fun compile(ctx: C_ExprContext): C_Expr {
         val cBase = base.compile(ctx)
         return cBase.call(ctx, base.startPos, args)

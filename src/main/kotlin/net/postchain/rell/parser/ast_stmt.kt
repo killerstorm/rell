@@ -26,7 +26,7 @@ abstract class S_Statement(val pos: S_Pos) {
 
     protected open fun discoverVars0(map: MutableTypedKeyMap) = C_StatementVars.EMPTY
 
-    fun getModifiedVars(ctx: C_EntityContext): Set<String> {
+    fun getModifiedVars(ctx: C_DefinitionContext): Set<String> {
         val res = ctx.statementVars.get(modifiedVars)
         return res
     }
@@ -52,7 +52,7 @@ class S_SimpleVarDeclarator(private val attrHeader: S_AttrHeader): S_VarDeclarat
             return R_WildcardVarDeclarator
         }
 
-        val rType = if (attrHeader.hasExplicitType() || rExprType == null) attrHeader.compileType(ctx.entCtx.nsCtx) else null
+        val rType = if (attrHeader.hasExplicitType() || rExprType == null) attrHeader.compileType(ctx.defCtx.nsCtx) else null
 
         if (rType == null && rExprType == null) {
             throw C_Error(name.pos, "stmt_var_notypeexpr:${name.str}", "Neither type nor expression specified for '${name.str}'")
@@ -164,20 +164,20 @@ class S_ReturnStatement(pos: S_Pos, val expr: S_Expr?): S_Statement(pos) {
             C_Utils.checkUnitType(pos, rExpr.type, "stmt_return_unit", "Expression returns nothing")
         }
 
-        val entCtx = ctx.blkCtx.entCtx
+        val defCtx = ctx.blkCtx.defCtx
 
-        if (entCtx.entityType == C_EntityType.OPERATION) {
+        if (defCtx.definitionType == C_DefinitionType.OPERATION) {
             if (rExpr != null) {
                 throw C_Error(pos, "stmt_return_op_value", "Operation must return nothing")
             }
         } else {
-            check(entCtx.entityType == C_EntityType.FUNCTION || entCtx.entityType == C_EntityType.QUERY)
-            if (entCtx.entityType == C_EntityType.QUERY && rExpr == null) {
+            check(defCtx.definitionType == C_DefinitionType.FUNCTION || defCtx.definitionType == C_DefinitionType.QUERY)
+            if (defCtx.definitionType == C_DefinitionType.QUERY && rExpr == null) {
                 throw C_Error(pos, "stmt_return_query_novalue", "Query must return a value")
             }
 
             val rRetType = if (rExpr == null) R_UnitType else rExpr.type
-            entCtx.matchReturnType(pos, rRetType)
+            defCtx.matchReturnType(pos, rRetType)
         }
 
         val rStmt = R_ReturnStatement(rExpr)
@@ -328,7 +328,7 @@ class S_WhileStatement(pos: S_Pos, val expr: S_Expr, val stmt: S_Statement): S_S
         val rExpr = loop.condExpr
         S_Type.match(R_BooleanType, rExpr.type, expr.startPos, "stmt_while_expr_type", "Wrong type of while-expression")
 
-        val loopId = ctx.blkCtx.entCtx.nextLoopId()
+        val loopId = ctx.blkCtx.defCtx.nextLoopId()
         val loopCtx = loop.condCtx.subBlock(loopId)
 
         val condFacts = loop.condFacts
@@ -370,7 +370,7 @@ class S_WhileStatement(pos: S_Pos, val expr: S_Expr, val stmt: S_Statement): S_S
         }
 
         private fun getModifiedVars(stmt: S_Statement, ctx: C_ExprContext): List<C_ScopeEntry> {
-            val modVars = stmt.getModifiedVars(ctx.blkCtx.entCtx)
+            val modVars = stmt.getModifiedVars(ctx.blkCtx.defCtx)
             val res = ArrayList<C_ScopeEntry>(modVars.size)
 
             for (name in modVars) {
@@ -433,7 +433,7 @@ class S_ForStatement(pos: S_Pos, val declarator: S_VarDeclarator, val expr: S_Ex
         val exprType = rExpr.type
         val (itemType, iterator) = compileForIterator(exprType)
 
-        val loopId = ctx.blkCtx.entCtx.nextLoopId()
+        val loopId = ctx.blkCtx.defCtx.nextLoopId()
         val loopCtx = loop.condCtx.subBlock(loopId)
 
         val mutVarFacts = C_MutableVarFacts()

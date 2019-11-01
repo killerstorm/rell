@@ -118,7 +118,7 @@ class LibDecimalTest: BaseRellTest(false) {
 
     @Test fun testCreateUpdate() {
         tstCtx.useSql = true
-        def("class user { name; mutable value: decimal; }")
+        def("entity user { name; mutable value: decimal; }")
 
         val expMin = "0." + "0".repeat(C_Constants.DECIMAL_FRAC_DIGITS - 1) + "1"
         val expMax = "9".repeat(C_Constants.DECIMAL_INT_DIGITS) + "." + "9".repeat(C_Constants.DECIMAL_FRAC_DIGITS)

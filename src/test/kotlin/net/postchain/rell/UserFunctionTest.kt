@@ -33,7 +33,7 @@ class UserFunctionTest: BaseRellTest(false) {
 
     @Test fun testDbSelect() {
         tstCtx.useSql = true
-        def("class user { name: text; }")
+        def("entity user { name: text; }")
         chkOp("create user('Bob'); create user('Alice');")
 
         chkFn("function f(name: text): user = user @ { name };", "f('Bob')", "user[1]")
@@ -42,7 +42,7 @@ class UserFunctionTest: BaseRellTest(false) {
 
     @Test fun testDbUpdate() {
         tstCtx.useSql = true
-        def("class user { name: text; mutable score: integer; }")
+        def("entity user { name: text; mutable score: integer; }")
         chkOp("create user('Bob', 100); create user('Alice', 250);")
 
         val fn = "function f(name: text, s: integer): integer { update user @ { name } ( score += s ); return s; }"
@@ -120,7 +120,7 @@ class UserFunctionTest: BaseRellTest(false) {
 
     @Test fun testCallUnderAt() {
         tstCtx.useSql = true
-        def("class user { name: text; id: integer; }")
+        def("entity user { name: text; id: integer; }")
         chkOp("create user('Bob',123); create user('Alice',456);")
 
         val fn = "function foo(a: text): text = a.upper_case();"

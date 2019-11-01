@@ -43,7 +43,7 @@ class NullPropagationTest: BaseRellTest(false) {
 
     @Test fun testExprBinary() {
         tst.strictToString = false
-        def("record rec { a: integer; }")
+        def("struct rec { a: integer; }")
 
         chkExprBinaryInt("==")
         chkExprBinaryInt("!=")
@@ -150,7 +150,7 @@ class NullPropagationTest: BaseRellTest(false) {
 
     @Test fun testExprMember() {
         tst.strictToString = false
-        def("record rec { a: integer; }")
+        def("struct rec { a: integer; }")
         def("function f(r: rec?): rec? = r;")
         chkEx("{ val x = _nullable(rec(123)); return _type_of(x); }", "rec?")
         chkEx("{ val x = _nullable(rec(123)); val t = (x!!).a; return _type_of(x); }", "rec")
@@ -178,9 +178,9 @@ class NullPropagationTest: BaseRellTest(false) {
         chkEx("{ val x = _nullable(123); _nullable_int(x!!); return _type_of(x); }", "integer")
     }
 
-    @Test fun testExprRecordConstructor() {
+    @Test fun testExprStructConstructor() {
         tst.strictToString = false
-        def("record rec { a: integer; }")
+        def("struct rec { a: integer; }")
         chkEx("{ val x = _nullable(123); return _type_of(x); }", "integer?")
         chkEx("{ val x = _nullable(123); val t = rec(x!!); return _type_of(x); }", "integer")
         chkEx("{ val x = _nullable(123); val t = rec(a = x!!); return _type_of(x); }", "integer")
@@ -213,7 +213,7 @@ class NullPropagationTest: BaseRellTest(false) {
 
     @Test fun testExprCreate() {
         tstCtx.useSql = true
-        def("class user { name; score: integer; }")
+        def("entity user { name; score: integer; }")
 
         chkOp("val x = _nullable(123); print(_type_of(x));")
         chkStdout("integer?")
@@ -228,7 +228,7 @@ class NullPropagationTest: BaseRellTest(false) {
     @Test fun testExprAt() {
         tst.strictToString = false
         tstCtx.useSql = true
-        def("class user { name; score: integer; }")
+        def("entity user { name; score: integer; }")
 
         chkEx("{ val x = _nullable(123); return _type_of(x); }", "integer?")
         chkEx("{ val x = _nullable(123); val t = user @* { x!! }; return _type_of(x); }", "integer")
@@ -318,7 +318,7 @@ class NullPropagationTest: BaseRellTest(false) {
 
     @Test fun testStmtUpdate() {
         tstCtx.useSql = true
-        def("class user { name; mutable score: integer; }")
+        def("entity user { name; mutable score: integer; }")
 
         chkOp("{ val x = _nullable(123); print(_type_of(x)); }")
         chkStdout("integer?")
@@ -344,7 +344,7 @@ class NullPropagationTest: BaseRellTest(false) {
 
     @Test fun testStmtDelete() {
         tstCtx.useSql = true
-        def("class user { name; mutable score: integer; }")
+        def("entity user { name; mutable score: integer; }")
 
         chkOp("{ val x = _nullable(123); print(_type_of(x)); }")
         chkStdout("integer?")

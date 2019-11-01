@@ -5,7 +5,7 @@ import net.postchain.gtv.Gtv
 import net.postchain.rell.CommonUtils
 import net.postchain.rell.PostchainUtils
 import net.postchain.rell.model.R_App
-import net.postchain.rell.model.R_Class
+import net.postchain.rell.model.R_Entity
 import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.GtvToRtContext
@@ -112,27 +112,27 @@ object SqlTestUtils {
         return "INSERT INTO \"$table\"(\"${SqlConstants.ROWID_COLUMN}\",$quotedColumns) VALUES ($values);"
     }
 
-    fun dumpDatabaseClasses(sqlExec: SqlExecutor, chainMapping: Rt_ChainSqlMapping, app: R_App): List<String> {
+    fun dumpDatabaseEntity(sqlExec: SqlExecutor, chainMapping: Rt_ChainSqlMapping, app: R_App): List<String> {
         val list = mutableListOf<String>()
 
-        for (cls in app.classes) {
-            if (cls.sqlMapping.autoCreateTable()) {
-                dumpClass(sqlExec, chainMapping, cls, list)
+        for (entity in app.entities) {
+            if (entity.sqlMapping.autoCreateTable()) {
+                dumpEntity(sqlExec, chainMapping, entity, list)
             }
         }
 
         for (obj in app.objects) {
-            dumpClass(sqlExec, chainMapping, obj.rClass, list)
+            dumpEntity(sqlExec, chainMapping, obj.rEntity, list)
         }
 
         return list.toList()
     }
 
-    private fun dumpClass(sqlExec: SqlExecutor, chainMapping: Rt_ChainSqlMapping, cls: R_Class, list: MutableList<String>) {
-        val table = cls.sqlMapping.table(chainMapping)
-        val cols = listOf(cls.sqlMapping.rowidColumn()) + cls.attributes.values.map { it.sqlMapping }
-        val sql = getTableDumpSql(table, cols, cls.sqlMapping.rowidColumn())
-        val rows = dumpSql(sqlExec, sql).map { "${cls.moduleLevelName}($it)" }
+    private fun dumpEntity(sqlExec: SqlExecutor, chainMapping: Rt_ChainSqlMapping, entity: R_Entity, list: MutableList<String>) {
+        val table = entity.sqlMapping.table(chainMapping)
+        val cols = listOf(entity.sqlMapping.rowidColumn()) + entity.attributes.values.map { it.sqlMapping }
+        val sql = getTableDumpSql(table, cols, entity.sqlMapping.rowidColumn())
+        val rows = dumpSql(sqlExec, sql).map { "${entity.moduleLevelName}($it)" }
         list += rows
     }
 
@@ -279,6 +279,26 @@ object TestSnippetsRecorder {
         addSnippet(snippet)
     }
 
+    private fun sourceDirToMap(sourceDir: C_SourceDir): Map<String, String> {
+        val map = mutableMapOf<C_SourcePath, String>()
+        sourceDirToMap0(sourceDir, C_SourcePath(), map)
+        return map.mapKeys { (k, _) -> k.str() }.toImmMap()
+    }
+
+    private fun sourceDirToMap0(sourceDir: C_SourceDir, path: C_SourcePath, map: MutableMap<C_SourcePath, String>) {
+        for (file in sourceDir.files(path)) {
+            val subPath = path.add(file)
+            check(subPath !in map) { "File already in the map: $subPath" }
+            val text = sourceDir.file(subPath)!!.readText()
+            map[subPath] = text
+        }
+
+        for (dir in sourceDir.dirs(path)) {
+            val subPath = path.add(dir)
+            sourceDirToMap0(sourceDir, subPath, map)
+        }
+    }
+
     private fun makeParsing(files: Map<String, String>): Map<String, List<IdeSnippetMessage>> {
         val res = mutableMapOf<String, List<IdeSnippetMessage>>()
 
@@ -306,26 +326,6 @@ object TestSnippetsRecorder {
                 Runtime.getRuntime().addShutdownHook(thread)
                 shutdownHookInstalled = true
             }
-        }
-    }
-
-    private fun sourceDirToMap(sourceDir: C_SourceDir): Map<String, String> {
-        val map = mutableMapOf<C_SourcePath, String>()
-        sourceDirToMap0(sourceDir, C_SourcePath(), map)
-        return map.mapKeys { (k, _) -> k.str() }.toImmMap()
-    }
-
-    private fun sourceDirToMap0(sourceDir: C_SourceDir, path: C_SourcePath, map: MutableMap<C_SourcePath, String>) {
-        for (file in sourceDir.files(path)) {
-            val subPath = path.add(file)
-            check(subPath !in map) { "File already in the map: $subPath" }
-            val text = sourceDir.file(subPath)!!.readText()
-            map[subPath] = text
-        }
-
-        for (dir in sourceDir.dirs(path)) {
-            val subPath = path.add(dir)
-            sourceDirToMap0(sourceDir, subPath, map)
         }
     }
 

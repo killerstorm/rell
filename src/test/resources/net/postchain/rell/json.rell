@@ -1,4 +1,4 @@
-class myclass {
+entity myclass {
     index foo: json;
     key name;
 }

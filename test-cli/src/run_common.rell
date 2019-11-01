@@ -1,6 +1,6 @@
 module;
 
-record module_args {
+struct module_args {
     message: text;
 }
 

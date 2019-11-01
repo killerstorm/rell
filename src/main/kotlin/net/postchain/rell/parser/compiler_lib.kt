@@ -285,17 +285,17 @@ object C_LibFunctions {
             is R_SetType -> getSetFns(type)
             is R_MapType -> getMapFns(type)
             is R_VirtualMapType -> getVirtualMapFns(type)
-            is R_ClassType -> getClassFns(type)
+            is R_EntityType -> getEntityFns(type)
             is R_EnumType -> getEnumFns(type)
             is R_TupleType -> getTupleFns(type)
             is R_VirtualTupleType -> getVirtualTupleFns(type)
-            is R_RecordType -> getRecordFns(type.record)
-            is R_VirtualRecordType -> getVirtualRecordFns(type)
+            is R_StructType -> getStructFns(type.struct)
+            is R_VirtualStructType -> getVirtualStructFns(type)
             else -> C_MemberFuncTable(mapOf())
         }
     }
 
-    private fun getClassFns(type: R_ClassType): C_MemberFuncTable {
+    private fun getEntityFns(type: R_EntityType): C_MemberFuncTable {
         return typeMemFuncBuilder(type)
                 .build()
     }
@@ -448,11 +448,11 @@ object C_LibFunctions {
                 .build()
     }
 
-    fun makeRecordNamespace(record: R_Record): C_NamespaceDef {
-        val type = record.type
-        val mFromBytes = globalFnFromGtv(type, R_SysFn_Record.FromBytes(record))
-        val mFromGtv = globalFnFromGtv(type, R_SysFn_Record.FromGtv(record, false))
-        val mFromGtvPretty = globalFnFromGtv(type, R_SysFn_Record.FromGtv(record, true))
+    fun makeStructNamespace(struct: R_Struct): C_NamespaceDef {
+        val type = struct.type
+        val mFromBytes = globalFnFromGtv(type, R_SysFn_Struct.FromBytes(struct))
+        val mFromGtv = globalFnFromGtv(type, R_SysFn_Struct.FromGtv(struct, false))
+        val mFromGtvPretty = globalFnFromGtv(type, R_SysFn_Struct.FromGtv(struct, true))
 
         val fns = C_GlobalFuncBuilder()
                 .add("fromBytes", listOf(R_ByteArrayType), mFromBytes, C_Deprecated_UseInstead("from_bytes"))
@@ -472,11 +472,11 @@ object C_LibFunctions {
         return if (!flags.gtv.fromGtv) C_SysFunction_Invalid(type) else C_SysGlobalFormalParamsFuncBody(type, fn)
     }
 
-    private fun getRecordFns(record: R_Record): C_MemberFuncTable {
-        val type = record.type
-        val mToBytes = memFnToGtv(type, R_ByteArrayType, R_SysFn_Record.ToBytes(record))
-        val mToGtv = memFnToGtv(type, R_GtvType, R_SysFn_Record.ToGtv(record, false))
-        val mToGtvPretty = memFnToGtv(type, R_GtvType, R_SysFn_Record.ToGtv(record, true))
+    private fun getStructFns(struct: R_Struct): C_MemberFuncTable {
+        val type = struct.type
+        val mToBytes = memFnToGtv(type, R_ByteArrayType, R_SysFn_Struct.ToBytes(struct))
+        val mToGtv = memFnToGtv(type, R_GtvType, R_SysFn_Struct.ToGtv(struct, false))
+        val mToGtvPretty = memFnToGtv(type, R_GtvType, R_SysFn_Struct.ToGtv(struct, true))
 
         return typeMemFuncBuilder(type)
                 .add("toBytes", listOf(), mToBytes, C_Deprecated_UseInstead("to_bytes"))
@@ -486,7 +486,7 @@ object C_LibFunctions {
                 .build()
     }
 
-    private fun getVirtualRecordFns(type: R_VirtualRecordType): C_MemberFuncTable {
+    private fun getVirtualStructFns(type: R_VirtualStructType): C_MemberFuncTable {
         return typeMemFuncBuilder(type)
                 .add("to_full", type.innerType, listOf(), R_SysFn_Virtual.ToFull)
                 .build()
@@ -545,51 +545,51 @@ object C_LibFunctions {
 object C_Ns_OpContext {
     val NAME = "op_context"
 
-    fun transactionExpr(entCtx: C_EntityContext): R_Expr {
-        val type = entCtx.appCtx.sysDefs.transactionClass.type
+    fun transactionExpr(defCtx: C_DefinitionContext): R_Expr {
+        val type = defCtx.appCtx.sysDefs.transactionEntity.type
         return R_SysCallExpr(type, R_SysFn_OpContext.Transaction(type), listOf())
     }
 
-    private fun checkCtx(entCtx: C_EntityContext, name: List<S_Name>) {
-        val et = entCtx.entityType
-        if (et != C_EntityType.OPERATION && et != C_EntityType.FUNCTION && et != C_EntityType.CLASS) {
+    private fun checkCtx(defCtx: C_DefinitionContext, name: List<S_Name>) {
+        val dt = defCtx.definitionType
+        if (dt != C_DefinitionType.OPERATION && dt != C_DefinitionType.FUNCTION && dt != C_DefinitionType.ENTITY) {
             throw C_Error(name[0].pos, "op_ctx_noop", "Cannot access '$NAME' outside of an operation")
         }
     }
 
     object Value_LastBlockTime: C_NamespaceValue_RExpr() {
-        override fun get0(entCtx: C_EntityContext, name: List<S_Name>): R_Expr {
-            checkCtx(entCtx, name)
+        override fun get0(defCtx: C_DefinitionContext, name: List<S_Name>): R_Expr {
+            checkCtx(defCtx, name)
             return R_SysCallExpr(R_IntegerType, R_SysFn_OpContext.LastBlockTime, listOf())
         }
     }
 
     object Value_BlockHeight: C_NamespaceValue_RExpr() {
-        override fun get0(entCtx: C_EntityContext, name: List<S_Name>): R_Expr {
-            checkCtx(entCtx, name)
+        override fun get0(defCtx: C_DefinitionContext, name: List<S_Name>): R_Expr {
+            checkCtx(defCtx, name)
             return R_SysCallExpr(R_IntegerType, R_SysFn_OpContext.BlockHeight, listOf())
         }
     }
 
     object Value_Transaction: C_NamespaceValue_RExpr() {
-        override fun get0(entCtx: C_EntityContext, name: List<S_Name>): R_Expr {
-            checkCtx(entCtx, name)
-            return transactionExpr(entCtx)
+        override fun get0(defCtx: C_DefinitionContext, name: List<S_Name>): R_Expr {
+            checkCtx(defCtx, name)
+            return transactionExpr(defCtx)
         }
     }
 }
 
 private object C_NsValue_ChainContext_Args: C_NamespaceValue_RExpr() {
-    override fun get0(entCtx: C_EntityContext, name: List<S_Name>): R_Expr {
-        val record = entCtx.modCtx.getModuleArgsRecord()
-        if (record == null) {
+    override fun get0(defCtx: C_DefinitionContext, name: List<S_Name>): R_Expr {
+        val struct = defCtx.modCtx.getModuleArgsStruct()
+        if (struct == null) {
             val nameStr = C_Utils.nameStr(name)
             throw C_Error(name[0].pos, "expr_chainctx_args_norec",
-                    "To use '$nameStr', define a record '${C_Constants.MODULE_ARGS_RECORD}'")
+                    "To use '$nameStr', define a struct '${C_Constants.MODULE_ARGS_STRUCT}'")
         }
 
-        val moduleName = entCtx.modCtx.module.name
-        return R_SysCallExpr(record.type, R_SysFn_ChainContext.Args(moduleName), listOf())
+        val moduleName = defCtx.modCtx.module.name
+        return R_SysCallExpr(struct.type, R_SysFn_ChainContext.Args(moduleName), listOf())
     }
 }
 

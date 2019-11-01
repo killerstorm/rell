@@ -50,10 +50,10 @@ class C_ModuleContext(
 
     val rootNsCtx = C_NamespaceContext(this, null, null, nsGetter)
 
-    fun getModuleArgsRecord(): R_Record? {
+    fun getModuleArgsStruct(): R_Struct? {
         val content = module.content()
-        val rec = content.defs.records[C_Constants.MODULE_ARGS_RECORD]
-        return rec?.record
+        val struct = content.defs.structs[C_Constants.MODULE_ARGS_STRUCT]
+        return struct?.struct
     }
 }
 
@@ -116,13 +116,13 @@ class C_NamespaceContext(
         return typeDef
     }
 
-    fun getClass(name: List<S_Name>): R_Class {
+    fun getEntity(name: List<S_Name>): R_Entity {
         val type = getTypeOpt(name)
-        if (type !is R_ClassType) {
+        if (type !is R_EntityType) {
             val nameStr = C_Utils.nameStr(name)
-            throw C_Error(name[0].pos, "unknown_class:$nameStr", "Unknown class: '$nameStr'")
+            throw C_Error(name[0].pos, "unknown_entity:$nameStr", "Unknown entity: '$nameStr'")
         }
-        return type.rClass
+        return type.rEntity
     }
 
     fun getValueOpt(name: String): C_NamespaceValue? {
@@ -167,12 +167,12 @@ class C_NamespaceContext(
 class C_ExternalChain(
         val name: S_String,
         val ref: R_ExternalChainRef,
-        val blockClass: R_Class,
-        val transactionClass: R_Class,
+        val blockEntity: R_Entity,
+        val transactionEntity: R_Entity,
         val mntTables: C_MountTables
 )
 
-class C_DefinitionContext(
+class C_MountContext(
         val fileCtx: C_FileContext,
         val nsCtx: C_NamespaceContext,
         val extChain: C_ExternalChain?,
@@ -185,9 +185,9 @@ class C_DefinitionContext(
     val executor = nsCtx.executor
     val mntBuilder = fileCtx.mntBuilder
 
-    fun checkNotExternal(pos: S_Pos, defType: C_DefType) {
+    fun checkNotExternal(pos: S_Pos, decType: C_DeclarationType) {
         if (extChain != null) {
-            val def = defType.description
+            val def = decType.description
             throw C_Error(pos, "def_external:$def", "Not allowed to have $def in external block")
         }
     }
@@ -204,18 +204,18 @@ class C_DefinitionContext(
     }
 }
 
-enum class C_EntityType {
-    CLASS,
+enum class C_DefinitionType {
+    ENTITY,
     OBJECT,
-    RECORD,
+    STRUCT,
     QUERY,
     OPERATION,
     FUNCTION,
 }
 
-class C_EntityContext(
+class C_DefinitionContext(
         val nsCtx: C_NamespaceContext,
-        val entityType: C_EntityType,
+        val definitionType: C_DefinitionType,
         explicitReturnType: R_Type?,
         val statementVars: TypedKeyMap
 ){
@@ -237,7 +237,7 @@ class C_EntityContext(
     val rootExprCtx = C_ExprContext(rootBlkCtx, rootNameCtx, C_VarFactsContext(C_VarFacts.EMPTY))
 
     fun checkDbUpdateAllowed(pos: S_Pos) {
-        if (entityType == C_EntityType.QUERY) {
+        if (definitionType == C_DefinitionType.QUERY) {
             throw C_Error(pos, "no_db_update", "Database modifications are not allowed in this context")
         }
     }
@@ -312,9 +312,9 @@ class C_EntityContext(
     }
 }
 
-class C_ClassContext(
-        val entCtx: C_EntityContext,
-        private val className: String,
+class C_EntityContext(
+        val defCtx: C_DefinitionContext,
+        private val entityName: String,
         private val logAnnotation: Boolean
 ) {
     private val attributes = mutableMapOf<String, R_Attrib>()
@@ -326,29 +326,29 @@ class C_ClassContext(
     fun hasAttribute(name: String): Boolean = name in attributes
 
     fun addAttribute(name: S_Name, attr: S_AttrHeader, mutable: Boolean, expr: S_Expr?) {
-        val entityType = entCtx.entityType
+        val defType = defCtx.definitionType
 
-        val rType = attr.compileTypeOpt(entCtx.nsCtx)
+        val rType = attr.compileTypeOpt(defCtx.nsCtx)
 
         val nameStr = name.str
         if (nameStr in attributes) {
-            entCtx.globalCtx.error(name.pos, "dup_attr:$nameStr", "Duplicate attribute: '$nameStr'")
+            defCtx.globalCtx.error(name.pos, "dup_attr:$nameStr", "Duplicate attribute: '$nameStr'")
             return
         }
 
         var err = rType == null
 
-        val insideClass = entityType == C_EntityType.CLASS || entityType == C_EntityType.OBJECT
+        val insideEntity = defType == C_DefinitionType.ENTITY || defType == C_DefinitionType.OBJECT
 
-        if (insideClass && !C_ClassAttrRef.isAllowedRegularAttrName(nameStr)) {
-            entCtx.globalCtx.error(name.pos, "unallowed_attr_name:$nameStr", "Unallowed attribute name: '$nameStr'")
+        if (insideEntity && !C_EntityAttrRef.isAllowedRegularAttrName(nameStr)) {
+            defCtx.globalCtx.error(name.pos, "unallowed_attr_name:$nameStr", "Unallowed attribute name: '$nameStr'")
             err = true
         }
 
         if (mutable && logAnnotation) {
             val ann = C_Constants.LOG_ANNOTATION
-            entCtx.globalCtx.error(name.pos, "class_attr_mutable_log:$className:$nameStr",
-                    "Class '$className' cannot have mutable attributes because of the '$ann' annotation")
+            defCtx.globalCtx.error(name.pos, "entity_attr_mutable_log:$entityName:$nameStr",
+                    "Entity '$entityName' cannot have mutable attributes because of the '$ann' annotation")
             err = true
         }
 
@@ -356,15 +356,15 @@ class C_ClassContext(
             return
         }
 
-        if (insideClass && !rType.sqlAdapter.isSqlCompatible()) {
-            entCtx.globalCtx.error(name.pos, "class_attr_type:$nameStr:${rType.toStrictString()}",
+        if (insideEntity && !rType.sqlAdapter.isSqlCompatible()) {
+            defCtx.globalCtx.error(name.pos, "entity_attr_type:$nameStr:${rType.toStrictString()}",
                     "Attribute '$nameStr' has unallowed type: ${rType.toStrictString()}")
             err = true
         }
 
-        if (entityType == C_EntityType.OBJECT && expr == null) {
-            entCtx.globalCtx.error(name.pos, "object_attr_novalue:$className:$nameStr",
-                    "Object attribute '$className.$nameStr' must have a default value")
+        if (defType == C_DefinitionType.OBJECT && expr == null) {
+            defCtx.globalCtx.error(name.pos, "object_attr_novalue:$entityName:$nameStr",
+                    "Object attribute '$entityName.$nameStr' must have a default value")
             err = true
         }
 
@@ -373,7 +373,7 @@ class C_ClassContext(
         }
 
         val exprCreator: (() -> R_Expr)? = if (expr == null) null else { ->
-            val rExpr = expr.compile(entCtx.rootExprCtx).value().toRExpr()
+            val rExpr = expr.compile(defCtx.rootExprCtx).value().toRExpr()
             val adapter = S_Type.adapt(rType, rExpr.type, name.pos, "attr_type:$nameStr", "Default value type mismatch for '$nameStr'")
             adapter.adaptExpr(rExpr)
         }
@@ -383,11 +383,11 @@ class C_ClassContext(
 
     fun addAttribute0(name: String, rType: R_Type, mutable: Boolean, canSetInCreate: Boolean, exprCreator: (() -> R_Expr)?) {
         check(name !in attributes)
-        check(entCtx.entityType != C_EntityType.OBJECT || exprCreator != null)
+        check(defCtx.definitionType != C_DefinitionType.OBJECT || exprCreator != null)
 
         val rAttr = R_Attrib(attributes.size, name, rType, mutable, exprCreator != null, canSetInCreate)
 
-        entCtx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
+        defCtx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
             if (exprCreator == null) {
                 rAttr.setExpr(null)
             } else {
@@ -403,34 +403,34 @@ class C_ClassContext(
         check(rAttr.type.isAssignableFrom(rExpr.type)) {
             val exp = rAttr.type.toStrictString()
             val act = rExpr.type.toStrictString()
-            "Attribute '$className.${rAttr.name}' expression type mismatch: expected '$exp', was '$act'"
+            "Attribute '$entityName.${rAttr.name}' expression type mismatch: expected '$exp', was '$act'"
         }
         rAttr.setExpr(rExpr)
     }
 
     fun addKey(pos: S_Pos, attrs: List<S_Name>) {
         val names = attrs.map { it.str }
-        addUniqueKeyIndex(pos, uniqueKeys, names, "class_key_dup", "Duplicate key")
+        addUniqueKeyIndex(pos, uniqueKeys, names, "entity_key_dup", "Duplicate key")
         keys.add(R_Key(names))
     }
 
     fun addIndex(pos: S_Pos, attrs: List<S_Name>) {
         val names = attrs.map { it.str }
-        addUniqueKeyIndex(pos, uniqueIndices, names, "class_index_dup", "Duplicate index")
+        addUniqueKeyIndex(pos, uniqueIndices, names, "entity_index_dup", "Duplicate index")
         indices.add(R_Index(names))
     }
 
-    fun createClassBody(): R_ClassBody {
-        return R_ClassBody(keys.toList(), indices.toList(), attributes.toMap())
+    fun createEntityBody(): R_EntityBody {
+        return R_EntityBody(keys.toList(), indices.toList(), attributes.toMap())
     }
 
-    fun createRecordBody(): Map<String, R_Attrib> {
+    fun createStructBody(): Map<String, R_Attrib> {
         return attributes.toMap()
     }
 
     private fun addUniqueKeyIndex(pos: S_Pos, set: MutableSet<Set<String>>, names: List<String>, errCode: String, errMsg: String) {
-        if (entCtx.entityType == C_EntityType.OBJECT) {
-            throw C_Error(pos, "object_keyindex:${className}", "Object cannot have key or index")
+        if (defCtx.definitionType == C_DefinitionType.OBJECT) {
+            throw C_Error(pos, "object_keyindex:${entityName}", "Object cannot have key or index")
         }
 
         val nameSet = names.toSet()
