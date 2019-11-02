@@ -548,4 +548,31 @@ class ExpressionTest: BaseRellTest(false) {
         chkIntegerOver(op, left, right)
         chkIntegerOver(op, right, left)
     }
+
+    @Test fun testTupleFieldAccess() {
+        chkEx("{ val t = (123, 'Hello'); return _type_of(t[0]); }", "text[integer]")
+        chkEx("{ val t = (123, 'Hello'); return _type_of(t[1]); }", "text[text]")
+        chkEx("{ val t = (123, 'Hello'); return t[0]; }", "int[123]")
+        chkEx("{ val t = (123, 'Hello'); return t[1]; }", "text[Hello]")
+
+        chkEx("{ val t = (x = 123, y = 'Hello'); return _type_of(t[0]); }", "text[integer]")
+        chkEx("{ val t = (x = 123, y = 'Hello'); return _type_of(t[1]); }", "text[text]")
+        chkEx("{ val t = (x = 123, y = 'Hello'); return t[0]; }", "int[123]")
+        chkEx("{ val t = (x = 123, y = 'Hello'); return t[1]; }", "text[Hello]")
+
+        chkEx("{ val t = (123, 'Hello'); return t[-1]; }", "ct_err:expr_lookup:tuple:index:-1:2")
+        chkEx("{ val t = (123, 'Hello'); return t[2]; }", "ct_err:expr_lookup:tuple:index:2:2")
+        chkEx("{ val t = (123, 'Hello'); return t[+1]; }", "text[Hello]")
+        chkEx("{ val t = (123, 'Hello'); return t[-0]; }", "int[123]")
+        chkEx("{ val t = (123, 'Hello'); return t[0+1]; }", "ct_err:expr_lookup:tuple:no_const")
+        chkEx("{ val t = (123, 'Hello'); val i = 0; return t[i]; }", "ct_err:expr_lookup:tuple:no_const")
+
+        chkEx("{ val t = (123, 'Hello'); return t[true]; }", "ct_err:expr_lookup_keytype:integer:boolean")
+        chkEx("{ val t = (123, 'Hello'); return t['Bob']; }", "ct_err:expr_lookup_keytype:integer:text")
+
+        chkEx("{ val t = _nullable((123, 'Hello')); return t[0]; }", "ct_err:expr_lookup_null")
+        chkEx("{ val t = _nullable((123, 'Hello')); return t[1]; }", "ct_err:expr_lookup_null")
+        chkEx("{ val t = _nullable((123, 'Hello')); return t!![0]; }", "int[123]")
+        chkEx("{ val t = _nullable((123, 'Hello')); return t!![1]; }", "text[Hello]")
+    }
 }

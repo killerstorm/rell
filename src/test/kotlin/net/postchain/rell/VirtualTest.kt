@@ -946,10 +946,16 @@ class VirtualTest: BaseGtxTest(false) {
     @Test fun testTupleType() {
         val type = "virtual<(a:integer,b:text)>"
         var args = argToGtv("[123,'Hello']", "[[0],[1]]")
+
         chkVirtual(type, "_type_of(x)", args, "'virtual<(a:integer,b:text)>'")
         chkVirtual(type, "_type_of(x.to_full())", args, "'(a:integer,b:text)'")
         chkVirtual(type, "_type_of(x.a)", args, "'integer'")
         chkVirtual(type, "_type_of(x.b)", args, "'text'")
+
+        chkVirtual(type, "_type_of(x[0])", args, "'integer'")
+        chkVirtual(type, "_type_of(x[1])", args, "'text'")
+        chkVirtual(type, "_type_of(x[-1])", args, "ct_err:expr_lookup:tuple:index:-1:2")
+        chkVirtual(type, "_type_of(x[2])", args, "ct_err:expr_lookup:tuple:index:2:2")
     }
 
     @Test fun testTupleValue() {
@@ -960,16 +966,24 @@ class VirtualTest: BaseGtxTest(false) {
         chkVirtual(type, "_strict_str(x)", args, "'virtual(a=int[123],b=text[Hello])'")
         chkVirtual(type, "_strict_str(x.a)", args, "'int[123]'")
         chkVirtual(type, "_strict_str(x.b)", args, "'text[Hello]'")
+        chkVirtual(type, "_strict_str(x[0])", args, "'int[123]'")
+        chkVirtual(type, "_strict_str(x[1])", args, "'text[Hello]'")
+        chkVirtual(type, "_strict_str(x[-1])", args, "ct_err:expr_lookup:tuple:index:-1:2")
+        chkVirtual(type, "_strict_str(x[2])", args, "ct_err:expr_lookup:tuple:index:2:2")
 
         args = argToGtv("[123,'Hello']", "[[0]]")
         chkVirtual(type, "_strict_str(x)", args, "'virtual(a=int[123],b=null)'")
         chkVirtual(type, "_strict_str(x.a)", args, "'int[123]'")
         chkVirtual(type, "_strict_str(x.b)", args, "rt_err:virtual_tuple:get:novalue:b")
+        chkVirtual(type, "_strict_str(x[0])", args, "'int[123]'")
+        chkVirtual(type, "_strict_str(x[1])", args, "rt_err:virtual_tuple:get:novalue:b")
 
         args = argToGtv("[123,'Hello']", "[[1]]")
         chkVirtual(type, "_strict_str(x)", args, "'virtual(a=null,b=text[Hello])'")
         chkVirtual(type, "_strict_str(x.a)", args, "rt_err:virtual_tuple:get:novalue:a")
         chkVirtual(type, "_strict_str(x.b)", args, "'text[Hello]'")
+        chkVirtual(type, "_strict_str(x[0])", args, "rt_err:virtual_tuple:get:novalue:a")
+        chkVirtual(type, "_strict_str(x[1])", args, "'text[Hello]'")
     }
 
     @Test fun testTupleToFull() {
@@ -1000,6 +1014,8 @@ class VirtualTest: BaseGtxTest(false) {
         chkVirtual(type, "_strict_str(x)", args, "'virtual(a=int[456],b=virtual<rec>[i=int[123],t=text[Hello]])'")
         chkVirtual(type, "_strict_str(x.a)", args, "'int[456]'")
         chkVirtual(type, "_strict_str(x.b)", args, "'virtual<rec>[i=int[123],t=text[Hello]]'")
+        chkVirtual(type, "_strict_str(x[0])", args, "'int[456]'")
+        chkVirtual(type, "_strict_str(x[1])", args, "'virtual<rec>[i=int[123],t=text[Hello]]'")
 
         args = argToGtv("[456,[123,'Hello']]", "[[1,0]]")
         chkVirtual(type, "_type_of(x)", args, "'virtual<(a:integer,b:rec)>'")
@@ -1008,6 +1024,10 @@ class VirtualTest: BaseGtxTest(false) {
         chkVirtual(type, "_strict_str(x.b)", args, "'virtual<rec>[i=int[123],t=null]'")
         chkVirtual(type, "_strict_str(x.b.i)", args, "'int[123]'")
         chkVirtual(type, "_strict_str(x.b.t)", args, "rt_err:virtual_struct:get:novalue:rec:t")
+        chkVirtual(type, "_strict_str(x[0])", args, "rt_err:virtual_tuple:get:novalue:a")
+        chkVirtual(type, "_strict_str(x[1])", args, "'virtual<rec>[i=int[123],t=null]'")
+        chkVirtual(type, "_strict_str(x[1].i)", args, "'int[123]'")
+        chkVirtual(type, "_strict_str(x[1].t)", args, "rt_err:virtual_struct:get:novalue:rec:t")
     }
 
     @Test fun testVirtual() {

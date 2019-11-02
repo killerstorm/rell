@@ -82,6 +82,8 @@ class S_LookupExpr(val opPos: S_Pos, val base: S_Expr, val expr: S_Expr): S_Expr
             is R_VirtualListType -> compileVirtualList(rBase, rExpr, baseType.innerType.elementType)
             is R_MapType -> compileMap(rBase, rExpr, baseType.keyType, baseType.valueType)
             is R_VirtualMapType -> compileVirtualMap(rBase, rExpr, baseType.innerType.keyType, baseType.innerType.valueType)
+            is R_TupleType -> compileTuple(rBase, rExpr, baseType)
+            is R_VirtualTupleType -> compileVirtualTuple(rBase, rExpr, baseType)
             else -> {
                 val typeStr = baseType.toStrictString()
                 throw C_Error(opPos2, "expr_lookup_base:$typeStr", "Operator '[]' undefined for type $typeStr")
@@ -125,6 +127,40 @@ class S_LookupExpr(val opPos: S_Pos, val base: S_Expr, val expr: S_Expr): S_Expr
         matchKey(R_IntegerType, rExpr)
         val rResExpr = R_ByteArraySubscriptExpr(rBase, rExpr)
         return C_LookupInternal(rResExpr, null)
+    }
+
+    private fun compileTuple(rBase: R_Expr, rExpr: R_Expr, baseType: R_TupleType): C_LookupInternal {
+        val index = compileTuple0(rExpr, baseType)
+        val field = baseType.fields[index]
+        val rRes = R_MemberExpr(rBase, false, R_MemberCalculator_TupleAttr(field.type, index))
+        return C_LookupInternal(rRes, null)
+    }
+
+    private fun compileVirtualTuple(rBase: R_Expr, rExpr: R_Expr, baseType: R_VirtualTupleType): C_LookupInternal {
+        val index = compileTuple0(rExpr, baseType.innerType)
+        val field = baseType.innerType.fields[index]
+        val virtualType = S_VirtualType.virtualMemberType(field.type)
+        val rRes = R_MemberExpr(rBase, false, R_MemberCalculator_VirtualTupleAttr(virtualType, index))
+        return C_LookupInternal(rRes, null)
+    }
+
+    private fun compileTuple0(rExpr: R_Expr, baseType: R_TupleType): Int {
+        matchKey(R_IntegerType, rExpr)
+
+        val index = C_Utils.evaluate(expr.startPos) { rExpr.constantValue()?.asInteger() }
+        if (index == null) {
+            throw C_Error(expr.startPos, "expr_lookup:tuple:no_const",
+                    "Lookup key for a tuple must be a constant value, not an expression")
+        }
+
+        val fields = baseType.fields
+
+        if (index < 0 || index >= fields.size) {
+            throw C_Error(expr.startPos, "expr_lookup:tuple:index:$index:${fields.size}",
+                    "Index out of bounds, must be from 0 to ${fields.size-1}")
+        }
+
+        return index.toInt()
     }
 
     private fun matchKey(rType: R_Type, rExpr: R_Expr) {
@@ -288,14 +324,7 @@ class S_WhenConditionExpr(val exprs: List<S_Expr>): S_WhenCondition() {
     }
 
     private fun evaluateConstantValue(cValue: C_Value): Rt_Value? {
-        try {
-            val v = cValue.constantValue()
-            return v
-        } catch (e: Rt_Error) {
-            throw C_Error(cValue.pos, "expr_eval_fail:${e.code}", e.message ?: "Evaluation failed")
-        } catch (e: Throwable) {
-            throw C_Error(cValue.pos, "expr_eval_fail:${e.javaClass.canonicalName}", "Evaluation failed")
-        }
+        return C_Utils.evaluate(cValue.pos) { cValue.constantValue() }
     }
 
     private fun getVarFacts(keyVarId: C_VarId?, keyType: R_Type?, cValue: C_Value): C_ExprVarFacts {

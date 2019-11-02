@@ -98,14 +98,61 @@ Examples:
 -  ``(integer)`` - one value
 -  ``(integer, text)`` - two values
 -  ``(integer, (text, boolean))`` - nested tuple
--  ``(x: integer, y: integer)`` - named fields (can be accessed as
-   ``A.x``, ``A.y``)
+-  ``(x: integer, y: integer)`` - named fields (can be accessed as ``A.x``, ``A.y``)
 
-Tuple types are compatible only if names and types of fields are the
-same:
+Tuple types are compatible only if names and types of fields are the same:
 
 -  ``(x:integer, y:integer)`` and ``(a:integer,b:integer)`` are not compatible.
 -  ``(x:integer, y:integer)`` and ``(integer,integer)`` are not compatible.
+
+Using tuples
+~~~~~~~~~~~~~~~~~~~~~~~
+
+-  ``(1, 2, 3)`` - three values
+-  ``(123, 'Hello')`` - two values
+-  ``(456,)`` - one value (because of the comma)
+-  ``(789)`` - not a tuple (no comma)
+-  ``(a = 123, b = 'Hello')`` - tuple with named fields
+
+Reading tuple fields:
+
+- ``t[0]``, ``t[1]`` - by index
+- ``t.a``, ``t.b`` - by name (for named fields)
+
+Unpacking tuples
+~~~~~~~~~~~~~~~~
+
+::
+
+    val t = (123, 'Hello');
+    val (n, s) = t;           // n = 123, s = 'Hello'
+
+Works for arbitrarily nested tuples:
+
+::
+
+    val (n, (p, (x, y), q)) = calculate();
+
+Special symbol ``_`` is used to ignore a tuple element:
+
+::
+
+    val (_, s) = (123, 'Hello'); // s = 'Hello'
+
+Variable types can be specified explicitly:
+
+::
+
+    val (n: integer, s: text) = (123, 'Hello');
+
+Unpacking can be used in a loop:
+
+::
+
+    val l: list<(integer, text)> = get_tuples();
+    for ((x, y) in l) {
+        print(x, y);
+    }
 
 Collection types
 ----------------
@@ -126,6 +173,29 @@ Following types are mutable:
 -  Nullable type - only if the underlying type is mutable.
 -  Struct type - if the struct has a mutable field, or a field of a mutable type.
 -  Tuple - if a type of an element is mutable.
+
+Creating collections
+~~~~~~~~~~~~~~~~~~~~
+
+List:
+
+::
+
+    val l1 = [ 1, 2, 3, 4, 5 ];
+    val l2 = list<integer>();
+
+Set:
+
+::
+
+    val s = set<integer>();
+
+Map:
+
+::
+
+    val m1 = [ 'Bob' : 123, 'Alice' : 456 ];
+    val m2 = map<text, integer>();
 
 decimal
 -------------
@@ -338,7 +408,7 @@ but such definition has restrictions (e. g. cannot specify ``mutable``):
     }
 
 Entity annotations
-~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~
 
 ::
 
@@ -739,26 +809,6 @@ Text literals may have escape-sequences:
 -  Special characters: ``\"``, ``\'``, ``\\``.
 -  Unicode: ``\u003A``.
 
-Tuple:
-
--  ``(1, 2, 3)`` - three values
--  ``(123, 'Hello')`` - two values
--  ``(456,)`` - one value (because of the comma)
--  ``(789)`` - not a tuple (no comma)
--  ``(a = 123, b = 'Hello')`` - tuple with named fields
-
-List:
-
-::
-
-    [ 1, 2, 3, 4, 5 ]
-
-Map:
-
-::
-
-    [ 'Bob' : 123, 'Alice' : 456 ]
-
 Operators
 ---------
 
@@ -851,32 +901,6 @@ Variables:
     var x: integer;
     var y = 123;
     var z: text = 'Hello';
-
-Tuple unpacking
-~~~~~~~~~~~~~~~
-
-::
-
-    val t = (123, 'Hello');
-    val (n, s) = t;           // n = 123, s = 'Hello'
-
-Works with arbitrarily nested tuples:
-
-::
-
-    val (n, (p, (x, y), q)) = calculate();
-
-Special symbol ``_`` is used to ignore a tuple element:
-
-::
-
-    val (_, s) = (123, 'Hello'); // s = 'Hello'
-
-Variable types can be specified explicitly:
-
-::
-
-    val (n: integer, s: text) = (123, 'Hello');
 
 Basic statements
 ----------------
@@ -1007,7 +1031,7 @@ For:
 The expression after ``in`` may return a ``range`` or a collection
 (``list``, ``set``, ``map``).
 
-Tuple unpacking can be used:
+Tuple unpacking can be used in a loop:
 
 ::
 

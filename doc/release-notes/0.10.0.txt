@@ -94,7 +94,16 @@ Works also for variables, parameters and nullable types:
 operation o(foo.user?) {} // same as "user: foo.user?"
 
 
-7. Library: Function byte_array.sha256()
+7. Language: Tuple fields access by index
+
+Now following code will work:
+
+val t = (123, 'Hello');
+print(t[0]);
+print(t[1]);
+
+
+8. Library: Function byte_array.sha256()
 
 A new member function sha256() for the byte_array type has been added.
 
@@ -104,7 +113,7 @@ Code examples:
 'bar'.to_bytes().sha256() => byte_array[fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9]
 
 
-8. Library: Retirement of deprecated functions
+9. Library: Retirement of deprecated functions
 
 Previously deprecated functions and types now are completely deprecated and cannot be used.
 

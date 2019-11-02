@@ -4,6 +4,7 @@ import com.github.h0tk3y.betterParse.parser.ParseException
 import com.github.h0tk3y.betterParse.parser.parseToEnd
 import net.postchain.rell.*
 import net.postchain.rell.model.*
+import net.postchain.rell.runtime.Rt_Error
 import org.jooq.impl.SQLDataType
 import java.math.BigDecimal
 import java.util.*
@@ -192,12 +193,15 @@ object C_Utils {
 
     fun nameStr(name: List<S_Name>): String = name.joinToString(".") { it.str }
 
-    fun findFile(rootDir: C_SourceDir, fullPath: C_SourcePath): C_SourceFile {
-        val file = rootDir.file(fullPath)
-        if (file == null) {
-            throw C_CommonError("file_not_found:$fullPath", "File not found: '$fullPath'")
+    fun <T> evaluate(pos: S_Pos, code: () -> T): T {
+        try {
+            val v = code()
+            return v
+        } catch (e: Rt_Error) {
+            throw C_Error(pos, "eval_fail:${e.code}", e.message ?: "Evaluation failed")
+        } catch (e: Throwable) {
+            throw C_Error(pos, "eval_fail:${e.javaClass.canonicalName}", "Evaluation failed")
         }
-        return file
     }
 }
 
