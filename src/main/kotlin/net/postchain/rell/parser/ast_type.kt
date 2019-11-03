@@ -10,17 +10,15 @@ sealed class S_Type {
         return compile(ctx.blkCtx.defCtx.nsCtx)
     }
 
-    fun compileOpt(ctx: C_NamespaceContext): R_Type? {
-        return ctx.globalCtx.consumeError { compile(ctx) }
-    }
-
-    open fun inferName(): S_Name? = null
-
     companion object {
         fun match(dstType: R_Type, srcType: R_Type, errPos: S_Pos, errCode: String, errMsg: String) {
             if (!dstType.isAssignableFrom(srcType)) {
                 throw C_Errors.errTypeMismatch(errPos, srcType, dstType, errCode, errMsg)
             }
+        }
+
+        fun matchOpt(ctx: C_ExprContext, dstType: R_Type, srcType: R_Type, errPos: S_Pos, errCode: String, errMsg: String): Boolean {
+            return ctx.globalCtx.consumeError { match(dstType, srcType, errPos, errCode, errMsg); true } ?: false
         }
 
         fun adapt(dstType: R_Type, srcType: R_Type, errPos: S_Pos, errCode: String, errMsg: String): R_TypeAdapter {
@@ -40,7 +38,6 @@ sealed class S_Type {
 
 class S_NameType(val names: List<S_Name>): S_Type() {
     override fun compile(ctx: C_NamespaceContext): R_Type = ctx.getType(names)
-    override fun inferName() = names[names.size - 1]
 }
 
 class S_NullableType(val pos: S_Pos, val valueType: S_Type): S_Type() {
@@ -49,8 +46,6 @@ class S_NullableType(val pos: S_Pos, val valueType: S_Type): S_Type() {
         if (rValueType is R_NullableType) throw C_Error(pos, "type_nullable_nullable", "Nullable nullable (T??) is not allowed")
         return R_NullableType(rValueType)
     }
-
-    override fun inferName() = valueType.inferName()
 }
 
 class S_TupleType(val fields: List<Pair<S_Name?, S_Type>>): S_Type() {

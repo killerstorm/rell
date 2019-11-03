@@ -102,7 +102,8 @@ class RellConfigGenTest {
         val sourceDir = C_MapSourceDir.of(files)
         val modules = listOf(R_ModuleName.EMPTY)
         val cRes = C_Compiler.compile(sourceDir, modules)
-        if (cRes.error != null) throw cRes.error!!
+
+        check(cRes.errors.isEmpty()) { "Errors: ${cRes.errors.map { it.code }}" }
         check(cRes.app != null)
 
         val templateGtv = if (templateXml == null) GtvFactory.gtv(mapOf()) else PostchainUtils.xmlToGtv(templateXml)

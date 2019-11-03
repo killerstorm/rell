@@ -4,8 +4,6 @@ import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_TupleValue
 import net.postchain.rell.runtime.Rt_Value
 
-class R_Variable(val name: String, val type: R_Type)
-
 sealed class R_StatementResult
 class R_StatementResult_Return(val value: Rt_Value?): R_StatementResult()
 class R_StatementResult_Break: R_StatementResult()

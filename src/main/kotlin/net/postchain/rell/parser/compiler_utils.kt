@@ -57,7 +57,10 @@ object C_Constants {
             .divide(BigDecimal.TEN.pow(DECIMAL_FRAC_DIGITS))
 }
 
-class C_ExternalParam(val name: S_Name, val rParam: R_ExternalParam)
+class C_ExternalParam(val name: S_Name, val type: R_Type?) {
+    fun nameCode(index: Int) = "$index:${name.str}"
+    fun nameMsg(index: Int) = "'${name.str}'"
+}
 
 object C_Utils {
     fun toDbExpr(pos: S_Pos, rExpr: R_Expr): Db_Expr {
@@ -166,7 +169,7 @@ object C_Utils {
         return cls
     }
 
-    fun crashExpr(type: R_Type, msg: String): R_Expr {
+    fun crashExpr(type: R_Type, msg: String = "Compilation error"): R_Expr {
         val fn = R_SysFn_Internal.ThrowCrash(msg)
         return R_SysCallExpr(type, fn, listOf())
     }
@@ -365,12 +368,6 @@ object C_Errors {
         val code = "mnt_conflict:sys:${def.appLevelName}:$mountName"
         val msg = "Mount name conflict: '$mountName' is a system mount name"
         return C_Error(pos, code, msg)
-    }
-
-    fun errTypeNotGtvCompatible(pos: S_Pos, type: R_Type, reason: String?, code: String, msg: String): C_Error {
-        val extra = if (reason == null) "" else "; reason: $reason"
-        val fullMsg = "$msg is not Gtv-compatible: ${type.toStrictString()}$extra"
-        throw C_Error(pos, "$code:${type.toStrictString()}", fullMsg)
     }
 }
 

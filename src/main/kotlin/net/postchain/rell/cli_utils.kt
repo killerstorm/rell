@@ -28,8 +28,8 @@ object RellCliUtils {
     fun compile(sourceDir: C_SourceDir, modules: List<R_ModuleName>, quiet: Boolean): C_CompilationResult {
         val res = compile0(sourceDir, modules)
 
-        val warnCnt = res.messages.filter { it.type == C_MessageType.WARNING }.size
-        val errCnt = res.messages.filter { it.type == C_MessageType.ERROR }.size
+        val warnCnt = res.warnings.size
+        val errCnt = res.errors.size
 
         System.out.flush()
 

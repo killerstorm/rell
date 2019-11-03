@@ -250,11 +250,11 @@ class IncrementTest: BaseRellTest(false) {
         chkEx("{ $init; val y = -x++; return (x, y); }", "(int[124],int[-123])")
         chkEx("{ $init; val y = -x--; return (x, y); }", "(int[122],int[-123])")
         chkEx("{ $init; val y = -++x; return (x, y); }", "(int[124],int[-124])")
-        chkEx("{ $init; val y = ---x; return (x, y); }", "ct_err:expr_bad_dst")
+        chkEx("{ $init; val y = ---x; return 0; }", "ct_err:expr_bad_dst")
 
         chkEx("{ $init; val y = +x++; return (x, y); }", "(int[124],int[123])")
         chkEx("{ $init; val y = +x--; return (x, y); }", "(int[122],int[123])")
-        chkEx("{ $init; val y = +++x; return (x, y); }", "ct_err:expr_bad_dst")
+        chkEx("{ $init; val y = +++x; return 0; }", "ct_err:expr_bad_dst")
         chkEx("{ $init; val y = +--x; return (x, y); }", "(int[122],int[122])")
 
         chkEx("{ $init; -x++; return x; }", "ct_err:syntax")

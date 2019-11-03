@@ -1,10 +1,7 @@
 package net.postchain.rell.test
 
 import net.postchain.rell.model.R_App
-import net.postchain.rell.parser.C_CompilerOptions
-import net.postchain.rell.parser.C_MapSourceDir
-import net.postchain.rell.parser.C_Message
-import net.postchain.rell.parser.C_SourceDir
+import net.postchain.rell.parser.*
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_Printer
 import net.postchain.rell.sql.SqlExecutor
@@ -80,9 +77,9 @@ abstract class RellBaseTester(
         val options = compilerOptions()
         val cRes = RellTestUtils.compileApp(sourceDir, options)
 
-        val error = cRes.error
-        if (error != null) {
-            throw error
+        if (cRes.errors.isNotEmpty()) {
+            val err = cRes.errors[0]
+            throw C_Error(err.pos, err.code, err.text)
         }
 
         return cRes.app!!
@@ -269,7 +266,7 @@ abstract class RellBaseTester(
     }
 
     companion object {
-        private fun checkResult(expected: String, actual: String) {
+        fun checkResult(expected: String, actual: String) {
             val expected2 = if (!expected.startsWith("ct_err:")) expected else {
                 expected.replace(Regex("\n *"), "")
             }

@@ -157,13 +157,15 @@ object S_Grammar : Grammar<S_RellFile>() {
 
     private val nameTypeAttrHeader by name * -COLON * type map { (name, type) -> S_NameTypeAttrHeader(name, type) }
 
-    private val anonAttrHeader by fullName * optional(QUESTION) map { (name, nullable) ->
-        if (name.size == 1 && nullable == null) {
-            S_NameAttrHeader(name[0])
+    private val anonAttrHeader by fullName * optional(QUESTION) map {
+        (names, nullable) ->
+        if (names.size == 1 && nullable == null) {
+            S_NameAttrHeader(names[0])
         } else {
-            val type = S_NameType(name)
+            val name = names.last()
+            val type = S_NameType(names)
             val resultType = if (nullable == null) type else S_NullableType(nullable.pos, type)
-            S_TypeAttrHeader(resultType)
+            S_NameTypeAttrHeader(name, resultType)
         }
     }
 

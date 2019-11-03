@@ -169,12 +169,9 @@ class R_Query(names: R_DefinitionNames, mountName: R_MountName): R_MountedRoutin
     }
 }
 
-private class R_FunctionHeader(val type: R_Type, val params: List<R_ExternalParam>)
-private class R_FunctionBody(val body: R_Statement, val frame: R_CallFrame)
-
 class R_Function(names: R_DefinitionNames): R_Routine(names) {
-    private val headerLate = C_LateInit(C_CompilerPass.MEMBERS, R_FunctionHeader(R_UnitType, listOf()))
-    private val bodyLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_FunctionBody(R_EmptyStatement, R_CallFrame.ERROR))
+    private val headerLate = C_LateInit(C_CompilerPass.MEMBERS, EMPTY_HEADER)
+    private val bodyLate = C_LateInit(C_CompilerPass.EXPRESSIONS, EMPTY_BODY)
 
     fun setHeader(type: R_Type, params: List<R_ExternalParam>) {
         headerLate.set(R_FunctionHeader(type, params))
@@ -217,6 +214,14 @@ class R_Function(names: R_DefinitionNames): R_Routine(names) {
         val frame = bodyLate.get().frame
         val defCtx = Rt_DefinitionContext(appCtx, dbUpdateAllowed)
         return Rt_CallFrame(defCtx, frame)
+    }
+
+    private class R_FunctionHeader(val type: R_Type, val params: List<R_ExternalParam>)
+    private class R_FunctionBody(val body: R_Statement, val frame: R_CallFrame)
+
+    companion object {
+        private val EMPTY_HEADER = R_FunctionHeader(R_UnitType, listOf())
+        private val EMPTY_BODY = R_FunctionBody(R_EmptyStatement, R_CallFrame.ERROR)
     }
 }
 

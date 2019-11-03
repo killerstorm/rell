@@ -421,7 +421,7 @@ class VirtualTest: BaseGtxTest(false) {
         chkVirtualEx(type, "{ x.remove_all([123, 456]); return 0; }", args, "ct_err:unknown_member:virtual<list<integer>>:remove_all")
         chkVirtualEx(type, "{ x.add(789); return 0; }", args, "ct_err:unknown_member:virtual<list<integer>>:add")
         chkVirtualEx(type, "{ x.add_all([789]); return 0; }", args, "ct_err:unknown_member:virtual<list<integer>>:add_all")
-        chkVirtualEx(type, "{ x._sort(); }", args, "ct_err:unknown_member:virtual<list<integer>>:_sort")
+        chkVirtualEx(type, "{ x._sort(); return 0; }", args, "ct_err:unknown_member:virtual<list<integer>>:_sort")
     }
 
     @Test fun testListIterator() {

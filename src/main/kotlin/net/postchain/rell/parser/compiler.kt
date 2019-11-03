@@ -164,7 +164,6 @@ object C_Compiler {
         val modMgr = C_ModuleManager(appCtx, sourceDir, appCtx.executor)
 
         var app: R_App? = null
-        var error: C_Error? = null
 
         try {
             for (module in modules) {
@@ -173,20 +172,15 @@ object C_Compiler {
             app = appCtx.createApp()
         } catch (e: C_Error) {
             appCtx.globalCtx.error(e)
-            error = e
         }
 
         val messages = CommonUtils.sortedByCopy(appCtx.globalCtx.messages()) { ComparablePos(it.pos) }
-
-        val errorMessage = messages.firstOrNull { it.type == C_MessageType.ERROR }
-        if (error == null && errorMessage != null) {
-            error = C_Error(errorMessage.pos, errorMessage.code, errorMessage.text)
-        }
+        val errors = messages.filter { it.type == C_MessageType.ERROR }
 
         val files = modMgr.moduleFiles()
 
-        val resApp = if (error == null) app else null
-        return C_CompilationResult(resApp, error, messages, files)
+        val resApp = if (errors.isEmpty()) app else null
+        return C_CompilationResult(resApp, messages, files)
     }
 
     private class ComparablePos(sPos: S_Pos): Comparable<ComparablePos> {
@@ -201,8 +195,10 @@ object C_Compiler {
     }
 }
 
-class C_CompilationResult(val app: R_App?, val error: C_Error?, messages: List<C_Message>, files: List<C_SourcePath>) {
+class C_CompilationResult(val app: R_App?, messages: List<C_Message>, files: List<C_SourcePath>) {
     val messages = messages.toImmList()
+    val warnings = this.messages.filter { it.type == C_MessageType.WARNING }.toImmList()
+    val errors = this.messages.filter { it.type == C_MessageType.ERROR }.toImmList()
     val files = files.toImmList()
 }
 

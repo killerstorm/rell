@@ -325,11 +325,12 @@ class C_EntityContext(
 
     fun hasAttribute(name: String): Boolean = name in attributes
 
-    fun addAttribute(name: S_Name, attr: S_AttrHeader, mutable: Boolean, expr: S_Expr?) {
+    fun addAttribute(attr: S_AttrHeader, mutable: Boolean, expr: S_Expr?) {
         val defType = defCtx.definitionType
 
         val rType = attr.compileTypeOpt(defCtx.nsCtx)
 
+        val name = attr.name
         val nameStr = name.str
         if (nameStr in attributes) {
             defCtx.globalCtx.error(name.pos, "dup_attr:$nameStr", "Duplicate attribute: '$nameStr'")

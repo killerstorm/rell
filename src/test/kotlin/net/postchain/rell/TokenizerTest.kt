@@ -186,7 +186,7 @@ class TokenizerTest: BaseRellTest(false) {
 
     @Test fun testErrPos() {
         tst.errMsgPos = true
-        chkEx("{ val x = 5;\nval x = 10; }", "ct_err:main.rell(2:5):var_dupname:x")
+        chkEx("{ val x = 5;\nval x = 10; return 0; }", "ct_err:main.rell(2:5):var_dupname:x")
         chkEx("{ val x = 5;\nreturn; }", "ct_err:main.rell(2:1):stmt_return_query_novalue")
     }
 

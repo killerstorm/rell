@@ -79,18 +79,18 @@ class RellCodeTester(
 
     fun chkQueryEx(code: String, name: String, args: List<Rt_Value>, expected: String) {
         val actual = callQuery(code, name, args)
-        assertEquals(expected, actual)
+        checkResult(expected, actual)
     }
 
     fun chkQueryGtv(code: String, expected: String) {
         val queryCode = "query q() $code"
         val actual = callQuery0(queryCode, "q", listOf(), GtvTestUtils::decodeGtvQueryArgs)
-        assertEquals(expected, actual)
+        checkResult(expected, actual)
     }
 
     fun chkQueryGtvEx(code: String, args: List<String>, expected: String) {
         val actual = callQuery0(code, "q", args, GtvTestUtils::decodeGtvQueryArgs)
-        assertEquals(expected, actual)
+        checkResult(expected, actual)
     }
 
     fun chkQueryType(bodyCode: String, expected: String) {
@@ -99,7 +99,7 @@ class RellCodeTester(
         val actual = processApp(moduleCode) { module ->
             module.queries.getValue(R_MountName.of("q")).type().toStrictString()
         }
-        assertEquals(expected, actual)
+        checkResult(expected, actual)
     }
 
     fun chkOp(bodyCode: String, expected: String = "OK") {
@@ -109,17 +109,17 @@ class RellCodeTester(
 
     fun chkOpEx(opCode: String, name: String, expected: String) {
         val actual = callOp(opCode, name, listOf())
-        assertEquals(expected, actual)
+        checkResult(expected, actual)
     }
 
     fun chkOpGtvEx(code: String, args: List<String>, expected: String) {
         val actual = callOp0(code, "o", args, GtvTestUtils::decodeGtvOpArgsStr)
-        assertEquals(expected, actual)
+        checkResult(expected, actual)
     }
 
     fun chkFnEx(code: String, expected: String) {
         val actual = callFn(code)
-        assertEquals(expected, actual)
+        checkResult(expected, actual)
     }
 
     private fun callFn(code: String): String {

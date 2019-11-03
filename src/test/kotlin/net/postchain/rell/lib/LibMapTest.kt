@@ -174,7 +174,7 @@ class LibMapTest: BaseRellTest(false) {
         chkEx("{ val x = ['Bob':123,'Alice':456]; val r = x.remove('Alice'); return ''+r+ ' ' + x; }", "456 {Bob=123}")
         chkEx("{ val x = ['Bob':123,'Alice':456]; val r = x.remove('Trudy'); return ''+r+ ' ' + x; }",
                 "rt_err:fn:map.remove:novalue:text[Trudy]")
-        chkEx("{ val x = ['Bob':123,'Alice':456]; val r = x.remove(123); return ''+r+ ' ' + x; }",
+        chkEx("{ val x = ['Bob':123,'Alice':456]; val r = x.remove(123); return 0; }",
                 "ct_err:expr_call_argtypes:map<text,integer>.remove:integer")
     }
 

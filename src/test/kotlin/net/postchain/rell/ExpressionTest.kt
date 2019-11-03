@@ -446,10 +446,10 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testVariables() {
-        chkEx("{ val x = integer; }", "ct_err:expr_novalue:namespace")
-        chkEx("{ val x = chain_context; }", "ct_err:expr_novalue:namespace")
-        chkEx("{ var x: text; x = integer; }", "ct_err:expr_novalue:namespace")
-        chkEx("{ var x: text; x = chain_context; }", "ct_err:expr_novalue:namespace")
+        chkEx("{ val x = integer; return 0; }", "ct_err:expr_novalue:namespace")
+        chkEx("{ val x = chain_context; return 0; }", "ct_err:expr_novalue:namespace")
+        chkEx("{ var x: text; x = integer; return 0; }", "ct_err:expr_novalue:namespace")
+        chkEx("{ var x: text; x = chain_context; return 0; }", "ct_err:expr_novalue:namespace")
     }
 
     @Test fun testNameStructVsLocal() {

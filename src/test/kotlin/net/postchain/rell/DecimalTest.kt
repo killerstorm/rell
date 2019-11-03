@@ -351,8 +351,8 @@ class DecimalTest: BaseRellTest(false) {
 
         chk("f(123, 456)", "dec[579]")
         chk("f(decimal(123), 456)", "dec[579]")
-        chk("f(123, decimal(456))", "ct_err:expr_call_argtype:f:1:integer:decimal")
-        chk("f(decimal(123), decimal(456))", "ct_err:expr_call_argtype:f:1:integer:decimal")
+        chk("f(123, decimal(456))", "ct_err:expr_call_argtype:f:1:y:integer:decimal")
+        chk("f(decimal(123), decimal(456))", "ct_err:expr_call_argtype:f:1:y:integer:decimal")
 
         chk("g(123, 456)", "dec[56088]")
         chk("g(decimal(123), 456)", "dec[56088]")
@@ -366,12 +366,12 @@ class DecimalTest: BaseRellTest(false) {
         chkEx("{ val r = rec(); return r.x; }", "dec[123]")
         chkEx("{ val r = rec(x = decimal(456)); return r.x; }", "dec[456]")
         //chkEx("{ val r = rec(x = 456); return r.x; }", "dec[456]")
-        chkEx("{ val r = rec(x = null); return r.x; }", "ct_err:attr_bad_type:0:x:decimal:null")
-        chkEx("{ val r = rec(x = _nullable_int(456)); return r.x; }", "ct_err:attr_bad_type:0:x:decimal:integer?")
+        chkEx("{ val r = rec(x = null); return 0; }", "ct_err:attr_bad_type:0:x:decimal:null")
+        chkEx("{ val r = rec(x = _nullable_int(456)); return 0; }", "ct_err:attr_bad_type:0:x:decimal:integer?")
         chkEx("{ val r = rec(); r.x = decimal(456); return r.x; }", "dec[456]")
         chkEx("{ val r = rec(); r.x = 456; return r.x; }", "dec[456]")
-        chkEx("{ val r = rec(); r.x = null; return r.x; }", "ct_err:stmt_assign_type:decimal:null")
-        chkEx("{ val r = rec(); r.x = _nullable_int(456); return r.x; }", "ct_err:stmt_assign_type:decimal:integer?")
+        chkEx("{ val r = rec(); r.x = null; return 0; }", "ct_err:stmt_assign_type:decimal:null")
+        chkEx("{ val r = rec(); r.x = _nullable_int(456); return 0; }", "ct_err:stmt_assign_type:decimal:integer?")
         chkEx("{ val r = rec(); r.x += 456; return r.x; }", "dec[579]")
         chkEx("{ val r = rec(); r.x *= 456; return r.x; }", "dec[56088]")
 

@@ -205,7 +205,7 @@ class ObjectTest: BaseRellTest() {
         chkData("foo(0,33,Tschuss,999)")
         chk("(foo.x,foo.s,foo.c)", "(int[33],text[Tschuss],int[999])")
 
-        chkEx("{ update foo ( 'Tschuss' ); }", "ct_err:no_db_update")
+        chkEx("{ update foo ( 'Tschuss' ); return 0; }", "ct_err:no_db_update")
     }
 
     @Test fun testUpdateMemory() {

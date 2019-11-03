@@ -7,7 +7,6 @@ import net.postchain.rell.test.RellTestUtils
 import org.junit.Test
 import java.io.File
 import kotlin.test.assertEquals
-import kotlin.test.fail
 
 class CliSnippetsTest {
     @Test fun testMod() = chkModule("mod")
@@ -27,7 +26,6 @@ class CliSnippetsTest {
         val modules = listOf(R_ModuleName.of(module))
         val res = RellTestUtils.compileApp(sourceDir, modules, C_CompilerOptions.DEFAULT)
 
-        if (res.error != null) fail(res.error?.code)
         assertEquals(0, res.messages.size)
     }
 }

@@ -28,9 +28,8 @@ object RellTestUtils {
         val cRes = compileApp(sourceDir, options)
         outMessages?.addAll(cRes.messages)
 
-        val errs = cRes.messages.filter { it.type == C_MessageType.ERROR }
-        if (!errs.isEmpty()) {
-            val s = errsToString(errs, errPos)
+        if (!cRes.errors.isEmpty()) {
+            val s = errsToString(cRes.errors, errPos)
             return "ct_err:$s"
         }
 

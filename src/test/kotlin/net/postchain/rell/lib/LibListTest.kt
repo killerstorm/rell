@@ -154,7 +154,7 @@ class LibListTest: BaseRellTest(false) {
         chkEx("{ $init val r = x.add(2); return r+' '+x; }", "true [1, 2, 3, 2]")
         chkEx("{ $init val r = x.add(-1, 4); return r+' '+x; }", "rt_err:fn:list.add:index:3:-1")
         chkEx("{ $init val r = x.add(4, 4); return r+' '+x; }", "rt_err:fn:list.add:index:3:4")
-        chkEx("{ $init val r = x.add('Hello'); return r+' '+x; }", "ct_err:expr_call_argtypes:list<integer>.add:text")
+        chkEx("{ $init val r = x.add('Hello'); return 0; }", "ct_err:expr_call_argtypes:list<integer>.add:text")
     }
 
     @Test fun testAddAll() {
@@ -163,7 +163,7 @@ class LibListTest: BaseRellTest(false) {
         chkEx("{ $init val r = x.add_all(list<integer>()); return r+' '+x; }", "false [1, 2, 3]")
         chkEx("{ $init val r = x.add_all([4, 5, 6]); return r+' '+x; }", "true [1, 2, 3, 4, 5, 6]")
         chkEx("{ $init val r = x.add_all([1, 2, 3]); return r+' '+x; }", "true [1, 2, 3, 1, 2, 3]")
-        chkEx("{ $init val r = x.add_all(['Hello']); return r+' '+x; }", "ct_err:expr_call_argtypes:list<integer>.add_all:list<text>")
+        chkEx("{ $init val r = x.add_all(['Hello']); return 0; }", "ct_err:expr_call_argtypes:list<integer>.add_all:list<text>")
         chkEx("{ $init val r = x.add_all(0, [4, 5, 6]); return r+' '+x; }", "true [4, 5, 6, 1, 2, 3]")
         chkEx("{ $init val r = x.add_all(3, [4, 5, 6]); return r+' '+x; }", "true [1, 2, 3, 4, 5, 6]")
         chkEx("{ $init val r = x.add_all(-1, [4, 5, 6]); return r+' '+x; }", "rt_err:fn:list.add_all:index:3:-1")
@@ -179,7 +179,7 @@ class LibListTest: BaseRellTest(false) {
         chkEx("{ $init val r = x.remove(2); return ''+r+' '+x; }", "true [1, 3, 2, 3, 4]")
         chkEx("{ $init val r = x.remove(3); return ''+r+' '+x; }", "true [1, 2, 2, 3, 4]")
         chkEx("{ $init val r = x.remove(0); return ''+r+' '+x; }", "false [1, 2, 3, 2, 3, 4]")
-        chkEx("{ $init val r = x.remove('Hello'); return ''+r+' '+x; }", "ct_err:expr_call_argtypes:list<integer>.remove:text")
+        chkEx("{ $init val r = x.remove('Hello'); return 0; }", "ct_err:expr_call_argtypes:list<integer>.remove:text")
     }
 
     @Test fun testRemoveAll() {
@@ -193,8 +193,8 @@ class LibListTest: BaseRellTest(false) {
         chkEx("{ $init val r = x.remove_all([2]); return ''+r+' '+x; }", "true [1, 3, 3, 4]")
         chkEx("{ $init val r = x.remove_all([1, 2, 3]); return ''+r+' '+x; }", "true [4]")
         chkEx("{ $init val r = x.remove_all([1, 3]); return ''+r+' '+x; }", "true [2, 2, 4]")
-        chkEx("{ $init val r = x.remove_all(['Hello']); return ''+r+' '+x; }", "ct_err:expr_call_argtypes:list<integer>.remove_all:list<text>")
-        chkEx("{ $init val r = x.remove_all(set(['Hello'])); return ''+r+' '+x; }", "ct_err:expr_call_argtypes:list<integer>.remove_all:set<text>")
+        chkEx("{ $init val r = x.remove_all(['Hello']); return 0; }", "ct_err:expr_call_argtypes:list<integer>.remove_all:list<text>")
+        chkEx("{ $init val r = x.remove_all(set(['Hello'])); return 0; }", "ct_err:expr_call_argtypes:list<integer>.remove_all:set<text>")
     }
 
     @Test fun testRemoveAt() {
@@ -205,7 +205,7 @@ class LibListTest: BaseRellTest(false) {
         chkEx("{ $init val r = x.remove_at(2); return ''+r+' '+x; }", "3 [1, 2]")
         chkEx("{ $init val r = x.remove_at(-1); return ''+r+' '+x; }", "rt_err:fn:list.remove_at:index:3:-1")
         chkEx("{ $init val r = x.remove_at(3); return ''+r+' '+x; }", "rt_err:fn:list.remove_at:index:3:3")
-        chkEx("{ $init val r = x.remove_at('Hello'); return ''+r+' '+x; }", "ct_err:expr_call_argtypes:list<integer>.remove_at:text")
+        chkEx("{ $init val r = x.remove_at('Hello'); return 0; }", "ct_err:expr_call_argtypes:list<integer>.remove_at:text")
     }
 
     @Test fun testClear() {

@@ -381,10 +381,10 @@ class NullAnalysisTest: BaseRellTest(false) {
                 "ct_err:expr_mem_null:value")
 
         chkEx("{ var p = make_nodes(); var s = 0; while (p == null) { s += p.value; p = p.next; } return s; }",
-                "ct_err:expr_mem_null:value")
+                "ct_err:[expr_mem_null:value][expr_mem_null:next]")
 
         chkEx("{ var p = make_nodes(); var s = 0; while (s == 0) { s += p.value; p = p.next; } return s; }",
-                "ct_err:expr_mem_null:value")
+                "ct_err:[expr_mem_null:value][expr_mem_null:next]")
 
         chkEx("{ var p = make_nodes(); while (p != null) { p = p.next; } return _type_of(p); }", "text[node?]")
         chkEx("{ var p = make_nodes(); p!!; return _type_of(p); }", "text[node]")

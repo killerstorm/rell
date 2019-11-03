@@ -197,16 +197,16 @@ private class C_NsDef_SysFunction(private val fn: C_GlobalFunction): C_NsDef() {
     }
 }
 
-private class C_NsDef_UserFunction(private val fn: R_Function): C_NsDef() {
+private class C_NsDef_UserFunction(private val fn: C_UserGlobalFunction): C_NsDef() {
     override fun type() = C_DeclarationType.FUNCTION
 
     override fun addToNamespace(b: C_NamespaceBuilder, name: String) {
-        val cFn = C_UserGlobalFunction(fn)
-        b.addFunction(name, cFn)
+        b.addFunction(name, fn)
     }
 
     override fun addToDefs(b: C_ModuleDefsBuilder) {
-        b.functions.add(fn.moduleLevelName, fn)
+        val rFn = fn.rFunction
+        b.functions.add(rFn.moduleLevelName, rFn)
     }
 }
 
@@ -362,7 +362,7 @@ class C_UserNsProtoBuilder: C_NsProtoBuilder() {
         addDef(name, C_NsDef_Enum(e))
     }
 
-    fun addFunction(name: S_Name, fn: R_Function) {
+    fun addFunction(name: S_Name, fn: C_UserGlobalFunction) {
         addDef(name, C_NsDef_UserFunction(fn))
     }
 

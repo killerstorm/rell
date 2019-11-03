@@ -380,16 +380,11 @@ class RellPostchainModuleFactory(
             }
         }
 
-        val rApp = cResult.app
-        if (rApp != null) {
-            return rApp
-        }
+        val errors = cResult.errors
 
-        val cError = cResult.error
-        val err = if (cError != null && !wrapCtErrors) {
-            cError
-        } else {
-            UserMistake(cError?.message ?: "Compilation error")
+        val rApp = cResult.app
+        if (rApp != null && rApp.valid && errors.isEmpty()) {
+            return rApp
         }
 
         if (copyOutput) {
@@ -397,6 +392,17 @@ class RellPostchainModuleFactory(
         }
 
         errorHandler.ignoreError()
+
+        val err = if (wrapCtErrors) {
+            val error = if (errors.isEmpty()) null else errors[0]
+            UserMistake(error?.text ?: "Compilation error")
+        } else if (errors.isNotEmpty()) {
+            val error = errors[0]
+            C_Error(error.pos, error.code, error.text)
+        } else {
+            IllegalStateException("Compilation error")
+        }
+
         throw err
     }
 
