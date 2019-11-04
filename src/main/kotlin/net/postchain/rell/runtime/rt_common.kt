@@ -3,6 +3,7 @@ package net.postchain.rell.runtime
 import mu.KLogging
 import net.postchain.core.ByteArrayKey
 import net.postchain.rell.model.*
+import net.postchain.rell.sql.SqlConstants
 
 sealed class Rt_BaseError: Exception {
     constructor(msg: String): super(msg)
@@ -32,7 +33,7 @@ class Rt_ExternalChain(val chainId: Long, val rid: ByteArray, val height: Long) 
     val sqlMapping = Rt_ChainSqlMapping(chainId)
 }
 
-class Rt_CallFrame(val entCtx: Rt_EntityContext, rFrame: R_CallFrame) {
+class Rt_CallFrame(val defCtx: Rt_DefinitionContext, rFrame: R_CallFrame) {
     private var curBlock = rFrame.rootBlock
     private val values = Array<Rt_Value?>(rFrame.size) { null }
 
@@ -69,7 +70,7 @@ class Rt_CallFrame(val entCtx: Rt_EntityContext, rFrame: R_CallFrame) {
     fun get(ptr: R_VarPtr): Rt_Value {
         val value = getOpt(ptr)
         check(value != null) { "Variable not initialized: $ptr" }
-        return value!!
+        return value
     }
 
     fun getOpt(ptr: R_VarPtr): Rt_Value? {
@@ -125,9 +126,9 @@ interface Rt_PrinterFactory {
 class Rt_ChainSqlMapping(val chainId: Long) {
     private val prefix = "c" + chainId + "."
 
-    val rowidTable = fullName("rowid_gen")
-    val rowidFunction = fullName("make_rowid")
-    val metaClassTable = fullName("sys.classes")
+    val rowidTable = fullName(SqlConstants.ROWID_GEN)
+    val rowidFunction = fullName(SqlConstants.MAKE_ROWID)
+    val metaEntitiesTable = fullName("sys.classes")
     val metaAttributesTable = fullName("sys.attributes")
 
     val tableSqlFilter = "$prefix%"
@@ -136,8 +137,8 @@ class Rt_ChainSqlMapping(val chainId: Long) {
         return prefix + baseName
     }
 
-    fun tempName(baseName: String): String {
-        return prefix + "sys.temp." + baseName
+    fun fullName(mountName: R_MountName): String {
+        return prefix + mountName.str()
     }
 
     fun isChainTable(table: String): Boolean {

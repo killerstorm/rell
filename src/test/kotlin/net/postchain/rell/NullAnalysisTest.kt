@@ -153,7 +153,7 @@ class NullAnalysisTest: BaseRellTest(false) {
     }
 
     @Test fun testSafeAccess() {
-        def("record rec { mutable x: integer; }")
+        def("struct rec { mutable x: integer; }")
         chkEx("{ val r: rec? = rec(123); return _type_of(r.x); }", "text[integer]")
         chkEx("{ val r: rec? = rec(123); return _type_of(r?.x); }", "text[integer]")
         chkEx("{ val r: rec? = _nullable(rec(123)); return _type_of(r?.x); }", "text[integer?]")
@@ -186,7 +186,7 @@ class NullAnalysisTest: BaseRellTest(false) {
     @Test fun testIfType() {
         def("function f(a: integer?): integer? = a;")
         def("function g(a: integer?): rec? = if (a == null) null else rec(a);")
-        def("record rec { a: integer; }")
+        def("struct rec { a: integer; }")
 
         chkEx("{ val x = f(123); return _type_of(x); }", "text[integer?]")
 
@@ -370,7 +370,7 @@ class NullAnalysisTest: BaseRellTest(false) {
     }
 
     @Test fun testWhileNull() {
-        def("record node { next: node?; value: integer; }")
+        def("struct node { next: node?; value: integer; }")
         def("function make_nodes(): node? = node(123, node(456, node(789, null)));")
 
         chkEx("{ var p = make_nodes(); while (p != null) { p = p.next; } return p; }", "null")
@@ -381,10 +381,10 @@ class NullAnalysisTest: BaseRellTest(false) {
                 "ct_err:expr_mem_null:value")
 
         chkEx("{ var p = make_nodes(); var s = 0; while (p == null) { s += p.value; p = p.next; } return s; }",
-                "ct_err:expr_mem_null:value")
+                "ct_err:[expr_mem_null:value][expr_mem_null:next]")
 
         chkEx("{ var p = make_nodes(); var s = 0; while (s == 0) { s += p.value; p = p.next; } return s; }",
-                "ct_err:expr_mem_null:value")
+                "ct_err:[expr_mem_null:value][expr_mem_null:next]")
 
         chkEx("{ var p = make_nodes(); while (p != null) { p = p.next; } return _type_of(p); }", "text[node?]")
         chkEx("{ var p = make_nodes(); p!!; return _type_of(p); }", "text[node]")
@@ -410,7 +410,7 @@ class NullAnalysisTest: BaseRellTest(false) {
     }
 
     @Test fun testDefiniteFactNullEquality() {
-        def("record rec { a: integer; }")
+        def("struct rec { a: integer; }")
         def("function f(r: rec?): rec? = r;")
         chkDefiniteFactNullEquality("==", true)
         chkDefiniteFactNullEquality("!=", false)
@@ -426,25 +426,25 @@ class NullAnalysisTest: BaseRellTest(false) {
     }
 
     @Test fun testDefiniteFactIsNull() {
-        def("record rec { a: integer; }")
+        def("struct rec { a: integer; }")
         def("function f(r: rec?): rec? = r;")
         chkDefiniteFactExpr("x??", "boolean[false]", "boolean[true]", "ct_err:unop_operand_type:??:rec")
     }
 
     @Test fun testDefiniteFactElvis() {
-        def("record rec { a: integer; }")
+        def("struct rec { a: integer; }")
         def("function f(r: rec?): rec? = r;")
         chkDefiniteFactExpr("x ?: rec(-1)", "rec[a=int[-1]]", "rec[a=int[123]]", "ct_err:binop_operand_type:?::rec:rec")
     }
 
     @Test fun testDefiniteFactSafeMember() {
-        def("record rec { a: integer; }")
+        def("struct rec { a: integer; }")
         def("function f(r: rec?): rec? = r;")
         chkDefiniteFactExpr("x?.a", "null", "int[123]", "ct_err:expr_safemem_type:rec")
     }
 
     @Test fun testDefiniteFactExists() {
-        def("record rec { a: integer; }")
+        def("struct rec { a: integer; }")
         def("function f(r: rec?): rec? = r;")
         chkDefiniteFactExpr("exists(x)", "boolean[false]", "boolean[true]", "ct_err:expr_call_argtypes:exists:rec")
         chkDefiniteFactExpr("not exists(x)", "boolean[true]", "boolean[false]", "ct_err:expr_call_argtypes:exists:rec")
@@ -495,7 +495,7 @@ class NullAnalysisTest: BaseRellTest(false) {
 
     @Test fun testAtExpr() {
         tstCtx.useSql = true
-        def("class user { name; score: integer; }")
+        def("entity user { name; score: integer; }")
         insert("c0.user", "name,score", "33,'Bob',1000")
 
         chkAtExpr("123", "if (x == null) true else .score >= x", "user[33]")
@@ -527,6 +527,6 @@ class NullAnalysisTest: BaseRellTest(false) {
     // if (x!! > 0) if (x == null)
     // if (x!! > 0 and x == null)
 
-    // record fields: if (x.y.z == null) return; // x.y.z is not nullable from now
+    // struct fields: if (x.y.z == null) return; // x.y.z is not nullable from now
     // if (f?.x?.y?.z != null) print(f.x.y.z)
 }

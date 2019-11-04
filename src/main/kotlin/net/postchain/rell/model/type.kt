@@ -69,7 +69,7 @@ private class R_TypeSqlAdapter_None(private val type: R_Type): R_TypeSqlAdapter(
     }
 }
 
-private sealed class R_TypeSqlAdapter_Some: R_TypeSqlAdapter() {
+private abstract class R_TypeSqlAdapter_Some: R_TypeSqlAdapter() {
     final override fun isSqlCompatible() = true
 }
 
@@ -322,31 +322,31 @@ object R_NullType: R_Type("null") {
     override fun createGtvConversion() = GtvRtConversion_Null
 }
 
-class R_ClassType(val rClass: R_Class): R_Type(rClass.name) {
+class R_EntityType(val rEntity: R_Entity): R_Type(rEntity.appLevelName) {
     override fun comparator() = Rt_Comparator.create { it.asObjectId() }
-    override fun fromCli(s: String): Rt_Value = Rt_ClassValue(this, s.toLong())
+    override fun fromCli(s: String): Rt_Value = Rt_EntityValue(this, s.toLong())
     override fun toStrictString(): String = name
-    override fun equals(other: Any?): Boolean = other is R_ClassType && other.rClass == rClass
-    override fun hashCode(): Int = rClass.hashCode()
+    override fun equals(other: Any?): Boolean = other is R_EntityType && other.rEntity == rEntity
+    override fun hashCode(): Int = rEntity.hashCode()
 
-    override fun createGtvConversion() = GtvRtConversion_Class(this)
-    override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Class(this)
+    override fun createGtvConversion() = GtvRtConversion_Entity(this)
+    override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Entity(this)
 }
 
-private class R_TypeSqlAdapter_Class(private val type: R_ClassType): R_TypeSqlAdapter_Some() {
+private class R_TypeSqlAdapter_Entity(private val type: R_EntityType): R_TypeSqlAdapter_Some() {
     override fun toSqlValue(value: Rt_Value) = value.asObjectId()
     override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = stmt.setLong(idx, value.asObjectId())
-    override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_ClassValue(type, rs.getLong(idx))
+    override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_EntityValue(type, rs.getLong(idx))
 
     override fun metaName(sqlCtx: Rt_SqlContext): String {
-        val rClass = type.rClass
-        val chain = sqlCtx.chainMapping(rClass.external?.chain)
-        val metaName = rClass.external?.externalName ?: rClass.name
+        val rEntity = type.rEntity
+        val chain = sqlCtx.chainMapping(rEntity.external?.chain)
+        val metaName = rEntity.metaName
         return "class:${chain.chainId}:$metaName"
     }
 }
 
-class R_ObjectType(val rObject: R_Object): R_Type(rObject.rClass.name) {
+class R_ObjectType(val rObject: R_Object): R_Type(rObject.appLevelName) {
     override fun isDirectVirtualable() = false
     override fun toStrictString(): String = name
     override fun equals(other: Any?): Boolean = other is R_ObjectType && other.rObject == rObject
@@ -354,81 +354,45 @@ class R_ObjectType(val rObject: R_Object): R_Type(rObject.rClass.name) {
     override fun createGtvConversion() = GtvRtConversion_None
 }
 
-class R_RecordFlags(val typeFlags: R_TypeFlags, val cyclic: Boolean, val infinite: Boolean)
-
-class R_RecordType(name: String): R_Type(name) {
-    private lateinit var bodyLate: R_RecordBody
-    private lateinit var flagsLate: R_RecordFlags
-
-    val attributes: Map<String, R_Attrib> get() = bodyLate.attrMap
-    val attributesList: List<R_Attrib> get() = bodyLate.attrList
-    val flags: R_RecordFlags get() = flagsLate
-
-    val virtualType = R_VirtualRecordType(this)
-
-    fun setAttributes(attrs: Map<String, R_Attrib>) {
-        val attrsList = attrs.values.toList()
-        attrsList.withIndex().forEach { (idx, attr) -> check(attr.index == idx) }
-        val attrMutable = attrs.values.any { it.mutable }
-        bodyLate = R_RecordBody(attrs, attrsList, attrMutable)
-    }
-
-    fun setFlags(flags: R_RecordFlags) {
-        flagsLate = flags
-    }
-
+class R_StructType(val struct: R_Struct): R_Type(struct.appLevelName) {
     override fun isReference() = true
-    override fun isDirectMutable() = bodyLate.attrMutable
-    override fun completeFlags() = flagsLate.typeFlags
+    override fun isDirectMutable() = struct.isDirectlyMutable()
+    override fun completeFlags() = struct.flags.typeFlags
 
     override fun toStrictString(): String = name
-    override fun componentTypes() = attributesList.map { it.type }.toList()
+    override fun componentTypes() = struct.attributesList.map { it.type }.toList()
 
-    override fun createGtvConversion() = GtvRtConversion_Record(this)
-
-    private class R_RecordBody(
-            val attrMap: Map<String, R_Attrib>,
-            val attrList: List<R_Attrib>,
-            val attrMutable: Boolean
-    )
+    override fun createGtvConversion() = GtvRtConversion_Struct(struct)
 }
 
-class R_EnumAttr(val name: String, val value: Int)
-
-class R_EnumType(name: String, val attrs: List<R_EnumAttr>): R_Type(name) {
-    private val attrMap = attrs.map { Pair(it.name, it) }.toMap()
-    private val rtValues = attrs.map { Rt_EnumValue(this, it) }
-
+class R_EnumType(val enum: R_Enum): R_Type(enum.appLevelName) {
     override fun comparator() = Rt_Comparator.create { it.asEnum().value }
-    override fun fromCli(s: String): Rt_Value = Rt_EnumValue(this, attrMap.getValue(s))
-    override fun toStrictString(): String = name
 
-    override fun createGtvConversion() = GtvRtConversion_Enum(this)
+    override fun fromCli(s: String): Rt_Value {
+        val attr = enum.attr(s)
+        requireNotNull(attr) { "$name: $s" }
+        return Rt_EnumValue(this, attr)
+    }
+
+    override fun toStrictString() = name
+
+    override fun createGtvConversion() = GtvRtConversion_Enum(enum)
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Enum(this)
 
-    fun attr(name: String): R_EnumAttr? {
-        return attrMap[name]
-    }
+    private class R_TypeSqlAdapter_Enum(private val type: R_EnumType): R_TypeSqlAdapter_Some() {
+        override fun toSqlValue(value: Rt_Value) = value.asEnum().value
+        override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = stmt.setInt(idx, value.asEnum().value)
 
-    fun attr(value: Long): R_EnumAttr? {
-        if (value < 0 || value >= attrs.size) {
-            return null
+        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+            val v = rs.getInt(idx).toLong()
+            val attr = type.enum.attr(v)
+            requireNotNull(attr) { "$type: $v" }
+            return Rt_EnumValue(type, attr)
         }
-        return attrs[value.toInt()]
-    }
 
-    fun values(): List<Rt_Value> {
-        return rtValues
-    }
-}
-
-private class R_TypeSqlAdapter_Enum(private val type: R_EnumType): R_TypeSqlAdapter_Some() {
-    override fun toSqlValue(value: Rt_Value) = value.asEnum().value
-    override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = stmt.setInt(idx, value.asEnum().value)
-    override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_EnumValue(type, type.attrs[rs.getInt(idx)])
-
-    override fun metaName(sqlCtx: Rt_SqlContext): String {
-        return "enum:${type.name}"
+        override fun metaName(sqlCtx: Rt_SqlContext): String {
+            return "enum:${type.name}"
+        }
     }
 }
 
@@ -638,7 +602,7 @@ class R_VirtualTupleType(val innerType: R_TupleType): R_VirtualType(innerType) {
     override fun equals(other: Any?): Boolean = other is R_VirtualTupleType && innerType == other.innerType
 }
 
-class R_VirtualRecordType(val innerType: R_RecordType): R_VirtualType(innerType) {
-    override fun createGtvConversion() = GtvRtConversion_VirtualRecord(this)
-    override fun equals(other: Any?): Boolean = other is R_VirtualRecordType && innerType == other.innerType
+class R_VirtualStructType(val innerType: R_StructType): R_VirtualType(innerType) {
+    override fun createGtvConversion() = GtvRtConversion_VirtualStruct(this)
+    override fun equals(other: Any?): Boolean = other is R_VirtualStructType && innerType == other.innerType
 }

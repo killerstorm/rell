@@ -6,7 +6,7 @@ import org.junit.Test
 class RedDbExprTest: BaseRellTest() {
     private fun initDefault() {
         tst.strictToString = false
-        def("class user { name; score: integer; }")
+        def("entity user { name; score: integer; }")
         def("function fi(x: integer, tag: text): integer { print(tag); return x; }")
         insert("c0.user", "name,score", "1,'Bob',123")
         insert("c0.user", "name,score", "2,'Alice',456")
@@ -258,7 +258,7 @@ class RedDbExprTest: BaseRellTest() {
 
     private fun initWhenSpecial() {
         tst.strictToString = false
-        def("class user { name; id: integer; value1: integer; value2: integer; }")
+        def("entity user { name; id: integer; value1: integer; value2: integer; }")
         def("function fi(x: integer, tag: text): integer { print(tag); return x; }")
         insert("c0.user", "name,id,value1,value2", "1,'Bob',0,100,200")
     }

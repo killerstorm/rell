@@ -165,11 +165,11 @@ class LibIntegerTest: BaseRellTest(false) {
         chk("(-9223372036854775807-1).to_text(16)", "text[-8000000000000000]")
     }
 
-    @Test fun testSignum() {
-        chk("(0).signum()", "int[0]")
-        chk("(1).signum()", "int[1]")
-        chk("(-1).signum()", "int[-1]")
-        chk("(-123456).signum()", "int[-1]")
-        chk("(123456).signum()", "int[1]")
+    @Test fun testSign() {
+        chk("(0).sign()", "int[0]")
+        chk("(1).sign()", "int[1]")
+        chk("(-1).sign()", "int[-1]")
+        chk("(-123456).sign()", "int[-1]")
+        chk("(123456).sign()", "int[1]")
     }
 }

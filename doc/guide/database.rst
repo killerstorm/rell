@@ -28,15 +28,15 @@ Specifies whether the expression must return one or many objects:
 From-part
 ---------
 
-Simple (one class):
+Simple (one entity):
 
 ``user @* { .name == 'Bob' }``
 
-Complex (one or more classes):
+Complex (one or more entities):
 
 ``(user, company) @* { user.name == 'Bob' and company.name == 'Microsoft' and user.xyz == company.xyz }``
 
-Specifying class aliases:
+Specifying entity aliases:
 
 ``(u: user) @* { u.name == 'Bob' }``
 
@@ -45,15 +45,15 @@ Specifying class aliases:
 Where-part
 ----------
 
-Zero or more comma-separated expressions using class attributes, local variables or system functions:
+Zero or more comma-separated expressions using entity attributes, local variables or system functions:
 
 ``user @* {}`` - returns all users
 
 ``user @ { .name == 'Bill', .company == 'Microsoft' }`` - returns a specific user (all conditions must match)
 
-Attributes of a class can be accessed with a dot, e. g. ``.name`` or with a class name or alias, ``user.name``.
+Attributes of an entity can be accessed with a dot, e. g. ``.name`` or with an entity name or alias, ``user.name``.
 
-Class attributes can also be matched implicitly by name or type:
+Entity attributes can also be matched implicitly by name or type:
 
 ::
 
@@ -62,7 +62,7 @@ Class attributes can also be matched implicitly by name or type:
     return user @ { name, ms };
 
 Explanation: the first where-expression is the local variable ``name``, there is an attribute called ``name`` in the
-class ``user``. The second expression is ``ms``, there is no such attribute, but the type of the local variable ``ms``
+entity ``user``. The second expression is ``ms``, there is no such attribute, but the type of the local variable ``ms``
 is ``company``, and there is an attribute of type ``company`` in ``user``.
 
 What-part
@@ -97,7 +97,7 @@ When field names are not specified explicitly, they can be deducted implicitly b
     val u = user @ { ... } ( .first_name, .last_name, age = 2018 - .year_of_birth );
     print(u.first_name, u.last_name, u.age);
 
-By default, if a field name is not specified and the expression is a single name (e. g. an attribute of a class),
+By default, if a field name is not specified and the expression is a single name (e. g. an attribute of an entity),
 that name is used as a tuple field name:
 
 ::
@@ -201,21 +201,21 @@ If the number of updated records does not match the cardinality, a run-time erro
 
 Can change only ``mutable`` attributes.
 
-Class attributes can be matched implicitly by name or type:
+Entity attributes can be matched implicitly by name or type:
 
 ::
 
     val company = 'Microsoft';
     update user @ { .name == 'Bob' } ( company );
 
-Using multiple classes with aliases. The first class is the one being
-updated. Other classes can be used in the where-part:
+Using multiple entities with aliases. The first entity is the one being
+updated. Other entities can be used in the where-part:
 
 ::
 
     update (u: user, c: company) @ { u.xyz == c.xyz, u.name == 'Bob', c.name == 'Google' } ( city = 'Seattle' );
 
-Can specify an arbitrary expression returning a class, a nullable class or a collection of a class:
+Can specify an arbitrary expression returning a entity, a nullable entity or a collection of entities:
 
 ::
 
@@ -243,13 +243,13 @@ If the number of deleted records does not match the cardinality, a run-time erro
     delete user @? { .name == 'Bob' };                   // zero or one
     delete user @* { .company.name == 'Bad Company' };   // any number
 
-Using multiple classes. Similar to ``update``, only the object(s) of the first class will be deleted:
+Using multiple entities. Similar to ``update``, only the object(s) of the first entity will be deleted:
 
 ::
 
     delete (u: user, c: company) @ { u.xyz == c.xyz, u.name == 'Bob', c.name == 'Google' };
 
-Can specify an arbitrary expression returning a class, a nullable class or a collection of a class:
+Can specify an arbitrary expression returning an entity, a nullable entity or a collection of entities:
 
 ::
 
@@ -258,4 +258,4 @@ Can specify an arbitrary expression returning a class, a nullable class or a col
 
 --------------
 
-*Rell v0.9.1*
+*Rell v0.10.0*

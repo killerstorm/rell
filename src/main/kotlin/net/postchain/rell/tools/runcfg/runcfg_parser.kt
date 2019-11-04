@@ -2,6 +2,9 @@ package net.postchain.rell.tools.runcfg
 
 import net.postchain.gtv.Gtv
 import net.postchain.rell.Bytes32
+import net.postchain.rell.model.R_ModuleName
+import net.postchain.rell.module.RELL_VERSION_MODULE_SYSTEM
+import net.postchain.rell.toImmMap
 
 object RunConfigParser {
     fun parseConfig(xml: RellXmlElement): Rcfg_Run {
@@ -144,15 +147,16 @@ object RunConfigParser {
 
         config.check(ctx.configHeights.add(height)) { "duplicate height: $height (chain: '${ctx.name}')" }
 
-        var module: Rcfg_Module? = null
+        var app: Rcfg_App? = null
         val gtvs = mutableListOf<Rcfg_ChainConfigGtv>()
 
         for (elem in config.elems) {
             when (elem.tag) {
-                "module" -> {
-                    elem.check(module == null) { "module specified more than once" }
-                    module = parseModuleConfig(elem)
+                "app" -> {
+                    elem.check(app == null) { "app specified more than once" }
+                    app = parseAppConfig(elem)
                 }
+                "module" -> throw elem.error("module tag is deprecated since Rell $RELL_VERSION_MODULE_SYSTEM, use app instead")
                 "gtv" -> {
                     val gtv = parseChainConfigGtv(elem)
                     gtvs.add(gtv)
@@ -161,53 +165,67 @@ object RunConfigParser {
             }
         }
 
-        return Rcfg_ChainConfig(height, module, gtvs, addDependencies)
+        return Rcfg_ChainConfig(height, app, gtvs, addDependencies)
     }
 
-    private fun parseModuleConfig(module: RellXmlElement): Rcfg_Module {
-        module.checkNoText()
+    private fun parseAppConfig(app: RellXmlElement): Rcfg_App {
+        app.checkNoText()
 
-        val attrs = module.attrs()
-        val src = attrs.getNoBlank("src")
+        val attrs = app.attrs()
+        val moduleStr = attrs.get("module")
         val addDefaults = attrs.getBooleanOpt("add-defaults") ?: true
         attrs.checkNoMore()
 
-        var args: Map<String, Gtv>? = null
+        val module = R_ModuleName.ofOpt(moduleStr)
+        module ?: throw app.error("Invalid module name: '$moduleStr'")
 
-        for (elem in module.elems) {
+        var args = mutableMapOf<R_ModuleName, Map<String, Gtv>>()
+
+        for (elem in app.elems) {
             when (elem.tag) {
                 "args" -> {
-                    elem.check(args == null) { "args specified more than once" }
-                    args = parseModuleArgs(elem)
+                    val (argsModule, moduleArgs) = parseModuleArgs(elem)
+                    elem.check(argsModule !in args) { "args specified more than once for module '$argsModule'" }
+                    args[argsModule] = moduleArgs
                 }
                 else -> throw elem.errorTag()
             }
         }
 
-        return Rcfg_Module(src, args, addDefaults)
+        return Rcfg_App(module, args.toImmMap(), addDefaults)
     }
 
-    private fun parseModuleArgs(args: RellXmlElement): Map<String, Gtv> {
+    private fun parseModuleArgs(args: RellXmlElement): Pair<R_ModuleName, Map<String, Gtv>> {
         args.checkNoText()
-        args.attrs().checkNoMore()
+
+        val attrs = args.attrs()
+        val moduleStr = attrs.get("module")
+        attrs.checkNoMore()
+
+        val module = R_ModuleName.ofOpt(moduleStr)
+        module ?: throw args.error("Invalid module name: '${moduleStr}'")
 
         val res = mutableMapOf<String, Gtv>()
 
         for (elem in args.elems) {
-            elem.checkTag("arg")
-            elem.checkNoText()
-
-            val attrs = elem.attrs()
-            val key = attrs.getNoBlank("key")
-            attrs.checkNoMore()
-
+            val (key, gtv) = parseModuleArg(elem)
             elem.check(key !in res) { "duplicate module arg key: '$key'" }
-
-            val gtv = RunConfigGtvParser.parseNestedGtv(elem)
             res[key] = gtv
         }
 
-        return res
+        return Pair(module, res)
+    }
+
+    private fun parseModuleArg(elem: RellXmlElement): Pair<String, Gtv> {
+        elem.checkTag("arg")
+        elem.checkNoText()
+
+        val attrs = elem.attrs()
+        val key = attrs.getNoBlank("key")
+        attrs.checkNoMore()
+
+        val gtv = RunConfigGtvParser.parseNestedGtv(elem)
+        return Pair(key, gtv)
     }
 
     private fun parseChainConfigGtv(gtvElem: RellXmlElement): Rcfg_ChainConfigGtv {

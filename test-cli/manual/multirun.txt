@@ -1,0 +1,55 @@
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./multirun.sh -d test-cli/src test-cli/config/run-simple.xml
+
+curl "http://localhost:7740/query/01234567abcdef01234567abcdef01234567abcdef01234567abcdef01234567" -X POST -d '{"type":"sum_digits_int","n":1000}'
+
+"73fb9a5de29b"
+
+curl "http://localhost:7740/query/01234567abcdef01234567abcdef01234567abcdef01234567abcdef01234567" -X POST -d '{"type":"sum_digits_dec","n":1000}'
+
+"73fb9a5de29b"
+
+curl "http://localhost:7740/query/01234567abcdef01234567abcdef01234567abcdef01234567abcdef01234567" -X POST -d '{"type":"get_module_args"}'
+
+{"x":123456,"y":"Hello!"}
+
+curl "http://localhost:7740/query/01234567abcdef01234567abcdef01234567abcdef01234567abcdef01234567" -X POST -d '{"type":"get_common_args"}'
+
+{"message":"Some common message..."}
+
+curl "http://localhost:7740/query/01234567abcdef01234567abcdef01234567abcdef01234567abcdef01234567" -X POST -d '{"type":"get_raw_config"}' | python -m json.tool
+
+{
+    "blockstrategy": {
+        "name": "net.postchain.base.BaseBlockBuildingStrategy"
+    },
+    "configurationfactory": "net.postchain.gtx.GTXBlockchainConfigurationFactory",
+    "gtx": {
+        "modules": [
+            "net.postchain.rell.module.RellPostchainModuleFactory",
+            "net.postchain.gtx.StandardOpsGTXModule"
+        ],
+        "rell": {
+            "moduleArgs": {
+                "run_common": {
+                    "message": "Some common message..."
+                },
+                "run_simple": {
+                    "x": 123456,
+                    "y": "Hello!"
+                }
+            },
+            "modules": [
+                "run_simple"
+            ],
+            "sources_v0.9": {
+                "calc.rell": "module;\n\nfunction sum_digits_integer(n: integer): text {\n    var x = 1;\n    var res = 0;\n    for (i in range(n)) {\n        var t = x;\n        while (t > 0) {\n            res = (res * 7 + (t % 10)) % 281474976710655;\n            t /= 10;\n        }\n        ++x;\n    }\n    return res.to_hex();\n}\n\nfunction sum_digits_decimal(n: integer): text {\n    var x = 1.0;\n    var res = 0.0;\n    for (i in range(n)) {\n        var t = x;\n        while (t > 0) {\n            res = (res * 7 + (t % 10)) % 281474976710655;\n            t = (t / 10).floor();\n        }\n        ++x;\n    }\n    return integer(res).to_hex();\n}\n",
+                "run_common.rell": "module;\n\nstruct module_args {\n    message: text;\n}\n\nquery get_common_args() = chain_context.args;\n",
+                "run_simple.rell": "module;\n\nimport run_common;\nimport calc;\n\nstruct module_args {\n    x: integer;\n    y: text;\n}\n\nquery sum_digits_int(n: integer) = calc.sum_digits_integer(n);\nquery sum_digits_dec(n: integer) = calc.sum_digits_decimal(n);\n\nquery get_raw_config() = chain_context.raw_config;\nquery get_module_args() = chain_context.args;\n"
+            }
+        }
+    },
+    "signers": [
+        "0350FE40766BC0CE8D08B3F5B810E49A8352FDD458606BD5FAFE5ACDCDC8FF3F57"
+    ]
+}

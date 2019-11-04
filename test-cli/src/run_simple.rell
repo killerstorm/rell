@@ -1,0 +1,15 @@
+module;
+
+import run_common;
+import calc;
+
+struct module_args {
+    x: integer;
+    y: text;
+}
+
+query sum_digits_int(n: integer) = calc.sum_digits_integer(n);
+query sum_digits_dec(n: integer) = calc.sum_digits_decimal(n);
+
+query get_raw_config() = chain_context.raw_config;
+query get_module_args() = chain_context.args;

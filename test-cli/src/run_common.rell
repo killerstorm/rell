@@ -1,0 +1,7 @@
+module;
+
+struct module_args {
+    message: text;
+}
+
+query get_common_args() = chain_context.args;

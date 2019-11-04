@@ -26,11 +26,7 @@ class LibSetTest: BaseRellTest(false) {
         chk("set([1]).size()", "int[1]")
         chk("set([1, 2, 3, 4, 5]).size()", "int[5]")
         chk("set([1, 2, 3, 2, 3, 4, 5]).size()", "int[5]")
-
-        chk("set<integer>().len()", "int[0]")
-        chk("set([1]).len()", "int[1]")
-        chk("set([1, 2, 3, 4, 5]).len()", "int[5]")
-        chk("set([1, 2, 3, 2, 3, 4, 5]).len()", "int[5]")
+        chk("set<integer>().len()", "ct_err:deprecated:FUNCTION:set<integer>.len:size")
     }
 
     @Test fun testEquals() {
@@ -87,8 +83,8 @@ class LibSetTest: BaseRellTest(false) {
         chkEx("{ $init val r = x.add(1); return r+' '+x; }", "false [1, 2, 3]")
         chkEx("{ $init val r = x.add(2); return r+' '+x; }", "false [1, 2, 3]")
         chkEx("{ $init val r = x.add(3); return r+' '+x; }", "false [1, 2, 3]")
-        chkEx("{ $init val r = x.add('Hello'); return r+' '+x; }", "ct_err:expr_call_argtypes:set<integer>.add:text")
-        chkEx("{ $init val r = x.add(0, 4); return r+' '+x; }", "ct_err:expr_call_argtypes:set<integer>.add:integer,integer")
+        chkEx("{ $init val r = x.add('Hello'); return 0; }", "ct_err:expr_call_argtypes:set<integer>.add:text")
+        chkEx("{ $init val r = x.add(0, 4); return 0; }", "ct_err:expr_call_argtypes:set<integer>.add:integer,integer")
     }
 
     @Test fun testAddAll() {
@@ -101,9 +97,9 @@ class LibSetTest: BaseRellTest(false) {
         chkEx("{ $init val r = x.add_all(set<integer>([3, 4, 5])); return r+' '+x; }", "true [1, 2, 3, 4, 5]")
         chkEx("{ $init val r = x.add_all(list<integer>([3, 4, 5])); return r+' '+x; }", "true [1, 2, 3, 4, 5]")
         chkEx("{ $init val r = x.add_all([4, 5, 6]); return r+' '+x; }", "true [1, 2, 3, 4, 5, 6]")
-        chkEx("{ $init val r = x.add_all(set(['Hello'])); return r+' '+x; }", "ct_err:expr_call_argtypes:set<integer>.add_all:set<text>")
-        chkEx("{ $init val r = x.add_all(['Hello']); return r+' '+x; }", "ct_err:expr_call_argtypes:set<integer>.add_all:list<text>")
-        chkEx("{ $init val r = x.add_all(0, [4, 5, 6]); return r+' '+x; }", "ct_err:expr_call_argtypes:set<integer>.add_all:integer,list<integer>")
+        chkEx("{ $init val r = x.add_all(set(['Hello'])); return 0; }", "ct_err:expr_call_argtypes:set<integer>.add_all:set<text>")
+        chkEx("{ $init val r = x.add_all(['Hello']); return 0; }", "ct_err:expr_call_argtypes:set<integer>.add_all:list<text>")
+        chkEx("{ $init val r = x.add_all(0, [4, 5, 6]); return 0; }", "ct_err:expr_call_argtypes:set<integer>.add_all:integer,list<integer>")
     }
 
     @Test fun testRemove() {
@@ -113,7 +109,7 @@ class LibSetTest: BaseRellTest(false) {
         chkEx("{ $init val r = x.remove(2); return ''+r+' '+x; }", "true [1, 3]")
         chkEx("{ $init val r = x.remove(3); return ''+r+' '+x; }", "true [1, 2]")
         chkEx("{ $init val r = x.remove(0); return ''+r+' '+x; }", "false [1, 2, 3]")
-        chkEx("{ $init val r = x.remove('Hello'); return ''+r+' '+x; }", "ct_err:expr_call_argtypes:set<integer>.remove:text")
+        chkEx("{ $init val r = x.remove('Hello'); return 0; }", "ct_err:expr_call_argtypes:set<integer>.remove:text")
     }
 
     @Test fun testRemoveAll() {
@@ -127,8 +123,8 @@ class LibSetTest: BaseRellTest(false) {
         chkEx("{ $init val r = x.remove_all([2]); return ''+r+' '+x; }", "true [1, 3]")
         chkEx("{ $init val r = x.remove_all([1, 2, 3]); return ''+r+' '+x; }", "true []")
         chkEx("{ $init val r = x.remove_all([1, 3]); return ''+r+' '+x; }", "true [2]")
-        chkEx("{ $init val r = x.remove_all(['Hello']); return ''+r+' '+x; }", "ct_err:expr_call_argtypes:set<integer>.remove_all:list<text>")
-        chkEx("{ $init val r = x.remove_all(set(['Hello'])); return ''+r+' '+x; }", "ct_err:expr_call_argtypes:set<integer>.remove_all:set<text>")
+        chkEx("{ $init val r = x.remove_all(['Hello']); return 0; }", "ct_err:expr_call_argtypes:set<integer>.remove_all:list<text>")
+        chkEx("{ $init val r = x.remove_all(set(['Hello'])); return 0; }", "ct_err:expr_call_argtypes:set<integer>.remove_all:set<text>")
     }
 
     @Test fun testClear() {
@@ -148,7 +144,7 @@ class LibSetTest: BaseRellTest(false) {
 
     @Test fun testSort() {
         tst.strictToString = false
-        def("record rec { x: integer; }")
+        def("struct rec { x: integer; }")
 
         chkEx("{ val s = set([ 5, 4, 3, 2, 1 ]); s._sort(); return s; }", "ct_err:unknown_member:set<integer>:_sort")
 

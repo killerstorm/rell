@@ -5,3 +5,5 @@ META-INF
 /target
 /.attach_pid*
 /logs
+/out
+/postchain.pid

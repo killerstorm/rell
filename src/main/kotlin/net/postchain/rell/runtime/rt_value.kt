@@ -2,7 +2,6 @@ package net.postchain.rell.runtime
 
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.google.common.collect.Iterables
 import com.google.common.math.LongMath
 import mu.KLogging
 import net.postchain.gtv.Gtv
@@ -35,7 +34,7 @@ enum class Rt_ValueType {
     MAP,
     MUTABLE_MAP,
     TUPLE,
-    RECORD,
+    STRUCT,
     ENUM,
     OBJECT,
     JSON,
@@ -47,7 +46,7 @@ enum class Rt_ValueType {
     VIRTUAL_SET,
     VIRTUAL_MAP,
     VIRTUAL_TUPLE,
-    VIRTUAL_RECORD,
+    VIRTUAL_STRUCT,
 }
 
 sealed class Rt_Value {
@@ -71,9 +70,9 @@ sealed class Rt_Value {
     open fun asMutableMap(): MutableMap<Rt_Value, Rt_Value> = throw errType(Rt_ValueType.MUTABLE_MAP)
     open fun asTuple(): List<Rt_Value> = throw errType(Rt_ValueType.TUPLE)
     open fun asVirtualTuple(): Rt_VirtualTupleValue = throw errType(Rt_ValueType.VIRTUAL_TUPLE)
-    open fun asRecord(): Rt_RecordValue = throw errType(Rt_ValueType.RECORD)
+    open fun asStruct(): Rt_StructValue = throw errType(Rt_ValueType.STRUCT)
     open fun asVirtual(): Rt_VirtualValue = throw errType(Rt_ValueType.VIRTUAL)
-    open fun asVirtualRecord(): Rt_VirtualRecordValue = throw errType(Rt_ValueType.VIRTUAL_RECORD)
+    open fun asVirtualStruct(): Rt_VirtualStructValue = throw errType(Rt_ValueType.VIRTUAL_STRUCT)
     open fun asEnum(): R_EnumAttr = throw errType(Rt_ValueType.ENUM)
     open fun asRange(): Rt_RangeValue = throw errType(Rt_ValueType.RANGE)
     open fun asObjectId(): Long = throw errType(Rt_ValueType.CLASS)
@@ -254,14 +253,14 @@ class Rt_RowidValue(val value: Long): Rt_Value() {
     override fun hashCode() = java.lang.Long.hashCode(value)
 }
 
-class Rt_ClassValue(val type: R_ClassType, val rowid: Long): Rt_Value() {
+class Rt_EntityValue(val type: R_EntityType, val rowid: Long): Rt_Value() {
     override fun type() = type
     override fun valueType() = Rt_ValueType.CLASS
     override fun asObjectId() = rowid
     override fun asFormatArg() = toString()
     override fun toStrictString(showTupleFieldNames: Boolean) = "${type.name}[$rowid]"
     override fun toString() = toStrictString()
-    override fun equals(other: Any?) = other is Rt_ClassValue && type == other.type && rowid == other.rowid
+    override fun equals(other: Any?) = other is Rt_EntityValue && type == other.type && rowid == other.rowid
     override fun hashCode() = Objects.hash(type, rowid)
 }
 
@@ -326,7 +325,7 @@ class Rt_VirtualListValue(
     }
 
     override fun size() = elements.size
-    override fun iterable() = Iterables.filter(elements) { it != null } as Iterable<Rt_Value>
+    override fun iterable() = elements.filterNotNull()
 
     fun contains(index: Long) = index >= 0 && index < elements.size && elements[index.toInt()] != null
 
@@ -373,7 +372,7 @@ class Rt_VirtualSetValue(
     override fun hashCode() = elements.hashCode()
 
     override fun toFull0(): Rt_Value {
-        val resElements = elements.map { toFull(it!!) }.toMutableSet()
+        val resElements = elements.map { toFull(it) }.toMutableSet()
         return Rt_SetValue(type.innerType, resElements)
     }
 
@@ -420,8 +419,8 @@ class Rt_VirtualMapValue(
 
     override fun toFull0(): Rt_Value {
         val resMap = map
-                .mapKeys { (k, v) -> toFull(k) }
-                .mapValues { (k, v) -> toFull(v) }
+                .mapKeys { (k, _) -> toFull(k) }
+                .mapValues { (_, v) -> toFull(v) }
                 .toMutableMap()
         return Rt_MapValue(type.innerType, resMap)
     }
@@ -503,16 +502,16 @@ class Rt_VirtualTupleValue(
     }
 }
 
-class Rt_RecordValue(private val type: R_RecordType, private val attributes: MutableList<Rt_Value>): Rt_Value() {
+class Rt_StructValue(private val type: R_StructType, private val attributes: MutableList<Rt_Value>): Rt_Value() {
     override fun type() = type
-    override fun valueType() = Rt_ValueType.RECORD
-    override fun asRecord() = this
+    override fun valueType() = Rt_ValueType.STRUCT
+    override fun asStruct() = this
     override fun asFormatArg() = toString()
-    override fun equals(other: Any?) = other is Rt_RecordValue && attributes == other.attributes
+    override fun equals(other: Any?) = other is Rt_StructValue && attributes == other.attributes
     override fun hashCode() = type.hashCode() * 31 + attributes.hashCode()
 
-    override fun toString() = toString(type, attributes)
-    override fun toStrictString(showTupleFieldNames: Boolean) = toStrictString(type, type, attributes)
+    override fun toString() = toString(type.struct, attributes)
+    override fun toStrictString(showTupleFieldNames: Boolean) = toStrictString(type, type.struct, attributes)
 
     fun get(index: Int): Rt_Value {
         return attributes[index]
@@ -523,22 +522,22 @@ class Rt_RecordValue(private val type: R_RecordType, private val attributes: Mut
     }
 
     companion object {
-        fun toString(type: R_RecordType, attributes: List<out Rt_Value?>): String {
+        fun toString(struct: R_Struct, attributes: List<out Rt_Value?>): String {
             val attrs = attributes.withIndex().joinToString(",") { (i, attr) ->
-                val n = type.attributesList[i].name
+                val n = struct.attributesList[i].name
                 val v = attr?.toString()
                 "$n=$v"
             }
-            return "${type.name}{$attrs}"
+            return "${struct.appLevelName}{$attrs}"
         }
 
-        fun toStrictString(type: R_Type, recordType: R_RecordType, attributes: List<out Rt_Value?>): String {
-            val attrs = attributes.indices.joinToString(",") {attributeToStrictString(recordType, attributes, it) }
+        fun toStrictString(type: R_Type, struct: R_Struct, attributes: List<out Rt_Value?>): String {
+            val attrs = attributes.indices.joinToString(",") { attributeToStrictString(struct, attributes, it) }
             return "${type.name}[$attrs]"
         }
 
-        private fun attributeToStrictString(type: R_RecordType, attributes: List<out Rt_Value?>, idx: Int): String {
-            val name = type.attributesList[idx].name
+        private fun attributeToStrictString(struct: R_Struct, attributes: List<out Rt_Value?>, idx: Int): String {
+            val name = struct.attributesList[idx].name
             val value = attributes[idx]
             val valueStr = value?.toStrictString()
             return "$name=$valueStr"
@@ -546,35 +545,35 @@ class Rt_RecordValue(private val type: R_RecordType, private val attributes: Mut
     }
 }
 
-class Rt_VirtualRecordValue(
+class Rt_VirtualStructValue(
         gtv: Gtv,
-        private val type: R_VirtualRecordType,
+        private val type: R_VirtualStructType,
         private val attributes: List<Rt_Value?>
 ): Rt_VirtualValue(gtv) {
     override fun type() = type
-    override fun valueType() = Rt_ValueType.VIRTUAL_RECORD
-    override fun asVirtualRecord() = this
+    override fun valueType() = Rt_ValueType.VIRTUAL_STRUCT
+    override fun asVirtualStruct() = this
     override fun asFormatArg() = toString()
-    override fun equals(other: Any?) = other is Rt_VirtualRecordValue && attributes == other.attributes
+    override fun equals(other: Any?) = other is Rt_VirtualStructValue && attributes == other.attributes
     override fun hashCode() = type.hashCode() * 31 + attributes.hashCode()
 
-    override fun toString() = Rt_RecordValue.toString(type.innerType, attributes)
+    override fun toString() = Rt_StructValue.toString(type.innerType.struct, attributes)
     override fun toStrictString(showTupleFieldNames: Boolean) =
-            Rt_RecordValue.toStrictString(type, type.innerType, attributes)
+            Rt_StructValue.toStrictString(type, type.innerType.struct, attributes)
 
     fun get(index: Int): Rt_Value {
         val value = attributes[index]
         if (value == null) {
             val typeName = type.innerType.name
-            val attr = type.innerType.attributesList[index].name
-            throw Rt_Error("virtual_record:get:novalue:$typeName:$attr", "Attribute '$typeName.$attr' has no value")
+            val attr = type.innerType.struct.attributesList[index].name
+            throw Rt_Error("virtual_struct:get:novalue:$typeName:$attr", "Attribute '$typeName.$attr' has no value")
         }
         return value
     }
 
     override fun toFull0(): Rt_Value {
         val fullAttrValues = attributes.map { toFull(it!!) }.toMutableList()
-        return Rt_RecordValue(type.innerType, fullAttrValues)
+        return Rt_StructValue(type.innerType, fullAttrValues)
     }
 }
 

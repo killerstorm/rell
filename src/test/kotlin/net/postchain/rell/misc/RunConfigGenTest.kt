@@ -2,6 +2,7 @@ package net.postchain.rell.misc
 
 import net.postchain.rell.MapGeneralDir
 import net.postchain.rell.parser.C_MapSourceDir
+import net.postchain.rell.test.RellTestUtils
 import net.postchain.rell.tools.runcfg.RellRunConfigGenerator
 import org.junit.Test
 import kotlin.test.assertEquals
@@ -59,9 +60,9 @@ class RunConfigGenTest {
 
     @Test fun testModule() {
         val sourceFiles = mapOf(
-                "app.rell" to "include 'sub';\nfunction main(){}",
-                "sub.rell" to "function sub(){}",
-                "other.rell" to "function other(){}"
+                "app.rell" to "module; import sub;\nfunction main(){}",
+                "sub.rell" to "module; function sub(){}",
+                "other.rell" to "module; function other(){}"
         )
 
         val files = generate(sourceFiles, mapOf(), """
@@ -72,7 +73,7 @@ class RunConfigGenTest {
                 <chains>
                     <chain name="user" iid="33" brid="01234567abcdef01234567abcdef01234567abcdef01234567abcdef01234567">
                         <config height="0">
-                            <module src="app" add-defaults="false"/>
+                            <app module="app" add-defaults="false"/>
                         </config>
                     </chain>
                 </chains>
@@ -90,17 +91,19 @@ class RunConfigGenTest {
                     <dict>
                         <entry key="rell">
                             <dict>
-                                <entry key="mainFile">
-                                    <string>app.rell</string>
+                                <entry key="modules">
+                                    <array>
+                                        <string>app</string>
+                                    </array>
                                 </entry>
-                                <entry key="sources_v0.9">
+                                <entry key="sources_v${RellTestUtils.RELL_VER}">
                                     <dict>
                                         <entry key="app.rell">
-                                            <string>include 'sub';
+                                            <string>module; import sub;
             function main(){}</string>
                                         </entry>
                                         <entry key="sub.rell">
-                                            <string>function sub(){}</string>
+                                            <string>module; function sub(){}</string>
                                         </entry>
                                     </dict>
                                 </entry>
@@ -129,6 +132,6 @@ class RunConfigGenTest {
     private fun chkFile(files: MutableMap<String, String>, path: String, expected: String) {
         val actual = files.remove(path)
         assertNotNull(actual, "File not found: $path ${files.keys}")
-        assertEquals(expected.trimIndent().trim(), actual!!.trim())
+        assertEquals(expected.trimIndent().trim(), actual.trim())
     }
 }

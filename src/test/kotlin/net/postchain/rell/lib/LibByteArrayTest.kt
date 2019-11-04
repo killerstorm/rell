@@ -13,6 +13,11 @@ class LibByteArrayTest: BaseRellTest(false) {
         chk("byte_array(123)", "ct_err:expr_call_argtypes:byte_array:integer")
     }
 
+    @Test fun testSha256() {
+        chk("'foo'.to_bytes().sha256()", "byte_array[2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae]")
+        chk("'bar'.to_bytes().sha256()", "byte_array[fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9]")
+    }
+
     @Test fun testFromList() {
         chk("byte_array.from_list(list<integer>())", "byte_array[]")
         chk("byte_array.from_list([123])", "byte_array[7b]")
@@ -53,13 +58,6 @@ class LibByteArrayTest: BaseRellTest(false) {
         chk("x'0123ABCD'[-1]", "rt_err:expr_bytearray_subscript_index:4:-1")
 
         chkEx("{ val x = x'0123ABCD'; x[1] = 123; return x; }", "ct_err:expr_unmodifiable:byte_array")
-    }
-
-    @Test fun testDecode() {
-        chk("x''.decode()", "text[]")
-        chk("x'48656c6c6f'.decode()", "text[Hello]")
-        chk("x'd09fd180d0b8d0b2d0b5d182'.decode()", """text[\u041f\u0440\u0438\u0432\u0435\u0442]""")
-        chk("x'fefeffff'.decode()", """text[\ufffd\ufffd\ufffd\ufffd]""")
     }
 
     @Test fun testSub() {

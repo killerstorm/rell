@@ -11,7 +11,7 @@ class TokenizerTest: BaseRellTest(false) {
         chk("123456789", "int[123456789]")
         chk("9223372036854775807", "int[9223372036854775807]")
         chk("01234567", "int[1234567]")
-        chk("\n9223372036854775808", "ct_err:main.rell(2:1):lex:int:9223372036854775808")
+        chk("\n9223372036854775808", "ct_err:main.rell(2:1):lex:int:range:9223372036854775808")
         chk("\n1a", "ct_err:main.rell(2:2):lex:number_end")
         chk("\n1f", "ct_err:main.rell(2:2):lex:number_end")
         chk("\n1z", "ct_err:main.rell(2:2):lex:number_end")
@@ -27,11 +27,11 @@ class TokenizerTest: BaseRellTest(false) {
         chk("0x1234abcd", "int[305441741]")
         chk("0x1234abcd", "int[305441741]")
         chk("0x7FFFFFFFFFFFFFFF", "int[9223372036854775807]")
-        chk("0x8000000000000000", "ct_err:main.rell(1:13):lex:int:0x8000000000000000")
+        chk("0x8000000000000000", "ct_err:main.rell(1:13):lex:int:range:0x8000000000000000")
         chk("0xFED", "int[4077]")
         chk("0xFed", "int[4077]")
         chk("0xfed", "int[4077]")
-        chk("\n0x", "ct_err:main.rell(2:1):lex:int:0x")
+        chk("\n0x", "ct_err:main.rell(2:1):lex:int:invalid:0x")
         chk("\n0X0", "ct_err:main.rell(2:2):lex:number_end")
         chk("\n0xg", "ct_err:main.rell(2:3):lex:number_end")
         chk("\n0x0g", "ct_err:main.rell(2:4):lex:number_end")
@@ -186,7 +186,7 @@ class TokenizerTest: BaseRellTest(false) {
 
     @Test fun testErrPos() {
         tst.errMsgPos = true
-        chkEx("{ val x = 5;\nval x = 10; }", "ct_err:main.rell(2:5):var_dupname:x")
+        chkEx("{ val x = 5;\nval x = 10; return 0; }", "ct_err:main.rell(2:5):var_dupname:x")
         chkEx("{ val x = 5;\nreturn; }", "ct_err:main.rell(2:1):stmt_return_query_novalue")
     }
 

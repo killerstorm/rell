@@ -1,10 +1,7 @@
 package net.postchain.rell.test
 
-import net.postchain.rell.model.R_Module
-import net.postchain.rell.parser.C_CompilerOptions
-import net.postchain.rell.parser.C_MapSourceDir
-import net.postchain.rell.parser.C_Message
-import net.postchain.rell.parser.C_SourceDir
+import net.postchain.rell.model.R_App
+import net.postchain.rell.parser.*
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_Printer
 import net.postchain.rell.sql.SqlExecutor
@@ -15,13 +12,13 @@ import kotlin.test.assertEquals
 
 abstract class RellBaseTester(
         private val tstCtx: RellTestContext,
-        classDefs: List<String> = listOf(),
+        entityDefs: List<String> = listOf(),
         inserts: List<String> = listOf(),
         gtv: Boolean = false
 ){
     private var inited = false
     private var lastInserts = listOf<String>()
-    private var moduleProto: R_Module? = null
+    private var appProto: R_App? = null
 
     protected val messages = mutableListOf<C_Message>()
 
@@ -29,7 +26,7 @@ abstract class RellBaseTester(
     var gtv = gtv
     var deprecatedError = false
 
-    var defs: List<String> = classDefs
+    var defs: List<String> = entityDefs
         set(value) {
             checkNotInited()
             field = value
@@ -58,16 +55,13 @@ abstract class RellBaseTester(
 
         if (!inited) {
             val code = defsCode()
-
-            val includeDir = createIncludeDir(code)
-            val options = compilerOptions()
-            val module = RellTestUtils.parseModule(includeDir, options).rModule
+            val app = initCompile(code)
 
             if (tstCtx.useSql) {
-                initSql(code, module)
+                initSql(code, app)
             }
 
-            moduleProto = module
+            appProto = app
             inited = true
         } else if (inserts != lastInserts) {
             val sqlExec = tstCtx.sqlExec()
@@ -76,6 +70,19 @@ abstract class RellBaseTester(
             }
             initSqlInserts(sqlExec)
         }
+    }
+
+    private fun initCompile(code: String): R_App {
+        val sourceDir = createSourceDir(code)
+        val options = compilerOptions()
+        val cRes = RellTestUtils.compileApp(sourceDir, options)
+
+        if (cRes.errors.isNotEmpty()) {
+            val err = cRes.errors[0]
+            throw C_Error(err.pos, err.code, err.text)
+        }
+
+        return cRes.app!!
     }
 
     protected val eval = RellTestEval()
@@ -114,15 +121,15 @@ abstract class RellBaseTester(
         check(!inited)
     }
 
-    private fun initSql(moduleCode: String, module: R_Module) {
+    private fun initSql(moduleCode: String, app: R_App) {
         val sqlExec = tstCtx.sqlExec()
-        initSqlReset(sqlExec, moduleCode, module)
+        initSqlReset(sqlExec, moduleCode, app)
         initSqlInserts(sqlExec)
     }
 
-    protected abstract fun initSqlReset(exec: SqlExecutor, moduleCode: String, module: R_Module)
+    protected abstract fun initSqlReset(exec: SqlExecutor, moduleCode: String, app: R_App)
 
-    private fun createIncludeDir(code: String): C_SourceDir {
+    private fun createSourceDir(code: String): C_SourceDir {
         val files = files(code)
         return C_MapSourceDir.of(files)
     }
@@ -153,12 +160,21 @@ abstract class RellBaseTester(
 
     fun chkDataNew(expected: List<String>) {
         expectedData.addAll(expected)
-        val actual = dumpDatabase()
+        val actual = dumpDatabaseEntities()
         assertEquals(expectedData, actual)
     }
 
     fun chkDataNew(vararg expected: String) {
         chkDataNew(expected.toList())
+    }
+
+    fun chkDataRaw(vararg expected: String) {
+        chkDataRaw(expected.toList())
+    }
+
+    fun chkDataRaw(expected: List<String>) {
+        val actual = dumpDatabaseTables()
+        assertEquals(expected, actual)
     }
 
     fun chkDataSql(sql: String, vararg expected: String) {
@@ -167,10 +183,20 @@ abstract class RellBaseTester(
         assertEquals(expected.toList(), actual)
     }
 
-    private fun dumpDatabase(): List<String> {
+    private fun dumpDatabaseEntities(): List<String> {
         init()
         val sqlMapping = createChainSqlMapping()
-        return SqlTestUtils.dumpDatabaseClasses(tstCtx.sqlExec(), sqlMapping, moduleProto!!)
+        return SqlTestUtils.dumpDatabaseEntity(tstCtx.sqlExec(), sqlMapping, appProto!!)
+    }
+
+    fun dumpDatabaseTables(): List<String> {
+        init()
+        val map = SqlTestUtils.dumpDatabaseTables(tstCtx.sqlConn(), tstCtx.sqlExec())
+        return map.keys.sorted()
+                .filter { !it.matches(Regex("c\\d+\\.(rowid_gen|sys\\.attributes|sys\\.classes)")) }
+                .flatMap {
+                    map.getValue(it).map { row -> "$it($row)" }
+                }
     }
 
     fun resetRowid() {
@@ -188,11 +214,10 @@ abstract class RellBaseTester(
     }
 
     protected fun getSqlExec() = tstCtx.sqlExec()
-    protected fun getModuleProto() = moduleProto!!
 
     fun chkCompile(code: String, expected: String) {
         val actual = compileModule(code)
-        assertEquals(expected, actual)
+        checkResult(expected, actual)
     }
 
     fun chkStdout(vararg expected: String) = stdoutPrinter0.chk(*expected)
@@ -200,25 +225,24 @@ abstract class RellBaseTester(
 
     fun compileModule(code: String): String {
         val moduleCode = moduleCode(code)
-        return processModule(moduleCode) { "OK" }
+        return processApp(moduleCode) { "OK" }
     }
 
-    fun compileModuleEx(code: String): R_Module {
+    fun compileAppEx(code: String): R_App {
         val moduleCode = moduleCode(code)
-        var res: R_Module? = null
-        processModule(moduleCode) {
+        var res: R_App? = null
+        processApp(moduleCode) {
             res = it
             "OK"
         }
         return res!!
     }
 
-    fun processModule(code: String, processor: (R_Module) -> String): String {
+    fun processApp(code: String, processor: (R_App) -> String): String {
         messages.clear()
-        val includeDir = createIncludeDir(code)
-        return RellTestUtils.processModule(includeDir, errMsgPos, compilerOptions()) {
-            messages.addAll(it.messages)
-            processor(it.rModule)
+        val sourceDir = createSourceDir(code)
+        return RellTestUtils.processApp(sourceDir, errMsgPos, compilerOptions(), messages) {
+            processor(it.rApp)
         }
     }
 
@@ -238,6 +262,15 @@ abstract class RellBaseTester(
             val actualList = queue.toList()
             assertEquals(expectedList, actualList)
             queue.clear()
+        }
+    }
+
+    companion object {
+        fun checkResult(expected: String, actual: String) {
+            val expected2 = if (!expected.startsWith("ct_err:")) expected else {
+                expected.replace(Regex("\n *"), "")
+            }
+            assertEquals(expected2, actual)
         }
     }
 }

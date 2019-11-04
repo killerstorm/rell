@@ -1,0 +1,22 @@
+module;
+
+query stairq(n: integer) {
+    return stairf(n);
+}
+
+function stairf(n: integer): integer {
+    var i = 0;
+    var res = 0;
+    while (i < n) {
+        var j = 0;
+        var s = '';
+        while (j < i) {
+            s = s + " ";
+            j = j + 1;
+        }
+        print(s + i);
+        res += i;
+        i = i + 1;
+    }
+    return res;
+}

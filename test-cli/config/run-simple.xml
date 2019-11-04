@@ -1,0 +1,20 @@
+<run wipe-db="true">
+    <nodes>
+        <config src="node-config.properties" add-signers="false" />
+    </nodes>
+    <chains>
+        <chain name="test" iid="1" brid="01234567abcdef01234567abcdef01234567abcdef01234567abcdef01234567">
+            <config height="0">
+                <app module="run_simple">
+                    <args module="run_simple">
+                        <arg key="x"><int>123456</int></arg>
+                        <arg key="y"><string>Hello!</string></arg>
+                    </args>
+                    <args module="run_common">
+                        <arg key="message"><string>Some common message...</string></arg>
+                    </args>
+                </app>
+            </config>
+        </chain>
+    </chains>
+</run>

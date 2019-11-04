@@ -6,26 +6,26 @@ import net.postchain.rell.runtime.Rt_Value
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 
-data class SqlTableAlias(val cls: R_Class, val str: String)
+data class SqlTableAlias(val cls: R_Entity, val str: String)
 class SqlTableJoin(val attr: R_Attrib, val alias: SqlTableAlias)
 
-class SqlFromInfo(val classes: List<SqlFromClass>)
-class SqlFromClass(val alias: SqlTableAlias, val joins: List<SqlFromJoin>)
+class SqlFromInfo(val entities: List<SqlFromEntity>)
+class SqlFromEntity(val alias: SqlTableAlias, val joins: List<SqlFromJoin>)
 class SqlFromJoin(val baseAlias: SqlTableAlias, val attr: String, val alias: SqlTableAlias)
 
 class SqlGenContext private constructor(
         val sqlCtx: Rt_SqlContext,
-        classes: List<R_AtClass>,
+        entities: List<R_AtEntity>,
         private val parameters: List<Rt_Value>
 ) {
     private var aliasCtr = 0
-    private val clsAliasMap = mutableMapOf<R_AtClass, ClassAliasTbl>()
-    private val aliasTblMap = mutableMapOf<SqlTableAlias, ClassAliasTbl>()
+    private val clsAliasMap = mutableMapOf<R_AtEntity, EntityAliasTbl>()
+    private val aliasTblMap = mutableMapOf<SqlTableAlias, EntityAliasTbl>()
 
     init {
-        classes.withIndex().forEach { (i, cls) -> check(cls.index == i) }
-        for (cls in classes) {
-            getClassAlias(cls)
+        entities.withIndex().forEach { (i, cls) -> check(cls.index == i) }
+        for (cls in entities) {
+            getEntityAlias(cls)
         }
     }
 
@@ -33,16 +33,16 @@ class SqlGenContext private constructor(
         return parameters[index]
     }
 
-    fun getClassAlias(cls: R_AtClass): SqlTableAlias {
+    fun getEntityAlias(cls: R_AtEntity): SqlTableAlias {
         val tbl = clsAliasMap.computeIfAbsent(cls) {
-            val tbl = ClassAliasTbl(nextAlias(cls.rClass))
+            val tbl = EntityAliasTbl(nextAlias(cls.rEntity))
             aliasTblMap[tbl.alias] = tbl
             tbl
         }
         return tbl.alias
     }
 
-    fun getRelAlias(baseAlias: SqlTableAlias, rel: R_Attrib, cls: R_Class): SqlTableAlias {
+    fun getRelAlias(baseAlias: SqlTableAlias, rel: R_Attrib, cls: R_Entity): SqlTableAlias {
         val tbl = aliasTblMap.getValue(baseAlias)
         val map = tbl.subAliases.computeIfAbsent(baseAlias) { mutableMapOf() }
         val join = map.computeIfAbsent(rel.name) {
@@ -54,25 +54,25 @@ class SqlGenContext private constructor(
     }
 
     fun getFromInfo(): SqlFromInfo {
-        val classes = clsAliasMap.entries.map { (cls, tbl) ->
+        val entities = clsAliasMap.entries.map { (_, tbl) ->
             val joins = tbl.subAliases.entries.flatMap { (alias, map) ->
                 map.values.map { tblJoin -> SqlFromJoin(alias, tblJoin.attr.sqlMapping, tblJoin.alias) }
             }
-            SqlFromClass(tbl.alias, joins)
+            SqlFromEntity(tbl.alias, joins)
         }
-        return SqlFromInfo(classes)
+        return SqlFromInfo(entities)
     }
 
-    private fun nextAlias(cls: R_Class) = SqlTableAlias(cls, String.format("A%02d", aliasCtr++))
+    private fun nextAlias(cls: R_Entity) = SqlTableAlias(cls, String.format("A%02d", aliasCtr++))
 
-    private class ClassAliasTbl(val alias: SqlTableAlias) {
+    private class EntityAliasTbl(val alias: SqlTableAlias) {
         val subAliases = mutableMapOf<SqlTableAlias, MutableMap<String, SqlTableJoin>>()
     }
 
     companion object {
-        fun create(frame: Rt_CallFrame, classes: List<R_AtClass>, parameters: List<Rt_Value>): SqlGenContext {
-            val sqlCtx = frame.entCtx.modCtx.sqlCtx
-            return SqlGenContext(sqlCtx, classes, parameters)
+        fun create(frame: Rt_CallFrame, entities: List<R_AtEntity>, parameters: List<Rt_Value>): SqlGenContext {
+            val sqlCtx = frame.defCtx.sqlCtx
+            return SqlGenContext(sqlCtx, entities, parameters)
         }
     }
 }
@@ -174,13 +174,13 @@ class SqlListBuilder(private val builder: SqlBuilder, private val sep: String) {
 class ParameterizedSql(val sql: String, val params: List<SqlParam>) {
     fun execute(frame: Rt_CallFrame) {
         val args = calcArgs(frame)
-        val sqlExec = frame.entCtx.modCtx.globalCtx.sqlExec
+        val sqlExec = frame.defCtx.globalCtx.sqlExec
         sqlExec.execute(sql, args::bind)
     }
 
     fun executeQuery(frame: Rt_CallFrame, consumer: (ResultSet) -> Unit) {
         val args = calcArgs(frame)
-        val sqlExec = frame.entCtx.modCtx.globalCtx.sqlExec
+        val sqlExec = frame.defCtx.globalCtx.sqlExec
         sqlExec.executeQuery(sql, args::bind, consumer)
     }
 

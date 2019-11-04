@@ -1,0 +1,132 @@
+RELEASE NOTES 0.10.0 (2019-11-04)
+
+
+Upgrade instructions: http://rell.chromia.com/en/0.10.0/languageguide/migration-0.10.html
+
+
+1. Language: Module system
+
+Docs: http://rell.chromia.com/en/0.10.0/languageguide/modules.html
+
+The new module system replaces the "include" directive as a way to combine multiple .rell files into an application.
+
+Highlights:
+
+- A Rell application is a set of modules
+- A module can be either a single .rell file or a directory with multiple .rell files
+- Modules can import each other
+- Rell files within a directory-module see each other's definitions and are imported as a single module
+
+
+2. Language: Entities and structs
+
+Classes renamed to entities and records renamed to structs:
+
+entity user {
+    name;
+    company;
+}
+
+struct module_args {
+    chain_name: text;
+}
+
+Existing code with classes and records will not compile.
+
+To help fixing the code, there is a tool migrate-v0.10.sh. The tool replaces class/record by entity/struct, as well
+as replaces most of deprecated library functions. The tool can be found in the postchain-node directory of
+a Rell distribution.
+
+
+3. Language: @mount annotation
+
+Docs: http://rell.chromia.com/en/0.10.0/languageguide/general.html#mount-names
+
+Mount names are defined for entities, objects, operations and queries:
+
+- for entities and objects, that's the name of an SQL table where the data is stored
+- for operations and queries, that's a name used to invoke an operation or a query from the outside
+
+By default, a mount name of a definition is defined by its fully-qualified name (namespace path + definition name).
+
+The new @mount annotation is used to specify an arbitrary mount name for a definition:
+
+@mount('foo.bar.user') entity user {}
+
+
+4. Language: Annotations syntax
+
+Following the example of the @mount annotation, the old log annotation is now written the same way:
+
+@log entity user {}
+
+instead of
+
+entity user (log) {}
+
+(the old syntax is still allowed, but deprecated)
+
+
+5. Language: Anonymous namespace
+
+An anonymous (without a name) namespace allows to apply an annotation to a set of definitions:
+
+@mount('foo'bar')
+namespace {
+    entity user {}
+    entity company {}
+}
+
+
+6. Language: Name inference from qualified type name
+
+Rell always allowed to not specify a type or a name if they are the same:
+
+entity balance { account; asset; }
+
+is equivalent to
+
+entity balance { account: account; asset: asset; }
+
+However, sometimes a type is defined in a namespace or in another module, so the code becomes:
+
+entity balance { foo.account; bar.asset; }
+
+Now such notation is also supported, and the code is equivalent to
+
+entity balance { account: foo.account; asset: bar.asset; }
+
+Works also for variables, parameters and nullable types:
+
+operation o(foo.user?) {} // same as "user: foo.user?"
+
+
+7. Language: Tuple fields access by index
+
+Now following code will work:
+
+val t = (123, 'Hello');
+print(t[0]);
+print(t[1]);
+
+
+8. Compiler: Not stopping on first compilation error
+
+Now Rell compiler (and Eclipse IDE) can report multiple semantic compilation errors per .rell file.
+
+
+9. Library: Function byte_array.sha256()
+
+A new member function sha256() for the byte_array type has been added.
+
+Code examples:
+
+'foo'.to_bytes().sha256() => byte_array[2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae]
+'bar'.to_bytes().sha256() => byte_array[fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9]
+
+
+10. Library: Retirement of deprecated functions
+
+Previously deprecated functions and types now are completely deprecated and cannot be used.
+
+Existing code can be (partially) fixed with the migrate-v0.10.sh tool.

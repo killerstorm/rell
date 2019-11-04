@@ -1,5 +1,8 @@
 package net.postchain.rell
 
+import com.google.common.collect.ImmutableList
+import com.google.common.collect.ImmutableMap
+import com.google.common.collect.ImmutableSet
 import net.postchain.base.SECP256K1CryptoSystem
 import net.postchain.base.data.PostgreSQLCommands
 import net.postchain.base.data.PostgreSQLDatabaseAccess
@@ -248,3 +251,45 @@ class DirBuilder {
 
     fun toFileMap() = files.toMap()
 }
+
+class LateInit<T> {
+    private var t: T? = null
+
+    fun isSet(): Boolean = t != null
+
+    fun get(): T = t!!
+
+    fun set(v: T) {
+        check(t == null) { "value already initialized with: <$t>" }
+
+        t = v
+    }
+}
+
+class ThreadLocalContext<T>(private val defaultValue: T? = null) {
+    private val local = ThreadLocal.withInitial<T> { defaultValue }
+
+    fun <R> set(value: T, code: () -> R): R {
+        val old = local.get()
+        local.set(value)
+        try {
+            val res = code()
+            return res
+        } finally {
+            local.set(old)
+        }
+    }
+
+    fun get(): T {
+        val res = local.get()
+        check(res != null)
+        return res
+    }
+}
+
+typealias Getter<T> = () -> T
+typealias Setter<T> = (T) -> Unit
+
+fun <T> Iterable<T>.toImmList(): List<T> = ImmutableList.copyOf(this)
+fun <T> Iterable<T>.toImmSet(): Set<T> = ImmutableSet.copyOf(this)
+fun <K, V> Map<K, V>.toImmMap(): Map<K, V> = ImmutableMap.copyOf(this)

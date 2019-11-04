@@ -1,9 +1,7 @@
 package net.postchain.rell.misc
 
-import com.github.h0tk3y.betterParse.combinators.map
-import com.github.h0tk3y.betterParse.combinators.or
-import com.github.h0tk3y.betterParse.grammar.Grammar
 import com.github.h0tk3y.betterParse.combinators.*
+import com.github.h0tk3y.betterParse.grammar.Grammar
 import com.github.h0tk3y.betterParse.grammar.parseToEnd
 import com.github.h0tk3y.betterParse.grammar.parser
 import com.github.h0tk3y.betterParse.parser.Parser
@@ -65,10 +63,10 @@ class BetterParseExperimentalTest {
 
         private val tupField by ( optional(ID * -EQ) * _expr) map { ( name, expr ) -> Pair(name?.text, expr) }
 
-        private val tupTail by ( separatedTerms(tupField, COMMA, true) * optional(COMMA) ) map { (a, b) -> a }
+        private val tupTail by ( separatedTerms(tupField, COMMA, true) * -optional(COMMA) )
 
-        private val tupExpr by ( LPAR * tupField * -COMMA * optional(tupTail) * -RPAR) map {
-            (pos, field, tail) ->
+        private val tupExpr by ( -LPAR * tupField * -COMMA * optional(tupTail) * -RPAR) map {
+            (field, tail) ->
             if (tail == null && field.first == null) {
                 field.second
             } else {

@@ -1,5 +1,5 @@
-class city { key name: text; }
-class person { name: text; city; street: text; house: integer; score: integer; }
+entity city { key name: text; }
+entity person { name: text; city; street: text; house: integer; score: integer; }
 
 object some_state {
     mutable x: integer = 5;

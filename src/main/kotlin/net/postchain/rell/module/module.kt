@@ -10,21 +10,22 @@ import net.postchain.gtx.GTXModule
 import net.postchain.gtx.GTXModuleFactory
 import net.postchain.gtx.GTXOperation
 import net.postchain.rell.CommonUtils
-import net.postchain.rell.model.R_ExternalParam
-import net.postchain.rell.model.R_Module
-import net.postchain.rell.model.R_Operation
-import net.postchain.rell.model.R_Query
+import net.postchain.rell.LateInit
+import net.postchain.rell.model.*
 import net.postchain.rell.parser.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.DefaultSqlExecutor
 import net.postchain.rell.sql.SqlInit
+import net.postchain.rell.toImmMap
+import net.postchain.rell.toImmSet
 import org.apache.commons.lang3.time.FastDateFormat
 
-val RELL_LANG_VERSION = "0.9"
-val RELL_VERSION = "0.9.1"
+const val RELL_LANG_VERSION = "0.10"
+const val RELL_VERSION = "0.10.0"
+const val RELL_VERSION_MODULE_SYSTEM = "0.10.0"
 
-val CONFIG_RELL_FILES = "files_v$RELL_LANG_VERSION"
-val CONFIG_RELL_SOURCES = "sources_v$RELL_LANG_VERSION"
+const val CONFIG_RELL_FILES = "files_v$RELL_LANG_VERSION"
+const val CONFIG_RELL_SOURCES = "sources_v$RELL_LANG_VERSION"
 
 private fun convertArgs(ctx: GtvToRtContext, params: List<R_ExternalParam>, args: List<Gtv>): List<Rt_Value> {
     return args.mapIndexed { index, arg ->
@@ -114,17 +115,21 @@ private class RellGTXOperation(
         private val errorHandler: ErrorHandler,
         opData: ExtOpData
 ) : GTXOperation(opData) {
-    private lateinit var gtvToRtCtx: GtvToRtContext
-    private lateinit var args: List<Rt_Value>
+    private val gtvToRtCtx = LateInit<GtvToRtContext>()
+    private val args = LateInit<List<Rt_Value>>()
 
     override fun isCorrect(): Boolean {
         handleError {
-            if (data.args.size != rOperation.params.size) {
-                throw UserMistake("Wrong argument count: ${data.args.size} instead of ${rOperation.params.size}")
+            val params = rOperation.params()
+            if (data.args.size != params.size) {
+                throw UserMistake("Wrong argument count: ${data.args.size} instead of ${params.size}")
             }
-
-            gtvToRtCtx = GtvToRtContext(GTV_OPERATION_PRETTY)
-            args = convertArgs(gtvToRtCtx, rOperation.params, data.args.toList())
+            if (!gtvToRtCtx.isSet()) {
+                gtvToRtCtx.set(GtvToRtContext(GTV_OPERATION_PRETTY))
+            }
+            if (!args.isSet()) {
+                args.set(convertArgs(gtvToRtCtx.get(), params, data.args.toList()))
+            }
         }
         return true
     }
@@ -134,15 +139,15 @@ private class RellGTXOperation(
             val blockHeight = DatabaseAccess.of(ctx).getLastBlockHeight(ctx)
             val opCtx = Rt_OpContext(ctx.timestamp, ctx.txIID, blockHeight, data.signers.toList())
             val heightProvider = Rt_TxChainHeightProvider(ctx)
-            val modCtx = module.makeRtModuleContext(ctx, opCtx, heightProvider)
-            gtvToRtCtx.finish(modCtx)
-            rOperation.callTopNoTx(modCtx, args)
+            val modCtx = module.createAppContext(ctx, opCtx, heightProvider)
+            gtvToRtCtx.get().finish(modCtx)
+            rOperation.callTopNoTx(modCtx, args.get())
         }
         return true
     }
 
     private fun <T> handleError(code: () -> T): T {
-        return errorHandler.handleError({ "Operation '${rOperation.name}' failed" }) {
+        return errorHandler.handleError({ "Operation '${rOperation.appLevelName}' failed" }) {
             code()
         }
     }
@@ -165,7 +170,7 @@ private class RellModuleConfig(
 )
 
 private class RellPostchainModule(
-        private val rModule: R_Module,
+        private val rApp: R_App,
         private val moduleName: String,
         private val chainCtx: Rt_ChainContext,
         private val chainDeps: Map<String, ByteArray>,
@@ -174,76 +179,84 @@ private class RellPostchainModule(
         private val errorHandler: ErrorHandler,
         private val config: RellModuleConfig
 ) : GTXModule {
+    private val operationNames = rApp.operations.keys.map { it.str() }.toImmSet()
+    private val queryNames = rApp.queries.keys.map { it.str() }.toImmSet()
+
     override fun getOperations(): Set<String> {
-        return rModule.operations.keys
+        return operationNames
     }
 
     override fun getQueries(): Set<String> {
-        return rModule.queries.keys
+        return queryNames
     }
 
     override fun initializeDB(ctx: EContext) {
         errorHandler.handleError({ "Database initialization failed" }) {
             val heightProvider = Rt_ConstantChainHeightProvider(-1)
-            val modCtx = makeRtModuleContext(ctx, null, heightProvider)
-            SqlInit.init(modCtx, config.dbInitLogLevel)
+            val appCtx = createAppContext(ctx, null, heightProvider)
+            SqlInit.init(appCtx, config.dbInitLogLevel)
         }
     }
 
     override fun makeTransactor(opData: ExtOpData): Transactor {
         return errorHandler.handleError({ "Operation '${opData.opName}' failed" }) {
-            val op = rModule.operations[opData.opName]
-            if (op == null) {
-                throw UserMistake("Operation not found")
-            }
-            RellGTXOperation(this, op, errorHandler, opData)
+            val rOperation = getRoutine("Operation", rApp.operations, opData.opName)
+            RellGTXOperation(this, rOperation, errorHandler, opData)
         }
     }
 
-    override fun query(ctx: EContext, name: String, args: Gtv): Gtv {
+    override fun query(ctxt: EContext, name: String, args: Gtv): Gtv {
         return errorHandler.handleError({ "Query '$name' failed" }) {
-            query0(ctx, name, args)
+            query0(ctxt, name, args)
         }
     }
 
     private fun query0(ctx: EContext, name: String, args: Gtv): Gtv {
-        val rQuery = rModule.queries[name]
-        if (rQuery == null) {
-            throw UserMistake("Query not found")
-        }
+        val rQuery = getRoutine("Query", rApp.queries, name)
 
         val heightProvider = Rt_ConstantChainHeightProvider(Long.MAX_VALUE)
-        val modCtx = makeRtModuleContext(ctx, null, heightProvider)
-        val rtArgs = translateQueryArgs(modCtx, rQuery, args)
+        val appCtx = createAppContext(ctx, null, heightProvider)
+        val rtArgs = translateQueryArgs(appCtx, rQuery, args)
 
-        val rtResult = rQuery.callTopQuery(modCtx, rtArgs)
-        val gtvResult = rQuery.type.rtToGtv(rtResult, GTV_QUERY_PRETTY)
+        val rtResult = rQuery.callTopQuery(appCtx, rtArgs)
+
+        val type = rQuery.type()
+        val gtvResult = type.rtToGtv(rtResult, GTV_QUERY_PRETTY)
         return gtvResult
     }
 
-    private fun translateQueryArgs(modCtx: Rt_ModuleContext, rQuery: R_Query, gtvArgs: Gtv): List<Rt_Value> {
+    private fun <T> getRoutine(kind: String, map: Map<R_MountName, T>, name: String): T {
+        val mountName = R_MountName.ofOpt(name)
+        mountName ?: throw UserMistake("$kind mount name is invalid: '$name")
+
+        val r = map[mountName]
+        return r ?: throw UserMistake("$kind not found: '$name'")
+    }
+
+    private fun translateQueryArgs(appCtx: Rt_AppContext, rQuery: R_Query, gtvArgs: Gtv): List<Rt_Value> {
         gtvArgs is GtvDictionary
+        val params = rQuery.params()
 
         val argMap = gtvArgs.asDict().filterKeys { it != "type" }
         val actArgNames = argMap.keys
-        val expArgNames = rQuery.params.map { it.name }.toSet()
+        val expArgNames = params.map { it.name }.toSet()
         if (actArgNames != expArgNames) {
             throw UserMistake("Wrong arguments: $actArgNames instead of $expArgNames")
         }
 
         val gtvToRtCtx = GtvToRtContext(GTV_QUERY_PRETTY)
-        val args = rQuery.params.map { argMap.getValue(it.name) }
-        val rtArgs = convertArgs(gtvToRtCtx, rQuery.params, args)
-        gtvToRtCtx.finish(modCtx)
+        val args = params.map { argMap.getValue(it.name) }
+        val rtArgs = convertArgs(gtvToRtCtx, params, args)
+        gtvToRtCtx.finish(appCtx)
 
         return rtArgs
     }
 
-    fun makeRtModuleContext(
+    fun createAppContext(
             eCtx: EContext,
             opCtx: Rt_OpContext?,
             heightProvider: Rt_ChainHeightProvider
-    ): Rt_ModuleContext {
+    ): Rt_AppContext {
         val sqlExec = DefaultSqlExecutor(eCtx.conn, config.sqlLogging)
         val sqlMapping = Rt_ChainSqlMapping(eCtx.chainID)
 
@@ -257,8 +270,8 @@ private class RellPostchainModule(
         )
 
         val chainDeps = chainDeps.mapValues { (_, rid) -> Rt_ChainDependency(rid) }
-        val sqlCtx = Rt_SqlContext.create(rModule, sqlMapping, chainDeps, sqlExec, heightProvider)
-        return Rt_ModuleContext(globalCtx, rModule, sqlCtx)
+        val sqlCtx = Rt_SqlContext.create(rApp, sqlMapping, chainDeps, sqlExec, heightProvider)
+        return Rt_AppContext(globalCtx, sqlCtx, rApp)
     }
 }
 
@@ -269,8 +282,8 @@ class RellPostchainModuleFactory(
         private val wrapRtErrors: Boolean = true,
         private val forceTypeCheck: Boolean = false
 ) : GTXModuleFactory {
-    override fun makeModule(data: Gtv, blockchainRID: ByteArray): GTXModule {
-        val gtxNode = data.asDict().getValue("gtx").asDict()
+    override fun makeModule(config: Gtv, blockchainRID: ByteArray): GTXModule {
+        val gtxNode = config.asDict().getValue("gtx").asDict()
         val rellNode = gtxNode.getValue("rell").asDict()
 
         val moduleName = rellNode["moduleName"]?.asString() ?: ""
@@ -281,11 +294,12 @@ class RellPostchainModuleFactory(
         return errorHandler.handleError({ "Module initialization failed" }) {
             val copyOutput = rellNode["copyOutputToCombinedPrinter"]?.asBoolean() ?: true
 
-            val (sourceCodes, mainFilePath) = getModuleCode(rellNode)
-            val module = compileModule(sourceCodes, mainFilePath, errorHandler, copyOutput)
+            val sourceCodes = getSourceCodes(rellNode)
+            val modules = getModuleNames(rellNode)
+            val app = compileApp(sourceCodes, modules, errorHandler, copyOutput)
 
-            val chainCtx = createChainContext(data, rellNode, module, blockchainRID)
-            val chainDeps = getGtxChainDependencies(data)
+            val chainCtx = createChainContext(config, rellNode, app, blockchainRID)
+            val chainDeps = getGtxChainDependencies(config)
 
             val modLogPrinter = getModulePrinter(logPrinter, Rt_TimestampPrinter(combinedPrinter), copyOutput)
             val modStdoutPrinter = getModulePrinter(stdoutPrinter, combinedPrinter, copyOutput)
@@ -294,21 +308,21 @@ class RellPostchainModuleFactory(
             val typeCheck = forceTypeCheck || (rellNode["typeCheck"]?.asBoolean() ?: false)
             val dbInitLogLevel = rellNode["dbInitLogLevel"]?.asInteger()?.toInt() ?: SqlInit.LOG_STEP_COMPLEX
 
-            val config = RellModuleConfig(
+            val moduleConfig = RellModuleConfig(
                     sqlLogging = sqlLogging,
                     typeCheck = typeCheck,
                     dbInitLogLevel = dbInitLogLevel
             )
 
             RellPostchainModule(
-                    module,
+                    app,
                     moduleName,
                     chainCtx,
                     chainDeps,
                     logPrinter = modLogPrinter,
                     stdoutPrinter = modStdoutPrinter,
                     errorHandler = errorHandler,
-                    config = config
+                    config = moduleConfig
             )
         }
     }
@@ -332,19 +346,23 @@ class RellPostchainModuleFactory(
         }
     }
 
-    private fun compileModule(
+    private fun compileApp(
             sourceCodes: Map<C_SourcePath, C_SourceFile>,
-            mainFilePath: C_SourcePath,
+            modules: List<R_ModuleName>,
             errorHandler: ErrorHandler,
             copyOutput: Boolean
-    ): R_Module {
+    ): R_App {
         val sourceDir = C_MapSourceDir(sourceCodes)
-        val cResult = C_Compiler.compile(sourceDir, mainFilePath)
-        val module = processCompilationResult(cResult, errorHandler, copyOutput)
-        return module
+        val cResult = C_Compiler.compile(sourceDir, modules)
+        val app = processCompilationResult(cResult, errorHandler, copyOutput)
+        return app
     }
 
-    private fun processCompilationResult(cResult: C_CompilationResult, errorHandler: ErrorHandler, copyOutput: Boolean): R_Module {
+    private fun processCompilationResult(
+            cResult: C_CompilationResult,
+            errorHandler: ErrorHandler,
+            copyOutput: Boolean
+    ): R_App {
         for (message in cResult.messages) {
             val str = message.toString()
 
@@ -362,26 +380,44 @@ class RellPostchainModuleFactory(
             }
         }
 
-        if (cResult.module == null) {
-            val cError = cResult.error
-            val err = if (cError != null && !wrapCtErrors) {
-                cError
-            } else {
-                UserMistake(cError?.message ?: "Compilation error")
-            }
+        val errors = cResult.errors
 
-            if (copyOutput) {
-                errorHandler.printer.print("Compilation failed")
-            }
-
-            errorHandler.ignoreError()
-            throw err
+        val rApp = cResult.app
+        if (rApp != null && rApp.valid && errors.isEmpty()) {
+            return rApp
         }
 
-        return cResult.module!!
+        if (copyOutput) {
+            errorHandler.printer.print("Compilation failed")
+        }
+
+        errorHandler.ignoreError()
+
+        val err = if (wrapCtErrors) {
+            val error = if (errors.isEmpty()) null else errors[0]
+            UserMistake(error?.text ?: "Compilation error")
+        } else if (errors.isNotEmpty()) {
+            val error = errors[0]
+            C_Error(error.pos, error.code, error.text)
+        } else {
+            IllegalStateException("Compilation error")
+        }
+
+        throw err
     }
 
-    private fun getModuleCode(rellNode: Map<String, Gtv>): Pair<Map<C_SourcePath, C_SourceFile>, C_SourcePath> {
+    private fun getModuleNames(rellNode: Map<String, Gtv>): List<R_ModuleName> {
+        val modulesNode = rellNode["modules"]
+
+        val names = (modulesNode?.asArray() ?: arrayOf()).map {
+            val s = it.asString()
+            R_ModuleName.ofOpt(s) ?: throw UserMistake("Invalid module name: '$s'")
+        }
+
+        return if (names.isNotEmpty()) names else listOf(R_ModuleName.EMPTY)
+    }
+
+    private fun getSourceCodes(rellNode: Map<String, Gtv>): Map<C_SourcePath, C_SourceFile> {
         val filesNode = rellNode[CONFIG_RELL_FILES]
         val sourcesNode = rellNode[CONFIG_RELL_SOURCES]
 
@@ -397,16 +433,10 @@ class RellPostchainModuleFactory(
             filesNode!!.asDict().mapValues { (_, v) -> CommonUtils.readFileContent(v.asString()) }
         }
 
-        val sourcePathsToCodes = sourceCodes
+        return sourceCodes
                 .mapKeys { (k, _) -> parseSourcePath(k) }
                 .mapValues { (k, v) -> C_TextSourceFile(k, v) }
-
-        val mainFilePath = parseSourcePath(rellNode.getValue("mainFile").asString())
-        if (mainFilePath !in sourcePathsToCodes) {
-            throw UserMistake("File '$mainFilePath' not found in sources")
-        }
-
-        return Pair(sourcePathsToCodes, mainFilePath)
+                .toImmMap()
     }
 
     private fun parseSourcePath(s: String): C_SourcePath {
@@ -418,21 +448,30 @@ class RellPostchainModuleFactory(
     private fun createChainContext(
             rawConfig: Gtv,
             rellNode: Map<String, Gtv>,
-            rModule: R_Module,
+            rApp: R_App,
             blockchainRid: ByteArray
     ): Rt_ChainContext {
-        val argsRec = rModule.moduleArgsRecord
-        val gtvArgs = rellNode["moduleArgs"]
+        val gtvArgsDict = rellNode["moduleArgs"]?.asDict() ?: mapOf()
 
-        val args = if (argsRec == null) null else {
-            if (gtvArgs == null) {
-                throw UserMistake("No moduleArgs in blockchain configuration, but type ${argsRec} defined in the code")
+        val moduleArgs = mutableMapOf<R_ModuleName, Rt_Value>()
+
+        for (rModule in rApp.modules) {
+            val argsStruct = rModule.moduleArgs
+
+            if (argsStruct != null) {
+                val gtvArgs = gtvArgsDict[rModule.name.str()]
+                if (gtvArgs == null) {
+                    throw UserMistake("No moduleArgs in blockchain configuration for module '${rModule.name}', " +
+                            "but type ${argsStruct.moduleLevelName} defined in the code")
+                }
+
+                val convCtx = GtvToRtContext(true)
+                val rtArgs = argsStruct.type.gtvToRt(convCtx, gtvArgs)
+                moduleArgs[rModule.name] = rtArgs
             }
-            val convCtx = GtvToRtContext(true)
-            argsRec.gtvToRt(convCtx, gtvArgs)
         }
 
-        return Rt_ChainContext(rawConfig, args, blockchainRid)
+        return Rt_ChainContext(rawConfig, moduleArgs, blockchainRid)
     }
 
     private fun getGtxChainDependencies(data: Gtv): Map<String, ByteArray> {

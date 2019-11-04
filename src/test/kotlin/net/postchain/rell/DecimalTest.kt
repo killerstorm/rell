@@ -47,8 +47,8 @@ class DecimalTest: BaseRellTest(false) {
 
     @Test fun testLiteralMax() {
         chk("9223372036854775807", "int[9223372036854775807]")
-        chk("9223372036854775808", "ct_err:lex:int:9223372036854775808")
-        chk("9223372036854775809", "ct_err:lex:int:9223372036854775809")
+        chk("9223372036854775808", "ct_err:lex:int:range:9223372036854775808")
+        chk("9223372036854775809", "ct_err:lex:int:range:9223372036854775809")
         chkLit("9223372036854775808.0", "dec[9223372036854775808]")
         chkLit("9223372036854775809.0", "dec[9223372036854775809]")
 
@@ -351,8 +351,8 @@ class DecimalTest: BaseRellTest(false) {
 
         chk("f(123, 456)", "dec[579]")
         chk("f(decimal(123), 456)", "dec[579]")
-        chk("f(123, decimal(456))", "ct_err:expr_call_argtype:f:1:integer:decimal")
-        chk("f(decimal(123), decimal(456))", "ct_err:expr_call_argtype:f:1:integer:decimal")
+        chk("f(123, decimal(456))", "ct_err:expr_call_argtype:f:1:y:integer:decimal")
+        chk("f(decimal(123), decimal(456))", "ct_err:expr_call_argtype:f:1:y:integer:decimal")
 
         chk("g(123, 456)", "dec[56088]")
         chk("g(decimal(123), 456)", "dec[56088]")
@@ -360,18 +360,18 @@ class DecimalTest: BaseRellTest(false) {
         chk("g(decimal(123), decimal(456))", "dec[56088]")
     }
 
-    @Test fun testPromotionRecord() {
-        def("record rec { mutable x: decimal = 123; mutable y: decimal? = _nullable_int(789); }")
+    @Test fun testPromotionStruct() {
+        def("struct rec { mutable x: decimal = 123; mutable y: decimal? = _nullable_int(789); }")
 
         chkEx("{ val r = rec(); return r.x; }", "dec[123]")
         chkEx("{ val r = rec(x = decimal(456)); return r.x; }", "dec[456]")
         //chkEx("{ val r = rec(x = 456); return r.x; }", "dec[456]")
-        chkEx("{ val r = rec(x = null); return r.x; }", "ct_err:attr_bad_type:0:x:decimal:null")
-        chkEx("{ val r = rec(x = _nullable_int(456)); return r.x; }", "ct_err:attr_bad_type:0:x:decimal:integer?")
+        chkEx("{ val r = rec(x = null); return 0; }", "ct_err:attr_bad_type:0:x:decimal:null")
+        chkEx("{ val r = rec(x = _nullable_int(456)); return 0; }", "ct_err:attr_bad_type:0:x:decimal:integer?")
         chkEx("{ val r = rec(); r.x = decimal(456); return r.x; }", "dec[456]")
         chkEx("{ val r = rec(); r.x = 456; return r.x; }", "dec[456]")
-        chkEx("{ val r = rec(); r.x = null; return r.x; }", "ct_err:stmt_assign_type:decimal:null")
-        chkEx("{ val r = rec(); r.x = _nullable_int(456); return r.x; }", "ct_err:stmt_assign_type:decimal:integer?")
+        chkEx("{ val r = rec(); r.x = null; return 0; }", "ct_err:stmt_assign_type:decimal:null")
+        chkEx("{ val r = rec(); r.x = _nullable_int(456); return 0; }", "ct_err:stmt_assign_type:decimal:integer?")
         chkEx("{ val r = rec(); r.x += 456; return r.x; }", "dec[579]")
         chkEx("{ val r = rec(); r.x *= 456; return r.x; }", "dec[56088]")
 
@@ -390,7 +390,7 @@ class DecimalTest: BaseRellTest(false) {
 
     @Test fun testPromotionCreateUpdate() {
         tstCtx.useSql = true
-        def("class user { name; mutable x: decimal = 123; }")
+        def("entity user { name; mutable x: decimal = 123; }")
         insert("c0.user", "name,x", "333,'Bob',789")
 
         chk("(user @ { 'Bob' }).x", "dec[789]")

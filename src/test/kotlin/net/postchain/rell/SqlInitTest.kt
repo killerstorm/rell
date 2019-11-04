@@ -11,7 +11,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
 
     @Test fun testNoMeta() {
         chkTables()
-        chkInit("class user { name; score: integer; }")
+        chkInit("entity user { name; score: integer; }")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer")
         chkColumns("c0.user(name:text,rowid:int8,score:int8)")
     }
@@ -27,7 +27,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         chkTables("c0.sys.classes")
     }
 
-    @Test fun testBrokenMetaNoClassTable() {
+    @Test fun testBrokenMetaNoEntityTable() {
         chkInit("")
         chkTables("c0.sys.attributes", "c0.sys.classes")
 
@@ -38,7 +38,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         chkTables("c0.sys.attributes")
     }
 
-    @Test fun testBrokenMetaBadClassTable() {
+    @Test fun testBrokenMetaBadEntityTable() {
         val table = "c0.sys.classes"
         val id = """"id" INT NOT NULL PRIMARY KEY"""
         val name = """"name" TEXT NOT NULL UNIQUE"""
@@ -99,54 +99,54 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         chkInit("", expected)
     }
 
-    @Test fun testBrokenMetaAttrNoClass() {
-        chkInit("class user { name; }")
+    @Test fun testBrokenMetaAttrNoEntity() {
+        chkInit("entity user { name; }")
         chkAll("0,user,class,false", "0,name,sys:text")
 
         execSql("""DELETE FROM "c0.sys.classes";""")
         chkAll("", "0,name,sys:text")
 
-        chkInit("class user { name; }", "rt_err:meta:attrnoclass:0")
+        chkInit("entity user { name; }", "rt_err:meta:attr_no_entity:0")
         chkAll("", "0,name,sys:text")
     }
 
-    @Test fun testBrokenMetaBadClassType() {
-        chkInit("class user { name; }")
+    @Test fun testBrokenMetaBadEntityType() {
+        chkInit("entity user { name; }")
         chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
 
         execSql("""UPDATE "c0.sys.classes" SET "type" = 'foo';""")
         chkAll("0,user,foo,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
 
-        chkInit("class user { name; }", "rt_err:meta:cls:bad_type:0:user:foo")
+        chkInit("entity user { name; }", "rt_err:meta:entity:bad_type:0:user:foo")
         chkAll("0,user,foo,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
     }
 
-    @Test fun testBrokenMetaClassNoTable() {
-        chkInit("class user { name; }")
+    @Test fun testBrokenMetaEntityNoTable() {
+        chkInit("entity user { name; }")
         chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
 
         execSql("""DROP TABLE "c0.user";""")
         chkAll("0,user,class,false", "0,name,sys:text", "")
 
-        chkInit("class user { name; }", "rt_err:meta:no_data_tables:c0.user")
+        chkInit("entity user { name; }", "rt_err:meta:no_data_tables:c0.user")
         chkAll("0,user,class,false", "0,name,sys:text", "")
 
         chkInit("", "rt_err:meta:no_data_tables:c0.user")
         chkAll("0,user,class,false", "0,name,sys:text", "")
     }
 
-    @Test fun testTableNoMetaClass() {
-        chkInit("class user { name; }")
+    @Test fun testTableNoMetaEntity() {
+        chkInit("entity user { name; }")
         chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
 
         execSql("""DELETE FROM "c0.sys.attributes";""")
         execSql("""DELETE FROM "c0.sys.classes";""")
         chkAll("", "", "c0.user(name:text,rowid:int8)")
 
-        chkInit("class user { name; }", "rt_err:meta:no_meta_classes:c0.user")
+        chkInit("entity user { name; }", "rt_err:meta:no_meta_entities:c0.user")
         chkAll("", "", "c0.user(name:text,rowid:int8)")
 
-        chkInit("", "rt_err:meta:no_meta_classes:c0.user")
+        chkInit("", "rt_err:meta:no_meta_entities:c0.user")
         chkAll("", "", "c0.user(name:text,rowid:int8)")
     }
 
@@ -156,24 +156,24 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         execSql("""CREATE TABLE "c0.user" ("rowid" BIGINT NOT NULL PRIMARY KEY, "name" TEXT NOT NULL);""")
         chkAll("NO_TABLE", "NO_TABLE", "c0.user(name:text,rowid:int8)")
 
-        chkInit("class user { name; }", "rt_err:meta:no_meta_classes:c0.user")
+        chkInit("entity user { name; }", "rt_err:meta:no_meta_entities:c0.user")
         chkAll("NO_TABLE", "NO_TABLE", "c0.user(name:text,rowid:int8)")
 
-        chkInit("", "rt_err:meta:no_meta_classes:c0.user")
+        chkInit("", "rt_err:meta:no_meta_entities:c0.user")
         chkAll("NO_TABLE", "NO_TABLE", "c0.user(name:text,rowid:int8)")
     }
 
     @Test fun testMetaAttrNoColumn() {
-        chkInit("class user { name; score: integer; }")
+        chkInit("entity user { name; score: integer; }")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer", "c0.user(name:text,rowid:int8,score:int8)")
 
         execSql("""ALTER TABLE "c0.user" DROP COLUMN "score";""")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer", "c0.user(name:text,rowid:int8)")
 
-        chkInit("class user { name; score: integer; }", "rt_err:meta:no_data_columns:c0.user:score")
+        chkInit("entity user { name; score: integer; }", "rt_err:meta:no_data_columns:c0.user:score")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer", "c0.user(name:text,rowid:int8)")
 
-        chkInit("class user { name; }", "rt_err:meta:no_data_columns:c0.user:score")
+        chkInit("entity user { name; }", "rt_err:meta:no_data_columns:c0.user:score")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer", "c0.user(name:text,rowid:int8)")
 
         chkInit("", "rt_err:meta:no_data_columns:c0.user:score")
@@ -181,16 +181,16 @@ class SqlInitTest: BaseContextTest(useSql = true) {
     }
 
     @Test fun testColumnNoMetaAttr() {
-        chkInit("class user { name; score: integer; }")
+        chkInit("entity user { name; score: integer; }")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer", "c0.user(name:text,rowid:int8,score:int8)")
 
         execSql("""DELETE FROM "c0.sys.attributes" WHERE name = 'score';""")
         chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8,score:int8)")
 
-        chkInit("class user { name; score: integer; }", "rt_err:meta:no_meta_attrs:c0.user:score")
+        chkInit("entity user { name; score: integer; }", "rt_err:meta:no_meta_attrs:c0.user:score")
         chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8,score:int8)")
 
-        chkInit("class user { name; }", "rt_err:meta:no_meta_attrs:c0.user:score")
+        chkInit("entity user { name; }", "rt_err:meta:no_meta_attrs:c0.user:score")
         chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8,score:int8)")
 
         chkInit("", "rt_err:meta:no_meta_attrs:c0.user:score")
@@ -198,86 +198,86 @@ class SqlInitTest: BaseContextTest(useSql = true) {
     }
 
     @Test fun testNoRowid() {
-        chkInit("class user { name; score: integer; }")
+        chkInit("entity user { name; score: integer; }")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer", "c0.user(name:text,rowid:int8,score:int8)")
 
         execSql("""ALTER TABLE "c0.user" DROP COLUMN "rowid";""")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer", "c0.user(name:text,score:int8)")
 
-        chkInit("class user { name; score: integer; }", "rt_err:meta:no_data_columns:c0.user:rowid")
+        chkInit("entity user { name; score: integer; }", "rt_err:meta:no_data_columns:c0.user:rowid")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer", "c0.user(name:text,score:int8)")
 
         chkInit("", "rt_err:meta:no_data_columns:c0.user:rowid")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer", "c0.user(name:text,score:int8)")
     }
 
-    @Test fun testMetaClassNoCode() {
-        chkInit("class user { name; score: integer; }")
+    @Test fun testMetaEntityNoCode() {
+        chkInit("entity user { name; score: integer; }")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer", "c0.user(name:text,rowid:int8,score:int8)")
 
-        chkInit("", "OK", "dbinit:no_code:CLASS:user")
+        chkInit("", "OK", "dbinit:no_code:ENTITY:user")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer", "c0.user(name:text,rowid:int8,score:int8)")
     }
 
     @Test fun testMetaAttrNoCode() {
-        chkInit("class user { name; score: integer; }")
+        chkInit("entity user { name; score: integer; }")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer", "c0.user(name:text,rowid:int8,score:int8)")
 
         insert("c0.user", "name,score", "100,'Bob',123")
         chkData("c0.user(100,Bob,123)")
 
-        chkInit("class user { name; }", "OK", "dbinit:no_code:attrs:user:score")
+        chkInit("entity user { name; }", "OK", "dbinit:no_code:attrs:user:score")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer", "c0.user(name:text,rowid:int8,score:int8)")
         chkData("c0.user(100,Bob,123)")
     }
 
-    @Test fun testMetaClassCodeDiff() {
-        chkInit("class user(log) { name; }")
+    @Test fun testMetaEntityCodeDiff() {
+        chkInit("@log entity user { name; }")
         chkAll("0,user,class,true", "0,name,sys:text 0,transaction,class:0:transaction")
         chkColumns("c0.user(name:text,rowid:int8,transaction:int8)")
 
-        chkInit("class user { name; }", "rt_err:meta:cls:diff_log:true:false")
+        chkInit("entity user { name; }", "rt_err:meta:cls:diff_log:user:true:false")
         chkAll("0,user,class,true", "0,name,sys:text 0,transaction,class:0:transaction")
         chkColumns("c0.user(name:text,rowid:int8,transaction:int8)")
     }
 
-    @Test fun testMetaClassCodeDiff2() {
-        chkInit("class user { name; }")
+    @Test fun testMetaEntityCodeDiff2() {
+        chkInit("entity user { name; }")
         chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
 
-        chkInit("class user(log) { name; }", "rt_err:meta:cls:diff_log:false:true")
+        chkInit("@log entity user { name; }", "rt_err:meta:cls:diff_log:user:false:true")
         chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
     }
 
     @Test fun testMetaAttrCodeDiff() {
-        chkInit("class user { name; score: integer; }")
+        chkInit("entity user { name; score: integer; }")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer", "c0.user(name:text,rowid:int8,score:int8)")
 
-        chkInit("class user { name; score: text; }", "rt_err:meta:attr:diff_type:user:score:sys:integer:sys:text")
+        chkInit("entity user { name; score: text; }", "rt_err:meta:attr:diff_type:user:score:sys:integer:sys:text")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer", "c0.user(name:text,rowid:int8,score:int8)")
     }
 
-    @Test fun testAddClass() {
-        chkInit("class company { address: text; }")
+    @Test fun testAddEntity() {
+        chkInit("entity company { address: text; }")
         chkAll("0,company,class,false", "0,address,sys:text", "c0.company(address:text,rowid:int8)")
 
         insert("c0.company", "address", "0,'Stockholm'")
         chkData("c0.company(0,Stockholm)")
 
-        chkInit("class company { address: text; } class user { name; }")
+        chkInit("entity company { address: text; } entity user { name; }")
         chkAll("0,company,class,false 1,user,class,false", "0,address,sys:text 1,name,sys:text")
         chkColumns("c0.company(address:text,rowid:int8)", "c0.user(name:text,rowid:int8)")
         chkData("c0.company(0,Stockholm)")
     }
 
     @Test fun testAddObject() {
-        chkInit("class user { name; score: integer; }")
+        chkInit("entity user { name; score: integer; }")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer", "c0.user(name:text,rowid:int8,score:int8)")
 
         insert("c0.user", "name,score", "0,'Bob',123")
         chkData("c0.user(0,Bob,123)")
 
-        chkInit("class user { name; score: integer; } object state { mutable value: integer = 456; }")
+        chkInit("entity user { name; score: integer; } object state { mutable value: integer = 456; }")
         chkAll("0,user,class,false 1,state,object,false", "0,name,sys:text 0,score,sys:integer 1,value,sys:integer")
         chkColumns("c0.state(rowid:int8,value:int8)", "c0.user(name:text,rowid:int8,score:int8)")
         chkData("c0.state(0,456)", "c0.user(0,Bob,123)")
@@ -305,7 +305,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         chkData("c0.bar(0,579)", "c0.foo(0,123)")
     }
 
-    @Test fun testAddObjectClass() {
+    @Test fun testAddObjectEntity() {
         chkInit("object state { mutable value: integer = 123; }")
         chkAll("0,state,object,false", "0,value,sys:integer", "c0.state(rowid:int8,value:int8)")
         chkData("c0.state(0,123)")
@@ -313,74 +313,74 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         execSql("""UPDATE "c0.state" SET value = 456;""")
         chkData("c0.state(0,456)")
 
-        chkInit("object state { mutable value: integer = 123; } class user { name; score: integer; }")
+        chkInit("object state { mutable value: integer = 123; } entity user { name; score: integer; }")
         chkAll("0,state,object,false 1,user,class,false", "0,value,sys:integer 1,name,sys:text 1,score,sys:integer")
         chkColumns("c0.state(rowid:int8,value:int8)", "c0.user(name:text,rowid:int8,score:int8)")
         chkData("c0.state(0,456)")
     }
 
-    @Test fun testMetaClassCodeObject() {
-        chkInit("class user { name; score: integer; }")
+    @Test fun testMetaEntityCodeObject() {
+        chkInit("entity user { name; score: integer; }")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer", "c0.user(name:text,rowid:int8,score:int8)")
 
-        chkInit("object user { mutable name = 'Bob'; mutable score: integer = 123; }", "rt_err:meta:cls:diff_type:CLASS:OBJECT")
+        chkInit("object user { mutable name = 'Bob'; mutable score: integer = 123; }", "rt_err:meta:cls:diff_type:user:ENTITY:OBJECT")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer", "c0.user(name:text,rowid:int8,score:int8)")
     }
 
-    @Test fun testMetaObjectCodeClass() {
+    @Test fun testMetaObjectCodeEntity() {
         chkInit("object state { mutable value: integer = 123; }")
         chkAll("0,state,object,false", "0,value,sys:integer", "c0.state(rowid:int8,value:int8)")
         chkData("c0.state(0,123)")
 
-        chkInit("class state { value: integer; }", "rt_err:meta:cls:diff_type:OBJECT:CLASS")
+        chkInit("entity state { value: integer; }", "rt_err:meta:cls:diff_type:state:OBJECT:ENTITY")
         chkAll("0,state,object,false", "0,value,sys:integer", "c0.state(rowid:int8,value:int8)")
         chkData("c0.state(0,123)")
     }
 
-    @Test fun testAddClassAttrSimpleType() {
-        chkInit("class user { name; }")
+    @Test fun testAddEntityAttrSimpleType() {
+        chkInit("entity user { name; }")
         chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
 
         insert("c0.user", "name", "100,'Bob'")
         insert("c0.user", "name", "101,'Alice'")
         chkData("c0.user(100,Bob)", "c0.user(101,Alice)")
 
-        chkInit("class user { name; score: integer; }", "rt_err:meta:attr:new_no_def_value:user:score")
+        chkInit("entity user { name; score: integer; }", "rt_err:meta:attr:new_no_def_value:user:score")
         chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
         chkData("c0.user(100,Bob)", "c0.user(101,Alice)")
 
-        chkInit("class user { name; score: integer = -123; }")
+        chkInit("entity user { name; score: integer = -123; }")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer", "c0.user(name:text,rowid:int8,score:int8)")
         chkData("c0.user(100,Bob,-123)", "c0.user(101,Alice,-123)")
     }
 
-    @Test fun testAddClassAttrDefValue() {
-        chkInit("class user { name; }")
+    @Test fun testAddEntityAttrDefValue() {
+        chkInit("entity user { name; }")
         chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
 
         insert("c0.user", "name", "100,'Bob'")
         insert("c0.user", "name", "101,'Alice'")
         chkData("c0.user(100,Bob)", "c0.user(101,Alice)")
 
-        chkInit("class user { name; score: integer = 123; }")
+        chkInit("entity user { name; score: integer = 123; }")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer", "c0.user(name:text,rowid:int8,score:int8)")
         chkData("c0.user(100,Bob,123)", "c0.user(101,Alice,123)")
     }
 
-    @Test fun testAddClassAttrDefValue2() {
-        chkInit("class user { name; }")
+    @Test fun testAddEntityAttrDefValue2() {
+        chkInit("entity user { name; }")
         chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
 
         insert("c0.user", "name", "100,'Bob'")
         insert("c0.user", "name", "101,'Alice'")
         chkData("c0.user(100,Bob)", "c0.user(101,Alice)")
 
-        chkInit("class company { name; } class user { name; }")
+        chkInit("entity company { name; } entity user { name; }")
         chkAll("0,user,class,false 1,company,class,false", "0,name,sys:text 1,name,sys:text")
         chkColumns("c0.company(name:text,rowid:int8)", "c0.user(name:text,rowid:int8)")
         chkData("c0.user(100,Bob)", "c0.user(101,Alice)")
 
-        chkInit("class company { name; } class user { name; company: company = company @ { 'Microsoft' }; }",
+        chkInit("entity company { name; } entity user { name; company: company = company @ { 'Microsoft' }; }",
                 "rt_err:at:wrong_count:0")
         chkAll("0,user,class,false 1,company,class,false", "0,name,sys:text 1,name,sys:text")
         chkColumns("c0.company(name:text,rowid:int8)", "c0.user(name:text,rowid:int8)")
@@ -390,14 +390,14 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         insert("c0.company", "name", "201,'Microsoft'")
         chkData("c0.company(200,Apple)", "c0.company(201,Microsoft)", "c0.user(100,Bob)", "c0.user(101,Alice)")
 
-        chkInit("class company { name; } class user { name; company: company = company @ { 'Microsoft' }; }")
+        chkInit("entity company { name; } entity user { name; company: company = company @ { 'Microsoft' }; }")
         chkAll("0,user,class,false 1,company,class,false", "0,company,class:0:company 0,name,sys:text 1,name,sys:text")
         chkColumns("c0.company(name:text,rowid:int8)", "c0.user(company:int8,name:text,rowid:int8)")
         chkData("c0.company(200,Apple)", "c0.company(201,Microsoft)", "c0.user(100,201,Bob)", "c0.user(101,201,Alice)")
     }
 
-    @Test fun testAddClassAttrNoDefValue() {
-        chkInit("class company { name; } class user { name; }")
+    @Test fun testAddEntityAttrNoDefValue() {
+        chkInit("entity company { name; } entity user { name; }")
         chkAll("0,company,class,false 1,user,class,false", "0,name,sys:text 1,name,sys:text")
         chkColumns("c0.company(name:text,rowid:int8)", "c0.user(name:text,rowid:int8)")
 
@@ -405,39 +405,39 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         insert("c0.user", "name", "101,'Alice'")
         chkData("c0.user(100,Bob)", "c0.user(101,Alice)")
 
-        chkInit("class company { name; } class user { name; company; }", "rt_err:meta:attr:new_no_def_value:user:company")
+        chkInit("entity company { name; } entity user { name; company; }", "rt_err:meta:attr:new_no_def_value:user:company")
         chkAll("0,company,class,false 1,user,class,false", "0,name,sys:text 1,name,sys:text")
         chkColumns("c0.company(name:text,rowid:int8)", "c0.user(name:text,rowid:int8)")
         chkData("c0.user(100,Bob)", "c0.user(101,Alice)")
     }
 
-    @Test fun testAddClassAttrNoDefValueNoRecords() {
-        chkInit("class user { name; }")
+    @Test fun testAddEntityAttrNoDefValueNoRecords() {
+        chkInit("entity user { name; }")
         chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
         chkData()
 
-        chkInit("class company { name; } class user { name; company; }")
+        chkInit("entity company { name; } entity user { name; company; }")
         chkAll("0,user,class,false 1,company,class,false", "0,company,class:0:company 0,name,sys:text 1,name,sys:text")
         chkColumns("c0.company(name:text,rowid:int8)", "c0.user(company:int8,name:text,rowid:int8)")
         chkData()
     }
 
-    @Test fun testAddClassAttrKey() {
-        chkInit("class user { name; }")
+    @Test fun testAddEntityAttrKey() {
+        chkInit("entity user { name; }")
         chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
         chkData()
 
-        chkInit("class user { name; key id: integer; }", "rt_err:dbinit:index_diff:user:code:key:id,meta:attr:new_key:user:id")
+        chkInit("entity user { name; key id: integer; }", "rt_err:dbinit:index_diff:user:code:key:id,meta:attr:new_key:user:id")
         chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
         chkData()
     }
 
-    @Test fun testAddClassAttrIndex() {
-        chkInit("class user { name; }")
+    @Test fun testAddEntityAttrIndex() {
+        chkInit("entity user { name; }")
         chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
         chkData()
 
-        chkInit("class user { name; index id: integer; }", "rt_err:dbinit:index_diff:user:code:index:id,meta:attr:new_index:user:id")
+        chkInit("entity user { name; index id: integer; }", "rt_err:dbinit:index_diff:user:code:index:id,meta:attr:new_index:user:id")
         chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
         chkData()
     }
@@ -464,29 +464,29 @@ class SqlInitTest: BaseContextTest(useSql = true) {
     }
 
     @Test fun testAddMoreAttrs() {
-        chkInit("class user { name; }")
+        chkInit("entity user { name; }")
         chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
 
         insert("c0.user", "name", "100,'Bob'")
         chkData("c0.user(100,Bob)")
 
-        chkInit("class user { name; score: integer = 123; }")
+        chkInit("entity user { name; score: integer = 123; }")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer", "c0.user(name:text,rowid:int8,score:int8)")
         chkData("c0.user(100,Bob,123)")
 
-        chkInit("class user { name; score: integer = 123; u: integer = 456; }")
+        chkInit("entity user { name; score: integer = 123; u: integer = 456; }")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer 0,u,sys:integer")
         chkColumns("c0.user(name:text,rowid:int8,score:int8,u:int8)")
         chkData("c0.user(100,Bob,123,456)")
 
-        chkInit("class user { name; score: integer = 123; u: integer = 456; v: integer = 789; }")
+        chkInit("entity user { name; score: integer = 123; u: integer = 456; v: integer = 789; }")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer 0,u,sys:integer 0,v,sys:integer")
         chkColumns("c0.user(name:text,rowid:int8,score:int8,u:int8,v:int8)")
         chkData("c0.user(100,Bob,123,456,789)")
     }
 
     @Test fun testAddColumnToReferencedTable() {
-        chkInit("class company { name; } class user { name; company; }")
+        chkInit("entity company { name; } entity user { name; company; }")
         chkAll(
                 "0,company,class,false 1,user,class,false",
                 "0,name,sys:text 1,company,class:0:company 1,name,sys:text",
@@ -497,7 +497,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         insert("c0.user", "name,company", "200,'Steve',100")
         chkData("c0.company(100,Apple)", "c0.user(200,100,Steve)")
 
-        chkInit("class company { name; address: text = '?'; } class user { name; company; }")
+        chkInit("entity company { name; address: text = '?'; } entity user { name; company; }")
         chkAll(
                 "0,company,class,false 1,user,class,false",
                 "0,address,sys:text 0,name,sys:text 1,company,class:0:company 1,name,sys:text",
@@ -507,7 +507,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
     }
 
     @Test fun testAddColumnReference() {
-        chkInit("class company { name; } class user { name; }")
+        chkInit("entity company { name; } entity user { name; }")
         chkAll(
                 "0,company,class,false 1,user,class,false",
                 "0,name,sys:text 1,name,sys:text",
@@ -518,7 +518,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         insert("c0.user", "name", "200,'Steve'")
         chkData("c0.company(100,Apple)", "c0.user(200,Steve)")
 
-        chkInit("class company { name; } class user { name; company = company @ { 'Apple' }; }")
+        chkInit("entity company { name; } entity user { name; company = company @ { 'Apple' }; }")
         chkAll(
                 "0,company,class,false 1,user,class,false",
                 "0,name,sys:text 1,company,class:0:company 1,name,sys:text",
@@ -567,14 +567,14 @@ class SqlInitTest: BaseContextTest(useSql = true) {
     }
 
     private fun chkKeyIndex(attrs: String, extra: String, expected: String) {
-        chkInit("class user { $attrs $extra }", expected)
+        chkInit("entity user { $attrs $extra }", expected)
     }
 
     @Test fun testDropAll() {
         RellTestContext().use { ctx ->
             val t = RellCodeTester(ctx)
-            t.def("class company { name; }")
-            t.def("class user { name; company; }")
+            t.def("entity company { name; }")
+            t.def("entity user { name; company; }")
             t.insert("c0.company", "name", "100,'Apple'")
             t.insert("c0.user", "name,company", "200,'Steve',100")
             t.chkQuery("company @*{} ( .name )", "list<text>[text[Apple]]")
@@ -583,8 +583,8 @@ class SqlInitTest: BaseContextTest(useSql = true) {
 
         RellTestContext().use { ctx ->
             val t = RellCodeTester(ctx)
-            t.def("class company { name; boss: user; }")
-            t.def("class user { name; }")
+            t.def("entity company { name; boss: user; }")
+            t.def("entity user { name; }")
             t.chkQuery("company @*{} ( .name )", "list<text>[]")
             t.chkQuery("user @*{} ( .name )", "list<text>[]")
         }
@@ -599,11 +599,11 @@ class SqlInitTest: BaseContextTest(useSql = true) {
 
         var actualWarnings = ""
 
-        val actual = RellTestUtils.processModule(code) { module ->
-            val modCtx = tst.createModuleCtx(globalCtx, module.rModule)
+        val actual = RellTestUtils.processApp(code) { app ->
+            val appCtx = tst.createAppCtx(globalCtx, app.rApp)
             RellTestUtils.catchRtErr {
                 sqlExec.transaction {
-                    val warnings = SqlInit.init(modCtx, SqlInit.LOG_ALL)
+                    val warnings = SqlInit.init(appCtx, SqlInit.LOG_ALL)
                     actualWarnings = warnings.joinToString(",")
                 }
                 "OK"
@@ -616,14 +616,14 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         lastDefs = code
     }
 
-    private fun chkAll(metaCls: String, metaAttrs: String, cols: String? = null) {
+    private fun chkAll(metaEnts: String, metaAttrs: String, cols: String? = null) {
         fun split(s: String) = s.split(" ").filter { !it.isEmpty() }.toTypedArray()
-        chkMetaClasses(*split(metaCls))
+        chkMetaEntities(*split(metaEnts))
         chkMetaAttrs(*split(metaAttrs))
         if (cols != null) chkColumns(*split(cols))
     }
 
-    private fun chkMetaClasses(vararg expected: String) {
+    private fun chkMetaEntities(vararg expected: String) {
         val sql = """SELECT C.id, C.name, C.type, C.log FROM "c0.sys.classes" C ORDER BY C.id;"""
         chkDataSql("c0.sys.classes", sql, *expected)
     }

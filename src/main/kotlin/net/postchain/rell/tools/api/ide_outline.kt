@@ -1,12 +1,12 @@
-package net.postchain.rell.parser.ide
+package net.postchain.rell.tools.api
 
 import net.postchain.rell.parser.S_Name
 import net.postchain.rell.parser.S_Node
 
 enum class IdeOutlineNodeType {
-    CLASS,
+    ENTITY,
     OBJECT,
-    RECORD,
+    STRUCT,
     ATTRIBUTE,
     KEY_INDEX,
     ENUM,
@@ -14,7 +14,8 @@ enum class IdeOutlineNodeType {
     NAMESPACE,
     FUNCTION,
     OPERATION,
-    QUERY
+    QUERY,
+    IMPORT,
 }
 
 interface IdeOutlineTreeBuilder {

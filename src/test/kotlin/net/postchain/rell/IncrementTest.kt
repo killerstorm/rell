@@ -18,9 +18,9 @@ class IncrementTest: BaseRellTest(false) {
         chkEx("{ var x = 123; val y = --x; return (x, y); }", "(int[122],int[122])")
     }
 
-    @Test fun testOperandClass() {
+    @Test fun testOperandEntity() {
         tstCtx.useSql = true
-        def("class foo { mutable x: integer; y: integer; }")
+        def("entity foo { mutable x: integer; y: integer; }")
         insert("c0.foo", "x,y", "1,123,456")
 
         val init = "val f = foo@{}"
@@ -86,8 +86,8 @@ class IncrementTest: BaseRellTest(false) {
         chkEx("{ --foo.x; return 0; }", "ct_err:no_db_update")
     }
 
-    @Test fun testOperandRecord() {
-        def("record foo { mutable x: integer = 123; y: integer = 456; }")
+    @Test fun testOperandStruct() {
+        def("struct foo { mutable x: integer = 123; y: integer = 456; }")
 
         chkEx("{ val f = foo(); f.x++; return f; }", "foo[x=int[124],y=int[456]]")
         chkEx("{ val f = foo(); f.x--; return f; }", "foo[x=int[122],y=int[456]]")
@@ -148,7 +148,7 @@ class IncrementTest: BaseRellTest(false) {
     }
 
     @Test fun testOperandComplex() {
-        def("record rec { mutable x: integer; }")
+        def("struct rec { mutable x: integer; }")
         def("function f(r: rec): list<map<text,rec>> = [['X' : rec(-1)], ['A' : r]];")
 
         chkEx("{ val r = rec(123); f(r)[1]['A'].x++; return r; }", "rec[x=int[124]]")
@@ -170,7 +170,7 @@ class IncrementTest: BaseRellTest(false) {
     }
 
     @Test fun testSafeAccess() {
-        def("record r { mutable x: integer; }")
+        def("struct r { mutable x: integer; }")
         val init = "val r: r? = _nullable(r(123))"
 
         chkEx("{ $init; r.x++; return r; }", "ct_err:expr_mem_null:x")
@@ -204,9 +204,9 @@ class IncrementTest: BaseRellTest(false) {
         chkEx("{ val r: r? = null; return _type_of(--r?.x); }", "text[integer?]")
     }
 
-    @Test fun testSafeAccessClass() {
+    @Test fun testSafeAccessEntity() {
         tstCtx.useSql = true
-        def("class user { mutable x: integer; }")
+        def("entity user { mutable x: integer; }")
         insert("c0.user", "x", "1,123")
         val init = "val u: user? = user@?{}"
 
@@ -250,11 +250,11 @@ class IncrementTest: BaseRellTest(false) {
         chkEx("{ $init; val y = -x++; return (x, y); }", "(int[124],int[-123])")
         chkEx("{ $init; val y = -x--; return (x, y); }", "(int[122],int[-123])")
         chkEx("{ $init; val y = -++x; return (x, y); }", "(int[124],int[-124])")
-        chkEx("{ $init; val y = ---x; return (x, y); }", "ct_err:expr_bad_dst")
+        chkEx("{ $init; val y = ---x; return 0; }", "ct_err:expr_bad_dst")
 
         chkEx("{ $init; val y = +x++; return (x, y); }", "(int[124],int[123])")
         chkEx("{ $init; val y = +x--; return (x, y); }", "(int[122],int[123])")
-        chkEx("{ $init; val y = +++x; return (x, y); }", "ct_err:expr_bad_dst")
+        chkEx("{ $init; val y = +++x; return 0; }", "ct_err:expr_bad_dst")
         chkEx("{ $init; val y = +--x; return (x, y); }", "(int[122],int[122])")
 
         chkEx("{ $init; -x++; return x; }", "ct_err:syntax")
@@ -268,8 +268,8 @@ class IncrementTest: BaseRellTest(false) {
     }
 
     @Test fun testWrongType() {
-        def("class user { name; }")
-        def("record rec { mutable v: integer; }")
+        def("entity user { name; }")
+        def("struct rec { mutable v: integer; }")
         chkWrongType("boolean")
         chkWrongType("text")
         chkWrongType("byte_array")

@@ -116,7 +116,7 @@ class LibGtvTest: BaseRellTest(false) {
     }
     @Test fun testToFromGtvRowid() {
         tstCtx.useSql = true
-        def("class user { name; }")
+        def("entity user { name; }")
         insert("c0.user", "name", "0,'Bob'")
         insert("c0.user", "name", "123,'Alice'")
 
@@ -282,9 +282,9 @@ class LibGtvTest: BaseRellTest(false) {
     }
 
     @Test fun testToGtvTuple() {
-        def("record A { t: (x: integer, y: text); }")
-        def("record B { t: (x: integer, text); }")
-        def("record C { t: (s: (x: boolean, y: text), k: integer); }")
+        def("struct A { t: (x: integer, y: text); }")
+        def("struct B { t: (x: integer, text); }")
+        def("struct C { t: (s: (x: boolean, y: text), k: integer); }")
 
         chk("(123,).to_gtv()", "gtv[[123]]")
         chk("(123,'Hello').to_gtv()", """gtv[[123,"Hello"]]""")
@@ -321,9 +321,9 @@ class LibGtvTest: BaseRellTest(false) {
         chkFromGtv("[[{'x':1,'y':'A'},123]]", "C.from_gtv_pretty(g)", "C[t=(s=(x=boolean[true],y=text[A]),k=int[123])]")
     }
 
-    @Test fun testToFromGtvRecord() {
-        def("record rec { x: integer; y: text; }")
-        def("record no_gtv { r: range; }")
+    @Test fun testToFromGtvStruct() {
+        def("struct rec { x: integer; y: text; }")
+        def("struct no_gtv { r: range; }")
 
         chk("rec(123,'Hello').to_gtv()", """gtv[[123,"Hello"]]""")
         chk("no_gtv(range(10)).to_gtv()", "ct_err:fn:invalid:no_gtv:no_gtv.to_gtv")
@@ -331,28 +331,28 @@ class LibGtvTest: BaseRellTest(false) {
         chk("no_gtv(range(10)).to_gtv_pretty()", "ct_err:fn:invalid:no_gtv:no_gtv.to_gtv_pretty")
 
         chkFromGtv("[123,'Hello']", "rec.from_gtv(g)", "rec[x=int[123],y=text[Hello]]")
-        chkFromGtv("[]", "rec.from_gtv(g)", "gtv_err:record_size:rec:2:0")
-        chkFromGtv("[123]", "rec.from_gtv(g)", "gtv_err:record_size:rec:2:1")
+        chkFromGtv("[]", "rec.from_gtv(g)", "gtv_err:struct_size:rec:2:0")
+        chkFromGtv("[123]", "rec.from_gtv(g)", "gtv_err:struct_size:rec:2:1")
         chkFromGtv("['Hello',123]", "rec.from_gtv(g)", "gtv_err:type:integer:STRING")
         chkFromGtv("{'x':123,'y':'Hello'}", "rec.from_gtv(g)", "gtv_err:type:array:DICT")
 
         chkFromGtv("{'x':123,'y':'Hello'}", "rec.from_gtv_pretty(g)", "rec[x=int[123],y=text[Hello]]")
         chkFromGtv("{'y':'Hello','x':123}", "rec.from_gtv_pretty(g)", "rec[x=int[123],y=text[Hello]]")
-        chkFromGtv("{}", "rec.from_gtv_pretty(g)", "gtv_err:record_size:rec:2:0")
-        chkFromGtv("{'x':123}", "rec.from_gtv_pretty(g)", "gtv_err:record_size:rec:2:1")
-        chkFromGtv("{'y':'Hello'}", "rec.from_gtv_pretty(g)", "gtv_err:record_size:rec:2:1")
+        chkFromGtv("{}", "rec.from_gtv_pretty(g)", "gtv_err:struct_size:rec:2:0")
+        chkFromGtv("{'x':123}", "rec.from_gtv_pretty(g)", "gtv_err:struct_size:rec:2:1")
+        chkFromGtv("{'y':'Hello'}", "rec.from_gtv_pretty(g)", "gtv_err:struct_size:rec:2:1")
         chkFromGtv("{'y':123,'x':'Hello'}", "rec.from_gtv_pretty(g)", "gtv_err:type:integer:STRING")
-        chkFromGtv("[]", "rec.from_gtv(g)", "gtv_err:record_size:rec:2:0")
+        chkFromGtv("[]", "rec.from_gtv(g)", "gtv_err:struct_size:rec:2:0")
         chkFromGtv("[123,'Hello']", "rec.from_gtv_pretty(g)", "rec[x=int[123],y=text[Hello]]")
-        chkFromGtv("[]", "rec.from_gtv_pretty(g)", "gtv_err:record_size:rec:2:0")
+        chkFromGtv("[]", "rec.from_gtv_pretty(g)", "gtv_err:struct_size:rec:2:0")
 
         chkFromGtv("[]", "no_gtv.from_gtv(g)", "ct_err:fn:invalid:no_gtv:from_gtv")
         chkFromGtv("[]", "no_gtv.from_gtv_pretty(g)", "ct_err:fn:invalid:no_gtv:from_gtv_pretty")
     }
 
-    @Test fun testToFromGtvClass() {
+    @Test fun testToFromGtvEntity() {
         tstCtx.useSql = true
-        def("class user { name; }")
+        def("entity user { name; }")
         def("object state { mutable value: integer = 0; }")
         insert("c0.user", "name", "5,'Bob'")
 

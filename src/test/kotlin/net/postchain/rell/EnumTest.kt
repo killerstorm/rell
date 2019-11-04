@@ -42,13 +42,41 @@ class EnumTest: BaseRellTest() {
         chkCompile("enum foo { A, B, C, }", "OK")
         chkCompile("enum foo {}", "OK")
         chkCompile("enum foo { A, B, C, A }", "ct_err:enum_dup:A")
-        chkCompile("enum foo {} enum foo {}", "ct_err:name_conflict:enum:foo")
-        chkCompile("object foo {} enum foo {}", "ct_err:name_conflict:object:foo")
-        chkCompile("class foo {} enum foo {}", "ct_err:name_conflict:class:foo")
-        chkCompile("record foo {} enum foo {}", "ct_err:name_conflict:record:foo")
-        chkCompile("enum foo {} object foo {}", "ct_err:name_conflict:enum:foo")
-        chkCompile("enum foo {} class foo {}", "ct_err:name_conflict:enum:foo")
-        chkCompile("enum foo {} record foo {}", "ct_err:name_conflict:enum:foo")
+
+        chkCompile("enum foo {} enum foo {}", """ct_err:
+            [name_conflict:user:foo:ENUM:main.rell(1:18)]
+            [name_conflict:user:foo:ENUM:main.rell(1:6)]
+        """)
+
+        chkCompile("object foo {} enum foo {}", """ct_err:
+            [name_conflict:user:foo:ENUM:main.rell(1:20)]
+            [name_conflict:user:foo:OBJECT:main.rell(1:8)]
+        """)
+
+        chkCompile("entity foo {} enum foo {}", """ct_err:
+            [name_conflict:user:foo:ENUM:main.rell(1:20)]
+            [name_conflict:user:foo:ENTITY:main.rell(1:8)]
+        """)
+
+        chkCompile("struct foo {} enum foo {}", """ct_err:
+            [name_conflict:user:foo:ENUM:main.rell(1:20)]
+            [name_conflict:user:foo:STRUCT:main.rell(1:8)]
+        """)
+
+        chkCompile("enum foo {} object foo {}", """ct_err:
+            [name_conflict:user:foo:OBJECT:main.rell(1:20)]
+            [name_conflict:user:foo:ENUM:main.rell(1:6)]
+        """)
+
+        chkCompile("enum foo {} entity foo {}", """ct_err:
+            [name_conflict:user:foo:ENTITY:main.rell(1:20)]
+            [name_conflict:user:foo:ENUM:main.rell(1:6)]
+        """)
+
+        chkCompile("enum foo {} struct foo {}", """ct_err:
+            [name_conflict:user:foo:STRUCT:main.rell(1:20)]
+            [name_conflict:user:foo:ENUM:main.rell(1:6)]
+        """)
     }
 
     @Test fun testTypeCompatibility() {
@@ -65,9 +93,9 @@ class EnumTest: BaseRellTest() {
         chkEx(": foo? = null;", "null")
     }
 
-    @Test fun testClassAttribute() {
+    @Test fun testEntityAttribute() {
         def("enum foo { A, B, C }")
-        def("class cls { name; f: foo; }")
+        def("entity cls { name; f: foo; }")
         def("object obj { mutable f: foo = foo.A; }")
         insert("c0.cls", "name,f", "0,'Bob',0")
 
@@ -90,7 +118,7 @@ class EnumTest: BaseRellTest() {
 
     @Test fun testNameConflicts() {
         def("enum foo { A, B, C }")
-        def("class user { name: text; f: foo; }")
+        def("entity user { name: text; f: foo; }")
         insert("c0.user", "name,f", "0,'Bob',1")
 
         chkEx("{ return user @ {} ( =.f ); }", "foo[B]")

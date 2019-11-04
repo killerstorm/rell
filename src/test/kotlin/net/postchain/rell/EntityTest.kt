@@ -5,40 +5,40 @@ import net.postchain.rell.test.RellCodeTester
 import org.junit.Test
 import kotlin.test.assertEquals
 
-class ClassTest: BaseRellTest(false) {
+class EntityTest: BaseRellTest(false) {
     @Test fun testAttrNoType() {
-        chkCompile("class foo { name; }", "OK")
-        chkCompile("class foo { name123; }", "ct_err:unknown_name_type:name123")
-        chkCompile("class foo { index name123; }", "ct_err:unknown_name_type:name123")
-        chkCompile("class foo { key name123; }", "ct_err:unknown_name_type:name123")
+        chkCompile("entity foo { name; }", "OK")
+        chkCompile("entity foo { name123; }", "ct_err:unknown_name_type:name123")
+        chkCompile("entity foo { index name123; }", "ct_err:unknown_name_type:name123")
+        chkCompile("entity foo { key name123; }", "ct_err:unknown_name_type:name123")
     }
 
     @Test fun testIndex() {
-        chkCompile("class foo { name; index name; }", "OK")
-        chkCompile("class foo { name; index name: text; }", "ct_err:class_keyindex_def:name")
-        chkCompile("class foo { index name: text; name; }", "ct_err:class_keyindex_def:name")
-        chkCompile("class foo { name; index name; index name; }", "ct_err:class_index_dup:name")
+        chkCompile("entity foo { name; index name; }", "OK")
+        chkCompile("entity foo { name; index name: text; }", "ct_err:entity_keyindex_def:name")
+        chkCompile("entity foo { index name: text; name; }", "ct_err:entity_keyindex_def:name")
+        chkCompile("entity foo { name; index name; index name; }", "ct_err:entity_index_dup:name")
 
-        chkCompile("class foo { name1: text; name2: text; index name1, name2; }", "OK")
-        chkCompile("class foo { name1: text; name2: text; index name1; index name2; index name1, name2; }", "OK")
-        chkCompile("class foo { name1: text; name2: text; index name1, name2; index name2, name1; }",
-                "ct_err:class_index_dup:name1,name2")
+        chkCompile("entity foo { name1: text; name2: text; index name1, name2; }", "OK")
+        chkCompile("entity foo { name1: text; name2: text; index name1; index name2; index name1, name2; }", "OK")
+        chkCompile("entity foo { name1: text; name2: text; index name1, name2; index name2, name1; }",
+                "ct_err:entity_index_dup:name1,name2")
 
-        chkCompile("class foo { name1: text; name2: text; index name1, name1; }", "ct_err:class_keyindex_dup:name1")
+        chkCompile("entity foo { name1: text; name2: text; index name1, name1; }", "ct_err:entity_keyindex_dup:name1")
 
-        chkCompile("class foo { name1: text; index name1, name2: text; }", "OK")
-        chkCompile("class foo { name1: text; index name, name1: text; }", "ct_err:class_keyindex_def:name1")
+        chkCompile("entity foo { name1: text; index name1, name2: text; }", "OK")
+        chkCompile("entity foo { name1: text; index name, name1: text; }", "ct_err:entity_keyindex_def:name1")
 
-        chkCompile("class foo { mutable name: text; index name; }", "OK")
+        chkCompile("entity foo { mutable name: text; index name; }", "OK")
 
-        chkCompile("class foo { index name; mutable name: text; }", "OK")
-        chkCompile("class foo { index name: text; name; }", "ct_err:class_keyindex_def:name")
+        chkCompile("entity foo { index name; mutable name: text; }", "OK")
+        chkCompile("entity foo { index name: text; name; }", "ct_err:entity_keyindex_def:name")
     }
 
     @Test fun testIndexWithoutAttr() {
         tstCtx.useSql = true
-        def("class foo { index name; }")
-        def("class bar { index name: text; }")
+        def("entity foo { index name; }")
+        def("entity bar { index name: text; }")
         chkOp("create foo(name = 'A');")
         chkOp("create bar(name = 'B');")
         chk("foo @ {} (.name)", "text[A]")
@@ -47,10 +47,10 @@ class ClassTest: BaseRellTest(false) {
 
     @Test fun testIndexWithAttr() {
         tstCtx.useSql = true
-        def("class A { name; index name; }")
-        def("class B { index name; name: text; }")
-        def("class C { name1: text; index name1, name2: text; }")
-        def("class D { mutable name: text; index name; }")
+        def("entity A { name; index name; }")
+        def("entity B { index name; name: text; }")
+        def("entity C { name1: text; index name1, name2: text; }")
+        def("entity D { mutable name: text; index name; }")
 
         chkOp("create A(name = 'A');")
         chkOp("create B(name = 'B');")
@@ -67,31 +67,31 @@ class ClassTest: BaseRellTest(false) {
     }
 
     @Test fun testKey() {
-        chkCompile("class foo { name; key name; }", "OK")
-        chkCompile("class foo { name; key name: text; }", "ct_err:class_keyindex_def:name")
-        chkCompile("class foo { key name: text; name; }", "ct_err:class_keyindex_def:name")
-        chkCompile("class foo { name; key name; key name; }", "ct_err:class_key_dup:name")
+        chkCompile("entity foo { name; key name; }", "OK")
+        chkCompile("entity foo { name; key name: text; }", "ct_err:entity_keyindex_def:name")
+        chkCompile("entity foo { key name: text; name; }", "ct_err:entity_keyindex_def:name")
+        chkCompile("entity foo { name; key name; key name; }", "ct_err:entity_key_dup:name")
 
-        chkCompile("class foo { name1: text; name2: text; key name1, name2; }", "OK")
-        chkCompile("class foo { name1: text; name2: text; key name1; key name2; key name1, name2; }", "OK")
-        chkCompile("class foo { name1: text; name2: text; key name1, name2; key name2, name1; }",
-                "ct_err:class_key_dup:name1,name2")
+        chkCompile("entity foo { name1: text; name2: text; key name1, name2; }", "OK")
+        chkCompile("entity foo { name1: text; name2: text; key name1; key name2; key name1, name2; }", "OK")
+        chkCompile("entity foo { name1: text; name2: text; key name1, name2; key name2, name1; }",
+                "ct_err:entity_key_dup:name1,name2")
 
-        chkCompile("class foo { name1: text; name2: text; key name1, name1; }", "ct_err:class_keyindex_dup:name1")
+        chkCompile("entity foo { name1: text; name2: text; key name1, name1; }", "ct_err:entity_keyindex_dup:name1")
 
-        chkCompile("class foo { name1: text; key name1, name2: text; }", "OK")
-        chkCompile("class foo { name1: text; key name, name1: text; }", "ct_err:class_keyindex_def:name1")
+        chkCompile("entity foo { name1: text; key name1, name2: text; }", "OK")
+        chkCompile("entity foo { name1: text; key name, name1: text; }", "ct_err:entity_keyindex_def:name1")
 
-        chkCompile("class foo { mutable name: text; key name; }", "OK")
+        chkCompile("entity foo { mutable name: text; key name; }", "OK")
 
-        chkCompile("class foo { key name; mutable name: text; }", "OK")
-        chkCompile("class foo { key name: text; name; }", "ct_err:class_keyindex_def:name")
+        chkCompile("entity foo { key name; mutable name: text; }", "OK")
+        chkCompile("entity foo { key name: text; name; }", "ct_err:entity_keyindex_def:name")
     }
 
     @Test fun testKeyWithoutAttr() {
         tstCtx.useSql = true
-        def("class foo { key name; }")
-        def("class bar { key name: text; }")
+        def("entity foo { key name; }")
+        def("entity bar { key name: text; }")
         chkOp("create foo(name = 'A');")
         chkOp("create bar(name = 'B');")
         chk("foo @ {} (.name)", "text[A]")
@@ -100,10 +100,10 @@ class ClassTest: BaseRellTest(false) {
 
     @Test fun testKeyWithAttr() {
         tstCtx.useSql = true
-        def("class A { name; key name; }")
-        def("class B { key name; name: text; }")
-        def("class C { name1: text; key name1, name2: text; }")
-        def("class D { mutable name: text; key name; }")
+        def("entity A { name; key name; }")
+        def("entity B { key name; name: text; }")
+        def("entity C { name1: text; key name1, name2: text; }")
+        def("entity D { mutable name: text; key name; }")
 
         chkOp("create A(name = 'A');")
         chkOp("create B(name = 'B');")
@@ -121,7 +121,7 @@ class ClassTest: BaseRellTest(false) {
 
     @Test fun testKeyIndexDupValue() {
         tstCtx.useSql = true
-        def("class foo { mutable k: text; mutable i: text; key k; index i; }")
+        def("entity foo { mutable k: text; mutable i: text; key k; index i; }")
 
         chkOp("create foo(k = 'K1', i = 'I1');")
         chkOp("create foo(k = 'K1', i = 'I2');", "rt_err:sqlerr:0")
@@ -133,14 +133,14 @@ class ClassTest: BaseRellTest(false) {
     }
 
     @Test fun testDeclarationOrder() {
-        chkCompile("class user { c: company; } class company { name; }", "OK")
-        chkCompile("query q() = user @* {}; class user { name; }", "OK")
+        chkCompile("entity user { c: company; } entity company { name; }", "OK")
+        chkCompile("query q() = user @* {}; entity user { name; }", "OK")
     }
 
     @Test fun testForwardReferenceInAttributeValue() {
         tstCtx.useSql = true
-        def("class foo { x: integer; k: integer = (bar@*{ .v > 0 }).size(); }")
-        def("class bar { v: integer; }")
+        def("entity foo { x: integer; k: integer = (bar@*{ .v > 0 }).size(); }")
+        def("entity bar { v: integer; }")
 
         chkOp("""
             create foo(x = 1);
@@ -159,23 +159,25 @@ class ClassTest: BaseRellTest(false) {
     }
 
     @Test fun testAnnotations() {
-        chkCompile("class user (log) {}", "OK")
-        chkCompile("class user (foo) {}", "ct_err:class_ann_bad:foo")
-        chkCompile("class user (log, log) {}", "ct_err:class_ann_dup:log")
+        chkCompile("@log entity user {}", "OK")
+        chkCompile("entity user (foo) {}", "ct_err:entity_ann_bad:foo")
+        chkCompile("@foo entity user {}", "ct_err:ann:invalid:foo")
+        chkCompile("@log @log entity user {}", "ct_err:ann:log:dup")
+        chkCompile("entity user (log, log) {}", "ct_err:entity_ann_dup:log")
 
-        val m1 = tst.compileModuleEx("class user {}")
-        val c1 = m1.classes["user"]!!
+        val a1 = tst.compileAppEx("entity user {}")
+        val c1 = a1.entities.first { it.simpleName == "user" }
         assertEquals(false, c1.flags.log)
 
-        val m2 = tst.compileModuleEx("class user (log) {}")
-        val c2 = m2.classes["user"]!!
+        val a2 = tst.compileAppEx("@log entity user {}")
+        val c2 = a2.entities.first { it.simpleName == "user" }
         assertEquals(true, c2.flags.log)
     }
 
     @Test fun testBugSqlCreateTableOrder() {
         // Bug: SQL tables must be created in topological order because of foreign key constraints.
-        def("class user { name: text; company; }")
-        def("class company { name: text; }")
+        def("entity user { name: text; company; }")
+        def("entity company { name: text; }")
         tstCtx.useSql = true
         chkOp("val c = create company('Amazon'); create user ('Bob', c);")
         chkData("user(2,Bob,1)", "company(1,Amazon)")
@@ -184,7 +186,7 @@ class ClassTest: BaseRellTest(false) {
     }
 
     @Test fun testCycle() {
-        chkCompile("class foo { bar; } class bar { foo; }", "ct_err:class_cycle:foo,bar")
+        chkCompile("entity foo { bar; } entity bar { foo; }", "ct_err:entity_cycle:foo,bar")
     }
 
     @Test fun testTablePrefix() {
@@ -217,20 +219,20 @@ class ClassTest: BaseRellTest(false) {
     @Test fun testRowidAttr() {
         tstCtx.useSql = false
 
-        chkCompile("class foo { rowid: integer; }", "ct_err:unallowed_attr_name:rowid")
-        chkCompile("class foo { rowid: text; }", "ct_err:unallowed_attr_name:rowid")
-        chkCompile("class foo { index rowid: integer; }", "ct_err:unallowed_attr_name:rowid")
-        chkCompile("class foo { key rowid: integer; }", "ct_err:unallowed_attr_name:rowid")
+        chkCompile("entity foo { rowid: integer; }", "ct_err:unallowed_attr_name:rowid")
+        chkCompile("entity foo { rowid: text; }", "ct_err:unallowed_attr_name:rowid")
+        chkCompile("entity foo { index rowid: integer; }", "ct_err:unallowed_attr_name:rowid")
+        chkCompile("entity foo { key rowid: integer; }", "ct_err:unallowed_attr_name:rowid")
 
-        chkCompile("object foo { rowid: integer; }", "ct_err:unallowed_attr_name:rowid")
-        chkCompile("object foo { rowid: text; }", "ct_err:unallowed_attr_name:rowid")
+        chkCompile("object foo { rowid: integer; }", "ct_err:[object_attr_novalue:foo:rowid][unallowed_attr_name:rowid]")
+        chkCompile("object foo { rowid: text; }", "ct_err:[object_attr_novalue:foo:rowid][unallowed_attr_name:rowid]")
 
-        chkCompile("record foo { rowid: integer; }", "OK")
-        chkCompile("record foo { rowid: text; }", "OK")
+        chkCompile("struct foo { rowid: integer; }", "OK")
+        chkCompile("struct foo { rowid: text; }", "OK")
     }
 
-    @Test fun testClassRowidAttr() {
-        initClassRowidAttr()
+    @Test fun testEntityRowidAttr() {
+        initEntityRowidAttr()
 
         chkEx("{ return _type_of((user @ { 'Bob' }).rowid); }", "text[rowid]")
         chkEx("{ val u = user @ { 'Bob' }; return _type_of(u.rowid); }", "text[rowid]")
@@ -248,8 +250,8 @@ class ClassTest: BaseRellTest(false) {
         chkEx("{ val u = user @ { 'Bob' }; u.rowid = 999; return 0; }", "ct_err:expr_bad_dst:rowid")
     }
 
-    @Test fun testClassRowidAttrAt() {
-        initClassRowidAttr()
+    @Test fun testEntityRowidAttrAt() {
+        initEntityRowidAttr()
 
         chk("user @ { 'Bob' } ( _type_of(.rowid) )", "text[rowid]")
         chk("company @ { 'BobCorp' } ( _type_of(.boss.rowid) )", "text[rowid]")
@@ -275,10 +277,10 @@ class ClassTest: BaseRellTest(false) {
         chkEx("{ val x = 'Alice'; return user @ { x }; }", "user[200]")
     }
 
-    private fun initClassRowidAttr() {
+    private fun initEntityRowidAttr() {
         tstCtx.useSql = true
-        def("class user { name; }")
-        def("class company { name; boss: user; }")
+        def("entity user { name; }")
+        def("entity company { name; boss: user; }")
         def("function to_rowid(i: integer): rowid = rowid.from_gtv(i.to_gtv());")
         insert("c0.user", "name", "100,'Bob'")
         insert("c0.user", "name", "200,'Alice'")
@@ -294,8 +296,8 @@ class ClassTest: BaseRellTest(false) {
 
     private fun createTablePrefixTester(chainId: Long, rowid: Long, company: String, user: String): RellCodeTester {
         val t = RellCodeTester(tstCtx)
-        t.def("class user { name: text; company; }")
-        t.def("class company { name: text; }")
+        t.def("entity user { name: text; company; }")
+        t.def("entity company { name: text; }")
         t.chainId = chainId
         t.insert("c${chainId}.company", "name","${rowid},'$company'")
         t.insert("c${chainId}.user", "name,company","${rowid+1},'$user',${rowid}")

@@ -10,9 +10,9 @@ import kotlin.test.assertFailsWith
 class GtxModuleTest : BaseGtxTest() {
     private val tablePrefix = "c995511."
 
-    private val classDefs = listOf(
-            "class city { key name: text; }",
-            "class person { name: text; city; street: text; house: integer; score: integer; }"
+    private val entityDefs = listOf(
+            "entity city { key name: text; }",
+            "entity person { name: text; city; street: text; house: integer; score: integer; }"
     )
 
     private val inserts = listOf(
@@ -25,13 +25,13 @@ class GtxModuleTest : BaseGtxTest() {
     )
 
     @Test fun testQueryNoObjects() {
-        tst.defs = classDefs
+        tst.defs = entityDefs
         chk("city @* {}", "[]")
         chk("city @* {}.name", "[]")
     }
 
     @Test fun testQuerySimple() {
-        tst.defs = classDefs
+        tst.defs = entityDefs
         tst.inserts = inserts
 
         chk("city @* {}", "[1,2,3]")
@@ -47,7 +47,7 @@ class GtxModuleTest : BaseGtxTest() {
     }
 
     @Test fun testQueryGetPersonsNamesByCityName() {
-        tst.defs = classDefs
+        tst.defs = entityDefs
         tst.inserts = inserts
 
         val query = "query q(cityName: text) = person @* { .city.name == cityName }.name;"
@@ -57,7 +57,7 @@ class GtxModuleTest : BaseGtxTest() {
     }
 
     @Test fun testQueryGetPersonAddressByName() {
-        tst.defs = classDefs
+        tst.defs = entityDefs
         tst.inserts = inserts
 
         val query = "query q(name: text) = person @ { name } ( city_name = .city.name, .street, .house );"
@@ -67,7 +67,7 @@ class GtxModuleTest : BaseGtxTest() {
     }
 
     @Test fun testQueryGetPersonsByCitySet() {
-        tst.defs = classDefs
+        tst.defs = entityDefs
         tst.inserts = inserts
 
         val query = """
@@ -86,28 +86,28 @@ class GtxModuleTest : BaseGtxTest() {
     }
 
     @Test fun testQueryErrArgMissing() {
-        tst.defs = classDefs
+        tst.defs = entityDefs
         assertFailsWith<UserMistake> {
             chkFull("query q(name: text) = city @ { name };", "", "")
         }
     }
 
     @Test fun testQueryErrArgExtra() {
-        tst.defs = classDefs
+        tst.defs = entityDefs
         assertFailsWith<UserMistake> {
             chkFull("query q(name: text) = city @ { name };", "name:'New York',foo:12345", "")
         }
     }
 
     @Test fun testQueryErrArgWrongType() {
-        tst.defs = classDefs
+        tst.defs = entityDefs
         assertFailsWith<UserMistake> {
             chkFull("query q(name: text) = city @ { name };", "name:12345", "")
         }
     }
 
     @Test fun testQueryErrArgSetDuplicate() {
-        tst.defs = classDefs
+        tst.defs = entityDefs
         tst.inserts = inserts
         val query = """
             query q(cities: set<text>): list<text> {
@@ -123,22 +123,22 @@ class GtxModuleTest : BaseGtxTest() {
     }
 
     @Test fun testQueryErrArgNonexistentObjectId() {
-        tst.defs = classDefs
+        tst.defs = entityDefs
         tst.inserts = inserts
         assertFailsWith<UserMistake> {
             chkFull("query q(city) = person @* { city };", "city:999", "")
         }
     }
 
-    @Test fun testQueryErrArgObjectIdOfWrongClass() {
-        tst.defs = classDefs
+    @Test fun testQueryErrArgObjectIdOfWrongEntity() {
+        tst.defs = entityDefs
         assertFailsWith<UserMistake> {
             chkFull("query q(city) = person @* { city };", "city:5", "")
         }
     }
 
     @Test fun testQueryErrRuntimeErrorNoObjects() {
-        tst.defs = classDefs
+        tst.defs = entityDefs
         tst.inserts = inserts
         assertFailsWith<UserMistake> {
             chkFull("query q(name: text) = city @ { name };", "city:'Den Helder'", "")
@@ -146,7 +146,7 @@ class GtxModuleTest : BaseGtxTest() {
     }
 
     @Test fun testQueryErrRuntimeErrorOther() {
-        tst.defs = classDefs
+        tst.defs = entityDefs
         assertFailsWith<UserMistake> {
             chkFull("query q(a: integer, b: integer) = a / b;", "a:123,b:0", "")
         }
@@ -155,7 +155,7 @@ class GtxModuleTest : BaseGtxTest() {
     @Test fun testTableStructureUpdate() {
         run {
             val t = RellGtxTester(tstCtx, chainId = 0)
-            t.def("class user { name; }")
+            t.def("entity user { name; }")
             t.insert("c0.user", "name", "100,'Bob'")
             t.insert("c0.user", "name", "101,'Alice'")
             t.chkData("user(100,Bob)", "user(101,Alice)")
@@ -163,7 +163,7 @@ class GtxModuleTest : BaseGtxTest() {
 
         run {
             val t = RellGtxTester(tstCtx, chainId = 0)
-            t.def("class user { name; mutable score: integer = 123; }")
+            t.def("entity user { name; mutable score: integer = 123; }")
             t.chkData("user(100,Bob,123)", "user(101,Alice,123)")
         }
     }

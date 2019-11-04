@@ -68,7 +68,7 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testMemberFunctionVsField() {
-        def("record foo { to_gtv: integer; }")
+        def("struct foo { to_gtv: integer; }")
         chkEx("{ val v = foo(123); return v.to_gtv; }", "int[123]")
         chkEx("{ val v = foo(123); return v.to_gtv.str(); }", "text[123]")
         chkEx("{ val v = foo(123); return v.to_gtv().to_json().str(); }", "text[[123]]")
@@ -76,7 +76,7 @@ class ExpressionTest: BaseRellTest(false) {
 
     @Test fun testListItems() {
         tstCtx.useSql = true
-        def("class user { name: text; }")
+        def("entity user { name: text; }")
 
         chkOp("create user('Bob');")
         chkOp("create user('Alice');")
@@ -92,7 +92,7 @@ class ExpressionTest: BaseRellTest(false) {
 
     @Test fun testFunctionsUnderAt() {
         tstCtx.useSql = true
-        def("class user { name: text; score: integer; }")
+        def("entity user { name: text; score: integer; }")
         chkOp("create user('Bob',-5678);")
 
         chkEx("{ val s = 'Hello'; return user @ {} ( .name.size() + s.size() ); }", "int[8]")
@@ -109,10 +109,10 @@ class ExpressionTest: BaseRellTest(false) {
         chkEx("{ return unit(); }", "ct_err:stmt_return_unit")
     }
 
-    @Test fun testDataClassPathExpr() {
+    @Test fun testEntityPathExpr() {
         tstCtx.useSql = true
-        def("class company { name: text; }")
-        def("class user { name: text; company; }")
+        def("entity company { name: text; }")
+        def("entity user { name: text; company; }")
 
         chkOp("""
             val facebook = create company('Facebook');
@@ -132,10 +132,10 @@ class ExpressionTest: BaseRellTest(false) {
         chk("((u: user) @ { 'Bill' } ( u )).company.name", "text[Microsoft]")
     }
 
-    @Test fun testDataClassPathExprMix() {
+    @Test fun testEntityPathExprMix() {
         tstCtx.useSql = true
-        def("class company { name: text; }")
-        def("class user { name: text; company; }")
+        def("entity company { name: text; }")
+        def("entity user { name: text; company; }")
 
         chkOp("""
             val microsoft = create company('Microsoft');
@@ -160,12 +160,12 @@ class ExpressionTest: BaseRellTest(false) {
                 "text[microhard]")
     }
 
-    @Test fun testDataClassPathExprComplex() {
+    @Test fun testEntityPathExprComplex() {
         tstCtx.useSql = true
-        def("class c1 { name: text; }")
-        def("class c2 { name: text; c1; }")
-        def("class c3 { name: text; c2; }")
-        def("class c4 { name: text; c3; }")
+        def("entity c1 { name: text; }")
+        def("entity c2 { name: text; c1; }")
+        def("entity c3 { name: text; c2; }")
+        def("entity c4 { name: text; c3; }")
 
         chkOp("""
             val c1_1 = create c1('c1_1');
@@ -207,7 +207,7 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testTupleAt() {
-        def("class user { name: text; street: text; house: integer; }")
+        def("entity user { name: text; street: text; house: integer; }")
 
         chk("user @ {} ( x = (.name,) ) ", "ct_err:expr_sqlnotallowed")
         chk("user @ {} ( x = (.name, .street, .house) ) ", "ct_err:expr_sqlnotallowed")
@@ -262,7 +262,7 @@ class ExpressionTest: BaseRellTest(false) {
 
     @Test fun testNamespaceUnderAt() {
         tstCtx.useSql = true
-        def("class user { name: text; score: integer; }")
+        def("entity user { name: text; score: integer; }")
         chkOp("create user('Bob',-5678);")
 
         chk("user @ { .score == integer }", "ct_err:expr_novalue:namespace")
@@ -280,7 +280,7 @@ class ExpressionTest: BaseRellTest(false) {
     @Test fun testMoreFunctionsUnderAt() {
         tstCtx.useSql = true
         tst.strictToString = false
-        def("class user { id: integer; name1: text; name2: text; v1: integer; v2: integer; }")
+        def("entity user { id: integer; name1: text; name2: text; v1: integer; v2: integer; }")
         chkOp("""
             create user(id = 1, name1 = 'Bill', name2 = 'Gates', v1 = 111, v2 = 222);
             create user(id = 2, name1 = 'Mark', name2 = 'Zuckerberg', v1 = 333, v2 = 444);
@@ -446,14 +446,14 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testVariables() {
-        chkEx("{ val x = integer; }", "ct_err:expr_novalue:namespace")
-        chkEx("{ val x = chain_context; }", "ct_err:expr_novalue:namespace")
-        chkEx("{ var x: text; x = integer; }", "ct_err:expr_novalue:namespace")
-        chkEx("{ var x: text; x = chain_context; }", "ct_err:expr_novalue:namespace")
+        chkEx("{ val x = integer; return 0; }", "ct_err:expr_novalue:namespace")
+        chkEx("{ val x = chain_context; return 0; }", "ct_err:expr_novalue:namespace")
+        chkEx("{ var x: text; x = integer; return 0; }", "ct_err:expr_novalue:namespace")
+        chkEx("{ var x: text; x = chain_context; return 0; }", "ct_err:expr_novalue:namespace")
     }
 
-    @Test fun testNameRecordVsLocal() {
-        def("record rec {x:integer;}")
+    @Test fun testNameStructVsLocal() {
+        def("struct rec {x:integer;}")
         chkEx("{ return rec(456); }", "rec[x=int[456]]")
         chkEx("{ val rec = 123; return rec(456); }", "rec[x=int[456]]")
         chkEx("{ val rec = 123; return rec; }", "int[123]")
@@ -547,5 +547,32 @@ class ExpressionTest: BaseRellTest(false) {
     private fun chkIntegerOver2(op: String, left: String, right: String) {
         chkIntegerOver(op, left, right)
         chkIntegerOver(op, right, left)
+    }
+
+    @Test fun testTupleFieldAccess() {
+        chkEx("{ val t = (123, 'Hello'); return _type_of(t[0]); }", "text[integer]")
+        chkEx("{ val t = (123, 'Hello'); return _type_of(t[1]); }", "text[text]")
+        chkEx("{ val t = (123, 'Hello'); return t[0]; }", "int[123]")
+        chkEx("{ val t = (123, 'Hello'); return t[1]; }", "text[Hello]")
+
+        chkEx("{ val t = (x = 123, y = 'Hello'); return _type_of(t[0]); }", "text[integer]")
+        chkEx("{ val t = (x = 123, y = 'Hello'); return _type_of(t[1]); }", "text[text]")
+        chkEx("{ val t = (x = 123, y = 'Hello'); return t[0]; }", "int[123]")
+        chkEx("{ val t = (x = 123, y = 'Hello'); return t[1]; }", "text[Hello]")
+
+        chkEx("{ val t = (123, 'Hello'); return t[-1]; }", "ct_err:expr_lookup:tuple:index:-1:2")
+        chkEx("{ val t = (123, 'Hello'); return t[2]; }", "ct_err:expr_lookup:tuple:index:2:2")
+        chkEx("{ val t = (123, 'Hello'); return t[+1]; }", "text[Hello]")
+        chkEx("{ val t = (123, 'Hello'); return t[-0]; }", "int[123]")
+        chkEx("{ val t = (123, 'Hello'); return t[0+1]; }", "ct_err:expr_lookup:tuple:no_const")
+        chkEx("{ val t = (123, 'Hello'); val i = 0; return t[i]; }", "ct_err:expr_lookup:tuple:no_const")
+
+        chkEx("{ val t = (123, 'Hello'); return t[true]; }", "ct_err:expr_lookup_keytype:integer:boolean")
+        chkEx("{ val t = (123, 'Hello'); return t['Bob']; }", "ct_err:expr_lookup_keytype:integer:text")
+
+        chkEx("{ val t = _nullable((123, 'Hello')); return t[0]; }", "ct_err:expr_lookup_null")
+        chkEx("{ val t = _nullable((123, 'Hello')); return t[1]; }", "ct_err:expr_lookup_null")
+        chkEx("{ val t = _nullable((123, 'Hello')); return t!![0]; }", "int[123]")
+        chkEx("{ val t = _nullable((123, 'Hello')); return t!![1]; }", "text[Hello]")
     }
 }

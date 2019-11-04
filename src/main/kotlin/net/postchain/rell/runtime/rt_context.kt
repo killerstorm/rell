@@ -6,10 +6,8 @@ import net.postchain.core.ByteArrayKey
 import net.postchain.gtv.Gtv
 import net.postchain.rell.CommonUtils
 import net.postchain.rell.model.*
-import net.postchain.rell.sql.MetaClass
-import net.postchain.rell.sql.MetaClassType
-import net.postchain.rell.sql.SqlExecutor
-import net.postchain.rell.sql.SqlMeta
+import net.postchain.rell.sql.*
+import net.postchain.rell.toImmMap
 
 class Rt_GlobalContext(
         val stdoutPrinter: Rt_Printer,
@@ -25,26 +23,33 @@ class Rt_GlobalContext(
 }
 
 class Rt_SqlContext private constructor(
-        val module: R_Module,
+        app: R_App,
         val mainChainMapping: Rt_ChainSqlMapping,
         private val linkedExternalChains: List<Rt_ExternalChain>
 ) {
+    val entities = app.entities
+    val objects = app.objects
+    val topologicalEntities = app.topologicalEntities
+    private val externalChainsRoot = app.externalChainsRoot
+
     companion object : KLogging() {
-        fun createNoExternalChains(module: R_Module, mainChainMapping: Rt_ChainSqlMapping): Rt_SqlContext {
-            check(module.externalChains.isEmpty()) { "Module uses external chains" }
-            return Rt_SqlContext(module, mainChainMapping, listOf())
+        fun createNoExternalChains(app: R_App, mainChainMapping: Rt_ChainSqlMapping): Rt_SqlContext {
+            require(app.valid)
+            require(app.externalChains.isEmpty()) { "App uses external chains" }
+            return Rt_SqlContext(app, mainChainMapping, listOf())
         }
 
         fun create(
-                module: R_Module,
+                app: R_App,
                 mainChainMapping: Rt_ChainSqlMapping,
                 chainDependencies: Map<String, Rt_ChainDependency>,
                 sqlExec: SqlExecutor,
                 heightProvider: Rt_ChainHeightProvider
         ): Rt_SqlContext {
+            require(app.valid)
             val externalChains = getExternalChains(sqlExec, chainDependencies, heightProvider)
-            val linkedExternalChains = calcLinkedExternalChains(module, externalChains)
-            val sqlCtx = Rt_SqlContext(module, mainChainMapping, linkedExternalChains)
+            val linkedExternalChains = calcLinkedExternalChains(app, externalChains)
+            val sqlCtx = Rt_SqlContext(app, mainChainMapping, linkedExternalChains)
             checkExternalMetaInfo(sqlCtx, externalChains, sqlExec)
             return sqlCtx
         }
@@ -102,7 +107,7 @@ class Rt_SqlContext private constructor(
         }
 
         private fun calcLinkedExternalChains(
-                module: R_Module,
+                app: R_App,
                 externalChains: Map<String, Rt_ExternalChain>
         ): List<Rt_ExternalChain> {
             val chainIds = mutableSetOf<Long>()
@@ -118,7 +123,7 @@ class Rt_SqlContext private constructor(
                 }
             }
 
-            return module.externalChains.map { rChain ->
+            return app.externalChains.map { rChain ->
                 val name = rChain.name
                 val rtChain = externalChains[name]
                 if (rtChain == null) {
@@ -129,20 +134,20 @@ class Rt_SqlContext private constructor(
         }
 
         private fun checkExternalMetaInfo(sqlCtx: Rt_SqlContext, chains: Map<String, Rt_ExternalChain>, sqlExec: SqlExecutor) {
-            val chainMetaClasses = chains.mapValues { (name, chain) -> loadExternalMetaData(name, chain, sqlExec) }
-            val chainExternalClasses = getChainExternalClasses(sqlCtx.module)
+            val chainMetaEntities = chains.mapValues { (name, chain) -> loadExternalMetaData(name, chain, sqlExec) }
+            val chainExternalEntities = getChainExternalEntities(sqlCtx.entities)
 
-            for (chain in chainExternalClasses.keys) {
-                val extClasses = chainExternalClasses.getValue(chain)
-                val metaClasses = chainMetaClasses.getOrDefault(chain, mapOf())
-                checkMissingClasses(chain, extClasses, metaClasses)
+            for (chain in chainExternalEntities.keys) {
+                val extEntities = chainExternalEntities.getValue(chain)
+                val metaEntities = chainMetaEntities.getOrDefault(chain, mapOf())
+                checkMissingEntities(chain, extEntities, metaEntities)
 
-                for (clsName in extClasses.keys.sorted()) {
-                    val extCls = extClasses.getValue(clsName)
-                    val metaCls = metaClasses.getValue(clsName)
+                for (clsName in extEntities.keys.sorted()) {
+                    val extCls = extEntities.getValue(clsName)
+                    val metaCls = metaEntities.getValue(clsName)
                     if (!metaCls.log) {
                         throw Rt_Error("external_meta_nolog:$chain:$clsName",
-                                "Class '$clsName' in external chain '$chain' is not a log class")
+                                "Entity '$clsName' in external chain '$chain' is not a log entity")
                     }
 
                     checkMissingAttrs(chain, extCls, metaCls)
@@ -151,57 +156,57 @@ class Rt_SqlContext private constructor(
             }
         }
 
-        private fun checkMissingClasses(chain: String, extClasses: Map<String, R_Class>, metaClasses: Map<String, MetaClass>) {
-            val metaClassNames = metaClasses.filter { (_, c) -> c.type == MetaClassType.CLASS }.keys
-            val missingClasses = Sets.difference(extClasses.keys, metaClassNames)
-            if (!missingClasses.isEmpty()) {
-                val list = missingClasses.sorted()
-                throw Rt_Error("external_meta_nocls:$chain:${list.joinToString(",")}",
-                        "Classes not found in external chain '$chain': ${list.joinToString()}")
+        private fun checkMissingEntities(chain: String, extEntities: Map<String, R_Entity>, metaEntities: Map<String, MetaEntity>) {
+            val metaEntityNames = metaEntities.filter { (_, c) -> c.type == MetaEntityType.ENTITY }.keys
+            val missingEntities = Sets.difference(extEntities.keys, metaEntityNames)
+            if (!missingEntities.isEmpty()) {
+                val list = missingEntities.sorted()
+                throw Rt_Error("external_meta_no_entity:$chain:${list.joinToString(",")}",
+                        "Entities not found in external chain '$chain': ${list.joinToString()}")
             }
         }
 
-        private fun checkMissingAttrs(chain: String, extCls: R_Class, metaCls: MetaClass) {
+        private fun checkMissingAttrs(chain: String, extCls: R_Entity, metaCls: MetaEntity) {
             val metaAttrNames = metaCls.attrs.keys
             val extAttrNames = extCls.attributes.keys
             val missingAttrs = Sets.difference(extAttrNames, metaAttrNames)
             if (!missingAttrs.isEmpty()) {
-                val clsName = extCls.name
+                val clsName = extCls.appLevelName
                 val list = missingAttrs.sorted()
                 throw Rt_Error("external_meta_noattrs:$chain:$clsName:${list.joinToString(",")}",
-                        "Missing attributes of class '$clsName' in external chain '$chain': ${list.joinToString()}")
+                        "Missing attributes of entity '$clsName' in external chain '$chain': ${list.joinToString()}")
             }
         }
 
-        private fun checkAttrTypes(sqlCtx: Rt_SqlContext, chain: String, extCls: R_Class, metaCls: MetaClass) {
+        private fun checkAttrTypes(sqlCtx: Rt_SqlContext, chain: String, extCls: R_Entity, metaCls: MetaEntity) {
             for (extAttr in extCls.attributes.values.sortedBy { it.name }) {
                 val attrName = extAttr.name
                 val metaAttr = metaCls.attrs.getValue(attrName)
                 val metaType = metaAttr.type
                 val extType = extAttr.type.sqlAdapter.metaName(sqlCtx)
                 if (metaType != extType) {
-                    val clsName = extCls.name
+                    val clsName = extCls.appLevelName
                     throw Rt_Error("external_meta_attrtype:$chain:$clsName:$attrName:[$extType]:[$metaType]",
-                            "Attribute type mismatch for class '$clsName' in external chain '$chain': " +
+                            "Attribute type mismatch for entity '$clsName' in external chain '$chain': " +
                                     "expected '$extType', actual '$metaType'")
                 }
             }
         }
 
-        private fun getChainExternalClasses(module: R_Module): Map<String, Map<String, R_Class>> {
-            val res = mutableMapOf<String, MutableMap<String, R_Class>>()
-            for (cls in module.classes.values) {
+        private fun getChainExternalEntities(entities: List<R_Entity>): Map<String, Map<String, R_Entity>> {
+            val res = mutableMapOf<String, MutableMap<String, R_Entity>>()
+            for (cls in entities) {
                 if (cls.external != null && cls.external.metaCheck) {
                     val map = res.computeIfAbsent(cls.external.chain.name) { mutableMapOf() }
-                    check(cls.external.externalName !in map)
-                    map[cls.external.externalName] = cls
+                    check(cls.metaName !in map)
+                    map[cls.metaName] = cls
                 }
             }
             return res
         }
 
-        private fun loadExternalMetaData(name: String, chain: Rt_ExternalChain, sqlExec: SqlExecutor): Map<String, MetaClass> {
-            val res: Map<String, MetaClass>
+        private fun loadExternalMetaData(name: String, chain: Rt_ExternalChain, sqlExec: SqlExecutor): Map<String, MetaEntity> {
+            val res: Map<String, MetaEntity>
 
             val msgs = Rt_Messages(logger)
             try {
@@ -213,35 +218,60 @@ class Rt_SqlContext private constructor(
 
             return res
         }
-
-        private class Rt_ExternalAttr(val type: String)
-        private class Rt_ExternalClass(val log: Boolean, val attrs: Map<String, Rt_ExternalAttr>)
     }
 
-    fun linkedChain(chain: R_ExternalChain): Rt_ExternalChain {
+    fun linkedChain(chain: R_ExternalChainRef): Rt_ExternalChain {
+        check(chain.root === externalChainsRoot)
         return linkedExternalChains[chain.index]
     }
 
-    fun chainMapping(externalChain: R_ExternalChain?): Rt_ChainSqlMapping {
+    fun chainMapping(externalChain: R_ExternalChainRef?): Rt_ChainSqlMapping {
         return if (externalChain == null) mainChainMapping else linkedChain(externalChain).sqlMapping
     }
 }
 
-class Rt_ModuleContext(val globalCtx: Rt_GlobalContext, val module: R_Module, val sqlCtx: Rt_SqlContext) {
+class Rt_AppContext(val globalCtx: Rt_GlobalContext, val sqlCtx: Rt_SqlContext, val app: R_App) {
+    private var objsInit: SqlObjectsInit? = null
+    private var objsInited = false
+
     fun createRootFrame(): Rt_CallFrame {
         val rFrameBlock = R_FrameBlock(null, R_FrameBlockId(0), 0, 0)
         val rFrame = R_CallFrame(0, rFrameBlock)
-        val entCtx = Rt_EntityContext(this, true)
-        return Rt_CallFrame(entCtx, rFrame)
+        val defCtx = Rt_DefinitionContext(this, true)
+        return Rt_CallFrame(defCtx, rFrame)
     }
 
-    fun insertObjectRecord(rObject: R_Object) {
-        val frame = createRootFrame()
-        rObject.insert(frame)
+    fun objectsInitialization(objsInit: SqlObjectsInit, code: () -> Unit) {
+        check(this.objsInit == null)
+        check(!objsInited)
+        objsInited = true
+        this.objsInit = objsInit
+        try {
+            code()
+        } finally {
+            this.objsInit = null
+        }
+    }
+
+    fun forceObjectInit(obj: R_Object): Boolean {
+        val ref = objsInit
+        return if (ref == null) false else {
+            ref.forceObject(obj)
+            true
+        }
     }
 }
 
-class Rt_EntityContext(val modCtx: Rt_ModuleContext, val dbUpdateAllowed: Boolean) {
+class Rt_CallContext(val appCtx: Rt_AppContext) {
+    val globalCtx = appCtx.globalCtx
+    val chainCtx = globalCtx.chainCtx
+}
+
+class Rt_DefinitionContext(val appCtx: Rt_AppContext, val dbUpdateAllowed: Boolean) {
+    val globalCtx = appCtx.globalCtx
+    val sqlCtx = appCtx.sqlCtx
+    val callCtx = Rt_CallContext(appCtx)
+
     fun checkDbUpdateAllowed() {
         if (!dbUpdateAllowed) {
             throw Rt_Error("no_db_update", "Database modifications are not allowed in this context")
@@ -251,4 +281,6 @@ class Rt_EntityContext(val modCtx: Rt_ModuleContext, val dbUpdateAllowed: Boolea
 
 class Rt_OpContext(val lastBlockTime: Long, val transactionIid: Long, val blockHeight: Long, val signers: List<ByteArray>)
 
-class Rt_ChainContext(val rawConfig: Gtv, val args: Rt_Value?, val blockchainRid: ByteArray)
+class Rt_ChainContext(val rawConfig: Gtv, args: Map<R_ModuleName, Rt_Value>, val blockchainRid: ByteArray) {
+    val args = args.toImmMap()
+}

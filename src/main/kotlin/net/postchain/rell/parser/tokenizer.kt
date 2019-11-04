@@ -4,10 +4,12 @@ import com.github.h0tk3y.betterParse.lexer.TokenMatch
 import com.github.h0tk3y.betterParse.lexer.Tokenizer
 import com.github.h0tk3y.betterParse.utils.cached
 import net.postchain.rell.CommonUtils
+import net.postchain.rell.model.R_Name
 import net.postchain.rell.runtime.Rt_DecimalUtils
 import net.postchain.rell.runtime.Rt_DecimalValue
 import net.postchain.rell.runtime.Rt_Value
 import java.io.InputStream
+import java.math.BigInteger
 import java.util.*
 import kotlin.coroutines.experimental.buildSequence
 
@@ -98,8 +100,8 @@ class RellTokenizer(private val tokensEx: List<RellToken>) : Tokenizer {
             val tk = seq.tokenMatch(tkByteArray, s)
             decodeByteArray(pos, tk.text) // Fail early - will throw an exception if the token is invalid.
             return tk
-        } else if (Character.isJavaIdentifierStart(k)) {
-            scanWhileTrue(seq, Character::isJavaIdentifierPart)
+        } else if (R_Name.isNameStart(k)) {
+            scanWhileTrue(seq) { R_Name.isNamePart(it) }
             val s = seq.text(0, 0)
             val tk = tkKeywords.getOrDefault(s, tkIdentifier)
             return seq.tokenMatch(tk, s)
@@ -231,7 +233,7 @@ class RellTokenizer(private val tokensEx: List<RellToken>) : Tokenizer {
 
     private fun scanNumberEnd(seq: CharSeq) {
         var r = seq.cur()
-        if (r != null && Character.isJavaIdentifierPart(r)) {
+        if (r != null && R_Name.isNamePart(r)) {
             throw seq.err("lex:number_end", "Invalid numeric literal")
         }
     }
@@ -345,12 +347,6 @@ class RellTokenizer(private val tokensEx: List<RellToken>) : Tokenizer {
         }
     }
 
-    private fun isGeneralToken(s: String) = s.matches(Regex("<[A-Z0-9_]+>"))
-
-    private fun isDigit(c: Char?) = c != null && c >= '0' && c <= '9'
-    private fun isHexDigit(c: Char) = isDigit(c) || c >= 'A' && c <= 'F' || c >= 'a' && c <= 'f'
-    private fun isDelim(c: Char) = "~!@#$%^&*()-=+[]{}|;:,.<>/?".contains(c)
-
     companion object {
         const val IDENTIFIER = "<IDENTIFIER>"
         const val INTEGER = "<INTEGER>"
@@ -360,15 +356,45 @@ class RellTokenizer(private val tokensEx: List<RellToken>) : Tokenizer {
 
         private const val MAX_DECIMAL_LITERAL_LENGTH = 1000
 
+        private val BIG_MIN_INTEGER = BigInteger.valueOf(Long.MIN_VALUE)
+        private val BIG_MAX_INTEGER = BigInteger.valueOf(Long.MAX_VALUE)
+
+        private fun isGeneralToken(s: String) = s.matches(Regex("<[A-Z0-9_]+>"))
+
+        private fun isDigit(c: Char?) = c != null && c >= '0' && c <= '9'
+        private fun isHexDigit(c: Char) = isDigit(c) || c >= 'A' && c <= 'F' || c >= 'a' && c <= 'f'
+        private fun isDelim(c: Char) = "~!@#$%^&*()-=+[]{}|;:,.<>/?".contains(c)
+
+        fun decodeName(pos: S_Pos, s: String): S_Name {
+            if (!R_Name.isValid(s)) {
+                throw C_Error(pos, "lex:name:invalid:$s", "Invalid name: '$s'")
+            }
+            return S_Name(pos, s)
+        }
+
         fun decodeInteger(pos: S_Pos, s: String): Long {
+            var radix = 10
+            var p = s
+
+            if (s.startsWith("0x")) {
+                radix = 16
+                p = s.substring(2)
+            }
+
             return try {
-                if (s.startsWith("0x")) {
-                    java.lang.Long.parseLong(s.substring(2), 16)
-                } else {
-                    java.lang.Long.parseLong(s)
-                }
+                java.lang.Long.parseLong(p, radix)
             } catch (e: NumberFormatException) {
-                throw C_Error(pos, "lex:int:$s", "Invalid integer literal: '$s'")
+                val big = try {
+                    BigInteger(p, radix)
+                } catch (e2: NumberFormatException) {
+                    null
+                }
+
+                if (big != null && (big < BIG_MIN_INTEGER || big > BIG_MAX_INTEGER)) {
+                    throw C_Error(pos, "lex:int:range:$s", "Integer literal out of range: $s")
+                } else {
+                    throw C_Error(pos, "lex:int:invalid:$s", "Invalid integer literal: '$s'")
+                }
             }
         }
 

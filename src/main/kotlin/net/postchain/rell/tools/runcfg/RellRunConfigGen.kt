@@ -1,5 +1,6 @@
 package net.postchain.rell.tools.runcfg
 
+import net.postchain.rell.RellBaseCliArgs
 import net.postchain.rell.RellCliUtils
 import picocli.CommandLine
 import java.io.File
@@ -13,7 +14,7 @@ fun main(args: Array<String>) {
 
 private fun main0(args: RellRunConfigGenArgs) {
     val runConfigFile = RellCliUtils.checkFile(args.runConfigFile)
-    val sourceDir = RellCliUtils.checkDir(args.sourceDir)
+    val sourceDir = RellCliUtils.checkDir(args.sourceDir ?: ".")
 
     val outputDir = if (args.outputDir == null) File(".") else {
         val f = File(args.outputDir!!)
@@ -50,11 +51,8 @@ private fun printFiles(files: Map<String, String>) {
 }
 
 @CommandLine.Command(name = "RellRunConfigGen", description = ["Generate blockchain config from a run config"])
-private class RellRunConfigGenArgs {
-    @CommandLine.Option(names = ["--source-dir"], paramLabel =  "SOURCE_DIR", description = ["Rell source directory"], required = true)
-    var sourceDir: String = ""
-
-    @CommandLine.Option(names = ["--output-dir"], paramLabel =  "OUTPUT_DIR", description = ["Output directory"])
+private class RellRunConfigGenArgs: RellBaseCliArgs() {
+    @CommandLine.Option(names = ["-o", "--output-dir"], paramLabel =  "OUTPUT_DIR", description = ["Output directory"])
     var outputDir: String? = null
 
     @CommandLine.Option(names = ["--dry-run"], paramLabel = "DRY_RUN", description = ["Do not create files"])

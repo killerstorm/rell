@@ -4,9 +4,9 @@ import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 
 class UpdateDeleteTest: BaseRellTest() {
-    override fun classDefs() = listOf(
-            "class city { name: text; }",
-            "class person { name: text; mutable city; mutable street: text; mutable house: integer; mutable score: integer; }"
+    override fun entityDefs() = listOf(
+            "entity city { name: text; }",
+            "entity person { name: text; mutable city; mutable street: text; mutable house: integer; mutable score: integer; }"
     )
 
     @Test fun testUpdatePersonSetScore() {
@@ -40,8 +40,8 @@ class UpdateDeleteTest: BaseRellTest() {
     }
 
     @Test fun testUpdateMutable() {
-        def("class city { name: text; }")
-        def("class person { name: text; home: city; mutable work: city; base: integer; mutable score: integer; }")
+        def("entity city { name: text; }")
+        def("entity person { name: text; home: city; mutable work: city; base: integer; mutable score: integer; }")
 
         chkOp("""
                 val boston = create city('Boston');
@@ -106,7 +106,7 @@ class UpdateDeleteTest: BaseRellTest() {
         chkData()
     }
 
-    @Test fun testUpdateClassAlias() {
+    @Test fun testUpdateEntityAlias() {
         createCitiesAndPersons()
 
         chkOp("update (p: person) @ { p.name == 'Mike' } ( score = 999 );")
@@ -119,7 +119,7 @@ class UpdateDeleteTest: BaseRellTest() {
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,777)")
     }
 
-    @Test fun testDeleteClassAlias() {
+    @Test fun testDeleteEntityAlias() {
         createCitiesAndPersons()
 
         chkOp("delete (p: person) @ { p.name == 'Mike' };")
@@ -132,14 +132,14 @@ class UpdateDeleteTest: BaseRellTest() {
         chkDataCommon()
     }
 
-    @Test fun testUpdateExtraClass() {
+    @Test fun testUpdateExtraEntity() {
         createCitiesAndPersons()
 
         chkOp("update (p: person, c: city) @ { p.city == c, c.name == 'New York' } ( score = 999 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,999)")
     }
 
-    @Test fun testDeleteExtraClass() {
+    @Test fun testDeleteExtraEntity() {
         createCitiesAndPersons()
 
         chkOp("delete (p: person, c: city) @ { p.city == c, c.name == 'New York' };")
@@ -147,8 +147,8 @@ class UpdateDeleteTest: BaseRellTest() {
     }
 
     @Test fun testErr() {
-        chkOp("update foo @ {} ( x = 0 );", "ct_err:unknown_class:foo")
-        chkOp("delete foo @ {};", "ct_err:unknown_class:foo")
+        chkOp("update foo @ {} ( x = 0 );", "ct_err:unknown_entity:foo")
+        chkOp("delete foo @ {};", "ct_err:unknown_entity:foo")
 
         chkOp("update person @ {} ( foo = 123 );", "ct_err:attr_unknown_name:foo")
 
@@ -382,7 +382,7 @@ class UpdateDeleteTest: BaseRellTest() {
     }
 
     @Test fun testDeleteNoAttributes() {
-        def("class person {}")
+        def("entity person {}")
         chkOp("create person();")
         chkData("person(1)")
         chkOp("delete person@*{};")
@@ -481,9 +481,9 @@ class UpdateDeleteTest: BaseRellTest() {
     }
 
     @Test fun testUpdateShortSyntaxPath() {
-        def("class person { name; mutable score: integer; }")
-        def("class foo { p: person; }")
-        def("class bar { f: foo; }")
+        def("entity person { name; mutable score: integer; }")
+        def("entity foo { p: person; }")
+        def("entity bar { f: foo; }")
         tst.inserts = listOf()
         insert("c0.person", "name,score", "1,'James',100")
         insert("c0.person", "name,score", "2,'Mike',250")
@@ -517,8 +517,8 @@ class UpdateDeleteTest: BaseRellTest() {
     }
 
     @Test fun testBugGamePlayerSubExpr() {
-        def("class user { name; mutable games_total: integer; mutable games_won: integer; }")
-        def("class game { player_1: user; player_2: user; }")
+        def("entity user { name; mutable games_total: integer; mutable games_won: integer; }")
+        def("entity game { player_1: user; player_2: user; }")
         insert("c0.user", "name,games_total,games_won", "1,'Bob',3,2")
         insert("c0.user", "name,games_total,games_won", "4,'Alice',6,5")
         insert("c0.game", "player_1,player_2", "7,1,4")

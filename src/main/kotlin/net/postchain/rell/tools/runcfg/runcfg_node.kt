@@ -16,7 +16,7 @@ object RunConfigNodeConfigGen {
             generateNodeConfigByPath(nodeConfig.src, configDir)
         } else {
             check(nodeConfig.text != null)
-            generateNodeConfigByText(nodeConfig.text!!)
+            generateNodeConfigByText(nodeConfig.text)
         }
     }
 
@@ -116,7 +116,7 @@ object RunConfigNodeConfigGen {
                     msg
                 }
 
-                signersMap[id] = bytes!!
+                signersMap[id] = bytes
             }
         }
 

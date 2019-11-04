@@ -6,9 +6,9 @@ import net.postchain.rell.Bytes33
 import net.postchain.rell.GeneralDir
 import net.postchain.rell.PostchainUtils
 import net.postchain.rell.RellConfigGen
+import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.CONFIG_RELL_SOURCES
 import net.postchain.rell.parser.C_SourceDir
-import net.postchain.rell.parser.C_SourcePath
 
 class RunConfigChainConfigGen private constructor(private val sourceDir: C_SourceDir, private val configDir: GeneralDir) {
     companion object {
@@ -23,13 +23,13 @@ class RunConfigChainConfigGen private constructor(private val sourceDir: C_Sourc
 
             for (chain in runConfig.chains) {
                 val resConfigs = mutableMapOf<Long, Gtv>()
-                val sourcePaths = mutableSetOf<C_SourcePath>()
+                val modules = mutableSetOf<R_ModuleName>()
                 for (config in chain.configs) {
-                    val (gtv, sourcePath) = generator.genChainConfig(chain, config, extraSigners)
+                    val (gtv, module) = generator.genChainConfig(chain, config, extraSigners)
                     resConfigs[config.height] = gtv
-                    if (sourcePath != null) sourcePaths.add(sourcePath)
+                    if (module != null) modules.add(module)
                 }
-                val resChain = RellPostAppChain(chain.name, chain.iid, chain.brid, resConfigs, sourcePaths)
+                val resChain = RellPostAppChain(chain.name, chain.iid, chain.brid, resConfigs, modules)
                 res.add(resChain)
             }
 
@@ -41,14 +41,14 @@ class RunConfigChainConfigGen private constructor(private val sourceDir: C_Sourc
             chain: Rcfg_Chain,
             config: Rcfg_ChainConfig,
             extraSigners: Collection<Bytes33>
-    ): Pair<Gtv, C_SourcePath?> {
+    ): Pair<Gtv, R_ModuleName?> {
         val b = RunConfigGtvBuilder()
-        var sourcePath: C_SourcePath? = null
+        var module: R_ModuleName? = null
 
-        if (config.module != null) {
-            val (moduleGtv, moduleSourcePath) = genModuleConfig(config.module)
+        if (config.app != null) {
+            val (moduleGtv, appModule) = genAppConfig(config.app)
             b.update(moduleGtv)
-            sourcePath = moduleSourcePath
+            module = appModule
         }
 
         for (chainGtv in config.gtvs) {
@@ -67,13 +67,13 @@ class RunConfigChainConfigGen private constructor(private val sourceDir: C_Sourc
         }
 
         val gtv = b.build()
-        return Pair(gtv, sourcePath)
+        return Pair(gtv, module)
     }
 
-    private fun genModuleConfig(module: Rcfg_Module): Pair<Gtv, C_SourcePath> {
+    private fun genAppConfig(app: Rcfg_App): Pair<Gtv, R_ModuleName> {
         val b = RunConfigGtvBuilder()
 
-        if (module.addDefaults) {
+        if (app.addDefaults) {
             b.update(gtv("name" to gtv("net.postchain.base.BaseBlockBuildingStrategy")), "blockstrategy")
             b.update(gtv("net.postchain.gtx.GTXBlockchainConfigurationFactory"), "configurationfactory")
 
@@ -84,21 +84,22 @@ class RunConfigChainConfigGen private constructor(private val sourceDir: C_Sourc
             b.update(modulesGtv, "gtx", "modules")
         }
 
-        val sourcePath = C_SourcePath.parse(module.src + ".rell")
-        val sources = RellConfigGen.getModuleSources(sourceDir, sourcePath)
+        val configGen = RellConfigGen.create(sourceDir, listOf(app.module))
+        val sources = configGen.getModuleSources()
 
         val srcGtv = gtv(
-                "mainFile" to gtv(sources.mainFile),
+                "modules" to gtv(listOf(gtv(app.module.str()))),
                 CONFIG_RELL_SOURCES to gtv(sources.files.mapValues { (_, v) -> gtv(v) })
         )
         b.update(srcGtv, "gtx", "rell")
 
-        if (module.args != null) {
-            b.update(gtv(module.args), "gtx", "rell", "moduleArgs")
+        if (app.args.isNotEmpty()) {
+            val argsGtv = app.args.mapKeys{ (k, _) -> k.str() }.mapValues{ (_, v) -> gtv(v) }
+            b.update(gtv(argsGtv), "gtx", "rell", "moduleArgs")
         }
 
         val gtv = b.build()
-        return Pair(gtv, sourcePath)
+        return Pair(gtv, app.module)
     }
 
     private fun genChainGtv(chainGtv: Rcfg_ChainConfigGtv): Gtv {

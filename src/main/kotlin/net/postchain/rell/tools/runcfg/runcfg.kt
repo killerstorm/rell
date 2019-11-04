@@ -2,9 +2,9 @@ package net.postchain.rell.tools.runcfg
 
 import net.postchain.gtv.Gtv
 import net.postchain.rell.*
+import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.parser.C_DiskSourceDir
 import net.postchain.rell.parser.C_SourceDir
-import net.postchain.rell.parser.C_SourcePath
 import java.io.File
 
 class RellPostAppCliConfig(val sourceDir: C_SourceDir, val configDir: File, val config: RellPostAppConfig)
@@ -22,7 +22,7 @@ class RellPostAppChain(
         val iid: Long,
         val brid: Bytes32,
         val configs: Map<Long, Gtv>,
-        val sourcePaths: Set<C_SourcePath>
+        val modules: Set<R_ModuleName>
 )
 
 class Rcfg_Run(val nodeConfig: Rcfg_NodeConfig, val chains: List<Rcfg_Chain>, val wipeDb: Boolean)
@@ -39,12 +39,16 @@ class Rcfg_Chain(
 
 class Rcfg_ChainConfig(
         val height: Long,
-        val module: Rcfg_Module?,
+        val app: Rcfg_App?,
         val gtvs: List<Rcfg_ChainConfigGtv>,
         val addDependencies: Boolean
 )
 
-class Rcfg_Module(val src: String, val args: Map<String, Gtv>?, val addDefaults: Boolean)
+class Rcfg_App(
+        val module: R_ModuleName,
+        val args: Map<R_ModuleName, Map<String, Gtv>>,
+        val addDefaults: Boolean
+)
 
 class Rcfg_ChainConfigGtv(val path: List<String>, val src: String?, val gtv: Gtv?)
 

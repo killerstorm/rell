@@ -16,6 +16,8 @@ class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
         chkQueryRes("= x'12EF';", """"12EF"""")
         chkQueryRes("""= json('{"x":123,"y":"Hello"}');""", """"{\"x\":123,\"y\":\"Hello\"}"""")
         chkQueryRes("= null;", "null")
+        chkQueryRes("= 123.456;", "\"123.456\"")
+        chkQueryRes("= 123.0;", "\"123\"")
     }
 
     @Test fun testQueryResultTuple() {
@@ -37,14 +39,14 @@ class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
         chkQueryRes("= [1:'A',2:'B',3:'C'];", """[[1,"A"],[2,"B"],[3,"C"]]""")
     }
 
-    @Test fun testQueryResultRecord() {
-        def("record foo { x: integer; b: bar; }")
-        def("record bar { p: boolean; q: text; }")
+    @Test fun testQueryResultStruct() {
+        def("struct foo { x: integer; b: bar; }")
+        def("struct bar { p: boolean; q: text; }")
         chkQueryRes(" = foo(123, bar(true, 'Hello'));", """{"b":{"p":1,"q":"Hello"},"x":123}""")
     }
 
-    @Test fun testQueryResultCyclicRecord() {
-        def("record node { v: integer; left: node? = null; right: node? = null; }")
+    @Test fun testQueryResultCyclicStruct() {
+        def("struct node { v: integer; left: node? = null; right: node? = null; }")
         chkQueryRes("= node(456, left = node(123), right = node(789));",
                 """{"left":{"left":null,"right":null,"v":123},"right":{"left":null,"right":null,"v":789},"v":456}""")
     }
@@ -75,6 +77,9 @@ class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
         chkArg("json", """"{\"x\":123,\"y\":\"Hello\"}"""", """json[{"x":123,"y":"Hello"}]""")
         chkArg("json", """{"x":123,"y":"Hello"}""", "gtv_err:type:json:DICT")
         chkArg("json", """"{"""", "gtv_err:type:json:STRING")
+
+        chkArg("decimal", "123", "dec[123]")
+        chkArg("decimal", "'123.456'", "dec[123.456]")
     }
 
     @Test fun testArgByteArray() {
@@ -157,54 +162,54 @@ class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
         chkArg("gtv", """{ "x" : 123, "y" : [4,5,6] }""", """gtv[{"x":123,"y":[4,5,6]}]""")
     }
 
-    @Test fun testArgRecordQuery() {
-        def("record foo { x: integer; b: bar; }")
-        def("record bar { p: boolean; q: text; }")
-        def("record qaz { b: bar?; }")
+    @Test fun testArgStructQuery() {
+        def("struct foo { x: integer; b: bar; }")
+        def("struct bar { p: boolean; q: text; }")
+        def("struct qaz { b: bar?; }")
         tst.gtvResult = false
 
         chkQueryArg("foo", """{"x":123,"b":{"p":1,"q":"Hello"}}""", "foo[x=int[123],b=bar[p=boolean[true],q=text[Hello]]]")
         chkQueryArg("foo", """{"x":123,"b":{"p":2,"q":"Hello"}}""", "gtv_err:type:boolean:INTEGER")
         chkQueryArg("foo", """{"x":123,"b":{"p":1,"q":456}}""", "gtv_err:type:string:INTEGER")
-        chkQueryArg("foo", """{"b":{"p":1,"q":"Hello"}}""", "gtv_err:record_size:foo:2:1")
+        chkQueryArg("foo", """{"b":{"p":1,"q":"Hello"}}""", "gtv_err:struct_size:foo:2:1")
         chkQueryArg("foo", """{"x":123,"b":null}""", "gtv_err:type:array:NULL")
-        chkQueryArg("foo", """{"x":123}""", "gtv_err:record_size:foo:2:1")
-        chkQueryArg("foo", """{"x":123,"b":{"p":1,"q":"Hello","r":456}}""", "gtv_err:record_size:bar:2:3")
+        chkQueryArg("foo", """{"x":123}""", "gtv_err:struct_size:foo:2:1")
+        chkQueryArg("foo", """{"x":123,"b":{"p":1,"q":"Hello","r":456}}""", "gtv_err:struct_size:bar:2:3")
 
-        chkQueryArg("qaz", """{"b":{"p":2,"q":"Hello","r":456}}""", "gtv_err:record_size:bar:2:3")
+        chkQueryArg("qaz", """{"b":{"p":2,"q":"Hello","r":456}}""", "gtv_err:struct_size:bar:2:3")
         chkQueryArg("qaz", """{"b":null}""", "qaz[b=null]")
-        chkQueryArg("qaz", """{}""", "gtv_err:record_size:qaz:1:0")
+        chkQueryArg("qaz", """{}""", "gtv_err:struct_size:qaz:1:0")
     }
 
-    @Test fun testArgRecordQueryCyclic() {
-        def("record node { v: integer; left: node? = null; right: node? = null; }")
+    @Test fun testArgStructQueryCyclic() {
+        def("struct node { v: integer; left: node? = null; right: node? = null; }")
         tst.gtvResult = false
 
         chkQueryArg("node", """{"v":456,"left":{"v":123,"left":null,"right":null},"right":{"v":789,"left":null,"right":null}}""",
                 "node[v=int[456],left=node[v=int[123],left=null,right=null],right=node[v=int[789],left=null,right=null]]")
     }
 
-    @Test fun testArgRecordOp() {
-        def("record foo { x: integer; b: bar; }")
-        def("record bar { p: boolean; q: text; }")
-        def("record qaz { b: bar?; }")
+    @Test fun testArgStructOp() {
+        def("struct foo { x: integer; b: bar; }")
+        def("struct bar { p: boolean; q: text; }")
+        def("struct qaz { b: bar?; }")
 
         chkOpArg("foo", """[123,[1,"Hello"]]""", "foo[x=int[123],b=bar[p=boolean[true],q=text[Hello]]]")
         chkOpArg("foo", """{"x":123,"b":{"p":1,"q":"Hello"}}""", "gtv_err:type:array:DICT")
         chkOpArg("foo", """[123,[2,"Hello"]]""", "gtv_err:type:boolean:INTEGER")
         chkOpArg("foo", """[123,[1,456]]""", "gtv_err:type:string:INTEGER")
-        chkOpArg("foo", """[[1,"Hello"]]""", "gtv_err:record_size:foo:2:1")
+        chkOpArg("foo", """[[1,"Hello"]]""", "gtv_err:struct_size:foo:2:1")
         chkOpArg("foo", """[123,null]""", "gtv_err:type:array:NULL")
-        chkOpArg("foo", """[123]""", "gtv_err:record_size:foo:2:1")
-        chkOpArg("foo", """[123,[1,"Hello",456]]""", "gtv_err:record_size:bar:2:3")
+        chkOpArg("foo", """[123]""", "gtv_err:struct_size:foo:2:1")
+        chkOpArg("foo", """[123,[1,"Hello",456]]""", "gtv_err:struct_size:bar:2:3")
 
-        chkOpArg("qaz", """[[2,"Hello",456]]""", "gtv_err:record_size:bar:2:3")
+        chkOpArg("qaz", """[[2,"Hello",456]]""", "gtv_err:struct_size:bar:2:3")
         chkOpArg("qaz", """[null]""", "qaz[b=null]")
-        chkOpArg("qaz", """[]""", "gtv_err:record_size:qaz:1:0")
+        chkOpArg("qaz", """[]""", "gtv_err:struct_size:qaz:1:0")
     }
 
-    @Test fun testArgRecordOpCyclic() {
-        def("record node { v: integer; left: node? = null; right: node? = null; }")
+    @Test fun testArgStructOpCyclic() {
+        def("struct node { v: integer; left: node? = null; right: node? = null; }")
 
         chkOpArg("node", """[456,[123,null,null],[789,null,null]]""",
                 "node[v=int[456],left=node[v=int[123],left=null,right=null],right=node[v=int[789],left=null,right=null]]")

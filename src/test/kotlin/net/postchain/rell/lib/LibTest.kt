@@ -42,24 +42,24 @@ class LibTest: BaseRellTest(false) {
 
     @Test fun testLog() {
         chkEx("{ log('Hello'); return 123; }", "int[123]")
-        chkLog("main.rell(1) Hello")
+        chkLog("[main.rell:1] Hello")
         chkStdout()
 
         chkEx("{ log(12345); return 123; }", "int[123]")
-        chkLog("main.rell(1) 12345")
+        chkLog("[main.rell:1] 12345")
         chkStdout()
 
         chkEx("{ log(1, 2, 3, 4, 5); return 123; }", "int[123]")
-        chkLog("main.rell(1) 1 2 3 4 5")
+        chkLog("[main.rell:1] 1 2 3 4 5")
         chkStdout()
 
         chkEx("{ log(); return 123; }", "int[123]")
         chkStdout()
-        chkLog("main.rell(1)")
+        chkLog("[main.rell:1]")
 
         chkEx("{\n    log('Hello'); log('World');\n    log('Bye');\n    return 123;\n}", "int[123]")
         chkStdout()
-        chkLog("main.rell(2) Hello", "main.rell(2) World", "main.rell(3) Bye")
+        chkLog("[main.rell:2] Hello", "[main.rell:2] World", "[main.rell:3] Bye")
     }
 
     @Test fun testIsSigner() {
@@ -78,7 +78,7 @@ class LibTest: BaseRellTest(false) {
 
     @Test fun testTypeOf() {
         tst.strictToString = false
-        def("class user { name: text; }")
+        def("entity user { name: text; }")
 
         chk("_type_of(null)", "null")
         chk("_type_of(true)", "boolean")
@@ -131,10 +131,10 @@ class LibTest: BaseRellTest(false) {
                 "byte_array[a424302230080c0178a30302017b30160c0179a511300fa303020104a303020105a303020106]")
     }
 
-    @Test fun testRecord() {
-        def("record foo { a: integer; b: text; }")
-        def("record bar { a: (x: integer, text); }")
-        def("record qaz { m: map<integer,text>; }")
+    @Test fun testStruct() {
+        def("struct foo { a: integer; b: text; }")
+        def("struct bar { a: (x: integer, text); }")
+        def("struct qaz { m: map<integer,text>; }")
 
         chk("foo(123,'Hello').to_gtv()", """gtv[[123,"Hello"]]""")
         chk("foo(123,'Hello').to_gtv_pretty()", """gtv[{"a":123,"b":"Hello"}]""")
@@ -184,24 +184,19 @@ class LibTest: BaseRellTest(false) {
 
         chkCompile("function f(v: GTXValue){}", "ct_err:deprecated:TYPE:GTXValue:gtv")
         chkCompile("function f(v: list<GTXValue>){}", "ct_err:deprecated:TYPE:GTXValue:gtv")
-        chkCompile("record rec { v: GTXValue; }", "ct_err:deprecated:TYPE:GTXValue:gtv")
-        chkCompile("record rec { v: list<GTXValue>; }", "ct_err:deprecated:TYPE:GTXValue:gtv")
-        chkCompile("record rec { v: map<text,GTXValue>; }", "ct_err:deprecated:TYPE:GTXValue:gtv")
-        chkCompile("record rec { v: map<text,list<GTXValue?>>?; }", "ct_err:deprecated:TYPE:GTXValue:gtv")
+        chkCompile("struct rec { v: GTXValue; }", "ct_err:deprecated:TYPE:GTXValue:gtv")
+        chkCompile("struct rec { v: list<GTXValue>; }", "ct_err:deprecated:TYPE:GTXValue:gtv")
+        chkCompile("struct rec { v: map<text,GTXValue>; }", "ct_err:deprecated:TYPE:GTXValue:gtv")
+        chkCompile("struct rec { v: map<text,list<GTXValue?>>?; }", "ct_err:deprecated:TYPE:GTXValue:gtv")
 
         chkCompile("function f() { GTXValue.from_bytes(x''); }", "ct_err:deprecated:NAMESPACE:GTXValue:gtv")
         chkCompile("function f() { GTXValue.from_json(''); }", "ct_err:deprecated:NAMESPACE:GTXValue:gtv")
     }
 
-    @Test fun testDeprecatedWarning() {
-        chkCompile("function f(v: GTXValue){}", "OK")
-        chkWarn("deprecated:TYPE:GTXValue:gtv")
-
-        chkCompile("record rec { v: list<GTXValue>; }", "OK")
-        chkWarn("deprecated:TYPE:GTXValue:gtv")
-
-        chkCompile("function f() { GTXValue.from_bytes(x''); }", "OK")
-        chkWarn("deprecated:NAMESPACE:GTXValue:gtv")
+    @Test fun testDeprecatedDefaultMode() {
+        chkCompile("function f(v: GTXValue){}", "ct_err:deprecated:TYPE:GTXValue:gtv")
+        chkCompile("struct rec { v: list<GTXValue>; }", "ct_err:deprecated:TYPE:GTXValue:gtv")
+        chkCompile("function f() { GTXValue.from_bytes(x''); }", "ct_err:deprecated:NAMESPACE:GTXValue:gtv")
     }
 
     @Test fun testDeprecatedFunctions() {
@@ -210,7 +205,7 @@ class LibTest: BaseRellTest(false) {
         chkCompile("function f(x: integer?) { requireNotEmpty(x); }",
                 "ct_err:deprecated:FUNCTION:requireNotEmpty:require_not_empty")
 
-        chk("empty(_nullable_int(123))", "ct_err:deprecated:FUNCTION:empty:exists")
+        chk("empty(_nullable_int(123))", "boolean[true]")
 
         chk("byte_array([1,2,3,4])", "ct_err:deprecated:FUNCTION:byte_array:byte_array.from_list")
         chk("byte_array('1234')", "byte_array[1234]")
@@ -253,7 +248,7 @@ class LibTest: BaseRellTest(false) {
 
     @Test fun testDeprecatedFunctionsGtv() {
         tst.deprecatedError = true
-        def("record rec { x: integer; }")
+        def("struct rec { x: integer; }")
 
         chk("gtv.fromBytes(x'1234')", "ct_err:deprecated:FUNCTION:fromBytes:from_bytes")
         chk("gtv.fromJSON('{}')", "ct_err:deprecated:FUNCTION:fromJSON:from_json")

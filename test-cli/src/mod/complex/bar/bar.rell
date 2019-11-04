@@ -1,0 +1,7 @@
+import ^.sub;
+
+function bar() {
+    log('bar start');
+    sub.helper();
+    log('bar end');
+}

@@ -6,8 +6,8 @@ sealed class S_Type {
     abstract fun compile(ctx: C_NamespaceContext): R_Type
 
     fun compile(ctx: C_ExprContext): R_Type {
-        ctx.blkCtx.entCtx.nsCtx.modCtx.checkPass(C_ModulePass.EXPRESSIONS, C_ModulePass.EXPRESSIONS)
-        return compile(ctx.blkCtx.entCtx.nsCtx)
+        ctx.blkCtx.defCtx.executor.checkPass(C_CompilerPass.EXPRESSIONS)
+        return compile(ctx.blkCtx.defCtx.nsCtx)
     }
 
     companion object {
@@ -15,6 +15,10 @@ sealed class S_Type {
             if (!dstType.isAssignableFrom(srcType)) {
                 throw C_Errors.errTypeMismatch(errPos, srcType, dstType, errCode, errMsg)
             }
+        }
+
+        fun matchOpt(ctx: C_ExprContext, dstType: R_Type, srcType: R_Type, errPos: S_Pos, errCode: String, errMsg: String): Boolean {
+            return ctx.globalCtx.consumeError { match(dstType, srcType, errPos, errCode, errMsg); true } ?: false
         }
 
         fun adapt(dstType: R_Type, srcType: R_Type, errPos: S_Pos, errCode: String, errMsg: String): R_TypeAdapter {
@@ -96,7 +100,7 @@ class S_VirtualType(val pos: S_Pos, val innerType: S_Type): S_Type() {
             throw errBadInnerType(rInnerType)
         }
 
-        ctx.modCtx.onPass(C_ModulePass.VALIDATION) {
+        ctx.executor.onPass(C_CompilerPass.VALIDATION) {
             validate(rInnerType)
         }
 
@@ -112,7 +116,7 @@ class S_VirtualType(val pos: S_Pos, val innerType: S_Type): S_Type() {
 
     private fun errBadInnerType(rInnerType: R_Type): C_Error {
         return C_Error(pos, "type:virtual:bad_inner_type:${rInnerType.name}",
-                "Type ${rInnerType.name} cannot be virtual (allowed types are: list, map, record, tuple)")
+                "Type '${rInnerType.name}' cannot be virtual (allowed types are: list, set, map, struct, tuple)")
     }
 
     companion object {
@@ -122,7 +126,7 @@ class S_VirtualType(val pos: S_Pos, val innerType: S_Type): S_Type() {
                 is R_SetType -> type.virtualType
                 is R_MapType -> type.virtualType
                 is R_TupleType -> type.virtualType
-                is R_RecordType -> type.virtualType
+                is R_StructType -> type.struct.virtualType
                 else -> null
             }
         }

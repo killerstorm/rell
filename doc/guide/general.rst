@@ -28,9 +28,9 @@ Simple type aliases:
 Complex types:
 --------------
 
--  class
+-  ``entity``
+-  ``struct``
 -  ``T?`` - nullable type
--  ``record``
 -  tuple: ``(T1, ..., Tn)``
 -  ``list<T>``
 -  ``set<T>``
@@ -42,7 +42,7 @@ Complex types:
 Nullable type
 -------------
 
--  Class attributes cannot be nullable.
+-  Entity attributes cannot be nullable.
 -  Can be used with almost any type (except nullable, ``unit``, ``null``).
 -  Nullable nullable (``T??`` is not allowed).
 -  Normal operations of the underlying type cannot be applied directly.
@@ -98,14 +98,61 @@ Examples:
 -  ``(integer)`` - one value
 -  ``(integer, text)`` - two values
 -  ``(integer, (text, boolean))`` - nested tuple
--  ``(x: integer, y: integer)`` - named fields (can be accessed as
-   ``A.x``, ``A.y``)
+-  ``(x: integer, y: integer)`` - named fields (can be accessed as ``A.x``, ``A.y``)
 
-Tuple types are compatible only if names and types of fields are the
-same:
+Tuple types are compatible only if names and types of fields are the same:
 
 -  ``(x:integer, y:integer)`` and ``(a:integer,b:integer)`` are not compatible.
 -  ``(x:integer, y:integer)`` and ``(integer,integer)`` are not compatible.
+
+Using tuples
+~~~~~~~~~~~~~~~~~~~~~~~
+
+-  ``(1, 2, 3)`` - three values
+-  ``(123, 'Hello')`` - two values
+-  ``(456,)`` - one value (because of the comma)
+-  ``(789)`` - not a tuple (no comma)
+-  ``(a = 123, b = 'Hello')`` - tuple with named fields
+
+Reading tuple fields:
+
+- ``t[0]``, ``t[1]`` - by index
+- ``t.a``, ``t.b`` - by name (for named fields)
+
+Unpacking tuples
+~~~~~~~~~~~~~~~~
+
+::
+
+    val t = (123, 'Hello');
+    val (n, s) = t;           // n = 123, s = 'Hello'
+
+Works for arbitrarily nested tuples:
+
+::
+
+    val (n, (p, (x, y), q)) = calculate();
+
+Special symbol ``_`` is used to ignore a tuple element:
+
+::
+
+    val (_, s) = (123, 'Hello'); // s = 'Hello'
+
+Variable types can be specified explicitly:
+
+::
+
+    val (n: integer, s: text) = (123, 'Hello');
+
+Unpacking can be used in a loop:
+
+::
+
+    val l: list<(integer, text)> = get_tuples();
+    for ((x, y) in l) {
+        print(x, y);
+    }
 
 Collection types
 ----------------
@@ -124,8 +171,31 @@ Following types are mutable:
 
 -  Collection types (``list``, ``set``, ``map``) - always.
 -  Nullable type - only if the underlying type is mutable.
--  Record type - if the record has a mutable field, or a field of a mutable type.
+-  Struct type - if the struct has a mutable field, or a field of a mutable type.
 -  Tuple - if a type of an element is mutable.
+
+Creating collections
+~~~~~~~~~~~~~~~~~~~~
+
+List:
+
+::
+
+    val l1 = [ 1, 2, 3, 4, 5 ];
+    val l2 = list<integer>();
+
+Set:
+
+::
+
+    val s = set<integer>();
+
+Map:
+
+::
+
+    val m1 = [ 'Bob' : 123, 'Alice' : 456 ];
+    val m2 = map<text, integer>();
 
 decimal
 -------------
@@ -200,7 +270,7 @@ Type ``virtual<T>`` can be used only with following types ``T``:
 - ``list<*>``
 - ``set<*>``
 - ``map<text, *>``
-- ``record``
+- ``struct``
 - tuple
 
 Additionally, types of all internal elements of ``T`` must satisfy following constraints:
@@ -210,7 +280,7 @@ Additionally, types of all internal elements of ``T`` must satisfy following con
 
 Operations available for all virtual types:
 
-- member access: ``[]`` for ``list`` and ``map``, ``.name`` for ``record`` and tuple
+- member access: ``[]`` for ``list`` and ``map``, ``.name`` for ``struct`` and tuple
 - ``.to_full(): T`` - converts the virtual value to the original value, if the value is full
   (all internal elements are present), otherwise throws an exception
 - ``.hash(): byte_array`` - returns the hash of the value, which is the same as the hash of the
@@ -220,7 +290,7 @@ Operations available for all virtual types:
 Features of ``virtual<T>``:
 
 - it is immutable
-- reading a member of type ``list<*>``, ``map<*,*>``, ``record`` or tuple returns a value of
+- reading a member of type ``list<*>``, ``map<*,*>``, ``struct`` or tuple returns a value of
   the corresponding virtual type, not of the actual member type
 - cannot be converted to Gtv, so cannot be used as a return type of a ``query``
 
@@ -228,7 +298,7 @@ Example:
 
 ::
 
-    record rec { t: text; s: integer; }
+    struct rec { t: text; s: integer; }
 
     operation op(recs: virtual<list<rec>>) {
         for (rec in recs) {                 // type of "rec" is "virtual<rec>", not "rec"
@@ -253,82 +323,23 @@ assigned to a variable of type ``A`` (or passed as a parameter of type
 Module definitions
 ==================
 
-Include
--------
+Entity
+------
 
-A Rell file can include contents of other Rell files.
+Values (instances) of an entity in Rell are stored in a database, not in memory.
+They have to be created and deleted explicitly using Rell ``create`` and ``delete`` expressions.
+An in-memory equivalent of an entity in Rell is a struct.
 
-Suppose file ``helper.rell`` contains:
-
-::
-
-    class user { name; }
-    function square(x: integer): integer = x * x;
-
-Definitions from ``helper.rell`` can be included using the ``include`` directive:
+A variable of an entity type holds an ID (primary key) of the corresponding database record, but not its attribute values.
 
 ::
 
-    include 'helper';
-
-    query get_all_users() = user @* {};
-    query my_query() = square(33);
-
-Included directive can be put in a namespace or an external block:
-
-::
-
-    namespace helper {
-        include 'helper';
-    }
-
-    query get_all_users() = helper.user @* {};
-    query my_query() = helper.square(33);
-
-All definitions from the included file are visible in the including file, and vice versa, i. e. the code in the
-included file can access all definitions of the including file.
-
-In a standard operational mode, when Rell is run via Postchain, available files are defined in the blockchain
-configuration under the path ``gtx.rell``:
-
-::
-
-    {
-        "gtx": {
-            "rell": {
-                "mainFile": "main.rell",
-                "sources_v0.9": {
-                    "main.rell": "...",
-                    "helper.rell": "..."
-                }
-            }
-        }
-    }
-
-More details:
-
-- File name is specified without extension.
-- An absolute or relative path can be specified. Absolute path starts with ``/``, and points to the Rell sources root,
-  not to the file system root.
-- Not allowed to include the same file twice within the same namespace. But if the same file is included indirectly
-  (via another included file), the include directive has no effect.
-
-Class
------
-
-Instances of a class in Rell are stored in a database, not in memory. They have to be created and deleted explicitly
-using Rell ``create`` and ``delete`` expressions. An in-memory equivalent of a class in Rell is a record.
-
-A variable of a class type holds an ID (primary key) of the corresponding database record, but not its attribute values.
-
-::
-
-    class company {
+    entity company {
         name: text;
         address: text;
     }
 
-    class user {
+    entity user {
         first_name: text;
         last_name: text;
         year_of_birth: integer;
@@ -339,7 +350,7 @@ If attribute type is not specified, it will be the same as attribute name:
 
 ::
 
-    class user {
+    entity user {
         name;       // built-in type "name"
         company;    // user-defined type "company" (error if no such type)
     }
@@ -348,11 +359,11 @@ Attributes may have default values:
 
 ::
 
-    class user {
+    entity user {
         home_city: text = 'New York';
     }
 
-An ID (database primary key) of a class object can be accessed via the ``rowid`` implicit attribute (of type ``rowid``):
+An ID (database primary key) of an entity value can be accessed via the ``rowid`` implicit attribute (of type ``rowid``):
 
 ::
 
@@ -365,11 +376,11 @@ An ID (database primary key) of a class object can be accessed via the ``rowid``
 Keys and Indices
 ~~~~~~~~~~~~~~~~
 
-Classes can have ``key`` and ``index`` clauses:
+Entities can have ``key`` and ``index`` clauses:
 
 ::
 
-    class user {
+    entity user {
         name: text;
         address: text;
         key name;
@@ -380,7 +391,7 @@ Keys and indices may have multiple attributes:
 
 ::
 
-    class user {
+    entity user {
         first_name: text;
         last_name: text;
         key first_name, last_name;
@@ -391,31 +402,31 @@ but such definition has restrictions (e. g. cannot specify ``mutable``):
 
 ::
 
-    class user {
+    entity user {
         key first_name: text, last_name: text;
         index address: text;
     }
 
-Class annotations
-~~~~~~~~~~~~~~~~~
+Entity annotations
+~~~~~~~~~~~~~~~~~~
 
 ::
 
-    class user (log) {
+    @log entity user {
         name: text;
     }
 
-The ``log`` annotation has following effects:
+The ``@log`` annotation has following effects:
 
-- Special attribute ``transaction`` of type ``transaction`` is added to the class.
-- When an object is created, ``transaction`` is set to the result of ``op_context.transaction`` (current transaction).
-- Class cannot have mutable attributes.
-- Objects cannot be deleted.
+- Special attribute ``transaction`` of type ``transaction`` is added to the entity.
+- When an entity value is created, ``transaction`` is set to the result of ``op_context.transaction`` (current transaction).
+- Entity cannot have mutable attributes.
+- Values cannot be deleted.
 
 Object
 ------
 
-Object is similar to class, but there can be only one instance of an object:
+Object is similar to entity, but there can be only one instance of an object:
 
 ::
 
@@ -440,32 +451,32 @@ Modifying an object:
 
 Features of objects:
 
-- Like classes, objects are stored in a database.
+- Like entities, objects are stored in a database.
 - Objects are initialized automatically during blockchain initialization.
 - Cannot create or delete an object from code.
 - Attributes of an object must have default values.
 
-Record
+Struct
 ------
 
-A record is similar to a class, but its instances exist in memory, not in a database.
+Struct is similar to entity, but its values exist in memory, not in a database.
 
 ::
 
-    record user {
+    struct user {
         name: text;
         address: text;
         mutable balance: integer = 0;
     }
 
-Features of records:
+Features of structs:
 
 - Attributes are immutable by default, and only mutable when declared with ``mutable`` keyword.
 - Attributes can have
 - An attribute may have a default value, which is used if the attribute is not specified during construction.
-- Records are deleted from memory implicitly by a garbage collector.
+- Structs are deleted from memory implicitly by a garbage collector.
 
-Creating record values:
+Creating struct values:
 
 ::
 
@@ -479,15 +490,15 @@ by name or type:
     val name = 'Bob';
     val address = 'New York';
     val u = user(name, address);
-    val u2 = user(address, name); // Order does not matter - same record object is created.
+    val u2 = user(address, name); // Order does not matter - same struct value is created.
 
-Record attributes can be accessed using operator ``.``:
+Struct attributes can be accessed using operator ``.``:
 
 ::
 
     print(u.name, u.address);
 
-Safe-access operator ``?.`` can be used to read or modify attributes of a nullable record:
+Safe-access operator ``?.`` can be used to read or modify attributes of a nullable struct:
 
 ::
 
@@ -602,12 +613,12 @@ Definitions can be put in a namespace:
 ::
 
     namespace foo {
-        class user {
+        entity user {
             name;
             country;
         }
 
-        record point {
+        struct point {
             x: integer;
             y: integer;
         }
@@ -625,19 +636,37 @@ Features of namespaces:
 
 - No need to specify a full name within a namespace, i. e. can use ``country`` under namespace ``foo`` directly, not as
   ``foo.country``.
-- Names of tables for classes and objects defined in a namespace contain the full name, e. g. the table for class
+- Names of tables for entities and objects defined in a namespace contain the full name, e. g. the table for entity
   ``foo.user`` will be named ``c0.foo.user``.
 - It is allowed to define namespace with same name multiple times with different inner definitions.
+
+Anonymous namespace:
+
+::
+
+    namespace {
+        // some definitions
+    }
+
+Can be used to apply an annotation to a set of definitions:
+
+::
+
+    @mount('foo.bar')
+    namespace {
+        entity user {}
+        entity company {}
+    }
 
 External
 --------
 
-External blocks are used to access classes defined in other blockchains:
+External blocks are used to access entities defined in other blockchains:
 
 ::
 
     external 'foo' {
-        class user(log) {
+        @log entity user {
             name;
         }
     }
@@ -647,28 +676,20 @@ External blocks are used to access classes defined in other blockchains:
 In this example, ``'foo'`` is the name of an external blockchain. To be used in an external block, a blockchain
 must be defined in the blockchain configuration (``dependencies`` node).
 
-Every blockchain has its ``chain_id``, which is included in table names for classes and objects of that chain. If the
-blockchain ``'foo'`` has ``chain_id`` = 123, the table for the class ``user`` will be called ``c123.user``.
-
-Can use ``include`` within an external block:
-
-::
-
-    external 'foo' {
-        include 'foo_defs';
-    }
+Every blockchain has its ``chain_id``, which is included in table names for entities and objects of that chain. If the
+blockchain ``'foo'`` has ``chain_id`` = 123, the table for the entity ``user`` will be called ``c123.user``.
 
 Other features:
 
-- External classes must be annotated with the ``log`` annotation. This implies that those classes cannot have mutable
+- External entities must be annotated with the ``@log`` annotation. This implies that those entity cannot have mutable
   attributes.
-- Objects of external classes cannot be created or deleted.
-- Only classes and namespaces are allowed inside of an external block.
+- Values of external entities cannot be created or deleted.
+- Only entities and namespaces are allowed inside of an external block.
 - Can have only one external block for a specific blockchain name.
-- When selecting objects of an external class (using at-expression), an implicit block height filter is applied, so
+- When selecting values of an external entity (using at-expression), an implicit block height filter is applied, so
   the active blockchain can see only those blocks of the external blockchain whose height is lower than a specific value.
-- Every blockchain stores the structure of its classes in meta-information tables. When a blockchain is started,
-  the meta-information of all involved external blockchains is verified to make sure that all declared external classes
+- Every blockchain stores the structure of its entities in meta-information tables. When a blockchain is started,
+  the meta-information of all involved external blockchains is verified to make sure that all declared external entities
   exist and have declared attributes.
 
 Transactions and blocks
@@ -680,19 +701,98 @@ To access blocks and transactions of an external blockchian, a special syntax is
 
     namespace foo {
         external 'foo' {
-            class transaction;
-            class block;
+            entity transaction;
+            entity block;
         }
     }
 
    function get_foo_transactions(): list<foo.transaction> = foo.transaction @* {};
    function get_foo_blocks(): list<foo.block> = foo.block @* {};
 
-- External block must be put in a namespace in order to prevent name conflict, since classes ``transaction`` and
+- External block must be put in a namespace in order to prevent name conflict, since entities ``transaction`` and
   ``block`` are already defined in the top-level scope (they represent transactions and blocks of the active blockchain).
 - Namespace name can be arbitrary.
 - External and non-external transactions/blocks are distinct, incompatible types.
-- When selecting external transactions or blocks, an implicit height filter is applied (like for external classes).
+- When selecting external transactions or blocks, an implicit height filter is applied (like for external entities).
+
+.. _general-mount-names:
+
+Mount names
+-----------
+
+Entities, objects, operations and queries have mount names:
+
+- for entities and objects, those names are the SQL table names where the data is stored
+- for operations and queries, a mount name is used to invoke an operation or a query from the outside
+
+By default, a mount name is defined by a fully-qualified name of a definition:
+
+::
+
+    namespace foo {
+        namespace bar {
+            entity user {}
+        }
+    }
+
+The mount name for the entity ``user`` is ``foo.bar.user``.
+
+To specify a custom mount name, ``@mount`` annotation is used:
+
+::
+
+    @mount('foo.bar.user')
+    entity user {}
+
+The ``@mount`` annotation can be specified for entities, objects, operations and queries.
+
+In addition, it can be specified for a namespace:
+
+::
+
+    @mount('foo.bar')
+    namespace ns {
+        entity user {}
+    }
+
+or a module:
+
+::
+
+    @mount('foo.bar')
+    module;
+
+    entity user {}
+
+In both cases, the mount name of ``user`` is ``foo.bar.user``.
+
+A mount name can be relative to the context mount name. For example, when defined in a namespace
+
+::
+
+    @mount('a.b.c')
+    namespace ns {
+        entity user {}
+    }
+
+entity ``user`` will have following mount names when annotated with ``@mount``:
+
+- ``@mount('.d.user')`` -> ``a.b.c.d.user``
+- ``@mount('^.user')`` -> ``a.b.user``
+- ``@mount('^^.x.user')`` -> ``a.x.user``
+
+Special character ``.`` appends names to the context mount name, and ``^`` removes the last part from the context
+mount name.
+
+A mount name can end with ``.``, in that case the name of the definition is appended to the mount name:
+
+::
+
+    @mount('foo.')
+    entity user {}      // mount name = "foo.user"
+
+    @mount('foo')
+    entity user {}      // mount name = "foo"
 
 --------------
 
@@ -716,26 +816,6 @@ Text literals may have escape-sequences:
 -  Special characters: ``\"``, ``\'``, ``\\``.
 -  Unicode: ``\u003A``.
 
-Tuple:
-
--  ``(1, 2, 3)`` - three values
--  ``(123, 'Hello')`` - two values
--  ``(456,)`` - one value (because of the comma)
--  ``(789)`` - not a tuple (no comma)
--  ``(a = 123, b = 'Hello')`` - tuple with named fields
-
-List:
-
-::
-
-    [ 1, 2, 3, 4, 5 ]
-
-Map:
-
-::
-
-    [ 'Bob' : 123, 'Alice' : 456 ]
-
 Operators
 ---------
 
@@ -758,11 +838,11 @@ Comparison:
 -  ``<=``
 -  ``>=``
 
-Operators ``==`` and ``!=`` compare values. For complex types (collections, tuples, records) they compare member
-values, recursively. For ``class`` object values only object IDs are compared.
+Operators ``==`` and ``!=`` compare values. For complex types (collections, tuples, structs) they compare member
+values, recursively. For ``entity`` values only object IDs are compared.
 
 Operators ``===`` and ``!==`` compare references, not values. They can be used only on types:
-tuple, ``record``, ``list``, ``set``, ``map``, ``gtv``, ``range``.
+tuple, ``struct``, ``list``, ``set``, ``map``, ``gtv``, ``range``.
 
 Example:
 
@@ -828,32 +908,6 @@ Variables:
     var x: integer;
     var y = 123;
     var z: text = 'Hello';
-
-Tuple unpacking
-~~~~~~~~~~~~~~~
-
-::
-
-    val t = (123, 'Hello');
-    val (n, s) = t;           // n = 123, s = 'Hello'
-
-Works with arbitrarily nested tuples:
-
-::
-
-    val (n, (p, (x, y), q)) = calculate();
-
-Special symbol ``_`` is used to ignore a tuple element:
-
-::
-
-    val (_, s) = (123, 'Hello'); // s = 'Hello'
-
-Variable types can be specified explicitly:
-
-::
-
-    val (n: integer, s: text) = (123, 'Hello');
 
 Basic statements
 ----------------
@@ -984,7 +1038,7 @@ For:
 The expression after ``in`` may return a ``range`` or a collection
 (``list``, ``set``, ``map``).
 
-Tuple unpacking can be used:
+Tuple unpacking can be used in a loop:
 
 ::
 
@@ -1039,4 +1093,4 @@ Multiline comment:
 
 --------------
 
-*Rell v0.9.1*
+*Rell v0.10.0*

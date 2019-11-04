@@ -9,8 +9,8 @@ class StatementTest: BaseRellTest() {
         chkEx("{ val x = 123; return x; }", "int[123]")
         chkEx("{ val x = 123; x = 456; return x; }", "ct_err:expr_assign_val:x")
         chkEx("{ val x: integer = 123; return x; }", "int[123]")
-        chkEx("{ val x: text = 123; return x; }", "ct_err:stmt_var_type:x:text:integer")
-        chkEx("{ val x: integer = 'Hello'; return x; }", "ct_err:stmt_var_type:x:integer:text")
+        chkEx("{ val x: text = 123; return 0; }", "ct_err:stmt_var_type:x:text:integer")
+        chkEx("{ val x: integer = 'Hello'; return 0; }", "ct_err:stmt_var_type:x:integer:text")
         chkEx("{ val x = unit(); return 123; }", "ct_err:stmt_var_unit:x")
         chkEx("{ val x: integer; x = 123; return x; }", "int[123]")
         chkEx("{ val x: integer; x = 123; x = 456; return x; }", "ct_err:expr_assign_val:x")
@@ -19,22 +19,22 @@ class StatementTest: BaseRellTest() {
     @Test fun testVar() {
         chkEx("{ var x = 123; return x; }", "int[123]")
         chkEx("{ var x = 123; x = 456; return x; }", "int[456]")
-        chkEx("{ var x; }", "ct_err:stmt_var_notypeexpr:x")
+        chkEx("{ var x; return 0; }", "ct_err:unknown_name_type:x")
         chkEx("{ var x: integer = 123; return x; }", "int[123]")
         chkEx("{ var x: integer; x = 123; return x; }", "int[123]")
-        chkEx("{ var x: integer; x = 'Hello'; return x; }", "ct_err:stmt_assign_type:integer:text")
-        chkEx("{ var x: text; x = 123; return x; }", "ct_err:stmt_assign_type:text:integer")
-        chkEx("{ var x: integer = 'Hello'; return x; }", "ct_err:stmt_var_type:x:integer:text")
-        chkEx("{ var x: text = 123; return x; }", "ct_err:stmt_var_type:x:text:integer")
+        chkEx("{ var x: integer; x = 'Hello'; return 0; }", "ct_err:stmt_assign_type:integer:text")
+        chkEx("{ var x: text; x = 123; return 0; }", "ct_err:stmt_assign_type:text:integer")
+        chkEx("{ var x: integer = 'Hello'; return 0; }", "ct_err:stmt_var_type:x:integer:text")
+        chkEx("{ var x: text = 123; return 0; }", "ct_err:stmt_var_type:x:text:integer")
         chkEx("{ var x = 123; x = 'Hello'; return x; }", "ct_err:stmt_assign_type:integer:text")
         chkEx("{ var x = unit(); return 123; }", "ct_err:stmt_var_unit:x")
     }
 
     @Test fun testNameConflict() {
-        chkEx("{ val x = 123; val x = 456; }", "ct_err:var_dupname:x")
-        chkEx("{ val x = 123; var x = 456; }", "ct_err:var_dupname:x")
-        chkEx("{ var x = 123; val x = 456; }", "ct_err:var_dupname:x")
-        chkEx("{ var x = 123; var x = 456; }", "ct_err:var_dupname:x")
+        chkEx("{ val x = 123; val x = 456; return 0; }", "ct_err:var_dupname:x")
+        chkEx("{ val x = 123; var x = 456; return 0; }", "ct_err:var_dupname:x")
+        chkEx("{ var x = 123; val x = 456; return 0; }", "ct_err:var_dupname:x")
+        chkEx("{ var x = 123; var x = 456; return 0; }", "ct_err:var_dupname:x")
         chkEx("{ val x = 123; { val x = 456; } return 789; }", "ct_err:var_dupname:x")
         chkEx("{ val x = 123; if (2 > 1) { val x = 456; } return 789; }", "ct_err:var_dupname:x")
 
@@ -121,7 +121,7 @@ class StatementTest: BaseRellTest() {
     }
 
     @Test fun testFor() {
-        def("class user { name: text; }")
+        def("entity user { name: text; }")
         chkOp("create user('Bob'); create user('Alice'); create user('Trudy');")
 
         val code = """{
@@ -137,7 +137,7 @@ class StatementTest: BaseRellTest() {
     }
 
     @Test fun testForBreak() {
-        def("class user { name: text; }")
+        def("entity user { name: text; }")
         chkOp("create user('Bob'); create user('Alice'); create user('Trudy');")
 
         val code = """{
@@ -156,7 +156,7 @@ class StatementTest: BaseRellTest() {
     }
 
     @Test fun testForReturn() {
-        def("class user { name: text; }")
+        def("entity user { name: text; }")
         chkOp("create user('Bob'); create user('Alice'); create user('Trudy');")
 
         val code = """{
@@ -316,15 +316,16 @@ class StatementTest: BaseRellTest() {
         chkEx("{ var x: integer; if (a) { x = 123; } else { return 456; } return x; }", true, "int[123]")
         chkEx("{ var x: integer; if (a) { x = 123; } else { return 456; } return x; }", false, "int[456]")
 
-        chkEx("{ var x: integer; x += 5; return x; }", "ct_err:expr_var_uninit:x")
+        chkEx("{ var x: integer; x += 5; return x; }", "ct_err:[expr_var_uninit:x][expr_var_uninit:x]")
         chkEx("{ var x: integer; x += 5; return 0; }", "ct_err:expr_var_uninit:x")
-        chkEx("{ var x: integer; if (a) { x = 0; } x += 5; return x; }", true, "ct_err:expr_var_uninit:x")
+        chkEx("{ var x: integer; if (a) { x = 0; } x += 5; return 0; }", true, "ct_err:expr_var_uninit:x")
+        chkEx("{ var x: integer; if (a) { x = 0; } return x; }", true, "ct_err:expr_var_uninit:x")
 
-        chkEx("{ var x: integer; x++; return x; }", "ct_err:expr_var_uninit:x")
+        chkEx("{ var x: integer; x++; return x; }", "ct_err:[expr_var_uninit:x][expr_var_uninit:x]")
         chkEx("{ var x: integer; x++; return 0; }", "ct_err:expr_var_uninit:x")
-        chkEx("{ var x: integer; if (a) { x = 0; } x++; return x; }", true, "ct_err:expr_var_uninit:x")
-        chkEx("{ var x: integer; ++x; return x; }", "ct_err:expr_var_uninit:x")
-        chkEx("{ var x: integer; if (a) { x = 0; } ++x; return x; }", true, "ct_err:expr_var_uninit:x")
+        chkEx("{ var x: integer; if (a) { x = 0; } x++; return 0; }", true, "ct_err:expr_var_uninit:x")
+        chkEx("{ var x: integer; ++x; return 0; }", "ct_err:expr_var_uninit:x")
+        chkEx("{ var x: integer; if (a) { x = 0; } ++x; return 0; }", true, "ct_err:expr_var_uninit:x")
 
         chkEx("{ var x: integer = 123; if (a) { x = 456; } return x; }", false, "int[123]")
         chkEx("{ var x: integer = 123; if (a) { x = 456; } return x; }", true, "int[456]")
@@ -352,7 +353,7 @@ class StatementTest: BaseRellTest() {
         chkEx("{ var x: integer; when(a) { true -> x = 123; false -> x = 456; } return x; }", true, "int[123]")
         chkEx("{ var x: integer; when(a) { true -> x = 123; false -> x = 456; } return x; }", false, "int[456]")
         chkEx("{ var x: integer; when(a) { 0 -> print(x); 1 -> x = 456; else -> return 789; } return x; }", 0,
-                "ct_err:expr_var_uninit:x")
+                "ct_err:[expr_var_uninit:x][expr_var_uninit:x]")
     }
 
     @Test fun testUninitializedVarLoop() {
@@ -371,9 +372,10 @@ class StatementTest: BaseRellTest() {
         chkEx("{ val x: integer; for (v in range(1)) { if (a) { x = 123; } } return 456; }", false, "ct_err:expr_assign_val:x")
 
         chkEx("{ val x: integer; while(a) { x = 123; } return 0; }", false, "ct_err:expr_assign_val:x")
-        chkEx("{ val x: integer; while(a) { x = 123; return x; } return 0; }", false, "ct_err:expr_assign_val:x")
-        chkEx("{ val x: integer; while(a) { x = 123; return x; } return 456; }", false, "ct_err:expr_assign_val:x")
-        chkEx("{ val x: integer; while(a) { x = 123; return x; } return 456; }", true, "ct_err:expr_assign_val:x")
+        chkEx("{ val x: integer; while(a) { x = 123; return x; } return 0; }", false, "ct_err:[expr_assign_val:x][expr_var_uninit:x]")
+        chkEx("{ val x: integer; while(a) { x = 123; return 0; } return 456; }", false, "ct_err:expr_assign_val:x")
+        chkEx("{ val x: integer; while(a) { x = 123; return 0; } return 456; }", true, "ct_err:expr_assign_val:x")
+        chkEx("{ val x: integer; while(a) { x = 123; return x; } return 456; }", true, "ct_err:[expr_assign_val:x][expr_var_uninit:x]")
         chkEx("{ val x: integer; while (false) { if (a) { x = 123; } } return 456; }", false, "ct_err:expr_assign_val:x")
 
         chkEx("{ var x: boolean; while(x) { x = false; } return 0; }", "ct_err:expr_var_uninit:x")
@@ -388,14 +390,14 @@ class StatementTest: BaseRellTest() {
         chkEx("{ val x: integer; if (a) x = 123; else x = 456; return x; }", true, "int[123]")
         chkEx("{ val x: integer; if (a) x = 123; else x = 456; return x; }", false, "int[456]")
         chkEx("{ val x: integer; if (a) x = 123; return x; }", true, "ct_err:expr_var_uninit:x")
-        chkEx("{ val x: integer = 123; if (a) x = 456; else x = 789; return x; }", true, "ct_err:expr_assign_val:x")
+        chkEx("{ val x: integer = 123; if (a) x = 456; else x = 789; return x; }", true, "ct_err:[expr_assign_val:x][expr_assign_val:x]")
         chkEx("{ val x: integer = 123; if (a) x = 456; return x; }", true, "ct_err:expr_assign_val:x")
 
         chkEx("{ val x: integer; if (a) { x = 123; return x; } return 456; }", true, "int[123]")
         chkEx("{ val x: integer; if (a) { x = 123; return x; } return 456; }", false, "int[456]")
         chkEx("{ val x: integer; if (a) { x = 123; } return x; }", true, "ct_err:expr_var_uninit:x")
         chkEx("{ val x: integer; if (a) { return x; } return 456; }", true, "ct_err:expr_var_uninit:x")
-        chkEx("{ val x: integer; if (a) { x = 123; } x = 456; return x; }", true, "ct_err:expr_assign_val:x")
+        chkEx("{ val x: integer; if (a) { x = 123; } x = 456; return 0; }", true, "ct_err:expr_assign_val:x")
         chkEx("{ val x: integer; if (a) { x = 123; return x; } x = 456; return x; }", true, "int[123]")
         chkEx("{ val x: integer; if (a) { x = 123; return x; } x = 456; return x; }", false, "int[456]")
         chkEx("{ val x: integer; if (a) { x = 123; return x; } else {} x = 456; return x; }", true, "int[123]")

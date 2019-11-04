@@ -1,0 +1,29 @@
+module;
+
+function sum_digits_integer(n: integer): text {
+    var x = 1;
+    var res = 0;
+    for (i in range(n)) {
+        var t = x;
+        while (t > 0) {
+            res = (res * 7 + (t % 10)) % 281474976710655;
+            t /= 10;
+        }
+        ++x;
+    }
+    return res.to_hex();
+}
+
+function sum_digits_decimal(n: integer): text {
+    var x = 1.0;
+    var res = 0.0;
+    for (i in range(n)) {
+        var t = x;
+        while (t > 0) {
+            res = (res * 7 + (t % 10)) % 281474976710655;
+            t = (t / 10).floor();
+        }
+        ++x;
+    }
+    return integer(res).to_hex();
+}

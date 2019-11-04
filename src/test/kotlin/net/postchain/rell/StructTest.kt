@@ -4,16 +4,16 @@ import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 import kotlin.test.assertEquals
 
-class RecordTest: BaseRellTest(false) {
+class StructTest: BaseRellTest(false) {
     @Test fun testGeneral() {
-        def("record foo { x: integer; s: text; }")
+        def("struct foo { x: integer; s: text; }")
         chkEx("{ val r = foo(x = 123, s = 'Hello'); return r.x; }", "int[123]")
         chkEx("{ val r = foo(x = 123, s = 'Hello'); return r.s; }", "text[Hello]")
         chkEx("{ return foo(x = 123, s = 'Hello'); }", "foo[x=int[123],s=text[Hello]]")
     }
 
     @Test fun testConstruct() {
-        def("record foo { i: integer; s: text; q: text = 'Unknown'; t: (integer, text); }")
+        def("struct foo { i: integer; s: text; q: text = 'Unknown'; t: (integer, text); }")
 
         chkEx("{ return foo(i = 123, s = 'Hello', q = 'Foo', t = (456, 'Bye')); }",
                 "foo[i=int[123],s=text[Hello],q=text[Foo],t=(int[456],text[Bye])]")
@@ -28,7 +28,7 @@ class RecordTest: BaseRellTest(false) {
     }
 
     @Test fun testConstructResolveAttrByName() {
-        def("record foo { i: integer; s: text; q: text = 'Unknown'; }")
+        def("struct foo { i: integer; s: text; q: text = 'Unknown'; }")
 
         chkEx("{ val s = 'Hello'; val q = 'Bye'; return foo(i = 123, q, s); }",
                 "foo[i=int[123],s=text[Hello],q=text[Bye]]")
@@ -40,24 +40,31 @@ class RecordTest: BaseRellTest(false) {
     }
 
     @Test fun testConstructResolveAttrByType() {
-        def("record foo { i: integer; s: text; q: text = 'Unknown'; }")
+        def("struct foo { i: integer; s: text; q: text = 'Unknown'; }")
         chkEx("{ val v = 123; return foo(v, s = 'Hello'); }", "foo[i=int[123],s=text[Hello],q=text[Unknown]]")
         chkEx("{ val v = 'Hello'; return foo(i = 123, v); }", "ct_err:attr_implic_multi:1:s,q")
     }
 
     @Test fun testConstructNoArgs() {
-        def("record foo { x: integer = 123; } record bar { f: foo; }")
+        def("struct foo { x: integer = 123; } struct bar { f: foo; }")
         chk("foo()", "foo[x=int[123]]")
         chk("bar(foo())", "bar[f=foo[x=int[123]]]")
     }
 
-    @Test fun testRecordVsFunctionNameConflict() {
-        chkCompile("function foo(x: integer){} record foo {s:text;}", "ct_err:name_conflict:function:foo")
-        chkCompile("record foo {s:text;} function foo(x: integer){}", "ct_err:name_conflict:record:foo")
+    @Test fun testStructVsFunctionNameConflict() {
+        chkCompile("function foo(x: integer){} struct foo {s:text;}", """ct_err:
+            [name_conflict:user:foo:STRUCT:main.rell(1:35)]
+            [name_conflict:user:foo:FUNCTION:main.rell(1:10)]
+        """)
+
+        chkCompile("struct foo {s:text;} function foo(x: integer){}", """ct_err:
+            [name_conflict:user:foo:FUNCTION:main.rell(1:31)]
+            [name_conflict:user:foo:STRUCT:main.rell(1:8)]
+        """)
     }
 
     @Test fun testMutableAttributes() {
-        def("record foo { mutable a: integer; b: integer; }")
+        def("struct foo { mutable a: integer; b: integer; }")
         chkEx("{ val r = foo(a = 123, b = 456); return r; }", "foo[a=int[123],b=int[456]]")
         chkEx("{ val r = foo(a = 123, b = 456); r.a = 789; return r; }", "foo[a=int[789],b=int[456]]")
         chkEx("{ val r = foo(a = 123, b = 456); r.b = 789; return r; }", "ct_err:update_attr_not_mutable:b")
@@ -65,7 +72,7 @@ class RecordTest: BaseRellTest(false) {
     }
 
     @Test fun testAttributeTypeNullable() {
-        def("record foo { a: integer?; b: text?; }")
+        def("struct foo { a: integer?; b: text?; }")
         chk("foo(a = 123, b = 'Hello')", "foo[a=int[123],b=text[Hello]]")
         chk("foo(a = null, b = 'Hello')", "foo[a=null,b=text[Hello]]")
         chk("foo(a = 123, b = null)", "foo[a=int[123],b=null]")
@@ -73,30 +80,30 @@ class RecordTest: BaseRellTest(false) {
     }
 
     @Test fun testAttributeTypeTuple() {
-        def("record foo { a: (integer, text); }")
+        def("struct foo { a: (integer, text); }")
         chk("foo((123, 'Hello'))", "foo[a=(int[123],text[Hello])]")
     }
 
     @Test fun testAttributeTypeCollection() {
-        def("record foo { l: list<integer>; s: set<text>; m: map<integer, text>; }")
+        def("struct foo { l: list<integer>; s: set<text>; m: map<integer, text>; }")
         chk("foo([123], set(['Hello']), [123:'Hello'])",
                 "foo[l=list<integer>[int[123]],s=set<text>[text[Hello]],m=map<integer,text>[int[123]=text[Hello]]]")
     }
 
     @Test fun testTypeCompatibility() {
-        def("record foo { x: integer; } record bar { x: integer; }")
+        def("struct foo { x: integer; } struct bar { x: integer; }")
         chkEx("{ val r: foo = foo(123); return r; }", "foo[x=int[123]]")
         chkEx("{ val r: bar = bar(123); return r; }", "bar[x=int[123]]")
-        chkEx("{ val r: foo = bar(123); return r; }", "ct_err:stmt_var_type:r:foo:bar")
-        chkEx("{ val r: bar = foo(123); return r; }", "ct_err:stmt_var_type:r:bar:foo")
+        chkEx("{ val r: foo = bar(123); return 0; }", "ct_err:stmt_var_type:r:foo:bar")
+        chkEx("{ val r: bar = foo(123); return 0; }", "ct_err:stmt_var_type:r:bar:foo")
     }
 
-    @Test fun testRecordAsClassAttributeType() {
-        chkCompile("record foo { x: integer; } class bar { foo; }", "ct_err:class_attr_type:foo:foo")
+    @Test fun testStructAsEntityAttributeType() {
+        chkCompile("struct foo { x: integer; } entity bar { foo; }", "ct_err:entity_attr_type:foo:foo")
     }
 
-    @Test fun testAttributeOfNullableRecord() {
-        def("record foo { mutable x: integer; }")
+    @Test fun testAttributeOfNullableStruct() {
+        def("struct foo { mutable x: integer; }")
         def("function nop(x: foo?): foo? = x;")
 
         chkEx("{ val r: foo? = nop(foo(123)); return r.x; }", "ct_err:expr_mem_null:x")
@@ -121,8 +128,8 @@ class RecordTest: BaseRellTest(false) {
         chkEx("{ val r: foo? = nop(null); r!!.x = 456; return r; }", "rt_err:null_value")
     }
 
-    @Test fun testAttributeOfNullableRecord2() {
-        def("record foo { b: bar?; } record bar { mutable x: integer; }")
+    @Test fun testAttributeOfNullableStruct2() {
+        def("struct foo { b: bar?; } struct bar { mutable x: integer; }")
         chkEx("{ val r: foo? = _nullable(foo(bar(123))); return r?.b?.x; }", "int[123]")
         chkEx("{ val r: foo? = _nullable(foo(null)); return r?.b?.x; }", "null")
         chkEx("{ val r: foo? = null; return r?.b?.x; }", "null")
@@ -138,7 +145,7 @@ class RecordTest: BaseRellTest(false) {
 
     @Test fun testConstructUnderAt() {
         tstCtx.useSql = true
-        def("class user { name; value: integer; } record foo { x: integer; }")
+        def("entity user { name; value: integer; } struct foo { x: integer; }")
         chkOp("create user('Bob', 123); create user('Alice', 456);")
         chk("user @ { .value == foo(x = 123).x }(.name)", "text[Bob]")
         chk("user @ { .value == foo(x = 456).x }(.name)", "text[Alice]")
@@ -146,101 +153,102 @@ class RecordTest: BaseRellTest(false) {
 
     @Test fun testAccessUnderAt() {
         tstCtx.useSql = true
-        def("class user { name; value: integer; } record foo { x: integer; }")
+        def("entity user { name; value: integer; } struct foo { x: integer; }")
         chkOp("create user('Bob', 123); create user('Alice', 456);")
         chkEx("{ var r = foo(123); return user @ { .value == r.x }(.name); }", "text[Bob]")
         chkEx("{ var r = foo(456); return user @ { .value == r.x }(.name); }", "text[Alice]")
     }
 
-    @Test fun testRecordFlags() {
-        chkFlags("record foo { x: integer; }", "foo[gtv]")
-        chkFlags("record foo { mutable x: integer; }", "foo[mut,gtv]")
-        chkFlags("record foo { x: integer; next: foo?; }", "foo[gtv,cyc,inf]")
-        chkFlags("record foo { mutable x: integer; next: foo?; }", "foo[mut,gtv,cyc,inf]")
-        chkFlags("record foo { x: virtual<list<integer>>; }", "foo[from_gtv]")
+    @Test fun testStructFlags() {
+        chkFlags("struct foo { x: integer; }", "foo[gtv]")
+        chkFlags("struct foo { mutable x: integer; }", "foo[mut,gtv]")
+        chkFlags("struct foo { x: integer; next: foo?; }", "foo[gtv,cyc,inf]")
+        chkFlags("struct foo { mutable x: integer; next: foo?; }", "foo[mut,gtv,cyc,inf]")
+        chkFlags("struct foo { x: virtual<list<integer>>; }", "foo[from_gtv]")
 
-        chkFlags("record foo { x: integer; }", "foo[gtv]")
-        chkFlags("record foo { x: integer?; }", "foo[gtv]")
-        chkFlags("record foo { x: text; }", "foo[gtv]")
-        chkFlags("record foo { x: byte_array; }", "foo[gtv]")
-        chkFlags("record foo { x: boolean; }", "foo[gtv]")
-        chkFlags("record foo { x: (x: integer, text); }", "foo[gtv]")
-        chkFlags("record foo { x: range; }", "foo[]")
-        chkFlags("class user { name; } record foo { x: user; }", "foo[gtv]")
-        chkFlags("record foo { x: list<integer>; }", "foo[mut,gtv]")
-        chkFlags("record foo { x: set<integer>; }", "foo[mut,gtv]")
-        chkFlags("record foo { x: map<integer,text>; }", "foo[mut,gtv]")
+        chkFlags("struct foo { x: integer; }", "foo[gtv]")
+        chkFlags("struct foo { x: integer?; }", "foo[gtv]")
+        chkFlags("struct foo { x: text; }", "foo[gtv]")
+        chkFlags("struct foo { x: byte_array; }", "foo[gtv]")
+        chkFlags("struct foo { x: boolean; }", "foo[gtv]")
+        chkFlags("struct foo { x: (x: integer, text); }", "foo[gtv]")
+        chkFlags("struct foo { x: range; }", "foo[]")
+        chkFlags("entity user { name; } struct foo { x: user; }", "foo[gtv]")
+        chkFlags("struct foo { x: list<integer>; }", "foo[mut,gtv]")
+        chkFlags("struct foo { x: set<integer>; }", "foo[mut,gtv]")
+        chkFlags("struct foo { x: map<integer,text>; }", "foo[mut,gtv]")
 
-        chkFlags("record bar { x: integer; } record foo { y: bar; }", "bar[gtv],foo[gtv]")
-        chkFlags("record bar { x: integer; } record foo { mutable y: bar; }", "bar[gtv],foo[mut,gtv]")
-        chkFlags("record bar { mutable x: integer; } record foo { y: bar; }", "bar[mut,gtv],foo[mut,gtv]")
-        chkFlags("record bar { mutable x: integer?; } record foo { y: bar; }", "bar[mut,gtv],foo[mut,gtv]")
+        chkFlags("struct bar { x: integer; } struct foo { y: bar; }", "bar[gtv],foo[gtv]")
+        chkFlags("struct bar { x: integer; } struct foo { mutable y: bar; }", "bar[gtv],foo[mut,gtv]")
+        chkFlags("struct bar { mutable x: integer; } struct foo { y: bar; }", "bar[mut,gtv],foo[mut,gtv]")
+        chkFlags("struct bar { mutable x: integer?; } struct foo { y: bar; }", "bar[mut,gtv],foo[mut,gtv]")
 
-        chkFlags("record bar { x: foo?; } record foo { y: bar?; }", "bar[gtv,cyc,inf],foo[gtv,cyc,inf]")
-        chkFlags("record bar { mutable x: foo?; } record foo { y: bar?; }", "bar[mut,gtv,cyc,inf],foo[mut,gtv,cyc,inf]")
-        chkFlags("record bar { x: foo?; } record foo { mutable y: bar?; }", "bar[mut,gtv,cyc,inf],foo[mut,gtv,cyc,inf]")
+        chkFlags("struct bar { x: foo?; } struct foo { y: bar?; }", "bar[gtv,cyc,inf],foo[gtv,cyc,inf]")
+        chkFlags("struct bar { mutable x: foo?; } struct foo { y: bar?; }", "bar[mut,gtv,cyc,inf],foo[mut,gtv,cyc,inf]")
+        chkFlags("struct bar { x: foo?; } struct foo { mutable y: bar?; }", "bar[mut,gtv,cyc,inf],foo[mut,gtv,cyc,inf]")
 
-        chkFlags("record bar { x: bar?; } record foo { y: bar?; }", "bar[gtv,cyc,inf],foo[gtv,inf]")
-        chkFlags("record bar { mutable x: bar?; } record foo { y: bar?; }", "bar[mut,gtv,cyc,inf],foo[mut,gtv,inf]")
-        chkFlags("record bar { x: bar?; } record foo { mutable y: bar?; }", "bar[gtv,cyc,inf],foo[mut,gtv,inf]")
+        chkFlags("struct bar { x: bar?; } struct foo { y: bar?; }", "bar[gtv,cyc,inf],foo[gtv,inf]")
+        chkFlags("struct bar { mutable x: bar?; } struct foo { y: bar?; }", "bar[mut,gtv,cyc,inf],foo[mut,gtv,inf]")
+        chkFlags("struct bar { x: bar?; } struct foo { mutable y: bar?; }", "bar[gtv,cyc,inf],foo[mut,gtv,inf]")
 
-        chkFlags("record bar { x: foo?; } record foo { y: (q: boolean, list<map<text,bar>>); }",
+        chkFlags("struct bar { x: foo?; } struct foo { y: (q: boolean, list<map<text,bar>>); }",
                 "bar[mut,gtv,cyc,inf],foo[mut,gtv,cyc,inf]")
-        chkFlags("record bar { x: integer; } record foo { y: (q: boolean, list<map<text,bar>>); }",
+        chkFlags("struct bar { x: integer; } struct foo { y: (q: boolean, list<map<text,bar>>); }",
                 "bar[gtv],foo[mut,gtv]")
     }
 
-    @Test fun testRecordFlagsGtv() {
-        chkFlags("record foo { x: integer; }", "foo[gtv]")
-        chkFlags("record foo { x: (a: text, b: integer); }", "foo[gtv]")
-        chkFlags("record foo { x: (a: integer, b: text); }", "foo[gtv]")
-        chkFlags("record foo { x: (x: text, integer); }", "foo[gtv]")
+    @Test fun testStructFlagsGtv() {
+        chkFlags("struct foo { x: integer; }", "foo[gtv]")
+        chkFlags("struct foo { x: (a: text, b: integer); }", "foo[gtv]")
+        chkFlags("struct foo { x: (a: integer, b: text); }", "foo[gtv]")
+        chkFlags("struct foo { x: (x: text, integer); }", "foo[gtv]")
 
-        chkFlags("record foo { x: map<text,integer>; }", "foo[mut,gtv]")
-        chkFlags("record foo { x: map<integer,text>; }", "foo[mut,gtv]")
+        chkFlags("struct foo { x: map<text,integer>; }", "foo[mut,gtv]")
+        chkFlags("struct foo { x: map<integer,text>; }", "foo[mut,gtv]")
 
-        chkFlags("record foo { x: list<set<(a: text, b: integer)>>; }", "foo[mut,gtv]")
-        chkFlags("record foo { x: list<set<(q: text, integer)>>; }", "foo[mut,gtv]")
-        chkFlags("record foo { x: list<map<text,integer>>; }", "foo[mut,gtv]")
-        chkFlags("record foo { x: list<map<integer,text>>; }", "foo[mut,gtv]")
+        chkFlags("struct foo { x: list<set<(a: text, b: integer)>>; }", "foo[mut,gtv]")
+        chkFlags("struct foo { x: list<set<(q: text, integer)>>; }", "foo[mut,gtv]")
+        chkFlags("struct foo { x: list<map<text,integer>>; }", "foo[mut,gtv]")
+        chkFlags("struct foo { x: list<map<integer,text>>; }", "foo[mut,gtv]")
 
-        chkFlags("record foo { x: (a:text,b:integer); } record bar { mutable y: range; }", "bar[mut],foo[gtv]")
-        chkFlags("record foo { x: (a:text,b:integer); p: bar; } record bar { mutable y: range; }", "bar[mut],foo[mut]")
-        chkFlags("record foo { x: (a:text,b:integer); } record bar { mutable y: range; q: foo; }", "bar[mut],foo[gtv]")
-        chkFlags("record foo { x: (a:text,b:integer); p: bar; } record bar { mutable y: range; q: foo; }",
+        chkFlags("struct foo { x: (a:text,b:integer); } struct bar { mutable y: range; }", "bar[mut],foo[gtv]")
+        chkFlags("struct foo { x: (a:text,b:integer); p: bar; } struct bar { mutable y: range; }", "bar[mut],foo[mut]")
+        chkFlags("struct foo { x: (a:text,b:integer); } struct bar { mutable y: range; q: foo; }", "bar[mut],foo[gtv]")
+        chkFlags("struct foo { x: (a:text,b:integer); p: bar; } struct bar { mutable y: range; q: foo; }",
                 "bar[mut,cyc,inf],foo[mut,cyc,inf]")
 
-        chkFlags("record foo { x: (t:text,integer); } record bar { mutable y: range; }", "bar[mut],foo[gtv]")
-        chkFlags("record foo { x: (t:text,integer); p: bar; } record bar { mutable y: range; }", "bar[mut],foo[mut]")
-        chkFlags("record foo { x: (t:text,integer); } record bar { mutable y: range; q: foo; }", "bar[mut],foo[gtv]")
-        chkFlags("record foo { x: (t:text,integer); p: bar; } record bar { mutable y: range; q: foo; }",
+        chkFlags("struct foo { x: (t:text,integer); } struct bar { mutable y: range; }", "bar[mut],foo[gtv]")
+        chkFlags("struct foo { x: (t:text,integer); p: bar; } struct bar { mutable y: range; }", "bar[mut],foo[mut]")
+        chkFlags("struct foo { x: (t:text,integer); } struct bar { mutable y: range; q: foo; }", "bar[mut],foo[gtv]")
+        chkFlags("struct foo { x: (t:text,integer); p: bar; } struct bar { mutable y: range; q: foo; }",
                 "bar[mut,cyc,inf],foo[mut,cyc,inf]")
     }
 
     private fun chkFlags(code: String, expected: String) {
-        val actual = tst.processModule(code) { module ->
+        val actual = tst.processApp(code) { app ->
             val lst = mutableListOf<String>()
-            for (rec in module.records.values.sortedBy { it.name }) {
+            val structs = app.modules.flatMap { it.structs.values }
+            for (struct in structs.sortedBy { it.simpleName }) {
                 val flags = mutableListOf<String>()
-                if (rec.flags.typeFlags.mutable) flags.add("mut")
+                if (struct.flags.typeFlags.mutable) flags.add("mut")
 
-                val gtv = rec.flags.typeFlags.gtv
+                val gtv = struct.flags.typeFlags.gtv
                 if (gtv.fromGtv && gtv.toGtv) flags.add("gtv") else {
                     if (gtv.fromGtv) flags.add("from_gtv")
                     if (gtv.toGtv) flags.add("to_gtv")
                 }
 
-                if (rec.flags.cyclic) flags.add("cyc")
-                if (rec.flags.infinite) flags.add("inf")
-                lst.add("${rec.name}[${flags.joinToString(",")}]")
+                if (struct.flags.cyclic) flags.add("cyc")
+                if (struct.flags.infinite) flags.add("inf")
+                lst.add("${struct.simpleName}[${flags.joinToString(",")}]")
             }
             lst.joinToString(",")
         }
         assertEquals(expected, actual)
     }
 
-    @Test fun testMutableRecordAsMapSetKey() {
-        def("record foo { mutable x: integer; }")
+    @Test fun testMutableStructAsMapSetKey() {
+        def("struct foo { mutable x: integer; }")
         chk("set<foo>()", "ct_err:expr_set_type:foo")
         chk("map<foo,text>()", "ct_err:expr_map_keytype:foo")
         chk("map<text,foo>()", "map<text,foo>[]")
@@ -250,8 +258,8 @@ class RecordTest: BaseRellTest(false) {
         chk("[foo(123)]", "list<foo>[foo[x=int[123]]]")
     }
 
-    @Test fun testRecordAsMapSetKeySimple() {
-        def("record foo { x: integer; }")
+    @Test fun testStructAsMapSetKeySimple() {
+        def("struct foo { x: integer; }")
 
         chkEx("{ var s = set([foo(123)]); return s; }", "set<foo>[foo[x=int[123]]]")
         chkEx("{ var s = set([foo(123)]); return s.contains(foo(123)); }", "boolean[true]")
@@ -262,8 +270,8 @@ class RecordTest: BaseRellTest(false) {
         chkEx("{ var m = [foo(123) : 'Hello']; return m[foo(456)]; }", "rt_err:fn_map_get_novalue:foo[x=int[456]]")
     }
 
-    @Test fun testRecordAsMapSetKeyComplex() {
-        def("record foo { x: text; b: bar; } record bar { p: integer; q: integer; }")
+    @Test fun testStructAsMapSetKeyComplex() {
+        def("struct foo { x: text; b: bar; } struct bar { p: integer; q: integer; }")
 
         chkEx("{ var s = set([foo('ABC', bar(p=123,q=456))]); return s; }",
                 "set<foo>[foo[x=text[ABC],b=bar[p=int[123],q=int[456]]]]")
@@ -285,7 +293,7 @@ class RecordTest: BaseRellTest(false) {
     }
 
     @Test fun testEqSimple() {
-        def("record foo { x: integer; y: text; } record bar { x: integer; y: text; }")
+        def("struct foo { x: integer; y: text; } struct bar { x: integer; y: text; }")
 
         chkEx("{ val f = foo(123, 'Hello'); return f == foo(123, 'Hello'); }", "boolean[true]")
         chkEx("{ val f = foo(123, 'Hello'); return f != foo(123, 'Hello'); }", "boolean[false]")
@@ -299,7 +307,7 @@ class RecordTest: BaseRellTest(false) {
     }
 
     @Test fun testEqComplex() {
-        def("record foo { x: integer; b: list<bar>; } record bar { s: list<text>; q: boolean; }")
+        def("struct foo { x: integer; b: list<bar>; } struct bar { s: list<text>; q: boolean; }")
 
         chkEx("{ val f = foo(123, [bar(['Hello'], true)]); return f == foo(123, [bar(['Hello'], true)]); }",
                 "boolean[true]")
@@ -316,7 +324,7 @@ class RecordTest: BaseRellTest(false) {
     }
 
     @Test fun testEqTree() {
-        def("record node { left: node?; right: node?; value: integer; }")
+        def("struct node { left: node?; right: node?; value: integer; }")
 
         chkEx("""{
             val p = node(
@@ -348,7 +356,7 @@ class RecordTest: BaseRellTest(false) {
     }
 
     @Test fun testRefEq() {
-        def("record foo { a: integer; b: text; }")
+        def("struct foo { a: integer; b: text; }")
 
         chkEx("{ val x = foo(123, 'Hello'); val y = foo(123, 'Hello'); return x == y; }", "boolean[true]")
         chkEx("{ val x = foo(123, 'Hello'); val y = foo(123, 'Hello'); return x != y; }", "boolean[false]")
@@ -359,7 +367,7 @@ class RecordTest: BaseRellTest(false) {
     }
 
     @Test fun testToString() {
-        def("record foo { a: integer; b: bar; } record bar { s: text; }")
+        def("struct foo { a: integer; b: bar; } struct bar { s: text; }")
         chk("'' + foo(123, bar('Hello'))", "text[foo{a=123,b=bar{s=Hello}}]")
     }
 
@@ -370,7 +378,7 @@ class RecordTest: BaseRellTest(false) {
 
     @Test fun testCircularReference() {
         val code = """
-            record node { value: integer; mutable next: node?; }
+            struct node { value: integer; mutable next: node?; }
 
             function list_to_chain(values: list<integer>): node? {
                 var first: node? = null;

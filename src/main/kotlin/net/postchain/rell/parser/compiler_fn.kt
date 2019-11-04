@@ -1,221 +1,121 @@
 package net.postchain.rell.parser
 
 import net.postchain.rell.model.*
-import org.apache.commons.collections4.multimap.ArrayListValuedHashMap
 
-sealed class C_ArgTypeMatcher {
-    abstract fun match(type: R_Type): C_ArgTypeMatch?
+
+abstract class C_GlobalFunction {
+    abstract fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr
 }
 
-object C_ArgTypeMatcher_Any: C_ArgTypeMatcher() {
-    override fun match(type: R_Type) = C_ArgTypeMatch_Direct
+abstract class C_RegularGlobalFunction: C_GlobalFunction() {
+    abstract fun compileCallRegular(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Expr
+
+    override final fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
+        val cArgs = compileArgs(ctx, args)
+        return compileCallRegular(ctx, name, cArgs)
+    }
+
+    companion object {
+        fun compileArgs(ctx: C_ExprContext, args: List<S_NameExprPair>): List<C_Value> {
+            val namedArg = args.map { it.name }.filterNotNull().firstOrNull()
+            if (namedArg != null) {
+                val argName = namedArg.str
+                throw C_Error(namedArg.pos, "expr_call_namedarg:$argName", "Named function arguments not supported")
+            }
+
+            val cArgs = args.map {
+                val sArg = it.expr
+                val cArg = sArg.compile(ctx).value()
+                val type = cArg.type()
+                C_Utils.checkUnitType(sArg.startPos, type, "expr_arg_unit", "Argument expression returns nothing")
+                cArg
+            }
+
+            return cArgs
+        }
+    }
 }
 
-class C_ArgTypeMatcher_Simple(val targetType: R_Type): C_ArgTypeMatcher() {
-    override fun match(type: R_Type): C_ArgTypeMatch? {
-        return if (targetType.isAssignableFrom(type)) {
-            C_ArgTypeMatch_Direct
-        } else if (targetType == R_DecimalType && type == R_IntegerType) {
-            C_ArgTypeMatch_IntegerToDecimal
+class C_StructGlobalFunction(private val struct: R_Struct): C_GlobalFunction() {
+    override fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
+        return compileCall(struct, ctx, name, args)
+    }
+
+    companion object {
+        fun compileCall(struct: R_Struct, ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
+            val attrs = C_AttributeResolver.resolveCreate(ctx, struct.attributes, args, name.pos)
+            val rExpr = R_StructExpr(struct, attrs.rAttrs)
+            return C_RValue.makeExpr(name.pos, rExpr, attrs.exprFacts)
+        }
+    }
+}
+
+class C_UserGlobalFunction(val rFunction: R_Function): C_RegularGlobalFunction() {
+    private val paramsLate = C_LateInit(C_CompilerPass.MEMBERS, listOf<C_ExternalParam>())
+
+    fun setParams(params: List<C_ExternalParam>) {
+        paramsLate.set(params)
+    }
+
+    override fun compileCallRegular(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Expr {
+        val params = paramsLate.get()
+        val effArgs = checkArgs(ctx, name, params, args)
+
+        val type = rFunction.type()
+
+        val rExpr = if (effArgs != null) {
+            val rArgs = effArgs.map { it.toRExpr() }
+            R_UserCallExpr(type, rFunction, rArgs)
         } else {
-            null
+            C_Utils.crashExpr(type, "Compilation error")
         }
-    }
-}
 
-class C_ArgTypeMatcher_CollectionSub(val elementType: R_Type): C_ArgTypeMatcher() {
-    override fun match(type: R_Type): C_ArgTypeMatch? {
-        val direct = type is R_CollectionType && elementType.isAssignableFrom(type.elementType)
-        return if (direct) C_ArgTypeMatch_Direct else null
-    }
-}
-
-class C_ArgTypeMatcher_MapSub(val keyType: R_Type, val valueType: R_Type): C_ArgTypeMatcher() {
-    override fun match(type: R_Type): C_ArgTypeMatch? {
-        val direct = type is R_MapType
-                && keyType.isAssignableFrom(type.keyType)
-                && valueType.isAssignableFrom(type.valueType)
-        return if (direct) C_ArgTypeMatch_Direct else null
-    }
-}
-
-sealed class C_ArgTypeMatch {
-    abstract fun effectiveArg(arg: C_Value): C_Value
-}
-
-object C_ArgTypeMatch_Direct: C_ArgTypeMatch() {
-    override fun effectiveArg(arg: C_Value) = arg
-}
-
-object C_ArgTypeMatch_IntegerToDecimal: C_ArgTypeMatch() {
-    override fun effectiveArg(arg: C_Value) = C_Utils.integerToDecimalPromotion(arg)
-}
-
-class C_ArgTypesMatch(private val match: List<C_ArgTypeMatch>) {
-    val size = match.size
-
-    fun effectiveArgs(args: List<C_Value>): List<C_Value> {
-        check(args.size == match.size) { "${args.size} != ${match.size}" }
-        return args.mapIndexed { i, arg -> match[i].effectiveArg(arg) }
+        val exprFacts = C_ExprVarFacts.forSubExpressions(args)
+        return C_RValue.makeExpr(name.pos, rExpr, exprFacts)
     }
 
-    companion object {
-        fun match(params: List<C_ArgTypeMatcher>, args: List<R_Type>): C_ArgTypesMatch? {
-            if (args.size != params.size) {
-                return null
-            }
+    private fun checkArgs(ctx: C_ExprContext, name: S_Name, params: List<C_ExternalParam>, args: List<C_Value>): List<C_Value>? {
+        val nameStr = name.str
+        var err = false
 
-            val res = mutableListOf<C_ArgTypeMatch>()
+        if (args.size != params.size) {
+            ctx.globalCtx.error(name.pos, "expr_call_argcnt:$nameStr:${params.size}:${args.size}",
+                    "Wrong number of arguments for '$nameStr': ${args.size} instead of ${params.size}")
+            err = true
+        }
 
-            for ((i, arg) in args.withIndex()) {
-                val param = params[i]
-                val match = param.match(arg)
-                if (match == null) {
-                    return null
+        val matchList = mutableListOf<C_ArgTypeMatch>()
+        val n = Math.min(args.size, params.size)
+
+        for ((i, param) in params.subList(0, n).withIndex()) {
+            val arg = args[i]
+            val paramType = param.type
+            val argType = arg.type()
+
+            var m: C_ArgTypeMatch? = null
+
+            if (paramType != null) {
+                val matcher = C_ArgTypeMatcher_Simple(paramType)
+                m = matcher.match(argType)
+                if (m == null) {
+                    val paramCode = param.nameCode(i)
+                    val paramMsg = param.nameMsg(i)
+                    val code = "expr_call_argtype:$nameStr:$paramCode:${paramType.toStrictString()}:${argType.toStrictString()}"
+                    val msg = "Wrong argument type for parameter $paramMsg: ${argType} instead of ${paramType}"
+                    ctx.globalCtx.error(name.pos, code, msg)
+                    err = true
                 }
-                res.add(match)
             }
 
-            return C_ArgTypesMatch(res)
-        }
-    }
-}
-
-sealed class C_FuncCaseCtx {
-    abstract val fullName: S_Name
-}
-
-class C_GlobalFuncCaseCtx(name: S_Name): C_FuncCaseCtx() {
-    override val fullName = name
-}
-
-class C_MemberFuncCaseCtx(val member: C_MemberRef): C_FuncCaseCtx() {
-    override val fullName = S_Name(member.name.pos, member.qualifiedName())
-}
-
-abstract class C_FuncCase<CtxT: C_FuncCaseCtx> {
-    abstract fun match(args: List<C_Value>): C_FuncCaseMatch<CtxT>?
-}
-
-typealias C_GlobalFuncCase = C_FuncCase<C_GlobalFuncCaseCtx>
-typealias C_GlobalFuncCaseMatch = C_FuncCaseMatch<C_GlobalFuncCaseCtx>
-
-abstract class C_SysFuncCase<CtxT: C_FuncCaseCtx>: C_FuncCase<CtxT>()
-typealias C_GlobalSysFuncCase = C_SysFuncCase<C_GlobalFuncCaseCtx>
-typealias C_MemberSysFuncCase = C_SysFuncCase<C_MemberFuncCaseCtx>
-
-abstract class C_FuncCaseMatch<CtxT: C_FuncCaseCtx> {
-    abstract fun compileCall(ctx: C_ExprContext, caseCtx: CtxT): C_Value
-
-    open fun compileCallDb(ctx: C_ExprContext, caseCtx: CtxT): C_Value {
-        val name = caseCtx.fullName
-        throw C_Errors.errFunctionNoSql(name.pos, name.str)
-    }
-}
-
-class C_DeprecatedFuncCase<CtxT: C_FuncCaseCtx>(
-        private val case: C_FuncCase<CtxT>,
-        private val deprecated: C_Deprecated
-): C_FuncCase<CtxT>() {
-    override fun match(args: List<C_Value>): C_FuncCaseMatch<CtxT>? {
-        val match = case.match(args)
-        return if (match == null) match else C_DeprecatedFuncCaseMatch(match, deprecated)
-    }
-
-    private class C_DeprecatedFuncCaseMatch<CtxT: C_FuncCaseCtx>(
-            private val match: C_FuncCaseMatch<CtxT>,
-            private val deprecated: C_Deprecated
-    ): C_FuncCaseMatch<CtxT>() {
-        override fun compileCall(ctx: C_ExprContext, caseCtx: CtxT): C_Value {
-            deprecatedMessage(ctx, caseCtx)
-            return match.compileCall(ctx, caseCtx)
+            matchList.add(m ?: C_ArgTypeMatch_Direct)
         }
 
-        override fun compileCallDb(ctx: C_ExprContext, caseCtx: CtxT): C_Value {
-            deprecatedMessage(ctx, caseCtx)
-            return match.compileCallDb(ctx, caseCtx)
-        }
-
-        private fun deprecatedMessage(ctx: C_ExprContext, caseCtx: CtxT) {
-            val name = caseCtx.fullName
-            C_Def.deprecatedMessage(ctx.blkCtx.entCtx.nsCtx, C_DefType.FUNCTION, name.pos, name.str, deprecated)
-        }
-    }
-}
-
-abstract class C_BasicGlobalFuncCaseMatch(private val args: List<C_Value>): C_GlobalFuncCaseMatch() {
-    abstract fun compileCallExpr(name: S_Name, args: List<R_Expr>): R_Expr
-
-    open fun compileCallDbExpr(name: S_Name, args: List<Db_Expr>): Db_Expr {
-        throw C_Errors.errFunctionNoSql(name.pos, name.str)
-    }
-
-    final override fun compileCall(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): C_Value {
-        return compileCall(caseCtx, args, this::compileCallExpr)
-    }
-
-    final override fun compileCallDb(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): C_Value {
-        return compileCallDb(caseCtx, args, this::compileCallDbExpr)
-    }
-
-    companion object {
-        fun compileCall(
-                caseCtx: C_GlobalFuncCaseCtx,
-                args: List<C_Value>,
-                rFactory: (S_Name, List<R_Expr>) -> R_Expr
-        ): C_Value {
-            val name = caseCtx.fullName
-            val rArgs = args.map { it.toRExpr() }
-            val rExpr = rFactory(name, rArgs)
-            val facts = C_ExprVarFacts.forSubExpressions(args)
-            return C_RValue(name.pos, rExpr, facts)
-        }
-
-        fun compileCallDb(
-                caseCtx: C_GlobalFuncCaseCtx,
-                args: List<C_Value>,
-                dbFactory: (S_Name, List<Db_Expr>) -> Db_Expr
-        ): C_Value {
-            val name = caseCtx.fullName
-            val dbArgs = args.map { it.toDbExpr() }
-            val dbExpr = dbFactory(name, dbArgs)
-            val facts = C_ExprVarFacts.forSubExpressions(args)
-            return C_DbValue(name.pos, dbExpr, facts)
-        }
-    }
-}
-
-class C_FormalParamsFuncCase<CtxT: C_FuncCaseCtx>(
-        private val params: List<C_ArgTypeMatcher>,
-        private val body: C_FormalParamsFuncBody<CtxT>
-): C_FuncCase<CtxT>() {
-    override fun match(args: List<C_Value>): C_FuncCaseMatch<CtxT>? {
-        val argTypes = args.map { it.type() }
-        val paramsMatch = C_ArgTypesMatch.match(params, argTypes)
-        if (paramsMatch == null) {
+        if (err) {
             return null
         }
-        return C_FormalParamsFuncCaseMatch(body, args, paramsMatch)
-    }
-}
 
-class C_FormalParamsFuncCaseMatch<CtxT: C_FuncCaseCtx>(
-        private val body: C_FormalParamsFuncBody<CtxT>,
-        private val args: List<C_Value>,
-        private val paramsMatch: C_ArgTypesMatch = C_ArgTypesMatch(args.map { C_ArgTypeMatch_Direct })
-): C_FuncCaseMatch<CtxT>() {
-    init {
-        check(paramsMatch.size == args.size)
-    }
-
-    override fun compileCall(ctx: C_ExprContext, caseCtx: CtxT): C_Value {
-        val effArgs = paramsMatch.effectiveArgs(args)
-        return body.compileCall(ctx, caseCtx, effArgs)
-    }
-
-    override fun compileCallDb(ctx: C_ExprContext, caseCtx: CtxT): C_Value {
-        val effArgs = paramsMatch.effectiveArgs(args)
-        return body.compileCallDb(ctx, caseCtx, effArgs)
+        val match = C_ArgTypesMatch(matchList)
+        return match.effectiveArgs(args)
     }
 }
 
@@ -248,14 +148,11 @@ class C_SysGlobalFormalParamsFuncBody(
             throw C_Errors.errFunctionNoSql(name.pos, name.str)
         }
 
-        return C_BasicGlobalFuncCaseMatch.compileCallDb(caseCtx, args) { name, dbArgs ->
+        return C_BasicGlobalFuncCaseMatch.compileCallDb(caseCtx, args) { _, dbArgs ->
             Db_CallExpr(type, dbFn, dbArgs)
         }
     }
 }
-
-typealias C_MemberFuncCase = C_FuncCase<C_MemberFuncCaseCtx>
-typealias C_MemberFuncCaseMatch = C_FuncCaseMatch<C_MemberFuncCaseCtx>
 
 class C_SysMemberFormalParamsFuncBody(
         private val type: R_Type,
@@ -293,40 +190,6 @@ class C_SysMemberFormalParamsFuncBody(
     }
 }
 
-object C_FuncUtils {
-    fun checkArgs(name: S_Name, params: List<R_ExternalParam>, args: List<C_Value>): List<C_Value> {
-        val nameStr = name.str
-
-        if (args.size != params.size) {
-            throw C_Error(name.pos, "expr_call_argcnt:$nameStr:${params.size}:${args.size}",
-                    "Wrong number of arguments for '$nameStr': ${args.size} instead of ${params.size}")
-        }
-
-        val matchList = mutableListOf<C_ArgTypeMatch>()
-
-        for ((i, param) in params.withIndex()) {
-            val arg = args[i]
-            val paramType = param.type
-            val argType = arg.type()
-            val m = C_ArgTypeMatcher_Simple(paramType).match(argType)
-            if (m == null) {
-                throw C_Error(name.pos, "expr_call_argtype:$nameStr:$i:${paramType.toStrictString()}:${argType.toStrictString()}",
-                        "Wrong argument type for '$nameStr' #${i + 1}: ${argType.toStrictString()} instead of ${paramType.toStrictString()}")
-            }
-            matchList.add(m)
-        }
-
-        val match = C_ArgTypesMatch(matchList)
-        return match.effectiveArgs(args)
-    }
-
-    fun errNoMatch(pos: S_Pos, name: String, args: List<R_Type>): C_Error {
-        val argsStrShort = args.joinToString(",") { it.toStrictString() }
-        val argsStr = args.joinToString { it.toStrictString() }
-        return C_Error(pos, "expr_call_argtypes:$name:$argsStrShort", "Function $name undefined for arguments ($argsStr)")
-    }
-}
-
 class C_SysGlobalFunction(private val cases: List<C_GlobalFuncCase>): C_RegularGlobalFunction() {
     override fun compileCallRegular(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Expr {
         val match = matchCase(name, args)
@@ -351,7 +214,7 @@ class C_SysGlobalFunction(private val cases: List<C_GlobalFuncCase>): C_RegularG
         }
 
         val argTypes = args.map { it.type() }
-        throw C_FuncUtils.errNoMatch(name.pos, name.str, argTypes)
+        throw C_FuncMatchUtils.errNoMatch(name.pos, name.str, argTypes)
     }
 }
 
@@ -380,167 +243,6 @@ class C_SysMemberFunction(val cases: List<C_MemberFuncCase>) {
         }
 
         val argTypes = args.map { it.type() }
-        throw C_FuncUtils.errNoMatch(pos, fullName, argTypes)
-    }
-}
-
-class C_GlobalFuncTable(private val map: Map<String, C_GlobalFunction>) {
-    companion object {
-        val EMPTY = C_GlobalFuncTable(mapOf())
-    }
-
-    fun get(name: String): C_GlobalFunction? {
-        return map[name]
-    }
-
-    fun toMap(): Map<String, C_GlobalFunction> {
-        return map.toMap()
-    }
-}
-
-class C_MemberFuncTable(private val map: Map<String, C_SysMemberFunction>) {
-    fun get(name: String): C_SysMemberFunction? {
-        return map[name]
-    }
-}
-
-sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT> {
-    private val map = ArrayListValuedHashMap<String, C_FuncCase<CaseCtxT>>()
-
-    protected abstract fun makeBody(result: R_Type, rFn: R_SysFunction, dbFn: Db_SysFunction?): C_FormalParamsFuncBody<CaseCtxT>
-    protected abstract fun makeFunc(cases: List<C_FuncCase<CaseCtxT>>): FuncT
-
-    protected fun addCase(name: String, case: C_FuncCase<CaseCtxT>, deprecated: C_Deprecated?) {
-        val case2 = if (deprecated == null) case else makeDeprecatedCase(case, deprecated)
-        map.put(name, case2)
-    }
-
-    protected fun buildMap(): Map<String, FuncT> {
-        val fnMap = mutableMapOf<String, FuncT>()
-        for (name in map.keySet().sorted()) {
-            val cases = map[name]
-            fnMap[name] = makeFunc(cases)
-        }
-        return fnMap.toMap()
-    }
-
-    private fun makeCase(params: List<C_ArgTypeMatcher>, body: C_FormalParamsFuncBody<CaseCtxT>): C_FuncCase<CaseCtxT> {
-        return C_FormalParamsFuncCase(params, body)
-    }
-
-    private fun makeDeprecatedCase(case: C_FuncCase<CaseCtxT>, deprecated: C_Deprecated): C_FuncCase<CaseCtxT> {
-        return C_DeprecatedFuncCase(case, deprecated)
-    }
-
-    fun addEx(
-            name: String,
-            result: R_Type,
-            params: List<C_ArgTypeMatcher>,
-            rFn: R_SysFunction,
-            deprecated: C_Deprecated
-    ): BuilderT = addEx(name, result, params, rFn, null, deprecated)
-
-    fun addEx(
-            name: String,
-            result: R_Type,
-            params: List<C_ArgTypeMatcher>,
-            rFn: R_SysFunction,
-            dbFn: Db_SysFunction? = null,
-            deprecated: C_Deprecated? = null
-    ): BuilderT {
-        val body = makeBody(result, rFn, dbFn)
-        val case = makeCase(params, body)
-        addCase(name, case, deprecated)
-        return this as BuilderT
-    }
-
-    fun add(
-            name: String,
-            result: R_Type,
-            params: List<R_Type>,
-            rFn: R_SysFunction,
-            deprecated: C_Deprecated
-    ): BuilderT = add(name, result, params, rFn, null, deprecated)
-
-    fun add(
-            name: String,
-            result: R_Type,
-            params: List<R_Type>,
-            rFn: R_SysFunction,
-            dbFn: Db_SysFunction? = null,
-            deprecated: C_Deprecated? = null
-    ): BuilderT {
-        val matchers = params.map { C_ArgTypeMatcher_Simple(it) }
-        addEx(name, result, matchers, rFn, dbFn, deprecated)
-        return this as BuilderT
-    }
-
-    fun add(
-            name: String,
-            params: List<R_Type>,
-            body: C_FormalParamsFuncBody<CaseCtxT>,
-            deprecated: C_Deprecated? = null
-    ): BuilderT {
-        val matchers = params.map { C_ArgTypeMatcher_Simple(it) }
-        val case = makeCase(matchers, body)
-        addCase(name, case, deprecated)
-        return this as BuilderT
-    }
-
-    fun add(name: String, case: C_FuncCase<CaseCtxT>, deprecated: C_Deprecated? = null): BuilderT {
-        addCase(name, case, deprecated)
-        return this as BuilderT
-    }
-
-    fun addIf(
-            c: Boolean,
-            name: String,
-            result: R_Type,
-            params: List<R_Type>,
-            rFn: R_SysFunction,
-            dbFn: Db_SysFunction? = null
-    ): BuilderT {
-        if (c) {
-            add(name, result, params, rFn, dbFn)
-        }
-        return this as BuilderT
-    }
-}
-
-class C_GlobalFuncBuilder: C_FuncBuilder<C_GlobalFuncBuilder, C_GlobalFuncCaseCtx, C_GlobalFunction>() {
-    override fun makeBody(
-            result: R_Type,
-            rFn: R_SysFunction,
-            dbFn: Db_SysFunction?
-    ): C_FormalParamsFuncBody<C_GlobalFuncCaseCtx> {
-        return C_SysGlobalFormalParamsFuncBody(result, rFn, dbFn)
-    }
-
-    override fun makeFunc(cases: List<C_FuncCase<C_GlobalFuncCaseCtx>>): C_GlobalFunction {
-        return C_SysGlobalFunction(cases)
-    }
-
-    fun build(): C_GlobalFuncTable {
-        val fnMap = buildMap()
-        return C_GlobalFuncTable(fnMap)
-    }
-}
-
-class C_MemberFuncBuilder: C_FuncBuilder<C_MemberFuncBuilder, C_MemberFuncCaseCtx, C_SysMemberFunction>() {
-    override fun makeBody(
-            result: R_Type,
-            rFn: R_SysFunction,
-            dbFn: Db_SysFunction?
-    ): C_FormalParamsFuncBody<C_MemberFuncCaseCtx> {
-        return C_SysMemberFormalParamsFuncBody(result, rFn, dbFn)
-    }
-
-    override fun makeFunc(cases: List<C_FuncCase<C_MemberFuncCaseCtx>>): C_SysMemberFunction {
-        return C_SysMemberFunction(cases)
-    }
-
-    fun build(): C_MemberFuncTable {
-        val fnMap = buildMap()
-        return C_MemberFuncTable(fnMap)
+        throw C_FuncMatchUtils.errNoMatch(pos, fullName, argTypes)
     }
 }

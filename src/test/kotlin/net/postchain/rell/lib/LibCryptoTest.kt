@@ -28,10 +28,10 @@ class LibCryptoTest: BaseRellTest(false) {
         return CommonUtils.bytesToHex(secp256k1_sign(CommonUtils.hexToBytes(messageHex), privKeyBytes))
     }
 
-    @Test fun testHashRecord() {
+    @Test fun testHashStruct() {
         tst.strictToString = false
-        def("record rec { i: integer; t: text; }")
-        def("record rec_nogtv { m: range; }")
+        def("struct rec { i: integer; t: text; }")
+        def("struct rec_nogtv { m: range; }")
         chk("rec(123,'Hello').hash()", "0x74443c7de4d4fee6f6f4d9b0aa5d4749dbfb0965b422e578802701b9ac2e063a")
         chk("rec(456,'Bye').hash()", "0x7758916e7f9f1a9e0a84351f402dbc9c906492879a9d71dc4ff1f5b7d67bdf53")
         chk("rec_nogtv(range(10)).hash()", "ct_err:fn:invalid:rec_nogtv:rec_nogtv.hash")
@@ -93,10 +93,10 @@ class LibCryptoTest: BaseRellTest(false) {
         chk("(123,y='Hello').hash()", "0x74443c7de4d4fee6f6f4d9b0aa5d4749dbfb0965b422e578802701b9ac2e063a")
     }
 
-    @Test fun testHashClassObject() {
+    @Test fun testHashEntityObject() {
         tstCtx.useSql = true
         tst.strictToString = false
-        def("class cls { x: integer; }")
+        def("entity cls { x: integer; }")
         def("object obj { mutable s: text = 'Hello'; }")
         insert("c0.cls", "x", "1,123")
         insert("c0.cls", "x", "2,456")

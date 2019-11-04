@@ -5,8 +5,8 @@ import net.postchain.rell.test.SqlTestUtils
 import org.junit.Test
 
 class UpdateDeleteExprTest: BaseRellTest() {
-    override fun classDefs() = listOf(
-            "class user { name: text; mutable score: integer; }"
+    override fun entityDefs() = listOf(
+            "entity user { name: text; mutable score: integer; }"
     )
 
     override fun objInserts() = listOf(
@@ -216,7 +216,7 @@ class UpdateDeleteExprTest: BaseRellTest() {
         chkData()
     }
 
-    @Test fun testUpdateMultiClasses() {
+    @Test fun testUpdateMultiEntities() {
         initUserCompany()
         chkData("user(1,Bob,Google,100)", "user(2,Alice,Amazon,200)", "company(3,Google,250)", "company(4,Amazon,525)")
 
@@ -224,7 +224,7 @@ class UpdateDeleteExprTest: BaseRellTest() {
         chkData("user(1,Bob,Google,350)", "user(2,Alice,Amazon,725)", "company(3,Google,250)", "company(4,Amazon,525)")
     }
 
-    @Test fun testDeleteMultiClasses() {
+    @Test fun testDeleteMultiEntities() {
         initUserCompany()
         chkData("user(1,Bob,Google,100)", "user(2,Alice,Amazon,200)", "company(3,Google,250)", "company(4,Amazon,525)")
 
@@ -233,8 +233,8 @@ class UpdateDeleteExprTest: BaseRellTest() {
     }
 
     private fun initUserCompany() {
-        def("class user { name: text; company: text; mutable score: integer; }")
-        def("class company { name: text; score: integer; }")
+        def("entity user { name: text; company: text; mutable score: integer; }")
+        def("entity company { name: text; score: integer; }")
         tst.inserts = listOf()
 
         chkOp("""

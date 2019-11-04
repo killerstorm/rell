@@ -178,7 +178,7 @@ class WhenTest: BaseRellTest(false) {
     @Test fun testStmtFullCoverageBoolean() {
         chkWhen("boolean", "{ when(a) { false -> return 'A'; true -> return 'B'; } }",
                 "false" to "text[A]", "true" to "text[B]")
-        chkWhen("boolean", "{ when(a) { false -> return 'A'; true -> return 'B'; else -> return 'C'; } }",
+        chkWhen("boolean", "{ when(a) { false -> return 'A'; true -> return 'B'; else -> return 'C'; } return ''; }",
                 "false" to "ct_err:when_else_allvalues:boolean")
         chkWhen("boolean", "{ when(a) { false -> return 'A'; } }", "false" to "ct_err:fun_noreturn:f")
         chkWhen("boolean", "{ when(a) { true -> return 'A'; } }", "false" to "ct_err:fun_noreturn:f")
@@ -186,7 +186,7 @@ class WhenTest: BaseRellTest(false) {
 
     @Test fun testStmtFullCoverageEnum() {
         def("enum E { A, B, C }")
-        chkWhen("E", "{ when(a) { A -> return 'A'; B -> return 'B'; C -> return 'C'; else -> return '?'; } }",
+        chkWhen("E", "{ when(a) { A -> return 'A'; B -> return 'B'; C -> return 'C'; else -> return '?'; } return ''; }",
                 "E.A" to "ct_err:when_else_allvalues:E")
         chkWhen("E", "{ when(a) { A -> return 'A'; B -> return 'B'; C -> return 'C'; } }",
                 "E.A" to "text[A]", "E.B" to "text[B]", "E.C" to "text[C]")
@@ -276,7 +276,7 @@ class WhenTest: BaseRellTest(false) {
 
     private fun initWhenAt(type: String, value: String) {
         tstCtx.useSql = true
-        def("class foo { mutable x: $type; s1: text; s2: text; }")
+        def("entity foo { mutable x: $type; s1: text; s2: text; }")
         insert("c0.foo", "x,s1,s2", "100,$value,'Yes','No'")
     }
 

@@ -1,6 +1,7 @@
 package net.postchain.rell.tools.runcfg
 
 import net.postchain.rell.GeneralDir
+import net.postchain.rell.RellCliErr
 import org.w3c.dom.Document
 import org.w3c.dom.Element
 import org.w3c.dom.Node
@@ -191,11 +192,11 @@ class RellXmlElement(
 
     fun errorTag(): RuntimeException = error("this element is not expected here")
 
-    fun error(msg: String, cause: Throwable? = null): RuntimeException {
+    fun error(msg: String): RuntimeException {
         val parentPath = parentTreePath()
         val path = if (parentPath.isEmpty()) "document root" else "path: " + parentPath.joinToString(" -> ")
         val fullMsg = "$file: element '$tag': $msg [$path]"
-        throw IllegalStateException(fullMsg, cause)
+        throw RellCliErr(fullMsg)
     }
 
     fun printTree(lev: Int = 0) {
@@ -289,8 +290,8 @@ class RellXmlAttrsParser(private val elem: RellXmlElement) {
         val res = try {
             parser(value)
         } catch (e: Throwable) {
-            val msg = parseErrMsg(key, type, value)
-            throw elem.error(msg, e)
+            val msg = parseErrMsg(key, type, value) + " (parsing failed)"
+            throw elem.error(msg)
         }
 
         val err = checker(res)

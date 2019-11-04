@@ -1,0 +1,8 @@
+import ^.bar;
+
+query foo() {
+    log('foo start');
+    bar.bar();
+    log('foo end');
+    return 0;
+}

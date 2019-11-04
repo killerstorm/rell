@@ -27,12 +27,13 @@ class UserFunctionTest: BaseRellTest(false) {
         chkFn("function f(): integer { return 'Hello'; }", "f()", "ct_err:entity_rettype:integer:text")
         chkFn("function f(): integer { if (1 > 0) return 123; return 'Hello'; }", "f()", "ct_err:entity_rettype:integer:text")
         chkFn("function f(): integer { if (1 > 0) return 123; return 456; }", "f()", "int[123]")
-        chkFn("function g(x: integer): integer = 123; function f(x: integer) = g(x);", "f(123)", "ct_err:entity_rettype:unit:integer")
+        chkFn("function g(x: integer): integer = 123; function f(x: integer) = g(x);", "f(123)",
+                "ct_err:[entity_rettype:unit:integer][query_exprtype_unit]")
     }
 
     @Test fun testDbSelect() {
         tstCtx.useSql = true
-        def("class user { name: text; }")
+        def("entity user { name: text; }")
         chkOp("create user('Bob'); create user('Alice');")
 
         chkFn("function f(name: text): user = user @ { name };", "f('Bob')", "user[1]")
@@ -41,7 +42,7 @@ class UserFunctionTest: BaseRellTest(false) {
 
     @Test fun testDbUpdate() {
         tstCtx.useSql = true
-        def("class user { name: text; mutable score: integer; }")
+        def("entity user { name: text; mutable score: integer; }")
         chkOp("create user('Bob', 100); create user('Alice', 250);")
 
         val fn = "function f(name: text, s: integer): integer { update user @ { name } ( score += s ); return s; }"
@@ -64,17 +65,21 @@ class UserFunctionTest: BaseRellTest(false) {
     }
 
     @Test fun testWrongArgs() {
-        chkFn("function f(){}", "f(123)", "ct_err:expr_call_argcnt:f:0:1")
-        chkFn("function f(x:integer){}", "f()", "ct_err:expr_call_argcnt:f:1:0")
-        chkFn("function f(x:integer){}", "f(123, 456)", "ct_err:expr_call_argcnt:f:1:2")
-        chkFn("function f(x:integer,y:text){}", "f()", "ct_err:expr_call_argcnt:f:2:0")
-        chkFn("function f(x:integer,y:text){}", "f(123)", "ct_err:expr_call_argcnt:f:2:1")
-        chkFn("function f(x:integer,y:text){}", "f(123,'Hello','World')", "ct_err:expr_call_argcnt:f:2:3")
+        chkFnErr("function f(){}", "f(123)", "ct_err:expr_call_argcnt:f:0:1")
+        chkFnErr("function f(x:integer){}", "f()", "ct_err:expr_call_argcnt:f:1:0")
+        chkFnErr("function f(x:integer){}", "f(123, 456)", "ct_err:expr_call_argcnt:f:1:2")
+        chkFnErr("function f(x:integer,y:text){}", "f()", "ct_err:expr_call_argcnt:f:2:0")
+        chkFnErr("function f(x:integer,y:text){}", "f(123)", "ct_err:expr_call_argcnt:f:2:1")
+        chkFnErr("function f(x:integer,y:text){}", "f(123,'Hello','World')", "ct_err:expr_call_argcnt:f:2:3")
 
-        chkFn("function f(x:integer){}", "f('Hello')", "ct_err:expr_call_argtype:f:0:integer:text")
-        chkFn("function f(x:integer,y:text){}", "f('Hello','World')", "ct_err:expr_call_argtype:f:0:integer:text")
-        chkFn("function f(x:integer,y:text){}", "f('Hello',123)", "ct_err:expr_call_argtype:f:0:integer:text")
-        chkFn("function f(x:integer,y:text){}", "f(123,456)", "ct_err:expr_call_argtype:f:1:text:integer")
+        chkFnErr("function f(x:integer){}", "f('Hello')", "ct_err:expr_call_argtype:f:0:x:integer:text")
+        chkFnErr("function f(x:integer,y:text){}", "f('Hello','World')", "ct_err:expr_call_argtype:f:0:x:integer:text")
+        chkFnErr("function f(x:integer,y:text){}", "f(123,456)", "ct_err:expr_call_argtype:f:1:y:text:integer")
+
+        chkFnErr("function f(x:integer,y:text){}", "f('Hello',123)", """ct_err:
+            [expr_call_argtype:f:0:x:integer:text]
+            [expr_call_argtype:f:1:y:text:integer]
+        """)
     }
 
     @Test fun testRecursion() {
@@ -119,7 +124,7 @@ class UserFunctionTest: BaseRellTest(false) {
 
     @Test fun testCallUnderAt() {
         tstCtx.useSql = true
-        def("class user { name: text; id: integer; }")
+        def("entity user { name: text; id: integer; }")
         chkOp("create user('Bob',123); create user('Alice',456);")
 
         val fn = "function foo(a: text): text = a.upper_case();"
@@ -135,13 +140,17 @@ class UserFunctionTest: BaseRellTest(false) {
         chkFnEx(fnCode, "= $callCode ;", expected)
     }
 
+    private fun chkFnErr(fnCode: String, callCode: String, expected: String) {
+        chkFnEx(fnCode, "{ $callCode; return 0; }", expected)
+    }
+
     private fun chkFnEx(fnCode: String, queryCode: String, expected: String) {
         val code = "$fnCode query q() $queryCode"
-        tst.chkQueryEx(code, listOf(), expected)
+        tst.chkQueryEx(code, "q", listOf(), expected)
     }
 
     private fun chkFnOp(fnCode: String, callCode: String, expected: String = "OK") {
         val code = "$fnCode operation o() { $callCode }"
-        tst.chkOpEx(code, expected)
+        chkOpFull(code, expected)
     }
 }

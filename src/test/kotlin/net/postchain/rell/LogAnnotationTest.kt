@@ -6,19 +6,33 @@ import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 
 class LogAnnotationTest: BaseRellTest() {
-    @Test fun testMutableAttribute() {
-        chkCompile("class foo { mutable x: integer; }", "OK")
-        chkCompile("class foo (log) { mutable x: integer; }", "ct_err:class_attr_mutable_log:foo:x")
+    @Test fun testLegacyAnnotation() {
+        chkCompile("entity foo (log) { x: integer; }", "OK")
+        tst.chkWarn("ann:legacy:log")
+
+        chkCompile("entity foo (log) { x: integer; transaction: integer; }", "ct_err:dup_attr:transaction")
+        chkCompile("entity foo (log) { x: integer; transaction; }", "ct_err:dup_attr:transaction")
+
+        chkCompile("@log entity foo (log) { x: integer; }", "ct_err:entity_ann_dup:log")
+        tst.chkWarn("ann:legacy:log")
     }
 
-    @Test fun testRedefineSysAttribute() {
-        chkCompile("class foo (log) { x: integer; }", "OK")
-        chkCompile("class foo (log) { x: integer; transaction: integer; }", "ct_err:dup_attr:transaction")
-        chkCompile("class foo (log) { x: integer; transaction; }", "ct_err:dup_attr:transaction")
+    @Test fun testGeneral() {
+        chkCompile("entity foo { mutable x: integer; }", "OK")
+        chkCompile("@log entity foo { mutable x: integer; }", "ct_err:entity_attr_mutable_log:foo:x")
+
+        chkCompile("@log entity foo { x: integer; }", "OK")
+        chkCompile("@log entity foo { x: integer; transaction: integer; }", "ct_err:dup_attr:transaction")
+        chkCompile("@log entity foo { x: integer; transaction; }", "ct_err:dup_attr:transaction")
+
+        chkCompile("@log @log entity foo { x: integer; }", "ct_err:ann:log:dup")
+
+        chkCompile("@log() entity foo { x: integer; }", "OK")
+        chkCompile("@log(123) entity foo { x: integer; }", "ct_err:ann:log:args:1")
     }
 
     @Test fun testSysAttributes() {
-        def("class foo(log) { x: integer; }")
+        def("@log entity foo { x: integer; }")
         tst.inserts = LibBlockTransactionTest.BLOCK_INSERTS
         tst.chainId = 333
         tst.opContext = Rt_OpContext(-1, 444, -1, listOf())
@@ -47,7 +61,7 @@ class LogAnnotationTest: BaseRellTest() {
     }
 
     @Test fun testSysAttributesModify() {
-        def("class foo(log) { x: integer; }")
+        def("@log entity foo { x: integer; }")
         tst.inserts = LibBlockTransactionTest.BLOCK_INSERTS
         tst.chainId = 333
         tst.opContext = Rt_OpContext(-1, 444, -1, listOf())
@@ -62,8 +76,8 @@ class LogAnnotationTest: BaseRellTest() {
     }
 
     @Test fun testDelete() {
-        def("class foo(log) { x: integer; }")
-        def("class bar { x: integer; }")
+        def("@log entity foo { x: integer; }")
+        def("entity bar { x: integer; }")
         chkOp("delete foo @* {};", "ct_err:stmt_delete_cant:foo")
         chkOp("delete bar @* {};")
     }

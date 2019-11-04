@@ -1,93 +1,93 @@
-    class issuer {
-        pubkey;
-        key name;
-    }
+entity issuer {
+    pubkey;
+    key name;
+}
 
-    class reporter {
-        index issuer;
-        key name;
-        index pubkey;
-    }
+entity reporter {
+    index issuer;
+    key name;
+    index pubkey;
+}
 
-    class framework {
-        index issuer;
-        key name;
-    }
+entity framework {
+    index issuer;
+    key name;
+}
 
-    class pool {  index issuer; key name; }
+entity pool {  index issuer; key name; }
 
-    class bond {
-        key ISIN: text;
-        index issuer;
-        index pool;
-        index framework;
-        issue_date: timestamp;
-        maturity_date: timestamp;
-        value: integer;
-        shares: integer;
-    }
+entity bond {
+    key ISIN: text;
+    index issuer;
+    index pool;
+    index framework;
+    issue_date: timestamp;
+    maturity_date: timestamp;
+    value: integer;
+    shares: integer;
+}
 
-    class project {
-        index issuer;
-        index pool;
-        index framework;
-        started: timestamp;
-        key name;
-        description: text;
-    }
+entity project {
+    index issuer;
+    index pool;
+    index framework;
+    started: timestamp;
+    key name;
+    description: text;
+}
 
-    class project_report_category {
-        index project;
-        reporter;
-        key project, name;
-        created: timestamp;
-    }
+entity project_report_category {
+    index project;
+    reporter;
+    key project, name;
+    created: timestamp;
+}
 
-    class document {
-        key hash: byte_array;
-        contents: byte_array;
-    }
+entity document {
+    key hash: byte_array;
+    contents: byte_array;
+}
 
-    class project_report {
-        index project_report_category;
-        timestamp;
-        reporter;
-        document;
-        value: text;
-        metadata: text;
-    }
+entity project_report {
+    index project_report_category;
+    timestamp;
+    reporter;
+    document;
+    value: text;
+    metadata: text;
+}
 
-    operation add_issuer (admin_pubkey: signer, pubkey, name) {
-        require((admin_pubkey == x"deadbeaf"), "Admin pubkey doesnt match");
-        create issuer (pubkey, name);
-    }
+operation add_issuer (admin_pubkey: signer, pubkey, name) {
+    require((admin_pubkey == x"deadbeaf"), "Admin pubkey doesnt match");
+    create issuer (pubkey, name);
+}
 
-    operation add_reporter (issuer_pubkey: signer, name, pubkey) {
-        create reporter (issuer@{pubkey=issuer_pubkey}, name, pubkey);
-    }
+operation add_reporter (issuer_pubkey: signer, name, pubkey) {
+    create reporter (issuer@{pubkey=issuer_pubkey}, name, pubkey);
+}
 
-    operation add_framework (issuer_pubkey: signer, name) {
-        create framework (issuer@{pubkey=issuer_pubkey}, name);
-    }
+operation add_framework (issuer_pubkey: signer, name) {
+    create framework (issuer@{pubkey=issuer_pubkey}, name);
+}
 
-    operation add_pool (issuer_pubkey: signer, name) {
-        create pool (issuer@{pubkey=issuer_pubkey}, name);
-    }
+operation add_pool (issuer_pubkey: signer, name) {
+    create pool (issuer@{pubkey=issuer_pubkey}, name);
+}
 
-    operation add_bond (issuer_pubkey: signer, ISIN: text,
-                        pool_name: text, framework_name: text, issue_date: timestamp,
-                        maturity_date: timestamp, value: integer, shares: integer)
-    {
-        create bond (
-            ISIN = ISIN,
-            issuer = issuer@{pubkey=issuer_pubkey},
-            pool@{name=pool_name},
-            framework@{name=framework_name},
-            issue_date,
-            maturity_date,
-            value, shares
-        );
-    }
+operation add_bond (issuer_pubkey: signer, ISIN: text,
+                    pool_name: text, framework_name: text, issue_date: timestamp,
+                    maturity_date: timestamp, value: integer, shares: integer)
+{
+    create bond (
+        ISIN = ISIN,
+        issuer = issuer@{pubkey=issuer_pubkey},
+        pool@{name=pool_name},
+        framework@{name=framework_name},
+        issue_date,
+        maturity_date,
+        value, shares
+    );
+}
 
 
 operation update_project_description(issuer_pubkey: signer, name, description: text) {
