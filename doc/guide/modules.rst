@@ -32,32 +32,20 @@ Example of a Rell source directory tree:
         │   └── queries.rell
         └── single.rell
 
-``app/multi/functions.rell``:
+**app/multi/functions.rell**:
 
 ::
 
     function g(): integer = 456;
 
-``app/multi/module.rell``:
+**app/multi/module.rell**:
 
 ::
 
     module;
     enum state { OPEN, CLOSED }
 
-``app/multi/operations.rell``:
-
-::
-
-    operation op() {}
-
-``app/multi/queries.rell``:
-
-::
-
-    query q() = 123;
-
-``app/single.rell``:
+**app/single.rell**:
 
 ::
 
@@ -67,8 +55,11 @@ Example of a Rell source directory tree:
 Every module has a name defined by its source directory path. The sample source directory tree given above defines
 two modules:
 
-- ``app.multi`` - a directory-module in the directory ``app/multi``
+- ``app.multi`` - a directory-module in the directory ``app/multi`` (consisting of 4 files)
 - ``app.single`` - a file-module in the file ``app/single.rell``
+
+There may be a root module - a directory-module which consists of .rell files located in the root of the source directory.
+Root module has an empty name. Web IDE uses the root module as the default main module of a Rell application.
 
 Import
 ==============
@@ -87,7 +78,7 @@ When importing a module, it is added to the current namespace with some alias. B
 part of the module name, i. e. ``single`` for the module ``app.single`` or ``multi`` for ``app.multi``. The definitions
 of the module can be accessed via the alias.
 
-An custom alias can be specified:
+A custom alias can be specified:
 
 ::
 
@@ -117,4 +108,4 @@ database on initialization.
 
 --------------
 
-*Rell v0.9.1*
+*Rell v0.10.0*

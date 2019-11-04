@@ -1,7 +1,12 @@
 RELEASE NOTES 0.10.0 (2019-11-04)
 
 
+Upgrade instructions: http://rell.chromia.com/en/0.10.0/languageguide/migration-0.10.html
+
+
 1. Language: Module system
+
+Docs: http://rell.chromia.com/en/0.10.0/languageguide/modules.html
 
 The new module system replaces the "include" directive as a way to combine multiple .rell files into an application.
 
@@ -29,11 +34,13 @@ struct module_args {
 Existing code with classes and records will not compile.
 
 To help fixing the code, there is a tool migrate-v0.10.sh. The tool replaces class/record by entity/struct, as well
-as replaces most of deprecated library functions. The tool could be found in the postchain-node directory of
+as replaces most of deprecated library functions. The tool can be found in the postchain-node directory of
 a Rell distribution.
 
 
 3. Language: @mount annotation
+
+Docs: http://rell.chromia.com/en/0.10.0/languageguide/general.html#mount-names
 
 Mount names are defined for entities, objects, operations and queries:
 

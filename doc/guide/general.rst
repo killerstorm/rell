@@ -715,6 +715,8 @@ To access blocks and transactions of an external blockchian, a special syntax is
 - External and non-external transactions/blocks are distinct, incompatible types.
 - When selecting external transactions or blocks, an implicit height filter is applied (like for external entities).
 
+.. _general-mount-names:
+
 Mount names
 -----------
 
@@ -784,8 +786,13 @@ mount name.
 
 A mount name can end with ``.``, in that case the name of the definition is appended to the mount name:
 
-- ``@mount('foo.') entity user {}`` gives mount name ``foo.user``, while
-- ``@mount('foo') entity user {}`` gives mount name ``foo``.
+::
+
+    @mount('foo.')
+    entity user {}      // mount name = "foo.user"
+
+    @mount('foo')
+    entity user {}      // mount name = "foo"
 
 --------------
 
@@ -1086,4 +1093,4 @@ Multiline comment:
 
 --------------
 
-*Rell v0.9.1*
+*Rell v0.10.0*

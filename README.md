@@ -8,10 +8,6 @@
 
 [Library](doc/guide/library.rst)
 
-## Other Resources
-
-[Run.XML format](RunXML.md)
-
 ## Build
 
 Simplest way to build:
@@ -101,7 +97,7 @@ Runs a Rell Postchain app
 ## Run a Mutli-Chain Postchain Node (Run.XML)
 
 Runs a Postchain node with one or multiple blockchains. The configuration is specified
-in the [Run.XML](RunXML.md) format. This utility is used by the `Run As` - `Rell Postchain App` command in the Eclipse IDE.
+in the Run.XML format. This utility is used by the `Run As` - `Rell Postchain App` command in the Eclipse IDE.
 
 ```
 ./multirun.sh
