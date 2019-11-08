@@ -1,0 +1,11 @@
+RELEASE NOTES 0.10.1 (2019-11-??)
+
+
+1. Language: Enum .value attribute in at-expression
+
+Now the "value" attribute of an enum can be used in at-expression:
+
+enum role { ADMIN, USER }
+class account { name; role; }
+
+account @* {} ( .name, .role.value )

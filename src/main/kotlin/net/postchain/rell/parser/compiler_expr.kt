@@ -374,7 +374,7 @@ abstract class C_Value(val pos: S_Pos) {
         val effectiveBaseType = if (baseType is R_NullableType) baseType.valueType else baseType
 
         val memberRef = C_MemberRef(pos, this, memberName, safe)
-        val valueExpr = C_MemberResolver.valueForType(effectiveBaseType, memberRef)
+        val valueExpr = C_MemberResolver.valueForType(ctx, effectiveBaseType, memberRef)
         val fnExpr = C_MemberResolver.functionForType(effectiveBaseType, memberRef)
 
         if (valueExpr == null && fnExpr == null) {

@@ -144,6 +144,13 @@ object C_LibFunctions {
 
     private val GTV_NAMESPACE = makeNamespace(GTV_NAMESPACE_FNS)
 
+    private val GTV_FNS = typeMemFuncBuilder(R_GtvType)
+            .add("toBytes", R_ByteArrayType, listOf(), R_SysFn_Gtv.ToBytes, depError("to_bytes"))
+            .add("to_bytes", R_ByteArrayType, listOf(), R_SysFn_Gtv.ToBytes)
+            .add("toJSON", R_JsonType, listOf(), R_SysFn_Gtv.ToJson, depError("to_json"))
+            .add("to_json", R_JsonType, listOf(), R_SysFn_Gtv.ToJson)
+            .build()
+
     private val CHAIN_CONTEXT_NAMESPACE = makeNamespace(
             C_GlobalFuncTable.EMPTY,
             stdFnValue("raw_config", R_GtvType, R_SysFn_ChainContext.RawConfig),
@@ -238,11 +245,9 @@ object C_LibFunctions {
 
     private val RANGE_NAMESPACE = makeNamespace(RANGE_NAMESPACE_FNS)
 
-    private val GTV_FNS = typeMemFuncBuilder(R_GtvType)
-            .add("toBytes", R_ByteArrayType, listOf(), R_SysFn_Gtv.ToBytes, depError("to_bytes"))
-            .add("to_bytes", R_ByteArrayType, listOf(), R_SysFn_Gtv.ToBytes)
-            .add("toJSON", R_JsonType, listOf(), R_SysFn_Gtv.ToJson, depError("to_json"))
-            .add("to_json", R_JsonType, listOf(), R_SysFn_Gtv.ToJson)
+    private val ENUM_PROPS = typeMemFuncBuilder(R_GtvType)
+            .add("name", R_TextType, listOf(), R_SysFn_Enum.Name)
+            .add("value", R_IntegerType, listOf(), R_SysFn_Enum.Value, Db_SysFn_Nop)
             .build()
 
     private val NAMESPACES = mapOf(
@@ -266,6 +271,11 @@ object C_LibFunctions {
     fun getMemberFunctionOpt(type: R_Type, name: String): C_SysMemberFunction? {
         val table = getTypeMemberFunctions(type)
         val fn = table.get(name)
+        return fn
+    }
+
+    fun getEnumPropertyOpt(name: String): C_SysMemberFunction? {
+        val fn = ENUM_PROPS.get(name)
         return fn
     }
 

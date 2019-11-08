@@ -1,8 +1,8 @@
 package net.postchain.rell.model
 
 import net.postchain.rell.CommonUtils
-import net.postchain.rell.parser.C_EntityAttrRef
 import net.postchain.rell.parser.C_Constants
+import net.postchain.rell.parser.C_EntityAttrRef
 import net.postchain.rell.runtime.Rt_BooleanValue
 import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_NullValue
@@ -490,6 +490,13 @@ object Db_SysFn_Decimal {
             // Clever regexp: can handle special cases like "0.0", "0.000000", etc.
             bld.append(" :: TEXT, '(([.][0-9]*[1-9])(0+)\$)|([.]0+\$)', '\\2')")
         }
+    }
+}
+
+object Db_SysFn_Nop: Db_SysFunction("NOP") {
+    override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<RedDb_Expr>) {
+        check(args.size == 1)
+        args[0].toSql(ctx, bld)
     }
 }
 
