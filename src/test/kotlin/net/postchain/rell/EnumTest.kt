@@ -160,6 +160,25 @@ class EnumTest: BaseRellTest() {
         chk("foo.C.value", "int[2]")
     }
 
+    @Test fun testMemberFunctionsAt() {
+        def("enum foo { A, B, C }")
+        def("entity user { name; foo; }")
+        insert("c0.user", "name,foo", "1,'Bob',0")
+        insert("c0.user", "name,foo", "2,'Alice',1")
+        insert("c0.user", "name,foo", "3,'Trudy',2")
+
+        chk("user @ { 'Bob' } ( .foo.value )", "int[0]")
+        chk("user @ { 'Alice' } ( .foo.value )", "int[1]")
+        chk("user @ { 'Trudy' } ( .foo.value )", "int[2]")
+        chk("user @ { 'Alice' } ( =.name, =.foo, =.foo.value )", "(text[Alice],foo[B],int[1])")
+
+        chk("user @ { .foo.value == 0 } ( .name )", "text[Bob]")
+        chk("user @ { .foo.value == 1 } ( .name )", "text[Alice]")
+        chk("user @ { .foo.value == 2 } ( .name )", "text[Trudy]")
+
+        chk("user @ { 'Bob' } ( .foo.name )", "ct_err:expr_call_nosql:foo.name")
+    }
+
     @Test fun testNullable() {
         def("enum foo { A, B, C }")
         def("function nop(x: foo?): foo? = x;")

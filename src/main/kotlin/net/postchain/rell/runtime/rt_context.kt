@@ -142,16 +142,16 @@ class Rt_SqlContext private constructor(
                 val metaEntities = chainMetaEntities.getOrDefault(chain, mapOf())
                 checkMissingEntities(chain, extEntities, metaEntities)
 
-                for (clsName in extEntities.keys.sorted()) {
-                    val extCls = extEntities.getValue(clsName)
-                    val metaCls = metaEntities.getValue(clsName)
-                    if (!metaCls.log) {
-                        throw Rt_Error("external_meta_nolog:$chain:$clsName",
-                                "Entity '$clsName' in external chain '$chain' is not a log entity")
+                for (entityName in extEntities.keys.sorted()) {
+                    val extEntity = extEntities.getValue(entityName)
+                    val metaEntity = metaEntities.getValue(entityName)
+                    if (!metaEntity.log) {
+                        throw Rt_Error("external_meta_nolog:$chain:$entityName",
+                                "Entity '$entityName' in external chain '$chain' is not a log entity")
                     }
 
-                    checkMissingAttrs(chain, extCls, metaCls)
-                    checkAttrTypes(sqlCtx, chain, extCls, metaCls)
+                    checkMissingAttrs(chain, extEntity, metaEntity)
+                    checkAttrTypes(sqlCtx, chain, extEntity, metaEntity)
                 }
             }
         }
@@ -166,28 +166,28 @@ class Rt_SqlContext private constructor(
             }
         }
 
-        private fun checkMissingAttrs(chain: String, extCls: R_Entity, metaCls: MetaEntity) {
-            val metaAttrNames = metaCls.attrs.keys
-            val extAttrNames = extCls.attributes.keys
+        private fun checkMissingAttrs(chain: String, extEntity: R_Entity, metaEntity: MetaEntity) {
+            val metaAttrNames = metaEntity.attrs.keys
+            val extAttrNames = extEntity.attributes.keys
             val missingAttrs = Sets.difference(extAttrNames, metaAttrNames)
             if (!missingAttrs.isEmpty()) {
-                val clsName = extCls.appLevelName
+                val entityName = extEntity.appLevelName
                 val list = missingAttrs.sorted()
-                throw Rt_Error("external_meta_noattrs:$chain:$clsName:${list.joinToString(",")}",
-                        "Missing attributes of entity '$clsName' in external chain '$chain': ${list.joinToString()}")
+                throw Rt_Error("external_meta_noattrs:$chain:$entityName:${list.joinToString(",")}",
+                        "Missing attributes of entity '$entityName' in external chain '$chain': ${list.joinToString()}")
             }
         }
 
-        private fun checkAttrTypes(sqlCtx: Rt_SqlContext, chain: String, extCls: R_Entity, metaCls: MetaEntity) {
-            for (extAttr in extCls.attributes.values.sortedBy { it.name }) {
+        private fun checkAttrTypes(sqlCtx: Rt_SqlContext, chain: String, extEntity: R_Entity, metaEntity: MetaEntity) {
+            for (extAttr in extEntity.attributes.values.sortedBy { it.name }) {
                 val attrName = extAttr.name
-                val metaAttr = metaCls.attrs.getValue(attrName)
+                val metaAttr = metaEntity.attrs.getValue(attrName)
                 val metaType = metaAttr.type
                 val extType = extAttr.type.sqlAdapter.metaName(sqlCtx)
                 if (metaType != extType) {
-                    val clsName = extCls.appLevelName
-                    throw Rt_Error("external_meta_attrtype:$chain:$clsName:$attrName:[$extType]:[$metaType]",
-                            "Attribute type mismatch for entity '$clsName' in external chain '$chain': " +
+                    val entityName = extEntity.appLevelName
+                    throw Rt_Error("external_meta_attrtype:$chain:$entityName:$attrName:[$extType]:[$metaType]",
+                            "Attribute type mismatch for '$entityName.$attrName' in external chain '$chain': " +
                                     "expected '$extType', actual '$metaType'")
                 }
             }
@@ -195,11 +195,11 @@ class Rt_SqlContext private constructor(
 
         private fun getChainExternalEntities(entities: List<R_Entity>): Map<String, Map<String, R_Entity>> {
             val res = mutableMapOf<String, MutableMap<String, R_Entity>>()
-            for (cls in entities) {
-                if (cls.external != null && cls.external.metaCheck) {
-                    val map = res.computeIfAbsent(cls.external.chain.name) { mutableMapOf() }
-                    check(cls.metaName !in map)
-                    map[cls.metaName] = cls
+            for (entity in entities) {
+                if (entity.external != null && entity.external.metaCheck) {
+                    val map = res.computeIfAbsent(entity.external.chain.name) { mutableMapOf() }
+                    check(entity.metaName !in map)
+                    map[entity.metaName] = entity
                 }
             }
             return res

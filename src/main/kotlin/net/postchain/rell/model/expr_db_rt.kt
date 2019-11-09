@@ -6,7 +6,7 @@ import net.postchain.rell.runtime.Rt_Value
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 
-data class SqlTableAlias(val cls: R_Entity, val str: String)
+data class SqlTableAlias(val entity: R_Entity, val str: String)
 class SqlTableJoin(val attr: R_Attrib, val alias: SqlTableAlias)
 
 class SqlFromInfo(val entities: List<SqlFromEntity>)
@@ -19,13 +19,13 @@ class SqlGenContext private constructor(
         private val parameters: List<Rt_Value>
 ) {
     private var aliasCtr = 0
-    private val clsAliasMap = mutableMapOf<R_AtEntity, EntityAliasTbl>()
-    private val aliasTblMap = mutableMapOf<SqlTableAlias, EntityAliasTbl>()
+    private val entityAliasMap = mutableMapOf<R_AtEntity, EntityAliasTbl>()
+    private val aliasTableMap = mutableMapOf<SqlTableAlias, EntityAliasTbl>()
 
     init {
-        entities.withIndex().forEach { (i, cls) -> check(cls.index == i) }
-        for (cls in entities) {
-            getEntityAlias(cls)
+        entities.withIndex().forEach { (i, entity) -> check(entity.index == i) }
+        for (entity in entities) {
+            getEntityAlias(entity)
         }
     }
 
@@ -34,27 +34,27 @@ class SqlGenContext private constructor(
     }
 
     fun getEntityAlias(cls: R_AtEntity): SqlTableAlias {
-        val tbl = clsAliasMap.computeIfAbsent(cls) {
+        val tbl = entityAliasMap.computeIfAbsent(cls) {
             val tbl = EntityAliasTbl(nextAlias(cls.rEntity))
-            aliasTblMap[tbl.alias] = tbl
+            aliasTableMap[tbl.alias] = tbl
             tbl
         }
         return tbl.alias
     }
 
-    fun getRelAlias(baseAlias: SqlTableAlias, rel: R_Attrib, cls: R_Entity): SqlTableAlias {
-        val tbl = aliasTblMap.getValue(baseAlias)
+    fun getRelAlias(baseAlias: SqlTableAlias, rel: R_Attrib, entity: R_Entity): SqlTableAlias {
+        val tbl = aliasTableMap.getValue(baseAlias)
         val map = tbl.subAliases.computeIfAbsent(baseAlias) { mutableMapOf() }
         val join = map.computeIfAbsent(rel.name) {
-            val alias = nextAlias(cls)
-            aliasTblMap[alias] = tbl
+            val alias = nextAlias(entity)
+            aliasTableMap[alias] = tbl
             SqlTableJoin(rel, alias)
         }
         return join.alias
     }
 
     fun getFromInfo(): SqlFromInfo {
-        val entities = clsAliasMap.entries.map { (_, tbl) ->
+        val entities = entityAliasMap.entries.map { (_, tbl) ->
             val joins = tbl.subAliases.entries.flatMap { (alias, map) ->
                 map.values.map { tblJoin -> SqlFromJoin(alias, tblJoin.attr.sqlMapping, tblJoin.alias) }
             }
@@ -63,7 +63,7 @@ class SqlGenContext private constructor(
         return SqlFromInfo(entities)
     }
 
-    private fun nextAlias(cls: R_Entity) = SqlTableAlias(cls, String.format("A%02d", aliasCtr++))
+    private fun nextAlias(entity: R_Entity) = SqlTableAlias(entity, String.format("A%02d", aliasCtr++))
 
     private class EntityAliasTbl(val alias: SqlTableAlias) {
         val subAliases = mutableMapOf<SqlTableAlias, MutableMap<String, SqlTableJoin>>()

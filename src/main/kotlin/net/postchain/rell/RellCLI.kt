@@ -25,7 +25,7 @@ fun main(args: Array<String>) {
 
 private fun main0(args: RellCliArgs) {
     if (args.version) {
-        System.out.println("Rell version $RELL_VERSION")
+        System.out.println("Rell $RELL_VERSION")
         exitProcess(0)
     }
 

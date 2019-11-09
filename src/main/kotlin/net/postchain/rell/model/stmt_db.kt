@@ -15,22 +15,22 @@ sealed class R_UpdateTarget {
 }
 
 class R_UpdateTarget_Simple(
-        val cls: R_AtEntity,
+        val entity: R_AtEntity,
         val extraEntities: List<R_AtEntity>,
         val cardinality: R_AtCardinality,
         val where: Db_Expr?
 ): R_UpdateTarget() {
     init {
-        check(cls.index == 0)
+        check(entity.index == 0)
         extraEntities.withIndex().forEach { check(it.index + 1 == it.value.index) }
     }
 
-    override fun entity() = cls
+    override fun entity() = entity
     override fun extraEntities() = extraEntities
     override fun where() = where
 
     override fun execute(stmt: R_BaseUpdateStatement, frame: Rt_CallFrame) {
-        val ctx = SqlGenContext.create(frame, listOf(cls) + extraEntities, listOf())
+        val ctx = SqlGenContext.create(frame, listOf(entity) + extraEntities, listOf())
         execute(stmt, frame, ctx, cardinality)
     }
 
@@ -53,12 +53,12 @@ class R_UpdateTarget_Simple(
     }
 }
 
-sealed class R_UpdateTarget_Expr(val cls: R_AtEntity, val where: Db_Expr, val expr: R_Expr): R_UpdateTarget() {
+sealed class R_UpdateTarget_Expr(val entity: R_AtEntity, val where: Db_Expr, val expr: R_Expr): R_UpdateTarget() {
     init {
-        check(cls.index == 0)
+        check(entity.index == 0)
     }
 
-    final override fun entity() = cls
+    final override fun entity() = entity
     final override fun extraEntities() = listOf<R_AtEntity>()
     final override fun where() = where
 
@@ -68,25 +68,25 @@ sealed class R_UpdateTarget_Expr(val cls: R_AtEntity, val where: Db_Expr, val ex
     }
 }
 
-class R_UpdateTarget_Expr_One(cls: R_AtEntity, where: Db_Expr, expr: R_Expr): R_UpdateTarget_Expr(cls, where, expr) {
+class R_UpdateTarget_Expr_One(entity: R_AtEntity, where: Db_Expr, expr: R_Expr): R_UpdateTarget_Expr(entity, where, expr) {
     override fun execute(stmt: R_BaseUpdateStatement, frame: Rt_CallFrame) {
         val value = expr.evaluate(frame)
         if (value == Rt_NullValue) {
             return
         }
 
-        val ctx = SqlGenContext.create(frame, listOf(cls), listOf(value))
+        val ctx = SqlGenContext.create(frame, listOf(entity), listOf(value))
         execute0(stmt, frame, ctx)
     }
 }
 
 class R_UpdateTarget_Expr_Many(
-        cls: R_AtEntity,
+        entity: R_AtEntity,
         where: Db_Expr,
         expr: R_Expr,
         val set: Boolean,
         val listType: R_Type
-): R_UpdateTarget_Expr(cls, where, expr) {
+): R_UpdateTarget_Expr(entity, where, expr) {
     override fun execute(stmt: R_BaseUpdateStatement, frame: Rt_CallFrame) {
         val value = expr.evaluate(frame)
 
@@ -105,21 +105,21 @@ class R_UpdateTarget_Expr_Many(
 
         for (part in CommonUtils.split(lst, partSize)) {
             val partValue = Rt_ListValue(listType, part)
-            val ctx = SqlGenContext.create(frame, listOf(cls), listOf(partValue))
+            val ctx = SqlGenContext.create(frame, listOf(entity), listOf(partValue))
             execute0(stmt, frame, ctx)
         }
     }
 }
 
 class R_UpdateTarget_Object(rObject: R_Object): R_UpdateTarget() {
-    private val cls = R_AtEntity(rObject.rEntity, 0)
+    private val entity = R_AtEntity(rObject.rEntity, 0)
 
-    override fun entity() = cls
+    override fun entity() = entity
     override fun extraEntities(): List<R_AtEntity> = listOf()
     override fun where() = null
 
     override fun execute(stmt: R_BaseUpdateStatement, frame: Rt_CallFrame) {
-        val ctx = SqlGenContext.create(frame, listOf(cls), listOf())
+        val ctx = SqlGenContext.create(frame, listOf(entity), listOf())
         R_UpdateTarget_Simple.execute(stmt, frame, ctx, R_AtCardinality.ONE)
     }
 }
@@ -136,26 +136,26 @@ sealed class R_BaseUpdateStatement(val target: R_UpdateTarget): R_Statement() {
     }
 
     fun appendMainTable(builder: SqlBuilder, sqlCtx: Rt_SqlContext, fromInfo: SqlFromInfo) {
-        val cls = target.entity()
-        val table = cls.rEntity.sqlMapping.table(sqlCtx)
+        val entity = target.entity()
+        val table = entity.rEntity.sqlMapping.table(sqlCtx)
         builder.appendName(table)
         builder.append(" ")
-        builder.append(fromInfo.entities[cls.index].alias.str)
+        builder.append(fromInfo.entities[entity.index].alias.str)
     }
 
     fun appendExtraTables(builder: SqlBuilder, sqlCtx: Rt_SqlContext, fromInfo: SqlFromInfo, keyword: String) {
         val tables = mutableListOf<Pair<String, SqlTableAlias>>()
 
-        val cls = target.entity()
-        for (join in fromInfo.entities[cls.index].joins) {
-            val table = join.alias.cls.sqlMapping.table(sqlCtx)
+        val entity = target.entity()
+        for (join in fromInfo.entities[entity.index].joins) {
+            val table = join.alias.entity.sqlMapping.table(sqlCtx)
             tables.add(Pair(table, join.alias))
         }
 
-        for (extraCls in target.extraEntities()) {
-            tables.add(Pair(extraCls.rEntity.sqlMapping.table(sqlCtx), fromInfo.entities[extraCls.index].alias))
-            for (join in fromInfo.entities[extraCls.index].joins) {
-                tables.add(Pair(join.alias.cls.sqlMapping.table(sqlCtx), join.alias))
+        for (extraEntity in target.extraEntities()) {
+            tables.add(Pair(extraEntity.rEntity.sqlMapping.table(sqlCtx), fromInfo.entities[extraEntity.index].alias))
+            for (join in fromInfo.entities[extraEntity.index].joins) {
+                tables.add(Pair(join.alias.entity.sqlMapping.table(sqlCtx), join.alias))
             }
         }
 
@@ -196,15 +196,15 @@ sealed class R_BaseUpdateStatement(val target: R_UpdateTarget): R_Statement() {
             b.append("(")
             b.appendColumn(join.baseAlias, join.attr)
             b.append(" = ")
-            b.appendColumn(join.alias, join.alias.cls.sqlMapping.rowidColumn())
+            b.appendColumn(join.alias, join.alias.entity.sqlMapping.rowidColumn())
             b.append(")")
         }
     }
 
     fun appendReturning(builder: SqlBuilder, fromInfo: SqlFromInfo) {
-        val cls = target.entity()
+        val entity = target.entity()
         builder.append(" RETURNING ")
-        builder.appendColumn(fromInfo.entities[cls.index].alias, cls.rEntity.sqlMapping.rowidColumn())
+        builder.appendColumn(fromInfo.entities[entity.index].alias, entity.rEntity.sqlMapping.rowidColumn())
     }
 }
 

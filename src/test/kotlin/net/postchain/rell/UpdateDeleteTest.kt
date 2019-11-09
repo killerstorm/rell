@@ -539,7 +539,7 @@ class UpdateDeleteTest: BaseRellTest() {
             print(u.score);
         """.trimIndent()
 
-        chkOp(code, "rt_err:expr_clsattr_count:0")
+        chkOp(code, "rt_err:expr_entity_attr_count:0")
     }
 
     private fun resetChkOp(code: String, expected: String = "OK") {

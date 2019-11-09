@@ -15,11 +15,11 @@ class S_UpdateTarget_Simple(
 ): S_UpdateTarget() {
     override fun compile(ctx: C_ExprContext, subValues: MutableList<C_Value>): C_UpdateTarget {
         val cFrom = S_AtExpr.compileFrom(ctx, from)
-        val cls = cFrom[0].compile()
+        val entity = cFrom[0].compile()
         val extraEntities = cFrom.subList(1, cFrom.size).map { it.compile() }
         val dbCtx = ctx.update(nameCtx = C_DbNameContext(ctx.blkCtx, cFrom))
         val dbWhere = where.compile(dbCtx, subValues)
-        val rTarget = R_UpdateTarget_Simple(cls, extraEntities, cardinality.rCardinality, dbWhere)
+        val rTarget = R_UpdateTarget_Simple(entity, extraEntities, cardinality.rCardinality, dbWhere)
         return C_UpdateTarget(dbCtx, rTarget)
     }
 }
@@ -31,9 +31,9 @@ class S_UpdateTarget_Expr(val expr: S_Expr): S_UpdateTarget() {
         subValues.add(cValue)
 
         val rTarget = compileTarget(cValue)
-        val rCls = rTarget.entity()
-        val cCls = C_AtEntity(rCls.rEntity, rCls.rEntity.simpleName, rCls.index)
-        val dbCtx = ctx.update(nameCtx = C_DbNameContext(ctx.blkCtx, listOf(cCls)))
+        val rEntity = rTarget.entity()
+        val cEntity = C_AtEntity(rEntity.rEntity, rEntity.rEntity.simpleName, rEntity.index)
+        val dbCtx = ctx.update(nameCtx = C_DbNameContext(ctx.blkCtx, listOf(cEntity)))
 
         return C_UpdateTarget(dbCtx, rTarget)
     }
@@ -61,25 +61,25 @@ class S_UpdateTarget_Expr(val expr: S_Expr): S_UpdateTarget() {
     }
 
     private fun compileTargetEntity(rExpr: R_Expr, rEntity: R_Entity): R_UpdateTarget {
-        val cls = R_AtEntity(rEntity, 0)
-        val whereLeft = Db_EntityExpr(cls)
+        val entity = R_AtEntity(rEntity, 0)
+        val whereLeft = Db_EntityExpr(entity)
         val whereRight = Db_ParameterExpr(rEntity.type, 0)
         val where = C_Utils.makeDbBinaryExprEq(whereLeft, whereRight)
-        return R_UpdateTarget_Expr_One(cls, where, rExpr)
+        return R_UpdateTarget_Expr_One(entity, where, rExpr)
     }
 
     private fun compileTargetObject(rObject: R_Object): R_UpdateTarget {
         return R_UpdateTarget_Object(rObject)
     }
 
-    private fun compileTargetCollection(rExpr: R_Expr, type: R_Type, clsType: R_EntityType, set: Boolean): R_UpdateTarget {
-        val rEntity = clsType.rEntity
-        val cls = R_AtEntity(rEntity, 0)
-        val whereLeft = Db_EntityExpr(cls)
-        val whereRight = Db_ArrayParameterExpr(type, clsType, 0)
+    private fun compileTargetCollection(rExpr: R_Expr, type: R_Type, entityType: R_EntityType, set: Boolean): R_UpdateTarget {
+        val rEntity = entityType.rEntity
+        val entity = R_AtEntity(rEntity, 0)
+        val whereLeft = Db_EntityExpr(entity)
+        val whereRight = Db_ArrayParameterExpr(type, entityType, 0)
         val where = Db_BinaryExpr(R_BooleanType, Db_BinaryOp_In, whereLeft, whereRight)
-        val setType = R_SetType(clsType)
-        return R_UpdateTarget_Expr_Many(cls, where, rExpr, set, setType)
+        val setType = R_SetType(entityType)
+        return R_UpdateTarget_Expr_Many(entity, where, rExpr, set, setType)
     }
 }
 
@@ -104,13 +104,13 @@ class S_UpdateStatement(pos: S_Pos, val target: S_UpdateTarget, val what: List<S
         return C_Statement(rStmt, false, resFacts.postFacts)
     }
 
-    private fun compileWhat(cls: R_Entity, ctx: C_ExprContext, subValues: MutableList<C_Value>): List<R_UpdateStatementWhat> {
-        val dbWhat = what.map { compileWhatExpr(cls, ctx, it) }
+    private fun compileWhat(entity: R_Entity, ctx: C_ExprContext, subValues: MutableList<C_Value>): List<R_UpdateStatementWhat> {
+        val dbWhat = what.map { compileWhatExpr(entity, ctx, it) }
         subValues.addAll(dbWhat)
 
         val types = dbWhat.map { it.type() }
         val whatPairs = what.map { S_NameExprPair(it.name, it.expr) }
-        val attrs = C_AttributeResolver.resolveUpdate(cls, whatPairs, types)
+        val attrs = C_AttributeResolver.resolveUpdate(entity, whatPairs, types)
 
         val updAttrs = attrs.withIndex().map { (idx, attr) ->
             val w = what[idx]
@@ -121,12 +121,12 @@ class S_UpdateStatement(pos: S_Pos, val target: S_UpdateTarget, val what: List<S
         return updAttrs
     }
 
-    private fun compileWhatExpr(cls: R_Entity, ctx: C_ExprContext, pair: S_UpdateWhat): C_Value {
+    private fun compileWhatExpr(entity: R_Entity, ctx: C_ExprContext, pair: S_UpdateWhat): C_Value {
         val impName = pair.expr.asName()
         if (impName != null && pair.name == null) {
-            val clsAttr = cls.attributes[impName.str]
+            val entityAttr = entity.attributes[impName.str]
             val localVar = ctx.blkCtx.lookupLocalVar(impName.str)
-            if (clsAttr != null && localVar != null) {
+            if (entityAttr != null && localVar != null) {
                 val rExpr = localVar.toVarExpr()
                 val dbExpr = C_Utils.toDbExpr(impName.pos, rExpr)
                 return C_DbValue(pair.expr.startPos, dbExpr, C_ExprVarFacts.EMPTY)

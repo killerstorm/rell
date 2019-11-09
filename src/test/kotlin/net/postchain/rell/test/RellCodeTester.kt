@@ -13,6 +13,7 @@ import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.sql.SqlInit
 import net.postchain.rell.sql.SqlUtils
+import net.postchain.rell.toImmMap
 import org.junit.Assert
 import kotlin.test.assertEquals
 
@@ -21,8 +22,7 @@ class RellCodeTester(
         entityDefs: List<String> = listOf(),
         inserts: List<String> = listOf(),
         gtv: Boolean = false
-): RellBaseTester(tstCtx, entityDefs, inserts, gtv)
-{
+): RellBaseTester(tstCtx, entityDefs, inserts, gtv) {
     var gtvResult: Boolean = gtv
         set(value) {
             checkNotInited()
@@ -71,6 +71,8 @@ class RellCodeTester(
         val ridArray = CommonUtils.hexToBytes(rid)
         chainDependencies[name] = TestChainDependency(ridArray, height)
     }
+
+    fun chainDependencies() = chainDependencies.mapValues { (_, v) -> Pair(v.rid, v.height) }.toImmMap()
 
     fun chkQuery(bodyCode: String, expected: String) {
         val queryCode = "query q() = $bodyCode;"

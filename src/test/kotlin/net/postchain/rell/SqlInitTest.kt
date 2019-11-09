@@ -236,7 +236,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         chkAll("0,user,class,true", "0,name,sys:text 0,transaction,class:0:transaction")
         chkColumns("c0.user(name:text,rowid:int8,transaction:int8)")
 
-        chkInit("entity user { name; }", "rt_err:meta:cls:diff_log:user:true:false")
+        chkInit("entity user { name; }", "rt_err:meta:entity:diff_log:user:true:false")
         chkAll("0,user,class,true", "0,name,sys:text 0,transaction,class:0:transaction")
         chkColumns("c0.user(name:text,rowid:int8,transaction:int8)")
     }
@@ -245,7 +245,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         chkInit("entity user { name; }")
         chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
 
-        chkInit("@log entity user { name; }", "rt_err:meta:cls:diff_log:user:false:true")
+        chkInit("@log entity user { name; }", "rt_err:meta:entity:diff_log:user:false:true")
         chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
     }
 
@@ -323,7 +323,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         chkInit("entity user { name; score: integer; }")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer", "c0.user(name:text,rowid:int8,score:int8)")
 
-        chkInit("object user { mutable name = 'Bob'; mutable score: integer = 123; }", "rt_err:meta:cls:diff_type:user:ENTITY:OBJECT")
+        chkInit("object user { mutable name = 'Bob'; mutable score: integer = 123; }", "rt_err:meta:entity:diff_type:user:ENTITY:OBJECT")
         chkAll("0,user,class,false", "0,name,sys:text 0,score,sys:integer", "c0.user(name:text,rowid:int8,score:int8)")
     }
 
@@ -332,7 +332,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         chkAll("0,state,object,false", "0,value,sys:integer", "c0.state(rowid:int8,value:int8)")
         chkData("c0.state(0,123)")
 
-        chkInit("entity state { value: integer; }", "rt_err:meta:cls:diff_type:state:OBJECT:ENTITY")
+        chkInit("entity state { value: integer; }", "rt_err:meta:entity:diff_type:state:OBJECT:ENTITY")
         chkAll("0,state,object,false", "0,value,sys:integer", "c0.state(rowid:int8,value:int8)")
         chkData("c0.state(0,123)")
     }
