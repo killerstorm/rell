@@ -36,12 +36,12 @@ object SqlMeta {
             msgs.errorIfNotEmpty(metaMissing, "meta:notables", "$MSG_BROKEN_META: missing table(s)")
         }
 
-        val clsChk = SqlTableChecker(tables, mapping.metaEntitiesTable)
-        clsChk.checkColumn("id", "int4")
-        clsChk.checkColumn("name", "text")
-        clsChk.checkColumn("type", "text")
-        clsChk.checkColumn("log", "bool")
-        clsChk.finish(msgs)
+        val entityChk = SqlTableChecker(tables, mapping.metaEntitiesTable)
+        entityChk.checkColumn("id", "int4")
+        entityChk.checkColumn("name", "text")
+        entityChk.checkColumn("type", "text")
+        entityChk.checkColumn("log", "bool")
+        entityChk.finish(msgs)
 
         val attrChk = SqlTableChecker(tables, mapping.metaAttributesTable)
         attrChk.checkColumn("class_id", "int4")
@@ -72,12 +72,12 @@ object SqlMeta {
         msgs.checkErrors()
 
         val res = mutableMapOf<String, MetaEntity>()
-        for (clsRec in metaEntities) {
-            val type = decodeEntityType(clsRec, msgs)
+        for (entityRec in metaEntities) {
+            val type = decodeEntityType(entityRec, msgs)
             if (type == null) continue
-            val attrs = attrMap[clsRec.id] ?: listOf()
+            val attrs = attrMap[entityRec.id] ?: listOf()
             val resAttrMap = attrs.map { Pair(it.name, MetaAttr(it.name, it.type)) }.toMap()
-            res[clsRec.name] = MetaEntity(clsRec.id, clsRec.name, type, clsRec.log, resAttrMap)
+            res[entityRec.name] = MetaEntity(entityRec.id, entityRec.name, type, entityRec.log, resAttrMap)
         }
 
         return res
@@ -155,18 +155,18 @@ object SqlMeta {
         msgs.errorIfNotEmpty(missingTables, "meta:no_data_tables", "Missing tables for existing metadata entities")
         msgs.errorIfNotEmpty(missingEntities, "meta:no_meta_entities", "Missing metadata entities for existing tables")
 
-        for (cls in metaData.values) {
-            val table = mapping.fullName(cls.name)
+        for (entity in metaData.values) {
+            val table = mapping.fullName(entity.name)
             val sqlTable = tables[table]
             if (sqlTable != null) {
-                checkDataTable(table, sqlTable, cls, msgs)
+                checkDataTable(table, sqlTable, entity, msgs)
             }
         }
     }
 
-    private fun checkDataTable(table: String, sqlTable: SqlTable, metaCls: MetaEntity, msgs: Rt_Messages) {
-        val missingCols = (metaCls.attrs.keys + listOf(SqlConstants.ROWID_COLUMN)).filter { it !in sqlTable.cols }
-        val missingAttrs = (sqlTable.cols.keys - listOf(SqlConstants.ROWID_COLUMN)).filter { it !in metaCls.attrs }
+    private fun checkDataTable(table: String, sqlTable: SqlTable, metaEntity: MetaEntity, msgs: Rt_Messages) {
+        val missingCols = (metaEntity.attrs.keys + listOf(SqlConstants.ROWID_COLUMN)).filter { it !in sqlTable.cols }
+        val missingAttrs = (sqlTable.cols.keys - listOf(SqlConstants.ROWID_COLUMN)).filter { it !in metaEntity.attrs }
 
         msgs.errorIfNotEmpty(missingCols, "meta:no_data_columns:$table",
                 "Missing columns for existing meta attributes in table $table")
@@ -180,8 +180,8 @@ object SqlMeta {
         sqls += genMetaTablesCreate(sqlCtx)
 
         val metaEntities = sqlCtx.topologicalEntities.filter { it.sqlMapping.autoCreateTable() }
-        for ((i, cls) in metaEntities.withIndex()) {
-            sqls += genMetaEntityInserts(sqlCtx, i, cls, MetaEntityType.ENTITY)
+        for ((i, entity) in metaEntities.withIndex()) {
+            sqls += genMetaEntityInserts(sqlCtx, i, entity, MetaEntityType.ENTITY)
         }
 
         return SqlGen.joinSqls(sqls)
@@ -194,24 +194,24 @@ object SqlMeta {
         return sqls
     }
 
-    fun genMetaEntityInserts(sqlCtx: Rt_SqlContext, classId: Int, cls: R_Entity, clsType: MetaEntityType): List<String> {
+    fun genMetaEntityInserts(sqlCtx: Rt_SqlContext, classId: Int, entity: R_Entity, entityType: MetaEntityType): List<String> {
         val sqls = mutableListOf<String>()
 
-        val clsTable = DSL.table(DSL.name(sqlCtx.mainChainMapping.metaEntitiesTable))
+        val entityTable = DSL.table(DSL.name(sqlCtx.mainChainMapping.metaEntitiesTable))
 
-        sqls += SqlGen.DSL_CTX.insertInto(clsTable,
+        sqls += SqlGen.DSL_CTX.insertInto(entityTable,
                 DSL.field("id"),
                 DSL.field("name"),
                 DSL.field("type"),
                 DSL.field("log")
         ).values(
                 classId,
-                cls.metaName,
-                clsType.code,
-                cls.flags.log
+                entity.metaName,
+                entityType.code,
+                entity.flags.log
         ).getSQL(ParamType.INLINED) + ";"
 
-        sqls += genMetaAttrsInserts(sqlCtx, classId, cls.attributes.values)
+        sqls += genMetaAttrsInserts(sqlCtx, classId, entity.attributes.values)
 
         return sqls
     }

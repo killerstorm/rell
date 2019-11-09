@@ -549,7 +549,7 @@ object C_Ns_OpContext {
     val NAME = "op_context"
 
     fun transactionExpr(defCtx: C_DefinitionContext): R_Expr {
-        val type = defCtx.appCtx.sysDefs.transactionEntity.type
+        val type = defCtx.modCtx.sysDefs.transactionEntity.type
         return R_SysCallExpr(type, R_SysFn_OpContext.Transaction(type), listOf())
     }
 

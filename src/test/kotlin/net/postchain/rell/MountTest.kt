@@ -25,7 +25,7 @@ class MountTest: BaseRellTest() {
         chkCompile("@mount('foo') operation o(){}", "OK")
         chkCompile("@mount('foo') query q() = 123;", "OK")
         chkCompile("@mount('foo') namespace ns {}", "OK")
-        chkCompile("@mount('foo') external 'bar' {}", "OK")
+        chkCompile("@mount('foo') @external('bar') namespace {}", "OK")
 
         chkCompile("@mount('foo') struct rec { x: integer; }", "ct_err:ann:mount:target_type:STRUCT")
         chkCompile("@mount('foo') enum en { A, B, C }", "ct_err:ann:mount:target_type:ENUM")
@@ -97,7 +97,7 @@ class MountTest: BaseRellTest() {
         chkCompile("@mount('') operation o(){}", "ct_err:ann:mount:empty:OPERATION")
         chkCompile("@mount('') query q() = 123;", "ct_err:ann:mount:empty:QUERY")
         chkCompile("@mount('') namespace ns {}", "OK")
-        chkCompile("@mount('') external 'bar' {}", "OK")
+        chkCompile("@mount('') @external('bar') namespace {}", "OK")
         chkCompile("import sub;", "OK")
     }
 
@@ -451,8 +451,8 @@ class MountTest: BaseRellTest() {
     private fun chkConflictSystemTable(table: String) {
         chkCompile("@mount('') namespace foo { entity $table {} }", "ct_err:mnt_conflict:sys:foo.$table:$table")
         chkCompile("namespace foo { @mount('$table') entity user {} }", "ct_err:mnt_conflict:sys:foo.user:$table")
-        chkCompile("namespace foo { external 'bar' { @log entity $table {} } }", "ct_err:mnt_conflict:sys:foo.$table:$table")
-        chkCompile("external 'bar' { @mount('$table') @log entity user {} }", "ct_err:mnt_conflict:sys:user:$table")
+        chkCompile("@mount('') namespace foo { @external('bar') @log entity $table {} }", "ct_err:mnt_conflict:sys:[bar]#foo.$table:$table")
+        chkCompile("@external('bar') namespace { @mount('$table') @log entity user {} }", "ct_err:mnt_conflict:sys:[bar]#user:$table")
         chkCompile("namespace foo { @mount('$table') object user {} }", "ct_err:mnt_conflict:sys:foo.user:$table")
         chkCompile("namespace foo { @mount('$table') operation user() {} }", "OK")
         chkCompile("namespace foo { @mount('$table') query user() = 0; }", "OK")
@@ -461,15 +461,24 @@ class MountTest: BaseRellTest() {
     private fun chkConflictSysTable(table: String) {
         chkCompile("@mount('sys.$table') entity user {}", "ct_err:mnt_conflict:sys:user:sys.$table")
         chkCompile("namespace sys { entity $table {} }", "ct_err:mnt_conflict:sys:sys.$table:sys.$table")
-        chkCompile("external 'foo' { @mount('sys.$table') @log entity user {} }", "ct_err:mnt_conflict:sys:user:sys.$table")
-        chkCompile("external 'foo' { namespace sys { @log entity $table {} } }", "ct_err:mnt_conflict:sys:sys.$table:sys.$table")
+        chkCompile("@external('foo') namespace { @mount('sys.$table') @log entity user {} }", "ct_err:mnt_conflict:sys:[foo]#user:sys.$table")
+        chkCompile("@external('foo') namespace { namespace sys { @log entity $table {} } }", "ct_err:mnt_conflict:sys:[foo]#sys.$table:sys.$table")
     }
 
     @Test fun testConflictDifferentChains() {
-        chkCompile("namespace ns1 { external 'foo' { @log entity user {} } } namespace ns2 { external 'bar' { @log entity user {} } }", "OK")
-        chkCompile("namespace ns1 { external 'foo' { @log entity user {} } } namespace ns2 { entity user {} }", "OK")
-        chkCompile("external 'foo' { @mount('some') @log entity user {} } external 'bar' { @mount('some') @log entity company {} }", "OK")
-        chkCompile("external 'foo' { @mount('some') @log entity user {} } @mount('some') entity company {}", "OK")
+        chkCompile("""
+            namespace ns1 { @external('foo') namespace { @log entity user {} } }
+            namespace ns2 { @external('bar') namespace { @log entity user {} } }
+        """, "OK")
+
+        chkCompile("namespace ns1 { @external('foo') namespace { @log entity user {} } } namespace ns2 { entity user {} }", "OK")
+
+        chkCompile("""
+            @external('foo') namespace { @mount('some') @log entity user {} }
+            @external('bar') namespace { @mount('some') @log entity company {} }
+        """, "OK")
+
+        chkCompile("@external('foo') namespace { @mount('some') @log entity user {} } @mount('some') entity company {}", "OK")
     }
 
     @Test fun testConflictFileLevelAndModuleLevel() {
@@ -615,7 +624,7 @@ class MountTest: BaseRellTest() {
     @Test fun testRelativePathSyntaxMisc() {
         file("a/module.rell", "@mount('foo.') module;")
         chkCompile("import a;", "ct_err:a/module.rell:ann:mount:tail:no_name:foo.:MODULE")
-        chkCompile("@mount('bar.') external 'something' {}", "ct_err:ann:mount:tail:no_name:bar.:EXTERNAL")
+        chkCompile("@mount('bar.') @external('something') namespace {}", "ct_err:ann:mount:tail:no_name:bar.:NAMESPACE")
         chkCompile("@mount('a.b.c') namespace foo { @mount(' ^^.x') query q()=123; }", "ct_err:ann:mount:invalid: ^^.x")
         chkCompile("@mount('a.b.c') namespace foo { @mount('^^ .x') query q()=123; }", "ct_err:ann:mount:invalid:^^ .x")
         chkCompile("@mount('a.b.c') namespace foo { @mount('^^.x') query q()=123; }", "OK")

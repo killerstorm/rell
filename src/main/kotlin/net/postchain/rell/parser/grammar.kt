@@ -76,7 +76,6 @@ object S_Grammar : Grammar<S_RellFile>() {
     private val ENUM by relltok("enum")
     private val FUNCTION by relltok("function")
     private val NAMESPACE by relltok("namespace")
-    private val EXTERNAL by relltok("external")
     private val MODULE by relltok("module")
     private val IMPORT by relltok("import")
     private val INCLUDE by relltok("include")
@@ -603,10 +602,6 @@ object S_Grammar : Grammar<S_RellFile>() {
         (name, defs) -> annotatedDef { S_NamespaceDefinition(it, name, defs) }
     }
 
-    private val externalDef by ( EXTERNAL * STRING * -LCURL * zeroOrMore(parser(this::annotatedDef)) * -RCURL ) map {
-        (pos, name, defs) -> annotatedDef { S_ExternalDefinition(it, pos.pos, S_String(name.pos, name.text), defs) }
-    }
-
     private val absoluteImportPath by separatedTerms(name, DOT, false) map { S_ImportPath(null, it) }
 
     private val relativeImportPath by DOT * separatedTerms(name, DOT, true) map {
@@ -636,7 +631,6 @@ object S_Grammar : Grammar<S_RellFile>() {
             or queryDef
             or functionDef
             or namespaceDef
-            or externalDef
             or importDef
             or includeDef
     )

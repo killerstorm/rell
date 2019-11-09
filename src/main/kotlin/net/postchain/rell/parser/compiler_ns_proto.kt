@@ -134,22 +134,22 @@ private class C_NsDef_Type(private val type: C_TypeDef): C_NsDef() {
     }
 }
 
-private sealed class C_NsDef_Entity(private val cls: R_Entity): C_NsDef() {
+private sealed class C_NsDef_Entity(private val entity: R_Entity): C_NsDef() {
     final override fun type() = C_DeclarationType.ENTITY
 
     final override fun addToNamespace(b: C_NamespaceBuilder, name: String) {
-        val typeDef = C_TypeDef(cls.type)
+        val typeDef = C_TypeDef(entity.type)
         b.addType(name, typeDef)
         b.addValue(name, C_NamespaceValue_Entity(typeDef))
     }
 }
 
-private class C_NsDef_SysEntity(cls: R_Entity): C_NsDef_Entity(cls)
+private class C_NsDef_SysEntity(entity: R_Entity): C_NsDef_Entity(entity)
 
-private class C_NsDef_UserEntity(private val cls: C_Entity, private val addToModule: Boolean): C_NsDef_Entity(cls.cls) {
+private class C_NsDef_UserEntity(private val entity: C_Entity, private val addToModule: Boolean): C_NsDef_Entity(entity.entity) {
     override fun addToDefs(b: C_ModuleDefsBuilder) {
         if (addToModule) {
-            b.entities.add(cls.cls.moduleLevelName, cls.cls)
+            b.entities.add(entity.entity.moduleLevelName, entity.entity)
         }
     }
 }
@@ -261,7 +261,7 @@ class C_SysNsProto(entries: List<C_NsEntry>) {
 }
 
 class C_SysNsProtoBuilder: C_NsProtoBuilder() {
-    private fun addDef(name: String, def: C_NsDef, privateAccess: Boolean = false) {
+    private fun addDef(name: String, def: C_NsDef, privateAccess: Boolean = true) {
         addDef(name, null, def, privateAccess)
     }
 
@@ -273,8 +273,8 @@ class C_SysNsProtoBuilder: C_NsProtoBuilder() {
         addDef(name, C_NsDef_Type(type))
     }
 
-    fun addEntity(name: String, cls: R_Entity) {
-        addDef(name, C_NsDef_SysEntity(cls))
+    fun addEntity(name: String, entity: R_Entity, privateAccess: Boolean) {
+        addDef(name, C_NsDef_SysEntity(entity), privateAccess)
     }
 
     fun addFunction(name: String, fn: C_GlobalFunction) {
@@ -346,8 +346,8 @@ class C_UserNsProtoBuilder: C_NsProtoBuilder() {
         return Pair(subNs.builder, subNs.namespace.getter)
     }
 
-    fun addEntity(name: S_Name, cls: R_Entity, addToModule: Boolean = true) {
-        addDef(name, C_NsDef_UserEntity(C_Entity(name.pos, cls), addToModule))
+    fun addEntity(name: S_Name, entity: R_Entity, addToModule: Boolean = true) {
+        addDef(name, C_NsDef_UserEntity(C_Entity(name.pos, entity), addToModule))
     }
 
     fun addObject(name: S_Name, obj: R_Object) {
