@@ -11,10 +11,10 @@ class C_AtEntity(val rEntity: R_Entity, val alias: String, val index: Int) {
     fun compileExpr() = Db_EntityExpr(rAtEntity)
 }
 
-class C_ExprContextAttr(val entity: C_AtEntity, val attrRef: C_EntityAttrRef) {
+class C_ExprContextAttr(val cls: C_AtEntity, val attrRef: C_EntityAttrRef) {
     fun compile(): Db_Expr {
-        val entityExpr = entity.compileExpr()
-        return attrRef.createDbContextAttrExpr(entityExpr)
+        val clsExpr = cls.compileExpr()
+        return attrRef.createDbContextAttrExpr(clsExpr)
     }
 }
 
@@ -170,15 +170,15 @@ class C_DbNameContext(blkCtx: C_BlockContext, private val entities: List<C_AtEnt
     override fun resolveNameValue(ctx: C_ExprContext, name: S_Name): C_NameResolution? {
         val nameStr = name.str
 
-        val entity = findEntityByAlias(nameStr)
+        val cls = findEntityByAlias(nameStr)
         val loc = blkCtx.lookupLocalVar(nameStr)
         val glob = blkCtx.defCtx.nsCtx.getValueOpt(name.str)
 
-        if (entity != null && loc != null) {
+        if (cls != null && loc != null) {
             throw C_Errors.errNameConflictAliasLocal(name)
         }
 
-        if (entity != null) return C_NameResolution_Entity(name, entity)
+        if (cls != null) return C_NameResolution_Entity(name, cls)
         if (loc != null) return C_NameResolution_Local(name, ctx, loc)
         if (glob != null) return C_NameResolution_Value(name, blkCtx.defCtx, glob)
 
@@ -187,9 +187,9 @@ class C_DbNameContext(blkCtx: C_BlockContext, private val entities: List<C_AtEnt
 
     private fun findEntityByAlias(alias: String): C_AtEntity? {
         //TODO use a lookup table
-        for (entity in entities) {
-            if (entity.alias == alias) {
-                return entity
+        for (cls in entities) {
+            if (cls.alias == alias) {
+                return cls
             }
         }
         return null
@@ -202,7 +202,7 @@ class C_DbNameContext(blkCtx: C_BlockContext, private val entities: List<C_AtEnt
         if (attrs.isEmpty()) {
             throw C_Errors.errUnknownAttr(name)
         } else if (attrs.size > 1) {
-            throw C_Errors.errMultipleAttrs(name.pos, attrs, "at_attr_name_ambig:$nameStr",
+            throw C_Errors.errMutlipleAttrs(name.pos, attrs, "at_attr_name_ambig:$nameStr",
                     "Multiple attributes with name '$nameStr'")
         }
 
@@ -239,9 +239,9 @@ class C_DbNameContext(blkCtx: C_BlockContext, private val entities: List<C_AtEnt
         //TODO take other kinds of fields into account
         //TODO fail when there is more than one match
         //TODO use a table lookup
-        for (entity in entities) {
-            val entityAttrs = resolver(entity.rEntity)
-            val ctxAttrs = entityAttrs.map { C_ExprContextAttr(entity, it) }
+        for (cls in entities) {
+            val clsAttrs = resolver(cls.rEntity)
+            val ctxAttrs = clsAttrs.map { C_ExprContextAttr(cls, it) }
             attrs.addAll(ctxAttrs)
         }
 
@@ -253,8 +253,8 @@ sealed class C_NameResolution(val name: S_Name) {
     abstract fun toExpr(): C_Expr
 }
 
-private class C_NameResolution_Entity(name: S_Name, private val entity: C_AtEntity): C_NameResolution(name) {
-    override fun toExpr() = C_DbValue.makeExpr(name.pos, entity.compileExpr())
+private class C_NameResolution_Entity(name: S_Name, private val cls: C_AtEntity): C_NameResolution(name) {
+    override fun toExpr() = C_DbValue.makeExpr(name.pos, cls.compileExpr())
 }
 
 private class C_NameResolution_Local(
@@ -374,7 +374,7 @@ abstract class C_Value(val pos: S_Pos) {
         val effectiveBaseType = if (baseType is R_NullableType) baseType.valueType else baseType
 
         val memberRef = C_MemberRef(pos, this, memberName, safe)
-        val valueExpr = C_MemberResolver.valueForType(ctx, effectiveBaseType, memberRef)
+        val valueExpr = C_MemberResolver.valueForType(effectiveBaseType, memberRef)
         val fnExpr = C_MemberResolver.functionForType(effectiveBaseType, memberRef)
 
         if (valueExpr == null && fnExpr == null) {

@@ -5,14 +5,13 @@ import net.postchain.rell.parser.*
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_Printer
 import net.postchain.rell.sql.SqlExecutor
-import net.postchain.rell.toImmMap
 import org.jooq.tools.jdbc.MockConnection
 import java.sql.Connection
 import java.util.*
 import kotlin.test.assertEquals
 
 abstract class RellBaseTester(
-        val tstCtx: RellTestContext,
+        private val tstCtx: RellTestContext,
         entityDefs: List<String> = listOf(),
         inserts: List<String> = listOf(),
         gtv: Boolean = false
@@ -114,10 +113,8 @@ abstract class RellBaseTester(
         files[path] = text
     }
 
-    fun files() = files.toImmMap()
-
     protected fun files(code: String): Map<String, String> {
-        return files() + mapOf(RellTestUtils.MAIN_FILE to code)
+        return files.toMap() + mapOf(RellTestUtils.MAIN_FILE to code)
     }
 
     protected fun checkNotInited() {

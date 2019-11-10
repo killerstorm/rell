@@ -16,8 +16,8 @@ val GTV_OPERATION_PRETTY = false
 class GtvToRtContext(val pretty: Boolean) {
     private val objectIds: MultiValuedMap<R_Entity, Long> = HashSetValuedHashMap()
 
-    fun trackObject(entity: R_Entity, rowid: Long) {
-        objectIds.put(entity, rowid)
+    fun trackObject(cls: R_Entity, rowid: Long) {
+        objectIds.put(cls, rowid)
     }
 
     fun finish(appCtx: Rt_AppContext) {

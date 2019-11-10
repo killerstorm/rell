@@ -158,7 +158,7 @@ class R_MemberCalculator_DataAttribute(type: R_Type, val atBase: R_AtExprBase): 
             } else {
                 "Found more than one object $baseValue in the database: ${list.size}"
             }
-            throw Rt_Error("expr_entity_attr_count:${list.size}", msg)
+            throw Rt_Error("expr_clsattr_count:${list.size}", msg)
         }
 
         check(list[0].size == 1)

@@ -331,18 +331,18 @@ class R_EntityType(val rEntity: R_Entity): R_Type(rEntity.appLevelName) {
 
     override fun createGtvConversion() = GtvRtConversion_Entity(this)
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Entity(this)
+}
 
-    private class R_TypeSqlAdapter_Entity(private val type: R_EntityType): R_TypeSqlAdapter_Some() {
-        override fun toSqlValue(value: Rt_Value) = value.asObjectId()
-        override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = stmt.setLong(idx, value.asObjectId())
-        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_EntityValue(type, rs.getLong(idx))
+private class R_TypeSqlAdapter_Entity(private val type: R_EntityType): R_TypeSqlAdapter_Some() {
+    override fun toSqlValue(value: Rt_Value) = value.asObjectId()
+    override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = stmt.setLong(idx, value.asObjectId())
+    override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_EntityValue(type, rs.getLong(idx))
 
-        override fun metaName(sqlCtx: Rt_SqlContext): String {
-            val rEntity = type.rEntity
-            val chain = sqlCtx.chainMapping(rEntity.external?.chain)
-            val metaName = rEntity.metaName
-            return "class:${chain.chainId}:$metaName"
-        }
+    override fun metaName(sqlCtx: Rt_SqlContext): String {
+        val rEntity = type.rEntity
+        val chain = sqlCtx.chainMapping(rEntity.external?.chain)
+        val metaName = rEntity.metaName
+        return "class:${chain.chainId}:$metaName"
     }
 }
 

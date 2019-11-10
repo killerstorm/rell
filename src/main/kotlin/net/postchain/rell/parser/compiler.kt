@@ -5,7 +5,7 @@ import net.postchain.rell.model.*
 import net.postchain.rell.toImmList
 import java.util.*
 
-class C_Entity(val defPos: S_Pos?, val entity: R_Entity)
+class C_Entity(val defPos: S_Pos?, val cls: R_Entity)
 class C_Struct(val name: S_Name, val struct: R_Struct)
 
 enum class C_CompilerPass {
@@ -60,30 +60,10 @@ class C_StatementVarsBlock {
 class C_SystemDefs private constructor(
         val blockEntity: R_Entity,
         val transactionEntity: R_Entity,
-        val mntTables: C_MountTables,
-        sysEntities: List<R_Entity>
+        val nsProto: C_SysNsProto,
+        val mntTables: C_MountTables
 ) {
-    private val sysEntities = sysEntities.toImmList()
-
-    fun createNsProto(entitiesPrivate: Boolean): C_SysNsProto {
-        val sysNamespaces = SYSTEM_NAMESPACES
-        val sysTypes = SYSTEM_TYPES
-        val sysFunctions = SYSTEM_FUNCTIONS
-
-        val nsBuilder = C_SysNsProtoBuilder()
-
-        for ((name, type) in sysTypes) nsBuilder.addType(name, type)
-        for (entity in sysEntities) nsBuilder.addEntity(entity.simpleName, entity, entitiesPrivate)
-        for ((name, fn) in sysFunctions) nsBuilder.addFunction(name, fn)
-        for ((name, ns) in sysNamespaces) nsBuilder.addNamespace(name, ns)
-
-        return nsBuilder.build()
-    }
-
     companion object {
-        private val SYSTEM_NAMESPACES = C_LibFunctions.getSystemNamespaces()
-        private val SYSTEM_FUNCTIONS = C_LibFunctions.getGlobalFunctions()
-
         private val SYSTEM_TYPES = mapOf(
                 "boolean" to C_TypeDef(R_BooleanType),
                 "text" to C_TypeDef(R_TextType),
@@ -106,20 +86,28 @@ class C_SystemDefs private constructor(
         fun create(executor: C_CompilerExecutor, appDefsBuilder: C_AppDefsBuilder): C_SystemDefs {
             val blockEntity = C_Utils.createBlockEntity(executor, null)
             val transactionEntity = C_Utils.createTransactionEntity(executor, null, blockEntity)
-            return create(appDefsBuilder, blockEntity, transactionEntity)
-        }
 
-        fun create(appDefsBuilder: C_AppDefsBuilder, blockEntity: R_Entity, transactionEntity: R_Entity): C_SystemDefs {
+            val sysNamespaces = C_LibFunctions.getSystemNamespaces()
+            val sysTypes = SYSTEM_TYPES
             val sysEntities =  listOf(blockEntity, transactionEntity)
+            val sysFunctions = C_LibFunctions.getGlobalFunctions()
 
+            val nsBuilder = C_SysNsProtoBuilder()
             val mntBuilder = C_MountTablesBuilder()
-            for (entity in sysEntities) {
-                appDefsBuilder.entities.add(C_Entity(null, entity))
-                mntBuilder.addEntity(null, entity)
+
+            for ((name, type) in sysTypes) nsBuilder.addType(name, type)
+            for (cls in sysEntities) nsBuilder.addEntity(cls.simpleName, cls)
+            for ((name, fn) in sysFunctions) nsBuilder.addFunction(name, fn)
+            for ((name, ns) in sysNamespaces) nsBuilder.addNamespace(name, ns)
+
+            for (cls in sysEntities) {
+                appDefsBuilder.entities.add(C_Entity(null, cls))
+                mntBuilder.addEntity(null, cls)
             }
 
+            val nsProto = nsBuilder.build()
             val mntTables = mntBuilder.build()
-            return C_SystemDefs(blockEntity, transactionEntity, mntTables, sysEntities)
+            return C_SystemDefs(blockEntity, transactionEntity, nsProto, mntTables)
         }
     }
 }
@@ -179,7 +167,7 @@ object C_Compiler {
 
         try {
             for (module in modules) {
-                modMgr.linkModule(module, null)
+                modMgr.linkModule(module)
             }
             app = appCtx.createApp()
         } catch (e: C_Error) {

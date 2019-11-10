@@ -145,7 +145,8 @@ object C_Utils {
             sqlMapping: R_EntitySqlMapping,
             attrs: List<R_Attrib>
     ): R_Entity {
-        val names = createDefNames(R_ModuleName.EMPTY, chain, null, simpleName)
+        val fullName = if (chain == null) simpleName else "external[${chain.name}].$simpleName"
+        val names = R_DefinitionNames(simpleName, fullName, fullName)
         val mountName = R_MountName.of(simpleName)
 
         val flags = R_EntityFlags(
@@ -157,28 +158,15 @@ object C_Utils {
                 log = false
         )
 
-        val externalEntity = if (chain == null) null else R_ExternalEntity(chain, false)
-        val entity = R_Entity(names, mountName, flags, sqlMapping, externalEntity)
+        val externalCls = if (chain == null) null else R_ExternalEntity(chain, false)
+        val cls = R_Entity(names, mountName, flags, sqlMapping, externalCls)
 
         val attrMap = attrs.map { it.name to it }.toMap()
         executor.onPass(C_CompilerPass.MEMBERS) {
-            entity.setBody(R_EntityBody(listOf(), listOf(), attrMap))
+            cls.setBody(R_EntityBody(listOf(), listOf(), attrMap))
         }
 
-        return entity
-    }
-
-    fun createDefNames(
-            moduleName: R_ModuleName,
-            extChain: R_ExternalChainRef?,
-            namespacePath: String?,
-            simpleName: String
-    ): R_DefinitionNames {
-        val moduleLevelName = fullName(namespacePath, simpleName)
-        var modName = moduleName.str()
-        if (extChain != null) modName += "[${extChain.name}]"
-        val appLevelName = if (modName.isEmpty()) moduleLevelName else "$modName#$moduleLevelName"
-        return R_DefinitionNames(simpleName, moduleLevelName, appLevelName)
+        return cls
     }
 
     fun crashExpr(type: R_Type, msg: String = "Compilation error"): R_Expr {
@@ -262,8 +250,8 @@ object C_Errors {
                 "$errMsg: ${srcType.toStrictString()} instead of ${dstType.toStrictString()}")
     }
 
-    fun errMultipleAttrs(pos: S_Pos, attrs: List<C_ExprContextAttr>, errCode: String, errMsg: String): C_Error {
-        val attrsLst = attrs.map { it.entity.alias + "." + it.attrRef.name }
+    fun errMutlipleAttrs(pos: S_Pos, attrs: List<C_ExprContextAttr>, errCode: String, errMsg: String): C_Error {
+        val attrsLst = attrs.map { it.cls.alias + "." + it.attrRef.name }
         return C_Error(pos, "$errCode:${attrsLst.joinToString(",")}", "$errMsg: ${attrsLst.joinToString()}")
     }
 

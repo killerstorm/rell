@@ -182,7 +182,7 @@ class S_Modifiers(val modifiers: List<S_Modifier>) {
     }
 
     fun compile(ctx: C_MountContext, target: C_ModifierTarget) {
-        val modifierCtx = C_ModifierContext(ctx.globalCtx, ctx, ctx.mountName)
+        val modifierCtx = C_ModifierContext(ctx.globalCtx, ctx.mountName)
         compile(modifierCtx, target)
     }
 }
@@ -214,15 +214,14 @@ class S_EntityDefinition(
             return
         }
 
-        val modTarget = C_ModifierTarget(C_DeclarationType.ENTITY, name, externalChain = true, mount = true, log = true)
+        val modTarget = C_ModifierTarget(C_DeclarationType.ENTITY, name, mount = true, log = true)
         modifiers.compile(ctx, modTarget)
 
-        val extChain = modTarget.externalChain(ctx)
+        val names = ctx.nsCtx.defNames(name.str)
+        val extChain = ctx.extChain
         val extChainRef = extChain?.ref
-        val external = extChainRef != null || ctx.modCtx.external
+        val external = extChainRef != null
         val rFlags = compileFlags(ctx, external, modTarget)
-
-        val names = ctx.nsCtx.defNames(name.str, extChain)
 
         if (external && ctx.mountName.isEmpty() && name.str in HEADER_ENTITIES) {
             throw C_Error(name.pos, "def_entity_external_unallowed:${name.str}",
@@ -250,22 +249,14 @@ class S_EntityDefinition(
         ctx.mntBuilder.addEntity(name.pos, rEntity)
 
         ctx.executor.onPass(C_CompilerPass.MEMBERS) {
-            membersPass(ctx, extChain, rEntity, body)
+            membersPass(ctx, rEntity, body)
         }
     }
 
     private fun compileHeader(ctx: C_MountContext) {
         var err = false
 
-        val modTarget = C_ModifierTarget(
-                C_DeclarationType.ENTITY,
-                name,
-                externalChain = true,
-                mount = true,
-                mountAllowed = false,
-                log = true,
-                logAllowed = false
-        )
+        val modTarget = C_ModifierTarget(C_DeclarationType.ENTITY, name, mount = true, mountAllowed = false, log = true, logAllowed = false)
         modifiers.compile(ctx, modTarget)
 
         if (!annotations.isEmpty()) {
@@ -282,10 +273,9 @@ class S_EntityDefinition(
             err = true
         }
 
-        val extChain = modTarget.externalChain(ctx)
-        if (extChain == null && !ctx.modCtx.external) {
+        if (ctx.extChain == null) {
             ctx.globalCtx.error(name.pos, "def_entity_hdr_noexternal:${name.str}",
-                    "Entity header must be declared as external")
+                    "Entity header must be declared in external block")
             return
         }
 
@@ -293,8 +283,7 @@ class S_EntityDefinition(
             return
         }
 
-        val sysDefs = extChain?.sysDefs ?: ctx.modCtx.sysDefs
-        val rEntity = entGetter(sysDefs)
+        val rEntity = entGetter(ctx.extChain)
         ctx.nsBuilder.addEntity(name, rEntity, addToModule = false)
     }
 
@@ -331,15 +320,15 @@ class S_EntityDefinition(
         )
     }
 
-    private fun membersPass(ctx: C_MountContext, extChain: C_ExternalChain?, rEntity: R_Entity, clauses: List<S_RelClause>) {
+    private fun membersPass(ctx: C_MountContext, rEntity: R_Entity, clauses: List<S_RelClause>) {
         val defCtx = C_DefinitionContext(ctx.nsCtx, C_DefinitionType.ENTITY, null, TypedKeyMap())
         val entCtx = C_EntityContext(defCtx, name.str, rEntity.flags.log)
 
         if (rEntity.flags.log) {
-            val sysDefs = extChain?.sysDefs ?: ctx.modCtx.sysDefs
-            val txType = sysDefs.transactionEntity.type
+            val txCls = if (ctx.extChain == null) ctx.modCtx.appCtx.sysDefs.transactionEntity else ctx.extChain.transactionEntity
+            val txType = txCls.type
             entCtx.addAttribute0("transaction", txType, false, false) {
-                if (extChain == null) {
+                if (ctx.extChain == null) {
                     C_Ns_OpContext.transactionExpr(entCtx.defCtx)
                 } else {
                     C_Utils.crashExpr(txType, "Trying to initialize transaction for external entity '${rEntity.appLevelName}'")
@@ -362,8 +351,8 @@ class S_EntityDefinition(
 
     companion object {
         private val HEADER_ENTITIES = mutableMapOf(
-            C_Constants.BLOCK_ENTITY to { sysDefs: C_SystemDefs -> sysDefs.blockEntity },
-            C_Constants.TRANSACTION_ENTITY to { sysDefs: C_SystemDefs -> sysDefs.transactionEntity }
+            C_Constants.BLOCK_ENTITY to { c: C_ExternalChain -> c.blockEntity },
+            C_Constants.TRANSACTION_ENTITY to { c: C_ExternalChain -> c.transactionEntity }
         )
 
         fun compileClauses(entCtx: C_EntityContext, clauses: List<S_RelClause>) {
@@ -746,22 +735,19 @@ class S_NamespaceDefinition(
         val definitions: List<S_Definition>
 ): S_Definition(modifiers) {
     override fun compile(ctx: C_MountContext) {
-        val modTarget = C_ModifierTarget(C_DeclarationType.NAMESPACE, name,
-                externalChain = true, mount = true, emptyMountAllowed = true)
+        val modTarget = C_ModifierTarget(C_DeclarationType.NAMESPACE, name, mount = true, emptyMountAllowed = true)
         modifiers.compile(ctx, modTarget)
 
-        val subCtx = createSubMountContext(ctx, modTarget)
+        val subMntCtx = createSubMntCtx(ctx, modTarget)
         for (def in definitions) {
-            def.compile(subCtx)
+            def.compile(subMntCtx)
         }
     }
 
-    private fun createSubMountContext(ctx: C_MountContext, modTarget: C_ModifierTarget): C_MountContext {
-        val extChain = modTarget.externalChain(ctx)
-
+    private fun createSubMntCtx(ctx: C_MountContext, modTarget: C_ModifierTarget): C_MountContext {
         if (name == null) {
             val subMountName = modTarget.mount?.get() ?: ctx.mountName
-            return C_MountContext(ctx.fileCtx, ctx.nsCtx, extChain, ctx.nsBuilder, subMountName)
+            return C_MountContext(ctx.fileCtx, ctx.nsCtx, ctx.extChain, ctx.nsBuilder, subMountName)
         }
 
         val (subNsBuilder, subNsGetter) = ctx.nsBuilder.addNamespace(name)
@@ -770,7 +756,7 @@ class S_NamespaceDefinition(
         val subNsCtx = C_NamespaceContext(ctx.modCtx, ctx.nsCtx, names.moduleLevelName, subNsGetter)
 
         val subMountName = ctx.mountName(modTarget, name)
-        return C_MountContext(ctx.fileCtx, subNsCtx, extChain, subNsBuilder, subMountName)
+        return C_MountContext(ctx.fileCtx, subNsCtx, ctx.extChain, subNsBuilder, subMountName)
     }
 
     override fun getImportedModules(moduleName: R_ModuleName, res: MutableSet<R_ModuleName>) {
@@ -783,6 +769,46 @@ class S_NamespaceDefinition(
         val sub = if (name == null) b else b.node(this, name, IdeOutlineNodeType.NAMESPACE)
         for (def in definitions) {
             def.ideBuildOutlineTree(sub)
+        }
+    }
+}
+
+class S_ExternalDefinition(
+        modifiers: S_Modifiers,
+        val pos: S_Pos,
+        val name: S_String,
+        val definitions: List<S_Definition>
+): S_Definition(modifiers) {
+    override fun compile(ctx: C_MountContext) {
+        ctx.checkNotExternal(pos, C_DeclarationType.EXTERNAL)
+
+        val modTarget = C_ModifierTarget(C_DeclarationType.EXTERNAL, null, mount = true, emptyMountAllowed = true)
+        modifiers.compile(ctx, modTarget)
+
+        if (name.str.isEmpty()) {
+            ctx.globalCtx.error(name.pos, "def_external_invalid:$name", "Invalid chain name: '$name'")
+            return
+        }
+
+        val mountName = modTarget.mount?.get() ?: R_MountName.EMPTY
+
+        val extChain = ctx.appCtx.addExternalChain(name)
+        val subCtx = C_MountContext(ctx.fileCtx, ctx.nsCtx, extChain, ctx.nsBuilder, mountName)
+
+        for (def in definitions) {
+            def.compile(subCtx)
+        }
+    }
+
+    override fun getImportedModules(moduleName: R_ModuleName, res: MutableSet<R_ModuleName>) {
+        for (def in definitions) {
+            def.getImportedModules(moduleName, res)
+        }
+    }
+
+    override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
+        for (def in definitions) {
+            def.ideBuildOutlineTree(b)
         }
     }
 }
@@ -822,34 +848,30 @@ class S_ImportDefinition(
         val modulePath: S_ImportPath
 ): S_Definition(modifiers) {
     override fun compile(ctx: C_MountContext) {
-        val moduleName = ctx.globalCtx.consumeError { modulePath.compile(pos, ctx.modCtx.module.name) }
-        if (moduleName == null) return
+        val moduleName = try {
+            modulePath.compile(pos, ctx.modCtx.module.name)
+        } catch (e: C_Error) {
+            ctx.globalCtx.error(e)
+            return
+        }
 
-        val modTarget = C_ModifierTarget(C_DeclarationType.IMPORT, null, externalChain = true)
+        val modTarget = C_ModifierTarget(C_DeclarationType.IMPORT, null)
         modifiers.compile(ctx, modTarget)
 
-        val extChain = modTarget.externalChain(ctx)
-
         val module = try {
-            ctx.modCtx.modMgr.linkModule(moduleName, extChain)
+            ctx.modCtx.modMgr.linkModule(moduleName)
         } catch (e: C_CommonError) {
             ctx.globalCtx.error(pos, e.code, e.msg)
-            null
+            return
         }
 
         val actualAlias = getActualAlias()
         if (actualAlias == null) {
             ctx.globalCtx.error(pos, "import:no_alias", "Cannot infer an alias, specify import alias explicitly")
-        }
-
-        if (module != null && (extChain != null || ctx.modCtx.external) && !module.header().external) {
-            ctx.globalCtx.error(pos, "import:module_not_external:$moduleName", "Module '$moduleName' is not external")
             return
         }
 
-        if (actualAlias != null && module != null) {
-            ctx.nsBuilder.addImport(actualAlias, module)
-        }
+        ctx.nsBuilder.addImport(actualAlias, module)
     }
 
     override fun getImportedModules(moduleName: R_ModuleName, res: MutableSet<R_ModuleName>) {
@@ -883,33 +905,24 @@ class S_IncludeDefinition(val pos: S_Pos): S_Definition(S_Modifiers(listOf())) {
 }
 
 class S_ModuleHeader(val modifiers: S_Modifiers, val pos: S_Pos) {
-    fun compile(globalCtx: C_GlobalContext, parentMountName: R_MountName): C_ModuleHeader {
-        val modifierCtx = C_ModifierContext(globalCtx, null, parentMountName)
-
-        val modTarget = C_ModifierTarget(
-                C_DeclarationType.MODULE,
-                null,
-                externalModule = true,
-                mount = true,
-                emptyMountAllowed = true
-        )
+    fun compile(globalCtx: C_GlobalContext, parentMountName: R_MountName): R_MountName? {
+        val modifierCtx = C_ModifierContext(globalCtx, parentMountName)
+        val modTarget = C_ModifierTarget(C_DeclarationType.MODULE, null, mount = true, emptyMountAllowed = true)
         modifiers.compile(modifierCtx, modTarget)
-
-        val mountName = modTarget.mount?.get() ?: parentMountName
-        val external = modTarget.externalModule?.get() ?: false
-        return C_ModuleHeader(mountName, external)
+        return modTarget.mount?.get()
     }
 }
 
 class S_RellFile(val header: S_ModuleHeader?, val definitions: List<S_Definition>): S_Node() {
-    fun compileHeader(globalCtx: C_GlobalContext, parentMountName: R_MountName): C_ModuleHeader? {
-        return header?.compile(globalCtx, parentMountName)
+    fun compileHeader(globalCtx: C_GlobalContext, parentMountName: R_MountName): R_MountName {
+        val res = header?.compile(globalCtx, parentMountName)
+        return res ?: parentMountName
     }
 
     fun compile(modCtx: C_ModuleContext): C_CompiledRellFile {
         modCtx.executor.checkPass(C_CompilerPass.DEFINITIONS)
 
-        val mountName = modCtx.module.header().mountName
+        val mountName = modCtx.module.mountName()
 
         val fileCtx = C_FileContext(modCtx)
 
@@ -917,7 +930,7 @@ class S_RellFile(val header: S_ModuleHeader?, val definitions: List<S_Definition
         val nsLate = C_LateInit(C_CompilerPass.NAMESPACES, C_Namespace.EMPTY)
 
         val nsCtx = C_NamespaceContext(modCtx, modCtx.rootNsCtx, null, nsLate.getter)
-        val mntCtx = C_MountContext(fileCtx, nsCtx, modCtx.module.extChain, nsBuilder, mountName)
+        val mntCtx = C_MountContext(fileCtx, nsCtx, null, nsBuilder, mountName)
 
         compileDefs(mntCtx)
 

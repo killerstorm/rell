@@ -94,7 +94,7 @@ Runs a Rell Postchain app
                   Source directory used to resolve absolute include paths (default: the directory of the Rell file)
 ```
 
-## Run a Multi-Chain Postchain Node (Run.XML)
+## Run a Mutli-Chain Postchain Node (Run.XML)
 
 Runs a Postchain node with one or multiple blockchains. The configuration is specified
 in the Run.XML format. This utility is used by the `Run As` - `Rell Postchain App` command in the Eclipse IDE.

@@ -29,6 +29,7 @@ enum class C_DeclarationType(val description: String) {
     FUNCTION("function"),
     OPERATION("operation"),
     QUERY("query"),
+    EXTERNAL("external"),
     IMPORT("import")
 }
 

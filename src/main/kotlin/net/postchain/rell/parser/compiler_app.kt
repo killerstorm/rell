@@ -18,19 +18,28 @@ class C_AppContext(val globalCtx: C_GlobalContext, controller: C_CompilerControl
     private val externalChainsRoot = R_ExternalChainsRoot()
     private val externalChains = mutableMapOf<String, C_ExternalChain>()
 
-    fun addExternalChain(name: String): C_ExternalChain {
+    fun addExternalChain(name: S_String): C_ExternalChain {
         executor.checkPass(C_CompilerPass.DEFINITIONS)
-        return externalChains.computeIfAbsent(name) { createExternalChain(name) }
+        return externalChains.computeIfAbsent(name.str) { createExternalChain(name) }
     }
 
-    private fun createExternalChain(name: String): C_ExternalChain {
-        val ref = R_ExternalChainRef(externalChainsRoot, name, externalChains.size)
+    private fun createExternalChain(name: S_String): C_ExternalChain {
+        val ref = R_ExternalChainRef(externalChainsRoot, name.str, externalChains.size)
 
         val blockEntity = C_Utils.createBlockEntity(executor, ref)
         val transactionEntity = C_Utils.createTransactionEntity(executor, ref, blockEntity)
 
-        val sysDefs = C_SystemDefs.create(defsBuilder, blockEntity, transactionEntity)
-        return C_ExternalChain(name, ref, sysDefs)
+        val sysEntities = listOf(blockEntity, transactionEntity)
+
+        val mntBuilder = C_MountTablesBuilder()
+        for (cls in sysEntities) {
+            defsBuilder.entities.add(C_Entity(null, cls))
+            mntBuilder.addEntity(null, cls)
+        }
+
+        val mntTables = mntBuilder.build()
+
+        return C_ExternalChain(name, ref, blockEntity, transactionEntity, mntTables)
     }
 
     fun addModule(module: C_CompiledModule) {
@@ -68,7 +77,7 @@ class C_AppContext(val globalCtx: C_GlobalContext, controller: C_CompilerControl
         return R_App(
                 valid = valid,
                 modules = modules.map { it.rModule },
-                entities = appEntities.map { it.entity },
+                entities = appEntities.map { it.cls },
                 objects = appObjects,
                 operations = appOperationsMap,
                 queries = appQueriesMap,
@@ -102,7 +111,7 @@ class C_AppContext(val globalCtx: C_GlobalContext, controller: C_CompilerControl
         val builder = C_MountTablesBuilder()
         builder.add(sysDefs.mntTables)
         for (extChain in externalChains.values) {
-            builder.add(extChain.sysDefs.mntTables)
+            builder.add(extChain.mntTables)
         }
 
         for (module in modules) {
@@ -115,26 +124,26 @@ class C_AppContext(val globalCtx: C_GlobalContext, controller: C_CompilerControl
 
     private fun calcTopologicalEntities(entities: List<C_Entity>): List<R_Entity> {
         val graph = mutableMapOf<R_Entity, Collection<R_Entity>>()
-        for (entity in entities) {
+        for (cls in entities) {
             val deps = mutableSetOf<R_Entity>()
-            for (attr in entity.entity.attributes.values) {
+            for (attr in cls.cls.attributes.values) {
                 if (attr.type is R_EntityType) {
                     deps.add(attr.type.rEntity)
                 }
             }
-            graph[entity.entity] = deps
+            graph[cls.cls] = deps
         }
 
-        val entityToPos = entities.filter { it.defPos != null }.map { Pair(it.entity, it.defPos!!) }.toMap()
+        val entityToPos = entities.filter { it.defPos != null }.map { Pair(it.cls, it.defPos!!) }.toMap()
 
         val cycles = C_GraphUtils.findCycles(graph)
         if (!cycles.isEmpty()) {
             val cycle = cycles[0]
             val shortStr = cycle.joinToString(",") { it.appLevelName }
             val str = cycle.joinToString { it.appLevelName }
-            val entity = cycle[0]
-            val pos = entityToPos[entity]
-            check(pos != null) { entity.appLevelName }
+            val cls = cycle[0]
+            val pos = entityToPos[cls]
+            check(pos != null) { cls.appLevelName }
             throw C_Error(pos, "entity_cycle:$shortStr", "Entity cycle, not allowed: $str")
         }
 
@@ -172,7 +181,7 @@ class C_AppDefsTableBuilder<T, K>(private val executor: C_CompilerExecutor, priv
 }
 
 class C_AppDefsBuilder(executor: C_CompilerExecutor) {
-    val entities = C_AppDefsTableBuilder<C_Entity, R_Entity>(executor) { it.entity }
+    val entities = C_AppDefsTableBuilder<C_Entity, R_Entity>(executor) { it.cls }
     val objects = C_AppDefsTableBuilder<R_Object, R_Object>(executor) { it }
     val structs = C_AppDefsTableBuilder<R_Struct, R_Struct>(executor) { it }
     val operations = C_AppDefsTableBuilder<R_Operation, R_Operation>(executor) { it }

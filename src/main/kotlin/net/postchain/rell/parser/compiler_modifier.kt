@@ -6,16 +6,14 @@ import net.postchain.rell.model.R_TextType
 import net.postchain.rell.runtime.Rt_Value
 import org.apache.commons.lang3.StringUtils
 
-class C_ModifierContext(val globalCtx: C_GlobalContext, val mntCtx: C_MountContext?, val outerMountName: R_MountName)
+class C_ModifierContext(val globalCtx: C_GlobalContext, val outerMountName: R_MountName)
 
 object C_Annotation {
-    const val EXTERNAL = "external"
     const val LOG = "log"
     const val MOUNT = "mount"
 
     fun compile(ctx: C_ModifierContext, name: S_Name, args: List<Rt_Value>, target: C_ModifierTarget) {
         when (name.str) {
-            EXTERNAL -> C_Annotation_External.compile(ctx, name.pos, args, target)
             LOG -> C_Annotation_Log.compile(ctx, name.pos, args, target)
             MOUNT -> C_Annotation_Mount.compile(ctx, name.pos, args, target)
             else -> ctx.globalCtx.error(name.pos, "ann:invalid:${name.str}", "Invalid annotation: '${name.str}'")
@@ -39,20 +37,32 @@ private object C_Annotation_Mount {
             ctx.globalCtx.error(pos, "ann:mount:empty:${target.type}",
                     "Cannot use empty mount name for ${target.type.description}")
         } else {
-            C_AnnUtils.processAnnotation(ctx, pos, target, C_Annotation.MOUNT, target.mount, target.mountAllowed, mountName)
+            processAnnotation(ctx, pos, target, C_Annotation.MOUNT, target.mount, target.mountAllowed, mountName)
         }
     }
 
     private fun processArgs(ctx: C_ModifierContext, pos: S_Pos, args: List<Rt_Value>): C_MountPath? {
-        val str = C_AnnUtils.processArgsString(ctx, pos, args)
-        if (str == null) {
+        val expectedArgs = 1
+        if (args.size != expectedArgs) {
+            ctx.globalCtx.error(pos, "ann:mount:arg_count:${args.size}",
+                    "Wrong number of arguments (expected $expectedArgs)")
             return null
         }
 
+        val arg = args[0]
+        val type = arg.type()
+        if (type != R_TextType) {
+            ctx.globalCtx.error(pos, "ann:mount:arg_type:${type.toStrictString()}",
+                    "Wrong argument type: $type instead of $R_TextType")
+            return null
+        }
+
+        val str = arg.asString()
         val res = parsePath(str)
         if (res == null) {
             ctx.globalCtx.error(pos, "ann:mount:invalid:$str", "Invalid mount name: '$str'")
         }
+
         return res
     }
 
@@ -138,110 +148,21 @@ private object C_Annotation_Log {
             return
         }
 
-        C_AnnUtils.processAnnotation(ctx, pos, target, C_Annotation.LOG, target.log, target.logAllowed, true)
+        processAnnotation(ctx, pos, target, C_Annotation.LOG, target.log, target.logAllowed, true)
     }
 }
-
-private object C_Annotation_External {
-    fun compile(ctx: C_ModifierContext, pos: S_Pos, args: List<Rt_Value>, target: C_ModifierTarget) {
-        if (args.size == 0) {
-            compileNoArgs(ctx, pos, target)
-            return
-        }
-
-        val chain = processArgs(ctx, pos, args)
-        if (chain == null) {
-            return
-        }
-
-        val value = C_ExternalAnnotation(pos, chain)
-        val code = "external:unary"
-        val name = "${C_Annotation.EXTERNAL} with argument"
-        C_AnnUtils.processAnnotation(ctx, pos, target, name, target.externalChain, true, value, nameCode = code)
-    }
-
-    private fun compileNoArgs(ctx: C_ModifierContext, pos: S_Pos, target: C_ModifierTarget) {
-        val code = "external:nullary"
-        val name = "${C_Annotation.EXTERNAL} without argument"
-        C_AnnUtils.processAnnotation(ctx, pos, target, name, target.externalModule, true, true, nameCode = code)
-    }
-
-    private fun processArgs(ctx: C_ModifierContext, pos: S_Pos, args: List<Rt_Value>): String? {
-        val str = C_AnnUtils.processArgsString(ctx, pos, args)
-        if (str != null && str.isEmpty()) {
-            ctx.globalCtx.error(pos, "ann:external:invalid:$str", "Invalid external chain name: '$str'")
-            return null
-        }
-        return str
-    }
-}
-
-private object C_AnnUtils {
-    fun processArgsString(ctx: C_ModifierContext, pos: S_Pos, args: List<Rt_Value>): String? {
-        val expectedArgs = 1
-        if (args.size != expectedArgs) {
-            ctx.globalCtx.error(pos, "ann:mount:arg_count:${args.size}",
-                    "Wrong number of arguments (expected $expectedArgs)")
-            return null
-        }
-
-        val arg = args[0]
-        val type = arg.type()
-        if (type != R_TextType) {
-            ctx.globalCtx.error(pos, "ann:mount:arg_type:${type.toStrictString()}",
-                    "Wrong argument type: $type instead of $R_TextType")
-            return null
-        }
-
-        val str = arg.asString()
-        return str
-    }
-
-    fun <T> processAnnotation(
-            ctx: C_ModifierContext,
-            pos: S_Pos,
-            target: C_ModifierTarget,
-            name: String,
-            field: C_ModifierValue<T>?,
-            allowed: Boolean,
-            value: T,
-            nameCode: String = name
-    ) {
-        if (field == null) {
-            ctx.globalCtx.error(pos, "ann:$nameCode:target_type:${target.type}",
-                    "Annotation @$name cannot be used for ${target.type.description}")
-        } else if (!allowed) {
-            var msg = "Annotation @$name not allowed for ${target.type.description}"
-            if (target.name != null) msg += " '${target.name.str}'"
-            ctx.globalCtx.error(pos, "ann:$nameCode:not_allowed:${target.type}:${target.name}", msg)
-        } else if (!field.set(value)) {
-            ctx.globalCtx.error(pos, "ann:$nameCode:dup", "Annotation @$name specified multiple times")
-        }
-    }
-}
-
-class C_ExternalAnnotation(val pos: S_Pos, val chain: String)
 
 class C_ModifierTarget(
         val type: C_DeclarationType,
         val name: S_Name?,
-        externalChain: Boolean = false,
-        externalModule: Boolean = false,
-        log: Boolean = false,
-        val logAllowed: Boolean = log,
         mount: Boolean = false,
+        log: Boolean = false,
         val mountAllowed: Boolean = mount,
-        val emptyMountAllowed: Boolean = false
+        val emptyMountAllowed: Boolean = false,
+        val logAllowed: Boolean = log
 ) {
-    val externalChain = C_ModifierValue.opt<C_ExternalAnnotation>(externalChain)
-    val externalModule = C_ModifierValue.opt<Boolean>(externalModule)
-    val log = C_ModifierValue.opt<Boolean>(log)
     val mount = C_ModifierValue.opt<R_MountName>(mount)
-
-    fun externalChain(mntCtx: C_MountContext): C_ExternalChain? {
-        val ann = externalChain?.get()
-        return if (ann == null) mntCtx.extChain else mntCtx.appCtx.addExternalChain(ann.chain)
-    }
+    val log = C_ModifierValue.opt<Boolean>(log)
 }
 
 class C_ModifierValue<T> {
@@ -257,5 +178,26 @@ class C_ModifierValue<T> {
 
     companion object {
         fun <T> opt(b: Boolean) = if (b) C_ModifierValue<T>() else null
+    }
+}
+
+private fun <T> processAnnotation(
+        ctx: C_ModifierContext,
+        pos: S_Pos,
+        target: C_ModifierTarget,
+        name: String,
+        field: C_ModifierValue<T>?,
+        allowed: Boolean,
+        value: T
+) {
+    if (field == null) {
+        ctx.globalCtx.error(pos, "ann:$name:target_type:${target.type}",
+                "Annotation @$name cannot be used with ${target.type.description}")
+    } else if (!allowed) {
+        var msg = "Annotation @$name not allowed for ${target.type.description}"
+        if (target.name != null) msg += " '${target.name.str}'"
+        ctx.globalCtx.error(pos, "ann:$name:not_allowed:${target.type}:${target.name}", msg)
+    } else if (!field.set(value)) {
+        ctx.globalCtx.error(pos, "ann:$name:dup", "Annotation @$name specified multiple times")
     }
 }

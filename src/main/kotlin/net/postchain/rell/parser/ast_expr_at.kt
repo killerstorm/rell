@@ -115,7 +115,7 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
         if (attrs.isEmpty()) {
             throw C_Error(expr.startPos, "at_where_type:$idx:$type", "No attribute matches type of where-expression #${idx+1}: $type")
         } else if (attrs.size > 1) {
-            throw C_Errors.errMultipleAttrs(expr.startPos, attrs, "at_attr_type_ambig:$idx:$type",
+            throw C_Errors.errMutlipleAttrs(expr.startPos, attrs, "at_attr_type_ambig:$idx:$type",
                     "Multiple attributes match type of where-expression #${idx+1} ($type)")
         }
 
@@ -264,13 +264,13 @@ class S_AtExpr(
             val cFrom = from.mapIndexed { i, f -> compileFromEntity(ctx, i, f) }
 
             val names = mutableSetOf<String>()
-            for ((alias, entity) in cFrom) {
-                if (!names.add(entity.alias)) {
-                    throw C_Error(alias.pos, "at_dup_alias:${entity.alias}", "Duplicate entity alias: ${entity.alias}")
+            for ((alias, cls) in cFrom) {
+                if (!names.add(cls.alias)) {
+                    throw C_Error(alias.pos, "at_dup_alias:${cls.alias}", "Duplicate entity alias: ${cls.alias}")
                 }
             }
 
-            return cFrom.map { ( _, entity ) -> entity }
+            return cFrom.map { ( _, cls ) -> cls }
         }
 
         private fun compileFromEntity(ctx: C_ExprContext, idx: Int, from: S_AtExprFrom): Pair<S_Name, C_AtEntity> {
@@ -283,8 +283,8 @@ class S_AtExpr(
             }
 
             val alias = from.alias ?: from.entityName[from.entityName.size - 1]
-            val entity = ctx.blkCtx.defCtx.nsCtx.getEntity(from.entityName)
-            return Pair(alias, C_AtEntity(entity, alias.str, idx))
+            val cls = ctx.blkCtx.defCtx.nsCtx.getEntity(from.entityName)
+            return Pair(alias, C_AtEntity(cls, alias.str, idx))
         }
 
         fun findWhereContextAttrsByType(ctx: C_ExprContext, type: R_Type): List<C_ExprContextAttr> {

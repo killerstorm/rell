@@ -60,9 +60,9 @@ object C_AttributeResolver {
         }
     }
 
-    fun resolveUpdate(entity: R_Entity, exprs: List<S_NameExprPair>, types: List<R_Type>): List<R_Attrib> {
-        val explicitExprs = matchExplicitExprs(entity.attributes, exprs, true)
-        return matchImplicitExprs(entity.attributes, exprs, types, explicitExprs, true)
+    fun resolveUpdate(cls: R_Entity, exprs: List<S_NameExprPair>, types: List<R_Type>): List<R_Attrib> {
+        val explicitExprs = matchExplicitExprs(cls.attributes, exprs, true)
+        return matchImplicitExprs(cls.attributes, exprs, types, explicitExprs, true)
     }
 
     private fun matchExplicitExprs(attributes: Map<String, R_Attrib>, exprs: List<S_NameExprPair>, mutableOnly: Boolean)

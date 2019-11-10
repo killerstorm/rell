@@ -100,11 +100,11 @@ object SqlGen {
 
         for (attr in attrs) {
             if (attr.type is R_EntityType) {
-                val refEntity = attr.type.rEntity
-                val refTable = refEntity.sqlMapping.table(sqlCtx)
+                val refCls = attr.type.rEntity
+                val refTable = refCls.sqlMapping.table(sqlCtx)
                 val constraint = constraint("${sqlTable}_${attr.sqlMapping}_FK")
                         .foreignKey(attr.sqlMapping)
-                        .references(refTable, refEntity.sqlMapping.rowidColumn())
+                        .references(refTable, refCls.sqlMapping.rowidColumn())
                 constraints.add(constraint)
             }
         }

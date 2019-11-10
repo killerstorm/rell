@@ -21,8 +21,7 @@ import net.postchain.rell.toImmSet
 import org.apache.commons.lang3.time.FastDateFormat
 
 const val RELL_LANG_VERSION = "0.10"
-const val RELL_VERSION = "0.10.1"
-
+const val RELL_VERSION = "0.10.0"
 const val RELL_VERSION_MODULE_SYSTEM = "0.10.0"
 
 const val CONFIG_RELL_FILES = "files_v$RELL_LANG_VERSION"

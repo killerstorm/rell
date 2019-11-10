@@ -3,7 +3,6 @@ package net.postchain.rell.parser
 import net.postchain.rell.Getter
 import net.postchain.rell.TypedKeyMap
 import net.postchain.rell.model.*
-import org.apache.commons.lang3.StringUtils
 
 class C_GlobalContext(val compilerOptions: C_CompilerOptions) {
     private var frameBlockIdCtr = 0L
@@ -51,10 +50,6 @@ class C_ModuleContext(
 
     val rootNsCtx = C_NamespaceContext(this, null, null, nsGetter)
 
-    val external = module.header().external
-
-    val sysDefs = module.extChain?.sysDefs ?: appCtx.sysDefs
-
     fun getModuleArgsStruct(): R_Struct? {
         val content = module.content()
         val struct = content.defs.structs[C_Constants.MODULE_ARGS_STRUCT]
@@ -75,8 +70,11 @@ class C_NamespaceContext(
     val globalCtx = modCtx.globalCtx
     val executor = modCtx.executor
 
-    fun defNames(simpleName: String, extChain: C_ExternalChain? = null): R_DefinitionNames {
-        return C_Utils.createDefNames(modCtx.module.name, extChain?.ref, namespacePath, simpleName)
+    fun defNames(simpleName: String): R_DefinitionNames {
+        val moduleLevelName = C_Utils.fullName(namespacePath, simpleName)
+        val modName = modCtx.module.name
+        val appLevelName = if (modName.parts.isEmpty()) moduleLevelName else "$modName#$moduleLevelName"
+        return R_DefinitionNames(simpleName, moduleLevelName, appLevelName)
     }
 
     fun getType(name: List<S_Name>): R_Type {
@@ -167,9 +165,11 @@ class C_NamespaceContext(
 }
 
 class C_ExternalChain(
-        val name: String,
+        val name: S_String,
         val ref: R_ExternalChainRef,
-        val sysDefs: C_SystemDefs
+        val blockEntity: R_Entity,
+        val transactionEntity: R_Entity,
+        val mntTables: C_MountTables
 )
 
 class C_MountContext(
@@ -187,15 +187,9 @@ class C_MountContext(
 
     fun checkNotExternal(pos: S_Pos, decType: C_DeclarationType) {
         if (extChain != null) {
-            failExternal(pos, decType, "namespace")
-        } else if (modCtx.external) {
-            failExternal(pos, decType, "module")
+            val def = decType.description
+            throw C_Error(pos, "def_external:$def", "Not allowed to have $def in external block")
         }
-    }
-
-    private fun failExternal(pos: S_Pos, decType: C_DeclarationType, place: String) {
-        val type = StringUtils.capitalize(decType.description)
-        throw C_Error(pos, "def_external:$place:$decType", "$type not allowed in external $place")
     }
 
     fun mountName(modTarget: C_ModifierTarget, simpleName: S_Name): R_MountName {
