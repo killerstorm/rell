@@ -339,65 +339,36 @@ Can be used to apply an annotation to a set of definitions:
 External
 --------
 
-The ``@external`` annotation is used to access entities defined in other blockchains.
+External blocks are used to access entities defined in other blockchains:
 
 ::
 
-    @external('foo') namespace {
-        @log entity user {}
-        @log entity company {}
+    external 'foo' {
+        @log entity user {
+            name;
+        }
     }
-
-    @external('foo') @log entity city {}
 
     query get_all_users() = user @* {};
 
-In this example, ``'foo'`` is the name of an external blockchain. To be used in an ``@external`` annotation, a blockchain
+In this example, ``'foo'`` is the name of an external blockchain. To be used in an external block, a blockchain
 must be defined in the blockchain configuration (``dependencies`` node).
 
 Every blockchain has its ``chain_id``, which is included in table names for entities and objects of that chain. If the
 blockchain ``'foo'`` has ``chain_id`` = 123, the table for the entity ``user`` will be called ``c123.user``.
 
-Features:
+Other features:
 
-- External entities must be annotated with the ``@log`` annotation. This implies that those entities cannot have mutable
+- External entities must be annotated with the ``@log`` annotation. This implies that those entity cannot have mutable
   attributes.
 - Values of external entities cannot be created or deleted.
-- Only entities, namespaces and imports can be annotated with ``@external``.
+- Only entities and namespaces are allowed inside of an external block.
+- Can have only one external block for a specific blockchain name.
 - When selecting values of an external entity (using at-expression), an implicit block height filter is applied, so
   the active blockchain can see only those blocks of the external blockchain whose height is lower than a specific value.
 - Every blockchain stores the structure of its entities in meta-information tables. When a blockchain is started,
   the meta-information of all involved external blockchains is verified to make sure that all declared external entities
   exist and have declared attributes.
-
-External modules
-~~~~~~~~~~~~~~~~
-
-A module can be annotated with the ``@external`` with no arguments:
-
-::
-
-    @external module;
-
-    @log entity user {}
-    @log entity company {}
-
-An external module:
-
-- can contain only namespaces, entities (annotated with ``@log``) and imports of other external modules;
-- can be imported as a regular or an external module.
-
-Regular import: entities defined in the module ``ext`` belong to the current blockchain.
-
-::
-
-    import ext;
-
-External import: entities defined in the module ``ext`` are imported as external entities from the chain ``foo``.
-
-::
-
-    @external('foo') import ext;
 
 Transactions and blocks
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -406,27 +377,21 @@ To access blocks and transactions of an external blockchian, a special syntax is
 
 ::
 
-    @external('foo') namespace foo {
-        entity transaction;
-        entity block;
+    namespace foo {
+        external 'foo' {
+            entity transaction;
+            entity block;
+        }
     }
 
    function get_foo_transactions(): list<foo.transaction> = foo.transaction @* {};
    function get_foo_blocks(): list<foo.block> = foo.block @* {};
 
+- External block must be put in a namespace in order to prevent name conflict, since entities ``transaction`` and
+  ``block`` are already defined in the top-level scope (they represent transactions and blocks of the active blockchain).
+- Namespace name can be arbitrary.
 - External and non-external transactions/blocks are distinct, incompatible types.
 - When selecting external transactions or blocks, an implicit height filter is applied (like for external entities).
-
-Entities ``transaction`` and ``block`` of an external chain can be accessed also via an external module:
-
-::
-
-    @external('foo') import ext;
-
-    function get_foo_transactions(): list<ext.transaction> = ext.transaction @* {};
-    function get_foo_blocks(): list<ext.block> = ext.block @* {};
-
-The entities are implicitly added to the module's namespace and can be accessed by its import alias.
 
 .. _general-mount-names:
 
