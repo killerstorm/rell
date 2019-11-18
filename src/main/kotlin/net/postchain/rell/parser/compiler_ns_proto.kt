@@ -1,54 +1,11 @@
 package net.postchain.rell.parser
 
-import com.google.common.collect.LinkedHashMultimap
-import com.google.common.collect.Multimap
 import net.postchain.rell.Getter
 import net.postchain.rell.Setter
 import net.postchain.rell.model.*
 import net.postchain.rell.toImmList
 
-abstract class C_NameConflictsProcessor<K, E> {
-    abstract fun isSystemEntry(entry: E): Boolean
-    abstract fun getConflictableKey(entry: E): K
-    abstract fun handleConflict(globalCtx: C_GlobalContext, entry: E, otherEntry: E)
-
-    fun processConflicts(
-            globalCtx: C_GlobalContext,
-            allEntries: List<E>,
-            errorsEntries: MutableSet<E>
-    ): List<E> {
-        val map: Multimap<K, E> = LinkedHashMultimap.create()
-        for (entry in allEntries) {
-            val key = getConflictableKey(entry)
-            map.put(key, entry)
-        }
-
-        val res = mutableListOf<E>()
-
-        for (name in map.keySet()) {
-            val entries = map.get(name)
-            val (sysEntries, userEntries) = entries.partition { isSystemEntry(it) }
-
-            if (entries.size > 1) {
-                for (entry in userEntries) {
-                    if (errorsEntries.add(entry)) {
-                        val otherEntry = entries.first { it !== entry }
-                        handleConflict(globalCtx, entry, otherEntry)
-                    }
-                }
-            }
-
-            res.addAll(sysEntries)
-            if (sysEntries.isEmpty() && !userEntries.isEmpty()) {
-                res.add(userEntries[0])
-            }
-        }
-
-        return res.toImmList()
-    }
-}
-
-private object C_NameConflictsProcessor_NsEntry: C_NameConflictsProcessor<String, C_NsEntry>() {
+private object C_DefConflictsProcessor_NsEntry: C_DefConflictsProcessor<String, C_NsEntry>() {
     override fun isSystemEntry(entry: C_NsEntry) = entry.sName == null
     override fun getConflictableKey(entry: C_NsEntry) = entry.name
 
@@ -67,7 +24,7 @@ class C_NsEntry(val name: String, val sName: S_Name?, val privateAccess: Boolean
                 entries: List<C_NsEntry>,
                 errorsEntries: MutableSet<C_NsEntry>
         ): List<C_NsEntry> {
-            return C_NameConflictsProcessor_NsEntry.processConflicts(globalCtx, entries, errorsEntries)
+            return C_DefConflictsProcessor_NsEntry.processConflicts(globalCtx, entries, errorsEntries)
         }
 
         fun createNamespace(entries: List<C_NsEntry>): C_Namespace {

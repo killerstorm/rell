@@ -12,6 +12,7 @@ enum class C_CompilerPass {
     DEFINITIONS,
     NAMESPACES,
     MEMBERS,
+    ABSTRACT,
     STRUCTS,
     EXPRESSIONS,
     VALIDATION,
@@ -125,26 +126,32 @@ class C_SystemDefs private constructor(
 }
 
 // Instantiated in Eclipse IDE, change parameters carefully.
-class C_CompilerOptions(val gtv: Boolean, val deprecatedError: Boolean) {
+class C_CompilerOptions(val gtv: Boolean, val deprecatedError: Boolean, val ide: Boolean) {
     class Builder {
         private var gtv = DEFAULT.gtv
         private var deprecatedError = DEFAULT.deprecatedError
+        private var ide = DEFAULT.ide
 
-        fun gtv(v: Boolean): Builder {
+        @Suppress("UNUSED") fun gtv(v: Boolean): Builder {
             gtv = v
             return this
         }
 
-        fun deprecatedError(v: Boolean): Builder {
+        @Suppress("UNUSED") fun deprecatedError(v: Boolean): Builder {
             deprecatedError = v
             return this
         }
 
-        fun build() = C_CompilerOptions(gtv = gtv, deprecatedError = deprecatedError)
+        @Suppress("UNUSED") fun ide(v: Boolean): Builder {
+            ide = v
+            return this
+        }
+
+        fun build() = C_CompilerOptions(gtv = gtv, deprecatedError = deprecatedError, ide = ide)
     }
 
     companion object {
-        @JvmField val DEFAULT = C_CompilerOptions(gtv = true, deprecatedError = false)
+        @JvmField val DEFAULT = C_CompilerOptions(gtv = true, deprecatedError = false, ide = false)
 
         @JvmStatic fun builder() = Builder()
     }
@@ -178,8 +185,14 @@ object C_Compiler {
         var app: R_App? = null
 
         try {
-            for (module in modules) {
-                modMgr.linkModule(module, null)
+            for (moduleName in modules) {
+                val module = modMgr.linkModule(moduleName, null)
+
+                val header = module.header()
+                if (header.abstract != null && !globalCtx.compilerOptions.ide) {
+                    appCtx.globalCtx.error(header.abstract, "module:main_abstract:$moduleName",
+                            "Module '${moduleName.str()}' is abstract, cannot be used as a main module")
+                }
             }
             app = appCtx.createApp()
         } catch (e: C_Error) {

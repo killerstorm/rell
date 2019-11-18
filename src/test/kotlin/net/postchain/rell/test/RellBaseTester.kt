@@ -1,10 +1,12 @@
 package net.postchain.rell.test
 
 import net.postchain.rell.model.R_App
+import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.parser.*
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_Printer
 import net.postchain.rell.sql.SqlExecutor
+import net.postchain.rell.toImmList
 import net.postchain.rell.toImmMap
 import org.jooq.tools.jdbc.MockConnection
 import java.sql.Connection
@@ -51,6 +53,8 @@ abstract class RellBaseTester(
     val stdoutPrinter: Rt_Printer = stdoutPrinter0
     val logPrinter: Rt_Printer = logPrinter0
 
+    private var mainModules: List<String>? = null
+
     fun init() {
         tstCtx.init()
 
@@ -75,8 +79,9 @@ abstract class RellBaseTester(
 
     private fun initCompile(code: String): R_App {
         val sourceDir = createSourceDir(code)
+        val modules = mainModules()
         val options = compilerOptions()
-        val cRes = RellTestUtils.compileApp(sourceDir, options)
+        val cRes = RellTestUtils.compileApp(sourceDir, modules, options)
 
         if (cRes.errors.isNotEmpty()) {
             val err = cRes.errors[0]
@@ -90,7 +95,7 @@ abstract class RellBaseTester(
 
     private val expectedData = mutableListOf<String>()
 
-    protected fun compilerOptions() = C_CompilerOptions(gtv, deprecatedError)
+    protected fun compilerOptions() = C_CompilerOptions(gtv = gtv, deprecatedError = deprecatedError, ide = false)
 
     fun def(def: String) {
         checkNotInited()
@@ -119,6 +124,13 @@ abstract class RellBaseTester(
     protected fun files(code: String): Map<String, String> {
         return files() + mapOf(RellTestUtils.MAIN_FILE to code)
     }
+
+    fun mainModule(vararg modules: String) {
+        checkNotInited()
+        mainModules = modules.toList().toImmList()
+    }
+
+    protected fun mainModules() = (mainModules ?: listOf("")).map { R_ModuleName.of(it) }
 
     protected fun checkNotInited() {
         check(!inited)
@@ -244,7 +256,8 @@ abstract class RellBaseTester(
     fun processApp(code: String, processor: (R_App) -> String): String {
         messages.clear()
         val sourceDir = createSourceDir(code)
-        return RellTestUtils.processApp(sourceDir, errMsgPos, compilerOptions(), messages) {
+        val modules = mainModules()
+        return RellTestUtils.processApp(sourceDir, errMsgPos, compilerOptions(), messages, modules) {
             processor(it.rApp)
         }
     }

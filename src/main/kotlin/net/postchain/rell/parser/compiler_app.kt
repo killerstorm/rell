@@ -13,7 +13,7 @@ class C_AppContext(val globalCtx: C_GlobalContext, controller: C_CompilerControl
     val defsBuilder = C_AppDefsBuilder(executor)
     val sysDefs = C_SystemDefs.create(executor, defsBuilder)
 
-    private val modules = mutableListOf<C_CompiledModule>()
+    private val modules = C_ListBuilder<C_AppModule>()
 
     private val externalChainsRoot = R_ExternalChainsRoot()
     private val externalChains = mutableMapOf<String, C_ExternalChain>()
@@ -33,9 +33,9 @@ class C_AppContext(val globalCtx: C_GlobalContext, controller: C_CompilerControl
         return C_ExternalChain(name, ref, sysDefs)
     }
 
-    fun addModule(module: C_CompiledModule) {
+    fun addModule(module: C_Module, compiled: C_CompiledModule) {
         executor.checkPass(C_CompilerPass.NAMESPACES)
-        modules.add(module)
+        modules.add(C_AppModule(module, compiled.rModule, compiled.contents))
     }
 
     private var createAppCalled = false
@@ -43,6 +43,11 @@ class C_AppContext(val globalCtx: C_GlobalContext, controller: C_CompilerControl
     fun createApp(): R_App {
         check(!createAppCalled)
         createAppCalled = true
+
+        executor.onPass(C_CompilerPass.ABSTRACT) {
+            val mods = modules.commit().map { it.module }
+            C_AbstractCompiler.compile(globalCtx, mods)
+        }
 
         executor.onPass(C_CompilerPass.STRUCTS) {
             val appStructs = defsBuilder.structs.build()
@@ -67,7 +72,7 @@ class C_AppContext(val globalCtx: C_GlobalContext, controller: C_CompilerControl
 
         return R_App(
                 valid = valid,
-                modules = modules.map { it.rModule },
+                modules = modules.commit().map { it.rModule },
                 entities = appEntities.map { it.entity },
                 objects = appObjects,
                 operations = appOperationsMap,
@@ -105,8 +110,8 @@ class C_AppContext(val globalCtx: C_GlobalContext, controller: C_CompilerControl
             builder.add(extChain.sysDefs.mntTables)
         }
 
-        for (module in modules) {
-            builder.add(module.content.mntTables)
+        for (module in modules.commit()) {
+            builder.add(module.contents.mntTables)
         }
 
         val tables = builder.build()
@@ -150,6 +155,8 @@ class C_AppContext(val globalCtx: C_GlobalContext, controller: C_CompilerControl
         }
         return res.toImmMap()
     }
+
+    private class C_AppModule(val module: C_Module, val rModule: R_Module, val contents: C_ModuleContents)
 }
 
 class C_AppDefsTableBuilder<T, K>(private val executor: C_CompilerExecutor, private val keyGetter: (T) -> K) {
@@ -179,7 +186,7 @@ class C_AppDefsBuilder(executor: C_CompilerExecutor) {
     val queries = C_AppDefsTableBuilder<R_Query, R_Query>(executor) { it }
 }
 
-private class C_NameConflictsProcessor_MntEntry(private val chain: String?): C_NameConflictsProcessor<R_MountName, C_MntEntry>() {
+private class C_DefConflictsProcessor_MntEntry(private val chain: String?): C_DefConflictsProcessor<R_MountName, C_MntEntry>() {
     override fun isSystemEntry(entry: C_MntEntry) = entry.pos == null
     override fun getConflictableKey(entry: C_MntEntry) = entry.mountName
 
@@ -215,7 +222,7 @@ class C_MntEntry(val type: C_DeclarationType, val def: R_Definition, val pos: S_
         }
 
         private fun processMountConflicts0(globalCtx: C_GlobalContext, chain: String?, mntTable: C_MntTable): C_MntTable {
-            val processor = C_NameConflictsProcessor_MntEntry(chain)
+            val processor = C_DefConflictsProcessor_MntEntry(chain)
             val resEntries = processor.processConflicts(globalCtx, mntTable.entries, mutableSetOf())
             return C_MntTable(resEntries)
         }

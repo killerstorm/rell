@@ -2,6 +2,8 @@ package net.postchain.rell.parser
 
 import com.github.h0tk3y.betterParse.parser.ParseException
 import com.github.h0tk3y.betterParse.parser.parseToEnd
+import com.google.common.collect.LinkedHashMultimap
+import com.google.common.collect.Multimap
 import net.postchain.rell.*
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Error
@@ -63,6 +65,8 @@ class C_ExternalParam(val name: S_Name, val type: R_Type?) {
 }
 
 object C_Utils {
+    val ERROR_STATEMENT = R_ExprStatement(crashExpr(R_UnitType))
+
     fun toDbExpr(pos: S_Pos, rExpr: R_Expr): Db_Expr {
         val type = rExpr.type
         if (!type.sqlAdapter.isSqlCompatible()) {
@@ -145,7 +149,7 @@ object C_Utils {
             sqlMapping: R_EntitySqlMapping,
             attrs: List<R_Attrib>
     ): R_Entity {
-        val names = createDefNames(R_ModuleName.EMPTY, chain, null, simpleName)
+        val names = createDefNames(R_ModuleName.EMPTY, chain, null, listOf(simpleName))
         val mountName = R_MountName.of(simpleName)
 
         val flags = R_EntityFlags(
@@ -172,12 +176,21 @@ object C_Utils {
             moduleName: R_ModuleName,
             extChain: R_ExternalChainRef?,
             namespacePath: String?,
-            simpleName: String
+            qualifiedName: List<String>
     ): R_DefinitionNames {
-        val moduleLevelName = fullName(namespacePath, simpleName)
+        check(qualifiedName.isNotEmpty())
+
+        val fullNamespacePath = if (qualifiedName.size == 1) namespacePath else {
+            fullName(namespacePath, qualifiedName.subList(0, qualifiedName.size - 1).joinToString("."))
+        }
+
+        val simpleName = qualifiedName.last()
+        val moduleLevelName = fullName(fullNamespacePath, simpleName)
+
         var modName = moduleName.str()
         if (extChain != null) modName += "[${extChain.name}]"
         val appLevelName = if (modName.isEmpty()) moduleLevelName else "$modName#$moduleLevelName"
+
         return R_DefinitionNames(simpleName, moduleLevelName, appLevelName)
     }
 
@@ -204,7 +217,9 @@ object C_Utils {
         }
     }
 
-    fun fullName(namespacePath: String?, name: String) = if (namespacePath == null) name else (namespacePath + "." + name)
+    fun fullName(namespacePath: String?, name: String): String {
+        return if (namespacePath == null) name else (namespacePath + "." + name)
+    }
 
     fun nameStr(name: List<S_Name>): String = name.joinToString(".") { it.str }
 
@@ -553,6 +568,47 @@ object C_StructUtils {
     private class StructInfo(val directFlags: R_TypeFlags, val dependencies: Set<R_Struct>)
 }
 
+abstract class C_DefConflictsProcessor<K, E> {
+    abstract fun isSystemEntry(entry: E): Boolean
+    abstract fun getConflictableKey(entry: E): K
+    abstract fun handleConflict(globalCtx: C_GlobalContext, entry: E, otherEntry: E)
+
+    fun processConflicts(
+            globalCtx: C_GlobalContext,
+            allEntries: List<E>,
+            errorsEntries: MutableSet<E>
+    ): List<E> {
+        val map: Multimap<K, E> = LinkedHashMultimap.create()
+        for (entry in allEntries) {
+            val key = getConflictableKey(entry)
+            map.put(key, entry)
+        }
+
+        val res = mutableListOf<E>()
+
+        for (name in map.keySet()) {
+            val entries = map.get(name)
+            val (sysEntries, userEntries) = entries.partition { isSystemEntry(it) }
+
+            if (entries.size > 1) {
+                for (entry in userEntries) {
+                    if (errorsEntries.add(entry)) {
+                        val otherEntry = entries.first { it !== entry }
+                        handleConflict(globalCtx, entry, otherEntry)
+                    }
+                }
+            }
+
+            res.addAll(sysEntries)
+            if (sysEntries.isEmpty() && !userEntries.isEmpty()) {
+                res.add(userEntries[0])
+            }
+        }
+
+        return res.toImmList()
+    }
+}
+
 private class C_LateInitContext(executor: C_CompilerExecutor) {
     private var internals: Internals? = Internals(executor)
 
@@ -585,16 +641,35 @@ private class C_LateInitContext(executor: C_CompilerExecutor) {
     private class Internals(val executor: C_CompilerExecutor) {
         val uninits = mutableListOf<() -> Unit>()
     }
+
+    companion object {
+        private val LOCAL_CTX = ThreadLocalContext<C_LateInitContext>()
+
+        fun getContext() = LOCAL_CTX.get()
+
+        fun <T> runInContext(executor: C_CompilerExecutor, code: () -> T): T {
+            val ctx = C_LateInitContext(executor)
+            try {
+                val res = LOCAL_CTX.set(ctx, code)
+                return res
+            } finally {
+                ctx.destroy()
+            }
+        }
+    }
 }
 
 class C_LateInit<T>(private val pass: C_CompilerPass, fallback: T) {
-    private val ctx = LOCAL_CTX.get()
+    private val ctx = C_LateInitContext.getContext()
     private var value: T? = null
     private var fallback: T? = fallback
 
     init {
         ctx.checkPass(null, pass.prev())
-        ctx.onDestroy { this.fallback = null }
+        ctx.onDestroy {
+            if (value == null) value = this.fallback
+            this.fallback = null
+        }
     }
 
     val getter: Getter<T> = { get() }
@@ -616,16 +691,25 @@ class C_LateInit<T>(private val pass: C_CompilerPass, fallback: T) {
     }
 
     companion object {
-        private val LOCAL_CTX = ThreadLocalContext<C_LateInitContext>()
-
         fun <T> context(executor: C_CompilerExecutor, code: () -> T): T {
-            val ctx = C_LateInitContext(executor)
-            try {
-                val res = LOCAL_CTX.set(ctx, code)
-                return res
-            } finally {
-                ctx.destroy()
-            }
+            return C_LateInitContext.runInContext(executor, code)
         }
+    }
+}
+
+class C_ListBuilder<T> {
+    private val list = mutableListOf<T>()
+    private var commit: List<T>? = null
+
+    fun add(value: T) {
+        check(commit == null)
+        list.add(value)
+    }
+
+    fun commit(): List<T> {
+        if (commit == null) {
+            commit = list.toImmList()
+        }
+        return commit!!
     }
 }

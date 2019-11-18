@@ -9,7 +9,7 @@ class C_GlobalContext(val compilerOptions: C_CompilerOptions) {
     private var frameBlockIdCtr = 0L
     private val messages = mutableListOf<C_Message>()
 
-    fun nextFrameBlockId(): R_FrameBlockId = R_FrameBlockId(frameBlockIdCtr++)
+    fun nextFrameBlockId(location: String): R_FrameBlockId = R_FrameBlockId(frameBlockIdCtr++, location)
 
     fun message(type: C_MessageType, pos: S_Pos, code: String, text: String) {
         messages.add(C_Message(type, pos, code, text))
@@ -52,11 +52,10 @@ class C_ModuleContext(
     val rootNsCtx = C_NamespaceContext(this, null, null, nsGetter)
 
     val external = module.header().external
-
     val sysDefs = module.extChain?.sysDefs ?: appCtx.sysDefs
 
     fun getModuleArgsStruct(): R_Struct? {
-        val content = module.content()
+        val content = module.contents()
         val struct = content.defs.structs[C_Constants.MODULE_ARGS_STRUCT]
         return struct?.struct
     }
@@ -64,6 +63,34 @@ class C_ModuleContext(
 
 class C_FileContext(val modCtx: C_ModuleContext) {
     val mntBuilder = C_MountTablesBuilder()
+
+    private val imports = C_ListBuilder<C_ImportDescriptor>()
+    private val abstracts = C_ListBuilder<C_AbstractDescriptor>()
+    private val overrides = C_ListBuilder<C_OverrideDescriptor>()
+
+    fun addImport(d: C_ImportDescriptor) {
+        modCtx.executor.checkPass(C_CompilerPass.DEFINITIONS)
+        imports.add(d)
+    }
+
+    fun addAbstractFunction(d: C_AbstractDescriptor) {
+        modCtx.executor.checkPass(C_CompilerPass.DEFINITIONS)
+        abstracts.add(d)
+    }
+
+    fun addOverrideFunction(d: C_OverrideDescriptor) {
+        modCtx.executor.checkPass(C_CompilerPass.DEFINITIONS)
+        overrides.add(d)
+    }
+
+    private var createContentsCalled = false
+
+    fun createContents(): C_RellFileContents {
+        modCtx.executor.checkPass(C_CompilerPass.DEFINITIONS)
+        check(!createContentsCalled)
+        createContentsCalled = true
+        return C_RellFileContents(imports.commit(), abstracts.commit(), overrides.commit())
+    }
 }
 
 class C_NamespaceContext(
@@ -75,8 +102,12 @@ class C_NamespaceContext(
     val globalCtx = modCtx.globalCtx
     val executor = modCtx.executor
 
+    fun defNames(qualifiedName: List<String>, extChain: C_ExternalChain? = null): R_DefinitionNames {
+        return C_Utils.createDefNames(modCtx.module.name, extChain?.ref, namespacePath, qualifiedName)
+    }
+
     fun defNames(simpleName: String, extChain: C_ExternalChain? = null): R_DefinitionNames {
-        return C_Utils.createDefNames(modCtx.module.name, extChain?.ref, namespacePath, simpleName)
+        return defNames(listOf(simpleName), extChain)
     }
 
     fun getType(name: List<S_Name>): R_Type {
@@ -90,32 +121,12 @@ class C_NamespaceContext(
 
     fun getTypeOpt(name: List<S_Name>): R_Type? {
         val typeDef = getTypeDefOpt(name)
-        val type = typeDef?.useDef(modCtx, name)
-        return type
+        return typeDef?.useDef(modCtx, name)
     }
 
-    private fun getTypeDefOpt(name: List<S_Name>): C_TypeDef? {
-        check(!name.isEmpty())
-
-        val name0 = name[0].str
-        if (name.size == 1) {
-            val typeDef = getDefOpt { it.getDirectTypeOpt(name0) }
-            return typeDef
-        }
-
-        var nsDef = getDefOpt { it.getDirectNamespaceOpt(name0) }
-        if (nsDef == null) return null
-
-        for (i in 1 .. name.size - 2) {
-            val nsName = name.subList(0, i)
-            val ns = nsDef!!.useDef(modCtx, nsName)
-            nsDef = ns.namespaces[name[i].str]
-            if (nsDef == null) return null
-        }
-
-        val nsName = name.subList(0, name.size - 1)
-        val typeDef = nsDef!!.useDef(modCtx, nsName).types[name[name.size - 1].str]
-        return typeDef
+    private fun getTypeDefOpt(qName: List<S_Name>): C_TypeDef? {
+        val (ns, name) = processQualifiedName(qName)
+        return ns?.type(name)
     }
 
     fun getEntity(name: List<S_Name>): R_Entity {
@@ -136,6 +147,25 @@ class C_NamespaceContext(
         executor.checkPass(C_CompilerPass.EXPRESSIONS, null)
         val fn = getDefOpt { it.getDirectFunctionOpt(name) }
         return fn
+    }
+
+    fun getFunctionOpt(qName: List<S_Name>): C_GlobalFunction? {
+        executor.checkPass(C_CompilerPass.MEMBERS, null)
+        val (ns, name) = processQualifiedName(qName)
+        return if (ns == null) null else ns.function(name)
+    }
+
+    private fun processQualifiedName(qName: List<S_Name>): Pair<GeneralNs?, String> {
+        check(!qName.isEmpty())
+        var ns: GeneralNs = RootGeneralNs()
+
+        for (i in 0 .. qName.size - 2) {
+            val ns2 = ns.sub(qName[i])
+            if (ns2 == null) return Pair(null, "?")
+            ns = ns2
+        }
+
+        return Pair(ns, qName[qName.size - 1].str)
     }
 
     private fun <T> getDefOpt(getter: (C_NamespaceContext) -> T?): T? {
@@ -163,6 +193,33 @@ class C_NamespaceContext(
 
     private fun getDirectFunctionOpt(name: String): C_GlobalFunction? {
         return nsGetter().functions[name]
+    }
+
+    private inner abstract class GeneralNs(private val qName: List<S_Name>) {
+        abstract fun type(name: String): C_TypeDef?
+        abstract fun namespace(name: String): C_NamespaceDef?
+        abstract fun value(name: String): C_NamespaceValue?
+        abstract fun function(name: String): C_GlobalFunction?
+
+        fun sub(name: S_Name): GeneralNs? {
+            val subNsDef = namespace(name.str)
+            return if (subNsDef == null) null else SubGeneralNs(qName + name, subNsDef)
+        }
+    }
+
+    private inner class SubGeneralNs(qName: List<S_Name>, private val nsDef: C_NamespaceDef): GeneralNs(qName) {
+        private fun namespace() = nsDef.useDef(modCtx, listOf())
+        override fun type(name: String) = namespace().types[name]
+        override fun namespace(name: String) = namespace().namespaces[name]
+        override fun value(name: String) = namespace().values[name]
+        override fun function(name: String) = namespace().functions[name]
+    }
+
+    private inner class RootGeneralNs: GeneralNs(listOf()) {
+        override fun type(name: String) = getDefOpt { it.getDirectTypeOpt(name) }
+        override fun namespace(name: String) = getDefOpt { it.getDirectNamespaceOpt(name) }
+        override fun value(name: String) = getDefOpt { it.getDirectValueOpt(name) }
+        override fun function(name: String) = getDefOpt { it.getDirectFunctionOpt(name) }
     }
 }
 
@@ -238,7 +295,9 @@ class C_DefinitionContext(
     private var nextLoopId = 0
     private var nextVarId = 0
 
-    private val rootBlkCtx = C_BlockContext(this, null, null)
+    private val rootBlkCtx = C_BlockContext(this, null, null,
+            "ns:" + nsCtx.modCtx.module.name.str() + ":" + (nsCtx.namespacePath ?: "<root>"))
+
     private val rootNameCtx = C_RNameContext(rootBlkCtx)
     val rootExprCtx = C_ExprContext(rootBlkCtx, rootNameCtx, C_VarFactsContext(C_VarFacts.EMPTY))
 

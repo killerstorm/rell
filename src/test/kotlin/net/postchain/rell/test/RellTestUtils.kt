@@ -23,9 +23,10 @@ object RellTestUtils {
             errPos: Boolean = false,
             options: C_CompilerOptions = C_CompilerOptions.DEFAULT,
             outMessages: MutableList<C_Message>? = null,
+            modules: List<R_ModuleName> = listOf(R_ModuleName.EMPTY),
             processor: (T_App) -> String
     ): String {
-        val cRes = compileApp(sourceDir, options)
+        val cRes = compileApp(sourceDir, modules, options)
         outMessages?.addAll(cRes.messages)
 
         if (!cRes.errors.isEmpty()) {

@@ -82,7 +82,7 @@ class C_RegularNamespaceDef(private val namespace: C_Namespace, deprecated: C_De
 }
 
 class C_ImportNamespaceDef(private val module: C_Module): C_NamespaceDef(null) {
-    override fun def() = module.content().namespace
+    override fun def() = module.contents().namespace
 }
 
 class C_Namespace(

@@ -4,6 +4,7 @@ import net.postchain.rell.model.*
 
 
 abstract class C_GlobalFunction {
+    abstract fun getAbstractInfo(): Pair<R_Definition?, C_AbstractDescriptor?>
     abstract fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr
 }
 
@@ -37,6 +38,8 @@ abstract class C_RegularGlobalFunction: C_GlobalFunction() {
 }
 
 class C_StructGlobalFunction(private val struct: R_Struct): C_GlobalFunction() {
+    override fun getAbstractInfo() = Pair(struct, null)
+
     override fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
         return compileCall(struct, ctx, name, args)
     }
@@ -50,24 +53,32 @@ class C_StructGlobalFunction(private val struct: R_Struct): C_GlobalFunction() {
     }
 }
 
-class C_UserGlobalFunction(val rFunction: R_Function): C_RegularGlobalFunction() {
-    private val paramsLate = C_LateInit(C_CompilerPass.MEMBERS, listOf<C_ExternalParam>())
+class C_UserFunctionHeader(val retType: R_Type, val cParams: List<C_ExternalParam>) {
+    companion object {
+        val EMPTY = C_UserFunctionHeader(R_UnitType, listOf())
+    }
+}
 
-    fun setParams(params: List<C_ExternalParam>) {
-        paramsLate.set(params)
+class C_UserGlobalFunction(val rFunction: R_Function, private val abstract: C_AbstractDescriptor?): C_RegularGlobalFunction() {
+    private val headerLate = C_LateInit(C_CompilerPass.MEMBERS, C_UserFunctionHeader.EMPTY)
+
+    fun setHeader(retType: R_Type, cParams: List<C_ExternalParam>) {
+        val header = C_UserFunctionHeader(retType, cParams)
+        headerLate.set(header)
+        abstract?.setHeader(header)
     }
 
-    override fun compileCallRegular(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Expr {
-        val params = paramsLate.get()
-        val effArgs = checkArgs(ctx, name, params, args)
+    override fun getAbstractInfo() = Pair(rFunction, abstract)
 
-        val type = rFunction.type()
+    override fun compileCallRegular(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Expr {
+        val header = headerLate.get()
+        val effArgs = checkArgs(ctx, name, header.cParams, args)
 
         val rExpr = if (effArgs != null) {
             val rArgs = effArgs.map { it.toRExpr() }
-            R_UserCallExpr(type, rFunction, rArgs)
+            R_UserCallExpr(header.retType, rFunction, rArgs)
         } else {
-            C_Utils.crashExpr(type, "Compilation error")
+            C_Utils.crashExpr(header.retType, "Compilation error")
         }
 
         val exprFacts = C_ExprVarFacts.forSubExpressions(args)
@@ -191,6 +202,8 @@ class C_SysMemberFormalParamsFuncBody(
 }
 
 class C_SysGlobalFunction(private val cases: List<C_GlobalFuncCase>): C_RegularGlobalFunction() {
+    override fun getAbstractInfo() = Pair(null, null)
+
     override fun compileCallRegular(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Expr {
         val match = matchCase(name, args)
         val caseCtx = C_GlobalFuncCaseCtx(name)

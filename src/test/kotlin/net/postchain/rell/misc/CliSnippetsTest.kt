@@ -19,6 +19,8 @@ class CliSnippetsTest {
     @Test fun testRunSimple() = chkModule("run_simple")
     @Test fun testStair() = chkModule("stair")
 
+    @Test fun testAbstr() = chkModule("abstr.main")
+
     private fun chkModule(module: String) {
         val dir = File("test-cli/src")
         val sourceDir = C_DiskSourceDir(dir)

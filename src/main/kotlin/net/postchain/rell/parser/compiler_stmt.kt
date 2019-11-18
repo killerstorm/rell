@@ -9,6 +9,7 @@ data class C_LoopId(val id: Int)
 class C_Statement(val rStmt: R_Statement, val returnAlways: Boolean, val varFacts: C_VarFacts = C_VarFacts.EMPTY) {
     companion object {
         val EMPTY = C_Statement(R_EmptyStatement, false)
+        val ERROR = C_Statement(C_Utils.ERROR_STATEMENT, false)
 
         fun empty(varFacts: C_VarFacts): C_Statement {
             return if (varFacts.isEmpty()) EMPTY else C_Statement(R_EmptyStatement, false, varFacts)

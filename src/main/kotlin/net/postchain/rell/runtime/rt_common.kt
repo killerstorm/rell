@@ -81,7 +81,7 @@ class Rt_CallFrame(val defCtx: Rt_DefinitionContext, rFrame: R_CallFrame) {
 
     private fun checkPtr(ptr: R_VarPtr): Int {
         val block = curBlock
-        check(ptr.blockId == block.id)
+        check(ptr.blockId == block.id) { "expected ${ptr.blockId}, was ${block.id}" }
         val offset = ptr.offset
         check(offset >= 0)
         check(offset < block.offset + block.size)

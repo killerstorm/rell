@@ -1,0 +1,10 @@
+module;
+
+import ^.custom;
+import ^.library;
+
+override function custom.formula(x: integer): integer = x * x;
+
+function main() {
+    library.calculate(123);
+}

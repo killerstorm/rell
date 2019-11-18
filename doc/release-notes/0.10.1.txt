@@ -41,3 +41,19 @@ import ext;
 // External import: entities defined in "ext" are imported as external entities from chain "other_chain".
 @external('other_chain')
 import ext;
+
+
+4. Language: Abstract modules and functions
+
+A module or a function can be declared abstract:
+
+abstract module;
+abstract function customize(x: integer): text;
+
+Abstract functions shall be overridden in client modules:
+
+import lib;
+override function lib.customize(x: integer): text { ... }
+
+This allows to customize a library module with arbitrary behavior. When importing an abstract module, all its
+abstract functions that have no body must be overridden.

@@ -28,11 +28,16 @@ class C_ScopeEntry(
     fun toVarExpr(): R_VarExpr = R_VarExpr(type, ptr, name)
 }
 
-class C_BlockContext(val defCtx: C_DefinitionContext, private val parent: C_BlockContext?, val loop: C_LoopId?) {
+class C_BlockContext(
+        val defCtx: C_DefinitionContext,
+        private val parent: C_BlockContext?,
+        val loop: C_LoopId?,
+        private val location: String
+) {
     private val startOffset: Int = if (parent == null) 0 else parent.startOffset + parent.locals.size
     private val locals = mutableMapOf<String, C_ScopeEntry0>()
 
-    private val blockId = defCtx.globalCtx.nextFrameBlockId()
+    private val blockId = defCtx.globalCtx.nextFrameBlockId(location)
 
     fun add(name: S_Name, type: R_Type, modifiable: Boolean): Pair<C_VarId, R_VarPtr> {
         val nameStr = name.str
@@ -117,7 +122,7 @@ class C_ExprContext(val blkCtx: C_BlockContext, val nameCtx: C_NameContext, val 
     }
 
     fun subBlock(loop: C_LoopId?): C_ExprContext {
-        val subBlkCtx = C_BlockContext(blkCtx.defCtx, blkCtx, loop)
+        val subBlkCtx = C_BlockContext(blkCtx.defCtx, blkCtx, loop, "blk")
         val subNameCtx = C_RNameContext(subBlkCtx)
         return C_ExprContext(subBlkCtx, subNameCtx, factsCtx)
     }

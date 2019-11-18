@@ -97,9 +97,11 @@ class IdeCodeSnippet(
     @JvmField val parsing = parsing.toImmMap()
 
     fun serialize(): String {
-        val opts = mutableMapOf<String, Any>()
-        opts["gtv"] = options.gtv
-        opts["deprecatedError"] = options.deprecatedError
+        val opts = mapOf<String, Any>(
+                "gtv"  to options.gtv,
+                "deprecatedError" to options.deprecatedError,
+                "ide" to options.ide
+        )
 
         val msgs = messages.map { it.serialize() }
 
@@ -135,7 +137,8 @@ class IdeCodeSnippet(
             val optionsMap = optionsRaw.map { (k, v) -> k as String to v }.toMap()
             val options = C_CompilerOptions(
                     gtv = optionsMap.getValue("gtv") as Boolean,
-                    deprecatedError = optionsMap.getValue("deprecatedError") as Boolean
+                    deprecatedError = optionsMap.getValue("deprecatedError") as Boolean,
+                    ide = (optionsMap["ide"] as Boolean?) ?: false
             )
 
             val messagesRaw = obj.getValue("messages") as List<Any>

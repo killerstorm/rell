@@ -235,7 +235,7 @@ class Rt_AppContext(val globalCtx: Rt_GlobalContext, val sqlCtx: Rt_SqlContext, 
     private var objsInited = false
 
     fun createRootFrame(): Rt_CallFrame {
-        val rFrameBlock = R_FrameBlock(null, R_FrameBlockId(0), 0, 0)
+        val rFrameBlock = R_FrameBlock(null, R_FrameBlockId(0, "app"), 0, 0)
         val rFrame = R_CallFrame(0, rFrameBlock)
         val defCtx = Rt_DefinitionContext(this, true)
         return Rt_CallFrame(defCtx, rFrame)

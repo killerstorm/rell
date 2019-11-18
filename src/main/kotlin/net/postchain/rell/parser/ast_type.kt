@@ -17,8 +17,8 @@ sealed class S_Type {
             }
         }
 
-        fun matchOpt(ctx: C_ExprContext, dstType: R_Type, srcType: R_Type, errPos: S_Pos, errCode: String, errMsg: String): Boolean {
-            return ctx.globalCtx.consumeError { match(dstType, srcType, errPos, errCode, errMsg); true } ?: false
+        fun matchOpt(globalCtx: C_GlobalContext, dstType: R_Type, srcType: R_Type, errPos: S_Pos, errCode: String, errMsg: String): Boolean {
+            return globalCtx.consumeError { match(dstType, srcType, errPos, errCode, errMsg); true } ?: false
         }
 
         fun adapt(dstType: R_Type, srcType: R_Type, errPos: S_Pos, errCode: String, errMsg: String): R_TypeAdapter {

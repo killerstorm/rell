@@ -2,6 +2,7 @@ package net.postchain.rell.model
 
 import net.postchain.rell.parser.C_CompilerPass
 import net.postchain.rell.parser.C_LateInit
+import net.postchain.rell.parser.C_Utils
 import net.postchain.rell.runtime.*
 import net.postchain.rell.toImmList
 import net.postchain.rell.toImmMap
@@ -26,13 +27,13 @@ abstract class R_Definition(names: R_DefinitionNames) {
 class R_ExternalChainsRoot
 class R_ExternalChainRef(val root: R_ExternalChainsRoot, val name: String, val index: Int)
 
-data class R_FrameBlockId(val id: Long)
+data class R_FrameBlockId(val id: Long, val location: String)
 data class R_VarPtr(val blockId: R_FrameBlockId, val offset: Int)
 class R_FrameBlock(val parentId: R_FrameBlockId?, val id: R_FrameBlockId, val offset: Int, val size: Int)
 
 class R_CallFrame(val size: Int, val rootBlock: R_FrameBlock) {
     companion object {
-        private val ERROR_BLOCK = R_FrameBlock(null, R_FrameBlockId(-1), -1, -1)
+        private val ERROR_BLOCK = R_FrameBlock(null, R_FrameBlockId(-1, "error"), -1, -1)
         val ERROR = R_CallFrame(0, ERROR_BLOCK)
     }
 }
@@ -111,7 +112,7 @@ class R_Operation(names: R_DefinitionNames, mountName: R_MountName): R_MountedRo
     private class Internals(val params: List<R_ExternalParam>, val body: R_Statement, val frame: R_CallFrame)
 
     companion object {
-        private val ERROR_INTERNALS = Internals(params = listOf(), body = R_EmptyStatement, frame = R_CallFrame.ERROR)
+        private val ERROR_INTERNALS = Internals(params = listOf(), body = C_Utils.ERROR_STATEMENT, frame = R_CallFrame.ERROR)
     }
 }
 
@@ -163,65 +164,56 @@ class R_Query(names: R_DefinitionNames, mountName: R_MountName): R_MountedRoutin
         private val ERROR_INTERNALS = Internals(
                 type = R_UnitType,
                 params = listOf(),
-                body = R_EmptyStatement,
+                body = C_Utils.ERROR_STATEMENT,
                 frame = R_CallFrame.ERROR
         )
     }
 }
 
+class R_FunctionBody(val type: R_Type, val params: List<R_ExternalParam>, val body: R_Statement, val frame: R_CallFrame) {
+    companion object {
+        val EMPTY = R_FunctionBody(R_UnitType, listOf(), C_Utils.ERROR_STATEMENT, R_CallFrame.ERROR)
+    }
+}
+
 class R_Function(names: R_DefinitionNames): R_Routine(names) {
-    private val headerLate = C_LateInit(C_CompilerPass.MEMBERS, EMPTY_HEADER)
-    private val bodyLate = C_LateInit(C_CompilerPass.EXPRESSIONS, EMPTY_BODY)
+    private val bodyLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_FunctionBody.EMPTY)
 
-    fun setHeader(type: R_Type, params: List<R_ExternalParam>) {
-        headerLate.set(R_FunctionHeader(type, params))
+    fun setBody(body: R_FunctionBody) {
+        bodyLate.set(body)
     }
 
-    fun setBody(body: R_Statement, frame: R_CallFrame) {
-        bodyLate.set(R_FunctionBody(body, frame))
-    }
-
-    fun type() = headerLate.get().type
-
-    override fun params() = headerLate.get().params
+    override fun params() = bodyLate.get().params
 
     override fun callTop(appCtx: Rt_AppContext, args: List<Rt_Value>): Rt_Value? {
         val res = callTopFunction(appCtx, args)
-        val type = headerLate.get().type
+        val type = bodyLate.get().type
         return if (type != R_UnitType) res else null
     }
 
     fun callTopFunction(appCtx: Rt_AppContext, args: List<Rt_Value>, dbUpdateAllowed: Boolean = false): Rt_Value {
-        val rtFrame = createRtFrame(appCtx, dbUpdateAllowed)
+        val body = bodyLate.get()
+        val rtFrame = createRtFrame(body, appCtx, dbUpdateAllowed)
         val res = call(rtFrame, args)
         return res
     }
 
     fun call(rtFrame: Rt_CallFrame, args: List<Rt_Value>): Rt_Value {
-        val rtSubFrame = createRtFrame(rtFrame.defCtx.appCtx, rtFrame.defCtx.dbUpdateAllowed)
+        val body = bodyLate.get()
+        val rtSubFrame = createRtFrame(body, rtFrame.defCtx.appCtx, rtFrame.defCtx.dbUpdateAllowed)
 
         val params = params()
         processArgs(params, args, rtSubFrame)
 
-        val body = bodyLate.get().body
-        val res = body.execute(rtSubFrame)
+        val res = body.body.execute(rtSubFrame)
 
         val retVal = if (res is R_StatementResult_Return) res.value else null
         return retVal ?: Rt_UnitValue
     }
 
-    private fun createRtFrame(appCtx: Rt_AppContext, dbUpdateAllowed: Boolean): Rt_CallFrame {
-        val frame = bodyLate.get().frame
+    private fun createRtFrame(body: R_FunctionBody, appCtx: Rt_AppContext, dbUpdateAllowed: Boolean): Rt_CallFrame {
         val defCtx = Rt_DefinitionContext(appCtx, dbUpdateAllowed)
-        return Rt_CallFrame(defCtx, frame)
-    }
-
-    private class R_FunctionHeader(val type: R_Type, val params: List<R_ExternalParam>)
-    private class R_FunctionBody(val body: R_Statement, val frame: R_CallFrame)
-
-    companion object {
-        private val EMPTY_HEADER = R_FunctionHeader(R_UnitType, listOf())
-        private val EMPTY_BODY = R_FunctionBody(R_EmptyStatement, R_CallFrame.ERROR)
+        return Rt_CallFrame(defCtx, body.frame)
     }
 }
 

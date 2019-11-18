@@ -18,18 +18,26 @@ private class C_ParsedRellFile(val path: C_SourcePath, private val ast: S_RellFi
     }
 
     fun compile(ctx: C_ModuleSourceContext): C_CompiledRellFile {
-        val res = ast?.compile(ctx.modCtx) ?: C_CompiledRellFile.EMPTY
-        return res
+        return ast?.compile(path, ctx.modCtx) ?: C_CompiledRellFile.empty(path)
     }
 }
 
-class C_CompiledRellFile(val nsProto: C_UserNsProto, val mntTables: C_MountTables, val innerNsSetter: Setter<C_Namespace>) {
+class C_CompiledRellFile(
+        val path: C_SourcePath,
+        val nsProto: C_UserNsProto,
+        val mntTables: C_MountTables,
+        val contents: C_RellFileContents,
+        val innerNsSetter: Setter<C_Namespace>
+) {
+    override fun toString() = path.str()
+
     companion object {
-        val EMPTY = C_CompiledRellFile(C_UserNsProto.EMPTY, C_MountTables.EMPTY, {})
+        fun empty(path: C_SourcePath): C_CompiledRellFile =
+                C_CompiledRellFile(path, C_UserNsProto.EMPTY, C_MountTables.EMPTY, C_RellFileContents.EMPTY, {})
     }
 }
 
-class C_ModuleHeader(val mountName: R_MountName, val external: Boolean)
+class C_ModuleHeader(val mountName: R_MountName, val abstract: S_Pos?, val external: Boolean)
 
 class C_ModuleSourceContext(val modCtx: C_ModuleContext)
 
@@ -74,6 +82,22 @@ private class C_DirModuleSource(private val files: List<C_ParsedRellFile>): C_Mo
     }
 }
 
+class C_ImportDescriptor(val pos: S_Pos, val module: C_Module)
+
+class C_RellFileContents(
+        imports: List<C_ImportDescriptor>,
+        abstracts: List<C_AbstractDescriptor>,
+        overrides: List<C_OverrideDescriptor>
+) {
+    val imports = imports.toImmList()
+    val abstracts = abstracts.toImmList()
+    val overrides = overrides.toImmList()
+
+    companion object {
+        val EMPTY = C_RellFileContents(listOf(), listOf(), listOf())
+    }
+}
+
 class C_Module(
         val name: R_ModuleName,
         val extChain: C_ExternalChain?,
@@ -82,14 +106,14 @@ class C_Module(
         private val globalCtx: C_GlobalContext,
         private val executor: C_CompilerExecutor
 ) {
-    private val content = C_LateInit(C_CompilerPass.NAMESPACES, C_ModuleContent.EMPTY)
+    private val contents = C_LateInit(C_CompilerPass.NAMESPACES, C_ModuleContents.EMPTY)
     private var header: C_ModuleHeader? = null
 
     fun header(): C_ModuleHeader {
         var res = header
         if (res == null) {
             val parentMountName = parentModule?.header()?.mountName ?: R_MountName.EMPTY
-            res = source.compileHeader(globalCtx, parentMountName) ?: C_ModuleHeader(parentMountName, false)
+            res = source.compileHeader(globalCtx, parentMountName) ?: C_ModuleHeader(parentMountName, null, false)
             header = res
         }
         return res
@@ -102,22 +126,22 @@ class C_Module(
         val ctx = C_ModuleSourceContext(modCtx)
         val compiledFiles = source.compile(ctx)
 
-        modCtx.executor.onPass(C_CompilerPass.NAMESPACES) {
+        appCtx.executor.onPass(C_CompilerPass.NAMESPACES) {
             val compiled = C_ModuleCompiler.compile(modCtx, name, compiledFiles, nsLate.setter)
-            content.set(compiled.content)
-            appCtx.addModule(compiled)
+            contents.set(compiled.contents)
+            appCtx.addModule(this, compiled)
         }
     }
 
-    fun content(): C_ModuleContent {
+    fun contents(): C_ModuleContents {
         executor.checkPass(C_CompilerPass.MEMBERS, null)
-        return content.get()
+        return contents.get()
     }
 
     fun files() = source.files()
 }
 
-class C_CompiledModule(val rModule: R_Module, val content: C_ModuleContent)
+class C_CompiledModule(val rModule: R_Module, val contents: C_ModuleContents)
 
 class C_ModuleCompiler private constructor(private val modCtx: C_ModuleContext) {
     companion object {
@@ -161,8 +185,9 @@ class C_ModuleCompiler private constructor(private val modCtx: C_ModuleContext) 
                 moduleArgs = moduleArgs?.struct
         )
 
-        val content = C_ModuleContent(modNames.outerNs, modMounts, defs)
-        return C_CompiledModule(rModule, content)
+        val fileContents = files.map { it.contents }
+        val contents = C_ModuleContents(modNames.outerNs, modMounts, defs, fileContents)
+        return C_CompiledModule(rModule, contents)
     }
 
     private fun processModuleArgs(defs: C_ModuleDefs): C_Struct? {
@@ -293,9 +318,16 @@ class C_ModuleDefTableBuilder<T> {
     fun build() = map.toImmMap()
 }
 
-class C_ModuleContent(val namespace: C_Namespace, val mntTables: C_MountTables, val defs: C_ModuleDefs) {
+class C_ModuleContents(
+        val namespace: C_Namespace,
+        val mntTables: C_MountTables,
+        val defs: C_ModuleDefs,
+        files: List<C_RellFileContents>
+) {
+    val files = files.toImmList()
+
     companion object {
-        val EMPTY = C_ModuleContent(C_Namespace.EMPTY, C_MountTables.EMPTY, C_ModuleDefs.EMPTY)
+        val EMPTY = C_ModuleContents(C_Namespace.EMPTY, C_MountTables.EMPTY, C_ModuleDefs.EMPTY, listOf())
     }
 }
 

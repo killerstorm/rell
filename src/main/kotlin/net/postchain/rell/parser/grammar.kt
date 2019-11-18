@@ -61,45 +61,46 @@ object S_Grammar : Grammar<S_RellFile>() {
     private val DIV_ASSIGN by relltok("/=")
     private val MOD_ASSIGN by relltok("%=")
 
-    private val CREATE by relltok("create")
-    private val UPDATE by relltok("update")
-    private val DELETE by relltok("delete")
-    private val ENTITY by relltok("entity")
+    private val ABSTRACT by relltok("abstract")
+    private val BREAK by relltok("break")
     private val CLASS by relltok("class")
-    private val KEY by relltok("key")
+    private val CREATE by relltok("create")
+    private val DELETE by relltok("delete")
+    private val ELSE by relltok("else")
+    private val ENTITY by relltok("entity")
+    private val ENUM by relltok("enum")
+    private val FALSE by relltok("false")
+    private val FOR by relltok("for")
+    private val FUNCTION by relltok("function")
+    private val IF by relltok("if")
+    private val IMPORT by relltok("import")
+    private val IN by relltok("in")
+    private val INCLUDE by relltok("include")
     private val INDEX by relltok("index")
+    private val KEY by relltok("key")
+    private val LIMIT by relltok("limit")
+    private val LIST by relltok("list")
+    private val MAP by relltok("map")
+    private val MODULE by relltok("module")
+    private val MUTABLE by relltok("mutable")
+    private val NAMESPACE by relltok("namespace")
+    private val NULL by relltok("null")
     private val OBJECT by relltok("object")
     private val OPERATION by relltok("operation")
+    private val OVERRIDE by relltok("override")
     private val QUERY by relltok("query")
-    private val STRUCT by relltok("struct")
     private val RECORD by relltok("record")
-    private val ENUM by relltok("enum")
-    private val FUNCTION by relltok("function")
-    private val NAMESPACE by relltok("namespace")
-    private val MODULE by relltok("module")
-    private val IMPORT by relltok("import")
-    private val INCLUDE by relltok("include")
+    private val RETURN by relltok("return")
+    private val SET by relltok("set")
+    private val SORT by relltok("sort")
+    private val STRUCT by relltok("struct")
+    private val TRUE by relltok("true")
+    private val UPDATE by relltok("update")
     private val VAL by relltok("val")
     private val VAR by relltok("var")
-    private val RETURN by relltok("return")
-    private val IF by relltok("if")
-    private val ELSE by relltok("else")
+    private val VIRTUAL by relltok("virtual")
     private val WHEN by relltok("when")
     private val WHILE by relltok("while")
-    private val FOR by relltok("for")
-    private val BREAK by relltok("break")
-    private val IN by relltok("in")
-    private val MUTABLE by relltok("mutable")
-    private val LIMIT by relltok("limit")
-    private val SORT by relltok("sort")
-    private val LIST by relltok("list")
-    private val SET by relltok("set")
-    private val MAP by relltok("map")
-    private val VIRTUAL by relltok("virtual")
-
-    private val FALSE by relltok("false")
-    private val TRUE by relltok("true")
-    private val NULL by relltok("null")
 
     private val NUMBER by relltok(RellTokenizer.INTEGER) // Must be exactly INT for Eclipse coloring, but then Xtext assumes it's a decimal Integer
     private val DECIMAL by relltok(RellTokenizer.DECIMAL)
@@ -111,13 +112,13 @@ object S_Grammar : Grammar<S_RellFile>() {
 
     private val name by ( ID ) map { RellTokenizer.decodeName(it.pos, it.text) }
 
-    private val fullName by separatedTerms(name, DOT, false)
+    private val qualifiedName by separatedTerms(name, DOT, false)
 
     private val typeRef by parser(this::type)
     private val expressionRef by parser(this::expression)
     private val statementRef by parser(this::statement)
 
-    private val nameType by fullName map { S_NameType(it) }
+    private val nameType by qualifiedName map { S_NameType(it) }
 
     private val tupleField by ( optional(name * -COLON) * typeRef ) map { (name, type) -> Pair(name, type) }
     private val tupleType by ( -LPAR * separatedTerms(tupleField, COMMA, false) * -RPAR ) map { S_TupleType(it) }
@@ -152,11 +153,16 @@ object S_Grammar : Grammar<S_RellFile>() {
         (name, args) -> S_Annotation(name, args ?: listOf())
     }
 
-    private val modifier: Parser<S_Modifier> by annotation
+    private val keywordModifier by (
+            ( ABSTRACT map { S_KeywordModifier_Abstract(S_String(it)) } )
+            or ( OVERRIDE map { S_KeywordModifier_Override(S_String(it)) } )
+    )
+
+    private val modifier: Parser<S_Modifier> by keywordModifier or annotation
 
     private val nameTypeAttrHeader by name * -COLON * type map { (name, type) -> S_NameTypeAttrHeader(name, type) }
 
-    private val anonAttrHeader by fullName * optional(QUESTION) map {
+    private val anonAttrHeader by qualifiedName * optional(QUESTION) map {
         (names, nullable) ->
         if (names.size == 1 && nullable == null) {
             S_NameAttrHeader(names[0])
@@ -284,9 +290,9 @@ object S_Grammar : Grammar<S_RellFile>() {
         }
     }
 
-    private val atExprFromSingle by fullName map { S_PosValue(it[0].pos, listOf(S_AtExprFrom(null, it))) }
+    private val atExprFromSingle by qualifiedName map { S_PosValue(it[0].pos, listOf(S_AtExprFrom(null, it))) }
 
-    private val atExprFromItem by ( optional( name * -COLON ) * fullName ) map {
+    private val atExprFromItem by ( optional( name * -COLON ) * qualifiedName ) map {
         ( alias, entityName ) -> S_AtExprFrom(alias, entityName)
     }
 
@@ -366,7 +372,7 @@ object S_Grammar : Grammar<S_RellFile>() {
 
     private val createExprArgs by ( -LPAR * separatedTerms(createExprArg, COMMA, true) * -RPAR )
 
-    private val createExpr by (CREATE * fullName * createExprArgs) map {
+    private val createExpr by (CREATE * qualifiedName * createExprArgs) map {
         (kw, entityName, exprs) ->
         S_CreateExpr(kw.pos, entityName, exprs)
     }
@@ -588,13 +594,16 @@ object S_Grammar : Grammar<S_RellFile>() {
 
     private val functionBodyShort by (-ASSIGN * expression * -SEMI) map { S_FunctionBodyShort(it) }
     private val functionBodyFull by blockStmt map { stmt -> S_FunctionBodyFull(stmt) }
-    private val functionBody by ( functionBodyShort or functionBodyFull )
+    private val functionBodyNone by SEMI map { null as S_FunctionBody? }
+    private val functionBody by ( functionBodyShort or functionBodyFull or functionBodyNone )
 
-    private val queryDef by ( -QUERY * name * formalParameters * optional(-COLON * type) * functionBody ) map {
+    private val queryBody by ( functionBodyShort or functionBodyFull )
+
+    private val queryDef by ( -QUERY * name * formalParameters * optional(-COLON * type) * queryBody ) map {
         (name, params, type, body) -> annotatedDef { S_QueryDefinition(it, name, params, type, body) }
     }
 
-    private val functionDef by ( -FUNCTION * name * formalParameters * optional(-COLON * type) * functionBody ) map {
+    private val functionDef by ( -FUNCTION * qualifiedName * formalParameters * optional(-COLON * type) * functionBody ) map {
         (name, params, type, body) -> annotatedDef { S_FunctionDefinition(it, name, params, type, body) }
     }
 

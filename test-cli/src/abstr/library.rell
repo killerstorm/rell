@@ -1,0 +1,8 @@
+abstract module;
+
+import ^.custom;
+
+function calculate(x: integer) {
+    val y = custom.formula(x);
+    print('f(' + x + ') = ' + y);
+}

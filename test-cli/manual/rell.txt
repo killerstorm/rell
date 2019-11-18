@@ -65,3 +65,8 @@ Hello from support!
 2019-10-24 20:18:35.627 INFO  Rell - mod/complex/bar/bar.rell(4) bar start
 2019-10-24 20:18:35.630 INFO  Rell - mod/complex/sub/helper.rell(2) helper
 2019-10-24 20:18:35.630 INFO  Rell - mod/complex/bar/bar.rell(6) bar end
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rell.sh -d test-cli/src abstr.main main
+
+f(123) = 15129
