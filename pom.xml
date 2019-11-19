@@ -5,13 +5,13 @@
 
     <groupId>net.postchain.rell</groupId>
     <artifactId>rellr</artifactId>
-    <version>0.9.0</version>
+    <version>0.9.1</version>
     <packaging>jar</packaging>
 
     <name>rellr</name>
 
     <properties>
-        <postchain.version>3.0.0</postchain.version>
+        <postchain.version>3.0.1-SNAPSHOT</postchain.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <kotlin.version>1.2.21</kotlin.version>
         <junit.version>4.12</junit.version>

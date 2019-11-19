@@ -1,9 +1,11 @@
 package net.postchain.rell.tools.runcfg
 
 import mu.KotlinLogging
+import net.postchain.StorageBuilder
 import net.postchain.config.app.AppConfig
 import net.postchain.config.node.NodeConfig
 import net.postchain.config.node.NodeConfigurationProviderFactory
+import net.postchain.core.NODE_ID_TODO
 import net.postchain.core.UserMistake
 import net.postchain.devtools.PostchainTestNode
 import net.postchain.rell.RellCliUtils
@@ -54,7 +56,10 @@ private fun startPostchainNode(rellAppConf: RellPostAppCliConfig): NodeConfig {
     val nodeConfPro = NodeConfigurationProviderFactory.createProvider(nodeAppConf)
     val nodeConf = nodeConfPro.getConfiguration()
 
-    val node = PostchainTestNode(nodeConfPro, rellAppConf.config.wipeDb)
+    // Wiping DB
+    StorageBuilder.buildStorage(nodeAppConf, NODE_ID_TODO, rellAppConf.config.wipeDb).close()
+
+    val node = PostchainTestNode(nodeConfPro)
 
     val chainsSorted = rellAppConf.config.chains.sortedBy { it.iid }
 
@@ -98,7 +103,7 @@ private fun getNodeConfig(configDir: File, node: RellPostAppNode): AppConfig {
 
 @CommandLine.Command(name = "RellRunConfigLaunch", description = ["Launch a run config"])
 private class RellRunConfigLaunchArgs {
-    @CommandLine.Option(names = ["--source-dir"], paramLabel =  "SOURCE_DIR", description = ["Rell source directory"], required = true)
+    @CommandLine.Option(names = ["--source-dir"], paramLabel = "SOURCE_DIR", description = ["Rell source directory"], required = true)
     var sourceDir: String = ""
 
     @CommandLine.Parameters(index = "0", paramLabel = "RUN_CONFIG", description = ["Run config file"])

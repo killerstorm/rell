@@ -1,11 +1,13 @@
 package net.postchain.rell.tools
 
 import mu.KotlinLogging
+import net.postchain.StorageBuilder
 import net.postchain.base.secp256k1_derivePubKey
 import net.postchain.common.hexStringToByteArray
 import net.postchain.common.toHex
 import net.postchain.config.app.AppConfig
 import net.postchain.config.node.NodeConfigurationProviderFactory
+import net.postchain.core.NODE_ID_TODO
 import net.postchain.devtools.PostchainTestNode
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory.gtv
@@ -53,7 +55,10 @@ private fun main0(args: RunPostchainAppArgs) {
     val template = RunPostchainApp.genBlockchainConfigTemplate(nodeConf.pubKeyByteArray)
     val bcConf = RellConfigGen.makeConfig(sourceDir, sourcePath, template)
 
-    val node = PostchainTestNode(nodeConfPro, true)
+    // Wiping DB
+    StorageBuilder.buildStorage(nodeAppConf, NODE_ID_TODO, true).close()
+
+    val node = PostchainTestNode(nodeConfPro)
     node.addBlockchain(0, bcRid, bcConf)
     node.startBlockchain(0)
 
@@ -100,22 +105,22 @@ class RellJavaLoggingInit {
     }
 }
 
-class Rt_RellAppPrinterFactory: Rt_PrinterFactory {
+class Rt_RellAppPrinterFactory : Rt_PrinterFactory {
     override fun newPrinter() = Rt_LogPrinter("RellApp")
 }
 
 @CommandLine.Command(name = "PostchainAppLauncher", description = ["Runs a Rell Postchain app"])
 private class RunPostchainAppArgs {
-    @CommandLine.Option(names = ["--node-config"], paramLabel =  "NODE_CONFIG_FILE", required = true,
-            description =  ["Node configuration (.properties)"])
+    @CommandLine.Option(names = ["--node-config"], paramLabel = "NODE_CONFIG_FILE", required = true,
+            description = ["Node configuration (.properties)"])
     var nodeConfigFile: String = ""
 
-    @CommandLine.Option(names = ["--blockchain-rid"], paramLabel =  "BLOCKCHAIN_RID", required = true,
-            description =  ["Blockchain RID (hex, 32 bytes)"])
+    @CommandLine.Option(names = ["--blockchain-rid"], paramLabel = "BLOCKCHAIN_RID", required = true,
+            description = ["Blockchain RID (hex, 32 bytes)"])
     var blockchainRid: String = ""
 
-    @CommandLine.Option(names = ["--source-dir"], paramLabel =  "SOURCE_DIR",
-            description =  ["Source directory used to resolve absolute include paths (default: the directory of the Rell file)"])
+    @CommandLine.Option(names = ["--source-dir"], paramLabel = "SOURCE_DIR",
+            description = ["Source directory used to resolve absolute include paths (default: the directory of the Rell file)"])
     var sourceDir: String? = null
 
     @CommandLine.Parameters(index = "0", paramLabel = "RELL_FILE", description = ["Rell main file"])
