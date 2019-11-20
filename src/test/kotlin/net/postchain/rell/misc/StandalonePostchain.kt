@@ -1,5 +1,8 @@
 package net.postchain.rell.misc
 
+import net.postchain.StorageBuilder
+import net.postchain.config.node.NodeConfigurationProviderFactory
+import net.postchain.core.NODE_ID_TODO
 import net.postchain.devtools.IntegrationTest
 import net.postchain.devtools.PostchainTestNode
 import net.postchain.gtv.Gtv
@@ -24,20 +27,24 @@ fun main(args: Array<String>) {
     }
 }
 
-private class PostchainAccess: IntegrationTest() {
+private class PostchainAccess : IntegrationTest() {
     fun createNode(configFile: String): PostchainTestNode {
         val nodeIndex = 0
         val totalNodesCount = 1
         val preWipeDatabase = true
 
-        val nodeConfigProvider = createNodeConfig(nodeIndex, totalNodesCount, DEFAULT_CONFIG_FILE)
+        val appConfig = createAppConfig(nodeIndex, totalNodesCount, DEFAULT_CONFIG_FILE)
+        val nodeConfigProvider = NodeConfigurationProviderFactory.createProvider(appConfig)
         val nodeConfig = nodeConfigProvider.getConfiguration()
         nodesNames[nodeConfig.pubKey] = "$nodeIndex"
         val blockchainConfig = readBlockchainConfigStub(configFile)
         val chainId = nodeConfig.activeChainIds.first().toLong()
-        val blockchainRid = CommonUtils.hexToBytes(blockchainRids[chainId]!!)
+        val blockchainRid = CommonUtils.hexToBytes(BLOCKCHAIN_RIDS[chainId]!!)
 
-        return PostchainTestNode(nodeConfigProvider, preWipeDatabase)
+        // Wiping DB
+        StorageBuilder.buildStorage(appConfig, NODE_ID_TODO, preWipeDatabase).close()
+
+        return PostchainTestNode(nodeConfigProvider)
                 .apply {
                     addBlockchain(chainId, blockchainRid, blockchainConfig)
                     startBlockchain()

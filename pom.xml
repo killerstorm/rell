@@ -11,7 +11,7 @@
     <name>rellr</name>
 
     <properties>
-        <postchain.version>3.0.0</postchain.version>
+        <postchain.version>3.0.1-SNAPSHOT</postchain.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <kotlin.version>1.3.21</kotlin.version>
         <junit.version>4.12</junit.version>
