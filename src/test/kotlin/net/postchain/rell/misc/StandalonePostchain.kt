@@ -1,8 +1,6 @@
 package net.postchain.rell.misc
 
-import net.postchain.StorageBuilder
 import net.postchain.config.node.NodeConfigurationProviderFactory
-import net.postchain.core.NODE_ID_TODO
 import net.postchain.devtools.IntegrationTest
 import net.postchain.devtools.PostchainTestNode
 import net.postchain.gtv.Gtv
@@ -41,10 +39,7 @@ private class PostchainAccess : IntegrationTest() {
         val chainId = nodeConfig.activeChainIds.first().toLong()
         val blockchainRid = CommonUtils.hexToBytes(BLOCKCHAIN_RIDS[chainId]!!)
 
-        // Wiping DB
-        StorageBuilder.buildStorage(appConfig, NODE_ID_TODO, preWipeDatabase).close()
-
-        return PostchainTestNode(nodeConfigProvider)
+        return PostchainTestNode(nodeConfigProvider, preWipeDatabase)
                 .apply {
                     addBlockchain(chainId, blockchainRid, blockchainConfig)
                     startBlockchain()
