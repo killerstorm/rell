@@ -208,7 +208,7 @@ private class C_OverrideConflictsProcessor(private val globalCtx: C_GlobalContex
         val locCode1 = locationCode(location)
         val locCode2 = locationCode(otherLocation)
         val fName = abstract.functionName()
-        val code = "override:conflict:$fName:$locCode1:$locCode2"
+        val code = "override:conflict:[$fName]:[$locCode1]:[$locCode2]"
 
         val locMsg1 = locationMsg(location)
         val locMsg2 = otherLocationMsg(otherLocation)
@@ -294,7 +294,7 @@ private class C_MissingOverridesProcessor(
     private fun processMissingOverride(import: C_ImportDescriptor, abstract: C_AbstractDescriptor) {
         val fName = abstract.functionName()
         val fPos = abstract.functionPos()
-        val code = "override:missing:$fName:${fPos.strLine()}"
+        val code = "override:missing:[$fName]:[${fPos.strLine()}]"
         val msg = "No override for abstract function '$fName' (defined at ${fPos.strLine()})"
         globalCtx.error(import.pos, code, msg)
         errorAbstracts.add(abstract)
@@ -325,7 +325,7 @@ private class C_MissingOverridesProcessor(
             if (!abstract.hasDefaultBody && abstract !in actualOverrides && abstract !in errorAbstracts) {
                 val fName = abstract.functionName()
                 val fPos = abstract.functionPos()
-                globalCtx.error(fPos, "override:missing:$fName", "No override for abstract function '$fName'")
+                globalCtx.error(fPos, "override:missing:[$fName]", "No override for abstract function '$fName'")
             }
         }
     }

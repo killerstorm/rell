@@ -52,12 +52,15 @@ private class ErrorHandler(val printer: Rt_Printer, private val wrapCtErrors: Bo
         } catch (e: ProgrammerMistake) {
             val msg = processError(msgSupplier, e)
             throw ProgrammerMistake(msg, e)
+        } catch (e: Rt_StackTraceError) {
+            val msg = processError(msgSupplier, e, e.stack)
+            throw if (wrapRtErrors) UserMistake(msg) else e
         } catch (e: Rt_BaseError) {
             val msg = processError(msgSupplier, e)
-            throw if (wrapRtErrors) UserMistake(msg, e) else e
+            throw if (wrapRtErrors) UserMistake(msg) else e
         } catch (e: C_Error){
             val msg = processError(msgSupplier, e)
-            throw if (wrapCtErrors) UserMistake(msg, e) else e
+            throw if (wrapCtErrors) UserMistake(msg) else e
         } catch (e: Exception) {
             val msg = processError(msgSupplier, e)
             throw ProgrammerMistake(msg, e)
@@ -67,17 +70,19 @@ private class ErrorHandler(val printer: Rt_Printer, private val wrapCtErrors: Bo
         }
     }
 
-    private fun processError(msgSupplier: () -> String, e: Throwable): String {
+    private fun processError(msgSupplier: () -> String, e: Throwable, stack: List<R_StackPos> = listOf()): String {
         val subMsg = msgSupplier()
         val errMsg = e.message ?: e.toString()
-        val fullMsg = "$subMsg: $errMsg"
+        val headMsg = "$subMsg: $errMsg"
 
         if (!ignore) {
+            val fullMsg = Rt_Utils.appendStackTrace(headMsg, stack)
             printer.print("ERROR $fullMsg")
         }
         ignore = false
 
-        return fullMsg
+        val resMsg = if (stack.isEmpty()) headMsg else "[${stack[0]}] $headMsg"
+        return resMsg
     }
 }
 
@@ -278,23 +283,21 @@ private class RellPostchainModule(
 
 class RellPostchainModuleFactory(
         private val stdoutPrinter: Rt_Printer = Rt_StdoutPrinter,
-        private val logPrinter: Rt_Printer = Rt_LogPrinter(),
+        private val logPrinter: Rt_Printer = Rt_LogPrinter("net.postchain.rell.Rell"), // Need net.postchain to be logged with Postchain settings.
         private val wrapCtErrors: Boolean = true,
         private val wrapRtErrors: Boolean = true,
         private val forceTypeCheck: Boolean = false
-) : GTXModuleFactory {
+): GTXModuleFactory {
     override fun makeModule(config: Gtv, blockchainRID: ByteArray): GTXModule {
         val gtxNode = config.asDict().getValue("gtx").asDict()
         val rellNode = gtxNode.getValue("rell").asDict()
 
         val moduleName = rellNode["moduleName"]?.asString() ?: ""
 
-        val combinedPrinter = getCombinedPrinter(rellNode)
+        val (combinedPrinter, copyOutput) = getCombinedPrinter(rellNode)
         val errorHandler = ErrorHandler(combinedPrinter, wrapCtErrors, wrapRtErrors)
 
         return errorHandler.handleError({ "Module initialization failed" }) {
-            val copyOutput = rellNode["copyOutputToCombinedPrinter"]?.asBoolean() ?: true
-
             val sourceCodes = getSourceCodes(rellNode)
             val modules = getModuleNames(rellNode)
             val app = compileApp(sourceCodes, modules, errorHandler, copyOutput)
@@ -332,18 +335,19 @@ class RellPostchainModuleFactory(
         return if (copy) Rt_MultiPrinter(basePrinter, combinedPrinter) else basePrinter
     }
 
-    private fun getCombinedPrinter(rellNode: Map<String, Gtv>): Rt_Printer {
+    private fun getCombinedPrinter(rellNode: Map<String, Gtv>): Pair<Rt_Printer, Boolean> {
         val className = rellNode["combinedPrinterFactoryClass"]?.asString()
-        className ?: return Rt_NopPrinter
+        val copyOutput = rellNode["copyOutputToCombinedPrinter"]?.asBoolean() ?: true
+        className ?: return Pair(logPrinter, false)
 
         try {
             val cls = Class.forName(className)
             val factory = cls.newInstance() as Rt_PrinterFactory
             val printer = factory.newPrinter()
-            return printer
+            return Pair(printer, copyOutput)
         } catch (e: Throwable) {
             logger.error(e) { "Combined printer creation failed" }
-            return Rt_NopPrinter
+            return Pair(Rt_NopPrinter, false)
         }
     }
 

@@ -449,6 +449,7 @@ sealed class R_RequireExpr(type: R_Type, val expr: R_Expr, val msgExpr: R_Expr?)
             val msgValue = msgExpr.evaluate(frame)
             msgValue.asString()
         }
+
         throw Rt_RequireError(msg)
     }
 }
@@ -661,6 +662,16 @@ class R_ChainHeightExpr(val chain: R_ExternalChainRef): R_Expr(R_IntegerType) {
         val rtChain = frame.defCtx.sqlCtx.linkedChain(chain)
         return Rt_IntValue(rtChain.height)
     }
+}
+
+class R_StackTraceExpr(private val subExpr: R_Expr, private val filePos: R_FilePos): R_Expr(subExpr.type) {
+    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
+        return Rt_StackTraceError.trackStack(frame, filePos) {
+            subExpr.evaluate(frame)
+        }
+    }
+
+    override fun constantValue() = subExpr.constantValue()
 }
 
 class R_TypeAdapterExpr(type: R_Type, private val expr: R_Expr, private val adapter: R_TypeAdapter): R_Expr(type) {

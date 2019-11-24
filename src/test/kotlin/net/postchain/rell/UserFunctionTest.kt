@@ -23,12 +23,12 @@ class UserFunctionTest: BaseRellTest(false) {
 
     @Test fun testReturnType() {
         chkFn("function f(): integer = 123;", "f()", "int[123]")
-        chkFn("function f(): integer = 'Hello';", "f()", "ct_err:entity_rettype:integer:text")
-        chkFn("function f(): integer { return 'Hello'; }", "f()", "ct_err:entity_rettype:integer:text")
-        chkFn("function f(): integer { if (1 > 0) return 123; return 'Hello'; }", "f()", "ct_err:entity_rettype:integer:text")
+        chkFn("function f(): integer = 'Hello';", "f()", "ct_err:entity_rettype:[integer]:[text]")
+        chkFn("function f(): integer { return 'Hello'; }", "f()", "ct_err:entity_rettype:[integer]:[text]")
+        chkFn("function f(): integer { if (1 > 0) return 123; return 'Hello'; }", "f()", "ct_err:entity_rettype:[integer]:[text]")
         chkFn("function f(): integer { if (1 > 0) return 123; return 456; }", "f()", "int[123]")
         chkFn("function g(x: integer): integer = 123; function f(x: integer) = g(x);", "f(123)",
-                "ct_err:[entity_rettype:unit:integer][query_exprtype_unit]")
+                "ct_err:[entity_rettype:[unit]:[integer]][query_exprtype_unit]")
     }
 
     @Test fun testDbSelect() {
@@ -59,8 +59,8 @@ class UserFunctionTest: BaseRellTest(false) {
     }
 
     @Test fun testResultType() {
-        chkFnEx("function f(): integer = 123;", "{ var x: text; x = f(); return 123; }", "ct_err:stmt_assign_type:text:integer")
-        chkFnEx("function f() {}", "{ var x: text; x = f(); return 123; }", "ct_err:stmt_assign_type:text:unit")
+        chkFnEx("function f(): integer = 123;", "{ var x: text; x = f(); return 123; }", "ct_err:stmt_assign_type:[text]:[integer]")
+        chkFnEx("function f() {}", "{ var x: text; x = f(); return 123; }", "ct_err:stmt_assign_type:[text]:[unit]")
         chkFnEx("function f() {}", "{ val x = f(); return 123; }", "ct_err:stmt_var_unit:x")
     }
 
@@ -134,6 +134,13 @@ class UserFunctionTest: BaseRellTest(false) {
 
         chkFnEx(fn, "= user @ { foo(.name) == 'BOB' };", "ct_err:expr_sqlnotallowed")
         chkFnEx(fn, "= user @ { .id == 123 } ( foo(.name) );", "ct_err:expr_sqlnotallowed")
+    }
+
+    @Test fun testShortBodyUnitType() {
+        def("function foo(x: list<integer>) { x.add(123); }")
+        def("function bar(x: list<integer>) = foo(x);")
+        chkEx("{ val x = list<integer>(); foo(x); return x; }", "list<integer>[int[123]]")
+        chkEx("{ val x = list<integer>(); bar(x); return x; }", "list<integer>[int[123]]")
     }
 
     private fun chkFn(fnCode: String, callCode: String, expected: String) {

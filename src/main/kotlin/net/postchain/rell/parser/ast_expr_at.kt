@@ -190,8 +190,7 @@ class S_AtExpr(
         val where: S_AtExprWhere,
         val what: S_AtExprWhat,
         val limit: S_Expr?
-): S_Expr(startPos)
-{
+): S_Expr(startPos) {
     override fun compile(ctx: C_ExprContext): C_Expr {
         val base = compileBase(ctx)
 

@@ -1,0 +1,13 @@
+<run wipe-db="true">
+    <nodes>
+        <config src="node-config.properties" add-signers="false" />
+    </nodes>
+    <chains>
+        <chain name="test" iid="1" brid="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef">
+            <config height="0">
+                <app module="stack_trace">
+                </app>
+            </config>
+        </chain>
+    </chains>
+</run>

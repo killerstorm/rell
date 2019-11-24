@@ -57,3 +57,18 @@ override function lib.customize(x: integer): text { ... }
 
 This allows to customize a library module with arbitrary behavior. When importing an abstract module, all its
 abstract functions that have no body must be overridden.
+
+
+5. Run-time: Error stack traces
+
+Now Rell prints stack traces of run-time errors (with function names, file names and line numbers):
+
+2019-11-24 17:28:30.980 INFO  net.postchain.rell.Rell - ERROR Query 'ent_main_q' failed: No records found
+	at stack_trace.entities!ent_main(stack_trace/entities.rell:6)
+	at stack_trace.entities!ent_main_q(stack_trace/entities.rell:11)
+
+Stack traces are printed to the output of a Rell app (Web IDE log, Eclipse Console view, Postchain log file, etc.).
+
+Run-time error messages returned to the client (as a one line, without a stack trace) will have a location:
+
+[stack_trace.entities!ent_main(stack_trace/entities.rell:6)] Query 'ent_main_q' failed: No records found

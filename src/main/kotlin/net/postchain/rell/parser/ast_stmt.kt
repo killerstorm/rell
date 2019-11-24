@@ -10,7 +10,12 @@ abstract class S_Statement(val pos: S_Pos) {
     protected abstract fun compile0(ctx: C_ExprContext): C_Statement
 
     fun compile(ctx: C_ExprContext): C_Statement {
-        return ctx.globalCtx.consumeError { compile0(ctx) } ?: C_Statement.ERROR
+        val cStmt = ctx.globalCtx.consumeError { compile0(ctx) }
+        if (cStmt == null) return C_Statement.ERROR
+
+        val filePos = pos.toFilePos()
+        val rStmt = R_StackTraceStatement(cStmt.rStmt, filePos)
+        return cStmt.updateStmt(rStmt)
     }
 
     fun compileWithFacts(ctx: C_ExprContext, facts: C_VarFacts): C_Statement {
@@ -507,7 +512,7 @@ class S_ForStatement(pos: S_Pos, val declarator: S_VarDeclarator, val expr: S_Ex
             }
             is R_RangeType -> Pair(R_IntegerType, R_ForIterator_Range)
             else -> {
-                ctx.globalCtx.error(expr.startPos, "stmt_for_expr_type:${exprType.toStrictString()}",
+                ctx.globalCtx.error(expr.startPos, "stmt_for_expr_type:[${exprType.toStrictString()}]",
                         "Wrong type of for-expression: ${exprType.toStrictString()}")
                 return Pair(null, null)
             }

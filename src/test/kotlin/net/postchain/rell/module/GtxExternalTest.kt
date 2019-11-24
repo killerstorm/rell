@@ -66,6 +66,6 @@ class GtxExternalTest: BaseGtxTest() {
         def("@external('foo') namespace { @log entity user { name; } }")
         tst.wrapRtErrors = false
         tst.extraModuleConfig["dependencies"] = "[['foo','deadbeef']]"
-        chk("_strict_str(user @{} ( =user, =.name ))", "'([foo]#user[15],text[Bob])'")
+        chk("_strict_str(user @{} ( =user, =.name ))", "'([foo]!user[15],text[Bob])'")
     }
 }

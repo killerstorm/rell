@@ -330,8 +330,8 @@ class VirtualTest: BaseGtxTest(false) {
         chkVirtualEx("virtual<rec>", "{ x.i = 456; return 0; }", args, "ct_err:update_attr_not_mutable:i")
         chkVirtualEx("virtual<rec>", "{ x.t = 'Bye'; return 0; }", args, "ct_err:update_attr_not_mutable:t")
 
-        chkVirtualEx("virtual<rec>", " = x.foo;", args, "ct_err:unknown_member:virtual<rec>:foo")
-        chkVirtualEx("virtual<rec>", " = x.foo();", args, "ct_err:unknown_member:virtual<rec>:foo")
+        chkVirtualEx("virtual<rec>", " = x.foo;", args, "ct_err:unknown_member:[virtual<rec>]:foo")
+        chkVirtualEx("virtual<rec>", " = x.foo();", args, "ct_err:unknown_member:[virtual<rec>]:foo")
     }
 
     @Test fun testListType() {
@@ -409,19 +409,19 @@ class VirtualTest: BaseGtxTest(false) {
         chkVirtualEx(type, " = _strict_str(x[0]);", args, "'int[123]'")
         chkVirtualEx(type, " = _strict_str(x.get(0));", args, "'int[123]'")
 
-        chkVirtualEx(type, " = x.contains(123);", args, "ct_err:unknown_member:virtual<list<integer>>:contains")
-        chkVirtualEx(type, " = x.index_of(123);", args, "ct_err:unknown_member:virtual<list<integer>>:index_of")
-        chkVirtualEx(type, " = x.contains_all([123]);", args, "ct_err:unknown_member:virtual<list<integer>>:contains_all")
-        chkVirtualEx(type, " = x.sub(0, 1);", args, "ct_err:unknown_member:virtual<list<integer>>:sub")
-        chkVirtualEx(type, " = x.sorted();", args, "ct_err:unknown_member:virtual<list<integer>>:sorted")
+        chkVirtualEx(type, " = x.contains(123);", args, "ct_err:unknown_member:[virtual<list<integer>>]:contains")
+        chkVirtualEx(type, " = x.index_of(123);", args, "ct_err:unknown_member:[virtual<list<integer>>]:index_of")
+        chkVirtualEx(type, " = x.contains_all([123]);", args, "ct_err:unknown_member:[virtual<list<integer>>]:contains_all")
+        chkVirtualEx(type, " = x.sub(0, 1);", args, "ct_err:unknown_member:[virtual<list<integer>>]:sub")
+        chkVirtualEx(type, " = x.sorted();", args, "ct_err:unknown_member:[virtual<list<integer>>]:sorted")
 
-        chkVirtualEx(type, "{ x.clear(); return 0; }", args, "ct_err:unknown_member:virtual<list<integer>>:clear")
-        chkVirtualEx(type, "{ x.remove(123); return 0; }", args, "ct_err:unknown_member:virtual<list<integer>>:remove")
-        chkVirtualEx(type, "{ x.remove_at(0); return 0; }", args, "ct_err:unknown_member:virtual<list<integer>>:remove_at")
-        chkVirtualEx(type, "{ x.remove_all([123, 456]); return 0; }", args, "ct_err:unknown_member:virtual<list<integer>>:remove_all")
-        chkVirtualEx(type, "{ x.add(789); return 0; }", args, "ct_err:unknown_member:virtual<list<integer>>:add")
-        chkVirtualEx(type, "{ x.add_all([789]); return 0; }", args, "ct_err:unknown_member:virtual<list<integer>>:add_all")
-        chkVirtualEx(type, "{ x._sort(); return 0; }", args, "ct_err:unknown_member:virtual<list<integer>>:_sort")
+        chkVirtualEx(type, "{ x.clear(); return 0; }", args, "ct_err:unknown_member:[virtual<list<integer>>]:clear")
+        chkVirtualEx(type, "{ x.remove(123); return 0; }", args, "ct_err:unknown_member:[virtual<list<integer>>]:remove")
+        chkVirtualEx(type, "{ x.remove_at(0); return 0; }", args, "ct_err:unknown_member:[virtual<list<integer>>]:remove_at")
+        chkVirtualEx(type, "{ x.remove_all([123, 456]); return 0; }", args, "ct_err:unknown_member:[virtual<list<integer>>]:remove_all")
+        chkVirtualEx(type, "{ x.add(789); return 0; }", args, "ct_err:unknown_member:[virtual<list<integer>>]:add")
+        chkVirtualEx(type, "{ x.add_all([789]); return 0; }", args, "ct_err:unknown_member:[virtual<list<integer>>]:add_all")
+        chkVirtualEx(type, "{ x._sort(); return 0; }", args, "ct_err:unknown_member:[virtual<list<integer>>]:_sort")
     }
 
     @Test fun testListIterator() {
@@ -687,7 +687,7 @@ class VirtualTest: BaseGtxTest(false) {
         chkVirtual(type, "_strict_str(123 in x)", args, "'boolean[true]'")
         chkVirtual(type, "_strict_str(456 in x)", args, "'boolean[true]'")
         chkVirtual(type, "_strict_str(789 in x)", args, "'boolean[false]'")
-        chkVirtual(type, "_strict_str('A' in x)", args, "ct_err:binop_operand_type:in:text:virtual<set<integer>>")
+        chkVirtual(type, "_strict_str('A' in x)", args, "ct_err:binop_operand_type:in:[text]:[virtual<set<integer>>]")
 
         args = argToGtv("[123,456]", "[[0]]")
         chkVirtual(type, "_strict_str(x)", args, "'virtual<set<integer>>[int[123]]'")
@@ -732,15 +732,15 @@ class VirtualTest: BaseGtxTest(false) {
         chkVirtualEx(type, " = _strict_str(456 in x);", args, "'boolean[true]'")
         chkVirtualEx(type, " = _strict_str(789 in x);", args, "'boolean[false]'")
 
-        chkVirtualEx(type, " = x.contains(123);", args, "ct_err:unknown_member:virtual<set<integer>>:contains")
-        chkVirtualEx(type, " = x.contains_all([123]);", args, "ct_err:unknown_member:virtual<set<integer>>:contains_all")
-        chkVirtualEx(type, " = x.sorted();", args, "ct_err:unknown_member:virtual<set<integer>>:sorted")
+        chkVirtualEx(type, " = x.contains(123);", args, "ct_err:unknown_member:[virtual<set<integer>>]:contains")
+        chkVirtualEx(type, " = x.contains_all([123]);", args, "ct_err:unknown_member:[virtual<set<integer>>]:contains_all")
+        chkVirtualEx(type, " = x.sorted();", args, "ct_err:unknown_member:[virtual<set<integer>>]:sorted")
 
-        chkVirtualEx(type, "{ x.clear(); return 0; }", args, "ct_err:unknown_member:virtual<set<integer>>:clear")
-        chkVirtualEx(type, "{ x.remove(123); return 0; }", args, "ct_err:unknown_member:virtual<set<integer>>:remove")
-        chkVirtualEx(type, "{ x.remove_all([123, 456]); return 0; }", args, "ct_err:unknown_member:virtual<set<integer>>:remove_all")
-        chkVirtualEx(type, "{ x.add(789); return 0; }", args, "ct_err:unknown_member:virtual<set<integer>>:add")
-        chkVirtualEx(type, "{ x.add_all([789]); return 0; }", args, "ct_err:unknown_member:virtual<set<integer>>:add_all")
+        chkVirtualEx(type, "{ x.clear(); return 0; }", args, "ct_err:unknown_member:[virtual<set<integer>>]:clear")
+        chkVirtualEx(type, "{ x.remove(123); return 0; }", args, "ct_err:unknown_member:[virtual<set<integer>>]:remove")
+        chkVirtualEx(type, "{ x.remove_all([123, 456]); return 0; }", args, "ct_err:unknown_member:[virtual<set<integer>>]:remove_all")
+        chkVirtualEx(type, "{ x.add(789); return 0; }", args, "ct_err:unknown_member:[virtual<set<integer>>]:add")
+        chkVirtualEx(type, "{ x.add_all([789]); return 0; }", args, "ct_err:unknown_member:[virtual<set<integer>>]:add_all")
     }
 
     @Test fun testSetOperatorIn() {
@@ -749,7 +749,7 @@ class VirtualTest: BaseGtxTest(false) {
 
         var args = mapOf("x" to argToGtv("[[123,'A'],[456,'B']]", "[[0],[1]]"), "y" to argToGtv("[123,'A']", "[[0],[1]]"))
         chkFull("query q(x: $type, y: $innerType) = _strict_str(y in x);", args,
-                "ct_err:binop_operand_type:in:(integer,text):virtual<set<(integer,text)>>")
+                "ct_err:binop_operand_type:in:[(integer,text)]:[virtual<set<(integer,text)>>]")
 
         val code = "query q(x: $type, y: virtual<$innerType>) = _strict_str(y in x);"
         chkFull(code, args, "'boolean[true]'")
@@ -811,7 +811,7 @@ class VirtualTest: BaseGtxTest(false) {
 
         args = argToGtv("[[123,'Hello'],[456,'Bye']]", "[[0],[1]]")
         chkVirtual(type, "_strict_str((a=123,b='Hello') in x)", args,
-                "ct_err:binop_operand_type:in:(a:integer,b:text):virtual<set<(a:integer,b:text)>>")
+                "ct_err:binop_operand_type:in:[(a:integer,b:text)]:[virtual<set<(a:integer,b:text)>>]")
     }
 
     @Test fun testMapType() {
@@ -893,13 +893,13 @@ class VirtualTest: BaseGtxTest(false) {
         chkVirtualEx(type, "= _strict_str(x.values());", args, "'list<integer>[int[456],int[123]]'")
 
         chkVirtualEx(type, "{ x.clear(); return 0; }", args,
-                "ct_err:unknown_member:virtual<map<text,integer>>:clear")
+                "ct_err:unknown_member:[virtual<map<text,integer>>]:clear")
         chkVirtualEx(type, "{ x.put('Hi', 789); return 0; }", args,
-                "ct_err:unknown_member:virtual<map<text,integer>>:put")
+                "ct_err:unknown_member:[virtual<map<text,integer>>]:put")
         chkVirtualEx(type, "{ x.put_all(['Hi':789]); return 0; }", args,
-                "ct_err:unknown_member:virtual<map<text,integer>>:put_all")
+                "ct_err:unknown_member:[virtual<map<text,integer>>]:put_all")
         chkVirtualEx(type, "{ x.remove('Hello'); return 0; }", args,
-                "ct_err:unknown_member:virtual<map<text,integer>>:remove")
+                "ct_err:unknown_member:[virtual<map<text,integer>>]:remove")
     }
 
     @Test fun testMapIterator() {
@@ -1201,7 +1201,7 @@ class VirtualTest: BaseGtxTest(false) {
 
     private fun chkOperatorErr(type1: String, type2: String, vararg ops: String) {
         for (op in ops) {
-            chkCompile("query q(x: $type1, y: $type2) = x $op y;", "ct_err:binop_operand_type:$op:$type1:$type2")
+            chkCompile("query q(x: $type1, y: $type2) = x $op y;", "ct_err:binop_operand_type:$op:[$type1]:[$type2]")
         }
     }
 

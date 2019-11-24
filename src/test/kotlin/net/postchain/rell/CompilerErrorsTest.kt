@@ -37,19 +37,20 @@ class CompilerErrorsTest: BaseRellTest(false) {
     @Test fun testFunctionParamDuplicate() {
         chkCompile("function foo(x: integer, x: text) {}", "ct_err:dup_param_name:x")
         chkCompile("function foo(x: integer, x: text) { val t: integer = x; }", "ct_err:dup_param_name:x")
-        chkCompile("function foo(x: integer, x: text) { val t: text = x; }", "ct_err:[dup_param_name:x][stmt_var_type:t:text:integer]")
+        chkCompile("function foo(x: integer, x: text) { val t: text = x; }", "ct_err:[dup_param_name:x][stmt_var_type:t:[text]:[integer]]")
     }
 
     @Test fun testStmt() {
         chkStmt("print(X); print(Y); print(Z);", "ct_err:[unknown_name:X][unknown_name:Y][unknown_name:Z]")
 
-        chkStmt("if ('not_a_boolean') print(X); else print(Y);", "ct_err:[stmt_if_expr_type:boolean:text][unknown_name:X][unknown_name:Y]")
+        chkStmt("if ('not_a_boolean') print(X); else print(Y);",
+                "ct_err:[stmt_if_expr_type:[boolean]:[text]][unknown_name:X][unknown_name:Y]")
         chkStmt("if (BAD) print(X); else print(Y);", "ct_err:[unknown_name:BAD][unknown_name:X][unknown_name:Y]")
 
-        chkStmt("while ('not_a_boolean') print(X);", "ct_err:[stmt_while_expr_type:boolean:text][unknown_name:X]")
+        chkStmt("while ('not_a_boolean') print(X);", "ct_err:[stmt_while_expr_type:[boolean]:[text]][unknown_name:X]")
         chkStmt("while (BAD) print(X);", "ct_err:[unknown_name:BAD][unknown_name:X]")
 
-        chkStmt("for (i in true) print(X);", "ct_err:[stmt_for_expr_type:boolean][unknown_name:X]")
+        chkStmt("for (i in true) print(X);", "ct_err:[stmt_for_expr_type:[boolean]][unknown_name:X]")
         chkStmt("for (i in BAD) print(X);", "ct_err:[unknown_name:BAD][unknown_name:X]")
 
         chkStmt("X = Y;", "ct_err:[unknown_name:X][unknown_name:Y]")

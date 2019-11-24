@@ -7,6 +7,7 @@ class S_NameExprPair(val name: S_Name?, val expr: S_Expr)
 
 abstract class S_Expr(val startPos: S_Pos) {
     abstract fun compile(ctx: C_ExprContext): C_Expr
+
     open fun compileWhere(ctx: C_ExprContext, idx: Int): C_Expr = compile(ctx)
     open fun asName(): S_Name? = null
     open fun constantValue(): Rt_Value? = null

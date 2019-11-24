@@ -53,16 +53,18 @@ abstract class BaseRellTest(useSql: Boolean = true, gtv: Boolean = false): BaseT
         chkFnEx(modCode, expected)
     }
 
+    fun chkOp(code: String, expected: String = "OK") = tst.chkOp(code, expected)
+    fun chkOpFull(code: String, expected: String = "OK", name: String = "o") = tst.chkOpEx(code, name, expected)
+
     fun chkFnEx(code: String, expected: String) = tst.chkFnEx(code, expected)
 
     fun chkData(vararg expected: String) = tst.chkData(*expected)
     fun chkDataNew(vararg expected: String) = tst.chkDataNew(*expected)
     fun chkDataRaw(vararg expected: String) = tst.chkDataRaw(*expected)
 
-    fun chkOp(code: String, expected: String = "OK") = tst.chkOp(code, expected)
-    fun chkOpFull(code: String, expected: String = "OK", name: String = "o") = tst.chkOpEx(code, name, expected)
-
     fun chkWarn(vararg  expected: String) = tst.chkWarn(*expected)
+
+    fun chkStack(vararg expected: String) = tst.chkStack(*expected)
 
     private fun rtVal(v: Long?) = if (v == null) Rt_NullValue else Rt_IntValue(v)
     private fun rtVal(v: String?) = if (v == null) Rt_NullValue else Rt_TextValue(v)

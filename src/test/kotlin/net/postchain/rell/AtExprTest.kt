@@ -151,7 +151,7 @@ class AtExprTest: BaseRellTest() {
     @Test fun testNameResolutionAliasVsLocalAttr() {
         // Alias vs. attr: no conflict.
         chk("user @* { .firstName == 'Mark' }", "list<user>[user[10]]")
-        chk("(firstName: user) @* { firstName == 'Mark' }", "ct_err:binop_operand_type:==:user:text")
+        chk("(firstName: user) @* { firstName == 'Mark' }", "ct_err:binop_operand_type:==:[user]:[text]")
         chk("(firstName: user) @* { .firstName == 'Mark' }", "list<user>[user[10]]")
         chk("(firstName: user) @* { firstName.firstName == 'Mark' }", "list<user>[user[10]]")
 
@@ -364,7 +364,7 @@ class AtExprTest: BaseRellTest() {
         chkEx("{ $base return t.firstName; }", "text[Bill]")
         chkEx("{ $base return t.lastName; }", "text[Gates]")
         chkEx("{ $base return t.companyName; }", "text[Microsoft]")
-        chkEx("{ $base return t.foo; }", "ct_err:unknown_member:(firstName:text,lastName:text,companyName:text):foo")
+        chkEx("{ $base return t.foo; }", "ct_err:unknown_member:[(firstName:text,lastName:text,companyName:text)]:foo")
     }
 
     @Test fun testLimit() {
@@ -557,10 +557,10 @@ class AtExprTest: BaseRellTest() {
         insert("c0.user", "name,company,flag", "100,'Jobs',33,true")
         insert("c0.user", "name,company,flag", "101,'Wozniak',33,false")
 
-        chk("user @* { .company }", "ct_err:at_where:type:0:boolean:company")
-        chk("user @* { .name }", "ct_err:at_where:type:0:boolean:text")
-        chk("user @* { .name + .company.name }", "ct_err:at_where:type:0:boolean:text")
-        chk("user @* { 'Steve ' + .name }", "ct_err:at_where:type:0:boolean:text")
+        chk("user @* { .company }", "ct_err:at_where:type:0:[boolean]:[company]")
+        chk("user @* { .name }", "ct_err:at_where:type:0:[boolean]:[text]")
+        chk("user @* { .name + .company.name }", "ct_err:at_where:type:0:[boolean]:[text]")
+        chk("user @* { 'Steve ' + .name }", "ct_err:at_where:type:0:[boolean]:[text]")
 
         chk("user @* { 'Jobs' }", "list<user>[user[100]]")
         chk("user @* { 'Wozniak' }", "list<user>[user[101]]")

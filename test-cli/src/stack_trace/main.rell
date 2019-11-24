@@ -1,0 +1,37 @@
+// Line 1
+// Line 2
+// Line 3
+// Line 4
+// Line 5
+function calc(x: integer) {
+    require(x > 0, 'x must be positive, but was ' + x);
+    val y = x / 10;
+    when (x % 10) {
+        0 -> calc(y);  // Line 10 and so on.
+        1 -> calc(y);
+        2 -> calc(y);
+        3 -> calc(y);
+        4 -> calc(y);
+        5 -> calc(y);
+        6 -> calc(y);
+        7 -> calc(y);
+        8 -> calc(y);
+        9 -> calc(y);
+    }
+}
+
+function main(x: integer) {
+    log('main start');
+    calc(x);
+}
+
+operation main_op(x: integer) {
+    log('main start');
+    calc(x);
+}
+
+query main_q(x: integer) {
+    log('main start');
+    calc(x);
+    return 0;
+}

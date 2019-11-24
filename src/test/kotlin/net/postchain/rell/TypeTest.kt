@@ -63,43 +63,43 @@ class TypeTest: BaseRellTest() {
         chkEx("{ var x: (integer, text); x = (123, 'Hello'); return x; }", "(int[123],text[Hello])");
 
         chkEx("{ var x: (a: integer, b: text); x = (123, 'Hello'); return 0; }",
-                "ct_err:stmt_assign_type:(a:integer,b:text):(integer,text)");
+                "ct_err:stmt_assign_type:[(a:integer,b:text)]:[(integer,text)]");
 
         chkEx("{ var x: (a: integer, b: text) = (a=1,b=''); var y: (integer, text) = (2,''); y = x; return 0; }",
-                "ct_err:stmt_assign_type:(integer,text):(a:integer,b:text)");
+                "ct_err:stmt_assign_type:[(integer,text)]:[(a:integer,b:text)]");
 
         chkEx("{ var x: (a: integer, b: text) = (a=1,b=''); var y: (p: integer, q: text) = (p=2,q=''); y = x; return 0; }",
-                "ct_err:stmt_assign_type:(p:integer,q:text):(a:integer,b:text)");
+                "ct_err:stmt_assign_type:[(p:integer,q:text)]:[(a:integer,b:text)]");
     }
 
     @Test fun testRange() {
         chkEx("{ var x: range; x = range(0,100); return x; }", "range[0,100,1]")
-        chkEx("{ var x: range; x = 12345; return 0; }", "ct_err:stmt_assign_type:range:integer")
+        chkEx("{ var x: range; x = 12345; return 0; }", "ct_err:stmt_assign_type:[range]:[integer]")
     }
 
     @Test fun testList() {
         chkEx("{ var x: list<integer>; x = [1, 2, 3]; return x; }", "list<integer>[int[1],int[2],int[3]]")
         chkEx("{ var x: list<integer>; x = ['Hello', 'World']; return 0; }",
-                "ct_err:stmt_assign_type:list<integer>:list<text>")
+                "ct_err:stmt_assign_type:[list<integer>]:[list<text>]")
         chkEx("{ var x: list<list<text>>; x = [['Hello', 'World']]; return x; }",
                 "list<list<text>>[list<text>[text[Hello],text[World]]]")
-        chkEx("{ var x: list<integer>; x = 123; return 0; }", "ct_err:stmt_assign_type:list<integer>:integer")
+        chkEx("{ var x: list<integer>; x = 123; return 0; }", "ct_err:stmt_assign_type:[list<integer>]:[integer]")
     }
 
     @Test fun testSet() {
         chkEx("{ var x: set<integer>; x = set([1, 2, 3]); return x; }", "set<integer>[int[1],int[2],int[3]]")
-        chkEx("{ var x: set<integer>; x = [1, 2, 3]; return 0; }", "ct_err:stmt_assign_type:set<integer>:list<integer>")
+        chkEx("{ var x: set<integer>; x = [1, 2, 3]; return 0; }", "ct_err:stmt_assign_type:[set<integer>]:[list<integer>]")
         chkEx("{ var x: set<integer>; x = set(['Hello', 'World']); return 0; }",
-                "ct_err:stmt_assign_type:set<integer>:set<text>")
-        chkEx("{ var x: set<integer>; x = 123; return 0; }", "ct_err:stmt_assign_type:set<integer>:integer")
+                "ct_err:stmt_assign_type:[set<integer>]:[set<text>]")
+        chkEx("{ var x: set<integer>; x = 123; return 0; }", "ct_err:stmt_assign_type:[set<integer>]:[integer]")
     }
 
     @Test fun testMap() {
         chkEx("{ var x: map<text,integer>; x = ['Bob':123]; return x; }", "map<text,integer>[text[Bob]=int[123]]")
         chkEx("{ var x: map<text,integer>; x = [1, 2, 3]; return 0; }",
-                "ct_err:stmt_assign_type:map<text,integer>:list<integer>")
+                "ct_err:stmt_assign_type:[map<text,integer>]:[list<integer>]")
         chkEx("{ var x: map<text,integer>; x = set(['Hello', 'World']); return 0; }",
-                "ct_err:stmt_assign_type:map<text,integer>:set<text>")
+                "ct_err:stmt_assign_type:[map<text,integer>]:[set<text>]")
     }
 
     @Test fun testEntityAttributeTypeErr() {
@@ -112,12 +112,12 @@ class TypeTest: BaseRellTest() {
     @Test fun testRowid() {
         def("entity user { name; }")
 
-        chkCompile("function f(x: integer): rowid = x;", "ct_err:entity_rettype:rowid:integer")
-        chkCompile("function f(x: rowid): integer = x;", "ct_err:entity_rettype:integer:rowid")
+        chkCompile("function f(x: integer): rowid = x;", "ct_err:entity_rettype:[rowid]:[integer]")
+        chkCompile("function f(x: rowid): integer = x;", "ct_err:entity_rettype:[integer]:[rowid]")
         chkCompile("function f(x: rowid): rowid = x;", "OK")
 
-        chkCompile("function f(x: user): rowid = x;", "ct_err:entity_rettype:rowid:user")
-        chkCompile("function f(x: rowid): user = x;", "ct_err:entity_rettype:user:rowid")
+        chkCompile("function f(x: user): rowid = x;", "ct_err:entity_rettype:[rowid]:[user]")
+        chkCompile("function f(x: rowid): user = x;", "ct_err:entity_rettype:[user]:[rowid]")
         chkCompile("function f(x: user): rowid = x.rowid;", "OK")
         chkCompile("function f(x: rowid): user = user @ { .rowid == x };", "OK")
     }

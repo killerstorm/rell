@@ -6,6 +6,8 @@ import mu.KLogging
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_AppContext
 import net.postchain.rell.runtime.Rt_Messages
+import net.postchain.rell.runtime.Rt_StackTraceError
+import net.postchain.rell.runtime.Rt_Utils
 
 private val ORD_TABLES = 0
 private val ORD_RECORDS = 1
@@ -59,7 +61,7 @@ class SqlInit private constructor(private val appCtx: Rt_AppContext, private val
             log(planLogLevel, "    ${step.title}")
         }
 
-        val stepCtx = SqlStepCtx(appCtx, initCtx.objsInit, globalCtx.sqlExec)
+        val stepCtx = SqlStepCtx(logger, appCtx, initCtx.objsInit, globalCtx.sqlExec)
         for (step in steps) {
             log(stepLogLevel, "Step: ${step.title}")
             step.action.run(stepCtx)
@@ -350,7 +352,7 @@ private class SqlInitStep(val order: Int, val order2: Int, val title: String, va
     }
 }
 
-private class SqlStepCtx(val appCtx: Rt_AppContext, val objsInit: SqlObjectsInit, val sqlExec: SqlExecutor) {
+private class SqlStepCtx(val logger: KLogger, val appCtx: Rt_AppContext, val objsInit: SqlObjectsInit, val sqlExec: SqlExecutor) {
     val sqlCtx = appCtx.sqlCtx
 }
 
@@ -371,7 +373,15 @@ private class SqlStepAction_ExecSql(sqls: List<String>): SqlStepAction() {
 
 private class SqlStepAction_InsertObject(private val rObject: R_Object): SqlStepAction() {
     override fun run(ctx: SqlStepCtx) {
-        ctx.objsInit.initObject(rObject)
+        try {
+            ctx.objsInit.initObject(rObject)
+        } catch (e: Rt_StackTraceError) {
+            ctx.logger.error {
+                val head = "Failed to insert record for object '${rObject.appLevelName}': ${e.message}"
+                Rt_Utils.appendStackTrace(head, e.stack)
+            }
+            throw e
+        }
     }
 }
 
@@ -382,7 +392,7 @@ private class SqlStepAction_AddColumns_AlterTable(
 ): SqlStepAction() {
     override fun run(ctx: SqlStepCtx) {
         val sql = R_CreateExpr.buildAddColumnsSql(ctx.sqlCtx, entity, attrs, existingRecs)
-        val frame = ctx.appCtx.createRootFrame()
+        val frame = ctx.appCtx.createRootFrame(entity.pos)
         sql.execute(frame)
     }
 }

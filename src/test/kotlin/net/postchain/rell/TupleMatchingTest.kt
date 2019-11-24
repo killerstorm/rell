@@ -21,16 +21,16 @@ class TupleMatchingTest: BaseRellTest(false) {
         chkEx("{ val (i: integer) = (123); return 0; }", "ct_err:var_notuple:integer")
         chkEx("{ val (i: integer) = (123,); return i; }", "int[123]")
         chkEx("{ val (i: integer) = 123; return 0; }", "ct_err:var_notuple:integer")
-        chkEx("{ val i: integer = (123,); return 0; }", "ct_err:stmt_var_type:i:integer:(integer)")
+        chkEx("{ val i: integer = (123,); return 0; }", "ct_err:stmt_var_type:i:[integer]:[(integer)]")
         chkEx("{ val i: integer = 123; return i; }", "int[123]")
     }
 
     @Test fun testTypeMismatch() {
         chkEx("{ val (x, y) = (123, 'Hello', true); return 0; }", "ct_err:var_tuple_wrongsize:2:3:(integer,text,boolean)")
         chkEx("{ val (x, y, z) = (123, 'Hello'); return 0; }", "ct_err:var_tuple_wrongsize:3:2:(integer,text)")
-        chkEx("{ val (x: integer, y: text) = ('Hello', 123); return 0; }", "ct_err:stmt_var_type:x:integer:text")
-        chkEx("{ val (x, y: text) = ('Hello', 123); return 0; }", "ct_err:stmt_var_type:y:text:integer")
-        chkEx("{ val (x: integer, y) = ('Hello', 123); return 0; }", "ct_err:stmt_var_type:x:integer:text")
+        chkEx("{ val (x: integer, y: text) = ('Hello', 123); return 0; }", "ct_err:stmt_var_type:x:[integer]:[text]")
+        chkEx("{ val (x, y: text) = ('Hello', 123); return 0; }", "ct_err:stmt_var_type:y:[text]:[integer]")
+        chkEx("{ val (x: integer, y) = ('Hello', 123); return 0; }", "ct_err:stmt_var_type:x:[integer]:[text]")
         chkEx("{ val (x, y) = ('Hello', 123); return x; }", "text[Hello]")
     }
 
@@ -51,7 +51,7 @@ class TupleMatchingTest: BaseRellTest(false) {
     @Test fun testNullable() {
         chkEx("{ val t: integer? = _nullable(123); var (x, y) = (t, 'Hello'); return x; }", "int[123]")
         chkEx("{ val t: integer? = _nullable(123); var (x: integer, y: text) = (t, 'Hello'); return 0; }",
-                "ct_err:stmt_var_type:x:integer:integer?")
+                "ct_err:stmt_var_type:x:[integer]:[integer?]")
         chkEx("{ val t: integer? = _nullable(123); var (x: integer?, y) = (t, 'Hello'); return x; }", "int[123]")
         chkEx("{ val (x: integer, y) = (123, 'Hello'); return x; }", "int[123]")
     }

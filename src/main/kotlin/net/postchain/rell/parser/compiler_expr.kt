@@ -90,7 +90,7 @@ class C_BlockContext(
                 val offset: Int,
                 val varId: C_VarId
         ) {
-            fun toVarPtr(blockId: R_FrameBlockId): R_VarPtr = R_VarPtr(blockId, offset)
+            fun toVarPtr(blockId: R_FrameBlockId): R_VarPtr = R_VarPtr(name, blockId, offset)
 
             fun toScopeEntry(blockId: R_FrameBlockId): C_ScopeEntry {
                 return C_ScopeEntry(name, type, modifiable, varId, toVarPtr(blockId))
@@ -361,8 +361,14 @@ class C_ObjectAttrDestination(private val rObject: R_Object, private val attr: R
 abstract class C_Value(val pos: S_Pos) {
     abstract fun type(): R_Type
     abstract fun isDb(): Boolean
-    abstract fun toRExpr(): R_Expr
+    protected abstract fun toRExpr0(): R_Expr
     abstract fun toDbExpr(): Db_Expr
+
+    fun toRExpr(): R_Expr {
+        val rExpr = toRExpr0()
+        val filePos = pos.toFilePos()
+        return R_StackTraceExpr(rExpr, filePos)
+    }
 
     open fun constantValue(): Rt_Value? = null
     open fun varId(): C_VarId? = null
@@ -400,7 +406,7 @@ class C_RValue(
 ): C_Value(pos) {
     override fun type() = rExpr.type
     override fun isDb() = false
-    override fun toRExpr() = rExpr
+    override fun toRExpr0() = rExpr
     override fun toDbExpr() = C_Utils.toDbExpr(pos, rExpr)
     override fun constantValue() = rExpr.constantValue()
     override fun varFacts() = exprVarFacts
@@ -416,7 +422,7 @@ class C_RValue(
 class C_DbValue(pos: S_Pos, private val dbExpr: Db_Expr, private val varFacts: C_ExprVarFacts): C_Value(pos) {
     override fun type() = dbExpr.type
     override fun isDb() = true
-    override fun toRExpr() = throw C_Errors.errExprDbNotAllowed(pos)
+    override fun toRExpr0() = throw C_Errors.errExprDbNotAllowed(pos)
     override fun toDbExpr() = dbExpr
     override fun constantValue() = dbExpr.constantValue()
     override fun varFacts() = varFacts
@@ -447,7 +453,7 @@ class C_LookupValue(
 ): C_Value(pos) {
     override fun type() = expr.type
     override fun isDb() = false
-    override fun toRExpr() = expr
+    override fun toRExpr0() = expr
     override fun toDbExpr() = C_Utils.toDbExpr(pos, expr)
     override fun varFacts() = varFacts
 
@@ -473,7 +479,7 @@ private class C_LocalVarValue(
     override fun toDbExpr() = C_Utils.toDbExpr(pos, toRExpr())
     override fun varId() = entry.varId
 
-    override fun toRExpr(): R_Expr {
+    override fun toRExpr0(): R_Expr {
         checkInitialized()
         var rExpr: R_Expr = entry.toVarExpr()
         if (smartNotNull) {
@@ -535,7 +541,7 @@ private class C_LocalVarValue(
 private class C_ObjectValue(private val name: List<S_Name>, private val rObject: R_Object): C_Value(name[0].pos) {
     override fun type() = rObject.type
     override fun isDb() = false
-    override fun toRExpr() = R_ObjectExpr(rObject.type)
+    override fun toRExpr0() = R_ObjectExpr(rObject.type)
     override fun toDbExpr() = C_Utils.toDbExpr(pos, toRExpr())
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
@@ -549,7 +555,7 @@ private class C_ObjectValue(private val name: List<S_Name>, private val rObject:
 private class C_ObjectAttrValue(pos: S_Pos, private val rObject: R_Object, private val attr: R_Attrib): C_Value(pos) {
     override fun type() = attr.type
     override fun isDb() = false
-    override fun toRExpr() = createAccessExpr()
+    override fun toRExpr0() = createAccessExpr()
     override fun toDbExpr() = C_Utils.toDbExpr(pos, toRExpr())
 
     override fun destination(ctx: C_ExprContext): C_Destination {

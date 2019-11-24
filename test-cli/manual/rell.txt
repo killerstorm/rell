@@ -70,3 +70,38 @@ Hello from support!
 ./rell.sh -d test-cli/src abstr.main main
 
 f(123) = 15129
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rell.sh -d test-cli/src stack_trace main 12345
+
+2019-11-24 13:36:13.523 INFO  Rell - [stack_trace!main(stack_trace/main.rell:24)] main start
+ERROR [stack_trace!calc(stack_trace/main.rell:7)] x must be positive, but was 0
+	at stack_trace!calc(stack_trace/main.rell:7)
+	at stack_trace!calc(stack_trace/main.rell:11)
+	at stack_trace!calc(stack_trace/main.rell:12)
+	at stack_trace!calc(stack_trace/main.rell:13)
+	at stack_trace!calc(stack_trace/main.rell:14)
+	at stack_trace!calc(stack_trace/main.rell:15)
+	at stack_trace!main(stack_trace/main.rell:25)
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rell.sh -d test-cli/src -- stack_trace error '/'
+ERROR Division by zero: 1 / 0
+	at stack_trace!error(stack_trace/errors.rell:3)
+
+./rell.sh -d test-cli/src -- stack_trace error '%'
+ERROR Division by zero: 1 % 0
+	at stack_trace!error(stack_trace/errors.rell:4)
+
+./rell.sh -d test-cli/src -- stack_trace error '-'
+ERROR Integer overflow: -(-9223372036854775808)
+	at stack_trace!error(stack_trace/errors.rell:5)
+
+./rell.sh -d test-cli/src -- stack_trace error 'abs'
+ERROR System function 'abs': Integer overflow: -9223372036854775808
+	at stack_trace!error(stack_trace/errors.rell:6)
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rell.sh --db-properties test-cli/config/node-config.properties -d test-cli/src -- stack_trace.entities ent_main
+ERROR No records found
+	at stack_trace.entities!ent_main(stack_trace/entities.rell:6)

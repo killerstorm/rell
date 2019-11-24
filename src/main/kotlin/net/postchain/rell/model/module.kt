@@ -8,18 +8,20 @@ import net.postchain.rell.toImmList
 import net.postchain.rell.toImmMap
 import java.util.*
 
-class R_DefinitionNames(
-        val simpleName: String,
-        val moduleLevelName: String,
-        val appLevelName: String
-) {
+class R_DefinitionNames(val module: String, val namespace: String?, val simpleName: String) {
+    val qualifiedName = if (namespace == null) simpleName else "$namespace.$simpleName"
+    val appLevelName = if (module.isEmpty()) qualifiedName else R_DefinitionPos.appLevelName(module, qualifiedName)
+
+    fun pos() = R_DefinitionPos(module, qualifiedName)
+
     override fun toString() = appLevelName
 }
 
 abstract class R_Definition(names: R_DefinitionNames) {
     val simpleName = names.simpleName
-    val moduleLevelName = names.moduleLevelName
+    val moduleLevelName = names.qualifiedName
     val appLevelName = names.appLevelName
+    val pos = names.pos()
 
     final override fun toString() = "${javaClass.simpleName}[$appLevelName]"
 }
@@ -28,7 +30,7 @@ class R_ExternalChainsRoot
 class R_ExternalChainRef(val root: R_ExternalChainsRoot, val name: String, val index: Int)
 
 data class R_FrameBlockId(val id: Long, val location: String)
-data class R_VarPtr(val blockId: R_FrameBlockId, val offset: Int)
+data class R_VarPtr(val name: String, val blockId: R_FrameBlockId, val offset: Int)
 class R_FrameBlock(val parentId: R_FrameBlockId?, val id: R_FrameBlockId, val offset: Int, val size: Int)
 
 class R_CallFrame(val size: Int, val rootBlock: R_FrameBlock) {
@@ -76,8 +78,8 @@ class R_Operation(names: R_DefinitionNames, mountName: R_MountName): R_MountedRo
     override fun callTop(appCtx: Rt_AppContext, args: List<Rt_Value>): Rt_Value? {
         val ints = internals.get()
 
-        val defCtx = Rt_DefinitionContext(appCtx, true)
-        val rtFrame = Rt_CallFrame(defCtx, ints.frame)
+        val defCtx = Rt_DefinitionContext(appCtx, true, pos)
+        val rtFrame = Rt_CallFrame(null, null, defCtx, ints.frame)
 
         checkCallArgs(this, ints.params, args)
         processArgs(ints.params, args, rtFrame)
@@ -92,8 +94,8 @@ class R_Operation(names: R_DefinitionNames, mountName: R_MountName): R_MountedRo
     fun callTopNoTx(appCtx: Rt_AppContext, args: List<Rt_Value>) {
         val ints = internals.get()
 
-        val defCtx = Rt_DefinitionContext(appCtx, true)
-        val rtFrame = Rt_CallFrame(defCtx, ints.frame)
+        val defCtx = Rt_DefinitionContext(appCtx, true, pos)
+        val rtFrame = Rt_CallFrame(null, null, defCtx, ints.frame)
 
         checkCallArgs(this, ints.params, args)
         processArgs(ints.params, args, rtFrame)
@@ -133,8 +135,8 @@ class R_Query(names: R_DefinitionNames, mountName: R_MountName): R_MountedRoutin
     fun callTopQuery(appCtx: Rt_AppContext, args: List<Rt_Value>): Rt_Value {
         val ints = internals.get()
 
-        val defCtx = Rt_DefinitionContext(appCtx, false)
-        val rtFrame = Rt_CallFrame(defCtx, ints.frame)
+        val defCtx = Rt_DefinitionContext(appCtx, false, pos)
+        val rtFrame = Rt_CallFrame(null, null, defCtx, ints.frame)
 
         checkCallArgs(this, ints.params, args)
         processArgs(ints.params, args, rtFrame)
@@ -170,9 +172,21 @@ class R_Query(names: R_DefinitionNames, mountName: R_MountName): R_MountedRoutin
     }
 }
 
-class R_FunctionBody(val type: R_Type, val params: List<R_ExternalParam>, val body: R_Statement, val frame: R_CallFrame) {
+class R_FunctionBody(
+        val defPos: R_DefinitionPos,
+        val type: R_Type,
+        val params: List<R_ExternalParam>,
+        val body: R_Statement,
+        val frame: R_CallFrame
+) {
     companion object {
-        val EMPTY = R_FunctionBody(R_UnitType, listOf(), C_Utils.ERROR_STATEMENT, R_CallFrame.ERROR)
+        val EMPTY = R_FunctionBody(
+                R_DefinitionPos("<error>", "<error>"),
+                R_UnitType,
+                listOf(),
+                C_Utils.ERROR_STATEMENT,
+                R_CallFrame.ERROR
+        )
     }
 }
 
@@ -193,14 +207,14 @@ class R_Function(names: R_DefinitionNames): R_Routine(names) {
 
     fun callTopFunction(appCtx: Rt_AppContext, args: List<Rt_Value>, dbUpdateAllowed: Boolean = false): Rt_Value {
         val body = bodyLate.get()
-        val rtFrame = createRtFrame(body, appCtx, dbUpdateAllowed)
-        val res = call(rtFrame, args)
+        val rtFrame = createRtFrame(body, appCtx, dbUpdateAllowed, null, null)
+        val res = call(rtFrame, args, null)
         return res
     }
 
-    fun call(rtFrame: Rt_CallFrame, args: List<Rt_Value>): Rt_Value {
+    fun call(rtFrame: Rt_CallFrame, args: List<Rt_Value>, callerFilePos: R_FilePos?): Rt_Value {
         val body = bodyLate.get()
-        val rtSubFrame = createRtFrame(body, rtFrame.defCtx.appCtx, rtFrame.defCtx.dbUpdateAllowed)
+        val rtSubFrame = createRtFrame(body, rtFrame.defCtx.appCtx, rtFrame.defCtx.dbUpdateAllowed, rtFrame, callerFilePos)
 
         val params = params()
         processArgs(params, args, rtSubFrame)
@@ -211,9 +225,20 @@ class R_Function(names: R_DefinitionNames): R_Routine(names) {
         return retVal ?: Rt_UnitValue
     }
 
-    private fun createRtFrame(body: R_FunctionBody, appCtx: Rt_AppContext, dbUpdateAllowed: Boolean): Rt_CallFrame {
-        val defCtx = Rt_DefinitionContext(appCtx, dbUpdateAllowed)
-        return Rt_CallFrame(defCtx, body.frame)
+    private fun createRtFrame(
+            body: R_FunctionBody,
+            appCtx: Rt_AppContext,
+            dbUpdateAllowed: Boolean,
+            callerFrame: Rt_CallFrame?,
+            callerFilePos: R_FilePos?
+    ): Rt_CallFrame {
+        val defCtx = Rt_DefinitionContext(appCtx, dbUpdateAllowed, body.defPos)
+
+        val callerPos = if (callerFrame?.defCtx?.pos == null || callerFilePos == null) null else {
+            R_StackPos(callerFrame.defCtx.pos, callerFilePos)
+        }
+
+        return Rt_CallFrame(callerFrame, callerPos, defCtx, body.frame)
     }
 }
 

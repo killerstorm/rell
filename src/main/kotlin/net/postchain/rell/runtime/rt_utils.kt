@@ -1,6 +1,7 @@
 package net.postchain.rell.runtime
 
 import mu.KLogger
+import net.postchain.rell.model.R_StackPos
 import net.postchain.rell.parser.C_Constants
 import net.postchain.rell.sql.SqlExecutor
 import java.math.BigDecimal
@@ -10,6 +11,8 @@ import java.sql.Connection
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.sql.SQLException
+
+class RellInterpreterCrashException(message: String): RuntimeException(message)
 
 class Rt_Comparator<T>(private val getter: (Rt_Value) -> T, private val comparator: Comparator<T>): Comparator<Rt_Value> {
     override fun compare(o1: Rt_Value?, o2: Rt_Value?): Int {
@@ -135,8 +138,8 @@ class Rt_Messages(private val logger: KLogger) {
             throw errors[0]
         }
 
-        val code = errors.joinToString(",") { it.code }
-        val msg = errors.joinToString("\n") { it.message ?: "" }
+        val code = errors.map { it.code }.joinToString(",")
+        val msg = errors.map { it.message }.filterNotNull().joinToString("\n")
         throw Rt_Error(code, msg)
     }
 
@@ -157,6 +160,10 @@ object Rt_Utils {
         } catch (e: Throwable) {
             throw Rt_Error(errCode, e.message ?: "")
         }
+    }
+
+    fun appendStackTrace(msg: String, stack: List<R_StackPos>): String {
+        return if (stack.isEmpty()) msg else (msg + "\n" + stack.joinToString("\n") { "\tat $it" })
     }
 }
 

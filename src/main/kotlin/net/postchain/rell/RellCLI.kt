@@ -11,6 +11,7 @@ import net.postchain.rell.sql.*
 import picocli.CommandLine
 import kotlin.system.exitProcess
 
+@Suppress("unused")
 private val INIT = run {
     RellCliUtils.initLogging()
 }
@@ -25,7 +26,7 @@ fun main(args: Array<String>) {
 
 private fun main0(args: RellCliArgs) {
     if (args.version) {
-        System.out.println("Rell $RELL_VERSION")
+        println("Rell $RELL_VERSION")
         exitProcess(0)
     }
 
@@ -40,36 +41,43 @@ private fun main0(args: RellCliArgs) {
     }
 
     if (args.resetdb && args.module == null) {
-        runWithSql(args) { sqlExec ->
-            sqlExec.transaction {
-                SqlUtils.dropAll(sqlExec, true)
-            }
-        }
-        println("Database cleared")
+        resetDatabase(args)
         return
     }
 
     val (entryModule, entryRoutine) = parseEntryPoint(args)
 
     val app = RellCliUtils.compileApp(args.sourceDir, entryModule, args.quiet)
-    val routine = getRoutineCaller(app, args, entryModule, entryRoutine)
+    val launcher = getAppLauncher(app, args, entryModule, entryRoutine)
 
     runWithSql(args) { sqlExec ->
         val sqlCtx = Rt_SqlContext.createNoExternalChains(app, SQL_MAPPER)
-
         if (dbSpecified) {
-            sqlExec.transaction {
-                if (args.resetdb) {
-                    SqlUtils.dropAll(sqlExec, true)
-                }
-
-                val modCtx = createAppContext(args, app, sqlCtx, sqlExec, null)
-                val logLevel = if (args.sqlInitLog) SqlInit.LOG_ALL else SqlInit.LOG_NONE
-                SqlInit.init(modCtx, logLevel)
-            }
+            initDatabase(args, app, sqlExec, sqlCtx)
         }
 
-        routine(sqlExec, sqlCtx)
+        launcher?.launch(sqlExec, sqlCtx)
+    }
+}
+
+private fun resetDatabase(args: RellCliArgs) {
+    runWithSql(args) { sqlExec ->
+        sqlExec.transaction {
+            SqlUtils.dropAll(sqlExec, true)
+        }
+    }
+    println("Database cleared")
+}
+
+private fun initDatabase(args: RellCliArgs, app: R_App, sqlExec: SqlExecutor, sqlCtx: Rt_SqlContext) {
+    sqlExec.transaction {
+        if (args.resetdb) {
+            SqlUtils.dropAll(sqlExec, true)
+        }
+
+        val modCtx = createAppContext(args, app, sqlCtx, sqlExec, null)
+        val logLevel = if (args.sqlInitLog) SqlInit.LOG_ALL else SqlInit.LOG_NONE
+        SqlInit.init(modCtx, logLevel)
     }
 }
 
@@ -93,29 +101,15 @@ private fun parseEntryPoint(args: RellCliArgs): Pair<R_ModuleName, R_QualifiedNa
     return Pair(moduleName, routineName)
 }
 
-private fun getRoutineCaller(
+private fun getAppLauncher(
         app: R_App,
         args: RellCliArgs,
         entryModule: R_ModuleName,
         entryRoutine: R_QualifiedName?
-): (SqlExecutor, Rt_SqlContext) -> Unit {
-    if (entryRoutine == null) return { _, _ -> }
-
+): RellAppLauncher? {
+    if (entryRoutine == null) return null
     val entryPoint = findEntryPoint(app, entryModule, entryRoutine)
-
-    return { sqlExec, sqlCtx ->
-        val appCtx = createAppContext(args, app, sqlCtx, sqlExec, entryPoint.opContext())
-
-        val gtvCtx = GtvToRtContext(true)
-        val rtArgs = parseArgs(entryPoint, gtvCtx, args.args ?: listOf(), args.json || args.jsonArgs)
-        gtvCtx.finish(appCtx)
-
-        val rtRes = entryPoint.call(appCtx, rtArgs)
-        if (rtRes != null && rtRes != Rt_UnitValue) {
-            val strRes = resultToString(rtRes, args.jsonResult || args.json)
-            println(strRes)
-        }
-    }
+    return RellAppLauncher(app, args, entryPoint)
 }
 
 private fun runWithSql(args: RellCliArgs, code: (SqlExecutor) -> Unit) {
@@ -244,6 +238,37 @@ private fun resultToString(res: Rt_Value, json: Boolean): String {
         PostchainUtils.gtvToJson(gtv)
     } else {
         res.toString()
+    }
+}
+
+private class RellAppLauncher(
+        private val app: R_App,
+        private val args: RellCliArgs,
+        private val entryPoint: RellEntryPoint
+) {
+    fun launch(sqlExec: SqlExecutor, sqlCtx: Rt_SqlContext) {
+        val appCtx = createAppContext(args, app, sqlCtx, sqlExec, entryPoint.opContext())
+
+        val gtvCtx = GtvToRtContext(true)
+        val rtArgs = parseArgs(entryPoint, gtvCtx, args.args ?: listOf(), args.json || args.jsonArgs)
+        gtvCtx.finish(appCtx)
+
+        val rtRes = callEntryPoint(appCtx, rtArgs)
+        if (rtRes != null && rtRes != Rt_UnitValue) {
+            val strRes = resultToString(rtRes, args.jsonResult || args.json)
+            println(strRes)
+        }
+    }
+
+    private fun callEntryPoint(appCtx: Rt_AppContext, rtArgs: List<Rt_Value>): Rt_Value? {
+        val res = try {
+            entryPoint.call(appCtx, rtArgs)
+        } catch (e: Rt_StackTraceError) {
+            val msg = Rt_Utils.appendStackTrace("ERROR ${e.message}", e.stack)
+            System.err.println(msg)
+            exitProcess(1)
+        }
+        return res
     }
 }
 

@@ -9,8 +9,8 @@ class LibMapTest: BaseRellTest(false) {
         chk("['Bob':123]", "map<text,integer>[text[Bob]=int[123]]")
         chk("['Bob':123,'Alice':456,'Trudy':789]", "map<text,integer>[text[Bob]=int[123],text[Alice]=int[456],text[Trudy]=int[789]]")
         chk("[123:456]", "map<integer,integer>[int[123]=int[456]]")
-        chk("['Bob':123,'Alice':'Hello']", "ct_err:expr_map_valuetype:integer:text")
-        chk("[123:456,'Bob':789]", "ct_err:expr_map_keytype:integer:text")
+        chk("['Bob':123,'Alice':'Hello']", "ct_err:expr_map_valuetype:[integer]:[text]")
+        chk("[123:456,'Bob':789]", "ct_err:expr_map_keytype:[integer]:[text]")
         chk("['Bob':123,'Bob':456]", "rt_err:expr_map_dupkey:text[Bob]")
         chk("['Bob':123,'Bob':123]", "rt_err:expr_map_dupkey:text[Bob]")
     }
@@ -56,7 +56,7 @@ class LibMapTest: BaseRellTest(false) {
 
     @Test fun testIn() {
         chk("'Bob' in map<text,integer>()", "boolean[false]")
-        chk("123 in map<text,integer>()", "ct_err:binop_operand_type:in:integer:map<text,integer>")
+        chk("123 in map<text,integer>()", "ct_err:binop_operand_type:in:[integer]:[map<text,integer>]")
         chk("'Bob' in ['Bob':123]", "boolean[true]")
         chk("'Alice' in ['Bob':123]", "boolean[false]")
         chk("'Bob' in ['Bob':123,'Alice':456]", "boolean[true]")
@@ -76,14 +76,14 @@ class LibMapTest: BaseRellTest(false) {
 
     @Test fun testSubscriptGet() {
         chk("['Bob':123]['Bob']", "int[123]")
-        chk("['Bob':123][123]", "ct_err:expr_lookup_keytype:text:integer")
+        chk("['Bob':123][123]", "ct_err:expr_lookup_keytype:[text]:[integer]")
         chk("['Bob':123]['Alice']", "rt_err:fn_map_get_novalue:text[Alice]")
         chk("['Bob':123,'Alice':456]['Bob']", "int[123]")
         chk("['Bob':123,'Alice':456]['Alice']", "int[456]")
         chk("['Bob':123,'Alice':456]['Trudy']", "rt_err:fn_map_get_novalue:text[Trudy]")
 
         chk("map(['Bob':123])['Bob']", "int[123]")
-        chk("map(['Bob':123])[123]", "ct_err:expr_lookup_keytype:text:integer")
+        chk("map(['Bob':123])[123]", "ct_err:expr_lookup_keytype:[text]:[integer]")
         chk("map(['Bob':123])['Alice']", "rt_err:fn_map_get_novalue:text[Alice]")
         chk("map(['Bob':123,'Alice':456])['Bob']", "int[123]")
         chk("map(['Bob':123,'Alice':456])['Alice']", "int[456]")
@@ -100,16 +100,16 @@ class LibMapTest: BaseRellTest(false) {
         chk("$map == ['Bob':123,'Alice':456]", "boolean[false]")
         chk("$map == ['Bob':123,'Alice':456,'Trudy':789,'Satoshi':555]", "boolean[false]")
         chk("$map == map<text,integer>()", "boolean[false]")
-        chk("$map == map<integer,text>()", "ct_err:binop_operand_type:==:map<text,integer>:map<integer,text>")
-        chk("$map == map<text,text>()", "ct_err:binop_operand_type:==:map<text,integer>:map<text,text>")
-        chk("$map == map<integer,integer>()", "ct_err:binop_operand_type:==:map<text,integer>:map<integer,integer>")
-        chk("$map == [123:'Bob']", "ct_err:binop_operand_type:==:map<text,integer>:map<integer,text>")
-        chk("$map == [123:456]", "ct_err:binop_operand_type:==:map<text,integer>:map<integer,integer>")
-        chk("$map == ['Bob':'Alice']", "ct_err:binop_operand_type:==:map<text,integer>:map<text,text>")
-        chk("$map == [123]", "ct_err:binop_operand_type:==:map<text,integer>:list<integer>")
-        chk("$map == ['Bob']", "ct_err:binop_operand_type:==:map<text,integer>:list<text>")
-        chk("$map == set<integer>()", "ct_err:binop_operand_type:==:map<text,integer>:set<integer>")
-        chk("$map == set([1, 2, 3])", "ct_err:binop_operand_type:==:map<text,integer>:set<integer>")
+        chk("$map == map<integer,text>()", "ct_err:binop_operand_type:==:[map<text,integer>]:[map<integer,text>]")
+        chk("$map == map<text,text>()", "ct_err:binop_operand_type:==:[map<text,integer>]:[map<text,text>]")
+        chk("$map == map<integer,integer>()", "ct_err:binop_operand_type:==:[map<text,integer>]:[map<integer,integer>]")
+        chk("$map == [123:'Bob']", "ct_err:binop_operand_type:==:[map<text,integer>]:[map<integer,text>]")
+        chk("$map == [123:456]", "ct_err:binop_operand_type:==:[map<text,integer>]:[map<integer,integer>]")
+        chk("$map == ['Bob':'Alice']", "ct_err:binop_operand_type:==:[map<text,integer>]:[map<text,text>]")
+        chk("$map == [123]", "ct_err:binop_operand_type:==:[map<text,integer>]:[list<integer>]")
+        chk("$map == ['Bob']", "ct_err:binop_operand_type:==:[map<text,integer>]:[list<text>]")
+        chk("$map == set<integer>()", "ct_err:binop_operand_type:==:[map<text,integer>]:[set<integer>]")
+        chk("$map == set([1, 2, 3])", "ct_err:binop_operand_type:==:[map<text,integer>]:[set<integer>]")
     }
 
     @Test fun testStr() {
@@ -141,9 +141,9 @@ class LibMapTest: BaseRellTest(false) {
         chkEx("{ val x = ['Bob':123,'Alice':456]; x['Bob'] = 555; return ''+x; }", "{Bob=555, Alice=456}")
         chkEx("{ val x = ['Bob':123,'Alice':456]; x['Alice'] = 555; return ''+x; }", "{Bob=123, Alice=555}")
         chkEx("{ val x = ['Bob':123,'Alice':456]; x['Trudy'] = 555; return ''+x; }", "{Bob=123, Alice=456, Trudy=555}")
-        chkEx("{ val x = ['Bob':123]; x['Alice'] = 'Hello'; return ''+x; }", "ct_err:stmt_assign_type:integer:text")
-        chkEx("{ val x = ['Bob':123]; x[123] = 456; return ''+x; }", "ct_err:expr_lookup_keytype:text:integer")
-        chkEx("{ val x = ['Bob':123]; x[123] = 'Bob'; return ''+x; }", "ct_err:expr_lookup_keytype:text:integer")
+        chkEx("{ val x = ['Bob':123]; x['Alice'] = 'Hello'; return ''+x; }", "ct_err:stmt_assign_type:[integer]:[text]")
+        chkEx("{ val x = ['Bob':123]; x[123] = 456; return ''+x; }", "ct_err:expr_lookup_keytype:[text]:[integer]")
+        chkEx("{ val x = ['Bob':123]; x[123] = 'Bob'; return ''+x; }", "ct_err:expr_lookup_keytype:[text]:[integer]")
         chkEx("{ val x = ['Bob':123,'Alice':456]; x['Bob'] += 500; return ''+x; }", "{Bob=623, Alice=456}")
 
         chkEx("{ val m: map<text,integer>? = if (1>0) ['Bob':123] else null; m['Bob'] = 456; return m; }", "ct_err:expr_lookup_null")

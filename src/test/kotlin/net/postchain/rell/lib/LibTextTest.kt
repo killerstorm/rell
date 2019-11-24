@@ -24,7 +24,7 @@ class LibTextTest: BaseRellTest(false) {
         chk("'Hello'[4]", "text[o]")
         chk("'Hello'[-1]", "rt_err:expr_text_subscript_index:5:-1")
         chk("'Hello'[5]", "rt_err:expr_text_subscript_index:5:5")
-        chk("'Hello'['World']", "ct_err:expr_lookup_keytype:integer:text")
+        chk("'Hello'['World']", "ct_err:expr_lookup_keytype:[integer]:[text]")
 
         chkEx("{ val x = 'Hello'; x[2] = 'X'; return x; }", "ct_err:expr_unmodifiable:text")
     }

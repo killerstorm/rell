@@ -185,18 +185,31 @@ object C_Utils {
         }
 
         val simpleName = qualifiedName.last()
-        val moduleLevelName = fullName(fullNamespacePath, simpleName)
 
         var modName = moduleName.str()
         if (extChain != null) modName += "[${extChain.name}]"
-        val appLevelName = if (modName.isEmpty()) moduleLevelName else "$modName#$moduleLevelName"
 
-        return R_DefinitionNames(simpleName, moduleLevelName, appLevelName)
+        return R_DefinitionNames(modName, fullNamespacePath, simpleName)
+    }
+
+    fun createSysCallExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, name: S_String): R_Expr {
+        return createSysCallExpr(type, fn, args, name.pos, name.str)
+    }
+
+    fun createSysCallExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, qualifiedName: List<S_Name>): R_Expr {
+        val nameStr = nameStr(qualifiedName)
+        return createSysCallExpr(type, fn, args, qualifiedName[0].pos, nameStr)
+    }
+
+    fun createSysCallExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, pos: S_Pos, nameStr: String): R_Expr {
+        val rCallExpr = R_SysCallExpr(type, fn, args, nameStr)
+        val filePos = pos.toFilePos()
+        return R_StackTraceExpr(rCallExpr, filePos)
     }
 
     fun crashExpr(type: R_Type, msg: String = "Compilation error"): R_Expr {
-        val fn = R_SysFn_Internal.ThrowCrash(msg)
-        return R_SysCallExpr(type, fn, listOf())
+        val arg = R_ConstantExpr.makeText(msg)
+        return R_SysCallExpr(type, R_SysFn_Internal.Crash, listOf(arg), null)
     }
 
     fun integerToDecimalPromotion(value: C_Value): C_Value {
@@ -212,7 +225,7 @@ object C_Utils {
             return C_DbValue(value.pos, dbResExpr, value.varFacts())
         } else {
             val rExpr = value.toRExpr()
-            val rResExpr = R_SysCallExpr(R_DecimalType, R_SysFn_Decimal.FromInteger, listOf(rExpr))
+            val rResExpr = createSysCallExpr(R_DecimalType, R_SysFn_Decimal.FromInteger, listOf(rExpr), value.pos, "decimal")
             return C_RValue(value.pos, rResExpr, value.varFacts())
         }
     }
@@ -222,6 +235,7 @@ object C_Utils {
     }
 
     fun nameStr(name: List<S_Name>): String = name.joinToString(".") { it.str }
+    fun namePosStr(name: List<S_Name>): S_String = S_String(name[0].pos, nameStr(name))
 
     fun <T> evaluate(pos: S_Pos, code: () -> T): T {
         try {
@@ -273,7 +287,7 @@ object C_Parser {
 
 object C_Errors {
     fun errTypeMismatch(pos: S_Pos, srcType: R_Type, dstType: R_Type, errCode: String, errMsg: String): C_Error {
-        return C_Error(pos, "$errCode:${dstType.toStrictString()}:${srcType.toStrictString()}",
+        return C_Error(pos, "$errCode:[${dstType.toStrictString()}]:[${srcType.toStrictString()}]",
                 "$errMsg: ${srcType.toStrictString()} instead of ${dstType.toStrictString()}")
     }
 
@@ -307,7 +321,7 @@ object C_Errors {
     }
 
     fun errUnknownMember(type: R_Type, name: S_Name): C_Error {
-        return C_Error(name.pos, "unknown_member:${type.toStrictString()}:${name.str}",
+        return C_Error(name.pos, "unknown_member:[${type.toStrictString()}]:${name.str}",
                 "Type ${type.toStrictString()} has no member '${name.str}'")
 
     }
@@ -372,12 +386,10 @@ object C_Errors {
             pos: S_Pos,
             otherEntry: C_MntEntry
     ): C_Error {
-        val otherNameCode = otherEntry.def.appLevelName
-        val otherNameMsg = otherEntry.def.simpleName
-
         val baseCode = "mnt_conflict"
-        val commonCode = "${def.appLevelName}:$mountName:${otherEntry.type}:$otherNameCode"
+        val commonCode = "[${def.appLevelName}]:$mountName:${otherEntry.type}:[${otherEntry.def.appLevelName}]"
         val baseMsg = "Mount name conflict" + if (chain == null) "" else "(external chain '$chain')"
+        val otherNameMsg = otherEntry.def.simpleName
 
         if (otherEntry.pos != null) {
             val code = "$baseCode:user:$commonCode:${otherEntry.pos}"
@@ -392,7 +404,7 @@ object C_Errors {
     }
 
     fun errMountConflictSystem(mountName: R_MountName, def: R_Definition, pos: S_Pos): C_Error {
-        val code = "mnt_conflict:sys:${def.appLevelName}:$mountName"
+        val code = "mnt_conflict:sys:[${def.appLevelName}]:$mountName"
         val msg = "Mount name conflict: '$mountName' is a system mount name"
         return C_Error(pos, code, msg)
     }

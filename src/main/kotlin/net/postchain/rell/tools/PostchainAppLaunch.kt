@@ -100,7 +100,7 @@ class RellJavaLoggingInit {
 }
 
 class Rt_RellAppPrinterFactory: Rt_PrinterFactory {
-    override fun newPrinter() = Rt_LogPrinter("RellApp")
+    override fun newPrinter() = Rt_LogPrinter("Rell")
 }
 
 @CommandLine.Command(name = "PostchainAppLaunch", description = ["Runs a Rell Postchain app"])

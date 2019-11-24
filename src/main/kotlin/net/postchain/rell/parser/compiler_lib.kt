@@ -48,6 +48,7 @@ object C_LibFunctions {
 
             .add("verify_signature", R_BooleanType, listOf(R_ByteArrayType, R_ByteArrayType, R_ByteArrayType), R_SysFn_Crypto.VerifySignature)
 
+            .add("_crash", C_SysFn_Crash)
             .add("_type_of", C_SysFn_TypeOf)
             .add("_nullable", C_SysFn_Nullable(null))
             .add("_nullable_int", C_SysFn_Nullable(R_IntegerType))
@@ -548,9 +549,11 @@ object C_LibFunctions {
 object C_Ns_OpContext {
     val NAME = "op_context"
 
-    fun transactionExpr(defCtx: C_DefinitionContext): R_Expr {
+    private val TRANSACTION_FN = "$NAME.transaction"
+
+    fun transactionExpr(defCtx: C_DefinitionContext, pos: S_Pos): R_Expr {
         val type = defCtx.modCtx.sysDefs.transactionEntity.type
-        return R_SysCallExpr(type, R_SysFn_OpContext.Transaction(type), listOf())
+        return C_Utils.createSysCallExpr(type, R_SysFn_OpContext.Transaction(type), listOf(), pos, TRANSACTION_FN)
     }
 
     private fun checkCtx(defCtx: C_DefinitionContext, name: List<S_Name>) {
@@ -563,21 +566,21 @@ object C_Ns_OpContext {
     object Value_LastBlockTime: C_NamespaceValue_RExpr() {
         override fun get0(defCtx: C_DefinitionContext, name: List<S_Name>): R_Expr {
             checkCtx(defCtx, name)
-            return R_SysCallExpr(R_IntegerType, R_SysFn_OpContext.LastBlockTime, listOf())
+            return C_Utils.createSysCallExpr(R_IntegerType, R_SysFn_OpContext.LastBlockTime, listOf(), name)
         }
     }
 
     object Value_BlockHeight: C_NamespaceValue_RExpr() {
         override fun get0(defCtx: C_DefinitionContext, name: List<S_Name>): R_Expr {
             checkCtx(defCtx, name)
-            return R_SysCallExpr(R_IntegerType, R_SysFn_OpContext.BlockHeight, listOf())
+            return C_Utils.createSysCallExpr(R_IntegerType, R_SysFn_OpContext.BlockHeight, listOf(), name)
         }
     }
 
     object Value_Transaction: C_NamespaceValue_RExpr() {
         override fun get0(defCtx: C_DefinitionContext, name: List<S_Name>): R_Expr {
             checkCtx(defCtx, name)
-            return transactionExpr(defCtx)
+            return transactionExpr(defCtx, name[0].pos)
         }
     }
 }
@@ -592,7 +595,7 @@ private object C_NsValue_ChainContext_Args: C_NamespaceValue_RExpr() {
         }
 
         val moduleName = defCtx.modCtx.module.name
-        return R_SysCallExpr(struct.type, R_SysFn_ChainContext.Args(moduleName), listOf())
+        return C_Utils.createSysCallExpr(struct.type, R_SysFn_ChainContext.Args(moduleName), listOf(), name)
     }
 }
 
@@ -603,11 +606,11 @@ private class C_SysFn_Print(private val log: Boolean): C_GlobalSysFuncCase() {
     }
 
     private inner class CaseMatch(args: List<C_Value>): C_BasicGlobalFuncCaseMatch(args) {
-        override fun compileCallExpr(fullName: S_String, args: List<R_Expr>): R_Expr {
-            val pos = fullName.pos.strLine()
-            val rFn = R_SysFn_General.Print(log, pos)
-            val rExpr = R_SysCallExpr(R_UnitType, rFn, args)
-            return rExpr
+        override fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
+            val fullName = caseCtx.fullName
+            val filePos = caseCtx.filePos()
+            val rFn = R_SysFn_General.Print(log, filePos)
+            return C_Utils.createSysCallExpr(R_UnitType, rFn, args, fullName)
         }
     }
 }
@@ -621,14 +624,14 @@ private object C_SysFn_TypeOf: C_GlobalSysFuncCase() {
     }
 
     private class CaseMatch(private val str: String): C_BasicGlobalFuncCaseMatch(listOf()) {
-        override fun compileCallExpr(fullName: S_String, args: List<R_Expr>): R_Expr {
+        override fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
             var rExpr = R_ConstantExpr.makeText(str)
             return rExpr
         }
 
-        override fun compileCallDbExpr(fullName: S_String, args: List<Db_Expr>): Db_Expr {
+        override fun compileCallDbExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<Db_Expr>): Db_Expr {
             var rExpr = R_ConstantExpr.makeText(str)
-            return C_Utils.toDbExpr(fullName.pos, rExpr)
+            return C_Utils.toDbExpr(caseCtx.fullName.pos, rExpr)
         }
     }
 }
@@ -649,9 +652,23 @@ private class C_SysFn_Nullable(private val baseType: R_Type?): C_GlobalSysFuncCa
             args: List<C_Value>,
             private val resType: R_Type
     ): C_BasicGlobalFuncCaseMatch(args) {
-        override fun compileCallExpr(fullName: S_String, args: List<R_Expr>): R_Expr {
+        override fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
             check(args.size == 1)
-            return R_SysCallExpr(resType, R_SysFn_Internal.Nop, args)
+            return C_Utils.createSysCallExpr(resType, R_SysFn_Internal.Nop, args, caseCtx.fullName)
+        }
+    }
+}
+
+private object C_SysFn_Crash: C_GlobalSysFuncCase() {
+    override fun match(args: List<C_Value>): C_GlobalFuncCaseMatch? {
+        if (args.size != 1) return null
+        return CaseMatch(args)
+    }
+
+    private class CaseMatch(args: List<C_Value>): C_BasicGlobalFuncCaseMatch(args) {
+        override fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
+            check(args.size == 1)
+            return R_SysCallExpr(R_UnitType, R_SysFn_Internal.Crash, args, null)
         }
     }
 }
@@ -663,10 +680,10 @@ private object C_SysFn_Nop: C_GlobalSysFuncCase() {
     }
 
     private class CaseMatch(args: List<C_Value>): C_BasicGlobalFuncCaseMatch(args) {
-        override fun compileCallExpr(fullName: S_String, args: List<R_Expr>): R_Expr {
+        override fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
             check(args.size == 1)
             val arg = args[0]
-            return R_SysCallExpr(arg.type, R_SysFn_Internal.Nop, args)
+            return C_Utils.createSysCallExpr(arg.type, R_SysFn_Internal.Nop, args, caseCtx.fullName)
         }
     }
 }
@@ -685,7 +702,7 @@ private object C_SysFn_Require_Boolean: C_GlobalSysFuncCase() {
     }
 
     private class CaseMatch(args: List<C_Value>): C_BasicGlobalFuncCaseMatch(args) {
-        override fun compileCallExpr(fullName: S_String, args: List<R_Expr>): R_Expr {
+        override fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
             val rExpr = args[0]
             val rMsgExpr = if (args.size < 2) null else args[1]
             return R_RequireExpr_Boolean(rExpr, rMsgExpr)
@@ -743,7 +760,7 @@ private object C_SysFn_Require_Collection: C_GlobalSysFuncCase() {
     }
 
     private class CaseMatch_Collection(args: List<C_Value>, val valueType: R_Type): C_BasicGlobalFuncCaseMatch(args) {
-        override fun compileCallExpr(fullName: S_String, args: List<R_Expr>): R_Expr {
+        override fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
             val rExpr = args[0]
             val rMsgExpr = if (args.size < 2) null else args[1]
             return R_RequireExpr_Collection(valueType, rExpr, rMsgExpr)
@@ -751,7 +768,7 @@ private object C_SysFn_Require_Collection: C_GlobalSysFuncCase() {
     }
 
     private class CaseMatch_Map(args: List<C_Value>, val valueType: R_Type): C_BasicGlobalFuncCaseMatch(args) {
-        override fun compileCallExpr(fullName: S_String, args: List<R_Expr>): R_Expr {
+        override fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
             val rExpr = args[0]
             val rMsgExpr = if (args.size < 2) null else args[1]
             return R_RequireExpr_Map(valueType, rExpr, rMsgExpr)
@@ -780,7 +797,7 @@ private object C_SysFn_Exists: C_GlobalSysFuncCase() {
             val facts = preFacts.and(C_ExprVarFacts.forNullCheck(arg, false))
 
             val rArgs = args.map { it.toRExpr() }
-            val rExpr = R_SysCallExpr(R_BooleanType, R_SysFn_General.Exists, rArgs)
+            val rExpr = C_Utils.createSysCallExpr(R_BooleanType, R_SysFn_General.Exists, rArgs, caseCtx.fullName)
 
             return C_RValue(caseCtx.fullName.pos, rExpr, facts)
         }

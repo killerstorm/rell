@@ -25,7 +25,7 @@ class ChainContextTest : BaseGtxTest() {
         chk("chain_context.args", "{'n':123,'s':'Hello'}")
         chk("chain_context.args.s", "'Hello'")
         chk("chain_context.args.n", "123")
-        chk("chain_context.args.x", "ct_err:unknown_member:module_args:x")
+        chk("chain_context.args.x", "ct_err:unknown_member:[module_args]:x")
 
         tst.moduleArgs()
         chkUserMistake("", "Module initialization failed: No moduleArgs in blockchain configuration")

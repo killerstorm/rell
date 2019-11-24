@@ -35,10 +35,10 @@ class LibSetTest: BaseRellTest(false) {
         chk("set([1, 2, 3]) == set([1, 2])", "boolean[false]")
         chk("set([1, 2, 3]) == set([1, 2, 3, 4])", "boolean[false]")
         chk("set([1, 2, 3]) == set<integer>()", "boolean[false]")
-        chk("set([1, 2, 3]) == set<text>()", "ct_err:binop_operand_type:==:set<integer>:set<text>")
-        chk("set([1, 2, 3]) == set(['Hello'])", "ct_err:binop_operand_type:==:set<integer>:set<text>")
-        chk("set([1, 2, 3]) == list<integer>()", "ct_err:binop_operand_type:==:set<integer>:list<integer>")
-        chk("set([1, 2, 3]) == list([1, 2, 3])", "ct_err:binop_operand_type:==:set<integer>:list<integer>")
+        chk("set([1, 2, 3]) == set<text>()", "ct_err:binop_operand_type:==:[set<integer>]:[set<text>]")
+        chk("set([1, 2, 3]) == set(['Hello'])", "ct_err:binop_operand_type:==:[set<integer>]:[set<text>]")
+        chk("set([1, 2, 3]) == list<integer>()", "ct_err:binop_operand_type:==:[set<integer>]:[list<integer>]")
+        chk("set([1, 2, 3]) == list([1, 2, 3])", "ct_err:binop_operand_type:==:[set<integer>]:[list<integer>]")
     }
 
     @Test fun testContains() {
@@ -52,7 +52,7 @@ class LibSetTest: BaseRellTest(false) {
         chk("1 in set([1, 2, 3])", "boolean[true]")
         chk("3 in set([1, 2, 3])", "boolean[true]")
         chk("5 in set([1, 2, 3])", "boolean[false]")
-        chk("'Hello' in set([1, 2, 3])", "ct_err:binop_operand_type:in:text:set<integer>")
+        chk("'Hello' in set([1, 2, 3])", "ct_err:binop_operand_type:in:[text]:[set<integer>]")
     }
 
     @Test fun testContainsAll() {
@@ -146,9 +146,9 @@ class LibSetTest: BaseRellTest(false) {
         tst.strictToString = false
         def("struct rec { x: integer; }")
 
-        chkEx("{ val s = set([ 5, 4, 3, 2, 1 ]); s._sort(); return s; }", "ct_err:unknown_member:set<integer>:_sort")
+        chkEx("{ val s = set([ 5, 4, 3, 2, 1 ]); s._sort(); return s; }", "ct_err:unknown_member:[set<integer>]:_sort")
 
         chk("set([ 5, 4, 3, 2, 1 ]).sorted()", "[1, 2, 3, 4, 5]")
-        chk("set([rec(123), rec(456)]).sorted()", "ct_err:unknown_member:set<rec>:sorted")
+        chk("set([rec(123), rec(456)]).sorted()", "ct_err:unknown_member:[set<rec>]:sorted")
     }
 }

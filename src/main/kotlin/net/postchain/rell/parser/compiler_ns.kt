@@ -153,7 +153,9 @@ class C_NamespaceValue_SysFunction(
         private val resultType: R_Type,
         private val fn: R_SysFunction
 ): C_NamespaceValue_RExpr() {
-    override fun get0(defCtx: C_DefinitionContext, name: List<S_Name>) = R_SysCallExpr(resultType, fn, listOf())
+    override fun get0(defCtx: C_DefinitionContext, name: List<S_Name>): R_Expr {
+        return C_Utils.createSysCallExpr(resultType, fn, listOf(), name)
+    }
 }
 
 class C_NamespaceValue_Entity(private val typeDef: C_TypeDef): C_NamespaceValue() {

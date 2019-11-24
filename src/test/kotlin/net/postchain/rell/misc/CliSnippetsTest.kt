@@ -20,6 +20,7 @@ class CliSnippetsTest {
     @Test fun testStair() = chkModule("stair")
 
     @Test fun testAbstr() = chkModule("abstr.main")
+    @Test fun testStackTrace() = chkModule("stack_trace")
 
     private fun chkModule(module: String) {
         val dir = File("test-cli/src")

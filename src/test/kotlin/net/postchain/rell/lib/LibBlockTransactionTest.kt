@@ -30,18 +30,18 @@ class LibBlockTransactionTest: BaseRellTest() {
         chkEx("{ $block; return b.block_height; }", "int[222]")
         chkEx("{ $block; return b.block_rid; }", "byte_array[deadbeef]")
         chkEx("{ $block; return b.timestamp; }", "int[1500000000000]")
-        chkEx("{ $block; return b.block_iid; }", "ct_err:unknown_member:block:block_iid")
+        chkEx("{ $block; return b.block_iid; }", "ct_err:unknown_member:[block]:block_iid")
 
         chkEx("{ $trans; return t.tx_rid; }", "byte_array[fade]")
         chkEx("{ $trans; return t.tx_hash; }", "byte_array[1234]")
         chkEx("{ $trans; return t.tx_data; }", "byte_array[edaf]")
-        chkEx("{ $trans; return t.tx_iid; }", "ct_err:unknown_member:transaction:tx_iid")
+        chkEx("{ $trans; return t.tx_iid; }", "ct_err:unknown_member:[transaction]:tx_iid")
 
         chkEx("{ $trans; return t.block; }", "block[111]")
         chkEx("{ $trans; return t.block.block_height; }", "int[222]")
         chkEx("{ $trans; return t.block.block_rid; }", "byte_array[deadbeef]")
         chkEx("{ $trans; return t.block.timestamp; }", "int[1500000000000]")
-        chkEx("{ $trans; return t.block.block_iid; }", "ct_err:unknown_member:block:block_iid")
+        chkEx("{ $trans; return t.block.block_iid; }", "ct_err:unknown_member:[block]:block_iid")
     }
 
     @Test fun testBlockReadAt() {
@@ -65,7 +65,7 @@ class LibBlockTransactionTest: BaseRellTest() {
         chk("transaction@{} ( .block.block_height )", "int[222]")
         chk("transaction@{} ( .block.block_rid )", "byte_array[deadbeef]")
         chk("transaction@{} ( .block.timestamp )", "int[1500000000000]")
-        chk("transaction@{} ( .block.block_iid )", "ct_err:unknown_member:block:block_iid")
+        chk("transaction@{} ( .block.block_iid )", "ct_err:unknown_member:[block]:block_iid")
     }
 
     @Test fun testBlockWrite() {

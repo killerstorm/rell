@@ -35,9 +35,9 @@ class LibRangeTest: BaseRellTest(false) {
         chk("(-9223372036854775807-1) in range(5)", "boolean[false]")
         chk("9223372036854775807 in range(5)", "boolean[false]")
 
-        chk("true in range(5)", "ct_err:binop_operand_type:in:boolean:range")
-        chk("'Hello' in range(5)", "ct_err:binop_operand_type:in:text:range")
-        chk("range(5) in range(5)", "ct_err:binop_operand_type:in:range:range")
+        chk("true in range(5)", "ct_err:binop_operand_type:in:[boolean]:[range]")
+        chk("'Hello' in range(5)", "ct_err:binop_operand_type:in:[text]:[range]")
+        chk("range(5) in range(5)", "ct_err:binop_operand_type:in:[range]:[range]")
 
         chk("4 in range(5,7)", "boolean[false]")
         chk("5 in range(5,7)", "boolean[true]")

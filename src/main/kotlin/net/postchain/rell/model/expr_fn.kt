@@ -6,6 +6,7 @@ import net.postchain.rell.PostchainUtils
 import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.parser.C_Constants
 import net.postchain.rell.runtime.*
+import org.apache.commons.lang3.StringUtils
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.math.MathContext
@@ -23,16 +24,48 @@ sealed class R_CallExpr(type: R_Type, val args: List<R_Expr>): R_Expr(type) {
     }
 }
 
-class R_SysCallExpr(type: R_Type, val fn: R_SysFunction, args: List<R_Expr>): R_CallExpr(type, args) {
+class R_SysCallExpr(
+        type: R_Type,
+        private val fn: R_SysFunction,
+        args: List<R_Expr>,
+        private val name: String?
+): R_CallExpr(type, args) {
     override fun call(frame: Rt_CallFrame, values: List<Rt_Value>): Rt_Value {
+        val res = if (name == null) {
+            call0(frame, values)
+        } else try {
+            call0(frame, values)
+        } catch (e: Rt_StackTraceError) {
+            throw e
+        } catch (e: Rt_BaseError) {
+            val msg = decorate(e.message)
+            throw e.updateMessage(msg)
+        } catch (e: Throwable) {
+            val msg = decorate(e.message)
+            throw RuntimeException(msg, e)
+        }
+        return res
+    }
+
+    private fun decorate(msg: String?): String {
+        val msg2 = StringUtils.defaultIfBlank(msg, "error")
+        return "System function '$name': $msg2"
+    }
+
+    private fun call0(frame: Rt_CallFrame, values: List<Rt_Value>): Rt_Value {
         val res = fn.call(frame.defCtx.callCtx, values)
         return res
     }
 }
 
-class R_UserCallExpr(type: R_Type, private val fn: R_Function, args: List<R_Expr>): R_CallExpr(type, args) {
+class R_UserCallExpr(
+        type: R_Type,
+        private val fn: R_Function,
+        args: List<R_Expr>,
+        private val filePos: R_FilePos
+): R_CallExpr(type, args) {
     override fun call(frame: Rt_CallFrame, values: List<Rt_Value>): Rt_Value {
-        val res = fn.call(frame, values)
+        val res = fn.call(frame, values, filePos)
         return res
     }
 }
@@ -243,7 +276,7 @@ object R_SysFn_Decimal {
     object Sqrt: MemFn() {
         override fun call(obj: BigDecimal): Rt_Value {
             if (obj < BigDecimal.ZERO) {
-                throw Rt_Error("decimal.sqrt:negative:$obj", "Calling decimal.sqrt() on a negative value")
+                throw Rt_Error("decimal.sqrt:negative:$obj", "Negative value")
             }
             TODO()
         }
@@ -713,7 +746,7 @@ object R_SysFn_General {
         }
     }
 
-    class Print(private val log: Boolean, private val pos: String): R_SysFunction() {
+    class Print(private val log: Boolean, private val filePos: R_FilePos): R_SysFunction() {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             val buf = StringBuilder()
             for (arg in args) {
@@ -725,15 +758,15 @@ object R_SysFn_General {
 
             val str = buf.toString()
 
-            val ctx = ctx.globalCtx
-            val printer = if (log) ctx.logPrinter else ctx.stdoutPrinter
-            val fullStr = if (log) logStr(str) else str
+            val printer = if (log) ctx.globalCtx.logPrinter else ctx.globalCtx.stdoutPrinter
+            val fullStr = if (log) logStr(ctx, str) else str
             printer.print(fullStr)
 
             return Rt_UnitValue
         }
 
-        private fun logStr(str: String): String {
+        private fun logStr(ctx: Rt_CallContext, str: String): String {
+            val pos = R_StackPos(ctx.defCtx.pos, filePos)
             val posStr = "[$pos]"
             return if (str.isEmpty()) posStr else "$posStr $str"
         }
@@ -745,7 +778,7 @@ object R_SysFn_Math {
         override fun call(arg: Rt_Value): Rt_Value {
             val a = arg.asInteger()
             if (a == Long.MIN_VALUE) {
-                throw Rt_Error("abs:integer:overflow:$a", "Integer overflow in abs(): $a")
+                throw Rt_Error("abs:integer:overflow:$a", "Integer overflow: $a")
             }
             val r = Math.abs(a)
             return Rt_IntValue(r)
@@ -836,7 +869,10 @@ object R_SysFn_Internal {
         }
     }
 
-    class ThrowCrash(private val msg: String): R_SysFunction_0() {
-        override fun call() = throw IllegalStateException(msg)
+    object Crash: R_SysFunction_1() {
+        override fun call(arg: Rt_Value): Rt_Value {
+            val s = arg.asString()
+            throw RellInterpreterCrashException(s)
+        }
     }
 }

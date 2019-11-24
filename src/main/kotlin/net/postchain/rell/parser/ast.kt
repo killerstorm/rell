@@ -13,14 +13,18 @@ import kotlin.math.min
 
 abstract class S_Pos {
     abstract fun path(): C_SourcePath
+    abstract fun line(): Int
     abstract fun pos(): Long
     abstract fun str(): String
     abstract fun strLine(): String
     override fun toString() = str()
+
+    fun toFilePos() = R_FilePos(path().str(), line())
 }
 
 class S_BasicPos(private val file: C_SourcePath, private val row: Int, private val col: Int): S_Pos() {
     override fun path() = file
+    override fun line() = row
     override fun pos() = Math.min(row, 1_000_000_000) * 1_000_000_000L + Math.min(col, 1_000_000_000)
     override fun str() = "$file($row:$col)"
     override fun strLine() = "$file:$row"
@@ -356,7 +360,7 @@ class S_EntityDefinition(
             val txType = sysDefs.transactionEntity.type
             entCtx.addAttribute0("transaction", txType, false, false) {
                 if (extChain == null) {
-                    C_Ns_OpContext.transactionExpr(entCtx.defCtx)
+                    C_Ns_OpContext.transactionExpr(entCtx.defCtx, name.pos)
                 } else {
                     C_Utils.crashExpr(txType, "Trying to initialize transaction for external entity '${rEntity.appLevelName}'")
                 }
@@ -646,7 +650,7 @@ private fun checkGtvCompatibility(
 abstract class S_FunctionBody {
     abstract fun processStatementVars(): TypedKeyMap
     abstract fun compileQuery(name: S_Name, ctx: C_ExprContext): R_Statement
-    abstract fun compileFunction(name: S_Name, ctx: C_ExprContext): R_Statement
+    abstract fun compileFunction(qualifiedName: List<S_Name>, ctx: C_ExprContext): R_Statement
 }
 
 class S_FunctionBodyShort(val expr: S_Expr): S_FunctionBody() {
@@ -660,19 +664,17 @@ class S_FunctionBodyShort(val expr: S_Expr): S_FunctionBody() {
         return R_ReturnStatement(rExpr)
     }
 
-    override fun compileFunction(name: S_Name, ctx: C_ExprContext): R_Statement {
+    override fun compileFunction(qualifiedName: List<S_Name>, ctx: C_ExprContext): R_Statement {
+        val name = C_Utils.namePosStr(qualifiedName)
+
         val rExpr = expr.compile(ctx).value().toRExpr()
         ctx.blkCtx.defCtx.matchReturnType(name.pos, rExpr.type)
 
-        if (rExpr.type != R_UnitType) {
-            return R_ReturnStatement(rExpr)
+        return if (rExpr.type != R_UnitType) {
+            R_ReturnStatement(rExpr)
+        } else {
+            R_ExprStatement(rExpr)
         }
-
-        val blkCtx = ctx.blkCtx
-        val subBlkCtx = C_BlockContext(blkCtx.defCtx, blkCtx, blkCtx.loop, "fn:${name.str}")
-        val rBlock = subBlkCtx.makeFrameBlock()
-
-        return R_BlockStatement(listOf(R_ExprStatement(rExpr), R_ReturnStatement(null)), rBlock)
     }
 }
 
@@ -693,11 +695,12 @@ class S_FunctionBodyFull(val body: S_Statement): S_FunctionBody() {
         return cBody.rStmt
     }
 
-    override fun compileFunction(name: S_Name, ctx: C_ExprContext): R_Statement {
+    override fun compileFunction(qualifiedName: List<S_Name>, ctx: C_ExprContext): R_Statement {
         val cBody = body.compile(ctx)
 
         val retType = ctx.blkCtx.defCtx.actualReturnType()
         if (retType != R_UnitType) {
+            val name = C_Utils.namePosStr(qualifiedName)
             if (!cBody.returnAlways) {
                 throw C_Error(name.pos, "fun_noreturn:${name.str}", "Function '${name.str}': not all code paths return value")
             }
@@ -760,9 +763,13 @@ class S_FunctionDefinition(
         }
     }
 
-    private fun compileDefinition0(ctx: C_MountContext): R_Function {
+    private fun definitionNames(ctx: C_MountContext): R_DefinitionNames {
         val qName = qualifiedName.map { it.str }
-        val names = ctx.nsCtx.defNames(qName)
+        return ctx.nsCtx.defNames(qName)
+    }
+
+    private fun compileDefinition0(ctx: C_MountContext): R_Function {
+        val names = definitionNames(ctx)
         return R_Function(names)
     }
 
@@ -781,10 +788,9 @@ class S_FunctionDefinition(
     }
 
     private fun compileRegularBody(cHeader: C_FnHeader, rFn: R_Function) {
-        val name = qualifiedName.last()
         val exprCtx = cHeader.bodyExprCtx
-        val rBody = body?.compileFunction(name, exprCtx) ?: C_Utils.ERROR_STATEMENT
-        rFn.setBody(createFunctionBody(cHeader, rBody))
+        val rBody = body?.compileFunction(qualifiedName, exprCtx) ?: C_Utils.ERROR_STATEMENT
+        rFn.setBody(createFunctionBody(rFn.pos, cHeader, rBody))
     }
 
     private fun compileAbstract(ctx: C_MountContext, name: S_Name) {
@@ -819,11 +825,10 @@ class S_FunctionDefinition(
             descriptor: C_AbstractDescriptor,
             realBody: S_FunctionBody
     ) {
-        val name = qualifiedName.last()
         val exprCtx = cHeader.bodyExprCtx
-        val rBody = realBody.compileFunction(name, exprCtx)
+        val rBody = realBody.compileFunction(qualifiedName, exprCtx)
         if (descriptor.isUsingDefaultBody()) {
-            rFn.setBody(createFunctionBody(cHeader, rBody))
+            rFn.setBody(createFunctionBody(rFn.pos, cHeader, rBody))
         }
     }
 
@@ -847,7 +852,7 @@ class S_FunctionDefinition(
             val (def, desc) = fn.getAbstractInfo()
             if (desc == null) {
                 val qName = def?.appLevelName ?: C_Utils.nameStr(qualifiedName)
-                ctx.globalCtx.error(qualifiedName[0].pos, "fn:override:not_abstract:$qName", "Function is not abstract: '$qName'")
+                ctx.globalCtx.error(qualifiedName[0].pos, "fn:override:not_abstract:[$qName]", "Function is not abstract: '$qName'")
             }
             desc
         }
@@ -870,10 +875,12 @@ class S_FunctionDefinition(
             checkOverrideSignature(ctx, absDescriptor, cHeader)
         }
 
+        val names = definitionNames(ctx)
+        val defPos = names.pos()
+
         val exprCtx = cHeader.bodyExprCtx
-        val name = qualifiedName.last()
-        val rBody = body?.compileFunction(name, exprCtx) ?: C_Utils.ERROR_STATEMENT
-        overDescriptor.setBody(createFunctionBody(cHeader, rBody))
+        val rBody = body?.compileFunction(qualifiedName, exprCtx) ?: C_Utils.ERROR_STATEMENT
+        overDescriptor.setBody(createFunctionBody(defPos, cHeader, rBody))
     }
 
     private fun checkOverrideSignature(ctx: C_MountContext, abstractDescriptor: C_AbstractDescriptor, cHeader: C_FnHeader) {
@@ -903,9 +910,9 @@ class S_FunctionDefinition(
         }
     }
 
-    private fun createFunctionBody(cHeader: C_FnHeader, rBody: R_Statement): R_FunctionBody {
+    private fun createFunctionBody(defPos: R_DefinitionPos, cHeader: C_FnHeader, rBody: R_Statement): R_FunctionBody {
         val rCallFrame = cHeader.bodyExprCtx.defCtx.makeCallFrame()
-        return R_FunctionBody(cHeader.retType, cHeader.rParams, rBody, rCallFrame)
+        return R_FunctionBody(defPos, cHeader.retType, cHeader.rParams, rBody, rCallFrame)
     }
 
     override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
@@ -948,7 +955,7 @@ class S_NamespaceDefinition(
         val (subNsBuilder, subNsGetter) = ctx.nsBuilder.addNamespace(name)
 
         val names = ctx.nsCtx.defNames(name.str)
-        val subNsCtx = C_NamespaceContext(ctx.modCtx, ctx.nsCtx, names.moduleLevelName, subNsGetter)
+        val subNsCtx = C_NamespaceContext(ctx.modCtx, ctx.nsCtx, names.qualifiedName, subNsGetter)
 
         val subMountName = ctx.mountName(modTarget, name)
         return C_MountContext(ctx.fileCtx, subNsCtx, extChain, subNsBuilder, subMountName)

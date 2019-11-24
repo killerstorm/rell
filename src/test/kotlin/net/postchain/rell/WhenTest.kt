@@ -70,9 +70,9 @@ class WhenTest: BaseRellTest(false) {
     @Test fun testExprResultTypes() {
         chkWhenRet("integer", "text?", "= when(a) { 0 -> null; 1 -> 'A'; else -> '?'; };",
                 "0" to "null", "1" to "text[A]", "2" to "text[?]")
-        chkWhen("integer", "= when(a) { 0 -> 123; else -> 'Hello'; };", "0" to "ct_err:expr_when_incompatible_type:integer:text")
-        chkWhen("integer", "= when(a) { 0 -> 'Hello'; else -> 123; };", "0" to "ct_err:expr_when_incompatible_type:text:integer")
-        chkWhen("integer", "= when(a) { 0 -> true; else -> x'12EF'; };", "0" to "ct_err:expr_when_incompatible_type:boolean:byte_array")
+        chkWhen("integer", "= when(a) { 0 -> 123; else -> 'Hello'; };", "0" to "ct_err:expr_when_incompatible_type:[integer]:[text]")
+        chkWhen("integer", "= when(a) { 0 -> 'Hello'; else -> 123; };", "0" to "ct_err:expr_when_incompatible_type:[text]:[integer]")
+        chkWhen("integer", "= when(a) { 0 -> true; else -> x'12EF'; };", "0" to "ct_err:expr_when_incompatible_type:[boolean]:[byte_array]")
     }
 
     @Test fun testExprDuplicateConstantValue() {

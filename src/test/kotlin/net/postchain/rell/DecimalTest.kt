@@ -340,9 +340,9 @@ class DecimalTest: BaseRellTest(false) {
         chkEx("{ var x = decimal(123); x += 456; return x; }", "dec[579]")
         chkEx("{ var x = decimal(123); x *= 456; return x; }", "dec[56088]")
 
-        chkEx("{ var x = 123; x = decimal(456); return x; }", "ct_err:stmt_assign_type:integer:decimal")
-        chkEx("{ var x = 123; x += decimal(456); return x; }", "ct_err:binop_operand_type:+=:integer:decimal")
-        chkEx("{ var x = 123; x *= decimal(456); return x; }", "ct_err:binop_operand_type:*=:integer:decimal")
+        chkEx("{ var x = 123; x = decimal(456); return x; }", "ct_err:stmt_assign_type:[integer]:[decimal]")
+        chkEx("{ var x = 123; x += decimal(456); return x; }", "ct_err:binop_operand_type:+=:[integer]:[decimal]")
+        chkEx("{ var x = 123; x *= decimal(456); return x; }", "ct_err:binop_operand_type:*=:[integer]:[decimal]")
     }
 
     @Test fun testPromotionUserFunction() {
@@ -370,8 +370,8 @@ class DecimalTest: BaseRellTest(false) {
         chkEx("{ val r = rec(x = _nullable_int(456)); return 0; }", "ct_err:attr_bad_type:0:x:decimal:integer?")
         chkEx("{ val r = rec(); r.x = decimal(456); return r.x; }", "dec[456]")
         chkEx("{ val r = rec(); r.x = 456; return r.x; }", "dec[456]")
-        chkEx("{ val r = rec(); r.x = null; return 0; }", "ct_err:stmt_assign_type:decimal:null")
-        chkEx("{ val r = rec(); r.x = _nullable_int(456); return 0; }", "ct_err:stmt_assign_type:decimal:integer?")
+        chkEx("{ val r = rec(); r.x = null; return 0; }", "ct_err:stmt_assign_type:[decimal]:[null]")
+        chkEx("{ val r = rec(); r.x = _nullable_int(456); return 0; }", "ct_err:stmt_assign_type:[decimal]:[integer?]")
         chkEx("{ val r = rec(); r.x += 456; return r.x; }", "dec[579]")
         chkEx("{ val r = rec(); r.x *= 456; return r.x; }", "dec[56088]")
 
@@ -384,8 +384,8 @@ class DecimalTest: BaseRellTest(false) {
         chkEx("{ val r = rec(); r.y = 456; return r.y; }", "dec[456]")
         chkEx("{ val r = rec(); r.y = null; return r.y; }", "null")
         chkEx("{ val r = rec(); r.y = _nullable_int(456); return r.y; }", "dec[456]")
-        chkEx("{ val r = rec(); r.y += 456; return r.y; }", "ct_err:binop_operand_type:+=:decimal?:integer")
-        chkEx("{ val r = rec(); r.y *= 456; return r.y; }", "ct_err:binop_operand_type:*=:decimal?:integer")
+        chkEx("{ val r = rec(); r.y += 456; return r.y; }", "ct_err:binop_operand_type:+=:[decimal?]:[integer]")
+        chkEx("{ val r = rec(); r.y *= 456; return r.y; }", "ct_err:binop_operand_type:*=:[decimal?]:[integer]")
     }
 
     @Test fun testPromotionCreateUpdate() {

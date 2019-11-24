@@ -54,7 +54,7 @@ object R_SysFn_List_Get: R_SysFn_List() {
     override fun call(obj: MutableList<Rt_Value>, a: Rt_Value): Rt_Value {
         val i = a.asInteger()
         if (i < 0 || i >= obj.size) {
-            throw Rt_Error("fn:list.get:index:${obj.size}:$i", "Index out of bounds: $i (size ${obj.size})")
+            throw Rt_Error("fn:list.get:index:${obj.size}:$i", "List index out of bounds: $i (size ${obj.size})")
         }
         return obj[i.toInt()]
     }

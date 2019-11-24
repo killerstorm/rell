@@ -136,7 +136,7 @@ private class C_MemberAttrValue(
     override fun type() = type
     override fun isDb() = memberRef.base.isDb()
 
-    override fun toRExpr(): R_Expr {
+    override fun toRExpr0(): R_Expr {
         val rBase = memberRef.base.toRExpr()
         val calculator = memAttr.calculator()
         return R_MemberExpr(rBase, memberRef.safe, calculator)
@@ -266,7 +266,7 @@ private class C_EntityAttrValue private constructor(
     override fun type() = resultType
     override fun isDb() = false // Important: value does not belong to an outer @-expression
 
-    override fun toRExpr(): R_Expr {
+    override fun toRExpr0(): R_Expr {
         val from = listOf(base.atEntity)
 
         val whereLeft = Db_EntityExpr(base.atEntity)

@@ -86,6 +86,8 @@ sealed class C_FuncCaseCtx {
 
 class C_GlobalFuncCaseCtx(name: S_Name): C_FuncCaseCtx() {
     override val fullName = S_String(name)
+
+    fun filePos() = fullName.pos.toFilePos()
 }
 
 class C_MemberFuncCaseCtx(val member: C_MemberRef): C_FuncCaseCtx() {
@@ -146,10 +148,10 @@ class C_DeprecatedFuncCase<CtxT: C_FuncCaseCtx>(
 }
 
 abstract class C_BasicGlobalFuncCaseMatch(private val args: List<C_Value>): C_GlobalFuncCaseMatch() {
-    abstract fun compileCallExpr(fullName: S_String, args: List<R_Expr>): R_Expr
+    abstract fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr
 
-    open fun compileCallDbExpr(fullName: S_String, args: List<Db_Expr>): Db_Expr {
-        throw C_Errors.errFunctionNoSql(fullName.pos, fullName.str)
+    open fun compileCallDbExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<Db_Expr>): Db_Expr {
+        throw C_Errors.errFunctionNoSql(caseCtx.fullName.pos, caseCtx.fullName.str)
     }
 
     final override fun compileCall(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): C_Value {
@@ -164,25 +166,23 @@ abstract class C_BasicGlobalFuncCaseMatch(private val args: List<C_Value>): C_Gl
         fun compileCall(
                 caseCtx: C_GlobalFuncCaseCtx,
                 args: List<C_Value>,
-                rFactory: (S_String, List<R_Expr>) -> R_Expr
+                rFactory: (C_GlobalFuncCaseCtx, List<R_Expr>) -> R_Expr
         ): C_Value {
-            val fullName = caseCtx.fullName
             val rArgs = args.map { it.toRExpr() }
-            val rExpr = rFactory(fullName, rArgs)
+            val rExpr = rFactory(caseCtx, rArgs)
             val facts = C_ExprVarFacts.forSubExpressions(args)
-            return C_RValue(fullName.pos, rExpr, facts)
+            return C_RValue(caseCtx.fullName.pos, rExpr, facts)
         }
 
         fun compileCallDb(
                 caseCtx: C_GlobalFuncCaseCtx,
                 args: List<C_Value>,
-                dbFactory: (S_String, List<Db_Expr>) -> Db_Expr
+                dbFactory: (C_GlobalFuncCaseCtx, List<Db_Expr>) -> Db_Expr
         ): C_Value {
-            val fullName = caseCtx.fullName
             val dbArgs = args.map { it.toDbExpr() }
-            val dbExpr = dbFactory(fullName, dbArgs)
+            val dbExpr = dbFactory(caseCtx, dbArgs)
             val facts = C_ExprVarFacts.forSubExpressions(args)
-            return C_DbValue(fullName.pos, dbExpr, facts)
+            return C_DbValue(caseCtx.fullName.pos, dbExpr, facts)
         }
     }
 }

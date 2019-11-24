@@ -75,14 +75,22 @@ class C_UserGlobalFunction(val rFunction: R_Function, private val abstract: C_Ab
         val effArgs = checkArgs(ctx, name, header.cParams, args)
 
         val rExpr = if (effArgs != null) {
-            val rArgs = effArgs.map { it.toRExpr() }
-            R_UserCallExpr(header.retType, rFunction, rArgs)
+            compileCallRegular0(ctx, name, header, effArgs)
         } else {
             C_Utils.crashExpr(header.retType, "Compilation error")
         }
 
         val exprFacts = C_ExprVarFacts.forSubExpressions(args)
         return C_RValue.makeExpr(name.pos, rExpr, exprFacts)
+    }
+
+    private fun compileCallRegular0(ctx: C_ExprContext, name: S_Name, header: C_UserFunctionHeader, effArgs: List<C_Value>): R_Expr {
+        val file = name.pos.path().str()
+        val line = name.pos.line()
+        val filePos = R_FilePos(file, line)
+
+        val rArgs = effArgs.map { it.toRExpr() }
+        return R_UserCallExpr(header.retType, rFunction, rArgs, filePos)
     }
 
     private fun checkArgs(ctx: C_ExprContext, name: S_Name, params: List<C_ExternalParam>, args: List<C_Value>): List<C_Value>? {
@@ -149,7 +157,7 @@ class C_SysGlobalFormalParamsFuncBody(
 ): C_GlobalFormalParamsFuncBody() {
     override fun compileCall(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx, args: List<C_Value>): C_Value {
         return C_BasicGlobalFuncCaseMatch.compileCall(caseCtx, args) { _, rArgs ->
-            R_SysCallExpr(type, rFn, rArgs)
+            C_Utils.createSysCallExpr(type, rFn, rArgs, caseCtx.fullName)
         }
     }
 

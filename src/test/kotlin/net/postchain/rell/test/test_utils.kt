@@ -4,10 +4,7 @@ import com.google.common.collect.HashMultimap
 import net.postchain.gtv.Gtv
 import net.postchain.rell.CommonUtils
 import net.postchain.rell.PostchainUtils
-import net.postchain.rell.model.R_App
-import net.postchain.rell.model.R_Entity
-import net.postchain.rell.model.R_ExternalParam
-import net.postchain.rell.model.R_ModuleName
+import net.postchain.rell.model.*
 import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.module.RELL_VERSION
 import net.postchain.rell.parser.*
@@ -363,8 +360,9 @@ object TestSnippetsRecorder {
     }
 }
 
-class RellTestEval() {
+class RellTestEval {
     private var wrapping = false
+    private var lastErrorStack = listOf<R_StackPos>()
 
     fun eval(code: () -> String): String {
         val oldWrapping = wrapping
@@ -372,11 +370,13 @@ class RellTestEval() {
         return try {
             code()
         } catch (e: EvalException) {
-            e.message!!
+            e.payload
         } finally {
             wrapping = oldWrapping
         }
     }
+
+    fun errorStack() = lastErrorStack
 
     fun <T> wrapCt(code: () -> T): T {
         if (wrapping) {
@@ -390,9 +390,16 @@ class RellTestEval() {
     fun <T> wrapRt(code: () -> T): T {
         if (wrapping) {
             val p = RellTestUtils.catchRtErr0(code)
-            return result(p)
+            lastErrorStack = p.first?.stack ?: listOf()
+            return result(Pair(p.first?.res, p.second))
         } else {
             return code()
+        }
+    }
+
+    fun <T> wrapAll(code: () -> T): T {
+        return wrapRt {
+            wrapCt(code)
         }
     }
 
@@ -401,5 +408,5 @@ class RellTestEval() {
         return p.second!!
     }
 
-    private class EvalException(msg: String): RuntimeException(msg)
+    private class EvalException(val payload: String): RuntimeException()
 }

@@ -80,7 +80,7 @@ class ModuleTest: BaseRellTest(false) {
         chkCompile("import lib.a; query q() = (a.user@{}).a;", "ct_err:lib/a.rell:unknown_type:ERROR")
         chkCompile("import lib.a; query q() = (a.user@{}).b;", "ct_err:lib/a.rell:unknown_type:ERROR")
         chkCompile("import lib.a; query q() = (a.user@{}).c;", "ct_err:lib/a.rell:unknown_type:ERROR")
-        chkCompile("import lib.a; query q() = (a.user@{}).x;", "ct_err:[main.rell:unknown_member:lib.a#user:x][lib/a.rell:unknown_type:ERROR]")
+        chkCompile("import lib.a; query q() = (a.user@{}).x;", "ct_err:[main.rell:unknown_member:[lib.a!user]:x][lib/a.rell:unknown_type:ERROR]")
         chkCompile("import lib.a; query q() = 123;", "ct_err:lib/a.rell:unknown_type:ERROR")
     }
 
@@ -142,8 +142,8 @@ class ModuleTest: BaseRellTest(false) {
         file("a/foo.rell", "module; import a.bar; entity company { user: bar.user; }")
         file("a/bar.rell", "module; import a.foo; entity user { company: foo.company; }")
         chkCompile("", "OK")
-        chkCompile("import a.foo;", "ct_err:a/foo.rell:entity_cycle:a.foo#company,a.bar#user")
-        chkCompile("import a.bar;", "ct_err:a/bar.rell:entity_cycle:a.bar#user,a.foo#company")
+        chkCompile("import a.foo;", "ct_err:a/foo.rell:entity_cycle:a.foo!company,a.bar!user")
+        chkCompile("import a.bar;", "ct_err:a/bar.rell:entity_cycle:a.bar!user,a.foo!company")
     }
 
     @Test fun testImportInNamespace() {
@@ -217,9 +217,9 @@ class ModuleTest: BaseRellTest(false) {
         chkImp(imports, "b.f(a.rec(123))", "int[246]")
         chkImp(imports, "b.f(a2.rec(123))", "int[246]")
         chkImp(imports, "b.f(ns.a.rec(123))", "int[246]")
-        chkImp(imports, "_type_of(a.rec(123))", "text[lib.a#rec]")
-        chkImp(imports, "_type_of(a2.rec(123))", "text[lib.a#rec]")
-        chkImp(imports, "_type_of(ns.a.rec(123))", "text[lib.a#rec]")
+        chkImp(imports, "_type_of(a.rec(123))", "text[lib.a!rec]")
+        chkImp(imports, "_type_of(a2.rec(123))", "text[lib.a!rec]")
+        chkImp(imports, "_type_of(ns.a.rec(123))", "text[lib.a!rec]")
     }
 
     /*@Test*/ fun testImportSameModuleMultipleTimes2() {
@@ -360,7 +360,7 @@ class ModuleTest: BaseRellTest(false) {
     }
 
     private fun chkSystemDefsNotVisibleFromOutside() {
-        chkQueryEx("import a; query q(): a.rec = a.rec();", "a#rec[x=int[123]]")
+        chkQueryEx("import a; query q(): a.rec = a.rec();", "a!rec[x=int[123]]")
         chkQueryEx("import a; query q(): a.integer = 123;", "ct_err:unknown_type:a.integer")
         chkQueryEx("import a; query q(): a.boolean = false;", "ct_err:unknown_type:a.boolean")
         chkQueryEx("import a; query q(): a.text = 'Abc';", "ct_err:unknown_type:a.text")

@@ -615,8 +615,9 @@ class Rt_JsonValue private constructor(private val str: String): Rt_Value() {
         fun parse(s: String): Rt_Value {
             val mapper = ObjectMapper()
 
-            val json = try { mapper.readTree(s) }
-            catch (e: JsonProcessingException) {
+            val json = try {
+                mapper.readTree(s)
+            } catch (e: JsonProcessingException) {
                 throw IllegalArgumentException(s)
             }
 

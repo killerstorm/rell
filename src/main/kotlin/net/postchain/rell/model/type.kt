@@ -78,6 +78,8 @@ private abstract class R_TypeSqlAdapter_Primitive(private val name: String): R_T
 }
 
 sealed class R_Type(val name: String) {
+    val toTextFunction = "$name.to_text"
+
     private val gtvConversion by lazy { createGtvConversion() }
     val sqlAdapter = createSqlAdapter()
 

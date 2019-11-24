@@ -4,10 +4,28 @@ import net.postchain.rell.toImmList
 import org.apache.commons.lang3.StringUtils
 import java.util.*
 
+class R_DefinitionPos(val module: String, val definition: String) {
+    override fun toString() = appLevelName(module, definition)
+
+    companion object {
+        fun appLevelName(module: String, definition: String) = "$module!$definition"
+    }
+}
+
+class R_FilePos(val file: String, val line: Int) {
+    override fun toString() = "$file:$line"
+}
+
+class R_StackPos(val def: R_DefinitionPos, val file: R_FilePos) {
+    override fun toString() = "$def($file)"
+}
+
 sealed class R_GenericQualifiedName<T: R_GenericQualifiedName<T>>(parts: List<R_Name>) {
     val parts = parts.toImmList()
 
-    fun str() = parts.joinToString(".")
+    private val str = parts.joinToString(".")
+
+    fun str() = str
     fun isEmpty() = parts.isEmpty()
 
     fun startsWith(qName: T): Boolean {

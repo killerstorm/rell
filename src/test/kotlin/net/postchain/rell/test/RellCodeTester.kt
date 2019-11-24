@@ -8,6 +8,7 @@ import net.postchain.rell.CommonUtils
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_MountName
+import net.postchain.rell.model.R_StackPos
 import net.postchain.rell.parser.C_MessageType
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlExecutor
@@ -37,6 +38,8 @@ class RellCodeTester(
     var sqlUpdatePortionSize = 1000
 
     private val chainDependencies = mutableMapOf<String, TestChainDependency>()
+
+    private var rtErrStack = listOf<R_StackPos>()
 
     override fun initSqlReset(exec: SqlExecutor, moduleCode: String, app: R_App) {
         val globalCtx = createInitGlobalCtx(exec)
@@ -138,9 +141,9 @@ class RellCodeTester(
     }
 
     private fun <T> callQuery0(code: String, name: String, args: List<T>, decoder: (List<R_ExternalParam>, List<T>) -> List<Rt_Value>): String {
-        return eval.eval {
+        val evalRes = eval.eval {
             if (wrapInit) {
-                eval.wrapCt { init() }
+                eval.wrapAll { init() }
             } else {
                 init()
             }
@@ -153,9 +156,12 @@ class RellCodeTester(
             else RellTestUtils.ENCODER_PLAIN
 
             processAppCtx(globalCtx, moduleCode) { appCtx ->
-                RellTestUtils.callQueryGeneric(appCtx, name, args, decoder, encoder)
+                RellTestUtils.callQueryGeneric(eval, appCtx, name, args, decoder, encoder)
             }
         }
+
+        rtErrStack = eval.errorStack()
+        return evalRes
     }
 
     private fun callOp(code: String, name: String, args: List<Rt_Value>): String {
@@ -225,6 +231,11 @@ class RellCodeTester(
             val msg = list.joinToString()
             Assert.fail(msg)
         }
+    }
+
+    fun chkStack(vararg expected: String) {
+        val actual = rtErrStack.map { it.toString() }
+        assertEquals(expected.toList(), actual)
     }
 
     fun chkInit(expected: String) {

@@ -99,7 +99,7 @@ class S_SafeMemberExpr(val base: S_Expr, val name: S_Name): S_Expr(base.startPos
     }
 
     private fun errWrongType(type: R_Type): C_Error {
-        return C_Error(name.pos, "expr_safemem_type:${type.toStrictString()}",
+        return C_Error(name.pos, "expr_safemem_type:[${type.toStrictString()}]",
                 "Wrong type for operator '?.': ${type.toStrictString()}")
     }
 }

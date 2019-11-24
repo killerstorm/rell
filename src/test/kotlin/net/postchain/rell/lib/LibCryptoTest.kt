@@ -62,7 +62,7 @@ class LibCryptoTest: BaseRellTest(false) {
         chk("'A'.hash()", "0xba96d941ab620e0d6092bfbd494266922b6242427840aa452195ded17e13c696")
         chk("'B'.hash()", "0xc065296148ac7ec279e36057709c0f398bf2ca81f99b9395f9155686ceedfde0")
         chk("'C'.hash()", "0xef9f6fb8ab1cca16984702e79ea420ca8922ce15670ccd6bf12ee9b26f9fdac9")
-        chk("range(10).hash()", "ct_err:unknown_member:range:hash")
+        chk("range(10).hash()", "ct_err:unknown_member:[range]:hash")
     }
 
     @Test fun testHashCollection() {

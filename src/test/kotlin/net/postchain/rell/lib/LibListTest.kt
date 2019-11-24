@@ -9,7 +9,7 @@ class LibListTest: BaseRellTest(false) {
         chk("[123]", "list<integer>[int[123]]")
         chk("[123, 456, 789]", "list<integer>[int[123],int[456],int[789]]")
         chk("['Hello', 'World']", "list<text>[text[Hello],text[World]]")
-        chk("[123, 'Hello']", "ct_err:expr_list_itemtype:integer:text")
+        chk("[123, 'Hello']", "ct_err:expr_list_itemtype:[integer]:[text]")
     }
 
     @Test fun testConstructor() {
@@ -73,10 +73,10 @@ class LibListTest: BaseRellTest(false) {
         chk("[1, 2, 3] == [1, 2]", "boolean[false]")
         chk("[1, 2, 3] == [1, 2, 3, 4]", "boolean[false]")
         chk("[1, 2, 3] == list<integer>()", "boolean[false]")
-        chk("[1, 2, 3] == list<text>()", "ct_err:binop_operand_type:==:list<integer>:list<text>")
-        chk("[1, 2, 3] == ['Hello']", "ct_err:binop_operand_type:==:list<integer>:list<text>")
-        chk("[1, 2, 3] == set<integer>()", "ct_err:binop_operand_type:==:list<integer>:set<integer>")
-        chk("[1, 2, 3] == set([1, 2, 3])", "ct_err:binop_operand_type:==:list<integer>:set<integer>")
+        chk("[1, 2, 3] == list<text>()", "ct_err:binop_operand_type:==:[list<integer>]:[list<text>]")
+        chk("[1, 2, 3] == ['Hello']", "ct_err:binop_operand_type:==:[list<integer>]:[list<text>]")
+        chk("[1, 2, 3] == set<integer>()", "ct_err:binop_operand_type:==:[list<integer>]:[set<integer>]")
+        chk("[1, 2, 3] == set([1, 2, 3])", "ct_err:binop_operand_type:==:[list<integer>]:[set<integer>]")
     }
 
     @Test fun testContains() {
@@ -90,7 +90,7 @@ class LibListTest: BaseRellTest(false) {
         chk("1 in [1, 2, 3]", "boolean[true]")
         chk("3 in [1, 2, 3]", "boolean[true]")
         chk("5 in [1, 2, 3]", "boolean[false]")
-        chk("'Hello' in [1, 2, 3]", "ct_err:binop_operand_type:in:text:list<integer>")
+        chk("'Hello' in [1, 2, 3]", "ct_err:binop_operand_type:in:[text]:[list<integer>]")
     }
 
     @Test fun testContainsAll() {
@@ -256,6 +256,6 @@ class LibListTest: BaseRellTest(false) {
 
         chk("[(2,'B'),(2,'A'),(1,'X')].sorted()", "[(1,X), (2,A), (2,B)]")
 
-        chk("[rec(123), rec(456)].sorted()", "ct_err:unknown_member:list<rec>:sorted")
+        chk("[rec(123), rec(456)].sorted()", "ct_err:unknown_member:[list<rec>]:sorted")
     }
 }

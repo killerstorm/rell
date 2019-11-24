@@ -7,3 +7,4 @@ META-INF
 /logs
 /out
 /postchain.pid
+/db.log

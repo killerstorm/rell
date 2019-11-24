@@ -163,14 +163,14 @@ class AtExprPathTest: BaseRellTest() {
     @Test fun testInvalidPath() {
         chk("person @ { foo }", "ct_err:unknown_name:foo")
         chk("person @ { .foo }", "ct_err:expr_attr_unknown:foo")
-        chk("(p: person) @ { p.foo == 123 }", "ct_err:unknown_member:person:foo")
-        chk("(p: person) @ { p.city.foo == 123 }", "ct_err:unknown_member:city:foo")
-        chk("(p: person) @ { p.city.foo.bar == 123 }", "ct_err:unknown_member:city:foo")
-        chk("(p: person) @ { p.city.state.foo == 123 }", "ct_err:unknown_member:state:foo")
-        chk("(p: person) @ { p.city.state.country.foo == 123 }", "ct_err:unknown_member:country:foo")
-        chk("(p: person) @ { p.city.state.country.foo.bar == 123 }", "ct_err:unknown_member:country:foo")
-        chk("person @ { .city.state.country.foo.bar == 123 }", "ct_err:unknown_member:country:foo")
-        chk("person @ { person.city.state.country.foo.bar == 123 }", "ct_err:unknown_member:country:foo")
+        chk("(p: person) @ { p.foo == 123 }", "ct_err:unknown_member:[person]:foo")
+        chk("(p: person) @ { p.city.foo == 123 }", "ct_err:unknown_member:[city]:foo")
+        chk("(p: person) @ { p.city.foo.bar == 123 }", "ct_err:unknown_member:[city]:foo")
+        chk("(p: person) @ { p.city.state.foo == 123 }", "ct_err:unknown_member:[state]:foo")
+        chk("(p: person) @ { p.city.state.country.foo == 123 }", "ct_err:unknown_member:[country]:foo")
+        chk("(p: person) @ { p.city.state.country.foo.bar == 123 }", "ct_err:unknown_member:[country]:foo")
+        chk("person @ { .city.state.country.foo.bar == 123 }", "ct_err:unknown_member:[country]:foo")
+        chk("person @ { person.city.state.country.foo.bar == 123 }", "ct_err:unknown_member:[country]:foo")
     }
 
     private object Ins {

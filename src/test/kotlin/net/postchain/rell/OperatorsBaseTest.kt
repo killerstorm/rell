@@ -308,6 +308,7 @@ abstract class OperatorsBaseTest: BaseResourcefulTest() {
     @Test fun testMinusUnary() {
         chkOp("-", vInt(123), "int[-123]")
         chkOp("-", vInt(-123), "int[123]")
+        chkOp("-", vInt(Long.MIN_VALUE), errRt("expr:-:overflow:-9223372036854775808"))
 
         chkOp("-", vDec("123"), "dec[-123]")
         chkOp("-", vDec("-123"), "dec[123]")
@@ -617,13 +618,13 @@ abstract class OperatorsBaseTest: BaseResourcefulTest() {
         chkExpr("if (#0) #1 else #2", "text[Yes]", vBool(true), vText("Yes"), vText("No"))
         chkExpr("if (#0) #1 else #2", "text[No]", vBool(false), vText("Yes"), vText("No"))
 
-        chkExprErr("if (true) 'Hello' else 123", listOf(), "ct_err:expr_if_restype:text:integer")
-        chkExprErr("if (true) 'Hello' else decimal(123)", listOf(), "ct_err:expr_if_restype:text:decimal")
-        chkExprErr("if (123) 'A' else 'B'", listOf(), "ct_err:expr_if_cond_type:boolean:integer")
-        chkExprErr("if (decimal(123)) 'A' else 'B'", listOf(), "ct_err:expr_if_cond_type:boolean:decimal")
-        chkExprErr("if ('Hello') 'A' else 'B'", listOf(), "ct_err:expr_if_cond_type:boolean:text")
-        chkExprErr("if (null) 'A' else 'B'", listOf(), "ct_err:expr_if_cond_type:boolean:null")
-        chkExprErr("if (unit()) 'A' else 'B'", listOf(), "ct_err:expr_if_cond_type:boolean:unit")
+        chkExprErr("if (true) 'Hello' else 123", listOf(), "ct_err:expr_if_restype:[text]:[integer]")
+        chkExprErr("if (true) 'Hello' else decimal(123)", listOf(), "ct_err:expr_if_restype:[text]:[decimal]")
+        chkExprErr("if (123) 'A' else 'B'", listOf(), "ct_err:expr_if_cond_type:[boolean]:[integer]")
+        chkExprErr("if (decimal(123)) 'A' else 'B'", listOf(), "ct_err:expr_if_cond_type:[boolean]:[decimal]")
+        chkExprErr("if ('Hello') 'A' else 'B'", listOf(), "ct_err:expr_if_cond_type:[boolean]:[text]")
+        chkExprErr("if (null) 'A' else 'B'", listOf(), "ct_err:expr_if_cond_type:[boolean]:[null]")
+        chkExprErr("if (unit()) 'A' else 'B'", listOf(), "ct_err:expr_if_cond_type:[boolean]:[unit]")
     }
 
     @Test fun testIfDecimal() {
@@ -1019,11 +1020,11 @@ abstract class OperatorsBaseTest: BaseResourcefulTest() {
     }
 
     private fun chkOpErr(op: String, left: String, right: String) {
-        chkExprErr("#0 $op #1", listOf(left, right), "ct_err:binop_operand_type:$op:$left:$right")
+        chkExprErr("#0 $op #1", listOf(left, right), "ct_err:binop_operand_type:$op:[$left]:[$right]")
     }
 
     private fun chkOpErr(op: String, right: String) {
-        chkExprErr("$op #0", listOf(right), "ct_err:unop_operand_type:$op:$right")
+        chkExprErr("$op #0", listOf(right), "ct_err:unop_operand_type:$op:[$right]")
     }
 
     private fun chkExprErr(expr: String, types: List<String>, expected: String) {

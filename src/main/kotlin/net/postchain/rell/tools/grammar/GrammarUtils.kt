@@ -17,8 +17,9 @@ object GrammarUtils {
         for (p in S_Grammar::class.memberProperties) {
             p.isAccessible = true
 
-            val v = try { p.getter.call(S_Grammar) }
-            catch (e: IllegalArgumentException) {
+            val v = try {
+                p.getter.call(S_Grammar)
+            } catch (e: IllegalArgumentException) {
                 p.getter.call()
             }
 

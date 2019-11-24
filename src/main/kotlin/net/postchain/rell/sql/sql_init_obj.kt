@@ -61,7 +61,7 @@ class SqlObjectsInit(private val appCtx: Rt_AppContext) {
             }
 
             started = true
-            val frame = appCtx.createRootFrame()
+            val frame = appCtx.createRootFrame(obj.pos)
             obj.insert(frame)
             finished = true
         }

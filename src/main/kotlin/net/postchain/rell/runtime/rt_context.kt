@@ -32,6 +32,17 @@ class Rt_SqlContext private constructor(
     val topologicalEntities = app.topologicalEntities
     private val externalChainsRoot = app.externalChainsRoot
 
+    fun linkedChain(chain: R_ExternalChainRef): Rt_ExternalChain {
+        check(chain.root === externalChainsRoot)
+        return linkedExternalChains[chain.index]
+    }
+
+    fun chainMapping(externalChain: R_ExternalChainRef?): Rt_ChainSqlMapping {
+        return if (externalChain == null) mainChainMapping else linkedChain(externalChain).sqlMapping
+    }
+
+    class InitError(val code: String, val msg: String): java.lang.RuntimeException(msg)
+
     companion object : KLogging() {
         fun createNoExternalChains(app: R_App, mainChainMapping: Rt_ChainSqlMapping): Rt_SqlContext {
             require(app.valid)
@@ -65,7 +76,7 @@ class Rt_SqlContext private constructor(
             for ((name, dep) in dependencies) {
                 val ridStr = CommonUtils.bytesToHex(dep.rid)
                 if (!rids.add(ridStr)) {
-                    throw Rt_Error("external_chain_dup_rid:$name:$ridStr",
+                    throw errInit("external_chain_dup_rid:$name:$ridStr",
                             "Duplicate external chain RID: '$name', 0x$ridStr")
                 }
             }
@@ -78,14 +89,14 @@ class Rt_SqlContext private constructor(
                 val ridStr = CommonUtils.bytesToHex(dep.rid)
                 val chainId = dbRidMap[ridStr]
                 if (chainId == null) {
-                    throw Rt_Error("external_chain_no_rid:$name:$ridStr",
+                    throw errInit("external_chain_no_rid:$name:$ridStr",
                             "External chain '$name' not found in the database by RID 0x$ridStr")
                 }
 
                 val ridKey = ByteArrayKey(dep.rid)
                 val height = heightProvider.getChainHeight(ridKey, chainId)
                 if (height == null) {
-                    throw Rt_Error("external_chain_no_height:$name:$ridStr:$chainId",
+                    throw errInit("external_chain_no_height:$name:$ridStr:$chainId",
                             "Unknown height of the external chain '$name' (RID: 0x$ridStr, ID: $chainId)")
                 }
 
@@ -116,10 +127,10 @@ class Rt_SqlContext private constructor(
                 val id = c.chainId
                 val rid = CommonUtils.bytesToHex(c.rid)
                 if (!chainIds.add(id)) {
-                    throw Rt_Error("external_chain_dup_id:$name:$id", "Duplicate external chain ID: '$name', $id")
+                    throw errInit("external_chain_dup_id:$name:$id", "Duplicate external chain ID: '$name', $id")
                 }
                 if (!chainRids.add(rid)) {
-                    throw Rt_Error("external_chain_dup_rid:$name:$rid", "Duplicate external chain RID: '$name', 0x$rid")
+                    throw errInit("external_chain_dup_rid:$name:$rid", "Duplicate external chain RID: '$name', 0x$rid")
                 }
             }
 
@@ -127,7 +138,7 @@ class Rt_SqlContext private constructor(
                 val name = rChain.name
                 val rtChain = externalChains[name]
                 if (rtChain == null) {
-                    throw Rt_Error("external_chain_unknown:$name", "External chain not found: '$name'")
+                    throw errInit("external_chain_unknown:$name", "External chain not found: '$name'")
                 }
                 rtChain!!
             }
@@ -146,7 +157,7 @@ class Rt_SqlContext private constructor(
                     val extEntity = extEntities.getValue(entityName)
                     val metaEntity = metaEntities.getValue(entityName)
                     if (!metaEntity.log) {
-                        throw Rt_Error("external_meta_nolog:$chain:$entityName",
+                        throw errInit("external_meta_nolog:$chain:$entityName",
                                 "Entity '$entityName' in external chain '$chain' is not a log entity")
                     }
 
@@ -161,7 +172,7 @@ class Rt_SqlContext private constructor(
             val missingEntities = Sets.difference(extEntities.keys, metaEntityNames)
             if (!missingEntities.isEmpty()) {
                 val list = missingEntities.sorted()
-                throw Rt_Error("external_meta_no_entity:$chain:${list.joinToString(",")}",
+                throw errInit("external_meta_no_entity:$chain:${list.joinToString(",")}",
                         "Entities not found in external chain '$chain': ${list.joinToString()}")
             }
         }
@@ -173,7 +184,7 @@ class Rt_SqlContext private constructor(
             if (!missingAttrs.isEmpty()) {
                 val entityName = extEntity.appLevelName
                 val list = missingAttrs.sorted()
-                throw Rt_Error("external_meta_noattrs:$chain:$entityName:${list.joinToString(",")}",
+                throw errInit("external_meta_noattrs:$chain:[$entityName]:${list.joinToString(",")}",
                         "Missing attributes of entity '$entityName' in external chain '$chain': ${list.joinToString()}")
             }
         }
@@ -186,7 +197,7 @@ class Rt_SqlContext private constructor(
                 val extType = extAttr.type.sqlAdapter.metaName(sqlCtx)
                 if (metaType != extType) {
                     val entityName = extEntity.appLevelName
-                    throw Rt_Error("external_meta_attrtype:$chain:$entityName:$attrName:[$extType]:[$metaType]",
+                    throw errInit("external_meta_attrtype:$chain:[$entityName]:$attrName:[$extType]:[$metaType]",
                             "Attribute type mismatch for '$entityName.$attrName' in external chain '$chain': " +
                                     "expected '$extType', actual '$metaType'")
                 }
@@ -213,20 +224,14 @@ class Rt_SqlContext private constructor(
                 res = SqlMeta.loadMetaData(sqlExec, chain.sqlMapping, msgs)
                 msgs.checkErrors()
             } catch (e: Rt_Error) {
-                throw Rt_Error(e.code, "Failed to load metadata for external chain '$name' (chain_iid = ${chain.chainId})", e)
+                throw errInit("external_meta_error:${chain.chainId}:$name:${e.code}",
+                        "Failed to load metadata for external chain '$name' (chain_iid = ${chain.chainId}): ${e.message}")
             }
 
             return res
         }
-    }
 
-    fun linkedChain(chain: R_ExternalChainRef): Rt_ExternalChain {
-        check(chain.root === externalChainsRoot)
-        return linkedExternalChains[chain.index]
-    }
-
-    fun chainMapping(externalChain: R_ExternalChainRef?): Rt_ChainSqlMapping {
-        return if (externalChain == null) mainChainMapping else linkedChain(externalChain).sqlMapping
+        private fun errInit(code: String, msg: String): RuntimeException = Rt_Error(code, msg)
     }
 }
 
@@ -234,11 +239,11 @@ class Rt_AppContext(val globalCtx: Rt_GlobalContext, val sqlCtx: Rt_SqlContext, 
     private var objsInit: SqlObjectsInit? = null
     private var objsInited = false
 
-    fun createRootFrame(): Rt_CallFrame {
+    fun createRootFrame(defPos: R_DefinitionPos): Rt_CallFrame {
         val rFrameBlock = R_FrameBlock(null, R_FrameBlockId(0, "app"), 0, 0)
         val rFrame = R_CallFrame(0, rFrameBlock)
-        val defCtx = Rt_DefinitionContext(this, true)
-        return Rt_CallFrame(defCtx, rFrame)
+        val defCtx = Rt_DefinitionContext(this, true, defPos)
+        return Rt_CallFrame(null, null, defCtx, rFrame)
     }
 
     fun objectsInitialization(objsInit: SqlObjectsInit, code: () -> Unit) {
@@ -262,15 +267,16 @@ class Rt_AppContext(val globalCtx: Rt_GlobalContext, val sqlCtx: Rt_SqlContext, 
     }
 }
 
-class Rt_CallContext(val appCtx: Rt_AppContext) {
+class Rt_CallContext(val defCtx: Rt_DefinitionContext) {
+    val appCtx = defCtx.appCtx
     val globalCtx = appCtx.globalCtx
     val chainCtx = globalCtx.chainCtx
 }
 
-class Rt_DefinitionContext(val appCtx: Rt_AppContext, val dbUpdateAllowed: Boolean) {
+class Rt_DefinitionContext(val appCtx: Rt_AppContext, val dbUpdateAllowed: Boolean, val pos: R_DefinitionPos) {
     val globalCtx = appCtx.globalCtx
     val sqlCtx = appCtx.sqlCtx
-    val callCtx = Rt_CallContext(appCtx)
+    val callCtx = Rt_CallContext(this)
 
     fun checkDbUpdateAllowed() {
         if (!dbUpdateAllowed) {

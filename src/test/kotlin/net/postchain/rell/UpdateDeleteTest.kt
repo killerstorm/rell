@@ -191,8 +191,8 @@ class UpdateDeleteTest: BaseRellTest() {
     }
 
     @Test fun testCompoundAssignmentErr() {
-        chkOp("update person @ {} ( score += false );", "ct_err:binop_operand_type:+=:integer:boolean")
-        chkOp("update person @ {} ( score += 'Hello' );", "ct_err:binop_operand_type:+=:integer:text")
+        chkOp("update person @ {} ( score += false );", "ct_err:binop_operand_type:+=:[integer]:[boolean]")
+        chkOp("update person @ {} ( score += 'Hello' );", "ct_err:binop_operand_type:+=:[integer]:[text]")
 
         chkAssignmentErr("-=")
         chkAssignmentErr("*=")
@@ -201,11 +201,11 @@ class UpdateDeleteTest: BaseRellTest() {
     }
 
     private fun chkAssignmentErr(op: String) {
-        chkOp("update person @ {} ( score $op false );", "ct_err:binop_operand_type:$op:integer:boolean")
-        chkOp("update person @ {} ( score $op 'Hello' );", "ct_err:binop_operand_type:$op:integer:text")
-        chkOp("update person @ {} ( street $op false );", "ct_err:binop_operand_type:$op:text:boolean")
-        chkOp("update person @ {} ( street $op 123 );", "ct_err:binop_operand_type:$op:text:integer")
-        chkOp("update person @ {} ( street $op 'Hello' );", "ct_err:binop_operand_type:$op:text:text")
+        chkOp("update person @ {} ( score $op false );", "ct_err:binop_operand_type:$op:[integer]:[boolean]")
+        chkOp("update person @ {} ( score $op 'Hello' );", "ct_err:binop_operand_type:$op:[integer]:[text]")
+        chkOp("update person @ {} ( street $op false );", "ct_err:binop_operand_type:$op:[text]:[boolean]")
+        chkOp("update person @ {} ( street $op 123 );", "ct_err:binop_operand_type:$op:[text]:[integer]")
+        chkOp("update person @ {} ( street $op 'Hello' );", "ct_err:binop_operand_type:$op:[text]:[text]")
     }
 
     @Test fun testUpdateDotAttribute() {
@@ -409,14 +409,14 @@ class UpdateDeleteTest: BaseRellTest() {
         resetChkOp("val p = ${person("Mike")}; p.score *= 33;")
         chkDataCommon(james(100), mike(250*33))
 
-        resetChkOp("val p = ${person("Mike")}; p.score = 'Hello';", "ct_err:stmt_assign_type:integer:text")
+        resetChkOp("val p = ${person("Mike")}; p.score = 'Hello';", "ct_err:stmt_assign_type:[integer]:[text]")
         chkDataCommon(james(100), mike(250))
 
-        resetChkOp("val p = ${person("Mike")}; p.score += 'Hello';", "ct_err:binop_operand_type:+=:integer:text")
+        resetChkOp("val p = ${person("Mike")}; p.score += 'Hello';", "ct_err:binop_operand_type:+=:[integer]:[text]")
         chkDataCommon(james(100), mike(250))
 
         resetChkOp("val p = ${person("Mike")}; val v: integer? = _nullable(123); p.score += v;",
-                "ct_err:binop_operand_type:+=:integer:integer?")
+                "ct_err:binop_operand_type:+=:[integer]:[integer?]")
         chkDataCommon(james(100), mike(250))
 
         resetChkOp("val p = ${person("Mike")}; p.name = 'Bond';", "ct_err:update_attr_not_mutable:name")
@@ -472,8 +472,8 @@ class UpdateDeleteTest: BaseRellTest() {
         resetChkOp("val p = ${person("James")}; p.city = ${city("San Francisco")};")
         chkDataCommon(james(100, 2), mike(250, 1))
 
-        resetChkOp("val p = ${person("James")}; p.city += ${city("San Francisco")};", "ct_err:binop_operand_type:+=:city:city")
-        resetChkOp("val p = ${person("James")}; p.city *= ${city("San Francisco")};", "ct_err:binop_operand_type:*=:city:city")
+        resetChkOp("val p = ${person("James")}; p.city += ${city("San Francisco")};", "ct_err:binop_operand_type:+=:[city]:[city]")
+        resetChkOp("val p = ${person("James")}; p.city *= ${city("San Francisco")};", "ct_err:binop_operand_type:*=:[city]:[city]")
         chkDataCommon(james(100, 3), mike(250, 1))
 
         resetChkOp("val p = ${person("Mike")}; p.city = ${city("Los Angeles")};")
