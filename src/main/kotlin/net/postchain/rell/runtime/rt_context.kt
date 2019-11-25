@@ -20,6 +20,12 @@ class Rt_GlobalContext(
         val typeCheck: Boolean = false
 ){
     val sqlExec: SqlExecutor = Rt_SqlExecutor(sqlExec, logSqlErrors)
+
+    private val rellVersion = Rt_RellVersion.getInstance()
+
+    fun rellVersion(): Rt_RellVersion {
+        return rellVersion ?: throw Rt_Error("fn:rell.git_info:no_data", "Version information not found")
+    }
 }
 
 class Rt_SqlContext private constructor(

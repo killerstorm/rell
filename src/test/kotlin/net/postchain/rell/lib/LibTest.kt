@@ -1,6 +1,7 @@
 package net.postchain.rell.lib
 
 import net.postchain.rell.CommonUtils
+import net.postchain.rell.module.RELL_VERSION
 import net.postchain.rell.runtime.Rt_OpContext
 import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
@@ -268,5 +269,15 @@ class LibTest: BaseRellTest(false) {
         chk("rec(5).toBytes()", "ct_err:deprecated:FUNCTION:rec.toBytes:to_bytes")
         chk("rec(5).toGTXValue()", "ct_err:deprecated:FUNCTION:rec.toGTXValue:to_gtv")
         chk("rec(5).toPrettyGTXValue()", "ct_err:deprecated:FUNCTION:rec.toPrettyGTXValue:to_gtv_pretty")
+    }
+
+    @Test fun testRellVersion() {
+        chk("_type_of(rell.version.RELL_VERSION)", "text[text]")
+        chk("_type_of(rell.version.POSTCHAIN_VERSION)", "text[text]")
+        chk("_type_of(rell.version.BUILD)", "text[text]")
+        chk("_type_of(rell.version.build_info())", "text[map<text,text>]")
+
+        chk("rell.version.RELL_VERSION", "text[$RELL_VERSION]")
+        chk("rell.version.POSTCHAIN_VERSION", "text[3.0.0]")
     }
 }

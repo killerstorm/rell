@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import net.postchain.rell.RellConfigGen
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.parser.*
+import net.postchain.rell.runtime.Rt_RellVersion
+import net.postchain.rell.runtime.Rt_RellVersionProperty
 import net.postchain.rell.toImmList
 import net.postchain.rell.toImmMap
 
@@ -47,6 +49,11 @@ object IdeApi {
     ): List<C_Message> {
         val res = C_Compiler.compile(sourceDir, modules, options)
         return res.messages
+    }
+
+    @JvmStatic fun getRellVersionInfo(): Map<Rt_RellVersionProperty, String>? {
+        val ver = Rt_RellVersion.getInstance()
+        return ver?.properties
     }
 }
 

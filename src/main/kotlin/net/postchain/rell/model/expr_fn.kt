@@ -855,6 +855,37 @@ object R_SysFn_Crypto {
     }
 }
 
+object R_SysFn_Rell {
+    object Version {
+        object BuildInfo: R_SysFunction() {
+            private val TYPE = R_MapType(R_TextType, R_TextType)
+
+            override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
+                check(args.size == 0)
+                val ver = ctx.globalCtx.rellVersion()
+                return Rt_MapValue(TYPE, ver.rtProperties.toMutableMap())
+            }
+        }
+
+        object Build: R_SysFunction() {
+            override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
+                check(args.size == 0)
+                val ver = ctx.globalCtx.rellVersion()
+                return Rt_TextValue(ver.buildDescriptor)
+            }
+        }
+
+        object PostchainVersion: R_SysFunction() {
+            override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
+                check(args.size == 0)
+                val ver = ctx.globalCtx.rellVersion()
+                val postchainVer = ver.properties.getValue(Rt_RellVersionProperty.POSTCHAIN_VERSION)
+                return Rt_TextValue(postchainVer)
+            }
+        }
+    }
+}
+
 object R_SysFn_Internal {
     object StrictStr: R_SysFunction_1() {
         override fun call(arg: Rt_Value): Rt_Value {

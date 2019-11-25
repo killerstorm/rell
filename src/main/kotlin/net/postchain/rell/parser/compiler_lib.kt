@@ -1,8 +1,10 @@
 package net.postchain.rell.parser
 
 import net.postchain.rell.model.*
+import net.postchain.rell.module.RELL_VERSION
 import net.postchain.rell.runtime.Rt_DecimalValue
 import net.postchain.rell.runtime.Rt_IntValue
+import net.postchain.rell.runtime.Rt_TextValue
 import net.postchain.rell.runtime.Rt_Value
 import java.math.BigDecimal
 
@@ -251,18 +253,38 @@ object C_LibFunctions {
             .add("value", R_IntegerType, listOf(), R_SysFn_Enum.Value, Db_SysFn_Nop)
             .build()
 
+    private val RELL_VERSION_NAMESPACE_FNS = C_GlobalFuncBuilder()
+            .add("build_info", R_MapType(R_TextType, R_TextType), listOf(), R_SysFn_Rell.Version.BuildInfo)
+            .build()
+
+    private val RELL_VERSION_NAMESPACE = makeNamespace(
+            RELL_VERSION_NAMESPACE_FNS,
+            stdConstValue("RELL_VERSION", RELL_VERSION),
+            stdFnValue("POSTCHAIN_VERSION", R_TextType, R_SysFn_Rell.Version.PostchainVersion),
+            stdFnValue("BUILD", R_TextType, R_SysFn_Rell.Version.Build)
+    )
+
+    private val RELL_NAMESPACE_FNS = C_GlobalFuncBuilder()
+            .build()
+
+    private val RELL_NAMESPACE = makeNamespace(
+            RELL_NAMESPACE_FNS,
+            stdNamespace("version", RELL_VERSION_NAMESPACE)
+    )
+
     private val NAMESPACES = mapOf(
             "boolean" to C_RegularNamespaceDef(BOOLEAN_NAMESPACE),
-            "integer" to C_RegularNamespaceDef(INTEGER_NAMESPACE),
-            "decimal" to C_RegularNamespaceDef(DECIMAL_NAMESPACE),
-            "text" to C_RegularNamespaceDef(TEXT_NAMESPACE),
             "byte_array" to C_RegularNamespaceDef(BYTEARRAY_NAMESPACE),
-            "rowid" to C_RegularNamespaceDef(ROWID_NAMESPACE),
-            "json" to C_RegularNamespaceDef(JSON_NAMESPACE),
-            "range" to C_RegularNamespaceDef(RANGE_NAMESPACE),
+            "chain_context" to C_RegularNamespaceDef(CHAIN_CONTEXT_NAMESPACE),
+            "decimal" to C_RegularNamespaceDef(DECIMAL_NAMESPACE),
             "GTXValue" to C_RegularNamespaceDef(GTV_NAMESPACE, depError("gtv")),
             "gtv" to C_RegularNamespaceDef(GTV_NAMESPACE),
-            "chain_context" to C_RegularNamespaceDef(CHAIN_CONTEXT_NAMESPACE),
+            "integer" to C_RegularNamespaceDef(INTEGER_NAMESPACE),
+            "json" to C_RegularNamespaceDef(JSON_NAMESPACE),
+            "range" to C_RegularNamespaceDef(RANGE_NAMESPACE),
+            "rell" to C_RegularNamespaceDef(RELL_NAMESPACE),
+            "rowid" to C_RegularNamespaceDef(ROWID_NAMESPACE),
+            "text" to C_RegularNamespaceDef(TEXT_NAMESPACE),
             C_Ns_OpContext.NAME to C_RegularNamespaceDef(OP_CONTEXT_NAMESPACE)
     )
 
@@ -849,6 +871,7 @@ private fun makeNamespace(fns: C_GlobalFuncTable, vararg values: Pair<String, C_
 
 private fun stdConstValue(name: String, value: Long) = stdConstValue(name, Rt_IntValue(value))
 private fun stdConstValue(name: String, value: BigDecimal) = stdConstValue(name, Rt_DecimalValue.of(value))
+private fun stdConstValue(name: String, value: String) = stdConstValue(name, Rt_TextValue(value))
 
 private fun stdConstValue(name: String, value: Rt_Value): Pair<String, C_NamespaceValue> {
     return Pair(name, C_NamespaceValue_Value(value))
@@ -856,6 +879,11 @@ private fun stdConstValue(name: String, value: Rt_Value): Pair<String, C_Namespa
 
 private fun stdFnValue(name: String, type: R_Type, fn: R_SysFunction): Pair<String, C_NamespaceValue> {
     return Pair(name, C_NamespaceValue_SysFunction(type, fn))
+}
+
+private fun stdNamespace(name: String, ns: C_Namespace): Pair<String, C_NamespaceValue> {
+    val nsDef = C_RegularNamespaceDef(ns)
+    return Pair(name, C_NamespaceValue_Namespace(nsDef))
 }
 
 private fun matcher(type: R_Type): C_ArgTypeMatcher = C_ArgTypeMatcher_Simple(type)

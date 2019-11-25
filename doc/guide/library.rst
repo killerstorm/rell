@@ -1,8 +1,8 @@
-=======
-Library
-=======
+===============
+System Library
+===============
 
-System entities
+Entities
 ===============
 
 ::
@@ -23,6 +23,9 @@ System entities
 It is not possible to create, modify or delete values of those entities in code.
 
 --------------
+
+Namespaces
+===============
 
 chain_context
 -------------
@@ -86,6 +89,35 @@ System namespace ``op_context`` can be used only in an operation or a function c
 is the first block).
 
 ``op_context.transaction: transaction`` - the transaction currently being built.
+
+rell.version
+--------------
+
+``rell.version.RELL_VERSION: text`` - version of Rell, e. g. "0.10.1"
+
+``rell.version.POSTCHAIN_VERSION: text`` - version of Postchain, e. g. "3.0.0"
+
+``rell.version.BUILD: text`` - verbose information about the Rell build in one line; example:
+
+    rell: 0.10.1; postchain: 3.0.0; time: 2019-11-25T17:25:52+0000; branch: v0.10.1; commit: f875de6 (2019-11-25T10:37:18+0000); dirty: true
+
+``rell.version.build_info(): map<text, text>`` - returns the information about the Rell build as a map:
+
+=========================== ========================================
+Key                         Example of a value
+=========================== ========================================
+rell.branch                 v0.10.1
+rell.build.time             2019-11-25T17:25:52+0000
+rell.version                0.10.1
+rell.commit.id              f875de6
+rell.commit.id.full         f875de60555284a53442e072e4fd4dda0029f792
+rell.commit.message.short   Commit message...
+rell.commit.message.full    Commit message...
+rell.commit.time            2019-11-25T10:37:18+0000
+rell.dirty                  true
+postchain.version           3.0.0
+kotlin.version              1.3.21
+=========================== ========================================
 
 --------------
 
