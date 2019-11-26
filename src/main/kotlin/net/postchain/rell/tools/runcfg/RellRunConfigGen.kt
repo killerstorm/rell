@@ -32,20 +32,26 @@ private fun main0(args: RellRunConfigGenArgs) {
     }
 }
 
-private fun createFiles(outputDir: File, files: Map<String, String>) {
+private fun createFiles(outputDir: File, files: Map<String, Any>) {
     RellCliUtils.prepareDir(outputDir)
     for ((path, text) in files) {
         val file = File(outputDir, path)
         val dir = file.parentFile
         RellCliUtils.prepareDir(dir)
-        file.writeText(text)
+        if (text is String)
+            file.writeText(text)
+        else if (text is ByteArray)
+            file.writeBytes(text)
     }
 }
 
-private fun printFiles(files: Map<String, String>) {
+private fun printFiles(files: Map<String, Any>) {
     for ((file, text) in files) {
         println(file)
-        println(text)
+        if (text is String) println(text)
+        else {
+            println("BINARY DATA OMITTED")
+        }
         println()
     }
 }

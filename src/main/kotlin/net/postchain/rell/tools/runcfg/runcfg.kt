@@ -1,6 +1,8 @@
 package net.postchain.rell.tools.runcfg
 
 import net.postchain.gtv.Gtv
+import net.postchain.gtv.GtvEncoder
+import net.postchain.gtv.merkle.serializeGtvToByteArary
 import net.postchain.rell.*
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.parser.C_DiskSourceDir
@@ -81,7 +83,7 @@ object RellRunConfigGenerator {
         return runConfig
     }
 
-    fun buildFiles(appConfig: RellPostAppConfig): Map<String, String> {
+    fun buildFiles(appConfig: RellPostAppConfig): Map<String, Any> {
         val dirBuilder = DirBuilder()
         dirBuilder.put(appConfig.node.dstFiles)
 
@@ -93,6 +95,7 @@ object RellRunConfigGenerator {
                 val configPath = "$chainPath/$height.xml"
                 val xml = PostchainUtils.gtvToXml(gtv)
                 dirBuilder.put(configPath, xml)
+                dirBuilder.put("$chainPath/$height.gtx", GtvEncoder.encodeGtv(gtv))
             }
         }
 

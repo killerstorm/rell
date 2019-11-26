@@ -32,7 +32,7 @@ object RunConfigNodeConfigGen {
             processSigners(incf.srcPath, incf.text, signers)
         }
 
-        return RellPostAppNode(path, null, dirBuilder.toFileMap(), signers)
+        return RellPostAppNode(path, null, dirBuilder.toTextFileMap(), signers)
     }
 
     private fun discoverIncludedFiles(mainPath: String, mainText: String, configDir: GeneralDir): List<IncFile> {

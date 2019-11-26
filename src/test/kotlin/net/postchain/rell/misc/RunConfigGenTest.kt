@@ -125,8 +125,8 @@ class RunConfigGenTest {
         val sourceDir = C_MapSourceDir.of(sourceFiles)
         val configDir = MapGeneralDir(configFiles)
         val conf = RellRunConfigGenerator.generate(sourceDir, configDir, "run.xml", confText.trimIndent())
-        val files = RellRunConfigGenerator.buildFiles(conf).toMutableMap()
-        return files
+        return RellRunConfigGenerator.buildFiles(conf).filterValues { it is String }
+                .mapValues { it.value as String }.toMutableMap()
     }
 
     private fun chkFile(files: MutableMap<String, String>, path: String, expected: String) {

@@ -235,12 +235,18 @@ class Bytes33(bytes: ByteArray): FixLenBytes(bytes) {
 }
 
 class DirBuilder {
-    private val files = mutableMapOf<String, String>()
+    private val files = mutableMapOf<String, Any>()
 
     fun put(path: String, text: String) {
         check(path.isNotBlank())
         check(path !in files) { "Duplicate file: $path" }
         files[path] = text
+    }
+
+    fun put(path: String, notText: ByteArray) {
+        check(path.isNotBlank())
+        check(path !in files) { "Duplicate file: $path" }
+        files[path] = notText
     }
 
     fun put(map: Map<String, String>) {
@@ -250,6 +256,7 @@ class DirBuilder {
     }
 
     fun toFileMap() = files.toMap()
+    fun toTextFileMap() = files.filterValues { it is String }.mapValues { it.value as String }
 }
 
 class LateInit<T> {
