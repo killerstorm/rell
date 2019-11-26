@@ -2,10 +2,9 @@ package net.postchain.rell.tools.runcfg
 
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory.gtv
-import net.postchain.rell.Bytes33
-import net.postchain.rell.GeneralDir
-import net.postchain.rell.PostchainUtils
-import net.postchain.rell.RellConfigGen
+import net.postchain.gtv.merkle.GtvMerkleHashCalculator
+import net.postchain.gtv.merkleHash
+import net.postchain.rell.*
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.CONFIG_RELL_SOURCES
 import net.postchain.rell.parser.C_SourceDir
@@ -29,7 +28,12 @@ class RunConfigChainConfigGen private constructor(private val sourceDir: C_Sourc
                     resConfigs[config.height] = gtv
                     if (module != null) modules.add(module)
                 }
-                val resChain = RellPostAppChain(chain.name, chain.iid, chain.brid, resConfigs, modules)
+                val actualBRID: Bytes32
+                if (chain.brid.toHex() == "0000000000000000000000000000000000000000000000000000000000000000") {
+                    actualBRID = Bytes32(PostchainUtils.merkleHash(resConfigs[0]!!))
+                } else
+                    actualBRID = chain.brid
+                val resChain = RellPostAppChain(chain.name, chain.iid, actualBRID, resConfigs, modules)
                 res.add(resChain)
             }
 
