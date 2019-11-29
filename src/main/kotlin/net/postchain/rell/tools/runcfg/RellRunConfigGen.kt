@@ -1,5 +1,6 @@
 package net.postchain.rell.tools.runcfg
 
+import net.postchain.rell.DirFile
 import net.postchain.rell.RellBaseCliArgs
 import net.postchain.rell.RellCliUtils
 import picocli.CommandLine
@@ -32,19 +33,20 @@ private fun main0(args: RellRunConfigGenArgs) {
     }
 }
 
-private fun createFiles(outputDir: File, files: Map<String, String>) {
+private fun createFiles(outputDir: File, files: Map<String, DirFile>) {
     RellCliUtils.prepareDir(outputDir)
-    for ((path, text) in files) {
-        val file = File(outputDir, path)
-        val dir = file.parentFile
+    for ((path, file) in files) {
+        val javaFile = File(outputDir, path)
+        val dir = javaFile.parentFile
         RellCliUtils.prepareDir(dir)
-        file.writeText(text)
+        file.write(javaFile)
     }
 }
 
-private fun printFiles(files: Map<String, String>) {
-    for ((file, text) in files) {
-        println(file)
+private fun printFiles(files: Map<String, DirFile>) {
+    for ((path, file) in files) {
+        val text = file.previewText()
+        println(path)
         println(text)
         println()
     }

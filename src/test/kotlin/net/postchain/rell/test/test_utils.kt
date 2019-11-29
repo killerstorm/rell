@@ -29,6 +29,8 @@ import java.sql.ResultSet
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
+fun String.unwrap(): String = this.replace(Regex("\\n\\s*"), "")
+
 class T_App(val rApp: R_App, val messages: List<C_Message>)
 
 object SqlTestUtils {

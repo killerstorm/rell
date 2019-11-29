@@ -190,6 +190,11 @@ class RellXmlElement(
         }
     }
 
+    fun <T> checkNotNull(v: T?, msgCode: () -> String): T {
+        check(v != null, msgCode)
+        return v!!
+    }
+
     fun errorTag(): RuntimeException = error("this element is not expected here")
 
     fun error(msg: String): RuntimeException {

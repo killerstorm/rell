@@ -193,6 +193,28 @@ class MapGeneralDir(private val files: Map<String, String>): GeneralDir() {
     private fun joinPath(path: List<String>) = path.joinToString("/")
 }
 
+class Bytes {
+    private val bytes: ByteArray
+
+    private constructor(bytes: ByteArray) {
+        this.bytes = bytes
+    }
+
+    fun size() = bytes.size
+
+    fun toByteArray() = bytes.clone()
+    fun toHex() = bytes.toHex()
+
+    override fun equals(other: Any?) = other is Bytes && Arrays.equals(bytes, other.bytes)
+    override fun hashCode() = Arrays.hashCode(bytes)
+    override fun toString() = bytes.toHex()
+
+    companion object {
+        fun of(bytes: ByteArray) = Bytes(bytes.clone())
+        fun of(text: String) = Bytes(text.toByteArray())
+    }
+}
+
 abstract class FixLenBytes(bytes: ByteArray) {
     private val bytes: ByteArray
 
@@ -234,22 +256,45 @@ class Bytes33(bytes: ByteArray): FixLenBytes(bytes) {
     }
 }
 
-class DirBuilder {
-    private val files = mutableMapOf<String, String>()
+sealed class DirFile {
+    abstract fun previewText(): String
+    abstract fun write(file: File)
+}
 
-    fun put(path: String, text: String) {
+class TextDirFile(val text: String): DirFile() {
+    override fun previewText() = text
+    override fun write(file: File) = file.writeText(text)
+}
+
+class BinaryDirFile(val data: Bytes): DirFile() {
+    override fun previewText() = "<binary file, ${data.size()} bytes>"
+    override fun write(file: File) = file.writeBytes(data.toByteArray())
+}
+
+class DirBuilder {
+    private val files = mutableMapOf<String, DirFile>()
+
+    fun put(path: String, file: DirFile) {
         check(path.isNotBlank())
         check(path !in files) { "Duplicate file: $path" }
-        files[path] = text
+        files[path] = file
     }
 
-    fun put(map: Map<String, String>) {
-        for ((path, text) in map) {
-            put(path, text)
+    fun put(path: String, text: String) {
+        put(path, TextDirFile(text))
+    }
+
+    fun put(path: String, data: Bytes) {
+        put(path, BinaryDirFile(data))
+    }
+
+    fun put(map: Map<String, DirFile>) {
+        for ((path, file) in map) {
+            put(path, file)
         }
     }
 
-    fun toFileMap() = files.toMap()
+    fun toFileMap() = files.toImmMap()
 }
 
 class LateInit<T> {

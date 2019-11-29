@@ -2,10 +2,7 @@ package net.postchain.rell.tools.runcfg
 
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory.gtv
-import net.postchain.rell.Bytes33
-import net.postchain.rell.GeneralDir
-import net.postchain.rell.PostchainUtils
-import net.postchain.rell.RellConfigGen
+import net.postchain.rell.*
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.CONFIG_RELL_SOURCES
 import net.postchain.rell.parser.C_SourceDir
@@ -18,28 +15,49 @@ class RunConfigChainConfigGen private constructor(private val sourceDir: C_Sourc
                 runConfig: Rcfg_Run,
                 extraSigners: Collection<Bytes33>
         ): List<RellPostAppChain> {
-            val res = mutableListOf<RellPostAppChain>()
             val generator = RunConfigChainConfigGen(sourceDir, configDir)
 
-            for (chain in runConfig.chains) {
-                val resConfigs = mutableMapOf<Long, Gtv>()
-                val modules = mutableSetOf<R_ModuleName>()
-                for (config in chain.configs) {
-                    val (gtv, module) = generator.genChainConfig(chain, config, extraSigners)
-                    resConfigs[config.height] = gtv
-                    if (module != null) modules.add(module)
-                }
-                val resChain = RellPostAppChain(chain.name, chain.iid, chain.brid, resConfigs, modules)
+            val res = mutableListOf<RellPostAppChain>()
+            val brids = mutableMapOf<Rcfg_Chain, Bytes32>()
+
+            for (runChain in runConfig.chains) {
+                val resChain = generator.genChainConfig(runChain, brids, extraSigners)
                 res.add(resChain)
+                brids[runChain] = resChain.brid
             }
 
-            return res
+            return res.toImmList()
         }
     }
 
     private fun genChainConfig(
             chain: Rcfg_Chain,
+            brids: Map<Rcfg_Chain, Bytes32>,
+            extraSigners: Collection<Bytes33>
+    ): RellPostAppChain {
+        val resConfigs = mutableMapOf<Long, Gtv>()
+        val modules = mutableSetOf<R_ModuleName>()
+
+        for (config in chain.configs) {
+            val (gtv, module) = genChainConfig0(chain, config, brids, extraSigners)
+            resConfigs[config.height] = gtv
+            if (module != null) modules.add(module)
+        }
+
+        val brid = chain.brid ?: calcChainBrid(resConfigs)
+        return RellPostAppChain(chain.name, chain.iid, brid, resConfigs, modules)
+    }
+
+    private fun calcChainBrid(configs: Map<Long, Gtv>): Bytes32 {
+        val config0 = configs.getValue(0)
+        val hash = PostchainUtils.merkleHash(config0)
+        return Bytes32(hash)
+    }
+
+    private fun genChainConfig0(
+            chain: Rcfg_Chain,
             config: Rcfg_ChainConfig,
+            brids: Map<Rcfg_Chain, Bytes32>,
             extraSigners: Collection<Bytes33>
     ): Pair<Gtv, R_ModuleName?> {
         val b = RunConfigGtvBuilder()
@@ -56,13 +74,15 @@ class RunConfigChainConfigGen private constructor(private val sourceDir: C_Sourc
             b.update(actualGtv, *chainGtv.path.toTypedArray())
         }
 
-        if (!extraSigners.isEmpty()) {
-            val signersGtv: Gtv = gtv(extraSigners.map { gtv(it.toByteArray()) })
-            b.update(signersGtv, "signers")
-        }
+        val signersGtv: Gtv = gtv(extraSigners.map { gtv(it.toByteArray()) })
+        b.update(signersGtv, "signers")
 
-        if (config.addDependencies && !chain.dependencies.isEmpty()) {
-            val depsGtv = gtv(chain.dependencies.map { (k, v) -> gtv(gtv(k), gtv(v.toByteArray())) })
+        if (config.addDependencies && !config.dependencies.isEmpty()) {
+            val deps = config.dependencies.map { (k, v) ->
+                val depBrid = brids.getValue(v).toByteArray()
+                gtv(gtv(k), gtv(depBrid))
+            }
+            val depsGtv = gtv(deps)
             b.update(depsGtv, "dependencies")
         }
 

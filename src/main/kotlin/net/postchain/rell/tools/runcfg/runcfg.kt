@@ -1,6 +1,7 @@
 package net.postchain.rell.tools.runcfg
 
 import net.postchain.gtv.Gtv
+import net.postchain.gtv.GtvEncoder
 import net.postchain.rell.*
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.parser.C_DiskSourceDir
@@ -13,7 +14,7 @@ class RellPostAppConfig(val node: RellPostAppNode, val chains: List<RellPostAppC
 class RellPostAppNode(
         val srcPropsPath: String?,
         val srcPropsText: String?,
-        val dstFiles: Map<String, String>,
+        val dstFiles: Map<String, DirFile>,
         val signers: Set<Bytes33>
 )
 
@@ -32,16 +33,16 @@ class Rcfg_NodeConfig(val src: String?, val text: String?, val addSigners: Boole
 class Rcfg_Chain(
         val name: String,
         val iid: Long,
-        val brid: Bytes32,
-        val configs: List<Rcfg_ChainConfig>,
-        val dependencies: Map<String, Bytes32>
+        val brid: Bytes32?,
+        val configs: List<Rcfg_ChainConfig>
 )
 
 class Rcfg_ChainConfig(
         val height: Long,
         val app: Rcfg_App?,
         val gtvs: List<Rcfg_ChainConfigGtv>,
-        val addDependencies: Boolean
+        val addDependencies: Boolean,
+        val dependencies: Map<String, Rcfg_Chain>
 )
 
 class Rcfg_App(
@@ -69,7 +70,9 @@ object RellRunConfigGenerator {
         val rcfg = readConfig(configDir, confPath, confText)
 
         val nodeConfig = RunConfigNodeConfigGen.generateNodeConfig(rcfg.nodeConfig, configDir)
-        val chainConfigs = RunConfigChainConfigGen.generateChainsConfigs(sourceDir, configDir, rcfg, nodeConfig.signers)
+
+        val extraSigners = if (rcfg.nodeConfig.addSigners) nodeConfig.signers else immSetOf()
+        val chainConfigs = RunConfigChainConfigGen.generateChainsConfigs(sourceDir, configDir, rcfg, extraSigners)
 
         return RellPostAppConfig(nodeConfig, chainConfigs, wipeDb = rcfg.wipeDb)
     }
@@ -81,7 +84,7 @@ object RellRunConfigGenerator {
         return runConfig
     }
 
-    fun buildFiles(appConfig: RellPostAppConfig): Map<String, String> {
+    fun buildFiles(appConfig: RellPostAppConfig): Map<String, DirFile> {
         val dirBuilder = DirBuilder()
         dirBuilder.put(appConfig.node.dstFiles)
 
@@ -90,9 +93,11 @@ object RellRunConfigGenerator {
             dirBuilder.put("$chainPath/brid.txt", chain.brid.toHex())
 
             for ((height, gtv) in chain.configs) {
-                val configPath = "$chainPath/$height.xml"
                 val xml = PostchainUtils.gtvToXml(gtv)
-                dirBuilder.put(configPath, xml)
+                dirBuilder.put("$chainPath/$height.xml", xml)
+
+                val bytes = Bytes.of(GtvEncoder.encodeGtv(gtv))
+                dirBuilder.put("$chainPath/$height.gtv", bytes)
             }
         }
 

@@ -4,6 +4,7 @@ import net.postchain.gtv.Gtv
 import net.postchain.rell.Bytes32
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.RELL_VERSION_MODULE_SYSTEM
+import net.postchain.rell.toImmList
 import net.postchain.rell.toImmMap
 
 object RunConfigParser {
@@ -85,15 +86,16 @@ object RunConfigParser {
             headers.add(header)
         }
 
-        val brids = headers.map { Pair(it.name, it.brid) }.toMap()
+        val headersMap = headers.map { it.name to it }.toMap().toImmMap()
+        val resChains = mutableMapOf<String, Rcfg_Chain>()
 
-        val res = mutableListOf<Rcfg_Chain>()
-        for (header in headers) {
-            val chain = parseChain(header, brids)
-            res.add(chain)
+        for (header in headers.sortedBy { it.iid }) {
+            val chain = parseChain(header, headersMap, resChains)
+            check(chain.name !in resChains)
+            resChains[chain.name] = chain
         }
 
-        return res
+        return resChains.values.toImmList()
     }
 
     private fun parseChainHeader(ctx: ParseChainsCtx, chain: RellXmlElement): ParseChainHeader {
@@ -103,20 +105,26 @@ object RunConfigParser {
         val attrs = chain.attrs()
         val name = attrs.getNoBlank("name")
         val iid = attrs.getType("iid", null) { val v = it.toLong(); check(v >= 0); v }
-        val brid = attrs.getType("brid", null) { Bytes32.parse(it) }
+        val brid = attrs.getTypeOpt("brid", null) { Bytes32.parse(it) }
         attrs.checkNoMore()
 
         chain.check(ctx.names.add(name)) { "duplicate chain name: '$name'" }
         chain.check(ctx.iids.add(iid)) { "duplicate chain IID: $iid (name: '$name')" }
-        chain.check(ctx.brids.add(brid)) { "duplicate chain BRID: ${brid.toHex()} (name: '$name')" }
+
+        if (brid != null) {
+            chain.check(ctx.brids.add(brid)) { "duplicate chain BRID: ${brid.toHex()} (name: '$name')" }
+        }
 
         return ParseChainHeader(name, iid, brid, chain)
     }
 
-    private fun parseChain(header: ParseChainHeader, brids: Map<String, Bytes32>): Rcfg_Chain {
-        val subCtx = ParseChainCtx(header.name)
+    private fun parseChain(
+            header: ParseChainHeader,
+            allChains: Map<String, ParseChainHeader>,
+            parsedChains: Map<String, Rcfg_Chain>
+    ): Rcfg_Chain {
+        val subCtx = ParseChainCtx(header, allChains, parsedChains)
         val configs = mutableListOf<Rcfg_ChainConfig>()
-        var dependencies: Map<String, Bytes32>? = null
 
         for (elem in header.elem.elems) {
             when (elem.tag) {
@@ -124,17 +132,13 @@ object RunConfigParser {
                     val config = parseChainConfig(subCtx, elem)
                     configs.add(config)
                 }
-                "dependencies" -> {
-                    elem.check(dependencies == null) { "dependencies specified more than once" }
-                    dependencies = parseChainDependencies(elem, brids)
-                }
                 else -> throw elem.errorTag()
             }
         }
 
         header.elem.check(configs.any { it.height == 0L }) { "no config for height 0" }
 
-        return Rcfg_Chain(header.name, header.iid, header.brid, configs, dependencies ?: mapOf())
+        return Rcfg_Chain(header.name, header.iid, header.brid, configs)
     }
 
     private fun parseChainConfig(ctx: ParseChainCtx, config: RellXmlElement): Rcfg_ChainConfig {
@@ -149,6 +153,7 @@ object RunConfigParser {
 
         var app: Rcfg_App? = null
         val gtvs = mutableListOf<Rcfg_ChainConfigGtv>()
+        var dependencies: Map<String, Rcfg_Chain>? = null
 
         for (elem in config.elems) {
             when (elem.tag) {
@@ -161,11 +166,15 @@ object RunConfigParser {
                     val gtv = parseChainConfigGtv(elem)
                     gtvs.add(gtv)
                 }
+                "dependencies" -> {
+                    elem.check(dependencies == null) { "dependencies specified more than once" }
+                    dependencies = parseChainDependencies(ctx, elem)
+                }
                 else -> throw elem.errorTag()
             }
         }
 
-        return Rcfg_ChainConfig(height, app, gtvs, addDependencies)
+        return Rcfg_ChainConfig(height, app, gtvs, addDependencies, dependencies ?: mapOf())
     }
 
     private fun parseAppConfig(app: RellXmlElement): Rcfg_App {
@@ -251,11 +260,11 @@ object RunConfigParser {
         return Rcfg_ChainConfigGtv(path ?: listOf(), src, gtv)
     }
 
-    private fun parseChainDependencies(deps: RellXmlElement, brids: Map<String, Bytes32>): Map<String, Bytes32> {
+    private fun parseChainDependencies(ctx: ParseChainCtx, deps: RellXmlElement): Map<String, Rcfg_Chain> {
         deps.checkNoText()
         deps.attrs().checkNoMore()
 
-        val res = mutableMapOf<String, Bytes32>()
+        val res = mutableMapOf<String, Rcfg_Chain>()
 
         for (elem in deps.elems) {
             elem.checkTag("dependency")
@@ -269,16 +278,21 @@ object RunConfigParser {
 
             elem.check(name !in res) { "duplicate dependency name: '$name'" }
 
-            val brid = brids[chain]
-            elem.check(brid != null) { "unknown chain: '$chain' (dependency: '$name')" }
+            val depHeader = elem.checkNotNull(ctx.allChains[chain]) { "dependency '$name': unknown chain '$chain'" }
 
-            res[name] = brid!!
+            val header = ctx.header
+            elem.check(depHeader.iid < header.iid) { "dependency '$name': " +
+                    "chain '${header.name}' cannot depend on '${chain}', " +
+                    "because IID of '${header.name}' (${header.iid}) is not greater than " +
+                    "IID of '${chain}' (${depHeader.iid})" }
+
+            res[name] = ctx.parsedChains.getValue(chain)
         }
 
         return res
     }
 
-    private class ParseChainHeader(val name: String, val iid: Long, val brid: Bytes32, val elem: RellXmlElement)
+    private class ParseChainHeader(val name: String, val iid: Long, val brid: Bytes32?, val elem: RellXmlElement)
 
     private class ParseChainsCtx {
         val names = mutableSetOf<String>()
@@ -286,7 +300,12 @@ object RunConfigParser {
         val brids = mutableSetOf<Bytes32>()
     }
 
-    private class ParseChainCtx(val name: String) {
+    private class ParseChainCtx(
+            val header: ParseChainHeader,
+            val allChains: Map<String, ParseChainHeader>,
+            val parsedChains: Map<String, Rcfg_Chain>
+    ) {
+        val name = header.name
         val configHeights = mutableSetOf<Long>()
     }
 }
