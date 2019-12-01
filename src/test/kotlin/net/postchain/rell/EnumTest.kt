@@ -99,11 +99,11 @@ class EnumTest: BaseRellTest() {
         def("object obj { mutable f: foo = foo.A; }")
         insert("c0.cls", "name,f", "0,'Bob',0")
 
-        chk("cls @* {} ( =.name, =.f )", "list<(text,foo)>[(text[Bob],foo[A])]")
+        chk("cls @* {} ( _=.name, _=.f )", "list<(text,foo)>[(text[Bob],foo[A])]")
         chkData("cls(0,Bob,0)", "obj(0,0)")
 
         chkOp("create cls('Alice', foo.B);")
-        chk("cls @* {} ( =.name, =.f )", "list<(text,foo)>[(text[Bob],foo[A]),(text[Alice],foo[B])]")
+        chk("cls @* {} ( _=.name, _=.f )", "list<(text,foo)>[(text[Bob],foo[A]),(text[Alice],foo[B])]")
         chkData("cls(0,Bob,0)", "cls(1,Alice,1)", "obj(0,0)")
 
         chk("obj.f", "foo[A]")
@@ -121,7 +121,7 @@ class EnumTest: BaseRellTest() {
         def("entity user { name: text; f: foo; }")
         insert("c0.user", "name,f", "0,'Bob',1")
 
-        chkEx("{ return user @ {} ( =.f ); }", "foo[B]")
+        chkEx("{ return user @ {} ( _=.f ); }", "foo[B]")
         chkEx("{ val foo = 'Bob'; return user @? { .name == foo }; }", "user[0]")
         chkEx("{ val foo = 'Bob'; return user @? { .f == foo.B }; }", "ct_err:unknown_member:[text]:B")
         chkEx("{ val foo = 'Bob'; return foo; }", "text[Bob]")
@@ -170,7 +170,7 @@ class EnumTest: BaseRellTest() {
         chk("user @ { 'Bob' } ( .foo.value )", "int[0]")
         chk("user @ { 'Alice' } ( .foo.value )", "int[1]")
         chk("user @ { 'Trudy' } ( .foo.value )", "int[2]")
-        chk("user @ { 'Alice' } ( =.name, =.foo, =.foo.value )", "(text[Alice],foo[B],int[1])")
+        chk("user @ { 'Alice' } ( _=.name, _=.foo, _=.foo.value )", "(text[Alice],foo[B],int[1])")
 
         chk("user @ { .foo.value == 0 } ( .name )", "text[Bob]")
         chk("user @ { .foo.value == 1 } ( .name )", "text[Alice]")

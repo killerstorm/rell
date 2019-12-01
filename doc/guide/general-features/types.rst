@@ -133,7 +133,7 @@ Ordered collection type. Accept duplication.
 
 .. code-block:: rell
 
-  var messages = message @* { } ( sort timestamp = .timestamp );
+  var messages = message @* { } ( @sort timestamp = .timestamp );
   messages.add(new_message);
 
 set<T>

@@ -329,7 +329,7 @@ class AtExprTest: BaseRellTest() {
         chk("(u1: user, u2: user) @ { u1.firstName == 'Bill', u2.firstName == 'Mark' } ( .lastName )",
                 "ct_err:at_attr_name_ambig:lastName:u1.lastName,u2.lastName")
 
-        chk("(u1: user, u2: user) @ { u1.firstName == 'Bill', u2.firstName == 'Mark' } ( u1.lastName, u2.lastName )",
+        chk("(u1: user, u2: user) @ { u1.firstName == 'Bill', u2.firstName == 'Mark' } ( _=u1.lastName, _=u2.lastName )",
                 "(text[Gates],text[Zuckerberg])")
         chk("(u1: user, u2: user) @ { u1.firstName == 'Bill', u2.firstName == 'Mark' } ( u1.company.name, u2.company.name )",
                 "(text[Microsoft],text[Facebook])")
@@ -355,7 +355,7 @@ class AtExprTest: BaseRellTest() {
         chk("(u: user, company) @ { u.firstName == 'Bill', company.name == 'Facebook' }",
                 "(u=user[40],company=company[100])")
 
-        chk("user @ { .firstName == 'Bill' } ( x = .firstName, x = .lastName )", "ct_err:ct_err:at_dup_what_name:x")
+        chk("user @ { .firstName == 'Bill' } ( x = .firstName, x = .lastName )", "ct_err:at:dup_field_name:x")
         chk("user @ { .firstName == 'Bill' } ( x = .firstName, y = .lastName )", "(x=text[Bill],y=text[Gates])")
     }
 
@@ -413,60 +413,90 @@ class AtExprTest: BaseRellTest() {
         tst.strictToString = false
 
         chk("'' + user @* {} ( .firstName )", "[Mark, Steve, Steve, Jeff, Bill, Paul, Sergey, Larry]")
-        chk("'' + user @* {} ( sort .firstName )", "[Bill, Jeff, Larry, Mark, Paul, Sergey, Steve, Steve]")
-        chk("'' + user @* {} ( -sort .firstName )", "[Steve, Steve, Sergey, Paul, Mark, Larry, Jeff, Bill]")
+        chk("'' + user @* {} ( @sort .firstName )", "[Bill, Jeff, Larry, Mark, Paul, Sergey, Steve, Steve]")
+        chk("'' + user @* {} ( @sort_desc .firstName )", "[Steve, Steve, Sergey, Paul, Mark, Larry, Jeff, Bill]")
 
-        chk("'' + user @* { .company.name == 'Apple' } ( sort =.firstName, sort =.lastName )", "[(Steve,Jobs), (Steve,Wozniak)]")
-        chk("'' + user @* { .company.name == 'Apple' } ( sort =.firstName, -sort =.lastName )", "[(Steve,Wozniak), (Steve,Jobs)]")
+        chk("'' + user @* { .company.name == 'Apple' } ( @sort _=.firstName, sort _=.lastName )", "[(Steve,Jobs), (Steve,Wozniak)]")
+        chk("'' + user @* { .company.name == 'Apple' } ( @sort _=.firstName, -sort _=.lastName )", "[(Steve,Wozniak), (Steve,Jobs)]")
 
-        chk("'' + user @* {} ( sort =.company.name, =.lastName )",
+        chk("'' + user @* {} ( @sort _=.company.name, _=.lastName )",
                 "[(Amazon,Bezos), (Apple,Jobs), (Apple,Wozniak), (Facebook,Zuckerberg), (Google,Brin), (Google,Page), " +
                         "(Microsoft,Gates), (Microsoft,Allen)]")
 
-        chk("'' + user @* {} ( sort =.company.name, sort =.lastName )",
+        chk("'' + user @* {} ( @sort _=.company.name, sort _=.lastName )",
                 "[(Amazon,Bezos), (Apple,Jobs), (Apple,Wozniak), (Facebook,Zuckerberg), (Google,Brin), (Google,Page), " +
                         "(Microsoft,Allen), (Microsoft,Gates)]")
 
-        chk("'' + user @* {} ( -sort user )",
+        chk("'' + user @* {} ( @sort_desc user )",
                 "[user[51], user[50], user[41], user[40], user[30], user[21], user[20], user[10]]")
 
-        chk("'' + user @* {} ( -sort =.company, =user )",
+        chk("'' + user @* {} ( @sort_desc _=.company, _=user )",
                 "[(company[500],user[50]), (company[500],user[51]), (company[400],user[40]), (company[400],user[41]), " +
                 "(company[300],user[30]), (company[200],user[20]), (company[200],user[21]), (company[100],user[10])]")
     }
 
+    @Test fun testSortAnnotation() {
+        tst.strictToString = false
+
+        chk("user @* {} ( @sort @sort .firstName )", "ct_err:ann:sort:dup")
+        chk("user @* {} ( @sort_desc @sort_desc .firstName )", "ct_err:ann:sort_desc:dup")
+        chk("user @* {} ( @sort @sort_desc .firstName )", "ct_err:ann:sort_desc:dup")
+        chk("user @* {} ( @sort_desc @sort .firstName )", "ct_err:ann:sort:dup")
+
+        chk("'' + user @* {} ( @sort() .firstName )", "[Bill, Jeff, Larry, Mark, Paul, Sergey, Steve, Steve]")
+        chk("user @* {} ( @sort(123) .firstName )", "ct_err:ann:sort:args:1")
+        chk("user @* {} ( @sort('desc') .firstName )", "ct_err:ann:sort:args:1")
+
+        chk("user @* {} ( @sort sort .firstName )", "ct_err:ann:sort:dup")
+        chk("user @* {} ( @sort_desc sort .firstName )", "ct_err:ann:sort_desc:dup")
+        chk("user @* {} ( @sort -sort .firstName )", "ct_err:ann:sort:dup")
+        chk("user @* {} ( @sort_desc -sort .firstName )", "ct_err:ann:sort_desc:dup")
+    }
+
+    @Test fun testSortOld() {
+        tst.strictToString = false
+
+        chk("user @* {} ( .firstName )", "[Mark, Steve, Steve, Jeff, Bill, Paul, Sergey, Larry]")
+
+        chk("user @* {} ( sort .firstName )", "[Bill, Jeff, Larry, Mark, Paul, Sergey, Steve, Steve]")
+        chkWarn("at:what:sort:deprecated:sort")
+
+        chk("user @* {} ( -sort .firstName )", "[Steve, Steve, Sergey, Paul, Mark, Larry, Jeff, Bill]")
+        chkWarn("at:what:sort:deprecated:sort_desc")
+    }
+
     @Test fun testNullLiteral() {
-        chk("user @ { .firstName == 'Bill' } (=.lastName, ''+null)", "(text[Gates],text[null])")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, ''+null)", "(text[Gates],text[null])")
         //chk("user @ { firstName = 'Bill' } (lastName, null)", "(text[Gates],null)")
     }
 
     @Test fun testLookupExpr() {
-        chk("user @ { .firstName == 'Bill' } (=.lastName, 'Hello'[1])", "(text[Gates],text[e])")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, 'Hello'[1])", "(text[Gates],text[e])")
         chk("user @ { .firstName == 'Bill' } (.lastName[2])", "ct_err:expr_sqlnotallowed")
         chk("user @ { .firstName == 'Bill' } ('HelloWorld'[.lastName.size()])", "ct_err:expr_sqlnotallowed")
     }
 
     @Test fun testTupleExpr() {
-        chk("user @ { .firstName == 'Bill' } (=.lastName, '' + (123,'Hello'))", "(text[Gates],text[(123,Hello)])")
-        chk("user @ { .firstName == 'Bill' } (=.lastName, '' + (123,.firstName))", "ct_err:expr_sqlnotallowed")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + (123,'Hello'))", "(text[Gates],text[(123,Hello)])")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + (123,.firstName))", "ct_err:expr_sqlnotallowed")
     }
 
     @Test fun testCollectionLiteralExpr() {
-        chk("user @ { .firstName == 'Bill' } (=.lastName, '' + [1,2,3])", "(text[Gates],text[[1, 2, 3]])")
-        chk("user @ { .firstName == 'Bill' } (=.lastName, '' + [.firstName,.lastName])", "ct_err:expr_sqlnotallowed")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + [1,2,3])", "(text[Gates],text[[1, 2, 3]])")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + [.firstName,.lastName])", "ct_err:expr_sqlnotallowed")
 
-        chk("user @ { .firstName == 'Bill' } (=.lastName, '' + [123:'Hello'])", "(text[Gates],text[{123=Hello}])")
-        chk("user @ { .firstName == 'Bill' } (=.lastName, '' + [.firstName:.lastName])", "ct_err:expr_sqlnotallowed")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + [123:'Hello'])", "(text[Gates],text[{123=Hello}])")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + [.firstName:.lastName])", "ct_err:expr_sqlnotallowed")
     }
 
     @Test fun testCollectionConstructorExpr() {
-        chk("user @ { .firstName == 'Bill' } (=.lastName, '' + list([1,2,3]))", "(text[Gates],text[[1, 2, 3]])")
-        chk("user @ { .firstName == 'Bill' } (=.lastName, '' + set([1,2,3]))", "(text[Gates],text[[1, 2, 3]])")
-        chk("user @ { .firstName == 'Bill' } (=.lastName, '' + map([123:'Hello']))", "(text[Gates],text[{123=Hello}])")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + list([1,2,3]))", "(text[Gates],text[[1, 2, 3]])")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + set([1,2,3]))", "(text[Gates],text[[1, 2, 3]])")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + map([123:'Hello']))", "(text[Gates],text[{123=Hello}])")
 
-        chk("user @ { .firstName == 'Bill' } (=.lastName, '' + list(.firstName))", "ct_err:expr_sqlnotallowed")
-        chk("user @ { .firstName == 'Bill' } (=.lastName, '' + set(.firstName))", "ct_err:expr_sqlnotallowed")
-        chk("user @ { .firstName == 'Bill' } (=.lastName, '' + map(.firstName))", "ct_err:expr_sqlnotallowed")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + list(.firstName))", "ct_err:expr_sqlnotallowed")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + set(.firstName))", "ct_err:expr_sqlnotallowed")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + map(.firstName))", "ct_err:expr_sqlnotallowed")
     }
 
     @Test fun testMultiLocalWhere() {
@@ -566,6 +596,49 @@ class AtExprTest: BaseRellTest() {
         chk("user @* { 'Wozniak' }", "list<user>[user[101]]")
         chk("user @* { .flag }", "list<user>[user[100]]")
         chk("user @* { not .flag }", "list<user>[user[101]]")
+    }
+
+    @Test fun testFieldNaming() {
+        tst.defs = listOf()
+        tst.inserts = listOf()
+        tst.strictToString = false
+
+        def("entity user { name; }")
+        def("entity company { name; }")
+        insert("c0.user", "name", "1,'Bob'")
+        insert("c0.company", "name", "1,'Apple'")
+
+        chk("(u: user, c: company) @ {} ( u.name, c.name )", "ct_err:at:dup_field_name:name")
+        chk("(u: user, c: company) @ {} ( name = u.name, c.name )", "ct_err:at:dup_field_name:name")
+        chk("(u: user, c: company) @ {} ( u.name, name = c.name )", "ct_err:at:dup_field_name:name")
+        chk("(u: user, c: company) @ {} ( name1 = u.name, name2 = c.name )", "(name1=Bob,name2=Apple)")
+
+        chk("(u: user, c: company) @ {} ( _ = u.name, c.name )", "(Bob,name=Apple)")
+        chk("(u: user, c: company) @ {} ( u.name, _ = c.name )", "(name=Bob,Apple)")
+        chk("(u: user, c: company) @ {} ( _ = u.name, _ = c.name )", "(Bob,Apple)")
+
+        chk("(u: user, c: company) @ {} ( @omit u.name, c.name )", "Apple")
+        chk("(u: user, c: company) @ {} ( u.name, @omit c.name )", "Bob")
+        chk("(u: user, c: company) @ {} ( @omit u.name, name = c.name )", "(name=Apple)")
+        chk("(u: user, c: company) @ {} ( name = u.name, @omit c.name )", "(name=Bob)")
+
+        chk("(u: user, c: company) @ {} ( @omit u.name, _ = c.name )", "Apple")
+        chk("(u: user, c: company) @ {} ( _ = u.name, @omit c.name )", "Bob")
+
+        chk("(u: user, c: company) @ {} ( @omit u.name, @omit u.name )", "ct_err:at:no_fields")
+
+        chk("(u: user, c: company) @ {} ( @omit @sort u.name, c.name )", "Apple")
+        chk("(u: user, c: company) @ {} ( u.name, @omit @sort c.name )", "Bob")
+        chk("(u: user, c: company) @ {} ( @omit @sort u.name, name = c.name )", "(name=Apple)")
+        chk("(u: user, c: company) @ {} ( name = u.name, @omit @sort c.name )", "(name=Bob)")
+        chk("(u: user, c: company) @ {} ( @omit @sort u.name, _ = c.name )", "Apple")
+        chk("(u: user, c: company) @ {} ( _ = u.name, @omit @sort c.name )", "Bob")
+
+        chk("(u: user, c: company) @ {} ( @omit name = u.name, c.name )", "ct_err:at:dup_field_name:name")
+        chk("(u: user, c: company) @ {} ( @omit name = u.name, name = c.name )", "ct_err:at:dup_field_name:name")
+        chk("(u: user, c: company) @ {} ( @omit u.name, c.name )", "Apple")
+        chk("(u: user, c: company) @ {} ( @omit u.name, name = c.name )", "(name=Apple)")
+        chk("(u: user, c: company) @ {} ( @omit u.name, c.name, c )", "(name=Apple,company[1])")
     }
 
     private object Ins {

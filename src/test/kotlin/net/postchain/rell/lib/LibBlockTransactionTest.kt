@@ -173,14 +173,14 @@ class LibBlockTransactionTest: BaseRellTest() {
 
         val expr = """
             transaction @* {} (
-                =transaction,
-                =.tx_rid,
-                =.tx_hash,
-                =.tx_data,
-                =.block,
-                =.block.block_height,
-                =.block.block_rid,
-                =.block.timestamp
+                _=transaction,
+                _=.tx_rid,
+                _=.tx_hash,
+                _=.tx_data,
+                _=.block,
+                _=.block.block_height,
+                _=.block.block_rid,
+                _=.block.timestamp
             )
         """.trimIndent()
 
@@ -191,67 +191,67 @@ class LibBlockTransactionTest: BaseRellTest() {
         t.chkQuery(expr, "[(transaction[444],0xfade,0x1234,0xedaf,block[111],222,0xdeadbeef,1500000000000)]")
         t.chkQuery("(b: block, t: transaction) @* {}", "[(b=block[111],t=transaction[444])]")
 
-        t.chkQuery("foo @* {} (=foo,=.b,=.t)", "[(foo[1],block[111],transaction[444])]")
-        t.chkQuery("foo @* {} (=.value)", "[0]")
+        t.chkQuery("foo @* {} (_=foo,_=.b,_=.t)", "[(foo[1],block[111],transaction[444])]")
+        t.chkQuery("foo @* {} (_=.value)", "[0]")
         t.chkOp("update foo @* { .b.block_height >= 0, .t.tx_hash != x'' } ( value = 100 );")
-        t.chkQuery("foo @* {} (=.value)", "[100]")
+        t.chkQuery("foo @* {} (_=.value)", "[100]")
         t.chkOp("delete foo @* { .b.block_height >= 0, .t.tx_hash != x'' };")
-        t.chkQuery("foo @* {} (=.value)", "[]")
+        t.chkQuery("foo @* {} (_=.value)", "[]")
 
         t = createChainIdTester(555, 1, 2)
 
         t.chkQuery(expr, "[(transaction[2],0xceed,0x4321,0xfeed,block[1],35,0xfeebdaed,1400000000000)]")
         t.chkQuery("(b: block, t: transaction) @* {}", "[(b=block[1],t=transaction[2])]")
 
-        t.chkQuery("foo @* {} (=foo,=.b,=.t)", "[(foo[1],block[1],transaction[2])]")
-        t.chkQuery("foo @* {} (=.value)", "[0]")
+        t.chkQuery("foo @* {} (_=foo,_=.b,_=.t)", "[(foo[1],block[1],transaction[2])]")
+        t.chkQuery("foo @* {} (_=.value)", "[0]")
         t.chkOp("update foo @* { .b.block_height >= 0, .t.tx_hash != x'' } ( value = 100 );")
-        t.chkQuery("foo @* {} (=.value)", "[100]")
+        t.chkQuery("foo @* {} (_=.value)", "[100]")
         t.chkOp("delete foo @* { .b.block_height >= 0, .t.tx_hash != x'' };")
-        t.chkQuery("foo @* {} (=.value)", "[]")
+        t.chkQuery("foo @* {} (_=.value)", "[]")
 
         t = createChainIdTester(600, 3, 4)
 
         t.chkQuery(expr, "[]")
         t.chkQuery("transaction @* {}", "[]")
-        t.chkQuery("block @* {} ( =block, =.block_height, =.block_rid, =.timestamp )", "[(block[3],46,0xbadbad,1300000000000)]")
+        t.chkQuery("block @* {} ( _=block, _=.block_height, _=.block_rid, _=.timestamp )", "[(block[3],46,0xbadbad,1300000000000)]")
         t.chkQuery("(b: block, t: transaction) @* {}", "[]")
 
         t.chkQuery("foo @* {}", "[foo[1]]")
-        t.chkQuery("foo @* {} (=foo,=.b)", "[(foo[1],block[3])]")
-        t.chkQuery("foo @* {} (=foo,=.t)", "[(foo[1],transaction[4])]")
-        t.chkQuery("foo @* {} (=foo,=.b,=.t)", "[(foo[1],block[3],transaction[4])]")
-        t.chkQuery("foo @* {} (=.value)", "[0]")
+        t.chkQuery("foo @* {} (_=foo,_=.b)", "[(foo[1],block[3])]")
+        t.chkQuery("foo @* {} (_=foo,_=.t)", "[(foo[1],transaction[4])]")
+        t.chkQuery("foo @* {} (_=foo,_=.b,_=.t)", "[(foo[1],block[3],transaction[4])]")
+        t.chkQuery("foo @* {} (_=.value)", "[0]")
         t.chkOp("update foo @* {} ( value = 100 );")
-        t.chkQuery("foo @* {} (=.value)", "[100]")
+        t.chkQuery("foo @* {} (_=.value)", "[100]")
         t.chkOp("update foo @* { .b.block_height >= 0 } ( value = 200 );")
-        t.chkQuery("foo @* {} (=.value)", "[200]")
+        t.chkQuery("foo @* {} (_=.value)", "[200]")
         t.chkOp("update foo @* { .t.tx_hash != x'' } ( value = 300 );")
-        t.chkQuery("foo @* {} (=.value)", "[300]")
+        t.chkQuery("foo @* {} (_=.value)", "[300]")
         t.chkOp("delete foo @* { .t.tx_hash != x'' };")
-        t.chkQuery("foo @* {} (=.value)", "[]")
+        t.chkQuery("foo @* {} (_=.value)", "[]")
 
         t = createChainIdTester(601, 3, 4)
 
         t.chkQuery(expr, "[(transaction[4],0xceed,0xf00d,0xcdef,block[3],46,0xbadbad,1300000000000)]")
-        t.chkQuery("transaction @* {} ( =transaction, =.tx_rid, =.tx_hash, =.tx_data )", "[(transaction[4],0xceed,0xf00d,0xcdef)]")
+        t.chkQuery("transaction @* {} ( _=transaction, _=.tx_rid, _=.tx_hash, _=.tx_data )", "[(transaction[4],0xceed,0xf00d,0xcdef)]")
         t.chkQuery("transaction @* { .block == .block }", "[transaction[4]]")
         t.chkQuery("block @* {}", "[]")
         t.chkQuery("(b: block, t: transaction) @* {}", "[]")
 
         t.chkQuery("foo @* {}", "[foo[1]]")
-        t.chkQuery("foo @* {} (=foo,=.b)", "[(foo[1],block[3])]")
-        t.chkQuery("foo @* {} (=foo,=.t)", "[(foo[1],transaction[4])]")
-        t.chkQuery("foo @* {} (=foo,=.b,=.t)", "[(foo[1],block[3],transaction[4])]")
-        t.chkQuery("foo @* {} (=.value)", "[0]")
+        t.chkQuery("foo @* {} (_=foo,_=.b)", "[(foo[1],block[3])]")
+        t.chkQuery("foo @* {} (_=foo,_=.t)", "[(foo[1],transaction[4])]")
+        t.chkQuery("foo @* {} (_=foo,_=.b,_=.t)", "[(foo[1],block[3],transaction[4])]")
+        t.chkQuery("foo @* {} (_=.value)", "[0]")
         t.chkOp("update foo @* {} ( value = 100 );")
-        t.chkQuery("foo @* {} (=.value)", "[100]")
+        t.chkQuery("foo @* {} (_=.value)", "[100]")
         t.chkOp("update foo @* { .b.block_height >= 0 } ( value = 200 );")
-        t.chkQuery("foo @* {} (=.value)", "[200]")
+        t.chkQuery("foo @* {} (_=.value)", "[200]")
         t.chkOp("update foo @* { .t.tx_hash != x'' } ( value = 300 );")
-        t.chkQuery("foo @* {} (=.value)", "[300]")
+        t.chkQuery("foo @* {} (_=.value)", "[300]")
         t.chkOp("delete foo @* { .b.block_height >= 0 };")
-        t.chkQuery("foo @* {} (=.value)", "[]")
+        t.chkQuery("foo @* {} (_=.value)", "[]")
     }
 
     @Test fun textGtv() {

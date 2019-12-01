@@ -75,7 +75,7 @@ class ExternalModuleTest: BaseRellTest() {
         chkDataRaw("c0.data(100,1)", "c1101.company(1,Amazon,330100)", "c1101.user(1,1,Jeff,330100)")
         chk("users.user @* {} ( user, .name )", "[(users[A]!user[1],name=Jeff)]")
         chk("companies.company @* {} ( company, .name )", "[(companies[A]!company[1],name=Amazon)]")
-        chk("data @ {} (=.user, .user.name, .user.company, .user.company.name)",
+        chk("data @ {} (_=.user, .user.name, .user.company, .user.company.name)",
                 "(users[A]!user[1],Jeff,companies[A]!company[1],Amazon)")
     }
 
@@ -94,7 +94,7 @@ class ExternalModuleTest: BaseRellTest() {
 
         chkDataRaw("c0.data(100,1)", "c1101.company(1,Amazon,330100)", "c1102.user(1,1,Jeff,330200)")
         chk("users.user @* {} ( user, .name )", "[(users[B]!user[1],name=Jeff)]")
-        chk("data @ {} (=.user, .user.name, .user.company, .user.company.name)",
+        chk("data @ {} (_=.user, .user.name, .user.company, .user.company.name)",
                 "(users[B]!user[1],Jeff,companies[A]!company[1],Amazon)")
     }
 
@@ -108,8 +108,8 @@ class ExternalModuleTest: BaseRellTest() {
         insert("c0.user", "name,transaction", "2,'Alice',330000")
 
         chkDataRaw("c0.user(2,Alice,330000)", "c1101.user(1,Bob,330100)")
-        chk("reg_users.user @ {} ( =user, =.name )", "(users!user[2],Alice)")
-        chk("ext_users.user @ {} ( =user, =.name )", "(users[A]!user[1],Bob)")
+        chk("reg_users.user @ {} ( _=user, _=.name )", "(users!user[2],Alice)")
+        chk("ext_users.user @ {} ( _=user, _=.name )", "(users[A]!user[1],Bob)")
         chkEx("{ val u: ext_users.user = reg_users.user @ {}; return 0; }", "ct_err:stmt_var_type:u:[users[A]!user]:[users!user]")
         chkEx("{ val u: reg_users.user = ext_users.user @ {}; return 0; }", "ct_err:stmt_var_type:u:[users!user]:[users[A]!user]")
     }
@@ -124,9 +124,9 @@ class ExternalModuleTest: BaseRellTest() {
         def("@external('A') import users_3: users;")
 
         chkDataRaw("c1101.user(1,Bob,330100)")
-        chk("users_1.user @ {} ( =user, =.name )", "(users[A]!user[1],Bob)")
-        chk("users_2.user @ {} ( =user, =.name )", "(users[A]!user[1],Bob)")
-        chk("users_3.user @ {} ( =user, =.name )", "(users[A]!user[1],Bob)")
+        chk("users_1.user @ {} ( _=user, _=.name )", "(users[A]!user[1],Bob)")
+        chk("users_2.user @ {} ( _=user, _=.name )", "(users[A]!user[1],Bob)")
+        chk("users_3.user @ {} ( _=user, _=.name )", "(users[A]!user[1],Bob)")
         chkEx("{ val u: users_1.user = users_2.user @ {}; return u; }", "users[A]!user[1]")
         chkEx("{ val u: users_2.user = users_3.user @ {}; return u; }", "users[A]!user[1]")
         chkEx("{ val u: users_3.user = users_1.user @ {}; return u; }", "users[A]!user[1]")
@@ -146,9 +146,9 @@ class ExternalModuleTest: BaseRellTest() {
         def("@external('C') import users_3: users;")
 
         chkDataRaw("c1101.user(1,Bob,330100)", "c1102.user(1,Alice,330200)", "c1103.user(1,Trudy,330300)")
-        chk("users_1.user @ {} ( =user, =.name )", "(users[A]!user[1],Bob)")
-        chk("users_2.user @ {} ( =user, =.name )", "(users[B]!user[1],Alice)")
-        chk("users_3.user @ {} ( =user, =.name )", "(users[C]!user[1],Trudy)")
+        chk("users_1.user @ {} ( _=user, _=.name )", "(users[A]!user[1],Bob)")
+        chk("users_2.user @ {} ( _=user, _=.name )", "(users[B]!user[1],Alice)")
+        chk("users_3.user @ {} ( _=user, _=.name )", "(users[C]!user[1],Trudy)")
         chkEx("{ val u: users_1.user = users_2.user @ {}; return 0; }", "ct_err:stmt_var_type:u:[users[A]!user]:[users[B]!user]")
         chkEx("{ val u: users_2.user = users_3.user @ {}; return 0; }", "ct_err:stmt_var_type:u:[users[B]!user]:[users[C]!user]")
         chkEx("{ val u: users_3.user = users_1.user @ {}; return 0; }", "ct_err:stmt_var_type:u:[users[C]!user]:[users[A]!user]")
@@ -177,7 +177,7 @@ class ExternalModuleTest: BaseRellTest() {
 
         chkDataRaw("c0.data(100,1)", "c1101.company(1,Amazon,330100)", "c1102.user(1,1,Jeff,330200)")
         chk("users.user @* {} ( user, .name )", "[(users[B]!user[1],name=Jeff)]")
-        chk("data @ {} (=.user, .user.name, .user.company, .user.company.name)",
+        chk("data @ {} (_=.user, .user.name, .user.company, .user.company.name)",
                 "(users[B]!user[1],Jeff,users[A]!company[1],Amazon)")
     }
 
@@ -241,7 +241,7 @@ class ExternalModuleTest: BaseRellTest() {
         chkEx("{ val t: ext.transaction = ext.data@{}(.some_tx); return t; }", "[A]!transaction[330101]")
         chkEx("{ val b: ext.block = ext.data@{}(.some_blk); return b; }", "[A]!block[220102]")
 
-        chk("ext.data @ {} ( =.name, =.transaction, =.transaction.block, =.some_tx, =.some_blk )",
+        chk("ext.data @ {} ( _=.name, _=.transaction, _=.transaction.block, _=.some_tx, _=.some_blk )",
                 "(Bob,[A]!transaction[330100],[A]!block[220100],[A]!transaction[330101],[A]!block[220102])")
     }
 
@@ -362,7 +362,7 @@ class ExternalModuleTest: BaseRellTest() {
         }
 
         t.insert("c$chainId.$entityName", columns, values)
-        t.chkQuery("$moduleName.$entityName @ {} ( =$entityName, =.name )", "($moduleName!$entityName[1],text[$value])")
+        t.chkQuery("$moduleName.$entityName @ {} ( _=$entityName, _=.name )", "($moduleName!$entityName[1],text[$value])")
 
         tst.dropTables = false
     }

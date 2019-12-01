@@ -281,7 +281,7 @@ class WhenTest: BaseRellTest(false) {
     }
 
     private fun chkWhenAt(expr: String, vararg cases: Pair<String, String>) {
-        val fullExpr = "foo @{} ( = $expr )"
+        val fullExpr = "foo @{} ( _ = $expr )"
         for ((arg, expected) in cases) {
             chkOp("update foo@{} ( x = $arg );")
             chk(fullExpr, expected)

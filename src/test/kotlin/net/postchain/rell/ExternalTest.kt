@@ -14,7 +14,7 @@ class ExternalTest: BaseRellTest() {
         initExternalChain()
         def("@external('foo') namespace { @log entity user { name; } }")
         tst.chainDependency("foo", "deadbeef", 1000)
-        chk("user @ {} ( =user, =.name )", "([foo]!user[1],text[Bob])")
+        chk("user @ {} ( _=user, _=.name )", "([foo]!user[1],text[Bob])")
     }
 
     @Test fun testExternalEntity() {
@@ -24,7 +24,7 @@ class ExternalTest: BaseRellTest() {
         initExternalChain()
         def("@external('foo') @log entity user { name; }")
         tst.chainDependency("foo", "deadbeef", 1000)
-        chk("user @ {} ( =user, =.name )", "([foo]!user[1],text[Bob])")
+        chk("user @ {} ( _=user, _=.name )", "([foo]!user[1],text[Bob])")
     }
 
     @Test fun testExternalNamespace() {
@@ -34,7 +34,7 @@ class ExternalTest: BaseRellTest() {
         initExternalChain()
         def("@external('foo') @mount('') namespace ns { @log entity user { name; } }")
         tst.chainDependency("foo", "deadbeef", 1000)
-        chk("ns.user @ {} ( =user, =.name )", "([foo]!ns.user[1],text[Bob])")
+        chk("ns.user @ {} ( _=user, _=.name )", "([foo]!ns.user[1],text[Bob])")
     }
 
     @Test fun testExternalInsideNamespace() {
@@ -44,8 +44,8 @@ class ExternalTest: BaseRellTest() {
         initExternalChain()
         def("@external('foo') @mount('') namespace bar { @log entity user { name; } }")
         tst.chainDependency("foo", "deadbeef", 1000)
-        chk("bar.user @ {} ( =user, =.name )", "([foo]!bar.user[1],text[Bob])")
-        chk("user @ {} ( =user, =.name )", "ct_err:unknown_entity:user")
+        chk("bar.user @ {} ( _=user, _=.name )", "([foo]!bar.user[1],text[Bob])")
+        chk("user @ {} ( _=user, _=.name )", "ct_err:unknown_entity:user")
     }
 
     @Test fun testNamespaceInsideExternal() {
@@ -55,8 +55,8 @@ class ExternalTest: BaseRellTest() {
         initExternalChain(333, "abc.foo.bar.user", "namespace abc { namespace foo { namespace bar { @log entity user { name; } } } }")
         def("namespace abc { @external('ext') namespace foo { namespace bar { @log entity user { name; } } } }")
         tst.chainDependency("ext", "deadbeef", 1000)
-        chk("abc.foo.bar.user @ {} ( =user, =.name )", "([ext]!abc.foo.bar.user[1],text[Bob])")
-        chk("foo.bar.user @ {} ( =user, =.name )", "ct_err:unknown_entity:foo.bar.user")
+        chk("abc.foo.bar.user @ {} ( _=user, _=.name )", "([ext]!abc.foo.bar.user[1],text[Bob])")
+        chk("foo.bar.user @ {} ( _=user, _=.name )", "ct_err:unknown_entity:foo.bar.user")
     }
 
     @Test fun testUnallowedDefs() {
@@ -124,7 +124,7 @@ class ExternalTest: BaseRellTest() {
         def("entity local { user; }")
         insert("c0.local", "user", "1,1")
         tst.chainDependency("foo", "deadbeef", 1000)
-        chk("local @ {} ( =local, =.user, =.user.name )", "(local[1],[foo]!user[1],text[Bob])")
+        chk("local @ {} ( _=local, _=.user, _=.user.name )", "(local[1],[foo]!user[1],text[Bob])")
     }
 
     @Test fun testReferenceExternalToInternal() {
@@ -160,7 +160,7 @@ class ExternalTest: BaseRellTest() {
         insert("c555.company", "name,transaction", "33,'Google',444")
         insert("c333.user", "name,transaction,company", "17,'Bob',2,33")
 
-        chk("user @ {} ( =user, =.name, =.company, =.company.name )", "([foo]!user[17],text[Bob],company[33],text[Google])")
+        chk("user @ {} ( _=user, _=.name, _=.company, _=.company.name )", "([foo]!user[17],text[Bob],company[33],text[Google])")
     }
 
     @Test fun testAccessTransaction() {
@@ -193,15 +193,15 @@ class ExternalTest: BaseRellTest() {
             t.insert(LibBlockTransactionTest.BLOCK_INSERTS)
             t.insert("c333.company", "name,transaction", "1,'Google',444")
             t.insert("c333.user", "name,company,transaction", "1,'Bob',1,444")
-            t.chkQuery("user @ {} ( =user, =.name, =.company, =.company.name, =.transaction )",
+            t.chkQuery("user @ {} ( _=user, _=.name, _=.company, _=.company.name, _=.transaction )",
                     "(user[1],text[Bob],company[1],text[Google],transaction[444])")
         }
         tst.dropTables = false
 
         def("@external('foo') namespace { @log entity company { name; } @log entity user { name; company; } }")
         tst.chainDependency("foo", "deadbeef", 1000)
-        chk("user @ {} ( =user, =.name, =.company, =.company.name )", "([foo]!user[1],text[Bob],[foo]!company[1],text[Google])")
-        chk("company @ {} ( =company, =.name )", "([foo]!company[1],text[Google])")
+        chk("user @ {} ( _=user, _=.name, _=.company, _=.company.name )", "([foo]!user[1],text[Bob],[foo]!company[1],text[Google])")
+        chk("company @ {} ( _=company, _=.name )", "([foo]!company[1],text[Google])")
     }
 
     @Test fun testHeightCheck() {
@@ -824,39 +824,39 @@ class ExternalTest: BaseRellTest() {
 
         tst.chainDependency("foo", "deadbeef", 1000)
 
-        chkQueryEx("@external('foo') @log entity user { name; } query q() = user @ {} ( =user, =.name );",
+        chkQueryEx("@external('foo') @log entity user { name; } query q() = user @ {} ( _=user, _=.name );",
                 "rt_err:external_meta_no_entity:foo:user")
 
         chkQueryEx("@external('foo') namespace foo { namespace bar { @log entity user { name; } } } " +
-                "query q() = foo.bar.user @ {} ( =user, =.name );",
+                "query q() = foo.bar.user @ {} ( _=user, _=.name );",
                 "([foo]!foo.bar.user[1],text[Bob])")
 
         chkQueryEx("@external('foo') @mount('foo.bar.user') @log entity admin { name; } " +
-                "query q() = admin @ {} ( =admin, =.name );",
+                "query q() = admin @ {} ( _=admin, _=.name );",
                 "([foo]!admin[1],text[Bob])")
 
         chkQueryEx("@external('foo') namespace { @mount('foo.bar.user') @log entity admin { name; } }" +
-                "query q() = admin @ {} ( =admin, =.name );",
+                "query q() = admin @ {} ( _=admin, _=.name );",
                 "([foo]!admin[1],text[Bob])")
 
         chkQueryEx("@mount('foo.bar.') @external('foo') @log entity user { name; } " +
-                "query q() = user @ {} ( =user, =.name );",
+                "query q() = user @ {} ( _=user, _=.name );",
                 "([foo]!user[1],text[Bob])")
 
         chkQueryEx("@mount('foo.bar') @external('foo') namespace { @log entity user { name; } }" +
-                "query q() = user @ {} ( =user, =.name );",
+                "query q() = user @ {} ( _=user, _=.name );",
                 "([foo]!user[1],text[Bob])")
 
         chkQueryEx("@external('foo') @mount('foo.bar') namespace ns { @log entity user { name; } } " +
-                "query q() = ns.user @ {} ( =user, =.name );",
+                "query q() = ns.user @ {} ( _=user, _=.name );",
                 "([foo]!ns.user[1],text[Bob])")
 
         chkQueryEx("@mount('junk') @external('foo') namespace { @mount('foo.bar') namespace ns { @log entity user { name; } } } " +
-                "query q() = ns.user @ {} ( =user, =.name );",
+                "query q() = ns.user @ {} ( _=user, _=.name );",
                 "([foo]!ns.user[1],text[Bob])")
 
         chkQueryEx("@mount('junk') @external('foo') namespace { @mount('trash') namespace ns { @mount('foo.bar.user') @log entity user { name; } } } " +
-                "query q() = ns.user @ {} ( =user, =.name );",
+                "query q() = ns.user @ {} ( _=user, _=.name );",
                 "([foo]!ns.user[1],text[Bob])")
     }
 
@@ -887,7 +887,7 @@ class ExternalTest: BaseRellTest() {
             t.chainId = chainId
             t.dropTables = resetDatabase
             t.insert("c$chainId.$entityName", "name,transaction", "1,'Bob',444")
-            t.chkQuery("$entityName @ {} ( =user, =.name )", "($entityName[1],text[Bob])")
+            t.chkQuery("$entityName @ {} ( _=user, _=.name )", "($entityName[1],text[Bob])")
         }
         tst.dropTables = false
     }

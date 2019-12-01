@@ -105,3 +105,29 @@ Run-time error messages returned to the client (as a one line, without a stack t
     rell.dirty:                  true
     postchain.version:           3.0.0
     kotlin.version:              1.3.21
+
+
+7. Language: Excluding fields from at-expressions
+
+Use @omit annotation to exclude a field from a tuple produced by an at-expression:
+
+user @* {} ( .name, @omit .company );       // returns list<text>, not list<(text,company)>
+
+This is useful when one needs to use a value for sorting, but does not want to include that value into the result set:
+
+user @* {} ( .name, @omit @sort .company );
+
+If only one field remains after exclusion, the result is a single value, not a tuple (for @+ and @*: a list of values
+instead of list of tuples). Not allowed to exclude all fields from the result.
+
+To include a field without a name, specify "_" as the name:
+
+user @* {} ( _ = .name, _ = .company );
+// Returns list<(text,text)>, not list<(name:text,company:company)>.
+
+
+8. Language: Sort annotations
+
+Old sort syntax has been deprecated. Annotations @sort and @sort_desc shall be used instead. Example:
+
+user @* {} ( @sort .name );

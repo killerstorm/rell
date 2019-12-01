@@ -149,7 +149,11 @@ object S_Grammar : Grammar<S_RellFile>() {
 
     private val annotationArgs by ( -LPAR * separatedTerms(parser(::literalExpr), COMMA, true) * -RPAR )
 
-    private val annotation by ( -AT * name * optional(annotationArgs) ) map {
+    private val annotationNameName by name
+    private val annotationNameSort by SORT map { S_Name(it.pos, it.text) }
+    private val annotationName by annotationNameName or annotationNameSort
+
+    private val annotation by ( -AT * annotationName * optional(annotationArgs) ) map {
         (name, args) -> S_Annotation(name, args ?: listOf())
     }
 
@@ -309,18 +313,18 @@ object S_Grammar : Grammar<S_RellFile>() {
             or ( AT map { S_AtCardinality.ONE } )
     )
 
-    private val atExprWhatSimple by oneOrMore((-DOT * name)) map { path -> S_AtExprWhatSimple(path) }
+    private val atExprWhatSimple by oneOrMore((-DOT * name)) map { path -> S_AtExprWhat_Simple(path) }
 
-    private val atExprWhatSort by ( optional(MINUS) * SORT ) map { (minus, _) -> minus == null }
+    private val atExprWhatSort by ( optional(MINUS) * SORT ) map { (minus, kw) -> S_AtExprWhatSort(kw.pos, minus == null) }
 
-    private val atExprWhatName by ( optional(name) * -ASSIGN ) map { name -> S_AtExprWhatAttr(name) }
+    private val atExprWhatName by ( name * -ASSIGN )
 
-    private val atExprWhatComplexItem by ( optional(atExprWhatSort) * optional(atExprWhatName) * expressionRef ) map {
-        (sort, name, expr) -> S_AtExprWhatComplexField(name, expr, sort)
+    private val atExprWhatComplexItem by ( zeroOrMore(annotation) * optional(atExprWhatSort) * optional(atExprWhatName) * expressionRef ) map {
+        (annotations, sort, name, expr) -> S_AtExprWhatComplexField(name, expr, annotations, sort)
     }
 
     private val atExprWhatComplex by ( -LPAR * separatedTerms(atExprWhatComplexItem, COMMA, false) * -RPAR ) map {
-        exprs -> S_AtExprWhatComplex(exprs)
+        exprs -> S_AtExprWhat_Complex(exprs)
     }
 
     private val atExprWhat by ( atExprWhatSimple or atExprWhatComplex )
@@ -333,7 +337,7 @@ object S_Grammar : Grammar<S_RellFile>() {
 
     private val atExpr by ( atExprFrom * atExprAt * atExprWhere * optional(atExprWhat) * optional(atExprLimit) ) map {
         ( from, cardinality, where, whatOpt, limit ) ->
-        val what = if (whatOpt == null) S_AtExprWhatDefault() else whatOpt
+        val what = if (whatOpt == null) S_AtExprWhat_Default() else whatOpt
         S_AtExpr(from.pos, cardinality, from.value, where, what, limit)
     }
 

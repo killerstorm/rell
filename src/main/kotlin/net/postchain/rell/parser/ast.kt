@@ -234,7 +234,7 @@ class S_EntityDefinition(
             return
         }
 
-        val modTarget = C_ModifierTarget(C_DeclarationType.ENTITY, name, externalChain = true, mount = true, log = true)
+        val modTarget = C_ModifierTarget(C_ModifierTargetType.ENTITY, name, externalChain = true, mount = true, log = true)
         modifiers.compile(ctx, modTarget)
 
         val extChain = modTarget.externalChain(ctx)
@@ -278,7 +278,7 @@ class S_EntityDefinition(
         var err = false
 
         val modTarget = C_ModifierTarget(
-                C_DeclarationType.ENTITY,
+                C_ModifierTargetType.ENTITY,
                 name,
                 externalChain = true,
                 mount = true,
@@ -414,7 +414,7 @@ class S_ObjectDefinition(
                 log = false
         )
 
-        val modTarget = C_ModifierTarget(C_DeclarationType.OBJECT, name, mount = true)
+        val modTarget = C_ModifierTarget(C_ModifierTargetType.OBJECT, name, mount = true)
         modifiers.compile(ctx, modTarget)
 
         val names = ctx.nsCtx.defNames(name.str)
@@ -463,7 +463,7 @@ class S_StructDefinition(
 
         ctx.checkNotExternal(name.pos, C_DeclarationType.STRUCT)
 
-        val modTarget = C_ModifierTarget(C_DeclarationType.STRUCT, name)
+        val modTarget = C_ModifierTarget(C_ModifierTargetType.STRUCT, name)
         modifiers.compile(ctx, modTarget)
 
         val names = ctx.nsCtx.defNames(name.str)
@@ -503,7 +503,7 @@ class S_EnumDefinition(
     override fun compile(ctx: C_MountContext) {
         ctx.checkNotExternal(name.pos, C_DeclarationType.ENUM)
 
-        val modTarget = C_ModifierTarget(C_DeclarationType.ENUM, name)
+        val modTarget = C_ModifierTarget(C_ModifierTargetType.ENUM, name)
         modifiers.compile(ctx, modTarget)
 
         val set = mutableSetOf<String>()
@@ -539,7 +539,7 @@ class S_OperationDefinition(
     override fun compile(ctx: C_MountContext) {
         ctx.checkNotExternal(name.pos, C_DeclarationType.OPERATION)
 
-        val modTarget = C_ModifierTarget(C_DeclarationType.OPERATION, name, mount = true)
+        val modTarget = C_ModifierTarget(C_ModifierTargetType.OPERATION, name, mount = true)
         modifiers.compile(ctx, modTarget)
 
         val names = ctx.nsCtx.defNames(name.str)
@@ -588,7 +588,7 @@ class S_QueryDefinition(
     override fun compile(ctx: C_MountContext) {
         ctx.checkNotExternal(name.pos, C_DeclarationType.QUERY)
 
-        val modTarget = C_ModifierTarget(C_DeclarationType.QUERY, name, mount = true)
+        val modTarget = C_ModifierTarget(C_ModifierTargetType.QUERY, name, mount = true)
         modifiers.compile(ctx, modTarget)
 
         val names = ctx.nsCtx.defNames(name.str)
@@ -721,7 +721,7 @@ class S_FunctionDefinition(
         val name = qualifiedName.last()
         ctx.checkNotExternal(name.pos, C_DeclarationType.FUNCTION)
 
-        val modTarget = C_ModifierTarget(C_DeclarationType.FUNCTION, name, abstract = true, override = true)
+        val modTarget = C_ModifierTarget(C_ModifierTargetType.FUNCTION, name, abstract = true, override = true)
         modifiers.compile(ctx, modTarget)
 
         val abstract = modTarget.abstract?.get() ?: false
@@ -934,7 +934,7 @@ class S_NamespaceDefinition(
         val definitions: List<S_Definition>
 ): S_Definition(modifiers) {
     override fun compile(ctx: C_MountContext) {
-        val modTarget = C_ModifierTarget(C_DeclarationType.NAMESPACE, name,
+        val modTarget = C_ModifierTarget(C_ModifierTargetType.NAMESPACE, name,
                 externalChain = true, mount = true, emptyMountAllowed = true)
         modifiers.compile(ctx, modTarget)
 
@@ -1013,7 +1013,7 @@ class S_ImportDefinition(
         val moduleName = ctx.globalCtx.consumeError { modulePath.compile(pos, ctx.modCtx.module.name) }
         if (moduleName == null) return
 
-        val modTarget = C_ModifierTarget(C_DeclarationType.IMPORT, null, externalChain = true)
+        val modTarget = C_ModifierTarget(C_ModifierTargetType.IMPORT, null, externalChain = true)
         modifiers.compile(ctx, modTarget)
 
         val extChain = modTarget.externalChain(ctx)
@@ -1076,7 +1076,7 @@ class S_ModuleHeader(val modifiers: S_Modifiers, val pos: S_Pos) {
         val modifierCtx = C_ModifierContext(globalCtx, parentMountName)
 
         val modTarget = C_ModifierTarget(
-                C_DeclarationType.MODULE,
+                C_ModifierTargetType.MODULE,
                 null,
                 abstract = true,
                 externalModule = true,

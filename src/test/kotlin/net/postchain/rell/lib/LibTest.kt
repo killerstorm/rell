@@ -278,6 +278,5 @@ class LibTest: BaseRellTest(false) {
         chk("_type_of(rell.version.build_info())", "text[map<text,text>]")
 
         chk("rell.version.RELL_VERSION", "text[$RELL_VERSION]")
-        chk("rell.version.POSTCHAIN_VERSION", "text[3.0.0]")
     }
 }

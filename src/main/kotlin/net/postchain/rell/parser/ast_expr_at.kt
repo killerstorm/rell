@@ -6,15 +6,17 @@ class S_AtExprFrom(val alias: S_Name?, val entityName: List<S_Name>)
 
 class C_AtWhat(val exprs: List<Pair<String?, Db_Expr>>, val sort: List<Pair<Db_Expr, Boolean>>)
 
+class S_AtExprWhatSort(val pos: S_Pos, val asc: Boolean)
+
 sealed class S_AtExprWhat {
     abstract fun compile(ctx: C_ExprContext, subValues: MutableList<C_Value>): C_AtWhat
 }
 
-class S_AtExprWhatDefault: S_AtExprWhat() {
+class S_AtExprWhat_Default: S_AtExprWhat() {
     override fun compile(ctx: C_ExprContext, subValues: MutableList<C_Value>) = ctx.nameCtx.createDefaultAtWhat()
 }
 
-class S_AtExprWhatSimple(val path: List<S_Name>): S_AtExprWhat() {
+class S_AtExprWhat_Simple(val path: List<S_Name>): S_AtExprWhat() {
     override fun compile(ctx: C_ExprContext, subValues: MutableList<C_Value>): C_AtWhat {
         var expr = ctx.nameCtx.resolveAttr(path[0])
         for (step in path.subList(1, path.size)) {
@@ -27,64 +29,103 @@ class S_AtExprWhatSimple(val path: List<S_Name>): S_AtExprWhat() {
     }
 }
 
-class S_AtExprWhatAttr(val name: S_Name?)
+class S_AtExprWhatComplexField(
+        val attr: S_Name?,
+        val expr: S_Expr,
+        val annotations: List<S_Annotation>,
+        val sort: S_AtExprWhatSort?
+)
 
-class S_AtExprWhatComplexField(val attr: S_AtExprWhatAttr?, val expr: S_Expr, val sort: Boolean?)
-
-class S_AtExprWhatComplex(val fields: List<S_AtExprWhatComplexField>): S_AtExprWhat() {
+class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExprWhat() {
     override fun compile(ctx: C_ExprContext, subValues: MutableList<C_Value>): C_AtWhat {
-        checkExplicitNames()
+        val procFields = processFields(ctx)
+        subValues.addAll(procFields.map { it.value })
 
-        val values = fields.map { it.expr.compile(ctx).value() }
-        subValues.addAll(values)
+        val incFields = procFields.filter { !it.excluded }
 
-        val dbExprs = values.map { it.toDbExpr() }
-
-        val implicitNames = fields.withIndex().map { (idx, field) ->
-            if (field.attr != null) null else dbExprs[idx].implicitName()
+        if (incFields.isEmpty()) {
+            ctx.globalCtx.error(fields[0].expr.startPos, "at:no_fields", "All fields are excluded from the result")
         }
 
-        val names = mutableSetOf<String>()
-        names.addAll(fields.filter { it.attr?.name != null }.map { it.attr!!.name!!.str })
-
-        val dupNames = mutableSetOf<String>()
-
-        for (name in implicitNames) {
-            if (name != null && !names.add(name)) {
-                dupNames.add(name)
-            }
+        val exprs = incFields.map { field ->
+            val name = if (field.nameExplicit || incFields.size > 1) field.name else null
+            Pair(name, field.dbExpr)
         }
 
-        val exprs = fields.withIndex().map { (idx, field) ->
-            val name = if (field.attr != null) {
-                if (field.attr.name == null) null else field.attr.name.str
-            } else {
-                val impName = implicitNames[idx]
-                if (impName != null && !dupNames.contains(impName) && fields.size > 1) {
-                    impName
-                } else {
-                    null
-                }
-            }
-            Pair(name, dbExprs[idx])
-        }
-
-        val sort = fields.withIndex()
-                .filter { (_, field) -> field.sort != null }
-                .map { (idx, field) -> Pair(exprs[idx].second, field.sort!!) }
+        val sort = procFields.filter { it.sort != null }.map { Pair(it.dbExpr, it.sort!!) }
 
         return C_AtWhat(exprs, sort)
     }
 
-    private fun checkExplicitNames() {
-        val names = mutableSetOf<String>()
-        for (field in fields) {
-            val name = field.attr?.name
-            if (name != null && !names.add(name.str)) {
-                throw C_Error(name.pos, "ct_err:at_dup_what_name:${name.str}", "Duplicate field: '${name.str}'")
-            }
-        }
+    private fun processFields(ctx: C_ExprContext): List<WhatField> {
+        val procFields = fields.map { processField(ctx, it) }
+        val res = processNameConflicts(ctx, procFields)
+        return res
     }
+
+    private fun processField(ctx: C_ExprContext, field: S_AtExprWhatComplexField): WhatField {
+        val modTarget = C_ModifierTarget(C_ModifierTargetType.EXPRESSION, null, omit = true, sort = true)
+
+        if (field.sort != null) {
+            modTarget.sort?.set(field.sort.asc)
+            val ann = if (field.sort.asc) C_Modifier.SORT else C_Modifier.SORT_DESC
+            ctx.globalCtx.warning(field.sort.pos, "at:what:sort:deprecated:$ann", "Deprecated sort syntax; use @$ann annotation instead")
+        }
+
+        val modifierCtx = C_ModifierContext(ctx.globalCtx, R_MountName.EMPTY)
+        for (annotation in field.annotations) {
+            annotation.compile(modifierCtx, modTarget)
+        }
+
+        val omit = modTarget.omit?.get() ?: false
+        val sort = modTarget.sort?.get()
+
+        val value = field.expr.compile(ctx).value()
+        val dbExpr = value.toDbExpr()
+
+        var namePos: S_Pos = field.expr.startPos
+        var name: String? = null
+        var nameExplicit = false
+
+        val attr = field.attr
+        if (attr != null) {
+            if (attr.str != "_") {
+                namePos = attr.pos
+                name = attr.str
+                nameExplicit = true
+            }
+        } else if (!omit) {
+            name = dbExpr.implicitName()
+        }
+
+        return WhatField(value, dbExpr, namePos, name, nameExplicit, omit, sort)
+    }
+
+    private fun processNameConflicts(ctx: C_ExprContext, procFields: List<WhatField>): List<WhatField> {
+        val res = mutableListOf<WhatField>()
+        val names = mutableSetOf<String>()
+
+        for (f in procFields) {
+            var name = f.name
+            if (name != null && !names.add(name)) {
+                ctx.globalCtx.error(f.namePos, "at:dup_field_name:$name", "Duplicate field name: '$name'")
+                name = null
+            }
+            res.add(WhatField(f.value, f.dbExpr, f.namePos, name, f.nameExplicit, f.excluded, f.sort))
+        }
+
+        return res
+    }
+
+    private class WhatField(
+            val value: C_Value,
+            val dbExpr: Db_Expr,
+            val namePos: S_Pos,
+            val name: String?,
+            val nameExplicit: Boolean,
+            val excluded: Boolean,
+            val sort: Boolean?
+    )
 }
 
 class S_AtExprWhere(val exprs: List<S_Expr>) {

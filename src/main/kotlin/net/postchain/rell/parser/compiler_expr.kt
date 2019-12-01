@@ -32,7 +32,7 @@ class C_BlockContext(
         val defCtx: C_DefinitionContext,
         private val parent: C_BlockContext?,
         val loop: C_LoopId?,
-        private val location: String
+        location: String
 ) {
     private val startOffset: Int = if (parent == null) 0 else parent.startOffset + parent.locals.size
     private val locals = mutableMapOf<String, C_ScopeEntry0>()
