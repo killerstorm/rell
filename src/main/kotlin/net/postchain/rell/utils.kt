@@ -3,6 +3,7 @@ package net.postchain.rell
 import com.google.common.collect.ImmutableList
 import com.google.common.collect.ImmutableMap
 import com.google.common.collect.ImmutableSet
+import net.postchain.base.BlockchainRid
 import net.postchain.base.SECP256K1CryptoSystem
 import net.postchain.base.data.PostgreSQLCommands
 import net.postchain.base.data.PostgreSQLDatabaseAccess
@@ -103,7 +104,14 @@ object PostchainUtils {
 
     fun merkleHash(v: Gtv): ByteArray = v.merkleHash(merkleCalculator)
 
+    fun hexToRid(s: String): BlockchainRid = BlockchainRid(CommonUtils.hexToBytes(s))
+
     fun createDatabaseAccess(): SQLDatabaseAccess = PostgreSQLDatabaseAccess(PostgreSQLCommands)
+
+    fun calcBlockchainRid(config: Gtv): Bytes32 {
+        val hash = merkleHash(config)
+        return Bytes32(hash)
+    }
 }
 
 class MutableTypedKeyMap {

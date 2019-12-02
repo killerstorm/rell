@@ -39,23 +39,21 @@ class RunConfigChainConfigGen private constructor(private val sourceDir: C_Sourc
         val modules = mutableSetOf<R_ModuleName>()
 
         for (config in chain.configs) {
-            val (gtv, module) = genChainConfig0(chain, config, brids, extraSigners)
+            val (gtv, module) = genChainConfig0(config, brids, extraSigners)
             resConfigs[config.height] = gtv
             if (module != null) modules.add(module)
         }
 
-        val brid = chain.brid ?: calcChainBrid(resConfigs)
+        val brid = calcChainBrid(resConfigs)
         return RellPostAppChain(chain.name, chain.iid, brid, resConfigs, modules)
     }
 
     private fun calcChainBrid(configs: Map<Long, Gtv>): Bytes32 {
         val config0 = configs.getValue(0)
-        val hash = PostchainUtils.merkleHash(config0)
-        return Bytes32(hash)
+        return PostchainUtils.calcBlockchainRid(config0)
     }
 
     private fun genChainConfig0(
-            chain: Rcfg_Chain,
             config: Rcfg_ChainConfig,
             brids: Map<Rcfg_Chain, Bytes32>,
             extraSigners: Collection<Bytes33>

@@ -1,6 +1,7 @@
 package net.postchain.rell.module
 
 import mu.KLogging
+import net.postchain.base.BlockchainRid
 import net.postchain.base.data.DatabaseAccess
 import net.postchain.core.*
 import net.postchain.gtv.Gtv
@@ -288,7 +289,7 @@ class RellPostchainModuleFactory(
         private val wrapRtErrors: Boolean = true,
         private val forceTypeCheck: Boolean = false
 ): GTXModuleFactory {
-    override fun makeModule(config: Gtv, blockchainRID: ByteArray): GTXModule {
+    override fun makeModule(config: Gtv, blockchainRID: BlockchainRid): GTXModule {
         val gtxNode = config.asDict().getValue("gtx").asDict()
         val rellNode = gtxNode.getValue("rell").asDict()
 
@@ -454,7 +455,7 @@ class RellPostchainModuleFactory(
             rawConfig: Gtv,
             rellNode: Map<String, Gtv>,
             rApp: R_App,
-            blockchainRid: ByteArray
+            blockchainRid: BlockchainRid
     ): Rt_ChainContext {
         val gtvArgsDict = rellNode["moduleArgs"]?.asDict() ?: mapOf()
 

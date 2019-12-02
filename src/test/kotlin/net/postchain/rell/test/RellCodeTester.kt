@@ -1,6 +1,7 @@
 package net.postchain.rell.test
 
 import com.google.common.collect.Sets
+import net.postchain.base.BlockchainRid
 import net.postchain.core.ByteArrayKey
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
@@ -205,7 +206,7 @@ class RellCodeTester(
     }
 
     private fun createChainContext(): Rt_ChainContext {
-        val bcRid = ByteArray(32)
+        val bcRid = BlockchainRid(ByteArray(32))
         return Rt_ChainContext(GtvNull, mapOf(), bcRid)
     }
 

@@ -30,7 +30,7 @@ class RunConfigGenTest {
                     <config src="my-config.properties"/>
                 </nodes>
                 <chains>
-                    <chain name="user" iid="33" brid="01234567abcdef01234567abcdef01234567abcdef01234567abcdef01234567">
+                    <chain name="user" iid="33">
                         <config height="0">
                         </config>
                     </chain>
@@ -46,7 +46,7 @@ class RunConfigGenTest {
 
         chkFile(files, "private.properties", "bar=456")
 
-        chkFile(files, "blockchains/33/brid.txt", "01234567ABCDEF01234567ABCDEF01234567ABCDEF01234567ABCDEF01234567")
+        chkFile(files, "blockchains/33/brid.txt", "A5D2F114B70602A5145FB705EC4FED482F47B2AAB9780DBD17564DF1E4150F99")
 
         chkFile(files, "blockchains/33/0.xml", """
             <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -75,7 +75,7 @@ class RunConfigGenTest {
                     <config src="my-config.properties" add-signers="false"/>
                 </nodes>
                 <chains>
-                    <chain name="user" iid="33" brid="01234567abcdef01234567abcdef01234567abcdef01234567abcdef01234567">
+                    <chain name="user" iid="33">
                         <config height="0">
                         </config>
                     </chain>
@@ -84,7 +84,7 @@ class RunConfigGenTest {
         """)
 
         chkFile(files, "node-config.properties", "node.0.pubkey=0350fe40766bc0ce8d08b3f5b810e49a8352fdd458606bd5fafe5acdcdc8ff3f57")
-        chkFile(files, "blockchains/33/brid.txt", "01234567ABCDEF01234567ABCDEF01234567ABCDEF01234567ABCDEF01234567")
+        chkFile(files, "blockchains/33/brid.txt", "F9161BC0ABE91C6ACAB68B4A0B18CCD5763AE5B5798BC522209DDCF6D0302630")
         chkFileBin(files, "blockchains/33/0.gtv", """{"signers":[]}""")
 
         chkFile(files, "blockchains/33/0.xml", """
@@ -110,7 +110,7 @@ class RunConfigGenTest {
                     <config src="my-config.properties"/>
                 </nodes>
                 <chains>
-                    <chain name="user" iid="33" brid="01234567abcdef01234567abcdef01234567abcdef01234567abcdef01234567">
+                    <chain name="user" iid="33">
                         <config height="0">
                         </config>
                     </chain>
@@ -119,7 +119,7 @@ class RunConfigGenTest {
         """)
 
         chkFile(files, "node-config.properties", "node.0.pubkey=0350fe40766bc0ce8d08b3f5b810e49a8352fdd458606bd5fafe5acdcdc8ff3f57")
-        chkFile(files, "blockchains/33/brid.txt", "01234567ABCDEF01234567ABCDEF01234567ABCDEF01234567ABCDEF01234567")
+        chkFile(files, "blockchains/33/brid.txt", "A5D2F114B70602A5145FB705EC4FED482F47B2AAB9780DBD17564DF1E4150F99")
         chkFileBin(files, "blockchains/33/0.gtv", """{"signers":["0350FE40766BC0CE8D08B3F5B810E49A8352FDD458606BD5FAFE5ACDCDC8FF3F57"]}""")
 
         chkFile(files, "blockchains/33/0.xml", """
@@ -149,7 +149,7 @@ class RunConfigGenTest {
                     <config>x=123</config>
                 </nodes>
                 <chains>
-                    <chain name="user" iid="33" brid="01234567abcdef01234567abcdef01234567abcdef01234567abcdef01234567">
+                    <chain name="user" iid="33">
                         <config height="0">
                             <app module="app" add-defaults="false"/>
                         </config>
@@ -160,7 +160,7 @@ class RunConfigGenTest {
 
         chkFile(files, "node-config.properties", "x=123")
 
-        chkFile(files, "blockchains/33/brid.txt", "01234567ABCDEF01234567ABCDEF01234567ABCDEF01234567ABCDEF01234567")
+        chkFile(files, "blockchains/33/brid.txt", "D44732A2C0C545B0CDB44C90F3B05432531283BCB35D5BBA0BAD7A1793B06C90")
 
         chkFile(files, "blockchains/33/0.xml", """
             <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -214,10 +214,10 @@ class RunConfigGenTest {
                     </config>
                 </nodes>
                 <chains>
-                    <chain name="user" iid="33" brid="01234567abcdef01234567abcdef01234567abcdef01234567abcdef01234567">
+                    <chain name="user" iid="33">
                         <config height="0"/>
                     </chain>
-                    <chain name="city" iid="55" brid="abcdef01234567abcdef01234567abcdef01234567abcdef01234567abcdef01">
+                    <chain name="city" iid="55">
                         <config height="0">
                             <dependencies>
                                 <dependency name="user_dep" chain="user" />
@@ -229,12 +229,12 @@ class RunConfigGenTest {
         """)
 
         chkFile(files, "node-config.properties", "node.0.pubkey=0350fe40766bc0ce8d08b3f5b810e49a8352fdd458606bd5fafe5acdcdc8ff3f57")
-        chkFile(files, "blockchains/33/brid.txt", "01234567ABCDEF01234567ABCDEF01234567ABCDEF01234567ABCDEF01234567")
+        chkFile(files, "blockchains/33/brid.txt", "A5D2F114B70602A5145FB705EC4FED482F47B2AAB9780DBD17564DF1E4150F99")
         chkFileBin(files, "blockchains/33/0.gtv", """{"signers":["0350FE40766BC0CE8D08B3F5B810E49A8352FDD458606BD5FAFE5ACDCDC8FF3F57"]}""")
-        chkFile(files, "blockchains/55/brid.txt", "ABCDEF01234567ABCDEF01234567ABCDEF01234567ABCDEF01234567ABCDEF01")
+        chkFile(files, "blockchains/55/brid.txt", "D2DE94C67C3FAEDFB14D241FA902D3D4BA285F4C2813A6750F59CF502B5ADDEC")
 
         chkFileBin(files, "blockchains/55/0.gtv", """{
-            "dependencies":[["user_dep","01234567ABCDEF01234567ABCDEF01234567ABCDEF01234567ABCDEF01234567"]],
+            "dependencies":[["user_dep","A5D2F114B70602A5145FB705EC4FED482F47B2AAB9780DBD17564DF1E4150F99"]],
             "signers":["0350FE40766BC0CE8D08B3F5B810E49A8352FDD458606BD5FAFE5ACDCDC8FF3F57"]}
         """.unwrap())
 
@@ -256,7 +256,7 @@ class RunConfigGenTest {
                     <array>
                         <array>
                             <string>user_dep</string>
-                            <bytea>01234567ABCDEF01234567ABCDEF01234567ABCDEF01234567ABCDEF01234567</bytea>
+                            <bytea>A5D2F114B70602A5145FB705EC4FED482F47B2AAB9780DBD17564DF1E4150F99</bytea>
                         </array>
                     </array>
                 </entry>

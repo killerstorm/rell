@@ -2,6 +2,7 @@ package net.postchain.rell.runtime
 
 import com.google.common.collect.Sets
 import mu.KLogging
+import net.postchain.base.BlockchainRid
 import net.postchain.core.ByteArrayKey
 import net.postchain.gtv.Gtv
 import net.postchain.rell.CommonUtils
@@ -293,6 +294,6 @@ class Rt_DefinitionContext(val appCtx: Rt_AppContext, val dbUpdateAllowed: Boole
 
 class Rt_OpContext(val lastBlockTime: Long, val transactionIid: Long, val blockHeight: Long, val signers: List<ByteArray>)
 
-class Rt_ChainContext(val rawConfig: Gtv, args: Map<R_ModuleName, Rt_Value>, val blockchainRid: ByteArray) {
+class Rt_ChainContext(val rawConfig: Gtv, args: Map<R_ModuleName, Rt_Value>, val blockchainRid: BlockchainRid) {
     val args = args.toImmMap()
 }

@@ -1,12 +1,12 @@
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------
-./singlerun.sh -d test-cli/src --blockchain-rid=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef --node-config test-cli/config/node-config.properties stair
+./singlerun.sh -d test-cli/src --node-config test-cli/config/node-config.properties stair
 
 curl "http://localhost:7740/query/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" -X POST -d '{"type":"stairq","n":10}'
 
 45
 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------
-./singlerun.sh -d test-cli/src --blockchain-rid=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef --node-config test-cli/config/node-config.properties mod.complex.foo
+./singlerun.sh -d test-cli/src --node-config test-cli/config/node-config.properties mod.complex.foo
 
 curl "http://localhost:7740/query/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" -X POST -d '{"type":"foo"}'
 
@@ -21,7 +21,7 @@ Postchain log:
 2019-10-24 20:58:47.702 INFO  Rell - mod/complex/foo/foo.rell(6) foo end
 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------
-./singlerun.sh -d test-cli/src --blockchain-rid=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef --node-config test-cli/config/node-config.properties stack_trace
+./singlerun.sh -d test-cli/src --node-config test-cli/config/node-config.properties stack_trace
 
 curl "http://localhost:7740/query/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" -X POST -d '{"type":"main_q","x":12345}'
 

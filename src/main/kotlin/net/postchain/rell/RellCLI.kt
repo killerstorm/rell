@@ -1,5 +1,6 @@
 package net.postchain.rell
 
+import net.postchain.base.BlockchainRid
 import net.postchain.config.SimpleDatabaseConnector
 import net.postchain.config.app.AppConfig
 import net.postchain.gtv.GtvNull
@@ -176,7 +177,7 @@ private fun findEntryPoint(app: R_App, moduleName: R_ModuleName, routineName: R_
 }
 
 private fun createGlobalCtx(args: RellCliArgs, sqlExec: SqlExecutor, opCtx: Rt_OpContext?): Rt_GlobalContext {
-    val bcRid = ByteArray(32)
+    val bcRid = BlockchainRid(ByteArray(32))
     val chainCtx = Rt_ChainContext(GtvNull, mapOf(), bcRid)
 
     return Rt_GlobalContext(

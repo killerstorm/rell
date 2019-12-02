@@ -1,5 +1,6 @@
 package net.postchain.rell
 
+import net.postchain.base.BlockchainRid
 import net.postchain.gtv.GtvNull
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_Entity
@@ -29,7 +30,7 @@ class OperatorsInterpretedTest: OperatorsBaseTest() {
         val args2 = args.map { it as InterpTstVal }
         val types = args2.map { it.type }
 
-        val chainCtx = Rt_ChainContext(GtvNull, mapOf(), ByteArray(32))
+        val chainCtx = Rt_ChainContext(GtvNull, mapOf(), BlockchainRid.EMPTY_RID)
 
         val globalCtx = Rt_GlobalContext(
                 Rt_FailingPrinter,

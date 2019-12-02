@@ -497,7 +497,7 @@ object R_SysFn_ChainContext {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             check(args.size == 0)
             val bcRid = ctx.chainCtx.blockchainRid
-            return Rt_ByteArrayValue(bcRid)
+            return Rt_ByteArrayValue(bcRid.data)
         }
     }
 

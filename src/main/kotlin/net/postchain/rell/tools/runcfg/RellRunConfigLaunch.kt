@@ -1,9 +1,11 @@
 package net.postchain.rell.tools.runcfg
 
 import mu.KotlinLogging
+import net.postchain.StorageBuilder
 import net.postchain.config.app.AppConfig
 import net.postchain.config.node.NodeConfig
 import net.postchain.config.node.NodeConfigurationProviderFactory
+import net.postchain.core.NODE_ID_TODO
 import net.postchain.core.UserMistake
 import net.postchain.devtools.PostchainTestNode
 import net.postchain.rell.RellBaseCliArgs
@@ -12,6 +14,7 @@ import org.apache.commons.configuration2.PropertiesConfiguration
 import picocli.CommandLine
 import java.io.File
 import java.io.StringReader
+import java.util.*
 
 private val log = run {
     RellCliUtils.initLogging()
@@ -52,13 +55,21 @@ private fun startPostchainNode(rellAppConf: RellPostAppCliConfig): NodeConfig {
     val nodeConfPro = NodeConfigurationProviderFactory.createProvider(nodeAppConf)
     val nodeConf = nodeConfPro.getConfiguration()
 
-    val node = PostchainTestNode(nodeConfPro, rellAppConf.config.wipeDb)
+    // Wiping DB
+    StorageBuilder.buildStorage(nodeAppConf, NODE_ID_TODO, rellAppConf.config.wipeDb).close()
+
+    val node = PostchainTestNode(nodeConfPro)
 
     val chainsSorted = rellAppConf.config.chains.sortedBy { it.iid }
 
     for (chain in chainsSorted) {
         val genesisConfig = chain.configs.getValue(0)
-        node.addBlockchain(chain.iid, chain.brid.toByteArray(), genesisConfig)
+        val brid = node.addBlockchain(chain.iid, genesisConfig)
+        log.info { "Chain '${chain.name}' ID = ${chain.iid} RID = ${brid.toHex()}" }
+
+        check(Arrays.equals(brid.data, chain.brid.toByteArray())) {
+            "Chain '${chain.name}' (${chain.iid}): calculated BRID = ${chain.brid.toHex()}, postchain BRID = ${brid.toHex()}"
+        }
 
         for ((height, config) in chain.configs) {
             if (height != 0L) {

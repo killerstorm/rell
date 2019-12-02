@@ -105,17 +105,12 @@ object RunConfigParser {
         val attrs = chain.attrs()
         val name = attrs.getNoBlank("name")
         val iid = attrs.getType("iid", null) { val v = it.toLong(); check(v >= 0); v }
-        val brid = attrs.getTypeOpt("brid", null) { Bytes32.parse(it) }
         attrs.checkNoMore()
 
         chain.check(ctx.names.add(name)) { "duplicate chain name: '$name'" }
         chain.check(ctx.iids.add(iid)) { "duplicate chain IID: $iid (name: '$name')" }
 
-        if (brid != null) {
-            chain.check(ctx.brids.add(brid)) { "duplicate chain BRID: ${brid.toHex()} (name: '$name')" }
-        }
-
-        return ParseChainHeader(name, iid, brid, chain)
+        return ParseChainHeader(name, iid, chain)
     }
 
     private fun parseChain(
@@ -138,7 +133,7 @@ object RunConfigParser {
 
         header.elem.check(configs.any { it.height == 0L }) { "no config for height 0" }
 
-        return Rcfg_Chain(header.name, header.iid, header.brid, configs)
+        return Rcfg_Chain(header.name, header.iid, configs)
     }
 
     private fun parseChainConfig(ctx: ParseChainCtx, config: RellXmlElement): Rcfg_ChainConfig {
@@ -292,7 +287,7 @@ object RunConfigParser {
         return res
     }
 
-    private class ParseChainHeader(val name: String, val iid: Long, val brid: Bytes32?, val elem: RellXmlElement)
+    private class ParseChainHeader(val name: String, val iid: Long, val elem: RellXmlElement)
 
     private class ParseChainsCtx {
         val names = mutableSetOf<String>()

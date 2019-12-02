@@ -1,12 +1,12 @@
 package net.postchain.rell.tools
 
 import mu.KotlinLogging
-import net.postchain.common.toHex
 import net.postchain.config.app.AppConfig
 import net.postchain.config.node.NodeConfigurationProviderFactory
 import net.postchain.core.UserMistake
 import net.postchain.devtools.TestLauncher
 import net.postchain.gtv.gtvml.GtvMLEncoder
+import net.postchain.rell.PostchainUtils
 import net.postchain.rell.RellBaseCliArgs
 import net.postchain.rell.RellCliUtils
 import net.postchain.rell.RellConfigGen
@@ -29,14 +29,11 @@ private fun main0(args: RunPostchainTestArgs) {
     RellCliUtils.checkFile(args.testFile)
     RellCliUtils.checkFile(args.nodeConfigFile)
 
-    val bcRid = RellCliUtils.parseHex(args.blockchainRid, 32, "blockchain RID")
-
     log.info("STARTING POSTCHAIN TEST")
     log.info("    source directory: ${target.sourcePath.absolutePath}")
     log.info("    module:           ${args.module}")
     log.info("    test file:        ${File(args.testFile).absolutePath}")
     log.info("    node config file: ${File(args.nodeConfigFile).absolutePath}")
-    log.info("    blockchain RID:   ${args.blockchainRid}")
     log.info("")
 
     val configGen = RellConfigGen.create(target)
@@ -50,6 +47,8 @@ private fun main0(args: RunPostchainTestArgs) {
     val tests = File(args.testFile).readText()
 
     val bcConfFile = File.createTempFile("test-blockchain-configuration", ".xml")
+
+    val bcRid = PostchainUtils.calcBlockchainRid(bcConf)
 
     val res = try {
         bcConfFile.writeText(GtvMLEncoder.encodeXMLGtv(bcConf))
@@ -102,10 +101,6 @@ private class RunPostchainTestArgs: RellBaseCliArgs() {
     @CommandLine.Option(names = ["--node-config"], paramLabel =  "NODE_CONFIG_FILE", required = true,
             description =  ["Node configuration (.properties)"])
     var nodeConfigFile: String = ""
-
-    @CommandLine.Option(names = ["--blockchain-rid"], paramLabel =  "BLOCKCHAIN_RID", required = true,
-            description =  ["Blockchain RID (hex, 32 bytes)"])
-    var blockchainRid: String = ""
 
     @CommandLine.Parameters(index = "0", paramLabel = "MODULE", description = ["Module name"])
     var module: String = ""

@@ -30,12 +30,7 @@ class Rcfg_Run(val nodeConfig: Rcfg_NodeConfig, val chains: List<Rcfg_Chain>, va
 
 class Rcfg_NodeConfig(val src: String?, val text: String?, val addSigners: Boolean)
 
-class Rcfg_Chain(
-        val name: String,
-        val iid: Long,
-        val brid: Bytes32?,
-        val configs: List<Rcfg_ChainConfig>
-)
+class Rcfg_Chain(val name: String, val iid: Long, val configs: List<Rcfg_ChainConfig>)
 
 class Rcfg_ChainConfig(
         val height: Long,
