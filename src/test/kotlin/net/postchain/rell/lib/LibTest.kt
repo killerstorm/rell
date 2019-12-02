@@ -174,15 +174,36 @@ class LibTest: BaseRellTest(false) {
     }
 
     @Test fun testExists() {
-        chkEx("{ var x: integer? = _nullable(123); return exists(x); }", "boolean[true]")
-        chkEx("{ var x: integer? = null; return exists(x); }", "boolean[false]")
+        chkEmptyExists("exists", true)
+    }
 
-        chk("exists(123)", "ct_err:expr_call_argtypes:exists:integer")
-        chk("exists(false)", "ct_err:expr_call_argtypes:exists:boolean")
-        chk("exists('Hello')", "ct_err:expr_call_argtypes:exists:text")
-        chk("exists(null)", "ct_err:expr_call_argtypes:exists:null")
-        chk("exists([123])", "ct_err:expr_call_argtypes:exists:list<integer>")
-        chk("exists([123 : 'Hello'])", "ct_err:expr_call_argtypes:exists:map<integer,text>")
+    @Test fun testEmpty() {
+        chkEmptyExists("empty", false)
+    }
+
+    private fun chkEmptyExists(f: String, exists: Boolean) {
+        def("function zlist(l: list<integer>?): list<integer>? = l;")
+        def("function zmap(m: map<integer, text>?): map<integer, text>? = m;")
+
+        chkEx("{ var x: integer? = _nullable(123); return $f(x); }", "boolean[${exists}]")
+        chkEx("{ var x: integer? = null; return $f(x); }", "boolean[${!exists}]")
+
+        chk("$f([123])", "boolean[${exists}]")
+        chk("$f(zlist([123]))", "boolean[${exists}]")
+        chk("$f(list<integer>())", "boolean[${!exists}]")
+        chk("$f(zlist(list<integer>()))", "boolean[${!exists}]")
+        chk("$f(zlist(null))", "boolean[${!exists}]")
+
+        chk("$f([123 : 'Hello'])", "boolean[${exists}]")
+        chk("$f(zmap([123 : 'Hello']))", "boolean[${exists}]")
+        chk("$f(map<integer,text>())", "boolean[${!exists}]")
+        chk("$f(zmap(map<integer,text>()))", "boolean[${!exists}]")
+        chk("$f(zmap(null))", "boolean[${!exists}]")
+
+        chk("$f(123)", "ct_err:expr_call_argtypes:$f:integer")
+        chk("$f(false)", "ct_err:expr_call_argtypes:$f:boolean")
+        chk("$f('Hello')", "ct_err:expr_call_argtypes:$f:text")
+        chk("$f(null)", "ct_err:expr_call_argtypes:$f:null")
     }
 
     @Test fun testDeprecatedError() {
@@ -211,7 +232,7 @@ class LibTest: BaseRellTest(false) {
         chkCompile("function f(x: integer?) { requireNotEmpty(x); }",
                 "ct_err:deprecated:FUNCTION:requireNotEmpty:require_not_empty")
 
-        chk("empty(_nullable_int(123))", "boolean[true]")
+        chk("empty(_nullable_int(123))", "boolean[false]")
 
         chk("byte_array([1,2,3,4])", "ct_err:deprecated:FUNCTION:byte_array:byte_array.from_list")
         chk("byte_array('1234')", "byte_array[1234]")

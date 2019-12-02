@@ -101,7 +101,16 @@ Global Functions
 | ``abs(integer): integer`` - absolute value
 | ``abs(decimal): decimal``
 
-``exists(T?): boolean`` - returns ``true`` if the argument is ``null`` and ``false`` otherwise
+| ``empty(T?): boolean`` - returns ``true`` if the argument is ``null`` or an empty collection and ``false`` otherwise;
+  for nullable collections checks both conditions
+| ``empty(list<T>): boolean``
+| ``empty(set<T>): boolean``
+| ``empty(map<K, V>): boolean``
+
+| ``exists(T?): boolean`` - opposite to ``empty()``
+| ``exists(list<T>): boolean``
+| ``exists(set<T>): boolean``
+| ``exists(map<K, V>): boolean``
 
 ``is_signer(byte_array): boolean`` - returns ``true`` if a byte array is
 in the list of signers of current operation

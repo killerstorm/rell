@@ -26,8 +26,10 @@ object C_LibFunctions {
             .add("requireNotEmpty", C_SysFn_Require_Nullable, depError("require_not_empty"))
             .add("require_not_empty", C_SysFn_Require_Collection)
             .add("require_not_empty", C_SysFn_Require_Nullable)
-            .add("exists", C_SysFn_Exists)
-            .add("empty", C_SysFn_Exists)
+            .add("exists", C_SysFn_Exists_Collection(false))
+            .add("exists", C_SysFn_Exists_Nullable(false))
+            .add("empty", C_SysFn_Exists_Collection(true))
+            .add("empty", C_SysFn_Exists_Nullable(true))
 
             .add("integer", R_IntegerType, listOf(R_TextType), R_SysFn_Integer.FromText)
             .add("integer", R_IntegerType, listOf(R_TextType, R_IntegerType), R_SysFn_Integer.FromText)
@@ -714,7 +716,7 @@ private object C_SysFn_Require_Boolean: C_GlobalSysFuncCase() {
         override fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
             val rExpr = args[0]
             val rMsgExpr = if (args.size < 2) null else args[1]
-            return R_RequireExpr_Boolean(rExpr, rMsgExpr)
+            return R_RequireExpr(R_UnitType, rExpr, rMsgExpr, R_RequireCondition_Boolean)
         }
     }
 }
@@ -739,7 +741,7 @@ private object C_SysFn_Require_Nullable: C_GlobalSysFuncCase() {
             val rExpr = exprValue.toRExpr()
 
             val rMsgExpr = if (args.size < 2) null else args[1].toRExpr()
-            val rResExpr = R_RequireExpr_Nullable(valueType, rExpr, rMsgExpr)
+            val rResExpr = R_RequireExpr(valueType, rExpr, rMsgExpr, R_RequireCondition_Nullable)
 
             val preFacts = exprValue.varFacts().postFacts
             val exprVarFacts = C_ExprVarFacts.forNullCast(preFacts, exprValue)
@@ -753,39 +755,42 @@ private object C_SysFn_Require_Collection: C_GlobalSysFuncCase() {
     override fun match(args: List<C_Value>): C_GlobalFuncCaseMatch? {
         if (args.size < 1 || args.size > 2) return null
 
-        val exprType = args[0].type()
-        val valueType = if (exprType is R_NullableType) exprType.valueType else exprType
-
         val msgType = if (args.size < 2) null else args[1].type()
         if (msgType != null && !R_TextType.isAssignableFrom(msgType)) return null
 
-        if (valueType is R_CollectionType) {
-            return CaseMatch_Collection(args, valueType)
+        val exprType = args[0].type()
+        val (valueType, condition) = getCondition(exprType)
+        return if (condition == null) null else CaseMatch(args, valueType, condition)
+    }
+
+    fun getCondition(exprType: R_Type): Pair<R_Type, R_RequireCondition?> {
+        val valueType = if (exprType is R_NullableType) exprType.valueType else exprType
+
+        val condition = if (valueType is R_CollectionType) {
+            R_RequireCondition_Collection
         } else if (valueType is R_MapType) {
-            return CaseMatch_Map(args, valueType)
+            R_RequireCondition_Map
         } else {
-            return null
+            null
         }
+
+        return Pair(valueType, condition)
     }
 
-    private class CaseMatch_Collection(args: List<C_Value>, val valueType: R_Type): C_BasicGlobalFuncCaseMatch(args) {
+    private class CaseMatch(
+            args: List<C_Value>,
+            private val valueType: R_Type,
+            private val condition: R_RequireCondition
+    ): C_BasicGlobalFuncCaseMatch(args) {
         override fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
             val rExpr = args[0]
             val rMsgExpr = if (args.size < 2) null else args[1]
-            return R_RequireExpr_Collection(valueType, rExpr, rMsgExpr)
-        }
-    }
-
-    private class CaseMatch_Map(args: List<C_Value>, val valueType: R_Type): C_BasicGlobalFuncCaseMatch(args) {
-        override fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
-            val rExpr = args[0]
-            val rMsgExpr = if (args.size < 2) null else args[1]
-            return R_RequireExpr_Map(valueType, rExpr, rMsgExpr)
+            return R_RequireExpr(valueType, rExpr, rMsgExpr, condition)
         }
     }
 }
 
-private object C_SysFn_Exists: C_GlobalSysFuncCase() {
+private class C_SysFn_Exists_Nullable(private val not: Boolean): C_GlobalSysFuncCase() {
     override fun match(args: List<C_Value>): C_GlobalFuncCaseMatch? {
         if (args.size != 1) return null
 
@@ -793,23 +798,42 @@ private object C_SysFn_Exists: C_GlobalSysFuncCase() {
         val exprType = expr.type()
         if (exprType !is R_NullableType) return null
 
-        return CaseMatch(args)
+        return CaseMatch(not, args, R_RequireCondition_Nullable)
     }
 
-    private class CaseMatch(private val args: List<C_Value>): C_GlobalFuncCaseMatch() {
+    class CaseMatch(
+            private val not: Boolean,
+            private val args: List<C_Value>,
+            private val condition: R_RequireCondition
+    ): C_GlobalFuncCaseMatch() {
         override fun compileCall(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): C_Value {
             check(args.size == 1)
 
             val arg = args[0]
 
             val preFacts = C_ExprVarFacts.forSubExpressions(args)
-            val facts = preFacts.and(C_ExprVarFacts.forNullCheck(arg, false))
+            val facts = preFacts.and(C_ExprVarFacts.forNullCheck(arg, not))
 
+            val fn = R_SysFn_General.Exists(condition, not)
             val rArgs = args.map { it.toRExpr() }
-            val rExpr = C_Utils.createSysCallExpr(R_BooleanType, R_SysFn_General.Exists, rArgs, caseCtx.fullName)
+            val rExpr = C_Utils.createSysCallExpr(R_BooleanType, fn, rArgs, caseCtx.fullName)
 
             return C_RValue(caseCtx.fullName.pos, rExpr, facts)
         }
+    }
+}
+
+private class C_SysFn_Exists_Collection(private val not: Boolean): C_GlobalSysFuncCase() {
+    override fun match(args: List<C_Value>): C_GlobalFuncCaseMatch? {
+        if (args.size != 1) return null
+
+        val expr = args[0].asNullable()
+        val exprType = expr.type()
+
+        val (_, condition) = C_SysFn_Require_Collection.getCondition(exprType)
+        if (condition == null) return null
+
+        return C_SysFn_Exists_Nullable.CaseMatch(not, args, condition)
     }
 }
 

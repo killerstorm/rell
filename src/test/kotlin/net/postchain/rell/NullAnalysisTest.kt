@@ -361,6 +361,33 @@ class NullAnalysisTest: BaseRellTest(false) {
         chkEx("{ val x = _nullable_int(null); if (not exists(x)) return _type_of(x); return ''; }", "integer?")
     }
 
+    @Test fun testExistsCollection() {
+        tst.strictToString = false
+        chkEx("{ val x = _nullable([123]); return _type_of(x); }", "list<integer>?")
+        chkEx("{ val x = _nullable([123]); if (exists(x)) return _type_of(x); return ''; }", "list<integer>")
+        chkEx("{ val x = _nullable([123]); if (not exists(x)) return ''; return _type_of(x); }", "list<integer>")
+        chkEx("{ val x = _nullable([123]); if (exists(x)) return _type_of(x); return ''; }", "list<integer>")
+        chkEx("{ val x = if(2>1) null else [123]; if (not exists(x)) return _type_of(x); return ''; }", "list<integer>?")
+    }
+
+    @Test fun testEmpty() {
+        tst.strictToString = false
+        chkEx("{ val x = _nullable_int(123); return _type_of(x); }", "integer?")
+        chkEx("{ val x = _nullable_int(123); if (not empty(x)) return _type_of(x); return ''; }", "integer")
+        chkEx("{ val x = _nullable_int(123); if (empty(x)) return ''; return _type_of(x); }", "integer")
+        chkEx("{ val x = _nullable_int(123); if (not empty(x)) return _type_of(x); return ''; }", "integer")
+        chkEx("{ val x = _nullable_int(null); if (empty(x)) return _type_of(x); return ''; }", "integer?")
+    }
+
+    @Test fun testEmptyCollection() {
+        tst.strictToString = false
+        chkEx("{ val x = _nullable([123]); return _type_of(x); }", "list<integer>?")
+        chkEx("{ val x = _nullable([123]); if (not empty(x)) return _type_of(x); return ''; }", "list<integer>")
+        chkEx("{ val x = _nullable([123]); if (empty(x)) return ''; return _type_of(x); }", "list<integer>")
+        chkEx("{ val x = _nullable([123]); if (not empty(x)) return _type_of(x); return ''; }", "list<integer>")
+        chkEx("{ val x = if(2>1) null else [123]; if (empty(x)) return _type_of(x); return ''; }", "list<integer>?")
+    }
+
     @Test fun testList() {
         tst.strictToString = false
         chkEx("{ val x: integer? = _nullable_int(123); return _type_of([x]); }", "list<integer?>")

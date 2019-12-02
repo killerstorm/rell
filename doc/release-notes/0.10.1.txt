@@ -131,3 +131,9 @@ user @* {} ( _ = .name, _ = .company );
 Old sort syntax has been deprecated. Annotations @sort and @sort_desc shall be used instead. Example:
 
 user @* {} ( @sort .name );
+
+
+9. Library: Functions exists() and empty() for collections
+
+Functions exists() and empty() now accept collections (list, set, map) and check if they are empty. For a nullable
+collection, a value is considered empty if it is either null or an empty collection.

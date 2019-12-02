@@ -435,12 +435,15 @@ class R_WhenExpr(type: R_Type, val chooser: R_WhenChooser, val exprs: List<R_Exp
     }
 }
 
-sealed class R_RequireExpr(type: R_Type, val expr: R_Expr, val msgExpr: R_Expr?): R_Expr(type) {
-    abstract fun calculate(v: Rt_Value): Rt_Value?
-
-    final override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
+class R_RequireExpr(
+        type: R_Type,
+        private val expr: R_Expr,
+        private val msgExpr: R_Expr?,
+        private val condition: R_RequireCondition
+): R_Expr(type) {
+    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         val value = expr.evaluate(frame)
-        val res = calculate(value)
+        val res = condition.calculate(value)
         if (res != null) {
             return res
         }
@@ -454,19 +457,23 @@ sealed class R_RequireExpr(type: R_Type, val expr: R_Expr, val msgExpr: R_Expr?)
     }
 }
 
-class R_RequireExpr_Boolean(expr: R_Expr, msgExpr: R_Expr?): R_RequireExpr(R_UnitType, expr, msgExpr) {
+sealed class R_RequireCondition {
+    abstract fun calculate(v: Rt_Value): Rt_Value?
+}
+
+object R_RequireCondition_Boolean: R_RequireCondition() {
     override fun calculate(v: Rt_Value) = if (v.asBoolean()) Rt_UnitValue else null
 }
 
-class R_RequireExpr_Nullable(type: R_Type, expr: R_Expr, msgExpr: R_Expr?): R_RequireExpr(type, expr, msgExpr) {
+object R_RequireCondition_Nullable: R_RequireCondition() {
     override fun calculate(v: Rt_Value) = if (v != Rt_NullValue) v else null
 }
 
-class R_RequireExpr_Collection(type: R_Type, expr: R_Expr, msgExpr: R_Expr?): R_RequireExpr(type, expr, msgExpr) {
+object R_RequireCondition_Collection: R_RequireCondition() {
     override fun calculate(v: Rt_Value) = if (v != Rt_NullValue && !v.asCollection().isEmpty()) v else null
 }
 
-class R_RequireExpr_Map(type: R_Type, expr: R_Expr, msgExpr: R_Expr?): R_RequireExpr(type, expr, msgExpr) {
+object R_RequireCondition_Map: R_RequireCondition() {
     override fun calculate(v: Rt_Value) = if (v != Rt_NullValue && !v.asMap().isEmpty()) v else null
 }
 

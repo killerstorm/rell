@@ -740,10 +740,12 @@ object R_SysFn_General {
         }
     }
 
-    object Exists: R_SysFunction_1() {
+    class Exists(private val condition: R_RequireCondition, private val not: Boolean): R_SysFunction_1() {
         override fun call(arg: Rt_Value): Rt_Value {
-            val b = arg != Rt_NullValue
-            return Rt_BooleanValue(b)
+            val value = condition.calculate(arg)
+            val exists = value != null
+            val res = if (not) !exists else exists
+            return Rt_BooleanValue(res)
         }
     }
 
