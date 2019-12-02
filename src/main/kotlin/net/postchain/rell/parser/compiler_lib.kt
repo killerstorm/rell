@@ -1,7 +1,6 @@
 package net.postchain.rell.parser
 
 import net.postchain.rell.model.*
-import net.postchain.rell.module.RELL_VERSION
 import net.postchain.rell.runtime.Rt_DecimalValue
 import net.postchain.rell.runtime.Rt_IntValue
 import net.postchain.rell.runtime.Rt_TextValue
@@ -253,23 +252,11 @@ object C_LibFunctions {
             .add("value", R_IntegerType, listOf(), R_SysFn_Enum.Value, Db_SysFn_Nop)
             .build()
 
-    private val RELL_VERSION_NAMESPACE_FNS = C_GlobalFuncBuilder()
-            .add("build_info", R_MapType(R_TextType, R_TextType), listOf(), R_SysFn_Rell.Version.BuildInfo)
-            .build()
-
-    private val RELL_VERSION_NAMESPACE = makeNamespace(
-            RELL_VERSION_NAMESPACE_FNS,
-            stdConstValue("RELL_VERSION", RELL_VERSION),
-            stdFnValue("POSTCHAIN_VERSION", R_TextType, R_SysFn_Rell.Version.PostchainVersion),
-            stdFnValue("BUILD", R_TextType, R_SysFn_Rell.Version.Build)
-    )
-
     private val RELL_NAMESPACE_FNS = C_GlobalFuncBuilder()
             .build()
 
     private val RELL_NAMESPACE = makeNamespace(
-            RELL_NAMESPACE_FNS,
-            stdNamespace("version", RELL_VERSION_NAMESPACE)
+            RELL_NAMESPACE_FNS
     )
 
     private val NAMESPACES = mapOf(

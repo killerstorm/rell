@@ -29,7 +29,7 @@ class C_AppContext(val globalCtx: C_GlobalContext, controller: C_CompilerControl
         val blockEntity = C_Utils.createBlockEntity(executor, ref)
         val transactionEntity = C_Utils.createTransactionEntity(executor, ref, blockEntity)
 
-        val sysDefs = C_SystemDefs.create(defsBuilder, blockEntity, transactionEntity)
+        val sysDefs = C_SystemDefs.create(defsBuilder, blockEntity, transactionEntity, listOf())
         return C_ExternalChain(name, ref, sysDefs)
     }
 
@@ -277,6 +277,11 @@ class C_MountTablesBuilder {
     fun addQuery(name: S_Name, q: R_Query) {
         val b = chainBuilder("")
         b.queries.add(C_DeclarationType.QUERY, q, name.pos, q.mountName)
+    }
+
+    fun addQuery(q: R_Query) {
+        val b = chainBuilder("")
+        b.queries.add(C_DeclarationType.QUERY, q, null, q.mountName)
     }
 
     private fun chainBuilder(chain: String) = chains.computeIfAbsent(chain) { C_ChainMountTablesBuilder() }

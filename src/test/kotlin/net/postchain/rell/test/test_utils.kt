@@ -220,11 +220,11 @@ object GtvTestUtils {
     fun decodeGtvStr(s: String) = PostchainUtils.jsonToGtv(s)
     fun encodeGtvStr(gtv: Gtv) = PostchainUtils.gtvToJson(gtv)
 
-    fun decodeGtvQueryArgs(params: List<R_ExternalParam>, args: List<String>): List<Rt_Value> {
+    fun decodeGtvQueryArgs(params: List<R_Param>, args: List<String>): List<Rt_Value> {
         return decodeGtvArgs(params, args, true)
     }
 
-    fun decodeGtvOpArgs(params: List<R_ExternalParam>, args: List<Gtv>): List<Rt_Value> {
+    fun decodeGtvOpArgs(params: List<R_Param>, args: List<Gtv>): List<Rt_Value> {
         check(params.size == args.size)
         val ctx = GtvToRtContext(false)
         return args.mapIndexed { i, gtv ->
@@ -232,11 +232,11 @@ object GtvTestUtils {
         }
     }
 
-    fun decodeGtvOpArgsStr(params: List<R_ExternalParam>, args: List<String>): List<Rt_Value> {
+    fun decodeGtvOpArgsStr(params: List<R_Param>, args: List<String>): List<Rt_Value> {
         return decodeGtvArgs(params, args, false)
     }
 
-    private fun decodeGtvArgs(params: List<R_ExternalParam>, args: List<String>, pretty: Boolean): List<Rt_Value> {
+    private fun decodeGtvArgs(params: List<R_Param>, args: List<String>, pretty: Boolean): List<Rt_Value> {
         check(params.size == args.size)
         val ctx = GtvToRtContext(pretty)
         return args.mapIndexed { i, arg ->

@@ -6,8 +6,8 @@ import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
 import net.postchain.rell.CommonUtils
 import net.postchain.rell.model.R_App
-import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_MountName
+import net.postchain.rell.model.R_Param
 import net.postchain.rell.model.R_StackPos
 import net.postchain.rell.parser.C_MessageType
 import net.postchain.rell.runtime.*
@@ -140,7 +140,12 @@ class RellCodeTester(
         return callQuery0(code, name, args) { _, v -> v }
     }
 
-    private fun <T> callQuery0(code: String, name: String, args: List<T>, decoder: (List<R_ExternalParam>, List<T>) -> List<Rt_Value>): String {
+    private fun <T> callQuery0(
+            code: String,
+            name: String,
+            args: List<T>,
+            decoder: (List<R_Param>, List<T>) -> List<Rt_Value>
+    ): String {
         val evalRes = eval.eval {
             if (wrapInit) {
                 eval.wrapAll { init() }
@@ -176,7 +181,7 @@ class RellCodeTester(
         return callOp0(code, "o", args, GtvTestUtils::decodeGtvOpArgsStr)
     }
 
-    private fun <T> callOp0(code: String, name: String, args: List<T>, decoder: (List<R_ExternalParam>, List<T>) -> List<Rt_Value>): String {
+    private fun <T> callOp0(code: String, name: String, args: List<T>, decoder: (List<R_Param>, List<T>) -> List<Rt_Value>): String {
         init()
         val moduleCode = moduleCode(code)
         val globalCtx = createGlobalCtx()

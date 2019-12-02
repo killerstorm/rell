@@ -57,10 +57,14 @@ class R_Attrib(
     }
 }
 
-class R_ExternalParam(val name: String, val type: R_Type, val ptr: R_VarPtr)
+class R_Param(val name: String, val type: R_Type)
+
+class R_VarParam(val name: String, val type: R_Type, val ptr: R_VarPtr) {
+    fun toParam() = R_Param(name, type)
+}
 
 sealed class R_Routine(names: R_DefinitionNames): R_Definition(names) {
-    abstract fun params(): List<R_ExternalParam>
+    abstract fun params(): List<R_Param>
     abstract fun callTop(appCtx: Rt_AppContext, args: List<Rt_Value>): Rt_Value?
 }
 
@@ -69,20 +73,15 @@ sealed class R_MountedRoutine(names: R_DefinitionNames, val mountName: R_MountNa
 class R_Operation(names: R_DefinitionNames, mountName: R_MountName): R_MountedRoutine(names, mountName) {
     private val internals = C_LateInit(C_CompilerPass.EXPRESSIONS, ERROR_INTERNALS)
 
-    fun setInternals(params: List<R_ExternalParam>, body: R_Statement, frame: R_CallFrame) {
-        internals.set(Internals(params, body, frame))
+    fun setInternals(varParams: List<R_VarParam>, body: R_Statement, frame: R_CallFrame) {
+        val params = varParams.map { it.toParam() }.toImmList()
+        internals.set(Internals(params, varParams, body, frame))
     }
 
     override fun params() = internals.get().params
 
     override fun callTop(appCtx: Rt_AppContext, args: List<Rt_Value>): Rt_Value? {
-        val ints = internals.get()
-
-        val defCtx = Rt_DefinitionContext(appCtx, true, pos)
-        val rtFrame = Rt_CallFrame(null, null, defCtx, ints.frame)
-
-        checkCallArgs(this, ints.params, args)
-        processArgs(ints.params, args, rtFrame)
+        val rtFrame = processCallArgs(appCtx, args)
 
         appCtx.globalCtx.sqlExec.transaction {
             execute(rtFrame)
@@ -92,15 +91,20 @@ class R_Operation(names: R_DefinitionNames, mountName: R_MountName): R_MountedRo
     }
 
     fun callTopNoTx(appCtx: Rt_AppContext, args: List<Rt_Value>) {
+        val rtFrame = processCallArgs(appCtx, args)
+        execute(rtFrame)
+    }
+
+    private fun processCallArgs(appCtx: Rt_AppContext, args: List<Rt_Value>): Rt_CallFrame {
         val ints = internals.get()
 
         val defCtx = Rt_DefinitionContext(appCtx, true, pos)
         val rtFrame = Rt_CallFrame(null, null, defCtx, ints.frame)
 
         checkCallArgs(this, ints.params, args)
-        processArgs(ints.params, args, rtFrame)
+        processArgs(ints.varParams, args, rtFrame)
 
-        execute(rtFrame)
+        return rtFrame
     }
 
     private fun execute(rtFrame: Rt_CallFrame) {
@@ -111,18 +115,71 @@ class R_Operation(names: R_DefinitionNames, mountName: R_MountName): R_MountedRo
         }
     }
 
-    private class Internals(val params: List<R_ExternalParam>, val body: R_Statement, val frame: R_CallFrame)
+    private class Internals(
+            val params: List<R_Param>,
+            val varParams: List<R_VarParam>,
+            val body: R_Statement,
+            val frame: R_CallFrame
+    )
 
     companion object {
-        private val ERROR_INTERNALS = Internals(params = listOf(), body = C_Utils.ERROR_STATEMENT, frame = R_CallFrame.ERROR)
+        private val ERROR_INTERNALS = Internals(
+                params = listOf(),
+                varParams = listOf(),
+                body = C_Utils.ERROR_STATEMENT,
+                frame = R_CallFrame.ERROR
+        )
+    }
+}
+
+sealed class R_QueryBody {
+    abstract fun params(): List<R_Param>
+    abstract fun execute(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, pos: R_DefinitionPos): Rt_Value
+}
+
+class R_UserQueryBody(
+        private val varParams: List<R_VarParam>,
+        private val body: R_Statement,
+        private val frame: R_CallFrame
+): R_QueryBody() {
+    private val params = varParams.map { it.toParam() }.toImmList()
+
+    override fun params() = params
+
+    override fun execute(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, pos: R_DefinitionPos): Rt_Value {
+        val rtFrame = Rt_CallFrame(null, null, defCtx, frame)
+
+        processArgs(varParams, args, rtFrame)
+
+        val res = body.execute(rtFrame)
+        check(res is R_StatementResult_Return) { "${res?.javaClass?.name}" }
+
+        check(res.value != null)
+        return res.value
+    }
+
+    companion object {
+        val ERROR: R_QueryBody = R_UserQueryBody(listOf(), C_Utils.ERROR_STATEMENT, R_CallFrame.ERROR)
+    }
+}
+
+class R_SysQueryBody(params: List<R_Param>, private val fn: R_SysFunction): R_QueryBody() {
+    private val params = params.toImmList()
+
+    override fun params() = params
+
+    override fun execute(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, pos: R_DefinitionPos): Rt_Value {
+        val ctx = Rt_CallContext(defCtx)
+        return fn.call(ctx, args)
     }
 }
 
 class R_Query(names: R_DefinitionNames, mountName: R_MountName): R_MountedRoutine(names, mountName) {
     private val internals = C_LateInit(C_CompilerPass.EXPRESSIONS, ERROR_INTERNALS)
 
-    fun setInternals(type: R_Type, params: List<R_ExternalParam>, body: R_Statement, frame: R_CallFrame) {
-        internals.set(Internals(type, params, body, frame))
+    fun setInternals(type: R_Type, body: R_QueryBody) {
+        val params = body.params()
+        internals.set(Internals(type, params, body))
     }
 
     override fun params() = internals.get().params
@@ -134,51 +191,28 @@ class R_Query(names: R_DefinitionNames, mountName: R_MountName): R_MountedRoutin
 
     fun callTopQuery(appCtx: Rt_AppContext, args: List<Rt_Value>): Rt_Value {
         val ints = internals.get()
-
-        val defCtx = Rt_DefinitionContext(appCtx, false, pos)
-        val rtFrame = Rt_CallFrame(null, null, defCtx, ints.frame)
-
         checkCallArgs(this, ints.params, args)
-        processArgs(ints.params, args, rtFrame)
-
-        val res = ints.body.execute(rtFrame)
-        if (res == null) {
-            val name = appLevelName
-            throw Rt_Error("query_novalue:$name", "Query '$name' did not return a value")
-        }
-
-        if (res !is R_StatementResult_Return) {
-            throw IllegalStateException("" + res)
-        }
-        check(res.value != null)
-
-        return res.value
+        val defCtx = Rt_DefinitionContext(appCtx, false, pos)
+        val res = ints.body.execute(defCtx, args, pos)
+        return res
     }
 
-    private class Internals(
-            val type: R_Type,
-            val params: List<R_ExternalParam>,
-            val body: R_Statement,
-            val frame: R_CallFrame
-    )
+    private class Internals(val type: R_Type, val params: List<R_Param>, val body: R_QueryBody)
 
     companion object {
-        private val ERROR_INTERNALS = Internals(
-                type = R_UnitType,
-                params = listOf(),
-                body = C_Utils.ERROR_STATEMENT,
-                frame = R_CallFrame.ERROR
-        )
+        private val ERROR_INTERNALS = Internals(type = R_UnitType, params = listOf(), body = R_UserQueryBody.ERROR)
     }
 }
 
 class R_FunctionBody(
         val defPos: R_DefinitionPos,
         val type: R_Type,
-        val params: List<R_ExternalParam>,
+        val varParams: List<R_VarParam>,
         val body: R_Statement,
         val frame: R_CallFrame
 ) {
+    val params = varParams.map { it.toParam() }.toImmList()
+
     companion object {
         val EMPTY = R_FunctionBody(
                 R_DefinitionPos("<error>", "<error>"),
@@ -216,8 +250,7 @@ class R_Function(names: R_DefinitionNames): R_Routine(names) {
         val body = bodyLate.get()
         val rtSubFrame = createRtFrame(body, rtFrame.defCtx.appCtx, rtFrame.defCtx.dbUpdateAllowed, rtFrame, callerFilePos)
 
-        val params = params()
-        processArgs(params, args, rtSubFrame)
+        processArgs(body.varParams, args, rtSubFrame)
 
         val res = body.body.execute(rtSubFrame)
 
@@ -242,7 +275,7 @@ class R_Function(names: R_DefinitionNames): R_Routine(names) {
     }
 }
 
-private fun checkCallArgs(routine: R_Routine, params: List<R_ExternalParam>, args: List<Rt_Value>) {
+private fun checkCallArgs(routine: R_Routine, params: List<R_Param>, args: List<Rt_Value>) {
     val name = routine.appLevelName
 
     if (args.size != params.size) {
@@ -261,7 +294,7 @@ private fun checkCallArgs(routine: R_Routine, params: List<R_ExternalParam>, arg
     }
 }
 
-private fun processArgs(params: List<R_ExternalParam>, args: List<Rt_Value>, frame: Rt_CallFrame) {
+private fun processArgs(params: List<R_VarParam>, args: List<Rt_Value>, frame: Rt_CallFrame) {
     check(args.size == params.size)
     for (i in params.indices) {
         val param = params[i]

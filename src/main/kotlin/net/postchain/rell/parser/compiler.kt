@@ -107,16 +107,35 @@ class C_SystemDefs private constructor(
         fun create(executor: C_CompilerExecutor, appDefsBuilder: C_AppDefsBuilder): C_SystemDefs {
             val blockEntity = C_Utils.createBlockEntity(executor, null)
             val transactionEntity = C_Utils.createTransactionEntity(executor, null, blockEntity)
-            return create(appDefsBuilder, blockEntity, transactionEntity)
+
+            val queries = listOf(
+                    C_Utils.createSysQuery(executor, "get_rell_version", R_TextType, R_SysFn_Rell.GetRellVersion),
+                    C_Utils.createSysQuery(executor, "get_postchain_version", R_TextType, R_SysFn_Rell.GetPostchainVersion),
+                    C_Utils.createSysQuery(executor, "get_build", R_TextType, R_SysFn_Rell.GetBuild),
+                    C_Utils.createSysQuery(executor, "get_build_details", R_SysFn_Rell.GetBuildDetails.TYPE, R_SysFn_Rell.GetBuildDetails)
+            )
+
+            return create(appDefsBuilder, blockEntity, transactionEntity, queries)
         }
 
-        fun create(appDefsBuilder: C_AppDefsBuilder, blockEntity: R_Entity, transactionEntity: R_Entity): C_SystemDefs {
+        fun create(
+                appDefsBuilder: C_AppDefsBuilder,
+                blockEntity: R_Entity,
+                transactionEntity: R_Entity,
+                queries: List<R_Query>
+        ): C_SystemDefs {
             val sysEntities =  listOf(blockEntity, transactionEntity)
 
             val mntBuilder = C_MountTablesBuilder()
+
             for (entity in sysEntities) {
                 appDefsBuilder.entities.add(C_Entity(null, entity))
                 mntBuilder.addEntity(null, entity)
+            }
+
+            for (query in queries) {
+                appDefsBuilder.queries.add(query)
+                mntBuilder.addQuery(query)
             }
 
             val mntTables = mntBuilder.build()

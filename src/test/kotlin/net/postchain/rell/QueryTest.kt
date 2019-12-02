@@ -1,5 +1,6 @@
 package net.postchain.rell
 
+import net.postchain.rell.module.RELL_VERSION
 import net.postchain.rell.runtime.Rt_BooleanValue
 import net.postchain.rell.runtime.Rt_IntValue
 import net.postchain.rell.runtime.Rt_TextValue
@@ -141,5 +142,9 @@ class QueryTest: BaseRellTest() {
         chkEx("{ return print('Hello'); }", "ct_err:stmt_return_unit")
 
         chkEx("{ if (1 > 0) return 123; else return 'Hello'; }", "ct_err:entity_rettype:[integer]:[text]")
+    }
+
+    @Test fun testGetRellVersion() {
+        chkQueryEx("", "rell.get_rell_version", listOf(), "text[$RELL_VERSION]")
     }
 }

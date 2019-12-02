@@ -4,6 +4,7 @@ import net.postchain.core.Signature
 import net.postchain.rell.CommonUtils
 import net.postchain.rell.PostchainUtils
 import net.postchain.rell.module.GtvToRtContext
+import net.postchain.rell.module.RELL_VERSION
 import net.postchain.rell.parser.C_Constants
 import net.postchain.rell.runtime.*
 import org.apache.commons.lang3.StringUtils
@@ -856,32 +857,37 @@ object R_SysFn_Crypto {
 }
 
 object R_SysFn_Rell {
-    object Version {
-        object BuildInfo: R_SysFunction() {
-            private val TYPE = R_MapType(R_TextType, R_TextType)
-
-            override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
-                check(args.size == 0)
-                val ver = ctx.globalCtx.rellVersion()
-                return Rt_MapValue(TYPE, ver.rtProperties.toMutableMap())
-            }
+    object GetRellVersion: R_SysFunction() {
+        override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
+            check(args.size == 0)
+            return Rt_TextValue(RELL_VERSION)
         }
+    }
 
-        object Build: R_SysFunction() {
-            override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
-                check(args.size == 0)
-                val ver = ctx.globalCtx.rellVersion()
-                return Rt_TextValue(ver.buildDescriptor)
-            }
+    object GetPostchainVersion: R_SysFunction() {
+        override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
+            check(args.size == 0)
+            val ver = ctx.globalCtx.rellVersion()
+            val postchainVer = ver.properties.getValue(Rt_RellVersionProperty.POSTCHAIN_VERSION)
+            return Rt_TextValue(postchainVer)
         }
+    }
 
-        object PostchainVersion: R_SysFunction() {
-            override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
-                check(args.size == 0)
-                val ver = ctx.globalCtx.rellVersion()
-                val postchainVer = ver.properties.getValue(Rt_RellVersionProperty.POSTCHAIN_VERSION)
-                return Rt_TextValue(postchainVer)
-            }
+    object GetBuild: R_SysFunction() {
+        override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
+            check(args.size == 0)
+            val ver = ctx.globalCtx.rellVersion()
+            return Rt_TextValue(ver.buildDescriptor)
+        }
+    }
+
+    object GetBuildDetails: R_SysFunction() {
+        val TYPE = R_MapType(R_TextType, R_TextType)
+
+        override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
+            check(args.size == 0)
+            val ver = ctx.globalCtx.rellVersion()
+            return Rt_MapValue(TYPE, ver.rtProperties.toMutableMap())
         }
     }
 }

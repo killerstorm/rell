@@ -172,6 +172,21 @@ object C_Utils {
         return entity
     }
 
+    fun createSysQuery(executor: C_CompilerExecutor, simpleName: String, type: R_Type, fn: R_SysFunction): R_Query {
+        val moduleName = R_ModuleName.of("rell")
+        val names = createDefNames(moduleName, null, null, listOf(simpleName))
+
+        val mountName = R_MountName(moduleName.parts + R_Name.of(simpleName))
+        val query = R_Query(names, mountName)
+
+        executor.onPass(C_CompilerPass.EXPRESSIONS) {
+            val body = R_SysQueryBody(listOf(), fn)
+            query.setInternals(type, body)
+        }
+
+        return query
+    }
+
     fun createDefNames(
             moduleName: R_ModuleName,
             extChain: R_ExternalChainRef?,

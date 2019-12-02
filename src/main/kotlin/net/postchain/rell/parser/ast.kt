@@ -619,7 +619,8 @@ class S_QueryDefinition(
             checkGtvResult(ctx, rRetType)
         }
 
-        rQuery.setInternals(rRetType, extParams.rParams, rBody, rCallFrame)
+        val rQueryBody = R_UserQueryBody(extParams.rParams, rBody, rCallFrame)
+        rQuery.setInternals(rRetType, rQueryBody)
     }
 
     private fun checkGtvResult(ctx: C_NamespaceContext, rType: R_Type) {
@@ -921,10 +922,10 @@ class S_FunctionDefinition(
     }
 
     private class C_FnHeader(
-        val retType: R_Type,
-        val bodyExprCtx: C_ExprContext,
-        val rParams: List<R_ExternalParam>,
-        val cParams: List<C_ExternalParam>
+            val retType: R_Type,
+            val bodyExprCtx: C_ExprContext,
+            val rParams: List<R_VarParam>,
+            val cParams: List<C_ExternalParam>
     )
 }
 
@@ -1154,7 +1155,7 @@ private fun compileExternalParams(
 
     val names = mutableSetOf<String>()
     val inited = mutableMapOf<C_VarId, C_VarFact>()
-    val rExtParams = mutableListOf<R_ExternalParam>()
+    val rVarParams = mutableListOf<R_VarParam>()
     val cExtParams = mutableListOf<C_ExternalParam>()
 
     for (param in params) {
@@ -1167,8 +1168,8 @@ private fun compileExternalParams(
         } else if (type != null) {
             val (cId, ptr) = blkCtx.add(name, type, false)
             inited[cId] = C_VarFact.YES
-            val rExtParam = R_ExternalParam(name.str, type, ptr)
-            rExtParams.add(rExtParam)
+            val rVarParam = R_VarParam(name.str, type, ptr)
+            rVarParams.add(rVarParam)
         }
 
         val cExtParam = C_ExternalParam(name, type)
@@ -1183,7 +1184,7 @@ private fun compileExternalParams(
     val exprCtx = defCtx.rootExprCtx
     val exprCtx2 = exprCtx.update(factsCtx = exprCtx.factsCtx.sub(varFacts))
 
-    return C_ExternalParams(exprCtx2, rExtParams.toImmList(), cExtParams.toImmList())
+    return C_ExternalParams(exprCtx2, rVarParams.toImmList(), cExtParams.toImmList())
 }
 
 private fun checkGtvParam(ctx: C_NamespaceContext, param: C_ExternalParam) {
@@ -1195,6 +1196,6 @@ private fun checkGtvParam(ctx: C_NamespaceContext, param: C_ExternalParam) {
 
 private class C_ExternalParams(
         val exprCtx: C_ExprContext,
-        val rParams: List<R_ExternalParam>,
+        val rParams: List<R_VarParam>,
         val cParams: List<C_ExternalParam>
 )

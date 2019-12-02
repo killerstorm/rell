@@ -133,7 +133,7 @@ object RellTestUtils {
     }
 
     fun callQuery(appCtx: Rt_AppContext, name: String, args: List<Rt_Value>, encoder: (R_Type, Rt_Value) -> String): String {
-        val decoder = { _: List<R_ExternalParam>, args2: List<Rt_Value> -> args2 }
+        val decoder = { _: List<R_Param>, args2: List<Rt_Value> -> args2 }
         val eval = RellTestEval()
         return eval.eval {
             callQueryGeneric(eval, appCtx, name, args, decoder, encoder)
@@ -145,7 +145,7 @@ object RellTestUtils {
             appCtx: Rt_AppContext,
             name: String,
             args: List<T>,
-            decoder: (List<R_ExternalParam>, List<T>) -> List<Rt_Value>,
+            decoder: (List<R_Param>, List<T>) -> List<Rt_Value>,
             encoder: (R_Type, Rt_Value) -> String
     ): String {
         val mName = R_MountName.of(name)
@@ -163,7 +163,7 @@ object RellTestUtils {
     }
 
     fun callOp(appCtx: Rt_AppContext, name: String, args: List<Rt_Value>): String {
-        val decoder = { _: List<R_ExternalParam>, args2: List<Rt_Value> -> args2 }
+        val decoder = { _: List<R_Param>, args2: List<Rt_Value> -> args2 }
         return callOpGeneric(appCtx, name, args, decoder)
     }
 
@@ -171,7 +171,7 @@ object RellTestUtils {
             appCtx: Rt_AppContext,
             name: String,
             args: List<T>,
-            decoder: (List<R_ExternalParam>, List<T>) -> List<Rt_Value>
+            decoder: (List<R_Param>, List<T>) -> List<Rt_Value>
     ): String
     {
         val mName = R_MountName.of(name)

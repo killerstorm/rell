@@ -74,23 +74,23 @@ Run-time error messages returned to the client (as a one line, without a stack t
 [stack_trace.entities!ent_main(stack_trace/entities.rell:6)] Query 'ent_main_q' failed: No records found
 
 
-6. Library: Rell version and build information
+6. Library: System queries returning build and version information
 
-(1) Rell and Postchain version constants:
+(1) Rell and Postchain versions:
 
-    rell.version.RELL_VERSION: text;        // e. g. "0.10.1"
-    rell.version.POSTCHAIN_VERSION: text;   // e. g. "3.0.0"
+    rell.get_rell_version(): text;        // e. g. "0.10.1"
+    rell.get_postchain_version(): text;   // e. g. "3.0.0"
 
 (2) Build description, contains various information that describes the build:
 
-    rell.version.BUILD: text;
+    rell.get_build(): text;
 
-    Value example:
+    Result example:
     "rell: 0.10.1; postchain: 3.0.0; time: 2019-11-25T17:25:52+0000; branch: v0.10.1; commit: f875de6 (2019-11-25T10:37:18+0000); dirty: true"
 
 (3) Build properties as a key-value map:
 
-    rell.version.build_info(): map<text, text>;
+    rell.get_build_details(): map<text, text>;
 
     Example of a returned map:
 

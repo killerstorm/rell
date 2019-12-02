@@ -39,7 +39,11 @@ abstract class BaseRellTest(useSql: Boolean = true, gtv: Boolean = false): BaseT
         tst.chkQueryEx(code, "q", listOf(), expected)
     }
 
-    fun chkQueryEx(code: String, args: List<Rt_Value>, expected: String, name: String = "q") {
+    fun chkQueryEx(code: String, args: List<Rt_Value>, expected: String) {
+        chkQueryEx(code, "q", args, expected)
+    }
+
+    fun chkQueryEx(code: String, name: String, args: List<Rt_Value>, expected: String) {
         tst.chkQueryEx(code, name, args, expected)
     }
 

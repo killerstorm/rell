@@ -105,3 +105,9 @@ ERROR System function 'abs': Integer overflow: -9223372036854775808
 ./rell.sh --db-properties test-cli/config/node-config.properties -d test-cli/src -- stack_trace.entities ent_main
 ERROR No records found
 	at stack_trace.entities!ent_main(stack_trace/entities.rell:6)
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rell.sh -d test-cli/src calc rell.get_rell_version
+./rell.sh -d test-cli/src calc rell.get_postchain_version
+./rell.sh -d test-cli/src calc rell.get_build
+./rell.sh --json -d test-cli/src calc rell.get_build_details

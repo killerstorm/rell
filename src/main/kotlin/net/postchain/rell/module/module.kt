@@ -28,7 +28,7 @@ const val RELL_VERSION_MODULE_SYSTEM = "0.10.0"
 const val CONFIG_RELL_FILES = "files_v$RELL_LANG_VERSION"
 const val CONFIG_RELL_SOURCES = "sources_v$RELL_LANG_VERSION"
 
-private fun convertArgs(ctx: GtvToRtContext, params: List<R_ExternalParam>, args: List<Gtv>): List<Rt_Value> {
+private fun convertArgs(ctx: GtvToRtContext, params: List<R_Param>, args: List<Gtv>): List<Rt_Value> {
     return args.mapIndexed { index, arg ->
         val type = params[index].type
         type.gtvToRt(ctx, arg)

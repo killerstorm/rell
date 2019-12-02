@@ -150,15 +150,16 @@ private fun findEntryPoint(app: R_App, moduleName: R_ModuleName, routineName: R_
     }
 
     val name = routineName.str()
+    val mountName = R_MountName(routineName.parts)
     val eps = mutableListOf<RellEntryPoint>()
 
-    val op = module.operations[name]
+    val op = module.operations[name] ?: app.operations[mountName]
     if (op != null) {
         val time = System.currentTimeMillis() / 1000
         eps.add(RellEntryPoint_Operation(op, Rt_OpContext(time, -1, -1, listOf())))
     }
 
-    val q = module.queries[name]
+    val q = module.queries[name] ?: app.queries[mountName]
     if (q != null) eps.add(RellEntryPoint_Query(q))
 
     val f = module.functions[name]
@@ -208,7 +209,7 @@ private fun parseArgs(entryPoint: RellEntryPoint, gtvCtx: GtvToRtContext, args: 
     return args.withIndex().map { (idx, arg) -> parseArg(gtvCtx, params[idx], arg, json) }
 }
 
-private fun parseArg(gtvCtx: GtvToRtContext, param: R_ExternalParam, arg: String, json: Boolean): Rt_Value {
+private fun parseArg(gtvCtx: GtvToRtContext, param: R_Param, arg: String, json: Boolean): Rt_Value {
     val type = param.type
 
     if (json) {

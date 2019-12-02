@@ -87,7 +87,7 @@ class MountTest: BaseRellTest() {
     }
 
     @Test fun testQuery() {
-        chkQueryEx("@mount('foo.bar') query some() = 123;", listOf(), "int[123]", name = "foo.bar")
+        chkQueryEx("@mount('foo.bar') query some() = 123;", "foo.bar", listOf(), "int[123]")
     }
 
     @Test fun testEmptyMount() {
@@ -463,6 +463,17 @@ class MountTest: BaseRellTest() {
         chkCompile("namespace sys { entity $table {} }", "ct_err:mnt_conflict:sys:[sys.$table]:sys.$table")
         chkCompile("@external('foo') namespace { @mount('sys.$table') @log entity user {} }", "ct_err:mnt_conflict:sys:[[foo]!user]:sys.$table")
         chkCompile("@external('foo') namespace { namespace sys { @log entity $table {} } }", "ct_err:mnt_conflict:sys:[[foo]!sys.$table]:sys.$table")
+    }
+
+    @Test fun testConflictSystemQuery() {
+        chkCompile("@mount('rell.') query get_rell_version() = '123';",
+                "ct_err:mnt_conflict:sys:[get_rell_version]:rell.get_rell_version:QUERY:[rell!get_rell_version]")
+        chkCompile("@mount('rell.') query get_postchain_version() = '123';",
+                "ct_err:mnt_conflict:sys:[get_postchain_version]:rell.get_postchain_version:QUERY:[rell!get_postchain_version]")
+        chkCompile("@mount('rell.') query get_build() = '123';",
+                "ct_err:mnt_conflict:sys:[get_build]:rell.get_build:QUERY:[rell!get_build]")
+        chkCompile("@mount('rell.') query get_build_details() = '123';",
+                "ct_err:mnt_conflict:sys:[get_build_details]:rell.get_build_details:QUERY:[rell!get_build_details]")
     }
 
     @Test fun testConflictDifferentChains() {
