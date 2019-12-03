@@ -111,3 +111,7 @@ ERROR No records found
 ./rell.sh -d test-cli/src calc rell.get_postchain_version
 ./rell.sh -d test-cli/src calc rell.get_build
 ./rell.sh --json -d test-cli/src calc rell.get_build_details
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rell.sh -d test-cli/src mod rell.get_app_structure | python -m json.tool
+./rell.sh -d test-cli/src app_structure rell.get_app_structure | python -m json.tool

@@ -14,6 +14,7 @@ import net.postchain.gtv.*
 import net.postchain.gtv.gtvml.GtvMLEncoder
 import net.postchain.gtv.gtvml.GtvMLParser
 import net.postchain.gtv.merkle.GtvMerkleHashCalculator
+import net.postchain.rell.runtime.toGtv
 import java.io.File
 import java.util.*
 import javax.xml.bind.DatatypeConverter
@@ -350,3 +351,6 @@ fun <K, V> immMapOf(vararg entries: Pair<K, V>): Map<K, V> = mapOf(*entries).toI
 fun <T> Iterable<T>.toImmList(): List<T> = ImmutableList.copyOf(this)
 fun <T> Iterable<T>.toImmSet(): Set<T> = ImmutableSet.copyOf(this)
 fun <K, V> Map<K, V>.toImmMap(): Map<K, V> = ImmutableMap.copyOf(this)
+
+// Needs to be in a different file than List<Gtv>.toGtv() because of a name conflict...
+fun List<String>.toGtv(): Gtv = GtvFactory.gtv(this.map { it.toGtv() })

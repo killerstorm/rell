@@ -1,14 +1,24 @@
 package net.postchain.rell.model
 
+import net.postchain.gtv.Gtv
 import net.postchain.rell.parser.C_CompilerPass
 import net.postchain.rell.parser.C_LateInit
 import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_EnumValue
 import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.runtime.toGtv
+import net.postchain.rell.toGtv
 
-class R_Key(val attribs: List<String>)
+sealed class R_KeyIndex(val attribs: List<String>) {
+    fun toMetaGtv(): Gtv {
+        return mapOf(
+                "attributes" to attribs.toGtv()
+        ).toGtv()
+    }
+}
 
-class R_Index(val attribs: List<String>)
+class R_Key(attribs: List<String>): R_KeyIndex(attribs)
+class R_Index(attribs: List<String>): R_KeyIndex(attribs)
 
 class R_EntityFlags(
         val isObject: Boolean,
@@ -49,6 +59,23 @@ class R_Entity(
         return attr ?: throw IllegalStateException("Entity '$appLevelName' has no attribute '$name'")
     }
 
+    override fun toMetaGtv() = toMetaGtv(true)
+
+    fun toMetaGtv(full: Boolean): Gtv {
+        val map = mutableMapOf(
+                "mount" to mountName.str().toGtv(),
+                "attributes" to attributes.mapValues { it.value.toMetaGtv() }.toGtv()
+        )
+
+        if (full) {
+            map["log"] = flags.log.toGtv()
+            map["keys"] = keys.map { it.toMetaGtv() }.toGtv()
+            map["indexes"] = indexes.map { it.toMetaGtv() }.toGtv()
+        }
+
+        return map.toGtv()
+    }
+
     companion object {
         private val ERROR_BODY = R_EntityBody(keys = listOf(), indexes = listOf(), attributes = mapOf())
     }
@@ -62,6 +89,8 @@ class R_Object(names: R_DefinitionNames, val rEntity: R_Entity): R_Definition(na
         val sql = R_CreateExpr.buildSql(frame.defCtx.sqlCtx, rEntity, createAttrs, "0")
         sql.execute(frame)
     }
+
+    override fun toMetaGtv() = rEntity.toMetaGtv(false)
 }
 
 class R_StructFlags(val typeFlags: R_TypeFlags, val cyclic: Boolean, val infinite: Boolean)
@@ -90,6 +119,12 @@ class R_Struct(names: R_DefinitionNames): R_Definition(names) {
 
     fun isDirectlyMutable() = bodyLate.get().attrMutable
 
+    override fun toMetaGtv(): Gtv {
+        return mapOf(
+                "attributes" to attributes.mapValues { it.value.toMetaGtv() }.toGtv()
+        ).toGtv()
+    }
+
     private class R_StructBody(
             val attrMap: Map<String, R_Attrib>,
             val attrList: List<R_Attrib>,
@@ -103,7 +138,10 @@ class R_Struct(names: R_DefinitionNames): R_Definition(names) {
     }
 }
 
-class R_EnumAttr(val name: String, val value: Int)
+class R_EnumAttr(val name: String, val value: Int) {
+    // Currently returning an empty map, in the future there may be some values.
+    fun toMetaGtv() = mapOf<String, Gtv>().toGtv()
+}
 
 class R_Enum(names: R_DefinitionNames, val attrs: List<R_EnumAttr>): R_Definition(names) {
     val type = R_EnumType(this)
@@ -124,5 +162,11 @@ class R_Enum(names: R_DefinitionNames, val attrs: List<R_EnumAttr>): R_Definitio
 
     fun values(): List<Rt_Value> {
         return rtValues
+    }
+
+    override fun toMetaGtv(): Gtv {
+        return mapOf(
+                "values" to attrMap.mapValues { it.value.toMetaGtv() }.toGtv()
+        ).toGtv()
     }
 }

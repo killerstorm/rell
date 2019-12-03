@@ -1,5 +1,6 @@
 package net.postchain.rell.model
 
+import net.postchain.gtv.Gtv
 import net.postchain.rell.parser.C_CompilerPass
 import net.postchain.rell.parser.C_LateInit
 import net.postchain.rell.parser.C_Utils
@@ -22,6 +23,8 @@ abstract class R_Definition(names: R_DefinitionNames) {
     val moduleLevelName = names.qualifiedName
     val appLevelName = names.appLevelName
     val pos = names.pos()
+
+    abstract fun toMetaGtv(): Gtv
 
     final override fun toString() = "${javaClass.simpleName}[$appLevelName]"
 }
@@ -55,9 +58,21 @@ class R_Attrib(
     fun setExpr(expr: R_Expr?) {
         expr0.set(Optional.ofNullable(expr))
     }
+
+    fun toMetaGtv(): Gtv {
+        return mapOf(
+                "type" to type.toMetaGtv(),
+                "mutable" to mutable.toGtv()
+        ).toGtv()
+    }
 }
 
-class R_Param(val name: String, val type: R_Type)
+class R_Param(val name: String, val type: R_Type) {
+    fun toMetaGtv(): Gtv = mapOf(
+            "name" to name.toGtv(),
+            "type" to type.toMetaGtv()
+    ).toGtv()
+}
 
 class R_VarParam(val name: String, val type: R_Type, val ptr: R_VarPtr) {
     fun toParam() = R_Param(name, type)
@@ -113,6 +128,12 @@ class R_Operation(names: R_DefinitionNames, mountName: R_MountName): R_MountedRo
         if (res != null) {
             check(res is R_StatementResult_Return && res.value == null)
         }
+    }
+
+    override fun toMetaGtv(): Gtv {
+        return mapOf(
+                "parameters" to params().map { it.toMetaGtv() }.toGtv()
+        ).toGtv()
     }
 
     private class Internals(
@@ -197,6 +218,13 @@ class R_Query(names: R_DefinitionNames, mountName: R_MountName): R_MountedRoutin
         return res
     }
 
+    override fun toMetaGtv(): Gtv {
+        return mapOf(
+                "type" to type().toMetaGtv(),
+                "parameters" to params().map { it.toMetaGtv() }.toGtv()
+        ).toGtv()
+    }
+
     private class Internals(val type: R_Type, val params: List<R_Param>, val body: R_QueryBody)
 
     companion object {
@@ -273,6 +301,14 @@ class R_Function(names: R_DefinitionNames): R_Routine(names) {
 
         return Rt_CallFrame(callerFrame, callerPos, defCtx, body.frame)
     }
+
+    override fun toMetaGtv(): Gtv {
+        val body = bodyLate.get()
+        return mapOf(
+                "type" to body.type.toMetaGtv(),
+                "parameters" to params().map { it.toMetaGtv() }.toGtv()
+        ).toGtv()
+    }
 }
 
 private fun checkCallArgs(routine: R_Routine, params: List<R_Param>, args: List<Rt_Value>) {
@@ -330,17 +366,57 @@ class R_App(
             check(c.index == i)
         }
     }
+
+    fun toMetaGtv(): Gtv {
+        return mapOf(
+                "modules" to modules.map {
+                    val name = it.name.str()
+                    val fullName = if (it.externalChain == null) name else "$name[${it.externalChain}]"
+                    fullName to it.toMetaGtv()
+                }.toMap().toGtv()
+        ).toGtv()
+    }
 }
 
 class R_Module(
         val name: R_ModuleName,
+        val abstract: Boolean,
+        val external: Boolean,
+        val externalChain: String?,
         val entities: Map<String, R_Entity>,
         val objects: Map<String, R_Object>,
         val structs: Map<String, R_Struct>,
+        val enums: Map<String, R_Enum>,
         val operations: Map<String, R_Operation>,
         val queries: Map<String, R_Query>,
         val functions: Map<String, R_Function>,
         val moduleArgs: R_Struct?
 ){
     override fun toString() = name.toString()
+
+    fun toMetaGtv(): Gtv {
+        val map = mutableMapOf(
+                "name" to name.str().toGtv()
+        )
+
+        if (abstract) map["abstract"] = abstract.toGtv()
+        if (external) map["external"] = external.toGtv()
+        if (externalChain != null) map["externalChain"] = externalChain.toGtv()
+
+        addGtvDefs(map, "entities", entities)
+        addGtvDefs(map, "objects", objects)
+        addGtvDefs(map, "structs", structs)
+        addGtvDefs(map, "enums", enums)
+        addGtvDefs(map, "operations", operations)
+        addGtvDefs(map, "queries", queries)
+        addGtvDefs(map, "functions", functions)
+
+        return map.toGtv()
+    }
+
+    private fun addGtvDefs(map: MutableMap<String, Gtv>, key: String, defs: Map<String, R_Definition>) {
+        if (defs.isNotEmpty()) {
+            map[key] = defs.keys.sorted().map { it to defs.getValue(it).toMetaGtv() }.toMap().toGtv()
+        }
+    }
 }

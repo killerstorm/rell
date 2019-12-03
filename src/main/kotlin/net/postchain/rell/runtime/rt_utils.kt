@@ -1,12 +1,11 @@
 package net.postchain.rell.runtime
 
-import com.google.common.io.Resources
 import mu.KLogger
+import net.postchain.gtv.Gtv
+import net.postchain.gtv.GtvFactory
 import net.postchain.rell.model.R_StackPos
 import net.postchain.rell.parser.C_Constants
 import net.postchain.rell.sql.SqlExecutor
-import net.postchain.rell.toImmMap
-import java.io.StringReader
 import java.math.BigDecimal
 import java.math.MathContext
 import java.math.RoundingMode
@@ -14,8 +13,11 @@ import java.sql.Connection
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.sql.SQLException
-import java.util.*
-import kotlin.Comparator
+
+fun String.toGtv(): Gtv = GtvFactory.gtv(this)
+fun Boolean.toGtv(): Gtv = GtvFactory.gtv(this)
+fun List<Gtv>.toGtv(): Gtv = GtvFactory.gtv(this)
+fun Map<String, Gtv>.toGtv(): Gtv = GtvFactory.gtv(this)
 
 class RellInterpreterCrashException(message: String): RuntimeException(message)
 

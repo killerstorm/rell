@@ -892,6 +892,14 @@ object R_SysFn_Rell {
             return Rt_MapValue(TYPE, ver.rtProperties.toMutableMap())
         }
     }
+
+    object GetAppStructure: R_SysFunction() {
+        override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
+            check(args.size == 0)
+            val v = ctx.appCtx.app.toMetaGtv()
+            return Rt_GtvValue(v)
+        }
+    }
 }
 
 object R_SysFn_Internal {

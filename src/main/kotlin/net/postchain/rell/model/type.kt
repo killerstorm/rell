@@ -1,6 +1,7 @@
 package net.postchain.rell.model
 
 import net.postchain.gtv.Gtv
+import net.postchain.gtv.GtvNull
 import net.postchain.rell.CommonUtils
 import net.postchain.rell.module.*
 import net.postchain.rell.parser.C_Constants
@@ -123,6 +124,8 @@ sealed class R_Type(val name: String) {
         return if (assignable) R_TypeAdapter_Direct else null
     }
 
+    abstract fun toMetaGtv(): Gtv
+
     companion object {
         fun commonTypeOpt(a: R_Type, b: R_Type): R_Type? {
             if (a.isAssignableFrom(b)) {
@@ -139,6 +142,7 @@ sealed class R_Type(val name: String) {
 
 sealed class R_PrimitiveType(name: String, val sqlType: DataType<*>): R_Type(name) {
     final override fun toStrictString(): String = name
+    final override fun toMetaGtv() = name.toGtv()
 }
 
 object R_UnitType: R_PrimitiveType("unit", SQLDataType.OTHER) {
@@ -319,9 +323,10 @@ object R_JsonType: R_PrimitiveType("json", JSON_SQL_DATA_TYPE) {
 object R_NullType: R_Type("null") {
     override fun defaultValue() = Rt_NullValue
     override fun comparator() = Rt_Comparator.create { 0 }
-    override fun toStrictString() = "null"
     override fun calcCommonType(other: R_Type): R_Type? = R_NullableType(other)
     override fun createGtvConversion() = GtvRtConversion_Null
+    override fun toStrictString() = "null"
+    override fun toMetaGtv() = "null".toGtv()
 }
 
 class R_EntityType(val rEntity: R_Entity): R_Type(rEntity.appLevelName) {
@@ -333,6 +338,8 @@ class R_EntityType(val rEntity: R_Entity): R_Type(rEntity.appLevelName) {
 
     override fun createGtvConversion() = GtvRtConversion_Entity(this)
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Entity(this)
+
+    override fun toMetaGtv() = rEntity.appLevelName.toGtv()
 
     private class R_TypeSqlAdapter_Entity(private val type: R_EntityType): R_TypeSqlAdapter_Some() {
         override fun toSqlValue(value: Rt_Value) = value.asObjectId()
@@ -350,10 +357,11 @@ class R_EntityType(val rEntity: R_Entity): R_Type(rEntity.appLevelName) {
 
 class R_ObjectType(val rObject: R_Object): R_Type(rObject.appLevelName) {
     override fun isDirectVirtualable() = false
-    override fun toStrictString(): String = name
     override fun equals(other: Any?): Boolean = other is R_ObjectType && other.rObject == rObject
     override fun hashCode(): Int = rObject.hashCode()
     override fun createGtvConversion() = GtvRtConversion_None
+    override fun toStrictString(): String = name
+    override fun toMetaGtv() = rObject.appLevelName.toGtv()
 }
 
 class R_StructType(val struct: R_Struct): R_Type(struct.appLevelName) {
@@ -361,10 +369,11 @@ class R_StructType(val struct: R_Struct): R_Type(struct.appLevelName) {
     override fun isDirectMutable() = struct.isDirectlyMutable()
     override fun completeFlags() = struct.flags.typeFlags
 
-    override fun toStrictString(): String = name
     override fun componentTypes() = struct.attributesList.map { it.type }.toList()
-
     override fun createGtvConversion() = GtvRtConversion_Struct(struct)
+
+    override fun toStrictString(): String = name
+    override fun toMetaGtv() = struct.appLevelName.toGtv()
 }
 
 class R_EnumType(val enum: R_Enum): R_Type(enum.appLevelName) {
@@ -376,10 +385,12 @@ class R_EnumType(val enum: R_Enum): R_Type(enum.appLevelName) {
         return Rt_EnumValue(this, attr)
     }
 
-    override fun toStrictString() = name
-
     override fun createGtvConversion() = GtvRtConversion_Enum(enum)
+
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Enum(this)
+
+    override fun toStrictString() = name
+    override fun toMetaGtv() = enum.appLevelName.toGtv()
 
     private class R_TypeSqlAdapter_Enum(private val type: R_EnumType): R_TypeSqlAdapter_Some() {
         override fun toSqlValue(value: Rt_Value) = value.asEnum().value
@@ -438,20 +449,31 @@ class R_NullableType(val valueType: R_Type): R_Type(valueType.name + "?") {
     }
 
     override fun createGtvConversion() = GtvRtConversion_Nullable(this)
+
+    override fun toMetaGtv() = mapOf(
+            "type" to "nullable".toGtv(),
+            "value" to valueType.toMetaGtv()
+    ).toGtv()
 }
 
 // TODO: make this more elaborate
 class R_ClosureType(name: String): R_Type(name) {
     override fun isDirectVirtualable() = false
-    override fun toStrictString() = TODO("TODO")
     override fun createGtvConversion() = GtvRtConversion_None
+    override fun toStrictString() = TODO()
+    override fun toMetaGtv() = TODO()
 }
 
-sealed class R_CollectionType(val elementType: R_Type, baseName: String): R_Type("$baseName<${elementType.toStrictString()}>") {
+sealed class R_CollectionType(val elementType: R_Type, val baseName: String): R_Type("$baseName<${elementType.toStrictString()}>") {
     final override fun isReference() = true
     final override fun isDirectMutable() = true
-    final override fun toStrictString() = name
     final override fun componentTypes() = listOf(elementType)
+    final override fun toStrictString() = name
+
+    final override fun toMetaGtv() = mapOf(
+            "type" to baseName.toGtv(),
+            "value" to elementType.toMetaGtv()
+    ).toGtv()
 }
 
 class R_ListType(elementType: R_Type): R_CollectionType(elementType, "list") {
@@ -495,6 +517,12 @@ class R_MapType(val keyType: R_Type, val valueType: R_Type): R_Type("map<${keyTy
     }
 
     override fun createGtvConversion() = GtvRtConversion_Map(this)
+
+    override fun toMetaGtv() = mapOf(
+            "type" to "map".toGtv(),
+            "key" to keyType.toMetaGtv(),
+            "value" to valueType.toMetaGtv()
+    ).toGtv()
 }
 
 class R_TupleField(val name: String?, val type: R_Type) {
@@ -504,6 +532,11 @@ class R_TupleField(val name: String?, val type: R_Type) {
 
     override fun toString(): String = toStrictString()
     override fun equals(other: Any?): Boolean = other is R_TupleField && name == other.name && type == other.type
+
+    fun toMetaGtv() = mapOf(
+            "name" to (name?.toGtv() ?: GtvNull),
+            "type" to type.toMetaGtv()
+    ).toGtv()
 }
 
 class R_TupleType(val fields: List<R_TupleField>): R_Type("(${fields.joinToString(",") { it.toStrictString() }})") {
@@ -557,25 +590,36 @@ class R_TupleType(val fields: List<R_TupleField>): R_Type("(${fields.joinToStrin
         }
         return Rt_TupleComparator(fieldComparators)
     }
+
+    override fun toMetaGtv() = mapOf(
+            "type" to "tuple".toGtv(),
+            "fields" to fields.map { it.toMetaGtv() }.toGtv()
+    ).toGtv()
 }
 
 object R_RangeType: R_Type("range") {
     override fun isDirectVirtualable() = false
     override fun isReference() = true
     override fun comparator() = Rt_Comparator.create { it.asRange() }
-    override fun toStrictString(): String = "range"
     override fun createGtvConversion() = GtvRtConversion_None
+    override fun toStrictString(): String = name
+    override fun toMetaGtv() = name.toGtv()
 }
 
 object R_GtvType: R_Type("gtv") {
     override fun isReference() = true
-    override fun toStrictString() = name
     override fun createGtvConversion() = GtvRtConversion_Gtv
+    override fun toStrictString() = name
+    override fun toMetaGtv() = name.toGtv()
 }
 
-sealed class R_VirtualType(innerType: R_Type): R_Type("virtual<${innerType.name}>") {
+sealed class R_VirtualType(private val innerType: R_Type): R_Type("virtual<${innerType.name}>") {
     final override fun isReference() = true
     final override fun toStrictString() = name
+    final override fun toMetaGtv() = mapOf(
+            "type" to "virtual".toGtv(),
+            "value" to innerType.toMetaGtv()
+    ).toGtv()
 }
 
 sealed class R_VirtualCollectionType(innerType: R_Type): R_VirtualType(innerType) {

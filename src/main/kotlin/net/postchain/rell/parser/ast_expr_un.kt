@@ -67,7 +67,7 @@ object S_UnaryOp_Not: S_UnaryOp("not") {
         val resVarFacts = C_ExprVarFacts.of(
                 trueFacts = varFacts.falseFacts,
                 falseFacts = varFacts.trueFacts,
-                postFacts =  varFacts.postFacts
+                postFacts = varFacts.postFacts
         )
 
         val resValue = if (value.isDb()) {

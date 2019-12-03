@@ -12,6 +12,7 @@ import net.postchain.devtools.PostchainTestNode
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory.gtv
 import net.postchain.rell.RellBaseCliArgs
+import net.postchain.rell.RellCliLogUtils
 import net.postchain.rell.RellCliUtils
 import net.postchain.rell.RellConfigGen
 import net.postchain.rell.runtime.Rt_LogPrinter
@@ -22,7 +23,7 @@ import java.io.File
 import java.util.logging.LogManager
 
 private val log = run {
-    RellCliUtils.initLogging()
+    RellCliLogUtils.initLogging()
     KotlinLogging.logger("PostchainApp")
 }
 
@@ -41,6 +42,8 @@ private fun main0(args: RunPostchainAppArgs) {
     log.info("    module:           ${args.module}")
     log.info("    node config file: ${File(args.nodeConfigFile).absolutePath}")
     log.info("")
+
+    RellCliUtils.printVersionInfo()
 
     val configGen = RellConfigGen.create(target)
 
@@ -61,7 +64,7 @@ private fun main0(args: RunPostchainAppArgs) {
     log.info("")
     log.info("POSTCHAIN APP STARTED")
     log.info("    REST API port:  ${nodeConf.restApiPort}")
-    log.info("    Blockchain RID: ${brid.toHex()}")
+    log.info("    blockchain RID: ${brid.toHex()}")
     log.info("")
 }
 
@@ -108,8 +111,8 @@ class Rt_RellAppPrinterFactory: Rt_PrinterFactory {
 
 @CommandLine.Command(name = "PostchainAppLaunch", description = ["Runs a Rell Postchain app"])
 private class RunPostchainAppArgs: RellBaseCliArgs() {
-    @CommandLine.Option(names = ["--node-config"], paramLabel =  "NODE_CONFIG_FILE", required = true,
-            description =  ["Node configuration (.properties)"])
+    @CommandLine.Option(names = ["--node-config"], paramLabel = "NODE_CONFIG_FILE", required = true,
+            description = ["Node configuration (.properties)"])
     var nodeConfigFile: String = ""
 
     @CommandLine.Parameters(index = "0", paramLabel = "MODULE", description = ["Module name"])

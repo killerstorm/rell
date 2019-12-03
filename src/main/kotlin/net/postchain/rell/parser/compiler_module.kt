@@ -1,7 +1,7 @@
 package net.postchain.rell.parser
 
-import com.google.common.collect.ImmutableMap
 import net.postchain.rell.Setter
+import net.postchain.rell.immMapOf
 import net.postchain.rell.model.*
 import net.postchain.rell.toImmList
 import net.postchain.rell.toImmMap
@@ -174,11 +174,17 @@ class C_ModuleCompiler private constructor(private val modCtx: C_ModuleContext) 
         val defs = modNames.defs
         val moduleArgs = processModuleArgs(defs)
 
+        val header = modCtx.module.header()
+
         val rModule = R_Module(
                 modName,
+                abstract = header.abstract != null,
+                external = header.external,
+                externalChain = modCtx.module.extChain?.name,
                 entities = defs.entities,
                 objects = defs.objects,
                 structs = defs.structs.mapValues { (_, v) -> v.struct },
+                enums = defs.enums,
                 operations = defs.operations,
                 queries = defs.queries,
                 functions = defs.functions,
@@ -256,6 +262,7 @@ class C_ModuleDefsBuilder {
     val entities = C_ModuleDefTableBuilder<R_Entity>()
     val objects = C_ModuleDefTableBuilder<R_Object>()
     val structs = C_ModuleDefTableBuilder<C_Struct>()
+    val enums = C_ModuleDefTableBuilder<R_Enum>()
     val functions = C_ModuleDefTableBuilder<R_Function>()
     val operations = C_ModuleDefTableBuilder<R_Operation>()
     val queries = C_ModuleDefTableBuilder<R_Query>()
@@ -264,6 +271,7 @@ class C_ModuleDefsBuilder {
         entities.add(defs.entities)
         objects.add(defs.objects)
         structs.add(defs.structs)
+        enums.add(defs.enums)
         functions.add(defs.functions)
         operations.add(defs.operations)
         queries.add(defs.queries)
@@ -274,6 +282,7 @@ class C_ModuleDefsBuilder {
                 entities = entities.build(),
                 objects = objects.build(),
                 structs = structs.build(),
+                enums = enums.build(),
                 functions = functions.build(),
                 operations = operations.build(),
                 queries = queries.build()
@@ -285,18 +294,20 @@ class C_ModuleDefs(
         val entities: Map<String, R_Entity>,
         val objects: Map<String, R_Object>,
         val structs: Map<String, C_Struct>,
+        val enums: Map<String, R_Enum>,
         val functions: Map<String, R_Function>,
         val operations: Map<String, R_Operation>,
         val queries: Map<String, R_Query>
 ){
     companion object {
         val EMPTY = C_ModuleDefs(
-                entities = ImmutableMap.of(),
-                objects = ImmutableMap.of(),
-                structs = ImmutableMap.of(),
-                functions = ImmutableMap.of(),
-                operations = ImmutableMap.of(),
-                queries = ImmutableMap.of()
+                entities = immMapOf(),
+                objects = immMapOf(),
+                structs = immMapOf(),
+                enums = immMapOf(),
+                functions = immMapOf(),
+                operations = immMapOf(),
+                queries = immMapOf()
         )
     }
 }

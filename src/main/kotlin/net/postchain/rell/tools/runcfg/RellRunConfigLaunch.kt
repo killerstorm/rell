@@ -9,6 +9,7 @@ import net.postchain.core.NODE_ID_TODO
 import net.postchain.core.UserMistake
 import net.postchain.devtools.PostchainTestNode
 import net.postchain.rell.RellBaseCliArgs
+import net.postchain.rell.RellCliLogUtils
 import net.postchain.rell.RellCliUtils
 import org.apache.commons.configuration2.PropertiesConfiguration
 import picocli.CommandLine
@@ -17,7 +18,7 @@ import java.io.StringReader
 import java.util.*
 
 private val log = run {
-    RellCliUtils.initLogging()
+    RellCliLogUtils.initLogging()
     KotlinLogging.logger("PostchainApp")
 }
 
@@ -35,6 +36,8 @@ private fun main0(args: RellRunConfigLaunchArgs) {
     log.info("    source directory: ${sourceDir.absolutePath}")
     log.info("    run config file: ${runConfigFile.absolutePath}")
     log.info("")
+
+    RellCliUtils.printVersionInfo()
 
     val rellAppConf = RellRunConfigGenerator.generateCli(sourceDir, runConfigFile)
 

@@ -6,7 +6,6 @@ import net.postchain.config.app.AppConfig
 import net.postchain.gtv.GtvNull
 import net.postchain.rell.model.*
 import net.postchain.rell.module.GtvToRtContext
-import net.postchain.rell.module.RELL_VERSION
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.*
 import picocli.CommandLine
@@ -14,7 +13,7 @@ import kotlin.system.exitProcess
 
 @Suppress("unused")
 private val INIT = run {
-    RellCliUtils.initLogging()
+    RellCliLogUtils.initLogging()
 }
 
 private val SQL_MAPPER = Rt_ChainSqlMapping(0)
@@ -27,7 +26,8 @@ fun main(args: Array<String>) {
 
 private fun main0(args: RellCliArgs) {
     if (args.version) {
-        println("Rell $RELL_VERSION")
+        val ver = Rt_RellVersion.getInstance()?.buildDescriptor ?: "Version unknown"
+        println(ver)
         exitProcess(0)
     }
 
@@ -314,12 +314,12 @@ private class RellEntryPoint_Query(private val q: R_Query): RellEntryPoint() {
 
 @CommandLine.Command(name = "rell", description = ["Executes a rell program"])
 private class RellCliArgs: RellBaseCliArgs() {
-    @CommandLine.Option(names = ["--db-url"], paramLabel =  "DB_URL",
-            description =  ["Database JDBC URL, e. g. jdbc:postgresql://localhost/relltestdb?user=relltestuser&password=1234"])
+    @CommandLine.Option(names = ["--db-url"], paramLabel = "DB_URL",
+            description = ["Database JDBC URL, e. g. jdbc:postgresql://localhost/relltestdb?user=relltestuser&password=1234"])
     var dbUrl: String? = null
 
-    @CommandLine.Option(names = ["--db-properties"], paramLabel =  "DB_PROPERTIES",
-            description =  ["Database connection properties file (same format as node-config.properties)"])
+    @CommandLine.Option(names = ["--db-properties"], paramLabel = "DB_PROPERTIES",
+            description = ["Database connection properties file (same format as node-config.properties)"])
     var dbProperties: String? = null
 
     @CommandLine.Option(names = ["--resetdb"], description = ["Reset database (drop everything)"])

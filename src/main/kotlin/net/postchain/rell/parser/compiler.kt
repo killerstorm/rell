@@ -112,7 +112,8 @@ class C_SystemDefs private constructor(
                     C_Utils.createSysQuery(executor, "get_rell_version", R_TextType, R_SysFn_Rell.GetRellVersion),
                     C_Utils.createSysQuery(executor, "get_postchain_version", R_TextType, R_SysFn_Rell.GetPostchainVersion),
                     C_Utils.createSysQuery(executor, "get_build", R_TextType, R_SysFn_Rell.GetBuild),
-                    C_Utils.createSysQuery(executor, "get_build_details", R_SysFn_Rell.GetBuildDetails.TYPE, R_SysFn_Rell.GetBuildDetails)
+                    C_Utils.createSysQuery(executor, "get_build_details", R_SysFn_Rell.GetBuildDetails.TYPE, R_SysFn_Rell.GetBuildDetails),
+                    C_Utils.createSysQuery(executor, "get_app_structure", R_GtvType, R_SysFn_Rell.GetAppStructure)
             )
 
             return create(appDefsBuilder, blockEntity, transactionEntity, queries)
@@ -124,7 +125,7 @@ class C_SystemDefs private constructor(
                 transactionEntity: R_Entity,
                 queries: List<R_Query>
         ): C_SystemDefs {
-            val sysEntities =  listOf(blockEntity, transactionEntity)
+            val sysEntities = listOf(blockEntity, transactionEntity)
 
             val mntBuilder = C_MountTablesBuilder()
 

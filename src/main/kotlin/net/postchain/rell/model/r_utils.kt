@@ -1,5 +1,6 @@
 package net.postchain.rell.model
 
+import net.postchain.rell.CommonUtils
 import net.postchain.rell.toImmList
 import org.apache.commons.lang3.StringUtils
 import java.util.*
@@ -20,7 +21,7 @@ class R_StackPos(val def: R_DefinitionPos, val file: R_FilePos) {
     override fun toString() = "$def($file)"
 }
 
-sealed class R_GenericQualifiedName<T: R_GenericQualifiedName<T>>(parts: List<R_Name>) {
+sealed class R_GenericQualifiedName<T: R_GenericQualifiedName<T>>(parts: List<R_Name>): Comparable<T> {
     val parts = parts.toImmList()
 
     private val str = parts.joinToString(".")
@@ -43,6 +44,10 @@ sealed class R_GenericQualifiedName<T: R_GenericQualifiedName<T>>(parts: List<R_
     }
 
     protected abstract fun create(parts: List<R_Name>): T
+
+    final override fun compareTo(other: T): Int {
+        return CommonUtils.compareLists(parts, other.parts)
+    }
 
     final override fun toString() = str()
     final override fun equals(other: Any?) = other is R_GenericQualifiedName<*> && javaClass == other.javaClass && parts == other.parts
@@ -90,7 +95,8 @@ class R_MountName(parts: List<R_Name>): R_GenericQualifiedName<R_MountName>(part
     }
 }
 
-class R_Name private constructor(val str: String) {
+class R_Name private constructor(val str: String): Comparable<R_Name> {
+    override fun compareTo(other: R_Name) = str.compareTo(other.str)
     override fun toString() = str
     override fun equals(other: Any?) = other is R_Name && str == other.str
     override fun hashCode() = str.hashCode()

@@ -284,7 +284,7 @@ private class RellPostchainModule(
 
 class RellPostchainModuleFactory(
         private val stdoutPrinter: Rt_Printer = Rt_StdoutPrinter,
-        private val logPrinter: Rt_Printer = Rt_LogPrinter("net.postchain.rell.Rell"), // Need net.postchain to be logged with Postchain settings.
+        private val logPrinter: Rt_Printer = Rt_LogPrinter("Rell"),
         private val wrapCtErrors: Boolean = true,
         private val wrapRtErrors: Boolean = true,
         private val forceTypeCheck: Boolean = false

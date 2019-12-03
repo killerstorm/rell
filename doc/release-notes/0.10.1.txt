@@ -74,7 +74,7 @@ Run-time error messages returned to the client (as a one line, without a stack t
 [stack_trace.entities!ent_main(stack_trace/entities.rell:6)] Query 'ent_main_q' failed: No records found
 
 
-6. Library: System queries returning build and version information
+6. Run-time: System queries returning build and version information
 
 (1) Rell and Postchain versions:
 
@@ -137,3 +137,60 @@ user @* {} ( @sort .name );
 
 Functions exists() and empty() now accept collections (list, set, map) and check if they are empty. For a nullable
 collection, a value is considered empty if it is either null or an empty collection.
+
+
+10. Run-time: System query to get application structure
+
+System query "rell.get_app_structure" returns the structure of the Rell application - its modules and definitions.
+Definitions are entities, objects, structs, enums, operations, queries and functions. The type of the return value is gtv.
+
+Example of a returned value (in JSON representation):
+
+{
+    "modules": [
+        {
+            "entities": {
+                "company": {
+                    "attributes": {
+                        "name": {
+                            "mutable": 0,
+                            "type": "text"
+                        }
+                    },
+                    "indexes": [],
+                    "keys": [],
+                    "log": 0,
+                    "mount": "company"
+                },
+                "user": {
+                    "attributes": {
+                        "company": {
+                            "mutable": 0,
+                            "type": "app_structure!company"
+                        },
+                        "name": {
+                            "mutable": 0,
+                            "type": "text"
+                        }
+                    },
+                    "indexes": [],
+                    "keys": [],
+                    "log": 0,
+                    "mount": "user"
+                }
+            },
+            "name": "app_structure",
+            "queries": {
+                "get_user_name": {
+                    "parameters": [
+                        {
+                            "name": "user",
+                            "type": "app_structure!user"
+                        }
+                    ],
+                    "type": "text"
+                }
+            }
+        }
+    ]
+}

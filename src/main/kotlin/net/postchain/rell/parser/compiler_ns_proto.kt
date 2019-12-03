@@ -144,6 +144,10 @@ private class C_NsDef_Enum(private val e: R_Enum): C_NsDef() {
         b.addType(name, C_TypeDef(e.type))
         b.addValue(name, C_NamespaceValue_Enum(e))
     }
+
+    override fun addToDefs(b: C_ModuleDefsBuilder) {
+        b.enums.add(e.moduleLevelName, e)
+    }
 }
 
 private class C_NsDef_SysFunction(private val fn: C_GlobalFunction): C_NsDef() {

@@ -1,23 +1,23 @@
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------
 ./multirun.sh -d test-cli/src test-cli/config/run-simple.xml
 
-curl "http://localhost:7740/query/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" -X POST -d '{"type":"sum_digits_int","n":1000}'
+curl "http://localhost:7740/query/iid_1" -X POST -d '{"type":"sum_digits_int","n":1000}'
 
 "73fb9a5de29b"
 
-curl "http://localhost:7740/query/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" -X POST -d '{"type":"sum_digits_dec","n":1000}'
+curl "http://localhost:7740/query/iid_1" -X POST -d '{"type":"sum_digits_dec","n":1000}'
 
 "73fb9a5de29b"
 
-curl "http://localhost:7740/query/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" -X POST -d '{"type":"get_module_args"}'
+curl "http://localhost:7740/query/iid_1" -X POST -d '{"type":"get_module_args"}'
 
 {"x":123456,"y":"Hello!"}
 
-curl "http://localhost:7740/query/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" -X POST -d '{"type":"get_common_args"}'
+curl "http://localhost:7740/query/iid_1" -X POST -d '{"type":"get_common_args"}'
 
 {"message":"Some common message..."}
 
-curl "http://localhost:7740/query/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" -X POST -d '{"type":"get_raw_config"}' | python -m json.tool
+curl -s "http://localhost:7740/query/iid_1" -X POST -d '{"type":"get_raw_config"}' | python -m json.tool
 
 {
     "blockstrategy": {
@@ -54,12 +54,10 @@ curl "http://localhost:7740/query/0123456789abcdef0123456789abcdef0123456789abcd
     ]
 }
 
-
-
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------
 ./multirun.sh -d test-cli/src test-cli/config/run-stack_trace.xml
 
-curl "http://localhost:7740/query/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" -X POST -d '{"type":"main_q","x":12345}'
+curl "http://localhost:7740/query/iid_1" -X POST -d '{"type":"main_q","x":12345}'
 
 {"error":"Query \u0027main_q\u0027 failed: [stack_trace!calc(stack_trace/main.rell:7)] x must be positive, but was 0"}
 
@@ -118,3 +116,8 @@ test-cli/sh/query.sh '{"type":"ent_main_q"}' | jq -r '.error'
 2019-11-24 17:28:30.980 INFO  net.postchain.rell.Rell - ERROR Query 'ent_main_q' failed: No records found
 	at stack_trace.entities!ent_main(stack_trace/entities.rell:6)
 	at stack_trace.entities!ent_main_q(stack_trace/entities.rell:11)
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./multirun.sh -d test-cli/src test-cli/config/run-simple.xml
+
+curl -s "http://localhost:7740/query/iid_1" -X POST -d '{"type":"rell.get_app_structure"}' | python -m json.tool
