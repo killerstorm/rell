@@ -148,7 +148,7 @@ object RunConfigParser {
 
         var app: Rcfg_App? = null
         val gtvs = mutableListOf<Rcfg_ChainConfigGtv>()
-        var dependencies: Map<String, Rcfg_Chain>? = null
+        var dependencies: Map<String, Rcfg_Dependency>? = null
 
         for (elem in config.elems) {
             when (elem.tag) {
@@ -255,11 +255,11 @@ object RunConfigParser {
         return Rcfg_ChainConfigGtv(path ?: listOf(), src, gtv)
     }
 
-    private fun parseChainDependencies(ctx: ParseChainCtx, deps: RellXmlElement): Map<String, Rcfg_Chain> {
+    private fun parseChainDependencies(ctx: ParseChainCtx, deps: RellXmlElement): Map<String, Rcfg_Dependency> {
         deps.checkNoText()
         deps.attrs().checkNoMore()
 
-        val res = mutableMapOf<String, Rcfg_Chain>()
+        val res = mutableMapOf<String, Rcfg_Dependency>()
 
         for (elem in deps.elems) {
             elem.checkTag("dependency")
@@ -268,23 +268,44 @@ object RunConfigParser {
 
             val attrs = elem.attrs()
             val name = attrs.getNoBlank("name")
-            val chain = attrs.getNoBlank("chain")
+            val chain = attrs.getNoBlankOpt("chain")
+            val brid = attrs.getTypeOpt("brid", "BRID") { Bytes32.parse(it) }
             attrs.checkNoMore()
 
             elem.check(name !in res) { "duplicate dependency name: '$name'" }
+            elem.check(chain == null || brid == null) { "dependency '$name': both chain and brid specified" }
+            elem.check(chain != null || brid != null) { "dependency '$name': neither chain nor brid specified" }
 
-            val depHeader = elem.checkNotNull(ctx.allChains[chain]) { "dependency '$name': unknown chain '$chain'" }
-
-            val header = ctx.header
-            elem.check(depHeader.iid < header.iid) { "dependency '$name': " +
-                    "chain '${header.name}' cannot depend on '${chain}', " +
-                    "because IID of '${header.name}' (${header.iid}) is not greater than " +
-                    "IID of '${chain}' (${depHeader.iid})" }
-
-            res[name] = ctx.parsedChains.getValue(chain)
+            val dep = parseDependency(ctx, elem, name, chain, brid)
+            res[name] = dep
         }
 
         return res
+    }
+
+    private fun parseDependency(
+            ctx: ParseChainCtx,
+            elem: RellXmlElement,
+            name: String,
+            chain: String?,
+            brid: Bytes32?
+    ): Rcfg_Dependency {
+        if (brid != null) {
+            return Rcfg_Dependency(null, brid)
+        }
+
+        chain!!
+
+        val depHeader = elem.checkNotNull(ctx.allChains[chain]) { "dependency '$name': unknown chain '$chain'" }
+
+        val header = ctx.header
+        elem.check(depHeader.iid < header.iid) { "dependency '$name': " +
+                "chain '${header.name}' cannot depend on '${chain}', " +
+                "because IID of '${header.name}' (${header.iid}) is not greater than " +
+                "IID of '${chain}' (${depHeader.iid})" }
+
+        val depChain = ctx.parsedChains.getValue(chain)
+        return Rcfg_Dependency(depChain, null)
     }
 
     private class ParseChainHeader(val name: String, val iid: Long, val elem: RellXmlElement)

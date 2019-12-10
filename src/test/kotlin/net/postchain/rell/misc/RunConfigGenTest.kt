@@ -205,7 +205,15 @@ class RunConfigGenTest {
         assertEquals(setOf<String>(), files.keys)
     }
 
-    @Test fun testDependencies() {
+    @Test fun testDependenciesChainName() {
+        chkDependencies(""" chain="user" """)
+    }
+
+    @Test fun testDependenciesBrid() {
+        chkDependencies(""" brid="A5D2F114B70602A5145FB705EC4FED482F47B2AAB9780DBD17564DF1E4150F99" """)
+    }
+
+    private fun chkDependencies(depStr: String) {
         val files = generate(mapOf(), mapOf(), """
             <run>
                 <nodes>
@@ -220,7 +228,7 @@ class RunConfigGenTest {
                     <chain name="city" iid="55">
                         <config height="0">
                             <dependencies>
-                                <dependency name="user_dep" chain="user" />
+                                <dependency name="user_dep" $depStr />
                             </dependencies>
                         </config>
                     </chain>

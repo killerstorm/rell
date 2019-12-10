@@ -18,7 +18,7 @@ Simplest way to build:
     ```  
     Switch to the right branch:  
     ```
-    git checkout ver-3.0.0
+    git checkout ver-3.1.0
     ```
 2. Build `postchain2`:  
     ```

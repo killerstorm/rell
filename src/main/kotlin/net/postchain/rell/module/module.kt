@@ -284,7 +284,7 @@ private class RellPostchainModule(
 
 class RellPostchainModuleFactory(
         private val stdoutPrinter: Rt_Printer = Rt_StdoutPrinter,
-        private val logPrinter: Rt_Printer = Rt_LogPrinter("Rell"),
+        private val logPrinter: Rt_Printer = Rt_LogPrinter(),
         private val wrapCtErrors: Boolean = true,
         private val wrapRtErrors: Boolean = true,
         private val forceTypeCheck: Boolean = false

@@ -32,12 +32,14 @@ class Rcfg_NodeConfig(val src: String?, val text: String?, val addSigners: Boole
 
 class Rcfg_Chain(val name: String, val iid: Long, val configs: List<Rcfg_ChainConfig>)
 
+class Rcfg_Dependency(val chain: Rcfg_Chain?, val brid: Bytes32?)
+
 class Rcfg_ChainConfig(
         val height: Long,
         val app: Rcfg_App?,
         val gtvs: List<Rcfg_ChainConfigGtv>,
         val addDependencies: Boolean,
-        val dependencies: Map<String, Rcfg_Chain>
+        val dependencies: Map<String, Rcfg_Dependency>
 )
 
 class Rcfg_App(

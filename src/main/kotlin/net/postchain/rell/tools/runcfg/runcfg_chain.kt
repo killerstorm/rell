@@ -77,7 +77,7 @@ class RunConfigChainConfigGen private constructor(private val sourceDir: C_Sourc
 
         if (config.addDependencies && !config.dependencies.isEmpty()) {
             val deps = config.dependencies.map { (k, v) ->
-                val depBrid = brids.getValue(v).toByteArray()
+                val depBrid = if (v.chain != null) brids.getValue(v.chain).toByteArray() else v.brid!!.toByteArray()
                 gtv(gtv(k), gtv(depBrid))
             }
             val depsGtv = gtv(deps)

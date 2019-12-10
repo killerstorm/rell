@@ -1,17 +1,7 @@
-RELEASE NOTES 0.10.1 (2019-11-??)
+RELEASE NOTES 0.10.1 (2019-12-10)
 
 
-1. Language: Enum .value attribute in at-expression
-
-Now the "value" attribute of an enum can be used in at-expression:
-
-enum role { ADMIN, USER }
-entity account { name; role; }
-
-account @* {} ( .name, .role.value )
-
-
-2. Language: External annotation
+1. Language: External annotation
 
 External blocks replaced by "@external" annotation:
 
@@ -23,7 +13,7 @@ External blocks replaced by "@external" annotation:
 @external('chain_name') @log entity city {}
 
 
-3. Language: External modules
+2. Language: External modules
 
 A module can be annotated with "@external":
 
@@ -43,7 +33,7 @@ import ext;
 import ext;
 
 
-4. Language: Abstract modules and functions
+3. Language: Abstract modules and functions
 
 A module or a function can be declared abstract:
 
@@ -59,7 +49,49 @@ This allows to customize a library module with arbitrary behavior. When importin
 abstract functions that have no body must be overridden.
 
 
-5. Run-time: Error stack traces
+4. Language: Excluding fields from at-expressions
+
+Use @omit annotation to exclude a field from a tuple produced by an at-expression:
+
+user @* {} ( .name, @omit .company );       // returns list<text>, not list<(text,company)>
+
+This is useful when one needs to use a value for sorting, but does not want to include that value into the result set:
+
+user @* {} ( .name, @omit @sort .company );
+
+If only one field remains after exclusion, the result is a single value, not a tuple (for @+ and @*: a list of values
+instead of list of tuples). Not allowed to exclude all fields from the result.
+
+To include a field without a name, specify "_" as the name:
+
+user @* {} ( _ = .name, _ = .company );
+// Returns list<(text,text)>, not list<(name:text,company:company)>.
+
+
+5. Language: Sort annotations
+
+Old sort syntax has been deprecated. Annotations @sort and @sort_desc shall be used instead. Example:
+
+user @* {} ( @sort .name );
+
+
+6. Language: Enum .value attribute in at-expression
+
+Now the "value" attribute of an enum can be used in at-expression:
+
+enum role { ADMIN, USER }
+entity account { name; role; }
+
+account @* {} ( .name, .role.value )
+
+
+7. Library: Functions exists() and empty() for collections
+
+Functions exists() and empty() now accept collections (list, set, map) and check if they are empty. For a nullable
+collection, a value is considered empty if it is either null or an empty collection.
+
+
+8. Run-time: Error stack traces
 
 Now Rell prints stack traces of run-time errors (with function names, file names and line numbers):
 
@@ -74,7 +106,7 @@ Run-time error messages returned to the client (as a one line, without a stack t
 [stack_trace.entities!ent_main(stack_trace/entities.rell:6)] Query 'ent_main_q' failed: No records found
 
 
-6. Run-time: System queries returning build and version information
+9. Run-time: System queries returning build and version information
 
 (1) Rell and Postchain versions:
 
@@ -105,38 +137,6 @@ Run-time error messages returned to the client (as a one line, without a stack t
     rell.dirty:                  true
     postchain.version:           3.0.0
     kotlin.version:              1.3.21
-
-
-7. Language: Excluding fields from at-expressions
-
-Use @omit annotation to exclude a field from a tuple produced by an at-expression:
-
-user @* {} ( .name, @omit .company );       // returns list<text>, not list<(text,company)>
-
-This is useful when one needs to use a value for sorting, but does not want to include that value into the result set:
-
-user @* {} ( .name, @omit @sort .company );
-
-If only one field remains after exclusion, the result is a single value, not a tuple (for @+ and @*: a list of values
-instead of list of tuples). Not allowed to exclude all fields from the result.
-
-To include a field without a name, specify "_" as the name:
-
-user @* {} ( _ = .name, _ = .company );
-// Returns list<(text,text)>, not list<(name:text,company:company)>.
-
-
-8. Language: Sort annotations
-
-Old sort syntax has been deprecated. Annotations @sort and @sort_desc shall be used instead. Example:
-
-user @* {} ( @sort .name );
-
-
-9. Library: Functions exists() and empty() for collections
-
-Functions exists() and empty() now accept collections (list, set, map) and check if they are empty. For a nullable
-collection, a value is considered empty if it is either null or an empty collection.
 
 
 10. Run-time: System query to get application structure
@@ -194,3 +194,13 @@ Example of a returned value (in JSON representation):
         }
     ]
 }
+
+
+11. Tools: Changes in Run.XML format
+
+(1) Attribute "brid" of element "chain" removed. Blockchain RID is now calculated as a hash of the chain config.
+
+(2) Element "dependencies" moved from "chain" to "config".
+
+(3) Added attribute "brid" to element "dependency". A dependency can now be specified either by chain name or by
+    blockchain RID.
