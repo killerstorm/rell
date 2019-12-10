@@ -4,28 +4,7 @@ import mu.KLogging
 import net.postchain.core.ByteArrayKey
 import net.postchain.rell.model.*
 import net.postchain.rell.sql.SqlConstants
-
-sealed class Rt_BaseError: Exception {
-    constructor(msg: String): super(msg)
-    constructor(msg: String, cause: Throwable): super(msg, cause)
-}
-
-class Rt_Error: Rt_BaseError {
-    val code: String
-
-    constructor(code: String, msg: String): super(msg) {
-        this.code = code
-    }
-
-    constructor(code: String, msg: String, cause: Throwable): super(msg, cause) {
-        this.code = code
-    }
-}
-
-class Rt_RequireError(val userMsg: String?): Rt_BaseError(userMsg ?: "Requirement error")
-class Rt_ValueTypeError(val expected: Rt_ValueType, val actual: Rt_ValueType):
-        Rt_BaseError("Value type mismatch: expected $expected, but was $actual")
-class Rt_GtvError(val code: String, msg: String): Rt_BaseError(msg)
+import net.postchain.rell.toImmList
 
 class Rt_ChainDependency(val rid: ByteArray)
 
@@ -33,7 +12,12 @@ class Rt_ExternalChain(val chainId: Long, val rid: ByteArray, val height: Long) 
     val sqlMapping = Rt_ChainSqlMapping(chainId)
 }
 
-class Rt_CallFrame(val defCtx: Rt_DefinitionContext, rFrame: R_CallFrame) {
+class Rt_CallFrame(
+        private val callerFrame: Rt_CallFrame?,
+        private val callerPos: R_StackPos?,
+        val defCtx: Rt_DefinitionContext,
+        rFrame: R_CallFrame
+) {
     private var curBlock = rFrame.rootBlock
     private val values = Array<Rt_Value?>(rFrame.size) { null }
 
@@ -81,11 +65,30 @@ class Rt_CallFrame(val defCtx: Rt_DefinitionContext, rFrame: R_CallFrame) {
 
     private fun checkPtr(ptr: R_VarPtr): Int {
         val block = curBlock
-        check(ptr.blockId == block.id)
+        check(ptr.blockId == block.id) { "ptr = $ptr, block.id = ${block.id}" }
         val offset = ptr.offset
         check(offset >= 0)
         check(offset < block.offset + block.size)
         return offset
+    }
+
+    fun stackPos(filePos: R_FilePos): R_StackPos {
+        return R_StackPos(defCtx.pos, filePos)
+    }
+
+    fun stackTrace(lastPos: R_FilePos): List<R_StackPos> {
+        val res = mutableListOf<R_StackPos>()
+
+        res.add(R_StackPos(defCtx.pos, lastPos))
+
+        var frame: Rt_CallFrame? = this
+        while (frame != null) {
+            val pos = frame.callerPos
+            if (pos != null) res.add(pos)
+            frame = frame.callerFrame
+        }
+
+        return res.toImmList()
     }
 }
 
@@ -111,7 +114,7 @@ object Rt_StdoutPrinter: Rt_Printer {
     }
 }
 
-class Rt_LogPrinter(name: String = "Rell"): Rt_Printer {
+class Rt_LogPrinter(name: String = "net.postchain.Rell"): Rt_Printer {
     private val logger = KLogging().logger(name)
 
     override fun print(str: String) {

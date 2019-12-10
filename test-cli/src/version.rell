@@ -1,0 +1,42 @@
+module;
+
+function print_prop(name: text, value: text) {
+    print('%-32s [%s]'.format(name + ':', value));
+}
+
+function main() {
+    print_prop('RELL_VERSION', rell.version.RELL_VERSION);
+    print_prop('POSTCHAIN_VERSION', rell.version.POSTCHAIN_VERSION);
+    print_prop('BUILD', rell.version.BUILD);
+
+    val bi = rell.version.build_info();
+
+    print('build_info():');
+    for ((name, value) in bi) {
+        print_prop('    ' + name, value);
+    }
+
+    require(rell.version.RELL_VERSION == bi['rell.version']);
+    require(rell.version.POSTCHAIN_VERSION == bi['postchain.version']);
+
+    require(bi['rell.dirty'] in ['true', 'false']);
+
+    val req_props = [
+        'rell.branch',
+        'rell.build.time',
+        'rell.commit.id',
+        'rell.commit.id.full',
+        'rell.commit.message.short',
+        'rell.commit.message.full',
+        'rell.commit.time',
+        'kotlin.version'
+    ];
+
+    for (name in req_props) {
+        require(name in bi, 'missing property: ' + name);
+        val value = bi[name];
+        require(not value.empty(), 'value is empty: ' + name);
+    }
+
+    print('OK');
+}

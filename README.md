@@ -18,7 +18,7 @@ Simplest way to build:
     ```  
     Switch to the right branch:  
     ```
-    git checkout ver-3.0.0
+    git checkout ver-3.1.0
     ```
 2. Build `postchain2`:  
     ```
@@ -94,7 +94,7 @@ Runs a Rell Postchain app
                   Source directory used to resolve absolute include paths (default: the directory of the Rell file)
 ```
 
-## Run a Mutli-Chain Postchain Node (Run.XML)
+## Run a Multi-Chain Postchain Node (Run.XML)
 
 Runs a Postchain node with one or multiple blockchains. The configuration is specified
 in the Run.XML format. This utility is used by the `Run As` - `Rell Postchain App` command in the Eclipse IDE.

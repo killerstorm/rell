@@ -4,10 +4,7 @@ import com.google.common.collect.HashMultimap
 import net.postchain.gtv.Gtv
 import net.postchain.rell.CommonUtils
 import net.postchain.rell.PostchainUtils
-import net.postchain.rell.model.R_App
-import net.postchain.rell.model.R_Entity
-import net.postchain.rell.model.R_ExternalParam
-import net.postchain.rell.model.R_ModuleName
+import net.postchain.rell.model.*
 import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.module.RELL_VERSION
 import net.postchain.rell.parser.*
@@ -31,6 +28,8 @@ import java.sql.DriverManager
 import java.sql.ResultSet
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+
+fun String.unwrap(): String = this.replace(Regex("\\n\\s*"), "")
 
 class T_App(val rApp: R_App, val messages: List<C_Message>)
 
@@ -197,12 +196,14 @@ object SqlTestUtils {
 
     fun dumpTablesStructure(con: Connection): Map<String, Map<String, String>> {
         val map = HashMultimap.create<String, Pair<String, String>>()
-        con.metaData.getColumns(null, con.schema, "c0.%", null).use { rs ->
+        con.metaData.getColumns(null, con.schema, "c%.%", null).use { rs ->
             while (rs.next()) {
                 val table = rs.getString(3)
                 val column = rs.getString(4)
                 val type = rs.getString(6)
-                map.put(table, Pair(column, type))
+                if (table.matches(Regex("c\\d+\\..+"))) {
+                    map.put(table, Pair(column, type))
+                }
             }
         }
 
@@ -219,11 +220,11 @@ object GtvTestUtils {
     fun decodeGtvStr(s: String) = PostchainUtils.jsonToGtv(s)
     fun encodeGtvStr(gtv: Gtv) = PostchainUtils.gtvToJson(gtv)
 
-    fun decodeGtvQueryArgs(params: List<R_ExternalParam>, args: List<String>): List<Rt_Value> {
+    fun decodeGtvQueryArgs(params: List<R_Param>, args: List<String>): List<Rt_Value> {
         return decodeGtvArgs(params, args, true)
     }
 
-    fun decodeGtvOpArgs(params: List<R_ExternalParam>, args: List<Gtv>): List<Rt_Value> {
+    fun decodeGtvOpArgs(params: List<R_Param>, args: List<Gtv>): List<Rt_Value> {
         check(params.size == args.size)
         val ctx = GtvToRtContext(false)
         return args.mapIndexed { i, gtv ->
@@ -231,11 +232,11 @@ object GtvTestUtils {
         }
     }
 
-    fun decodeGtvOpArgsStr(params: List<R_ExternalParam>, args: List<String>): List<Rt_Value> {
+    fun decodeGtvOpArgsStr(params: List<R_Param>, args: List<String>): List<Rt_Value> {
         return decodeGtvArgs(params, args, false)
     }
 
-    private fun decodeGtvArgs(params: List<R_ExternalParam>, args: List<String>, pretty: Boolean): List<Rt_Value> {
+    private fun decodeGtvArgs(params: List<R_Param>, args: List<String>, pretty: Boolean): List<Rt_Value> {
         check(params.size == args.size)
         val ctx = GtvToRtContext(pretty)
         return args.mapIndexed { i, arg ->
@@ -361,8 +362,9 @@ object TestSnippetsRecorder {
     }
 }
 
-class RellTestEval() {
+class RellTestEval {
     private var wrapping = false
+    private var lastErrorStack = listOf<R_StackPos>()
 
     fun eval(code: () -> String): String {
         val oldWrapping = wrapping
@@ -370,11 +372,13 @@ class RellTestEval() {
         return try {
             code()
         } catch (e: EvalException) {
-            e.message!!
+            e.payload
         } finally {
             wrapping = oldWrapping
         }
     }
+
+    fun errorStack() = lastErrorStack
 
     fun <T> wrapCt(code: () -> T): T {
         if (wrapping) {
@@ -388,9 +392,16 @@ class RellTestEval() {
     fun <T> wrapRt(code: () -> T): T {
         if (wrapping) {
             val p = RellTestUtils.catchRtErr0(code)
-            return result(p)
+            lastErrorStack = p.first?.stack ?: listOf()
+            return result(Pair(p.first?.res, p.second))
         } else {
             return code()
+        }
+    }
+
+    fun <T> wrapAll(code: () -> T): T {
+        return wrapRt {
+            wrapCt(code)
         }
     }
 
@@ -399,5 +410,5 @@ class RellTestEval() {
         return p.second!!
     }
 
-    private class EvalException(msg: String): RuntimeException(msg)
+    private class EvalException(val payload: String): RuntimeException()
 }

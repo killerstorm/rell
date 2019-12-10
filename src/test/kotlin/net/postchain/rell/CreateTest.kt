@@ -35,7 +35,7 @@ class CreateTest: BaseRellTest() {
         chkOp("create person ( name = 'James', city @ { 'Los Angeles' }, street = 'Evergreen Ave', house = 5, score = 100 );")
         chkDataNew("person(4,James,3,Evergreen Ave,5,100)")
 
-        chkOp("create person ( name = 'Mike', city @ { 'New York' }, street =  'Grand St', house = 7, score = 250 );")
+        chkOp("create person ( name = 'Mike', city @ { 'New York' }, street = 'Grand St', house = 7, score = 250 );")
         chkDataNew("person(5,Mike,1,Grand St,7,250)")
     }
 
@@ -63,8 +63,8 @@ class CreateTest: BaseRellTest() {
 
     @Test fun testDefaultValueTypeErr() {
         tst.defs = listOf()
-        chkCompile("entity person { name: text; year: integer = 'Hello'; }", "ct_err:attr_type:year:integer:text")
-        chkCompile("entity person { name: text = 12345; year: integer; }", "ct_err:attr_type:name:text:integer")
+        chkCompile("entity person { name: text; year: integer = 'Hello'; }", "ct_err:attr_type:year:[integer]:[text]")
+        chkCompile("entity person { name: text = 12345; year: integer; }", "ct_err:attr_type:name:[text]:[integer]")
     }
 
     @Test fun testDefaultValueVariable() {

@@ -10,12 +10,12 @@ abstract class S_Statement(val pos: S_Pos) {
     protected abstract fun compile0(ctx: C_ExprContext): C_Statement
 
     fun compile(ctx: C_ExprContext): C_Statement {
-        return try {
-            compile0(ctx)
-        } catch (e: C_Error) {
-            ctx.globalCtx.error(e)
-            C_Statement.EMPTY
-        }
+        val cStmt = ctx.globalCtx.consumeError { compile0(ctx) }
+        if (cStmt == null) return C_Statement.ERROR
+
+        val filePos = pos.toFilePos()
+        val rStmt = R_StackTraceStatement(cStmt.rStmt, filePos)
+        return cStmt.updateStmt(rStmt)
     }
 
     fun compileWithFacts(ctx: C_ExprContext, facts: C_VarFacts): C_Statement {
@@ -164,7 +164,7 @@ class S_VarStatement(
 
 class S_ReturnStatement(pos: S_Pos, val expr: S_Expr?): S_Statement(pos) {
     override fun compile0(ctx: C_ExprContext): C_Statement {
-        val rStmt = ctx.globalCtx.consumeError { compileInternal(ctx) } ?: R_EmptyStatement
+        val rStmt = ctx.globalCtx.consumeError { compileInternal(ctx) } ?: C_Utils.ERROR_STATEMENT
         return C_Statement(rStmt, true)
     }
 
@@ -275,7 +275,7 @@ class S_IfStatement(pos: S_Pos, val expr: S_Expr, val trueStmt: S_Statement, val
         if (cExpr != null) {
             val value = cExpr.value()
             rExpr = value.toRExpr()
-            S_Type.matchOpt(ctx, R_BooleanType, rExpr.type, expr.startPos, "stmt_if_expr_type", "Wrong type of if-expression")
+            S_Type.matchOpt(ctx.globalCtx, R_BooleanType, rExpr.type, expr.startPos, "stmt_if_expr_type", "Wrong type of if-expression")
             exprVarFacts = value.varFacts()
         } else {
             rExpr = C_Utils.crashExpr(R_BooleanType)
@@ -316,7 +316,7 @@ class S_WhenStatement(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenState
         val chooser = S_WhenExpr.compileChooser(ctx, expr, conds)
         if (chooser == null) {
             cases.forEach { it.stmt.compile(ctx) }
-            return C_Statement.EMPTY
+            return C_Statement.ERROR
         }
 
         val cStmts = cases.mapIndexed { i, case -> case.stmt.compileWithFacts(chooser.bodyCtx, chooser.caseFacts[i]) }
@@ -354,11 +354,11 @@ class S_WhileStatement(pos: S_Pos, val expr: S_Expr, val stmt: S_Statement): S_S
         val loop = compileLoop(ctx, this, expr)
         if (loop == null) {
             stmt.compile(ctx)
-            return C_Statement.EMPTY
+            return C_Statement.ERROR
         }
 
         val rExpr = loop.condExpr
-        S_Type.matchOpt(ctx, R_BooleanType, rExpr.type, expr.startPos, "stmt_while_expr_type", "Wrong type of while-expression")
+        S_Type.matchOpt(ctx.globalCtx, R_BooleanType, rExpr.type, expr.startPos, "stmt_while_expr_type", "Wrong type of while-expression")
 
         val loopId = ctx.blkCtx.defCtx.nextLoopId()
         val loopCtx = loop.condCtx.subBlock(loopId)
@@ -461,7 +461,7 @@ class S_ForStatement(pos: S_Pos, val declarator: S_VarDeclarator, val expr: S_Ex
         val loop = S_WhileStatement.compileLoop(ctx, this, expr)
         if (loop == null) {
             stmt.compile(ctx)
-            return C_Statement.EMPTY
+            return C_Statement.ERROR
         }
 
         val rExpr = loop.condExpr
@@ -469,7 +469,7 @@ class S_ForStatement(pos: S_Pos, val declarator: S_VarDeclarator, val expr: S_Ex
         val (itemType, iterator) = compileForIterator(ctx, exprType)
         if (itemType == null || iterator == null) {
             stmt.compile(ctx)
-            return C_Statement.EMPTY
+            return C_Statement.ERROR
         }
 
         val loopId = ctx.blkCtx.defCtx.nextLoopId()
@@ -512,7 +512,7 @@ class S_ForStatement(pos: S_Pos, val declarator: S_VarDeclarator, val expr: S_Ex
             }
             is R_RangeType -> Pair(R_IntegerType, R_ForIterator_Range)
             else -> {
-                ctx.globalCtx.error(expr.startPos, "stmt_for_expr_type:${exprType.toStrictString()}",
+                ctx.globalCtx.error(expr.startPos, "stmt_for_expr_type:[${exprType.toStrictString()}]",
                         "Wrong type of for-expression: ${exprType.toStrictString()}")
                 return Pair(null, null)
             }

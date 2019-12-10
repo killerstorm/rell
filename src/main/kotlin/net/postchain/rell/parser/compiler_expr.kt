@@ -11,10 +11,10 @@ class C_AtEntity(val rEntity: R_Entity, val alias: String, val index: Int) {
     fun compileExpr() = Db_EntityExpr(rAtEntity)
 }
 
-class C_ExprContextAttr(val cls: C_AtEntity, val attrRef: C_EntityAttrRef) {
+class C_ExprContextAttr(val entity: C_AtEntity, val attrRef: C_EntityAttrRef) {
     fun compile(): Db_Expr {
-        val clsExpr = cls.compileExpr()
-        return attrRef.createDbContextAttrExpr(clsExpr)
+        val entityExpr = entity.compileExpr()
+        return attrRef.createDbContextAttrExpr(entityExpr)
     }
 }
 
@@ -28,11 +28,16 @@ class C_ScopeEntry(
     fun toVarExpr(): R_VarExpr = R_VarExpr(type, ptr, name)
 }
 
-class C_BlockContext(val defCtx: C_DefinitionContext, private val parent: C_BlockContext?, val loop: C_LoopId?) {
+class C_BlockContext(
+        val defCtx: C_DefinitionContext,
+        private val parent: C_BlockContext?,
+        val loop: C_LoopId?,
+        location: String
+) {
     private val startOffset: Int = if (parent == null) 0 else parent.startOffset + parent.locals.size
     private val locals = mutableMapOf<String, C_ScopeEntry0>()
 
-    private val blockId = defCtx.globalCtx.nextFrameBlockId()
+    private val blockId = defCtx.globalCtx.nextFrameBlockId(location)
 
     fun add(name: S_Name, type: R_Type, modifiable: Boolean): Pair<C_VarId, R_VarPtr> {
         val nameStr = name.str
@@ -85,7 +90,7 @@ class C_BlockContext(val defCtx: C_DefinitionContext, private val parent: C_Bloc
                 val offset: Int,
                 val varId: C_VarId
         ) {
-            fun toVarPtr(blockId: R_FrameBlockId): R_VarPtr = R_VarPtr(blockId, offset)
+            fun toVarPtr(blockId: R_FrameBlockId): R_VarPtr = R_VarPtr(name, blockId, offset)
 
             fun toScopeEntry(blockId: R_FrameBlockId): C_ScopeEntry {
                 return C_ScopeEntry(name, type, modifiable, varId, toVarPtr(blockId))
@@ -117,7 +122,7 @@ class C_ExprContext(val blkCtx: C_BlockContext, val nameCtx: C_NameContext, val 
     }
 
     fun subBlock(loop: C_LoopId?): C_ExprContext {
-        val subBlkCtx = C_BlockContext(blkCtx.defCtx, blkCtx, loop)
+        val subBlkCtx = C_BlockContext(blkCtx.defCtx, blkCtx, loop, "blk")
         val subNameCtx = C_RNameContext(subBlkCtx)
         return C_ExprContext(subBlkCtx, subNameCtx, factsCtx)
     }
@@ -170,15 +175,15 @@ class C_DbNameContext(blkCtx: C_BlockContext, private val entities: List<C_AtEnt
     override fun resolveNameValue(ctx: C_ExprContext, name: S_Name): C_NameResolution? {
         val nameStr = name.str
 
-        val cls = findEntityByAlias(nameStr)
+        val entity = findEntityByAlias(nameStr)
         val loc = blkCtx.lookupLocalVar(nameStr)
         val glob = blkCtx.defCtx.nsCtx.getValueOpt(name.str)
 
-        if (cls != null && loc != null) {
+        if (entity != null && loc != null) {
             throw C_Errors.errNameConflictAliasLocal(name)
         }
 
-        if (cls != null) return C_NameResolution_Entity(name, cls)
+        if (entity != null) return C_NameResolution_Entity(name, entity)
         if (loc != null) return C_NameResolution_Local(name, ctx, loc)
         if (glob != null) return C_NameResolution_Value(name, blkCtx.defCtx, glob)
 
@@ -187,9 +192,9 @@ class C_DbNameContext(blkCtx: C_BlockContext, private val entities: List<C_AtEnt
 
     private fun findEntityByAlias(alias: String): C_AtEntity? {
         //TODO use a lookup table
-        for (cls in entities) {
-            if (cls.alias == alias) {
-                return cls
+        for (entity in entities) {
+            if (entity.alias == alias) {
+                return entity
             }
         }
         return null
@@ -202,7 +207,7 @@ class C_DbNameContext(blkCtx: C_BlockContext, private val entities: List<C_AtEnt
         if (attrs.isEmpty()) {
             throw C_Errors.errUnknownAttr(name)
         } else if (attrs.size > 1) {
-            throw C_Errors.errMutlipleAttrs(name.pos, attrs, "at_attr_name_ambig:$nameStr",
+            throw C_Errors.errMultipleAttrs(name.pos, attrs, "at_attr_name_ambig:$nameStr",
                     "Multiple attributes with name '$nameStr'")
         }
 
@@ -239,9 +244,9 @@ class C_DbNameContext(blkCtx: C_BlockContext, private val entities: List<C_AtEnt
         //TODO take other kinds of fields into account
         //TODO fail when there is more than one match
         //TODO use a table lookup
-        for (cls in entities) {
-            val clsAttrs = resolver(cls.rEntity)
-            val ctxAttrs = clsAttrs.map { C_ExprContextAttr(cls, it) }
+        for (entity in entities) {
+            val entityAttrs = resolver(entity.rEntity)
+            val ctxAttrs = entityAttrs.map { C_ExprContextAttr(entity, it) }
             attrs.addAll(ctxAttrs)
         }
 
@@ -253,8 +258,8 @@ sealed class C_NameResolution(val name: S_Name) {
     abstract fun toExpr(): C_Expr
 }
 
-private class C_NameResolution_Entity(name: S_Name, private val cls: C_AtEntity): C_NameResolution(name) {
-    override fun toExpr() = C_DbValue.makeExpr(name.pos, cls.compileExpr())
+private class C_NameResolution_Entity(name: S_Name, private val entity: C_AtEntity): C_NameResolution(name) {
+    override fun toExpr() = C_DbValue.makeExpr(name.pos, entity.compileExpr())
 }
 
 private class C_NameResolution_Local(
@@ -356,8 +361,14 @@ class C_ObjectAttrDestination(private val rObject: R_Object, private val attr: R
 abstract class C_Value(val pos: S_Pos) {
     abstract fun type(): R_Type
     abstract fun isDb(): Boolean
-    abstract fun toRExpr(): R_Expr
+    protected abstract fun toRExpr0(): R_Expr
     abstract fun toDbExpr(): Db_Expr
+
+    fun toRExpr(): R_Expr {
+        val rExpr = toRExpr0()
+        val filePos = pos.toFilePos()
+        return R_StackTraceExpr(rExpr, filePos)
+    }
 
     open fun constantValue(): Rt_Value? = null
     open fun varId(): C_VarId? = null
@@ -374,7 +385,7 @@ abstract class C_Value(val pos: S_Pos) {
         val effectiveBaseType = if (baseType is R_NullableType) baseType.valueType else baseType
 
         val memberRef = C_MemberRef(pos, this, memberName, safe)
-        val valueExpr = C_MemberResolver.valueForType(effectiveBaseType, memberRef)
+        val valueExpr = C_MemberResolver.valueForType(ctx, effectiveBaseType, memberRef)
         val fnExpr = C_MemberResolver.functionForType(effectiveBaseType, memberRef)
 
         if (valueExpr == null && fnExpr == null) {
@@ -395,7 +406,7 @@ class C_RValue(
 ): C_Value(pos) {
     override fun type() = rExpr.type
     override fun isDb() = false
-    override fun toRExpr() = rExpr
+    override fun toRExpr0() = rExpr
     override fun toDbExpr() = C_Utils.toDbExpr(pos, rExpr)
     override fun constantValue() = rExpr.constantValue()
     override fun varFacts() = exprVarFacts
@@ -411,7 +422,7 @@ class C_RValue(
 class C_DbValue(pos: S_Pos, private val dbExpr: Db_Expr, private val varFacts: C_ExprVarFacts): C_Value(pos) {
     override fun type() = dbExpr.type
     override fun isDb() = true
-    override fun toRExpr() = throw C_Errors.errExprDbNotAllowed(pos)
+    override fun toRExpr0() = throw C_Errors.errExprDbNotAllowed(pos)
     override fun toDbExpr() = dbExpr
     override fun constantValue() = dbExpr.constantValue()
     override fun varFacts() = varFacts
@@ -442,7 +453,7 @@ class C_LookupValue(
 ): C_Value(pos) {
     override fun type() = expr.type
     override fun isDb() = false
-    override fun toRExpr() = expr
+    override fun toRExpr0() = expr
     override fun toDbExpr() = C_Utils.toDbExpr(pos, expr)
     override fun varFacts() = varFacts
 
@@ -468,7 +479,7 @@ private class C_LocalVarValue(
     override fun toDbExpr() = C_Utils.toDbExpr(pos, toRExpr())
     override fun varId() = entry.varId
 
-    override fun toRExpr(): R_Expr {
+    override fun toRExpr0(): R_Expr {
         checkInitialized()
         var rExpr: R_Expr = entry.toVarExpr()
         if (smartNotNull) {
@@ -530,7 +541,7 @@ private class C_LocalVarValue(
 private class C_ObjectValue(private val name: List<S_Name>, private val rObject: R_Object): C_Value(name[0].pos) {
     override fun type() = rObject.type
     override fun isDb() = false
-    override fun toRExpr() = R_ObjectExpr(rObject.type)
+    override fun toRExpr0() = R_ObjectExpr(rObject.type)
     override fun toDbExpr() = C_Utils.toDbExpr(pos, toRExpr())
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
@@ -544,7 +555,7 @@ private class C_ObjectValue(private val name: List<S_Name>, private val rObject:
 private class C_ObjectAttrValue(pos: S_Pos, private val rObject: R_Object, private val attr: R_Attrib): C_Value(pos) {
     override fun type() = attr.type
     override fun isDb() = false
-    override fun toRExpr() = createAccessExpr()
+    override fun toRExpr0() = createAccessExpr()
     override fun toDbExpr() = C_Utils.toDbExpr(pos, toRExpr())
 
     override fun destination(ctx: C_ExprContext): C_Destination {

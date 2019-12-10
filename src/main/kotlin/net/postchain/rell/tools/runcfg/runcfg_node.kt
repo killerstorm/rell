@@ -1,9 +1,6 @@
 package net.postchain.rell.tools.runcfg
 
-import net.postchain.rell.Bytes33
-import net.postchain.rell.CommonUtils
-import net.postchain.rell.DirBuilder
-import net.postchain.rell.GeneralDir
+import net.postchain.rell.*
 import java.io.StringReader
 import java.util.*
 import java.util.regex.Pattern
@@ -72,7 +69,7 @@ object RunConfigNodeConfigGen {
         check(includes.isEmpty()) { "Node configuration includes files $includes, not allowed when not using a separate file" }
 
         val text2 = trimLines(text)
-        val dstFiles = mapOf(FILE_NAME to text2)
+        val dstFiles = mapOf(FILE_NAME to TextDirFile(text2))
 
         val signers = mutableSetOf<Bytes33>()
         processSigners(null, text, signers)

@@ -1,54 +1,11 @@
 package net.postchain.rell.parser
 
-import com.google.common.collect.LinkedHashMultimap
-import com.google.common.collect.Multimap
 import net.postchain.rell.Getter
 import net.postchain.rell.Setter
 import net.postchain.rell.model.*
 import net.postchain.rell.toImmList
 
-abstract class C_NameConflictsProcessor<K, E> {
-    abstract fun isSystemEntry(entry: E): Boolean
-    abstract fun getConflictableKey(entry: E): K
-    abstract fun handleConflict(globalCtx: C_GlobalContext, entry: E, otherEntry: E)
-
-    fun processConflicts(
-            globalCtx: C_GlobalContext,
-            allEntries: List<E>,
-            errorsEntries: MutableSet<E>
-    ): List<E> {
-        val map: Multimap<K, E> = LinkedHashMultimap.create()
-        for (entry in allEntries) {
-            val key = getConflictableKey(entry)
-            map.put(key, entry)
-        }
-
-        val res = mutableListOf<E>()
-
-        for (name in map.keySet()) {
-            val entries = map.get(name)
-            val (sysEntries, userEntries) = entries.partition { isSystemEntry(it) }
-
-            if (entries.size > 1) {
-                for (entry in userEntries) {
-                    if (errorsEntries.add(entry)) {
-                        val otherEntry = entries.first { it !== entry }
-                        handleConflict(globalCtx, entry, otherEntry)
-                    }
-                }
-            }
-
-            res.addAll(sysEntries)
-            if (sysEntries.isEmpty() && !userEntries.isEmpty()) {
-                res.add(userEntries[0])
-            }
-        }
-
-        return res.toImmList()
-    }
-}
-
-private object C_NameConflictsProcessor_NsEntry: C_NameConflictsProcessor<String, C_NsEntry>() {
+private object C_DefConflictsProcessor_NsEntry: C_DefConflictsProcessor<String, C_NsEntry>() {
     override fun isSystemEntry(entry: C_NsEntry) = entry.sName == null
     override fun getConflictableKey(entry: C_NsEntry) = entry.name
 
@@ -67,7 +24,7 @@ class C_NsEntry(val name: String, val sName: S_Name?, val privateAccess: Boolean
                 entries: List<C_NsEntry>,
                 errorsEntries: MutableSet<C_NsEntry>
         ): List<C_NsEntry> {
-            return C_NameConflictsProcessor_NsEntry.processConflicts(globalCtx, entries, errorsEntries)
+            return C_DefConflictsProcessor_NsEntry.processConflicts(globalCtx, entries, errorsEntries)
         }
 
         fun createNamespace(entries: List<C_NsEntry>): C_Namespace {
@@ -134,22 +91,22 @@ private class C_NsDef_Type(private val type: C_TypeDef): C_NsDef() {
     }
 }
 
-private sealed class C_NsDef_Entity(private val cls: R_Entity): C_NsDef() {
+private sealed class C_NsDef_Entity(private val entity: R_Entity): C_NsDef() {
     final override fun type() = C_DeclarationType.ENTITY
 
     final override fun addToNamespace(b: C_NamespaceBuilder, name: String) {
-        val typeDef = C_TypeDef(cls.type)
+        val typeDef = C_TypeDef(entity.type)
         b.addType(name, typeDef)
         b.addValue(name, C_NamespaceValue_Entity(typeDef))
     }
 }
 
-private class C_NsDef_SysEntity(cls: R_Entity): C_NsDef_Entity(cls)
+private class C_NsDef_SysEntity(entity: R_Entity): C_NsDef_Entity(entity)
 
-private class C_NsDef_UserEntity(private val cls: C_Entity, private val addToModule: Boolean): C_NsDef_Entity(cls.cls) {
+private class C_NsDef_UserEntity(private val entity: C_Entity, private val addToModule: Boolean): C_NsDef_Entity(entity.entity) {
     override fun addToDefs(b: C_ModuleDefsBuilder) {
         if (addToModule) {
-            b.entities.add(cls.cls.moduleLevelName, cls.cls)
+            b.entities.add(entity.entity.moduleLevelName, entity.entity)
         }
     }
 }
@@ -186,6 +143,10 @@ private class C_NsDef_Enum(private val e: R_Enum): C_NsDef() {
     override fun addToNamespace(b: C_NamespaceBuilder, name: String) {
         b.addType(name, C_TypeDef(e.type))
         b.addValue(name, C_NamespaceValue_Enum(e))
+    }
+
+    override fun addToDefs(b: C_ModuleDefsBuilder) {
+        b.enums.add(e.moduleLevelName, e)
     }
 }
 
@@ -261,7 +222,7 @@ class C_SysNsProto(entries: List<C_NsEntry>) {
 }
 
 class C_SysNsProtoBuilder: C_NsProtoBuilder() {
-    private fun addDef(name: String, def: C_NsDef, privateAccess: Boolean = false) {
+    private fun addDef(name: String, def: C_NsDef, privateAccess: Boolean = true) {
         addDef(name, null, def, privateAccess)
     }
 
@@ -273,8 +234,8 @@ class C_SysNsProtoBuilder: C_NsProtoBuilder() {
         addDef(name, C_NsDef_Type(type))
     }
 
-    fun addEntity(name: String, cls: R_Entity) {
-        addDef(name, C_NsDef_SysEntity(cls))
+    fun addEntity(name: String, entity: R_Entity, privateAccess: Boolean) {
+        addDef(name, C_NsDef_SysEntity(entity), privateAccess)
     }
 
     fun addFunction(name: String, fn: C_GlobalFunction) {
@@ -346,8 +307,8 @@ class C_UserNsProtoBuilder: C_NsProtoBuilder() {
         return Pair(subNs.builder, subNs.namespace.getter)
     }
 
-    fun addEntity(name: S_Name, cls: R_Entity, addToModule: Boolean = true) {
-        addDef(name, C_NsDef_UserEntity(C_Entity(name.pos, cls), addToModule))
+    fun addEntity(name: S_Name, entity: R_Entity, addToModule: Boolean = true) {
+        addDef(name, C_NsDef_UserEntity(C_Entity(name.pos, entity), addToModule))
     }
 
     fun addObject(name: S_Name, obj: R_Object) {

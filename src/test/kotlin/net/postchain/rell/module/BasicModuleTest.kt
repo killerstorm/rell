@@ -1,5 +1,6 @@
 package net.postchain.rell.module
 
+import net.postchain.base.BlockchainRid
 import net.postchain.base.SECP256K1CryptoSystem
 import net.postchain.devtools.IntegrationTest
 import net.postchain.devtools.KeyPairHelper
@@ -7,12 +8,11 @@ import net.postchain.devtools.PostchainTestNode
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory.gtv
 import net.postchain.gtx.GTXDataBuilder
-import net.postchain.rell.CommonUtils
 import org.junit.Test
 import kotlin.test.assertEquals
 
 class BasicModuleTest : IntegrationTest() {
-    private val testBlockchainRID = CommonUtils.hexToBytes("78967baa4768cbcef11c508326ffb13a956689fcb6dc3ba17f4b895cbb1577a3")
+    private var blockchainRid: BlockchainRid? = null
     private val myCS = SECP256K1CryptoSystem()
 
     @Test fun testBuildBlock() {
@@ -85,7 +85,7 @@ class BasicModuleTest : IntegrationTest() {
 
     private fun makeTx(ownerIdx: Int, opName: String, vararg opArgs: Gtv): ByteArray {
         val owner = KeyPairHelper.pubKey(ownerIdx)
-        return GTXDataBuilder(testBlockchainRID, arrayOf(owner), myCS).run {
+        return GTXDataBuilder(blockchainRid!!, arrayOf(owner), myCS).run {
             addOperation(opName, opArgs.toList().toTypedArray())
             finish()
             sign(myCS.buildSigMaker(owner, KeyPairHelper.privKey(ownerIdx)))
@@ -112,7 +112,9 @@ class BasicModuleTest : IntegrationTest() {
     }
 
     private fun setupNode(): PostchainTestNode {
-        return createNode(0, "/net/postchain/rell/basic/blockchain_config.xml")
+        val node = createNode(0, "/net/postchain/rell/basic/blockchain_config.xml")
+        blockchainRid = node.getBlockchainRid(1L)
+        return node
     }
 
     private fun insertObjects(node: PostchainTestNode) {

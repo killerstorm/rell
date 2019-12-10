@@ -1,0 +1,14 @@
+<test>
+    <block>
+        <transaction>
+                <signers>
+                        <param type="bytea" key="Alice" />
+                </signers>
+                <operations>
+                        <operation name="main_op">
+                                <int>12345</int>
+                        </operation>
+                </operations>
+        </transaction>
+    </block>
+</test>

@@ -1,0 +1,19 @@
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./req_run_node.sh node-2.json
+
+./req_query.sh '{"type":"main_q","x":12345}'
+
+{"error":"Query \u0027main_q\u0027 failed: [!calc(main.rell:7)] x must be positive, but was 0"}
+
+./req_node_log.sh
+
+2019-11-24 13:48:34,666 Node started
+2019-11-24 13:48:42,218 [!main_q(main.rell:34)] main start
+ERROR Query 'main_q' failed: [!calc(main.rell:7)] x must be positive, but was 0
+	at !calc(main.rell:7)
+	at !calc(main.rell:11)
+	at !calc(main.rell:12)
+	at !calc(main.rell:13)
+	at !calc(main.rell:14)
+	at !calc(main.rell:15)
+	at !main_q(main.rell:35)

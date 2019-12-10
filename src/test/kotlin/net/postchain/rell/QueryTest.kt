@@ -1,5 +1,6 @@
 package net.postchain.rell
 
+import net.postchain.rell.module.RELL_VERSION
 import net.postchain.rell.runtime.Rt_BooleanValue
 import net.postchain.rell.runtime.Rt_IntValue
 import net.postchain.rell.runtime.Rt_TextValue
@@ -60,16 +61,16 @@ class QueryTest: BaseRellTest() {
         chkEx("{ return; }", "ct_err:stmt_return_query_novalue")
 
         chkQueryEx("query q(): integer = 123;", "int[123]")
-        chkQueryEx("query q(): integer = 'Hello';", "ct_err:entity_rettype:integer:text")
-        chkQueryEx("query q(): text = 123;", "ct_err:entity_rettype:text:integer")
+        chkQueryEx("query q(): integer = 'Hello';", "ct_err:entity_rettype:[integer]:[text]")
+        chkQueryEx("query q(): text = 123;", "ct_err:entity_rettype:[text]:[integer]")
 
         chkQueryEx("query q(): integer { return 123; }", "int[123]")
-        chkQueryEx("query q(): integer { return 'Hello'; }", "ct_err:entity_rettype:integer:text")
-        chkQueryEx("query q(): text { return 123; }", "ct_err:entity_rettype:text:integer")
+        chkQueryEx("query q(): integer { return 'Hello'; }", "ct_err:entity_rettype:[integer]:[text]")
+        chkQueryEx("query q(): text { return 123; }", "ct_err:entity_rettype:[text]:[integer]")
 
         chkEx("{ if (1 > 0) return 123; else return 456; }", "int[123]")
-        chkEx("{ if (1 > 0) return 123; else return 'Hello'; }", "ct_err:entity_rettype:integer:text")
-        chkEx("{ if (1 > 0) return 'Hello'; else return 123; }", "ct_err:entity_rettype:text:integer")
+        chkEx("{ if (1 > 0) return 123; else return 'Hello'; }", "ct_err:entity_rettype:[integer]:[text]")
+        chkEx("{ if (1 > 0) return 'Hello'; else return 123; }", "ct_err:entity_rettype:[text]:[integer]")
     }
 
     @Test fun testNoReturn() {
@@ -111,12 +112,12 @@ class QueryTest: BaseRellTest() {
 
     @Test fun testReturnTypeExplicit() {
         tstCtx.useSql = true
-        tst.chkQueryType(": integer { return null; }", "ct_err:entity_rettype:integer:null")
+        tst.chkQueryType(": integer { return null; }", "ct_err:entity_rettype:[integer]:[null]")
         tst.chkQueryType(": integer? { return null; }", "integer?")
         tst.chkQueryType(": integer? { return 123; }", "integer?")
         tst.chkQueryType(": integer { return 123; }", "integer")
         tst.chkQueryType(": integer { if (integer('0') == 0) return 123; else return null; }",
-                "ct_err:entity_rettype:integer:null")
+                "ct_err:entity_rettype:[integer]:[null]")
         tst.chkQueryType(": integer? { if (integer('0') == 0) return null; else return 123; }", "integer?")
         tst.chkQueryType(": integer? { if (integer('0') == 0) return 123; else return null; }", "integer?")
     }
@@ -140,6 +141,10 @@ class QueryTest: BaseRellTest() {
         chkEx("{ return unit(); }", "ct_err:stmt_return_unit")
         chkEx("{ return print('Hello'); }", "ct_err:stmt_return_unit")
 
-        chkEx("{ if (1 > 0) return 123; else return 'Hello'; }", "ct_err:entity_rettype:integer:text")
+        chkEx("{ if (1 > 0) return 123; else return 'Hello'; }", "ct_err:entity_rettype:[integer]:[text]")
+    }
+
+    @Test fun testGetRellVersion() {
+        chkQueryEx("", "rell.get_rell_version", listOf(), "text[$RELL_VERSION]")
     }
 }

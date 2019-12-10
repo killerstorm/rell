@@ -9,7 +9,7 @@
 
     <dependencySets>
         <dependencySet>
-            <outputDirectory>/lib</outputDirectory>
+            <outputDirectory>./lib</outputDirectory>
             <useTransitiveDependencies>false</useTransitiveDependencies>
             <useProjectArtifact>false</useProjectArtifact>
             <includes>
@@ -31,14 +31,14 @@
             <source>
                 target/${rell.jarName}.jar
             </source>
-            <outputDirectory>/lib</outputDirectory>
+            <outputDirectory>./lib</outputDirectory>
         </file>
     </files>
 
     <fileSets>
         <fileSet>
             <directory>${project.build.scriptSourceDirectory}</directory>
-            <outputDirectory>/</outputDirectory>
+            <outputDirectory>./</outputDirectory>
             <includes>
                 <include>*.sh</include>
             </includes>

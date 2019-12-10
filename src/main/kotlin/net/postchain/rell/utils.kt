@@ -3,6 +3,7 @@ package net.postchain.rell
 import com.google.common.collect.ImmutableList
 import com.google.common.collect.ImmutableMap
 import com.google.common.collect.ImmutableSet
+import net.postchain.base.BlockchainRid
 import net.postchain.base.SECP256K1CryptoSystem
 import net.postchain.base.data.PostgreSQLCommands
 import net.postchain.base.data.PostgreSQLDatabaseAccess
@@ -13,6 +14,7 @@ import net.postchain.gtv.*
 import net.postchain.gtv.gtvml.GtvMLEncoder
 import net.postchain.gtv.gtvml.GtvMLParser
 import net.postchain.gtv.merkle.GtvMerkleHashCalculator
+import net.postchain.rell.runtime.toGtv
 import java.io.File
 import java.util.*
 import javax.xml.bind.DatatypeConverter
@@ -103,7 +105,14 @@ object PostchainUtils {
 
     fun merkleHash(v: Gtv): ByteArray = v.merkleHash(merkleCalculator)
 
+    fun hexToRid(s: String): BlockchainRid = BlockchainRid(CommonUtils.hexToBytes(s))
+
     fun createDatabaseAccess(): SQLDatabaseAccess = PostgreSQLDatabaseAccess(PostgreSQLCommands)
+
+    fun calcBlockchainRid(config: Gtv): Bytes32 {
+        val hash = merkleHash(config)
+        return Bytes32(hash)
+    }
 }
 
 class MutableTypedKeyMap {
@@ -193,6 +202,28 @@ class MapGeneralDir(private val files: Map<String, String>): GeneralDir() {
     private fun joinPath(path: List<String>) = path.joinToString("/")
 }
 
+class Bytes {
+    private val bytes: ByteArray
+
+    private constructor(bytes: ByteArray) {
+        this.bytes = bytes
+    }
+
+    fun size() = bytes.size
+
+    fun toByteArray() = bytes.clone()
+    fun toHex() = bytes.toHex()
+
+    override fun equals(other: Any?) = other is Bytes && Arrays.equals(bytes, other.bytes)
+    override fun hashCode() = Arrays.hashCode(bytes)
+    override fun toString() = bytes.toHex()
+
+    companion object {
+        fun of(bytes: ByteArray) = Bytes(bytes.clone())
+        fun of(text: String) = Bytes(text.toByteArray())
+    }
+}
+
 abstract class FixLenBytes(bytes: ByteArray) {
     private val bytes: ByteArray
 
@@ -234,22 +265,45 @@ class Bytes33(bytes: ByteArray): FixLenBytes(bytes) {
     }
 }
 
-class DirBuilder {
-    private val files = mutableMapOf<String, String>()
+sealed class DirFile {
+    abstract fun previewText(): String
+    abstract fun write(file: File)
+}
 
-    fun put(path: String, text: String) {
+class TextDirFile(val text: String): DirFile() {
+    override fun previewText() = text
+    override fun write(file: File) = file.writeText(text)
+}
+
+class BinaryDirFile(val data: Bytes): DirFile() {
+    override fun previewText() = "<binary file, ${data.size()} bytes>"
+    override fun write(file: File) = file.writeBytes(data.toByteArray())
+}
+
+class DirBuilder {
+    private val files = mutableMapOf<String, DirFile>()
+
+    fun put(path: String, file: DirFile) {
         check(path.isNotBlank())
         check(path !in files) { "Duplicate file: $path" }
-        files[path] = text
+        files[path] = file
     }
 
-    fun put(map: Map<String, String>) {
-        for ((path, text) in map) {
-            put(path, text)
+    fun put(path: String, text: String) {
+        put(path, TextDirFile(text))
+    }
+
+    fun put(path: String, data: Bytes) {
+        put(path, BinaryDirFile(data))
+    }
+
+    fun put(map: Map<String, DirFile>) {
+        for ((path, file) in map) {
+            put(path, file)
         }
     }
 
-    fun toFileMap() = files.toMap()
+    fun toFileMap() = files.toImmMap()
 }
 
 class LateInit<T> {
@@ -290,6 +344,13 @@ class ThreadLocalContext<T>(private val defaultValue: T? = null) {
 typealias Getter<T> = () -> T
 typealias Setter<T> = (T) -> Unit
 
+fun <T> immListOf(vararg values: T): List<T> = ImmutableList.copyOf(values)
+fun <T> immSetOf(vararg values: T): Set<T> = ImmutableSet.copyOf(values)
+fun <K, V> immMapOf(vararg entries: Pair<K, V>): Map<K, V> = mapOf(*entries).toImmMap()
+
 fun <T> Iterable<T>.toImmList(): List<T> = ImmutableList.copyOf(this)
 fun <T> Iterable<T>.toImmSet(): Set<T> = ImmutableSet.copyOf(this)
 fun <K, V> Map<K, V>.toImmMap(): Map<K, V> = ImmutableMap.copyOf(this)
+
+// Needs to be in a different file than List<Gtv>.toGtv() because of a name conflict...
+fun List<String>.toGtv(): Gtv = GtvFactory.gtv(this.map { it.toGtv() })

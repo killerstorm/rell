@@ -1,5 +1,6 @@
 package net.postchain.rell.tools
 
+import net.postchain.rell.RellCliLogUtils
 import net.postchain.rell.RellCliUtils
 import net.postchain.rell.parser.S_Grammar
 import picocli.CommandLine
@@ -38,7 +39,7 @@ private val MIGRATION_MAP = mapOf(
 )
 
 fun main(args: Array<String>) {
-    RellCliUtils.initLogging()
+    RellCliLogUtils.initLogging()
     RellCliUtils.runCli(args, MigratorArgs()) {
         main0(it)
     }

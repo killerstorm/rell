@@ -103,7 +103,7 @@ class NamespaceTest: BaseRellTest() {
         chk("foo.bar @ {} ( foo.bar )", "ct_err:expr_novalue:type")
         chk("foo.bar @ {} ( bar )", "foo.bar[0]")
         chk("foo.bar @ {} ( foo )", "ct_err:expr_novalue:namespace")
-        chk("foo.bar @ {} ( bar, bar.x, .x )", "(foo.bar[0],int[123],int[123])")
+        chk("foo.bar @ {} ( bar, _=bar.x, _=.x )", "(foo.bar[0],int[123],int[123])")
     }
 
     @Test fun testTableNameConflict() {
@@ -113,8 +113,8 @@ class NamespaceTest: BaseRellTest() {
         insert("c0.user", "x", "0,123")
         insert("c0.foo.user", "y", "1,456")
 
-        chk("user @ {} ( user, =.x )", "(user[0],int[123])")
-        chk("foo.user @ {} ( user, =.y )", "(foo.user[1],int[456])")
+        chk("user @ {} ( user, _=.x )", "(user[0],int[123])")
+        chk("foo.user @ {} ( user, _=.y )", "(foo.user[1],int[456])")
         chk("bar.user.z", "int[789]")
     }
 

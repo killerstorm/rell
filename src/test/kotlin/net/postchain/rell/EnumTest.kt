@@ -23,17 +23,17 @@ class EnumTest: BaseRellTest() {
         chk("foo.A == foo.B", "boolean[false]")
         chk("foo.A != foo.A", "boolean[false]")
         chk("foo.A != foo.B", "boolean[true]")
-        chk("foo.A === foo.A", "ct_err:binop_operand_type:===:foo:foo")
-        chk("foo.A !== foo.A", "ct_err:binop_operand_type:!==:foo:foo")
+        chk("foo.A === foo.A", "ct_err:binop_operand_type:===:[foo]:[foo]")
+        chk("foo.A !== foo.A", "ct_err:binop_operand_type:!==:[foo]:[foo]")
         chk("foo.A < foo.A", "boolean[false]")
         chk("foo.A < foo.B", "boolean[true]")
         chk("foo.A > foo.A", "boolean[false]")
         chk("foo.A > foo.B", "boolean[false]")
         chk("foo.B > foo.A", "boolean[true]")
-        chk("foo.A + foo.A", "ct_err:binop_operand_type:+:foo:foo")
-        chk("foo.A - foo.B", "ct_err:binop_operand_type:-:foo:foo")
-        chk("foo.A + 1", "ct_err:binop_operand_type:+:foo:integer")
-        chk("foo.A - 1", "ct_err:binop_operand_type:-:foo:integer")
+        chk("foo.A + foo.A", "ct_err:binop_operand_type:+:[foo]:[foo]")
+        chk("foo.A - foo.B", "ct_err:binop_operand_type:-:[foo]:[foo]")
+        chk("foo.A + 1", "ct_err:binop_operand_type:+:[foo]:[integer]")
+        chk("foo.A - 1", "ct_err:binop_operand_type:-:[foo]:[integer]")
         chk("foo.A + ''", "text[A]")
         chk("'' + foo.A", "text[A]")
     }
@@ -82,13 +82,13 @@ class EnumTest: BaseRellTest() {
     @Test fun testTypeCompatibility() {
         def("enum foo { A, B, C }")
         def("enum bar { A, B, C }")
-        chkEx(": foo = bar.A;", "ct_err:entity_rettype:foo:bar")
-        chkEx(": bar = foo.A;", "ct_err:entity_rettype:bar:foo")
-        chkEx(": foo = null;", "ct_err:entity_rettype:foo:null")
-        chkEx(": foo = 0;", "ct_err:entity_rettype:foo:integer")
-        chkEx(": foo = 1;", "ct_err:entity_rettype:foo:integer")
-        chkEx(": foo = 'Hello';", "ct_err:entity_rettype:foo:text")
-        chkEx(": foo = true;", "ct_err:entity_rettype:foo:boolean")
+        chkEx(": foo = bar.A;", "ct_err:entity_rettype:[foo]:[bar]")
+        chkEx(": bar = foo.A;", "ct_err:entity_rettype:[bar]:[foo]")
+        chkEx(": foo = null;", "ct_err:entity_rettype:[foo]:[null]")
+        chkEx(": foo = 0;", "ct_err:entity_rettype:[foo]:[integer]")
+        chkEx(": foo = 1;", "ct_err:entity_rettype:[foo]:[integer]")
+        chkEx(": foo = 'Hello';", "ct_err:entity_rettype:[foo]:[text]")
+        chkEx(": foo = true;", "ct_err:entity_rettype:[foo]:[boolean]")
         chkEx(": foo? = foo.A;", "foo[A]")
         chkEx(": foo? = null;", "null")
     }
@@ -99,11 +99,11 @@ class EnumTest: BaseRellTest() {
         def("object obj { mutable f: foo = foo.A; }")
         insert("c0.cls", "name,f", "0,'Bob',0")
 
-        chk("cls @* {} ( =.name, =.f )", "list<(text,foo)>[(text[Bob],foo[A])]")
+        chk("cls @* {} ( _=.name, _=.f )", "list<(text,foo)>[(text[Bob],foo[A])]")
         chkData("cls(0,Bob,0)", "obj(0,0)")
 
         chkOp("create cls('Alice', foo.B);")
-        chk("cls @* {} ( =.name, =.f )", "list<(text,foo)>[(text[Bob],foo[A]),(text[Alice],foo[B])]")
+        chk("cls @* {} ( _=.name, _=.f )", "list<(text,foo)>[(text[Bob],foo[A]),(text[Alice],foo[B])]")
         chkData("cls(0,Bob,0)", "cls(1,Alice,1)", "obj(0,0)")
 
         chk("obj.f", "foo[A]")
@@ -121,11 +121,11 @@ class EnumTest: BaseRellTest() {
         def("entity user { name: text; f: foo; }")
         insert("c0.user", "name,f", "0,'Bob',1")
 
-        chkEx("{ return user @ {} ( =.f ); }", "foo[B]")
+        chkEx("{ return user @ {} ( _=.f ); }", "foo[B]")
         chkEx("{ val foo = 'Bob'; return user @? { .name == foo }; }", "user[0]")
-        chkEx("{ val foo = 'Bob'; return user @? { .f == foo.B }; }", "ct_err:unknown_member:text:B")
+        chkEx("{ val foo = 'Bob'; return user @? { .f == foo.B }; }", "ct_err:unknown_member:[text]:B")
         chkEx("{ val foo = 'Bob'; return foo; }", "text[Bob]")
-        chkEx("{ val foo = 'Bob'; return foo.C; }", "ct_err:unknown_member:text:C")
+        chkEx("{ val foo = 'Bob'; return foo.C; }", "ct_err:unknown_member:[text]:C")
     }
 
     @Test fun testStaticFunctions() {
@@ -160,14 +160,33 @@ class EnumTest: BaseRellTest() {
         chk("foo.C.value", "int[2]")
     }
 
+    @Test fun testMemberFunctionsAt() {
+        def("enum foo { A, B, C }")
+        def("entity user { name; foo; }")
+        insert("c0.user", "name,foo", "1,'Bob',0")
+        insert("c0.user", "name,foo", "2,'Alice',1")
+        insert("c0.user", "name,foo", "3,'Trudy',2")
+
+        chk("user @ { 'Bob' } ( .foo.value )", "int[0]")
+        chk("user @ { 'Alice' } ( .foo.value )", "int[1]")
+        chk("user @ { 'Trudy' } ( .foo.value )", "int[2]")
+        chk("user @ { 'Alice' } ( _=.name, _=.foo, _=.foo.value )", "(text[Alice],foo[B],int[1])")
+
+        chk("user @ { .foo.value == 0 } ( .name )", "text[Bob]")
+        chk("user @ { .foo.value == 1 } ( .name )", "text[Alice]")
+        chk("user @ { .foo.value == 2 } ( .name )", "text[Trudy]")
+
+        chk("user @ { 'Bob' } ( .foo.name )", "ct_err:expr_call_nosql:foo.name")
+    }
+
     @Test fun testNullable() {
         def("enum foo { A, B, C }")
         def("function nop(x: foo?): foo? = x;")
 
         chkEx("{ val f: foo = foo.A; return f.name; }", "text[A]")
-        chkEx("{ val f: foo = foo.A; return f?.name; }", "ct_err:expr_safemem_type:foo")
-        chkEx("{ val f: foo = foo.A; return f!!.name; }", "ct_err:unop_operand_type:!!:foo")
-        chkEx("{ val f: foo = foo.A; return f ?: foo.C; }", "ct_err:binop_operand_type:?::foo:foo")
+        chkEx("{ val f: foo = foo.A; return f?.name; }", "ct_err:expr_safemem_type:[foo]")
+        chkEx("{ val f: foo = foo.A; return f!!.name; }", "ct_err:unop_operand_type:!!:[foo]")
+        chkEx("{ val f: foo = foo.A; return f ?: foo.C; }", "ct_err:binop_operand_type:?::[foo]:[foo]")
 
         chkEx("{ val f: foo? = nop(foo.A); return f.name; }", "ct_err:expr_mem_null:name")
         chkEx("{ val f: foo? = nop(foo.A); return f?.name; }", "text[A]")

@@ -1,5 +1,6 @@
 package net.postchain.rell.sql
 
+import net.postchain.rell.runtime.Rt_Error
 import java.io.Closeable
 import java.sql.Connection
 import java.sql.DriverManager
@@ -136,5 +137,5 @@ object NoConnSqlExecutor: SqlExecutor() {
     override fun execute(sql: String, preparator: (PreparedStatement) -> Unit) = throw err()
     override fun executeQuery(sql: String, preparator: (PreparedStatement) -> Unit, consumer: (ResultSet) -> Unit) = throw err()
 
-    private fun err() = IllegalStateException("No database connection")
+    private fun err() = Rt_Error("no_sql", "No database connection")
 }

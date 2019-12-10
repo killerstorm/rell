@@ -86,10 +86,10 @@ class R_AtExprBase(
                 b.append(" DESC")
             }
         }
-        for (cls in from) {
+        for (entity in from) {
             orderByList.nextItem()
-            val alias = ctx.getEntityAlias(cls)
-            b.appendColumn(alias, cls.rEntity.sqlMapping.rowidColumn())
+            val alias = ctx.getEntityAlias(entity)
+            b.appendColumn(alias, entity.rEntity.sqlMapping.rowidColumn())
         }
 
         if (limit != null) {
@@ -114,23 +114,23 @@ class R_AtExprBase(
         for ((expr, _) in redSort) {
             expr.toSql(ctx, b)
         }
-        for (cls in from) {
-            ctx.getEntityAlias(cls)
+        for (entity in from) {
+            ctx.getEntityAlias(entity)
         }
         return ctx.getFromInfo()
     }
 
     private fun appendFrom(b: SqlBuilder, sqlCtx: Rt_SqlContext, fromInfo: SqlFromInfo) {
         b.append(" FROM ")
-        b.append(fromInfo.entities, ", ") { cls ->
-            val table = cls.alias.cls.sqlMapping.table(sqlCtx)
+        b.append(fromInfo.entities, ", ") { entity ->
+            val table = entity.alias.entity.sqlMapping.table(sqlCtx)
             b.appendName(table)
             b.append(" ")
-            b.append(cls.alias.str)
+            b.append(entity.alias.str)
 
-            for (join in cls.joins) {
+            for (join in entity.joins) {
                 b.append(" INNER JOIN ")
-                val joinMapping = join.alias.cls.sqlMapping
+                val joinMapping = join.alias.entity.sqlMapping
                 b.appendName(joinMapping.table(sqlCtx))
                 b.append(" ")
                 b.append(join.alias.str)
@@ -157,8 +157,8 @@ class R_AtExprBase(
         val exprs = mutableListOf<Db_Expr?>()
         exprs.add(where)
 
-        for (atCls in from) {
-            val expr = atCls.rEntity.sqlMapping.extraWhereExpr(atCls)
+        for (atEntity in from) {
+            val expr = atEntity.rEntity.sqlMapping.extraWhereExpr(atEntity)
             exprs.add(expr)
         }
 
@@ -174,8 +174,8 @@ class R_AtExprBase(
 
     companion object {
         fun appendExtraWhere(b: SqlBuilder, sqlCtx: Rt_SqlContext, fromInfo: SqlFromInfo) {
-            for (cls in fromInfo.entities) {
-                cls.alias.cls.sqlMapping.appendExtraWhere(b, sqlCtx, cls.alias)
+            for (entity in fromInfo.entities) {
+                entity.alias.entity.sqlMapping.appendExtraWhere(b, sqlCtx, entity.alias)
             }
         }
     }
@@ -187,8 +187,7 @@ class R_AtExpr(
         val cardinality: R_AtCardinality,
         val limit: R_Expr?,
         val rowType: R_AtExprRowType
-): R_Expr(type)
-{
+): R_Expr(type) {
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         val records = base.execute(frame, listOf(), limit)
         return decodeResult(records)

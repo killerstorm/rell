@@ -7,10 +7,12 @@ import org.apache.commons.lang3.StringUtils
 import java.io.File
 
 data class C_SourcePath(val parts: List<String> = listOf()): Comparable<C_SourcePath> {
+    private val str = parts.joinToString("/")
+
     fun add(path: C_SourcePath) = C_SourcePath(parts + path.parts)
     fun add(part: String) = C_SourcePath(parts + part)
     fun parent() = C_SourcePath(parts.subList(0, parts.size - 1))
-    fun str() = parts.joinToString("/")
+    fun str() = str
 
     override fun compareTo(other: C_SourcePath) = CommonUtils.compareLists(parts, other.parts)
     override fun toString() = str()

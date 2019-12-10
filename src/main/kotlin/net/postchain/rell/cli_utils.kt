@@ -1,9 +1,11 @@
 package net.postchain.rell
 
+import mu.KLogging
 import net.postchain.common.hexStringToByteArray
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.parser.*
+import net.postchain.rell.runtime.Rt_RellVersion
 import net.postchain.rell.tools.RellJavaLoggingInit
 import picocli.CommandLine
 import java.io.File
@@ -11,7 +13,7 @@ import java.io.OutputStream
 import java.io.PrintStream
 import kotlin.system.exitProcess
 
-object RellCliUtils {
+object RellCliUtils: KLogging() {
     fun compileApp(sourceDir: String?, moduleName: R_ModuleName, quiet: Boolean = false): R_App {
         val file = if (sourceDir == null) File(".") else File(sourceDir)
         val cSourceDir = C_DiskSourceDir(file.absoluteFile)
@@ -100,6 +102,60 @@ object RellCliUtils {
         return argsObj
     }
 
+    fun parseHex(s: String, sizeBytes: Int, msg: String): ByteArray {
+        val bytes = calc({ s.hexStringToByteArray() }, Exception::class.java) { "Invalid $msg: '$s'" }
+        check(bytes.size == sizeBytes) { "Invalid $msg size: ${bytes.size}" }
+        return bytes
+    }
+
+    fun prepareDir(dir: File) {
+        check(dir.isDirectory || dir.mkdirs()) { "Cannot create directory: $dir" }
+    }
+
+    fun check(b: Boolean, msgCode: () -> String) {
+        if (!b) {
+            val msg = msgCode()
+            throw RellCliErr(msg)
+        }
+    }
+
+    fun checkDir(path: String): File {
+        val file = File(path)
+        check(file.isDirectory) { "Directory not found: $path" }
+        return file
+    }
+
+    fun checkFile(path: String): File {
+        val file = File(path)
+        check(file.isFile) { "File not found: $path" }
+        return file
+    }
+
+    fun checkModule(s: String): R_ModuleName {
+        val res = R_ModuleName.ofOpt(s)
+        return res ?: throw RellCliErr("Invalid module name: '$s'")
+    }
+
+    fun <T> calc(calc: () -> T, errType: Class<out Throwable>, msg: () -> String): T {
+        try {
+            val res = calc()
+            return res
+        } catch (e: Throwable) {
+            if (errType.isInstance(e)) {
+                val s = msg()
+                throw RellCliErr(s)
+            }
+            throw e
+        }
+    }
+
+    fun printVersionInfo() {
+        val ver = Rt_RellVersion.getInstance()?.buildDescriptor ?: "Rell version unknown"
+        logger.info(ver)
+    }
+}
+
+object RellCliLogUtils {
     fun initLogging() {
         System.setProperty("java.util.logging.config.class", RellJavaLoggingInit::class.java.name)
 
@@ -154,53 +210,6 @@ object RellCliUtils {
             // ignore
         }
     }
-
-    fun parseHex(s: String, sizeBytes: Int, msg: String): ByteArray {
-        val bytes = calc({ s.hexStringToByteArray() }, Exception::class.java) { "Invalid $msg: '$s'" }
-        check(bytes.size == sizeBytes) { "Invalid $msg size: ${bytes.size}" }
-        return bytes
-    }
-
-    fun prepareDir(dir: File) {
-        check(dir.isDirectory || dir.mkdirs()) { "Cannot create directory: $dir" }
-    }
-
-    fun check(b: Boolean, msgCode: () -> String) {
-        if (!b) {
-            val msg = msgCode()
-            throw RellCliErr(msg)
-        }
-    }
-
-    fun checkDir(path: String): File {
-        val file = File(path)
-        check(file.isDirectory) { "Directory not found: $path" }
-        return file
-    }
-
-    fun checkFile(path: String): File {
-        val file = File(path)
-        check(file.isFile) { "File not found: $path" }
-        return file
-    }
-
-    fun checkModule(s: String): R_ModuleName {
-        val res = R_ModuleName.ofOpt(s)
-        return res ?: throw RellCliErr("Invalid module name: '$s'")
-    }
-
-    fun <T> calc(calc: () -> T, errType: Class<out Throwable>, msg: () -> String): T {
-        try {
-            val res = calc()
-            return res
-        } catch (e: Throwable) {
-            if (errType.isInstance(e)) {
-                val s = msg()
-                throw RellCliErr(s)
-            }
-            throw e
-        }
-    }
 }
 
 class RellCliErr(msg: String): RuntimeException(msg)
@@ -213,7 +222,7 @@ class RellModuleSources(modules: List<String>, files: Map<String, String>) {
 class RellCliTarget(val sourcePath: File, val sourceDir: C_SourceDir, val modules: List<R_ModuleName>)
 
 abstract class RellBaseCliArgs {
-    @CommandLine.Option(names = ["-d", "--source-dir"], paramLabel =  "SOURCE_DIR",
-            description =  ["Rell source code directory (default: current directory)"])
+    @CommandLine.Option(names = ["-d", "--source-dir"], paramLabel = "SOURCE_DIR",
+            description = ["Rell source code directory (default: current directory)"])
     var sourceDir: String? = null
 }

@@ -23,9 +23,10 @@ object RellTestUtils {
             errPos: Boolean = false,
             options: C_CompilerOptions = C_CompilerOptions.DEFAULT,
             outMessages: MutableList<C_Message>? = null,
+            modules: List<R_ModuleName> = listOf(R_ModuleName.EMPTY),
             processor: (T_App) -> String
     ): String {
-        val cRes = compileApp(sourceDir, options)
+        val cRes = compileApp(sourceDir, modules, options)
         outMessages?.addAll(cRes.messages)
 
         if (!cRes.errors.isEmpty()) {
@@ -78,25 +79,39 @@ object RellTestUtils {
 
     fun catchRtErr(block: () -> String): String {
         val p = catchRtErr0(block)
-        return p.first ?: p.second!!
+        return p.first?.res ?: p.second!!
+    }
+
+    fun catchRtErrWithStack(block: () -> String): TestCallResult {
+        val p = catchRtErr0(block)
+        return p.first ?: TestCallResult(p.second!!, listOf())
     }
 
     fun <T> catchRtErr(block1: () -> T, block2: (T) -> String): String {
         val p1 = catchRtErr0(block1)
-        if (p1.first != null) return p1.first!!
+        if (p1.first != null) return p1.first!!.res
         return block2(p1.second!!)
     }
 
-    fun <T> catchRtErr0(block: () -> T): Pair<String?, T?> {
+    fun <T> catchRtErr0(block: () -> T): Pair<TestCallResult?, T?> {
         try {
             val res = block()
             return Pair(null, res)
-        } catch (e: Rt_Error) {
-            return Pair("rt_err:" + e.code, null)
-        } catch (e: Rt_RequireError) {
-            return Pair("req_err:" + if (e.userMsg != null) "[${e.userMsg}]" else "null", null)
-        } catch (e: Rt_GtvError) {
-            return Pair("gtv_err:" + e.code, null)
+        } catch (e: Rt_StackTraceError) {
+            val err = rtErrToString(e.realCause)
+            return Pair(TestCallResult(err, e.stack), null)
+        } catch (e: Throwable) {
+            val err = rtErrToString(e)
+            return Pair(TestCallResult(err, listOf()), null)
+        }
+    }
+
+    private fun rtErrToString(e: Throwable): String {
+        return when (e) {
+            is Rt_Error -> "rt_err:" + e.code
+            is Rt_RequireError -> "req_err:" + if (e.userMsg != null) "[${e.userMsg}]" else "null"
+            is Rt_GtvError -> "gtv_err:" + e.code
+            else -> throw e
         }
     }
 
@@ -118,36 +133,37 @@ object RellTestUtils {
     }
 
     fun callQuery(appCtx: Rt_AppContext, name: String, args: List<Rt_Value>, encoder: (R_Type, Rt_Value) -> String): String {
-        val decoder = { _: List<R_ExternalParam>, args2: List<Rt_Value> -> args2 }
-        return callQueryGeneric(appCtx, name, args, decoder, encoder)
+        val decoder = { _: List<R_Param>, args2: List<Rt_Value> -> args2 }
+        val eval = RellTestEval()
+        return eval.eval {
+            callQueryGeneric(eval, appCtx, name, args, decoder, encoder)
+        }
     }
 
     fun <T> callQueryGeneric(
+            eval: RellTestEval,
             appCtx: Rt_AppContext,
             name: String,
             args: List<T>,
-            decoder: (List<R_ExternalParam>, List<T>) -> List<Rt_Value>,
+            decoder: (List<R_Param>, List<T>) -> List<Rt_Value>,
             encoder: (R_Type, Rt_Value) -> String
-    ): String
-    {
+    ): String {
         val mName = R_MountName.of(name)
         val query = appCtx.app.queries[mName]
         if (query == null) throw IllegalStateException("Query not found: '$name'")
 
-        val (rtErr, rtArgs) = catchRtErr0 { decoder(query.params(), args) }
-        if (rtErr != null) {
-            return rtErr
-        }
+        val rtArgs = eval.wrapRt { decoder(query.params(), args) }
 
-        val res = catchRtErr {
+        val res = eval.wrapRt {
             val v = query.callTopQuery(appCtx, rtArgs!!)
             encoder(query.type(), v)
         }
+
         return res
     }
 
     fun callOp(appCtx: Rt_AppContext, name: String, args: List<Rt_Value>): String {
-        val decoder = { _: List<R_ExternalParam>, args2: List<Rt_Value> -> args2 }
+        val decoder = { _: List<R_Param>, args2: List<Rt_Value> -> args2 }
         return callOpGeneric(appCtx, name, args, decoder)
     }
 
@@ -155,7 +171,7 @@ object RellTestUtils {
             appCtx: Rt_AppContext,
             name: String,
             args: List<T>,
-            decoder: (List<R_ExternalParam>, List<T>) -> List<Rt_Value>
+            decoder: (List<R_Param>, List<T>) -> List<Rt_Value>
     ): String
     {
         val mName = R_MountName.of(name)
@@ -164,7 +180,7 @@ object RellTestUtils {
 
         val (rtErr, rtArgs) = catchRtErr0 { decoder(op.params(), args) }
         if (rtErr != null) {
-            return rtErr
+            return rtErr.res
         }
 
         return catchRtErr {
@@ -173,14 +189,11 @@ object RellTestUtils {
         }
     }
 
-    fun compileApp(sourceDir: C_SourceDir, options: C_CompilerOptions): C_CompilationResult {
-        val modules = listOf(R_ModuleName.EMPTY)
-        return compileApp(sourceDir, modules, options)
-    }
-
     fun compileApp(sourceDir: C_SourceDir, modules: List<R_ModuleName>, options: C_CompilerOptions): C_CompilationResult {
         val res = C_Compiler.compile(sourceDir, modules, options)
         TestSnippetsRecorder.record(sourceDir, modules, options, res)
         return res
     }
+
+    class TestCallResult(val res: String, val stack: List<R_StackPos>)
 }

@@ -1,18 +1,19 @@
 package net.postchain.rell
 
+import net.postchain.base.BlockchainRid
 import net.postchain.config.SimpleDatabaseConnector
 import net.postchain.config.app.AppConfig
 import net.postchain.gtv.GtvNull
 import net.postchain.rell.model.*
 import net.postchain.rell.module.GtvToRtContext
-import net.postchain.rell.module.RELL_VERSION
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.*
 import picocli.CommandLine
 import kotlin.system.exitProcess
 
+@Suppress("unused")
 private val INIT = run {
-    RellCliUtils.initLogging()
+    RellCliLogUtils.initLogging()
 }
 
 private val SQL_MAPPER = Rt_ChainSqlMapping(0)
@@ -25,7 +26,8 @@ fun main(args: Array<String>) {
 
 private fun main0(args: RellCliArgs) {
     if (args.version) {
-        System.out.println("Rell version $RELL_VERSION")
+        val ver = Rt_RellVersion.getInstance()?.buildDescriptor ?: "Version unknown"
+        println(ver)
         exitProcess(0)
     }
 
@@ -40,36 +42,43 @@ private fun main0(args: RellCliArgs) {
     }
 
     if (args.resetdb && args.module == null) {
-        runWithSql(args) { sqlExec ->
-            sqlExec.transaction {
-                SqlUtils.dropAll(sqlExec, true)
-            }
-        }
-        println("Database cleared")
+        resetDatabase(args)
         return
     }
 
     val (entryModule, entryRoutine) = parseEntryPoint(args)
 
     val app = RellCliUtils.compileApp(args.sourceDir, entryModule, args.quiet)
-    val routine = getRoutineCaller(app, args, entryModule, entryRoutine)
+    val launcher = getAppLauncher(app, args, entryModule, entryRoutine)
 
     runWithSql(args) { sqlExec ->
         val sqlCtx = Rt_SqlContext.createNoExternalChains(app, SQL_MAPPER)
-
         if (dbSpecified) {
-            sqlExec.transaction {
-                if (args.resetdb) {
-                    SqlUtils.dropAll(sqlExec, true)
-                }
-
-                val modCtx = createAppContext(args, app, sqlCtx, sqlExec, null)
-                val logLevel = if (args.sqlInitLog) SqlInit.LOG_ALL else SqlInit.LOG_NONE
-                SqlInit.init(modCtx, logLevel)
-            }
+            initDatabase(args, app, sqlExec, sqlCtx)
         }
 
-        routine(sqlExec, sqlCtx)
+        launcher?.launch(sqlExec, sqlCtx)
+    }
+}
+
+private fun resetDatabase(args: RellCliArgs) {
+    runWithSql(args) { sqlExec ->
+        sqlExec.transaction {
+            SqlUtils.dropAll(sqlExec, true)
+        }
+    }
+    println("Database cleared")
+}
+
+private fun initDatabase(args: RellCliArgs, app: R_App, sqlExec: SqlExecutor, sqlCtx: Rt_SqlContext) {
+    sqlExec.transaction {
+        if (args.resetdb) {
+            SqlUtils.dropAll(sqlExec, true)
+        }
+
+        val modCtx = createAppContext(args, app, sqlCtx, sqlExec, null)
+        val logLevel = if (args.sqlInitLog) SqlInit.LOG_ALL else SqlInit.LOG_NONE
+        SqlInit.init(modCtx, logLevel)
     }
 }
 
@@ -93,29 +102,15 @@ private fun parseEntryPoint(args: RellCliArgs): Pair<R_ModuleName, R_QualifiedNa
     return Pair(moduleName, routineName)
 }
 
-private fun getRoutineCaller(
+private fun getAppLauncher(
         app: R_App,
         args: RellCliArgs,
         entryModule: R_ModuleName,
         entryRoutine: R_QualifiedName?
-): (SqlExecutor, Rt_SqlContext) -> Unit {
-    if (entryRoutine == null) return { _, _ -> }
-
+): RellAppLauncher? {
+    if (entryRoutine == null) return null
     val entryPoint = findEntryPoint(app, entryModule, entryRoutine)
-
-    return { sqlExec, sqlCtx ->
-        val appCtx = createAppContext(args, app, sqlCtx, sqlExec, entryPoint.opContext())
-
-        val gtvCtx = GtvToRtContext(true)
-        val rtArgs = parseArgs(entryPoint, gtvCtx, args.args ?: listOf(), args.json || args.jsonArgs)
-        gtvCtx.finish(appCtx)
-
-        val rtRes = entryPoint.call(appCtx, rtArgs)
-        if (rtRes != null && rtRes != Rt_UnitValue) {
-            val strRes = resultToString(rtRes, args.jsonResult || args.json)
-            println(strRes)
-        }
-    }
+    return RellAppLauncher(app, args, entryPoint)
 }
 
 private fun runWithSql(args: RellCliArgs, code: (SqlExecutor) -> Unit) {
@@ -156,15 +151,16 @@ private fun findEntryPoint(app: R_App, moduleName: R_ModuleName, routineName: R_
     }
 
     val name = routineName.str()
+    val mountName = R_MountName(routineName.parts)
     val eps = mutableListOf<RellEntryPoint>()
 
-    val op = module.operations[name]
+    val op = module.operations[name] ?: app.operations[mountName]
     if (op != null) {
         val time = System.currentTimeMillis() / 1000
         eps.add(RellEntryPoint_Operation(op, Rt_OpContext(time, -1, -1, listOf())))
     }
 
-    val q = module.queries[name]
+    val q = module.queries[name] ?: app.queries[mountName]
     if (q != null) eps.add(RellEntryPoint_Query(q))
 
     val f = module.functions[name]
@@ -181,7 +177,7 @@ private fun findEntryPoint(app: R_App, moduleName: R_ModuleName, routineName: R_
 }
 
 private fun createGlobalCtx(args: RellCliArgs, sqlExec: SqlExecutor, opCtx: Rt_OpContext?): Rt_GlobalContext {
-    val bcRid = ByteArray(32)
+    val bcRid = BlockchainRid(ByteArray(32))
     val chainCtx = Rt_ChainContext(GtvNull, mapOf(), bcRid)
 
     return Rt_GlobalContext(
@@ -214,7 +210,7 @@ private fun parseArgs(entryPoint: RellEntryPoint, gtvCtx: GtvToRtContext, args: 
     return args.withIndex().map { (idx, arg) -> parseArg(gtvCtx, params[idx], arg, json) }
 }
 
-private fun parseArg(gtvCtx: GtvToRtContext, param: R_ExternalParam, arg: String, json: Boolean): Rt_Value {
+private fun parseArg(gtvCtx: GtvToRtContext, param: R_Param, arg: String, json: Boolean): Rt_Value {
     val type = param.type
 
     if (json) {
@@ -244,6 +240,37 @@ private fun resultToString(res: Rt_Value, json: Boolean): String {
         PostchainUtils.gtvToJson(gtv)
     } else {
         res.toString()
+    }
+}
+
+private class RellAppLauncher(
+        private val app: R_App,
+        private val args: RellCliArgs,
+        private val entryPoint: RellEntryPoint
+) {
+    fun launch(sqlExec: SqlExecutor, sqlCtx: Rt_SqlContext) {
+        val appCtx = createAppContext(args, app, sqlCtx, sqlExec, entryPoint.opContext())
+
+        val gtvCtx = GtvToRtContext(true)
+        val rtArgs = parseArgs(entryPoint, gtvCtx, args.args ?: listOf(), args.json || args.jsonArgs)
+        gtvCtx.finish(appCtx)
+
+        val rtRes = callEntryPoint(appCtx, rtArgs)
+        if (rtRes != null && rtRes != Rt_UnitValue) {
+            val strRes = resultToString(rtRes, args.jsonResult || args.json)
+            println(strRes)
+        }
+    }
+
+    private fun callEntryPoint(appCtx: Rt_AppContext, rtArgs: List<Rt_Value>): Rt_Value? {
+        val res = try {
+            entryPoint.call(appCtx, rtArgs)
+        } catch (e: Rt_StackTraceError) {
+            val msg = Rt_Utils.appendStackTrace("ERROR ${e.message}", e.stack)
+            System.err.println(msg)
+            exitProcess(1)
+        }
+        return res
     }
 }
 
@@ -287,12 +314,12 @@ private class RellEntryPoint_Query(private val q: R_Query): RellEntryPoint() {
 
 @CommandLine.Command(name = "rell", description = ["Executes a rell program"])
 private class RellCliArgs: RellBaseCliArgs() {
-    @CommandLine.Option(names = ["--db-url"], paramLabel =  "DB_URL",
-            description =  ["Database JDBC URL, e. g. jdbc:postgresql://localhost/relltestdb?user=relltestuser&password=1234"])
+    @CommandLine.Option(names = ["--db-url"], paramLabel = "DB_URL",
+            description = ["Database JDBC URL, e. g. jdbc:postgresql://localhost/relltestdb?user=relltestuser&password=1234"])
     var dbUrl: String? = null
 
-    @CommandLine.Option(names = ["--db-properties"], paramLabel =  "DB_PROPERTIES",
-            description =  ["Database connection properties file (same format as node-config.properties)"])
+    @CommandLine.Option(names = ["--db-properties"], paramLabel = "DB_PROPERTIES",
+            description = ["Database connection properties file (same format as node-config.properties)"])
     var dbProperties: String? = null
 
     @CommandLine.Option(names = ["--resetdb"], description = ["Reset database (drop everything)"])

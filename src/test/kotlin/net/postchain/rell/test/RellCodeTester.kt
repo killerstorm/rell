@@ -1,18 +1,21 @@
 package net.postchain.rell.test
 
 import com.google.common.collect.Sets
+import net.postchain.base.BlockchainRid
 import net.postchain.core.ByteArrayKey
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
 import net.postchain.rell.CommonUtils
 import net.postchain.rell.model.R_App
-import net.postchain.rell.model.R_ExternalParam
 import net.postchain.rell.model.R_MountName
+import net.postchain.rell.model.R_Param
+import net.postchain.rell.model.R_StackPos
 import net.postchain.rell.parser.C_MessageType
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.sql.SqlInit
 import net.postchain.rell.sql.SqlUtils
+import net.postchain.rell.toImmMap
 import org.junit.Assert
 import kotlin.test.assertEquals
 
@@ -21,8 +24,7 @@ class RellCodeTester(
         entityDefs: List<String> = listOf(),
         inserts: List<String> = listOf(),
         gtv: Boolean = false
-): RellBaseTester(tstCtx, entityDefs, inserts, gtv)
-{
+): RellBaseTester(tstCtx, entityDefs, inserts, gtv) {
     var gtvResult: Boolean = gtv
         set(value) {
             checkNotInited()
@@ -37,6 +39,8 @@ class RellCodeTester(
     var sqlUpdatePortionSize = 1000
 
     private val chainDependencies = mutableMapOf<String, TestChainDependency>()
+
+    private var rtErrStack = listOf<R_StackPos>()
 
     override fun initSqlReset(exec: SqlExecutor, moduleCode: String, app: R_App) {
         val globalCtx = createInitGlobalCtx(exec)
@@ -71,6 +75,8 @@ class RellCodeTester(
         val ridArray = CommonUtils.hexToBytes(rid)
         chainDependencies[name] = TestChainDependency(ridArray, height)
     }
+
+    fun chainDependencies() = chainDependencies.mapValues { (_, v) -> Pair(v.rid, v.height) }.toImmMap()
 
     fun chkQuery(bodyCode: String, expected: String) {
         val queryCode = "query q() = $bodyCode;"
@@ -135,10 +141,15 @@ class RellCodeTester(
         return callQuery0(code, name, args) { _, v -> v }
     }
 
-    private fun <T> callQuery0(code: String, name: String, args: List<T>, decoder: (List<R_ExternalParam>, List<T>) -> List<Rt_Value>): String {
-        return eval.eval {
+    private fun <T> callQuery0(
+            code: String,
+            name: String,
+            args: List<T>,
+            decoder: (List<R_Param>, List<T>) -> List<Rt_Value>
+    ): String {
+        val evalRes = eval.eval {
             if (wrapInit) {
-                eval.wrapCt { init() }
+                eval.wrapAll { init() }
             } else {
                 init()
             }
@@ -151,9 +162,12 @@ class RellCodeTester(
             else RellTestUtils.ENCODER_PLAIN
 
             processAppCtx(globalCtx, moduleCode) { appCtx ->
-                RellTestUtils.callQueryGeneric(appCtx, name, args, decoder, encoder)
+                RellTestUtils.callQueryGeneric(eval, appCtx, name, args, decoder, encoder)
             }
         }
+
+        rtErrStack = eval.errorStack()
+        return evalRes
     }
 
     private fun callOp(code: String, name: String, args: List<Rt_Value>): String {
@@ -168,7 +182,7 @@ class RellCodeTester(
         return callOp0(code, "o", args, GtvTestUtils::decodeGtvOpArgsStr)
     }
 
-    private fun <T> callOp0(code: String, name: String, args: List<T>, decoder: (List<R_ExternalParam>, List<T>) -> List<Rt_Value>): String {
+    private fun <T> callOp0(code: String, name: String, args: List<T>, decoder: (List<R_Param>, List<T>) -> List<Rt_Value>): String {
         init()
         val moduleCode = moduleCode(code)
         val globalCtx = createGlobalCtx()
@@ -192,7 +206,7 @@ class RellCodeTester(
     }
 
     private fun createChainContext(): Rt_ChainContext {
-        val bcRid = ByteArray(32)
+        val bcRid = BlockchainRid(ByteArray(32))
         return Rt_ChainContext(GtvNull, mapOf(), bcRid)
     }
 
@@ -223,6 +237,11 @@ class RellCodeTester(
             val msg = list.joinToString()
             Assert.fail(msg)
         }
+    }
+
+    fun chkStack(vararg expected: String) {
+        val actual = rtErrStack.map { it.toString() }
+        assertEquals(expected.toList(), actual)
     }
 
     fun chkInit(expected: String) {

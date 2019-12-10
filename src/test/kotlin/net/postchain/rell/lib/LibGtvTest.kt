@@ -193,8 +193,8 @@ class LibGtvTest: BaseRellTest(false) {
         chk("gtv.from_json('[123]').to_gtv()", "gtv[[123]]")
         chk("gtv.from_json('[123]').to_gtv_pretty()", "gtv[[123]]")
 
-        chk("range(10).to_gtv()", "ct_err:unknown_member:range:to_gtv")
-        chk("range(10).to_gtv_pretty()", "ct_err:unknown_member:range:to_gtv_pretty")
+        chk("range(10).to_gtv()", "ct_err:unknown_member:[range]:to_gtv")
+        chk("range(10).to_gtv_pretty()", "ct_err:unknown_member:[range]:to_gtv_pretty")
         chkFromGtv("''", "range.from_gtv(g)", "ct_err:fn:invalid:range:from_gtv")
         chkFromGtv("''", "range.from_gtv_pretty(g)", "ct_err:fn:invalid:range:from_gtv_pretty")
     }

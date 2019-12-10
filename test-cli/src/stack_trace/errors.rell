@@ -1,0 +1,20 @@
+function error(e: text) {
+    when (e) {
+        '/' -> print(1 / 0);
+        '%' -> print(1 % 0);
+        '-' -> print(-integer.MIN_VALUE);
+        'abs' -> abs(integer.MIN_VALUE);
+        'decimal' -> decimal('hello');
+        'integer.from_hex' -> integer.from_hex('hello');
+        'list[]' -> print(list<integer>()[1000]);
+        'list.get' -> print(list<integer>().get(1000));
+        'require' -> require(false);
+        'text[]' -> print('Hello'[1000]);
+        'text.char_at' -> 'Hello'.char_at(1000);
+    }
+}
+
+query error_q(e: text) {
+    error(e);
+    return 0;
+}

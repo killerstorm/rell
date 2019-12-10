@@ -81,16 +81,16 @@ Specifying names of result tuple fields:
 
 Sorting:
 
-``user @* {} ( sort .last_name, sort .first_name )`` - sort by ``last_name`` first, then by ``first_name``.
+``user @* {} ( @sort .last_name, @sort .first_name )`` - sort by ``last_name`` first, then by ``first_name``.
 
-``user @* {} ( -sort .year_of_birth, sort .last_name )`` - sort by ``year_of_birth`` desdending,
+``user @* {} ( @sort_desc .year_of_birth, @sort .last_name )`` - sort by ``year_of_birth`` descending,
 then by ``last_name`` ascending.
 
 Field names can be combined with sorting:
 
-``user @* {} ( sort x = .last_name, -sort y = .year_of_birth )``
+``user @* {} ( @sort x = .last_name, @sort_desc y = .year_of_birth )``
 
-When field names are not specified explicitly, they can be deducted implicitly by attribute name:
+When field names are not specified explicitly, they can be inferred implicitly from attribute name:
 
 ::
 
@@ -105,12 +105,27 @@ that name is used as a tuple field name:
     val u = user @ { ... } ( .first_name, .last_name );
     // Result is a tuple (first_name: text, last_name: text).
 
-To prevent implicit field name creation, specify ``=`` before the expression (i. e. use an "empty" field name):
+To have a tuple field without a name, use ``_`` as field name:
 
 ::
 
-    val u = user @ { ... } ( = .first_name, = .last_name );
+    val u = user @ { ... } ( _ = .first_name, _ = .last_name );
     // Result is a tuple (text, text).
+
+To exclude a field from the result tuple, use ``@omit`` annotation:
+
+::
+
+    val us = user @* {} ( .last_name, @omit .first_name ) ;
+    // Result is list<text>, since last_name is excluded, and then there is only one expression to return
+
+a possibility to exclude a field is useful, for example, when one needs to sort by some expression, but does not want
+to include that expression into the result tuple:
+
+::
+
+    val sorted_users = user @* { _ = .first_name, _ = .last_name, @omit @sort .date_of_birth }
+    // Returns list<(text,text)>.
 
 Tail part
 ---------
@@ -258,4 +273,4 @@ Can specify an arbitrary expression returning an entity, a nullable entity or a 
 
 --------------
 
-*Rell v0.10.0*
+*Rell v0.10.1*

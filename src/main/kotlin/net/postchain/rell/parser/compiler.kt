@@ -5,13 +5,14 @@ import net.postchain.rell.model.*
 import net.postchain.rell.toImmList
 import java.util.*
 
-class C_Entity(val defPos: S_Pos?, val cls: R_Entity)
+class C_Entity(val defPos: S_Pos?, val entity: R_Entity)
 class C_Struct(val name: S_Name, val struct: R_Struct)
 
 enum class C_CompilerPass {
     DEFINITIONS,
     NAMESPACES,
     MEMBERS,
+    ABSTRACT,
     STRUCTS,
     EXPRESSIONS,
     VALIDATION,
@@ -60,10 +61,30 @@ class C_StatementVarsBlock {
 class C_SystemDefs private constructor(
         val blockEntity: R_Entity,
         val transactionEntity: R_Entity,
-        val nsProto: C_SysNsProto,
-        val mntTables: C_MountTables
+        val mntTables: C_MountTables,
+        sysEntities: List<R_Entity>
 ) {
+    private val sysEntities = sysEntities.toImmList()
+
+    fun createNsProto(entitiesPrivate: Boolean): C_SysNsProto {
+        val sysNamespaces = SYSTEM_NAMESPACES
+        val sysTypes = SYSTEM_TYPES
+        val sysFunctions = SYSTEM_FUNCTIONS
+
+        val nsBuilder = C_SysNsProtoBuilder()
+
+        for ((name, type) in sysTypes) nsBuilder.addType(name, type)
+        for (entity in sysEntities) nsBuilder.addEntity(entity.simpleName, entity, entitiesPrivate)
+        for ((name, fn) in sysFunctions) nsBuilder.addFunction(name, fn)
+        for ((name, ns) in sysNamespaces) nsBuilder.addNamespace(name, ns)
+
+        return nsBuilder.build()
+    }
+
     companion object {
+        private val SYSTEM_NAMESPACES = C_LibFunctions.getSystemNamespaces()
+        private val SYSTEM_FUNCTIONS = C_LibFunctions.getGlobalFunctions()
+
         private val SYSTEM_TYPES = mapOf(
                 "boolean" to C_TypeDef(R_BooleanType),
                 "text" to C_TypeDef(R_TextType),
@@ -87,52 +108,70 @@ class C_SystemDefs private constructor(
             val blockEntity = C_Utils.createBlockEntity(executor, null)
             val transactionEntity = C_Utils.createTransactionEntity(executor, null, blockEntity)
 
-            val sysNamespaces = C_LibFunctions.getSystemNamespaces()
-            val sysTypes = SYSTEM_TYPES
-            val sysEntities =  listOf(blockEntity, transactionEntity)
-            val sysFunctions = C_LibFunctions.getGlobalFunctions()
+            val queries = listOf(
+                    C_Utils.createSysQuery(executor, "get_rell_version", R_TextType, R_SysFn_Rell.GetRellVersion),
+                    C_Utils.createSysQuery(executor, "get_postchain_version", R_TextType, R_SysFn_Rell.GetPostchainVersion),
+                    C_Utils.createSysQuery(executor, "get_build", R_TextType, R_SysFn_Rell.GetBuild),
+                    C_Utils.createSysQuery(executor, "get_build_details", R_SysFn_Rell.GetBuildDetails.TYPE, R_SysFn_Rell.GetBuildDetails),
+                    C_Utils.createSysQuery(executor, "get_app_structure", R_GtvType, R_SysFn_Rell.GetAppStructure)
+            )
 
-            val nsBuilder = C_SysNsProtoBuilder()
+            return create(appDefsBuilder, blockEntity, transactionEntity, queries)
+        }
+
+        fun create(
+                appDefsBuilder: C_AppDefsBuilder,
+                blockEntity: R_Entity,
+                transactionEntity: R_Entity,
+                queries: List<R_Query>
+        ): C_SystemDefs {
+            val sysEntities = listOf(blockEntity, transactionEntity)
+
             val mntBuilder = C_MountTablesBuilder()
 
-            for ((name, type) in sysTypes) nsBuilder.addType(name, type)
-            for (cls in sysEntities) nsBuilder.addEntity(cls.simpleName, cls)
-            for ((name, fn) in sysFunctions) nsBuilder.addFunction(name, fn)
-            for ((name, ns) in sysNamespaces) nsBuilder.addNamespace(name, ns)
-
-            for (cls in sysEntities) {
-                appDefsBuilder.entities.add(C_Entity(null, cls))
-                mntBuilder.addEntity(null, cls)
+            for (entity in sysEntities) {
+                appDefsBuilder.entities.add(C_Entity(null, entity))
+                mntBuilder.addEntity(null, entity)
             }
 
-            val nsProto = nsBuilder.build()
+            for (query in queries) {
+                appDefsBuilder.queries.add(query)
+                mntBuilder.addQuery(query)
+            }
+
             val mntTables = mntBuilder.build()
-            return C_SystemDefs(blockEntity, transactionEntity, nsProto, mntTables)
+            return C_SystemDefs(blockEntity, transactionEntity, mntTables, sysEntities)
         }
     }
 }
 
 // Instantiated in Eclipse IDE, change parameters carefully.
-class C_CompilerOptions(val gtv: Boolean, val deprecatedError: Boolean) {
+class C_CompilerOptions(val gtv: Boolean, val deprecatedError: Boolean, val ide: Boolean) {
     class Builder {
         private var gtv = DEFAULT.gtv
         private var deprecatedError = DEFAULT.deprecatedError
+        private var ide = DEFAULT.ide
 
-        fun gtv(v: Boolean): Builder {
+        @Suppress("UNUSED") fun gtv(v: Boolean): Builder {
             gtv = v
             return this
         }
 
-        fun deprecatedError(v: Boolean): Builder {
+        @Suppress("UNUSED") fun deprecatedError(v: Boolean): Builder {
             deprecatedError = v
             return this
         }
 
-        fun build() = C_CompilerOptions(gtv = gtv, deprecatedError = deprecatedError)
+        @Suppress("UNUSED") fun ide(v: Boolean): Builder {
+            ide = v
+            return this
+        }
+
+        fun build() = C_CompilerOptions(gtv = gtv, deprecatedError = deprecatedError, ide = ide)
     }
 
     companion object {
-        @JvmField val DEFAULT = C_CompilerOptions(gtv = true, deprecatedError = false)
+        @JvmField val DEFAULT = C_CompilerOptions(gtv = true, deprecatedError = false, ide = false)
 
         @JvmStatic fun builder() = Builder()
     }
@@ -166,8 +205,14 @@ object C_Compiler {
         var app: R_App? = null
 
         try {
-            for (module in modules) {
-                modMgr.linkModule(module)
+            for (moduleName in modules) {
+                val module = modMgr.linkModule(moduleName, null)
+
+                val header = module.header()
+                if (header.abstract != null && !globalCtx.compilerOptions.ide) {
+                    appCtx.globalCtx.error(header.abstract, "module:main_abstract:$moduleName",
+                            "Module '${moduleName.str()}' is abstract, cannot be used as a main module")
+                }
             }
             app = appCtx.createApp()
         } catch (e: C_Error) {

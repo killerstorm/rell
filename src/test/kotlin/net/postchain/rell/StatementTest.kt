@@ -9,8 +9,8 @@ class StatementTest: BaseRellTest() {
         chkEx("{ val x = 123; return x; }", "int[123]")
         chkEx("{ val x = 123; x = 456; return x; }", "ct_err:expr_assign_val:x")
         chkEx("{ val x: integer = 123; return x; }", "int[123]")
-        chkEx("{ val x: text = 123; return 0; }", "ct_err:stmt_var_type:x:text:integer")
-        chkEx("{ val x: integer = 'Hello'; return 0; }", "ct_err:stmt_var_type:x:integer:text")
+        chkEx("{ val x: text = 123; return 0; }", "ct_err:stmt_var_type:x:[text]:[integer]")
+        chkEx("{ val x: integer = 'Hello'; return 0; }", "ct_err:stmt_var_type:x:[integer]:[text]")
         chkEx("{ val x = unit(); return 123; }", "ct_err:stmt_var_unit:x")
         chkEx("{ val x: integer; x = 123; return x; }", "int[123]")
         chkEx("{ val x: integer; x = 123; x = 456; return x; }", "ct_err:expr_assign_val:x")
@@ -22,11 +22,11 @@ class StatementTest: BaseRellTest() {
         chkEx("{ var x; return 0; }", "ct_err:unknown_name_type:x")
         chkEx("{ var x: integer = 123; return x; }", "int[123]")
         chkEx("{ var x: integer; x = 123; return x; }", "int[123]")
-        chkEx("{ var x: integer; x = 'Hello'; return 0; }", "ct_err:stmt_assign_type:integer:text")
-        chkEx("{ var x: text; x = 123; return 0; }", "ct_err:stmt_assign_type:text:integer")
-        chkEx("{ var x: integer = 'Hello'; return 0; }", "ct_err:stmt_var_type:x:integer:text")
-        chkEx("{ var x: text = 123; return 0; }", "ct_err:stmt_var_type:x:text:integer")
-        chkEx("{ var x = 123; x = 'Hello'; return x; }", "ct_err:stmt_assign_type:integer:text")
+        chkEx("{ var x: integer; x = 'Hello'; return 0; }", "ct_err:stmt_assign_type:[integer]:[text]")
+        chkEx("{ var x: text; x = 123; return 0; }", "ct_err:stmt_assign_type:[text]:[integer]")
+        chkEx("{ var x: integer = 'Hello'; return 0; }", "ct_err:stmt_var_type:x:[integer]:[text]")
+        chkEx("{ var x: text = 123; return 0; }", "ct_err:stmt_var_type:x:[text]:[integer]")
+        chkEx("{ var x = 123; x = 'Hello'; return x; }", "ct_err:stmt_assign_type:[integer]:[text]")
         chkEx("{ var x = unit(); return 123; }", "ct_err:stmt_var_unit:x")
     }
 
@@ -46,8 +46,8 @@ class StatementTest: BaseRellTest() {
         chkEx("{ if (true) return 123; return 456; }", "int[123]")
         chkEx("{ if (false) return 123; return 456; }", "int[456]")
 
-        chkEx("{ if ('Hello') return 123; return 456; }", "ct_err:stmt_if_expr_type:boolean:text")
-        chkEx("{ if (555) return 123; return 456; }", "ct_err:stmt_if_expr_type:boolean:integer")
+        chkEx("{ if ('Hello') return 123; return 456; }", "ct_err:stmt_if_expr_type:[boolean]:[text]")
+        chkEx("{ if (555) return 123; return 456; }", "ct_err:stmt_if_expr_type:[boolean]:[integer]")
 
         chkEx("{ if (a == 0) return 123; return 456; }", 0, "int[123]")
         chkEx("{ if (a == 0) return 123; return 456; }", 1, "int[456]")
@@ -219,11 +219,11 @@ class StatementTest: BaseRellTest() {
     }
 
     @Test fun testAssignmentErr() {
-        chkEx("{ var x = true; x += false; return x; }", "ct_err:binop_operand_type:+=:boolean:boolean")
-        chkEx("{ var x = true; x += 123; return x; }", "ct_err:binop_operand_type:+=:boolean:integer")
-        chkEx("{ var x = true; x += 'Hello'; return x; }", "ct_err:binop_operand_type:+=:boolean:text")
-        chkEx("{ var x = 123; x += false; return x; }", "ct_err:binop_operand_type:+=:integer:boolean")
-        chkEx("{ var x = 123; x += 'Hello'; return x; }", "ct_err:binop_operand_type:+=:integer:text")
+        chkEx("{ var x = true; x += false; return x; }", "ct_err:binop_operand_type:+=:[boolean]:[boolean]")
+        chkEx("{ var x = true; x += 123; return x; }", "ct_err:binop_operand_type:+=:[boolean]:[integer]")
+        chkEx("{ var x = true; x += 'Hello'; return x; }", "ct_err:binop_operand_type:+=:[boolean]:[text]")
+        chkEx("{ var x = 123; x += false; return x; }", "ct_err:binop_operand_type:+=:[integer]:[boolean]")
+        chkEx("{ var x = 123; x += 'Hello'; return x; }", "ct_err:binop_operand_type:+=:[integer]:[text]")
 
         chkEx("{ var x = 123; +x = 456; return x; }", "ct_err:syntax")
         chkEx("{ var x = 123; +x += 456; return x; }", "ct_err:syntax")
@@ -235,14 +235,14 @@ class StatementTest: BaseRellTest() {
     }
 
     private fun chkAssignmentErr(op: String) {
-        chkEx("{ var x = true; x $op false; return x; }", "ct_err:binop_operand_type:$op:boolean:boolean")
-        chkEx("{ var x = true; x $op 123; return x; }", "ct_err:binop_operand_type:$op:boolean:integer")
-        chkEx("{ var x = true; x $op 'Hello'; return x; }", "ct_err:binop_operand_type:$op:boolean:text")
-        chkEx("{ var x = 123; x $op false; return x; }", "ct_err:binop_operand_type:$op:integer:boolean")
-        chkEx("{ var x = 123; x $op 'Hello'; return x; }", "ct_err:binop_operand_type:$op:integer:text")
-        chkEx("{ var x = 'Hello'; x $op false; return x; }", "ct_err:binop_operand_type:$op:text:boolean")
-        chkEx("{ var x = 'Hello'; x $op 123; return x; }", "ct_err:binop_operand_type:$op:text:integer")
-        chkEx("{ var x = 'Hello'; x $op 'Hello'; return x; }", "ct_err:binop_operand_type:$op:text:text")
+        chkEx("{ var x = true; x $op false; return x; }", "ct_err:binop_operand_type:$op:[boolean]:[boolean]")
+        chkEx("{ var x = true; x $op 123; return x; }", "ct_err:binop_operand_type:$op:[boolean]:[integer]")
+        chkEx("{ var x = true; x $op 'Hello'; return x; }", "ct_err:binop_operand_type:$op:[boolean]:[text]")
+        chkEx("{ var x = 123; x $op false; return x; }", "ct_err:binop_operand_type:$op:[integer]:[boolean]")
+        chkEx("{ var x = 123; x $op 'Hello'; return x; }", "ct_err:binop_operand_type:$op:[integer]:[text]")
+        chkEx("{ var x = 'Hello'; x $op false; return x; }", "ct_err:binop_operand_type:$op:[text]:[boolean]")
+        chkEx("{ var x = 'Hello'; x $op 123; return x; }", "ct_err:binop_operand_type:$op:[text]:[integer]")
+        chkEx("{ var x = 'Hello'; x $op 'Hello'; return x; }", "ct_err:binop_operand_type:$op:[text]:[text]")
     }
 
     @Test fun testComplexListAssignment() {

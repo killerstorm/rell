@@ -1,24 +1,30 @@
 package net.postchain.rell.model
 
+import net.postchain.gtv.Gtv
 import net.postchain.rell.parser.C_CompilerPass
 import net.postchain.rell.parser.C_LateInit
+import net.postchain.rell.parser.C_Utils
 import net.postchain.rell.runtime.*
 import net.postchain.rell.toImmList
 import net.postchain.rell.toImmMap
 import java.util.*
 
-class R_DefinitionNames(
-        val simpleName: String,
-        val moduleLevelName: String,
-        val appLevelName: String
-) {
+class R_DefinitionNames(val module: String, val namespace: String?, val simpleName: String) {
+    val qualifiedName = if (namespace == null) simpleName else "$namespace.$simpleName"
+    val appLevelName = if (module.isEmpty()) qualifiedName else R_DefinitionPos.appLevelName(module, qualifiedName)
+
+    fun pos() = R_DefinitionPos(module, qualifiedName)
+
     override fun toString() = appLevelName
 }
 
 abstract class R_Definition(names: R_DefinitionNames) {
     val simpleName = names.simpleName
-    val moduleLevelName = names.moduleLevelName
+    val moduleLevelName = names.qualifiedName
     val appLevelName = names.appLevelName
+    val pos = names.pos()
+
+    abstract fun toMetaGtv(): Gtv
 
     final override fun toString() = "${javaClass.simpleName}[$appLevelName]"
 }
@@ -26,13 +32,13 @@ abstract class R_Definition(names: R_DefinitionNames) {
 class R_ExternalChainsRoot
 class R_ExternalChainRef(val root: R_ExternalChainsRoot, val name: String, val index: Int)
 
-data class R_FrameBlockId(val id: Long)
-data class R_VarPtr(val blockId: R_FrameBlockId, val offset: Int)
+data class R_FrameBlockId(val id: Long, val location: String)
+data class R_VarPtr(val name: String, val blockId: R_FrameBlockId, val offset: Int)
 class R_FrameBlock(val parentId: R_FrameBlockId?, val id: R_FrameBlockId, val offset: Int, val size: Int)
 
 class R_CallFrame(val size: Int, val rootBlock: R_FrameBlock) {
     companion object {
-        private val ERROR_BLOCK = R_FrameBlock(null, R_FrameBlockId(-1), -1, -1)
+        private val ERROR_BLOCK = R_FrameBlock(null, R_FrameBlockId(-1, "error"), -1, -1)
         val ERROR = R_CallFrame(0, ERROR_BLOCK)
     }
 }
@@ -52,12 +58,28 @@ class R_Attrib(
     fun setExpr(expr: R_Expr?) {
         expr0.set(Optional.ofNullable(expr))
     }
+
+    fun toMetaGtv(): Gtv {
+        return mapOf(
+                "type" to type.toMetaGtv(),
+                "mutable" to mutable.toGtv()
+        ).toGtv()
+    }
 }
 
-class R_ExternalParam(val name: String, val type: R_Type, val ptr: R_VarPtr)
+class R_Param(val name: String, val type: R_Type) {
+    fun toMetaGtv(): Gtv = mapOf(
+            "name" to name.toGtv(),
+            "type" to type.toMetaGtv()
+    ).toGtv()
+}
+
+class R_VarParam(val name: String, val type: R_Type, val ptr: R_VarPtr) {
+    fun toParam() = R_Param(name, type)
+}
 
 sealed class R_Routine(names: R_DefinitionNames): R_Definition(names) {
-    abstract fun params(): List<R_ExternalParam>
+    abstract fun params(): List<R_Param>
     abstract fun callTop(appCtx: Rt_AppContext, args: List<Rt_Value>): Rt_Value?
 }
 
@@ -66,20 +88,15 @@ sealed class R_MountedRoutine(names: R_DefinitionNames, val mountName: R_MountNa
 class R_Operation(names: R_DefinitionNames, mountName: R_MountName): R_MountedRoutine(names, mountName) {
     private val internals = C_LateInit(C_CompilerPass.EXPRESSIONS, ERROR_INTERNALS)
 
-    fun setInternals(params: List<R_ExternalParam>, body: R_Statement, frame: R_CallFrame) {
-        internals.set(Internals(params, body, frame))
+    fun setInternals(varParams: List<R_VarParam>, body: R_Statement, frame: R_CallFrame) {
+        val params = varParams.map { it.toParam() }.toImmList()
+        internals.set(Internals(params, varParams, body, frame))
     }
 
     override fun params() = internals.get().params
 
     override fun callTop(appCtx: Rt_AppContext, args: List<Rt_Value>): Rt_Value? {
-        val ints = internals.get()
-
-        val defCtx = Rt_DefinitionContext(appCtx, true)
-        val rtFrame = Rt_CallFrame(defCtx, ints.frame)
-
-        checkCallArgs(this, ints.params, args)
-        processArgs(ints.params, args, rtFrame)
+        val rtFrame = processCallArgs(appCtx, args)
 
         appCtx.globalCtx.sqlExec.transaction {
             execute(rtFrame)
@@ -89,15 +106,20 @@ class R_Operation(names: R_DefinitionNames, mountName: R_MountName): R_MountedRo
     }
 
     fun callTopNoTx(appCtx: Rt_AppContext, args: List<Rt_Value>) {
+        val rtFrame = processCallArgs(appCtx, args)
+        execute(rtFrame)
+    }
+
+    private fun processCallArgs(appCtx: Rt_AppContext, args: List<Rt_Value>): Rt_CallFrame {
         val ints = internals.get()
 
-        val defCtx = Rt_DefinitionContext(appCtx, true)
-        val rtFrame = Rt_CallFrame(defCtx, ints.frame)
+        val defCtx = Rt_DefinitionContext(appCtx, true, pos)
+        val rtFrame = Rt_CallFrame(null, null, defCtx, ints.frame)
 
         checkCallArgs(this, ints.params, args)
-        processArgs(ints.params, args, rtFrame)
+        processArgs(ints.varParams, args, rtFrame)
 
-        execute(rtFrame)
+        return rtFrame
     }
 
     private fun execute(rtFrame: Rt_CallFrame) {
@@ -108,18 +130,77 @@ class R_Operation(names: R_DefinitionNames, mountName: R_MountName): R_MountedRo
         }
     }
 
-    private class Internals(val params: List<R_ExternalParam>, val body: R_Statement, val frame: R_CallFrame)
+    override fun toMetaGtv(): Gtv {
+        return mapOf(
+                "parameters" to params().map { it.toMetaGtv() }.toGtv()
+        ).toGtv()
+    }
+
+    private class Internals(
+            val params: List<R_Param>,
+            val varParams: List<R_VarParam>,
+            val body: R_Statement,
+            val frame: R_CallFrame
+    )
 
     companion object {
-        private val ERROR_INTERNALS = Internals(params = listOf(), body = R_EmptyStatement, frame = R_CallFrame.ERROR)
+        private val ERROR_INTERNALS = Internals(
+                params = listOf(),
+                varParams = listOf(),
+                body = C_Utils.ERROR_STATEMENT,
+                frame = R_CallFrame.ERROR
+        )
+    }
+}
+
+sealed class R_QueryBody {
+    abstract fun params(): List<R_Param>
+    abstract fun execute(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, pos: R_DefinitionPos): Rt_Value
+}
+
+class R_UserQueryBody(
+        private val varParams: List<R_VarParam>,
+        private val body: R_Statement,
+        private val frame: R_CallFrame
+): R_QueryBody() {
+    private val params = varParams.map { it.toParam() }.toImmList()
+
+    override fun params() = params
+
+    override fun execute(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, pos: R_DefinitionPos): Rt_Value {
+        val rtFrame = Rt_CallFrame(null, null, defCtx, frame)
+
+        processArgs(varParams, args, rtFrame)
+
+        val res = body.execute(rtFrame)
+        check(res is R_StatementResult_Return) { "${res?.javaClass?.name}" }
+
+        check(res.value != null)
+        return res.value
+    }
+
+    companion object {
+        val ERROR: R_QueryBody = R_UserQueryBody(listOf(), C_Utils.ERROR_STATEMENT, R_CallFrame.ERROR)
+    }
+}
+
+class R_SysQueryBody(params: List<R_Param>, private val fn: R_SysFunction): R_QueryBody() {
+    private val params = params.toImmList()
+
+    override fun params() = params
+
+    override fun execute(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, pos: R_DefinitionPos): Rt_Value {
+        val ctx = Rt_CallContext(defCtx)
+        return fn.call(ctx, args)
     }
 }
 
 class R_Query(names: R_DefinitionNames, mountName: R_MountName): R_MountedRoutine(names, mountName) {
     private val internals = C_LateInit(C_CompilerPass.EXPRESSIONS, ERROR_INTERNALS)
 
-    fun setInternals(type: R_Type, params: List<R_ExternalParam>, body: R_Statement, frame: R_CallFrame) {
-        internals.set(Internals(type, params, body, frame))
+    fun setInternals(type: R_Type, body: R_QueryBody) {
+        val params = body.params()
+        internals.set(Internals(type, params, body))
     }
 
     override fun params() = internals.get().params
@@ -131,101 +212,106 @@ class R_Query(names: R_DefinitionNames, mountName: R_MountName): R_MountedRoutin
 
     fun callTopQuery(appCtx: Rt_AppContext, args: List<Rt_Value>): Rt_Value {
         val ints = internals.get()
-
-        val defCtx = Rt_DefinitionContext(appCtx, false)
-        val rtFrame = Rt_CallFrame(defCtx, ints.frame)
-
         checkCallArgs(this, ints.params, args)
-        processArgs(ints.params, args, rtFrame)
-
-        val res = ints.body.execute(rtFrame)
-        if (res == null) {
-            val name = appLevelName
-            throw Rt_Error("query_novalue:$name", "Query '$name' did not return a value")
-        }
-
-        if (res !is R_StatementResult_Return) {
-            throw IllegalStateException("" + res)
-        }
-        check(res.value != null)
-
-        return res.value
+        val defCtx = Rt_DefinitionContext(appCtx, false, pos)
+        val res = ints.body.execute(defCtx, args, pos)
+        return res
     }
 
-    private class Internals(
-            val type: R_Type,
-            val params: List<R_ExternalParam>,
-            val body: R_Statement,
-            val frame: R_CallFrame
-    )
+    override fun toMetaGtv(): Gtv {
+        return mapOf(
+                "type" to type().toMetaGtv(),
+                "parameters" to params().map { it.toMetaGtv() }.toGtv()
+        ).toGtv()
+    }
+
+    private class Internals(val type: R_Type, val params: List<R_Param>, val body: R_QueryBody)
 
     companion object {
-        private val ERROR_INTERNALS = Internals(
-                type = R_UnitType,
-                params = listOf(),
-                body = R_EmptyStatement,
-                frame = R_CallFrame.ERROR
+        private val ERROR_INTERNALS = Internals(type = R_UnitType, params = listOf(), body = R_UserQueryBody.ERROR)
+    }
+}
+
+class R_FunctionBody(
+        val defPos: R_DefinitionPos,
+        val type: R_Type,
+        val varParams: List<R_VarParam>,
+        val body: R_Statement,
+        val frame: R_CallFrame
+) {
+    val params = varParams.map { it.toParam() }.toImmList()
+
+    companion object {
+        val EMPTY = R_FunctionBody(
+                R_DefinitionPos("<error>", "<error>"),
+                R_UnitType,
+                listOf(),
+                C_Utils.ERROR_STATEMENT,
+                R_CallFrame.ERROR
         )
     }
 }
 
 class R_Function(names: R_DefinitionNames): R_Routine(names) {
-    private val headerLate = C_LateInit(C_CompilerPass.MEMBERS, EMPTY_HEADER)
-    private val bodyLate = C_LateInit(C_CompilerPass.EXPRESSIONS, EMPTY_BODY)
+    private val bodyLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_FunctionBody.EMPTY)
 
-    fun setHeader(type: R_Type, params: List<R_ExternalParam>) {
-        headerLate.set(R_FunctionHeader(type, params))
+    fun setBody(body: R_FunctionBody) {
+        bodyLate.set(body)
     }
 
-    fun setBody(body: R_Statement, frame: R_CallFrame) {
-        bodyLate.set(R_FunctionBody(body, frame))
-    }
-
-    fun type() = headerLate.get().type
-
-    override fun params() = headerLate.get().params
+    override fun params() = bodyLate.get().params
 
     override fun callTop(appCtx: Rt_AppContext, args: List<Rt_Value>): Rt_Value? {
         val res = callTopFunction(appCtx, args)
-        val type = headerLate.get().type
+        val type = bodyLate.get().type
         return if (type != R_UnitType) res else null
     }
 
     fun callTopFunction(appCtx: Rt_AppContext, args: List<Rt_Value>, dbUpdateAllowed: Boolean = false): Rt_Value {
-        val rtFrame = createRtFrame(appCtx, dbUpdateAllowed)
-        val res = call(rtFrame, args)
+        val body = bodyLate.get()
+        val rtFrame = createRtFrame(body, appCtx, dbUpdateAllowed, null, null)
+        val res = call(rtFrame, args, null)
         return res
     }
 
-    fun call(rtFrame: Rt_CallFrame, args: List<Rt_Value>): Rt_Value {
-        val rtSubFrame = createRtFrame(rtFrame.defCtx.appCtx, rtFrame.defCtx.dbUpdateAllowed)
+    fun call(rtFrame: Rt_CallFrame, args: List<Rt_Value>, callerFilePos: R_FilePos?): Rt_Value {
+        val body = bodyLate.get()
+        val rtSubFrame = createRtFrame(body, rtFrame.defCtx.appCtx, rtFrame.defCtx.dbUpdateAllowed, rtFrame, callerFilePos)
 
-        val params = params()
-        processArgs(params, args, rtSubFrame)
+        processArgs(body.varParams, args, rtSubFrame)
 
-        val body = bodyLate.get().body
-        val res = body.execute(rtSubFrame)
+        val res = body.body.execute(rtSubFrame)
 
         val retVal = if (res is R_StatementResult_Return) res.value else null
         return retVal ?: Rt_UnitValue
     }
 
-    private fun createRtFrame(appCtx: Rt_AppContext, dbUpdateAllowed: Boolean): Rt_CallFrame {
-        val frame = bodyLate.get().frame
-        val defCtx = Rt_DefinitionContext(appCtx, dbUpdateAllowed)
-        return Rt_CallFrame(defCtx, frame)
+    private fun createRtFrame(
+            body: R_FunctionBody,
+            appCtx: Rt_AppContext,
+            dbUpdateAllowed: Boolean,
+            callerFrame: Rt_CallFrame?,
+            callerFilePos: R_FilePos?
+    ): Rt_CallFrame {
+        val defCtx = Rt_DefinitionContext(appCtx, dbUpdateAllowed, body.defPos)
+
+        val callerPos = if (callerFrame?.defCtx?.pos == null || callerFilePos == null) null else {
+            R_StackPos(callerFrame.defCtx.pos, callerFilePos)
+        }
+
+        return Rt_CallFrame(callerFrame, callerPos, defCtx, body.frame)
     }
 
-    private class R_FunctionHeader(val type: R_Type, val params: List<R_ExternalParam>)
-    private class R_FunctionBody(val body: R_Statement, val frame: R_CallFrame)
-
-    companion object {
-        private val EMPTY_HEADER = R_FunctionHeader(R_UnitType, listOf())
-        private val EMPTY_BODY = R_FunctionBody(R_EmptyStatement, R_CallFrame.ERROR)
+    override fun toMetaGtv(): Gtv {
+        val body = bodyLate.get()
+        return mapOf(
+                "type" to body.type.toMetaGtv(),
+                "parameters" to params().map { it.toMetaGtv() }.toGtv()
+        ).toGtv()
     }
 }
 
-private fun checkCallArgs(routine: R_Routine, params: List<R_ExternalParam>, args: List<Rt_Value>) {
+private fun checkCallArgs(routine: R_Routine, params: List<R_Param>, args: List<Rt_Value>) {
     val name = routine.appLevelName
 
     if (args.size != params.size) {
@@ -244,7 +330,7 @@ private fun checkCallArgs(routine: R_Routine, params: List<R_ExternalParam>, arg
     }
 }
 
-private fun processArgs(params: List<R_ExternalParam>, args: List<Rt_Value>, frame: Rt_CallFrame) {
+private fun processArgs(params: List<R_VarParam>, args: List<Rt_Value>, frame: Rt_CallFrame) {
     check(args.size == params.size)
     for (i in params.indices) {
         val param = params[i]
@@ -280,17 +366,57 @@ class R_App(
             check(c.index == i)
         }
     }
+
+    fun toMetaGtv(): Gtv {
+        return mapOf(
+                "modules" to modules.map {
+                    val name = it.name.str()
+                    val fullName = if (it.externalChain == null) name else "$name[${it.externalChain}]"
+                    fullName to it.toMetaGtv()
+                }.toMap().toGtv()
+        ).toGtv()
+    }
 }
 
 class R_Module(
         val name: R_ModuleName,
+        val abstract: Boolean,
+        val external: Boolean,
+        val externalChain: String?,
         val entities: Map<String, R_Entity>,
         val objects: Map<String, R_Object>,
         val structs: Map<String, R_Struct>,
+        val enums: Map<String, R_Enum>,
         val operations: Map<String, R_Operation>,
         val queries: Map<String, R_Query>,
         val functions: Map<String, R_Function>,
         val moduleArgs: R_Struct?
 ){
     override fun toString() = name.toString()
+
+    fun toMetaGtv(): Gtv {
+        val map = mutableMapOf(
+                "name" to name.str().toGtv()
+        )
+
+        if (abstract) map["abstract"] = abstract.toGtv()
+        if (external) map["external"] = external.toGtv()
+        if (externalChain != null) map["externalChain"] = externalChain.toGtv()
+
+        addGtvDefs(map, "entities", entities)
+        addGtvDefs(map, "objects", objects)
+        addGtvDefs(map, "structs", structs)
+        addGtvDefs(map, "enums", enums)
+        addGtvDefs(map, "operations", operations)
+        addGtvDefs(map, "queries", queries)
+        addGtvDefs(map, "functions", functions)
+
+        return map.toGtv()
+    }
+
+    private fun addGtvDefs(map: MutableMap<String, Gtv>, key: String, defs: Map<String, R_Definition>) {
+        if (defs.isNotEmpty()) {
+            map[key] = defs.keys.sorted().map { it to defs.getValue(it).toMetaGtv() }.toMap().toGtv()
+        }
+    }
 }

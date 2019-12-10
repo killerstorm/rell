@@ -1,0 +1,14 @@
+module;
+
+entity company {
+    name;
+}
+
+entity user {
+    name;
+    company;
+}
+
+query get_user_name(user) {
+    return user.name;
+}

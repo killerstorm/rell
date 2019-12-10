@@ -2,6 +2,8 @@ package net.postchain.rell.parser
 
 import com.github.h0tk3y.betterParse.parser.ParseException
 import com.github.h0tk3y.betterParse.parser.parseToEnd
+import com.google.common.collect.LinkedHashMultimap
+import com.google.common.collect.Multimap
 import net.postchain.rell.*
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Error
@@ -63,6 +65,8 @@ class C_ExternalParam(val name: S_Name, val type: R_Type?) {
 }
 
 object C_Utils {
+    val ERROR_STATEMENT = R_ExprStatement(crashExpr(R_UnitType))
+
     fun toDbExpr(pos: S_Pos, rExpr: R_Expr): Db_Expr {
         val type = rExpr.type
         if (!type.sqlAdapter.isSqlCompatible()) {
@@ -145,8 +149,7 @@ object C_Utils {
             sqlMapping: R_EntitySqlMapping,
             attrs: List<R_Attrib>
     ): R_Entity {
-        val fullName = if (chain == null) simpleName else "external[${chain.name}].$simpleName"
-        val names = R_DefinitionNames(simpleName, fullName, fullName)
+        val names = createDefNames(R_ModuleName.EMPTY, chain, null, listOf(simpleName))
         val mountName = R_MountName.of(simpleName)
 
         val flags = R_EntityFlags(
@@ -158,20 +161,70 @@ object C_Utils {
                 log = false
         )
 
-        val externalCls = if (chain == null) null else R_ExternalEntity(chain, false)
-        val cls = R_Entity(names, mountName, flags, sqlMapping, externalCls)
+        val externalEntity = if (chain == null) null else R_ExternalEntity(chain, false)
+        val entity = R_Entity(names, mountName, flags, sqlMapping, externalEntity)
 
         val attrMap = attrs.map { it.name to it }.toMap()
         executor.onPass(C_CompilerPass.MEMBERS) {
-            cls.setBody(R_EntityBody(listOf(), listOf(), attrMap))
+            entity.setBody(R_EntityBody(listOf(), listOf(), attrMap))
         }
 
-        return cls
+        return entity
+    }
+
+    fun createSysQuery(executor: C_CompilerExecutor, simpleName: String, type: R_Type, fn: R_SysFunction): R_Query {
+        val moduleName = R_ModuleName.of("rell")
+        val names = createDefNames(moduleName, null, null, listOf(simpleName))
+
+        val mountName = R_MountName(moduleName.parts + R_Name.of(simpleName))
+        val query = R_Query(names, mountName)
+
+        executor.onPass(C_CompilerPass.EXPRESSIONS) {
+            val body = R_SysQueryBody(listOf(), fn)
+            query.setInternals(type, body)
+        }
+
+        return query
+    }
+
+    fun createDefNames(
+            moduleName: R_ModuleName,
+            extChain: R_ExternalChainRef?,
+            namespacePath: String?,
+            qualifiedName: List<String>
+    ): R_DefinitionNames {
+        check(qualifiedName.isNotEmpty())
+
+        val fullNamespacePath = if (qualifiedName.size == 1) namespacePath else {
+            fullName(namespacePath, qualifiedName.subList(0, qualifiedName.size - 1).joinToString("."))
+        }
+
+        val simpleName = qualifiedName.last()
+
+        var modName = moduleName.str()
+        if (extChain != null) modName += "[${extChain.name}]"
+
+        return R_DefinitionNames(modName, fullNamespacePath, simpleName)
+    }
+
+    fun createSysCallExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, name: S_String): R_Expr {
+        return createSysCallExpr(type, fn, args, name.pos, name.str)
+    }
+
+    fun createSysCallExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, qualifiedName: List<S_Name>): R_Expr {
+        val nameStr = nameStr(qualifiedName)
+        return createSysCallExpr(type, fn, args, qualifiedName[0].pos, nameStr)
+    }
+
+    fun createSysCallExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, pos: S_Pos, nameStr: String): R_Expr {
+        val rCallExpr = R_SysCallExpr(type, fn, args, nameStr)
+        val filePos = pos.toFilePos()
+        return R_StackTraceExpr(rCallExpr, filePos)
     }
 
     fun crashExpr(type: R_Type, msg: String = "Compilation error"): R_Expr {
-        val fn = R_SysFn_Internal.ThrowCrash(msg)
-        return R_SysCallExpr(type, fn, listOf())
+        val arg = R_ConstantExpr.makeText(msg)
+        return R_SysCallExpr(type, R_SysFn_Internal.Crash, listOf(arg), null)
     }
 
     fun integerToDecimalPromotion(value: C_Value): C_Value {
@@ -187,14 +240,17 @@ object C_Utils {
             return C_DbValue(value.pos, dbResExpr, value.varFacts())
         } else {
             val rExpr = value.toRExpr()
-            val rResExpr = R_SysCallExpr(R_DecimalType, R_SysFn_Decimal.FromInteger, listOf(rExpr))
+            val rResExpr = createSysCallExpr(R_DecimalType, R_SysFn_Decimal.FromInteger, listOf(rExpr), value.pos, "decimal")
             return C_RValue(value.pos, rResExpr, value.varFacts())
         }
     }
 
-    fun fullName(namespacePath: String?, name: String) = if (namespacePath == null) name else (namespacePath + "." + name)
+    fun fullName(namespacePath: String?, name: String): String {
+        return if (namespacePath == null) name else (namespacePath + "." + name)
+    }
 
     fun nameStr(name: List<S_Name>): String = name.joinToString(".") { it.str }
+    fun namePosStr(name: List<S_Name>): S_String = S_String(name[0].pos, nameStr(name))
 
     fun <T> evaluate(pos: S_Pos, code: () -> T): T {
         try {
@@ -246,12 +302,12 @@ object C_Parser {
 
 object C_Errors {
     fun errTypeMismatch(pos: S_Pos, srcType: R_Type, dstType: R_Type, errCode: String, errMsg: String): C_Error {
-        return C_Error(pos, "$errCode:${dstType.toStrictString()}:${srcType.toStrictString()}",
+        return C_Error(pos, "$errCode:[${dstType.toStrictString()}]:[${srcType.toStrictString()}]",
                 "$errMsg: ${srcType.toStrictString()} instead of ${dstType.toStrictString()}")
     }
 
-    fun errMutlipleAttrs(pos: S_Pos, attrs: List<C_ExprContextAttr>, errCode: String, errMsg: String): C_Error {
-        val attrsLst = attrs.map { it.cls.alias + "." + it.attrRef.name }
+    fun errMultipleAttrs(pos: S_Pos, attrs: List<C_ExprContextAttr>, errCode: String, errMsg: String): C_Error {
+        val attrsLst = attrs.map { it.entity.alias + "." + it.attrRef.name }
         return C_Error(pos, "$errCode:${attrsLst.joinToString(",")}", "$errMsg: ${attrsLst.joinToString()}")
     }
 
@@ -280,7 +336,7 @@ object C_Errors {
     }
 
     fun errUnknownMember(type: R_Type, name: S_Name): C_Error {
-        return C_Error(name.pos, "unknown_member:${type.toStrictString()}:${name.str}",
+        return C_Error(name.pos, "unknown_member:[${type.toStrictString()}]:${name.str}",
                 "Type ${type.toStrictString()} has no member '${name.str}'")
 
     }
@@ -345,12 +401,10 @@ object C_Errors {
             pos: S_Pos,
             otherEntry: C_MntEntry
     ): C_Error {
-        val otherNameCode = otherEntry.def.appLevelName
-        val otherNameMsg = otherEntry.def.simpleName
-
         val baseCode = "mnt_conflict"
-        val commonCode = "${def.appLevelName}:$mountName:${otherEntry.type}:$otherNameCode"
+        val commonCode = "[${def.appLevelName}]:$mountName:${otherEntry.type}:[${otherEntry.def.appLevelName}]"
         val baseMsg = "Mount name conflict" + if (chain == null) "" else "(external chain '$chain')"
+        val otherNameMsg = otherEntry.def.simpleName
 
         if (otherEntry.pos != null) {
             val code = "$baseCode:user:$commonCode:${otherEntry.pos}"
@@ -365,7 +419,7 @@ object C_Errors {
     }
 
     fun errMountConflictSystem(mountName: R_MountName, def: R_Definition, pos: S_Pos): C_Error {
-        val code = "mnt_conflict:sys:${def.appLevelName}:$mountName"
+        val code = "mnt_conflict:sys:[${def.appLevelName}]:$mountName"
         val msg = "Mount name conflict: '$mountName' is a system mount name"
         return C_Error(pos, code, msg)
     }
@@ -541,6 +595,47 @@ object C_StructUtils {
     private class StructInfo(val directFlags: R_TypeFlags, val dependencies: Set<R_Struct>)
 }
 
+abstract class C_DefConflictsProcessor<K, E> {
+    abstract fun isSystemEntry(entry: E): Boolean
+    abstract fun getConflictableKey(entry: E): K
+    abstract fun handleConflict(globalCtx: C_GlobalContext, entry: E, otherEntry: E)
+
+    fun processConflicts(
+            globalCtx: C_GlobalContext,
+            allEntries: List<E>,
+            errorsEntries: MutableSet<E>
+    ): List<E> {
+        val map: Multimap<K, E> = LinkedHashMultimap.create()
+        for (entry in allEntries) {
+            val key = getConflictableKey(entry)
+            map.put(key, entry)
+        }
+
+        val res = mutableListOf<E>()
+
+        for (name in map.keySet()) {
+            val entries = map.get(name)
+            val (sysEntries, userEntries) = entries.partition { isSystemEntry(it) }
+
+            if (entries.size > 1) {
+                for (entry in userEntries) {
+                    if (errorsEntries.add(entry)) {
+                        val otherEntry = entries.first { it !== entry }
+                        handleConflict(globalCtx, entry, otherEntry)
+                    }
+                }
+            }
+
+            res.addAll(sysEntries)
+            if (sysEntries.isEmpty() && !userEntries.isEmpty()) {
+                res.add(userEntries[0])
+            }
+        }
+
+        return res.toImmList()
+    }
+}
+
 private class C_LateInitContext(executor: C_CompilerExecutor) {
     private var internals: Internals? = Internals(executor)
 
@@ -573,16 +668,35 @@ private class C_LateInitContext(executor: C_CompilerExecutor) {
     private class Internals(val executor: C_CompilerExecutor) {
         val uninits = mutableListOf<() -> Unit>()
     }
+
+    companion object {
+        private val LOCAL_CTX = ThreadLocalContext<C_LateInitContext>()
+
+        fun getContext() = LOCAL_CTX.get()
+
+        fun <T> runInContext(executor: C_CompilerExecutor, code: () -> T): T {
+            val ctx = C_LateInitContext(executor)
+            try {
+                val res = LOCAL_CTX.set(ctx, code)
+                return res
+            } finally {
+                ctx.destroy()
+            }
+        }
+    }
 }
 
 class C_LateInit<T>(private val pass: C_CompilerPass, fallback: T) {
-    private val ctx = LOCAL_CTX.get()
+    private val ctx = C_LateInitContext.getContext()
     private var value: T? = null
     private var fallback: T? = fallback
 
     init {
         ctx.checkPass(null, pass.prev())
-        ctx.onDestroy { this.fallback = null }
+        ctx.onDestroy {
+            if (value == null) value = this.fallback
+            this.fallback = null
+        }
     }
 
     val getter: Getter<T> = { get() }
@@ -604,16 +718,25 @@ class C_LateInit<T>(private val pass: C_CompilerPass, fallback: T) {
     }
 
     companion object {
-        private val LOCAL_CTX = ThreadLocalContext<C_LateInitContext>()
-
         fun <T> context(executor: C_CompilerExecutor, code: () -> T): T {
-            val ctx = C_LateInitContext(executor)
-            try {
-                val res = LOCAL_CTX.set(ctx, code)
-                return res
-            } finally {
-                ctx.destroy()
-            }
+            return C_LateInitContext.runInContext(executor, code)
         }
+    }
+}
+
+class C_ListBuilder<T> {
+    private val list = mutableListOf<T>()
+    private var commit: List<T>? = null
+
+    fun add(value: T) {
+        check(commit == null)
+        list.add(value)
+    }
+
+    fun commit(): List<T> {
+        if (commit == null) {
+            commit = list.toImmList()
+        }
+        return commit!!
     }
 }

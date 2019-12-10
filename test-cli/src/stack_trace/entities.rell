@@ -1,0 +1,13 @@
+module;
+
+entity user { name; }
+
+function ent_main(): user {
+    val u = user @ {};
+    return u;
+}
+
+query ent_main_q() {
+    val u = ent_main();
+    return u;
+}

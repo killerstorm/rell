@@ -1,0 +1,206 @@
+RELEASE NOTES 0.10.1 (2019-12-10)
+
+
+1. Language: External annotation
+
+External blocks replaced by "@external" annotation:
+
+@external('chain_name') namespace {
+    @log entity user {}
+    @log entity company {}
+}
+
+@external('chain_name') @log entity city {}
+
+
+2. Language: External modules
+
+A module can be annotated with "@external":
+
+@external module;
+@log entity user {}
+@log entity company {}
+
+An external module:
+- can contain only namespaces, entities (annotated with "@log") and imports of other external modules
+- can be imported as a regular or an external module
+
+// Regular import: entities defined in "ext" belong to the current blockchain.
+import ext;
+
+// External import: entities defined in "ext" are imported as external entities from chain "other_chain".
+@external('other_chain')
+import ext;
+
+
+3. Language: Abstract modules and functions
+
+A module or a function can be declared abstract:
+
+abstract module;
+abstract function customize(x: integer): text;
+
+Abstract functions shall be overridden in client modules:
+
+import lib;
+override function lib.customize(x: integer): text { ... }
+
+This allows to customize a library module with arbitrary behavior. When importing an abstract module, all its
+abstract functions that have no body must be overridden.
+
+
+4. Language: Excluding fields from at-expressions
+
+Use @omit annotation to exclude a field from a tuple produced by an at-expression:
+
+user @* {} ( .name, @omit .company );       // returns list<text>, not list<(text,company)>
+
+This is useful when one needs to use a value for sorting, but does not want to include that value into the result set:
+
+user @* {} ( .name, @omit @sort .company );
+
+If only one field remains after exclusion, the result is a single value, not a tuple (for @+ and @*: a list of values
+instead of list of tuples). Not allowed to exclude all fields from the result.
+
+To include a field without a name, specify "_" as the name:
+
+user @* {} ( _ = .name, _ = .company );
+// Returns list<(text,text)>, not list<(name:text,company:company)>.
+
+
+5. Language: Sort annotations
+
+Old sort syntax has been deprecated. Annotations @sort and @sort_desc shall be used instead. Example:
+
+user @* {} ( @sort .name );
+
+
+6. Language: Enum .value attribute in at-expression
+
+Now the "value" attribute of an enum can be used in at-expression:
+
+enum role { ADMIN, USER }
+entity account { name; role; }
+
+account @* {} ( .name, .role.value )
+
+
+7. Library: Functions exists() and empty() for collections
+
+Functions exists() and empty() now accept collections (list, set, map) and check if they are empty. For a nullable
+collection, a value is considered empty if it is either null or an empty collection.
+
+
+8. Run-time: Error stack traces
+
+Now Rell prints stack traces of run-time errors (with function names, file names and line numbers):
+
+2019-11-24 17:28:30.980 INFO  net.postchain.rell.Rell - ERROR Query 'ent_main_q' failed: No records found
+	at stack_trace.entities!ent_main(stack_trace/entities.rell:6)
+	at stack_trace.entities!ent_main_q(stack_trace/entities.rell:11)
+
+Stack traces are printed to the output of a Rell app (Web IDE log, Eclipse Console view, Postchain log file, etc.).
+
+Run-time error messages returned to the client (as a one line, without a stack trace) will have a location:
+
+[stack_trace.entities!ent_main(stack_trace/entities.rell:6)] Query 'ent_main_q' failed: No records found
+
+
+9. Run-time: System queries returning build and version information
+
+(1) Rell and Postchain versions:
+
+    rell.get_rell_version(): text;        // e. g. "0.10.1"
+    rell.get_postchain_version(): text;   // e. g. "3.0.0"
+
+(2) Build description, contains various information that describes the build:
+
+    rell.get_build(): text;
+
+    Result example:
+    "rell: 0.10.1; postchain: 3.0.0; time: 2019-11-25T17:25:52+0000; branch: v0.10.1; commit: f875de6 (2019-11-25T10:37:18+0000); dirty: true"
+
+(3) Build properties as a key-value map:
+
+    rell.get_build_details(): map<text, text>;
+
+    Example of a returned map:
+
+    rell.branch:                 v0.10.1
+    rell.build.time:             2019-11-25T17:25:52+0000
+    rell.version:                0.10.1
+    rell.commit.id:              f875de6
+    rell.commit.id.full:         f875de60555284a53442e072e4fd4dda0029f792
+    rell.commit.message.short:   Commit message...
+    rell.commit.message.full:    Commit message...
+    rell.commit.time:            2019-11-25T10:37:18+0000
+    rell.dirty:                  true
+    postchain.version:           3.0.0
+    kotlin.version:              1.3.21
+
+
+10. Run-time: System query to get application structure
+
+System query "rell.get_app_structure" returns the structure of the Rell application - its modules and definitions.
+Definitions are entities, objects, structs, enums, operations, queries and functions. The type of the return value is gtv.
+
+Example of a returned value (in JSON representation):
+
+{
+    "modules": [
+        {
+            "entities": {
+                "company": {
+                    "attributes": {
+                        "name": {
+                            "mutable": 0,
+                            "type": "text"
+                        }
+                    },
+                    "indexes": [],
+                    "keys": [],
+                    "log": 0,
+                    "mount": "company"
+                },
+                "user": {
+                    "attributes": {
+                        "company": {
+                            "mutable": 0,
+                            "type": "app_structure!company"
+                        },
+                        "name": {
+                            "mutable": 0,
+                            "type": "text"
+                        }
+                    },
+                    "indexes": [],
+                    "keys": [],
+                    "log": 0,
+                    "mount": "user"
+                }
+            },
+            "name": "app_structure",
+            "queries": {
+                "get_user_name": {
+                    "parameters": [
+                        {
+                            "name": "user",
+                            "type": "app_structure!user"
+                        }
+                    ],
+                    "type": "text"
+                }
+            }
+        }
+    ]
+}
+
+
+11. Tools: Changes in Run.XML format
+
+(1) Attribute "brid" of element "chain" removed. Blockchain RID is now calculated as a hash of the chain config.
+
+(2) Element "dependencies" moved from "chain" to "config".
+
+(3) Added attribute "brid" to element "dependency". A dependency can now be specified either by chain name or by
+    blockchain RID.

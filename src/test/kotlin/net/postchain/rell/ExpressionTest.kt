@@ -221,13 +221,13 @@ class ExpressionTest: BaseRellTest(false) {
         chk("list<integer>(['Hello'])", "ct_err:expr_list_typemiss:integer:text")
         chk("list<text>([12345])", "ct_err:expr_list_typemiss:text:integer")
         chk("['Hello', 'World']", "list<text>[text[Hello],text[World]]")
-        chk("['Hello', 'World', 12345]", "ct_err:expr_list_itemtype:text:integer")
+        chk("['Hello', 'World', 12345]", "ct_err:expr_list_itemtype:[text]:[integer]")
         chk("[unit()]", "ct_err:expr_list_unit")
         chk("[print('Hello')]", "ct_err:expr_list_unit")
     }
 
     @Test fun testUnknownFunction() {
-        chkEx("{ val s = 'Hello'; return s.badfunc(); }", "ct_err:unknown_member:text:badfunc")
+        chkEx("{ val s = 'Hello'; return s.badfunc(); }", "ct_err:unknown_member:[text]:badfunc")
     }
 
     @Test fun testIn() {
@@ -235,22 +235,22 @@ class ExpressionTest: BaseRellTest(false) {
         chk("456 in [123, 456]", "boolean[true]")
         chk("789 in [123, 456]", "boolean[false]")
         chk("123 in list<integer>()", "boolean[false]")
-        chk("123 in list<text>()", "ct_err:binop_operand_type:in:integer:list<text>")
-        chk("'Hello' in list<integer>()", "ct_err:binop_operand_type:in:text:list<integer>")
+        chk("123 in list<text>()", "ct_err:binop_operand_type:in:[integer]:[list<text>]")
+        chk("'Hello' in list<integer>()", "ct_err:binop_operand_type:in:[text]:[list<integer>]")
 
         chk("123 in set([123, 456])", "boolean[true]")
         chk("456 in set([123, 456])", "boolean[true]")
         chk("789 in set([123, 456])", "boolean[false]")
         chk("123 in set<integer>()", "boolean[false]")
-        chk("123 in set<text>()", "ct_err:binop_operand_type:in:integer:set<text>")
-        chk("'Hello' in set<integer>()", "ct_err:binop_operand_type:in:text:set<integer>")
+        chk("123 in set<text>()", "ct_err:binop_operand_type:in:[integer]:[set<text>]")
+        chk("'Hello' in set<integer>()", "ct_err:binop_operand_type:in:[text]:[set<integer>]")
 
         chk("123 in [123:'Bob',456:'Alice']", "boolean[true]")
         chk("456 in [123:'Bob',456:'Alice']", "boolean[true]")
         chk("789 in [123:'Bob',456:'Alice']", "boolean[false]")
         chk("123 in map<integer,text>()", "boolean[false]")
-        chk("123 in map<text,integer>()", "ct_err:binop_operand_type:in:integer:map<text,integer>")
-        chk("'Hello' in map<integer,text>()", "ct_err:binop_operand_type:in:text:map<integer,text>")
+        chk("123 in map<text,integer>()", "ct_err:binop_operand_type:in:[integer]:[map<text,integer>]")
+        chk("'Hello' in map<integer,text>()", "ct_err:binop_operand_type:in:[text]:[map<integer,text>]")
     }
 
     @Test fun testNamespace() {
@@ -291,26 +291,26 @@ class ExpressionTest: BaseRellTest(false) {
         chkEx("{ return user @* {} (.id+0, (.name1 + .name2).upper_case().lower_case().size()); }", "[(1,9), (2,14), (3,12)]")
         chkEx("{ return user @* {} (.id+0, (.v1 * (.v2 + 101)).str()); }", "[(1,35853), (2,181485), (3,425685)]")
         chkEx("{ return user @* {} (.id+0, (.v1 * (.v2 + 101)).str().size()); }", "[(1,5), (2,6), (3,6)]")
-        chkEx("{ return user @* {} (.id+0, (.name1 + .name2).foo); }", "ct_err:unknown_member:text:foo")
-        chkEx("{ return user @* {} (.id+0, (.v1 * (.v2 + 101)).foo); }", "ct_err:unknown_member:integer:foo")
-        chkEx("{ return user @* {} (.id+0, (.name1 + .name2).foo()); }", "ct_err:unknown_member:text:foo")
-        chkEx("{ return user @* {} (.id+0, (.v1 * (.v2 + 101)).foo()); }", "ct_err:unknown_member:integer:foo")
+        chkEx("{ return user @* {} (.id+0, (.name1 + .name2).foo); }", "ct_err:unknown_member:[text]:foo")
+        chkEx("{ return user @* {} (.id+0, (.v1 * (.v2 + 101)).foo); }", "ct_err:unknown_member:[integer]:foo")
+        chkEx("{ return user @* {} (.id+0, (.name1 + .name2).foo()); }", "ct_err:unknown_member:[text]:foo")
+        chkEx("{ return user @* {} (.id+0, (.v1 * (.v2 + 101)).foo()); }", "ct_err:unknown_member:[integer]:foo")
 
         val c = "val str1 = 'Hello'; val k1 = 777;"
         chkEx("{ $c return user @* {} (.id+0, (str1 + .name2).size()); }", "[(1,10), (2,15), (3,12)]")
         chkEx("{ $c return user @* {} (.id+0, (str1 + .name2).upper_case().lower_case().size()); }", "[(1,10), (2,15), (3,12)]")
         chkEx("{ $c return user @* {} (.id+0, (k1 * (.v2 + 101)).str()); }", "[(1,250971), (2,423465), (3,595959)]")
         chkEx("{ $c return user @* {} (.id+0, (k1 * (.v2 + 101)).str().size()); }", "[(1,6), (2,6), (3,6)]")
-        chkEx("{ $c return user @* {} (.id+0, (str1 + .name2).foo); }", "ct_err:unknown_member:text:foo")
-        chkEx("{ $c return user @* {} (.id+0, (k1 * (.v2 + 101)).foo); }", "ct_err:unknown_member:integer:foo")
-        chkEx("{ $c return user @* {} (.id+0, (str1 + .name2).foo()); }", "ct_err:unknown_member:text:foo")
-        chkEx("{ $c return user @* {} (.id+0, (k1 * (.v2 + 101)).foo()); }", "ct_err:unknown_member:integer:foo")
+        chkEx("{ $c return user @* {} (.id+0, (str1 + .name2).foo); }", "ct_err:unknown_member:[text]:foo")
+        chkEx("{ $c return user @* {} (.id+0, (k1 * (.v2 + 101)).foo); }", "ct_err:unknown_member:[integer]:foo")
+        chkEx("{ $c return user @* {} (.id+0, (str1 + .name2).foo()); }", "ct_err:unknown_member:[text]:foo")
+        chkEx("{ $c return user @* {} (.id+0, (k1 * (.v2 + 101)).foo()); }", "ct_err:unknown_member:[integer]:foo")
     }
 
     @Test fun testPathError() {
-        chkEx("{ val s = 'Hello'; return s.foo.bar; }", "ct_err:unknown_member:text:foo")
-        chkEx("{ val s = 'Hello'; return s.foo.bar(); }", "ct_err:unknown_member:text:foo")
-        chkEx("{ val s = 'Hello'; return s.foo(); }", "ct_err:unknown_member:text:foo")
+        chkEx("{ val s = 'Hello'; return s.foo.bar; }", "ct_err:unknown_member:[text]:foo")
+        chkEx("{ val s = 'Hello'; return s.foo.bar(); }", "ct_err:unknown_member:[text]:foo")
+        chkEx("{ val s = 'Hello'; return s.foo(); }", "ct_err:unknown_member:[text]:foo")
     }
 
     @Test fun testCallNotCallable() {
@@ -349,7 +349,7 @@ class ExpressionTest: BaseRellTest(false) {
         chkEx("{ val a = (123, 'Hello'); val b = a; return a === b; }", "boolean[true]")
         chkEx("{ val a = (123, 'Hello'); val b = a; return a !== b; }", "boolean[false]")
         chkEx("{ val a = (123, 'Hello'); val b = ('Hello', 123); return a == b; }",
-                "ct_err:binop_operand_type:==:(integer,text):(text,integer)")
+                "ct_err:binop_operand_type:==:[(integer,text)]:[(text,integer)]")
 
         chkEx("{ val a = range(123); val b = range(123); return a == b; }", "boolean[true]")
         chkEx("{ val a = range(123); val b = range(123); return a != b; }", "boolean[false]")
@@ -358,23 +358,23 @@ class ExpressionTest: BaseRellTest(false) {
         chkEx("{ val a = range(123); val b = a; return a === b; }", "boolean[true]")
         chkEx("{ val a = range(123); val b = a; return a !== b; }", "boolean[false]")
 
-        chkEx("{ return 123 === 123; }", "ct_err:binop_operand_type:===:integer:integer")
-        chkEx("{ return 123 !== 123; }", "ct_err:binop_operand_type:!==:integer:integer")
-        chkEx("{ return true === true; }", "ct_err:binop_operand_type:===:boolean:boolean")
-        chkEx("{ return true !== true; }", "ct_err:binop_operand_type:!==:boolean:boolean")
-        chkEx("{ return 'Hello' === 'Hello'; }", "ct_err:binop_operand_type:===:text:text")
-        chkEx("{ return 'Hello' !== 'Hello'; }", "ct_err:binop_operand_type:!==:text:text")
-        chkEx("{ return x'12AB' === x'12AB'; }", "ct_err:binop_operand_type:===:byte_array:byte_array")
-        chkEx("{ return x'12AB' !== x'12AB'; }", "ct_err:binop_operand_type:!==:byte_array:byte_array")
-        chkEx("{ return null === null; }", "ct_err:binop_operand_type:===:null:null")
-        chkEx("{ return null !== null; }", "ct_err:binop_operand_type:!==:null:null")
+        chkEx("{ return 123 === 123; }", "ct_err:binop_operand_type:===:[integer]:[integer]")
+        chkEx("{ return 123 !== 123; }", "ct_err:binop_operand_type:!==:[integer]:[integer]")
+        chkEx("{ return true === true; }", "ct_err:binop_operand_type:===:[boolean]:[boolean]")
+        chkEx("{ return true !== true; }", "ct_err:binop_operand_type:!==:[boolean]:[boolean]")
+        chkEx("{ return 'Hello' === 'Hello'; }", "ct_err:binop_operand_type:===:[text]:[text]")
+        chkEx("{ return 'Hello' !== 'Hello'; }", "ct_err:binop_operand_type:!==:[text]:[text]")
+        chkEx("{ return x'12AB' === x'12AB'; }", "ct_err:binop_operand_type:===:[byte_array]:[byte_array]")
+        chkEx("{ return x'12AB' !== x'12AB'; }", "ct_err:binop_operand_type:!==:[byte_array]:[byte_array]")
+        chkEx("{ return null === null; }", "ct_err:binop_operand_type:===:[null]:[null]")
+        chkEx("{ return null !== null; }", "ct_err:binop_operand_type:!==:[null]:[null]")
     }
 
     @Test fun testEqRefNullable() {
-        chkEx("{ val a: integer? = _nullable(123); return a === null; }", "ct_err:binop_operand_type:===:integer?:null")
-        chkEx("{ val a: integer? = _nullable(123); return a !== null; }", "ct_err:binop_operand_type:!==:integer?:null")
-        chkEx("{ val a: integer? = _nullable(123); return a === 123; }", "ct_err:binop_operand_type:===:integer?:integer")
-        chkEx("{ val a: integer? = _nullable(123); return a !== 123; }", "ct_err:binop_operand_type:!==:integer?:integer")
+        chkEx("{ val a: integer? = _nullable(123); return a === null; }", "ct_err:binop_operand_type:===:[integer?]:[null]")
+        chkEx("{ val a: integer? = _nullable(123); return a !== null; }", "ct_err:binop_operand_type:!==:[integer?]:[null]")
+        chkEx("{ val a: integer? = _nullable(123); return a === 123; }", "ct_err:binop_operand_type:===:[integer?]:[integer]")
+        chkEx("{ val a: integer? = _nullable(123); return a !== 123; }", "ct_err:binop_operand_type:!==:[integer?]:[integer]")
 
         chkEx("{ val a: list<integer>? = _nullable([1,2,3]); return a === null; }", "boolean[false]")
         chkEx("{ val a: list<integer>? = _nullable([1,2,3]); return a !== null; }", "boolean[true]")
@@ -408,18 +408,18 @@ class ExpressionTest: BaseRellTest(false) {
     @Test fun testIf() {
         chkEx("= if (a) 1 else 2;", true, "int[1]")
         chkEx("= if (a) 1 else 2;", false, "int[2]")
-        chkEx("= if (a) 'Hello' else 123;", true, "ct_err:expr_if_restype:text:integer")
+        chkEx("= if (a) 'Hello' else 123;", true, "ct_err:expr_if_restype:[text]:[integer]")
         chkEx("= if (a) 123 else null;", true, "int[123]")
         chkEx("= if (a) 123 else null;", false, "null")
         chkEx("= if (a) (null, 'Hello') else (123, null);", true, "(null,text[Hello])")
         chkEx("= if (a) (null, 'Hello') else (123, null);", false, "(int[123],null)")
-        chkEx("= if (a) (null, 'Hello') else (null, 123);", true, "ct_err:expr_if_restype:(null,text):(null,integer)")
+        chkEx("= if (a) (null, 'Hello') else (null, 123);", true, "ct_err:expr_if_restype:[(null,text)]:[(null,integer)]")
 
-        chk("if (123) 'A' else 'B'", "ct_err:expr_if_cond_type:boolean:integer")
-        chk("if ('Hello') 'A' else 'B'", "ct_err:expr_if_cond_type:boolean:text")
-        chk("if (null) 'A' else 'B'", "ct_err:expr_if_cond_type:boolean:null")
-        chk("if (unit()) 'A' else 'B'", "ct_err:expr_if_cond_type:boolean:unit")
-        chkEx("{ val x: boolean? = _nullable(true); return if (x) 'A' else 'B'; }", "ct_err:expr_if_cond_type:boolean:boolean?")
+        chk("if (123) 'A' else 'B'", "ct_err:expr_if_cond_type:[boolean]:[integer]")
+        chk("if ('Hello') 'A' else 'B'", "ct_err:expr_if_cond_type:[boolean]:[text]")
+        chk("if (null) 'A' else 'B'", "ct_err:expr_if_cond_type:[boolean]:[null]")
+        chk("if (unit()) 'A' else 'B'", "ct_err:expr_if_cond_type:[boolean]:[unit]")
+        chkEx("{ val x: boolean? = _nullable(true); return if (x) 'A' else 'B'; }", "ct_err:expr_if_cond_type:[boolean]:[boolean?]")
     }
 
     @Test fun testIfShortCircuit() {
@@ -469,7 +469,7 @@ class ExpressionTest: BaseRellTest(false) {
     @Test fun testIsNull() {
         chkEx("{ val x = _nullable_int(123); return x??; }", "boolean[true]")
         chkEx("{ val x = _nullable_int(null); return x??; }", "boolean[false]")
-        chkEx("{ val x = 123; return x??; }", "ct_err:unop_operand_type:??:integer")
+        chkEx("{ val x = 123; return x??; }", "ct_err:unop_operand_type:??:[integer]")
     }
 
     @Test fun testIntegerOverflow() {
@@ -567,8 +567,8 @@ class ExpressionTest: BaseRellTest(false) {
         chkEx("{ val t = (123, 'Hello'); return t[0+1]; }", "ct_err:expr_lookup:tuple:no_const")
         chkEx("{ val t = (123, 'Hello'); val i = 0; return t[i]; }", "ct_err:expr_lookup:tuple:no_const")
 
-        chkEx("{ val t = (123, 'Hello'); return t[true]; }", "ct_err:expr_lookup_keytype:integer:boolean")
-        chkEx("{ val t = (123, 'Hello'); return t['Bob']; }", "ct_err:expr_lookup_keytype:integer:text")
+        chkEx("{ val t = (123, 'Hello'); return t[true]; }", "ct_err:expr_lookup_keytype:[integer]:[boolean]")
+        chkEx("{ val t = (123, 'Hello'); return t['Bob']; }", "ct_err:expr_lookup_keytype:[integer]:[text]")
 
         chkEx("{ val t = _nullable((123, 'Hello')); return t[0]; }", "ct_err:expr_lookup_null")
         chkEx("{ val t = _nullable((123, 'Hello')); return t[1]; }", "ct_err:expr_lookup_null")

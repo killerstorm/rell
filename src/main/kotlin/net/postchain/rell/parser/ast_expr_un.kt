@@ -7,7 +7,7 @@ sealed class S_UnaryOp(val code: String) {
     abstract fun compile(ctx: C_ExprContext, startPos: S_Pos, opPos: S_Pos, expr: C_Expr): C_Expr
 
     fun errTypeMismatch(pos: S_Pos, type: R_Type): C_Error {
-        return C_Error(pos, "unop_operand_type:$code:$type", "Wrong operand type for '$code': $type")
+        return C_Error(pos, "unop_operand_type:$code:[$type]", "Wrong operand type for '$code': $type")
     }
 }
 
@@ -67,7 +67,7 @@ object S_UnaryOp_Not: S_UnaryOp("not") {
         val resVarFacts = C_ExprVarFacts.of(
                 trueFacts = varFacts.falseFacts,
                 falseFacts = varFacts.trueFacts,
-                postFacts =  varFacts.postFacts
+                postFacts = varFacts.postFacts
         )
 
         val resValue = if (value.isDb()) {

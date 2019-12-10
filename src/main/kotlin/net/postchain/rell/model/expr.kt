@@ -158,7 +158,7 @@ class R_MemberCalculator_DataAttribute(type: R_Type, val atBase: R_AtExprBase): 
             } else {
                 "Found more than one object $baseValue in the database: ${list.size}"
             }
-            throw Rt_Error("expr_clsattr_count:${list.size}", msg)
+            throw Rt_Error("expr_entity_attr_count:${list.size}", msg)
         }
 
         check(list[0].size == 1)
@@ -435,12 +435,15 @@ class R_WhenExpr(type: R_Type, val chooser: R_WhenChooser, val exprs: List<R_Exp
     }
 }
 
-sealed class R_RequireExpr(type: R_Type, val expr: R_Expr, val msgExpr: R_Expr?): R_Expr(type) {
-    abstract fun calculate(v: Rt_Value): Rt_Value?
-
-    final override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
+class R_RequireExpr(
+        type: R_Type,
+        private val expr: R_Expr,
+        private val msgExpr: R_Expr?,
+        private val condition: R_RequireCondition
+): R_Expr(type) {
+    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         val value = expr.evaluate(frame)
-        val res = calculate(value)
+        val res = condition.calculate(value)
         if (res != null) {
             return res
         }
@@ -449,23 +452,28 @@ sealed class R_RequireExpr(type: R_Type, val expr: R_Expr, val msgExpr: R_Expr?)
             val msgValue = msgExpr.evaluate(frame)
             msgValue.asString()
         }
+
         throw Rt_RequireError(msg)
     }
 }
 
-class R_RequireExpr_Boolean(expr: R_Expr, msgExpr: R_Expr?): R_RequireExpr(R_UnitType, expr, msgExpr) {
+sealed class R_RequireCondition {
+    abstract fun calculate(v: Rt_Value): Rt_Value?
+}
+
+object R_RequireCondition_Boolean: R_RequireCondition() {
     override fun calculate(v: Rt_Value) = if (v.asBoolean()) Rt_UnitValue else null
 }
 
-class R_RequireExpr_Nullable(type: R_Type, expr: R_Expr, msgExpr: R_Expr?): R_RequireExpr(type, expr, msgExpr) {
+object R_RequireCondition_Nullable: R_RequireCondition() {
     override fun calculate(v: Rt_Value) = if (v != Rt_NullValue) v else null
 }
 
-class R_RequireExpr_Collection(type: R_Type, expr: R_Expr, msgExpr: R_Expr?): R_RequireExpr(type, expr, msgExpr) {
+object R_RequireCondition_Collection: R_RequireCondition() {
     override fun calculate(v: Rt_Value) = if (v != Rt_NullValue && !v.asCollection().isEmpty()) v else null
 }
 
-class R_RequireExpr_Map(type: R_Type, expr: R_Expr, msgExpr: R_Expr?): R_RequireExpr(type, expr, msgExpr) {
+object R_RequireCondition_Map: R_RequireCondition() {
     override fun calculate(v: Rt_Value) = if (v != Rt_NullValue && !v.asMap().isEmpty()) v else null
 }
 
@@ -661,6 +669,16 @@ class R_ChainHeightExpr(val chain: R_ExternalChainRef): R_Expr(R_IntegerType) {
         val rtChain = frame.defCtx.sqlCtx.linkedChain(chain)
         return Rt_IntValue(rtChain.height)
     }
+}
+
+class R_StackTraceExpr(private val subExpr: R_Expr, private val filePos: R_FilePos): R_Expr(subExpr.type) {
+    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
+        return Rt_StackTraceError.trackStack(frame, filePos) {
+            subExpr.evaluate(frame)
+        }
+    }
+
+    override fun constantValue() = subExpr.constantValue()
 }
 
 class R_TypeAdapterExpr(type: R_Type, private val expr: R_Expr, private val adapter: R_TypeAdapter): R_Expr(type) {

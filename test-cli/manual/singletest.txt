@@ -1,6 +1,19 @@
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------
-./singletest.sh -d test-cli/src --blockchain-rid=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef --node-config test-cli/config/node-config.properties legacy_test test-cli/test/legacy_test.xml
+./singletest.sh -d test-cli/src --node-config test-cli/config/node-config.properties legacy_test test-cli/test/legacy_test.xml
 
 2019-10-24 21:08:23.623 INFO  Rell - legacy_test.rell(5) x = 123456789.987654321
 2019-10-24 21:08:23.623 INFO  Rell - legacy_test.rell(6) x^2 = 15241578994055784.200731595789971041
 2019-10-24 21:08:23.623 INFO  Rell - legacy_test.rell(7) x^3 = 1881676416949388556641282.84797183506803765611
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./singletest.sh -d test-cli/src --node-config test-cli/config/node-config.properties stack_trace test-cli/test/stack_trace_test.xml
+
+2019-11-24 13:37:27.681 INFO  net.postchain.rell.Rell - [stack_trace!main_op(stack_trace/main.rell:29)] main start
+2019-11-24 13:37:27.684 INFO  Rell - ERROR Operation 'stack_trace!main_op' failed: [stack_trace!calc(stack_trace/main.rell:7)] x must be positive, but was 0
+	at stack_trace!calc(stack_trace/main.rell:7)
+	at stack_trace!calc(stack_trace/main.rell:11)
+	at stack_trace!calc(stack_trace/main.rell:12)
+	at stack_trace!calc(stack_trace/main.rell:13)
+	at stack_trace!calc(stack_trace/main.rell:14)
+	at stack_trace!calc(stack_trace/main.rell:15)
+	at stack_trace!main_op(stack_trace/main.rell:30)

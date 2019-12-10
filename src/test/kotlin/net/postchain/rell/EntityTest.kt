@@ -59,7 +59,7 @@ class EntityTest: BaseRellTest(false) {
 
         chk("A @ {} (.name)", "text[A]")
         chk("B @ {} (.name)", "text[B]")
-        chk("C @ {} (=.name1,=.name2)", "(text[C1],text[C2])")
+        chk("C @ {} (_=.name1,_=.name2)", "(text[C1],text[C2])")
         chk("D @ {} (.name)", "text[D1]")
 
         chkOp("update D @ {} (name = 'D2');")
@@ -112,7 +112,7 @@ class EntityTest: BaseRellTest(false) {
 
         chk("A @ {} (.name)", "text[A]")
         chk("B @ {} (.name)", "text[B]")
-        chk("C @ {} (=.name1,=.name2)", "(text[C1],text[C2])")
+        chk("C @ {} (_=.name1,_=.name2)", "(text[C1],text[C2])")
         chk("D @ {} (.name)", "text[D1]")
 
         chkOp("update D @ {} (name = 'D2');")
@@ -181,8 +181,8 @@ class EntityTest: BaseRellTest(false) {
         tstCtx.useSql = true
         chkOp("val c = create company('Amazon'); create user ('Bob', c);")
         chkData("user(2,Bob,1)", "company(1,Amazon)")
-        chk("company @* {} ( =.name )", "list<text>[text[Amazon]]")
-        chk("user @* {} ( =.name, =.company )", "list<(text,company)>[(text[Bob],company[1])]")
+        chk("company @* {} ( _=.name )", "list<text>[text[Amazon]]")
+        chk("user @* {} ( _=.name, _=.company )", "list<(text,company)>[(text[Bob],company[1])]")
     }
 
     @Test fun testCycle() {
@@ -197,23 +197,23 @@ class EntityTest: BaseRellTest(false) {
         val tst2 = createTablePrefixTester(456, 200, "Google", "Alice")
 
         tst1.chkData("user(101,Bob,100)", "company(100,Amazon)")
-        tst1.chkQuery("company @* {}( =company, =.name )", "[(company[100],Amazon)]")
-        tst1.chkQuery("user @* {}( =user, =.name, =.company.name )", "[(user[101],Bob,Amazon)]")
+        tst1.chkQuery("company @* {}( _=company, _=.name )", "[(company[100],Amazon)]")
+        tst1.chkQuery("user @* {}( _=user, _=.name, _=.company.name )", "[(user[101],Bob,Amazon)]")
 
         tst2.chkData("user(201,Alice,200)", "company(200,Google)")
-        tst2.chkQuery("company @* {}( =company, =.name )", "[(company[200],Google)]")
-        tst2.chkQuery("user @* {}( =user, =.name, =.company.name )", "[(user[201],Alice,Google)]")
+        tst2.chkQuery("company @* {}( _=company, _=.name )", "[(company[200],Google)]")
+        tst2.chkQuery("user @* {}( _=user, _=.name, _=.company.name )", "[(user[201],Alice,Google)]")
 
         tst1.chkOp("val c = create company('Facebook'); create user ('Trudy', c);")
         tst2.chkOp("val c = create company('Microsoft'); create user ('James', c);")
 
         tst1.chkData("user(2,Trudy,1)", "user(101,Bob,100)", "company(1,Facebook)", "company(100,Amazon)")
-        tst1.chkQuery("company @* {}( =company, =.name )", "[(company[1],Facebook), (company[100],Amazon)]")
-        tst1.chkQuery("user @* {}( =user, =.name, =.company.name )", "[(user[2],Trudy,Facebook), (user[101],Bob,Amazon)]")
+        tst1.chkQuery("company @* {}( _=company, _=.name )", "[(company[1],Facebook), (company[100],Amazon)]")
+        tst1.chkQuery("user @* {}( _=user, _=.name, _=.company.name )", "[(user[2],Trudy,Facebook), (user[101],Bob,Amazon)]")
 
         tst2.chkData("user(2,James,1)", "user(201,Alice,200)", "company(1,Microsoft)", "company(200,Google)")
-        tst2.chkQuery("company @* {}( =company, =.name )", "[(company[1],Microsoft), (company[200],Google)]")
-        tst2.chkQuery("user @* {}( =user, =.name, =.company.name )", "[(user[2],James,Microsoft), (user[201],Alice,Google)]")
+        tst2.chkQuery("company @* {}( _=company, _=.name )", "[(company[1],Microsoft), (company[200],Google)]")
+        tst2.chkQuery("user @* {}( _=user, _=.name, _=.company.name )", "[(user[2],James,Microsoft), (user[201],Alice,Google)]")
     }
 
     @Test fun testRowidAttr() {

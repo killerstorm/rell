@@ -119,7 +119,7 @@ object R_SysFn_Text_CharAt: R_SysFn_Text() {
     override fun call(obj: String, a: Rt_Value): Rt_Value {
         val index = a.asInteger()
         if (index < 0 || index >= obj.length) {
-            throw Rt_Error("fn:text.char_at:index:${obj.length}:$index", "Index out of bounds: $index (length ${obj.length})")
+            throw Rt_Error("fn:text.char_at:index:${obj.length}:$index", "Text index out of bounds: $index (length ${obj.length})")
         }
         val c = obj[index.toInt()]
         return Rt_IntValue(c.toLong())

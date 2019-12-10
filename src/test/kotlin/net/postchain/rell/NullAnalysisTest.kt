@@ -7,12 +7,12 @@ class NullAnalysisTest: BaseRellTest(false) {
     @Test fun testInit() {
         def("function f(a: integer?): integer? = a;")
 
-        chkEx("{ val x: integer? = null; return x + 1; }", "ct_err:binop_operand_type:+:integer?:integer")
-        chkEx("{ val x: integer? = f(123); return x + 1; }", "ct_err:binop_operand_type:+:integer?:integer")
+        chkEx("{ val x: integer? = null; return x + 1; }", "ct_err:binop_operand_type:+:[integer?]:[integer]")
+        chkEx("{ val x: integer? = f(123); return x + 1; }", "ct_err:binop_operand_type:+:[integer?]:[integer]")
         chkEx("{ val x: integer? = 123; return x + 1; }", "int[124]")
 
-        chkEx("{ val x: integer?; x = null; return x + 1; }", "ct_err:binop_operand_type:+:integer?:integer")
-        chkEx("{ val x: integer?; x = f(123); return x + 1; }", "ct_err:binop_operand_type:+:integer?:integer")
+        chkEx("{ val x: integer?; x = null; return x + 1; }", "ct_err:binop_operand_type:+:[integer?]:[integer]")
+        chkEx("{ val x: integer?; x = f(123); return x + 1; }", "ct_err:binop_operand_type:+:[integer?]:[integer]")
         chkEx("{ val x: integer?; x = 123; return x + 1; }", "int[124]")
 
         chkEx("{ val x: integer? = null; return abs(x); }", "ct_err:expr_call_argtypes:abs:integer?")
@@ -25,20 +25,20 @@ class NullAnalysisTest: BaseRellTest(false) {
     @Test fun testAssignment() {
         def("function f(a: integer?): integer? = a;")
 
-        chkEx("{ var x: integer? = null; x = null; return x + 1; }", "ct_err:binop_operand_type:+:integer?:integer")
-        chkEx("{ var x: integer? = null; x = f(123); return x + 1; }", "ct_err:binop_operand_type:+:integer?:integer")
+        chkEx("{ var x: integer? = null; x = null; return x + 1; }", "ct_err:binop_operand_type:+:[integer?]:[integer]")
+        chkEx("{ var x: integer? = null; x = f(123); return x + 1; }", "ct_err:binop_operand_type:+:[integer?]:[integer]")
         chkEx("{ var x: integer? = null; x = 123; return x + 1; }", "int[124]")
 
-        chkEx("{ var x: integer? = f(123); x = null; return x + 1; }", "ct_err:binop_operand_type:+:integer?:integer")
-        chkEx("{ var x: integer? = f(123); x = f(123); return x + 1; }", "ct_err:binop_operand_type:+:integer?:integer")
+        chkEx("{ var x: integer? = f(123); x = null; return x + 1; }", "ct_err:binop_operand_type:+:[integer?]:[integer]")
+        chkEx("{ var x: integer? = f(123); x = f(123); return x + 1; }", "ct_err:binop_operand_type:+:[integer?]:[integer]")
         chkEx("{ var x: integer? = f(123); x = 123; return x + 1; }", "int[124]")
 
-        chkEx("{ var x: integer? = 123; x = null; return x + 1; }", "ct_err:binop_operand_type:+:integer?:integer")
-        chkEx("{ var x: integer? = 123; x = f(456); return x + 1; }", "ct_err:binop_operand_type:+:integer?:integer")
+        chkEx("{ var x: integer? = 123; x = null; return x + 1; }", "ct_err:binop_operand_type:+:[integer?]:[integer]")
+        chkEx("{ var x: integer? = 123; x = f(456); return x + 1; }", "ct_err:binop_operand_type:+:[integer?]:[integer]")
         chkEx("{ var x: integer? = 123; x = 456; return x + 1; }", "int[457]")
 
-        chkEx("{ var x: integer?; x = null; return x + 1; }", "ct_err:binop_operand_type:+:integer?:integer")
-        chkEx("{ var x: integer?; x = f(456); return x + 1; }", "ct_err:binop_operand_type:+:integer?:integer")
+        chkEx("{ var x: integer?; x = null; return x + 1; }", "ct_err:binop_operand_type:+:[integer?]:[integer]")
+        chkEx("{ var x: integer?; x = f(456); return x + 1; }", "ct_err:binop_operand_type:+:[integer?]:[integer]")
         chkEx("{ var x: integer?; x = 456; return x + 1; }", "int[457]")
 
         chkEx("{ var x: integer? = _nullable(123); return _type_of(x); }", "text[integer?]")
@@ -67,8 +67,8 @@ class NullAnalysisTest: BaseRellTest(false) {
     }
 
     @Test fun testCompoundAssignment() {
-        chkEx("{ var x = _nullable_int(123); x += 1; return x; }", "ct_err:binop_operand_type:+=:integer?:integer")
-        chkEx("{ var x: integer? = null; x += 1; return x; }", "ct_err:binop_operand_type:+=:integer?:integer")
+        chkEx("{ var x = _nullable_int(123); x += 1; return x; }", "ct_err:binop_operand_type:+=:[integer?]:[integer]")
+        chkEx("{ var x: integer? = null; x += 1; return x; }", "ct_err:binop_operand_type:+=:[integer?]:[integer]")
         chkEx("{ var x: integer? = 123; x += 1; return x; }", "int[124]")
 
         chkEx("{ var x = _nullable_int(123); if (x != null) x += 1; return x; }", "int[124]")
@@ -100,7 +100,7 @@ class NullAnalysisTest: BaseRellTest(false) {
     }
 
     @Test fun testBooleanExpressions() {
-        chkQueryEx("query q(x: integer?) = x > 5;", 6, "ct_err:binop_operand_type:>:integer?:integer")
+        chkQueryEx("query q(x: integer?) = x > 5;", 6, "ct_err:binop_operand_type:>:[integer?]:[integer]")
         chkQueryEx("query q(x: integer?) = x != null;", 5, "boolean[true]")
         chkQueryEx("query q(x: integer?) = x == null;", 5, "boolean[false]")
 
@@ -110,13 +110,13 @@ class NullAnalysisTest: BaseRellTest(false) {
         chkQueryEx(q, 6, "boolean[true]")
         chkQueryEx(q, 5, "boolean[false]")
         chkQueryEx(q, null as Long?, "boolean[false]")
-        chkQueryEx("query q(x: integer?) = x == null and x > 5;", 0, "ct_err:binop_operand_type:>:integer?:integer")
+        chkQueryEx("query q(x: integer?) = x == null and x > 5;", 0, "ct_err:binop_operand_type:>:[integer?]:[integer]")
 
         q = "query q(x: integer?) = x == null or x > 5;"
         chkQueryEx(q, 6, "boolean[true]")
         chkQueryEx(q, 5, "boolean[false]")
         chkQueryEx(q, null as Long?, "boolean[true]")
-        chkQueryEx("query q(x: integer?) = x != null or x > 5;", 0, "ct_err:binop_operand_type:>:integer?:integer")
+        chkQueryEx("query q(x: integer?) = x != null or x > 5;", 0, "ct_err:binop_operand_type:>:[integer?]:[integer]")
 
         q = "query q(x: integer?, y: integer?) = x == null or y == null or x > y;"
         chkQueryEx(q, 6, 5, "boolean[true]")
@@ -126,9 +126,9 @@ class NullAnalysisTest: BaseRellTest(false) {
         chkQueryEx(q, null as Long?, null as Long?, "boolean[true]")
 
         chkQueryEx("query q(x: integer?, y: integer?) = x == null or x > y;", 0, 0,
-                "ct_err:binop_operand_type:>:integer:integer?")
+                "ct_err:binop_operand_type:>:[integer]:[integer?]")
         chkQueryEx("query q(x: integer?, y: integer?) = y == null or x > y;", 0, 0,
-                "ct_err:binop_operand_type:>:integer?:integer")
+                "ct_err:binop_operand_type:>:[integer?]:[integer]")
 
         q = "query q(x: integer?) = not (x == null) and x > 5;"
         chkQueryEx(q, 6, "boolean[true]")
@@ -172,7 +172,7 @@ class NullAnalysisTest: BaseRellTest(false) {
     }
 
     @Test fun testIf() {
-        chkEx("{ val x = _nullable(123); return x + 1; }", "ct_err:binop_operand_type:+:integer?:integer")
+        chkEx("{ val x = _nullable(123); return x + 1; }", "ct_err:binop_operand_type:+:[integer?]:[integer]")
         chkEx("{ val x = _nullable(123); if (x != null) return x + 1; return -1; }", "int[124]")
         chkEx("{ val x = _nullable(123); if (x == null) return -1; return x + 1; }", "int[124]")
 
@@ -226,10 +226,10 @@ class NullAnalysisTest: BaseRellTest(false) {
     }
 
     @Test fun testIfExpr() {
-        chkQueryEx("query q(x: integer?) = x + 1;", 0, "ct_err:binop_operand_type:+:integer?:integer")
-        chkQueryEx("query q(x: integer?) = if (x == null) x + 1 else 0;", 0, "ct_err:binop_operand_type:+:integer?:integer")
+        chkQueryEx("query q(x: integer?) = x + 1;", 0, "ct_err:binop_operand_type:+:[integer?]:[integer]")
+        chkQueryEx("query q(x: integer?) = if (x == null) x + 1 else 0;", 0, "ct_err:binop_operand_type:+:[integer?]:[integer]")
 
-        chkQueryEx("query q(x: integer?) = _type_of(x + 1);", 0, "ct_err:binop_operand_type:+:integer?:integer")
+        chkQueryEx("query q(x: integer?) = _type_of(x + 1);", 0, "ct_err:binop_operand_type:+:[integer?]:[integer]")
         chkQueryEx("query q(x: integer?) = _type_of(if (x == null) 0 else x + 1);", 0, "text[integer]")
         chkQueryEx("query q(x: integer?) = _type_of(if (x == null) null else x + 1);", 0, "text[integer?]")
         chkQueryEx("query q(x: integer?) = _type_of(if (not x??) 0 else x + 1);", 0, "text[integer]")
@@ -245,11 +245,11 @@ class NullAnalysisTest: BaseRellTest(false) {
         chkQueryEx(q, null as Long?, "int[0]")
         chkQueryEx(q, 123, "int[124]")
 
-        chkQueryEx("query q(x: integer?, y: integer?) = x + y;", 0, "ct_err:binop_operand_type:+:integer?:integer?")
+        chkQueryEx("query q(x: integer?, y: integer?) = x + y;", 0, "ct_err:binop_operand_type:+:[integer?]:[integer?]")
         chkQueryEx("query q(x: integer?, y: integer?) = if (x != null) x + y else 0;", 0,
-                "ct_err:binop_operand_type:+:integer:integer?")
+                "ct_err:binop_operand_type:+:[integer]:[integer?]")
         chkQueryEx("query q(x: integer?, y: integer?) = if (y != null) x + y else 0;", 0,
-                "ct_err:binop_operand_type:+:integer?:integer")
+                "ct_err:binop_operand_type:+:[integer?]:[integer]")
 
         q = "query q(x: integer?, y: integer?) = if (x != null) if (y != null) x + y else 1 else 0;"
         chkQueryEx(q, null as Long?, null as Long?, "int[0]")
@@ -271,7 +271,7 @@ class NullAnalysisTest: BaseRellTest(false) {
     }
 
     @Test fun testWhen() {
-        chkEx("{ val x = _nullable(123); return x + 1; }", "ct_err:binop_operand_type:+:integer?:integer")
+        chkEx("{ val x = _nullable(123); return x + 1; }", "ct_err:binop_operand_type:+:[integer?]:[integer]")
         chkEx("{ val x = _nullable(123); when { x != null -> return x + 1; } return -1; }", "int[124]")
         chkEx("{ val x = _nullable(123); when { x == null -> return -1; } return x + 1; }", "int[124]")
 
@@ -283,7 +283,7 @@ class NullAnalysisTest: BaseRellTest(false) {
     }
 
     @Test fun testWhenMultipleConditions() {
-        val err = "ct_err:binop_operand_type:+:integer?:integer"
+        val err = "ct_err:binop_operand_type:+:[integer?]:[integer]"
 
         chkEx("{ val x = _nullable(123); return x + 1; }", err)
         chkEx("{ val x = _nullable(123); when { x != null -> return x + 1; } return -1; }", "int[124]")
@@ -301,9 +301,9 @@ class NullAnalysisTest: BaseRellTest(false) {
     }
 
     @Test fun testWhenExpr() {
-        chkQueryEx("query q(x: integer?) = x + 1;", 0, "ct_err:binop_operand_type:+:integer?:integer")
+        chkQueryEx("query q(x: integer?) = x + 1;", 0, "ct_err:binop_operand_type:+:[integer?]:[integer]")
 
-        chkQueryEx("query q(x: integer?) = _type_of(x + 1);", 0, "ct_err:binop_operand_type:+:integer?:integer")
+        chkQueryEx("query q(x: integer?) = _type_of(x + 1);", 0, "ct_err:binop_operand_type:+:[integer?]:[integer]")
         chkQueryEx("query q(x: integer?) = _type_of(when { x == null -> 0; else -> x + 1 });", 0, "text[integer]")
         chkQueryEx("query q(x: integer?) = _type_of(when { x == null -> null; else -> x + 1 });", 0, "text[integer?]")
         chkQueryEx("query q(x: integer?) = _type_of(when(x) { null -> 0; else -> x + 1 });", 0, "text[integer]")
@@ -312,11 +312,11 @@ class NullAnalysisTest: BaseRellTest(false) {
         chkQueryEx("query q(x: integer?) = when { x == null -> 0; else -> x + 1 };", 123, "int[124]")
         chkQueryEx("query q(x: integer?) = when { x != null -> x + 1; else -> 0 };", 123, "int[124]")
 
-        chkQueryEx("query q(x: integer?, y: integer?) = x + y;", 0, "ct_err:binop_operand_type:+:integer?:integer?")
+        chkQueryEx("query q(x: integer?, y: integer?) = x + y;", 0, "ct_err:binop_operand_type:+:[integer?]:[integer?]")
         chkQueryEx("query q(x: integer?, y: integer?) = when { x != null -> x + y; else -> 0 };", 0,
-                "ct_err:binop_operand_type:+:integer:integer?")
+                "ct_err:binop_operand_type:+:[integer]:[integer?]")
         chkQueryEx("query q(x: integer?, y: integer?) = when { y != null -> x + y; else -> 0 };", 0,
-                "ct_err:binop_operand_type:+:integer?:integer")
+                "ct_err:binop_operand_type:+:[integer?]:[integer]")
 
         chkQueryEx("query q(x: integer?, y: integer?) = when { x != null -> when { y != null -> x + y; else -> 1 }; else -> 0 };",
                 123, 456, "int[579]")
@@ -361,6 +361,33 @@ class NullAnalysisTest: BaseRellTest(false) {
         chkEx("{ val x = _nullable_int(null); if (not exists(x)) return _type_of(x); return ''; }", "integer?")
     }
 
+    @Test fun testExistsCollection() {
+        tst.strictToString = false
+        chkEx("{ val x = _nullable([123]); return _type_of(x); }", "list<integer>?")
+        chkEx("{ val x = _nullable([123]); if (exists(x)) return _type_of(x); return ''; }", "list<integer>")
+        chkEx("{ val x = _nullable([123]); if (not exists(x)) return ''; return _type_of(x); }", "list<integer>")
+        chkEx("{ val x = _nullable([123]); if (exists(x)) return _type_of(x); return ''; }", "list<integer>")
+        chkEx("{ val x = if(2>1) null else [123]; if (not exists(x)) return _type_of(x); return ''; }", "list<integer>?")
+    }
+
+    @Test fun testEmpty() {
+        tst.strictToString = false
+        chkEx("{ val x = _nullable_int(123); return _type_of(x); }", "integer?")
+        chkEx("{ val x = _nullable_int(123); if (not empty(x)) return _type_of(x); return ''; }", "integer")
+        chkEx("{ val x = _nullable_int(123); if (empty(x)) return ''; return _type_of(x); }", "integer")
+        chkEx("{ val x = _nullable_int(123); if (not empty(x)) return _type_of(x); return ''; }", "integer")
+        chkEx("{ val x = _nullable_int(null); if (empty(x)) return _type_of(x); return ''; }", "integer?")
+    }
+
+    @Test fun testEmptyCollection() {
+        tst.strictToString = false
+        chkEx("{ val x = _nullable([123]); return _type_of(x); }", "list<integer>?")
+        chkEx("{ val x = _nullable([123]); if (not empty(x)) return _type_of(x); return ''; }", "list<integer>")
+        chkEx("{ val x = _nullable([123]); if (empty(x)) return ''; return _type_of(x); }", "list<integer>")
+        chkEx("{ val x = _nullable([123]); if (not empty(x)) return _type_of(x); return ''; }", "list<integer>")
+        chkEx("{ val x = if(2>1) null else [123]; if (empty(x)) return _type_of(x); return ''; }", "list<integer>?")
+    }
+
     @Test fun testList() {
         tst.strictToString = false
         chkEx("{ val x: integer? = _nullable_int(123); return _type_of([x]); }", "list<integer?>")
@@ -394,18 +421,18 @@ class NullAnalysisTest: BaseRellTest(false) {
     @Test fun testLoopVarModification() {
         chkEx("{ var x: integer? = 123; var b = true; while (x > 0 and b) { b = false; } return 0; }", "int[0]")
         chkEx("{ var x: integer? = 123; var b = true; while (x > 0 and b) { b = false; x = null; } return 0; }",
-                "ct_err:binop_operand_type:>:integer?:integer")
+                "ct_err:binop_operand_type:>:[integer?]:[integer]")
         chkEx("{ var x: integer? = 123; var b = true; while (x > 0 and b) { b = false; x = 123; } return 0; }",
-                "ct_err:binop_operand_type:>:integer?:integer")
+                "ct_err:binop_operand_type:>:[integer?]:[integer]")
 
         chkEx("{ var x: integer? = 123; var b = true; while (b) { print(x+1); b = false; } return 0; }", "int[0]")
         chkEx("{ var x: integer? = 123; var b = true; while (b) { print(x+1); x = 123; b = false; } return 0; }",
-                "ct_err:binop_operand_type:+:integer?:integer")
+                "ct_err:binop_operand_type:+:[integer?]:[integer]")
         chkEx("{ var x: integer? = 123; var b = true; while (b) { x = 123; print(x+1); b = false; } return 0; }", "int[0]")
 
         chkEx("{ var x: integer? = 123; for (k in [0]) { print(x+1); } return 0; }", "int[0]")
         chkEx("{ var x: integer? = 123; for (k in [0]) { print(x+1); x = 123; } return 0; }",
-                "ct_err:binop_operand_type:+:integer?:integer")
+                "ct_err:binop_operand_type:+:[integer?]:[integer]")
         chkEx("{ var x: integer? = 123; for (k in [0]) { x = 123; print(x+1); } return 0; }", "int[0]")
     }
 
@@ -421,26 +448,26 @@ class NullAnalysisTest: BaseRellTest(false) {
     private fun chkDefiniteFactNullEquality(op: String, eq: Boolean) {
         val resNull = "boolean[$eq]"
         val resNotNull = "boolean[${!eq}]"
-        chkDefiniteFactExpr("x $op null", resNull, resNotNull, "ct_err:binop_operand_type:$op:rec:null")
-        chkDefiniteFactExpr("null $op x", resNull, resNotNull, "ct_err:binop_operand_type:$op:null:rec")
+        chkDefiniteFactExpr("x $op null", resNull, resNotNull, "ct_err:binop_operand_type:$op:[rec]:[null]")
+        chkDefiniteFactExpr("null $op x", resNull, resNotNull, "ct_err:binop_operand_type:$op:[null]:[rec]")
     }
 
     @Test fun testDefiniteFactIsNull() {
         def("struct rec { a: integer; }")
         def("function f(r: rec?): rec? = r;")
-        chkDefiniteFactExpr("x??", "boolean[false]", "boolean[true]", "ct_err:unop_operand_type:??:rec")
+        chkDefiniteFactExpr("x??", "boolean[false]", "boolean[true]", "ct_err:unop_operand_type:??:[rec]")
     }
 
     @Test fun testDefiniteFactElvis() {
         def("struct rec { a: integer; }")
         def("function f(r: rec?): rec? = r;")
-        chkDefiniteFactExpr("x ?: rec(-1)", "rec[a=int[-1]]", "rec[a=int[123]]", "ct_err:binop_operand_type:?::rec:rec")
+        chkDefiniteFactExpr("x ?: rec(-1)", "rec[a=int[-1]]", "rec[a=int[123]]", "ct_err:binop_operand_type:?::[rec]:[rec]")
     }
 
     @Test fun testDefiniteFactSafeMember() {
         def("struct rec { a: integer; }")
         def("function f(r: rec?): rec? = r;")
-        chkDefiniteFactExpr("x?.a", "null", "int[123]", "ct_err:expr_safemem_type:rec")
+        chkDefiniteFactExpr("x?.a", "null", "int[123]", "ct_err:expr_safemem_type:[rec]")
     }
 
     @Test fun testDefiniteFactExists() {
@@ -468,7 +495,7 @@ class NullAnalysisTest: BaseRellTest(false) {
     }
 
     @Test fun testDefiniteFactOperatorNotNull() {
-        chkDefiniteFactNullCast("x!!", "ct_err:unop_operand_type:!!:integer", "rt_err:null_value")
+        chkDefiniteFactNullCast("x!!", "ct_err:unop_operand_type:!!:[integer]", "rt_err:null_value")
     }
 
     @Test fun testDefiniteFactRequire() {

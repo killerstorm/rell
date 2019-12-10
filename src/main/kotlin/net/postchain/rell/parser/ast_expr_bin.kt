@@ -181,7 +181,7 @@ sealed class C_BinOp {
 
     companion object {
         fun errTypeMismatch(pos: S_Pos, op: String, leftType: R_Type, rightType: R_Type): C_Error {
-            return C_Error(pos, "binop_operand_type:$op:$leftType:$rightType",
+            return C_Error(pos, "binop_operand_type:$op:[$leftType]:[$rightType]",
                     "Wrong operand types for '$op': $leftType, $rightType")
         }
     }
@@ -471,7 +471,7 @@ object C_BinOp_Plus: C_BinOp_Common() {
         val db = value.isDb()
         if (!db) {
             val rExpr = value.toRExpr()
-            val rResExpr = R_SysCallExpr(R_TextType, R_SysFn_Any.ToText, listOf(rExpr))
+            val rResExpr = C_Utils.createSysCallExpr(R_TextType, R_SysFn_Any.ToText, listOf(rExpr), value.pos, type.toTextFunction)
             return C_RValue(value.pos, rResExpr, value.varFacts().copyPostFacts())
         }
 

@@ -106,6 +106,46 @@ Only the main module and all modules imported by it (directly or indirectly) are
 When a module is active, its operations and queries can be invoked, and tables for its entities and objects are added to the
 database on initialization.
 
+Abstract modules
+=================
+
+A module or a function can be declared abstract:
+
+::
+
+    abstract module;
+
+    abstract function customize(x: integer): text;
+
+Abstract functions shall be overridden in client modules:
+
+::
+
+    import lib;
+
+    override function lib.customize(x: integer): text { ... }
+
+This allows to customize a library module with arbitrary behavior.
+
+An abstract function may have a body which is used as the default implementation:
+
+::
+
+    abstract module;
+
+    abstract function customize(x: integer): text {
+        return 'Default';
+    }
+
+When importing an abstract module, either all its abstract functions that have no body must be overridden, or
+the importing module must be declared abstract.
+
+More details:
+
+- Only an abstract module can have abstract functions.
+- Not allowed to override the same abstract function more than once.
+- An abstract module cannot be used as a main module.
+
 --------------
 
-*Rell v0.10.0*
+*Rell v0.10.1*

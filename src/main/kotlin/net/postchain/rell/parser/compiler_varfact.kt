@@ -320,7 +320,7 @@ class C_ExprVarFacts private constructor(
                 varFacts = varFacts.and(C_VarFacts.of(nulled = mapOf(varId to C_VarFact.NO)))
             }
 
-            return of(postFacts =  varFacts)
+            return of(postFacts = varFacts)
         }
 
         fun forSubExpressions(values: List<C_Value>): C_ExprVarFacts {

@@ -152,7 +152,7 @@ class UpdateDeleteExprTest: BaseRellTest() {
         chkData("user(101,Bob,6500)", "user(102,Alice,555)")
 
         chkOp("val u = user @* { .name == 'Bob' }; update u ( score = (u.score * 3 + 500) );",
-                "ct_err:unknown_member:list<user>:score")
+                "ct_err:unknown_member:[list<user>]:score")
     }
 
     @Test fun testWrongType() {

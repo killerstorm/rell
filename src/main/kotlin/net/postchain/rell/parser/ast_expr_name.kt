@@ -11,7 +11,7 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
     }
 
     override fun compileWhere(ctx: C_ExprContext, idx: Int): C_Expr {
-        val clsAttrs = ctx.nameCtx.findAttributesByName(name.str)
+        val entityAttrs = ctx.nameCtx.findAttributesByName(name.str)
         val localVar = ctx.blkCtx.lookupLocalVar(name.str)
 
         if (localVar == null) {
@@ -20,46 +20,46 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
 
         val varType = localVar.type
 
-        val clsAttrsByType = if (!clsAttrs.isEmpty()) {
-            clsAttrs.filter { C_BinOp_EqNe.checkTypesDb(it.attrRef.type(), varType) }
+        val entityAttrsByType = if (!entityAttrs.isEmpty()) {
+            entityAttrs.filter { C_BinOp_EqNe.checkTypesDb(it.attrRef.type(), varType) }
         } else {
             S_AtExpr.findWhereContextAttrsByType(ctx, varType)
         }
 
-        if (clsAttrsByType.isEmpty()) {
+        if (entityAttrsByType.isEmpty()) {
             throw C_Error(name.pos, "at_where:var_noattrs:$idx:${name.str}:$varType",
                     "No attribute matches variable '${name.str}' by name or type ($varType)")
-        } else if (clsAttrsByType.size > 1) {
-            if (clsAttrs.isEmpty()) {
-                throw C_Errors.errMutlipleAttrs(
+        } else if (entityAttrsByType.size > 1) {
+            if (entityAttrs.isEmpty()) {
+                throw C_Errors.errMultipleAttrs(
                         name.pos,
-                        clsAttrsByType,
+                        entityAttrsByType,
                         "at_where:var_manyattrs_name:$idx:${name.str}:$varType",
                         "Multiple attributes match variable '${name.str}' by type ($varType)"
                 )
             } else {
-                throw C_Errors.errMutlipleAttrs(
+                throw C_Errors.errMultipleAttrs(
                         name.pos,
-                        clsAttrsByType,
+                        entityAttrsByType,
                         "at_where:var_manyattrs_nametype:$idx:${name.str}:$varType",
                         "Multiple attributes match variable '${name.str}' by name and type ($varType)"
                 )
             }
         }
 
-        val clsAttr = clsAttrsByType[0]
-        val attrType = clsAttr.attrRef.type()
+        val entityAttr = entityAttrsByType[0]
+        val attrType = entityAttr.attrRef.type()
         if (!C_BinOp_EqNe.checkTypesDb(attrType, varType)) {
             throw C_Error(name.pos, "at_param_attr_type_mismatch:$name:$attrType:$varType",
                     "Parameter type does not match attribute type for '$name': $varType instead of $attrType")
         }
 
-        val clsAttrExpr = clsAttr.compile()
+        val entityAttrExpr = entityAttr.compile()
 
         val localAttrExpr = localVar.toVarExpr()
         val dbLocalAttrExpr = C_Utils.toDbExpr(startPos, localAttrExpr)
 
-        val dbExpr = C_Utils.makeDbBinaryExprEq(clsAttrExpr, dbLocalAttrExpr)
+        val dbExpr = C_Utils.makeDbBinaryExprEq(entityAttrExpr, dbLocalAttrExpr)
         return C_DbValue.makeExpr(startPos, dbExpr)
     }
 }
@@ -99,7 +99,7 @@ class S_SafeMemberExpr(val base: S_Expr, val name: S_Name): S_Expr(base.startPos
     }
 
     private fun errWrongType(type: R_Type): C_Error {
-        return C_Error(name.pos, "expr_safemem_type:${type.toStrictString()}",
+        return C_Error(name.pos, "expr_safemem_type:[${type.toStrictString()}]",
                 "Wrong type for operator '?.': ${type.toStrictString()}")
     }
 }

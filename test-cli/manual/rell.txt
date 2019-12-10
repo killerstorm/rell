@@ -21,7 +21,7 @@
        7
         8
          9
-0
+45
 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------
 ./rell.sh -d test-cli/src stair stairf 10
@@ -36,6 +36,7 @@
        7
         8
          9
+45
 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------
 ./rell.sh -d test-cli/src misc ns.fun
@@ -58,6 +59,7 @@ Hello from support!
 2019-10-24 20:18:14.747 INFO  Rell - mod/complex/sub/helper.rell(2) helper
 2019-10-24 20:18:14.747 INFO  Rell - mod/complex/bar/bar.rell(6) bar end
 2019-10-24 20:18:14.747 INFO  Rell - mod/complex/foo/foo.rell(6) foo end
+0
 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------
 ./rell.sh -d test-cli/src mod.complex.bar bar
@@ -65,3 +67,53 @@ Hello from support!
 2019-10-24 20:18:35.627 INFO  Rell - mod/complex/bar/bar.rell(4) bar start
 2019-10-24 20:18:35.630 INFO  Rell - mod/complex/sub/helper.rell(2) helper
 2019-10-24 20:18:35.630 INFO  Rell - mod/complex/bar/bar.rell(6) bar end
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rell.sh -d test-cli/src abstr.main main
+
+f(123) = 15129
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rell.sh -d test-cli/src stack_trace main 12345
+
+2019-11-24 13:36:13.523 INFO  Rell - [stack_trace!main(stack_trace/main.rell:24)] main start
+ERROR [stack_trace!calc(stack_trace/main.rell:7)] x must be positive, but was 0
+	at stack_trace!calc(stack_trace/main.rell:7)
+	at stack_trace!calc(stack_trace/main.rell:11)
+	at stack_trace!calc(stack_trace/main.rell:12)
+	at stack_trace!calc(stack_trace/main.rell:13)
+	at stack_trace!calc(stack_trace/main.rell:14)
+	at stack_trace!calc(stack_trace/main.rell:15)
+	at stack_trace!main(stack_trace/main.rell:25)
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rell.sh -d test-cli/src -- stack_trace error '/'
+ERROR Division by zero: 1 / 0
+	at stack_trace!error(stack_trace/errors.rell:3)
+
+./rell.sh -d test-cli/src -- stack_trace error '%'
+ERROR Division by zero: 1 % 0
+	at stack_trace!error(stack_trace/errors.rell:4)
+
+./rell.sh -d test-cli/src -- stack_trace error '-'
+ERROR Integer overflow: -(-9223372036854775808)
+	at stack_trace!error(stack_trace/errors.rell:5)
+
+./rell.sh -d test-cli/src -- stack_trace error 'abs'
+ERROR System function 'abs': Integer overflow: -9223372036854775808
+	at stack_trace!error(stack_trace/errors.rell:6)
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rell.sh --db-properties test-cli/config/node-config.properties -d test-cli/src -- stack_trace.entities ent_main
+ERROR No records found
+	at stack_trace.entities!ent_main(stack_trace/entities.rell:6)
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rell.sh -d test-cli/src calc rell.get_rell_version
+./rell.sh -d test-cli/src calc rell.get_postchain_version
+./rell.sh -d test-cli/src calc rell.get_build
+./rell.sh --json -d test-cli/src calc rell.get_build_details
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rell.sh -d test-cli/src mod rell.get_app_structure | python -m json.tool
+./rell.sh -d test-cli/src app_structure rell.get_app_structure | python -m json.tool

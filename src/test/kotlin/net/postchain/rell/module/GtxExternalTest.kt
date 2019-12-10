@@ -7,13 +7,13 @@ import org.junit.Test
 
 class GtxExternalTest: BaseGtxTest() {
     @Test fun testUnknownChain() {
-        def("external 'foo' {}")
+        def("@external('foo') namespace {}")
         tst.wrapRtErrors = false
         chk("123", "rt_err:external_chain_unknown:foo")
     }
 
     @Test fun testUnknownChain2() {
-        def("external 'foo' {}")
+        def("@external('foo') namespace {}")
         tst.wrapRtErrors = false
         tst.extraModuleConfig["dependencies"] = "[['foo','deadbeef']]"
         chk("123", "rt_err:external_chain_no_rid:foo:deadbeef")
@@ -29,7 +29,7 @@ class GtxExternalTest: BaseGtxTest() {
             t.init()
         }
 
-        def("external 'foo' {}")
+        def("@external('foo') namespace {}")
         tst.wrapRtErrors = false
         tst.extraModuleConfig["dependencies"] = "[['foo','deadbeef']]"
         chk("123", "123")
@@ -45,7 +45,7 @@ class GtxExternalTest: BaseGtxTest() {
             t.init()
         }
 
-        def("external 'foo' { @log entity user {} }")
+        def("@external('foo') namespace { @log entity user {} }")
         tst.wrapRtErrors = false
         tst.extraModuleConfig["dependencies"] = "[['foo','deadbeef']]"
         chk("123", "rt_err:external_meta_no_entity:foo:user")
@@ -63,9 +63,9 @@ class GtxExternalTest: BaseGtxTest() {
             t.init()
         }
 
-        def("external 'foo' { @log entity user { name; } }")
+        def("@external('foo') namespace { @log entity user { name; } }")
         tst.wrapRtErrors = false
         tst.extraModuleConfig["dependencies"] = "[['foo','deadbeef']]"
-        chk("_strict_str(user @{} ( =user, =.name ))", "'(user[15],text[Bob])'")
+        chk("_strict_str(user @{} ( _=user, _=.name ))", "'([foo]!user[15],text[Bob])'")
     }
 }

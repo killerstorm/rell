@@ -1,6 +1,7 @@
 package net.postchain.rell.module
 
 import mu.KLogging
+import net.postchain.base.BlockchainRid
 import net.postchain.base.data.DatabaseAccess
 import net.postchain.core.*
 import net.postchain.gtv.Gtv
@@ -21,13 +22,14 @@ import net.postchain.rell.toImmSet
 import org.apache.commons.lang3.time.FastDateFormat
 
 const val RELL_LANG_VERSION = "0.10"
-const val RELL_VERSION = "0.10.0"
+const val RELL_VERSION = "0.10.1"
+
 const val RELL_VERSION_MODULE_SYSTEM = "0.10.0"
 
 const val CONFIG_RELL_FILES = "files_v$RELL_LANG_VERSION"
 const val CONFIG_RELL_SOURCES = "sources_v$RELL_LANG_VERSION"
 
-private fun convertArgs(ctx: GtvToRtContext, params: List<R_ExternalParam>, args: List<Gtv>): List<Rt_Value> {
+private fun convertArgs(ctx: GtvToRtContext, params: List<R_Param>, args: List<Gtv>): List<Rt_Value> {
     return args.mapIndexed { index, arg ->
         val type = params[index].type
         type.gtvToRt(ctx, arg)
@@ -51,12 +53,15 @@ private class ErrorHandler(val printer: Rt_Printer, private val wrapCtErrors: Bo
         } catch (e: ProgrammerMistake) {
             val msg = processError(msgSupplier, e)
             throw ProgrammerMistake(msg, e)
+        } catch (e: Rt_StackTraceError) {
+            val msg = processError(msgSupplier, e, e.stack)
+            throw if (wrapRtErrors) UserMistake(msg) else e
         } catch (e: Rt_BaseError) {
             val msg = processError(msgSupplier, e)
-            throw if (wrapRtErrors) UserMistake(msg, e) else e
+            throw if (wrapRtErrors) UserMistake(msg) else e
         } catch (e: C_Error){
             val msg = processError(msgSupplier, e)
-            throw if (wrapCtErrors) UserMistake(msg, e) else e
+            throw if (wrapCtErrors) UserMistake(msg) else e
         } catch (e: Exception) {
             val msg = processError(msgSupplier, e)
             throw ProgrammerMistake(msg, e)
@@ -66,17 +71,19 @@ private class ErrorHandler(val printer: Rt_Printer, private val wrapCtErrors: Bo
         }
     }
 
-    private fun processError(msgSupplier: () -> String, e: Throwable): String {
+    private fun processError(msgSupplier: () -> String, e: Throwable, stack: List<R_StackPos> = listOf()): String {
         val subMsg = msgSupplier()
         val errMsg = e.message ?: e.toString()
-        val fullMsg = "$subMsg: $errMsg"
+        val headMsg = "$subMsg: $errMsg"
 
         if (!ignore) {
+            val fullMsg = Rt_Utils.appendStackTrace(headMsg, stack)
             printer.print("ERROR $fullMsg")
         }
         ignore = false
 
-        return fullMsg
+        val resMsg = if (stack.isEmpty()) headMsg else "[${stack[0]}] $headMsg"
+        return resMsg
     }
 }
 
@@ -281,19 +288,17 @@ class RellPostchainModuleFactory(
         private val wrapCtErrors: Boolean = true,
         private val wrapRtErrors: Boolean = true,
         private val forceTypeCheck: Boolean = false
-) : GTXModuleFactory {
-    override fun makeModule(config: Gtv, blockchainRID: ByteArray): GTXModule {
+): GTXModuleFactory {
+    override fun makeModule(config: Gtv, blockchainRID: BlockchainRid): GTXModule {
         val gtxNode = config.asDict().getValue("gtx").asDict()
         val rellNode = gtxNode.getValue("rell").asDict()
 
         val moduleName = rellNode["moduleName"]?.asString() ?: ""
 
-        val combinedPrinter = getCombinedPrinter(rellNode)
+        val (combinedPrinter, copyOutput) = getCombinedPrinter(rellNode)
         val errorHandler = ErrorHandler(combinedPrinter, wrapCtErrors, wrapRtErrors)
 
         return errorHandler.handleError({ "Module initialization failed" }) {
-            val copyOutput = rellNode["copyOutputToCombinedPrinter"]?.asBoolean() ?: true
-
             val sourceCodes = getSourceCodes(rellNode)
             val modules = getModuleNames(rellNode)
             val app = compileApp(sourceCodes, modules, errorHandler, copyOutput)
@@ -331,18 +336,19 @@ class RellPostchainModuleFactory(
         return if (copy) Rt_MultiPrinter(basePrinter, combinedPrinter) else basePrinter
     }
 
-    private fun getCombinedPrinter(rellNode: Map<String, Gtv>): Rt_Printer {
+    private fun getCombinedPrinter(rellNode: Map<String, Gtv>): Pair<Rt_Printer, Boolean> {
         val className = rellNode["combinedPrinterFactoryClass"]?.asString()
-        className ?: return Rt_NopPrinter
+        val copyOutput = rellNode["copyOutputToCombinedPrinter"]?.asBoolean() ?: true
+        className ?: return Pair(logPrinter, false)
 
         try {
             val cls = Class.forName(className)
             val factory = cls.newInstance() as Rt_PrinterFactory
             val printer = factory.newPrinter()
-            return printer
+            return Pair(printer, copyOutput)
         } catch (e: Throwable) {
             logger.error(e) { "Combined printer creation failed" }
-            return Rt_NopPrinter
+            return Pair(Rt_NopPrinter, false)
         }
     }
 
@@ -449,7 +455,7 @@ class RellPostchainModuleFactory(
             rawConfig: Gtv,
             rellNode: Map<String, Gtv>,
             rApp: R_App,
-            blockchainRid: ByteArray
+            blockchainRid: BlockchainRid
     ): Rt_ChainContext {
         val gtvArgsDict = rellNode["moduleArgs"]?.asDict() ?: mapOf()
 

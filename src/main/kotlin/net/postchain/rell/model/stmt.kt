@@ -1,6 +1,7 @@
 package net.postchain.rell.model
 
 import net.postchain.rell.runtime.Rt_CallFrame
+import net.postchain.rell.runtime.Rt_StackTraceError
 import net.postchain.rell.runtime.Rt_TupleValue
 import net.postchain.rell.runtime.Rt_Value
 
@@ -206,5 +207,13 @@ class R_ForStatement(
 class R_BreakStatement: R_Statement() {
     override fun execute(frame: Rt_CallFrame): R_StatementResult? {
         return R_StatementResult_Break()
+    }
+}
+
+class R_StackTraceStatement(private val subStmt: R_Statement, private val filePos: R_FilePos): R_Statement() {
+    override fun execute(frame: Rt_CallFrame): R_StatementResult? {
+        return Rt_StackTraceError.trackStack(frame, filePos) {
+            subStmt.execute(frame)
+        }
     }
 }

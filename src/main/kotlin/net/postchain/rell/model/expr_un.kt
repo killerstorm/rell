@@ -1,5 +1,6 @@
 package net.postchain.rell.model
 
+import com.google.common.math.LongMath
 import net.postchain.rell.runtime.*
 
 sealed class R_UnaryOp {
@@ -9,7 +10,14 @@ sealed class R_UnaryOp {
 object R_UnaryOp_Minus_Integer: R_UnaryOp() {
     override fun evaluate(operand: Rt_Value): Rt_Value {
         val v = operand.asInteger()
-        return Rt_IntValue(-v)
+
+        val res = try {
+            LongMath.checkedSubtract(0, v)
+        } catch (e: ArithmeticException) {
+            throw Rt_Error("expr:-:overflow:$v", "Integer overflow: -($v)")
+        }
+
+        return Rt_IntValue(res)
     }
 }
 

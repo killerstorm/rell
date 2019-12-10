@@ -10,7 +10,6 @@ import net.postchain.gtv.GtvString
 import net.postchain.gtx.ExtOpData
 import net.postchain.gtx.GTXModule
 import net.postchain.gtx.GTXSchemaManager
-import net.postchain.rell.CommonUtils
 import net.postchain.rell.PostchainUtils
 import net.postchain.rell.model.R_App
 import net.postchain.rell.module.RellPostchainModuleFactory
@@ -134,7 +133,7 @@ class RellGtxTester(
             val blkCtx = BaseBlockEContext(ctx, 0, 0, mapOf())
             val txCtx = BaseTxEContext(blkCtx, 0)
 
-            val bcRid = CommonUtils.hexToBytes(blockchainRID)
+            val bcRid = PostchainUtils.hexToRid(blockchainRID)
             val opData = ExtOpData(name, 0, bcRid, arrayOf(), args.toTypedArray())
             val tx = module.makeTransactor(opData)
             check(tx.isCorrect())
@@ -166,8 +165,8 @@ class RellGtxTester(
         )
 
         val moduleCfg = moduleConfig(moduleCode)
-        val bcRidBytes = CommonUtils.hexToBytes(blockchainRID)
-        val module = factory.makeModule(moduleCfg, bcRidBytes)
+        val bcRid = PostchainUtils.hexToRid(blockchainRID)
+        val module = factory.makeModule(moduleCfg, bcRid)
         return module
     }
 

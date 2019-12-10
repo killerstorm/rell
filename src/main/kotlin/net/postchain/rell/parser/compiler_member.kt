@@ -7,14 +7,14 @@ class C_MemberRef(val pos: S_Pos, val base: C_Value, val name: S_Name, val safe:
 }
 
 object C_MemberResolver {
-    fun valueForType(type: R_Type, ref: C_MemberRef): C_Expr? {
+    fun valueForType(ctx: C_ExprContext, type: R_Type, ref: C_MemberRef): C_Expr? {
         return when (type) {
             is R_TupleType -> valueForTuple(type, ref)
             is R_VirtualTupleType -> valueForVirtualTuple(type, ref)
             is R_StructType -> valueForStruct(type, ref)
             is R_VirtualStructType -> valueForVirtualStruct(type, ref)
             is R_EntityType -> valueForEntity(type, ref)
-            is R_EnumType -> valueForEnum(ref)
+            is R_EnumType -> valueForEnum(ctx, ref)
             else -> null
         }
     }
@@ -68,16 +68,12 @@ object C_MemberResolver {
         return attrRef?.createIpMemberExpr(ref)
     }
 
-    private fun valueForEnum(ref: C_MemberRef): C_Expr? {
-        val calculator = if (ref.name.str == "name") {
-            R_MemberCalculator_SysFn(R_TextType, R_SysFn_Enum.Name, listOf())
-        } else if (ref.name.str == "value") {
-            R_MemberCalculator_SysFn(R_IntegerType, R_SysFn_Enum.Value, listOf())
-        } else {
-            return null
+    private fun valueForEnum(ctx: C_ExprContext, ref: C_MemberRef): C_Expr? {
+        val fn = C_LibFunctions.getEnumPropertyOpt(ref.name.str)
+        return if (fn == null) null else {
+            val fnExpr = C_MemberFunctionExpr(ref, fn)
+            fnExpr.call(ctx, ref.pos, listOf())
         }
-        val field = C_MemberAttr_SimpleReadOnly(ref.name, calculator)
-        return makeMemberExpr(ref, field)
     }
 
     fun functionForType(type: R_Type, ref: C_MemberRef): C_Expr? {
@@ -140,7 +136,7 @@ private class C_MemberAttrValue(
     override fun type() = type
     override fun isDb() = memberRef.base.isDb()
 
-    override fun toRExpr(): R_Expr {
+    override fun toRExpr0(): R_Expr {
         val rBase = memberRef.base.toRExpr()
         val calculator = memAttr.calculator()
         return R_MemberExpr(rBase, memberRef.safe, calculator)
@@ -270,7 +266,7 @@ private class C_EntityAttrValue private constructor(
     override fun type() = resultType
     override fun isDb() = false // Important: value does not belong to an outer @-expression
 
-    override fun toRExpr(): R_Expr {
+    override fun toRExpr0(): R_Expr {
         val from = listOf(base.atEntity)
 
         val whereLeft = Db_EntityExpr(base.atEntity)
