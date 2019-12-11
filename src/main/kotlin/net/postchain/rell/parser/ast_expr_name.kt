@@ -18,8 +18,31 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
             return compile(ctx)
         }
 
-        val varType = localVar.type
+        val res = C_NameResolution_Local(name, ctx, localVar)
+        val cValue = res.toExpr().value()
+        val varType = cValue.type()
 
+        val entityAttr = matchAttribute(ctx, idx, entityAttrs, varType)
+        val attrType = entityAttr.attrRef.type()
+        if (!C_BinOp_EqNe.checkTypesDb(attrType, varType)) {
+            throw C_Error(name.pos, "at_param_attr_type_mismatch:$name:$attrType:$varType",
+                    "Parameter type does not match attribute type for '$name': $varType instead of $attrType")
+        }
+
+        val entityAttrExpr = entityAttr.compile()
+        val localAttrExpr = cValue.toRExpr()
+        val dbLocalAttrExpr = C_Utils.toDbExpr(startPos, localAttrExpr)
+
+        val dbExpr = C_Utils.makeDbBinaryExprEq(entityAttrExpr, dbLocalAttrExpr)
+        return C_DbValue.makeExpr(startPos, dbExpr)
+    }
+
+    private fun matchAttribute(
+            ctx: C_ExprContext,
+            idx: Int,
+            entityAttrs: List<C_ExprContextAttr>,
+            varType: R_Type
+    ): C_ExprContextAttr {
         val entityAttrsByType = if (!entityAttrs.isEmpty()) {
             entityAttrs.filter { C_BinOp_EqNe.checkTypesDb(it.attrRef.type(), varType) }
         } else {
@@ -47,20 +70,7 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
             }
         }
 
-        val entityAttr = entityAttrsByType[0]
-        val attrType = entityAttr.attrRef.type()
-        if (!C_BinOp_EqNe.checkTypesDb(attrType, varType)) {
-            throw C_Error(name.pos, "at_param_attr_type_mismatch:$name:$attrType:$varType",
-                    "Parameter type does not match attribute type for '$name': $varType instead of $attrType")
-        }
-
-        val entityAttrExpr = entityAttr.compile()
-
-        val localAttrExpr = localVar.toVarExpr()
-        val dbLocalAttrExpr = C_Utils.toDbExpr(startPos, localAttrExpr)
-
-        val dbExpr = C_Utils.makeDbBinaryExprEq(entityAttrExpr, dbLocalAttrExpr)
-        return C_DbValue.makeExpr(startPos, dbExpr)
+        return entityAttrsByType[0]
     }
 }
 

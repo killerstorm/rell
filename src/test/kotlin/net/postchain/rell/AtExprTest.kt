@@ -64,6 +64,11 @@ class AtExprTest: BaseRellTest() {
         chkEx("{ val corp = company @ { .name == 'Microsoft' }; return user @* { corp }; }", "list<user>[user[40],user[41]]")
     }
 
+    @Test fun testAttributeByExpressionTypeNullable() {
+        chkEx("{ val c = _nullable(company @ { .name == 'Facebook' }); if (c == null) return null; return user @* { c }; }",
+                "list<user>[user[10]]")
+    }
+
     @Test fun testAttributeByNameAndType() {
         def("entity foo { name: text; }")
         def("entity bar { name: text; }")

@@ -262,22 +262,15 @@ private class C_NameResolution_Entity(name: S_Name, private val entity: C_AtEnti
     override fun toExpr() = C_DbValue.makeExpr(name.pos, entity.compileExpr())
 }
 
-private class C_NameResolution_Local(
+class C_NameResolution_Local(
         name: S_Name,
         private val ctx: C_ExprContext,
         private val entry: C_ScopeEntry
 ): C_NameResolution(name) {
     override fun toExpr(): C_Expr {
         val nulled = ctx.factsCtx.nulled(entry.varId)
-
-        var smartType = entry.type
-        var smartNotNull = false
-        if (entry.type is R_NullableType && nulled == C_VarFact.NO) {
-            smartType = entry.type.valueType
-            smartNotNull = true
-        }
-
-        val value = C_LocalVarValue(ctx, name, entry, nulled, smartType, smartNotNull)
+        val smartType = if (entry.type is R_NullableType && nulled == C_VarFact.NO) entry.type.valueType else null
+        val value = C_LocalVarValue(ctx, name, entry, nulled, smartType)
         return C_ValueExpr(value)
     }
 }
@@ -471,10 +464,9 @@ private class C_LocalVarValue(
         private val name: S_Name,
         private val entry: C_ScopeEntry,
         private val nulled: C_VarFact,
-        private val smartType: R_Type,
-        private val smartNotNull: Boolean
+        private val smartType: R_Type?
 ): C_Value(name.pos) {
-    override fun type() = smartType
+    override fun type() = smartType ?: entry.type
     override fun isDb() = false
     override fun toDbExpr() = C_Utils.toDbExpr(pos, toRExpr())
     override fun varId() = entry.varId
@@ -482,7 +474,7 @@ private class C_LocalVarValue(
     override fun toRExpr0(): R_Expr {
         checkInitialized()
         var rExpr: R_Expr = entry.toVarExpr()
-        if (smartNotNull) {
+        if (smartType != null) {
             rExpr = R_NotNullExpr(smartType, rExpr)
         }
         return rExpr
@@ -497,7 +489,7 @@ private class C_LocalVarValue(
         val (freq, msg) = if (nulled == C_VarFact.YES) Pair("always", "is always") else Pair("never", "cannot be")
         globCtx.warning(name.pos, "expr_var_null:$freq:${name.str}", "Variable '${name.str}' $msg null at this location")
 
-        return C_LocalVarValue(ctx, name, entry, nulled, entry.type, false)
+        return C_LocalVarValue(ctx, name, entry, nulled, null)
     }
 
     override fun destination(ctx: C_ExprContext): C_Destination {
@@ -507,7 +499,7 @@ private class C_LocalVarValue(
                 throw C_Error(name.pos, "expr_assign_val:${name.str}", "Value of '${name.str}' cannot be changed")
             }
         }
-        val effectiveType = if (smartNotNull) smartType else entry.type
+        val effectiveType = smartType ?: entry.type
         return C_LocalVarDestination(effectiveType)
     }
 
