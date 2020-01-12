@@ -4,7 +4,7 @@ import mu.KLogger
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
 import net.postchain.rell.model.R_StackPos
-import net.postchain.rell.parser.C_Constants
+import net.postchain.rell.compiler.C_Constants
 import net.postchain.rell.sql.SqlExecutor
 import java.math.BigDecimal
 import java.math.MathContext

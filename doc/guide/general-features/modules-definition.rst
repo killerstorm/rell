@@ -373,7 +373,7 @@ Features:
 External modules
 ~~~~~~~~~~~~~~~~
 
-A module can be annotated with the ``@external`` with no arguments:
+A module can be annotated with the ``@external`` annotation with no arguments:
 
 ::
 

@@ -3,8 +3,8 @@ package net.postchain.rell.tools.grammar
 import com.github.h0tk3y.betterParse.combinators.AndCombinator
 import com.github.h0tk3y.betterParse.combinators.OrCombinator
 import com.github.h0tk3y.betterParse.parser.Parser
-import net.postchain.rell.parser.RellToken
-import net.postchain.rell.parser.S_Grammar
+import net.postchain.rell.compiler.parser.RellToken
+import net.postchain.rell.compiler.parser.S_Grammar
 import org.apache.commons.lang3.time.FastDateFormat
 import java.util.*
 import kotlin.reflect.full.memberProperties

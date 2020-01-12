@@ -1,6 +1,6 @@
 package net.postchain.rell.tools.grammar
 
-import net.postchain.rell.parser.S_Grammar
+import net.postchain.rell.compiler.parser.S_Grammar
 
 fun main() {
     val tokenizer = S_Grammar.tokenizer

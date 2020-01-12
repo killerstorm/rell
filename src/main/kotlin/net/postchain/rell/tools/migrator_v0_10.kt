@@ -2,7 +2,7 @@ package net.postchain.rell.tools
 
 import net.postchain.rell.RellCliLogUtils
 import net.postchain.rell.RellCliUtils
-import net.postchain.rell.parser.S_Grammar
+import net.postchain.rell.compiler.parser.S_Grammar
 import picocli.CommandLine
 import java.io.File
 import java.nio.file.Files

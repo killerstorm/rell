@@ -1,8 +1,6 @@
 package net.postchain.rell
 
-import com.google.common.collect.ImmutableList
-import com.google.common.collect.ImmutableMap
-import com.google.common.collect.ImmutableSet
+import com.google.common.collect.*
 import net.postchain.base.BlockchainRid
 import net.postchain.base.SECP256K1CryptoSystem
 import net.postchain.base.data.PostgreSQLCommands
@@ -84,6 +82,15 @@ object CommonUtils {
         }
 
         return res
+    }
+
+    fun <T> compoundSetter(setters: Collection<Setter<T>>): Setter<T> {
+        val copy = setters.toImmList()
+        return {
+            for (setter in copy) {
+                setter(it)
+            }
+        }
     }
 }
 
@@ -307,6 +314,9 @@ class DirBuilder {
 }
 
 class LateInit<T> {
+    val getter: Getter<T> = { get() }
+    val setter: Setter<T> = { set(it) }
+
     private var t: T? = null
 
     fun isSet(): Boolean = t != null
@@ -315,7 +325,6 @@ class LateInit<T> {
 
     fun set(v: T) {
         check(t == null) { "value already initialized with: <$t>" }
-
         t = v
     }
 }
@@ -351,6 +360,8 @@ fun <K, V> immMapOf(vararg entries: Pair<K, V>): Map<K, V> = mapOf(*entries).toI
 fun <T> Iterable<T>.toImmList(): List<T> = ImmutableList.copyOf(this)
 fun <T> Iterable<T>.toImmSet(): Set<T> = ImmutableSet.copyOf(this)
 fun <K, V> Map<K, V>.toImmMap(): Map<K, V> = ImmutableMap.copyOf(this)
+
+fun <K, V> multiMapOf(): Multimap<K, V> = LinkedHashMultimap.create()
 
 // Needs to be in a different file than List<Gtv>.toGtv() because of a name conflict...
 fun List<String>.toGtv(): Gtv = GtvFactory.gtv(this.map { it.toGtv() })

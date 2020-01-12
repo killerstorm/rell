@@ -4,10 +4,10 @@ import com.google.common.collect.HashMultimap
 import net.postchain.gtv.Gtv
 import net.postchain.rell.CommonUtils
 import net.postchain.rell.PostchainUtils
+import net.postchain.rell.compiler.*
 import net.postchain.rell.model.*
 import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.module.RELL_VERSION
-import net.postchain.rell.parser.*
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.sql.SqlConstants

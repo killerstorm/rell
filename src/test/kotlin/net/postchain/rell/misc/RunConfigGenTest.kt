@@ -2,7 +2,7 @@ package net.postchain.rell.misc
 
 import net.postchain.gtv.GtvDecoder
 import net.postchain.rell.*
-import net.postchain.rell.parser.C_MapSourceDir
+import net.postchain.rell.compiler.C_MapSourceDir
 import net.postchain.rell.test.GtvTestUtils
 import net.postchain.rell.test.RellTestUtils
 import net.postchain.rell.test.unwrap

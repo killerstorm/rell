@@ -1,7 +1,7 @@
 package net.postchain.rell.tools.api
 
-import net.postchain.rell.parser.S_Name
-import net.postchain.rell.parser.S_Node
+import net.postchain.rell.compiler.ast.S_Name
+import net.postchain.rell.compiler.ast.S_Node
 
 enum class IdeOutlineNodeType {
     ENTITY,

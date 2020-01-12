@@ -176,3 +176,6 @@ INFO  2019-11-24 13:35:01.832 [kovenant-worker-3] Rell - ERROR Query 'main_q' fa
 	at stack_trace!calc(stack_trace/main.rell:14)
 	at stack_trace!calc(stack_trace/main.rell:15)
 	at stack_trace!main_q(stack_trace/main.rell:35)
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./multigen.sh -d test-cli/runxml-docs-sample/src -o out test-cli/runxml-docs-sample/run.xml

@@ -4,8 +4,8 @@ import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvEncoder
 import net.postchain.rell.*
 import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.parser.C_DiskSourceDir
-import net.postchain.rell.parser.C_SourceDir
+import net.postchain.rell.compiler.C_DiskSourceDir
+import net.postchain.rell.compiler.C_SourceDir
 import java.io.File
 
 class RellPostAppCliConfig(val sourceDir: C_SourceDir, val configDir: File, val config: RellPostAppConfig)

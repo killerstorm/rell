@@ -1,7 +1,8 @@
 package net.postchain.rell.test
 
+import net.postchain.rell.compiler.*
+import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.*
-import net.postchain.rell.parser.*
 import net.postchain.rell.runtime.*
 
 object RellTestUtils {

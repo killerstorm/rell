@@ -34,10 +34,10 @@ Simplest way to build:
 Run `rell.sh`:
 
 ```
-Usage: rell [-qv] [--json] [--json-args] [--json-result] [--resetdb] [--sqllog] [--typecheck] [--db-properties=DB_PROPERTIES] [--db-url=DB_URL] [--source-dir=SOURCE_DIR] [FILE] [OP] [ARGS...]
+Usage: rell [-qv] [--json] [--json-args] [--json-result] [--resetdb] [--sqlinitlog] [--sqllog] [--typecheck] [--db-properties=DB_PROPERTIES] [--db-url=DB_URL] [-d=SOURCE_DIR] [MODULE] [ENTRY] [ARGS...]
 Executes a rell program
-      [FILE]            Rell source file
-      [OP]              Operation or query name
+      [MODULE]          Module name
+      [ENTRY]           Entry point (operation/query/function name)
       [ARGS...]         Call arguments
       --db-properties=DB_PROPERTIES
                         Database connection properties file (same format as node-config.properties)
@@ -46,10 +46,11 @@ Executes a rell program
       --json-args       Accept Rell program arguments in JSON format
       --json-result     Print Rell program result in JSON format
       --resetdb         Reset database (drop everything)
-      --source-dir=SOURCE_DIR
-                        Source directory used to resolve absolute include paths (default: the directory of the Rell file)
+      --sqlinitlog      Enable SQL tables structure update logging
       --sqllog          Enable SQL logging
       --typecheck       Run-time type checking (debug)
+  -d, --source-dir=SOURCE_DIR
+                        Rell source code directory (default: current directory)
   -q, --quiet           No useless messages
   -v, --version         Print version and quit
 ```
@@ -83,15 +84,13 @@ A `node-config.properties` and a Rell file must be specified.
 ```
 $ ./singlerun.sh
 
-Usage: PostchainAppLauncher --blockchain-rid=BLOCKCHAIN_RID --node-config=NODE_CONFIG_FILE [--source-dir=SOURCE_DIR] RELL_FILE
+Usage: PostchainAppLaunch --node-config=NODE_CONFIG_FILE [-d=SOURCE_DIR] MODULE
 Runs a Rell Postchain app
-      RELL_FILE   Rell main file
-      --blockchain-rid=BLOCKCHAIN_RID
-                  Blockchain RID (hex, 32 bytes)
+      MODULE   Module name
       --node-config=NODE_CONFIG_FILE
-                  Node configuration (.properties)
-      --source-dir=SOURCE_DIR
-                  Source directory used to resolve absolute include paths (default: the directory of the Rell file)
+               Node configuration (.properties)
+  -d, --source-dir=SOURCE_DIR
+               Rell source code directory (default: current directory)
 ```
 
 ## Run a Multi-Chain Postchain Node (Run.XML)

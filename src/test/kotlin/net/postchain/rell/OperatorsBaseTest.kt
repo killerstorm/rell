@@ -1,6 +1,6 @@
 package net.postchain.rell
 
-import net.postchain.rell.parser.C_Constants
+import net.postchain.rell.compiler.C_Constants
 import net.postchain.rell.test.BaseResourcefulTest
 import org.junit.Test
 import java.math.BigDecimal

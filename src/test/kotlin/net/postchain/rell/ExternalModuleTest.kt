@@ -285,6 +285,22 @@ class ExternalModuleTest: BaseRellTest() {
         chk("_type_of(block@{})", "block")
     }
 
+    @Test fun testTxBlkImport() {
+        file("ext.rell", "@external module; @log entity user { name; }")
+        initExternalModule(1, "ext", "user", "Bob")
+        initChainDependency(1, "A")
+
+        def("@external('A') import exact: ext.{transaction, block};")
+        def("@external('A') import wildcard: ext.*;")
+
+        chk("_type_of(exact.transaction@{})", "[A]!transaction")
+        chk("_type_of(exact.block@{})", "[A]!block")
+        chk("_type_of(wildcard.transaction@{})", "[A]!transaction")
+        chk("_type_of(wildcard.block@{})", "[A]!block")
+        chk("_type_of(transaction@{})", "transaction")
+        chk("_type_of(block@{})", "block")
+    }
+
     @Test fun testNoLog() {
         file("ext.rell", "@external module; entity user { name; }")
         chkCompile("import ext;", "ct_err:ext.rell:def_entity_external_nolog:user")

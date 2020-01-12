@@ -17,3 +17,13 @@ ERROR Query 'main_q' failed: [!calc(main.rell:7)] x must be positive, but was 0
 	at !calc(main.rell:14)
 	at !calc(main.rell:15)
 	at !main_q(main.rell:35)
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./req_run_tests.sh tests-2.json | python -m json.tool
+
+{
+    "malformedXML": false,
+    "output": "2019-12-30 13:46:27,660 [!foo(foo.rell:1)] foo begin\n2019-12-30 13:46:27,660 [!bar(bar.rell:1)] bar begin/end\n2019-12-30 13:46:27,660 [!foo(foo.rell:1)] foo end\n",
+    "passed": true,
+    "transactionFailures": []
+}

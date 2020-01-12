@@ -10,7 +10,7 @@ import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_MountName
 import net.postchain.rell.model.R_Param
 import net.postchain.rell.model.R_StackPos
-import net.postchain.rell.parser.C_MessageType
+import net.postchain.rell.compiler.C_MessageType
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.sql.SqlInit

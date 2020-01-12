@@ -1,6 +1,6 @@
 package net.postchain.rell.lib
 
-import net.postchain.rell.parser.C_Constants
+import net.postchain.rell.compiler.C_Constants
 import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 

@@ -1,0 +1,40 @@
+<run wipe-db="true">
+    <nodes>
+        <config src="config/node-config.properties" add-signers="false" />
+    </nodes>
+    <chains>
+        <chain name="user" iid="1">
+            <config height="0">
+                <app module="user" />
+                <gtv path="gtx/rell/moduleArgs/user">
+                    <dict>
+                        <entry key="foo"><bytea>0373599a61cc6b3bc02a78c34313e1737ae9cfd56b9bb24360b437d469efdf3b15</bytea></entry>
+                    </dict>
+                </gtv>
+            </config>
+            <config height="1000">
+                <app module="user_1000">
+                    <args module="user_1000">
+                        <arg key="foo"><bytea>0373599a61cc6b3bc02a78c34313e1737ae9cfd56b9bb24360b437d469efdf3b15</bytea></arg>
+                    </args>
+                </app>
+                <gtv path="path" src="config/template.xml"/>
+            </config>
+        </chain>
+        <chain name="city" iid="2">
+            <config height="0" add-dependencies="false">
+                <app module="city" />
+                <gtv path="signers">
+                    <array>
+                        <bytea>0350fe40766bc0ce8d08b3f5b810e49a8352fdd458606bd5fafe5acdcdc8ff3f57</bytea>
+                    </array>
+                </gtv>
+                <dependencies>
+                    <dependency name="user" chain="user" />
+                </dependencies>
+            </config>
+            <include src="config/city-include-1.xml"/>
+            <include src="config/city-include-2.xml" root="false"/>
+        </chain>
+    </chains>
+</run>

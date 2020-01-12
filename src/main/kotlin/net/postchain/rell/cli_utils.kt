@@ -2,9 +2,9 @@ package net.postchain.rell
 
 import mu.KLogging
 import net.postchain.common.hexStringToByteArray
+import net.postchain.rell.compiler.*
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.parser.*
 import net.postchain.rell.runtime.Rt_RellVersion
 import net.postchain.rell.tools.RellJavaLoggingInit
 import picocli.CommandLine

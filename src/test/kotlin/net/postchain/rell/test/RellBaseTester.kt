@@ -1,8 +1,8 @@
 package net.postchain.rell.test
 
+import net.postchain.rell.compiler.*
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.parser.*
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_Printer
 import net.postchain.rell.sql.SqlExecutor

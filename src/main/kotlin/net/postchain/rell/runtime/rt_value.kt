@@ -9,7 +9,7 @@ import net.postchain.gtv.GtvVirtual
 import net.postchain.rell.CommonUtils
 import net.postchain.rell.PostchainUtils
 import net.postchain.rell.model.*
-import net.postchain.rell.parser.C_Constants
+import net.postchain.rell.compiler.C_Constants
 import java.math.BigDecimal
 import java.util.*
 
