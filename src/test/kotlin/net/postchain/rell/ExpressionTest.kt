@@ -432,9 +432,9 @@ class ExpressionTest: BaseRellTest(false) {
         """.trimIndent()
 
         chkFull(code, listOf(Rt_BooleanValue(true)), "int[123]")
-        chkStdout("Yes")
+        chkOut("Yes")
         chkFull(code, listOf(Rt_BooleanValue(false)), "int[456]")
-        chkStdout("No")
+        chkOut("No")
     }
 
     @Test fun testIfPrecedence() {

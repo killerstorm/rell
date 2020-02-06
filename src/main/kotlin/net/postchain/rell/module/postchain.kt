@@ -15,8 +15,9 @@ import net.postchain.rell.LateInit
 import net.postchain.rell.compiler.*
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
-import net.postchain.rell.sql.DefaultSqlExecutor
+import net.postchain.rell.sql.ConnectionSqlExecutor
 import net.postchain.rell.sql.SqlInit
+import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.toImmMap
 import net.postchain.rell.toImmSet
 import org.apache.commons.lang3.time.FastDateFormat
@@ -146,9 +147,9 @@ private class RellGTXOperation(
             val blockHeight = DatabaseAccess.of(ctx).getLastBlockHeight(ctx)
             val opCtx = Rt_OpContext(ctx.timestamp, ctx.txIID, blockHeight, data.signers.toList())
             val heightProvider = Rt_TxChainHeightProvider(ctx)
-            val modCtx = module.createAppContext(ctx, opCtx, heightProvider)
-            gtvToRtCtx.get().finish(modCtx)
-            rOperation.callTopNoTx(modCtx, args.get())
+            val exeCtx = module.createExecutionContext(ctx, opCtx, heightProvider)
+            gtvToRtCtx.get().finish(exeCtx)
+            rOperation.call(exeCtx, args.get())
         }
         return true
     }
@@ -181,7 +182,7 @@ private class RellPostchainModule(
         private val moduleName: String,
         private val chainCtx: Rt_ChainContext,
         private val chainDeps: Map<String, ByteArray>,
-        private val stdoutPrinter: Rt_Printer,
+        private val outPrinter: Rt_Printer,
         private val logPrinter: Rt_Printer,
         private val errorHandler: ErrorHandler,
         private val config: RellModuleConfig
@@ -200,8 +201,9 @@ private class RellPostchainModule(
     override fun initializeDB(ctx: EContext) {
         errorHandler.handleError({ "Database initialization failed" }) {
             val heightProvider = Rt_ConstantChainHeightProvider(-1)
-            val appCtx = createAppContext(ctx, null, heightProvider)
-            SqlInit.init(appCtx, config.dbInitLogLevel)
+            val exeCtx = createExecutionContext(ctx, null, heightProvider)
+            val initLogging = SqlInitLogging.ofLevel(config.dbInitLogLevel)
+            SqlInit.init(exeCtx, initLogging)
         }
     }
 
@@ -222,14 +224,15 @@ private class RellPostchainModule(
         val rQuery = getRoutine("Query", rApp.queries, name)
 
         val heightProvider = Rt_ConstantChainHeightProvider(Long.MAX_VALUE)
-        val appCtx = createAppContext(ctx, null, heightProvider)
-        val rtArgs = translateQueryArgs(appCtx, rQuery, args)
 
-        val rtResult = rQuery.callTopQuery(appCtx, rtArgs)
+        val exeCtx = createExecutionContext(ctx, null, heightProvider)
+        val rtArgs = translateQueryArgs(exeCtx, rQuery, args)
+        val rtResult = rQuery.call(exeCtx, rtArgs)
 
         val type = rQuery.type()
         val gtvResult = type.rtToGtv(rtResult, GTV_QUERY_PRETTY)
         return gtvResult
+
     }
 
     private fun <T> getRoutine(kind: String, map: Map<R_MountName, T>, name: String): T {
@@ -240,7 +243,30 @@ private class RellPostchainModule(
         return r ?: throw UserMistake("$kind not found: '$name'")
     }
 
-    private fun translateQueryArgs(appCtx: Rt_AppContext, rQuery: R_Query, gtvArgs: Gtv): List<Rt_Value> {
+    fun createExecutionContext(
+            eCtx: EContext,
+            opCtx: Rt_OpContext?,
+            heightProvider: Rt_ChainHeightProvider
+    ): Rt_ExecutionContext {
+        val sqlMapping = Rt_ChainSqlMapping(eCtx.chainID)
+
+        val globalCtx = Rt_GlobalContext(
+                opCtx = opCtx,
+                outPrinter = outPrinter,
+                logPrinter = logPrinter,
+                chainCtx = chainCtx,
+                typeCheck = config.typeCheck
+        )
+
+        val chainDeps = chainDeps.mapValues { (_, rid) -> Rt_ChainDependency(rid) }
+
+        val sqlExec = Rt_SqlExecutor(ConnectionSqlExecutor(eCtx.conn, config.sqlLogging), globalCtx.logSqlErrors)
+        val sqlCtx = Rt_SqlContext.create(rApp, sqlMapping, chainDeps, sqlExec, heightProvider)
+        val appCtx = Rt_AppContext(globalCtx, sqlCtx, rApp, null)
+        return Rt_ExecutionContext(appCtx, sqlExec)
+    }
+
+    private fun translateQueryArgs(exeCtx: Rt_ExecutionContext, rQuery: R_Query, gtvArgs: Gtv): List<Rt_Value> {
         gtvArgs is GtvDictionary
         val params = rQuery.params()
 
@@ -254,36 +280,14 @@ private class RellPostchainModule(
         val gtvToRtCtx = GtvToRtContext(GTV_QUERY_PRETTY)
         val args = params.map { argMap.getValue(it.name) }
         val rtArgs = convertArgs(gtvToRtCtx, params, args)
-        gtvToRtCtx.finish(appCtx)
+        gtvToRtCtx.finish(exeCtx)
 
         return rtArgs
-    }
-
-    fun createAppContext(
-            eCtx: EContext,
-            opCtx: Rt_OpContext?,
-            heightProvider: Rt_ChainHeightProvider
-    ): Rt_AppContext {
-        val sqlExec = DefaultSqlExecutor(eCtx.conn, config.sqlLogging)
-        val sqlMapping = Rt_ChainSqlMapping(eCtx.chainID)
-
-        val globalCtx = Rt_GlobalContext(
-                sqlExec = sqlExec,
-                opCtx = opCtx,
-                stdoutPrinter = stdoutPrinter,
-                logPrinter = logPrinter,
-                chainCtx = chainCtx,
-                typeCheck = config.typeCheck
-        )
-
-        val chainDeps = chainDeps.mapValues { (_, rid) -> Rt_ChainDependency(rid) }
-        val sqlCtx = Rt_SqlContext.create(rApp, sqlMapping, chainDeps, sqlExec, heightProvider)
-        return Rt_AppContext(globalCtx, sqlCtx, rApp)
     }
 }
 
 class RellPostchainModuleFactory(
-        private val stdoutPrinter: Rt_Printer = Rt_StdoutPrinter,
+        private val outPrinter: Rt_Printer = Rt_OutPrinter,
         private val logPrinter: Rt_Printer = Rt_LogPrinter(),
         private val wrapCtErrors: Boolean = true,
         private val wrapRtErrors: Boolean = true,
@@ -307,11 +311,11 @@ class RellPostchainModuleFactory(
             val chainDeps = getGtxChainDependencies(config)
 
             val modLogPrinter = getModulePrinter(logPrinter, Rt_TimestampPrinter(combinedPrinter), copyOutput)
-            val modStdoutPrinter = getModulePrinter(stdoutPrinter, combinedPrinter, copyOutput)
+            val modOutPrinter = getModulePrinter(outPrinter, combinedPrinter, copyOutput)
 
             val sqlLogging = rellNode["sqlLog"]?.asBoolean() ?: false
             val typeCheck = forceTypeCheck || (rellNode["typeCheck"]?.asBoolean() ?: false)
-            val dbInitLogLevel = rellNode["dbInitLogLevel"]?.asInteger()?.toInt() ?: SqlInit.LOG_STEP_COMPLEX
+            val dbInitLogLevel = rellNode["dbInitLogLevel"]?.asInteger()?.toInt() ?: SqlInitLogging.LOG_STEP_COMPLEX
 
             val moduleConfig = RellModuleConfig(
                     sqlLogging = sqlLogging,
@@ -325,7 +329,7 @@ class RellPostchainModuleFactory(
                     chainCtx,
                     chainDeps,
                     logPrinter = modLogPrinter,
-                    stdoutPrinter = modStdoutPrinter,
+                    outPrinter = modOutPrinter,
                     errorHandler = errorHandler,
                     config = moduleConfig
             )

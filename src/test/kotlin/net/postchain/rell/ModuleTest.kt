@@ -22,7 +22,7 @@ class ModuleTest: BaseRellTest(false) {
             struct bar { x: foo; }
         """
         tst.chkOpGtvEx(code, listOf("""[123]"""), "OK")
-        chkStdout("bar[x=foo[p=int[123]]]")
+        chkOut("bar[x=foo[p=int[123]]]")
     }
 
     @Test fun testForwardTypeReferenceQuery() {

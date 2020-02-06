@@ -1,4 +1,4 @@
-package net.postchain.rell.module
+package net.postchain.rell.gtx
 
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvByteArray
@@ -262,7 +262,7 @@ class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
 
     private fun chkRes(expected: String, actual: String) {
         if (actual == "OK") {
-            chkStdout(expected)
+            chkOut(expected)
         } else {
             assertEquals(expected, actual)
         }

@@ -4,6 +4,7 @@ import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
+import net.postchain.rell.sql.SqlManager
 
 object RellTestUtils {
     val ENCODER_PLAIN = { _: R_Type, v: Rt_Value -> v.toString() }
@@ -83,17 +84,6 @@ object RellTestUtils {
         return p.first?.res ?: p.second!!
     }
 
-    fun catchRtErrWithStack(block: () -> String): TestCallResult {
-        val p = catchRtErr0(block)
-        return p.first ?: TestCallResult(p.second!!, listOf())
-    }
-
-    fun <T> catchRtErr(block1: () -> T, block2: (T) -> String): String {
-        val p1 = catchRtErr0(block1)
-        if (p1.first != null) return p1.first!!.res
-        return block2(p1.second!!)
-    }
-
     fun <T> catchRtErr0(block: () -> T): Pair<TestCallResult?, T?> {
         try {
             val res = block()
@@ -116,10 +106,10 @@ object RellTestUtils {
         }
     }
 
-    fun callFn(appCtx: Rt_AppContext, name: String, args: List<Rt_Value>, strict: Boolean): String {
-        val fn = findFn(appCtx.app, name)
+    fun callFn(exeCtx: Rt_ExecutionContext, name: String, args: List<Rt_Value>, strict: Boolean): String {
+        val fn = findFn(exeCtx.appCtx.app, name)
         val res = catchRtErr {
-            val v = fn.callTopFunction(appCtx, args)
+            val v = fn.callTop(exeCtx, args)
             if (strict) v.toStrictString() else v.toString()
         }
         return res
@@ -133,48 +123,43 @@ object RellTestUtils {
         throw IllegalStateException("Function not found: '$name'")
     }
 
-    fun callQuery(appCtx: Rt_AppContext, name: String, args: List<Rt_Value>, encoder: (R_Type, Rt_Value) -> String): String {
+    fun callQuery(exeCtx: Rt_ExecutionContext, name: String, args: List<Rt_Value>, encoder: (R_Type, Rt_Value) -> String): String {
         val decoder = { _: List<R_Param>, args2: List<Rt_Value> -> args2 }
         val eval = RellTestEval()
         return eval.eval {
-            callQueryGeneric(eval, appCtx, name, args, decoder, encoder)
+            callQueryGeneric(eval, exeCtx, name, args, decoder, encoder)
         }
     }
 
     fun <T> callQueryGeneric(
             eval: RellTestEval,
-            appCtx: Rt_AppContext,
+            exeCtx: Rt_ExecutionContext,
             name: String,
             args: List<T>,
             decoder: (List<R_Param>, List<T>) -> List<Rt_Value>,
             encoder: (R_Type, Rt_Value) -> String
     ): String {
         val mName = R_MountName.of(name)
-        val query = appCtx.app.queries[mName]
+        val query = exeCtx.appCtx.app.queries[mName]
         if (query == null) throw IllegalStateException("Query not found: '$name'")
 
         val rtArgs = eval.wrapRt { decoder(query.params(), args) }
 
         val res = eval.wrapRt {
-            val v = query.callTopQuery(appCtx, rtArgs!!)
+            val v = query.call(exeCtx, rtArgs!!)
             encoder(query.type(), v)
         }
 
         return res
     }
 
-    fun callOp(appCtx: Rt_AppContext, name: String, args: List<Rt_Value>): String {
-        val decoder = { _: List<R_Param>, args2: List<Rt_Value> -> args2 }
-        return callOpGeneric(appCtx, name, args, decoder)
-    }
-
     fun <T> callOpGeneric(
             appCtx: Rt_AppContext,
+            sqlMgr: SqlManager,
             name: String,
             args: List<T>,
             decoder: (List<R_Param>, List<T>) -> List<Rt_Value>
-    ): String
-    {
+    ): String {
         val mName = R_MountName.of(name)
         val op = appCtx.app.operations[mName]
         if (op == null) throw IllegalStateException("Operation not found: '$name'")
@@ -185,8 +170,11 @@ object RellTestUtils {
         }
 
         return catchRtErr {
-            op.callTop(appCtx, rtArgs!!)
-            "OK"
+            sqlMgr.transaction { sqlExec ->
+                val exeCtx = Rt_ExecutionContext(appCtx, sqlExec)
+                op.call(exeCtx, rtArgs!!)
+                "OK"
+            }
         }
     }
 

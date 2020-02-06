@@ -1,37 +1,83 @@
 package net.postchain.rell.compiler
 
+import com.google.common.collect.Multimap
 import net.postchain.rell.*
 import net.postchain.rell.compiler.ast.S_Name
-import net.postchain.rell.model.R_Type
 import java.util.*
+
+class C_NsImp_Namespace(directDefs: Map<String, C_NsImp_Def>, importDefs: Multimap<String, C_NsImp_Def>) {
+    val directDefs = directDefs.toImmMap()
+    val importDefs = importDefs.toImmMultimap()
+
+    companion object { val EMPTY = C_NsImp_Namespace(mapOf(), immMultimapOf()) }
+}
+
+sealed class C_NsImp_Def
+
+class C_NsImp_Def_Simple(val elem: C_NamespaceElement): C_NsImp_Def()
+
+class C_NsImp_Def_Namespace(private val getter: LateGetter<C_NsImp_Namespace>): C_NsImp_Def() {
+    fun ns() = getter.get()
+}
 
 object C_NsImp_ImportsProcessor {
     fun process(
-            globalCtx: C_GlobalContext,
-            modules: Map<C_ModuleKey, C_NsAsm_Namespace>
-    ): Map<C_ModuleKey, C_NsAsm_Namespace> {
-        val processor = C_NsImp_InternalImportsProcessor(globalCtx, modules)
-        return processor.process()
+            msgCtx: C_MessageContext,
+            modules: Map<C_ModuleKey, C_NsAsm_Namespace>,
+            preModules: Map<C_ModuleKey, C_NsImp_Namespace>
+    ): Map<C_ModuleKey, C_NsImp_Namespace> {
+        val converter = C_NsImp_NamespaceConverter()
+        val asmPreModules = preModules.mapValues { (_, v) -> converter.convert(v) }
+        val processor = C_NsImp_InternalImportsProcessor(msgCtx, modules, asmPreModules)
+
+        val (asmList, listVsMap) = ListVsMap.mapToList(modules)
+        val impList = processor.process(asmList)
+        val impMap = listVsMap.listToMap(impList)
+
+        return impMap
+    }
+
+    fun process(
+            msgCtx: C_MessageContext,
+            ns: C_NsAsm_Namespace,
+            preModules: Map<C_ModuleKey, C_NsImp_Namespace>
+    ): C_NsImp_Namespace {
+        val impList = process0(msgCtx, mapOf(), preModules, listOf(ns))
+        check(impList.size == 1)
+        return impList[0]
+    }
+
+    private fun process0(
+            msgCtx: C_MessageContext,
+            modules: Map<C_ModuleKey, C_NsAsm_Namespace>,
+            preModules: Map<C_ModuleKey, C_NsImp_Namespace>,
+            asmList: List<C_NsAsm_Namespace>
+    ): List<C_NsImp_Namespace> {
+        val converter = C_NsImp_NamespaceConverter()
+        val asmPreModules = preModules.mapValues { (_, v) -> converter.convert(v) }
+        val processor = C_NsImp_InternalImportsProcessor(msgCtx, modules, asmPreModules)
+        return processor.process(asmList)
     }
 }
 
 private class C_NsImp_InternalImportsProcessor(
-        private val globalCtx: C_GlobalContext,
-        private val modules: Map<C_ModuleKey, C_NsAsm_Namespace>
+        private val msgCtx: C_MessageContext,
+        private val modules: Map<C_ModuleKey, C_NsAsm_Namespace>,
+        preModules: Map<C_ModuleKey, C_NsAsm_Namespace>
 ) {
-    private val importResolver = C_NsImp_ImportResolver(modules)
+    private val importResolver = C_NsImp_ImportResolver(modules, preModules)
     private val states = mutableMapOf<C_NsAsm_Namespace, C_NsImp_NamespaceState>()
 
-    fun process(): Map<C_ModuleKey, C_NsAsm_Namespace> {
-        val res = mutableMapOf<C_ModuleKey, C_NsAsm_Namespace>()
-
-        for ((module, ns) in modules) {
-            val state = processNamespace(ns)
-            val nsGetter = state.getAsmNamespaceGetter()
-            res[module] = nsGetter()
+    fun process(asmList: List<C_NsAsm_Namespace>): List<C_NsImp_Namespace> {
+        for (ns in asmList) {
+            processNamespace(ns)
         }
 
-        return res.toImmMap()
+        val impList = asmList
+                .map { states.getValue(it).getNamespace() }
+                .toImmList()
+
+        return impList
     }
 
     private fun processNamespace(targetNs: C_NsAsm_Namespace): C_NsImp_NamespaceState {
@@ -57,10 +103,21 @@ private class C_NsImp_InternalImportsProcessor(
             processDirectWildcardImport(wildcard)
         }
 
+        for ((name, defs) in targetNs.importDefs.asMap()) {
+            for (def in defs) {
+                processImportDef(builder, name, def)
+            }
+        }
+
         val closure = importResolver.namespaceClosure(targetNs)
         for (ns in closure.filter { it !== targetNs }) {
             for ((name, def) in ns.defs) {
                 processImportDef(builder, name, def)
+            }
+            for ((name, defs) in ns.importDefs.asMap()) {
+                for (def in defs) {
+                    processImportDef(builder, name, def)
+                }
             }
         }
 
@@ -71,7 +128,7 @@ private class C_NsImp_InternalImportsProcessor(
     private fun processDirectDef(builder: C_NsImp_NamespaceBuilder, name: String, def: C_NsAsm_Def) {
         return when (def) {
             is C_NsAsm_Def_Simple -> {
-                builder.addDirectDef(name, def)
+                builder.addDirectDef(name, def.elem)
             }
             is C_NsAsm_Def_ExactImport -> {
                 processDirectExactImport(builder, name, def.imp)
@@ -79,8 +136,8 @@ private class C_NsImp_InternalImportsProcessor(
             is C_NsAsm_Def_Namespace -> {
                 val ns = def.ns()
                 val nsState = processNamespace(ns)
-                val nsGetter = nsState.getAsmNamespaceGetter()
-                val nsDef = C_NsAsm_Def_Namespace.createLate(nsGetter)
+                val nsGetter = nsState.getNamespaceGetter()
+                val nsDef = C_NsImp_Def_Namespace(nsGetter)
                 builder.addDirectDef(name, nsDef)
             }
         }
@@ -88,11 +145,11 @@ private class C_NsImp_InternalImportsProcessor(
 
     private fun processDirectExactImport(builder: C_NsImp_NamespaceBuilder, name: String, imp: C_NsAsm_ExactImport) {
         val res = importResolver.resolveExactImport(imp)
-        val def = res.valueOrReport(globalCtx)
+        val def = res.valueOrReport(msgCtx)
         return when (def) {
             null -> {}
             is C_NsAsm_Def_Simple -> {
-                builder.addDirectDef(name, def)
+                builder.addDirectDef(name, def.elem)
             }
             is C_NsAsm_Def_Namespace -> {
                 processImportNamespaceDef(builder, name, def)
@@ -126,133 +183,105 @@ private class C_NsImp_InternalImportsProcessor(
         val ns = def.ns()
         val nsState = processNamespace(ns)
         val nsGetter = nsState.getNamespaceGetter()
-        val nsProxy = C_DefProxy.createGetter(nsGetter)
-        val nsDef = C_NsDef_UserNamespace(nsProxy)
-        val elem = nsDef.toNamespaceElement()
-        builder.addImportDef(name, elem)
+        val nsDef = C_NsImp_Def_Namespace(nsGetter)
+        builder.addImportDef(name, nsDef)
     }
 
     private fun processDirectWildcardImport(wildcard: C_NsAsm_WildcardImport) {
         val res = importResolver.resolveNamespaceByPath(wildcard.module, wildcard.path)
-        res.valueOrReport(globalCtx)
+        res.valueOrReport(msgCtx)
     }
 
-    private fun getState(ns: C_NsAsm_Namespace) = states.computeIfAbsent(ns) { C_NsImp_NamespaceState(ns.setter) }
+    private fun getState(ns: C_NsAsm_Namespace) = states.computeIfAbsent(ns) { C_NsImp_NamespaceState() }
 
-    private class C_NsImp_NamespaceState(private val oldSetter: Setter<C_Namespace>) {
+    private class C_NsImp_NamespaceState {
         var processed = false
 
-        private val asmNsInit = LateInit<C_NsAsm_Namespace>()
-        private val nsInit = LateInit<C_Namespace>()
-        private val ref: C_DefProxy<C_Namespace>
+        private val nsInit = LateInit<C_NsImp_Namespace>()
 
-        init {
-            val getter = nsInit.getter
-            ref = C_DefProxy.createGetter(getter)
+        fun initNamespace(ns: C_NsImp_Namespace) {
+            nsInit.set(ns)
         }
 
-        fun initNamespace(impNs: C_NsImp_Namespace) {
-            val setter = CommonUtils.compoundSetter(listOf(oldSetter, nsInit.setter))
-            val asmNs = C_NsAsm_Namespace(impNs.defs, listOf(), setter)
-            asmNsInit.set(asmNs)
-        }
-
+        fun getNamespace() = nsInit.get()
         fun getNamespaceGetter() = nsInit.getter
-        fun getAsmNamespaceGetter() = asmNsInit.getter
     }
-}
-
-private class C_NsImp_Namespace(defs: Map<String, C_NsAsm_Def>) {
-    val defs = defs.toImmMap()
 }
 
 private class C_NsImp_NamespaceBuilder {
-    private val directDefs = mutableMapOf<String, C_NsAsm_Def>()
-    private val types = BuilderTable<R_Type>()
-    private val namespaces = BuilderTable<C_Namespace>()
-    private val values = BuilderTable<C_NamespaceValue>()
-    private val functions = BuilderTable<C_GlobalFunction>()
+    private val directDefs = mutableMapOf<String, C_NsImp_Def>()
+    private val importDefs = mutableMultimapOf<String, C_NsImp_Def>()
 
-    fun addDirectDef(name: String, def: C_NsAsm_Def) {
+    fun addDirectDef(name: String, def: C_NsImp_Def) {
         check(name !in directDefs)
         directDefs[name] = def
     }
 
+    fun addDirectDef(name: String, elem: C_NamespaceElement) {
+        val def = C_NsImp_Def_Simple(elem)
+        addDirectDef(name, def)
+    }
+
+    fun addImportDef(name: String, def: C_NsImp_Def) {
+        importDefs.put(name, def)
+    }
+
     fun addImportDef(name: String, elem: C_NamespaceElement) {
-        types.add(name, elem.type)
-        namespaces.add(name, elem.namespace)
-        values.add(name, elem.value)
-        functions.add(name, elem.function)
+        val def = C_NsImp_Def_Simple(elem)
+        addImportDef(name, def)
     }
 
     fun build(): C_NsImp_Namespace {
-        val defs = mutableMapOf<String, C_NsAsm_Def>()
+        return C_NsImp_Namespace(directDefs.toImmMap(), importDefs.toImmMultimap())
+    }
+}
 
-        for ((name, def) in directDefs) {
-            val impElem = getImportElem(name)
-            val resDef = mergeDefs(def, impElem)
-            defs[name] = resDef
-        }
+private class C_NsImp_NamespaceConverter {
+    private val map = mutableMapOf<C_NsImp_Namespace, LateGetter<C_NsAsm_Namespace>>()
 
-        val names = types.keys() + namespaces.keys() + values.keys() + functions.keys()
-
-        for (name in names) {
-            if (name !in defs) {
-                val elem = getImportElem(name)
-                defs[name] = C_NsAsm_Def_Simple(elem)
-            }
-        }
-
-        return C_NsImp_Namespace(defs.toImmMap())
+    fun convert(impNs: C_NsImp_Namespace): C_NsAsm_Namespace {
+        val late = convertNamespaceLate(impNs)
+        return late.get()
     }
 
-    private fun mergeDefs(def: C_NsAsm_Def, elem: C_NamespaceElement): C_NsAsm_Def {
-        return if (def !is C_NsAsm_Def_Simple) def else {
-            val resElem = C_NamespaceElement(
-                    type = def.elem.type ?: elem.type,
-                    namespace = def.elem.namespace ?: elem.namespace,
-                    value = def.elem.value ?: elem.value,
-                    function = def.elem.function ?: elem.function
-            )
-            C_NsAsm_Def_Simple(resElem)
+    private fun convertNamespaceLate(impNs: C_NsImp_Namespace): LateGetter<C_NsAsm_Namespace> {
+        var getter = map[impNs]
+        if (getter == null) {
+            val late = LateInit<C_NsAsm_Namespace>()
+            getter = late.getter
+            map[impNs] = getter
+            val ns = convertNamespace(impNs)
+            late.set(ns)
         }
+        return getter
     }
 
-    private fun getImportElem(name: String): C_NamespaceElement {
-        return C_NamespaceElement(
-                type = types.get(name),
-                namespace = namespaces.get(name),
-                value = values.get(name),
-                function = functions.get(name)
-        )
+    private fun convertNamespace(impNs: C_NsImp_Namespace): C_NsAsm_Namespace {
+        val defs = impNs.directDefs.mapValues { (_, v) -> convertDef(v) }
+
+        val importDefs = impNs.importDefs.asMap()
+                .mapValues { (_, v) -> v.map { convertDef(it) } }
+                .toImmMultimap()
+
+        return C_NsAsm_Namespace(defs, importDefs, listOf())
     }
 
-    private class BuilderTable<T> {
-        private val map = multiMapOf<String, C_DefProxy<T>>()
-
-        fun add(name: String, def: C_DefProxy<T>?) {
-            if (def != null) {
-                map.put(name, def)
-            }
-        }
-
-        fun keys() = map.keySet().toImmSet()
-
-        fun get(name: String): C_DefProxy<T>? {
-            val defs = map[name]
-            return buildEntry(defs)
-        }
-
-        private fun buildEntry(defs: Collection<C_DefProxy<T>>): C_DefProxy<T>? {
-            return if (defs.isEmpty()) null else {
-                val def = defs.iterator().next()
-                if (defs.size == 1) def else C_AmbiguousDefProxy(def)
+    private fun convertDef(def: C_NsImp_Def): C_NsAsm_Def {
+        return when (def) {
+            is C_NsImp_Def_Simple -> C_NsAsm_Def_Simple(def.elem)
+            is C_NsImp_Def_Namespace -> {
+                val ns = def.ns()
+                val late = convertNamespaceLate(ns)
+                C_NsAsm_Def_Namespace.createLate(late)
             }
         }
     }
 }
 
-private class C_NsImp_ImportResolver(private val modules: Map<C_ModuleKey, C_NsAsm_Namespace>) {
+private class C_NsImp_ImportResolver(
+        private val modules: Map<C_ModuleKey, C_NsAsm_Namespace>,
+        private val preModules: Map<C_ModuleKey, C_NsAsm_Namespace>
+) {
     private data class NsNameKey(val ns: C_NsAsm_Namespace, val name: String)
 
     private val resolveNamespaceByNameCalc: C_RecursionSafeCalculator<NsNameKey, S_Name, C_NsAsm_Namespace>
@@ -277,7 +306,7 @@ private class C_NsImp_ImportResolver(private val modules: Map<C_ModuleKey, C_NsA
     }
 
     fun resolveNamespaceByPath(module: C_ModuleKey, path: List<S_Name>): C_NsImp_Result<C_NsAsm_Namespace> {
-        var ns = modules[module] ?: C_NsAsm_Namespace.EMPTY
+        var ns = preModules[module] ?: modules[module] ?: C_NsAsm_Namespace.EMPTY
         for (name in path) {
             val res = resolveNamespaceByName(ns, name.str)
             if (res.value == null) {
@@ -390,6 +419,7 @@ private class C_NsImp_ImportResolver(private val modules: Map<C_ModuleKey, C_NsA
         }
 
         val defs = mutableListOf<C_NsAsm_Def>()
+        defs.addAll(ns.importDefs.get(name))
 
         val queue: Queue<C_NsAsm_WildcardImport> = ArrayDeque()
         val set = mutableSetOf<C_NsAsm_Namespace>()
@@ -405,6 +435,8 @@ private class C_NsImp_ImportResolver(private val modules: Map<C_ModuleKey, C_NsA
                 val def = importedNs.defs[name]
                 if (def != null) {
                     defs.add(def)
+                } else {
+                    defs.addAll(importedNs.importDefs.get(name))
                 }
             }
         }
@@ -460,10 +492,10 @@ private class C_NsImp_Result<T> private constructor(val value: T?, val error: Ge
         return C_NsImp_Result(null, error)
     }
 
-    fun valueOrReport(globalCtx: C_GlobalContext): T? {
+    fun valueOrReport(msgCtx: C_MessageContext): T? {
         if (value == null) {
             val err = error()
-            globalCtx.error(err)
+            msgCtx.error(err)
         }
         return value
     }

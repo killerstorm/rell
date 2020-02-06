@@ -9,7 +9,7 @@ import net.postchain.rell.model.R_TextType
 import net.postchain.rell.runtime.Rt_Value
 import org.apache.commons.lang3.StringUtils
 
-class C_ModifierContext(val globalCtx: C_GlobalContext, val outerMountName: R_MountName)
+class C_ModifierContext(val msgCtx: C_MessageContext, val outerMountName: R_MountName)
 
 object C_Modifier {
     const val EXTERNAL = "external"
@@ -27,7 +27,7 @@ object C_Modifier {
             OMIT -> C_Annotation_Omit.compile(ctx, name, args, target)
             SORT -> C_Annotation_Sort.compile(ctx, name, args, target, true)
             SORT_DESC -> C_Annotation_Sort.compile(ctx, name, args, target, false)
-            else -> ctx.globalCtx.error(name.pos, "ann:invalid:${name.str}", "Invalid annotation: '${name.str}'")
+            else -> ctx.msgCtx.error(name.pos, "ann:invalid:${name.str}", "Invalid annotation: '${name.str}'")
         }
     }
 
@@ -40,10 +40,10 @@ object C_Modifier {
     ) {
         val name = kw.str
         if (field == null) {
-            ctx.globalCtx.error(kw.pos, "modifier:target_type:$name:${target.type}",
+            ctx.msgCtx.error(kw.pos, "modifier:target_type:$name:${target.type}",
                     "Cannot specify '$name' for ${target.type.description}")
         } else if (!field.set(value)) {
-            ctx.globalCtx.error(kw.pos, "modifier:dup:$name", "Modifier '$name' specified multiple times")
+            ctx.msgCtx.error(kw.pos, "modifier:dup:$name", "Modifier '$name' specified multiple times")
         }
     }
 }
@@ -55,13 +55,13 @@ private object C_Annotation_Mount {
             return
         }
 
-        val mountName = applyMountPath(ctx.globalCtx, pos, ctx.outerMountName, target, mountPath)
+        val mountName = applyMountPath(ctx.msgCtx, pos, ctx.outerMountName, target, mountPath)
         if (mountName == null) {
             return
         }
 
         if (target.mount != null && target.mountAllowed && !target.emptyMountAllowed && mountName.isEmpty()) {
-            ctx.globalCtx.error(pos, "ann:mount:empty:${target.type}",
+            ctx.msgCtx.error(pos, "ann:mount:empty:${target.type}",
                     "Cannot use empty mount name for ${target.type.description}")
         } else {
             C_AnnUtils.processAnnotation(ctx, pos, target, C_Modifier.MOUNT, target.mount, target.mountAllowed, mountName)
@@ -76,7 +76,7 @@ private object C_Annotation_Mount {
 
         val res = parsePath(str)
         if (res == null) {
-            ctx.globalCtx.error(pos, "ann:mount:invalid:$str", "Invalid mount name: '$str'")
+            ctx.msgCtx.error(pos, "ann:mount:invalid:$str", "Invalid mount name: '$str'")
         }
         return res
     }
@@ -115,7 +115,7 @@ private object C_Annotation_Mount {
     }
 
     private fun applyMountPath(
-            globalCtx: C_GlobalContext,
+            msgCtx: C_MessageContext,
             pos: S_Pos,
             mountName: R_MountName,
             target: C_ModifierTarget,
@@ -124,7 +124,7 @@ private object C_Annotation_Mount {
         var base = listOf<R_Name>()
         if (mountPath.up != null) {
             if (mountPath.up > mountName.parts.size) {
-                globalCtx.error(pos, "ann:mount:up:${mountName.parts.size}:${mountPath.up}",
+                msgCtx.error(pos, "ann:mount:up:${mountName.parts.size}:${mountPath.up}",
                         "Cannot go up by ${mountPath.up} on current mount path '$mountName'")
                 return null
             }
@@ -132,7 +132,7 @@ private object C_Annotation_Mount {
         }
 
         if (!target.emptyMountAllowed && mountPath.up != null && mountPath.path.isEmpty() && !mountPath.tail) {
-            globalCtx.error(pos, "ann:mount:invalid:${mountPath.str}:${target.type}",
+            msgCtx.error(pos, "ann:mount:invalid:${mountPath.str}:${target.type}",
                     "Mount path '${mountPath.str}' is invalid for ${target.type.description}")
             return null
         }
@@ -143,7 +143,7 @@ private object C_Annotation_Mount {
         }
 
         if (target.name == null) {
-            globalCtx.error(pos, "ann:mount:tail:no_name:${mountPath.str}:${target.type}",
+            msgCtx.error(pos, "ann:mount:tail:no_name:${mountPath.str}:${target.type}",
                     "Mount path '${mountPath.str}' is invalid for ${target.type.description}")
             return null
         }
@@ -190,7 +190,7 @@ private object C_Annotation_External {
     private fun processArgs(ctx: C_ModifierContext, pos: S_Pos, args: List<Rt_Value>): String? {
         val str = C_AnnUtils.processArgsString(ctx, pos, args)
         if (str != null && str.isEmpty()) {
-            ctx.globalCtx.error(pos, "ann:external:invalid:$str", "Invalid external chain name: '$str'")
+            ctx.msgCtx.error(pos, "ann:external:invalid:$str", "Invalid external chain name: '$str'")
             return null
         }
         return str
@@ -216,7 +216,7 @@ private object C_Annotation_Sort {
 private object C_AnnUtils {
     fun checkNoArgs(ctx: C_ModifierContext, pos: S_Pos, name: String, args: List<Rt_Value>): Boolean {
         if (args.isNotEmpty()) {
-            ctx.globalCtx.error(pos, "ann:$name:args:${args.size}", "Annotation @$name takes no arguments")
+            ctx.msgCtx.error(pos, "ann:$name:args:${args.size}", "Annotation @$name takes no arguments")
             return false
         }
         return true
@@ -225,7 +225,7 @@ private object C_AnnUtils {
     fun processArgsString(ctx: C_ModifierContext, pos: S_Pos, args: List<Rt_Value>): String? {
         val expectedArgs = 1
         if (args.size != expectedArgs) {
-            ctx.globalCtx.error(pos, "ann:mount:arg_count:${args.size}",
+            ctx.msgCtx.error(pos, "ann:mount:arg_count:${args.size}",
                     "Wrong number of arguments (expected $expectedArgs)")
             return null
         }
@@ -233,7 +233,7 @@ private object C_AnnUtils {
         val arg = args[0]
         val type = arg.type()
         if (type != R_TextType) {
-            ctx.globalCtx.error(pos, "ann:mount:arg_type:${type.toStrictString()}",
+            ctx.msgCtx.error(pos, "ann:mount:arg_type:${type.toStrictString()}",
                     "Wrong argument type: $type instead of $R_TextType")
             return null
         }
@@ -254,15 +254,15 @@ private object C_AnnUtils {
             generalName: String? = null
     ) {
         if (field == null) {
-            ctx.globalCtx.error(pos, "ann:$nameCode:target_type:${target.type}",
+            ctx.msgCtx.error(pos, "ann:$nameCode:target_type:${target.type}",
                     "Annotation @$name cannot be used for ${target.type.description}")
         } else if (!allowed) {
             var msg = "Annotation @$name not allowed for ${target.type.description}"
             if (target.name != null) msg += " '${target.name.str}'"
-            ctx.globalCtx.error(pos, "ann:$nameCode:not_allowed:${target.type}:${target.name}", msg)
+            ctx.msgCtx.error(pos, "ann:$nameCode:not_allowed:${target.type}:${target.name}", msg)
         } else if (!field.set(value)) {
             val errName = generalName ?: "Annotation @$name"
-            ctx.globalCtx.error(pos, "ann:$nameCode:dup", "$errName specified multiple times")
+            ctx.msgCtx.error(pos, "ann:$nameCode:dup", "$errName specified multiple times")
         }
     }
 }

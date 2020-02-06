@@ -3,10 +3,11 @@ package net.postchain.rell.test
 import net.postchain.rell.runtime.*
 
 abstract class BaseRellTest(useSql: Boolean = true, gtv: Boolean = false): BaseTesterTest(useSql) {
+    final override val tst = RellCodeTester(tstCtx, entityDefs(), objInserts(), gtv = gtv)
+    val repl by lazy { tst.createRepl() }
+
     open fun entityDefs(): List<String> = listOf()
     open fun objInserts(): List<String> = listOf()
-
-    final override val tst = RellCodeTester(tstCtx, entityDefs(), objInserts(), gtv = gtv)
 
     fun chk(code: String, arg: Long, expected: String) = chkEx("= $code ;", arg, expected)
     fun chk(code: String, arg1: Long, arg2: Long, expected: String) = chkEx("= $code ;", arg1, arg2, expected)
@@ -85,8 +86,8 @@ abstract class BaseRellTest(useSql: Boolean = true, gtv: Boolean = false): BaseT
             return this
         }
 
-        fun stdout(vararg expected: String): QueryChecker {
-            chkStdout(*expected)
+        fun out(vararg expected: String): QueryChecker {
+            chkOut(*expected)
             return this
         }
 

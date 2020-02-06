@@ -4,7 +4,6 @@ import com.github.h0tk3y.betterParse.lexer.TokenMatch
 import com.github.h0tk3y.betterParse.lexer.Tokenizer
 import com.github.h0tk3y.betterParse.utils.cached
 import net.postchain.rell.CommonUtils
-import net.postchain.rell.compiler.C_Error
 import net.postchain.rell.compiler.C_Parser
 import net.postchain.rell.compiler.ast.S_BasicPos
 import net.postchain.rell.compiler.ast.S_Name
@@ -16,7 +15,21 @@ import net.postchain.rell.runtime.Rt_Value
 import java.io.InputStream
 import java.math.BigInteger
 import java.util.*
-import kotlin.coroutines.experimental.buildSequence
+import kotlin.NoSuchElementException
+
+class RellTokenizerState {
+    var lastRow = 1
+    var lastCol = 1
+    var lastEof = false
+
+    fun update(row: Int, col: Int, eof: Boolean) {
+        lastRow = row
+        lastCol = col
+        lastEof = eof
+    }
+}
+
+class RellTokenizerError(val pos: S_Pos, val code: String, val msg: String, val eof: Boolean = false): RuntimeException(msg)
 
 class RellTokenizer(private val tokensEx: List<RellToken>) : Tokenizer {
     val tkIdentifier: RellToken
@@ -66,22 +79,12 @@ class RellTokenizer(private val tokensEx: List<RellToken>) : Tokenizer {
     }
 
     override fun tokenize(input: InputStream) = throw UnsupportedOperationException()
-
     override fun tokenize(input: Readable) = throw UnsupportedOperationException()
-
     override fun tokenize(input: Scanner) = throw UnsupportedOperationException()
+    override fun tokenize(input: String) = tokenize(input, RellTokenizerState())
 
-    override fun tokenize(input: String) = tokenize(input) {}
-
-    fun tokenize(input: String, callback: (TokenMatch) -> Unit) = buildSequence<TokenMatch> {
-        val seq = CharSeq(input)
-        while (true) {
-            val token = scanToken(seq)
-            token ?: break
-            callback(token)
-            yield(token)
-        }
-    }.constrainOnce().cached()
+    fun tokenize(input: String, outState: RellTokenizerState) =
+            Sequence { TokenizerIterator(input, outState) }.constrainOnce().cached()
 
     private fun scanToken(seq: CharSeq): TokenMatch? {
         scanBlank(seq)
@@ -158,7 +161,7 @@ class RellTokenizer(private val tokensEx: List<RellToken>) : Tokenizer {
             val k = seq.cur()
             seq.next()
             if (k == null) {
-                throw seq.err("lex:comment_eof", "Unclosed multiline comment")
+                throw seq.err("lex:comment_eof", "Unclosed multiline comment", true)
             } else if (k == '*' && seq.cur() == '/') {
                 seq.next()
                 break
@@ -256,7 +259,7 @@ class RellTokenizer(private val tokensEx: List<RellToken>) : Tokenizer {
                 seq.next()
                 break
             } else if (k == null || k == '\n') {
-                throw seq.err("lex:string_unclosed", "Unclosed string literal")
+                throw seq.err("lex:string_unclosed", "Unclosed string literal", false) // Cannot recover with more input
             } else if (k == '\\') {
                 val c = scanEscapeSeq(seq)
                 buf.append(c)
@@ -324,7 +327,7 @@ class RellTokenizer(private val tokensEx: List<RellToken>) : Tokenizer {
                 seq.next()
                 break
             } else if (c == null || c == '\n') {
-                throw seq.err("lex:bytearray_unclosed", "Unclosed byte array literal")
+                throw seq.err("lex:bytearray_unclosed", "Unclosed byte array literal", false) // Cannot recover with more input
             }
             seq.next()
             buf.append(c)
@@ -352,6 +355,41 @@ class RellTokenizer(private val tokensEx: List<RellToken>) : Tokenizer {
         }
     }
 
+    private inner class TokenizerIterator(input: String, private val outState: RellTokenizerState): Iterator<TokenMatch> {
+        private val charSeq = CharSeq(input)
+        private var token: TokenMatch? = null
+        private var eof = false
+
+        override fun hasNext(): Boolean {
+            val t = fetchToken()
+            return t != null
+        }
+
+        override fun next(): TokenMatch {
+            val t = fetchToken()
+            if (t == null) throw NoSuchElementException()
+            token = null
+            return t
+        }
+
+        private fun fetchToken(): TokenMatch? {
+            var t = token
+            if (t != null || eof) return t
+
+            t = scanToken(charSeq)
+            if (t == null) {
+                eof = true
+                outState.update(charSeq.row(), charSeq.col(), true)
+                return null
+            }
+
+            token = t
+            outState.update(t.row, t.column, false)
+
+            return t
+        }
+    }
+
     companion object {
         const val IDENTIFIER = "<IDENTIFIER>"
         const val INTEGER = "<INTEGER>"
@@ -372,7 +410,7 @@ class RellTokenizer(private val tokensEx: List<RellToken>) : Tokenizer {
 
         fun decodeName(pos: S_Pos, s: String): S_Name {
             if (!R_Name.isValid(s)) {
-                throw C_Error(pos, "lex:name:invalid:$s", "Invalid name: '$s'")
+                throw RellTokenizerError(pos, "lex:name:invalid:$s", "Invalid name: '$s'")
             }
             return S_Name(pos, s)
         }
@@ -396,9 +434,9 @@ class RellTokenizer(private val tokensEx: List<RellToken>) : Tokenizer {
                 }
 
                 if (big != null && (big < BIG_MIN_INTEGER || big > BIG_MAX_INTEGER)) {
-                    throw C_Error(pos, "lex:int:range:$s", "Integer literal out of range: $s")
+                    throw RellTokenizerError(pos, "lex:int:range:$s", "Integer literal out of range: $s")
                 } else {
-                    throw C_Error(pos, "lex:int:invalid:$s", "Invalid integer literal: '$s'")
+                    throw RellTokenizerError(pos, "lex:int:invalid:$s", "Invalid integer literal: '$s'")
                 }
             }
         }
@@ -406,19 +444,19 @@ class RellTokenizer(private val tokensEx: List<RellToken>) : Tokenizer {
         fun decodeDecimal(pos: S_Pos, s: String): Rt_Value {
             val len = s.length
             if (len > MAX_DECIMAL_LITERAL_LENGTH) {
-                throw C_Error(pos, "lex:decimal:length:$len",
+                throw RellTokenizerError(pos, "lex:decimal:length:$len",
                         "Decimal literal is too long: $len (max: $MAX_DECIMAL_LITERAL_LENGTH)")
             }
 
             val bd = try {
                 Rt_DecimalUtils.parse(s)
             } catch (e: NumberFormatException) {
-                throw C_Error(pos, "lex:decimal:invalid:$s", "Invalid decimal literal: '$s'")
+                throw RellTokenizerError(pos, "lex:decimal:invalid:$s", "Invalid decimal literal: '$s'")
             }
 
             val v = Rt_DecimalValue.ofTry(bd)
             if (v == null) {
-                throw C_Error(pos, "lex:decimal:range:$s", "Decimal literal value out of range")
+                throw RellTokenizerError(pos, "lex:decimal:range:$s", "Decimal literal value out of range")
             }
 
             return v
@@ -434,7 +472,7 @@ class RellTokenizer(private val tokensEx: List<RellToken>) : Tokenizer {
             } catch (e: IllegalArgumentException) {
                 val maxlen = 64
                 val p = if (s.length <= maxlen) s else (s.substring(0, maxlen) + "...")
-                throw C_Error(pos, "lex:bad_hex:$p", "Invalid byte array literal: '$p'")
+                throw RellTokenizerError(pos, "lex:bad_hex:$p", "Invalid byte array literal: '$p'")
             }
         }
     }
@@ -465,6 +503,8 @@ private class CharSeq(private val str: String) {
     fun afterCur() = if (pos >= len - 1) null else str[pos + 1]
     fun startPos() = S_BasicPos(C_Parser.currentFile(), startRow, startCol)
     fun pos() = pos
+    fun row() = row
+    fun col() = col
 
     fun keepPos() {
         startPos = pos
@@ -477,8 +517,8 @@ private class CharSeq(private val str: String) {
 
     fun tokenMatch(token: RellToken, text: String) = TokenMatch(token.token, text, startPos, startRow, startCol)
 
-    fun err(code: String, msg: String) = err(textPos(), code, msg)
-    fun err(pos: S_Pos, code: String, msg: String) = C_Error(pos, code, msg)
+    fun err(code: String, msg: String, eof: Boolean = false) = err(textPos(), code, msg, eof)
+    fun err(pos: S_Pos, code: String, msg: String, eof: Boolean = false) = RellTokenizerError(pos, code, msg, eof)
 
     fun next() {
         if (pos < len) {

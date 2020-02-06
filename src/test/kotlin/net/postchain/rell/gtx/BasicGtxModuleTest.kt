@@ -1,4 +1,4 @@
-package net.postchain.rell.module
+package net.postchain.rell.gtx
 
 import net.postchain.base.BlockchainRid
 import net.postchain.base.SECP256K1CryptoSystem
@@ -11,7 +11,7 @@ import net.postchain.gtx.GTXDataBuilder
 import org.junit.Test
 import kotlin.test.assertEquals
 
-class BasicModuleTest : IntegrationTest() {
+class BasicGtxModuleTest : IntegrationTest() {
     private var blockchainRid: BlockchainRid? = null
     private val myCS = SECP256K1CryptoSystem()
 

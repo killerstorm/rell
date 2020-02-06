@@ -153,6 +153,10 @@ class WhenTest: BaseRellTest(false) {
         chkWhen("integer", "= when(a) { else -> 'A'; 1 -> 'B'; };", "1" to "ct_err:when_else_notlast")
     }
 
+    @Test fun testExprUnit() {
+        chk("when { 2 > 1 -> print(123); else -> print(456) }", "ct_err:[query_exprtype_unit][when_exprtype_unit][when_exprtype_unit]")
+    }
+
     @Test fun testStmt() {
         chkWhen("integer", "{ when(a) { 0 -> return 'A'; 1 -> { val x = 'B'; return x; } else -> return '?'; } }",
                 "0" to "text[A]", "1" to "text[B]", "2" to "text[?]")

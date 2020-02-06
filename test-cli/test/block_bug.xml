@@ -1,0 +1,13 @@
+<test>
+    <block>
+        <transaction>
+                <signers>
+                        <param type="bytea" key="Alice" />
+                </signers>
+                <operations>
+                        <operation name="log_request">
+                        </operation>
+                </operations>
+        </transaction>
+    </block>
+</test>

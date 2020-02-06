@@ -1,17 +1,16 @@
 package net.postchain.rell.compiler
 
-import net.postchain.rell.model.*
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_NameExprPair
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.model.*
 
-
-abstract class C_GlobalFunction {
+sealed class C_GlobalFunction {
     abstract fun getAbstractInfo(): Pair<R_Definition?, C_AbstractDescriptor?>
     abstract fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr
 }
 
-abstract class C_RegularGlobalFunction: C_GlobalFunction() {
+sealed class C_RegularGlobalFunction: C_GlobalFunction() {
     abstract fun compileCallRegular(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Expr
 
     override final fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
@@ -101,7 +100,7 @@ class C_UserGlobalFunction(val rFunction: R_Function, private val abstract: C_Ab
         var err = false
 
         if (args.size != params.size) {
-            ctx.globalCtx.error(name.pos, "expr_call_argcnt:$nameStr:${params.size}:${args.size}",
+            ctx.msgCtx.error(name.pos, "expr_call_argcnt:$nameStr:${params.size}:${args.size}",
                     "Wrong number of arguments for '$nameStr': ${args.size} instead of ${params.size}")
             err = true
         }
@@ -124,7 +123,7 @@ class C_UserGlobalFunction(val rFunction: R_Function, private val abstract: C_Ab
                     val paramMsg = param.nameMsg(i)
                     val code = "expr_call_argtype:$nameStr:$paramCode:${paramType.toStrictString()}:${argType.toStrictString()}"
                     val msg = "Wrong argument type for parameter $paramMsg: ${argType} instead of ${paramType}"
-                    ctx.globalCtx.error(name.pos, code, msg)
+                    ctx.msgCtx.error(name.pos, code, msg)
                     err = true
                 }
             }

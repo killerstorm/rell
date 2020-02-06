@@ -3,6 +3,7 @@ package net.postchain.rell.test
 import net.postchain.base.BaseBlockEContext
 import net.postchain.base.BaseEContext
 import net.postchain.base.BaseTxEContext
+import net.postchain.core.EContext
 import net.postchain.core.UserMistake
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
@@ -37,12 +38,11 @@ class RellGtxTester(
         super.chainId = chainId
     }
 
-    override fun initSqlReset(exec: SqlExecutor, moduleCode: String, app: R_App) {
+    override fun initSqlReset(sqlExec: SqlExecutor, moduleCode: String, app: R_App) {
         val gtxModule = createGtxModule(moduleCode)
 
-        exec.transaction {
-            val con = exec.connection()
-            val dbAccess = PostchainUtils.createDatabaseAccess()
+        val dbAccess = PostchainUtils.createDatabaseAccess()
+        sqlExec.connection { con ->
             val ctx = BaseEContext(con, chainId, nodeId, dbAccess)
             GTXSchemaManager.initializeDB(ctx)
             gtxModule.initializeDB(ctx)
@@ -96,15 +96,12 @@ class RellGtxTester(
 
             val module = eval.wrapCt { createGtxModule(moduleCode) }
 
-            val conn = getSqlConn()
-            val dbAccess = PostchainUtils.createDatabaseAccess()
-            val ctx = BaseEContext(conn, chainId, nodeId, dbAccess)
-
-            val res = eval.wrapRt {
-                module.query(ctx, name, queryGtv)
+            withEContext(false) { ctx ->
+                val res = eval.wrapRt {
+                    module.query(ctx, name, queryGtv)
+                }
+                GtvTestUtils.gtvToStr(res)
             }
-
-            GtvTestUtils.gtvToStr(res)
         }
     }
 
@@ -127,21 +124,33 @@ class RellGtxTester(
 
             val module = eval.wrapCt { createGtxModule(moduleCode) }
 
-            val conn = getSqlConn()
-            val dbAccess = PostchainUtils.createDatabaseAccess()
-            val ctx = BaseEContext(conn, chainId, nodeId, dbAccess)
-            val blkCtx = BaseBlockEContext(ctx, 0, 0, mapOf())
-            val txCtx = BaseTxEContext(blkCtx, 0)
+            val res = withEContext(true) { ctx ->
+                val blkCtx = BaseBlockEContext(ctx, 0, 0, mapOf())
+                val txCtx = BaseTxEContext(blkCtx, 0)
 
-            val bcRid = PostchainUtils.hexToRid(blockchainRID)
-            val opData = ExtOpData(name, 0, bcRid, arrayOf(), args.toTypedArray())
-            val tx = module.makeTransactor(opData)
-            check(tx.isCorrect())
+                val bcRid = PostchainUtils.hexToRid(blockchainRID)
+                val opData = ExtOpData(name, 0, bcRid, arrayOf(), args.toTypedArray())
+                val tx = module.makeTransactor(opData)
+                check(tx.isCorrect())
 
-            val res = tx.apply(txCtx)
+                tx.apply(txCtx)
+            }
+
             check(res)
             "OK"
         }
+    }
+
+    private fun <T> withEContext(tx: Boolean, code: (EContext) -> T): T {
+        init()
+        val res = tstCtx.sqlMgr().execute(tx) { sqlExec ->
+            sqlExec.connection { con ->
+                val dbAccess = PostchainUtils.createDatabaseAccess()
+                val ctx = BaseEContext(con, chainId, nodeId, dbAccess)
+                code(ctx)
+            }
+        }
+        return res
     }
 
     fun chkUserMistake(code: String, msg: String) {
@@ -157,7 +166,7 @@ class RellGtxTester(
 
     private fun createGtxModule(moduleCode: String): GTXModule {
         val factory = RellPostchainModuleFactory(
-                stdoutPrinter = stdoutPrinter,
+                outPrinter = outPrinter,
                 logPrinter = logPrinter,
                 wrapCtErrors = false,
                 wrapRtErrors = wrapRtErrors,

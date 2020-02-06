@@ -18,7 +18,7 @@ class S_UpdateTarget_Simple(
         val cFrom = S_AtExpr.compileFrom(ctx, from)
         val entity = cFrom[0].compile()
         val extraEntities = cFrom.subList(1, cFrom.size).map { it.compile() }
-        val dbCtx = ctx.update(nameCtx = C_DbNameContext(ctx.blkCtx, cFrom))
+        val dbCtx = ctx.update(nameCtx = C_NameContext.createAt(ctx.nameCtx, cFrom))
         val dbWhere = where.compile(dbCtx, subValues)
         val rTarget = R_UpdateTarget_Simple(entity, extraEntities, cardinality.rCardinality, dbWhere)
         return C_UpdateTarget(dbCtx, rTarget)
@@ -34,7 +34,7 @@ class S_UpdateTarget_Expr(val expr: S_Expr): S_UpdateTarget() {
         val rTarget = compileTarget(cValue)
         val rEntity = rTarget.entity()
         val cEntity = C_AtEntity(rEntity.rEntity, rEntity.rEntity.simpleName, rEntity.index)
-        val dbCtx = ctx.update(nameCtx = C_DbNameContext(ctx.blkCtx, listOf(cEntity)))
+        val dbCtx = ctx.update(nameCtx = C_NameContext.createAt(ctx.nameCtx, listOf(cEntity)))
 
         return C_UpdateTarget(dbCtx, rTarget)
     }
@@ -87,11 +87,11 @@ class S_UpdateTarget_Expr(val expr: S_Expr): S_UpdateTarget() {
 class S_UpdateWhat(val pos: S_Pos, val name: S_Name?, val op: S_AssignOpCode?, val expr: S_Expr)
 
 class S_UpdateStatement(pos: S_Pos, val target: S_UpdateTarget, val what: List<S_UpdateWhat>): S_Statement(pos) {
-    override fun compile0(ctx: C_ExprContext): C_Statement {
-        ctx.blkCtx.defCtx.checkDbUpdateAllowed(pos)
+    override fun compile0(ctx: C_StmtContext, repl: Boolean): C_Statement {
+        ctx.defCtx.checkDbUpdateAllowed(pos)
 
         val subValues = mutableListOf<C_Value>()
-        val cTarget = target.compile(ctx, subValues)
+        val cTarget = target.compile(ctx.exprCtx, subValues)
 
         val rEntity = cTarget.rTarget.entity().rEntity
         if (!rEntity.flags.canUpdate) {
@@ -126,7 +126,7 @@ class S_UpdateStatement(pos: S_Pos, val target: S_UpdateTarget, val what: List<S
         val impName = pair.expr.asName()
         if (impName != null && pair.name == null) {
             val entityAttr = entity.attributes[impName.str]
-            val localVar = ctx.blkCtx.lookupLocalVar(impName.str)
+            val localVar = ctx.nameCtx.resolveNameLocalValue(impName.str)
             if (entityAttr != null && localVar != null) {
                 val rExpr = localVar.toVarExpr()
                 val dbExpr = C_Utils.toDbExpr(impName.pos, rExpr)
@@ -138,11 +138,11 @@ class S_UpdateStatement(pos: S_Pos, val target: S_UpdateTarget, val what: List<S
 }
 
 class S_DeleteStatement(pos: S_Pos, val target: S_UpdateTarget): S_Statement(pos) {
-    override fun compile0(ctx: C_ExprContext): C_Statement {
-        ctx.blkCtx.defCtx.checkDbUpdateAllowed(pos)
+    override fun compile0(ctx: C_StmtContext, repl: Boolean): C_Statement {
+        ctx.defCtx.checkDbUpdateAllowed(pos)
 
         val subValues = mutableListOf<C_Value>()
-        val cTarget = target.compile(ctx, subValues)
+        val cTarget = target.compile(ctx.exprCtx, subValues)
 
         val rEntity = cTarget.rTarget.entity().rEntity
         val msgName = rEntity.simpleName

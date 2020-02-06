@@ -14,13 +14,16 @@ abstract class S_Expr(val startPos: S_Pos) {
     open fun constantValue(): Rt_Value? = null
 
     fun compileOpt(ctx: C_ExprContext): C_Expr? {
-        return ctx.globalCtx.consumeError { compile(ctx) }
+        return ctx.msgCtx.consumeError { compile(ctx) }
     }
 
     fun compileWithFacts(ctx: C_ExprContext, facts: C_VarFacts): C_Expr {
         val factsCtx = ctx.updateFacts(facts)
         return compile(factsCtx)
     }
+
+    fun compile(ctx: C_StmtContext) = compile(ctx.exprCtx)
+    fun compileOpt(ctx: C_StmtContext) = compileOpt(ctx.exprCtx)
 }
 
 sealed class S_LiteralExpr(pos: S_Pos): S_Expr(pos) {
@@ -178,10 +181,9 @@ class S_LookupExpr(val opPos: S_Pos, val base: S_Expr, val expr: S_Expr): S_Expr
 
 class S_CreateExpr(pos: S_Pos, val entityName: List<S_Name>, val exprs: List<S_NameExprPair>): S_Expr(pos) {
     override fun compile(ctx: C_ExprContext): C_Expr {
-        ctx.blkCtx.defCtx.checkDbUpdateAllowed(startPos)
+        ctx.defCtx.checkDbUpdateAllowed(startPos)
 
-        val nsCtx = ctx.blkCtx.defCtx.nsCtx
-        val entity = nsCtx.getEntity(entityName)
+        val entity = ctx.nsCtx.getEntity(entityName)
         val attrs = C_AttributeResolver.resolveCreate(ctx, entity.attributes, exprs, startPos)
 
         if (!entity.flags.canCreate) {
@@ -287,7 +289,7 @@ sealed class S_WhenCondition {
     abstract fun compile(
             ctx: C_ExprContext,
             builder: C_WhenChooserBuilder,
-            keyVarId: C_VarId?,
+            keyVarUid: C_VarUid?,
             keyType: R_Type?,
             idx: Int,
             last: Boolean
@@ -304,7 +306,7 @@ class S_WhenConditionExpr(val exprs: List<S_Expr>): S_WhenCondition() {
     override fun compile(
             ctx: C_ExprContext,
             builder: C_WhenChooserBuilder,
-            keyVarId: C_VarId?,
+            keyVarUid: C_VarUid?,
             keyType: R_Type?,
             idx: Int,
             last: Boolean
@@ -312,13 +314,13 @@ class S_WhenConditionExpr(val exprs: List<S_Expr>): S_WhenCondition() {
         var caseFacts = C_VarFacts.EMPTY
 
         for (expr in exprs) {
-            val elseFacts = builder.elseFacts.immutableCopy()
+            val elseFacts = builder.elseFacts.toVarFacts()
             val exprCtx = ctx.updateFacts(elseFacts)
             val cValue = compileExpr(exprCtx, keyType, expr)
 
             builder.variableCases.add(C_ChooserCase(expr, cValue, idx))
 
-            val valueFacts = getVarFacts(keyVarId, keyType, cValue)
+            val valueFacts = getVarFacts(keyVarUid, keyType, cValue)
             builder.elseFacts.andFacts(valueFacts.falseFacts)
 
             if (exprs.size == 1) {
@@ -328,7 +330,7 @@ class S_WhenConditionExpr(val exprs: List<S_Expr>): S_WhenCondition() {
             val value = evaluateConstantValue(cValue)
             if (value != null) {
                 if (value in builder.constantCases) {
-                    ctx.globalCtx.error(expr.startPos, "when_expr_dupvalue:$value", "Value already used")
+                    ctx.msgCtx.error(expr.startPos, "when_expr_dupvalue:$value", "Value already used")
                 }
                 builder.constantCases[value] = idx
             }
@@ -341,15 +343,15 @@ class S_WhenConditionExpr(val exprs: List<S_Expr>): S_WhenCondition() {
         return C_Utils.evaluate(cValue.pos) { cValue.constantValue() }
     }
 
-    private fun getVarFacts(keyVarId: C_VarId?, keyType: R_Type?, cValue: C_Value): C_ExprVarFacts {
+    private fun getVarFacts(keyVarUid: C_VarUid?, keyType: R_Type?, cValue: C_Value): C_ExprVarFacts {
         if (keyType == null) {
             return cValue.varFacts()
         }
 
         val type = cValue.type()
-        if (keyVarId != null && type == R_NullType) {
-            val trueFacts = C_VarFacts.of(nulled = mapOf(keyVarId to C_VarFact.YES))
-            val falseFacts = C_VarFacts.of(nulled = mapOf(keyVarId to C_VarFact.NO))
+        if (keyVarUid != null && type == R_NullType) {
+            val trueFacts = C_VarFacts.of(nulled = mapOf(keyVarUid to C_VarFact.YES))
+            val falseFacts = C_VarFacts.of(nulled = mapOf(keyVarUid to C_VarFact.NO))
             return C_ExprVarFacts.of(trueFacts, falseFacts)
         }
 
@@ -388,23 +390,23 @@ class S_WhenCondtiionElse(val pos: S_Pos): S_WhenCondition() {
     override fun compile(
             ctx: C_ExprContext,
             builder: C_WhenChooserBuilder,
-            keyVarId: C_VarId?,
+            keyVarUid: C_VarUid?,
             keyType: R_Type?,
             idx: Int,
             last: Boolean
     ) {
         if (!last) {
-            ctx.globalCtx.error(pos, "when_else_notlast", "Else case must be the last one")
+            ctx.msgCtx.error(pos, "when_else_notlast", "Else case must be the last one")
         }
 
         check(builder.elseCase == null)
         builder.elseCase = Pair(pos, idx)
-        builder.caseFacts[idx] = builder.elseFacts.immutableCopy()
+        builder.caseFacts[idx] = builder.elseFacts.toVarFacts()
         builder.elseFacts.clear()
     }
 }
 
-class C_WhenChooserBuilder(val keyValue: C_Value?, val keyPostFacts: C_VarFacts, val bodyCtx: C_ExprContext) {
+class C_WhenChooserBuilder(val keyValue: C_Value?, val keyPostFacts: C_VarFacts, val bodyExprCtx: C_ExprContext) {
     val constantCases = mutableMapOf<Rt_Value, Int>()
     val variableCases = mutableListOf<C_ChooserCase>()
     var elseCase: Pair<S_Pos, Int>? = null
@@ -426,7 +428,7 @@ class C_ChooserCase(val expr: S_Expr, val cValue: C_Value, val idx: Int)
 class C_WhenChooser(
         val rChooser: R_WhenChooser,
         val keyPostFacts: C_VarFacts,
-        val bodyCtx: C_ExprContext,
+        val bodyExprCtx: C_ExprContext,
         val full: Boolean,
         val caseFacts: List<C_VarFacts>,
         val elseFacts: C_VarFacts
@@ -446,7 +448,7 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
 
         val missingElseReported = !builder.fullCoverage
         if (missingElseReported) {
-            ctx.globalCtx.error(startPos, "when_no_else", "Else case missing")
+            ctx.msgCtx.error(startPos, "when_no_else", "Else case missing")
         }
 
         val caseFacts = builder.caseFactsToList()
@@ -481,6 +483,11 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
                     "When case expressions have incompatible types")
         }
 
+        for (cValue in cValues) {
+            val type = cValue.type()
+            C_Utils.checkUnitType(ctx.msgCtx, cValue.pos, type, "when_exprtype_unit", "Expression returns nothing")
+        }
+
         return Pair(type, cValues)
     }
 
@@ -506,7 +513,7 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
         val elseIdx = builder.elseCase
         if (elseIdx == null) {
             if (!missingElseReported) {
-                ctx.globalCtx.error(startPos, "expr_when:no_else", "When must have an 'else' in a database expression")
+                ctx.msgCtx.error(startPos, "expr_when:no_else", "When must have an 'else' in a database expression")
             }
             val rExpr = C_Utils.crashExpr(type)
             return Db_InterpretedExpr(rExpr)
@@ -532,10 +539,10 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
             return C_WhenChooser(
                     chooser,
                     builder.keyPostFacts,
-                    builder.bodyCtx,
+                    builder.bodyExprCtx,
                     builder.fullCoverage,
                     builder.caseFactsToList(),
-                    builder.elseFacts.immutableCopy()
+                    builder.elseFacts.toVarFacts()
             )
         }
 
@@ -558,7 +565,7 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
             val keyPostFacts = keyValue?.varFacts()?.postFacts ?: C_VarFacts.EMPTY
 
             if (keyType == R_NullType) {
-                ctx.globalCtx.error(expr!!.startPos, "when_expr_type:null", "Cannot use null as when expression")
+                ctx.msgCtx.error(expr!!.startPos, "when_expr_type:null", "Cannot use null as when expression")
             }
 
             val bodyCtx = ctx.updateFacts(keyPostFacts)

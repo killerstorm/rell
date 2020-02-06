@@ -445,7 +445,7 @@ object R_SysFn_Struct {
                 val gtv = PostchainUtils.bytesToGtv(bytes)
                 val convCtx = GtvToRtContext(false)
                 val res = struct.type.gtvToRt(convCtx, gtv)
-                convCtx.finish(ctx.appCtx)
+                convCtx.finish(ctx.exeCtx)
                 res
             }
         }
@@ -459,7 +459,7 @@ object R_SysFn_Struct {
             return Rt_Utils.wrapErr("fn:struct:from_gtv:$pretty") {
                 val convCtx = GtvToRtContext(pretty)
                 val res = struct.type.gtvToRt(convCtx, gtv)
-                convCtx.finish(ctx.appCtx)
+                convCtx.finish(ctx.exeCtx)
                 res
             }
         }
@@ -570,7 +570,7 @@ object R_SysFn_Any {
             val res = try {
                 val gtvCtx = GtvToRtContext(pretty)
                 val rt = type.gtvToRt(gtvCtx, gtv)
-                gtvCtx.finish(ctx.appCtx)
+                gtvCtx.finish(ctx.exeCtx)
                 rt
             } catch (e: Exception) {
                 throw Rt_Error(name, e.message ?: "")
@@ -622,7 +622,7 @@ object R_SysFn_General {
 
             val str = buf.toString()
 
-            val printer = if (log) ctx.globalCtx.logPrinter else ctx.globalCtx.stdoutPrinter
+            val printer = if (log) ctx.globalCtx.logPrinter else ctx.globalCtx.outPrinter
             val fullStr = if (log) logStr(ctx, str) else str
             printer.print(fullStr)
 

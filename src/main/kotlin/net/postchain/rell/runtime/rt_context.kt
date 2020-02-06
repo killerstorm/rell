@@ -7,21 +7,19 @@ import net.postchain.core.ByteArrayKey
 import net.postchain.gtv.Gtv
 import net.postchain.rell.CommonUtils
 import net.postchain.rell.model.*
+import net.postchain.rell.repl.ReplOutputChannel
 import net.postchain.rell.sql.*
 import net.postchain.rell.toImmMap
 
 class Rt_GlobalContext(
-        val stdoutPrinter: Rt_Printer,
+        val outPrinter: Rt_Printer,
         val logPrinter: Rt_Printer,
-        sqlExec: SqlExecutor,
         val opCtx: Rt_OpContext?,
         val chainCtx: Rt_ChainContext,
         val logSqlErrors: Boolean = false,
         val sqlUpdatePortionSize: Int = 1000, // Experimental maximum is 2^15
         val typeCheck: Boolean = false
 ){
-    val sqlExec: SqlExecutor = Rt_SqlExecutor(sqlExec, logSqlErrors)
-
     private val rellVersion = Rt_RellVersion.getInstance()
 
     fun rellVersion(): Rt_RellVersion {
@@ -34,9 +32,7 @@ class Rt_SqlContext private constructor(
         val mainChainMapping: Rt_ChainSqlMapping,
         private val linkedExternalChains: List<Rt_ExternalChain>
 ) {
-    val entities = app.entities
-    val objects = app.objects
-    val topologicalEntities = app.topologicalEntities
+    val appDefs = app.sqlDefs
     private val externalChainsRoot = app.externalChainsRoot
 
     fun linkedChain(chain: R_ExternalChainRef): Rt_ExternalChain {
@@ -47,8 +43,6 @@ class Rt_SqlContext private constructor(
     fun chainMapping(externalChain: R_ExternalChainRef?): Rt_ChainSqlMapping {
         return if (externalChain == null) mainChainMapping else linkedChain(externalChain).sqlMapping
     }
-
-    class InitError(val code: String, val msg: String): java.lang.RuntimeException(msg)
 
     companion object : KLogging() {
         fun createNoExternalChains(app: R_App, mainChainMapping: Rt_ChainSqlMapping): Rt_SqlContext {
@@ -153,7 +147,7 @@ class Rt_SqlContext private constructor(
 
         private fun checkExternalMetaInfo(sqlCtx: Rt_SqlContext, chains: Map<String, Rt_ExternalChain>, sqlExec: SqlExecutor) {
             val chainMetaEntities = chains.mapValues { (name, chain) -> loadExternalMetaData(name, chain, sqlExec) }
-            val chainExternalEntities = getChainExternalEntities(sqlCtx.entities)
+            val chainExternalEntities = getChainExternalEntities(sqlCtx.appDefs.entities)
 
             for (chain in chainExternalEntities.keys) {
                 val extEntities = chainExternalEntities.getValue(chain)
@@ -242,15 +236,26 @@ class Rt_SqlContext private constructor(
     }
 }
 
-class Rt_AppContext(val globalCtx: Rt_GlobalContext, val sqlCtx: Rt_SqlContext, val app: R_App) {
+class Rt_AppContext(
+        val globalCtx: Rt_GlobalContext,
+        val sqlCtx: Rt_SqlContext,
+        val app: R_App,
+        val replOut: ReplOutputChannel?
+) {
     private var objsInit: SqlObjectsInit? = null
     private var objsInited = false
 
-    fun createRootFrame(defPos: R_DefinitionPos): Rt_CallFrame {
-        val rFrameBlock = R_FrameBlock(null, R_FrameBlockId(0, "app"), 0, 0)
+    fun createRootFrame(defPos: R_DefinitionPos, sqlExec: SqlExecutor): Rt_CallFrame {
+        val exeCtx = Rt_ExecutionContext(this, sqlExec)
+        val defCtx = Rt_DefinitionContext(exeCtx, true, defPos)
+
+        val containerUid = R_ContainerUid(0, "<init>", app.uid)
+        val fnUid = R_FnUid(0, "<init>", containerUid)
+        val blockUid = R_FrameBlockUid(0, "<init>", fnUid)
+        val rFrameBlock = R_FrameBlock(null, blockUid, 0, 0)
         val rFrame = R_CallFrame(0, rFrameBlock)
-        val defCtx = Rt_DefinitionContext(this, true, defPos)
-        return Rt_CallFrame(null, null, defCtx, rFrame)
+
+        return rFrame.createRtFrame(defCtx, null, null)
     }
 
     fun objectsInitialization(objsInit: SqlObjectsInit, code: () -> Unit) {
@@ -274,13 +279,19 @@ class Rt_AppContext(val globalCtx: Rt_GlobalContext, val sqlCtx: Rt_SqlContext, 
     }
 }
 
+class Rt_ExecutionContext(val appCtx: Rt_AppContext, val sqlExec: SqlExecutor) {
+    val globalCtx = appCtx.globalCtx
+}
+
 class Rt_CallContext(val defCtx: Rt_DefinitionContext) {
-    val appCtx = defCtx.appCtx
+    val exeCtx = defCtx.exeCtx
+    val appCtx = exeCtx.appCtx
     val globalCtx = appCtx.globalCtx
     val chainCtx = globalCtx.chainCtx
 }
 
-class Rt_DefinitionContext(val appCtx: Rt_AppContext, val dbUpdateAllowed: Boolean, val pos: R_DefinitionPos) {
+class Rt_DefinitionContext(val exeCtx: Rt_ExecutionContext, val dbUpdateAllowed: Boolean, val pos: R_DefinitionPos) {
+    val appCtx = exeCtx.appCtx
     val globalCtx = appCtx.globalCtx
     val sqlCtx = appCtx.sqlCtx
     val callCtx = Rt_CallContext(this)

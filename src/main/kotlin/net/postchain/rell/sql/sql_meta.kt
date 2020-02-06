@@ -179,7 +179,7 @@ object SqlMeta {
         val sqls = mutableListOf<String>()
         sqls += genMetaTablesCreate(sqlCtx)
 
-        val metaEntities = sqlCtx.topologicalEntities.filter { it.sqlMapping.autoCreateTable() }
+        val metaEntities = sqlCtx.appDefs.topologicalEntities.filter { it.sqlMapping.autoCreateTable() }
         for ((i, entity) in metaEntities.withIndex()) {
             sqls += genMetaEntityInserts(sqlCtx, i, entity, MetaEntityType.ENTITY)
         }

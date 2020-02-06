@@ -6,13 +6,13 @@ import org.junit.Test
 class OperationTest: BaseRellTest() {
     @Test fun testReturn() {
         chkOp("print('Hello'); print('World');")
-        chkStdout("Hello", "World")
+        chkOut("Hello", "World")
 
         chkOp("print('Hello'); return;")
-        chkStdout("Hello")
+        chkOut("Hello")
 
         chkOp("print('Hello'); return; print('World');", "ct_err:stmt_deadcode")
-        chkStdout()
+        chkOut()
 
         chkOp("return 123;", "ct_err:stmt_return_op_value")
     }

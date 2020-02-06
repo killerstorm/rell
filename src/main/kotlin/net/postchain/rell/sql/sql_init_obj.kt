@@ -1,11 +1,11 @@
 package net.postchain.rell.sql
 
 import net.postchain.rell.model.R_Object
-import net.postchain.rell.runtime.Rt_AppContext
 import net.postchain.rell.runtime.Rt_Error
+import net.postchain.rell.runtime.Rt_ExecutionContext
 import java.util.*
 
-class SqlObjectsInit(private val appCtx: Rt_AppContext) {
+class SqlObjectsInit(private val exeCtx: Rt_ExecutionContext) {
     private var addDone = false
     private val states = mutableMapOf<R_Object, ObjState>()
     private val initStack: Deque<ObjState> = ArrayDeque()
@@ -61,7 +61,7 @@ class SqlObjectsInit(private val appCtx: Rt_AppContext) {
             }
 
             started = true
-            val frame = appCtx.createRootFrame(obj.pos)
+            val frame = exeCtx.appCtx.createRootFrame(obj.pos, exeCtx.sqlExec)
             obj.insert(frame)
             finished = true
         }

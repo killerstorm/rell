@@ -44,11 +44,11 @@ class RedDbExprTest: BaseRellTest() {
         }
 
         chkArgs("a: integer", "= user @* { .score == if (fi(a, 'A') == -1) .score else fi(a, 'B') };") { q ->
-            q.chk(123, "[user[1]]").stdout("A", "B")
-            q.chk(124, "[]").stdout("A", "B")
-            q.chk(456, "[user[2]]").stdout("A", "B")
-            q.chk(457, "[]").stdout("A", "B")
-            q.chk(-1, "[user[1], user[2]]").stdout("A")
+            q.chk(123, "[user[1]]").out("A", "B")
+            q.chk(124, "[]").out("A", "B")
+            q.chk(456, "[user[2]]").out("A", "B")
+            q.chk(457, "[]").out("A", "B")
+            q.chk(-1, "[user[1], user[2]]").out("A")
         }
     }
 
@@ -267,11 +267,11 @@ class RedDbExprTest: BaseRellTest() {
         chkArgs(params, "= user @* {} ( $expr );", tester)
     }
 
-    private fun chk(q: QueryChecker, arg: Any?, expected: String, stdout: String? = null) {
+    private fun chk(q: QueryChecker, arg: Any?, expected: String, out: String? = null) {
         q.chk(arg, expected)
 
-        if (stdout != null) {
-            q.stdout(*stdout.split(",").toTypedArray())
+        if (out != null) {
+            q.out(*out.split(",").toTypedArray())
         }
     }
 }

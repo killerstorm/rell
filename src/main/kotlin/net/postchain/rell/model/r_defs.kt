@@ -97,7 +97,7 @@ class R_StructFlags(val typeFlags: R_TypeFlags, val cyclic: Boolean, val infinit
 
 class R_Struct(names: R_DefinitionNames): R_Definition(names) {
     private val bodyLate = C_LateInit(C_CompilerPass.MEMBERS, DEFAULT_BODY)
-    private val flagsLate = C_LateInit(C_CompilerPass.STRUCTS, DEFAULT_STRUCT_FLAGS)
+    private val flagsLate = C_LateInit(C_CompilerPass.APPDEFS, DEFAULT_STRUCT_FLAGS)
 
     val attributes: Map<String, R_Attrib> get() = bodyLate.get().attrMap
     val attributesList: List<R_Attrib> get() = bodyLate.get().attrList

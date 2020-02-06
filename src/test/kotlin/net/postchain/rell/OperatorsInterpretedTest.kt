@@ -35,7 +35,6 @@ class OperatorsInterpretedTest: OperatorsBaseTest() {
         val globalCtx = Rt_GlobalContext(
                 Rt_FailingPrinter,
                 Rt_FailingPrinter,
-                NoConnSqlExecutor,
                 null,
                 chainCtx,
                 typeCheck = true
@@ -45,8 +44,9 @@ class OperatorsInterpretedTest: OperatorsBaseTest() {
             val ctx = ValCtx(app)
             val rtArgs = args2.map { it.rt(ctx) }
             val sqlCtx = Rt_SqlContext.createNoExternalChains(app, Rt_ChainSqlMapping(0))
-            val modCtx = Rt_AppContext(globalCtx, sqlCtx, app)
-            RellTestUtils.callQuery(modCtx, "q", rtArgs, RellTestUtils.ENCODER_STRICT)
+            val appCtx = Rt_AppContext(globalCtx, sqlCtx, app, null)
+            val exeCtx = Rt_ExecutionContext(appCtx, NoConnSqlExecutor)
+            RellTestUtils.callQuery(exeCtx, "q", rtArgs, RellTestUtils.ENCODER_STRICT)
         }
         return res
     }

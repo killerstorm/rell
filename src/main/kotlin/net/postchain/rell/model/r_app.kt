@@ -32,13 +32,20 @@ abstract class R_Definition(names: R_DefinitionNames) {
 class R_ExternalChainsRoot
 class R_ExternalChainRef(val root: R_ExternalChainsRoot, val name: String, val index: Int)
 
-data class R_FrameBlockId(val id: Long, val location: String)
-data class R_VarPtr(val name: String, val blockId: R_FrameBlockId, val offset: Int)
-class R_FrameBlock(val parentId: R_FrameBlockId?, val id: R_FrameBlockId, val offset: Int, val size: Int)
+data class R_AppUid(val id: Long)
+data class R_ContainerUid(val id: Long, val name: String, val app: R_AppUid)
+data class R_FnUid(val id: Long, val name: String, val container: R_ContainerUid)
+data class R_FrameBlockUid(val id: Long, val name: String, val fn: R_FnUid)
+data class R_VarPtr(val name: String, val blockUid: R_FrameBlockUid, val offset: Int)
+class R_FrameBlock(val parentUid: R_FrameBlockUid?, val uid: R_FrameBlockUid, val offset: Int, val size: Int)
 
 class R_CallFrame(val size: Int, val rootBlock: R_FrameBlock) {
+    fun createRtFrame(defCtx: Rt_DefinitionContext, caller: Rt_ParentFrame?, state: Rt_CallFrameState?): Rt_CallFrame {
+        return Rt_CallFrame(defCtx, this, caller, state)
+    }
+
     companion object {
-        private val ERROR_BLOCK = R_FrameBlock(null, R_FrameBlockId(-1, "error"), -1, -1)
+        private val ERROR_BLOCK = R_FrameBlock(null, R_Utils.ERROR_BLOCK_UID, -1, -1)
         val ERROR = R_CallFrame(0, ERROR_BLOCK)
     }
 }
@@ -80,7 +87,6 @@ class R_VarParam(val name: String, val type: R_Type, val ptr: R_VarPtr) {
 
 sealed class R_Routine(names: R_DefinitionNames): R_Definition(names) {
     abstract fun params(): List<R_Param>
-    abstract fun callTop(appCtx: Rt_AppContext, args: List<Rt_Value>): Rt_Value?
 }
 
 sealed class R_MountedRoutine(names: R_DefinitionNames, val mountName: R_MountName): R_Routine(names)
@@ -95,26 +101,17 @@ class R_Operation(names: R_DefinitionNames, mountName: R_MountName): R_MountedRo
 
     override fun params() = internals.get().params
 
-    override fun callTop(appCtx: Rt_AppContext, args: List<Rt_Value>): Rt_Value? {
-        val rtFrame = processCallArgs(appCtx, args)
-
-        appCtx.globalCtx.sqlExec.transaction {
-            execute(rtFrame)
-        }
-
+    fun call(exeCtx: Rt_ExecutionContext, args: List<Rt_Value>): Rt_Value? {
+        val rtFrame = processCallArgs(exeCtx, args)
+        execute(rtFrame)
         return null
     }
 
-    fun callTopNoTx(appCtx: Rt_AppContext, args: List<Rt_Value>) {
-        val rtFrame = processCallArgs(appCtx, args)
-        execute(rtFrame)
-    }
-
-    private fun processCallArgs(appCtx: Rt_AppContext, args: List<Rt_Value>): Rt_CallFrame {
+    private fun processCallArgs(exeCtx: Rt_ExecutionContext, args: List<Rt_Value>): Rt_CallFrame {
         val ints = internals.get()
 
-        val defCtx = Rt_DefinitionContext(appCtx, true, pos)
-        val rtFrame = Rt_CallFrame(null, null, defCtx, ints.frame)
+        val defCtx = Rt_DefinitionContext(exeCtx, true, pos)
+        val rtFrame = ints.frame.createRtFrame(defCtx, null, null)
 
         checkCallArgs(this, ints.params, args)
         processArgs(ints.varParams, args, rtFrame)
@@ -168,7 +165,7 @@ class R_UserQueryBody(
     override fun params() = params
 
     override fun execute(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, pos: R_DefinitionPos): Rt_Value {
-        val rtFrame = Rt_CallFrame(null, null, defCtx, frame)
+        val rtFrame = frame.createRtFrame(defCtx, null, null)
 
         processArgs(varParams, args, rtFrame)
 
@@ -206,14 +203,10 @@ class R_Query(names: R_DefinitionNames, mountName: R_MountName): R_MountedRoutin
     override fun params() = internals.get().params
     fun type(): R_Type = internals.get().type
 
-    override fun callTop(appCtx: Rt_AppContext, args: List<Rt_Value>): Rt_Value? {
-        return callTopQuery(appCtx, args)
-    }
-
-    fun callTopQuery(appCtx: Rt_AppContext, args: List<Rt_Value>): Rt_Value {
+    fun call(exeCtx: Rt_ExecutionContext, args: List<Rt_Value>): Rt_Value {
         val ints = internals.get()
         checkCallArgs(this, ints.params, args)
-        val defCtx = Rt_DefinitionContext(appCtx, false, pos)
+        val defCtx = Rt_DefinitionContext(exeCtx, false, pos)
         val res = ints.body.execute(defCtx, args, pos)
         return res
     }
@@ -261,22 +254,22 @@ class R_Function(names: R_DefinitionNames): R_Routine(names) {
 
     override fun params() = bodyLate.get().params
 
-    override fun callTop(appCtx: Rt_AppContext, args: List<Rt_Value>): Rt_Value? {
-        val res = callTopFunction(appCtx, args)
-        val type = bodyLate.get().type
-        return if (type != R_UnitType) res else null
-    }
-
-    fun callTopFunction(appCtx: Rt_AppContext, args: List<Rt_Value>, dbUpdateAllowed: Boolean = false): Rt_Value {
+    fun callTop(exeCtx: Rt_ExecutionContext, args: List<Rt_Value>, dbUpdateAllowed: Boolean = false): Rt_Value {
         val body = bodyLate.get()
-        val rtFrame = createRtFrame(body, appCtx, dbUpdateAllowed, null, null)
-        val res = call(rtFrame, args, null)
+        val defCtx = Rt_DefinitionContext(exeCtx, dbUpdateAllowed, body.defPos)
+        val res = call0(defCtx, args, null)
         return res
     }
 
-    fun call(rtFrame: Rt_CallFrame, args: List<Rt_Value>, callerFilePos: R_FilePos?): Rt_Value {
+    fun call(rtFrame: Rt_CallFrame, args: List<Rt_Value>, callerFilePos: R_FilePos): Rt_Value {
+        val callerStackPos = R_StackPos(rtFrame.defCtx.pos, callerFilePos)
+        val caller = Rt_ParentFrame(rtFrame, callerStackPos)
+        return call0(rtFrame.defCtx, args, caller)
+    }
+
+    private fun call0(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, caller: Rt_ParentFrame?): Rt_Value {
         val body = bodyLate.get()
-        val rtSubFrame = createRtFrame(body, rtFrame.defCtx.appCtx, rtFrame.defCtx.dbUpdateAllowed, rtFrame, callerFilePos)
+        val rtSubFrame = createRtFrame(body, defCtx.exeCtx, defCtx.dbUpdateAllowed, caller)
 
         processArgs(body.varParams, args, rtSubFrame)
 
@@ -288,18 +281,12 @@ class R_Function(names: R_DefinitionNames): R_Routine(names) {
 
     private fun createRtFrame(
             body: R_FunctionBody,
-            appCtx: Rt_AppContext,
+            exeCtx: Rt_ExecutionContext,
             dbUpdateAllowed: Boolean,
-            callerFrame: Rt_CallFrame?,
-            callerFilePos: R_FilePos?
+            caller: Rt_ParentFrame?
     ): Rt_CallFrame {
-        val defCtx = Rt_DefinitionContext(appCtx, dbUpdateAllowed, body.defPos)
-
-        val callerPos = if (callerFrame?.defCtx?.pos == null || callerFilePos == null) null else {
-            R_StackPos(callerFrame.defCtx.pos, callerFilePos)
-        }
-
-        return Rt_CallFrame(callerFrame, callerPos, defCtx, body.frame)
+        val defCtx = Rt_DefinitionContext(exeCtx, dbUpdateAllowed, body.defPos)
+        return body.frame.createRtFrame(defCtx, caller, null)
     }
 
     override fun toMetaGtv(): Gtv {
@@ -382,28 +369,46 @@ class R_Module(
     }
 }
 
-class R_App(
-        val valid: Boolean,
-        modules: List<R_Module>,
+class R_AppSqlDefs(
         entities: List<R_Entity>,
         objects: List<R_Object>,
-        operations: Map<R_MountName, R_Operation>,
-        queries: Map<R_MountName, R_Query>,
-        topologicalEntities: List<R_Entity>,
-        val externalChainsRoot: R_ExternalChainsRoot,
-        externalChains: List<R_ExternalChainRef>
+        topologicalEntities: List<R_Entity>
 ) {
-    val modules = modules.toImmList()
     val entities = entities.toImmList()
     val objects = objects.toImmList()
+    val topologicalEntities = topologicalEntities.toImmList()
+
+    init {
+        check(this.topologicalEntities.size == this.entities.size) { "${this.topologicalEntities.size} != ${this.entities.size}" }
+    }
+
+    fun same(other: R_AppSqlDefs): Boolean {
+        return entities == other.entities
+                && objects == other.objects
+                && topologicalEntities == other.topologicalEntities
+    }
+
+    companion object {
+        val EMPTY = R_AppSqlDefs(listOf(), listOf(), listOf())
+    }
+}
+
+class R_App(
+        val valid: Boolean,
+        val uid: R_AppUid,
+        modules: List<R_Module>,
+        operations: Map<R_MountName, R_Operation>,
+        queries: Map<R_MountName, R_Query>,
+        val externalChainsRoot: R_ExternalChainsRoot,
+        externalChains: List<R_ExternalChainRef>,
+        val sqlDefs: R_AppSqlDefs
+) {
+    val modules = modules.toImmList()
     val operations = operations.toImmMap()
     val queries = queries.toImmMap()
-    val topologicalEntities = topologicalEntities.toImmList()
     val externalChains = externalChains.toImmList()
 
     init {
-        check(topologicalEntities.size == entities.size) { "${topologicalEntities.size} != ${entities.size}" }
-
         for ((i, c) in externalChains.withIndex()) {
             check(c.root === externalChainsRoot)
             check(c.index == i)

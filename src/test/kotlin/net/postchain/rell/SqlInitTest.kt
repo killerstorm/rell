@@ -1,6 +1,7 @@
 package net.postchain.rell
 
 import net.postchain.rell.sql.SqlInit
+import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.sql.SqlUtils
 import net.postchain.rell.test.*
 import org.junit.Test
@@ -84,8 +85,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
     }
 
     private fun chkBrokenMetaTable(table: String, columns: List<String>, expected: String) {
-        val sqlExec = tstCtx.sqlExec()
-        sqlExec.transaction {
+        tstCtx.sqlMgr().transaction { sqlExec ->
             SqlUtils.dropAll(sqlExec, true)
         }
 
@@ -594,19 +594,19 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         val tst = RellCodeTester(tstCtx)
         tst.chainId = 0
 
-        val sqlExec = tstCtx.sqlExec()
-        val globalCtx = tst.createInitGlobalCtx(sqlExec)
+        val globalCtx = tst.createInitGlobalCtx()
 
         var actualWarnings = ""
 
         val actual = RellTestUtils.processApp(code) { app ->
-            val appCtx = tst.createAppCtx(globalCtx, app.rApp)
             RellTestUtils.catchRtErr {
-                sqlExec.transaction {
-                    val warnings = SqlInit.init(appCtx, SqlInit.LOG_ALL)
+                tstCtx.sqlMgr().transaction { sqlExec ->
+                    val appCtx = tst.createExeCtx(globalCtx, sqlExec, app.rApp)
+                    val initLogging = SqlInitLogging.ofLevel(SqlInitLogging.LOG_ALL)
+                    val warnings = SqlInit.init(appCtx, initLogging)
                     actualWarnings = warnings.joinToString(",")
+                    "OK"
                 }
-                "OK"
             }
         }
 
@@ -639,9 +639,11 @@ class SqlInitTest: BaseContextTest(useSql = true) {
     }
 
     private fun dumpDataSql(table: String, sql: String): List<String> {
-        val tables = SqlTestUtils.dumpTablesStructure(tstCtx.sqlConn())
+        val tables = dumpTablesStructure()
         if (table !in tables) return listOf("NO_TABLE")
-        return SqlTestUtils.dumpSql(tstCtx.sqlExec(), sql)
+        return tstCtx.sqlMgr().access { sqlExec ->
+            SqlTestUtils.dumpSql(sqlExec, sql)
+        }
     }
 
     private fun chkColumns(vararg expected: String) {
@@ -655,8 +657,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
     }
 
     private fun dumpTables(meta: Boolean, columns: Boolean): List<String> {
-        val con = tstCtx.sqlConn()
-        val map = SqlTestUtils.dumpTablesStructure(con)
+        val map = dumpTablesStructure()
 
         val res = mutableListOf<String>()
         for (table in map.keys) {
@@ -669,20 +670,26 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         return res
     }
 
+    private fun dumpTablesStructure(): Map<String, Map<String, String>> {
+        val sqlMgr = tstCtx.sqlMgr()
+        val map = sqlMgr.access { sqlExec ->
+            sqlExec.connection { con ->
+                SqlTestUtils.dumpTablesStructure(con)
+            }
+        }
+        return map
+    }
+
     private fun insert(table: String, columns: String, values: String) {
         val sql = SqlTestUtils.mkins(table, columns, values)
         execSql(sql)
     }
 
     private fun chkData(vararg expected: String) {
-        val con = tstCtx.sqlConn()
-        val sqlExec = tstCtx.sqlExec()
-
-        val actualMap = SqlTestUtils.dumpDatabaseTables(con, sqlExec)
+        val actualMap = SqlTestUtils.dumpDatabaseTables(tstCtx.sqlMgr())
         val actual = actualMap.keys
                 .filter { it != "c0.rowid_gen" && it != "c0.sys.classes" && it != "c0.sys.attributes" }
                 .flatMap { table -> actualMap.getValue(table).map { "$table($it)" } }
-
         assertEquals(expected.toList(), actual)
     }
 
@@ -704,8 +711,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
     }
 
     private fun execSql(sql: String) {
-        val sqlExec = tstCtx.sqlExec()
-        sqlExec.transaction {
+        tstCtx.sqlMgr().transaction { sqlExec ->
             sqlExec.execute(sql)
         }
     }

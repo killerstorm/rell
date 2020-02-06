@@ -255,6 +255,11 @@ class ImportTest: BaseRellTest(false) {
         chkImport("import a.{exact.*};", "f()", "int[123]")
     }
 
+    @Test fun testWildcardDuplicate() {
+        file("lib.rell", "module; function f(): integer = 123;")
+        chkImport("import lib.*; import lib.*;", "f()", "int[123]")
+    }
+
     @Test fun testDefKindsExact() {
         initDefKinds()
         chkImport("import lib.{user};", "_type_of(user@{})", "text[lib!user]")

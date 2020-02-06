@@ -3,8 +3,12 @@ package net.postchain.rell.compiler
 import net.postchain.rell.CommonUtils
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.ast.S_RellFile
 import net.postchain.rell.model.*
+import net.postchain.rell.repl.ReplCode
+import net.postchain.rell.repl.ReplCodeState
 import net.postchain.rell.toImmList
+import net.postchain.rell.toImmMap
 import java.util.*
 
 class C_Entity(val defPos: S_Pos?, val entity: R_Entity)
@@ -16,9 +20,11 @@ enum class C_CompilerPass {
     MODULES,
     MEMBERS,
     ABSTRACT,
-    STRUCTS,
+    APPDEFS,
     EXPRESSIONS,
     VALIDATION,
+    APPLICATION,
+    FINISH
     ;
 
     fun prev(): C_CompilerPass {
@@ -66,8 +72,13 @@ class C_SystemDefs private constructor(
         val ns: C_Namespace,
         val blockEntity: R_Entity,
         val transactionEntity: R_Entity,
-        val mntTables: C_MountTables
+        val mntTables: C_MountTables,
+        entities: List<R_Entity>,
+        queries: List<R_Query>
 ) {
+    val entities = entities.toImmList()
+    val queries = queries.toImmList()
+
     companion object {
         private val SYSTEM_NAMESPACES = C_LibFunctions.getSystemNamespaces()
         private val SYSTEM_FUNCTIONS = C_LibFunctions.getGlobalFunctions()
@@ -91,7 +102,7 @@ class C_SystemDefs private constructor(
                 "gtv" to typeRef(R_GtvType)
         )
 
-        fun create(executor: C_CompilerExecutor, appDefsBuilder: C_AppDefsBuilder): C_SystemDefs {
+        fun create(executor: C_CompilerExecutor, stamp: R_AppUid): C_SystemDefs {
             val blockEntity = C_Utils.createBlockEntity(executor, null)
             val transactionEntity = C_Utils.createTransactionEntity(executor, null, blockEntity)
 
@@ -103,11 +114,11 @@ class C_SystemDefs private constructor(
                     C_Utils.createSysQuery(executor, "get_app_structure", R_GtvType, R_SysFn_Rell.GetAppStructure)
             )
 
-            return create(appDefsBuilder, blockEntity, transactionEntity, queries)
+            return create(stamp, blockEntity, transactionEntity, queries)
         }
 
         fun create(
-                appDefsBuilder: C_AppDefsBuilder,
+                stamp: R_AppUid,
                 blockEntity: R_Entity,
                 transactionEntity: R_Entity,
                 queries: List<R_Query>
@@ -116,20 +127,12 @@ class C_SystemDefs private constructor(
             val nsProto = createNsProto(sysEntities)
             val ns = C_NsEntry.createNamespace(nsProto.entries)
 
-            val mntBuilder = C_MountTablesBuilder()
-
-            for (entity in sysEntities) {
-                appDefsBuilder.entities.add(C_Entity(null, entity))
-                mntBuilder.addEntity(null, entity)
-            }
-
-            for (query in queries) {
-                appDefsBuilder.queries.add(query)
-                mntBuilder.addQuery(query)
-            }
-
+            val mntBuilder = C_MountTablesBuilder(stamp)
+            for (entity in sysEntities) mntBuilder.addEntity(null, entity)
+            for (query in queries) mntBuilder.addQuery(query)
             val mntTables = mntBuilder.build()
-            return C_SystemDefs(nsProto, ns, blockEntity, transactionEntity, mntTables)
+
+            return C_SystemDefs(nsProto, ns, blockEntity, transactionEntity, mntTables, sysEntities, queries)
         }
 
         private fun createNsProto(sysEntities: List<R_Entity>): C_SysNsProto {
@@ -192,10 +195,11 @@ object C_Compiler {
             options: C_CompilerOptions = C_CompilerOptions.DEFAULT
     ): C_CompilationResult {
         val globalCtx = C_GlobalContext(options)
-        val controller = C_CompilerController(globalCtx)
+        val msgCtx = C_MessageContext(globalCtx)
+        val controller = C_CompilerController(msgCtx)
 
         val res = C_LateInit.context(controller.executor) {
-            compile0(sourceDir, globalCtx, controller, modules)
+            compile0(sourceDir, msgCtx, controller, modules)
         }
 
         return res
@@ -203,57 +207,174 @@ object C_Compiler {
 
     private fun compile0(
             sourceDir: C_SourceDir,
-            globalCtx: C_GlobalContext,
+            msgCtx: C_MessageContext,
             controller: C_CompilerController,
             modules: List<R_ModuleName>
     ): C_CompilationResult {
-        val appCtx = C_AppContext(globalCtx, controller)
-        val modMgr = C_ModuleManager(appCtx, sourceDir, appCtx.executor)
-
-        var app: R_App? = null
+        val globalCtx = msgCtx.globalCtx
+        val appCtx = C_AppContext(msgCtx, controller.executor, false, C_ReplAppState.EMPTY)
+        val modMgr = C_ModuleManager(appCtx, sourceDir, controller.executor, mapOf())
 
         try {
             for (moduleName in modules) {
                 val module = modMgr.linkModule(moduleName, null)
 
-                val header = module.header()
-                if (header.abstract != null && !globalCtx.compilerOptions.ide) {
-                    appCtx.globalCtx.error(header.abstract, "module:main_abstract:$moduleName",
+                val header = module.header
+                if (header.abstractPos != null && !globalCtx.compilerOptions.ide) {
+                    msgCtx.error(header.abstractPos, "module:main_abstract:$moduleName",
                             "Module '${moduleName.str()}' is abstract, cannot be used as a main module")
                 }
             }
-            app = appCtx.createApp()
         } catch (e: C_Error) {
-            appCtx.globalCtx.error(e)
+            msgCtx.error(e)
         }
 
-        val messages = CommonUtils.sortedByCopy(appCtx.globalCtx.messages()) { ComparablePos(it.pos) }
+        controller.run()
+
+        val app = appCtx.getApp()
+
+        val messages = CommonUtils.sortedByCopy(appCtx.msgCtx.messages()) { ComparablePos(it.pos) }
         val errors = messages.filter { it.type == C_MessageType.ERROR }
 
         val files = modMgr.moduleFiles()
 
-        val resApp = if (errors.isEmpty()) app else null
-        return C_CompilationResult(resApp, messages, files)
-    }
-
-    private class ComparablePos(sPos: S_Pos): Comparable<ComparablePos> {
-        private val path: C_SourcePath = sPos.path()
-        private val pos = sPos.pos()
-
-        override fun compareTo(other: ComparablePos): Int {
-            var d = path.compareTo(other.path)
-            if (d == 0) d = pos.compareTo(other.pos)
-            return d
-        }
+        val rApp = if (errors.isEmpty()) app else null
+        return C_CompilationResult(rApp, messages, files)
     }
 }
 
-class C_CompilationResult(val app: R_App?, messages: List<C_Message>, files: List<C_SourcePath>) {
+object C_ReplCompiler {
+    fun compile(
+            sourceDir: C_SourceDir,
+            linkedModule: R_ModuleName?,
+            code: String,
+            globalCtx: C_GlobalContext,
+            oldDefsState: C_ReplDefsState,
+            oldCodeState: ReplCodeState
+    ): C_ReplResult {
+        val msgCtx = C_MessageContext(globalCtx)
+        val controller = C_CompilerController(msgCtx)
+        val res = C_LateInit.context(controller.executor) {
+            compile0(sourceDir, linkedModule, msgCtx, controller, code, oldDefsState, oldCodeState)
+        }
+        return res
+    }
+
+    private fun compile0(
+            sourceDir: C_SourceDir,
+            linkedModule: R_ModuleName?,
+            msgCtx: C_MessageContext,
+            controller: C_CompilerController,
+            code: String,
+            oldDefsState: C_ReplDefsState,
+            oldCodeState: ReplCodeState
+    ): C_ReplResult {
+        val executor = controller.executor
+        val appCtx = C_AppContext(msgCtx, executor, true, oldDefsState.appState)
+        val replCtx = createReplContext(appCtx, sourceDir, linkedModule, executor, oldDefsState)
+
+        val codeGetter = msgCtx.consumeError {
+            if (linkedModule != null) {
+                replCtx.modCtx.modMgr.linkModule(linkedModule, null)
+            }
+
+            val ast = C_Parser.parseRepl(code)
+            ast.compile(replCtx, oldCodeState)
+        }
+
+        controller.run()
+
+        val app = appCtx.getApp()
+        val messages = CommonUtils.sortedByCopy(msgCtx.messages()) { ComparablePos(it.pos) }
+        val errors = messages.filter { it.type == C_MessageType.ERROR }
+
+        val success = if (app == null || codeGetter == null || !errors.isEmpty()) null else {
+            val cCode = codeGetter.get()
+            val newAppState = appCtx.getNewReplState()
+            val newState = C_ReplDefsState(false, newAppState)
+            C_ReplSuccess(app, newState, cCode)
+        }
+
+        return C_ReplResult(success, messages)
+    }
+
+    private fun createReplContext(
+            appCtx: C_AppContext,
+            sourceDir: C_SourceDir,
+            moduleName: R_ModuleName?,
+            executor: C_CompilerExecutor,
+            oldDefsState: C_ReplDefsState
+    ): C_MountContext {
+        val modMgr = C_ModuleManager(appCtx, sourceDir, executor, oldDefsState.appState.modules)
+
+        val linkedModuleKey = if (moduleName == null) null else C_ModuleKey(moduleName, null)
+        val replNsAssembler = appCtx.createReplNsAssembler(linkedModuleKey)
+        val componentNsAssembler = replNsAssembler.addComponent()
+
+        val modCtx = C_ReplModuleContext(
+                appCtx,
+                modMgr,
+                moduleName ?: R_ModuleName.EMPTY,
+                replNsAssembler.futureNs(),
+                componentNsAssembler.futureNs()
+        )
+
+        val fileCtx = C_FileContext(modCtx)
+
+        val mntCtx = S_RellFile.createMountContext(fileCtx, R_MountName.EMPTY, componentNsAssembler)
+
+        executor.onPass(C_CompilerPass.MODULES) {
+            val mntTables = fileCtx.mntBuilder.build()
+            appCtx.addExtraMountTables(mntTables)
+        }
+
+        return mntCtx
+    }
+}
+
+private class ComparablePos(sPos: S_Pos): Comparable<ComparablePos> {
+    private val path: C_SourcePath = sPos.path()
+    private val pos = sPos.pos()
+
+    override fun compareTo(other: ComparablePos): Int {
+        var d = path.compareTo(other.path)
+        if (d == 0) d = pos.compareTo(other.pos)
+        return d
+    }
+}
+
+sealed class C_AbstractResult(messages: List<C_Message>) {
     val messages = messages.toImmList()
     val warnings = this.messages.filter { it.type == C_MessageType.WARNING }.toImmList()
     val errors = this.messages.filter { it.type == C_MessageType.ERROR }.toImmList()
+}
+
+class C_CompilationResult(val app: R_App?, messages: List<C_Message>, files: List<C_SourcePath>): C_AbstractResult(messages) {
     val files = files.toImmList()
 }
+
+class C_ReplAppState(
+        val nsAsmState: C_NsAsm_ReplState,
+        modules: Map<C_ModuleKey, C_PrecompiledModule>,
+        val sysDefs: C_SystemDefs?,
+        val sqlDefs: R_AppSqlDefs,
+        val mntTables: C_MountTables
+) {
+    val modules = modules.toImmMap()
+
+    companion object {
+        val EMPTY = C_ReplAppState(C_NsAsm_ReplState.EMPTY, mapOf(), null, R_AppSqlDefs.EMPTY, C_MountTables.EMPTY)
+    }
+}
+
+class C_ReplDefsState(val initial: Boolean, val appState: C_ReplAppState) {
+    companion object {
+        val EMPTY = C_ReplDefsState(true, C_ReplAppState.EMPTY)
+    }
+}
+
+class C_ReplSuccess(val app: R_App, val defsState: C_ReplDefsState, val code: ReplCode)
+class C_ReplResult(val success: C_ReplSuccess?, messages: List<C_Message>): C_AbstractResult(messages)
 
 abstract class C_CompilerExecutor {
     abstract fun checkPass(minPass: C_CompilerPass?, maxPass: C_CompilerPass?)
@@ -273,7 +394,7 @@ abstract class C_CompilerExecutor {
     }
 }
 
-class C_CompilerController(private val globalCtx: C_GlobalContext) {
+class C_CompilerController(private val msgCtx: C_MessageContext) {
     val executor: C_CompilerExecutor = ExecutorImpl()
 
     private val passes = C_CompilerPass.values().map { Pair(it, ArrayDeque<C_PassTask>() as Queue<C_PassTask>) }.toMap()
@@ -316,7 +437,7 @@ class C_CompilerController(private val globalCtx: C_GlobalContext) {
 
     private inner class C_PassTask(private val code: () -> Unit) {
         fun execute() {
-            globalCtx.consumeError(code)
+            msgCtx.consumeError(code)
         }
     }
 

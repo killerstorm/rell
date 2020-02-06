@@ -1,4 +1,4 @@
-package net.postchain.rell.module
+package net.postchain.rell.gtx
 
 import net.postchain.rell.test.BaseGtxTest
 import net.postchain.rell.test.RellTestUtils

@@ -1,12 +1,18 @@
 package net.postchain.rell.compiler
 
 import com.github.h0tk3y.betterParse.parser.ParseException
+import com.github.h0tk3y.betterParse.parser.Parser
 import com.github.h0tk3y.betterParse.parser.parseToEnd
-import net.postchain.rell.*
+import net.postchain.rell.CommonUtils
+import net.postchain.rell.ThreadLocalContext
 import net.postchain.rell.compiler.ast.*
+import net.postchain.rell.compiler.parser.RellTokenizerError
+import net.postchain.rell.compiler.parser.RellTokenizerState
 import net.postchain.rell.compiler.parser.S_Grammar
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Error
+import net.postchain.rell.toImmList
+import net.postchain.rell.toImmSet
 import org.jooq.impl.SQLDataType
 import java.math.BigDecimal
 import java.util.*
@@ -65,7 +71,8 @@ class C_ExternalParam(val name: S_Name, val type: R_Type?) {
 }
 
 object C_Utils {
-    val ERROR_STATEMENT = R_ExprStatement(crashExpr(R_UnitType))
+    val ERROR_EXPR = crashExpr(R_UnitType)
+    val ERROR_STATEMENT = R_ExprStatement(ERROR_EXPR)
 
     fun toDbExpr(pos: S_Pos, rExpr: R_Expr): Db_Expr {
         val type = rExpr.type
@@ -103,6 +110,12 @@ object C_Utils {
     fun checkUnitType(pos: S_Pos, type: R_Type, errCode: String, errMsg: String) {
         if (type == R_UnitType) {
             throw C_Error(pos, errCode, errMsg)
+        }
+    }
+
+    fun checkUnitType(msgCtx: C_MessageContext, pos: S_Pos, type: R_Type, errCode: String, errMsg: String) {
+        if (type == R_UnitType) {
+            msgCtx.error(pos, errCode, errMsg)
         }
     }
 
@@ -264,38 +277,69 @@ object C_Utils {
     }
 
     fun appLevelName(module: C_ModuleKey, path: List<S_Name>): String {
-        val moduleName = module.name.str()
+        val moduleName = module.keyStr()
         val qualifiedName = nameStr(path)
         return R_DefinitionPos.appLevelName(moduleName, qualifiedName)
     }
+}
+
+sealed class C_ParserResult<T> {
+    abstract fun getAst(): T
+}
+
+private class C_SuccessParserResult<T>(private val ast: T): C_ParserResult<T>() {
+    override fun getAst() = ast
+}
+
+private class C_ErrorParserResult<T>(val error: C_Error, val eof: Boolean): C_ParserResult<T>() {
+    override fun getAst() = throw error
 }
 
 object C_Parser {
     private val currentFileLocal = ThreadLocalContext(C_SourcePath(listOf("?")))
 
     fun parse(filePath: C_SourcePath, sourceCode: String): S_RellFile {
+        val res = parse0(filePath, sourceCode, S_Grammar)
+        val ast = res.getAst()
+        return ast
+    }
+
+    fun parseRepl(code: String): S_ReplCommand {
+        val path = C_SourcePath.parse("<console>")
+        val res = parse0(path, code, S_Grammar.replParser)
+        val ast = res.getAst()
+        return ast
+    }
+
+    fun checkEofErrorRepl(code: String): C_Error? {
+        val path = C_SourcePath.parse("<console>")
+        val res = parse0(path, code, S_Grammar.replParser)
+        return when (res) {
+            is C_SuccessParserResult -> null
+            is C_ErrorParserResult -> if (res.eof) res.error else null
+        }
+    }
+
+    private fun <T> parse0(filePath: C_SourcePath, sourceCode: String, parser: Parser<T>): C_ParserResult<T> {
         // The syntax error position returned by the parser library is misleading: if there is an error in the middle
         // of an operation, it returns the position of the beginning of the operation.
         // Following workaround handles this by tracking the position of the farthest reached token (seems to work fine).
 
-        var maxRow = 1
-        var maxCol = 1
-
-        val tokenSeq = S_Grammar.tokenizer.tokenize(sourceCode) {
-            if (!it.type.ignored) {
-                maxRow = it.row
-                maxCol = it.column
-            }
-        }
+        val state = RellTokenizerState()
+        val tokenSeq = S_Grammar.tokenizer.tokenize(sourceCode, state)
 
         try {
             val ast = overrideCurrentFile(filePath) {
-                S_Grammar.parseToEnd(tokenSeq)
+                parser.parseToEnd(tokenSeq)
             }
-            return ast
+            return C_SuccessParserResult(ast)
+        } catch (e: RellTokenizerError) {
+            val error = C_Error(e.pos, e.code, e.msg)
+            return C_ErrorParserResult(error, e.eof)
         } catch (e: ParseException) {
-            val pos = S_BasicPos(filePath, maxRow, maxCol)
-            throw C_Error(pos, "syntax", "Syntax error")
+            val pos = S_BasicPos(filePath, state.lastRow, state.lastCol)
+            val error = C_Error(pos, "syntax", "Syntax error")
+            return C_ErrorParserResult(error, state.lastEof)
         }
     }
 
@@ -568,7 +612,8 @@ class C_StructsInfo(
 
 object C_StructUtils {
     fun buildStructsInfo(structs: Collection<R_Struct>): C_StructsInfo {
-        val infoMap = structs.map { Pair(it, calcStructInfo(it.type)) }.toMap()
+        val declaredStructs = structs.toImmSet()
+        val infoMap = structs.map { Pair(it, calcStructInfo(declaredStructs, it.type)) }.toMap()
         val graph = infoMap.mapValues { (_, v) -> v.dependencies.toList() }
         val mutable = infoMap.filter { (_, v) -> v.directFlags.mutable }.keys
         val nonVirtualable = infoMap.filter { (_, v) -> !v.directFlags.virtualable }.keys
@@ -577,12 +622,12 @@ object C_StructUtils {
         return C_StructsInfo(mutable, nonVirtualable, nonGtvFrom, nonGtvTo, graph)
     }
 
-    private fun calcStructInfo(type: R_Type): StructInfo {
+    private fun calcStructInfo(declaredStructs: Set<R_Struct>, type: R_Type): StructInfo {
         val flags = mutableListOf(type.directFlags())
         val deps = mutableSetOf<R_Struct>()
 
         for (subType in type.componentTypes()) {
-            val subStruct = discoverStructInfo(subType)
+            val subStruct = discoverStructInfo(declaredStructs, subType)
             flags.add(subStruct.directFlags)
             deps.addAll(subStruct.dependencies)
         }
@@ -591,11 +636,12 @@ object C_StructUtils {
         return StructInfo(resFlags, deps.toImmSet())
     }
 
-    private fun discoverStructInfo(type: R_Type): StructInfo {
-        if (type is R_StructType) {
+    private fun discoverStructInfo(declaredStructs: Set<R_Struct>, type: R_Type): StructInfo {
+        // Taking into account only structs declared in this app (not those compiled elsewhere).
+        if (type is R_StructType && type.struct in declaredStructs) {
             return StructInfo(type.directFlags(), setOf(type.struct))
         }
-        return calcStructInfo(type)
+        return calcStructInfo(declaredStructs, type)
     }
 
     private class StructInfo(val directFlags: R_TypeFlags, val dependencies: Set<R_Struct>)
@@ -651,6 +697,10 @@ private class C_LateInitContext(executor: C_CompilerExecutor) {
     }
 }
 
+class C_LateGetter<T>(private val init: C_LateInit<T>) {
+    fun get() = init.get()
+}
+
 class C_LateInit<T>(private val pass: C_CompilerPass, fallback: T) {
     private val ctx = C_LateInitContext.getContext()
     private var value: T? = null
@@ -664,8 +714,7 @@ class C_LateInit<T>(private val pass: C_CompilerPass, fallback: T) {
         }
     }
 
-    val getter: Getter<T> = { get() }
-    val setter: Setter<T> = { set(it) }
+    val getter = C_LateGetter(this)
 
     fun set(value: T) {
         ctx.checkPass(pass, pass)
@@ -703,5 +752,14 @@ class C_ListBuilder<T> {
             commit = list.toImmList()
         }
         return commit!!
+    }
+}
+
+class C_UidGen<T>(private val factory: (Long, String) -> T) {
+    private var nextUid = 0L
+
+    fun next(name: String): T {
+        val uid = nextUid++
+        return factory(uid, name)
     }
 }

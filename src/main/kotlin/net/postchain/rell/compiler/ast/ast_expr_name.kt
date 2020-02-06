@@ -12,9 +12,7 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
     }
 
     override fun compileWhere(ctx: C_ExprContext, idx: Int): C_Expr {
-        val entityAttrs = ctx.nameCtx.findAttributesByName(name.str)
-        val localVar = ctx.blkCtx.lookupLocalVar(name.str)
-
+        val localVar = ctx.nameCtx.resolveNameLocalValue(name.str)
         if (localVar == null) {
             return compile(ctx)
         }
@@ -23,6 +21,7 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
         val cValue = res.toExpr().value()
         val varType = cValue.type()
 
+        val entityAttrs = ctx.nameCtx.findAttributesByName(name.str)
         val entityAttr = matchAttribute(ctx, idx, entityAttrs, varType)
         val attrType = entityAttr.attrRef.type()
         if (!C_BinOp_EqNe.checkTypesDb(attrType, varType)) {

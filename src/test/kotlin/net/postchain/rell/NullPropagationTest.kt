@@ -216,13 +216,13 @@ class NullPropagationTest: BaseRellTest(false) {
         def("entity user { name; score: integer; }")
 
         chkOp("val x = _nullable(123); print(_type_of(x));")
-        chkStdout("integer?")
+        chkOut("integer?")
 
         chkOp("val x = _nullable(123); create user('Bob', x!!); print(_type_of(x));")
-        chkStdout("integer")
+        chkOut("integer")
 
         chkOp("val x = _nullable(123); create user('Alice', score = x!!); print(_type_of(x));")
-        chkStdout("integer")
+        chkOut("integer")
     }
 
     @Test fun testExprAt() {
@@ -321,25 +321,25 @@ class NullPropagationTest: BaseRellTest(false) {
         def("entity user { name; mutable score: integer; }")
 
         chkOp("{ val x = _nullable(123); print(_type_of(x)); }")
-        chkStdout("integer?")
+        chkOut("integer?")
 
         chkOp("{ val x = _nullable(123); update user @* { x!! } ( score = 0 ); print(_type_of(x)); }")
-        chkStdout("integer")
+        chkOut("integer")
 
         chkOp("{ val x = _nullable(123); update user @* { .score * 5 > x!! - 10 } ( score = 0 ); print(_type_of(x)); }")
-        chkStdout("integer")
+        chkOut("integer")
 
         chkOp("{ val x = _nullable(123); update user @* {} ( score = x!! ); print(_type_of(x)); }")
-        chkStdout("integer")
+        chkOut("integer")
 
         chkOp("{ val x = _nullable(123); update user @* {} ( score += x!! ); print(_type_of(x)); }")
-        chkStdout("integer")
+        chkOut("integer")
 
         chkOp("{ val x = _nullable(123); val u = user @? {}; update u ( score = x!! ); print(_type_of(x)); }")
-        chkStdout("integer")
+        chkOut("integer")
 
         chkOp("{ val x = _nullable(123); update (user @? { x!! }) ( score = 0 ); print(_type_of(x)); }")
-        chkStdout("integer")
+        chkOut("integer")
     }
 
     @Test fun testStmtDelete() {
@@ -347,15 +347,15 @@ class NullPropagationTest: BaseRellTest(false) {
         def("entity user { name; mutable score: integer; }")
 
         chkOp("{ val x = _nullable(123); print(_type_of(x)); }")
-        chkStdout("integer?")
+        chkOut("integer?")
 
         chkOp("{ val x = _nullable(123); delete user @* { x!! }; print(_type_of(x)); }")
-        chkStdout("integer")
+        chkOut("integer")
 
         chkOp("{ val x = _nullable(123); delete user @* { .score * 5 > x!! - 10 }; print(_type_of(x)); }")
-        chkStdout("integer")
+        chkOut("integer")
 
         chkOp("{ val x = _nullable(123); delete (user @? { x!! }); print(_type_of(x)); }")
-        chkStdout("integer")
+        chkOut("integer")
     }
 }

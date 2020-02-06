@@ -166,11 +166,11 @@ class EntityTest: BaseRellTest(false) {
         chkCompile("entity user (log, log) {}", "ct_err:entity_ann_dup:log")
 
         val a1 = tst.compileAppEx("entity user {}")
-        val c1 = a1.entities.first { it.simpleName == "user" }
+        val c1 = a1.sqlDefs.entities.first { it.simpleName == "user" }
         assertEquals(false, c1.flags.log)
 
         val a2 = tst.compileAppEx("@log entity user {}")
-        val c2 = a2.entities.first { it.simpleName == "user" }
+        val c2 = a2.sqlDefs.entities.first { it.simpleName == "user" }
         assertEquals(true, c2.flags.log)
     }
 

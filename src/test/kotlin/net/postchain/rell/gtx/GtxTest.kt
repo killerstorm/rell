@@ -1,4 +1,4 @@
-package net.postchain.rell.module
+package net.postchain.rell.gtx
 
 import net.postchain.rell.test.BaseGtxTest
 import org.junit.Test
@@ -19,7 +19,7 @@ class GtxTest : BaseGtxTest() {
     @Test fun testNamespaceOperation() {
         def("namespace foo { operation bar() {print('Hello');} }")
         chkCallOperation("foo.bar", listOf())
-        chkStdout("Hello")
+        chkOut("Hello")
     }
 
     @Test fun testNamespaceQuery() {

@@ -237,7 +237,7 @@ class LibListTest: BaseRellTest(false) {
 
     @Test fun testFor() {
         chkOp("for (i in list([123, 456, 789])) print(i);")
-        chkStdout("123", "456", "789")
+        chkOut("123", "456", "789")
     }
 
     @Test fun testSort() {

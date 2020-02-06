@@ -1,6 +1,9 @@
 package net.postchain.rell.compiler
 
-import net.postchain.rell.compiler.ast.*
+import net.postchain.rell.compiler.ast.C_BinOp
+import net.postchain.rell.compiler.ast.S_Name
+import net.postchain.rell.compiler.ast.S_NameExprPair
+import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_EnumValue
 import net.postchain.rell.runtime.Rt_Value
@@ -19,189 +22,73 @@ class C_ExprContextAttr(val entity: C_AtEntity, val attrRef: C_EntityAttrRef) {
     }
 }
 
-class C_ScopeEntry(
-        val name: String,
-        val type: R_Type,
-        val modifiable: Boolean,
-        val varId: C_VarId,
-        val ptr: R_VarPtr
-) {
-    fun toVarExpr(): R_VarExpr = R_VarExpr(type, ptr, name)
-}
-
-class C_BlockContext(
-        val defCtx: C_DefinitionContext,
-        private val parent: C_BlockContext?,
-        val loop: C_LoopId?,
-        location: String
-) {
-    private val startOffset: Int = if (parent == null) 0 else parent.startOffset + parent.locals.size
-    private val locals = mutableMapOf<String, C_ScopeEntry0>()
-
-    private val blockId = defCtx.globalCtx.nextFrameBlockId(location)
-
-    fun add(name: S_Name, type: R_Type, modifiable: Boolean): Pair<C_VarId, R_VarPtr> {
-        val nameStr = name.str
-        if (lookupLocalVar(nameStr) != null) {
-            throw C_Error(name.pos, "var_dupname:$nameStr", "Duplicate variable: '$nameStr'")
-        }
-
-        val ofs = startOffset + locals.size
-        defCtx.adjustCallFrameSize(ofs + 1)
-
-        val varId = defCtx.nextVarId(nameStr)
-
-        val entry = C_ScopeEntry0(nameStr, type, modifiable, ofs, varId)
-        locals[nameStr] = entry
-
-        val ptr = entry.toVarPtr(blockId)
-        return Pair(varId, ptr)
-    }
-
-    fun lookupLocalVar(name: String): C_ScopeEntry? {
-        val local = findValue { it.locals[name] }
-        return local?.toScopeEntry(blockId)
-    }
-
-    private fun <T> findValue(getter: (C_BlockContext) -> T?): T? {
-        var ctx: C_BlockContext? = this
-        while (ctx != null) {
-            val value = getter(ctx)
-            if (value != null) {
-                return value
-            }
-            ctx = ctx.parent
-        }
-        return null
-    }
-
-    fun makeFrameBlock(): R_FrameBlock {
-        val parentId = if (parent != null) parent.blockId else null
-        return R_FrameBlock(parentId, blockId, startOffset, locals.size)
-    }
-
-    companion object {
-        // Difference between C_ScopeEntry0 and C_ScopeEntry: there is one C_ScopeEntry0 for each variable, but
-        // may be different C_ScopeEntry for same variable if it is being accessed from different scopes.
-        // C_ScopeEntry refers to a scope (via ptr.blockId) where the variable is being used, not where it is declared.
-        private class C_ScopeEntry0(
-                val name: String,
-                val type: R_Type,
-                val modifiable: Boolean,
-                val offset: Int,
-                val varId: C_VarId
-        ) {
-            fun toVarPtr(blockId: R_FrameBlockId): R_VarPtr = R_VarPtr(name, blockId, offset)
-
-            fun toScopeEntry(blockId: R_FrameBlockId): C_ScopeEntry {
-                return C_ScopeEntry(name, type, modifiable, varId, toVarPtr(blockId))
-            }
-        }
-    }
-}
-
-class C_ExprContext(val blkCtx: C_BlockContext, val nameCtx: C_NameContext, val factsCtx: C_VarFactsContext) {
-    val defCtx = blkCtx.defCtx
-    val modCtx = defCtx.modCtx
+class C_ExprContext(val defCtx: C_DefinitionContext, val nameCtx: C_NameContext, val factsCtx: C_VarFactsContext) {
+    val nsCtx = defCtx.nsCtx
     val globalCtx = defCtx.globalCtx
+    val msgCtx = nsCtx.msgCtx
+    val executor = defCtx.executor
+    val nsValueCtx = C_NamespaceValueContext(defCtx)
 
     fun update(
-            blkCtx: C_BlockContext? = null,
             nameCtx: C_NameContext? = null,
             factsCtx: C_VarFactsContext? = null
     ): C_ExprContext {
-        val blkCtx2 = blkCtx ?: this.blkCtx
         val nameCtx2 = nameCtx ?: this.nameCtx
         val factsCtx2 = factsCtx ?: this.factsCtx
-        return if (blkCtx2 == this.blkCtx && nameCtx2 == this.nameCtx && factsCtx2 == this.factsCtx) this else
-            C_ExprContext(blkCtx2, nameCtx2, factsCtx2)
+        return if (nameCtx2 == this.nameCtx && factsCtx2 == this.factsCtx) this else C_ExprContext(defCtx, nameCtx2, factsCtx2)
     }
 
     fun updateFacts(facts: C_VarFactsAccess): C_ExprContext {
         if (facts.isEmpty()) return this
         return update(factsCtx = this.factsCtx.sub(facts))
     }
+}
 
-    fun subBlock(loop: C_LoopId?): C_ExprContext {
-        val subBlkCtx = C_BlockContext(blkCtx.defCtx, blkCtx, loop, "blk")
-        val subNameCtx = C_RNameContext(subBlkCtx)
-        return C_ExprContext(subBlkCtx, subNameCtx, factsCtx)
+class C_StmtContext private constructor(val blkCtx: C_BlockContext, val exprCtx: C_ExprContext) {
+    val fnCtx = blkCtx.fnCtx
+    val defCtx = fnCtx.defCtx
+    val nsCtx = defCtx.nsCtx
+    val msgCtx = nsCtx.msgCtx
+    val executor = defCtx.executor
+
+    fun update(
+            blkCtx: C_BlockContext? = null,
+            exprCtx: C_ExprContext? = null
+    ): C_StmtContext {
+        val blkCtx2 = blkCtx ?: this.blkCtx
+        val exprCtx2 = exprCtx ?: this.exprCtx
+        return if (blkCtx2 == this.blkCtx && exprCtx2 == this.exprCtx) this else C_StmtContext(blkCtx2, exprCtx2)
+    }
+
+    fun updateFacts(facts: C_VarFactsAccess): C_StmtContext {
+        return update(exprCtx = exprCtx.updateFacts(facts))
+    }
+
+    fun subBlock(loop: C_LoopUid?): Pair<C_StmtContext, C_OwnerBlockContext> {
+        val subBlkCtx = blkCtx.createSubContext(loop, "blk")
+        val subExprCtx = exprCtx.update(nameCtx = subBlkCtx.nameCtx)
+        val subCtx = C_StmtContext(subBlkCtx, subExprCtx)
+        return Pair(subCtx, subBlkCtx)
+    }
+
+    companion object {
+        fun createRoot(blkCtx: C_BlockContext): C_StmtContext {
+            val exprCtx = C_ExprContext(blkCtx.defCtx, blkCtx.nameCtx, C_VarFactsContext.EMPTY)
+            return C_StmtContext(blkCtx, exprCtx)
+        }
     }
 }
 
-sealed class C_NameContext(protected val blkCtx: C_BlockContext) {
-    abstract fun resolveAttr(name: S_Name): C_Expr
+sealed class C_NameContext {
+    abstract fun resolveNameLocalValue(name: String): C_LocalVar?
+    protected abstract fun resolveNameGlobalValue(name: S_Name): C_DefRef<C_NamespaceValue>?
+    protected abstract fun resolveNameFunction(name: S_Name): C_Expr?
 
-    abstract fun resolveNameValue(ctx: C_ExprContext, name: S_Name): C_NameResolution?
-
-    fun resolveName(ctx: C_ExprContext, name: S_Name): C_Expr {
-        val value = resolveNameValue(ctx, name)
-        val valueExpr = value?.toExpr()
-
-        val fn = blkCtx.defCtx.nsCtx.getFunctionOpt(listOf(name))
-        val fnExpr = if (fn == null) null else C_FunctionExpr(name, fn)
-
-        val expr = C_ValueFunctionExpr.create(name, valueExpr, fnExpr)
-        return expr ?: throw C_Errors.errUnknownName(name)
-    }
-
+    protected abstract fun findEntityByAlias(alias: String): C_AtEntity?
     abstract fun findAttributesByName(name: String): List<C_ExprContextAttr>
     abstract fun findAttributesByType(type: R_Type): List<C_ExprContextAttr>
 
-    abstract fun createDefaultAtWhat(): C_AtWhat
-}
-
-class C_RNameContext(blkCtx: C_BlockContext): C_NameContext(blkCtx) {
-    override fun resolveNameValue(ctx: C_ExprContext, name: S_Name): C_NameResolution? {
-        val loc = blkCtx.lookupLocalVar(name.str)
-        val glob = blkCtx.defCtx.nsCtx.getValueOpt(name)
-
-        if (loc != null) return C_NameResolution_Local(name, ctx, loc)
-        if (glob != null) return C_NameResolution_Value(name, blkCtx.defCtx, glob)
-
-        return null
-    }
-
-    override fun resolveAttr(name: S_Name): C_Expr {
-        throw C_Errors.errUnknownAttr(name)
-    }
-
-    override fun findAttributesByName(name: String): List<C_ExprContextAttr> = listOf()
-    override fun findAttributesByType(type: R_Type): List<C_ExprContextAttr> = listOf()
-
-    override fun createDefaultAtWhat() = C_AtWhat(listOf(), listOf()) // Must not be called
-}
-
-class C_DbNameContext(blkCtx: C_BlockContext, private val entities: List<C_AtEntity>): C_NameContext(blkCtx) {
-    override fun resolveNameValue(ctx: C_ExprContext, name: S_Name): C_NameResolution? {
-        val nameStr = name.str
-
-        val entity = findEntityByAlias(nameStr)
-        val loc = blkCtx.lookupLocalVar(nameStr)
-        val glob = blkCtx.defCtx.nsCtx.getValueOpt(name)
-
-        if (entity != null && loc != null) {
-            throw C_Errors.errNameConflictAliasLocal(name)
-        }
-
-        if (entity != null) return C_NameResolution_Entity(name, entity)
-        if (loc != null) return C_NameResolution_Local(name, ctx, loc)
-        if (glob != null) return C_NameResolution_Value(name, blkCtx.defCtx, glob)
-
-        return null
-    }
-
-    private fun findEntityByAlias(alias: String): C_AtEntity? {
-        //TODO use a lookup table
-        for (entity in entities) {
-            if (entity.alias == alias) {
-                return entity
-            }
-        }
-        return null
-    }
-
-    override fun resolveAttr(name: S_Name): C_Expr {
+    fun resolveAttr(name: S_Name): C_Expr {
         val nameStr = name.str
         val attrs = findAttributesByName(nameStr)
 
@@ -217,13 +104,86 @@ class C_DbNameContext(blkCtx: C_BlockContext, private val entities: List<C_AtEnt
         return C_DbValue.makeExpr(name.pos, dbExpr)
     }
 
-    override fun createDefaultAtWhat(): C_AtWhat {
-        val exprs = entities.map {
-            val name = if (entities.size == 1) null else it.alias
-            val expr = it.compileExpr()
-            Pair(name, expr)
+    fun resolveNameValue(ctx: C_ExprContext, name: S_Name): C_NameResolution? {
+        val nameStr = name.str
+
+        val entity = findEntityByAlias(nameStr)
+        val loc = resolveNameLocalValue(nameStr)
+        val glob = resolveNameGlobalValue(name)
+
+        if (entity != null && loc != null) {
+            throw C_Errors.errNameConflictAliasLocal(name)
         }
-        return C_AtWhat(exprs, listOf())
+
+        if (entity != null) return C_NameResolution_Entity(name, entity)
+        if (loc != null) return C_NameResolution_Local(name, ctx, loc)
+        if (glob != null) return C_NameResolution_Value(name, ctx.nsValueCtx, glob)
+
+        return null
+    }
+
+    fun resolveName(ctx: C_ExprContext, name: S_Name): C_Expr {
+        val value = resolveNameValue(ctx, name)
+        val valueExpr = value?.toExpr()
+        val fnExpr = resolveNameFunction(name)
+        val expr = C_ValueFunctionExpr.create(name, valueExpr, fnExpr)
+        return expr ?: throw C_Errors.errUnknownName(name)
+    }
+
+    protected fun resolveNameGlobalValue(ctx: C_NameContext, name: S_Name) = ctx.resolveNameGlobalValue(name)
+    protected fun resolveNameFunction(ctx: C_NameContext, name: S_Name) = ctx.resolveNameFunction(name)
+
+    companion object {
+        fun createNamespace(nsCtx: C_NamespaceContext): C_NameContext {
+            return C_NamespaceNameContext(nsCtx)
+        }
+
+        fun createBlock(parent: C_NameContext, blkCtx: C_BlockContext): C_NameContext {
+            return C_BlockNameContext(parent, blkCtx)
+        }
+
+        fun createAt(parent: C_NameContext, entities: List<C_AtEntity>): C_NameContext {
+            return C_AtNameContext(parent, entities)
+        }
+    }
+}
+
+private class C_NamespaceNameContext(private val nsCtx: C_NamespaceContext): C_NameContext() {
+    override fun resolveNameLocalValue(name: String) = null
+    override fun resolveNameGlobalValue(name: S_Name) = nsCtx.getValueOpt(name)
+
+    override fun resolveNameFunction(name: S_Name): C_Expr? {
+        val fn = nsCtx.getFunctionOpt(listOf(name))
+        return if (fn == null) null else C_FunctionExpr(name, fn)
+    }
+
+    override fun findEntityByAlias(alias: String) = null
+    override fun findAttributesByName(name: String) = listOf<C_ExprContextAttr>()
+    override fun findAttributesByType(type: R_Type) = listOf<C_ExprContextAttr>()
+}
+
+private class C_BlockNameContext(private val parent: C_NameContext, private val blkCtx: C_BlockContext): C_NameContext() {
+    override fun resolveNameLocalValue(name: String) = blkCtx.lookupLocalVar(name)
+    override fun resolveNameGlobalValue(name: S_Name) = resolveNameGlobalValue(parent, name)
+    override fun resolveNameFunction(name: S_Name) = resolveNameFunction(parent, name)
+    override fun findEntityByAlias(alias: String) = null
+    override fun findAttributesByName(name: String) = listOf<C_ExprContextAttr>()
+    override fun findAttributesByType(type: R_Type) = listOf<C_ExprContextAttr>()
+}
+
+private class C_AtNameContext(private val parent: C_NameContext, private val entities: List<C_AtEntity>): C_NameContext() {
+    override fun resolveNameLocalValue(name: String) = parent.resolveNameLocalValue(name)
+    override fun resolveNameGlobalValue(name: S_Name) = resolveNameGlobalValue(parent, name)
+    override fun resolveNameFunction(name: S_Name) = resolveNameFunction(parent, name)
+
+    override fun findEntityByAlias(alias: String): C_AtEntity? {
+        //TODO use a lookup table
+        for (entity in entities) {
+            if (entity.alias == alias) {
+                return entity
+            }
+        }
+        return null
     }
 
     override fun findAttributesByName(name: String): List<C_ExprContextAttr> {
@@ -266,22 +226,22 @@ private class C_NameResolution_Entity(name: S_Name, private val entity: C_AtEnti
 class C_NameResolution_Local(
         name: S_Name,
         private val ctx: C_ExprContext,
-        private val entry: C_ScopeEntry
+        private val localVar: C_LocalVar
 ): C_NameResolution(name) {
     override fun toExpr(): C_Expr {
-        val nulled = ctx.factsCtx.nulled(entry.varId)
-        val smartType = if (entry.type is R_NullableType && nulled == C_VarFact.NO) entry.type.valueType else null
-        val value = C_LocalVarValue(ctx, name, entry, nulled, smartType)
+        val nulled = ctx.factsCtx.nulled(localVar.uid)
+        val smartType = if (localVar.type is R_NullableType && nulled == C_VarFact.NO) localVar.type.valueType else null
+        val value = C_LocalVarValue(ctx, name, localVar, nulled, smartType)
         return C_ValueExpr(value)
     }
 }
 
 private class C_NameResolution_Value(
         name: S_Name,
-        private val defCtx: C_DefinitionContext,
+        private val ctx: C_NamespaceValueContext,
         private val value: C_DefRef<C_NamespaceValue>
 ): C_NameResolution(name) {
-    override fun toExpr(): C_Expr = C_NamespaceValueExpr(defCtx, listOf(name), value)
+    override fun toExpr(): C_Expr = C_NamespaceValueExpr(ctx, listOf(name), value)
 }
 
 class C_BinOpType(val resType: R_Type, val rOp: R_BinaryOp?, val dbOp: Db_BinaryOp?)
@@ -365,7 +325,7 @@ abstract class C_Value(val pos: S_Pos) {
     }
 
     open fun constantValue(): Rt_Value? = null
-    open fun varId(): C_VarId? = null
+    open fun varId(): C_VarUid? = null
     open fun varFacts(): C_ExprVarFacts = C_ExprVarFacts.EMPTY
 
     open fun asNullable(): C_Value = this
@@ -463,18 +423,18 @@ class C_LookupValue(
 private class C_LocalVarValue(
         private val ctx: C_ExprContext,
         private val name: S_Name,
-        private val entry: C_ScopeEntry,
+        private val localVar: C_LocalVar,
         private val nulled: C_VarFact,
         private val smartType: R_Type?
 ): C_Value(name.pos) {
-    override fun type() = smartType ?: entry.type
+    override fun type() = smartType ?: localVar.type
     override fun isDb() = false
     override fun toDbExpr() = C_Utils.toDbExpr(pos, toRExpr())
-    override fun varId() = entry.varId
+    override fun varId() = localVar.uid
 
     override fun toRExpr0(): R_Expr {
         checkInitialized()
-        var rExpr: R_Expr = entry.toVarExpr()
+        var rExpr: R_Expr = localVar.toVarExpr()
         if (smartType != null) {
             rExpr = R_NotNullExpr(smartType, rExpr)
         }
@@ -482,50 +442,49 @@ private class C_LocalVarValue(
     }
 
     override fun asNullable(): C_Value {
-        if (entry.type !is R_NullableType || nulled == C_VarFact.MAYBE) {
+        if (localVar.type !is R_NullableType || nulled == C_VarFact.MAYBE) {
             return this
         }
 
-        val globCtx = ctx.globalCtx
         val (freq, msg) = if (nulled == C_VarFact.YES) Pair("always", "is always") else Pair("never", "cannot be")
-        globCtx.warning(name.pos, "expr_var_null:$freq:${name.str}", "Variable '${name.str}' $msg null at this location")
+        ctx.msgCtx.warning(name.pos, "expr_var_null:$freq:${name.str}", "Variable '${name.str}' $msg null at this location")
 
-        return C_LocalVarValue(ctx, name, entry, nulled, null)
+        return C_LocalVarValue(ctx, name, localVar, nulled, null)
     }
 
     override fun destination(ctx: C_ExprContext): C_Destination {
         check(ctx === this.ctx)
-        if (!entry.modifiable) {
-            if (ctx.factsCtx.inited(entry.varId) != C_VarFact.NO) {
+        if (!localVar.modifiable) {
+            if (ctx.factsCtx.inited(localVar.uid) != C_VarFact.NO) {
                 throw C_Error(name.pos, "expr_assign_val:${name.str}", "Value of '${name.str}' cannot be changed")
             }
         }
-        val effectiveType = smartType ?: entry.type
+        val effectiveType = smartType ?: localVar.type
         return C_LocalVarDestination(effectiveType)
     }
 
     private fun checkInitialized() {
-        if (ctx.factsCtx.inited(entry.varId) != C_VarFact.YES) {
+        if (ctx.factsCtx.inited(localVar.uid) != C_VarFact.YES) {
             val nameStr = name.str
             throw C_Error(pos, "expr_var_uninit:$nameStr", "Variable '$nameStr' may be uninitialized")
         }
     }
 
     private inner class C_LocalVarDestination(private val effectiveType: R_Type): C_Destination() {
-        override fun type() = entry.type
+        override fun type() = localVar.type
         override fun effectiveType() = effectiveType
 
         override fun compileAssignStatement(srcExpr: R_Expr, op: C_AssignOp?): R_Statement {
             if (op != null) {
                 checkInitialized()
             }
-            val rDstExpr = entry.toVarExpr()
+            val rDstExpr = localVar.toVarExpr()
             return R_AssignStatement(rDstExpr, srcExpr, op?.rOp)
         }
 
         override fun compileAssignExpr(startPos: S_Pos, resType: R_Type, srcExpr: R_Expr, op: C_AssignOp, post: Boolean): R_Expr {
             checkInitialized()
-            val rDstExpr = entry.toVarExpr()
+            val rDstExpr = localVar.toVarExpr()
             return R_AssignExpr(resType, op.rOp, rDstExpr, srcExpr, post)
         }
     }
@@ -555,7 +514,7 @@ private class C_ObjectAttrValue(pos: S_Pos, private val rObject: R_Object, priva
         if (!attr.mutable) {
             throw C_Errors.errAttrNotMutable(pos, attr.name)
         }
-        ctx.blkCtx.defCtx.checkDbUpdateAllowed(pos)
+        ctx.defCtx.checkDbUpdateAllowed(pos)
         return C_ObjectAttrDestination(rObject, attr)
     }
 
@@ -617,8 +576,7 @@ class C_NamespaceExpr(private val name: List<S_Name>, private val nsRef: C_Names
     override fun startPos() = name[0].pos
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
-        val defCtx = ctx.blkCtx.defCtx
-        val valueExpr = memberValue(defCtx, memberName)
+        val valueExpr = memberValue(ctx.nsValueCtx, memberName)
 
         val fnRef = nsRef.function(memberName)
         val fnExpr = if (fnRef != null) C_FunctionExpr(memberName, fnRef) else null
@@ -627,9 +585,9 @@ class C_NamespaceExpr(private val name: List<S_Name>, private val nsRef: C_Names
         return expr ?: throw C_Errors.errUnknownName(name, memberName)
     }
 
-    private fun memberValue(defCtx: C_DefinitionContext, memberName: S_Name): C_Expr? {
+    private fun memberValue(ctx: C_NamespaceValueContext, memberName: S_Name): C_Expr? {
         val valueRef = nsRef.value(memberName)
-        val valueExpr = valueRef?.getDef()?.toExpr(defCtx, name + listOf(memberName))
+        val valueExpr = valueRef?.getDef()?.toExpr(ctx, name + listOf(memberName))
         if (valueExpr != null) return valueExpr
 
         val typeRef = nsRef.type(memberName)
@@ -667,7 +625,7 @@ class C_ObjectExpr(name: List<S_Name>, rObject: R_Object): C_Expr() {
     }
 }
 
-class C_EnumExpr(private val globalCtx: C_GlobalContext, private val name: List<S_Name>, private val rEnum: R_Enum): C_Expr() {
+class C_EnumExpr(private val msgCtx: C_MessageContext, private val name: List<S_Name>, private val rEnum: R_Enum): C_Expr() {
     override fun kind() = C_ExprKind.ENUM
     override fun startPos() = name[0].pos
 
@@ -692,7 +650,7 @@ class C_EnumExpr(private val globalCtx: C_GlobalContext, private val name: List<
     private fun memberFn(memberName: S_Name): C_Expr? {
         val fn = C_LibFunctions.getTypeStaticFunction(rEnum.type, memberName.str)
         return if (fn == null) null else {
-            val fnRef = C_DefRef(globalCtx, name + memberName, C_DefProxy.create(fn))
+            val fnRef = C_DefRef(msgCtx, name + memberName, C_DefProxy.create(fn))
             C_FunctionExpr(memberName, fnRef)
         }
     }
@@ -728,7 +686,7 @@ class C_TypeExpr(private val pos: S_Pos, private val type: R_Type): C_Expr() {
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
         val fn = C_LibFunctions.getTypeStaticFunction(type, memberName.str)
         if (fn == null) throw C_Errors.errUnknownName(type, memberName)
-        val fnRef = C_DefRef(ctx.globalCtx, listOf(memberName), C_DefProxy.create(fn))
+        val fnRef = C_DefRef(ctx.msgCtx, listOf(memberName), C_DefProxy.create(fn))
         return C_FunctionExpr(memberName, fnRef)
     }
 }
@@ -758,11 +716,11 @@ class C_ValueFunctionExpr private constructor(
 }
 
 class C_NamespaceValueExpr(
-        private val defCtx: C_DefinitionContext,
+        private val ctx: C_NamespaceValueContext,
         private val name: List<S_Name>,
         private val value: C_DefRef<C_NamespaceValue>
 ): C_Expr() {
-    private fun expr(): C_Expr = value.getDef().toExpr(defCtx, name)
+    private fun expr(): C_Expr = value.getDef().toExpr(ctx, name)
     override fun kind() = expr().kind()
     override fun startPos() = name.last().pos
     override fun value() = expr().value()

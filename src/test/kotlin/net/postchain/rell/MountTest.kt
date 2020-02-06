@@ -83,7 +83,7 @@ class MountTest: BaseRellTest() {
 
     @Test fun testOperation() {
         chkOpFull("@mount('foo.bar') operation some() { print('Hello!'); }", name = "foo.bar")
-        chkStdout("Hello!")
+        chkOut("Hello!")
     }
 
     @Test fun testQuery() {

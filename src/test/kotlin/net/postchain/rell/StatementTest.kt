@@ -168,33 +168,33 @@ class StatementTest: BaseRellTest() {
         }""".trimIndent()
 
         chkEx(code, "int[123]")
-        chkStdout("0", "1", "2", "3")
+        chkOut("0", "1", "2", "3")
     }
 
     @Test fun testForRange() {
         chkOp("for (i in range(5)) print(i);")
-        chkStdout("0", "1", "2", "3", "4")
+        chkOut("0", "1", "2", "3", "4")
 
         chkOp("for (i in range(5, 0, -1)) print(i);")
-        chkStdout("5", "4", "3", "2", "1")
+        chkOut("5", "4", "3", "2", "1")
 
         chkOp("for (i in range(0)) print(i);")
-        chkStdout()
+        chkOut()
 
         chkOp("for (i in range(1000,1000)) print(i);")
-        chkStdout()
+        chkOut()
 
         chkOp("for (i in range(9223372036854775800,9223372036854775807,5)) print(i);")
-        chkStdout("9223372036854775800", "9223372036854775805")
+        chkOut("9223372036854775800", "9223372036854775805")
 
         chkOp("for (i in range(-9223372036854775807-1,9223372036854775807,9223372036854775807)) print(i);")
-        chkStdout("-9223372036854775808", "-1", "9223372036854775806")
+        chkOut("-9223372036854775808", "-1", "9223372036854775806")
 
         chkOp("for (i in range(9223372036854775807,-9223372036854775807-1,-9223372036854775807)) print(i);")
-        chkStdout("9223372036854775807", "0", "-9223372036854775807")
+        chkOut("9223372036854775807", "0", "-9223372036854775807")
 
         chkOp("for (i in range(9223372036854775807,-9223372036854775807-1,-9223372036854775807-1)) print(i);")
-        chkStdout("9223372036854775807", "-1")
+        chkOut("9223372036854775807", "-1")
     }
 
     @Test fun testEmptyStatement() {
@@ -412,5 +412,13 @@ class StatementTest: BaseRellTest() {
         chkEx("{ if (a) return 123; else return 456; return 789; }", true, "ct_err:stmt_deadcode")
         chkEx("{ if (a) { return 123; } else { return 456; } return 789; }", true, "ct_err:stmt_deadcode")
         chkEx("{ if (a) { return 123; print('Hello'); } return 456; }", true, "ct_err:stmt_deadcode")
+        chkEx("{ return 123; return 456; return 789; return 0; }", "ct_err:stmt_deadcode")
+    }
+
+    // Make sure that parser's time complexity is not O(N^2) - there was such a bug. Execution time shall be ~3s.
+    @Test fun testParserTimeComplexityTest() {
+        val n = 20000
+        for (i in 0 until n) def("function f_$i(): integer = $i;")
+        chk("f_${n-1}()", "int[${n-1}]")
     }
 }

@@ -1,10 +1,10 @@
 package net.postchain.rell.compiler
 
-import net.postchain.rell.model.*
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_NameExprPair
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_VirtualType
+import net.postchain.rell.model.*
 
 class C_MemberRef(val pos: S_Pos, val base: C_Value, val name: S_Name, val safe: Boolean) {
     fun qualifiedName() = "${base.type().toStrictString()}.${name.str}"
@@ -292,7 +292,7 @@ private class C_EntityAttrValue private constructor(
         if (attrInfo.attr == null || !attrInfo.attr.mutable) {
             throw C_Errors.errAttrNotMutable(attrInfo.name.pos, attrInfo.name.str)
         }
-        ctx.blkCtx.defCtx.checkDbUpdateAllowed(pos)
+        ctx.defCtx.checkDbUpdateAllowed(pos)
         return C_EntityAttrDestination(parent, attrInfo.rEntity, attrInfo.attr)
     }
 

@@ -221,7 +221,7 @@ class ObjectTest: BaseRellTest() {
 
         chkData("foo(0,456)")
         chk("foo.x", "int[456]")
-        chkStdout("123", "456")
+        chkOut("123", "456")
     }
 
     @Test fun testInitSideEffects() {

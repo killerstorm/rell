@@ -66,25 +66,36 @@ class R_ReturnStatement(val expr: R_Expr?): R_Statement() {
 class R_BlockStatement(val stmts: List<R_Statement>, val frameBlock: R_FrameBlock): R_Statement() {
     override fun execute(frame: Rt_CallFrame): R_StatementResult? {
         val res = frame.block(frameBlock) {
-            execute0(frame)
+            executeStatements(frame, stmts)
         }
         return res
     }
 
-    private fun execute0(frame: Rt_CallFrame): R_StatementResult? {
-        for (stmt in stmts) {
-            val res = stmt.execute(frame)
-            if (res != null) {
-                return res
+    companion object {
+        fun executeStatements(frame: Rt_CallFrame, stmts: List<R_Statement>): R_StatementResult? {
+            for (stmt in stmts) {
+                val res = stmt.execute(frame)
+                if (res != null) {
+                    return res
+                }
             }
+            return null
         }
+
+    }
+}
+
+class R_ExprStatement(private val expr: R_Expr): R_Statement() {
+    override fun execute(frame: Rt_CallFrame): R_StatementResult? {
+        expr.evaluate(frame)
         return null
     }
 }
 
-class R_ExprStatement(val expr: R_Expr): R_Statement() {
+class R_ReplExprStatement(private val expr: R_Expr): R_Statement() {
     override fun execute(frame: Rt_CallFrame): R_StatementResult? {
-        expr.evaluate(frame)
+        val res = expr.evaluate(frame)
+        frame.defCtx.appCtx.replOut?.printValue(res)
         return null
     }
 }

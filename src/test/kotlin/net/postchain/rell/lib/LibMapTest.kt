@@ -206,7 +206,7 @@ class LibMapTest: BaseRellTest(false) {
 
     @Test fun testFor() {
         chkOp("for (k in ['Bob':123,'Alice':456,'Trudy':789]) print(k);")
-        chkStdout("(Bob,123)", "(Alice,456)", "(Trudy,789)")
+        chkOut("(Bob,123)", "(Alice,456)", "(Trudy,789)")
     }
 
     @Test fun testMutableKey() {

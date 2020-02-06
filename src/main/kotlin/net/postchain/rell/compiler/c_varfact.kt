@@ -1,8 +1,10 @@
 package net.postchain.rell.compiler
 
+import net.postchain.rell.CommonUtils
 import net.postchain.rell.model.R_NullType
 import net.postchain.rell.model.R_NullableType
 import net.postchain.rell.model.R_Type
+import net.postchain.rell.toImmMap
 
 enum class C_VarFact {
     NO,
@@ -20,17 +22,21 @@ enum class C_VarFact {
 
 abstract class C_VarFactsAccess {
     abstract fun isEmpty(): Boolean
-    abstract fun inited(varId: C_VarId): C_VarFact?
-    abstract fun nulled(varId: C_VarId): C_VarFact?
+    abstract fun inited(varUid: C_VarUid): C_VarFact?
+    abstract fun nulled(varUid: C_VarUid): C_VarFact?
+    abstract fun toVarFacts(): C_VarFacts
 }
 
 class C_VarFacts private constructor(
-        val inited: Map<C_VarId, C_VarFact>,
-        val nulled: Map<C_VarId, C_VarFact>
+        inited: Map<C_VarUid, C_VarFact>,
+        nulled: Map<C_VarUid, C_VarFact>
 ): C_VarFactsAccess() {
+    val inited = inited.toImmMap()
+    val nulled = nulled.toImmMap()
+
     override fun isEmpty() = inited.isEmpty() && nulled.isEmpty()
-    override fun inited(varId: C_VarId) = inited[varId]
-    override fun nulled(varId: C_VarId) = nulled[varId]
+    override fun inited(varUid: C_VarUid) = inited[varUid]
+    override fun nulled(varUid: C_VarUid) = nulled[varUid]
 
     fun and(other: C_VarFacts): C_VarFacts {
         if (other.isEmpty()) return this
@@ -38,7 +44,7 @@ class C_VarFacts private constructor(
 
         val mutFacts = C_MutableVarFacts(this)
         mutFacts.andFacts(other)
-        return mutFacts.immutableCopy()
+        return mutFacts.toVarFacts()
     }
 
     fun put(other: C_VarFacts): C_VarFacts {
@@ -53,7 +59,7 @@ class C_VarFacts private constructor(
         return C_VarFacts(inited2, nulled2)
     }
 
-    private fun put0(facts1: Map<C_VarId, C_VarFact>, facts2: Map<C_VarId, C_VarFact>): Map<C_VarId, C_VarFact> {
+    private fun put0(facts1: Map<C_VarUid, C_VarFact>, facts2: Map<C_VarUid, C_VarFact>): Map<C_VarUid, C_VarFact> {
         if (facts2.isEmpty()) {
             return facts1
         } else if (facts1.isEmpty()) {
@@ -65,23 +71,25 @@ class C_VarFacts private constructor(
         }
     }
 
+    override fun toVarFacts() = this
+
     override fun toString() = varFactsToString(inited, nulled)
 
     companion object {
         val EMPTY = C_VarFacts(inited = mapOf(), nulled = mapOf())
 
-        fun of(inited: Map<C_VarId, C_VarFact> = mapOf(), nulled: Map<C_VarId, C_VarFact> = mapOf()): C_VarFacts {
+        fun of(inited: Map<C_VarUid, C_VarFact> = mapOf(), nulled: Map<C_VarUid, C_VarFact> = mapOf()): C_VarFacts {
             return if (inited.isEmpty() && nulled.isEmpty()) EMPTY else C_VarFacts(inited, nulled)
         }
 
-        fun varTypeToNulled(varId: C_VarId, varType: R_Type, valueType: R_Type): Map<C_VarId, C_VarFact> {
+        fun varTypeToNulled(varUid: C_VarUid, varType: R_Type, valueType: R_Type): Map<C_VarUid, C_VarFact> {
             if (varType !is R_NullableType) return mapOf()
             val fact = when (valueType) {
                 R_NullType -> C_VarFact.YES
                 !is R_NullableType -> C_VarFact.NO
                 else -> C_VarFact.MAYBE
             }
-            return mapOf(varId to fact)
+            return mapOf(varUid to fact)
         }
 
         fun forBranches(ctx: C_ExprContext, cases: List<C_VarFacts>): C_VarFacts {
@@ -92,10 +100,10 @@ class C_VarFacts private constructor(
 
         private fun calcBranches(
                 cases: List<C_VarFacts>,
-                prevGetter: (C_VarId) -> C_VarFact,
-                factsGetter: (C_VarFacts) -> Map<C_VarId, C_VarFact>
-        ): Map<C_VarId, C_VarFact> {
-            val res = mutableMapOf<C_VarId, C_VarFact>()
+                prevGetter: (C_VarUid) -> C_VarFact,
+                factsGetter: (C_VarFacts) -> Map<C_VarUid, C_VarFact>
+        ): Map<C_VarUid, C_VarFact> {
+            val res = mutableMapOf<C_VarUid, C_VarFact>()
 
             val allVars = cases.flatMap { factsGetter(it).keys }.toSet()
 
@@ -121,8 +129,8 @@ class C_MutableVarFacts(facts: C_VarFacts = C_VarFacts.EMPTY): C_VarFactsAccess(
     private val nulled = facts.nulled.toMutableMap()
 
     override fun isEmpty() = inited.isEmpty() && nulled.isEmpty()
-    override fun inited(varId: C_VarId) = inited[varId]
-    override fun nulled(varId: C_VarId) = nulled[varId]
+    override fun inited(varUid: C_VarUid) = inited[varUid]
+    override fun nulled(varUid: C_VarUid) = nulled[varUid]
 
     fun clear() {
         inited.clear()
@@ -139,7 +147,7 @@ class C_MutableVarFacts(facts: C_VarFacts = C_VarFacts.EMPTY): C_VarFactsAccess(
         andFacts(nulled, facts.nulled, Companion::andNulled)
     }
 
-    fun immutableCopy(): C_VarFacts {
+    override fun toVarFacts(): C_VarFacts {
         return C_VarFacts.of(inited = inited.toMap(), nulled = nulled.toMap())
     }
 
@@ -147,8 +155,8 @@ class C_MutableVarFacts(facts: C_VarFacts = C_VarFacts.EMPTY): C_VarFactsAccess(
 
     companion object {
         private fun andFacts(
-                a: MutableMap<C_VarId, C_VarFact>,
-                b: Map<C_VarId, C_VarFact>,
+                a: MutableMap<C_VarUid, C_VarFact>,
+                b: Map<C_VarUid, C_VarFact>,
                 op: (C_VarFact, C_VarFact) -> C_VarFact?
         ) {
             for (varId in b.keys) {
@@ -173,8 +181,8 @@ class C_MutableVarFacts(facts: C_VarFacts = C_VarFacts.EMPTY): C_VarFactsAccess(
     }
 }
 
-private fun varFactsToString(inited: Map<C_VarId, C_VarFact>, nulled: Map<C_VarId, C_VarFact>): String {
-    fun str(map: Map<C_VarId, C_VarFact>) = "{" + map.entries.joinToString(",") { (k, v) -> "${k.name}=$v" } + "}"
+private fun varFactsToString(inited: Map<C_VarUid, C_VarFact>, nulled: Map<C_VarUid, C_VarFact>): String {
+    fun str(map: Map<C_VarUid, C_VarFact>) = "{" + map.entries.joinToString(",") { (k, v) -> "${k.name}=$v" } + "}"
     return "[inited=" + str(inited) + ", nulled=" + str(nulled) + "]"
 }
 
@@ -196,13 +204,13 @@ class C_VarFactsContext {
         return if (subFacts.isEmpty()) this else C_VarFactsContext(this, subFacts)
     }
 
-    fun inited(varId: C_VarId) = get(varId, C_VarFactsAccess::inited) ?: C_VarFact.NO
-    fun nulled(varId: C_VarId) = get(varId, C_VarFactsAccess::nulled) ?: C_VarFact.MAYBE
+    fun inited(varUid: C_VarUid) = get(varUid, C_VarFactsAccess::inited) ?: C_VarFact.NO
+    fun nulled(varUid: C_VarUid) = get(varUid, C_VarFactsAccess::nulled) ?: C_VarFact.MAYBE
 
-    private fun get(varId: C_VarId, getter: (C_VarFactsAccess, C_VarId) -> C_VarFact?): C_VarFact? {
+    private fun get(varUid: C_VarUid, getter: (C_VarFactsAccess, C_VarUid) -> C_VarFact?): C_VarFact? {
         var ctx: C_VarFactsContext? = this
         while (ctx != null) {
-            val fact = getter(ctx.facts, varId)
+            val fact = getter(ctx.facts, varUid)
             if (fact != null) {
                 return fact
             }
@@ -211,7 +219,21 @@ class C_VarFactsContext {
         return null
     }
 
+    fun toVarFacts(): C_VarFacts {
+        val list = CommonUtils.chainToList(this) { it.parent }.reversed()
+        val res = C_MutableVarFacts()
+        for (ctx in list) {
+            val facts = ctx.facts.toVarFacts()
+            res.putFacts(facts)
+        }
+        return res.toVarFacts()
+    }
+
     override fun toString() = facts.toString()
+
+    companion object {
+        val EMPTY = C_VarFactsContext(C_VarFacts.EMPTY)
+    }
 }
 
 class C_BlockVarFacts(private val ctx: C_VarFactsContext) {
@@ -228,7 +250,7 @@ class C_BlockVarFacts(private val ctx: C_VarFactsContext) {
         return ctx.sub(facts)
     }
 
-    fun copyFacts(): C_VarFacts = mutFacts.immutableCopy()
+    fun copyFacts(): C_VarFacts = mutFacts.toVarFacts()
 
     private inner class C_BlkVarFactsAccess(val modCount: Long): C_VarFactsAccess() {
         override fun isEmpty(): Boolean {
@@ -236,14 +258,19 @@ class C_BlockVarFacts(private val ctx: C_VarFactsContext) {
             return mutFacts.isEmpty()
         }
 
-        override fun inited(varId: C_VarId): C_VarFact? {
+        override fun inited(varUid: C_VarUid): C_VarFact? {
             checkModCount()
-            return mutFacts.inited(varId)
+            return mutFacts.inited(varUid)
         }
 
-        override fun nulled(varId: C_VarId): C_VarFact? {
+        override fun nulled(varUid: C_VarUid): C_VarFact? {
             checkModCount()
-            return mutFacts.nulled(varId)
+            return mutFacts.nulled(varUid)
+        }
+
+        override fun toVarFacts(): C_VarFacts {
+            checkModCount()
+            return mutFacts.toVarFacts()
         }
 
         private fun checkModCount() {

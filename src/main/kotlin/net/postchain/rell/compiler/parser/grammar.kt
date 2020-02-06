@@ -200,7 +200,7 @@ object S_Grammar : Grammar<S_RellFile>() {
     private val entityAnnotations by -LPAR * separatedTerms(name, COMMA, false) * -RPAR
 
     private val entityBodyFull by ( -LCURL * relClauses * -RCURL)
-    private val entityBodyShort by (SEMI) map { _ -> null }
+    private val entityBodyShort by (SEMI) map { null }
     private val entityBody by ( entityBodyFull or entityBodyShort)
 
     private val entityKeyword by (ENTITY map { null }) or (CLASS map { it.pos })
@@ -351,7 +351,7 @@ object S_Grammar : Grammar<S_RellFile>() {
 
     private val atExpr by ( atExprFrom * atExprAt * atExprWhere * optional(atExprWhat) * optional(atExprLimit) ) map {
         ( from, cardinality, where, whatOpt, limit ) ->
-        val what = if (whatOpt == null) S_AtExprWhat_Default() else whatOpt
+        val what = whatOpt ?: S_AtExprWhat_Default()
         S_AtExpr(from.pos, cardinality, from.value, where, what, limit)
     }
 
@@ -609,11 +609,10 @@ object S_Grammar : Grammar<S_RellFile>() {
         S_DeleteStatement(kw.pos, target)
     }
 
-    private val statement: Parser<S_Statement> by (
+    private val statementNoExpr by (
             emptyStmt
             or varStmt
             or assignStmt
-            or incrementStmt
             or returnStmt
             or blockStmt
             or ifStmt
@@ -621,10 +620,15 @@ object S_Grammar : Grammar<S_RellFile>() {
             or whileStmt
             or forStmt
             or breakStmt
-            or callStmt
-            or createStmt
             or updateStmt
             or deleteStmt
+    )
+
+    private val statement: Parser<S_Statement> by (
+            statementNoExpr
+            or incrementStmt
+            or callStmt
+            or createStmt
     )
 
     private val formalParameters by ( -LPAR * separatedTerms(attrHeader, COMMA, true) * -RPAR)
@@ -695,22 +699,41 @@ object S_Grammar : Grammar<S_RellFile>() {
             or objectDef
             or structDef
             or enumDef
-            or opDef
-            or queryDef
             or functionDef
             or namespaceDef
             or importDef
+            or opDef
+            or queryDef
             or includeDef
     )
 
     private val annotatedDef by zeroOrMore(modifier) * anyDef map {
-        (modifiers, def) -> def.createDef(S_Modifiers(modifiers))
+        (modifiers, def) -> def.createDef(modifiers)
     }
 
     private val moduleHeader by zeroOrMore(modifier) * MODULE * -SEMI map {
-        (modifiers, kw) ->
-        S_ModuleHeader(S_Modifiers(modifiers), kw.pos)
+        (modifiers, kw) -> S_ModuleHeader(S_Modifiers(modifiers), kw.pos)
     }
+
+    private val defReplStep by annotatedDef map {
+        def -> S_DefinitionReplStep(def)
+    }
+
+    private val replExprStatement by expression * -SEMI map {
+        expr -> S_ExprStatement(expr)
+    }
+
+    private val stmtReplStep by statementNoExpr or replExprStatement map {
+        stmt -> S_StatementReplStep(stmt)
+    }
+
+    private val replStep by defReplStep or stmtReplStep
+
+    private val replCommand by zeroOrMore(replStep) * optional(expression) map {
+        (steps, expr) -> S_ReplCommand(steps, expr)
+    }
+
+    val replParser: Parser<S_ReplCommand> by replCommand
 
     override val rootParser by optional(moduleHeader) * zeroOrMore(annotatedDef) map {
         (header, defs) ->
@@ -738,7 +761,7 @@ private fun tailsToExpr(head: S_Expr, tails: List<BaseExprTail>): S_Expr {
 }
 
 private class AnnotatedDef(private val creator: (S_Modifiers) -> S_Definition) {
-    fun createDef(modifiers: S_Modifiers) = creator(modifiers)
+    fun createDef(modifiers: List<S_Modifier>) = creator(S_Modifiers(modifiers))
 }
 
 private fun annotatedDef(creator: (S_Modifiers) -> S_Definition): AnnotatedDef = AnnotatedDef(creator)

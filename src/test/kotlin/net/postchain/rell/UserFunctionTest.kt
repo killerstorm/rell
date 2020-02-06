@@ -18,7 +18,7 @@ class UserFunctionTest: BaseRellTest(false) {
         chkFn("function f() = print('Hello');", "f()", "ct_err:query_exprtype_unit")
 
         chkFnEx("function f() = print('Hello');", "{ f(); return 123; }", "int[123]")
-        chkStdout("Hello")
+        chkOut("Hello")
     }
 
     @Test fun testReturnType() {
@@ -119,7 +119,7 @@ class UserFunctionTest: BaseRellTest(false) {
         """.trimIndent()
 
         chkFnEx(fn, "{ foo(5); return 0; }", "int[0]")
-        chkStdout("foo 5", "bar 4", "foo 3", "bar 2", "foo 1", "bar 0")
+        chkOut("foo 5", "bar 4", "foo 3", "bar 2", "foo 1", "bar 0")
     }
 
     @Test fun testCallUnderAt() {

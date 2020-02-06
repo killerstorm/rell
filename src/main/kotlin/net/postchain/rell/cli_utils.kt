@@ -14,11 +14,15 @@ import java.io.PrintStream
 import kotlin.system.exitProcess
 
 object RellCliUtils: KLogging() {
-    fun compileApp(sourceDir: String?, moduleName: R_ModuleName, quiet: Boolean = false): R_App {
-        val file = if (sourceDir == null) File(".") else File(sourceDir)
-        val cSourceDir = C_DiskSourceDir(file.absoluteFile)
+    fun createSourceDir(sourceDirPath: String?): C_SourceDir {
+        val file = if (sourceDirPath == null) File(".") else File(sourceDirPath)
+        return C_DiskSourceDir(file.absoluteFile)
+    }
 
-        val res = compileApp(cSourceDir, listOf(moduleName), quiet)
+    fun compileApp(sourceDir: String?, moduleName: R_ModuleName?, quiet: Boolean = false): R_App {
+        val cSourceDir = createSourceDir(sourceDir)
+        val modules = listOf(moduleName).filterNotNull()
+        val res = compileApp(cSourceDir, modules, quiet)
         return res
     }
 
@@ -92,7 +96,6 @@ object RellCliUtils: KLogging() {
     private fun <T> parseCliArgs(args: Array<String>, argsObj: T): T {
         val cl = CommandLine(argsObj)
         try {
-            if (args.size == 0) throw CommandLine.PicocliException("no args")
             cl.parse(*args)
         } catch (e: CommandLine.PicocliException) {
             cl.usageHelpWidth = 1000

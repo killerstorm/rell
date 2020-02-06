@@ -10,15 +10,22 @@ class C_AtWhat(val exprs: List<Pair<String?, Db_Expr>>, val sort: List<Pair<Db_E
 class S_AtExprWhatSort(val pos: S_Pos, val asc: Boolean)
 
 sealed class S_AtExprWhat {
-    abstract fun compile(ctx: C_ExprContext, subValues: MutableList<C_Value>): C_AtWhat
+    abstract fun compile(ctx: C_ExprContext, from: List<C_AtEntity>, subValues: MutableList<C_Value>): C_AtWhat
 }
 
 class S_AtExprWhat_Default: S_AtExprWhat() {
-    override fun compile(ctx: C_ExprContext, subValues: MutableList<C_Value>) = ctx.nameCtx.createDefaultAtWhat()
+    override fun compile(ctx: C_ExprContext, from: List<C_AtEntity>, subValues: MutableList<C_Value>): C_AtWhat {
+        val exprs = from.map {
+            val name = if (from.size == 1) null else it.alias
+            val expr = it.compileExpr()
+            Pair(name, expr)
+        }
+        return C_AtWhat(exprs, listOf())
+    }
 }
 
 class S_AtExprWhat_Simple(val path: List<S_Name>): S_AtExprWhat() {
-    override fun compile(ctx: C_ExprContext, subValues: MutableList<C_Value>): C_AtWhat {
+    override fun compile(ctx: C_ExprContext, from: List<C_AtEntity>, subValues: MutableList<C_Value>): C_AtWhat {
         var expr = ctx.nameCtx.resolveAttr(path[0])
         for (step in path.subList(1, path.size)) {
             expr = expr.member(ctx, step, false)
@@ -38,14 +45,14 @@ class S_AtExprWhatComplexField(
 )
 
 class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExprWhat() {
-    override fun compile(ctx: C_ExprContext, subValues: MutableList<C_Value>): C_AtWhat {
+    override fun compile(ctx: C_ExprContext, from: List<C_AtEntity>, subValues: MutableList<C_Value>): C_AtWhat {
         val procFields = processFields(ctx)
         subValues.addAll(procFields.map { it.value })
 
         val incFields = procFields.filter { !it.excluded }
 
         if (incFields.isEmpty()) {
-            ctx.globalCtx.error(fields[0].expr.startPos, "at:no_fields", "All fields are excluded from the result")
+            ctx.msgCtx.error(fields[0].expr.startPos, "at:no_fields", "All fields are excluded from the result")
         }
 
         val exprs = incFields.map { field ->
@@ -70,10 +77,10 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
         if (field.sort != null) {
             modTarget.sort?.set(field.sort.asc)
             val ann = if (field.sort.asc) C_Modifier.SORT else C_Modifier.SORT_DESC
-            ctx.globalCtx.warning(field.sort.pos, "at:what:sort:deprecated:$ann", "Deprecated sort syntax; use @$ann annotation instead")
+            ctx.msgCtx.warning(field.sort.pos, "at:what:sort:deprecated:$ann", "Deprecated sort syntax; use @$ann annotation instead")
         }
 
-        val modifierCtx = C_ModifierContext(ctx.globalCtx, R_MountName.EMPTY)
+        val modifierCtx = C_ModifierContext(ctx.msgCtx, R_MountName.EMPTY)
         for (annotation in field.annotations) {
             annotation.compile(modifierCtx, modTarget)
         }
@@ -109,7 +116,7 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
         for (f in procFields) {
             var name = f.name
             if (name != null && !names.add(name)) {
-                ctx.globalCtx.error(f.namePos, "at:dup_field_name:$name", "Duplicate field name: '$name'")
+                ctx.msgCtx.error(f.namePos, "at:dup_field_name:$name", "Duplicate field name: '$name'")
                 name = null
             }
             res.add(WhatField(f.value, f.dbExpr, f.namePos, name, f.nameExplicit, f.excluded, f.sort))
@@ -254,10 +261,10 @@ class S_AtExpr(
         val cFrom = compileFrom(ctx, from)
         val rFrom = cFrom.map { it.compile() }
 
-        val dbCtx = ctx.update(nameCtx = C_DbNameContext(ctx.blkCtx, cFrom))
+        val dbCtx = ctx.update(nameCtx = C_NameContext.createAt(ctx.nameCtx, cFrom))
         val dbWhere = where.compile(dbCtx, subValues)
 
-        val ctWhat = what.compile(dbCtx, subValues)
+        val ctWhat = what.compile(dbCtx, cFrom, subValues)
         val resType = calcResultType(ctWhat.exprs)
 
         val dbWhatExprs = ctWhat.exprs.map { it.second }
@@ -317,14 +324,14 @@ class S_AtExpr(
         private fun compileFromEntity(ctx: C_ExprContext, idx: Int, from: S_AtExprFrom): Pair<S_Name, C_AtEntity> {
             if (from.alias != null) {
                 val name = from.alias
-                val entry = ctx.blkCtx.lookupLocalVar(name.str)
-                if (entry != null) {
+                val localVar = ctx.nameCtx.resolveNameLocalValue(name.str)
+                if (localVar != null) {
                     throw C_Error(name.pos, "expr_at_conflict_alias:${name.str}", "Name conflict: '${name.str}'")
                 }
             }
 
             val alias = from.alias ?: from.entityName[from.entityName.size - 1]
-            val entity = ctx.blkCtx.defCtx.nsCtx.getEntity(from.entityName)
+            val entity = ctx.nsCtx.getEntity(from.entityName)
             return Pair(alias, C_AtEntity(entity, alias.str, idx))
         }
 

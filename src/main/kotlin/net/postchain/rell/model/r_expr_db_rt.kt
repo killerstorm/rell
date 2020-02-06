@@ -174,13 +174,13 @@ class SqlListBuilder(private val builder: SqlBuilder, private val sep: String) {
 class ParameterizedSql(val sql: String, val params: List<SqlParam>) {
     fun execute(frame: Rt_CallFrame) {
         val args = calcArgs(frame)
-        val sqlExec = frame.defCtx.globalCtx.sqlExec
+        val sqlExec = frame.sqlExec
         sqlExec.execute(sql, args::bind)
     }
 
     fun executeQuery(frame: Rt_CallFrame, consumer: (ResultSet) -> Unit) {
         val args = calcArgs(frame)
-        val sqlExec = frame.defCtx.globalCtx.sqlExec
+        val sqlExec = frame.sqlExec
         sqlExec.executeQuery(sql, args::bind, consumer)
     }
 

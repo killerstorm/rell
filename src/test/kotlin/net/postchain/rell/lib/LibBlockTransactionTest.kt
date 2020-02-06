@@ -264,6 +264,17 @@ class LibBlockTransactionTest: BaseRellTest() {
         chk("""r.from_gtv_pretty(gtv.from_json('{"t":444}'))""", "ct_err:fn:invalid:r:from_gtv_pretty")
     }
 
+    @Test fun testSelectOrderByTimestamp() {
+        tst.chainId = 333
+        tst.inserts = RellTestContext.BlockBuilder()
+                .block(1, 333, 222, "DEADBEEF", "5678", 1500000000000)
+                .block(2, 333, 35, "FEEBDAED", "8765", 1400000000000)
+                .block(3, 333, 46, "BADBAD", "FEDC", 0)
+                .block(4, 555, 46, "BADBAD", "FEDC", 1300000000000)
+                .list()
+        chk("block @* {} ( @sort .timestamp )", "list<integer>[int[0],int[1400000000000],int[1500000000000]]")
+    }
+
     private fun createChainIdTester(chainId: Long, blockIid: Long, txIid: Long): RellCodeTester {
         val t = RellCodeTester(tstCtx)
         t.def("entity foo { b: block; t: transaction; mutable value: integer; }")

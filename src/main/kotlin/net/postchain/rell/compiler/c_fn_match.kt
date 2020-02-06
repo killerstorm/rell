@@ -145,7 +145,13 @@ class C_DeprecatedFuncCase<CtxT: C_FuncCaseCtx>(
 
         private fun deprecatedMessage(ctx: C_ExprContext, caseCtx: CtxT) {
             val name = caseCtx.fullName
-            C_DeprecatedDefProxy.deprecatedMessage(ctx.globalCtx, C_DeclarationType.FUNCTION, name.pos, name.str, deprecated)
+            C_DeprecatedDefProxy.deprecatedMessage(
+                    ctx.msgCtx,
+                    C_DeclarationType.FUNCTION,
+                    name.pos,
+                    name.str,
+                    deprecated
+            )
         }
     }
 }

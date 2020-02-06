@@ -567,50 +567,50 @@ object C_Ns_OpContext {
 
     private val TRANSACTION_FN = "$NAME.transaction"
 
-    fun transactionExpr(defCtx: C_DefinitionContext, pos: S_Pos): R_Expr {
-        val type = defCtx.modCtx.sysDefs.transactionEntity.type
+    fun transactionExpr(ctx: C_NamespaceValueContext, pos: S_Pos): R_Expr {
+        val type = ctx.modCtx.sysDefs.transactionEntity.type
         return C_Utils.createSysCallExpr(type, R_SysFn_OpContext.Transaction(type), listOf(), pos, TRANSACTION_FN)
     }
 
-    private fun checkCtx(defCtx: C_DefinitionContext, name: List<S_Name>) {
-        val dt = defCtx.definitionType
+    private fun checkCtx(ctx: C_NamespaceValueContext, name: List<S_Name>) {
+        val dt = ctx.defCtx.definitionType
         if (dt != C_DefinitionType.OPERATION && dt != C_DefinitionType.FUNCTION && dt != C_DefinitionType.ENTITY) {
-            throw C_Error(name[0].pos, "op_ctx_noop", "Cannot access '$NAME' outside of an operation")
+            throw C_Error(name[0].pos, "op_ctx_noop", "Can access '$NAME' only in an operation, function or entity")
         }
     }
 
     object Value_LastBlockTime: C_NamespaceValue_RExpr() {
-        override fun toExpr0(defCtx: C_DefinitionContext, name: List<S_Name>): R_Expr {
-            checkCtx(defCtx, name)
+        override fun toExpr0(ctx: C_NamespaceValueContext, name: List<S_Name>): R_Expr {
+            checkCtx(ctx, name)
             return C_Utils.createSysCallExpr(R_IntegerType, R_SysFn_OpContext.LastBlockTime, listOf(), name)
         }
     }
 
     object Value_BlockHeight: C_NamespaceValue_RExpr() {
-        override fun toExpr0(defCtx: C_DefinitionContext, name: List<S_Name>): R_Expr {
-            checkCtx(defCtx, name)
+        override fun toExpr0(ctx: C_NamespaceValueContext, name: List<S_Name>): R_Expr {
+            checkCtx(ctx, name)
             return C_Utils.createSysCallExpr(R_IntegerType, R_SysFn_OpContext.BlockHeight, listOf(), name)
         }
     }
 
     object Value_Transaction: C_NamespaceValue_RExpr() {
-        override fun toExpr0(defCtx: C_DefinitionContext, name: List<S_Name>): R_Expr {
-            checkCtx(defCtx, name)
-            return transactionExpr(defCtx, name[0].pos)
+        override fun toExpr0(ctx: C_NamespaceValueContext, name: List<S_Name>): R_Expr {
+            checkCtx(ctx, name)
+            return transactionExpr(ctx, name[0].pos)
         }
     }
 }
 
 private object C_NsValue_ChainContext_Args: C_NamespaceValue_RExpr() {
-    override fun toExpr0(defCtx: C_DefinitionContext, name: List<S_Name>): R_Expr {
-        val struct = defCtx.modCtx.getModuleArgsStruct()
+    override fun toExpr0(ctx: C_NamespaceValueContext, name: List<S_Name>): R_Expr {
+        val struct = ctx.modCtx.getModuleArgsStruct()
         if (struct == null) {
             val nameStr = C_Utils.nameStr(name)
             throw C_Error(name[0].pos, "expr_chainctx_args_norec",
                     "To use '$nameStr', define a struct '${C_Constants.MODULE_ARGS_STRUCT}'")
         }
 
-        val moduleName = defCtx.modCtx.module.name
+        val moduleName = ctx.modCtx.moduleName
         return C_Utils.createSysCallExpr(struct.type, R_SysFn_ChainContext.Args(moduleName), listOf(), name)
     }
 }

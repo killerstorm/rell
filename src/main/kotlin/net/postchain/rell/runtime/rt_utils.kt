@@ -3,9 +3,10 @@ package net.postchain.rell.runtime
 import mu.KLogger
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
-import net.postchain.rell.model.R_StackPos
 import net.postchain.rell.compiler.C_Constants
+import net.postchain.rell.model.R_StackPos
 import net.postchain.rell.sql.SqlExecutor
+import net.postchain.rell.sql.SqlManager
 import java.math.BigDecimal
 import java.math.MathContext
 import java.math.RoundingMode
@@ -72,15 +73,22 @@ class Rt_TupleComparator(private val elemComparators: List<Comparator<Rt_Value>>
     }
 }
 
-class Rt_SqlExecutor(private val sqlExec: SqlExecutor, private val logErrors: Boolean): SqlExecutor() {
-    override fun connection(): Connection {
-        return sqlExec.connection()
-    }
-
-    override fun transaction(code: () -> Unit) {
-        wrapErr("(transaction)") {
-            sqlExec.transaction(code)
+class Rt_SqlManager(private val sqlMgr: SqlManager, private val logErrors: Boolean): SqlManager() {
+    override fun <T> execute0(tx: Boolean, code: (SqlExecutor) -> T): T {
+        val res = sqlMgr.execute(tx) { sqlExec ->
+            val sqlExec2 = Rt_SqlExecutor(sqlExec, logErrors)
+            code(sqlExec2)
         }
+        return res
+    }
+}
+
+class Rt_SqlExecutor(private val sqlExec: SqlExecutor, private val logErrors: Boolean): SqlExecutor() {
+    override fun <T> connection(code: (Connection) -> T): T {
+        val res = wrapErr("(connection)") {
+            sqlExec.connection(code)
+        }
+        return res
     }
 
     override fun execute(sql: String) {

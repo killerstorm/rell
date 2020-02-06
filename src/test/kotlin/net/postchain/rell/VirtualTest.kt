@@ -1278,13 +1278,13 @@ class VirtualTest: BaseGtxTest(false) {
         val code = "operation o(x: virtual<list<integer>>) { print(_strict_str(x)); }"
 
         chkOpFull(code, listOf(argToGtv("[123,456]", "[[0],[1]]")))
-        chkStdout("virtual<list<integer>>[int[123],int[456]]")
+        chkOut("virtual<list<integer>>[int[123],int[456]]")
 
         chkOpFull(code, listOf(argToGtv("[123,456]", "[[0]]")))
-        chkStdout("virtual<list<integer>>[int[123],null]")
+        chkOut("virtual<list<integer>>[int[123],null]")
 
         chkOpFull(code, listOf(argToGtv("[123,456]", "[[1]]")))
-        chkStdout("virtual<list<integer>>[null,int[456]]")
+        chkOut("virtual<list<integer>>[null,int[456]]")
     }
 
     @Test fun testHash() {

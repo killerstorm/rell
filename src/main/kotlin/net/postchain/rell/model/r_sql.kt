@@ -8,6 +8,7 @@ import net.postchain.rell.sql.SqlConstants
 abstract class R_EntitySqlMapping {
     abstract fun rowidColumn(): String
     abstract fun autoCreateTable(): Boolean
+    abstract fun isSystemEntity(): Boolean
     abstract fun table(sqlCtx: Rt_SqlContext): String
     abstract fun table(chainMapping: Rt_ChainSqlMapping): String
     abstract fun appendExtraWhere(b: SqlBuilder, sqlCtx: Rt_SqlContext, alias: SqlTableAlias)
@@ -34,6 +35,7 @@ abstract class R_EntitySqlMapping {
 class R_EntitySqlMapping_Regular(private val mountName: R_MountName): R_EntitySqlMapping() {
     override fun rowidColumn() = SqlConstants.ROWID_COLUMN
     override fun autoCreateTable() = true
+    override fun isSystemEntity() = false
 
     override fun table(sqlCtx: Rt_SqlContext): String {
         return table(sqlCtx.mainChainMapping)
@@ -56,6 +58,7 @@ class R_EntitySqlMapping_Regular(private val mountName: R_MountName): R_EntitySq
 class R_EntitySqlMapping_External(private val mountName: R_MountName, private val chain: R_ExternalChainRef): R_EntitySqlMapping() {
     override fun rowidColumn() = SqlConstants.ROWID_COLUMN
     override fun autoCreateTable() = false
+    override fun isSystemEntity() = false
 
     override fun table(sqlCtx: Rt_SqlContext): String {
         val chainMapping = sqlCtx.linkedChain(chain).sqlMapping
@@ -96,13 +99,14 @@ abstract class R_EntitySqlMapping_TxBlk(
         private val rowid: String,
         private val chain: R_ExternalChainRef?
 ): R_EntitySqlMapping() {
-    override fun rowidColumn() = rowid
-    override fun autoCreateTable() = false
+    final override fun rowidColumn() = rowid
+    final override fun autoCreateTable() = false
+    final override fun isSystemEntity() = true
 
-    override fun table(sqlCtx: Rt_SqlContext) = table
+    final override fun table(sqlCtx: Rt_SqlContext) = table
     override fun table(chainMapping: Rt_ChainSqlMapping) = table
 
-    override fun appendExtraWhere(b: SqlBuilder, sqlCtx: Rt_SqlContext, alias: SqlTableAlias) {
+    final override fun appendExtraWhere(b: SqlBuilder, sqlCtx: Rt_SqlContext, alias: SqlTableAlias) {
         val chainMapping = sqlCtx.chainMapping(chain)
         b.appendSep(" AND ")
         b.append("(")
@@ -125,7 +129,7 @@ abstract class R_EntitySqlMapping_TxBlk(
         return extraWhereExpr0(entity, entityExpr, chain)
     }
 
-    override fun selectExistingObjects(sqlCtx: Rt_SqlContext, where: String) = throw UnsupportedOperationException()
+    final override fun selectExistingObjects(sqlCtx: Rt_SqlContext, where: String) = throw UnsupportedOperationException()
 }
 
 class R_EntitySqlMapping_Transaction(chain: R_ExternalChainRef?): R_EntitySqlMapping_TxBlk(SqlConstants.TRANSACTIONS_TABLE, "tx_iid", chain) {

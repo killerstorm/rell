@@ -167,6 +167,11 @@ class AtExprTest: BaseRellTest() {
         chkEx("{ val u = 'Bill'; return (u: user) @ { u.firstName == 'Mark' }; }", "ct_err:expr_at_conflict_alias:u")
     }
 
+    @Test fun testNameResolutionEntityVsLocal() {
+        chkEx("{ val user = 'Bill'; return user @ { .firstName == 'Bill' }; }", "user[40]")
+        chkEx("{ val user = 'Bill'; return user @ { .firstName == user }; }", "ct_err:expr_name_entity_local:user")
+    }
+
     @Test fun testAttributeAmbiguityName() {
         def("entity user { name: text; }")
         def("entity company { name: text; }")

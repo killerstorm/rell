@@ -7,29 +7,29 @@ import net.postchain.rell.model.R_EntityType
 import net.postchain.rell.model.R_Type
 
 class C_ScopeBuilder {
-    private val globalCtx: C_GlobalContext
+    private val msgCtx: C_MessageContext
     private val scope: C_Scope
 
-    constructor(globalCtx: C_GlobalContext): this(globalCtx, null, { C_Namespace.EMPTY })
+    constructor(msgCtx: C_MessageContext): this(msgCtx, null, { C_Namespace.EMPTY })
 
-    private constructor(globalCtx: C_GlobalContext, parentScope: C_Scope?, nsGetter: Getter<C_Namespace>) {
-        this.globalCtx = globalCtx
-        this.scope = C_Scope(globalCtx, parentScope, nsGetter)
+    private constructor(msgCtx: C_MessageContext, parentScope: C_Scope?, nsGetter: Getter<C_Namespace>) {
+        this.msgCtx = msgCtx
+        this.scope = C_Scope(msgCtx, parentScope, nsGetter)
     }
 
     fun nested(nsGetter: Getter<C_Namespace>): C_ScopeBuilder {
-        return C_ScopeBuilder(globalCtx, scope, nsGetter)
+        return C_ScopeBuilder(msgCtx, scope, nsGetter)
     }
 
     fun scope() = scope
 }
 
 class C_Scope(
-        private val globalCtx: C_GlobalContext,
+        private val msgCtx: C_MessageContext,
         private val parent: C_Scope?,
         private val nsGetter: Getter<C_Namespace>
 ) {
-    private val rootNsRef: C_NamespaceRef by lazy { C_NamespaceRef(globalCtx, listOf(), nsGetter()) }
+    private val rootNsRef: C_NamespaceRef by lazy { C_NamespaceRef(msgCtx, listOf(), nsGetter()) }
 
     fun getType(name: List<S_Name>): R_Type {
         val type = getTypeOpt(name)

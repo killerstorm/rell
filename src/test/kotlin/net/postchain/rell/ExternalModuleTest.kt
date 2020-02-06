@@ -325,6 +325,19 @@ class ExternalModuleTest: BaseRellTest() {
         chkCompile("@external namespace bar {}", "ct_err:ann:external:nullary:target_type:NAMESPACE")
     }
 
+    @Test fun testSystemDefsAccess() {
+        file("ext.rell", "@external module; @log entity user { name; }")
+        initExternalModule(1, "ext", "user", "Bob")
+        initChainDependency(1, "A")
+        def("@external('A') import ext;")
+
+        chk("_type_of(ext.transaction@{})", "[A]!transaction")
+        chk("_type_of(ext.block@{})", "[A]!block")
+        chkEx("{ val x: ext.integer = 123; return 0; }", "ct_err:unknown_type:ext.integer")
+        chk("ext.integer('123')", "ct_err:unknown_name:ext.integer")
+        chk("ext.max(123, 456)", "ct_err:unknown_name:ext.max")
+    }
+
     private fun chkModule(code: String, expected: String) {
         chkModuleFull("@external module; $code", expected)
     }

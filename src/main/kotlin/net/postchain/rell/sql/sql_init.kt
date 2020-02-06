@@ -4,7 +4,7 @@ import com.google.common.collect.Sets
 import mu.KLogger
 import mu.KLogging
 import net.postchain.rell.model.*
-import net.postchain.rell.runtime.Rt_AppContext
+import net.postchain.rell.runtime.Rt_ExecutionContext
 import net.postchain.rell.runtime.Rt_Messages
 import net.postchain.rell.runtime.Rt_StackTraceError
 import net.postchain.rell.runtime.Rt_Utils
@@ -12,34 +12,58 @@ import net.postchain.rell.runtime.Rt_Utils
 private val ORD_TABLES = 0
 private val ORD_RECORDS = 1
 
-class SqlInit private constructor(private val appCtx: Rt_AppContext, private val logLevel: Int) {
-    private val sqlCtx = appCtx.sqlCtx
-    private val globalCtx = appCtx.globalCtx
+class SqlInitLogging(
+        val header: Boolean = false,
+        val plan: Boolean = false,
+        val planEmptyDb: Boolean = false,
+        val step: Boolean = false,
+        val stepEmptyDb: Boolean = false,
+        val metaNoCode: Boolean = false,
+        val allOther: Boolean = false
+) {
+    companion object {
+        val LOG_NONE = 0
+        val LOG_HEADER = 1000
+        val LOG_STEP_COMPLEX = 2000
+        val LOG_STEP_SIMPLE = 3000
+        val LOG_PLAN_COMPLEX = 4000
+        val LOG_PLAN_SIMPLE = 5000
+        val LOG_ALL = Integer.MAX_VALUE
 
-    private val initCtx = SqlInitCtx(logger, logLevel, SqlObjectsInit(appCtx))
+        fun ofLevel(level: Int) = SqlInitLogging(
+                header = level >= LOG_HEADER,
+                plan = level >= LOG_PLAN_COMPLEX,
+                planEmptyDb = level >= LOG_PLAN_SIMPLE,
+                step = level >= LOG_STEP_COMPLEX,
+                stepEmptyDb = level >= LOG_STEP_SIMPLE,
+                metaNoCode = level > LOG_NONE,
+                allOther = level >= LOG_ALL
+        )
+    }
+}
+
+class SqlInit private constructor(
+        private val exeCtx: Rt_ExecutionContext,
+        private val logging: SqlInitLogging
+) {
+    private val sqlCtx = exeCtx.appCtx.sqlCtx
+
+    private val initCtx = SqlInitCtx(logger, logging, SqlObjectsInit(exeCtx))
 
     companion object : KLogging() {
-        val LOG_ALL = 0
-        val LOG_PLAN_SIMPLE = 1000
-        val LOG_PLAN_COMPLEX = 2000
-        val LOG_STEP_SIMPLE = 3000
-        val LOG_STEP_COMPLEX = 4000
-        val LOG_TITLE = 5000
-        val LOG_NONE = Integer.MAX_VALUE
-
-        fun init(appCtx: Rt_AppContext, logLevel: Int): List<String> {
-            val obj = SqlInit(appCtx, logLevel)
+        fun init(exeCtx: Rt_ExecutionContext, logging: SqlInitLogging): List<String> {
+            val obj = SqlInit(exeCtx, logging)
             return obj.init()
         }
     }
 
     private fun init(): List<String> {
-        log(LOG_TITLE, "Initializing database (chain_iid = ${sqlCtx.mainChainMapping.chainId})")
+        log(logging.header, "Initializing database (chain_iid = ${sqlCtx.mainChainMapping.chainId})")
 
-        val dbEmpty = SqlInitPlanner.plan(appCtx, initCtx)
+        val dbEmpty = SqlInitPlanner.plan(exeCtx, initCtx)
         initCtx.checkErrors()
 
-        appCtx.objectsInitialization(initCtx.objsInit) {
+        exeCtx.appCtx.objectsInitialization(initCtx.objsInit) {
             executePlan(dbEmpty)
         }
 
@@ -49,49 +73,49 @@ class SqlInit private constructor(private val appCtx: Rt_AppContext, private val
     private fun executePlan(dbEmpty: Boolean) {
         val steps = initCtx.steps()
         if (steps.isEmpty()) {
-            log(LOG_ALL, "Nothing to do")
+            log(logging.allOther, "Nothing to do")
             return
         }
 
-        val stepLogLevel = if (dbEmpty) LOG_STEP_SIMPLE else LOG_STEP_COMPLEX
-        log(stepLogLevel, "Database init plan: ${steps.size} step(s)")
+        val stepLogAllowed = if (dbEmpty) logging.stepEmptyDb else logging.step
+        log(stepLogAllowed, "Database init plan: ${steps.size} step(s)")
 
-        val planLogLevel = if (dbEmpty) LOG_PLAN_SIMPLE else LOG_PLAN_COMPLEX
+        val planLogAllowed = if (dbEmpty) logging.planEmptyDb else logging.plan
         for (step in steps) {
-            log(planLogLevel, "    ${step.title}")
+            log(planLogAllowed, "    ${step.title}")
         }
 
-        val stepCtx = SqlStepCtx(logger, appCtx, initCtx.objsInit, globalCtx.sqlExec)
+        val stepCtx = SqlStepCtx(logger, exeCtx, initCtx.objsInit)
         for (step in steps) {
-            log(stepLogLevel, "Step: ${step.title}")
+            log(stepLogAllowed, "Step: ${step.title}")
             step.action.run(stepCtx)
         }
 
-        log(LOG_ALL, "Database initialization done")
+        log(logging.allOther, "Database initialization done")
     }
 
-    private fun log(level: Int, s: String) {
-        if (level >= logLevel) {
+    private fun log(allowed: Boolean, s: String) {
+        if (allowed) {
             logger.info(s)
         }
     }
 }
 
-private class SqlInitPlanner private constructor(private val appCtx: Rt_AppContext, private val initCtx: SqlInitCtx) {
-    private val globalCtx = appCtx.globalCtx
-    private val sqlCtx = appCtx.sqlCtx
+private class SqlInitPlanner private constructor(private val exeCtx: Rt_ExecutionContext, private val initCtx: SqlInitCtx) {
+    private val sqlCtx = exeCtx.appCtx.sqlCtx
     private val mapping = sqlCtx.mainChainMapping
 
     companion object {
-        fun plan(appCtx: Rt_AppContext, initCtx: SqlInitCtx): Boolean {
-            val obj = SqlInitPlanner(appCtx, initCtx)
+        fun plan(exeCtx: Rt_ExecutionContext, initCtx: SqlInitCtx): Boolean {
+            val obj = SqlInitPlanner(exeCtx, initCtx)
             return obj.plan()
         }
     }
 
     private fun plan(): Boolean {
-        val con = globalCtx.sqlExec.connection()
-        val tables = SqlUtils.getExistingChainTables(con, mapping)
+        val tables = exeCtx.sqlExec.connection { con ->
+            SqlUtils.getExistingChainTables(con, mapping)
+        }
 
         val metaExists = SqlMeta.checkMetaTablesExisting(mapping, tables, initCtx.msgs)
         initCtx.checkErrors()
@@ -99,7 +123,7 @@ private class SqlInitPlanner private constructor(private val appCtx: Rt_AppConte
         val metaData = processMeta(metaExists, tables)
         initCtx.checkErrors()
 
-        SqlEntityIniter.processEntities(appCtx, initCtx, metaData, tables)
+        SqlEntityIniter.processEntities(exeCtx, initCtx, metaData, tables)
         return !metaExists
     }
 
@@ -109,10 +133,10 @@ private class SqlInitPlanner private constructor(private val appCtx: Rt_AppConte
             initCtx.step(ORD_TABLES, "Create meta tables", SqlStepAction_ExecSql(SqlMeta.genMetaTablesCreate(sqlCtx)))
         }
 
-        val metaData = if (!metaExists) mapOf() else SqlMeta.loadMetaData(globalCtx.sqlExec, mapping, initCtx.msgs)
+        val metaData = if (!metaExists) mapOf() else SqlMeta.loadMetaData(exeCtx.sqlExec, mapping, initCtx.msgs)
         initCtx.checkErrors()
 
-        SqlMeta.checkDataTables(appCtx.sqlCtx, tables, metaData, initCtx.msgs)
+        SqlMeta.checkDataTables(sqlCtx, tables, metaData, initCtx.msgs)
         initCtx.checkErrors()
 
         return metaData
@@ -120,26 +144,25 @@ private class SqlInitPlanner private constructor(private val appCtx: Rt_AppConte
 }
 
 private class SqlEntityIniter private constructor(
-        appCtx: Rt_AppContext,
+        private val exeCtx: Rt_ExecutionContext,
         private val initCtx: SqlInitCtx,
         private val metaData: Map<String, MetaEntity>,
         private val sqlTables: Map<String, SqlTable>
 ) {
-    private val sqlCtx = appCtx.sqlCtx
-    private val globalCtx = appCtx.globalCtx
+    private val sqlCtx = exeCtx.appCtx.sqlCtx
 
     private var nextMetaEntityId = 1 + (metaData.values.map { it.id }.max() ?: -1)
 
-    private val warnUnexpectedSqlStructure = initCtx.logLevel < SqlInit.LOG_NONE
-
     private fun processEntities() {
-        for (entity in sqlCtx.topologicalEntities) {
+        val appDefs = sqlCtx.appDefs
+
+        for (entity in appDefs.topologicalEntities) {
             if (entity.sqlMapping.autoCreateTable()) {
                 processEntity(entity, MetaEntityType.ENTITY)
             }
         }
 
-        for (obj in sqlCtx.objects) {
+        for (obj in appDefs.objects) {
             val ins = processEntity(obj.rEntity, MetaEntityType.OBJECT)
             if (ins) {
                 val entityName = msgEntityName(obj.rEntity)
@@ -148,13 +171,13 @@ private class SqlEntityIniter private constructor(
             }
         }
 
-        val codeEntities = sqlCtx.entities
-                .plus(sqlCtx.objects.map { it.rEntity })
+        val codeEntities = appDefs.entities
+                .plus(appDefs.objects.map { it.rEntity })
                 .map { it.metaName }
                 .toSet()
 
         for (metaEntity in metaData.values.filter { it.name !in codeEntities }) {
-            if (warnUnexpectedSqlStructure) {
+            if (initCtx.logging.metaNoCode) {
                 // No need to print this warning in a Console App.
                 initCtx.msgs.warning("dbinit:no_code:${metaEntity.type}:${metaEntity.name}",
                         "Table for undefined ${metaEntity.type.en} '${metaEntity.name}' found")
@@ -229,7 +252,7 @@ private class SqlEntityIniter private constructor(
         if (!oldAttrs.isEmpty()) {
             val codeList = oldAttrs.joinToString(",")
             val msgList = oldAttrs.joinToString(", ")
-            if (warnUnexpectedSqlStructure) {
+            if (initCtx.logging.metaNoCode) {
                 val entityName = msgEntityName(entity)
                 initCtx.msgs.warning("dbinit:no_code:attrs:${entity.metaName}:$codeList",
                         "Table columns for undefined attributes of ${metaEntity.type.en} $entityName found: $msgList")
@@ -275,7 +298,7 @@ private class SqlEntityIniter private constructor(
     private fun processNewAttrs(entity: R_Entity, metaEntityId: Int, newAttrs: List<String>) {
         val attrsStr = newAttrs.joinToString()
 
-        val recs = SqlUtils.recordsExist(globalCtx.sqlExec, sqlCtx, entity)
+        val recs = SqlUtils.recordsExist(exeCtx.sqlExec, sqlCtx, entity)
 
         val entityName = msgEntityName(entity)
 
@@ -323,18 +346,18 @@ private class SqlEntityIniter private constructor(
 
     companion object {
         fun processEntities(
-                appCtx: Rt_AppContext,
+                exeCtx: Rt_ExecutionContext,
                 initCtx: SqlInitCtx,
                 metaData: Map<String, MetaEntity>,
                 sqlTables: Map<String, SqlTable>
         ) {
-            val obj = SqlEntityIniter(appCtx, initCtx, metaData, sqlTables)
+            val obj = SqlEntityIniter(exeCtx, initCtx, metaData, sqlTables)
             obj.processEntities()
         }
     }
 }
 
-private class SqlInitCtx(logger: KLogger, val logLevel: Int, val objsInit: SqlObjectsInit) {
+private class SqlInitCtx(logger: KLogger, val logging: SqlInitLogging, val objsInit: SqlObjectsInit) {
     val msgs = Rt_Messages(logger)
 
     private val steps = mutableListOf<SqlInitStep>()
@@ -352,8 +375,9 @@ private class SqlInitStep(val order: Int, val order2: Int, val title: String, va
     }
 }
 
-private class SqlStepCtx(val logger: KLogger, val appCtx: Rt_AppContext, val objsInit: SqlObjectsInit, val sqlExec: SqlExecutor) {
-    val sqlCtx = appCtx.sqlCtx
+private class SqlStepCtx(val logger: KLogger, val exeCtx: Rt_ExecutionContext, val objsInit: SqlObjectsInit) {
+    val sqlCtx = exeCtx.appCtx.sqlCtx
+    val sqlExec = exeCtx.sqlExec
 }
 
 private sealed class SqlStepAction {
@@ -392,7 +416,7 @@ private class SqlStepAction_AddColumns_AlterTable(
 ): SqlStepAction() {
     override fun run(ctx: SqlStepCtx) {
         val sql = R_CreateExpr.buildAddColumnsSql(ctx.sqlCtx, entity, attrs, existingRecs)
-        val frame = ctx.appCtx.createRootFrame(entity.pos)
+        val frame = ctx.exeCtx.appCtx.createRootFrame(entity.pos, ctx.sqlExec)
         sql.execute(frame)
     }
 }

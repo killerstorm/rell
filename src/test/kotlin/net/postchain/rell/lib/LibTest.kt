@@ -24,19 +24,19 @@ class LibTest: BaseRellTest(false) {
 
     @Test fun testPrint() {
         chkEx("{ print('Hello'); return 123; }", "int[123]")
-        chkStdout("Hello")
+        chkOut("Hello")
         chkLog()
 
         chkEx("{ print(12345); return 123; }", "int[123]")
-        chkStdout("12345")
+        chkOut("12345")
         chkLog()
 
         chkEx("{ print(1, 2, 3, 4, 5); return 123; }", "int[123]")
-        chkStdout("1 2 3 4 5")
+        chkOut("1 2 3 4 5")
         chkLog()
 
         chkEx("{ print(); return 123; }", "int[123]")
-        chkStdout("")
+        chkOut("")
         chkLog()
     }
 
@@ -45,26 +45,26 @@ class LibTest: BaseRellTest(false) {
 
         chkEx("{ log('Hello'); return 123; }", "int[123]")
         chkLog("[!q(main.rell:2)] Hello")
-        chkStdout()
+        chkOut()
 
         chkEx("{ log(12345); return 123; }", "int[123]")
         chkLog("[!q(main.rell:2)] 12345")
-        chkStdout()
+        chkOut()
 
         chkEx("{ log(1, 2, 3, 4, 5); return 123; }", "int[123]")
         chkLog("[!q(main.rell:2)] 1 2 3 4 5")
-        chkStdout()
+        chkOut()
 
         chkEx("{ log(); return 123; }", "int[123]")
-        chkStdout()
+        chkOut()
         chkLog("[!q(main.rell:2)]")
 
         chkEx("{\n    log('Hello'); log('World');\n    log('Bye');\n    return 123;\n}", "int[123]")
-        chkStdout()
+        chkOut()
         chkLog("[!q(main.rell:3)] Hello", "[!q(main.rell:3)] World", "[!q(main.rell:4)] Bye")
 
         chkEx("{ f(); return 0; }", "int[0]")
-        chkStdout()
+        chkOut()
         chkLog("[!f(main.rell:1)] this is f()")
     }
 

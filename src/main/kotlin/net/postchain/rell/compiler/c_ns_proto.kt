@@ -134,12 +134,14 @@ private class C_NsDef_Query(private val q: R_Query): C_NsDef() {
     }
 }
 
-class C_SysNsProto(entries: List<C_NsEntry>) {
+class C_SysNsProto(entries: List<C_NsEntry>, entities: List<C_NsEntry>) {
     val entries = entries.toImmList()
+    val entities = entities.toImmList()
 }
 
 class C_SysNsProtoBuilder {
     private val entries = mutableListOf<C_NsEntry>()
+    private val entities = mutableListOf<C_NsEntry>()
 
     private var completed = false
         private set(value) {
@@ -148,9 +150,11 @@ class C_SysNsProtoBuilder {
             field = value
         }
 
-    private fun addDef(name: String, def: C_NsDef) {
+    private fun addDef(name: String, def: C_NsDef): C_NsEntry {
         check(!completed)
-        entries.add(C_NsEntry(name, def))
+        val entry = C_NsEntry(name, def)
+        entries.add(entry)
+        return entry
     }
 
     fun addNamespace(name: String, ns: C_DefProxy<C_Namespace>) {
@@ -162,7 +166,8 @@ class C_SysNsProtoBuilder {
     }
 
     fun addEntity(name: String, entity: R_Entity) {
-        addDef(name, C_NsDef_SysEntity(entity))
+        val entry = addDef(name, C_NsDef_SysEntity(entity))
+        entities.add(entry)
     }
 
     fun addFunction(name: String, fn: C_GlobalFunction) {
@@ -172,11 +177,11 @@ class C_SysNsProtoBuilder {
     fun build(): C_SysNsProto {
         check(!completed)
         completed = true
-        return C_SysNsProto(entries)
+        return C_SysNsProto(entries, entities)
     }
 }
 
-class C_UserNsProtoBuilder(private val assembler: C_NsAsm_FileAssembler) {
+class C_UserNsProtoBuilder(private val assembler: C_NsAsm_ComponentAssembler) {
     fun futureNs() = assembler.futureNs()
 
     private fun addDef(name: S_Name, def: C_NsDef) {

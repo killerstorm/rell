@@ -8,8 +8,6 @@ import net.postchain.rell.runtime.Rt_Printer
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.toImmList
 import net.postchain.rell.toImmMap
-import org.jooq.tools.jdbc.MockConnection
-import java.sql.Connection
 import java.util.*
 import kotlin.test.assertEquals
 
@@ -47,10 +45,10 @@ abstract class RellBaseTester(
 
     private val files = mutableMapOf<String, String>()
 
-    private val stdoutPrinter0 = Rt_TesterPrinter()
+    private val outPrinter0 = Rt_TesterPrinter()
     private val logPrinter0 = Rt_TesterPrinter()
 
-    val stdoutPrinter: Rt_Printer = stdoutPrinter0
+    val outPrinter: Rt_Printer = outPrinter0
     val logPrinter: Rt_Printer = logPrinter0
 
     private var mainModules: List<String>? = null
@@ -69,11 +67,12 @@ abstract class RellBaseTester(
             appProto = app
             inited = true
         } else if (inserts != lastInserts) {
-            val sqlExec = tstCtx.sqlExec()
-            if (!lastInserts.isEmpty()) {
-                SqlTestUtils.clearTables(sqlExec)
+            tstCtx.sqlMgr().transaction { sqlExec ->
+                if (!lastInserts.isEmpty()) {
+                    SqlTestUtils.clearTables(sqlExec)
+                }
+                initSqlInserts(sqlExec)
             }
-            initSqlInserts(sqlExec)
         }
     }
 
@@ -137,9 +136,10 @@ abstract class RellBaseTester(
     }
 
     private fun initSql(moduleCode: String, app: R_App) {
-        val sqlExec = tstCtx.sqlExec()
-        initSqlReset(sqlExec, moduleCode, app)
-        initSqlInserts(sqlExec)
+        tstCtx.sqlMgr().transaction { sqlExec ->
+            initSqlReset(sqlExec, moduleCode, app)
+            initSqlInserts(sqlExec)
+        }
     }
 
     protected abstract fun initSqlReset(exec: SqlExecutor, moduleCode: String, app: R_App)
@@ -149,19 +149,12 @@ abstract class RellBaseTester(
         return C_MapSourceDir.of(files)
     }
 
-    private fun initSqlInserts(sqlExecLoc: SqlExecutor) {
+    private fun initSqlInserts(sqlExec: SqlExecutor) {
         if (!inserts.isEmpty()) {
             val insertSql = inserts.joinToString("\n") { it }
-            sqlExecLoc.transaction {
-                sqlExecLoc.execute(insertSql)
-            }
+            sqlExec.execute(insertSql)
         }
         lastInserts = inserts
-    }
-
-    protected fun getSqlConn(): Connection {
-        init()
-        return if (tstCtx.useSql) tstCtx.sqlConn() else MockConnection { TODO() }
     }
 
     fun chkData(expected: List<String>) {
@@ -194,19 +187,24 @@ abstract class RellBaseTester(
 
     fun chkDataSql(sql: String, vararg expected: String) {
         init()
-        val actual = SqlTestUtils.dumpSql(getSqlExec(), sql)
+        val actual = tstCtx.sqlMgr().access { sqlExec ->
+            SqlTestUtils.dumpSql(sqlExec, sql)
+        }
         assertEquals(expected.toList(), actual)
     }
 
     private fun dumpDatabaseEntities(): List<String> {
         init()
         val sqlMapping = createChainSqlMapping()
-        return SqlTestUtils.dumpDatabaseEntity(tstCtx.sqlExec(), sqlMapping, appProto!!)
+        val res = tstCtx.sqlMgr().access { sqlExec ->
+            SqlTestUtils.dumpDatabaseEntity(sqlExec, sqlMapping, appProto!!)
+        }
+        return res
     }
 
     fun dumpDatabaseTables(): List<String> {
         init()
-        val map = SqlTestUtils.dumpDatabaseTables(tstCtx.sqlConn(), tstCtx.sqlExec())
+        val map = SqlTestUtils.dumpDatabaseTables(tstCtx.sqlMgr())
         return map.keys.sorted()
                 .filter { !it.matches(Regex("c\\d+\\.(rowid_gen|sys\\.attributes|sys\\.classes)")) }
                 .flatMap {
@@ -217,7 +215,9 @@ abstract class RellBaseTester(
     fun resetRowid() {
         init()
         val sqlMapping = createChainSqlMapping()
-        SqlTestUtils.resetRowid(tstCtx.sqlExec(), sqlMapping)
+        tstCtx.sqlMgr().transaction { sqlExec ->
+            SqlTestUtils.resetRowid(sqlExec, sqlMapping)
+        }
     }
 
     protected fun defsCode(): String = defs.joinToString("\n")
@@ -228,14 +228,12 @@ abstract class RellBaseTester(
         return modCode
     }
 
-    protected fun getSqlExec() = tstCtx.sqlExec()
-
     fun chkCompile(code: String, expected: String) {
         val actual = compileModule(code)
         checkResult(expected, actual)
     }
 
-    fun chkStdout(vararg expected: String) = stdoutPrinter0.chk(*expected)
+    fun chkOut(vararg expected: String) = outPrinter0.chk(*expected)
     fun chkLog(vararg expected: String) = logPrinter0.chk(*expected)
 
     fun compileModule(code: String): String {

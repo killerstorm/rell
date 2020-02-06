@@ -6,11 +6,17 @@ import net.postchain.rell.compiler.ast.*
 import net.postchain.rell.model.*
 import org.apache.commons.lang3.StringUtils
 
-class C_GlobalContext(val compilerOptions: C_CompilerOptions) {
-    private var frameBlockIdCtr = 0L
-    private val messages = mutableListOf<C_Message>()
+data class C_VarUid(val id: Long, val name: String, val fn: R_FnUid)
+data class C_LoopUid(val id: Long, val fn: R_FnUid)
 
-    fun nextFrameBlockId(location: String): R_FrameBlockId = R_FrameBlockId(frameBlockIdCtr++, location)
+class C_GlobalContext(val compilerOptions: C_CompilerOptions) {
+    private val appUidGen = C_UidGen { id, _ -> R_AppUid(id) }
+
+    fun nextAppUid() = appUidGen.next("")
+}
+
+class C_MessageContext(val globalCtx: C_GlobalContext) {
+    private val messages = mutableListOf<C_Message>()
 
     fun message(type: C_MessageType, pos: S_Pos, code: String, text: String) {
         messages.add(C_Message(type, pos, code, text))
@@ -41,78 +47,147 @@ class C_GlobalContext(val compilerOptions: C_CompilerOptions) {
     }
 }
 
-class C_ModuleContext(val module: C_Module, val appCtx: C_AppContext, val modMgr: C_ModuleManager) {
+sealed class C_ModuleContext(val appCtx: C_AppContext, val modMgr: C_ModuleManager) {
     val globalCtx = appCtx.globalCtx
+    val msgCtx = appCtx.msgCtx
     val executor = appCtx.executor
 
-    val external = module.header().external
-    val sysDefs = module.extChain?.sysDefs ?: appCtx.sysDefs
+    abstract val moduleName: R_ModuleName
+    abstract val containerKey: C_ContainerKey
+    abstract val abstract: Boolean
+    abstract val external: Boolean
+    abstract val mountName: R_MountName
+    abstract val extChain: C_ExternalChain?
+    abstract val sysDefs: C_SystemDefs
+    abstract val repl: Boolean
 
-    private val nsAssembler = appCtx.createModuleNsAssembler(module.key, sysDefs, external)
-    private val nsGetter: Getter<C_Namespace>
-    private val defsGetter: Getter<C_ModuleDefs>
-    val scopeBuilder: C_ScopeBuilder
+    abstract val scopeBuilder: C_ScopeBuilder
+
+    private val containerUid: R_ContainerUid by lazy { appCtx.nextContainerUid(containerKey.keyStr()) }
+    private val fnUidGen = C_UidGen { id, name -> R_FnUid(id, name, containerUid) }
+
+    fun nextFnUid(name: String) = fnUidGen.next(name)
+
+    abstract fun createFileNsAssembler(): C_NsAsm_ComponentAssembler
+    abstract fun getModuleDefs(): C_ModuleDefs
+    abstract fun getModuleArgsStruct(): R_Struct?
+}
+
+class C_RegularModuleContext(
+        appCtx: C_AppContext,
+        private val module: C_Module,
+        modMgr: C_ModuleManager
+): C_ModuleContext(appCtx, modMgr) {
+    private val descriptor = module.descriptor
+
+    override val moduleName = descriptor.name
+    override val containerKey = descriptor.containerKey
+    override val abstract = descriptor.header.abstract
+    override val external = descriptor.header.external
+    override val mountName = descriptor.header.mountName
+    override val extChain = descriptor.extChain
+    override val sysDefs = extChain?.sysDefs ?: appCtx.sysDefs
+    override val repl = false
+
+    private val nsAssembler = appCtx.createModuleNsAssembler(descriptor.key, sysDefs, external)
+    private val defsGetter: C_LateGetter<C_ModuleDefs>
+    override val scopeBuilder: C_ScopeBuilder
 
     init {
-        val rootScopeBuilder = C_ScopeBuilder(globalCtx)
+        val rootScopeBuilder = C_ScopeBuilder(msgCtx)
         val sysScopeBuilder = rootScopeBuilder.nested { sysDefs.ns }
-        nsGetter = nsAssembler.futureNs()
+        val nsGetter = nsAssembler.futureNs()
         defsGetter = nsAssembler.futureDefs()
         scopeBuilder = sysScopeBuilder.nested(nsGetter)
     }
 
-    fun createFileNsAssembler() = nsAssembler.addFile()
+    override fun createFileNsAssembler() = nsAssembler.addComponent()
 
-    fun getNamespace() = nsGetter()
-    fun getModuleDefs() = defsGetter()
+    override fun getModuleDefs() = defsGetter.get()
 
-    fun getModuleArgsStruct(): R_Struct? {
-        val content = module.contents()
-        val struct = content.defs.structs[C_Constants.MODULE_ARGS_STRUCT]
+    override fun getModuleArgsStruct(): R_Struct? {
+        val contents = module.contents()
+        val struct = contents.defs.structs[C_Constants.MODULE_ARGS_STRUCT]
         return struct?.struct
     }
 }
 
+class C_ReplModuleContext(
+        appCtx: C_AppContext,
+        modMgr: C_ModuleManager,
+        moduleName: R_ModuleName,
+        replNsGetter: Getter<C_Namespace>,
+        componentNsGetter: Getter<C_Namespace>
+): C_ModuleContext(appCtx, modMgr) {
+    override val moduleName = moduleName
+    override val containerKey = C_ReplContainerKey
+    override val abstract = false
+    override val external = false
+    override val mountName = R_MountName.EMPTY
+    override val extChain = null
+    override val sysDefs = appCtx.sysDefs
+    override val repl = true
+
+    override val scopeBuilder: C_ScopeBuilder
+
+    init {
+        var builder = C_ScopeBuilder(msgCtx)
+        builder = builder.nested { sysDefs.ns }
+        builder = builder.nested(replNsGetter)
+        scopeBuilder = builder.nested(componentNsGetter)
+    }
+
+    override fun createFileNsAssembler() = throw UnsupportedOperationException()
+    override fun getModuleDefs() = C_ModuleDefs.EMPTY
+    override fun getModuleArgsStruct() = null
+}
+
 class C_FileContext(val modCtx: C_ModuleContext) {
-    val mntBuilder = C_MountTablesBuilder()
+    val executor = modCtx.executor
+    val appCtx = modCtx.appCtx
+
+    val mntBuilder = C_MountTablesBuilder(appCtx.appUid)
 
     private val imports = C_ListBuilder<C_ImportDescriptor>()
     private val abstracts = C_ListBuilder<C_AbstractDescriptor>()
     private val overrides = C_ListBuilder<C_OverrideDescriptor>()
 
     fun addImport(d: C_ImportDescriptor) {
-        modCtx.executor.checkPass(C_CompilerPass.DEFINITIONS)
+        executor.checkPass(C_CompilerPass.DEFINITIONS)
         imports.add(d)
     }
 
     fun addAbstractFunction(d: C_AbstractDescriptor) {
-        modCtx.executor.checkPass(C_CompilerPass.DEFINITIONS)
+        executor.checkPass(C_CompilerPass.DEFINITIONS)
         abstracts.add(d)
     }
 
     fun addOverrideFunction(d: C_OverrideDescriptor) {
-        modCtx.executor.checkPass(C_CompilerPass.DEFINITIONS)
+        executor.checkPass(C_CompilerPass.DEFINITIONS)
         overrides.add(d)
     }
 
     private var createContentsCalled = false
 
-    fun createContents(): C_RellFileContents {
-        modCtx.executor.checkPass(C_CompilerPass.DEFINITIONS)
+    fun createContents(): C_FileImportsDescriptor {
+        executor.checkPass(C_CompilerPass.DEFINITIONS)
         check(!createContentsCalled)
         createContentsCalled = true
-        return C_RellFileContents(imports.commit(), abstracts.commit(), overrides.commit())
+        return C_FileImportsDescriptor(imports.commit(), abstracts.commit(), overrides.commit())
     }
 }
 
 class C_NamespaceContext(val modCtx: C_ModuleContext, val namespacePath: String?, val scopeBuilder: C_ScopeBuilder) {
     val globalCtx = modCtx.globalCtx
+    val msgCtx = modCtx.msgCtx
     val executor = modCtx.executor
+
+    val nameCtx = C_NameContext.createNamespace(this)
 
     private val scope = scopeBuilder.scope()
 
     fun defNames(qualifiedName: List<String>, extChain: C_ExternalChain? = null): R_DefinitionNames {
-        return C_Utils.createDefNames(modCtx.module.name, extChain?.ref, namespacePath, qualifiedName)
+        return C_Utils.createDefNames(modCtx.moduleName, extChain?.ref, namespacePath, qualifiedName)
     }
 
     fun defNames(simpleName: String, extChain: C_ExternalChain? = null): R_DefinitionNames {
@@ -160,7 +235,8 @@ class C_MountContext(
 ) {
     val modCtx = nsCtx.modCtx
     val appCtx = modCtx.appCtx
-    val globalCtx = modCtx.globalCtx
+    val msgCtx = appCtx.msgCtx
+    val globalCtx = msgCtx.globalCtx
     val executor = nsCtx.executor
     val mntBuilder = fileCtx.mntBuilder
 
@@ -175,6 +251,12 @@ class C_MountContext(
     private fun failExternal(pos: S_Pos, decType: C_DeclarationType, place: String) {
         val type = StringUtils.capitalize(decType.msg)
         throw C_Error(pos, "def_external:$place:$decType", "$type not allowed in external $place")
+    }
+
+    fun checkNotRepl(pos: S_Pos, decType: C_DeclarationType) {
+        if (modCtx.repl) {
+            msgCtx.error(pos, "def_repl:$decType", "Cannot declare ${decType.msg} in REPL")
+        }
     }
 
     fun mountName(modTarget: C_ModifierTarget, simpleName: S_Name): R_MountName {
@@ -195,106 +277,23 @@ enum class C_DefinitionType {
     QUERY,
     OPERATION,
     FUNCTION,
+    REPL
 }
 
-class C_DefinitionContext(
-        val nsCtx: C_NamespaceContext,
-        val definitionType: C_DefinitionType,
-        explicitReturnType: R_Type?,
-        val statementVars: TypedKeyMap
-){
+class C_DefinitionContext(val mntCtx: C_MountContext, val definitionType: C_DefinitionType){
+    val nsCtx = mntCtx.nsCtx
     val modCtx = nsCtx.modCtx
     val appCtx = modCtx.appCtx
+    val msgCtx = appCtx.msgCtx
     val globalCtx = modCtx.globalCtx
     val executor = modCtx.executor
 
-    private val retTypeTracker =
-            if (explicitReturnType != null) RetTypeTracker.Explicit(explicitReturnType) else RetTypeTracker.Implicit()
-
-    private var callFrameSize = 0
-
-    private var nextLoopId = 0
-    private var nextVarId = 0
-
-    private val rootBlkCtx = C_BlockContext(this, null, null,
-            "ns:" + nsCtx.modCtx.module.name.str() + ":" + (nsCtx.namespacePath ?: "<root>"))
-
-    private val rootNameCtx = C_RNameContext(rootBlkCtx)
-    val rootExprCtx = C_ExprContext(rootBlkCtx, rootNameCtx, C_VarFactsContext(C_VarFacts.EMPTY))
+    val defExprCtx = C_ExprContext(this, nsCtx.nameCtx, C_VarFactsContext.EMPTY)
 
     fun checkDbUpdateAllowed(pos: S_Pos) {
-        if (definitionType == C_DefinitionType.QUERY) {
-            throw C_Error(pos, "no_db_update", "Database modifications are not allowed in this context")
+        if (definitionType == C_DefinitionType.QUERY || modCtx.repl) {
+            msgCtx.error(pos, "no_db_update", "Database modifications are not allowed in this context")
         }
-    }
-
-    fun matchReturnType(pos: S_Pos, type: R_Type) {
-        retTypeTracker.match(pos, type)
-    }
-
-    fun actualReturnType(): R_Type = retTypeTracker.getRetType()
-
-    fun adjustCallFrameSize(size: Int) {
-        check(size >= 0)
-        callFrameSize = Math.max(callFrameSize, size)
-    }
-
-    fun nextLoopId() = C_LoopId(nextLoopId++)
-    fun nextVarId(name: String) = C_VarId(nextVarId++, name)
-
-    fun makeCallFrame(): R_CallFrame {
-        val rootBlock = rootExprCtx.blkCtx.makeFrameBlock()
-        return R_CallFrame(callFrameSize, rootBlock)
-    }
-
-    private sealed class RetTypeTracker {
-        abstract fun getRetType(): R_Type
-        abstract fun match(pos: S_Pos, type: R_Type)
-
-        class Implicit: RetTypeTracker() {
-            private var impType: R_Type? = null
-
-            override fun getRetType(): R_Type {
-                val t = impType
-                if (t != null) return t
-                val res = R_UnitType
-                impType = res
-                return res
-            }
-
-            override fun match(pos: S_Pos, type: R_Type) {
-                val t = impType
-                if (t == null) {
-                    impType = type
-                } else if (t == R_UnitType) {
-                    if (type != R_UnitType) {
-                        throw errRetTypeMiss(pos, t, type)
-                    }
-                } else {
-                    val comType = R_Type.commonTypeOpt(t, type)
-                    if (comType == null) {
-                        throw errRetTypeMiss(pos, t, type)
-                    }
-                    impType = comType
-                }
-            }
-        }
-
-        class Explicit(val expType: R_Type): RetTypeTracker() {
-            override fun getRetType() = expType
-
-            override fun match(pos: S_Pos, type: R_Type) {
-                val m = if (expType == R_UnitType) type == R_UnitType else expType.isAssignableFrom(type)
-                if (!m) {
-                    throw errRetTypeMiss(pos, expType, type)
-                }
-            }
-        }
-    }
-
-    companion object {
-        private fun errRetTypeMiss(pos: S_Pos, dstType: R_Type, srcType: R_Type): C_Error =
-                C_Errors.errTypeMismatch(pos, srcType, dstType, "entity_rettype", "Return type mismatch")
     }
 }
 
@@ -303,6 +302,8 @@ class C_EntityContext(
         private val entityName: String,
         private val logAnnotation: Boolean
 ) {
+    private val msgCtx = defCtx.msgCtx
+
     private val attributes = mutableMapOf<String, R_Attrib>()
     private val keys = mutableListOf<R_Key>()
     private val indices = mutableListOf<R_Index>()
@@ -319,7 +320,7 @@ class C_EntityContext(
         val name = attr.name
         val nameStr = name.str
         if (nameStr in attributes) {
-            defCtx.globalCtx.error(name.pos, "dup_attr:$nameStr", "Duplicate attribute: '$nameStr'")
+            msgCtx.error(name.pos, "dup_attr:$nameStr", "Duplicate attribute: '$nameStr'")
             return
         }
 
@@ -328,13 +329,13 @@ class C_EntityContext(
         val insideEntity = defType == C_DefinitionType.ENTITY || defType == C_DefinitionType.OBJECT
 
         if (insideEntity && !C_EntityAttrRef.isAllowedRegularAttrName(nameStr)) {
-            defCtx.globalCtx.error(name.pos, "unallowed_attr_name:$nameStr", "Unallowed attribute name: '$nameStr'")
+            msgCtx.error(name.pos, "unallowed_attr_name:$nameStr", "Unallowed attribute name: '$nameStr'")
             err = true
         }
 
         if (mutable && logAnnotation) {
             val ann = C_Constants.LOG_ANNOTATION
-            defCtx.globalCtx.error(name.pos, "entity_attr_mutable_log:$entityName:$nameStr",
+            msgCtx.error(name.pos, "entity_attr_mutable_log:$entityName:$nameStr",
                     "Entity '$entityName' cannot have mutable attributes because of the '$ann' annotation")
             err = true
         }
@@ -344,13 +345,13 @@ class C_EntityContext(
         }
 
         if (insideEntity && !rType.sqlAdapter.isSqlCompatible()) {
-            defCtx.globalCtx.error(name.pos, "entity_attr_type:$nameStr:${rType.toStrictString()}",
+            msgCtx.error(name.pos, "entity_attr_type:$nameStr:${rType.toStrictString()}",
                     "Attribute '$nameStr' has unallowed type: ${rType.toStrictString()}")
             err = true
         }
 
         if (defType == C_DefinitionType.OBJECT && expr == null) {
-            defCtx.globalCtx.error(name.pos, "object_attr_novalue:$entityName:$nameStr",
+            msgCtx.error(name.pos, "object_attr_novalue:$entityName:$nameStr",
                     "Object attribute '$entityName.$nameStr' must have a default value")
             err = true
         }
@@ -360,7 +361,7 @@ class C_EntityContext(
         }
 
         val exprCreator: (() -> R_Expr)? = if (expr == null) null else { ->
-            val rExpr = expr.compile(defCtx.rootExprCtx).value().toRExpr()
+            val rExpr = expr.compile(defCtx.defExprCtx).value().toRExpr()
             val adapter = S_Type.adapt(rType, rExpr.type, name.pos, "attr_type:$nameStr", "Default value type mismatch for '$nameStr'")
             adapter.adaptExpr(rExpr)
         }
@@ -426,4 +427,90 @@ class C_EntityContext(
             throw C_Error(pos, "$errCode:${nameLst.joinToString(",")}", "$errMsg: ${nameLst.joinToString()}")
         }
     }
+}
+
+class C_FunctionContext(
+        val defCtx: C_DefinitionContext,
+        name: String,
+        explicitReturnType: R_Type?,
+        val statementVars: TypedKeyMap
+){
+    val nsCtx = defCtx.nsCtx
+    val modCtx = nsCtx.modCtx
+    val appCtx = modCtx.appCtx
+    val globalCtx = modCtx.globalCtx
+    val executor = modCtx.executor
+
+    val fnUid = defCtx.modCtx.nextFnUid(name)
+    private val blockUidGen = C_UidGen { id, name -> R_FrameBlockUid(id, name, fnUid) }
+    private val varUidGen = C_UidGen { id, name -> C_VarUid(id, name, fnUid) }
+    private val loopUidGen = C_UidGen { id, name -> C_LoopUid(id, fnUid) }
+
+    private val retTypeTracker =
+            if (explicitReturnType != null) RetTypeTracker.Explicit(explicitReturnType) else RetTypeTracker.Implicit()
+
+    fun nextBlockUid(name: String) = blockUidGen.next(name)
+    fun nextVarUid(name: String) = varUidGen.next(name)
+    fun nextLoopUid() = loopUidGen.next("")
+
+    fun matchReturnType(pos: S_Pos, type: R_Type) {
+        retTypeTracker.match(pos, type)
+    }
+
+    fun actualReturnType(): R_Type = retTypeTracker.getRetType()
+
+    private sealed class RetTypeTracker {
+        abstract fun getRetType(): R_Type
+        abstract fun match(pos: S_Pos, type: R_Type)
+
+        class Implicit: RetTypeTracker() {
+            private var impType: R_Type? = null
+
+            override fun getRetType(): R_Type {
+                val t = impType
+                if (t != null) return t
+                val res = R_UnitType
+                impType = res
+                return res
+            }
+
+            override fun match(pos: S_Pos, type: R_Type) {
+                val t = impType
+                if (t == null) {
+                    impType = type
+                } else if (t == R_UnitType) {
+                    if (type != R_UnitType) {
+                        throw errRetTypeMiss(pos, t, type)
+                    }
+                } else {
+                    val comType = R_Type.commonTypeOpt(t, type)
+                    if (comType == null) {
+                        throw errRetTypeMiss(pos, t, type)
+                    }
+                    impType = comType
+                }
+            }
+        }
+
+        class Explicit(val expType: R_Type): RetTypeTracker() {
+            override fun getRetType() = expType
+
+            override fun match(pos: S_Pos, type: R_Type) {
+                val m = if (expType == R_UnitType) type == R_UnitType else expType.isAssignableFrom(type)
+                if (!m) {
+                    throw errRetTypeMiss(pos, expType, type)
+                }
+            }
+        }
+    }
+
+    companion object {
+        private fun errRetTypeMiss(pos: S_Pos, dstType: R_Type, srcType: R_Type): C_Error =
+                C_Errors.errTypeMismatch(pos, srcType, dstType, "entity_rettype", "Return type mismatch")
+    }
+}
+
+class C_FunctionBodyContext(val frameCtx: C_FrameContext, val stmtCtx: C_StmtContext) {
+    val fnCtx = frameCtx.fnCtx
+    val defCtx = fnCtx.defCtx
 }

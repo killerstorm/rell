@@ -1,29 +1,83 @@
 package net.postchain.rell.compiler
 
-import net.postchain.rell.compiler.ast.S_Name
-import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.*
-import net.postchain.rell.multiMapOf
-import net.postchain.rell.sql.SqlConstants
+import net.postchain.rell.putAllAbsent
 import net.postchain.rell.toImmList
 import net.postchain.rell.toImmMap
+import net.postchain.rell.toImmSet
 import org.apache.commons.collections4.SetUtils
+import java.util.*
 
-class C_AppContext(val globalCtx: C_GlobalContext, controller: C_CompilerController) {
-    private val controller = controller
+class C_AppContext(
+        val msgCtx: C_MessageContext,
+        val executor: C_CompilerExecutor,
+        val repl: Boolean,
+        private val oldReplState: C_ReplAppState
+) {
+    val globalCtx = msgCtx.globalCtx
 
-    val executor = controller.executor
-    val defsBuilder = C_AppDefsBuilder(executor)
-    val sysDefs = C_SystemDefs.create(executor, defsBuilder)
+    val appUid = globalCtx.nextAppUid()
+    private val containerUidGen = C_UidGen { id, name -> R_ContainerUid(id, name, appUid) }
 
-    private val nsAssembler = C_NsAsm_AppAssembler.create(globalCtx)
-    private val modules = C_ListBuilder<C_AppModule>()
+    private val defsBuilder = C_AppDefsBuilder(executor)
+    val defsAdder: C_AppDefsAdder = defsBuilder
+
+    val sysDefs = oldReplState.sysDefs ?: C_SystemDefs.create(executor, appUid)
+
+    private val appDefsLate = C_LateInit(C_CompilerPass.APPDEFS, C_AppDefs.EMPTY)
+
+    private val nsAssembler = C_NsAsm_AppAssembler.create(msgCtx, appUid, oldReplState.modules)
+    private val modulesBuilder = C_ListBuilder<C_AppModule>()
+    private val extraMountTables = C_ListBuilder<C_MountTables>()
 
     private val externalChainsRoot = R_ExternalChainsRoot()
     private val externalChains = mutableMapOf<String, C_ExternalChain>()
 
+    private val appLate = C_LateInit(C_CompilerPass.APPLICATION, Optional.empty<R_App>())
+    private val nsAsmAppLate = C_LateInit(C_CompilerPass.NAMESPACES, C_NsAsm_App.EMPTY)
+    private val newReplStateLate = C_LateInit(C_CompilerPass.APPLICATION, C_ReplAppState.EMPTY)
+
+    init {
+        extraMountTables.add(oldReplState.mntTables)
+
+        executor.onPass(C_CompilerPass.NAMESPACES) {
+            val asmApp = nsAssembler.assemble()
+            nsAsmAppLate.set(asmApp)
+        }
+
+        executor.onPass(C_CompilerPass.ABSTRACT) {
+            val mods = modulesBuilder.commit().map { it.module }
+            C_AbstractCompiler.compile(msgCtx, mods)
+        }
+
+        executor.onPass(C_CompilerPass.APPDEFS) {
+            val appDefs = defsBuilder.build()
+            appDefsLate.set(appDefs)
+            processStructs(appDefs.structs)
+        }
+
+        executor.onPass(C_CompilerPass.APPLICATION) {
+            val app = createApp()
+            createNewReplState(app)
+        }
+    }
+
+    fun nextContainerUid(name: String) = containerUidGen.next(name)
+
+    fun getApp(): R_App? {
+        executor.checkPass(C_CompilerPass.FINISH)
+        val opt = appLate.get()
+        return opt.orElse(null)
+    }
+
+    fun getNewReplState() = newReplStateLate.get()
+
     fun createModuleNsAssembler(moduleKey: C_ModuleKey, sysDefs: C_SystemDefs, exportSysEntities: Boolean): C_NsAsm_ModuleAssembler {
         return nsAssembler.addModule(moduleKey, sysDefs.nsProto, exportSysEntities)
+    }
+
+    fun createReplNsAssembler(linkedModule: C_ModuleKey?): C_NsAsm_ReplAssembler {
+        return nsAssembler.addRepl(sysDefs.nsProto, linkedModule, oldReplState.nsAsmState)
     }
 
     fun addExternalChain(name: String): C_ExternalChain {
@@ -37,62 +91,74 @@ class C_AppContext(val globalCtx: C_GlobalContext, controller: C_CompilerControl
         val blockEntity = C_Utils.createBlockEntity(executor, ref)
         val transactionEntity = C_Utils.createTransactionEntity(executor, ref, blockEntity)
 
-        val sysDefs = C_SystemDefs.create(defsBuilder, blockEntity, transactionEntity, listOf())
-        return C_ExternalChain(name, ref, sysDefs)
+        val extSysDefs = C_SystemDefs.create(appUid, blockEntity, transactionEntity, listOf())
+        return C_ExternalChain(name, ref, extSysDefs)
     }
 
-    fun addModule(module: C_Module, compiled: C_CompiledModule) {
+    fun addModule(module: C_ModuleDescriptor, compiled: C_CompiledModule) {
         executor.checkPass(C_CompilerPass.MODULES)
-        modules.add(C_AppModule(module, compiled.rModule, compiled.contents))
+        modulesBuilder.add(C_AppModule(module, compiled.rModule, compiled.contents.mntTables))
     }
 
-    private var createAppCalled = false
+    fun addExtraMountTables(mntTables: C_MountTables) {
+        executor.checkPass(C_CompilerPass.MODULES)
+        extraMountTables.add(mntTables)
+    }
 
-    fun createApp(): R_App {
-        check(!createAppCalled)
-        createAppCalled = true
+    private fun createApp(): R_App {
+        val appDefs = appDefsLate.get()
+        val topologicalEntities = calcTopologicalEntities(appDefs.entities)
 
-        executor.onPass(C_CompilerPass.NAMESPACES) {
-            nsAssembler.assemble()
-        }
+        val appOperationsMap = routinesToMap(appDefs.operations)
+        val appQueriesMap = routinesToMap(sysDefs.queries + appDefs.queries)
 
-        executor.onPass(C_CompilerPass.ABSTRACT) {
-            val mods = modules.commit().map { it.module }
-            C_AbstractCompiler.compile(globalCtx, mods)
-        }
+        val valid = !msgCtx.messages().any { !it.type.ignorable }
+        val modules = modulesBuilder.commit()
 
-        executor.onPass(C_CompilerPass.STRUCTS) {
-            val appStructs = defsBuilder.structs.build()
-            processStructs(appStructs)
-        }
+        val oldSqlDefs = oldReplState.sqlDefs
+        val sqlDefs = R_AppSqlDefs(
+                entities = oldSqlDefs.entities + appDefs.entities.map { it.entity },
+                objects = oldSqlDefs.objects + appDefs.objects,
+                topologicalEntities = oldSqlDefs.topologicalEntities + topologicalEntities
+        )
 
-        controller.run()
-
-        processAppMountsConflicts()
-
-        val appEntities = defsBuilder.entities.build()
-        val appObjects = defsBuilder.objects.build()
-        val appOperations = defsBuilder.operations.build()
-        val appQueries = defsBuilder.queries.build()
-
-        val topologicalEntities = calcTopologicalEntities(appEntities)
-
-        val appOperationsMap = routinesToMap(appOperations)
-        val appQueriesMap = routinesToMap(appQueries)
-
-        val valid = !globalCtx.messages().any { !it.type.ignorable }
-
-        return R_App(
+        val rApp = R_App(
                 valid = valid,
-                modules = modules.commit().map { it.rModule },
-                entities = appEntities.map { it.entity },
-                objects = appObjects,
+                uid = appUid,
+                modules = modules.map { it.rModule },
                 operations = appOperationsMap,
                 queries = appQueriesMap,
-                topologicalEntities = topologicalEntities,
                 externalChainsRoot = externalChainsRoot,
-                externalChains = externalChains.values.map { it.ref }
+                externalChains = externalChains.values.map { it.ref },
+                sqlDefs = sqlDefs
         )
+        appLate.set(Optional.of(rApp))
+
+        return rApp
+    }
+
+    private fun createNewReplState(app: R_App) {
+        val mntTables = createAppMounts()
+
+        val asmApp = nsAsmAppLate.get()
+
+        val modules = modulesBuilder.commit()
+
+        val newPrecompiledModules = modules.map { module ->
+                    val ns = asmApp.modules[module.module.key]
+                    if (ns == null) null else {
+                        val preModule = C_PrecompiledModule(module.module, ns)
+                        Pair(module.module.key, preModule)
+                    }
+                }.filterNotNull()
+                .toMap()
+                .toImmMap()
+
+        val stateModules = oldReplState.modules.toMutableMap()
+        stateModules.putAllAbsent(newPrecompiledModules)
+
+        val newReplState = C_ReplAppState(asmApp.newReplState, stateModules, sysDefs, app.sqlDefs, mntTables)
+        newReplStateLate.set(newReplState)
     }
 
     private fun processStructs(structs: List<R_Struct>) {
@@ -115,27 +181,33 @@ class C_AppContext(val globalCtx: C_GlobalContext, controller: C_CompilerControl
         }
     }
 
-    private fun processAppMountsConflicts() {
-        val builder = C_MountTablesBuilder()
+    private fun createAppMounts(): C_MountTables {
+        val builder = C_MountTablesBuilder(appUid)
         builder.add(sysDefs.mntTables)
         for (extChain in externalChains.values) {
             builder.add(extChain.sysDefs.mntTables)
         }
 
-        for (module in modules.commit()) {
-            builder.add(module.contents.mntTables)
+        for (module in modulesBuilder.commit()) {
+            builder.add(module.mntTables)
+        }
+
+        for (mntTables in extraMountTables.commit()) {
+            builder.add(mntTables)
         }
 
         val tables = builder.build()
-        C_MntEntry.processMountConflicts(globalCtx, tables)
+        return C_MntEntry.processMountConflicts(msgCtx, appUid, tables)
     }
 
     private fun calcTopologicalEntities(entities: List<C_Entity>): List<R_Entity> {
+        val declaredEntities = entities.map { it.entity }.toImmSet()
         val graph = mutableMapOf<R_Entity, Collection<R_Entity>>()
+
         for (entity in entities) {
             val deps = mutableSetOf<R_Entity>()
             for (attr in entity.entity.attributes.values) {
-                if (attr.type is R_EntityType) {
+                if (attr.type is R_EntityType && attr.type.rEntity in declaredEntities) {
                     deps.add(attr.type.rEntity)
                 }
             }
@@ -168,13 +240,69 @@ class C_AppContext(val globalCtx: C_GlobalContext, controller: C_CompilerControl
         return res.toImmMap()
     }
 
-    private class C_AppModule(val module: C_Module, val rModule: R_Module, val contents: C_ModuleContents)
+    private class C_AppModule(val module: C_ModuleDescriptor, val rModule: R_Module, val mntTables: C_MountTables)
 }
 
-class C_AppDefsTableBuilder<T, K>(private val executor: C_CompilerExecutor, private val keyGetter: (T) -> K) {
+class C_AppDefs(
+        entities: List<C_Entity>,
+        objects: List<R_Object>,
+        structs: List<R_Struct>,
+        operations: List<R_Operation>,
+        queries: List<R_Query>
+) {
+    val entities = entities.toImmList()
+    val objects = objects.toImmList()
+    val structs = structs.toImmList()
+    val operations = operations.toImmList()
+    val queries = queries.toImmList()
+
+    companion object { val EMPTY = C_AppDefs(listOf(), listOf(), listOf(), listOf(), listOf()) }
+}
+
+interface C_AppDefsAdder {
+    fun addEntity(entity: C_Entity)
+    fun addObject(obj: R_Object)
+    fun addStruct(struct: R_Struct)
+    fun addOperation(op: R_Operation)
+    fun addQuery(q: R_Query)
+}
+
+private class C_AppDefsBuilder(executor: C_CompilerExecutor): C_AppDefsAdder {
+    private val entities = C_AppDefsTableBuilder<C_Entity, R_Entity>(executor) { it.entity }
+    private val objects = C_AppDefsTableBuilder<R_Object, R_Object>(executor) { it }
+    private val structs = C_AppDefsTableBuilder<R_Struct, R_Struct>(executor) { it }
+    private val operations = C_AppDefsTableBuilder<R_Operation, R_Operation>(executor) { it }
+    private val queries = C_AppDefsTableBuilder<R_Query, R_Query>(executor) { it }
+    private var build = false
+
+    override fun addEntity(entity: C_Entity) = add(entities, entity)
+    override fun addObject(obj: R_Object) = add(objects, obj)
+    override fun addStruct(struct: R_Struct) = add(structs, struct)
+    override fun addOperation(op: R_Operation) = add(operations, op)
+    override fun addQuery(q: R_Query) = add(queries, q)
+
+    private fun <T, K> add(table: C_AppDefsTableBuilder<T, K>, value: T) {
+        check(!build)
+        table.add(value)
+    }
+
+    fun build(): C_AppDefs {
+        check(!build)
+        build = true
+        return C_AppDefs(
+                entities.build(),
+                objects.build(),
+                structs.build(),
+                operations.build(),
+                queries.build()
+        )
+    }
+}
+
+private class C_AppDefsTableBuilder<T, K>(private val executor: C_CompilerExecutor, private val keyGetter: (T) -> K) {
     private val keys: MutableSet<K> = SetUtils.newIdentityHashSet()
     private val defs = mutableListOf<T>()
-    private var completed = false
+    private var build = false
 
     fun add(def: T) {
         executor.checkPass(C_CompilerPass.DEFINITIONS)
@@ -184,205 +312,8 @@ class C_AppDefsTableBuilder<T, K>(private val executor: C_CompilerExecutor, priv
     }
 
     fun build(): List<T> {
-        check(!completed)
-        completed = true
+        check(!build)
+        build = true
         return defs.toImmList()
-    }
-}
-
-class C_AppDefsBuilder(executor: C_CompilerExecutor) {
-    val entities = C_AppDefsTableBuilder<C_Entity, R_Entity>(executor) { it.entity }
-    val objects = C_AppDefsTableBuilder<R_Object, R_Object>(executor) { it }
-    val structs = C_AppDefsTableBuilder<R_Struct, R_Struct>(executor) { it }
-    val operations = C_AppDefsTableBuilder<R_Operation, R_Operation>(executor) { it }
-    val queries = C_AppDefsTableBuilder<R_Query, R_Query>(executor) { it }
-}
-
-private class C_MountConflictsProcessor(private val chain: String?) {
-    fun processConflicts(
-            globalCtx: C_GlobalContext,
-            allEntries: List<C_MntEntry>,
-            errorsEntries: MutableSet<C_MntEntry>
-    ): List<C_MntEntry> {
-        val map = multiMapOf<R_MountName, C_MntEntry>()
-        for (entry in allEntries) {
-            map.put(entry.mountName, entry)
-        }
-
-        val res = mutableListOf<C_MntEntry>()
-
-        for (name in map.keySet()) {
-            val entries = map.get(name)
-            val (sysEntries, userEntries) = entries.partition { it.pos == null }
-
-            if (entries.size > 1) {
-                for (entry in userEntries) {
-                    if (errorsEntries.add(entry)) {
-                        val otherEntry = entries.first { it !== entry }
-                        handleConflict(globalCtx, entry, otherEntry)
-                    }
-                }
-            }
-
-            res.addAll(sysEntries)
-            if (sysEntries.isEmpty() && !userEntries.isEmpty()) {
-                res.add(userEntries[0])
-            }
-        }
-
-        return res.toImmList()
-    }
-
-    private fun handleConflict(globalCtx: C_GlobalContext, entry: C_MntEntry, otherEntry: C_MntEntry) {
-        if (entry.def.appLevelName == otherEntry.def.appLevelName) {
-            // Same module and same qualified name -> must be also a name conflict error.
-            return
-        }
-
-        val error = C_Errors.errMountConflict(chain, entry.mountName, entry.def, entry.pos!!, otherEntry)
-        globalCtx.error(error)
-    }
-}
-
-class C_MntEntry(val type: C_DeclarationType, val def: R_Definition, val pos: S_Pos?, val mountName: R_MountName) {
-    companion object {
-        private val SYSTEM_MOUNT_NAMES = SqlConstants.SYSTEM_OBJECTS.map { R_MountName.of(it) }
-        private val SYSTEM_MOUNT_PREFIX = R_MountName.of("sys")
-
-        fun processMountConflicts(globalCtx: C_GlobalContext, mntTables: C_MountTables): C_MountTables {
-            val resChains = mntTables.chains.mapValues { (chain, t) ->
-                val nullableChain = if (chain == "") null else chain
-
-                val entities = processSystemMountConflicts(globalCtx, t.entities)
-
-                C_ChainMountTables(
-                        processMountConflicts0(globalCtx, nullableChain, entities),
-                        processMountConflicts0(globalCtx, nullableChain, t.operations),
-                        processMountConflicts0(globalCtx, nullableChain, t.queries)
-                )
-            }
-            return C_MountTables(resChains)
-        }
-
-        private fun processMountConflicts0(globalCtx: C_GlobalContext, chain: String?, mntTable: C_MntTable): C_MntTable {
-            val processor = C_MountConflictsProcessor(chain)
-            val resEntries = processor.processConflicts(globalCtx, mntTable.entries, mutableSetOf())
-            return C_MntTable(resEntries)
-        }
-
-        private fun processSystemMountConflicts(globalCtx: C_GlobalContext, mntTable: C_MntTable): C_MntTable {
-            val b = C_MntTableBuilder()
-
-            for (entry in mntTable.entries) {
-                if (entry.pos != null && (entry.mountName in SYSTEM_MOUNT_NAMES || entry.mountName.startsWith(SYSTEM_MOUNT_PREFIX))) {
-                    globalCtx.error(C_Errors.errMountConflictSystem(entry.mountName, entry.def, entry.pos))
-                } else {
-                    b.add(entry)
-                }
-            }
-
-            return b.build()
-        }
-    }
-}
-
-class C_MountTablesBuilder {
-    private val chains = mutableMapOf<String, C_ChainMountTablesBuilder>()
-
-    fun add(tables: C_MountTables) {
-        for ((chain, t) in tables.chains) {
-            val b = chainBuilder(chain)
-            b.entities.add(t.entities)
-            b.operations.add(t.operations)
-            b.queries.add(t.queries)
-        }
-    }
-
-    fun addEntity(namePos: S_Pos?, rEntity: R_Entity) {
-        addEntity0(C_DeclarationType.ENTITY, namePos, rEntity, rEntity)
-    }
-
-    fun addObject(name: S_Name, rObject: R_Object) {
-        addEntity0(C_DeclarationType.OBJECT, name.pos, rObject, rObject.rEntity)
-    }
-
-    private fun addEntity0(type: C_DeclarationType, namePos: S_Pos?, def: R_Definition, rEntity: R_Entity) {
-        val chain = rEntity.external?.chain?.name ?: ""
-        val b = chainBuilder(chain)
-        b.entities.add(type, def, namePos, rEntity.mountName)
-    }
-
-    fun addOperation(name: S_Name, o: R_Operation) {
-        val b = chainBuilder("")
-        b.operations.add(C_DeclarationType.OPERATION, o, name.pos, o.mountName)
-    }
-
-    fun addQuery(name: S_Name, q: R_Query) {
-        val b = chainBuilder("")
-        b.queries.add(C_DeclarationType.QUERY, q, name.pos, q.mountName)
-    }
-
-    fun addQuery(q: R_Query) {
-        val b = chainBuilder("")
-        b.queries.add(C_DeclarationType.QUERY, q, null, q.mountName)
-    }
-
-    private fun chainBuilder(chain: String) = chains.computeIfAbsent(chain) { C_ChainMountTablesBuilder() }
-
-    fun build(): C_MountTables {
-        val resChains = chains.mapValues { (_, v) ->
-            C_ChainMountTables(v.entities.build(), v.operations.build(), v.queries.build())
-        }
-        return C_MountTables(resChains)
-    }
-}
-
-class C_MountTables(chains: Map<String, C_ChainMountTables>) {
-    val chains = chains.toImmMap()
-
-    companion object {
-        val EMPTY = C_MountTables(mapOf())
-    }
-}
-
-class C_ChainMountTables(val entities: C_MntTable, val operations: C_MntTable, val queries: C_MntTable)
-
-class C_ChainMountTablesBuilder {
-    val entities = C_MntTableBuilder()
-    val operations = C_MntTableBuilder()
-    val queries = C_MntTableBuilder()
-}
-
-class C_MntTableBuilder {
-    private val entries = mutableListOf<C_MntEntry>()
-    private var finished = false
-
-    fun add(table: C_MntTable) {
-        check(!finished)
-        entries.addAll(table.entries)
-    }
-
-    fun add(entry: C_MntEntry) {
-        check(!finished)
-        entries.add(entry)
-    }
-
-    fun add(type: C_DeclarationType, def: R_Definition, namePos: S_Pos?, mountName: R_MountName) {
-        check(!finished)
-        entries.add(C_MntEntry(type, def, namePos, mountName))
-    }
-
-    fun build(): C_MntTable {
-        check(!finished)
-        finished = true
-        return C_MntTable(entries)
-    }
-}
-
-class C_MntTable(entries: List<C_MntEntry>) {
-    val entries = entries.toImmList()
-
-    companion object {
-        val EMPTY = C_MntTable(listOf())
     }
 }
