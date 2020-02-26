@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.tools.grammar
 
 import com.github.h0tk3y.betterParse.combinators.AndCombinator

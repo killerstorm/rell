@@ -139,3 +139,17 @@ include = config.properties
 **WARNING**: Unit tests drop all existing tables in the specified database, so make sure you specify a right database.
 
 To run unit tests in IntelliJ, select the `net.postchain.rell` package (or an individual tests class) and press Ctrl-Shift-F10 (or right click and choose "Run 'Tests in 'net.postchain.rell''").
+
+## Copyright & License information
+
+Copyright (c) 2017-2020 ChromaWay AB. All rights reserved.
+
+This software can used either under terms of commercial license
+obtained from ChromaWay AB, or, alternatively, under the terms
+of the GNU General Public License with additional linking exceptions.
+See file LICENSE for details.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.

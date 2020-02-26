@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.compiler.parser
 
 import com.github.h0tk3y.betterParse.lexer.TokenMatch
