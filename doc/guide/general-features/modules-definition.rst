@@ -509,4 +509,4 @@ A mount name can end with ``.``, in that case the name of the definition is appe
 
 --------------
 
-*Rell v0.10.1*
+*Rell v0.10.2*

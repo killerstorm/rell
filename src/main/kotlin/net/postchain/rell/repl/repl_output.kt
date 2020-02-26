@@ -56,10 +56,14 @@ object ReplValueFormatter {
         if (v == Rt_UnitValue) return null
         val type = v.type()
         return when (type) {
-            is R_CollectionType -> v.asCollection().joinToString("\n")
-            is R_MapType -> v.asMap().entries.joinToString("\n")
+            is R_CollectionType -> collectionToLines(v.asCollection())
+            is R_MapType -> collectionToLines(v.asMap().entries)
             else -> v.toString()
         }
+    }
+
+    private fun collectionToLines(c: Collection<*>): String? {
+        return if (c.isEmpty()) null else c.joinToString("\n")
     }
 
     private fun formatGtvJson(v: Rt_Value): String? {

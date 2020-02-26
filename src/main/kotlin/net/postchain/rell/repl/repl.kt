@@ -221,14 +221,13 @@ class ReplInterpreter private constructor(
             outChannel.setValueFormat(format)
         }
 
-        private val rawHelpCmd = "h"
+        private val rawHelpCmd = "?"
         private val rawQuitCmd = "q"
 
         val helpCmd = fullCmd(rawHelpCmd)
         val quitCmd = fullCmd(rawQuitCmd)
 
         private val rawMap = mapOf(
-                "?" to help,
                 rawHelpCmd to help,
                 "exit" to exit,
                 rawQuitCmd to exit,

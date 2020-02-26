@@ -18,7 +18,7 @@ Simplest way to build:
     ```  
     Switch to the right branch:  
     ```
-    git checkout ver-3.1.0
+    git checkout ver-3.1.3
     ```
 2. Build `postchain2`:  
     ```
@@ -29,69 +29,36 @@ Simplest way to build:
     mvn clean package -DskipTests
     ```
 
-## Command Line Interpreter
+## Command Line Interpreter / Shell
 
 Run `rell.sh`:
 
 ```
-Usage: rell [-qv] [--json] [--json-args] [--json-result] [--resetdb] [--sqlinitlog] [--sqllog] [--typecheck] [--db-properties=DB_PROPERTIES] [--db-url=DB_URL] [-d=SOURCE_DIR] [MODULE] [ENTRY] [ARGS...]
-Executes a rell program
-      [MODULE]          Module name
-      [ENTRY]           Entry point (operation/query/function name)
-      [ARGS...]         Call arguments
-      --db-properties=DB_PROPERTIES
-                        Database connection properties file (same format as node-config.properties)
-      --db-url=DB_URL   Database JDBC URL, e. g. jdbc:postgresql://localhost/relltestdb?user=relltestuser&password=1234
-      --json            Equivalent to --json-args --json-result
-      --json-args       Accept Rell program arguments in JSON format
-      --json-result     Print Rell program result in JSON format
-      --resetdb         Reset database (drop everything)
-      --sqlinitlog      Enable SQL tables structure update logging
-      --sqllog          Enable SQL logging
-      --typecheck       Run-time type checking (debug)
-  -d, --source-dir=SOURCE_DIR
-                        Rell source code directory (default: current directory)
-  -q, --quiet           No useless messages
-  -v, --version         Print version and quit
+Rell 0.10.2 (2020-02-26T14:16:46+0000)
+Type '\q' to quit or '\?' for help.
+>>> 2+2
+4
 ```
 
 To execute an operation without a database connection:
 
 ```
-./rell.sh RELL_FILE OPERATION_NAME [ARGS...]
+./rell.sh -d SOURCE_DIRECTORY MODULE_NAME OPERATION_NAME [ARGS...]
 ```
 
 To create database tables (**drops all existing tables**):
 
 ```
-./rell.sh --db-url JDBC_URL --resetdb RELL_FILE
+./rell.sh -d SOURCE_DIRECTORY --db-url JDBC_URL --resetdb MODULE_NAME
 ```
 
 To execute an operation with a database connection (using existing tables):
 
 ```
-./rell.sh --db-url JDBC_URL RELL_FILE OPERATION_NAME [ARGS...]
+./rell.sh -d SOURCE_DIRECTORY --db-url JDBC_URL MODULE_NAME OPERATION_NAME [ARGS...]
 ```
 
 Argument `--db-properties` can be used istead of `--db-url` in the above examples.
-
-## Run a Simple Poschain Node
-
-Start a single-chain Postchain Node with a Rell app. This utility is used by the `Run As` - `Rell Simple Postchain App` command in Eclipse IDE.
-
-A `node-config.properties` and a Rell file must be specified.
-
-```
-$ ./singlerun.sh
-
-Usage: PostchainAppLaunch --node-config=NODE_CONFIG_FILE [-d=SOURCE_DIR] MODULE
-Runs a Rell Postchain app
-      MODULE   Module name
-      --node-config=NODE_CONFIG_FILE
-               Node configuration (.properties)
-  -d, --source-dir=SOURCE_DIR
-               Rell source code directory (default: current directory)
-```
 
 ## Run a Multi-Chain Postchain Node (Run.XML)
 
@@ -101,11 +68,11 @@ in the Run.XML format. This utility is used by the `Run As` - `Rell Postchain Ap
 ```
 ./multirun.sh
 
-Usage: RellRunConfigLaunch --source-dir=SOURCE_DIR RUN_CONFIG
+Usage: RellRunConfigLaunch [-d=SOURCE_DIR] RUN_CONFIG
 Launch a run config
       RUN_CONFIG   Run config file
-      --source-dir=SOURCE_DIR
-                   Rell source directory
+  -d, --source-dir=SOURCE_DIR
+                   Rell source code directory (default: current directory)
 ```
 
 ## Running Unit Tests

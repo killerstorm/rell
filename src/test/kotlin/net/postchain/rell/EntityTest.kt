@@ -298,6 +298,21 @@ class EntityTest: BaseRellTest(false) {
         chk("state.rowid", "ct_err:unknown_name:state.rowid")
     }
 
+    @Test fun testNullValueInDatabase() {
+        tstCtx.useSql = true
+        def("entity data { id: integer; value: integer; flag: boolean; name: text; amount: decimal; }")
+        for (col in listOf("value", "flag", "name", "amount")) insert("""ALTER TABLE "c0.data" ALTER COLUMN "$col" DROP NOT NULL;""")
+        insert("c0.data", "id,value,flag,name,amount", "1,1,NULL,FALSE,'Bob',123.456")
+        insert("c0.data", "id,value,flag,name,amount", "2,2,0,NULL,'Bob',123.456")
+        insert("c0.data", "id,value,flag,name,amount", "3,3,0,FALSE,NULL,123.456")
+        insert("c0.data", "id,value,flag,name,amount", "4,4,0,FALSE,'Bob',NULL")
+
+        chk("data @ { .id == 1 } ( .value )", "rt_err:sql_null:integer")
+        chk("data @ { .id == 2 } ( .flag )", "rt_err:sql_null:boolean")
+        chk("data @ { .id == 3 } ( .name )", "rt_err:sql_null:text")
+        chk("data @ { .id == 4 } ( .amount )", "rt_err:sql_null:decimal")
+    }
+
     private fun createTablePrefixTester(chainId: Long, rowid: Long, company: String, user: String): RellCodeTester {
         val t = RellCodeTester(tstCtx)
         t.def("entity user { name: text; company; }")

@@ -12,8 +12,8 @@ import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvVirtual
 import net.postchain.rell.CommonUtils
 import net.postchain.rell.PostchainUtils
-import net.postchain.rell.model.*
 import net.postchain.rell.compiler.C_Constants
+import net.postchain.rell.model.*
 import java.math.BigDecimal
 import java.util.*
 
@@ -617,6 +617,10 @@ class Rt_JsonValue private constructor(private val str: String): Rt_Value() {
 
     companion object {
         fun parse(s: String): Rt_Value {
+            if (s.isBlank()) {
+                throw IllegalArgumentException(s)
+            }
+
             val mapper = ObjectMapper()
 
             val json = try {

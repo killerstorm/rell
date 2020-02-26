@@ -22,4 +22,4 @@ Multiline comment:
 
 --------------
 
-*Rell v0.10.1*
+*Rell v0.10.2*

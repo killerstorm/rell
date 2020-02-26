@@ -11,7 +11,7 @@
     <name>rellr</name>
 
     <properties>
-        <postchain.version>3.1.0</postchain.version>
+        <postchain.version>3.1.3</postchain.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <kotlin.version>1.3.21</kotlin.version>
         <junit.version>4.12</junit.version>
@@ -26,7 +26,7 @@
             </activation>
             <properties>
                 <rell.jarName>${project.artifactId}-${project.version}-jar-with-dependencies</rell.jarName>
-                <rell.postchainScope>compile</rell.postchainScope>
+                <rell.postchainScope>provided</rell.postchainScope>
             </properties>
         </profile>
         <profile>

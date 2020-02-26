@@ -7,9 +7,9 @@ package net.postchain.rell.tools.runcfg
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvEncoder
 import net.postchain.rell.*
-import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.compiler.C_DiskSourceDir
 import net.postchain.rell.compiler.C_SourceDir
+import net.postchain.rell.model.R_ModuleName
 import java.io.File
 
 class RellPostAppCliConfig(val sourceDir: C_SourceDir, val configDir: File, val config: RellPostAppConfig)
@@ -72,8 +72,8 @@ object RellRunConfigGenerator {
 
         val nodeConfig = RunConfigNodeConfigGen.generateNodeConfig(rcfg.nodeConfig, configDir)
 
-        val extraSigners = if (rcfg.nodeConfig.addSigners) nodeConfig.signers else immSetOf()
-        val chainConfigs = RunConfigChainConfigGen.generateChainsConfigs(sourceDir, configDir, rcfg, extraSigners)
+        val replaceSigners = if (rcfg.nodeConfig.addSigners) nodeConfig.signers else null
+        val chainConfigs = RunConfigChainConfigGen.generateChainsConfigs(sourceDir, configDir, rcfg, replaceSigners)
 
         return RellPostAppConfig(nodeConfig, chainConfigs, wipeDb = rcfg.wipeDb)
     }

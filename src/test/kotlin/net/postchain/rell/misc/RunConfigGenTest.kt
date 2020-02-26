@@ -140,6 +140,48 @@ class RunConfigGenTest {
         assertEquals(setOf<String>(), files.keys)
     }
 
+    @Test fun testAddSignersExisting() {
+        val configFiles = mapOf(
+                "my-config.properties" to "node.0.pubkey=0350fe40766bc0ce8d08b3f5b810e49a8352fdd458606bd5fafe5acdcdc8ff3f57"
+        )
+
+        val files = generate(mapOf(), configFiles, """
+            <run>
+                <nodes>
+                    <config src="my-config.properties"/>
+                </nodes>
+                <chains>
+                    <chain name="user" iid="33">
+                        <config height="0">
+                            <gtv path="signers">
+                                <array>
+                                    <bytea>987654321098765432109876543210987654321098765432109876543210ABCDEF</bytea>
+                                </array>
+                            </gtv>
+                        </config>
+                    </chain>
+                </chains>
+            </run>
+        """)
+
+        chkFile(files, "node-config.properties", "node.0.pubkey=0350fe40766bc0ce8d08b3f5b810e49a8352fdd458606bd5fafe5acdcdc8ff3f57")
+        chkFile(files, "blockchains/33/brid.txt", "A5D2F114B70602A5145FB705EC4FED482F47B2AAB9780DBD17564DF1E4150F99")
+        chkFileBin(files, "blockchains/33/0.gtv", """{"signers":["0350FE40766BC0CE8D08B3F5B810E49A8352FDD458606BD5FAFE5ACDCDC8FF3F57"]}""")
+
+        chkFile(files, "blockchains/33/0.xml", """
+            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <dict>
+                <entry key="signers">
+                    <array>
+                        <bytea>0350FE40766BC0CE8D08B3F5B810E49A8352FDD458606BD5FAFE5ACDCDC8FF3F57</bytea>
+                    </array>
+                </entry>
+            </dict>
+        """)
+
+        assertEquals(setOf<String>(), files.keys)
+    }
+
     @Test fun testModule() {
         val sourceFiles = mapOf(
                 "app.rell" to "module; import sub;\nfunction main(){}",

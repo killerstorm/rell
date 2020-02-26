@@ -7,8 +7,8 @@ package net.postchain.rell.model
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
 import net.postchain.rell.CommonUtils
-import net.postchain.rell.module.*
 import net.postchain.rell.compiler.C_Constants
+import net.postchain.rell.module.*
 import net.postchain.rell.runtime.*
 import org.jooq.DataType
 import org.jooq.SQLDialect
@@ -76,6 +76,20 @@ private class R_TypeSqlAdapter_None(private val type: R_Type): R_TypeSqlAdapter(
 
 private abstract class R_TypeSqlAdapter_Some: R_TypeSqlAdapter() {
     final override fun isSqlCompatible() = true
+
+    protected fun checkSqlNull(suspect: Boolean, rs: ResultSet, type: R_Type) {
+        if (suspect && rs.wasNull()) {
+            throw errSqlNull(type)
+        }
+    }
+
+    protected fun checkSqlNull(value: Any?, type: R_Type) {
+        if (value == null) {
+            throw errSqlNull(type)
+        }
+    }
+
+    private fun errSqlNull(type: R_Type) = Rt_Error("sql_null:${type.toStrictString()}", "Got NULL from SQL where expected $type")
 }
 
 private abstract class R_TypeSqlAdapter_Primitive(private val name: String): R_TypeSqlAdapter_Some() {
@@ -173,7 +187,11 @@ object R_BooleanType: R_PrimitiveType("boolean", SQLDataType.BOOLEAN) {
             stmt.setBoolean(idx, value.asBoolean())
         }
 
-        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_BooleanValue(rs.getBoolean(idx))
+        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+            val v = rs.getBoolean(idx)
+            checkSqlNull(!v, rs, R_BooleanType)
+            return Rt_BooleanValue(v)
+        }
     }
 }
 
@@ -191,7 +209,11 @@ object R_TextType: R_PrimitiveType("text", PostgresDataType.TEXT) {
             stmt.setString(idx, value.asString())
         }
 
-        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_TextValue(rs.getString(idx))
+        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+            val v = rs.getString(idx)
+            checkSqlNull(v, R_TextType)
+            return Rt_TextValue(v)
+        }
     }
 }
 
@@ -210,7 +232,11 @@ object R_IntegerType: R_PrimitiveType("integer", SQLDataType.BIGINT) {
             stmt.setLong(idx, value.asInteger())
         }
 
-        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_IntValue(rs.getLong(idx))
+        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+            val v = rs.getLong(idx)
+            checkSqlNull(v == 0L, rs, R_IntegerType)
+            return Rt_IntValue(v)
+        }
     }
 }
 
@@ -237,7 +263,11 @@ object R_DecimalType: R_PrimitiveType("decimal", C_Constants.DECIMAL_SQL_TYPE) {
             stmt.setBigDecimal(idx, value.asDecimal())
         }
 
-        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_DecimalValue.of(rs.getBigDecimal(idx))
+        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+            val v = rs.getBigDecimal(idx)
+            checkSqlNull(v, R_DecimalType)
+            return Rt_DecimalValue.of(v)
+        }
     }
 }
 
@@ -252,7 +282,12 @@ object R_ByteArrayType: R_PrimitiveType("byte_array", PostgresDataType.BYTEA) {
     private object R_TypeSqlAdapter_ByteArray: R_TypeSqlAdapter_Primitive("byte_array") {
         override fun toSqlValue(value: Rt_Value) = value.asByteArray()
         override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = stmt.setBytes(idx, value.asByteArray())
-        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_ByteArrayValue(rs.getBytes(idx))
+
+        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+            val v = rs.getBytes(idx)
+            checkSqlNull(v, R_ByteArrayType)
+            return Rt_ByteArrayValue(v)
+        }
     }
 }
 
@@ -271,7 +306,11 @@ object R_RowidType: R_PrimitiveType("rowid", SQLDataType.BIGINT) {
             stmt.setLong(idx, value.asRowid())
         }
 
-        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_RowidValue(rs.getLong(idx))
+        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+            val v = rs.getLong(idx)
+            checkSqlNull(v == 0L, rs, R_RowidType)
+            return Rt_RowidValue(v)
+        }
     }
 }
 
@@ -319,6 +358,7 @@ object R_JsonType: R_PrimitiveType("json", JSON_SQL_DATA_TYPE) {
 
         override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
             val str = rs.getString(idx)
+            checkSqlNull(str, R_JsonType)
             return Rt_JsonValue.parse(str)
         }
     }
@@ -348,7 +388,12 @@ class R_EntityType(val rEntity: R_Entity): R_Type(rEntity.appLevelName) {
     private class R_TypeSqlAdapter_Entity(private val type: R_EntityType): R_TypeSqlAdapter_Some() {
         override fun toSqlValue(value: Rt_Value) = value.asObjectId()
         override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = stmt.setLong(idx, value.asObjectId())
-        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value = Rt_EntityValue(type, rs.getLong(idx))
+
+        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+            val v = rs.getLong(idx)
+            checkSqlNull(v == 0L, rs, type)
+            return Rt_EntityValue(type, v)
+        }
 
         override fun metaName(sqlCtx: Rt_SqlContext): String {
             val rEntity = type.rEntity
@@ -402,6 +447,7 @@ class R_EnumType(val enum: R_Enum): R_Type(enum.appLevelName) {
 
         override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
             val v = rs.getInt(idx).toLong()
+            checkSqlNull(v == 0L, rs, type)
             val attr = type.enum.attr(v)
             requireNotNull(attr) { "$type: $v" }
             return Rt_EnumValue(type, attr)

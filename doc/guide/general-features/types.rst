@@ -431,4 +431,4 @@ assigned to a variable of type ``A`` (or passed as a parameter of type
 
 --------------
 
-*Rell v0.10.1*
+*Rell v0.10.2*

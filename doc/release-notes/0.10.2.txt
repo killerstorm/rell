@@ -1,4 +1,4 @@
-RELEASE NOTES 0.10.2 (2020-??-??)
+RELEASE NOTES 0.10.2 (2020-02-26)
 
 
 1. Language: Imports are public
@@ -79,8 +79,8 @@ Rell interpreter (rell.sh) now starts a REPL shell by default. It allows to type
 
 Example:
 
-Rell 0.10.2 (2020-02-04T16:18:55+0000)
-Type '\q' to quit or '\h' for help.
+Rell 0.10.2 (2020-02-26T14:16:46+0000)
+Type '\q' to quit or '\?' for help.
 >>> 2+2
 4
 >>> import calc;
