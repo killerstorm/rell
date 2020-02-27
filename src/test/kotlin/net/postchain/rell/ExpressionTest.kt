@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell
 
 import net.postchain.rell.runtime.Rt_BooleanValue
@@ -432,9 +436,9 @@ class ExpressionTest: BaseRellTest(false) {
         """.trimIndent()
 
         chkFull(code, listOf(Rt_BooleanValue(true)), "int[123]")
-        chkStdout("Yes")
+        chkOut("Yes")
         chkFull(code, listOf(Rt_BooleanValue(false)), "int[456]")
-        chkStdout("No")
+        chkOut("No")
     }
 
     @Test fun testIfPrecedence() {

@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.tools
 
 import mu.KotlinLogging
@@ -17,7 +21,7 @@ import net.postchain.rell.RellCliUtils
 import net.postchain.rell.RellConfigGen
 import net.postchain.rell.runtime.Rt_LogPrinter
 import net.postchain.rell.runtime.Rt_PrinterFactory
-import net.postchain.rell.sql.SqlInit
+import net.postchain.rell.sql.SqlInitLogging
 import picocli.CommandLine
 import java.io.File
 import java.util.logging.LogManager
@@ -51,7 +55,7 @@ private fun main0(args: RunPostchainAppArgs) {
     val nodeConfPro = NodeConfigurationProviderFactory.createProvider(nodeAppConf)
 
     val nodeConf = nodeConfPro.getConfiguration()
-    val template = RunPostchainApp.genBlockchainConfigTemplate(nodeConf.pubKeyByteArray)
+    val template = RunPostchainApp.genBlockchainConfigTemplate(nodeConf.pubKeyByteArray, args.sqlLog)
     val bcConf = configGen.makeConfig(template)
 
     // Wiping DB
@@ -69,7 +73,7 @@ private fun main0(args: RunPostchainAppArgs) {
 }
 
 object RunPostchainApp {
-    fun genBlockchainConfigTemplate(pubKey: ByteArray): Gtv {
+    fun genBlockchainConfigTemplate(pubKey: ByteArray, sqlLog: Boolean): Gtv {
         return gtv(
                 "blockstrategy" to gtv("name" to gtv("net.postchain.base.BaseBlockBuildingStrategy")),
                 "configurationfactory" to gtv("net.postchain.gtx.GTXBlockchainConfigurationFactory"),
@@ -80,7 +84,8 @@ object RunPostchainApp {
                                 gtv("net.postchain.gtx.StandardOpsGTXModule")
                         ),
                         "rell" to gtv(
-                                "dbInitLogLevel" to gtv(SqlInit.LOG_STEP_COMPLEX.toLong()),
+                                "dbInitLogLevel" to gtv(SqlInitLogging.LOG_STEP_COMPLEX.toLong()),
+                                "sqlLog" to gtv(sqlLog),
                                 "combinedPrinterFactoryClass" to gtv(Rt_RellAppPrinterFactory::class.java.name),
                                 "copyOutputToCombinedPrinter" to gtv(false)
                         )
@@ -117,4 +122,7 @@ private class RunPostchainAppArgs: RellBaseCliArgs() {
 
     @CommandLine.Parameters(index = "0", paramLabel = "MODULE", description = ["Module name"])
     var module: String = ""
+
+    @CommandLine.Option(names = ["--sqllog"], description = ["Enable SQL logging"])
+    var sqlLog = false
 }

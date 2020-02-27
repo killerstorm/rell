@@ -1,17 +1,22 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.test
 
 import com.google.common.collect.HashMultimap
 import net.postchain.gtv.Gtv
 import net.postchain.rell.CommonUtils
 import net.postchain.rell.PostchainUtils
+import net.postchain.rell.compiler.*
 import net.postchain.rell.model.*
 import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.module.RELL_VERSION
-import net.postchain.rell.parser.*
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.sql.SqlConstants
 import net.postchain.rell.sql.SqlExecutor
+import net.postchain.rell.sql.SqlManager
 import net.postchain.rell.sql.SqlUtils
 import net.postchain.rell.toImmMap
 import net.postchain.rell.tools.api.IdeCodeSnippet
@@ -101,9 +106,7 @@ object SqlTestUtils {
     fun clearTables(sqlExec: SqlExecutor) {
         val tables = SqlUtils.getExistingTables(sqlExec)
         val sql = tables.joinToString("\n") { "TRUNCATE \"$it\" CASCADE;" }
-        sqlExec.transaction {
-            sqlExec.execute(sql)
-        }
+        sqlExec.execute(sql)
     }
 
     fun mkins(table: String, columns: String, values: String): String {
@@ -114,13 +117,13 @@ object SqlTestUtils {
     fun dumpDatabaseEntity(sqlExec: SqlExecutor, chainMapping: Rt_ChainSqlMapping, app: R_App): List<String> {
         val list = mutableListOf<String>()
 
-        for (entity in app.entities) {
+        for (entity in app.sqlDefs.entities) {
             if (entity.sqlMapping.autoCreateTable()) {
                 dumpEntity(sqlExec, chainMapping, entity, list)
             }
         }
 
-        for (obj in app.objects) {
+        for (obj in app.sqlDefs.objects) {
             dumpEntity(sqlExec, chainMapping, obj.rEntity, list)
         }
 
@@ -178,7 +181,16 @@ object SqlTestUtils {
         return values.joinToString(",")
     }
 
-    fun dumpDatabaseTables(con: Connection, sqlExec: SqlExecutor): Map<String, List<String>> {
+    fun dumpDatabaseTables(sqlMgr: SqlManager): Map<String, List<String>> {
+        val res = sqlMgr.access { sqlExec ->
+            sqlExec.connection { con ->
+                dumpDatabaseTables(con, sqlExec)
+            }
+        }
+        return res
+    }
+
+    private fun dumpDatabaseTables(con: Connection, sqlExec: SqlExecutor): Map<String, List<String>> {
         val res = mutableMapOf<String, List<String>>()
 
         val struct = dumpTablesStructure(con)

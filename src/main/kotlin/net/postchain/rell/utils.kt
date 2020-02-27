@@ -1,8 +1,11 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell
 
-import com.google.common.collect.ImmutableList
-import com.google.common.collect.ImmutableMap
-import com.google.common.collect.ImmutableSet
+import com.google.common.collect.*
+import com.google.gson.GsonBuilder
 import net.postchain.base.BlockchainRid
 import net.postchain.base.SECP256K1CryptoSystem
 import net.postchain.base.data.PostgreSQLCommands
@@ -85,6 +88,44 @@ object CommonUtils {
 
         return res
     }
+
+    fun getHomeDir(): File? {
+        val homePath = System.getProperty("user.home")
+        if (homePath == null) return null
+        val homeDir = File(homePath)
+        return if (homeDir.isDirectory) homeDir else null
+    }
+
+    fun <T> chainToList(first: T?, nextGetter: (T) -> T?): List<T> {
+        if (first == null) return immListOf()
+
+        val res = mutableListOf<T>()
+        var cur = first
+        while (cur != null) {
+            res.add(cur)
+            cur = nextGetter(cur)
+        }
+
+        return res.toImmList()
+    }
+
+    fun tableToStrings(table: List<List<String>>): List<String> {
+        val widths = mutableListOf<Int>()
+
+        for (row in table) {
+            for ((i, cell) in row.withIndex()) {
+                if (widths.size <= i) widths.add(0)
+                widths[i] = Math.max(widths[i], cell.length)
+            }
+        }
+
+        return table.map { row ->
+            row
+                    .mapIndexed { i, cell -> if (i == row.size - 1) cell else cell.padEnd(widths[i]) }
+                    .joinToString("   ")
+        }
+    }
+
 }
 
 object PostchainUtils {
@@ -94,6 +135,12 @@ object PostchainUtils {
 
     private val GSON = make_gtv_gson()
 
+    private val PRETTY_GSON = GsonBuilder()
+            .registerTypeAdapter(Gtv::class.java, GtvAdapter())
+            .serializeNulls()
+            .setPrettyPrinting()
+            .create()!!
+
     fun gtvToBytes(v: Gtv): ByteArray = GtvEncoder.encodeGtv(v)
     fun bytesToGtv(v: ByteArray): Gtv = GtvFactory.decodeGtv(v)
 
@@ -102,6 +149,7 @@ object PostchainUtils {
 
     fun gtvToJson(v: Gtv): String = GSON.toJson(v, Gtv::class.java)
     fun jsonToGtv(s: String): Gtv = GSON.fromJson<Gtv>(s, Gtv::class.java) ?: GtvNull
+    fun gtvToJsonPretty(v: Gtv): String = PRETTY_GSON.toJson(v, Gtv::class.java)
 
     fun merkleHash(v: Gtv): ByteArray = v.merkleHash(merkleCalculator)
 
@@ -307,6 +355,9 @@ class DirBuilder {
 }
 
 class LateInit<T> {
+    val getter = LateGetter(this)
+    val setter = LateSetter(this)
+
     private var t: T? = null
 
     fun isSet(): Boolean = t != null
@@ -315,9 +366,24 @@ class LateInit<T> {
 
     fun set(v: T) {
         check(t == null) { "value already initialized with: <$t>" }
-
         t = v
     }
+}
+
+class LateGetter<T>(private val init: LateInit<T>) {
+    fun get(): T = init.get()
+
+    companion object {
+        fun <T> of(value: T): LateGetter<T> {
+            val init = LateInit<T>()
+            init.set(value)
+            return init.getter
+        }
+    }
+}
+
+class LateSetter<T>(private val init: LateInit<T>) {
+    fun set(value: T) = init.set(value)
 }
 
 class ThreadLocalContext<T>(private val defaultValue: T? = null) {
@@ -341,6 +407,23 @@ class ThreadLocalContext<T>(private val defaultValue: T? = null) {
     }
 }
 
+class ListVsMap<K> private constructor(private val entries: List<Map.Entry<K, *>>) {
+    fun <W> listToMap(list: List<W>): Map<K, W> {
+        val copy = list.toImmList()
+        check(copy.size == entries.size)
+        return entries.mapIndexed { i, e -> e.key to copy[i] }.toMap().toImmMap()
+    }
+
+    companion object {
+        fun <K, V> mapToList(map: Map<K, V>): Pair<List<V>, ListVsMap<K>> {
+            val entries = map.entries.toImmList()
+            val list = entries.map { it.value }.toImmList()
+            val listVsMap = ListVsMap(entries)
+            return Pair(list, listVsMap)
+        }
+    }
+}
+
 typealias Getter<T> = () -> T
 typealias Setter<T> = (T) -> Unit
 
@@ -351,6 +434,26 @@ fun <K, V> immMapOf(vararg entries: Pair<K, V>): Map<K, V> = mapOf(*entries).toI
 fun <T> Iterable<T>.toImmList(): List<T> = ImmutableList.copyOf(this)
 fun <T> Iterable<T>.toImmSet(): Set<T> = ImmutableSet.copyOf(this)
 fun <K, V> Map<K, V>.toImmMap(): Map<K, V> = ImmutableMap.copyOf(this)
+fun <K, V> Multimap<K, V>.toImmMultimap(): Multimap<K, V> = ImmutableMultimap.copyOf(this)
+
+fun <K, V> Map<K, Iterable<V>>.toImmMultimap(): Multimap<K, V> {
+    val map = mutableMultimapOf<K, V>()
+    for ((k, v) in this) {
+        map.putAll(k, v)
+    }
+    return map.toImmMultimap()
+}
+
+fun <K, V> MutableMap<K, V>.putAllAbsent(map: Map<K, V>) {
+    for ((key, value) in map) {
+        if (key !in this) {
+            put(key, value)
+        }
+    }
+}
+
+fun <K, V> immMultimapOf(): Multimap<K, V> = ImmutableMultimap.of()
+fun <K, V> mutableMultimapOf(): Multimap<K, V> = LinkedListMultimap.create()
 
 // Needs to be in a different file than List<Gtv>.toGtv() because of a name conflict...
 fun List<String>.toGtv(): Gtv = GtvFactory.gtv(this.map { it.toGtv() })

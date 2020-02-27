@@ -1,8 +1,12 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.misc
 
+import net.postchain.rell.compiler.C_CompilerOptions
+import net.postchain.rell.compiler.C_DiskSourceDir
 import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.parser.C_CompilerOptions
-import net.postchain.rell.parser.C_DiskSourceDir
 import net.postchain.rell.test.RellTestUtils
 import org.junit.Test
 import java.io.File
@@ -29,6 +33,6 @@ class CliSnippetsTest {
         val modules = listOf(R_ModuleName.of(module))
         val res = RellTestUtils.compileApp(sourceDir, modules, C_CompilerOptions.DEFAULT)
 
-        assertEquals(0, res.messages.size)
+        assertEquals(0, res.messages.size, res.messages.toString())
     }
 }

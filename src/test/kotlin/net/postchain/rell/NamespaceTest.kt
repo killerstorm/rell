@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell
 
 import net.postchain.rell.test.BaseRellTest
@@ -31,7 +35,7 @@ class NamespaceTest: BaseRellTest() {
                     function h(): integer = f();
                 }
             }
-        """.trimIndent())
+        """)
 
         chk("f()", "ct_err:unknown_name:f")
         chk("g()", "ct_err:unknown_name:g")
@@ -51,7 +55,7 @@ class NamespaceTest: BaseRellTest() {
                 function g(): integer = f();
                 function h(): integer = foo.f();
             }
-        """.trimIndent())
+        """)
         chk("f()", "int[123]")
         chk("foo.f()", "int[456]")
         chk("foo.g()", "int[456]")
@@ -86,6 +90,19 @@ class NamespaceTest: BaseRellTest() {
         chkCompile("namespace foo { entity bar {} object bar {} }", """ct_err:
             [name_conflict:user:bar:OBJECT:main.rell(1:38)]
             [name_conflict:user:bar:ENTITY:main.rell(1:24)]
+        """)
+    }
+
+    @Test fun testNameConflictMultipart() {
+        chkCompile("namespace a { function f(): integer = 123; } namespace a { function f(): integer = 123; }", """ct_err:
+            [name_conflict:user:f:FUNCTION:main.rell(1:69)]
+            [name_conflict:user:f:FUNCTION:main.rell(1:24)]
+        """)
+
+        chkCompile("namespace text { function f(): integer = 123; } namespace text { function f(): integer = 123; }", """ct_err:
+            [name_conflict:sys:text:TYPE]
+            [name_conflict:user:f:FUNCTION:main.rell(1:75)]
+            [name_conflict:user:f:FUNCTION:main.rell(1:27)]
         """)
     }
 
@@ -130,7 +147,7 @@ class NamespaceTest: BaseRellTest() {
                 operation op() {}
                 query q() = 123;
             }
-        """.trimIndent())
+        """)
         insert("c0.foo.user", "x", "0,123")
 
         chk("foo.f()", "int[123]")
@@ -167,7 +184,7 @@ class NamespaceTest: BaseRellTest() {
                     enum e { A, B, C }
                 }
             }
-        """.trimIndent())
+        """)
         insert("c0.foo.bar.c", "name", "0,'Bob'")
 
         chkEx("{ val x: foo.bar.c = foo.bar.c @ {}; return x; }", "foo.bar.c[0]")
@@ -180,7 +197,7 @@ class NamespaceTest: BaseRellTest() {
             namespace foo { function f(): integer = 123; }
             namespace foo { namespace bar { function g(): integer = 456; } }
             namespace foo { namespace bar { function h(): integer = 789; } }
-        """.trimIndent())
+        """)
 
         chk("foo.f()", "int[123]")
         chk("foo.bar.g()", "int[456]")
@@ -193,7 +210,7 @@ class NamespaceTest: BaseRellTest() {
             function p(): integer = foo.f() + foo.g() + foo.h();
             namespace foo { function g(): integer = h() * 3; }
             namespace foo { function h(): integer = 123; }
-        """.trimIndent())
+        """)
 
         chk("foo.f()", "int[738]")
         chk("foo.g()", "int[369]")
@@ -223,5 +240,39 @@ class NamespaceTest: BaseRellTest() {
             [name_conflict:user:f:FUNCTION:main.rell(1:65)]
             [name_conflict:user:f:FUNCTION:main.rell(1:22)]
         """)
+    }
+
+    @Test fun testOuterDefsAccess() {
+        def("""
+            function f(): integer = 123;
+            namespace a {
+                function g(): integer = f() + 456;
+                namespace b {
+                    function h(): integer = f() + g() + 789;
+                }
+            }
+        """)
+
+        chk("f()", "int[123]")
+        chk("a.g()", "int[579]")
+        chk("a.b.h()", "int[1491]")
+
+        chk("a.f()", "ct_err:unknown_name:a.f")
+        chk("a.b.f()", "ct_err:unknown_name:a.b.f")
+        chk("a.b.g()", "ct_err:unknown_name:a.b.g")
+    }
+
+    @Test fun testSysDefInNamespace() {
+        def("""
+            namespace x {
+                function integer(t: text): text = 'Hello';
+                function f(): text = integer('');
+                namespace y { function g(): text = integer(''); }
+            }
+        """)
+        chk("integer('123')", "int[123]")
+        chk("x.integer('123')", "text[Hello]")
+        chk("x.f()", "text[Hello]")
+        chk("x.y.g()", "text[Hello]")
     }
 }

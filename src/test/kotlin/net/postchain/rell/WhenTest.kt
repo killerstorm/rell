@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell
 
 import net.postchain.rell.test.BaseRellTest
@@ -151,6 +155,10 @@ class WhenTest: BaseRellTest(false) {
 
     @Test fun testExprElseNotInEnd() {
         chkWhen("integer", "= when(a) { else -> 'A'; 1 -> 'B'; };", "1" to "ct_err:when_else_notlast")
+    }
+
+    @Test fun testExprUnit() {
+        chk("when { 2 > 1 -> print(123); else -> print(456) }", "ct_err:[query_exprtype_unit][when_exprtype_unit][when_exprtype_unit]")
     }
 
     @Test fun testStmt() {

@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell
 
 import net.postchain.rell.test.BaseRellTest
@@ -66,26 +70,26 @@ class TupleMatchingTest: BaseRellTest(false) {
     @Test fun testForListSet() {
         val list = "[(123,'Hello'),(456,'Bye')]"
         chkEx("{ for ((x, y) in $list) { print(x,y); } return 7; }", "int[7]")
-        chkStdout("123 Hello", "456 Bye")
+        chkOut("123 Hello", "456 Bye")
 
         chkEx("{ for (x in $list) { print(x); } return 7; }", "int[7]")
-        chkStdout("(123,Hello)", "(456,Bye)")
+        chkOut("(123,Hello)", "(456,Bye)")
 
         chkEx("{ for ((x) in $list) { print(x); } return 7; }", "ct_err:var_tuple_wrongsize:1:2:(integer,text)")
         chkEx("{ for ((x, y, z) in $list) { print(x); } return 7; }", "ct_err:var_tuple_wrongsize:3:2:(integer,text)")
         chkEx("{ for (x, y in $list) { print(x,y); } return 7; }", "ct_err:syntax")
 
         chkEx("{ for ((x, y) in set($list)) { print(x,y); } return 7; }", "int[7]")
-        chkStdout("123 Hello", "456 Bye")
+        chkOut("123 Hello", "456 Bye")
     }
 
     @Test fun testForMap() {
         val map = "[123:'Hello',456:'Bye']"
         chkEx("{ for ((x, y) in $map) { print(x,y); } return 7; }", "int[7]")
-        chkStdout("123 Hello", "456 Bye")
+        chkOut("123 Hello", "456 Bye")
 
         chkEx("{ for (x in $map) { print(x); } return 7; }", "int[7]")
-        chkStdout("(123,Hello)", "(456,Bye)")
+        chkOut("(123,Hello)", "(456,Bye)")
 
         chkEx("{ for ((x) in $map) { print(x,y); } return 7; }", "ct_err:var_tuple_wrongsize:1:2:(integer,text)")
     }

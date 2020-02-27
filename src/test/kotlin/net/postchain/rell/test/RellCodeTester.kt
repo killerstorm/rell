@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.test
 
 import com.google.common.collect.Sets
@@ -6,14 +10,12 @@ import net.postchain.core.ByteArrayKey
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
 import net.postchain.rell.CommonUtils
-import net.postchain.rell.model.R_App
-import net.postchain.rell.model.R_MountName
-import net.postchain.rell.model.R_Param
-import net.postchain.rell.model.R_StackPos
-import net.postchain.rell.parser.C_MessageType
+import net.postchain.rell.compiler.C_MessageType
+import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.sql.SqlInit
+import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.sql.SqlUtils
 import net.postchain.rell.toImmMap
 import org.junit.Assert
@@ -37,32 +39,30 @@ class RellCodeTester(
     var strictToString = true
     var opContext: Rt_OpContext? = null
     var sqlUpdatePortionSize = 1000
+    var replModule: String? = null
 
     private val chainDependencies = mutableMapOf<String, TestChainDependency>()
 
     private var rtErrStack = listOf<R_StackPos>()
 
-    override fun initSqlReset(exec: SqlExecutor, moduleCode: String, app: R_App) {
-        val globalCtx = createInitGlobalCtx(exec)
-        val appCtx = createAppCtx(globalCtx, app)
+    override fun initSqlReset(sqlExec: SqlExecutor, moduleCode: String, app: R_App) {
+        val globalCtx = createInitGlobalCtx()
+        val exeCtx = createExeCtx(globalCtx, sqlExec, app)
 
-        exec.transaction {
-            if (dropTables) {
-                SqlUtils.dropAll(exec, false)
-            }
+        if (dropTables) {
+            SqlUtils.dropAll(sqlExec, false)
+        }
 
-            if (createTables) {
-                SqlInit.init(appCtx, SqlInit.LOG_NONE)
-            }
+        if (createTables) {
+            SqlInit.init(exeCtx, SqlInitLogging())
         }
     }
 
-    fun createInitGlobalCtx(sqlExec: SqlExecutor): Rt_GlobalContext {
+    fun createInitGlobalCtx(): Rt_GlobalContext {
         val chainCtx = createChainContext()
         return Rt_GlobalContext(
                 Rt_FailingPrinter,
                 Rt_FailingPrinter,
-                sqlExec,
                 null,
                 chainCtx,
                 logSqlErrors = true,
@@ -131,8 +131,7 @@ class RellCodeTester(
     private fun callFn(code: String): String {
         init()
         val moduleCode = moduleCode(code)
-        val globalCtx = createGlobalCtx()
-        return processAppCtx(globalCtx, moduleCode) { modCtx ->
+        return processWithExeCtx(moduleCode, false) { modCtx ->
             RellTestUtils.callFn(modCtx, "f", listOf(), strictToString)
         }
     }
@@ -155,13 +154,12 @@ class RellCodeTester(
             }
 
             val moduleCode = moduleCode(code)
-            val globalCtx = createGlobalCtx()
 
             val encoder = if (gtvResult) RellTestUtils.ENCODER_GTV
             else if (strictToString) RellTestUtils.ENCODER_STRICT
             else RellTestUtils.ENCODER_PLAIN
 
-            processAppCtx(globalCtx, moduleCode) { appCtx ->
+            processWithExeCtx(moduleCode, false) { appCtx ->
                 RellTestUtils.callQueryGeneric(eval, appCtx, name, args, decoder, encoder)
             }
         }
@@ -185,18 +183,16 @@ class RellCodeTester(
     private fun <T> callOp0(code: String, name: String, args: List<T>, decoder: (List<R_Param>, List<T>) -> List<Rt_Value>): String {
         init()
         val moduleCode = moduleCode(code)
-        val globalCtx = createGlobalCtx()
-        return processAppCtx(globalCtx, moduleCode) { modCtx ->
-            RellTestUtils.callOpGeneric(modCtx, name, args, decoder)
+        return processWithAppCtx(moduleCode) { appCtx ->
+            RellTestUtils.callOpGeneric(appCtx, tstCtx.sqlMgr(), name, args, decoder)
         }
     }
 
-    private fun createGlobalCtx(): Rt_GlobalContext {
+    fun createGlobalCtx(): Rt_GlobalContext {
         val chainContext = createChainContext()
         return Rt_GlobalContext(
-                stdoutPrinter,
+                outPrinter,
                 logPrinter,
-                getSqlExec(),
                 opContext,
                 chainContext,
                 logSqlErrors = true,
@@ -210,9 +206,14 @@ class RellCodeTester(
         return Rt_ChainContext(GtvNull, mapOf(), bcRid)
     }
 
-    fun createAppCtx(globalCtx: Rt_GlobalContext, app: R_App): Rt_AppContext {
-        val sqlCtx = createSqlCtx(app, globalCtx.sqlExec)
-        return Rt_AppContext(globalCtx, sqlCtx, app)
+    fun createAppCtx(globalCtx: Rt_GlobalContext, sqlExec: SqlExecutor, app: R_App): Rt_AppContext {
+        val sqlCtx = createSqlCtx(app, sqlExec)
+        return Rt_AppContext(globalCtx, sqlCtx, app, null)
+    }
+
+    fun createExeCtx(globalCtx: Rt_GlobalContext, sqlExec: SqlExecutor, app: R_App): Rt_ExecutionContext {
+        val appCtx = createAppCtx(globalCtx, sqlExec, app)
+        return Rt_ExecutionContext(appCtx, sqlExec)
     }
 
     private fun createSqlCtx(app: R_App, sqlExec: SqlExecutor): Rt_SqlContext {
@@ -252,12 +253,38 @@ class RellCodeTester(
         assertEquals(expected, actual)
     }
 
-    private fun processAppCtx(globalCtx: Rt_GlobalContext, code: String, processor: (Rt_AppContext) -> String): String {
+    fun createRepl(): RellReplTester {
+        val files = files()
+        val globalCtx = createGlobalCtx()
+        val moduleNameStr = replModule
+        val module = if (moduleNameStr == null) null else R_ModuleName.of(moduleNameStr)
+        val sqlMgr = tstCtx.sqlMgr()
+        return RellReplTester(files, globalCtx, sqlMgr, module, tstCtx.useSql)
+    }
+
+    private fun processWithExeCtx(code: String, tx: Boolean, processor: (Rt_ExecutionContext) -> String): String {
+        val globalCtx = createGlobalCtx()
         return processApp(code) { app ->
-            RellTestUtils.catchRtErr({ createAppCtx(globalCtx, app) }) {
-                appCtx -> processor(appCtx)
+            RellTestUtils.catchRtErr {
+                tstCtx.sqlMgr().execute(tx) { sqlExec ->
+                    val exeCtx = createExeCtx(globalCtx, sqlExec, app)
+                    processor(exeCtx)
+                }
             }
         }
+    }
+
+    private fun processWithAppCtx(code: String, processor: (Rt_AppContext) -> String): String {
+        val globalCtx = createGlobalCtx()
+        val res = processApp(code) { app ->
+            RellTestUtils.catchRtErr {
+                val appCtx = tstCtx.sqlMgr().access { sqlExec ->
+                    createAppCtx(globalCtx, sqlExec, app)
+                }
+                processor(appCtx)
+            }
+        }
+        return res
     }
 
     private class TestChainDependency(val rid: ByteArray, val height: Long)

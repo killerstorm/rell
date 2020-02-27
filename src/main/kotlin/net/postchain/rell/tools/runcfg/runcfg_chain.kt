@@ -1,11 +1,15 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.tools.runcfg
 
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory.gtv
 import net.postchain.rell.*
+import net.postchain.rell.compiler.C_SourceDir
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.CONFIG_RELL_SOURCES
-import net.postchain.rell.parser.C_SourceDir
 
 class RunConfigChainConfigGen private constructor(private val sourceDir: C_SourceDir, private val configDir: GeneralDir) {
     companion object {
@@ -13,7 +17,7 @@ class RunConfigChainConfigGen private constructor(private val sourceDir: C_Sourc
                 sourceDir: C_SourceDir,
                 configDir: GeneralDir,
                 runConfig: Rcfg_Run,
-                extraSigners: Collection<Bytes33>
+                replaceSigners: Collection<Bytes33>?
         ): List<RellPostAppChain> {
             val generator = RunConfigChainConfigGen(sourceDir, configDir)
 
@@ -21,7 +25,7 @@ class RunConfigChainConfigGen private constructor(private val sourceDir: C_Sourc
             val brids = mutableMapOf<Rcfg_Chain, Bytes32>()
 
             for (runChain in runConfig.chains) {
-                val resChain = generator.genChainConfig(runChain, brids, extraSigners)
+                val resChain = generator.genChainConfig(runChain, brids, replaceSigners)
                 res.add(resChain)
                 brids[runChain] = resChain.brid
             }
@@ -33,13 +37,13 @@ class RunConfigChainConfigGen private constructor(private val sourceDir: C_Sourc
     private fun genChainConfig(
             chain: Rcfg_Chain,
             brids: Map<Rcfg_Chain, Bytes32>,
-            extraSigners: Collection<Bytes33>
+            replaceSigners: Collection<Bytes33>?
     ): RellPostAppChain {
         val resConfigs = mutableMapOf<Long, Gtv>()
         val modules = mutableSetOf<R_ModuleName>()
 
         for (config in chain.configs) {
-            val (gtv, module) = genChainConfig0(config, brids, extraSigners)
+            val (gtv, module) = genChainConfig0(config, brids, replaceSigners)
             resConfigs[config.height] = gtv
             if (module != null) modules.add(module)
         }
@@ -56,7 +60,7 @@ class RunConfigChainConfigGen private constructor(private val sourceDir: C_Sourc
     private fun genChainConfig0(
             config: Rcfg_ChainConfig,
             brids: Map<Rcfg_Chain, Bytes32>,
-            extraSigners: Collection<Bytes33>
+            replaceSigners: Collection<Bytes33>?
     ): Pair<Gtv, R_ModuleName?> {
         val b = RunConfigGtvBuilder()
         var module: R_ModuleName? = null
@@ -72,8 +76,8 @@ class RunConfigChainConfigGen private constructor(private val sourceDir: C_Sourc
             b.update(actualGtv, *chainGtv.path.toTypedArray())
         }
 
-        val signersGtv: Gtv = gtv(extraSigners.map { gtv(it.toByteArray()) })
-        b.update(signersGtv, "signers")
+        val signersGtv = gtv((replaceSigners ?: listOf()).map { gtv(it.toByteArray()) })
+        b.update(signersGtv, replaceSigners != null, "signers")
 
         if (config.addDependencies && !config.dependencies.isEmpty()) {
             val deps = config.dependencies.map { (k, v) ->

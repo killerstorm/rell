@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell
 
 import net.postchain.rell.test.BaseRellTest
@@ -62,6 +66,11 @@ class AtExprTest: BaseRellTest() {
     @Test fun testAttributeByExpressionType() {
         chkEx("{ val corp = company @ { .name == 'Facebook' }; return user @ { corp }; }", "user[10]")
         chkEx("{ val corp = company @ { .name == 'Microsoft' }; return user @* { corp }; }", "list<user>[user[40],user[41]]")
+    }
+
+    @Test fun testAttributeByExpressionTypeNullable() {
+        chkEx("{ val c = _nullable(company @ { .name == 'Facebook' }); if (c == null) return null; return user @* { c }; }",
+                "list<user>[user[10]]")
     }
 
     @Test fun testAttributeByNameAndType() {
@@ -160,6 +169,11 @@ class AtExprTest: BaseRellTest() {
         chkEx("{ val u = 'Bill'; return (u: user) @ { .firstName == u }; }", "ct_err:expr_at_conflict_alias:u")
         chkEx("{ val u = 'Bill'; return (u: user) @ { .firstName == 'Bill' }; }", "ct_err:expr_at_conflict_alias:u")
         chkEx("{ val u = 'Bill'; return (u: user) @ { u.firstName == 'Mark' }; }", "ct_err:expr_at_conflict_alias:u")
+    }
+
+    @Test fun testNameResolutionEntityVsLocal() {
+        chkEx("{ val user = 'Bill'; return user @ { .firstName == 'Bill' }; }", "user[40]")
+        chkEx("{ val user = 'Bill'; return user @ { .firstName == user }; }", "ct_err:expr_name_entity_local:user")
     }
 
     @Test fun testAttributeAmbiguityName() {

@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.runtime
 
 import mu.KLogging
@@ -10,86 +14,6 @@ class Rt_ChainDependency(val rid: ByteArray)
 
 class Rt_ExternalChain(val chainId: Long, val rid: ByteArray, val height: Long) {
     val sqlMapping = Rt_ChainSqlMapping(chainId)
-}
-
-class Rt_CallFrame(
-        private val callerFrame: Rt_CallFrame?,
-        private val callerPos: R_StackPos?,
-        val defCtx: Rt_DefinitionContext,
-        rFrame: R_CallFrame
-) {
-    private var curBlock = rFrame.rootBlock
-    private val values = Array<Rt_Value?>(rFrame.size) { null }
-
-    fun <T> block(block: R_FrameBlock, code: () -> T): T {
-        val oldBlock = curBlock
-        check(block.parentId == oldBlock.id)
-        check(block.offset + block.size <= values.size)
-
-        for (i in 0 until block.size) {
-            check(values[block.offset + i] == null)
-        }
-
-        curBlock = block
-        try {
-            val res = code()
-            return res
-        } finally {
-            curBlock = oldBlock
-            for (i in 0 until block.size) {
-                values[block.offset + i] = null
-            }
-        }
-    }
-
-    fun set(ptr: R_VarPtr, varType: R_Type, value: Rt_Value, overwrite: Boolean) {
-        R_Expr.typeCheck(this, varType, value)
-        val offset = checkPtr(ptr)
-        if (!overwrite) {
-            check(values[offset] == null)
-        }
-        values[offset] = value
-    }
-
-    fun get(ptr: R_VarPtr): Rt_Value {
-        val value = getOpt(ptr)
-        check(value != null) { "Variable not initialized: $ptr" }
-        return value
-    }
-
-    fun getOpt(ptr: R_VarPtr): Rt_Value? {
-        val offset = checkPtr(ptr)
-        val value = values[offset]
-        return value
-    }
-
-    private fun checkPtr(ptr: R_VarPtr): Int {
-        val block = curBlock
-        check(ptr.blockId == block.id) { "ptr = $ptr, block.id = ${block.id}" }
-        val offset = ptr.offset
-        check(offset >= 0)
-        check(offset < block.offset + block.size)
-        return offset
-    }
-
-    fun stackPos(filePos: R_FilePos): R_StackPos {
-        return R_StackPos(defCtx.pos, filePos)
-    }
-
-    fun stackTrace(lastPos: R_FilePos): List<R_StackPos> {
-        val res = mutableListOf<R_StackPos>()
-
-        res.add(R_StackPos(defCtx.pos, lastPos))
-
-        var frame: Rt_CallFrame? = this
-        while (frame != null) {
-            val pos = frame.callerPos
-            if (pos != null) res.add(pos)
-            frame = frame.callerFrame
-        }
-
-        return res.toImmList()
-    }
 }
 
 interface Rt_Printer {
@@ -108,7 +32,7 @@ object Rt_NopPrinter: Rt_Printer {
     }
 }
 
-object Rt_StdoutPrinter: Rt_Printer {
+object Rt_OutPrinter: Rt_Printer {
     override fun print(str: String) {
         println(str)
     }

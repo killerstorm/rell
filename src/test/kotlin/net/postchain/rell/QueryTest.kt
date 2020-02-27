@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell
 
 import net.postchain.rell.module.RELL_VERSION
@@ -106,7 +110,7 @@ class QueryTest: BaseRellTest() {
         chkEx("{ update user @ {} ( name = 'Bob'); return 0; }", "ct_err:no_db_update")
         chkEx("{ delete user @ { .name == 'Bob' }; return 0; }", "ct_err:no_db_update")
         chkEx("{ if (2 < 3) create user('Bob'); return 0; }", "ct_err:no_db_update")
-        chkEx("{ if (2 < 3) update user @ {} ( .name == 'Bob'); return 0; }", "ct_err:no_db_update")
+        chkEx("{ if (2 < 3) update user @ {} ( .name = 'Bob' ); return 0; }", "ct_err:no_db_update")
         chkEx("{ if (2 < 3) delete user @ { .name == 'Bob' }; return 0; }", "ct_err:no_db_update")
     }
 

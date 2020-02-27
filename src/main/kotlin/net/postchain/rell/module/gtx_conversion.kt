@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.module
 
 import net.postchain.core.UserMistake
@@ -20,10 +24,10 @@ class GtvToRtContext(val pretty: Boolean) {
         objectIds.put(entity, rowid)
     }
 
-    fun finish(appCtx: Rt_AppContext) {
+    fun finish(exeCtx: Rt_ExecutionContext) {
         for (rEntities in objectIds.keySet()) {
             val rowids = objectIds.get(rEntities)
-            checkRowids(appCtx.globalCtx.sqlExec, appCtx.sqlCtx, rEntities, rowids)
+            checkRowids(exeCtx.sqlExec, exeCtx.appCtx.sqlCtx, rEntities, rowids)
         }
     }
 

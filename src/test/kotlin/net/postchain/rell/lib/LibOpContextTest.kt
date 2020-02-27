@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.lib
 
 import net.postchain.rell.runtime.Rt_OpContext
@@ -8,15 +12,15 @@ class LibOpContextTest: BaseRellTest(false) {
     @Test fun testLastBlockTime() {
         tst.opContext = Rt_OpContext(12345, -1, -1, listOf())
         chkOp("print(op_context.last_block_time);")
-        chkStdout("12345")
+        chkOut("12345")
 
         chkOp("val t: timestamp = op_context.last_block_time; print(t);") // Will fail when timestamp type becomes intependent.
-        chkStdout("12345")
+        chkOut("12345")
         chkOp("val t: integer = op_context.last_block_time; print(t);")
-        chkStdout("12345")
+        chkOut("12345")
 
         chkOpFull("function f(): timestamp = op_context.last_block_time; operation o() { print(f()); }")
-        chkStdout("12345")
+        chkOut("12345")
 
         tst.opContext = null
         chk("op_context.last_block_time", "ct_err:op_ctx_noop")
@@ -38,7 +42,7 @@ class LibOpContextTest: BaseRellTest(false) {
     @Test fun testBlockHeight() {
         tst.opContext = Rt_OpContext(12345, -1, 98765, listOf())
         chkOp("print(op_context.block_height);")
-        chkStdout("98765")
+        chkOut("98765")
     }
 
     @Test fun testTransaction() {
@@ -48,10 +52,10 @@ class LibOpContextTest: BaseRellTest(false) {
         tst.opContext = Rt_OpContext(-1, 444, -1, listOf())
 
         chkOp("print(_type_of(op_context.transaction));")
-        chkStdout("transaction")
+        chkOut("transaction")
 
         chkOp("print(_strict_str(op_context.transaction));")
-        chkStdout("transaction[444]")
+        chkOut("transaction[444]")
     }
 
     @Test fun testTransactionAsDefaultValue() {

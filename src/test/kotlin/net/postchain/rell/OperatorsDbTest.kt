@@ -1,6 +1,10 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell
 
-import net.postchain.rell.parser.C_Constants
+import net.postchain.rell.compiler.C_Constants
 import net.postchain.rell.test.RellCodeTester
 import net.postchain.rell.test.RellTestContext
 import net.postchain.rell.test.SqlTestUtils

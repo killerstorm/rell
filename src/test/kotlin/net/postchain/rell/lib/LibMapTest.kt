@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.lib
 
 import net.postchain.rell.test.BaseRellTest
@@ -206,7 +210,7 @@ class LibMapTest: BaseRellTest(false) {
 
     @Test fun testFor() {
         chkOp("for (k in ['Bob':123,'Alice':456,'Trudy':789]) print(k);")
-        chkStdout("(Bob,123)", "(Alice,456)", "(Trudy,789)")
+        chkOut("(Bob,123)", "(Alice,456)", "(Trudy,789)")
     }
 
     @Test fun testMutableKey() {

@@ -1,5 +1,11 @@
 module;
 
+function factorial(n: integer): decimal {
+    var res = 1.0;
+    for (i in range(1, n + 1)) res *= i;
+    return res;
+}
+
 function sum_digits_integer(n: integer): text {
     var x = 1;
     var res = 0;

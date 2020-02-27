@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.tools
 
 import mu.KotlinLogging
@@ -40,7 +44,7 @@ private fun main0(args: RunPostchainTestArgs) {
     val nodeAppConf = AppConfig.fromPropertiesFile(args.nodeConfigFile)
     val nodeConfPro = NodeConfigurationProviderFactory.createProvider(nodeAppConf)
     val nodeConf = nodeConfPro.getConfiguration()
-    val template = RunPostchainApp.genBlockchainConfigTemplate(nodeConf.pubKeyByteArray)
+    val template = RunPostchainApp.genBlockchainConfigTemplate(nodeConf.pubKeyByteArray, args.sqlLog)
     val bcConf = configGen.makeConfig(template)
 
     val tests = File(args.testFile).readText()
@@ -106,4 +110,7 @@ private class RunPostchainTestArgs: RellBaseCliArgs() {
 
     @CommandLine.Parameters(index = "1", paramLabel = "TEST_FILE", description = ["Test file (XML)"])
     var testFile: String = ""
+
+    @CommandLine.Option(names = ["--sqllog"], description = ["Enable SQL logging"])
+    var sqlLog = false
 }

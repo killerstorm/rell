@@ -1,0 +1,123 @@
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rell.sh -d test-cli/src not_found
+
+Module 'not_found' not found
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rell.sh -d test-cli/src syntax_error
+
+syntax_error/module.rell(1:1) ERROR: Syntax error
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rell.sh -d test-cli/src compilation_error
+
+compilation_error.rell(2:10) ERROR: Return type mismatch: text instead of integer
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rell.sh -d test-cli/src
+
+import calc;
+calc.sum_digits_integer(1000)
+
+73fb9a5de29b
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rell.sh --resetdb --db-properties test-cli/config/node-config.properties -d test-cli/src
+
+import c: repl.company;
+
+\db-update
+
+-->
+2020-02-03 17:32:28.164 INFO  SqlInit - Initializing database (chain_iid = 0)
+2020-02-03 17:32:28.338 INFO  SqlInit - Database init plan: 3 step(s)
+2020-02-03 17:32:28.338 INFO  SqlInit - Step: Create ROWID table and function
+2020-02-03 17:32:28.351 INFO  SqlInit - Step: Create meta tables
+2020-02-03 17:32:28.374 INFO  SqlInit - Step: Create table and meta for 'repl.company!company' (meta: company)
+
+import u: repl.user;
+
+c.company @* {}
+
+-->
+[]
+
+u.user @* {}
+
+-->
+Run-time error: SQL Error: ERROR: relation "c0.user" does not exist
+  Position: 25
+  Location: File: parse_relation.c, Routine: parserOpenTable, Line: 1180
+  Server SQLState: 42P01
+	at !<console>(<console>:1)
+
+c.company @* {}
+
+-->
+[]
+
+\db-update
+
+-->
+2020-02-03 17:32:50.720 INFO  SqlInit - Initializing database (chain_iid = 0)
+2020-02-03 17:32:50.780 INFO  SqlInit - Database init plan: 1 step(s)
+2020-02-03 17:32:50.780 INFO  SqlInit - Step: Create table and meta for 'repl.user!user' (meta: user)
+
+u.user @* {}
+
+-->
+[]
+
+c.company @* {}
+
+-->
+[]
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rell.sh --db-properties test-cli/config/node-config.properties -d test-cli/src
+
+import c: repl.company;
+
+c.company @* {}
+
+-->
+[]
+
+import u: repl.user;
+
+u.user @* {}
+
+-->
+[]
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rell.sh
+
+val l = [(123,'Hello'),(456,'Bye'),(789,'Chiao')];
+val m = [123:'Hello',456:'Bye',789:'Chiao'];
+val m2 = ['Hello':123,'Bye':456,'Chiao':789];
+
+\od
+l
+m
+m2
+
+\os
+l
+m
+m2
+
+\ol
+l
+m
+m2
+
+\oj
+l
+m
+m2
+
+\ox
+l
+m
+m2

@@ -1,11 +1,17 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.sql
 
+import net.postchain.config.DatabaseConnector
 import net.postchain.rell.runtime.Rt_Error
+import org.jooq.tools.jdbc.MockConnection
 import java.io.Closeable
 import java.sql.Connection
-import java.sql.DriverManager
 import java.sql.PreparedStatement
 import java.sql.ResultSet
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 object SqlConstants {
@@ -29,35 +35,129 @@ object SqlConstants {
     )
 }
 
+class SqlConnectionLogger(private val logging: Boolean) {
+    private val conId = idCounter.getAndIncrement()
+
+    fun log(s: String) {
+        if (logging) println("[$conId] $s")
+    }
+
+    companion object {
+        private val idCounter = AtomicLong()
+    }
+}
+
+abstract class SqlManager {
+    private val busy = AtomicBoolean()
+
+    protected abstract fun <T> execute0(tx: Boolean, code: (SqlExecutor) -> T): T
+
+    fun <T> transaction(code: (SqlExecutor) -> T): T = execute(true, code)
+    fun <T> access(code: (SqlExecutor) -> T): T = execute(false, code)
+
+    fun <T> execute(tx: Boolean, code: (SqlExecutor) -> T): T {
+        check(busy.compareAndSet(false, true))
+        try {
+            val res = execute0(tx) { sqlExec ->
+                SingleUseSqlExecutor(sqlExec).use(code)
+            }
+            return res
+        } finally {
+            check(busy.compareAndSet(true, false))
+        }
+    }
+
+    private class SingleUseSqlExecutor(private val sqlExec: SqlExecutor): SqlExecutor(), Closeable {
+        private var valid = true
+
+        override fun <T> connection(code: (Connection) -> T): T {
+            check(valid)
+            return sqlExec.connection(code)
+        }
+
+        override fun execute(sql: String) {
+            check(valid)
+            sqlExec.execute(sql)
+        }
+
+        override fun execute(sql: String, preparator: (PreparedStatement) -> Unit) {
+            check(valid)
+            sqlExec.execute(sql, preparator)
+        }
+
+        override fun executeQuery(sql: String, preparator: (PreparedStatement) -> Unit, consumer: (ResultSet) -> Unit) {
+            check(valid)
+            sqlExec.executeQuery(sql, preparator, consumer)
+        }
+
+        override fun close() {
+            check(valid)
+            valid = false
+        }
+    }
+}
+
 abstract class SqlExecutor {
-    abstract fun connection(): Connection
-    abstract fun transaction(code: () -> Unit)
+    abstract fun <T> connection(code: (Connection) -> T): T
     abstract fun execute(sql: String)
     abstract fun execute(sql: String, preparator: (PreparedStatement) -> Unit)
     abstract fun executeQuery(sql: String, preparator: (PreparedStatement) -> Unit, consumer: (ResultSet) -> Unit)
 }
 
-class DefaultSqlExecutor(private val con: Connection, private val logging: Boolean): SqlExecutor(), Closeable {
-    private val conId = idCounter.getAndIncrement()
+object NoConnSqlManager: SqlManager() {
+    override fun <T> execute0(tx: Boolean, code: (SqlExecutor) -> T): T {
+        val res = code(NoConnSqlExecutor)
+        return res
+    }
+}
 
-    override fun connection(): Connection {
-        return con
+object NoConnSqlExecutor: SqlExecutor() {
+    override fun <T> connection(code: (Connection) -> T): T {
+        val con = MockConnection { TODO() }
+        val res = code(con)
+        return res
     }
 
-    override fun transaction(code: () -> Unit) {
+    override fun execute(sql: String) = throw err()
+    override fun execute(sql: String, preparator: (PreparedStatement) -> Unit) = throw err()
+    override fun executeQuery(sql: String, preparator: (PreparedStatement) -> Unit, consumer: (ResultSet) -> Unit) = throw err()
+
+    private fun err() = Rt_Error("no_sql", "No database connection")
+}
+
+class ConnectionSqlManager(private val con: Connection, logging: Boolean): SqlManager() {
+    private val conLogger = SqlConnectionLogger(logging)
+    private val sqlExec = ConnectionSqlExecutor(con, conLogger)
+
+    init {
+        check(con.autoCommit)
+    }
+
+    override fun <T> execute0(tx: Boolean, code: (SqlExecutor) -> T): T {
+        val res = if (tx) {
+            transaction0(code)
+        } else {
+            access0(code)
+        }
+        return res
+    }
+
+    private fun <T> transaction0(code: (SqlExecutor) -> T): T {
         val autoCommit = con.autoCommit
+        check(autoCommit)
         try {
             con.autoCommit = false
             var rollback = true
             try {
-                log("BEGIN TRANSACTION")
-                code()
-                log("COMMIT TRANSACTION")
+                conLogger.log("BEGIN TRANSACTION")
+                val res = code(sqlExec)
+                conLogger.log("COMMIT TRANSACTION")
                 con.commit()
                 rollback = false
+                return res
             } finally {
                 if (rollback) {
-                    log("ROLLBACK TRANSACTION")
+                    conLogger.log("ROLLBACK TRANSACTION")
                     con.rollback()
                 }
             }
@@ -66,8 +166,26 @@ class DefaultSqlExecutor(private val con: Connection, private val logging: Boole
         }
     }
 
+    private fun <T> access0(code: (SqlExecutor) -> T): T {
+        check(con.autoCommit)
+        val res = code(sqlExec)
+        check(con.autoCommit)
+        return res
+    }
+}
+
+class ConnectionSqlExecutor(private val con: Connection, private val conLogger: SqlConnectionLogger): SqlExecutor() {
+    constructor(con: Connection, logging: Boolean): this(con, SqlConnectionLogger(logging))
+
+    override fun <T> connection(code: (Connection) -> T): T {
+        val autoCommit = con.autoCommit
+        val res = code(con)
+        check(con.autoCommit == autoCommit)
+        return res
+    }
+
     override fun execute(sql: String) {
-        execute0(sql) {
+        execute0(sql) { con ->
             con.createStatement().use { stmt ->
                 stmt.execute(sql)
             }
@@ -75,7 +193,7 @@ class DefaultSqlExecutor(private val con: Connection, private val logging: Boole
     }
 
     override fun execute(sql: String, preparator: (PreparedStatement) -> Unit) {
-        execute0(sql) {
+        execute0(sql) { con ->
             con.prepareStatement(sql).use { stmt ->
                 preparator(stmt)
                 stmt.execute()
@@ -84,7 +202,7 @@ class DefaultSqlExecutor(private val con: Connection, private val logging: Boole
     }
 
     override fun executeQuery(sql: String, preparator: (PreparedStatement) -> Unit, consumer: (ResultSet) -> Unit) {
-        execute0(sql) {
+        execute0(sql) { con ->
             con.prepareStatement(sql).use { stmt ->
                 preparator(stmt)
                 stmt.executeQuery().use { rs ->
@@ -96,46 +214,36 @@ class DefaultSqlExecutor(private val con: Connection, private val logging: Boole
         }
     }
 
-    private fun <T> execute0(sql: String, code: () -> T): T {
-        log(sql)
-        return code()
-    }
-
-    override fun close() {
-        con.close()
-    }
-
-    private fun log(s: String) {
-        if (logging) println("[$conId] $s")
-    }
-
-    companion object {
-        private val idCounter = AtomicLong()
-
-        fun connect(url: String): Connection {
-            val con = DriverManager.getConnection(url)
-            var c: AutoCloseable? = con
-            try {
-                con.autoCommit = true
-                c = null
-                return con
-            } finally {
-                c?.close()
-            }
-        }
+    private fun <T> execute0(sql: String, code: (Connection) -> T): T {
+        conLogger.log(sql)
+        val autoCommit = con.autoCommit
+        val res = code(con)
+        check(con.autoCommit == autoCommit)
+        return res
     }
 }
 
-object NoConnSqlExecutor: SqlExecutor() {
-    override fun connection() = throw err()
+class DatabaseConnectorSqlManager(private val connector: DatabaseConnector, logging: Boolean): SqlManager() {
+    private val conLogger = SqlConnectionLogger(logging)
 
-    override fun transaction(code: () -> Unit) {
-        code()
+    override fun <T> execute0(tx: Boolean, code: (SqlExecutor) -> T): T {
+        val res = if (tx) {
+            connector.withWriteConnection { con ->
+                executeWithConnection(con, false, code)
+            }
+        } else {
+            connector.withReadConnection { con ->
+                executeWithConnection(con, true, code)
+            }
+        }
+        return res
     }
 
-    override fun execute(sql: String) = throw err()
-    override fun execute(sql: String, preparator: (PreparedStatement) -> Unit) = throw err()
-    override fun executeQuery(sql: String, preparator: (PreparedStatement) -> Unit, consumer: (ResultSet) -> Unit) = throw err()
-
-    private fun err() = Rt_Error("no_sql", "No database connection")
+    private fun <T> executeWithConnection(con: Connection, autoCommit: Boolean, code: (SqlExecutor) -> T): T {
+        check(con.autoCommit == autoCommit)
+        val sqlExec = ConnectionSqlExecutor(con, conLogger)
+        val res = code(sqlExec)
+        check(con.autoCommit == autoCommit)
+        return res
+    }
 }

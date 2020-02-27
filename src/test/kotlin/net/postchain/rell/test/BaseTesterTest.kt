@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.test
 
 abstract class BaseTesterTest(useSql: Boolean): BaseContextTest(useSql) {
@@ -16,6 +20,6 @@ abstract class BaseTesterTest(useSql: Boolean): BaseContextTest(useSql) {
 
     fun chkCompile(code: String, expected: String) = tst.chkCompile(code, expected)
 
-    fun chkStdout(vararg expected: String) = tst.chkStdout(*expected)
+    fun chkOut(vararg expected: String) = tst.chkOut(*expected)
     fun chkLog(vararg expected: String) = tst.chkLog(*expected)
 }

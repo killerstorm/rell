@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell
 
 import net.postchain.rell.test.BaseRellTest
@@ -166,11 +170,11 @@ class EntityTest: BaseRellTest(false) {
         chkCompile("entity user (log, log) {}", "ct_err:entity_ann_dup:log")
 
         val a1 = tst.compileAppEx("entity user {}")
-        val c1 = a1.entities.first { it.simpleName == "user" }
+        val c1 = a1.sqlDefs.entities.first { it.simpleName == "user" }
         assertEquals(false, c1.flags.log)
 
         val a2 = tst.compileAppEx("@log entity user {}")
-        val c2 = a2.entities.first { it.simpleName == "user" }
+        val c2 = a2.sqlDefs.entities.first { it.simpleName == "user" }
         assertEquals(true, c2.flags.log)
     }
 
@@ -292,6 +296,21 @@ class EntityTest: BaseRellTest(false) {
         tstCtx.useSql = true
         def("object state { mutable value: text = 'Unknown'; }")
         chk("state.rowid", "ct_err:unknown_name:state.rowid")
+    }
+
+    @Test fun testNullValueInDatabase() {
+        tstCtx.useSql = true
+        def("entity data { id: integer; value: integer; flag: boolean; name: text; amount: decimal; }")
+        for (col in listOf("value", "flag", "name", "amount")) insert("""ALTER TABLE "c0.data" ALTER COLUMN "$col" DROP NOT NULL;""")
+        insert("c0.data", "id,value,flag,name,amount", "1,1,NULL,FALSE,'Bob',123.456")
+        insert("c0.data", "id,value,flag,name,amount", "2,2,0,NULL,'Bob',123.456")
+        insert("c0.data", "id,value,flag,name,amount", "3,3,0,FALSE,NULL,123.456")
+        insert("c0.data", "id,value,flag,name,amount", "4,4,0,FALSE,'Bob',NULL")
+
+        chk("data @ { .id == 1 } ( .value )", "rt_err:sql_null:integer")
+        chk("data @ { .id == 2 } ( .flag )", "rt_err:sql_null:boolean")
+        chk("data @ { .id == 3 } ( .name )", "rt_err:sql_null:text")
+        chk("data @ { .id == 4 } ( .amount )", "rt_err:sql_null:decimal")
     }
 
     private fun createTablePrefixTester(chainId: Long, rowid: Long, company: String, user: String): RellCodeTester {

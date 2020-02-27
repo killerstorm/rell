@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell
 
 import net.postchain.rell.test.BaseRellTest
@@ -263,7 +267,7 @@ class UpdateDeleteTest: BaseRellTest() {
             print(person @* {} ( .name, .score ));
         """.trimIndent())
 
-        chkStdout(
+        chkOut(
                 "[(name=James,score=100), (name=Mike,score=250)]",
                 "[(name=James,score=200), (name=Mike,score=250)]",
                 "[(name=James,score=200), (name=Mike,score=450)]",

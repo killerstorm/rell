@@ -1,0 +1,11 @@
+module;
+
+entity num { timestamp;}
+
+operation log_request() {
+    print('BLOCKS:', block@*{}(block, @sort .timestamp));
+
+    for (b in block@*{}) {
+        print('  ', b, b.timestamp);
+    }
+}

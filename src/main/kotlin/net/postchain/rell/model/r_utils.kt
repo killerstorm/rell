@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.model
 
 import net.postchain.rell.CommonUtils
@@ -41,6 +45,10 @@ sealed class R_GenericQualifiedName<T: R_GenericQualifiedName<T>>(parts: List<R_
     fun parent(): T {
         check(!parts.isEmpty()) { "Trying to get a parent name of an empty name" }
         return create(parts.subList(0, parts.size - 1))
+    }
+
+    fun child(name: R_Name): T {
+        return create(parts + name)
     }
 
     protected abstract fun create(parts: List<R_Name>): T
@@ -134,4 +142,11 @@ class R_Name private constructor(val str: String): Comparable<R_Name> {
             return names2.toImmList()
         }
     }
+}
+
+object R_Utils {
+    val ERROR_APP_UID = R_AppUid(-1)
+    val ERROR_CONTAINER_UID = R_ContainerUid(-1, "<error>", ERROR_APP_UID)
+    val ERROR_FN_UID = R_FnUid(-1, "<error>", ERROR_CONTAINER_UID)
+    val ERROR_BLOCK_UID = R_FrameBlockUid(-1, "<error>", ERROR_FN_UID)
 }

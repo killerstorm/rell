@@ -1,11 +1,15 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.misc
 
 import net.postchain.gtv.GtvFactory
 import net.postchain.rell.PostchainUtils
 import net.postchain.rell.RellConfigGen
 import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.parser.C_Compiler
-import net.postchain.rell.parser.C_MapSourceDir
+import net.postchain.rell.compiler.C_Compiler
+import net.postchain.rell.compiler.C_MapSourceDir
 import net.postchain.rell.test.GtvTestUtils
 import net.postchain.rell.test.RellTestUtils
 import org.junit.Test

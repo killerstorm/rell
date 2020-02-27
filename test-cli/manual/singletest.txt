@@ -17,3 +17,6 @@
 	at stack_trace!calc(stack_trace/main.rell:14)
 	at stack_trace!calc(stack_trace/main.rell:15)
 	at stack_trace!main_op(stack_trace/main.rell:30)
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./singletest.sh -d test-cli/src --node-config test-cli/config/node-config.properties other.block_bug test-cli/test/block_bug.xml

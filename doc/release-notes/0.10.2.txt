@@ -1,0 +1,91 @@
+RELEASE NOTES 0.10.2 (2020-02-26)
+
+
+1. Language: Imports are public
+
+Imported names are now public by default, and thus are visible from the outside of the module.
+There is yet no way to make an import private.
+
+
+2. Language: Import of specific definitions
+
+To import a specific definition (or a set of definitions) from a module, specify their names in braces:
+
+import foo.{f};
+import foo.{g, h};
+
+The definitions "f", "g" and "h" are added to the importing namespace like if they were defined there.
+
+If an import alias is specified, a nested namespace is created:
+
+import ns: foo.{f, g};
+
+This creates a namespace "ns" containing definitions "f" and "g".
+
+One can specify an alias for individual definitions in braces:
+
+import foo.{a: f, b: g};
+
+Imported definitions will be added to the namespace under names "a" and "b".
+
+
+3. Language: Wildcard imports
+
+Importing all definitions of a module:
+
+import foo.*;
+
+All definitions are added directly to the importing namespace.
+
+It is possible to import definitions of a specific namespace defined within a module:
+
+import foo.{ns.*};
+
+An import alias, if specified, creates a nested namespace and adds imported definitions there:
+
+import sub: foo.{ns.*};
+
+Definitions from the namespace "ns" of module "foo" will be added to a new namespace "sub".
+
+
+4. Language: Splitting namespaces between files
+
+A namespace can be split into parts defined in different files of a module. In result, the module will contain
+a namespace which is a combination of the parts:
+
+lib/a.rell:
+
+    namespace ns { function f(): integer = 123; }
+
+lib/b.rell:
+
+    namespace ns { function g(): integer = 456; }
+
+main.rell:
+
+    import lib;
+    // ...
+    lib.f();
+    lib.g();
+
+
+5. Tools: REPL (read-eval-print loop) shell
+
+Rell interpreter (rell.sh) now starts a REPL shell by default. It allows to type:
+
+- Epxressions
+- Statements (include var/val declaration)
+- Definitions (imports, functions, structs)
+
+Example:
+
+Rell 0.10.2 (2020-02-26T14:16:46+0000)
+Type '\q' to quit or '\?' for help.
+>>> 2+2
+4
+>>> import calc;
+>>> calc.factorial(100);
+93326215443944152681699238856266700490715968264381621468592963895217599993229915608941463976156518286253697920827223758251185210916864000000000000000000000000
+>>> function sqr(x: integer): integer = x * x;
+>>> sqr(5)
+25

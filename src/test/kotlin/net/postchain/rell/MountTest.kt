@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell
 
 import net.postchain.rell.sql.SqlConstants
@@ -83,7 +87,7 @@ class MountTest: BaseRellTest() {
 
     @Test fun testOperation() {
         chkOpFull("@mount('foo.bar') operation some() { print('Hello!'); }", name = "foo.bar")
-        chkStdout("Hello!")
+        chkOut("Hello!")
     }
 
     @Test fun testQuery() {

@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell
 
 import net.postchain.rell.test.BaseRellTest
@@ -221,7 +225,7 @@ class ObjectTest: BaseRellTest() {
 
         chkData("foo(0,456)")
         chk("foo.x", "int[456]")
-        chkStdout("123", "456")
+        chkOut("123", "456")
     }
 
     @Test fun testInitSideEffects() {

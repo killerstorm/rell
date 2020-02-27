@@ -1,9 +1,14 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.tools.api
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import net.postchain.rell.RellConfigGen
+import net.postchain.rell.compiler.*
+import net.postchain.rell.compiler.ast.S_RellFile
 import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.parser.*
 import net.postchain.rell.runtime.Rt_RellVersion
 import net.postchain.rell.runtime.Rt_RellVersionProperty
 import net.postchain.rell.toImmList

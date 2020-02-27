@@ -1,6 +1,10 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.misc
 
-import net.postchain.rell.parser.C_GraphUtils
+import net.postchain.rell.compiler.C_GraphUtils
 import org.junit.Test
 import kotlin.test.assertEquals
 

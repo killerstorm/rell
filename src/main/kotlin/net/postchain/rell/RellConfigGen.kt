@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell
 
 import net.postchain.gtv.Gtv
@@ -7,9 +11,9 @@ import net.postchain.gtv.GtvType
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.CONFIG_RELL_FILES
 import net.postchain.rell.module.CONFIG_RELL_SOURCES
-import net.postchain.rell.parser.C_Error
-import net.postchain.rell.parser.C_SourceDir
-import net.postchain.rell.parser.C_SourcePath
+import net.postchain.rell.compiler.C_Error
+import net.postchain.rell.compiler.C_SourceDir
+import net.postchain.rell.compiler.C_SourcePath
 import picocli.CommandLine
 import java.io.File
 import java.io.FileOutputStream

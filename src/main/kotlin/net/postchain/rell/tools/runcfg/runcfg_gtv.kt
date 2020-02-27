@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.tools.runcfg
 
 import net.postchain.common.hexStringToByteArray
@@ -87,8 +91,12 @@ class RunConfigGtvBuilder {
     private var value: Gtv = GtvFactory.gtv(mapOf())
 
     fun update(gtv: Gtv, vararg path: String) {
+        update(gtv, false, *path)
+    }
+
+    fun update(gtv: Gtv, replaceArrays: Boolean, vararg path: String) {
         val pathGtv = makeGtvPath(gtv, *path)
-        value = update(value, pathGtv)
+        value = update(value, pathGtv, replaceArrays)
     }
 
     fun build() = value
@@ -102,22 +110,22 @@ class RunConfigGtvBuilder {
     }
 
     companion object {
-        fun update(value: Gtv, update: Gtv): Gtv {
-            return update(value, update, listOf())
+        private fun update(value: Gtv, update: Gtv, replaceArrays: Boolean): Gtv {
+            return update(value, update, listOf(), replaceArrays)
         }
 
-        private fun update(value: Gtv, update: Gtv, path: List<String>): Gtv {
+        private fun update(value: Gtv, update: Gtv, path: List<String>, replaceArrays: Boolean): Gtv {
             val type = value.type
             return if (type == GtvType.DICT) {
-                updateDict(value, update, path)
+                updateDict(value, update, path, replaceArrays)
             } else if (type == GtvType.ARRAY) {
-                updateArray(value, update, path)
+                updateArray(value, update, path, replaceArrays)
             } else {
                 update
             }
         }
 
-        private fun updateDict(value: Gtv, update: Gtv, path: List<String>): Gtv {
+        private fun updateDict(value: Gtv, update: Gtv, path: List<String>, replaceArrays: Boolean): Gtv {
             checkUpdateType(value, update, GtvType.DICT, path)
 
             val valueMap = value.asDict()
@@ -134,7 +142,7 @@ class RunConfigGtvBuilder {
             for ((key, updValue) in updateMap) {
                 val oldValue = res[key]
                 val resValue = if (oldValue == null) updValue else {
-                    update(oldValue, updValue, path + key)
+                    update(oldValue, updValue, path + key, replaceArrays)
                 }
                 res[key] = resValue
             }
@@ -142,7 +150,7 @@ class RunConfigGtvBuilder {
             return GtvFactory.gtv(res)
         }
 
-        private fun updateArray(value: Gtv, update: Gtv, path: List<String>): Gtv {
+        private fun updateArray(value: Gtv, update: Gtv, path: List<String>, replaceArrays: Boolean): Gtv {
             checkUpdateType(value, update, GtvType.ARRAY, path)
 
             val valueArray = value.asArray()
@@ -154,7 +162,9 @@ class RunConfigGtvBuilder {
             }
 
             val res = mutableListOf<Gtv>()
-            res.addAll(valueArray)
+            if (!replaceArrays) {
+                res.addAll(valueArray)
+            }
             res.addAll(updateArray)
 
             return GtvFactory.gtv(res)

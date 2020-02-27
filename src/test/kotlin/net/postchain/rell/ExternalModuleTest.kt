@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell
 
 import net.postchain.common.toHex
@@ -285,6 +289,22 @@ class ExternalModuleTest: BaseRellTest() {
         chk("_type_of(block@{})", "block")
     }
 
+    @Test fun testTxBlkImport() {
+        file("ext.rell", "@external module; @log entity user { name; }")
+        initExternalModule(1, "ext", "user", "Bob")
+        initChainDependency(1, "A")
+
+        def("@external('A') import exact: ext.{transaction, block};")
+        def("@external('A') import wildcard: ext.*;")
+
+        chk("_type_of(exact.transaction@{})", "[A]!transaction")
+        chk("_type_of(exact.block@{})", "[A]!block")
+        chk("_type_of(wildcard.transaction@{})", "[A]!transaction")
+        chk("_type_of(wildcard.block@{})", "[A]!block")
+        chk("_type_of(transaction@{})", "transaction")
+        chk("_type_of(block@{})", "block")
+    }
+
     @Test fun testNoLog() {
         file("ext.rell", "@external module; entity user { name; }")
         chkCompile("import ext;", "ct_err:ext.rell:def_entity_external_nolog:user")
@@ -307,6 +327,19 @@ class ExternalModuleTest: BaseRellTest() {
         chkCompile("@external @log entity user { name; }", "ct_err:ann:external:nullary:target_type:ENTITY")
         chkCompile("@external namespace {}", "ct_err:ann:external:nullary:target_type:NAMESPACE")
         chkCompile("@external namespace bar {}", "ct_err:ann:external:nullary:target_type:NAMESPACE")
+    }
+
+    @Test fun testSystemDefsAccess() {
+        file("ext.rell", "@external module; @log entity user { name; }")
+        initExternalModule(1, "ext", "user", "Bob")
+        initChainDependency(1, "A")
+        def("@external('A') import ext;")
+
+        chk("_type_of(ext.transaction@{})", "[A]!transaction")
+        chk("_type_of(ext.block@{})", "[A]!block")
+        chkEx("{ val x: ext.integer = 123; return 0; }", "ct_err:unknown_type:ext.integer")
+        chk("ext.integer('123')", "ct_err:unknown_name:ext.integer")
+        chk("ext.max(123, 456)", "ct_err:unknown_name:ext.max")
     }
 
     private fun chkModule(code: String, expected: String) {

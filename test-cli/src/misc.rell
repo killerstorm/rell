@@ -6,3 +6,5 @@ namespace ns {
         log('Some logging');
     }
 }
+
+query get_blocks() = block @*{} ( @sort .timestamp );

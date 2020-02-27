@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.sql
 
 import net.postchain.rell.model.R_Attrib
@@ -179,7 +183,7 @@ object SqlMeta {
         val sqls = mutableListOf<String>()
         sqls += genMetaTablesCreate(sqlCtx)
 
-        val metaEntities = sqlCtx.topologicalEntities.filter { it.sqlMapping.autoCreateTable() }
+        val metaEntities = sqlCtx.appDefs.topologicalEntities.filter { it.sqlMapping.autoCreateTable() }
         for ((i, entity) in metaEntities.withIndex()) {
             sqls += genMetaEntityInserts(sqlCtx, i, entity, MetaEntityType.ENTITY)
         }

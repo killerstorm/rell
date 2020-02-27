@@ -373,7 +373,7 @@ Features:
 External modules
 ~~~~~~~~~~~~~~~~
 
-A module can be annotated with the ``@external`` with no arguments:
+A module can be annotated with the ``@external`` annotation with no arguments:
 
 ::
 
@@ -509,4 +509,4 @@ A mount name can end with ``.``, in that case the name of the definition is appe
 
 --------------
 
-*Rell v0.10.1*
+*Rell v0.10.2*

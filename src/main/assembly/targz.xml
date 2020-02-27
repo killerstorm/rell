@@ -45,5 +45,14 @@
             <fileMode>0755</fileMode>
             <filtered>true</filtered>
         </fileSet>
+        <fileSet>
+            <directory>${project.build.scriptSourceDirectory}</directory>
+            <outputDirectory>./</outputDirectory>
+            <includes>
+                <include>*.cmd</include>
+            </includes>
+            <fileMode>644</fileMode>
+            <filtered>true</filtered>
+        </fileSet>
     </fileSets>
 </assembly>

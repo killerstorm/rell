@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.tools.runcfg
 
 import mu.KotlinLogging
@@ -42,8 +46,10 @@ private fun main0(args: RellRunConfigLaunchArgs) {
     val rellAppConf = RellRunConfigGenerator.generateCli(sourceDir, runConfigFile)
 
     // Make sure that all sources compile before trying to start a node.
-    val allModules = rellAppConf.config.chains.flatMap { it.modules }.toSet().toList()
-    RellCliUtils.compileApp(rellAppConf.sourceDir, allModules, true)
+    for (chain in rellAppConf.config.chains) {
+        val modules = chain.modules.toList()
+        RellCliUtils.compileApp(rellAppConf.sourceDir, modules, true)
+    }
 
     val nodeConf = startPostchainNode(rellAppConf)
 

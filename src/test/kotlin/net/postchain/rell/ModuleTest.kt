@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell
 
 import net.postchain.rell.test.BaseRellTest
@@ -11,7 +15,7 @@ class ModuleTest: BaseRellTest(false) {
             struct foo { p: integer; }
             struct bar { x: foo; }
             query q() = f(foo(123));
-        """.trimIndent()
+        """
         chkQueryEx(code, "bar[x=foo[p=int[123]]]")
     }
 
@@ -20,9 +24,9 @@ class ModuleTest: BaseRellTest(false) {
             operation o(x: foo) { print(_strict_str(bar(x))); }
             struct foo { p: integer; }
             struct bar { x: foo; }
-        """.trimIndent()
+        """
         tst.chkOpGtvEx(code, listOf("""[123]"""), "OK")
-        chkStdout("bar[x=foo[p=int[123]]]")
+        chkOut("bar[x=foo[p=int[123]]]")
     }
 
     @Test fun testForwardTypeReferenceQuery() {
@@ -30,7 +34,7 @@ class ModuleTest: BaseRellTest(false) {
             query q(x: foo): bar = bar(x);
             struct foo { p: integer; }
             struct bar { x: foo; }
-        """.trimIndent()
+        """
         tst.chkQueryGtvEx(code, listOf("""{"p":123}"""), "bar[x=foo[p=int[123]]]")
     }
 
@@ -179,7 +183,7 @@ class ModuleTest: BaseRellTest(false) {
             struct rec {}
             enum e { A }
             function f() {}
-        """.trimIndent())
+        """)
 
         def("import lib.a;")
 
@@ -190,14 +194,14 @@ class ModuleTest: BaseRellTest(false) {
         chkCompile("function x(){ a.f(); }", "OK")
     }
 
-    @Test fun testImportsNotVisibleFromOutside() {
+    @Test fun testImportsVisibleFromOutside() {
         file("a.rell", "module; function f(): integer = 123;")
         file("b.rell", "module; import a; function g(): integer = a.f() * 456;")
         file("c/c1.rell", "import a; function g(): integer = a.f() * 789;")
         chkImp("import b;", "b.g()", "int[56088]")
-        chkImp("import b;", "b.a.f()", "ct_err:unknown_name:b.a")
+        chkImp("import b;", "b.a.f()", "int[123]")
         chkImp("import c;", "c.g()", "int[97047]")
-        chkImp("import c;", "c.a.f()", "ct_err:unknown_name:c.a")
+        chkImp("import c;", "c.a.f()", "int[123]")
     }
 
     @Test fun testImportNotAtTop() {
@@ -293,7 +297,7 @@ class ModuleTest: BaseRellTest(false) {
         chkQueryEx("import lib.a; query q() = a.f();", "int[123]")
         chkQueryEx("import lib.a; query q() = a.g();", "int[246]")
         chkQueryEx("import lib.b; query q() = b.p();", "int[738]")
-        chkQueryEx("import lib.c; query q() = c.q();", "ct_err:lib/c.rell:unknown_name:self.a") // To be supported later
+        chkQueryEx("import lib.c; query q() = c.q();", "int[984]")
     }
 
     @Test fun testCannotAccessImporterDefs() {
@@ -340,7 +344,19 @@ class ModuleTest: BaseRellTest(false) {
             [a/a1.rell(1:25):unknown_name:unknown_1]
             [a/a2.rell(1:10):name_conflict:user:f:FUNCTION:a/a1.rell(1:10)]
             [a/a2.rell(1:25):unknown_name:unknown_2]
-        """.trimMargin())
+        """)
+    }
+
+    @Test fun testNameConflictMount() {
+        tst.errMsgPos = true
+        val code = """
+            entity user {}
+            entity user {}
+        """.trimIndent()
+        chkCompile(code, """ct_err:
+            [main.rell(1:8):name_conflict:user:user:ENTITY:main.rell(2:8)]
+            [main.rell(2:8):name_conflict:user:user:ENTITY:main.rell(1:8)]
+        """)
     }
 
     @Test fun testInclude() {

@@ -1,7 +1,11 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.test
 
 import net.postchain.rell.CommonUtils
-import net.postchain.rell.runtime.Rt_SqlExecutor
+import net.postchain.rell.runtime.Rt_SqlManager
 import net.postchain.rell.sql.*
 import java.io.Closeable
 import java.sql.Connection
@@ -29,8 +33,8 @@ class RellTestContext(useSql: Boolean = true): Closeable {
 
     private var inited = false
     private var destroyed = false
-    private var sqlConn: Connection? = null
-    private var sqlExec: SqlExecutor = NoConnSqlExecutor
+    private var sqlResource: AutoCloseable? = null
+    private var sqlMgr: SqlManager? = null
 
     var sqlLogging = false
 
@@ -57,24 +61,25 @@ class RellTestContext(useSql: Boolean = true): Closeable {
 
         try {
             conn.autoCommit = true
-            val realSqlExec = Rt_SqlExecutor(DefaultSqlExecutor(conn, sqlLogging), true)
 
-            realSqlExec.transaction {
-                SqlUtils.dropAll(realSqlExec, true)
+            val sqlMgr = Rt_SqlManager(ConnectionSqlManager(conn, sqlLogging), true)
+
+            sqlMgr.transaction { sqlExec ->
+                SqlUtils.dropAll(sqlExec, true)
 
                 val sql = SqlGen.genSqlCreateSysTables()
-                realSqlExec.execute(sql)
+                sqlExec.execute(sql)
 
-                initSqlInsertBlockchains(realSqlExec)
+                initSqlInsertBlockchains(sqlExec)
 
                 if (!inserts.isEmpty()) {
                     val insertsSql = inserts.joinToString("\n")
-                    realSqlExec.execute(insertsSql)
+                    sqlExec.execute(insertsSql)
                 }
             }
 
-            sqlConn = conn
-            sqlExec = realSqlExec
+            this.sqlMgr = sqlMgr
+            sqlResource = conn
             closeable = null
         } finally {
             closeable?.close()
@@ -117,18 +122,13 @@ class RellTestContext(useSql: Boolean = true): Closeable {
 
     override fun close() {
         if (!inited || destroyed) return
-        sqlConn?.close()
-        sqlConn = null
+        sqlResource?.close()
+        sqlResource = null
         destroyed = true
     }
 
-    fun sqlConn(): Connection {
+    fun sqlMgr(): SqlManager {
         init()
-        return sqlConn!!
-    }
-
-    fun sqlExec(): SqlExecutor {
-        init()
-        return sqlExec
+        return if (useSql) sqlMgr!! else NoConnSqlManager
     }
 }

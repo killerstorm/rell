@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.lib
 
 import net.postchain.rell.test.BaseRellTest
@@ -237,7 +241,7 @@ class LibListTest: BaseRellTest(false) {
 
     @Test fun testFor() {
         chkOp("for (i in list([123, 456, 789])) print(i);")
-        chkStdout("123", "456", "789")
+        chkOut("123", "456", "789")
     }
 
     @Test fun testSort() {
