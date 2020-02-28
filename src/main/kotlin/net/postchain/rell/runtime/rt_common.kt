@@ -8,7 +8,6 @@ import mu.KLogging
 import net.postchain.core.ByteArrayKey
 import net.postchain.rell.model.*
 import net.postchain.rell.sql.SqlConstants
-import net.postchain.rell.toImmList
 
 class Rt_ChainDependency(val rid: ByteArray)
 

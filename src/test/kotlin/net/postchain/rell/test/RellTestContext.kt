@@ -6,10 +6,10 @@ package net.postchain.rell.test
 
 import net.postchain.base.data.PostgreSQLDatabaseAccess
 import net.postchain.base.data.SQLDatabaseAccess
-import net.postchain.rell.CommonUtils
-import net.postchain.rell.PostchainUtils
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.runtime.Rt_SqlManager
 import net.postchain.rell.sql.*
+import net.postchain.rell.utils.PostchainUtils
 import java.io.Closeable
 import java.sql.Connection
 

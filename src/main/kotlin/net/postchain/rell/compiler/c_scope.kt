@@ -4,7 +4,7 @@
 
 package net.postchain.rell.compiler
 
-import net.postchain.rell.Getter
+import net.postchain.rell.utils.Getter
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.model.R_Entity
 import net.postchain.rell.model.R_EntityType

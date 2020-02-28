@@ -7,7 +7,7 @@ package net.postchain.rell.compiler
 import net.postchain.rell.compiler.ast.S_Statement
 import net.postchain.rell.model.R_EmptyStatement
 import net.postchain.rell.model.R_Statement
-import net.postchain.rell.toImmList
+import net.postchain.rell.utils.toImmList
 
 class C_Statement(val rStmt: R_Statement, val returnAlways: Boolean, val varFacts: C_VarFacts = C_VarFacts.EMPTY) {
     fun updateStmt(newStmt: R_Statement): C_Statement {

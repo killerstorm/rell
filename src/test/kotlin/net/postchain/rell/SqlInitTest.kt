@@ -13,6 +13,7 @@ import net.postchain.rell.sql.SqlInit
 import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.sql.SqlUtils
 import net.postchain.rell.test.*
+import net.postchain.rell.utils.PostchainUtils
 import org.junit.Test
 import kotlin.test.assertEquals
 

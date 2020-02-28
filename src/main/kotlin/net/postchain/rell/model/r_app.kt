@@ -9,24 +9,23 @@ import net.postchain.rell.compiler.C_CompilerPass
 import net.postchain.rell.compiler.C_LateInit
 import net.postchain.rell.compiler.C_Utils
 import net.postchain.rell.runtime.*
-import net.postchain.rell.toImmList
-import net.postchain.rell.toImmMap
+import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmMap
 import java.util.*
 
 class R_DefinitionNames(val module: String, val namespace: String?, val simpleName: String) {
     val qualifiedName = if (namespace == null) simpleName else "$namespace.$simpleName"
     val appLevelName = if (module.isEmpty()) qualifiedName else R_DefinitionPos.appLevelName(module, qualifiedName)
-
-    fun pos() = R_DefinitionPos(module, qualifiedName)
+    val pos = R_DefinitionPos(module, qualifiedName)
 
     override fun toString() = appLevelName
 }
 
-abstract class R_Definition(names: R_DefinitionNames) {
+abstract class R_Definition(val names: R_DefinitionNames) {
     val simpleName = names.simpleName
     val moduleLevelName = names.qualifiedName
     val appLevelName = names.appLevelName
-    val pos = names.pos()
+    val pos = names.pos
 
     abstract fun toMetaGtv(): Gtv
 
@@ -154,19 +153,22 @@ class R_Operation(names: R_DefinitionNames, mountName: R_MountName): R_MountedRo
     }
 }
 
-sealed class R_QueryBody {
-    abstract fun params(): List<R_Param>
+sealed class R_QueryBody(
+        val retType: R_Type,
+        params: List<R_Param>
+) {
+    val params = params.toImmList()
+
     abstract fun execute(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, pos: R_DefinitionPos): Rt_Value
 }
 
 class R_UserQueryBody(
-        private val varParams: List<R_VarParam>,
+        retType: R_Type,
+        varParams: List<R_VarParam>,
         private val body: R_Statement,
         private val frame: R_CallFrame
-): R_QueryBody() {
-    private val params = varParams.map { it.toParam() }.toImmList()
-
-    override fun params() = params
+): R_QueryBody(retType, varParams.map { it.toParam() }) {
+    private val varParams = varParams.toImmList()
 
     override fun execute(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, pos: R_DefinitionPos): Rt_Value {
         val rtFrame = frame.createRtFrame(defCtx, null, null)
@@ -181,15 +183,11 @@ class R_UserQueryBody(
     }
 
     companion object {
-        val ERROR: R_QueryBody = R_UserQueryBody(listOf(), C_Utils.ERROR_STATEMENT, R_CallFrame.ERROR)
+        val ERROR: R_QueryBody = R_UserQueryBody(R_CtErrorType, listOf(), C_Utils.ERROR_STATEMENT, R_CallFrame.ERROR)
     }
 }
 
-class R_SysQueryBody(params: List<R_Param>, private val fn: R_SysFunction): R_QueryBody() {
-    private val params = params.toImmList()
-
-    override fun params() = params
-
+class R_SysQueryBody(retType: R_Type, params: List<R_Param>, private val fn: R_SysFunction): R_QueryBody(retType, params) {
     override fun execute(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, pos: R_DefinitionPos): Rt_Value {
         val ctx = Rt_CallContext(defCtx)
         return fn.call(ctx, args)
@@ -197,21 +195,20 @@ class R_SysQueryBody(params: List<R_Param>, private val fn: R_SysFunction): R_Qu
 }
 
 class R_Query(names: R_DefinitionNames, mountName: R_MountName): R_MountedRoutine(names, mountName) {
-    private val internals = C_LateInit(C_CompilerPass.EXPRESSIONS, ERROR_INTERNALS)
+    private val bodyLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_UserQueryBody.ERROR)
 
-    fun setInternals(type: R_Type, body: R_QueryBody) {
-        val params = body.params()
-        internals.set(Internals(type, params, body))
+    fun setBody(body: R_QueryBody) {
+        bodyLate.set(body)
     }
 
-    override fun params() = internals.get().params
-    fun type(): R_Type = internals.get().type
+    fun type(): R_Type = bodyLate.get().retType
+    override fun params() = bodyLate.get().params
 
     fun call(exeCtx: Rt_ExecutionContext, args: List<Rt_Value>): Rt_Value {
-        val ints = internals.get()
-        checkCallArgs(this, ints.params, args)
+        val body = bodyLate.get()
+        checkCallArgs(this, body.params, args)
         val defCtx = Rt_DefinitionContext(exeCtx, false, pos)
-        val res = ints.body.execute(defCtx, args, pos)
+        val res = body.execute(defCtx, args, pos)
         return res
     }
 
@@ -220,12 +217,6 @@ class R_Query(names: R_DefinitionNames, mountName: R_MountName): R_MountedRoutin
                 "type" to type().toMetaGtv(),
                 "parameters" to params().map { it.toMetaGtv() }.toGtv()
         ).toGtv()
-    }
-
-    private class Internals(val type: R_Type, val params: List<R_Param>, val body: R_QueryBody)
-
-    companion object {
-        private val ERROR_INTERNALS = Internals(type = R_UnitType, params = listOf(), body = R_UserQueryBody.ERROR)
     }
 }
 
@@ -239,9 +230,9 @@ class R_FunctionBody(
     val params = varParams.map { it.toParam() }.toImmList()
 
     companion object {
-        val EMPTY = R_FunctionBody(
+        val ERROR = R_FunctionBody(
                 R_DefinitionPos("<error>", "<error>"),
-                R_UnitType,
+                R_CtErrorType,
                 listOf(),
                 C_Utils.ERROR_STATEMENT,
                 R_CallFrame.ERROR
@@ -250,7 +241,7 @@ class R_FunctionBody(
 }
 
 class R_Function(names: R_DefinitionNames): R_Routine(names) {
-    private val bodyLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_FunctionBody.EMPTY)
+    private val bodyLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_FunctionBody.ERROR)
 
     fun setBody(body: R_FunctionBody) {
         bodyLate.set(body)

@@ -4,10 +4,10 @@
 
 package net.postchain.rell.compiler
 
-import net.postchain.rell.CommonUtils
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.compiler.ast.S_RellFile
-import net.postchain.rell.toImmList
-import net.postchain.rell.toImmMap
+import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmMap
 import org.apache.commons.lang3.StringUtils
 import java.io.File
 

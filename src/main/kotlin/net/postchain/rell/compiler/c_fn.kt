@@ -4,10 +4,10 @@
 
 package net.postchain.rell.compiler
 
-import net.postchain.rell.compiler.ast.S_Name
-import net.postchain.rell.compiler.ast.S_NameExprPair
-import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.ast.*
 import net.postchain.rell.model.*
+import net.postchain.rell.utils.RecursionAwareCalculator
+import net.postchain.rell.utils.RecursionAwareResult
 
 sealed class C_GlobalFunction {
     abstract fun getAbstractInfo(): Pair<R_Definition?, C_AbstractDescriptor?>
@@ -59,60 +59,91 @@ class C_StructGlobalFunction(private val struct: R_Struct): C_GlobalFunction() {
     }
 }
 
-class C_UserFunctionHeader(val retType: R_Type, val cParams: List<C_ExternalParam>) {
+class C_UserFunctionHeader(
+        val explicitType: R_Type?,
+        val params: C_FormalParameters,
+        val body: C_UserFunctionBody?
+) {
+    fun returnType(): R_Type {
+        return explicitType ?: (body?.returnType()?.value ?: R_CtErrorType)
+    }
+
     companion object {
-        val EMPTY = C_UserFunctionHeader(R_UnitType, listOf())
+        val ERROR = C_UserFunctionHeader(null, C_FormalParameters.EMPTY, null)
     }
 }
 
-class C_UserGlobalFunction(val rFunction: R_Function, private val abstract: C_AbstractDescriptor?): C_RegularGlobalFunction() {
-    private val headerLate = C_LateInit(C_CompilerPass.MEMBERS, C_UserFunctionHeader.EMPTY)
+class C_UserGlobalFunction(
+        val rFunction: R_Function,
+        private val abstract: C_AbstractDescriptor?
+): C_RegularGlobalFunction() {
+    private val headerLate = C_LateInit(C_CompilerPass.MEMBERS, C_UserFunctionHeader.ERROR)
 
-    fun setHeader(retType: R_Type, cParams: List<C_ExternalParam>) {
-        val header = C_UserFunctionHeader(retType, cParams)
+    fun setHeader(header: C_UserFunctionHeader) {
         headerLate.set(header)
-        abstract?.setHeader(header)
     }
 
     override fun getAbstractInfo() = Pair(rFunction, abstract)
 
     override fun compileCallRegular(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Expr {
         val header = headerLate.get()
-        val effArgs = checkArgs(ctx, name, header.cParams, args)
+        val effArgs = checkArgs(ctx, name, header.params, args)
+        val retType = compileReturnType(ctx, name, header)
 
-        val rExpr = if (effArgs != null) {
-            compileCallRegular0(ctx, name, header, effArgs)
+        val rExpr = if (effArgs != null && retType != null) {
+            compileCallRegular0(name, effArgs, retType)
         } else {
-            C_Utils.crashExpr(header.retType, "Compilation error")
+            C_Utils.crashExpr(retType ?: R_CtErrorType, "Compilation error")
         }
 
         val exprFacts = C_ExprVarFacts.forSubExpressions(args)
         return C_RValue.makeExpr(name.pos, rExpr, exprFacts)
     }
 
-    private fun compileCallRegular0(ctx: C_ExprContext, name: S_Name, header: C_UserFunctionHeader, effArgs: List<C_Value>): R_Expr {
+    private fun compileReturnType(ctx: C_ExprContext, name: S_Name, header: C_UserFunctionHeader): R_Type? {
+        if (header.explicitType != null) {
+            return header.explicitType
+        } else if (header.body == null) {
+            return null
+        }
+
+        val retTypeRes = header.body.returnType()
+        if (retTypeRes.recursion) {
+            val nameStr = name.str
+            ctx.msgCtx.error(name.pos, "fn_type_recursion:$nameStr",
+                    "The function '$nameStr' is recursive, cannot infer the return type; specify return type explicitly")
+        } else if (retTypeRes.stackOverflow) {
+            val nameStr = name.str
+            ctx.msgCtx.error(name.pos, "fn_type_stackoverflow:$nameStr",
+                    "Cannot infer return type for function '$nameStr': call chain is too long; specify return type explicitly")
+        }
+
+        return retTypeRes.value
+    }
+
+    private fun compileCallRegular0(name: S_Name, effArgs: List<C_Value>, retType: R_Type): R_Expr {
         val file = name.pos.path().str()
         val line = name.pos.line()
         val filePos = R_FilePos(file, line)
-
         val rArgs = effArgs.map { it.toRExpr() }
-        return R_UserCallExpr(header.retType, rFunction, rArgs, filePos)
+        return R_UserCallExpr(retType, rFunction, rArgs, filePos)
     }
 
-    private fun checkArgs(ctx: C_ExprContext, name: S_Name, params: List<C_ExternalParam>, args: List<C_Value>): List<C_Value>? {
+    private fun checkArgs(ctx: C_ExprContext, name: S_Name, params: C_FormalParameters, args: List<C_Value>): List<C_Value>? {
         val nameStr = name.str
         var err = false
 
-        if (args.size != params.size) {
-            ctx.msgCtx.error(name.pos, "expr_call_argcnt:$nameStr:${params.size}:${args.size}",
-                    "Wrong number of arguments for '$nameStr': ${args.size} instead of ${params.size}")
+        val paramsSize = params.list.size
+        if (args.size != paramsSize) {
+            ctx.msgCtx.error(name.pos, "expr_call_argcnt:$nameStr:$paramsSize:${args.size}",
+                    "Wrong number of arguments for '$nameStr': ${args.size} instead of $paramsSize")
             err = true
         }
 
         val matchList = mutableListOf<C_ArgTypeMatch>()
-        val n = Math.min(args.size, params.size)
+        val n = Math.min(args.size, paramsSize)
 
-        for ((i, param) in params.subList(0, n).withIndex()) {
+        for ((i, param) in params.list.subList(0, n).withIndex()) {
             val arg = args[i]
             val paramType = param.type
             val argType = arg.type()
@@ -271,5 +302,77 @@ class C_SysMemberFunction(val cases: List<C_MemberFuncCase>) {
 
         val argTypes = args.map { it.type() }
         throw C_FuncMatchUtils.errNoMatch(pos, fullName, argTypes)
+    }
+}
+
+class C_UserFunctionBody(bodyCtx: C_FunctionBodyContext, sBody: S_FunctionBody) {
+    private val retTypeCalculator = bodyCtx.mntCtx.appCtx.functionReturnTypeCalculator
+    private var state: BodyState = BodyState.StartState(bodyCtx, sBody)
+
+    fun returnType(): RecursionAwareResult<R_Type> {
+        val res = retTypeCalculator.calculate(this)
+        return res
+    }
+
+    private fun calculateReturnType(): R_Type {
+        val s = state
+        return when (s) {
+            is BodyState.StartState -> calculateReturnType0(s)
+            is BodyState.EndState -> s.rBody.type
+        }
+    }
+
+    private fun calculateReturnType0(s: BodyState.StartState): R_Type {
+        s.bodyCtx.mntCtx.executor.checkPass(C_CompilerPass.EXPRESSIONS)
+
+        if (!s.sBody.returnsValue()) {
+            return R_UnitType
+        }
+
+        val rBody = doCompile(s)
+        return rBody.type
+    }
+
+    fun compile(): R_FunctionBody {
+        // Needed to put the type calculation result to the cache. If this is not done, in case of a recursion,
+        // subsequently getting the return type will calculate it and emit an extra compilation error (recursion).
+        returnType()
+
+        val s = state
+        val res = when (s) {
+            is BodyState.StartState -> doCompile(s)
+            is BodyState.EndState -> s.rBody
+        }
+
+        return res
+    }
+
+    private fun doCompile(s: BodyState.StartState): R_FunctionBody {
+        check(state === s)
+        s.bodyCtx.mntCtx.executor.checkPass(C_CompilerPass.EXPRESSIONS)
+
+        var res = R_FunctionBody.ERROR
+
+        try {
+            res = s.sBody.compileFunction(s.bodyCtx)
+        } finally {
+            state = BodyState.EndState(res)
+        }
+
+        return res
+    }
+
+    private sealed class BodyState {
+        class StartState(val bodyCtx: C_FunctionBodyContext, val sBody: S_FunctionBody): BodyState()
+        class EndState(val rBody: R_FunctionBody): BodyState()
+    }
+
+    companion object {
+        fun createReturnTypeCalculator(): RecursionAwareCalculator<C_UserFunctionBody, R_Type> {
+            // Experimental threshold with default JRE settings is 500 (depth > 500 --> StackOverflowError).
+            return RecursionAwareCalculator(200, R_CtErrorType) {
+                it.calculateReturnType()
+            }
+        }
     }
 }

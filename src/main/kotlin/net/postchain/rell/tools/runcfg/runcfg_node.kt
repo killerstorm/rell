@@ -4,7 +4,7 @@
 
 package net.postchain.rell.tools.runcfg
 
-import net.postchain.rell.*
+import net.postchain.rell.utils.*
 import java.io.StringReader
 import java.util.*
 import java.util.regex.Pattern

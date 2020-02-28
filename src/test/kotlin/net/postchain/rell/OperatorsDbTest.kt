@@ -8,6 +8,7 @@ import net.postchain.rell.compiler.C_Constants
 import net.postchain.rell.test.RellCodeTester
 import net.postchain.rell.test.RellTestContext
 import net.postchain.rell.test.SqlTestUtils
+import net.postchain.rell.utils.CommonUtils
 import java.math.BigDecimal
 import kotlin.test.assertEquals
 

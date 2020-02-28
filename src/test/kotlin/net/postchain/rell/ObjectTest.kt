@@ -52,7 +52,7 @@ class ObjectTest: BaseRellTest() {
     @Test fun testUseAsType() {
         def("object foo { x: integer = 123; }")
         chkCompile("function g(f: foo){}", "ct_err:unknown_type:foo")
-        chkCompile("function g(): foo {}", "ct_err:unknown_type:foo")
+        chkCompile("function g(): foo {}", "ct_err:[fun_noreturn:g][unknown_type:foo]")
         chkCompile("function g() { var f: foo; }", "ct_err:unknown_type:foo")
         chkCompile("entity bar { f: foo; }", "ct_err:unknown_type:foo")
         chkCompile("function g() { var l: list<foo>; }", "ct_err:unknown_type:foo")

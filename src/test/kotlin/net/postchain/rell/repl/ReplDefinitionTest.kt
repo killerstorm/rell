@@ -42,7 +42,7 @@ class ReplDefinitionTest: BaseRellTest(false) {
     @Test fun testModuleInvalid() {
         file("lib.rell", "module; function f(): integer = 'Hello';")
         tst.replModule = "lib"
-        repl.chk("123", "CTE:lib.rell:entity_rettype:[integer]:[text]")
+        repl.chk("123", "CTE:lib.rell:fn_rettype:[integer]:[text]")
     }
 
     @Test fun testModuleNameConflict() {

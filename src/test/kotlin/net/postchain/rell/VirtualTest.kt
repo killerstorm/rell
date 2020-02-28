@@ -10,6 +10,7 @@ import net.postchain.gtv.path.GtvPathFactory
 import net.postchain.gtv.path.GtvPathSet
 import net.postchain.rell.test.BaseGtxTest
 import net.postchain.rell.test.GtvTestUtils
+import net.postchain.rell.utils.PostchainUtils
 import org.junit.Test
 
 class VirtualTest: BaseGtxTest(false) {

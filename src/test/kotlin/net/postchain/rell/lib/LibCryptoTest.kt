@@ -6,7 +6,7 @@ package net.postchain.rell.lib
 
 import net.postchain.base.secp256k1_derivePubKey
 import net.postchain.base.secp256k1_sign
-import net.postchain.rell.CommonUtils
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 

@@ -7,16 +7,16 @@ package net.postchain.rell.compiler
 import com.github.h0tk3y.betterParse.parser.ParseException
 import com.github.h0tk3y.betterParse.parser.Parser
 import com.github.h0tk3y.betterParse.parser.parseToEnd
-import net.postchain.rell.CommonUtils
-import net.postchain.rell.ThreadLocalContext
 import net.postchain.rell.compiler.ast.*
 import net.postchain.rell.compiler.parser.RellTokenizerError
 import net.postchain.rell.compiler.parser.RellTokenizerState
 import net.postchain.rell.compiler.parser.S_Grammar
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Error
-import net.postchain.rell.toImmList
-import net.postchain.rell.toImmSet
+import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.ThreadLocalContext
+import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmSet
 import org.jooq.impl.SQLDataType
 import java.math.BigDecimal
 import java.util.*
@@ -69,13 +69,13 @@ object C_Constants {
             .divide(BigDecimal.TEN.pow(DECIMAL_FRAC_DIGITS))
 }
 
-class C_ExternalParam(val name: S_Name, val type: R_Type?) {
+class C_FormalParameter(val name: S_Name, val type: R_Type?) {
     fun nameCode(index: Int) = "$index:${name.str}"
     fun nameMsg(index: Int) = "'${name.str}'"
 }
 
 object C_Utils {
-    val ERROR_EXPR = crashExpr(R_UnitType)
+    val ERROR_EXPR = crashExpr(R_CtErrorType)
     val ERROR_STATEMENT = R_ExprStatement(ERROR_EXPR)
 
     fun toDbExpr(pos: S_Pos, rExpr: R_Expr): Db_Expr {
@@ -197,8 +197,8 @@ object C_Utils {
         val query = R_Query(names, mountName)
 
         executor.onPass(C_CompilerPass.EXPRESSIONS) {
-            val body = R_SysQueryBody(listOf(), fn)
-            query.setInternals(type, body)
+            val body = R_SysQueryBody(type, listOf(), fn)
+            query.setBody(body)
         }
 
         return query
@@ -239,7 +239,7 @@ object C_Utils {
         return R_StackTraceExpr(rCallExpr, filePos)
     }
 
-    fun crashExpr(type: R_Type, msg: String = "Compilation error"): R_Expr {
+    fun crashExpr(type: R_Type = R_CtErrorType, msg: String = "Compilation error"): R_Expr {
         val arg = R_ConstantExpr.makeText(msg)
         return R_SysCallExpr(type, R_SysFn_Internal.Crash, listOf(arg), null)
     }

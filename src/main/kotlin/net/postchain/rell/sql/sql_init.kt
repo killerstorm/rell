@@ -12,12 +12,12 @@ import net.postchain.base.BlockchainRid
 import net.postchain.base.data.PostgreSQLDatabaseAccess
 import net.postchain.base.data.SQLDatabaseAccess
 import net.postchain.core.EContext
-import net.postchain.rell.PostchainUtils
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_ExecutionContext
 import net.postchain.rell.runtime.Rt_Messages
 import net.postchain.rell.runtime.Rt_StackTraceError
 import net.postchain.rell.runtime.Rt_Utils
+import net.postchain.rell.utils.PostchainUtils
 
 private val ORD_TABLES = 0
 private val ORD_RECORDS = 1

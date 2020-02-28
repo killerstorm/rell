@@ -5,7 +5,7 @@
 package net.postchain.rell.misc
 
 import net.postchain.gtv.GtvFactory
-import net.postchain.rell.PostchainUtils
+import net.postchain.rell.utils.PostchainUtils
 import net.postchain.rell.RellConfigGen
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.compiler.C_Compiler

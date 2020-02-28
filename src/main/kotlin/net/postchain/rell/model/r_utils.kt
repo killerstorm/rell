@@ -4,8 +4,8 @@
 
 package net.postchain.rell.model
 
-import net.postchain.rell.CommonUtils
-import net.postchain.rell.toImmList
+import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.toImmList
 import org.apache.commons.lang3.StringUtils
 import java.util.*
 

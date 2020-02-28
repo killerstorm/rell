@@ -15,9 +15,13 @@ sealed class S_Type {
         return compile(ctx.nsCtx)
     }
 
+    fun compileOpt(ctx: C_NamespaceContext): R_Type? {
+        return ctx.msgCtx.consumeError { compile(ctx) }
+    }
+
     companion object {
         fun match(dstType: R_Type, srcType: R_Type, errPos: S_Pos, errCode: String, errMsg: String) {
-            if (!dstType.isAssignableFrom(srcType)) {
+            if (dstType != R_CtErrorType && srcType != R_CtErrorType && !dstType.isAssignableFrom(srcType)) {
                 throw C_Errors.errTypeMismatch(errPos, srcType, dstType, errCode, errMsg)
             }
         }

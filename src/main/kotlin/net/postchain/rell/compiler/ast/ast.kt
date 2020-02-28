@@ -4,16 +4,16 @@
 
 package net.postchain.rell.compiler.ast
 
-import net.postchain.rell.MutableTypedKeyMap
-import net.postchain.rell.ThreadLocalContext
-import net.postchain.rell.TypedKeyMap
 import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.parser.RellTokenMatch
 import net.postchain.rell.model.*
 import net.postchain.rell.module.RELL_VERSION_MODULE_SYSTEM
-import net.postchain.rell.toImmList
 import net.postchain.rell.tools.api.IdeOutlineNodeType
 import net.postchain.rell.tools.api.IdeOutlineTreeBuilder
+import net.postchain.rell.utils.MutableTypedKeyMap
+import net.postchain.rell.utils.ThreadLocalContext
+import net.postchain.rell.utils.TypedKeyMap
+import net.postchain.rell.utils.toImmList
 import java.util.*
 import java.util.function.Supplier
 import kotlin.math.min
@@ -569,17 +569,18 @@ class S_OperationDefinition(
     }
 
     private fun doCompile(ctx: C_MountContext, rOperation: R_Operation) {
+        val forParams = C_FormalParameters.create(ctx.nsCtx, params, true)
+
         val statementVars = processStatementVars()
         val defCtx = C_DefinitionContext(ctx, C_DefinitionType.OPERATION)
         val fnCtx = C_FunctionContext(defCtx, rOperation.appLevelName, null, statementVars)
         val frameCtx = C_FrameContext.create(fnCtx)
 
-        val extParams = compileExternalParams(ctx.nsCtx, frameCtx, params, true)
-
-        val rBody = body.compile(extParams.stmtCtx).rStmt
+        val actParams = forParams.compile(frameCtx)
+        val rBody = body.compile(actParams.stmtCtx).rStmt
         val callFrame = frameCtx.makeCallFrame()
 
-        rOperation.setInternals(extParams.rParams, rBody, callFrame.rFrame)
+        rOperation.setInternals(actParams.rParams, rBody, callFrame.rFrame)
     }
 
     private fun processStatementVars(): TypedKeyMap {
@@ -621,25 +622,16 @@ class S_QueryDefinition(
     }
 
     private fun doCompile(ctx: C_MountContext, rQuery: R_Query) {
+        val forParams = C_FormalParameters.create(ctx.nsCtx, params, true)
         val rExplicitRetType = retType?.compile(ctx.nsCtx)
-        val statementVars = body.processStatementVars()
-        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.QUERY)
-        val fnCtx = C_FunctionContext(defCtx, rQuery.appLevelName, rExplicitRetType, statementVars)
-        val frameCtx = C_FrameContext.create(fnCtx)
+        val bodyCtx = C_FunctionBodyContext(ctx, name.pos, rQuery.names, rExplicitRetType, forParams)
 
-        val extParams = compileExternalParams(ctx.nsCtx, frameCtx, params, true)
-
-        val bodyCtx = C_FunctionBodyContext(frameCtx, extParams.stmtCtx)
-        val rBody = body.compileQuery(name, bodyCtx)
-        val callFrame = frameCtx.makeCallFrame()
-        val rRetType = fnCtx.actualReturnType()
+        val rQueryBody = body.compileQuery(bodyCtx)
+        rQuery.setBody(rQueryBody)
 
         if (ctx.globalCtx.compilerOptions.gtv) {
-            checkGtvResult(ctx.nsCtx, rRetType)
+            checkGtvResult(ctx.nsCtx, rQueryBody.retType)
         }
-
-        val rQueryBody = R_UserQueryBody(extParams.rParams, rBody, callFrame.rFrame)
-        rQuery.setInternals(rRetType, rQueryBody)
     }
 
     private fun checkGtvResult(ctx: C_NamespaceContext, rType: R_Type) {
@@ -668,27 +660,55 @@ private fun checkGtvCompatibility(
 }
 
 abstract class S_FunctionBody {
-    abstract fun processStatementVars(): TypedKeyMap
-    abstract fun compileQuery(name: S_Name, ctx: C_FunctionBodyContext): R_Statement
-    abstract fun compileFunction(qualifiedName: List<S_Name>, ctx: C_FunctionBodyContext): R_Statement
+    protected abstract fun processStatementVars(): TypedKeyMap
+    protected abstract fun compileQuery0(bodyCtx: C_FunctionBodyContext, stmtCtx: C_StmtContext): R_Statement
+    protected abstract fun compileFunction0(bodyCtx: C_FunctionBodyContext, stmtCtx: C_StmtContext): R_Statement
+
+    abstract fun returnsValue(): Boolean
+
+    fun compileQuery(ctx: C_FunctionBodyContext): R_QueryBody {
+        val statementVars = processStatementVars()
+        val defCtx = C_DefinitionContext(ctx.mntCtx, C_DefinitionType.QUERY)
+        val fnCtx = C_FunctionContext(defCtx, ctx.defNames.appLevelName, ctx.explicitRetType, statementVars)
+        val frameCtx = C_FrameContext.create(fnCtx)
+        val actParams = ctx.forParams.compile(frameCtx)
+
+        val rBody = compileQuery0(ctx, actParams.stmtCtx)
+        val callFrame = frameCtx.makeCallFrame()
+        val rRetType = fnCtx.actualReturnType()
+        return R_UserQueryBody(rRetType, actParams.rParams, rBody, callFrame.rFrame)
+    }
+
+    fun compileFunction(ctx: C_FunctionBodyContext): R_FunctionBody {
+        val statementVars = processStatementVars()
+        val defCtx = C_DefinitionContext(ctx.mntCtx, C_DefinitionType.FUNCTION)
+        val fnCtx = C_FunctionContext(defCtx, ctx.defNames.appLevelName, ctx.explicitRetType, statementVars)
+        val frameCtx = C_FrameContext.create(fnCtx)
+        val actParams = ctx.forParams.compile(frameCtx)
+
+        val rBody = compileFunction0(ctx, actParams.stmtCtx)
+        val callFrame = frameCtx.makeCallFrame()
+        val rRetType = fnCtx.actualReturnType()
+        return R_FunctionBody(ctx.defNames.pos, rRetType, actParams.rParams, rBody, callFrame.rFrame)
+    }
 }
 
 class S_FunctionBodyShort(val expr: S_Expr): S_FunctionBody() {
     override fun processStatementVars() = TypedKeyMap()
 
-    override fun compileQuery(name: S_Name, ctx: C_FunctionBodyContext): R_Statement {
-        val cExpr = expr.compile(ctx.stmtCtx)
+    override fun returnsValue() = true
+
+    override fun compileQuery0(bodyCtx: C_FunctionBodyContext, stmtCtx: C_StmtContext): R_Statement {
+        val cExpr = expr.compile(stmtCtx)
         val rExpr = cExpr.value().toRExpr()
-        C_Utils.checkUnitType(name.pos, rExpr.type, "query_exprtype_unit", "Query expressions returns nothing")
-        ctx.fnCtx.matchReturnType(name.pos, rExpr.type)
+        C_Utils.checkUnitType(bodyCtx.namePos, rExpr.type, "query_exprtype_unit", "Query expressions returns nothing")
+        stmtCtx.fnCtx.matchReturnType(bodyCtx.namePos, rExpr.type)
         return R_ReturnStatement(rExpr)
     }
 
-    override fun compileFunction(qualifiedName: List<S_Name>, ctx: C_FunctionBodyContext): R_Statement {
-        val name = C_Utils.namePosStr(qualifiedName)
-
-        val rExpr = expr.compile(ctx.stmtCtx).value().toRExpr()
-        ctx.fnCtx.matchReturnType(name.pos, rExpr.type)
+    override fun compileFunction0(bodyCtx: C_FunctionBodyContext, stmtCtx: C_StmtContext): R_Statement {
+        val rExpr = expr.compile(stmtCtx).value().toRExpr()
+        stmtCtx.fnCtx.matchReturnType(bodyCtx.namePos, rExpr.type)
 
         return if (rExpr.type != R_UnitType) {
             R_ReturnStatement(rExpr)
@@ -705,24 +725,29 @@ class S_FunctionBodyFull(val body: S_Statement): S_FunctionBody() {
         return map.immutableCopy()
     }
 
-    override fun compileQuery(name: S_Name, ctx: C_FunctionBodyContext): R_Statement {
-        val cBody = body.compile(ctx.stmtCtx)
+    override fun returnsValue(): Boolean {
+        return body.returnsValue() ?: false
+    }
+
+    override fun compileQuery0(bodyCtx: C_FunctionBodyContext, stmtCtx: C_StmtContext): R_Statement {
+        val cBody = body.compile(stmtCtx)
 
         if (!cBody.returnAlways) {
-            throw C_Error(name.pos, "query_noreturn:${name.str}", "Query '${name.str}': not all code paths return value")
+            val nameStr = bodyCtx.defNames.qualifiedName
+            throw C_Error(bodyCtx.namePos, "query_noreturn:$nameStr", "Query '$nameStr': not all code paths return value")
         }
 
         return cBody.rStmt
     }
 
-    override fun compileFunction(qualifiedName: List<S_Name>, ctx: C_FunctionBodyContext): R_Statement {
-        val cBody = body.compile(ctx.stmtCtx)
+    override fun compileFunction0(bodyCtx: C_FunctionBodyContext, stmtCtx: C_StmtContext): R_Statement {
+        val cBody = body.compile(stmtCtx)
 
-        val retType = ctx.fnCtx.actualReturnType()
+        val retType = stmtCtx.fnCtx.actualReturnType()
         if (retType != R_UnitType) {
-            val name = C_Utils.namePosStr(qualifiedName)
             if (!cBody.returnAlways) {
-                throw C_Error(name.pos, "fun_noreturn:${name.str}", "Function '${name.str}': not all code paths return value")
+                val nameStr = bodyCtx.defNames.qualifiedName
+                throw C_Error(bodyCtx.namePos, "fun_noreturn:$nameStr", "Function '$nameStr': not all code paths return value")
             }
         }
 
@@ -776,9 +801,9 @@ class S_FunctionDefinition(
         ctx.nsBuilder.addFunction(name, cFn)
 
         ctx.executor.onPass(C_CompilerPass.MEMBERS) {
-            val cHeader = compileRegularHeader(ctx, cFn)
+            val header = compileRegularHeader(ctx, cFn)
             ctx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
-                compileRegularBody(cHeader, rFn)
+                compileRegularBody(header, rFn)
             }
         }
     }
@@ -793,26 +818,32 @@ class S_FunctionDefinition(
         return R_Function(names)
     }
 
-    private fun compileRegularHeader(ctx: C_MountContext, cFn: C_UserGlobalFunction): C_FnHeader {
-        val h = compileHeader0(ctx, cFn.rFunction.appLevelName)
-        cFn.setHeader(h.retType, h.cParams)
-        return h
+    private fun compileRegularHeader(ctx: C_MountContext, cFn: C_UserGlobalFunction): C_UserFunctionHeader {
+        val header = compileHeader0(ctx, cFn.rFunction.names)
+        cFn.setHeader(header)
+        return header
     }
 
-    private fun compileHeader0(ctx: C_MountContext, name: String): C_FnHeader {
-        val rRetType = if (retType != null) retType.compile(ctx.nsCtx) else R_UnitType
-        val statementVars = body?.processStatementVars() ?: TypedKeyMap()
-        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.FUNCTION)
-        val fnCtx = C_FunctionContext(defCtx, name, rRetType, statementVars)
-        val frameCtx = C_FrameContext.create(fnCtx)
-        val extParams = compileExternalParams(ctx.nsCtx, frameCtx, params, false)
-        val bodyCtx = C_FunctionBodyContext(frameCtx, extParams.stmtCtx)
-        return C_FnHeader(rRetType, bodyCtx, extParams.rParams, extParams.cParams)
+    private fun compileHeader0(ctx: C_MountContext, defNames: R_DefinitionNames): C_UserFunctionHeader {
+        val explicitRetType = if (retType == null) null else (retType.compileOpt(ctx.nsCtx) ?: R_CtErrorType)
+        val bodyRetType = if (body == null) R_UnitType else null
+        val retType = explicitRetType ?: bodyRetType
+
+        val params = C_FormalParameters.create(ctx.nsCtx, params, false)
+
+        val cBody = if (body == null) null else {
+            val bodyCtx = C_FunctionBodyContext(ctx, qualifiedName[0].pos, defNames, retType, params)
+            C_UserFunctionBody(bodyCtx, body)
+        }
+
+        return C_UserFunctionHeader(retType, params, cBody)
     }
 
-    private fun compileRegularBody(cHeader: C_FnHeader, rFn: R_Function) {
-        val rBody = body?.compileFunction(qualifiedName, cHeader.bodyCtx) ?: C_Utils.ERROR_STATEMENT
-        rFn.setBody(createFunctionBody(rFn.pos, cHeader, rBody))
+    private fun compileRegularBody(header: C_UserFunctionHeader, rFn: R_Function) {
+        if (header.body != null) {
+            val rBody = header.body.compile()
+            rFn.setBody(rBody)
+        }
     }
 
     private fun compileAbstract(ctx: C_MountContext, name: S_Name) {
@@ -832,24 +863,12 @@ class S_FunctionDefinition(
         ctx.nsBuilder.addFunction(name, cFn)
 
         ctx.executor.onPass(C_CompilerPass.MEMBERS) {
-            val cHeader = compileRegularHeader(ctx, cFn)
-            if (body != null) {
-                ctx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
-                    compileAbstractBody(cHeader, rFn, descriptor, body)
-                }
+            val header = compileRegularHeader(ctx, cFn)
+            descriptor.setHeader(header)
+            ctx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
+                header.body?.compile() // Make sure no compilation errors.
+                descriptor.bind()
             }
-        }
-    }
-
-    private fun compileAbstractBody(
-            cHeader: C_FnHeader,
-            rFn: R_Function,
-            descriptor: C_AbstractDescriptor,
-            realBody: S_FunctionBody
-    ) {
-        val rBody = realBody.compileFunction(qualifiedName, cHeader.bodyCtx)
-        if (descriptor.isUsingDefaultBody()) {
-            rFn.setBody(createFunctionBody(rFn.pos, cHeader, rBody))
         }
     }
 
@@ -882,40 +901,46 @@ class S_FunctionDefinition(
             desc
         }
 
-        val cHeader = compileHeader0(ctx, C_Utils.nameStr(qualifiedName))
+        val names = definitionNames(ctx)
+        val header = compileHeader0(ctx, names)
+
         overDescriptor.setAbstract(absDescriptor)
+        if (header.body != null) {
+            overDescriptor.setBody(header.body)
+        }
 
         ctx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
-            compileOverrideBody(ctx, cHeader, absDescriptor, overDescriptor)
+            compileOverrideBody(ctx, header, absDescriptor)
         }
     }
 
     private fun compileOverrideBody(
             ctx: C_MountContext,
-            cHeader: C_FnHeader,
-            absDescriptor: C_AbstractDescriptor?,
-            overDescriptor: C_OverrideDescriptor
+            header: C_UserFunctionHeader,
+            absDescriptor: C_AbstractDescriptor?
     ) {
+        header.body?.compile()
         if (absDescriptor != null) {
-            checkOverrideSignature(ctx, absDescriptor, cHeader)
+            val retType = header.returnType()
+            checkOverrideSignature(ctx, absDescriptor, header.params, retType)
         }
-
-        val names = definitionNames(ctx)
-        val defPos = names.pos()
-
-        val rBody = body?.compileFunction(qualifiedName, cHeader.bodyCtx) ?: C_Utils.ERROR_STATEMENT
-        overDescriptor.setBody(createFunctionBody(defPos, cHeader, rBody))
     }
 
-    private fun checkOverrideSignature(ctx: C_MountContext, abstractDescriptor: C_AbstractDescriptor, cHeader: C_FnHeader) {
+    private fun checkOverrideSignature(
+            ctx: C_MountContext,
+            absDescriptor: C_AbstractDescriptor,
+            params: C_FormalParameters,
+            overType: R_Type
+    ) {
         val overPos = qualifiedName[0].pos
-        val absHeader = abstractDescriptor.header()
+        val absHeader = absDescriptor.header()
 
-        S_Type.matchOpt(ctx.msgCtx, absHeader.retType, cHeader.retType, overPos,
+        val absType = absHeader.returnType()
+        S_Type.matchOpt(ctx.msgCtx, absType, overType, overPos,
                 "fn:override:ret_type", "Return type missmatch")
 
-        val absParams = absHeader.cParams
-        val overParams = cHeader.cParams
+        val absParams = absHeader.params.list
+        val overParams = params.list
 
         if (absParams.size != overParams.size) {
             ctx.msgCtx.error(overPos, "fn:override:param_cnt:${absParams.size}:${overParams.size}",
@@ -934,22 +959,10 @@ class S_FunctionDefinition(
         }
     }
 
-    private fun createFunctionBody(defPos: R_DefinitionPos, cHeader: C_FnHeader, rBody: R_Statement): R_FunctionBody {
-        val callFrame = cHeader.bodyCtx.frameCtx.makeCallFrame()
-        return R_FunctionBody(defPos, cHeader.retType, cHeader.rParams, rBody, callFrame.rFrame)
-    }
-
     override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
         val name = qualifiedName.last()
         b.node(this, name, IdeOutlineNodeType.FUNCTION)
     }
-
-    private class C_FnHeader(
-            val retType: R_Type,
-            val bodyCtx: C_FunctionBodyContext,
-            val rParams: List<R_VarParam>,
-            val cParams: List<C_ExternalParam>
-    )
 }
 
 class S_NamespaceDefinition(
@@ -1215,58 +1228,69 @@ class S_RellFile(val header: S_ModuleHeader?, val definitions: List<S_Definition
     }
 }
 
-private fun compileExternalParams(
-        ctx: C_NamespaceContext,
-        frameCtx: C_FrameContext,
-        params: List<S_AttrHeader>,
-        gtv: Boolean
-): C_ExternalParams {
-    val blkCtx = frameCtx.rootBlkCtx
+class C_FormalParameters(list: List<C_FormalParameter>) {
+    val list = list.toImmList()
 
-    val names = mutableSetOf<String>()
-    val inited = mutableMapOf<C_VarUid, C_VarFact>()
-    val rVarParams = mutableListOf<R_VarParam>()
-    val cExtParams = mutableListOf<C_ExternalParam>()
+    fun compile(frameCtx: C_FrameContext): C_ActualParameters {
+        val inited = mutableMapOf<C_VarUid, C_VarFact>()
+        val names = mutableSetOf<String>()
+        val rParams = mutableListOf<R_VarParam>()
 
-    for (param in params) {
-        val name = param.name
-        val type = param.compileTypeOpt(ctx)
+        val blkCtx = frameCtx.rootBlkCtx
 
-        val nameStr = name.str
-        if (!names.add(nameStr)) {
-            ctx.msgCtx.error(name.pos, "dup_param_name:$nameStr", "Duplicate parameter: '$nameStr'")
-        } else if (type != null) {
-            val cVar = blkCtx.addLocalVar(name, type, false)
-            inited[cVar.uid] = C_VarFact.YES
-            val rVarParam = R_VarParam(name.str, type, cVar.ptr)
-            rVarParams.add(rVarParam)
+        for (param in list) {
+            val name = param.name
+            val nameStr = name.str
+            val type = param.type
+
+            if (!names.add(nameStr)) {
+                frameCtx.msgCtx.error(name.pos, "dup_param_name:$nameStr", "Duplicate parameter: '$nameStr'")
+            } else if (type != null) {
+                val cVar = blkCtx.addLocalVar(name, type, false)
+                inited[cVar.uid] = C_VarFact.YES
+                val rVarParam = R_VarParam(name.str, type, cVar.ptr)
+                rParams.add(rVarParam)
+            }
         }
 
-        val cExtParam = C_ExternalParam(name, type)
-        if (gtv && ctx.globalCtx.compilerOptions.gtv) {
-            checkGtvParam(ctx, cExtParam)
+        val varFacts = C_VarFacts.of(inited = inited.toMap())
+
+        val stmtCtx = C_StmtContext.createRoot(blkCtx)
+                .updateFacts(varFacts)
+
+        return C_ActualParameters(stmtCtx, rParams)
+    }
+
+    companion object {
+        val EMPTY = C_FormalParameters(listOf())
+
+        fun create(ctx: C_NamespaceContext, params: List<S_AttrHeader>, gtv: Boolean): C_FormalParameters {
+            val cParams = mutableListOf<C_FormalParameter>()
+
+            for (param in params) {
+                val name = param.name
+                val type = param.compileTypeOpt(ctx)
+
+                val cExtParam = C_FormalParameter(name, type)
+                if (gtv && ctx.globalCtx.compilerOptions.gtv) {
+                    checkGtvParam(ctx, cExtParam)
+                }
+
+                cParams.add(cExtParam)
+            }
+
+            return C_FormalParameters(cParams)
         }
 
-        cExtParams.add(cExtParam)
-    }
-
-    val varFacts = C_VarFacts.of(inited = inited.toMap())
-
-    val stmtCtx = C_StmtContext.createRoot(blkCtx)
-            .updateFacts(varFacts)
-
-    return C_ExternalParams(stmtCtx, rVarParams.toImmList(), cExtParams.toImmList())
-}
-
-private fun checkGtvParam(ctx: C_NamespaceContext, param: C_ExternalParam) {
-    if (param.type != null) {
-        val nameStr = param.name.str
-        checkGtvCompatibility(ctx, param.name.pos, param.type, true, "param_nogtv:$nameStr", "Type of parameter '$nameStr'")
+        private fun checkGtvParam(ctx: C_NamespaceContext, param: C_FormalParameter) {
+            if (param.type != null) {
+                val nameStr = param.name.str
+                checkGtvCompatibility(ctx, param.name.pos, param.type, true, "param_nogtv:$nameStr", "Type of parameter '$nameStr'")
+            }
+        }
     }
 }
 
-private class C_ExternalParams(
-        val stmtCtx: C_StmtContext,
-        val rParams: List<R_VarParam>,
-        val cParams: List<C_ExternalParam>
-)
+class C_ActualParameters(val stmtCtx: C_StmtContext, rParams: List<R_VarParam>) {
+    val rParams = rParams.toImmList()
+}

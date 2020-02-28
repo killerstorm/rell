@@ -10,8 +10,8 @@ import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_Printer
 import net.postchain.rell.sql.SqlExecutor
-import net.postchain.rell.toImmList
-import net.postchain.rell.toImmMap
+import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmMap
 import java.util.*
 import kotlin.test.assertEquals
 

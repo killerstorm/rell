@@ -4,10 +4,10 @@
 
 package net.postchain.rell.compiler
 
-import net.postchain.rell.LateGetter
-import net.postchain.rell.LateInit
-import net.postchain.rell.ListVsMap
-import net.postchain.rell.toImmList
+import net.postchain.rell.utils.LateGetter
+import net.postchain.rell.utils.LateInit
+import net.postchain.rell.utils.ListVsMap
+import net.postchain.rell.utils.toImmList
 
 object C_NsRes_ResultMaker {
     fun make(modules: Map<C_ModuleKey, C_NsImp_Namespace>): Map<C_ModuleKey, C_Namespace> {

@@ -4,8 +4,8 @@
 
 package net.postchain.rell.compiler.ast
 
-import net.postchain.rell.MutableTypedKeyMap
-import net.postchain.rell.TypedKey
+import net.postchain.rell.utils.MutableTypedKeyMap
+import net.postchain.rell.utils.TypedKey
 import net.postchain.rell.compiler.*
 import net.postchain.rell.model.*
 
@@ -43,6 +43,8 @@ abstract class S_Statement(val pos: S_Pos) {
         val res = ctx.statementVars.get(modifiedVars)
         return res
     }
+
+    open fun returnsValue(): Boolean? = null
 }
 
 class S_EmptyStatement(pos: S_Pos): S_Statement(pos) {
@@ -202,6 +204,8 @@ class S_ReturnStatement(pos: S_Pos, val expr: S_Expr?): S_Statement(pos) {
 
         return R_ReturnStatement(rExpr)
     }
+
+    override fun returnsValue() = expr != null
 }
 
 class S_BlockStatement(pos: S_Pos, val stmts: List<S_Statement>): S_Statement(pos) {
@@ -230,6 +234,14 @@ class S_BlockStatement(pos: S_Pos, val stmts: List<S_Statement>): S_Statement(po
 
         val modified = block.modified()
         return C_StatementVars(setOf(), modified)
+    }
+
+    override fun returnsValue(): Boolean? {
+        for (s in stmts) {
+            val rv = s.returnsValue()
+            if (rv != null) return rv
+        }
+        return null
     }
 }
 
@@ -303,6 +315,11 @@ class S_IfStatement(pos: S_Pos, val expr: S_Expr, val trueStmt: S_Statement, val
         val falseVars = if (falseStmt != null) falseStmt.discoverVars(map) else C_StatementVars.EMPTY
         return C_StatementVars(setOf(), trueVars.modified + falseVars.modified)
     }
+
+    override fun returnsValue(): Boolean? {
+        val t = trueStmt.returnsValue()
+        return t ?: falseStmt?.returnsValue()
+    }
 }
 
 class S_WhenStatementCase(val cond: S_WhenCondition, val stmt: S_Statement)
@@ -339,6 +356,14 @@ class S_WhenStatement(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenState
             modified.addAll(caseVars.modified)
         }
         return C_StatementVars(setOf(), modified)
+    }
+
+    override fun returnsValue(): Boolean? {
+        for (case in cases) {
+            val rv = case.stmt.returnsValue()
+            if (rv != null) return rv
+        }
+        return null
     }
 }
 
@@ -381,6 +406,8 @@ class S_WhileStatement(pos: S_Pos, val expr: S_Expr, val stmt: S_Statement): S_S
         val bodyVars = stmt.discoverVars(map)
         return C_StatementVars(setOf(), bodyVars.modified)
     }
+
+    override fun returnsValue() = stmt.returnsValue()
 
     companion object {
         fun compileLoop(ctx: C_StmtContext, stmt: S_Statement, expr: S_Expr): C_LoopStatement? {
@@ -533,6 +560,8 @@ class S_ForStatement(pos: S_Pos, val declarator: S_VarDeclarator, val expr: S_Ex
         val modified = block.modified()
         return C_StatementVars(setOf(), modified)
     }
+
+    override fun returnsValue() = stmt.returnsValue()
 }
 
 class S_BreakStatement(pos: S_Pos): S_Statement(pos) {

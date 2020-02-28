@@ -14,16 +14,16 @@ import net.postchain.gtx.ExtOpData
 import net.postchain.gtx.GTXModule
 import net.postchain.gtx.GTXModuleFactory
 import net.postchain.gtx.GTXOperation
-import net.postchain.rell.CommonUtils
-import net.postchain.rell.LateInit
+import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.LateInit
 import net.postchain.rell.compiler.*
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.ConnectionSqlExecutor
 import net.postchain.rell.sql.SqlInit
 import net.postchain.rell.sql.SqlInitLogging
-import net.postchain.rell.toImmMap
-import net.postchain.rell.toImmSet
+import net.postchain.rell.utils.toImmMap
+import net.postchain.rell.utils.toImmSet
 import org.apache.commons.lang3.time.FastDateFormat
 
 const val RELL_LANG_VERSION = "0.10"

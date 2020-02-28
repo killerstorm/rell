@@ -11,8 +11,8 @@ import net.postchain.rell.compiler.ast.S_RellFile
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.runtime.Rt_RellVersion
 import net.postchain.rell.runtime.Rt_RellVersionProperty
-import net.postchain.rell.toImmList
-import net.postchain.rell.toImmMap
+import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmMap
 
 @Suppress("UNUSED")
 object IdeApi {

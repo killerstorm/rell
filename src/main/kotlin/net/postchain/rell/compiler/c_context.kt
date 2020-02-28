@@ -4,10 +4,10 @@
 
 package net.postchain.rell.compiler
 
-import net.postchain.rell.Getter
-import net.postchain.rell.TypedKeyMap
 import net.postchain.rell.compiler.ast.*
 import net.postchain.rell.model.*
+import net.postchain.rell.utils.Getter
+import net.postchain.rell.utils.TypedKeyMap
 import org.apache.commons.lang3.StringUtils
 
 data class C_VarUid(val id: Long, val name: String, val fn: R_FnUid)
@@ -442,6 +442,7 @@ class C_FunctionContext(
     val nsCtx = defCtx.nsCtx
     val modCtx = nsCtx.modCtx
     val appCtx = modCtx.appCtx
+    val msgCtx = appCtx.msgCtx
     val globalCtx = modCtx.globalCtx
     val executor = modCtx.executor
 
@@ -480,8 +481,10 @@ class C_FunctionContext(
 
             override fun match(pos: S_Pos, type: R_Type) {
                 val t = impType
-                if (t == null) {
+                if (t == null || t == R_CtErrorType) {
                     impType = type
+                } else if (type == R_CtErrorType) {
+                    // Do nothing.
                 } else if (t == R_UnitType) {
                     if (type != R_UnitType) {
                         throw errRetTypeMiss(pos, t, type)
@@ -500,9 +503,11 @@ class C_FunctionContext(
             override fun getRetType() = expType
 
             override fun match(pos: S_Pos, type: R_Type) {
-                val m = if (expType == R_UnitType) type == R_UnitType else expType.isAssignableFrom(type)
-                if (!m) {
-                    throw errRetTypeMiss(pos, expType, type)
+                if (type != R_CtErrorType && expType != R_CtErrorType) {
+                    val m = if (expType == R_UnitType) type == R_UnitType else expType.isAssignableFrom(type)
+                    if (!m) {
+                        throw errRetTypeMiss(pos, expType, type)
+                    }
                 }
             }
         }
@@ -510,11 +515,14 @@ class C_FunctionContext(
 
     companion object {
         private fun errRetTypeMiss(pos: S_Pos, dstType: R_Type, srcType: R_Type): C_Error =
-                C_Errors.errTypeMismatch(pos, srcType, dstType, "entity_rettype", "Return type mismatch")
+                C_Errors.errTypeMismatch(pos, srcType, dstType, "fn_rettype", "Return type mismatch")
     }
 }
 
-class C_FunctionBodyContext(val frameCtx: C_FrameContext, val stmtCtx: C_StmtContext) {
-    val fnCtx = frameCtx.fnCtx
-    val defCtx = fnCtx.defCtx
-}
+class C_FunctionBodyContext(
+        val mntCtx: C_MountContext,
+        val namePos: S_Pos,
+        val defNames: R_DefinitionNames,
+        val explicitRetType: R_Type?,
+        val forParams: C_FormalParameters
+)

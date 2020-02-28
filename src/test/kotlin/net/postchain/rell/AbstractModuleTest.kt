@@ -374,6 +374,25 @@ class AbstractModuleTest: BaseRellTest() {
         chkCompile("function f(): integer;", "ct_err:fn:no_body:f")
     }
 
+    @Test fun testDefaultBodyCompilationError() {
+        file("lib.rell", "abstract module; abstract function f(): integer { val x: integer = 'Hello'; return 123; }")
+        chkCompile("import lib; override function lib.f(): integer = 456;", "ct_err:lib.rell:stmt_var_type:x:[integer]:[text]")
+    }
+
+    @Test fun testAbstractReturnTypeNotSpecified() {
+        file("lib.rell", "abstract module; abstract function f();")
+        chkCompile("import lib; override function lib.f(): integer { return 123; }", "ct_err:fn:override:ret_type:[unit]:[integer]")
+        chkCompile("import lib; override function lib.f() { return 123; }", "ct_err:fn:override:ret_type:[unit]:[integer]") // To be fixed.
+        chkCompile("import lib; override function lib.f() {}", "OK")
+    }
+
+    @Test fun testOverrideReturnTypeNotSpecified() {
+        file("lib.rell", "abstract module; abstract function f(): integer;")
+        chkCompile("import lib; override function lib.f() { return 'Hello'; }", "ct_err:fn:override:ret_type:[integer]:[text]") // To be fixed.
+        def("import lib; override function lib.f() { return 123; }")
+        chk("lib.f()", "int[123]")
+    }
+
     private fun chkOverFn(defs: String, expr: String, expected: String) {
         chkQueryEx("$defs query q() = $expr;", expected)
     }

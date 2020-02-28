@@ -73,9 +73,9 @@ main.rell:
 
 Rell interpreter (rell.sh) now starts a REPL shell by default. It allows to type:
 
-- Epxressions
-- Statements (include var/val declaration)
-- Definitions (imports, functions, structs)
+- Expressions
+- Statements (including var/val declarations)
+- Definitions (imports, functions, structs, enums, namespaces)
 
 Example:
 
@@ -86,6 +86,6 @@ Type '\q' to quit or '\?' for help.
 >>> import calc;
 >>> calc.factorial(100);
 93326215443944152681699238856266700490715968264381621468592963895217599993229915608941463976156518286253697920827223758251185210916864000000000000000000000000
->>> function sqr(x: integer): integer = x * x;
+>>> function sqr(x: integer) = x * x;
 >>> sqr(5)
 25

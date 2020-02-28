@@ -5,11 +5,11 @@ import net.postchain.base.BlockchainRid
 import net.postchain.base.data.PostgreSQLDatabaseAccess
 import net.postchain.base.data.SQLDatabaseAccess
 import net.postchain.common.hexStringToByteArray
-import net.postchain.rell.PostchainUtils
 import net.postchain.rell.sql.ConnectionSqlExecutor
 import net.postchain.rell.sql.SqlUtils
 import net.postchain.rell.test.BaseResourcefulTest
 import net.postchain.rell.test.SqlTestUtils
+import net.postchain.rell.utils.PostchainUtils
 import org.junit.Test
 import java.sql.Connection
 import kotlin.test.assertEquals

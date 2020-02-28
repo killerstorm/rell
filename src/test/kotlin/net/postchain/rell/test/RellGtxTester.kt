@@ -17,7 +17,7 @@ import net.postchain.gtv.GtvString
 import net.postchain.gtx.ExtOpData
 import net.postchain.gtx.GTXModule
 import net.postchain.gtx.GTXSchemaManager
-import net.postchain.rell.PostchainUtils
+import net.postchain.rell.utils.PostchainUtils
 import net.postchain.rell.model.R_App
 import net.postchain.rell.module.RellPostchainModuleFactory
 import net.postchain.rell.sql.SqlExecutor

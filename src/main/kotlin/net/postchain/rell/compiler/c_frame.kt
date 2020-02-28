@@ -6,9 +6,11 @@ package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.model.*
-import net.postchain.rell.toImmMap
+import net.postchain.rell.utils.toImmMap
 
 class C_FrameContext private constructor(val fnCtx: C_FunctionContext, proto: C_CallFrameProto) {
+    val msgCtx = fnCtx.msgCtx
+
     private val ownerRootBlkCtx = C_OwnerBlockContext.createRoot(this, proto.rootBlockScope)
     val rootBlkCtx: C_BlockContext = ownerRootBlkCtx
 

@@ -366,15 +366,15 @@ class ExternalTest: BaseRellTest() {
         tst.chainDependency("foo", "deadbeef", 1000)
         tst.chainDependency("bar", "beefdead", 1000)
 
-        chkCompile("function f(u: foo.user): transaction = u.transaction;", "ct_err:entity_rettype:[transaction]:[[foo]!transaction]")
-        chkCompile("function f(u: user): foo.transaction = u.transaction;", "ct_err:entity_rettype:[[foo]!transaction]:[transaction]")
-        chkCompile("function f(u: foo.user): block = u.transaction.block;", "ct_err:entity_rettype:[block]:[[foo]!block]")
-        chkCompile("function f(u: user): foo.block = u.transaction.block;", "ct_err:entity_rettype:[[foo]!block]:[block]")
+        chkCompile("function f(u: foo.user): transaction = u.transaction;", "ct_err:fn_rettype:[transaction]:[[foo]!transaction]")
+        chkCompile("function f(u: user): foo.transaction = u.transaction;", "ct_err:fn_rettype:[[foo]!transaction]:[transaction]")
+        chkCompile("function f(u: foo.user): block = u.transaction.block;", "ct_err:fn_rettype:[block]:[[foo]!block]")
+        chkCompile("function f(u: user): foo.block = u.transaction.block;", "ct_err:fn_rettype:[[foo]!block]:[block]")
 
-        chkCompile("function f(u: bar.user): foo.transaction = u.transaction;", "ct_err:entity_rettype:[[foo]!transaction]:[[bar]!transaction]")
-        chkCompile("function f(u: foo.user): bar.transaction = u.transaction;", "ct_err:entity_rettype:[[bar]!transaction]:[[foo]!transaction]")
-        chkCompile("function f(u: bar.user): foo.block = u.transaction.block;", "ct_err:entity_rettype:[[foo]!block]:[[bar]!block]")
-        chkCompile("function f(u: foo.user): bar.block = u.transaction.block;", "ct_err:entity_rettype:[[bar]!block]:[[foo]!block]")
+        chkCompile("function f(u: bar.user): foo.transaction = u.transaction;", "ct_err:fn_rettype:[[foo]!transaction]:[[bar]!transaction]")
+        chkCompile("function f(u: foo.user): bar.transaction = u.transaction;", "ct_err:fn_rettype:[[bar]!transaction]:[[foo]!transaction]")
+        chkCompile("function f(u: bar.user): foo.block = u.transaction.block;", "ct_err:fn_rettype:[[foo]!block]:[[bar]!block]")
+        chkCompile("function f(u: foo.user): bar.block = u.transaction.block;", "ct_err:fn_rettype:[[bar]!block]:[[foo]!block]")
     }
 
     @Test fun testTxExplicitTypeCompatibility2() {

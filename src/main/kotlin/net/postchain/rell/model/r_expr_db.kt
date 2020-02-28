@@ -4,7 +4,7 @@
 
 package net.postchain.rell.model
 
-import net.postchain.rell.CommonUtils
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.compiler.C_Constants
 import net.postchain.rell.compiler.C_EntityAttrRef
 import net.postchain.rell.runtime.Rt_BooleanValue

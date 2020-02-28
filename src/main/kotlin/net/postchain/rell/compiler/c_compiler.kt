@@ -4,15 +4,15 @@
 
 package net.postchain.rell.compiler
 
-import net.postchain.rell.CommonUtils
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_RellFile
 import net.postchain.rell.model.*
 import net.postchain.rell.repl.ReplCode
 import net.postchain.rell.repl.ReplCodeState
-import net.postchain.rell.toImmList
-import net.postchain.rell.toImmMap
+import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmMap
 import java.util.*
 
 class C_Entity(val defPos: S_Pos?, val entity: R_Entity)

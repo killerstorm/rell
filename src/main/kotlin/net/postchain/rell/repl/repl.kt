@@ -4,15 +4,15 @@
 
 package net.postchain.rell.repl
 
-import net.postchain.rell.CommonUtils
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.compiler.*
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlInit
 import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.sql.SqlManager
-import net.postchain.rell.toImmList
-import net.postchain.rell.toImmMap
+import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmMap
 
 class C_ReplCodeState(val frameProto: C_CallFrameProto, val blockCodeProto: C_BlockCodeProto) {
     companion object { val EMPTY = C_ReplCodeState(C_CallFrameProto.EMPTY, C_BlockCodeProto.EMPTY) }

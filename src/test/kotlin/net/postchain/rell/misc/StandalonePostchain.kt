@@ -8,7 +8,7 @@ import net.postchain.config.node.NodeConfigurationProviderFactory
 import net.postchain.devtools.IntegrationTest
 import net.postchain.devtools.PostchainTestNode
 import net.postchain.gtv.Gtv
-import net.postchain.rell.PostchainUtils
+import net.postchain.rell.utils.PostchainUtils
 import java.io.File
 
 fun main(args: Array<String>) {

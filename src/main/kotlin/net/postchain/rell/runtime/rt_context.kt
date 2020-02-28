@@ -9,11 +9,11 @@ import mu.KLogging
 import net.postchain.base.BlockchainRid
 import net.postchain.core.ByteArrayKey
 import net.postchain.gtv.Gtv
-import net.postchain.rell.CommonUtils
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.model.*
 import net.postchain.rell.repl.ReplOutputChannel
 import net.postchain.rell.sql.*
-import net.postchain.rell.toImmMap
+import net.postchain.rell.utils.toImmMap
 
 class Rt_GlobalContext(
         val outPrinter: Rt_Printer,

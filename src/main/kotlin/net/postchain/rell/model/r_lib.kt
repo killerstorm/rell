@@ -5,8 +5,8 @@
 package net.postchain.rell.model
 
 import net.postchain.core.Signature
-import net.postchain.rell.CommonUtils
-import net.postchain.rell.PostchainUtils
+import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.PostchainUtils
 import net.postchain.rell.compiler.C_Constants
 import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.module.RELL_VERSION

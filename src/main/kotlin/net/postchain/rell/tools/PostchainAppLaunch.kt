@@ -15,9 +15,9 @@ import net.postchain.core.NODE_ID_TODO
 import net.postchain.devtools.PostchainTestNode
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory.gtv
-import net.postchain.rell.RellBaseCliArgs
-import net.postchain.rell.RellCliLogUtils
-import net.postchain.rell.RellCliUtils
+import net.postchain.rell.utils.RellBaseCliArgs
+import net.postchain.rell.utils.RellCliLogUtils
+import net.postchain.rell.utils.RellCliUtils
 import net.postchain.rell.RellConfigGen
 import net.postchain.rell.runtime.Rt_LogPrinter
 import net.postchain.rell.runtime.Rt_PrinterFactory

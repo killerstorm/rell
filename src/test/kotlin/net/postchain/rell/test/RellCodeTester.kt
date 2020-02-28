@@ -14,7 +14,7 @@ import net.postchain.core.ByteArrayKey
 import net.postchain.core.EContext
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
-import net.postchain.rell.CommonUtils
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.compiler.C_MessageType
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
@@ -22,7 +22,7 @@ import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.sql.SqlInit
 import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.sql.SqlUtils
-import net.postchain.rell.toImmMap
+import net.postchain.rell.utils.toImmMap
 import org.junit.Assert
 import kotlin.test.assertEquals
 

@@ -7,10 +7,10 @@ package net.postchain.rell.compiler
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.*
-import net.postchain.rell.mutableMultimapOf
+import net.postchain.rell.utils.mutableMultimapOf
 import net.postchain.rell.sql.SqlConstants
-import net.postchain.rell.toImmList
-import net.postchain.rell.toImmMap
+import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmMap
 
 private class C_MountConflictsProcessor(private val chain: String?, private val currentStamp: R_AppUid) {
     fun processConflicts(

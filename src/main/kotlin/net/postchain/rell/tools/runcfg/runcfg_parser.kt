@@ -5,11 +5,11 @@
 package net.postchain.rell.tools.runcfg
 
 import net.postchain.gtv.Gtv
-import net.postchain.rell.Bytes32
+import net.postchain.rell.utils.Bytes32
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.RELL_VERSION_MODULE_SYSTEM
-import net.postchain.rell.toImmList
-import net.postchain.rell.toImmMap
+import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmMap
 
 object RunConfigParser {
     fun parseConfig(xml: RellXmlElement): Rcfg_Run {

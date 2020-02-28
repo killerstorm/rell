@@ -5,7 +5,7 @@
 package net.postchain.rell.runtime
 
 import net.postchain.rell.model.*
-import net.postchain.rell.toImmList
+import net.postchain.rell.utils.toImmList
 import java.util.*
 
 class Rt_ParentFrame(val frame: Rt_CallFrame, val pos: R_StackPos)

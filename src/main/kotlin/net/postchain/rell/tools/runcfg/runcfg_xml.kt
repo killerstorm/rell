@@ -4,8 +4,8 @@
 
 package net.postchain.rell.tools.runcfg
 
-import net.postchain.rell.GeneralDir
-import net.postchain.rell.RellCliErr
+import net.postchain.rell.utils.GeneralDir
+import net.postchain.rell.utils.RellCliErr
 import org.w3c.dom.Document
 import org.w3c.dom.Element
 import org.w3c.dom.Node

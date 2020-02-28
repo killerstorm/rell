@@ -12,6 +12,7 @@ import net.postchain.rell.model.R_EntityType
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.NoConnSqlExecutor
 import net.postchain.rell.test.RellTestUtils
+import net.postchain.rell.utils.CommonUtils
 import org.junit.Test
 import java.math.BigDecimal
 import kotlin.test.assertEquals

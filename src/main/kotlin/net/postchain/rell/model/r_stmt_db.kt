@@ -4,7 +4,7 @@
 
 package net.postchain.rell.model
 
-import net.postchain.rell.CommonUtils
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_ListValue
 import net.postchain.rell.runtime.Rt_NullValue

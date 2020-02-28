@@ -6,7 +6,7 @@ package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.model.*
-import net.postchain.rell.toImmList
+import net.postchain.rell.utils.toImmList
 
 class C_NsEntry(val name: String, val def: C_NsDef) {
     fun addToNamespace(nsBuilder: C_NamespaceBuilder) {

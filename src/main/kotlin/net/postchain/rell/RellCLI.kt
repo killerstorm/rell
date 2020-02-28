@@ -13,6 +13,7 @@ import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.repl.ReplShell
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.*
+import net.postchain.rell.utils.*
 import picocli.CommandLine
 import java.sql.DriverManager
 import kotlin.system.exitProcess

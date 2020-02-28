@@ -1,0 +1,12 @@
+RELEASE NOTES 0.10.3 (2020-??-??)
+
+
+1. Language: Function return type inference
+
+Not necessary to explicitly specify function return type. If not specified, the compiler infers it:
+
+function f(x: integer) = x * x; // returns "integer"
+
+function g(x: integer) {
+    return x * x;  // same as above
+}

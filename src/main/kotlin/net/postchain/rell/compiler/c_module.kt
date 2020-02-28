@@ -6,10 +6,10 @@ package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_RellFile
-import net.postchain.rell.immMapOf
+import net.postchain.rell.utils.immMapOf
 import net.postchain.rell.model.*
-import net.postchain.rell.toImmList
-import net.postchain.rell.toImmMap
+import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmMap
 import java.util.*
 
 private const val FILE_SUFFIX = ".rell"

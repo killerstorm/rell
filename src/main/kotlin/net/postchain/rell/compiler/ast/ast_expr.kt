@@ -377,7 +377,7 @@ class S_WhenConditionExpr(val exprs: List<S_Expr>): S_WhenCondition() {
 
         val cExpr = expr.compileOpt(ctx)
         if (cExpr == null) {
-            val rExpr = C_Utils.crashExpr(valueType ?: R_UnitType)
+            val rExpr = C_Utils.crashExpr(valueType ?: R_CtErrorType)
             return C_RValue(expr.startPos, rExpr)
         }
 
@@ -446,7 +446,7 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
 
         val builder = createWhenBuilder(ctx, expr, conds)
         if (builder == null) {
-            val rExpr = C_Utils.crashExpr(R_UnitType)
+            val rExpr = C_Utils.crashExpr()
             return C_RValue.makeExpr(startPos, rExpr)
         }
 

@@ -9,44 +9,44 @@ import org.junit.Test
 
 class NullableTest: BaseRellTest(false) {
     @Test fun testNullableTypes() {
-        chkFn(": boolean = null;", "ct_err:entity_rettype:[boolean]:[null]")
+        chkFn(": boolean = null;", "ct_err:fn_rettype:[boolean]:[null]")
         chkFn(": boolean? = null;", "null")
         chkFn(": boolean? = true;", "boolean[true]")
 
-        chkFn(": integer = null;", "ct_err:entity_rettype:[integer]:[null]")
+        chkFn(": integer = null;", "ct_err:fn_rettype:[integer]:[null]")
         chkFn(": integer? = null;", "null")
         chkFn(": integer? = 123;", "int[123]")
-        chkFn(": integer? = 'Hello';", "ct_err:entity_rettype:[integer?]:[text]")
+        chkFn(": integer? = 'Hello';", "ct_err:fn_rettype:[integer?]:[text]")
 
-        chkFn(": text = null;", "ct_err:entity_rettype:[text]:[null]")
+        chkFn(": text = null;", "ct_err:fn_rettype:[text]:[null]")
         chkFn(": text? = null;", "null")
         chkFn(": text? = 'Hello';", "text[Hello]")
-        chkFn(": text? = 123;", "ct_err:entity_rettype:[text?]:[integer]")
+        chkFn(": text? = 123;", "ct_err:fn_rettype:[text?]:[integer]")
 
         chkFn(": byte_array? = null;", "null")
         chkFn(": json? = null;", "null")
 
-        chkFn(": list<text> = null;", "ct_err:entity_rettype:[list<text>]:[null]")
+        chkFn(": list<text> = null;", "ct_err:fn_rettype:[list<text>]:[null]")
         chkFn(": list<text>? = null;", "null")
         chkFn(": list<text>? = ['Hello', 'World'];", "list<text>[text[Hello],text[World]]")
-        chkFn(": list<text>? = [123, 456];", "ct_err:entity_rettype:[list<text>?]:[list<integer>]")
+        chkFn(": list<text>? = [123, 456];", "ct_err:fn_rettype:[list<text>?]:[list<integer>]")
 
-        chkFn(": set<text> = null;", "ct_err:entity_rettype:[set<text>]:[null]")
+        chkFn(": set<text> = null;", "ct_err:fn_rettype:[set<text>]:[null]")
         chkFn(": set<text>? = null;", "null")
         chkFn(": set<text>? = set(['Hello', 'World']);", "set<text>[text[Hello],text[World]]")
-        chkFn(": set<text>? = ['Hello', 'World'];", "ct_err:entity_rettype:[set<text>?]:[list<text>]")
+        chkFn(": set<text>? = ['Hello', 'World'];", "ct_err:fn_rettype:[set<text>?]:[list<text>]")
 
-        chkFn(": map<integer,text> = null;", "ct_err:entity_rettype:[map<integer,text>]:[null]")
+        chkFn(": map<integer,text> = null;", "ct_err:fn_rettype:[map<integer,text>]:[null]")
         chkFn(": map<integer,text>? = null;", "null")
         chkFn(": map<integer,text>? = [123:'Hello',456:'World'];", "map<integer,text>[int[123]=text[Hello],int[456]=text[World]]")
-        chkFn(": map<integer,text>? = [123, 456];", "ct_err:entity_rettype:[map<integer,text>?]:[list<integer>]")
-        chkFn(": map<integer,text>? = ['Hello', 'World'];", "ct_err:entity_rettype:[map<integer,text>?]:[list<text>]")
-        chkFn(": map<integer,text>? = ['Hello':123,'World':456];", "ct_err:entity_rettype:[map<integer,text>?]:[map<text,integer>]")
+        chkFn(": map<integer,text>? = [123, 456];", "ct_err:fn_rettype:[map<integer,text>?]:[list<integer>]")
+        chkFn(": map<integer,text>? = ['Hello', 'World'];", "ct_err:fn_rettype:[map<integer,text>?]:[list<text>]")
+        chkFn(": map<integer,text>? = ['Hello':123,'World':456];", "ct_err:fn_rettype:[map<integer,text>?]:[map<text,integer>]")
 
-        chkFn(": range = null;", "ct_err:entity_rettype:[range]:[null]")
+        chkFn(": range = null;", "ct_err:fn_rettype:[range]:[null]")
         chkFn(": range? = null;", "null")
         chkFn(": range? = range(10);", "range[0,10,1]")
-        chkFn(": range? = 123;", "ct_err:entity_rettype:[range?]:[integer]")
+        chkFn(": range? = 123;", "ct_err:fn_rettype:[range?]:[integer]")
     }
 
     @Test fun testNullableNullable() {
@@ -88,8 +88,8 @@ class NullableTest: BaseRellTest(false) {
         def("entity user { name: text; }")
         chkOp("create user (name = 'Bob');")
 
-        chkFn(": user = null;", "ct_err:entity_rettype:[user]:[null]")
-        chkFn(": user = user @? { .name == 'Bob' };", "ct_err:entity_rettype:[user]:[user?]")
+        chkFn(": user = null;", "ct_err:fn_rettype:[user]:[null]")
+        chkFn(": user = user @? { .name == 'Bob' };", "ct_err:fn_rettype:[user]:[user?]")
         chkFn(": user = user @ { .name == 'Bob' };", "user[1]")
         chkFn(": user = user @ { .name == 'Alice' };", "rt_err:at:wrong_count:0")
 
@@ -105,22 +105,22 @@ class NullableTest: BaseRellTest(false) {
     }
 
     @Test fun testTupleOfNullable() {
-        chkFn(": (integer,text) = null;", "ct_err:entity_rettype:[(integer,text)]:[null]")
-        chkFn(": (integer,text) = (null, 'Hello');", "ct_err:entity_rettype:[(integer,text)]:[(null,text)]")
-        chkFn(": (integer,text) = (123, null);", "ct_err:entity_rettype:[(integer,text)]:[(integer,null)]")
+        chkFn(": (integer,text) = null;", "ct_err:fn_rettype:[(integer,text)]:[null]")
+        chkFn(": (integer,text) = (null, 'Hello');", "ct_err:fn_rettype:[(integer,text)]:[(null,text)]")
+        chkFn(": (integer,text) = (123, null);", "ct_err:fn_rettype:[(integer,text)]:[(integer,null)]")
         chkFn(": (integer,text) = (123, 'Hello');", "(int[123],text[Hello])")
 
-        chkFn(": (integer?,text) = null;", "ct_err:entity_rettype:[(integer?,text)]:[null]")
+        chkFn(": (integer?,text) = null;", "ct_err:fn_rettype:[(integer?,text)]:[null]")
         chkFn(": (integer?,text) = (null, 'Hello');", "(null,text[Hello])")
-        chkFn(": (integer?,text) = (123, null);", "ct_err:entity_rettype:[(integer?,text)]:[(integer,null)]")
+        chkFn(": (integer?,text) = (123, null);", "ct_err:fn_rettype:[(integer?,text)]:[(integer,null)]")
         chkFn(": (integer?,text) = (123, 'Hello');", "(int[123],text[Hello])")
 
-        chkFn(": (integer,text?) = null;", "ct_err:entity_rettype:[(integer,text?)]:[null]")
-        chkFn(": (integer,text?) = (null, 'Hello');", "ct_err:entity_rettype:[(integer,text?)]:[(null,text)]")
+        chkFn(": (integer,text?) = null;", "ct_err:fn_rettype:[(integer,text?)]:[null]")
+        chkFn(": (integer,text?) = (null, 'Hello');", "ct_err:fn_rettype:[(integer,text?)]:[(null,text)]")
         chkFn(": (integer,text?) = (123, null);", "(int[123],null)")
         chkFn(": (integer,text?) = (123, 'Hello');", "(int[123],text[Hello])")
 
-        chkFn(": (integer?,text?) = null;", "ct_err:entity_rettype:[(integer?,text?)]:[null]")
+        chkFn(": (integer?,text?) = null;", "ct_err:fn_rettype:[(integer?,text?)]:[null]")
         chkFn(": (integer?,text?) = (null, 'Hello');", "(null,text[Hello])")
         chkFn(": (integer?,text?) = (123, null);", "(int[123],null)")
         chkFn(": (integer?,text?) = (123, 'Hello');", "(int[123],text[Hello])")
@@ -128,17 +128,17 @@ class NullableTest: BaseRellTest(false) {
 
     @Test fun testNullableTuple() {
         chkFn(": (integer,text)? = null;", "null")
-        chkFn(": (integer,text)? = (null, 'Hello');", "ct_err:entity_rettype:[(integer,text)?]:[(null,text)]")
-        chkFn(": (integer,text)? = (123, null);", "ct_err:entity_rettype:[(integer,text)?]:[(integer,null)]")
+        chkFn(": (integer,text)? = (null, 'Hello');", "ct_err:fn_rettype:[(integer,text)?]:[(null,text)]")
+        chkFn(": (integer,text)? = (123, null);", "ct_err:fn_rettype:[(integer,text)?]:[(integer,null)]")
         chkFn(": (integer,text)? = (123, 'Hello');", "(int[123],text[Hello])")
 
         chkFn(": (integer?,text)? = null;", "null")
         chkFn(": (integer?,text)? = (null, 'Hello');", "(null,text[Hello])")
-        chkFn(": (integer?,text)? = (123, null);", "ct_err:entity_rettype:[(integer?,text)?]:[(integer,null)]")
+        chkFn(": (integer?,text)? = (123, null);", "ct_err:fn_rettype:[(integer?,text)?]:[(integer,null)]")
         chkFn(": (integer?,text)? = (123, 'Hello');", "(int[123],text[Hello])")
 
         chkFn(": (integer,text?)? = null;", "null")
-        chkFn(": (integer,text?)? = (null, 'Hello');", "ct_err:entity_rettype:[(integer,text?)?]:[(null,text)]")
+        chkFn(": (integer,text?)? = (null, 'Hello');", "ct_err:fn_rettype:[(integer,text?)?]:[(null,text)]")
         chkFn(": (integer,text?)? = (123, null);", "(int[123],null)")
         chkFn(": (integer,text?)? = (123, 'Hello');", "(int[123],text[Hello])")
 

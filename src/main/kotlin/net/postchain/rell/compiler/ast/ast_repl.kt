@@ -4,11 +4,11 @@
 
 package net.postchain.rell.compiler.ast
 
-import net.postchain.rell.MutableTypedKeyMap
-import net.postchain.rell.TypedKeyMap
+import net.postchain.rell.utils.MutableTypedKeyMap
+import net.postchain.rell.utils.TypedKeyMap
 import net.postchain.rell.compiler.*
 import net.postchain.rell.repl.*
-import net.postchain.rell.toImmList
+import net.postchain.rell.utils.toImmList
 
 class S_ReplCommand(steps: List<S_ReplStep>, expr: S_Expr?) {
     private val defs = steps.map { it.definition() }.filterNotNull().toImmList()
