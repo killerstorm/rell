@@ -21,9 +21,9 @@ class C_FrameContext private constructor(val fnCtx: C_FunctionContext, proto: C_
         callFrameSize = Math.max(callFrameSize, size)
     }
 
-    fun makeCallFrame(): C_CallFrame {
+    fun makeCallFrame(hasGuardBlock: Boolean): C_CallFrame {
         val rootBlock = ownerRootBlkCtx.buildBlock()
-        val rFrame = R_CallFrame(callFrameSize, rootBlock.rBlock)
+        val rFrame = R_CallFrame(callFrameSize, rootBlock.rBlock, hasGuardBlock)
         val proto = C_CallFrameProto(rFrame.size, rootBlock.scope)
         return C_CallFrame(rFrame, proto)
     }
@@ -140,6 +140,7 @@ sealed class C_BlockContext(val frameCtx: C_FrameContext, val loop: C_LoopUid?) 
 
     val nameCtx = C_NameContext.createBlock(nsCtx.nameCtx, this)
 
+    abstract fun isTopLevelBlock(): Boolean
     abstract fun createSubContext(loop: C_LoopUid?, location: String): C_OwnerBlockContext
     abstract fun lookupLocalVar(name: String): C_LocalVar?
     abstract fun addLocalVar(name: S_Name, type: R_Type, modifiable: Boolean): C_LocalVar
@@ -157,6 +158,8 @@ class C_OwnerBlockContext(
     private val startOffset: Int = parent?.scopeBuilder?.endOffset() ?: 0
     private val scopeBuilder: C_BlockScopeBuilder = C_BlockScopeBuilder(fnCtx, blockUid, startOffset, protoBlockScope)
     private var build = false
+
+    override fun isTopLevelBlock() = parent?.parent == null
 
     override fun createSubContext(loop: C_LoopUid?, location: String): C_OwnerBlockContext {
         check(!build)

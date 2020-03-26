@@ -430,7 +430,7 @@ class UpdateDeleteTest: BaseRellTest() {
         chkDataCommon(james(100), mike(250))
 
         resetData()
-        chkEx("{ val p = ${person("Mike")}; p.score += 123; return 0; }", "ct_err:no_db_update")
+        chkEx("{ val p = ${person("Mike")}; p.score += 123; return 0; }", "ct_err:no_db_update:query")
         chkDataCommon(james(100), mike(250))
     }
 

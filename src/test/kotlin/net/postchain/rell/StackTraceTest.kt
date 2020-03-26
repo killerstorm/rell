@@ -167,7 +167,7 @@ class StackTraceTest: BaseRellTest(false) {
 
     @Test fun testSpecificErrorsEntity() {
         tstCtx.useSql = true
-        chkSpecificError("create user ('Bob');", 3, "rt_err:no_db_update")
+        chkSpecificError("create user ('Bob');", 3, "rt_err:no_db_update:def")
         chkSpecificError("val t = user @ { 'Bob' };", 3, "rt_err:at:wrong_count:0")
     }
 

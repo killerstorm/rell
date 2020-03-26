@@ -10,3 +10,19 @@ function f(x: integer) = x * x; // returns "integer"
 function g(x: integer) {
     return x * x;  // same as above
 }
+
+
+2. Language: Guard block
+
+Used in operations to specify a read-only arguments verification code:
+
+operation foo (name) {
+    val u = user @ { name };
+    guard {
+        require(is_admin(user));
+    }
+    ...
+}
+
+Guard block allows to separate parameters verification from the rest of the operation's code, thus it can be executed
+independently to verify arguments (not supported yet).

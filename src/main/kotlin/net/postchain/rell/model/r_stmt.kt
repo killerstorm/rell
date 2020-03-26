@@ -232,3 +232,11 @@ class R_StackTraceStatement(private val subStmt: R_Statement, private val filePo
         }
     }
 }
+
+class R_GuardStatement(private val subStmt: R_Statement): R_Statement() {
+    override fun execute(frame: Rt_CallFrame): R_StatementResult? {
+        val res = subStmt.execute(frame)
+        frame.guardCompleted()
+        return res
+    }
+}

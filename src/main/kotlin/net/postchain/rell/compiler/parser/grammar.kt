@@ -15,6 +15,8 @@ import com.github.h0tk3y.betterParse.parser.Parsed
 import com.github.h0tk3y.betterParse.parser.Parser
 import net.postchain.rell.compiler.C_Parser
 import net.postchain.rell.compiler.ast.*
+import net.postchain.rell.compiler.parser.S_Grammar.getValue
+import net.postchain.rell.compiler.parser.S_Grammar.provideDelegate
 import kotlin.reflect.KProperty
 
 object S_Grammar : Grammar<S_RellFile>() {
@@ -78,6 +80,7 @@ object S_Grammar : Grammar<S_RellFile>() {
     private val FALSE by relltok("false")
     private val FOR by relltok("for")
     private val FUNCTION by relltok("function")
+    private val GUARD by relltok("guard")
     private val IF by relltok("if")
     private val IMPORT by relltok("import")
     private val IN by relltok("in")
@@ -601,16 +604,20 @@ object S_Grammar : Grammar<S_RellFile>() {
         }
     }
 
-    private val updateWhat by ( -LPAR * separatedTerms(updateWhatExpr, COMMA, true) * -RPAR)
+    private val updateWhat by ( -LPAR * separatedTerms(updateWhatExpr, COMMA, true) * -RPAR )
 
-    private val updateStmt by (UPDATE * updateTarget * updateWhat * -SEMI) map {
+    private val updateStmt by ( UPDATE * updateTarget * updateWhat * -SEMI ) map {
         (kw, target, what) ->
         S_UpdateStatement(kw.pos, target, what)
     }
 
-    private val deleteStmt by (DELETE * updateTarget * -SEMI) map {
+    private val deleteStmt by ( DELETE * updateTarget * -SEMI ) map {
         (kw, target) ->
         S_DeleteStatement(kw.pos, target)
+    }
+
+    private val guardStmt by ( GUARD * blockStmt ) map {
+        (kw, stmt) -> S_GuardStatement(kw.pos, stmt)
     }
 
     private val statementNoExpr by (
@@ -633,6 +640,7 @@ object S_Grammar : Grammar<S_RellFile>() {
             or incrementStmt
             or callStmt
             or createStmt
+            or guardStmt
     )
 
     private val formalParameters by ( -LPAR * separatedTerms(attrHeader, COMMA, true) * -RPAR)

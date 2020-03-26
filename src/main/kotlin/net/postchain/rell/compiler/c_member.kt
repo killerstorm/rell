@@ -296,7 +296,7 @@ private class C_EntityAttrValue private constructor(
         if (attrInfo.attr == null || !attrInfo.attr.mutable) {
             throw C_Errors.errAttrNotMutable(attrInfo.name.pos, attrInfo.name.str)
         }
-        ctx.defCtx.checkDbUpdateAllowed(pos)
+        ctx.checkDbUpdateAllowed(pos)
         return C_EntityAttrDestination(parent, attrInfo.rEntity, attrInfo.attr)
     }
 

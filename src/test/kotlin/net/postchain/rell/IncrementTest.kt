@@ -52,10 +52,10 @@ class IncrementTest: BaseRellTest(false) {
         chkOp("$init; ++f.y;", "ct_err:update_attr_not_mutable:y")
         chkOp("$init; --f.y;", "ct_err:update_attr_not_mutable:y")
 
-        chkEx("{ $init; f.x++; return 0; }", "ct_err:no_db_update")
-        chkEx("{ $init; f.x--; return 0; }", "ct_err:no_db_update")
-        chkEx("{ $init; ++f.x; return 0; }", "ct_err:no_db_update")
-        chkEx("{ $init; --f.x; return 0; }", "ct_err:no_db_update")
+        chkEx("{ $init; f.x++; return 0; }", "ct_err:no_db_update:query")
+        chkEx("{ $init; f.x--; return 0; }", "ct_err:no_db_update:query")
+        chkEx("{ $init; ++f.x; return 0; }", "ct_err:no_db_update:query")
+        chkEx("{ $init; --f.x; return 0; }", "ct_err:no_db_update:query")
     }
 
     @Test fun testOperandObject() {
@@ -84,10 +84,10 @@ class IncrementTest: BaseRellTest(false) {
         chkOp("++foo.y;", "ct_err:update_attr_not_mutable:y")
         chkOp("--foo.y;", "ct_err:update_attr_not_mutable:y")
 
-        chkEx("{ foo.x++; return 0; }", "ct_err:no_db_update")
-        chkEx("{ foo.x--; return 0; }", "ct_err:no_db_update")
-        chkEx("{ ++foo.x; return 0; }", "ct_err:no_db_update")
-        chkEx("{ --foo.x; return 0; }", "ct_err:no_db_update")
+        chkEx("{ foo.x++; return 0; }", "ct_err:no_db_update:query")
+        chkEx("{ foo.x--; return 0; }", "ct_err:no_db_update:query")
+        chkEx("{ ++foo.x; return 0; }", "ct_err:no_db_update:query")
+        chkEx("{ --foo.x; return 0; }", "ct_err:no_db_update:query")
     }
 
     @Test fun testOperandStruct() {

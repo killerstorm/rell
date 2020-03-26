@@ -185,7 +185,7 @@ class S_LookupExpr(val opPos: S_Pos, val base: S_Expr, val expr: S_Expr): S_Expr
 
 class S_CreateExpr(pos: S_Pos, val entityName: List<S_Name>, val exprs: List<S_NameExprPair>): S_Expr(pos) {
     override fun compile(ctx: C_ExprContext): C_Expr {
-        ctx.defCtx.checkDbUpdateAllowed(startPos)
+        ctx.checkDbUpdateAllowed(startPos)
 
         val entity = ctx.nsCtx.getEntity(entityName)
         val attrs = C_AttributeResolver.resolveCreate(ctx, entity.attributes, exprs, startPos)

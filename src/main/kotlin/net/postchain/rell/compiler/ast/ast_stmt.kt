@@ -19,16 +19,13 @@ abstract class S_Statement(val pos: S_Pos) {
         if (cStmt == null) return C_Statement.ERROR
         val filePos = pos.toFilePos()
         val rStmt = R_StackTraceStatement(cStmt.rStmt, filePos)
-        return cStmt.updateStmt(rStmt)
+        return cStmt.update(rStmt = rStmt)
     }
 
     fun compileWithFacts(ctx: C_StmtContext, facts: C_VarFacts): C_Statement {
         val subCtx = ctx.updateFacts(facts)
         val cStmt = compile(subCtx)
-        return if (facts.isEmpty()) cStmt else {
-            val facts2 = facts.put(cStmt.varFacts)
-            C_Statement(cStmt.rStmt, cStmt.returnAlways, facts2)
-        }
+        return if (facts.isEmpty()) cStmt else cStmt.update(varFacts = facts.put(cStmt.varFacts))
     }
 
     fun discoverVars(map: MutableTypedKeyMap): C_StatementVars {
@@ -212,7 +209,9 @@ class S_BlockStatement(pos: S_Pos, val stmts: List<S_Statement>): S_Statement(po
     override fun compile0(ctx: C_StmtContext, repl: Boolean): C_Statement {
         val (subCtx, subBlkCtx) = ctx.subBlock(ctx.blkCtx.loop)
 
-        val builder = C_BlockCodeBuilder(subCtx, false, C_BlockCodeProto.EMPTY)
+        val hasGuardBlock = stmts.any { it is S_GuardStatement }
+
+        val builder = C_BlockCodeBuilder(subCtx, repl = false, hasGuardBlock = hasGuardBlock, proto = C_BlockCodeProto.EMPTY)
         for (stmt in stmts) {
             builder.add(stmt)
         }
@@ -220,7 +219,7 @@ class S_BlockStatement(pos: S_Pos, val stmts: List<S_Statement>): S_Statement(po
 
         val frameBlock = subBlkCtx.buildBlock()
         val rStmt = R_BlockStatement(blockCode.rStmts, frameBlock.rBlock)
-        return C_Statement(rStmt, blockCode.returnAlways, blockCode.deltaVarFacts)
+        return C_Statement(rStmt, blockCode.returnAlways, blockCode.deltaVarFacts, blockCode.guardBlock)
     }
 
     override fun discoverVars0(map: MutableTypedKeyMap): C_StatementVars {
@@ -292,12 +291,14 @@ class S_IfStatement(pos: S_Pos, val expr: S_Expr, val trueStmt: S_Statement, val
             exprVarFacts = C_ExprVarFacts.EMPTY
         }
 
+        val subCtx = ctx.update(topLevel = false)
+
         val trueFacts = exprVarFacts.postFacts.and(exprVarFacts.trueFacts)
-        val cTrueStmt = trueStmt.compileWithFacts(ctx, trueFacts)
+        val cTrueStmt = trueStmt.compileWithFacts(subCtx, trueFacts)
 
         val falseFacts = exprVarFacts.postFacts.and(exprVarFacts.falseFacts)
         val cFalseStmt = if (falseStmt != null) {
-            falseStmt.compileWithFacts(ctx, falseFacts)
+            falseStmt.compileWithFacts(subCtx, falseFacts)
         } else {
             C_Statement.empty(falseFacts)
         }
@@ -306,7 +307,7 @@ class S_IfStatement(pos: S_Pos, val expr: S_Expr, val trueStmt: S_Statement, val
 
         val rStmt = R_IfStatement(rExpr, cTrueStmt.rStmt, cFalseStmt.rStmt)
 
-        val varFacts = C_Statement.calcBranchedVarFacts(ctx, listOf(cTrueStmt, cFalseStmt))
+        val varFacts = C_Statement.calcBranchedVarFacts(subCtx, listOf(cTrueStmt, cFalseStmt))
         return C_Statement(rStmt, returns, varFacts)
     }
 
@@ -571,5 +572,30 @@ class S_BreakStatement(pos: S_Pos): S_Statement(pos) {
         }
         val rStmt = R_BreakStatement()
         return C_Statement(rStmt, false)
+    }
+}
+
+class S_GuardStatement(pos: S_Pos, private val stmt: S_Statement): S_Statement(pos) {
+    override fun compile0(ctx: C_StmtContext, repl: Boolean): C_Statement {
+        if (repl) {
+            ctx.msgCtx.error(pos, "stmt_guard_repl", "Guard block not allowed in REPL")
+        }
+
+        if (!ctx.topLevel) {
+            ctx.msgCtx.error(pos, "stmt_guard_nested", "Guard block not allowed as a nested statement")
+        }
+
+        val defType = ctx.blkCtx.frameCtx.fnCtx.defCtx.definitionType
+        if (defType != C_DefinitionType.OPERATION) {
+            ctx.msgCtx.error(pos, "stmt_guard_wrong_def:$defType", "Guard block is allowed only in operations")
+        }
+
+        if (ctx.afterGuardBlock) {
+            ctx.msgCtx.error(pos, "stmt_guard_after_guard", "Only one guard block is allowed")
+        }
+
+        val cSubStmt = stmt.compile(ctx, repl)
+        val rStmt = R_GuardStatement(cSubStmt.rStmt)
+        return cSubStmt.update(rStmt = rStmt, guardBlock = true)
     }
 }

@@ -295,8 +295,10 @@ class C_DefinitionContext(val mntCtx: C_MountContext, val definitionType: C_Defi
     val defExprCtx = C_ExprContext(this, nsCtx.nameCtx, C_VarFactsContext.EMPTY)
 
     fun checkDbUpdateAllowed(pos: S_Pos) {
-        if (definitionType == C_DefinitionType.QUERY || modCtx.repl) {
-            msgCtx.error(pos, "no_db_update", "Database modifications are not allowed in this context")
+        if (definitionType == C_DefinitionType.QUERY) {
+            msgCtx.error(pos, "no_db_update:query", "Database modifications are not allowed in a query")
+        } else if (modCtx.repl) {
+            msgCtx.error(pos, "no_db_update:repl", "Database modifications are not allowed in REPL")
         }
     }
 }

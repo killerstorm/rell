@@ -577,8 +577,9 @@ class S_OperationDefinition(
         val frameCtx = C_FrameContext.create(fnCtx)
 
         val actParams = forParams.compile(frameCtx)
-        val rBody = body.compile(actParams.stmtCtx).rStmt
-        val callFrame = frameCtx.makeCallFrame()
+        val cBody = body.compile(actParams.stmtCtx)
+        val rBody = cBody.rStmt
+        val callFrame = frameCtx.makeCallFrame(cBody.guardBlock)
 
         rOperation.setInternals(actParams.rParams, rBody, callFrame.rFrame)
     }
@@ -661,8 +662,8 @@ private fun checkGtvCompatibility(
 
 abstract class S_FunctionBody {
     protected abstract fun processStatementVars(): TypedKeyMap
-    protected abstract fun compileQuery0(bodyCtx: C_FunctionBodyContext, stmtCtx: C_StmtContext): R_Statement
-    protected abstract fun compileFunction0(bodyCtx: C_FunctionBodyContext, stmtCtx: C_StmtContext): R_Statement
+    protected abstract fun compileQuery0(bodyCtx: C_FunctionBodyContext, stmtCtx: C_StmtContext): C_Statement
+    protected abstract fun compileFunction0(bodyCtx: C_FunctionBodyContext, stmtCtx: C_StmtContext): C_Statement
 
     abstract fun returnsValue(): Boolean
 
@@ -673,10 +674,10 @@ abstract class S_FunctionBody {
         val frameCtx = C_FrameContext.create(fnCtx)
         val actParams = ctx.forParams.compile(frameCtx)
 
-        val rBody = compileQuery0(ctx, actParams.stmtCtx)
-        val callFrame = frameCtx.makeCallFrame()
+        val cBody = compileQuery0(ctx, actParams.stmtCtx)
+        val callFrame = frameCtx.makeCallFrame(cBody.guardBlock)
         val rRetType = fnCtx.actualReturnType()
-        return R_UserQueryBody(rRetType, actParams.rParams, rBody, callFrame.rFrame)
+        return R_UserQueryBody(rRetType, actParams.rParams, cBody.rStmt, callFrame.rFrame)
     }
 
     fun compileFunction(ctx: C_FunctionBodyContext): R_FunctionBody {
@@ -686,10 +687,10 @@ abstract class S_FunctionBody {
         val frameCtx = C_FrameContext.create(fnCtx)
         val actParams = ctx.forParams.compile(frameCtx)
 
-        val rBody = compileFunction0(ctx, actParams.stmtCtx)
-        val callFrame = frameCtx.makeCallFrame()
+        val cBody = compileFunction0(ctx, actParams.stmtCtx)
+        val callFrame = frameCtx.makeCallFrame(cBody.guardBlock)
         val rRetType = fnCtx.actualReturnType()
-        return R_FunctionBody(ctx.defNames.pos, rRetType, actParams.rParams, rBody, callFrame.rFrame)
+        return R_FunctionBody(ctx.defNames.pos, rRetType, actParams.rParams, cBody.rStmt, callFrame.rFrame)
     }
 }
 
@@ -698,22 +699,22 @@ class S_FunctionBodyShort(val expr: S_Expr): S_FunctionBody() {
 
     override fun returnsValue() = true
 
-    override fun compileQuery0(bodyCtx: C_FunctionBodyContext, stmtCtx: C_StmtContext): R_Statement {
+    override fun compileQuery0(bodyCtx: C_FunctionBodyContext, stmtCtx: C_StmtContext): C_Statement {
         val cExpr = expr.compile(stmtCtx)
         val rExpr = cExpr.value().toRExpr()
         C_Utils.checkUnitType(bodyCtx.namePos, rExpr.type, "query_exprtype_unit", "Query expressions returns nothing")
         stmtCtx.fnCtx.matchReturnType(bodyCtx.namePos, rExpr.type)
-        return R_ReturnStatement(rExpr)
+        return C_Statement(R_ReturnStatement(rExpr), true)
     }
 
-    override fun compileFunction0(bodyCtx: C_FunctionBodyContext, stmtCtx: C_StmtContext): R_Statement {
+    override fun compileFunction0(bodyCtx: C_FunctionBodyContext, stmtCtx: C_StmtContext): C_Statement {
         val rExpr = expr.compile(stmtCtx).value().toRExpr()
         stmtCtx.fnCtx.matchReturnType(bodyCtx.namePos, rExpr.type)
 
         return if (rExpr.type != R_UnitType) {
-            R_ReturnStatement(rExpr)
+            C_Statement(R_ReturnStatement(rExpr), true)
         } else {
-            R_ExprStatement(rExpr)
+            C_Statement(R_ExprStatement(rExpr), false)
         }
     }
 }
@@ -729,7 +730,7 @@ class S_FunctionBodyFull(val body: S_Statement): S_FunctionBody() {
         return body.returnsValue() ?: false
     }
 
-    override fun compileQuery0(bodyCtx: C_FunctionBodyContext, stmtCtx: C_StmtContext): R_Statement {
+    override fun compileQuery0(bodyCtx: C_FunctionBodyContext, stmtCtx: C_StmtContext): C_Statement {
         val cBody = body.compile(stmtCtx)
 
         if (!cBody.returnAlways) {
@@ -737,10 +738,10 @@ class S_FunctionBodyFull(val body: S_Statement): S_FunctionBody() {
             throw C_Error(bodyCtx.namePos, "query_noreturn:$nameStr", "Query '$nameStr': not all code paths return value")
         }
 
-        return cBody.rStmt
+        return cBody
     }
 
-    override fun compileFunction0(bodyCtx: C_FunctionBodyContext, stmtCtx: C_StmtContext): R_Statement {
+    override fun compileFunction0(bodyCtx: C_FunctionBodyContext, stmtCtx: C_StmtContext): C_Statement {
         val cBody = body.compile(stmtCtx)
 
         val retType = stmtCtx.fnCtx.actualReturnType()
@@ -751,7 +752,7 @@ class S_FunctionBodyFull(val body: S_Statement): S_FunctionBody() {
             }
         }
 
-        return cBody.rStmt
+        return cBody
     }
 }
 

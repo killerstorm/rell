@@ -42,14 +42,14 @@ data class R_FrameBlockUid(val id: Long, val name: String, val fn: R_FnUid)
 data class R_VarPtr(val name: String, val blockUid: R_FrameBlockUid, val offset: Int)
 class R_FrameBlock(val parentUid: R_FrameBlockUid?, val uid: R_FrameBlockUid, val offset: Int, val size: Int)
 
-class R_CallFrame(val size: Int, val rootBlock: R_FrameBlock) {
+class R_CallFrame(val size: Int, val rootBlock: R_FrameBlock, val hasGuardBlock: Boolean) {
     fun createRtFrame(defCtx: Rt_DefinitionContext, caller: Rt_ParentFrame?, state: Rt_CallFrameState?): Rt_CallFrame {
-        return Rt_CallFrame(defCtx, this, caller, state)
+        return Rt_CallFrame(defCtx, this, caller, state, hasGuardBlock)
     }
 
     companion object {
         private val ERROR_BLOCK = R_FrameBlock(null, R_Utils.ERROR_BLOCK_UID, -1, -1)
-        val ERROR = R_CallFrame(0, ERROR_BLOCK)
+        val ERROR = R_CallFrame(0, ERROR_BLOCK, false)
     }
 }
 
@@ -264,7 +264,10 @@ class R_Function(names: R_DefinitionNames): R_Routine(names) {
 
     private fun call0(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, caller: Rt_ParentFrame?): Rt_Value {
         val body = bodyLate.get()
-        val rtSubFrame = createRtFrame(body, defCtx.exeCtx, defCtx.dbUpdateAllowed, caller)
+
+        val callerDbUpdateAllowed = caller?.frame?.dbUpdateAllowed() ?: true
+        val subDbUpdateAllowed = callerDbUpdateAllowed && defCtx.dbUpdateAllowed
+        val rtSubFrame = createRtFrame(body, defCtx.exeCtx, subDbUpdateAllowed, caller)
 
         processArgs(body.varParams, args, rtSubFrame)
 

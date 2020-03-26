@@ -495,7 +495,7 @@ class R_CreateExprAttr_Default(attr: R_Attrib): R_CreateExprAttr(attr) {
 
 class R_CreateExpr(val rEntity: R_Entity, val attrs: List<R_CreateExprAttr>): R_Expr(rEntity.type) {
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        frame.defCtx.checkDbUpdateAllowed()
+        frame.checkDbUpdateAllowed()
         val sqlCtx = frame.defCtx.sqlCtx
         val rowidFunc = sqlCtx.mainChainMapping.rowidFunction
         val rtSql = buildSql(sqlCtx, rEntity, attrs, "\"$rowidFunc\"()")

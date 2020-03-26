@@ -580,6 +580,20 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         chkInit("entity user { $attrs $extra }", expected)
     }
 
+    @Test fun testKeyRemove() {
+        chkInit("entity user { key name; }")
+        chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
+        chkInit("entity user { name; }", "rt_err:dbinit:index_diff:user:database:key:name")
+        chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
+    }
+
+    @Test fun testIndexRemove() {
+        chkInit("entity user { index name; }")
+        chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
+        chkInit("entity user { name; }", "rt_err:dbinit:index_diff:user:database:index:name")
+        chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
+    }
+
     @Test fun testDropAll() {
         RellTestContext().use { ctx ->
             val t = RellCodeTester(ctx)

@@ -92,7 +92,7 @@ class S_UpdateWhat(val pos: S_Pos, val name: S_Name?, val op: S_AssignOpCode?, v
 
 class S_UpdateStatement(pos: S_Pos, val target: S_UpdateTarget, val what: List<S_UpdateWhat>): S_Statement(pos) {
     override fun compile0(ctx: C_StmtContext, repl: Boolean): C_Statement {
-        ctx.defCtx.checkDbUpdateAllowed(pos)
+        ctx.checkDbUpdateAllowed(pos)
 
         val subValues = mutableListOf<C_Value>()
         val cTarget = target.compile(ctx.exprCtx, subValues)
@@ -143,7 +143,7 @@ class S_UpdateStatement(pos: S_Pos, val target: S_UpdateTarget, val what: List<S
 
 class S_DeleteStatement(pos: S_Pos, val target: S_UpdateTarget): S_Statement(pos) {
     override fun compile0(ctx: C_StmtContext, repl: Boolean): C_Statement {
-        ctx.defCtx.checkDbUpdateAllowed(pos)
+        ctx.checkDbUpdateAllowed(pos)
 
         val subValues = mutableListOf<C_Value>()
         val cTarget = target.compile(ctx.exprCtx, subValues)

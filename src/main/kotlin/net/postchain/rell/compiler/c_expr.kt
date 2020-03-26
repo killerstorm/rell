@@ -26,7 +26,12 @@ class C_ExprContextAttr(val entity: C_AtEntity, val attrRef: C_EntityAttrRef) {
     }
 }
 
-class C_ExprContext(val defCtx: C_DefinitionContext, val nameCtx: C_NameContext, val factsCtx: C_VarFactsContext) {
+class C_ExprContext(
+        val defCtx: C_DefinitionContext,
+        val nameCtx: C_NameContext,
+        val factsCtx: C_VarFactsContext,
+        val insideGuardBlock: Boolean = false
+) {
     val nsCtx = defCtx.nsCtx
     val globalCtx = defCtx.globalCtx
     val msgCtx = nsCtx.msgCtx
@@ -35,20 +40,35 @@ class C_ExprContext(val defCtx: C_DefinitionContext, val nameCtx: C_NameContext,
 
     fun update(
             nameCtx: C_NameContext? = null,
-            factsCtx: C_VarFactsContext? = null
+            factsCtx: C_VarFactsContext? = null,
+            insideGuardBlock: Boolean? = null
     ): C_ExprContext {
         val nameCtx2 = nameCtx ?: this.nameCtx
         val factsCtx2 = factsCtx ?: this.factsCtx
-        return if (nameCtx2 == this.nameCtx && factsCtx2 == this.factsCtx) this else C_ExprContext(defCtx, nameCtx2, factsCtx2)
+        val insideGuardBlock2 = this.insideGuardBlock || (insideGuardBlock ?: false)
+        return if (nameCtx2 == this.nameCtx && factsCtx2 == this.factsCtx && insideGuardBlock2 == this.insideGuardBlock) this
+        else C_ExprContext(defCtx, nameCtx2, factsCtx2, insideGuardBlock2)
     }
 
     fun updateFacts(facts: C_VarFactsAccess): C_ExprContext {
         if (facts.isEmpty()) return this
         return update(factsCtx = this.factsCtx.sub(facts))
     }
+
+    fun checkDbUpdateAllowed(pos: S_Pos) {
+        defCtx.checkDbUpdateAllowed(pos)
+        if (insideGuardBlock) {
+            msgCtx.error(pos, "no_db_update:guard", "Database modifications are not allowed inside or before a guard block")
+        }
+    }
 }
 
-class C_StmtContext private constructor(val blkCtx: C_BlockContext, val exprCtx: C_ExprContext) {
+class C_StmtContext private constructor(
+        val blkCtx: C_BlockContext,
+        val exprCtx: C_ExprContext,
+        val afterGuardBlock: Boolean = false,
+        val topLevel: Boolean = false
+) {
     val fnCtx = blkCtx.fnCtx
     val defCtx = fnCtx.defCtx
     val nsCtx = defCtx.nsCtx
@@ -57,11 +77,24 @@ class C_StmtContext private constructor(val blkCtx: C_BlockContext, val exprCtx:
 
     fun update(
             blkCtx: C_BlockContext? = null,
-            exprCtx: C_ExprContext? = null
+            exprCtx: C_ExprContext? = null,
+            afterGuardBlock: Boolean? = null,
+            topLevel: Boolean? = null
     ): C_StmtContext {
         val blkCtx2 = blkCtx ?: this.blkCtx
         val exprCtx2 = exprCtx ?: this.exprCtx
-        return if (blkCtx2 == this.blkCtx && exprCtx2 == this.exprCtx) this else C_StmtContext(blkCtx2, exprCtx2)
+        val afterGuardBlock2 = afterGuardBlock ?: this.afterGuardBlock
+        val topLevel2 = topLevel ?: this.topLevel
+        return if (blkCtx2 == this.blkCtx
+                && exprCtx2 == this.exprCtx
+                && afterGuardBlock2 == this.afterGuardBlock
+                && topLevel2 == this.topLevel
+        ) this else C_StmtContext(
+                blkCtx = blkCtx2,
+                exprCtx = exprCtx2,
+                afterGuardBlock = afterGuardBlock2,
+                topLevel = topLevel2
+        )
     }
 
     fun updateFacts(facts: C_VarFactsAccess): C_StmtContext {
@@ -71,14 +104,18 @@ class C_StmtContext private constructor(val blkCtx: C_BlockContext, val exprCtx:
     fun subBlock(loop: C_LoopUid?): Pair<C_StmtContext, C_OwnerBlockContext> {
         val subBlkCtx = blkCtx.createSubContext(loop, "blk")
         val subExprCtx = exprCtx.update(nameCtx = subBlkCtx.nameCtx)
-        val subCtx = C_StmtContext(subBlkCtx, subExprCtx)
+        val subCtx = update(blkCtx = subBlkCtx, exprCtx = subExprCtx, topLevel = subBlkCtx.isTopLevelBlock())
         return Pair(subCtx, subBlkCtx)
+    }
+
+    fun checkDbUpdateAllowed(pos: S_Pos) {
+        exprCtx.checkDbUpdateAllowed(pos)
     }
 
     companion object {
         fun createRoot(blkCtx: C_BlockContext): C_StmtContext {
             val exprCtx = C_ExprContext(blkCtx.defCtx, blkCtx.nameCtx, C_VarFactsContext.EMPTY)
-            return C_StmtContext(blkCtx, exprCtx)
+            return C_StmtContext(blkCtx, exprCtx, topLevel = true)
         }
     }
 }
@@ -518,7 +555,7 @@ private class C_ObjectAttrValue(pos: S_Pos, private val rObject: R_Object, priva
         if (!attr.mutable) {
             throw C_Errors.errAttrNotMutable(pos, attr.name)
         }
-        ctx.defCtx.checkDbUpdateAllowed(pos)
+        ctx.checkDbUpdateAllowed(pos)
         return C_ObjectAttrDestination(rObject, attr)
     }
 

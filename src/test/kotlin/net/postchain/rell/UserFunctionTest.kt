@@ -52,7 +52,7 @@ class UserFunctionTest: BaseRellTest(false) {
         val fn = "function f(name: text, s: integer): integer { update user @ { name } ( score += s ); return s; }"
 
         // Database modifications must fail at run-time when indirectly invoked from a query.
-        chkFn(fn, "f('Bob', 500)", "rt_err:no_db_update")
+        chkFn(fn, "f('Bob', 500)", "rt_err:no_db_update:def")
         tst.chkData("user(1,Bob,100)", "user(2,Alice,250)")
 
         // When f() is called from an operation, everything must work.

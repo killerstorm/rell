@@ -257,7 +257,7 @@ class Rt_AppContext(
         val fnUid = R_FnUid(0, "<init>", containerUid)
         val blockUid = R_FrameBlockUid(0, "<init>", fnUid)
         val rFrameBlock = R_FrameBlock(null, blockUid, 0, 0)
-        val rFrame = R_CallFrame(0, rFrameBlock)
+        val rFrame = R_CallFrame(0, rFrameBlock, false)
 
         return rFrame.createRtFrame(defCtx, null, null)
     }
@@ -299,12 +299,6 @@ class Rt_DefinitionContext(val exeCtx: Rt_ExecutionContext, val dbUpdateAllowed:
     val globalCtx = appCtx.globalCtx
     val sqlCtx = appCtx.sqlCtx
     val callCtx = Rt_CallContext(this)
-
-    fun checkDbUpdateAllowed() {
-        if (!dbUpdateAllowed) {
-            throw Rt_Error("no_db_update", "Database modifications are not allowed in this context")
-        }
-    }
 }
 
 class Rt_OpContext(val lastBlockTime: Long, val transactionIid: Long, val blockHeight: Long, val signers: List<ByteArray>)

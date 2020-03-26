@@ -14,7 +14,8 @@ class Rt_CallFrame(
         val defCtx: Rt_DefinitionContext,
         private val rFrame: R_CallFrame,
         private val caller: Rt_ParentFrame?,
-        state: Rt_CallFrameState?
+        state: Rt_CallFrameState?,
+        hasGuardBlock: Boolean
 ) {
     val exeCtx = defCtx.exeCtx
     val sqlExec = exeCtx.sqlExec
@@ -22,6 +23,8 @@ class Rt_CallFrame(
 
     private var curBlock = rFrame.rootBlock
     private val values = Array<Rt_Value?>(rFrame.size) { null }
+
+    private var beforeGuardBlock = hasGuardBlock
 
     init {
         if (state != null) {
@@ -103,6 +106,20 @@ class Rt_CallFrame(
         check(curBlock.uid == rFrame.rootBlock.uid)
         val valuesList = values.map { Optional.ofNullable(it) }.toList()
         return Rt_CallFrameState(valuesList)
+    }
+
+    fun guardCompleted() {
+        beforeGuardBlock = false
+    }
+
+    fun dbUpdateAllowed() = defCtx.dbUpdateAllowed && !beforeGuardBlock
+
+    fun checkDbUpdateAllowed() {
+        if (!defCtx.dbUpdateAllowed) {
+            throw Rt_Error("no_db_update:def", "Database modifications are not allowed in this context")
+        } else if (beforeGuardBlock) {
+            throw Rt_Error("no_db_update:guard", "Database modifications are not allowed inside or before a guard block")
+        }
     }
 }
 
