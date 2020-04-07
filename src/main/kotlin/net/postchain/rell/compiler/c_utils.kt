@@ -123,18 +123,20 @@ object C_Utils {
         }
     }
 
-    fun checkMapKeyType(pos: S_Pos, type: R_Type) {
-        checkMapKeyType0(pos, type, "expr_map_keytype", "map key")
+    fun checkMapKeyType(ctx: C_NamespaceContext, pos: S_Pos, type: R_Type) {
+        checkMapKeyType0(ctx, pos, type, "expr_map_keytype", "map key")
     }
 
-    fun checkSetElementType(pos: S_Pos, type: R_Type) {
-        checkMapKeyType0(pos, type, "expr_set_type", "set element")
+    fun checkSetElementType(ctx: C_NamespaceContext, pos: S_Pos, type: R_Type) {
+        checkMapKeyType0(ctx, pos, type, "expr_set_type", "set element")
     }
 
-    private fun checkMapKeyType0(pos: S_Pos, type: R_Type, errCode: String, errMsg: String) {
-        if (type.completeFlags().mutable) {
-            val typeStr = type.toStrictString()
-            throw C_Error(pos, "$errCode:$typeStr", "Mutable type cannot be used as $errMsg: $typeStr")
+    private fun checkMapKeyType0(ctx: C_NamespaceContext, pos: S_Pos, type: R_Type, errCode: String, errMsg: String) {
+        ctx.executor.onPass(C_CompilerPass.VALIDATION) {
+            if (type.completeFlags().mutable) {
+                val typeStr = type.toStrictString()
+                ctx.msgCtx.error(pos, "$errCode:$typeStr", "Mutable type cannot be used as $errMsg: $typeStr")
+            }
         }
     }
 

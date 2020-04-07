@@ -455,7 +455,7 @@ class C_LookupValue(
     override fun destination(ctx: C_ExprContext): C_Destination {
         if (dstExpr == null) {
             val type = baseType.toStrictString()
-            throw C_Error(pos, "expr_unmodifiable:$type", "Value of type '$type' cannot be modified")
+            throw C_Error(pos, "expr_immutable:$type", "Value of type '$type' cannot be modified")
         }
         return C_SimpleDestination(dstExpr)
     }
@@ -495,7 +495,7 @@ private class C_LocalVarValue(
 
     override fun destination(ctx: C_ExprContext): C_Destination {
         check(ctx === this.ctx)
-        if (!localVar.modifiable) {
+        if (!localVar.mutable) {
             if (ctx.factsCtx.inited(localVar.uid) != C_VarFact.NO) {
                 throw C_Error(name.pos, "expr_assign_val:${name.str}", "Value of '${name.str}' cannot be changed")
             }

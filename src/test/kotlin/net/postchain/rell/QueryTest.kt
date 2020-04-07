@@ -151,4 +151,15 @@ class QueryTest: BaseRellTest() {
     @Test fun testGetRellVersion() {
         chkQueryEx("", "rell.get_rell_version", listOf(), "text[$RELL_VERSION]")
     }
+
+    @Test fun testCallQuery() {
+        def("query foo() = 123;")
+        chk("foo()", "int[123]")
+    }
+
+    @Test fun testRecursiveTypeInference() {
+        chkCompile("query foo(x: integer) = if (x <= 1) 1 else foo(x - 1);", "ct_err:fn_type_recursion:QUERY:foo")
+        chkCompile("function foo(x: integer) = bar(x + 1); query bar(x: integer) = if (x <= 1) 1 else foo(x - 1);",
+                "ct_err:[fn_type_recursion:QUERY:bar][fn_type_recursion:FUNCTION:foo]")
+    }
 }

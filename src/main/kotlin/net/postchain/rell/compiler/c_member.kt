@@ -344,7 +344,7 @@ private class C_MemberFunctionExpr(private val memberRef: C_MemberRef, private v
     override fun startPos() = memberRef.pos
 
     override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_NameExprPair>): C_Expr {
-        val cArgs = C_RegularGlobalFunction.compileArgs(ctx, args)
+        val cArgs = C_FunctionUtils.compileRegularArgs(ctx, args)
         return fn.compileCall(ctx, memberRef, cArgs)
     }
 }

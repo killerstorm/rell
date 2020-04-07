@@ -404,8 +404,8 @@ class VirtualTest: BaseGtxTest(false) {
         val type = "virtual<list<integer>>"
         val args = argToGtv("[123,456]", "[[0],[1]]")
 
-        chkVirtualEx(type, "{ x[0] = 123; return 0; }", args, "ct_err:expr_unmodifiable:virtual<list<integer>>")
-        chkVirtualEx(type, "{ x[0] += 123; return 0; }", args, "ct_err:expr_unmodifiable:virtual<list<integer>>")
+        chkVirtualEx(type, "{ x[0] = 123; return 0; }", args, "ct_err:expr_immutable:virtual<list<integer>>")
+        chkVirtualEx(type, "{ x[0] += 123; return 0; }", args, "ct_err:expr_immutable:virtual<list<integer>>")
 
         chkVirtualEx(type, " = _strict_str(x.str());", args, "'text[[123, 456]]'")
         chkVirtualEx(type, " = _strict_str(x.to_text());", args, "'text[[123, 456]]'")
@@ -885,8 +885,8 @@ class VirtualTest: BaseGtxTest(false) {
         val type = "virtual<map<text, integer>>"
 
         var args = argToGtv("{'Hello':123,'Bye':456}", "[['Hello'],['Bye']]")
-        chkVirtualEx(type, "{ x['Hello'] = 123; return 0; }", args, "ct_err:expr_unmodifiable:virtual<map<text,integer>>")
-        chkVirtualEx(type, "{ x['Hello'] += 123; return 0; }", args, "ct_err:expr_unmodifiable:virtual<map<text,integer>>")
+        chkVirtualEx(type, "{ x['Hello'] = 123; return 0; }", args, "ct_err:expr_immutable:virtual<map<text,integer>>")
+        chkVirtualEx(type, "{ x['Hello'] += 123; return 0; }", args, "ct_err:expr_immutable:virtual<map<text,integer>>")
 
         chkVirtualEx(type, "= _strict_str(x.str());", args, "'text[{Bye=456, Hello=123}]'")
         chkVirtualEx(type, "= _strict_str(x.to_text());", args, "'text[{Bye=456, Hello=123}]'")
@@ -1290,6 +1290,14 @@ class VirtualTest: BaseGtxTest(false) {
 
         chkOpFull(code, listOf(argToGtv("[123,456]", "[[1]]")))
         chkOut("virtual<list<integer>>[null,int[456]]")
+    }
+
+    @Test fun testFunctionParameterType() {
+        def("struct rec { i: integer; }")
+        chkCompile("function f(x: virtual<rec>) {}", "OK")
+        chkCompile("function f(x: virtual<set<rec>>) {}", "OK")
+        chkCompile("function f(x: virtual<list<rec>>) {}", "OK")
+        chkCompile("function f(x: virtual<map<text,rec>>) {}", "OK")
     }
 
     @Test fun testHash() {

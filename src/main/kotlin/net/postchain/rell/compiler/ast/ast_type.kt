@@ -84,7 +84,7 @@ class S_SetType(val pos: S_Pos, val element: S_Type): S_Type() {
     override fun compile(ctx: C_NamespaceContext): R_Type {
         val rElement = element.compile(ctx)
         C_Utils.checkUnitType(pos, rElement, "type_set_unit", "Invalid set element type")
-        C_Utils.checkSetElementType(pos, rElement)
+        C_Utils.checkSetElementType(ctx, pos, rElement)
         return R_SetType(rElement)
     }
 }
@@ -95,7 +95,7 @@ class S_MapType(val pos: S_Pos, val key: S_Type, val value: S_Type): S_Type() {
         val rValue = value.compile(ctx)
         C_Utils.checkUnitType(pos, rKey, "type_map_key_unit", "Invalid map key type")
         C_Utils.checkUnitType(pos, rValue, "type_map_value_unit", "Invalid map value type")
-        C_Utils.checkMapKeyType(pos, rKey)
+        C_Utils.checkMapKeyType(ctx, pos, rKey)
         return R_MapType(rKey, rValue)
     }
 }

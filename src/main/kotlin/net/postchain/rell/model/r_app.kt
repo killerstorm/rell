@@ -90,6 +90,7 @@ class R_VarParam(val name: String, val type: R_Type, val ptr: R_VarPtr) {
 
 sealed class R_Routine(names: R_DefinitionNames): R_Definition(names) {
     abstract fun params(): List<R_Param>
+    abstract fun call(rtFrame: Rt_CallFrame, args: List<Rt_Value>, callerFilePos: R_FilePos): Rt_Value
 }
 
 sealed class R_MountedRoutine(names: R_DefinitionNames, val mountName: R_MountName): R_Routine(names)
@@ -108,6 +109,10 @@ class R_Operation(names: R_DefinitionNames, mountName: R_MountName): R_MountedRo
         val rtFrame = processCallArgs(exeCtx, args)
         execute(rtFrame)
         return null
+    }
+
+    override fun call(rtFrame: Rt_CallFrame, args: List<Rt_Value>, callerFilePos: R_FilePos): Rt_Value {
+        throw Rt_Error("call:operation", "Calling operation is not allowed")
     }
 
     private fun processCallArgs(exeCtx: Rt_ExecutionContext, args: List<Rt_Value>): Rt_CallFrame {
@@ -159,7 +164,7 @@ sealed class R_QueryBody(
 ) {
     val params = params.toImmList()
 
-    abstract fun execute(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, pos: R_DefinitionPos): Rt_Value
+    abstract fun call(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, caller: Rt_ParentFrame?): Rt_Value
 }
 
 class R_UserQueryBody(
@@ -170,8 +175,8 @@ class R_UserQueryBody(
 ): R_QueryBody(retType, varParams.map { it.toParam() }) {
     private val varParams = varParams.toImmList()
 
-    override fun execute(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, pos: R_DefinitionPos): Rt_Value {
-        val rtFrame = frame.createRtFrame(defCtx, null, null)
+    override fun call(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, caller: Rt_ParentFrame?): Rt_Value {
+        val rtFrame = frame.createRtFrame(defCtx, caller, null)
 
         processArgs(varParams, args, rtFrame)
 
@@ -188,7 +193,7 @@ class R_UserQueryBody(
 }
 
 class R_SysQueryBody(retType: R_Type, params: List<R_Param>, private val fn: R_SysFunction): R_QueryBody(retType, params) {
-    override fun execute(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, pos: R_DefinitionPos): Rt_Value {
+    override fun call(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, caller: Rt_ParentFrame?): Rt_Value {
         val ctx = Rt_CallContext(defCtx)
         return fn.call(ctx, args)
     }
@@ -208,7 +213,20 @@ class R_Query(names: R_DefinitionNames, mountName: R_MountName): R_MountedRoutin
         val body = bodyLate.get()
         checkCallArgs(this, body.params, args)
         val defCtx = Rt_DefinitionContext(exeCtx, false, pos)
-        val res = body.execute(defCtx, args, pos)
+        val res = body.call(defCtx, args, null)
+        return res
+    }
+
+    override fun call(rtFrame: Rt_CallFrame, args: List<Rt_Value>, callerFilePos: R_FilePos): Rt_Value {
+        val body = bodyLate.get()
+        checkCallArgs(this, body.params, args)
+
+        val callerStackPos = R_StackPos(rtFrame.defCtx.pos, callerFilePos)
+        val caller = Rt_ParentFrame(rtFrame, callerStackPos)
+
+        val defCtx = rtFrame.defCtx
+        val subDefCtx = Rt_DefinitionContext(defCtx.exeCtx, false, names.pos)
+        val res = body.call(subDefCtx, args, caller)
         return res
     }
 
@@ -256,7 +274,7 @@ class R_Function(names: R_DefinitionNames): R_Routine(names) {
         return res
     }
 
-    fun call(rtFrame: Rt_CallFrame, args: List<Rt_Value>, callerFilePos: R_FilePos): Rt_Value {
+    override fun call(rtFrame: Rt_CallFrame, args: List<Rt_Value>, callerFilePos: R_FilePos): Rt_Value {
         val callerStackPos = R_StackPos(rtFrame.defCtx.pos, callerFilePos)
         val caller = Rt_ParentFrame(rtFrame, callerStackPos)
         return call0(rtFrame.defCtx, args, caller)
@@ -266,8 +284,8 @@ class R_Function(names: R_DefinitionNames): R_Routine(names) {
         val body = bodyLate.get()
 
         val callerDbUpdateAllowed = caller?.frame?.dbUpdateAllowed() ?: true
-        val subDbUpdateAllowed = callerDbUpdateAllowed && defCtx.dbUpdateAllowed
-        val rtSubFrame = createRtFrame(body, defCtx.exeCtx, subDbUpdateAllowed, caller)
+        val dbUpdateAllowed = callerDbUpdateAllowed && defCtx.dbUpdateAllowed
+        val rtSubFrame = createRtFrame(body, defCtx.exeCtx, dbUpdateAllowed, caller)
 
         processArgs(body.varParams, args, rtSubFrame)
 

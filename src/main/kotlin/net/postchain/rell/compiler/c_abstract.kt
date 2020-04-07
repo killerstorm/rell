@@ -31,7 +31,7 @@ class C_AbstractDescriptor(private val fnPos: S_Pos, private val rFunction: R_Fu
     fun bind() {
         val overrideBody = overrideBodyLate.get().value
         val header = headerLate.get().value
-        val actualBody = overrideBody ?: header?.body
+        val actualBody = overrideBody ?: header?.fnBody
         if (actualBody != null) {
             val rBody = actualBody.compile()
             rFunction.setBody(rBody)

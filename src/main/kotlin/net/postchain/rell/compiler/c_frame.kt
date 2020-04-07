@@ -44,7 +44,7 @@ class C_CallFrameProto(val size: Int, val rootBlockScope: C_BlockScope) {
 class C_LocalVar(
         val name: String,
         val type: R_Type,
-        val modifiable: Boolean,
+        val mutable: Boolean,
         val uid: C_VarUid,
         val ptr: R_VarPtr
 ) {
@@ -82,7 +82,7 @@ class C_BlockScopeBuilder(
         return local?.toLocalVar(lookupBlockUid)
     }
 
-    fun add(name: S_Name, type: R_Type, modifiable: Boolean): C_LocalVar {
+    fun add(name: S_Name, type: R_Type, mutable: Boolean): C_LocalVar {
         check(!build)
 
         val nameStr = name.str
@@ -91,7 +91,7 @@ class C_BlockScopeBuilder(
         val ofs = endOffset++
         val varUid = fnCtx.nextVarUid(nameStr)
 
-        val entry = C_BlockScopeEntry(nameStr, type, modifiable, ofs, varUid)
+        val entry = C_BlockScopeEntry(nameStr, type, mutable, ofs, varUid)
         entries[nameStr] = entry
 
         val res = entry.toLocalVar(blockUid)
@@ -108,13 +108,13 @@ class C_BlockScopeBuilder(
 class C_BlockScopeEntry(
         val name: String,
         val type: R_Type,
-        val modifiable: Boolean,
+        val mutable: Boolean,
         val offset: Int,
         val varUid: C_VarUid
 ) {
     fun toLocalVar(blockUid: R_FrameBlockUid): C_LocalVar {
         val ptr = R_VarPtr(name, blockUid, offset)
-        return C_LocalVar(name, type, modifiable, varUid, ptr)
+        return C_LocalVar(name, type, mutable, varUid, ptr)
     }
 }
 
@@ -143,7 +143,7 @@ sealed class C_BlockContext(val frameCtx: C_FrameContext, val loop: C_LoopUid?) 
     abstract fun isTopLevelBlock(): Boolean
     abstract fun createSubContext(loop: C_LoopUid?, location: String): C_OwnerBlockContext
     abstract fun lookupLocalVar(name: String): C_LocalVar?
-    abstract fun addLocalVar(name: S_Name, type: R_Type, modifiable: Boolean): C_LocalVar
+    abstract fun addLocalVar(name: S_Name, type: R_Type, mutable: Boolean): C_LocalVar
 }
 
 class C_FrameBlock(val rBlock: R_FrameBlock, val scope: C_BlockScope)
@@ -172,12 +172,12 @@ class C_OwnerBlockContext(
         return res
     }
 
-    override fun addLocalVar(name: S_Name, type: R_Type, modifiable: Boolean): C_LocalVar {
+    override fun addLocalVar(name: S_Name, type: R_Type, mutable: Boolean): C_LocalVar {
         val nameStr = name.str
         if (lookupLocalVar(nameStr) != null) {
             throw C_Error(name.pos, "var_dupname:$nameStr", "Duplicate variable: '$nameStr'")
         }
-        return scopeBuilder.add(name, type, modifiable)
+        return scopeBuilder.add(name, type, mutable)
     }
 
     private fun <T> findValue(getter: (C_OwnerBlockContext) -> T?): T? {

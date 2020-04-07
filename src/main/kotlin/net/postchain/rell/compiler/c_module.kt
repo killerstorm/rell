@@ -272,16 +272,6 @@ class C_ModuleDefsBuilder {
     val operations = C_ModuleDefTableBuilder<R_Operation>()
     val queries = C_ModuleDefTableBuilder<R_Query>()
 
-    fun addDefs(defs: C_ModuleDefs) {
-        entities.add(defs.entities)
-        objects.add(defs.objects)
-        structs.add(defs.structs)
-        enums.add(defs.enums)
-        functions.add(defs.functions)
-        operations.add(defs.operations)
-        queries.add(defs.queries)
-    }
-
     fun build(): C_ModuleDefs {
         return C_ModuleDefs(
                 entities = entities.build(),

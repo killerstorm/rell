@@ -28,7 +28,7 @@ class C_AppContext(
 
     val sysDefs = oldReplState.sysDefs ?: C_SystemDefs.create(executor, appUid)
 
-    val functionReturnTypeCalculator = C_UserFunctionBody.createReturnTypeCalculator()
+    val functionReturnTypeCalculator = C_FunctionBody.createReturnTypeCalculator()
 
     private val appDefsLate = C_LateInit(C_CompilerPass.APPDEFS, C_AppDefs.EMPTY)
 

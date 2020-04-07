@@ -39,6 +39,8 @@ enum class C_DeclarationType(val msg: String) {
     QUERY("query"),
     IMPORT("import")
     ;
+
+    val capitalizedMsg = StringUtils.capitalize(msg)
 }
 
 sealed class C_DefProxy<T> {

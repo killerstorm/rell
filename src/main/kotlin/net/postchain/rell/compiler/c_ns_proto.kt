@@ -129,11 +129,12 @@ private class C_NsDef_Operation(private val op: R_Operation): C_NsDef() {
     }
 }
 
-private class C_NsDef_Query(private val q: R_Query): C_NsDef() {
+private class C_NsDef_Query(private val cQuery: C_QueryGlobalFunction): C_NsDef() {
     override fun type() = C_DeclarationType.QUERY
-    override fun toNamespaceElement() = C_NamespaceElement()
+    override fun toNamespaceElement() = C_NamespaceElement.create(function = cQuery)
 
     override fun addToDefs(b: C_ModuleDefsBuilder) {
+        val q = cQuery.rQuery
         b.queries.add(q.moduleLevelName, q)
     }
 }
@@ -233,7 +234,7 @@ class C_UserNsProtoBuilder(private val assembler: C_NsAsm_ComponentAssembler) {
         addDef(name, C_NsDef_Operation(operation))
     }
 
-    fun addQuery(name: S_Name, query: R_Query) {
+    fun addQuery(name: S_Name, query: C_QueryGlobalFunction) {
         addDef(name, C_NsDef_Query(query))
     }
 }

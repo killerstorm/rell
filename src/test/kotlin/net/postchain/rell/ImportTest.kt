@@ -126,35 +126,35 @@ class ImportTest: BaseRellTest(false) {
                 function f(): integer = 123;
                 function g(): integer = 456;
                 namespace y {
-                    function p(): integer = 321;
-                    function q(): integer = 654;
+                    function u(): integer = 321;
+                    function v(): integer = 654;
                 }
             }
         """)
 
         chkImport("import a.{x.*};", "f()", "int[123]")
         chkImport("import a.{x.*};", "g()", "int[456]")
-        chkImport("import a.{x.*};", "y.p()", "int[321]")
-        chkImport("import a.{x.*};", "y.q()", "int[654]")
+        chkImport("import a.{x.*};", "y.u()", "int[321]")
+        chkImport("import a.{x.*};", "y.v()", "int[654]")
 
-        chkImport("import a.{x.y.*};", "p()", "int[321]")
-        chkImport("import a.{x.y.*};", "q()", "int[654]")
-        chkImport("import a.{x.y.*};", "y.p()", "ct_err:unknown_name:y")
-        chkImport("import a.{x.y.*};", "y.q()", "ct_err:unknown_name:y")
+        chkImport("import a.{x.y.*};", "u()", "int[321]")
+        chkImport("import a.{x.y.*};", "v()", "int[654]")
+        chkImport("import a.{x.y.*};", "y.u()", "ct_err:unknown_name:y")
+        chkImport("import a.{x.y.*};", "y.v()", "ct_err:unknown_name:y")
 
         chkImport("import a.{x.*,x.y.*};", "f()", "int[123]")
         chkImport("import a.{x.*,x.y.*};", "g()", "int[456]")
-        chkImport("import a.{x.*,x.y.*};", "p()", "int[321]")
-        chkImport("import a.{x.*,x.y.*};", "q()", "int[654]")
-        chkImport("import a.{x.*,x.y.*};", "y.p()", "int[321]")
-        chkImport("import a.{x.*,x.y.*};", "y.q()", "int[654]")
+        chkImport("import a.{x.*,x.y.*};", "u()", "int[321]")
+        chkImport("import a.{x.*,x.y.*};", "v()", "int[654]")
+        chkImport("import a.{x.*,x.y.*};", "y.u()", "int[321]")
+        chkImport("import a.{x.*,x.y.*};", "y.v()", "int[654]")
 
         chkImport("import ns: a.{x.*,x.y.*};", "ns.f()", "int[123]")
         chkImport("import ns: a.{x.*,x.y.*};", "ns.g()", "int[456]")
-        chkImport("import ns: a.{x.*,x.y.*};", "ns.p()", "int[321]")
-        chkImport("import ns: a.{x.*,x.y.*};", "ns.q()", "int[654]")
-        chkImport("import ns: a.{x.*,x.y.*};", "ns.y.p()", "int[321]")
-        chkImport("import ns: a.{x.*,x.y.*};", "ns.y.q()", "int[654]")
+        chkImport("import ns: a.{x.*,x.y.*};", "ns.u()", "int[321]")
+        chkImport("import ns: a.{x.*,x.y.*};", "ns.v()", "int[654]")
+        chkImport("import ns: a.{x.*,x.y.*};", "ns.y.u()", "int[321]")
+        chkImport("import ns: a.{x.*,x.y.*};", "ns.y.v()", "int[654]")
     }
 
     @Test fun testWildcardConflict() {
@@ -170,11 +170,11 @@ class ImportTest: BaseRellTest(false) {
     }
 
     @Test fun testWildcardConflict3() {
-        file("a.rell", "module; function f(): integer = 123; function p(): integer = 456;")
-        file("b.rell", "module; function f(): integer = 321; function q(): integer = 789;")
+        file("a.rell", "module; function f(): integer = 123; function u(): integer = 456;")
+        file("b.rell", "module; function f(): integer = 321; function v(): integer = 789;")
         chkImport("import a.*; import b.*;", "f()", "ct_err:name:ambig:f")
-        chkImport("import a.*; import b.*;", "p()", "int[456]")
-        chkImport("import a.*; import b.*;", "q()", "int[789]")
+        chkImport("import a.*; import b.*;", "u()", "int[456]")
+        chkImport("import a.*; import b.*;", "v()", "int[789]")
         chkImport("import a.*; import a.*;", "f()", "int[123]")
         chkImport("import b.*; import b.*;", "f()", "int[321]")
     }

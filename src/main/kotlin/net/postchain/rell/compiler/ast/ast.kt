@@ -613,26 +613,38 @@ class S_QueryDefinition(
         val mountName = ctx.mountName(modTarget, name)
 
         val rQuery = R_Query(names, mountName)
+        val cQuery = C_QueryGlobalFunction(rQuery)
+
         ctx.appCtx.defsAdder.addQuery(rQuery)
-        ctx.nsBuilder.addQuery(name, rQuery)
+        ctx.nsBuilder.addQuery(name, cQuery)
         ctx.mntBuilder.addQuery(name, rQuery)
 
-        ctx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
-            doCompile(ctx, rQuery)
+        ctx.executor.onPass(C_CompilerPass.MEMBERS) {
+            val header = compileHeader(ctx, cQuery)
+            ctx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
+                compileBody(ctx, header, rQuery)
+            }
         }
     }
 
-    private fun doCompile(ctx: C_MountContext, rQuery: R_Query) {
-        val forParams = C_FormalParameters.create(ctx.nsCtx, params, true)
-        val rExplicitRetType = retType?.compile(ctx.nsCtx)
-        val bodyCtx = C_FunctionBodyContext(ctx, name.pos, rQuery.names, rExplicitRetType, forParams)
+    private fun compileHeader(ctx: C_MountContext, cQuery: C_QueryGlobalFunction): C_QueryFunctionHeader {
+        val header = C_FunctionUtils.compileQueryHeader(ctx, name, cQuery.rQuery.names, params, retType, body)
+        cQuery.setHeader(header)
+        return header
+    }
 
-        val rQueryBody = body.compileQuery(bodyCtx)
-        rQuery.setBody(rQueryBody)
+    private fun compileBody(ctx: C_MountContext, header: C_QueryFunctionHeader, rQuery: R_Query) {
+        if (header.queryBody == null) return
+
+        val rBody = header.queryBody.compile()
 
         if (ctx.globalCtx.compilerOptions.gtv) {
-            checkGtvResult(ctx.nsCtx, rQueryBody.retType)
+            ctx.executor.onPass(C_CompilerPass.VALIDATION) {
+                checkGtvResult(ctx.nsCtx, rBody.retType)
+            }
         }
+
+        rQuery.setBody(rBody)
     }
 
     private fun checkGtvResult(ctx: C_NamespaceContext, rType: R_Type) {
@@ -826,23 +838,12 @@ class S_FunctionDefinition(
     }
 
     private fun compileHeader0(ctx: C_MountContext, defNames: R_DefinitionNames): C_UserFunctionHeader {
-        val explicitRetType = if (retType == null) null else (retType.compileOpt(ctx.nsCtx) ?: R_CtErrorType)
-        val bodyRetType = if (body == null) R_UnitType else null
-        val retType = explicitRetType ?: bodyRetType
-
-        val params = C_FormalParameters.create(ctx.nsCtx, params, false)
-
-        val cBody = if (body == null) null else {
-            val bodyCtx = C_FunctionBodyContext(ctx, qualifiedName[0].pos, defNames, retType, params)
-            C_UserFunctionBody(bodyCtx, body)
-        }
-
-        return C_UserFunctionHeader(retType, params, cBody)
+        return C_FunctionUtils.compileFunctionHeader(ctx, qualifiedName.last(), defNames, params, retType, body)
     }
 
     private fun compileRegularBody(header: C_UserFunctionHeader, rFn: R_Function) {
-        if (header.body != null) {
-            val rBody = header.body.compile()
+        if (header.fnBody != null) {
+            val rBody = header.fnBody.compile()
             rFn.setBody(rBody)
         }
     }
@@ -867,7 +868,7 @@ class S_FunctionDefinition(
             val header = compileRegularHeader(ctx, cFn)
             descriptor.setHeader(header)
             ctx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
-                header.body?.compile() // Make sure no compilation errors.
+                header.fnBody?.compile() // Make sure no compilation errors.
                 descriptor.bind()
             }
         }
@@ -906,8 +907,8 @@ class S_FunctionDefinition(
         val header = compileHeader0(ctx, names)
 
         overDescriptor.setAbstract(absDescriptor)
-        if (header.body != null) {
-            overDescriptor.setBody(header.body)
+        if (header.fnBody != null) {
+            overDescriptor.setBody(header.fnBody)
         }
 
         ctx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
@@ -920,7 +921,7 @@ class S_FunctionDefinition(
             header: C_UserFunctionHeader,
             absDescriptor: C_AbstractDescriptor?
     ) {
-        header.body?.compile()
+        header.fnBody?.compile()
         if (absDescriptor != null) {
             val retType = header.returnType()
             checkOverrideSignature(ctx, absDescriptor, header.params, retType)
@@ -1271,13 +1272,16 @@ class C_FormalParameters(list: List<C_FormalParameter>) {
             for (param in params) {
                 val name = param.name
                 val type = param.compileTypeOpt(ctx)
-
                 val cExtParam = C_FormalParameter(name, type)
-                if (gtv && ctx.globalCtx.compilerOptions.gtv) {
-                    checkGtvParam(ctx, cExtParam)
-                }
-
                 cParams.add(cExtParam)
+            }
+
+            if (gtv && ctx.globalCtx.compilerOptions.gtv && cParams.isNotEmpty()) {
+                ctx.executor.onPass(C_CompilerPass.VALIDATION) {
+                    for (cExtParam in cParams) {
+                        checkGtvParam(ctx, cExtParam)
+                    }
+                }
             }
 
             return C_FormalParameters(cParams)

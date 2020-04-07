@@ -61,7 +61,7 @@ class LibByteArrayTest: BaseRellTest(false) {
         chk("x'0123ABCD'[4]", "rt_err:expr_bytearray_subscript_index:4:4")
         chk("x'0123ABCD'[-1]", "rt_err:expr_bytearray_subscript_index:4:-1")
 
-        chkEx("{ val x = x'0123ABCD'; x[1] = 123; return x; }", "ct_err:expr_unmodifiable:byte_array")
+        chkEx("{ val x = x'0123ABCD'; x[1] = 123; return x; }", "ct_err:expr_immutable:byte_array")
     }
 
     @Test fun testSub() {

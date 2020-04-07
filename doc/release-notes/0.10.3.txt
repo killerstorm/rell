@@ -26,3 +26,8 @@ operation foo (name) {
 
 Guard block allows to separate parameters verification from the rest of the operation's code, thus it can be executed
 independently to verify arguments (not supported yet).
+
+
+3. Language: Calling queries
+
+Now it is allowed to invoke queries from both code and REPL. Queries are equivalent to functions in this respect.

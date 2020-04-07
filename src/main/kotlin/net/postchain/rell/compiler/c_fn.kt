@@ -18,28 +18,8 @@ sealed class C_RegularGlobalFunction: C_GlobalFunction() {
     abstract fun compileCallRegular(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Expr
 
     override final fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
-        val cArgs = compileArgs(ctx, args)
+        val cArgs = C_FunctionUtils.compileRegularArgs(ctx, args)
         return compileCallRegular(ctx, name, cArgs)
-    }
-
-    companion object {
-        fun compileArgs(ctx: C_ExprContext, args: List<S_NameExprPair>): List<C_Value> {
-            val namedArg = args.map { it.name }.filterNotNull().firstOrNull()
-            if (namedArg != null) {
-                val argName = namedArg.str
-                throw C_Error(namedArg.pos, "expr_call_namedarg:$argName", "Named function arguments not supported")
-            }
-
-            val cArgs = args.map {
-                val sArg = it.expr
-                val cArg = sArg.compile(ctx).value()
-                val type = cArg.type()
-                C_Utils.checkUnitType(sArg.startPos, type, "expr_arg_unit", "Argument expression returns nothing")
-                cArg
-            }
-
-            return cArgs
-        }
     }
 }
 
@@ -59,17 +39,35 @@ class C_StructGlobalFunction(private val struct: R_Struct): C_GlobalFunction() {
     }
 }
 
-class C_UserFunctionHeader(
-        val explicitType: R_Type?,
-        val params: C_FormalParameters,
-        val body: C_UserFunctionBody?
-) {
+sealed class C_FunctionHeader(val explicitType: R_Type?, val params: C_FormalParameters, val body: C_FunctionBody?) {
+    abstract val declarationType: C_DeclarationType
+
     fun returnType(): R_Type {
         return explicitType ?: (body?.returnType()?.value ?: R_CtErrorType)
     }
+}
+
+class C_UserFunctionHeader(
+        explicitType: R_Type?,
+        params: C_FormalParameters,
+        val fnBody: C_UserFunctionBody?
+): C_FunctionHeader(explicitType, params, fnBody) {
+    override val declarationType = C_DeclarationType.FUNCTION
 
     companion object {
         val ERROR = C_UserFunctionHeader(null, C_FormalParameters.EMPTY, null)
+    }
+}
+
+class C_QueryFunctionHeader(
+        explicitType: R_Type?,
+        params: C_FormalParameters,
+        val queryBody: C_QueryFunctionBody?
+): C_FunctionHeader(explicitType, params, queryBody) {
+    override val declarationType = C_DeclarationType.QUERY
+
+    companion object {
+        val ERROR = C_QueryFunctionHeader(null, C_FormalParameters.EMPTY, null)
     }
 }
 
@@ -87,46 +85,100 @@ class C_UserGlobalFunction(
 
     override fun compileCallRegular(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Expr {
         val header = headerLate.get()
+        return C_FunctionUtils.compileRegularCall(ctx, name, args, rFunction, header)
+    }
+}
+
+class C_QueryGlobalFunction(val rQuery: R_Query): C_GlobalFunction() {
+    private val headerLate = C_LateInit(C_CompilerPass.MEMBERS, C_QueryFunctionHeader.ERROR)
+
+    fun setHeader(header: C_QueryFunctionHeader) {
+        headerLate.set(header)
+    }
+
+    override fun getAbstractInfo() = Pair(null, null)
+
+    override fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
+        val header = headerLate.get()
+        val cArgs = C_FunctionUtils.compileRegularArgs(ctx, args)
+        return C_FunctionUtils.compileRegularCall(ctx, name, cArgs, rQuery, header)
+    }
+}
+
+object C_FunctionUtils {
+    fun compileFunctionHeader(
+            ctx: C_MountContext,
+            simpleName: S_Name,
+            defNames: R_DefinitionNames,
+            params: List<S_AttrHeader>,
+            retType: S_Type?,
+            body: S_FunctionBody?
+    ): C_UserFunctionHeader {
+        val explicitRetType = if (retType == null) null else (retType.compileOpt(ctx.nsCtx) ?: R_CtErrorType)
+        val bodyRetType = if (body == null) R_UnitType else null
+        val retType = explicitRetType ?: bodyRetType
+
+        val cParams = C_FormalParameters.create(ctx.nsCtx, params, false)
+
+        val cBody = if (body == null) null else {
+            val bodyCtx = C_FunctionBodyContext(ctx, simpleName.pos, defNames, retType, cParams)
+            C_UserFunctionBody(bodyCtx, body)
+        }
+
+        return C_UserFunctionHeader(retType, cParams, cBody)
+    }
+
+    fun compileQueryHeader(
+            ctx: C_MountContext,
+            simpleName: S_Name,
+            defNames: R_DefinitionNames,
+            params: List<S_AttrHeader>,
+            retType: S_Type?,
+            body: S_FunctionBody
+    ): C_QueryFunctionHeader {
+        val retType = if (retType == null) null else (retType.compileOpt(ctx.nsCtx) ?: R_CtErrorType)
+        val cParams = C_FormalParameters.create(ctx.nsCtx, params, ctx.globalCtx.compilerOptions.gtv)
+        val bodyCtx = C_FunctionBodyContext(ctx, simpleName.pos, defNames, retType, cParams)
+        val cBody = C_QueryFunctionBody(bodyCtx, body)
+        return C_QueryFunctionHeader(retType, cParams, cBody)
+    }
+
+    fun compileRegularArgs(ctx: C_ExprContext, args: List<S_NameExprPair>): List<C_Value> {
+        val namedArg = args.map { it.name }.filterNotNull().firstOrNull()
+        if (namedArg != null) {
+            val argName = namedArg.str
+            throw C_Error(namedArg.pos, "expr_call_namedarg:$argName", "Named function arguments not supported")
+        }
+
+        val cArgs = args.map {
+            val sArg = it.expr
+            val cArg = sArg.compile(ctx).value()
+            val type = cArg.type()
+            C_Utils.checkUnitType(sArg.startPos, type, "expr_arg_unit", "Argument expression returns nothing")
+            cArg
+        }
+
+        return cArgs
+    }
+
+    fun compileRegularCall(
+            ctx: C_ExprContext,
+            name: S_Name,
+            args: List<C_Value>,
+            rFunction: R_Routine,
+            header: C_FunctionHeader
+    ): C_Expr {
         val effArgs = checkArgs(ctx, name, header.params, args)
         val retType = compileReturnType(ctx, name, header)
 
         val rExpr = if (effArgs != null && retType != null) {
-            compileCallRegular0(name, effArgs, retType)
+            compileRegularCall0(name, effArgs, retType, rFunction)
         } else {
             C_Utils.crashExpr(retType ?: R_CtErrorType, "Compilation error")
         }
 
         val exprFacts = C_ExprVarFacts.forSubExpressions(args)
         return C_RValue.makeExpr(name.pos, rExpr, exprFacts)
-    }
-
-    private fun compileReturnType(ctx: C_ExprContext, name: S_Name, header: C_UserFunctionHeader): R_Type? {
-        if (header.explicitType != null) {
-            return header.explicitType
-        } else if (header.body == null) {
-            return null
-        }
-
-        val retTypeRes = header.body.returnType()
-        if (retTypeRes.recursion) {
-            val nameStr = name.str
-            ctx.msgCtx.error(name.pos, "fn_type_recursion:$nameStr",
-                    "The function '$nameStr' is recursive, cannot infer the return type; specify return type explicitly")
-        } else if (retTypeRes.stackOverflow) {
-            val nameStr = name.str
-            ctx.msgCtx.error(name.pos, "fn_type_stackoverflow:$nameStr",
-                    "Cannot infer return type for function '$nameStr': call chain is too long; specify return type explicitly")
-        }
-
-        return retTypeRes.value
-    }
-
-    private fun compileCallRegular0(name: S_Name, effArgs: List<C_Value>, retType: R_Type): R_Expr {
-        val file = name.pos.path().str()
-        val line = name.pos.line()
-        val filePos = R_FilePos(file, line)
-        val rArgs = effArgs.map { it.toRExpr() }
-        return R_UserCallExpr(retType, rFunction, rArgs, filePos)
     }
 
     private fun checkArgs(ctx: C_ExprContext, name: S_Name, params: C_FormalParameters, args: List<C_Value>): List<C_Value>? {
@@ -172,6 +224,37 @@ class C_UserGlobalFunction(
 
         val match = C_ArgTypesMatch(matchList)
         return match.effectiveArgs(args)
+    }
+
+    private fun compileReturnType(ctx: C_ExprContext, name: S_Name, header: C_FunctionHeader): R_Type? {
+        if (header.explicitType != null) {
+            return header.explicitType
+        } else if (header.body == null) {
+            return null
+        }
+
+        val decType = header.declarationType
+        val retTypeRes = header.body.returnType()
+
+        if (retTypeRes.recursion) {
+            val nameStr = name.str
+            ctx.msgCtx.error(name.pos, "fn_type_recursion:$decType:$nameStr",
+                    "${decType.capitalizedMsg} '$nameStr' is recursive, cannot infer the return type; specify return type explicitly")
+        } else if (retTypeRes.stackOverflow) {
+            val nameStr = name.str
+            ctx.msgCtx.error(name.pos, "fn_type_stackoverflow:$decType:$nameStr",
+                    "Cannot infer return type for ${decType.msg} '$nameStr': call chain is too long; specify return type explicitly")
+        }
+
+        return retTypeRes.value
+    }
+
+    private fun compileRegularCall0(name: S_Name, effArgs: List<C_Value>, retType: R_Type, rFunction: R_Routine): R_Expr {
+        val file = name.pos.path().str()
+        val line = name.pos.line()
+        val filePos = R_FilePos(file, line)
+        val rArgs = effArgs.map { it.toRExpr() }
+        return R_UserCallExpr(retType, rFunction, rArgs, filePos)
     }
 }
 
@@ -305,24 +388,42 @@ class C_SysMemberFunction(val cases: List<C_MemberFuncCase>) {
     }
 }
 
-class C_UserFunctionBody(bodyCtx: C_FunctionBodyContext, sBody: S_FunctionBody) {
+sealed class C_FunctionBody(bodyCtx: C_FunctionBodyContext) {
     private val retTypeCalculator = bodyCtx.mntCtx.appCtx.functionReturnTypeCalculator
-    private var state: BodyState = BodyState.StartState(bodyCtx, sBody)
 
     fun returnType(): RecursionAwareResult<R_Type> {
         val res = retTypeCalculator.calculate(this)
         return res
     }
 
-    private fun calculateReturnType(): R_Type {
+    abstract fun calculateReturnType(): R_Type
+
+    companion object {
+        fun createReturnTypeCalculator(): RecursionAwareCalculator<C_FunctionBody, R_Type> {
+            // Experimental threshold with default JRE settings is 500 (depth > 500 ==> StackOverflowError).
+            return RecursionAwareCalculator(200, R_CtErrorType) {
+                it.calculateReturnType()
+            }
+        }
+    }
+}
+
+sealed class C_CommonFunctionBody<T>(bodyCtx: C_FunctionBodyContext, sBody: S_FunctionBody): C_FunctionBody(bodyCtx) {
+    private var state: BodyState<T> = BodyState.StartState(bodyCtx, sBody)
+
+    protected abstract fun getErrorBody(): T
+    protected abstract fun getReturnType(body: T): R_Type
+    protected abstract fun compileBody(ctx: C_FunctionBodyContext, sBody: S_FunctionBody): T
+
+    final override fun calculateReturnType(): R_Type {
         val s = state
         return when (s) {
             is BodyState.StartState -> calculateReturnType0(s)
-            is BodyState.EndState -> s.rBody.type
+            is BodyState.EndState -> getReturnType(s.rBody)
         }
     }
 
-    private fun calculateReturnType0(s: BodyState.StartState): R_Type {
+    private fun calculateReturnType0(s: BodyState.StartState<T>): R_Type {
         s.bodyCtx.mntCtx.executor.checkPass(C_CompilerPass.EXPRESSIONS)
 
         if (!s.sBody.returnsValue()) {
@@ -330,10 +431,11 @@ class C_UserFunctionBody(bodyCtx: C_FunctionBodyContext, sBody: S_FunctionBody) 
         }
 
         val rBody = doCompile(s)
-        return rBody.type
+        val rType = getReturnType(rBody)
+        return rType
     }
 
-    fun compile(): R_FunctionBody {
+    fun compile(): T {
         // Needed to put the type calculation result to the cache. If this is not done, in case of a recursion,
         // subsequently getting the return type will calculate it and emit an extra compilation error (recursion).
         returnType()
@@ -347,14 +449,14 @@ class C_UserFunctionBody(bodyCtx: C_FunctionBodyContext, sBody: S_FunctionBody) 
         return res
     }
 
-    private fun doCompile(s: BodyState.StartState): R_FunctionBody {
+    private fun doCompile(s: BodyState.StartState<T>): T {
         check(state === s)
         s.bodyCtx.mntCtx.executor.checkPass(C_CompilerPass.EXPRESSIONS)
 
-        var res = R_FunctionBody.ERROR
+        var res = getErrorBody()
 
         try {
-            res = s.sBody.compileFunction(s.bodyCtx)
+            res = compileBody(s.bodyCtx, s.sBody)
         } finally {
             state = BodyState.EndState(res)
         }
@@ -362,17 +464,20 @@ class C_UserFunctionBody(bodyCtx: C_FunctionBodyContext, sBody: S_FunctionBody) 
         return res
     }
 
-    private sealed class BodyState {
-        class StartState(val bodyCtx: C_FunctionBodyContext, val sBody: S_FunctionBody): BodyState()
-        class EndState(val rBody: R_FunctionBody): BodyState()
+    private sealed class BodyState<T> {
+        class StartState<T>(val bodyCtx: C_FunctionBodyContext, val sBody: S_FunctionBody): BodyState<T>()
+        class EndState<T>(val rBody: T): BodyState<T>()
     }
+}
 
-    companion object {
-        fun createReturnTypeCalculator(): RecursionAwareCalculator<C_UserFunctionBody, R_Type> {
-            // Experimental threshold with default JRE settings is 500 (depth > 500 --> StackOverflowError).
-            return RecursionAwareCalculator(200, R_CtErrorType) {
-                it.calculateReturnType()
-            }
-        }
-    }
+class C_UserFunctionBody(bodyCtx: C_FunctionBodyContext, sBody: S_FunctionBody): C_CommonFunctionBody<R_FunctionBody>(bodyCtx, sBody) {
+    override fun getErrorBody() = R_FunctionBody.ERROR
+    override fun getReturnType(body: R_FunctionBody) = body.type
+    override fun compileBody(ctx: C_FunctionBodyContext, sBody: S_FunctionBody) = sBody.compileFunction(ctx)
+}
+
+class C_QueryFunctionBody(bodyCtx: C_FunctionBodyContext, sBody: S_FunctionBody): C_CommonFunctionBody<R_QueryBody>(bodyCtx, sBody) {
+    override fun getErrorBody() = R_UserQueryBody.ERROR
+    override fun getReturnType(body: R_QueryBody) = body.retType
+    override fun compileBody(ctx: C_FunctionBodyContext, sBody: S_FunctionBody) = sBody.compileQuery(ctx)
 }
