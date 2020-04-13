@@ -142,7 +142,7 @@ sealed class C_NameContext {
 
         val attr = attrs[0]
         val dbExpr = attr.compile()
-        return C_DbValue.makeExpr(name.pos, dbExpr)
+        return C_DbValue.createExpr(name.pos, dbExpr)
     }
 
     fun resolveNameValue(ctx: C_ExprContext, name: S_Name): C_NameResolution? {
@@ -261,7 +261,7 @@ sealed class C_NameResolution(val name: S_Name) {
 }
 
 private class C_NameResolution_Entity(name: S_Name, private val entity: C_AtEntity): C_NameResolution(name) {
-    override fun toExpr() = C_DbValue.makeExpr(name.pos, entity.compileExpr())
+    override fun toExpr() = C_DbValue.createExpr(name.pos, entity.compileExpr())
 }
 
 class C_NameResolution_Local(
@@ -414,7 +414,7 @@ class C_RValue(
     }
 }
 
-class C_DbValue(pos: S_Pos, private val dbExpr: Db_Expr, private val varFacts: C_ExprVarFacts): C_Value(pos) {
+class C_DbValue private constructor(pos: S_Pos, private val dbExpr: Db_Expr, private val varFacts: C_ExprVarFacts): C_Value(pos) {
     override fun type() = dbExpr.type
     override fun isDb() = true
     override fun toRExpr0() = throw C_Errors.errExprDbNotAllowed(pos)
@@ -432,8 +432,12 @@ class C_DbValue(pos: S_Pos, private val dbExpr: Db_Expr, private val varFacts: C
     }
 
     companion object {
-        fun makeExpr(pos: S_Pos, dbExpr: Db_Expr, varFacts: C_ExprVarFacts = C_ExprVarFacts.EMPTY): C_Expr {
-            val value = C_DbValue(pos, dbExpr, varFacts)
+        fun create(pos: S_Pos, dbExpr: Db_Expr, varFacts: C_ExprVarFacts = C_ExprVarFacts.EMPTY): C_Value {
+            return if (dbExpr is Db_InterpretedExpr) C_RValue(pos, dbExpr.expr, varFacts) else C_DbValue(pos, dbExpr, varFacts)
+        }
+
+        fun createExpr(pos: S_Pos, dbExpr: Db_Expr, varFacts: C_ExprVarFacts = C_ExprVarFacts.EMPTY): C_Expr {
+            val value = create(pos, dbExpr, varFacts)
             return C_ValueExpr(value)
         }
     }

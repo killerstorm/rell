@@ -212,7 +212,7 @@ sealed class C_BinOp_Common: C_BinOp() {
             val dbRight = right.toDbExpr()
             val dbExpr = compileDb(dbLeft, dbRight)
             dbExpr ?: return null
-            return C_DbValue(left.pos, dbExpr, exprVarFacts)
+            return C_DbValue.create(left.pos, dbExpr, exprVarFacts)
         } else {
             val rLeft = left.toRExpr()
             val rRight = right.toRExpr()
@@ -488,7 +488,7 @@ object C_BinOp_Plus: C_BinOp_Common() {
 
         val dbExpr = value.toDbExpr()
         val dbResExpr = Db_CallExpr(R_TextType, dbFn, listOf(dbExpr))
-        return C_DbValue(value.pos, dbResExpr, value.varFacts().copyPostFacts())
+        return C_DbValue.create(value.pos, dbResExpr, value.varFacts().copyPostFacts())
     }
 
     private fun getDbToStringFunction(type: R_Type): Db_SysFunction? {
@@ -649,7 +649,7 @@ object C_BinOp_Elvis: C_BinOp() {
         if (db) {
             val dbRight = right.toDbExpr()
             val dbExpr = Db_ElvisExpr(resType, rLeft, dbRight)
-            return C_DbValue(left.pos, dbExpr, resVarFacts)
+            return C_DbValue.create(left.pos, dbExpr, resVarFacts)
         } else {
             val rRight = right.toRExpr()
             val rExpr = R_ElvisExpr(resType, rLeft, rRight)

@@ -174,6 +174,7 @@ class LibTextTest: BaseRellTest(false) {
         chk("'Hello'.matches('Bye')", "boolean[false]")
         chk("'Hello'.matches('[A-Za-z]+')", "boolean[true]")
         chk("'Hello'.matches('[0-9]+')", "boolean[false]")
+        chk("'Hello'.matches(')')", "rt_err:fn:text.matches:bad_regex")
     }
 
     @Test fun testCharAt() {

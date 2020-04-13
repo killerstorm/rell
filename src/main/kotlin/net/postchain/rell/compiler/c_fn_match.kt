@@ -149,12 +149,11 @@ class C_DeprecatedFuncCase<CtxT: C_FuncCaseCtx>(
 
         private fun deprecatedMessage(ctx: C_ExprContext, caseCtx: CtxT) {
             val name = caseCtx.fullName
-            C_DeprecatedDefProxy.deprecatedMessage(
+            C_DefProxy.deprecatedMessage(
                     ctx.msgCtx,
-                    C_DeclarationType.FUNCTION,
                     name.pos,
                     name.str,
-                    deprecated
+                    C_DefProxyDeprecation(C_DeclarationType.FUNCTION, deprecated)
             )
         }
     }
@@ -195,7 +194,7 @@ abstract class C_BasicGlobalFuncCaseMatch(private val args: List<C_Value>): C_Gl
             val dbArgs = args.map { it.toDbExpr() }
             val dbExpr = dbFactory(caseCtx, dbArgs)
             val facts = C_ExprVarFacts.forSubExpressions(args)
-            return C_DbValue(caseCtx.fullName.pos, dbExpr, facts)
+            return C_DbValue.create(caseCtx.fullName.pos, dbExpr, facts)
         }
     }
 }

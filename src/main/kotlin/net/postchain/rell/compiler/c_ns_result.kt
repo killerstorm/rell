@@ -107,7 +107,7 @@ private class C_NsRes_InternalMaker {
         } else if (defs.size == 1) {
             defs[0]
         } else {
-            C_AmbiguousDefProxy(defs[0])
+            defs[0].update(ambiguous = true)
         }
     }
 }

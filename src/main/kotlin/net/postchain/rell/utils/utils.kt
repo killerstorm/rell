@@ -16,6 +16,7 @@ import net.postchain.gtv.gtvml.GtvMLEncoder
 import net.postchain.gtv.gtvml.GtvMLParser
 import net.postchain.gtv.merkle.GtvMerkleHashCalculator
 import java.util.*
+import java.util.function.Supplier
 
 object PostchainUtils {
     val DATABASE_VERSION = 1
@@ -157,8 +158,8 @@ class LateInit<T> {
     }
 }
 
-class LateGetter<T>(private val init: LateInit<T>) {
-    fun get(): T = init.get()
+class LateGetter<T>(private val init: LateInit<T>): Supplier<T> {
+    override fun get(): T = init.get()
 
     companion object {
         fun <T> of(value: T): LateGetter<T> {

@@ -176,7 +176,7 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
         val attrExpr = attr.compile()
 
         val dbEqExpr = C_Utils.makeDbBinaryExprEq(attrExpr, dbExpr)
-        return C_DbValue.makeExpr(expr.startPos, dbEqExpr)
+        return C_DbValue.createExpr(expr.startPos, dbEqExpr)
     }
 
     private fun makeWhere(compiledExprs: List<C_Expr>): Db_Expr? {

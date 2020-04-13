@@ -128,7 +128,7 @@ class C_SystemDefs private constructor(
                 queries: List<R_Query>
         ): C_SystemDefs {
             val sysEntities = listOf(blockEntity, transactionEntity)
-            val nsProto = createNsProto(sysEntities)
+            val nsProto = createNsProto(sysEntities, queries)
             val ns = C_NsEntry.createNamespace(nsProto.entries)
 
             val mntBuilder = C_MountTablesBuilder(stamp)
@@ -139,7 +139,7 @@ class C_SystemDefs private constructor(
             return C_SystemDefs(nsProto, ns, blockEntity, transactionEntity, mntTables, sysEntities, queries)
         }
 
-        private fun createNsProto(sysEntities: List<R_Entity>): C_SysNsProto {
+        private fun createNsProto(sysEntities: List<R_Entity>, queries: List<R_Query>): C_SysNsProto {
             val sysNamespaces = SYSTEM_NAMESPACES
             val sysTypes = SYSTEM_TYPES
             val sysFunctions = SYSTEM_FUNCTIONS
@@ -155,7 +155,7 @@ class C_SystemDefs private constructor(
         }
 
         private fun typeRef(type: R_Type, deprecated: C_Deprecated? = null): C_DefProxy<R_Type> {
-            return C_DefProxy.create(C_DeclarationType.TYPE, deprecated, type)
+            return C_DefProxy.create(type, C_DeclarationType.TYPE, deprecated)
         }
     }
 }

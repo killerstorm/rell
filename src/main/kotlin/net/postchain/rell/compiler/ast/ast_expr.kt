@@ -255,7 +255,7 @@ class S_IfExpr(pos: S_Pos, val cond: S_Expr, val trueExpr: S_Expr, val falseExpr
             val dbFalse = cFalse.toDbExpr()
             val cases = listOf(Db_WhenCase(listOf(dbCond), dbTrue))
             val dbExpr = Db_WhenExpr(resType, null, cases, dbFalse)
-            return C_DbValue.makeExpr(startPos, dbExpr, resFacts)
+            return C_DbValue.createExpr(startPos, dbExpr, resFacts)
         } else {
             val rCond = cCond.toRExpr()
             val rTrue = cTrue.toRExpr()
@@ -466,7 +466,7 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
 
         if (db) {
             val dbExpr = compileDb(ctx, builder, type, cValues, missingElseReported)
-            return C_DbValue.makeExpr(startPos, dbExpr, resFacts)
+            return C_DbValue.createExpr(startPos, dbExpr, resFacts)
         } else {
             val rChooser = compileChooserR(builder)
             val rExprs = cValues.map { it.toRExpr() }

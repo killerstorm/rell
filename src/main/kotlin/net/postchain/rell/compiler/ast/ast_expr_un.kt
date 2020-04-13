@@ -29,7 +29,7 @@ object S_UnaryOp_Plus: S_UnaryOp("+") {
 
         if (value.isDb()) {
             val dbExpr = value.toDbExpr()
-            return C_DbValue.makeExpr(expr.startPos(), dbExpr)
+            return C_DbValue.createExpr(expr.startPos(), dbExpr)
         } else {
             val rExpr = value.toRExpr()
             val varFacts = C_ExprVarFacts.of(postFacts = value.varFacts().postFacts)
@@ -51,7 +51,7 @@ object S_UnaryOp_Minus: S_UnaryOp("-") {
 
         if (value.isDb()) {
             val dbExpr = Db_UnaryExpr(type, dbOp, value.toDbExpr())
-            return C_DbValue.makeExpr(startPos, dbExpr)
+            return C_DbValue.createExpr(startPos, dbExpr)
         } else {
             val rExpr = R_UnaryExpr(type, rOp, value.toRExpr())
             val varFacts = C_ExprVarFacts.of(postFacts = value.varFacts().postFacts)
@@ -77,7 +77,7 @@ object S_UnaryOp_Not: S_UnaryOp("not") {
 
         val resValue = if (value.isDb()) {
             val dbExpr = Db_UnaryExpr(R_BooleanType, Db_UnaryOp_Not, value.toDbExpr())
-            C_DbValue(startPos, dbExpr, resVarFacts)
+            C_DbValue.create(startPos, dbExpr, resVarFacts)
         } else {
             val rExpr = R_UnaryExpr(R_BooleanType, R_UnaryOp_Not, value.toRExpr())
             C_RValue(startPos, rExpr, resVarFacts)

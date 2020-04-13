@@ -325,7 +325,7 @@ class C_SysMemberFormalParamsFuncBody(
         val subValues = listOf(member.base) + args
         val exprFacts = C_ExprVarFacts.forSubExpressions(subValues)
 
-        return C_DbValue(member.name.pos, dbExpr, exprFacts)
+        return C_DbValue.create(member.name.pos, dbExpr, exprFacts)
     }
 }
 

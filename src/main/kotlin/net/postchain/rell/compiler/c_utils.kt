@@ -256,7 +256,7 @@ object C_Utils {
         if (value.isDb()) {
             val dbExpr = value.toDbExpr()
             val dbResExpr = Db_CallExpr(R_DecimalType, Db_SysFn_Decimal.FromInteger, listOf(dbExpr))
-            return C_DbValue(value.pos, dbResExpr, value.varFacts())
+            return C_DbValue.create(value.pos, dbResExpr, value.varFacts())
         } else {
             val rExpr = value.toRExpr()
             val rResExpr = createSysCallExpr(R_DecimalType, R_SysFn_Decimal.FromInteger, listOf(rExpr), value.pos, "decimal")

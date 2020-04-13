@@ -217,7 +217,7 @@ private class C_EntityAttrRef_Regular(rEntity: R_Entity, private val attr: R_Att
 
     override fun createDbMemberExpr(base: Db_TableExpr, pos: S_Pos, sName: S_Name): C_Expr {
         val dbExpr = makeDbAttrExpr(base, attr)
-        return C_DbValue.makeExpr(pos, dbExpr)
+        return C_DbValue.createExpr(pos, dbExpr)
     }
 
     override fun createIpEntityMemberExpr(baseValue: C_EntityAttrValueLike, baseExpr: Db_TableExpr, ref: C_MemberRef): C_Expr {
@@ -246,7 +246,7 @@ private class C_EntityAttrRef_Rowid(rEntity: R_Entity): C_EntityAttrRef(rEntity,
     override fun createDbMemberExpr(base: Db_TableExpr, pos: S_Pos, sName: S_Name): C_Expr {
         val dbExpr = Db_RowidExpr(base)
         val memExpr = C_DbAttrInfo(base.rEntity, sName, null, dbExpr)
-        return C_DbValue.makeExpr(pos, memExpr.dbExpr)
+        return C_DbValue.createExpr(pos, memExpr.dbExpr)
     }
 
     override fun createIpEntityMemberExpr(baseValue: C_EntityAttrValueLike, baseExpr: Db_TableExpr, ref: C_MemberRef): C_Expr {

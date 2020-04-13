@@ -30,4 +30,6 @@ independently to verify arguments (not supported yet).
 
 3. Language: Calling queries
 
-Now it is allowed to invoke queries from both code and REPL. Queries are equivalent to functions in this respect.
+Now it is allowed to invoke queries from code and REPL. Queries are equivalent to functions in this respect.
+
+System queries can be called too, e. g. rell.get_app_structure().

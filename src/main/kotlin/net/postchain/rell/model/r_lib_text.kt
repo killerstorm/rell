@@ -8,6 +8,7 @@ import net.postchain.rell.runtime.*
 import java.nio.ByteBuffer
 import java.util.*
 import java.util.regex.Pattern
+import java.util.regex.PatternSyntaxException
 
 sealed class R_SysFn_Text: R_SysFunction_Generic<String>() {
     override fun extract(v: Rt_Value): String = v.asString()
@@ -88,7 +89,15 @@ object R_SysFn_Text_Trim: R_SysFn_Text() {
 }
 
 object R_SysFn_Text_Matches: R_SysFn_Text() {
-    override fun call(obj: String, a: Rt_Value): Rt_Value = Rt_BooleanValue(Pattern.matches(a.asString(), obj))
+    override fun call(obj: String, a: Rt_Value): Rt_Value {
+        val pattern = a.asString()
+        val res = try {
+            Pattern.matches(pattern, obj)
+        } catch (e: PatternSyntaxException) {
+            throw Rt_Error("fn:text.matches:bad_regex", "Invalid regular expression: $pattern")
+        }
+        return Rt_BooleanValue(res)
+    }
 }
 
 private val CHARSET = Charsets.UTF_8

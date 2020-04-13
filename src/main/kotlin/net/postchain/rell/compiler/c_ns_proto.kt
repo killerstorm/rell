@@ -179,6 +179,10 @@ class C_SysNsProtoBuilder {
         addDef(name, C_NsDef_SysFunction(fn))
     }
 
+    fun addQuery(name: String, q: C_QueryGlobalFunction) {
+        addDef(name, C_NsDef_Query(q))
+    }
+
     fun build(): C_SysNsProto {
         check(!completed)
         completed = true

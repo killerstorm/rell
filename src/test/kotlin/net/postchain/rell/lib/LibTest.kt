@@ -107,6 +107,18 @@ class LibTest: BaseRellTest(false) {
         chk("_type_of(user @? {})", "user?")
         chk("_type_of(user @* {})", "list<user>")
         chk("_type_of(user @+ {})", "list<user>")
+
+        // Side effect.
+        chkEx("{ val s = set([123]); val t = _type_of(s.add(456)); return (s, t); }", "([123],boolean)")
+    }
+
+    @Test fun testTypeOfInAtExpr() {
+        tstCtx.useSql = true
+        def("entity user { name: text; }")
+        insert("c0.user", "name", "1,'Bob'")
+        chk("user @{} ( _type_of(.name) )", "text[text]")
+        chk("user @{} ( .name.matches('Bob') )", "ct_err:expr_call_nosql:text.matches")
+        chk("user @{} ( _type_of(.name).matches('text') )", "boolean[true]")
     }
 
     @Test fun testStrictStr() {
@@ -293,5 +305,15 @@ class LibTest: BaseRellTest(false) {
         chk("rec(5).toBytes()", "ct_err:deprecated:FUNCTION:rec.toBytes:to_bytes")
         chk("rec(5).toGTXValue()", "ct_err:deprecated:FUNCTION:rec.toGTXValue:to_gtv")
         chk("rec(5).toPrettyGTXValue()", "ct_err:deprecated:FUNCTION:rec.toPrettyGTXValue:to_gtv_pretty")
+    }
+
+    @Test fun testRellNamespaceConflict() {
+        chkCompile("function rell() = 0;", "ct_err:name_conflict:sys:rell:NAMESPACE")
+        chkCompile("namespace rell {}", "ct_err:name_conflict:sys:rell:NAMESPACE")
+    }
+
+    @Test fun testSysQueries() {
+        chk("rell.get_rell_version()", "text[0.10.2]")
+        chk("rell.get_app_structure()", """gtv[{"modules":{"":{"name":"","queries":{"q":{"parameters":[],"type":"gtv"}}}}}]""")
     }
 }

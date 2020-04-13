@@ -134,7 +134,7 @@ class S_UpdateStatement(pos: S_Pos, val target: S_UpdateTarget, val what: List<S
             if (entityAttr != null && localVar != null) {
                 val rExpr = localVar.toVarExpr()
                 val dbExpr = C_Utils.toDbExpr(impName.pos, rExpr)
-                return C_DbValue(pair.expr.startPos, dbExpr, C_ExprVarFacts.EMPTY)
+                return C_DbValue.create(pair.expr.startPos, dbExpr, C_ExprVarFacts.EMPTY)
             }
         }
         return pair.expr.compile(ctx).value()
