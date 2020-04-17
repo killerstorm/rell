@@ -26,7 +26,7 @@ class AbstractModuleTest: BaseRellTest() {
     @Test fun testOverrideMissing() {
         file("lib.rell", "abstract module; abstract function f(): integer;")
         file("imp.rell", "module; import lib; override function lib.f(): integer = 123;")
-        chkCompile("import lib;", "ct_err:override:missing:[lib!f]:[lib.rell:1]")
+        chkCompile("import lib;", "ct_err:override:missing:[lib:f]:[lib.rell:1]")
         chkCompile("import lib; import imp;", "OK")
     }
 
@@ -35,9 +35,9 @@ class AbstractModuleTest: BaseRellTest() {
         file("bad.rell", "module; import lib;")
         file("mid.rell", "abstract module; import lib;")
         file("imp.rell", "module; import lib; override function lib.f(): integer = 123;")
-        chkCompile("import lib;", "ct_err:override:missing:[lib!f]:[lib.rell:1]")
-        chkCompile("import bad;", "ct_err:bad.rell:override:missing:[lib!f]:[lib.rell:1]")
-        chkCompile("import mid;", "ct_err:override:missing:[lib!f]:[lib.rell:1]")
+        chkCompile("import lib;", "ct_err:override:missing:[lib:f]:[lib.rell:1]")
+        chkCompile("import bad;", "ct_err:bad.rell:override:missing:[lib:f]:[lib.rell:1]")
+        chkCompile("import mid;", "ct_err:override:missing:[lib:f]:[lib.rell:1]")
         chkCompile("import lib; import imp;", "OK")
     }
 
@@ -47,14 +47,14 @@ class AbstractModuleTest: BaseRellTest() {
         file("client.rell", "abstract module; import lib; function g(): integer = lib.f() * 456;")
         file("mistake.rell", "module; import lib; function g(): integer = lib.f() * 456;")
 
-        chkCompile("import mistake;", "ct_err:mistake.rell:override:missing:[lib!f]:[lib.rell:1]")
-        chkCompile("import client;", "ct_err:override:missing:[lib!f]:[lib.rell:1]")
+        chkCompile("import mistake;", "ct_err:mistake.rell:override:missing:[lib:f]:[lib.rell:1]")
+        chkCompile("import client;", "ct_err:override:missing:[lib:f]:[lib.rell:1]")
         chkOverFn("import client; import imp;", "client.g()", "int[56088]")
         chkOverFn("import client; import lib; override function lib.f(): integer = 456;", "client.g()", "int[207936]")
 
         chkCompile("import client; import lib; import imp; override function lib.f(): integer = 456;", """ct_err:
-            [override:conflict:[lib!f]:[import:imp:imp:imp.rell:1]:[direct::main.rell:1]]
-            [override:conflict:[lib!f]:[direct::main.rell:1]:[import:imp:imp:imp.rell:1]]
+            [override:conflict:[lib:f]:[import:imp:imp:imp.rell:1]:[direct::main.rell:1]]
+            [override:conflict:[lib:f]:[direct::main.rell:1]:[import:imp:imp:imp.rell:1]]
         """)
     }
 
@@ -64,13 +64,13 @@ class AbstractModuleTest: BaseRellTest() {
         file("imp2.rell", "module; import lib; override function lib.f(): integer = 456;")
 
         chkCompile("import imp1; import imp2;", """ct_err:
-            [override:conflict:[lib!f]:[import:imp1:imp1:imp1.rell:1]:[import:imp2:imp2:imp2.rell:1]]
-            [override:conflict:[lib!f]:[import:imp2:imp2:imp2.rell:1]:[import:imp1:imp1:imp1.rell:1]]
+            [override:conflict:[lib:f]:[import:imp1:imp1:imp1.rell:1]:[import:imp2:imp2:imp2.rell:1]]
+            [override:conflict:[lib:f]:[import:imp2:imp2:imp2.rell:1]:[import:imp1:imp1:imp1.rell:1]]
         """)
 
         chkCompile("import lib; import imp1; import imp2;", """ct_err:
-            [override:conflict:[lib!f]:[import:imp1:imp1:imp1.rell:1]:[import:imp2:imp2:imp2.rell:1]]
-            [override:conflict:[lib!f]:[import:imp2:imp2:imp2.rell:1]:[import:imp1:imp1:imp1.rell:1]]
+            [override:conflict:[lib:f]:[import:imp1:imp1:imp1.rell:1]:[import:imp2:imp2:imp2.rell:1]]
+            [override:conflict:[lib:f]:[import:imp2:imp2:imp2.rell:1]:[import:imp1:imp1:imp1.rell:1]]
         """)
 
         chkOverFn("import lib; import imp1;", "lib.f()", "int[123]")
@@ -85,8 +85,8 @@ class AbstractModuleTest: BaseRellTest() {
         file("client2.rell", "module; import lib; import imp2; function q(): integer = lib.f();")
 
         chkCompile("import client1; import client2;", """ct_err:
-            [override:conflict:[lib!f]:[import:client1:imp1:imp1.rell:1]:[import:client2:imp2:imp2.rell:1]]
-            [override:conflict:[lib!f]:[import:client2:imp2:imp2.rell:1]:[import:client1:imp1:imp1.rell:1]]
+            [override:conflict:[lib:f]:[import:client1:imp1:imp1.rell:1]:[import:client2:imp2:imp2.rell:1]]
+            [override:conflict:[lib:f]:[import:client2:imp2:imp2.rell:1]:[import:client1:imp1:imp1.rell:1]]
         """)
 
         chkOverFn("import client1;", "client1.p()", "int[123]")
@@ -102,8 +102,8 @@ class AbstractModuleTest: BaseRellTest() {
         """)
 
         chkCompile("import lib;", """ct_err:
-            [lib.rell:override:conflict:[lib!g]:[direct:lib:lib.rell:4]:[direct:lib:lib.rell:5]]
-            [lib.rell:override:conflict:[lib!g]:[direct:lib:lib.rell:5]:[direct:lib:lib.rell:4]]
+            [lib.rell:override:conflict:[lib:g]:[direct:lib:lib.rell:4]:[direct:lib:lib.rell:5]]
+            [lib.rell:override:conflict:[lib:g]:[direct:lib:lib.rell:5]:[direct:lib:lib.rell:4]]
         """)
     }
 
@@ -112,8 +112,8 @@ class AbstractModuleTest: BaseRellTest() {
         file("badimp.rell", "module; import lib; override function lib.f(): integer = 456;")
 
         chkCompile("import badimp;", """ct_err:
-            [badimp.rell:override:conflict:[lib!f]:[import:lib:lib:lib.rell:1]:[direct:badimp:badimp.rell:1]]
-            [badimp.rell:override:conflict:[lib!f]:[direct:badimp:badimp.rell:1]:[import:lib:lib:lib.rell:1]]
+            [badimp.rell:override:conflict:[lib:f]:[import:lib:lib:lib.rell:1]:[direct:badimp:badimp.rell:1]]
+            [badimp.rell:override:conflict:[lib:f]:[direct:badimp:badimp.rell:1]:[import:lib:lib:lib.rell:1]]
         """)
 
         chkOverFn("import lib;", "lib.f()", "int[123]")
@@ -126,8 +126,8 @@ class AbstractModuleTest: BaseRellTest() {
         mainModule("imp1", "imp2")
 
         chkCompile("", """ct_err:
-            [imp1.rell:override:conflict:[lib!f]:[direct:imp1:imp1.rell:1]:[direct:imp2:imp2.rell:1]]
-            [imp2.rell:override:conflict:[lib!f]:[direct:imp2:imp2.rell:1]:[direct:imp1:imp1.rell:1]]
+            [imp1.rell:override:conflict:[lib:f]:[direct:imp1:imp1.rell:1]:[direct:imp2:imp2.rell:1]]
+            [imp2.rell:override:conflict:[lib:f]:[direct:imp2:imp2.rell:1]:[direct:imp1:imp1.rell:1]]
         """)
     }
 
@@ -142,25 +142,25 @@ class AbstractModuleTest: BaseRellTest() {
         chkCompile("import imp1; import mid1;", "OK")
 
         chkCompile("import imp1; import imp2;", """ct_err:
-            [override:conflict:[lib!f]:[import:imp1:imp1:imp1.rell:1]:[import:imp2:imp2:imp2.rell:1]]
-            [override:conflict:[lib!f]:[import:imp2:imp2:imp2.rell:1]:[import:imp1:imp1:imp1.rell:1]]
+            [override:conflict:[lib:f]:[import:imp1:imp1:imp1.rell:1]:[import:imp2:imp2:imp2.rell:1]]
+            [override:conflict:[lib:f]:[import:imp2:imp2:imp2.rell:1]:[import:imp1:imp1:imp1.rell:1]]
         """)
 
         chkCompile("import imp1; import mid2;", """ct_err:
-            [override:conflict:[lib!f]:[import:imp1:imp1:imp1.rell:1]:[import:mid2:imp2:imp2.rell:1]]
-            [override:conflict:[lib!f]:[import:mid2:imp2:imp2.rell:1]:[import:imp1:imp1:imp1.rell:1]]
+            [override:conflict:[lib:f]:[import:imp1:imp1:imp1.rell:1]:[import:mid2:imp2:imp2.rell:1]]
+            [override:conflict:[lib:f]:[import:mid2:imp2:imp2.rell:1]:[import:imp1:imp1:imp1.rell:1]]
         """)
 
         chkCompile("import mid1; import mid2;", """ct_err:
-            [override:conflict:[lib!f]:[import:mid1:imp1:imp1.rell:1]:[import:mid2:imp2:imp2.rell:1]]
-            [override:conflict:[lib!f]:[import:mid2:imp2:imp2.rell:1]:[import:mid1:imp1:imp1.rell:1]]
+            [override:conflict:[lib:f]:[import:mid1:imp1:imp1.rell:1]:[import:mid2:imp2:imp2.rell:1]]
+            [override:conflict:[lib:f]:[import:mid2:imp2:imp2.rell:1]:[import:mid1:imp1:imp1.rell:1]]
         """)
     }
 
     @Test fun testOverrideNonAbstract() {
         file("lib.rell", "abstract module; abstract function f(): integer = 123; function g(): integer = 456;")
         chkCompile("import lib; override function lib.f(): integer = 987;", "OK")
-        chkCompile("import lib; override function lib.g(): integer = 987;", "ct_err:fn:override:not_abstract:[lib!g]")
+        chkCompile("import lib; override function lib.g(): integer = 987;", "ct_err:fn:override:not_abstract:[lib:g]")
     }
 
     @Test fun testOverrideWrongSignature() {
@@ -232,8 +232,8 @@ class AbstractModuleTest: BaseRellTest() {
         chkOverFn("import lib; import imp2;", "lib.f()", "int[456]")
 
         chkOverFn("import lib; import imp1; import imp2;", "lib.f()", """ct_err:
-            [override:conflict:[lib!f]:[import:imp1:imp1:imp1.rell:1]:[import:imp2:imp2:imp2.rell:1]]
-            [override:conflict:[lib!f]:[import:imp2:imp2:imp2.rell:1]:[import:imp1:imp1:imp1.rell:1]]
+            [override:conflict:[lib:f]:[import:imp1:imp1:imp1.rell:1]:[import:imp2:imp2:imp2.rell:1]]
+            [override:conflict:[lib:f]:[import:imp2:imp2:imp2.rell:1]:[import:imp1:imp1:imp1.rell:1]]
         """)
     }
 
@@ -242,8 +242,8 @@ class AbstractModuleTest: BaseRellTest() {
         chkOverFn("import lib;", "lib.f()", "int[123]")
 
         chkOverFn("import lib; override function lib.f(): integer = 456;", "lib.f()", """ct_err:
-            [override:conflict:[lib!f]:[import:lib:lib:lib.rell:1]:[direct::main.rell:1]]
-            [override:conflict:[lib!f]:[direct::main.rell:1]:[import:lib:lib:lib.rell:1]]
+            [override:conflict:[lib:f]:[import:lib:lib:lib.rell:1]:[direct::main.rell:1]]
+            [override:conflict:[lib:f]:[direct::main.rell:1]:[import:lib:lib:lib.rell:1]]
         """)
     }
 
@@ -266,7 +266,7 @@ class AbstractModuleTest: BaseRellTest() {
 
     @Test fun testOverrideInNamespace3() {
         file("lib.rell", "abstract module; namespace x { namespace y { abstract function f(): integer; } }")
-        chkOverFn("import lib;", "lib.x.y.f()", "ct_err:override:missing:[lib!x.y.f]:[lib.rell:1]")
+        chkOverFn("import lib;", "lib.x.y.f()", "ct_err:override:missing:[lib:x.y.f]:[lib.rell:1]")
         chkOverFn("import lib; override function lib.x.y.f(): integer = 123;", "lib.x.y.f()", "int[123]")
     }
 
@@ -279,7 +279,7 @@ class AbstractModuleTest: BaseRellTest() {
     @Test fun testImportRegularToAbstract() {
         file("lib.rell", "abstract module; abstract function f(): integer;")
         file("zero.rell", "abstract module;")
-        chkCompile("import lib;", "ct_err:override:missing:[lib!f]:[lib.rell:1]")
+        chkCompile("import lib;", "ct_err:override:missing:[lib:f]:[lib.rell:1]")
         chkCompile("import zero;", "OK")
     }
 
@@ -293,8 +293,8 @@ class AbstractModuleTest: BaseRellTest() {
         chkOverFn("import lib; import imp2;", "lib.f()", "int[456]")
 
         chkOverFn("import lib; import imp1; import imp2;", "lib.f()", """ct_err:
-            [override:conflict:[lib!f]:[import:imp1:imp1:imp1.rell:1]:[import:imp2:imp2:imp2.rell:1]]
-            [override:conflict:[lib!f]:[import:imp2:imp2:imp2.rell:1]:[import:imp1:imp1:imp1.rell:1]]
+            [override:conflict:[lib:f]:[import:imp1:imp1:imp1.rell:1]:[import:imp2:imp2:imp2.rell:1]]
+            [override:conflict:[lib:f]:[import:imp2:imp2:imp2.rell:1]:[import:imp1:imp1:imp1.rell:1]]
         """)
     }
 
@@ -366,7 +366,7 @@ class AbstractModuleTest: BaseRellTest() {
         chkCompile("import lib; override function lib.f(): integer;", "ct_err:fn:no_body:lib.f")
 
         chkCompile("import lib; function lib.f(): integer;", """ct_err:
-            [override:missing:[lib!f]:[lib.rell:1]]
+            [override:missing:[lib:f]:[lib.rell:1]]
             [fn:qname_no_override:lib.f]
             [fn:no_body:lib.f]
         """)

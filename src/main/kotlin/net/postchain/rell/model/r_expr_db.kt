@@ -145,6 +145,22 @@ class Db_UnaryExpr(type: R_Type, val op: Db_UnaryOp, val expr: Db_Expr): Db_Expr
     }
 }
 
+class Db_IsNullExpr(val expr: Db_Expr, val isNull: Boolean): Db_Expr(R_BooleanType) {
+    override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
+        val redExpr = expr.toRedExpr(frame)
+        return RedDb_IsNullExpr(redExpr, isNull)
+    }
+
+    private class RedDb_IsNullExpr(val expr: RedDb_Expr, val isNull: Boolean): RedDb_Expr() {
+        override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
+            bld.append("(")
+            expr.toSql(ctx, bld)
+            bld.append(if (isNull) " IS NULL" else " IS NOT NULL")
+            bld.append(")")
+        }
+    }
+}
+
 sealed class Db_TableExpr(val rEntity: R_Entity): Db_Expr(rEntity.type) {
     abstract fun alias(ctx: SqlGenContext): SqlTableAlias
 

@@ -180,7 +180,7 @@ class ObjectTest: BaseRellTest() {
             function f4(): integer = a4.o4.x;
         """.trimIndent())
         def("import a1; import a2; import a3; import a4;")
-        tst.chkInit("rt_err:obj:init_cycle:a1!o1,a3!o3,a2!o2,a4!o4,a1!o1")
+        tst.chkInit("rt_err:obj:init_cycle:a1:o1,a3:o3,a2:o2,a4:o4,a1:o1")
     }
 
     @Test fun testUpdate() {

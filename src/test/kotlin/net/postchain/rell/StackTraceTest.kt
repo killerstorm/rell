@@ -17,7 +17,7 @@ class StackTraceTest: BaseRellTest(false) {
         def("function g() { f(); }")
         def("function h() { g(); }")
         chkEx("{ h(); return 0; }", "req_err:[Fail]")
-        chkStack("!f(main.rell:1)", "!g(main.rell:2)", "!h(main.rell:3)", "!q(main.rell:4)")
+        chkStack(":f(main.rell:1)", ":g(main.rell:2)", ":h(main.rell:3)", ":q(main.rell:4)")
     }
 
     @Test fun testRecursionDirect() {
@@ -31,13 +31,13 @@ class StackTraceTest: BaseRellTest(false) {
         def("import lib;")
 
         chk("lib.f(0)", "req_err:null")
-        chkStack("lib!f(lib.rell:3)", "!q(main.rell:2)")
+        chkStack("lib:f(lib.rell:3)", ":q(main.rell:2)")
 
         chk("lib.f(1)", "req_err:null")
-        chkStack("lib!f(lib.rell:3)", "lib!f(lib.rell:4)", "!q(main.rell:2)")
+        chkStack("lib:f(lib.rell:3)", "lib:f(lib.rell:4)", ":q(main.rell:2)")
 
         chk("lib.f(3)", "req_err:null")
-        chkStack("lib!f(lib.rell:3)", "lib!f(lib.rell:4)", "lib!f(lib.rell:4)", "lib!f(lib.rell:4)", "!q(main.rell:2)")
+        chkStack("lib:f(lib.rell:3)", "lib:f(lib.rell:4)", "lib:f(lib.rell:4)", "lib:f(lib.rell:4)", ":q(main.rell:2)")
     }
 
     @Test fun testRecursionIndirect() {
@@ -57,29 +57,29 @@ class StackTraceTest: BaseRellTest(false) {
         def("import lib;")
 
         chk("lib.f(0)", "req_err:null")
-        chkStack("lib!f(lib.rell:5)", "!q(main.rell:2)")
+        chkStack("lib:f(lib.rell:5)", ":q(main.rell:2)")
 
         chk("lib.f(1)", "req_err:null")
-        chkStack("lib!f(lib.rell:5)",
-                "lib!one(lib.rell:3)", "lib!f(lib.rell:9)",
-                "!q(main.rell:2)"
+        chkStack("lib:f(lib.rell:5)",
+                "lib:one(lib.rell:3)", "lib:f(lib.rell:9)",
+                ":q(main.rell:2)"
         )
 
         chk("lib.f(2)", "req_err:null")
-        chkStack("lib!f(lib.rell:5)",
-                "lib!one(lib.rell:3)", "lib!f(lib.rell:9)",
-                "lib!zero(lib.rell:2)", "lib!f(lib.rell:7)",
-                "!q(main.rell:2)"
+        chkStack("lib:f(lib.rell:5)",
+                "lib:one(lib.rell:3)", "lib:f(lib.rell:9)",
+                "lib:zero(lib.rell:2)", "lib:f(lib.rell:7)",
+                ":q(main.rell:2)"
         )
 
         chk("lib.f(22)", "req_err:null")
-        chkStack("lib!f(lib.rell:5)",
-                "lib!one(lib.rell:3)", "lib!f(lib.rell:9)",
-                "lib!zero(lib.rell:2)", "lib!f(lib.rell:7)",
-                "lib!one(lib.rell:3)", "lib!f(lib.rell:9)",
-                "lib!one(lib.rell:3)", "lib!f(lib.rell:9)",
-                "lib!zero(lib.rell:2)", "lib!f(lib.rell:7)",
-                "!q(main.rell:2)"
+        chkStack("lib:f(lib.rell:5)",
+                "lib:one(lib.rell:3)", "lib:f(lib.rell:9)",
+                "lib:zero(lib.rell:2)", "lib:f(lib.rell:7)",
+                "lib:one(lib.rell:3)", "lib:f(lib.rell:9)",
+                "lib:one(lib.rell:3)", "lib:f(lib.rell:9)",
+                "lib:zero(lib.rell:2)", "lib:f(lib.rell:7)",
+                ":q(main.rell:2)"
         )
     }
 
@@ -90,7 +90,7 @@ class StackTraceTest: BaseRellTest(false) {
 
         def("import multi;")
         chkEx("{ multi.f(); return 0; }", "req_err:null")
-        chkStack("multi!g(multi/b.rell:1)", "single!s(single.rell:1)", "multi!f(multi/a.rell:1)", "!q(main.rell:2)")
+        chkStack("multi:g(multi/b.rell:1)", "single:s(single.rell:1)", "multi:f(multi/a.rell:1)", ":q(main.rell:2)")
     }
 
     @Test fun testAbstractFunctions() {
@@ -99,10 +99,10 @@ class StackTraceTest: BaseRellTest(false) {
         file("imp.rell", "module; import lib; import err; override function lib.g() { err.err(); }")
 
         chkQueryEx("import lib; query q() { lib.g(); return 0; }", "req_err:null")
-        chkStack("err!err(err.rell:1)", "lib!g(lib.rell:1)", "!q(main.rell:1)")
+        chkStack("err:err(err.rell:1)", "lib:g(lib.rell:1)", ":q(main.rell:1)")
 
         chkQueryEx("import lib; import imp; query q() { lib.g(); return 0; }", "req_err:null")
-        chkStack("err!err(err.rell:1)", "imp!lib.g(imp.rell:1)", "!q(main.rell:1)")
+        chkStack("err:err(err.rell:1)", "imp:lib.g(imp.rell:1)", ":q(main.rell:1)")
     }
 
     @Test fun testObjectAttr() {
@@ -114,7 +114,7 @@ class StackTraceTest: BaseRellTest(false) {
         def("object state { mutable x: integer = g(); }")
 
         chk("state.x", "req_err:[forced_crash]")
-        chkStack("!f(main.rell:1)", "!g(main.rell:2)", "!state(main.rell:3)")
+        chkStack(":f(main.rell:1)", ":g(main.rell:2)", ":state(main.rell:3)")
     }
 
     @Test fun testCrash() {
@@ -178,8 +178,8 @@ class StackTraceTest: BaseRellTest(false) {
         chkSpecificError("json('[{(');", 3, "rt_err:fn_json_badstr")
         chkSpecificError("val t = op_context.block_height;", 3, "rt_err:fn:op_context.block_height:noop")
 
-        chkSpecificError("ee.value('Hello');", 3, "rt_err:enum_badname:lib!ee:Hello")
-        chkSpecificError("ee.value(123);", 3, "rt_err:enum_badvalue:lib!ee:123")
+        chkSpecificError("ee.value('Hello');", 3, "rt_err:enum_badname:lib:ee:Hello")
+        chkSpecificError("ee.value(123);", 3, "rt_err:enum_badvalue:lib:ee:123")
 
         chkSpecificError("val g = gtv.from_json('[{}]');\ninteger.from_gtv(g);", 4, "rt_err:from_gtv")
     }
@@ -204,6 +204,6 @@ class StackTraceTest: BaseRellTest(false) {
 
         t.def("import mid;")
         t.chkQueryEx("query q() { mid.g(); return 0; }", "q", listOf(), error)
-        t.chkStack("lib!f(lib.rell:$line)", "mid!g(mid.rell:4)", "!q(main.rell:2)")
+        t.chkStack("lib:f(lib.rell:$line)", "mid:g(mid.rell:4)", ":q(main.rell:2)")
     }
 }

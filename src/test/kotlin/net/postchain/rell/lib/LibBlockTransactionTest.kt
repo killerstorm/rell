@@ -240,6 +240,17 @@ class LibBlockTransactionTest: BaseRellTest() {
         chk("block @* {} ( @sort .timestamp )", "list<integer>[int[0],int[1400000000000],int[1500000000000]]")
     }
 
+    @Test fun testSelectCurrentBlock() {
+        tst.chainId = 333
+        tst.inserts = RellTestContext.BlockBuilder(333)
+                .block(1, 10, "DEADBEEF", "5678", 1500000000000)
+                .block(2, 20, null, null, null)
+                .list()
+        chk("block @* {}", "list<block>[block[1]]")
+        chk("block @? { .block_height == 10 }", "block[1]")
+        chk("block @? { .block_height == 20 }", "null")
+    }
+
     private fun createChainIdTester(chainId: Long, blockIid: Long, txIid: Long, inserts: List<String>): RellCodeTester {
         val t = RellCodeTester(tstCtx)
         t.def("entity foo { b: block; t: transaction; mutable value: integer; }")

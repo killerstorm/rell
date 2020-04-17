@@ -19,7 +19,7 @@ class ExternalModuleTest: BaseRellTest() {
         insert("c0.user", "transaction,name", "100,720,'Bob'")
 
         def("import ext;")
-        chk("ext.user @* {} ( user, .name )", "[(ext!user[100],name=Bob)]")
+        chk("ext.user @* {} ( user, .name )", "[(ext:user[100],name=Bob)]")
         chkDataRaw("c0.user(100,Bob,720)")
     }
 
@@ -31,7 +31,7 @@ class ExternalModuleTest: BaseRellTest() {
         insert("c0.user", "transaction,name", "100,720,'Bob'")
 
         def("import ext;")
-        chk("ext.user @* {} ( user, .name )", "[(ext!user[100],name=Bob)]")
+        chk("ext.user @* {} ( user, .name )", "[(ext:user[100],name=Bob)]")
     }
 
     @Test fun testImportMainToExternalAsExternal() {
@@ -40,7 +40,7 @@ class ExternalModuleTest: BaseRellTest() {
         initChainDependency(1, "other")
 
         def("@external('other') import ext;")
-        chk("ext.user @* {} ( user, .name )", "[(ext[other]!user[1],name=Bob)]")
+        chk("ext.user @* {} ( user, .name )", "[(ext[other]:user[1],name=Bob)]")
         chkDataRaw("c1101.user(1,Bob,330100)")
     }
 
@@ -50,7 +50,7 @@ class ExternalModuleTest: BaseRellTest() {
         initChainDependency(1, "other")
 
         def("@external('other') namespace { import ext; }")
-        chk("ext.user @* {} ( user, .name )", "[(ext[other]!user[1],name=Bob)]")
+        chk("ext.user @* {} ( user, .name )", "[(ext[other]:user[1],name=Bob)]")
     }
 
     @Test fun testImportExternalToRegular() {
@@ -80,10 +80,10 @@ class ExternalModuleTest: BaseRellTest() {
         insert("c0.data", "user", "100,1")
 
         chkDataRaw("c0.data(100,1)", "c1101.company(1,Amazon,330100)", "c1101.user(1,1,Jeff,330100)")
-        chk("users.user @* {} ( user, .name )", "[(users[A]!user[1],name=Jeff)]")
-        chk("companies.company @* {} ( company, .name )", "[(companies[A]!company[1],name=Amazon)]")
+        chk("users.user @* {} ( user, .name )", "[(users[A]:user[1],name=Jeff)]")
+        chk("companies.company @* {} ( company, .name )", "[(companies[A]:company[1],name=Amazon)]")
         chk("data @ {} (_=.user, .user.name, .user.company, .user.company.name)",
-                "(users[A]!user[1],Jeff,companies[A]!company[1],Amazon)")
+                "(users[A]:user[1],Jeff,companies[A]:company[1],Amazon)")
     }
 
     @Test fun testImportExternalToExternalAsExternal() {
@@ -100,9 +100,9 @@ class ExternalModuleTest: BaseRellTest() {
         insert("c0.data", "user", "100,1")
 
         chkDataRaw("c0.data(100,1)", "c1101.company(1,Amazon,330100)", "c1102.user(1,1,Jeff,330200)")
-        chk("users.user @* {} ( user, .name )", "[(users[B]!user[1],name=Jeff)]")
+        chk("users.user @* {} ( user, .name )", "[(users[B]:user[1],name=Jeff)]")
         chk("data @ {} (_=.user, .user.name, .user.company, .user.company.name)",
-                "(users[B]!user[1],Jeff,companies[A]!company[1],Amazon)")
+                "(users[B]:user[1],Jeff,companies[A]:company[1],Amazon)")
     }
 
     @Test fun testImportMainToExternalAsRegularAndExternal() {
@@ -116,10 +116,10 @@ class ExternalModuleTest: BaseRellTest() {
         insert("c0.user", "name,transaction", "2,'Alice',720")
 
         chkDataRaw("c0.user(2,Alice,720)", "c1101.user(1,Bob,330100)")
-        chk("reg_users.user @ {} ( _=user, _=.name )", "(users!user[2],Alice)")
-        chk("ext_users.user @ {} ( _=user, _=.name )", "(users[A]!user[1],Bob)")
-        chkEx("{ val u: ext_users.user = reg_users.user @ {}; return 0; }", "ct_err:stmt_var_type:u:[users[A]!user]:[users!user]")
-        chkEx("{ val u: reg_users.user = ext_users.user @ {}; return 0; }", "ct_err:stmt_var_type:u:[users!user]:[users[A]!user]")
+        chk("reg_users.user @ {} ( _=user, _=.name )", "(users:user[2],Alice)")
+        chk("ext_users.user @ {} ( _=user, _=.name )", "(users[A]:user[1],Bob)")
+        chkEx("{ val u: ext_users.user = reg_users.user @ {}; return 0; }", "ct_err:stmt_var_type:u:[users[A]:user]:[users:user]")
+        chkEx("{ val u: reg_users.user = ext_users.user @ {}; return 0; }", "ct_err:stmt_var_type:u:[users:user]:[users[A]:user]")
     }
 
     @Test fun testImportMainToExternalAsExternalMultipleTimesSameChain() {
@@ -132,12 +132,12 @@ class ExternalModuleTest: BaseRellTest() {
         def("@external('A') import users_3: users;")
 
         chkDataRaw("c1101.user(1,Bob,330100)")
-        chk("users_1.user @ {} ( _=user, _=.name )", "(users[A]!user[1],Bob)")
-        chk("users_2.user @ {} ( _=user, _=.name )", "(users[A]!user[1],Bob)")
-        chk("users_3.user @ {} ( _=user, _=.name )", "(users[A]!user[1],Bob)")
-        chkEx("{ val u: users_1.user = users_2.user @ {}; return u; }", "users[A]!user[1]")
-        chkEx("{ val u: users_2.user = users_3.user @ {}; return u; }", "users[A]!user[1]")
-        chkEx("{ val u: users_3.user = users_1.user @ {}; return u; }", "users[A]!user[1]")
+        chk("users_1.user @ {} ( _=user, _=.name )", "(users[A]:user[1],Bob)")
+        chk("users_2.user @ {} ( _=user, _=.name )", "(users[A]:user[1],Bob)")
+        chk("users_3.user @ {} ( _=user, _=.name )", "(users[A]:user[1],Bob)")
+        chkEx("{ val u: users_1.user = users_2.user @ {}; return u; }", "users[A]:user[1]")
+        chkEx("{ val u: users_2.user = users_3.user @ {}; return u; }", "users[A]:user[1]")
+        chkEx("{ val u: users_3.user = users_1.user @ {}; return u; }", "users[A]:user[1]")
     }
 
     @Test fun testImportMainToExternalAsExternalMultipleTimesDifferentChains() {
@@ -154,12 +154,12 @@ class ExternalModuleTest: BaseRellTest() {
         def("@external('C') import users_3: users;")
 
         chkDataRaw("c1101.user(1,Bob,330100)", "c1102.user(1,Alice,330200)", "c1103.user(1,Trudy,330300)")
-        chk("users_1.user @ {} ( _=user, _=.name )", "(users[A]!user[1],Bob)")
-        chk("users_2.user @ {} ( _=user, _=.name )", "(users[B]!user[1],Alice)")
-        chk("users_3.user @ {} ( _=user, _=.name )", "(users[C]!user[1],Trudy)")
-        chkEx("{ val u: users_1.user = users_2.user @ {}; return 0; }", "ct_err:stmt_var_type:u:[users[A]!user]:[users[B]!user]")
-        chkEx("{ val u: users_2.user = users_3.user @ {}; return 0; }", "ct_err:stmt_var_type:u:[users[B]!user]:[users[C]!user]")
-        chkEx("{ val u: users_3.user = users_1.user @ {}; return 0; }", "ct_err:stmt_var_type:u:[users[C]!user]:[users[A]!user]")
+        chk("users_1.user @ {} ( _=user, _=.name )", "(users[A]:user[1],Bob)")
+        chk("users_2.user @ {} ( _=user, _=.name )", "(users[B]:user[1],Alice)")
+        chk("users_3.user @ {} ( _=user, _=.name )", "(users[C]:user[1],Trudy)")
+        chkEx("{ val u: users_1.user = users_2.user @ {}; return 0; }", "ct_err:stmt_var_type:u:[users[A]:user]:[users[B]:user]")
+        chkEx("{ val u: users_2.user = users_3.user @ {}; return 0; }", "ct_err:stmt_var_type:u:[users[B]:user]:[users[C]:user]")
+        chkEx("{ val u: users_3.user = users_1.user @ {}; return 0; }", "ct_err:stmt_var_type:u:[users[C]:user]:[users[A]:user]")
     }
 
     @Test fun testExternalNamespaceInExternalModule() {
@@ -184,9 +184,9 @@ class ExternalModuleTest: BaseRellTest() {
         insert("c0.data", "user", "100,1")
 
         chkDataRaw("c0.data(100,1)", "c1101.company(1,Amazon,330100)", "c1102.user(1,1,Jeff,330200)")
-        chk("users.user @* {} ( user, .name )", "[(users[B]!user[1],name=Jeff)]")
+        chk("users.user @* {} ( user, .name )", "[(users[B]:user[1],name=Jeff)]")
         chk("data @ {} (_=.user, .user.name, .user.company, .user.company.name)",
-                "(users[B]!user[1],Jeff,users[A]!company[1],Amazon)")
+                "(users[B]:user[1],Jeff,users[A]:company[1],Amazon)")
     }
 
     @Test fun testTxBlkInExternalModuleImplicit() {
@@ -202,15 +202,15 @@ class ExternalModuleTest: BaseRellTest() {
         """)
         chkTxBlkInExternalModule()
 
-        chk("_type_of(ext.ns.transaction@{})", "[A]!transaction")
-        chk("_type_of(ext.ns.block@{})", "[A]!block")
+        chk("_type_of(ext.ns.transaction@{})", "[A]:transaction")
+        chk("_type_of(ext.ns.block@{})", "[A]:block")
 
-        chkEx("{ val t: transaction = ext.ns.transaction@{}; return 0; }", "ct_err:stmt_var_type:t:[transaction]:[[A]!transaction]")
-        chkEx("{ val b: block = ext.ns.block@{}; return 0; }", "ct_err:stmt_var_type:b:[block]:[[A]!block]")
-        chkEx("{ val t: ext.ns.transaction = ext.data@{}(.transaction); return t; }", "[A]!transaction[330100]")
-        chkEx("{ val b: ext.ns.block = ext.data@{}(.transaction.block); return b; }", "[A]!block[220100]")
-        chkEx("{ val t: ext.ns.transaction = ext.data@{}(.some_tx); return t; }", "[A]!transaction[330101]")
-        chkEx("{ val b: ext.ns.block = ext.data@{}(.some_blk); return b; }", "[A]!block[220102]")
+        chkEx("{ val t: transaction = ext.ns.transaction@{}; return 0; }", "ct_err:stmt_var_type:t:[transaction]:[[A]:transaction]")
+        chkEx("{ val b: block = ext.ns.block@{}; return 0; }", "ct_err:stmt_var_type:b:[block]:[[A]:block]")
+        chkEx("{ val t: ext.ns.transaction = ext.data@{}(.transaction); return t; }", "[A]:transaction[330100]")
+        chkEx("{ val b: ext.ns.block = ext.data@{}(.transaction.block); return b; }", "[A]:block[220100]")
+        chkEx("{ val t: ext.ns.transaction = ext.data@{}(.some_tx); return t; }", "[A]:transaction[330101]")
+        chkEx("{ val b: ext.ns.block = ext.data@{}(.some_blk); return b; }", "[A]:block[220102]")
     }
 
     private fun chkTxBlkInExternalModule() {
@@ -221,36 +221,36 @@ class ExternalModuleTest: BaseRellTest() {
         def("@external('A') namespace e { entity transaction; entity block; }")
         chkDataRaw("c1101.data(1,Bob,220102,330101,330100)")
 
-        chk("_type_of(ext.data@{}(.transaction))", "[A]!transaction")
-        chk("_type_of(ext.data@{}(.transaction.block))", "[A]!block")
-        chk("_type_of(ext.data@{}(.some_tx))", "[A]!transaction")
-        chk("_type_of(ext.data@{}(.some_blk))", "[A]!block")
-        chk("_type_of(e.transaction@{})", "[A]!transaction")
-        chk("_type_of(e.transaction@{}(.block))", "[A]!block")
-        chk("_type_of(e.block@{})", "[A]!block")
-        chk("_type_of(ext.transaction@{})", "[A]!transaction")
-        chk("_type_of(ext.transaction@{}(.block))", "[A]!block")
-        chk("_type_of(ext.block@{})", "[A]!block")
+        chk("_type_of(ext.data@{}(.transaction))", "[A]:transaction")
+        chk("_type_of(ext.data@{}(.transaction.block))", "[A]:block")
+        chk("_type_of(ext.data@{}(.some_tx))", "[A]:transaction")
+        chk("_type_of(ext.data@{}(.some_blk))", "[A]:block")
+        chk("_type_of(e.transaction@{})", "[A]:transaction")
+        chk("_type_of(e.transaction@{}(.block))", "[A]:block")
+        chk("_type_of(e.block@{})", "[A]:block")
+        chk("_type_of(ext.transaction@{})", "[A]:transaction")
+        chk("_type_of(ext.transaction@{}(.block))", "[A]:block")
+        chk("_type_of(ext.block@{})", "[A]:block")
         chk("_type_of(transaction@{})", "transaction")
         chk("_type_of(block@{})", "block")
 
-        chkEx("{ val t: transaction = ext.data@{}(.transaction); return 0; }", "ct_err:stmt_var_type:t:[transaction]:[[A]!transaction]")
-        chkEx("{ val b: block = ext.data@{}(.transaction.block); return 0; }", "ct_err:stmt_var_type:b:[block]:[[A]!block]")
-        chkEx("{ val t: transaction = ext.data@{}(.some_tx); return 0; }", "ct_err:stmt_var_type:t:[transaction]:[[A]!transaction]")
-        chkEx("{ val b: block = ext.data@{}(.some_blk); return 0; }", "ct_err:stmt_var_type:b:[block]:[[A]!block]")
+        chkEx("{ val t: transaction = ext.data@{}(.transaction); return 0; }", "ct_err:stmt_var_type:t:[transaction]:[[A]:transaction]")
+        chkEx("{ val b: block = ext.data@{}(.transaction.block); return 0; }", "ct_err:stmt_var_type:b:[block]:[[A]:block]")
+        chkEx("{ val t: transaction = ext.data@{}(.some_tx); return 0; }", "ct_err:stmt_var_type:t:[transaction]:[[A]:transaction]")
+        chkEx("{ val b: block = ext.data@{}(.some_blk); return 0; }", "ct_err:stmt_var_type:b:[block]:[[A]:block]")
 
-        chkEx("{ val t: e.transaction = ext.data@{}(.transaction); return t; }", "[A]!transaction[330100]")
-        chkEx("{ val b: e.block = ext.data@{}(.transaction.block); return b; }", "[A]!block[220100]")
-        chkEx("{ val t: e.transaction = ext.data@{}(.some_tx); return t; }", "[A]!transaction[330101]")
-        chkEx("{ val b: e.block = ext.data@{}(.some_blk); return b; }", "[A]!block[220102]")
+        chkEx("{ val t: e.transaction = ext.data@{}(.transaction); return t; }", "[A]:transaction[330100]")
+        chkEx("{ val b: e.block = ext.data@{}(.transaction.block); return b; }", "[A]:block[220100]")
+        chkEx("{ val t: e.transaction = ext.data@{}(.some_tx); return t; }", "[A]:transaction[330101]")
+        chkEx("{ val b: e.block = ext.data@{}(.some_blk); return b; }", "[A]:block[220102]")
 
-        chkEx("{ val t: ext.transaction = ext.data@{}(.transaction); return t; }", "[A]!transaction[330100]")
-        chkEx("{ val b: ext.block = ext.data@{}(.transaction.block); return b; }", "[A]!block[220100]")
-        chkEx("{ val t: ext.transaction = ext.data@{}(.some_tx); return t; }", "[A]!transaction[330101]")
-        chkEx("{ val b: ext.block = ext.data@{}(.some_blk); return b; }", "[A]!block[220102]")
+        chkEx("{ val t: ext.transaction = ext.data@{}(.transaction); return t; }", "[A]:transaction[330100]")
+        chkEx("{ val b: ext.block = ext.data@{}(.transaction.block); return b; }", "[A]:block[220100]")
+        chkEx("{ val t: ext.transaction = ext.data@{}(.some_tx); return t; }", "[A]:transaction[330101]")
+        chkEx("{ val b: ext.block = ext.data@{}(.some_blk); return b; }", "[A]:block[220102]")
 
         chk("ext.data @ {} ( _=.name, _=.transaction, _=.transaction.block, _=.some_tx, _=.some_blk )",
-                "(Bob,[A]!transaction[330100],[A]!block[220100],[A]!transaction[330101],[A]!block[220102])")
+                "(Bob,[A]:transaction[330100],[A]:block[220100],[A]:transaction[330101],[A]:block[220102])")
     }
 
     @Test fun testTxBlkInExternalModuleAsRegular() {
@@ -301,10 +301,10 @@ class ExternalModuleTest: BaseRellTest() {
         def("@external('A') import exact: ext.{transaction, block};")
         def("@external('A') import wildcard: ext.*;")
 
-        chk("_type_of(exact.transaction@{})", "[A]!transaction")
-        chk("_type_of(exact.block@{})", "[A]!block")
-        chk("_type_of(wildcard.transaction@{})", "[A]!transaction")
-        chk("_type_of(wildcard.block@{})", "[A]!block")
+        chk("_type_of(exact.transaction@{})", "[A]:transaction")
+        chk("_type_of(exact.block@{})", "[A]:block")
+        chk("_type_of(wildcard.transaction@{})", "[A]:transaction")
+        chk("_type_of(wildcard.block@{})", "[A]:block")
         chk("_type_of(transaction@{})", "transaction")
         chk("_type_of(block@{})", "block")
     }
@@ -339,8 +339,8 @@ class ExternalModuleTest: BaseRellTest() {
         initChainDependency(1, "A")
         def("@external('A') import ext;")
 
-        chk("_type_of(ext.transaction@{})", "[A]!transaction")
-        chk("_type_of(ext.block@{})", "[A]!block")
+        chk("_type_of(ext.transaction@{})", "[A]:transaction")
+        chk("_type_of(ext.block@{})", "[A]:block")
         chkEx("{ val x: ext.integer = 123; return 0; }", "ct_err:unknown_type:ext.integer")
         chk("ext.integer('123')", "ct_err:unknown_name:ext.integer")
         chk("ext.max(123, 456)", "ct_err:unknown_name:ext.max")
@@ -414,7 +414,7 @@ class ExternalModuleTest: BaseRellTest() {
         }
 
         t.insert("c$chainId.$entityName", columns, values)
-        t.chkQuery("$moduleName.$entityName @ {} ( _=$entityName, _=.name )", "($moduleName!$entityName[1],text[$value])")
+        t.chkQuery("$moduleName.$entityName @ {} ( _=$entityName, _=.name )", "($moduleName:$entityName[1],text[$value])")
 
         tst.dropTables = false
     }

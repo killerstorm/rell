@@ -19,9 +19,12 @@ class RellTestContext(useSql: Boolean = true): Closeable {
 
         fun list() = list.toList()
 
-        fun block(iid: Long, height: Long, rid: String, header: String, timestamp: Long): BlockBuilder {
+        fun block(iid: Long, height: Long, rid: String?, header: String?, timestamp: Long?): BlockBuilder {
+            val ridStr = if (rid == null) "NULL" else """E'\\x$rid'"""
+            val headerStr = if (header == null) "NULL" else """E'\\x$header'"""
+            val timestampStr = if (timestamp == null) "NULL" else """$timestamp"""
             val s = """INSERT INTO "c$chainId.blocks"(block_iid,block_height,block_rid,block_header_data,block_witness,timestamp)
-                VALUES($iid,$height,E'\\x$rid',E'\\x$header',NULL,$timestamp);""".trimIndent()
+                VALUES($iid,$height,$ridStr,$headerStr,NULL,$timestampStr);""".trimIndent()
             list.add(s)
             return this
         }

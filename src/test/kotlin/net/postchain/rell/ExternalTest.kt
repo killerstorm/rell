@@ -17,7 +17,7 @@ class ExternalTest: BaseRellTest() {
         initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
         def("@external('foo') namespace { @log entity user { name; } }")
         tst.chainDependency("foo", "deadbeef", 1000)
-        chk("user @ {} ( _=user, _=.name )", "([foo]!user[1],text[Bob])")
+        chk("user @ {} ( _=user, _=.name )", "([foo]:user[1],text[Bob])")
     }
 
     @Test fun testExternalEntity() {
@@ -26,7 +26,7 @@ class ExternalTest: BaseRellTest() {
         initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
         def("@external('foo') @log entity user { name; }")
         tst.chainDependency("foo", "deadbeef", 1000)
-        chk("user @ {} ( _=user, _=.name )", "([foo]!user[1],text[Bob])")
+        chk("user @ {} ( _=user, _=.name )", "([foo]:user[1],text[Bob])")
     }
 
     @Test fun testExternalNamespace() {
@@ -35,7 +35,7 @@ class ExternalTest: BaseRellTest() {
         initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
         def("@external('foo') @mount('') namespace ns { @log entity user { name; } }")
         tst.chainDependency("foo", "deadbeef", 1000)
-        chk("ns.user @ {} ( _=user, _=.name )", "([foo]!ns.user[1],text[Bob])")
+        chk("ns.user @ {} ( _=user, _=.name )", "([foo]:ns.user[1],text[Bob])")
     }
 
     @Test fun testExternalInsideNamespace() {
@@ -44,7 +44,7 @@ class ExternalTest: BaseRellTest() {
         initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
         def("@external('foo') @mount('') namespace bar { @log entity user { name; } }")
         tst.chainDependency("foo", "deadbeef", 1000)
-        chk("bar.user @ {} ( _=user, _=.name )", "([foo]!bar.user[1],text[Bob])")
+        chk("bar.user @ {} ( _=user, _=.name )", "([foo]:bar.user[1],text[Bob])")
         chk("user @ {} ( _=user, _=.name )", "ct_err:unknown_entity:user")
     }
 
@@ -55,7 +55,7 @@ class ExternalTest: BaseRellTest() {
                 inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
         def("namespace abc { @external('ext') namespace foo { namespace bar { @log entity user { name; } } } }")
         tst.chainDependency("ext", "deadbeef", 1000)
-        chk("abc.foo.bar.user @ {} ( _=user, _=.name )", "([ext]!abc.foo.bar.user[1],text[Bob])")
+        chk("abc.foo.bar.user @ {} ( _=user, _=.name )", "([ext]:abc.foo.bar.user[1],text[Bob])")
         chk("foo.bar.user @ {} ( _=user, _=.name )", "ct_err:unknown_entity:foo.bar.user")
     }
 
@@ -119,7 +119,7 @@ class ExternalTest: BaseRellTest() {
         def("entity local { user; }")
         insert("c0.local", "user", "1,1")
         tst.chainDependency("foo", "deadbeef", 1000)
-        chk("local @ {} ( _=local, _=.user, _=.user.name )", "(local[1],[foo]!user[1],text[Bob])")
+        chk("local @ {} ( _=local, _=.user, _=.user.name )", "(local[1],[foo]:user[1],text[Bob])")
     }
 
     @Test fun testReferenceExternalToInternal() {
@@ -156,7 +156,7 @@ class ExternalTest: BaseRellTest() {
         insert("c555.company", "name,transaction", "33,'Google',2")
         insert("c333.user", "name,transaction,company", "17,'Bob',444,33")
 
-        chk("user @ {} ( _=user, _=.name, _=.company, _=.company.name )", "([foo]!user[17],text[Bob],company[33],text[Google])")
+        chk("user @ {} ( _=user, _=.name, _=.company, _=.company.name )", "([foo]:user[17],text[Bob],company[33],text[Google])")
     }
 
     @Test fun testAccessTransaction() {
@@ -167,11 +167,11 @@ class ExternalTest: BaseRellTest() {
         tst.chainDependency("foo", "deadbeef", 1000)
 
         chk("user@{} ( .name )", "text[Bob]")
-        chk("user@{} ( .transaction )", "[foo]!transaction[444]")
+        chk("user@{} ( .transaction )", "[foo]:transaction[444]")
         chk("user@{} ( .transaction.tx_rid )", "byte_array[fade]")
         chk("user@{} ( .transaction.tx_hash )", "byte_array[1234]")
         chk("user@{} ( .transaction.tx_data )", "byte_array[edaf]")
-        chk("user@{} ( .transaction.block )", "[foo]!block[111]")
+        chk("user@{} ( .transaction.block )", "[foo]:block[111]")
         chk("user@{} ( .transaction.block.block_height )", "int[222]")
         chk("user@{} ( .transaction.block.block_rid )", "byte_array[deadbeef]")
         chk("user@{} ( .transaction.block.timestamp )", "int[1500000000000]")
@@ -195,8 +195,8 @@ class ExternalTest: BaseRellTest() {
 
         def("@external('foo') namespace { @log entity company { name; } @log entity user { name; company; } }")
         tst.chainDependency("foo", "deadbeef", 1000)
-        chk("user @ {} ( _=user, _=.name, _=.company, _=.company.name )", "([foo]!user[1],text[Bob],[foo]!company[1],text[Google])")
-        chk("company @ {} ( _=company, _=.name )", "([foo]!company[1],text[Google])")
+        chk("user @ {} ( _=user, _=.name, _=.company, _=.company.name )", "([foo]:user[1],text[Bob],[foo]:company[1],text[Google])")
+        chk("company @ {} ( _=company, _=.name )", "([foo]:company[1],text[Google])")
     }
 
     @Test fun testHeightCheck() {
@@ -204,14 +204,14 @@ class ExternalTest: BaseRellTest() {
 
         chkHeight(10, "user @? {}", "null")
         chkHeight(221, "user @? {}", "null")
-        chkHeight(222, "user @? {}", "[foo]!user[1]")
-        chkHeight(223, "user @? {}", "[foo]!user[1]")
-        chkHeight(1000, "user @? {}", "[foo]!user[1]")
+        chkHeight(222, "user @? {}", "[foo]:user[1]")
+        chkHeight(223, "user @? {}", "[foo]:user[1]")
+        chkHeight(1000, "user @? {}", "[foo]:user[1]")
 
-        chkHeight(10, "local @? {} ( .user )", "[foo]!user[1]")
-        chkHeight(222, "local @? {} ( .user )", "[foo]!user[1]")
-        chkHeight(223, "local @? {} ( .user )", "[foo]!user[1]")
-        chkHeight(1000, "local @? {} ( .user )", "[foo]!user[1]")
+        chkHeight(10, "local @? {} ( .user )", "[foo]:user[1]")
+        chkHeight(222, "local @? {} ( .user )", "[foo]:user[1]")
+        chkHeight(223, "local @? {} ( .user )", "[foo]:user[1]")
+        chkHeight(1000, "local @? {} ( .user )", "[foo]:user[1]")
     }
 
     private fun chkHeight(height: Long, code: String, expected: String) {
@@ -250,29 +250,29 @@ class ExternalTest: BaseRellTest() {
         insert(LibBlockTransactionTest.BLOCK_INSERTS_0)
         insert("c0.local_user", "name,transaction", "1,'Bob',720")
 
-        chk("_type_of((foo.user @ {}).transaction)", "text[[foo]!transaction]")
-        chk("_type_of((foo.user @ {}).transaction.block)", "text[[foo]!block]")
-        chk("_type_of((bar.user @ {}).transaction)", "text[[bar]!transaction]")
-        chk("_type_of((bar.user @ {}).transaction.block)", "text[[bar]!block]")
+        chk("_type_of((foo.user @ {}).transaction)", "text[[foo]:transaction]")
+        chk("_type_of((foo.user @ {}).transaction.block)", "text[[foo]:block]")
+        chk("_type_of((bar.user @ {}).transaction)", "text[[bar]:transaction]")
+        chk("_type_of((bar.user @ {}).transaction.block)", "text[[bar]:block]")
         chk("_type_of((local_user @ {}).transaction)", "text[transaction]")
         chk("_type_of((local_user @ {}).transaction.block)", "text[block]")
 
         chkEx("{ val t: transaction = (foo.user @ {}).transaction; return 0; }",
-                "ct_err:stmt_var_type:t:[transaction]:[[foo]!transaction]")
+                "ct_err:stmt_var_type:t:[transaction]:[[foo]:transaction]")
         chkEx("{ val b: block = (foo.user @ {}).transaction.block; return 0; }",
-                "ct_err:stmt_var_type:b:[block]:[[foo]!block]")
+                "ct_err:stmt_var_type:b:[block]:[[foo]:block]")
 
         val txFn = "function f(t: transaction, u: foo.user)"
-        chkCompile("$txFn = (t == u.transaction);", "ct_err:binop_operand_type:==:[transaction]:[[foo]!transaction]")
-        chkCompile("$txFn = (t != u.transaction);", "ct_err:binop_operand_type:!=:[transaction]:[[foo]!transaction]")
-        chkCompile("$txFn = (t < u.transaction);", "ct_err:binop_operand_type:<:[transaction]:[[foo]!transaction]")
-        chkCompile("$txFn = (t > u.transaction);", "ct_err:binop_operand_type:>:[transaction]:[[foo]!transaction]")
+        chkCompile("$txFn = (t == u.transaction);", "ct_err:binop_operand_type:==:[transaction]:[[foo]:transaction]")
+        chkCompile("$txFn = (t != u.transaction);", "ct_err:binop_operand_type:!=:[transaction]:[[foo]:transaction]")
+        chkCompile("$txFn = (t < u.transaction);", "ct_err:binop_operand_type:<:[transaction]:[[foo]:transaction]")
+        chkCompile("$txFn = (t > u.transaction);", "ct_err:binop_operand_type:>:[transaction]:[[foo]:transaction]")
 
         val blkFn = "function f(b: block, u: foo.user)"
-        chkCompile("$blkFn = (b == u.transaction.block);", "ct_err:binop_operand_type:==:[block]:[[foo]!block]")
-        chkCompile("$blkFn = (b != u.transaction.block);", "ct_err:binop_operand_type:!=:[block]:[[foo]!block]")
-        chkCompile("$blkFn = (b < u.transaction.block);", "ct_err:binop_operand_type:<:[block]:[[foo]!block]")
-        chkCompile("$blkFn = (b > u.transaction.block);", "ct_err:binop_operand_type:>:[block]:[[foo]!block]")
+        chkCompile("$blkFn = (b == u.transaction.block);", "ct_err:binop_operand_type:==:[block]:[[foo]:block]")
+        chkCompile("$blkFn = (b != u.transaction.block);", "ct_err:binop_operand_type:!=:[block]:[[foo]:block]")
+        chkCompile("$blkFn = (b < u.transaction.block);", "ct_err:binop_operand_type:<:[block]:[[foo]:block]")
+        chkCompile("$blkFn = (b > u.transaction.block);", "ct_err:binop_operand_type:>:[block]:[[foo]:block]")
     }
 
     @Test fun testTxExplicitTypeDeclaration() {
@@ -351,10 +351,10 @@ class ExternalTest: BaseRellTest() {
         def("namespace ns1 { @mount('bar') @external('foo') namespace { entity transaction; entity block; } }")
         def("@mount('bar') namespace ns2 { @external('foo') namespace { entity transaction; entity block; } }")
 
-        chk("ns1.transaction @ {}", "[foo]!transaction[444]")
-        chk("ns2.transaction @ {}", "[foo]!transaction[444]")
-        chk("ns1.block @ {}", "[foo]!block[111]")
-        chk("ns2.block @ {}", "[foo]!block[111]")
+        chk("ns1.transaction @ {}", "[foo]:transaction[444]")
+        chk("ns2.transaction @ {}", "[foo]:transaction[444]")
+        chk("ns1.block @ {}", "[foo]:block[111]")
+        chk("ns2.block @ {}", "[foo]:block[111]")
     }
 
     @Test fun testTxExplicitTypeCompatibility() {
@@ -366,15 +366,15 @@ class ExternalTest: BaseRellTest() {
         tst.chainDependency("foo", "deadbeef", 1000)
         tst.chainDependency("bar", "beefdead", 1000)
 
-        chkCompile("function f(u: foo.user): transaction = u.transaction;", "ct_err:fn_rettype:[transaction]:[[foo]!transaction]")
-        chkCompile("function f(u: user): foo.transaction = u.transaction;", "ct_err:fn_rettype:[[foo]!transaction]:[transaction]")
-        chkCompile("function f(u: foo.user): block = u.transaction.block;", "ct_err:fn_rettype:[block]:[[foo]!block]")
-        chkCompile("function f(u: user): foo.block = u.transaction.block;", "ct_err:fn_rettype:[[foo]!block]:[block]")
+        chkCompile("function f(u: foo.user): transaction = u.transaction;", "ct_err:fn_rettype:[transaction]:[[foo]:transaction]")
+        chkCompile("function f(u: user): foo.transaction = u.transaction;", "ct_err:fn_rettype:[[foo]:transaction]:[transaction]")
+        chkCompile("function f(u: foo.user): block = u.transaction.block;", "ct_err:fn_rettype:[block]:[[foo]:block]")
+        chkCompile("function f(u: user): foo.block = u.transaction.block;", "ct_err:fn_rettype:[[foo]:block]:[block]")
 
-        chkCompile("function f(u: bar.user): foo.transaction = u.transaction;", "ct_err:fn_rettype:[[foo]!transaction]:[[bar]!transaction]")
-        chkCompile("function f(u: foo.user): bar.transaction = u.transaction;", "ct_err:fn_rettype:[[bar]!transaction]:[[foo]!transaction]")
-        chkCompile("function f(u: bar.user): foo.block = u.transaction.block;", "ct_err:fn_rettype:[[foo]!block]:[[bar]!block]")
-        chkCompile("function f(u: foo.user): bar.block = u.transaction.block;", "ct_err:fn_rettype:[[bar]!block]:[[foo]!block]")
+        chkCompile("function f(u: bar.user): foo.transaction = u.transaction;", "ct_err:fn_rettype:[[foo]:transaction]:[[bar]:transaction]")
+        chkCompile("function f(u: foo.user): bar.transaction = u.transaction;", "ct_err:fn_rettype:[[bar]:transaction]:[[foo]:transaction]")
+        chkCompile("function f(u: bar.user): foo.block = u.transaction.block;", "ct_err:fn_rettype:[[foo]:block]:[[bar]:block]")
+        chkCompile("function f(u: foo.user): bar.block = u.transaction.block;", "ct_err:fn_rettype:[[bar]:block]:[[foo]:block]")
     }
 
     @Test fun testTxExplicitTypeCompatibility2() {
@@ -398,12 +398,12 @@ class ExternalTest: BaseRellTest() {
             chkOpErr(type1, typeStr1, type2, typeStr2, ">")
         }
 
-        chkTypes("transaction", "transaction", "foo.transaction", "[foo]!transaction")
-        chkTypes("foo.transaction", "[foo]!transaction", "transaction", "transaction")
-        chkTypes("foo.transaction", "[foo]!transaction", "bar.transaction", "[bar]!transaction")
-        chkTypes("block", "block", "foo.block", "[foo]!block")
-        chkTypes("foo.block", "[foo]!block", "block", "block")
-        chkTypes("foo.block", "[foo]!block", "bar.block", "[bar]!block")
+        chkTypes("transaction", "transaction", "foo.transaction", "[foo]:transaction")
+        chkTypes("foo.transaction", "[foo]:transaction", "transaction", "transaction")
+        chkTypes("foo.transaction", "[foo]:transaction", "bar.transaction", "[bar]:transaction")
+        chkTypes("block", "block", "foo.block", "[foo]:block")
+        chkTypes("foo.block", "[foo]:block", "block", "block")
+        chkTypes("foo.block", "[foo]:block", "bar.block", "[bar]:block")
     }
 
     @Test fun testTxExplicitTypeCompatibility3() {
@@ -414,10 +414,10 @@ class ExternalTest: BaseRellTest() {
         def("namespace ns1 { @mount('bar') @external('foo') namespace { entity transaction; entity block; } }")
         def("@mount('bar') namespace ns2 { @external('foo') namespace { entity transaction; entity block; } }")
 
-        chkEx("{ val tx: ns1.transaction = ns2.transaction @ {}; return tx; }", "[foo]!transaction[444]")
-        chkEx("{ val tx: ns2.transaction = ns1.transaction @ {}; return tx; }", "[foo]!transaction[444]")
-        chkEx("{ val b: ns1.block = ns2.block @ {}; return b; }", "[foo]!block[111]")
-        chkEx("{ val b: ns2.block = ns1.block @ {}; return b; }", "[foo]!block[111]")
+        chkEx("{ val tx: ns1.transaction = ns2.transaction @ {}; return tx; }", "[foo]:transaction[444]")
+        chkEx("{ val tx: ns2.transaction = ns1.transaction @ {}; return tx; }", "[foo]:transaction[444]")
+        chkEx("{ val b: ns1.block = ns2.block @ {}; return b; }", "[foo]:block[111]")
+        chkEx("{ val b: ns2.block = ns1.block @ {}; return b; }", "[foo]:block[111]")
     }
 
     @Test fun testTxExplicitTypeLocalVar() {
@@ -429,11 +429,11 @@ class ExternalTest: BaseRellTest() {
 
         val tx = "val t: foo.transaction = foo.user @ {} (.transaction);"
         val block = "$tx; val b: foo.block = t.block;"
-        chkEx("{ $tx; return t; }", "[foo]!transaction[444]")
+        chkEx("{ $tx; return t; }", "[foo]:transaction[444]")
         chkEx("{ $tx; return t.tx_rid; }", "byte_array[fade]")
         chkEx("{ $tx; return t.tx_hash; }", "byte_array[1234]")
         chkEx("{ $tx; return t.tx_data; }", "byte_array[edaf]")
-        chkEx("{ $block; return b; }", "[foo]!block[111]")
+        chkEx("{ $block; return b; }", "[foo]:block[111]")
         chkEx("{ $block; return b.block_height; }", "int[222]")
         chkEx("{ $block; return b.block_rid; }", "byte_array[deadbeef]")
         chkEx("{ $block; return b.timestamp; }", "int[1500000000000]")
@@ -450,8 +450,8 @@ class ExternalTest: BaseRellTest() {
         chkOp("val u = foo.user @ {}; create local(u.transaction, u.transaction.block);")
         chkData("local(1,444,111)")
 
-        chk("(local @ {}).tx", "[foo]!transaction[444]")
-        chk("(local @ {}).blk", "[foo]!block[111]")
+        chk("(local @ {}).tx", "[foo]:transaction[444]")
+        chk("(local @ {}).blk", "[foo]:block[111]")
     }
 
     @Test fun testTxExplicitTypeSelect() {
@@ -459,9 +459,9 @@ class ExternalTest: BaseRellTest() {
 
         chkTxExplicitTypeSelect(10, "[]", "[]")
         chkTxExplicitTypeSelect(221, "[]", "[]")
-        chkTxExplicitTypeSelect(222, "[[foo]!transaction[444]]", "[[foo]!block[111]]")
-        chkTxExplicitTypeSelect(1000, "[[foo]!transaction[444]]", "[[foo]!block[111]]")
-        chkTxExplicitTypeSelect(1000000, "[[foo]!transaction[444]]", "[[foo]!block[111]]")
+        chkTxExplicitTypeSelect(222, "[[foo]:transaction[444]]", "[[foo]:block[111]]")
+        chkTxExplicitTypeSelect(1000, "[[foo]:transaction[444]]", "[[foo]:block[111]]")
+        chkTxExplicitTypeSelect(1000000, "[[foo]:transaction[444]]", "[[foo]:block[111]]")
     }
 
     private fun chkTxExplicitTypeSelect(height: Long, expectedTx: String, expectedBlock: String) {
@@ -515,12 +515,12 @@ class ExternalTest: BaseRellTest() {
         tst.chainDependency("foo", "deadbeef", 3)
 
         fun code(id: Long) = """rec.from_gtv_pretty(gtv.from_json('{"u":$id}'))"""
-        chk(code(1), "rec[u=[foo]!user[1]]")
-        chk(code(2), "rec[u=[foo]!user[2]]")
-        chk(code(3), "rec[u=[foo]!user[3]]")
-        chk(code(4), "gtv_err:obj_missing:[[foo]!user]:4")
-        chk(code(5), "gtv_err:obj_missing:[[foo]!user]:5")
-        chk(code(321), "gtv_err:obj_missing:[[foo]!user]:321")
+        chk(code(1), "rec[u=[foo]:user[1]]")
+        chk(code(2), "rec[u=[foo]:user[2]]")
+        chk(code(3), "rec[u=[foo]:user[3]]")
+        chk(code(4), "gtv_err:obj_missing:[[foo]:user]:4")
+        chk(code(5), "gtv_err:obj_missing:[[foo]:user]:5")
+        chk(code(321), "gtv_err:obj_missing:[[foo]:user]:321")
     }
 
     @Test fun testGtvExternalTransaction() {
@@ -554,8 +554,8 @@ class ExternalTest: BaseRellTest() {
 
         chkType("transaction")
         chkType("block")
-        chkType("foo.transaction", "[foo]!transaction")
-        chkType("foo.block", "[foo]!block")
+        chkType("foo.transaction", "[foo]:transaction")
+        chkType("foo.block", "[foo]:block")
 
         chkStructType("r_tx")
         chkStructType("r_block")
@@ -617,7 +617,7 @@ class ExternalTest: BaseRellTest() {
         chkMetaEntity(
                 "@log entity user { name: text; }",
                 "@external('foo') namespace { @log entity user { fullName: text; } }",
-                "rt_err:external_meta_noattrs:foo:[[foo]!user]:fullName"
+                "rt_err:external_meta_noattrs:foo:[[foo]:user]:fullName"
         )
     }
 
@@ -627,13 +627,13 @@ class ExternalTest: BaseRellTest() {
         chkMetaEntity(
                 "@log entity user { attr: integer; }",
                 "@external('foo') namespace { @log entity user { attr: text; } }",
-                "rt_err:external_meta_attrtype:foo:[[foo]!user]:attr:[sys:text]:[sys:integer]"
+                "rt_err:external_meta_attrtype:foo:[[foo]:user]:attr:[sys:text]:[sys:integer]"
         )
 
         chkMetaEntity(
                 "@log entity user { attr: text; }",
                 "@external('foo') namespace { @log entity user { attr: byte_array; } }",
-                "rt_err:external_meta_attrtype:foo:[[foo]!user]:attr:[sys:byte_array]:[sys:text]"
+                "rt_err:external_meta_attrtype:foo:[[foo]:user]:attr:[sys:byte_array]:[sys:text]"
         )
 
         chkMetaEntity(
@@ -655,7 +655,7 @@ class ExternalTest: BaseRellTest() {
         chkMetaEntity(
                 "@log entity company {} @log entity user { company; }",
                 "@log entity company {} @external('foo') namespace { @log entity user { company; } }",
-                "rt_err:external_meta_attrtype:foo:[[foo]!user]:company:[class:0:company]:[class:333:company]"
+                "rt_err:external_meta_attrtype:foo:[[foo]:user]:company:[class:0:company]:[class:333:company]"
         )
     }
 
@@ -807,35 +807,35 @@ class ExternalTest: BaseRellTest() {
 
         chkQueryEx("@external('foo') namespace foo { namespace bar { @log entity user { name; } } } " +
                 "query q() = foo.bar.user @ {} ( _=user, _=.name );",
-                "([foo]!foo.bar.user[1],text[Bob])")
+                "([foo]:foo.bar.user[1],text[Bob])")
 
         chkQueryEx("@external('foo') @mount('foo.bar.user') @log entity admin { name; } " +
                 "query q() = admin @ {} ( _=admin, _=.name );",
-                "([foo]!admin[1],text[Bob])")
+                "([foo]:admin[1],text[Bob])")
 
         chkQueryEx("@external('foo') namespace { @mount('foo.bar.user') @log entity admin { name; } }" +
                 "query q() = admin @ {} ( _=admin, _=.name );",
-                "([foo]!admin[1],text[Bob])")
+                "([foo]:admin[1],text[Bob])")
 
         chkQueryEx("@mount('foo.bar.') @external('foo') @log entity user { name; } " +
                 "query q() = user @ {} ( _=user, _=.name );",
-                "([foo]!user[1],text[Bob])")
+                "([foo]:user[1],text[Bob])")
 
         chkQueryEx("@mount('foo.bar') @external('foo') namespace { @log entity user { name; } }" +
                 "query q() = user @ {} ( _=user, _=.name );",
-                "([foo]!user[1],text[Bob])")
+                "([foo]:user[1],text[Bob])")
 
         chkQueryEx("@external('foo') @mount('foo.bar') namespace ns { @log entity user { name; } } " +
                 "query q() = ns.user @ {} ( _=user, _=.name );",
-                "([foo]!ns.user[1],text[Bob])")
+                "([foo]:ns.user[1],text[Bob])")
 
         chkQueryEx("@mount('junk') @external('foo') namespace { @mount('foo.bar') namespace ns { @log entity user { name; } } } " +
                 "query q() = ns.user @ {} ( _=user, _=.name );",
-                "([foo]!ns.user[1],text[Bob])")
+                "([foo]:ns.user[1],text[Bob])")
 
         chkQueryEx("@mount('junk') @external('foo') namespace { @mount('trash') namespace ns { @mount('foo.bar.user') @log entity user { name; } } } " +
                 "query q() = ns.user @ {} ( _=user, _=.name );",
-                "([foo]!ns.user[1],text[Bob])")
+                "([foo]:ns.user[1],text[Bob])")
     }
 
     @Test fun testDuplicateExternalBlock() {
@@ -848,8 +848,8 @@ class ExternalTest: BaseRellTest() {
             @mount('') namespace ns2 { @external('foo') @log entity user {} }
         """
         chkCompile(code, """ct_err:
-            [mnt_conflict:user:[[foo]!ns1.user]:user:ENTITY:[[foo]!ns2.user]:main.rell(3:69)]
-            [mnt_conflict:user:[[foo]!ns2.user]:user:ENTITY:[[foo]!ns1.user]:main.rell(2:69)]
+            [mnt_conflict:user:[[foo]:ns1.user]:user:ENTITY:[[foo]:ns2.user]:main.rell(3:69)]
+            [mnt_conflict:user:[[foo]:ns2.user]:user:ENTITY:[[foo]:ns1.user]:main.rell(2:69)]
         """)
     }
 

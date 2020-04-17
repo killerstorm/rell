@@ -48,28 +48,28 @@ class LibTest: BaseRellTest(false) {
         def("function f() { log('this is f()'); }")
 
         chkEx("{ log('Hello'); return 123; }", "int[123]")
-        chkLog("[!q(main.rell:2)] Hello")
+        chkLog("[:q(main.rell:2)] Hello")
         chkOut()
 
         chkEx("{ log(12345); return 123; }", "int[123]")
-        chkLog("[!q(main.rell:2)] 12345")
+        chkLog("[:q(main.rell:2)] 12345")
         chkOut()
 
         chkEx("{ log(1, 2, 3, 4, 5); return 123; }", "int[123]")
-        chkLog("[!q(main.rell:2)] 1 2 3 4 5")
+        chkLog("[:q(main.rell:2)] 1 2 3 4 5")
         chkOut()
 
         chkEx("{ log(); return 123; }", "int[123]")
         chkOut()
-        chkLog("[!q(main.rell:2)]")
+        chkLog("[:q(main.rell:2)]")
 
         chkEx("{\n    log('Hello'); log('World');\n    log('Bye');\n    return 123;\n}", "int[123]")
         chkOut()
-        chkLog("[!q(main.rell:3)] Hello", "[!q(main.rell:3)] World", "[!q(main.rell:4)] Bye")
+        chkLog("[:q(main.rell:3)] Hello", "[:q(main.rell:3)] World", "[:q(main.rell:4)] Bye")
 
         chkEx("{ f(); return 0; }", "int[0]")
         chkOut()
-        chkLog("[!f(main.rell:1)] this is f()")
+        chkLog("[:f(main.rell:1)] this is f()")
     }
 
     @Test fun testIsSigner() {
@@ -313,7 +313,7 @@ class LibTest: BaseRellTest(false) {
     }
 
     @Test fun testSysQueries() {
-        chk("rell.get_rell_version()", "text[0.10.2]")
+        chk("rell.get_rell_version()", "text[0.10.3]")
         chk("rell.get_app_structure()", """gtv[{"modules":{"":{"name":"","queries":{"q":{"parameters":[],"type":"gtv"}}}}}]""")
     }
 }

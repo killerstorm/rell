@@ -205,16 +205,16 @@ class ImportTest: BaseRellTest(false) {
             namespace fn { function x(): integer = 123; }
         """)
 
-        chkImport("import a.{ns.*, st.*};", "x(123)", "a!st.x[v=int[123]]")
-        chkImport("import a.{ns.*, st.*};", "list<x.rec>()", "list<a!ns.x.rec>[]")
+        chkImport("import a.{ns.*, st.*};", "x(123)", "a:st.x[v=int[123]]")
+        chkImport("import a.{ns.*, st.*};", "list<x.rec>()", "list<a:ns.x.rec>[]")
         chkImport("import a.{ns.*, st.*};", "x.f()", "ct_err:name:ambig:x")
 
-        chkImport("import a.{ns.*, en.*};", "list<x>()", "list<a!en.x>[]")
-        chkImport("import a.{ns.*, en.*};", "list<x.rec>()", "list<a!ns.x.rec>[]")
+        chkImport("import a.{ns.*, en.*};", "list<x>()", "list<a:en.x>[]")
+        chkImport("import a.{ns.*, en.*};", "list<x.rec>()", "list<a:ns.x.rec>[]")
         chkImport("import a.{ns.*, en.*};", "x.EN", "ct_err:[name:ambig:x][unknown_name:x.EN]")
         chkImport("import a.{ns.*, en.*};", "x.f()", "ct_err:name:ambig:x")
 
-        chkImport("import a.{ns.*, fn.*};", "list<x.rec>()", "list<a!ns.x.rec>[]")
+        chkImport("import a.{ns.*, fn.*};", "list<x.rec>()", "list<a:ns.x.rec>[]")
         chkImport("import a.{ns.*, fn.*};", "x.f()", "int[456]")
         chkImport("import a.{ns.*, fn.*};", "x()", "int[123]")
 
@@ -223,12 +223,12 @@ class ImportTest: BaseRellTest(false) {
         chkImport("import a.{st.*, en.*};", "x.from_bytes(x'')", "ct_err:name:ambig:x")
         chkImport("import a.{st.*, en.*};", "x.value(0)", "ct_err:[name:ambig:x][unknown_name:x.value]")
 
-        chkImport("import a.{st.*, fn.*};", "list<x>()", "list<a!st.x>[]")
-        chkImport("import a.{st.*, fn.*};", "_type_of(x.from_bytes(x''))", "text[a!st.x]")
+        chkImport("import a.{st.*, fn.*};", "list<x>()", "list<a:st.x>[]")
+        chkImport("import a.{st.*, fn.*};", "_type_of(x.from_bytes(x''))", "text[a:st.x]")
         chkImport("import a.{st.*, fn.*};", "x(123)", "ct_err:name:ambig:x")
 
-        chkImport("import a.{en.*, fn.*};", "list<x>()", "list<a!en.x>[]")
-        chkImport("import a.{en.*, fn.*};", "x.EN", "a!en.x[EN]")
+        chkImport("import a.{en.*, fn.*};", "list<x>()", "list<a:en.x>[]")
+        chkImport("import a.{en.*, fn.*};", "x.EN", "a:en.x[EN]")
         chkImport("import a.{en.*, fn.*};", "x()", "int[123]")
     }
 
@@ -266,10 +266,10 @@ class ImportTest: BaseRellTest(false) {
 
     @Test fun testDefKindsExact() {
         initDefKinds()
-        chkImport("import lib.{user};", "_type_of(user@{})", "text[lib!user]")
+        chkImport("import lib.{user};", "_type_of(user@{})", "text[lib:user]")
         chkImport("import lib.{state};", "_type_of(state.value)", "text[integer]")
-        chkImport("import lib.{lang};", "lang.EN", "lib!lang[EN]")
-        chkImport("import lib.{rec};", "rec(123)", "lib!rec[x=int[123]]")
+        chkImport("import lib.{lang};", "lang.EN", "lib:lang[EN]")
+        chkImport("import lib.{rec};", "rec(123)", "lib:rec[x=int[123]]")
         chkImport("import lib.{f};", "f()", "int[123]")
         chkImport("import lib.{ns};", "ns.p()", "int[789]")
         chkImport("import lib.{sub};", "sub.g()", "int[456]")
@@ -279,10 +279,10 @@ class ImportTest: BaseRellTest(false) {
 
     @Test fun testDefKindsWildcard() {
         initDefKinds()
-        chkImport("import lib.*;", "_type_of(user@{})", "text[lib!user]")
+        chkImport("import lib.*;", "_type_of(user@{})", "text[lib:user]")
         chkImport("import lib.*;", "_type_of(state.value)", "text[integer]")
-        chkImport("import lib.*;", "lang.EN", "lib!lang[EN]")
-        chkImport("import lib.*;", "rec(123)", "lib!rec[x=int[123]]")
+        chkImport("import lib.*;", "lang.EN", "lib:lang[EN]")
+        chkImport("import lib.*;", "rec(123)", "lib:rec[x=int[123]]")
         chkImport("import lib.*;", "f()", "int[123]")
         chkImport("import lib.*;", "ns.p()", "int[789]")
         chkImport("import lib.*;", "sub.g()", "int[456]")
@@ -346,8 +346,8 @@ class ImportTest: BaseRellTest(false) {
 
     @Test fun testRecursionExact2() {
         file("a.rell", "module; import a.{x};")
-        chkImport("import a;", "a.x", "ct_err:[main.rell:unknown_name:a.x][a.rell:import:exact:recursion:a!x]")
-        chkImport("import a;", "0", "ct_err:a.rell:import:exact:recursion:a!x")
+        chkImport("import a;", "a.x", "ct_err:[main.rell:unknown_name:a.x][a.rell:import:exact:recursion:a:x]")
+        chkImport("import a;", "0", "ct_err:a.rell:import:exact:recursion:a:x")
     }
 
     @Test fun testRecursionExact3() {
@@ -357,45 +357,45 @@ class ImportTest: BaseRellTest(false) {
         file("d.rell", "module; import a.{x};")
 
         chkImport("import a.{x};", "0", """ct_err:
-            [main.rell:import:exact:unresolved:a!x]
-            [a.rell:import:exact:recursion:b!x]
-            [b.rell:import:exact:recursion:c!x]
-            [c.rell:import:exact:recursion:a!x]
+            [main.rell:import:exact:unresolved:a:x]
+            [a.rell:import:exact:recursion:b:x]
+            [b.rell:import:exact:recursion:c:x]
+            [c.rell:import:exact:recursion:a:x]
         """)
 
         chkImport("import b.{x};", "0", """ct_err:
-            [main.rell:import:exact:unresolved:b!x]
-            [a.rell:import:exact:recursion:b!x]
-            [b.rell:import:exact:recursion:c!x]
-            [c.rell:import:exact:recursion:a!x]
+            [main.rell:import:exact:unresolved:b:x]
+            [a.rell:import:exact:recursion:b:x]
+            [b.rell:import:exact:recursion:c:x]
+            [c.rell:import:exact:recursion:a:x]
         """)
 
         chkImport("import c.{x};", "0", """ct_err:
-            [main.rell:import:exact:unresolved:c!x]
-            [a.rell:import:exact:recursion:b!x]
-            [b.rell:import:exact:recursion:c!x]
-            [c.rell:import:exact:recursion:a!x]
+            [main.rell:import:exact:unresolved:c:x]
+            [a.rell:import:exact:recursion:b:x]
+            [b.rell:import:exact:recursion:c:x]
+            [c.rell:import:exact:recursion:a:x]
         """)
 
         chkImport("import d.{x};", "0", """ct_err:
-            [main.rell:import:exact:unresolved:d!x]
-            [a.rell:import:exact:recursion:b!x]
-            [b.rell:import:exact:recursion:c!x]
-            [c.rell:import:exact:recursion:a!x]
-            [d.rell:import:exact:unresolved:a!x]
+            [main.rell:import:exact:unresolved:d:x]
+            [a.rell:import:exact:recursion:b:x]
+            [b.rell:import:exact:recursion:c:x]
+            [c.rell:import:exact:recursion:a:x]
+            [d.rell:import:exact:unresolved:a:x]
         """)
 
         chkImport("import a;", "0", """ct_err:
-            [a.rell:import:exact:recursion:b!x]
-            [b.rell:import:exact:recursion:c!x]
-            [c.rell:import:exact:recursion:a!x]
+            [a.rell:import:exact:recursion:b:x]
+            [b.rell:import:exact:recursion:c:x]
+            [c.rell:import:exact:recursion:a:x]
         """)
 
         chkImport("import d;", "0", """ct_err:
-            [a.rell:import:exact:recursion:b!x]
-            [b.rell:import:exact:recursion:c!x]
-            [c.rell:import:exact:recursion:a!x]
-            [d.rell:import:exact:unresolved:a!x]
+            [a.rell:import:exact:recursion:b:x]
+            [b.rell:import:exact:recursion:c:x]
+            [c.rell:import:exact:recursion:a:x]
+            [d.rell:import:exact:unresolved:a:x]
         """)
     }
 
@@ -409,8 +409,8 @@ class ImportTest: BaseRellTest(false) {
     @Test fun testRecursionExact5() {
         file("x.rell", "module; namespace a { import y.{b: d.e}; }")
         file("y.rell", "module; namespace d { import x.{e: a.b.c}; }")
-        chkImport("import x;", "0", "ct_err:[x.rell:import:exact:unresolved:y!d.e][y.rell:import:name_unresolved:b]")
-        chkImport("import y;", "0", "ct_err:[x.rell:import:exact:unresolved:y!d.e][y.rell:import:name_unresolved:b]")
+        chkImport("import x;", "0", "ct_err:[x.rell:import:exact:unresolved:y:d.e][y.rell:import:name_unresolved:b]")
+        chkImport("import y;", "0", "ct_err:[x.rell:import:exact:unresolved:y:d.e][y.rell:import:name_unresolved:b]")
     }
 
     @Test fun testRecursionWildcard() {

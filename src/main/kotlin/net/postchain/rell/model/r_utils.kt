@@ -13,7 +13,7 @@ class R_DefinitionPos(val module: String, val definition: String) {
     override fun toString() = appLevelName(module, definition)
 
     companion object {
-        fun appLevelName(module: String, definition: String) = "$module!$definition"
+        fun appLevelName(module: String, definition: String) = "$module:$definition"
     }
 }
 
