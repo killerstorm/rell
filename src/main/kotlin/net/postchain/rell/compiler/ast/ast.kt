@@ -102,11 +102,9 @@ class S_NameAttrHeader(name: S_Name): S_AttrHeader(name) {
 
     override fun compileType(ctx: C_NamespaceContext): R_Type {
         val rType = ctx.getTypeOpt(listOf(name))
-        if (rType == null) {
-            throw C_Error(name.pos, "unknown_name_type:${name.str}",
-                    "Cannot infer type for '${name.str}'; specify type explicitly")
+        return C_Errors.checkNotNull(rType, name.pos) {
+            "unknown_name_type:${name.str}" to "Cannot infer type for '${name.str}'; specify type explicitly"
         }
-        return rType
     }
 }
 
@@ -137,18 +135,16 @@ sealed class S_KeyIndexClause(val pos: S_Pos, val attrs: List<S_AttrHeader>): S_
         val names = mutableSetOf<String>()
         for (attr in attrs) {
             val name = attr.name
-            if (!names.add(name.str)) {
-                throw C_Error(name.pos, "entity_keyindex_dup:${name.str}",
-                        "Duplicate attribute: '${name.str}'")
+            C_Errors.check(names.add(name.str), name.pos) {
+                    "entity_keyindex_dup:${name.str}" to "Duplicate attribute: '${name.str}'"
             }
         }
 
         for (attr in attrs) {
             val name = attr.name
             if (ctx.hasAttribute(name.str)) {
-                if (attr.hasExplicitType()) {
-                    throw C_Error(name.pos, "entity_keyindex_def:${name.str}",
-                            "Attribute '${name.str}' is defined elsewhere, cannot specify type")
+                C_Errors.check(!attr.hasExplicitType(), name.pos) {
+                        "entity_keyindex_def:${name.str}" to "Attribute '${name.str}' is defined elsewhere, cannot specify type"
                 }
             } else {
                 ctx.addAttribute(attr, false, null)
@@ -254,14 +250,14 @@ class S_EntityDefinition(
 
         val names = ctx.nsCtx.defNames(name.str, extChain)
 
-        if (external && ctx.mountName.isEmpty() && name.str in HEADER_ENTITIES) {
-            throw C_Error(name.pos, "def_entity_external_unallowed:${name.str}",
-                    "External entity '${name.str}' can be declared only without body (as entity header)")
+        C_Errors.check(!external || !ctx.mountName.isEmpty() || name.str !in HEADER_ENTITIES, name.pos) {
+            "def_entity_external_unallowed:${name.str}" to
+                    "External entity '${name.str}' can be declared only without body (as entity header)"
         }
 
-        if (external && !rFlags.log) {
-            throw C_Error(name.pos, "def_entity_external_nolog:${names.simpleName}",
-                    "External entity '${names.simpleName}' must have '${C_Constants.LOG_ANNOTATION}' annotation")
+        C_Errors.check(!external || rFlags.log, name.pos) {
+            "def_entity_external_nolog:${names.simpleName}" to
+                    "External entity '${names.simpleName}' must have '${C_Constants.LOG_ANNOTATION}' annotation"
         }
 
         val mountName = ctx.mountName(modTarget, name)
@@ -745,9 +741,9 @@ class S_FunctionBodyFull(val body: S_Statement): S_FunctionBody() {
     override fun compileQuery0(bodyCtx: C_FunctionBodyContext, stmtCtx: C_StmtContext): C_Statement {
         val cBody = body.compile(stmtCtx)
 
-        if (!cBody.returnAlways) {
+        C_Errors.check(cBody.returnAlways, bodyCtx.namePos) {
             val nameStr = bodyCtx.defNames.qualifiedName
-            throw C_Error(bodyCtx.namePos, "query_noreturn:$nameStr", "Query '$nameStr': not all code paths return value")
+            "query_noreturn:$nameStr" to "Query '$nameStr': not all code paths return value"
         }
 
         return cBody
@@ -758,9 +754,9 @@ class S_FunctionBodyFull(val body: S_Statement): S_FunctionBody() {
 
         val retType = stmtCtx.fnCtx.actualReturnType()
         if (retType != R_UnitType) {
-            if (!cBody.returnAlways) {
+            C_Errors.check(cBody.returnAlways, bodyCtx.namePos) {
                 val nameStr = bodyCtx.defNames.qualifiedName
-                throw C_Error(bodyCtx.namePos, "fun_noreturn:$nameStr", "Function '$nameStr': not all code paths return value")
+                "fun_noreturn:$nameStr" to "Function '$nameStr': not all code paths return value"
             }
         }
 
@@ -969,11 +965,12 @@ class S_FunctionDefinition(
 
 class S_NamespaceDefinition(
         modifiers: S_Modifiers,
-        val name: S_Name?,
+        val fullName: List<S_Name>,
         val definitions: List<S_Definition>
 ): S_Definition(modifiers) {
     override fun compile(ctx: C_MountContext) {
-        val modTarget = C_ModifierTarget(C_ModifierTargetType.NAMESPACE, name,
+        val simpleName = if (fullName.isEmpty()) null else fullName.last()
+        val modTarget = C_ModifierTarget(C_ModifierTargetType.NAMESPACE, simpleName,
                 externalChain = true, mount = true, emptyMountAllowed = true)
         modifiers.compile(ctx, modTarget)
 
@@ -986,19 +983,24 @@ class S_NamespaceDefinition(
     private fun createSubMountContext(ctx: C_MountContext, modTarget: C_ModifierTarget): C_MountContext {
         val extChain = modTarget.externalChain(ctx)
 
-        if (name == null) {
+        if (fullName.isEmpty()) {
             val subMountName = modTarget.mount?.get() ?: ctx.mountName
             return C_MountContext(ctx.fileCtx, ctx.nsCtx, extChain, ctx.nsBuilder, subMountName)
         }
 
-        val subNsBuilder = ctx.nsBuilder.addNamespace(name, true)
+        var nsBuilder = ctx.nsBuilder
+        var nsCtx = ctx.nsCtx
 
-        val names = ctx.nsCtx.defNames(name.str)
-        val subScopeBuilder = ctx.nsCtx.scopeBuilder.nested(subNsBuilder.futureNs())
-        val subNsCtx = C_NamespaceContext(ctx.modCtx, names.qualifiedName, subScopeBuilder)
+        for (name in fullName) {
+            nsBuilder = nsBuilder.addNamespace(name, true)
 
-        val subMountName = ctx.mountName(modTarget, name)
-        return C_MountContext(ctx.fileCtx, subNsCtx, extChain, subNsBuilder, subMountName)
+            val names = nsCtx.defNames(name.str)
+            val subScopeBuilder = nsCtx.scopeBuilder.nested(nsBuilder.futureNs())
+            nsCtx = C_NamespaceContext(ctx.modCtx, names.qualifiedName, subScopeBuilder)
+        }
+
+        val mountName = ctx.mountName(modTarget, fullName)
+        return C_MountContext(ctx.fileCtx, nsCtx, extChain, nsBuilder, mountName)
     }
 
     override fun getImportedModules(moduleName: R_ModuleName, res: MutableSet<R_ModuleName>) {
@@ -1008,7 +1010,8 @@ class S_NamespaceDefinition(
     }
 
     override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
-        val sub = if (name == null) b else b.node(this, name, IdeOutlineNodeType.NAMESPACE)
+        var sub = b
+        for (name in fullName) sub = sub.node(this, name, IdeOutlineNodeType.NAMESPACE)
         for (def in definitions) {
             def.ideBuildOutlineTree(sub)
         }
@@ -1022,15 +1025,13 @@ class S_ImportModulePath(val relative: S_RelativeImportModulePath?, val path: Li
         val rPath = path.map { it.rName }
 
         if (relative == null) {
-            if (path.isEmpty()) {
-                throw C_Error(importPos, "import:no_path", "Module not specified")
-            }
+            C_Errors.check(path.isNotEmpty(), importPos, "import:no_path", "Module not specified")
             return R_ModuleName(rPath)
         }
 
-        if (relative.ups > currentModule.parts.size) {
-            throw C_Error(relative.pos, "import:up:${currentModule.parts.size}:${relative.ups}",
-                    "Cannot go up by ${relative.ups}, current module is '${currentModule}'")
+        C_Errors.check(relative.ups <= currentModule.parts.size, relative.pos) {
+            "import:up:${currentModule.parts.size}:${relative.ups}" to
+                    "Cannot go up by ${relative.ups}, current module is '${currentModule}'"
         }
 
         val base = currentModule.parts.subList(0, currentModule.parts.size - relative.ups)

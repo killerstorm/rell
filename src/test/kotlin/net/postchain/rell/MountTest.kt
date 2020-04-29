@@ -123,27 +123,38 @@ class MountTest: BaseRellTest() {
         chkMountName("$def", "c0.obj")
         chkMountName("@mount('foo.bar') $def", "c0.foo.bar")
 
-        chkMountName("namespace ns { $def } ", "c0.ns.obj")
-        chkMountName("@mount('') namespace ns { $def } ", "c0.obj")
-        chkMountName("@mount('foo.bar') namespace ns { $def } ", "c0.foo.bar.obj")
+        chkMountName("namespace ns { $def }", "c0.ns.obj")
+        chkMountName("@mount('') namespace ns { $def }", "c0.obj")
+        chkMountName("@mount('foo.bar') namespace ns { $def }", "c0.foo.bar.obj")
 
-        chkMountName("namespace { $def } ", "c0.obj")
-        chkMountName("@mount('') namespace { $def } ", "c0.obj")
-        chkMountName("@mount('foo.bar') namespace { $def } ", "c0.foo.bar.obj")
-        chkMountName("@mount('foo.') namespace { $def } ", "ct_err:ann:mount:tail:no_name:foo.:NAMESPACE")
+        chkMountName("namespace { $def }", "c0.obj")
+        chkMountName("@mount('') namespace { $def }", "c0.obj")
+        chkMountName("@mount('foo.bar') namespace { $def }", "c0.foo.bar.obj")
+        chkMountName("@mount('foo.') namespace { $def }", "ct_err:ann:mount:tail:no_name:foo.:NAMESPACE")
 
-        chkMountName("namespace ns1 { namespace ns2 { $def } } ", "c0.ns1.ns2.obj")
-        chkMountName("@mount('') namespace ns1 { namespace ns2 { $def } } ", "c0.ns2.obj")
-        chkMountName("@mount('foo.bar') namespace ns1 { namespace ns2 { $def } } ", "c0.foo.bar.ns2.obj")
+        chkMountName("namespace ns1 { namespace ns2 { $def } }", "c0.ns1.ns2.obj")
+        chkMountName("@mount('') namespace ns1 { namespace ns2 { $def } }", "c0.ns2.obj")
+        chkMountName("@mount('foo.bar') namespace ns1 { namespace ns2 { $def } }", "c0.foo.bar.ns2.obj")
 
-        chkMountName("namespace ns1 { @mount('') namespace ns2 { $def } } ", "c0.obj")
-        chkMountName("namespace ns1 { @mount('foo.bar') namespace ns2 { $def } } ", "c0.foo.bar.obj")
-        chkMountName("namespace ns1 { namespace ns2 { @mount('foo.bar') $def } } ", "c0.foo.bar")
+        chkMountName("namespace ns1 { @mount('') namespace ns2 { $def } }", "c0.obj")
+        chkMountName("namespace ns1 { @mount('foo.bar') namespace ns2 { $def } }", "c0.foo.bar.obj")
+        chkMountName("namespace ns1 { namespace ns2 { @mount('foo.bar') $def } }", "c0.foo.bar")
 
-        chkMountName("@mount('foo.bar') namespace ns1 { namespace ns2 { @mount('bob.alice') $def } } ", "c0.bob.alice")
-        chkMountName("namespace ns1 { @mount('foo.bar') namespace ns2 { @mount('bob.alice') $def } } ", "c0.bob.alice")
-        chkMountName("@mount('foo.bar') namespace ns1 { @mount('bob.alice') namespace ns2 { $def } } ", "c0.bob.alice.obj")
-        chkMountName("@mount('foo.bar') namespace ns1 { @mount('') namespace ns2 { $def } } ", "c0.obj")
+        chkMountName("@mount('foo.bar') namespace ns1 { namespace ns2 { @mount('bob.alice') $def } }", "c0.bob.alice")
+        chkMountName("namespace ns1 { @mount('foo.bar') namespace ns2 { @mount('bob.alice') $def } }", "c0.bob.alice")
+        chkMountName("@mount('foo.bar') namespace ns1 { @mount('bob.alice') namespace ns2 { $def } }", "c0.bob.alice.obj")
+        chkMountName("@mount('foo.bar') namespace ns1 { @mount('') namespace ns2 { $def } }", "c0.obj")
+    }
+
+    @Test fun testComplexNamespaces() {
+        val def = "object obj { x: integer = 123; }"
+        chkMountName("$def", "c0.obj")
+        chkMountName("@mount('foo.bar') $def", "c0.foo.bar")
+        chkMountName("namespace ns1.ns2 { $def }", "c0.ns1.ns2.obj")
+        chkMountName("@mount('') namespace ns1.ns2 { $def }", "c0.obj")
+        chkMountName("@mount('foo.bar') namespace ns1.ns2 { $def }", "c0.foo.bar.obj")
+        chkMountName("namespace ns1.ns2 { @mount('foo.bar') $def }", "c0.foo.bar")
+        chkMountName("@mount('foo.bar') namespace ns1.ns2 { @mount('bob.alice') $def }", "c0.bob.alice")
     }
 
     private fun chkMountName(code: String, expected0: String) {

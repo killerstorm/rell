@@ -667,7 +667,7 @@ object S_Grammar : Grammar<S_RellFile>() {
         annotatedDef { S_FunctionDefinition(it, name, params, type, body) }
     }
 
-    private val namespaceDef by ( -NAMESPACE * optional(name) * -LCURL * zeroOrMore(parser(this::annotatedDef)) * -RCURL) map {
+    private val namespaceDef by ( -NAMESPACE * separatedTerms(name, DOT, true) * -LCURL * zeroOrMore(parser(this::annotatedDef)) * -RCURL) map {
         (name, defs) ->
         annotatedDef { S_NamespaceDefinition(it, name, defs) }
     }

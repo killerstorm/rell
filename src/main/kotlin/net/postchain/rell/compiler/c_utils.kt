@@ -112,9 +112,7 @@ object C_Utils {
     }
 
     fun checkUnitType(pos: S_Pos, type: R_Type, errCode: String, errMsg: String) {
-        if (type == R_UnitType) {
-            throw C_Error(pos, errCode, errMsg)
-        }
+        C_Errors.check(type != R_UnitType, pos, errCode, errMsg)
     }
 
     fun checkUnitType(msgCtx: C_MessageContext, pos: S_Pos, type: R_Type, errCode: String, errMsg: String) {
@@ -478,6 +476,34 @@ object C_Errors {
         val code = "mnt_conflict:sys:[${def.appLevelName}]:$mountName"
         val msg = "Mount name conflict: '$mountName' is a system mount name"
         return C_Error(pos, code, msg)
+    }
+
+    fun check(b: Boolean, pos: S_Pos, code: String, msg: String) {
+        if (!b) {
+            throw C_Error(pos, code, msg)
+        }
+    }
+
+    fun check(b: Boolean, pos: S_Pos, codeMsgSupplier: () -> Pair<String, String>) {
+        if (!b) {
+            val (code, msg) = codeMsgSupplier()
+            throw C_Error(pos, code, msg)
+        }
+    }
+
+    fun <T> checkNotNull(value: T?, pos: S_Pos, code: String, msg: String): T {
+        if (value == null) {
+            throw C_Error(pos, code, msg)
+        }
+        return value
+    }
+
+    fun <T> checkNotNull(value: T?, pos: S_Pos, codeMsgSupplier: () -> Pair<String, String>): T {
+        if (value == null) {
+            val (code, msg) = codeMsgSupplier()
+            throw C_Error(pos, code, msg)
+        }
+        return value
     }
 }
 

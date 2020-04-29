@@ -33,3 +33,22 @@ independently to verify arguments (not supported yet).
 Now it is allowed to invoke queries from code and REPL. Queries are equivalent to functions in this respect.
 
 System queries can be called too, e. g. rell.get_app_structure().
+
+
+4. Language: Short nested namespace notation
+
+Short notation for a nested namespace:
+
+namespace x.y.z {
+    function f() = 123;
+}
+
+This is equivalent to:
+
+namespace x {
+    namespace y {
+        namespace z {
+            function f() = 123;
+        }
+    }
+}

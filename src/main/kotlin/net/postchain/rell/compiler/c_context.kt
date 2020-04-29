@@ -264,12 +264,16 @@ class C_MountContext(
     }
 
     fun mountName(modTarget: C_ModifierTarget, simpleName: S_Name): R_MountName {
+        return mountName(modTarget, listOf(simpleName))
+    }
+
+    fun mountName(modTarget: C_ModifierTarget, fullName: List<S_Name>): R_MountName {
         val explicit = modTarget.mount?.get()
         if (explicit != null) {
             return explicit
         }
 
-        val path = mountName.parts + simpleName.rName
+        val path = mountName.parts + fullName.map { it.rName }
         return R_MountName(path)
     }
 }
