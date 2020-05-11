@@ -59,6 +59,12 @@ class C_UserFunctionHeader(
     }
 }
 
+class C_OperationFunctionHeader(val params: C_FormalParameters) {
+    companion object {
+        val ERROR = C_OperationFunctionHeader(C_FormalParameters.EMPTY)
+    }
+}
+
 class C_QueryFunctionHeader(
         explicitType: R_Type?,
         params: C_FormalParameters,
@@ -86,6 +92,32 @@ class C_UserGlobalFunction(
     override fun compileCallRegular(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Expr {
         val header = headerLate.get()
         return C_FunctionUtils.compileRegularCall(ctx, name, args, rFunction, header)
+    }
+}
+
+class C_OperationGlobalFunction(val rOp: R_Operation): C_GlobalFunction() {
+    private val headerLate = C_LateInit(C_CompilerPass.MEMBERS, C_OperationFunctionHeader.ERROR)
+
+    fun setHeader(header: C_OperationFunctionHeader) {
+        headerLate.set(header)
+    }
+
+    override fun getAbstractInfo() = Pair(null, null)
+
+    override fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
+        val header = headerLate.get()
+
+        val cArgs = C_FunctionUtils.compileRegularArgs(ctx, args)
+        val cEffArgs = C_FunctionUtils.checkArgs(ctx, name, header.params, cArgs)
+
+        val rExpr = if (cEffArgs == null) {
+            C_Utils.crashExpr(R_OperationType)
+        } else {
+            val rArgs = cEffArgs.map { it.toRExpr() }
+            R_OperationExpr(rOp, rArgs)
+        }
+
+        return C_RValue.makeExpr(name.pos, rExpr)
     }
 }
 
@@ -118,7 +150,7 @@ object C_FunctionUtils {
         val bodyRetType = if (body == null) R_UnitType else null
         val retType = explicitRetType ?: bodyRetType
 
-        val cParams = C_FormalParameters.create(ctx.nsCtx, params, false)
+        val cParams = C_FormalParameters.compile(ctx.nsCtx, params, false)
 
         val cBody = if (body == null) null else {
             val bodyCtx = C_FunctionBodyContext(ctx, simpleName.pos, defNames, retType, cParams)
@@ -137,7 +169,7 @@ object C_FunctionUtils {
             body: S_FunctionBody
     ): C_QueryFunctionHeader {
         val retType = if (retType == null) null else (retType.compileOpt(ctx.nsCtx) ?: R_CtErrorType)
-        val cParams = C_FormalParameters.create(ctx.nsCtx, params, ctx.globalCtx.compilerOptions.gtv)
+        val cParams = C_FormalParameters.compile(ctx.nsCtx, params, ctx.globalCtx.compilerOptions.gtv)
         val bodyCtx = C_FunctionBodyContext(ctx, simpleName.pos, defNames, retType, cParams)
         val cBody = C_QueryFunctionBody(bodyCtx, body)
         return C_QueryFunctionHeader(retType, cParams, cBody)
@@ -181,7 +213,7 @@ object C_FunctionUtils {
         return C_RValue.makeExpr(name.pos, rExpr, exprFacts)
     }
 
-    private fun checkArgs(ctx: C_ExprContext, name: S_Name, params: C_FormalParameters, args: List<C_Value>): List<C_Value>? {
+    fun checkArgs(ctx: C_ExprContext, name: S_Name, params: C_FormalParameters, args: List<C_Value>): List<C_Value>? {
         val nameStr = name.str
         var err = false
 

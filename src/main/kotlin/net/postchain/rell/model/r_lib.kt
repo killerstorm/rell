@@ -767,6 +767,36 @@ object R_SysFn_Rell {
     }
 }
 
+object R_SysFn_Test {
+    object Tx {
+        object Empty: R_SysFunction_0() {
+            override fun call() = Rt_TestTxValue(listOf())
+        }
+
+        object OneOp: R_SysFunction_1() {
+            override fun call(arg: Rt_Value) = Rt_TestTxValue(listOf(arg.asOperation()))
+        }
+
+        object ListOfOps: R_SysFunction_1() {
+            override fun call(arg: Rt_Value) = Rt_TestTxValue(arg.asList().map { it.asOperation() })
+        }
+    }
+
+    object Block {
+        object Empty: R_SysFunction_0() {
+            override fun call() = Rt_TestBlockValue(listOf())
+        }
+
+        object OneTx: R_SysFunction_1() {
+            override fun call(arg: Rt_Value) = Rt_TestBlockValue(listOf(arg as Rt_TestTxValue))
+        }
+
+        object ListOfTxs: R_SysFunction_1() {
+            override fun call(arg: Rt_Value) = Rt_TestBlockValue(arg.asList().map { it as Rt_TestTxValue })
+        }
+    }
+}
+
 object R_SysFn_Internal {
     object StrictStr: R_SysFunction_1() {
         override fun call(arg: Rt_Value): Rt_Value {

@@ -166,14 +166,14 @@ object C_LibFunctions {
             C_GlobalFuncTable.EMPTY,
             stdFnValue("raw_config", R_GtvType, R_SysFn_ChainContext.RawConfig),
             stdFnValue("blockchain_rid", R_ByteArrayType, R_SysFn_ChainContext.BlockchainRid),
-            Pair("args", C_NsValue_ChainContext_Args)
+            "args" to C_NsValue_ChainContext_Args
     )
 
     private val OP_CONTEXT_NAMESPACE = makeNamespace(
             C_GlobalFuncTable.EMPTY,
-            Pair("last_block_time", C_Ns_OpContext.Value_LastBlockTime),
-            Pair("block_height", C_Ns_OpContext.Value_BlockHeight),
-            Pair("transaction", C_Ns_OpContext.Value_Transaction)
+            "last_block_time" to C_Ns_OpContext.Value_LastBlockTime,
+            "block_height" to C_Ns_OpContext.Value_BlockHeight,
+            "transaction" to C_Ns_OpContext.Value_Transaction
     )
 
     private val TEXT_NAMESPACE_FNS = typeGlobalFuncBuilder(R_TextType)
@@ -269,8 +269,27 @@ object C_LibFunctions {
             .add("get_app_structure", R_GtvType, listOf(), R_SysFn_Rell.GetAppStructure)
             .build()
 
-    private val RELL_NAMESPACE = makeNamespace(
-            RELL_NAMESPACE_FNS
+    private val RELL_TEST_NAMESPACE_FNS = C_GlobalFuncBuilder()
+            .add("block", R_TestBlockType, listOf(), R_SysFn_Test.Block.Empty)
+            .add("block", R_TestBlockType, listOf(R_TestTxType), R_SysFn_Test.Block.OneTx)
+            .add("block", R_TestBlockType, listOf(R_ListType(R_TestTxType)), R_SysFn_Test.Block.ListOfTxs)
+            .add("tx", R_TestTxType, listOf(), R_SysFn_Test.Tx.Empty)
+            .add("tx", R_TestTxType, listOf(R_OperationType), R_SysFn_Test.Tx.OneOp)
+            .add("tx", R_TestTxType, listOf(R_ListType(R_OperationType)), R_SysFn_Test.Tx.ListOfOps)
+            .build()
+
+    private val RELL_TEST_NAMESPACE = makeNamespaceEx(
+            functions = RELL_TEST_NAMESPACE_FNS,
+            types = mapOf(
+                    "block" to R_TestBlockType,
+                    "tx" to R_TestTxType
+            )
+    )
+
+    private val RELL_NAMESPACE = makeNamespaceEx(
+            functions = RELL_NAMESPACE_FNS,
+            namespaces = mapOf("test" to RELL_TEST_NAMESPACE),
+            values = mapOf("test" to C_NamespaceValue_Namespace(C_DefProxy.create(RELL_TEST_NAMESPACE)))
     )
 
     private val NAMESPACES = mapOf(
@@ -326,6 +345,7 @@ object C_LibFunctions {
             is R_TupleType -> getTupleFns(type)
             is R_VirtualTupleType -> getVirtualTupleFns(type)
             is R_StructType -> getStructFns(type.struct)
+            is R_OperationType -> getOperationFns(type)
             is R_VirtualStructType -> getVirtualStructFns(type)
             else -> C_MemberFuncTable(mapOf())
         }
@@ -512,6 +532,11 @@ object C_LibFunctions {
                 .add("to_bytes", listOf(), mToBytes)
                 .add("toGTXValue", listOf(), mToGtv, depError("to_gtv"))
                 .add("toPrettyGTXValue", listOf(), mToGtvPretty, depError("to_gtv_pretty"))
+                .build()
+    }
+
+    private fun getOperationFns(type: R_OperationType): C_MemberFuncTable {
+        return typeMemFuncBuilder(type)
                 .build()
     }
 
@@ -883,15 +908,26 @@ private class C_SysMemberFunction_Invalid(private val type: R_Type): C_MemberFor
     }
 }
 
-private fun makeNamespace(fns: C_GlobalFuncTable, vararg values: Pair<String, C_NamespaceValue>): C_Namespace {
+private fun makeNamespace(functions: C_GlobalFuncTable, vararg values: Pair<String, C_NamespaceValue>): C_Namespace {
+    return makeNamespaceEx(functions = functions, values = mapOf(*values))
+}
+
+private fun makeNamespaceEx(
+        functions: C_GlobalFuncTable = C_GlobalFuncTable.EMPTY,
+        types: Map<String, R_Type> = mapOf(),
+        namespaces: Map<String, C_Namespace> = mapOf(),
+        values: Map<String, C_NamespaceValue> = mapOf()
+): C_Namespace {
     val valueMap = mutableMapOf<String, C_DefProxy<C_NamespaceValue>>()
     for ((name, field) in values) {
         check(name !in valueMap)
         valueMap[name] = C_DefProxy.create(field)
     }
 
-    val functionMap = fns.toMap().mapValues { (k, v) -> C_DefProxy.create(v) }
-    return C_Namespace(mapOf(), mapOf(), valueMap, functionMap)
+    val namespaceMap = namespaces.mapValues { C_DefProxy.create(it.value) }
+    val typeMap = types.mapValues { C_DefProxy.create(it.value) }
+    val functionMap = functions.toMap().mapValues { (k, v) -> C_DefProxy.create(v) }
+    return C_Namespace(namespaceMap, typeMap, valueMap, functionMap)
 }
 
 private fun stdConstValue(name: String, value: Long) = stdConstValue(name, Rt_IntValue(value))

@@ -15,6 +15,7 @@ import net.postchain.rell.utils.PostchainUtils
 import net.postchain.rell.model.*
 import net.postchain.rell.compiler.C_Constants
 import net.postchain.rell.model.*
+import net.postchain.rell.utils.toImmList
 import java.math.BigDecimal
 import java.util.*
 
@@ -45,6 +46,9 @@ enum class Rt_ValueType {
     JSON,
     RANGE,
     GTV,
+    OPERATION,
+    TEST_BLOCK,
+    TEST_TX,
     VIRTUAL,
     VIRTUAL_COLLECTION,
     VIRTUAL_LIST,
@@ -82,6 +86,7 @@ sealed class Rt_Value {
     open fun asRange(): Rt_RangeValue = throw errType(Rt_ValueType.RANGE)
     open fun asObjectId(): Long = throw errType(Rt_ValueType.CLASS)
     open fun asGtv(): Gtv = throw errType(Rt_ValueType.GTV)
+    open fun asOperation(): Rt_OperationValue = throw errType(Rt_ValueType.OPERATION)
     open fun asFormatArg(): Any = toString()
 
     abstract fun toStrictString(showTupleFieldNames: Boolean = true): String
@@ -716,4 +721,55 @@ class Rt_GtvValue(val value: Gtv): Rt_Value() {
 
     override fun equals(other: Any?) = other is Rt_GtvValue && value == other.value
     override fun hashCode() = value.hashCode()
+}
+
+class Rt_OperationValue(val op: R_MountName, args: List<Rt_Value>): Rt_Value() {
+    val args = args.toImmList()
+
+    override fun type() = R_OperationType
+    override fun valueType() = Rt_ValueType.OPERATION
+    override fun asOperation() = this
+
+    override fun toStrictString(showTupleFieldNames: Boolean): String {
+        val argsStr = args.joinToString(",") { it.toStrictString() }
+        return "op[$op($argsStr)]"
+    }
+
+    override fun toString(): String {
+        val argsStr = args.joinToString(",")
+        return "$op($argsStr)"
+    }
+
+    override fun equals(other: Any?) = other is Rt_OperationValue && op == other.op && args == other.args
+    override fun hashCode() = Objects.hash(op, args)
+}
+
+class Rt_TestBlockValue(txs: List<Rt_TestTxValue>): Rt_Value() {
+    val txs = txs.toImmList()
+
+    override fun type() = R_TestBlockType
+    override fun valueType() = Rt_ValueType.TEST_BLOCK
+
+    override fun toStrictString(showTupleFieldNames: Boolean) =
+            "${type().toStrictString()}[${txs.joinToString(",") { it.toStrictString() }}]"
+
+    override fun toString() = "block(${txs.joinToString(",")})"
+
+    override fun equals(other: Any?) = other is Rt_TestBlockValue && txs == other.txs
+    override fun hashCode() = Objects.hash(txs)
+}
+
+class Rt_TestTxValue(ops: List<Rt_OperationValue>): Rt_Value() {
+    val ops = ops.toImmList()
+
+    override fun type() = R_TestTxType
+    override fun valueType() = Rt_ValueType.TEST_TX
+
+    override fun toStrictString(showTupleFieldNames: Boolean) =
+        "${type().toStrictString()}[${ops.joinToString(",") { it.toStrictString() }}]"
+
+    override fun toString() = "tx(${ops.joinToString(",")})"
+
+    override fun equals(other: Any?) = other is Rt_TestTxValue && ops == other.ops
+    override fun hashCode() = Objects.hash(ops)
 }

@@ -716,3 +716,24 @@ class R_VirtualStructType(val innerType: R_StructType): R_VirtualType(innerType)
     override fun createGtvConversion() = GtvRtConversion_VirtualStruct(this)
     override fun equals(other: Any?): Boolean = other is R_VirtualStructType && innerType == other.innerType
 }
+
+object R_OperationType: R_Type("operation") {
+    override fun isReference() = true
+    override fun createGtvConversion() = GtvRtConversion_Operation
+    override fun toStrictString(): String = name
+    override fun toMetaGtv() = name.toGtv()
+}
+
+object R_TestBlockType: R_Type("rell.test.block") {
+    override fun isReference() = true
+    override fun createGtvConversion() = GtvRtConversion_None
+    override fun toStrictString(): String = name
+    override fun toMetaGtv() = name.toGtv()
+}
+
+object R_TestTxType: R_Type("rell.test.tx") {
+    override fun isReference() = true
+    override fun createGtvConversion() = GtvRtConversion_None
+    override fun toStrictString(): String = name
+    override fun toMetaGtv() = name.toGtv()
+}

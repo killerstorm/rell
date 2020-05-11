@@ -373,6 +373,19 @@ class LibGtvTest: BaseRellTest(false) {
         chk("state.to_gtv_pretty()", "ct_err:unknown_name:state.to_gtv_pretty")
     }
 
+    @Test fun testToFromGtvOperation() {
+        def("operation op(x: integer, y: text) {}")
+
+        chk("op(123,'Hello').to_gtv()", """gtv[["op",[123,"Hello"]]]""")
+        chk("op(123,'Hello').to_gtv_pretty()", """gtv[["op",[123,"Hello"]]]""")
+
+        chkFromGtv("['op',[123,'Hello']]", "operation.from_gtv(g)", """op[op(gtv[123],gtv["Hello"])]""")
+        chkFromGtv("[123,'Hello']", "operation.from_gtv(g)", "rt_err:from_gtv")
+        chkFromGtv("['op',123,'Hello']", "operation.from_gtv(g)", "rt_err:from_gtv")
+        chkFromGtv("['',[123,'Hello']]", "operation.from_gtv(g)", "rt_err:from_gtv")
+        chkFromGtv("['987',[123,'Hello']]", "operation.from_gtv(g)", "rt_err:from_gtv")
+    }
+
     private fun chkFromGtv(gtv: String, expr: String, expected: String) {
         val gtv2 = gtv.replace('\'', '"')
         val code = """{ val g = gtv.from_json('$gtv2'); return $expr; }"""

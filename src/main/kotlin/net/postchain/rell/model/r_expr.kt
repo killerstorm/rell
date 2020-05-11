@@ -8,6 +8,7 @@ import net.postchain.rell.compiler.C_EntityAttrRef
 import net.postchain.rell.compiler.C_Utils
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlGen
+import net.postchain.rell.utils.toImmList
 
 abstract class R_Expr(val type: R_Type) {
     protected abstract fun evaluate0(frame: Rt_CallFrame): Rt_Value
@@ -742,5 +743,14 @@ class R_TypeAdapter_Nullable(private val dstType: R_Type, private val innerAdapt
     override fun adaptExpr(expr: Db_Expr): Db_Expr {
         // Not completely right, but Db_Exprs do not support nullable anyway.
         return Db_CallExpr(R_DecimalType, Db_SysFn_Decimal.FromInteger, listOf(expr))
+    }
+}
+
+class R_OperationExpr(private val op: R_Operation, args: List<R_Expr>): R_Expr(R_OperationType) {
+    private val args = args.toImmList()
+
+    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
+        val rtArgs = args.map { it.evaluate(frame) }
+        return Rt_OperationValue(op.mountName, rtArgs)
     }
 }

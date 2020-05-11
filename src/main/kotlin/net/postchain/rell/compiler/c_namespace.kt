@@ -305,3 +305,9 @@ class C_NamespaceValue_Struct(private val struct: R_Struct): C_NamespaceValue() 
         return C_StructExpr(name, struct, nsRef)
     }
 }
+
+class C_NamespaceValue_Type(private val type: R_Type): C_NamespaceValue() {
+    override fun toExpr(ctx: C_NamespaceValueContext, name: List<S_Name>): C_Expr {
+        return C_TypeExpr(name[0].pos, type)
+    }
+}

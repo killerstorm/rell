@@ -15,8 +15,6 @@ import com.github.h0tk3y.betterParse.parser.Parsed
 import com.github.h0tk3y.betterParse.parser.Parser
 import net.postchain.rell.compiler.C_Parser
 import net.postchain.rell.compiler.ast.*
-import net.postchain.rell.compiler.parser.S_Grammar.getValue
-import net.postchain.rell.compiler.parser.S_Grammar.provideDelegate
 import kotlin.reflect.KProperty
 
 object S_Grammar : Grammar<S_RellFile>() {
@@ -130,7 +128,10 @@ object S_Grammar : Grammar<S_RellFile>() {
     private val nameType by qualifiedName map { S_NameType(it) }
 
     private val tupleField by ( optional(name * -COLON) * typeRef) map { (name, type) -> Pair(name, type) }
-    private val tupleType by ( -LPAR * separatedTerms(tupleField, COMMA, false) * -RPAR) map { S_TupleType(it) }
+
+    private val tupleType by ( LPAR * separatedTerms(tupleField, COMMA, false) * -RPAR) map { (pos, fields) ->
+        S_TupleType(pos.pos, fields)
+    }
 
     private val listType by ( LIST * -LT * typeRef * -GT) map { (kw, type) -> S_ListType(kw.pos, type) }
     private val setType by ( SET * -LT * typeRef * -GT) map { (kw, type) -> S_SetType(kw.pos, type) }
@@ -140,6 +141,7 @@ object S_Grammar : Grammar<S_RellFile>() {
     }
 
     private val virtualType by ( VIRTUAL * -LT * typeRef * -GT) map { (kw, type) -> S_VirtualType(kw.pos, type) }
+    private val operationType by ( OPERATION ) map { S_OperationType(it.pos) }
 
     private val baseType by (
             nameType
@@ -148,6 +150,7 @@ object S_Grammar : Grammar<S_RellFile>() {
             or setType
             or mapType
             or virtualType
+            or operationType
     )
 
     private val type: Parser<S_Type> by ( baseType * zeroOrMore(QUESTION) ) map { (base, nulls) ->
@@ -407,7 +410,8 @@ object S_Grammar : Grammar<S_RellFile>() {
         S_CreateExpr(kw.pos, entityName, exprs)
     }
 
-    private val virtualExpr by virtualType map { type -> S_VirtualExpr(type) }
+    private val virtualTypeExpr by virtualType map { S_TypeExpr(it) }
+    private val operationTypeExpr by operationType map { S_TypeExpr(it) }
 
     private val baseExprHeadNoAt by (
             nameExpr
@@ -420,7 +424,8 @@ object S_Grammar : Grammar<S_RellFile>() {
             or listExpr
             or setExpr
             or mapExpr
-            or virtualExpr
+            or virtualTypeExpr
+            or operationTypeExpr
     )
 
     private val baseExprHead by ( atExpr or baseExprHeadNoAt)

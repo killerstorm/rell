@@ -52,3 +52,29 @@ namespace x {
         }
     }
 }
+
+
+5. Language: Calling operations
+
+Operation call uses the same syntax as function or query call, but has a completely different meaning. The call does not
+execute operation's body, but returns an operation call object instead (of type "operation"):
+
+operation foo(x: integer) {}
+...
+val o: operation = foo(123);
+
+Returned value can be used to construct transactions and blocks:
+
+val tx = rell.test.tx(foo(123));
+val blk = rell.test.block(tx);
+
+
+6. Library: types and functions rell.test.block, rell.test.tx
+
+function rell.test.block(): rell.test.block;
+function rell.test.block(tx: rell.test.tx): rell.test.block;
+function rell.test.block(txs: list<rell.test.tx>): rell.test.block;
+
+function rell.test.tx(): rell.test.tx;
+function rell.test.tx(op: operation): rell.test.tx;
+function rell.test.tx(ops: list<operation>): rell.test.tx;

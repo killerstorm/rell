@@ -7,7 +7,7 @@ package net.postchain.rell.compiler.ast
 import net.postchain.rell.compiler.*
 import net.postchain.rell.model.*
 
-sealed class S_Type {
+sealed class S_Type(val pos: S_Pos) {
     abstract fun compile(ctx: C_NamespaceContext): R_Type
 
     fun compile(ctx: C_ExprContext): R_Type {
@@ -45,11 +45,11 @@ sealed class S_Type {
     }
 }
 
-class S_NameType(val names: List<S_Name>): S_Type() {
+class S_NameType(val names: List<S_Name>): S_Type(names[0].pos) {
     override fun compile(ctx: C_NamespaceContext): R_Type = ctx.getType(names)
 }
 
-class S_NullableType(val pos: S_Pos, val valueType: S_Type): S_Type() {
+class S_NullableType(pos: S_Pos, val valueType: S_Type): S_Type(pos) {
     override fun compile(ctx: C_NamespaceContext): R_Type {
         val rValueType = valueType.compile(ctx)
         if (rValueType is R_NullableType) throw C_Error(pos, "type_nullable_nullable", "Nullable nullable (T??) is not allowed")
@@ -57,7 +57,7 @@ class S_NullableType(val pos: S_Pos, val valueType: S_Type): S_Type() {
     }
 }
 
-class S_TupleType(val fields: List<Pair<S_Name?, S_Type>>): S_Type() {
+class S_TupleType(pos: S_Pos, val fields: List<Pair<S_Name?, S_Type>>): S_Type(pos) {
     override fun compile(ctx: C_NamespaceContext): R_Type {
         val names = mutableSetOf<String>()
         for ((name, _) in fields) {
@@ -72,7 +72,7 @@ class S_TupleType(val fields: List<Pair<S_Name?, S_Type>>): S_Type() {
     }
 }
 
-class S_ListType(val pos: S_Pos, val element: S_Type): S_Type() {
+class S_ListType(pos: S_Pos, val element: S_Type): S_Type(pos) {
     override fun compile(ctx: C_NamespaceContext): R_Type {
         val rElement = element.compile(ctx)
         C_Utils.checkUnitType(pos, rElement, "type_list_unit", "Invalid list element type")
@@ -80,7 +80,7 @@ class S_ListType(val pos: S_Pos, val element: S_Type): S_Type() {
     }
 }
 
-class S_SetType(val pos: S_Pos, val element: S_Type): S_Type() {
+class S_SetType(pos: S_Pos, val element: S_Type): S_Type(pos) {
     override fun compile(ctx: C_NamespaceContext): R_Type {
         val rElement = element.compile(ctx)
         C_Utils.checkUnitType(pos, rElement, "type_set_unit", "Invalid set element type")
@@ -89,7 +89,7 @@ class S_SetType(val pos: S_Pos, val element: S_Type): S_Type() {
     }
 }
 
-class S_MapType(val pos: S_Pos, val key: S_Type, val value: S_Type): S_Type() {
+class S_MapType(pos: S_Pos, val key: S_Type, val value: S_Type): S_Type(pos) {
     override fun compile(ctx: C_NamespaceContext): R_Type {
         val rKey = key.compile(ctx)
         val rValue = value.compile(ctx)
@@ -100,7 +100,7 @@ class S_MapType(val pos: S_Pos, val key: S_Type, val value: S_Type): S_Type() {
     }
 }
 
-class S_VirtualType(val pos: S_Pos, val innerType: S_Type): S_Type() {
+class S_VirtualType(pos: S_Pos, val innerType: S_Type): S_Type(pos) {
     override fun compile(ctx: C_NamespaceContext): R_Type {
         val rInnerType = innerType.compile(ctx)
 
@@ -149,5 +149,11 @@ class S_VirtualType(val pos: S_Pos, val innerType: S_Type): S_Type() {
                 else -> virtualType(type) ?: type
             }
         }
+    }
+}
+
+class S_OperationType(pos: S_Pos): S_Type(pos) {
+    override fun compile(ctx: C_NamespaceContext): R_Type {
+        return R_OperationType
     }
 }

@@ -120,11 +120,12 @@ private class C_NsDef_UserFunction(private val userFn: C_UserGlobalFunction): C_
     }
 }
 
-private class C_NsDef_Operation(private val op: R_Operation): C_NsDef() {
+private class C_NsDef_Operation(private val cOp: C_OperationGlobalFunction): C_NsDef() {
     override fun type() = C_DeclarationType.OPERATION
-    override fun toNamespaceElement() = C_NamespaceElement()
+    override fun toNamespaceElement() = C_NamespaceElement.create(function = cOp)
 
     override fun addToDefs(b: C_ModuleDefsBuilder) {
+        val op = cOp.rOp
         b.operations.add(op.moduleLevelName, op)
     }
 }
@@ -234,7 +235,7 @@ class C_UserNsProtoBuilder(private val assembler: C_NsAsm_ComponentAssembler) {
         addDef(name, C_NsDef_UserFunction(fn))
     }
 
-    fun addOperation(name: S_Name, operation: R_Operation) {
+    fun addOperation(name: S_Name, operation: C_OperationGlobalFunction) {
         addDef(name, C_NsDef_Operation(operation))
     }
 

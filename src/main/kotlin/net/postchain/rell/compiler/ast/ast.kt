@@ -555,24 +555,34 @@ class S_OperationDefinition(
         val mountName = ctx.mountName(modTarget, name)
 
         val rOperation = R_Operation(names, mountName)
+        val cOperation = C_OperationGlobalFunction(rOperation)
+
         ctx.appCtx.defsAdder.addOperation(rOperation)
-        ctx.nsBuilder.addOperation(name, rOperation)
+        ctx.nsBuilder.addOperation(name, cOperation)
         ctx.mntBuilder.addOperation(name, rOperation)
 
-        ctx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
-            doCompile(ctx, rOperation)
+        ctx.executor.onPass(C_CompilerPass.MEMBERS) {
+            val header = compileHeader(ctx, cOperation)
+            ctx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
+                compileBody(ctx, rOperation, header)
+            }
         }
     }
 
-    private fun doCompile(ctx: C_MountContext, rOperation: R_Operation) {
-        val forParams = C_FormalParameters.create(ctx.nsCtx, params, true)
+    private fun compileHeader(ctx: C_MountContext, cOperation: C_OperationGlobalFunction): C_OperationFunctionHeader {
+        val forParams = C_FormalParameters.compile(ctx.nsCtx, params, true)
+        val header = C_OperationFunctionHeader(forParams)
+        cOperation.setHeader(header)
+        return header
+    }
 
+    private fun compileBody(ctx: C_MountContext, rOperation: R_Operation, header: C_OperationFunctionHeader) {
         val statementVars = processStatementVars()
         val defCtx = C_DefinitionContext(ctx, C_DefinitionType.OPERATION)
         val fnCtx = C_FunctionContext(defCtx, rOperation.appLevelName, null, statementVars)
         val frameCtx = C_FrameContext.create(fnCtx)
 
-        val actParams = forParams.compile(frameCtx)
+        val actParams = header.params.compile(frameCtx)
         val cBody = body.compile(actParams.stmtCtx)
         val rBody = cBody.rStmt
         val callFrame = frameCtx.makeCallFrame(cBody.guardBlock)
@@ -1267,7 +1277,7 @@ class C_FormalParameters(list: List<C_FormalParameter>) {
     companion object {
         val EMPTY = C_FormalParameters(listOf())
 
-        fun create(ctx: C_NamespaceContext, params: List<S_AttrHeader>, gtv: Boolean): C_FormalParameters {
+        fun compile(ctx: C_NamespaceContext, params: List<S_AttrHeader>, gtv: Boolean): C_FormalParameters {
             val cParams = mutableListOf<C_FormalParameter>()
 
             for (param in params) {

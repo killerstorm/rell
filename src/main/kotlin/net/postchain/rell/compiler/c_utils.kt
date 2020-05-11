@@ -491,6 +491,19 @@ object C_Errors {
         }
     }
 
+    fun check(ctx: C_MessageContext, b: Boolean, pos: S_Pos, code: String, msg: String) {
+        if (!b) {
+            ctx.error(pos, code, msg)
+        }
+    }
+
+    fun check(ctx: C_MessageContext, b: Boolean, pos: S_Pos, codeMsgSupplier: () -> Pair<String, String>) {
+        if (!b) {
+            val (code, msg) = codeMsgSupplier()
+            ctx.error(pos, code, msg)
+        }
+    }
+
     fun <T> checkNotNull(value: T?, pos: S_Pos, code: String, msg: String): T {
         if (value == null) {
             throw C_Error(pos, code, msg)

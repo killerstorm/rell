@@ -34,6 +34,7 @@ class C_ExprContext(
 ) {
     val nsCtx = defCtx.nsCtx
     val globalCtx = defCtx.globalCtx
+    val appCtx = defCtx.appCtx
     val msgCtx = nsCtx.msgCtx
     val executor = defCtx.executor
     val nsValueCtx = C_NamespaceValueContext(defCtx)

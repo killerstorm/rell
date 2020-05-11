@@ -953,7 +953,7 @@ class S_StructOrCallExpr(val base: S_Expr, val args: List<S_NameExprPair>): S_Ex
     }
 }
 
-class S_VirtualExpr(val type: S_VirtualType): S_Expr(type.pos) {
+class S_TypeExpr(val type: S_Type): S_Expr(type.pos) {
     override fun compile(ctx: C_ExprContext): C_Expr {
         val rType = type.compile(ctx)
         return C_TypeExpr(type.pos, rType)

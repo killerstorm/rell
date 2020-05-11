@@ -11,6 +11,7 @@ import net.postchain.gtv.merkle.proof.toGtvVirtual
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlExecutor
+import net.postchain.rell.utils.toImmList
 import org.apache.commons.collections4.MultiValuedMap
 import org.apache.commons.collections4.multimap.HashSetValuedHashMap
 
@@ -437,6 +438,32 @@ object GtvRtConversion_Gtv: GtvRtConversion() {
     override fun directCompatibility() = R_GtvCompatibility(true, true)
     override fun rtToGtv(rt: Rt_Value, pretty: Boolean) = rt.asGtv()
     override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv) = Rt_GtvValue(gtv)
+}
+
+object GtvRtConversion_Operation: GtvRtConversion() {
+    override fun directCompatibility() = R_GtvCompatibility(true, true)
+
+    override fun rtToGtv(rt: Rt_Value, pretty: Boolean): Gtv {
+        val op = rt.asOperation()
+        val args = op.args.map { it.type().rtToGtv(it, pretty) }
+        return GtvArray(arrayOf(GtvString(op.op.str()), GtvArray(args.toTypedArray())))
+    }
+
+    override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
+        val array = gtvToArray(gtv)
+        if (array.size != 2) {
+            throw errGtv("operation:array_size:${array.size}", "Wrong gtv array size: ${array.size} (must be 2)")
+        }
+
+        val nameStr = gtvToString(array[0])
+        val name = R_MountName.ofOpt(nameStr)
+        if (name == null || name.isEmpty()) {
+            throw errGtv("operation:bad_name:$nameStr", "Invalid operation name: '$nameStr'")
+        }
+
+        val args = gtvToArray(array[1]).map { Rt_GtvValue(it) }.toImmList()
+        return Rt_OperationValue(name, args)
+    }
 }
 
 sealed class GtvRtConversion_Virtual: GtvRtConversion() {
