@@ -4,7 +4,7 @@
 
 package net.postchain.rell.model
 
-import net.postchain.core.Signature
+import net.postchain.core.*
 import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.PostchainUtils
 import net.postchain.rell.compiler.C_Constants
@@ -767,32 +767,62 @@ object R_SysFn_Rell {
     }
 }
 
-object R_SysFn_Test {
+object R_SysFn_Gtx {
     object Tx {
-        object Empty: R_SysFunction_0() {
-            override fun call() = Rt_TestTxValue(listOf())
+        object NewEmpty: R_SysFunctionEx_0() {
+            override fun call(ctx: Rt_CallContext): Rt_Value {
+                val blockchainRid = ctx.globalCtx.chainCtx.blockchainRid
+                return Rt_GtxTxValue(blockchainRid, listOf(), listOf(), listOf())
+            }
         }
 
-        object OneOp: R_SysFunction_1() {
-            override fun call(arg: Rt_Value) = Rt_TestTxValue(listOf(arg.asOperation()))
+        object NewOneOp: R_SysFunctionEx_1() {
+            override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
+                val blockchainRid = ctx.globalCtx.chainCtx.blockchainRid
+                val ops = listOf(arg.asOperation())
+                return Rt_GtxTxValue(blockchainRid, ops, listOf(), listOf())
+            }
         }
 
-        object ListOfOps: R_SysFunction_1() {
-            override fun call(arg: Rt_Value) = Rt_TestTxValue(arg.asList().map { it.asOperation() })
+        object NewListOfOps: R_SysFunctionEx_1() {
+            override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
+                val blockchainRid = ctx.globalCtx.chainCtx.blockchainRid
+                val ops = arg.asList().map { it.asOperation() }
+                return Rt_GtxTxValue(blockchainRid, ops, listOf(), listOf())
+            }
+        }
+
+        object Run: R_SysFunctionEx_1() {
+            override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
+                val tx = arg.asGtxTx()
+                val block = Rt_GtxBlockValue(listOf(tx))
+                return Block.Run.call(ctx, block)
+            }
         }
     }
 
     object Block {
-        object Empty: R_SysFunction_0() {
-            override fun call() = Rt_TestBlockValue(listOf())
+        object NewEmpty: R_SysFunction_0() {
+            override fun call() = Rt_GtxBlockValue(listOf())
         }
 
-        object OneTx: R_SysFunction_1() {
-            override fun call(arg: Rt_Value) = Rt_TestBlockValue(listOf(arg as Rt_TestTxValue))
+        object NewOneTx: R_SysFunction_1() {
+            override fun call(arg: Rt_Value) = Rt_GtxBlockValue(listOf(arg.asGtxTx()))
         }
 
-        object ListOfTxs: R_SysFunction_1() {
-            override fun call(arg: Rt_Value) = Rt_TestBlockValue(arg.asList().map { it as Rt_TestTxValue })
+        object NewListOfTxs: R_SysFunction_1() {
+            override fun call(arg: Rt_Value) = Rt_GtxBlockValue(arg.asList().map { it.asGtxTx() })
+        }
+
+        object Run: R_SysFunctionEx_1() {
+            override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
+                if (!ctx.appCtx.repl) {
+                    throw Rt_Error("fn:block.run:no_repl", "Block can be executed only in REPL")
+                }
+                val block = arg.asGtxBlock()
+                PostchainBlockRunner.runBlock(ctx, block)
+                return Rt_UnitValue
+            }
         }
     }
 }

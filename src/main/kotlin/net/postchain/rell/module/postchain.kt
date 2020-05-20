@@ -14,16 +14,13 @@ import net.postchain.gtx.ExtOpData
 import net.postchain.gtx.GTXModule
 import net.postchain.gtx.GTXModuleFactory
 import net.postchain.gtx.GTXOperation
-import net.postchain.rell.utils.CommonUtils
-import net.postchain.rell.utils.LateInit
 import net.postchain.rell.compiler.*
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.ConnectionSqlExecutor
 import net.postchain.rell.sql.SqlInit
 import net.postchain.rell.sql.SqlInitLogging
-import net.postchain.rell.utils.toImmMap
-import net.postchain.rell.utils.toImmSet
+import net.postchain.rell.utils.*
 import org.apache.commons.lang3.time.FastDateFormat
 
 const val RELL_LANG_VERSION = "0.10"
@@ -182,6 +179,7 @@ private class RellModuleConfig(
 )
 
 private class RellPostchainModule(
+        private val env: RellPostchainModuleEnvironment,
         private val rApp: R_App,
         private val moduleName: String,
         private val chainCtx: Rt_ChainContext,
@@ -189,6 +187,8 @@ private class RellPostchainModule(
         private val outPrinter: Rt_Printer,
         private val logPrinter: Rt_Printer,
         private val errorHandler: ErrorHandler,
+        private val sourceDir: C_SourceDir,
+        private val modules: Set<R_ModuleName>,
         private val config: RellModuleConfig
 ) : GTXModule {
     private val operationNames = rApp.operations.keys.map { it.str() }.toImmSet()
@@ -259,6 +259,7 @@ private class RellPostchainModule(
                 outPrinter = outPrinter,
                 logPrinter = logPrinter,
                 chainCtx = chainCtx,
+                pcModuleEnv = env,
                 typeCheck = config.typeCheck
         )
 
@@ -266,7 +267,7 @@ private class RellPostchainModule(
 
         val sqlExec = Rt_SqlExecutor(ConnectionSqlExecutor(eCtx.conn, config.sqlLogging), globalCtx.logSqlErrors)
         val sqlCtx = Rt_SqlContext.create(rApp, sqlMapping, chainDeps, sqlExec, heightProvider)
-        val appCtx = Rt_AppContext(globalCtx, sqlCtx, rApp, null)
+        val appCtx = Rt_AppContext(globalCtx, sqlCtx, rApp, false, null, sourceDir, modules)
         return Rt_ExecutionContext(appCtx, sqlExec)
     }
 
@@ -290,13 +291,29 @@ private class RellPostchainModule(
     }
 }
 
-class RellPostchainModuleFactory(
-        private val outPrinter: Rt_Printer = Rt_OutPrinter,
-        private val logPrinter: Rt_Printer = Rt_LogPrinter(),
-        private val wrapCtErrors: Boolean = true,
-        private val wrapRtErrors: Boolean = true,
-        private val forceTypeCheck: Boolean = false
-): GTXModuleFactory {
+class RellPostchainModuleEnvironment(
+        val outPrinter: Rt_Printer = Rt_OutPrinter,
+        val logPrinter: Rt_Printer = Rt_LogPrinter(),
+        val wrapCtErrors: Boolean = true,
+        val wrapRtErrors: Boolean = true,
+        val forceTypeCheck: Boolean = false
+) {
+    companion object {
+        val DEFAULT = RellPostchainModuleEnvironment()
+
+        private val THREAD_LOCAL = ThreadLocalContext(DEFAULT)
+
+        fun get() = THREAD_LOCAL.get()
+
+        fun set(env: RellPostchainModuleEnvironment, code: () -> Unit) {
+            THREAD_LOCAL.set(env, code)
+        }
+    }
+}
+
+class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): GTXModuleFactory {
+    val env = env ?: RellPostchainModuleEnvironment.get()
+
     override fun makeModule(config: Gtv, blockchainRID: BlockchainRid): GTXModule {
         val gtxNode = config.asDict().getValue("gtx").asDict()
         val rellNode = gtxNode.getValue("rell").asDict()
@@ -304,21 +321,21 @@ class RellPostchainModuleFactory(
         val moduleName = rellNode["moduleName"]?.asString() ?: ""
 
         val (combinedPrinter, copyOutput) = getCombinedPrinter(rellNode)
-        val errorHandler = ErrorHandler(combinedPrinter, wrapCtErrors, wrapRtErrors)
+        val errorHandler = ErrorHandler(combinedPrinter, env.wrapCtErrors, env.wrapRtErrors)
 
         return errorHandler.handleError({ "Module initialization failed" }) {
-            val sourceCodes = getSourceCodes(rellNode)
+            val sourceDir = getSourceDir(rellNode)
             val modules = getModuleNames(rellNode)
-            val app = compileApp(sourceCodes, modules, errorHandler, copyOutput)
+            val app = compileApp(sourceDir, modules, errorHandler, copyOutput)
 
             val chainCtx = createChainContext(config, rellNode, app, blockchainRID)
             val chainDeps = getGtxChainDependencies(config)
 
-            val modLogPrinter = getModulePrinter(logPrinter, Rt_TimestampPrinter(combinedPrinter), copyOutput)
-            val modOutPrinter = getModulePrinter(outPrinter, combinedPrinter, copyOutput)
+            val modLogPrinter = getModulePrinter(env.logPrinter, Rt_TimestampPrinter(combinedPrinter), copyOutput)
+            val modOutPrinter = getModulePrinter(env.outPrinter, combinedPrinter, copyOutput)
 
             val sqlLogging = rellNode["sqlLog"]?.asBoolean() ?: false
-            val typeCheck = forceTypeCheck || (rellNode["typeCheck"]?.asBoolean() ?: false)
+            val typeCheck = env.forceTypeCheck || (rellNode["typeCheck"]?.asBoolean() ?: false)
             val dbInitLogLevel = rellNode["dbInitLogLevel"]?.asInteger()?.toInt() ?: SqlInitLogging.LOG_STEP_COMPLEX
 
             val moduleConfig = RellModuleConfig(
@@ -328,6 +345,7 @@ class RellPostchainModuleFactory(
             )
 
             RellPostchainModule(
+                    env,
                     app,
                     moduleName,
                     chainCtx,
@@ -335,7 +353,9 @@ class RellPostchainModuleFactory(
                     logPrinter = modLogPrinter,
                     outPrinter = modOutPrinter,
                     errorHandler = errorHandler,
-                    config = moduleConfig
+                    config = moduleConfig,
+                    sourceDir = sourceDir,
+                    modules = modules.toSet()
             )
         }
     }
@@ -347,7 +367,7 @@ class RellPostchainModuleFactory(
     private fun getCombinedPrinter(rellNode: Map<String, Gtv>): Pair<Rt_Printer, Boolean> {
         val className = rellNode["combinedPrinterFactoryClass"]?.asString()
         val copyOutput = rellNode["copyOutputToCombinedPrinter"]?.asBoolean() ?: true
-        className ?: return Pair(logPrinter, false)
+        className ?: return Pair(env.logPrinter, false)
 
         try {
             val cls = Class.forName(className)
@@ -361,12 +381,11 @@ class RellPostchainModuleFactory(
     }
 
     private fun compileApp(
-            sourceCodes: Map<C_SourcePath, C_SourceFile>,
+            sourceDir: C_SourceDir,
             modules: List<R_ModuleName>,
             errorHandler: ErrorHandler,
             copyOutput: Boolean
     ): R_App {
-        val sourceDir = C_MapSourceDir(sourceCodes)
         val cResult = C_Compiler.compile(sourceDir, modules)
         val app = processCompilationResult(cResult, errorHandler, copyOutput)
         return app
@@ -407,7 +426,7 @@ class RellPostchainModuleFactory(
 
         errorHandler.ignoreError()
 
-        val err = if (wrapCtErrors) {
+        val err = if (env.wrapCtErrors) {
             val error = if (errors.isEmpty()) null else errors[0]
             UserMistake(error?.text ?: "Compilation error")
         } else if (errors.isNotEmpty()) {
@@ -431,7 +450,7 @@ class RellPostchainModuleFactory(
         return if (names.isNotEmpty()) names else listOf(R_ModuleName.EMPTY)
     }
 
-    private fun getSourceCodes(rellNode: Map<String, Gtv>): Map<C_SourcePath, C_SourceFile> {
+    private fun getSourceDir(rellNode: Map<String, Gtv>): C_SourceDir {
         val filesNode = rellNode[CONFIG_RELL_FILES]
         val sourcesNode = rellNode[CONFIG_RELL_SOURCES]
 
@@ -447,10 +466,12 @@ class RellPostchainModuleFactory(
             filesNode!!.asDict().mapValues { (_, v) -> CommonUtils.readFileContent(v.asString()) }
         }
 
-        return sourceCodes
+        val files = sourceCodes
                 .mapKeys { (k, _) -> parseSourcePath(k) }
                 .mapValues { (k, v) -> C_TextSourceFile(k, v) }
                 .toImmMap()
+
+        return C_MapSourceDir(files)
     }
 
     private fun parseSourcePath(s: String): C_SourcePath {

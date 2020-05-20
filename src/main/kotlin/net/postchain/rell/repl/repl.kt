@@ -81,7 +81,7 @@ class ReplInterpreter private constructor(
         private val useSql: Boolean
 ) {
     private val commands = ControlCommands()
-    private val cGlobalCtx = C_GlobalContext(C_CompilerOptions.DEFAULT)
+    private val cGlobalCtx = C_GlobalContext(C_CompilerOptions.DEFAULT, sourceDir, if (module != null) setOf(module) else setOf())
 
     private var defsState = C_ReplDefsState.EMPTY
     private var codeState = ReplCodeState.EMPTY
@@ -158,7 +158,8 @@ class ReplInterpreter private constructor(
 
     private fun createRtAppContext(globalCtx: Rt_GlobalContext, app: R_App): Rt_AppContext {
         val sqlCtx = Rt_SqlContext.createNoExternalChains(app, Rt_ChainSqlMapping(0))
-        return Rt_AppContext(globalCtx, sqlCtx, app, outChannel)
+        val modules = (if (module != null) setOf(module) else setOf()) + defsState.appState.modules.keys.map { it.name }
+        return Rt_AppContext(globalCtx, sqlCtx, app, true, outChannel, sourceDir, modules)
     }
 
     private fun sqlUpdate(appCtx: Rt_AppContext, force: Boolean) {

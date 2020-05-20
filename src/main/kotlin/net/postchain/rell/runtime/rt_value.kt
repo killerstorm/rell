@@ -8,14 +8,12 @@ import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.google.common.math.LongMath
 import mu.KLogging
+import net.postchain.base.BlockchainRid
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvVirtual
-import net.postchain.rell.utils.CommonUtils
-import net.postchain.rell.utils.PostchainUtils
 import net.postchain.rell.model.*
 import net.postchain.rell.compiler.C_Constants
-import net.postchain.rell.model.*
-import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.*
 import java.math.BigDecimal
 import java.util.*
 
@@ -47,8 +45,8 @@ enum class Rt_ValueType {
     RANGE,
     GTV,
     OPERATION,
-    TEST_BLOCK,
-    TEST_TX,
+    GTX_BLOCK,
+    GTX_TX,
     VIRTUAL,
     VIRTUAL_COLLECTION,
     VIRTUAL_LIST,
@@ -87,6 +85,8 @@ sealed class Rt_Value {
     open fun asObjectId(): Long = throw errType(Rt_ValueType.CLASS)
     open fun asGtv(): Gtv = throw errType(Rt_ValueType.GTV)
     open fun asOperation(): Rt_OperationValue = throw errType(Rt_ValueType.OPERATION)
+    open fun asGtxTx(): Rt_GtxTxValue = throw errType(Rt_ValueType.GTX_TX)
+    open fun asGtxBlock(): Rt_GtxBlockValue = throw errType(Rt_ValueType.GTX_BLOCK)
     open fun asFormatArg(): Any = toString()
 
     abstract fun toStrictString(showTupleFieldNames: Boolean = true): String
@@ -744,32 +744,41 @@ class Rt_OperationValue(val op: R_MountName, args: List<Rt_Value>): Rt_Value() {
     override fun hashCode() = Objects.hash(op, args)
 }
 
-class Rt_TestBlockValue(txs: List<Rt_TestTxValue>): Rt_Value() {
+class Rt_GtxBlockValue(txs: List<Rt_GtxTxValue>): Rt_Value() {
     val txs = txs.toImmList()
 
-    override fun type() = R_TestBlockType
-    override fun valueType() = Rt_ValueType.TEST_BLOCK
+    override fun type() = R_GtxBlockType
+    override fun valueType() = Rt_ValueType.GTX_BLOCK
+    override fun asGtxBlock() = this
 
     override fun toStrictString(showTupleFieldNames: Boolean) =
             "${type().toStrictString()}[${txs.joinToString(",") { it.toStrictString() }}]"
 
     override fun toString() = "block(${txs.joinToString(",")})"
 
-    override fun equals(other: Any?) = other is Rt_TestBlockValue && txs == other.txs
+    override fun equals(other: Any?) = other is Rt_GtxBlockValue && txs == other.txs
     override fun hashCode() = Objects.hash(txs)
 }
 
-class Rt_TestTxValue(ops: List<Rt_OperationValue>): Rt_Value() {
+class Rt_GtxTxValue(
+        val blockchainRid: BlockchainRid,
+        ops: List<Rt_OperationValue>,
+        signers: List<Bytes33>,
+        signatures: List<Bytes32>
+): Rt_Value() {
     val ops = ops.toImmList()
+    val signers = signers.toImmList()
+    val signatures = signatures.toImmList()
 
-    override fun type() = R_TestTxType
-    override fun valueType() = Rt_ValueType.TEST_TX
+    override fun type() = R_GtxTxType
+    override fun valueType() = Rt_ValueType.GTX_TX
+    override fun asGtxTx() = this
 
     override fun toStrictString(showTupleFieldNames: Boolean) =
         "${type().toStrictString()}[${ops.joinToString(",") { it.toStrictString() }}]"
 
     override fun toString() = "tx(${ops.joinToString(",")})"
 
-    override fun equals(other: Any?) = other is Rt_TestTxValue && ops == other.ops
+    override fun equals(other: Any?) = other is Rt_GtxTxValue && ops == other.ops
     override fun hashCode() = Objects.hash(ops)
 }

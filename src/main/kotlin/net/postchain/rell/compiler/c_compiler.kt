@@ -198,7 +198,7 @@ object C_Compiler {
             modules: List<R_ModuleName>,
             options: C_CompilerOptions = C_CompilerOptions.DEFAULT
     ): C_CompilationResult {
-        val globalCtx = C_GlobalContext(options)
+        val globalCtx = C_GlobalContext(options, sourceDir, modules.toSet())
         val msgCtx = C_MessageContext(globalCtx)
         val controller = C_CompilerController(msgCtx)
 
@@ -295,7 +295,7 @@ object C_ReplCompiler {
         val success = if (app == null || codeGetter == null || !errors.isEmpty()) null else {
             val cCode = codeGetter.get()
             val newAppState = appCtx.getNewReplState()
-            val newState = C_ReplDefsState(false, newAppState)
+            val newState = C_ReplDefsState(newAppState)
             C_ReplSuccess(app, newState, cCode)
         }
 
@@ -371,9 +371,9 @@ class C_ReplAppState(
     }
 }
 
-class C_ReplDefsState(val initial: Boolean, val appState: C_ReplAppState) {
+class C_ReplDefsState(val appState: C_ReplAppState) {
     companion object {
-        val EMPTY = C_ReplDefsState(true, C_ReplAppState.EMPTY)
+        val EMPTY = C_ReplDefsState(C_ReplAppState.EMPTY)
     }
 }
 

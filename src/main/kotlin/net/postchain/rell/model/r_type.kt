@@ -724,16 +724,16 @@ object R_OperationType: R_Type("operation") {
     override fun toMetaGtv() = name.toGtv()
 }
 
-object R_TestBlockType: R_Type("rell.test.block") {
+object R_GtxBlockType: R_Type("rell.gtx.block") {
     override fun isReference() = true
-    override fun createGtvConversion() = GtvRtConversion_None
+    override fun createGtvConversion() = GtvRtConversion_GtxBlock
     override fun toStrictString(): String = name
     override fun toMetaGtv() = name.toGtv()
 }
 
-object R_TestTxType: R_Type("rell.test.tx") {
+object R_GtxTxType: R_Type("rell.gtx.tx") {
     override fun isReference() = true
-    override fun createGtvConversion() = GtvRtConversion_None
+    override fun createGtvConversion() = GtvRtConversion_GtxTx
     override fun toStrictString(): String = name
     override fun toMetaGtv() = name.toGtv()
 }

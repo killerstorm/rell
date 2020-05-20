@@ -4,6 +4,8 @@
 
 package net.postchain.rell.model
 
+import net.postchain.rell.compiler.C_DefinitionContext
+import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.runtime.*
 import org.apache.commons.lang3.StringUtils
 
@@ -70,7 +72,7 @@ abstract class R_SysFunction {
 abstract class R_SysFunction_0: R_SysFunction() {
     abstract fun call(): Rt_Value
 
-    override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
+    final override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
         check(args.size == 0)
         val res = call()
         return res
@@ -80,7 +82,7 @@ abstract class R_SysFunction_0: R_SysFunction() {
 abstract class R_SysFunction_1: R_SysFunction() {
     abstract fun call(arg: Rt_Value): Rt_Value
 
-    override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
+    final override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
         check(args.size == 1)
         val res = call(args[0])
         return res
@@ -90,7 +92,7 @@ abstract class R_SysFunction_1: R_SysFunction() {
 abstract class R_SysFunction_2: R_SysFunction() {
     abstract fun call(arg1: Rt_Value, arg2: Rt_Value): Rt_Value
 
-    override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
+    final override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
         check(args.size == 2)
         val res = call(args[0], args[1])
         return res
@@ -100,9 +102,49 @@ abstract class R_SysFunction_2: R_SysFunction() {
 abstract class R_SysFunction_3: R_SysFunction() {
     abstract fun call(arg1: Rt_Value, arg2: Rt_Value, arg3: Rt_Value): Rt_Value
 
-    override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
+    final override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
         check(args.size == 3)
         val res = call(args[0], args[1], args[2])
+        return res
+    }
+}
+
+abstract class R_SysFunctionEx_0: R_SysFunction() {
+    abstract fun call(ctx: Rt_CallContext): Rt_Value
+
+    final override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
+        check(args.size == 0)
+        val res = call(ctx)
+        return res
+    }
+}
+
+abstract class R_SysFunctionEx_1: R_SysFunction() {
+    abstract fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value
+
+    final override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
+        check(args.size == 1)
+        val res = call(ctx, args[0])
+        return res
+    }
+}
+
+abstract class R_SysFunctionEx_2: R_SysFunction() {
+    abstract fun call(ctx: Rt_CallContext, arg1: Rt_Value, arg2: Rt_Value): Rt_Value
+
+    final override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
+        check(args.size == 2)
+        val res = call(ctx, args[0], args[1])
+        return res
+    }
+}
+
+abstract class R_SysFunctionEx_3: R_SysFunction() {
+    abstract fun call(ctx: Rt_CallContext, arg1: Rt_Value, arg2: Rt_Value, arg3: Rt_Value): Rt_Value
+
+    final override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
+        check(args.size == 3)
+        val res = call(ctx, args[0], args[1], args[2])
         return res
     }
 }

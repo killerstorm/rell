@@ -8,12 +8,15 @@ import net.postchain.rell.compiler.ast.*
 import net.postchain.rell.model.*
 import net.postchain.rell.utils.Getter
 import net.postchain.rell.utils.TypedKeyMap
+import net.postchain.rell.utils.toImmSet
 import org.apache.commons.lang3.StringUtils
 
 data class C_VarUid(val id: Long, val name: String, val fn: R_FnUid)
 data class C_LoopUid(val id: Long, val fn: R_FnUid)
 
-class C_GlobalContext(val compilerOptions: C_CompilerOptions) {
+class C_GlobalContext(val compilerOptions: C_CompilerOptions, val sourceDir: C_SourceDir, modules: Set<R_ModuleName>) {
+    val modules = modules.toImmSet()
+
     private val appUidGen = C_UidGen { id, _ -> R_AppUid(id) }
 
     fun nextAppUid() = appUidGen.next("")

@@ -65,16 +65,30 @@ val o: operation = foo(123);
 
 Returned value can be used to construct transactions and blocks:
 
-val tx = rell.test.tx(foo(123));
-val blk = rell.test.block(tx);
+val tx = rell.gtx.tx(foo(123));
+val blk = rell.gtx.block(tx);
 
 
-6. Library: types and functions rell.test.block, rell.test.tx
+6. Library: types and functions rell.gtx.block, rell.gtx.tx
 
-function rell.test.block(): rell.test.block;
-function rell.test.block(tx: rell.test.tx): rell.test.block;
-function rell.test.block(txs: list<rell.test.tx>): rell.test.block;
+function rell.gtx.block(): rell.test.block;
+function rell.gtx.block(tx: rell.test.tx): rell.test.block;
+function rell.gtx.block(txs: list<rell.test.tx>): rell.test.block;
 
-function rell.test.tx(): rell.test.tx;
-function rell.test.tx(op: operation): rell.test.tx;
-function rell.test.tx(ops: list<operation>): rell.test.tx;
+function rell.gtx.tx(): rell.test.tx;
+function rell.gtx.tx(op: operation): rell.test.tx;
+function rell.gtx.tx(ops: list<operation>): rell.test.tx;
+
+
+7. REPL: Executing transactions and blocks
+
+Blocks and transactions created via rell.gtx.block() and rell.gtx.tx() functions can be executed in REPL:
+
+operation foo(x: integer) {}
+...
+val o: operation = foo(123);
+val tx = rell.gtx.tx(o);
+tx.run();
+
+Method run() is defined for types rell.gtx.tx and rell.gtx.block: it executes all operations in all transactions of
+a block, and adds the transactions and the block to the blockchain.

@@ -4,6 +4,7 @@
 
 package net.postchain.rell.module
 
+import net.postchain.base.BlockchainRid
 import net.postchain.core.UserMistake
 import net.postchain.gtv.*
 import net.postchain.gtv.merkle.proof.GtvMerkleProofTreeFactory
@@ -11,6 +12,8 @@ import net.postchain.gtv.merkle.proof.toGtvVirtual
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlExecutor
+import net.postchain.rell.utils.Bytes32
+import net.postchain.rell.utils.Bytes33
 import net.postchain.rell.utils.toImmList
 import org.apache.commons.collections4.MultiValuedMap
 import org.apache.commons.collections4.multimap.HashSetValuedHashMap
@@ -349,10 +352,7 @@ class GtvRtConversion_Map(val type: R_MapType): GtvRtConversion() {
     }
 
     private fun gtvToRtEntry(ctx: GtvToRtContext, gtv: Gtv): Pair<Rt_Value, Rt_Value> {
-        val array = gtvToArray(gtv)
-        if (array.size != 2) {
-            throw errGtv("map_entry_size:${array.size}", "Map entry size is ${array.size}")
-        }
+        val array = gtvToArray(gtv, 2, "map_entry_size")
         val key = type.keyType.gtvToRt(ctx, array[0])
         val value = type.valueType.gtvToRt(ctx, array[1])
         return Pair(key, value)
@@ -445,15 +445,13 @@ object GtvRtConversion_Operation: GtvRtConversion() {
 
     override fun rtToGtv(rt: Rt_Value, pretty: Boolean): Gtv {
         val op = rt.asOperation()
-        val args = op.args.map { it.type().rtToGtv(it, pretty) }
-        return GtvArray(arrayOf(GtvString(op.op.str()), GtvArray(args.toTypedArray())))
+        val name = op.op.str().toGtv()
+        val args = op.args.map { it.type().rtToGtv(it, pretty) }.toGtv()
+        return GtvFactory.gtv(name, args)
     }
 
     override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
-        val array = gtvToArray(gtv)
-        if (array.size != 2) {
-            throw errGtv("operation:array_size:${array.size}", "Wrong gtv array size: ${array.size} (must be 2)")
-        }
+        val array = gtvToArray(gtv, 2, "operation")
 
         val nameStr = gtvToString(array[0])
         val name = R_MountName.ofOpt(nameStr)
@@ -463,6 +461,49 @@ object GtvRtConversion_Operation: GtvRtConversion() {
 
         val args = gtvToArray(array[1]).map { Rt_GtvValue(it) }.toImmList()
         return Rt_OperationValue(name, args)
+    }
+}
+
+object GtvRtConversion_GtxTx: GtvRtConversion() {
+    override fun directCompatibility() = R_GtvCompatibility(true, true)
+
+    override fun rtToGtv(rt: Rt_Value, pretty: Boolean): Gtv {
+        val tx = rt.asGtxTx()
+        val body = GtvFactory.gtv(
+                tx.blockchainRid.toGtv(),
+                tx.ops.map { it.type().rtToGtv(it, pretty) }.toGtv(),
+                tx.signers.map { it.toGtv() }.toGtv()
+        )
+        val signatures = tx.signatures.map { it.toGtv() }.toGtv()
+        return GtvFactory.gtv(body, signatures)
+    }
+
+    override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
+        val txArray = gtvToArray(gtv, 2, "gtx_tx")
+
+        val bodyArray = gtvToArray(txArray[0], 3, "gtx_tx:body")
+        val blockchainRid = BlockchainRid(gtvToByteArray(bodyArray[0]))
+        val ops = gtvToArray(bodyArray[1]).map { GtvRtConversion_Operation.gtvToRt(ctx, it).asOperation() }
+        val signers = gtvToArray(bodyArray[2]).map { Bytes33(gtvToByteArray(it)) }
+
+        val signatures = gtvToArray(txArray[1]).map { Bytes32(gtvToByteArray(it)) }
+        return Rt_GtxTxValue(blockchainRid, ops, signers, signatures)
+    }
+}
+
+object GtvRtConversion_GtxBlock: GtvRtConversion() {
+    override fun directCompatibility() = R_GtvCompatibility(true, true)
+
+    override fun rtToGtv(rt: Rt_Value, pretty: Boolean): Gtv {
+        val block = rt.asGtxBlock()
+        val txs = block.txs.map { it.type().rtToGtv(it, pretty) }.toGtv()
+        return txs
+    }
+
+    override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
+        val array = gtvToArray(gtv)
+        val txs = array.map { GtvRtConversion_GtxTx.gtvToRt(ctx, it).asGtxTx() }
+        return Rt_GtxBlockValue(txs)
     }
 }
 
@@ -698,6 +739,15 @@ private fun gtvToJson(gtv: Gtv): Rt_Value {
     } catch (e: IllegalArgumentException) {
         throw errGtvType("json", gtv, "Type error: invalid JSON string")
     }
+}
+
+private fun gtvToArray(gtv: Gtv, size: Int, errCode: String): Array<out Gtv> {
+    val array = gtvToArray(gtv)
+    val actSize = array.size
+    if (actSize != size) {
+        throw errGtv("$errCode:$size:$actSize", "Wrong gtv array size: $actSize instead of $size")
+    }
+    return array
 }
 
 private fun gtvToArray(gtv: Gtv): Array<out Gtv> {

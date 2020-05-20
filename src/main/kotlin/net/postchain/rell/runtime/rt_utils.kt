@@ -5,6 +5,7 @@
 package net.postchain.rell.runtime
 
 import mu.KLogger
+import net.postchain.base.BlockchainRid
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
 import net.postchain.rell.compiler.C_Constants
@@ -21,6 +22,7 @@ import java.sql.SQLException
 
 fun String.toGtv(): Gtv = GtvFactory.gtv(this)
 fun Boolean.toGtv(): Gtv = GtvFactory.gtv(this)
+fun BlockchainRid.toGtv(): Gtv = GtvFactory.gtv(this.data)
 fun List<Gtv>.toGtv(): Gtv = GtvFactory.gtv(this)
 fun Map<String, Gtv>.toGtv(): Gtv = GtvFactory.gtv(this)
 

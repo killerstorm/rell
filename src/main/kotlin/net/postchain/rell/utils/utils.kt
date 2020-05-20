@@ -6,9 +6,11 @@ package net.postchain.rell.utils
 
 import com.google.gson.GsonBuilder
 import net.postchain.base.BlockchainRid
+import net.postchain.base.CryptoSystem
 import net.postchain.base.SECP256K1CryptoSystem
 import net.postchain.base.data.PostgreSQLDatabaseAccess
 import net.postchain.base.data.SQLDatabaseAccess
+import net.postchain.base.merkle.MerkleHashCalculator
 import net.postchain.common.hexStringToByteArray
 import net.postchain.common.toHex
 import net.postchain.gtv.*
@@ -21,9 +23,9 @@ import java.util.function.Supplier
 object PostchainUtils {
     val DATABASE_VERSION = 1
 
-    val cryptoSystem = SECP256K1CryptoSystem()
+    val cryptoSystem: CryptoSystem = SECP256K1CryptoSystem()
 
-    private val merkleCalculator = GtvMerkleHashCalculator(cryptoSystem)
+    private val merkleCalculator: MerkleHashCalculator<Gtv> = GtvMerkleHashCalculator(cryptoSystem)
 
     private val GSON = make_gtv_gson()
 
@@ -114,6 +116,7 @@ abstract class FixLenBytes(bytes: ByteArray) {
 
     fun toByteArray() = bytes.clone()
     fun toHex() = bytes.toHex()
+    fun toGtv(): Gtv = GtvFactory.gtv(bytes.clone())
 
     override fun equals(other: Any?) = other is FixLenBytes && javaClass == other.javaClass && Arrays.equals(bytes, other.bytes)
     override fun hashCode() = Arrays.hashCode(bytes)

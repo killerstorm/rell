@@ -109,7 +109,7 @@ class C_FileImportsDescriptor(
     companion object { val EMPTY = C_FileImportsDescriptor(listOf(), listOf(), listOf()) }
 }
 
-class C_ModuleKey(private val name: R_ModuleName, private val extChain: C_ExternalChain?) {
+class C_ModuleKey(val name: R_ModuleName, private val extChain: C_ExternalChain?) {
     fun keyStr(): String {
         val nameStr = name.str()
         return if (extChain == null) nameStr else "$nameStr[${extChain.name}]"

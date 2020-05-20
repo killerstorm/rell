@@ -73,6 +73,11 @@ class RellConfigGen(
         private val modules: List<R_ModuleName>,
         private val moduleFiles: List<C_SourcePath>
 ) {
+    fun makeConfig(): Gtv {
+        val template = GtvFactory.gtv(mapOf())
+        return makeConfig(template)
+    }
+
     fun makeConfig(templateXml: String?): Gtv {
         val template = getConfigTemplate(templateXml)
         return makeConfig(template)

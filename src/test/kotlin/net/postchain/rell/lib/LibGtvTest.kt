@@ -374,16 +374,40 @@ class LibGtvTest: BaseRellTest(false) {
     }
 
     @Test fun testToFromGtvOperation() {
-        def("operation op(x: integer, y: text) {}")
+        def("operation foo(x: integer, y: text) {}")
 
-        chk("op(123,'Hello').to_gtv()", """gtv[["op",[123,"Hello"]]]""")
-        chk("op(123,'Hello').to_gtv_pretty()", """gtv[["op",[123,"Hello"]]]""")
+        chk("foo(123,'Hello').to_gtv()", """gtv[["foo",[123,"Hello"]]]""")
+        chk("foo(123,'Hello').to_gtv_pretty()", """gtv[["foo",[123,"Hello"]]]""")
 
-        chkFromGtv("['op',[123,'Hello']]", "operation.from_gtv(g)", """op[op(gtv[123],gtv["Hello"])]""")
+        chkFromGtv("['foo',[123,'Hello']]", "operation.from_gtv(g)", """op[foo(gtv[123],gtv["Hello"])]""")
         chkFromGtv("[123,'Hello']", "operation.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("['op',123,'Hello']", "operation.from_gtv(g)", "rt_err:from_gtv")
+        chkFromGtv("['foo',123,'Hello']", "operation.from_gtv(g)", "rt_err:from_gtv")
         chkFromGtv("['',[123,'Hello']]", "operation.from_gtv(g)", "rt_err:from_gtv")
         chkFromGtv("['987',[123,'Hello']]", "operation.from_gtv(g)", "rt_err:from_gtv")
+    }
+
+    @Test fun testToFromGtvGtxTx() {
+        def("operation foo(x: integer, y: text) {}")
+
+        val brid = "00".repeat(32)
+        chk("rell.gtx.tx().to_gtv()", """gtv[[["$brid",[],[]],[]]]""")
+        chk("rell.gtx.tx(foo(123,'Hello')).to_gtv()", """gtv[[["$brid",[["foo",[123,"Hello"]]],[]],[]]]""")
+
+        chkFromGtv("[['$brid',[],[]],[]]", "rell.gtx.tx.from_gtv(g)", """rell.gtx.tx[]""")
+        chkFromGtv("[['$brid',[['foo',[123,'Hello']]],[]],[]]", "rell.gtx.tx.from_gtv(g)",
+                """rell.gtx.tx[op[foo(gtv[123],gtv["Hello"])]]""")
+    }
+
+    @Test fun testToFromGtvGtxBlock() {
+        def("operation foo(x: integer, y: text) {}")
+
+        val brid = "00".repeat(32)
+        chk("rell.gtx.block().to_gtv()", """gtv[[]]""")
+        chk("rell.gtx.block(rell.gtx.tx(foo(123,'Hello'))).to_gtv()", """gtv[[[["$brid",[["foo",[123,"Hello"]]],[]],[]]]]""")
+
+        chkFromGtv("[]", "rell.gtx.block.from_gtv(g)", """rell.gtx.block[]""")
+        chkFromGtv("[[['$brid',[['foo',[123,'Hello']]],[]],[]]]", "rell.gtx.block.from_gtv(g)",
+                """rell.gtx.block[rell.gtx.tx[op[foo(gtv[123],gtv["Hello"])]]]""")
     }
 
     private fun chkFromGtv(gtv: String, expr: String, expected: String) {

@@ -9,8 +9,10 @@ import mu.KLogging
 import net.postchain.base.BlockchainRid
 import net.postchain.core.ByteArrayKey
 import net.postchain.gtv.Gtv
+import net.postchain.rell.compiler.C_SourceDir
 import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.model.*
+import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.repl.ReplOutputChannel
 import net.postchain.rell.sql.*
 import net.postchain.rell.utils.toImmMap
@@ -20,10 +22,11 @@ class Rt_GlobalContext(
         val logPrinter: Rt_Printer,
         val opCtx: Rt_OpContext?,
         val chainCtx: Rt_ChainContext,
+        val pcModuleEnv: RellPostchainModuleEnvironment,
         val logSqlErrors: Boolean = false,
         val sqlUpdatePortionSize: Int = 1000, // Experimental maximum is 2^15
         val typeCheck: Boolean = false
-){
+) {
     private val rellVersion = Rt_RellVersion.getInstance()
 
     fun rellVersion(): Rt_RellVersion {
@@ -244,7 +247,10 @@ class Rt_AppContext(
         val globalCtx: Rt_GlobalContext,
         val sqlCtx: Rt_SqlContext,
         val app: R_App,
-        val replOut: ReplOutputChannel?
+        val repl: Boolean,
+        val replOut: ReplOutputChannel?,
+        val sourceDir: C_SourceDir,
+        val modules: Set<R_ModuleName>
 ) {
     private var objsInit: SqlObjectsInit? = null
     private var objsInited = false

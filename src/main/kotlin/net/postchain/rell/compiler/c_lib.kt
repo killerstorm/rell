@@ -269,27 +269,27 @@ object C_LibFunctions {
             .add("get_app_structure", R_GtvType, listOf(), R_SysFn_Rell.GetAppStructure)
             .build()
 
-    private val RELL_TEST_NAMESPACE_FNS = C_GlobalFuncBuilder()
-            .add("block", R_TestBlockType, listOf(), R_SysFn_Test.Block.Empty)
-            .add("block", R_TestBlockType, listOf(R_TestTxType), R_SysFn_Test.Block.OneTx)
-            .add("block", R_TestBlockType, listOf(R_ListType(R_TestTxType)), R_SysFn_Test.Block.ListOfTxs)
-            .add("tx", R_TestTxType, listOf(), R_SysFn_Test.Tx.Empty)
-            .add("tx", R_TestTxType, listOf(R_OperationType), R_SysFn_Test.Tx.OneOp)
-            .add("tx", R_TestTxType, listOf(R_ListType(R_OperationType)), R_SysFn_Test.Tx.ListOfOps)
+    private val RELL_GTX_NAMESPACE_FNS = C_GlobalFuncBuilder()
+            .add("block", R_GtxBlockType, listOf(), R_SysFn_Gtx.Block.NewEmpty)
+            .add("block", R_GtxBlockType, listOf(R_GtxTxType), R_SysFn_Gtx.Block.NewOneTx)
+            .add("block", R_GtxBlockType, listOf(R_ListType(R_GtxTxType)), R_SysFn_Gtx.Block.NewListOfTxs)
+            .add("tx", R_GtxTxType, listOf(), R_SysFn_Gtx.Tx.NewEmpty)
+            .add("tx", R_GtxTxType, listOf(R_OperationType), R_SysFn_Gtx.Tx.NewOneOp)
+            .add("tx", R_GtxTxType, listOf(R_ListType(R_OperationType)), R_SysFn_Gtx.Tx.NewListOfOps)
             .build()
 
-    private val RELL_TEST_NAMESPACE = makeNamespaceEx(
-            functions = RELL_TEST_NAMESPACE_FNS,
+    private val RELL_GTX_NAMESPACE = makeNamespaceEx(
+            functions = RELL_GTX_NAMESPACE_FNS,
             types = mapOf(
-                    "block" to R_TestBlockType,
-                    "tx" to R_TestTxType
+                    "block" to R_GtxBlockType,
+                    "tx" to R_GtxTxType
             )
     )
 
     private val RELL_NAMESPACE = makeNamespaceEx(
             functions = RELL_NAMESPACE_FNS,
-            namespaces = mapOf("test" to RELL_TEST_NAMESPACE),
-            values = mapOf("test" to C_NamespaceValue_Namespace(C_DefProxy.create(RELL_TEST_NAMESPACE)))
+            namespaces = mapOf("gtx" to RELL_GTX_NAMESPACE),
+            values = mapOf("gtx" to C_NamespaceValue_Namespace(C_DefProxy.create(RELL_GTX_NAMESPACE)))
     )
 
     private val NAMESPACES = mapOf(
@@ -345,8 +345,10 @@ object C_LibFunctions {
             is R_TupleType -> getTupleFns(type)
             is R_VirtualTupleType -> getVirtualTupleFns(type)
             is R_StructType -> getStructFns(type.struct)
-            is R_OperationType -> getOperationFns(type)
             is R_VirtualStructType -> getVirtualStructFns(type)
+            is R_OperationType -> typeMemFuncBuilder(type).build()
+            is R_GtxTxType -> getGtxTxFns(type)
+            is R_GtxBlockType -> getGtxBlockFns(type)
             else -> C_MemberFuncTable(mapOf())
         }
     }
@@ -535,14 +537,21 @@ object C_LibFunctions {
                 .build()
     }
 
-    private fun getOperationFns(type: R_OperationType): C_MemberFuncTable {
-        return typeMemFuncBuilder(type)
-                .build()
-    }
-
     private fun getVirtualStructFns(type: R_VirtualStructType): C_MemberFuncTable {
         return typeMemFuncBuilder(type)
                 .add("to_full", type.innerType, listOf(), R_SysFn_Virtual.ToFull)
+                .build()
+    }
+
+    private fun getGtxTxFns(type: R_GtxTxType): C_MemberFuncTable {
+        return typeMemFuncBuilder(type)
+                .add("run", R_UnitType, listOf(), R_SysFn_Gtx.Tx.Run)
+                .build()
+    }
+
+    private fun getGtxBlockFns(type: R_GtxBlockType): C_MemberFuncTable {
+        return typeMemFuncBuilder(type)
+                .add("run", R_UnitType, listOf(), R_SysFn_Gtx.Block.Run)
                 .build()
     }
 

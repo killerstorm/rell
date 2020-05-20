@@ -14,9 +14,11 @@ import net.postchain.core.ByteArrayKey
 import net.postchain.core.EContext
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
+import net.postchain.rell.compiler.C_MapSourceDir
 import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.compiler.C_MessageType
 import net.postchain.rell.model.*
+import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.sql.SqlInit
@@ -45,6 +47,7 @@ class RellCodeTester(
     var opContext: Rt_OpContext? = null
     var sqlUpdatePortionSize = 1000
     var replModule: String? = null
+    var chainRid: String? = null
 
     private val chainDependencies = mutableMapOf<String, TestChainDependency>()
 
@@ -81,7 +84,8 @@ class RellCodeTester(
                 null,
                 chainCtx,
                 logSqlErrors = true,
-                typeCheck = true
+                typeCheck = true,
+                pcModuleEnv = RellPostchainModuleEnvironment.DEFAULT
         )
     }
 
@@ -205,11 +209,21 @@ class RellCodeTester(
 
     fun createGlobalCtx(): Rt_GlobalContext {
         val chainContext = createChainContext()
+
+        val pcModuleEnv = RellPostchainModuleEnvironment(
+                outPrinter = outPrinter,
+                logPrinter = logPrinter,
+                wrapCtErrors = false,
+                wrapRtErrors = false,
+                forceTypeCheck = true
+        )
+
         return Rt_GlobalContext(
                 outPrinter,
                 logPrinter,
                 opContext,
                 chainContext,
+                pcModuleEnv = pcModuleEnv,
                 logSqlErrors = true,
                 sqlUpdatePortionSize = sqlUpdatePortionSize,
                 typeCheck = true
@@ -217,13 +231,14 @@ class RellCodeTester(
     }
 
     private fun createChainContext(): Rt_ChainContext {
-        val bcRid = BlockchainRid(ByteArray(32))
+        val bcRidHex = chainRid ?: "00".repeat(32)
+        val bcRid = BlockchainRid(bcRidHex.hexStringToByteArray())
         return Rt_ChainContext(GtvNull, mapOf(), bcRid)
     }
 
     fun createAppCtx(globalCtx: Rt_GlobalContext, sqlExec: SqlExecutor, app: R_App): Rt_AppContext {
         val sqlCtx = createSqlCtx(app, sqlExec)
-        return Rt_AppContext(globalCtx, sqlCtx, app, null)
+        return Rt_AppContext(globalCtx, sqlCtx, app, false, null, C_MapSourceDir.EMPTY, setOf())
     }
 
     fun createExeCtx(globalCtx: Rt_GlobalContext, sqlExec: SqlExecutor, app: R_App): Rt_ExecutionContext {
