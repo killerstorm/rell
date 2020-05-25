@@ -115,10 +115,12 @@ object C_Utils {
         C_Errors.check(type != R_UnitType, pos, errCode, errMsg)
     }
 
-    fun checkUnitType(msgCtx: C_MessageContext, pos: S_Pos, type: R_Type, errCode: String, errMsg: String) {
+    fun checkUnitType(msgCtx: C_MessageContext, pos: S_Pos, type: R_Type, errCode: String, errMsg: String): Boolean {
         if (type == R_UnitType) {
             msgCtx.error(pos, errCode, errMsg)
+            return false
         }
+        return true
     }
 
     fun checkMapKeyType(ctx: C_NamespaceContext, pos: S_Pos, type: R_Type) {

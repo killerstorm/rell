@@ -278,6 +278,30 @@ class UserFunctionTest: BaseRellTest(false) {
                 "ct_err:[unknown_type:unknown_type][stmt_var_type:x:[integer]:[text]]")
     }
 
+    @Test fun testNamedArguments() {
+        val fn = "function f(x: integer, y: text, z: boolean) = x + ',' + y + ',' + z;"
+
+        chkFn(fn, "f(123,'Hello',true)", "text[123,Hello,true]")
+        chkFn(fn, "f(x = 123, y = 'Hello', z = true)", "text[123,Hello,true]")
+        chkFn(fn, "f(z = true, y = 'Hello', x = 123)", "text[123,Hello,true]")
+        chkFn(fn, "f(123, 'Hello', z = true)", "text[123,Hello,true]")
+        chkFn(fn, "f(123, z = true, y = 'Hello')", "text[123,Hello,true]")
+        chkFn(fn, "f(123, 'Hello', z = true)", "text[123,Hello,true]")
+
+        chkFn(fn, "f(x = 123)", "ct_err:expr:call:missing_args:y,z")
+        chkFn(fn, "f(y = 'Hello')", "ct_err:expr:call:missing_args:x,z")
+        chkFn(fn, "f(z = true)", "ct_err:expr:call:missing_args:x,y")
+        chkFn(fn, "f(x = 123, y = 'Hello')", "ct_err:expr:call:missing_args:z")
+        chkFn(fn, "f(x = 123, z = true)", "ct_err:expr:call:missing_args:y")
+        chkFn(fn, "f(x = 123, y = 'Hello', true)", "ct_err:expr:call:positional_after_named")
+        chkFn(fn, "f(true, x = 123, y = 'Hello')",
+                "ct_err:[expr:call:missing_args:z][expr_call_argtype:f:0:x:integer:boolean][expr:call:named_arg_already_specified:f:x]")
+
+        chkFn(fn, "f(x = 'Bye', y = 'Hello', z = true)", "ct_err:expr_call_argtype:f:0:x:integer:text")
+        chkFn(fn, "f(x = 123, y = 456, z = true)", "ct_err:expr_call_argtype:f:1:y:text:integer")
+        chkFn(fn, "f(x = 123, y = 'Hello', z = 456)", "ct_err:expr_call_argtype:f:2:z:boolean:integer")
+    }
+
     private fun chkFn(fnCode: String, callCode: String, expected: String) {
         chkFnEx(fnCode, "= $callCode ;", expected)
     }

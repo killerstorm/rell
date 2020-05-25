@@ -377,7 +377,7 @@ class StructTest: BaseRellTest(false) {
 
     @Test fun testFunctionNamedArgument() {
         def("function foo(x: integer): integer = x * x;")
-        chk("foo(x = 123)", "ct_err:expr_call_namedarg:x")
+        chk("foo(x = 123)", "int[15129]")
     }
 
     @Test fun testCircularReference() {

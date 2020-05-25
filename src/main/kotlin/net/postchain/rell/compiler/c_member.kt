@@ -345,7 +345,17 @@ private class C_MemberFunctionExpr(private val memberRef: C_MemberRef, private v
 
     override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_NameExprPair>): C_Expr {
         val cArgs = C_FunctionUtils.compileRegularArgs(ctx, args)
-        return fn.compileCall(ctx, memberRef, cArgs)
+        if (!cArgs.named.isEmpty()) {
+            val arg = cArgs.named[0]
+            ctx.msgCtx.error(arg.first.pos, "expr:call:sys_member_fn_named_arg:${arg.first}",
+                    "Named arguments not supported for this function")
+            val rExpr = C_Utils.crashExpr()
+            return C_RValue.makeExpr(pos, rExpr)
+        } else if (!cArgs.valid) {
+            val rExpr = C_Utils.crashExpr()
+            return C_RValue.makeExpr(pos, rExpr)
+        }
+        return fn.compileCall(ctx, memberRef, cArgs.positional)
     }
 }
 

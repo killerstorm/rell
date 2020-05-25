@@ -92,3 +92,12 @@ tx.run();
 
 Method run() is defined for types rell.gtx.tx and rell.gtx.block: it executes all operations in all transactions of
 a block, and adds the transactions and the block to the blockchain.
+
+
+8. Language: Named function arguments
+
+When calling a function, arguments can be specified by names, in arbitrary order:
+
+function f(x: integer, y: text) {}
+...
+f(x = 123, y = 'Hello');

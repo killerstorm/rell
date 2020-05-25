@@ -8,6 +8,12 @@ import net.postchain.rell.compiler.ast.*
 import net.postchain.rell.model.*
 import net.postchain.rell.utils.RecursionAwareCalculator
 import net.postchain.rell.utils.RecursionAwareResult
+import net.postchain.rell.utils.toImmList
+
+class C_FunctionArgs(val valid: Boolean, positional: List<C_Value>, named: List<Pair<S_Name, C_Value>>) {
+    val positional = positional.toImmList()
+    val named = named.toImmList()
+}
 
 sealed class C_GlobalFunction {
     abstract fun getAbstractInfo(): Pair<R_Definition?, C_AbstractDescriptor?>
@@ -15,7 +21,7 @@ sealed class C_GlobalFunction {
 }
 
 sealed class C_RegularGlobalFunction: C_GlobalFunction() {
-    abstract fun compileCallRegular(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Expr
+    abstract fun compileCallRegular(ctx: C_ExprContext, name: S_Name, args: C_FunctionArgs): C_Expr
 
     override final fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
         val cArgs = C_FunctionUtils.compileRegularArgs(ctx, args)
@@ -89,7 +95,7 @@ class C_UserGlobalFunction(
 
     override fun getAbstractInfo() = Pair(rFunction, abstract)
 
-    override fun compileCallRegular(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Expr {
+    override fun compileCallRegular(ctx: C_ExprContext, name: S_Name, args: C_FunctionArgs): C_Expr {
         val header = headerLate.get()
         return C_FunctionUtils.compileRegularCall(ctx, name, args, rFunction, header)
     }
@@ -175,28 +181,49 @@ object C_FunctionUtils {
         return C_QueryFunctionHeader(retType, cParams, cBody)
     }
 
-    fun compileRegularArgs(ctx: C_ExprContext, args: List<S_NameExprPair>): List<C_Value> {
-        val namedArg = args.map { it.name }.filterNotNull().firstOrNull()
-        if (namedArg != null) {
-            val argName = namedArg.str
-            throw C_Error(namedArg.pos, "expr_call_namedarg:$argName", "Named function arguments not supported")
+    fun compileRegularArgs(ctx: C_ExprContext, args: List<S_NameExprPair>): C_FunctionArgs {
+        val positional = mutableListOf<C_Value>()
+        val namedNames = mutableSetOf<String>()
+        val named = mutableListOf<Pair<S_Name, C_Value>>()
+        var valid = true
+        var errPositionalAfterNamed = false
+
+        for (arg in args) {
+            val sExpr = arg.expr
+            val cValue = sExpr.compile(ctx).value()
+            val type = cValue.type()
+            if (!C_Utils.checkUnitType(ctx.msgCtx, sExpr.startPos, type, "expr_arg_unit", "Argument expression returns nothing")) {
+                valid = false
+            }
+
+            if (arg.name == null) {
+                if (!named.isEmpty()) {
+                    if (!errPositionalAfterNamed) {
+                        ctx.msgCtx.error(sExpr.startPos, "expr:call:positional_after_named", "Unnamed argument after a named argument")
+                        errPositionalAfterNamed = true
+                    }
+                    valid = false
+                } else {
+                    positional.add(cValue)
+                }
+            } else {
+                val name = arg.name
+                if (!namedNames.add(name.str)) {
+                    ctx.msgCtx.error(name.pos, "expr:call:named_arg_dup:$name", "Named argument '$name' specified more than once")
+                    valid = false
+                } else {
+                    named.add(Pair(name, cValue))
+                }
+            }
         }
 
-        val cArgs = args.map {
-            val sArg = it.expr
-            val cArg = sArg.compile(ctx).value()
-            val type = cArg.type()
-            C_Utils.checkUnitType(sArg.startPos, type, "expr_arg_unit", "Argument expression returns nothing")
-            cArg
-        }
-
-        return cArgs
+        return C_FunctionArgs(valid, positional, named)
     }
 
     fun compileRegularCall(
             ctx: C_ExprContext,
             name: S_Name,
-            args: List<C_Value>,
+            args: C_FunctionArgs,
             rFunction: R_Routine,
             header: C_FunctionHeader
     ): C_Expr {
@@ -209,11 +236,24 @@ object C_FunctionUtils {
             C_Utils.crashExpr(retType ?: R_CtErrorType, "Compilation error")
         }
 
-        val exprFacts = C_ExprVarFacts.forSubExpressions(args)
+        val argsValues = args.positional + args.named.map { it.second }
+        val exprFacts = C_ExprVarFacts.forSubExpressions(argsValues)
+
         return C_RValue.makeExpr(name.pos, rExpr, exprFacts)
     }
 
-    fun checkArgs(ctx: C_ExprContext, name: S_Name, params: C_FormalParameters, args: List<C_Value>): List<C_Value>? {
+    fun checkArgs(ctx: C_ExprContext, name: S_Name, params: C_FormalParameters, args: C_FunctionArgs): List<C_Value>? {
+        val res = if (!args.valid) {
+            null
+        } else if (args.named.isEmpty()) {
+            checkArgsPositionalOnly(ctx, name, params, args.positional)
+        } else {
+            checkArgsMixed(ctx, name, params, args)
+        }
+        return res
+    }
+
+    private fun checkArgsPositionalOnly(ctx: C_ExprContext, name: S_Name, params: C_FormalParameters, args: List<C_Value>): List<C_Value>? {
         val nameStr = name.str
         var err = false
 
@@ -224,38 +264,96 @@ object C_FunctionUtils {
             err = true
         }
 
-        val matchList = mutableListOf<C_ArgTypeMatch>()
-        val n = Math.min(args.size, paramsSize)
+        val matchList = matchArgTypes(ctx, name, params, args)
+        val matchListNz = matchList.filterNotNull()
+        if (err || matchListNz.size != params.list.size) {
+            return null
+        }
+
+        val match = C_ArgTypesMatch(matchListNz)
+        return match.effectiveArgs(args)
+    }
+
+    private fun checkArgsMixed(ctx: C_ExprContext, name: S_Name, params: C_FormalParameters, args: C_FunctionArgs): List<C_Value>? {
+        val (err, posArgs) = matchMixedArgs(ctx, name, params, args)
+        val matchList = matchArgTypes(ctx, name, params, posArgs)
+        val posArgsNz = posArgs.filterNotNull()
+        val matchListNz = matchList.filterNotNull()
+        if (err || matchListNz.size != params.list.size || posArgsNz.size != params.list.size) {
+            return null
+        }
+        val match = C_ArgTypesMatch(matchListNz)
+        return match.effectiveArgs(posArgsNz)
+    }
+
+    private fun matchMixedArgs(
+            ctx: C_ExprContext,
+            fnName: S_Name,
+            params: C_FormalParameters,
+            args: C_FunctionArgs
+    ): Pair<Boolean, List<C_Value?>> {
+        val res = mutableListOf<C_Value?>()
+        res.addAll(args.positional)
+        while (res.size < params.list.size) res.add(null)
+
+        var err = false
+
+        for ((name, value) in args.named) {
+            val i = params.list.indexOfFirst { it.name.str == name.str }
+            if (i < 0) {
+                ctx.msgCtx.error(name.pos, "expr:call:unknown_named_arg:$fnName:$name", "Function '$fnName' has no parameter '$name'")
+                err = true
+            } else if (res[i] != null) {
+                ctx.msgCtx.error(name.pos, "expr:call:named_arg_already_specified:$fnName:$name",
+                        "Parameter '$name' specified more than once (as named and unnamed)")
+                err = true
+            } else {
+                res[i] = value
+            }
+        }
+
+        val missing = params.list.withIndex().filter { (i, param) -> res[i] == null }.map { it.value.name }
+        if (!missing.isEmpty()) {
+            val codeStr = missing.joinToString(",")
+            val msgStr = missing.joinToString(", ")
+            ctx.msgCtx.error(fnName.pos, "expr:call:missing_args:$codeStr", "Missing argument(s): $msgStr")
+            err = true
+        }
+
+        return Pair(err, res)
+    }
+
+    private fun matchArgTypes(ctx: C_ExprContext, fnName: S_Name, params: C_FormalParameters, args: List<C_Value?>): List<C_ArgTypeMatch?> {
+        val matchList = mutableListOf<C_ArgTypeMatch?>()
+        val n = Math.min(args.size, params.list.size)
 
         for ((i, param) in params.list.subList(0, n).withIndex()) {
             val arg = args[i]
             val paramType = param.type
-            val argType = arg.type()
 
-            var m: C_ArgTypeMatch? = null
+            var m: C_ArgTypeMatch?
 
-            if (paramType != null) {
+            if (arg == null) {
+                m = null
+            } else if (paramType == null) {
+                m = C_ArgTypeMatch_Direct
+            } else {
+                val argType = arg.type()
                 val matcher = C_ArgTypeMatcher_Simple(paramType)
                 m = matcher.match(argType)
                 if (m == null) {
                     val paramCode = param.nameCode(i)
                     val paramMsg = param.nameMsg(i)
-                    val code = "expr_call_argtype:$nameStr:$paramCode:${paramType.toStrictString()}:${argType.toStrictString()}"
+                    val code = "expr_call_argtype:$fnName:$paramCode:${paramType.toStrictString()}:${argType.toStrictString()}"
                     val msg = "Wrong argument type for parameter $paramMsg: ${argType} instead of ${paramType}"
-                    ctx.msgCtx.error(name.pos, code, msg)
-                    err = true
+                    ctx.msgCtx.error(fnName.pos, code, msg)
                 }
             }
 
-            matchList.add(m ?: C_ArgTypeMatch_Direct)
+            matchList.add(m)
         }
 
-        if (err) {
-            return null
-        }
-
-        val match = C_ArgTypesMatch(matchList)
-        return match.effectiveArgs(args)
+        return matchList
     }
 
     private fun compileReturnType(ctx: C_ExprContext, name: S_Name, header: C_FunctionHeader): R_Type? {
@@ -364,11 +462,25 @@ class C_SysMemberFormalParamsFuncBody(
 class C_SysGlobalFunction(private val cases: List<C_GlobalFuncCase>): C_RegularGlobalFunction() {
     override fun getAbstractInfo() = Pair(null, null)
 
-    override fun compileCallRegular(ctx: C_ExprContext, name: S_Name, args: List<C_Value>): C_Expr {
-        val match = matchCase(name, args)
+    override fun compileCallRegular(ctx: C_ExprContext, name: S_Name, args: C_FunctionArgs): C_Expr {
+        if (!args.named.isEmpty()) {
+            val arg = args.named[0]
+            ctx.msgCtx.error(arg.first.pos, "expr:call:sys_global_named_arg:${arg.first}",
+                    "Named arguments not supported for function '$name'")
+            val rExpr = C_Utils.crashExpr()
+            return C_RValue.makeExpr(name.pos, rExpr)
+        }
+
+        if (!args.valid) {
+            val rExpr = C_Utils.crashExpr()
+            return C_RValue.makeExpr(name.pos, rExpr)
+        }
+
+        val posArgs = args.positional
+        val match = matchCase(name, posArgs)
         val caseCtx = C_GlobalFuncCaseCtx(name)
 
-        val db = args.any { it.isDb() }
+        val db = posArgs.any { it.isDb() }
         val value = if (db) {
             match.compileCallDb(ctx, caseCtx)
         } else {
