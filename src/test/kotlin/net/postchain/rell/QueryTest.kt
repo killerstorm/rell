@@ -162,4 +162,11 @@ class QueryTest: BaseRellTest() {
         chkCompile("function foo(x: integer) = bar(x + 1); query bar(x: integer) = if (x <= 1) 1 else foo(x - 1);",
                 "ct_err:[fn_type_recursion:QUERY:bar][fn_type_recursion:FUNCTION:foo]")
     }
+
+    @Test fun testDefaultParameters() {
+        def("query foo(x: integer = 123, y: text = 'Hello') = x+','+y;")
+        chk("foo()", "text[123,Hello]")
+        chk("foo(456)", "text[456,Hello]")
+        chk("foo(456,'Bye')", "text[456,Bye]")
+    }
 }

@@ -69,12 +69,12 @@ class UserFunctionTest: BaseRellTest(false) {
     }
 
     @Test fun testWrongArgs() {
-        chkFnErr("function f(){}", "f(123)", "ct_err:expr_call_argcnt:f:0:1")
-        chkFnErr("function f(x:integer){}", "f()", "ct_err:expr_call_argcnt:f:1:0")
-        chkFnErr("function f(x:integer){}", "f(123, 456)", "ct_err:expr_call_argcnt:f:1:2")
-        chkFnErr("function f(x:integer,y:text){}", "f()", "ct_err:expr_call_argcnt:f:2:0")
-        chkFnErr("function f(x:integer,y:text){}", "f(123)", "ct_err:expr_call_argcnt:f:2:1")
-        chkFnErr("function f(x:integer,y:text){}", "f(123,'Hello','World')", "ct_err:expr_call_argcnt:f:2:3")
+        chkFnErr("function f(){}", "f(123)", "ct_err:expr:call:arg_count:f:0:1")
+        chkFnErr("function f(x:integer){}", "f()", "ct_err:expr:call:missing_args:f:x")
+        chkFnErr("function f(x:integer){}", "f(123, 456)", "ct_err:expr:call:arg_count:f:1:2")
+        chkFnErr("function f(x:integer,y:text){}", "f()", "ct_err:expr:call:missing_args:f:x,y")
+        chkFnErr("function f(x:integer,y:text){}", "f(123)", "ct_err:expr:call:missing_args:f:y")
+        chkFnErr("function f(x:integer,y:text){}", "f(123,'Hello','World')", "ct_err:expr:call:arg_count:f:2:3")
 
         chkFnErr("function f(x:integer){}", "f('Hello')", "ct_err:expr_call_argtype:f:0:x:integer:text")
         chkFnErr("function f(x:integer,y:text){}", "f('Hello','World')", "ct_err:expr_call_argtype:f:0:x:integer:text")
@@ -288,18 +288,54 @@ class UserFunctionTest: BaseRellTest(false) {
         chkFn(fn, "f(123, z = true, y = 'Hello')", "text[123,Hello,true]")
         chkFn(fn, "f(123, 'Hello', z = true)", "text[123,Hello,true]")
 
-        chkFn(fn, "f(x = 123)", "ct_err:expr:call:missing_args:y,z")
-        chkFn(fn, "f(y = 'Hello')", "ct_err:expr:call:missing_args:x,z")
-        chkFn(fn, "f(z = true)", "ct_err:expr:call:missing_args:x,y")
-        chkFn(fn, "f(x = 123, y = 'Hello')", "ct_err:expr:call:missing_args:z")
-        chkFn(fn, "f(x = 123, z = true)", "ct_err:expr:call:missing_args:y")
+        chkFn(fn, "f(x = 123)", "ct_err:expr:call:missing_args:f:y,z")
+        chkFn(fn, "f(y = 'Hello')", "ct_err:expr:call:missing_args:f:x,z")
+        chkFn(fn, "f(z = true)", "ct_err:expr:call:missing_args:f:x,y")
+        chkFn(fn, "f(x = 123, y = 'Hello')", "ct_err:expr:call:missing_args:f:z")
+        chkFn(fn, "f(x = 123, z = true)", "ct_err:expr:call:missing_args:f:y")
         chkFn(fn, "f(x = 123, y = 'Hello', true)", "ct_err:expr:call:positional_after_named")
         chkFn(fn, "f(true, x = 123, y = 'Hello')",
-                "ct_err:[expr:call:missing_args:z][expr_call_argtype:f:0:x:integer:boolean][expr:call:named_arg_already_specified:f:x]")
+                "ct_err:[expr:call:missing_args:f:z][expr_call_argtype:f:0:x:integer:boolean][expr:call:named_arg_already_specified:f:x]")
 
         chkFn(fn, "f(x = 'Bye', y = 'Hello', z = true)", "ct_err:expr_call_argtype:f:0:x:integer:text")
         chkFn(fn, "f(x = 123, y = 456, z = true)", "ct_err:expr_call_argtype:f:1:y:text:integer")
         chkFn(fn, "f(x = 123, y = 'Hello', z = 456)", "ct_err:expr_call_argtype:f:2:z:boolean:integer")
+
+        chkFn(fn, "f(x = 123, y = 'Hello', z = 456, x = 789)", "ct_err:expr:call:named_arg_dup:x")
+    }
+
+    @Test fun testDefaultParameters() {
+        def("function f(x: integer = 123, y: text = 'Hello') = x + ',' + y;")
+        def("function g(x: integer = 123, y: text, z: boolean = true) = x + ',' + y + ',' + z;")
+
+        chk("f(456,'Bye')", "text[456,Bye]")
+        chk("f(456)", "text[456,Hello]")
+        chk("f()", "text[123,Hello]")
+        chk("f('Bye')", "ct_err:expr_call_argtype:f:0:x:integer:text")
+        chk("f(y='Bye')", "text[123,Bye]")
+
+        chk("g(456,'Bye',false)", "text[456,Bye,false]")
+        chk("g(456,'Bye')", "text[456,Bye,true]")
+        chk("g(456)", "ct_err:expr:call:missing_args:g:y")
+        chk("g('Bye')", "ct_err:[expr:call:missing_args:g:y][expr_call_argtype:g:0:x:integer:text]")
+        chk("g(y='Bye')", "text[123,Bye,true]")
+    }
+
+    @Test fun testDefaultParametersErrors() {
+        chkCompile("function f(x: integer, y: integer = x){}", "ct_err:unknown_name:x")
+        chkCompile("function f(x = 123){}", "ct_err:unknown_name_type:x")
+        chkCompile("function f(x: integer = 123){}", "OK")
+        chkCompile("function f(x: integer = 'Hello'){}", "ct_err:param_expr_type:[integer]:[text]")
+    }
+
+    @Test fun testDefaultParametersSideEffects() {
+        def("function side(x: integer) { print('side:'+x); return x; }")
+        def("function f(x: integer = side(123)) = x + 1;")
+
+        chk("f()", "int[124]")
+        chkOut("side:123")
+        chk("f(456)", "int[457]")
+        chkOut()
     }
 
     private fun chkFn(fnCode: String, callCode: String, expected: String) {

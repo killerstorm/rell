@@ -25,9 +25,9 @@ class CompilerErrorsTest: BaseRellTest(false) {
         chkCompile("function m() { foo(123, false, 'Hello'); }", "ct_err:$typeErr")
         chkCompile("function m() { foo(123, 0, 'Hello'); }", "ct_err:$typeErr")
 
-        chkCompile("function m() { foo(); }", "ct_err:[$typeErr][expr_call_argcnt:foo:3:0]")
-        chkCompile("function m() { foo(123, 'Hello'); }", "ct_err:[$typeErr][expr_call_argcnt:foo:3:2]")
-        chkCompile("function m() { foo(123, null, 'Hello', false); }", "ct_err:[$typeErr][expr_call_argcnt:foo:3:4]")
+        chkCompile("function m() { foo(); }", "ct_err:[$typeErr][expr:call:missing_args:foo:x,y,z]")
+        chkCompile("function m() { foo(123, 'Hello'); }", "ct_err:[$typeErr][expr:call:missing_args:foo:z]")
+        chkCompile("function m() { foo(123, null, 'Hello', false); }", "ct_err:[$typeErr][expr:call:arg_count:foo:3:4]")
 
         chkCompile("function m() { foo('Bye', null, 'Hello'); }", "ct_err:[$typeErr][expr_call_argtype:foo:0:x:integer:text]")
         chkCompile("function m() { foo(123, null, 456); }", "ct_err:[$typeErr][expr_call_argtype:foo:2:z:text:integer]")

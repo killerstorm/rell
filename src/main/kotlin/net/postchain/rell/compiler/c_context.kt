@@ -529,9 +529,12 @@ class C_FunctionContext(
 }
 
 class C_FunctionBodyContext(
-        val mntCtx: C_MountContext,
+        val defCtx: C_DefinitionContext,
         val namePos: S_Pos,
         val defNames: R_DefinitionNames,
         val explicitRetType: R_Type?,
         val forParams: C_FormalParameters
-)
+) {
+    val appCtx = defCtx.appCtx
+    val executor = defCtx.executor
+}

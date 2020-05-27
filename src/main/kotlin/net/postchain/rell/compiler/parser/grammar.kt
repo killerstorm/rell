@@ -648,11 +648,14 @@ object S_Grammar : Grammar<S_RellFile>() {
             or guardStmt
     )
 
-    private val formalParameters by ( -LPAR * separatedTerms(attrHeader, COMMA, true) * -RPAR)
+    private val formalParameter by ( attrHeader * optional(-ASSIGN * expression) ) map {
+        (attr, expr) -> S_FormalParameter(attr, expr)
+    }
+
+    private val formalParameters by ( -LPAR * separatedTerms(formalParameter, COMMA, true) * -RPAR)
 
     private val opDef by ( -OPERATION * name * formalParameters * blockStmt) map {
-        (name, params, body) ->
-        annotatedDef { S_OperationDefinition(it, name, params, body) }
+        (name, params, body) -> annotatedDef { S_OperationDefinition(it, name, params, body) }
     }
 
     private val functionBodyShort by (-ASSIGN * expression * -SEMI) map { S_FunctionBodyShort(it) }

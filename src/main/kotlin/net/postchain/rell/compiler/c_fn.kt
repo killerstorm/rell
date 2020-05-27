@@ -145,21 +145,21 @@ class C_QueryGlobalFunction(val rQuery: R_Query): C_GlobalFunction() {
 
 object C_FunctionUtils {
     fun compileFunctionHeader(
-            ctx: C_MountContext,
+            defCtx: C_DefinitionContext,
             simpleName: S_Name,
             defNames: R_DefinitionNames,
-            params: List<S_AttrHeader>,
+            params: List<S_FormalParameter>,
             retType: S_Type?,
             body: S_FunctionBody?
     ): C_UserFunctionHeader {
-        val explicitRetType = if (retType == null) null else (retType.compileOpt(ctx.nsCtx) ?: R_CtErrorType)
+        val explicitRetType = if (retType == null) null else (retType.compileOpt(defCtx.nsCtx) ?: R_CtErrorType)
         val bodyRetType = if (body == null) R_UnitType else null
         val retType = explicitRetType ?: bodyRetType
 
-        val cParams = C_FormalParameters.compile(ctx.nsCtx, params, false)
+        val cParams = C_FormalParameters.compile(defCtx, params, false)
 
         val cBody = if (body == null) null else {
-            val bodyCtx = C_FunctionBodyContext(ctx, simpleName.pos, defNames, retType, cParams)
+            val bodyCtx = C_FunctionBodyContext(defCtx, simpleName.pos, defNames, retType, cParams)
             C_UserFunctionBody(bodyCtx, body)
         }
 
@@ -167,16 +167,16 @@ object C_FunctionUtils {
     }
 
     fun compileQueryHeader(
-            ctx: C_MountContext,
+            defCtx: C_DefinitionContext,
             simpleName: S_Name,
             defNames: R_DefinitionNames,
-            params: List<S_AttrHeader>,
+            params: List<S_FormalParameter>,
             retType: S_Type?,
             body: S_FunctionBody
     ): C_QueryFunctionHeader {
-        val retType = if (retType == null) null else (retType.compileOpt(ctx.nsCtx) ?: R_CtErrorType)
-        val cParams = C_FormalParameters.compile(ctx.nsCtx, params, ctx.globalCtx.compilerOptions.gtv)
-        val bodyCtx = C_FunctionBodyContext(ctx, simpleName.pos, defNames, retType, cParams)
+        val retType = if (retType == null) null else (retType.compileOpt(defCtx.nsCtx) ?: R_CtErrorType)
+        val cParams = C_FormalParameters.compile(defCtx, params, defCtx.globalCtx.compilerOptions.gtv)
+        val bodyCtx = C_FunctionBodyContext(defCtx, simpleName.pos, defNames, retType, cParams)
         val cBody = C_QueryFunctionBody(bodyCtx, body)
         return C_QueryFunctionHeader(retType, cParams, cBody)
     }
@@ -243,50 +243,24 @@ object C_FunctionUtils {
     }
 
     fun checkArgs(ctx: C_ExprContext, name: S_Name, params: C_FormalParameters, args: C_FunctionArgs): List<C_Value>? {
-        val res = if (!args.valid) {
-            null
-        } else if (args.named.isEmpty()) {
-            checkArgsPositionalOnly(ctx, name, params, args.positional)
-        } else {
-            checkArgsMixed(ctx, name, params, args)
-        }
-        return res
-    }
-
-    private fun checkArgsPositionalOnly(ctx: C_ExprContext, name: S_Name, params: C_FormalParameters, args: List<C_Value>): List<C_Value>? {
-        val nameStr = name.str
-        var err = false
-
-        val paramsSize = params.list.size
-        if (args.size != paramsSize) {
-            ctx.msgCtx.error(name.pos, "expr_call_argcnt:$nameStr:$paramsSize:${args.size}",
-                    "Wrong number of arguments for '$nameStr': ${args.size} instead of $paramsSize")
-            err = true
-        }
-
-        val matchList = matchArgTypes(ctx, name, params, args)
-        val matchListNz = matchList.filterNotNull()
-        if (err || matchListNz.size != params.list.size) {
+        if (!args.valid) {
             return null
         }
 
-        val match = C_ArgTypesMatch(matchListNz)
-        return match.effectiveArgs(args)
-    }
+        val (err, posArgs) = matchArgs(ctx, name, params, args)
 
-    private fun checkArgsMixed(ctx: C_ExprContext, name: S_Name, params: C_FormalParameters, args: C_FunctionArgs): List<C_Value>? {
-        val (err, posArgs) = matchMixedArgs(ctx, name, params, args)
         val matchList = matchArgTypes(ctx, name, params, posArgs)
         val posArgsNz = posArgs.filterNotNull()
         val matchListNz = matchList.filterNotNull()
         if (err || matchListNz.size != params.list.size || posArgsNz.size != params.list.size) {
             return null
         }
+
         val match = C_ArgTypesMatch(matchListNz)
         return match.effectiveArgs(posArgsNz)
     }
 
-    private fun matchMixedArgs(
+    private fun matchArgs(
             ctx: C_ExprContext,
             fnName: S_Name,
             params: C_FormalParameters,
@@ -297,6 +271,14 @@ object C_FunctionUtils {
         while (res.size < params.list.size) res.add(null)
 
         var err = false
+
+        if (args.positional.size > params.list.size) {
+            val expCount = params.list.size
+            val actCount = args.positional.size + args.named.size
+            ctx.msgCtx.error(fnName.pos, "expr:call:arg_count:$fnName:$expCount:$actCount",
+                    "Wrong number of arguments for function '$fnName': $actCount instead of $expCount")
+            err = true
+        }
 
         for ((name, value) in args.named) {
             val i = params.list.indexOfFirst { it.name.str == name.str }
@@ -312,11 +294,17 @@ object C_FunctionUtils {
             }
         }
 
+        for ((i, param) in params.list.withIndex()) {
+            if (res[i] == null && param.hasExpr) {
+                res[i] = param.createDefaultValueExpr()
+            }
+        }
+
         val missing = params.list.withIndex().filter { (i, param) -> res[i] == null }.map { it.value.name }
         if (!missing.isEmpty()) {
             val codeStr = missing.joinToString(",")
             val msgStr = missing.joinToString(", ")
-            ctx.msgCtx.error(fnName.pos, "expr:call:missing_args:$codeStr", "Missing argument(s): $msgStr")
+            ctx.msgCtx.error(fnName.pos, "expr:call:missing_args:$fnName:$codeStr", "Missing argument(s): $msgStr")
             err = true
         }
 
@@ -533,7 +521,7 @@ class C_SysMemberFunction(val cases: List<C_MemberFuncCase>) {
 }
 
 sealed class C_FunctionBody(bodyCtx: C_FunctionBodyContext) {
-    private val retTypeCalculator = bodyCtx.mntCtx.appCtx.functionReturnTypeCalculator
+    private val retTypeCalculator = bodyCtx.appCtx.functionReturnTypeCalculator
 
     fun returnType(): RecursionAwareResult<R_Type> {
         val res = retTypeCalculator.calculate(this)
@@ -568,7 +556,7 @@ sealed class C_CommonFunctionBody<T>(bodyCtx: C_FunctionBodyContext, sBody: S_Fu
     }
 
     private fun calculateReturnType0(s: BodyState.StartState<T>): R_Type {
-        s.bodyCtx.mntCtx.executor.checkPass(C_CompilerPass.EXPRESSIONS)
+        s.bodyCtx.executor.checkPass(C_CompilerPass.EXPRESSIONS)
 
         if (!s.sBody.returnsValue()) {
             return R_UnitType
@@ -595,7 +583,7 @@ sealed class C_CommonFunctionBody<T>(bodyCtx: C_FunctionBodyContext, sBody: S_Fu
 
     private fun doCompile(s: BodyState.StartState<T>): T {
         check(state === s)
-        s.bodyCtx.mntCtx.executor.checkPass(C_CompilerPass.EXPRESSIONS)
+        s.bodyCtx.executor.checkPass(C_CompilerPass.EXPRESSIONS)
 
         var res = getErrorBody()
 

@@ -101,3 +101,17 @@ When calling a function, arguments can be specified by names, in arbitrary order
 function f(x: integer, y: text) {}
 ...
 f(x = 123, y = 'Hello');
+
+
+9. Language: Default parameter values
+
+Parameters of functions, queries and operations can have default values:
+
+function f(user: text = 'Bob', score: integer = 123) {...}
+...
+f();           // means f('Bob', 123)
+f('Alice');    // means f('Alice', 123)
+f(score=456);  // means f('Bob', 456)
+
+For operations and queries, default values are used only when calling from Rell code (including REPL), but not from
+the outside (e.g. for operations in transactions all parameters must be specified).

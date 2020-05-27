@@ -69,9 +69,28 @@ object C_Constants {
             .divide(BigDecimal.TEN.pow(DECIMAL_FRAC_DIGITS))
 }
 
-class C_FormalParameter(val name: S_Name, val type: R_Type?) {
+class C_FormalParameter(val name: S_Name, val type: R_Type?, val exprPos: S_Pos?, val hasExpr: Boolean) {
+    private val exprLate: C_LateInit<R_Expr> = C_LateInit(C_CompilerPass.EXPRESSIONS, C_Utils.ERROR_EXPR)
+
     fun nameCode(index: Int) = "$index:${name.str}"
     fun nameMsg(index: Int) = "'${name.str}'"
+
+    fun setExpr(expr: R_Expr) {
+        check(hasExpr)
+        exprLate.set(expr)
+    }
+
+    fun createVarParam(type: R_Type, ptr: R_VarPtr): R_VarParam {
+        return R_VarParam(name.str, type, ptr)
+    }
+
+    fun createDefaultValueExpr(): C_Value {
+        check(hasExpr)
+        check(exprPos != null)
+        val actType = type ?: R_CtErrorType
+        val rExpr = R_DefaultValueExpr(actType, exprLate)
+        return C_RValue(exprPos, rExpr)
+    }
 }
 
 object C_Utils {

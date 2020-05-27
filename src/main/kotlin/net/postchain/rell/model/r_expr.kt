@@ -5,6 +5,7 @@
 package net.postchain.rell.model
 
 import net.postchain.rell.compiler.C_EntityAttrRef
+import net.postchain.rell.compiler.C_LateInit
 import net.postchain.rell.compiler.C_Utils
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlGen
@@ -752,5 +753,13 @@ class R_OperationExpr(private val op: R_Operation, args: List<R_Expr>): R_Expr(R
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         val rtArgs = args.map { it.evaluate(frame) }
         return Rt_OperationValue(op.mountName, rtArgs)
+    }
+}
+
+class R_DefaultValueExpr(type: R_Type, private val exprLate: C_LateInit<R_Expr>): R_Expr(type) {
+    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
+        val expr = exprLate.get()
+        val res = expr.evaluate(frame)
+        return res
     }
 }

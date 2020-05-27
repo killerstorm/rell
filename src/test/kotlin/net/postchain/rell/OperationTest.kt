@@ -69,7 +69,7 @@ class OperationTest: BaseRellTest() {
         def("operation op(x: integer, y: text) {}")
         chk("op(123, 'Hello')", "op[op(int[123],text[Hello])]")
         chk("op('Hello', 123)", "ct_err:[expr_call_argtype:op:0:x:integer:text][expr_call_argtype:op:1:y:text:integer]")
-        chk("op(123, 'Hello', 456)", "ct_err:expr_call_argcnt:op:2:3")
+        chk("op(123, 'Hello', 456)", "ct_err:expr:call:arg_count:op:2:3")
         chk("op(123+456, 'Hello' + 'World')", "op[op(int[579],text[HelloWorld])]")
         chk("'' + op(123, 'Hello')", "text[op(123,Hello)]")
         chk("_type_of(op(123, 'Hello'))", "text[operation]")
@@ -121,5 +121,12 @@ class OperationTest: BaseRellTest() {
         def("operation bar(p: text, q: integer){}")
         chk("[ foo(123,'Hello') : 'Bob', bar('Bye', 456) : 'Alice' ]",
                 "map<operation,text>[op[foo(int[123],text[Hello])]=text[Bob],op[bar(text[Bye],int[456])]=text[Alice]]")
+    }
+
+    @Test fun testDefautParameters() {
+        def("operation foo(x: integer = 123, y: text = 'Hello'){}")
+        chk("foo()", "op[foo(int[123],text[Hello])]")
+        chk("foo(456)", "op[foo(int[456],text[Hello])]")
+        chk("foo(456,'Bye')", "op[foo(int[456],text[Bye])]")
     }
 }

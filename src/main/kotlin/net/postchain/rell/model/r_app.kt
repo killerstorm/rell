@@ -62,11 +62,11 @@ class R_Attrib(
         val canSetInCreate: Boolean = true,
         val sqlMapping: String = name
 ){
-    private val expr0 = C_LateInit<Optional<R_Expr>>(C_CompilerPass.EXPRESSIONS, Optional.empty())
-    val expr: R_Expr? get() = expr0.get().orElse(null)
+    private val exprLate = C_LateInit<Optional<R_Expr>>(C_CompilerPass.EXPRESSIONS, Optional.empty())
+    val expr: R_Expr? get() = exprLate.get().orElse(null)
 
     fun setExpr(expr: R_Expr?) {
-        expr0.set(Optional.ofNullable(expr))
+        exprLate.set(Optional.ofNullable(expr))
     }
 
     fun toMetaGtv(): Gtv {
