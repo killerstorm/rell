@@ -24,13 +24,8 @@ object SqlUtils {
 
     private fun dropTables(sqlExec: SqlExecutor, sysTables: Boolean) {
         val tables = getExistingTables(sqlExec)
-
-        val delTables = if (sysTables) tables else {
-            val sys = setOf(SqlConstants.BLOCKS_TABLE, SqlConstants.TRANSACTIONS_TABLE, SqlConstants.BLOCKCHAINS_TABLE)
-            tables.filter { it !in sys }
-        }
-
-        val sql = delTables.joinToString("\n") { "DROP TABLE \"$it\" CASCADE;" }
+        val delTables = tables.filter { sysTables || it !in SqlConstants.SYSTEM_APP_TABLES }
+        val sql = delTables.joinToString("\n") { "DROP TABLE IF EXISTS \"$it\" CASCADE;" }
         sqlExec.execute(sql)
     }
 
@@ -152,6 +147,18 @@ object SqlUtils {
         con.createStatement().use { stmt ->
             stmt.execute("""CREATE SCHEMA IF NOT EXISTS "$schema";""")
         }
+    }
+
+    fun printConnectionInfo(sqlExec: SqlExecutor) {
+        var database: String? = null
+        var schema: String? = null
+        sqlExec.executeQuery("SELECT CURRENT_DATABASE(), CURRENT_SCHEMA();", {}) { rs ->
+            check(database == null)
+            check(schema == null)
+            database = rs.getString(1)
+            schema = rs.getString(2)
+        }
+        println("Database: [$database], schema: [$schema]")
     }
 }
 

@@ -4,8 +4,8 @@
 
 package net.postchain.rell
 
+import net.postchain.StorageBuilder
 import net.postchain.base.BlockchainRid
-import net.postchain.config.SimpleDatabaseConnector
 import net.postchain.config.app.AppConfig
 import net.postchain.gtv.GtvNull
 import net.postchain.rell.model.*
@@ -107,7 +107,7 @@ private fun initDatabase(args: RellCliArgs, app: R_App, sqlMgr: SqlManager, sqlC
         val exeCtx = Rt_ExecutionContext(appCtx, sqlExec)
 
         val initLogging = SqlInitLogging.ofLevel(if (args.sqlInitLog) SqlInitLogging.LOG_ALL else SqlInitLogging.LOG_NONE)
-        SqlInit.init(exeCtx, initLogging)
+        SqlInit.init(exeCtx, true, initLogging)
     }
 }
 
@@ -155,8 +155,8 @@ private fun runWithSqlManager(args: RellCliArgs, logSqlErrors: Boolean, code: (S
         }
     } else if (dbProperties != null) {
         val appCfg = AppConfig.fromPropertiesFile(dbProperties)
-        val connector = SimpleDatabaseConnector(appCfg)
-        val sqlMgr = DatabaseConnectorSqlManager(connector, args.sqlLog)
+        val storage = StorageBuilder.buildStorage(appCfg, 0)
+        val sqlMgr = PostchainStorageSqlManager(storage, args.sqlLog)
         runWithSqlManager(appCfg.databaseSchema, sqlMgr, logSqlErrors, code)
     } else {
         code(NoConnSqlManager)

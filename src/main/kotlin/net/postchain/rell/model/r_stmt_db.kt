@@ -187,8 +187,6 @@ sealed class R_BaseUpdateStatement(val target: R_UpdateTarget): R_Statement() {
             redWhere.toSql(ctx, whereB)
         }
 
-        R_AtExprBase.appendExtraWhere(whereB, ctx.sqlCtx, fromInfo)
-
         if (!whereB.isEmpty()) {
             b.append(" WHERE ")
             b.append(whereB)

@@ -149,7 +149,6 @@ class R_AtExprBase(
     private fun appendWhere(b: SqlBuilder, ctx: SqlGenContext, redWhere: RedDb_Expr?, fromInfo: SqlFromInfo) {
         val whereB = SqlBuilder()
         redWhere?.toSql(ctx, whereB)
-        appendExtraWhere(whereB, ctx.sqlCtx, fromInfo)
 
         if (!whereB.isEmpty()) {
             b.append(" WHERE ")
@@ -174,14 +173,6 @@ class R_AtExprBase(
         }
 
         return expr?.toRedExpr(frame)
-    }
-
-    companion object {
-        fun appendExtraWhere(b: SqlBuilder, sqlCtx: Rt_SqlContext, fromInfo: SqlFromInfo) {
-            for (entity in fromInfo.entities) {
-                entity.alias.entity.sqlMapping.appendExtraWhere(b, sqlCtx, entity.alias)
-            }
-        }
     }
 }
 

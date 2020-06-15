@@ -7,6 +7,8 @@ package net.postchain.rell.test
 import net.postchain.base.BaseBlockEContext
 import net.postchain.base.BaseEContext
 import net.postchain.base.BaseTxEContext
+import net.postchain.base.BlockchainRid
+import net.postchain.common.hexStringToByteArray
 import net.postchain.core.EContext
 import net.postchain.core.UserMistake
 import net.postchain.gtv.Gtv
@@ -32,7 +34,6 @@ class RellGtxTester(
 ): RellBaseTester(tstCtx, entityDefs, inserts, gtv) {
     var wrapRtErrors = true
     val extraModuleConfig = mutableMapOf<String, String>()
-    var blockchainRID = "DEADBEEF"
     var nodeId: Int = 3377
     var modules: List<String>? = listOf("")
 
@@ -43,11 +44,14 @@ class RellGtxTester(
     }
 
     override fun initSqlReset(sqlExec: SqlExecutor, moduleCode: String, app: R_App) {
+        val bRid = BlockchainRid(blockchainRid.hexStringToByteArray())
+
         val gtxModule = createGtxModule(moduleCode)
 
         val dbAccess = PostchainUtils.createDatabaseAccess()
         sqlExec.connection { con ->
             val ctx = BaseEContext(con, chainId, nodeId, dbAccess)
+            dbAccess.initializeBlockchain(ctx, bRid)
             GTXSchemaManager.initializeDB(ctx)
             gtxModule.initializeDB(ctx)
         }
@@ -132,8 +136,8 @@ class RellGtxTester(
                 val blkCtx = BaseBlockEContext(ctx, 0, 0, mapOf())
                 val txCtx = BaseTxEContext(blkCtx, 0)
 
-                val bcRid = PostchainUtils.hexToRid(blockchainRID)
-                val opData = ExtOpData(name, 0, bcRid, arrayOf(), args.toTypedArray())
+                val bcRid = PostchainUtils.hexToRid(blockchainRid)
+                val opData = ExtOpData(name, 0, args.toTypedArray(), bcRid, arrayOf(), arrayOf())
                 val tx = module.makeTransactor(opData)
                 check(tx.isCorrect())
 
@@ -178,7 +182,7 @@ class RellGtxTester(
         )
 
         val moduleCfg = moduleConfig(moduleCode)
-        val bcRid = PostchainUtils.hexToRid(blockchainRID)
+        val bcRid = PostchainUtils.hexToRid(blockchainRid)
         val module = factory.makeModule(moduleCfg, bcRid)
         return module
     }

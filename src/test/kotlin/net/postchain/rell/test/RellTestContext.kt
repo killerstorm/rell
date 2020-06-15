@@ -4,28 +4,31 @@
 
 package net.postchain.rell.test
 
+import net.postchain.base.data.PostgreSQLDatabaseAccess
+import net.postchain.base.data.SQLDatabaseAccess
 import net.postchain.rell.CommonUtils
+import net.postchain.rell.PostchainUtils
 import net.postchain.rell.runtime.Rt_SqlManager
 import net.postchain.rell.sql.*
 import java.io.Closeable
 import java.sql.Connection
 
 class RellTestContext(useSql: Boolean = true): Closeable {
-    class BlockBuilder {
+    class BlockBuilder(private val chainId: Long) {
         private val list = mutableListOf<String>()
 
         fun list() = list.toList()
 
-        fun block(iid: Long, chainId: Long, height: Long, rid: String, header: String, timestamp: Long): BlockBuilder {
-            val s = """INSERT INTO "blocks"(block_iid,block_height,block_rid,chain_iid,block_header_data,block_witness,timestamp)
-                VALUES($iid,$height,E'\\x$rid',$chainId,E'\\x$header',NULL,$timestamp);""".trimIndent()
+        fun block(iid: Long, height: Long, rid: String, header: String, timestamp: Long): BlockBuilder {
+            val s = """INSERT INTO "c$chainId.blocks"(block_iid,block_height,block_rid,block_header_data,block_witness,timestamp)
+                VALUES($iid,$height,E'\\x$rid',E'\\x$header',NULL,$timestamp);""".trimIndent()
             list.add(s)
             return this
         }
 
-        fun tx(iid: Long, chainId: Long, block: Long, rid: String, data: String, hash: String): BlockBuilder {
-            val s = """INSERT INTO "transactions"(tx_iid,chain_iid,tx_rid,tx_data,tx_hash,block_iid)
-                VALUES($iid,$chainId,E'\\x$rid',E'\\x$data',E'\\x$hash',$block);""".trimIndent()
+        fun tx(iid: Long, block: Long, rid: String, data: String, hash: String): BlockBuilder {
+            val s = """INSERT INTO "c$chainId.transactions"(tx_iid,tx_rid,tx_data,tx_hash,block_iid)
+                VALUES($iid,E'\\x$rid',E'\\x$data',E'\\x$hash',$block);""".trimIndent()
             list.add(s)
             return this
         }
@@ -67,9 +70,7 @@ class RellTestContext(useSql: Boolean = true): Closeable {
             sqlMgr.transaction { sqlExec ->
                 SqlUtils.dropAll(sqlExec, true)
 
-                val sql = SqlGen.genSqlCreateSysTables()
-                sqlExec.execute(sql)
-
+                initSqlCreateSysTables(sqlExec)
                 initSqlInsertBlockchains(sqlExec)
 
                 if (!inserts.isEmpty()) {
@@ -83,6 +84,13 @@ class RellTestContext(useSql: Boolean = true): Closeable {
             closeable = null
         } finally {
             closeable?.close()
+        }
+    }
+
+    private fun initSqlCreateSysTables(sqlExec: SqlExecutor) {
+        val sqlAccess: SQLDatabaseAccess = PostgreSQLDatabaseAccess()
+        sqlExec.connection { con ->
+            sqlAccess.initializeApp(con, PostchainUtils.DATABASE_VERSION)
         }
     }
 

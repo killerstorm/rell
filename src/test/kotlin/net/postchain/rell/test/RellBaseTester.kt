@@ -30,6 +30,7 @@ abstract class RellBaseTester(
     var errMsgPos = false
     var gtv = gtv
     var deprecatedError = false
+    var blockchainRid = "DEADBEEF"
 
     var defs: List<String> = entityDefs
         set(value) {
@@ -210,7 +211,7 @@ abstract class RellBaseTester(
         init()
         val map = SqlTestUtils.dumpDatabaseTables(tstCtx.sqlMgr())
         return map.keys.sorted()
-                .filter { !it.matches(Regex("c\\d+\\.(rowid_gen|sys\\.attributes|sys\\.classes)")) }
+                .filter { !it.matches(Regex("c\\d+\\.(rowid_gen|sys\\.attributes|sys\\.classes|blocks|transactions)")) }
                 .flatMap {
                     map.getValue(it).map { row -> "$it($row)" }
                 }

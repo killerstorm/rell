@@ -172,6 +172,8 @@ object SqlTestUtils {
                 "" + value
             } else if (value is Boolean) {
                 "" + value
+            } else if (value == null) {
+                "NULL"
             } else {
                 throw IllegalStateException(value.javaClass.canonicalName)
             }
@@ -206,14 +208,15 @@ object SqlTestUtils {
         return res
     }
 
-    fun dumpTablesStructure(con: Connection): Map<String, Map<String, String>> {
+    fun dumpTablesStructure(con: Connection, all: Boolean = false): Map<String, Map<String, String>> {
         val map = HashMultimap.create<String, Pair<String, String>>()
-        con.metaData.getColumns(null, con.schema, "c%.%", null).use { rs ->
+        val namePattern = if (all) null else "c%.%"
+        con.metaData.getColumns(null, con.schema, namePattern, null).use { rs ->
             while (rs.next()) {
                 val table = rs.getString(3)
                 val column = rs.getString(4)
                 val type = rs.getString(6)
-                if (table.matches(Regex("c\\d+\\..+"))) {
+                if (all || table.matches(Regex("c\\d+\\..+"))) {
                     map.put(table, Pair(column, type))
                 }
             }

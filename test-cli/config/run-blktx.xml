@@ -1,0 +1,13 @@
+<run wipe-db="true">
+    <nodes>
+        <config src="node-config.properties" add-signers="true" />
+    </nodes>
+    <chains>
+        <chain name="blktx" iid="2">
+            <config height="0">
+                <app module="blktx">
+                </app>
+            </config>
+        </chain>
+    </chains>
+</run>

@@ -37,10 +37,9 @@ class AppGtvMetaTest: BaseRellTest(false) {
         tstCtx.blockchain(555, "beefdead")
         tst.chainDependency("foo", "deadbeef", 1000)
         tst.chainDependency("bar", "beefdead", 2000)
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
-        initExternalChain(333, true)
-        initExternalChain(555, false)
+        initExternalChain(333, true, LibBlockTransactionTest.BLOCK_INSERTS_333)
+        initExternalChain(555, false, LibBlockTransactionTest.BLOCK_INSERTS_555)
 
         file("lib.rell", "@external module;")
 
@@ -52,11 +51,12 @@ class AppGtvMetaTest: BaseRellTest(false) {
         }}""")
     }
 
-    private fun initExternalChain(chainId: Long, resetDatabase: Boolean) {
+    private fun initExternalChain(chainId: Long, resetDatabase: Boolean, inserts: List<String> = listOf()) {
         run {
             val t = RellCodeTester(tst.tstCtx)
             t.chainId = chainId
             t.dropTables = resetDatabase
+            t.insert(inserts)
             t.init()
         }
         tst.dropTables = false

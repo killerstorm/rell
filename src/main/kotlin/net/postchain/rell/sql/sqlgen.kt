@@ -4,7 +4,6 @@
 
 package net.postchain.rell.sql
 
-import net.postchain.base.data.PostgreSQLCommands
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_SqlContext
@@ -24,18 +23,6 @@ object SqlGen {
     private val disableLogo2 = disableLogo
 
     val DSL_CTX = DSL.using(SQLDialect.POSTGRES)
-
-    private val CREATE_TABLE_BLOCKS = PostgreSQLCommands.createTableBlocks
-    private val CREATE_TABLE_TRANSACTIONS = PostgreSQLCommands.createTableTransactions
-    private val CREATE_TABLE_BLOCKCHAINS = PostgreSQLCommands.createTableBlockChains
-
-    fun genSqlCreateSysTables(): String {
-        val sqls = mutableListOf<String>()
-        sqls += "$CREATE_TABLE_BLOCKS;"
-        sqls += "$CREATE_TABLE_TRANSACTIONS;"
-        sqls += "$CREATE_TABLE_BLOCKCHAINS;"
-        return joinSqls(sqls)
-    }
 
     fun genRowidSql(chainMapping: Rt_ChainSqlMapping): String {
         val table = chainMapping.rowidTable

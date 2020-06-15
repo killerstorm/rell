@@ -13,9 +13,8 @@ import org.junit.Test
 class ExternalTest: BaseRellTest() {
     @Test fun testSimple() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
-        initExternalChain()
+        initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
         def("@external('foo') namespace { @log entity user { name; } }")
         tst.chainDependency("foo", "deadbeef", 1000)
         chk("user @ {} ( _=user, _=.name )", "([foo]!user[1],text[Bob])")
@@ -23,9 +22,8 @@ class ExternalTest: BaseRellTest() {
 
     @Test fun testExternalEntity() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
-        initExternalChain()
+        initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
         def("@external('foo') @log entity user { name; }")
         tst.chainDependency("foo", "deadbeef", 1000)
         chk("user @ {} ( _=user, _=.name )", "([foo]!user[1],text[Bob])")
@@ -33,9 +31,8 @@ class ExternalTest: BaseRellTest() {
 
     @Test fun testExternalNamespace() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
-        initExternalChain()
+        initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
         def("@external('foo') @mount('') namespace ns { @log entity user { name; } }")
         tst.chainDependency("foo", "deadbeef", 1000)
         chk("ns.user @ {} ( _=user, _=.name )", "([foo]!ns.user[1],text[Bob])")
@@ -43,9 +40,8 @@ class ExternalTest: BaseRellTest() {
 
     @Test fun testExternalInsideNamespace() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
-        initExternalChain()
+        initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
         def("@external('foo') @mount('') namespace bar { @log entity user { name; } }")
         tst.chainDependency("foo", "deadbeef", 1000)
         chk("bar.user @ {} ( _=user, _=.name )", "([foo]!bar.user[1],text[Bob])")
@@ -54,9 +50,9 @@ class ExternalTest: BaseRellTest() {
 
     @Test fun testNamespaceInsideExternal() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
-        initExternalChain(333, "abc.foo.bar.user", "namespace abc { namespace foo { namespace bar { @log entity user { name; } } } }")
+        initExternalChain(333, "abc.foo.bar.user", "namespace abc { namespace foo { namespace bar { @log entity user { name; } } } }",
+                inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
         def("namespace abc { @external('ext') namespace foo { namespace bar { @log entity user { name; } } } }")
         tst.chainDependency("ext", "deadbeef", 1000)
         chk("abc.foo.bar.user @ {} ( _=user, _=.name )", "([ext]!abc.foo.bar.user[1],text[Bob])")
@@ -66,9 +62,8 @@ class ExternalTest: BaseRellTest() {
     @Test fun testUnallowedDefs() {
         tstCtx.blockchain(333, "deadbeef")
         tstCtx.blockchain(444, "cafebabe")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
-        initExternalChain()
+        initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
         tst.chainDependency("foo", "deadbeef", 1000)
         tst.chainDependency("bar", "cafebabe", 1000)
 
@@ -91,9 +86,8 @@ class ExternalTest: BaseRellTest() {
 
     @Test fun testNoLog() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
-        initExternalChain()
+        initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
         tst.chainDependency("foo", "deadbeef", 1000)
 
         chkCompile("@external('foo') namespace { entity user { name; } }", "ct_err:def_entity_external_nolog:user")
@@ -102,9 +96,8 @@ class ExternalTest: BaseRellTest() {
 
     @Test fun testDuplicateChainRID() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
-        initExternalChain()
+        initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
         tst.chainDependency("foo", "deadbeef", 1000)
         tst.chainDependency("bar", "deadbeef", 2000)
         chk("123", "rt_err:external_chain_dup_rid:bar:deadbeef")
@@ -112,18 +105,16 @@ class ExternalTest: BaseRellTest() {
 
     @Test fun testUnknownChain() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
-        initExternalChain()
+        initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
         tst.chainDependency("foo", "deadbeef", 1000)
         chkQueryEx("@external('bar') namespace { @log entity user { name; } } query q() = 123;", "rt_err:external_chain_unknown:bar")
     }
 
     @Test fun testReferenceInternalToExternal() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
-        initExternalChain()
+        initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
         def("@external('foo') namespace { @log entity user { name; } }")
         def("entity local { user; }")
         insert("c0.local", "user", "1,1")
@@ -140,7 +131,7 @@ class ExternalTest: BaseRellTest() {
             val t = RellCodeTester(tstCtx)
             t.def("@log entity company { name; }")
             t.chainId = 555
-            t.insert(LibBlockTransactionTest.BLOCK_INSERTS)
+            t.insert(LibBlockTransactionTest.BLOCK_INSERTS_555)
             t.init()
         }
 
@@ -151,6 +142,7 @@ class ExternalTest: BaseRellTest() {
             t.def("@log entity user { name; company; }")
             t.chainId = 333
             t.dropTables = false
+            t.insert(LibBlockTransactionTest.BLOCK_INSERTS_333)
             t.chainDependency("bar", "cafebabe", 1000)
             t.init()
         }
@@ -161,17 +153,16 @@ class ExternalTest: BaseRellTest() {
         tst.createTables = false
         tst.dropTables = false
         tst.chainDependency("foo", "deadbeef", 1000)
-        insert("c555.company", "name,transaction", "33,'Google',444")
-        insert("c333.user", "name,transaction,company", "17,'Bob',2,33")
+        insert("c555.company", "name,transaction", "33,'Google',2")
+        insert("c333.user", "name,transaction,company", "17,'Bob',444,33")
 
         chk("user @ {} ( _=user, _=.name, _=.company, _=.company.name )", "([foo]!user[17],text[Bob],company[33],text[Google])")
     }
 
     @Test fun testAccessTransaction() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
-        initExternalChain()
+        initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
         def("@external('foo') namespace { @log entity user { name; } }")
         tst.chainDependency("foo", "deadbeef", 1000)
 
@@ -194,7 +185,7 @@ class ExternalTest: BaseRellTest() {
             t.def("@log entity company { name; }")
             t.def("@log entity user { name; company; }")
             t.chainId = 333
-            t.insert(LibBlockTransactionTest.BLOCK_INSERTS)
+            t.insert(LibBlockTransactionTest.BLOCK_INSERTS_333)
             t.insert("c333.company", "name,transaction", "1,'Google',444")
             t.insert("c333.user", "name,company,transaction", "1,'Bob',1,444")
             t.chkQuery("user @ {} ( _=user, _=.name, _=.company, _=.company.name, _=.transaction )",
@@ -210,7 +201,6 @@ class ExternalTest: BaseRellTest() {
 
     @Test fun testHeightCheck() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         chkHeight(10, "user @? {}", "null")
         chkHeight(221, "user @? {}", "null")
@@ -225,7 +215,7 @@ class ExternalTest: BaseRellTest() {
     }
 
     private fun chkHeight(height: Long, code: String, expected: String) {
-        initExternalChain()
+        initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
         run {
             val t = RellCodeTester(tstCtx)
             t.dropTables = false
@@ -239,9 +229,8 @@ class ExternalTest: BaseRellTest() {
 
     @Test fun testMisc() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
-        initExternalChain()
+        initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
         tst.chainDependency("foo", "deadbeef", 1000)
         chkQueryEx("@external('foo') namespace {} query q() = 123;", "int[123]") // Empty external block
         chkCompile("@external('') namespace {}", "ct_err:ann:external:invalid:")
@@ -250,16 +239,16 @@ class ExternalTest: BaseRellTest() {
     @Test fun testTxImplicitTransactionBlockTypes() {
         tstCtx.blockchain(333, "deadbeef")
         tstCtx.blockchain(555, "beefdead")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
-        initExternalChain(chainId = 333)
-        initExternalChain(chainId = 555, resetDatabase = false)
+        initExternalChain(chainId = 333, inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
+        initExternalChain(chainId = 555, inserts = LibBlockTransactionTest.BLOCK_INSERTS_555, resetDatabase = false, txId = 2)
         def("@mount('') namespace foo { @external('foo') @log entity user { name; } }")
         def("@mount('') namespace bar { @external('bar') @log entity user { name; } }")
         def("@log entity local_user { name; }")
         tst.chainDependency("foo", "deadbeef", 1000)
         tst.chainDependency("bar", "beefdead", 1000)
-        insert("c0.local_user", "name,transaction", "1,'Bob',2")
+        insert(LibBlockTransactionTest.BLOCK_INSERTS_0)
+        insert("c0.local_user", "name,transaction", "1,'Bob',720")
 
         chk("_type_of((foo.user @ {}).transaction)", "text[[foo]!transaction]")
         chk("_type_of((foo.user @ {}).transaction.block)", "text[[foo]!block]")
@@ -346,9 +335,8 @@ class ExternalTest: BaseRellTest() {
 
     @Test fun testTxExplicitTypeMount() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
         tst.chainDependency("foo", "deadbeef", 1000)
-        initExternalChain()
+        initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
 
         chkCompile("@external('foo') namespace ns { @mount('') entity transaction; }", "ct_err:ann:mount:not_allowed:ENTITY:transaction")
         chkCompile("@external('foo') namespace ns { @mount('') entity block; }", "ct_err:ann:mount:not_allowed:ENTITY:block")
@@ -420,9 +408,8 @@ class ExternalTest: BaseRellTest() {
 
     @Test fun testTxExplicitTypeCompatibility3() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
         tst.chainDependency("foo", "deadbeef", 1000)
-        initExternalChain()
+        initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
 
         def("namespace ns1 { @mount('bar') @external('foo') namespace { entity transaction; entity block; } }")
         def("@mount('bar') namespace ns2 { @external('foo') namespace { entity transaction; entity block; } }")
@@ -435,9 +422,8 @@ class ExternalTest: BaseRellTest() {
 
     @Test fun testTxExplicitTypeLocalVar() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
-        initExternalChain()
+        initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
         def("@external('foo') @mount('') namespace foo { entity transaction; entity block; @log entity user { name; } }")
         tst.chainDependency("foo", "deadbeef", 1000)
 
@@ -455,9 +441,8 @@ class ExternalTest: BaseRellTest() {
 
     @Test fun testTxExplicitTypeAttribute() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
-        initExternalChain()
+        initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
         def("@external('foo') @mount('') namespace foo { entity transaction; entity block; @log entity user { name; } }")
         def("entity local { tx: foo.transaction; blk: foo.block; }")
         tst.chainDependency("foo", "deadbeef", 1000)
@@ -471,7 +456,6 @@ class ExternalTest: BaseRellTest() {
 
     @Test fun testTxExplicitTypeSelect() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         chkTxExplicitTypeSelect(10, "[]", "[]")
         chkTxExplicitTypeSelect(221, "[]", "[]")
@@ -481,7 +465,7 @@ class ExternalTest: BaseRellTest() {
     }
 
     private fun chkTxExplicitTypeSelect(height: Long, expectedTx: String, expectedBlock: String) {
-        initExternalChain()
+        initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
 
         run {
             val t = RellCodeTester(tstCtx)
@@ -497,17 +481,17 @@ class ExternalTest: BaseRellTest() {
     }
 
     @Test fun testGtvExternalEntity() {
-        val blockInserts = RellTestContext.BlockBuilder()
-                .block(1001, 123, 1, "DEAD01", "1001", 1510000000000)
-                .block(1002, 123, 2, "DEAD02", "1002", 1520000000000)
-                .block(1003, 123, 3, "DEAD03", "1003", 1530000000000)
-                .block(1004, 123, 4, "DEAD04", "1004", 1540000000000)
-                .block(1005, 123, 5, "DEAD05", "1005", 1550000000000)
-                .tx(2001, 123, 1001, "BEEF01", "2001", "1234")
-                .tx(2002, 123, 1002, "BEEF02", "2002", "1234")
-                .tx(2003, 123, 1003, "BEEF03", "2003", "1234")
-                .tx(2004, 123, 1004, "BEEF04", "2004", "1234")
-                .tx(2005, 123, 1005, "BEEF05", "2005", "1234")
+        val blockInserts = RellTestContext.BlockBuilder(123)
+                .block(1001, 1, "DEAD01", "1001", 1510000000000)
+                .block(1002, 2, "DEAD02", "1002", 1520000000000)
+                .block(1003, 3, "DEAD03", "1003", 1530000000000)
+                .block(1004, 4, "DEAD04", "1004", 1540000000000)
+                .block(1005, 5, "DEAD05", "1005", 1550000000000)
+                .tx(2001, 1001, "BEEF01", "2001", "1234")
+                .tx(2002, 1002, "BEEF02", "2002", "1234")
+                .tx(2003, 1003, "BEEF03", "2003", "1234")
+                .tx(2004, 1004, "BEEF04", "2004", "1234")
+                .tx(2005, 1005, "BEEF05", "2005", "1234")
                 .list()
 
         tstCtx.blockchain(123, "deadbeef")
@@ -581,9 +565,8 @@ class ExternalTest: BaseRellTest() {
 
     @Test fun testCreateExternalEntity() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
-        initExternalChain()
+        initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
         def("@external('foo') namespace { @log entity user { name; } }")
         tst.chainDependency("foo", "deadbeef", 1000)
         chkOp("create user (name = 'Alice');", "ct_err:expr_create_cant:user")
@@ -591,9 +574,8 @@ class ExternalTest: BaseRellTest() {
 
     @Test fun testDeleteExternalEntity() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
-        initExternalChain()
+        initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
         def("@external('foo') namespace { @log entity user { name; } }")
         tst.chainDependency("foo", "deadbeef", 1000)
         chkOp("delete user @* {};", "ct_err:stmt_delete_cant:user")
@@ -601,7 +583,6 @@ class ExternalTest: BaseRellTest() {
 
     @Test fun testMetaEntityNotFound() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         chkMetaEntity(
                 "@log entity company {}",
@@ -612,7 +593,6 @@ class ExternalTest: BaseRellTest() {
 
     @Test fun testMetaEntityObject() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         chkMetaEntity(
                 "object user { name: text = 'Bob'; }",
@@ -623,7 +603,6 @@ class ExternalTest: BaseRellTest() {
 
     @Test fun testMetaEntityNoLog() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         chkMetaEntity(
                 "entity user {}",
@@ -634,7 +613,6 @@ class ExternalTest: BaseRellTest() {
 
     @Test fun testMetaAttributeNotFound() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         chkMetaEntity(
                 "@log entity user { name: text; }",
@@ -645,7 +623,6 @@ class ExternalTest: BaseRellTest() {
 
     @Test fun testMetaAttributeWrongType() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         chkMetaEntity(
                 "@log entity user { attr: integer; }",
@@ -674,7 +651,6 @@ class ExternalTest: BaseRellTest() {
 
     @Test fun testMetaAttributeWrongChain() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         chkMetaEntity(
                 "@log entity company {} @log entity user { company; }",
@@ -685,7 +661,6 @@ class ExternalTest: BaseRellTest() {
 
     @Test fun testMetaAttributeSubset() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         chkMetaEntity(
                 "@log entity user { x: integer; y: text; z: boolean; }",
@@ -702,7 +677,6 @@ class ExternalTest: BaseRellTest() {
 
     @Test fun testMetaEntityNamespace() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         chkMetaEntity(
                 "namespace x { @log entity user {} }",
@@ -731,7 +705,6 @@ class ExternalTest: BaseRellTest() {
 
     @Test fun testMetaAttributeNamespace() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
         val extDefs = "namespace x { @log entity company {} } namespace y { @log entity user { c: x.company; } }"
 
@@ -768,7 +741,7 @@ class ExternalTest: BaseRellTest() {
             t.def("@log entity ext_a { value: integer; }")
             t.def("namespace y { @log entity ext_b {} }")
             t.chainId = 333
-            t.insert(LibBlockTransactionTest.BLOCK_INSERTS)
+            t.insert(LibBlockTransactionTest.BLOCK_INSERTS_333)
             t.init()
         }
 
@@ -807,6 +780,7 @@ class ExternalTest: BaseRellTest() {
             val t = RellCodeTester(tstCtx)
             t.def(externalDefs)
             t.chainId = 333
+            t.insert(LibBlockTransactionTest.BLOCK_INSERTS_333)
             t.chkQuery("123", "int[123]") // Initializes database
         }
 
@@ -822,9 +796,9 @@ class ExternalTest: BaseRellTest() {
 
     @Test fun testMountEntity() {
         tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
-        initExternalChain(333, "foo.bar.user", "namespace foo { namespace bar { @log entity user { name; } } }")
+        initExternalChain(333, "foo.bar.user", "namespace foo { namespace bar { @log entity user { name; } } }",
+                inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
 
         tst.chainDependency("foo", "deadbeef", 1000)
 
@@ -883,14 +857,17 @@ class ExternalTest: BaseRellTest() {
             chainId: Long = 333,
             entityName: String = "user",
             def: String = "@log entity user { name; }",
-            resetDatabase: Boolean = true
+            resetDatabase: Boolean = true,
+            inserts: List<String> = listOf(),
+            txId: Int = 444
     ) {
         run {
             val t = RellCodeTester(tst.tstCtx)
             t.def(def)
             t.chainId = chainId
             t.dropTables = resetDatabase
-            t.insert("c$chainId.$entityName", "name,transaction", "1,'Bob',444")
+            t.insert(inserts)
+            t.insert("c$chainId.$entityName", "name,transaction", "1,'Bob',$txId")
             t.chkQuery("$entityName @ {} ( _=user, _=.name )", "($entityName[1],text[Bob])")
         }
         tst.dropTables = false

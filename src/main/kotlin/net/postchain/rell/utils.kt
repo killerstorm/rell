@@ -8,7 +8,6 @@ import com.google.common.collect.*
 import com.google.gson.GsonBuilder
 import net.postchain.base.BlockchainRid
 import net.postchain.base.SECP256K1CryptoSystem
-import net.postchain.base.data.PostgreSQLCommands
 import net.postchain.base.data.PostgreSQLDatabaseAccess
 import net.postchain.base.data.SQLDatabaseAccess
 import net.postchain.common.hexStringToByteArray
@@ -129,6 +128,8 @@ object CommonUtils {
 }
 
 object PostchainUtils {
+    val DATABASE_VERSION = 1
+
     val cryptoSystem = SECP256K1CryptoSystem()
 
     private val merkleCalculator = GtvMerkleHashCalculator(cryptoSystem)
@@ -155,7 +156,7 @@ object PostchainUtils {
 
     fun hexToRid(s: String): BlockchainRid = BlockchainRid(CommonUtils.hexToBytes(s))
 
-    fun createDatabaseAccess(): SQLDatabaseAccess = PostgreSQLDatabaseAccess(PostgreSQLCommands)
+    fun createDatabaseAccess(): SQLDatabaseAccess = PostgreSQLDatabaseAccess()
 
     fun calcBlockchainRid(config: Gtv): Bytes32 {
         val hash = merkleHash(config)

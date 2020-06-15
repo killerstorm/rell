@@ -27,7 +27,7 @@ import net.postchain.rell.toImmSet
 import org.apache.commons.lang3.time.FastDateFormat
 
 const val RELL_LANG_VERSION = "0.10"
-const val RELL_VERSION = "0.10.2"
+const val RELL_VERSION = "0.10.3"
 
 const val RELL_VERSION_MODULE_SYSTEM = "0.10.0"
 
@@ -207,7 +207,7 @@ private class RellPostchainModule(
             val heightProvider = Rt_ConstantChainHeightProvider(-1)
             val exeCtx = createExecutionContext(ctx, null, heightProvider)
             val initLogging = SqlInitLogging.ofLevel(config.dbInitLogLevel)
-            SqlInit.init(exeCtx, initLogging)
+            SqlInit.init(exeCtx, false, initLogging)
         }
     }
 

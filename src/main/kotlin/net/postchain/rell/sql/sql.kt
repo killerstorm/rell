@@ -4,7 +4,9 @@
 
 package net.postchain.rell.sql
 
-import net.postchain.config.DatabaseConnector
+import net.postchain.base.Storage
+import net.postchain.base.withReadConnection
+import net.postchain.base.withWriteConnection
 import net.postchain.rell.runtime.Rt_Error
 import org.jooq.tools.jdbc.MockConnection
 import java.io.Closeable
@@ -19,17 +21,26 @@ object SqlConstants {
     const val ROWID_GEN = "rowid_gen"
     const val MAKE_ROWID = "make_rowid"
 
-    const val BLOCKS_TABLE = "blocks"
     const val BLOCKCHAINS_TABLE = "blockchains"
+
+    const val CONFIGURATIONS_TABLE = "configurations"
+    const val BLOCKS_TABLE = "blocks"
     const val TRANSACTIONS_TABLE = "transactions"
 
     val SYSTEM_OBJECTS = setOf(
             ROWID_GEN,
             MAKE_ROWID,
-            BLOCKS_TABLE,
             BLOCKCHAINS_TABLE,
+            CONFIGURATIONS_TABLE,
+            BLOCKS_TABLE,
             TRANSACTIONS_TABLE,
-            "configurations",
+            "meta",
+            "peerinfos",
+            "gtx_module_version"
+    )
+
+    val SYSTEM_APP_TABLES = setOf(
+            BLOCKCHAINS_TABLE,
             "meta",
             "peerinfos"
     )
@@ -175,7 +186,7 @@ class ConnectionSqlManager(private val con: Connection, logging: Boolean): SqlMa
 }
 
 class ConnectionSqlExecutor(private val con: Connection, private val conLogger: SqlConnectionLogger): SqlExecutor() {
-    constructor(con: Connection, logging: Boolean): this(con, SqlConnectionLogger(logging))
+    constructor(con: Connection, logging: Boolean = true): this(con, SqlConnectionLogger(logging))
 
     override fun <T> connection(code: (Connection) -> T): T {
         val autoCommit = con.autoCommit
@@ -223,17 +234,17 @@ class ConnectionSqlExecutor(private val con: Connection, private val conLogger: 
     }
 }
 
-class DatabaseConnectorSqlManager(private val connector: DatabaseConnector, logging: Boolean): SqlManager() {
+class PostchainStorageSqlManager(private val storage: Storage, logging: Boolean): SqlManager() {
     private val conLogger = SqlConnectionLogger(logging)
 
     override fun <T> execute0(tx: Boolean, code: (SqlExecutor) -> T): T {
         val res = if (tx) {
-            connector.withWriteConnection { con ->
-                executeWithConnection(con, false, code)
+            storage.withWriteConnection { ctx ->
+                executeWithConnection(ctx.conn, false, code)
             }
         } else {
-            connector.withReadConnection { con ->
-                executeWithConnection(con, true, code)
+            storage.withReadConnection { ctx ->
+                executeWithConnection(ctx.conn, true, code)
             }
         }
         return res

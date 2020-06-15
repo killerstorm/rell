@@ -85,7 +85,7 @@ class ReplInterpreter private constructor(
 
     private var defsState = C_ReplDefsState.EMPTY
     private var codeState = ReplCodeState.EMPTY
-    private var lastUpdateSqlDefs = R_AppSqlDefs.EMPTY
+    private var lastUpdateSqlDefs: R_AppSqlDefs? = null
 
     private var mustQuit = false
     private var sqlUpdateAuto = false
@@ -166,11 +166,12 @@ class ReplInterpreter private constructor(
             return
         }
 
-        if (useSql && !appCtx.sqlCtx.appDefs.same(lastUpdateSqlDefs)) {
+        val lastDefs = lastUpdateSqlDefs
+        if (useSql && (lastDefs == null || !appCtx.sqlCtx.appDefs.same(lastDefs))) {
             val logging = if (force) SQL_INIT_LOGGING_FORCE else SQL_INIT_LOGGING_AUTO
             sqlMgr.transaction { sqlExec ->
                 val exeCtx = Rt_ExecutionContext(appCtx, sqlExec)
-                SqlInit.init(exeCtx, logging)
+                SqlInit.init(exeCtx, true, logging)
             }
             lastUpdateSqlDefs = appCtx.sqlCtx.appDefs
         }
@@ -266,7 +267,7 @@ class ReplInterpreter private constructor(
                 useSql: Boolean
         ): ReplInterpreter? {
             val interpreter = ReplInterpreter(sourceDir, module, rtGlobalCtx, sqlMgr, outChannel, useSql)
-            val init = interpreter.executeCode("", false) // Make sure the module can be found and has no errors.
+            val init = interpreter.executeCode("", true) // Make sure the module can be found and has no errors.
             return if (init) interpreter else null
         }
     }

@@ -37,8 +37,8 @@ class LogAnnotationTest: BaseRellTest() {
 
     @Test fun testSysAttributes() {
         def("@log entity foo { x: integer; }")
-        tst.inserts = LibBlockTransactionTest.BLOCK_INSERTS
         tst.chainId = 333
+        tst.inserts = LibBlockTransactionTest.BLOCK_INSERTS_333
         tst.opContext = Rt_OpContext(-1, 444, -1, listOf())
 
         chkOp("create foo(x = 123);")
@@ -66,8 +66,8 @@ class LogAnnotationTest: BaseRellTest() {
 
     @Test fun testSysAttributesModify() {
         def("@log entity foo { x: integer; }")
-        tst.inserts = LibBlockTransactionTest.BLOCK_INSERTS
         tst.chainId = 333
+        tst.inserts = LibBlockTransactionTest.BLOCK_INSERTS_333
         tst.opContext = Rt_OpContext(-1, 444, -1, listOf())
 
         chkOp("create foo(x = 123, transaction@{});", "ct_err:create_attr_cantset:transaction")

@@ -5,6 +5,7 @@
 package net.postchain.rell
 
 import net.postchain.common.toHex
+import net.postchain.rell.lib.LibBlockTransactionTest
 import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.test.RellCodeTester
 import net.postchain.rell.test.RellTestContext
@@ -14,18 +15,20 @@ class ExternalModuleTest: BaseRellTest() {
     @Test fun testImportMainToExternalAsRegular() {
         initBasic()
         file("ext.rell", "@external module; @log entity user { name; }")
-        insert("c0.user", "transaction,name", "100,330000,'Bob'")
+        insert(LibBlockTransactionTest.BLOCK_INSERTS_0)
+        insert("c0.user", "transaction,name", "100,720,'Bob'")
 
         def("import ext;")
         chk("ext.user @* {} ( user, .name )", "[(ext!user[100],name=Bob)]")
-        chkDataRaw("c0.user(100,Bob,330000)")
+        chkDataRaw("c0.user(100,Bob,720)")
     }
 
     @Test fun testImportMainToExternalAsRegularDir() {
         initBasic()
         file("ext/module.rell", "@external module;")
         file("ext/part.rell", "@log entity user { name; }")
-        insert("c0.user", "transaction,name", "100,330000,'Bob'")
+        insert(LibBlockTransactionTest.BLOCK_INSERTS_0)
+        insert("c0.user", "transaction,name", "100,720,'Bob'")
 
         def("import ext;")
         chk("ext.user @* {} ( user, .name )", "[(ext!user[100],name=Bob)]")
@@ -109,9 +112,10 @@ class ExternalModuleTest: BaseRellTest() {
 
         def("import reg_users: users;")
         def("@external('A') import ext_users: users;")
-        insert("c0.user", "name,transaction", "2,'Alice',330000")
+        insert(LibBlockTransactionTest.BLOCK_INSERTS_0)
+        insert("c0.user", "name,transaction", "2,'Alice',720")
 
-        chkDataRaw("c0.user(2,Alice,330000)", "c1101.user(1,Bob,330100)")
+        chkDataRaw("c0.user(2,Alice,720)", "c1101.user(1,Bob,330100)")
         chk("reg_users.user @ {} ( _=user, _=.name )", "(users!user[2],Alice)")
         chk("ext_users.user @ {} ( _=user, _=.name )", "(users[A]!user[1],Bob)")
         chkEx("{ val u: ext_users.user = reg_users.user @ {}; return 0; }", "ct_err:stmt_var_type:u:[users[A]!user]:[users!user]")
@@ -359,12 +363,26 @@ class ExternalModuleTest: BaseRellTest() {
 
     private var initBasicDone = false
 
-    private fun initBasic() {
-        if (!initBasicDone) {
-            initBasicDone = true
-            tst.strictToString = false
-            for (iChain in 0 until 4) initChain(iChain)
+    private fun initBasic(dropTables: Boolean = false) {
+        if (initBasicDone) return
+        initBasicDone = true
+        tst.strictToString = false
+
+        val nChains = 4
+
+        for (iChain in 0 until nChains) {
+            val chainId = calcChainId(iChain)
+            val rid = calcChainRid(iChain)
+            tstCtx.blockchain(chainId, rid)
         }
+
+        if (dropTables) {
+            val t = RellCodeTester(tst.tstCtx)
+            t.dropTables = true
+            t.init()
+        }
+
+        for (iChain in 0 until nChains) initChain(iChain)
     }
 
     private fun initExternalModule(
@@ -378,14 +396,15 @@ class ExternalModuleTest: BaseRellTest() {
         val chainId = calcChainId(iChain)
         val txId = calcTxId(iChain, 0)
 
-        initBasic()
+        initBasic(tst.dropTables)
+        tst.dropTables = false
 
         val t = RellCodeTester(tst.tstCtx)
         for ((path, code) in tst.files()) t.file(path, code)
         for ((alias, chain) in tst.chainDependencies()) t.chainDependency(alias, chain.first.toHex(), chain.second)
         t.def("import $moduleName;")
         t.chainId = calcChainId(iChain)
-        t.dropTables = tst.dropTables
+        t.dropTables = false
 
         var columns = "name,transaction"
         var values = "1,'$value',$txId"
@@ -402,24 +421,29 @@ class ExternalModuleTest: BaseRellTest() {
 
     private fun initChain(iChain: Int) {
         val chainId = calcChainId(iChain)
-        val rid = calcChainRid(iChain)
         val inserts = chainInserts(iChain, chainId)
-        tstCtx.blockchain(chainId, rid)
-        tstCtx.insert(inserts)
+
+        val t = RellCodeTester(tst.tstCtx)
+        for ((path, code) in tst.files()) t.file(path, code)
+        for ((alias, chain) in tst.chainDependencies()) t.chainDependency(alias, chain.first.toHex(), chain.second)
+        t.chainId = chainId
+        t.dropTables = false
+        t.insert(inserts)
+        t.init()
     }
 
     private fun chainInserts(iChain: Int, chainId: Long): List<String> {
         val nBlocks = 4
         val nTxPerBlock = 4
-        val b = RellTestContext.BlockBuilder()
+        val b = RellTestContext.BlockBuilder(chainId)
         var iTx = 0
         for (iBlock in 0 until nBlocks) {
             val blockIid = calcBlockId(iChain, iBlock)
-            b.block(blockIid, chainId, iBlock.toLong(), "$blockIid", "FEED$chainId", 1500000000000 + 1000000 * iBlock)
+            b.block(blockIid, iBlock.toLong(), "$blockIid", "FEED$chainId", 1500000000000 + 1000000 * iBlock)
             for (k in 0 until nTxPerBlock) {
                 val txIid = calcTxId(iChain, iTx++)
                 val sTx = "%02d".format(iTx)
-                b.tx(txIid, chainId, blockIid, "$txIid", "DEAF${chainId}0$iBlock$sTx", "BEEF${chainId}0$iBlock$sTx")
+                b.tx(txIid, blockIid, "$txIid", "DEAF${chainId}0$iBlock$sTx", "BEEF${chainId}0$iBlock$sTx")
             }
         }
         return b.list()

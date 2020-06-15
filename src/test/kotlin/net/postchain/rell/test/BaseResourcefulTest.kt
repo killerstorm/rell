@@ -8,7 +8,7 @@ import org.junit.After
 import java.io.Closeable
 
 abstract class BaseResourcefulTest {
-    private val resources = mutableListOf<Closeable>()
+    private val resources = mutableListOf<AutoCloseable>()
 
     @After fun after() {
         for (resource in resources) {
@@ -20,7 +20,7 @@ abstract class BaseResourcefulTest {
         }
     }
 
-    protected fun <T: Closeable> resource(resource: T): T {
+    protected fun <T: AutoCloseable> resource(resource: T): T {
         resources.add(resource)
         return resource
     }
