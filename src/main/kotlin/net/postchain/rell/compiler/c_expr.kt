@@ -568,9 +568,12 @@ private class C_ObjectAttrValue(pos: S_Pos, private val rObject: R_Object, priva
         val rEntity = rObject.rEntity
         val atEntity = R_AtEntity(rEntity, 0)
         val from = listOf(atEntity)
+
         val whatExpr = Db_AttrExpr(Db_EntityExpr(atEntity), attr)
-        val what = listOf(whatExpr)
-        val atBase = R_AtExprBase(from, what, null, listOf())
+        val whatField = R_AtWhatField(whatExpr, R_AtWhatFlags.DEFAULT)
+        val what = listOf(whatField)
+
+        val atBase = R_AtExprBase(from, what, null)
         return R_ObjectAttrExpr(attr.type, rObject, atBase)
     }
 }

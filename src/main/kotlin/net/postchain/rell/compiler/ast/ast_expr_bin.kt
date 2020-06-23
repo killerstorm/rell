@@ -407,25 +407,12 @@ sealed class C_BinOp_Cmp(val cmpOp: R_CmpOp, val dbOp: Db_BinaryOp): C_BinOp_Com
             return null
         }
 
-        val rCmpType = compileType(left)
+        val rCmpType = R_CmpType.get(left)
         if (rCmpType == null) {
             return null
         }
 
         return C_BinOpType(R_BooleanType, R_BinaryOp_Cmp(cmpOp, rCmpType), dbOp)
-    }
-
-    private fun compileType(type: R_Type): R_CmpType? {
-        return when (type) {
-            R_IntegerType -> R_CmpType_Integer
-            R_DecimalType -> R_CmpType_Decimal
-            R_TextType -> R_CmpType_Text
-            R_ByteArrayType -> R_CmpType_ByteArray
-            R_RowidType -> R_CmpType_Rowid
-            is R_EntityType -> R_CmpType_Entity
-            is R_EnumType -> R_CmpType_Enum
-            else -> null
-        }
     }
 }
 

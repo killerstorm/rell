@@ -281,7 +281,10 @@ private class C_EntityAttrValue private constructor(
         val whereRight = Db_ParameterExpr(base.atEntity.rEntity.type, 0)
         val where = C_Utils.makeDbBinaryExprEq(whereLeft, whereRight)
 
-        val atBase = R_AtExprBase(from, listOf(attrInfo.dbExpr), where, listOf())
+        val whatField = R_AtWhatField(attrInfo.dbExpr, R_AtWhatFlags.DEFAULT)
+        val what = listOf(whatField)
+
+        val atBase = R_AtExprBase(from, what, where)
         val calculator = R_MemberCalculator_DataAttribute(attrInfo.dbExpr.type, atBase)
 
         val rBase = base.value.toRExpr()

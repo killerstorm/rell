@@ -107,9 +107,8 @@ abstract class RellBaseTester(
         defs = defs0
     }
 
-    fun insert(table: String, columns: String, values: String) {
-        val ins = SqlTestUtils.mkins(table, columns, values)
-        inserts = inserts + listOf(ins)
+    fun insert(table: String, columns: String, vararg rows: String) {
+        inserts = inserts + rows.map { SqlTestUtils.mkins(table, columns, it) }
     }
 
     fun insert(inserts: List<String>) {

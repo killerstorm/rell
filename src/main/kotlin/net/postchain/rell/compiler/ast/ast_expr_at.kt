@@ -6,12 +6,19 @@ package net.postchain.rell.compiler.ast
 
 import net.postchain.rell.compiler.*
 import net.postchain.rell.model.*
+import net.postchain.rell.utils.toImmList
 
 class S_AtExprFrom(val alias: S_Name?, val entityName: List<S_Name>)
 
-class C_AtWhat(val exprs: List<Pair<String?, Db_Expr>>, val sort: List<Pair<Db_Expr, Boolean>>)
+class C_AtWhatField(val name: String?, val expr: Db_Expr, val flags: R_AtWhatFlags)
 
-class S_AtExprWhatSort(val pos: S_Pos, val asc: Boolean)
+class C_AtWhat(fields: List<C_AtWhatField>) {
+    val fields = fields.toImmList()
+}
+
+class S_AtExprWhatSort(val pos: S_Pos, val asc: Boolean) {
+    val rSort = if (asc) R_AtWhatSort.ASC else R_AtWhatSort.DESC
+}
 
 sealed class S_AtExprWhat {
     abstract fun compile(ctx: C_ExprContext, from: List<C_AtEntity>, subValues: MutableList<C_Value>): C_AtWhat
@@ -19,12 +26,12 @@ sealed class S_AtExprWhat {
 
 class S_AtExprWhat_Default: S_AtExprWhat() {
     override fun compile(ctx: C_ExprContext, from: List<C_AtEntity>, subValues: MutableList<C_Value>): C_AtWhat {
-        val exprs = from.map {
+        val fields = from.map {
             val name = if (from.size == 1) null else it.alias
             val expr = it.compileExpr()
-            Pair(name, expr)
+            C_AtWhatField(name, expr, R_AtWhatFlags.DEFAULT)
         }
-        return C_AtWhat(exprs, listOf())
+        return C_AtWhat(fields)
     }
 }
 
@@ -35,9 +42,9 @@ class S_AtExprWhat_Simple(val path: List<S_Name>): S_AtExprWhat() {
             expr = expr.member(ctx, step, false)
         }
 
-        var dbExpr = expr.value().toDbExpr()
-        val exprs = listOf(Pair(null, dbExpr))
-        return C_AtWhat(exprs, listOf())
+        val dbExpr = expr.value().toDbExpr()
+        val fields = listOf(C_AtWhatField(null, dbExpr, R_AtWhatFlags.DEFAULT))
+        return C_AtWhat(fields)
     }
 }
 
@@ -53,33 +60,41 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
         val procFields = processFields(ctx)
         subValues.addAll(procFields.map { it.value })
 
-        val incFields = procFields.filter { !it.excluded }
-
-        if (incFields.isEmpty()) {
+        val selFields = procFields.filter { it.flags.select }
+        if (selFields.isEmpty()) {
             ctx.msgCtx.error(fields[0].expr.startPos, "at:no_fields", "All fields are excluded from the result")
         }
 
-        val exprs = incFields.map { field ->
-            val name = if (field.nameExplicit || incFields.size > 1) field.name else null
-            Pair(name, field.dbExpr)
+        val cFields = procFields.map { field ->
+            val name = if (field.flags.select && (field.nameExplicit || selFields.size > 1)) field.name else null
+            C_AtWhatField(name, field.dbExpr, field.flags)
         }
 
-        val sort = procFields.filter { it.sort != null }.map { Pair(it.dbExpr, it.sort!!) }
-
-        return C_AtWhat(exprs, sort)
+        return C_AtWhat(cFields)
     }
 
     private fun processFields(ctx: C_ExprContext): List<WhatField> {
         val procFields = fields.map { processField(ctx, it) }
+
+        val (aggrFields, noAggrFields) = procFields.withIndex().partition { it.value.flags.group || it.value.flags.aggregation }
+        if (aggrFields.isNotEmpty()) {
+            for ((i, field) in noAggrFields) {
+                val code = "at:what:no_aggr:$i"
+                val anns = C_AtAggregation.values().joinToString(", ") { "@${it.annotation}" }
+                val msg = "Either none or all what-expressions must be annotated with one of: $anns"
+                ctx.msgCtx.error(field.value.pos, code, msg)
+            }
+        }
+
         val res = processNameConflicts(ctx, procFields)
         return res
     }
 
     private fun processField(ctx: C_ExprContext, field: S_AtExprWhatComplexField): WhatField {
-        val modTarget = C_ModifierTarget(C_ModifierTargetType.EXPRESSION, null, omit = true, sort = true)
+        val modTarget = C_ModifierTarget(C_ModifierTargetType.EXPRESSION, null)
 
         if (field.sort != null) {
-            modTarget.sort?.set(field.sort.asc)
+            modTarget.sort?.set(field.sort.rSort)
             val ann = if (field.sort.asc) C_Modifier.SORT else C_Modifier.SORT_DESC
             ctx.msgCtx.warning(field.sort.pos, "at:what:sort:deprecated:$ann", "Deprecated sort syntax; use @$ann annotation instead")
         }
@@ -91,9 +106,17 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
 
         val omit = modTarget.omit?.get() ?: false
         val sort = modTarget.sort?.get()
+        val aggregation = modTarget.aggregation?.get()
+
+        val flags = R_AtWhatFlags(
+                select = !omit,
+                sort = sort,
+                group = aggregation == C_AtAggregation.GROUP,
+                aggregation = aggregation != null
+        )
 
         val value = field.expr.compile(ctx).value()
-        val dbExpr = value.toDbExpr()
+        val dbExpr = compileWhatExpr(ctx, value, aggregation)
 
         var namePos: S_Pos = field.expr.startPos
         var name: String? = null
@@ -110,7 +133,25 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
             name = dbExpr.implicitName()
         }
 
-        return WhatField(value, dbExpr, namePos, name, nameExplicit, omit, sort)
+        return WhatField(value, dbExpr, namePos, name, nameExplicit, flags)
+    }
+
+    private fun compileWhatExpr(ctx: C_ExprContext, value: C_Value, aggregation: C_AtAggregation?): Db_Expr {
+        val dbExpr = value.toDbExpr()
+        if (aggregation == null || aggregation.aggrFn == null) {
+            return dbExpr
+        }
+
+        val fn = aggregation.aggrFn
+
+        if (!fn.typeChecker(dbExpr.type)) {
+            val code = "at:what:aggr:bad_type:$aggregation:${dbExpr.type.toStrictString()}"
+            val msg = "Invalid type of ${aggregation} expression: ${dbExpr.type}"
+            ctx.msgCtx.error(value.pos, code, msg)
+        }
+
+        val aggrDbExpr = Db_CallExpr(dbExpr.type, fn.sysFn, listOf(dbExpr))
+        return aggrDbExpr
     }
 
     private fun processNameConflicts(ctx: C_ExprContext, procFields: List<WhatField>): List<WhatField> {
@@ -123,7 +164,7 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
                 ctx.msgCtx.error(f.namePos, "at:dup_field_name:$name", "Duplicate field name: '$name'")
                 name = null
             }
-            res.add(WhatField(f.value, f.dbExpr, f.namePos, name, f.nameExplicit, f.excluded, f.sort))
+            res.add(f.updateName(name))
         }
 
         return res
@@ -135,9 +176,19 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
             val namePos: S_Pos,
             val name: String?,
             val nameExplicit: Boolean,
-            val excluded: Boolean,
-            val sort: Boolean?
-    )
+            val flags: R_AtWhatFlags
+    ) {
+        fun updateName(newName: String?): WhatField {
+            return WhatField(
+                    value = value,
+                    dbExpr = dbExpr,
+                    namePos = namePos,
+                    name = newName,
+                    nameExplicit = nameExplicit,
+                    flags = flags
+            )
+        }
+    }
 }
 
 class S_AtExprWhere(val exprs: List<S_Expr>) {
@@ -268,26 +319,27 @@ class S_AtExpr(
         val dbCtx = ctx.update(nameCtx = C_NameContext.createAt(ctx.nameCtx, cFrom))
         val dbWhere = where.compile(dbCtx, subValues)
 
-        val ctWhat = what.compile(dbCtx, cFrom, subValues)
-        val resType = calcResultType(ctWhat.exprs)
+        val cWhat = what.compile(dbCtx, cFrom, subValues)
+        val resType = calcResultType(cWhat.fields)
 
-        val dbWhatExprs = ctWhat.exprs.map { it.second }
+        val rWhat = cWhat.fields.filter { !it.flags.ignore }.map { R_AtWhatField(it.expr, it.flags) }
 
         val rLimit = compileLimit(ctx, subValues)
 
-        val base = R_AtExprBase(rFrom, dbWhatExprs, dbWhere, ctWhat.sort)
+        val base = R_AtExprBase(rFrom, rWhat, dbWhere)
         val facts = C_ExprVarFacts.forSubExpressions(subValues)
 
         return AtBase(base, rLimit, resType, facts)
     }
 
-    private fun calcResultType(dbWhat: List<Pair<String?, Db_Expr>>): AtResultType {
-        if (dbWhat.size == 1 && dbWhat[0].first == null) {
-            val type = dbWhat[0].second.type
+    private fun calcResultType(whatFields: List<C_AtWhatField>): AtResultType {
+        val selFields = whatFields.filter { it.flags.select }
+        if (selFields.size == 1 && selFields[0].name == null) {
+            val type = selFields[0].expr.type
             return AtResultType(type, R_AtExprRowType_Simple)
         } else {
-            val fields = dbWhat.map { R_TupleField(it.first, it.second.type) }
-            val type = R_TupleType(fields)
+            val tupleFields = selFields.map { R_TupleField(it.name, it.expr.type) }
+            val type = R_TupleType(tupleFields)
             return AtResultType(type, R_AtExprRowType_Tuple(type))
         }
     }

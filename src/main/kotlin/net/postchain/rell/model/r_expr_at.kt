@@ -6,6 +6,7 @@ package net.postchain.rell.model
 
 import net.postchain.rell.compiler.C_Utils
 import net.postchain.rell.runtime.*
+import net.postchain.rell.utils.toImmList
 
 enum class R_AtCardinality(val zero: Boolean, val many: Boolean) {
     ZERO_ONE(true, false),
@@ -45,19 +46,35 @@ class R_AtExprRowType_Tuple(val type: R_TupleType): R_AtExprRowType() {
     }
 }
 
+enum class R_AtWhatSort(val asc: Boolean) {
+    ASC(true),
+    DESC(false),
+}
+
+class R_AtWhatFlags(val select: Boolean, val sort: R_AtWhatSort?, val group: Boolean, val aggregation: Boolean) {
+    val ignore = !select && !group && sort == null
+
+    companion object {
+        val DEFAULT = R_AtWhatFlags(select = true, sort = null, group = false, aggregation = false)
+    }
+}
+
+class R_AtWhatField(val expr: Db_Expr, val flags: R_AtWhatFlags)
+
 class R_AtExprBase(
         private val from: List<R_AtEntity>,
-        private val what: List<Db_Expr>,
-        private val where: Db_Expr?,
-        private val sort: List<Pair<Db_Expr, Boolean>>
+        private val what: List<R_AtWhatField>,
+        private val where: Db_Expr?
 ) {
+    private val resultTypes = what.filter { it.flags.select }.map { it.expr.type }.toImmList()
+
     init {
         from.withIndex().forEach { check(it.index == it.value.index) }
+        what.forEach { check(!it.flags.ignore) }
     }
 
     fun execute(frame: Rt_CallFrame, params: List<Rt_Value>, limit: R_Expr?): List<Array<Rt_Value>> {
         val rtSql = buildSql(frame, params, limit)
-        val resultTypes = what.map { it.type }
         val select = SqlSelect(rtSql, resultTypes)
         val records = select.execute(frame)
         return records
@@ -65,36 +82,24 @@ class R_AtExprBase(
 
     private fun buildSql(frame: Rt_CallFrame, params: List<Rt_Value>, limit: R_Expr?): ParameterizedSql {
         val redWhere = makeFullWhere(frame)
-        val redWhat = what.map { it.toRedExpr(frame) }
-        val redSort = sort.map { (s, b) -> Pair(s.toRedExpr(frame), b) }
+        val redWhat = what.map { RedWhatField(it.expr.toRedExpr(frame), it.flags) }
 
         val ctx = SqlGenContext.create(frame, from, params)
-        val fromInfo = buildFromInfo(ctx, redWhere, redWhat, redSort)
+        val fromInfo = buildFromInfo(ctx, redWhere, redWhat)
 
         val b = SqlBuilder()
 
         b.append("SELECT ")
-        b.append(redWhat, ", ") {
-            it.toSql(ctx, b)
+
+        val selRedWhat = redWhat.filter { it.flags.select }
+        b.append(selRedWhat, ", ") {
+            it.expr.toSql(ctx, b)
         }
 
         appendFrom(b, ctx.sqlCtx, fromInfo)
         appendWhere(b, ctx, redWhere, fromInfo)
-
-        b.append(" ORDER BY ")
-        val orderByList = b.listBuilder()
-        for ((expr, asc) in redSort) {
-            orderByList.nextItem()
-            expr.toSql(ctx, b)
-            if (!asc) {
-                b.append(" DESC")
-            }
-        }
-        for (entity in from) {
-            orderByList.nextItem()
-            val alias = ctx.getEntityAlias(entity)
-            b.appendColumn(alias, entity.rEntity.sqlMapping.rowidColumn())
-        }
+        appendGroupBy(b, ctx, redWhat)
+        appendOrderBy(b, ctx, redWhat)
 
         if (limit != null) {
             b.append(" LIMIT ")
@@ -107,15 +112,14 @@ class R_AtExprBase(
     private fun buildFromInfo(
             ctx: SqlGenContext,
             redWhere: RedDb_Expr?,
-            redWhat: List<RedDb_Expr>,
-            redSort: List<Pair<RedDb_Expr, Boolean>>
+            redWhat: List<RedWhatField>
     ): SqlFromInfo {
+        val redExprs = mutableListOf<RedDb_Expr>()
+        redExprs.addAll(redWhat.map { it.expr })
+        if (redWhere != null) redExprs.add(redWhere)
+
         val b = SqlBuilder()
-        for (w in redWhat) {
-            w.toSql(ctx, b)
-        }
-        redWhere?.toSql(ctx, b)
-        for ((expr, _) in redSort) {
+        for (expr in redExprs) {
             expr.toSql(ctx, b)
         }
         for (entity in from) {
@@ -156,6 +160,61 @@ class R_AtExprBase(
         }
     }
 
+    private fun appendGroupBy(b: SqlBuilder, ctx: SqlGenContext, redWhat: List<RedWhatField>) {
+        val redGroup = redWhat.filter { it.flags.group }
+        if (redGroup.isEmpty()) {
+            return
+        }
+
+        b.append(" GROUP BY ")
+
+        val listB = b.listBuilder()
+        for (field in redGroup) {
+            listB.nextItem()
+            field.expr.toSql(ctx, b)
+        }
+    }
+
+    private fun appendOrderBy(b: SqlBuilder, ctx: SqlGenContext, redWhat: List<RedWhatField>) {
+        val elements = getOrderByElements(redWhat)
+        if (elements.isEmpty()) {
+            return
+        }
+
+        b.append(" ORDER BY ")
+
+        val orderByList = b.listBuilder()
+        for (element in elements) {
+            orderByList.nextItem()
+            element.toSql(ctx, b)
+        }
+    }
+
+    private fun getOrderByElements(redWhat: List<RedWhatField>): List<OrderByElement> {
+        val elements = mutableListOf<OrderByElement>()
+
+        for (field in redWhat) {
+            if (field.flags.sort != null) {
+                elements.add(OrderByElement_Expr(field.expr, field.flags.sort))
+            }
+        }
+
+        val redGroup = redWhat.filter { it.flags.group }
+        if (redGroup.isNotEmpty() || redWhat.any { it.flags.aggregation }) {
+            for (field in redGroup) {
+                if (field.flags.sort == null) {
+                    elements.add(OrderByElement_Expr(field.expr, R_AtWhatSort.ASC))
+                }
+            }
+        } else {
+            for (entity in from) {
+                elements.add(OrderByElement_Entity(entity))
+            }
+        }
+
+        return elements.toImmList()
+    }
+
     private fun makeFullWhere(frame: Rt_CallFrame): RedDb_Expr? {
         val exprs = mutableListOf<Db_Expr?>()
         exprs.add(where)
@@ -173,6 +232,28 @@ class R_AtExprBase(
         }
 
         return expr?.toRedExpr(frame)
+    }
+
+    private class RedWhatField(val expr: RedDb_Expr, val flags: R_AtWhatFlags)
+
+    private abstract class OrderByElement {
+        abstract fun toSql(ctx: SqlGenContext, b: SqlBuilder)
+    }
+
+    private class OrderByElement_Expr(val redExpr: RedDb_Expr, val sort: R_AtWhatSort): OrderByElement() {
+        override fun toSql(ctx: SqlGenContext, b: SqlBuilder) {
+            redExpr.toSql(ctx, b)
+            if (!sort.asc) {
+                b.append(" DESC")
+            }
+        }
+    }
+
+    private class OrderByElement_Entity(val entity: R_AtEntity): OrderByElement() {
+        override fun toSql(ctx: SqlGenContext, b: SqlBuilder) {
+            val alias = ctx.getEntityAlias(entity)
+            b.appendColumn(alias, entity.rEntity.sqlMapping.rowidColumn())
+        }
     }
 }
 

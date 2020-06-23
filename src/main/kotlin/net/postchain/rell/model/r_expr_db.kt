@@ -465,6 +465,9 @@ object Db_SysFn_ByteArray_Size: Db_SysFn_Simple("byte_array.len", "LENGTH")
 object Db_SysFn_Json: Db_SysFn_Cast("json", "JSONB")
 object Db_SysFn_Json_ToText: Db_SysFn_Cast("json.to_text", "TEXT")
 object Db_SysFn_ToText: Db_SysFn_Cast("to_text", "TEXT")
+object Db_SysFn_Aggregation_Sum: Db_SysFn_Simple("sum", "SUM")
+object Db_SysFn_Aggregation_Min: Db_SysFn_Simple("min", "MIN")
+object Db_SysFn_Aggregation_Max: Db_SysFn_Simple("max", "MAX")
 
 object Db_SysFn_Decimal {
     object FromInteger: Db_SysFn_Cast("decimal(integer)", C_Constants.DECIMAL_SQL_TYPE_STR)
