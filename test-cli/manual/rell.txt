@@ -122,3 +122,17 @@ ERROR No records found
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------
 ./rell.sh -d test-cli/src mod rell.get_app_structure | python -m json.tool
 ./rell.sh -d test-cli/src app_structure rell.get_app_structure | python -m json.tool
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rell.sh -d test-cli/src tests
+
+TEST RESULTS:
+
+tests:test_foo OK
+tests:test_bar FAILED
+
+TESTS:  2
+PASSED: 1
+FAILED: 1
+
+***** FAILED *****

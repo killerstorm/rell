@@ -347,6 +347,7 @@ class R_Module(
         val abstract: Boolean,
         val external: Boolean,
         val externalChain: String?,
+        val test: Boolean,
         val entities: Map<String, R_Entity>,
         val objects: Map<String, R_Object>,
         val structs: Map<String, R_Struct>,
@@ -423,6 +424,8 @@ class R_App(
     val operations = operations.toImmMap()
     val queries = queries.toImmMap()
     val externalChains = externalChains.toImmList()
+
+    val moduleMap = this.modules.map { it.name to it }.toMap().toImmMap()
 
     init {
         for ((i, c) in externalChains.withIndex()) {

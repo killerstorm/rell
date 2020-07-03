@@ -213,6 +213,7 @@ sealed class S_KeywordModifier(protected val kw: S_String): S_Modifier()
 class S_KeywordModifier_Abstract(kw: S_String): S_KeywordModifier(kw) {
     override fun compile(ctx: C_ModifierContext, target: C_ModifierTarget) {
         C_Modifier.compileModifier(ctx, kw, target, target.abstract, true)
+        target.checkAbstractTest(ctx.msgCtx, kw.pos, target.test)
     }
 }
 
@@ -1165,6 +1166,10 @@ class S_ImportDefinition(
             ctx.msgCtx.error(pos, "import:module_not_external:$moduleName", "Module '$moduleName' is not external")
         }
 
+        if (module.header.test && !ctx.modCtx.test) {
+            ctx.msgCtx.error(pos, "import:module_test:$moduleName", "Cannot import a test module '$moduleName' from a non-test module")
+        }
+
         ctx.fileCtx.addImport(C_ImportDescriptor(pos, module))
     }
 
@@ -1207,7 +1212,8 @@ class S_ModuleHeader(val modifiers: S_Modifiers, val pos: S_Pos) {
                 abstract = true,
                 externalModule = true,
                 mount = true,
-                emptyMountAllowed = true
+                emptyMountAllowed = true,
+                test = true
         )
         modifiers.compile(modifierCtx, modTarget)
 
@@ -1217,8 +1223,9 @@ class S_ModuleHeader(val modifiers: S_Modifiers, val pos: S_Pos) {
         val abstractPos = if (abstract) pos else null
 
         val external = modTarget.externalModule?.get() ?: false
+        val test = modTarget.test?.get() ?: false
 
-        return C_ModuleHeader(mountName, abstractPos, external)
+        return C_ModuleHeader(mountName, abstractPos, external = external, test = test)
     }
 }
 

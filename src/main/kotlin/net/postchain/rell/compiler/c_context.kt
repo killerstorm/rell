@@ -63,6 +63,7 @@ sealed class C_ModuleContext(val appCtx: C_AppContext, val modMgr: C_ModuleManag
     abstract val containerKey: C_ContainerKey
     abstract val abstract: Boolean
     abstract val external: Boolean
+    abstract val test: Boolean
     abstract val mountName: R_MountName
     abstract val extChain: C_ExternalChain?
     abstract val sysDefs: C_SystemDefs
@@ -91,6 +92,7 @@ class C_RegularModuleContext(
     override val containerKey = descriptor.containerKey
     override val abstract = descriptor.header.abstract
     override val external = descriptor.header.external
+    override val test = descriptor.header.test
     override val mountName = descriptor.header.mountName
     override val extChain = descriptor.extChain
     override val sysDefs = extChain?.sysDefs ?: appCtx.sysDefs
@@ -130,6 +132,7 @@ class C_ReplModuleContext(
     override val containerKey = C_ReplContainerKey
     override val abstract = false
     override val external = false
+    override val test = false
     override val mountName = R_MountName.EMPTY
     override val extChain = null
     override val sysDefs = appCtx.sysDefs

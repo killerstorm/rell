@@ -10,7 +10,6 @@ import net.postchain.rell.compiler.ast.S_String
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.toImmMap
-import net.postchain.rell.utils.toImmSet
 import org.apache.commons.lang3.StringUtils
 
 class C_ModifierContext(val msgCtx: C_MessageContext, val outerMountName: R_MountName)
@@ -30,7 +29,8 @@ object C_Modifier {
                 "mount" to C_Annotation_Mount,
                 "omit" to C_Annotation_Omit,
                 SORT to C_Annotation_Sort(R_AtWhatSort.ASC),
-                SORT_DESC to C_Annotation_Sort(R_AtWhatSort.DESC)
+                SORT_DESC to C_Annotation_Sort(R_AtWhatSort.DESC),
+                "test" to C_Annotation_Test
         )
 
         for (aggr in C_AtAggregation.values()) {
@@ -226,7 +226,7 @@ private object C_Annotation_External: C_AnnBase() {
 private object C_Annotation_Omit: C_AnnBase() {
     override fun compile(ctx: C_ModifierContext, name: S_Name, args: List<Rt_Value>, target: C_ModifierTarget) {
         if (C_AnnUtils.checkNoArgs(ctx, name.pos, name.str, args)) {
-            C_AnnUtils.processAnnotation(ctx, name.pos, target, name.str, target.omit, true, true)
+            C_AnnUtils.processAnnotation(ctx, name.pos, target, name.str, target.omit, allowed = true, value = true)
         }
     }
 }
@@ -234,7 +234,16 @@ private object C_Annotation_Omit: C_AnnBase() {
 private class C_Annotation_Sort(private val sort: R_AtWhatSort): C_AnnBase() {
     override fun compile(ctx: C_ModifierContext, name: S_Name, args: List<Rt_Value>, target: C_ModifierTarget) {
         if (C_AnnUtils.checkNoArgs(ctx, name.pos, name.str, args)) {
-            C_AnnUtils.processAnnotation(ctx, name.pos, target, name.str, target.sort, true, sort, generalName = "Sorting")
+            C_AnnUtils.processAnnotation(ctx, name.pos, target, name.str, target.sort, allowed = true, value = sort, generalName = "Sorting")
+        }
+    }
+}
+
+private object C_Annotation_Test: C_AnnBase() {
+    override fun compile(ctx: C_ModifierContext, name: S_Name, args: List<Rt_Value>, target: C_ModifierTarget) {
+        if (C_AnnUtils.checkNoArgs(ctx, name.pos, name.str, args)) {
+            C_AnnUtils.processAnnotation(ctx, name.pos, target, name.str, target.test, allowed = true, value = true)
+            target.checkAbstractTest(ctx.msgCtx, name.pos, target.abstract)
         }
     }
 }
@@ -361,7 +370,8 @@ class C_ModifierTarget(
         mount: Boolean = false,
         val mountAllowed: Boolean = mount,
         val emptyMountAllowed: Boolean = false,
-        override: Boolean = false
+        override: Boolean = false,
+        test: Boolean = false
 ) {
     val abstract = C_ModifierValue.opt<Boolean>(abstract)
     val externalChain = C_ModifierValue.opt<C_ExternalAnnotation>(externalChain)
@@ -369,14 +379,21 @@ class C_ModifierTarget(
     val log = C_ModifierValue.opt<Boolean>(log)
     val mount = C_ModifierValue.opt<R_MountName>(mount)
     val override = C_ModifierValue.opt<Boolean>(override)
+    val test = C_ModifierValue.opt<Boolean>(test)
 
+    val aggregation = C_ModifierValue.opt<C_AtAggregation>(type.isExpression())
     val omit = C_ModifierValue.opt<Boolean>(type.isExpression())
     val sort = C_ModifierValue.opt<R_AtWhatSort>(type.isExpression())
-    val aggregation = C_ModifierValue.opt<C_AtAggregation>(type.isExpression())
 
     fun externalChain(mntCtx: C_MountContext): C_ExternalChain? {
         val ann = externalChain?.get()
         return if (ann == null) mntCtx.extChain else mntCtx.appCtx.addExternalChain(ann.chain)
+    }
+
+    fun checkAbstractTest(msgCtx: C_MessageContext, pos: S_Pos, otherValue: C_ModifierValue<Boolean>?) {
+        if (otherValue?.get() ?: false) {
+            msgCtx.error(pos, "modifier:module:abstract:test", "Abstract test modules are not allowed")
+        }
     }
 }
 

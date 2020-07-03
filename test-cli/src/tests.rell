@@ -1,0 +1,13 @@
+@test module;
+
+function test_foo() {
+    print('foo begin');
+    require(2 + 2 == 4);
+    print('foo end');
+}
+
+function test_bar() {
+    print('bar begin');
+    require(2 + 2 == 5);
+    print('bar end');
+}

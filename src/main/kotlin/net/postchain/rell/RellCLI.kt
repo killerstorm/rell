@@ -58,14 +58,32 @@ private fun main0(args: RellCliArgs) {
     val (entryModule, entryRoutine) = parseEntryPoint(args)
 
     if (args.batch || (entryModule != null && entryRoutine != null)) {
-        runApp(args, dbSpecified, entryModule, entryRoutine)
+        val app = RellCliUtils.compileApp(args.sourceDir, entryModule, args.quiet)
+        val module = if (entryModule == null) null else app.moduleMap[entryModule]
+        if (module != null && module.test) {
+            runTests(args, app, module, entryRoutine)
+        } else {
+            runApp(args, dbSpecified, entryModule, entryRoutine, app)
+        }
+    } else if (entryModule != null) {
+        val app = RellCliUtils.compileApp(args.sourceDir, entryModule, args.quiet)
+        val module = if (entryModule == null) null else app.moduleMap[entryModule]
+        if (module != null && module.test) {
+            runTests(args, app, module, entryRoutine)
+        } else {
+            runRepl(args, entryModule, dbSpecified)
+        }
     } else {
         runRepl(args, entryModule, dbSpecified)
     }
 }
 
-private fun runApp(args: RellCliArgs, dbSpecified: Boolean, entryModule: R_ModuleName?, entryRoutine: R_QualifiedName?) {
-    val app = RellCliUtils.compileApp(args.sourceDir, entryModule, args.quiet)
+private fun runApp(
+        args: RellCliArgs,
+        dbSpecified: Boolean,
+        entryModule: R_ModuleName?,
+        entryRoutine: R_QualifiedName?, app: R_App
+) {
     val launcher = getAppLauncher(app, args, entryModule, entryRoutine)
 
     runWithSqlManager(args, true) { sqlMgr ->
@@ -74,6 +92,27 @@ private fun runApp(args: RellCliArgs, dbSpecified: Boolean, entryModule: R_Modul
             initDatabase(args, app, sqlMgr, sqlCtx)
         }
         launcher?.launch(sqlMgr, sqlCtx)
+    }
+}
+
+private fun runTests(args: RellCliArgs, app: R_App, module: R_Module, entryRoutine: R_QualifiedName?) {
+    val sqlCtx = Rt_SqlContext.createNoExternalChains(app, SQL_MAPPER)
+    val appCtx = createAppContext(args, app, sqlCtx, null, false)
+
+    val fns = TestRunner.getTestFunctions(module)
+            .filter { entryRoutine == null || it.names.qualifiedName == entryRoutine.str() }
+
+    var allOk = false
+
+    runWithSqlManager(args, true) { sqlMgr ->
+        sqlMgr.execute(false) { sqlExec ->
+            val exeCtx = Rt_ExecutionContext(appCtx, sqlExec)
+            allOk = TestRunner.runTests(exeCtx, fns)
+        }
+    }
+
+    if (!allOk) {
+        exitProcess(1)
     }
 }
 

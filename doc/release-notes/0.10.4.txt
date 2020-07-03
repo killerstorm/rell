@@ -1,0 +1,36 @@
+RELEASE NOTES 0.10.4 (202?-??-??)
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+1. Tools: Unit tests
+
+To write unit tests for Rell code, use test modules. A test module is defined using the @test annotation:
+
+    @test module;
+
+    function test_foo() {
+        require( 2 + 2 == 4 );
+    }
+    function test_bar() {
+        require( 2 + 2 == 5 );
+    }
+
+All functions in a test module that start with "test_" (and a function called exactly "test") are test functions and
+will be executed when the test module is run.
+
+To run a test module, use the command-line interpreter:
+
+rell.sh -d my_src_directory my_test_module
+
+Each test function will be executed independently of others, and a summary will be printed in the end:
+
+    ------------------------------------------------------------------------
+    TEST RESULTS:
+
+    my_test_module:test_foo OK
+    my_test_module:test_bar FAILED
+
+    TESTS:  2
+    PASSED: 1
+    FAILED: 1
+
+    ***** FAILED *****

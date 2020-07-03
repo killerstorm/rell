@@ -40,7 +40,7 @@ class C_CompiledRellFile(
     }
 }
 
-class C_ModuleHeader(val mountName: R_MountName, val abstractPos: S_Pos?, val external: Boolean) {
+class C_ModuleHeader(val mountName: R_MountName, val abstractPos: S_Pos?, val external: Boolean, val test: Boolean) {
     val abstract = abstractPos != null
 }
 
@@ -216,6 +216,7 @@ class C_ModuleCompiler private constructor(private val modCtx: C_ModuleContext) 
                 abstract = modCtx.abstract,
                 external = modCtx.external,
                 externalChain = modCtx.extChain?.name,
+                test = modCtx.test,
                 entities = defs.entities,
                 objects = defs.objects,
                 structs = defs.structs.mapValues { (_, v) -> v.struct },
@@ -380,7 +381,8 @@ class C_ModuleManager(
         }
 
         val parentMountName = parentModule?.header?.mountName ?: R_MountName.EMPTY
-        val header = source.compileHeader(appCtx.msgCtx, parentMountName) ?: C_ModuleHeader(parentMountName, null, false)
+        val header = source.compileHeader(appCtx.msgCtx, parentMountName)
+                ?: C_ModuleHeader(parentMountName, null, external = false, test = false)
 
         val module = C_Module(key, name, extChain, header, source, executor)
 
