@@ -248,6 +248,7 @@ class Rt_AppContext(
         val sqlCtx: Rt_SqlContext,
         val app: R_App,
         val repl: Boolean,
+        val test: Boolean,
         val replOut: ReplOutputChannel?,
         val sourceDir: C_SourceDir,
         val modules: Set<R_ModuleName>

@@ -267,7 +267,18 @@ private class RellPostchainModule(
 
         val sqlExec = Rt_SqlExecutor(ConnectionSqlExecutor(eCtx.conn, config.sqlLogging), globalCtx.logSqlErrors)
         val sqlCtx = Rt_SqlContext.create(rApp, sqlMapping, chainDeps, sqlExec, heightProvider)
-        val appCtx = Rt_AppContext(globalCtx, sqlCtx, rApp, false, null, sourceDir, modules)
+
+        val appCtx = Rt_AppContext(
+                globalCtx,
+                sqlCtx,
+                rApp,
+                repl = false,
+                test = false,
+                replOut = null,
+                sourceDir = sourceDir,
+                modules = modules
+        )
+
         return Rt_ExecutionContext(appCtx, sqlExec)
     }
 

@@ -17,6 +17,7 @@ import net.postchain.gtv.GtvNull
 import net.postchain.rell.compiler.C_MapSourceDir
 import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.compiler.C_MessageType
+import net.postchain.rell.compiler.C_SourceDir
 import net.postchain.rell.model.*
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.runtime.*
@@ -25,6 +26,7 @@ import net.postchain.rell.sql.SqlInit
 import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.sql.SqlUtils
 import net.postchain.rell.utils.toImmMap
+import net.postchain.rell.utils.toImmSet
 import org.junit.Assert
 import kotlin.test.assertEquals
 
@@ -236,13 +238,34 @@ class RellCodeTester(
         return Rt_ChainContext(GtvNull, mapOf(), bcRid)
     }
 
-    fun createAppCtx(globalCtx: Rt_GlobalContext, sqlExec: SqlExecutor, app: R_App): Rt_AppContext {
+    fun createAppCtx(
+            globalCtx: Rt_GlobalContext,
+            sqlExec: SqlExecutor,
+            app: R_App,
+            sourceDir: C_SourceDir,
+            test: Boolean
+    ): Rt_AppContext {
         val sqlCtx = createSqlCtx(app, sqlExec)
-        return Rt_AppContext(globalCtx, sqlCtx, app, false, null, C_MapSourceDir.EMPTY, setOf())
+        return Rt_AppContext(
+                globalCtx,
+                sqlCtx,
+                app,
+                repl = false,
+                test = test,
+                replOut = null,
+                sourceDir = sourceDir,
+                modules = app.modules.filter { !it.test && !it.abstract && !it.external }.map { it.name }.toImmSet()
+        )
     }
 
-    fun createExeCtx(globalCtx: Rt_GlobalContext, sqlExec: SqlExecutor, app: R_App): Rt_ExecutionContext {
-        val appCtx = createAppCtx(globalCtx, sqlExec, app)
+    fun createExeCtx(
+            globalCtx: Rt_GlobalContext,
+            sqlExec: SqlExecutor,
+            app: R_App,
+            sourceDir: C_SourceDir = C_MapSourceDir.EMPTY,
+            test: Boolean = false
+    ): Rt_ExecutionContext {
+        val appCtx = createAppCtx(globalCtx, sqlExec, app, sourceDir, test)
         return Rt_ExecutionContext(appCtx, sqlExec)
     }
 
@@ -309,7 +332,7 @@ class RellCodeTester(
         val res = processApp(code) { app ->
             RellTestUtils.catchRtErr {
                 val appCtx = tstCtx.sqlMgr().access { sqlExec ->
-                    createAppCtx(globalCtx, sqlExec, app)
+                    createAppCtx(globalCtx, sqlExec, app, C_MapSourceDir.EMPTY, false)
                 }
                 processor(appCtx)
             }

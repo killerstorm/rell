@@ -836,8 +836,8 @@ object R_SysFn_Gtx {
 
         object Run: R_SysFunctionEx_1() {
             override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
-                if (!ctx.appCtx.repl) {
-                    throw Rt_Error("fn:block.run:no_repl", "Block can be executed only in REPL")
+                if (!ctx.appCtx.repl && !ctx.appCtx.test) {
+                    throw Rt_Error("fn:block.run:no_repl_test", "Block can be executed only in REPL or test")
                 }
                 val block = arg.asGtxBlock()
                 PostchainBlockRunner.runBlock(ctx, block)

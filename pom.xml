@@ -26,7 +26,7 @@
             </activation>
             <properties>
                 <rell.jarName>${project.artifactId}-${project.version}-jar-with-dependencies</rell.jarName>
-                <rell.postchainScope>provided</rell.postchainScope>
+                <rell.postchainScope>compile</rell.postchainScope>
             </properties>
         </profile>
         <profile>

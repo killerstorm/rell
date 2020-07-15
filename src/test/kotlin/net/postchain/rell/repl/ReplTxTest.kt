@@ -56,7 +56,7 @@ class ReplTxTest: BaseRellTest(true) {
     @Test fun testNoRepl() {
         file("module.rell", "module;")
         def("operation foo(x: integer){}")
-        chkEx("{ rell.gtx.tx(foo(123)).run(); return 0; }", "rt_err:fn:block.run:no_repl")
+        chkEx("{ rell.gtx.tx(foo(123)).run(); return 0; }", "rt_err:fn:block.run:no_repl_test")
     }
 
     @Test fun testImportedOperations() {

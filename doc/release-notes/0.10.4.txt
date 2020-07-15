@@ -34,3 +34,34 @@ Each test function will be executed independently of others, and a summary will 
     FAILED: 1
 
     ***** FAILED *****
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+2. Tools: Executing transactions and blocks in unit tests
+
+Blocks and transactions created via functions rell.gtx.block() and rell.gtx.tx() can be executed in unit tests
+in order to invoke operations and modify data.
+
+Example. Production module, file data.rell:
+
+    module;
+    entity user {
+        name;
+    }
+    operation add_user(name) {
+        create user(name);
+    }
+
+Test module, file data_test.rell:
+
+    @test module;
+    import data;
+
+    function test_add_user() {
+        require( data.user@*{}(.name) == list<text>(), 'expected_no_users' );
+
+        val tx = rell.gtx.tx(data.add_user('Bob'));
+        require( data.user@*{}(.name) == list<text>(), 'expected_no_users' );
+
+        tx.run();
+        require( data.user@*{}(.name) == ['Bob'], 'expected_user_bob' );
+    }

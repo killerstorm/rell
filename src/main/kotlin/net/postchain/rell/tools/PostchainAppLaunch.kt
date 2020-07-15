@@ -73,7 +73,7 @@ private fun main0(args: RunPostchainAppArgs) {
 }
 
 object RunPostchainApp {
-    fun genBlockchainConfigTemplate(pubKey: ByteArray, sqlLog: Boolean): Gtv {
+    fun genBlockchainConfigTemplate(pubKey: ByteArray, sqlLog: Boolean, sqlInitLog: Int = SqlInitLogging.LOG_STEP_COMPLEX): Gtv {
         return gtv(
                 "blockstrategy" to gtv("name" to gtv("net.postchain.base.BaseBlockBuildingStrategy")),
                 "configurationfactory" to gtv("net.postchain.gtx.GTXBlockchainConfigurationFactory"),
@@ -84,7 +84,7 @@ object RunPostchainApp {
                                 gtv("net.postchain.gtx.StandardOpsGTXModule")
                         ),
                         "rell" to gtv(
-                                "dbInitLogLevel" to gtv(SqlInitLogging.LOG_STEP_COMPLEX.toLong()),
+                                "dbInitLogLevel" to gtv(sqlInitLog.toLong()),
                                 "sqlLog" to gtv(sqlLog),
                                 "combinedPrinterFactoryClass" to gtv(Rt_RellAppPrinterFactory::class.java.name),
                                 "copyOutputToCombinedPrinter" to gtv(false)

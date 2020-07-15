@@ -80,6 +80,8 @@ class Rt_TupleComparator(private val elemComparators: List<Comparator<Rt_Value>>
 }
 
 class Rt_SqlManager(private val sqlMgr: SqlManager, private val logErrors: Boolean): SqlManager() {
+    override val hasConnection = sqlMgr.hasConnection
+
     override fun <T> execute0(tx: Boolean, code: (SqlExecutor) -> T): T {
         val res = sqlMgr.execute(tx) { sqlExec ->
             val sqlExec2 = Rt_SqlExecutor(sqlExec, logErrors)

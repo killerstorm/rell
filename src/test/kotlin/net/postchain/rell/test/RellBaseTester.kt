@@ -148,7 +148,7 @@ abstract class RellBaseTester(
 
     protected abstract fun initSqlReset(exec: SqlExecutor, moduleCode: String, app: R_App)
 
-    private fun createSourceDir(code: String): C_SourceDir {
+    fun createSourceDir(code: String): C_SourceDir {
         val files = files(code)
         return C_MapSourceDir.of(files)
     }

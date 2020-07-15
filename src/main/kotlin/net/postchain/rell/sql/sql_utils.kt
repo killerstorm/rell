@@ -6,7 +6,9 @@ package net.postchain.rell.sql
 
 import com.google.common.collect.HashMultimap
 import net.postchain.rell.model.R_Entity
+import net.postchain.rell.runtime.Rt_AppContext
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
+import net.postchain.rell.runtime.Rt_ExecutionContext
 import net.postchain.rell.runtime.Rt_SqlContext
 import org.apache.http.client.utils.URLEncodedUtils
 import java.net.URI
@@ -159,6 +161,18 @@ object SqlUtils {
             schema = rs.getString(2)
         }
         println("Database: [$database], schema: [$schema]")
+    }
+
+    fun initDatabase(appCtx: Rt_AppContext, sqlMgr: SqlManager, dropTables: Boolean, sqlInitLog: Boolean) {
+        sqlMgr.transaction { sqlExec ->
+            if (dropTables) {
+                dropAll(sqlExec, true)
+            }
+
+            val exeCtx = Rt_ExecutionContext(appCtx, sqlExec)
+            val initLogging = SqlInitLogging.ofLevel(if (sqlInitLog) SqlInitLogging.LOG_ALL else SqlInitLogging.LOG_NONE)
+            SqlInit.init(exeCtx, true, initLogging)
+        }
     }
 }
 

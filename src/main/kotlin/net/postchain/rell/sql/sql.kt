@@ -59,6 +59,8 @@ class SqlConnectionLogger(private val logging: Boolean) {
 }
 
 abstract class SqlManager {
+    abstract val hasConnection: Boolean
+
     private val busy = AtomicBoolean()
 
     protected abstract fun <T> execute0(tx: Boolean, code: (SqlExecutor) -> T): T
@@ -116,6 +118,8 @@ abstract class SqlExecutor {
 }
 
 object NoConnSqlManager: SqlManager() {
+    override val hasConnection = false
+
     override fun <T> execute0(tx: Boolean, code: (SqlExecutor) -> T): T {
         val res = code(NoConnSqlExecutor)
         return res
@@ -137,6 +141,8 @@ object NoConnSqlExecutor: SqlExecutor() {
 }
 
 class ConnectionSqlManager(private val con: Connection, logging: Boolean): SqlManager() {
+    override val hasConnection = true
+
     private val conLogger = SqlConnectionLogger(logging)
     private val sqlExec = ConnectionSqlExecutor(con, conLogger)
 
@@ -235,6 +241,8 @@ class ConnectionSqlExecutor(private val con: Connection, private val conLogger: 
 }
 
 class PostchainStorageSqlManager(private val storage: Storage, logging: Boolean): SqlManager() {
+    override val hasConnection = true
+
     private val conLogger = SqlConnectionLogger(logging)
 
     override fun <T> execute0(tx: Boolean, code: (SqlExecutor) -> T): T {

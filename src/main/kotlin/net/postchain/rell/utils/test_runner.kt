@@ -1,8 +1,15 @@
 package net.postchain.rell.utils
 
+import net.postchain.rell.compiler.C_SourceDir
+import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_Function
 import net.postchain.rell.model.R_Module
+import net.postchain.rell.runtime.Rt_AppContext
 import net.postchain.rell.runtime.Rt_ExecutionContext
+import net.postchain.rell.runtime.Rt_GlobalContext
+import net.postchain.rell.runtime.Rt_SqlContext
+import net.postchain.rell.sql.SqlManager
+import net.postchain.rell.sql.SqlUtils
 
 private sealed class TestResult
 
@@ -17,32 +24,74 @@ private class TestResult_Fail(val error: Throwable): TestResult() {
 object TestRunner {
     private val SEPARATOR = "-".repeat(72)
 
-    fun runTests(exeCtx: Rt_ExecutionContext, fns: List<R_Function>): Boolean {
-        val res = runTestCases(exeCtx, fns)
-        return processTestResults(res)
+    fun runTests(
+            sqlMgr: SqlManager,
+            app: R_App,
+            globalCtx: Rt_GlobalContext,
+            sqlCtx: Rt_SqlContext,
+            sourceDir: C_SourceDir,
+            fns: List<R_Function>
+    ): Boolean {
+        val resMap = runTestCases(sqlMgr, app, globalCtx, sqlCtx, sourceDir, fns)
+        return processTestResults(resMap)
     }
 
-    private fun runTestCases(exeCtx: Rt_ExecutionContext, fns: List<R_Function>): Map<String, TestResult> {
+    private fun runTestCases(
+            sqlMgr: SqlManager,
+            app: R_App,
+            globalCtx: Rt_GlobalContext,
+            sqlCtx: Rt_SqlContext,
+            sourceDir: C_SourceDir,
+            fns: List<R_Function>
+    ): Map<String, TestResult> {
         val res = mutableMapOf<String, TestResult>()
 
         for (f in fns) {
-            println(SEPARATOR)
-            println("TEST ${f.appLevelName}")
-
-            val v = try {
-                f.callTop(exeCtx, listOf())
-                println("${f.appLevelName} OK")
-                TestResult_OK
-            } catch (e: Throwable) {
-                e.printStackTrace(System.out)
-                println("${f.appLevelName} FAILED")
-                TestResult_Fail(e)
-            }
-
+            val v = runTestCase(sqlMgr, app, globalCtx, sqlCtx, sourceDir, f)
             res[f.appLevelName] = v
         }
 
         return res.toImmMap()
+    }
+
+    private fun runTestCase(
+            sqlMgr: SqlManager,
+            app: R_App,
+            globalCtx: Rt_GlobalContext,
+            sqlCtx: Rt_SqlContext,
+            sourceDir: C_SourceDir,
+            f: R_Function
+    ): TestResult {
+        println(SEPARATOR)
+        println("TEST ${f.appLevelName}")
+
+        val appCtx = Rt_AppContext(
+                globalCtx,
+                sqlCtx,
+                app,
+                repl = false,
+                test = true,
+                replOut = null,
+                sourceDir = sourceDir,
+                modules = app.moduleMap.keys.toImmSet()
+        )
+
+        if (sqlMgr.hasConnection) {
+            SqlUtils.initDatabase(appCtx, sqlMgr, true, false)
+        }
+
+        return sqlMgr.transaction { sqlExec ->
+            val exeCtx = Rt_ExecutionContext(appCtx, sqlExec)
+            try {
+                f.callTop(exeCtx, listOf())
+                println("OK ${f.appLevelName}")
+                TestResult_OK
+            } catch (e: Throwable) {
+                e.printStackTrace(System.out)
+                println("FAILED ${f.appLevelName}")
+                TestResult_Fail(e)
+            }
+        }
     }
 
     private fun processTestResults(resMap: Map<String, TestResult>): Boolean {

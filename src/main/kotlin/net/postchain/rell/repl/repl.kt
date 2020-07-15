@@ -159,7 +159,16 @@ class ReplInterpreter private constructor(
     private fun createRtAppContext(globalCtx: Rt_GlobalContext, app: R_App): Rt_AppContext {
         val sqlCtx = Rt_SqlContext.createNoExternalChains(app, Rt_ChainSqlMapping(0))
         val modules = (if (module != null) setOf(module) else setOf()) + defsState.appState.modules.keys.map { it.name }
-        return Rt_AppContext(globalCtx, sqlCtx, app, true, outChannel, sourceDir, modules)
+        return Rt_AppContext(
+                globalCtx,
+                sqlCtx,
+                app,
+                repl = true,
+                test = false,
+                replOut = outChannel,
+                sourceDir = sourceDir,
+                modules = modules
+        )
     }
 
     private fun sqlUpdate(appCtx: Rt_AppContext, force: Boolean) {

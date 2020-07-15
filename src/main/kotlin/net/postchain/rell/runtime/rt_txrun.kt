@@ -21,6 +21,7 @@ import net.postchain.gtv.GtvEncoder
 import net.postchain.gtx.GTXBlockchainConfigurationFactory
 import net.postchain.rell.RellConfigGen
 import net.postchain.rell.module.RellPostchainModuleEnvironment
+import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.tools.RunPostchainApp
 import net.postchain.rell.utils.PostchainUtils
 import java.sql.Connection
@@ -75,7 +76,7 @@ object PostchainBlockRunner {
 
     private fun getGtvConfig(ctx: Rt_CallContext, pubKey: ByteArray): Gtv {
         val configGen = RellConfigGen.create(ctx.appCtx.sourceDir, ctx.appCtx.modules.toList())
-        val configTemplate = RunPostchainApp.genBlockchainConfigTemplate(pubKey, false)
+        val configTemplate = RunPostchainApp.genBlockchainConfigTemplate(pubKey, false, SqlInitLogging.LOG_NONE)
         return configGen.makeConfig(configTemplate)
     }
 

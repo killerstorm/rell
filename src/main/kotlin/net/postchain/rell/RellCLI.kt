@@ -9,6 +9,7 @@ import net.postchain.base.BlockchainRid
 import net.postchain.config.app.AppConfig
 import net.postchain.gtv.GtvNull
 import net.postchain.rell.compiler.C_MapSourceDir
+import net.postchain.rell.compiler.C_SourceDir
 import net.postchain.rell.model.*
 import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.module.RellPostchainModuleEnvironment
@@ -67,7 +68,7 @@ private fun main0(args: RellCliArgs) {
         }
     } else if (entryModule != null) {
         val app = RellCliUtils.compileApp(args.sourceDir, entryModule, args.quiet)
-        val module = if (entryModule == null) null else app.moduleMap[entryModule]
+        val module = app.moduleMap[entryModule]
         if (module != null && module.test) {
             runTests(args, app, module, entryRoutine)
         } else {
@@ -96,8 +97,10 @@ private fun runApp(
 }
 
 private fun runTests(args: RellCliArgs, app: R_App, module: R_Module, entryRoutine: R_QualifiedName?) {
+    val globalCtx = createGlobalCtx(args, null)
+
     val sqlCtx = Rt_SqlContext.createNoExternalChains(app, SQL_MAPPER)
-    val appCtx = createAppContext(args, app, sqlCtx, null, false)
+    val sourceDir = RellCliUtils.createSourceDir(args.sourceDir)
 
     val fns = TestRunner.getTestFunctions(module)
             .filter { entryRoutine == null || it.names.qualifiedName == entryRoutine.str() }
@@ -105,10 +108,7 @@ private fun runTests(args: RellCliArgs, app: R_App, module: R_Module, entryRouti
     var allOk = false
 
     runWithSqlManager(args, true) { sqlMgr ->
-        sqlMgr.execute(false) { sqlExec ->
-            val exeCtx = Rt_ExecutionContext(appCtx, sqlExec)
-            allOk = TestRunner.runTests(exeCtx, fns)
-        }
+        allOk = TestRunner.runTests(sqlMgr, app, globalCtx, sqlCtx, sourceDir, fns)
     }
 
     if (!allOk) {
@@ -140,17 +140,8 @@ private fun resetDatabase(args: RellCliArgs) {
 }
 
 private fun initDatabase(args: RellCliArgs, app: R_App, sqlMgr: SqlManager, sqlCtx: Rt_SqlContext) {
-    sqlMgr.transaction { sqlExec ->
-        if (args.resetdb) {
-            SqlUtils.dropAll(sqlExec, true)
-        }
-
-        val appCtx = createAppContext(args, app, sqlCtx, null, false)
-        val exeCtx = Rt_ExecutionContext(appCtx, sqlExec)
-
-        val initLogging = SqlInitLogging.ofLevel(if (args.sqlInitLog) SqlInitLogging.LOG_ALL else SqlInitLogging.LOG_NONE)
-        SqlInit.init(exeCtx, true, initLogging)
-    }
+    val appCtx = createAppContext(args, app, sqlCtx, null, repl = false, test = false, sourceDir = C_MapSourceDir.EMPTY)
+    SqlUtils.initDatabase(appCtx, sqlMgr, args.resetdb, args.sqlInitLog)
 }
 
 private fun parseEntryPoint(args: RellCliArgs): Pair<R_ModuleName?, R_QualifiedName?> {
@@ -279,12 +270,22 @@ private fun createAppContext(
         app: R_App,
         sqlCtx: Rt_SqlContext,
         opCtx: Rt_OpContext?,
-        repl: Boolean
+        repl: Boolean,
+        test: Boolean,
+        sourceDir: C_SourceDir
 ): Rt_AppContext {
     val globalCtx = createGlobalCtx(args, opCtx)
-    val sourceDir = C_MapSourceDir.EMPTY
-    val modules = setOf<R_ModuleName>()
-    return Rt_AppContext(globalCtx, sqlCtx, app, repl, null, sourceDir, modules)
+    val modules = app.moduleMap.keys.toImmSet()
+    return Rt_AppContext(
+            globalCtx,
+            sqlCtx,
+            app,
+            repl = repl,
+            test = test,
+            replOut = null,
+            sourceDir = sourceDir,
+            modules = modules
+    )
 }
 
 private fun parseArgs(entryPoint: RellEntryPoint, gtvCtx: GtvToRtContext, args: List<String>, json: Boolean): List<Rt_Value> {
@@ -335,7 +336,8 @@ private class RellAppLauncher(
         private val entryPoint: RellEntryPoint
 ) {
     fun launch(sqlMgr: SqlManager, sqlCtx: Rt_SqlContext) {
-        val appCtx = createAppContext(args, app, sqlCtx, entryPoint.opContext(), false)
+        val appCtx = createAppContext(
+                args, app, sqlCtx, entryPoint.opContext(), repl = false, test = false, sourceDir = C_MapSourceDir.EMPTY)
 
         val rtRes = sqlMgr.execute(entryPoint.transaction) { sqlExec ->
             val exeCtx = Rt_ExecutionContext(appCtx, sqlExec)

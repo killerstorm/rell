@@ -1,0 +1,13 @@
+module;
+
+entity user {
+    name;
+}
+
+operation add_user(name) {
+    create user(name);
+}
+
+operation remove_user(name) {
+    delete user @ { name };
+}
