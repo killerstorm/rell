@@ -145,8 +145,7 @@ TEST RESULTS:
 tests.data_test:test_add_user OK
 tests.data_test:test_remove_user OK
 
-TESTS:  2
-PASSED: 2
-FAILED: 0
+SUMMARY: 0 FAILED 2 PASSED 2 TOTAL
+
 
 ***** OK *****

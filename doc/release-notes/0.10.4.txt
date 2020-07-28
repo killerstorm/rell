@@ -29,9 +29,8 @@ Each test function will be executed independently of others, and a summary will 
     my_test_module:test_foo OK
     my_test_module:test_bar FAILED
 
-    TESTS:  2
-    PASSED: 1
-    FAILED: 1
+    SUMMARY: 1 FAILED 1 PASSED 2 TOTAL
+
 
     ***** FAILED *****
 

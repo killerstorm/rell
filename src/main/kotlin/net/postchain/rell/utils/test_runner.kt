@@ -110,9 +110,7 @@ object TestRunner {
         val nOk = resMap.values.count { it is TestResult_OK }
         val nFailed = nTests - nOk
 
-        println("TESTS:  $nTests")
-        println("PASSED: $nOk")
-        println("FAILED: $nFailed")
+        println("SUMMARY: $nFailed FAILED $nOk PASSED $nTests TOTAL\n")
 
         val allOk = nFailed == 0
         println("\n***** ${if (allOk) "OK" else "FAILED"} *****")

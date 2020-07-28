@@ -206,6 +206,7 @@ class S_IndexClause(pos: S_Pos, attrs: List<S_AttrHeader>): S_KeyIndexClause(pos
 
 sealed class S_Modifier {
     abstract fun compile(ctx: C_ModifierContext, target: C_ModifierTarget)
+    open fun ideIsTestFile(): Boolean = false
 }
 
 sealed class S_KeywordModifier(protected val kw: S_String): S_Modifier()
@@ -228,6 +229,8 @@ class S_Annotation(val name: S_Name, val args: List<S_LiteralExpr>): S_Modifier(
         val argValues = args.map { it.value() }
         C_Modifier.compileAnnotation(ctx, name, argValues, target)
     }
+
+    override fun ideIsTestFile() = name.str == C_Modifier.TEST
 }
 
 class S_Modifiers(val modifiers: List<S_Modifier>) {
@@ -1227,6 +1230,10 @@ class S_ModuleHeader(val modifiers: S_Modifiers, val pos: S_Pos) {
 
         return C_ModuleHeader(mountName, abstractPos, external = external, test = test)
     }
+
+    fun ideIsTestFile(): Boolean {
+        return modifiers.modifiers.any { it.ideIsTestFile() }
+    }
 }
 
 class S_RellFile(val header: S_ModuleHeader?, val definitions: List<S_Definition>): S_Node() {
@@ -1268,6 +1275,10 @@ class S_RellFile(val header: S_ModuleHeader?, val definitions: List<S_Definition
         for (def in definitions) {
             def.ideBuildOutlineTree(b)
         }
+    }
+
+    fun ideIsTestFile(): Boolean {
+        return header != null && header.ideIsTestFile()
     }
 
     companion object {

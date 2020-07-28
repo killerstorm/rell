@@ -13,6 +13,11 @@ import net.postchain.rell.runtime.Rt_RellVersion
 import net.postchain.rell.runtime.Rt_RellVersionProperty
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
+import org.apache.commons.configuration2.PropertiesConfiguration
+import org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder
+import org.apache.commons.configuration2.builder.fluent.Parameters
+import org.apache.commons.configuration2.convert.DefaultListDelimiterHandler
+import java.io.File
 
 @Suppress("UNUSED")
 object IdeApi {
@@ -59,6 +64,24 @@ object IdeApi {
     @JvmStatic fun getRellVersionInfo(): Map<Rt_RellVersionProperty, String>? {
         val ver = Rt_RellVersion.getInstance()
         return ver?.properties
+    }
+
+    @JvmStatic fun isValidDatabaseProperties(file: File): Boolean {
+        val params = Parameters().properties()
+                .setFile(file)
+                .setListDelimiterHandler(DefaultListDelimiterHandler(','))
+
+        val conf = FileBasedConfigurationBuilder(PropertiesConfiguration::class.java)
+                .configure(params)
+                .configuration
+
+        val res = conf.containsKey("database.url")
+        return res
+    }
+
+    @JvmStatic fun isValidRellTestFile(text: String): Boolean {
+        val ast = C_Parser.parse(C_SourcePath(), text)
+        return ast.ideIsTestFile()
     }
 }
 

@@ -19,6 +19,7 @@ object C_Modifier {
 
     const val SORT = "sort"
     const val SORT_DESC = "sort_desc"
+    const val TEST = "test"
 
     private val ANNOTATIONS: Map<String, C_AnnBase>
 
@@ -30,7 +31,7 @@ object C_Modifier {
                 "omit" to C_Annotation_Omit,
                 SORT to C_Annotation_Sort(R_AtWhatSort.ASC),
                 SORT_DESC to C_Annotation_Sort(R_AtWhatSort.DESC),
-                "test" to C_Annotation_Test
+                TEST to C_Annotation_Test
         )
 
         for (aggr in C_AtAggregation.values()) {
