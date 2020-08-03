@@ -534,7 +534,7 @@ abstract class OperatorsBaseTest: BaseResourcefulTest() {
         chkExpr("#0.str()", """text[["Hello"]]""", vJson("""["Hello"]"""))
     }
 
-    @Test fun testFuncMathInteger() {
+    @Test fun testLibMathInteger() {
         chkExpr("_type_of(abs(#0))", "text[integer]", vInt(12345))
         chkExpr("abs(#0)", "int[12345]", vInt(12345))
         chkExpr("abs(#0)", "int[12345]", vInt(-12345))
@@ -548,7 +548,7 @@ abstract class OperatorsBaseTest: BaseResourcefulTest() {
         chkExpr("max(#0, #1)", "int[67890]", vInt(67890), vInt(12345))
     }
 
-    @Test fun testFuncMathDecimal() {
+    @Test fun testLibMathDecimal() {
         // Decimal.
         chkExpr("_type_of(abs(#0))", "text[decimal]", vDec("123.456"))
         chkExpr("_type_of(abs(#0))", "text[decimal]", vDec("123456"))
@@ -583,12 +583,46 @@ abstract class OperatorsBaseTest: BaseResourcefulTest() {
         chkExpr("max(#0, #1)", "dec[456]", vInt(456), vDec("123"))
     }
 
-    @Test fun testFuncSize() {
-        chkExpr("#0.size()", "int[0]", vText(""))
-        chkExpr("#0.size()", "int[5]", vText("Hello"))
+    @Test fun testLibByteArrayEmpty() {
+        chkExpr("#0.empty()", "boolean[true]", vBytes(""))
+        chkExpr("#0.empty()", "boolean[false]", vBytes("00"))
+        chkExpr("#0.empty()", "boolean[false]", vBytes("123456789A"))
+    }
 
+    @Test fun testLibByteArraySize() {
         chkExpr("#0.size()", "int[0]", vBytes(""))
+        chkExpr("#0.size()", "int[1]", vBytes("00"))
         chkExpr("#0.size()", "int[5]", vBytes("123456789A"))
+    }
+
+    @Test fun testLibByteArraySub() {
+        chkExpr("#0.sub(#1)", "byte_array[0123abcd]", vBytes("0123ABCD"), vInt(0))
+        chkExpr("#0.sub(#1)", "byte_array[abcd]", vBytes("0123ABCD"), vInt(2))
+        chkExpr("#0.sub(#1)", "byte_array[cd]", vBytes("0123ABCD"), vInt(3))
+        chkExpr("#0.sub(#1)", "byte_array[]", vBytes("0123ABCD"), vInt(4))
+        //chkExpr("#0.sub(#1)", errRt("fn:byte_array.sub:range:4:5:4"), vBytes("0123ABCD"), vInt(5))
+        //chkExpr("#0.sub(#1)", errRt("fn:byte_array.sub:range:4:-1:4"), vBytes("0123ABCD"), vInt(-1))
+        chkExpr("#0.sub(#1, #2)", "byte_array[23ab]", vBytes("0123ABCD"), vInt(1), vInt(3))
+        chkExpr("#0.sub(#1, #2)", "byte_array[0123abcd]", vBytes("0123ABCD"), vInt(0), vInt(4))
+        chkExpr("#0.sub(#1, #2)", errRt("fn:byte_array.sub:range:4:1:0"), vBytes("0123ABCD"), vInt(1), vInt(0))
+        //chkExpr("#0.sub(#1, #2)", errRt("fn:byte_array.sub:range:4:1:5"), vBytes("0123ABCD"), vInt(1), vInt(5))
+    }
+
+    @Test fun testLibByteArrayToHex() {
+        chkExpr("#0.to_hex()", "text[]", vBytes(""))
+        chkExpr("#0.to_hex()", "text[deadbeef]", vBytes("DEADBEEF"))
+    }
+
+    @Test fun testLibByteArrayToBase64() {
+        chkExpr("#0.to_base64()", "text[]", vBytes(""))
+        chkExpr("#0.to_base64()", "text[AA==]", vBytes("00"))
+        chkExpr("#0.to_base64()", "text[AAA=]", vBytes("0000"))
+        chkExpr("#0.to_base64()", "text[AAAA]", vBytes("000000"))
+        chkExpr("#0.to_base64()", "text[AAAAAA==]", vBytes("00000000"))
+        chkExpr("#0.to_base64()", "text[////]", vBytes("FFFFFF"))
+        chkExpr("#0.to_base64()", "text[EjRWeA==]", vBytes("12345678"))
+        chkExpr("#0.to_base64()", "text[3q2+7w==]", vBytes("deadbeef"))
+        chkExpr("#0.to_base64()", "text[yv66vt6tvu8=]", vBytes("cafebabedeadbeef"))
     }
 
     @Test fun testIf() {
@@ -660,6 +694,95 @@ abstract class OperatorsBaseTest: BaseResourcefulTest() {
         chkExpr("#0.sign()", "int[0]", vInt(0))
         chkExpr("#0.sign()", "int[1]", vInt(12345))
         chkExpr("#0.sign()", "int[-1]", vInt(-12345))
+    }
+
+    @Test fun testLibTextCharAt() {
+        chkExpr("#0.char_at(#1)", "int[72]", vText("Hello"), vInt(0))
+        chkExpr("#0.char_at(#1)", "int[101]", vText("Hello"), vInt(1))
+        chkExpr("#0.char_at(#1)", "int[108]", vText("Hello"), vInt(2))
+        chkExpr("#0.char_at(#1)", "int[108]", vText("Hello"), vInt(3))
+        chkExpr("#0.char_at(#1)", "int[111]", vText("Hello"), vInt(4))
+        //chkExpr("#0.char_at(#1)", "rt_err:fn:text.char_at:index:5:5", vText("Hello"), vInt(5))
+        //chkExpr("#0.char_at(#1)", "rt_err:fn:text.char_at:index:5:-1", vText("Hello"), vInt(-1))
+        chkExpr("#0.char_at(#1)", "int[32]", vText("Hello World"), vInt(5))
+    }
+
+    @Test fun testLibTextContains() {
+        chkExpr("#0.contains('Hello')", "boolean[true]", vText("Hello"), vText("Hello"))
+        chkExpr("#0.contains('ello')", "boolean[true]", vText("Hello"), vText("ello"))
+        chkExpr("#0.contains('ll')", "boolean[true]", vText("Hello"), vText("ll"))
+        chkExpr("#0.contains('lo')", "boolean[true]", vText("Hello"), vText("lo"))
+        chkExpr("#0.contains('hello')", "boolean[false]", vText("Hello"), vText("hello"))
+        chkExpr("#0.contains('L')", "boolean[false]", vText("Hello"), vText("L"))
+        chkExpr("#0.contains('Hello1')", "boolean[false]", vText("Hello"), vText("Hello1"))
+    }
+
+    @Test fun testLibTextEmpty() {
+        chkExpr("#0.empty()", "boolean[true]", vText(""))
+        chkExpr("#0.empty()", "boolean[false]", vText(" "))
+        chkExpr("#0.empty()", "boolean[false]", vText("X"))
+        chkExpr("#0.empty()", "boolean[false]", vText("Hello"))
+    }
+
+    @Test fun testLibTextEndsWith() {
+        chkExpr("#0.ends_with(#1)", "boolean[true]", vText("Hello"), vText("Hello"))
+        chkExpr("#0.ends_with(#1)", "boolean[true]", vText("Hello"), vText("ello"))
+        chkExpr("#0.ends_with(#1)", "boolean[true]", vText("Hello"), vText("o"))
+        chkExpr("#0.ends_with(#1)", "boolean[true]", vText("Hello"), vText(""))
+        chkExpr("#0.ends_with(#1)", "boolean[false]", vText("Hello"), vText("hello"))
+        chkExpr("#0.ends_with(#1)", "boolean[false]", vText("Hello"), vText("XHello"))
+    }
+
+    @Test fun testLibTextIndexOf() {
+        chkExpr("#0.index_of(#1)", "int[0]", vText("Hello"), vText("Hello"))
+        chkExpr("#0.index_of(#1)", "int[1]", vText("Hello"), vText("ello"))
+        chkExpr("#0.index_of(#1)", "int[2]", vText("Hello"), vText("ll"))
+        chkExpr("#0.index_of(#1)", "int[2]", vText("Hello"), vText("l"))
+        chkExpr("#0.index_of(#1)", "int[3]", vText("Hello"), vText("lo"))
+        chkExpr("#0.index_of(#1)", "int[-1]", vText("Hello"), vText("hello"))
+        chkExpr("#0.index_of(#1)", "int[-1]", vText("Hello"), vText("L"))
+    }
+
+    @Test fun testLibTextReplace() {
+        chkExpr("#0.replace(#1, #2)", "text[Bye World]", vText("Hello World"), vText("Hello"), vText("Bye"))
+        chkExpr("#0.replace(#1, #2)", "text[Hell0 W0rld]", vText("Hello World"), vText("o"), vText("0"))
+        chkExpr("#0.replace(#1, #2)", "text[Hello World]", vText("Hello World"), vText("Bye"), vText("Tschus"))
+    }
+
+    @Test fun testLibTextSize() {
+        chkExpr("#0.size()", "int[0]", vText(""))
+        chkExpr("#0.size()", "int[1]", vText(" "))
+        chkExpr("#0.size()", "int[1]", vText("X"))
+        chkExpr("#0.size()", "int[5]", vText("Hello"))
+    }
+
+    @Test fun testLibTextStartsWith() {
+        chkExpr("#0.starts_with(#1)", "boolean[true]", vText("Hello"), vText("Hello"))
+        chkExpr("#0.starts_with(#1)", "boolean[true]", vText("Hello"), vText("Hell"))
+        chkExpr("#0.starts_with(#1)", "boolean[true]", vText("Hello"), vText("H"))
+        chkExpr("#0.starts_with(#1)", "boolean[true]", vText("Hello"), vText(""))
+        chkExpr("#0.starts_with(#1)", "boolean[false]", vText("Hello"), vText("hello"))
+        chkExpr("#0.starts_with(#1)", "boolean[false]", vText("Hello"), vText("Hellou"))
+    }
+
+    @Test fun testLibTextSub() {
+        chkExpr("#0.sub(#1)", "text[World]", vText("Hello World"), vInt(6))
+        chkExpr("#0.sub(#1)", "text[]", vText("Hello World"), vInt(11))
+        chkExpr("#0.sub(#1)", "text[Hello World]", vText("Hello World"), vInt(0))
+        //chkExpr("#0.sub(#1)", "rt_err:fn:text.sub:range:11:12:11", vText("Hello World"), vInt(12))
+        chkExpr("#0.sub(#1, #2)", "text[Wor]", vText("Hello World"), vInt(6), vInt(9))
+        chkExpr("#0.sub(#1, #2)", "text[]", vText("Hello World"), vInt(6), vInt(6))
+        chkExpr("#0.sub(#1, #2)", "text[World]", vText("Hello World"), vInt(6), vInt(11))
+        //chkExpr("#0.sub(#1, #2)", "rt_err:fn:text.sub:range:11:6:12", vText("Hello World"), vInt(6), vInt(12))
+        chkExpr("#0.sub(#1, #2)", errRt("fn:text.sub:range:11:6:5"), vText("Hello World"), vInt(6), vInt(5))
+        chkExpr("#0.sub(#1, #2)", "text[Hello World]", vText("Hello World"), vInt(0), vInt(11))
+    }
+
+    @Test fun testLibTextTrim() {
+        chkExpr("#0.trim()", "text[Hello]", vText("Hello"))
+        chkExpr("#0.trim()", "text[Hello]", vText("  Hello   "))
+        chkExpr("#0.trim()", "text[Hello]", vText("  \t\t   Hello   \t  "))
+        chkExpr("#0.trim()", "text[Hello]", vText(" \n\t\r\n Hello \n\r\t "))
     }
 
     @Test fun testLibDecimalAbs() {

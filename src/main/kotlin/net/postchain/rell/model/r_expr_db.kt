@@ -11,6 +11,8 @@ import net.postchain.rell.runtime.Rt_BooleanValue
 import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_NullValue
 import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.utils.toImmList
+import java.util.regex.Pattern
 
 sealed class Db_BinaryOp(val code: String, val sql: String) {
     open fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value? = null
@@ -441,6 +443,39 @@ abstract class Db_SysFn_Simple(name: String, val sql: String): Db_SysFunction(na
     }
 }
 
+abstract class Db_SysFn_Template(name: String, private val arity: Int, private val template: String): Db_SysFunction(name) {
+    private val fragments: List<Pair<String?, Int?>>
+
+    init {
+        val pat = Pattern.compile("#\\d")
+        val m = pat.matcher(template)
+
+        val list = mutableListOf<Pair<String?, Int?>>()
+        var i = 0
+
+        while (m.find()) {
+            val start = m.start()
+            val end = m.end()
+            if (i < start) list.add(Pair(template.substring(i, start), null))
+            val v = m.group().substring(1).toInt()
+            list.add(Pair(null, v))
+            i = end
+        }
+
+        if (i < template.length) list.add(Pair(template.substring(i), null))
+
+        fragments = list.toImmList()
+    }
+
+    override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<RedDb_Expr>) {
+        check(args.size == arity)
+        for (f in fragments) {
+            if (f.first != null) bld.append(f.first!!)
+            if (f.second != null) args[f.second!!].toSql(ctx, bld)
+        }
+    }
+}
+
 abstract class Db_SysFn_Cast(name: String, val type: String): Db_SysFunction(name) {
     override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<RedDb_Expr>) {
         check(args.size == 1)
@@ -451,20 +486,42 @@ abstract class Db_SysFn_Cast(name: String, val type: String): Db_SysFunction(nam
 }
 
 object Db_SysFn_Int_ToText: Db_SysFn_Cast("int.to_text", "TEXT")
+
 object Db_SysFn_Abs_Integer: Db_SysFn_Simple("abs", "ABS")
 object Db_SysFn_Abs_Decimal: Db_SysFn_Simple("abs", "ABS")
 object Db_SysFn_Min_Integer: Db_SysFn_Simple("min", "LEAST")
 object Db_SysFn_Min_Decimal: Db_SysFn_Simple("min", "LEAST")
 object Db_SysFn_Max_Integer: Db_SysFn_Simple("max", "GREATEST")
 object Db_SysFn_Max_Decimal: Db_SysFn_Simple("max", "GREATEST")
+
 object Db_SysFn_Sign: Db_SysFn_Simple("sign", "SIGN")
-object Db_SysFn_Text_Size: Db_SysFn_Simple("text.len", "LENGTH")
-object Db_SysFn_Text_UpperCase: Db_SysFn_Simple("text.len", "UPPER")
-object Db_SysFn_Text_LowerCase: Db_SysFn_Simple("text.len", "LOWER")
-object Db_SysFn_ByteArray_Size: Db_SysFn_Simple("byte_array.len", "LENGTH")
+
+object Db_SysFn_Text_CharAt: Db_SysFn_Template("text.char_at", 2, "ASCII(SUBSTR(#0, ((#1)+1)::INT, 1))")
+object Db_SysFn_Text_Contains: Db_SysFn_Template("text.contains", 2, "(STRPOS(#0, #1) > 0)")
+object Db_SysFn_Text_Empty: Db_SysFn_Template("text.empty", 1, "(LENGTH(#0) = 0)")
+object Db_SysFn_Text_EndsWith: Db_SysFn_Template("text.ends_with", 2, "(RIGHT(#0, LENGTH(#1)) = #1)")
+object Db_SysFn_Text_IndexOf: Db_SysFn_Template("text.index_of", 2, "(STRPOS(#0, #1) - 1)")
+object Db_SysFn_Text_LowerCase: Db_SysFn_Simple("text.lower_case", "LOWER")
+object Db_SysFn_Text_Replace: Db_SysFn_Template("text.replace", 3, "REPLACE(#0, #1, #2)")
+object Db_SysFn_Text_Size: Db_SysFn_Simple("text.size", "LENGTH")
+object Db_SysFn_Text_StartsWith: Db_SysFn_Template("text.starts_with", 2, "(LEFT(#0, LENGTH(#1)) = #1)")
+object Db_SysFn_Text_Sub_1: Db_SysFn_Template("text.sub/1", 2, "SUBSTR(#0, ((#1)+1)::INT)")
+object Db_SysFn_Text_Sub_2: Db_SysFn_Template("text.sub/2", 3, "SUBSTR(#0, ((#1)+1)::INT, ((#2)-(#1))::INT)")
+object Db_SysFn_Text_Trim: Db_SysFn_Template("text.trim", 1, "TRIM(#0, ' '||CHR(9)||CHR(10)||CHR(13))")
+object Db_SysFn_Text_UpperCase: Db_SysFn_Simple("text.upper_case", "UPPER")
+
+object Db_SysFn_ByteArray_Empty: Db_SysFn_Template("byte_array.empty", 1, "(LENGTH(#0) = 0)")
+object Db_SysFn_ByteArray_Size: Db_SysFn_Template("byte_array.size", 1, "LENGTH(#0)")
+object Db_SysFn_ByteArray_Sub_1: Db_SysFn_Template("byte_array.sub/1", 2, "SUBSTR(#0, ((#1)+1)::INT)")
+object Db_SysFn_ByteArray_Sub_2: Db_SysFn_Template("byte_array.sub/2", 3, "SUBSTR(#0, ((#1)+1)::INT, ((#2)-(#1))::INT)")
+object Db_SysFn_ByteArray_ToHex: Db_SysFn_Template("byte_array.to_hex", 1, "ENCODE(#0, 'HEX')")
+object Db_SysFn_ByteArray_ToBase64: Db_SysFn_Template("byte_array.to_base64", 1, "ENCODE(#0, 'BASE64')")
+
 object Db_SysFn_Json: Db_SysFn_Cast("json", "JSONB")
 object Db_SysFn_Json_ToText: Db_SysFn_Cast("json.to_text", "TEXT")
+
 object Db_SysFn_ToText: Db_SysFn_Cast("to_text", "TEXT")
+
 object Db_SysFn_Aggregation_Sum: Db_SysFn_Simple("sum", "SUM")
 object Db_SysFn_Aggregation_Min: Db_SysFn_Simple("min", "MIN")
 object Db_SysFn_Aggregation_Max: Db_SysFn_Simple("max", "MAX")

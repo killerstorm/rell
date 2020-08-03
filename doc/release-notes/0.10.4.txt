@@ -64,3 +64,23 @@ Test module, file data_test.rell:
         tx.run();
         require( data.user@*{}(.name) == ['Bob'], 'expected_user_bob' );
     }
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+3. Library: Support for text and byte_array functions in @-expressions
+
+Following functions are now supported in @-expressions (they are translated to their SQL equivalents):
+
+    byte_array.empty()
+    byte_array.sub()
+    byte_array.to_base64()
+    byte_array.to_hex()
+
+    text.char_at()
+    text.contains()
+    text.empty()
+    text.ends_with()
+    text.index_of()
+    text.replace()
+    text.starts_with()
+    text.sub()
+    text.trim()
