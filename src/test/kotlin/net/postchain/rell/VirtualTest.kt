@@ -959,8 +959,8 @@ class VirtualTest: BaseGtxTest(false) {
 
         chkVirtual(type, "_type_of(x[0])", args, "'integer'")
         chkVirtual(type, "_type_of(x[1])", args, "'text'")
-        chkVirtual(type, "_type_of(x[-1])", args, "ct_err:expr_lookup:tuple:index:-1:2")
-        chkVirtual(type, "_type_of(x[2])", args, "ct_err:expr_lookup:tuple:index:2:2")
+        chkVirtual(type, "_type_of(x[-1])", args, "ct_err:expr_subscript:tuple:index:-1:2")
+        chkVirtual(type, "_type_of(x[2])", args, "ct_err:expr_subscript:tuple:index:2:2")
     }
 
     @Test fun testTupleValue() {
@@ -973,8 +973,8 @@ class VirtualTest: BaseGtxTest(false) {
         chkVirtual(type, "_strict_str(x.b)", args, "'text[Hello]'")
         chkVirtual(type, "_strict_str(x[0])", args, "'int[123]'")
         chkVirtual(type, "_strict_str(x[1])", args, "'text[Hello]'")
-        chkVirtual(type, "_strict_str(x[-1])", args, "ct_err:expr_lookup:tuple:index:-1:2")
-        chkVirtual(type, "_strict_str(x[2])", args, "ct_err:expr_lookup:tuple:index:2:2")
+        chkVirtual(type, "_strict_str(x[-1])", args, "ct_err:expr_subscript:tuple:index:-1:2")
+        chkVirtual(type, "_strict_str(x[2])", args, "ct_err:expr_subscript:tuple:index:2:2")
 
         args = argToGtv("[123,'Hello']", "[[0]]")
         chkVirtual(type, "_strict_str(x)", args, "'virtual(a=int[123],b=null)'")

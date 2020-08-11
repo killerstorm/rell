@@ -484,10 +484,10 @@ class AtExprTest: BaseRellTest() {
         //chk("user @ { firstName = 'Bill' } (lastName, null)", "(text[Gates],null)")
     }
 
-    @Test fun testLookupExpr() {
+    @Test fun testSubscriptExpr() {
         chk("user @ { .firstName == 'Bill' } (_=.lastName, 'Hello'[1])", "(text[Gates],text[e])")
-        chk("user @ { .firstName == 'Bill' } (.lastName[2])", "ct_err:expr_sqlnotallowed")
-        chk("user @ { .firstName == 'Bill' } ('HelloWorld'[.lastName.size()])", "ct_err:expr_sqlnotallowed")
+        chk("user @ { .firstName == 'Bill' } (.lastName[2])", "text[t]")
+        chk("user @ { .firstName == 'Bill' } ('HelloWorld'[.lastName.size()])", "text[W]")
     }
 
     @Test fun testTupleExpr() {

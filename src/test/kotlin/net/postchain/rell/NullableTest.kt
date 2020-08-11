@@ -337,10 +337,10 @@ class NullableTest: BaseRellTest(false) {
 
     @Test fun testMapGet() {
         tst.strictToString = false
-        chkEx("{ val x = map<integer,text>([123:'Hello']); return x[null];}", "ct_err:expr_lookup_keytype:[integer]:[null]")
+        chkEx("{ val x = map<integer,text>([123:'Hello']); return x[null];}", "ct_err:expr_subscript_keytype:[integer]:[null]")
         chkEx("{ val x = map<integer?,text>([123:'Hello']); return x[null];}", "rt_err:fn_map_get_novalue:null")
         chkEx("{ val x = map<integer?,text>([123:'Hello']); x.put(null,'World'); return x[null];}", "World")
-        chkEx("{ val x = map<integer,text?>([123:'Hello']); return x[null];}", "ct_err:expr_lookup_keytype:[integer]:[null]")
+        chkEx("{ val x = map<integer,text?>([123:'Hello']); return x[null];}", "ct_err:expr_subscript_keytype:[integer]:[null]")
         chkEx("{ val x = map<integer?,text?>([123:'Hello']); return x[null];}", "rt_err:fn_map_get_novalue:null")
         chkEx("{ val x = map<integer?,text?>([123:'Hello']); x.put(null,'World'); return x[null];}", "World")
     }
@@ -355,9 +355,9 @@ class NullableTest: BaseRellTest(false) {
         chkEx("{ val x = map<integer,text>(); x.put(null,null); return ''+x;}",
                 "ct_err:expr_call_argtypes:map<integer,text>.put:null,null")
         chkEx("{ val x = map<integer,text>(); x[123]='Hello'; return ''+x;}", "{123=Hello}")
-        chkEx("{ val x = map<integer,text>(); x[null]='Hello'; return ''+x;}", "ct_err:expr_lookup_keytype:[integer]:[null]")
+        chkEx("{ val x = map<integer,text>(); x[null]='Hello'; return ''+x;}", "ct_err:expr_subscript_keytype:[integer]:[null]")
         chkEx("{ val x = map<integer,text>(); x[123]=null; return ''+x;}", "ct_err:stmt_assign_type:[text]:[null]")
-        chkEx("{ val x = map<integer,text>(); x[null]=null; return ''+x;}", "ct_err:expr_lookup_keytype:[integer]:[null]")
+        chkEx("{ val x = map<integer,text>(); x[null]=null; return ''+x;}", "ct_err:expr_subscript_keytype:[integer]:[null]")
 
         chkEx("{ val x = map<integer?,text>(); x.put(123,'Hello'); return ''+x;}", "{123=Hello}")
         chkEx("{ val x = map<integer?,text>(); x.put(null,'Hello'); return ''+x;}", "{null=Hello}")
@@ -377,9 +377,9 @@ class NullableTest: BaseRellTest(false) {
         chkEx("{ val x = map<integer,text?>(); x.put(null,null); return ''+x;}",
                 "ct_err:expr_call_argtypes:map<integer,text?>.put:null,null")
         chkEx("{ val x = map<integer,text?>(); x[123]='Hello'; return ''+x;}", "{123=Hello}")
-        chkEx("{ val x = map<integer,text?>(); x[null]='Hello'; return ''+x;}", "ct_err:expr_lookup_keytype:[integer]:[null]")
+        chkEx("{ val x = map<integer,text?>(); x[null]='Hello'; return ''+x;}", "ct_err:expr_subscript_keytype:[integer]:[null]")
         chkEx("{ val x = map<integer,text?>(); x[123]=null; return ''+x;}", "{123=null}")
-        chkEx("{ val x = map<integer,text?>(); x[null]=null; return ''+x;}", "ct_err:expr_lookup_keytype:[integer]:[null]")
+        chkEx("{ val x = map<integer,text?>(); x[null]=null; return ''+x;}", "ct_err:expr_subscript_keytype:[integer]:[null]")
 
         chkEx("{ val x = map<integer?,text?>(); x.put(123,'Hello'); return ''+x;}", "{123=Hello}")
         chkEx("{ val x = map<integer?,text?>(); x.put(null,'Hello'); return ''+x;}", "{null=Hello}")
@@ -583,9 +583,9 @@ class NullableTest: BaseRellTest(false) {
         chkEx("{ var x: (a:integer)?; return x.a; }", "ct_err:expr_mem_null:a")
         chkEx("{ var x: (a:integer)?; return x.b; }", "ct_err:unknown_member:[(a:integer)]:b")
         chkEx("{ var x: (a:integer); return x.a; }", "ct_err:expr_var_uninit:x")
-        chkEx("{ var x: list<integer>? = _nullable([1]); return x[0]; }", "ct_err:expr_lookup_null")
+        chkEx("{ var x: list<integer>? = _nullable([1]); return x[0]; }", "ct_err:expr_subscript_null")
         chkEx("{ var x: integer? = _nullable(123); val y = [1, 2, 3]; return y[x]; }",
-                "ct_err:expr_lookup_keytype:[integer]:[integer?]")
+                "ct_err:expr_subscript_keytype:[integer]:[integer?]")
         chkEx("{ val x: integer? = _nullable(123); return x.to_hex(); }", "ct_err:expr_mem_null:to_hex")
     }
 

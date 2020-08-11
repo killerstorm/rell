@@ -268,7 +268,7 @@ class R_MapExpr(type: R_Type, val arg: R_Expr?): R_Expr(type) {
     }
 }
 
-class R_ListLookupExpr(type: R_Type, val base: R_Expr, val expr: R_Expr): R_DestinationExpr(type) {
+class R_ListSubscriptExpr(type: R_Type, val base: R_Expr, val expr: R_Expr): R_DestinationExpr(type) {
     override fun evaluateRef(frame: Rt_CallFrame): Rt_ValueRef {
         val baseValue = base.evaluate(frame)
         val indexValue = expr.evaluate(frame)
@@ -289,7 +289,7 @@ class R_ListLookupExpr(type: R_Type, val base: R_Expr, val expr: R_Expr): R_Dest
     }
 }
 
-class R_VirtualListLookupExpr(type: R_Type, val base: R_Expr, val expr: R_Expr): R_Expr(type) {
+class R_VirtualListSubscriptExpr(type: R_Type, val base: R_Expr, val expr: R_Expr): R_Expr(type) {
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         val baseValue = base.evaluate(frame)
         val indexValue = expr.evaluate(frame)
@@ -300,7 +300,7 @@ class R_VirtualListLookupExpr(type: R_Type, val base: R_Expr, val expr: R_Expr):
     }
 }
 
-class R_MapLookupExpr(type: R_Type, val base: R_Expr, val expr: R_Expr): R_DestinationExpr(type) {
+class R_MapSubscriptExpr(type: R_Type, val base: R_Expr, val expr: R_Expr): R_DestinationExpr(type) {
     override fun evaluateRef(frame: Rt_CallFrame): Rt_ValueRef {
         val baseValue = base.evaluate(frame)
         val keyValue = expr.evaluate(frame)
@@ -327,12 +327,12 @@ class R_MapLookupExpr(type: R_Type, val base: R_Expr, val expr: R_Expr): R_Desti
     }
 }
 
-class R_VirtualMapLookupExpr(type: R_Type, val base: R_Expr, val expr: R_Expr): R_Expr(type) {
+class R_VirtualMapSubscriptExpr(type: R_Type, val base: R_Expr, val expr: R_Expr): R_Expr(type) {
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         val baseValue = base.evaluate(frame)
         val keyValue = expr.evaluate(frame)
         val map = baseValue.asMap()
-        val res = R_MapLookupExpr.getValue(map, keyValue)
+        val res = R_MapSubscriptExpr.getValue(map, keyValue)
         return res
     }
 }

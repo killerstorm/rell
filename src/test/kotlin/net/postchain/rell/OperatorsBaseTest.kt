@@ -672,6 +672,25 @@ abstract class OperatorsBaseTest: BaseResourcefulTest() {
         chkExpr(expr, "dec[789]", vText("C"), v1, v2, v3)
     }
 
+    @Test fun testSubscriptByteArray() {
+        chkExpr("#0[#1]", "int[1]", vBytes("0123ABCD"), vInt(0))
+        chkExpr("#0[#1]", "int[35]", vBytes("0123ABCD"), vInt(1))
+        chkExpr("#0[#1]", "int[171]", vBytes("0123ABCD"), vInt(2))
+        chkExpr("#0[#1]", "int[205]", vBytes("0123ABCD"), vInt(3))
+        chkExpr("#0[#1]", errRt("expr_bytearray_subscript_index:4:4"), vBytes("0123ABCD"), vInt(4))
+        chkExpr("#0[#1]", errRt("expr_bytearray_subscript_index:4:-1"), vBytes("0123ABCD"), vInt(-1))
+    }
+
+    @Test fun testSubscriptText() {
+        chkExpr("#0[#1]", "text[H]", vText("Hello"), vInt(0))
+        chkExpr("#0[#1]", "text[e]", vText("Hello"), vInt(1))
+        chkExpr("#0[#1]", "text[l]", vText("Hello"), vInt(2))
+        chkExpr("#0[#1]", "text[l]", vText("Hello"), vInt(3))
+        chkExpr("#0[#1]", "text[o]", vText("Hello"), vInt(4))
+        //chkExpr("#0[#1]", "rt_err:expr_text_subscript_index:5:-1", vText("Hello"), vInt(-1))
+        //chkExpr("#0[#1]", "rt_err:expr_text_subscript_index:5:5", vText("Hello"), vInt(5))
+    }
+
     @Test fun testLibIntegerAbs() {
         chkExpr("#0.abs()", "int[0]", vInt(0))
         chkExpr("#0.abs()", "int[12345]", vInt(-12345))

@@ -404,7 +404,7 @@ class S_EntityDefinition(
                     val nsValueCtx = C_NamespaceValueContext(entCtx.defCtx)
                     C_Ns_OpContext.transactionExpr(nsValueCtx, name.pos)
                 } else {
-                    C_Utils.crashExpr(txType, "Trying to initialize transaction for external entity '${rEntity.appLevelName}'")
+                    C_Utils.errorRExpr(txType, "Trying to initialize transaction for external entity '${rEntity.appLevelName}'")
                 }
             }
         }

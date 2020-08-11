@@ -94,7 +94,7 @@ class C_FormalParameter(val name: S_Name, val type: R_Type?, val exprPos: S_Pos?
 }
 
 object C_Utils {
-    val ERROR_EXPR = crashExpr(R_CtErrorType)
+    val ERROR_EXPR = errorRExpr(R_CtErrorType)
     val ERROR_STATEMENT = R_ExprStatement(ERROR_EXPR)
 
     fun toDbExpr(pos: S_Pos, rExpr: R_Expr): Db_Expr {
@@ -260,9 +260,24 @@ object C_Utils {
         return R_StackTraceExpr(rCallExpr, filePos)
     }
 
-    fun crashExpr(type: R_Type = R_CtErrorType, msg: String = "Compilation error"): R_Expr {
+    fun errorRExpr(type: R_Type = R_CtErrorType, msg: String = "Compilation error"): R_Expr {
         val arg = R_ConstantExpr.makeText(msg)
         return R_SysCallExpr(type, R_SysFn_Internal.Crash, listOf(arg), null)
+    }
+
+    fun errorDbExpr(type: R_Type = R_CtErrorType, msg: String = "Compilation error"): Db_Expr {
+        val rExpr = errorRExpr(type, msg)
+        return Db_InterpretedExpr(rExpr)
+    }
+
+    fun errorValue(pos: S_Pos, type: R_Type = R_CtErrorType, msg: String = "Compilation error"): C_Value {
+        val rExpr = errorRExpr(type, msg)
+        return C_RValue(pos, rExpr)
+    }
+
+    fun errorExpr(pos: S_Pos, type: R_Type = R_CtErrorType, msg: String = "Compilation error"): C_Expr {
+        val value = errorValue(pos, type, msg)
+        return C_ValueExpr(value)
     }
 
     fun integerToDecimalPromotion(value: C_Value): C_Value {

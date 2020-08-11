@@ -287,7 +287,7 @@ class S_IfStatement(pos: S_Pos, val expr: S_Expr, val trueStmt: S_Statement, val
             S_Type.matchOpt(ctx.msgCtx, R_BooleanType, rExpr.type, expr.startPos, "stmt_if_expr_type", "Wrong type of if-expression")
             exprVarFacts = value.varFacts()
         } else {
-            rExpr = C_Utils.crashExpr(R_BooleanType)
+            rExpr = C_Utils.errorRExpr(R_BooleanType)
             exprVarFacts = C_ExprVarFacts.EMPTY
         }
 

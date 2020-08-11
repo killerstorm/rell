@@ -444,7 +444,7 @@ class C_DbValue private constructor(pos: S_Pos, private val dbExpr: Db_Expr, pri
     }
 }
 
-class C_LookupValue(
+class C_SubscriptValue(
         pos: S_Pos,
         private val baseType: R_Type,
         private val expr: R_Expr,

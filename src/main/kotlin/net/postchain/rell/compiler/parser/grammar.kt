@@ -438,7 +438,7 @@ object S_Grammar : Grammar<S_RellFile>() {
     private val callArgs by ( -LPAR * separatedTerms(callArg, COMMA, true) * -RPAR)
 
     private val baseExprTailMember by ( -DOT * name) map { name -> BaseExprTail_Member(name) }
-    private val baseExprTailLookup by ( LBRACK * expressionRef * -RBRACK) map { (pos, expr) -> BaseExprTail_Lookup(pos.pos, expr) }
+    private val baseExprTailSubscript by ( LBRACK * expressionRef * -RBRACK) map { (pos, expr) -> BaseExprTail_Subscript(pos.pos, expr) }
     private val baseExprTailNotNull by (NOTNULL) map { BaseExprTail_NotNull(it.pos) }
     private val baseExprTailSafeMember by ( -SAFECALL * name) map { name -> BaseExprTail_SafeMember(name) }
     private val baseExprTailUnaryPostfixOp by unaryPostfixOperator map { BaseExprTail_UnaryPostfixOp(it.pos, it.value) }
@@ -449,7 +449,7 @@ object S_Grammar : Grammar<S_RellFile>() {
 
     private val baseExprTailNoCall by (
             baseExprTailMember
-            or baseExprTailLookup
+            or baseExprTailSubscript
             or baseExprTailNotNull
             or baseExprTailSafeMember
             or baseExprTailUnaryPostfixOp
@@ -798,8 +798,8 @@ private class BaseExprTail_SafeMember(val name: S_Name): BaseExprTail() {
     override fun toExpr(base: S_Expr) = S_SafeMemberExpr(base, name)
 }
 
-private class BaseExprTail_Lookup(val pos: S_Pos, val expr: S_Expr): BaseExprTail() {
-    override fun toExpr(base: S_Expr) = S_LookupExpr(pos, base, expr)
+private class BaseExprTail_Subscript(val pos: S_Pos, val expr: S_Expr): BaseExprTail() {
+    override fun toExpr(base: S_Expr) = S_SubscriptExpr(pos, base, expr)
 }
 
 private class BaseExprTail_Call(val args: List<S_NameExprPair>): BaseExprTail() {

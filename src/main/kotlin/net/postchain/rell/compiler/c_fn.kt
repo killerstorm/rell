@@ -117,7 +117,7 @@ class C_OperationGlobalFunction(val rOp: R_Operation): C_GlobalFunction() {
         val cEffArgs = C_FunctionUtils.checkArgs(ctx, name, header.params, cArgs)
 
         val rExpr = if (cEffArgs == null) {
-            C_Utils.crashExpr(R_OperationType)
+            C_Utils.errorRExpr(R_OperationType)
         } else {
             val rArgs = cEffArgs.map { it.toRExpr() }
             R_OperationExpr(rOp, rArgs)
@@ -233,7 +233,7 @@ object C_FunctionUtils {
         val rExpr = if (effArgs != null && retType != null) {
             compileRegularCall0(name, effArgs, retType, rFunction)
         } else {
-            C_Utils.crashExpr(retType ?: R_CtErrorType, "Compilation error")
+            C_Utils.errorRExpr(retType ?: R_CtErrorType, "Compilation error")
         }
 
         val argsValues = args.positional + args.named.map { it.second }
@@ -455,13 +455,11 @@ class C_SysGlobalFunction(private val cases: List<C_GlobalFuncCase>): C_RegularG
             val arg = args.named[0]
             ctx.msgCtx.error(arg.first.pos, "expr:call:sys_global_named_arg:${arg.first}",
                     "Named arguments not supported for function '$name'")
-            val rExpr = C_Utils.crashExpr()
-            return C_RValue.makeExpr(name.pos, rExpr)
+            return C_Utils.errorExpr(name.pos)
         }
 
         if (!args.valid) {
-            val rExpr = C_Utils.crashExpr()
-            return C_RValue.makeExpr(name.pos, rExpr)
+            return C_Utils.errorExpr(name.pos)
         }
 
         val posArgs = args.positional

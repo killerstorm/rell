@@ -67,7 +67,7 @@ class LibListTest: BaseRellTest(false) {
         chk("[1, 2, 3, 4, 5][-1]", "rt_err:list:index:5:-1")
         chk("[1, 2, 3, 4, 5][5]", "rt_err:list:index:5:5")
 
-        chkEx("{ val x: list<integer>? = if (1>0) [1,2,3] else null; return x[1]; }", "ct_err:expr_lookup_null")
+        chkEx("{ val x: list<integer>? = if (1>0) [1,2,3] else null; return x[1]; }", "ct_err:expr_subscript_null")
         chkEx("{ val x: list<integer>? = if (1>0) [1,2,3] else null; return x!![1]; }", "int[2]")
     }
 
@@ -235,7 +235,7 @@ class LibListTest: BaseRellTest(false) {
         chkEx("{ $init x[-1] = 5; return x; }", "rt_err:list:index:3:-1")
         chkEx("{ $init x[3] = 5; return x; }", "rt_err:list:index:3:3")
 
-        chkEx("{ val x: list<integer>? = if (1>0) [1,2,3] else null; x[1] = 5; return x; }", "ct_err:expr_lookup_null")
+        chkEx("{ val x: list<integer>? = if (1>0) [1,2,3] else null; x[1] = 5; return x; }", "ct_err:expr_subscript_null")
         chkEx("{ val x: list<integer>? = if (1>0) [1,2,3] else null; x!![1] = 5; return x; }", "[1, 5, 3]")
     }
 

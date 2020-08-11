@@ -124,7 +124,7 @@ class NullPropagationTest: BaseRellTest(false) {
         chkEx("{ val x = _nullable(123); val y: integer? = null; val t = y ?: x!!; return _type_of(x); }", "integer?")
     }
 
-    @Test fun testExprLookup() {
+    @Test fun testExprSubscript() {
         tst.strictToString = false
         chkEx("{ val x = _nullable(3); return _type_of(x); }", "integer?")
         chkEx("{ val a = [1,2,3,4,5]; val x = _nullable(3); val t = a[x!!]; return _type_of(x); }", "integer")

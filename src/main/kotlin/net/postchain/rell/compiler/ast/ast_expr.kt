@@ -63,119 +63,150 @@ class S_NullLiteralExpr(pos: S_Pos): S_LiteralExpr(pos) {
     override fun value() = Rt_NullValue
 }
 
-class S_LookupExpr(val opPos: S_Pos, val base: S_Expr, val expr: S_Expr): S_Expr(base.startPos) {
+class S_SubscriptExpr(val opPos: S_Pos, val base: S_Expr, val expr: S_Expr): S_Expr(base.startPos) {
     override fun compile(ctx: C_ExprContext): C_Expr {
         val baseValue = base.compile(ctx).value()
         val exprValue = expr.compile(ctx).value()
 
-        val rBase = baseValue.toRExpr()
-        val rExpr = exprValue.toRExpr()
-
-        val baseType = rBase.type
+        val baseType = baseValue.type()
         val effectiveType = if (baseType is R_NullableType) baseType.valueType else baseType
 
-        val lookup = compile0(opPos, rBase, rExpr, effectiveType)
+        val cSubscript = compileSubscriptType(ctx, opPos, effectiveType)
+        if (cSubscript == null) {
+            return C_Utils.errorExpr(opPos)
+        }
 
-        C_Errors.check(baseType !is R_NullableType, opPos, "expr_lookup_null", "Cannot apply '[]' on nullable value")
+        C_Errors.check(ctx.msgCtx, baseType !is R_NullableType, opPos, "expr_subscript_null", "Cannot apply '[]' on nullable value")
+        S_Type.match(cSubscript.keyType, exprValue.type(), expr.startPos, "expr_subscript_keytype", "Invalid subscript key type")
 
         val postFacts = baseValue.varFacts().postFacts.and(exprValue.varFacts().postFacts)
         val exprFacts = C_ExprVarFacts.of(postFacts = postFacts)
 
-        val lookupValue = C_LookupValue(startPos, rBase.type, lookup.expr, lookup.dstExpr, exprFacts)
-        return C_ValueExpr(lookupValue)
+        val subscriptValue = if (baseValue.isDb() || exprValue.isDb()) {
+            val dbBase = baseValue.toDbExpr()
+            val dbExpr = exprValue.toDbExpr()
+            val dbResExpr = cSubscript.compileDb(dbBase, dbExpr)
+            C_DbValue.create(startPos, dbResExpr, exprFacts)
+        } else {
+            val rBase = baseValue.toRExpr()
+            val rExpr = exprValue.toRExpr()
+            val rSubscript = cSubscript.compileR(rBase, rExpr)
+            C_SubscriptValue(startPos, rBase.type, rSubscript.expr, rSubscript.dstExpr, exprFacts)
+        }
+
+        return C_ValueExpr(subscriptValue)
     }
 
-    private fun compile0(opPos2: S_Pos, rBase: R_Expr, rExpr: R_Expr, baseType: R_Type): C_LookupInternal {
+    private fun compileSubscriptType(ctx: C_ExprContext, opPos2: S_Pos, baseType: R_Type): C_Subscript? {
         return when (baseType) {
-            R_TextType -> compileText(rBase, rExpr)
-            R_ByteArrayType -> compileByteArray(rBase, rExpr)
-            is R_ListType -> compileList(rBase, rExpr, baseType.elementType)
-            is R_VirtualListType -> compileVirtualList(rBase, rExpr, baseType.innerType.elementType)
-            is R_MapType -> compileMap(rBase, rExpr, baseType.keyType, baseType.valueType)
-            is R_VirtualMapType -> compileVirtualMap(rBase, rExpr, baseType.innerType.keyType, baseType.innerType.valueType)
-            is R_TupleType -> compileTuple(rBase, rExpr, baseType)
-            is R_VirtualTupleType -> compileVirtualTuple(rBase, rExpr, baseType)
+            R_TextType -> C_Subscript_Text()
+            R_ByteArrayType -> C_Subscript_ByteArray()
+            is R_ListType -> C_Subscript_List(baseType.elementType)
+            is R_VirtualListType -> C_Subscript_VirtualList(baseType.innerType.elementType)
+            is R_MapType -> C_Subscript_Map(baseType.keyType, baseType.valueType)
+            is R_VirtualMapType -> C_Subscript_VirtualMap(baseType.innerType.keyType, baseType.innerType.valueType)
+            is R_TupleType -> C_Subscript_Tuple(baseType)
+            is R_VirtualTupleType -> C_Subscript_VirtualTuple(baseType)
             else -> {
                 val typeStr = baseType.toStrictString()
-                throw C_Error(opPos2, "expr_lookup_base:$typeStr", "Operator '[]' undefined for type $typeStr")
+                ctx.msgCtx.error(opPos2, "expr_subscript_base:$typeStr", "Operator '[]' undefined for type $typeStr")
+                null
             }
         }
     }
 
-    private fun compileList(rBase: R_Expr, rExpr: R_Expr, elementType: R_Type): C_LookupInternal {
-        matchKey(R_IntegerType, rExpr)
-        val rResExpr = R_ListLookupExpr(elementType, rBase, rExpr)
-        return C_LookupInternal(rResExpr, rResExpr)
-    }
-
-    private fun compileVirtualList(rBase: R_Expr, rExpr: R_Expr, elementType: R_Type): C_LookupInternal {
-        matchKey(R_IntegerType, rExpr)
-        val virtualElementType = S_VirtualType.virtualMemberType(elementType)
-        val rResExpr = R_VirtualListLookupExpr(virtualElementType, rBase, rExpr)
-        return C_LookupInternal(rResExpr, null)
-    }
-
-    private fun compileMap(rBase: R_Expr, rExpr: R_Expr, keyType: R_Type, valueType: R_Type): C_LookupInternal {
-        matchKey(keyType, rExpr)
-        val rResExpr = R_MapLookupExpr(valueType, rBase, rExpr)
-        return C_LookupInternal(rResExpr, rResExpr)
-    }
-
-    private fun compileVirtualMap(rBase: R_Expr, rExpr: R_Expr, keyType: R_Type, valueType: R_Type): C_LookupInternal {
-        matchKey(keyType, rExpr)
-        val virtualValueType = S_VirtualType.virtualMemberType(valueType)
-        val rResExpr = R_VirtualMapLookupExpr(virtualValueType, rBase, rExpr)
-        return C_LookupInternal(rResExpr, null)
-    }
-
-    private fun compileText(rBase: R_Expr, rExpr: R_Expr): C_LookupInternal {
-        matchKey(R_IntegerType, rExpr)
-        val rResExpr = R_TextSubscriptExpr(rBase, rExpr)
-        return C_LookupInternal(rResExpr, null)
-    }
-
-    private fun compileByteArray(rBase: R_Expr, rExpr: R_Expr): C_LookupInternal {
-        matchKey(R_IntegerType, rExpr)
-        val rResExpr = R_ByteArraySubscriptExpr(rBase, rExpr)
-        return C_LookupInternal(rResExpr, null)
-    }
-
-    private fun compileTuple(rBase: R_Expr, rExpr: R_Expr, baseType: R_TupleType): C_LookupInternal {
-        val index = compileTuple0(rExpr, baseType)
-        val field = baseType.fields[index]
-        val rRes = R_MemberExpr(rBase, false, R_MemberCalculator_TupleAttr(field.type, index))
-        return C_LookupInternal(rRes, null)
-    }
-
-    private fun compileVirtualTuple(rBase: R_Expr, rExpr: R_Expr, baseType: R_VirtualTupleType): C_LookupInternal {
-        val index = compileTuple0(rExpr, baseType.innerType)
-        val field = baseType.innerType.fields[index]
-        val virtualType = S_VirtualType.virtualMemberType(field.type)
-        val rRes = R_MemberExpr(rBase, false, R_MemberCalculator_VirtualTupleAttr(virtualType, index))
-        return C_LookupInternal(rRes, null)
-    }
-
     private fun compileTuple0(rExpr: R_Expr, baseType: R_TupleType): Int {
-        matchKey(R_IntegerType, rExpr)
-
         val indexZ = C_Utils.evaluate(expr.startPos) { rExpr.constantValue()?.asInteger() }
-
-        val index = C_Errors.checkNotNull(indexZ, expr.startPos, "expr_lookup:tuple:no_const",
-                "Lookup key for a tuple must be a constant value, not an expression")
+        val index = C_Errors.checkNotNull(indexZ, expr.startPos, "expr_subscript:tuple:no_const",
+                "Subscript key for a tuple must be a constant value, not an expression")
 
         val fields = baseType.fields
         C_Errors.check(index >= 0 && index < fields.size, expr.startPos) {
-            "expr_lookup:tuple:index:$index:${fields.size}" to "Index out of bounds, must be from 0 to ${fields.size - 1}"
+            "expr_subscript:tuple:index:$index:${fields.size}" to "Index out of bounds, must be from 0 to ${fields.size - 1}"
         }
 
         return index.toInt()
     }
 
-    private fun matchKey(rType: R_Type, rExpr: R_Expr) {
-        S_Type.match(rType, rExpr.type, expr.startPos, "expr_lookup_keytype", "Invalid lookup key type")
+    private class C_RSubscript(val expr: R_Expr, val dstExpr: R_DestinationExpr?)
+
+    private abstract inner class C_Subscript(val keyType: R_Type) {
+        abstract fun compileR(rBase: R_Expr, rExpr: R_Expr): C_RSubscript
+
+        open fun compileDb(dbBase: Db_Expr, dbExpr: Db_Expr): Db_Expr {
+            throw C_Errors.errExprDbNotAllowed(opPos)
+        }
     }
 
-    private class C_LookupInternal(val expr: R_Expr, val dstExpr: R_DestinationExpr?)
+    private inner class C_Subscript_Text: C_Subscript(R_IntegerType) {
+        override fun compileR(rBase: R_Expr, rExpr: R_Expr): C_RSubscript {
+            val rResExpr = R_TextSubscriptExpr(rBase, rExpr)
+            return C_RSubscript(rResExpr, null)
+        }
+
+        override fun compileDb(dbBase: Db_Expr, dbExpr: Db_Expr): Db_Expr {
+            return Db_CallExpr(R_TextType, Db_SysFn_Text_Subscript, listOf(dbBase, dbExpr))
+        }
+    }
+    private inner class C_Subscript_ByteArray: C_Subscript(R_IntegerType) {
+        override fun compileR(rBase: R_Expr, rExpr: R_Expr): C_RSubscript {
+            val rResExpr = R_ByteArraySubscriptExpr(rBase, rExpr)
+            return C_RSubscript(rResExpr, null)
+        }
+
+        override fun compileDb(dbBase: Db_Expr, dbExpr: Db_Expr): Db_Expr {
+            return Db_CallExpr(R_IntegerType, Db_SysFn_ByteArray_Subscript, listOf(dbBase, dbExpr))
+        }
+    }
+
+    private inner class C_Subscript_List(val elementType: R_Type): C_Subscript(R_IntegerType) {
+        override fun compileR(rBase: R_Expr, rExpr: R_Expr): C_RSubscript {
+            val rResExpr = R_ListSubscriptExpr(elementType, rBase, rExpr)
+            return C_RSubscript(rResExpr, rResExpr)
+        }
+    }
+
+    private inner class C_Subscript_VirtualList(val elementType: R_Type): C_Subscript(R_IntegerType) {
+        override fun compileR(rBase: R_Expr, rExpr: R_Expr): C_RSubscript {
+            val virtualElementType = S_VirtualType.virtualMemberType(elementType)
+            val rResExpr = R_VirtualListSubscriptExpr(virtualElementType, rBase, rExpr)
+            return C_RSubscript(rResExpr, null)
+        }
+    }
+
+    private inner class C_Subscript_Map(keyType: R_Type, val valueType: R_Type): C_Subscript(keyType) {
+        override fun compileR(rBase: R_Expr, rExpr: R_Expr): C_RSubscript {
+            val rResExpr = R_MapSubscriptExpr(valueType, rBase, rExpr)
+            return C_RSubscript(rResExpr, rResExpr)
+        }
+    }
+
+    private inner class C_Subscript_VirtualMap(keyType: R_Type, val valueType: R_Type): C_Subscript(keyType) {
+        override fun compileR(rBase: R_Expr, rExpr: R_Expr): C_RSubscript {
+            val virtualValueType = S_VirtualType.virtualMemberType(valueType)
+            val rResExpr = R_VirtualMapSubscriptExpr(virtualValueType, rBase, rExpr)
+            return C_RSubscript(rResExpr, null)
+        }
+    }
+
+    private inner class C_Subscript_Tuple(val baseType: R_TupleType): C_Subscript(R_IntegerType) {
+        override fun compileR(rBase: R_Expr, rExpr: R_Expr): C_RSubscript {
+            val index = compileTuple0(rExpr, baseType)
+            val field = baseType.fields[index]
+            val rRes = R_MemberExpr(rBase, false, R_MemberCalculator_TupleAttr(field.type, index))
+            return C_RSubscript(rRes, null)
+        }
+    }
+
+    private inner class C_Subscript_VirtualTuple(val baseType: R_VirtualTupleType): C_Subscript(R_IntegerType) {
+        override fun compileR(rBase: R_Expr, rExpr: R_Expr): C_RSubscript {
+            val index = compileTuple0(rExpr, baseType.innerType)
+            val field = baseType.innerType.fields[index]
+            val virtualType = S_VirtualType.virtualMemberType(field.type)
+            val rRes = R_MemberExpr(rBase, false, R_MemberCalculator_VirtualTupleAttr(virtualType, index))
+            return C_RSubscript(rRes, null)
+        }
+    }
 }
 
 class S_CreateExpr(pos: S_Pos, val entityName: List<S_Name>, val exprs: List<S_NameExprPair>): S_Expr(pos) {
@@ -373,8 +404,7 @@ class S_WhenConditionExpr(val exprs: List<S_Expr>): S_WhenCondition() {
 
         val cExpr = expr.compileOpt(ctx)
         if (cExpr == null) {
-            val rExpr = C_Utils.crashExpr(valueType ?: R_CtErrorType)
-            return C_RValue(expr.startPos, rExpr)
+            return C_Utils.errorValue(expr.startPos, valueType ?: R_CtErrorType)
         }
 
         val cValue = cExpr.value()
@@ -442,8 +472,7 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
 
         val builder = createWhenBuilder(ctx, expr, conds)
         if (builder == null) {
-            val rExpr = C_Utils.crashExpr()
-            return C_RValue.makeExpr(startPos, rExpr)
+            return C_Utils.errorExpr(startPos)
         }
 
         val missingElseReported = !builder.fullCoverage
@@ -515,8 +544,7 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
             if (!missingElseReported) {
                 ctx.msgCtx.error(startPos, "expr_when:no_else", "When must have an 'else' in a database expression")
             }
-            val rExpr = C_Utils.crashExpr(type)
-            return Db_InterpretedExpr(rExpr)
+            return C_Utils.errorDbExpr(type)
         }
 
         val elseExpr = cValues[elseIdx.second].toDbExpr()
