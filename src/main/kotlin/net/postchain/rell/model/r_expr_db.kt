@@ -501,6 +501,7 @@ object Db_SysFn_Text_Contains: Db_SysFn_Template("text.contains", 2, "(STRPOS(#0
 object Db_SysFn_Text_Empty: Db_SysFn_Template("text.empty", 1, "(LENGTH(#0) = 0)")
 object Db_SysFn_Text_EndsWith: Db_SysFn_Template("text.ends_with", 2, "(RIGHT(#0, LENGTH(#1)) = #1)")
 object Db_SysFn_Text_IndexOf: Db_SysFn_Template("text.index_of", 2, "(STRPOS(#0, #1) - 1)")
+object Db_SysFn_Text_Like: Db_SysFn_Template("text.like", 2, "((#0) LIKE (#1))")
 object Db_SysFn_Text_LowerCase: Db_SysFn_Simple("text.lower_case", "LOWER")
 object Db_SysFn_Text_Replace: Db_SysFn_Template("text.replace", 3, "REPLACE(#0, #1, #2)")
 object Db_SysFn_Text_Size: Db_SysFn_Simple("text.size", "LENGTH")

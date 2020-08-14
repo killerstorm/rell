@@ -16,6 +16,7 @@ import net.postchain.rell.compiler.C_Constants
 import net.postchain.rell.utils.*
 import java.math.BigDecimal
 import java.util.*
+import java.util.regex.Pattern
 
 abstract class Rt_ValueRef {
     abstract fun get(): Rt_Value
@@ -209,6 +210,37 @@ class Rt_TextValue(val value: String): Rt_Value() {
     override fun hashCode() = value.hashCode()
 
     companion object {
+        fun like(s: String, pattern: String): Boolean {
+            val regex = likePatternToRegex(pattern)
+            val m = regex.matcher(s)
+            return m.matches()
+        }
+
+        private fun likePatternToRegex(pattern: String): Pattern {
+            val buf = StringBuilder()
+            val raw = StringBuilder()
+            var esc = false
+
+            for (c in pattern) {
+                if (esc) {
+                    raw.append(c)
+                    esc = false
+                } else if (c == '\\') {
+                    esc = true
+                } else if (c == '%' || c == '_') {
+                    if (raw.isNotEmpty()) buf.append(Pattern.quote(raw.toString()))
+                    raw.setLength(0)
+                    buf.append(if (c == '%') ".*" else ".")
+                } else {
+                    raw.append(c)
+                }
+            }
+
+            if (raw.isNotEmpty()) buf.append(Pattern.quote(raw.toString()))
+            val s = buf.toString()
+            return Pattern.compile(s, Pattern.DOTALL)
+        }
+
         private fun escape(s: String): String {
             if (s.isEmpty()) return ""
 

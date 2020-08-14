@@ -90,3 +90,24 @@ Following functions are now supported in @-expressions (they are translated to t
 
 Works almost exactly as in interpreted expressions, however, x[i] returns an empty string in SQL when the index is
 out of range, while in the interpreter this causes a run-time error.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+5. Library: Function text.like()
+
+New function for simple pattern matching which works same way in interpreted expressions and in @-expressions:
+
+    text.like(pattern): boolean
+
+is equivalent to the SQL LIKE clause:
+
+    <text> LIKE <pattern>
+
+Special character "_" matches any single character and "%" matches any string of zero or more characters.
+
+    print(name.like('% von %'))
+    user @* { .name.like('% von %') }
+
+To match characters "_" and "%", escape them with "\" (note that "\\_" in a string literal produces "\_" at run-time,
+since "\" is also an escape character in string literals):
+
+    title.like('string\\_with\\_underscores')
