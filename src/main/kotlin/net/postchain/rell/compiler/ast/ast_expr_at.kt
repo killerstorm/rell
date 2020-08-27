@@ -295,7 +295,7 @@ class S_AtExpr(
         val what: S_AtExprWhat,
         val limit: S_Expr?
 ): S_Expr(startPos) {
-    override fun compile(ctx: C_ExprContext): C_Expr {
+    override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
         val base = compileBase(ctx)
 
         val type = if (cardinality.rCardinality.many) {

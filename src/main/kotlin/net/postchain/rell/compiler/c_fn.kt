@@ -21,10 +21,12 @@ sealed class C_GlobalFunction {
 }
 
 sealed class C_RegularGlobalFunction: C_GlobalFunction() {
+    abstract fun getHintParams(): C_FormalParameters
     abstract fun compileCallRegular(ctx: C_ExprContext, name: S_Name, args: C_FunctionArgs): C_Expr
 
     override final fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
-        val cArgs = C_FunctionUtils.compileRegularArgs(ctx, args)
+        val hintParams = getHintParams()
+        val cArgs = C_FunctionUtils.compileRegularArgs(ctx, args, hintParams)
         return compileCallRegular(ctx, name, cArgs)
     }
 }
@@ -93,6 +95,7 @@ class C_UserGlobalFunction(
         headerLate.set(header)
     }
 
+    override fun getHintParams() = headerLate.get().params
     override fun getAbstractInfo() = Pair(rFunction, abstract)
 
     override fun compileCallRegular(ctx: C_ExprContext, name: S_Name, args: C_FunctionArgs): C_Expr {
@@ -113,7 +116,7 @@ class C_OperationGlobalFunction(val rOp: R_Operation): C_GlobalFunction() {
     override fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
         val header = headerLate.get()
 
-        val cArgs = C_FunctionUtils.compileRegularArgs(ctx, args)
+        val cArgs = C_FunctionUtils.compileRegularArgs(ctx, args, header.params)
         val cEffArgs = C_FunctionUtils.checkArgs(ctx, name, header.params, cArgs)
 
         val rExpr = if (cEffArgs == null) {
@@ -138,9 +141,13 @@ class C_QueryGlobalFunction(val rQuery: R_Query): C_GlobalFunction() {
 
     override fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
         val header = headerLate.get()
-        val cArgs = C_FunctionUtils.compileRegularArgs(ctx, args)
+        val cArgs = C_FunctionUtils.compileRegularArgs(ctx, args, header.params)
         return C_FunctionUtils.compileRegularCall(ctx, name, cArgs, rQuery, header)
     }
+}
+
+interface C_FunctionParametersHints {
+    fun getTypeHint(index: Int, name: String?): C_TypeHint
 }
 
 object C_FunctionUtils {
@@ -181,16 +188,18 @@ object C_FunctionUtils {
         return C_QueryFunctionHeader(retType, cParams, cBody)
     }
 
-    fun compileRegularArgs(ctx: C_ExprContext, args: List<S_NameExprPair>): C_FunctionArgs {
+    fun compileRegularArgs(ctx: C_ExprContext, args: List<S_NameExprPair>, paramsHints: C_FunctionParametersHints): C_FunctionArgs {
         val positional = mutableListOf<C_Value>()
         val namedNames = mutableSetOf<String>()
         val named = mutableListOf<Pair<S_Name, C_Value>>()
         var valid = true
         var errPositionalAfterNamed = false
 
-        for (arg in args) {
+        for ((i, arg) in args.withIndex()) {
             val sExpr = arg.expr
-            val cValue = sExpr.compile(ctx).value()
+            val typeHint = paramsHints.getTypeHint(i, arg.name?.str)
+            val cValue = sExpr.compile(ctx, typeHint).value()
+
             val type = cValue.type()
             if (!C_Utils.checkUnitType(ctx.msgCtx, sExpr.startPos, type, "expr_arg_unit", "Argument expression returns nothing")) {
                 valid = false
@@ -448,6 +457,7 @@ class C_SysMemberFormalParamsFuncBody(
 }
 
 class C_SysGlobalFunction(private val cases: List<C_GlobalFuncCase>): C_RegularGlobalFunction() {
+    override fun getHintParams() = C_FormalParameters.EMPTY
     override fun getAbstractInfo() = Pair(null, null)
 
     override fun compileCallRegular(ctx: C_ExprContext, name: S_Name, args: C_FunctionArgs): C_Expr {
@@ -490,6 +500,8 @@ class C_SysGlobalFunction(private val cases: List<C_GlobalFuncCase>): C_RegularG
 }
 
 class C_SysMemberFunction(val cases: List<C_MemberFuncCase>) {
+    val paramsHints: C_FunctionParametersHints = C_SysMemberFnParamHints()
+
     fun compileCall(ctx: C_ExprContext, member: C_MemberRef, args: List<C_Value>): C_Expr {
         val qName = member.qualifiedName()
         val match = matchCase(member.name.pos, qName, args)
@@ -515,6 +527,26 @@ class C_SysMemberFunction(val cases: List<C_MemberFuncCase>) {
 
         val argTypes = args.map { it.type() }
         throw C_FuncMatchUtils.errNoMatch(pos, fullName, argTypes)
+    }
+
+    private inner class C_SysMemberFnParamHints: C_FunctionParametersHints {
+        override fun getTypeHint(index: Int, name: String?) = C_TypeHint_SysFunc(index)
+    }
+
+    private inner class C_TypeHint_SysFunc(private val index: Int): C_TypeHint() {
+        override fun getListElementType() = calcHint { it.getListElementType() }
+        override fun getSetElementType() = calcHint { it.getSetElementType() }
+        override fun getMapKeyValueTypes() = calcHint { it.getMapKeyValueTypes() }
+
+        private fun <T> calcHint(getter: (C_TypeHint) -> T?): T? {
+            val set = mutableSetOf<T>()
+            for (case in cases) {
+                val hint = case.getParamTypeHint(index)
+                val value = getter(hint)
+                if (value != null) set.add(value)
+            }
+            return if (set.size != 1) null else set.iterator().next()
+        }
     }
 }
 

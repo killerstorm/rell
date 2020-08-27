@@ -9,7 +9,7 @@ import org.junit.Test
 
 class LibListTest: BaseRellTest(false) {
     @Test fun testLiteral() {
-        chk("[]", "ct_err:expr_list_empty")
+        chk("[]", "ct_err:expr_list_no_type")
         chk("[123]", "list<integer>[int[123]]")
         chk("[123, 456, 789]", "list<integer>[int[123],int[456],int[789]]")
         chk("['Hello', 'World']", "list<text>[text[Hello],text[World]]")
@@ -19,8 +19,8 @@ class LibListTest: BaseRellTest(false) {
     @Test fun testConstructor() {
         chk("list()", "ct_err:expr_list_notype")
         chk("list<integer>()", "list<integer>[]")
-        chk("list([])", "ct_err:expr_list_empty")
-        chk("list<integer>([])", "ct_err:expr_list_empty")
+        chk("list([])", "ct_err:expr_list_no_type")
+        chk("list<integer>([])", "ct_err:expr_list_no_type")
         chk("list([123])", "list<integer>[int[123]]")
         chk("list([123, 456, 789])", "list<integer>[int[123],int[456],int[789]]")
         chk("list(set<integer>())", "list<integer>[]")

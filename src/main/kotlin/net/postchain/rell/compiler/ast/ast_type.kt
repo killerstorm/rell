@@ -18,31 +18,6 @@ sealed class S_Type(val pos: S_Pos) {
     fun compileOpt(ctx: C_NamespaceContext): R_Type? {
         return ctx.msgCtx.consumeError { compile(ctx) }
     }
-
-    companion object {
-        fun match(dstType: R_Type, srcType: R_Type, errPos: S_Pos, errCode: String, errMsg: String) {
-            if (dstType != R_CtErrorType && srcType != R_CtErrorType && !dstType.isAssignableFrom(srcType)) {
-                throw C_Errors.errTypeMismatch(errPos, srcType, dstType, errCode, errMsg)
-            }
-        }
-
-        fun matchOpt(msgCtx: C_MessageContext, dstType: R_Type, srcType: R_Type, errPos: S_Pos, errCode: String, errMsg: String): Boolean {
-            return msgCtx.consumeError { match(dstType, srcType, errPos, errCode, errMsg); true } ?: false
-        }
-
-        fun adapt(dstType: R_Type, srcType: R_Type, errPos: S_Pos, errCode: String, errMsg: String): R_TypeAdapter {
-            val adapter = dstType.getTypeAdapter(srcType)
-            if (adapter == null) {
-                throw C_Errors.errTypeMismatch(errPos, srcType, dstType, errCode, errMsg)
-            }
-            return adapter
-        }
-
-        fun commonType(a: R_Type, b: R_Type, errPos: S_Pos, errCode: String, errMsg: String): R_Type {
-            val res = R_Type.commonTypeOpt(a, b)
-            return res ?: throw C_Errors.errTypeMismatch(errPos, b, a, errCode, errMsg)
-        }
-    }
 }
 
 class S_NameType(val names: List<S_Name>): S_Type(names[0].pos) {
@@ -96,7 +71,7 @@ class S_MapType(pos: S_Pos, val key: S_Type, val value: S_Type): S_Type(pos) {
         C_Utils.checkUnitType(pos, rKey, "type_map_key_unit", "Invalid map key type")
         C_Utils.checkUnitType(pos, rValue, "type_map_value_unit", "Invalid map value type")
         C_Utils.checkMapKeyType(ctx, pos, rKey)
-        return R_MapType(rKey, rValue)
+        return R_MapType(R_MapKeyValueTypes(rKey, rValue))
     }
 }
 

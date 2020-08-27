@@ -111,3 +111,34 @@ To match characters "_" and "%", escape them with "\" (note that "\\_" in a stri
 since "\" is also an escape character in string literals):
 
     title.like('string\\_with\\_underscores')
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+6. Language: Inference of collection types from return types, variables, attributes, parameters, etc.
+
+It is no more necessary to specify the type of an empty collection when assigning it to a known variable or returning
+from a function with a known return type:
+
+    function f(q: integer): list<map<integer,text>> {
+        if (q < 0) return [];   // In the past one had to write full type specification: list<map<integer,text>>().
+        // ...
+    }
+
+Works for lists, sets and maps, for both literals (e. g. [], [:]) and constructors (list(), set(), map()):
+
+    var x: set<text>;
+    x = set();
+
+    var m: map<integer, text>;
+    m = [:];
+
+"[:]" is a new empty map literal notation, equivalent to expression "map()":
+
+    val m: map<integer, text> = [:];
+
+Some places where collection type inference helps to shorten the code:
+
+- function arguments:                   f([]);
+- function parameter default values:    function f(x: list<integer> = []){}
+- struct constructor invocation:        my_struct(x = []);
+- struct attribute assignment:          struct_object.x = [];
+- list/map element assignment:          map_of_lists[x] = [];

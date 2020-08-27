@@ -4,10 +4,7 @@
 
 package net.postchain.rell.compiler
 
-import net.postchain.rell.compiler.ast.S_Name
-import net.postchain.rell.compiler.ast.S_NameExprPair
-import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.compiler.ast.S_VirtualType
+import net.postchain.rell.compiler.ast.*
 import net.postchain.rell.model.*
 
 class C_MemberRef(val pos: S_Pos, val base: C_Value, val name: S_Name, val safe: Boolean) {
@@ -347,7 +344,7 @@ private class C_MemberFunctionExpr(private val memberRef: C_MemberRef, private v
     override fun startPos() = memberRef.pos
 
     override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_NameExprPair>): C_Expr {
-        val cArgs = C_FunctionUtils.compileRegularArgs(ctx, args)
+        val cArgs = C_FunctionUtils.compileRegularArgs(ctx, args, fn.paramsHints)
         if (!cArgs.named.isEmpty()) {
             val arg = cArgs.named[0]
             ctx.msgCtx.error(arg.first.pos, "expr:call:sys_member_fn_named_arg:${arg.first}",

@@ -371,10 +371,12 @@ object S_Grammar : Grammar<S_RellFile>() {
     }
 
     private val mapLiteralExprEntry by ( expressionRef * -COLON * expressionRef) map { (key, value) -> Pair(key, value) }
-    private val mapLiteralExpr by ( LBRACK * separatedTerms(mapLiteralExprEntry, COMMA, true) * -RBRACK) map {
+    private val emptyMapLiteralExpr by ( LBRACK * -COLON * -RBRACK ) map { pos -> S_MapLiteralExpr(pos.pos, listOf()) }
+    private val nonEmptyMapLiteralExpr by ( LBRACK * separatedTerms(mapLiteralExprEntry, COMMA, false) * -RBRACK) map {
         ( pos, entries ) ->
         S_MapLiteralExpr(pos.pos, entries)
     }
+    private val mapLiteralExpr by emptyMapLiteralExpr or nonEmptyMapLiteralExpr
 
     private val listExprType by -LT * type * -GT
 

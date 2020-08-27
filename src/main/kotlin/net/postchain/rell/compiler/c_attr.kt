@@ -15,9 +15,8 @@ object C_AttributeResolver {
             attributes: Map<String, R_Attrib>,
             exprs: List<S_NameExprPair>,
             pos: S_Pos
-    ): C_CreateAttributes
-    {
-        val values = exprs.map { it.expr.compile(ctx).value() }
+    ): C_CreateAttributes {
+        val values = exprs.map { compileCreateArg(ctx, attributes, it).value() }
         val rExprs = values.map { it.toRExpr() }
         val types = rExprs.map { it.type }
 
@@ -40,6 +39,18 @@ object C_AttributeResolver {
 
         val exprFacts = C_ExprVarFacts.forSubExpressions(values)
         return C_CreateAttributes(attrExprsDef, exprFacts)
+    }
+
+    private fun compileCreateArg(ctx: C_ExprContext, attributes: Map<String, R_Attrib>, expr: S_NameExprPair): C_Expr {
+        val attr = if (expr.name != null) {
+            attributes[expr.name.str]
+        } else if (attributes.size == 1) {
+            attributes.values.iterator().next()
+        } else {
+            null
+        }
+        val typeHint = C_TypeHint.ofType(attr?.type)
+        return expr.expr.compile(ctx, typeHint)
     }
 
     private fun matchCreateAttrs(

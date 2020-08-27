@@ -99,7 +99,7 @@ object S_AssignOp_Eq: S_AssignOp() {
         val dstType = dstExpr.type()
         val rSrcExpr = srcValue.toRExpr()
 
-        val adapter = S_Type.adapt(dstType, rSrcExpr.type, pos, "stmt_assign_type", "Assignment type mismatch")
+        val adapter = C_Types.adapt(dstType, rSrcExpr.type, pos, "stmt_assign_type", "Assignment type mismatch")
         val rSrcAdapterExpr = adapter.adaptExpr(rSrcExpr)
         val rStmt = dstExpr.compileAssignStatement(rSrcAdapterExpr, null)
 
@@ -648,7 +648,7 @@ object C_BinOp_Elvis: C_BinOp() {
 class S_BinaryExprTail(val op: S_PosValue<S_BinaryOp>, val expr: S_Expr)
 
 class S_BinaryExpr(val head: S_Expr, val tail: List<S_BinaryExprTail>): S_Expr(head.startPos) {
-    override fun compile(ctx: C_ExprContext): C_Expr {
+    override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
         val queue = LinkedList(tail)
         val tree = buildTree(head, queue, 0)
         val value = tree.compile(ctx)

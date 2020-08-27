@@ -73,7 +73,7 @@ class S_SimpleVarDeclarator(private val attrHeader: S_AttrHeader): S_VarDeclarat
         }
 
         val typeAdapter = if (rExprType != null && rType != null) {
-            S_Type.adapt(rType, rExprType, name.pos, "stmt_var_type:${name.str}", "Type mismatch for '${name.str}'")
+            C_Types.adapt(rType, rExprType, name.pos, "stmt_var_type:${name.str}", "Type mismatch for '${name.str}'")
         } else {
             R_TypeAdapter_Direct
         }
@@ -172,7 +172,7 @@ class S_ReturnStatement(pos: S_Pos, val expr: S_Expr?): S_Statement(pos) {
     }
 
     private fun compileInternal(ctx: C_StmtContext): R_Statement {
-        val cExpr = expr?.compile(ctx)
+        val cExpr = expr?.compile(ctx, C_TypeHint.ofType(ctx.fnCtx.explicitReturnType))
         val rExpr = cExpr?.value()?.toRExpr()
         if (rExpr != null) {
             C_Utils.checkUnitType(pos, rExpr.type, "stmt_return_unit", "Expression returns nothing")
@@ -259,7 +259,10 @@ class S_ExprStatement(val expr: S_Expr): S_Statement(expr.startPos) {
 class S_AssignStatement(val dstExpr: S_Expr, val op: S_PosValue<S_AssignOpCode>, val srcExpr: S_Expr): S_Statement(dstExpr.startPos) {
     override fun compile0(ctx: C_StmtContext, repl: Boolean): C_Statement {
         val cDstExpr = dstExpr.compileOpt(ctx)
-        val cSrcExpr = srcExpr.compileOpt(ctx)
+
+        val typeHint = C_TypeHint.ofType(cDstExpr?.value()?.type())
+        val cSrcExpr = srcExpr.compileOpt(ctx, typeHint)
+
         if (cDstExpr == null || cSrcExpr == null) {
             return C_Statement.EMPTY
         }
@@ -284,7 +287,7 @@ class S_IfStatement(pos: S_Pos, val expr: S_Expr, val trueStmt: S_Statement, val
         if (cExpr != null) {
             val value = cExpr.value()
             rExpr = value.toRExpr()
-            S_Type.matchOpt(ctx.msgCtx, R_BooleanType, rExpr.type, expr.startPos, "stmt_if_expr_type", "Wrong type of if-expression")
+            C_Types.matchOpt(ctx.msgCtx, R_BooleanType, rExpr.type, expr.startPos, "stmt_if_expr_type", "Wrong type of if-expression")
             exprVarFacts = value.varFacts()
         } else {
             rExpr = C_Utils.errorRExpr(R_BooleanType)
@@ -384,7 +387,7 @@ class S_WhileStatement(pos: S_Pos, val expr: S_Expr, val stmt: S_Statement): S_S
         }
 
         val rExpr = loop.condExpr
-        S_Type.matchOpt(ctx.msgCtx, R_BooleanType, rExpr.type, expr.startPos, "stmt_while_expr_type", "Wrong type of while-expression")
+        C_Types.matchOpt(ctx.msgCtx, R_BooleanType, rExpr.type, expr.startPos, "stmt_while_expr_type", "Wrong type of while-expression")
 
         val loopUid = ctx.fnCtx.nextLoopUid()
         val (loopCtx, loopBlkCtx) = loop.condCtx.subBlock(loopUid)

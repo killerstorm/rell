@@ -11,7 +11,7 @@ import net.postchain.rell.model.R_Type
 class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
     override fun asName(): S_Name? = name
 
-    override fun compile(ctx: C_ExprContext): C_Expr {
+    override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
         return ctx.nameCtx.resolveName(ctx, name)
     }
 
@@ -79,14 +79,14 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
 }
 
 class S_AttrExpr(pos: S_Pos, val name: S_Name): S_Expr(pos) {
-    override fun compile(ctx: C_ExprContext): C_Expr {
+    override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
         val expr = ctx.nameCtx.resolveAttr(name)
         return expr
     }
 }
 
 class S_MemberExpr(val base: S_Expr, val name: S_Name): S_Expr(base.startPos) {
-    override fun compile(ctx: C_ExprContext): C_Expr {
+    override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
         val cBase = base.compile(ctx)
         val cExpr = cBase.member(ctx, name, false)
         return cExpr
@@ -94,7 +94,7 @@ class S_MemberExpr(val base: S_Expr, val name: S_Name): S_Expr(base.startPos) {
 }
 
 class S_SafeMemberExpr(val base: S_Expr, val name: S_Name): S_Expr(base.startPos) {
-    override fun compile(ctx: C_ExprContext): C_Expr {
+    override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
         val cBase = base.compile(ctx)
 
         val baseValue = cBase.value()

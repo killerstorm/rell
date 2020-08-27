@@ -10,10 +10,7 @@ import net.postchain.rell.model.*
 import net.postchain.rell.module.RELL_VERSION_MODULE_SYSTEM
 import net.postchain.rell.tools.api.IdeOutlineNodeType
 import net.postchain.rell.tools.api.IdeOutlineTreeBuilder
-import net.postchain.rell.utils.MutableTypedKeyMap
-import net.postchain.rell.utils.ThreadLocalContext
-import net.postchain.rell.utils.TypedKeyMap
-import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.*
 import java.util.*
 import java.util.function.Supplier
 import kotlin.math.min
@@ -123,7 +120,7 @@ class S_FormalParameter(val attr: S_AttrHeader, val expr: S_Expr?) {
     }
 
     private fun compileExpr(defCtx: C_DefinitionContext, attrType: R_Type?): R_Expr {
-        val cExpr = expr!!.compileOpt(defCtx.defExprCtx)
+        val cExpr = expr!!.compileOpt(defCtx.defExprCtx, C_TypeHint.ofType(attrType))
         if (cExpr == null) {
             return C_Utils.ERROR_EXPR
         }
@@ -131,7 +128,7 @@ class S_FormalParameter(val attr: S_AttrHeader, val expr: S_Expr?) {
         val rExpr = cExpr.value().toRExpr()
         if (attrType != null) {
             val type = rExpr.type
-            S_Type.matchOpt(defCtx.msgCtx, attrType, type, expr.startPos, "param_expr_type",
+            C_Types.matchOpt(defCtx.msgCtx, attrType, type, expr.startPos, "param_expr_type",
                     "Wrong type of default value of parameter '${attr.name}'")
         }
 
@@ -752,7 +749,7 @@ class S_FunctionBodyShort(val expr: S_Expr): S_FunctionBody() {
     override fun returnsValue() = true
 
     override fun compileQuery0(bodyCtx: C_FunctionBodyContext, stmtCtx: C_StmtContext): C_Statement {
-        val cExpr = expr.compile(stmtCtx)
+        val cExpr = expr.compile(stmtCtx, C_TypeHint.ofType(bodyCtx.explicitRetType))
         val rExpr = cExpr.value().toRExpr()
         C_Utils.checkUnitType(bodyCtx.namePos, rExpr.type, "query_exprtype_unit", "Query expressions returns nothing")
         stmtCtx.fnCtx.matchReturnType(bodyCtx.namePos, rExpr.type)
@@ -760,7 +757,7 @@ class S_FunctionBodyShort(val expr: S_Expr): S_FunctionBody() {
     }
 
     override fun compileFunction0(bodyCtx: C_FunctionBodyContext, stmtCtx: C_StmtContext): C_Statement {
-        val rExpr = expr.compile(stmtCtx).value().toRExpr()
+        val rExpr = expr.compile(stmtCtx, C_TypeHint.ofType(bodyCtx.explicitRetType)).value().toRExpr()
         stmtCtx.fnCtx.matchReturnType(bodyCtx.namePos, rExpr.type)
 
         return if (rExpr.type != R_UnitType) {
@@ -981,7 +978,7 @@ class S_FunctionDefinition(
         val absHeader = absDescriptor.header()
 
         val absType = absHeader.returnType()
-        S_Type.matchOpt(ctx.msgCtx, absType, overType, overPos,
+        C_Types.matchOpt(ctx.msgCtx, absType, overType, overPos,
                 "fn:override:ret_type", "Return type missmatch")
 
         val absParams = absHeader.params.list
@@ -1292,8 +1289,15 @@ class S_RellFile(val header: S_ModuleHeader?, val definitions: List<S_Definition
     }
 }
 
-class C_FormalParameters(list: List<C_FormalParameter>) {
+class C_FormalParameters(list: List<C_FormalParameter>): C_FunctionParametersHints {
     val list = list.toImmList()
+    val map = list.map { it.name.str to it }.toMap().toImmMap()
+
+    override fun getTypeHint(index: Int, name: String?): C_TypeHint {
+        val byName = if (name != null) map[name]?.type else null
+        val byIndex = if (index < list.size) list[index].type else null
+        return C_TypeHint.ofType(byName ?: byIndex)
+    }
 
     fun compile(frameCtx: C_FrameContext): C_ActualParameters {
         val inited = mutableMapOf<C_VarUid, C_VarFact>()

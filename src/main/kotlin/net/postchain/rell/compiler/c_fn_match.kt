@@ -8,16 +8,22 @@ import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_String
 import net.postchain.rell.model.*
+import net.postchain.rell.utils.toImmList
+import java.util.*
 
 sealed class C_ArgTypeMatcher {
+    abstract fun getTypeHint(): C_TypeHint
     abstract fun match(type: R_Type): C_ArgTypeMatch?
 }
 
 object C_ArgTypeMatcher_Any: C_ArgTypeMatcher() {
+    override fun getTypeHint() = C_TypeHint.NONE
     override fun match(type: R_Type) = C_ArgTypeMatch_Direct
 }
 
 class C_ArgTypeMatcher_Simple(val targetType: R_Type): C_ArgTypeMatcher() {
+    override fun getTypeHint() = C_TypeHint.ofType(targetType)
+
     override fun match(type: R_Type): C_ArgTypeMatch? {
         return if (targetType.isAssignableFrom(type)) {
             C_ArgTypeMatch_Direct
@@ -29,18 +35,22 @@ class C_ArgTypeMatcher_Simple(val targetType: R_Type): C_ArgTypeMatcher() {
     }
 }
 
-class C_ArgTypeMatcher_CollectionSub(val elementType: R_Type): C_ArgTypeMatcher() {
+class C_ArgTypeMatcher_CollectionSub(private val elementType: R_Type): C_ArgTypeMatcher() {
+    override fun getTypeHint() = C_TypeHint.collection(elementType)
+
     override fun match(type: R_Type): C_ArgTypeMatch? {
         val direct = type is R_CollectionType && elementType.isAssignableFrom(type.elementType)
         return if (direct) C_ArgTypeMatch_Direct else null
     }
 }
 
-class C_ArgTypeMatcher_MapSub(val keyType: R_Type, val valueType: R_Type): C_ArgTypeMatcher() {
+class C_ArgTypeMatcher_MapSub(private val keyValueTypes: R_MapKeyValueTypes): C_ArgTypeMatcher() {
+    override fun getTypeHint() = C_TypeHint.map(keyValueTypes)
+
     override fun match(type: R_Type): C_ArgTypeMatch? {
         val direct = type is R_MapType
-                && keyType.isAssignableFrom(type.keyType)
-                && valueType.isAssignableFrom(type.valueType)
+                && keyValueTypes.key.isAssignableFrom(type.keyType)
+                && keyValueTypes.value.isAssignableFrom(type.valueType)
         return if (direct) C_ArgTypeMatch_Direct else null
     }
 }
@@ -102,6 +112,7 @@ class C_MemberFuncCaseCtx(val member: C_MemberRef): C_FuncCaseCtx() {
 }
 
 abstract class C_FuncCase<CtxT: C_FuncCaseCtx> {
+    abstract fun getParamTypeHint(index: Int): C_TypeHint
     abstract fun match(args: List<C_Value>): C_FuncCaseMatch<CtxT>?
 }
 
@@ -111,9 +122,12 @@ typealias C_MemberFuncCaseMatch = C_FuncCaseMatch<C_MemberFuncCaseCtx>
 typealias C_GlobalFuncCase = C_FuncCase<C_GlobalFuncCaseCtx>
 typealias C_GlobalFuncCaseMatch = C_FuncCaseMatch<C_GlobalFuncCaseCtx>
 
-abstract class C_SysFuncCase<CtxT: C_FuncCaseCtx>: C_FuncCase<CtxT>()
-typealias C_GlobalSysFuncCase = C_SysFuncCase<C_GlobalFuncCaseCtx>
-typealias C_MemberSysFuncCase = C_SysFuncCase<C_MemberFuncCaseCtx>
+abstract class C_SpecialFuncCase<CtxT: C_FuncCaseCtx>: C_FuncCase<CtxT>() {
+    override fun getParamTypeHint(index: Int) = C_TypeHint.NONE
+}
+
+typealias C_GlobalSpecialFuncCase = C_SpecialFuncCase<C_GlobalFuncCaseCtx>
+typealias C_MemberSpecialFuncCase = C_SpecialFuncCase<C_MemberFuncCaseCtx>
 
 abstract class C_FuncCaseMatch<CtxT: C_FuncCaseCtx> {
     abstract fun compileCall(ctx: C_ExprContext, caseCtx: CtxT): C_Value
@@ -128,6 +142,8 @@ class C_DeprecatedFuncCase<CtxT: C_FuncCaseCtx>(
         private val case: C_FuncCase<CtxT>,
         private val deprecated: C_Deprecated
 ): C_FuncCase<CtxT>() {
+    override fun getParamTypeHint(index: Int) = case.getParamTypeHint(index)
+
     override fun match(args: List<C_Value>): C_FuncCaseMatch<CtxT>? {
         val match = case.match(args)
         return if (match == null) match else C_DeprecatedFuncCaseMatch(match, deprecated)
@@ -203,6 +219,8 @@ class C_FormalParamsFuncCase<CtxT: C_FuncCaseCtx>(
         private val params: List<C_ArgTypeMatcher>,
         private val body: C_FormalParamsFuncBody<CtxT>
 ): C_FuncCase<CtxT>() {
+    override fun getParamTypeHint(index: Int) = if (index >= params.size) C_TypeHint.NONE else params[index].getTypeHint()
+
     override fun match(args: List<C_Value>): C_FuncCaseMatch<CtxT>? {
         val argTypes = args.map { it.type() }
         val paramsMatch = C_ArgTypesMatch.match(params, argTypes)

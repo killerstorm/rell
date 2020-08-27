@@ -561,7 +561,13 @@ class R_SetType(elementType: R_Type): R_CollectionType(elementType, "set") {
     override fun createGtvConversion() = GtvRtConversion_Set(this)
 }
 
-class R_MapType(val keyType: R_Type, val valueType: R_Type): R_Type("map<${keyType.toStrictString()},${valueType.toStrictString()}>") {
+class R_MapKeyValueTypes(val key: R_Type, val value: R_Type)
+
+class R_MapType(val keyValueTypes: R_MapKeyValueTypes): R_Type("map<${keyValueTypes.key.toStrictString()},${keyValueTypes.value.toStrictString()}>") {
+    constructor(keyType: R_Type, valueType: R_Type): this(R_MapKeyValueTypes(keyType, valueType))
+
+    val keyType = keyValueTypes.key
+    val valueType = keyValueTypes.value
     val virtualType = R_VirtualMapType(this)
 
     override fun isReference() = true
@@ -635,7 +641,7 @@ class R_TupleType(val fields: List<R_TupleField>): R_Type("(${fields.joinToStrin
         val resFields = fields.mapIndexed { i, field ->
             val otherField = other.fields[i]
             if (field.name != otherField.name) return null
-            val type = R_Type.commonTypeOpt(field.type, otherField.type)
+            val type = commonTypeOpt(field.type, otherField.type)
             if (type == null) return null
             R_TupleField(field.name, type)
         }

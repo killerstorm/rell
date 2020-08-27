@@ -377,8 +377,8 @@ class C_EntityContext(
         }
 
         val exprCreator: (() -> R_Expr)? = if (expr == null) null else { ->
-            val rExpr = expr.compile(defCtx.defExprCtx).value().toRExpr()
-            val adapter = S_Type.adapt(rType, rExpr.type, name.pos, "attr_type:$nameStr", "Default value type mismatch for '$nameStr'")
+            val rExpr = expr.compile(defCtx.defExprCtx, C_TypeHint.ofType(rType)).value().toRExpr()
+            val adapter = C_Types.adapt(rType, rExpr.type, name.pos, "attr_type:$nameStr", "Default value type mismatch for '$nameStr'")
             adapter.adaptExpr(rExpr)
         }
 
@@ -448,7 +448,7 @@ class C_EntityContext(
 class C_FunctionContext(
         val defCtx: C_DefinitionContext,
         name: String,
-        explicitReturnType: R_Type?,
+        val explicitReturnType: R_Type?,
         val statementVars: TypedKeyMap
 ){
     val nsCtx = defCtx.nsCtx

@@ -662,7 +662,7 @@ private object C_NsValue_ChainContext_Args: C_NamespaceValue_RExpr() {
     }
 }
 
-private class C_SysFn_Print(private val log: Boolean): C_GlobalSysFuncCase() {
+private class C_SysFn_Print(private val log: Boolean): C_GlobalSpecialFuncCase() {
     override fun match(args: List<C_Value>): C_GlobalFuncCaseMatch? {
         // Print supports any number of arguments and any types, so not checking.
         return CaseMatch(args)
@@ -678,7 +678,7 @@ private class C_SysFn_Print(private val log: Boolean): C_GlobalSysFuncCase() {
     }
 }
 
-private object C_SysFn_TypeOf: C_GlobalSysFuncCase() {
+private object C_SysFn_TypeOf: C_GlobalSpecialFuncCase() {
     override fun match(args: List<C_Value>): C_GlobalFuncCaseMatch? {
         if (args.size != 1) return null
         val type = args[0].type()
@@ -699,7 +699,7 @@ private object C_SysFn_TypeOf: C_GlobalSysFuncCase() {
     }
 }
 
-private class C_SysFn_Nullable(private val baseType: R_Type?): C_GlobalSysFuncCase() {
+private class C_SysFn_Nullable(private val baseType: R_Type?): C_GlobalSpecialFuncCase() {
     override fun match(args: List<C_Value>): C_GlobalFuncCaseMatch? {
         if (args.size != 1) return null
 
@@ -722,7 +722,7 @@ private class C_SysFn_Nullable(private val baseType: R_Type?): C_GlobalSysFuncCa
     }
 }
 
-private object C_SysFn_Crash: C_GlobalSysFuncCase() {
+private object C_SysFn_Crash: C_GlobalSpecialFuncCase() {
     override fun match(args: List<C_Value>): C_GlobalFuncCaseMatch? {
         if (args.size != 1) return null
         return CaseMatch(args)
@@ -736,7 +736,7 @@ private object C_SysFn_Crash: C_GlobalSysFuncCase() {
     }
 }
 
-private object C_SysFn_Nop: C_GlobalSysFuncCase() {
+private object C_SysFn_Nop: C_GlobalSpecialFuncCase() {
     override fun match(args: List<C_Value>): C_GlobalFuncCaseMatch? {
         if (args.size != 1) return null
         return CaseMatch(args)
@@ -751,7 +751,7 @@ private object C_SysFn_Nop: C_GlobalSysFuncCase() {
     }
 }
 
-private object C_SysFn_Require_Boolean: C_GlobalSysFuncCase() {
+private object C_SysFn_Require_Boolean: C_GlobalSpecialFuncCase() {
     override fun match(args: List<C_Value>): C_GlobalFuncCaseMatch? {
         if (args.size < 1 || args.size > 2) return null
 
@@ -773,7 +773,7 @@ private object C_SysFn_Require_Boolean: C_GlobalSysFuncCase() {
     }
 }
 
-private object C_SysFn_Require_Nullable: C_GlobalSysFuncCase() {
+private object C_SysFn_Require_Nullable: C_GlobalSpecialFuncCase() {
     override fun match(args: List<C_Value>): C_GlobalFuncCaseMatch? {
         if (args.size < 1 || args.size > 2) return null
 
@@ -803,7 +803,7 @@ private object C_SysFn_Require_Nullable: C_GlobalSysFuncCase() {
     }
 }
 
-private object C_SysFn_Require_Collection: C_GlobalSysFuncCase() {
+private object C_SysFn_Require_Collection: C_GlobalSpecialFuncCase() {
     override fun match(args: List<C_Value>): C_GlobalFuncCaseMatch? {
         if (args.size < 1 || args.size > 2) return null
 
@@ -842,7 +842,7 @@ private object C_SysFn_Require_Collection: C_GlobalSysFuncCase() {
     }
 }
 
-private class C_SysFn_Exists_Nullable(private val not: Boolean): C_GlobalSysFuncCase() {
+private class C_SysFn_Exists_Nullable(private val not: Boolean): C_GlobalSpecialFuncCase() {
     override fun match(args: List<C_Value>): C_GlobalFuncCaseMatch? {
         if (args.size != 1) return null
 
@@ -875,7 +875,7 @@ private class C_SysFn_Exists_Nullable(private val not: Boolean): C_GlobalSysFunc
     }
 }
 
-private class C_SysFn_Exists_Collection(private val not: Boolean): C_GlobalSysFuncCase() {
+private class C_SysFn_Exists_Collection(private val not: Boolean): C_GlobalSpecialFuncCase() {
     override fun match(args: List<C_Value>): C_GlobalFuncCaseMatch? {
         if (args.size != 1) return null
 
@@ -889,7 +889,7 @@ private class C_SysFn_Exists_Collection(private val not: Boolean): C_GlobalSysFu
     }
 }
 
-private object C_SysFn_Text_Format: C_MemberSysFuncCase() {
+private object C_SysFn_Text_Format: C_MemberSpecialFuncCase() {
     override fun match(args: List<C_Value>): C_MemberFuncCaseMatch? {
         val body = C_SysMemberFormalParamsFuncBody(R_TextType, R_SysFn_Text_Format)
         return C_FormalParamsFuncCaseMatch(body, args)
@@ -956,6 +956,7 @@ private fun stdFnValue(name: String, type: R_Type, fn: R_SysFunction): Pair<Stri
 
 private fun matcher(type: R_Type): C_ArgTypeMatcher = C_ArgTypeMatcher_Simple(type)
 private fun matcherColSub(elementType: R_Type): C_ArgTypeMatcher = C_ArgTypeMatcher_CollectionSub(elementType)
-private fun matcherMapSub(keyType: R_Type, valueType: R_Type): C_ArgTypeMatcher = C_ArgTypeMatcher_MapSub(keyType, valueType)
+private fun matcherMapSub(keyType: R_Type, valueType: R_Type): C_ArgTypeMatcher =
+        C_ArgTypeMatcher_MapSub(R_MapKeyValueTypes(keyType, valueType))
 
 private fun depError(newName: String) = C_Deprecated(useInstead = newName, error = true)
