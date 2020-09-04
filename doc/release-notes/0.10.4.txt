@@ -140,3 +140,13 @@ Some places where collection type inference helps to shorten the code:
 - struct constructor invocation:        my_struct(x = []);
 - struct attribute assignment:          struct_object.x = [];
 - list/map element assignment:          map_of_lists[x] = [];
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+7. Language: Continue statement
+
+Rell now has the continue statement, like many other languages. It can be used in for and while loops.
+
+for (x in get_list_of_values()) {
+    if (x < 0) continue;
+    // Do something.
+}

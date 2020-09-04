@@ -11,7 +11,8 @@ import net.postchain.rell.runtime.Rt_Value
 
 sealed class R_StatementResult
 class R_StatementResult_Return(val value: Rt_Value?): R_StatementResult()
-class R_StatementResult_Break: R_StatementResult()
+object R_StatementResult_Break: R_StatementResult()
+object R_StatementResult_Continue: R_StatementResult()
 
 abstract class R_Statement {
     abstract fun execute(frame: Rt_CallFrame): R_StatementResult?
@@ -150,8 +151,13 @@ class R_WhileStatement(val expr: R_Expr, val stmt: R_Statement, val frameBlock: 
             }
 
             val res = executeBody(frame)
-            if (res != null) {
-                return if (res is R_StatementResult_Return) res else null
+
+            if (res is R_StatementResult_Return) {
+                return res
+            } else if (res == R_StatementResult_Break) {
+                break
+            } else if (res == R_StatementResult_Continue) {
+                continue
             }
         }
         return null
@@ -207,21 +213,35 @@ class R_ForStatement(
 
     private fun execute0(frame: Rt_CallFrame, list: Iterable<Rt_Value>): R_StatementResult? {
         var first = true
+
         for (item in list) {
             varDeclarator.initialize(frame, item, !first)
             first = false
+
             val res = stmt.execute(frame)
-            if (res != null) {
-                return if (res is R_StatementResult_Return) res else null
+
+            if (res is R_StatementResult_Return) {
+                return res
+            } else if (res == R_StatementResult_Break) {
+                break
+            } else if (res == R_StatementResult_Continue) {
+                continue
             }
         }
+
         return null
     }
 }
 
 class R_BreakStatement: R_Statement() {
     override fun execute(frame: Rt_CallFrame): R_StatementResult? {
-        return R_StatementResult_Break()
+        return R_StatementResult_Break
+    }
+}
+
+class R_ContinueStatement: R_Statement() {
+    override fun execute(frame: Rt_CallFrame): R_StatementResult? {
+        return R_StatementResult_Continue
     }
 }
 

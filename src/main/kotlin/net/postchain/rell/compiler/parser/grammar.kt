@@ -70,6 +70,7 @@ object S_Grammar : Grammar<S_RellFile>() {
     private val ABSTRACT by relltok("abstract")
     private val BREAK by relltok("break")
     private val CLASS by relltok("class")
+    private val CONTINUE by relltok("continue")
     private val CREATE by relltok("create")
     private val DELETE by relltok("delete")
     private val ELSE by relltok("else")
@@ -585,6 +586,7 @@ object S_Grammar : Grammar<S_RellFile>() {
     }
 
     private val breakStmt by ( BREAK * -SEMI) map { S_BreakStatement(it.pos) }
+    private val continueStmt by ( CONTINUE * -SEMI) map { S_ContinueStatement(it.pos) }
 
     private val callStmt by ( baseExpr * -SEMI) map { expr -> S_ExprStatement(expr) }
 
@@ -638,6 +640,7 @@ object S_Grammar : Grammar<S_RellFile>() {
             or whileStmt
             or forStmt
             or breakStmt
+            or continueStmt
             or updateStmt
             or deleteStmt
     )

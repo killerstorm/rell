@@ -578,6 +578,16 @@ class S_BreakStatement(pos: S_Pos): S_Statement(pos) {
     }
 }
 
+class S_ContinueStatement(pos: S_Pos): S_Statement(pos) {
+    override fun compile0(ctx: C_StmtContext, repl: Boolean): C_Statement {
+        if (ctx.blkCtx.loop == null) {
+            throw C_Error(pos, "stmt_continue_noloop", "Continue without a loop")
+        }
+        val rStmt = R_ContinueStatement()
+        return C_Statement(rStmt, false)
+    }
+}
+
 class S_GuardStatement(pos: S_Pos, private val stmt: S_Statement): S_Statement(pos) {
     override fun compile0(ctx: C_StmtContext, repl: Boolean): C_Statement {
         if (repl) {
