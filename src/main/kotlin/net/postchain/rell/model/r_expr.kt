@@ -156,7 +156,7 @@ class R_MemberCalculator_VirtualStructAttr(type: R_Type, val attr: R_Attrib): R_
 
 class R_MemberCalculator_DataAttribute(type: R_Type, val atBase: R_AtExprBase): R_MemberCalculator(type) {
     override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
-        val list = atBase.execute(frame, listOf(baseValue), null)
+        val list = atBase.execute(frame, listOf(baseValue), null, null)
 
         if (list.size != 1) {
             val msg = if (list.size == 0) {
@@ -616,12 +616,12 @@ class R_ObjectExpr(val objType: R_ObjectType): R_Expr(objType) {
 
 class R_ObjectAttrExpr(type: R_Type, val rObject: R_Object, val atBase: R_AtExprBase): R_Expr(type) {
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        var records = atBase.execute(frame, listOf(), null)
+        var records = atBase.execute(frame, listOf(), null, null)
 
         if (records.isEmpty()) {
             val forced = frame.defCtx.appCtx.forceObjectInit(rObject)
             if (forced) {
-                records = atBase.execute(frame, listOf(), null)
+                records = atBase.execute(frame, listOf(), null, null)
             }
         }
 

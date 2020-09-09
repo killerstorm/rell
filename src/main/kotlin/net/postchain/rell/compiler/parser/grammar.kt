@@ -94,6 +94,7 @@ object S_Grammar : Grammar<S_RellFile>() {
     private val NAMESPACE by relltok("namespace")
     private val NULL by relltok("null")
     private val OBJECT by relltok("object")
+    private val OFFSET by relltok("offset")
     private val OPERATION by relltok("operation")
     private val OVERRIDE by relltok("override")
     private val QUERY by relltok("query")
@@ -358,12 +359,18 @@ object S_Grammar : Grammar<S_RellFile>() {
         S_AtExprWhere(exprs)
     }
 
-    private val atExprLimit by ( -LIMIT * expressionRef)
+    private val atExprLimit by ( -LIMIT * expressionRef )
+    private val atExprOffset by ( -OFFSET * expressionRef )
 
-    private val atExpr by ( atExprFrom * atExprAt * atExprWhere * optional(atExprWhat) * optional(atExprLimit) ) map {
-        ( from, cardinality, where, whatOpt, limit ) ->
+    private val atExprModifiers by (
+            ((atExprLimit * optional(atExprOffset)) map { (limit, offset) -> AtExprMods(limit, offset) })
+            or ((atExprOffset * optional(atExprLimit)) map { (offset, limit) -> AtExprMods(limit, offset) })
+    )
+
+    private val atExpr by ( atExprFrom * atExprAt * atExprWhere * optional(atExprWhat) * optional(atExprModifiers) ) map {
+        ( from, cardinality, where, whatOpt, mods ) ->
         val what = whatOpt ?: S_AtExprWhat_Default()
-        S_AtExpr(from.pos, cardinality, from.value, where, what, limit)
+        S_AtExpr(from.pos, cardinality, from.value, where, what, mods?.limit, mods?.offset)
     }
 
     private val listLiteralExpr by ( LBRACK * separatedTerms(expressionRef, COMMA, true) * -RBRACK) map {
@@ -818,6 +825,8 @@ private class BaseExprTail_NotNull(val pos: S_Pos): BaseExprTail() {
 private class BaseExprTail_UnaryPostfixOp(val pos: S_Pos, val op: S_UnaryOp): BaseExprTail() {
     override fun toExpr(base: S_Expr) = S_UnaryExpr(base.startPos, S_PosValue(pos, op), base)
 }
+
+private class AtExprMods(val limit: S_Expr?, val offset: S_Expr?)
 
 private infix fun <T> Parser<RellTokenMatch>.mapNode(transform: (RellTokenMatch) -> T): Parser<S_PosValue<T>> = MapCombinator(this) {
     S_PosValue(it, transform(it))

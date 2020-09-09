@@ -404,7 +404,55 @@ class AtExprTest: BaseRellTest() {
         chk("user @? {} limit 1", "user[10]")
         chk("user @? {} limit 2", "rt_err:at:wrong_count:2")
 
+        chk("user @* {} limit -1", "rt_err:expr:at:limit:negative:-1")
+        chk("user @* {} limit -999999", "rt_err:expr:at:limit:negative:-999999")
+
         chk("user @ {} limit 'Hello'", "ct_err:expr_at_limit_type:text")
+    }
+
+    @Test fun testOffset() {
+        chk("user @* {}", "list<user>[user[10],user[20],user[21],user[30],user[40],user[41],user[50],user[51]]")
+        chk("user @* {} offset 0", "list<user>[user[10],user[20],user[21],user[30],user[40],user[41],user[50],user[51]]")
+        chk("user @* {} offset 1", "list<user>[user[20],user[21],user[30],user[40],user[41],user[50],user[51]]")
+        chk("user @* {} offset 2", "list<user>[user[21],user[30],user[40],user[41],user[50],user[51]]")
+        chk("user @* {} offset 3", "list<user>[user[30],user[40],user[41],user[50],user[51]]")
+        chk("user @* {} offset 4", "list<user>[user[40],user[41],user[50],user[51]]")
+        chk("user @* {} offset 5", "list<user>[user[41],user[50],user[51]]")
+        chk("user @* {} offset 6", "list<user>[user[50],user[51]]")
+        chk("user @* {} offset 7", "list<user>[user[51]]")
+        chk("user @* {} offset 8", "list<user>[]")
+        chk("user @* {} offset 9", "list<user>[]")
+
+        chk("user @* {} offset -1", "rt_err:expr:at:offset:negative:-1")
+        chk("user @* {} offset -99999999", "rt_err:expr:at:offset:negative:-99999999")
+        chk("user @* {} offset 999999999", "list<user>[]")
+
+        chk("user @ {} offset 'Hello'", "ct_err:expr_at_offset_type:text")
+    }
+
+    @Test fun testLimitOffset() {
+        chk("user @? {} limit 1 offset 0", "user[10]")
+        chk("user @? {} limit 1 offset 1", "user[20]")
+        chk("user @? {} limit 1 offset 2", "user[21]")
+        chk("user @? {} limit 1 offset 3", "user[30]")
+        chk("user @? {} limit 1 offset 4", "user[40]")
+        chk("user @? {} limit 1 offset 5", "user[41]")
+        chk("user @? {} limit 1 offset 6", "user[50]")
+        chk("user @? {} limit 1 offset 7", "user[51]")
+        chk("user @? {} limit 1 offset 8", "null")
+
+        chk("user @* {} limit 3 offset 0", "list<user>[user[10],user[20],user[21]]")
+        chk("user @* {} limit 3 offset 1", "list<user>[user[20],user[21],user[30]]")
+        chk("user @* {} limit 3 offset 2", "list<user>[user[21],user[30],user[40]]")
+        chk("user @* {} limit 3 offset 3", "list<user>[user[30],user[40],user[41]]")
+        chk("user @* {} limit 3 offset 4", "list<user>[user[40],user[41],user[50]]")
+        chk("user @* {} limit 3 offset 5", "list<user>[user[41],user[50],user[51]]")
+        chk("user @* {} limit 3 offset 6", "list<user>[user[50],user[51]]")
+        chk("user @* {} limit 3 offset 7", "list<user>[user[51]]")
+        chk("user @* {} limit 3 offset 8", "list<user>[]")
+
+        chk("user @? {} offset 3 limit 1", "user[30]")
+        chk("user @* {} offset 6 limit 3", "list<user>[user[50],user[51]]")
     }
 
     @Test fun testCardinalityOne() {

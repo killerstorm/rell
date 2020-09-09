@@ -4,8 +4,6 @@
 
 package net.postchain.rell.model
 
-import net.postchain.rell.compiler.C_DefinitionContext
-import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.runtime.*
 import org.apache.commons.lang3.StringUtils
 

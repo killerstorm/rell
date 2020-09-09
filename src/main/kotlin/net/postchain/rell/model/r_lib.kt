@@ -867,4 +867,16 @@ object R_SysFn_Internal {
             throw RellInterpreterCrashException(s)
         }
     }
+
+    class CheckNonNegative(private val codeFmt: String, private val msgFmt: String): R_SysFunction_1() {
+        override fun call(arg: Rt_Value): Rt_Value {
+            val v = arg.asInteger()
+            if (v < 0) {
+                val code = codeFmt.format(v)
+                val msg = msgFmt.format(v)
+                throw Rt_Error(code, msg)
+            }
+            return arg
+        }
+    }
 }

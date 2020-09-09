@@ -150,3 +150,16 @@ for (x in get_list_of_values()) {
     if (x < 0) continue;
     // Do something.
 }
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+8. Language: Offset clause in at-expression
+
+In addition to a limit, one can now also specify an offset in an at-expression in order to select a portion of a
+result set:
+
+    user @* {} offset X limit Y
+
+The offset is zero-based, so if offset 0 is specified, all records will be returned, while offset 1 will skip the first
+record and so on.
+
+Both limit and offset clauses are optional and can be used together in an arbitrary order.

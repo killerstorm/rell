@@ -293,7 +293,8 @@ class S_AtExpr(
         val from: List<S_AtExprFrom>,
         val where: S_AtExprWhere,
         val what: S_AtExprWhat,
-        val limit: S_Expr?
+        val limit: S_Expr?,
+        val offset: S_Expr?
 ): S_Expr(startPos) {
     override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
         val base = compileBase(ctx)
@@ -306,7 +307,7 @@ class S_AtExpr(
             base.resType.type
         }
 
-        var rExpr = R_AtExpr(type, base.rBase, cardinality.rCardinality, base.limit, base.resType.rowDecoder)
+        val rExpr = R_AtExpr(type, base.rBase, cardinality.rCardinality, base.limit, base.offset, base.resType.rowDecoder)
         return C_RValue.makeExpr(startPos, rExpr, base.exprFacts)
     }
 
@@ -324,12 +325,13 @@ class S_AtExpr(
 
         val rWhat = cWhat.fields.filter { !it.flags.ignore }.map { R_AtWhatField(it.expr, it.flags) }
 
-        val rLimit = compileLimit(ctx, subValues)
+        val rLimit = compileLimitOffset(limit, "limit", CHECK_LIMIT, ctx, subValues)
+        val rOffset = compileLimitOffset(offset, "offset", CHECK_OFFSET, ctx, subValues)
 
         val base = R_AtExprBase(rFrom, rWhat, dbWhere)
         val facts = C_ExprVarFacts.forSubExpressions(subValues)
 
-        return AtBase(base, rLimit, resType, facts)
+        return AtBase(base, rLimit, rOffset, resType, facts)
     }
 
     private fun calcResultType(whatFields: List<C_AtWhatField>): AtResultType {
@@ -344,26 +346,42 @@ class S_AtExpr(
         }
     }
 
-    private fun compileLimit(ctx: C_ExprContext, subValues: MutableList<C_Value>): R_Expr? {
-        if (limit == null) {
+    private fun compileLimitOffset(
+            sExpr: S_Expr?,
+            msg: String,
+            checkFn: R_SysFunction,
+            ctx: C_ExprContext,
+            subValues: MutableList<C_Value>
+    ): R_Expr? {
+        if (sExpr == null) {
             return null
         }
 
-        val cValue = limit.compile(ctx).value()
+        val cValue = sExpr.compile(ctx).value()
         subValues.add(cValue)
 
         val type = cValue.type()
         if (type != R_IntegerType) {
-            throw C_Error(limit.startPos, "expr_at_limit_type:${type.toStrictString()}",
-                    "Wrong limit type: ${type.toStrictString()} instead of ${R_IntegerType.toStrictString()}")
+            throw C_Error(sExpr.startPos, "expr_at_${msg}_type:${type.toStrictString()}",
+                    "Wrong $msg type: ${type.toStrictString()} instead of ${R_IntegerType.toStrictString()}")
         }
 
-        return cValue.toRExpr()
+        val rExpr = cValue.toRExpr()
+        return R_SysCallExpr(R_IntegerType, checkFn, listOf(rExpr), "check_non_negative")
     }
 
     private class AtResultType(val type: R_Type, val rowDecoder: R_AtExprRowType)
 
     companion object {
+        private val CHECK_LIMIT = createCheckFn("limit")
+        private val CHECK_OFFSET = createCheckFn("offset")
+
+        private fun createCheckFn(part: String): R_SysFunction {
+            val codeFmt = "expr:at:$part:negative:%d"
+            val msgFmt = "Negative $part: %d"
+            return R_SysFn_Internal.CheckNonNegative(codeFmt, msgFmt)
+        }
+
         fun compileFrom(ctx: C_ExprContext, from: List<S_AtExprFrom>): List<C_AtEntity> {
             val cFrom = from.mapIndexed { i, f -> compileFromEntity(ctx, i, f) }
 
@@ -402,6 +420,7 @@ class S_AtExpr(
         private class AtBase(
                 val rBase: R_AtExprBase,
                 val limit: R_Expr?,
+                val offset: R_Expr?,
                 val resType: AtResultType,
                 val exprFacts: C_ExprVarFacts
         )

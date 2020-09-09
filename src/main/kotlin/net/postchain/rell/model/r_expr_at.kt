@@ -73,14 +73,14 @@ class R_AtExprBase(
         what.forEach { check(!it.flags.ignore) }
     }
 
-    fun execute(frame: Rt_CallFrame, params: List<Rt_Value>, limit: R_Expr?): List<Array<Rt_Value>> {
-        val rtSql = buildSql(frame, params, limit)
+    fun execute(frame: Rt_CallFrame, params: List<Rt_Value>, limit: R_Expr?, offset: R_Expr?): List<Array<Rt_Value>> {
+        val rtSql = buildSql(frame, params, limit, offset)
         val select = SqlSelect(rtSql, resultTypes)
         val records = select.execute(frame)
         return records
     }
 
-    private fun buildSql(frame: Rt_CallFrame, params: List<Rt_Value>, limit: R_Expr?): ParameterizedSql {
+    private fun buildSql(frame: Rt_CallFrame, params: List<Rt_Value>, limit: R_Expr?, offset: R_Expr?): ParameterizedSql {
         val redWhere = makeFullWhere(frame)
         val redWhat = what.map { RedWhatField(it.expr.toRedExpr(frame), it.flags) }
 
@@ -104,6 +104,11 @@ class R_AtExprBase(
         if (limit != null) {
             b.append(" LIMIT ")
             b.append(limit)
+        }
+
+        if (offset != null) {
+            b.append(" OFFSET ")
+            b.append(offset)
         }
 
         return b.build()
@@ -262,10 +267,11 @@ class R_AtExpr(
         val base: R_AtExprBase,
         val cardinality: R_AtCardinality,
         val limit: R_Expr?,
+        val offset: R_Expr?,
         val rowType: R_AtExprRowType
 ): R_Expr(type) {
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        val records = base.execute(frame, listOf(), limit)
+        val records = base.execute(frame, listOf(), limit, offset)
         return decodeResult(records)
     }
 
