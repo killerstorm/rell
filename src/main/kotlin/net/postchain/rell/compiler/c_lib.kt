@@ -265,11 +265,11 @@ object C_LibFunctions {
             .build()
 
     private val RELL_NAMESPACE_FNS = C_GlobalFuncBuilder()
-            .add("get_rell_version", R_TextType, listOf(), R_SysFn_Rell.GetRellVersion)
-            .add("get_postchain_version", R_TextType, listOf(), R_SysFn_Rell.GetPostchainVersion)
-            .add("get_build", R_TextType, listOf(), R_SysFn_Rell.GetBuild)
-            .add("get_build_details", R_SysFn_Rell.GetBuildDetails.TYPE, listOf(), R_SysFn_Rell.GetBuildDetails)
-            .add("get_app_structure", R_GtvType, listOf(), R_SysFn_Rell.GetAppStructure)
+//            .add("get_rell_version", R_TextType, listOf(), R_SysFn_Rell.GetRellVersion)
+//            .add("get_postchain_version", R_TextType, listOf(), R_SysFn_Rell.GetPostchainVersion)
+//            .add("get_build", R_TextType, listOf(), R_SysFn_Rell.GetBuild)
+//            .add("get_build_details", R_SysFn_Rell.GetBuildDetails.TYPE, listOf(), R_SysFn_Rell.GetBuildDetails)
+//            .add("get_app_structure", R_GtvType, listOf(), R_SysFn_Rell.GetAppStructure)
             .build()
 
     private val RELL_GTX_NAMESPACE_FNS = C_GlobalFuncBuilder()

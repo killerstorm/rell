@@ -16,9 +16,9 @@ Simplest way to build:
     ```
     git clone git@bitbucket.org:chromawallet/postchain2.git
     ```  
-    Switch to the right branch:  
+    Switch to the right tag:  
     ```
-    git checkout ver-3.1.3
+    git checkout ver-3.3.0
     ```
 2. Build `postchain2`:  
     ```

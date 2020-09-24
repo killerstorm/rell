@@ -313,7 +313,7 @@ class LibTest: BaseRellTest(false) {
     }
 
     @Test fun testSysQueries() {
-        chk("rell.get_rell_version()", "text[0.10.3]")
-        chk("rell.get_app_structure()", """gtv[{"modules":{"":{"name":"","queries":{"q":{"parameters":[],"type":"gtv"}}}}}]""")
+        chk("rell.get_rell_version()", "ct_err:unknown_name:rell.get_rell_version")
+        chk("rell.get_app_structure()", "ct_err:unknown_name:rell.get_app_structure")
     }
 }
