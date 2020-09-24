@@ -57,6 +57,9 @@ object C_LibFunctions {
             .add("log", C_SysFn_Print(true))
 
             .add("verify_signature", R_BooleanType, listOf(R_ByteArrayType, R_ByteArrayType, R_ByteArrayType), R_SysFn_Crypto.VerifySignature)
+            .add("sha256", R_ByteArrayType, listOf(R_ByteArrayType), R_SysFn_ByteArray.Sha256)
+            .add("keccak256", R_ByteArrayType, listOf(R_ByteArrayType), R_SysFn_Crypto.Keccak256)
+            .add("eth_ecrecover", R_ByteArrayType, listOf(R_ByteArrayType, R_ByteArrayType, R_IntegerType, R_ByteArrayType), R_SysFn_Crypto.EthEcRecover)
 
             .add("_crash", C_SysFn_Crash)
             .add("_type_of", C_SysFn_TypeOf)

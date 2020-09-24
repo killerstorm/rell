@@ -11,6 +11,7 @@ import net.postchain.rell.compiler.C_Constants
 import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.module.RELL_VERSION
 import net.postchain.rell.runtime.*
+import org.spongycastle.jcajce.provider.digest.Keccak
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.math.MathContext
@@ -699,6 +700,17 @@ object R_SysFn_Math {
 }
 
 object R_SysFn_Crypto {
+    object EthEcRecover: R_SysFunction_4() {
+        override fun call(arg1: Rt_Value, arg2: Rt_Value, arg3: Rt_Value, arg4: Rt_Value): Rt_Value {
+            val r = arg1.asByteArray()
+            val s = arg2.asByteArray()
+            val recId = arg3.asInteger()
+            val hash = arg4.asByteArray()
+            val res = Rt_CryptoUtils.ethereumPubkeyFromSignature(r, s, recId, hash)
+            return Rt_ByteArrayValue(res)
+        }
+    }
+
     object IsSigner: R_SysFunction() {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             check(args.size == 1)
@@ -706,6 +718,14 @@ object R_SysFn_Crypto {
             val opCtx = ctx.globalCtx.opCtx
             val r = if (opCtx == null) false else opCtx.signers.any { Arrays.equals(it, a) }
             return Rt_BooleanValue(r)
+        }
+    }
+
+    object Keccak256: R_SysFunction_1() {
+        override fun call(arg: Rt_Value): Rt_Value {
+            val ba = arg.asByteArray()
+            val res = Rt_CryptoUtils.keccak256(ba)
+            return Rt_ByteArrayValue(res)
         }
     }
 

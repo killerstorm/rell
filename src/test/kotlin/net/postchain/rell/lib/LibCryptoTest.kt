@@ -24,6 +24,38 @@ class LibCryptoTest: BaseRellTest(false) {
         chk("verify_signature(x'DEADBEFF', x'$pubKey', x'$sign2')", "boolean[true]")
     }
 
+    @Test fun testKeccak256() {
+        chk("keccak256(x'')", "byte_array[c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470]")
+        chk("keccak256('1'.to_bytes())", "byte_array[c89efdaa54c0f20c7adf612882df0950f5a951637e0307cdcb4c672f298b8bc6]")
+        chk("keccak256('Hello world!'.to_bytes())", "byte_array[ecd0e108a98e192af1d2c25055f4e3bed784b5c877204e73219a5203251feaab]")
+    }
+
+    @Test fun testSha256() {
+        chk("sha256(x'')", "byte_array[e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855]")
+        chk("sha256('1'.to_bytes())", "byte_array[6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b]")
+        chk("sha256('Hello world!'.to_bytes())", "byte_array[c0535e4be2b79ffd93291305436bf889314e4a3faec05ecffcbb7df31ad9e51a]")
+    }
+
+    @Test fun testEthEcrecover() {
+        chk("""eth_ecrecover(
+                x'13d6965f2a0f9306e96c65d799516d81e7a324ae9ce4f4dbe8acb8bb08bc18a5',
+                x'6789b81fd6f24b8b7c3313ffc873c44659b2ba2554efd0074613e9b03fc99c0c',
+                0,
+                x'16ac6804d09d6c64eb2bf61db42907f7c4ee2b7c7c34998c42b7659c2fb33929'
+            )""",
+            "byte_array[f117f07ef53a4c90e1d6573c62ceeb5caebeb94c68ecd5d4c088f1e2395ed4438193b2b00c56fa62494f5bfb180c437ff301d8eb6993034bf0d8bc4a0a93bf0d]"
+        )
+
+        chk("""eth_ecrecover(
+                x'410f3bbc0fc384de5504aeddd523adff920c559e11c6bfc1ba98b5debb9af497',
+                x'6a5419f6f20d87cb4ff2589dd9a908003629fb54c0b004e5029c58abf888e200',
+                0,
+                x'bff7e44c2273efdbfc7a3192c5d6d3f2871c6f59b69ad2cfac71e05ba3f89ef9'
+            )""",
+            "byte_array[f117f07ef53a4c90e1d6573c62ceeb5caebeb94c68ecd5d4c088f1e2395ed4438193b2b00c56fa62494f5bfb180c437ff301d8eb6993034bf0d8bc4a0a93bf0d]"
+        )
+    }
+
     @Test fun testVerifySignatureErr() {
         chk("verify_signature(x'0123', x'4567', x'89AB')", "rt_err:verify_signature")
     }

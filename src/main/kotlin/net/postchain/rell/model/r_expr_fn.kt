@@ -109,6 +109,16 @@ abstract class R_SysFunction_3: R_SysFunction() {
     }
 }
 
+abstract class R_SysFunction_4: R_SysFunction() {
+    abstract fun call(arg1: Rt_Value, arg2: Rt_Value, arg3: Rt_Value, arg4: Rt_Value): Rt_Value
+
+    final override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
+        check(args.size == 4)
+        val res = call(args[0], args[1], args[2], args[3])
+        return res
+    }
+}
+
 abstract class R_SysFunctionEx_0: R_SysFunction() {
     abstract fun call(ctx: Rt_CallContext): Rt_Value
 

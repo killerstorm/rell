@@ -116,11 +116,16 @@
         </dependency>
 
         <dependency>
+            <groupId>io.infinitape</groupId>
+            <artifactId>etherjar-tx</artifactId>
+            <version>0.10.2</version>
+        </dependency>
+
+        <dependency>
             <groupId>org.jetbrains.kotlin</groupId>
             <artifactId>kotlin-stdlib</artifactId>
             <version>${kotlin.version}</version>
         </dependency>
-
         <dependency>
             <groupId>org.jetbrains.kotlin</groupId>
             <artifactId>kotlin-reflect</artifactId>
@@ -278,6 +283,10 @@
             <id>jcentral</id>
             <name>bintray</name>
             <url>https://jcenter.bintray.com</url>
+        </repository>
+        <repository>
+            <id>etherjar</id>
+            <url>https://dl.bintray.com/infinitape/etherjar</url>
         </repository>
     </repositories>
 </project>
