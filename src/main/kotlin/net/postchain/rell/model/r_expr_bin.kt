@@ -19,6 +19,21 @@ object R_CmpOp_Ge: R_CmpOp(">=", { it >= 0 })
 
 sealed class R_CmpType {
     abstract fun compare(left: Rt_Value, right: Rt_Value): Int
+
+    companion object {
+        fun get(type: R_Type): R_CmpType? {
+            return when (type) {
+                R_IntegerType -> R_CmpType_Integer
+                R_DecimalType -> R_CmpType_Decimal
+                R_TextType -> R_CmpType_Text
+                R_ByteArrayType -> R_CmpType_ByteArray
+                R_RowidType -> R_CmpType_Rowid
+                is R_EntityType -> R_CmpType_Entity
+                is R_EnumType -> R_CmpType_Enum
+                else -> null
+            }
+        }
+    }
 }
 
 object R_CmpType_Integer: R_CmpType() {

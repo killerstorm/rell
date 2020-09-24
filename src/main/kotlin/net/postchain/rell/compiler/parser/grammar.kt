@@ -78,6 +78,7 @@ object S_Grammar : Grammar<S_RellFile>() {
     private val FALSE by relltok("false")
     private val FOR by relltok("for")
     private val FUNCTION by relltok("function")
+    private val GUARD by relltok("guard")
     private val IF by relltok("if")
     private val IMPORT by relltok("import")
     private val IN by relltok("in")
@@ -127,7 +128,10 @@ object S_Grammar : Grammar<S_RellFile>() {
     private val nameType by qualifiedName map { S_NameType(it) }
 
     private val tupleField by ( optional(name * -COLON) * typeRef) map { (name, type) -> Pair(name, type) }
-    private val tupleType by ( -LPAR * separatedTerms(tupleField, COMMA, false) * -RPAR) map { S_TupleType(it) }
+
+    private val tupleType by ( LPAR * separatedTerms(tupleField, COMMA, false) * -RPAR) map { (pos, fields) ->
+        S_TupleType(pos.pos, fields)
+    }
 
     private val listType by ( LIST * -LT * typeRef * -GT) map { (kw, type) -> S_ListType(kw.pos, type) }
     private val setType by ( SET * -LT * typeRef * -GT) map { (kw, type) -> S_SetType(kw.pos, type) }
@@ -137,6 +141,7 @@ object S_Grammar : Grammar<S_RellFile>() {
     }
 
     private val virtualType by ( VIRTUAL * -LT * typeRef * -GT) map { (kw, type) -> S_VirtualType(kw.pos, type) }
+    private val operationType by ( OPERATION ) map { S_OperationType(it.pos) }
 
     private val baseType by (
             nameType
@@ -145,6 +150,7 @@ object S_Grammar : Grammar<S_RellFile>() {
             or setType
             or mapType
             or virtualType
+            or operationType
     )
 
     private val type: Parser<S_Type> by ( baseType * zeroOrMore(QUESTION) ) map { (base, nulls) ->
@@ -404,7 +410,8 @@ object S_Grammar : Grammar<S_RellFile>() {
         S_CreateExpr(kw.pos, entityName, exprs)
     }
 
-    private val virtualExpr by virtualType map { type -> S_VirtualExpr(type) }
+    private val virtualTypeExpr by virtualType map { S_TypeExpr(it) }
+    private val operationTypeExpr by operationType map { S_TypeExpr(it) }
 
     private val baseExprHeadNoAt by (
             nameExpr
@@ -417,7 +424,8 @@ object S_Grammar : Grammar<S_RellFile>() {
             or listExpr
             or setExpr
             or mapExpr
-            or virtualExpr
+            or virtualTypeExpr
+            or operationTypeExpr
     )
 
     private val baseExprHead by ( atExpr or baseExprHeadNoAt)
@@ -601,16 +609,20 @@ object S_Grammar : Grammar<S_RellFile>() {
         }
     }
 
-    private val updateWhat by ( -LPAR * separatedTerms(updateWhatExpr, COMMA, true) * -RPAR)
+    private val updateWhat by ( -LPAR * separatedTerms(updateWhatExpr, COMMA, true) * -RPAR )
 
-    private val updateStmt by (UPDATE * updateTarget * updateWhat * -SEMI) map {
+    private val updateStmt by ( UPDATE * updateTarget * updateWhat * -SEMI ) map {
         (kw, target, what) ->
         S_UpdateStatement(kw.pos, target, what)
     }
 
-    private val deleteStmt by (DELETE * updateTarget * -SEMI) map {
+    private val deleteStmt by ( DELETE * updateTarget * -SEMI ) map {
         (kw, target) ->
         S_DeleteStatement(kw.pos, target)
+    }
+
+    private val guardStmt by ( GUARD * blockStmt ) map {
+        (kw, stmt) -> S_GuardStatement(kw.pos, stmt)
     }
 
     private val statementNoExpr by (
@@ -633,13 +645,17 @@ object S_Grammar : Grammar<S_RellFile>() {
             or incrementStmt
             or callStmt
             or createStmt
+            or guardStmt
     )
 
-    private val formalParameters by ( -LPAR * separatedTerms(attrHeader, COMMA, true) * -RPAR)
+    private val formalParameter by ( attrHeader * optional(-ASSIGN * expression) ) map {
+        (attr, expr) -> S_FormalParameter(attr, expr)
+    }
+
+    private val formalParameters by ( -LPAR * separatedTerms(formalParameter, COMMA, true) * -RPAR)
 
     private val opDef by ( -OPERATION * name * formalParameters * blockStmt) map {
-        (name, params, body) ->
-        annotatedDef { S_OperationDefinition(it, name, params, body) }
+        (name, params, body) -> annotatedDef { S_OperationDefinition(it, name, params, body) }
     }
 
     private val functionBodyShort by (-ASSIGN * expression * -SEMI) map { S_FunctionBodyShort(it) }
@@ -659,7 +675,7 @@ object S_Grammar : Grammar<S_RellFile>() {
         annotatedDef { S_FunctionDefinition(it, name, params, type, body) }
     }
 
-    private val namespaceDef by ( -NAMESPACE * optional(name) * -LCURL * zeroOrMore(parser(this::annotatedDef)) * -RCURL) map {
+    private val namespaceDef by ( -NAMESPACE * separatedTerms(name, DOT, true) * -LCURL * zeroOrMore(parser(this::annotatedDef)) * -RCURL) map {
         (name, defs) ->
         annotatedDef { S_NamespaceDefinition(it, name, defs) }
     }

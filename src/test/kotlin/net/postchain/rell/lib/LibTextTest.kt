@@ -30,7 +30,7 @@ class LibTextTest: BaseRellTest(false) {
         chk("'Hello'[5]", "rt_err:expr_text_subscript_index:5:5")
         chk("'Hello'['World']", "ct_err:expr_lookup_keytype:[integer]:[text]")
 
-        chkEx("{ val x = 'Hello'; x[2] = 'X'; return x; }", "ct_err:expr_unmodifiable:text")
+        chkEx("{ val x = 'Hello'; x[2] = 'X'; return x; }", "ct_err:expr_immutable:text")
     }
 
     @Test fun testCompareTo() {
@@ -174,6 +174,7 @@ class LibTextTest: BaseRellTest(false) {
         chk("'Hello'.matches('Bye')", "boolean[false]")
         chk("'Hello'.matches('[A-Za-z]+')", "boolean[true]")
         chk("'Hello'.matches('[0-9]+')", "boolean[false]")
+        chk("'Hello'.matches(')')", "rt_err:fn:text.matches:bad_regex")
     }
 
     @Test fun testCharAt() {

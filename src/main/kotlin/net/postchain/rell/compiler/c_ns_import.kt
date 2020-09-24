@@ -7,6 +7,7 @@ package net.postchain.rell.compiler
 import com.google.common.collect.Multimap
 import net.postchain.rell.*
 import net.postchain.rell.compiler.ast.S_Name
+import net.postchain.rell.utils.*
 import java.util.*
 
 class C_NsImp_Namespace(directDefs: Map<String, C_NsImp_Def>, importDefs: Multimap<String, C_NsImp_Def>) {

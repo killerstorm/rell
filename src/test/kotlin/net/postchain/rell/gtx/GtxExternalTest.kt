@@ -19,57 +19,57 @@ class GtxExternalTest: BaseGtxTest() {
     @Test fun testUnknownChain2() {
         def("@external('foo') namespace {}")
         tst.wrapRtErrors = false
-        tst.extraModuleConfig["dependencies"] = "[['foo','deadbeef']]"
-        chk("123", "rt_err:external_chain_no_rid:foo:deadbeef")
+        tst.extraModuleConfig["dependencies"] = "[['foo','beefdead']]"
+        chk("123", "rt_err:external_chain_no_rid:foo:beefdead")
     }
 
     @Test fun testUnknownChain3() {
-        tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
+        tstCtx.blockchain(333, "beefdead")
 
         run {
             val t = RellCodeTester(tstCtx)
             t.chainId = 333
+            t.insert(LibBlockTransactionTest.BLOCK_INSERTS_333)
             t.init()
         }
 
         def("@external('foo') namespace {}")
         tst.wrapRtErrors = false
-        tst.extraModuleConfig["dependencies"] = "[['foo','deadbeef']]"
+        tst.extraModuleConfig["dependencies"] = "[['foo','beefdead']]"
         chk("123", "123")
     }
 
     @Test fun testUnknownExternalEntity() {
-        tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
+        tstCtx.blockchain(333, "beefdead")
 
         run {
             val t = RellCodeTester(tstCtx)
             t.chainId = 333
+            t.insert(LibBlockTransactionTest.BLOCK_INSERTS_333)
             t.init()
         }
 
         def("@external('foo') namespace { @log entity user {} }")
         tst.wrapRtErrors = false
-        tst.extraModuleConfig["dependencies"] = "[['foo','deadbeef']]"
+        tst.extraModuleConfig["dependencies"] = "[['foo','beefdead']]"
         chk("123", "rt_err:external_meta_no_entity:foo:user")
     }
 
     @Test fun testExternalEntityOK() {
-        tstCtx.blockchain(333, "deadbeef")
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
+        tstCtx.blockchain(333, "beefdead")
 
         run {
             val t = RellCodeTester(tstCtx)
             t.def("@log entity user { name; }")
             t.chainId = 333
+            t.insert(LibBlockTransactionTest.BLOCK_INSERTS_333)
             t.insert("c333.user", "name,transaction", "15,'Bob',444")
             t.init()
         }
 
         def("@external('foo') namespace { @log entity user { name; } }")
         tst.wrapRtErrors = false
-        tst.extraModuleConfig["dependencies"] = "[['foo','deadbeef']]"
-        chk("_strict_str(user @{} ( _=user, _=.name ))", "'([foo]!user[15],text[Bob])'")
+        tst.extraModuleConfig["dependencies"] = "[['foo','beefdead']]"
+        chk("_strict_str(user @{} ( _=user, _=.name ))", "'([foo]:user[15],text[Bob])'")
     }
 }

@@ -7,7 +7,7 @@ package net.postchain.rell.gtx
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvByteArray
 import net.postchain.gtv.GtvString
-import net.postchain.rell.CommonUtils
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 import kotlin.test.assertEquals

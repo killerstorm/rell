@@ -11,6 +11,10 @@ import net.postchain.core.UserMistake
 import net.postchain.devtools.TestLauncher
 import net.postchain.gtv.gtvml.GtvMLEncoder
 import net.postchain.rell.*
+import net.postchain.rell.utils.PostchainUtils
+import net.postchain.rell.utils.RellBaseCliArgs
+import net.postchain.rell.utils.RellCliLogUtils
+import net.postchain.rell.utils.RellCliUtils
 import picocli.CommandLine
 import java.io.File
 

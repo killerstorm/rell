@@ -6,78 +6,63 @@ package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.R_Function
-import net.postchain.rell.model.R_FunctionBody
 import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.toImmList
-import net.postchain.rell.toImmSet
+import net.postchain.rell.utils.Nullable
+import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmSet
 
 class C_AbstractDescriptor(private val fnPos: S_Pos, private val rFunction: R_Function, val hasDefaultBody: Boolean) {
-    private val headerLate = C_LateInit(C_CompilerPass.MEMBERS, C_UserFunctionHeader.EMPTY)
-
-    private var override = false
-    private var usingDefaultBody = false
-
-    fun header() = headerLate.get()
+    private val headerLate = C_LateInit(C_CompilerPass.MEMBERS, Nullable<C_UserFunctionHeader>(null))
+    private val overrideBodyLate = C_LateInit(C_CompilerPass.ABSTRACT, Nullable<C_UserFunctionBody>(null))
 
     fun functionPos() = fnPos
     fun functionName() = rFunction.appLevelName
 
-    fun isUsingDefaultBody(): Boolean {
-        check(!usingDefaultBody)
-        if (!hasDefaultBody || override) return false
-        usingDefaultBody = true
-        return true
-    }
+    fun header(): C_UserFunctionHeader = headerLate.get().value ?: C_UserFunctionHeader.ERROR
 
     fun setHeader(header: C_UserFunctionHeader) {
-        headerLate.set(header)
+        headerLate.set(Nullable(header))
     }
 
-    fun setOverride() {
-        check(!override)
-        check(!usingDefaultBody)
-        override = true
+    fun setOverride(overrideBody: C_UserFunctionBody) {
+        overrideBodyLate.set(Nullable(overrideBody))
     }
 
-    fun setBody(body: R_FunctionBody) {
-        rFunction.setBody(body)
+    fun bind() {
+        val overrideBody = overrideBodyLate.get().value
+        val header = headerLate.get().value
+        val actualBody = overrideBody ?: header?.fnBody
+        if (actualBody != null) {
+            val rBody = actualBody.compile()
+            rFunction.setBody(rBody)
+        }
     }
 }
 
 class C_OverrideDescriptor(val fnPos: S_Pos) {
-    private val headerLate = C_LateInit(C_CompilerPass.MEMBERS, EMPTY_HEADER)
-    private var bodySet = false
+    private val abstractLate = C_LateInit(C_CompilerPass.MEMBERS, Nullable<C_AbstractDescriptor>(null))
+    private val bodyLate = C_LateInit(C_CompilerPass.MEMBERS, Nullable<C_UserFunctionBody>(null))
     private var bind = false
 
-    fun abstract() = headerLate.get().abstract
+    fun abstract() = abstractLate.get().value
 
     fun setAbstract(abstract: C_AbstractDescriptor?) {
-        headerLate.set(C_OverrideHeader(abstract))
+        abstractLate.set(Nullable(abstract))
     }
 
-    fun setBody(body: R_FunctionBody) {
-        check(!bodySet)
-        bodySet = true
-        val abstract = abstract() // Does state check
-        if (bind) {
-            abstract?.setBody(body)
-        }
+    fun setBody(body: C_UserFunctionBody) {
+        bodyLate.set(Nullable(body))
     }
 
     fun bind(): C_AbstractDescriptor? {
         check(!bind)
-        check(!bodySet)
-        val abstract = abstract() // Does state check
         bind = true
-
-        abstract?.setOverride()
+        val abstract = abstractLate.get().value
+        val body = bodyLate.get().value
+        if (abstract != null && body != null) {
+            abstract.setOverride(body)
+        }
         return abstract
-    }
-
-    private class C_OverrideHeader(val abstract: C_AbstractDescriptor?)
-
-    companion object {
-        private val EMPTY_HEADER = C_OverrideHeader(null)
     }
 }
 

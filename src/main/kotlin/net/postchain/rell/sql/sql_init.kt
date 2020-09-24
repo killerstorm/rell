@@ -7,11 +7,17 @@ package net.postchain.rell.sql
 import com.google.common.collect.Sets
 import mu.KLogger
 import mu.KLogging
+import net.postchain.base.BaseEContext
+import net.postchain.base.BlockchainRid
+import net.postchain.base.data.PostgreSQLDatabaseAccess
+import net.postchain.base.data.SQLDatabaseAccess
+import net.postchain.core.EContext
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_ExecutionContext
 import net.postchain.rell.runtime.Rt_Messages
 import net.postchain.rell.runtime.Rt_StackTraceError
 import net.postchain.rell.runtime.Rt_Utils
+import net.postchain.rell.utils.PostchainUtils
 
 private val ORD_TABLES = 0
 private val ORD_RECORDS = 1
@@ -48,6 +54,7 @@ class SqlInitLogging(
 
 class SqlInit private constructor(
         private val exeCtx: Rt_ExecutionContext,
+        private val initPostchain: Boolean,
         private val logging: SqlInitLogging
 ) {
     private val sqlCtx = exeCtx.appCtx.sqlCtx
@@ -55,8 +62,8 @@ class SqlInit private constructor(
     private val initCtx = SqlInitCtx(logger, logging, SqlObjectsInit(exeCtx))
 
     companion object : KLogging() {
-        fun init(exeCtx: Rt_ExecutionContext, logging: SqlInitLogging): List<String> {
-            val obj = SqlInit(exeCtx, logging)
+        fun init(exeCtx: Rt_ExecutionContext, initPostchain: Boolean, logging: SqlInitLogging): List<String> {
+            val obj = SqlInit(exeCtx, initPostchain, logging)
             return obj.init()
         }
     }
@@ -66,6 +73,10 @@ class SqlInit private constructor(
 
         val dbEmpty = SqlInitPlanner.plan(exeCtx, initCtx)
         initCtx.checkErrors()
+
+        if (initPostchain) {
+            initPostchain()
+        }
 
         exeCtx.appCtx.objectsInitialization(initCtx.objsInit) {
             executePlan(dbEmpty)
@@ -96,6 +107,18 @@ class SqlInit private constructor(
         }
 
         log(logging.allOther, "Database initialization done")
+    }
+
+    private fun initPostchain() {
+        val chainId = exeCtx.appCtx.sqlCtx.mainChainMapping.chainId
+        val bcRid: BlockchainRid = BlockchainRid.EMPTY_RID
+
+        val sqlAccess: SQLDatabaseAccess = PostgreSQLDatabaseAccess()
+        exeCtx.sqlExec.connection { con ->
+            sqlAccess.initializeApp(con, PostchainUtils.DATABASE_VERSION)
+            val eCtx: EContext = BaseEContext(con, chainId, 0, sqlAccess)
+            sqlAccess.initializeBlockchain(eCtx, bcRid)
+        }
     }
 
     private fun log(allowed: Boolean, s: String) {

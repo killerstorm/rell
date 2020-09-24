@@ -10,7 +10,7 @@ abstract class BaseTesterTest(useSql: Boolean): BaseContextTest(useSql) {
     fun file(path: String, text: String) = tst.file(path, text)
     fun mainModule(vararg modules: String) = tst.mainModule(*modules)
     fun def(def: String) = tst.def(def)
-    fun insert(table: String, columns: String, values: String) = tst.insert(table, columns, values)
+    fun insert(table: String, columns: String, vararg rows: String) = tst.insert(table, columns, *rows)
     fun insert(insert: String) = tst.insert(listOf(insert))
     fun insert(inserts: List<String>) = tst.insert(inserts)
 

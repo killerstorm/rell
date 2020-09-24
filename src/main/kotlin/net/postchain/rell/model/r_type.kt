@@ -6,10 +6,10 @@ package net.postchain.rell.model
 
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
-import net.postchain.rell.CommonUtils
 import net.postchain.rell.compiler.C_Constants
 import net.postchain.rell.module.*
 import net.postchain.rell.runtime.*
+import net.postchain.rell.utils.CommonUtils
 import org.jooq.DataType
 import org.jooq.SQLDialect
 import org.jooq.impl.DefaultDataType
@@ -146,6 +146,12 @@ sealed class R_Type(val name: String) {
 
     companion object {
         fun commonTypeOpt(a: R_Type, b: R_Type): R_Type? {
+            if (a == R_CtErrorType) {
+                return b
+            } else if (b == R_CtErrorType) {
+                return a
+            }
+
             if (a.isAssignableFrom(b)) {
                 return a
             } else if (b.isAssignableFrom(a)) {
@@ -156,6 +162,14 @@ sealed class R_Type(val name: String) {
             return res
         }
     }
+}
+
+object R_CtErrorType: R_Type("<error>") {
+    override fun createGtvConversion() = GtvRtConversion_None
+    override fun toStrictString() = "<error>"
+    override fun isAssignableFrom(type: R_Type): Boolean = true
+    override open fun calcCommonType(other: R_Type): R_Type? = other
+    override fun toMetaGtv(): Gtv = throw UnsupportedOperationException()
 }
 
 sealed class R_PrimitiveType(name: String, val sqlType: DataType<*>): R_Type(name) {
@@ -701,4 +715,25 @@ class R_VirtualTupleType(val innerType: R_TupleType): R_VirtualType(innerType) {
 class R_VirtualStructType(val innerType: R_StructType): R_VirtualType(innerType) {
     override fun createGtvConversion() = GtvRtConversion_VirtualStruct(this)
     override fun equals(other: Any?): Boolean = other is R_VirtualStructType && innerType == other.innerType
+}
+
+object R_OperationType: R_Type("operation") {
+    override fun isReference() = true
+    override fun createGtvConversion() = GtvRtConversion_Operation
+    override fun toStrictString(): String = name
+    override fun toMetaGtv() = name.toGtv()
+}
+
+object R_GtxBlockType: R_Type("rell.gtx.block") {
+    override fun isReference() = true
+    override fun createGtvConversion() = GtvRtConversion_GtxBlock
+    override fun toStrictString(): String = name
+    override fun toMetaGtv() = name.toGtv()
+}
+
+object R_GtxTxType: R_Type("rell.gtx.tx") {
+    override fun isReference() = true
+    override fun createGtvConversion() = GtvRtConversion_GtxTx
+    override fun toStrictString(): String = name
+    override fun toMetaGtv() = name.toGtv()
 }

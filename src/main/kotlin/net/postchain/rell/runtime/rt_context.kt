@@ -9,21 +9,24 @@ import mu.KLogging
 import net.postchain.base.BlockchainRid
 import net.postchain.core.ByteArrayKey
 import net.postchain.gtv.Gtv
-import net.postchain.rell.CommonUtils
+import net.postchain.rell.compiler.C_SourceDir
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.model.*
+import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.repl.ReplOutputChannel
 import net.postchain.rell.sql.*
-import net.postchain.rell.toImmMap
+import net.postchain.rell.utils.toImmMap
 
 class Rt_GlobalContext(
         val outPrinter: Rt_Printer,
         val logPrinter: Rt_Printer,
         val opCtx: Rt_OpContext?,
         val chainCtx: Rt_ChainContext,
+        val pcModuleEnv: RellPostchainModuleEnvironment,
         val logSqlErrors: Boolean = false,
         val sqlUpdatePortionSize: Int = 1000, // Experimental maximum is 2^15
         val typeCheck: Boolean = false
-){
+) {
     private val rellVersion = Rt_RellVersion.getInstance()
 
     fun rellVersion(): Rt_RellVersion {
@@ -244,7 +247,10 @@ class Rt_AppContext(
         val globalCtx: Rt_GlobalContext,
         val sqlCtx: Rt_SqlContext,
         val app: R_App,
-        val replOut: ReplOutputChannel?
+        val repl: Boolean,
+        val replOut: ReplOutputChannel?,
+        val sourceDir: C_SourceDir,
+        val modules: Set<R_ModuleName>
 ) {
     private var objsInit: SqlObjectsInit? = null
     private var objsInited = false
@@ -257,7 +263,7 @@ class Rt_AppContext(
         val fnUid = R_FnUid(0, "<init>", containerUid)
         val blockUid = R_FrameBlockUid(0, "<init>", fnUid)
         val rFrameBlock = R_FrameBlock(null, blockUid, 0, 0)
-        val rFrame = R_CallFrame(0, rFrameBlock)
+        val rFrame = R_CallFrame(0, rFrameBlock, false)
 
         return rFrame.createRtFrame(defCtx, null, null)
     }
@@ -299,12 +305,6 @@ class Rt_DefinitionContext(val exeCtx: Rt_ExecutionContext, val dbUpdateAllowed:
     val globalCtx = appCtx.globalCtx
     val sqlCtx = appCtx.sqlCtx
     val callCtx = Rt_CallContext(this)
-
-    fun checkDbUpdateAllowed() {
-        if (!dbUpdateAllowed) {
-            throw Rt_Error("no_db_update", "Database modifications are not allowed in this context")
-        }
-    }
 }
 
 class Rt_OpContext(val lastBlockTime: Long, val transactionIid: Long, val blockHeight: Long, val signers: List<ByteArray>)

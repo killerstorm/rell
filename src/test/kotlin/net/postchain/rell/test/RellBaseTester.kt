@@ -10,8 +10,8 @@ import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_Printer
 import net.postchain.rell.sql.SqlExecutor
-import net.postchain.rell.toImmList
-import net.postchain.rell.toImmMap
+import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmMap
 import java.util.*
 import kotlin.test.assertEquals
 
@@ -30,6 +30,7 @@ abstract class RellBaseTester(
     var errMsgPos = false
     var gtv = gtv
     var deprecatedError = false
+    var blockchainRid = "DEADBEEF"
 
     var defs: List<String> = entityDefs
         set(value) {
@@ -106,9 +107,8 @@ abstract class RellBaseTester(
         defs = defs0
     }
 
-    fun insert(table: String, columns: String, values: String) {
-        val ins = SqlTestUtils.mkins(table, columns, values)
-        inserts = inserts + listOf(ins)
+    fun insert(table: String, columns: String, vararg rows: String) {
+        inserts = inserts + rows.map { SqlTestUtils.mkins(table, columns, it) }
     }
 
     fun insert(inserts: List<String>) {
@@ -210,7 +210,7 @@ abstract class RellBaseTester(
         init()
         val map = SqlTestUtils.dumpDatabaseTables(tstCtx.sqlMgr())
         return map.keys.sorted()
-                .filter { !it.matches(Regex("c\\d+\\.(rowid_gen|sys\\.attributes|sys\\.classes)")) }
+                .filter { !it.matches(Regex("c\\d+\\.(rowid_gen|sys\\.attributes|sys\\.classes|blocks|transactions)")) }
                 .flatMap {
                     map.getValue(it).map { row -> "$it($row)" }
                 }

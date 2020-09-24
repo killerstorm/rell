@@ -4,10 +4,10 @@
 
 package net.postchain.rell.tools.runcfg
 
-import net.postchain.rell.DirFile
-import net.postchain.rell.RellBaseCliArgs
-import net.postchain.rell.RellCliLogUtils
-import net.postchain.rell.RellCliUtils
+import net.postchain.rell.utils.DirFile
+import net.postchain.rell.utils.RellBaseCliArgs
+import net.postchain.rell.utils.RellCliLogUtils
+import net.postchain.rell.utils.RellCliUtils
 import picocli.CommandLine
 import java.io.File
 

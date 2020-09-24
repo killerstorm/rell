@@ -4,13 +4,14 @@
 
 package net.postchain.rell.model
 
-import net.postchain.core.Signature
-import net.postchain.rell.CommonUtils
-import net.postchain.rell.PostchainUtils
+import net.postchain.core.*
+import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.PostchainUtils
 import net.postchain.rell.compiler.C_Constants
 import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.module.RELL_VERSION
 import net.postchain.rell.runtime.*
+import org.spongycastle.jcajce.provider.digest.Keccak
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.math.MathContext
@@ -699,6 +700,17 @@ object R_SysFn_Math {
 }
 
 object R_SysFn_Crypto {
+    object EthEcRecover: R_SysFunction_4() {
+        override fun call(arg1: Rt_Value, arg2: Rt_Value, arg3: Rt_Value, arg4: Rt_Value): Rt_Value {
+            val r = arg1.asByteArray()
+            val s = arg2.asByteArray()
+            val recId = arg3.asInteger()
+            val hash = arg4.asByteArray()
+            val res = Rt_CryptoUtils.ethereumPubkeyFromSignature(r, s, recId, hash)
+            return Rt_ByteArrayValue(res)
+        }
+    }
+
     object IsSigner: R_SysFunction() {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             check(args.size == 1)
@@ -706,6 +718,14 @@ object R_SysFn_Crypto {
             val opCtx = ctx.globalCtx.opCtx
             val r = if (opCtx == null) false else opCtx.signers.any { Arrays.equals(it, a) }
             return Rt_BooleanValue(r)
+        }
+    }
+
+    object Keccak256: R_SysFunction_1() {
+        override fun call(arg: Rt_Value): Rt_Value {
+            val ba = arg.asByteArray()
+            val res = Rt_CryptoUtils.keccak256(ba)
+            return Rt_ByteArrayValue(res)
         }
     }
 
@@ -763,6 +783,66 @@ object R_SysFn_Rell {
             check(args.size == 0)
             val v = ctx.appCtx.app.toMetaGtv()
             return Rt_GtvValue(v)
+        }
+    }
+}
+
+object R_SysFn_Gtx {
+    object Tx {
+        object NewEmpty: R_SysFunctionEx_0() {
+            override fun call(ctx: Rt_CallContext): Rt_Value {
+                val blockchainRid = ctx.globalCtx.chainCtx.blockchainRid
+                return Rt_GtxTxValue(blockchainRid, listOf(), listOf(), listOf())
+            }
+        }
+
+        object NewOneOp: R_SysFunctionEx_1() {
+            override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
+                val blockchainRid = ctx.globalCtx.chainCtx.blockchainRid
+                val ops = listOf(arg.asOperation())
+                return Rt_GtxTxValue(blockchainRid, ops, listOf(), listOf())
+            }
+        }
+
+        object NewListOfOps: R_SysFunctionEx_1() {
+            override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
+                val blockchainRid = ctx.globalCtx.chainCtx.blockchainRid
+                val ops = arg.asList().map { it.asOperation() }
+                return Rt_GtxTxValue(blockchainRid, ops, listOf(), listOf())
+            }
+        }
+
+        object Run: R_SysFunctionEx_1() {
+            override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
+                val tx = arg.asGtxTx()
+                val block = Rt_GtxBlockValue(listOf(tx))
+                return Block.Run.call(ctx, block)
+            }
+        }
+    }
+
+    object Block {
+        object NewEmpty: R_SysFunction_0() {
+            override fun call() = Rt_GtxBlockValue(listOf())
+        }
+
+        object NewOneTx: R_SysFunction_1() {
+            override fun call(arg: Rt_Value) = Rt_GtxBlockValue(listOf(arg.asGtxTx()))
+        }
+
+        object NewListOfTxs: R_SysFunction_1() {
+            override fun call(arg: Rt_Value) = Rt_GtxBlockValue(arg.asList().map { it.asGtxTx() })
+        }
+
+        object Run: R_SysFunctionEx_1() {
+            override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
+                if (!ctx.appCtx.repl) {
+                    throw Rt_Error("fn:block.run:no_repl", "Block can be executed only in REPL")
+                }
+                val block = arg.asGtxBlock()
+                PostchainBlockRunner.runBlock(ctx, block)
+                return Rt_UnitValue
+            }
         }
     }
 }

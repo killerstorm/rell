@@ -8,7 +8,6 @@ import mu.KLogging
 import net.postchain.core.ByteArrayKey
 import net.postchain.rell.model.*
 import net.postchain.rell.sql.SqlConstants
-import net.postchain.rell.toImmList
 
 class Rt_ChainDependency(val rid: ByteArray)
 
@@ -55,6 +54,8 @@ class Rt_ChainSqlMapping(val chainId: Long) {
 
     val rowidTable = fullName(SqlConstants.ROWID_GEN)
     val rowidFunction = fullName(SqlConstants.MAKE_ROWID)
+    val blocksTable = fullName(SqlConstants.BLOCKS_TABLE)
+    val transactionsTable = fullName(SqlConstants.TRANSACTIONS_TABLE)
     val metaEntitiesTable = fullName("sys.classes")
     val metaAttributesTable = fullName("sys.attributes")
 
@@ -71,6 +72,13 @@ class Rt_ChainSqlMapping(val chainId: Long) {
     fun isChainTable(table: String): Boolean {
         return table.startsWith(prefix) && table != rowidTable && table != rowidFunction
     }
+
+    fun systemTables() = listOf(
+            blocksTable,
+            transactionsTable,
+            fullName(SqlConstants.CONFIGURATIONS_TABLE),
+            fullName("gtx_module_version")
+    )
 }
 
 interface Rt_ChainHeightProvider {

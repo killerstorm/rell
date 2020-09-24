@@ -6,12 +6,15 @@ package net.postchain.rell
 
 import net.postchain.base.BlockchainRid
 import net.postchain.gtv.GtvNull
+import net.postchain.rell.compiler.C_MapSourceDir
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_Entity
 import net.postchain.rell.model.R_EntityType
+import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.NoConnSqlExecutor
 import net.postchain.rell.test.RellTestUtils
+import net.postchain.rell.utils.CommonUtils
 import org.junit.Test
 import java.math.BigDecimal
 import kotlin.test.assertEquals
@@ -41,14 +44,15 @@ class OperatorsInterpretedTest: OperatorsBaseTest() {
                 Rt_FailingPrinter,
                 null,
                 chainCtx,
-                typeCheck = true
+                typeCheck = true,
+                pcModuleEnv = RellPostchainModuleEnvironment.DEFAULT
         )
 
         val res = processExpr0(expr2, types) { app ->
             val ctx = ValCtx(app)
             val rtArgs = args2.map { it.rt(ctx) }
             val sqlCtx = Rt_SqlContext.createNoExternalChains(app, Rt_ChainSqlMapping(0))
-            val appCtx = Rt_AppContext(globalCtx, sqlCtx, app, null)
+            val appCtx = Rt_AppContext(globalCtx, sqlCtx, app, false, null, C_MapSourceDir.EMPTY, setOf())
             val exeCtx = Rt_ExecutionContext(appCtx, NoConnSqlExecutor)
             RellTestUtils.callQuery(exeCtx, "q", rtArgs, RellTestUtils.ENCODER_STRICT)
         }

@@ -1,0 +1,180 @@
+RELEASE NOTES 0.10.3 (2020-09-24)
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+1. Language: Function return type inference
+
+Not necessary to explicitly specify function return type. If not specified, the compiler infers it:
+
+function f(x: integer) = x * x; // returns "integer"
+
+function g(x: integer) {
+    return x * x;  // same as above
+}
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+2. Language: Guard block
+
+Used in operations to specify a read-only arguments verification code:
+
+operation foo (name) {
+    val u = user @ { name };
+    guard {
+        require(is_admin(user));
+    }
+    ...
+}
+
+Guard block allows to separate parameters verification from the rest of the operation's code, thus it can be executed
+independently to verify arguments (not supported yet).
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+3. Language: Calling queries
+
+Now it is allowed to invoke queries from code and REPL. Queries are equivalent to functions in this respect.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+4. Language: Short nested namespace notation
+
+Short notation for a nested namespace:
+
+namespace x.y.z {
+    function f() = 123;
+}
+
+This is equivalent to:
+
+namespace x {
+    namespace y {
+        namespace z {
+            function f() = 123;
+        }
+    }
+}
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+5. Language: Calling operations
+
+Operation call uses the same syntax as function or query call, but has a completely different meaning. The call does not
+execute operation's body, but returns an operation call object instead (of type "operation"):
+
+operation foo(x: integer) {}
+...
+val o: operation = foo(123);
+
+Returned value can be used to construct transactions and blocks:
+
+val tx = rell.gtx.tx(foo(123));
+val blk = rell.gtx.block(tx);
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+6. Library: types and functions rell.gtx.block, rell.gtx.tx
+
+function rell.gtx.block(): rell.test.block;
+function rell.gtx.block(tx: rell.test.tx): rell.test.block;
+function rell.gtx.block(txs: list<rell.test.tx>): rell.test.block;
+
+function rell.gtx.tx(): rell.test.tx;
+function rell.gtx.tx(op: operation): rell.test.tx;
+function rell.gtx.tx(ops: list<operation>): rell.test.tx;
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+7. REPL: Executing transactions and blocks
+
+Blocks and transactions created via rell.gtx.block() and rell.gtx.tx() functions can be executed in REPL:
+
+operation foo(x: integer) {}
+...
+val o: operation = foo(123);
+val tx = rell.gtx.tx(o);
+tx.run();
+
+Method run() is defined for types rell.gtx.tx and rell.gtx.block: it executes all operations in all transactions of
+a block, and adds the transactions and the block to the blockchain.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+8. Language: Named function arguments
+
+When calling a function, arguments can be specified by names, in arbitrary order:
+
+function f(x: integer, y: text) {}
+...
+f(x = 123, y = 'Hello');
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+9. Language: Default parameter values
+
+Parameters of functions, queries and operations can have default values:
+
+function f(user: text = 'Bob', score: integer = 123) {...}
+...
+f();           // means f('Bob', 123)
+f('Alice');    // means f('Alice', 123)
+f(score=456);  // means f('Bob', 456)
+
+For operations and queries, default values are used only when calling from Rell code (including REPL), but not from
+the outside (e.g. for operations in transactions all parameters must be specified).
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+10. Language: Group By
+
+Rell equivalent of SQL GROUP BY clause can be written using annotations: @group, @min, @max, @sum.
+
+entity city {
+    name;
+    country: text;
+    population: integer;
+}
+
+To calculate the number of cities in every country, one can write:
+
+    city @*{} ( @group .country, @sum 1 )
+
+The result is a list of tuples (text, integer) - country name, number of cities.
+
+To calculate also the total population of all cities in each country:
+
+    city @*{} ( @group .country, @sum 1, @sum .population )
+
+Equivalent SQL query looks like:
+
+    SELECT city.country, COUNT(*), SUM(city.population) FROM city GROUP BY city.country;
+
+To calculate an aggregated value over all records without grouping, do not specify @group:
+
+    val (city_count, total_city_population) = city @ {} ( @sum 1, @sum .population );
+
+    val usa_city_count = city @ { .country == 'USA' } ( @sum 1 );
+
+Grouping/aggregating annotations can be combined with other expression-level annotations, like @sort and @omit:
+
+    city @*{} ( @group .country, @omit @sort_desc @sum 1 ) // List of countries sorted by the number of cities, descending.
+
+Tuple field names can be specified after annotations:
+
+    city @*{} ( @group .country, @sum city_count = 1, @sum total_population = .population )
+
+General rules:
+- To group by an attribute (or an expression): annotate it with @group.
+- To calculate an aggregated value (min/max/sum): annotate an expression with @min, @max or @sum.
+- To calculate count, use @sum 1 (there is no @count annotation).
+
+Additional info:
+- More than one expression can be annotated with @group in order to group by multiple values.
+- If no sorting specified (with @sort), the results are implicitly sorted by grouping values (to make them deterministic).
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+11. Library: New cryptographic functions: sha256, keccak256, eth_ecrecover
+
+Cryptographic hash functions:
+
+    keccak256(x: byte_array): byte_array
+    sha256(x: byte_array): byte_array
+
+* Note: there was a function byte_array.sha256(), but not a global function sha256().
+
+A function to calculate Ethererum public key from a signature and a hash:
+
+    eth_ecrecover(r: byte_array, s: byte_array, rec_id: integer, hash: byte_array): byte_array
+
+Does almost the same as the ecrecover() function from Solidity, but returns a 64-byte public key, not a 20-byte address
+(which is last 20 bytes of keccak256() of the public key). Also, parameters are in a different order.

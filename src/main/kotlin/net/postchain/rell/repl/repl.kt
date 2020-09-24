@@ -4,15 +4,15 @@
 
 package net.postchain.rell.repl
 
-import net.postchain.rell.CommonUtils
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.compiler.*
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlInit
 import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.sql.SqlManager
-import net.postchain.rell.toImmList
-import net.postchain.rell.toImmMap
+import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmMap
 
 class C_ReplCodeState(val frameProto: C_CallFrameProto, val blockCodeProto: C_BlockCodeProto) {
     companion object { val EMPTY = C_ReplCodeState(C_CallFrameProto.EMPTY, C_BlockCodeProto.EMPTY) }
@@ -81,11 +81,11 @@ class ReplInterpreter private constructor(
         private val useSql: Boolean
 ) {
     private val commands = ControlCommands()
-    private val cGlobalCtx = C_GlobalContext(C_CompilerOptions.DEFAULT)
+    private val cGlobalCtx = C_GlobalContext(C_CompilerOptions.DEFAULT, sourceDir, if (module != null) setOf(module) else setOf())
 
     private var defsState = C_ReplDefsState.EMPTY
     private var codeState = ReplCodeState.EMPTY
-    private var lastUpdateSqlDefs = R_AppSqlDefs.EMPTY
+    private var lastUpdateSqlDefs: R_AppSqlDefs? = null
 
     private var mustQuit = false
     private var sqlUpdateAuto = false
@@ -158,7 +158,8 @@ class ReplInterpreter private constructor(
 
     private fun createRtAppContext(globalCtx: Rt_GlobalContext, app: R_App): Rt_AppContext {
         val sqlCtx = Rt_SqlContext.createNoExternalChains(app, Rt_ChainSqlMapping(0))
-        return Rt_AppContext(globalCtx, sqlCtx, app, outChannel)
+        val modules = (if (module != null) setOf(module) else setOf()) + defsState.appState.modules.keys.map { it.name }
+        return Rt_AppContext(globalCtx, sqlCtx, app, true, outChannel, sourceDir, modules)
     }
 
     private fun sqlUpdate(appCtx: Rt_AppContext, force: Boolean) {
@@ -166,11 +167,12 @@ class ReplInterpreter private constructor(
             return
         }
 
-        if (useSql && !appCtx.sqlCtx.appDefs.same(lastUpdateSqlDefs)) {
+        val lastDefs = lastUpdateSqlDefs
+        if (useSql && (lastDefs == null || !appCtx.sqlCtx.appDefs.same(lastDefs))) {
             val logging = if (force) SQL_INIT_LOGGING_FORCE else SQL_INIT_LOGGING_AUTO
             sqlMgr.transaction { sqlExec ->
                 val exeCtx = Rt_ExecutionContext(appCtx, sqlExec)
-                SqlInit.init(exeCtx, logging)
+                SqlInit.init(exeCtx, true, logging)
             }
             lastUpdateSqlDefs = appCtx.sqlCtx.appDefs
         }
@@ -266,7 +268,7 @@ class ReplInterpreter private constructor(
                 useSql: Boolean
         ): ReplInterpreter? {
             val interpreter = ReplInterpreter(sourceDir, module, rtGlobalCtx, sqlMgr, outChannel, useSql)
-            val init = interpreter.executeCode("", false) // Make sure the module can be found and has no errors.
+            val init = interpreter.executeCode("", true) // Make sure the module can be found and has no errors.
             return if (init) interpreter else null
         }
     }

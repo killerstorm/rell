@@ -4,11 +4,11 @@
 
 package net.postchain.rell.compiler.ast
 
-import net.postchain.rell.MutableTypedKeyMap
-import net.postchain.rell.TypedKeyMap
+import net.postchain.rell.utils.MutableTypedKeyMap
+import net.postchain.rell.utils.TypedKeyMap
 import net.postchain.rell.compiler.*
 import net.postchain.rell.repl.*
-import net.postchain.rell.toImmList
+import net.postchain.rell.utils.toImmList
 
 class S_ReplCommand(steps: List<S_ReplStep>, expr: S_Expr?) {
     private val defs = steps.map { it.definition() }.filterNotNull().toImmList()
@@ -42,7 +42,7 @@ class S_ReplCommand(steps: List<S_ReplStep>, expr: S_Expr?) {
         val stmtCtx = C_StmtContext.createRoot(ctx.frameCtx.rootBlkCtx)
 
         ctx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
-            val builder = C_BlockCodeBuilder(stmtCtx, true, ctx.codeState.cState.blockCodeProto)
+            val builder = C_BlockCodeBuilder(stmtCtx, true, false, ctx.codeState.cState.blockCodeProto)
             compileBlock(builder)
             val blockCode = builder.build()
             val replCode = createReplCode(ctx, blockCode)
@@ -51,7 +51,7 @@ class S_ReplCommand(steps: List<S_ReplStep>, expr: S_Expr?) {
     }
 
     private fun createReplCode(ctx: C_ReplCommandContext, blockCode: C_BlockCode): ReplCode {
-        val callFrame = ctx.frameCtx.makeCallFrame()
+        val callFrame = ctx.frameCtx.makeCallFrame(false)
         val rCommand = R_ReplCode(callFrame.rFrame, blockCode.rStmts)
         val blockCodeProto = blockCode.createProto()
         val cState = C_ReplCodeState(callFrame.proto, blockCodeProto)

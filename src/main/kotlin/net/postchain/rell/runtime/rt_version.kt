@@ -5,9 +5,9 @@
 package net.postchain.rell.runtime
 
 import com.google.common.io.Resources
-import net.postchain.rell.immMapOf
+import net.postchain.rell.utils.immMapOf
 import net.postchain.rell.module.RELL_VERSION
-import net.postchain.rell.toImmMap
+import net.postchain.rell.utils.toImmMap
 import java.io.StringReader
 import java.util.*
 

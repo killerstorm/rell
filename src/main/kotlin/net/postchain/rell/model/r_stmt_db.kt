@@ -4,7 +4,7 @@
 
 package net.postchain.rell.model
 
-import net.postchain.rell.CommonUtils
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_ListValue
 import net.postchain.rell.runtime.Rt_NullValue
@@ -134,7 +134,7 @@ sealed class R_BaseUpdateStatement(val target: R_UpdateTarget): R_Statement() {
     abstract fun buildSql(frame: Rt_CallFrame, ctx: SqlGenContext, returning: Boolean): ParameterizedSql
 
     final override fun execute(frame: Rt_CallFrame): R_StatementResult? {
-        frame.defCtx.checkDbUpdateAllowed()
+        frame.checkDbUpdateAllowed()
         target.execute(this, frame)
         return null
     }
@@ -186,8 +186,6 @@ sealed class R_BaseUpdateStatement(val target: R_UpdateTarget): R_Statement() {
             whereB.appendSep(" AND ")
             redWhere.toSql(ctx, whereB)
         }
-
-        R_AtExprBase.appendExtraWhere(whereB, ctx.sqlCtx, fromInfo)
 
         if (!whereB.isEmpty()) {
             b.append(" WHERE ")

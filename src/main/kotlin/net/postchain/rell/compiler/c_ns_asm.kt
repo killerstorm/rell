@@ -6,12 +6,12 @@ package net.postchain.rell.compiler
 
 import com.google.common.collect.Multimap
 import com.google.common.collect.Sets
-import net.postchain.rell.*
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.R_AppUid
 import net.postchain.rell.model.R_Name
 import net.postchain.rell.model.R_QualifiedName
+import net.postchain.rell.utils.*
 import java.util.*
 
 interface C_NsAsm_BasicAssembler {

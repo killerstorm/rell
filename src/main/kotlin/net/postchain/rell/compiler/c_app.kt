@@ -5,10 +5,10 @@
 package net.postchain.rell.compiler
 
 import net.postchain.rell.model.*
-import net.postchain.rell.putAllAbsent
-import net.postchain.rell.toImmList
-import net.postchain.rell.toImmMap
-import net.postchain.rell.toImmSet
+import net.postchain.rell.utils.putAllAbsent
+import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmMap
+import net.postchain.rell.utils.toImmSet
 import org.apache.commons.collections4.SetUtils
 import java.util.*
 
@@ -27,6 +27,8 @@ class C_AppContext(
     val defsAdder: C_AppDefsAdder = defsBuilder
 
     val sysDefs = oldReplState.sysDefs ?: C_SystemDefs.create(executor, appUid)
+
+    val functionReturnTypeCalculator = C_FunctionBody.createReturnTypeCalculator()
 
     private val appDefsLate = C_LateInit(C_CompilerPass.APPDEFS, C_AppDefs.EMPTY)
 

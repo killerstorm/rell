@@ -5,9 +5,11 @@
 package net.postchain.rell.model
 
 import net.postchain.rell.compiler.C_EntityAttrRef
+import net.postchain.rell.compiler.C_LateInit
 import net.postchain.rell.compiler.C_Utils
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlGen
+import net.postchain.rell.utils.toImmList
 
 abstract class R_Expr(val type: R_Type) {
     protected abstract fun evaluate0(frame: Rt_CallFrame): Rt_Value
@@ -495,7 +497,7 @@ class R_CreateExprAttr_Default(attr: R_Attrib): R_CreateExprAttr(attr) {
 
 class R_CreateExpr(val rEntity: R_Entity, val attrs: List<R_CreateExprAttr>): R_Expr(rEntity.type) {
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        frame.defCtx.checkDbUpdateAllowed()
+        frame.checkDbUpdateAllowed()
         val sqlCtx = frame.defCtx.sqlCtx
         val rowidFunc = sqlCtx.mainChainMapping.rowidFunction
         val rtSql = buildSql(sqlCtx, rEntity, attrs, "\"$rowidFunc\"()")
@@ -742,5 +744,22 @@ class R_TypeAdapter_Nullable(private val dstType: R_Type, private val innerAdapt
     override fun adaptExpr(expr: Db_Expr): Db_Expr {
         // Not completely right, but Db_Exprs do not support nullable anyway.
         return Db_CallExpr(R_DecimalType, Db_SysFn_Decimal.FromInteger, listOf(expr))
+    }
+}
+
+class R_OperationExpr(private val op: R_Operation, args: List<R_Expr>): R_Expr(R_OperationType) {
+    private val args = args.toImmList()
+
+    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
+        val rtArgs = args.map { it.evaluate(frame) }
+        return Rt_OperationValue(op.mountName, rtArgs)
+    }
+}
+
+class R_DefaultValueExpr(type: R_Type, private val exprLate: C_LateInit<R_Expr>): R_Expr(type) {
+    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
+        val expr = exprLate.get()
+        val res = expr.evaluate(frame)
+        return res
     }
 }

@@ -18,6 +18,7 @@ class LibByteArrayTest: BaseRellTest(false) {
     }
 
     @Test fun testSha256() {
+        chk("x''.sha256()", "byte_array[e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855]")
         chk("'foo'.to_bytes().sha256()", "byte_array[2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae]")
         chk("'bar'.to_bytes().sha256()", "byte_array[fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9]")
     }
@@ -61,7 +62,7 @@ class LibByteArrayTest: BaseRellTest(false) {
         chk("x'0123ABCD'[4]", "rt_err:expr_bytearray_subscript_index:4:4")
         chk("x'0123ABCD'[-1]", "rt_err:expr_bytearray_subscript_index:4:-1")
 
-        chkEx("{ val x = x'0123ABCD'; x[1] = 123; return x; }", "ct_err:expr_unmodifiable:byte_array")
+        chkEx("{ val x = x'0123ABCD'; x[1] = 123; return x; }", "ct_err:expr_immutable:byte_array")
     }
 
     @Test fun testSub() {

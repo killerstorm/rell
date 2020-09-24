@@ -4,10 +4,16 @@
 
 package net.postchain.rell
 
+import net.postchain.base.BaseEContext
+import net.postchain.base.BlockchainRid
+import net.postchain.base.data.PostgreSQLDatabaseAccess
+import net.postchain.base.data.SQLDatabaseAccess
+import net.postchain.core.EContext
 import net.postchain.rell.sql.SqlInit
 import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.sql.SqlUtils
 import net.postchain.rell.test.*
+import net.postchain.rell.utils.PostchainUtils
 import org.junit.Test
 import kotlin.test.assertEquals
 
@@ -574,6 +580,20 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         chkInit("entity user { $attrs $extra }", expected)
     }
 
+    @Test fun testKeyRemove() {
+        chkInit("entity user { key name; }")
+        chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
+        chkInit("entity user { name; }", "rt_err:dbinit:index_diff:user:database:key:name")
+        chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
+    }
+
+    @Test fun testIndexRemove() {
+        chkInit("entity user { index name; }")
+        chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
+        chkInit("entity user { name; }", "rt_err:dbinit:index_diff:user:database:index:name")
+        chkAll("0,user,class,false", "0,name,sys:text", "c0.user(name:text,rowid:int8)")
+    }
+
     @Test fun testDropAll() {
         RellTestContext().use { ctx ->
             val t = RellCodeTester(ctx)
@@ -597,6 +617,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
     private fun chkInit(code: String, expected: String = "OK", expectedWarnings: String = "") {
         val tst = RellCodeTester(tstCtx)
         tst.chainId = 0
+        createSysTables(tst)
 
         val globalCtx = tst.createInitGlobalCtx()
 
@@ -607,7 +628,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
                 tstCtx.sqlMgr().transaction { sqlExec ->
                     val appCtx = tst.createExeCtx(globalCtx, sqlExec, app.rApp)
                     val initLogging = SqlInitLogging.ofLevel(SqlInitLogging.LOG_ALL)
-                    val warnings = SqlInit.init(appCtx, initLogging)
+                    val warnings = SqlInit.init(appCtx, false, initLogging)
                     actualWarnings = warnings.joinToString(",")
                     "OK"
                 }
@@ -618,6 +639,18 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         assertEquals(expectedWarnings, actualWarnings)
 
         lastDefs = code
+    }
+
+    private fun createSysTables(t: RellCodeTester) {
+        val sqlAccess: SQLDatabaseAccess = PostgreSQLDatabaseAccess()
+        tstCtx.sqlMgr().transaction { sqlExec ->
+            sqlExec.connection { con ->
+                sqlAccess.initializeApp(con, PostchainUtils.DATABASE_VERSION)
+                val eCtx: EContext = BaseEContext(con, t.chainId, 0, sqlAccess)
+                val bcRid: BlockchainRid = BlockchainRid.EMPTY_RID
+                sqlAccess.initializeBlockchain(eCtx, bcRid)
+            }
+        }
     }
 
     private fun chkAll(metaEnts: String, metaAttrs: String, cols: String? = null) {
@@ -665,7 +698,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
 
         val res = mutableListOf<String>()
         for (table in map.keys) {
-            if (table == "c0.rowid_gen") continue
+            if (table in listOf("c0.rowid_gen", "c0.blocks", "c0.transactions", "c0.configurations")) continue
             if (!meta && (table == "c0.sys.attributes" || table == "c0.sys.classes")) continue
             val attrs = map.getValue(table).map { (name, type) -> "$name:$type" } .joinToString(",")
             res.add(if (columns) "$table($attrs)" else table)

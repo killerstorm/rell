@@ -12,9 +12,9 @@ import net.postchain.config.node.NodeConfigurationProviderFactory
 import net.postchain.core.NODE_ID_TODO
 import net.postchain.core.UserMistake
 import net.postchain.devtools.PostchainTestNode
-import net.postchain.rell.RellBaseCliArgs
-import net.postchain.rell.RellCliLogUtils
-import net.postchain.rell.RellCliUtils
+import net.postchain.rell.utils.RellBaseCliArgs
+import net.postchain.rell.utils.RellCliLogUtils
+import net.postchain.rell.utils.RellCliUtils
 import org.apache.commons.configuration2.PropertiesConfiguration
 import picocli.CommandLine
 import java.io.File

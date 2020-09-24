@@ -52,7 +52,7 @@ class ObjectTest: BaseRellTest() {
     @Test fun testUseAsType() {
         def("object foo { x: integer = 123; }")
         chkCompile("function g(f: foo){}", "ct_err:unknown_type:foo")
-        chkCompile("function g(): foo {}", "ct_err:unknown_type:foo")
+        chkCompile("function g(): foo {}", "ct_err:[fun_noreturn:g][unknown_type:foo]")
         chkCompile("function g() { var f: foo; }", "ct_err:unknown_type:foo")
         chkCompile("entity bar { f: foo; }", "ct_err:unknown_type:foo")
         chkCompile("function g() { var l: list<foo>; }", "ct_err:unknown_type:foo")
@@ -180,7 +180,7 @@ class ObjectTest: BaseRellTest() {
             function f4(): integer = a4.o4.x;
         """.trimIndent())
         def("import a1; import a2; import a3; import a4;")
-        tst.chkInit("rt_err:obj:init_cycle:a1!o1,a3!o3,a2!o2,a4!o4,a1!o1")
+        tst.chkInit("rt_err:obj:init_cycle:a1:o1,a3:o3,a2:o2,a4:o4,a1:o1")
     }
 
     @Test fun testUpdate() {
@@ -209,7 +209,7 @@ class ObjectTest: BaseRellTest() {
         chkData("foo(0,33,Tschuss,999)")
         chk("(foo.x,foo.s,foo.c)", "(int[33],text[Tschuss],int[999])")
 
-        chkEx("{ update foo ( 'Tschuss' ); return 0; }", "ct_err:no_db_update")
+        chkEx("{ update foo ( 'Tschuss' ); return 0; }", "ct_err:no_db_update:query")
     }
 
     @Test fun testUpdateMemory() {
@@ -286,7 +286,7 @@ class ObjectTest: BaseRellTest() {
         chkOp("foo.y += 10;", "ct_err:update_attr_not_mutable:y")
         chkData("foo(0,4565,250)")
 
-        chkEx("{ foo.x = 50; return 0; }", "ct_err:no_db_update")
-        chkEx("{ foo.x += 50; return 0; }", "ct_err:no_db_update")
+        chkEx("{ foo.x = 50; return 0; }", "ct_err:no_db_update:query")
+        chkEx("{ foo.x += 50; return 0; }", "ct_err:no_db_update:query")
     }
 }

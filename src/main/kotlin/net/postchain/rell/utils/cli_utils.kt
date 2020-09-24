@@ -2,7 +2,7 @@
  * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
  */
 
-package net.postchain.rell
+package net.postchain.rell.utils
 
 import mu.KLogging
 import net.postchain.common.hexStringToByteArray

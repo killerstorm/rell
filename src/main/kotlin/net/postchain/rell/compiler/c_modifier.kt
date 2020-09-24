@@ -7,31 +7,46 @@ package net.postchain.rell.compiler
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_String
-import net.postchain.rell.model.R_MountName
-import net.postchain.rell.model.R_Name
-import net.postchain.rell.model.R_TextType
+import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.utils.toImmMap
+import net.postchain.rell.utils.toImmSet
 import org.apache.commons.lang3.StringUtils
 
 class C_ModifierContext(val msgCtx: C_MessageContext, val outerMountName: R_MountName)
 
 object C_Modifier {
     const val EXTERNAL = "external"
-    const val LOG = "log"
-    const val MOUNT = "mount"
+
     const val SORT = "sort"
     const val SORT_DESC = "sort_desc"
-    const val OMIT = "omit"
+
+    private val ANNOTATIONS: Map<String, C_AnnBase>
+
+    init {
+        val anns = mutableMapOf(
+                EXTERNAL to C_Annotation_External,
+                "log" to C_Annotation_Log,
+                "mount" to C_Annotation_Mount,
+                "omit" to C_Annotation_Omit,
+                SORT to C_Annotation_Sort(R_AtWhatSort.ASC),
+                SORT_DESC to C_Annotation_Sort(R_AtWhatSort.DESC)
+        )
+
+        for (aggr in C_AtAggregation.values()) {
+            check(aggr.annotation !in anns)
+            anns[aggr.annotation] = C_Annotation_Aggregation(aggr)
+        }
+
+        ANNOTATIONS = anns.toImmMap()
+    }
 
     fun compileAnnotation(ctx: C_ModifierContext, name: S_Name, args: List<Rt_Value>, target: C_ModifierTarget) {
-        when (name.str) {
-            EXTERNAL -> C_Annotation_External.compile(ctx, name.pos, args, target)
-            LOG -> C_Annotation_Log.compile(ctx, name.pos, args, target)
-            MOUNT -> C_Annotation_Mount.compile(ctx, name.pos, args, target)
-            OMIT -> C_Annotation_Omit.compile(ctx, name, args, target)
-            SORT -> C_Annotation_Sort.compile(ctx, name, args, target, true)
-            SORT_DESC -> C_Annotation_Sort.compile(ctx, name, args, target, false)
-            else -> ctx.msgCtx.error(name.pos, "ann:invalid:${name.str}", "Invalid annotation: '${name.str}'")
+        val ann = ANNOTATIONS[name.str]
+        if (ann != null) {
+            ann.compile(ctx, name, args, target)
+        } else {
+            ctx.msgCtx.error(name.pos, "ann:invalid:${name.str}", "Invalid annotation: '${name.str}'")
         }
     }
 
@@ -52,8 +67,9 @@ object C_Modifier {
     }
 }
 
-private object C_Annotation_Mount {
-    fun compile(ctx: C_ModifierContext, pos: S_Pos, args: List<Rt_Value>, target: C_ModifierTarget) {
+private object C_Annotation_Mount: C_AnnBase() {
+    override fun compile(ctx: C_ModifierContext, name: S_Name, args: List<Rt_Value>, target: C_ModifierTarget) {
+        val pos = name.pos
         val mountPath = processArgs(ctx, pos, args)
         if (mountPath == null) {
             return
@@ -68,7 +84,7 @@ private object C_Annotation_Mount {
             ctx.msgCtx.error(pos, "ann:mount:empty:${target.type}",
                     "Cannot use empty mount name for ${target.type.description}")
         } else {
-            C_AnnUtils.processAnnotation(ctx, pos, target, C_Modifier.MOUNT, target.mount, target.mountAllowed, mountName)
+            C_AnnUtils.processAnnotation(ctx, pos, target, name.str, target.mount, target.mountAllowed, mountName)
         }
     }
 
@@ -159,16 +175,22 @@ private object C_Annotation_Mount {
     private class C_MountPath(val str: String, val up: Int?, val path: List<R_Name>, val tail: Boolean)
 }
 
-private object C_Annotation_Log {
-    fun compile(ctx: C_ModifierContext, pos: S_Pos, args: List<Rt_Value>, target: C_ModifierTarget) {
-        if (C_AnnUtils.checkNoArgs(ctx, pos, C_Modifier.LOG, args)) {
-            C_AnnUtils.processAnnotation(ctx, pos, target, C_Modifier.LOG, target.log, target.logAllowed, true)
+private sealed class C_AnnBase {
+    abstract fun compile(ctx: C_ModifierContext, name: S_Name, args: List<Rt_Value>, target: C_ModifierTarget)
+}
+
+private object C_Annotation_Log: C_AnnBase() {
+    override fun compile(ctx: C_ModifierContext, name: S_Name, args: List<Rt_Value>, target: C_ModifierTarget) {
+        if (C_AnnUtils.checkNoArgs(ctx, name.pos, name.str, args)) {
+            C_AnnUtils.processAnnotation(ctx, name.pos, target, name.str, target.log, target.logAllowed, true)
         }
     }
 }
 
-private object C_Annotation_External {
-    fun compile(ctx: C_ModifierContext, pos: S_Pos, args: List<Rt_Value>, target: C_ModifierTarget) {
+private object C_Annotation_External: C_AnnBase() {
+    override fun compile(ctx: C_ModifierContext, name: S_Name, args: List<Rt_Value>, target: C_ModifierTarget) {
+        val pos = name.pos
+
         if (args.size == 0) {
             compileNoArgs(ctx, pos, target)
             return
@@ -181,8 +203,8 @@ private object C_Annotation_External {
 
         val value = C_ExternalAnnotation(pos, chain)
         val code = "external:unary"
-        val name = "${C_Modifier.EXTERNAL} with argument"
-        C_AnnUtils.processAnnotation(ctx, pos, target, name, target.externalChain, true, value, nameCode = code)
+        val msg = "${C_Modifier.EXTERNAL} with argument"
+        C_AnnUtils.processAnnotation(ctx, pos, target, msg, target.externalChain, true, value, nameCode = code)
     }
 
     private fun compileNoArgs(ctx: C_ModifierContext, pos: S_Pos, target: C_ModifierTarget) {
@@ -201,18 +223,26 @@ private object C_Annotation_External {
     }
 }
 
-private object C_Annotation_Omit {
-    fun compile(ctx: C_ModifierContext, name: S_Name, args: List<Rt_Value>, target: C_ModifierTarget) {
+private object C_Annotation_Omit: C_AnnBase() {
+    override fun compile(ctx: C_ModifierContext, name: S_Name, args: List<Rt_Value>, target: C_ModifierTarget) {
         if (C_AnnUtils.checkNoArgs(ctx, name.pos, name.str, args)) {
             C_AnnUtils.processAnnotation(ctx, name.pos, target, name.str, target.omit, true, true)
         }
     }
 }
 
-private object C_Annotation_Sort {
-    fun compile(ctx: C_ModifierContext, name: S_Name, args: List<Rt_Value>, target: C_ModifierTarget, asc: Boolean) {
+private class C_Annotation_Sort(private val sort: R_AtWhatSort): C_AnnBase() {
+    override fun compile(ctx: C_ModifierContext, name: S_Name, args: List<Rt_Value>, target: C_ModifierTarget) {
         if (C_AnnUtils.checkNoArgs(ctx, name.pos, name.str, args)) {
-            C_AnnUtils.processAnnotation(ctx, name.pos, target, name.str, target.sort, true, asc, generalName = "Sorting")
+            C_AnnUtils.processAnnotation(ctx, name.pos, target, name.str, target.sort, true, sort, generalName = "Sorting")
+        }
+    }
+}
+
+private class C_Annotation_Aggregation(val value: C_AtAggregation): C_AnnBase() {
+    override fun compile(ctx: C_ModifierContext, name: S_Name, args: List<Rt_Value>, target: C_ModifierTarget) {
+        if (C_AnnUtils.checkNoArgs(ctx, name.pos, name.str, args)) {
+            C_AnnUtils.processAnnotation(ctx, name.pos, target, name.str, target.aggregation, allowed = true, value = value)
         }
     }
 }
@@ -273,6 +303,26 @@ private object C_AnnUtils {
 
 class C_ExternalAnnotation(val pos: S_Pos, val chain: String)
 
+enum class C_AtAggregationFunction(val sysFn: Db_SysFunction, val typeChecker: (R_Type) -> Boolean) {
+    SUM(Db_SysFn_Aggregation_Sum, { it == R_IntegerType || it == R_DecimalType }),
+    MIN(Db_SysFn_Aggregation_Min, { isValidMinMaxType(it) }),
+    MAX(Db_SysFn_Aggregation_Max, { isValidMinMaxType(it) }),
+    ;
+
+    companion object {
+        private fun isValidMinMaxType(type: R_Type): Boolean {
+            return type != R_BooleanType && type != R_ByteArrayType && R_CmpType.get(type) != null
+        }
+    }
+}
+
+enum class C_AtAggregation(val annotation: String, val aggrFn: C_AtAggregationFunction?) {
+    GROUP("group", null),
+    SUM("sum", C_AtAggregationFunction.SUM),
+    MIN("min", C_AtAggregationFunction.MIN),
+    MAX("max", C_AtAggregationFunction.MAX),
+}
+
 enum class C_ModifierTargetType {
     MODULE(C_DeclarationType.MODULE),
     NAMESPACE(C_DeclarationType.NAMESPACE),
@@ -296,6 +346,8 @@ enum class C_ModifierTargetType {
     constructor(description: String) {
         this.description = description
     }
+
+    fun isExpression() = this == EXPRESSION
 }
 
 class C_ModifierTarget(
@@ -309,9 +361,7 @@ class C_ModifierTarget(
         mount: Boolean = false,
         val mountAllowed: Boolean = mount,
         val emptyMountAllowed: Boolean = false,
-        omit: Boolean = false,
-        override: Boolean = false,
-        sort: Boolean = false
+        override: Boolean = false
 ) {
     val abstract = C_ModifierValue.opt<Boolean>(abstract)
     val externalChain = C_ModifierValue.opt<C_ExternalAnnotation>(externalChain)
@@ -319,8 +369,10 @@ class C_ModifierTarget(
     val log = C_ModifierValue.opt<Boolean>(log)
     val mount = C_ModifierValue.opt<R_MountName>(mount)
     val override = C_ModifierValue.opt<Boolean>(override)
-    val omit = C_ModifierValue.opt<Boolean>(omit)
-    val sort = C_ModifierValue.opt<Boolean>(sort)
+
+    val omit = C_ModifierValue.opt<Boolean>(type.isExpression())
+    val sort = C_ModifierValue.opt<R_AtWhatSort>(type.isExpression())
+    val aggregation = C_ModifierValue.opt<C_AtAggregation>(type.isExpression())
 
     fun externalChain(mntCtx: C_MountContext): C_ExternalChain? {
         val ann = externalChain?.get()

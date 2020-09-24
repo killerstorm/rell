@@ -9,24 +9,23 @@ import net.postchain.rell.compiler.C_CompilerPass
 import net.postchain.rell.compiler.C_LateInit
 import net.postchain.rell.compiler.C_Utils
 import net.postchain.rell.runtime.*
-import net.postchain.rell.toImmList
-import net.postchain.rell.toImmMap
+import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmMap
 import java.util.*
 
 class R_DefinitionNames(val module: String, val namespace: String?, val simpleName: String) {
     val qualifiedName = if (namespace == null) simpleName else "$namespace.$simpleName"
     val appLevelName = if (module.isEmpty()) qualifiedName else R_DefinitionPos.appLevelName(module, qualifiedName)
-
-    fun pos() = R_DefinitionPos(module, qualifiedName)
+    val pos = R_DefinitionPos(module, qualifiedName)
 
     override fun toString() = appLevelName
 }
 
-abstract class R_Definition(names: R_DefinitionNames) {
+abstract class R_Definition(val names: R_DefinitionNames) {
     val simpleName = names.simpleName
     val moduleLevelName = names.qualifiedName
     val appLevelName = names.appLevelName
-    val pos = names.pos()
+    val pos = names.pos
 
     abstract fun toMetaGtv(): Gtv
 
@@ -43,14 +42,14 @@ data class R_FrameBlockUid(val id: Long, val name: String, val fn: R_FnUid)
 data class R_VarPtr(val name: String, val blockUid: R_FrameBlockUid, val offset: Int)
 class R_FrameBlock(val parentUid: R_FrameBlockUid?, val uid: R_FrameBlockUid, val offset: Int, val size: Int)
 
-class R_CallFrame(val size: Int, val rootBlock: R_FrameBlock) {
+class R_CallFrame(val size: Int, val rootBlock: R_FrameBlock, val hasGuardBlock: Boolean) {
     fun createRtFrame(defCtx: Rt_DefinitionContext, caller: Rt_ParentFrame?, state: Rt_CallFrameState?): Rt_CallFrame {
-        return Rt_CallFrame(defCtx, this, caller, state)
+        return Rt_CallFrame(defCtx, this, caller, state, hasGuardBlock)
     }
 
     companion object {
         private val ERROR_BLOCK = R_FrameBlock(null, R_Utils.ERROR_BLOCK_UID, -1, -1)
-        val ERROR = R_CallFrame(0, ERROR_BLOCK)
+        val ERROR = R_CallFrame(0, ERROR_BLOCK, false)
     }
 }
 
@@ -63,11 +62,11 @@ class R_Attrib(
         val canSetInCreate: Boolean = true,
         val sqlMapping: String = name
 ){
-    private val expr0 = C_LateInit<Optional<R_Expr>>(C_CompilerPass.EXPRESSIONS, Optional.empty())
-    val expr: R_Expr? get() = expr0.get().orElse(null)
+    private val exprLate = C_LateInit<Optional<R_Expr>>(C_CompilerPass.EXPRESSIONS, Optional.empty())
+    val expr: R_Expr? get() = exprLate.get().orElse(null)
 
     fun setExpr(expr: R_Expr?) {
-        expr0.set(Optional.ofNullable(expr))
+        exprLate.set(Optional.ofNullable(expr))
     }
 
     fun toMetaGtv(): Gtv {
@@ -91,6 +90,7 @@ class R_VarParam(val name: String, val type: R_Type, val ptr: R_VarPtr) {
 
 sealed class R_Routine(names: R_DefinitionNames): R_Definition(names) {
     abstract fun params(): List<R_Param>
+    abstract fun call(rtFrame: Rt_CallFrame, args: List<Rt_Value>, callerFilePos: R_FilePos): Rt_Value
 }
 
 sealed class R_MountedRoutine(names: R_DefinitionNames, val mountName: R_MountName): R_Routine(names)
@@ -109,6 +109,10 @@ class R_Operation(names: R_DefinitionNames, mountName: R_MountName): R_MountedRo
         val rtFrame = processCallArgs(exeCtx, args)
         execute(rtFrame)
         return null
+    }
+
+    override fun call(rtFrame: Rt_CallFrame, args: List<Rt_Value>, callerFilePos: R_FilePos): Rt_Value {
+        throw Rt_Error("call:operation", "Calling operation is not allowed")
     }
 
     private fun processCallArgs(exeCtx: Rt_ExecutionContext, args: List<Rt_Value>): Rt_CallFrame {
@@ -154,22 +158,25 @@ class R_Operation(names: R_DefinitionNames, mountName: R_MountName): R_MountedRo
     }
 }
 
-sealed class R_QueryBody {
-    abstract fun params(): List<R_Param>
-    abstract fun execute(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, pos: R_DefinitionPos): Rt_Value
+sealed class R_QueryBody(
+        val retType: R_Type,
+        params: List<R_Param>
+) {
+    val params = params.toImmList()
+
+    abstract fun call(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, caller: Rt_ParentFrame?): Rt_Value
 }
 
 class R_UserQueryBody(
-        private val varParams: List<R_VarParam>,
+        retType: R_Type,
+        varParams: List<R_VarParam>,
         private val body: R_Statement,
         private val frame: R_CallFrame
-): R_QueryBody() {
-    private val params = varParams.map { it.toParam() }.toImmList()
+): R_QueryBody(retType, varParams.map { it.toParam() }) {
+    private val varParams = varParams.toImmList()
 
-    override fun params() = params
-
-    override fun execute(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, pos: R_DefinitionPos): Rt_Value {
-        val rtFrame = frame.createRtFrame(defCtx, null, null)
+    override fun call(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, caller: Rt_ParentFrame?): Rt_Value {
+        val rtFrame = frame.createRtFrame(defCtx, caller, null)
 
         processArgs(varParams, args, rtFrame)
 
@@ -181,37 +188,45 @@ class R_UserQueryBody(
     }
 
     companion object {
-        val ERROR: R_QueryBody = R_UserQueryBody(listOf(), C_Utils.ERROR_STATEMENT, R_CallFrame.ERROR)
+        val ERROR: R_QueryBody = R_UserQueryBody(R_CtErrorType, listOf(), C_Utils.ERROR_STATEMENT, R_CallFrame.ERROR)
     }
 }
 
-class R_SysQueryBody(params: List<R_Param>, private val fn: R_SysFunction): R_QueryBody() {
-    private val params = params.toImmList()
-
-    override fun params() = params
-
-    override fun execute(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, pos: R_DefinitionPos): Rt_Value {
+class R_SysQueryBody(retType: R_Type, params: List<R_Param>, private val fn: R_SysFunction): R_QueryBody(retType, params) {
+    override fun call(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, caller: Rt_ParentFrame?): Rt_Value {
         val ctx = Rt_CallContext(defCtx)
         return fn.call(ctx, args)
     }
 }
 
 class R_Query(names: R_DefinitionNames, mountName: R_MountName): R_MountedRoutine(names, mountName) {
-    private val internals = C_LateInit(C_CompilerPass.EXPRESSIONS, ERROR_INTERNALS)
+    private val bodyLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_UserQueryBody.ERROR)
 
-    fun setInternals(type: R_Type, body: R_QueryBody) {
-        val params = body.params()
-        internals.set(Internals(type, params, body))
+    fun setBody(body: R_QueryBody) {
+        bodyLate.set(body)
     }
 
-    override fun params() = internals.get().params
-    fun type(): R_Type = internals.get().type
+    fun type(): R_Type = bodyLate.get().retType
+    override fun params() = bodyLate.get().params
 
     fun call(exeCtx: Rt_ExecutionContext, args: List<Rt_Value>): Rt_Value {
-        val ints = internals.get()
-        checkCallArgs(this, ints.params, args)
+        val body = bodyLate.get()
+        checkCallArgs(this, body.params, args)
         val defCtx = Rt_DefinitionContext(exeCtx, false, pos)
-        val res = ints.body.execute(defCtx, args, pos)
+        val res = body.call(defCtx, args, null)
+        return res
+    }
+
+    override fun call(rtFrame: Rt_CallFrame, args: List<Rt_Value>, callerFilePos: R_FilePos): Rt_Value {
+        val body = bodyLate.get()
+        checkCallArgs(this, body.params, args)
+
+        val callerStackPos = R_StackPos(rtFrame.defCtx.pos, callerFilePos)
+        val caller = Rt_ParentFrame(rtFrame, callerStackPos)
+
+        val defCtx = rtFrame.defCtx
+        val subDefCtx = Rt_DefinitionContext(defCtx.exeCtx, false, names.pos)
+        val res = body.call(subDefCtx, args, caller)
         return res
     }
 
@@ -220,12 +235,6 @@ class R_Query(names: R_DefinitionNames, mountName: R_MountName): R_MountedRoutin
                 "type" to type().toMetaGtv(),
                 "parameters" to params().map { it.toMetaGtv() }.toGtv()
         ).toGtv()
-    }
-
-    private class Internals(val type: R_Type, val params: List<R_Param>, val body: R_QueryBody)
-
-    companion object {
-        private val ERROR_INTERNALS = Internals(type = R_UnitType, params = listOf(), body = R_UserQueryBody.ERROR)
     }
 }
 
@@ -239,9 +248,9 @@ class R_FunctionBody(
     val params = varParams.map { it.toParam() }.toImmList()
 
     companion object {
-        val EMPTY = R_FunctionBody(
+        val ERROR = R_FunctionBody(
                 R_DefinitionPos("<error>", "<error>"),
-                R_UnitType,
+                R_CtErrorType,
                 listOf(),
                 C_Utils.ERROR_STATEMENT,
                 R_CallFrame.ERROR
@@ -250,7 +259,7 @@ class R_FunctionBody(
 }
 
 class R_Function(names: R_DefinitionNames): R_Routine(names) {
-    private val bodyLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_FunctionBody.EMPTY)
+    private val bodyLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_FunctionBody.ERROR)
 
     fun setBody(body: R_FunctionBody) {
         bodyLate.set(body)
@@ -265,7 +274,7 @@ class R_Function(names: R_DefinitionNames): R_Routine(names) {
         return res
     }
 
-    fun call(rtFrame: Rt_CallFrame, args: List<Rt_Value>, callerFilePos: R_FilePos): Rt_Value {
+    override fun call(rtFrame: Rt_CallFrame, args: List<Rt_Value>, callerFilePos: R_FilePos): Rt_Value {
         val callerStackPos = R_StackPos(rtFrame.defCtx.pos, callerFilePos)
         val caller = Rt_ParentFrame(rtFrame, callerStackPos)
         return call0(rtFrame.defCtx, args, caller)
@@ -273,7 +282,10 @@ class R_Function(names: R_DefinitionNames): R_Routine(names) {
 
     private fun call0(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, caller: Rt_ParentFrame?): Rt_Value {
         val body = bodyLate.get()
-        val rtSubFrame = createRtFrame(body, defCtx.exeCtx, defCtx.dbUpdateAllowed, caller)
+
+        val callerDbUpdateAllowed = caller?.frame?.dbUpdateAllowed() ?: true
+        val dbUpdateAllowed = callerDbUpdateAllowed && defCtx.dbUpdateAllowed
+        val rtSubFrame = createRtFrame(body, defCtx.exeCtx, dbUpdateAllowed, caller)
 
         processArgs(body.varParams, args, rtSubFrame)
 

@@ -4,7 +4,7 @@
 
 package net.postchain.rell.model
 
-import net.postchain.rell.CommonUtils
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.compiler.C_Constants
 import net.postchain.rell.compiler.C_EntityAttrRef
 import net.postchain.rell.runtime.Rt_BooleanValue
@@ -140,6 +140,22 @@ class Db_UnaryExpr(type: R_Type, val op: Db_UnaryOp, val expr: Db_Expr): Db_Expr
             bld.append(op.sql)
             bld.append(" ")
             expr.toSql(ctx, bld)
+            bld.append(")")
+        }
+    }
+}
+
+class Db_IsNullExpr(val expr: Db_Expr, val isNull: Boolean): Db_Expr(R_BooleanType) {
+    override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
+        val redExpr = expr.toRedExpr(frame)
+        return RedDb_IsNullExpr(redExpr, isNull)
+    }
+
+    private class RedDb_IsNullExpr(val expr: RedDb_Expr, val isNull: Boolean): RedDb_Expr() {
+        override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
+            bld.append("(")
+            expr.toSql(ctx, bld)
+            bld.append(if (isNull) " IS NULL" else " IS NOT NULL")
             bld.append(")")
         }
     }
@@ -449,6 +465,9 @@ object Db_SysFn_ByteArray_Size: Db_SysFn_Simple("byte_array.len", "LENGTH")
 object Db_SysFn_Json: Db_SysFn_Cast("json", "JSONB")
 object Db_SysFn_Json_ToText: Db_SysFn_Cast("json.to_text", "TEXT")
 object Db_SysFn_ToText: Db_SysFn_Cast("to_text", "TEXT")
+object Db_SysFn_Aggregation_Sum: Db_SysFn_Simple("sum", "SUM")
+object Db_SysFn_Aggregation_Min: Db_SysFn_Simple("min", "MIN")
+object Db_SysFn_Aggregation_Max: Db_SysFn_Simple("max", "MAX")
 
 object Db_SysFn_Decimal {
     object FromInteger: Db_SysFn_Cast("decimal(integer)", C_Constants.DECIMAL_SQL_TYPE_STR)

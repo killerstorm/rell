@@ -5,19 +5,26 @@
 package net.postchain.rell.test
 
 import com.google.common.collect.Sets
+import net.postchain.base.BaseEContext
 import net.postchain.base.BlockchainRid
+import net.postchain.base.data.PostgreSQLDatabaseAccess
+import net.postchain.base.data.SQLDatabaseAccess
+import net.postchain.common.hexStringToByteArray
 import net.postchain.core.ByteArrayKey
+import net.postchain.core.EContext
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
-import net.postchain.rell.CommonUtils
+import net.postchain.rell.compiler.C_MapSourceDir
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.compiler.C_MessageType
 import net.postchain.rell.model.*
+import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.sql.SqlInit
 import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.sql.SqlUtils
-import net.postchain.rell.toImmMap
+import net.postchain.rell.utils.toImmMap
 import org.junit.Assert
 import kotlin.test.assertEquals
 
@@ -40,6 +47,7 @@ class RellCodeTester(
     var opContext: Rt_OpContext? = null
     var sqlUpdatePortionSize = 1000
     var replModule: String? = null
+    var chainRid: String? = null
 
     private val chainDependencies = mutableMapOf<String, TestChainDependency>()
 
@@ -54,7 +62,17 @@ class RellCodeTester(
         }
 
         if (createTables) {
-            SqlInit.init(exeCtx, SqlInitLogging())
+            initSqlCreateSysTables(sqlExec)
+            SqlInit.init(exeCtx, false, SqlInitLogging())
+        }
+    }
+
+    private fun initSqlCreateSysTables(sqlExec: SqlExecutor) {
+        val sqlAccess: SQLDatabaseAccess = PostgreSQLDatabaseAccess()
+        sqlExec.connection { con ->
+            val eCtx: EContext = BaseEContext(con, chainId, 0, sqlAccess)
+            val bcRid = BlockchainRid(blockchainRid.hexStringToByteArray())
+            sqlAccess.initializeBlockchain(eCtx, bcRid)
         }
     }
 
@@ -66,7 +84,8 @@ class RellCodeTester(
                 null,
                 chainCtx,
                 logSqlErrors = true,
-                typeCheck = true
+                typeCheck = true,
+                pcModuleEnv = RellPostchainModuleEnvironment.DEFAULT
         )
     }
 
@@ -190,11 +209,21 @@ class RellCodeTester(
 
     fun createGlobalCtx(): Rt_GlobalContext {
         val chainContext = createChainContext()
+
+        val pcModuleEnv = RellPostchainModuleEnvironment(
+                outPrinter = outPrinter,
+                logPrinter = logPrinter,
+                wrapCtErrors = false,
+                wrapRtErrors = false,
+                forceTypeCheck = true
+        )
+
         return Rt_GlobalContext(
                 outPrinter,
                 logPrinter,
                 opContext,
                 chainContext,
+                pcModuleEnv = pcModuleEnv,
                 logSqlErrors = true,
                 sqlUpdatePortionSize = sqlUpdatePortionSize,
                 typeCheck = true
@@ -202,13 +231,14 @@ class RellCodeTester(
     }
 
     private fun createChainContext(): Rt_ChainContext {
-        val bcRid = BlockchainRid(ByteArray(32))
+        val bcRidHex = chainRid ?: "00".repeat(32)
+        val bcRid = BlockchainRid(bcRidHex.hexStringToByteArray())
         return Rt_ChainContext(GtvNull, mapOf(), bcRid)
     }
 
     fun createAppCtx(globalCtx: Rt_GlobalContext, sqlExec: SqlExecutor, app: R_App): Rt_AppContext {
         val sqlCtx = createSqlCtx(app, sqlExec)
-        return Rt_AppContext(globalCtx, sqlCtx, app, null)
+        return Rt_AppContext(globalCtx, sqlCtx, app, false, null, C_MapSourceDir.EMPTY, setOf())
     }
 
     fun createExeCtx(globalCtx: Rt_GlobalContext, sqlExec: SqlExecutor, app: R_App): Rt_ExecutionContext {

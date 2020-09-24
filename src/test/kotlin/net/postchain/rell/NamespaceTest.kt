@@ -275,4 +275,22 @@ class NamespaceTest: BaseRellTest() {
         chk("x.f()", "text[Hello]")
         chk("x.y.g()", "text[Hello]")
     }
+
+    @Test fun testComplexNamespace() {
+        def("namespace x.y.z { function f() = 123; }")
+        chk("x.y.z.f()", "int[123]")
+        chk("f()", "ct_err:unknown_name:f")
+        chk("x.f()", "ct_err:unknown_name:x.f")
+    }
+
+    @Test fun testComplexNamespaceMerging() {
+        def("namespace a.b.c { function f() = 123; }")
+        def("namespace a.b.d { function f() = 456; }")
+        def("namespace a.e.f { function f() = 789; }")
+        def("namespace a { namespace g.h { function f() = 987; }}")
+        chk("a.b.c.f()", "int[123]")
+        chk("a.b.d.f()", "int[456]")
+        chk("a.e.f.f()", "int[789]")
+        chk("a.g.h.f()", "int[987]")
+    }
 }

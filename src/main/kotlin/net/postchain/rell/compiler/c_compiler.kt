@@ -4,15 +4,15 @@
 
 package net.postchain.rell.compiler
 
-import net.postchain.rell.CommonUtils
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_RellFile
 import net.postchain.rell.model.*
 import net.postchain.rell.repl.ReplCode
 import net.postchain.rell.repl.ReplCodeState
-import net.postchain.rell.toImmList
-import net.postchain.rell.toImmMap
+import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmMap
 import java.util.*
 
 class C_Entity(val defPos: S_Pos?, val entity: R_Entity)
@@ -128,7 +128,7 @@ class C_SystemDefs private constructor(
                 queries: List<R_Query>
         ): C_SystemDefs {
             val sysEntities = listOf(blockEntity, transactionEntity)
-            val nsProto = createNsProto(sysEntities)
+            val nsProto = createNsProto(sysEntities, queries)
             val ns = C_NsEntry.createNamespace(nsProto.entries)
 
             val mntBuilder = C_MountTablesBuilder(stamp)
@@ -139,7 +139,7 @@ class C_SystemDefs private constructor(
             return C_SystemDefs(nsProto, ns, blockEntity, transactionEntity, mntTables, sysEntities, queries)
         }
 
-        private fun createNsProto(sysEntities: List<R_Entity>): C_SysNsProto {
+        private fun createNsProto(sysEntities: List<R_Entity>, queries: List<R_Query>): C_SysNsProto {
             val sysNamespaces = SYSTEM_NAMESPACES
             val sysTypes = SYSTEM_TYPES
             val sysFunctions = SYSTEM_FUNCTIONS
@@ -155,7 +155,7 @@ class C_SystemDefs private constructor(
         }
 
         private fun typeRef(type: R_Type, deprecated: C_Deprecated? = null): C_DefProxy<R_Type> {
-            return C_DefProxy.create(C_DeclarationType.TYPE, deprecated, type)
+            return C_DefProxy.create(type, C_DeclarationType.TYPE, deprecated)
         }
     }
 }
@@ -198,7 +198,7 @@ object C_Compiler {
             modules: List<R_ModuleName>,
             options: C_CompilerOptions = C_CompilerOptions.DEFAULT
     ): C_CompilationResult {
-        val globalCtx = C_GlobalContext(options)
+        val globalCtx = C_GlobalContext(options, sourceDir, modules.toSet())
         val msgCtx = C_MessageContext(globalCtx)
         val controller = C_CompilerController(msgCtx)
 
@@ -295,7 +295,7 @@ object C_ReplCompiler {
         val success = if (app == null || codeGetter == null || !errors.isEmpty()) null else {
             val cCode = codeGetter.get()
             val newAppState = appCtx.getNewReplState()
-            val newState = C_ReplDefsState(false, newAppState)
+            val newState = C_ReplDefsState(newAppState)
             C_ReplSuccess(app, newState, cCode)
         }
 
@@ -371,9 +371,9 @@ class C_ReplAppState(
     }
 }
 
-class C_ReplDefsState(val initial: Boolean, val appState: C_ReplAppState) {
+class C_ReplDefsState(val appState: C_ReplAppState) {
     companion object {
-        val EMPTY = C_ReplDefsState(true, C_ReplAppState.EMPTY)
+        val EMPTY = C_ReplDefsState(C_ReplAppState.EMPTY)
     }
 }
 

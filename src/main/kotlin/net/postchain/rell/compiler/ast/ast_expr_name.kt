@@ -38,7 +38,7 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
         val dbLocalAttrExpr = C_Utils.toDbExpr(startPos, localAttrExpr)
 
         val dbExpr = C_Utils.makeDbBinaryExprEq(entityAttrExpr, dbLocalAttrExpr)
-        return C_DbValue.makeExpr(startPos, dbExpr)
+        return C_DbValue.createExpr(startPos, dbExpr)
     }
 
     private fun matchAttribute(

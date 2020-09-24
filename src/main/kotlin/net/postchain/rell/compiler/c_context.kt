@@ -4,16 +4,19 @@
 
 package net.postchain.rell.compiler
 
-import net.postchain.rell.Getter
-import net.postchain.rell.TypedKeyMap
 import net.postchain.rell.compiler.ast.*
 import net.postchain.rell.model.*
+import net.postchain.rell.utils.Getter
+import net.postchain.rell.utils.TypedKeyMap
+import net.postchain.rell.utils.toImmSet
 import org.apache.commons.lang3.StringUtils
 
 data class C_VarUid(val id: Long, val name: String, val fn: R_FnUid)
 data class C_LoopUid(val id: Long, val fn: R_FnUid)
 
-class C_GlobalContext(val compilerOptions: C_CompilerOptions) {
+class C_GlobalContext(val compilerOptions: C_CompilerOptions, val sourceDir: C_SourceDir, modules: Set<R_ModuleName>) {
+    val modules = modules.toImmSet()
+
     private val appUidGen = C_UidGen { id, _ -> R_AppUid(id) }
 
     fun nextAppUid() = appUidGen.next("")
@@ -264,12 +267,16 @@ class C_MountContext(
     }
 
     fun mountName(modTarget: C_ModifierTarget, simpleName: S_Name): R_MountName {
+        return mountName(modTarget, listOf(simpleName))
+    }
+
+    fun mountName(modTarget: C_ModifierTarget, fullName: List<S_Name>): R_MountName {
         val explicit = modTarget.mount?.get()
         if (explicit != null) {
             return explicit
         }
 
-        val path = mountName.parts + simpleName.rName
+        val path = mountName.parts + fullName.map { it.rName }
         return R_MountName(path)
     }
 }
@@ -295,8 +302,10 @@ class C_DefinitionContext(val mntCtx: C_MountContext, val definitionType: C_Defi
     val defExprCtx = C_ExprContext(this, nsCtx.nameCtx, C_VarFactsContext.EMPTY)
 
     fun checkDbUpdateAllowed(pos: S_Pos) {
-        if (definitionType == C_DefinitionType.QUERY || modCtx.repl) {
-            msgCtx.error(pos, "no_db_update", "Database modifications are not allowed in this context")
+        if (definitionType == C_DefinitionType.QUERY) {
+            msgCtx.error(pos, "no_db_update:query", "Database modifications are not allowed in a query")
+        } else if (modCtx.repl) {
+            msgCtx.error(pos, "no_db_update:repl", "Database modifications are not allowed in REPL")
         }
     }
 }
@@ -442,6 +451,7 @@ class C_FunctionContext(
     val nsCtx = defCtx.nsCtx
     val modCtx = nsCtx.modCtx
     val appCtx = modCtx.appCtx
+    val msgCtx = appCtx.msgCtx
     val globalCtx = modCtx.globalCtx
     val executor = modCtx.executor
 
@@ -480,8 +490,10 @@ class C_FunctionContext(
 
             override fun match(pos: S_Pos, type: R_Type) {
                 val t = impType
-                if (t == null) {
+                if (t == null || t == R_CtErrorType) {
                     impType = type
+                } else if (type == R_CtErrorType) {
+                    // Do nothing.
                 } else if (t == R_UnitType) {
                     if (type != R_UnitType) {
                         throw errRetTypeMiss(pos, t, type)
@@ -500,9 +512,11 @@ class C_FunctionContext(
             override fun getRetType() = expType
 
             override fun match(pos: S_Pos, type: R_Type) {
-                val m = if (expType == R_UnitType) type == R_UnitType else expType.isAssignableFrom(type)
-                if (!m) {
-                    throw errRetTypeMiss(pos, expType, type)
+                if (type != R_CtErrorType && expType != R_CtErrorType) {
+                    val m = if (expType == R_UnitType) type == R_UnitType else expType.isAssignableFrom(type)
+                    if (!m) {
+                        throw errRetTypeMiss(pos, expType, type)
+                    }
                 }
             }
         }
@@ -510,11 +524,17 @@ class C_FunctionContext(
 
     companion object {
         private fun errRetTypeMiss(pos: S_Pos, dstType: R_Type, srcType: R_Type): C_Error =
-                C_Errors.errTypeMismatch(pos, srcType, dstType, "entity_rettype", "Return type mismatch")
+                C_Errors.errTypeMismatch(pos, srcType, dstType, "fn_rettype", "Return type mismatch")
     }
 }
 
-class C_FunctionBodyContext(val frameCtx: C_FrameContext, val stmtCtx: C_StmtContext) {
-    val fnCtx = frameCtx.fnCtx
-    val defCtx = fnCtx.defCtx
+class C_FunctionBodyContext(
+        val defCtx: C_DefinitionContext,
+        val namePos: S_Pos,
+        val defNames: R_DefinitionNames,
+        val explicitRetType: R_Type?,
+        val forParams: C_FormalParameters
+) {
+    val appCtx = defCtx.appCtx
+    val executor = defCtx.executor
 }

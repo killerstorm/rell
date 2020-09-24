@@ -4,15 +4,18 @@
 
 package net.postchain.rell
 
+import net.postchain.StorageBuilder
 import net.postchain.base.BlockchainRid
-import net.postchain.config.SimpleDatabaseConnector
 import net.postchain.config.app.AppConfig
 import net.postchain.gtv.GtvNull
+import net.postchain.rell.compiler.C_MapSourceDir
 import net.postchain.rell.model.*
 import net.postchain.rell.module.GtvToRtContext
+import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.repl.ReplShell
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.*
+import net.postchain.rell.utils.*
 import picocli.CommandLine
 import java.sql.DriverManager
 import kotlin.system.exitProcess
@@ -103,11 +106,11 @@ private fun initDatabase(args: RellCliArgs, app: R_App, sqlMgr: SqlManager, sqlC
             SqlUtils.dropAll(sqlExec, true)
         }
 
-        val appCtx = createAppContext(args, app, sqlCtx, null)
+        val appCtx = createAppContext(args, app, sqlCtx, null, false)
         val exeCtx = Rt_ExecutionContext(appCtx, sqlExec)
 
         val initLogging = SqlInitLogging.ofLevel(if (args.sqlInitLog) SqlInitLogging.LOG_ALL else SqlInitLogging.LOG_NONE)
-        SqlInit.init(exeCtx, initLogging)
+        SqlInit.init(exeCtx, true, initLogging)
     }
 }
 
@@ -155,8 +158,8 @@ private fun runWithSqlManager(args: RellCliArgs, logSqlErrors: Boolean, code: (S
         }
     } else if (dbProperties != null) {
         val appCfg = AppConfig.fromPropertiesFile(dbProperties)
-        val connector = SimpleDatabaseConnector(appCfg)
-        val sqlMgr = DatabaseConnectorSqlManager(connector, args.sqlLog)
+        val storage = StorageBuilder.buildStorage(appCfg, 0)
+        val sqlMgr = PostchainStorageSqlManager(storage, args.sqlLog)
         runWithSqlManager(appCfg.databaseSchema, sqlMgr, logSqlErrors, code)
     } else {
         code(NoConnSqlManager)
@@ -216,12 +219,19 @@ private fun createGlobalCtx(args: RellCliArgs, opCtx: Rt_OpContext?): Rt_GlobalC
     val bcRid = BlockchainRid(ByteArray(32))
     val chainCtx = Rt_ChainContext(GtvNull, mapOf(), bcRid)
 
+    val pcModuleEnv = RellPostchainModuleEnvironment(
+            outPrinter = Rt_OutPrinter,
+            logPrinter = Rt_LogPrinter(),
+            forceTypeCheck = args.typeCheck
+    )
+
     return Rt_GlobalContext(
             opCtx = opCtx,
             chainCtx = chainCtx,
             outPrinter = Rt_OutPrinter,
             logPrinter = Rt_LogPrinter(),
-            typeCheck = args.typeCheck
+            typeCheck = args.typeCheck,
+            pcModuleEnv = pcModuleEnv
     )
 }
 
@@ -229,10 +239,13 @@ private fun createAppContext(
         args: RellCliArgs,
         app: R_App,
         sqlCtx: Rt_SqlContext,
-        opCtx: Rt_OpContext?
+        opCtx: Rt_OpContext?,
+        repl: Boolean
 ): Rt_AppContext {
     val globalCtx = createGlobalCtx(args, opCtx)
-    return Rt_AppContext(globalCtx, sqlCtx, app, null)
+    val sourceDir = C_MapSourceDir.EMPTY
+    val modules = setOf<R_ModuleName>()
+    return Rt_AppContext(globalCtx, sqlCtx, app, repl, null, sourceDir, modules)
 }
 
 private fun parseArgs(entryPoint: RellEntryPoint, gtvCtx: GtvToRtContext, args: List<String>, json: Boolean): List<Rt_Value> {
@@ -283,7 +296,7 @@ private class RellAppLauncher(
         private val entryPoint: RellEntryPoint
 ) {
     fun launch(sqlMgr: SqlManager, sqlCtx: Rt_SqlContext) {
-        val appCtx = createAppContext(args, app, sqlCtx, entryPoint.opContext())
+        val appCtx = createAppContext(args, app, sqlCtx, entryPoint.opContext(), false)
 
         val rtRes = sqlMgr.execute(entryPoint.transaction) { sqlExec ->
             val exeCtx = Rt_ExecutionContext(appCtx, sqlExec)

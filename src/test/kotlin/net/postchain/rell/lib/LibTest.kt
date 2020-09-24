@@ -4,7 +4,7 @@
 
 package net.postchain.rell.lib
 
-import net.postchain.rell.CommonUtils
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.runtime.Rt_OpContext
 import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
@@ -48,28 +48,28 @@ class LibTest: BaseRellTest(false) {
         def("function f() { log('this is f()'); }")
 
         chkEx("{ log('Hello'); return 123; }", "int[123]")
-        chkLog("[!q(main.rell:2)] Hello")
+        chkLog("[:q(main.rell:2)] Hello")
         chkOut()
 
         chkEx("{ log(12345); return 123; }", "int[123]")
-        chkLog("[!q(main.rell:2)] 12345")
+        chkLog("[:q(main.rell:2)] 12345")
         chkOut()
 
         chkEx("{ log(1, 2, 3, 4, 5); return 123; }", "int[123]")
-        chkLog("[!q(main.rell:2)] 1 2 3 4 5")
+        chkLog("[:q(main.rell:2)] 1 2 3 4 5")
         chkOut()
 
         chkEx("{ log(); return 123; }", "int[123]")
         chkOut()
-        chkLog("[!q(main.rell:2)]")
+        chkLog("[:q(main.rell:2)]")
 
         chkEx("{\n    log('Hello'); log('World');\n    log('Bye');\n    return 123;\n}", "int[123]")
         chkOut()
-        chkLog("[!q(main.rell:3)] Hello", "[!q(main.rell:3)] World", "[!q(main.rell:4)] Bye")
+        chkLog("[:q(main.rell:3)] Hello", "[:q(main.rell:3)] World", "[:q(main.rell:4)] Bye")
 
         chkEx("{ f(); return 0; }", "int[0]")
         chkOut()
-        chkLog("[!f(main.rell:1)] this is f()")
+        chkLog("[:f(main.rell:1)] this is f()")
     }
 
     @Test fun testIsSigner() {
@@ -107,6 +107,18 @@ class LibTest: BaseRellTest(false) {
         chk("_type_of(user @? {})", "user?")
         chk("_type_of(user @* {})", "list<user>")
         chk("_type_of(user @+ {})", "list<user>")
+
+        // Side effect.
+        chkEx("{ val s = set([123]); val t = _type_of(s.add(456)); return (s, t); }", "([123],boolean)")
+    }
+
+    @Test fun testTypeOfInAtExpr() {
+        tstCtx.useSql = true
+        def("entity user { name: text; }")
+        insert("c0.user", "name", "1,'Bob'")
+        chk("user @{} ( _type_of(.name) )", "text[text]")
+        chk("user @{} ( .name.matches('Bob') )", "ct_err:expr_call_nosql:text.matches")
+        chk("user @{} ( _type_of(.name).matches('text') )", "boolean[true]")
     }
 
     @Test fun testStrictStr() {
@@ -293,5 +305,15 @@ class LibTest: BaseRellTest(false) {
         chk("rec(5).toBytes()", "ct_err:deprecated:FUNCTION:rec.toBytes:to_bytes")
         chk("rec(5).toGTXValue()", "ct_err:deprecated:FUNCTION:rec.toGTXValue:to_gtv")
         chk("rec(5).toPrettyGTXValue()", "ct_err:deprecated:FUNCTION:rec.toPrettyGTXValue:to_gtv_pretty")
+    }
+
+    @Test fun testRellNamespaceConflict() {
+        chkCompile("function rell() = 0;", "ct_err:name_conflict:sys:rell:NAMESPACE")
+        chkCompile("namespace rell {}", "ct_err:name_conflict:sys:rell:NAMESPACE")
+    }
+
+    @Test fun testSysQueries() {
+        chk("rell.get_rell_version()", "ct_err:unknown_name:rell.get_rell_version")
+        chk("rell.get_app_structure()", "ct_err:unknown_name:rell.get_app_structure")
     }
 }

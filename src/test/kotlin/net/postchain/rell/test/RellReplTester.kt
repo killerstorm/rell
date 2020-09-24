@@ -8,6 +8,7 @@ import net.postchain.rell.compiler.C_MapSourceDir
 import net.postchain.rell.compiler.C_Message
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.model.R_StackPos
+import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.repl.ReplInterpreter
 import net.postchain.rell.repl.ReplOutputChannel
 import net.postchain.rell.repl.ReplValueFormat
@@ -29,11 +30,20 @@ class RellReplTester(
     private val outChannel = TestReplOutputChannel()
     private val sourceDir = C_MapSourceDir.of(files)
 
+    private val pcModuleEnv = RellPostchainModuleEnvironment(
+            outPrinter = outChannel.outPrinter,
+            logPrinter = outChannel.logPrinter,
+            wrapCtErrors = false,
+            wrapRtErrors = false,
+            forceTypeCheck = true
+    )
+
     private val replGlobalCtx = Rt_GlobalContext(
             outChannel.outPrinter,
             outChannel.logPrinter,
             globalCtx.opCtx,
             globalCtx.chainCtx,
+            pcModuleEnv = pcModuleEnv,
             logSqlErrors = globalCtx.logSqlErrors,
             sqlUpdatePortionSize = globalCtx.sqlUpdatePortionSize,
             typeCheck = globalCtx.typeCheck

@@ -65,16 +65,16 @@ class QueryTest: BaseRellTest() {
         chkEx("{ return; }", "ct_err:stmt_return_query_novalue")
 
         chkQueryEx("query q(): integer = 123;", "int[123]")
-        chkQueryEx("query q(): integer = 'Hello';", "ct_err:entity_rettype:[integer]:[text]")
-        chkQueryEx("query q(): text = 123;", "ct_err:entity_rettype:[text]:[integer]")
+        chkQueryEx("query q(): integer = 'Hello';", "ct_err:fn_rettype:[integer]:[text]")
+        chkQueryEx("query q(): text = 123;", "ct_err:fn_rettype:[text]:[integer]")
 
         chkQueryEx("query q(): integer { return 123; }", "int[123]")
-        chkQueryEx("query q(): integer { return 'Hello'; }", "ct_err:entity_rettype:[integer]:[text]")
-        chkQueryEx("query q(): text { return 123; }", "ct_err:entity_rettype:[text]:[integer]")
+        chkQueryEx("query q(): integer { return 'Hello'; }", "ct_err:fn_rettype:[integer]:[text]")
+        chkQueryEx("query q(): text { return 123; }", "ct_err:fn_rettype:[text]:[integer]")
 
         chkEx("{ if (1 > 0) return 123; else return 456; }", "int[123]")
-        chkEx("{ if (1 > 0) return 123; else return 'Hello'; }", "ct_err:entity_rettype:[integer]:[text]")
-        chkEx("{ if (1 > 0) return 'Hello'; else return 123; }", "ct_err:entity_rettype:[text]:[integer]")
+        chkEx("{ if (1 > 0) return 123; else return 'Hello'; }", "ct_err:fn_rettype:[integer]:[text]")
+        chkEx("{ if (1 > 0) return 'Hello'; else return 123; }", "ct_err:fn_rettype:[text]:[integer]")
     }
 
     @Test fun testNoReturn() {
@@ -106,22 +106,22 @@ class QueryTest: BaseRellTest() {
 
     @Test fun testCreateUpdateDelete() {
         def("entity user { mutable name: text; }")
-        chkEx("{ create user('Bob'); return 0; }", "ct_err:no_db_update")
-        chkEx("{ update user @ {} ( name = 'Bob'); return 0; }", "ct_err:no_db_update")
-        chkEx("{ delete user @ { .name == 'Bob' }; return 0; }", "ct_err:no_db_update")
-        chkEx("{ if (2 < 3) create user('Bob'); return 0; }", "ct_err:no_db_update")
-        chkEx("{ if (2 < 3) update user @ {} ( .name = 'Bob' ); return 0; }", "ct_err:no_db_update")
-        chkEx("{ if (2 < 3) delete user @ { .name == 'Bob' }; return 0; }", "ct_err:no_db_update")
+        chkEx("{ create user('Bob'); return 0; }", "ct_err:no_db_update:query")
+        chkEx("{ update user @ {} ( name = 'Bob'); return 0; }", "ct_err:no_db_update:query")
+        chkEx("{ delete user @ { .name == 'Bob' }; return 0; }", "ct_err:no_db_update:query")
+        chkEx("{ if (2 < 3) create user('Bob'); return 0; }", "ct_err:no_db_update:query")
+        chkEx("{ if (2 < 3) update user @ {} ( .name = 'Bob' ); return 0; }", "ct_err:no_db_update:query")
+        chkEx("{ if (2 < 3) delete user @ { .name == 'Bob' }; return 0; }", "ct_err:no_db_update:query")
     }
 
     @Test fun testReturnTypeExplicit() {
         tstCtx.useSql = true
-        tst.chkQueryType(": integer { return null; }", "ct_err:entity_rettype:[integer]:[null]")
+        tst.chkQueryType(": integer { return null; }", "ct_err:fn_rettype:[integer]:[null]")
         tst.chkQueryType(": integer? { return null; }", "integer?")
         tst.chkQueryType(": integer? { return 123; }", "integer?")
         tst.chkQueryType(": integer { return 123; }", "integer")
         tst.chkQueryType(": integer { if (integer('0') == 0) return 123; else return null; }",
-                "ct_err:entity_rettype:[integer]:[null]")
+                "ct_err:fn_rettype:[integer]:[null]")
         tst.chkQueryType(": integer? { if (integer('0') == 0) return null; else return 123; }", "integer?")
         tst.chkQueryType(": integer? { if (integer('0') == 0) return 123; else return null; }", "integer?")
     }
@@ -145,10 +145,28 @@ class QueryTest: BaseRellTest() {
         chkEx("{ return unit(); }", "ct_err:stmt_return_unit")
         chkEx("{ return print('Hello'); }", "ct_err:stmt_return_unit")
 
-        chkEx("{ if (1 > 0) return 123; else return 'Hello'; }", "ct_err:entity_rettype:[integer]:[text]")
+        chkEx("{ if (1 > 0) return 123; else return 'Hello'; }", "ct_err:fn_rettype:[integer]:[text]")
     }
 
     @Test fun testGetRellVersion() {
         chkQueryEx("", "rell.get_rell_version", listOf(), "text[$RELL_VERSION]")
+    }
+
+    @Test fun testCallQuery() {
+        def("query foo() = 123;")
+        chk("foo()", "int[123]")
+    }
+
+    @Test fun testRecursiveTypeInference() {
+        chkCompile("query foo(x: integer) = if (x <= 1) 1 else foo(x - 1);", "ct_err:fn_type_recursion:QUERY:foo")
+        chkCompile("function foo(x: integer) = bar(x + 1); query bar(x: integer) = if (x <= 1) 1 else foo(x - 1);",
+                "ct_err:[fn_type_recursion:QUERY:bar][fn_type_recursion:FUNCTION:foo]")
+    }
+
+    @Test fun testDefaultParameters() {
+        def("query foo(x: integer = 123, y: text = 'Hello') = x+','+y;")
+        chk("foo()", "text[123,Hello]")
+        chk("foo(456)", "text[456,Hello]")
+        chk("foo(456,'Bye')", "text[456,Bye]")
     }
 }

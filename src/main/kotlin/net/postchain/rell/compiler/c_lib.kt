@@ -57,6 +57,9 @@ object C_LibFunctions {
             .add("log", C_SysFn_Print(true))
 
             .add("verify_signature", R_BooleanType, listOf(R_ByteArrayType, R_ByteArrayType, R_ByteArrayType), R_SysFn_Crypto.VerifySignature)
+            .add("sha256", R_ByteArrayType, listOf(R_ByteArrayType), R_SysFn_ByteArray.Sha256)
+            .add("keccak256", R_ByteArrayType, listOf(R_ByteArrayType), R_SysFn_Crypto.Keccak256)
+            .add("eth_ecrecover", R_ByteArrayType, listOf(R_ByteArrayType, R_ByteArrayType, R_IntegerType, R_ByteArrayType), R_SysFn_Crypto.EthEcRecover)
 
             .add("_crash", C_SysFn_Crash)
             .add("_type_of", C_SysFn_TypeOf)
@@ -166,14 +169,14 @@ object C_LibFunctions {
             C_GlobalFuncTable.EMPTY,
             stdFnValue("raw_config", R_GtvType, R_SysFn_ChainContext.RawConfig),
             stdFnValue("blockchain_rid", R_ByteArrayType, R_SysFn_ChainContext.BlockchainRid),
-            Pair("args", C_NsValue_ChainContext_Args)
+            "args" to C_NsValue_ChainContext_Args
     )
 
     private val OP_CONTEXT_NAMESPACE = makeNamespace(
             C_GlobalFuncTable.EMPTY,
-            Pair("last_block_time", C_Ns_OpContext.Value_LastBlockTime),
-            Pair("block_height", C_Ns_OpContext.Value_BlockHeight),
-            Pair("transaction", C_Ns_OpContext.Value_Transaction)
+            "last_block_time" to C_Ns_OpContext.Value_LastBlockTime,
+            "block_height" to C_Ns_OpContext.Value_BlockHeight,
+            "transaction" to C_Ns_OpContext.Value_Transaction
     )
 
     private val TEXT_NAMESPACE_FNS = typeGlobalFuncBuilder(R_TextType)
@@ -262,10 +265,34 @@ object C_LibFunctions {
             .build()
 
     private val RELL_NAMESPACE_FNS = C_GlobalFuncBuilder()
+//            .add("get_rell_version", R_TextType, listOf(), R_SysFn_Rell.GetRellVersion)
+//            .add("get_postchain_version", R_TextType, listOf(), R_SysFn_Rell.GetPostchainVersion)
+//            .add("get_build", R_TextType, listOf(), R_SysFn_Rell.GetBuild)
+//            .add("get_build_details", R_SysFn_Rell.GetBuildDetails.TYPE, listOf(), R_SysFn_Rell.GetBuildDetails)
+//            .add("get_app_structure", R_GtvType, listOf(), R_SysFn_Rell.GetAppStructure)
             .build()
 
-    private val RELL_NAMESPACE = makeNamespace(
-            RELL_NAMESPACE_FNS
+    private val RELL_GTX_NAMESPACE_FNS = C_GlobalFuncBuilder()
+            .add("block", R_GtxBlockType, listOf(), R_SysFn_Gtx.Block.NewEmpty)
+            .add("block", R_GtxBlockType, listOf(R_GtxTxType), R_SysFn_Gtx.Block.NewOneTx)
+            .add("block", R_GtxBlockType, listOf(R_ListType(R_GtxTxType)), R_SysFn_Gtx.Block.NewListOfTxs)
+            .add("tx", R_GtxTxType, listOf(), R_SysFn_Gtx.Tx.NewEmpty)
+            .add("tx", R_GtxTxType, listOf(R_OperationType), R_SysFn_Gtx.Tx.NewOneOp)
+            .add("tx", R_GtxTxType, listOf(R_ListType(R_OperationType)), R_SysFn_Gtx.Tx.NewListOfOps)
+            .build()
+
+    private val RELL_GTX_NAMESPACE = makeNamespaceEx(
+            functions = RELL_GTX_NAMESPACE_FNS,
+            types = mapOf(
+                    "block" to R_GtxBlockType,
+                    "tx" to R_GtxTxType
+            )
+    )
+
+    private val RELL_NAMESPACE = makeNamespaceEx(
+            functions = RELL_NAMESPACE_FNS,
+            namespaces = mapOf("gtx" to RELL_GTX_NAMESPACE),
+            values = mapOf("gtx" to C_NamespaceValue_Namespace(C_DefProxy.create(RELL_GTX_NAMESPACE)))
     )
 
     private val NAMESPACES = mapOf(
@@ -322,6 +349,9 @@ object C_LibFunctions {
             is R_VirtualTupleType -> getVirtualTupleFns(type)
             is R_StructType -> getStructFns(type.struct)
             is R_VirtualStructType -> getVirtualStructFns(type)
+            is R_OperationType -> typeMemFuncBuilder(type).build()
+            is R_GtxTxType -> getGtxTxFns(type)
+            is R_GtxBlockType -> getGtxBlockFns(type)
             else -> C_MemberFuncTable(mapOf())
         }
     }
@@ -513,6 +543,18 @@ object C_LibFunctions {
     private fun getVirtualStructFns(type: R_VirtualStructType): C_MemberFuncTable {
         return typeMemFuncBuilder(type)
                 .add("to_full", type.innerType, listOf(), R_SysFn_Virtual.ToFull)
+                .build()
+    }
+
+    private fun getGtxTxFns(type: R_GtxTxType): C_MemberFuncTable {
+        return typeMemFuncBuilder(type)
+                .add("run", R_UnitType, listOf(), R_SysFn_Gtx.Tx.Run)
+                .build()
+    }
+
+    private fun getGtxBlockFns(type: R_GtxBlockType): C_MemberFuncTable {
+        return typeMemFuncBuilder(type)
+                .add("run", R_UnitType, listOf(), R_SysFn_Gtx.Block.Run)
                 .build()
     }
 
@@ -878,15 +920,26 @@ private class C_SysMemberFunction_Invalid(private val type: R_Type): C_MemberFor
     }
 }
 
-private fun makeNamespace(fns: C_GlobalFuncTable, vararg values: Pair<String, C_NamespaceValue>): C_Namespace {
+private fun makeNamespace(functions: C_GlobalFuncTable, vararg values: Pair<String, C_NamespaceValue>): C_Namespace {
+    return makeNamespaceEx(functions = functions, values = mapOf(*values))
+}
+
+private fun makeNamespaceEx(
+        functions: C_GlobalFuncTable = C_GlobalFuncTable.EMPTY,
+        types: Map<String, R_Type> = mapOf(),
+        namespaces: Map<String, C_Namespace> = mapOf(),
+        values: Map<String, C_NamespaceValue> = mapOf()
+): C_Namespace {
     val valueMap = mutableMapOf<String, C_DefProxy<C_NamespaceValue>>()
     for ((name, field) in values) {
         check(name !in valueMap)
         valueMap[name] = C_DefProxy.create(field)
     }
 
-    val functionMap = fns.toMap().mapValues { (k, v) -> C_DefProxy.create(v) }
-    return C_Namespace(mapOf(), mapOf(), valueMap, functionMap)
+    val namespaceMap = namespaces.mapValues { C_DefProxy.create(it.value) }
+    val typeMap = types.mapValues { C_DefProxy.create(it.value) }
+    val functionMap = functions.toMap().mapValues { (k, v) -> C_DefProxy.create(v) }
+    return C_Namespace(namespaceMap, typeMap, valueMap, functionMap)
 }
 
 private fun stdConstValue(name: String, value: Long) = stdConstValue(name, Rt_IntValue(value))

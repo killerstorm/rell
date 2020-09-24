@@ -4,14 +4,15 @@
 
 package net.postchain.rell.compiler
 
-import net.postchain.rell.LateGetter
+import net.postchain.rell.utils.LateGetter
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Value
-import net.postchain.rell.toImmList
-import net.postchain.rell.toImmMap
+import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmMap
 import org.apache.commons.lang3.StringUtils
+import java.util.function.Supplier
 
 class C_Deprecated(
         private val useInstead: String,
@@ -39,75 +40,77 @@ enum class C_DeclarationType(val msg: String) {
     QUERY("query"),
     IMPORT("import")
     ;
+
+    val capitalizedMsg = StringUtils.capitalize(msg)
 }
 
-sealed class C_DefProxy<T> {
-    abstract fun getDef(msgCtx: C_MessageContext, name: List<S_Name>): T
-    abstract fun getDefQuiet(): T?
+class C_DefProxyDeprecation(val type: C_DeclarationType, val deprecated: C_Deprecated)
 
-    companion object {
-        fun <T> create(def: T): C_DefProxy<T> = C_SimpleDefProxy(def)
-        fun <T> createGetter(getter: LateGetter<T>): C_DefProxy<T> = C_GetterDefProxy(getter)
+class C_DefProxy<T> private constructor(
+        private val supplier: Supplier<T>,
+        private val ambiguous: Boolean = false,
+        private val deprecation: C_DefProxyDeprecation? = null
+) {
+    fun getDef(msgCtx: C_MessageContext, name: List<S_Name>): T {
+        val res = supplier.get()
 
-        fun create(type: R_Type, deprecated: C_Deprecated? = null): C_DefProxy<R_Type> {
-            return create(C_DeclarationType.TYPE, deprecated, type)
+        if (ambiguous) {
+            val lastName = name.last()
+            val qName = C_Utils.nameStr(name)
+            msgCtx.error(lastName.pos, "name:ambig:$qName", "Name '$qName' is ambiguous")
         }
 
-        fun create(namespace: C_Namespace, deprecated: C_Deprecated? = null): C_DefProxy<C_Namespace> {
-            return create(C_DeclarationType.NAMESPACE, deprecated, namespace)
+        if (deprecation != null) {
+            val simpleName = name.last()
+            deprecatedMessage(msgCtx, simpleName.pos, simpleName.str, deprecation)
         }
 
-        fun <T> create(type: C_DeclarationType, deprecated: C_Deprecated?, def: T): C_DefProxy<T> {
-            return create0(C_SimpleDefProxy(def), type, deprecated)
-        }
-
-        fun <T> create(type: C_DeclarationType, deprecated: C_Deprecated?, getter: LateGetter<T>): C_DefProxy<T> {
-            return create0(C_GetterDefProxy(getter), type, deprecated)
-        }
-
-        private fun <T> create0(proxy: C_DefProxy<T>, type: C_DeclarationType, deprecated: C_Deprecated?): C_DefProxy<T> {
-            return if (deprecated == null) proxy else C_DeprecatedDefProxy(proxy, type, deprecated)
-        }
-    }
-}
-
-private sealed class C_BasicDefProxy<T>: C_DefProxy<T>() {
-    protected abstract fun def(): T
-    final override fun getDef(msgCtx: C_MessageContext, name: List<S_Name>) = def()
-}
-
-private class C_SimpleDefProxy<T>(private val def: T): C_BasicDefProxy<T>() {
-    override fun def() = def
-    override fun getDefQuiet() = def
-}
-
-private class C_GetterDefProxy<T>(private val getter: LateGetter<T>): C_BasicDefProxy<T>() {
-    override fun def() = getter.get()
-    override fun getDefQuiet() = getter.get()
-}
-
-class C_DeprecatedDefProxy<T>(
-        private val proxy: C_DefProxy<T>,
-        private val type: C_DeclarationType,
-        private val deprecated: C_Deprecated
-): C_DefProxy<T>() {
-    override fun getDef(msgCtx: C_MessageContext, name: List<S_Name>): T {
-        val simpleName = name.last()
-        deprecatedMessage(msgCtx, type, simpleName.pos, simpleName.str, deprecated)
-        val res = proxy.getDef(msgCtx, name)
         return res
     }
 
-    override fun getDefQuiet() = proxy.getDefQuiet()
+    fun getDefQuiet(): T = supplier.get()
+
+    fun update(ambiguous: Boolean? = null, deprecation: C_DefProxyDeprecation? = null): C_DefProxy<T> {
+        val ambiguous2 = ambiguous ?: this.ambiguous
+        return if (ambiguous2 == this.ambiguous && deprecation === this.deprecation) this else
+            C_DefProxy(supplier, ambiguous2, deprecation)
+    }
 
     companion object {
+        fun <T> create(def: T): C_DefProxy<T> = C_DefProxy(Supplier { def })
+        fun <T> createGetter(getter: LateGetter<T>): C_DefProxy<T> = C_DefProxy(getter)
+
+        fun create(type: R_Type, deprecated: C_Deprecated? = null): C_DefProxy<R_Type> {
+            return create(type, C_DeclarationType.TYPE, deprecated)
+        }
+
+        fun create(namespace: C_Namespace, deprecated: C_Deprecated? = null): C_DefProxy<C_Namespace> {
+            return create(namespace, C_DeclarationType.NAMESPACE, deprecated)
+        }
+
+        fun <T> create(def: T, type: C_DeclarationType, deprecated: C_Deprecated?): C_DefProxy<T> {
+            val supplier = Supplier { def }
+            val deprecation = if (deprecated == null) null else C_DefProxyDeprecation(type, deprecated)
+            return C_DefProxy(supplier, deprecation = deprecation)
+        }
+
+        fun <T> create(def: T, deprecation: C_DefProxyDeprecation?): C_DefProxy<T> {
+            return C_DefProxy(Supplier { def }, deprecation = deprecation)
+        }
+
+        fun <T> create(supplier: Supplier<T>, deprecation: C_DefProxyDeprecation?): C_DefProxy<T> {
+            return C_DefProxy(supplier, deprecation = deprecation)
+        }
+
         fun deprecatedMessage(
                 msgCtx: C_MessageContext,
-                type: C_DeclarationType,
                 pos: S_Pos,
                 name: String,
-                deprecated: C_Deprecated
+                deprecation: C_DefProxyDeprecation
         ) {
+            val type = deprecation.type
+            val deprecated = deprecation.deprecated
+
             val typeStr = StringUtils.capitalize(type.msg)
             val depCode = deprecated.detailsCode()
             val depStr = deprecated.detailsMessage()
@@ -120,19 +123,6 @@ class C_DeprecatedDefProxy<T>(
             msgCtx.message(msgType, pos, code, msg)
         }
     }
-}
-
-class C_AmbiguousDefProxy<T>(private val proxy: C_DefProxy<T>): C_DefProxy<T>() {
-    override fun getDef(msgCtx: C_MessageContext, name: List<S_Name>): T {
-        val lastName = name.last()
-        val qName = C_Utils.nameStr(name)
-        msgCtx.error(lastName.pos, "name:ambig:$qName", "Name '$qName' is ambiguous")
-
-        val res = proxy.getDef(msgCtx, name)
-        return res
-    }
-
-    override fun getDefQuiet() = proxy.getDefQuiet()
 }
 
 class C_DefRef<T>(
@@ -243,7 +233,7 @@ class C_NamespaceBuilder {
     }
 
     private fun <T> addDef(map: MutableMap<String, C_DefProxy<T>>, name: String, def: C_DefProxy<T>) {
-        check(name !in map)
+        check(name !in map) { "$name ${map.keys.sorted()}" }
         map[name] = def
     }
 
@@ -313,5 +303,11 @@ class C_NamespaceValue_Struct(private val struct: R_Struct): C_NamespaceValue() 
         val nsProxy = C_LibFunctions.makeStructNamespace(struct)
         val nsRef = C_NamespaceRef.create(ctx.msgCtx, name, nsProxy)
         return C_StructExpr(name, struct, nsRef)
+    }
+}
+
+class C_NamespaceValue_Type(private val type: R_Type): C_NamespaceValue() {
+    override fun toExpr(ctx: C_NamespaceValueContext, name: List<S_Name>): C_Expr {
+        return C_TypeExpr(name[0].pos, type)
     }
 }

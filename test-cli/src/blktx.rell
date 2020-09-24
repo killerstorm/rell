@@ -1,0 +1,18 @@
+module;
+
+operation do_something(x: text) {
+    log('operation do_something:', x);
+}
+
+query get_data() {
+    val blks = block @* {};
+    val txs = transaction @* {};
+    log('blocks:', blks);
+    log('transactions:', txs);
+
+    val res_blks = list<rowid>();
+    for (blk in blks) res_blks.add(blk.rowid);
+    val res_txs = list<rowid>();
+    for (tx in txs) res_txs.add(tx.rowid);
+    return (res_blks, res_txs);
+}

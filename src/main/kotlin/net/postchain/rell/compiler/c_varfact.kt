@@ -4,11 +4,11 @@
 
 package net.postchain.rell.compiler
 
-import net.postchain.rell.CommonUtils
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.model.R_NullType
 import net.postchain.rell.model.R_NullableType
 import net.postchain.rell.model.R_Type
-import net.postchain.rell.toImmMap
+import net.postchain.rell.utils.toImmMap
 
 enum class C_VarFact {
     NO,

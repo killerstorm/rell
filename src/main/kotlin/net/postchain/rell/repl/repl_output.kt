@@ -5,7 +5,7 @@
 package net.postchain.rell.repl
 
 import net.postchain.gtv.Gtv
-import net.postchain.rell.PostchainUtils
+import net.postchain.rell.utils.PostchainUtils
 import net.postchain.rell.compiler.C_Message
 import net.postchain.rell.model.R_CollectionType
 import net.postchain.rell.model.R_MapType

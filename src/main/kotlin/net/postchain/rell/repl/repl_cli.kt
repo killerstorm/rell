@@ -5,7 +5,7 @@
 package net.postchain.rell.repl
 
 import com.google.common.base.Throwables
-import net.postchain.rell.CommonUtils
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.compiler.C_Message
 import net.postchain.rell.compiler.C_Parser
 import net.postchain.rell.compiler.C_SourceDir

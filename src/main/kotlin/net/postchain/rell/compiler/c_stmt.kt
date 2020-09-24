@@ -7,11 +7,29 @@ package net.postchain.rell.compiler
 import net.postchain.rell.compiler.ast.S_Statement
 import net.postchain.rell.model.R_EmptyStatement
 import net.postchain.rell.model.R_Statement
-import net.postchain.rell.toImmList
+import net.postchain.rell.utils.toImmList
 
-class C_Statement(val rStmt: R_Statement, val returnAlways: Boolean, val varFacts: C_VarFacts = C_VarFacts.EMPTY) {
-    fun updateStmt(newStmt: R_Statement): C_Statement {
-        return C_Statement(newStmt, returnAlways, varFacts)
+class C_Statement(
+        val rStmt: R_Statement,
+        val returnAlways: Boolean,
+        val varFacts: C_VarFacts = C_VarFacts.EMPTY,
+        val guardBlock: Boolean = false
+) {
+    fun update(
+            rStmt: R_Statement? = null,
+            returnAlways: Boolean? = null,
+            varFacts: C_VarFacts? = null,
+            guardBlock: Boolean? = null
+    ): C_Statement {
+        val rStmt2 = rStmt ?: this.rStmt
+        val returnAlways2 = returnAlways ?: this.returnAlways
+        val varFacts2 = varFacts ?: this.varFacts
+        val guardBlock2 = guardBlock ?: this.guardBlock
+        return if (rStmt2 === this.rStmt
+                && returnAlways2 == this.returnAlways
+                && varFacts2 === this.varFacts
+                && guardBlock2 == this.guardBlock) this
+                else C_Statement(rStmt = rStmt2, returnAlways = returnAlways2, varFacts = varFacts2, guardBlock = guardBlock2)
     }
 
     companion object {
@@ -33,6 +51,7 @@ class C_Statement(val rStmt: R_Statement, val returnAlways: Boolean, val varFact
 class C_BlockCode(
         rStmts: List<R_Statement>,
         val returnAlways: Boolean,
+        val guardBlock: Boolean,
         val deltaVarFacts: C_VarFacts,
         val factsCtx: C_VarFactsContext
 ) {
@@ -48,19 +67,24 @@ class C_BlockCodeProto(val varFacts: C_VarFacts) {
     companion object { val EMPTY = C_BlockCodeProto(C_VarFacts.EMPTY) }
 }
 
-class C_BlockCodeBuilder(ctx: C_StmtContext, private val repl: Boolean, proto: C_BlockCodeProto) {
+class C_BlockCodeBuilder(ctx: C_StmtContext, private val repl: Boolean, hasGuardBlock: Boolean, proto: C_BlockCodeProto) {
     private val ctx = ctx.updateFacts(proto.varFacts)
     private val rStmts = mutableListOf<R_Statement>()
     private var returnAlways = false
     private var deadCode = false
+    private var beforeGuardBlock = hasGuardBlock
+    private var afterGuardBlock = false
     private val blkVarFacts = C_BlockVarFacts(this.ctx.exprCtx.factsCtx)
     private var build = false
 
     fun add(stmt: S_Statement) {
         check(!build)
 
-        val subFactsCtx = ctx.update(exprCtx = ctx.exprCtx.update(factsCtx = blkVarFacts.subContext()))
-        val cStmt = stmt.compile(subFactsCtx, repl)
+        val subCtx = ctx.update(
+                exprCtx = ctx.exprCtx.update(factsCtx = blkVarFacts.subContext(), insideGuardBlock = beforeGuardBlock),
+                afterGuardBlock = afterGuardBlock
+        )
+        val cStmt = stmt.compile(subCtx, repl)
 
         if (returnAlways && !deadCode) {
             ctx.msgCtx.error(stmt.pos, "stmt_deadcode", "Dead code")
@@ -68,6 +92,12 @@ class C_BlockCodeBuilder(ctx: C_StmtContext, private val repl: Boolean, proto: C
         }
 
         rStmts.add(cStmt.rStmt)
+
+        if (cStmt.guardBlock) {
+            beforeGuardBlock = false
+            afterGuardBlock = true
+        }
+
         returnAlways = returnAlways || cStmt.returnAlways
         blkVarFacts.putFacts(cStmt.varFacts)
     }
@@ -77,6 +107,6 @@ class C_BlockCodeBuilder(ctx: C_StmtContext, private val repl: Boolean, proto: C
         build = true
         val deltaVarFacts = blkVarFacts.copyFacts()
         val factsCtx = ctx.exprCtx.factsCtx.sub(deltaVarFacts)
-        return C_BlockCode(rStmts, returnAlways, deltaVarFacts, factsCtx)
+        return C_BlockCode(rStmts, returnAlways, afterGuardBlock, deltaVarFacts, factsCtx)
     }
 }

@@ -31,10 +31,10 @@ object C_AttributeResolver {
         checkMissingAttrs(attributes, attrExprsDef, pos)
 
         for ((idx, attr) in attrs.withIndex()) {
-            if (!attr.canSetInCreate) {
+            val expr = exprs[idx].expr
+            C_Errors.check(attr.canSetInCreate, expr.startPos) {
                 val name = attr.name
-                val expr = exprs[idx].expr
-                throw C_Error(expr.startPos, "create_attr_cantset:$name", "Cannot set value of system attribute '$name'")
+                "create_attr_cantset:$name" to "Cannot set value of system attribute '$name'"
             }
         }
 
@@ -61,9 +61,8 @@ object C_AttributeResolver {
         val names = attrs.map { it.attr.name }.toSet()
 
         val missing = (attributes.keys - names).sorted().toList()
-        if (!missing.isEmpty()) {
-            throw C_Error(pos, "attr_missing:${missing.joinToString(",")}",
-                    "Attributes not specified: ${missing.joinToString()}")
+        C_Errors.check(missing.isEmpty(), pos) {
+            "attr_missing:${missing.joinToString(",")}" to "Attributes not specified: ${missing.joinToString()}"
         }
     }
 
@@ -81,14 +80,16 @@ object C_AttributeResolver {
         for ((idx, pair) in exprs.withIndex()) {
             if (pair.name != null) {
                 val name = pair.name
-                val attr = attributes[name.str]
-                if (attr == null) {
-                    throw C_Error(name.pos, "attr_unknown_name:${name.str}", "Unknown attribute: '${name.str}'")
-                } else if (!explicitNames.add(name.str)) {
-                    throw C_Error(name.pos, "attr_dup_name:${name.str}", "Attribute already specified: '${name.str}'")
-                } else if (mutableOnly && !attr.mutable) {
-                    throw C_Error(name.pos, "update_attr_not_mutable:${name.str}", "Attribute is not mutable: '${name.str}'")
+                val attrZ = attributes[name.str]
+                val attr = C_Errors.checkNotNull(attrZ, name.pos) { "attr_unknown_name:${name.str}" to "Unknown attribute: '${name.str}'" }
+
+                C_Errors.check(explicitNames.add(name.str), name.pos) {
+                    "attr_dup_name:${name.str}" to "Attribute already specified: '${name.str}'"
                 }
+                C_Errors.check(!mutableOnly || attr.mutable, name.pos) {
+                    "update_attr_not_mutable:${name.str}" to "Attribute is not mutable: '${name.str}'"
+                }
+
                 explicitExprs.add(IndexedValue(idx, attr))
             }
         }
@@ -162,12 +163,9 @@ object C_AttributeResolver {
 
         for ((idx, attr) in implicitExprs) {
             val name = attr.name
-            if (name in explicitNames) {
-                throw C_Error(
-                        exprs[idx].expr.startPos,
-                        "attr_implic_explic:$idx:$name",
-                        "Expression #${idx + 1} matches attribute '$name' which is already specified"
-                )
+            C_Errors.check(name !in explicitNames, exprs[idx].expr.startPos) {
+                    "attr_implic_explic:$idx:$name" to
+                            "Expression #${idx + 1} matches attribute '$name' which is already specified"
             }
         }
     }
@@ -183,10 +181,9 @@ object C_AttributeResolver {
         }
 
         for ((name, list) in implicitConflicts) {
-            if (list.size > 1) {
-                val pos = exprs[list[0]].expr.startPos
-                throw C_Error(pos, "attr_implic_multi:$name:${list.joinToString(",")}",
-                        "Multiple expressions match attribute '$name': ${list.joinToString { "#" + (it + 1) }}")
+            C_Errors.check(list.size <= 1, exprs[list[0]].expr.startPos) {
+                "attr_implic_multi:$name:${list.joinToString(",")}" to
+                        "Multiple expressions match attribute '$name': ${list.joinToString { "#" + (it + 1) }}"
             }
         }
     }
@@ -211,9 +208,11 @@ object C_AttributeResolver {
         val byType = implicitMatchByType(attributes, type, mutableOnly)
         if (byType.size == 1) {
             return byType[0]
-        } else if (byType.size > 1) {
-            throw C_Error(expr.startPos, "attr_implic_multi:$idx:${byType.joinToString(",") { it.name }}",
-                    "Multiple attributes match expression #${idx + 1}: ${byType.joinToString(", ") { it.name }}")
+        }
+
+        C_Errors.check(byType.size == 0, expr.startPos) {
+                "attr_implic_multi:$idx:${byType.joinToString(",") { it.name }}" to
+                        "Multiple attributes match expression #${idx + 1}: ${byType.joinToString(", ") { it.name }}"
         }
 
         throw C_Error(expr.startPos, "attr_implic_unknown:$idx",
@@ -230,12 +229,9 @@ object C_AttributeResolver {
     }
 
     private fun typeCheck(pos: S_Pos, idx: Int, attr: R_Attrib, exprType: R_Type) {
-        if (!attr.type.isAssignableFrom(exprType)) {
-            throw C_Error(
-                    pos,
-                    "attr_bad_type:$idx:${attr.name}:${attr.type.toStrictString()}:${exprType.toStrictString()}",
-                    "Attribute type mismatch for '${attr.name}': ${exprType} instead of ${attr.type}"
-            )
+        C_Errors.check(attr.type.isAssignableFrom(exprType), pos) {
+                "attr_bad_type:$idx:${attr.name}:${attr.type.toStrictString()}:${exprType.toStrictString()}" to
+                        "Attribute type mismatch for '${attr.name}': ${exprType} instead of ${attr.type}"
         }
     }
 }

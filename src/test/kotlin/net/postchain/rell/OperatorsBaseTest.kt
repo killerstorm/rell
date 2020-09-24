@@ -214,23 +214,7 @@ abstract class OperatorsBaseTest: BaseResourcefulTest() {
     }
 
     @Test fun testPlusDecimal() {
-        chkOp("+", vDec("123"), vDec("456"), "dec[579]")
-        chkOp("+", vDec("12345"), vDec("67890"), "dec[80235]")
-        chkOp("+", vDec("12.34"), vDec("56.78"), "dec[69.12]")
-
-        // Extreme values.
-        val d = DV
-
-        chkOp("+", vDec("${d.lim2}"), vDec("1"), "dec[${d.lim1}]")
-        chkDecOverflow("+", vDec("${d.lim2}"), vDec("2"))
-        chkOp("+", vDec("-${d.lim2}"), vDec("-1"), "dec[-${d.lim1}]")
-        chkDecOverflow("+", vDec("-${d.lim2}"), vDec("-2"))
-
-        chkOp("+", vDec("0.${d.frac3}12"), vDec("0.${d.frac0}34"), "dec[0.${d.frac3}46]")
-        chkOp("+", vDec("${d.lim1}.${d.frac3}12"), vDec("0.${d.frac6}34"), "dec[${d.lim1}.${d.frac9}46]")
-        chkOp("+", vDec("${d.lim1}.${d.frac3}95"), vDec("0.${d.frac6}04"), "dec[${d.lim1}.${d.frac9}99]")
-        chkOp("+", vDec("-${d.lim1}.${d.frac3}95"), vDec("-0.${d.frac6}04"), "dec[-${d.lim1}.${d.frac9}99]")
-        chkDecOverflow("+", vDec("-${d.lim1}.${d.frac3}95"), vDec("-0.${d.frac6}05"))
+        chkDecimalCases(DecimalTest.ADD_TEST_CASES)
 
         // Mixed integer and decimal.
         chkOp("+", vDec("123"), vInt(456), "dec[579]")
@@ -238,10 +222,21 @@ abstract class OperatorsBaseTest: BaseResourcefulTest() {
         chkOp("+", vDec("12345"), vInt(67890), "dec[80235]")
         chkOp("+", vInt(12345), vDec("67890"), "dec[80235]")
 
+        val d = DV
         chkOp("+", vDec("${d.lim2}"), vInt(1), "dec[${d.lim1}]")
         chkDecOverflow("+", vDec("${d.lim2}"), vInt(2))
         chkOp("+", vDec("-${d.lim2}"), vInt(-1), "dec[-${d.lim1}]")
         chkDecOverflow("+", vDec("-${d.lim2}"), vInt(-2))
+    }
+
+    private fun chkDecimalCases(cases: List<DecimalTest.DecAddCase>) {
+        for (case in cases) {
+            if (case.expected != null) {
+                chkOp(case.op, vDec(case.a), vDec(case.b), "dec[${case.expected}]")
+            } else {
+                chkDecOverflow(case.op, vDec(case.a), vDec(case.b))
+            }
+        }
     }
 
     @Test fun testPlusSpecial() {
@@ -279,23 +274,7 @@ abstract class OperatorsBaseTest: BaseResourcefulTest() {
     }
 
     @Test fun testMinusDecimal() {
-        chkOp("-", vDec("12345"), vDec("67890"), "dec[-55545]")
-        chkOp("-", vDec("67890"), vDec("12345"), "dec[55545]")
-        chkOp("-", vDec("12.34"), vDec("56.78"), "dec[-44.44]")
-
-        // Extreme values.
-        val d = DV
-
-        chkOp("-", vDec("-${d.lim2}"), vDec("1"), "dec[-${d.lim1}]")
-        chkDecOverflow("-", vDec("-${d.lim2}"), vDec("2"))
-        chkOp("-", vDec("${d.lim2}"), vDec("-1"), "dec[${d.lim1}]")
-        chkDecOverflow("-", vDec("${d.lim2}"), vDec("-2"))
-
-        chkOp("-", vDec("0.${d.frac3}34"), vDec("0.${d.frac0}12"), "dec[0.${d.frac3}22]")
-        chkOp("-", vDec("${d.lim1}.${d.frac9}34"), vDec("0.${d.frac6}12"), "dec[${d.lim1}.${d.frac3}22]")
-        chkOp("-", vDec("-${d.lim1}.${d.frac3}95"), vDec("0.${d.frac6}04"), "dec[-${d.lim1}.${d.frac9}99]")
-        chkOp("-", vDec("-${d.lim1}.${d.frac3}95"), vDec("0.${d.frac6}04"), "dec[-${d.lim1}.${d.frac9}99]")
-        chkDecOverflow("-", vDec("-${d.lim1}.${d.frac3}95"), vDec("0.${d.frac6}05"))
+        chkDecimalCases(DecimalTest.SUB_TEST_CASES)
 
         // Mixed integer and decimal.
         chkOp("-", vDec("12345"), vInt(67890), "dec[-55545]")
@@ -303,6 +282,7 @@ abstract class OperatorsBaseTest: BaseResourcefulTest() {
         chkOp("-", vDec("67890"), vInt(12345), "dec[55545]")
         chkOp("-", vInt(67890), vDec("12345"), "dec[55545]")
 
+        val d = DV
         chkOp("-", vDec("-${d.lim2}"), vInt(1), "dec[-${d.lim1}]")
         chkDecOverflow("-", vDec("-${d.lim2}"), vInt(2))
         chkOp("-", vDec("${d.lim2}"), vInt(-1), "dec[${d.lim1}]")
@@ -1084,19 +1064,8 @@ abstract class OperatorsBaseTest: BaseResourcefulTest() {
     }
 
     companion object {
-        private val DV = DecVals()
+        private val DV = DecimalTest.DecVals()
     }
 
     abstract class TstVal
-
-    private class DecVals {
-        val intDigs = C_Constants.DECIMAL_INT_DIGITS
-        val lim1 = DecimalTest.limitMinus(1)
-        val lim2 = DecimalTest.limitMinus(2)
-        val limDiv10 = DecimalTest.limitDiv(10)
-        val frac0 = DecimalTest.fracBase("0")
-        val frac3 = DecimalTest.fracBase("3")
-        val frac6 = DecimalTest.fracBase("6")
-        val frac9 = DecimalTest.fracBase("9")
-    }
 }

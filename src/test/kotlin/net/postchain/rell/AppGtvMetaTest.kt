@@ -37,10 +37,9 @@ class AppGtvMetaTest: BaseRellTest(false) {
         tstCtx.blockchain(555, "beefdead")
         tst.chainDependency("foo", "deadbeef", 1000)
         tst.chainDependency("bar", "beefdead", 2000)
-        tstCtx.insert(LibBlockTransactionTest.BLOCK_INSERTS)
 
-        initExternalChain(333, true)
-        initExternalChain(555, false)
+        initExternalChain(333, true, LibBlockTransactionTest.BLOCK_INSERTS_333)
+        initExternalChain(555, false, LibBlockTransactionTest.BLOCK_INSERTS_555)
 
         file("lib.rell", "@external module;")
 
@@ -52,11 +51,12 @@ class AppGtvMetaTest: BaseRellTest(false) {
         }}""")
     }
 
-    private fun initExternalChain(chainId: Long, resetDatabase: Boolean) {
+    private fun initExternalChain(chainId: Long, resetDatabase: Boolean, inserts: List<String> = listOf()) {
         run {
             val t = RellCodeTester(tst.tstCtx)
             t.chainId = chainId
             t.dropTables = resetDatabase
+            t.insert(inserts)
             t.init()
         }
         tst.dropTables = false
@@ -174,9 +174,9 @@ class AppGtvMetaTest: BaseRellTest(false) {
 
     @Test fun testTypeCustom() {
         initTypes()
-        chkMetaType("lib.user", """ "lib!user" """)
-        chkMetaType("lib.rec", """ "lib!rec" """)
-        chkMetaType("lib.kind", """ "lib!kind" """)
+        chkMetaType("lib.user", """ "lib:user" """)
+        chkMetaType("lib.rec", """ "lib:rec" """)
+        chkMetaType("lib.kind", """ "lib:kind" """)
     }
 
     @Test fun testTypeCollections() {
@@ -217,13 +217,13 @@ class AppGtvMetaTest: BaseRellTest(false) {
     @Test fun testTypeNullable() {
         initTypes()
         chkMetaType("integer?", """{"type":"nullable","value":"integer"}""")
-        chkMetaType("lib.user?", """{"type":"nullable","value":"lib!user"}""")
+        chkMetaType("lib.user?", """{"type":"nullable","value":"lib:user"}""")
     }
 
     @Test fun testTypeVirtual() {
         initTypes()
 
-        chkMetaType("virtual<lib.rec>", """{"type":"virtual","value":"lib!rec"}""")
+        chkMetaType("virtual<lib.rec>", """{"type":"virtual","value":"lib:rec"}""")
         chkMetaType("virtual<list<integer>>", """{"type":"virtual","value":{"type":"list","value":"integer"}}""")
         chkMetaType("virtual<set<integer>>", """{"type":"virtual","value":{"type":"set","value":"integer"}}""")
         chkMetaType("virtual<map<text,integer>>", """{"type":"virtual","value":{"type":"map","key":"text","value":"integer"}}""")
@@ -254,7 +254,7 @@ class AppGtvMetaTest: BaseRellTest(false) {
             },
             "value":{
                 "type":"list",
-                "value":{"type":"set","value":"lib!user"}
+                "value":{"type":"set","value":"lib:user"}
             }
         }""")
     }

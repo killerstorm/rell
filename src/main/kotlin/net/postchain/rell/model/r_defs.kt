@@ -11,7 +11,7 @@ import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_EnumValue
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.runtime.toGtv
-import net.postchain.rell.toGtv
+import net.postchain.rell.utils.toGtv
 
 sealed class R_KeyIndex(val attribs: List<String>) {
     fun toMetaGtv(): Gtv {

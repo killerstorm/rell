@@ -4,7 +4,7 @@
 
 package net.postchain.rell.compiler
 
-import net.postchain.rell.Getter
+import net.postchain.rell.utils.Getter
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.model.R_Entity
 import net.postchain.rell.model.R_EntityType
@@ -36,10 +36,10 @@ class C_Scope(
     private val rootNsRef: C_NamespaceRef by lazy { C_NamespaceRef(msgCtx, listOf(), nsGetter()) }
 
     fun getType(name: List<S_Name>): R_Type {
-        val type = getTypeOpt(name)
-        if (type == null) {
+        val typeZ = getTypeOpt(name)
+        val type = C_Errors.checkNotNull(typeZ, name[0].pos) {
             val nameStr = C_Utils.nameStr(name)
-            throw C_Error(name[0].pos, "unknown_type:$nameStr", "Unknown type: '$nameStr'")
+            "unknown_type:$nameStr" to "Unknown type: '$nameStr'"
         }
         return type
     }

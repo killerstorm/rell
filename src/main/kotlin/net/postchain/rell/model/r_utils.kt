@@ -4,8 +4,8 @@
 
 package net.postchain.rell.model
 
-import net.postchain.rell.CommonUtils
-import net.postchain.rell.toImmList
+import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.toImmList
 import org.apache.commons.lang3.StringUtils
 import java.util.*
 
@@ -13,7 +13,7 @@ class R_DefinitionPos(val module: String, val definition: String) {
     override fun toString() = appLevelName(module, definition)
 
     companion object {
-        fun appLevelName(module: String, definition: String) = "$module!$definition"
+        fun appLevelName(module: String, definition: String) = "$module:$definition"
     }
 }
 

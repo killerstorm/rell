@@ -579,4 +579,11 @@ class ExpressionTest: BaseRellTest(false) {
         chkEx("{ val t = _nullable((123, 'Hello')); return t!![0]; }", "int[123]")
         chkEx("{ val t = _nullable((123, 'Hello')); return t!![1]; }", "text[Hello]")
     }
+
+    @Test fun testNamedArgumentsInSysFunctions() {
+        chk("abs(x=123)", "ct_err:expr:call:sys_global_named_arg:x")
+        chk("abs(123)", "int[123]")
+        chk("'hello'.sub(start=3)", "ct_err:expr:call:sys_member_fn_named_arg:start")
+        chk("'hello'.sub(3)", "text[lo]")
+    }
 }

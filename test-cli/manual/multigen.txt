@@ -179,3 +179,11 @@ INFO  2019-11-24 13:35:01.832 [kovenant-worker-3] Rell - ERROR Query 'main_q' fa
 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------
 ./multigen.sh -d test-cli/runxml-docs-sample/src -o out test-cli/runxml-docs-sample/run.xml
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./multigen.sh -d test-cli/src -o out test-cli/config/run-blktx.xml
+
+./postchain.sh wipe-db -nc out/node-config.properties
+./postchain.sh run-node-auto -d out
+
+curl "http://localhost:7740/query/iid_2" -X POST -d '{"type":"get_data","x":"Bob"}'

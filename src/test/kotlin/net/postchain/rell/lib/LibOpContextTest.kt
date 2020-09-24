@@ -47,8 +47,8 @@ class LibOpContextTest: BaseRellTest(false) {
 
     @Test fun testTransaction() {
         tstCtx.useSql = true
-        tst.inserts = LibBlockTransactionTest.BLOCK_INSERTS
         tst.chainId = 333
+        tst.inserts = LibBlockTransactionTest.BLOCK_INSERTS_333
         tst.opContext = Rt_OpContext(-1, 444, -1, listOf())
 
         chkOp("print(_type_of(op_context.transaction));")
@@ -61,8 +61,8 @@ class LibOpContextTest: BaseRellTest(false) {
     @Test fun testTransactionAsDefaultValue() {
         tstCtx.useSql = true
         def("entity foo { t: transaction = op_context.transaction; }")
-        tst.inserts = LibBlockTransactionTest.BLOCK_INSERTS
         tst.chainId = 333
+        tst.inserts = LibBlockTransactionTest.BLOCK_INSERTS_333
         tst.opContext = Rt_OpContext(-1, 444, -1, listOf())
 
         chkOp("create foo();")

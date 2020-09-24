@@ -14,12 +14,12 @@ class ReplDefinitionTest: BaseRellTest(false) {
         tst.replModule = "lib"
 
         repl.chk("f(123)", "RES:int[15129]")
-        repl.chk("rec(456)", "RES:lib!rec[x=int[456]]")
+        repl.chk("rec(456)", "RES:lib:rec[x=int[456]]")
 
         repl.chk("function f(x: integer): integer = x * x * x;", "CTE:<console>:name_conflict:user:f:FUNCTION:lib/main.rell(1:37)")
         repl.chk("f(123)", "RES:int[15129]")
         repl.chk("struct rec {}", "CTE:<console>:name_conflict:user:rec:STRUCT:lib/main.rell(1:8)")
-        repl.chk("rec(789)", "RES:lib!rec[x=int[789]]")
+        repl.chk("rec(789)", "RES:lib:rec[x=int[789]]")
 
         repl.chk("import .sub;")
         repl.chk("sub.g()", "RES:int[456]")
@@ -42,7 +42,7 @@ class ReplDefinitionTest: BaseRellTest(false) {
     @Test fun testModuleInvalid() {
         file("lib.rell", "module; function f(): integer = 'Hello';")
         tst.replModule = "lib"
-        repl.chk("123", "CTE:lib.rell:entity_rettype:[integer]:[text]")
+        repl.chk("123", "CTE:lib.rell:fn_rettype:[integer]:[text]")
     }
 
     @Test fun testModuleNameConflict() {
@@ -63,11 +63,11 @@ class ReplDefinitionTest: BaseRellTest(false) {
         repl.chk("import lib;")
         repl.chk("lib.f(123)", "RES:int[15129]")
         repl.chk("lib.f(456)", "RES:int[207936]")
-        repl.chk("lib.rec()", "RES:lib!rec[p=text[Hello],q=int[123]]")
+        repl.chk("lib.rec()", "RES:lib:rec[p=text[Hello],q=int[123]]")
 
         repl.chk("struct dat { r: rec; }", "CTE:<console>:unknown_type:rec")
         repl.chk("struct dat { r: lib.rec; }")
-        repl.chk("dat(lib.rec('Bye',456))", "RES:dat[r=lib!rec[p=text[Bye],q=int[456]]]")
+        repl.chk("dat(lib.rec('Bye',456))", "RES:dat[r=lib:rec[p=text[Bye],q=int[456]]]")
     }
 
     @Test fun testImportExact() {
@@ -194,7 +194,7 @@ class ReplDefinitionTest: BaseRellTest(false) {
         repl.chk("import u;")
         repl.chk("entity user { name; };",
                 "CTE:<console>:def_repl:ENTITY",
-                "CTE:<console>:mnt_conflict:user:[user]:user:ENTITY:[u!user]:u.rell(1:16)"
+                "CTE:<console>:mnt_conflict:user:[user]:user:ENTITY:[u:user]:u.rell(1:16)"
         )
         repl.chk("entity company { name; }", "CTE:<console>:def_repl:ENTITY")
         repl.chk("import c;")
@@ -250,7 +250,7 @@ class ReplDefinitionTest: BaseRellTest(false) {
     @Test fun testAbstractFunctionImport() {
         file("lib.rell", "abstract module; abstract function f(): integer; function g(): integer = f() + 1;")
         file("imp.rell", "module; import lib; override function lib.f(): integer = 123;")
-        repl.chk("import lib;", "CTE:lib.rell:override:missing:[lib!f]")
+        repl.chk("import lib;", "CTE:lib.rell:override:missing:[lib:f]")
         repl.chk("import imp;")
         repl.chk("imp.lib.f()", "RES:int[123]")
         repl.chk("imp.lib.g()", "RES:int[124]")
@@ -262,7 +262,7 @@ class ReplDefinitionTest: BaseRellTest(false) {
     @Test fun testAbstractFunctionLinked() {
         file("lib.rell", "abstract module; abstract function f(): integer; function g(): integer = f() + 1;")
         tst.replModule = "lib"
-        repl.chk("123", "CTE:lib.rell:override:missing:[lib!f]")
+        repl.chk("123", "CTE:lib.rell:override:missing:[lib:f]")
     }
 
     @Test fun testOverrideFunction() {

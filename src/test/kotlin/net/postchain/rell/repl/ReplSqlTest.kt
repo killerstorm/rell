@@ -28,10 +28,10 @@ class ReplSqlTest: BaseRellTest(true) {
         file("c.rell", "module; entity company { name; }")
         repl.chk("\\db-auto", "CMD:db-auto:true")
         repl.chk("import u;")
-        repl.chk("u.user @* {}", "RES:list<u!user>[u!user[0],u!user[1]]")
+        repl.chk("u.user @* {}", "RES:list<u:user>[u:user[0],u:user[1]]")
         repl.chk("u.user @* {} (.name)", "RES:list<text>[text[Bob],text[Alice]]")
         repl.chk("import c;")
-        repl.chk("c.company @* {}", "RES:list<c!company>[]")
+        repl.chk("c.company @* {}", "RES:list<c:company>[]")
     }
 
     @Test fun testEntityModify() {
@@ -39,9 +39,9 @@ class ReplSqlTest: BaseRellTest(true) {
         repl.chk("\\db-auto", "CMD:db-auto:true")
         repl.chk("import u;")
         repl.chk("u.user @* {} (.name)", "RES:list<text>[]")
-        repl.chk("create u.user ('Bob', 123)", "CTE:<console>:no_db_update")
-        repl.chk("update u.user @* {} (value = 123);", "CTE:<console>:no_db_update")
-        repl.chk("delete u.user @* {};", "CTE:<console>:no_db_update")
+        repl.chk("create u.user ('Bob', 123)", "CTE:<console>:no_db_update:repl")
+        repl.chk("update u.user @* {} (value = 123);", "CTE:<console>:no_db_update:repl")
+        repl.chk("delete u.user @* {};", "CTE:<console>:no_db_update:repl")
     }
 
     @Test fun testObjectDeclare() {
@@ -54,7 +54,7 @@ class ReplSqlTest: BaseRellTest(true) {
         tst.replModule = ""
         repl.chk("\\db-auto", "CMD:db-auto:true")
         repl.chk("state.x", "RES:int[123]")
-        repl.chk("state.x = 456;", "CTE:<console>:no_db_update")
+        repl.chk("state.x = 456;", "CTE:<console>:no_db_update:repl")
     }
 
     @Test fun testObjectImport() {
@@ -64,10 +64,10 @@ class ReplSqlTest: BaseRellTest(true) {
         repl.chk("\\db-auto", "CMD:db-auto:true")
         repl.chk("import s;")
         repl.chk("s.state.x", "RES:int[123]")
-        repl.chk("s.state.x = 456;", "CTE:<console>:no_db_update")
+        repl.chk("s.state.x = 456;", "CTE:<console>:no_db_update:repl")
         repl.chk("import t;")
         repl.chk("t.etats.y", "RES:int[456]")
-        repl.chk("t.etats.y = 789;", "CTE:<console>:no_db_update")
+        repl.chk("t.etats.y = 789;", "CTE:<console>:no_db_update:repl")
     }
 
     @Test fun testSysEntities() {
@@ -99,7 +99,7 @@ class ReplSqlTest: BaseRellTest(true) {
         repl.chk("import u;")
         repl.chk("u.user @* {}", "RTE:sqlerr:0")
         repl.chk("\\db-update")
-        repl.chk("u.user @* {}", "RES:list<u!user>[]")
+        repl.chk("u.user @* {}", "RES:list<u:user>[]")
     }
 
     @Test fun testDbUpdate2() {
@@ -108,14 +108,14 @@ class ReplSqlTest: BaseRellTest(true) {
 
         repl.chk("import c;")
         repl.chk("\\db-update")
-        repl.chk("c.company @* {}", "RES:list<c!company>[]")
+        repl.chk("c.company @* {}", "RES:list<c:company>[]")
 
         repl.chk("import u;")
         repl.chk("u.user @* {}", "RTE:sqlerr:0")
-        repl.chk("c.company @* {}", "RES:list<c!company>[]")
+        repl.chk("c.company @* {}", "RES:list<c:company>[]")
         repl.chk("\\db-update")
-        repl.chk("u.user @* {}", "RES:list<u!user>[]")
-        repl.chk("c.company @* {}", "RES:list<c!company>[]")
+        repl.chk("u.user @* {}", "RES:list<u:user>[]")
+        repl.chk("c.company @* {}", "RES:list<c:company>[]")
     }
 
     @Test fun testDbAuto() {
@@ -126,16 +126,16 @@ class ReplSqlTest: BaseRellTest(true) {
         repl.chk("import c;")
         repl.chk("c.company @* {}", "RTE:sqlerr:0")
         repl.chk("\\db-auto", "CMD:db-auto:true")
-        repl.chk("c.company @* {}", "RES:list<c!company>[]")
+        repl.chk("c.company @* {}", "RES:list<c:company>[]")
 
         repl.chk("import u;")
-        repl.chk("u.user @* {}", "RES:list<u!user>[]")
+        repl.chk("u.user @* {}", "RES:list<u:user>[]")
 
         repl.chk("\\db-auto", "CMD:db-auto:false")
         repl.chk("import d;")
         repl.chk("d.data @* {}", "RTE:sqlerr:0")
         repl.chk("\\db-update")
-        repl.chk("d.data @* {}", "RES:list<d!data>[]")
+        repl.chk("d.data @* {}", "RES:list<d:data>[]")
     }
 
     private fun initSql(defs: String, insTable: String, insColumns: String, vararg insData: String) {

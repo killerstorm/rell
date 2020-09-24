@@ -7,9 +7,10 @@ package net.postchain.rell.tools.runcfg
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory.gtv
 import net.postchain.rell.*
-import net.postchain.rell.compiler.C_SourceDir
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.CONFIG_RELL_SOURCES
+import net.postchain.rell.compiler.C_SourceDir
+import net.postchain.rell.utils.*
 
 class RunConfigChainConfigGen private constructor(private val sourceDir: C_SourceDir, private val configDir: GeneralDir) {
     companion object {

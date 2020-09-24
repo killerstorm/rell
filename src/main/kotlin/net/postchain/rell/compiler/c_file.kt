@@ -4,10 +4,10 @@
 
 package net.postchain.rell.compiler
 
-import net.postchain.rell.CommonUtils
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.compiler.ast.S_RellFile
-import net.postchain.rell.toImmList
-import net.postchain.rell.toImmMap
+import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmMap
 import org.apache.commons.lang3.StringUtils
 import java.io.File
 
@@ -113,7 +113,7 @@ class C_MapSourceDir(files: Map<C_SourcePath, C_SourceFile>): C_SourceDir() {
 
     companion object {
         @JvmField
-        val EMPTY = C_MapSourceDir(mapOf())
+        val EMPTY: C_SourceDir = C_MapSourceDir(mapOf())
 
         @JvmStatic
         fun of(files: Map<String, String>): C_SourceDir {

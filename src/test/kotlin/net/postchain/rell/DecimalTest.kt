@@ -7,6 +7,7 @@ package net.postchain.rell
 import net.postchain.rell.compiler.C_Constants
 import net.postchain.rell.runtime.Rt_DecimalValue
 import net.postchain.rell.test.BaseRellTest
+import net.postchain.rell.utils.toImmList
 import org.junit.Test
 import java.math.BigInteger
 
@@ -429,11 +430,102 @@ class DecimalTest: BaseRellTest(false) {
         chkEx("{ var x: decimal = 123.456; --x; return x; }", "dec[122.456]")
     }
 
+    @Test fun testAggregationSum() {
+        tstCtx.useSql = true
+        def("entity data { v: decimal; }")
+
+        for (case in ADD_TEST_CASES + SUB_TEST_CASES) {
+            tst.inserts = listOf()
+            val b = if (case.op == "+") case.b else if (case.b.startsWith("-")) case.b.substring(1) else "-${case.b}"
+            insertDecimal(1, case.a)
+            insertDecimal(2, b)
+
+            val expr = "data @{} ( @sum .v )"
+            if (case.expected != null) {
+                tst.chkQuery(expr, "dec[${case.expected}]")
+            } else {
+                tst.chkQuery(expr, "rt_err:sqlerr:0")
+            }
+        }
+    }
+
+    private fun insertDecimal(id: Int, v: String) {
+        tst.insert("c0.data", "v", "$id,'$v' :: ${C_Constants.DECIMAL_SQL_TYPE_STR}")
+    }
+
+    class DecAddCase(val op: String, val a: String, val b: String, val expected: String?)
+
+    class DecVals {
+        val intDigs = C_Constants.DECIMAL_INT_DIGITS
+        val lim1 = limitMinus(1)
+        val lim2 = limitMinus(2)
+        val limDiv10 = limitDiv(10)
+        val frac0 = fracBase("0")
+        val frac3 = fracBase("3")
+        val frac6 = fracBase("6")
+        val frac9 = fracBase("9")
+    }
+
     companion object {
         val LIMIT = BigInteger.TEN.pow(C_Constants.DECIMAL_INT_DIGITS)
 
         fun limitMinus(minus: Long) = "" + (LIMIT - BigInteger.valueOf(minus))
         fun limitDiv(div: Long) = "" + (LIMIT / BigInteger.valueOf(div))
         fun fracBase(dig: String) = dig.repeat(C_Constants.DECIMAL_FRAC_DIGITS - 2)
+
+        val ADD_TEST_CASES = makeAddCases()
+        val SUB_TEST_CASES = makeSubCases()
+
+        private fun makeAddCases(): List<DecAddCase> {
+            val list = mutableListOf<DecAddCase>()
+
+            addCase(list, "+", "123", "456", "579")
+            addCase(list, "+", "12345", "67890", "80235")
+            addCase(list, "+", "12.34", "56.78", "69.12")
+
+            // Extreme values.
+            val d = DecVals()
+
+            addCase(list, "+", "${d.lim2}", "1", "${d.lim1}")
+            addCase(list, "+", "${d.lim2}", "2", null)
+            addCase(list, "+", "-${d.lim2}", "-1", "-${d.lim1}")
+            addCase(list, "+", "-${d.lim2}", "-2", null)
+
+            addCase(list, "+", "0.${d.frac3}12", "0.${d.frac0}34", "0.${d.frac3}46")
+            addCase(list, "+", "${d.lim1}.${d.frac3}12", "0.${d.frac6}34", "${d.lim1}.${d.frac9}46")
+            addCase(list, "+", "${d.lim1}.${d.frac3}95", "0.${d.frac6}04", "${d.lim1}.${d.frac9}99")
+            addCase(list, "+", "-${d.lim1}.${d.frac3}95", "-0.${d.frac6}04", "-${d.lim1}.${d.frac9}99")
+            addCase(list, "+", "-${d.lim1}.${d.frac3}95", "-0.${d.frac6}05", null)
+
+            return list.toImmList()
+        }
+
+        private fun makeSubCases(): List<DecAddCase> {
+            val list = mutableListOf<DecAddCase>()
+
+            addCase(list, "-", "12345", "67890", "-55545")
+            addCase(list, "-", "67890", "12345", "55545")
+            addCase(list, "-", "12.34", "56.78", "-44.44")
+
+            // Extreme values.
+            val d = DecVals()
+
+            addCase(list, "-", "-${d.lim2}", "1", "-${d.lim1}")
+            addCase(list, "-", "-${d.lim2}", "2", null)
+            addCase(list, "-", "${d.lim2}", "-1", "${d.lim1}")
+            addCase(list, "-", "${d.lim2}", "-2", null)
+
+            addCase(list, "-", "0.${d.frac3}34", "0.${d.frac0}12", "0.${d.frac3}22")
+            addCase(list, "-", "${d.lim1}.${d.frac9}34", "0.${d.frac6}12", "${d.lim1}.${d.frac3}22")
+            addCase(list, "-", "-${d.lim1}.${d.frac3}95", "0.${d.frac6}04", "-${d.lim1}.${d.frac9}99")
+            addCase(list, "-", "-${d.lim1}.${d.frac3}95", "0.${d.frac6}04", "-${d.lim1}.${d.frac9}99")
+            addCase(list, "-", "-${d.lim1}.${d.frac3}95", "0.${d.frac6}05", null)
+
+            return list.toImmList()
+        }
+
+        private fun addCase(list: MutableList<DecAddCase>, op: String, a: String, b: String, expected: String?) {
+            list.add(DecAddCase(op, a, b, expected))
+        }
     }
 }

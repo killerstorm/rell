@@ -217,7 +217,7 @@ private class C_EntityAttrRef_Regular(rEntity: R_Entity, private val attr: R_Att
 
     override fun createDbMemberExpr(base: Db_TableExpr, pos: S_Pos, sName: S_Name): C_Expr {
         val dbExpr = makeDbAttrExpr(base, attr)
-        return C_DbValue.makeExpr(pos, dbExpr)
+        return C_DbValue.createExpr(pos, dbExpr)
     }
 
     override fun createIpEntityMemberExpr(baseValue: C_EntityAttrValueLike, baseExpr: Db_TableExpr, ref: C_MemberRef): C_Expr {
@@ -246,7 +246,7 @@ private class C_EntityAttrRef_Rowid(rEntity: R_Entity): C_EntityAttrRef(rEntity,
     override fun createDbMemberExpr(base: Db_TableExpr, pos: S_Pos, sName: S_Name): C_Expr {
         val dbExpr = Db_RowidExpr(base)
         val memExpr = C_DbAttrInfo(base.rEntity, sName, null, dbExpr)
-        return C_DbValue.makeExpr(pos, memExpr.dbExpr)
+        return C_DbValue.createExpr(pos, memExpr.dbExpr)
     }
 
     override fun createIpEntityMemberExpr(baseValue: C_EntityAttrValueLike, baseExpr: Db_TableExpr, ref: C_MemberRef): C_Expr {
@@ -281,7 +281,10 @@ private class C_EntityAttrValue private constructor(
         val whereRight = Db_ParameterExpr(base.atEntity.rEntity.type, 0)
         val where = C_Utils.makeDbBinaryExprEq(whereLeft, whereRight)
 
-        val atBase = R_AtExprBase(from, listOf(attrInfo.dbExpr), where, listOf())
+        val whatField = R_AtWhatField(attrInfo.dbExpr, R_AtWhatFlags.DEFAULT)
+        val what = listOf(whatField)
+
+        val atBase = R_AtExprBase(from, what, where)
         val calculator = R_MemberCalculator_DataAttribute(attrInfo.dbExpr.type, atBase)
 
         val rBase = base.value.toRExpr()
@@ -296,7 +299,7 @@ private class C_EntityAttrValue private constructor(
         if (attrInfo.attr == null || !attrInfo.attr.mutable) {
             throw C_Errors.errAttrNotMutable(attrInfo.name.pos, attrInfo.name.str)
         }
-        ctx.defCtx.checkDbUpdateAllowed(pos)
+        ctx.checkDbUpdateAllowed(pos)
         return C_EntityAttrDestination(parent, attrInfo.rEntity, attrInfo.attr)
     }
 
@@ -344,8 +347,18 @@ private class C_MemberFunctionExpr(private val memberRef: C_MemberRef, private v
     override fun startPos() = memberRef.pos
 
     override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_NameExprPair>): C_Expr {
-        val cArgs = C_RegularGlobalFunction.compileArgs(ctx, args)
-        return fn.compileCall(ctx, memberRef, cArgs)
+        val cArgs = C_FunctionUtils.compileRegularArgs(ctx, args)
+        if (!cArgs.named.isEmpty()) {
+            val arg = cArgs.named[0]
+            ctx.msgCtx.error(arg.first.pos, "expr:call:sys_member_fn_named_arg:${arg.first}",
+                    "Named arguments not supported for this function")
+            val rExpr = C_Utils.crashExpr()
+            return C_RValue.makeExpr(pos, rExpr)
+        } else if (!cArgs.valid) {
+            val rExpr = C_Utils.crashExpr()
+            return C_RValue.makeExpr(pos, rExpr)
+        }
+        return fn.compileCall(ctx, memberRef, cArgs.positional)
     }
 }
 

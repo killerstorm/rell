@@ -6,10 +6,10 @@ package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_RellFile
-import net.postchain.rell.immMapOf
+import net.postchain.rell.utils.immMapOf
 import net.postchain.rell.model.*
-import net.postchain.rell.toImmList
-import net.postchain.rell.toImmMap
+import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmMap
 import java.util.*
 
 private const val FILE_SUFFIX = ".rell"
@@ -109,7 +109,7 @@ class C_FileImportsDescriptor(
     companion object { val EMPTY = C_FileImportsDescriptor(listOf(), listOf(), listOf()) }
 }
 
-class C_ModuleKey(private val name: R_ModuleName, private val extChain: C_ExternalChain?) {
+class C_ModuleKey(val name: R_ModuleName, private val extChain: C_ExternalChain?) {
     fun keyStr(): String {
         val nameStr = name.str()
         return if (extChain == null) nameStr else "$nameStr[${extChain.name}]"
@@ -271,16 +271,6 @@ class C_ModuleDefsBuilder {
     val functions = C_ModuleDefTableBuilder<R_Function>()
     val operations = C_ModuleDefTableBuilder<R_Operation>()
     val queries = C_ModuleDefTableBuilder<R_Query>()
-
-    fun addDefs(defs: C_ModuleDefs) {
-        entities.add(defs.entities)
-        objects.add(defs.objects)
-        structs.add(defs.structs)
-        enums.add(defs.enums)
-        functions.add(defs.functions)
-        operations.add(defs.operations)
-        queries.add(defs.queries)
-    }
 
     fun build(): C_ModuleDefs {
         return C_ModuleDefs(

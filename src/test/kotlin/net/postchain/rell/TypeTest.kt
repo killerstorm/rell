@@ -116,12 +116,12 @@ class TypeTest: BaseRellTest() {
     @Test fun testRowid() {
         def("entity user { name; }")
 
-        chkCompile("function f(x: integer): rowid = x;", "ct_err:entity_rettype:[rowid]:[integer]")
-        chkCompile("function f(x: rowid): integer = x;", "ct_err:entity_rettype:[integer]:[rowid]")
+        chkCompile("function f(x: integer): rowid = x;", "ct_err:fn_rettype:[rowid]:[integer]")
+        chkCompile("function f(x: rowid): integer = x;", "ct_err:fn_rettype:[integer]:[rowid]")
         chkCompile("function f(x: rowid): rowid = x;", "OK")
 
-        chkCompile("function f(x: user): rowid = x;", "ct_err:entity_rettype:[rowid]:[user]")
-        chkCompile("function f(x: rowid): user = x;", "ct_err:entity_rettype:[user]:[rowid]")
+        chkCompile("function f(x: user): rowid = x;", "ct_err:fn_rettype:[rowid]:[user]")
+        chkCompile("function f(x: rowid): user = x;", "ct_err:fn_rettype:[user]:[rowid]")
         chkCompile("function f(x: user): rowid = x.rowid;", "OK")
         chkCompile("function f(x: rowid): user = user @ { .rowid == x };", "OK")
     }

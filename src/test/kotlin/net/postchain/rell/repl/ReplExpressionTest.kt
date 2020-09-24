@@ -14,7 +14,16 @@ class ReplExpressionTest: BaseRellTest(false) {
         repl.chk("integer.MAX_VALUE", "RES:int[9223372036854775807]")
     }
 
-    /*@Test*/ fun testQuery() {
+    @Test fun testOperation() {
+        file("root.rell", "operation foo(x: integer, y: text) {}")
+        file("lib.rell", "module; operation bar(p: text, q: integer) {}")
+        tst.replModule = ""
+        repl.chk("foo(123, 'Hello')", "RES:op[foo(int[123],text[Hello])]")
+        repl.chk("import lib;")
+        repl.chk("lib.bar('Bye', 456)", "RES:op[bar(text[Bye],int[456])]")
+    }
+
+    @Test fun testQuery() {
         file("root.rell", "query info() = 123;")
         file("lib.rell", "module; query help() = 'Hello';")
         tst.replModule = ""
