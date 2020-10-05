@@ -18,6 +18,7 @@ import net.postchain.rell.runtime.Rt_Messages
 import net.postchain.rell.runtime.Rt_StackTraceError
 import net.postchain.rell.runtime.Rt_Utils
 import net.postchain.rell.utils.PostchainUtils
+import net.postchain.rell.utils.toImmSet
 
 private val ORD_TABLES = 0
 private val ORD_RECORDS = 1
@@ -144,10 +145,15 @@ private class SqlInitPlanner private constructor(private val exeCtx: Rt_Executio
             SqlUtils.getExistingChainTables(con, mapping)
         }
 
+        val functions = SqlUtils.getExistingFunctions(exeCtx.sqlExec).toImmSet()
+
         val metaExists = SqlMeta.checkMetaTablesExisting(mapping, tables, initCtx.msgs)
         initCtx.checkErrors()
 
         val metaData = processMeta(metaExists, tables)
+        initCtx.checkErrors()
+
+        processFunctions(functions)
         initCtx.checkErrors()
 
         SqlEntityIniter.processEntities(exeCtx, initCtx, metaData, tables)
@@ -167,6 +173,14 @@ private class SqlInitPlanner private constructor(private val exeCtx: Rt_Executio
         initCtx.checkErrors()
 
         return metaData
+    }
+
+    private fun processFunctions(functions: Set<String>) {
+        for ((name, sql) in SqlGen.RELL_SYS_FUNCTIONS) {
+            if (name !in functions) {
+                initCtx.step(ORD_TABLES, "Create function: '$name'", SqlStepAction_ExecSql(sql))
+            }
+        }
     }
 }
 

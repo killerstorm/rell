@@ -204,7 +204,7 @@ object C_LibFunctions {
             .add("format", C_SysFn_Text_Format)
             .add("replace", R_TextType, listOf(R_TextType, R_TextType), R_SysFn_Text_Replace, Db_SysFn_Text_Replace)
             .add("split", R_ListType(R_TextType), listOf(R_TextType), R_SysFn_Text_Split)
-            .add("trim", R_TextType, listOf(), R_SysFn_Text_Trim, Db_SysFn_Text_Trim)
+            .add("trim", R_TextType, listOf(), R_SysFn_Text_Trim/*, Db_SysFn_Text_Trim*/)
             .add("like", R_BooleanType, listOf(R_TextType), R_SysFn_Text_Like, Db_SysFn_Text_Like)
             .add("matches", R_BooleanType, listOf(R_TextType), R_SysFn_Text_Matches)
             .add("encode", R_ByteArrayType, listOf(), R_SysFn_Text_ToBytes, depError("to_bytes"))

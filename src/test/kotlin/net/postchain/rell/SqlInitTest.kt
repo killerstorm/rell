@@ -614,6 +614,31 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         }
     }
 
+    @Test fun testSysFunctions() {
+        chkFunctions()
+        chkInit("")
+        chkFunctions(
+                "c0.make_rowid",
+                "rell_bytea_substr1",
+                "rell_bytea_substr2",
+                "rell_text_getchar",
+                "rell_text_substr1",
+                "rell_text_substr2"
+        )
+
+        execSql("DROP FUNCTION rell_bytea_substr2; DROP FUNCTION rell_text_substr1;")
+        chkFunctions("c0.make_rowid", "rell_bytea_substr1", "rell_text_getchar", "rell_text_substr2")
+        chkInit("")
+        chkFunctions(
+                "c0.make_rowid",
+                "rell_bytea_substr1",
+                "rell_bytea_substr2",
+                "rell_text_getchar",
+                "rell_text_substr1",
+                "rell_text_substr2"
+        )
+    }
+
     private fun chkInit(code: String, expected: String = "OK", expectedWarnings: String = "") {
         val tst = RellCodeTester(tstCtx)
         tst.chainId = 0
@@ -715,6 +740,13 @@ class SqlInitTest: BaseContextTest(useSql = true) {
             }
         }
         return map
+    }
+
+    private fun chkFunctions(vararg expected: String) {
+        val actual = tstCtx.sqlMgr().access { sqlExec ->
+            SqlUtils.getExistingFunctions(sqlExec).sorted()
+        }
+        assertEquals(expected.toList(), actual)
     }
 
     private fun insert(table: String, columns: String, values: String) {

@@ -21,8 +21,13 @@ object SqlConstants {
     const val ROWID_GEN = "rowid_gen"
     const val MAKE_ROWID = "make_rowid"
 
-    const val BLOCKCHAINS_TABLE = "blockchains"
+    const val FN_BYTEA_SUBSTR1 = "rell_bytea_substr1"
+    const val FN_BYTEA_SUBSTR2 = "rell_bytea_substr2"
+    const val FN_TEXT_SUBSTR1 = "rell_text_substr1"
+    const val FN_TEXT_SUBSTR2 = "rell_text_substr2"
+    const val FN_TEXT_GETCHAR = "rell_text_getchar"
 
+    const val BLOCKCHAINS_TABLE = "blockchains"
     const val CONFIGURATIONS_TABLE = "configurations"
     const val BLOCKS_TABLE = "blocks"
     const val TRANSACTIONS_TABLE = "transactions"

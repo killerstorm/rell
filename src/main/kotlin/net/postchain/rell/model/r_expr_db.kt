@@ -11,6 +11,7 @@ import net.postchain.rell.runtime.Rt_BooleanValue
 import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_NullValue
 import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.sql.SqlConstants
 import net.postchain.rell.utils.toImmList
 import java.util.regex.Pattern
 
@@ -496,7 +497,7 @@ object Db_SysFn_Max_Decimal: Db_SysFn_Simple("max", "GREATEST")
 
 object Db_SysFn_Sign: Db_SysFn_Simple("sign", "SIGN")
 
-object Db_SysFn_Text_CharAt: Db_SysFn_Template("text.char_at", 2, "ASCII(SUBSTR(#0, ((#1)+1)::INT, 1))")
+object Db_SysFn_Text_CharAt: Db_SysFn_Template("text.char_at", 2, "ASCII(${SqlConstants.FN_TEXT_GETCHAR}(#0, (#1)::INT))")
 object Db_SysFn_Text_Contains: Db_SysFn_Template("text.contains", 2, "(STRPOS(#0, #1) > 0)")
 object Db_SysFn_Text_Empty: Db_SysFn_Template("text.empty", 1, "(LENGTH(#0) = 0)")
 object Db_SysFn_Text_EndsWith: Db_SysFn_Template("text.ends_with", 2, "(RIGHT(#0, LENGTH(#1)) = #1)")
@@ -506,16 +507,16 @@ object Db_SysFn_Text_LowerCase: Db_SysFn_Simple("text.lower_case", "LOWER")
 object Db_SysFn_Text_Replace: Db_SysFn_Template("text.replace", 3, "REPLACE(#0, #1, #2)")
 object Db_SysFn_Text_Size: Db_SysFn_Simple("text.size", "LENGTH")
 object Db_SysFn_Text_StartsWith: Db_SysFn_Template("text.starts_with", 2, "(LEFT(#0, LENGTH(#1)) = #1)")
-object Db_SysFn_Text_Sub_1: Db_SysFn_Template("text.sub/1", 2, "SUBSTR(#0, ((#1)+1)::INT)")
-object Db_SysFn_Text_Sub_2: Db_SysFn_Template("text.sub/2", 3, "SUBSTR(#0, ((#1)+1)::INT, ((#2)-(#1))::INT)")
-object Db_SysFn_Text_Subscript: Db_SysFn_Template("text.[]", 2, "SUBSTR(#0, ((#1)+1)::INT, 1)")
-object Db_SysFn_Text_Trim: Db_SysFn_Template("text.trim", 1, "TRIM(#0, ' '||CHR(9)||CHR(10)||CHR(13))")
+object Db_SysFn_Text_Sub_1: Db_SysFn_Template("text.sub/1", 2, "${SqlConstants.FN_TEXT_SUBSTR1}(#0, (#1)::INT)")
+object Db_SysFn_Text_Sub_2: Db_SysFn_Template("text.sub/2", 3, "${SqlConstants.FN_TEXT_SUBSTR2}(#0, (#1)::INT, (#2)::INT)")
+object Db_SysFn_Text_Subscript: Db_SysFn_Template("text.[]", 2, "${SqlConstants.FN_TEXT_GETCHAR}(#0, (#1)::INT)")
+//object Db_SysFn_Text_Trim: Db_SysFn_Template("text.trim", 1, "TRIM(#0, ' '||CHR(9)||CHR(10)||CHR(13))")
 object Db_SysFn_Text_UpperCase: Db_SysFn_Simple("text.upper_case", "UPPER")
 
 object Db_SysFn_ByteArray_Empty: Db_SysFn_Template("byte_array.empty", 1, "(LENGTH(#0) = 0)")
 object Db_SysFn_ByteArray_Size: Db_SysFn_Template("byte_array.size", 1, "LENGTH(#0)")
-object Db_SysFn_ByteArray_Sub_1: Db_SysFn_Template("byte_array.sub/1", 2, "SUBSTR(#0, ((#1)+1)::INT)")
-object Db_SysFn_ByteArray_Sub_2: Db_SysFn_Template("byte_array.sub/2", 3, "SUBSTR(#0, ((#1)+1)::INT, ((#2)-(#1))::INT)")
+object Db_SysFn_ByteArray_Sub_1: Db_SysFn_Template("byte_array.sub/1", 2, "${SqlConstants.FN_BYTEA_SUBSTR1}(#0, (#1)::INT)")
+object Db_SysFn_ByteArray_Sub_2: Db_SysFn_Template("byte_array.sub/2", 3, "${SqlConstants.FN_BYTEA_SUBSTR2}(#0, (#1)::INT, (#2)::INT)")
 object Db_SysFn_ByteArray_Subscript: Db_SysFn_Template("byte_array.[]", 2, "GET_BYTE(#0, (#1)::INT)")
 object Db_SysFn_ByteArray_ToHex: Db_SysFn_Template("byte_array.to_hex", 1, "ENCODE(#0, 'HEX')")
 object Db_SysFn_ByteArray_ToBase64: Db_SysFn_Template("byte_array.to_base64", 1, "ENCODE(#0, 'BASE64')")

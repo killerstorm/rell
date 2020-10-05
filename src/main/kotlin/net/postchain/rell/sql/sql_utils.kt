@@ -33,7 +33,7 @@ object SqlUtils {
 
     private fun dropFunctions(sqlExec: SqlExecutor) {
         val functions = getExistingFunctions(sqlExec)
-        val sql = functions.joinToString("\n") { "DROP FUNCTION \"$it\"();" }
+        val sql = functions.joinToString("\n") { "DROP FUNCTION \"$it\";" }
         sqlExec.execute(sql)
     }
 
@@ -44,7 +44,7 @@ object SqlUtils {
         return list.toList()
     }
 
-    private fun getExistingFunctions(sqlExec: SqlExecutor): List<String> {
+    fun getExistingFunctions(sqlExec: SqlExecutor): List<String> {
         val sql = "SELECT routine_name FROM information_schema.routines WHERE routine_catalog = CURRENT_DATABASE() AND routine_schema = CURRENT_SCHEMA();"
         val list = mutableListOf<String>()
         sqlExec.executeQuery(sql, {}) { rs -> list.add(rs.getString(1))}

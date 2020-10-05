@@ -83,13 +83,11 @@ Following functions are now supported in @-expressions (they are translated to t
     text.replace()
     text.starts_with()
     text.sub()
-    text.trim()
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 4. Language: Operator [] for text and byte_array types in @-expressions
 
-Works almost exactly as in interpreted expressions, however, x[i] returns an empty string in SQL when the index is
-out of range, while in the interpreter this causes a run-time error.
+Subscript operator used to work only in interpreted expressions, now it works in SQL expressions as well.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 5. Library: Function text.like()

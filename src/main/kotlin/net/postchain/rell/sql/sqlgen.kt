@@ -7,6 +7,7 @@ package net.postchain.rell.sql
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_SqlContext
+import net.postchain.rell.utils.toImmMap
 import org.jooq.Constraint
 import org.jooq.CreateTableColumnStep
 import org.jooq.DataType
@@ -23,6 +24,56 @@ object SqlGen {
     private val disableLogo2 = disableLogo
 
     val DSL_CTX = DSL.using(SQLDialect.POSTGRES)
+
+    val RELL_SYS_FUNCTIONS = mapOf(
+            genFunctionSubstr1(SqlConstants.FN_BYTEA_SUBSTR1, "BYTEA"),
+            genFunctionSubstr2(SqlConstants.FN_BYTEA_SUBSTR2, "BYTEA"),
+            genFunctionSubstr1(SqlConstants.FN_TEXT_SUBSTR1, "TEXT"),
+            genFunctionSubstr2(SqlConstants.FN_TEXT_SUBSTR2, "TEXT"),
+            genFunctionTextGetChar(SqlConstants.FN_TEXT_GETCHAR)
+    ).toImmMap()
+
+    private fun genFunctionSubstr1(name: String, type: String): Pair<String, String> {
+        return name to """
+                CREATE FUNCTION "$name"(v $type, i INT) RETURNS $type AS $$
+                DECLARE n INT;
+                BEGIN
+                    IF i < 0 THEN RAISE EXCEPTION '$name: i = %', i; END IF;
+                    n := LENGTH(v);
+                    IF i > n THEN RAISE EXCEPTION '$name: i = %, n = %', i, n; END IF;
+                    RETURN SUBSTR(v, i + 1);
+                END;
+                $$ LANGUAGE PLPGSQL IMMUTABLE;
+            """.trimIndent()
+    }
+
+    private fun genFunctionSubstr2(name: String, type: String): Pair<String, String> {
+        return name to """
+                CREATE FUNCTION "$name"(v $type, i INT, j INT) RETURNS $type AS $$
+                DECLARE n INT;
+                BEGIN
+                    IF i < 0 OR j < i THEN RAISE EXCEPTION '$name: i = %, j = %', i, j; END IF;
+                    n := LENGTH(v);
+                    IF j > n THEN RAISE EXCEPTION '$name: i = %, j = %, n = %', i, j, n; END IF;
+                    RETURN SUBSTR(v, i + 1, j - i);
+                END;
+                $$ LANGUAGE PLPGSQL IMMUTABLE;
+            """.trimIndent()
+    }
+
+    private fun genFunctionTextGetChar(name: String): Pair<String, String> {
+        return name to """
+                CREATE FUNCTION "$name"(v TEXT, i INT) RETURNS TEXT AS $$
+                DECLARE n INT;
+                BEGIN
+                    IF i < 0 THEN RAISE EXCEPTION '$name: i = %', i; END IF;
+                    n := LENGTH(v);
+                    IF i >= n THEN RAISE EXCEPTION '$name: i = %, n = %', i, n; END IF;
+                    RETURN SUBSTR(v, i + 1, 1);
+                END;
+                $$ LANGUAGE PLPGSQL IMMUTABLE;
+            """.trimIndent()
+    }
 
     fun genRowidSql(chainMapping: Rt_ChainSqlMapping): String {
         val table = chainMapping.rowidTable
@@ -46,7 +97,7 @@ object SqlGen {
         val rowid = mapping.rowidColumn()
         val attrs = rEntity.attributes.values
 
-        val t = SqlGen.DSL_CTX.createTable(tableName)
+        val t = DSL_CTX.createTable(tableName)
 
         val constraints = mutableListOf<Constraint>()
         constraints.add(constraint("PK_" + tableName).primaryKey(rowid))
@@ -70,7 +121,7 @@ object SqlGen {
                 val attrName = index.attribs[0]
                 indexSql = """CREATE INDEX "$indexName" ON "$tableName" USING gin ("${attrName}" jsonb_path_ops)"""
             } else {
-                indexSql = (SqlGen.DSL_CTX.createIndex(indexName).on(tableName, *index.attribs.toTypedArray())).toString();
+                indexSql = (DSL_CTX.createIndex(indexName).on(tableName, *index.attribs.toTypedArray())).toString();
             }
             ddl += indexSql + ";\n";
         }
