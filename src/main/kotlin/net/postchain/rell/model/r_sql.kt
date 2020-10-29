@@ -14,7 +14,7 @@ abstract class R_EntitySqlMapping {
     abstract fun isSystemEntity(): Boolean
     abstract fun table(sqlCtx: Rt_SqlContext): String
     abstract fun table(chainMapping: Rt_ChainSqlMapping): String
-    abstract fun extraWhereExpr(atEntity: R_AtEntity): Db_Expr?
+    abstract fun extraWhereExpr(atEntity: R_DbAtEntity): Db_Expr?
     abstract fun selectExistingObjects(sqlCtx: Rt_SqlContext, where: String): String
 
     companion object {
@@ -42,7 +42,7 @@ class R_EntitySqlMapping_Regular(private val mountName: R_MountName): R_EntitySq
     override fun table(sqlCtx: Rt_SqlContext) = table(sqlCtx.mainChainMapping)
     override fun table(chainMapping: Rt_ChainSqlMapping) = chainMapping.fullName(mountName)
 
-    override fun extraWhereExpr(atEntity: R_AtEntity) = null
+    override fun extraWhereExpr(atEntity: R_DbAtEntity) = null
 
     override fun selectExistingObjects(sqlCtx: Rt_SqlContext, where: String): String {
         val tbl = table(sqlCtx)
@@ -66,7 +66,7 @@ class R_EntitySqlMapping_External(private val mountName: R_MountName, private va
         return res
     }
 
-    override fun extraWhereExpr(atEntity: R_AtEntity): Db_Expr? {
+    override fun extraWhereExpr(atEntity: R_DbAtEntity): Db_Expr? {
         check(atEntity.rEntity.sqlMapping == this)
         val txAttr = atEntity.rEntity.attribute("transaction")
         val txEntity = (txAttr.type as R_EntityType).rEntity
@@ -108,7 +108,7 @@ abstract class R_EntitySqlMapping_TxBlk(
 
     abstract fun extraWhereExpr0(entity: R_Entity, entityExpr: Db_EntityExpr, chain: R_ExternalChainRef?): Db_Expr?
 
-    final override fun extraWhereExpr(atEntity: R_AtEntity): Db_Expr? {
+    final override fun extraWhereExpr(atEntity: R_DbAtEntity): Db_Expr? {
         check(atEntity.rEntity.sqlMapping == this)
         val entity = atEntity.rEntity
         val entityExpr = Db_EntityExpr(atEntity)

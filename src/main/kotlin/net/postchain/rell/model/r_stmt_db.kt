@@ -11,16 +11,16 @@ import net.postchain.rell.runtime.Rt_NullValue
 import net.postchain.rell.runtime.Rt_SqlContext
 
 sealed class R_UpdateTarget {
-    abstract fun entity(): R_AtEntity
-    abstract fun extraEntities(): List<R_AtEntity>
+    abstract fun entity(): R_DbAtEntity
+    abstract fun extraEntities(): List<R_DbAtEntity>
     abstract fun where(): Db_Expr?
 
     abstract fun execute(stmt: R_BaseUpdateStatement, frame: Rt_CallFrame)
 }
 
 class R_UpdateTarget_Simple(
-        val entity: R_AtEntity,
-        val extraEntities: List<R_AtEntity>,
+        val entity: R_DbAtEntity,
+        val extraEntities: List<R_DbAtEntity>,
         val cardinality: R_AtCardinality,
         val where: Db_Expr?
 ): R_UpdateTarget() {
@@ -52,18 +52,18 @@ class R_UpdateTarget_Simple(
                 ++count
             }
 
-            R_AtExpr.checkCount(cardinality, count)
+            R_AtExpr.checkCount(cardinality, count, false, "records")
         }
     }
 }
 
-sealed class R_UpdateTarget_Expr(val entity: R_AtEntity, val where: Db_Expr, val expr: R_Expr): R_UpdateTarget() {
+sealed class R_UpdateTarget_Expr(val entity: R_DbAtEntity, val where: Db_Expr, val expr: R_Expr): R_UpdateTarget() {
     init {
         check(entity.index == 0)
     }
 
     final override fun entity() = entity
-    final override fun extraEntities() = listOf<R_AtEntity>()
+    final override fun extraEntities() = listOf<R_DbAtEntity>()
     final override fun where() = where
 
     protected fun execute0(stmt: R_BaseUpdateStatement, frame: Rt_CallFrame, ctx: SqlGenContext) {
@@ -72,7 +72,7 @@ sealed class R_UpdateTarget_Expr(val entity: R_AtEntity, val where: Db_Expr, val
     }
 }
 
-class R_UpdateTarget_Expr_One(entity: R_AtEntity, where: Db_Expr, expr: R_Expr): R_UpdateTarget_Expr(entity, where, expr) {
+class R_UpdateTarget_Expr_One(entity: R_DbAtEntity, where: Db_Expr, expr: R_Expr): R_UpdateTarget_Expr(entity, where, expr) {
     override fun execute(stmt: R_BaseUpdateStatement, frame: Rt_CallFrame) {
         val value = expr.evaluate(frame)
         if (value == Rt_NullValue) {
@@ -85,7 +85,7 @@ class R_UpdateTarget_Expr_One(entity: R_AtEntity, where: Db_Expr, expr: R_Expr):
 }
 
 class R_UpdateTarget_Expr_Many(
-        entity: R_AtEntity,
+        entity: R_DbAtEntity,
         where: Db_Expr,
         expr: R_Expr,
         val set: Boolean,
@@ -116,10 +116,10 @@ class R_UpdateTarget_Expr_Many(
 }
 
 class R_UpdateTarget_Object(rObject: R_Object): R_UpdateTarget() {
-    private val entity = R_AtEntity(rObject.rEntity, 0)
+    private val entity = R_DbAtEntity(rObject.rEntity, 0)
 
     override fun entity() = entity
-    override fun extraEntities(): List<R_AtEntity> = listOf()
+    override fun extraEntities(): List<R_DbAtEntity> = listOf()
     override fun where() = null
 
     override fun execute(stmt: R_BaseUpdateStatement, frame: Rt_CallFrame) {

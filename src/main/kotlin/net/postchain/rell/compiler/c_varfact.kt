@@ -4,6 +4,7 @@
 
 package net.postchain.rell.compiler
 
+import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.model.R_NullType
 import net.postchain.rell.model.R_NullableType
@@ -330,7 +331,7 @@ class C_ExprVarFacts private constructor(
                 C_ExprVarFacts(trueFacts, falseFacts, postFacts)
         }
 
-        fun forNullCheck(value: C_Value, nullIfTrue: Boolean): C_ExprVarFacts {
+        fun forNullCheck(value: V_Expr, nullIfTrue: Boolean): C_ExprVarFacts {
             val varId = value.varId()
             if (varId == null) {
                 return EMPTY
@@ -343,7 +344,7 @@ class C_ExprVarFacts private constructor(
             return of(trueFacts = trueFacts, falseFacts = falseFacts)
         }
 
-        fun forNullCast(preFacts: C_VarFacts, value: C_Value): C_ExprVarFacts {
+        fun forNullCast(preFacts: C_VarFacts, value: V_Expr): C_ExprVarFacts {
             var varFacts = preFacts
 
             val varId = value.varId()
@@ -354,7 +355,7 @@ class C_ExprVarFacts private constructor(
             return of(postFacts = varFacts)
         }
 
-        fun forSubExpressions(values: List<C_Value>): C_ExprVarFacts {
+        fun forSubExpressions(values: List<V_Expr>): C_ExprVarFacts {
             val postFacts = values.fold(C_VarFacts.EMPTY) { facts, value -> facts.and(value.varFacts().postFacts) }
             return of(postFacts = postFacts)
         }

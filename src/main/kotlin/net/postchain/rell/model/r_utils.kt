@@ -110,8 +110,8 @@ class R_Name private constructor(val str: String): Comparable<R_Name> {
     override fun hashCode() = str.hashCode()
 
     companion object {
-        fun isNameStart(c: Char) = Character.isJavaIdentifierStart(c)
-        fun isNamePart(c: Char) = Character.isJavaIdentifierPart(c)
+        fun isNameStart(c: Char) = c == '_' || c in 'A'..'Z' || c in 'a'..'z'
+        fun isNamePart(c: Char) = isNameStart(c) || c in '0'..'9'
 
         fun isValid(s: String): Boolean {
             if (s.isEmpty()) return false

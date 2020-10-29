@@ -5,6 +5,7 @@
 package net.postchain.rell.model
 
 import net.postchain.rell.runtime.Rt_CallFrame
+import net.postchain.rell.runtime.Rt_IntValue
 import net.postchain.rell.runtime.Rt_SqlContext
 import net.postchain.rell.runtime.Rt_Value
 import java.sql.PreparedStatement
@@ -19,11 +20,11 @@ class SqlFromJoin(val baseAlias: SqlTableAlias, val attr: String, val alias: Sql
 
 class SqlGenContext private constructor(
         val sqlCtx: Rt_SqlContext,
-        entities: List<R_AtEntity>,
+        entities: List<R_DbAtEntity>,
         private val parameters: List<Rt_Value>
 ) {
     private var aliasCtr = 0
-    private val entityAliasMap = mutableMapOf<R_AtEntity, EntityAliasTbl>()
+    private val entityAliasMap = mutableMapOf<R_DbAtEntity, EntityAliasTbl>()
     private val aliasTableMap = mutableMapOf<SqlTableAlias, EntityAliasTbl>()
 
     init {
@@ -37,7 +38,7 @@ class SqlGenContext private constructor(
         return parameters[index]
     }
 
-    fun getEntityAlias(cls: R_AtEntity): SqlTableAlias {
+    fun getEntityAlias(cls: R_DbAtEntity): SqlTableAlias {
         val tbl = entityAliasMap.computeIfAbsent(cls) {
             val tbl = EntityAliasTbl(nextAlias(cls.rEntity))
             aliasTableMap[tbl.alias] = tbl
@@ -74,7 +75,7 @@ class SqlGenContext private constructor(
     }
 
     companion object {
-        fun create(frame: Rt_CallFrame, entities: List<R_AtEntity>, parameters: List<Rt_Value>): SqlGenContext {
+        fun create(frame: Rt_CallFrame, entities: List<R_DbAtEntity>, parameters: List<Rt_Value>): SqlGenContext {
             val sqlCtx = frame.defCtx.sqlCtx
             return SqlGenContext(sqlCtx, entities, parameters)
         }
@@ -131,6 +132,11 @@ class SqlBuilder {
 
     fun append(sql: String) {
         sqlBuf.append(sql)
+    }
+
+    fun append(param: Long) {
+        sqlBuf.append("?")
+        paramsBuf.add(SqlParam_Value(R_IntegerType, Rt_IntValue(param)))
     }
 
     fun append(param: R_Expr) {

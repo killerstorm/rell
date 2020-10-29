@@ -63,16 +63,20 @@ object Db_BinaryOp_In: Db_BinaryOp("in", "IN")
 sealed class Db_BinaryOp_AndOr(code: String, sql: String, private val shortCircuitValue: Boolean): Db_BinaryOp(code, sql) {
     final override fun toRedExpr(frame: Rt_CallFrame, type: R_Type, redLeft: RedDb_Expr, right: Db_Expr): RedDb_Expr {
         val leftValue = redLeft.constantValue()
-        if (leftValue == null) {
-            return super.toRedExpr(frame, type, redLeft, right)
-        }
-
-        if (leftValue.asBoolean() == shortCircuitValue) {
-            return RedDb_ConstantExpr(type, leftValue)
+        if (leftValue != null) {
+            val v = leftValue.asBoolean()
+            return if (v == shortCircuitValue) RedDb_ConstantExpr(type, leftValue) else right.toRedExpr(frame)
         }
 
         val redRight = right.toRedExpr(frame)
-        return redRight
+        val rightValue = redRight.constantValue()
+        if (rightValue != null) {
+            val v = rightValue.asBoolean()
+            return if (v == shortCircuitValue) RedDb_ConstantExpr(type, rightValue) else redLeft
+        }
+
+        val redExpr = RedDb_BinaryExpr(this, redLeft, redRight)
+        return RedDb_Utils.wrapDecimalExpr(type, redExpr)
     }
 }
 
@@ -85,7 +89,6 @@ object Db_UnaryOp_Minus_Decimal: Db_UnaryOp("-", "-")
 object Db_UnaryOp_Not: Db_UnaryOp("not", "NOT")
 
 sealed class Db_Expr(val type: R_Type) {
-    open fun implicitName(): String? = null
     open fun constantValue(): Rt_Value? = null
     abstract fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr
 }
@@ -180,15 +183,11 @@ sealed class Db_TableExpr(val rEntity: R_Entity): Db_Expr(rEntity.type) {
     }
 }
 
-class Db_EntityExpr(val entity: R_AtEntity): Db_TableExpr(entity.rEntity) {
+class Db_EntityExpr(val entity: R_DbAtEntity): Db_TableExpr(entity.rEntity) {
     override fun alias(ctx: SqlGenContext) = ctx.getEntityAlias(entity)
 }
 
 class Db_RelExpr(val base: Db_TableExpr, val attr: R_Attrib, targetEntity: R_Entity): Db_TableExpr(targetEntity) {
-    override fun implicitName(): String? {
-        return if (base is Db_EntityExpr) attr.name else null
-    }
-
     override fun alias(ctx: SqlGenContext): SqlTableAlias {
         val baseAlias = base.alias(ctx)
         return ctx.getRelAlias(baseAlias, attr, rEntity)
@@ -196,10 +195,6 @@ class Db_RelExpr(val base: Db_TableExpr, val attr: R_Attrib, targetEntity: R_Ent
 }
 
 class Db_AttrExpr(val base: Db_TableExpr, val attr: R_Attrib): Db_Expr(attr.type) {
-    override fun implicitName(): String? {
-        return if (base is Db_EntityExpr) attr.name else null
-    }
-
     override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
         val redExpr = RedDb_AttrExpr(base, attr)
         return RedDb_Utils.wrapDecimalExpr(type, redExpr)
@@ -214,10 +209,6 @@ class Db_AttrExpr(val base: Db_TableExpr, val attr: R_Attrib): Db_Expr(attr.type
 }
 
 class Db_RowidExpr(val base: Db_TableExpr): Db_Expr(C_EntityAttrRef.ROWID_TYPE) {
-    override fun implicitName(): String? {
-        return if (base is Db_EntityExpr) C_EntityAttrRef.ROWID_NAME else null
-    }
-
     override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
         return RedDb_RowidExpr(base)
     }

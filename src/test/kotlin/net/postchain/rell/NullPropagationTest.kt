@@ -246,6 +246,31 @@ class NullPropagationTest: BaseRellTest(false) {
         chkEx("{ val x = _nullable(123); val t = user @* {} ( .score, x!! ); return _type_of(x); }", "integer")
 
         chkEx("{ val x = _nullable(123); val t = user @* {} limit x!!; return _type_of(x); }", "integer")
+        chkEx("{ val x = _nullable(123); val t = user @* {} offset x!!; return _type_of(x); }", "integer")
+    }
+
+    @Test fun testExprAtCollection() {
+        tst.strictToString = false
+        def("struct user { name; score: integer; }")
+        def("function from() = [user('Bob', 123), user('Alice', 456)];")
+
+        chkEx("{ val x = _nullable(123); return _type_of(x); }", "integer?")
+        //chkEx("{ val x = _nullable(123); val t = from() @* { x!! }; return _type_of(x); }", "integer")
+        chkEx("{ val x = _nullable(123); val t = from() @* { $.score == x!! }; return _type_of(x); }", "integer")
+        chkEx("{ val x = _nullable(123); val t = from() @* { $.score * 5 > x!! - 10 }; return _type_of(x); }", "integer")
+        //chkEx("{ val x = _nullable(123); val t = from() @* { 'Bob', x!! }; return _type_of(x); }", "integer")
+        //chkEx("{ val x = _nullable(123); val t = from() @* { $.name == 'Bob', x!! }; return _type_of(x); }", "integer")
+        chkEx("{ val x = _nullable(123); val t = from() @* { $.name == 'Bob', $.score == x!! }; return _type_of(x); }", "integer")
+
+        chkEx("{ val x = _nullable(123); val t = from() @* {} ( x!! ); return _type_of(x); }", "integer")
+        chkEx("{ val x = _nullable(123); val t = from() @* {} ( $.score, x!! ); return _type_of(x); }", "integer")
+
+        chkEx("{ val x = _nullable(123); val t = from() @* {} limit x!!; return _type_of(x); }", "integer")
+        chkEx("{ val x = _nullable(123); val t = from() @* {} offset x!!; return _type_of(x); }", "integer")
+
+        chkEx("{ val x = _nullable(123); val t = [x] @* {}; return _type_of(x); }", "integer?")
+        chkEx("{ val x = _nullable(123); val t = [x!!] @* {}; return _type_of(x); }", "integer")
+        chkEx("{ val x = _nullable(123); val t = (a:[x!!]) @* {}; return _type_of(x); }", "integer")
     }
 
     @Test fun testStmtAssignment() {

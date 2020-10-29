@@ -54,11 +54,25 @@ class C_Scope(
     }
 
     fun getEntity(name: List<S_Name>): R_Entity {
+        val entity = getEntityOpt(name)
+        if (entity == null) {
+            val nameStr = C_Utils.nameStr(name)
+            throw C_Error(name[0].pos, "unknown_entity:$nameStr", "Unknown entity: '$nameStr'")
+        }
+        return entity
+    }
+
+    fun getEntityOpt(name: List<S_Name>): R_Entity? {
         val type = getTypeOpt(name)
+        if (type == null) {
+            return null
+        }
+
         if (type !is R_EntityType) {
             val nameStr = C_Utils.nameStr(name)
             throw C_Error(name[0].pos, "unknown_entity:$nameStr", "Unknown entity: '$nameStr'")
         }
+
         return type.rEntity
     }
 

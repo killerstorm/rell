@@ -7,6 +7,7 @@ package net.postchain.rell.compiler
 import net.postchain.rell.utils.LateGetter
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.vexpr.V_RExpr
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.toImmList
@@ -257,7 +258,7 @@ abstract class C_NamespaceValue_RExpr: C_NamespaceValue() {
 
     override final fun toExpr(ctx: C_NamespaceValueContext, name: List<S_Name>): C_Expr {
         val rExpr = toExpr0(ctx, name)
-        return C_RValue.makeExpr(name[0].pos, rExpr)
+        return V_RExpr.makeExpr(name[0].pos, rExpr)
     }
 }
 

@@ -121,7 +121,7 @@ class AtExprTest: BaseRellTest() {
     @Test fun testMultipleEntitiesBadAlias() {
         chk("(user: company, user) @ {}", "ct_err:at_dup_alias:user")
         chk("(user, user) @ {}", "ct_err:at_dup_alias:user")
-        chk("(u: user, u: user) @ {}", "ct_err:at_dup_alias:u")
+        chk("(u: user, u: user) @ {}", "ct_err:expr_tuple_dupname:u")
         chk("(user, u: user, user) @ {}", "ct_err:at_dup_alias:user")
     }
 
@@ -407,7 +407,7 @@ class AtExprTest: BaseRellTest() {
         chk("user @* {} limit -1", "rt_err:expr:at:limit:negative:-1")
         chk("user @* {} limit -999999", "rt_err:expr:at:limit:negative:-999999")
 
-        chk("user @ {} limit 'Hello'", "ct_err:expr_at_limit_type:text")
+        chk("user @ {} limit 'Hello'", "ct_err:expr_at_limit_type:[integer]:[text]")
     }
 
     @Test fun testOffset() {
@@ -427,7 +427,7 @@ class AtExprTest: BaseRellTest() {
         chk("user @* {} offset -99999999", "rt_err:expr:at:offset:negative:-99999999")
         chk("user @* {} offset 999999999", "list<user>[]")
 
-        chk("user @ {} offset 'Hello'", "ct_err:expr_at_offset_type:text")
+        chk("user @ {} offset 'Hello'", "ct_err:expr_at_offset_type:[integer]:[text]")
     }
 
     @Test fun testLimitOffset() {
@@ -540,7 +540,7 @@ class AtExprTest: BaseRellTest() {
 
     @Test fun testTupleExpr() {
         chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + (123,'Hello'))", "(text[Gates],text[(123,Hello)])")
-        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + (123,.firstName))", "ct_err:expr_sqlnotallowed")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + (123,.firstName))", "ct_err:expr:to_text:nosql:(integer,text)")
     }
 
     @Test fun testCollectionLiteralExpr() {
@@ -701,6 +701,27 @@ class AtExprTest: BaseRellTest() {
         chk("(u: user, c: company) @ {} ( @omit u.name, c.name )", "Apple")
         chk("(u: user, c: company) @ {} ( @omit u.name, name = c.name )", "(name=Apple)")
         chk("(u: user, c: company) @ {} ( @omit u.name, c.name, c )", "(name=Apple,company[1])")
+    }
+
+    @Test fun testSortOmit() {
+        tst.strictToString = false
+        chk("user @* { .company.name == 'Microsoft' } ( _ = .firstName, _ = .lastName )", "[(Bill,Gates), (Paul,Allen)]")
+        chk("user @* { .company.name == 'Microsoft' } ( @omit @sort _ = .firstName, _ = .lastName )", "[Gates, Allen]")
+        chk("user @* { .company.name == 'Microsoft' } ( @omit @sort_desc _ = .firstName, _ = .lastName )", "[Allen, Gates]")
+        chk("user @* { .company.name == 'Microsoft' } ( _ = .firstName, @omit @sort _ = .lastName )", "[Paul, Bill]")
+        chk("user @* { .company.name == 'Microsoft' } ( _ = .firstName, @omit @sort_desc _ = .lastName )", "[Bill, Paul]")
+    }
+
+    @Test fun testRowid() {
+        tst.strictToString = false
+        chk("user @* { .lastName == 'Jobs' } ( .rowid )", "[20]")
+        chk("user @* { .lastName == 'Jobs' } ( .rowid, .firstName )", "[(rowid=20,firstName=Steve)]")
+        chk("user @* { .lastName == 'Jobs' } ( .company.rowid )", "[200]")
+        chk("user @* { .lastName == 'Jobs' } ( .company.rowid, .firstName )", "[(200,firstName=Steve)]")
+        chk("(u:user) @* { .lastName == 'Jobs' } ( u.rowid )", "[20]")
+        chk("(u:user) @* { .lastName == 'Jobs' } ( u.rowid, u.firstName )", "[(rowid=20,firstName=Steve)]")
+        chk("(u:user) @* { .lastName == 'Jobs' } ( u.company.rowid )", "[200]")
+        chk("(u:user) @* { .lastName == 'Jobs' } ( u.company.rowid, u.firstName )", "[(200,firstName=Steve)]")
     }
 
     private object Ins {

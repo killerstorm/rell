@@ -8,6 +8,14 @@ import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 
 class TokenizerTest: BaseRellTest(false) {
+    @Test fun testName() {
+        tst.errMsgPos = true
+        chk("\n$", "ct_err:main.rell(2:1):expr:dollar:no_at")
+        chk("\nbob$", "ct_err:main.rell(2:4):syntax")
+        chk("\nSehenswürdigkeit", "ct_err:main.rell(2:8):lex:token")
+        chk("\nтест", "ct_err:main.rell(2:1):lex:token")
+    }
+
     @Test fun testIntegerLiteral() {
         tst.errMsgPos = true
 

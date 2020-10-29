@@ -5,8 +5,10 @@
 package net.postchain.rell.compiler.ast
 
 import net.postchain.rell.compiler.*
+import net.postchain.rell.model.R_BooleanType
 import net.postchain.rell.model.R_NullableType
 import net.postchain.rell.model.R_Type
+import net.postchain.rell.utils.toImmList
 
 class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
     override fun asName(): S_Name? = name
@@ -22,23 +24,24 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
         }
 
         val res = C_NameResolution_Local(name, ctx, localVar)
-        val cValue = res.toExpr().value()
-        val varType = cValue.type()
+        val vExpr = res.toExpr().value()
+        val varType = vExpr.type()
 
         val entityAttrs = ctx.nameCtx.findAttributesByName(name.str)
+        if (entityAttrs.isEmpty() && varType == R_BooleanType) {
+            return compile(ctx)
+        }
+
         val entityAttr = matchAttribute(ctx, idx, entityAttrs, varType)
-        val attrType = entityAttr.attrRef.type()
+        val attrType = entityAttr.type
         if (!C_BinOp_EqNe.checkTypesDb(attrType, varType)) {
             throw C_Error(name.pos, "at_param_attr_type_mismatch:$name:$attrType:$varType",
                     "Parameter type does not match attribute type for '$name': $varType instead of $attrType")
         }
 
-        val entityAttrExpr = entityAttr.compile()
-        val localAttrExpr = cValue.toRExpr()
-        val dbLocalAttrExpr = C_Utils.toDbExpr(startPos, localAttrExpr)
-
-        val dbExpr = C_Utils.makeDbBinaryExprEq(entityAttrExpr, dbLocalAttrExpr)
-        return C_DbValue.createExpr(startPos, dbExpr)
+        val entityAttrExpr = entityAttr.compile(startPos)
+        val vResExpr = C_Utils.makeVBinaryExprEq(startPos, entityAttrExpr, vExpr)
+        return C_VExpr(vResExpr)
     }
 
     private fun matchAttribute(
@@ -48,7 +51,7 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
             varType: R_Type
     ): C_ExprContextAttr {
         val entityAttrsByType = if (!entityAttrs.isEmpty()) {
-            entityAttrs.filter { C_BinOp_EqNe.checkTypesDb(it.attrRef.type(), varType) }
+            entityAttrs.filter { C_BinOp_EqNe.checkTypesDb(it.type, varType) }
         } else {
             S_AtExpr.findWhereContextAttrsByType(ctx, varType)
         }
@@ -76,12 +79,20 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
 
         return entityAttrsByType[0]
     }
+
+    override fun compileFromItem(ctx: C_ExprContext): C_AtFromItem {
+        val entity = ctx.nsCtx.getEntityOpt(listOf(name))
+        if (entity != null) {
+            return C_AtFromItem_Entity(name.pos, name.str, entity)
+        }
+        return super.compileFromItem(ctx)
+    }
 }
 
 class S_AttrExpr(pos: S_Pos, val name: S_Name): S_Expr(pos) {
     override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
-        val expr = ctx.nameCtx.resolveAttr(name)
-        return expr
+        val vExpr = ctx.nameCtx.resolveAttr(name)
+        return C_VExpr(vExpr)
     }
 }
 
@@ -90,6 +101,35 @@ class S_MemberExpr(val base: S_Expr, val name: S_Name): S_Expr(base.startPos) {
         val cBase = base.compile(ctx)
         val cExpr = cBase.member(ctx, name, false)
         return cExpr
+    }
+
+    override fun compileFromItem(ctx: C_ExprContext): C_AtFromItem {
+        val names = toNames()
+        if (names != null) {
+            val entity = ctx.nsCtx.getEntityOpt(names)
+            if (entity != null) {
+                return C_AtFromItem_Entity(names[0].pos, names.last().str, entity)
+            }
+        }
+
+        return super.compileFromItem(ctx)
+    }
+
+    private fun toNames(): List<S_Name>? {
+        var cur: S_Expr = this
+        val names = mutableListOf<S_Name>()
+
+        while (true) {
+            if (cur is S_NameExpr) {
+                names.add(cur.name)
+                return names.reversed().toImmList()
+            } else if (cur is S_MemberExpr) {
+                names.add(cur.name)
+                cur = cur.base
+            } else {
+                return null
+            }
+        }
     }
 }
 
@@ -115,5 +155,12 @@ class S_SafeMemberExpr(val base: S_Expr, val name: S_Name): S_Expr(base.startPos
     private fun errWrongType(type: R_Type): C_Error {
         return C_Error(name.pos, "expr_safemem_type:[${type.toStrictString()}]",
                 "Wrong type for operator '?.': ${type.toStrictString()}")
+    }
+}
+
+class S_DollarExpr(pos: S_Pos): S_Expr(pos) {
+    override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
+        val vExpr = ctx.nameCtx.resolvePlaceholder(startPos)
+        return C_VExpr(vExpr)
     }
 }

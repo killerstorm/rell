@@ -109,8 +109,8 @@ class LibBlockTransactionTest: BaseRellTest() {
 
         chk("block @* {}", "list<block>[block[111]]")
         chk("transaction @* {}", "list<transaction>[transaction[444]]")
-        chk("blocks @* {}", "ct_err:unknown_entity:blocks")
-        chk("transactions @* {}", "ct_err:unknown_entity:transactions")
+        chk("blocks @* {}", "ct_err:unknown_name:blocks")
+        chk("transactions @* {}", "ct_err:unknown_name:transactions")
     }
 
     @Test fun testBlockRef() {

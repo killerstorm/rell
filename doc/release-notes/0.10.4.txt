@@ -163,3 +163,37 @@ The offset is zero-based, so if offset 0 is specified, all records will be retur
 record and so on.
 
 Both limit and offset clauses are optional and can be used together in an arbitrary order.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+9. Language: At-expression for collections
+
+At-expressions can be used to filter and transform collections:
+
+    val l = [1, 2, 3, 4, 5, 6, 7];
+    val x = l @* { $ > 4 };
+    val y = l @* {} ( $ * $ );
+
+Special symbol "$" is used to access the current item in where- and what-parts. A custom alias can be specified instead:
+
+    val z = (a : l) @* { a > 4 };
+
+At-expressions can be chained:
+
+    val q = l
+        @* { $ >= 2 }
+        @* {} ( $ * $ )
+        @* { $ <= 25 }
+        ;
+
+Operations are performed in memory, not in database. If applying "at" to a list of entities, each entity will be
+selected from the database individually in order to access its attributes (may be slow):
+
+    val all_users = user @* {};                     // Select all users with one SQL query.
+    val good_users = all_users @* { $.is_good };    // Slow: will execute SQL query for every user to read its "is_good".
+
+Details:
+
+- All kinds of at-operators are supported: "@", "@?", "@*", "@+".
+- Source collection can be a list or a set, the result is always a list (or a single value).
+- Where- and what-expressions are not restricted to SQL-compatible ones (e. g. user-defined function calls are allowed).
+- Limit and offset clauses are supported.

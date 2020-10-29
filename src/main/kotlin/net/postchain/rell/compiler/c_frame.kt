@@ -5,13 +5,14 @@
 package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.ast.S_Name
+import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.*
 import net.postchain.rell.utils.toImmMap
 
 class C_FrameContext private constructor(val fnCtx: C_FunctionContext, proto: C_CallFrameProto) {
     val msgCtx = fnCtx.msgCtx
 
-    private val ownerRootBlkCtx = C_OwnerBlockContext.createRoot(this, proto.rootBlockScope)
+    private val ownerRootBlkCtx = C_OwnerBlockContext.createRoot(this, true, proto.rootBlockScope)
     val rootBlkCtx: C_BlockContext = ownerRootBlkCtx
 
     private var callFrameSize = proto.size
@@ -48,7 +49,14 @@ class C_LocalVar(
         val uid: C_VarUid,
         val ptr: R_VarPtr
 ) {
-    fun toVarExpr(): R_VarExpr = R_VarExpr(type, ptr, name)
+    fun toExpr(): R_DestinationExpr = R_VarExpr(type, ptr, name)
+}
+
+class C_PlaceholderVar(val ptr: R_VarPtr, val ambiguous: Boolean) {
+    fun toLocalVar(blockUid: R_FrameBlockUid): C_PlaceholderVar {
+        val localPtr = R_VarPtr(ptr.name, blockUid, ptr.offset)
+        return C_PlaceholderVar(localPtr, ambiguous)
+    }
 }
 
 class C_BlockScope(entries: Map<String, C_BlockScopeEntry>) {
@@ -82,7 +90,7 @@ class C_BlockScopeBuilder(
         return local?.toLocalVar(lookupBlockUid)
     }
 
-    fun add(name: S_Name, type: R_Type, mutable: Boolean): C_LocalVar {
+    fun addVar(name: S_Name, type: R_Type, mutable: Boolean): C_LocalVar {
         check(!build)
 
         val nameStr = name.str
@@ -96,6 +104,12 @@ class C_BlockScopeBuilder(
 
         val res = entry.toLocalVar(blockUid)
         return res
+    }
+
+    fun addPlaceholder(): R_VarPtr {
+        check(!build)
+        val ofs = endOffset++
+        return R_VarPtr(C_Constants.AT_PLACEHOLDER, blockUid, ofs)
     }
 
     fun build(): C_BlockScope {
@@ -118,32 +132,20 @@ class C_BlockScopeEntry(
     }
 }
 
-sealed class C_BlockContextState {
-    abstract fun createBlockContext(frameCtx: C_FrameContext): C_BlockContext
-}
-
-private class C_InternalBlockContextState(
-        private val blockUid: R_FrameBlockUid,
-        locals: Map<String, C_BlockScopeEntry>
-): C_BlockContextState() {
-    private val locals = locals.toImmMap()
-
-    override fun createBlockContext(frameCtx: C_FrameContext): C_BlockContext {
-        return C_OwnerBlockContext(frameCtx, null, blockUid, null, C_BlockScope.EMPTY)
-    }
-}
-
-sealed class C_BlockContext(val frameCtx: C_FrameContext, val loop: C_LoopUid?) {
+sealed class C_BlockContext(val frameCtx: C_FrameContext) {
     val fnCtx = frameCtx.fnCtx
     val defCtx = fnCtx.defCtx
     val nsCtx = defCtx.nsCtx
 
-    val nameCtx = C_NameContext.createBlock(nsCtx.nameCtx, this)
+    val nameCtx = C_NameContext.createBlock(this)
 
     abstract fun isTopLevelBlock(): Boolean
-    abstract fun createSubContext(loop: C_LoopUid?, location: String): C_OwnerBlockContext
+    abstract fun isCollectionAtAllowed(): Boolean
+    abstract fun createSubContext(location: String): C_OwnerBlockContext
     abstract fun lookupLocalVar(name: String): C_LocalVar?
+    abstract fun lookupPlaceholder(): C_PlaceholderVar?
     abstract fun addLocalVar(name: S_Name, type: R_Type, mutable: Boolean): C_LocalVar
+    abstract fun addPlaceholder(type: R_Type): R_VarPtr
 }
 
 class C_FrameBlock(val rBlock: R_FrameBlock, val scope: C_BlockScope)
@@ -152,19 +154,21 @@ class C_OwnerBlockContext(
         frameCtx: C_FrameContext,
         private val parent: C_OwnerBlockContext?,
         private val blockUid: R_FrameBlockUid,
-        loop: C_LoopUid?,
+        private val atAllowed: Boolean,
         protoBlockScope: C_BlockScope
-): C_BlockContext(frameCtx, loop) {
+): C_BlockContext(frameCtx) {
     private val startOffset: Int = parent?.scopeBuilder?.endOffset() ?: 0
     private val scopeBuilder: C_BlockScopeBuilder = C_BlockScopeBuilder(fnCtx, blockUid, startOffset, protoBlockScope)
+    private var placeholder: C_PlaceholderVar? = null
     private var build = false
 
     override fun isTopLevelBlock() = parent?.parent == null
+    override fun isCollectionAtAllowed() = atAllowed
 
-    override fun createSubContext(loop: C_LoopUid?, location: String): C_OwnerBlockContext {
+    override fun createSubContext(location: String): C_OwnerBlockContext {
         check(!build)
         val blockUid = fnCtx.nextBlockUid(location)
-        return C_OwnerBlockContext(frameCtx, this, blockUid, loop, C_BlockScope.EMPTY)
+        return C_OwnerBlockContext(frameCtx, this, blockUid, atAllowed, C_BlockScope.EMPTY)
     }
 
     override fun lookupLocalVar(name: String): C_LocalVar? {
@@ -172,12 +176,24 @@ class C_OwnerBlockContext(
         return res
     }
 
+    override fun lookupPlaceholder(): C_PlaceholderVar? {
+        val ph = findValue { it.placeholder }
+        return ph?.toLocalVar(blockUid)
+    }
+
     override fun addLocalVar(name: S_Name, type: R_Type, mutable: Boolean): C_LocalVar {
         val nameStr = name.str
         if (lookupLocalVar(nameStr) != null) {
             throw C_Error(name.pos, "var_dupname:$nameStr", "Duplicate variable: '$nameStr'")
         }
-        return scopeBuilder.add(name, type, mutable)
+        return scopeBuilder.addVar(name, type, mutable)
+    }
+
+    override fun addPlaceholder(type: R_Type): R_VarPtr {
+        val ambiguous = findValue { it.placeholder } != null
+        val varPtr = scopeBuilder.addPlaceholder()
+        placeholder = C_PlaceholderVar(varPtr, ambiguous)
+        return varPtr
     }
 
     private fun <T> findValue(getter: (C_OwnerBlockContext) -> T?): T? {
@@ -204,11 +220,11 @@ class C_OwnerBlockContext(
     }
 
     companion object {
-        fun createRoot(frameCtx: C_FrameContext, protoScope: C_BlockScope): C_OwnerBlockContext {
+        fun createRoot(frameCtx: C_FrameContext, atAllowed: Boolean, protoScope: C_BlockScope): C_OwnerBlockContext {
             val fnCtx = frameCtx.fnCtx
             val name = fnCtx.fnUid.name
             val blockUid = fnCtx.nextBlockUid("root:$name")
-            return C_OwnerBlockContext(frameCtx, null, blockUid, null, protoScope)
+            return C_OwnerBlockContext(frameCtx, null, blockUid, atAllowed, protoScope)
         }
     }
 }

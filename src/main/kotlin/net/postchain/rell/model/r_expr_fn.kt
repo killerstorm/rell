@@ -33,6 +33,8 @@ class R_SysCallExpr(
         } catch (e: Rt_BaseError) {
             val msg = decorate(e.message)
             throw e.updateMessage(msg)
+        } catch (e: RellInterpreterCrashException) {
+            throw e
         } catch (e: Throwable) {
             val msg = decorate(e.message)
             throw RuntimeException(msg, e)

@@ -45,7 +45,7 @@ class ExternalTest: BaseRellTest() {
         def("@external('foo') @mount('') namespace bar { @log entity user { name; } }")
         tst.chainDependency("foo", "deadbeef", 1000)
         chk("bar.user @ {} ( _=user, _=.name )", "([foo]:bar.user[1],text[Bob])")
-        chk("user @ {} ( _=user, _=.name )", "ct_err:unknown_entity:user")
+        chk("user @ {} ( _=user, _=.name )", "ct_err:unknown_name:user")
     }
 
     @Test fun testNamespaceInsideExternal() {
@@ -56,7 +56,7 @@ class ExternalTest: BaseRellTest() {
         def("namespace abc { @external('ext') namespace foo { namespace bar { @log entity user { name; } } } }")
         tst.chainDependency("ext", "deadbeef", 1000)
         chk("abc.foo.bar.user @ {} ( _=user, _=.name )", "([ext]:abc.foo.bar.user[1],text[Bob])")
-        chk("foo.bar.user @ {} ( _=user, _=.name )", "ct_err:unknown_entity:foo.bar.user")
+        chk("foo.bar.user @ {} ( _=user, _=.name )", "ct_err:unknown_name:foo")
     }
 
     @Test fun testUnallowedDefs() {

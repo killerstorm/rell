@@ -5,9 +5,11 @@
 package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.ast.*
+import net.postchain.rell.compiler.vexpr.V_DbExpr
+import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
 
-class C_MemberRef(val pos: S_Pos, val base: C_Value, val name: S_Name, val safe: Boolean) {
+class C_MemberRef(val pos: S_Pos, val base: V_Expr, val name: S_Name, val safe: Boolean) {
     fun qualifiedName() = "${base.type().toStrictString()}.${name.str}"
 }
 
@@ -132,14 +134,16 @@ private class C_MemberAttr_SimpleReadOnly(
     override fun destination(pos: S_Pos, base: R_Expr) = throw C_Errors.errBadDestination(name)
 }
 
-private class C_MemberAttrValue(
+private class V_MemberAttrExpr(
         private val memberRef: C_MemberRef,
         private val memAttr: C_MemberAttr,
         private val type: R_Type,
         private val varFacts: C_ExprVarFacts
-): C_Value(memberRef.pos) {
+): V_Expr(memberRef.pos) {
+    private val isDb = isDb(memberRef.base)
+
     override fun type() = type
-    override fun isDb() = memberRef.base.isDb()
+    override fun isDb() = isDb
 
     override fun toRExpr0(): R_Expr {
         val rBase = memberRef.base.toRExpr()
@@ -147,7 +151,7 @@ private class C_MemberAttrValue(
         return R_MemberExpr(rBase, memberRef.safe, calculator)
     }
 
-    override fun toDbExpr(): Db_Expr {
+    override fun toDbExpr0(): Db_Expr {
         val rExpr = toRExpr()
         return C_Utils.toDbExpr(memberRef.name.pos, rExpr)
     }
@@ -158,6 +162,11 @@ private class C_MemberAttrValue(
         val rBase = memberRef.base.toRExpr()
         val rDstExpr = memAttr.destination(memberRef.name.pos, rBase)
         return C_SimpleDestination(rDstExpr)
+    }
+
+    override fun implicitWhatName(): String? {
+        val isAt = memberRef.base.isAtExprItem()
+        return if (isAt) memberRef.name.str else null
     }
 }
 
@@ -206,15 +215,15 @@ private class C_EntityAttrRef_Regular(rEntity: R_Entity, private val attr: R_Att
     }
 
     override fun createIpMemberExpr(ref: C_MemberRef): C_Expr {
-        val atEntity = R_AtEntity(rEntity, 0)
+        val atEntity = R_DbAtEntity(rEntity, 0)
         val baseDbExpr = Db_EntityExpr(atEntity)
         val attrInfo = createAttrInfo(baseDbExpr, ref.name)
-        return C_EntityAttrValue.createIpMemberExpr(ref, atEntity, attrInfo)
+        return V_EntityAttrExpr.createIpMemberExpr(ref, atEntity, attrInfo)
     }
 
     override fun createDbMemberExpr(base: Db_TableExpr, pos: S_Pos, sName: S_Name): C_Expr {
         val dbExpr = makeDbAttrExpr(base, attr)
-        return C_DbValue.createExpr(pos, dbExpr)
+        return V_DbExpr.createExpr(pos, dbExpr)
     }
 
     override fun createIpEntityMemberExpr(baseValue: C_EntityAttrValueLike, baseExpr: Db_TableExpr, ref: C_MemberRef): C_Expr {
@@ -243,7 +252,7 @@ private class C_EntityAttrRef_Rowid(rEntity: R_Entity): C_EntityAttrRef(rEntity,
     override fun createDbMemberExpr(base: Db_TableExpr, pos: S_Pos, sName: S_Name): C_Expr {
         val dbExpr = Db_RowidExpr(base)
         val memExpr = C_DbAttrInfo(base.rEntity, sName, null, dbExpr)
-        return C_DbValue.createExpr(pos, memExpr.dbExpr)
+        return V_DbExpr.createExpr(pos, memExpr.dbExpr)
     }
 
     override fun createIpEntityMemberExpr(baseValue: C_EntityAttrValueLike, baseExpr: Db_TableExpr, ref: C_MemberRef): C_Expr {
@@ -252,22 +261,22 @@ private class C_EntityAttrRef_Rowid(rEntity: R_Entity): C_EntityAttrRef(rEntity,
 }
 
 private class C_EntityAttrValueBase(
-        val value: C_Value,
+        val value: V_Expr,
         val safe: Boolean,
-        val atEntity: R_AtEntity
+        val atEntity: R_DbAtEntity
 )
 
 interface C_EntityAttrValueLike {
     fun memberAttr(ref: C_MemberRef, memAttrInfo: C_DbAttrInfo): C_Expr
 }
 
-private class C_EntityAttrValue private constructor(
+private class V_EntityAttrExpr private constructor(
         pos: S_Pos,
         private val base: C_EntityAttrValueBase,
-        private val parent: C_Value,
+        private val parent: V_Expr,
         private val attrInfo: C_DbAttrInfo,
         private val resultType: R_Type
-): C_Value(pos), C_EntityAttrValueLike {
+): V_Expr(pos), C_EntityAttrValueLike {
     override fun type() = resultType
     override fun isDb() = false // Important: value does not belong to an outer @-expression
 
@@ -278,10 +287,10 @@ private class C_EntityAttrValue private constructor(
         val whereRight = Db_ParameterExpr(base.atEntity.rEntity.type, 0)
         val where = C_Utils.makeDbBinaryExprEq(whereLeft, whereRight)
 
-        val whatField = R_AtWhatField(attrInfo.dbExpr, R_AtWhatFlags.DEFAULT)
+        val whatField = R_DbAtWhatField(attrInfo.dbExpr, R_AtWhatFlags.DEFAULT)
         val what = listOf(whatField)
 
-        val atBase = R_AtExprBase(from, what, where)
+        val atBase = R_DbAtExprBase(from, what, where)
         val calculator = R_MemberCalculator_DataAttribute(attrInfo.dbExpr.type, atBase)
 
         val rBase = base.value.toRExpr()
@@ -290,7 +299,7 @@ private class C_EntityAttrValue private constructor(
     }
 
     // Cannot inject the corresponding Db_Expr directly into another Db_Expr - must wrap it in R_Expr.
-    override fun toDbExpr() = C_Utils.toDbExpr(pos, toRExpr())
+    override fun toDbExpr0() = C_Utils.toDbExpr(pos, toRExpr())
 
     override fun destination(ctx: C_ExprContext): C_Destination {
         if (attrInfo.attr == null || !attrInfo.attr.mutable) {
@@ -324,8 +333,13 @@ private class C_EntityAttrValue private constructor(
         return create0(base, memAttrInfo, ref)
     }
 
+    override fun implicitWhatName(): String? {
+        val isAt = base.value.isAtExprItem()
+        return if (isAt) attrInfo.name.str else null
+    }
+
     companion object {
-        fun createIpMemberExpr(ref: C_MemberRef, atEntity: R_AtEntity, memExpr: C_DbAttrInfo): C_Expr {
+        fun createIpMemberExpr(ref: C_MemberRef, atEntity: R_DbAtEntity, memExpr: C_DbAttrInfo): C_Expr {
             val base = C_EntityAttrValueBase(ref.base, ref.safe, atEntity)
             return create0(base, memExpr, ref)
         }
@@ -333,8 +347,8 @@ private class C_EntityAttrValue private constructor(
         private fun create0(base: C_EntityAttrValueBase, memAttrInfo: C_DbAttrInfo, ref: C_MemberRef): C_Expr {
             C_MemberResolver.checkNullAccess(ref.base.type(), ref.name, ref.safe)
             val resultType = C_Utils.effectiveMemberType(memAttrInfo.dbExpr.type, ref.safe)
-            val value = C_EntityAttrValue(ref.pos, base, ref.base, memAttrInfo, resultType)
-            return C_ValueExpr(value)
+            val value = V_EntityAttrExpr(ref.pos, base, ref.base, memAttrInfo, resultType)
+            return C_VExpr(value)
         }
     }
 }
@@ -369,6 +383,6 @@ private fun makeMemberExpr(ref: C_MemberRef, memAttr: C_MemberAttr): C_Expr {
     val fieldType = memAttr.type
     val effectiveType = C_Utils.effectiveMemberType(fieldType, ref.safe)
     val exprFacts = C_ExprVarFacts.of(postFacts = ref.base.varFacts().postFacts)
-    val value = C_MemberAttrValue(ref, memAttr, effectiveType, exprFacts)
-    return C_ValueExpr(value)
+    val value = V_MemberAttrExpr(ref, memAttr, effectiveType, exprFacts)
+    return C_VExpr(value)
 }

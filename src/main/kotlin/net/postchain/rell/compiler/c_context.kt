@@ -192,8 +192,6 @@ class C_NamespaceContext(val modCtx: C_ModuleContext, val namespacePath: String?
     val msgCtx = modCtx.msgCtx
     val executor = modCtx.executor
 
-    val nameCtx = C_NameContext.createNamespace(this)
-
     private val scope = scopeBuilder.scope()
 
     fun defNames(qualifiedName: List<String>, extChain: C_ExternalChain? = null): R_DefinitionNames {
@@ -217,6 +215,11 @@ class C_NamespaceContext(val modCtx: C_ModuleContext, val namespacePath: String?
     fun getEntity(name: List<S_Name>): R_Entity {
         executor.checkPass(C_CompilerPass.MEMBERS, null)
         return scope.getEntity(name)
+    }
+
+    fun getEntityOpt(name: List<S_Name>): R_Entity? {
+        executor.checkPass(C_CompilerPass.MEMBERS, null)
+        return scope.getEntityOpt(name)
     }
 
     fun getValueOpt(name: S_Name): C_DefRef<C_NamespaceValue>? {
@@ -302,7 +305,15 @@ class C_DefinitionContext(val mntCtx: C_MountContext, val definitionType: C_Defi
     val globalCtx = modCtx.globalCtx
     val executor = modCtx.executor
 
-    val defExprCtx = C_ExprContext(this, nsCtx.nameCtx, C_VarFactsContext.EMPTY)
+    val defExprCtx: C_ExprContext
+
+    init {
+        val fnCtx = C_FunctionContext(this, "${mntCtx.mountName}.<def>", null, TypedKeyMap())
+        val frameCtx = C_FrameContext.create(fnCtx)
+        val blkCtx = C_OwnerBlockContext.createRoot(frameCtx, false, C_BlockScope.EMPTY)
+        val nameCtx = C_NameContext.createBlock(blkCtx)
+        defExprCtx = C_ExprContext(blkCtx, nameCtx, C_VarFactsContext.EMPTY)
+    }
 
     fun checkDbUpdateAllowed(pos: S_Pos) {
         if (definitionType == C_DefinitionType.QUERY) {
@@ -450,7 +461,7 @@ class C_FunctionContext(
         name: String,
         val explicitReturnType: R_Type?,
         val statementVars: TypedKeyMap
-){
+) {
     val nsCtx = defCtx.nsCtx
     val modCtx = nsCtx.modCtx
     val appCtx = modCtx.appCtx

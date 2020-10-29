@@ -5,12 +5,16 @@
 package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.ast.*
+import net.postchain.rell.compiler.vexpr.V_Expr
+import net.postchain.rell.compiler.vexpr.V_RExpr
+import net.postchain.rell.compiler.vexpr.V_SysGlobalCaseCallExpr
+import net.postchain.rell.compiler.vexpr.V_SysMemberCaseCallExpr
 import net.postchain.rell.model.*
 import net.postchain.rell.utils.RecursionAwareCalculator
 import net.postchain.rell.utils.RecursionAwareResult
 import net.postchain.rell.utils.toImmList
 
-class C_FunctionArgs(val valid: Boolean, positional: List<C_Value>, named: List<Pair<S_Name, C_Value>>) {
+class C_FunctionArgs(val valid: Boolean, positional: List<V_Expr>, named: List<Pair<S_Name, V_Expr>>) {
     val positional = positional.toImmList()
     val named = named.toImmList()
 }
@@ -42,7 +46,7 @@ class C_StructGlobalFunction(private val struct: R_Struct): C_GlobalFunction() {
         fun compileCall(struct: R_Struct, ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
             val attrs = C_AttributeResolver.resolveCreate(ctx, struct.attributes, args, name.pos)
             val rExpr = R_StructExpr(struct, attrs.rAttrs)
-            return C_RValue.makeExpr(name.pos, rExpr, attrs.exprFacts)
+            return V_RExpr.makeExpr(name.pos, rExpr, attrs.exprFacts)
         }
     }
 }
@@ -119,14 +123,14 @@ class C_OperationGlobalFunction(val rOp: R_Operation): C_GlobalFunction() {
         val cArgs = C_FunctionUtils.compileRegularArgs(ctx, args, header.params)
         val cEffArgs = C_FunctionUtils.checkArgs(ctx, name, header.params, cArgs)
 
-        val rExpr = if (cEffArgs == null) {
-            C_Utils.errorRExpr(R_OperationType)
+        val vExpr = if (cEffArgs == null) {
+            C_Utils.errorVExpr(name.pos, R_OperationType)
         } else {
             val rArgs = cEffArgs.map { it.toRExpr() }
-            R_OperationExpr(rOp, rArgs)
+            V_RExpr(name.pos, R_OperationExpr(rOp, rArgs))
         }
 
-        return C_RValue.makeExpr(name.pos, rExpr)
+        return C_VExpr(vExpr)
     }
 }
 
@@ -189,9 +193,9 @@ object C_FunctionUtils {
     }
 
     fun compileRegularArgs(ctx: C_ExprContext, args: List<S_NameExprPair>, paramsHints: C_FunctionParametersHints): C_FunctionArgs {
-        val positional = mutableListOf<C_Value>()
+        val positional = mutableListOf<V_Expr>()
         val namedNames = mutableSetOf<String>()
-        val named = mutableListOf<Pair<S_Name, C_Value>>()
+        val named = mutableListOf<Pair<S_Name, V_Expr>>()
         var valid = true
         var errPositionalAfterNamed = false
 
@@ -239,19 +243,16 @@ object C_FunctionUtils {
         val effArgs = checkArgs(ctx, name, header.params, args)
         val retType = compileReturnType(ctx, name, header)
 
-        val rExpr = if (effArgs != null && retType != null) {
+        val vExpr = if (effArgs != null && retType != null) {
             compileRegularCall0(name, effArgs, retType, rFunction)
         } else {
-            C_Utils.errorRExpr(retType ?: R_CtErrorType, "Compilation error")
+            C_Utils.errorVExpr(name.pos, retType ?: R_CtErrorType, "Compilation error")
         }
 
-        val argsValues = args.positional + args.named.map { it.second }
-        val exprFacts = C_ExprVarFacts.forSubExpressions(argsValues)
-
-        return C_RValue.makeExpr(name.pos, rExpr, exprFacts)
+        return C_VExpr(vExpr)
     }
 
-    fun checkArgs(ctx: C_ExprContext, name: S_Name, params: C_FormalParameters, args: C_FunctionArgs): List<C_Value>? {
+    fun checkArgs(ctx: C_ExprContext, name: S_Name, params: C_FormalParameters, args: C_FunctionArgs): List<V_Expr>? {
         if (!args.valid) {
             return null
         }
@@ -274,8 +275,8 @@ object C_FunctionUtils {
             fnName: S_Name,
             params: C_FormalParameters,
             args: C_FunctionArgs
-    ): Pair<Boolean, List<C_Value?>> {
-        val res = mutableListOf<C_Value?>()
+    ): Pair<Boolean, List<V_Expr?>> {
+        val res = mutableListOf<V_Expr?>()
         res.addAll(args.positional)
         while (res.size < params.list.size) res.add(null)
 
@@ -320,7 +321,7 @@ object C_FunctionUtils {
         return Pair(err, res)
     }
 
-    private fun matchArgTypes(ctx: C_ExprContext, fnName: S_Name, params: C_FormalParameters, args: List<C_Value?>): List<C_ArgTypeMatch?> {
+    private fun matchArgTypes(ctx: C_ExprContext, fnName: S_Name, params: C_FormalParameters, args: List<V_Expr?>): List<C_ArgTypeMatch?> {
         val matchList = mutableListOf<C_ArgTypeMatch?>()
         val n = Math.min(args.size, params.list.size)
 
@@ -376,19 +377,23 @@ object C_FunctionUtils {
         return retTypeRes.value
     }
 
-    private fun compileRegularCall0(name: S_Name, effArgs: List<C_Value>, retType: R_Type, rFunction: R_Routine): R_Expr {
+    private fun compileRegularCall0(name: S_Name, effArgs: List<V_Expr>, retType: R_Type, rFunction: R_Routine): V_Expr {
         val file = name.pos.path().str()
         val line = name.pos.line()
         val filePos = R_FilePos(file, line)
         val rArgs = effArgs.map { it.toRExpr() }
-        return R_UserCallExpr(retType, rFunction, rArgs, filePos)
+        val rExpr = R_UserCallExpr(retType, rFunction, rArgs, filePos)
+        val exprFacts = C_ExprVarFacts.forSubExpressions(effArgs)
+        return V_RExpr(name.pos, rExpr, exprFacts)
     }
 }
 
-abstract class C_FormalParamsFuncBody<CtxT: C_FuncCaseCtx> {
-    abstract fun compileCall(ctx: C_ExprContext, caseCtx: CtxT, args: List<C_Value>): C_Value
+abstract class C_FormalParamsFuncBody<CtxT: C_FuncCaseCtx>(val resType: R_Type) {
+    abstract fun varFacts(caseCtx: CtxT, args: List<V_Expr>): C_ExprVarFacts
 
-    open fun compileCallDb(ctx: C_ExprContext, caseCtx: CtxT, args: List<C_Value>): C_Value {
+    abstract fun compileCall(ctx: C_ExprContext, caseCtx: CtxT, args: List<R_Expr>): R_Expr
+
+    open fun compileCallDb(ctx: C_ExprContext, caseCtx: CtxT, args: List<Db_Expr>): Db_Expr {
         val name = caseCtx.fullName
         throw C_Errors.errFunctionNoSql(name.pos, name.str)
     }
@@ -398,61 +403,49 @@ typealias C_GlobalFormalParamsFuncBody = C_FormalParamsFuncBody<C_GlobalFuncCase
 typealias C_MemberFormalParamsFuncBody = C_FormalParamsFuncBody<C_MemberFuncCaseCtx>
 
 class C_SysGlobalFormalParamsFuncBody(
-        private val type: R_Type,
+        resType: R_Type,
         private val rFn: R_SysFunction,
         private val dbFn: Db_SysFunction? = null
-): C_GlobalFormalParamsFuncBody() {
-    override fun compileCall(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx, args: List<C_Value>): C_Value {
-        return C_BasicGlobalFuncCaseMatch.compileCall(caseCtx, args) { _, rArgs ->
-            C_Utils.createSysCallExpr(type, rFn, rArgs, caseCtx.fullName)
-        }
+): C_GlobalFormalParamsFuncBody(resType) {
+    override fun varFacts(caseCtx: C_GlobalFuncCaseCtx, args: List<V_Expr>) = C_ExprVarFacts.forSubExpressions(args)
+
+    override fun compileCall(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
+        return C_Utils.createSysCallExpr(resType, rFn, args, caseCtx.fullName)
     }
 
-    override fun compileCallDb(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx, args: List<C_Value>): C_Value {
+    override fun compileCallDb(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx, args: List<Db_Expr>): Db_Expr {
         val name = caseCtx.fullName
         if (dbFn == null) {
             throw C_Errors.errFunctionNoSql(name.pos, name.str)
         }
-
-        return C_BasicGlobalFuncCaseMatch.compileCallDb(caseCtx, args) { _, dbArgs ->
-            Db_CallExpr(type, dbFn, dbArgs)
-        }
+        return Db_CallExpr(resType, dbFn, args)
     }
 }
 
 class C_SysMemberFormalParamsFuncBody(
-        private val type: R_Type,
+        resType: R_Type,
         private val rFn: R_SysFunction,
         private val dbFn: Db_SysFunction? = null
-): C_MemberFormalParamsFuncBody() {
-    override fun compileCall(ctx: C_ExprContext, caseCtx: C_MemberFuncCaseCtx, args: List<C_Value>): C_Value {
-        val member = caseCtx.member
-        val rBase = member.base.toRExpr()
-        val rArgs = args.map { it.toRExpr() }
-        val calculator = R_MemberCalculator_SysFn(type, rFn, rArgs)
-        val rExpr = R_MemberExpr(rBase, member.safe, calculator)
-
-        val subValues = listOf(member.base) + args
-        val exprFacts = C_ExprVarFacts.forSubExpressions(subValues)
-
-        return C_RValue(member.name.pos, rExpr, exprFacts)
+): C_MemberFormalParamsFuncBody(resType) {
+    override fun varFacts(caseCtx: C_MemberFuncCaseCtx, args: List<V_Expr>): C_ExprVarFacts {
+        return C_ExprVarFacts.forSubExpressions(listOf(caseCtx.member.base) + args)
     }
 
-    override fun compileCallDb(ctx: C_ExprContext, caseCtx: C_MemberFuncCaseCtx, args: List<C_Value>): C_Value {
+    override fun compileCall(ctx: C_ExprContext, caseCtx: C_MemberFuncCaseCtx, args: List<R_Expr>): R_Expr {
+        val member = caseCtx.member
+        val rBase = member.base.toRExpr()
+        val calculator = R_MemberCalculator_SysFn(resType, rFn, args)
+        return R_MemberExpr(rBase, member.safe, calculator)
+    }
+
+    override fun compileCallDb(ctx: C_ExprContext, caseCtx: C_MemberFuncCaseCtx, args: List<Db_Expr>): Db_Expr {
         if (dbFn == null) {
             return super.compileCallDb(ctx, caseCtx, args)
         }
-
         val member = caseCtx.member
         val dbBase = member.base.toDbExpr()
-        val dbArgs = args.map { it.toDbExpr() }
-        val dbFullArgs = listOf(dbBase) + dbArgs
-        val dbExpr = Db_CallExpr(type, dbFn, dbFullArgs)
-
-        val subValues = listOf(member.base) + args
-        val exprFacts = C_ExprVarFacts.forSubExpressions(subValues)
-
-        return C_DbValue.create(member.name.pos, dbExpr, exprFacts)
+        val dbFullArgs = listOf(dbBase) + args
+        return Db_CallExpr(resType, dbFn, dbFullArgs)
     }
 }
 
@@ -476,17 +469,11 @@ class C_SysGlobalFunction(private val cases: List<C_GlobalFuncCase>): C_RegularG
         val match = matchCase(name, posArgs)
         val caseCtx = C_GlobalFuncCaseCtx(name)
 
-        val db = posArgs.any { it.isDb() }
-        val value = if (db) {
-            match.compileCallDb(ctx, caseCtx)
-        } else {
-            match.compileCall(ctx, caseCtx)
-        }
-
-        return C_ValueExpr(value)
+        val vExpr = V_SysGlobalCaseCallExpr(ctx, caseCtx, match, posArgs)
+        return C_VExpr(vExpr)
     }
 
-    private fun matchCase(name: S_Name, args: List<C_Value>): C_GlobalFuncCaseMatch {
+    private fun matchCase(name: S_Name, args: List<V_Expr>): C_GlobalFuncCaseMatch {
         for (case in cases) {
             val res = case.match(args)
             if (res != null) {
@@ -502,22 +489,15 @@ class C_SysGlobalFunction(private val cases: List<C_GlobalFuncCase>): C_RegularG
 class C_SysMemberFunction(val cases: List<C_MemberFuncCase>) {
     val paramsHints: C_FunctionParametersHints = C_SysMemberFnParamHints()
 
-    fun compileCall(ctx: C_ExprContext, member: C_MemberRef, args: List<C_Value>): C_Expr {
+    fun compileCall(ctx: C_ExprContext, member: C_MemberRef, args: List<V_Expr>): C_Expr {
         val qName = member.qualifiedName()
         val match = matchCase(member.name.pos, qName, args)
         val caseCtx = C_MemberFuncCaseCtx(member)
-
-        val db = member.base.isDb() || args.any { it.isDb() }
-        val value = if (db) {
-            match.compileCallDb(ctx, caseCtx)
-        } else {
-            match.compileCall(ctx, caseCtx)
-        }
-
-        return C_ValueExpr(value)
+        val vExpr = V_SysMemberCaseCallExpr(ctx, caseCtx, match, args)
+        return C_VExpr(vExpr)
     }
 
-    private fun matchCase(pos: S_Pos, fullName: String, args: List<C_Value>): C_MemberFuncCaseMatch {
+    private fun matchCase(pos: S_Pos, fullName: String, args: List<V_Expr>): C_MemberFuncCaseMatch {
         for (case in cases) {
             val res = case.match(args)
             if (res != null) {

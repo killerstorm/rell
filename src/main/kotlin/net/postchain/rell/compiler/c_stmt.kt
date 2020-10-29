@@ -80,8 +80,10 @@ class C_BlockCodeBuilder(ctx: C_StmtContext, private val repl: Boolean, hasGuard
     fun add(stmt: S_Statement) {
         check(!build)
 
+        val subExprCtx = ctx.exprCtx.update(factsCtx = blkVarFacts.subContext(), insideGuardBlock = beforeGuardBlock)
+
         val subCtx = ctx.update(
-                exprCtx = ctx.exprCtx.update(factsCtx = blkVarFacts.subContext(), insideGuardBlock = beforeGuardBlock),
+                exprCtx = subExprCtx,
                 afterGuardBlock = afterGuardBlock
         )
         val cStmt = stmt.compile(subCtx, repl)

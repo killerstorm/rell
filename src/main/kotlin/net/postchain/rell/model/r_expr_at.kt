@@ -23,23 +23,23 @@ enum class R_AtCardinality(val zero: Boolean, val many: Boolean) {
     }
 }
 
-class R_AtEntity(val rEntity: R_Entity, val index: Int) {
-    override fun equals(other: Any?) = other is R_AtEntity && rEntity == other.rEntity && index == other.index
+class R_DbAtEntity(val rEntity: R_Entity, val index: Int) {
+    override fun equals(other: Any?) = other is R_DbAtEntity && rEntity == other.rEntity && index == other.index
     override fun hashCode() = rEntity.hashCode() * 31 + index
 }
 
-sealed class R_AtExprRowType {
+sealed class R_DbAtExprRowDecoder {
     abstract fun decode(row: Array<Rt_Value>): Rt_Value
 }
 
-object R_AtExprRowType_Simple: R_AtExprRowType() {
+object R_DbAtExprRowDecoder_Simple: R_DbAtExprRowDecoder() {
     override fun decode(row: Array<Rt_Value>): Rt_Value {
         check(row.size == 1) { "row.size == ${row.size}" }
         return row[0]
     }
 }
 
-class R_AtExprRowType_Tuple(val type: R_TupleType): R_AtExprRowType() {
+class R_DbAtExprRowDecoder_Tuple(val type: R_TupleType): R_DbAtExprRowDecoder() {
     override fun decode(row: Array<Rt_Value>): Rt_Value {
         check(row.size == type.fields.size) { "row.size == ${row.size}, not ${type.fields.size}" }
         return Rt_TupleValue(type, row.toList())
@@ -59,11 +59,11 @@ class R_AtWhatFlags(val select: Boolean, val sort: R_AtWhatSort?, val group: Boo
     }
 }
 
-class R_AtWhatField(val expr: Db_Expr, val flags: R_AtWhatFlags)
+class R_DbAtWhatField(val expr: Db_Expr, val flags: R_AtWhatFlags)
 
-class R_AtExprBase(
-        private val from: List<R_AtEntity>,
-        private val what: List<R_AtWhatField>,
+class R_DbAtExprBase(
+        private val from: List<R_DbAtEntity>,
+        private val what: List<R_DbAtWhatField>,
         private val where: Db_Expr?
 ) {
     private val resultTypes = what.filter { it.flags.select }.map { it.expr.type }.toImmList()
@@ -73,14 +73,14 @@ class R_AtExprBase(
         what.forEach { check(!it.flags.ignore) }
     }
 
-    fun execute(frame: Rt_CallFrame, params: List<Rt_Value>, limit: R_Expr?, offset: R_Expr?): List<Array<Rt_Value>> {
+    fun execute(frame: Rt_CallFrame, params: List<Rt_Value>, limit: Long?, offset: Long?): List<Array<Rt_Value>> {
         val rtSql = buildSql(frame, params, limit, offset)
         val select = SqlSelect(rtSql, resultTypes)
         val records = select.execute(frame)
         return records
     }
 
-    private fun buildSql(frame: Rt_CallFrame, params: List<Rt_Value>, limit: R_Expr?, offset: R_Expr?): ParameterizedSql {
+    private fun buildSql(frame: Rt_CallFrame, params: List<Rt_Value>, limit: Long?, offset: Long?): ParameterizedSql {
         val redWhere = makeFullWhere(frame)
         val redWhat = what.map { RedWhatField(it.expr.toRedExpr(frame), it.flags) }
 
@@ -254,7 +254,7 @@ class R_AtExprBase(
         }
     }
 
-    private class OrderByElement_Entity(val entity: R_AtEntity): OrderByElement() {
+    private class OrderByElement_Entity(val entity: R_DbAtEntity): OrderByElement() {
         override fun toSql(ctx: SqlGenContext, b: SqlBuilder) {
             val alias = ctx.getEntityAlias(entity)
             b.appendColumn(alias, entity.rEntity.sqlMapping.rowidColumn())
@@ -262,28 +262,36 @@ class R_AtExprBase(
     }
 }
 
-class R_AtExpr(
+abstract class R_AtExpr(
         type: R_Type,
-        val base: R_AtExprBase,
         val cardinality: R_AtCardinality,
-        val limit: R_Expr?,
-        val offset: R_Expr?,
-        val rowType: R_AtExprRowType
+        private val limit: R_Expr?,
+        private val offset: R_Expr?
 ): R_Expr(type) {
-    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        val records = base.execute(frame, listOf(), limit, offset)
-        return decodeResult(records)
+    protected fun evalLimit(frame: Rt_CallFrame): Long? = evalLimitOffset(frame, limit, "limit")
+    protected fun evalOffset(frame: Rt_CallFrame): Long? = evalLimitOffset(frame, offset, "offset")
+
+    private fun evalLimitOffset(frame: Rt_CallFrame, expr: R_Expr?, part: String): Long? {
+        if (expr == null) {
+            return null
+        }
+
+        val v0 = expr.evaluate(frame)
+        val v = v0.asInteger()
+
+        if (v < 0) {
+            val codeFmt = "expr:at:$part:negative:$v"
+            val msgFmt = "Negative $part: $v"
+            throw Rt_Error(codeFmt, msgFmt)
+        }
+
+        return v
     }
 
-    private fun decodeResult(records: List<Array<Rt_Value>>): Rt_Value {
-        val list = MutableList(records.size) { rowType.decode(records[it]) }
-
-        val count = list.size
-        checkCount(cardinality, count)
-
+    protected fun evalResult(list: MutableList<Rt_Value>): Rt_Value {
         if (cardinality.many) {
             return Rt_ListValue(type, list)
-        } else if (count > 0) {
+        } else if (list.isNotEmpty()) {
             return list[0]
         } else {
             return Rt_NullValue
@@ -291,11 +299,36 @@ class R_AtExpr(
     }
 
     companion object {
-        fun checkCount(cardinality: R_AtCardinality, count: Int) {
+        fun checkCount(cardinality: R_AtCardinality, count: Int, haveMore: Boolean, itemMsg: String) {
             if (!cardinality.matches(count)) {
-                val msg = if (count == 0) "No records found" else "Multiple records found: $count"
-                throw Rt_Error("at:wrong_count:$count", msg)
+                val code = if (count > 0 && haveMore) "at:wrong_count:$count+" else "at:wrong_count:$count"
+                val msg = when {
+                    count == 0 -> "No $itemMsg found"
+                    haveMore -> "Multiple $itemMsg found"
+                    else -> "Multiple $itemMsg found: $count"
+                }
+                throw Rt_Error(code, msg)
             }
         }
+    }
+}
+
+class R_DbAtExpr(
+        type: R_Type,
+        val base: R_DbAtExprBase,
+        cardinality: R_AtCardinality,
+        limit: R_Expr?,
+        offset: R_Expr?,
+        val rowDecoder: R_DbAtExprRowDecoder
+): R_AtExpr(type, cardinality, limit, offset) {
+    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
+        val limit = evalLimit(frame)
+        val offset = evalOffset(frame)
+
+        val records = base.execute(frame, listOf(), limit, offset)
+        checkCount(cardinality, records.count(), false, "records")
+
+        val values = MutableList(records.size) { rowDecoder.decode(records[it]) }
+        return evalResult(values)
     }
 }

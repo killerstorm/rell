@@ -207,7 +207,7 @@ class S_ReturnStatement(pos: S_Pos, val expr: S_Expr?): S_Statement(pos) {
 
 class S_BlockStatement(pos: S_Pos, val stmts: List<S_Statement>): S_Statement(pos) {
     override fun compile0(ctx: C_StmtContext, repl: Boolean): C_Statement {
-        val (subCtx, subBlkCtx) = ctx.subBlock(ctx.blkCtx.loop)
+        val (subCtx, subBlkCtx) = ctx.subBlock(ctx.loop)
 
         val hasGuardBlock = stmts.any { it is S_GuardStatement }
 
@@ -570,7 +570,7 @@ class S_ForStatement(pos: S_Pos, val declarator: S_VarDeclarator, val expr: S_Ex
 
 class S_BreakStatement(pos: S_Pos): S_Statement(pos) {
     override fun compile0(ctx: C_StmtContext, repl: Boolean): C_Statement {
-        if (ctx.blkCtx.loop == null) {
+        if (ctx.loop == null) {
             throw C_Error(pos, "stmt_break_noloop", "Break without a loop")
         }
         val rStmt = R_BreakStatement()
@@ -580,7 +580,7 @@ class S_BreakStatement(pos: S_Pos): S_Statement(pos) {
 
 class S_ContinueStatement(pos: S_Pos): S_Statement(pos) {
     override fun compile0(ctx: C_StmtContext, repl: Boolean): C_Statement {
-        if (ctx.blkCtx.loop == null) {
+        if (ctx.loop == null) {
             throw C_Error(pos, "stmt_continue_noloop", "Continue without a loop")
         }
         val rStmt = R_ContinueStatement()

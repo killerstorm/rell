@@ -37,7 +37,7 @@ class Rt_CallFrame(
 
     fun <T> block(block: R_FrameBlock, code: () -> T): T {
         val oldBlock = curBlock
-        check(block.parentUid == oldBlock.uid)
+        check(block.parentUid == oldBlock.uid) { "block.parentUid = ${block.parentUid}, oldBlock.uid = ${oldBlock.uid}" }
         check(block.offset + block.size <= values.size)
 
         for (i in 0 until block.size) {

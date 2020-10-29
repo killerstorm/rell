@@ -243,7 +243,7 @@ class VirtualTest: BaseGtxTest(false) {
         def("struct sub { q: integer; p: sub2; }")
         def("struct sub2 { r: integer; }")
 
-        var args = argToGtv("[123,'Hello',[456,[789]]]", "[[0],[1],[2]]")
+        val args = argToGtv("[123,'Hello',[456,[789]]]", "[[0],[1],[2]]")
 
         chkVirtual("virtual<rec>?", "_type_of(x)", args, "'virtual<rec>?'")
         chkVirtual("virtual<rec>?", "_type_of(x.to_full())", args, "ct_err:expr_mem_null:to_full")

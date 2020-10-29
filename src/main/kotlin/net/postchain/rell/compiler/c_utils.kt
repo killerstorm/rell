@@ -11,6 +11,10 @@ import net.postchain.rell.compiler.ast.*
 import net.postchain.rell.compiler.parser.RellTokenizerError
 import net.postchain.rell.compiler.parser.RellTokenizerState
 import net.postchain.rell.compiler.parser.S_Grammar
+import net.postchain.rell.compiler.vexpr.V_BinaryExpr
+import net.postchain.rell.compiler.vexpr.V_Expr
+import net.postchain.rell.compiler.vexpr.V_IntegerToDecimalExpr
+import net.postchain.rell.compiler.vexpr.V_RExpr
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Error
 import net.postchain.rell.utils.CommonUtils
@@ -55,6 +59,8 @@ object C_Constants {
     const val LOG_ANNOTATION = "log"
     const val MODULE_ARGS_STRUCT = "module_args"
 
+    const val AT_PLACEHOLDER = "$"
+
     const val TRANSACTION_ENTITY = "transaction"
     const val BLOCK_ENTITY = "block"
 
@@ -84,12 +90,12 @@ class C_FormalParameter(val name: S_Name, val type: R_Type?, val exprPos: S_Pos?
         return R_VarParam(name.str, type, ptr)
     }
 
-    fun createDefaultValueExpr(): C_Value {
+    fun createDefaultValueExpr(): V_Expr {
         check(hasExpr)
         check(exprPos != null)
         val actType = type ?: R_CtErrorType
         val rExpr = R_DefaultValueExpr(actType, exprLate)
-        return C_RValue(exprPos, rExpr)
+        return V_RExpr(exprPos, rExpr)
     }
 }
 
@@ -120,6 +126,11 @@ object C_Utils {
 
     fun makeDbBinaryExprChain(type: R_Type, rOp: R_BinaryOp, dbOp: Db_BinaryOp, exprs: List<Db_Expr>): Db_Expr {
         return CommonUtils.foldSimple(exprs) { left, right -> makeDbBinaryExpr(type, rOp, dbOp, left, right) }
+    }
+
+    fun makeVBinaryExprEq(pos: S_Pos, left: V_Expr, right: V_Expr): V_Expr {
+        val vOp = C_BinOp_EqNe.createVOp(true, left.type())
+        return V_BinaryExpr(pos, vOp, left, right, C_ExprVarFacts.EMPTY)
     }
 
     fun effectiveMemberType(formalType: R_Type, safe: Boolean): R_Type {
@@ -254,15 +265,17 @@ object C_Utils {
         return createSysCallExpr(type, fn, args, qualifiedName[0].pos, nameStr)
     }
 
-    fun createSysCallExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, pos: S_Pos, nameStr: String): R_Expr {
+    fun createSysCallExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, pos: S_Pos?, nameStr: String): R_Expr {
         val rCallExpr = R_SysCallExpr(type, fn, args, nameStr)
-        val filePos = pos.toFilePos()
-        return R_StackTraceExpr(rCallExpr, filePos)
+        return if (pos == null) rCallExpr else {
+            val filePos = pos.toFilePos()
+            R_StackTraceExpr(rCallExpr, filePos)
+        }
     }
 
     fun errorRExpr(type: R_Type = R_CtErrorType, msg: String = "Compilation error"): R_Expr {
         val arg = R_ConstantExpr.makeText(msg)
-        return R_SysCallExpr(type, R_SysFn_Internal.Crash, listOf(arg), null)
+        return createSysCallExpr(type, R_SysFn_Internal.Crash, listOf(arg), null, "error")
     }
 
     fun errorDbExpr(type: R_Type = R_CtErrorType, msg: String = "Compilation error"): Db_Expr {
@@ -270,32 +283,23 @@ object C_Utils {
         return Db_InterpretedExpr(rExpr)
     }
 
-    fun errorValue(pos: S_Pos, type: R_Type = R_CtErrorType, msg: String = "Compilation error"): C_Value {
+    fun errorVExpr(pos: S_Pos, type: R_Type = R_CtErrorType, msg: String = "Compilation error"): V_Expr {
         val rExpr = errorRExpr(type, msg)
-        return C_RValue(pos, rExpr)
+        return V_RExpr(pos, rExpr)
     }
 
     fun errorExpr(pos: S_Pos, type: R_Type = R_CtErrorType, msg: String = "Compilation error"): C_Expr {
-        val value = errorValue(pos, type, msg)
-        return C_ValueExpr(value)
+        val value = errorVExpr(pos, type, msg)
+        return C_VExpr(value)
     }
 
-    fun integerToDecimalPromotion(value: C_Value): C_Value {
-        val type = value.type()
+    fun integerToDecimalPromotion(vExpr: V_Expr): V_Expr {
+        val type = vExpr.type()
         if (type == R_DecimalType) {
-            return value
+            return vExpr
         }
         check(type == R_IntegerType) { "Expected $R_DecimalType, but was $type" }
-
-        if (value.isDb()) {
-            val dbExpr = value.toDbExpr()
-            val dbResExpr = Db_CallExpr(R_DecimalType, Db_SysFn_Decimal.FromInteger, listOf(dbExpr))
-            return C_DbValue.create(value.pos, dbResExpr, value.varFacts())
-        } else {
-            val rExpr = value.toRExpr()
-            val rResExpr = createSysCallExpr(R_DecimalType, R_SysFn_Decimal.FromInteger, listOf(rExpr), value.pos, "decimal")
-            return C_RValue(value.pos, rResExpr, value.varFacts())
-        }
+        return V_IntegerToDecimalExpr(vExpr, vExpr.varFacts())
     }
 
     fun fullName(namespacePath: String?, name: String): String {
@@ -397,8 +401,7 @@ object C_Errors {
     }
 
     fun errMultipleAttrs(pos: S_Pos, attrs: List<C_ExprContextAttr>, errCode: String, errMsg: String): C_Error {
-        val attrsLst = attrs.map { it.entity.alias + "." + it.attrRef.name }
-        return C_Error(pos, "$errCode:${attrsLst.joinToString(",")}", "$errMsg: ${attrsLst.joinToString()}")
+        return C_Error(pos, "$errCode:${attrs.joinToString(",")}", "$errMsg: ${attrs.joinToString()}")
     }
 
     fun errUnknownName(name: S_Name): C_Error {

@@ -238,6 +238,12 @@ class AtExprGroupTest: BaseRellTest() {
                 "(region=EMEA,country_count=3,total_gdp=7053)" +
         "]")
 
+        chk("country @* {} ( @group .region, @sum .gdp )", "[" +
+                "(region=AMER,22713), " +
+                "(region=APAC,14140), " +
+                "(region=EMEA,7053)" +
+        "]")
+
         chk("country @ {} ( @sum 1 )", "6")
         chk("country @ {} ( @sum .gdp )", "43906")
         chk("country @ {} ( @sum 1, @sum .gdp )", "(6,43906)")

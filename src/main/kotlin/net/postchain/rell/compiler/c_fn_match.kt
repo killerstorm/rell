@@ -7,9 +7,8 @@ package net.postchain.rell.compiler
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_String
+import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
-import net.postchain.rell.utils.toImmList
-import java.util.*
 
 sealed class C_ArgTypeMatcher {
     abstract fun getTypeHint(): C_TypeHint
@@ -56,21 +55,21 @@ class C_ArgTypeMatcher_MapSub(private val keyValueTypes: R_MapKeyValueTypes): C_
 }
 
 sealed class C_ArgTypeMatch {
-    abstract fun effectiveArg(arg: C_Value): C_Value
+    abstract fun effectiveArg(arg: V_Expr): V_Expr
 }
 
 object C_ArgTypeMatch_Direct: C_ArgTypeMatch() {
-    override fun effectiveArg(arg: C_Value) = arg
+    override fun effectiveArg(arg: V_Expr) = arg
 }
 
 object C_ArgTypeMatch_IntegerToDecimal: C_ArgTypeMatch() {
-    override fun effectiveArg(arg: C_Value) = C_Utils.integerToDecimalPromotion(arg)
+    override fun effectiveArg(arg: V_Expr) = C_Utils.integerToDecimalPromotion(arg)
 }
 
 class C_ArgTypesMatch(private val match: List<C_ArgTypeMatch>) {
     val size = match.size
 
-    fun effectiveArgs(args: List<C_Value>): List<C_Value> {
+    fun effectiveArgs(args: List<V_Expr>): List<V_Expr> {
         check(args.size == match.size) { "${args.size} != ${match.size}" }
         return args.mapIndexed { i, arg -> match[i].effectiveArg(arg) }
     }
@@ -113,7 +112,7 @@ class C_MemberFuncCaseCtx(val member: C_MemberRef): C_FuncCaseCtx() {
 
 abstract class C_FuncCase<CtxT: C_FuncCaseCtx> {
     abstract fun getParamTypeHint(index: Int): C_TypeHint
-    abstract fun match(args: List<C_Value>): C_FuncCaseMatch<CtxT>?
+    abstract fun match(args: List<V_Expr>): C_FuncCaseMatch<CtxT>?
 }
 
 typealias C_MemberFuncCase = C_FuncCase<C_MemberFuncCaseCtx>
@@ -129,10 +128,14 @@ abstract class C_SpecialFuncCase<CtxT: C_FuncCaseCtx>: C_FuncCase<CtxT>() {
 typealias C_GlobalSpecialFuncCase = C_SpecialFuncCase<C_GlobalFuncCaseCtx>
 typealias C_MemberSpecialFuncCase = C_SpecialFuncCase<C_MemberFuncCaseCtx>
 
-abstract class C_FuncCaseMatch<CtxT: C_FuncCaseCtx> {
-    abstract fun compileCall(ctx: C_ExprContext, caseCtx: CtxT): C_Value
+abstract class C_FuncCaseMatch<CtxT: C_FuncCaseCtx>(val resType: R_Type) {
+    open val canBeDb = true
 
-    open fun compileCallDb(ctx: C_ExprContext, caseCtx: CtxT): C_Value {
+    abstract fun varFacts(): C_ExprVarFacts
+
+    abstract fun compileCall(ctx: C_ExprContext, caseCtx: CtxT): R_Expr
+
+    open fun compileCallDb(ctx: C_ExprContext, caseCtx: CtxT): Db_Expr {
         val name = caseCtx.fullName
         throw C_Errors.errFunctionNoSql(name.pos, name.str)
     }
@@ -144,7 +147,7 @@ class C_DeprecatedFuncCase<CtxT: C_FuncCaseCtx>(
 ): C_FuncCase<CtxT>() {
     override fun getParamTypeHint(index: Int) = case.getParamTypeHint(index)
 
-    override fun match(args: List<C_Value>): C_FuncCaseMatch<CtxT>? {
+    override fun match(args: List<V_Expr>): C_FuncCaseMatch<CtxT>? {
         val match = case.match(args)
         return if (match == null) match else C_DeprecatedFuncCaseMatch(match, deprecated)
     }
@@ -152,13 +155,15 @@ class C_DeprecatedFuncCase<CtxT: C_FuncCaseCtx>(
     private class C_DeprecatedFuncCaseMatch<CtxT: C_FuncCaseCtx>(
             private val match: C_FuncCaseMatch<CtxT>,
             private val deprecated: C_Deprecated
-    ): C_FuncCaseMatch<CtxT>() {
-        override fun compileCall(ctx: C_ExprContext, caseCtx: CtxT): C_Value {
+    ): C_FuncCaseMatch<CtxT>(match.resType) {
+        override fun varFacts() = match.varFacts()
+
+        override fun compileCall(ctx: C_ExprContext, caseCtx: CtxT): R_Expr {
             deprecatedMessage(ctx, caseCtx)
             return match.compileCall(ctx, caseCtx)
         }
 
-        override fun compileCallDb(ctx: C_ExprContext, caseCtx: CtxT): C_Value {
+        override fun compileCallDb(ctx: C_ExprContext, caseCtx: CtxT): Db_Expr {
             deprecatedMessage(ctx, caseCtx)
             return match.compileCallDb(ctx, caseCtx)
         }
@@ -175,42 +180,42 @@ class C_DeprecatedFuncCase<CtxT: C_FuncCaseCtx>(
     }
 }
 
-abstract class C_BasicGlobalFuncCaseMatch(private val args: List<C_Value>): C_GlobalFuncCaseMatch() {
+abstract class C_BasicGlobalFuncCaseMatch(resType: R_Type, private val args: List<V_Expr>): C_GlobalFuncCaseMatch(resType) {
     abstract fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr
 
     open fun compileCallDbExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<Db_Expr>): Db_Expr {
         throw C_Errors.errFunctionNoSql(caseCtx.fullName.pos, caseCtx.fullName.str)
     }
 
-    final override fun compileCall(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): C_Value {
+    final override fun varFacts() = C_ExprVarFacts.forSubExpressions(args)
+
+    final override fun compileCall(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): R_Expr {
         return compileCall(caseCtx, args, this::compileCallExpr)
     }
 
-    final override fun compileCallDb(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): C_Value {
+    final override fun compileCallDb(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): Db_Expr {
         return compileCallDb(caseCtx, args, this::compileCallDbExpr)
     }
 
     companion object {
         fun compileCall(
                 caseCtx: C_GlobalFuncCaseCtx,
-                args: List<C_Value>,
+                args: List<V_Expr>,
                 rFactory: (C_GlobalFuncCaseCtx, List<R_Expr>) -> R_Expr
-        ): C_Value {
+        ): R_Expr {
             val rArgs = args.map { it.toRExpr() }
             val rExpr = rFactory(caseCtx, rArgs)
-            val facts = C_ExprVarFacts.forSubExpressions(args)
-            return C_RValue(caseCtx.fullName.pos, rExpr, facts)
+            return rExpr
         }
 
         fun compileCallDb(
                 caseCtx: C_GlobalFuncCaseCtx,
-                args: List<C_Value>,
+                args: List<V_Expr>,
                 dbFactory: (C_GlobalFuncCaseCtx, List<Db_Expr>) -> Db_Expr
-        ): C_Value {
+        ): Db_Expr {
             val dbArgs = args.map { it.toDbExpr() }
             val dbExpr = dbFactory(caseCtx, dbArgs)
-            val facts = C_ExprVarFacts.forSubExpressions(args)
-            return C_DbValue.create(caseCtx.fullName.pos, dbExpr, facts)
+            return dbExpr
         }
     }
 }
@@ -221,7 +226,7 @@ class C_FormalParamsFuncCase<CtxT: C_FuncCaseCtx>(
 ): C_FuncCase<CtxT>() {
     override fun getParamTypeHint(index: Int) = if (index >= params.size) C_TypeHint.NONE else params[index].getTypeHint()
 
-    override fun match(args: List<C_Value>): C_FuncCaseMatch<CtxT>? {
+    override fun match(args: List<V_Expr>): C_FuncCaseMatch<CtxT>? {
         val argTypes = args.map { it.type() }
         val paramsMatch = C_ArgTypesMatch.match(params, argTypes)
         if (paramsMatch == null) {
@@ -233,21 +238,27 @@ class C_FormalParamsFuncCase<CtxT: C_FuncCaseCtx>(
 
 class C_FormalParamsFuncCaseMatch<CtxT: C_FuncCaseCtx>(
         private val body: C_FormalParamsFuncBody<CtxT>,
-        private val args: List<C_Value>,
+        private val args: List<V_Expr>,
         private val paramsMatch: C_ArgTypesMatch = C_ArgTypesMatch(args.map { C_ArgTypeMatch_Direct })
-): C_FuncCaseMatch<CtxT>() {
+): C_FuncCaseMatch<CtxT>(body.resType) {
     init {
         check(paramsMatch.size == args.size)
     }
 
-    override fun compileCall(ctx: C_ExprContext, caseCtx: CtxT): C_Value {
-        val effArgs = paramsMatch.effectiveArgs(args)
-        return body.compileCall(ctx, caseCtx, effArgs)
+    override fun varFacts(): C_ExprVarFacts {
+        return C_ExprVarFacts.forSubExpressions(args)
     }
 
-    override fun compileCallDb(ctx: C_ExprContext, caseCtx: CtxT): C_Value {
+    override fun compileCall(ctx: C_ExprContext, caseCtx: CtxT): R_Expr {
         val effArgs = paramsMatch.effectiveArgs(args)
-        return body.compileCallDb(ctx, caseCtx, effArgs)
+        val rArgs = effArgs.map { it.toRExpr() }
+        return body.compileCall(ctx, caseCtx, rArgs)
+    }
+
+    override fun compileCallDb(ctx: C_ExprContext, caseCtx: CtxT): Db_Expr {
+        val effArgs = paramsMatch.effectiveArgs(args)
+        val dbArgs = effArgs.map { it.toDbExpr() }
+        return body.compileCallDb(ctx, caseCtx, dbArgs)
     }
 }
 
