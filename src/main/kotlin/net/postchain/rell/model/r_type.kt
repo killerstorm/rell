@@ -50,7 +50,7 @@ sealed class R_TypeSqlAdapter {
     abstract fun isSqlCompatible(): Boolean
     abstract fun toSqlValue(value: Rt_Value): Any
     abstract fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value)
-    abstract fun fromSql(rs: ResultSet, idx: Int): Rt_Value
+    abstract fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value
     abstract fun metaName(sqlCtx: Rt_SqlContext): String
 }
 
@@ -65,7 +65,7 @@ private class R_TypeSqlAdapter_None(private val type: R_Type): R_TypeSqlAdapter(
         throw Rt_Utils.errNotSupported("Type cannot be converted to SQL: ${type.toStrictString()}")
     }
 
-    override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+    override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
         throw Rt_Utils.errNotSupported("Type cannot be converted from SQL: ${type.toStrictString()}")
     }
 
@@ -75,17 +75,29 @@ private class R_TypeSqlAdapter_None(private val type: R_Type): R_TypeSqlAdapter(
 }
 
 private abstract class R_TypeSqlAdapter_Some: R_TypeSqlAdapter() {
-    final override fun isSqlCompatible() = true
+    override fun isSqlCompatible() = true
 
-    protected fun checkSqlNull(suspect: Boolean, rs: ResultSet, type: R_Type) {
+    protected fun checkSqlNull(suspect: Boolean, rs: ResultSet, type: R_Type, nullable: Boolean): Rt_Value? {
         if (suspect && rs.wasNull()) {
-            throw errSqlNull(type)
+            if (nullable) {
+                return Rt_NullValue
+            } else {
+                throw errSqlNull(type)
+            }
+        } else {
+            return null
         }
     }
 
-    protected fun checkSqlNull(value: Any?, type: R_Type) {
+    protected fun checkSqlNull(value: Any?, type: R_Type, nullable: Boolean): Rt_Value? {
         if (value == null) {
-            throw errSqlNull(type)
+            if (nullable) {
+                return Rt_NullValue
+            } else {
+                throw errSqlNull(type)
+            }
+        } else {
+            return null
         }
     }
 
@@ -201,10 +213,9 @@ object R_BooleanType: R_PrimitiveType("boolean", SQLDataType.BOOLEAN) {
             stmt.setBoolean(idx, value.asBoolean())
         }
 
-        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+        override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
             val v = rs.getBoolean(idx)
-            checkSqlNull(!v, rs, R_BooleanType)
-            return Rt_BooleanValue(v)
+            return checkSqlNull(!v, rs, R_BooleanType, nullable) ?: Rt_BooleanValue(v)
         }
     }
 }
@@ -223,10 +234,9 @@ object R_TextType: R_PrimitiveType("text", PostgresDataType.TEXT) {
             stmt.setString(idx, value.asString())
         }
 
-        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+        override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
             val v = rs.getString(idx)
-            checkSqlNull(v, R_TextType)
-            return Rt_TextValue(v)
+            return checkSqlNull(v, R_TextType, nullable) ?: Rt_TextValue(v)
         }
     }
 }
@@ -246,10 +256,9 @@ object R_IntegerType: R_PrimitiveType("integer", SQLDataType.BIGINT) {
             stmt.setLong(idx, value.asInteger())
         }
 
-        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+        override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
             val v = rs.getLong(idx)
-            checkSqlNull(v == 0L, rs, R_IntegerType)
-            return Rt_IntValue(v)
+            return checkSqlNull(v == 0L, rs, R_IntegerType, nullable) ?: Rt_IntValue(v)
         }
     }
 }
@@ -277,10 +286,9 @@ object R_DecimalType: R_PrimitiveType("decimal", C_Constants.DECIMAL_SQL_TYPE) {
             stmt.setBigDecimal(idx, value.asDecimal())
         }
 
-        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+        override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
             val v = rs.getBigDecimal(idx)
-            checkSqlNull(v, R_DecimalType)
-            return Rt_DecimalValue.of(v)
+            return checkSqlNull(v, R_DecimalType, nullable) ?: Rt_DecimalValue.of(v)
         }
     }
 }
@@ -297,10 +305,9 @@ object R_ByteArrayType: R_PrimitiveType("byte_array", PostgresDataType.BYTEA) {
         override fun toSqlValue(value: Rt_Value) = value.asByteArray()
         override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = stmt.setBytes(idx, value.asByteArray())
 
-        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+        override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
             val v = rs.getBytes(idx)
-            checkSqlNull(v, R_ByteArrayType)
-            return Rt_ByteArrayValue(v)
+            return checkSqlNull(v, R_ByteArrayType, nullable) ?: Rt_ByteArrayValue(v)
         }
     }
 }
@@ -320,10 +327,9 @@ object R_RowidType: R_PrimitiveType("rowid", SQLDataType.BIGINT) {
             stmt.setLong(idx, value.asRowid())
         }
 
-        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+        override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
             val v = rs.getLong(idx)
-            checkSqlNull(v == 0L, rs, R_RowidType)
-            return Rt_RowidValue(v)
+            return checkSqlNull(v == 0L, rs, R_RowidType, nullable) ?: Rt_RowidValue(v)
         }
     }
 }
@@ -370,10 +376,9 @@ object R_JsonType: R_PrimitiveType("json", JSON_SQL_DATA_TYPE) {
             stmt.setObject(idx, obj)
         }
 
-        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+        override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
             val str = rs.getString(idx)
-            checkSqlNull(str, R_JsonType)
-            return Rt_JsonValue.parse(str)
+            return checkSqlNull(str, R_JsonType, nullable) ?: Rt_JsonValue.parse(str)
         }
     }
 }
@@ -403,10 +408,9 @@ class R_EntityType(val rEntity: R_Entity): R_Type(rEntity.appLevelName) {
         override fun toSqlValue(value: Rt_Value) = value.asObjectId()
         override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = stmt.setLong(idx, value.asObjectId())
 
-        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+        override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
             val v = rs.getLong(idx)
-            checkSqlNull(v == 0L, rs, type)
-            return Rt_EntityValue(type, v)
+            return checkSqlNull(v == 0L, rs, type, nullable) ?: Rt_EntityValue(type, v)
         }
 
         override fun metaName(sqlCtx: Rt_SqlContext): String {
@@ -459,12 +463,14 @@ class R_EnumType(val enum: R_Enum): R_Type(enum.appLevelName) {
         override fun toSqlValue(value: Rt_Value) = value.asEnum().value
         override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = stmt.setInt(idx, value.asEnum().value)
 
-        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+        override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
             val v = rs.getInt(idx).toLong()
-            checkSqlNull(v == 0L, rs, type)
-            val attr = type.enum.attr(v)
-            requireNotNull(attr) { "$type: $v" }
-            return Rt_EnumValue(type, attr)
+            val res = checkSqlNull(v == 0L, rs, type, nullable)
+            return if (res != null) res else {
+                val attr = type.enum.attr(v)
+                requireNotNull(attr) { "$type: $v" }
+                Rt_EnumValue(type, attr)
+            }
         }
 
         override fun metaName(sqlCtx: Rt_SqlContext): String {
@@ -513,11 +519,27 @@ class R_NullableType(val valueType: R_Type): R_Type(valueType.name + "?") {
     }
 
     override fun createGtvConversion() = GtvRtConversion_Nullable(this)
+    override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Nullable()
 
     override fun toMetaGtv() = mapOf(
             "type" to "nullable".toGtv(),
             "value" to valueType.toMetaGtv()
     ).toGtv()
+
+    private inner class R_TypeSqlAdapter_Nullable: R_TypeSqlAdapter_Some() {
+        override fun isSqlCompatible() = false
+        override fun metaName(sqlCtx: Rt_SqlContext) = throw Rt_Utils.errNotSupported("Nullable entity attributes are not supported")
+
+        override fun toSqlValue(value: Rt_Value) = valueType.sqlAdapter.toSqlValue(value)
+
+        override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
+            stmt.setBoolean(idx, value.asBoolean())
+        }
+
+        override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
+            return valueType.sqlAdapter.fromSql(rs, idx, true)
+        }
+    }
 }
 
 // TODO: make this more elaborate

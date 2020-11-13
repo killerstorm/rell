@@ -28,19 +28,19 @@ class R_DbAtEntity(val rEntity: R_Entity, val index: Int) {
     override fun hashCode() = rEntity.hashCode() * 31 + index
 }
 
-sealed class R_DbAtExprRowDecoder {
-    abstract fun decode(row: Array<Rt_Value>): Rt_Value
+sealed class R_AtExprRowDecoder {
+    abstract fun decode(row: List<Rt_Value>): Rt_Value
 }
 
-object R_DbAtExprRowDecoder_Simple: R_DbAtExprRowDecoder() {
-    override fun decode(row: Array<Rt_Value>): Rt_Value {
+object R_AtExprRowDecoder_Simple: R_AtExprRowDecoder() {
+    override fun decode(row: List<Rt_Value>): Rt_Value {
         check(row.size == 1) { "row.size == ${row.size}" }
         return row[0]
     }
 }
 
-class R_DbAtExprRowDecoder_Tuple(val type: R_TupleType): R_DbAtExprRowDecoder() {
-    override fun decode(row: Array<Rt_Value>): Rt_Value {
+class R_AtExprRowDecoder_Tuple(val type: R_TupleType): R_AtExprRowDecoder() {
+    override fun decode(row: List<Rt_Value>): Rt_Value {
         check(row.size == type.fields.size) { "row.size == ${row.size}, not ${type.fields.size}" }
         return Rt_TupleValue(type, row.toList())
     }
@@ -51,29 +51,26 @@ enum class R_AtWhatSort(val asc: Boolean) {
     DESC(false),
 }
 
-class R_AtWhatFlags(val select: Boolean, val sort: R_AtWhatSort?, val group: Boolean, val aggregation: Boolean) {
-    val ignore = !select && !group && sort == null
-
+class R_AtWhatFieldFlags(val omit: Boolean, val sort: R_AtWhatSort?, val group: Boolean, val aggregate: Boolean) {
     companion object {
-        val DEFAULT = R_AtWhatFlags(select = true, sort = null, group = false, aggregation = false)
+        val DEFAULT = R_AtWhatFieldFlags(omit = false, sort = null, group = false, aggregate = false)
     }
 }
 
-class R_DbAtWhatField(val expr: Db_Expr, val flags: R_AtWhatFlags)
+class R_DbAtWhatField(val resultType: R_Type, val expr: Db_Expr, val flags: R_AtWhatFieldFlags)
 
 class R_DbAtExprBase(
         private val from: List<R_DbAtEntity>,
         private val what: List<R_DbAtWhatField>,
         private val where: Db_Expr?
 ) {
-    private val resultTypes = what.filter { it.flags.select }.map { it.expr.type }.toImmList()
+    private val resultTypes = what.filter { !it.flags.omit }.map { it.resultType }.toImmList()
 
     init {
         from.withIndex().forEach { check(it.index == it.value.index) }
-        what.forEach { check(!it.flags.ignore) }
     }
 
-    fun execute(frame: Rt_CallFrame, params: List<Rt_Value>, limit: Long?, offset: Long?): List<Array<Rt_Value>> {
+    fun execute(frame: Rt_CallFrame, params: List<Rt_Value>, limit: Long?, offset: Long?): List<List<Rt_Value>> {
         val rtSql = buildSql(frame, params, limit, offset)
         val select = SqlSelect(rtSql, resultTypes)
         val records = select.execute(frame)
@@ -91,7 +88,7 @@ class R_DbAtExprBase(
 
         b.append("SELECT ")
 
-        val selRedWhat = redWhat.filter { it.flags.select }
+        val selRedWhat = redWhat.filter { !it.flags.omit }
         b.append(selRedWhat, ", ") {
             it.expr.toSql(ctx, b)
         }
@@ -205,7 +202,7 @@ class R_DbAtExprBase(
         }
 
         val redGroup = redWhat.filter { it.flags.group }
-        if (redGroup.isNotEmpty() || redWhat.any { it.flags.aggregation }) {
+        if (redGroup.isNotEmpty() || redWhat.any { it.flags.aggregate }) {
             for (field in redGroup) {
                 if (field.flags.sort == null) {
                     elements.add(OrderByElement_Expr(field.expr, R_AtWhatSort.ASC))
@@ -239,7 +236,7 @@ class R_DbAtExprBase(
         return expr?.toRedExpr(frame)
     }
 
-    private class RedWhatField(val expr: RedDb_Expr, val flags: R_AtWhatFlags)
+    private class RedWhatField(val expr: RedDb_Expr, val flags: R_AtWhatFieldFlags)
 
     private abstract class OrderByElement {
         abstract fun toSql(ctx: SqlGenContext, b: SqlBuilder)
@@ -299,14 +296,10 @@ abstract class R_AtExpr(
     }
 
     companion object {
-        fun checkCount(cardinality: R_AtCardinality, count: Int, haveMore: Boolean, itemMsg: String) {
+        fun checkCount(cardinality: R_AtCardinality, count: Int, itemMsg: String) {
             if (!cardinality.matches(count)) {
-                val code = if (count > 0 && haveMore) "at:wrong_count:$count+" else "at:wrong_count:$count"
-                val msg = when {
-                    count == 0 -> "No $itemMsg found"
-                    haveMore -> "Multiple $itemMsg found"
-                    else -> "Multiple $itemMsg found: $count"
-                }
+                val code = "at:wrong_count:$count"
+                val msg = if (count == 0) "No $itemMsg found" else "Multiple $itemMsg found: $count"
                 throw Rt_Error(code, msg)
             }
         }
@@ -319,14 +312,14 @@ class R_DbAtExpr(
         cardinality: R_AtCardinality,
         limit: R_Expr?,
         offset: R_Expr?,
-        val rowDecoder: R_DbAtExprRowDecoder
+        val rowDecoder: R_AtExprRowDecoder
 ): R_AtExpr(type, cardinality, limit, offset) {
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         val limit = evalLimit(frame)
         val offset = evalOffset(frame)
 
         val records = base.execute(frame, listOf(), limit, offset)
-        checkCount(cardinality, records.count(), false, "records")
+        checkCount(cardinality, records.count(), "records")
 
         val values = MutableList(records.size) { rowDecoder.decode(records[it]) }
         return evalResult(values)

@@ -7,7 +7,10 @@ package net.postchain.rell.compiler
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_String
-import net.postchain.rell.model.*
+import net.postchain.rell.model.R_AtWhatSort
+import net.postchain.rell.model.R_MountName
+import net.postchain.rell.model.R_Name
+import net.postchain.rell.model.R_TextType
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.toImmMap
 import org.apache.commons.lang3.StringUtils
@@ -34,9 +37,9 @@ object C_Modifier {
                 TEST to C_Annotation_Test
         )
 
-        for (aggr in C_AtAggregation.values()) {
-            check(aggr.annotation !in anns)
-            anns[aggr.annotation] = C_Annotation_Aggregation(aggr)
+        for (s in C_AtSummarizationKind.values()) {
+            check(s.annotation !in anns)
+            anns[s.annotation] = C_Annotation_Summarization(s)
         }
 
         ANNOTATIONS = anns.toImmMap()
@@ -249,10 +252,10 @@ private object C_Annotation_Test: C_AnnBase() {
     }
 }
 
-private class C_Annotation_Aggregation(val value: C_AtAggregation): C_AnnBase() {
+private class C_Annotation_Summarization(val value: C_AtSummarizationKind): C_AnnBase() {
     override fun compile(ctx: C_ModifierContext, name: S_Name, args: List<Rt_Value>, target: C_ModifierTarget) {
         if (C_AnnUtils.checkNoArgs(ctx, name.pos, name.str, args)) {
-            C_AnnUtils.processAnnotation(ctx, name.pos, target, name.str, target.aggregation, allowed = true, value = value)
+            C_AnnUtils.processAnnotation(ctx, name.pos, target, name.str, target.summarization, allowed = true, value = value)
         }
     }
 }
@@ -313,24 +316,11 @@ private object C_AnnUtils {
 
 class C_ExternalAnnotation(val pos: S_Pos, val chain: String)
 
-enum class C_AtAggregationFunction(val sysFn: Db_SysFunction, val typeChecker: (R_Type) -> Boolean) {
-    SUM(Db_SysFn_Aggregation_Sum, { it == R_IntegerType || it == R_DecimalType }),
-    MIN(Db_SysFn_Aggregation_Min, { isValidMinMaxType(it) }),
-    MAX(Db_SysFn_Aggregation_Max, { isValidMinMaxType(it) }),
-    ;
-
-    companion object {
-        private fun isValidMinMaxType(type: R_Type): Boolean {
-            return type != R_BooleanType && type != R_ByteArrayType && R_CmpType.get(type) != null
-        }
-    }
-}
-
-enum class C_AtAggregation(val annotation: String, val aggrFn: C_AtAggregationFunction?) {
-    GROUP("group", null),
-    SUM("sum", C_AtAggregationFunction.SUM),
-    MIN("min", C_AtAggregationFunction.MIN),
-    MAX("max", C_AtAggregationFunction.MAX),
+enum class C_AtSummarizationKind(val annotation: String) {
+    GROUP("group"),
+    SUM("sum"),
+    MIN("min"),
+    MAX("max"),
 }
 
 enum class C_ModifierTargetType {
@@ -382,7 +372,7 @@ class C_ModifierTarget(
     val override = C_ModifierValue.opt<Boolean>(override)
     val test = C_ModifierValue.opt<Boolean>(test)
 
-    val aggregation = C_ModifierValue.opt<C_AtAggregation>(type.isExpression())
+    val summarization = C_ModifierValue.opt<C_AtSummarizationKind>(type.isExpression())
     val omit = C_ModifierValue.opt<Boolean>(type.isExpression())
     val sort = C_ModifierValue.opt<R_AtWhatSort>(type.isExpression())
 

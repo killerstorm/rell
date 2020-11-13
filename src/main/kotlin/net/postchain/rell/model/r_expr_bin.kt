@@ -21,8 +21,12 @@ sealed class R_CmpType {
     abstract fun compare(left: Rt_Value, right: Rt_Value): Int
 
     companion object {
-        fun get(type: R_Type): R_CmpType? {
+        fun forCmpOpType(type: R_Type): R_CmpType? = if (type == R_BooleanType) null else forType(type)
+        fun forAtMinMaxType(type: R_Type): R_CmpType? = forType(type)
+
+        private fun forType(type: R_Type): R_CmpType? {
             return when (type) {
+                R_BooleanType -> R_CmpType_Boolean
                 R_IntegerType -> R_CmpType_Integer
                 R_DecimalType -> R_CmpType_Decimal
                 R_TextType -> R_CmpType_Text
@@ -33,6 +37,14 @@ sealed class R_CmpType {
                 else -> null
             }
         }
+    }
+}
+
+object R_CmpType_Boolean: R_CmpType() {
+    override fun compare(left: Rt_Value, right: Rt_Value): Int {
+        val l = left.asBoolean()
+        val r = right.asBoolean()
+        return l.compareTo(r)
     }
 }
 

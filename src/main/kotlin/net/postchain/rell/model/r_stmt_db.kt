@@ -4,11 +4,11 @@
 
 package net.postchain.rell.model
 
-import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_ListValue
 import net.postchain.rell.runtime.Rt_NullValue
 import net.postchain.rell.runtime.Rt_SqlContext
+import net.postchain.rell.utils.CommonUtils
 
 sealed class R_UpdateTarget {
     abstract fun entity(): R_DbAtEntity
@@ -52,7 +52,7 @@ class R_UpdateTarget_Simple(
                 ++count
             }
 
-            R_AtExpr.checkCount(cardinality, count, false, "records")
+            R_AtExpr.checkCount(cardinality, count, "records")
         }
     }
 }

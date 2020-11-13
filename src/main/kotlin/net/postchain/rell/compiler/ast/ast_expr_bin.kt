@@ -382,7 +382,7 @@ sealed class C_BinOp_Cmp(val cmpOp: R_CmpOp, val dbOp: Db_BinaryOp): C_BinOp_Com
             return null
         }
 
-        val rCmpType = R_CmpType.get(left)
+        val rCmpType = R_CmpType.forCmpOpType(left)
         if (rCmpType == null) {
             return null
         }

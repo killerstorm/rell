@@ -125,27 +125,6 @@ class AtExprGroupTest: BaseRellTest() {
                 "[(AMER,2,22713,1274,21439), (APAC,1,14140,14140,14140), (EMEA,3,7053,447,3863)]")
     }
 
-    @Test fun testNoGroup() {
-        initDataCountries()
-
-        chk("country @ {} ( @sum .gdp, @min .gdp, @max .gdp )", "(43906,447,21439)")
-        chk("country @* {} ( @sum .gdp, @min .gdp, @max .gdp )", "[(43906,447,21439)]")
-        chk("country @* {} ( @group _=.region, @sum .gdp )", "[(AMER,22713), (APAC,14140), (EMEA,7053)]")
-
-        chk("country @ {} ( @sum 1 )", "6")
-        chk("country @ {} ( @sum .gdp )", "43906")
-
-        chk("country @* {} ( _=.name, @sum .gdp )", "ct_err:at:what:no_aggr:0")
-        chk("country @* {} ( @sum .gdp, _=.name )", "ct_err:at:what:no_aggr:1")
-        chk("country @* {} ( _=.region, @sum .gdp )", "ct_err:at:what:no_aggr:0")
-        chk("country @* {} ( @sum .gdp, _=.region )", "ct_err:at:what:no_aggr:1")
-        chk("country @* {} ( 123, @sum .gdp )", "ct_err:at:what:no_aggr:0")
-        chk("country @* {} ( @sum .gdp, 123 )", "ct_err:at:what:no_aggr:1")
-
-        chkEx("{ val (country_count, total_gdp) = country @{} ( @sum 1, @sum .gdp ); return (country_count, total_gdp); }",
-                "(6,43906)")
-    }
-
     @Test fun testOmit() {
         initDataCountries()
 
@@ -173,48 +152,6 @@ class AtExprGroupTest: BaseRellTest() {
         chk("country @* {} ( @min @max _=.region )", "ct_err:ann:max:dup")
         chk("country @* {} ( @group _=.region )", "[AMER, APAC, EMEA]")
         chk("country @* {} ( @min _=.region )", "[AMER]")
-    }
-
-    @Test fun testTypeSum() {
-        initDataAllTypes()
-
-        chk("data @ {} ( @sum .i )", "int[333]")
-        chk("data @ {} ( @sum .d )", "dec[166.65]")
-
-        chk("data @ {} ( @sum .b )", "ct_err:at:what:aggr:bad_type:SUM:boolean")
-        chk("data @ {} ( @sum .t )", "ct_err:at:what:aggr:bad_type:SUM:text")
-        chk("data @ {} ( @sum .ba )", "ct_err:at:what:aggr:bad_type:SUM:byte_array")
-        chk("data @ {} ( @sum .r )", "ct_err:at:what:aggr:bad_type:SUM:rowid")
-        chk("data @ {} ( @sum .e )", "ct_err:at:what:aggr:bad_type:SUM:color")
-        chk("data @ {} ( @sum .w )", "ct_err:at:what:aggr:bad_type:SUM:user")
-    }
-
-    @Test fun testTypeMinMax() {
-        initDataAllTypes()
-
-        chk("data @ {} ( @min .i, @max .i )", "(int[111],int[222])")
-        chk("data @ {} ( @min .d, @max .d )", "(dec[67.89],dec[98.76])")
-        chk("data @ {} ( @min .t, @max .t )", "(text[abc],text[def])")
-        chk("data @ {} ( @min .r, @max .r )", "(rowid[777],rowid[888])")
-        chk("data @ {} ( @min .e, @max .e )", "(color[green],color[blue])")
-        chk("data @ {} ( @min .w, @max .w )", "(user[500],user[501])")
-
-        chk("data @ {} ( @min .b )", "ct_err:at:what:aggr:bad_type:MIN:boolean")
-        chk("data @ {} ( @max .b )", "ct_err:at:what:aggr:bad_type:MAX:boolean")
-        chk("data @ {} ( @min .ba )", "ct_err:at:what:aggr:bad_type:MIN:byte_array")
-        chk("data @ {} ( @max .ba )", "ct_err:at:what:aggr:bad_type:MAX:byte_array")
-    }
-
-    private fun initDataAllTypes() {
-        def("entity user { name; }")
-        def("enum color { red, green, blue }")
-        def("entity data { b: boolean; i: integer; d: decimal; t: text; ba: byte_array; r: rowid; e: color; w: user; }")
-
-        insert("c0.user", "name", "500,'Bob'", "501,'Alice'")
-        insert("c0.data", "b,i,d,t,ba,r,e,w",
-                "601,false,111,67.89,'abc','\\xbeef',888,2,500",
-                "602,false,222,98.76,'def','\\xdead',777,1,501"
-        )
     }
 
     @Test fun testAnnotationsOnWrongTargets() {
@@ -248,5 +185,26 @@ class AtExprGroupTest: BaseRellTest() {
         chk("country @ {} ( @sum .gdp )", "43906")
         chk("country @ {} ( @sum 1, @sum .gdp )", "(6,43906)")
         chk("country @ {} ( @sum .gdp, @min .gdp, @max .gdp )", "(43906,447,21439)")
+    }
+
+    @Test fun testNoGroup() {
+        initDataCountries()
+
+        chk("country @ {} ( @sum .gdp, @min .gdp, @max .gdp )", "(43906,447,21439)")
+        chk("country @* {} ( @sum .gdp, @min .gdp, @max .gdp )", "[(43906,447,21439)]")
+        chk("country @* {} ( @group _=.region, @sum .gdp )", "[(AMER,22713), (APAC,14140), (EMEA,7053)]")
+
+        chk("country @ {} ( @sum 1 )", "6")
+        chk("country @ {} ( @sum .gdp )", "43906")
+
+        chk("country @* {} ( _=.name, @sum .gdp )", "ct_err:at:what:no_aggr:0")
+        chk("country @* {} ( @sum .gdp, _=.name )", "ct_err:at:what:no_aggr:1")
+        chk("country @* {} ( _=.region, @sum .gdp )", "ct_err:at:what:no_aggr:0")
+        chk("country @* {} ( @sum .gdp, _=.region )", "ct_err:at:what:no_aggr:1")
+        chk("country @* {} ( 123, @sum .gdp )", "ct_err:at:what:no_aggr:0")
+        chk("country @* {} ( @sum .gdp, 123 )", "ct_err:at:what:no_aggr:1")
+
+        chkEx("{ val (country_count, total_gdp) = country @{} ( @sum 1, @sum .gdp ); return (country_count, total_gdp); }",
+                "(6,43906)")
     }
 }

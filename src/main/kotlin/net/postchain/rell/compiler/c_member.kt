@@ -4,7 +4,10 @@
 
 package net.postchain.rell.compiler
 
-import net.postchain.rell.compiler.ast.*
+import net.postchain.rell.compiler.ast.S_Name
+import net.postchain.rell.compiler.ast.S_NameExprPair
+import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.ast.S_VirtualType
 import net.postchain.rell.compiler.vexpr.V_DbExpr
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
@@ -287,7 +290,7 @@ private class V_EntityAttrExpr private constructor(
         val whereRight = Db_ParameterExpr(base.atEntity.rEntity.type, 0)
         val where = C_Utils.makeDbBinaryExprEq(whereLeft, whereRight)
 
-        val whatField = R_DbAtWhatField(attrInfo.dbExpr, R_AtWhatFlags.DEFAULT)
+        val whatField = R_DbAtWhatField(attrInfo.dbExpr.type, attrInfo.dbExpr, R_AtWhatFieldFlags.DEFAULT)
         val what = listOf(whatField)
 
         val atBase = R_DbAtExprBase(from, what, where)

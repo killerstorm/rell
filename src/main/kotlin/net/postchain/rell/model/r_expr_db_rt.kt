@@ -8,6 +8,7 @@ import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_IntValue
 import net.postchain.rell.runtime.Rt_SqlContext
 import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.utils.toImmList
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 
@@ -212,17 +213,17 @@ class SqlArgs(val types: List<R_Type>, val values: List<Rt_Value>) {
 }
 
 class SqlSelect(val pSql: ParameterizedSql, val resultTypes: List<R_Type>) {
-    fun execute(frame: Rt_CallFrame): List<Array<Rt_Value>> {
-        val result = mutableListOf<Array<Rt_Value>>()
+    fun execute(frame: Rt_CallFrame): List<List<Rt_Value>> {
+        val result = mutableListOf<List<Rt_Value>>()
 
         pSql.executeQuery(frame) { rs ->
             val list = mutableListOf<Rt_Value>()
             for (i in resultTypes.indices) {
                 val type = resultTypes[i]
-                val value = type.sqlAdapter.fromSql(rs, i + 1)
+                val value = type.sqlAdapter.fromSql(rs, i + 1, false)
                 list.add(value)
             }
-            result.add(list.toTypedArray())
+            result.add(list.toImmList())
         }
 
         return result

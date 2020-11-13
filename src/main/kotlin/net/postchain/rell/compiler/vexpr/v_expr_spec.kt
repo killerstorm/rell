@@ -158,7 +158,7 @@ private class V_ObjectAttrExpr(pos: S_Pos, private val rObject: R_Object, privat
         val from = listOf(atEntity)
 
         val whatExpr = Db_AttrExpr(Db_EntityExpr(atEntity), attr)
-        val whatField = R_DbAtWhatField(whatExpr, R_AtWhatFlags.DEFAULT)
+        val whatField = R_DbAtWhatField(whatExpr.type, whatExpr, R_AtWhatFieldFlags.DEFAULT)
         val what = listOf(whatField)
 
         val atBase = R_DbAtExprBase(from, what, null)

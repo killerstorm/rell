@@ -77,4 +77,8 @@ object C_Types {
         val value = commonTypeOpt(a.value, b.value)
         return if (value == null) null else R_MapKeyValueTypes(key, value)
     }
+
+    fun toNullable(type: R_Type): R_Type {
+        return if (type is R_NullableType) type else R_NullableType(type)
+    }
 }

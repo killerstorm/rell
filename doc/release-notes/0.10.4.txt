@@ -197,3 +197,4 @@ Details:
 - Source collection can be a list or a set, the result is always a list (or a single value).
 - Where- and what-expressions are not restricted to SQL-compatible ones (e. g. user-defined function calls are allowed).
 - Limit and offset clauses are supported.
+- Grouping and aggregation is supported (via annotations @group, @sum, @min, @max).

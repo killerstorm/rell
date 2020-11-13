@@ -61,13 +61,13 @@ class AtExprCollectionTest: BaseRellTest(false) {
 
         chk("list<integer>() @ {}", "rt_err:at:wrong_count:0")
         chk("[123] @ {}", "int[123]")
-        chk("[1,2] @ {}", "rt_err:at:wrong_count:2+")
-        chk("[1,2,3] @ {}", "rt_err:at:wrong_count:2+")
+        chk("[1,2] @ {}", "rt_err:at:wrong_count:2")
+        chk("[1,2,3] @ {}", "rt_err:at:wrong_count:3")
 
         chk("list<integer>() @? {}", "null")
         chk("[123] @? {}", "int[123]")
-        chk("[1,2] @? {}", "rt_err:at:wrong_count:2+")
-        chk("[1,2,3] @? {}", "rt_err:at:wrong_count:2+")
+        chk("[1,2] @? {}", "rt_err:at:wrong_count:2")
+        chk("[1,2,3] @? {}", "rt_err:at:wrong_count:3")
 
         chk("list<integer>() @+ {}", "rt_err:at:wrong_count:0")
         chk("[123] @+ {}", "list<integer>[int[123]]")
@@ -213,17 +213,20 @@ class AtExprCollectionTest: BaseRellTest(false) {
         chk("[1,2,3,4,5] @*{} ( @omit $, @omit $*$, $*$*$ )", "[1, 8, 27, 64, 125]")
     }
 
+    @Test fun testWhatOmitEvaluation() {
+        tst.strictToString = false
+        def("struct ref { mutable v: integer = 7; }")
+        def("function fun(r: ref): integer = r.v++;")
+        chkEx("{ val r = ref(); return [1,2,3] @*{} ( fun(r) ); }", "[7, 8, 9]")
+        chkEx("{ val r = ref(); return [1,2,3] @*{} ( fun(r), 100 + fun(r) ); }", "[(7,108), (9,110), (11,112)]")
+        chkEx("{ val r = ref(); return [1,2,3] @*{} ( fun(r), @omit 100 + fun(r) ); }", "[7, 9, 11]")
+        chkEx("{ val r = ref(); return [1,2,3] @*{} ( @omit fun(r), 100 + fun(r) ); }", "[108, 110, 112]")
+    }
+
     @Test fun testWhatSort() {
         tst.strictToString = false
         chk("[1,2,3,4,5] @*{} ( @sort $ )", "ct_err:expr:at:sort:col")
         chk("[1,2,3,4,5] @*{} ( @sort_desc $ )", "ct_err:expr:at:sort:col")
-    }
-
-    @Test fun testWhatAggregation() {
-        chk("[1,2,3,4,5] @*{} ( @group $ )", "ct_err:expr:at:group:col")
-        chk("[1,2,3,4,5] @*{} ( @sum $ )", "ct_err:expr:at:group:col")
-        chk("[1,2,3,4,5] @*{} ( @min $ )", "ct_err:expr:at:group:col")
-        chk("[1,2,3,4,5] @*{} ( @max $ )", "ct_err:expr:at:group:col")
     }
 
     @Test fun testLimit() {
@@ -281,6 +284,34 @@ class AtExprCollectionTest: BaseRellTest(false) {
         chk("[1,2,3,4,5] @*{} offset 3 limit 1", "[4]")
         chk("[1,2,3,4,5] @*{} offset 3 limit 2", "[4, 5]")
         chk("[1,2,3,4,5] @*{} offset 3 limit 3", "[4, 5]")
+    }
+
+    @Test fun testLimitOffsetEvaluation() {
+        tst.strictToString = false
+        def("struct ctr { mutable v: integer = 0; }")
+        def("function f(c: ctr): integer { val k = (c.v++)+1; return k*k; }")
+
+        val init = "val c = ctr(); val l = [11,22,33,44,55];"
+        chkEx("{ $init; val t = l @* {} ( f(c) ); return (t, c.v); }", "([1, 4, 9, 16, 25],5)")
+        chkEx("{ $init; val t = l @* {} ( f(c) ) limit 3; return (t, c.v); }", "([1, 4, 9],3)")
+        chkEx("{ $init; val t = l @* {} ( f(c) ) offset 2; return (t, c.v); }", "([1, 4, 9],3)")
+        chkEx("{ $init; val t = l @* {} ( f(c) ) offset 2 limit 2; return (t, c.v); }", "([1, 4],2)")
+    }
+
+    @Test fun testLimitOffsetEvaluationGroup() {
+        tst.strictToString = false
+        def("struct ctr { mutable v: integer = 0; }")
+        def("function f(c: ctr): integer { val k = (c.v++)+1; return k*k; }")
+
+        val init = "val c = ctr(); val l = [11,22,33,44,55];"
+        chkEx("{ $init; val t = l @* {} ( @group 0, @sum f(c) ); return (t, c.v); }", "([(0,55)],5)")
+        chkEx("{ $init; val t = l @* {} ( @sum f(c) ); return (t, c.v); }", "([55],5)")
+        chkEx("{ $init; val t = l @* {} ( @sum f(c) ) limit 0; return (t, c.v); }", "([],0)")
+        chkEx("{ $init; val t = l @* {} ( @sum f(c) ) offset 1; return (t, c.v); }", "([],5)")
+        chkEx("{ $init; val t = l @* {} ( @group f(c) ); return (t, c.v); }", "([1, 4, 9, 16, 25],5)")
+        chkEx("{ $init; val t = l @* {} ( @group f(c) ) limit 3; return (t, c.v); }", "([1, 4, 9],5)")
+        chkEx("{ $init; val t = l @* {} ( @group f(c) ) offset 2; return (t, c.v); }", "([9, 16, 25],5)")
+        chkEx("{ $init; val t = l @* {} ( @group f(c) ) offset 2 limit 2; return (t, c.v); }", "([9, 16],5)")
     }
 
     @Test fun testNested() {
@@ -371,5 +402,63 @@ class AtExprCollectionTest: BaseRellTest(false) {
         chk("user @*{} @+{} ( $.name, $.score )", "[(name=Bob,score=123), (name=Alice,score=456)]")
         chk("user @*{} @+{} ( $.name, $.score ) @* { $.score >= 300 }", "[(name=Alice,score=456)]")
         chk("user @*{} @+{} ( $.name, $.score ) @* { $.score >= 300 } @?{} ( $.name )", "Alice")
+    }
+
+    @Test fun testGroupSimple() {
+        initGroupDataCountries()
+        chk("get_countries() @* {} ( $.region )", "[EMEA, EMEA, EMEA, AMER, AMER, APAC]")
+        chk("get_countries() @* {} ( @group $.region )", "[EMEA, AMER, APAC]")
+        chk("get_countries() @* {} ( $.language )", "[German, German, English, English, Spanish, Chinese]")
+        chk("get_countries() @* {} ( @group $.language )", "[German, English, Spanish, Chinese]")
+    }
+
+    @Test fun testGroupMulti() {
+        initGroupDataCountries()
+
+        chk("get_countries() @* {} ( @group _=$.region, @group _=$.language )",
+                "[(EMEA,German), (EMEA,English), (AMER,English), (AMER,Spanish), (APAC,Chinese)]")
+
+        chk("get_countries() @* {} ( @group _=$.language, @group _=$.region )",
+                "[(German,EMEA), (English,EMEA), (English,AMER), (Spanish,AMER), (Chinese,APAC)]")
+    }
+
+    @Test fun testGroupSum() {
+        initGroupDataCountries()
+
+        chk("get_countries() @* {} ( @group _=$.region, @sum 0 )", "[(EMEA,0), (AMER,0), (APAC,0)]")
+        chk("get_countries() @* {} ( @group _=$.region, @sum 1 )", "[(EMEA,3), (AMER,2), (APAC,1)]")
+        chk("get_countries() @* {} ( @group _=$.region, @sum $.gdp )", "[(EMEA,7053), (AMER,22713), (APAC,14140)]")
+        chk("get_countries() @* {} ( @group _=$.region, @sum $.name.size() )", "[(EMEA,28), (AMER,9), (APAC,5)]")
+
+        chk("get_countries() @* { $.gdp > 2000 } ( @group _=$.region, @sum $.gdp )", "[(EMEA,6606), (AMER,21439), (APAC,14140)]")
+    }
+
+    private fun initGroupDataCountries() {
+        tst.strictToString = false
+
+        def("struct country { name; region: text; language: text; gdp: integer; }")
+        def("function make_country(name, region: text, language: text, gdp: integer) = country(name, region, language, gdp);")
+
+        def("""
+            function get_countries() = [
+                make_country('Germany','EMEA','German',3863),
+                make_country('Austria','EMEA','German',447),
+                make_country('United Kingdom','EMEA','English',2743),
+                make_country('USA','AMER','English',21439),
+                make_country('Mexico','AMER','Spanish',1274),
+                make_country('China','APAC','Chinese',14140)
+            ];
+        """)
+    }
+
+    private fun initGroupDataAllTypes() {
+        def("enum color { red, green, blue }")
+        def("struct data { b: boolean; i: integer; d: decimal; t: text; ba: byte_array; e: color; }")
+        def("""
+            function get_data() = [
+                data(false,111,67.89,'abc',x'beef',color.blue),
+                data(false,222,98.76,'def',x'dead',color.green)
+            ];
+        """)
     }
 }
