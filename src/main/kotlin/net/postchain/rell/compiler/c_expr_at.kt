@@ -174,7 +174,7 @@ class C_AtFrom_Iterable(
 
         val cBlock = innerBlkCtx.buildBlock()
         val rParam = R_VarParam(C_Constants.AT_PLACEHOLDER, item.elemType, varPtr)
-        val rFrom = item.vExpr.toRExpr()
+        val rFrom = item.compile()
         val rWhere = details.base.where?.toRExpr() ?: R_ConstantExpr.makeBool(true)
         val rLimit = details.limit?.toRExpr()
         val rOffset = details.offset?.toRExpr()
@@ -243,7 +243,25 @@ class C_AtFrom_Iterable(
 
 sealed class C_AtFromItem(val pos: S_Pos)
 class C_AtFromItem_Entity(pos: S_Pos, val alias: String, val entity: R_Entity): C_AtFromItem(pos)
-class C_AtFromItem_Iterable(pos: S_Pos, val vExpr: V_Expr, val elemType: R_Type): C_AtFromItem(pos)
+
+sealed class C_AtFromItem_Iterable(pos: S_Pos, val vExpr: V_Expr, val elemType: R_Type): C_AtFromItem(pos) {
+    protected abstract fun compile0(rExpr: R_Expr): R_ColAtFrom
+
+    fun compile(): R_ColAtFrom {
+        val rExpr = vExpr.toRExpr()
+        return compile0(rExpr)
+    }
+}
+
+class C_AtFromItem_Collection(pos: S_Pos, vExpr: V_Expr, elemType: R_Type): C_AtFromItem_Iterable(pos, vExpr, elemType) {
+    override fun compile0(rExpr: R_Expr): R_ColAtFrom = R_ColAtFrom_Collection(rExpr)
+}
+
+class C_AtFromItem_Map(pos: S_Pos, vExpr: V_Expr, private val tupleType: R_TupleType)
+    : C_AtFromItem_Iterable(pos, vExpr, tupleType)
+{
+    override fun compile0(rExpr: R_Expr): R_ColAtFrom = R_ColAtFrom_Map(rExpr, tupleType)
+}
 
 class C_AtWhatField(
         val name: String?,

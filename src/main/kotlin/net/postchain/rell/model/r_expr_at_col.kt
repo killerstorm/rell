@@ -1,9 +1,7 @@
 package net.postchain.rell.model
 
-import net.postchain.rell.runtime.Rt_CallFrame
-import net.postchain.rell.runtime.Rt_Error
-import net.postchain.rell.runtime.Rt_NullValue
-import net.postchain.rell.runtime.Rt_Value
+import com.google.common.collect.Iterables
+import net.postchain.rell.runtime.*
 import net.postchain.rell.utils.toImmList
 import kotlin.math.min
 
@@ -242,11 +240,36 @@ class R_ColAtLimiter_Late(private val limit: Long, private val offset: Long): R_
     }
 }
 
+sealed class R_ColAtFrom(private val expr: R_Expr) {
+    protected abstract fun evaluate0(value: Rt_Value): Iterable<Rt_Value>
+
+    fun evaluate(frame: Rt_CallFrame): Iterable<Rt_Value> {
+        val value = expr.evaluate(frame)
+        return evaluate0(value)
+    }
+}
+
+class R_ColAtFrom_Collection(expr: R_Expr): R_ColAtFrom(expr) {
+    override fun evaluate0(value: Rt_Value): Iterable<Rt_Value> {
+        return value.asCollection()
+    }
+}
+
+class R_ColAtFrom_Map(expr: R_Expr, private val tupleType: R_TupleType): R_ColAtFrom(expr) {
+    override fun evaluate0(value: Rt_Value): Iterable<Rt_Value> {
+        val map = value.asMap()
+        return Iterables.transform(map.entries) {
+            val entry = it!!
+            Rt_TupleValue(tupleType, listOf(entry.key, entry.value))
+        }
+    }
+}
+
 class R_ColAtExpr(
         type: R_Type,
         val block: R_FrameBlock,
         val param: R_VarParam,
-        val from: R_Expr,
+        val from: R_ColAtFrom,
         val what: R_ColAtWhat,
         val where: R_Expr,
         val summarization: R_ColAtSummarization,
@@ -266,7 +289,7 @@ class R_ColAtExpr(
         val limit = evalLimit(frame)
         if (limit != null && limit <= 0L) return mutableListOf()
 
-        val collection = from.evaluate(frame).asCollection()
+        val iterable = from.evaluate(frame)
         val offset = evalOffset(frame)
 
         val summarizer = summarization.newSummarizer()
@@ -275,7 +298,7 @@ class R_ColAtExpr(
         val limiter = summarizer.newLimiter(limits, hasSorting)
 
         frame.block(block) {
-            for (item in collection) {
+            for (item in iterable) {
                 if (!limiter.processLimit()) {
                     break
                 }

@@ -177,6 +177,12 @@ Special symbol "$" is used to access the current item in where- and what-parts. 
 
     val z = (a : l) @* { a > 4 };
 
+Transforming a map:
+
+    val m = ['France':33, 'Italy':39, 'Germany':49];
+    val keys = m @* {} ( $.k );
+    val values = m @* {} ( $.v );
+
 At-expressions can be chained:
 
     val q = l
@@ -194,7 +200,7 @@ selected from the database individually in order to access its attributes (may b
 Details:
 
 - All kinds of at-operators are supported: "@", "@?", "@*", "@+".
-- Source collection can be a list or a set, the result is always a list (or a single value).
+- Source collection can be a list, a set or a map; the result is always a list (or a single value).
 - Where- and what-expressions are not restricted to SQL-compatible ones (e. g. user-defined function calls are allowed).
 - Limit and offset clauses are supported.
 - Grouping and aggregation is supported (via annotations @group, @sum, @min, @max).

@@ -42,7 +42,14 @@ abstract class S_Expr(val startPos: S_Pos) {
         val cValue = cExpr.value()
         val type = cValue.type()
         return when (type) {
-            is R_CollectionType -> C_AtFromItem_Iterable(startPos, cValue, type.elementType)
+            is R_CollectionType -> C_AtFromItem_Collection(startPos, cValue, type.elementType)
+            is R_MapType -> {
+                val tupleType = R_TupleType(listOf(
+                        R_TupleField("k", type.keyType),
+                        R_TupleField("v", type.valueType)
+                ))
+                C_AtFromItem_Map(startPos, cValue, tupleType)
+            }
             else -> {
                 val s = type.toStrictString()
                 throw C_Error(startPos, "at:from:bad_type:$s", "Invalid type for at-expression: $s")

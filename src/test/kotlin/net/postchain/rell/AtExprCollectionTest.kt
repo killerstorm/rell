@@ -139,8 +139,23 @@ class AtExprCollectionTest: BaseRellTest(false) {
     }
 
     @Test fun testFromMap() {
-        chk("['Bob':123] @* {}", "ct_err:at:from:bad_type:map<text,integer>")
-        chk("map<text,integer>() @* {}", "ct_err:at:from:bad_type:map<text,integer>")
+        tst.strictToString = false
+
+        chk("_type_of(['Bob':123] @ {})", "(k:text,v:integer)")
+        chk("_type_of(['Bob':123] @ {} ( $.k ))", "text")
+        chk("_type_of(['Bob':123] @ {} ( $.v ))", "integer")
+        chk("_type_of(['Bob':123] @* {})", "list<(k:text,v:integer)>")
+        chk("_type_of(['Bob':123] @* {} ( $.k ))", "list<text>")
+        chk("_type_of(['Bob':123] @* {} ( $.v ))", "list<integer>")
+
+        chk("['Bob':123, 'Alice':456] @* {}", "[(k=Bob,v=123), (k=Alice,v=456)]")
+        chk("map<text,integer>() @* {}", "[]")
+
+        chk("['Bob':123, 'Alice':456] @* {} ( $.k )", "[Bob, Alice]")
+        chk("['Bob':123, 'Alice':456] @* {} ( $.v )", "[123, 456]")
+        chk("['Bob':123, 'Alice':456] @* {} ( $.k, $.v )", "[(k=Bob,v=123), (k=Alice,v=456)]")
+        chk("['Bob':123, 'Alice':456] @* {} ( $.k + $.v )", "[Bob123, Alice456]")
+        chk("['Bob':123, 'Alice':456] @* {} ( _=$.k, _=$.v )", "[(Bob,123), (Alice,456)]")
     }
 
     @Test fun testFromForms() {
@@ -447,17 +462,6 @@ class AtExprCollectionTest: BaseRellTest(false) {
                 make_country('USA','AMER','English',21439),
                 make_country('Mexico','AMER','Spanish',1274),
                 make_country('China','APAC','Chinese',14140)
-            ];
-        """)
-    }
-
-    private fun initGroupDataAllTypes() {
-        def("enum color { red, green, blue }")
-        def("struct data { b: boolean; i: integer; d: decimal; t: text; ba: byte_array; e: color; }")
-        def("""
-            function get_data() = [
-                data(false,111,67.89,'abc',x'beef',color.blue),
-                data(false,222,98.76,'def',x'dead',color.green)
             ];
         """)
     }
