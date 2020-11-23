@@ -49,8 +49,22 @@ class AtExprCollectionTest: BaseRellTest(false) {
         chk("[1,2,3,4,5] @* {} ( $++ )", "ct_err:expr_bad_dst")
 
         chk("[1,2,3] @* {} ([4,5,6] @* {})", "[[4, 5, 6], [4, 5, 6], [4, 5, 6]]")
-        chk("[1,2,3] @* {} ([4,5,6] @* {} ( $ ))", "ct_err:expr:at:placeholder_ambiguous")
-        chk("[1,2,3] @* {exists([4,5,6] @* { $ > 0 })}", "ct_err:expr:at:placeholder_ambiguous")
+        chk("[1,2,3] @* {} ([4,5,6] @* {} ( $ ))", "ct_err:expr:placeholder:ambiguous")
+        chk("[1,2,3] @* {exists([4,5,6] @* { $ > 0 })}", "ct_err:expr:placeholder:ambiguous")
+    }
+
+    @Test fun testPlaceholderMixed() {
+        tstCtx.useSql = true
+        tst.strictToString = false
+        def("entity user { name; }")
+        insert("c0.user", "name", "100,'Bob'", "101,'Alice'")
+
+        chk("user @* {} ([123] @ {} ( $ ))", "ct_err:expr:placeholder:ambiguous")
+        chk("[123] @ {} (user @* {} ( $ ))", "ct_err:expr:placeholder:ambiguous")
+        chk("(x: user) @* {} ([123] @ {} ( $ ))", "[123, 123]")
+        chk("(x: [123]) @ {} (user @* {} ( $ ))", "[user[100], user[101]]")
+        chk("user @* {} ((x: [123]) @ {} ( $ ))", "ct_err:expr:placeholder:none")
+        chk("[123] @ {} ((x: user) @* {} ( $ ))", "ct_err:expr:placeholder:alias")
     }
 
     @Test fun testCardinality() {
@@ -84,8 +98,8 @@ class AtExprCollectionTest: BaseRellTest(false) {
         chk("(x: [1,2,3,4,5]) @* {}", "list<integer>[int[1],int[2],int[3],int[4],int[5]]")
         chk("(x: [1,2,3,4,5]) @* { x % 2 != 0 }", "list<integer>[int[1],int[3],int[5]]")
         chk("(x: [1,2,3,4,5]) @* {} (x * x)", "list<integer>[int[1],int[4],int[9],int[16],int[25]]")
-        chk("(x: [1,2,3,4,5]) @* { $ % 2 != 0 }", "ct_err:expr:at:placeholder_none")
-        chk("(x: [1,2,3,4,5]) @* {} ( $ )", "ct_err:expr:at:placeholder_none")
+        chk("(x: [1,2,3,4,5]) @* { $ % 2 != 0 }", "ct_err:expr:placeholder:none")
+        chk("(x: [1,2,3,4,5]) @* {} ( $ )", "ct_err:expr:placeholder:none")
     }
 
     @Test fun testFromAliasConflict() {
@@ -106,7 +120,7 @@ class AtExprCollectionTest: BaseRellTest(false) {
 
         chk("foo.bar.user @* {} (_=.name, _=.score)", "[(Bob,123)]")
         chk("(z:foo.bar.user) @* {} (_=z.name, _=z.score)", "[(Bob,123)]")
-        chkEx("{ val v = s_foo(); return v.bar.user @* {} (_=$.name, _=$.score); }", "[(Alice,456)]")
+        chkEx("{ val v = s_foo(); return v.bar.user @* {} (_=.name, _=.score); }", "[(Alice,456)]")
         chkEx("{ val v = s_foo(); return (z:v.bar.user) @* {} (_=z.name, _=z.score); }", "[(Alice,456)]")
         chkEx("{ val foo = s_foo(); return foo.bar.user @* {} (_=.name, _=.score); }", "[(Bob,123)]")
         chkEx("{ val foo = s_foo(); return (z:foo.bar.user) @* {} (_=z.name, _=z.score); }", "[(Bob,123)]")
@@ -142,20 +156,22 @@ class AtExprCollectionTest: BaseRellTest(false) {
         tst.strictToString = false
 
         chk("_type_of(['Bob':123] @ {})", "(k:text,v:integer)")
-        chk("_type_of(['Bob':123] @ {} ( $.k ))", "text")
-        chk("_type_of(['Bob':123] @ {} ( $.v ))", "integer")
+        chk("_type_of(['Bob':123] @ {} ( $) )", "(k:text,v:integer)")
+        chk("_type_of(['Bob':123] @ {} ( .k ))", "text")
+        chk("_type_of(['Bob':123] @ {} ( .v ))", "integer")
         chk("_type_of(['Bob':123] @* {})", "list<(k:text,v:integer)>")
-        chk("_type_of(['Bob':123] @* {} ( $.k ))", "list<text>")
-        chk("_type_of(['Bob':123] @* {} ( $.v ))", "list<integer>")
+        chk("_type_of(['Bob':123] @* {} ( $ ))", "list<(k:text,v:integer)>")
+        chk("_type_of(['Bob':123] @* {} ( .k ))", "list<text>")
+        chk("_type_of(['Bob':123] @* {} ( .v ))", "list<integer>")
 
         chk("['Bob':123, 'Alice':456] @* {}", "[(k=Bob,v=123), (k=Alice,v=456)]")
         chk("map<text,integer>() @* {}", "[]")
 
-        chk("['Bob':123, 'Alice':456] @* {} ( $.k )", "[Bob, Alice]")
-        chk("['Bob':123, 'Alice':456] @* {} ( $.v )", "[123, 456]")
-        chk("['Bob':123, 'Alice':456] @* {} ( $.k, $.v )", "[(k=Bob,v=123), (k=Alice,v=456)]")
-        chk("['Bob':123, 'Alice':456] @* {} ( $.k + $.v )", "[Bob123, Alice456]")
-        chk("['Bob':123, 'Alice':456] @* {} ( _=$.k, _=$.v )", "[(Bob,123), (Alice,456)]")
+        chk("['Bob':123, 'Alice':456] @* {} ( .k )", "[Bob, Alice]")
+        chk("['Bob':123, 'Alice':456] @* {} ( .v )", "[123, 456]")
+        chk("['Bob':123, 'Alice':456] @* {} ( .k, .v )", "[(k=Bob,v=123), (k=Alice,v=456)]")
+        chk("['Bob':123, 'Alice':456] @* {} ( .k + .v )", "[Bob123, Alice456]")
+        chk("['Bob':123, 'Alice':456] @* {} ( _=.k, _=.v )", "[(Bob,123), (Alice,456)]")
     }
 
     @Test fun testFromForms() {
@@ -174,10 +190,11 @@ class AtExprCollectionTest: BaseRellTest(false) {
         def("struct user { first_name: text; last_name: text; score: integer; }")
         def("function from() = [user(first_name='Bob',last_name='Meyer',123), user(first_name='Alice',last_name='Jones',score=456)];")
 
-        chkEx("{ val first_name = 'Bob'; return from() @* { first_name } (); }", "ct_err:at_where:var_noattrs:0:first_name:text")
-        chkEx("{ val last_name = 'Alice'; return from() @* { last_name } (); }", "ct_err:at_where:var_noattrs:0:last_name:text")
-        chkEx("{ val last_name = 'Jones'; return from() @* { last_name } (); }", "ct_err:at_where:var_noattrs:0:last_name:text")
-        chkEx("{ val first_name = 123; return from() @* { first_name } (); }", "ct_err:at_where:var_noattrs:0:first_name:integer")
+        chkEx("{ val first_name = 'Bob'; return from() @* { first_name }; }", "[user{first_name=Bob,last_name=Meyer,score=123}]")
+        chkEx("{ val last_name = 'Bob'; return from() @* { last_name }; }", "[]")
+        chkEx("{ val last_name = 'Alice'; return from() @* { last_name }; }", "[]")
+        chkEx("{ val last_name = 'Jones'; return from() @* { last_name }; }", "[user{first_name=Alice,last_name=Jones,score=456}]")
+        chkEx("{ val first_name = 123; return from() @* { first_name }; }", "ct_err:at_where:var_noattrs:0:first_name:integer")
     }
 
     @Test fun testWhereMatchByType() {
@@ -199,24 +216,57 @@ class AtExprCollectionTest: BaseRellTest(false) {
         tst.strictToString = false
         def("struct user { name; score: integer; }")
         def("function from() = [user('Bob',123), user('Alice',456)];")
-        chkWhatAttributes("from()", "$")
+        chkWhatAttributes("from()")
+    }
+
+    @Test fun testWhatAttributesTuple() {
+        tst.strictToString = false
+        def("function from() = [(name='Bob',score=123), (name='Alice',score=456)];")
+        chkWhatAttributes("from()")
     }
 
     @Test fun testWhatAttributesEntity() {
         tst.strictToString = false
         tstCtx.useSql = true
         def("entity user { name; score: integer; }")
-        insert("c0.user", "name,score", "1,'Bob',123", "2,'Alice',456")
         def("function from() = user @* {};")
+        insert("c0.user", "name,score", "1001,'Bob',123", "1002,'Alice',456")
 
-        chkWhatAttributes("user", "")
-        chkWhatAttributes("from()", "$")
+        chkWhatAttributesEntity("user")
+        chkWhatAttributesEntity("from()")
     }
 
-    private fun chkWhatAttributes(from: String, ph: String) {
-        chk("$from @*{} ( $ph.name )", "[Bob, Alice]")
-        chk("$from @*{} ( $ph.score )", "[123, 456]")
-        chk("$from @*{} ( $ph.name, $ph.score )", "[(name=Bob,score=123), (name=Alice,score=456)]")
+    private fun chkWhatAttributesEntity(from: String) {
+        chkWhatAttributes(from)
+        chk("$from @*{} ( .rowid )", "[1001, 1002]")
+        chk("$from @*{} ( $.rowid )", "[1001, 1002]")
+    }
+
+    private fun chkWhatAttributes(from: String) {
+        chk("$from @*{} ( .name )", "[Bob, Alice]")
+        chk("$from @*{} ( $.name )", "[Bob, Alice]")
+        chk("$from @*{} ( .score )", "[123, 456]")
+        chk("$from @*{} ( $.score )", "[123, 456]")
+        chk("$from @*{} ( .name, .score )", "[(name=Bob,score=123), (name=Alice,score=456)]")
+        chk("$from @*{} ( $.name, $.score )", "[(name=Bob,score=123), (name=Alice,score=456)]")
+    }
+
+    @Test fun testWhatAttributesEnum() {
+        tst.strictToString = false
+        def("enum color { red, green, blue }")
+
+        val from = "color.values()"
+        chk("$from @*{} ( .name )", "[red, green, blue]")
+        chk("$from @*{} ( $.name )", "[red, green, blue]")
+        chk("$from @*{} ( .value )", "[0, 1, 2]")
+        chk("$from @*{} ( $.value )", "[0, 1, 2]")
+    }
+
+    @Test fun testWhatAttributesFunction() {
+        tst.strictToString = false
+        val from = "['Bob', 'Alice']"
+        chk("$from @*{} ( .size() )", "ct_err:expr_attr_unknown:size")
+        chk("$from @*{} ( $.size() )", "[3, 5]")
     }
 
     @Test fun testWhatOmit() {
@@ -338,6 +388,17 @@ class AtExprCollectionTest: BaseRellTest(false) {
         chk("[1,2,3] @* {} ( (y:[4,5,6]) @* {} ( y, $ ) )", "[[(4,1), (5,1), (6,1)], [(4,2), (5,2), (6,2)], [(4,3), (5,3), (6,3)]]")
     }
 
+    @Test fun testNestedAttributes() {
+        tst.strictToString = false
+        def("struct user { name; pos: text; }")
+        def("struct company { name; city: text; }")
+        def("function users() = [user(name = 'Bob', pos = 'Dev'), user(name = 'Alice', pos = 'QA')];")
+        def("function companies() = [company(name = 'Apple', city = 'Cupertino'), company(name = 'Amazon', city = 'Seattle')];")
+
+        chk("users() @* {} ( companies() @* {} ( .name ) )", "[[Apple, Amazon], [Apple, Amazon]]")
+        chk("companies() @* {} ( users() @* {} ( .name ) )", "[[Bob, Alice], [Bob, Alice]]")
+    }
+
     @Test fun testUseAsParamDefaultValue() {
         tst.strictToString = false
         def("function f1(x: list<integer> = [1,2,3] @* {}) = list(x);")
@@ -414,38 +475,38 @@ class AtExprCollectionTest: BaseRellTest(false) {
         insert("c0.user", "name,score", "1,'Bob',123", "2,'Alice',456")
 
         chk("user @*{}", "[user[1], user[2]]")
-        chk("user @*{} @+{} ( $.name, $.score )", "[(name=Bob,score=123), (name=Alice,score=456)]")
-        chk("user @*{} @+{} ( $.name, $.score ) @* { $.score >= 300 }", "[(name=Alice,score=456)]")
-        chk("user @*{} @+{} ( $.name, $.score ) @* { $.score >= 300 } @?{} ( $.name )", "Alice")
+        chk("user @*{} @+{} ( .name, .score )", "[(name=Bob,score=123), (name=Alice,score=456)]")
+        chk("user @*{} @+{} ( .name, .score ) @* { .score >= 300 }", "[(name=Alice,score=456)]")
+        chk("user @*{} @+{} ( .name, .score ) @* { .score >= 300 } @?{} ( .name )", "Alice")
     }
 
     @Test fun testGroupSimple() {
         initGroupDataCountries()
-        chk("get_countries() @* {} ( $.region )", "[EMEA, EMEA, EMEA, AMER, AMER, APAC]")
-        chk("get_countries() @* {} ( @group $.region )", "[EMEA, AMER, APAC]")
-        chk("get_countries() @* {} ( $.language )", "[German, German, English, English, Spanish, Chinese]")
-        chk("get_countries() @* {} ( @group $.language )", "[German, English, Spanish, Chinese]")
+        chk("get_countries() @* {} ( .region )", "[EMEA, EMEA, EMEA, AMER, AMER, APAC]")
+        chk("get_countries() @* {} ( @group .region )", "[EMEA, AMER, APAC]")
+        chk("get_countries() @* {} ( .language )", "[German, German, English, English, Spanish, Chinese]")
+        chk("get_countries() @* {} ( @group .language )", "[German, English, Spanish, Chinese]")
     }
 
     @Test fun testGroupMulti() {
         initGroupDataCountries()
 
-        chk("get_countries() @* {} ( @group _=$.region, @group _=$.language )",
+        chk("get_countries() @* {} ( @group _=.region, @group _=.language )",
                 "[(EMEA,German), (EMEA,English), (AMER,English), (AMER,Spanish), (APAC,Chinese)]")
 
-        chk("get_countries() @* {} ( @group _=$.language, @group _=$.region )",
+        chk("get_countries() @* {} ( @group _=.language, @group _=.region )",
                 "[(German,EMEA), (English,EMEA), (English,AMER), (Spanish,AMER), (Chinese,APAC)]")
     }
 
     @Test fun testGroupSum() {
         initGroupDataCountries()
 
-        chk("get_countries() @* {} ( @group _=$.region, @sum 0 )", "[(EMEA,0), (AMER,0), (APAC,0)]")
-        chk("get_countries() @* {} ( @group _=$.region, @sum 1 )", "[(EMEA,3), (AMER,2), (APAC,1)]")
-        chk("get_countries() @* {} ( @group _=$.region, @sum $.gdp )", "[(EMEA,7053), (AMER,22713), (APAC,14140)]")
-        chk("get_countries() @* {} ( @group _=$.region, @sum $.name.size() )", "[(EMEA,28), (AMER,9), (APAC,5)]")
+        chk("get_countries() @* {} ( @group _=.region, @sum 0 )", "[(EMEA,0), (AMER,0), (APAC,0)]")
+        chk("get_countries() @* {} ( @group _=.region, @sum 1 )", "[(EMEA,3), (AMER,2), (APAC,1)]")
+        chk("get_countries() @* {} ( @group _=.region, @sum .gdp )", "[(EMEA,7053), (AMER,22713), (APAC,14140)]")
+        chk("get_countries() @* {} ( @group _=.region, @sum .name.size() )", "[(EMEA,28), (AMER,9), (APAC,5)]")
 
-        chk("get_countries() @* { $.gdp > 2000 } ( @group _=$.region, @sum $.gdp )", "[(EMEA,6606), (AMER,21439), (APAC,14140)]")
+        chk("get_countries() @* { .gdp > 2000 } ( @group _=.region, @sum .gdp )", "[(EMEA,6606), (AMER,21439), (APAC,14140)]")
     }
 
     private fun initGroupDataCountries() {

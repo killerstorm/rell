@@ -264,3 +264,19 @@ class V_SysMemberCaseCallExpr(
     override fun toRExpr0() = match.compileCall(ctx, caseCtx)
     override fun toDbExpr0() = match.compileCallDb(ctx, caseCtx)
 }
+
+class V_SysMemberPropertyExpr(
+        private val ctx: C_ExprContext,
+        private val caseCtx: C_MemberFuncCaseCtx,
+        private val prop: C_SysMemberFormalParamsFuncBody
+): V_Expr(caseCtx.fullName.pos) {
+    private val isDb = isDb(caseCtx.member.base)
+    private val resType = C_Utils.effectiveMemberType(prop.resType, caseCtx.member.safe)
+    private val varFacts = caseCtx.member.base.varFacts()
+
+    override fun type() = resType
+    override fun isDb() = isDb
+    override fun varFacts() = varFacts
+    override fun toRExpr0() = prop.compileCall(ctx, caseCtx, listOf())
+    override fun toDbExpr0() = prop.compileCallDb(ctx, caseCtx, listOf())
+}

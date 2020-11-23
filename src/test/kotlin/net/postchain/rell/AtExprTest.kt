@@ -724,6 +724,31 @@ class AtExprTest: BaseRellTest() {
         chk("(u:user) @* { .lastName == 'Jobs' } ( u.company.rowid, u.firstName )", "[(200,firstName=Steve)]")
     }
 
+    @Test fun testPlaceholder() {
+        tst.strictToString = false
+
+        chk("user @* { .firstName == 'Steve' }", "[user[20], user[21]]")
+        chk("user @* { .firstName == 'Steve' } ( $ )", "[user[20], user[21]]")
+        chk("user @* { .firstName == 'Steve' } ( $.lastName )", "[Jobs, Wozniak]")
+        chk("user @* { $.firstName == 'Steve' }", "[user[20], user[21]]")
+        chk("user @* { $.firstName == 'Steve' } ( $.lastName )", "[Jobs, Wozniak]")
+
+        chk("(user, company) @* {} ( $ )", "ct_err:expr:placeholder:multiple_entities:2")
+        chk("(user, company) @* { $.firstName == 'Steve' }", "ct_err:expr:placeholder:multiple_entities:2")
+
+        chk("(u: user) @* { .firstName == 'Steve' } ( $ )", "ct_err:expr:placeholder:alias")
+        chk("(u: user, c: company) @* { u.firstName == 'Steve' } ( $ )", "ct_err:expr:placeholder:multiple_entities:2")
+        chk("(u: user, company) @* { u.firstName == 'Steve' } ( $ )", "ct_err:expr:placeholder:multiple_entities:2")
+        chk("(user, c: company) @* { user.firstName == 'Steve' } ( $ )", "ct_err:expr:placeholder:multiple_entities:2")
+    }
+
+    @Test fun testPlaceholderAmbiguity() {
+        tst.strictToString = false
+        chk("company @* {} ( .name + (user @* {} ( $ )).size() )", "ct_err:expr:placeholder:ambiguous")
+        chk("company @* {} ( .name + ((u: user) @* {} ( $ )).size() )", "ct_err:expr:placeholder:alias")
+        chk("(c: company) @* {} ( .name + (user @* {} ( $ )).size() )", "[Facebook8, Apple8, Amazon8, Microsoft8, Google8]")
+    }
+
     private object Ins {
         fun company(id: Int, name: String): String = SqlTestUtils.mkins("c0.company", "name", "$id, '$name'")
 

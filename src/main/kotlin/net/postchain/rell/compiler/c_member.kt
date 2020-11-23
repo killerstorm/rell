@@ -10,80 +10,115 @@ import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_VirtualType
 import net.postchain.rell.compiler.vexpr.V_DbExpr
 import net.postchain.rell.compiler.vexpr.V_Expr
+import net.postchain.rell.compiler.vexpr.V_SysMemberPropertyExpr
 import net.postchain.rell.model.*
 
 class C_MemberRef(val pos: S_Pos, val base: V_Expr, val name: S_Name, val safe: Boolean) {
     fun qualifiedName() = "${base.type().toStrictString()}.${name.str}"
 }
 
+sealed class C_MemberValue {
+    abstract fun type(): R_Type
+    abstract fun compile(ctx: C_ExprContext, ref: C_MemberRef): V_Expr
+}
+
+private class C_MemberValue_BasicAttr(private val attr: C_MemberAttr): C_MemberValue() {
+    override fun type() = attr.type
+
+    override fun compile(ctx: C_ExprContext, ref: C_MemberRef): V_Expr {
+        return makeMemberExpr(ref, attr)
+    }
+}
+
+private class C_MemberValue_EntityAttr(private val attr: C_EntityAttrRef): C_MemberValue() {
+    override fun type() = attr.type()
+
+    override fun compile(ctx: C_ExprContext, ref: C_MemberRef): V_Expr {
+        return attr.createIpMemberExpr(ref)
+    }
+}
+
+private class C_MemberValue_EnumAttr(private val prop: C_SysMemberFormalParamsFuncBody): C_MemberValue() {
+    override fun type() = prop.resType
+
+    override fun compile(ctx: C_ExprContext, ref: C_MemberRef): V_Expr {
+        val caseCtx = C_MemberFuncCaseCtx(ref)
+        return V_SysMemberPropertyExpr(ctx, caseCtx, prop)
+    }
+}
+
 object C_MemberResolver {
     fun valueForType(ctx: C_ExprContext, type: R_Type, ref: C_MemberRef): C_Expr? {
+        val member = findMemberValueForType(type, ref.name.str)
+        member ?: return null
+        val vExpr = member.compile(ctx, ref)
+        return C_VExpr(vExpr)
+    }
+
+    fun findMemberValueForType(type: R_Type, name: String): C_MemberValue? {
         return when (type) {
-            is R_TupleType -> valueForTuple(type, ref)
-            is R_VirtualTupleType -> valueForVirtualTuple(type, ref)
-            is R_StructType -> valueForStruct(type, ref)
-            is R_VirtualStructType -> valueForVirtualStruct(type, ref)
-            is R_EntityType -> valueForEntity(type, ref)
-            is R_EnumType -> valueForEnum(ctx, ref)
+            is R_TupleType -> valueForTuple(type, name)
+            is R_VirtualTupleType -> valueForVirtualTuple(type, name)
+            is R_StructType -> valueForStruct(type, name)
+            is R_VirtualStructType -> valueForVirtualStruct(type, name)
+            is R_EntityType -> valueForEntity(type, name)
+            is R_EnumType -> valueForEnum(name)
             else -> null
         }
     }
 
-    private fun valueForTuple(type: R_TupleType, ref: C_MemberRef): C_Expr? {
-        val idx = type.fields.indexOfFirst { it.name == ref.name.str }
+    private fun valueForTuple(type: R_TupleType, name: String): C_MemberValue? {
+        val idx = type.fields.indexOfFirst { it.name == name }
         if (idx == -1) {
             return null
         }
 
-        val field = C_MemberAttr_TupleAttr(type.fields[idx].type, idx)
-        return makeMemberExpr(ref, field)
+        val memAttr = C_MemberAttr_TupleAttr(type.fields[idx].type, idx)
+        return C_MemberValue_BasicAttr(memAttr)
     }
 
-    private fun valueForVirtualTuple(type: R_VirtualTupleType, ref: C_MemberRef): C_Expr? {
+    private fun valueForVirtualTuple(type: R_VirtualTupleType, name: String): C_MemberValue? {
         val tupleType = type.innerType
-        val idx = tupleType.fields.indexOfFirst { it.name == ref.name.str }
+        val idx = tupleType.fields.indexOfFirst { it.name == name }
         if (idx == -1) {
             return null
         }
 
         val field = tupleType.fields[idx]
         val virtualType = S_VirtualType.virtualMemberType(field.type)
-        val memberField = C_MemberAttr_VirtualTupleAttr(virtualType, idx)
-        return makeMemberExpr(ref, memberField)
+        val memAttr = C_MemberAttr_VirtualTupleAttr(virtualType, idx)
+        return C_MemberValue_BasicAttr(memAttr)
     }
 
-    private fun valueForStruct(type: R_StructType, ref: C_MemberRef): C_Expr? {
-        val attr = type.struct.attributes[ref.name.str]
+    private fun valueForStruct(type: R_StructType, name: String): C_MemberValue? {
+        val attr = type.struct.attributes[name]
         if (attr == null) {
             return null
         }
 
-        val field = C_MemberAttr_StructAttr(attr)
-        return makeMemberExpr(ref, field)
+        val memAttr = C_MemberAttr_StructAttr(attr)
+        return C_MemberValue_BasicAttr(memAttr)
     }
 
-    private fun valueForVirtualStruct(type: R_VirtualStructType, ref: C_MemberRef): C_Expr? {
-        val attr = type.innerType.struct.attributes[ref.name.str]
+    private fun valueForVirtualStruct(type: R_VirtualStructType, name: String): C_MemberValue? {
+        val attr = type.innerType.struct.attributes[name]
         if (attr == null) {
             return null
         }
 
         val virtualType = S_VirtualType.virtualMemberType(attr.type)
-        val field = C_MemberAttr_VirtualStructAttr(virtualType, attr)
-        return makeMemberExpr(ref, field)
+        val memAttr = C_MemberAttr_VirtualStructAttr(virtualType, attr)
+        return C_MemberValue_BasicAttr(memAttr)
     }
 
-    private fun valueForEntity(type: R_EntityType, ref: C_MemberRef): C_Expr? {
-        val attrRef = C_EntityAttrRef.resolveByName(type.rEntity, ref.name.str)
-        return attrRef?.createIpMemberExpr(ref)
+    private fun valueForEntity(type: R_EntityType, name: String): C_MemberValue? {
+        val attrRef = C_EntityAttrRef.resolveByName(type.rEntity, name)
+        return if (attrRef == null) null else C_MemberValue_EntityAttr(attrRef)
     }
 
-    private fun valueForEnum(ctx: C_ExprContext, ref: C_MemberRef): C_Expr? {
-        val fn = C_LibFunctions.getEnumPropertyOpt(ref.name.str)
-        return if (fn == null) null else {
-            val fnExpr = C_MemberFunctionExpr(ref, fn)
-            fnExpr.call(ctx, ref.pos, listOf())
-        }
+    private fun valueForEnum(name: String): C_MemberValue? {
+        val prop = C_LibFunctions.getEnumPropertyOpt(name)
+        return if (prop == null) null else C_MemberValue_EnumAttr(prop)
     }
 
     fun functionForType(type: R_Type, ref: C_MemberRef): C_Expr? {
@@ -176,7 +211,7 @@ private class V_MemberAttrExpr(
 sealed class C_EntityAttrRef(protected val rEntity: R_Entity, val name: String) {
     abstract fun type(): R_Type
     abstract fun createDbContextAttrExpr(baseExpr: Db_TableExpr): Db_Expr
-    abstract fun createIpMemberExpr(ref: C_MemberRef): C_Expr
+    abstract fun createIpMemberExpr(ref: C_MemberRef): V_Expr
     abstract fun createDbMemberExpr(base: Db_TableExpr, pos: S_Pos, sName: S_Name): C_Expr
     abstract fun createIpEntityMemberExpr(baseValue: C_EntityAttrValueLike, baseExpr: Db_TableExpr, ref: C_MemberRef): C_Expr
 
@@ -217,7 +252,7 @@ private class C_EntityAttrRef_Regular(rEntity: R_Entity, private val attr: R_Att
         return makeDbAttrExpr(baseExpr, attr)
     }
 
-    override fun createIpMemberExpr(ref: C_MemberRef): C_Expr {
+    override fun createIpMemberExpr(ref: C_MemberRef): V_Expr {
         val atEntity = R_DbAtEntity(rEntity, 0)
         val baseDbExpr = Db_EntityExpr(atEntity)
         val attrInfo = createAttrInfo(baseDbExpr, ref.name)
@@ -247,7 +282,7 @@ private class C_EntityAttrRef_Rowid(rEntity: R_Entity): C_EntityAttrRef(rEntity,
         return Db_RowidExpr(baseExpr)
     }
 
-    override fun createIpMemberExpr(ref: C_MemberRef): C_Expr {
+    override fun createIpMemberExpr(ref: C_MemberRef): V_Expr {
         val field = C_MemberAttr_SimpleReadOnly(ref.name, R_MemberCalculator_Rowid)
         return makeMemberExpr(ref, field)
     }
@@ -259,7 +294,8 @@ private class C_EntityAttrRef_Rowid(rEntity: R_Entity): C_EntityAttrRef(rEntity,
     }
 
     override fun createIpEntityMemberExpr(baseValue: C_EntityAttrValueLike, baseExpr: Db_TableExpr, ref: C_MemberRef): C_Expr {
-        return createIpMemberExpr(ref)
+        val vExpr = createIpMemberExpr(ref)
+        return C_VExpr(vExpr)
     }
 }
 
@@ -333,7 +369,8 @@ private class V_EntityAttrExpr private constructor(
     }
 
     override fun memberAttr(ref: C_MemberRef, memAttrInfo: C_DbAttrInfo): C_Expr {
-        return create0(base, memAttrInfo, ref)
+        val vExpr = create0(base, memAttrInfo, ref)
+        return C_VExpr(vExpr)
     }
 
     override fun implicitWhatName(): String? {
@@ -342,16 +379,15 @@ private class V_EntityAttrExpr private constructor(
     }
 
     companion object {
-        fun createIpMemberExpr(ref: C_MemberRef, atEntity: R_DbAtEntity, memExpr: C_DbAttrInfo): C_Expr {
+        fun createIpMemberExpr(ref: C_MemberRef, atEntity: R_DbAtEntity, memExpr: C_DbAttrInfo): V_Expr {
             val base = C_EntityAttrValueBase(ref.base, ref.safe, atEntity)
             return create0(base, memExpr, ref)
         }
 
-        private fun create0(base: C_EntityAttrValueBase, memAttrInfo: C_DbAttrInfo, ref: C_MemberRef): C_Expr {
+        private fun create0(base: C_EntityAttrValueBase, memAttrInfo: C_DbAttrInfo, ref: C_MemberRef): V_Expr {
             C_MemberResolver.checkNullAccess(ref.base.type(), ref.name, ref.safe)
             val resultType = C_Utils.effectiveMemberType(memAttrInfo.dbExpr.type, ref.safe)
-            val value = V_EntityAttrExpr(ref.pos, base, ref.base, memAttrInfo, resultType)
-            return C_VExpr(value)
+            return V_EntityAttrExpr(ref.pos, base, ref.base, memAttrInfo, resultType)
         }
     }
 }
@@ -382,10 +418,9 @@ private fun makeDbAttrExpr(base: Db_TableExpr, attr: R_Attrib): Db_Expr {
     return if (resultEntity == null) Db_AttrExpr(base, attr) else Db_RelExpr(base, attr, resultEntity)
 }
 
-private fun makeMemberExpr(ref: C_MemberRef, memAttr: C_MemberAttr): C_Expr {
+private fun makeMemberExpr(ref: C_MemberRef, memAttr: C_MemberAttr): V_Expr {
     val fieldType = memAttr.type
     val effectiveType = C_Utils.effectiveMemberType(fieldType, ref.safe)
     val exprFacts = C_ExprVarFacts.of(postFacts = ref.base.varFacts().postFacts)
-    val value = V_MemberAttrExpr(ref, memAttr, effectiveType, exprFacts)
-    return C_VExpr(value)
+    return V_MemberAttrExpr(ref, memAttr, effectiveType, exprFacts)
 }

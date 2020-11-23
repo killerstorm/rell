@@ -29,7 +29,10 @@ abstract class S_Expr(val startPos: S_Pos) {
     open fun compileFrom(ctx: C_ExprContext, atPos: S_Pos, subValues: MutableList<V_Expr>): C_AtFrom {
         val item = compileFromItem(ctx)
         return when (item) {
-            is C_AtFromItem_Entity -> C_AtFrom_Entities(ctx, listOf(C_AtEntity(item.pos, item.entity, item.alias, 0)))
+            is C_AtFromItem_Entity -> {
+                val cEntity = C_AtEntity(item.pos, item.entity, item.alias, false, 0)
+                C_AtFrom_Entities(ctx, listOf(cEntity))
+            }
             is C_AtFromItem_Iterable -> {
                 subValues.add(item.vExpr)
                 C_AtFrom_Iterable(ctx, atPos, null, item)
@@ -283,8 +286,9 @@ class S_TupleExpr(startPos: S_Pos, val fields: List<S_TupleExprField>): S_Expr(s
         }
 
         val cEntities = entities.mapIndexed { i, item ->
-            val alias = pairs[i].first?.str ?: item.alias
-            C_AtEntity(item.pos, item.entity, alias, i)
+            val explicitAlias = pairs[i].first?.str
+            val alias = explicitAlias ?: item.alias
+            C_AtEntity(item.pos, item.entity, alias, explicitAlias != null, i)
         }
 
         val names = mutableSetOf<String>()

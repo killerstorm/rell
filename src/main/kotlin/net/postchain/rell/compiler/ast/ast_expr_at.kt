@@ -363,9 +363,11 @@ class S_AtExpr(
                 }
             }
 
-            val alias = from.alias ?: from.entityName[from.entityName.size - 1]
+            val explicitAlias = from.alias
+            val alias = explicitAlias ?: from.entityName[from.entityName.size - 1]
+
             val entity = ctx.nsCtx.getEntity(from.entityName)
-            return Pair(alias, C_AtEntity(alias.pos, entity, alias.str, idx))
+            return Pair(alias, C_AtEntity(alias.pos, entity, alias.str, explicitAlias != null, idx))
         }
 
         fun findWhereContextAttrsByType(ctx: C_ExprContext, type: R_Type): List<C_ExprContextAttr> {

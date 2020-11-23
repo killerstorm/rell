@@ -5,12 +5,9 @@ import net.postchain.rell.test.RellCodeTester
 import org.junit.Test
 
 abstract class AtExprGroupBaseTest: BaseRellTest() {
-    protected val ph = impPlaceholder()
-
     protected abstract fun impDefKw(): String
     protected abstract fun impCreateObjs(t: RellCodeTester, name: String, vararg objs: String)
     protected abstract fun impFrom(name: String): String
-    protected abstract fun impPlaceholder(): String
 
     private fun impCreateObjs(name: String, vararg objs: String) = impCreateObjs(tst, name, *objs)
 
@@ -48,7 +45,7 @@ abstract class AtExprGroupBaseTest: BaseRellTest() {
         initDataCountries()
         val from = impFrom("data")
         chk("$from @* {} ( @group 123 )", "[123]")
-        chk("$from @* {} ( @group 123, $ph.region )", "ct_err:at:what:no_aggr:1")
+        chk("$from @* {} ( @group 123, .region )", "ct_err:at:what:no_aggr:1")
         chk("$from @* {} ( @group 123, @sum 1 )", "[(123,6)]")
     }
 
@@ -57,17 +54,17 @@ abstract class AtExprGroupBaseTest: BaseRellTest() {
         val from = impFrom("data")
         chk("$from @* {} ( @sum 0 )", "[0]")
         chk("$from @* {} ( @sum 1 )", "[6]")
-        chk("$from @* {} ( @sum $ph.gdp )", "[43906]")
+        chk("$from @* {} ( @sum .gdp )", "[43906]")
         chk("$from @* {} ( @min 0, @max 0 )", "[(0,0)]")
-        chk("$from @* {} ( @min $ph.gdp, @max $ph.gdp )", "[(447,21439)]")
+        chk("$from @* {} ( @min .gdp, @max .gdp )", "[(447,21439)]")
     }
 
     @Test fun testNoRecords() {
         initDataCountries()
         val from = impFrom("data")
-        chk("$from @* {} ( @sum $ph.gdp, @min $ph.gdp, @max $ph.gdp )", "[(43906,447,21439)]")
-        chk("$from @* { $ph.region == 'NONE' } ( @group 123, @sum $ph.gdp, @min $ph.gdp, @max $ph.gdp )", "[]")
-        chk("$from @* { $ph.region == 'NONE' } ( @sum $ph.gdp, @min $ph.gdp, @max $ph.gdp )", "[(null,null,null)]")
+        chk("$from @* {} ( @sum .gdp, @min .gdp, @max .gdp )", "[(43906,447,21439)]")
+        chk("$from @* { .region == 'NONE' } ( @group 123, @sum .gdp, @min .gdp, @max .gdp )", "[]")
+        chk("$from @* { .region == 'NONE' } ( @sum .gdp, @min .gdp, @max .gdp )", "[(null,null,null)]")
     }
 
     @Test fun testTypeGroup() {
@@ -87,7 +84,7 @@ abstract class AtExprGroupBaseTest: BaseRellTest() {
         t.def("enum color { red, green, blue }")
         t.def("${impDefKw()} data { v: $type; }")
         impCreateObjs(t, "data", "v = $value")
-        t.chkQuery("${impFrom("data")} @? {} ( @group $ph.v )", exp)
+        t.chkQuery("${impFrom("data")} @? {} ( @group .v )", exp)
     }
 
     @Test fun testTypeGroupFormal() {
@@ -106,43 +103,43 @@ abstract class AtExprGroupBaseTest: BaseRellTest() {
         t.def("${impDefKw()} data { v: $type; }")
         t.def("enum color { red, green, blue }")
         impCreateObjs(t, "data")
-        t.chkQuery("_type_of(${impFrom("data")} @ {} ( @group $ph.v ))", exp)
+        t.chkQuery("_type_of(${impFrom("data")} @ {} ( @group .v ))", exp)
     }
 
     @Test fun testTypeSum() {
         initDataAllTypes()
         val from = impFrom("data")
 
-        chk("$from @ {} ( @sum $ph.i )", "int[333]")
-        chk("$from @ {} ( @sum $ph.d )", "dec[166.65]")
+        chk("$from @ {} ( @sum .i )", "int[333]")
+        chk("$from @ {} ( @sum .d )", "dec[166.65]")
 
-        chk("$from @ {} ( @sum $ph.b )", "ct_err:at:what:aggr:bad_type:SUM:boolean")
-        chk("$from @ {} ( @sum $ph.t )", "ct_err:at:what:aggr:bad_type:SUM:text")
-        chk("$from @ {} ( @sum $ph.ba )", "ct_err:at:what:aggr:bad_type:SUM:byte_array")
-        chk("$from @ {} ( @sum $ph.r )", "ct_err:at:what:aggr:bad_type:SUM:rowid")
-        chk("$from @ {} ( @sum $ph.e )", "ct_err:at:what:aggr:bad_type:SUM:color")
-        chk("$from @ {} ( @sum $ph.w )", "ct_err:at:what:aggr:bad_type:SUM:user")
+        chk("$from @ {} ( @sum .b )", "ct_err:at:what:aggr:bad_type:SUM:boolean")
+        chk("$from @ {} ( @sum .t )", "ct_err:at:what:aggr:bad_type:SUM:text")
+        chk("$from @ {} ( @sum .ba )", "ct_err:at:what:aggr:bad_type:SUM:byte_array")
+        chk("$from @ {} ( @sum .r )", "ct_err:at:what:aggr:bad_type:SUM:rowid")
+        chk("$from @ {} ( @sum .e )", "ct_err:at:what:aggr:bad_type:SUM:color")
+        chk("$from @ {} ( @sum .w )", "ct_err:at:what:aggr:bad_type:SUM:user")
     }
 
     @Test fun testTypeMinMax() {
         initDataAllTypes()
         val from = impFrom("data")
 
-        chk("$from @ {} ( @min $ph.i, @max $ph.i )", "(int[111],int[222])")
-        chk("$from @ {} ( @min $ph.d, @max $ph.d )", "(dec[67.89],dec[98.76])")
-        chk("$from @ {} ( @min $ph.t, @max $ph.t )", "(text[abc],text[def])")
-        chk("$from @ {} ( @min $ph.r, @max $ph.r )", "(rowid[777],rowid[888])")
-        chk("$from @ {} ( @min $ph.e, @max $ph.e )", "(color[green],color[blue])")
-        chk("$from @ {} ( @min $ph.w, @max $ph.w )", "(user[500],user[501])")
+        chk("$from @ {} ( @min .i, @max .i )", "(int[111],int[222])")
+        chk("$from @ {} ( @min .d, @max .d )", "(dec[67.89],dec[98.76])")
+        chk("$from @ {} ( @min .t, @max .t )", "(text[abc],text[def])")
+        chk("$from @ {} ( @min .r, @max .r )", "(rowid[777],rowid[888])")
+        chk("$from @ {} ( @min .e, @max .e )", "(color[green],color[blue])")
+        chk("$from @ {} ( @min .w, @max .w )", "(user[500],user[501])")
     }
 
     @Test fun testTypeSumFormal() {
         initDataAllTypes()
         val from = impFrom("data")
-        chk("_type_of($from @ {} ( @sum $ph.i ))", "text[integer?]")
-        chk("_type_of($from @ {} ( @sum $ph.d ))", "text[decimal?]")
-        chk("_type_of($from @ {} ( @omit @group 0, @sum $ph.i ))", "text[integer]")
-        chk("_type_of($from @ {} ( @omit @group 0, @sum $ph.d ))", "text[decimal]")
+        chk("_type_of($from @ {} ( @sum .i ))", "text[integer?]")
+        chk("_type_of($from @ {} ( @sum .d ))", "text[decimal?]")
+        chk("_type_of($from @ {} ( @omit @group 0, @sum .i ))", "text[integer]")
+        chk("_type_of($from @ {} ( @omit @group 0, @sum .d ))", "text[decimal]")
     }
 
     @Test fun testTypeMinMaxFormal() {
@@ -154,18 +151,18 @@ abstract class AtExprGroupBaseTest: BaseRellTest() {
     private fun chkTypeMinMaxFormal(ann: String) {
         val from = impFrom("data")
 
-        chk("_type_of($from @ {} ( @$ann $ph.i ))", "text[integer?]")
-        chk("_type_of($from @ {} ( @$ann $ph.d ))", "text[decimal?]")
-        chk("_type_of($from @ {} ( @$ann $ph.t ))", "text[text?]")
-        chk("_type_of($from @ {} ( @$ann $ph.r ))", "text[rowid?]")
-        chk("_type_of($from @ {} ( @$ann $ph.e ))", "text[color?]")
-        chk("_type_of($from @ {} ( @$ann $ph.w ))", "text[user?]")
+        chk("_type_of($from @ {} ( @$ann .i ))", "text[integer?]")
+        chk("_type_of($from @ {} ( @$ann .d ))", "text[decimal?]")
+        chk("_type_of($from @ {} ( @$ann .t ))", "text[text?]")
+        chk("_type_of($from @ {} ( @$ann .r ))", "text[rowid?]")
+        chk("_type_of($from @ {} ( @$ann .e ))", "text[color?]")
+        chk("_type_of($from @ {} ( @$ann .w ))", "text[user?]")
 
-        chk("_type_of($from @ {} ( @omit @group 0, @$ann $ph.i ))", "text[integer]")
-        chk("_type_of($from @ {} ( @omit @group 0, @$ann $ph.d ))", "text[decimal]")
-        chk("_type_of($from @ {} ( @omit @group 0, @$ann $ph.t ))", "text[text]")
-        chk("_type_of($from @ {} ( @omit @group 0, @$ann $ph.r ))", "text[rowid]")
-        chk("_type_of($from @ {} ( @omit @group 0, @$ann $ph.e ))", "text[color]")
-        chk("_type_of($from @ {} ( @omit @group 0, @$ann $ph.w ))", "text[user]")
+        chk("_type_of($from @ {} ( @omit @group 0, @$ann .i ))", "text[integer]")
+        chk("_type_of($from @ {} ( @omit @group 0, @$ann .d ))", "text[decimal]")
+        chk("_type_of($from @ {} ( @omit @group 0, @$ann .t ))", "text[text]")
+        chk("_type_of($from @ {} ( @omit @group 0, @$ann .r ))", "text[rowid]")
+        chk("_type_of($from @ {} ( @omit @group 0, @$ann .e ))", "text[color]")
+        chk("_type_of($from @ {} ( @omit @group 0, @$ann .w ))", "text[user]")
     }
 }

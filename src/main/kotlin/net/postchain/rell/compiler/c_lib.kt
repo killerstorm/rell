@@ -13,6 +13,7 @@ import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_DecimalValue
 import net.postchain.rell.runtime.Rt_IntValue
 import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.utils.immMapOf
 import java.math.BigDecimal
 
 object C_LibFunctions {
@@ -261,10 +262,10 @@ object C_LibFunctions {
 
     private val RANGE_NAMESPACE = makeNamespace(RANGE_NAMESPACE_FNS)
 
-    private val ENUM_PROPS = typeMemFuncBuilder(R_GtvType)
-            .add("name", R_TextType, listOf(), R_SysFn_Enum.Name)
-            .add("value", R_IntegerType, listOf(), R_SysFn_Enum.Value, Db_SysFn_Nop)
-            .build()
+    private val ENUM_PROPS = immMapOf(
+            "name" to C_SysMemberFormalParamsFuncBody(R_TextType, R_SysFn_Enum.Name),
+            "value" to C_SysMemberFormalParamsFuncBody(R_IntegerType, R_SysFn_Enum.Value, Db_SysFn_Nop)
+    )
 
     private val RELL_NAMESPACE_FNS = C_GlobalFuncBuilder()
 //            .add("get_rell_version", R_TextType, listOf(), R_SysFn_Rell.GetRellVersion)
@@ -324,9 +325,8 @@ object C_LibFunctions {
         return fn
     }
 
-    fun getEnumPropertyOpt(name: String): C_SysMemberFunction? {
-        val fn = ENUM_PROPS.get(name)
-        return fn
+    fun getEnumPropertyOpt(name: String): C_SysMemberFormalParamsFuncBody? {
+        return ENUM_PROPS[name]
     }
 
     private fun getTypeMemberFunctions(type: R_Type): C_MemberFuncTable {

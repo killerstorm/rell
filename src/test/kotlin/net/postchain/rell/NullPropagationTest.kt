@@ -256,11 +256,11 @@ class NullPropagationTest: BaseRellTest(false) {
 
         chkEx("{ val x = _nullable(123); return _type_of(x); }", "integer?")
         //chkEx("{ val x = _nullable(123); val t = from() @* { x!! }; return _type_of(x); }", "integer")
-        chkEx("{ val x = _nullable(123); val t = from() @* { $.score == x!! }; return _type_of(x); }", "integer")
-        chkEx("{ val x = _nullable(123); val t = from() @* { $.score * 5 > x!! - 10 }; return _type_of(x); }", "integer")
+        chkEx("{ val x = _nullable(123); val t = from() @* { .score == x!! }; return _type_of(x); }", "integer")
+        chkEx("{ val x = _nullable(123); val t = from() @* { .score * 5 > x!! - 10 }; return _type_of(x); }", "integer")
         //chkEx("{ val x = _nullable(123); val t = from() @* { 'Bob', x!! }; return _type_of(x); }", "integer")
-        //chkEx("{ val x = _nullable(123); val t = from() @* { $.name == 'Bob', x!! }; return _type_of(x); }", "integer")
-        chkEx("{ val x = _nullable(123); val t = from() @* { $.name == 'Bob', $.score == x!! }; return _type_of(x); }", "integer")
+        //chkEx("{ val x = _nullable(123); val t = from() @* { .name == 'Bob', x!! }; return _type_of(x); }", "integer")
+        chkEx("{ val x = _nullable(123); val t = from() @* { .name == 'Bob', $.score == x!! }; return _type_of(x); }", "integer")
 
         chkEx("{ val x = _nullable(123); val t = from() @* {} ( x!! ); return _type_of(x); }", "integer")
         chkEx("{ val x = _nullable(123); val t = from() @* {} ( $.score, x!! ); return _type_of(x); }", "integer")

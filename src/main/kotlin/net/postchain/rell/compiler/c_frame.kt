@@ -5,7 +5,6 @@
 package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.ast.S_Name
-import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.*
 import net.postchain.rell.utils.toImmMap
 
@@ -50,13 +49,6 @@ class C_LocalVar(
         val ptr: R_VarPtr
 ) {
     fun toExpr(): R_DestinationExpr = R_VarExpr(type, ptr, name)
-}
-
-class C_PlaceholderVar(val ptr: R_VarPtr, val ambiguous: Boolean) {
-    fun toLocalVar(blockUid: R_FrameBlockUid): C_PlaceholderVar {
-        val localPtr = R_VarPtr(ptr.name, blockUid, ptr.offset)
-        return C_PlaceholderVar(localPtr, ambiguous)
-    }
 }
 
 class C_BlockScope(entries: Map<String, C_BlockScopeEntry>) {
@@ -143,7 +135,7 @@ sealed class C_BlockContext(val frameCtx: C_FrameContext) {
     abstract fun isCollectionAtAllowed(): Boolean
     abstract fun createSubContext(location: String): C_OwnerBlockContext
     abstract fun lookupLocalVar(name: String): C_LocalVar?
-    abstract fun lookupPlaceholder(): C_PlaceholderVar?
+    abstract fun lookupPlaceholder(): R_VarPtr?
     abstract fun addLocalVar(name: S_Name, type: R_Type, mutable: Boolean): C_LocalVar
     abstract fun addPlaceholder(type: R_Type): R_VarPtr
 }
@@ -159,7 +151,7 @@ class C_OwnerBlockContext(
 ): C_BlockContext(frameCtx) {
     private val startOffset: Int = parent?.scopeBuilder?.endOffset() ?: 0
     private val scopeBuilder: C_BlockScopeBuilder = C_BlockScopeBuilder(fnCtx, blockUid, startOffset, protoBlockScope)
-    private var placeholder: C_PlaceholderVar? = null
+    private var placeholder: R_VarPtr? = null
     private var build = false
 
     override fun isTopLevelBlock() = parent?.parent == null
@@ -176,9 +168,10 @@ class C_OwnerBlockContext(
         return res
     }
 
-    override fun lookupPlaceholder(): C_PlaceholderVar? {
-        val ph = findValue { it.placeholder }
-        return ph?.toLocalVar(blockUid)
+    override fun lookupPlaceholder(): R_VarPtr? {
+        val ptr = findValue { it.placeholder }
+        ptr ?: return null
+        return R_VarPtr(ptr.name, blockUid, ptr.offset)
     }
 
     override fun addLocalVar(name: S_Name, type: R_Type, mutable: Boolean): C_LocalVar {
@@ -190,9 +183,8 @@ class C_OwnerBlockContext(
     }
 
     override fun addPlaceholder(type: R_Type): R_VarPtr {
-        val ambiguous = findValue { it.placeholder } != null
         val varPtr = scopeBuilder.addPlaceholder()
-        placeholder = C_PlaceholderVar(varPtr, ambiguous)
+        placeholder = varPtr
         return varPtr
     }
 

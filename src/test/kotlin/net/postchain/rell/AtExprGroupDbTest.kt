@@ -14,7 +14,6 @@ class AtExprGroupDbTest: AtExprGroupBaseTest() {
     }
 
     override fun impFrom(name: String) = name
-    override fun impPlaceholder() = ""
 
     @Test fun testTypeGroupDb() {
         def("entity user { name; }")
@@ -30,9 +29,9 @@ class AtExprGroupDbTest: AtExprGroupBaseTest() {
     @Test fun testTypeMinMaxDb() {
         initDataAllTypes()
         val from = impFrom("data")
-        chk("$from @ {} ( @min $ph.b )", "ct_err:at:what:aggr:bad_type:MIN:boolean")
-        chk("$from @ {} ( @max $ph.b )", "ct_err:at:what:aggr:bad_type:MAX:boolean")
-        chk("$from @ {} ( @min $ph.ba )", "ct_err:at:what:aggr:bad_type:MIN:byte_array")
-        chk("$from @ {} ( @max $ph.ba )", "ct_err:at:what:aggr:bad_type:MAX:byte_array")
+        chk("$from @ {} ( @min .b )", "ct_err:at:what:aggr:bad_type:MIN:boolean")
+        chk("$from @ {} ( @max .b )", "ct_err:at:what:aggr:bad_type:MAX:boolean")
+        chk("$from @ {} ( @min .ba )", "ct_err:at:what:aggr:bad_type:MIN:byte_array")
+        chk("$from @ {} ( @max .ba )", "ct_err:at:what:aggr:bad_type:MAX:byte_array")
     }
 }

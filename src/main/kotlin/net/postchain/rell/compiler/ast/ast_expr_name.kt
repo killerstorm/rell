@@ -27,7 +27,7 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
         val vExpr = res.toExpr().value()
         val varType = vExpr.type()
 
-        val entityAttrs = ctx.nameCtx.findAttributesByName(name.str)
+        val entityAttrs = ctx.nameCtx.findAttributesByName(name)
         if (entityAttrs.isEmpty() && varType == R_BooleanType) {
             return compile(ctx)
         }

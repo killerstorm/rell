@@ -4,7 +4,10 @@
 
 package net.postchain.rell.compiler
 
-import net.postchain.rell.compiler.ast.*
+import net.postchain.rell.compiler.ast.C_BinOp
+import net.postchain.rell.compiler.ast.S_Name
+import net.postchain.rell.compiler.ast.S_NameExprPair
+import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.vexpr.*
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_EnumValue
@@ -13,12 +16,21 @@ sealed class C_ExprContextAttr(val type: R_Type) {
     abstract fun compile(pos: S_Pos): V_Expr
 }
 
-class C_ExprContextAttr_Entity(
+class C_ExprContextAttr_DbAtEntity(
         private val entity: C_AtEntity,
         private val attrRef: C_EntityAttrRef
 ): C_ExprContextAttr(attrRef.type()) {
     override fun compile(pos: S_Pos) = V_AtAttrExpr(pos, entity.compile(), attrRef)
     override fun toString() = "${entity.alias}.${attrRef.name}"
+}
+
+class C_ExprContextAttr_ColAtMember(
+        private val ctx: C_ExprContext,
+        private val memberValue: C_MemberValue,
+        private val memberRef: C_MemberRef
+): C_ExprContextAttr(memberValue.type()) {
+    override fun compile(pos: S_Pos) = memberValue.compile(ctx, memberRef)
+    override fun toString() = ".${memberRef.name}"
 }
 
 class C_ExprContext(
@@ -129,20 +141,21 @@ class C_StmtContext private constructor(
 }
 
 sealed class C_NameContext {
+    abstract fun hasPlaceholder(): Boolean
     abstract fun resolvePlaceholder(pos: S_Pos): V_Expr
     abstract fun resolveNameLocalValue(name: String): C_LocalVar?
 
     protected abstract fun findDefinitionByAlias(alias: S_Name): C_NameResolution?
-    abstract fun findAttributesByName(name: String): List<C_ExprContextAttr>
+    abstract fun findAttributesByName(name: S_Name): List<C_ExprContextAttr>
     abstract fun findAttributesByType(type: R_Type): List<C_ExprContextAttr>
 
     fun resolveAttr(name: S_Name): V_Expr {
-        val nameStr = name.str
-        val attrs = findAttributesByName(nameStr)
+        val attrs = findAttributesByName(name)
 
         if (attrs.isEmpty()) {
             throw C_Errors.errUnknownAttr(name)
         } else if (attrs.size > 1) {
+            val nameStr = name.str
             throw C_Errors.errMultipleAttrs(name.pos, attrs, "at_attr_name_ambig:$nameStr",
                     "Multiple attributes with name '$nameStr'")
         }
@@ -191,17 +204,19 @@ sealed class C_NameContext {
 
 private class C_BlockNameContext(private val blkCtx: C_BlockContext): C_NameContext() {
     override fun resolveNameLocalValue(name: String) = blkCtx.lookupLocalVar(name)
+    override fun hasPlaceholder() = false
     override fun resolvePlaceholder(pos: S_Pos) = throw C_Error(pos, "expr:dollar:no_at", "Not in at-expression")
     override fun findDefinitionByAlias(alias: S_Name) = null
-    override fun findAttributesByName(name: String) = listOf<C_ExprContextAttr>()
+    override fun findAttributesByName(name: S_Name) = listOf<C_ExprContextAttr>()
     override fun findAttributesByType(type: R_Type) = listOf<C_ExprContextAttr>()
 }
 
 private class C_AtNameContext(private val blkCtx: C_BlockContext, private val from: C_AtFrom): C_NameContext() {
     override fun resolveNameLocalValue(name: String) = blkCtx.lookupLocalVar(name)
+    override fun hasPlaceholder() = from.hasPlaceholder()
     override fun resolvePlaceholder(pos: S_Pos) = from.resolvePlaceholder(pos)
     override fun findDefinitionByAlias(alias: S_Name) = from.findDefinitionByAlias(alias)
-    override fun findAttributesByName(name: String) = from.findAttributesByName(name)
+    override fun findAttributesByName(name: S_Name) = from.findAttributesByName(name)
     override fun findAttributesByType(type: R_Type) = from.findAttributesByType(type)
 }
 
@@ -211,9 +226,15 @@ sealed class C_NameResolution(val name: S_Name) {
 
 class C_NameResolution_Entity(name: S_Name, private val entity: C_AtEntity): C_NameResolution(name) {
     override fun toExpr(): C_Expr {
-        val rAtEntity = entity.compile()
-        val vExpr = V_AtEntityExpr(name.pos, rAtEntity)
+        val vExpr = createVExpr(entity, name.pos)
         return C_VExpr(vExpr)
+    }
+
+    companion object {
+        fun createVExpr(entity: C_AtEntity, pos: S_Pos): V_Expr {
+            val rAtEntity = entity.compile()
+            return V_AtEntityExpr(pos, rAtEntity)
+        }
     }
 }
 

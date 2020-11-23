@@ -42,7 +42,7 @@ class S_UpdateTarget_Expr(val expr: S_Expr): S_UpdateTarget() {
 
         val rTarget = compileTarget(cValue)
         val rEntity = rTarget.entity()
-        val cEntity = C_AtEntity(expr.startPos, rEntity.rEntity, rEntity.rEntity.simpleName, rEntity.index)
+        val cEntity = C_AtEntity(expr.startPos, rEntity.rEntity, rEntity.rEntity.simpleName, false, rEntity.index)
 
         val cFrom: C_AtFrom = C_AtFrom_Entities(ctx, listOf(cEntity))
         val dbCtx = cFrom.innerExprCtx()

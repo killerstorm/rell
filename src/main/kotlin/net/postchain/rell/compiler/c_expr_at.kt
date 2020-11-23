@@ -9,27 +9,36 @@ import net.postchain.rell.compiler.vexpr.V_RExpr
 import net.postchain.rell.model.*
 import net.postchain.rell.utils.toImmList
 
-class C_AtEntity(val pos: S_Pos, val rEntity: R_Entity, val alias: String, val index: Int) {
+class C_AtEntity(val pos: S_Pos, val rEntity: R_Entity, val alias: String, val explicitAlias: Boolean, val index: Int) {
     private val rAtEntity = R_DbAtEntity(rEntity, index)
 
     fun compile() = rAtEntity
     fun compileExpr() = Db_EntityExpr(rAtEntity)
 }
 
-sealed class C_AtFrom {
+sealed class C_AtFrom(private val outerExprCtx: C_ExprContext) {
     abstract fun innerExprCtx(): C_ExprContext
     abstract fun makeDefaultWhat(): C_AtWhat
-    abstract fun resolvePlaceholder(pos: S_Pos): V_Expr
     abstract fun findDefinitionByAlias(alias: S_Name): C_NameResolution?
-    abstract fun findAttributesByName(name: String): List<C_ExprContextAttr>
+    abstract fun findAttributesByName(name: S_Name): List<C_ExprContextAttr>
     abstract fun findAttributesByType(type: R_Type): List<C_ExprContextAttr>
     abstract fun compile(startPos: S_Pos, resType: R_Type, cardinality: R_AtCardinality, details: C_AtDetails): V_Expr
+
+    abstract fun hasPlaceholder(): Boolean
+    protected abstract fun resolvePlaceholder0(pos: S_Pos): V_Expr
+
+    fun resolvePlaceholder(pos: S_Pos): V_Expr {
+        if (hasPlaceholder() && outerExprCtx.nameCtx.hasPlaceholder()) {
+            throw C_Error(pos, "expr:placeholder:ambiguous", "Placeholder is ambiguous, use an alias")
+        }
+        return resolvePlaceholder0(pos)
+    }
 }
 
-class C_AtFrom_Entities(exprCtx: C_ExprContext, entities: List<C_AtEntity>): C_AtFrom() {
+class C_AtFrom_Entities(outerExprCtx: C_ExprContext, entities: List<C_AtEntity>): C_AtFrom(outerExprCtx) {
     val entities = entities.toImmList()
 
-    private val innerExprCtx = exprCtx.update(nameCtx = C_NameContext.createAt(exprCtx.blkCtx, this))
+    private val innerExprCtx = outerExprCtx.update(nameCtx = C_NameContext.createAt(outerExprCtx.blkCtx, this))
 
     override fun innerExprCtx() = innerExprCtx
 
@@ -43,8 +52,21 @@ class C_AtFrom_Entities(exprCtx: C_ExprContext, entities: List<C_AtEntity>): C_A
         return C_AtWhat(fields)
     }
 
-    override fun resolvePlaceholder(pos: S_Pos): V_Expr {
-        throw C_Error(pos, "expr:dollar:db_at", "Placeholder supported only in collection-at")
+    override fun hasPlaceholder(): Boolean {
+        return entities.size == 1 && entities.none { it.explicitAlias }
+    }
+
+    override fun resolvePlaceholder0(pos: S_Pos): V_Expr {
+        if (entities.size > 1) {
+            throw C_Error(pos, "expr:placeholder:multiple_entities:${entities.size}",
+                    "Cannot use a placeholder when there are multiple entities")
+        } else if (entities.any { it.explicitAlias }) {
+            throw C_Error(pos, "expr:placeholder:alias",
+                    "Cannot use a placeholder when there is an entity alias")
+        }
+
+        val entity = entities[0]
+        return C_NameResolution_Entity.createVExpr(entity, pos)
     }
 
     override fun findDefinitionByAlias(alias: S_Name): C_NameResolution? {
@@ -57,9 +79,9 @@ class C_AtFrom_Entities(exprCtx: C_ExprContext, entities: List<C_AtEntity>): C_A
         return null
     }
 
-    override fun findAttributesByName(name: String): List<C_ExprContextAttr> {
+    override fun findAttributesByName(name: S_Name): List<C_ExprContextAttr> {
         return findContextAttrs { rEntity ->
-            val attrRef = C_EntityAttrRef.resolveByName(rEntity, name)
+            val attrRef = C_EntityAttrRef.resolveByName(rEntity, name.str)
             if (attrRef == null) listOf() else listOf(attrRef)
         }
     }
@@ -78,7 +100,7 @@ class C_AtFrom_Entities(exprCtx: C_ExprContext, entities: List<C_AtEntity>): C_A
         //TODO use a table lookup
         for (entity in entities) {
             val entityAttrs = resolver(entity.rEntity)
-            val ctxAttrs = entityAttrs.map { C_ExprContextAttr_Entity(entity, it) }
+            val ctxAttrs = entityAttrs.map { C_ExprContextAttr_DbAtEntity(entity, it) }
             attrs.addAll(ctxAttrs)
         }
 
@@ -111,28 +133,31 @@ class C_AtFrom_Entities(exprCtx: C_ExprContext, entities: List<C_AtEntity>): C_A
 }
 
 class C_AtFrom_Iterable(
-        exprCtx: C_ExprContext,
+        outerExprCtx: C_ExprContext,
         private val pos: S_Pos,
         alias: S_Name?,
         private val item: C_AtFromItem_Iterable
-): C_AtFrom() {
-    private val innerBlkCtx = exprCtx.blkCtx.createSubContext("@")
+): C_AtFrom(outerExprCtx) {
+    private val innerBlkCtx = outerExprCtx.blkCtx.createSubContext("@")
 
     private val innerExprCtx: C_ExprContext
     private val varPtr: R_VarPtr
+    private val hasPlaceholder: Boolean
 
     init {
-        var factsCtx = exprCtx.factsCtx
+        var factsCtx = outerExprCtx.factsCtx
 
         if (alias == null) {
             varPtr = innerBlkCtx.addPlaceholder(item.elemType)
+            hasPlaceholder = true
         } else {
             val cVar = innerBlkCtx.addLocalVar(alias, item.elemType, false)
             factsCtx = factsCtx.sub(C_VarFacts.of(inited = mapOf(cVar.uid to C_VarFact.YES)))
             varPtr = cVar.ptr
+            hasPlaceholder = false
         }
 
-        innerExprCtx = exprCtx.update(
+        innerExprCtx = outerExprCtx.update(
                 blkCtx = innerBlkCtx,
                 nameCtx = C_NameContext.createAt(innerBlkCtx, this),
                 factsCtx = factsCtx
@@ -147,26 +172,32 @@ class C_AtFrom_Iterable(
         return C_AtWhat(listOf(field))
     }
 
-    override fun resolvePlaceholder(pos: S_Pos): V_Expr {
+    override fun hasPlaceholder() = hasPlaceholder
+
+    override fun resolvePlaceholder0(pos: S_Pos): V_Expr {
         val ph = innerBlkCtx.lookupPlaceholder()
         if (ph == null) {
-            throw C_Error(pos, "expr:at:placeholder_none", "Placeholder not defined")
-        } else if (ph.ambiguous) {
-            throw C_Error(pos, "expr:at:placeholder_ambiguous", "Placeholder is ambiguous, can belong to more than one expression; use aliases")
+            throw C_Error(pos, "expr:placeholder:none", "Placeholder not defined")
         }
-        return V_AtPlaceholderExpr(pos, item.elemType, ph.ptr)
+        return V_AtPlaceholderExpr(pos, item.elemType, ph)
     }
 
     override fun findDefinitionByAlias(alias: S_Name): C_NameResolution? {
-        return null // TODO
+        // The alias is added to the inner block scope.
+        return null
     }
 
-    override fun findAttributesByName(name: String): List<C_ExprContextAttr> {
-        return listOf() //TODO
+    override fun findAttributesByName(name: S_Name): List<C_ExprContextAttr> {
+        val memValue = C_MemberResolver.findMemberValueForType(item.elemType, name.str)
+        memValue ?: return listOf()
+
+        val base = V_AtPlaceholderExpr(name.pos, item.elemType, varPtr)
+        val memRef = C_MemberRef(name.pos, base, name, false)
+        return listOf(C_ExprContextAttr_ColAtMember(innerExprCtx, memValue, memRef))
     }
 
     override fun findAttributesByType(type: R_Type): List<C_ExprContextAttr> {
-        return listOf() //TODO
+        return listOf()
     }
 
     override fun compile(startPos: S_Pos, resType: R_Type, cardinality: R_AtCardinality, details: C_AtDetails): V_Expr {

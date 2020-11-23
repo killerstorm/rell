@@ -13,8 +13,6 @@ class AtExprGroupColTest: AtExprGroupBaseTest() {
 
     override fun impFrom(name: String) = "get_$name()"
 
-    override fun impPlaceholder() = "$"
-
     @Test fun testTypeGroupCol() {
         def("struct const_struct { q: integer; }")
 
@@ -60,9 +58,9 @@ class AtExprGroupColTest: AtExprGroupBaseTest() {
     @Test fun testTypeMinMaxCol() {
         initDataAllTypes()
         val from = impFrom("data")
-        chk("$from @ {} ( @min $ph.b )", "boolean[false]")
-        chk("$from @ {} ( @max $ph.b )", "boolean[true]")
-        chk("$from @ {} ( @min $ph.ba )", "byte_array[beef]")
-        chk("$from @ {} ( @max $ph.ba )", "byte_array[dead]")
+        chk("$from @ {} ( @min .b )", "boolean[false]")
+        chk("$from @ {} ( @max .b )", "boolean[true]")
+        chk("$from @ {} ( @min .ba )", "byte_array[beef]")
+        chk("$from @ {} ( @max .ba )", "byte_array[dead]")
     }
 }
