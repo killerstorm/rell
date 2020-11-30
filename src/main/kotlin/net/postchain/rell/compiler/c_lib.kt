@@ -70,6 +70,7 @@ object C_LibFunctions {
             .add("_nullable_text", C_SysFn_Nullable(R_TextType))
             .add("_nop", C_SysFn_Nop)
             .addEx("_strict_str", R_TextType, listOf(C_ArgTypeMatcher_Any), R_SysFn_Internal.StrictStr)
+            .add("_int_to_rowid", R_RowidType, listOf(R_IntegerType), R_SysFn_Internal.IntToRowid)
 
             .build()
 

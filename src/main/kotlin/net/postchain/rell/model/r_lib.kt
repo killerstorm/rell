@@ -4,14 +4,13 @@
 
 package net.postchain.rell.model
 
-import net.postchain.core.*
-import net.postchain.rell.utils.CommonUtils
-import net.postchain.rell.utils.PostchainUtils
+import net.postchain.core.Signature
 import net.postchain.rell.compiler.C_Constants
 import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.module.RELL_VERSION
 import net.postchain.rell.runtime.*
-import org.spongycastle.jcajce.provider.digest.Keccak
+import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.PostchainUtils
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.math.MathContext
@@ -865,6 +864,13 @@ object R_SysFn_Internal {
         override fun call(arg: Rt_Value): Rt_Value {
             val s = arg.asString()
             throw RellInterpreterCrashException(s)
+        }
+    }
+
+    object IntToRowid: R_SysFunction_1() {
+        override fun call(arg: Rt_Value): Rt_Value {
+            val i = arg.asInteger()
+            return Rt_RowidValue(i)
         }
     }
 }

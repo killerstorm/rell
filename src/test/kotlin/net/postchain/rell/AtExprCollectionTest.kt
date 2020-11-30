@@ -278,20 +278,103 @@ class AtExprCollectionTest: BaseRellTest(false) {
         chk("[1,2,3,4,5] @*{} ( @omit $, @omit $*$, $*$*$ )", "[1, 8, 27, 64, 125]")
     }
 
-    @Test fun testWhatOmitEvaluation() {
-        tst.strictToString = false
-        def("struct ref { mutable v: integer = 7; }")
-        def("function fun(r: ref): integer = r.v++;")
-        chkEx("{ val r = ref(); return [1,2,3] @*{} ( fun(r) ); }", "[7, 8, 9]")
-        chkEx("{ val r = ref(); return [1,2,3] @*{} ( fun(r), 100 + fun(r) ); }", "[(7,108), (9,110), (11,112)]")
-        chkEx("{ val r = ref(); return [1,2,3] @*{} ( fun(r), @omit 100 + fun(r) ); }", "[7, 9, 11]")
-        chkEx("{ val r = ref(); return [1,2,3] @*{} ( @omit fun(r), 100 + fun(r) ); }", "[108, 110, 112]")
-    }
-
     @Test fun testWhatSort() {
         tst.strictToString = false
-        chk("[1,2,3,4,5] @*{} ( @sort $ )", "ct_err:expr:at:sort:col")
-        chk("[1,2,3,4,5] @*{} ( @sort_desc $ )", "ct_err:expr:at:sort:col")
+
+        chk("[1,2,3,4,5] @* {}", "[1, 2, 3, 4, 5]")
+        chk("[5,4,3,2,1] @* {}", "[5, 4, 3, 2, 1]")
+
+        chk("[1,2,3,4,5] @*{} ( @sort $ )", "[1, 2, 3, 4, 5]")
+        chk("[1,2,3,4,5] @*{} ( @sort_desc $ )", "[5, 4, 3, 2, 1]")
+        chk("[5,4,3,2,1] @*{} ( @sort $ )", "[1, 2, 3, 4, 5]")
+        chk("[5,4,3,2,1] @*{} ( @sort_desc $ )", "[5, 4, 3, 2, 1]")
+
+        chk("[1,2,3,4,5] @*{} ( $, @omit @sort -$ )", "[5, 4, 3, 2, 1]")
+        chk("[1,2,3,4,5] @*{} ( $, @omit @sort_desc -$ )", "[1, 2, 3, 4, 5]")
+        chk("[5,4,3,2,1] @*{} ( $, @omit @sort -$ )", "[5, 4, 3, 2, 1]")
+        chk("[5,4,3,2,1] @*{} ( $, @omit @sort_desc -$ )", "[1, 2, 3, 4, 5]")
+    }
+
+    @Test fun testWhatSortComplex() {
+        initDataCountries()
+
+        chk("countries() @* {} ( .name )", "[Germany, Austria, United Kingdom, USA, Mexico, China]")
+        chk("countries() @* {} ( @sort .name )", "[Austria, China, Germany, Mexico, USA, United Kingdom]")
+        chk("countries() @* {} ( @sort_desc .name )", "[United Kingdom, USA, Mexico, Germany, China, Austria]")
+
+        chk("countries() @* {} ( .name, @omit @sort .region )", "[USA, Mexico, China, Germany, Austria, United Kingdom]")
+        chk("countries() @* {} ( .name, @omit @sort_desc .region )", "[Germany, Austria, United Kingdom, China, USA, Mexico]")
+        chk("countries() @* {} ( .name, @omit @sort .language )", "[China, United Kingdom, USA, Germany, Austria, Mexico]")
+        chk("countries() @* {} ( .name, @omit @sort_desc .language )", "[Mexico, Germany, Austria, United Kingdom, USA, China]")
+        chk("countries() @* {} ( .name, @omit @sort .gdp )", "[Austria, Mexico, United Kingdom, Germany, China, USA]")
+        chk("countries() @* {} ( .name, @omit @sort_desc .gdp )", "[USA, China, Germany, United Kingdom, Mexico, Austria]")
+
+        chk("countries() @* {} ( .region )", "[EMEA, EMEA, EMEA, AMER, AMER, APAC]")
+        chk("countries() @* {} ( @sort .region )", "[AMER, AMER, APAC, EMEA, EMEA, EMEA]")
+        chk("countries() @* {} ( @sort_desc .region )", "[EMEA, EMEA, EMEA, APAC, AMER, AMER]")
+
+        chk("countries() @* {} ( .language )", "[German, German, English, English, Spanish, Chinese]")
+        chk("countries() @* {} ( @sort .language )", "[Chinese, English, English, German, German, Spanish]")
+        chk("countries() @* {} ( @sort_desc .language )", "[Spanish, German, German, English, English, Chinese]")
+
+        chk("countries() @* {} ( .gdp )", "[3863, 447, 2743, 21439, 1274, 14140]")
+        chk("countries() @* {} ( @sort .gdp )", "[447, 1274, 2743, 3863, 14140, 21439]")
+        chk("countries() @* {} ( @sort_desc .gdp )", "[21439, 14140, 3863, 2743, 1274, 447]")
+
+        chk("countries() @* {} ( .name, @omit @sort .region, @omit @sort .gdp )", "[Mexico, USA, China, Austria, United Kingdom, Germany]")
+        chk("countries() @* {} ( .name, @omit @sort .region, @omit @sort_desc .gdp )", "[USA, Mexico, China, Germany, United Kingdom, Austria]")
+        chk("countries() @* {} ( .name, @omit @sort .language, @omit @sort .gdp )", "[China, United Kingdom, USA, Austria, Germany, Mexico]")
+        chk("countries() @* {} ( .name, @omit @sort .language, @omit @sort_desc .gdp )", "[China, USA, United Kingdom, Germany, Austria, Mexico]")
+
+        chk("countries() @* {} ( @sort _=.region, _=.name )",
+                "[(AMER,USA), (AMER,Mexico), (APAC,China), (EMEA,Germany), (EMEA,Austria), (EMEA,United Kingdom)]")
+        chk("countries() @* {} ( @sort _=.region, @sort _=.name )",
+                "[(AMER,Mexico), (AMER,USA), (APAC,China), (EMEA,Austria), (EMEA,Germany), (EMEA,United Kingdom)]")
+        chk("countries() @* {} ( @sort _=.region, @sort_desc _=.name )",
+                "[(AMER,USA), (AMER,Mexico), (APAC,China), (EMEA,United Kingdom), (EMEA,Germany), (EMEA,Austria)]")
+
+        chk("countries() @* {} ( @sort _=.language, _=.name )",
+                "[(Chinese,China), (English,United Kingdom), (English,USA), (German,Germany), (German,Austria), (Spanish,Mexico)]")
+        chk("countries() @* {} ( @sort _=.language, @sort _=.name )",
+                "[(Chinese,China), (English,USA), (English,United Kingdom), (German,Austria), (German,Germany), (Spanish,Mexico)]")
+        chk("countries() @* {} ( @sort _=.language, @sort_desc _=.name )",
+                "[(Chinese,China), (English,United Kingdom), (English,USA), (German,Germany), (German,Austria), (Spanish,Mexico)]")
+    }
+
+    @Test fun testWhatSortType() {
+        tstCtx.useSql = true
+        initDataCountries()
+        def("enum color { red, green, blue }")
+        def("entity user { name; }")
+        insert("c0.user", "name", "101,'Bob'", "102,'Alice'", "103,'Trudy'")
+
+        chkWhatSortTypeOK("[false,true,false]", "false", "false", "true")
+        chkWhatSortTypeOK("[111,222,333]", "111", "222", "333")
+        chkWhatSortTypeOK("[12.3,45.6,78.9]", "12.3", "45.6", "78.9")
+        chkWhatSortTypeOK("['A','B','C']", "A", "B", "C")
+        chkWhatSortTypeOK("[x'1234',x'5678',x'abcd']", "0x1234", "0x5678", "0xabcd")
+        chkWhatSortTypeOK("[color.red,color.green,color.blue]", "red", "green", "blue")
+        chkWhatSortTypeOK("((v:[123,456,789])@*{}(_int_to_rowid(v)))", "123", "456", "789")
+        chkWhatSortTypeOK("(user @* {})", "user[101]", "user[102]", "user[103]")
+        chkWhatSortTypeOK("[(123,'Bob'),(456,'Alice'),(789,'Trudy')]", "(123,Bob)", "(456,Alice)", "(789,Trudy)")
+        chkWhatSortTypeOK("[[123],[456],[789]]", "[123]", "[456]", "[789]")
+        chkWhatSortTypeOK("[range(123),range(456),range(789)]", "range(0,123,1)", "range(0,456,1)", "range(0,789,1)")
+
+        chkWhatSortTypeErr("countries()", "ct_err:at:expr:sort:type:country")
+        chkWhatSortTypeErr("[set([123])]", "ct_err:at:expr:sort:type:set<integer>")
+        chkWhatSortTypeErr("[[123:'Hello']]", "ct_err:at:expr:sort:type:map<integer,text>")
+    }
+
+    private fun chkWhatSortTypeOK(values: String, vararg sorted: String) {
+        val expAsc = sorted.joinToString(", ")
+        val expDesc = sorted.reversed().joinToString(", ")
+        chk("[0,1,2] @* {} ( @sort $values[$] )", "[$expAsc]")
+        chk("[0,1,2] @* {} ( @sort_desc $values[$] )", "[$expDesc]")
+    }
+
+    private fun chkWhatSortTypeErr(values: String, exp: String) {
+        chk("[0,1,2] @* {} ( @sort $values[$] )", exp)
+        chk("[0,1,2] @* {} ( @sort_desc $values[$] )", exp)
     }
 
     @Test fun testLimit() {
@@ -349,34 +432,6 @@ class AtExprCollectionTest: BaseRellTest(false) {
         chk("[1,2,3,4,5] @*{} offset 3 limit 1", "[4]")
         chk("[1,2,3,4,5] @*{} offset 3 limit 2", "[4, 5]")
         chk("[1,2,3,4,5] @*{} offset 3 limit 3", "[4, 5]")
-    }
-
-    @Test fun testLimitOffsetEvaluation() {
-        tst.strictToString = false
-        def("struct ctr { mutable v: integer = 0; }")
-        def("function f(c: ctr): integer { val k = (c.v++)+1; return k*k; }")
-
-        val init = "val c = ctr(); val l = [11,22,33,44,55];"
-        chkEx("{ $init; val t = l @* {} ( f(c) ); return (t, c.v); }", "([1, 4, 9, 16, 25],5)")
-        chkEx("{ $init; val t = l @* {} ( f(c) ) limit 3; return (t, c.v); }", "([1, 4, 9],3)")
-        chkEx("{ $init; val t = l @* {} ( f(c) ) offset 2; return (t, c.v); }", "([1, 4, 9],3)")
-        chkEx("{ $init; val t = l @* {} ( f(c) ) offset 2 limit 2; return (t, c.v); }", "([1, 4],2)")
-    }
-
-    @Test fun testLimitOffsetEvaluationGroup() {
-        tst.strictToString = false
-        def("struct ctr { mutable v: integer = 0; }")
-        def("function f(c: ctr): integer { val k = (c.v++)+1; return k*k; }")
-
-        val init = "val c = ctr(); val l = [11,22,33,44,55];"
-        chkEx("{ $init; val t = l @* {} ( @group 0, @sum f(c) ); return (t, c.v); }", "([(0,55)],5)")
-        chkEx("{ $init; val t = l @* {} ( @sum f(c) ); return (t, c.v); }", "([55],5)")
-        chkEx("{ $init; val t = l @* {} ( @sum f(c) ) limit 0; return (t, c.v); }", "([],0)")
-        chkEx("{ $init; val t = l @* {} ( @sum f(c) ) offset 1; return (t, c.v); }", "([],5)")
-        chkEx("{ $init; val t = l @* {} ( @group f(c) ); return (t, c.v); }", "([1, 4, 9, 16, 25],5)")
-        chkEx("{ $init; val t = l @* {} ( @group f(c) ) limit 3; return (t, c.v); }", "([1, 4, 9],5)")
-        chkEx("{ $init; val t = l @* {} ( @group f(c) ) offset 2; return (t, c.v); }", "([9, 16, 25],5)")
-        chkEx("{ $init; val t = l @* {} ( @group f(c) ) offset 2 limit 2; return (t, c.v); }", "([9, 16],5)")
     }
 
     @Test fun testNested() {
@@ -480,43 +535,60 @@ class AtExprCollectionTest: BaseRellTest(false) {
         chk("user @*{} @+{} ( .name, .score ) @* { .score >= 300 } @?{} ( .name )", "Alice")
     }
 
-    @Test fun testGroupSimple() {
-        initGroupDataCountries()
-        chk("get_countries() @* {} ( .region )", "[EMEA, EMEA, EMEA, AMER, AMER, APAC]")
-        chk("get_countries() @* {} ( @group .region )", "[EMEA, AMER, APAC]")
-        chk("get_countries() @* {} ( .language )", "[German, German, English, English, Spanish, Chinese]")
-        chk("get_countries() @* {} ( @group .language )", "[German, English, Spanish, Chinese]")
+    @Test fun testEvaluationOmit() {
+        tst.strictToString = false
+        def("struct ctr { mutable v: integer = 0; }")
+        def("function f(c: ctr): integer = c.v++;")
+        chkEx("{ val c = ctr(); val t = [5,6,7] @*{} ( $, f(c) ); return (t,c.v); }", "([(5,0), (6,1), (7,2)],3)")
+        chkEx("{ val c = ctr(); val t = [5,6,7] @*{} ( $, @omit f(c) ); return (t,c.v); }", "([5, 6, 7],3)")
+        chkEx("{ val c = ctr(); val t = [5,6,7] @*{} ( f(c), 100 + f(c) ); return (t,c.v); }", "([(0,101), (2,103), (4,105)],6)")
+        chkEx("{ val c = ctr(); val t = [5,6,7] @*{} ( f(c), @omit 100 + f(c) ); return (t,c.v); }", "([0, 2, 4],6)")
+        chkEx("{ val c = ctr(); val t = [5,6,7] @*{} ( @omit f(c), 100 + f(c) ); return (t,c.v); }", "([101, 103, 105],6)")
     }
 
-    @Test fun testGroupMulti() {
-        initGroupDataCountries()
+    @Test fun testEvaluationLimitOffset() {
+        tst.strictToString = false
+        def("struct ctr { mutable v: integer = 0; }")
+        def("function f(c: ctr): integer { val k = (c.v++)+1; return k*k; }")
 
-        chk("get_countries() @* {} ( @group _=.region, @group _=.language )",
-                "[(EMEA,German), (EMEA,English), (AMER,English), (AMER,Spanish), (APAC,Chinese)]")
+        val init = "val c = ctr(); val l = [11,22,33,44,55];"
+        chkEx("{ $init; val t = l @* {} ( f(c) ); return (t, c.v); }", "([1, 4, 9, 16, 25],5)")
+        chkEx("{ $init; val t = l @* {} ( f(c) ) limit 3; return (t, c.v); }", "([1, 4, 9],3)")
+        chkEx("{ $init; val t = l @* {} ( f(c) ) offset 2; return (t, c.v); }", "([1, 4, 9],3)")
+        chkEx("{ $init; val t = l @* {} ( f(c) ) offset 2 limit 2; return (t, c.v); }", "([1, 4],2)")
 
-        chk("get_countries() @* {} ( @group _=.language, @group _=.region )",
-                "[(German,EMEA), (English,EMEA), (English,AMER), (Spanish,AMER), (Chinese,APAC)]")
+        chkEx("{ $init; val t = l @* {} ( $, f(c) ) limit 3; return (t, c.v); }", "([(11,1), (22,4), (33,9)],3)")
+        chkEx("{ $init; val t = l @* {} ( @sort $, f(c) ) limit 3; return (t, c.v); }", "([(11,1), (22,4), (33,9)],5)")
+        chkEx("{ $init; val t = l @* {} ( @sort_desc $, f(c) ) limit 3; return (t, c.v); }", "([(55,25), (44,16), (33,9)],5)")
+        chkEx("{ $init; val t = l @* {} ( $, f(c) ) offset 2; return (t, c.v); }", "([(33,1), (44,4), (55,9)],3)")
+        chkEx("{ $init; val t = l @* {} ( @sort $, f(c) ) offset 2; return (t, c.v); }", "([(33,9), (44,16), (55,25)],5)")
+        chkEx("{ $init; val t = l @* {} ( @sort_desc $, f(c) ) offset 2; return (t, c.v); }", "([(33,9), (22,4), (11,1)],5)")
     }
 
-    @Test fun testGroupSum() {
-        initGroupDataCountries()
+    @Test fun testEvaluationLimitOffsetGroup() {
+        tst.strictToString = false
+        def("struct ctr { mutable v: integer = 0; }")
+        def("function f(c: ctr): integer { val k = (c.v++)+1; return k*k; }")
 
-        chk("get_countries() @* {} ( @group _=.region, @sum 0 )", "[(EMEA,0), (AMER,0), (APAC,0)]")
-        chk("get_countries() @* {} ( @group _=.region, @sum 1 )", "[(EMEA,3), (AMER,2), (APAC,1)]")
-        chk("get_countries() @* {} ( @group _=.region, @sum .gdp )", "[(EMEA,7053), (AMER,22713), (APAC,14140)]")
-        chk("get_countries() @* {} ( @group _=.region, @sum .name.size() )", "[(EMEA,28), (AMER,9), (APAC,5)]")
-
-        chk("get_countries() @* { .gdp > 2000 } ( @group _=.region, @sum .gdp )", "[(EMEA,6606), (AMER,21439), (APAC,14140)]")
+        val init = "val c = ctr(); val l = [11,22,33,44,55];"
+        chkEx("{ $init; val t = l @* {} ( @group 0, @sum f(c) ); return (t, c.v); }", "([(0,55)],5)")
+        chkEx("{ $init; val t = l @* {} ( @sum f(c) ); return (t, c.v); }", "([55],5)")
+        chkEx("{ $init; val t = l @* {} ( @sum f(c) ) limit 0; return (t, c.v); }", "([],0)")
+        chkEx("{ $init; val t = l @* {} ( @sum f(c) ) offset 1; return (t, c.v); }", "([],5)")
+        chkEx("{ $init; val t = l @* {} ( @group f(c) ); return (t, c.v); }", "([1, 4, 9, 16, 25],5)")
+        chkEx("{ $init; val t = l @* {} ( @group f(c) ) limit 3; return (t, c.v); }", "([1, 4, 9],5)")
+        chkEx("{ $init; val t = l @* {} ( @group f(c) ) offset 2; return (t, c.v); }", "([9, 16, 25],5)")
+        chkEx("{ $init; val t = l @* {} ( @group f(c) ) offset 2 limit 2; return (t, c.v); }", "([9, 16],5)")
     }
 
-    private fun initGroupDataCountries() {
+    private fun initDataCountries() {
         tst.strictToString = false
 
         def("struct country { name; region: text; language: text; gdp: integer; }")
         def("function make_country(name, region: text, language: text, gdp: integer) = country(name, region, language, gdp);")
 
         def("""
-            function get_countries() = [
+            function countries() = [
                 make_country('Germany','EMEA','German',3863),
                 make_country('Austria','EMEA','German',447),
                 make_country('United Kingdom','EMEA','English',2743),

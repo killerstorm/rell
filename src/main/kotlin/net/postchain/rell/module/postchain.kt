@@ -24,7 +24,7 @@ import net.postchain.rell.utils.*
 import org.apache.commons.lang3.time.FastDateFormat
 
 const val RELL_LANG_VERSION = "0.10"
-const val RELL_VERSION = "0.10.3"
+const val RELL_VERSION = "0.10.4"
 
 const val RELL_VERSION_MODULE_SYSTEM = "0.10.0"
 

@@ -7,6 +7,7 @@ import net.postchain.rell.compiler.vexpr.V_DbExpr
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_RExpr
 import net.postchain.rell.model.*
+import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.toImmList
 
 class C_AtEntity(val pos: S_Pos, val rEntity: R_Entity, val alias: String, val explicitAlias: Boolean, val index: Int) {
@@ -201,7 +202,7 @@ class C_AtFrom_Iterable(
     }
 
     override fun compile(startPos: S_Pos, resType: R_Type, cardinality: R_AtCardinality, details: C_AtDetails): V_Expr {
-        checkConstraints(details, startPos)
+        checkConstraints(startPos)
 
         val cBlock = innerBlkCtx.buildBlock()
         val rParam = R_VarParam(C_Constants.AT_PLACEHOLDER, item.elemType, varPtr)
@@ -229,12 +230,7 @@ class C_AtFrom_Iterable(
         return V_RExpr(startPos, rExpr, details.exprFacts)
     }
 
-    private fun checkConstraints(details: C_AtDetails, startPos: S_Pos) {
-        val sortField = details.base.what.fields.firstOrNull { it.flags.sort != null }
-        if (sortField != null) {
-            innerBlkCtx.frameCtx.msgCtx.error(sortField.expr.pos, "expr:at:sort:col", "Sorting not supported for collections")
-        }
-
+    private fun checkConstraints(startPos: S_Pos) {
         if (!innerBlkCtx.isCollectionAtAllowed()) {
             innerBlkCtx.frameCtx.msgCtx.error(startPos, "expr:at:bad_context", "Collection-at now allowed here")
         }
@@ -243,12 +239,34 @@ class C_AtFrom_Iterable(
     private fun compileWhat(details: C_AtDetails): R_ColAtWhat {
         val cFields = details.base.what.fields
         val fields = cFields.map { compileField(it) }
+        val sorting = compileSorting(cFields)
         return R_ColAtWhat(
                 fields,
                 details.res.selectedFields,
                 details.res.groupFields,
+                sorting,
                 details.res.rowDecoder
         )
+    }
+
+    private fun compileSorting(cFields: List<C_AtWhatField>): List<IndexedValue<Comparator<Rt_Value>>> {
+        val sorting = cFields
+                .withIndex()
+                .map { (i, f) ->
+                    val sort = f.flags.sort
+                    if (sort == null) null else {
+                        val type = f.resultType
+                        var comparator = type.comparator()
+                        if (comparator != null && !sort.asc) comparator = comparator.reversed()
+                        if (comparator != null) IndexedValue(i, comparator) else {
+                            innerExprCtx.msgCtx.error(f.expr.pos, "at:expr:sort:type:${type}", "Type ${type} is not sortable")
+                            null
+                        }
+                    }
+                }
+                .filterNotNull()
+                .toImmList()
+        return sorting
     }
 
     private fun compileField(cField: C_AtWhatField): R_ColAtWhatField {
@@ -364,10 +382,6 @@ sealed class C_AtSummarization_Aggregate(
         pos: C_AtSummarizationPos,
         valueType: R_Type
 ): C_AtSummarization(pos, valueType) {
-    final override fun getResultType(hasGroup: Boolean): R_Type {
-        return if (hasGroup) valueType else C_Types.toNullable(valueType)
-    }
-
     protected abstract fun compileDb0(): Db_SysFunction?
 
     final override fun isGroup() = false
@@ -385,9 +399,11 @@ sealed class C_AtSummarization_Aggregate(
 class C_AtSummarization_Aggregate_Sum(
         pos: C_AtSummarizationPos,
         valueType: R_Type,
-        private val rOp: R_BinaryOp
+        private val rOp: R_BinaryOp,
+        private val zeroValue: Rt_Value
 ): C_AtSummarization_Aggregate(pos, valueType) {
-    override fun compileR(ctx: C_NamespaceContext) = R_ColAtFieldSummarization_Aggregate_Sum(rOp)
+    override fun getResultType(hasGroup: Boolean) = valueType
+    override fun compileR(ctx: C_NamespaceContext) = R_ColAtFieldSummarization_Aggregate_Sum(rOp, zeroValue)
     override fun compileDb0() = Db_SysFn_Aggregation_Sum
 }
 
@@ -395,13 +411,25 @@ class C_AtSummarization_Aggregate_MinMax(
         pos: C_AtSummarizationPos,
         valueType: R_Type,
         private val rCmpOp: R_CmpOp,
-        private val rCmpType: R_CmpType,
+        private val rCmpType: R_CmpType?,
+        private val rComparator: Comparator<Rt_Value>?,
         private val dbFn: Db_SysFunction
 ): C_AtSummarization_Aggregate(pos, valueType) {
-    override fun compileR(ctx: C_NamespaceContext) = R_ColAtFieldSummarization_Aggregate_MinMax(rCmpOp, rCmpType)
+    override fun getResultType(hasGroup: Boolean): R_Type {
+        return if (hasGroup) valueType else C_Types.toNullable(valueType)
+    }
+
+    override fun compileR(ctx: C_NamespaceContext): R_ColAtFieldSummarization {
+        return if (rComparator == null) {
+            typeError(ctx.msgCtx, valueType, pos)
+            R_ColAtFieldSummarization_None
+        } else {
+            R_ColAtFieldSummarization_Aggregate_MinMax(rCmpOp, rComparator)
+        }
+    }
 
     override fun compileDb0(): Db_SysFunction? {
         // Postgres doesn't support MIN/MAX for BOOLEAN and BYTEA.
-        return if (valueType == R_BooleanType || valueType == R_ByteArrayType) null else dbFn
+        return if (rCmpType == null || valueType == R_BooleanType || valueType == R_ByteArrayType) null else dbFn
     }
 }

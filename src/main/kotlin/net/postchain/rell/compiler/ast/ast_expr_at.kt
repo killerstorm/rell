@@ -7,6 +7,8 @@ package net.postchain.rell.compiler.ast
 import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
+import net.postchain.rell.runtime.Rt_DecimalValue
+import net.postchain.rell.runtime.Rt_IntValue
 import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.toImmList
 
@@ -153,8 +155,8 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
 
     private fun compileSummarizationSum(pos: C_AtSummarizationPos, type: R_Type): C_AtSummarization? {
         return when (type) {
-            R_IntegerType -> C_AtSummarization_Aggregate_Sum(pos, type, R_BinaryOp_Add_Integer)
-            R_DecimalType -> C_AtSummarization_Aggregate_Sum(pos, type, R_BinaryOp_Add_Decimal)
+            R_IntegerType -> C_AtSummarization_Aggregate_Sum(pos, type, R_BinaryOp_Add_Integer, Rt_IntValue(0))
+            R_DecimalType -> C_AtSummarization_Aggregate_Sum(pos, type, R_BinaryOp_Add_Decimal, Rt_DecimalValue.ZERO)
             else -> null
         }
     }
@@ -166,7 +168,10 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
             dbFn: Db_SysFunction
     ): C_AtSummarization? {
         val rCmpType = R_CmpType.forAtMinMaxType(type)
-        return if (rCmpType == null) null else C_AtSummarization_Aggregate_MinMax(pos, type, cmpOp, rCmpType, dbFn)
+        val rComparator = if (type is R_NullableType) null else type.comparator()
+        return if (rCmpType == null && rComparator == null) null else {
+            C_AtSummarization_Aggregate_MinMax(pos, type, cmpOp, rCmpType, rComparator, dbFn)
+        }
     }
 
     private fun processNameConflicts(ctx: C_ExprContext, procFields: List<WhatField>): List<WhatField> {

@@ -25,18 +25,19 @@ sealed class R_ColAtFieldSummarization_Aggregate: R_ColAtFieldSummarization() {
 }
 
 class R_ColAtFieldSummarization_Aggregate_Sum(
-        private val op: R_BinaryOp
+        private val op: R_BinaryOp,
+        private val zeroValue: Rt_Value
 ): R_ColAtFieldSummarization_Aggregate() {
     override fun summarize(value1: Rt_Value, value2: Rt_Value) = op.evaluate(value1, value2)
-    override fun result(value: Rt_Value?) = value ?: Rt_NullValue
+    override fun result(value: Rt_Value?) = value ?: zeroValue
 }
 
 class R_ColAtFieldSummarization_Aggregate_MinMax(
         private val rCmpOp: R_CmpOp,
-        private val rCmpType: R_CmpType
+        private val comparator: Comparator<Rt_Value>
 ): R_ColAtFieldSummarization_Aggregate() {
     override fun summarize(value1: Rt_Value, value2: Rt_Value): Rt_Value {
-        val cmp = rCmpType.compare(value1, value2)
+        val cmp = comparator.compare(value1, value2)
         return if (rCmpOp.check(cmp)) value1 else value2
     }
 
@@ -49,15 +50,18 @@ class R_ColAtWhat(
         fields: List<R_ColAtWhatField>,
         selectedFields: List<Int>,
         groupFields: List<Int>,
+        sorting: List<IndexedValue<Comparator<Rt_Value>>>,
         val rowDecoder: R_AtExprRowDecoder
 ) {
     val fields = fields.toImmList()
     val selectedFields = selectedFields.toImmList()
     val groupFields = groupFields.toImmList()
+    val sorting = sorting.toImmList()
 
     init {
         selectedFields.forEach { check(it in fields.indices) }
         groupFields.forEach { check(it in fields.indices) }
+        sorting.forEach { check(it.index in fields.indices) }
     }
 }
 
@@ -277,7 +281,8 @@ class R_ColAtExpr(
         limit: R_Expr?,
         offset: R_Expr?
 ): R_AtExpr(type, cardinality, limit, offset) {
-    private val hasSorting = what.fields.any { it.flags.sort != null }
+    private val rowComparator = RowComparator.create(what.sorting)
+    private val hasSorting = rowComparator != null
 
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         val resList = evalList(frame)
@@ -320,6 +325,7 @@ class R_ColAtExpr(
         }
 
         var rows = summarizer.getResult()
+        if (rowComparator != null) rows = rows.sortedWith(rowComparator)
         rows = limiter.getResult(rows)
         checkCount(cardinality, rows.size, "values")
 
@@ -338,5 +344,25 @@ class R_ColAtExpr(
         val start = if (offset == null) 0 else min(offset, size)
         val end = if (limit == null) size else min(start + limit, size)
         return if (start == 0L && end == size) list else list.subList(start.toInt(), end.toInt())
+    }
+
+    private class RowComparator(private val sorting: List<IndexedValue<Comparator<Rt_Value>>>): Comparator<List<Rt_Value>> {
+        override fun compare(p0: List<Rt_Value>?, p1: List<Rt_Value>?): Int {
+            p0!!
+            p1!!
+            for ((i, c) in sorting) {
+                val v1 = p0[i]
+                val v2 = p1[i]
+                val d = c.compare(v1, v2)
+                if (d != 0) return d
+            }
+            return 0
+        }
+
+        companion object {
+            fun create(sorting: List<IndexedValue<Comparator<Rt_Value>>>): Comparator<List<Rt_Value>>? {
+                return if (sorting.isEmpty()) null else RowComparator(sorting)
+            }
+        }
     }
 }

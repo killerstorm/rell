@@ -4,7 +4,6 @@
 
 package net.postchain.rell.model
 
-import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.compiler.C_Constants
 import net.postchain.rell.compiler.C_EntityAttrRef
 import net.postchain.rell.runtime.Rt_BooleanValue
@@ -12,6 +11,7 @@ import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_NullValue
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.sql.SqlConstants
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.toImmList
 import java.util.regex.Pattern
 
@@ -435,7 +435,7 @@ abstract class Db_SysFn_Simple(name: String, val sql: String): Db_SysFunction(na
     }
 }
 
-abstract class Db_SysFn_Template(name: String, private val arity: Int, private val template: String): Db_SysFunction(name) {
+abstract class Db_SysFn_Template(name: String, private val arity: Int, template: String): Db_SysFunction(name) {
     private val fragments: List<Pair<String?, Int?>>
 
     init {
@@ -517,7 +517,7 @@ object Db_SysFn_Json_ToText: Db_SysFn_Cast("json.to_text", "TEXT")
 
 object Db_SysFn_ToText: Db_SysFn_Cast("to_text", "TEXT")
 
-object Db_SysFn_Aggregation_Sum: Db_SysFn_Simple("sum", "SUM")
+object Db_SysFn_Aggregation_Sum: Db_SysFn_Template("sum", 1, "COALESCE(SUM(#0),0)")
 object Db_SysFn_Aggregation_Min: Db_SysFn_Simple("min", "MIN")
 object Db_SysFn_Aggregation_Max: Db_SysFn_Simple("max", "MAX")
 
