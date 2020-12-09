@@ -1,11 +1,13 @@
 package net.postchain.rell.compiler.vexpr
 
 import net.postchain.rell.compiler.C_ExprVarFacts
+import net.postchain.rell.compiler.C_MessageContext
+import net.postchain.rell.compiler.C_Utils
 import net.postchain.rell.compiler.ast.C_BinOp
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.*
 
-class V_BinaryOp(val code: String, val resType: R_Type, val rOp: R_BinaryOp?, val dbOp: Db_BinaryOp?) {
+class V_BinaryOp(val code: String, val resType: R_Type, val rOp: R_BinaryOp, val dbOp: Db_BinaryOp?) {
     companion object {
         fun of(resType: R_Type, rOp: R_BinaryOp, dbOp: Db_BinaryOp?) = V_BinaryOp(rOp.code, resType, rOp, dbOp)
     }
@@ -27,15 +29,18 @@ class V_BinaryExpr(
     override fun toRExpr0(): R_Expr {
         val rLeft = left.toRExpr()
         val rRight = right.toRExpr()
-        if (op.rOp == null) throw C_BinOp.errTypeMismatch(pos, op.code, left.type(), right.type())
         return R_BinaryExpr(op.resType, op.rOp, rLeft, rRight)
     }
 
-    override fun toDbExpr0(): Db_Expr {
-        val dbLeft = left.toDbExpr()
-        val dbRight = right.toDbExpr()
-        if (op.dbOp == null) throw C_BinOp.errTypeMismatch(pos, op.code, left.type(), right.type())
-        return Db_BinaryExpr(op.resType, op.dbOp, dbLeft, dbRight)
+    override fun toDbExpr0(msgCtx: C_MessageContext): Db_Expr {
+        val dbLeft = left.toDbExpr(msgCtx)
+        val dbRight = right.toDbExpr(msgCtx)
+        return if (op.dbOp == null) {
+            C_BinOp.errTypeMismatch(msgCtx, pos, op.code, left.type(), right.type())
+            C_Utils.errorDbExpr(op.resType)
+        } else {
+            Db_BinaryExpr(op.resType, op.dbOp, dbLeft, dbRight)
+        }
     }
 }
 
@@ -58,9 +63,9 @@ class V_ElvisExpr(
         return R_ElvisExpr(resType, rLeft, rRight)
     }
 
-    override fun toDbExpr0(): Db_Expr {
+    override fun toDbExpr0(msgCtx: C_MessageContext): Db_Expr {
         val rLeft = left.toRExpr() // DB-expressions cannot be nullable...
-        val dbRight = right.toDbExpr()
+        val dbRight = right.toDbExpr(msgCtx)
         return Db_ElvisExpr(resType, rLeft, dbRight)
     }
 }

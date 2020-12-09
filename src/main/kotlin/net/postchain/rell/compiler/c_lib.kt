@@ -624,7 +624,7 @@ object C_Ns_OpContext {
     private fun checkCtx(ctx: C_NamespaceValueContext, name: List<S_Name>) {
         val dt = ctx.defCtx.definitionType
         if (dt != C_DefinitionType.OPERATION && dt != C_DefinitionType.FUNCTION && dt != C_DefinitionType.ENTITY) {
-            throw C_Error(name[0].pos, "op_ctx_noop", "Can access '$NAME' only in an operation, function or entity")
+            throw C_Error.stop(name[0].pos, "op_ctx_noop", "Can access '$NAME' only in an operation, function or entity")
         }
     }
 
@@ -655,7 +655,7 @@ private object C_NsValue_ChainContext_Args: C_NamespaceValue_RExpr() {
         val struct = ctx.modCtx.getModuleArgsStruct()
         if (struct == null) {
             val nameStr = C_Utils.nameStr(name)
-            throw C_Error(name[0].pos, "expr_chainctx_args_norec",
+            throw C_Error.stop(name[0].pos, "expr_chainctx_args_norec",
                     "To use '$nameStr', define a struct '${C_Constants.MODULE_ARGS_STRUCT}'")
         }
 
@@ -912,7 +912,7 @@ private class C_SysFunction_Invalid(private val type: R_Type): C_GlobalFormalPar
     private fun err(fullName: S_String): C_Error {
         val typeStr = type.name
         val nameStr = fullName.str
-        return C_Error(fullName.pos, "fn:invalid:$typeStr:$nameStr", "Function '$nameStr' not available for type '$typeStr'")
+        return C_Error.stop(fullName.pos, "fn:invalid:$typeStr:$nameStr", "Function '$nameStr' not available for type '$typeStr'")
     }
 }
 
@@ -923,7 +923,7 @@ private class C_SysMemberFunction_Invalid(private val type: R_Type): C_MemberFor
         val typeStr = type.name
         val member = caseCtx.member
         val name = member.qualifiedName()
-        throw C_Error(member.name.pos, "fn:invalid:$typeStr:$name", "Function '$name' not available for type '$typeStr'")
+        throw C_Error.stop(member.name.pos, "fn:invalid:$typeStr:$name", "Function '$name' not available for type '$typeStr'")
     }
 }
 

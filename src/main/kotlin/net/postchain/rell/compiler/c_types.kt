@@ -62,6 +62,21 @@ object C_Types {
         return adapter
     }
 
+    fun adaptSafe(
+            msgCtx: C_MessageContext,
+            dstType: R_Type,
+            srcType: R_Type,
+            errPos: S_Pos,
+            errCode: String,
+            errMsg: String
+    ): R_TypeAdapter {
+        val adapter = dstType.getTypeAdapter(srcType)
+        return if (adapter != null) adapter else {
+            C_Errors.errTypeMismatch(msgCtx, errPos, srcType, dstType, errCode, errMsg)
+            R_TypeAdapter_Direct
+        }
+    }
+
     fun commonType(a: R_Type, b: R_Type, errPos: S_Pos, errCode: String, errMsg: String): R_Type {
         val res = commonTypeOpt(a, b)
         return res ?: throw C_Errors.errTypeMismatch(errPos, b, a, errCode, errMsg)

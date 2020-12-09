@@ -194,7 +194,7 @@ abstract class C_BasicGlobalFuncCaseMatch(resType: R_Type, private val args: Lis
     }
 
     final override fun compileCallDb(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): Db_Expr {
-        return compileCallDb(caseCtx, args, this::compileCallDbExpr)
+        return compileCallDb(ctx, caseCtx, args, this::compileCallDbExpr)
     }
 
     companion object {
@@ -209,11 +209,12 @@ abstract class C_BasicGlobalFuncCaseMatch(resType: R_Type, private val args: Lis
         }
 
         fun compileCallDb(
+                ctx: C_ExprContext,
                 caseCtx: C_GlobalFuncCaseCtx,
                 args: List<V_Expr>,
                 dbFactory: (C_GlobalFuncCaseCtx, List<Db_Expr>) -> Db_Expr
         ): Db_Expr {
-            val dbArgs = args.map { it.toDbExpr() }
+            val dbArgs = args.map { it.toDbExpr(ctx.msgCtx) }
             val dbExpr = dbFactory(caseCtx, dbArgs)
             return dbExpr
         }
@@ -257,15 +258,16 @@ class C_FormalParamsFuncCaseMatch<CtxT: C_FuncCaseCtx>(
 
     override fun compileCallDb(ctx: C_ExprContext, caseCtx: CtxT): Db_Expr {
         val effArgs = paramsMatch.effectiveArgs(args)
-        val dbArgs = effArgs.map { it.toDbExpr() }
+        val dbArgs = effArgs.map { it.toDbExpr(ctx.msgCtx) }
         return body.compileCallDb(ctx, caseCtx, dbArgs)
     }
 }
 
 object C_FuncMatchUtils {
-    fun errNoMatch(pos: S_Pos, name: String, args: List<R_Type>): C_Error {
+    fun errNoMatch(ctx: C_ExprContext, pos: S_Pos, name: String, args: List<R_Type>) {
+        if (args.any { it == R_CtErrorType }) return
         val argsStrShort = args.joinToString(",") { it.toStrictString() }
         val argsStr = args.joinToString { it.toStrictString() }
-        return C_Error(pos, "expr_call_argtypes:$name:$argsStrShort", "Function $name undefined for arguments ($argsStr)")
+        ctx.msgCtx.error(pos, "expr_call_argtypes:$name:$argsStrShort", "Function $name undefined for arguments ($argsStr)")
     }
 }

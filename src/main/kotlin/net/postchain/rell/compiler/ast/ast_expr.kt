@@ -8,6 +8,7 @@ import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.vexpr.*
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
+import net.postchain.rell.utils.toImmSet
 
 class S_NameExprPair(val name: S_Name?, val expr: S_Expr)
 
@@ -16,6 +17,10 @@ abstract class S_Expr(val startPos: S_Pos) {
 
     fun compileOpt(ctx: C_ExprContext, typeHint: C_TypeHint = C_TypeHint.NONE): C_Expr? {
         return ctx.msgCtx.consumeError { compile(ctx, typeHint) }
+    }
+
+    fun compileSafe(ctx: C_ExprContext, typeHint: C_TypeHint = C_TypeHint.NONE): C_Expr {
+        return compileOpt(ctx, typeHint) ?: C_Utils.errorExpr(startPos)
     }
 
     fun compileWithFacts(ctx: C_ExprContext, facts: C_VarFacts, typeHint: C_TypeHint = C_TypeHint.NONE): C_Expr {
@@ -41,26 +46,25 @@ abstract class S_Expr(val startPos: S_Pos) {
     }
 
     open fun compileFromItem(ctx: C_ExprContext): C_AtFromItem {
-        val cExpr = compile(ctx)
+        val cExpr = compileSafe(ctx)
         val cValue = cExpr.value()
         val type = cValue.type()
         return when (type) {
             is R_CollectionType -> C_AtFromItem_Collection(startPos, cValue, type.elementType)
             is R_MapType -> {
-                val tupleType = R_TupleType(listOf(
-                        R_TupleField("k", type.keyType),
-                        R_TupleField("v", type.valueType)
-                ))
+                val tupleType = R_TupleType.create("k" to type.keyType, "v" to type.valueType)
                 C_AtFromItem_Map(startPos, cValue, tupleType)
             }
+            is R_CtErrorType -> C_AtFromItem_Collection(startPos, cValue, type)
             else -> {
                 val s = type.toStrictString()
-                throw C_Error(startPos, "at:from:bad_type:$s", "Invalid type for at-expression: $s")
+                ctx.msgCtx.error(startPos, "at:from:bad_type:$s", "Invalid type for at-expression: $s")
+                C_AtFromItem_Collection(startPos, cValue, type)
             }
         }
     }
 
-    open fun compileWhere(ctx: C_ExprContext, idx: Int): C_Expr = compile(ctx)
+    open fun compileWhere(ctx: C_ExprContext, idx: Int): C_Expr = compileSafe(ctx)
 
     open fun asName(): S_Name? = null
     open fun constantValue(): Rt_Value? = null
@@ -218,15 +222,18 @@ class S_TupleExpr(startPos: S_Pos, val fields: List<S_TupleExprField>): S_Expr(s
     override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
         val pairs = fields.map {
             when (it) {
-                is S_TupleExprField_NameColonExpr -> throw C_Error(it.colonPos, "tuple_name_colon_expr:${it.name}", "Syntax error")
+                is S_TupleExprField_NameColonExpr -> {
+                    ctx.msgCtx.error(it.colonPos, "tuple_name_colon_expr:${it.name}", "Syntax error")
+                    Pair(it.name, it.expr)
+                }
                 is S_TupleExprField_NameEqExpr -> Pair(it.name, it.expr)
                 is S_TupleExprField_Expr -> Pair(null, it.expr)
             }
         }
 
-        checkNames(pairs, "field")
+        checkNameConflicts(ctx, pairs, "field")
 
-        val vExprs = pairs.map { (_, expr) -> expr.compile(ctx).value() }
+        val vExprs = pairs.map { (_, expr) -> expr.compileSafe(ctx).value() }
         val vExpr = compile0(pairs, vExprs)
         return C_VExpr(vExpr)
     }
@@ -247,19 +254,25 @@ class S_TupleExpr(startPos: S_Pos, val fields: List<S_TupleExprField>): S_Expr(s
         val pairs = fields.map {
             when (it) {
                 is S_TupleExprField_NameColonExpr -> Pair(it.name, it.expr)
-                is S_TupleExprField_NameEqExpr -> throw C_Error(it.eqPos, "expr:at:from:tuple_name_eq_expr:${it.name}", "Syntax error")
+                is S_TupleExprField_NameEqExpr -> {
+                    ctx.msgCtx.error(it.eqPos, "expr:at:from:tuple_name_eq_expr:${it.name}", "Syntax error")
+                    Pair(it.name, it.expr)
+                }
                 is S_TupleExprField_Expr -> Pair(null, it.expr)
             }
         }
 
-        checkNames(pairs, "alias")
+        val dupAliases = checkNameConflicts(ctx, pairs, "alias")
+
+        val localVarConflictAliases = mutableSetOf<String>()
 
         for (pair in pairs) {
             val alias = pair.first
             if (alias != null) {
                 val localVar = ctx.nameCtx.resolveNameLocalValue(alias.str)
                 if (localVar != null) {
-                    throw C_Error(alias.pos, "expr_at_conflict_alias:${alias.str}", "Name conflict: '${alias.str}'")
+                    localVarConflictAliases.add(alias.str)
+                    ctx.msgCtx.error(alias.pos, "expr_at_conflict_alias:${alias.str}", "Name conflict: '${alias.str}'")
                 }
             }
         }
@@ -271,18 +284,20 @@ class S_TupleExpr(startPos: S_Pos, val fields: List<S_TupleExprField>): S_Expr(s
 
         for (item in items) {
             when (item) {
-                is C_AtFromItem_Entity -> processFromItem(item, entities, iterables)
-                is C_AtFromItem_Iterable -> processFromItem(item, iterables, entities)
+                is C_AtFromItem_Entity -> processFromItem(ctx, item, entities, iterables)
+                is C_AtFromItem_Iterable -> processFromItem(ctx, item, iterables, entities)
             }
         }
 
         if (entities.isEmpty()) {
             subValues.addAll(iterables.map { it.vExpr })
-            if (iterables.size > 1) {
-                throw C_Error(iterables[1].pos, "at:from:many_iterables:${iterables.size}", "Only one collection is allowed in at-expression")
+            if (iterables.size > 1 && iterables.any { it.vExpr.type() != R_CtErrorType }) {
+                ctx.msgCtx.error(iterables[1].pos, "at:from:many_iterables:${iterables.size}",
+                        "Only one collection is allowed in at-expression")
             }
             val alias = pairs[0].first
-            return C_AtFrom_Iterable(ctx, atPos, alias, iterables[0])
+            val actualAlias = if (alias == null || alias.str in localVarConflictAliases) null else alias
+            return C_AtFrom_Iterable(ctx, atPos, actualAlias, iterables[0])
         }
 
         val cEntities = entities.mapIndexed { i, item ->
@@ -293,32 +308,37 @@ class S_TupleExpr(startPos: S_Pos, val fields: List<S_TupleExprField>): S_Expr(s
 
         val names = mutableSetOf<String>()
         for ((i, entity) in cEntities.withIndex()) {
-            if (!names.add(entity.alias)) {
+            if (!names.add(entity.alias) && entity.alias !in dupAliases) {
                 val pos = pairs[i].first?.pos ?: pairs[i].second.startPos
-                throw C_Error(pos, "at_dup_alias:${entity.alias}", "Duplicate entity alias: ${entity.alias}")
+                ctx.msgCtx.error(pos, "at_dup_alias:${entity.alias}", "Duplicate entity alias: ${entity.alias}")
             }
         }
 
         return C_AtFrom_Entities(ctx, cEntities)
     }
 
-    private fun <T: C_AtFromItem> processFromItem(item: T, targets: MutableList<T>, opposites: List<*>) {
+    private fun <T: C_AtFromItem> processFromItem(ctx: C_ExprContext, item: T, targets: MutableList<T>, opposites: List<*>) {
         if (opposites.isNotEmpty()) {
-            throw C_Error(item.pos, "at:from:mix_entity_iterable", "Cannot mix entities and collections in at-expression")
+            ctx.msgCtx.error(item.pos, "at:from:mix_entity_iterable", "Cannot mix entities and collections in at-expression")
         }
         targets.add(item)
     }
 
-    private fun checkNames(pairs: List<Pair<S_Name?, S_Expr>>, kind: String) {
+    private fun checkNameConflicts(ctx: C_ExprContext, pairs: List<Pair<S_Name?, S_Expr>>, kind: String): Set<String> {
         val names = mutableSetOf<String>()
+        val dups = mutableSetOf<String>()
+
         for ((name, _) in pairs) {
             val nameStr = name?.str
             if (nameStr != null) {
-                C_Errors.check(names.add(nameStr), name.pos) {
-                    "expr_tuple_dupname:$nameStr" to "Duplicate $kind: '$nameStr'"
+                if (!names.add(nameStr)) {
+                    ctx.msgCtx.error(name.pos, "expr_tuple_dupname:$nameStr", "Duplicate $kind: '$nameStr'")
+                    dups.add(nameStr)
                 }
             }
         }
+
+        return dups.toImmSet()
     }
 }
 
@@ -493,7 +513,7 @@ sealed class S_CollectionExpr(pos: S_Pos, val type: S_Type?, val args: List<S_Ex
             val rArg = rArgs[0]
             return compileConstructorOneArg(ctx, rType, rArg)
         } else {
-            throw C_Error(startPos, "expr_${colType}_argcnt:${rArgs.size}",
+            throw C_Error.more(startPos, "expr_${colType}_argcnt:${rArgs.size}",
                     "Wrong number of arguments for $colType<>: ${rArgs.size}")
         }
     }
@@ -507,7 +527,7 @@ sealed class S_CollectionExpr(pos: S_Pos, val type: S_Type?, val args: List<S_Ex
     private fun compileConstructorOneArg(ctx: C_ExprContext, rType: R_Type?, rArg: R_Expr): R_Expr {
         val rArgType = rArg.type
         if (rArgType !is R_CollectionType) {
-            throw C_Error(startPos, "expr_${colType}_badtype:$rArgType",
+            throw C_Error.more(startPos, "expr_${colType}_badtype:$rArgType",
                     "Wrong argument type for $colType<>: ${rArgType.toStrictString()}")
         }
 
@@ -612,7 +632,7 @@ class S_MapExpr(pos: S_Pos, val keyValueTypes: Pair<S_Type, S_Type>?, val args: 
             val rArg = rArgs[0]
             return compileConstructorOneArg(rKeyValueTypes, rArg)
         } else {
-            throw C_Error(startPos, "expr_map_argcnt:${rArgs.size}", "Wrong number of arguments for map<>: ${rArgs.size}")
+            throw C_Error.more(startPos, "expr_map_argcnt:${rArgs.size}", "Wrong number of arguments for map<>: ${rArgs.size}")
         }
     }
 
@@ -627,7 +647,7 @@ class S_MapExpr(pos: S_Pos, val keyValueTypes: Pair<S_Type, S_Type>?, val args: 
         val rArgType = rArg.type
 
         if (rArgType !is R_MapType) {
-            throw C_Error(startPos, "expr_map_badtype:${rArgType.toStrictString()}",
+            throw C_Error.more(startPos, "expr_map_badtype:${rArgType.toStrictString()}",
                     "Wrong argument type for map<>: ${rArgType.toStrictString()}")
         }
 
@@ -670,7 +690,7 @@ class S_MapExpr(pos: S_Pos, val keyValueTypes: Pair<S_Type, S_Type>?, val args: 
 
 class S_StructOrCallExpr(val base: S_Expr, val args: List<S_NameExprPair>): S_Expr(base.startPos) {
     override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
-        val cBase = base.compile(ctx)
+        val cBase = base.compileSafe(ctx)
         return cBase.call(ctx, base.startPos, args)
     }
 }

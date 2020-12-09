@@ -201,7 +201,7 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
         val (resType, valueExprs) = compileExprs(ctx, chooserDetails.caseFacts)
 
         val resFacts = C_ExprVarFacts.of(postFacts = chooserDetails.keyPostFacts)
-        val vResExpr = V_WhenExpr(startPos, chooserDetails, valueExprs, resType, resFacts, ctx.msgCtx)
+        val vResExpr = V_WhenExpr(startPos, chooserDetails, valueExprs, resType, resFacts)
         return C_VExpr(vResExpr)
     }
 
@@ -268,7 +268,7 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
             }
 
             checkTypes(builder)
-            builder.fullCoverage = checkFullCoverage(builder)
+            builder.fullCoverage = checkFullCoverage(ctx, builder)
 
             return C_WhenChooserDetails(builder)
         }
@@ -291,7 +291,7 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
             }
         }
 
-        private fun checkFullCoverage(builder: C_WhenChooserDetailsBuilder): Boolean {
+        private fun checkFullCoverage(ctx: C_ExprContext, builder: C_WhenChooserDetailsBuilder): Boolean {
             val keyValue = builder.keyExpr
             if (keyValue == null) {
                 return builder.elseCase != null
@@ -302,7 +302,7 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
             val allValuesCovered = !allValues.isEmpty() && allValues == builder.constantCases.keys
 
             if (allValuesCovered && builder.elseCase != null) {
-                throw C_Error(builder.elseCase!!.value, "when_else_allvalues:$keyType",
+                ctx.msgCtx.error(builder.elseCase!!.value, "when_else_allvalues:$keyType",
                         "No values of type '$keyType' left for the else case")
             }
 

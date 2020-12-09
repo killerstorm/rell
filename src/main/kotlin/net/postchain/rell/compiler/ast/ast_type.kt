@@ -8,7 +8,11 @@ import net.postchain.rell.compiler.*
 import net.postchain.rell.model.*
 
 sealed class S_Type(val pos: S_Pos) {
-    abstract fun compile(ctx: C_NamespaceContext): R_Type
+    protected abstract fun compile0(ctx: C_NamespaceContext): R_Type
+
+    fun compile(ctx: C_NamespaceContext): R_Type {
+        return ctx.msgCtx.consumeError { compile0(ctx) } ?: R_CtErrorType
+    }
 
     fun compile(ctx: C_ExprContext): R_Type {
         ctx.executor.checkPass(C_CompilerPass.EXPRESSIONS)
@@ -16,29 +20,29 @@ sealed class S_Type(val pos: S_Pos) {
     }
 
     fun compileOpt(ctx: C_NamespaceContext): R_Type? {
-        return ctx.msgCtx.consumeError { compile(ctx) }
+        return ctx.msgCtx.consumeError { compile0(ctx) }
     }
 }
 
 class S_NameType(val names: List<S_Name>): S_Type(names[0].pos) {
-    override fun compile(ctx: C_NamespaceContext): R_Type = ctx.getType(names)
+    override fun compile0(ctx: C_NamespaceContext): R_Type = ctx.getType(names)
 }
 
 class S_NullableType(pos: S_Pos, val valueType: S_Type): S_Type(pos) {
-    override fun compile(ctx: C_NamespaceContext): R_Type {
+    override fun compile0(ctx: C_NamespaceContext): R_Type {
         val rValueType = valueType.compile(ctx)
-        if (rValueType is R_NullableType) throw C_Error(pos, "type_nullable_nullable", "Nullable nullable (T??) is not allowed")
+        if (rValueType is R_NullableType) throw C_Error.stop(pos, "type_nullable_nullable", "Nullable nullable (T??) is not allowed")
         return R_NullableType(rValueType)
     }
 }
 
 class S_TupleType(pos: S_Pos, val fields: List<Pair<S_Name?, S_Type>>): S_Type(pos) {
-    override fun compile(ctx: C_NamespaceContext): R_Type {
+    override fun compile0(ctx: C_NamespaceContext): R_Type {
         val names = mutableSetOf<String>()
         for ((name, _) in fields) {
             val nameStr = name?.str
             if (nameStr != null && !names.add(nameStr)) {
-                throw C_Error(name.pos, "type_tuple_dupname:$nameStr", "Duplicate field: '$nameStr'")
+                throw C_Error.stop(name.pos, "type_tuple_dupname:$nameStr", "Duplicate field: '$nameStr'")
             }
         }
 
@@ -48,7 +52,7 @@ class S_TupleType(pos: S_Pos, val fields: List<Pair<S_Name?, S_Type>>): S_Type(p
 }
 
 class S_ListType(pos: S_Pos, val element: S_Type): S_Type(pos) {
-    override fun compile(ctx: C_NamespaceContext): R_Type {
+    override fun compile0(ctx: C_NamespaceContext): R_Type {
         val rElement = element.compile(ctx)
         C_Utils.checkUnitType(pos, rElement, "type_list_unit", "Invalid list element type")
         return R_ListType(rElement)
@@ -56,7 +60,7 @@ class S_ListType(pos: S_Pos, val element: S_Type): S_Type(pos) {
 }
 
 class S_SetType(pos: S_Pos, val element: S_Type): S_Type(pos) {
-    override fun compile(ctx: C_NamespaceContext): R_Type {
+    override fun compile0(ctx: C_NamespaceContext): R_Type {
         val rElement = element.compile(ctx)
         C_Utils.checkUnitType(pos, rElement, "type_set_unit", "Invalid set element type")
         C_Utils.checkSetElementType(ctx, pos, rElement)
@@ -65,7 +69,7 @@ class S_SetType(pos: S_Pos, val element: S_Type): S_Type(pos) {
 }
 
 class S_MapType(pos: S_Pos, val key: S_Type, val value: S_Type): S_Type(pos) {
-    override fun compile(ctx: C_NamespaceContext): R_Type {
+    override fun compile0(ctx: C_NamespaceContext): R_Type {
         val rKey = key.compile(ctx)
         val rValue = value.compile(ctx)
         C_Utils.checkUnitType(pos, rKey, "type_map_key_unit", "Invalid map key type")
@@ -76,7 +80,7 @@ class S_MapType(pos: S_Pos, val key: S_Type, val value: S_Type): S_Type(pos) {
 }
 
 class S_VirtualType(pos: S_Pos, val innerType: S_Type): S_Type(pos) {
-    override fun compile(ctx: C_NamespaceContext): R_Type {
+    override fun compile0(ctx: C_NamespaceContext): R_Type {
         val rInnerType = innerType.compile(ctx)
 
         val rType = virtualType(rInnerType)
@@ -99,7 +103,7 @@ class S_VirtualType(pos: S_Pos, val innerType: S_Type): S_Type(pos) {
     }
 
     private fun errBadInnerType(rInnerType: R_Type): C_Error {
-        return C_Error(pos, "type:virtual:bad_inner_type:${rInnerType.name}",
+        return C_Error.stop(pos, "type:virtual:bad_inner_type:${rInnerType.name}",
                 "Type '${rInnerType.name}' cannot be virtual (allowed types are: list, set, map, struct, tuple)")
     }
 
@@ -128,7 +132,7 @@ class S_VirtualType(pos: S_Pos, val innerType: S_Type): S_Type(pos) {
 }
 
 class S_OperationType(pos: S_Pos): S_Type(pos) {
-    override fun compile(ctx: C_NamespaceContext): R_Type {
+    override fun compile0(ctx: C_NamespaceContext): R_Type {
         return R_OperationType
     }
 }

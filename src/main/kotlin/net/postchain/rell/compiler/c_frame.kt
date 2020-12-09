@@ -86,13 +86,11 @@ class C_BlockScopeBuilder(
         check(!build)
 
         val nameStr = name.str
-        check(nameStr !in entries) { nameStr }
-
         val ofs = endOffset++
         val varUid = fnCtx.nextVarUid(nameStr)
 
         val entry = C_BlockScopeEntry(nameStr, type, mutable, ofs, varUid)
-        entries[nameStr] = entry
+        if (nameStr !in entries) entries[nameStr] = entry
 
         val res = entry.toLocalVar(blockUid)
         return res
@@ -177,7 +175,7 @@ class C_OwnerBlockContext(
     override fun addLocalVar(name: S_Name, type: R_Type, mutable: Boolean): C_LocalVar {
         val nameStr = name.str
         if (lookupLocalVar(nameStr) != null) {
-            throw C_Error(name.pos, "var_dupname:$nameStr", "Duplicate variable: '$nameStr'")
+            frameCtx.msgCtx.error(name.pos, "var_dupname:$nameStr", "Duplicate variable: '$nameStr'")
         }
         return scopeBuilder.addVar(name, type, mutable)
     }

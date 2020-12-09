@@ -177,11 +177,19 @@ sealed class R_Type(val name: String) {
 }
 
 object R_CtErrorType: R_Type("<error>") {
-    override fun createGtvConversion() = GtvRtConversion_None
+    override fun createGtvConversion(): GtvRtConversion = GtvRtConversion_Null
+    override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_CtError
     override fun toStrictString() = "<error>"
     override fun isAssignableFrom(type: R_Type): Boolean = true
-    override open fun calcCommonType(other: R_Type): R_Type? = other
+    override fun calcCommonType(other: R_Type): R_Type? = other
     override fun toMetaGtv(): Gtv = throw UnsupportedOperationException()
+
+    private object R_TypeSqlAdapter_CtError: R_TypeSqlAdapter_Some() {
+        override fun toSqlValue(value: Rt_Value) = throw Rt_Utils.errNotSupported("Error")
+        override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = throw Rt_Utils.errNotSupported("Error")
+        override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean) = throw Rt_Utils.errNotSupported("Error")
+        override fun metaName(sqlCtx: Rt_SqlContext) = throw Rt_Utils.errNotSupported("Error")
+    }
 }
 
 sealed class R_PrimitiveType(name: String, val sqlType: DataType<*>): R_Type(name) {
@@ -687,6 +695,13 @@ class R_TupleType(val fields: List<R_TupleField>): R_Type("(${fields.joinToStrin
             "type" to "tuple".toGtv(),
             "fields" to fields.map { it.toMetaGtv() }.toGtv()
     ).toGtv()
+
+    companion object {
+        fun create(vararg fields: Pair<String, R_Type>): R_TupleType {
+            val fieldsList = fields.map { R_TupleField(it.first, it.second) }
+            return R_TupleType(fieldsList)
+        }
+    }
 }
 
 object R_RangeType: R_Type("range") {

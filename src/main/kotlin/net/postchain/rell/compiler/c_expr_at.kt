@@ -30,7 +30,7 @@ sealed class C_AtFrom(private val outerExprCtx: C_ExprContext) {
 
     fun resolvePlaceholder(pos: S_Pos): V_Expr {
         if (hasPlaceholder() && outerExprCtx.nameCtx.hasPlaceholder()) {
-            throw C_Error(pos, "expr:placeholder:ambiguous", "Placeholder is ambiguous, use an alias")
+            throw C_Error.stop(pos, "expr:placeholder:ambiguous", "Placeholder is ambiguous, use an alias")
         }
         return resolvePlaceholder0(pos)
     }
@@ -59,10 +59,10 @@ class C_AtFrom_Entities(outerExprCtx: C_ExprContext, entities: List<C_AtEntity>)
 
     override fun resolvePlaceholder0(pos: S_Pos): V_Expr {
         if (entities.size > 1) {
-            throw C_Error(pos, "expr:placeholder:multiple_entities:${entities.size}",
+            throw C_Error.stop(pos, "expr:placeholder:multiple_entities:${entities.size}",
                     "Cannot use a placeholder when there are multiple entities")
         } else if (entities.any { it.explicitAlias }) {
-            throw C_Error(pos, "expr:placeholder:alias",
+            throw C_Error.stop(pos, "expr:placeholder:alias",
                     "Cannot use a placeholder when there is an entity alias")
         }
 
@@ -113,14 +113,14 @@ class C_AtFrom_Entities(outerExprCtx: C_ExprContext, entities: List<C_AtEntity>)
         val rFrom = cFrom.entities.map { it.compile() }
 
         val rWhat = details.base.what.fields.filter { !isIgnoredField(it) }.map {
-            var dbExpr = it.expr.toDbExpr()
+            var dbExpr = it.expr.toDbExpr(innerExprCtx.msgCtx)
             if (it.summarization != null) {
                 dbExpr = it.summarization.compileDb(innerExprCtx.nsCtx, dbExpr)
             }
             R_DbAtWhatField(it.resultType, dbExpr, it.flags)
         }
 
-        val rBase = R_DbAtExprBase(rFrom, rWhat, details.base.where?.toDbExpr())
+        val rBase = R_DbAtExprBase(rFrom, rWhat, details.base.where?.toDbExpr(innerExprCtx.msgCtx))
         val rLimit = details.limit?.toRExpr()
         val rOffset = details.offset?.toRExpr()
         val rowDecoder = details.res.rowDecoder
@@ -178,7 +178,7 @@ class C_AtFrom_Iterable(
     override fun resolvePlaceholder0(pos: S_Pos): V_Expr {
         val ph = innerBlkCtx.lookupPlaceholder()
         if (ph == null) {
-            throw C_Error(pos, "expr:placeholder:none", "Placeholder not defined")
+            throw C_Error.stop(pos, "expr:placeholder:none", "Placeholder not defined")
         }
         return V_AtPlaceholderExpr(pos, item.elemType, ph)
     }

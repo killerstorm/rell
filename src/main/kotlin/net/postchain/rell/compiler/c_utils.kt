@@ -25,6 +25,12 @@ import org.jooq.impl.SQLDataType
 import java.math.BigDecimal
 import java.util.*
 
+class C_CodeMsg(val code: String, val msg: String)
+
+class C_PosCodeMsg(val pos: S_Pos, val code: String, val msg: String) {
+    constructor(pos: S_Pos, codeMsg: C_CodeMsg): this(pos, codeMsg.code, codeMsg.msg)
+}
+
 class C_CommonError(val code: String, val msg: String): RuntimeException(msg)
 
 class C_Error: RuntimeException {
@@ -32,10 +38,16 @@ class C_Error: RuntimeException {
     val code: String
     val errMsg: String
 
-    constructor(pos: S_Pos, code: String, errMsg: String): super("$pos $errMsg") {
+    private constructor(pos: S_Pos, code: String, errMsg: String): super("$pos $errMsg") {
         this.pos = pos
         this.code = code
         this.errMsg = errMsg
+    }
+
+    companion object {
+        fun more(pos: S_Pos, code: String, errMsg: String) = C_Error(pos, code, errMsg)
+        fun stop(pos: S_Pos, code: String, errMsg: String) = C_Error(pos, code, errMsg)
+        fun other(pos: S_Pos, code: String, errMsg: String) = C_Error(pos, code, errMsg)
     }
 }
 
@@ -318,9 +330,9 @@ object C_Utils {
             val v = code()
             return v
         } catch (e: Rt_Error) {
-            throw C_Error(pos, "eval_fail:${e.code}", e.message ?: "Evaluation failed")
+            throw C_Error.stop(pos, "eval_fail:${e.code}", e.message ?: "Evaluation failed")
         } catch (e: Throwable) {
-            throw C_Error(pos, "eval_fail:${e.javaClass.canonicalName}", "Evaluation failed")
+            throw C_Error.stop(pos, "eval_fail:${e.javaClass.canonicalName}", "Evaluation failed")
         }
     }
 
@@ -382,11 +394,11 @@ object C_Parser {
             }
             return C_SuccessParserResult(ast)
         } catch (e: RellTokenizerError) {
-            val error = C_Error(e.pos, e.code, e.msg)
+            val error = C_Error.other(e.pos, e.code, e.msg)
             return C_ErrorParserResult(error, e.eof)
         } catch (e: ParseException) {
             val pos = S_BasicPos(filePath, state.lastRow, state.lastCol)
-            val error = C_Error(pos, "syntax", "Syntax error")
+            val error = C_Error.other(pos, "syntax", "Syntax error")
             return C_ErrorParserResult(error, state.lastEof)
         }
     }
@@ -400,95 +412,112 @@ object C_Parser {
 
 object C_Errors {
     fun errTypeMismatch(pos: S_Pos, srcType: R_Type, dstType: R_Type, errCode: String, errMsg: String): C_Error {
-        return C_Error(pos, "$errCode:[${dstType.toStrictString()}]:[${srcType.toStrictString()}]",
+        return C_Error.stop(pos, "$errCode:[${dstType.toStrictString()}]:[${srcType.toStrictString()}]",
                 "$errMsg: ${srcType.toStrictString()} instead of ${dstType.toStrictString()}")
     }
 
-    fun errMultipleAttrs(pos: S_Pos, attrs: List<C_ExprContextAttr>, errCode: String, errMsg: String): C_Error {
-        return C_Error(pos, "$errCode:${attrs.joinToString(",")}", "$errMsg: ${attrs.joinToString()}")
+    fun errTypeMismatch(msgCtx: C_MessageContext, pos: S_Pos, srcType: R_Type, dstType: R_Type, errCode: String, errMsg: String) {
+        if (srcType != R_CtErrorType && dstType != R_CtErrorType) {
+            val srcTypeStr = srcType.toStrictString()
+            val dstTypeStr = dstType.toStrictString()
+            msgCtx.error(pos, "$errCode:[$dstTypeStr]:[$srcTypeStr]", "$errMsg: $srcTypeStr instead of $dstTypeStr")
+        }
     }
 
-    fun errUnknownName(name: S_Name): C_Error {
-        return C_Error(name.pos, "unknown_name:${name.str}", "Unknown name: '${name.str}'")
+    fun errMultipleAttrs(pos: S_Pos, attrs: List<C_ExprContextAttr>, errCode: String, errMsg: String): C_Error {
+        return C_Error.stop(pos, "$errCode:${attrs.joinToString(",")}", "$errMsg: ${attrs.joinToString()}")
     }
 
     fun errUnknownName(baseType: R_Type, name: S_Name): C_Error {
         val baseName = baseType.name
-        return C_Error(name.pos, "unknown_name:$baseName.${name.str}", "Unknown name: '$baseName.${name.str}'")
+        return C_Error.stop(name.pos, "unknown_name:$baseName.${name.str}", "Unknown name: '$baseName.${name.str}'")
     }
 
     fun errUnknownName(baseName: List<S_Name>, name: S_Name): C_Error {
         val fullName = baseName + listOf(name)
         val nameStr = C_Utils.nameStr(fullName)
-        return C_Error(name.pos, "unknown_name:$nameStr", "Unknown name: '$nameStr'")
+        return errUnknownName(name.pos, nameStr)
+    }
+
+    fun errUnknownName(name: S_Name): C_Error {
+        return errUnknownName(name.pos, name.str)
+    }
+
+    private fun errUnknownName(pos: S_Pos, str: String): C_Error {
+        return C_Error.stop(pos, "unknown_name:$str", "Unknown name: '$str'")
     }
 
     fun errUnknownAttr(name: S_Name): C_Error {
         val nameStr = name.str
-        return C_Error(name.pos, "expr_attr_unknown:$nameStr", "Unknown attribute: '$nameStr'")
+        return C_Error.stop(name.pos, "expr_attr_unknown:$nameStr", "Unknown attribute: '$nameStr'")
     }
 
     fun errUnknownFunction(name: S_Name): C_Error {
-        return C_Error(name.pos, "unknown_fn:${name.str}", "Unknown function: '${name.str}'")
+        return C_Error.stop(name.pos, "unknown_fn:${name.str}", "Unknown function: '${name.str}'")
     }
 
     fun errUnknownMember(type: R_Type, name: S_Name): C_Error {
-        return C_Error(name.pos, "unknown_member:[${type.toStrictString()}]:${name.str}",
+        return C_Error.stop(name.pos, "unknown_member:[${type.toStrictString()}]:${name.str}",
                 "Type ${type.toStrictString()} has no member '${name.str}'")
+    }
 
+    fun errUnknownMember(msgCtx: C_MessageContext, type: R_Type, name: S_Name) {
+        if (type != R_CtErrorType) {
+            msgCtx.error(name.pos, "unknown_member:[${type.toStrictString()}]:${name.str}",
+                    "Type ${type.toStrictString()} has no member '${name.str}'")
+        }
     }
 
     fun errFunctionNoSql(pos: S_Pos, name: String): C_Error {
-        return C_Error(pos, "expr_call_nosql:$name", "Function '$name' cannot be converted to SQL")
+        return C_Error.stop(pos, "expr_call_nosql:$name", "Function '$name' cannot be converted to SQL")
     }
 
     fun errBadDestination(pos: S_Pos): C_Error {
-        return C_Error(pos, "expr_bad_dst", "Invalid assignment destination")
+        return C_Error.stop(pos, "expr_bad_dst", "Invalid assignment destination")
     }
 
     fun errBadDestination(name: S_Name): C_Error {
-        return C_Error(name.pos, "expr_bad_dst:${name.str}", "Cannot modify '${name.str}'")
+        return C_Error.stop(name.pos, "expr_bad_dst:${name.str}", "Cannot modify '${name.str}'")
     }
 
     fun errAttrNotMutable(pos: S_Pos, name: String): C_Error {
-        return C_Error(pos, "update_attr_not_mutable:$name", "Attribute '$name' is not mutable")
+        return C_Error.stop(pos, "update_attr_not_mutable:$name", "Attribute '$name' is not mutable")
     }
 
     fun errExprNoDb(pos: S_Pos, type: R_Type): C_Error {
         val typeStr = type.toStrictString()
-        return C_Error(pos, "expr_nosql:$typeStr", "Value of type $typeStr cannot be converted to SQL")
+        return C_Error.stop(pos, "expr_nosql:$typeStr", "Value of type $typeStr cannot be converted to SQL")
     }
 
     fun errExprDbNotAllowed(pos: S_Pos): C_Error {
-        return C_Error(pos, "expr_sqlnotallowed", "Database expression not allowed here")
+        return C_Error.stop(pos, "expr_sqlnotallowed", "Database expression not allowed here")
     }
 
-    fun errCannotUpdate(pos: S_Pos, name: String): C_Error {
-        return C_Error(pos, "stmt_update_cant:$name", "Not allowed to update objects of entity '$name'")
+    fun errCannotUpdate(msgCtx: C_MessageContext, pos: S_Pos, name: String) {
+        msgCtx.error(pos, "stmt_update_cant:$name", "Not allowed to update objects of entity '$name'")
     }
 
     fun errCannotDelete(pos: S_Pos, name: String): C_Error {
-        return C_Error(pos, "stmt_delete_cant:$name", "Not allowed to delete objects of entity '$name'")
+        return C_Error.stop(pos, "stmt_delete_cant:$name", "Not allowed to delete objects of entity '$name'")
     }
 
     fun errNameConflictAliasLocal(name: S_Name): C_Error {
         val nameStr = name.str
-        throw C_Error(name.pos, "expr_name_entity_local:$nameStr",
+        throw C_Error.stop(name.pos, "expr_name_entity_local:$nameStr",
                 "Name '$nameStr' is ambiguous: can be entity alias or local variable")
     }
 
-    fun errNameConflict(name: S_Name, otherType: C_DeclarationType, otherPos: S_Pos?): C_Error {
+    fun errNameConflict(name: S_Name, otherType: C_DeclarationType, otherPos: S_Pos?): C_PosCodeMsg {
         val baseCode = "name_conflict"
         val baseMsg = "Name conflict"
-        return if (otherPos != null) {
+        val codeMsg = if (otherPos != null) {
             val code = "$baseCode:user:${name.str}:$otherType:$otherPos"
             val msg = "$baseMsg: ${otherType.msg} '${name.str}' defined at ${otherPos.strLine()}"
-            C_Error(name.pos, code, msg)
+            C_CodeMsg(code, msg)
         } else {
-            val code = "$baseCode:sys:${name.str}:$otherType"
-            val msg = "$baseMsg: system ${otherType.msg} '${name.str}'"
-            C_Error(name.pos, code, msg)
+            C_CodeMsg("$baseCode:sys:${name.str}:$otherType", "$baseMsg: system ${otherType.msg} '${name.str}'")
         }
+        return C_PosCodeMsg(name.pos, codeMsg)
     }
 
     fun errMountConflict(
@@ -503,34 +532,37 @@ object C_Errors {
         val baseMsg = "Mount name conflict" + if (chain == null) "" else "(external chain '$chain')"
         val otherNameMsg = otherEntry.def.simpleName
 
+        val code: String
+        val msg: String
+
         if (otherEntry.pos != null) {
-            val code = "$baseCode:user:$commonCode:${otherEntry.pos}"
-            val msg = "$baseMsg: ${otherEntry.type.msg} '$otherNameMsg' has mount name '$mountName' " +
+            code = "$baseCode:user:$commonCode:${otherEntry.pos}"
+            msg = "$baseMsg: ${otherEntry.type.msg} '$otherNameMsg' has mount name '$mountName' " +
                     "(defined at ${otherEntry.pos.strLine()})"
-            return C_Error(pos, code, msg)
         } else {
-            val code = "$baseCode:sys:$commonCode"
-            val msg = "$baseMsg: system ${otherEntry.type.msg} '$otherNameMsg' has mount name '$mountName'"
-            return C_Error(pos, code, msg)
+            code = "$baseCode:sys:$commonCode"
+            msg = "$baseMsg: system ${otherEntry.type.msg} '$otherNameMsg' has mount name '$mountName'"
         }
+
+        return C_Error.stop(pos, code, msg)
     }
 
     fun errMountConflictSystem(mountName: R_MountName, def: R_Definition, pos: S_Pos): C_Error {
         val code = "mnt_conflict:sys:[${def.appLevelName}]:$mountName"
         val msg = "Mount name conflict: '$mountName' is a system mount name"
-        return C_Error(pos, code, msg)
+        return C_Error.stop(pos, code, msg)
     }
 
     fun check(b: Boolean, pos: S_Pos, code: String, msg: String) {
         if (!b) {
-            throw C_Error(pos, code, msg)
+            throw C_Error.stop(pos, code, msg)
         }
     }
 
     fun check(b: Boolean, pos: S_Pos, codeMsgSupplier: () -> Pair<String, String>) {
         if (!b) {
             val (code, msg) = codeMsgSupplier()
-            throw C_Error(pos, code, msg)
+            throw C_Error.stop(pos, code, msg)
         }
     }
 
@@ -549,7 +581,7 @@ object C_Errors {
 
     fun <T> checkNotNull(value: T?, pos: S_Pos, code: String, msg: String): T {
         if (value == null) {
-            throw C_Error(pos, code, msg)
+            throw C_Error.stop(pos, code, msg)
         }
         return value
     }
@@ -557,7 +589,7 @@ object C_Errors {
     fun <T> checkNotNull(value: T?, pos: S_Pos, codeMsgSupplier: () -> Pair<String, String>): T {
         if (value == null) {
             val (code, msg) = codeMsgSupplier()
-            throw C_Error(pos, code, msg)
+            throw C_Error.stop(pos, code, msg)
         }
         return value
     }

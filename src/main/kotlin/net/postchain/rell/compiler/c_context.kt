@@ -42,6 +42,10 @@ class C_MessageContext(val globalCtx: C_GlobalContext) {
         error(error.pos, error.code, error.errMsg)
     }
 
+    fun error(error: C_PosCodeMsg) {
+        error(error.pos, error.code, error.msg)
+    }
+
     fun messages() = messages.toList()
 
     fun <T> consumeError(code: () -> T): T? {
@@ -263,7 +267,7 @@ class C_MountContext(
 
     private fun failExternal(pos: S_Pos, decType: C_DeclarationType, place: String) {
         val type = StringUtils.capitalize(decType.msg)
-        throw C_Error(pos, "def_external:$place:$decType", "$type not allowed in external $place")
+        throw C_Error.stop(pos, "def_external:$place:$decType", "$type not allowed in external $place")
     }
 
     fun checkNotRepl(pos: S_Pos, decType: C_DeclarationType) {
@@ -342,7 +346,7 @@ class C_EntityContext(
     fun addAttribute(attr: S_AttrHeader, mutable: Boolean, expr: S_Expr?) {
         val defType = defCtx.definitionType
 
-        val rType = attr.compileTypeOpt(defCtx.nsCtx)
+        val rType = attr.compileType(defCtx.nsCtx)
 
         val name = attr.name
         val nameStr = name.str
@@ -351,7 +355,7 @@ class C_EntityContext(
             return
         }
 
-        var err = rType == null
+        var err = rType == R_CtErrorType
 
         val insideEntity = defType == C_DefinitionType.ENTITY || defType == C_DefinitionType.OBJECT
 
@@ -367,10 +371,6 @@ class C_EntityContext(
             err = true
         }
 
-        if (rType == null) {
-            return
-        }
-
         if (insideEntity && !rType.sqlAdapter.isSqlCompatible()) {
             msgCtx.error(name.pos, "entity_attr_type:$nameStr:${rType.toStrictString()}",
                     "Attribute '$nameStr' has unallowed type: ${rType.toStrictString()}")
@@ -383,20 +383,28 @@ class C_EntityContext(
             err = true
         }
 
-        if (err) {
-            return
+        val exprCreator: (() -> R_Expr)? = when {
+            expr == null && defType == C_DefinitionType.OBJECT -> { -> C_Utils.errorRExpr(rType) }
+            expr == null -> null
+            else -> { ->
+                val rExpr = expr.compile(defCtx.defExprCtx, C_TypeHint.ofType(rType)).value().toRExpr()
+                val adapter = C_Types.adaptSafe(msgCtx, rType, rExpr.type, name.pos, "attr_type:$nameStr",
+                        "Default value type mismatch for '$nameStr'")
+                adapter.adaptExpr(rExpr)
+            }
         }
 
-        val exprCreator: (() -> R_Expr)? = if (expr == null) null else { ->
-            val rExpr = expr.compile(defCtx.defExprCtx, C_TypeHint.ofType(rType)).value().toRExpr()
-            val adapter = C_Types.adapt(rType, rExpr.type, name.pos, "attr_type:$nameStr", "Default value type mismatch for '$nameStr'")
-            adapter.adaptExpr(rExpr)
-        }
-
-        addAttribute0(nameStr, rType, mutable, true, exprCreator)
+        addAttribute0(nameStr, rType, mutable = mutable, canSetInCreate = true, valid = !err, exprCreator = exprCreator)
     }
 
-    fun addAttribute0(name: String, rType: R_Type, mutable: Boolean, canSetInCreate: Boolean, exprCreator: (() -> R_Expr)?) {
+    fun addAttribute0(
+            name: String,
+            rType: R_Type,
+            mutable: Boolean,
+            canSetInCreate: Boolean,
+            valid: Boolean,
+            exprCreator: (() -> R_Expr)?
+    ) {
         check(name !in attributes)
         check(defCtx.definitionType != C_DefinitionType.OBJECT || exprCreator != null)
 
@@ -410,16 +418,13 @@ class C_EntityContext(
             }
         }
 
-        attributes[name] = rAttr
+        if (valid) {
+            attributes[name] = rAttr
+        }
     }
 
     private fun compileAttributeExpression(rAttr: R_Attrib, exprCreator: (() -> R_Expr)) {
         val rExpr = exprCreator()
-        check(rAttr.type.isAssignableFrom(rExpr.type)) {
-            val exp = rAttr.type.toStrictString()
-            val act = rExpr.type.toStrictString()
-            "Attribute '$entityName.${rAttr.name}' expression type mismatch: expected '$exp', was '$act'"
-        }
         rAttr.setExpr(rExpr)
     }
 
@@ -445,13 +450,13 @@ class C_EntityContext(
 
     private fun addUniqueKeyIndex(pos: S_Pos, set: MutableSet<Set<String>>, names: List<String>, errCode: String, errMsg: String) {
         if (defCtx.definitionType == C_DefinitionType.OBJECT) {
-            throw C_Error(pos, "object_keyindex:${entityName}", "Object cannot have key or index")
+            throw C_Error.stop(pos, "object_keyindex:${entityName}", "Object cannot have key or index")
         }
 
         val nameSet = names.toSet()
         if (!set.add(nameSet)) {
             val nameLst = names.sorted()
-            throw C_Error(pos, "$errCode:${nameLst.joinToString(",")}", "$errMsg: ${nameLst.joinToString()}")
+            throw C_Error.stop(pos, "$errCode:${nameLst.joinToString(",")}", "$errMsg: ${nameLst.joinToString()}")
         }
     }
 }

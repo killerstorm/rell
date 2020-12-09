@@ -205,7 +205,7 @@ sealed class C_NameContext {
 private class C_BlockNameContext(private val blkCtx: C_BlockContext): C_NameContext() {
     override fun resolveNameLocalValue(name: String) = blkCtx.lookupLocalVar(name)
     override fun hasPlaceholder() = false
-    override fun resolvePlaceholder(pos: S_Pos) = throw C_Error(pos, "expr:dollar:no_at", "Not in at-expression")
+    override fun resolvePlaceholder(pos: S_Pos) = throw C_Error.stop(pos, "expr:dollar:no_at", "Not in at-expression")
     override fun findDefinitionByAlias(alias: S_Name) = null
     override fun findAttributesByName(name: S_Name) = listOf<C_ExprContextAttr>()
     override fun findAttributesByType(type: R_Type) = listOf<C_ExprContextAttr>()
@@ -281,13 +281,19 @@ class C_SimpleDestination(private val rDstExpr: R_DestinationExpr): C_Destinatio
     }
 }
 
-class C_EntityAttrDestination(private val base: V_Expr, private val rEntity: R_Entity, private val attr: R_Attrib): C_Destination() {
+class C_EntityAttrDestination(
+        private val msgCtx: C_MessageContext,
+        private val base: V_Expr,
+        private val rEntity: R_Entity,
+        private val attr: R_Attrib
+): C_Destination() {
     override fun type() = attr.type
     override fun resultType(srcType: R_Type) = R_UnitType
 
     override fun compileAssignStatement(srcExpr: R_Expr, op: C_AssignOp?): R_Statement {
         if (op != null && op.dbOp == null) {
-            throw C_BinOp.errTypeMismatch(op.pos, op.code, attr.type, srcExpr.type)
+            C_BinOp.errTypeMismatch(msgCtx, op.pos, op.code, attr.type, srcExpr.type)
+            return C_Utils.ERROR_STATEMENT
         }
 
         val atEntity = R_DbAtEntity(rEntity, 0)
@@ -308,13 +314,18 @@ class C_EntityAttrDestination(private val base: V_Expr, private val rEntity: R_E
     }
 }
 
-class C_ObjectAttrDestination(private val rObject: R_Object, private val attr: R_Attrib): C_Destination() {
+class C_ObjectAttrDestination(
+        private val msgCtx: C_MessageContext,
+        private val rObject: R_Object,
+        private val attr: R_Attrib
+): C_Destination() {
     override fun type() = attr.type
     override fun resultType(srcType: R_Type) = R_UnitType
 
     override fun compileAssignStatement(srcExpr: R_Expr, op: C_AssignOp?): R_Statement {
         if (op != null && op.dbOp == null) {
-            throw C_BinOp.errTypeMismatch(op.pos, op.code, attr.type, srcExpr.type)
+            C_BinOp.errTypeMismatch(msgCtx, op.pos, op.code, attr.type, srcExpr.type)
+            return C_Utils.ERROR_STATEMENT
         }
 
         val rTarget = R_UpdateTarget_Object(rObject)
@@ -349,15 +360,21 @@ abstract class C_Expr {
     }
 
     open fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_NameExprPair>): C_Expr {
+        args.forEach { it.expr.compileSafe(ctx) }
+
         val type = value().type() // May fail with "not a value" - that's OK.
-        val typeStr = type.toStrictString()
-        throw C_Error(pos, "expr_call_nofn:$typeStr", "Not a function: value of type $typeStr")
+        if (type == R_CtErrorType) {
+            return C_Utils.errorExpr(pos)
+        } else {
+            val typeStr = type.toStrictString()
+            throw C_Error.stop(pos, "expr_call_nofn:$typeStr", "Not a function: value of type $typeStr")
+        }
     }
 
     private fun errNoValue(): C_Error {
         val pos = startPos()
         val kind = kind().code
-        return C_Error(pos, "expr_novalue:$kind", "Expression has no value: $kind")
+        return C_Error.stop(pos, "expr_novalue:$kind", "Expression has no value: $kind")
     }
 }
 

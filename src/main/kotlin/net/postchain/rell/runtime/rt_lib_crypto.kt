@@ -8,7 +8,6 @@ import net.postchain.rell.utils.EthereumSignature
 import org.spongycastle.jcajce.provider.digest.Keccak
 import java.math.BigInteger
 import java.security.MessageDigest
-import java.util.*
 
 object Rt_CryptoUtils {
     fun keccak256(data: ByteArray): ByteArray {

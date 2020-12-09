@@ -51,7 +51,7 @@ enum class S_BinaryOp(private val code: String, val op: C_BinOp) {
                     m[op] = level
                 }
             }
-            check(m.keys.containsAll(S_BinaryOp.values().toSet())) {
+            check(m.keys.containsAll(values().toSet())) {
                 "Forgot to add new operator to the precedence table?"
             }
 
@@ -61,12 +61,14 @@ enum class S_BinaryOp(private val code: String, val op: C_BinOp) {
 
     fun precedence(): Int = PRECEDENCE_MAP.getValue(this)
 
-    fun compile(pos: S_Pos, left: V_Expr, right: V_Expr): V_Expr {
+    fun compile(ctx: C_ExprContext, pos: S_Pos, left: V_Expr, right: V_Expr): V_Expr {
         val value = op.compile(left, right)
-        if (value != null) {
-            return value
+        return if (value != null) {
+            value
+        } else {
+            C_BinOp.errTypeMismatch(ctx.msgCtx, pos, code, left.type(), right.type())
+            C_Utils.errorVExpr(pos)
         }
-        throw C_BinOp.errTypeMismatch(pos, code, left.type(), right.type())
     }
 }
 
@@ -82,7 +84,7 @@ enum class S_AssignOpCode(val op: S_AssignOp) {
 
 sealed class S_AssignOp {
     abstract fun compile(ctx: C_ExprContext, pos: S_Pos, dstValue: V_Expr, srcValue: V_Expr): C_Statement
-    abstract fun compileDbUpdate(pos: S_Pos, attr: R_Attrib, srcValue: V_Expr): R_UpdateStatementWhat
+    abstract fun compileDbUpdate(ctx: C_ExprContext, pos: S_Pos, attr: R_Attrib, srcValue: V_Expr): R_UpdateStatementWhat?
 
     protected open fun compileVarFacts(
             dstValue: V_Expr,
@@ -120,15 +122,16 @@ object S_AssignOp_Eq: S_AssignOp() {
         return varFacts
     }
 
-    override fun compileDbUpdate(pos: S_Pos, attr: R_Attrib, srcValue: V_Expr): R_UpdateStatementWhat {
-        val expr = srcValue.toDbExpr()
+    override fun compileDbUpdate(ctx: C_ExprContext, pos: S_Pos, attr: R_Attrib, srcValue: V_Expr): R_UpdateStatementWhat {
+        val expr = srcValue.toDbExpr(ctx.msgCtx)
         val adapter = attr.type.getTypeAdapter(expr.type)
-        if (adapter == null) {
+        val expr2 = if (adapter == null) {
             val name = attr.name
-            throw C_Error(pos, "stmt_assign_type:$name:${attr.type.toStrictString()}:${expr.type.toStrictString()}",
-                    "Type mismatch for '$name': ${expr.type.toStrictString()} instead of ${attr.type.toStrictString()}")
+            C_Errors.errTypeMismatch(ctx.msgCtx, pos, expr.type, attr.type, "stmt_assign_type", "Type mismatch for '$name'")
+            C_Utils.errorDbExpr(attr.type)
+        } else {
+            adapter.adaptExpr(expr)
         }
-        val expr2 = adapter.adaptExpr(expr)
         return R_UpdateStatementWhat(attr, expr2, null)
     }
 }
@@ -142,11 +145,7 @@ class S_AssignOp_Op(val code: String, val op: C_BinOp_Common): S_AssignOp() {
         val rSrcExpr = srcValue2.toRExpr()
         val srcType = rSrcExpr.type
 
-        val binOp = compileBinOp(pos, dstType, srcType)
-        if (binOp.rOp == null) {
-            throw C_BinOp.errTypeMismatch(pos, code, dstType, srcType)
-        }
-
+        val binOp = compileBinOp(ctx, pos, dstType, srcType)
         val cOp = C_AssignOp(pos, code, binOp.rOp, binOp.dbOp)
         val rStmt = dstExpr.compileAssignStatement(rSrcExpr, cOp)
 
@@ -154,25 +153,25 @@ class S_AssignOp_Op(val code: String, val op: C_BinOp_Common): S_AssignOp() {
         return C_Statement(rStmt, false, varFacts)
     }
 
-    override fun compileDbUpdate(pos: S_Pos, attr: R_Attrib, srcValue: V_Expr): R_UpdateStatementWhat {
+    override fun compileDbUpdate(ctx: C_ExprContext, pos: S_Pos, attr: R_Attrib, srcValue: V_Expr): R_UpdateStatementWhat {
         val srcValue2 = op.adaptRight(attr.type, srcValue)
-        val dbSrcExpr = srcValue2.toDbExpr()
+        val dbSrcExpr = srcValue2.toDbExpr(ctx.msgCtx)
         val srcType = dbSrcExpr.type
 
-        val binOp = compileBinOp(pos, attr.type, srcType)
+        val binOp = compileBinOp(ctx, pos, attr.type, srcType)
         if (binOp.dbOp == null) {
-            throw C_BinOp.errTypeMismatch(pos, code, attr.type, srcType)
+            C_BinOp.errTypeMismatch(ctx.msgCtx, pos, code, attr.type, srcType)
         }
 
         return R_UpdateStatementWhat(attr, dbSrcExpr, binOp.dbOp)
     }
 
-    private fun compileBinOp(pos: S_Pos, left: R_Type, right: R_Type): V_BinaryOp {
+    private fun compileBinOp(ctx: C_ExprContext, pos: S_Pos, left: R_Type, right: R_Type): V_BinaryOp {
         val binOp = op.compileOp(left, right)
-        if (binOp == null || binOp.resType != left) {
-            throw C_BinOp.errTypeMismatch(pos, code, left, right)
+        return if (binOp != null && binOp.resType == left) binOp else {
+            C_BinOp.errTypeMismatch(ctx.msgCtx, pos, code, left, right)
+            V_BinaryOp.of(left, R_BinaryOp_Add_Integer, Db_BinaryOp_Add_Integer) // Using fake ops for error recovery.
         }
-        return binOp
     }
 }
 
@@ -186,9 +185,11 @@ sealed class C_BinOp {
     }
 
     companion object {
-        fun errTypeMismatch(pos: S_Pos, op: String, leftType: R_Type, rightType: R_Type): C_Error {
-            return C_Error(pos, "binop_operand_type:$op:[$leftType]:[$rightType]",
-                    "Wrong operand types for '$op': $leftType, $rightType")
+        fun errTypeMismatch(msgCtx: C_MessageContext, pos: S_Pos, op: String, leftType: R_Type, rightType: R_Type) {
+            if (leftType != R_CtErrorType && rightType != R_CtErrorType) {
+                msgCtx.error(pos, "binop_operand_type:$op:[$leftType]:[$rightType]",
+                        "Wrong operand types for '$op': $leftType, $rightType")
+            }
         }
     }
 }
@@ -627,7 +628,7 @@ class S_BinaryExpr(val head: S_Expr, val tail: List<S_BinaryExprTail>): S_Expr(h
             val rightCtx = ctx.updateFacts(rightFacts)
             val rightValue = right.compile(rightCtx)
 
-            return op.compile(sOp.pos, leftValue, rightValue)
+            return op.compile(ctx, sOp.pos, leftValue, rightValue)
         }
     }
 }

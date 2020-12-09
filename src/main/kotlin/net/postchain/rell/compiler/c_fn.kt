@@ -339,7 +339,7 @@ object C_FunctionUtils {
                 val argType = arg.type()
                 val matcher = C_ArgTypeMatcher_Simple(paramType)
                 m = matcher.match(argType)
-                if (m == null) {
+                if (m == null && argType != R_CtErrorType) {
                     val paramCode = param.nameCode(i)
                     val paramMsg = param.nameMsg(i)
                     val code = "expr_call_argtype:$fnName:$paramCode:${paramType.toStrictString()}:${argType.toStrictString()}"
@@ -443,7 +443,7 @@ class C_SysMemberFormalParamsFuncBody(
             return super.compileCallDb(ctx, caseCtx, args)
         }
         val member = caseCtx.member
-        val dbBase = member.base.toDbExpr()
+        val dbBase = member.base.toDbExpr(ctx.msgCtx)
         val dbFullArgs = listOf(dbBase) + args
         return Db_CallExpr(resType, dbFn, dbFullArgs)
     }
@@ -466,14 +466,16 @@ class C_SysGlobalFunction(private val cases: List<C_GlobalFuncCase>): C_RegularG
         }
 
         val posArgs = args.positional
-        val match = matchCase(name, posArgs)
-        val caseCtx = C_GlobalFuncCaseCtx(name)
 
+        val match = matchCase(ctx, name, posArgs)
+        match ?: return C_Utils.errorExpr(name.pos)
+
+        val caseCtx = C_GlobalFuncCaseCtx(name)
         val vExpr = V_SysGlobalCaseCallExpr(ctx, caseCtx, match, posArgs)
         return C_VExpr(vExpr)
     }
 
-    private fun matchCase(name: S_Name, args: List<V_Expr>): C_GlobalFuncCaseMatch {
+    private fun matchCase(ctx: C_ExprContext, name: S_Name, args: List<V_Expr>): C_GlobalFuncCaseMatch? {
         for (case in cases) {
             val res = case.match(args)
             if (res != null) {
@@ -482,7 +484,8 @@ class C_SysGlobalFunction(private val cases: List<C_GlobalFuncCase>): C_RegularG
         }
 
         val argTypes = args.map { it.type() }
-        throw C_FuncMatchUtils.errNoMatch(name.pos, name.str, argTypes)
+        C_FuncMatchUtils.errNoMatch(ctx, name.pos, name.str, argTypes)
+        return null
     }
 }
 
@@ -491,13 +494,14 @@ class C_SysMemberFunction(val cases: List<C_MemberFuncCase>) {
 
     fun compileCall(ctx: C_ExprContext, member: C_MemberRef, args: List<V_Expr>): C_Expr {
         val qName = member.qualifiedName()
-        val match = matchCase(member.name.pos, qName, args)
+        val match = matchCase(ctx, member.name.pos, qName, args)
+        match ?: return C_Utils.errorExpr(member.pos)
         val caseCtx = C_MemberFuncCaseCtx(member)
         val vExpr = V_SysMemberCaseCallExpr(ctx, caseCtx, match, args)
         return C_VExpr(vExpr)
     }
 
-    private fun matchCase(pos: S_Pos, fullName: String, args: List<V_Expr>): C_MemberFuncCaseMatch {
+    private fun matchCase(ctx: C_ExprContext, pos: S_Pos, fullName: String, args: List<V_Expr>): C_MemberFuncCaseMatch? {
         for (case in cases) {
             val res = case.match(args)
             if (res != null) {
@@ -506,7 +510,8 @@ class C_SysMemberFunction(val cases: List<C_MemberFuncCase>) {
         }
 
         val argTypes = args.map { it.type() }
-        throw C_FuncMatchUtils.errNoMatch(pos, fullName, argTypes)
+        C_FuncMatchUtils.errNoMatch(ctx, pos, fullName, argTypes)
+        return null
     }
 
     private inner class C_SysMemberFnParamHints: C_FunctionParametersHints {

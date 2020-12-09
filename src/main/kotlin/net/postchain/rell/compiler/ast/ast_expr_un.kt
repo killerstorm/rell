@@ -12,8 +12,10 @@ import net.postchain.rell.runtime.Rt_DecimalValue
 sealed class S_UnaryOp(val code: String) {
     abstract fun compile(ctx: C_ExprContext, startPos: S_Pos, opPos: S_Pos, expr: V_Expr): V_Expr
 
-    fun errTypeMismatch(pos: S_Pos, type: R_Type): C_Error {
-        return C_Error(pos, "unop_operand_type:$code:[$type]", "Wrong operand type for '$code': $type")
+    fun errTypeMismatch(ctx: C_ExprContext, pos: S_Pos, type: R_Type) {
+        if (type != R_CtErrorType) {
+            ctx.msgCtx.error(pos, "unop_operand_type:$code:[$type]", "Wrong operand type for '$code': $type")
+        }
     }
 }
 
@@ -21,7 +23,7 @@ object S_UnaryOp_Plus: S_UnaryOp("+") {
     override fun compile(ctx: C_ExprContext, startPos: S_Pos, opPos: S_Pos, expr: V_Expr): V_Expr {
         val type = expr.type()
         if (type != R_IntegerType && type != R_DecimalType) {
-            throw errTypeMismatch(opPos, type)
+            errTypeMismatch(ctx, opPos, type)
         }
 
         // Cannot simply return "expr", because then expressions like "(+x)++" or "(+x) = 123" will be allowed.
@@ -34,10 +36,14 @@ object S_UnaryOp_Plus: S_UnaryOp("+") {
 object S_UnaryOp_Minus: S_UnaryOp("-") {
     override fun compile(ctx: C_ExprContext, startPos: S_Pos, opPos: S_Pos, expr: V_Expr): V_Expr {
         val type = expr.type()
+
         val vOp = when (type) {
             R_IntegerType -> V_UnaryOp_Minus(type, R_UnaryOp_Minus_Integer, Db_UnaryOp_Minus_Integer)
             R_DecimalType -> V_UnaryOp_Minus(type, R_UnaryOp_Minus_Decimal, Db_UnaryOp_Minus_Decimal)
-            else -> throw errTypeMismatch(opPos, type)
+            else -> {
+                errTypeMismatch(ctx, opPos, type)
+                V_UnaryOp_Minus(type, R_UnaryOp_Minus_Integer, Db_UnaryOp_Minus_Integer) // Fake op for error recovery.
+            }
         }
 
         val varFacts = C_ExprVarFacts.of(postFacts = expr.varFacts().postFacts)
@@ -49,7 +55,7 @@ object S_UnaryOp_Not: S_UnaryOp("not") {
     override fun compile(ctx: C_ExprContext, startPos: S_Pos, opPos: S_Pos, expr: V_Expr): V_Expr {
         val type = expr.type()
         if (type != R_BooleanType) {
-            throw errTypeMismatch(opPos, type)
+            errTypeMismatch(ctx, opPos, type)
         }
 
         val varFacts = expr.varFacts()
@@ -68,16 +74,17 @@ class S_UnaryOp_IncDec(val inc: Boolean, val post: Boolean): S_UnaryOp(if (inc) 
         val dst = expr.destination(ctx)
         val dstType = dst.effectiveType()
 
-        val idOps = if (R_IntegerType.isAssignableFrom(dstType)) {
+        val ops = if (R_IntegerType.isAssignableFrom(dstType)) {
             Pair(INTEGER_INCREMENT, INTEGER_DECREMENT)
         } else if (R_DecimalType.isAssignableFrom(dstType)) {
             Pair(DECIMAL_INCREMENT, DECIMAL_DECREMENT)
         } else {
             val opCode = if (inc) "++" else "--"
-            throw C_Error(opPos, "expr_incdec_type:$opCode:$dstType", "Bad operand type for '$opCode': $dstType")
+            ctx.msgCtx.error(opPos, "expr_incdec_type:$opCode:$dstType", "Bad operand type for '$opCode': $dstType")
+            Pair(INTEGER_INCREMENT, INTEGER_DECREMENT) // Fake ops for recovery.
         }
 
-        val idOp = if (inc) idOps.first else idOps.second
+        val idOp = if (inc) ops.first else ops.second
         val op = C_AssignOp(opPos, idOp.op, idOp.rOp, idOp.dbOp)
 
         val resType = dst.resultType(expr.type())
@@ -102,13 +109,14 @@ object S_UnaryOp_NotNull: S_UnaryOp("!!") {
     override fun compile(ctx: C_ExprContext, startPos: S_Pos, opPos: S_Pos, expr: V_Expr): V_Expr {
         val value = expr.asNullable()
         val type = value.type()
-        if (type !is R_NullableType) {
-            throw errTypeMismatch(opPos, type)
+        val valueType = if (type is R_NullableType) type.valueType else {
+            errTypeMismatch(ctx, opPos, type)
+            type
         }
 
         val preFacts = value.varFacts().postFacts
         val varFacts = C_ExprVarFacts.forNullCast(preFacts, value)
-        return V_UnaryExpr(startPos, V_UnaryOp_NotNull(type.valueType), expr, varFacts)
+        return V_UnaryExpr(startPos, V_UnaryOp_NotNull(valueType), expr, varFacts)
     }
 }
 
@@ -117,7 +125,7 @@ object S_UnaryOp_IsNull: S_UnaryOp("??") {
         val value = expr.asNullable()
         val type = value.type()
         if (type !is R_NullableType) {
-            throw errTypeMismatch(opPos, type)
+            errTypeMismatch(ctx, opPos, type)
         }
 
         val preFacts = value.varFacts()

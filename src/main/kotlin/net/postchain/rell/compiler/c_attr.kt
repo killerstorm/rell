@@ -4,10 +4,10 @@
 
 package net.postchain.rell.compiler
 
-import net.postchain.rell.model.*
 import net.postchain.rell.compiler.ast.S_Expr
 import net.postchain.rell.compiler.ast.S_NameExprPair
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.model.*
 
 object C_AttributeResolver {
     fun resolveCreate(
@@ -20,7 +20,7 @@ object C_AttributeResolver {
         val rExprs = values.map { it.toRExpr() }
         val types = rExprs.map { it.type }
 
-        val attrs = matchCreateAttrs(attributes, exprs, types)
+        val attrs = matchCreateAttrs(ctx.msgCtx, attributes, exprs, types)
         val attrExprs = attrs.mapIndexed { idx, attr ->
             val rExpr = rExprs[idx]
             R_CreateExprAttr_Specified(attr, rExpr)
@@ -54,13 +54,14 @@ object C_AttributeResolver {
     }
 
     private fun matchCreateAttrs(
+            msgCtx: C_MessageContext,
             attributes: Map<String, R_Attrib>,
             exprs: List<S_NameExprPair>,
             types: List<R_Type>
     ): List<R_Attrib> {
-        val explicitExprs = matchExplicitExprs(attributes, exprs, false)
+        val explicitExprs = matchExplicitExprs(msgCtx, attributes, exprs, false)
         checkExplicitExprTypes(exprs, explicitExprs, types)
-        return matchImplicitExprs(attributes, exprs, types, explicitExprs, false)
+        return matchImplicitExprs(msgCtx, attributes, exprs, types, explicitExprs, false)
     }
 
     private fun matchDefaultExprs(attributes: Map<String, R_Attrib>, attrExprs: List<R_CreateExprAttr>): List<R_CreateExprAttr> {
@@ -77,14 +78,17 @@ object C_AttributeResolver {
         }
     }
 
-    fun resolveUpdate(entity: R_Entity, exprs: List<S_NameExprPair>, types: List<R_Type>): List<R_Attrib> {
-        val explicitExprs = matchExplicitExprs(entity.attributes, exprs, true)
-        return matchImplicitExprs(entity.attributes, exprs, types, explicitExprs, true)
+    fun resolveUpdate(msgCtx: C_MessageContext, entity: R_Entity, exprs: List<S_NameExprPair>, types: List<R_Type>): List<R_Attrib> {
+        val explicitExprs = matchExplicitExprs(msgCtx, entity.attributes, exprs, entity.flags.canUpdate)
+        return matchImplicitExprs(msgCtx, entity.attributes, exprs, types, explicitExprs, true)
     }
 
-    private fun matchExplicitExprs(attributes: Map<String, R_Attrib>, exprs: List<S_NameExprPair>, mutableOnly: Boolean)
-            : List<IndexedValue<R_Attrib>>
-    {
+    private fun matchExplicitExprs(
+            msgCtx: C_MessageContext,
+            attributes: Map<String, R_Attrib>,
+            exprs: List<S_NameExprPair>,
+            mutableOnly: Boolean
+    ): List<IndexedValue<R_Attrib>> {
         val explicitNames = mutableSetOf<String>()
         val explicitExprs = mutableListOf<IndexedValue<R_Attrib>>()
 
@@ -97,8 +101,9 @@ object C_AttributeResolver {
                 C_Errors.check(explicitNames.add(name.str), name.pos) {
                     "attr_dup_name:${name.str}" to "Attribute already specified: '${name.str}'"
                 }
-                C_Errors.check(!mutableOnly || attr.mutable, name.pos) {
-                    "update_attr_not_mutable:${name.str}" to "Attribute is not mutable: '${name.str}'"
+
+                if (mutableOnly && !attr.mutable) {
+                    msgCtx.error(name.pos, "update_attr_not_mutable:${name.str}", "Attribute is not mutable: '${name.str}'")
                 }
 
                 explicitExprs.add(IndexedValue(idx, attr))
@@ -117,14 +122,14 @@ object C_AttributeResolver {
     }
 
     private fun matchImplicitExprs(
+            msgCtx: C_MessageContext,
             attributes: Map<String, R_Attrib>,
             exprs: List<S_NameExprPair>,
             types: List<R_Type>,
             explicitExprs: List<IndexedValue<R_Attrib>>,
             mutableOnly: Boolean
-    ) : List<R_Attrib>
-    {
-        val implicitExprs = matchImplicitExprs0(attributes, exprs, types, mutableOnly)
+    ) : List<R_Attrib> {
+        val implicitExprs = matchImplicitExprs0(msgCtx, attributes, exprs, types, mutableOnly)
         val result = combineMatchedExprs(exprs, explicitExprs, implicitExprs)
         return result
     }
@@ -133,8 +138,7 @@ object C_AttributeResolver {
             exprs: List<S_NameExprPair>,
             explicitExprs: List<IndexedValue<R_Attrib>>,
             implicitExprs: List<IndexedValue<R_Attrib>>
-    ) : List<R_Attrib>
-    {
+    ) : List<R_Attrib> {
         checkImplicitExprsConflicts1(exprs, explicitExprs, implicitExprs)
         checkImplicitExprsConflicts2(exprs, implicitExprs)
 
@@ -146,19 +150,21 @@ object C_AttributeResolver {
     }
 
     private fun matchImplicitExprs0(
+            msgCtx: C_MessageContext,
             attributes: Map<String, R_Attrib>,
             exprs: List<S_NameExprPair>,
             types: List<R_Type>,
             mutableOnly: Boolean
-    ): List<IndexedValue<R_Attrib>>
-    {
+    ): List<IndexedValue<R_Attrib>> {
         val result = mutableListOf<IndexedValue<R_Attrib>>()
 
         for ((idx, pair) in exprs.withIndex()) {
             if (pair.name == null) {
                 val type = types[idx]
-                val attr = implicitMatch(attributes, idx, pair.expr, type, mutableOnly)
-                result.add(IndexedValue(idx, attr))
+                val attr = implicitMatch(msgCtx, attributes, idx, pair.expr, type, mutableOnly)
+                if (attr != null) {
+                    result.add(IndexedValue(idx, attr))
+                }
             }
         }
 
@@ -168,8 +174,8 @@ object C_AttributeResolver {
     private fun checkImplicitExprsConflicts1(
             exprs: List<S_NameExprPair>,
             explicitExprs: List<IndexedValue<R_Attrib>>,
-            implicitExprs: List<IndexedValue<R_Attrib>>)
-    {
+            implicitExprs: List<IndexedValue<R_Attrib>>
+    ) {
         val explicitNames = explicitExprs.map { (_, attr) -> attr.name }.toSet()
 
         for ((idx, attr) in implicitExprs) {
@@ -200,13 +206,13 @@ object C_AttributeResolver {
     }
 
     private fun implicitMatch(
+            msgCtx: C_MessageContext,
             attributes: Map<String, R_Attrib>,
             idx: Int,
             expr: S_Expr,
             type: R_Type,
             mutableOnly: Boolean
-    ): R_Attrib
-    {
+    ): R_Attrib? {
         val byName = implicitMatchByName(attributes, expr)
         if (byName != null) {
             typeCheck(expr.startPos, idx, byName, type)
@@ -226,8 +232,12 @@ object C_AttributeResolver {
                         "Multiple attributes match expression #${idx + 1}: ${byType.joinToString(", ") { it.name }}"
         }
 
-        throw C_Error(expr.startPos, "attr_implic_unknown:$idx",
-                "Cannot find attribute for expression #${idx + 1} of type ${type.toStrictString()}")
+        if (type != R_CtErrorType) {
+            msgCtx.error(expr.startPos, "attr_implic_unknown:$idx:$type",
+                    "Cannot find attribute for expression #${idx + 1} of type ${type.toStrictString()}")
+        }
+
+        return null
     }
 
     private fun implicitMatchByName(attributes: Map<String, R_Attrib>, expr: S_Expr): R_Attrib? {

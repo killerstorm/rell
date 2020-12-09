@@ -128,7 +128,7 @@ object C_MemberResolver {
 
     fun checkNullAccess(type: R_Type, name: S_Name, safe: Boolean) {
         if (!safe && type is R_NullableType) {
-            throw C_Error(name.pos, "expr_mem_null:${name.str}", "Cannot access member '${name.str}' of nullable value")
+            throw C_Error.stop(name.pos, "expr_mem_null:${name.str}", "Cannot access member '${name.str}' of nullable value")
         }
     }
 }
@@ -189,7 +189,7 @@ private class V_MemberAttrExpr(
         return R_MemberExpr(rBase, memberRef.safe, calculator)
     }
 
-    override fun toDbExpr0(): Db_Expr {
+    override fun toDbExpr0(msgCtx: C_MessageContext): Db_Expr {
         val rExpr = toRExpr()
         return C_Utils.toDbExpr(memberRef.name.pos, rExpr)
     }
@@ -338,14 +338,14 @@ private class V_EntityAttrExpr private constructor(
     }
 
     // Cannot inject the corresponding Db_Expr directly into another Db_Expr - must wrap it in R_Expr.
-    override fun toDbExpr0() = C_Utils.toDbExpr(pos, toRExpr())
+    override fun toDbExpr0(msgCtx: C_MessageContext) = C_Utils.toDbExpr(pos, toRExpr())
 
     override fun destination(ctx: C_ExprContext): C_Destination {
         if (attrInfo.attr == null || !attrInfo.attr.mutable) {
             throw C_Errors.errAttrNotMutable(attrInfo.name.pos, attrInfo.name.str)
         }
         ctx.checkDbUpdateAllowed(pos)
-        return C_EntityAttrDestination(parent, attrInfo.rEntity, attrInfo.attr)
+        return C_EntityAttrDestination(ctx.msgCtx, parent, attrInfo.rEntity, attrInfo.attr)
     }
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {

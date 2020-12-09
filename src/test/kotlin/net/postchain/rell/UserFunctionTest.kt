@@ -202,10 +202,9 @@ class UserFunctionTest: BaseRellTest(false) {
         chkFn("function f(x: integer) = if (x > 0) f(x - 1) else 0;", "f(0)",
                 "ct_err:[fn_type_recursion:FUNCTION:f][fn_type_recursion:FUNCTION:f]")
         chkFn("function f(x: integer) = if (x > 0) f(x - 1) + 1 else 0;", "f(3)",
-                "ct_err:[fn_type_recursion:FUNCTION:f][binop_operand_type:+:[<error>]:[integer]]")
+                "ct_err:[fn_type_recursion:FUNCTION:f][fn_type_recursion:FUNCTION:f]")
         chkFn("function f(x: integer) { if (x > 0) return f(x - 1); return 0; }", "0", "ct_err:fn_type_recursion:FUNCTION:f")
-        chkFn("function f(x: integer) { if (x > 0) return f(x - 1) + 1; return 0; }", "0",
-                "ct_err:[fn_type_recursion:FUNCTION:f][binop_operand_type:+:[<error>]:[integer]]")
+        chkFn("function f(x: integer) { if (x > 0) return f(x - 1) + 1; return 0; }", "0", "ct_err:fn_type_recursion:FUNCTION:f")
     }
 
     @Test fun testInferReturnTypeIndirectRecursion() {

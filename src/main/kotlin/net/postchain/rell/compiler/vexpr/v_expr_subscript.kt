@@ -86,9 +86,9 @@ class V_CommonSubscriptExpr(
         return kind.compileR(pos, rBase, rKey)
     }
 
-    override fun toDbExpr0(): Db_Expr {
-        val dbBase = baseExpr.toDbExpr()
-        val dbKey = keyExpr.toDbExpr()
+    override fun toDbExpr0(msgCtx: C_MessageContext): Db_Expr {
+        val dbBase = baseExpr.toDbExpr(msgCtx)
+        val dbKey = keyExpr.toDbExpr(msgCtx)
         return kind.compileDb(pos, dbBase, dbKey)
     }
 
@@ -99,7 +99,7 @@ class V_CommonSubscriptExpr(
         if (dstExpr == null) {
             val baseType = baseExpr.type()
             val type = baseType.toStrictString()
-            throw C_Error(pos, "expr_immutable:$type", "Value of type '$type' cannot be modified")
+            throw C_Error.stop(pos, "expr_immutable:$type", "Value of type '$type' cannot be modified")
         }
         return C_SimpleDestination(dstExpr)
     }

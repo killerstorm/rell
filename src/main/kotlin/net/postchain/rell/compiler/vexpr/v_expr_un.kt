@@ -1,9 +1,6 @@
 package net.postchain.rell.compiler.vexpr
 
-import net.postchain.rell.compiler.C_AssignOp
-import net.postchain.rell.compiler.C_Destination
-import net.postchain.rell.compiler.C_Error
-import net.postchain.rell.compiler.C_ExprVarFacts
+import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Value
@@ -34,12 +31,12 @@ class V_UnaryOp_Not: V_UnaryOp(R_BooleanType) {
 
 class V_UnaryOp_NotNull(resType: R_Type): V_UnaryOp(resType) {
     override fun compileR(pos: S_Pos, expr: R_Expr) = R_NotNullExpr(resType, expr)
-    override fun compileDb(pos: S_Pos, expr: Db_Expr) = throw C_Error(pos, "expr:is_null:nodb", "Not supported for SQL")
+    override fun compileDb(pos: S_Pos, expr: Db_Expr) = throw C_Error.stop(pos, "expr:is_null:nodb", "Not supported for SQL")
 }
 
 class V_UnaryOp_IsNull: V_UnaryOp(R_BooleanType) {
     override fun compileR(pos: S_Pos, expr: R_Expr) = R_BinaryExpr(R_BooleanType, R_BinaryOp_Ne, expr, R_ConstantExpr.makeNull())
-    override fun compileDb(pos: S_Pos, expr: Db_Expr) = throw C_Error(pos, "expr:is_null:nodb", "Not supported for SQL")
+    override fun compileDb(pos: S_Pos, expr: Db_Expr) = throw C_Error.stop(pos, "expr:is_null:nodb", "Not supported for SQL")
 }
 
 class V_UnaryExpr(
@@ -59,8 +56,8 @@ class V_UnaryExpr(
         return op.compileR(pos, rExpr)
     }
 
-    override fun toDbExpr0(): Db_Expr {
-        val dbExpr = expr.toDbExpr()
+    override fun toDbExpr0(msgCtx: C_MessageContext): Db_Expr {
+        val dbExpr = expr.toDbExpr(msgCtx)
         return op.compileDb(pos, dbExpr)
     }
 

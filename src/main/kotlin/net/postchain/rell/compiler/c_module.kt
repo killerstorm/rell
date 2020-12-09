@@ -6,8 +6,8 @@ package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_RellFile
-import net.postchain.rell.utils.immMapOf
 import net.postchain.rell.model.*
+import net.postchain.rell.utils.immMapOf
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 import java.util.*
@@ -240,7 +240,7 @@ class C_ModuleCompiler private constructor(private val modCtx: C_ModuleContext) 
         if (moduleArgs != null) {
             modCtx.appCtx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
                 if (!moduleArgs.struct.flags.typeFlags.gtv.fromGtv) {
-                    throw C_Error(moduleArgs.name.pos, "module_args_nogtv",
+                    throw C_Error.more(moduleArgs.name.pos, "module_args_nogtv",
                             "Struct '${moduleArgs.struct.moduleLevelName}' is not Gtv-compatible")
                 }
             }

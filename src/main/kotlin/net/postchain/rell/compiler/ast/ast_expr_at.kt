@@ -112,7 +112,7 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
                 aggregate = summarization != null && summarization != C_AtSummarizationKind.GROUP
         )
 
-        val vExpr = field.expr.compile(ctx).value()
+        val vExpr = field.expr.compileSafe(ctx).value()
         val cSummarization = compileSummarization(ctx, vExpr, summarization)
 
         var namePos: S_Pos = field.expr.startPos
@@ -223,7 +223,7 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
         subValues.add(vExpr)
 
         val type = vExpr.type()
-        if (type == R_BooleanType) {
+        if (type == R_BooleanType || type == R_CtErrorType) {
             return vExpr
         }
 
@@ -234,7 +234,9 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
 
         val attrs = S_AtExpr.findWhereContextAttrsByType(ctx, type)
         if (attrs.isEmpty()) {
-            throw C_Error(expr.startPos, "at_where_type:$idx:$type", "No attribute matches type of where-expression #${idx + 1}: $type")
+            ctx.msgCtx.error(expr.startPos, "at_where_type:$idx:$type",
+                    "No attribute matches type of where-expression #${idx + 1}: $type")
+            return C_Utils.errorVExpr(expr.startPos)
         } else if (attrs.size > 1) {
             throw C_Errors.errMultipleAttrs(expr.startPos, attrs, "at_attr_type_ambig:$idx:$type",
                     "Multiple attributes match type of where-expression #${idx+1} ($type)")
@@ -247,14 +249,16 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
 
     private fun makeWhere(compiledExprs: List<V_Expr>): V_Expr? {
         for (value in compiledExprs) {
-            check(value.type() == R_BooleanType)
+            check(value.type() in listOf(R_BooleanType, R_CtErrorType))
         }
 
         if (compiledExprs.isEmpty()) {
             return null
         }
 
-        return CommonUtils.foldSimple(compiledExprs) { left, right -> C_BinOp_And.compile(left, right)!! }
+        return CommonUtils.foldSimple(compiledExprs) { left, right ->
+            C_BinOp_And.compile(left, right) ?: C_Utils.errorVExpr(left.pos)
+        }
     }
 }
 
@@ -346,35 +350,6 @@ class S_AtExpr(
     }
 
     companion object {
-        fun compileFromEntities(ctx: C_ExprContext, from: List<S_AtExprFrom>): List<C_AtEntity> {
-            val cFrom = from.mapIndexed { i, f -> compileFromEntity(ctx, i, f) }
-
-            val names = mutableSetOf<String>()
-            for ((alias, entity) in cFrom) {
-                if (!names.add(entity.alias)) {
-                    throw C_Error(alias.pos, "at_dup_alias:${entity.alias}", "Duplicate entity alias: ${entity.alias}")
-                }
-            }
-
-            return cFrom.map { ( _, entity ) -> entity }
-        }
-
-        private fun compileFromEntity(ctx: C_ExprContext, idx: Int, from: S_AtExprFrom): Pair<S_Name, C_AtEntity> {
-            if (from.alias != null) {
-                val name = from.alias
-                val localVar = ctx.nameCtx.resolveNameLocalValue(name.str)
-                if (localVar != null) {
-                    throw C_Error(name.pos, "expr_at_conflict_alias:${name.str}", "Name conflict: '${name.str}'")
-                }
-            }
-
-            val explicitAlias = from.alias
-            val alias = explicitAlias ?: from.entityName[from.entityName.size - 1]
-
-            val entity = ctx.nsCtx.getEntity(from.entityName)
-            return Pair(alias, C_AtEntity(alias.pos, entity, alias.str, explicitAlias != null, idx))
-        }
-
         fun findWhereContextAttrsByType(ctx: C_ExprContext, type: R_Type): List<C_ExprContextAttr> {
             return if (type == R_BooleanType) {
                 listOf()

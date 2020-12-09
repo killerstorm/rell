@@ -91,9 +91,9 @@ class LibBlockTransactionTest: BaseRellTest() {
         chkOp("update block@{}( block_rid = x'cafe' );", "ct_err:stmt_update_cant:block")
         chkOp("update block@{}( timestamp = 999 );", "ct_err:stmt_update_cant:block")
 
-        chkOp("update transaction@{}( tx_rid = 'dead' );", "ct_err:stmt_update_cant:transaction")
-        chkOp("update transaction@{}( tx_hash = 'dead' );", "ct_err:stmt_update_cant:transaction")
-        chkOp("update transaction@{}( tx_data = 'dead' );", "ct_err:stmt_update_cant:transaction")
+        chkOp("update transaction@{}( tx_rid = x'dead' );", "ct_err:stmt_update_cant:transaction")
+        chkOp("update transaction@{}( tx_hash = x'dead' );", "ct_err:stmt_update_cant:transaction")
+        chkOp("update transaction@{}( tx_data = x'dead' );", "ct_err:stmt_update_cant:transaction")
         chkOp("update transaction@{}( block = block@{} );", "ct_err:stmt_update_cant:transaction")
 
         chkOp("delete block@{};", "ct_err:stmt_delete_cant:block")

@@ -82,26 +82,28 @@ class S_String(val pos: S_Pos, val str: String): S_Node() {
 
 sealed class S_AttrHeader(val name: S_Name): S_Node() {
     abstract fun hasExplicitType(): Boolean
-    abstract fun compileType(ctx: C_NamespaceContext): R_Type
+    abstract fun compileTypeOpt(ctx: C_NamespaceContext): R_Type?
 
-    fun compileTypeOpt(ctx: C_NamespaceContext): R_Type? {
-        return ctx.msgCtx.consumeError { compileType(ctx) }
+    fun compileType(ctx: C_NamespaceContext): R_Type {
+        return compileTypeOpt(ctx) ?: R_CtErrorType
     }
 }
 
 class S_NameTypeAttrHeader(name: S_Name, private val type: S_Type): S_AttrHeader(name) {
     override fun hasExplicitType() = true
-    override fun compileType(ctx: C_NamespaceContext) = type.compile(ctx)
+    override fun compileTypeOpt(ctx: C_NamespaceContext) = type.compileOpt(ctx)
 }
 
 class S_NameAttrHeader(name: S_Name): S_AttrHeader(name) {
     override fun hasExplicitType() = false
 
-    override fun compileType(ctx: C_NamespaceContext): R_Type {
+    override fun compileTypeOpt(ctx: C_NamespaceContext): R_Type? {
         val rType = ctx.getTypeOpt(listOf(name))
-        return C_Errors.checkNotNull(rType, name.pos) {
-            "unknown_name_type:${name.str}" to "Cannot infer type for '${name.str}'; specify type explicitly"
+        if (rType == null) {
+            ctx.msgCtx.error(name.pos, "unknown_name_type:${name.str}",
+                    "Cannot infer type for '${name.str}'; specify type explicitly")
         }
+        return rType
     }
 }
 
@@ -396,7 +398,7 @@ class S_EntityDefinition(
         if (rEntity.flags.log) {
             val sysDefs = extChain?.sysDefs ?: ctx.modCtx.sysDefs
             val txType = sysDefs.transactionEntity.type
-            entCtx.addAttribute0("transaction", txType, false, false) {
+            entCtx.addAttribute0("transaction", txType, mutable = false, canSetInCreate = false, valid = true) {
                 if (extChain == null) {
                     val nsValueCtx = C_NamespaceValueContext(entCtx.defCtx)
                     C_Ns_OpContext.transactionExpr(nsValueCtx, name.pos)

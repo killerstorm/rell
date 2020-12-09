@@ -4,10 +4,10 @@
 
 package net.postchain.rell.compiler.ast
 
-import net.postchain.rell.utils.MutableTypedKeyMap
-import net.postchain.rell.utils.TypedKey
 import net.postchain.rell.compiler.*
 import net.postchain.rell.model.*
+import net.postchain.rell.utils.MutableTypedKeyMap
+import net.postchain.rell.utils.TypedKey
 
 abstract class S_Statement(val pos: S_Pos) {
     private val modifiedVars = TypedKey<Set<String>>()
@@ -57,28 +57,28 @@ class S_SimpleVarDeclarator(private val attrHeader: S_AttrHeader): S_VarDeclarat
     override fun compile(ctx: C_StmtContext, mutable: Boolean, rExprType: R_Type?, varFacts: C_MutableVarFacts): R_VarDeclarator {
         val name = attrHeader.name
 
-        if (name.str == "_") {
-            if (attrHeader.hasExplicitType()) {
-                throw C_Error(name.pos, "var_wildcard_type", "Name '${name.str}' is a wildcard, it cannot have a type")
-            }
-            return R_WildcardVarDeclarator
-        }
-
         val rType = if (attrHeader.hasExplicitType() || rExprType == null) attrHeader.compileType(ctx.nsCtx) else null
 
         if (rType == null && rExprType == null) {
-            throw C_Error(name.pos, "stmt_var_notypeexpr:${name.str}", "Neither type nor expression specified for '${name.str}'")
+            ctx.msgCtx.error(name.pos, "stmt_var_notypeexpr:${name.str}", "Neither type nor expression specified for '${name.str}'")
         } else if (rExprType != null) {
             C_Utils.checkUnitType(name.pos, rExprType, "stmt_var_unit:${name.str}", "Expression for '${name.str}' returns nothing")
         }
 
         val typeAdapter = if (rExprType != null && rType != null) {
-            C_Types.adapt(rType, rExprType, name.pos, "stmt_var_type:${name.str}", "Type mismatch for '${name.str}'")
+            C_Types.adaptSafe(ctx.msgCtx, rType, rExprType, name.pos, "stmt_var_type:${name.str}", "Type mismatch for '${name.str}'")
         } else {
             R_TypeAdapter_Direct
         }
 
-        val rVarType = rType ?: rExprType!!
+        if (name.str == "_") {
+            if (attrHeader.hasExplicitType()) {
+                ctx.msgCtx.error(name.pos, "var_wildcard_type", "Name '${name.str}' is a wildcard, it cannot have a type")
+            }
+            return R_WildcardVarDeclarator
+        }
+
+        val rVarType = rType ?: rExprType ?: R_CtErrorType
         val cVar = ctx.blkCtx.addLocalVar(name, rVarType, mutable)
 
         val facts = if (rExprType != null) {
@@ -89,7 +89,6 @@ class S_SimpleVarDeclarator(private val attrHeader: S_AttrHeader): S_VarDeclarat
             val inited = mapOf(cVar.uid to C_VarFact.NO)
             C_VarFacts.of(inited = inited)
         }
-
         varFacts.putFacts(facts)
 
         return R_SimpleVarDeclarator(cVar.ptr, rVarType, typeAdapter)
@@ -116,19 +115,25 @@ class S_TupleVarDeclarator(val pos: S_Pos, val subDeclarators: List<S_VarDeclara
             return subDeclarators.map { it.compile(ctx, mutable, null, varFacts) }
         }
 
-        if (rExprType !is R_TupleType) {
-            throw C_Error(pos, "var_notuple:$rExprType", "Expression must return a tuple, but it returns '$rExprType'")
-        }
-
-        val n1 = subDeclarators.size
-        val n2 = rExprType.fields.size
-        if (n1 != n2) {
-            throw C_Error(pos, "var_tuple_wrongsize:$n1:$n2:$rExprType",
-                    "Expression returns a tuple of $n2 element(s) instead of $n1 element(s): $rExprType")
+        val fieldTypes = if (rExprType is R_TupleType) {
+            val n1 = subDeclarators.size
+            val n2 = rExprType.fields.size
+            if (n1 != n2) {
+                ctx.msgCtx.error(pos, "var_tuple_wrongsize:$n1:$n2:$rExprType",
+                        "Expression returns a tuple of $n2 element(s) instead of $n1 element(s): $rExprType")
+            }
+            subDeclarators.indices.map {
+                if (it < n2) rExprType.fields[it].type else R_CtErrorType
+            }
+        } else {
+            if (rExprType != R_CtErrorType) {
+                ctx.msgCtx.error(pos, "var_notuple:$rExprType", "Expression must return a tuple, but it returns '$rExprType'")
+            }
+            subDeclarators.map { R_CtErrorType }
         }
 
         return subDeclarators.withIndex().map { (i, subDeclarator) ->
-            subDeclarator.compile(ctx, mutable, rExprType.fields[i].type, varFacts)
+            subDeclarator.compile(ctx, mutable, fieldTypes[i], varFacts)
         }
     }
 
@@ -146,14 +151,13 @@ class S_VarStatement(
         val mutable: Boolean
 ): S_Statement(pos) {
     override fun compile0(ctx: C_StmtContext, repl: Boolean): C_Statement {
-        val cValue = expr?.compile(ctx)?.value()
+        val cValue = expr?.compileSafe(ctx.exprCtx)?.value()
         val rExpr = cValue?.toRExpr()
 
         val varFacts = C_MutableVarFacts()
         varFacts.putFacts(cValue?.varFacts()?.postFacts ?: C_VarFacts.EMPTY)
 
-        var rDeclarator = declarator.compile(ctx, mutable, rExpr?.type, varFacts)
-
+        val rDeclarator = declarator.compile(ctx, mutable, rExpr?.type, varFacts)
         val rStmt = R_VarStatement(rDeclarator, rExpr)
         return C_Statement(rStmt, false, varFacts.toVarFacts())
     }
@@ -571,7 +575,7 @@ class S_ForStatement(pos: S_Pos, val declarator: S_VarDeclarator, val expr: S_Ex
 class S_BreakStatement(pos: S_Pos): S_Statement(pos) {
     override fun compile0(ctx: C_StmtContext, repl: Boolean): C_Statement {
         if (ctx.loop == null) {
-            throw C_Error(pos, "stmt_break_noloop", "Break without a loop")
+            throw C_Error.more(pos, "stmt_break_noloop", "Break without a loop")
         }
         val rStmt = R_BreakStatement()
         return C_Statement(rStmt, false)
@@ -581,7 +585,7 @@ class S_BreakStatement(pos: S_Pos): S_Statement(pos) {
 class S_ContinueStatement(pos: S_Pos): S_Statement(pos) {
     override fun compile0(ctx: C_StmtContext, repl: Boolean): C_Statement {
         if (ctx.loop == null) {
-            throw C_Error(pos, "stmt_continue_noloop", "Continue without a loop")
+            throw C_Error.more(pos, "stmt_continue_noloop", "Continue without a loop")
         }
         val rStmt = R_ContinueStatement()
         return C_Statement(rStmt, false)

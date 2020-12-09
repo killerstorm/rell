@@ -20,7 +20,7 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
     override fun compileWhere(ctx: C_ExprContext, idx: Int): C_Expr {
         val localVar = ctx.nameCtx.resolveNameLocalValue(name.str)
         if (localVar == null) {
-            return compile(ctx)
+            return compileSafe(ctx)
         }
 
         val res = C_NameResolution_Local(name, ctx, localVar)
@@ -29,15 +29,13 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
 
         val entityAttrs = ctx.nameCtx.findAttributesByName(name)
         if (entityAttrs.isEmpty() && varType == R_BooleanType) {
-            return compile(ctx)
+            return compileSafe(ctx)
         }
 
-        val entityAttr = matchAttribute(ctx, idx, entityAttrs, varType)
-        val attrType = entityAttr.type
-        if (!C_BinOp_EqNe.checkTypesDb(attrType, varType)) {
-            throw C_Error(name.pos, "at_param_attr_type_mismatch:$name:$attrType:$varType",
-                    "Parameter type does not match attribute type for '$name': $varType instead of $attrType")
+        val entityAttr = ctx.msgCtx.consumeError {
+            matchAttribute(ctx, idx, entityAttrs, varType)
         }
+        entityAttr ?: return C_Utils.errorExpr(startPos)
 
         val entityAttrExpr = entityAttr.compile(startPos)
         val vResExpr = C_Utils.makeVBinaryExprEq(startPos, entityAttrExpr, vExpr)
@@ -57,7 +55,7 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
         }
 
         if (entityAttrsByType.isEmpty()) {
-            throw C_Error(name.pos, "at_where:var_noattrs:$idx:${name.str}:$varType",
+            throw C_Error.more(name.pos, "at_where:var_noattrs:$idx:${name.str}:$varType",
                     "No attribute matches variable '${name.str}' by name or type ($varType)")
         } else if (entityAttrsByType.size > 1) {
             if (entityAttrs.isEmpty()) {
@@ -139,9 +137,11 @@ class S_SafeMemberExpr(val base: S_Expr, val name: S_Name): S_Expr(base.startPos
 
         val baseValue = cBase.value()
         val baseValueNullable = baseValue.asNullable()
+
         val baseType = baseValueNullable.type()
         if (baseType !is R_NullableType) {
-            throw errWrongType(baseType)
+            val typeStr = baseType.toStrictString()
+            ctx.msgCtx.error(name.pos, "expr_safemem_type:[$typeStr]", "Wrong type for operator '?.': $typeStr")
         }
 
         val smartType = baseValue.type()
@@ -150,11 +150,6 @@ class S_SafeMemberExpr(val base: S_Expr, val name: S_Name): S_Expr(base.startPos
         } else {
             return baseValueNullable.member(ctx, name, true)
         }
-    }
-
-    private fun errWrongType(type: R_Type): C_Error {
-        return C_Error(name.pos, "expr_safemem_type:[${type.toStrictString()}]",
-                "Wrong type for operator '?.': ${type.toStrictString()}")
     }
 }
 

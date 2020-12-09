@@ -13,7 +13,7 @@ class V_RExpr(
     override fun type() = rExpr.type
     override fun isDb() = false
     override fun toRExpr0() = rExpr
-    override fun toDbExpr0() = C_Utils.toDbExpr(pos, rExpr)
+    override fun toDbExpr0(msgCtx: C_MessageContext) = C_Utils.toDbExpr(pos, rExpr)
     override fun constantValue() = rExpr.constantValue()
     override fun varFacts() = exprVarFacts
 
@@ -29,7 +29,7 @@ class V_DbExpr private constructor(pos: S_Pos, private val dbExpr: Db_Expr, priv
     override fun type() = dbExpr.type
     override fun isDb() = true
     override fun toRExpr0() = throw C_Errors.errExprDbNotAllowed(pos)
-    override fun toDbExpr0() = dbExpr
+    override fun toDbExpr0(msgCtx: C_MessageContext) = dbExpr
     override fun constantValue() = dbExpr.constantValue()
     override fun varFacts() = varFacts
 
@@ -63,7 +63,7 @@ class V_LocalVarExpr(
 ): V_Expr(name.pos) {
     override fun type() = smartType ?: localVar.type
     override fun isDb() = false
-    override fun toDbExpr0() = C_Utils.toDbExpr(pos, toRExpr())
+    override fun toDbExpr0(msgCtx: C_MessageContext) = C_Utils.toDbExpr(pos, toRExpr())
     override fun varId() = localVar.uid
 
     override fun toRExpr0(): R_Expr {
@@ -90,7 +90,7 @@ class V_LocalVarExpr(
         check(ctx === this.ctx)
         if (!localVar.mutable) {
             if (ctx.factsCtx.inited(localVar.uid) != C_VarFact.NO) {
-                throw C_Error(name.pos, "expr_assign_val:${name.str}", "Value of '${name.str}' cannot be changed")
+                throw C_Error.stop(name.pos, "expr_assign_val:${name.str}", "Value of '${name.str}' cannot be changed")
             }
         }
         val effectiveType = smartType ?: localVar.type
@@ -100,7 +100,7 @@ class V_LocalVarExpr(
     private fun checkInitialized() {
         if (ctx.factsCtx.inited(localVar.uid) != C_VarFact.YES) {
             val nameStr = name.str
-            throw C_Error(pos, "expr_var_uninit:$nameStr", "Variable '$nameStr' may be uninitialized")
+            throw C_Error.stop(pos, "expr_var_uninit:$nameStr", "Variable '$nameStr' may be uninitialized")
         }
     }
 
@@ -128,7 +128,7 @@ class V_ObjectExpr(private val name: List<S_Name>, private val rObject: R_Object
     override fun type() = rObject.type
     override fun isDb() = false
     override fun toRExpr0() = R_ObjectExpr(rObject.type)
-    override fun toDbExpr0() = C_Utils.toDbExpr(pos, toRExpr())
+    override fun toDbExpr0(msgCtx: C_MessageContext) = C_Utils.toDbExpr(pos, toRExpr())
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
         val attr = rObject.rEntity.attributes[memberName.str]
@@ -142,14 +142,14 @@ private class V_ObjectAttrExpr(pos: S_Pos, private val rObject: R_Object, privat
     override fun type() = attr.type
     override fun isDb() = false
     override fun toRExpr0() = createAccessExpr()
-    override fun toDbExpr0() = C_Utils.toDbExpr(pos, toRExpr())
+    override fun toDbExpr0(msgCtx: C_MessageContext) = C_Utils.toDbExpr(pos, toRExpr())
 
     override fun destination(ctx: C_ExprContext): C_Destination {
         if (!attr.mutable) {
             throw C_Errors.errAttrNotMutable(pos, attr.name)
         }
         ctx.checkDbUpdateAllowed(pos)
-        return C_ObjectAttrDestination(rObject, attr)
+        return C_ObjectAttrDestination(ctx.msgCtx, rObject, attr)
     }
 
     private fun createAccessExpr(): R_Expr {

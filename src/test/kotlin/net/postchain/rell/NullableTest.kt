@@ -550,9 +550,9 @@ class NullableTest: BaseRellTest(false) {
         tstOperErr("boolean", "and")
         tstOperErr("boolean", "or")
 
-        chkEx("{ var x: boolean?; return not x; }", "ct_err:unop_operand_type:not:[boolean?]")
-        chkEx("{ var x: integer?; return +x; }", "ct_err:unop_operand_type:+:[integer?]")
-        chkEx("{ var x: integer?; return -x; }", "ct_err:unop_operand_type:-:[integer?]")
+        chkEx("{ var x: boolean?; return not x; }", "ct_err:[unop_operand_type:not:[boolean?]][expr_var_uninit:x]")
+        chkEx("{ var x: integer?; return +x; }", "ct_err:[unop_operand_type:+:[integer?]][expr_var_uninit:x]")
+        chkEx("{ var x: integer?; return -x; }", "ct_err:[unop_operand_type:-:[integer?]][expr_var_uninit:x]")
 
         chkEx("{ var x: integer? = _nullable(123); return x in [123, 456]; }",
                 "ct_err:binop_operand_type:in:[integer?]:[list<integer>]")
@@ -695,7 +695,7 @@ class NullableTest: BaseRellTest(false) {
         chkEx("{ val x: (a:integer?)? = _nullable((a=null)); return x?.a?.to_hex(); }", "null")
         chkEx("{ val x: (a:integer?)? = null; return x?.a?.to_hex(); }", "null")
 
-        chkEx("{ null?.str(); return 0; }", "ct_err:expr_safemem_type:[null]")
+        chkEx("{ null?.str(); return 0; }", "ct_err:[expr_safemem_type:[null]][unknown_member:[null]:str]")
 
         chkEx("{ return integer.from_hex('7b'); }", "int[123]")
         chkEx("{ return integer?.from_hex('7b'); }", "ct_err:expr_novalue:namespace")

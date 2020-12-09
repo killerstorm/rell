@@ -4,11 +4,11 @@
 
 package net.postchain.rell.compiler
 
-import net.postchain.rell.utils.Getter
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.model.R_Entity
 import net.postchain.rell.model.R_EntityType
 import net.postchain.rell.model.R_Type
+import net.postchain.rell.utils.Getter
 
 class C_ScopeBuilder {
     private val msgCtx: C_MessageContext
@@ -57,7 +57,7 @@ class C_Scope(
         val entity = getEntityOpt(name)
         if (entity == null) {
             val nameStr = C_Utils.nameStr(name)
-            throw C_Error(name[0].pos, "unknown_entity:$nameStr", "Unknown entity: '$nameStr'")
+            throw C_Error.stop(name[0].pos, "unknown_entity:$nameStr", "Unknown entity: '$nameStr'")
         }
         return entity
     }
@@ -70,7 +70,7 @@ class C_Scope(
 
         if (type !is R_EntityType) {
             val nameStr = C_Utils.nameStr(name)
-            throw C_Error(name[0].pos, "unknown_entity:$nameStr", "Unknown entity: '$nameStr'")
+            throw C_Error.stop(name[0].pos, "unknown_entity:$nameStr", "Unknown entity: '$nameStr'")
         }
 
         return type.rEntity

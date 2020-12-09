@@ -89,7 +89,7 @@ abstract class RellBaseTester(
 
         if (cRes.errors.isNotEmpty()) {
             val err = cRes.errors[0]
-            throw C_Error(err.pos, err.code, err.text)
+            throw C_Error.other(err.pos, err.code, err.text)
         }
 
         return cRes.app!!

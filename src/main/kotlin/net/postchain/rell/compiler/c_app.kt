@@ -230,7 +230,7 @@ class C_AppContext(
             val entity = cycle[0]
             val pos = entityToPos[entity]
             check(pos != null) { entity.appLevelName }
-            throw C_Error(pos, "entity_cycle:$shortStr", "Entity cycle, not allowed: $str")
+            throw C_Error.stop(pos, "entity_cycle:$shortStr", "Entity cycle, not allowed: $str")
         }
 
         val res = C_GraphUtils.topologicalSort(graph)

@@ -49,8 +49,7 @@ class V_WhenExpr(
         private val chooserDetails: V_WhenChooserDetails,
         private val valueExprs: List<V_Expr>,
         private val resType: R_Type,
-        private val resVarFacts: C_ExprVarFacts,
-        private val msgCtx: C_MessageContext
+        private val resVarFacts: C_ExprVarFacts
 ): V_Expr(pos) {
     private val isDb = (listOfNotNull(chooserDetails.keyExpr) + chooserDetails.variableCases.map { it.value }).any { isDb(it) }
             || valueExprs.any { isDb(it) }
@@ -65,17 +64,17 @@ class V_WhenExpr(
         return R_WhenExpr(resType, rChooser, rExprs)
     }
 
-    override fun toDbExpr0(): Db_Expr {
+    override fun toDbExpr0(msgCtx: C_MessageContext): Db_Expr {
         val caseCondMap = mutableMapOf<Int, MutableList<Db_Expr>>()
         for (case in chooserDetails.variableCases) caseCondMap[case.index] = mutableListOf()
-        for (case in chooserDetails.variableCases) caseCondMap.getValue(case.index).add(case.value.toDbExpr())
+        for (case in chooserDetails.variableCases) caseCondMap.getValue(case.index).add(case.value.toDbExpr(msgCtx))
 
-        val keyExpr = chooserDetails.keyExpr?.toDbExpr()
+        val keyExpr = chooserDetails.keyExpr?.toDbExpr(msgCtx)
 
         val caseExprs = caseCondMap.keys.sorted().map { idx ->
             val conds = caseCondMap.getValue(idx)
             val value = valueExprs[idx]
-            Db_WhenCase(conds, value.toDbExpr())
+            Db_WhenCase(conds, value.toDbExpr(msgCtx))
         }
 
         val elseIdx = chooserDetails.elseCase
@@ -86,7 +85,7 @@ class V_WhenExpr(
             return C_Utils.errorDbExpr(resType)
         }
 
-        val elseExpr = valueExprs[elseIdx.index].toDbExpr()
+        val elseExpr = valueExprs[elseIdx.index].toDbExpr(msgCtx)
         return Db_WhenExpr(resType, keyExpr, caseExprs, elseExpr)
     }
 }

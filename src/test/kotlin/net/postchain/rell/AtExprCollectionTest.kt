@@ -103,9 +103,9 @@ class AtExprCollectionTest: BaseRellTest(false) {
     }
 
     @Test fun testFromAliasConflict() {
-        chk("(x: [1,2,3], x: [4,5,6]) @* {}", "ct_err:expr_tuple_dupname:x")
+        chk("(x: [1,2,3], x: [4,5,6]) @* {}", "ct_err:[expr_tuple_dupname:x][at:from:many_iterables:2]")
         chk("(x: [1,2,3]) @* {} ((x: [4,5,6]) @* {})", "ct_err:expr_at_conflict_alias:x")
-        chk("(x: [1,2,3]) @* {(x: [4,5,6]) @* {}}", "ct_err:expr_at_conflict_alias:x")
+        chk("(x: [1,2,3]) @* {((x: [4,5,6]) @* {}).empty()}", "ct_err:expr_at_conflict_alias:x")
         chkEx("{ val x = 'Hello'; return (x: [1,2,3]) @* {}; }", "ct_err:expr_at_conflict_alias:x")
     }
 
@@ -141,8 +141,8 @@ class AtExprCollectionTest: BaseRellTest(false) {
         chk("(a : [1,2,3,4,5],) @* {}", "[1, 2, 3, 4, 5]")
         chk("(a = [1,2,3,4,5]) @* {}", "ct_err:expr:at:from:tuple_name_eq_expr:a")
         chk("(a = [1,2,3,4,5],) @* {}", "ct_err:expr:at:from:tuple_name_eq_expr:a")
-        chk("(a : [1,2,3], b = [4,5,6]) @* {}", "ct_err:expr:at:from:tuple_name_eq_expr:b")
-        chk("(a = [1,2,3], b : [4,5,6]) @* {}", "ct_err:expr:at:from:tuple_name_eq_expr:a")
+        chk("(a : [1,2,3], b = [4,5,6]) @* {}", "ct_err:[expr:at:from:tuple_name_eq_expr:b][at:from:many_iterables:2]")
+        chk("(a = [1,2,3], b : [4,5,6]) @* {}", "ct_err:[expr:at:from:tuple_name_eq_expr:a][at:from:many_iterables:2]")
     }
 
     @Test fun testFromListSet() {
@@ -202,10 +202,10 @@ class AtExprCollectionTest: BaseRellTest(false) {
         def("struct user { name: text; score: integer; }")
         def("function from() = [user('Bob',123), user('Alice',score=456)];")
 
-        chk("from() @* { 'Bob' } ()", "ct_err:at_where_type:0:text")
-        chk("from() @* { 'Alice' } ()", "ct_err:at_where_type:0:text")
-        chk("from() @* { 123 } ()", "ct_err:at_where_type:0:integer")
-        chk("from() @* { 456 } ()", "ct_err:at_where_type:0:integer")
+        chk("from() @* { 'Bob' }", "ct_err:at_where_type:0:text")
+        chk("from() @* { 'Alice' }", "ct_err:at_where_type:0:text")
+        chk("from() @* { 123 }", "ct_err:at_where_type:0:integer")
+        chk("from() @* { 456 }", "ct_err:at_where_type:0:integer")
     }
 
     @Test fun testWhatDefault() {

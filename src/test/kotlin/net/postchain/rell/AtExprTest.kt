@@ -166,9 +166,11 @@ class AtExprTest: BaseRellTest() {
 
         // Alias vs. local: error.
         chkEx("{ val u = 'Bill'; return user @ { .firstName == u }; }", "user[40]")
-        chkEx("{ val u = 'Bill'; return (u: user) @ { .firstName == u }; }", "ct_err:expr_at_conflict_alias:u")
+        chkEx("{ val u = 'Bill'; return (u: user) @ { .firstName == u }; }",
+                "ct_err:[expr_at_conflict_alias:u][expr_name_entity_local:u]")
         chkEx("{ val u = 'Bill'; return (u: user) @ { .firstName == 'Bill' }; }", "ct_err:expr_at_conflict_alias:u")
-        chkEx("{ val u = 'Bill'; return (u: user) @ { u.firstName == 'Mark' }; }", "ct_err:expr_at_conflict_alias:u")
+        chkEx("{ val u = 'Bill'; return (u: user) @ { u.firstName == 'Mark' }; }",
+                "ct_err:[expr_at_conflict_alias:u][expr_name_entity_local:u]")
     }
 
     @Test fun testNameResolutionEntityVsLocal() {
@@ -227,7 +229,8 @@ class AtExprTest: BaseRellTest() {
 
         // Ambiguity between attributes of different entities.
         chkEx("{ $base return (s1: single, s2: single) @ { tgt1 }; }", "ct_err:at_where:var_manyattrs_name:0:tgt1:target:s1.t,s2.t")
-        chkEx("{ $base return (s1: single, s2: single) @ { tgt1, tgt2 }; }", "ct_err:at_where:var_manyattrs_name:0:tgt1:target:s1.t,s2.t")
+        chkEx("{ $base return (s1: single, s2: single) @ { tgt1, tgt2 }; }",
+                "ct_err:[at_where:var_manyattrs_name:0:tgt1:target:s1.t,s2.t][at_where:var_manyattrs_name:1:tgt2:target:s1.t,s2.t]")
         chkEx("{ $base return (s1: single, s2: single) @ { s1.t == tgt1, tgt2 }; }", "ct_err:at_where:var_manyattrs_name:1:tgt2:target:s1.t,s2.t")
         chkEx("{ $base return (s1: single, s2: single) @ { s1.t == tgt1, s2.t == tgt2 }; }", "(s1=single[0],s2=single[1])")
     }

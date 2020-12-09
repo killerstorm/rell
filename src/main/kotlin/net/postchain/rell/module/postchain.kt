@@ -442,7 +442,7 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
             UserMistake(error?.text ?: "Compilation error")
         } else if (errors.isNotEmpty()) {
             val error = errors[0]
-            C_Error(error.pos, error.code, error.text)
+            C_Error.other(error.pos, error.code, error.text)
         } else {
             IllegalStateException("Compilation error")
         }
