@@ -80,30 +80,24 @@ class S_String(val pos: S_Pos, val str: String): S_Node() {
     override fun toString() = str
 }
 
-sealed class S_AttrHeader(val name: S_Name): S_Node() {
-    abstract fun hasExplicitType(): Boolean
-    abstract fun compileTypeOpt(ctx: C_NamespaceContext): R_Type?
+class S_AttrHeader(val name: S_Name, val type: S_Type?): S_Node() {
+    fun hasExplicitType() = type != null
+
+    fun compileTypeOpt(ctx: C_NamespaceContext): R_Type? {
+        if (type != null) {
+            return type.compileOpt(ctx)
+        }
+
+        val rType = ctx.getTypeOpt(listOf(name))
+        if (rType == null) {
+            C_Errors.errAttributeTypeUnknown(ctx.msgCtx, name)
+        }
+
+        return rType
+    }
 
     fun compileType(ctx: C_NamespaceContext): R_Type {
         return compileTypeOpt(ctx) ?: R_CtErrorType
-    }
-}
-
-class S_NameTypeAttrHeader(name: S_Name, private val type: S_Type): S_AttrHeader(name) {
-    override fun hasExplicitType() = true
-    override fun compileTypeOpt(ctx: C_NamespaceContext) = type.compileOpt(ctx)
-}
-
-class S_NameAttrHeader(name: S_Name): S_AttrHeader(name) {
-    override fun hasExplicitType() = false
-
-    override fun compileTypeOpt(ctx: C_NamespaceContext): R_Type? {
-        val rType = ctx.getTypeOpt(listOf(name))
-        if (rType == null) {
-            ctx.msgCtx.error(name.pos, "unknown_name_type:${name.str}",
-                    "Cannot infer type for '${name.str}'; specify type explicitly")
-        }
-        return rType
     }
 }
 
@@ -139,69 +133,55 @@ class S_FormalParameter(val attr: S_AttrHeader, val expr: S_Expr?) {
 }
 
 sealed class S_RelClause: S_Node() {
-    abstract fun compileAttributes(ctx: C_EntityContext)
-    abstract fun compileRest(ctx: C_EntityContext)
+    abstract fun compile(ctx: C_EntityContext)
     abstract fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder)
 }
 
-class S_AttributeClause(val attr: S_AttrHeader, val mutable: Boolean, val expr: S_Expr?): S_RelClause() {
-    override fun compileAttributes(ctx: C_EntityContext) {
-        ctx.addAttribute(attr, mutable, expr)
+class S_AttributeClause(val attr: S_AttributeDefinition): S_RelClause() {
+    override fun compile(ctx: C_EntityContext) {
+        ctx.addAttribute(attr, true)
     }
 
-    override fun compileRest(ctx: C_EntityContext) {}
-
     override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
-        b.node(this, attr.name, IdeOutlineNodeType.ATTRIBUTE)
+        b.node(this, attr.header.name, IdeOutlineNodeType.ATTRIBUTE)
     }
 }
 
-sealed class S_KeyIndexClause(val pos: S_Pos, val attrs: List<S_AttrHeader>): S_RelClause() {
-    final override fun compileAttributes(ctx: C_EntityContext) {}
+enum class S_KeyIndexKind {
+    KEY,
+    INDEX,
+}
 
-    abstract fun addToContext(ctx: C_EntityContext, pos: S_Pos, names: List<S_Name>)
+class S_KeyIndexClause(val pos: S_Pos, val kind: S_KeyIndexKind, val attrs: List<S_AttributeDefinition>): S_RelClause() {
+    override fun compile(ctx: C_EntityContext) {
+        for (attr in attrs) {
+            ctx.addAttribute(attr, false)
+        }
 
-    final override fun compileRest(ctx: C_EntityContext) {
         val names = mutableSetOf<String>()
         for (attr in attrs) {
-            val name = attr.name
+            val name = attr.header.name
             C_Errors.check(names.add(name.str), name.pos) {
                     "entity_keyindex_dup:${name.str}" to "Duplicate attribute: '${name.str}'"
             }
         }
 
-        for (attr in attrs) {
-            val name = attr.name
-            if (ctx.hasAttribute(name.str)) {
-                C_Errors.check(!attr.hasExplicitType(), name.pos) {
-                        "entity_keyindex_def:${name.str}" to "Attribute '${name.str}' is defined elsewhere, cannot specify type"
-                }
-            } else {
-                ctx.addAttribute(attr, false, null)
-            }
-        }
+        val attrNames = attrs.map { it.header.name }
 
-        addToContext(ctx, pos, attrs.map { it.name })
+        when (kind) {
+            S_KeyIndexKind.KEY -> ctx.addKey(pos, attrNames)
+            S_KeyIndexKind.INDEX -> ctx.addIndex(pos, attrNames)
+        }
     }
 
-    final override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
+    override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
         for (attr in attrs) {
-            b.node(attr, attr.name, IdeOutlineNodeType.KEY_INDEX)
+            b.node(attr, attr.header.name, IdeOutlineNodeType.KEY_INDEX)
         }
     }
 }
 
-class S_KeyClause(pos: S_Pos, attrs: List<S_AttrHeader>): S_KeyIndexClause(pos, attrs) {
-    override fun addToContext(ctx: C_EntityContext, pos: S_Pos, names: List<S_Name>) {
-        ctx.addKey(pos, names)
-    }
-}
-
-class S_IndexClause(pos: S_Pos, attrs: List<S_AttrHeader>): S_KeyIndexClause(pos, attrs) {
-    override fun addToContext(ctx: C_EntityContext, pos: S_Pos, names: List<S_Name>) {
-        ctx.addIndex(pos, names)
-    }
-}
+class S_AttributeDefinition(val mutablePos: S_Pos?, val header: S_AttrHeader, val expr: S_Expr?): S_Node()
 
 sealed class S_Modifier {
     abstract fun compile(ctx: C_ModifierContext, target: C_ModifierTarget)
@@ -393,22 +373,26 @@ class S_EntityDefinition(
 
     private fun membersPass(ctx: C_MountContext, extChain: C_ExternalChain?, rEntity: R_Entity, clauses: List<S_RelClause>) {
         val defCtx = C_DefinitionContext(ctx, C_DefinitionType.ENTITY)
-        val entCtx = C_EntityContext(defCtx, name.str, rEntity.flags.log)
+
+        val sysAttrs = mutableListOf<C_SysAttribute>()
 
         if (rEntity.flags.log) {
             val sysDefs = extChain?.sysDefs ?: ctx.modCtx.sysDefs
             val txType = sysDefs.transactionEntity.type
-            entCtx.addAttribute0("transaction", txType, mutable = false, canSetInCreate = false, valid = true) {
-                if (extChain == null) {
-                    val nsValueCtx = C_NamespaceValueContext(entCtx.defCtx)
-                    C_Ns_OpContext.transactionExpr(nsValueCtx, name.pos)
-                } else {
-                    C_Utils.errorRExpr(txType, "Trying to initialize transaction for external entity '${rEntity.appLevelName}'")
-                }
+            val expr = if (extChain == null) {
+                val nsValueCtx = C_NamespaceValueContext(defCtx)
+                C_Ns_OpContext.transactionExpr(nsValueCtx, name.pos)
+            } else {
+                C_Utils.errorRExpr(txType, "Trying to initialize transaction for external entity '${rEntity.appLevelName}'")
             }
+            sysAttrs.add(C_SysAttribute("transaction", txType, expr = expr, mutable = false, canSetInCreate = false))
         }
 
-        compileClauses(entCtx, clauses)
+        val entCtx = C_EntityContext(defCtx, name.str, rEntity.flags.log, sysAttrs)
+
+        for (clause in clauses) {
+            clause.compile(entCtx)
+        }
 
         val body = entCtx.createEntityBody()
         rEntity.setBody(body)
@@ -426,22 +410,13 @@ class S_EntityDefinition(
             C_Constants.BLOCK_ENTITY to { sysDefs: C_SystemDefs -> sysDefs.blockEntity },
             C_Constants.TRANSACTION_ENTITY to { sysDefs: C_SystemDefs -> sysDefs.transactionEntity }
         )
-
-        fun compileClauses(entCtx: C_EntityContext, clauses: List<S_RelClause>) {
-            for (clause in clauses) {
-                clause.compileAttributes(entCtx)
-            }
-            for (clause in clauses) {
-                clause.compileRest(entCtx)
-            }
-        }
     }
 }
 
 class S_ObjectDefinition(
         modifiers: S_Modifiers,
         val name: S_Name,
-        val clauses: List<S_RelClause>
+        val attrs: List<S_AttributeDefinition>
 ): S_Definition(modifiers) {
     override fun compile(ctx: C_MountContext) {
         ctx.checkNotExternal(name.pos, C_DeclarationType.OBJECT)
@@ -476,8 +451,11 @@ class S_ObjectDefinition(
 
     private fun membersPass(ctx: C_MountContext, rObject: R_Object) {
         val defCtx = C_DefinitionContext(ctx, C_DefinitionType.OBJECT)
-        val entCtx = C_EntityContext(defCtx, name.str, false)
-        S_EntityDefinition.compileClauses(entCtx, clauses)
+        val entCtx = C_EntityContext(defCtx, name.str, false, listOf())
+
+        for (attr in attrs) {
+            entCtx.addAttribute(attr, true)
+        }
 
         val body = entCtx.createEntityBody()
         rObject.rEntity.setBody(body)
@@ -485,8 +463,8 @@ class S_ObjectDefinition(
 
     override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
         val sub = b.node(this, name, IdeOutlineNodeType.OBJECT)
-        for (clause in clauses) {
-            clause.ideBuildOutlineTree(sub)
+        for (attr in attrs) {
+            sub.node(attr, attr.header.name, IdeOutlineNodeType.ATTRIBUTE)
         }
     }
 }
@@ -495,7 +473,7 @@ class S_StructDefinition(
         modifiers: S_Modifiers,
         val deprecatedKwPos: S_Pos?,
         val name: S_Name,
-        val attrs: List<S_AttributeClause>
+        val attrs: List<S_AttributeDefinition>
 ): S_Definition(modifiers) {
     override fun compile(ctx: C_MountContext) {
         if (deprecatedKwPos != null) {
@@ -520,9 +498,10 @@ class S_StructDefinition(
 
     private fun membersPass(ctx: C_MountContext, rStruct: R_Struct) {
         val defCtx = C_DefinitionContext(ctx, C_DefinitionType.STRUCT)
-        val entCtx = C_EntityContext(defCtx, name.str, false)
-        for (clause in attrs) {
-            clause.compileAttributes(entCtx)
+        val entCtx = C_EntityContext(defCtx, name.str, false, listOf())
+
+        for (attr in attrs) {
+            entCtx.addAttribute(attr, true)
         }
 
         val attributes = entCtx.createStructBody()
@@ -532,7 +511,7 @@ class S_StructDefinition(
     override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
         val sub = b.node(this, name, IdeOutlineNodeType.STRUCT)
         for (attr in attrs) {
-            attr.ideBuildOutlineTree(sub)
+            sub.node(attr, attr.header.name, IdeOutlineNodeType.ATTRIBUTE)
         }
     }
 }

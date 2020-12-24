@@ -4,7 +4,7 @@
 
 package net.postchain.rell.sql
 
-import net.postchain.rell.model.R_Attrib
+import net.postchain.rell.model.R_Attribute
 import net.postchain.rell.model.R_Entity
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_Messages
@@ -220,7 +220,7 @@ object SqlMeta {
         return sqls
     }
 
-    fun genMetaAttrsInserts(sqlCtx: Rt_SqlContext, classId: Int, attrs: Collection<R_Attrib>): List<String> {
+    fun genMetaAttrsInserts(sqlCtx: Rt_SqlContext, classId: Int, attrs: Collection<R_Attribute>): List<String> {
         val sqls = mutableListOf<String>()
 
         val attrTable = DSL.table(DSL.name(sqlCtx.mainChainMapping.metaAttributesTable))

@@ -128,7 +128,7 @@ class R_UpdateTarget_Object(rObject: R_Object): R_UpdateTarget() {
     }
 }
 
-class R_UpdateStatementWhat(val attr: R_Attrib, val expr: Db_Expr, val op: Db_BinaryOp?)
+class R_UpdateStatementWhat(val attr: R_Attribute, val expr: Db_Expr, val op: Db_BinaryOp?)
 
 sealed class R_BaseUpdateStatement(val target: R_UpdateTarget): R_Statement() {
     abstract fun buildSql(frame: Rt_CallFrame, ctx: SqlGenContext, returning: Boolean): ParameterizedSql

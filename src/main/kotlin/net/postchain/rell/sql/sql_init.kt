@@ -457,7 +457,7 @@ private class SqlStepAction_AddColumns_AlterTable(
 ): SqlStepAction() {
     override fun run(ctx: SqlStepCtx) {
         val sql = R_CreateExpr.buildAddColumnsSql(ctx.sqlCtx, entity, attrs, existingRecs)
-        val frame = ctx.exeCtx.appCtx.createRootFrame(entity.pos, ctx.sqlExec)
+        val frame = ctx.exeCtx.appCtx.createRootFrame(entity.pos, ctx.sqlExec, true)
         sql.execute(frame)
     }
 }

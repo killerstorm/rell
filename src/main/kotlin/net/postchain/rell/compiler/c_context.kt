@@ -4,7 +4,9 @@
 
 package net.postchain.rell.compiler
 
-import net.postchain.rell.compiler.ast.*
+import net.postchain.rell.compiler.ast.C_FormalParameters
+import net.postchain.rell.compiler.ast.S_Name
+import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.*
 import net.postchain.rell.utils.Getter
 import net.postchain.rell.utils.TypedKeyMap
@@ -298,7 +300,10 @@ enum class C_DefinitionType {
     QUERY,
     OPERATION,
     FUNCTION,
-    REPL
+    REPL,
+    ;
+
+    fun isEntityLike() = this == ENTITY || this == OBJECT
 }
 
 class C_DefinitionContext(val mntCtx: C_MountContext, val definitionType: C_DefinitionType){
@@ -322,141 +327,10 @@ class C_DefinitionContext(val mntCtx: C_MountContext, val definitionType: C_Defi
     fun checkDbUpdateAllowed(pos: S_Pos) {
         if (definitionType == C_DefinitionType.QUERY) {
             msgCtx.error(pos, "no_db_update:query", "Database modifications are not allowed in a query")
+        } else if (definitionType == C_DefinitionType.OBJECT) {
+            msgCtx.error(pos, "no_db_update:object:expr", "Database modifications are not allowed in object attribute expressions")
         } else if (modCtx.repl) {
             msgCtx.error(pos, "no_db_update:repl", "Database modifications are not allowed in REPL")
-        }
-    }
-}
-
-class C_EntityContext(
-        val defCtx: C_DefinitionContext,
-        private val entityName: String,
-        private val logAnnotation: Boolean
-) {
-    private val msgCtx = defCtx.msgCtx
-
-    private val attributes = mutableMapOf<String, R_Attrib>()
-    private val keys = mutableListOf<R_Key>()
-    private val indices = mutableListOf<R_Index>()
-    private val uniqueKeys = mutableSetOf<Set<String>>()
-    private val uniqueIndices = mutableSetOf<Set<String>>()
-
-    fun hasAttribute(name: String): Boolean = name in attributes
-
-    fun addAttribute(attr: S_AttrHeader, mutable: Boolean, expr: S_Expr?) {
-        val defType = defCtx.definitionType
-
-        val rType = attr.compileType(defCtx.nsCtx)
-
-        val name = attr.name
-        val nameStr = name.str
-        if (nameStr in attributes) {
-            msgCtx.error(name.pos, "dup_attr:$nameStr", "Duplicate attribute: '$nameStr'")
-            return
-        }
-
-        var err = rType == R_CtErrorType
-
-        val insideEntity = defType == C_DefinitionType.ENTITY || defType == C_DefinitionType.OBJECT
-
-        if (insideEntity && !C_EntityAttrRef.isAllowedRegularAttrName(nameStr)) {
-            msgCtx.error(name.pos, "unallowed_attr_name:$nameStr", "Unallowed attribute name: '$nameStr'")
-            err = true
-        }
-
-        if (mutable && logAnnotation) {
-            val ann = C_Constants.LOG_ANNOTATION
-            msgCtx.error(name.pos, "entity_attr_mutable_log:$entityName:$nameStr",
-                    "Entity '$entityName' cannot have mutable attributes because of the '$ann' annotation")
-            err = true
-        }
-
-        if (insideEntity && !rType.sqlAdapter.isSqlCompatible()) {
-            msgCtx.error(name.pos, "entity_attr_type:$nameStr:${rType.toStrictString()}",
-                    "Attribute '$nameStr' has unallowed type: ${rType.toStrictString()}")
-            err = true
-        }
-
-        if (defType == C_DefinitionType.OBJECT && expr == null) {
-            msgCtx.error(name.pos, "object_attr_novalue:$entityName:$nameStr",
-                    "Object attribute '$entityName.$nameStr' must have a default value")
-            err = true
-        }
-
-        val exprCreator: (() -> R_Expr)? = when {
-            expr == null && defType == C_DefinitionType.OBJECT -> { -> C_Utils.errorRExpr(rType) }
-            expr == null -> null
-            else -> { ->
-                val rExpr = expr.compile(defCtx.defExprCtx, C_TypeHint.ofType(rType)).value().toRExpr()
-                val adapter = C_Types.adaptSafe(msgCtx, rType, rExpr.type, name.pos, "attr_type:$nameStr",
-                        "Default value type mismatch for '$nameStr'")
-                adapter.adaptExpr(rExpr)
-            }
-        }
-
-        addAttribute0(nameStr, rType, mutable = mutable, canSetInCreate = true, valid = !err, exprCreator = exprCreator)
-    }
-
-    fun addAttribute0(
-            name: String,
-            rType: R_Type,
-            mutable: Boolean,
-            canSetInCreate: Boolean,
-            valid: Boolean,
-            exprCreator: (() -> R_Expr)?
-    ) {
-        check(name !in attributes)
-        check(defCtx.definitionType != C_DefinitionType.OBJECT || exprCreator != null)
-
-        val rAttr = R_Attrib(attributes.size, name, rType, mutable, exprCreator != null, canSetInCreate)
-
-        defCtx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
-            if (exprCreator == null) {
-                rAttr.setExpr(null)
-            } else {
-                compileAttributeExpression(rAttr, exprCreator)
-            }
-        }
-
-        if (valid) {
-            attributes[name] = rAttr
-        }
-    }
-
-    private fun compileAttributeExpression(rAttr: R_Attrib, exprCreator: (() -> R_Expr)) {
-        val rExpr = exprCreator()
-        rAttr.setExpr(rExpr)
-    }
-
-    fun addKey(pos: S_Pos, attrs: List<S_Name>) {
-        val names = attrs.map { it.str }
-        addUniqueKeyIndex(pos, uniqueKeys, names, "entity_key_dup", "Duplicate key")
-        keys.add(R_Key(names))
-    }
-
-    fun addIndex(pos: S_Pos, attrs: List<S_Name>) {
-        val names = attrs.map { it.str }
-        addUniqueKeyIndex(pos, uniqueIndices, names, "entity_index_dup", "Duplicate index")
-        indices.add(R_Index(names))
-    }
-
-    fun createEntityBody(): R_EntityBody {
-        return R_EntityBody(keys.toList(), indices.toList(), attributes.toMap())
-    }
-
-    fun createStructBody(): Map<String, R_Attrib> {
-        return attributes.toMap()
-    }
-
-    private fun addUniqueKeyIndex(pos: S_Pos, set: MutableSet<Set<String>>, names: List<String>, errCode: String, errMsg: String) {
-        if (defCtx.definitionType == C_DefinitionType.OBJECT) {
-            throw C_Error.stop(pos, "object_keyindex:${entityName}", "Object cannot have key or index")
-        }
-
-        val nameSet = names.toSet()
-        if (!set.add(nameSet)) {
-            val nameLst = names.sorted()
-            throw C_Error.stop(pos, "$errCode:${nameLst.joinToString(",")}", "$errMsg: ${nameLst.joinToString()}")
         }
     }
 }

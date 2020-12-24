@@ -129,7 +129,7 @@ object SqlGen {
         return ddl
     }
 
-    private fun genAttrColumns(attrs: Collection<R_Attrib>, step: CreateTableColumnStep): CreateTableColumnStep {
+    private fun genAttrColumns(attrs: Collection<R_Attribute>, step: CreateTableColumnStep): CreateTableColumnStep {
         var q = step
         for (attr in attrs) {
             q = q.column(attr.sqlMapping, getSqlType(attr.type))
@@ -137,7 +137,7 @@ object SqlGen {
         return q
     }
 
-    private fun genAttrConstraints(sqlCtx: Rt_SqlContext, sqlTable: String, attrs: Collection<R_Attrib>): List<Constraint> {
+    private fun genAttrConstraints(sqlCtx: Rt_SqlContext, sqlTable: String, attrs: Collection<R_Attribute>): List<Constraint> {
         val constraints = mutableListOf<Constraint>()
 
         for (attr in attrs) {
@@ -154,13 +154,13 @@ object SqlGen {
         return constraints
     }
 
-    fun genAddColumnSql(table: String, attr: R_Attrib, nullable: Boolean): String {
+    fun genAddColumnSql(table: String, attr: R_Attribute, nullable: Boolean): String {
         val type = getSqlType(attr.type).nullable(nullable)
         val b = DSL_CTX.alterTable(table).addColumn(attr.sqlMapping, type)
         return b.toString()
     }
 
-    fun genAddAttrConstraintsSql(sqlCtx: Rt_SqlContext, table: String, attrs: List<R_Attrib>): String {
+    fun genAddAttrConstraintsSql(sqlCtx: Rt_SqlContext, table: String, attrs: List<R_Attribute>): String {
         val constraints = genAttrConstraints(sqlCtx, table, attrs)
         if (constraints.isEmpty()) {
             return ""

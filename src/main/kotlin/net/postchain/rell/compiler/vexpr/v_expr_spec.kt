@@ -138,7 +138,7 @@ class V_ObjectExpr(private val name: List<S_Name>, private val rObject: R_Object
     }
 }
 
-private class V_ObjectAttrExpr(pos: S_Pos, private val rObject: R_Object, private val attr: R_Attrib): V_Expr(pos) {
+private class V_ObjectAttrExpr(pos: S_Pos, private val rObject: R_Object, private val attr: R_Attribute): V_Expr(pos) {
     override fun type() = attr.type
     override fun isDb() = false
     override fun toRExpr0() = createAccessExpr()

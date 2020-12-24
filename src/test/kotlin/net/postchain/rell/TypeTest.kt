@@ -194,7 +194,7 @@ class TypeTest: BaseRellTest() {
         chk("_type_of((mixed@{}).bar)", "text[ns.bar]")
 
         chkCompile("entity bad { foo; index foo; }", "OK")
-        chkCompile("entity bad { ns.bar; index ns.bar; }", "ct_err:entity_keyindex_def:bar")
+        chkCompile("entity bad { ns.bar; index ns.bar; }", "OK")
         chkCompile("entity bad { ns.bar; index bar; }", "OK")
     }
 }

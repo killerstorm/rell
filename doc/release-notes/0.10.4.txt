@@ -10,6 +10,7 @@ To write unit tests for Rell code, use test modules. A test module is defined us
     function test_foo() {
         require( 2 + 2 == 4 );
     }
+
     function test_bar() {
         require( 2 + 2 == 5 );
     }
@@ -43,9 +44,11 @@ in order to invoke operations and modify data.
 Example. Production module, file data.rell:
 
     module;
+
     entity user {
         name;
     }
+
     operation add_user(name) {
         create user(name);
     }
@@ -205,3 +208,20 @@ Details:
 - Limit and offset clauses are supported.
 - Annotations @sort, @sort_desc and @omit are supported.
 - Grouping and aggregation is supported (via annotations @group, @sum, @min, @max).
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+10. Language: Key and index attribute syntax improvements
+
+Now one can specify mutability and default value for particular attributes within a key or index clause:
+
+    entity address {
+        index mutable city: text = 'London', mutable street: text = 'Unknown';
+    }
+
+In previous versions that code would like like this:
+
+    entity address {
+        mutable city: text = 'London';
+        mutable street: text = 'Unknown';
+        index city, street;
+    }

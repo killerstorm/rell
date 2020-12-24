@@ -13,7 +13,7 @@ import java.sql.PreparedStatement
 import java.sql.ResultSet
 
 data class SqlTableAlias(val entity: R_Entity, val str: String)
-class SqlTableJoin(val attr: R_Attrib, val alias: SqlTableAlias)
+class SqlTableJoin(val attr: R_Attribute, val alias: SqlTableAlias)
 
 class SqlFromInfo(val entities: List<SqlFromEntity>)
 class SqlFromEntity(val alias: SqlTableAlias, val joins: List<SqlFromJoin>)
@@ -48,7 +48,7 @@ class SqlGenContext private constructor(
         return tbl.alias
     }
 
-    fun getRelAlias(baseAlias: SqlTableAlias, rel: R_Attrib, entity: R_Entity): SqlTableAlias {
+    fun getRelAlias(baseAlias: SqlTableAlias, rel: R_Attribute, entity: R_Entity): SqlTableAlias {
         val tbl = aliasTableMap.getValue(baseAlias)
         val map = tbl.subAliases.computeIfAbsent(baseAlias) { mutableMapOf() }
         val join = map.computeIfAbsent(rel.name) {

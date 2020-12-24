@@ -84,7 +84,7 @@ enum class S_AssignOpCode(val op: S_AssignOp) {
 
 sealed class S_AssignOp {
     abstract fun compile(ctx: C_ExprContext, pos: S_Pos, dstValue: V_Expr, srcValue: V_Expr): C_Statement
-    abstract fun compileDbUpdate(ctx: C_ExprContext, pos: S_Pos, attr: R_Attrib, srcValue: V_Expr): R_UpdateStatementWhat?
+    abstract fun compileDbUpdate(ctx: C_ExprContext, pos: S_Pos, attr: R_Attribute, srcValue: V_Expr): R_UpdateStatementWhat?
 
     protected open fun compileVarFacts(
             dstValue: V_Expr,
@@ -122,7 +122,7 @@ object S_AssignOp_Eq: S_AssignOp() {
         return varFacts
     }
 
-    override fun compileDbUpdate(ctx: C_ExprContext, pos: S_Pos, attr: R_Attrib, srcValue: V_Expr): R_UpdateStatementWhat {
+    override fun compileDbUpdate(ctx: C_ExprContext, pos: S_Pos, attr: R_Attribute, srcValue: V_Expr): R_UpdateStatementWhat {
         val expr = srcValue.toDbExpr(ctx.msgCtx)
         val adapter = attr.type.getTypeAdapter(expr.type)
         val expr2 = if (adapter == null) {
@@ -153,7 +153,7 @@ class S_AssignOp_Op(val code: String, val op: C_BinOp_Common): S_AssignOp() {
         return C_Statement(rStmt, false, varFacts)
     }
 
-    override fun compileDbUpdate(ctx: C_ExprContext, pos: S_Pos, attr: R_Attrib, srcValue: V_Expr): R_UpdateStatementWhat {
+    override fun compileDbUpdate(ctx: C_ExprContext, pos: S_Pos, attr: R_Attribute, srcValue: V_Expr): R_UpdateStatementWhat {
         val srcValue2 = op.adaptRight(attr.type, srcValue)
         val dbSrcExpr = srcValue2.toDbExpr(ctx.msgCtx)
         val srcType = dbSrcExpr.type

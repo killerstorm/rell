@@ -6,6 +6,7 @@ package net.postchain.rell.model
 
 import net.postchain.gtv.Gtv
 import net.postchain.rell.compiler.C_CompilerPass
+import net.postchain.rell.compiler.C_LateGetter
 import net.postchain.rell.compiler.C_LateInit
 import net.postchain.rell.compiler.C_Utils
 import net.postchain.rell.runtime.*
@@ -53,21 +54,17 @@ class R_CallFrame(val size: Int, val rootBlock: R_FrameBlock, val hasGuardBlock:
     }
 }
 
-class R_Attrib(
+class R_Attribute(
         val index: Int,
         val name: String,
         val type: R_Type,
         val mutable: Boolean,
         val hasExpr: Boolean,
         val canSetInCreate: Boolean = true,
-        val sqlMapping: String = name
-){
-    private val exprLate = C_LateInit<Optional<R_Expr>>(C_CompilerPass.EXPRESSIONS, Optional.empty())
-    val expr: R_Expr? get() = exprLate.get().orElse(null)
-
-    fun setExpr(expr: R_Expr?) {
-        exprLate.set(Optional.ofNullable(expr))
-    }
+        val sqlMapping: String = name,
+        private val exprGetter: C_LateGetter<Optional<R_Expr>>
+) {
+    val expr: R_Expr? get() = exprGetter.get().orElse(null)
 
     fun toMetaGtv(): Gtv {
         return mapOf(

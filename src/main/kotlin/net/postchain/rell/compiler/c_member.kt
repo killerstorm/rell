@@ -148,7 +148,7 @@ private class C_MemberAttr_VirtualTupleAttr(type: R_Type, private val fieldIndex
     override fun destination(pos: S_Pos, base: R_Expr) = throw C_Errors.errBadDestination(pos)
 }
 
-private class C_MemberAttr_StructAttr(private val attr: R_Attrib): C_MemberAttr(attr.type) {
+private class C_MemberAttr_StructAttr(private val attr: R_Attribute): C_MemberAttr(attr.type) {
     override fun calculator() = R_MemberCalculator_StructAttr(attr)
 
     override fun destination(pos: S_Pos, base: R_Expr): R_DestinationExpr {
@@ -159,7 +159,7 @@ private class C_MemberAttr_StructAttr(private val attr: R_Attrib): C_MemberAttr(
     }
 }
 
-private class C_MemberAttr_VirtualStructAttr(type: R_Type, private val attr: R_Attrib): C_MemberAttr(type) {
+private class C_MemberAttr_VirtualStructAttr(type: R_Type, private val attr: R_Attribute): C_MemberAttr(type) {
     override fun calculator() = R_MemberCalculator_VirtualStructAttr(type, attr)
     override fun destination(pos: S_Pos, base: R_Expr) = throw C_Errors.errAttrNotMutable(pos, attr.name)
 }
@@ -245,7 +245,7 @@ sealed class C_EntityAttrRef(protected val rEntity: R_Entity, val name: String) 
     }
 }
 
-private class C_EntityAttrRef_Regular(rEntity: R_Entity, private val attr: R_Attrib): C_EntityAttrRef(rEntity, attr.name) {
+private class C_EntityAttrRef_Regular(rEntity: R_Entity, private val attr: R_Attribute): C_EntityAttrRef(rEntity, attr.name) {
     override fun type() = attr.type
 
     override fun createDbContextAttrExpr(baseExpr: Db_TableExpr): Db_Expr {
@@ -410,9 +410,9 @@ private class C_MemberFunctionExpr(private val memberRef: C_MemberRef, private v
     }
 }
 
-class C_DbAttrInfo(val rEntity: R_Entity, val name: S_Name, val attr: R_Attrib?, val dbExpr: Db_Expr)
+class C_DbAttrInfo(val rEntity: R_Entity, val name: S_Name, val attr: R_Attribute?, val dbExpr: Db_Expr)
 
-private fun makeDbAttrExpr(base: Db_TableExpr, attr: R_Attrib): Db_Expr {
+private fun makeDbAttrExpr(base: Db_TableExpr, attr: R_Attribute): Db_Expr {
     val resultType = attr.type
     val resultEntity = (resultType as? R_EntityType)?.rEntity
     return if (resultEntity == null) Db_AttrExpr(base, attr) else Db_RelExpr(base, attr, resultEntity)

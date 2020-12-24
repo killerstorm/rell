@@ -42,6 +42,30 @@ class CompilerErrorsTest: BaseRellTest(false) {
                 "ct_err:[unknown_type:BAD1][unknown_type:BAD2][$badError2][$badError1]")
     }
 
+    @Test fun testDefEntity() {
+        val un = "unknown_name"
+        val ut = "unknown_type"
+
+        chkCompile("entity data { a: T1 = E1; a: T2 = E2; }", "ct_err:[$ut:T1][$un:E1][dup_attr:a][$ut:T2][$un:E2]")
+        chkCompile("entity data { a: T1 = E1; key a: T2 = E2; }",
+                "ct_err:[$ut:T1][$un:E1][$ut:T2][entity:attr:expr_not_primary:a][$un:E2]")
+        chkCompile("entity data { a: T1 = E1; index a: T2 = E2; }",
+                "ct_err:[$ut:T1][$un:E1][$ut:T2][entity:attr:expr_not_primary:a][$un:E2]")
+        chkCompile("entity data { key a: T1 = E1, b: T2 = E2; }", "ct_err:[$ut:T1][$un:E1][$ut:T2][$un:E2]")
+        chkCompile("entity data { index a: T1 = E1, b: T2 = E2; }", "ct_err:[$ut:T1][$un:E1][$ut:T2][$un:E2]")
+        chkCompile("entity data { a: T1 = E1; key mutable a: T2 = E2; }",
+                "ct_err:[$ut:T1][$un:E1][entity:attr:mutable_not_primary:a][$ut:T2][entity:attr:expr_not_primary:a][$un:E2]")
+        chkCompile("entity data { a: T1 = E1; index mutable a: T2 = E2; }",
+                "ct_err:[$ut:T1][$un:E1][entity:attr:mutable_not_primary:a][$ut:T2][entity:attr:expr_not_primary:a][$un:E2]")
+
+        chkCompile("entity data { rowid: T1 = E1; }", "ct_err:[unallowed_attr_name:rowid][$ut:T1][$un:E1]")
+        chkCompile("entity data { range = E1; }", "ct_err:[entity_attr_type:range:range][$un:E1]")
+        chkCompile("entity data { r: range = E1; }", "ct_err:[entity_attr_type:r:range][$un:E1]")
+
+        chkCompile("@log entity data { transaction: T1 = E1; a: T2 = E2; }",
+                "ct_err:[dup_attr:transaction][$ut:T1][$un:E1][$ut:T2][$un:E2]")
+    }
+
     @Test fun testDefFunctionParamBadType() {
         def("function foo(x: integer, y: UNKNOWN_TYPE, z: text) {}")
         chkDefFunctionParamBadType("unknown_type:UNKNOWN_TYPE")

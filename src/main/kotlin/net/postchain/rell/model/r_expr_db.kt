@@ -187,20 +187,20 @@ class Db_EntityExpr(val entity: R_DbAtEntity): Db_TableExpr(entity.rEntity) {
     override fun alias(ctx: SqlGenContext) = ctx.getEntityAlias(entity)
 }
 
-class Db_RelExpr(val base: Db_TableExpr, val attr: R_Attrib, targetEntity: R_Entity): Db_TableExpr(targetEntity) {
+class Db_RelExpr(val base: Db_TableExpr, val attr: R_Attribute, targetEntity: R_Entity): Db_TableExpr(targetEntity) {
     override fun alias(ctx: SqlGenContext): SqlTableAlias {
         val baseAlias = base.alias(ctx)
         return ctx.getRelAlias(baseAlias, attr, rEntity)
     }
 }
 
-class Db_AttrExpr(val base: Db_TableExpr, val attr: R_Attrib): Db_Expr(attr.type) {
+class Db_AttrExpr(val base: Db_TableExpr, val attr: R_Attribute): Db_Expr(attr.type) {
     override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
         val redExpr = RedDb_AttrExpr(base, attr)
         return RedDb_Utils.wrapDecimalExpr(type, redExpr)
     }
 
-    private class RedDb_AttrExpr(val base: Db_TableExpr, val attr: R_Attrib): RedDb_Expr() {
+    private class RedDb_AttrExpr(val base: Db_TableExpr, val attr: R_Attribute): RedDb_Expr() {
         override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
             val alias = base.alias(ctx)
             bld.appendColumn(alias, attr.sqlMapping)

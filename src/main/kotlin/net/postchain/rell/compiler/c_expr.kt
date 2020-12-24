@@ -285,7 +285,7 @@ class C_EntityAttrDestination(
         private val msgCtx: C_MessageContext,
         private val base: V_Expr,
         private val rEntity: R_Entity,
-        private val attr: R_Attrib
+        private val attr: R_Attribute
 ): C_Destination() {
     override fun type() = attr.type
     override fun resultType(srcType: R_Type) = R_UnitType
@@ -317,7 +317,7 @@ class C_EntityAttrDestination(
 class C_ObjectAttrDestination(
         private val msgCtx: C_MessageContext,
         private val rObject: R_Object,
-        private val attr: R_Attrib
+        private val attr: R_Attribute
 ): C_Destination() {
     override fun type() = attr.type
     override fun resultType(srcType: R_Type) = R_UnitType

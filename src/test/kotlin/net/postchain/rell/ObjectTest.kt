@@ -45,8 +45,8 @@ class ObjectTest: BaseRellTest() {
     }
 
     @Test fun testKeyIndex() {
-        chkCompile("object foo { x: integer = 123; key x; }", "ct_err:object_keyindex:foo")
-        chkCompile("object foo { x: integer = 123; index x; }", "ct_err:object_keyindex:foo")
+        chkCompile("object foo { x: integer = 123; key x; }", "ct_err:syntax")
+        chkCompile("object foo { x: integer = 123; index x; }", "ct_err:syntax")
     }
 
     @Test fun testUseAsType() {
@@ -228,20 +228,30 @@ class ObjectTest: BaseRellTest() {
         chkOut("123", "456")
     }
 
-    @Test fun testInitSideEffects() {
-        def("entity journal { n: integer; s: text; }")
-        def("object a { x: integer = f('a', 123); }")
-        def("object b { x: integer = f('b', 456); }")
-        def("object c { x: integer = f('c', 789); }")
-        def("""
-            function f(s: text, v: integer): integer {
-                val n = (journal @* {}).size();
-                create journal ( n, s );
-                return v;
-            }
-        """.trimIndent())
+    @Test fun testInitSideEffectsDirect() {
+        def("entity data { v: integer; }")
+        chkCompile("object state { mutable d: data = create data(123); }", "ct_err:no_db_update:object:expr")
+    }
 
-        chkData("journal(1,0,a)", "journal(2,1,b)", "journal(3,2,c)", "a(0,123)", "b(0,456)", "c(0,789)")
+    @Test fun testInitSideEffectsIndirectCreate() {
+        def("entity data { mutable v: integer; }")
+        def("function f(v: integer): integer { create data(v); return v*v; }")
+        def("object state { mutable d: integer = f(123); }")
+        tst.chkInit("rt_err:no_db_update:def")
+    }
+
+    @Test fun testInitSideEffectsIndirectUpdate() {
+        def("entity data { mutable v: integer; }")
+        def("function f(v: integer): integer { update data @*{} ( .v += v ); return v*v; }")
+        def("object state { mutable d: integer = f(123); }")
+        tst.chkInit("rt_err:no_db_update:def")
+    }
+
+    @Test fun testInitSideEffectsIndirectDelete() {
+        def("entity data { mutable v: integer; }")
+        def("function f(v: integer): integer { delete data @*{}; return v*v; }")
+        def("object state { mutable d: integer = f(123); }")
+        tst.chkInit("rt_err:no_db_update:def")
     }
 
     @Test fun testNameResolution() {

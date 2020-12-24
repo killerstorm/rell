@@ -84,7 +84,9 @@ class ModuleTest: BaseRellTest(false) {
         chkCompile("import lib.a; query q() = (a.user@{}).a;", "ct_err:lib/a.rell:unknown_type:ERROR")
         chkCompile("import lib.a; query q() = (a.user@{}).b;", "ct_err:lib/a.rell:unknown_type:ERROR")
         chkCompile("import lib.a; query q() = (a.user@{}).c;", "ct_err:lib/a.rell:unknown_type:ERROR")
-        chkCompile("import lib.a; query q() = (a.user@{}).x;", "ct_err:[main.rell:unknown_member:[lib.a:user]:x][lib/a.rell:unknown_type:ERROR]")
+        chkCompile("import lib.a; query q() = (a.user@{}).x;", "ct_err:lib/a.rell:unknown_type:ERROR")
+        chkCompile("import lib.a; query q() = (a.user@{}).z;",
+                "ct_err:[main.rell:unknown_member:[lib.a:user]:z][lib/a.rell:unknown_type:ERROR]")
         chkCompile("import lib.a; query q() = 123;", "ct_err:lib/a.rell:unknown_type:ERROR")
     }
 

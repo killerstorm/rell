@@ -188,9 +188,9 @@ object C_Utils {
 
     fun createBlockEntity(executor: C_CompilerExecutor, chain: R_ExternalChainRef?): R_Entity {
         val attrs = listOf(
-                R_Attrib(0, "block_height", R_IntegerType, false, false),
-                R_Attrib(1, "block_rid", R_ByteArrayType, false, false),
-                R_Attrib(2, "timestamp", R_IntegerType, false, false)
+                C_SysAttribute("block_height", R_IntegerType, false),
+                C_SysAttribute("block_rid", R_ByteArrayType, false),
+                C_SysAttribute("timestamp", R_IntegerType, false)
         )
         val sqlMapping = R_EntitySqlMapping_Block(chain)
         return createSysEntity(executor, C_Constants.BLOCK_ENTITY, chain, sqlMapping, attrs)
@@ -198,10 +198,10 @@ object C_Utils {
 
     fun createTransactionEntity(executor: C_CompilerExecutor, chain: R_ExternalChainRef?, blockEntity: R_Entity): R_Entity {
         val attrs = listOf(
-                R_Attrib(0, "tx_rid", R_ByteArrayType, false, false),
-                R_Attrib(1, "tx_hash", R_ByteArrayType, false, false),
-                R_Attrib(2, "tx_data", R_ByteArrayType, false, false),
-                R_Attrib(3, "block", blockEntity.type, false, false, true, "block_iid")
+                C_SysAttribute("tx_rid", R_ByteArrayType, false),
+                C_SysAttribute("tx_hash", R_ByteArrayType, false),
+                C_SysAttribute("tx_data", R_ByteArrayType, false),
+                C_SysAttribute("block", blockEntity.type, false, sqlMapping = "block_iid")
         )
         val sqlMapping = R_EntitySqlMapping_Transaction(chain)
         return createSysEntity(executor, C_Constants.TRANSACTION_ENTITY, chain, sqlMapping, attrs)
@@ -212,7 +212,7 @@ object C_Utils {
             simpleName: String,
             chain: R_ExternalChainRef?,
             sqlMapping: R_EntitySqlMapping,
-            attrs: List<R_Attrib>
+            attrs: List<C_SysAttribute>
     ): R_Entity {
         val names = createDefNames(R_ModuleName.EMPTY, chain, null, listOf(simpleName))
         val mountName = R_MountName.of(simpleName)
@@ -229,9 +229,10 @@ object C_Utils {
         val externalEntity = if (chain == null) null else R_ExternalEntity(chain, false)
         val entity = R_Entity(names, mountName, flags, sqlMapping, externalEntity)
 
-        val attrMap = attrs.map { it.name to it }.toMap()
+        val rAttrs = attrs.mapIndexed { i, attr -> attr.compile(i) }
+        val rAttrMap = rAttrs.map { it.name to it }.toMap()
         executor.onPass(C_CompilerPass.MEMBERS) {
-            entity.setBody(R_EntityBody(listOf(), listOf(), attrMap))
+            entity.setBody(R_EntityBody(listOf(), listOf(), rAttrMap))
         }
 
         return entity
@@ -553,6 +554,15 @@ object C_Errors {
         return C_Error.stop(pos, code, msg)
     }
 
+    fun errDuplicateAttribute(msgCtx: C_MessageContext, name: S_Name) {
+        msgCtx.error(name.pos, "dup_attr:$name", "Duplicate attribute: '$name'")
+    }
+
+    fun errAttributeTypeUnknown(msgCtx: C_MessageContext, name: S_Name) {
+        msgCtx.error(name.pos, "unknown_name_type:${name.str}",
+                "Cannot infer type for '${name.str}'; specify type explicitly")
+    }
+
     fun check(b: Boolean, pos: S_Pos, code: String, msg: String) {
         if (!b) {
             throw C_Error.stop(pos, code, msg)
@@ -821,7 +831,7 @@ class C_LateGetter<T>(private val init: C_LateInit<T>) {
     fun get() = init.get()
 }
 
-class C_LateInit<T>(private val pass: C_CompilerPass, fallback: T) {
+class C_LateInit<T>(val pass: C_CompilerPass, fallback: T) {
     private val ctx = C_LateInitContext.getContext()
     private var value: T? = null
     private var fallback: T? = fallback

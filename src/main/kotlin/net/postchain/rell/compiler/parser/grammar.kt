@@ -144,7 +144,7 @@ object S_Grammar : Grammar<S_RellFile>() {
         S_MapType(kw.pos, key, value)
     }
 
-    private val virtualType by ( VIRTUAL * -LT * typeRef * -GT) map { (kw, type) -> S_VirtualType(kw.pos, type) }
+    private val virtualType by ( VIRTUAL * -LT * typeRef * -GT ) map { (kw, type) -> S_VirtualType(kw.pos, type) }
     private val operationType by ( OPERATION ) map { S_OperationType(it.pos) }
 
     private val baseType by (
@@ -163,7 +163,7 @@ object S_Grammar : Grammar<S_RellFile>() {
         res
     }
 
-    private val annotationArgs by ( -LPAR * separatedTerms(parser(S_Grammar::literalExpr), COMMA, true) * -RPAR)
+    private val annotationArgs by ( -LPAR * separatedTerms(parser(S_Grammar::literalExpr), COMMA, true ) * -RPAR)
 
     private val annotationNameName by name
     private val annotationNameSort by SORT map { S_Name(it.pos, it.text) }
@@ -181,39 +181,48 @@ object S_Grammar : Grammar<S_RellFile>() {
 
     private val modifier: Parser<S_Modifier> by keywordModifier or annotation
 
-    private val nameTypeAttrHeader by name * -COLON * type map { (name, type) -> S_NameTypeAttrHeader(name, type) }
+    private val nameTypeAttrHeader by name * -COLON * type map { (name, type) -> S_AttrHeader(name, type) }
 
     private val anonAttrHeader by qualifiedName * optional(QUESTION) map {
         (names, nullable) ->
         if (names.size == 1 && nullable == null) {
-            S_NameAttrHeader(names[0])
+            S_AttrHeader(names[0], null)
         } else {
             val name = names.last()
             val type = S_NameType(names)
             val resultType = if (nullable == null) type else S_NullableType(nullable.pos, type)
-            S_NameTypeAttrHeader(name, resultType)
+            S_AttrHeader(name, resultType)
         }
     }
 
-    private val attrHeader by ( nameTypeAttrHeader or anonAttrHeader)
+    private val attrHeader by ( nameTypeAttrHeader or anonAttrHeader )
 
-    private val relFields by separatedTerms(attrHeader, COMMA, false)
-
-    private val relKeyClause by ( KEY * relFields * -SEMI) map { (kw, attrs) -> S_KeyClause(kw.pos, attrs) }
-    private val relIndexClause by ( INDEX * relFields * -SEMI) map { (kw, attrs) -> S_IndexClause(kw.pos, attrs) }
-
-    private val relAttributeClause by ( optional(MUTABLE) * attrHeader * optional(-ASSIGN * expressionRef) * -SEMI) map {
-        ( mutable, field, expr ) ->
-        S_AttributeClause(field, mutable != null, expr)
+    private val baseAttributeDefinition by optional(MUTABLE) * attrHeader * optional(-ASSIGN * expressionRef) map {
+        (mutable, header, expr) ->
+        S_AttributeDefinition(mutable?.pos, header, expr)
     }
 
-    private val anyRelClause by ( relKeyClause or relIndexClause or relAttributeClause)
+    private val attributeDefinition by baseAttributeDefinition * -SEMI
 
-    private val relClauses by zeroOrMore(anyRelClause)
+    private val relAttributeClause by attributeDefinition map {
+        S_AttributeClause(it)
+    }
+
+    private val keyIndexKind by (
+            ( KEY mapNode { S_KeyIndexKind.KEY } )
+            or ( INDEX mapNode { S_KeyIndexKind.INDEX } )
+    )
+
+    private val relKeyIndexClause by ( keyIndexKind * separatedTerms(baseAttributeDefinition, COMMA, false) * -SEMI ) map {
+        (kind, attrs) ->
+        S_KeyIndexClause(kind.pos, kind.value, attrs)
+    }
+
+    private val relAnyClause by relAttributeClause or relKeyIndexClause
 
     private val entityAnnotations by -LPAR * separatedTerms(name, COMMA, false) * -RPAR
 
-    private val entityBodyFull by ( -LCURL * relClauses * -RCURL)
+    private val entityBodyFull by ( -LCURL * zeroOrMore(relAnyClause) * -RCURL)
     private val entityBodyShort by (SEMI) map { null }
     private val entityBody by ( entityBodyFull or entityBodyShort)
 
@@ -227,14 +236,14 @@ object S_Grammar : Grammar<S_RellFile>() {
         }
     }
 
-    private val objectDef by ( -OBJECT * name * -LCURL * zeroOrMore(anyRelClause) * -RCURL) map {
-        (name, clauses) ->
-        annotatedDef { S_ObjectDefinition(it, name, clauses) }
+    private val objectDef by ( -OBJECT * name * -LCURL * zeroOrMore(attributeDefinition) * -RCURL) map {
+        (name, attrs) ->
+        annotatedDef { S_ObjectDefinition(it, name, attrs) }
     }
 
     private val structKeyword by (STRUCT map { null }) or (RECORD map { it.pos })
 
-    private val structDef by ( structKeyword * name * -LCURL * zeroOrMore(relAttributeClause) * -RCURL) map {
+    private val structDef by ( structKeyword * name * -LCURL * zeroOrMore(attributeDefinition) * -RCURL) map {
         (deprecatedKwPos, name, attrs) ->
         annotatedDef { S_StructDefinition(it, deprecatedKwPos, name, attrs) }
     }

@@ -69,7 +69,7 @@ class R_VarExpr(type: R_Type, val ptr: R_VarPtr, val name: String): R_Destinatio
     }
 }
 
-class R_StructMemberExpr(val base: R_Expr, val attr: R_Attrib): R_DestinationExpr(attr.type) {
+class R_StructMemberExpr(val base: R_Expr, val attr: R_Attribute): R_DestinationExpr(attr.type) {
     override fun evaluateRef(frame: Rt_CallFrame): Rt_ValueRef? {
         val baseValue = base.evaluate(frame)
         if (baseValue is Rt_NullValue) {
@@ -81,7 +81,7 @@ class R_StructMemberExpr(val base: R_Expr, val attr: R_Attrib): R_DestinationExp
         return Rt_StructAttrRef(structValue, attr)
     }
 
-    private class Rt_StructAttrRef(val struct: Rt_StructValue, val attr: R_Attrib): Rt_ValueRef() {
+    private class Rt_StructAttrRef(val struct: Rt_StructValue, val attr: R_Attribute): Rt_ValueRef() {
         override fun get(): Rt_Value {
             val value = struct.get(attr.index)
             return value
@@ -140,14 +140,14 @@ class R_MemberCalculator_VirtualTupleAttr(type: R_Type, val fieldIndex: Int): R_
     }
 }
 
-class R_MemberCalculator_StructAttr(val attr: R_Attrib): R_MemberCalculator(attr.type) {
+class R_MemberCalculator_StructAttr(val attr: R_Attribute): R_MemberCalculator(attr.type) {
     override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
         val structValue = baseValue.asStruct()
         return structValue.get(attr.index)
     }
 }
 
-class R_MemberCalculator_VirtualStructAttr(type: R_Type, val attr: R_Attrib): R_MemberCalculator(type) {
+class R_MemberCalculator_VirtualStructAttr(type: R_Type, val attr: R_Attribute): R_MemberCalculator(type) {
     override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
         val structValue = baseValue.asVirtualStruct()
         return structValue.get(attr.index)
@@ -483,15 +483,15 @@ object R_RequireCondition_Map: R_RequireCondition() {
     override fun calculate(v: Rt_Value) = if (v != Rt_NullValue && !v.asMap().isEmpty()) v else null
 }
 
-sealed class R_CreateExprAttr(val attr: R_Attrib) {
+sealed class R_CreateExprAttr(val attr: R_Attribute) {
     abstract fun expr(): R_Expr
 }
 
-class R_CreateExprAttr_Specified(attr: R_Attrib, private val expr: R_Expr): R_CreateExprAttr(attr) {
+class R_CreateExprAttr_Specified(attr: R_Attribute, private val expr: R_Expr): R_CreateExprAttr(attr) {
     override fun expr() = expr
 }
 
-class R_CreateExprAttr_Default(attr: R_Attrib): R_CreateExprAttr(attr) {
+class R_CreateExprAttr_Default(attr: R_Attribute): R_CreateExprAttr(attr) {
     override fun expr() = attr.expr!!
 }
 

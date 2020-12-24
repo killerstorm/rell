@@ -10,11 +10,11 @@ import net.postchain.base.BlockchainRid
 import net.postchain.core.ByteArrayKey
 import net.postchain.gtv.Gtv
 import net.postchain.rell.compiler.C_SourceDir
-import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.model.*
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.repl.ReplOutputChannel
 import net.postchain.rell.sql.*
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.toImmMap
 
 class Rt_GlobalContext(
@@ -256,9 +256,9 @@ class Rt_AppContext(
     private var objsInit: SqlObjectsInit? = null
     private var objsInited = false
 
-    fun createRootFrame(defPos: R_DefinitionPos, sqlExec: SqlExecutor): Rt_CallFrame {
+    fun createRootFrame(defPos: R_DefinitionPos, sqlExec: SqlExecutor, modsAllowed: Boolean): Rt_CallFrame {
         val exeCtx = Rt_ExecutionContext(this, sqlExec)
-        val defCtx = Rt_DefinitionContext(exeCtx, true, defPos)
+        val defCtx = Rt_DefinitionContext(exeCtx, modsAllowed, defPos)
 
         val containerUid = R_ContainerUid(0, "<init>", app.uid)
         val fnUid = R_FnUid(0, "<init>", containerUid)
