@@ -23,7 +23,7 @@ enum class R_AtCardinality(val zero: Boolean, val many: Boolean) {
     }
 }
 
-class R_DbAtEntity(val rEntity: R_Entity, val index: Int) {
+class R_DbAtEntity(val rEntity: R_EntityDefinition, val index: Int) {
     override fun equals(other: Any?) = other is R_DbAtEntity && rEntity == other.rEntity && index == other.index
     override fun hashCode() = rEntity.hashCode() * 31 + index
 }
@@ -57,14 +57,57 @@ class R_AtWhatFieldFlags(val omit: Boolean, val sort: R_AtWhatSort?, val group: 
     }
 }
 
-class R_DbAtWhatField(val resultType: R_Type, val expr: Db_Expr, val flags: R_AtWhatFieldFlags)
+abstract class R_DbAtWhatCombiner {
+    abstract fun combine(values: List<Rt_Value>): Rt_Value
+}
+
+sealed class R_DbAtWhatValue {
+    abstract fun rawCount(): Int
+    abstract fun rawTypes(): List<R_Type>
+    abstract fun toRedExprs(frame: Rt_CallFrame): List<RedDb_Expr>
+    abstract fun rawToResult(rawValues: List<Rt_Value>): Rt_Value
+}
+
+class R_DbAtWhatValue_Simple(private val expr: Db_Expr, private val resultType: R_Type): R_DbAtWhatValue() {
+    override fun rawCount() = 1
+    override fun rawTypes() = listOf(resultType)
+
+    override fun toRedExprs(frame: Rt_CallFrame): List<RedDb_Expr> {
+        val redExpr = expr.toRedExpr(frame)
+        return listOf(redExpr)
+    }
+
+    override fun rawToResult(rawValues: List<Rt_Value>): Rt_Value {
+        check(rawValues.size == 1) { "rawValues.size = ${rawValues.size}" }
+        return rawValues[0]
+    }
+}
+
+class R_DbAtWhatValue_Complex(exprs: List<Db_Expr>, private val combiner: R_DbAtWhatCombiner): R_DbAtWhatValue() {
+    private val exprs = exprs.toImmList()
+
+    override fun rawCount() = exprs.size
+    override fun rawTypes() = exprs.map { it.type }
+
+    override fun toRedExprs(frame: Rt_CallFrame): List<RedDb_Expr> {
+        return exprs.map { it.toRedExpr(frame) }
+    }
+
+    override fun rawToResult(rawValues: List<Rt_Value>): Rt_Value {
+        check(rawValues.size == exprs.size) { "rawValues.size = ${rawValues.size} (expected {${exprs.size}})" }
+        return combiner.combine(rawValues)
+    }
+}
+
+class R_DbAtWhatField(val flags: R_AtWhatFieldFlags, val value: R_DbAtWhatValue)
 
 class R_DbAtExprBase(
         private val from: List<R_DbAtEntity>,
         private val what: List<R_DbAtWhatField>,
         private val where: Db_Expr?
 ) {
-    private val resultTypes = what.filter { !it.flags.omit }.map { it.resultType }.toImmList()
+    private val selWhat = what.filter { !it.flags.omit }.toImmList()
+    private val resultTypes = selWhat.flatMap { it.value.rawTypes() }.toImmList()
 
     init {
         from.withIndex().forEach { check(it.index == it.value.index) }
@@ -73,13 +116,33 @@ class R_DbAtExprBase(
     fun execute(frame: Rt_CallFrame, params: List<Rt_Value>, limit: Long?, offset: Long?): List<List<Rt_Value>> {
         val rtSql = buildSql(frame, params, limit, offset)
         val select = SqlSelect(rtSql, resultTypes)
-        val records = select.execute(frame)
+        val records = select.execute(frame) { combineRow(it) }
         return records
+    }
+
+    private fun combineRow(row: List<Rt_Value>): List<Rt_Value> {
+        val res: MutableList<Rt_Value> = ArrayList(selWhat.size)
+
+        var pos = 0
+        for (field in selWhat) {
+            val v = field.value
+            val count = v.rawCount()
+            val subRow = row.subList(pos, pos + count)
+            val value = v.rawToResult(subRow)
+            res.add(value)
+            pos += count
+        }
+
+        return res.toImmList()
     }
 
     private fun buildSql(frame: Rt_CallFrame, params: List<Rt_Value>, limit: Long?, offset: Long?): ParameterizedSql {
         val redWhere = makeFullWhere(frame)
-        val redWhat = what.map { RedWhatField(it.expr.toRedExpr(frame), it.flags) }
+
+        val redWhat = what.flatMap { whatField ->
+            val redExprs = whatField.value.toRedExprs(frame)
+            redExprs.map { RedWhatField(it, whatField.flags) }
+        }
 
         val ctx = SqlGenContext.create(frame, from, params)
         val fromInfo = buildFromInfo(ctx, redWhere, redWhat)

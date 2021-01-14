@@ -22,9 +22,9 @@ val GTV_QUERY_PRETTY = true
 val GTV_OPERATION_PRETTY = false
 
 class GtvToRtContext(val pretty: Boolean) {
-    private val objectIds: MultiValuedMap<R_Entity, Long> = HashSetValuedHashMap()
+    private val objectIds: MultiValuedMap<R_EntityDefinition, Long> = HashSetValuedHashMap()
 
-    fun trackObject(entity: R_Entity, rowid: Long) {
+    fun trackObject(entity: R_EntityDefinition, rowid: Long) {
         objectIds.put(entity, rowid)
     }
 
@@ -35,7 +35,7 @@ class GtvToRtContext(val pretty: Boolean) {
         }
     }
 
-    private fun checkRowids(sqlExec: SqlExecutor, sqlCtx: Rt_SqlContext, rEntity: R_Entity, rowids: Collection<Long>) {
+    private fun checkRowids(sqlExec: SqlExecutor, sqlCtx: Rt_SqlContext, rEntity: R_EntityDefinition, rowids: Collection<Long>) {
         val existingIds = selectExistingIds(sqlExec, sqlCtx, rEntity, rowids)
         val missingIds = rowids.toSet() - existingIds
         if (!missingIds.isEmpty()) {
@@ -45,7 +45,7 @@ class GtvToRtContext(val pretty: Boolean) {
         }
     }
 
-    private fun selectExistingIds(sqlExec: SqlExecutor, sqlCtx: Rt_SqlContext, rEntity: R_Entity, rowids: Collection<Long>): Set<Long> {
+    private fun selectExistingIds(sqlExec: SqlExecutor, sqlCtx: Rt_SqlContext, rEntity: R_EntityDefinition, rowids: Collection<Long>): Set<Long> {
         val buf = StringBuilder()
         buf.append("\"").append(rEntity.sqlMapping.rowidColumn()).append("\" IN (")
         rowids.joinTo(buf, ",")
@@ -184,7 +184,7 @@ class GtvRtConversion_Struct(private val struct: R_Struct): GtvRtConversion() {
         val rtFields = attrs.map { attr ->
             val key = attr.name
             if (key !in gtvFields) {
-                val typeName = struct.appLevelName
+                val typeName = struct.name
                 throw errGtv("struct_nokey:$typeName:$key", "Key missing in Gtv dictionary: field '$typeName.$key'")
             }
             val gtvField = gtvFields.getValue(key)
@@ -224,7 +224,7 @@ class GtvRtConversion_Struct(private val struct: R_Struct): GtvRtConversion() {
     }
 }
 
-class GtvRtConversion_Enum(private val enum: R_Enum): GtvRtConversion() {
+class GtvRtConversion_Enum(private val enum: R_EnumDefinition): GtvRtConversion() {
     override fun directCompatibility() = R_GtvCompatibility(true, true)
 
     override fun rtToGtv(rt: Rt_Value, pretty: Boolean): Gtv {

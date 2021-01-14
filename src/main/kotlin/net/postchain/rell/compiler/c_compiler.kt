@@ -4,19 +4,19 @@
 
 package net.postchain.rell.compiler
 
-import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_RellFile
 import net.postchain.rell.model.*
 import net.postchain.rell.repl.ReplCode
 import net.postchain.rell.repl.ReplCodeState
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 import java.util.*
 
-class C_Entity(val defPos: S_Pos?, val entity: R_Entity)
-class C_Struct(val name: S_Name, val struct: R_Struct)
+class C_Entity(val defPos: S_Pos?, val entity: R_EntityDefinition)
+class C_Struct(val name: S_Name, val structDef: R_StructDefinition)
 
 enum class C_CompilerPass {
     DEFINITIONS,
@@ -74,11 +74,11 @@ class C_StatementVarsBlock {
 class C_SystemDefs private constructor(
         val nsProto: C_SysNsProto,
         val ns: C_Namespace,
-        val blockEntity: R_Entity,
-        val transactionEntity: R_Entity,
+        val blockEntity: R_EntityDefinition,
+        val transactionEntity: R_EntityDefinition,
         val mntTables: C_MountTables,
-        entities: List<R_Entity>,
-        queries: List<R_Query>
+        entities: List<R_EntityDefinition>,
+        queries: List<R_QueryDefinition>
 ) {
     val entities = entities.toImmList()
     val queries = queries.toImmList()
@@ -106,10 +106,11 @@ class C_SystemDefs private constructor(
                 "gtv" to typeRef(R_GtvType)
         )
 
-        fun create(executor: C_CompilerExecutor, stamp: R_AppUid): C_SystemDefs {
-            val blockEntity = C_Utils.createBlockEntity(executor, null)
-            val transactionEntity = C_Utils.createTransactionEntity(executor, null, blockEntity)
+        fun create(appCtx: C_AppContext, stamp: R_AppUid): C_SystemDefs {
+            val blockEntity = C_Utils.createBlockEntity(appCtx, null)
+            val transactionEntity = C_Utils.createTransactionEntity(appCtx, null, blockEntity)
 
+            val executor = appCtx.executor
             val queries = listOf(
                     C_Utils.createSysQuery(executor, "get_rell_version", R_TextType, R_SysFn_Rell.GetRellVersion),
                     C_Utils.createSysQuery(executor, "get_postchain_version", R_TextType, R_SysFn_Rell.GetPostchainVersion),
@@ -123,9 +124,9 @@ class C_SystemDefs private constructor(
 
         fun create(
                 stamp: R_AppUid,
-                blockEntity: R_Entity,
-                transactionEntity: R_Entity,
-                queries: List<R_Query>
+                blockEntity: R_EntityDefinition,
+                transactionEntity: R_EntityDefinition,
+                queries: List<R_QueryDefinition>
         ): C_SystemDefs {
             val sysEntities = listOf(blockEntity, transactionEntity)
             val nsProto = createNsProto(sysEntities, queries)
@@ -139,7 +140,7 @@ class C_SystemDefs private constructor(
             return C_SystemDefs(nsProto, ns, blockEntity, transactionEntity, mntTables, sysEntities, queries)
         }
 
-        private fun createNsProto(sysEntities: List<R_Entity>, queries: List<R_Query>): C_SysNsProto {
+        private fun createNsProto(sysEntities: List<R_EntityDefinition>, queries: List<R_QueryDefinition>): C_SysNsProto {
             val sysNamespaces = SYSTEM_NAMESPACES
             val sysTypes = SYSTEM_TYPES
             val sysFunctions = SYSTEM_FUNCTIONS

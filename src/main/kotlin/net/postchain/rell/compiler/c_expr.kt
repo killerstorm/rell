@@ -284,7 +284,7 @@ class C_SimpleDestination(private val rDstExpr: R_DestinationExpr): C_Destinatio
 class C_EntityAttrDestination(
         private val msgCtx: C_MessageContext,
         private val base: V_Expr,
-        private val rEntity: R_Entity,
+        private val rEntity: R_EntityDefinition,
         private val attr: R_Attribute
 ): C_Destination() {
     override fun type() = attr.type
@@ -316,7 +316,7 @@ class C_EntityAttrDestination(
 
 class C_ObjectAttrDestination(
         private val msgCtx: C_MessageContext,
-        private val rObject: R_Object,
+        private val rObject: R_ObjectDefinition,
         private val attr: R_Attribute
 ): C_Destination() {
     override fun type() = attr.type
@@ -412,25 +412,52 @@ class C_NamespaceExpr(private val name: List<S_Name>, private val nsRef: C_Names
     }
 }
 
-class C_StructExpr(
-        private val name: List<S_Name>,
-        private val struct: R_Struct,
-        private val nsRef: C_NamespaceRef
+sealed class C_StructExpr(
+        private val startPos: S_Pos,
+        protected val struct: R_Struct
 ): C_Expr() {
-    override fun kind() = C_ExprKind.STRUCT
-    override fun startPos() = name[0].pos
+    final override fun kind() = C_ExprKind.STRUCT
+    final override fun startPos() = startPos
 
-    override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
-        val nsExpr = C_NamespaceExpr(name, nsRef)
-        return nsExpr.member(ctx, memberName, safe)
+    protected abstract val baseName: String
+
+    protected abstract fun memberFunction(ctx: C_ExprContext, memberName: S_Name): C_Expr?
+
+    final override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
+        val fnExpr = memberFunction(ctx, memberName)
+        return fnExpr ?: throw C_Errors.errUnknownName(startPos, "$baseName.$memberName")
     }
 
-    override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_NameExprPair>): C_Expr {
-        return C_StructGlobalFunction.compileCall(struct, ctx, name.last(), args)
+    final override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_NameExprPair>): C_Expr {
+        return C_StructGlobalFunction.compileCall(struct, ctx, startPos, args)
     }
 }
 
-class C_ObjectExpr(name: List<S_Name>, rObject: R_Object): C_Expr() {
+class C_NamespaceStructExpr(
+        name: List<S_Name>,
+        struct: R_Struct,
+        private val nsRef: C_NamespaceRef
+): C_StructExpr(name[0].pos, struct) {
+    override val baseName = C_Utils.nameStr(name)
+
+    override fun memberFunction(ctx: C_ExprContext, memberName: S_Name): C_Expr? {
+        val fnRef = nsRef.function(memberName)
+        return if (fnRef != null) C_FunctionExpr(memberName, fnRef) else null
+    }
+}
+
+class C_MirrorStructExpr(pos: S_Pos, struct: R_Struct, private val ns: C_Namespace): C_StructExpr(pos, struct) {
+    override val baseName = struct.name
+
+    override fun memberFunction(ctx: C_ExprContext, memberName: S_Name): C_Expr? {
+        val fnProxy = ns.function(memberName.str)
+        fnProxy ?: return null
+        val fnRef = C_DefRef(ctx.msgCtx, listOf(memberName), fnProxy)
+        return C_FunctionExpr(memberName, fnRef)
+    }
+}
+
+class C_ObjectExpr(name: List<S_Name>, rObject: R_ObjectDefinition): C_Expr() {
     private val vExpr = V_ObjectExpr(name, rObject)
 
     override fun kind() = C_ExprKind.OBJECT
@@ -442,7 +469,7 @@ class C_ObjectExpr(name: List<S_Name>, rObject: R_Object): C_Expr() {
     }
 }
 
-class C_EnumExpr(private val msgCtx: C_MessageContext, private val name: List<S_Name>, private val rEnum: R_Enum): C_Expr() {
+class C_EnumExpr(private val msgCtx: C_MessageContext, private val name: List<S_Name>, private val rEnum: R_EnumDefinition): C_Expr() {
     override fun kind() = C_ExprKind.ENUM
     override fun startPos() = name[0].pos
 

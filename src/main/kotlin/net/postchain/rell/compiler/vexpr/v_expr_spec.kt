@@ -4,6 +4,9 @@ import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.*
+import net.postchain.rell.runtime.Rt_Error
+import net.postchain.rell.runtime.Rt_StructValue
+import net.postchain.rell.runtime.Rt_Value
 
 class V_RExpr(
         pos: S_Pos,
@@ -124,7 +127,7 @@ class V_LocalVarExpr(
     }
 }
 
-class V_ObjectExpr(private val name: List<S_Name>, private val rObject: R_Object): V_Expr(name[0].pos) {
+class V_ObjectExpr(private val name: List<S_Name>, private val rObject: R_ObjectDefinition): V_Expr(name[0].pos) {
     override fun type() = rObject.type
     override fun isDb() = false
     override fun toRExpr0() = R_ObjectExpr(rObject.type)
@@ -132,13 +135,17 @@ class V_ObjectExpr(private val name: List<S_Name>, private val rObject: R_Object
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
         val attr = rObject.rEntity.attributes[memberName.str]
-        attr ?: throw C_Errors.errUnknownName(name, memberName)
-        val vExpr = V_ObjectAttrExpr(memberName.pos, rObject, attr)
-        return C_VExpr(vExpr)
+        val attrExpr = if (attr == null) null else C_VExpr(V_ObjectAttrExpr(memberName.pos, rObject, attr))
+
+        val memberRef = C_MemberRef(pos, this, memberName, safe)
+        val fnExpr = C_MemberResolver.functionForType(rObject.type, memberRef)
+
+        val cExpr = C_ValueFunctionExpr.create(memberName, attrExpr, fnExpr)
+        return cExpr ?: throw C_Errors.errUnknownMember(rObject.type, memberName)
     }
 }
 
-private class V_ObjectAttrExpr(pos: S_Pos, private val rObject: R_Object, private val attr: R_Attribute): V_Expr(pos) {
+private class V_ObjectAttrExpr(pos: S_Pos, private val rObject: R_ObjectDefinition, private val attr: R_Attribute): V_Expr(pos) {
     override fun type() = attr.type
     override fun isDb() = false
     override fun toRExpr0() = createAccessExpr()
@@ -155,13 +162,104 @@ private class V_ObjectAttrExpr(pos: S_Pos, private val rObject: R_Object, privat
     private fun createAccessExpr(): R_Expr {
         val rEntity = rObject.rEntity
         val atEntity = R_DbAtEntity(rEntity, 0)
-        val from = listOf(atEntity)
-
         val whatExpr = Db_AttrExpr(Db_EntityExpr(atEntity), attr)
-        val whatField = R_DbAtWhatField(whatExpr.type, whatExpr, R_AtWhatFieldFlags.DEFAULT)
-        val what = listOf(whatField)
+        val whatValue = R_DbAtWhatValue_Simple(whatExpr, whatExpr.type)
+        val whatField = R_DbAtWhatField(R_AtWhatFieldFlags.DEFAULT, whatValue)
+        return createRExpr(rObject, atEntity, whatField, attr.type)
+    }
 
-        val atBase = R_DbAtExprBase(from, what, null)
-        return R_ObjectAttrExpr(attr.type, rObject, atBase)
+    companion object {
+        fun createRExpr(
+                rObject: R_ObjectDefinition,
+                atEntity: R_DbAtEntity,
+                whatField: R_DbAtWhatField,
+                resType: R_Type
+        ): R_Expr {
+            val from = listOf(atEntity)
+            val what = listOf(whatField)
+            val atBase = R_DbAtExprBase(from, what, null)
+            return R_ObjectAttrExpr(resType, rObject, atBase)
+        }
+    }
+}
+
+class V_EntityToStructExpr(
+        private val memberRef: C_MemberRef,
+        private val entityType: R_EntityType
+): V_Expr(memberRef.base.pos) {
+    private val isDb = isDb(memberRef.base)
+    private val structType = entityType.rEntity.mirrorStruct.type
+    private val resultType = C_Utils.effectiveMemberType(structType, memberRef.safe)
+
+    override fun type() = resultType
+    override fun isDb() = isDb
+
+    override fun toRExpr0(): R_Expr {
+        val atEntity = R_DbAtEntity(entityType.rEntity, 0)
+        val whatValue = createWhatValue(Db_EntityExpr(atEntity))
+        val whatField = R_DbAtWhatField(R_AtWhatFieldFlags.DEFAULT, whatValue)
+        return V_EntityAttrExpr.createRExpr(memberRef.base, atEntity, whatField, memberRef.safe, structType)
+    }
+
+    override fun toDbExprWhat(exprCtx: C_ExprContext, field: C_AtWhatField): R_DbAtWhatValue {
+        val flags = field.flags
+        checkFlag(exprCtx, flags.sort?.pos, "sort", "sort")
+        checkFlag(exprCtx, flags.group, "group", "group")
+        checkFlag(exprCtx, flags.aggregate, "aggregate", "aggregate")
+
+        val dbEntityExpr = memberRef.base.toDbExpr(exprCtx.msgCtx) as Db_TableExpr
+        return createWhatValue(dbEntityExpr)
+    }
+
+    private fun checkFlag(exprCtx: C_ExprContext, flagPos: S_Pos?, code: String, msg: String) {
+        if (flagPos != null) {
+            exprCtx.msgCtx.error(flagPos, "to_struct:$code", "Cannot $msg to_struct()")
+        }
+    }
+
+    private fun createWhatValue(dbEntityExpr: Db_TableExpr): R_DbAtWhatValue {
+        val rEntity = entityType.rEntity
+        val dbExprs = rEntity.attributes.map {
+            C_EntityAttrRef.create(rEntity, it.value).createDbContextAttrExpr(dbEntityExpr)
+        }
+        return R_DbAtWhatValue_Complex(dbExprs, R_DbAtWhatCombiner_ToStruct(entityType.rEntity))
+    }
+}
+
+class V_ObjectToStructExpr(pos: S_Pos, private val objectType: R_ObjectType): V_Expr(pos) {
+    private val structType = objectType.rObject.rEntity.mirrorStruct.type
+    private val resultType = structType
+
+    override fun type() = resultType
+    override fun isDb() = false
+
+    override fun toRExpr0(): R_Expr {
+        val atEntity = R_DbAtEntity(objectType.rObject.rEntity, 0)
+        val whatValue = createWhatValue(Db_EntityExpr(atEntity))
+        val whatField = R_DbAtWhatField(R_AtWhatFieldFlags.DEFAULT, whatValue)
+        return V_ObjectAttrExpr.createRExpr(objectType.rObject, atEntity, whatField, structType)
+    }
+
+    private fun createWhatValue(dbEntityExpr: Db_TableExpr): R_DbAtWhatValue {
+        val rEntity = objectType.rObject.rEntity
+        val dbExprs = rEntity.attributes.map {
+            C_EntityAttrRef.create(rEntity, it.value).createDbContextAttrExpr(dbEntityExpr)
+        }
+        return R_DbAtWhatValue_Complex(dbExprs, R_DbAtWhatCombiner_ToStruct(objectType.rObject.rEntity))
+    }
+}
+
+private class R_DbAtWhatCombiner_ToStruct(private val rEntity: R_EntityDefinition): R_DbAtWhatCombiner() {
+    override fun combine(values: List<Rt_Value>): Rt_Value {
+        val struct = rEntity.mirrorStruct
+        val attrs = struct.attributesList
+
+        if (values.size != attrs.size) {
+            throw Rt_Error("to_struct:values_size:${attrs.size}:${values.size}",
+                    "Received wrong number of values: ${values.size} instead of ${attrs.size}")
+        }
+
+        val attrValues = values.toMutableList()
+        return Rt_StructValue(struct.type, attrValues)
     }
 }

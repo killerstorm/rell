@@ -7,6 +7,7 @@ package net.postchain.rell.compiler
 import net.postchain.rell.model.Db_SysFunction
 import net.postchain.rell.model.R_SysFunction
 import net.postchain.rell.model.R_Type
+import org.apache.commons.collections4.MultiValuedMap
 import org.apache.commons.collections4.multimap.ArrayListValuedHashMap
 
 class C_GlobalFuncTable(private val map: Map<String, C_GlobalFunction>) {
@@ -30,23 +31,28 @@ class C_MemberFuncTable(private val map: Map<String, C_SysMemberFunction>) {
 }
 
 sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT> {
-    private val map = ArrayListValuedHashMap<String, C_FuncCase<CaseCtxT>>()
+    private val caseMap: MultiValuedMap<String, C_FuncCase<CaseCtxT>> = ArrayListValuedHashMap()
+    private val fnMap = mutableMapOf<String, FuncT>()
 
     protected abstract fun makeBody(result: R_Type, rFn: R_SysFunction, dbFn: Db_SysFunction?): C_FormalParamsFuncBody<CaseCtxT>
     protected abstract fun makeFunc(cases: List<C_FuncCase<CaseCtxT>>): FuncT
 
     protected fun addCase(name: String, case: C_FuncCase<CaseCtxT>, deprecated: C_Deprecated?) {
         val case2 = if (deprecated == null) case else makeDeprecatedCase(case, deprecated)
-        map.put(name, case2)
+        caseMap.put(name, case2)
     }
 
     protected fun buildMap(): Map<String, FuncT> {
-        val fnMap = mutableMapOf<String, FuncT>()
-        for (name in map.keySet().sorted()) {
-            val cases = map[name]
-            fnMap[name] = makeFunc(cases)
+        val res = mutableMapOf<String, FuncT>()
+        for (name in caseMap.keySet().sorted()) {
+            val cases = caseMap[name]
+            res[name] = makeFunc(cases.toList())
         }
-        return fnMap.toMap()
+        for (name in fnMap.keys) {
+            check(name !in res) { name }
+            res[name] = fnMap.getValue(name)
+        }
+        return res.toMap()
     }
 
     private fun makeCase(params: List<C_ArgTypeMatcher>, body: C_FormalParamsFuncBody<CaseCtxT>): C_FuncCase<CaseCtxT> {
@@ -117,6 +123,12 @@ sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT> {
         return this as BuilderT
     }
 
+    fun add(name: String, fn: FuncT): BuilderT {
+        check(name !in fnMap) { "Duplicate function: '$name'" }
+        fnMap[name] = fn
+        return this as BuilderT
+    }
+
     fun addIf(
             c: Boolean,
             name: String,
@@ -161,7 +173,7 @@ class C_MemberFuncBuilder: C_FuncBuilder<C_MemberFuncBuilder, C_MemberFuncCaseCt
     }
 
     override fun makeFunc(cases: List<C_FuncCase<C_MemberFuncCaseCtx>>): C_SysMemberFunction {
-        return C_SysMemberFunction(cases)
+        return C_CasesSysMemberFunction(cases)
     }
 
     fun build(): C_MemberFuncTable {

@@ -8,6 +8,7 @@ import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.vexpr.V_DbExpr
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
+import net.postchain.rell.utils.toImmList
 
 class C_UpdateTarget(val ctx: C_ExprContext, val rTarget: R_UpdateTarget)
 
@@ -106,7 +107,7 @@ class S_UpdateTarget_Expr(val expr: S_Expr): S_UpdateTarget() {
         return rTarget
     }
 
-    private fun compileTargetEntity(rExpr: R_Expr, rEntity: R_Entity): R_UpdateTarget {
+    private fun compileTargetEntity(rExpr: R_Expr, rEntity: R_EntityDefinition): R_UpdateTarget {
         val entity = R_DbAtEntity(rEntity, 0)
         val whereLeft = Db_EntityExpr(entity)
         val whereRight = Db_ParameterExpr(rEntity.type, 0)
@@ -114,7 +115,7 @@ class S_UpdateTarget_Expr(val expr: S_Expr): S_UpdateTarget() {
         return R_UpdateTarget_Expr_One(entity, where, rExpr)
     }
 
-    private fun compileTargetObject(rObject: R_Object): R_UpdateTarget {
+    private fun compileTargetObject(rObject: R_ObjectDefinition): R_UpdateTarget {
         return R_UpdateTarget_Object(rObject)
     }
 
@@ -155,24 +156,26 @@ class S_UpdateStatement(pos: S_Pos, val target: S_UpdateTarget, val what: List<S
         return C_Statement(rStmt, false, resFacts.postFacts)
     }
 
-    private fun compileWhat(ctx: C_ExprContext, entity: R_Entity, subValues: MutableList<V_Expr>): List<R_UpdateStatementWhat> {
-        val dbWhat = what.map { compileWhatExpr(entity, ctx, it) }
-        subValues.addAll(dbWhat)
+    private fun compileWhat(
+            ctx: C_ExprContext,
+            entity: R_EntityDefinition,
+            subValues: MutableList<V_Expr>
+    ): List<R_UpdateStatementWhat> {
+        val args = what.mapIndexed { i, w -> C_Argument(i, w.name, w.expr, compileWhatExpr(entity, ctx, w)) }
+        subValues.addAll(args.map { it.vExpr })
 
-        val types = dbWhat.map { it.type() }
-        val whatPairs = what.map { S_NameExprPair(it.name, it.expr) }
-        val attrs = C_AttributeResolver.resolveUpdate(ctx.msgCtx, entity, whatPairs, types)
+        val attrs = C_AttributeResolver.resolveUpdate(ctx.msgCtx, entity, args)
 
-        val updAttrs = attrs.withIndex().mapNotNull { (idx, attr) ->
-            val w = what[idx]
+        val updAttrs = attrs.mapNotNull { (arg, attr) ->
+            val w = what[arg.index]
             val op = if (w.op == null) S_AssignOp_Eq else w.op.op
-            op.compileDbUpdate(ctx, w.pos, attr, dbWhat[idx])
-        }
+            op.compileDbUpdate(ctx, w.pos, attr, arg.vExpr)
+        }.toImmList()
 
         return updAttrs
     }
 
-    private fun compileWhatExpr(entity: R_Entity, ctx: C_ExprContext, pair: S_UpdateWhat): V_Expr {
+    private fun compileWhatExpr(entity: R_EntityDefinition, ctx: C_ExprContext, pair: S_UpdateWhat): V_Expr {
         val impName = pair.expr.asName()
         if (impName != null && pair.name == null) {
             val entityAttr = entity.attributes[impName.str]

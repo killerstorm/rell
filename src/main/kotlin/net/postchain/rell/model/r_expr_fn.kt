@@ -55,7 +55,7 @@ class R_SysCallExpr(
 
 class R_UserCallExpr(
         type: R_Type,
-        private val fn: R_Routine,
+        private val fn: R_RoutineDefinition,
         args: List<R_Expr>,
         private val filePos: R_FilePos
 ): R_CallExpr(type, args) {

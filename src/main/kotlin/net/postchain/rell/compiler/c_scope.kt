@@ -5,8 +5,9 @@
 package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.ast.S_Name
-import net.postchain.rell.model.R_Entity
+import net.postchain.rell.model.R_EntityDefinition
 import net.postchain.rell.model.R_EntityType
+import net.postchain.rell.model.R_ObjectDefinition
 import net.postchain.rell.model.R_Type
 import net.postchain.rell.utils.Getter
 
@@ -53,7 +54,7 @@ class C_Scope(
         return getQualifiedDef(qName, GeneralNs::type)
     }
 
-    fun getEntity(name: List<S_Name>): R_Entity {
+    fun getEntity(name: List<S_Name>): R_EntityDefinition {
         val entity = getEntityOpt(name)
         if (entity == null) {
             val nameStr = C_Utils.nameStr(name)
@@ -62,7 +63,7 @@ class C_Scope(
         return entity
     }
 
-    fun getEntityOpt(name: List<S_Name>): R_Entity? {
+    fun getEntityOpt(name: List<S_Name>): R_EntityDefinition? {
         val type = getTypeOpt(name)
         if (type == null) {
             return null
@@ -74,6 +75,11 @@ class C_Scope(
         }
 
         return type.rEntity
+    }
+
+    fun getObjectOpt(name: List<S_Name>): R_ObjectDefinition? {
+        val value = getQualifiedDef(name, GeneralNs::value)
+        return (value?.getDef() as? C_NamespaceValue_Object)?.rObject
     }
 
     fun getValueOpt(name: S_Name): C_DefRef<C_NamespaceValue>? {

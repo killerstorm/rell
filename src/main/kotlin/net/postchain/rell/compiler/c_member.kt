@@ -208,7 +208,7 @@ private class V_MemberAttrExpr(
     }
 }
 
-sealed class C_EntityAttrRef(protected val rEntity: R_Entity, val name: String) {
+sealed class C_EntityAttrRef(protected val rEntity: R_EntityDefinition, val name: String) {
     abstract fun type(): R_Type
     abstract fun createDbContextAttrExpr(baseExpr: Db_TableExpr): Db_Expr
     abstract fun createIpMemberExpr(ref: C_MemberRef): V_Expr
@@ -221,7 +221,11 @@ sealed class C_EntityAttrRef(protected val rEntity: R_Entity, val name: String) 
 
         fun isAllowedRegularAttrName(name: String) = name != ROWID_NAME
 
-        fun resolveByName(rEntity: R_Entity, name: String): C_EntityAttrRef? {
+        fun create(rEntity: R_EntityDefinition, attr: R_Attribute): C_EntityAttrRef {
+            return C_EntityAttrRef_Regular(rEntity, attr)
+        }
+
+        fun resolveByName(rEntity: R_EntityDefinition, name: String): C_EntityAttrRef? {
             return if (name == ROWID_NAME) {
                 C_EntityAttrRef_Rowid(rEntity)
             } else {
@@ -230,7 +234,7 @@ sealed class C_EntityAttrRef(protected val rEntity: R_Entity, val name: String) 
             }
         }
 
-        fun resolveByType(rEntity: R_Entity, type: R_Type): List<C_EntityAttrRef> {
+        fun resolveByType(rEntity: R_EntityDefinition, type: R_Type): List<C_EntityAttrRef> {
             val res = mutableListOf<C_EntityAttrRef>()
             if (type == ROWID_TYPE) {
                 res.add(C_EntityAttrRef_Rowid(rEntity))
@@ -245,7 +249,7 @@ sealed class C_EntityAttrRef(protected val rEntity: R_Entity, val name: String) 
     }
 }
 
-private class C_EntityAttrRef_Regular(rEntity: R_Entity, private val attr: R_Attribute): C_EntityAttrRef(rEntity, attr.name) {
+private class C_EntityAttrRef_Regular(rEntity: R_EntityDefinition, private val attr: R_Attribute): C_EntityAttrRef(rEntity, attr.name) {
     override fun type() = attr.type
 
     override fun createDbContextAttrExpr(baseExpr: Db_TableExpr): Db_Expr {
@@ -275,7 +279,7 @@ private class C_EntityAttrRef_Regular(rEntity: R_Entity, private val attr: R_Att
     }
 }
 
-private class C_EntityAttrRef_Rowid(rEntity: R_Entity): C_EntityAttrRef(rEntity, ROWID_NAME) {
+private class C_EntityAttrRef_Rowid(rEntity: R_EntityDefinition): C_EntityAttrRef(rEntity, ROWID_NAME) {
     override fun type() = ROWID_TYPE
 
     override fun createDbContextAttrExpr(baseExpr: Db_TableExpr): Db_Expr {
@@ -309,7 +313,7 @@ interface C_EntityAttrValueLike {
     fun memberAttr(ref: C_MemberRef, memAttrInfo: C_DbAttrInfo): C_Expr
 }
 
-private class V_EntityAttrExpr private constructor(
+class V_EntityAttrExpr private constructor(
         pos: S_Pos,
         private val base: C_EntityAttrValueBase,
         private val parent: V_Expr,
@@ -320,21 +324,10 @@ private class V_EntityAttrExpr private constructor(
     override fun isDb() = false // Important: value does not belong to an outer @-expression
 
     override fun toRExpr0(): R_Expr {
-        val from = listOf(base.atEntity)
-
-        val whereLeft = Db_EntityExpr(base.atEntity)
-        val whereRight = Db_ParameterExpr(base.atEntity.rEntity.type, 0)
-        val where = C_Utils.makeDbBinaryExprEq(whereLeft, whereRight)
-
-        val whatField = R_DbAtWhatField(attrInfo.dbExpr.type, attrInfo.dbExpr, R_AtWhatFieldFlags.DEFAULT)
-        val what = listOf(whatField)
-
-        val atBase = R_DbAtExprBase(from, what, where)
-        val calculator = R_MemberCalculator_DataAttribute(attrInfo.dbExpr.type, atBase)
-
-        val rBase = base.value.toRExpr()
-        val rExpr = R_MemberExpr(rBase, base.safe, calculator)
-        return rExpr
+        val dbAttrExpr = attrInfo.dbExpr
+        val whatValue = R_DbAtWhatValue_Simple(dbAttrExpr, dbAttrExpr.type)
+        val whatField = R_DbAtWhatField(R_AtWhatFieldFlags.DEFAULT, whatValue)
+        return createRExpr(base.value, base.atEntity, whatField, base.safe, dbAttrExpr.type)
     }
 
     // Cannot inject the corresponding Db_Expr directly into another Db_Expr - must wrap it in R_Expr.
@@ -389,6 +382,28 @@ private class V_EntityAttrExpr private constructor(
             val resultType = C_Utils.effectiveMemberType(memAttrInfo.dbExpr.type, ref.safe)
             return V_EntityAttrExpr(ref.pos, base, ref.base, memAttrInfo, resultType)
         }
+
+        fun createRExpr(
+                base: V_Expr,
+                atEntity: R_DbAtEntity,
+                whatField: R_DbAtWhatField,
+                safe: Boolean,
+                resType: R_Type
+        ): R_Expr {
+            val whereLeft = Db_EntityExpr(atEntity)
+            val whereRight = Db_ParameterExpr(atEntity.rEntity.type, 0)
+            val where = C_Utils.makeDbBinaryExprEq(whereLeft, whereRight)
+
+            val what = listOf(whatField)
+
+            val from = listOf(atEntity)
+            val atBase = R_DbAtExprBase(from, what, where)
+            val calculator = R_MemberCalculator_DataAttribute(resType, atBase)
+
+            val rBase = base.toRExpr()
+            val rExpr = R_MemberExpr(rBase, safe, calculator)
+            return rExpr
+        }
     }
 }
 
@@ -397,7 +412,7 @@ private class C_MemberFunctionExpr(private val memberRef: C_MemberRef, private v
     override fun startPos() = memberRef.pos
 
     override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_NameExprPair>): C_Expr {
-        val cArgs = C_FunctionUtils.compileRegularArgs(ctx, args, fn.paramsHints)
+        val cArgs = C_FunctionUtils.compileRegularArgs(ctx, args, fn.getParamsHints())
         if (!cArgs.named.isEmpty()) {
             val arg = cArgs.named[0]
             ctx.msgCtx.error(arg.first.pos, "expr:call:sys_member_fn_named_arg:${arg.first}",
@@ -410,7 +425,7 @@ private class C_MemberFunctionExpr(private val memberRef: C_MemberRef, private v
     }
 }
 
-class C_DbAttrInfo(val rEntity: R_Entity, val name: S_Name, val attr: R_Attribute?, val dbExpr: Db_Expr)
+class C_DbAttrInfo(val rEntity: R_EntityDefinition, val name: S_Name, val attr: R_Attribute?, val dbExpr: Db_Expr)
 
 private fun makeDbAttrExpr(base: Db_TableExpr, attr: R_Attribute): Db_Expr {
     val resultType = attr.type

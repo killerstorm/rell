@@ -4,12 +4,14 @@
 
 package net.postchain.rell.compiler
 
+import com.google.common.math.IntMath
 import net.postchain.rell.compiler.ast.C_FormalParameters
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.*
 import net.postchain.rell.utils.Getter
 import net.postchain.rell.utils.TypedKeyMap
+import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmSet
 import org.apache.commons.lang3.StringUtils
 
@@ -26,9 +28,11 @@ class C_GlobalContext(val compilerOptions: C_CompilerOptions, val sourceDir: C_S
 
 class C_MessageContext(val globalCtx: C_GlobalContext) {
     private val messages = mutableListOf<C_Message>()
+    private var errorCount = 0
 
     fun message(type: C_MessageType, pos: S_Pos, code: String, text: String) {
         messages.add(C_Message(type, pos, code, text))
+        if (type == C_MessageType.ERROR) errorCount = IntMath.checkedAdd(errorCount, 1)
     }
 
     fun warning(pos: S_Pos, code: String, text: String) {
@@ -36,8 +40,7 @@ class C_MessageContext(val globalCtx: C_GlobalContext) {
     }
 
     fun error(pos: S_Pos, code: String, msg: String) {
-        val message = C_Message(C_MessageType.ERROR, pos, code, msg)
-        messages.add(message)
+        message(C_MessageType.ERROR, pos, code, msg)
     }
 
     fun error(error: C_Error) {
@@ -48,7 +51,7 @@ class C_MessageContext(val globalCtx: C_GlobalContext) {
         error(error.pos, error.code, error.msg)
     }
 
-    fun messages() = messages.toList()
+    fun messages() = messages.toImmList()
 
     fun <T> consumeError(code: () -> T): T? {
         try {
@@ -56,6 +59,19 @@ class C_MessageContext(val globalCtx: C_GlobalContext) {
         } catch (e: C_Error) {
             error(e)
             return null
+        }
+    }
+
+    fun errorWatcher() = C_ErrorWatcher()
+
+    inner class C_ErrorWatcher {
+        private var lastErrorCount = errorCount
+
+        fun hasNewErrors(): Boolean {
+            val count = errorCount
+            val res = count > lastErrorCount
+            lastErrorCount = count
+            return res
         }
     }
 }
@@ -123,7 +139,7 @@ class C_RegularModuleContext(
     override fun getModuleArgsStruct(): R_Struct? {
         val contents = module.contents()
         val struct = contents.defs.structs[C_Constants.MODULE_ARGS_STRUCT]
-        return struct?.struct
+        return struct?.structDef?.struct
     }
 }
 
@@ -218,14 +234,19 @@ class C_NamespaceContext(val modCtx: C_ModuleContext, val namespacePath: String?
         return scope.getTypeOpt(name)
     }
 
-    fun getEntity(name: List<S_Name>): R_Entity {
+    fun getEntity(name: List<S_Name>): R_EntityDefinition {
         executor.checkPass(C_CompilerPass.MEMBERS, null)
         return scope.getEntity(name)
     }
 
-    fun getEntityOpt(name: List<S_Name>): R_Entity? {
+    fun getEntityOpt(name: List<S_Name>): R_EntityDefinition? {
         executor.checkPass(C_CompilerPass.MEMBERS, null)
         return scope.getEntityOpt(name)
+    }
+
+    fun getObjectOpt(name: List<S_Name>): R_ObjectDefinition? {
+        executor.checkPass(C_CompilerPass.MEMBERS, null)
+        return scope.getObjectOpt(name)
     }
 
     fun getValueOpt(name: S_Name): C_DefRef<C_NamespaceValue>? {

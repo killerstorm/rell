@@ -8,6 +8,7 @@ import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.parser.RellTokenMatch
 import net.postchain.rell.model.*
 import net.postchain.rell.module.RELL_VERSION_MODULE_SYSTEM
+import net.postchain.rell.runtime.toGtv
 import net.postchain.rell.tools.api.IdeOutlineNodeType
 import net.postchain.rell.tools.api.IdeOutlineTreeBuilder
 import net.postchain.rell.utils.*
@@ -283,7 +284,7 @@ class S_EntityDefinition(
 
         val rExternalEntity = if (extChainRef == null) null else R_ExternalEntity(extChainRef, true)
 
-        val rEntity = R_Entity(names, mountName, rFlags, rMapping, rExternalEntity)
+        val rEntity = C_Utils.createEntity(ctx.appCtx, C_DefinitionType.ENTITY, names, mountName, rFlags, rMapping, rExternalEntity)
 
         ctx.appCtx.defsAdder.addEntity(C_Entity(name.pos, rEntity))
         ctx.nsBuilder.addEntity(name, rEntity)
@@ -371,7 +372,7 @@ class S_EntityDefinition(
         )
     }
 
-    private fun membersPass(ctx: C_MountContext, extChain: C_ExternalChain?, rEntity: R_Entity, clauses: List<S_RelClause>) {
+    private fun membersPass(ctx: C_MountContext, extChain: C_ExternalChain?, rEntity: R_EntityDefinition, clauses: List<S_RelClause>) {
         val defCtx = C_DefinitionContext(ctx, C_DefinitionType.ENTITY)
 
         val sysAttrs = mutableListOf<C_SysAttribute>()
@@ -395,7 +396,7 @@ class S_EntityDefinition(
         }
 
         val body = entCtx.createEntityBody()
-        rEntity.setBody(body)
+        C_Utils.setEntityBody(rEntity, body)
     }
 
     override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
@@ -438,8 +439,9 @@ class S_ObjectDefinition(
         val mountName = ctx.mountName(modTarget, name)
         val sqlMapping = R_EntitySqlMapping_Regular(mountName)
 
-        val rEntity = R_Entity(names, mountName, entityFlags, sqlMapping, null)
-        val rObject = R_Object(names, rEntity)
+        val rEntity = C_Utils.createEntity(ctx.appCtx, C_DefinitionType.OBJECT, names, mountName, entityFlags, sqlMapping, null)
+        val rObject = R_ObjectDefinition(names, rEntity)
+
         ctx.appCtx.defsAdder.addObject(rObject)
         ctx.nsBuilder.addObject(name, rObject)
         ctx.mntBuilder.addObject(name, rObject)
@@ -449,7 +451,7 @@ class S_ObjectDefinition(
         }
     }
 
-    private fun membersPass(ctx: C_MountContext, rObject: R_Object) {
+    private fun membersPass(ctx: C_MountContext, rObject: R_ObjectDefinition) {
         val defCtx = C_DefinitionContext(ctx, C_DefinitionType.OBJECT)
         val entCtx = C_EntityContext(defCtx, name.str, false, listOf())
 
@@ -458,7 +460,7 @@ class S_ObjectDefinition(
         }
 
         val body = entCtx.createEntityBody()
-        rObject.rEntity.setBody(body)
+        C_Utils.setEntityBody(rObject.rEntity, body)
     }
 
     override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
@@ -487,9 +489,10 @@ class S_StructDefinition(
         modifiers.compile(ctx, modTarget)
 
         val names = ctx.nsCtx.defNames(name.str)
-        val rStruct = R_Struct(names)
+        val rStruct = R_Struct(names.appLevelName, names.appLevelName.toGtv())
+        val rStructDef = R_StructDefinition(names, rStruct)
         ctx.appCtx.defsAdder.addStruct(rStruct)
-        ctx.nsBuilder.addStruct(name, rStruct)
+        ctx.nsBuilder.addStruct(name, rStructDef)
 
         ctx.executor.onPass(C_CompilerPass.MEMBERS) {
             membersPass(ctx, rStruct)
@@ -539,7 +542,7 @@ class S_EnumDefinition(
         }
 
         val names = ctx.nsCtx.defNames(name.str)
-        val rEnum = R_Enum(names, rAttrs.toList())
+        val rEnum = R_EnumDefinition(names, rAttrs.toList())
         ctx.nsBuilder.addEnum(name, rEnum)
     }
 
@@ -568,7 +571,7 @@ class S_OperationDefinition(
         val mountName = ctx.mountName(modTarget, name)
 
         val defCtx = C_DefinitionContext(ctx, C_DefinitionType.OPERATION)
-        val rOperation = R_Operation(names, mountName)
+        val rOperation = R_OperationDefinition(names, mountName)
         val cOperation = C_OperationGlobalFunction(rOperation)
 
         ctx.appCtx.defsAdder.addOperation(rOperation)
@@ -590,7 +593,7 @@ class S_OperationDefinition(
         return header
     }
 
-    private fun compileBody(defCtx: C_DefinitionContext, rOperation: R_Operation, header: C_OperationFunctionHeader) {
+    private fun compileBody(defCtx: C_DefinitionContext, rOperation: R_OperationDefinition, header: C_OperationFunctionHeader) {
         val statementVars = processStatementVars()
         val fnCtx = C_FunctionContext(defCtx, rOperation.appLevelName, null, statementVars)
         val frameCtx = C_FrameContext.create(fnCtx)
@@ -632,7 +635,7 @@ class S_QueryDefinition(
         val mountName = ctx.mountName(modTarget, name)
 
         val defCtx = C_DefinitionContext(ctx, C_DefinitionType.QUERY)
-        val rQuery = R_Query(names, mountName)
+        val rQuery = R_QueryDefinition(names, mountName)
         val cQuery = C_QueryGlobalFunction(rQuery)
 
         ctx.appCtx.defsAdder.addQuery(rQuery)
@@ -653,7 +656,7 @@ class S_QueryDefinition(
         return header
     }
 
-    private fun compileBody(ctx: C_MountContext, header: C_QueryFunctionHeader, rQuery: R_Query) {
+    private fun compileBody(ctx: C_MountContext, header: C_QueryFunctionHeader, rQuery: R_QueryDefinition) {
         if (header.queryBody == null) return
 
         val rBody = header.queryBody.compile()
@@ -846,9 +849,9 @@ class S_FunctionDefinition(
         return ctx.nsCtx.defNames(qName)
     }
 
-    private fun compileDefinition0(ctx: C_MountContext): R_Function {
+    private fun compileDefinition0(ctx: C_MountContext): R_FunctionDefinition {
         val names = definitionNames(ctx)
-        return R_Function(names)
+        return R_FunctionDefinition(names)
     }
 
     private fun compileRegularHeader(defCtx: C_DefinitionContext, cFn: C_UserGlobalFunction): C_UserFunctionHeader {
@@ -861,7 +864,7 @@ class S_FunctionDefinition(
         return C_FunctionUtils.compileFunctionHeader(defCtx, qualifiedName.last(), defNames, params, retType, body)
     }
 
-    private fun compileRegularBody(header: C_UserFunctionHeader, rFn: R_Function) {
+    private fun compileRegularBody(header: C_UserFunctionHeader, rFn: R_FunctionDefinition) {
         if (header.fnBody != null) {
             val rBody = header.fnBody.compile()
             rFn.setBody(rBody)
@@ -916,9 +919,9 @@ class S_FunctionDefinition(
         }
 
         val absDescriptor = if (fn == null) null else {
-            val (def, desc) = fn.getAbstractInfo()
+            val desc = fn.getAbstractDescriptor()
             if (desc == null) {
-                val qName = def?.appLevelName ?: C_Utils.nameStr(qualifiedName)
+                val qName = fn.getDefinition()?.appLevelName ?: C_Utils.nameStr(qualifiedName)
                 defCtx.msgCtx.error(qualifiedName[0].pos, "fn:override:not_abstract:[$qName]", "Function is not abstract: '$qName'")
             }
             desc

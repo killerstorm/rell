@@ -115,7 +115,7 @@ class R_UpdateTarget_Expr_Many(
     }
 }
 
-class R_UpdateTarget_Object(rObject: R_Object): R_UpdateTarget() {
+class R_UpdateTarget_Object(rObject: R_ObjectDefinition): R_UpdateTarget() {
     private val entity = R_DbAtEntity(rObject.rEntity, 0)
 
     override fun entity() = entity

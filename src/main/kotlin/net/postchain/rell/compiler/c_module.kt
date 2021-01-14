@@ -219,12 +219,12 @@ class C_ModuleCompiler private constructor(private val modCtx: C_ModuleContext) 
                 test = modCtx.test,
                 entities = defs.entities,
                 objects = defs.objects,
-                structs = defs.structs.mapValues { (_, v) -> v.struct },
+                structs = defs.structs.mapValues { (_, v) -> v.structDef },
                 enums = defs.enums,
                 operations = defs.operations,
                 queries = defs.queries,
                 functions = defs.functions,
-                moduleArgs = moduleArgs?.struct
+                moduleArgs = moduleArgs?.structDef
         )
 
         val fileImports = files.map { it.importsDescriptor }
@@ -239,9 +239,9 @@ class C_ModuleCompiler private constructor(private val modCtx: C_ModuleContext) 
 
         if (moduleArgs != null) {
             modCtx.appCtx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
-                if (!moduleArgs.struct.flags.typeFlags.gtv.fromGtv) {
+                if (!moduleArgs.structDef.struct.flags.typeFlags.gtv.fromGtv) {
                     throw C_Error.more(moduleArgs.name.pos, "module_args_nogtv",
-                            "Struct '${moduleArgs.struct.moduleLevelName}' is not Gtv-compatible")
+                            "Struct '${moduleArgs.structDef.moduleLevelName}' is not Gtv-compatible")
                 }
             }
         }
@@ -265,13 +265,13 @@ class C_ModuleCompiler private constructor(private val modCtx: C_ModuleContext) 
 }
 
 class C_ModuleDefsBuilder {
-    val entities = C_ModuleDefTableBuilder<R_Entity>()
-    val objects = C_ModuleDefTableBuilder<R_Object>()
+    val entities = C_ModuleDefTableBuilder<R_EntityDefinition>()
+    val objects = C_ModuleDefTableBuilder<R_ObjectDefinition>()
     val structs = C_ModuleDefTableBuilder<C_Struct>()
-    val enums = C_ModuleDefTableBuilder<R_Enum>()
-    val functions = C_ModuleDefTableBuilder<R_Function>()
-    val operations = C_ModuleDefTableBuilder<R_Operation>()
-    val queries = C_ModuleDefTableBuilder<R_Query>()
+    val enums = C_ModuleDefTableBuilder<R_EnumDefinition>()
+    val functions = C_ModuleDefTableBuilder<R_FunctionDefinition>()
+    val operations = C_ModuleDefTableBuilder<R_OperationDefinition>()
+    val queries = C_ModuleDefTableBuilder<R_QueryDefinition>()
 
     fun build(): C_ModuleDefs {
         return C_ModuleDefs(
@@ -287,13 +287,13 @@ class C_ModuleDefsBuilder {
 }
 
 class C_ModuleDefs(
-        val entities: Map<String, R_Entity>,
-        val objects: Map<String, R_Object>,
+        val entities: Map<String, R_EntityDefinition>,
+        val objects: Map<String, R_ObjectDefinition>,
         val structs: Map<String, C_Struct>,
-        val enums: Map<String, R_Enum>,
-        val functions: Map<String, R_Function>,
-        val operations: Map<String, R_Operation>,
-        val queries: Map<String, R_Query>
+        val enums: Map<String, R_EnumDefinition>,
+        val functions: Map<String, R_FunctionDefinition>,
+        val operations: Map<String, R_OperationDefinition>,
+        val queries: Map<String, R_QueryDefinition>
 ){
     companion object {
         val EMPTY = C_ModuleDefs(

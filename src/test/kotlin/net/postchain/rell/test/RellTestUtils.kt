@@ -119,7 +119,7 @@ object RellTestUtils {
         return res
     }
 
-    private fun findFn(app: R_App, name: String): R_Function {
+    private fun findFn(app: R_App, name: String): R_FunctionDefinition {
         for (module in app.modules) {
             val fn = module.functions[name]
             if (fn != null) return fn

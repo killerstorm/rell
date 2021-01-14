@@ -5,13 +5,13 @@
 package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.model.R_Function
+import net.postchain.rell.model.R_FunctionDefinition
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.utils.Nullable
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmSet
 
-class C_AbstractDescriptor(private val fnPos: S_Pos, private val rFunction: R_Function, val hasDefaultBody: Boolean) {
+class C_AbstractDescriptor(private val fnPos: S_Pos, private val rFunction: R_FunctionDefinition, val hasDefaultBody: Boolean) {
     private val headerLate = C_LateInit(C_CompilerPass.MEMBERS, Nullable<C_UserFunctionHeader>(null))
     private val overrideBodyLate = C_LateInit(C_CompilerPass.ABSTRACT, Nullable<C_UserFunctionBody>(null))
 

@@ -20,6 +20,10 @@ import net.postchain.gtv.merkle.GtvMerkleHashCalculator
 import java.util.*
 import java.util.function.Supplier
 
+fun <T> checkEquals(expected: T, actual: T) {
+    check(expected == actual) { "expected <$expected> actual <$actual>" }
+}
+
 object PostchainUtils {
     val DATABASE_VERSION = 1
 

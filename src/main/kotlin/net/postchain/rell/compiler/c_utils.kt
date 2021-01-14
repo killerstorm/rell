@@ -17,6 +17,7 @@ import net.postchain.rell.compiler.vexpr.V_IntegerToDecimalExpr
 import net.postchain.rell.compiler.vexpr.V_RExpr
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Error
+import net.postchain.rell.runtime.toGtv
 import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.ThreadLocalContext
 import net.postchain.rell.utils.toImmList
@@ -186,17 +187,17 @@ object C_Utils {
         }
     }
 
-    fun createBlockEntity(executor: C_CompilerExecutor, chain: R_ExternalChainRef?): R_Entity {
+    fun createBlockEntity(appCtx: C_AppContext, chain: R_ExternalChainRef?): R_EntityDefinition {
         val attrs = listOf(
                 C_SysAttribute("block_height", R_IntegerType, false),
                 C_SysAttribute("block_rid", R_ByteArrayType, false),
                 C_SysAttribute("timestamp", R_IntegerType, false)
         )
         val sqlMapping = R_EntitySqlMapping_Block(chain)
-        return createSysEntity(executor, C_Constants.BLOCK_ENTITY, chain, sqlMapping, attrs)
+        return createSysEntity(appCtx, C_Constants.BLOCK_ENTITY, chain, sqlMapping, attrs)
     }
 
-    fun createTransactionEntity(executor: C_CompilerExecutor, chain: R_ExternalChainRef?, blockEntity: R_Entity): R_Entity {
+    fun createTransactionEntity(appCtx: C_AppContext, chain: R_ExternalChainRef?, blockEntity: R_EntityDefinition): R_EntityDefinition {
         val attrs = listOf(
                 C_SysAttribute("tx_rid", R_ByteArrayType, false),
                 C_SysAttribute("tx_hash", R_ByteArrayType, false),
@@ -204,16 +205,16 @@ object C_Utils {
                 C_SysAttribute("block", blockEntity.type, false, sqlMapping = "block_iid")
         )
         val sqlMapping = R_EntitySqlMapping_Transaction(chain)
-        return createSysEntity(executor, C_Constants.TRANSACTION_ENTITY, chain, sqlMapping, attrs)
+        return createSysEntity(appCtx, C_Constants.TRANSACTION_ENTITY, chain, sqlMapping, attrs)
     }
 
     private fun createSysEntity(
-            executor: C_CompilerExecutor,
+            appCtx: C_AppContext,
             simpleName: String,
             chain: R_ExternalChainRef?,
             sqlMapping: R_EntitySqlMapping,
             attrs: List<C_SysAttribute>
-    ): R_Entity {
+    ): R_EntityDefinition {
         val names = createDefNames(R_ModuleName.EMPTY, chain, null, listOf(simpleName))
         val mountName = R_MountName.of(simpleName)
 
@@ -227,23 +228,54 @@ object C_Utils {
         )
 
         val externalEntity = if (chain == null) null else R_ExternalEntity(chain, false)
-        val entity = R_Entity(names, mountName, flags, sqlMapping, externalEntity)
+        val entity = createEntity(appCtx, C_DefinitionType.ENTITY, names, mountName, flags, sqlMapping, externalEntity)
 
         val rAttrs = attrs.mapIndexed { i, attr -> attr.compile(i) }
         val rAttrMap = rAttrs.map { it.name to it }.toMap()
-        executor.onPass(C_CompilerPass.MEMBERS) {
-            entity.setBody(R_EntityBody(listOf(), listOf(), rAttrMap))
+
+        appCtx.executor.onPass(C_CompilerPass.MEMBERS) {
+            setEntityBody(entity, R_EntityBody(listOf(), listOf(), rAttrMap))
         }
 
         return entity
     }
 
-    fun createSysQuery(executor: C_CompilerExecutor, simpleName: String, type: R_Type, fn: R_SysFunction): R_Query {
+    fun createEntity(
+            appCtx: C_AppContext,
+            defType: C_DefinitionType,
+            names: R_DefinitionNames,
+            mountName: R_MountName,
+            flags: R_EntityFlags,
+            sqlMapping: R_EntitySqlMapping,
+            externalEntity: R_ExternalEntity?
+    ): R_EntityDefinition {
+        val rStruct = createEntityStruct(names, defType)
+        appCtx.defsAdder.addStruct(rStruct)
+        return R_EntityDefinition(names, mountName, flags, sqlMapping, externalEntity, rStruct)
+    }
+
+    private fun createEntityStruct(names: R_DefinitionNames, defType: C_DefinitionType): R_Struct {
+        val structName = "struct<${names.appLevelName}>"
+        val structMetaGtv = mapOf(
+                "type" to "struct".toGtv(),
+                "definition_type" to defType.name.toGtv(),
+                "definition" to names.appLevelName.toGtv()
+        ).toGtv()
+        return R_Struct(structName, structMetaGtv)
+    }
+
+    fun setEntityBody(entity: R_EntityDefinition, body: R_EntityBody) {
+        val structAttrs = body.attributes.mapValues { it.value.copy(mutable = false) }
+        entity.setBody(body)
+        entity.mirrorStruct.setAttributes(structAttrs)
+    }
+
+    fun createSysQuery(executor: C_CompilerExecutor, simpleName: String, type: R_Type, fn: R_SysFunction): R_QueryDefinition {
         val moduleName = R_ModuleName.of("rell")
         val names = createDefNames(moduleName, null, null, listOf(simpleName))
 
         val mountName = R_MountName(moduleName.parts + R_Name.of(simpleName))
-        val query = R_Query(names, mountName)
+        val query = R_QueryDefinition(names, mountName)
 
         executor.onPass(C_CompilerPass.EXPRESSIONS) {
             val body = R_SysQueryBody(type, listOf(), fn)
@@ -444,7 +476,7 @@ object C_Errors {
         return errUnknownName(name.pos, name.str)
     }
 
-    private fun errUnknownName(pos: S_Pos, str: String): C_Error {
+    fun errUnknownName(pos: S_Pos, str: String): C_Error {
         return C_Error.stop(pos, "unknown_name:$str", "Unknown name: '$str'")
     }
 

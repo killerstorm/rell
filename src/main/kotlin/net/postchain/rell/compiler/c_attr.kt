@@ -4,64 +4,64 @@
 
 package net.postchain.rell.compiler
 
+import com.google.common.collect.LinkedHashMultimap
+import com.google.common.collect.Multimap
+import com.google.common.collect.Sets
 import net.postchain.rell.compiler.ast.S_Expr
+import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_NameExprPair
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
+import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmMap
 
 object C_AttributeResolver {
     fun resolveCreate(
             ctx: C_ExprContext,
             attributes: Map<String, R_Attribute>,
-            exprs: List<S_NameExprPair>,
+            args: List<C_Argument>,
             pos: S_Pos
     ): C_CreateAttributes {
-        val values = exprs.map { compileCreateArg(ctx, attributes, it).value() }
-        val rExprs = values.map { it.toRExpr() }
-        val types = rExprs.map { it.type }
+        val rExprMap = args.map { it to it.vExpr.toRExpr() }.toMap().toImmMap()
 
-        val attrs = matchCreateAttrs(ctx.msgCtx, attributes, exprs, types)
-        val attrExprs = attrs.mapIndexed { idx, attr ->
-            val rExpr = rExprs[idx]
-            R_CreateExprAttr_Specified(attr, rExpr)
+        val errWatcher = ctx.msgCtx.errorWatcher()
+        val matchedAttrs = matchCreateAttrs(ctx.msgCtx, attributes, args)
+
+        val unmatchedArgs = Sets.difference(args.toSet(), matchedAttrs.keys)
+        if (unmatchedArgs.isNotEmpty() && !errWatcher.hasNewErrors()) {
+            // Must not happen, added for safety.
+            ctx.msgCtx.error(pos, "create:unmatched_args", "Not all arguments matched to attributes")
+        }
+
+        val attrExprs = matchedAttrs.map {
+            val rExpr = rExprMap.getValue(it.key)
+            R_CreateExprAttr_Specified(it.value, rExpr)
         }
 
         val attrExprsDef = attrExprs + matchDefaultExprs(attributes, attrExprs)
         checkMissingAttrs(attributes, attrExprsDef, pos)
 
-        for ((idx, attr) in attrs.withIndex()) {
-            val expr = exprs[idx].expr
-            C_Errors.check(attr.canSetInCreate, expr.startPos) {
+        for ((arg, attr) in matchedAttrs) {
+            val exprPos = arg.vExpr.pos
+            C_Errors.check(attr.canSetInCreate, exprPos) {
                 val name = attr.name
                 "create_attr_cantset:$name" to "Cannot set value of system attribute '$name'"
             }
         }
 
-        val exprFacts = C_ExprVarFacts.forSubExpressions(values)
+        val exprFacts = C_ExprVarFacts.forSubExpressions(args.map { it.vExpr })
         return C_CreateAttributes(attrExprsDef, exprFacts)
-    }
-
-    private fun compileCreateArg(ctx: C_ExprContext, attributes: Map<String, R_Attribute>, expr: S_NameExprPair): C_Expr {
-        val attr = if (expr.name != null) {
-            attributes[expr.name.str]
-        } else if (attributes.size == 1) {
-            attributes.values.iterator().next()
-        } else {
-            null
-        }
-        val typeHint = C_TypeHint.ofType(attr?.type)
-        return expr.expr.compile(ctx, typeHint)
     }
 
     private fun matchCreateAttrs(
             msgCtx: C_MessageContext,
             attributes: Map<String, R_Attribute>,
-            exprs: List<S_NameExprPair>,
-            types: List<R_Type>
-    ): List<R_Attribute> {
-        val explicitExprs = matchExplicitExprs(msgCtx, attributes, exprs, false)
-        checkExplicitExprTypes(exprs, explicitExprs, types)
-        return matchImplicitExprs(msgCtx, attributes, exprs, types, explicitExprs, false)
+            args: List<C_Argument>
+    ): Map<C_Argument, R_Attribute> {
+        val explicitAttrs = matchExplicitAttrs(msgCtx, attributes, args, false)
+        checkExplicitExprTypes(explicitAttrs)
+        return matchImplicitAttrs(msgCtx, attributes, args, explicitAttrs, false)
     }
 
     private fun matchDefaultExprs(attributes: Map<String, R_Attribute>, attrExprs: List<R_CreateExprAttr>): List<R_CreateExprAttr> {
@@ -78,129 +78,133 @@ object C_AttributeResolver {
         }
     }
 
-    fun resolveUpdate(msgCtx: C_MessageContext, entity: R_Entity, exprs: List<S_NameExprPair>, types: List<R_Type>): List<R_Attribute> {
-        val explicitExprs = matchExplicitExprs(msgCtx, entity.attributes, exprs, entity.flags.canUpdate)
-        return matchImplicitExprs(msgCtx, entity.attributes, exprs, types, explicitExprs, true)
+    fun resolveUpdate(
+            msgCtx: C_MessageContext,
+            entity: R_EntityDefinition,
+            args: List<C_Argument>
+    ): Map<C_Argument, R_Attribute> {
+        val errWatcher = msgCtx.errorWatcher()
+        val explicitAttrs = matchExplicitAttrs(msgCtx, entity.attributes, args, entity.flags.canUpdate)
+        val matchedAttrs = matchImplicitAttrs(msgCtx, entity.attributes, args, explicitAttrs, true)
+
+        val unmatched = Sets.difference(args.toSet(), matchedAttrs.keys)
+        if (unmatched.isNotEmpty() && !errWatcher.hasNewErrors() && !args.any { it.vExpr.type() == R_CtErrorType }) {
+            val pos = unmatched.first().vExpr.pos
+            msgCtx.error(pos, "update:unmatched_args", "Not all arguments matched to attributes")
+        }
+
+        return matchedAttrs
     }
 
-    private fun matchExplicitExprs(
+    private fun matchExplicitAttrs(
             msgCtx: C_MessageContext,
-            attributes: Map<String, R_Attribute>,
-            exprs: List<S_NameExprPair>,
+            attrs: Map<String, R_Attribute>,
+            args: List<C_Argument>,
             mutableOnly: Boolean
-    ): List<IndexedValue<R_Attribute>> {
+    ): Map<C_Argument, R_Attribute> {
         val explicitNames = mutableSetOf<String>()
-        val explicitExprs = mutableListOf<IndexedValue<R_Attribute>>()
+        val explicitExprs = mutableMapOf<C_Argument, R_Attribute>()
 
-        for ((idx, pair) in exprs.withIndex()) {
-            if (pair.name != null) {
-                val name = pair.name
-                val attrZ = attributes[name.str]
-                val attr = C_Errors.checkNotNull(attrZ, name.pos) { "attr_unknown_name:${name.str}" to "Unknown attribute: '${name.str}'" }
+        for (arg in args) {
+            val name = arg.name
+            name ?: continue
 
-                C_Errors.check(explicitNames.add(name.str), name.pos) {
-                    "attr_dup_name:${name.str}" to "Attribute already specified: '${name.str}'"
-                }
+            val attrZ = attrs[name.str]
+            val attr = C_Errors.checkNotNull(attrZ, name.pos) { "attr_unknown_name:${name.str}" to "Unknown attribute: '${name.str}'" }
 
-                if (mutableOnly && !attr.mutable) {
-                    msgCtx.error(name.pos, "update_attr_not_mutable:${name.str}", "Attribute is not mutable: '${name.str}'")
-                }
-
-                explicitExprs.add(IndexedValue(idx, attr))
+            C_Errors.check(explicitNames.add(name.str), name.pos) {
+                "attr_dup_name:${name.str}" to "Attribute already specified: '${name.str}'"
             }
+
+            if (mutableOnly && !attr.mutable) {
+                msgCtx.error(name.pos, "update_attr_not_mutable:${name.str}", "Attribute is not mutable: '${name.str}'")
+            }
+
+            explicitExprs[arg] = attr
         }
 
-        return explicitExprs.toList()
+        return explicitExprs.toImmMap()
     }
 
-    private fun checkExplicitExprTypes(exprs: List<S_NameExprPair>, explicitExprs: List<IndexedValue<R_Attribute>>, types: List<R_Type>) {
-        for ((idx, attr) in explicitExprs) {
-            val pos = exprs[idx].expr.startPos
-            val type = types[idx]
-            typeCheck(pos, idx, attr, type)
+    private fun checkExplicitExprTypes(explicitAttrs: Map<C_Argument, R_Attribute>) {
+        for ((arg, attr) in explicitAttrs) {
+            val vExpr = arg.vExpr
+            val type = vExpr.type()
+            typeCheck(vExpr.pos, arg.index, attr, type)
         }
     }
 
-    private fun matchImplicitExprs(
+    private fun matchImplicitAttrs(
             msgCtx: C_MessageContext,
-            attributes: Map<String, R_Attribute>,
-            exprs: List<S_NameExprPair>,
-            types: List<R_Type>,
-            explicitExprs: List<IndexedValue<R_Attribute>>,
+            attrs: Map<String, R_Attribute>,
+            args: List<C_Argument>,
+            explicitExprs: Map<C_Argument, R_Attribute>,
             mutableOnly: Boolean
-    ) : List<R_Attribute> {
-        val implicitExprs = matchImplicitExprs0(msgCtx, attributes, exprs, types, mutableOnly)
-        val result = combineMatchedExprs(exprs, explicitExprs, implicitExprs)
-        return result
+    ) : Map<C_Argument, R_Attribute> {
+        val implicitAttrs = matchImplicitAttrs0(msgCtx, attrs, args, mutableOnly)
+        val res = combineMatchedExprs(explicitExprs, implicitAttrs)
+        return res
     }
 
     private fun combineMatchedExprs(
-            exprs: List<S_NameExprPair>,
-            explicitExprs: List<IndexedValue<R_Attribute>>,
-            implicitExprs: List<IndexedValue<R_Attribute>>
-    ) : List<R_Attribute> {
-        checkImplicitExprsConflicts1(exprs, explicitExprs, implicitExprs)
-        checkImplicitExprsConflicts2(exprs, implicitExprs)
-
-        val combinedExprs = (explicitExprs + implicitExprs).sortedBy { it.index }.toList()
-        combinedExprs.withIndex().forEach { check(it.index == it.value.index ) }
-
-        val result = combinedExprs.map { (_, attr) -> attr }.toList()
-        return result
+            explicitAttrs: Map<C_Argument, R_Attribute>,
+            implicitAttrs: Map<C_Argument, R_Attribute>
+    ): Map<C_Argument, R_Attribute> {
+        checkImplicitExprsConflicts1(explicitAttrs, implicitAttrs)
+        checkImplicitExprsConflicts2(implicitAttrs)
+        val res = explicitAttrs + implicitAttrs
+        return res
     }
 
-    private fun matchImplicitExprs0(
+    private fun matchImplicitAttrs0(
             msgCtx: C_MessageContext,
-            attributes: Map<String, R_Attribute>,
-            exprs: List<S_NameExprPair>,
-            types: List<R_Type>,
+            attrs: Map<String, R_Attribute>,
+            args: List<C_Argument>,
             mutableOnly: Boolean
-    ): List<IndexedValue<R_Attribute>> {
-        val result = mutableListOf<IndexedValue<R_Attribute>>()
+    ): Map<C_Argument, R_Attribute> {
+        val res = mutableMapOf<C_Argument, R_Attribute>()
 
-        for ((idx, pair) in exprs.withIndex()) {
-            if (pair.name == null) {
-                val type = types[idx]
-                val attr = implicitMatch(msgCtx, attributes, idx, pair.expr, type, mutableOnly)
+        for (arg in args) {
+            if (arg.name == null) {
+                val type = arg.vExpr.type()
+                val attr = implicitMatch(msgCtx, attrs, arg.index, arg.sExpr, type, mutableOnly)
                 if (attr != null) {
-                    result.add(IndexedValue(idx, attr))
+                    res[arg] = attr
                 }
             }
         }
 
-        return result.toList()
+        return res.toImmMap()
     }
 
     private fun checkImplicitExprsConflicts1(
-            exprs: List<S_NameExprPair>,
-            explicitExprs: List<IndexedValue<R_Attribute>>,
-            implicitExprs: List<IndexedValue<R_Attribute>>
+            explicitAttrs: Map<C_Argument, R_Attribute>,
+            implicitAttrs: Map<C_Argument, R_Attribute>
     ) {
-        val explicitNames = explicitExprs.map { (_, attr) -> attr.name }.toSet()
-
-        for ((idx, attr) in implicitExprs) {
+        val explicitNames = explicitAttrs.map { it.value.name }.toSet()
+        for ((arg, attr) in implicitAttrs) {
             val name = attr.name
-            C_Errors.check(name !in explicitNames, exprs[idx].expr.startPos) {
-                    "attr_implic_explic:$idx:$name" to
-                            "Expression #${idx + 1} matches attribute '$name' which is already specified"
+            C_Errors.check(name !in explicitNames, arg.sExpr.startPos) {
+                    "attr_implic_explic:${arg.index}:$name" to
+                            "Expression #${arg.index + 1} matches attribute '$name' which is already specified"
             }
         }
     }
 
-    private fun checkImplicitExprsConflicts2(exprs: List<S_NameExprPair>, implicitExprs: List<IndexedValue<R_Attribute>>) {
-        val implicitConflicts = mutableMapOf<String, MutableList<Int>>()
-        for ((_, attr) in implicitExprs) {
-            implicitConflicts[attr.name] = mutableListOf()
+    private fun checkImplicitExprsConflicts2(implicitAttrs: Map<C_Argument, R_Attribute>) {
+        val implicitConflicts: Multimap<String, C_Argument> = LinkedHashMultimap.create()
+        for ((arg, attr) in implicitAttrs) {
+            implicitConflicts.put(attr.name, arg)
         }
 
-        for ((idx, attr) in implicitExprs) {
-            implicitConflicts[attr.name]!!.add(idx)
-        }
-
-        for ((name, list) in implicitConflicts) {
-            C_Errors.check(list.size <= 1, exprs[list[0]].expr.startPos) {
-                "attr_implic_multi:$name:${list.joinToString(",")}" to
-                        "Multiple expressions match attribute '$name': ${list.joinToString { "#" + (it + 1) }}"
+        for (name in implicitConflicts.keySet()) {
+            val args = implicitConflicts.get(name)
+            if (args.size > 1) {
+                val arg = args.first()
+                val idxs = args.map { it.index }
+                val code = "attr_implic_multi:$name:${idxs.joinToString(",")}"
+                val msg = "Multiple expressions match attribute '$name': ${idxs.joinToString { "#" + (it + 1) }}"
+                throw C_Error.stop(arg.sExpr.startPos, code, msg)
             }
         }
     }
@@ -253,6 +257,33 @@ object C_AttributeResolver {
         C_Errors.check(attr.type.isAssignableFrom(exprType), pos) {
                 "attr_bad_type:$idx:${attr.name}:${attr.type.toStrictString()}:${exprType.toStrictString()}" to
                         "Attribute type mismatch for '${attr.name}': ${exprType} instead of ${attr.type}"
+        }
+    }
+}
+
+class C_Argument(val index: Int, val name: S_Name?, val sExpr: S_Expr, val vExpr: V_Expr) {
+    companion object {
+        fun compile(
+                ctx: C_ExprContext,
+                attributes: Map<String, R_Attribute>,
+                args: List<S_NameExprPair>
+        ): List<C_Argument> {
+            return args.mapIndexed { i, arg ->
+                val vExpr = compileArg(ctx, attributes, arg)
+                C_Argument(i, arg.name, arg.expr, vExpr)
+            }.toImmList()
+        }
+
+        private fun compileArg(ctx: C_ExprContext, attributes: Map<String, R_Attribute>, expr: S_NameExprPair): V_Expr {
+            val attr = if (expr.name != null) {
+                attributes[expr.name.str]
+            } else if (attributes.size == 1) {
+                attributes.values.iterator().next()
+            } else {
+                null
+            }
+            val typeHint = C_TypeHint.ofType(attr?.type)
+            return expr.expr.compile(ctx, typeHint).value()
         }
     }
 }

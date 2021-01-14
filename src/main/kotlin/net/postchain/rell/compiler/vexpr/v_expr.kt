@@ -1,6 +1,7 @@
 package net.postchain.rell.compiler.vexpr
 
 import net.postchain.rell.compiler.*
+import net.postchain.rell.compiler.ast.S_Expr
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.*
@@ -29,6 +30,16 @@ abstract class V_Expr(val pos: S_Pos) {
         }
         val rExpr = toRExpr()
         return C_Utils.toDbExpr(pos, rExpr)
+    }
+
+    open fun toDbExprWhat(exprCtx: C_ExprContext, field: C_AtWhatField): R_DbAtWhatValue {
+        var dbExpr = toDbExpr(exprCtx.msgCtx)
+
+        if (field.summarization != null) {
+            dbExpr = field.summarization.compileDb(exprCtx.nsCtx, dbExpr)
+        }
+
+        return R_DbAtWhatValue_Simple(dbExpr, field.resultType)
     }
 
     open fun constantValue(): Rt_Value? = null
@@ -198,10 +209,17 @@ class V_AtEntityExpr(pos: S_Pos, private val rAtEntity: R_DbAtEntity): V_Expr(po
     override fun toDbExpr0(msgCtx: C_MessageContext) = Db_EntityExpr(rAtEntity)
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
-        val attrRef = C_EntityAttrRef.resolveByName(rAtEntity.rEntity, memberName.str)
-        attrRef ?: throw C_Errors.errUnknownMember(rAtEntity.rEntity.type, memberName)
-        val vExpr = V_AtAttrExpr(pos, rAtEntity, attrRef)
-        return C_VExpr(vExpr)
+        val entity = rAtEntity.rEntity
+        val entityType = entity.type
+
+        val attrRef = C_EntityAttrRef.resolveByName(entity, memberName.str)
+        val attrExpr = if (attrRef == null) null else C_VExpr(V_AtAttrExpr(pos, rAtEntity, attrRef))
+
+        val memberRef = C_MemberRef(pos, this, memberName, safe)
+        val fnExpr = C_MemberResolver.functionForType(entityType, memberRef)
+
+        val cExpr = C_ValueFunctionExpr.create(memberName, attrExpr, fnExpr)
+        return cExpr ?: throw C_Errors.errUnknownMember(entityType, memberName)
     }
 }
 

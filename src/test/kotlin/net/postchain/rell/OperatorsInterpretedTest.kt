@@ -8,7 +8,7 @@ import net.postchain.base.BlockchainRid
 import net.postchain.gtv.GtvNull
 import net.postchain.rell.compiler.C_MapSourceDir
 import net.postchain.rell.model.R_App
-import net.postchain.rell.model.R_Entity
+import net.postchain.rell.model.R_EntityDefinition
 import net.postchain.rell.model.R_EntityType
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.runtime.*
@@ -142,7 +142,7 @@ class OperatorsInterpretedTest: OperatorsBaseTest() {
                 return Rt_EntityValue(t, id)
             }
 
-            private fun findEntity(app: R_App, name: String): R_Entity {
+            private fun findEntity(app: R_App, name: String): R_EntityDefinition {
                 for (module in app.modules) {
                     val c = module.entities[name]
                     if (c != null) return c

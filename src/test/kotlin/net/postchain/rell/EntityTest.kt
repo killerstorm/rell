@@ -5,7 +5,7 @@
 package net.postchain.rell
 
 import net.postchain.rell.model.R_Attribute
-import net.postchain.rell.model.R_Entity
+import net.postchain.rell.model.R_EntityDefinition
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.test.RellCodeTester
@@ -292,7 +292,7 @@ class EntityTest: BaseRellTest(false) {
     @Test fun testObjectRowidAttr() {
         tstCtx.useSql = true
         def("object state { mutable value: text = 'Unknown'; }")
-        chk("state.rowid", "ct_err:unknown_name:state.rowid")
+        chk("state.rowid", "ct_err:unknown_member:[state]:rowid")
     }
 
     @Test fun testNullValueInDatabase() {
@@ -491,7 +491,7 @@ class EntityTest: BaseRellTest(false) {
         assertEquals(exp, act)
     }
 
-    private fun entityToString(e: R_Entity): String {
+    private fun entityToString(e: R_EntityDefinition): String {
         val attrs = e.attributes.values.map { attrToString(it) }
         val keys = e.keys.map { "key ${it.attribs.joinToString(",")}" }
         val idxs = e.indexes.map { "index ${it.attribs.joinToString(",")}" }

@@ -87,12 +87,12 @@ object SqlGen {
         """.trimIndent()
     }
 
-    fun genEntity(sqlCtx: Rt_SqlContext, rEntity: R_Entity): String {
+    fun genEntity(sqlCtx: Rt_SqlContext, rEntity: R_EntityDefinition): String {
         val tableName = rEntity.sqlMapping.table(sqlCtx)
         return genEntity(sqlCtx, rEntity, tableName)
     }
 
-    fun genEntity(sqlCtx: Rt_SqlContext, rEntity: R_Entity, tableName: String): String {
+    fun genEntity(sqlCtx: Rt_SqlContext, rEntity: R_EntityDefinition, tableName: String): String {
         val mapping = rEntity.sqlMapping
         val rowid = mapping.rowidColumn()
         val attrs = rEntity.attributes.values

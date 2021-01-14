@@ -471,7 +471,7 @@ object R_SysFn_Struct {
 }
 
 object R_SysFn_Enum {
-    class Values(private val enum: R_Enum): R_SysFunction_0() {
+    class Values(private val enum: R_EnumDefinition): R_SysFunction_0() {
         private val listType = R_ListType(enum.type)
 
         override fun call(): Rt_Value {
@@ -480,7 +480,7 @@ object R_SysFn_Enum {
         }
     }
 
-    class Value_Text(private val enum: R_Enum): R_SysFunction_1() {
+    class Value_Text(private val enum: R_EnumDefinition): R_SysFunction_1() {
         override fun call(arg: Rt_Value): Rt_Value {
             val name = arg.asString()
             val attr = enum.attr(name)
@@ -491,7 +491,7 @@ object R_SysFn_Enum {
         }
     }
 
-    class Value_Int(private val enum: R_Enum): R_SysFunction_1() {
+    class Value_Int(private val enum: R_EnumDefinition): R_SysFunction_1() {
         override fun call(arg: Rt_Value): Rt_Value {
             val value = arg.asInteger()
             val attr = enum.attr(value)
@@ -637,6 +637,12 @@ object R_SysFn_General {
             val pos = R_StackPos(ctx.defCtx.pos, filePos)
             val posStr = "[$pos]"
             return if (str.isEmpty()) posStr else "$posStr $str"
+        }
+    }
+
+    class Entity_ToStruct(): R_SysFunction_1() {
+        override fun call(arg: Rt_Value): Rt_Value {
+            TODO("Not yet implemented")
         }
     }
 }

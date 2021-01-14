@@ -12,10 +12,6 @@ import net.postchain.rell.runtime.Rt_IntValue
 import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.toImmList
 
-class S_AtExprWhatSort(val pos: S_Pos, val asc: Boolean) {
-    val rSort = if (asc) R_AtWhatSort.ASC else R_AtWhatSort.DESC
-}
-
 class S_AtExprFrom(val alias: S_Name?, val entityName: List<S_Name>)
 
 sealed class S_AtExprWhat {
@@ -37,7 +33,7 @@ class S_AtExprWhat_Simple(val path: List<S_Name>): S_AtExprWhat() {
         }
 
         val vExpr = expr.value()
-        val fields = listOf(C_AtWhatField(null, vExpr.type(), vExpr, R_AtWhatFieldFlags.DEFAULT, null))
+        val fields = listOf(C_AtWhatField(null, vExpr.type(), vExpr, C_AtWhatFieldFlags.DEFAULT, null))
         return C_AtWhat(fields)
     }
 }
@@ -46,7 +42,7 @@ class S_AtExprWhatComplexField(
         val attr: S_Name?,
         val expr: S_Expr,
         val annotations: List<S_Annotation>,
-        val sort: S_AtExprWhatSort?
+        val sort: S_PosValue<R_AtWhatSort>?
 )
 
 class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExprWhat() {
@@ -73,7 +69,10 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
     private fun processFields(ctx: C_ExprContext): List<WhatField> {
         val procFields = fields.map { processField(ctx, it) }
 
-        val (aggrFields, noAggrFields) = procFields.withIndex().partition { it.value.summarization != null }
+        val (aggrFields, noAggrFields) = procFields.withIndex().partition {
+            it.value.summarization != null || it.value.flags.aggregate != null
+        }
+
         if (aggrFields.isNotEmpty()) {
             for ((i, field) in noAggrFields) {
                 val code = "at:what:no_aggr:$i"
@@ -91,8 +90,8 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
         val modTarget = C_ModifierTarget(C_ModifierTargetType.EXPRESSION, null)
 
         if (field.sort != null) {
-            modTarget.sort?.set(field.sort.rSort)
-            val ann = if (field.sort.asc) C_Modifier.SORT else C_Modifier.SORT_DESC
+            modTarget.sort?.set(field.sort)
+            val ann = if (field.sort.value.asc) C_Modifier.SORT else C_Modifier.SORT_DESC
             ctx.msgCtx.warning(field.sort.pos, "at:what:sort:deprecated:$ann", "Deprecated sort syntax; use @$ann annotation instead")
         }
 
@@ -103,17 +102,17 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
 
         val omit = modTarget.omit?.get() ?: false
         val sort = modTarget.sort?.get()
-        val summarization = modTarget.summarization?.get()
+        val summ = modTarget.summarization?.get()
 
-        val flags = R_AtWhatFieldFlags(
+        val flags = C_AtWhatFieldFlags(
                 omit = omit,
                 sort = sort,
-                group = summarization == C_AtSummarizationKind.GROUP,
-                aggregate = summarization != null && summarization != C_AtSummarizationKind.GROUP
+                group = if (summ?.value == C_AtSummarizationKind.GROUP) summ.pos else null,
+                aggregate = if (summ != null && summ.value != C_AtSummarizationKind.GROUP) summ.pos else null
         )
 
         val vExpr = field.expr.compileSafe(ctx).value()
-        val cSummarization = compileSummarization(ctx, vExpr, summarization)
+        val cSummarization = compileSummarization(ctx, vExpr, summ?.value)
 
         var namePos: S_Pos = field.expr.startPos
         var name: String? = null
@@ -195,7 +194,7 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
             val namePos: S_Pos,
             val name: String?,
             val nameExplicit: Boolean,
-            val flags: R_AtWhatFieldFlags,
+            val flags: C_AtWhatFieldFlags,
             val summarization: C_AtSummarization?
     ) {
         fun updateName(newName: String?): WhatField {

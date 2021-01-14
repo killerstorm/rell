@@ -114,6 +114,14 @@ class CreateTest: BaseRellTest() {
         chkData("person(1)")
     }
 
+    @Test fun testWrongAttributes() {
+        def("entity person { name; rating: integer; }")
+        chkOp("create person(true);", "ct_err:[attr_missing:name,rating][attr_implic_unknown:0:boolean]")
+        chkOp("create person('Bob', true);", "ct_err:[attr_missing:rating][attr_implic_unknown:1:boolean]")
+        chkOp("create person(true, 'Bob');", "ct_err:[attr_missing:rating][attr_implic_unknown:0:boolean]")
+        chkOp("create person('Bob', 123, true);", "ct_err:attr_implic_unknown:2:boolean")
+    }
+
     @Test fun testBugAttrExpr() {
         tst.def("operation o(){ create user(); }")
         tst.def("entity user { name = 'Bob'; }")

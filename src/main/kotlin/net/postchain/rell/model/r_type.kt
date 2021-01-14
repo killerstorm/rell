@@ -400,7 +400,7 @@ object R_NullType: R_Type("null") {
     override fun toMetaGtv() = "null".toGtv()
 }
 
-class R_EntityType(val rEntity: R_Entity): R_Type(rEntity.appLevelName) {
+class R_EntityType(val rEntity: R_EntityDefinition): R_Type(rEntity.appLevelName) {
     override fun comparator() = Rt_Comparator.create { it.asObjectId() }
     override fun fromCli(s: String): Rt_Value = Rt_EntityValue(this, s.toLong())
     override fun toStrictString(): String = name
@@ -430,7 +430,7 @@ class R_EntityType(val rEntity: R_Entity): R_Type(rEntity.appLevelName) {
     }
 }
 
-class R_ObjectType(val rObject: R_Object): R_Type(rObject.appLevelName) {
+class R_ObjectType(val rObject: R_ObjectDefinition): R_Type(rObject.appLevelName) {
     override fun isDirectVirtualable() = false
     override fun equals(other: Any?): Boolean = other is R_ObjectType && other.rObject == rObject
     override fun hashCode(): Int = rObject.hashCode()
@@ -439,7 +439,7 @@ class R_ObjectType(val rObject: R_Object): R_Type(rObject.appLevelName) {
     override fun toMetaGtv() = rObject.appLevelName.toGtv()
 }
 
-class R_StructType(val struct: R_Struct): R_Type(struct.appLevelName) {
+class R_StructType(val struct: R_Struct): R_Type(struct.name) {
     override fun isReference() = true
     override fun isDirectMutable() = struct.isDirectlyMutable()
     override fun completeFlags() = struct.flags.typeFlags
@@ -448,10 +448,10 @@ class R_StructType(val struct: R_Struct): R_Type(struct.appLevelName) {
     override fun createGtvConversion() = GtvRtConversion_Struct(struct)
 
     override fun toStrictString(): String = name
-    override fun toMetaGtv() = struct.appLevelName.toGtv()
+    override fun toMetaGtv() = struct.typeMetaGtv
 }
 
-class R_EnumType(val enum: R_Enum): R_Type(enum.appLevelName) {
+class R_EnumType(val enum: R_EnumDefinition): R_Type(enum.appLevelName) {
     override fun comparator() = Rt_Comparator.create { it.asEnum().value }
 
     override fun fromCli(s: String): Rt_Value {

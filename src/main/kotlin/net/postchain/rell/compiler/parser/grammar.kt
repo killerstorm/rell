@@ -16,6 +16,7 @@ import com.github.h0tk3y.betterParse.parser.Parser
 import net.postchain.rell.compiler.C_Parser
 import net.postchain.rell.compiler.ast.*
 import net.postchain.rell.model.R_AtCardinality
+import net.postchain.rell.model.R_AtWhatSort
 import kotlin.reflect.KProperty
 
 object S_Grammar : Grammar<S_RellFile>() {
@@ -147,6 +148,10 @@ object S_Grammar : Grammar<S_RellFile>() {
     private val virtualType by ( VIRTUAL * -LT * typeRef * -GT ) map { (kw, type) -> S_VirtualType(kw.pos, type) }
     private val operationType by ( OPERATION ) map { S_OperationType(it.pos) }
 
+    private val mirrorStructType by ( STRUCT * -LT * typeRef * -GT ) map {
+        (kw, paramType) -> S_MirrorStructType(kw.pos, paramType)
+    }
+
     private val baseType by (
             nameType
             or tupleType
@@ -155,6 +160,7 @@ object S_Grammar : Grammar<S_RellFile>() {
             or mapType
             or virtualType
             or operationType
+            or mirrorStructType
     )
 
     private val type: Parser<S_Type> by ( baseType * zeroOrMore(QUESTION) ) map { (base, nulls) ->
@@ -360,7 +366,11 @@ object S_Grammar : Grammar<S_RellFile>() {
 
     private val atExprWhatSimple by oneOrMore((-DOT * name)) map { path -> S_AtExprWhat_Simple(path) }
 
-    private val atExprWhatSort by ( optional(MINUS) * SORT) map { (minus, kw) -> S_AtExprWhatSort(kw.pos, minus == null) }
+    private val atExprWhatSort by ( optional(MINUS) * SORT) map {
+        (minus, kw) ->
+        val sort = if (minus == null) R_AtWhatSort.ASC else R_AtWhatSort.DESC
+        S_PosValue(kw.pos, sort)
+    }
 
     private val atExprWhatName by ( name * -ASSIGN)
 
@@ -424,6 +434,11 @@ object S_Grammar : Grammar<S_RellFile>() {
         S_MapExpr(kw.pos, keyValueTypes, args)
     }
 
+    private val mirrorStructExpr by ( STRUCT * -LT * type * -GT ) map {
+        (kw, type) ->
+        S_MirrorStructExpr(kw.pos, type)
+    }
+
     private val createExprArg by ( optional(-optional(DOT) * name * -ASSIGN) * expressionRef) map {
         (name, expr) ->
         S_NameExprPair(name, expr)
@@ -451,6 +466,7 @@ object S_Grammar : Grammar<S_RellFile>() {
             or listExpr
             or setExpr
             or mapExpr
+            or mirrorStructExpr
             or virtualTypeExpr
             or operationTypeExpr
     )

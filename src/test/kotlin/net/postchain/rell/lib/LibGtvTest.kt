@@ -118,6 +118,7 @@ class LibGtvTest: BaseRellTest(false) {
         chkFromGtv("123", "byte_array.from_gtv(g)", "rt_err:from_gtv")
         chkFromGtv("123", "byte_array.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
     }
+
     @Test fun testToFromGtvRowid() {
         tstCtx.useSql = true
         def("entity user { name; }")
@@ -369,8 +370,8 @@ class LibGtvTest: BaseRellTest(false) {
         chkFromGtv("5", "user.from_gtv_pretty(g)", "user[5]")
         chkFromGtv("'X'", "user.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
 
-        chk("state.to_gtv()", "ct_err:unknown_name:state.to_gtv")
-        chk("state.to_gtv_pretty()", "ct_err:unknown_name:state.to_gtv_pretty")
+        chk("state.to_gtv()", "ct_err:unknown_member:[state]:to_gtv")
+        chk("state.to_gtv_pretty()", "ct_err:unknown_member:[state]:to_gtv_pretty")
     }
 
     @Test fun testToFromGtvOperation() {

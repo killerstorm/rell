@@ -1,9 +1,8 @@
 package net.postchain.rell
 
-import net.postchain.rell.compiler.C_MapSourceDir
 import net.postchain.rell.compiler.C_SourceDir
 import net.postchain.rell.model.R_App
-import net.postchain.rell.model.R_Function
+import net.postchain.rell.model.R_FunctionDefinition
 import net.postchain.rell.runtime.Rt_GlobalContext
 import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.test.RellCodeTester
@@ -109,7 +108,7 @@ class TestModuleTest: BaseRellTest(false) {
         return actual
     }
 
-    private fun runTest(globalCtx: Rt_GlobalContext, sourceDir: C_SourceDir, app: R_App, module: String, f: R_Function): String {
+    private fun runTest(globalCtx: Rt_GlobalContext, sourceDir: C_SourceDir, app: R_App, module: String, f: R_FunctionDefinition): String {
         val tester = RellCodeTester(tstCtx)
         for ((path, text) in tst.files()) tester.file(path, text)
         tester.mainModule(module)

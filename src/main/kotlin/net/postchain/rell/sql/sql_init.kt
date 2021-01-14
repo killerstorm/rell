@@ -226,7 +226,7 @@ private class SqlEntityIniter private constructor(
         }
     }
 
-    private fun processEntity(entity: R_Entity, type: MetaEntityType): Boolean {
+    private fun processEntity(entity: R_EntityDefinition, type: MetaEntityType): Boolean {
         val metaEntity = metaData[entity.metaName]
         if (metaEntity == null) {
             processNewEntity(entity, type)
@@ -237,7 +237,7 @@ private class SqlEntityIniter private constructor(
         }
     }
 
-    private fun processNewEntity(entity: R_Entity, type: MetaEntityType) {
+    private fun processNewEntity(entity: R_EntityDefinition, type: MetaEntityType) {
         val sqls = mutableListOf<String>()
         sqls += SqlGen.genEntity(sqlCtx, entity)
 
@@ -248,7 +248,7 @@ private class SqlEntityIniter private constructor(
         initCtx.step(ORD_TABLES, "Create table and meta for $entityName", SqlStepAction_ExecSql(sqls))
     }
 
-    private fun processExistingEntity(entity: R_Entity, type: MetaEntityType, metaCls: MetaEntity) {
+    private fun processExistingEntity(entity: R_EntityDefinition, type: MetaEntityType, metaCls: MetaEntity) {
         if (type != metaCls.type) {
             val clsName = msgEntityName(entity)
             initCtx.msgs.error("meta:entity:diff_type:${entity.metaName}:${metaCls.type}:$type",
@@ -273,7 +273,7 @@ private class SqlEntityIniter private constructor(
         }
     }
 
-    private fun checkAttrTypes(entity: R_Entity, metaEntity: MetaEntity) {
+    private fun checkAttrTypes(entity: R_EntityDefinition, metaEntity: MetaEntity) {
         for (attr in entity.attributes.values) {
             val metaAttr = metaEntity.attrs[attr.name]
             if (metaAttr != null) {
@@ -288,7 +288,7 @@ private class SqlEntityIniter private constructor(
         }
     }
 
-    private fun checkOldAttrs(entity: R_Entity, metaEntity: MetaEntity) {
+    private fun checkOldAttrs(entity: R_EntityDefinition, metaEntity: MetaEntity) {
         val oldAttrs = metaEntity.attrs.keys.filter { it !in entity.attributes }.sorted()
         if (!oldAttrs.isEmpty()) {
             val codeList = oldAttrs.joinToString(",")
@@ -301,7 +301,7 @@ private class SqlEntityIniter private constructor(
         }
     }
 
-    private fun checkSqlIndexes(entity: R_Entity) {
+    private fun checkSqlIndexes(entity: R_EntityDefinition) {
         val table = sqlTables.getValue(entity.sqlMapping.table(sqlCtx))
         val sqlIndexes = table.indexes.filter { !(it.unique && it.cols == listOf(SqlConstants.ROWID_COLUMN)) }
 
@@ -316,7 +316,7 @@ private class SqlEntityIniter private constructor(
     }
 
     private fun compareSqlIndexes(
-            entity: R_Entity,
+            entity: R_EntityDefinition,
             aPlace: String,
             aIndexes: List<SqlIndex>,
             bPlace: String,
@@ -336,7 +336,7 @@ private class SqlEntityIniter private constructor(
         }
     }
 
-    private fun processNewAttrs(entity: R_Entity, metaEntityId: Int, newAttrs: List<String>) {
+    private fun processNewAttrs(entity: R_EntityDefinition, metaEntityId: Int, newAttrs: List<String>) {
         val attrsStr = newAttrs.joinToString()
 
         val recs = SqlUtils.recordsExist(exeCtx.sqlExec, sqlCtx, entity)
@@ -355,7 +355,7 @@ private class SqlEntityIniter private constructor(
         initCtx.step(ORD_TABLES, "Add meta attributes for $entityName: $attrsStr", SqlStepAction_ExecSql(metaSql))
     }
 
-    private fun makeCreateExprAttrs(entity: R_Entity, newAttrs: List<String>, existingRecs: Boolean): List<R_CreateExprAttr> {
+    private fun makeCreateExprAttrs(entity: R_EntityDefinition, newAttrs: List<String>, existingRecs: Boolean): List<R_CreateExprAttr> {
         val res = mutableListOf<R_CreateExprAttr>()
 
         val keys = entity.keys.flatMap { it.attribs }.toSet()
@@ -436,7 +436,7 @@ private class SqlStepAction_ExecSql(sqls: List<String>): SqlStepAction() {
     }
 }
 
-private class SqlStepAction_InsertObject(private val rObject: R_Object): SqlStepAction() {
+private class SqlStepAction_InsertObject(private val rObject: R_ObjectDefinition): SqlStepAction() {
     override fun run(ctx: SqlStepCtx) {
         try {
             ctx.objsInit.initObject(rObject)
@@ -451,7 +451,7 @@ private class SqlStepAction_InsertObject(private val rObject: R_Object): SqlStep
 }
 
 private class SqlStepAction_AddColumns_AlterTable(
-        private val entity: R_Entity,
+        private val entity: R_EntityDefinition,
         private val attrs: List<R_CreateExprAttr>,
         private val existingRecs: Boolean
 ): SqlStepAction() {
@@ -462,7 +462,7 @@ private class SqlStepAction_AddColumns_AlterTable(
     }
 }
 
-private fun msgEntityName(rEntity: R_Entity): String {
+private fun msgEntityName(rEntity: R_EntityDefinition): String {
     val meta = rEntity.metaName
     val app = rEntity.appLevelName
     return if (meta == app) {

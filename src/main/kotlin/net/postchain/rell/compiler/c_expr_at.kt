@@ -2,6 +2,7 @@ package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.ast.S_PosValue
 import net.postchain.rell.compiler.vexpr.V_AtPlaceholderExpr
 import net.postchain.rell.compiler.vexpr.V_DbExpr
 import net.postchain.rell.compiler.vexpr.V_Expr
@@ -10,7 +11,7 @@ import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.toImmList
 
-class C_AtEntity(val pos: S_Pos, val rEntity: R_Entity, val alias: String, val explicitAlias: Boolean, val index: Int) {
+class C_AtEntity(val pos: S_Pos, val rEntity: R_EntityDefinition, val alias: String, val explicitAlias: Boolean, val index: Int) {
     private val rAtEntity = R_DbAtEntity(rEntity, index)
 
     fun compile() = rAtEntity
@@ -48,7 +49,7 @@ class C_AtFrom_Entities(outerExprCtx: C_ExprContext, entities: List<C_AtEntity>)
             val name = if (entities.size == 1) null else it.alias
             val dbExpr = it.compileExpr()
             val vExpr = V_DbExpr.create(it.pos, dbExpr)
-            C_AtWhatField(name, vExpr.type(), vExpr, R_AtWhatFieldFlags.DEFAULT, null)
+            C_AtWhatField(name, vExpr.type(), vExpr, C_AtWhatFieldFlags.DEFAULT, null)
         }
         return C_AtWhat(fields)
     }
@@ -93,7 +94,7 @@ class C_AtFrom_Entities(outerExprCtx: C_ExprContext, entities: List<C_AtEntity>)
         }
     }
 
-    private fun findContextAttrs(resolver: (R_Entity) -> List<C_EntityAttrRef>): List<C_ExprContextAttr> {
+    private fun findContextAttrs(resolver: (R_EntityDefinition) -> List<C_EntityAttrRef>): List<C_ExprContextAttr> {
         val attrs = mutableListOf<C_ExprContextAttr>()
 
         //TODO take other kinds of fields into account
@@ -113,11 +114,9 @@ class C_AtFrom_Entities(outerExprCtx: C_ExprContext, entities: List<C_AtEntity>)
         val rFrom = cFrom.entities.map { it.compile() }
 
         val rWhat = details.base.what.fields.filter { !isIgnoredField(it) }.map {
-            var dbExpr = it.expr.toDbExpr(innerExprCtx.msgCtx)
-            if (it.summarization != null) {
-                dbExpr = it.summarization.compileDb(innerExprCtx.nsCtx, dbExpr)
-            }
-            R_DbAtWhatField(it.resultType, dbExpr, it.flags)
+            val whatValue = it.expr.toDbExprWhat(innerExprCtx, it)
+            val rFlags = it.flags.compile()
+            R_DbAtWhatField(rFlags, whatValue)
         }
 
         val rBase = R_DbAtExprBase(rFrom, rWhat, details.base.where?.toDbExpr(innerExprCtx.msgCtx))
@@ -169,7 +168,7 @@ class C_AtFrom_Iterable(
 
     override fun makeDefaultWhat(): C_AtWhat {
         val vExpr = V_AtPlaceholderExpr(pos, item.elemType, varPtr)
-        val field = C_AtWhatField(null, vExpr.type(), vExpr, R_AtWhatFieldFlags.DEFAULT, null)
+        val field = C_AtWhatField(null, vExpr.type(), vExpr, C_AtWhatFieldFlags.DEFAULT, null)
         return C_AtWhat(listOf(field))
     }
 
@@ -257,9 +256,9 @@ class C_AtFrom_Iterable(
                     if (sort == null) null else {
                         val type = f.resultType
                         var comparator = type.comparator()
-                        if (comparator != null && !sort.asc) comparator = comparator.reversed()
+                        if (comparator != null && !sort.value.asc) comparator = comparator.reversed()
                         if (comparator != null) IndexedValue(i, comparator) else {
-                            innerExprCtx.msgCtx.error(f.expr.pos, "at:expr:sort:type:${type}", "Type ${type} is not sortable")
+                            innerExprCtx.msgCtx.error(sort.pos, "at:expr:sort:type:${type}", "Type ${type} is not sortable")
                             null
                         }
                     }
@@ -276,7 +275,8 @@ class C_AtFrom_Iterable(
         } else {
             cField.summarization.compileR(innerExprCtx.nsCtx)
         }
-        return R_ColAtWhatField(rExpr, cField.flags, summarization)
+        val rFlags = cField.flags.compile()
+        return R_ColAtWhatField(rExpr, rFlags, summarization)
     }
 
     private fun compileSummarization(cResult: C_AtExprResult, rWhat: R_ColAtWhat): R_ColAtSummarization {
@@ -291,7 +291,7 @@ class C_AtFrom_Iterable(
 }
 
 sealed class C_AtFromItem(val pos: S_Pos)
-class C_AtFromItem_Entity(pos: S_Pos, val alias: String, val entity: R_Entity): C_AtFromItem(pos)
+class C_AtFromItem_Entity(pos: S_Pos, val alias: String, val entity: R_EntityDefinition): C_AtFromItem(pos)
 
 sealed class C_AtFromItem_Iterable(pos: S_Pos, val vExpr: V_Expr, val elemType: R_Type): C_AtFromItem(pos) {
     protected abstract fun compile0(rExpr: R_Expr): R_ColAtFrom
@@ -312,11 +312,24 @@ class C_AtFromItem_Map(pos: S_Pos, vExpr: V_Expr, private val tupleType: R_Tuple
     override fun compile0(rExpr: R_Expr): R_ColAtFrom = R_ColAtFrom_Map(rExpr, tupleType)
 }
 
+class C_AtWhatFieldFlags(
+        val omit: Boolean,
+        val sort: S_PosValue<R_AtWhatSort>?,
+        val group: S_Pos?,
+        val aggregate: S_Pos?
+) {
+    fun compile() = R_AtWhatFieldFlags(omit = omit, sort = sort?.value, group = group != null, aggregate = aggregate != null)
+
+    companion object {
+        val DEFAULT = C_AtWhatFieldFlags(omit = false, sort = null, group = null, aggregate = null)
+    }
+}
+
 class C_AtWhatField(
         val name: String?,
         val resultType: R_Type,
         val expr: V_Expr,
-        val flags: R_AtWhatFieldFlags,
+        val flags: C_AtWhatFieldFlags,
         val summarization: C_AtSummarization?
 )
 

@@ -11,8 +11,8 @@ import mu.KLogging
 import net.postchain.base.BlockchainRid
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvVirtual
-import net.postchain.rell.model.*
 import net.postchain.rell.compiler.C_Constants
+import net.postchain.rell.model.*
 import net.postchain.rell.utils.*
 import java.math.BigDecimal
 import java.util.*
@@ -570,7 +570,7 @@ class Rt_StructValue(private val type: R_StructType, private val attributes: Mut
                 val v = attr?.toString()
                 "$n=$v"
             }
-            return "${struct.appLevelName}{$attrs}"
+            return "${struct.name}{$attrs}"
         }
 
         fun toStrictString(type: R_Type, struct: R_Struct, attributes: List<out Rt_Value?>): String {

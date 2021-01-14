@@ -225,3 +225,39 @@ In previous versions that code would like like this:
         mutable street: text = 'Unknown';
         index city, street;
     }
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+11. Language: Types struct<entity> and struct<object>
+
+A new type allows to have a struct which has same attributes as an entity or an object:
+
+    entity user {
+        name;
+        address: text;
+    }
+
+    operation add_user(data: struct<user>) {
+        //...
+    }
+
+An instance of a struct<T> can be created same way as for a regular struct:
+
+    val s = struct<user>(name = 'Bob', address = '33 Main St.');
+
+It's also possible to obtain a struct-copy of an entity/object using the 'to_struct()' function:
+
+    val u = user @ { .name == 'Bob' };
+    val s = u.to_struct();              // returns struct<user>
+
+Alternatively, 'to_struct()' can be used in an at-expression (in the what-part):
+
+    val s = user @ { .name == 'Bob' } ( user.to_struct() );
+
+One can pass a struct<entity> to a create expression instead of specifying individual attributes of the entity:
+
+    create user(s);       // s is struct<user>
+
+Details:
+
+- Attributes of struct<T> are not mutable regardless of the mutability of the attributes of the underlying type.
+- Attributes of struct<T> have same default values as the attributes of T.

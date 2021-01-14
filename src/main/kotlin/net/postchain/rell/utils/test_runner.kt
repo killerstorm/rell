@@ -2,7 +2,7 @@ package net.postchain.rell.utils
 
 import net.postchain.rell.compiler.C_SourceDir
 import net.postchain.rell.model.R_App
-import net.postchain.rell.model.R_Function
+import net.postchain.rell.model.R_FunctionDefinition
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.runtime.Rt_AppContext
 import net.postchain.rell.runtime.Rt_ExecutionContext
@@ -30,7 +30,7 @@ object TestRunner {
             globalCtx: Rt_GlobalContext,
             sqlCtx: Rt_SqlContext,
             sourceDir: C_SourceDir,
-            fns: List<R_Function>
+            fns: List<R_FunctionDefinition>
     ): Boolean {
         val resMap = runTestCases(sqlMgr, app, globalCtx, sqlCtx, sourceDir, fns)
         return processTestResults(resMap)
@@ -42,7 +42,7 @@ object TestRunner {
             globalCtx: Rt_GlobalContext,
             sqlCtx: Rt_SqlContext,
             sourceDir: C_SourceDir,
-            fns: List<R_Function>
+            fns: List<R_FunctionDefinition>
     ): Map<String, TestResult> {
         val res = mutableMapOf<String, TestResult>()
 
@@ -60,7 +60,7 @@ object TestRunner {
             globalCtx: Rt_GlobalContext,
             sqlCtx: Rt_SqlContext,
             sourceDir: C_SourceDir,
-            f: R_Function
+            f: R_FunctionDefinition
     ): TestResult {
         println(SEPARATOR)
         println("TEST ${f.appLevelName}")
@@ -118,7 +118,7 @@ object TestRunner {
         return allOk
     }
 
-    fun getTestFunctions(module: R_Module): List<R_Function> {
+    fun getTestFunctions(module: R_Module): List<R_FunctionDefinition> {
         return module.functions.values
                 .filter { it.simpleName == "test" || it.simpleName.startsWith("test_") }
                 .filter { it.params().isEmpty() }

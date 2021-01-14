@@ -196,15 +196,36 @@ class S_CreateExpr(pos: S_Pos, val entityName: List<S_Name>, val exprs: List<S_N
         ctx.checkDbUpdateAllowed(startPos)
 
         val entity = ctx.nsCtx.getEntity(entityName)
-        val attrs = C_AttributeResolver.resolveCreate(ctx, entity.attributes, exprs, startPos)
+        val structType = entity.mirrorStruct.type
+
+        val args = C_Argument.compile(ctx, entity.attributes, exprs)
+
+        val vExpr = if (args.size == 1 && args[0].name == null && structType.isAssignableFrom(args[0].vExpr.type())) {
+            compileStruct(entity, args[0].vExpr, structType)
+        } else {
+            compileRegular(ctx, entity, args)
+        }
+
+        return C_VExpr(vExpr)
+    }
+
+    private fun compileRegular(ctx: C_ExprContext, entity: R_EntityDefinition, args: List<C_Argument>): V_Expr {
+        val attrs = C_AttributeResolver.resolveCreate(ctx, entity.attributes, args, startPos)
 
         C_Errors.check(entity.flags.canCreate, startPos) {
             val entityNameStr = C_Utils.nameStr(entityName)
             "expr_create_cant:$entityNameStr" to "Not allowed to create instances of entity '$entityNameStr'"
         }
 
-        val rExpr = R_CreateExpr(entity, attrs.rAttrs)
-        return V_RExpr.makeExpr(startPos, rExpr, attrs.exprFacts)
+        val rExpr = R_RegularCreateExpr(entity, attrs.rAttrs)
+        return V_RExpr(startPos, rExpr, attrs.exprFacts)
+    }
+
+    private fun compileStruct(entity: R_EntityDefinition, vExpr: V_Expr, structType: R_StructType): V_Expr {
+        val rStructExpr = vExpr.toRExpr()
+        val rExpr = R_StructCreateExpr(entity, structType, rStructExpr)
+        val exprFacts = C_ExprVarFacts.forSubExpressions(listOf(vExpr))
+        return V_RExpr(startPos, rExpr, exprFacts)
     }
 }
 
@@ -699,5 +720,14 @@ class S_TypeExpr(val type: S_Type): S_Expr(type.pos) {
     override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
         val rType = type.compile(ctx)
         return C_TypeExpr(type.pos, rType)
+    }
+}
+
+class S_MirrorStructExpr(pos: S_Pos, val type: S_Type): S_Expr(pos) {
+    override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
+        val structType = type.compileStructOfDefinitionType(ctx.nsCtx)
+        structType ?: return C_Utils.errorExpr(startPos)
+        val ns = C_LibFunctions.makeStructNamespace(structType.struct)
+        return C_MirrorStructExpr(startPos, structType.struct, ns)
     }
 }

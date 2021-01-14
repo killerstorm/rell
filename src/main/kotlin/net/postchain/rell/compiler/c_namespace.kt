@@ -4,12 +4,12 @@
 
 package net.postchain.rell.compiler
 
-import net.postchain.rell.utils.LateGetter
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.vexpr.V_RExpr
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.utils.LateGetter
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 import org.apache.commons.lang3.StringUtils
@@ -282,7 +282,7 @@ class C_NamespaceValue_Entity(private val typeProxy: C_DefProxy<R_Type>): C_Name
     }
 }
 
-class C_NamespaceValue_Enum(private val rEnum: R_Enum): C_NamespaceValue() {
+class C_NamespaceValue_Enum(private val rEnum: R_EnumDefinition): C_NamespaceValue() {
     override fun toExpr(ctx: C_NamespaceValueContext, name: List<S_Name>) = C_EnumExpr(ctx.msgCtx, name, rEnum)
 }
 
@@ -293,7 +293,7 @@ class C_NamespaceValue_Namespace(private val nsProxy: C_DefProxy<C_Namespace>): 
     }
 }
 
-class C_NamespaceValue_Object(private val rObject: R_Object): C_NamespaceValue() {
+class C_NamespaceValue_Object(val rObject: R_ObjectDefinition): C_NamespaceValue() {
     override fun toExpr(ctx: C_NamespaceValueContext, name: List<S_Name>): C_Expr {
         return C_ObjectExpr(name, rObject)
     }
@@ -301,14 +301,9 @@ class C_NamespaceValue_Object(private val rObject: R_Object): C_NamespaceValue()
 
 class C_NamespaceValue_Struct(private val struct: R_Struct): C_NamespaceValue() {
     override fun toExpr(ctx: C_NamespaceValueContext, name: List<S_Name>): C_Expr {
-        val nsProxy = C_LibFunctions.makeStructNamespace(struct)
+        val ns = C_LibFunctions.makeStructNamespace(struct)
+        val nsProxy = C_DefProxy.create(ns)
         val nsRef = C_NamespaceRef.create(ctx.msgCtx, name, nsProxy)
-        return C_StructExpr(name, struct, nsRef)
-    }
-}
-
-class C_NamespaceValue_Type(private val type: R_Type): C_NamespaceValue() {
-    override fun toExpr(ctx: C_NamespaceValueContext, name: List<S_Name>): C_Expr {
-        return C_TypeExpr(name[0].pos, type)
+        return C_NamespaceStructExpr(name, struct, nsRef)
     }
 }

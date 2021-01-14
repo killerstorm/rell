@@ -167,7 +167,7 @@ class Db_IsNullExpr(val expr: Db_Expr, val isNull: Boolean): Db_Expr(R_BooleanTy
     }
 }
 
-sealed class Db_TableExpr(val rEntity: R_Entity): Db_Expr(rEntity.type) {
+sealed class Db_TableExpr(val rEntity: R_EntityDefinition): Db_Expr(rEntity.type) {
     abstract fun alias(ctx: SqlGenContext): SqlTableAlias
 
     final override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
@@ -187,7 +187,7 @@ class Db_EntityExpr(val entity: R_DbAtEntity): Db_TableExpr(entity.rEntity) {
     override fun alias(ctx: SqlGenContext) = ctx.getEntityAlias(entity)
 }
 
-class Db_RelExpr(val base: Db_TableExpr, val attr: R_Attribute, targetEntity: R_Entity): Db_TableExpr(targetEntity) {
+class Db_RelExpr(val base: Db_TableExpr, val attr: R_Attribute, targetEntity: R_EntityDefinition): Db_TableExpr(targetEntity) {
     override fun alias(ctx: SqlGenContext): SqlTableAlias {
         val baseAlias = base.alias(ctx)
         return ctx.getRelAlias(baseAlias, attr, rEntity)

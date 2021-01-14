@@ -120,7 +120,7 @@ class Rt_TimestampPrinter(private val printer: Rt_Printer): Rt_Printer {
 
 private class RellGTXOperation(
         private val module: RellPostchainModule,
-        private val rOperation: R_Operation,
+        private val rOperation: R_OperationDefinition,
         private val errorHandler: ErrorHandler,
         opData: ExtOpData
 ) : GTXOperation(opData) {
@@ -282,7 +282,7 @@ private class RellPostchainModule(
         return Rt_ExecutionContext(appCtx, sqlExec)
     }
 
-    private fun translateQueryArgs(exeCtx: Rt_ExecutionContext, rQuery: R_Query, gtvArgs: Gtv): List<Rt_Value> {
+    private fun translateQueryArgs(exeCtx: Rt_ExecutionContext, rQuery: R_QueryDefinition, gtvArgs: Gtv): List<Rt_Value> {
         gtvArgs is GtvDictionary
         val params = rQuery.params()
 

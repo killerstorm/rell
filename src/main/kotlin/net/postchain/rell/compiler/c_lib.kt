@@ -8,7 +8,9 @@ import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_String
 import net.postchain.rell.compiler.ast.S_VirtualType
+import net.postchain.rell.compiler.vexpr.V_EntityToStructExpr
 import net.postchain.rell.compiler.vexpr.V_Expr
+import net.postchain.rell.compiler.vexpr.V_ObjectToStructExpr
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_DecimalValue
 import net.postchain.rell.runtime.Rt_IntValue
@@ -347,6 +349,7 @@ object C_LibFunctions {
             is R_MapType -> getMapFns(type)
             is R_VirtualMapType -> getVirtualMapFns(type)
             is R_EntityType -> getEntityFns(type)
+            is R_ObjectType -> getObjectFns(type)
             is R_EnumType -> getEnumFns(type)
             is R_TupleType -> getTupleFns(type)
             is R_VirtualTupleType -> getVirtualTupleFns(type)
@@ -361,6 +364,13 @@ object C_LibFunctions {
 
     private fun getEntityFns(type: R_EntityType): C_MemberFuncTable {
         return typeMemFuncBuilder(type)
+                .add("to_struct", C_SysFn_Entity_ToStruct(type))
+                .build()
+    }
+
+    private fun getObjectFns(type: R_ObjectType): C_MemberFuncTable {
+        return C_MemberFuncBuilder()
+                .add("to_struct", C_SysFn_Object_ToStruct(type))
                 .build()
     }
 
@@ -505,7 +515,7 @@ object C_LibFunctions {
                 .build()
     }
 
-    fun makeStructNamespace(struct: R_Struct): C_DefProxy<C_Namespace> {
+    fun makeStructNamespace(struct: R_Struct): C_Namespace {
         val type = struct.type
         val mFromBytes = globalFnFromGtv(type, R_SysFn_Struct.FromBytes(struct))
         val mFromGtv = globalFnFromGtv(type, R_SysFn_Struct.FromGtv(struct, false))
@@ -520,8 +530,7 @@ object C_LibFunctions {
                 .add("from_gtv_pretty", listOf(R_GtvType), mFromGtvPretty)
                 .build()
 
-        val ns = makeNamespace(fns)
-        return C_DefProxy.create(ns)
+        return makeNamespace(fns)
     }
 
     private fun globalFnFromGtv(type: R_Type, fn: R_SysFunction): C_GlobalFormalParamsFuncBody {
@@ -576,7 +585,7 @@ object C_LibFunctions {
         return fn
     }
 
-    private fun getEnumStaticFns(b: C_GlobalFuncBuilder, enum: R_Enum) {
+    private fun getEnumStaticFns(b: C_GlobalFuncBuilder, enum: R_EnumDefinition) {
         val type = enum.type
         b.add("values", R_ListType(type), listOf(), R_SysFn_Enum.Values(enum))
         b.add("value", type, listOf(R_TextType), R_SysFn_Enum.Value_Text(enum))
@@ -665,7 +674,7 @@ private object C_NsValue_ChainContext_Args: C_NamespaceValue_RExpr() {
 }
 
 private class C_SysFn_Print(private val log: Boolean): C_GlobalSpecialFuncCase() {
-    override fun match(args: List<V_Expr>): C_GlobalFuncCaseMatch? {
+    override fun match(args: List<V_Expr>): C_GlobalFuncCaseMatch {
         // Print supports any number of arguments and any types, so not checking.
         return CaseMatch(args)
     }
@@ -896,6 +905,28 @@ private object C_SysFn_Text_Format: C_MemberSpecialFuncCase() {
         val body = C_SysMemberFormalParamsFuncBody(R_TextType, R_SysFn_Text_Format)
         return C_FormalParamsFuncCaseMatch(body, args)
     }
+}
+
+private sealed class C_SysFn_Common_ToStruct: C_SpecialSysMemberFunction() {
+    protected abstract fun compile0(member: C_MemberRef): V_Expr
+
+    final override fun compileCall(ctx: C_ExprContext, member: C_MemberRef, args: List<V_Expr>): C_Expr {
+        if (args.isNotEmpty()) {
+            val argTypes = args.map { it.type() }
+            C_FuncMatchUtils.errNoMatch(ctx, member.pos, member.qualifiedName(), argTypes)
+        }
+
+        val vExpr = compile0(member)
+        return C_VExpr(vExpr)
+    }
+}
+
+private class C_SysFn_Entity_ToStruct(private val entityType: R_EntityType): C_SysFn_Common_ToStruct() {
+    override fun compile0(member: C_MemberRef): V_Expr = V_EntityToStructExpr(member, entityType)
+}
+
+private class C_SysFn_Object_ToStruct(private val objectType: R_ObjectType): C_SysFn_Common_ToStruct() {
+    override fun compile0(member: C_MemberRef): V_Expr = V_ObjectToStructExpr(member.pos, objectType)
 }
 
 private class C_SysFunction_Invalid(private val type: R_Type): C_GlobalFormalParamsFuncBody(R_CtErrorType) {

@@ -5,7 +5,7 @@
 package net.postchain.rell.sql
 
 import com.google.common.collect.HashMultimap
-import net.postchain.rell.model.R_Entity
+import net.postchain.rell.model.R_EntityDefinition
 import net.postchain.rell.runtime.Rt_AppContext
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_ExecutionContext
@@ -120,7 +120,7 @@ object SqlUtils {
         return res
     }
 
-    fun recordsExist(sqlExec: SqlExecutor, sqlCtx: Rt_SqlContext, entity: R_Entity): Boolean {
+    fun recordsExist(sqlExec: SqlExecutor, sqlCtx: Rt_SqlContext, entity: R_EntityDefinition): Boolean {
         val table = entity.sqlMapping.table(sqlCtx)
         val sql = """SELECT "${SqlConstants.ROWID_COLUMN}" FROM "$table" LIMIT 1;"""
         var res: Boolean = false

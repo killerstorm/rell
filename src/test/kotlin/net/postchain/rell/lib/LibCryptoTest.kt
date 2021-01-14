@@ -6,8 +6,8 @@ package net.postchain.rell.lib
 
 import net.postchain.base.secp256k1_derivePubKey
 import net.postchain.base.secp256k1_sign
-import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.test.BaseRellTest
+import net.postchain.rell.utils.CommonUtils
 import org.junit.Test
 
 class LibCryptoTest: BaseRellTest(false) {
@@ -138,6 +138,6 @@ class LibCryptoTest: BaseRellTest(false) {
         insert("c0.cls", "x", "2,456")
         chk("(cls@{123}).hash()", "0x6ccd14b5a877874ddc7ca52bd3aeded5543b73a354779224bbb86b0fd315b418")
         chk("(cls@{456}).hash()", "0x4317338211726f61b281d62f0683fd55e355011b6e7495cf56f9e03059a3bc0a")
-        chk("obj.hash()", "ct_err:unknown_name:obj.hash")
+        chk("obj.hash()", "ct_err:unknown_member:[obj]:hash")
     }
 }

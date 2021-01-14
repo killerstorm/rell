@@ -6,6 +6,7 @@ package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.ast.S_PosValue
 import net.postchain.rell.compiler.ast.S_String
 import net.postchain.rell.model.R_AtWhatSort
 import net.postchain.rell.model.R_MountName
@@ -238,7 +239,8 @@ private object C_Annotation_Omit: C_AnnBase() {
 private class C_Annotation_Sort(private val sort: R_AtWhatSort): C_AnnBase() {
     override fun compile(ctx: C_ModifierContext, name: S_Name, args: List<Rt_Value>, target: C_ModifierTarget) {
         if (C_AnnUtils.checkNoArgs(ctx, name.pos, name.str, args)) {
-            C_AnnUtils.processAnnotation(ctx, name.pos, target, name.str, target.sort, allowed = true, value = sort, generalName = "Sorting")
+            val posValue = S_PosValue(name.pos, sort)
+            C_AnnUtils.processAnnotation(ctx, name.pos, target, name.str, target.sort, allowed = true, value = posValue, generalName = "Sorting")
         }
     }
 }
@@ -255,7 +257,8 @@ private object C_Annotation_Test: C_AnnBase() {
 private class C_Annotation_Summarization(val value: C_AtSummarizationKind): C_AnnBase() {
     override fun compile(ctx: C_ModifierContext, name: S_Name, args: List<Rt_Value>, target: C_ModifierTarget) {
         if (C_AnnUtils.checkNoArgs(ctx, name.pos, name.str, args)) {
-            C_AnnUtils.processAnnotation(ctx, name.pos, target, name.str, target.summarization, allowed = true, value = value)
+            val posValue = S_PosValue(name.pos, value)
+            C_AnnUtils.processAnnotation(ctx, name.pos, target, name.str, target.summarization, allowed = true, value = posValue)
         }
     }
 }
@@ -372,9 +375,9 @@ class C_ModifierTarget(
     val override = C_ModifierValue.opt<Boolean>(override)
     val test = C_ModifierValue.opt<Boolean>(test)
 
-    val summarization = C_ModifierValue.opt<C_AtSummarizationKind>(type.isExpression())
+    val summarization = C_ModifierValue.opt<S_PosValue<C_AtSummarizationKind>>(type.isExpression())
     val omit = C_ModifierValue.opt<Boolean>(type.isExpression())
-    val sort = C_ModifierValue.opt<R_AtWhatSort>(type.isExpression())
+    val sort = C_ModifierValue.opt<S_PosValue<R_AtWhatSort>>(type.isExpression())
 
     fun externalChain(mntCtx: C_MountContext): C_ExternalChain? {
         val ann = externalChain?.get()

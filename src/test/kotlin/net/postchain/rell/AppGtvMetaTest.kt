@@ -259,9 +259,16 @@ class AppGtvMetaTest: BaseRellTest(false) {
         }""")
     }
 
+    @Test fun testTypeStruct() {
+        initTypes()
+        chkMetaType("struct<lib.user>", """{"type":"struct","definition_type":"ENTITY","definition":"lib:user"}""")
+        chkMetaType("struct<lib.state>", """{"type":"struct","definition_type":"OBJECT","definition":"lib:state"}""")
+    }
+
     private fun initTypes() {
         file("lib.rell", """module;
             entity user {}
+            object state {}
             struct rec {}
             enum kind { A }
         """)
@@ -283,6 +290,7 @@ class AppGtvMetaTest: BaseRellTest(false) {
                 "name":"lib",
                 "entities":{"user":{"attributes":{},"indexes":[],"keys":[],"log":0,"mount":"user"}},
                 "structs":{"rec":{"attributes":{}}},
+                "objects":{"state":{"attributes":{},"mount":"state"}},
                 "enums":{"kind":{"values":{"A":{}}}}
             }
         }}""")

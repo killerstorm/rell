@@ -20,7 +20,9 @@ class C_FunctionArgs(val valid: Boolean, positional: List<V_Expr>, named: List<P
 }
 
 sealed class C_GlobalFunction {
-    abstract fun getAbstractInfo(): Pair<R_Definition?, C_AbstractDescriptor?>
+    open fun getDefinition(): R_Definition? = null
+    open fun getAbstractDescriptor(): C_AbstractDescriptor? = null
+
     abstract fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr
 }
 
@@ -35,18 +37,19 @@ sealed class C_RegularGlobalFunction: C_GlobalFunction() {
     }
 }
 
-class C_StructGlobalFunction(private val struct: R_Struct): C_GlobalFunction() {
-    override fun getAbstractInfo() = Pair(struct, null)
+class C_StructGlobalFunction(private val structDef: R_StructDefinition): C_GlobalFunction() {
+    override fun getDefinition() = structDef
 
     override fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
-        return compileCall(struct, ctx, name, args)
+        return compileCall(structDef.struct, ctx, name.pos, args)
     }
 
     companion object {
-        fun compileCall(struct: R_Struct, ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
-            val attrs = C_AttributeResolver.resolveCreate(ctx, struct.attributes, args, name.pos)
+        fun compileCall(struct: R_Struct, ctx: C_ExprContext, fnPos: S_Pos, args: List<S_NameExprPair>): C_Expr {
+            val cArgs = C_Argument.compile(ctx, struct.attributes, args)
+            val attrs = C_AttributeResolver.resolveCreate(ctx, struct.attributes, cArgs, fnPos)
             val rExpr = R_StructExpr(struct, attrs.rAttrs)
-            return V_RExpr.makeExpr(name.pos, rExpr, attrs.exprFacts)
+            return V_RExpr.makeExpr(fnPos, rExpr, attrs.exprFacts)
         }
     }
 }
@@ -90,7 +93,7 @@ class C_QueryFunctionHeader(
 }
 
 class C_UserGlobalFunction(
-        val rFunction: R_Function,
+        val rFunction: R_FunctionDefinition,
         private val abstract: C_AbstractDescriptor?
 ): C_RegularGlobalFunction() {
     private val headerLate = C_LateInit(C_CompilerPass.MEMBERS, C_UserFunctionHeader.ERROR)
@@ -99,8 +102,9 @@ class C_UserGlobalFunction(
         headerLate.set(header)
     }
 
+    override fun getDefinition() = rFunction
+    override fun getAbstractDescriptor() = abstract
     override fun getHintParams() = headerLate.get().params
-    override fun getAbstractInfo() = Pair(rFunction, abstract)
 
     override fun compileCallRegular(ctx: C_ExprContext, name: S_Name, args: C_FunctionArgs): C_Expr {
         val header = headerLate.get()
@@ -108,14 +112,12 @@ class C_UserGlobalFunction(
     }
 }
 
-class C_OperationGlobalFunction(val rOp: R_Operation): C_GlobalFunction() {
+class C_OperationGlobalFunction(val rOp: R_OperationDefinition): C_GlobalFunction() {
     private val headerLate = C_LateInit(C_CompilerPass.MEMBERS, C_OperationFunctionHeader.ERROR)
 
     fun setHeader(header: C_OperationFunctionHeader) {
         headerLate.set(header)
     }
-
-    override fun getAbstractInfo() = Pair(null, null)
 
     override fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
         val header = headerLate.get()
@@ -134,14 +136,12 @@ class C_OperationGlobalFunction(val rOp: R_Operation): C_GlobalFunction() {
     }
 }
 
-class C_QueryGlobalFunction(val rQuery: R_Query): C_GlobalFunction() {
+class C_QueryGlobalFunction(val rQuery: R_QueryDefinition): C_GlobalFunction() {
     private val headerLate = C_LateInit(C_CompilerPass.MEMBERS, C_QueryFunctionHeader.ERROR)
 
     fun setHeader(header: C_QueryFunctionHeader) {
         headerLate.set(header)
     }
-
-    override fun getAbstractInfo() = Pair(null, null)
 
     override fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
         val header = headerLate.get()
@@ -237,7 +237,7 @@ object C_FunctionUtils {
             ctx: C_ExprContext,
             name: S_Name,
             args: C_FunctionArgs,
-            rFunction: R_Routine,
+            rFunction: R_RoutineDefinition,
             header: C_FunctionHeader
     ): C_Expr {
         val effArgs = checkArgs(ctx, name, header.params, args)
@@ -377,7 +377,7 @@ object C_FunctionUtils {
         return retTypeRes.value
     }
 
-    private fun compileRegularCall0(name: S_Name, effArgs: List<V_Expr>, retType: R_Type, rFunction: R_Routine): V_Expr {
+    private fun compileRegularCall0(name: S_Name, effArgs: List<V_Expr>, retType: R_Type, rFunction: R_RoutineDefinition): V_Expr {
         val file = name.pos.path().str()
         val line = name.pos.line()
         val filePos = R_FilePos(file, line)
@@ -451,7 +451,6 @@ class C_SysMemberFormalParamsFuncBody(
 
 class C_SysGlobalFunction(private val cases: List<C_GlobalFuncCase>): C_RegularGlobalFunction() {
     override fun getHintParams() = C_FormalParameters.EMPTY
-    override fun getAbstractInfo() = Pair(null, null)
 
     override fun compileCallRegular(ctx: C_ExprContext, name: S_Name, args: C_FunctionArgs): C_Expr {
         if (!args.named.isEmpty()) {
@@ -489,10 +488,15 @@ class C_SysGlobalFunction(private val cases: List<C_GlobalFuncCase>): C_RegularG
     }
 }
 
-class C_SysMemberFunction(val cases: List<C_MemberFuncCase>) {
-    val paramsHints: C_FunctionParametersHints = C_SysMemberFnParamHints()
+sealed class C_SysMemberFunction {
+    abstract fun getParamsHints(): C_FunctionParametersHints
+    abstract fun compileCall(ctx: C_ExprContext, member: C_MemberRef, args: List<V_Expr>): C_Expr
+}
 
-    fun compileCall(ctx: C_ExprContext, member: C_MemberRef, args: List<V_Expr>): C_Expr {
+class C_CasesSysMemberFunction(private val cases: List<C_MemberFuncCase>): C_SysMemberFunction() {
+    override fun getParamsHints(): C_FunctionParametersHints = C_SysMemberFnParamHints()
+
+    override fun compileCall(ctx: C_ExprContext, member: C_MemberRef, args: List<V_Expr>): C_Expr {
         val qName = member.qualifiedName()
         val match = matchCase(ctx, member.name.pos, qName, args)
         match ?: return C_Utils.errorExpr(member.pos)
@@ -533,6 +537,10 @@ class C_SysMemberFunction(val cases: List<C_MemberFuncCase>) {
             return if (set.size != 1) null else set.iterator().next()
         }
     }
+}
+
+abstract class C_SpecialSysMemberFunction: C_SysMemberFunction() {
+    override fun getParamsHints(): C_FunctionParametersHints = C_FormalParameters(listOf())
 }
 
 sealed class C_FunctionBody(bodyCtx: C_FunctionBodyContext) {

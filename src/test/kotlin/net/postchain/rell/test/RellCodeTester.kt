@@ -15,7 +15,6 @@ import net.postchain.core.EContext
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
 import net.postchain.rell.compiler.C_MapSourceDir
-import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.compiler.C_MessageType
 import net.postchain.rell.compiler.C_SourceDir
 import net.postchain.rell.model.*
@@ -25,6 +24,7 @@ import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.sql.SqlInit
 import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.sql.SqlUtils
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.toImmMap
 import net.postchain.rell.utils.toImmSet
 import org.junit.Assert
@@ -101,6 +101,11 @@ class RellCodeTester(
 
     fun chkQuery(bodyCode: String, expected: String) {
         val queryCode = "query q() = $bodyCode;"
+        chkQueryEx(queryCode, "q", listOf(), expected)
+    }
+
+    fun chkQueryEx(bodyCode: String, expected: String) {
+        val queryCode = "query q() $bodyCode"
         chkQueryEx(queryCode, "q", listOf(), expected)
     }
 

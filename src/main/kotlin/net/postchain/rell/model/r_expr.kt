@@ -495,14 +495,20 @@ class R_CreateExprAttr_Default(attr: R_Attribute): R_CreateExprAttr(attr) {
     override fun expr() = attr.expr!!
 }
 
-class R_CreateExpr(val rEntity: R_Entity, val attrs: List<R_CreateExprAttr>): R_Expr(rEntity.type) {
-    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
+sealed class R_CreateExpr(val rEntity: R_EntityDefinition): R_Expr(rEntity.type) {
+    protected abstract fun evaluateValues(frame: Rt_CallFrame): List<Pair<R_Attribute, Rt_Value>>
+
+    final override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         frame.checkDbUpdateAllowed()
+
+        val values = evaluateValues(frame)
+
         val sqlCtx = frame.defCtx.sqlCtx
         val rowidFunc = sqlCtx.mainChainMapping.rowidFunction
-        val rtSql = buildSql(sqlCtx, rEntity, attrs, "\"$rowidFunc\"()")
+        val rtSql = buildSql(sqlCtx, rEntity, values, "\"$rowidFunc\"()")
         val rtSel = SqlSelect(rtSql, listOf(type))
         val res = rtSel.execute(frame)
+
         check(res.size == 1)
         check(res[0].size == 1)
         return res[0][0]
@@ -511,8 +517,8 @@ class R_CreateExpr(val rEntity: R_Entity, val attrs: List<R_CreateExprAttr>): R_
     companion object {
         fun buildSql(
                 sqlCtx: Rt_SqlContext,
-                rEntity: R_Entity,
-                attrs: List<R_CreateExprAttr>,
+                rEntity: R_EntityDefinition,
+                values: List<Pair<R_Attribute, Rt_Value>>,
                 rowidExpr: String
         ): ParameterizedSql {
             val b = SqlBuilder()
@@ -525,17 +531,17 @@ class R_CreateExpr(val rEntity: R_Entity, val attrs: List<R_CreateExprAttr>): R_
 
             b.append("(")
             b.appendName(rowid)
-            b.append(attrs, "") { attr ->
+            b.append(values, "") { pair ->
                 b.append(", ")
-                b.appendName(attr.attr.sqlMapping)
+                b.appendName(pair.first.sqlMapping)
             }
             b.append(")")
 
             b.append(" VALUES (")
             b.append(rowidExpr)
-            b.append(attrs, "") { attr ->
+            b.append(values, "") { pair ->
                 b.append(", ")
-                b.append(attr.expr())
+                b.append(pair.first.type, pair.second)
             }
             b.append(")")
 
@@ -547,7 +553,7 @@ class R_CreateExpr(val rEntity: R_Entity, val attrs: List<R_CreateExprAttr>): R_
 
         fun buildAddColumnsSql(
                 sqlCtx: Rt_SqlContext,
-                rEntity: R_Entity,
+                rEntity: R_EntityDefinition,
                 attrs: List<R_CreateExprAttr>,
                 existingRecs: Boolean
         ): ParameterizedSql {
@@ -592,6 +598,26 @@ class R_CreateExpr(val rEntity: R_Entity, val attrs: List<R_CreateExprAttr>): R_
     }
 }
 
+class R_RegularCreateExpr(rEntity: R_EntityDefinition, val attrs: List<R_CreateExprAttr>): R_CreateExpr(rEntity) {
+    override fun evaluateValues(frame: Rt_CallFrame): List<Pair<R_Attribute, Rt_Value>> {
+        return attrs.map {
+            val value = it.expr().evaluate(frame)
+            it.attr to value
+        }
+    }
+}
+
+class R_StructCreateExpr(
+        rEntity: R_EntityDefinition,
+        val structType: R_StructType,
+        val structExpr: R_Expr
+): R_CreateExpr(rEntity) {
+    override fun evaluateValues(frame: Rt_CallFrame): List<Pair<R_Attribute, Rt_Value>> {
+        val structValue = structExpr.evaluate(frame).asStruct()
+        return structType.struct.attributesList.mapIndexed { i, attr -> attr to structValue.get(i) }
+    }
+}
+
 class R_StructExpr(private val struct: R_Struct, private val attrs: List<R_CreateExprAttr>): R_Expr(struct.type) {
     init {
         check(attrs.size == struct.attributesList.size)
@@ -614,7 +640,7 @@ class R_ObjectExpr(val objType: R_ObjectType): R_Expr(objType) {
     }
 }
 
-class R_ObjectAttrExpr(type: R_Type, val rObject: R_Object, val atBase: R_DbAtExprBase): R_Expr(type) {
+class R_ObjectAttrExpr(type: R_Type, val rObject: R_ObjectDefinition, val atBase: R_DbAtExprBase): R_Expr(type) {
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         var records = atBase.execute(frame, listOf(), null, null)
 
@@ -747,7 +773,7 @@ class R_TypeAdapter_Nullable(private val dstType: R_Type, private val innerAdapt
     }
 }
 
-class R_OperationExpr(private val op: R_Operation, args: List<R_Expr>): R_Expr(R_OperationType) {
+class R_OperationExpr(private val op: R_OperationDefinition, args: List<R_Expr>): R_Expr(R_OperationType) {
     private val args = args.toImmList()
 
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {

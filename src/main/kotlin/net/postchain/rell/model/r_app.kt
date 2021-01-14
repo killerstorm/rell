@@ -72,6 +72,21 @@ class R_Attribute(
                 "mutable" to mutable.toGtv()
         ).toGtv()
     }
+
+    fun copy(mutable: Boolean): R_Attribute {
+        return R_Attribute(
+                index = index,
+                name = name,
+                type = type,
+                mutable = mutable,
+                hasExpr = hasExpr,
+                canSetInCreate = canSetInCreate,
+                sqlMapping = sqlMapping,
+                exprGetter = exprGetter
+        )
+    }
+
+    override fun toString() = name
 }
 
 class R_Param(val name: String, val type: R_Type) {
@@ -85,14 +100,14 @@ class R_VarParam(val name: String, val type: R_Type, val ptr: R_VarPtr) {
     fun toParam() = R_Param(name, type)
 }
 
-sealed class R_Routine(names: R_DefinitionNames): R_Definition(names) {
+sealed class R_RoutineDefinition(names: R_DefinitionNames): R_Definition(names) {
     abstract fun params(): List<R_Param>
     abstract fun call(rtFrame: Rt_CallFrame, args: List<Rt_Value>, callerFilePos: R_FilePos): Rt_Value
 }
 
-sealed class R_MountedRoutine(names: R_DefinitionNames, val mountName: R_MountName): R_Routine(names)
+sealed class R_MountedRoutineDefinition(names: R_DefinitionNames, val mountName: R_MountName): R_RoutineDefinition(names)
 
-class R_Operation(names: R_DefinitionNames, mountName: R_MountName): R_MountedRoutine(names, mountName) {
+class R_OperationDefinition(names: R_DefinitionNames, mountName: R_MountName): R_MountedRoutineDefinition(names, mountName) {
     private val internals = C_LateInit(C_CompilerPass.EXPRESSIONS, ERROR_INTERNALS)
 
     fun setInternals(varParams: List<R_VarParam>, body: R_Statement, frame: R_CallFrame) {
@@ -196,7 +211,7 @@ class R_SysQueryBody(retType: R_Type, params: List<R_Param>, private val fn: R_S
     }
 }
 
-class R_Query(names: R_DefinitionNames, mountName: R_MountName): R_MountedRoutine(names, mountName) {
+class R_QueryDefinition(names: R_DefinitionNames, mountName: R_MountName): R_MountedRoutineDefinition(names, mountName) {
     private val bodyLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_UserQueryBody.ERROR)
 
     fun setBody(body: R_QueryBody) {
@@ -255,7 +270,7 @@ class R_FunctionBody(
     }
 }
 
-class R_Function(names: R_DefinitionNames): R_Routine(names) {
+class R_FunctionDefinition(names: R_DefinitionNames): R_RoutineDefinition(names) {
     private val bodyLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_FunctionBody.ERROR)
 
     fun setBody(body: R_FunctionBody) {
@@ -311,7 +326,7 @@ class R_Function(names: R_DefinitionNames): R_Routine(names) {
     }
 }
 
-private fun checkCallArgs(routine: R_Routine, params: List<R_Param>, args: List<Rt_Value>) {
+private fun checkCallArgs(routine: R_RoutineDefinition, params: List<R_Param>, args: List<Rt_Value>) {
     val name = routine.appLevelName
 
     if (args.size != params.size) {
@@ -345,14 +360,14 @@ class R_Module(
         val external: Boolean,
         val externalChain: String?,
         val test: Boolean,
-        val entities: Map<String, R_Entity>,
-        val objects: Map<String, R_Object>,
-        val structs: Map<String, R_Struct>,
-        val enums: Map<String, R_Enum>,
-        val operations: Map<String, R_Operation>,
-        val queries: Map<String, R_Query>,
-        val functions: Map<String, R_Function>,
-        val moduleArgs: R_Struct?
+        val entities: Map<String, R_EntityDefinition>,
+        val objects: Map<String, R_ObjectDefinition>,
+        val structs: Map<String, R_StructDefinition>,
+        val enums: Map<String, R_EnumDefinition>,
+        val operations: Map<String, R_OperationDefinition>,
+        val queries: Map<String, R_QueryDefinition>,
+        val functions: Map<String, R_FunctionDefinition>,
+        val moduleArgs: R_StructDefinition?
 ){
     override fun toString() = name.toString()
 
@@ -384,9 +399,9 @@ class R_Module(
 }
 
 class R_AppSqlDefs(
-        entities: List<R_Entity>,
-        objects: List<R_Object>,
-        topologicalEntities: List<R_Entity>
+        entities: List<R_EntityDefinition>,
+        objects: List<R_ObjectDefinition>,
+        topologicalEntities: List<R_EntityDefinition>
 ) {
     val entities = entities.toImmList()
     val objects = objects.toImmList()
@@ -411,8 +426,8 @@ class R_App(
         val valid: Boolean,
         val uid: R_AppUid,
         modules: List<R_Module>,
-        operations: Map<R_MountName, R_Operation>,
-        queries: Map<R_MountName, R_Query>,
+        operations: Map<R_MountName, R_OperationDefinition>,
+        queries: Map<R_MountName, R_QueryDefinition>,
         val externalChainsRoot: R_ExternalChainsRoot,
         externalChains: List<R_ExternalChainRef>,
         val sqlDefs: R_AppSqlDefs

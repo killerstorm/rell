@@ -12,7 +12,7 @@ import net.postchain.rell.utils.toImmList
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 
-data class SqlTableAlias(val entity: R_Entity, val str: String)
+data class SqlTableAlias(val entity: R_EntityDefinition, val str: String)
 class SqlTableJoin(val attr: R_Attribute, val alias: SqlTableAlias)
 
 class SqlFromInfo(val entities: List<SqlFromEntity>)
@@ -48,7 +48,7 @@ class SqlGenContext private constructor(
         return tbl.alias
     }
 
-    fun getRelAlias(baseAlias: SqlTableAlias, rel: R_Attribute, entity: R_Entity): SqlTableAlias {
+    fun getRelAlias(baseAlias: SqlTableAlias, rel: R_Attribute, entity: R_EntityDefinition): SqlTableAlias {
         val tbl = aliasTableMap.getValue(baseAlias)
         val map = tbl.subAliases.computeIfAbsent(baseAlias) { mutableMapOf() }
         val join = map.computeIfAbsent(rel.name) {
@@ -69,7 +69,7 @@ class SqlGenContext private constructor(
         return SqlFromInfo(entities)
     }
 
-    private fun nextAlias(entity: R_Entity) = SqlTableAlias(entity, String.format("A%02d", aliasCtr++))
+    private fun nextAlias(entity: R_EntityDefinition) = SqlTableAlias(entity, String.format("A%02d", aliasCtr++))
 
     private class EntityAliasTbl(val alias: SqlTableAlias) {
         val subAliases = mutableMapOf<SqlTableAlias, MutableMap<String, SqlTableJoin>>()
@@ -214,6 +214,10 @@ class SqlArgs(val types: List<R_Type>, val values: List<Rt_Value>) {
 
 class SqlSelect(val pSql: ParameterizedSql, val resultTypes: List<R_Type>) {
     fun execute(frame: Rt_CallFrame): List<List<Rt_Value>> {
+        return execute(frame) { it }
+    }
+
+    fun execute(frame: Rt_CallFrame, transformer: (List<Rt_Value>) -> List<Rt_Value>): List<List<Rt_Value>> {
         val result = mutableListOf<List<Rt_Value>>()
 
         pSql.executeQuery(frame) { rs ->
@@ -223,7 +227,10 @@ class SqlSelect(val pSql: ParameterizedSql, val resultTypes: List<R_Type>) {
                 val value = type.sqlAdapter.fromSql(rs, i + 1, false)
                 list.add(value)
             }
-            result.add(list.toImmList())
+
+            val row = list.toImmList()
+            val transRow = transformer(row)
+            result.add(transRow)
         }
 
         return result

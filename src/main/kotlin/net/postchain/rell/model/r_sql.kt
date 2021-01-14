@@ -18,14 +18,14 @@ abstract class R_EntitySqlMapping {
     abstract fun selectExistingObjects(sqlCtx: Rt_SqlContext, where: String): String
 
     companion object {
-        fun makeTransactionBlockHeightExpr(txEntity: R_Entity, txExpr: Db_TableExpr, chain: R_ExternalChainRef): Db_Expr {
+        fun makeTransactionBlockHeightExpr(txEntity: R_EntityDefinition, txExpr: Db_TableExpr, chain: R_ExternalChainRef): Db_Expr {
             val blockAttr = txEntity.attribute("block")
             val blockEntity = (blockAttr.type as R_EntityType).rEntity
             val blockExpr = Db_RelExpr(txExpr, blockAttr, blockEntity)
             return makeBlockHeightExpr(blockEntity, blockExpr, chain)
         }
 
-        fun makeBlockHeightExpr(blockEntity: R_Entity, blockExpr: Db_TableExpr, chain: R_ExternalChainRef): Db_Expr {
+        fun makeBlockHeightExpr(blockEntity: R_EntityDefinition, blockExpr: Db_TableExpr, chain: R_ExternalChainRef): Db_Expr {
             val heightAttr = blockEntity.attribute("block_height")
             val blockHeightExpr = Db_AttrExpr(blockExpr, heightAttr)
             val chainHeightExpr = Db_InterpretedExpr(R_ChainHeightExpr(chain))
@@ -106,7 +106,7 @@ abstract class R_EntitySqlMapping_TxBlk(
         return res
     }
 
-    abstract fun extraWhereExpr0(entity: R_Entity, entityExpr: Db_EntityExpr, chain: R_ExternalChainRef?): Db_Expr?
+    abstract fun extraWhereExpr0(entity: R_EntityDefinition, entityExpr: Db_EntityExpr, chain: R_ExternalChainRef?): Db_Expr?
 
     final override fun extraWhereExpr(atEntity: R_DbAtEntity): Db_Expr? {
         check(atEntity.rEntity.sqlMapping == this)
@@ -121,7 +121,7 @@ abstract class R_EntitySqlMapping_TxBlk(
 class R_EntitySqlMapping_Transaction(chain: R_ExternalChainRef?): R_EntitySqlMapping_TxBlk("tx_iid", chain) {
     override fun table(chainMapping: Rt_ChainSqlMapping) = chainMapping.transactionsTable
 
-    override fun extraWhereExpr0(entity: R_Entity, entityExpr: Db_EntityExpr, chain: R_ExternalChainRef?): Db_Expr? {
+    override fun extraWhereExpr0(entity: R_EntityDefinition, entityExpr: Db_EntityExpr, chain: R_ExternalChainRef?): Db_Expr? {
         // Extra WHERE with block height check is needed only for external block/transaction entities.
         return if (chain == null) null else makeTransactionBlockHeightExpr(entity, entityExpr, chain)
     }
@@ -130,7 +130,7 @@ class R_EntitySqlMapping_Transaction(chain: R_ExternalChainRef?): R_EntitySqlMap
 class R_EntitySqlMapping_Block(chain: R_ExternalChainRef?): R_EntitySqlMapping_TxBlk("block_iid", chain) {
     override fun table(chainMapping: Rt_ChainSqlMapping) = chainMapping.blocksTable
 
-    override fun extraWhereExpr0(entity: R_Entity, entityExpr: Db_EntityExpr, chain: R_ExternalChainRef?): Db_Expr? {
+    override fun extraWhereExpr0(entity: R_EntityDefinition, entityExpr: Db_EntityExpr, chain: R_ExternalChainRef?): Db_Expr? {
         val timestampAttr = entity.attribute("timestamp")
         val timestampExpr = Db_AttrExpr(entityExpr, timestampAttr)
         val timestampIsNotNullExpr = Db_IsNullExpr(timestampExpr, false)

@@ -370,12 +370,12 @@ private class RellAppLauncher(
 private sealed class RellEntryPoint {
     abstract val kind: String
     abstract val transaction: Boolean
-    abstract fun routine(): R_Routine
+    abstract fun routine(): R_RoutineDefinition
     abstract fun opContext(): Rt_OpContext?
     abstract fun call(exeCtx: Rt_ExecutionContext, args: List<Rt_Value>): Rt_Value?
 }
 
-private class RellEntryPoint_Function(private val f: R_Function): RellEntryPoint() {
+private class RellEntryPoint_Function(private val f: R_FunctionDefinition): RellEntryPoint() {
     override val kind = "function"
     override val transaction = false
     override fun routine() = f
@@ -386,7 +386,7 @@ private class RellEntryPoint_Function(private val f: R_Function): RellEntryPoint
     }
 }
 
-private class RellEntryPoint_Operation(private val o: R_Operation, private val opCtx: Rt_OpContext): RellEntryPoint() {
+private class RellEntryPoint_Operation(private val o: R_OperationDefinition, private val opCtx: Rt_OpContext): RellEntryPoint() {
     override val kind = "operation"
     override val transaction = true
     override fun routine() = o
@@ -398,7 +398,7 @@ private class RellEntryPoint_Operation(private val o: R_Operation, private val o
     }
 }
 
-private class RellEntryPoint_Query(private val q: R_Query): RellEntryPoint() {
+private class RellEntryPoint_Query(private val q: R_QueryDefinition): RellEntryPoint() {
     override val kind = "query"
     override val transaction = false
     override fun routine() = q

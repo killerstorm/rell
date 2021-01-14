@@ -175,7 +175,7 @@ class Rt_SqlContext private constructor(
             }
         }
 
-        private fun checkMissingEntities(chain: String, extEntities: Map<String, R_Entity>, metaEntities: Map<String, MetaEntity>) {
+        private fun checkMissingEntities(chain: String, extEntities: Map<String, R_EntityDefinition>, metaEntities: Map<String, MetaEntity>) {
             val metaEntityNames = metaEntities.filter { (_, c) -> c.type == MetaEntityType.ENTITY }.keys
             val missingEntities = Sets.difference(extEntities.keys, metaEntityNames)
             if (!missingEntities.isEmpty()) {
@@ -185,7 +185,7 @@ class Rt_SqlContext private constructor(
             }
         }
 
-        private fun checkMissingAttrs(chain: String, extEntity: R_Entity, metaEntity: MetaEntity) {
+        private fun checkMissingAttrs(chain: String, extEntity: R_EntityDefinition, metaEntity: MetaEntity) {
             val metaAttrNames = metaEntity.attrs.keys
             val extAttrNames = extEntity.attributes.keys
             val missingAttrs = Sets.difference(extAttrNames, metaAttrNames)
@@ -197,7 +197,7 @@ class Rt_SqlContext private constructor(
             }
         }
 
-        private fun checkAttrTypes(sqlCtx: Rt_SqlContext, chain: String, extEntity: R_Entity, metaEntity: MetaEntity) {
+        private fun checkAttrTypes(sqlCtx: Rt_SqlContext, chain: String, extEntity: R_EntityDefinition, metaEntity: MetaEntity) {
             for (extAttr in extEntity.attributes.values.sortedBy { it.name }) {
                 val attrName = extAttr.name
                 val metaAttr = metaEntity.attrs.getValue(attrName)
@@ -212,8 +212,8 @@ class Rt_SqlContext private constructor(
             }
         }
 
-        private fun getChainExternalEntities(entities: List<R_Entity>): Map<String, Map<String, R_Entity>> {
-            val res = mutableMapOf<String, MutableMap<String, R_Entity>>()
+        private fun getChainExternalEntities(entities: List<R_EntityDefinition>): Map<String, Map<String, R_EntityDefinition>> {
+            val res = mutableMapOf<String, MutableMap<String, R_EntityDefinition>>()
             for (entity in entities) {
                 if (entity.external != null && entity.external.metaCheck) {
                     val map = res.computeIfAbsent(entity.external.chain.name) { mutableMapOf() }
@@ -281,7 +281,7 @@ class Rt_AppContext(
         }
     }
 
-    fun forceObjectInit(obj: R_Object): Boolean {
+    fun forceObjectInit(obj: R_ObjectDefinition): Boolean {
         val ref = objsInit
         return if (ref == null) false else {
             ref.forceObject(obj)

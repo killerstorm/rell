@@ -37,12 +37,13 @@ class R_EntityBody(val keys: List<R_Key>, val indexes: List<R_Index>, val attrib
 
 class R_ExternalEntity(val chain: R_ExternalChainRef, val metaCheck: Boolean)
 
-class R_Entity(
+class R_EntityDefinition(
         names: R_DefinitionNames,
         val mountName: R_MountName,
         val flags: R_EntityFlags,
         val sqlMapping: R_EntitySqlMapping,
-        val external: R_ExternalEntity?
+        val external: R_ExternalEntity?,
+        val mirrorStruct: R_Struct
 ): R_Definition(names) {
     val metaName = mountName.str()
 
@@ -85,12 +86,13 @@ class R_Entity(
     }
 }
 
-class R_Object(names: R_DefinitionNames, val rEntity: R_Entity): R_Definition(names) {
+class R_ObjectDefinition(names: R_DefinitionNames, val rEntity: R_EntityDefinition): R_Definition(names) {
     val type = R_ObjectType(this)
 
     fun insert(frame: Rt_CallFrame) {
         val createAttrs = rEntity.attributes.values.map { R_CreateExprAttr_Default(it) }
-        val sql = R_CreateExpr.buildSql(frame.defCtx.sqlCtx, rEntity, createAttrs, "0")
+        val createValues = createAttrs.map { it.attr to it.expr().evaluate(frame) }
+        val sql = R_CreateExpr.buildSql(frame.defCtx.sqlCtx, rEntity, createValues, "0")
         sql.execute(frame)
     }
 
@@ -99,7 +101,7 @@ class R_Object(names: R_DefinitionNames, val rEntity: R_Entity): R_Definition(na
 
 class R_StructFlags(val typeFlags: R_TypeFlags, val cyclic: Boolean, val infinite: Boolean)
 
-class R_Struct(names: R_DefinitionNames): R_Definition(names) {
+class R_Struct(val name: String, val typeMetaGtv: Gtv) {
     private val bodyLate = C_LateInit(C_CompilerPass.MEMBERS, DEFAULT_BODY)
     private val flagsLate = C_LateInit(C_CompilerPass.APPDEFS, DEFAULT_STRUCT_FLAGS)
 
@@ -123,11 +125,13 @@ class R_Struct(names: R_DefinitionNames): R_Definition(names) {
 
     fun isDirectlyMutable() = bodyLate.get().attrMutable
 
-    override fun toMetaGtv(): Gtv {
+    fun toMetaGtv(): Gtv {
         return mapOf(
                 "attributes" to attributes.mapValues { it.value.toMetaGtv() }.toGtv()
         ).toGtv()
     }
+
+    override fun toString() = name
 
     private class R_StructBody(
             val attrMap: Map<String, R_Attribute>,
@@ -142,12 +146,18 @@ class R_Struct(names: R_DefinitionNames): R_Definition(names) {
     }
 }
 
+class R_StructDefinition(names: R_DefinitionNames, val struct: R_Struct): R_Definition(names) {
+    val type = struct.type
+
+    override fun toMetaGtv() = struct.toMetaGtv()
+}
+
 class R_EnumAttr(val name: String, val value: Int) {
     // Currently returning an empty map, in the future there may be some values.
     fun toMetaGtv() = mapOf<String, Gtv>().toGtv()
 }
 
-class R_Enum(names: R_DefinitionNames, val attrs: List<R_EnumAttr>): R_Definition(names) {
+class R_EnumDefinition(names: R_DefinitionNames, val attrs: List<R_EnumAttr>): R_Definition(names) {
     val type = R_EnumType(this)
 
     private val attrMap = attrs.map { Pair(it.name, it) }.toMap()

@@ -5,7 +5,7 @@
 package net.postchain.rell.sql
 
 import net.postchain.rell.model.R_Attribute
-import net.postchain.rell.model.R_Entity
+import net.postchain.rell.model.R_EntityDefinition
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_Messages
 import net.postchain.rell.runtime.Rt_SqlContext
@@ -198,7 +198,7 @@ object SqlMeta {
         return sqls
     }
 
-    fun genMetaEntityInserts(sqlCtx: Rt_SqlContext, classId: Int, entity: R_Entity, entityType: MetaEntityType): List<String> {
+    fun genMetaEntityInserts(sqlCtx: Rt_SqlContext, classId: Int, entity: R_EntityDefinition, entityType: MetaEntityType): List<String> {
         val sqls = mutableListOf<String>()
 
         val entityTable = DSL.table(DSL.name(sqlCtx.mainChainMapping.metaEntitiesTable))

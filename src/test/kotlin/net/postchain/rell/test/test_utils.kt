@@ -130,7 +130,7 @@ object SqlTestUtils {
         return list.toList()
     }
 
-    private fun dumpEntity(sqlExec: SqlExecutor, chainMapping: Rt_ChainSqlMapping, entity: R_Entity, list: MutableList<String>) {
+    private fun dumpEntity(sqlExec: SqlExecutor, chainMapping: Rt_ChainSqlMapping, entity: R_EntityDefinition, list: MutableList<String>) {
         val table = entity.sqlMapping.table(chainMapping)
         val cols = listOf(entity.sqlMapping.rowidColumn()) + entity.attributes.values.map { it.sqlMapping }
         val sql = getTableDumpSql(table, cols, entity.sqlMapping.rowidColumn())
