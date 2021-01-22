@@ -12,7 +12,6 @@ import net.postchain.rell.compiler.C_Utils
 import net.postchain.rell.runtime.*
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
-import java.util.*
 
 class R_DefinitionNames(val module: String, val namespace: String?, val simpleName: String) {
     val qualifiedName = if (namespace == null) simpleName else "$namespace.$simpleName"
@@ -59,12 +58,13 @@ class R_Attribute(
         val name: String,
         val type: R_Type,
         val mutable: Boolean,
-        val hasExpr: Boolean,
         val canSetInCreate: Boolean = true,
         val sqlMapping: String = name,
-        private val exprGetter: C_LateGetter<Optional<R_Expr>>
+        private val exprGetter: C_LateGetter<R_Expr>?
 ) {
-    val expr: R_Expr? get() = exprGetter.get().orElse(null)
+    val expr: R_Expr? get() = exprGetter?.get()
+
+    val hasExpr: Boolean get() = exprGetter != null
 
     fun toMetaGtv(): Gtv {
         return mapOf(
@@ -79,7 +79,6 @@ class R_Attribute(
                 name = name,
                 type = type,
                 mutable = mutable,
-                hasExpr = hasExpr,
                 canSetInCreate = canSetInCreate,
                 sqlMapping = sqlMapping,
                 exprGetter = exprGetter
@@ -107,7 +106,11 @@ sealed class R_RoutineDefinition(names: R_DefinitionNames): R_Definition(names) 
 
 sealed class R_MountedRoutineDefinition(names: R_DefinitionNames, val mountName: R_MountName): R_RoutineDefinition(names)
 
-class R_OperationDefinition(names: R_DefinitionNames, mountName: R_MountName): R_MountedRoutineDefinition(names, mountName) {
+class R_OperationDefinition(
+        names: R_DefinitionNames,
+        mountName: R_MountName,
+        val mirrorStruct: R_Struct
+): R_MountedRoutineDefinition(names, mountName) {
     private val internals = C_LateInit(C_CompilerPass.EXPRESSIONS, ERROR_INTERNALS)
 
     fun setInternals(varParams: List<R_VarParam>, body: R_Statement, frame: R_CallFrame) {

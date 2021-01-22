@@ -282,9 +282,11 @@ object C_LibFunctions {
             .add("block", R_GtxBlockType, listOf(), R_SysFn_Gtx.Block.NewEmpty)
             .add("block", R_GtxBlockType, listOf(R_GtxTxType), R_SysFn_Gtx.Block.NewOneTx)
             .add("block", R_GtxBlockType, listOf(R_ListType(R_GtxTxType)), R_SysFn_Gtx.Block.NewListOfTxs)
-            .add("tx", R_GtxTxType, listOf(), R_SysFn_Gtx.Tx.NewEmpty)
-            .add("tx", R_GtxTxType, listOf(R_OperationType), R_SysFn_Gtx.Tx.NewOneOp)
-            .add("tx", R_GtxTxType, listOf(R_ListType(R_OperationType)), R_SysFn_Gtx.Tx.NewListOfOps)
+            .add("tx", R_GtxTxType, listOf(), R_SysFn_Gtx.Tx.New_Empty)
+            .add("tx", R_GtxTxType, listOf(R_ListType(R_OperationType)), R_SysFn_Gtx.Tx.New_ListOfOps)
+            .addEx("tx", R_GtxTxType, C_ArgsTypesMatcher_OneMany(C_ArgTypeMatcher_Simple(R_OperationType)), R_SysFn_Gtx.Tx.New_Ops)
+            .addEx("tx", R_GtxTxType, C_ArgsTypesMatcher_OneMany(C_ArgTypeMatcher_MirrorStructOperation), R_SysFn_Gtx.Tx.New_Structs)
+            .addEx("tx", R_GtxTxType, listOf(C_ArgTypeMatcher_List(C_ArgTypeMatcher_MirrorStructOperation)), R_SysFn_Gtx.Tx.New_ListOfStructs)
             .build()
 
     private val RELL_GTX_NAMESPACE = makeNamespaceEx(
@@ -544,12 +546,18 @@ object C_LibFunctions {
         val mToGtv = memFnToGtv(type, R_GtvType, R_SysFn_Struct.ToGtv(struct, false))
         val mToGtvPretty = memFnToGtv(type, R_GtvType, R_SysFn_Struct.ToGtv(struct, true))
 
-        return typeMemFuncBuilder(type)
-                .add("toBytes", listOf(), mToBytes, depError("to_bytes"))
-                .add("to_bytes", listOf(), mToBytes)
-                .add("toGTXValue", listOf(), mToGtv, depError("to_gtv"))
-                .add("toPrettyGTXValue", listOf(), mToGtvPretty, depError("to_gtv_pretty"))
-                .build()
+        val b = typeMemFuncBuilder(type)
+
+        if (struct.operation != null) {
+            b.add("to_operation", R_OperationType, listOf(), R_SysFn_General.Struct_ToOperation)
+        }
+
+        b.add("toBytes", listOf(), mToBytes, depError("to_bytes"))
+        b.add("to_bytes", listOf(), mToBytes)
+        b.add("toGTXValue", listOf(), mToGtv, depError("to_gtv"))
+        b.add("toPrettyGTXValue", listOf(), mToGtvPretty, depError("to_gtv_pretty"))
+
+        return b.build()
     }
 
     private fun getVirtualStructFns(type: R_VirtualStructType): C_MemberFuncTable {

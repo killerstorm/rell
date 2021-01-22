@@ -88,27 +88,35 @@ object C_Constants {
             .divide(BigDecimal.TEN.pow(DECIMAL_FRAC_DIGITS))
 }
 
-class C_FormalParameter(val name: S_Name, val type: R_Type?, val exprPos: S_Pos?, val hasExpr: Boolean) {
-    private val exprLate: C_LateInit<R_Expr> = C_LateInit(C_CompilerPass.EXPRESSIONS, C_Utils.ERROR_EXPR)
+class C_FormalParameter(
+        val name: S_Name,
+        val type: R_Type?,
+        private val exprGetterPosValue: S_PosValue<C_LateGetter<R_Expr>>?
+) {
+    val hasExpr: Boolean get() = exprGetterPosValue != null
 
     fun nameCode(index: Int) = "$index:${name.str}"
     fun nameMsg(index: Int) = "'${name.str}'"
-
-    fun setExpr(expr: R_Expr) {
-        check(hasExpr)
-        exprLate.set(expr)
-    }
 
     fun createVarParam(type: R_Type, ptr: R_VarPtr): R_VarParam {
         return R_VarParam(name.str, type, ptr)
     }
 
     fun createDefaultValueExpr(): V_Expr {
-        check(hasExpr)
-        check(exprPos != null)
+        check(exprGetterPosValue != null)
         val actType = type ?: R_CtErrorType
-        val rExpr = R_DefaultValueExpr(actType, exprLate)
-        return V_RExpr(exprPos, rExpr)
+        val rExpr = R_DefaultValueExpr(actType, exprGetterPosValue.value)
+        return V_RExpr(exprGetterPosValue.pos, rExpr)
+    }
+
+    fun createMirrorAttr(index: Int): R_Attribute {
+        return R_Attribute(
+                index,
+                name.str,
+                type ?: R_CtErrorType,
+                mutable = false,
+                exprGetter = exprGetterPosValue?.value
+        )
     }
 }
 
@@ -249,19 +257,25 @@ object C_Utils {
             sqlMapping: R_EntitySqlMapping,
             externalEntity: R_ExternalEntity?
     ): R_EntityDefinition {
-        val rStruct = createEntityStruct(names, defType)
-        appCtx.defsAdder.addStruct(rStruct)
+        val rStruct = createMirrorStruct(appCtx, names, defType)
         return R_EntityDefinition(names, mountName, flags, sqlMapping, externalEntity, rStruct)
     }
 
-    private fun createEntityStruct(names: R_DefinitionNames, defType: C_DefinitionType): R_Struct {
+    fun createMirrorStruct(
+            appCtx: C_AppContext,
+            names: R_DefinitionNames,
+            defType: C_DefinitionType,
+            operation: R_MountName? = null
+    ): R_Struct {
         val structName = "struct<${names.appLevelName}>"
         val structMetaGtv = mapOf(
                 "type" to "struct".toGtv(),
                 "definition_type" to defType.name.toGtv(),
                 "definition" to names.appLevelName.toGtv()
         ).toGtv()
-        return R_Struct(structName, structMetaGtv)
+        val rStruct = R_Struct(structName, structMetaGtv, operation = operation)
+        appCtx.defsAdder.addStruct(rStruct)
+        return rStruct
     }
 
     fun setEntityBody(entity: R_EntityDefinition, body: R_EntityBody) {

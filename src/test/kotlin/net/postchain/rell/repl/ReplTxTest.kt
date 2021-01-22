@@ -18,7 +18,7 @@ class ReplTxTest: BaseRellTest(true) {
         initStuff()
 
         repl.chk("val op = foo(123);")
-        repl.chk("op", "RES:op[foo(int[123])]")
+        repl.chk("op", "RES:struct<foo>[x=int[123]]")
         repl.chk("val tx = rell.gtx.tx(op);")
         repl.chk("tx.run();", "OUT:x=123", "RES:unit")
     }

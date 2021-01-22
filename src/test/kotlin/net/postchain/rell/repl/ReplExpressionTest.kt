@@ -18,9 +18,11 @@ class ReplExpressionTest: BaseRellTest(false) {
         file("root.rell", "operation foo(x: integer, y: text) {}")
         file("lib.rell", "module; operation bar(p: text, q: integer) {}")
         tst.replModule = ""
-        repl.chk("foo(123, 'Hello')", "RES:op[foo(int[123],text[Hello])]")
+        repl.chk("foo(123, 'Hello')", "RES:struct<foo>[x=int[123],y=text[Hello]]")
+        repl.chk("foo(123, 'Hello').to_operation()", "RES:op[foo(int[123],text[Hello])]")
         repl.chk("import lib;")
-        repl.chk("lib.bar('Bye', 456)", "RES:op[bar(text[Bye],int[456])]")
+        repl.chk("lib.bar('Bye', 456)", "RES:struct<lib:bar>[p=text[Bye],q=int[456]]")
+        repl.chk("lib.bar('Bye', 456).to_operation()", "RES:op[bar(text[Bye],int[456])]")
     }
 
     @Test fun testQuery() {

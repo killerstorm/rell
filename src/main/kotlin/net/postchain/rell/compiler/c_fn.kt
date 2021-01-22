@@ -126,7 +126,7 @@ class C_OperationGlobalFunction(val rOp: R_OperationDefinition): C_GlobalFunctio
         val cEffArgs = C_FunctionUtils.checkArgs(ctx, name, header.params, cArgs)
 
         val vExpr = if (cEffArgs == null) {
-            C_Utils.errorVExpr(name.pos, R_OperationType)
+            C_Utils.errorVExpr(name.pos, rOp.mirrorStruct.type)
         } else {
             val rArgs = cEffArgs.map { it.toRExpr() }
             V_RExpr(name.pos, R_OperationExpr(rOp, rArgs))
@@ -266,7 +266,7 @@ object C_FunctionUtils {
             return null
         }
 
-        val match = C_ArgTypesMatch(matchListNz)
+        val match = C_ArgsTypesMatch(matchListNz)
         return match.effectiveArgs(posArgsNz)
     }
 

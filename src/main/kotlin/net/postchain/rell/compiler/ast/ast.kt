@@ -106,14 +106,18 @@ class S_FormalParameter(val attr: S_AttrHeader, val expr: S_Expr?) {
     fun compile(defCtx: C_DefinitionContext): C_FormalParameter {
         val name = attr.name
         val type = attr.compileTypeOpt(defCtx.nsCtx)
-        val cParam = C_FormalParameter(name, type, expr?.startPos, expr != null)
-        if (expr != null) {
+
+        val exprGetterPosValue = if (expr == null) null else {
+            val errExpr = C_Utils.errorRExpr(type ?: R_CtErrorType)
+            val exprLate = C_LateInit(C_CompilerPass.EXPRESSIONS, errExpr)
             defCtx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
                 val rExpr = compileExpr(defCtx, type)
-                cParam.setExpr(rExpr)
+                exprLate.set(rExpr)
             }
+            S_PosValue(expr.startPos, exprLate.getter)
         }
-        return cParam
+
+        return C_FormalParameter(name, type, exprGetterPosValue)
     }
 
     private fun compileExpr(defCtx: C_DefinitionContext, attrType: R_Type?): R_Expr {
@@ -489,7 +493,7 @@ class S_StructDefinition(
         modifiers.compile(ctx, modTarget)
 
         val names = ctx.nsCtx.defNames(name.str)
-        val rStruct = R_Struct(names.appLevelName, names.appLevelName.toGtv())
+        val rStruct = R_Struct(names.appLevelName, names.appLevelName.toGtv(), operation = null)
         val rStructDef = R_StructDefinition(names, rStruct)
         ctx.appCtx.defsAdder.addStruct(rStruct)
         ctx.nsBuilder.addStruct(name, rStructDef)
@@ -571,7 +575,8 @@ class S_OperationDefinition(
         val mountName = ctx.mountName(modTarget, name)
 
         val defCtx = C_DefinitionContext(ctx, C_DefinitionType.OPERATION)
-        val rOperation = R_OperationDefinition(names, mountName)
+        val rStruct = C_Utils.createMirrorStruct(ctx.appCtx, names, defCtx.definitionType, operation = mountName)
+        val rOperation = R_OperationDefinition(names, mountName, rStruct)
         val cOperation = C_OperationGlobalFunction(rOperation)
 
         ctx.appCtx.defsAdder.addOperation(rOperation)
@@ -579,18 +584,31 @@ class S_OperationDefinition(
         ctx.mntBuilder.addOperation(name, rOperation)
 
         ctx.executor.onPass(C_CompilerPass.MEMBERS) {
-            val header = compileHeader(defCtx, cOperation)
+            val header = compileHeader(defCtx, cOperation, rStruct)
             ctx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
                 compileBody(defCtx, rOperation, header)
             }
         }
     }
 
-    private fun compileHeader(defCtx: C_DefinitionContext, cOperation: C_OperationGlobalFunction): C_OperationFunctionHeader {
+    private fun compileHeader(
+            defCtx: C_DefinitionContext,
+            cOperation: C_OperationGlobalFunction,
+            mirrorStruct: R_Struct
+    ): C_OperationFunctionHeader {
         val forParams = C_FormalParameters.compile(defCtx, params, true)
         val header = C_OperationFunctionHeader(forParams)
         cOperation.setHeader(header)
+        compileMirrorStructAttrs(mirrorStruct, forParams)
         return header
+    }
+
+    private fun compileMirrorStructAttrs(mirrorStruct: R_Struct, forParams: C_FormalParameters) {
+        val attrs = forParams.list
+                .mapIndexed { i, param -> param.createMirrorAttr(i) }
+                .map { it.name to it }
+                .toMap().toImmMap()
+        mirrorStruct.setAttributes(attrs)
     }
 
     private fun compileBody(defCtx: C_DefinitionContext, rOperation: R_OperationDefinition, header: C_OperationFunctionHeader) {

@@ -101,7 +101,7 @@ class R_ObjectDefinition(names: R_DefinitionNames, val rEntity: R_EntityDefiniti
 
 class R_StructFlags(val typeFlags: R_TypeFlags, val cyclic: Boolean, val infinite: Boolean)
 
-class R_Struct(val name: String, val typeMetaGtv: Gtv) {
+class R_Struct(val name: String, val typeMetaGtv: Gtv, val operation: R_MountName?) {
     private val bodyLate = C_LateInit(C_CompilerPass.MEMBERS, DEFAULT_BODY)
     private val flagsLate = C_LateInit(C_CompilerPass.APPDEFS, DEFAULT_STRUCT_FLAGS)
 

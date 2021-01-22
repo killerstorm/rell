@@ -5,7 +5,7 @@
 package net.postchain.rell.model
 
 import net.postchain.rell.compiler.C_EntityAttrRef
-import net.postchain.rell.compiler.C_LateInit
+import net.postchain.rell.compiler.C_LateGetter
 import net.postchain.rell.compiler.C_Utils
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlGen
@@ -773,18 +773,19 @@ class R_TypeAdapter_Nullable(private val dstType: R_Type, private val innerAdapt
     }
 }
 
-class R_OperationExpr(private val op: R_OperationDefinition, args: List<R_Expr>): R_Expr(R_OperationType) {
+class R_OperationExpr(private val op: R_OperationDefinition, args: List<R_Expr>): R_Expr(op.mirrorStruct.type) {
     private val args = args.toImmList()
 
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         val rtArgs = args.map { it.evaluate(frame) }
-        return Rt_OperationValue(op.mountName, rtArgs)
+        val attrValues = rtArgs.toMutableList()
+        return Rt_StructValue(op.mirrorStruct.type, attrValues)
     }
 }
 
-class R_DefaultValueExpr(type: R_Type, private val exprLate: C_LateInit<R_Expr>): R_Expr(type) {
+class R_DefaultValueExpr(type: R_Type, private val exprGetter: C_LateGetter<R_Expr>): R_Expr(type) {
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        val expr = exprLate.get()
+        val expr = exprGetter.get()
         val res = expr.evaluate(frame)
         return res
     }

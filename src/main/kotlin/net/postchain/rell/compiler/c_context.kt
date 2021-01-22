@@ -258,6 +258,11 @@ class C_NamespaceContext(val modCtx: C_ModuleContext, val namespacePath: String?
         executor.checkPass(C_CompilerPass.MEMBERS, null)
         return scope.getFunctionOpt(qName)
     }
+
+    fun getOperationOpt(name: List<S_Name>): R_OperationDefinition? {
+        executor.checkPass(C_CompilerPass.MEMBERS, null)
+        return scope.getOperationOpt(name)
+    }
 }
 
 class C_ExternalChain(

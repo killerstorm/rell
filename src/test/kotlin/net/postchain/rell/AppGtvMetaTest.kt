@@ -259,10 +259,11 @@ class AppGtvMetaTest: BaseRellTest(false) {
         }""")
     }
 
-    @Test fun testTypeStruct() {
+    @Test fun testTypeMirrorStruct() {
         initTypes()
         chkMetaType("struct<lib.user>", """{"type":"struct","definition_type":"ENTITY","definition":"lib:user"}""")
         chkMetaType("struct<lib.state>", """{"type":"struct","definition_type":"OBJECT","definition":"lib:state"}""")
+        chkMetaType("struct<lib.op>", """{"type":"struct","definition_type":"OPERATION","definition":"lib:op"}""")
     }
 
     private fun initTypes() {
@@ -271,6 +272,7 @@ class AppGtvMetaTest: BaseRellTest(false) {
             object state {}
             struct rec {}
             enum kind { A }
+            operation op() {}
         """)
         def("import lib;")
     }
@@ -289,6 +291,7 @@ class AppGtvMetaTest: BaseRellTest(false) {
             "lib":{
                 "name":"lib",
                 "entities":{"user":{"attributes":{},"indexes":[],"keys":[],"log":0,"mount":"user"}},
+                "operations":{"op":{"parameters":[]}},
                 "structs":{"rec":{"attributes":{}}},
                 "objects":{"state":{"attributes":{},"mount":"state"}},
                 "enums":{"kind":{"values":{"A":{}}}}

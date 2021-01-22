@@ -5,10 +5,7 @@
 package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.ast.S_Name
-import net.postchain.rell.model.R_EntityDefinition
-import net.postchain.rell.model.R_EntityType
-import net.postchain.rell.model.R_ObjectDefinition
-import net.postchain.rell.model.R_Type
+import net.postchain.rell.model.*
 import net.postchain.rell.utils.Getter
 
 class C_ScopeBuilder {
@@ -89,6 +86,11 @@ class C_Scope(
 
     fun getFunctionOpt(qName: List<S_Name>): C_DefRef<C_GlobalFunction>? {
         return getQualifiedDef(qName, GeneralNs::function)
+    }
+
+    fun getOperationOpt(qName: List<S_Name>): R_OperationDefinition? {
+        val def = getQualifiedDef(qName, GeneralNs::function)
+        return (def?.getDef() as? C_OperationGlobalFunction)?.rOp
     }
 
     private fun <T> getQualifiedDef(qName: List<S_Name>, getter: (GeneralNs, S_Name) -> C_DefRef<T>?): C_DefRef<T>? {

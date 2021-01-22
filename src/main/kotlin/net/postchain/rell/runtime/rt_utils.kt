@@ -188,6 +188,21 @@ object Rt_Utils {
     fun appendStackTrace(msg: String, stack: List<R_StackPos>): String {
         return if (stack.isEmpty()) msg else (msg + "\n" + stack.joinToString("\n") { "\tat $it" })
     }
+
+    fun check(b: Boolean, msgProvider: () -> Pair<String, String>) {
+        if (!b) {
+            val (code, msg) = msgProvider()
+            throw Rt_Error(code, msg)
+        }
+    }
+
+    fun <T> checkNotNull(value: T?, msgProvider: () -> Pair<String, String>): T {
+        if (value == null) {
+            val (code, msg) = msgProvider()
+            throw Rt_Error(code, msg)
+        }
+        return value
+    }
 }
 
 object Rt_DecimalUtils {

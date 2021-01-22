@@ -23,12 +23,12 @@ sealed class S_Type(val pos: S_Pos) {
         return ctx.msgCtx.consumeError { compile0(ctx) }
     }
 
-    open fun compileStructOfDefinitionType(ctx: C_NamespaceContext): R_StructType? {
+    open fun compileMirrorStructType(ctx: C_NamespaceContext): R_StructType? {
         val rParamType = compileOpt(ctx)
-        return if (rParamType == null) null else compileStructOfDefinitionType0(rParamType)
+        return if (rParamType == null) null else compileMirrorStructType0(rParamType)
     }
 
-    protected fun compileStructOfDefinitionType0(rParamType: R_Type): R_StructType {
+    protected fun compileMirrorStructType0(rParamType: R_Type): R_StructType {
         return if (rParamType is R_EntityType) {
             rParamType.rEntity.mirrorStruct.type
         } else {
@@ -40,7 +40,7 @@ sealed class S_Type(val pos: S_Pos) {
 class S_NameType(val names: List<S_Name>): S_Type(names[0].pos) {
     override fun compile0(ctx: C_NamespaceContext): R_Type = ctx.getType(names)
 
-    override fun compileStructOfDefinitionType(ctx: C_NamespaceContext): R_StructType? {
+    override fun compileMirrorStructType(ctx: C_NamespaceContext): R_StructType? {
         var rParamType = ctx.getTypeOpt(names)
 
         if (rParamType == null) {
@@ -50,11 +50,16 @@ class S_NameType(val names: List<S_Name>): S_Type(names[0].pos) {
             }
         }
 
-        return if (rParamType != null) {
-            return compileStructOfDefinitionType0(rParamType)
-        } else {
-            super.compileStructOfDefinitionType(ctx) // Reports compilation error.
+        if (rParamType != null) {
+            return compileMirrorStructType0(rParamType)
         }
+
+        val rOp = ctx.getOperationOpt(names)
+        if (rOp != null) {
+            return rOp.mirrorStruct.type
+        }
+
+        return super.compileMirrorStructType(ctx) // Reports compilation error.
     }
 }
 
@@ -169,6 +174,6 @@ class S_OperationType(pos: S_Pos): S_Type(pos) {
 
 class S_MirrorStructType(pos: S_Pos, val paramType: S_Type): S_Type(pos) {
     override fun compile0(ctx: C_NamespaceContext): R_Type {
-        return paramType.compileStructOfDefinitionType(ctx) ?: R_CtErrorType
+        return paramType.compileMirrorStructType(ctx) ?: R_CtErrorType
     }
 }

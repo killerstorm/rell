@@ -11,9 +11,15 @@ class LibGtxTxBlockTest: BaseRellTest(false) {
         chk("rell.gtx.tx()", "rell.gtx.tx[]")
         chk("rell.gtx.tx(list<operation>())", "rell.gtx.tx[]")
         chk("rell.gtx.tx(foo(123,'Hello'))", "rell.gtx.tx[op[foo(int[123],text[Hello])]]")
+        chk("rell.gtx.tx(foo(123,'Hello').to_operation())", "rell.gtx.tx[op[foo(int[123],text[Hello])]]")
         chk("rell.gtx.tx([foo(123,'Hello')])", "rell.gtx.tx[op[foo(int[123],text[Hello])]]")
-        chk("rell.gtx.tx([foo(123,'Hello'),bar('Bye',456)])", "rell.gtx.tx[op[foo(int[123],text[Hello])],op[bar(text[Bye],int[456])]]")
-        chk("rell.gtx.tx(foo(123,'Hello'),bar('Bye',456))", "ct_err:expr_call_argtypes:tx:operation,operation")
+        chk("rell.gtx.tx([foo(123,'Hello').to_operation()])", "rell.gtx.tx[op[foo(int[123],text[Hello])]]")
+        chk("rell.gtx.tx([foo(123,'Hello').to_operation(),bar('Bye',456).to_operation()])",
+                "rell.gtx.tx[op[foo(int[123],text[Hello])],op[bar(text[Bye],int[456])]]")
+        chk("rell.gtx.tx(foo(123,'Hello'),bar('Bye',456))",
+                "rell.gtx.tx[op[foo(int[123],text[Hello])],op[bar(text[Bye],int[456])]]")
+        chk("rell.gtx.tx(foo(123,'Hello').to_operation(),bar('Bye',456).to_operation())",
+                "rell.gtx.tx[op[foo(int[123],text[Hello])],op[bar(text[Bye],int[456])]]")
 
         chk("_type_of(rell.gtx.tx())", "text[rell.gtx.tx]")
         chkEx("{ val x: rell.gtx.tx = rell.gtx.tx(); return x; }", "rell.gtx.tx[]")
@@ -25,8 +31,11 @@ class LibGtxTxBlockTest: BaseRellTest(false) {
         chk("rell.gtx.block()", "rell.gtx.block[]")
         chk("rell.gtx.block(list<rell.gtx.tx>())", "rell.gtx.block[]")
         chk("rell.gtx.block(rell.gtx.tx(foo(123,'Hello')))", "rell.gtx.block[rell.gtx.tx[op[foo(int[123],text[Hello])]]]")
+        chk("rell.gtx.block(rell.gtx.tx(foo(123,'Hello').to_operation()))", "rell.gtx.block[rell.gtx.tx[op[foo(int[123],text[Hello])]]]")
         chk("rell.gtx.block([rell.gtx.tx(foo(123,'Hello'))])", "rell.gtx.block[rell.gtx.tx[op[foo(int[123],text[Hello])]]]")
-        chk("rell.gtx.block(foo(123,'Hello'))", "ct_err:expr_call_argtypes:block:operation")
+        chk("rell.gtx.block([rell.gtx.tx(foo(123,'Hello').to_operation())])", "rell.gtx.block[rell.gtx.tx[op[foo(int[123],text[Hello])]]]")
+        chk("rell.gtx.block(foo(123,'Hello'))", "ct_err:expr_call_argtypes:block:struct<foo>")
+        chk("rell.gtx.block(foo(123,'Hello').to_operation())", "ct_err:expr_call_argtypes:block:operation")
 
         chk("_type_of(rell.gtx.block())", "text[rell.gtx.block]")
         chkEx("{ val x: rell.gtx.block = rell.gtx.block(); return x; }", "rell.gtx.block[]")

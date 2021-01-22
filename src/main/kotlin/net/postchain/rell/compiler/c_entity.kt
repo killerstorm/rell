@@ -7,7 +7,6 @@ import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.*
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmSet
-import java.util.*
 
 class C_SysAttribute(
         val name: String,
@@ -18,15 +17,14 @@ class C_SysAttribute(
         val canSetInCreate: Boolean = true
 ) {
     fun compile(index: Int): R_Attribute {
-        val exprLate = C_LateInit(C_CompilerPass.EXPRESSIONS, Optional.ofNullable(expr))
+        val exprGetter = if (expr == null) null else C_LateInit(C_CompilerPass.EXPRESSIONS, expr).getter
         return R_Attribute(
                 index,
                 name,
                 type,
                 mutable,
-                hasExpr = expr != null,
                 canSetInCreate = canSetInCreate,
-                exprGetter = exprLate.getter,
+                exprGetter = exprGetter,
                 sqlMapping = sqlMapping
         )
     }
@@ -38,7 +36,7 @@ class C_AttributeDefinition(
         val explicitType: R_Type?,
         val implicitType: R_Type?,
         val exprPos: S_Pos?,
-        val exprGetter: C_LateGetter<Optional<R_Expr>>?
+        val exprGetter: C_LateGetter<R_Expr>?
 ) {
     fun compileType(nsCtx: C_NamespaceContext): R_Type {
         val type = explicitType ?: implicitType
@@ -83,8 +81,7 @@ class C_AttributeClause(private val defCtx: C_DefinitionContext) {
                 priDef.name.str,
                 rType,
                 priDef.mutablePos != null,
-                hasExpr = priDef.exprGetter != null,
-                exprGetter = priDef.exprGetter ?: C_LateInit(C_CompilerPass.EXPRESSIONS, Optional.empty<R_Expr>()).getter
+                exprGetter = priDef.exprGetter
         )
 
         return rAttr
@@ -172,20 +169,20 @@ class C_EntityContext(
         }
     }
 
-    private fun processAttrExpr(name: S_Name, expr: S_Expr?, type: R_Type?): C_LateGetter<Optional<R_Expr>>? {
+    private fun processAttrExpr(name: S_Name, expr: S_Expr?, type: R_Type?): C_LateGetter<R_Expr>? {
         if (expr == null) {
             return null
         }
 
         val exprType = type ?: R_CtErrorType
-        val late = C_LateInit(C_CompilerPass.EXPRESSIONS, Optional.empty<R_Expr>())
+        val late = C_LateInit(C_CompilerPass.EXPRESSIONS, C_Utils.errorRExpr(exprType))
 
         defCtx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
             val rExpr0 = expr.compile(defCtx.defExprCtx, C_TypeHint.ofType(exprType)).value().toRExpr()
             val adapter = C_Types.adaptSafe(msgCtx, exprType, rExpr0.type, name.pos, "attr_type:$name",
                     "Default value type mismatch for '$name'")
             val rExpr = adapter.adaptExpr(rExpr0)
-            late.set(Optional.of(rExpr))
+            late.set(rExpr)
         }
 
         return late.getter

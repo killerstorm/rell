@@ -56,12 +56,20 @@ sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT> {
     }
 
     private fun makeCase(params: List<C_ArgTypeMatcher>, body: C_FormalParamsFuncBody<CaseCtxT>): C_FuncCase<CaseCtxT> {
-        return C_FormalParamsFuncCase(params, body)
+        val matcher = C_ArgsTypesMatcher_Fixed(params)
+        return makeCase(matcher, body)
+    }
+
+    private fun makeCase(matcher: C_ArgsTypesMatcher, body: C_FormalParamsFuncBody<CaseCtxT>): C_FuncCase<CaseCtxT> {
+        return C_FormalParamsFuncCase(matcher, body)
     }
 
     private fun makeDeprecatedCase(case: C_FuncCase<CaseCtxT>, deprecated: C_Deprecated): C_FuncCase<CaseCtxT> {
         return C_DeprecatedFuncCase(case, deprecated)
     }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun self(): BuilderT = this as BuilderT
 
     fun addEx(
             name: String,
@@ -78,11 +86,20 @@ sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT> {
             rFn: R_SysFunction,
             dbFn: Db_SysFunction? = null,
             deprecated: C_Deprecated? = null
+    ): BuilderT = addEx(name, result, C_ArgsTypesMatcher_Fixed(params), rFn, dbFn, deprecated)
+
+    fun addEx(
+            name: String,
+            result: R_Type,
+            matcher: C_ArgsTypesMatcher,
+            rFn: R_SysFunction,
+            dbFn: Db_SysFunction? = null,
+            deprecated: C_Deprecated? = null
     ): BuilderT {
         val body = makeBody(result, rFn, dbFn)
-        val case = makeCase(params, body)
+        val case = makeCase(matcher, body)
         addCase(name, case, deprecated)
-        return this as BuilderT
+        return self()
     }
 
     fun add(
@@ -103,7 +120,7 @@ sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT> {
     ): BuilderT {
         val matchers = params.map { C_ArgTypeMatcher_Simple(it) }
         addEx(name, result, matchers, rFn, dbFn, deprecated)
-        return this as BuilderT
+        return self()
     }
 
     fun add(
@@ -115,18 +132,18 @@ sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT> {
         val matchers = params.map { C_ArgTypeMatcher_Simple(it) }
         val case = makeCase(matchers, body)
         addCase(name, case, deprecated)
-        return this as BuilderT
+        return self()
     }
 
     fun add(name: String, case: C_FuncCase<CaseCtxT>, deprecated: C_Deprecated? = null): BuilderT {
         addCase(name, case, deprecated)
-        return this as BuilderT
+        return self()
     }
 
     fun add(name: String, fn: FuncT): BuilderT {
         check(name !in fnMap) { "Duplicate function: '$name'" }
         fnMap[name] = fn
-        return this as BuilderT
+        return self()
     }
 
     fun addIf(
@@ -140,7 +157,7 @@ sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT> {
         if (c) {
             add(name, result, params, rFn, dbFn)
         }
-        return this as BuilderT
+        return self()
     }
 }
 

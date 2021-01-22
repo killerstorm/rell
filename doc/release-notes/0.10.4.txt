@@ -261,3 +261,33 @@ Details:
 
 - Attributes of struct<T> are not mutable regardless of the mutability of the attributes of the underlying type.
 - Attributes of struct<T> have same default values as the attributes of T.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+12. Language: Type struct<operation>
+
+A new type struct<operation> defines a struct which has same attributes as the operation's parameters:
+
+    operation add_user(name: text, rating: integer) {
+        //...
+    }
+
+    query can_add_user(user: struct<add_user>) {
+        if (user.name == '') return false;
+        if (user.rating < 0) return false;
+        return true;
+    }
+
+The type struct<operation> is the result type of Rell operation invocation expression:
+
+    val op: struct<add_user> = add_user('Bob', 123);
+
+the returned value can be used to construct blocks and transactions (in unit tests or REPL):
+
+    val tx = rell.gtx.tx(op);
+    tx.run();
+
+Details:
+
+- Attributes of struct<OP> are not mutable.
+- Attributes of struct<OP> have same default values as the parameters of OP.
+- Member function struct<OP>.to_operation() converts the structure to the "operation" type.

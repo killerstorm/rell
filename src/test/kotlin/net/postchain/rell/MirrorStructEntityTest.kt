@@ -5,7 +5,7 @@ import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.test.RellCodeTester
 import org.junit.Test
 
-class MirrorStructTest: BaseRellTest(false) {
+class MirrorStructEntityTest: BaseRellTest(false) {
     @Test fun testValidParameterKinds() {
         def("entity my_entity {}")
         def("object my_object {}")
@@ -18,7 +18,6 @@ class MirrorStructTest: BaseRellTest(false) {
         def("entity my_entity {}")
         def("struct my_struct {}")
         def("function my_function() {}")
-        def("operation my_operation() {}")
         def("query my_query() = 0;")
         def("enum my_enum { red, green, blue }")
 
@@ -27,7 +26,6 @@ class MirrorStructTest: BaseRellTest(false) {
 
         chkType("struct<my_struct>", "ct_err:type:struct:bad_type:my_struct")
         chkType("struct<my_function>", "ct_err:unknown_type:my_function")
-        chkType("struct<my_operation>", "ct_err:unknown_type:my_operation")
         chkType("struct<my_query>", "ct_err:unknown_type:my_query")
         chkType("struct<my_enum>", "ct_err:type:struct:bad_type:my_enum")
         chkType("struct<my_entity?>", "ct_err:type:struct:bad_type:my_entity?")

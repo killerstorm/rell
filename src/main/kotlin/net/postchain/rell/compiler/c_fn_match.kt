@@ -9,6 +9,28 @@ import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_String
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
+import net.postchain.rell.utils.toImmList
+
+abstract class C_ArgsTypesMatcher {
+    abstract fun getTypeHint(index: Int): C_TypeHint
+    abstract fun match(types: List<R_Type>): C_ArgsTypesMatch?
+}
+
+class C_ArgsTypesMatcher_Fixed(matchers: List<C_ArgTypeMatcher>): C_ArgsTypesMatcher() {
+    private val matchers = matchers.toImmList()
+    override fun getTypeHint(index: Int) = if (index >= matchers.size) C_TypeHint.NONE else matchers[index].getTypeHint()
+    override fun match(types: List<R_Type>) = C_ArgsTypesMatch.match(matchers, types)
+}
+
+class C_ArgsTypesMatcher_OneMany(val matcher: C_ArgTypeMatcher): C_ArgsTypesMatcher() {
+    override fun getTypeHint(index: Int) = matcher.getTypeHint()
+
+    override fun match(types: List<R_Type>): C_ArgsTypesMatch? {
+        if (types.isEmpty()) return null
+        val matches = types.mapNotNull { matcher.match(it) }
+        return if (matches.size != types.size) null else C_ArgsTypesMatch(matches)
+    }
+}
 
 sealed class C_ArgTypeMatcher {
     abstract fun getTypeHint(): C_TypeHint
@@ -54,6 +76,36 @@ class C_ArgTypeMatcher_MapSub(private val keyValueTypes: R_MapKeyValueTypes): C_
     }
 }
 
+class C_ArgTypeMatcher_List(val elementMatcher: C_ArgTypeMatcher): C_ArgTypeMatcher() {
+    override fun getTypeHint() = C_TypeHint.NONE
+
+    override fun match(type: R_Type): C_ArgTypeMatch? {
+        if (type !is R_ListType) return null
+        val match = elementMatcher.match(type.elementType)
+        return if (match == C_ArgTypeMatch_Direct) match else null
+    }
+}
+
+object C_ArgTypeMatcher_MirrorStructOperation: C_ArgTypeMatcher() {
+    override fun getTypeHint() = C_TypeHint.NONE
+
+    override fun match(type: R_Type): C_ArgTypeMatch? {
+        val direct = type is R_StructType && type.struct.operation != null
+        return if (direct) C_ArgTypeMatch_Direct else null
+    }
+}
+
+object C_ArgTypeMatcher_ListOfMirrorStructOperations: C_ArgTypeMatcher() {
+    override fun getTypeHint() = C_TypeHint.NONE
+
+    override fun match(type: R_Type): C_ArgTypeMatch? {
+        if (type !is R_ListType) return null
+        val elemType = type.elementType
+        val direct = elemType is R_StructType && elemType.struct.operation != null
+        return if (direct) C_ArgTypeMatch_Direct else null
+    }
+}
+
 sealed class C_ArgTypeMatch {
     abstract fun effectiveArg(arg: V_Expr): V_Expr
 }
@@ -66,7 +118,7 @@ object C_ArgTypeMatch_IntegerToDecimal: C_ArgTypeMatch() {
     override fun effectiveArg(arg: V_Expr) = C_Utils.integerToDecimalPromotion(arg)
 }
 
-class C_ArgTypesMatch(private val match: List<C_ArgTypeMatch>) {
+class C_ArgsTypesMatch(private val match: List<C_ArgTypeMatch>) {
     val size = match.size
 
     fun effectiveArgs(args: List<V_Expr>): List<V_Expr> {
@@ -75,7 +127,7 @@ class C_ArgTypesMatch(private val match: List<C_ArgTypeMatch>) {
     }
 
     companion object {
-        fun match(params: List<C_ArgTypeMatcher>, args: List<R_Type>): C_ArgTypesMatch? {
+        fun match(params: List<C_ArgTypeMatcher>, args: List<R_Type>): C_ArgsTypesMatch? {
             if (args.size != params.size) {
                 return null
             }
@@ -91,7 +143,7 @@ class C_ArgTypesMatch(private val match: List<C_ArgTypeMatch>) {
                 res.add(match)
             }
 
-            return C_ArgTypesMatch(res)
+            return C_ArgsTypesMatch(res)
         }
     }
 }
@@ -222,17 +274,15 @@ abstract class C_BasicGlobalFuncCaseMatch(resType: R_Type, private val args: Lis
 }
 
 class C_FormalParamsFuncCase<CtxT: C_FuncCaseCtx>(
-        private val params: List<C_ArgTypeMatcher>,
+        private val matcher: C_ArgsTypesMatcher,
         private val body: C_FormalParamsFuncBody<CtxT>
 ): C_FuncCase<CtxT>() {
-    override fun getParamTypeHint(index: Int) = if (index >= params.size) C_TypeHint.NONE else params[index].getTypeHint()
+    override fun getParamTypeHint(index: Int) = matcher.getTypeHint(index)
 
     override fun match(args: List<V_Expr>): C_FuncCaseMatch<CtxT>? {
         val argTypes = args.map { it.type() }
-        val paramsMatch = C_ArgTypesMatch.match(params, argTypes)
-        if (paramsMatch == null) {
-            return null
-        }
+        val paramsMatch = matcher.match(argTypes)
+        paramsMatch ?: return null
         return C_FormalParamsFuncCaseMatch(body, args, paramsMatch)
     }
 }
@@ -240,7 +290,7 @@ class C_FormalParamsFuncCase<CtxT: C_FuncCaseCtx>(
 class C_FormalParamsFuncCaseMatch<CtxT: C_FuncCaseCtx>(
         private val body: C_FormalParamsFuncBody<CtxT>,
         private val args: List<V_Expr>,
-        private val paramsMatch: C_ArgTypesMatch = C_ArgTypesMatch(args.map { C_ArgTypeMatch_Direct })
+        private val paramsMatch: C_ArgsTypesMatch = C_ArgsTypesMatch(args.map { C_ArgTypeMatch_Direct })
 ): C_FuncCaseMatch<CtxT>(body.resType) {
     init {
         check(paramsMatch.size == args.size)

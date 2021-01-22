@@ -640,9 +640,18 @@ object R_SysFn_General {
         }
     }
 
-    class Entity_ToStruct(): R_SysFunction_1() {
+    object Struct_ToOperation: R_SysFunction_1() {
         override fun call(arg: Rt_Value): Rt_Value {
-            TODO("Not yet implemented")
+            val v = arg.asStruct()
+
+            val structType = v.type()
+            val op = Rt_Utils.checkNotNull(structType.struct.operation) {
+                // Must not happen, checking for extra safety.
+                "to_operation:bad_type:${v.type()}" to "Wrong struct type: ${v.type()}"
+            }
+
+            val values = structType.struct.attributesList.map { v.get(it.index) }
+            return Rt_OperationValue(op, values)
         }
     }
 }
@@ -794,26 +803,39 @@ object R_SysFn_Rell {
 
 object R_SysFn_Gtx {
     object Tx {
-        object NewEmpty: R_SysFunctionEx_0() {
+        object New_Empty: R_SysFunctionEx_0() {
             override fun call(ctx: Rt_CallContext): Rt_Value {
                 val blockchainRid = ctx.globalCtx.chainCtx.blockchainRid
                 return Rt_GtxTxValue(blockchainRid, listOf(), listOf(), listOf())
             }
         }
 
-        object NewOneOp: R_SysFunctionEx_1() {
-            override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
-                val blockchainRid = ctx.globalCtx.chainCtx.blockchainRid
-                val ops = listOf(arg.asOperation())
-                return Rt_GtxTxValue(blockchainRid, ops, listOf(), listOf())
+        object New_Ops: R_SysFunction() {
+            override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
+                val ops = args.map { it.asOperation() }
+                return newTx(ctx, ops)
             }
         }
 
-        object NewListOfOps: R_SysFunctionEx_1() {
+        object New_Structs: R_SysFunction() {
+            override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
+                val ops = args.map { R_SysFn_General.Struct_ToOperation.call(it).asOperation() }
+                return newTx(ctx, ops)
+            }
+        }
+
+        object New_ListOfOps: R_SysFunctionEx_1() {
             override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
-                val blockchainRid = ctx.globalCtx.chainCtx.blockchainRid
                 val ops = arg.asList().map { it.asOperation() }
-                return Rt_GtxTxValue(blockchainRid, ops, listOf(), listOf())
+                return newTx(ctx, ops)
+            }
+        }
+
+        object New_ListOfStructs: R_SysFunctionEx_1() {
+            override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
+                val list = arg.asList()
+                val ops = list.map { R_SysFn_General.Struct_ToOperation.call(it).asOperation() }
+                return newTx(ctx, ops)
             }
         }
 
@@ -823,6 +845,11 @@ object R_SysFn_Gtx {
                 val block = Rt_GtxBlockValue(listOf(tx))
                 return Block.Run.call(ctx, block)
             }
+        }
+
+        private fun newTx(ctx: Rt_CallContext, ops: List<Rt_OperationValue>): Rt_Value {
+            val blockchainRid = ctx.globalCtx.chainCtx.blockchainRid
+            return Rt_GtxTxValue(blockchainRid, ops, listOf(), listOf())
         }
     }
 

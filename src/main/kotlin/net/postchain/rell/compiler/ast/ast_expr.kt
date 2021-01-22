@@ -725,7 +725,7 @@ class S_TypeExpr(val type: S_Type): S_Expr(type.pos) {
 
 class S_MirrorStructExpr(pos: S_Pos, val type: S_Type): S_Expr(pos) {
     override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
-        val structType = type.compileStructOfDefinitionType(ctx.nsCtx)
+        val structType = type.compileMirrorStructType(ctx.nsCtx)
         structType ?: return C_Utils.errorExpr(startPos)
         val ns = C_LibFunctions.makeStructNamespace(structType.struct)
         return C_MirrorStructExpr(startPos, structType.struct, ns)
