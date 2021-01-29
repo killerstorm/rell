@@ -493,7 +493,7 @@ class S_StructDefinition(
         modifiers.compile(ctx, modTarget)
 
         val names = ctx.nsCtx.defNames(name.str)
-        val rStruct = R_Struct(names.appLevelName, names.appLevelName.toGtv(), operation = null)
+        val rStruct = R_Struct(names.appLevelName, names.appLevelName.toGtv(), mirrorStructs = null)
         val rStructDef = R_StructDefinition(names, rStruct)
         ctx.appCtx.defsAdder.addStruct(rStruct)
         ctx.nsBuilder.addStruct(name, rStructDef)
@@ -575,8 +575,8 @@ class S_OperationDefinition(
         val mountName = ctx.mountName(modTarget, name)
 
         val defCtx = C_DefinitionContext(ctx, C_DefinitionType.OPERATION)
-        val rStruct = C_Utils.createMirrorStruct(ctx.appCtx, names, defCtx.definitionType, operation = mountName)
-        val rOperation = R_OperationDefinition(names, mountName, rStruct)
+        val mirrorStructs = C_Utils.createMirrorStructs(ctx.appCtx, names, defCtx.definitionType, operation = mountName)
+        val rOperation = R_OperationDefinition(names, mountName, mirrorStructs)
         val cOperation = C_OperationGlobalFunction(rOperation)
 
         ctx.appCtx.defsAdder.addOperation(rOperation)
@@ -584,7 +584,7 @@ class S_OperationDefinition(
         ctx.mntBuilder.addOperation(name, rOperation)
 
         ctx.executor.onPass(C_CompilerPass.MEMBERS) {
-            val header = compileHeader(defCtx, cOperation, rStruct)
+            val header = compileHeader(defCtx, cOperation, mirrorStructs)
             ctx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
                 compileBody(defCtx, rOperation, header)
             }
@@ -594,21 +594,23 @@ class S_OperationDefinition(
     private fun compileHeader(
             defCtx: C_DefinitionContext,
             cOperation: C_OperationGlobalFunction,
-            mirrorStruct: R_Struct
+            mirrorStructs: R_MirrorStructs
     ): C_OperationFunctionHeader {
         val forParams = C_FormalParameters.compile(defCtx, params, true)
         val header = C_OperationFunctionHeader(forParams)
         cOperation.setHeader(header)
-        compileMirrorStructAttrs(mirrorStruct, forParams)
+        compileMirrorStructAttrs(mirrorStructs, forParams, false)
+        compileMirrorStructAttrs(mirrorStructs, forParams, true)
         return header
     }
 
-    private fun compileMirrorStructAttrs(mirrorStruct: R_Struct, forParams: C_FormalParameters) {
+    private fun compileMirrorStructAttrs(mirrorStructs: R_MirrorStructs, forParams: C_FormalParameters, mutable: Boolean) {
+        val struct = mirrorStructs.getStruct(mutable)
         val attrs = forParams.list
-                .mapIndexed { i, param -> param.createMirrorAttr(i) }
+                .mapIndexed { i, param -> param.createMirrorAttr(i, mutable) }
                 .map { it.name to it }
                 .toMap().toImmMap()
-        mirrorStruct.setAttributes(attrs)
+        struct.setAttributes(attrs)
     }
 
     private fun compileBody(defCtx: C_DefinitionContext, rOperation: R_OperationDefinition, header: C_OperationFunctionHeader) {

@@ -126,7 +126,7 @@ class C_OperationGlobalFunction(val rOp: R_OperationDefinition): C_GlobalFunctio
         val cEffArgs = C_FunctionUtils.checkArgs(ctx, name, header.params, cArgs)
 
         val vExpr = if (cEffArgs == null) {
-            C_Utils.errorVExpr(name.pos, rOp.mirrorStruct.type)
+            C_Utils.errorVExpr(name.pos, rOp.mirrorStructs.immutable.type)
         } else {
             val rArgs = cEffArgs.map { it.toRExpr() }
             V_RExpr(name.pos, R_OperationExpr(rOp, rArgs))

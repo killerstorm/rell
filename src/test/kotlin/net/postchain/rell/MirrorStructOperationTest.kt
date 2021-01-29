@@ -55,16 +55,25 @@ class MirrorStructOperationTest: BaseRellTest(false) {
 
     @Test fun testInstanceMemberFunctions() {
         def("operation new_user(name, rating: integer) {}")
-        val expr = "struct<new_user>('Bob',123)"
+        chkInstanceMemberFunctions("struct<new_user>")
+        chkInstanceMemberFunctions("struct<mutable new_user>")
+    }
+
+    private fun chkInstanceMemberFunctions(type: String) {
+        val expr = "$type('Bob',123)"
         chk("$expr.to_gtv()", """gtv[["Bob",123]]""")
         chk("$expr.to_gtv_pretty()", """gtv[{"name":"Bob","rating":123}]""")
         chk("$expr.to_bytes()", "byte_array[a50e300ca2050c03426f62a30302017b]")
-        chk("$expr.bad_name()", "ct_err:unknown_member:[struct<new_user>]:bad_name")
+        chk("$expr.bad_name()", "ct_err:unknown_member:[$type]:bad_name")
     }
 
     @Test fun testStaticMemberFunctions() {
         def("operation new_user(name, rating: integer) {}")
-        val type = "struct<new_user>"
+        chkStaticMemberFunctions("struct<new_user>")
+        chkStaticMemberFunctions("struct<mutable new_user>")
+    }
+
+    private fun chkStaticMemberFunctions(type: String) {
         chk("""$type.from_gtv(gtv.from_json('["Bob",123]'))""", "$type[name=text[Bob],rating=int[123]]")
         chk("""$type.from_gtv_pretty(gtv.from_json('{"name":"Bob","rating":123}'))""", "$type[name=text[Bob],rating=int[123]]")
         chk("$type.from_bytes(x'a50e300ca2050c03426f62a30302017b')", "$type[name=text[Bob],rating=int[123]]")
@@ -84,5 +93,36 @@ class MirrorStructOperationTest: BaseRellTest(false) {
     @Test fun testToOperation() {
         def("operation new_user(name, rating: integer) {}")
         chk("struct<new_user>('Bob',123).to_operation()", "op[new_user(text[Bob],int[123])]")
+    }
+
+    @Test fun testMutableBasic() {
+        def("operation new_user(name = 'Bob', rating: integer = 123) {}")
+
+        chk("_type_of(struct<new_user>())", "text[struct<new_user>]")
+        chk("_type_of(struct<mutable new_user>())", "text[struct<mutable new_user>]")
+
+        chk("struct<mutable new_user>()", "struct<mutable new_user>[name=text[Bob],rating=int[123]]")
+        chk("struct<mutable new_user>('Alice',456)", "struct<mutable new_user>[name=text[Alice],rating=int[456]]")
+
+        chkEx("{ val s = struct<mutable new_user>(); return s; }", "struct<mutable new_user>[name=text[Bob],rating=int[123]]")
+        chkEx("{ val s = struct<mutable new_user>(); s.name = 'Alice'; return s; }",
+                "struct<mutable new_user>[name=text[Alice],rating=int[123]]")
+        chkEx("{ val s = struct<mutable new_user>(); s.rating = 456; return s; }",
+                "struct<mutable new_user>[name=text[Bob],rating=int[456]]")
+    }
+
+    @Test fun testMutableToStruct() {
+        def("operation new_user(name = 'Bob', rating: integer = 123) {}")
+
+        val expr = "new_user()"
+        val op = "new_user"
+
+        chk("_type_of($expr)", "text[struct<$op>]")
+        chk("_type_of($expr.to_immutable())", "ct_err:unknown_member:[struct<new_user>]:to_immutable")
+        chk("_type_of($expr.to_mutable())", "text[struct<mutable $op>]")
+
+        chk("$expr.to_mutable()", "struct<mutable $op>[name=text[Bob],rating=int[123]]")
+        chk("$expr.to_mutable().to_immutable()", "struct<$op>[name=text[Bob],rating=int[123]]")
+        chk("$expr.to_immutable()", "ct_err:unknown_member:[struct<new_user>]:to_immutable")
     }
 }

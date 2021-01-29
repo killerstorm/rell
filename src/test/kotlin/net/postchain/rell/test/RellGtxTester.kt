@@ -17,11 +17,11 @@ import net.postchain.gtv.GtvString
 import net.postchain.gtx.ExtOpData
 import net.postchain.gtx.GTXModule
 import net.postchain.gtx.GTXSchemaManager
-import net.postchain.rell.utils.PostchainUtils
 import net.postchain.rell.model.R_App
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.module.RellPostchainModuleFactory
 import net.postchain.rell.sql.SqlExecutor
+import net.postchain.rell.utils.PostchainUtils
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.fail
@@ -60,6 +60,10 @@ class RellGtxTester(
 
     fun moduleArgs(vararg args: Pair<String, String>) {
         moduleArgs = args.toMap()
+    }
+
+    override fun chkEx(code: String, expected: String) {
+        chkQueryEx("query q() $code", "", expected)
     }
 
     fun chkQueryEx(code: String, args: String, expected: String) {

@@ -347,7 +347,7 @@ class UserFunctionTest: BaseRellTest(false) {
 
     private fun chkFnEx(fnCode: String, queryCode: String, expected: String) {
         val code = "$fnCode query q() $queryCode"
-        tst.chkQueryEx(code, "q", listOf(), expected)
+        tst.chkFull(code, "q", listOf(), expected)
     }
 
     private fun chkFnOp(fnCode: String, callCode: String, expected: String = "OK") {

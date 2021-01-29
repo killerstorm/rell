@@ -468,6 +468,47 @@ object R_SysFn_Struct {
             }
         }
     }
+
+    object ToOperation: R_SysFunction_1() {
+        override fun call(arg: Rt_Value): Rt_Value {
+            val v = arg.asStruct()
+
+            val structType = v.type()
+            val op = Rt_Utils.checkNotNull(structType.struct.mirrorStructs?.operation) {
+                // Must not happen, checking for extra safety.
+                "to_operation:bad_type:${v.type()}" to "Wrong struct type: ${v.type()}"
+            }
+
+            val values = structType.struct.attributesList.map { v.get(it.index) }
+            return Rt_OperationValue(op, values)
+        }
+    }
+
+    object ToImmutable: R_SysFunction_1() {
+        override fun call(arg: Rt_Value) = toMutableOrImmutable(arg, false, "to_immutable")
+    }
+
+    object ToMutable: R_SysFunction_1() {
+        override fun call(arg: Rt_Value) = toMutableOrImmutable(arg, true, "to_mutable")
+    }
+
+    private fun toMutableOrImmutable(arg: Rt_Value, returnMutable: Boolean, name: String): Rt_Value {
+        val v = arg.asStruct()
+
+        val structType = v.type()
+        val mirrorStructs = Rt_Utils.checkNotNull(structType.struct.mirrorStructs) {
+            // Must not happen, checking for extra safety.
+            "$name:bad_type:${v.type()}" to "Wrong struct type: ${v.type()}"
+        }
+
+        val resultType = mirrorStructs.getStruct(returnMutable).type
+        if (structType == resultType) {
+            return arg
+        }
+
+        val values = structType.struct.attributesList.map { v.get(it.index) }.toMutableList()
+        return Rt_StructValue(resultType, values)
+    }
 }
 
 object R_SysFn_Enum {
@@ -639,21 +680,6 @@ object R_SysFn_General {
             return if (str.isEmpty()) posStr else "$posStr $str"
         }
     }
-
-    object Struct_ToOperation: R_SysFunction_1() {
-        override fun call(arg: Rt_Value): Rt_Value {
-            val v = arg.asStruct()
-
-            val structType = v.type()
-            val op = Rt_Utils.checkNotNull(structType.struct.operation) {
-                // Must not happen, checking for extra safety.
-                "to_operation:bad_type:${v.type()}" to "Wrong struct type: ${v.type()}"
-            }
-
-            val values = structType.struct.attributesList.map { v.get(it.index) }
-            return Rt_OperationValue(op, values)
-        }
-    }
 }
 
 object R_SysFn_Math {
@@ -819,7 +845,7 @@ object R_SysFn_Gtx {
 
         object New_Structs: R_SysFunction() {
             override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
-                val ops = args.map { R_SysFn_General.Struct_ToOperation.call(it).asOperation() }
+                val ops = args.map { R_SysFn_Struct.ToOperation.call(it).asOperation() }
                 return newTx(ctx, ops)
             }
         }
@@ -834,7 +860,7 @@ object R_SysFn_Gtx {
         object New_ListOfStructs: R_SysFunctionEx_1() {
             override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
                 val list = arg.asList()
-                val ops = list.map { R_SysFn_General.Struct_ToOperation.call(it).asOperation() }
+                val ops = list.map { R_SysFn_Struct.ToOperation.call(it).asOperation() }
                 return newTx(ctx, ops)
             }
         }

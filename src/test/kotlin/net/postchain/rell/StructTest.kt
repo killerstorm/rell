@@ -418,6 +418,6 @@ class StructTest: BaseRellTest(false) {
             }
         """.trimIndent()
 
-        chkQueryEx(code, "list<integer>[int[123],int[456],int[789]]")
+        chkFull(code, "list<integer>[int[123],int[456],int[789]]")
     }
 }

@@ -590,8 +590,8 @@ class NullableTest: BaseRellTest(false) {
     }
 
     private fun tstOperErr(type: String, op: String) {
-        chkQueryEx("query q(x: $type?, y: $type) = x $op y;", "ct_err:binop_operand_type:$op:[$type?]:[$type]")
-        chkQueryEx("query q(x: $type?, y: $type) = y $op x;", "ct_err:binop_operand_type:$op:[$type]:[$type?]")
+        chkFull("query q(x: $type?, y: $type) = x $op y;", "ct_err:binop_operand_type:$op:[$type?]:[$type]")
+        chkFull("query q(x: $type?, y: $type) = y $op x;", "ct_err:binop_operand_type:$op:[$type]:[$type?]")
     }
 
     @Test fun testSpecOpElvis() {

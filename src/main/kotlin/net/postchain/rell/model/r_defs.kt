@@ -43,7 +43,7 @@ class R_EntityDefinition(
         val flags: R_EntityFlags,
         val sqlMapping: R_EntitySqlMapping,
         val external: R_ExternalEntity?,
-        val mirrorStruct: R_Struct
+        val mirrorStructs: R_MirrorStructs
 ): R_Definition(names) {
     val metaName = mountName.str()
 
@@ -101,7 +101,7 @@ class R_ObjectDefinition(names: R_DefinitionNames, val rEntity: R_EntityDefiniti
 
 class R_StructFlags(val typeFlags: R_TypeFlags, val cyclic: Boolean, val infinite: Boolean)
 
-class R_Struct(val name: String, val typeMetaGtv: Gtv, val operation: R_MountName?) {
+class R_Struct(val name: String, val typeMetaGtv: Gtv, val mirrorStructs: R_MirrorStructs?) {
     private val bodyLate = C_LateInit(C_CompilerPass.MEMBERS, DEFAULT_BODY)
     private val flagsLate = C_LateInit(C_CompilerPass.APPDEFS, DEFAULT_STRUCT_FLAGS)
 
@@ -143,6 +143,25 @@ class R_Struct(val name: String, val typeMetaGtv: Gtv, val operation: R_MountNam
         private val DEFAULT_BODY = R_StructBody(attrMap = mapOf(), attrList = listOf(), attrMutable = false)
         private val DEFAULT_TYPE_FLAGS = R_TypeFlags(mutable = false, gtv = R_GtvCompatibility(true, true), virtualable = true)
         private val DEFAULT_STRUCT_FLAGS = R_StructFlags(typeFlags = DEFAULT_TYPE_FLAGS, cyclic = false, infinite = false)
+    }
+}
+
+class R_MirrorStructs(names: R_DefinitionNames, defType: String, val operation: R_MountName?) {
+    val immutable = createStruct(names, defType, false)
+    val mutable = createStruct(names, defType, true)
+
+    fun getStruct(mutable: Boolean) = if (mutable) this.mutable else this.immutable
+
+    private fun createStruct(names: R_DefinitionNames, defType: String, mutable: Boolean): R_Struct {
+        val mutableStr = if (mutable) "mutable " else ""
+        val structName = "struct<$mutableStr${names.appLevelName}>"
+        val structMetaGtv = mapOf(
+                "type" to "struct".toGtv(),
+                "definition_type" to defType.toGtv(),
+                "definition" to names.appLevelName.toGtv(),
+                "mutable" to mutable.toGtv()
+        ).toGtv()
+        return R_Struct(structName, structMetaGtv, mirrorStructs = this)
     }
 }
 

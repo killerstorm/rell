@@ -16,7 +16,7 @@ class ModuleTest: BaseRellTest(false) {
             struct bar { x: foo; }
             query q() = f(foo(123));
         """
-        chkQueryEx(code, "bar[x=foo[p=int[123]]]")
+        chkFull(code, "bar[x=foo[p=int[123]]]")
     }
 
     @Test fun testForwardTypeReferenceOperation() {
@@ -208,11 +208,11 @@ class ModuleTest: BaseRellTest(false) {
 
     @Test fun testImportNotAtTop() {
         file("lib/a.rell", "module; function f(): integer = 123;")
-        chkQueryEx("query q() = a.f(); import lib.a;", "int[123]")
-        chkQueryEx("function g(): integer = a.f(); import lib.a; query q() = g();", "int[123]")
-        chkQueryEx("namespace foo { function g(): integer = a.f(); import lib.a; } query q() = foo.g();", "int[123]")
-        chkQueryEx("namespace foo { function g(): integer = a.f(); } import lib.a; query q() = foo.g();", "int[123]")
-        chkQueryEx("namespace foo { function g(): integer = a.f(); } query q() = foo.g(); import lib.a;", "int[123]")
+        chkFull("query q() = a.f(); import lib.a;", "int[123]")
+        chkFull("function g(): integer = a.f(); import lib.a; query q() = g();", "int[123]")
+        chkFull("namespace foo { function g(): integer = a.f(); import lib.a; } query q() = foo.g();", "int[123]")
+        chkFull("namespace foo { function g(): integer = a.f(); } import lib.a; query q() = foo.g();", "int[123]")
+        chkFull("namespace foo { function g(): integer = a.f(); } query q() = foo.g(); import lib.a;", "int[123]")
     }
 
     @Test fun testImportSameModuleMultipleTimes() {
@@ -289,17 +289,17 @@ class ModuleTest: BaseRellTest(false) {
         t.file("a/y/module.rell", "function f(): text = 'a.y';")
         t.file("a/b/z/module.rell", "function f(): text = 'a.b.z';")
         t.def("import a.b.c;")
-        t.chkQuery("c.g()", exp)
+        t.chk("c.g()", exp)
     }
 
     @Test fun testImportSelf() {
         file("lib/a.rell", "module; import self: .; function f(): integer = 123; function g(): integer = self.f() * 2;")
         file("lib/b.rell", "module; import lib.a; function p(): integer = a.g() * 3;")
         file("lib/c.rell", "module; import lib.a; import self: .; function q(): integer = self.a.g() * 4;")
-        chkQueryEx("import lib.a; query q() = a.f();", "int[123]")
-        chkQueryEx("import lib.a; query q() = a.g();", "int[246]")
-        chkQueryEx("import lib.b; query q() = b.p();", "int[738]")
-        chkQueryEx("import lib.c; query q() = c.q();", "int[984]")
+        chkFull("import lib.a; query q() = a.f();", "int[123]")
+        chkFull("import lib.a; query q() = a.g();", "int[246]")
+        chkFull("import lib.b; query q() = b.p();", "int[738]")
+        chkFull("import lib.c; query q() = c.q();", "int[984]")
     }
 
     @Test fun testCannotAccessImporterDefs() {
@@ -367,7 +367,7 @@ class ModuleTest: BaseRellTest(false) {
         chkCompile("include 'sub/foo'; function g(): integer = f();", "ct_err:[include][unknown_name:f]")
         chkCompile("include 'sub/foo.rell';", "ct_err:include")
         chkCompile("include 'sub/bar';", "ct_err:include")
-        chkQueryEx("import sub; query q() = sub.f();", "int[123]")
+        chkFull("import sub; query q() = sub.f();", "int[123]")
     }
 
     @Test fun testSyntaxErrorBugs() {
@@ -378,18 +378,18 @@ class ModuleTest: BaseRellTest(false) {
     }
 
     private fun chkSystemDefsNotVisibleFromOutside() {
-        chkQueryEx("import a; query q(): a.rec = a.rec();", "a:rec[x=int[123]]")
-        chkQueryEx("import a; query q(): a.integer = 123;", "ct_err:unknown_type:a.integer")
-        chkQueryEx("import a; query q(): a.boolean = false;", "ct_err:unknown_type:a.boolean")
-        chkQueryEx("import a; query q(): a.text = 'Abc';", "ct_err:unknown_type:a.text")
-        chkQueryEx("import a; query q(): a.byte_array = x'1234';", "ct_err:unknown_type:a.byte_array")
-        chkQueryEx("import a; query q() = a.abs(-123);", "ct_err:unknown_name:a.abs")
-        chkQueryEx("import a; query q() = abs(-123);", "int[123]")
-        chkQueryEx("import a; query q() = a.integer.MIN_VALUE;", "ct_err:unknown_name:a.integer")
-        chkQueryEx("import a; query q() = integer.MIN_VALUE;", "int[-9223372036854775808]")
+        chkFull("import a; query q(): a.rec = a.rec();", "a:rec[x=int[123]]")
+        chkFull("import a; query q(): a.integer = 123;", "ct_err:unknown_type:a.integer")
+        chkFull("import a; query q(): a.boolean = false;", "ct_err:unknown_type:a.boolean")
+        chkFull("import a; query q(): a.text = 'Abc';", "ct_err:unknown_type:a.text")
+        chkFull("import a; query q(): a.byte_array = x'1234';", "ct_err:unknown_type:a.byte_array")
+        chkFull("import a; query q() = a.abs(-123);", "ct_err:unknown_name:a.abs")
+        chkFull("import a; query q() = abs(-123);", "int[123]")
+        chkFull("import a; query q() = a.integer.MIN_VALUE;", "ct_err:unknown_name:a.integer")
+        chkFull("import a; query q() = integer.MIN_VALUE;", "int[-9223372036854775808]")
     }
 
     private fun chkImp(imp: String, code: String, exp: String) {
-        chkQueryEx("$imp query q() = $code;", exp)
+        chkFull("$imp query q() = $code;", exp)
     }
 }

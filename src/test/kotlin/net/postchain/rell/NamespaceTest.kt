@@ -231,9 +231,9 @@ class NamespaceTest: BaseRellTest() {
     }
 
     @Test fun testAnonymousNamespace() {
-        chkQueryEx("namespace { query q() = 123; }", "int[123]")
-        chkQueryEx("namespace { function f(): integer = 123; } query q() = f();", "int[123]")
-        chkQueryEx("namespace { function f(): integer = g(); } query q() = f(); namespace { function g(): integer = 123; }", "int[123]")
+        chkFull("namespace { query q() = 123; }", "int[123]")
+        chkFull("namespace { function f(): integer = 123; } query q() = f();", "int[123]")
+        chkFull("namespace { function f(): integer = g(); } query q() = f(); namespace { function g(): integer = 123; }", "int[123]")
         chkCompile("namespace { function f(): integer = 123; } namespace ns { function f(): integer = 456; }", "OK")
 
         chkCompile("namespace { function f(): integer = 123; } namespace { function f(): integer = 456; }", """ct_err:

@@ -601,16 +601,16 @@ class SqlInitTest: BaseContextTest(useSql = true) {
             t.def("entity user { name; company; }")
             t.insert("c0.company", "name", "100,'Apple'")
             t.insert("c0.user", "name,company", "200,'Steve',100")
-            t.chkQuery("company @*{} ( .name )", "list<text>[text[Apple]]")
-            t.chkQuery("user @*{} ( .name )", "list<text>[text[Steve]]")
+            t.chk("company @*{} ( .name )", "list<text>[text[Apple]]")
+            t.chk("user @*{} ( .name )", "list<text>[text[Steve]]")
         }
 
         RellTestContext().use { ctx ->
             val t = RellCodeTester(ctx)
             t.def("entity company { name; boss: user; }")
             t.def("entity user { name; }")
-            t.chkQuery("company @*{} ( .name )", "list<text>[]")
-            t.chkQuery("user @*{} ( .name )", "list<text>[]")
+            t.chk("company @*{} ( .name )", "list<text>[]")
+            t.chk("user @*{} ( .name )", "list<text>[]")
         }
     }
 
@@ -764,7 +764,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
 
     private fun chk(expr: String, expected: String) {
         val t = createChkTester()
-        t.chkQuery(expr, expected)
+        t.chk(expr, expected)
     }
 
     private fun chkOp(code: String, expected: String) {

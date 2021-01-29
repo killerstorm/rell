@@ -99,17 +99,32 @@ class RellCodeTester(
 
     fun chainDependencies() = chainDependencies.mapValues { (_, v) -> Pair(v.rid, v.height) }.toImmMap()
 
-    fun chkQuery(bodyCode: String, expected: String) {
-        val queryCode = "query q() = $bodyCode;"
-        chkQueryEx(queryCode, "q", listOf(), expected)
+    override fun chkEx(code: String, expected: String) {
+        val queryCode = "query q() $code"
+        chkFull(queryCode, "q", listOf(), expected)
     }
 
-    fun chkQueryEx(bodyCode: String, expected: String) {
-        val queryCode = "query q() $bodyCode"
-        chkQueryEx(queryCode, "q", listOf(), expected)
+    fun chkEx(code: String, args: List<Any>, expected: String) {
+        val args2 = args.map { v ->
+            when (v) {
+                is Boolean -> "boolean" to Rt_BooleanValue(v)
+                is Long -> "integer" to Rt_IntValue(v)
+                else -> throw IllegalArgumentException(v.javaClass.name)
+            }
+        }
+
+        val params = args2.mapIndexed { i, v ->
+            val argName = ('a' + i).toString()
+            "$argName: ${v.first}"
+        }.joinToString(", ")
+
+        chkFull("query q($params) $code", args2.map { it.second }, expected)
     }
 
-    fun chkQueryEx(code: String, name: String, args: List<Rt_Value>, expected: String) {
+    fun chkFull(code: String, expected: String) = chkFull(code, listOf(), expected)
+    fun chkFull(code: String, args: List<Rt_Value>, expected: String) = chkFull(code, "q", args, expected)
+
+    fun chkFull(code: String, name: String, args: List<Rt_Value>, expected: String) {
         val actual = callQuery(code, name, args)
         checkResult(expected, actual)
     }
@@ -149,7 +164,9 @@ class RellCodeTester(
         checkResult(expected, actual)
     }
 
-    fun chkFnEx(code: String, expected: String) {
+    fun chkFn(code: String, expected: String) = chkFnFull("function f() $code", expected)
+
+    fun chkFnFull(code: String, expected: String) {
         val actual = callFn(code)
         checkResult(expected, actual)
     }

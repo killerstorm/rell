@@ -72,21 +72,21 @@ class MirrorStructEntityTest: BaseRellTest(false) {
     private fun chkAttributeRead(def: String) {
         val t = RellCodeTester(tstCtx)
         t.def(def)
-        t.chkQueryEx("{ val s = struct<data>(x = 123, y = 'abc'); return s.x; }", "int[123]")
-        t.chkQueryEx("{ val s = struct<data>(x = 123, y = 'abc'); return s.y; }", "text[abc]")
+        t.chkEx("{ val s = struct<data>(x = 123, y = 'abc'); return s.x; }", "int[123]")
+        t.chkEx("{ val s = struct<data>(x = 123, y = 'abc'); return s.y; }", "text[abc]")
     }
 
-    @Test fun testMutability() {
-        chkMutability("entity data { x: integer; mutable y: text; }")
-        chkMutability("object data { x: integer = 123; mutable y: text = 'abc'; }")
+    @Test fun testAttributeWrite() {
+        chkAttributeWrite("entity data { x: integer; mutable y: text; }")
+        chkAttributeWrite("object data { x: integer = 123; mutable y: text = 'abc'; }")
     }
 
-    private fun chkMutability(def: String) {
+    private fun chkAttributeWrite(def: String) {
         val t = RellCodeTester(tstCtx)
         t.def(def)
         val init = "val s = struct<data>(x = 123, y = 'abc');"
-        t.chkQueryEx("{ $init s.x = 456; return 0; }", "ct_err:update_attr_not_mutable:x")
-        t.chkQueryEx("{ $init s.y = 'xyz'; return 0; }", "ct_err:update_attr_not_mutable:y")
+        t.chkEx("{ $init s.x = 456; return 0; }", "ct_err:update_attr_not_mutable:x")
+        t.chkEx("{ $init s.y = 'xyz'; return 0; }", "ct_err:update_attr_not_mutable:y")
     }
 
     @Test fun testInstanceMemberFunctions() {
@@ -98,10 +98,10 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         val t = RellCodeTester(tstCtx)
         t.def(def)
         val expr = "struct<data>(x = 123, y = 'abc')"
-        t.chkQuery("$expr.to_gtv()", """gtv[[123,"abc"]]""")
-        t.chkQuery("$expr.to_gtv_pretty()", """gtv[{"x":123,"y":"abc"}]""")
-        t.chkQuery("$expr.to_bytes()", "byte_array[a50e300ca30302017ba2050c03616263]")
-        t.chkQuery("$expr.bad_name()", "ct_err:unknown_member:[struct<data>]:bad_name")
+        t.chk("$expr.to_gtv()", """gtv[[123,"abc"]]""")
+        t.chk("$expr.to_gtv_pretty()", """gtv[{"x":123,"y":"abc"}]""")
+        t.chk("$expr.to_bytes()", "byte_array[a50e300ca30302017ba2050c03616263]")
+        t.chk("$expr.bad_name()", "ct_err:unknown_member:[struct<data>]:bad_name")
     }
 
     @Test fun testStaticMemberFunctions() {
@@ -112,10 +112,10 @@ class MirrorStructEntityTest: BaseRellTest(false) {
     private fun chkStaticMemberFunctions(def: String) {
         val t = RellCodeTester(tstCtx)
         t.def(def)
-        t.chkQuery("""struct<data>.from_gtv(gtv.from_json('[123,"abc"]'))""", "struct<data>[x=int[123],y=text[abc]]")
-        t.chkQuery("""struct<data>.from_gtv_pretty(gtv.from_json('{"x":123,"y":"abc"}'))""", "struct<data>[x=int[123],y=text[abc]]")
-        t.chkQuery("struct<data>.from_bytes(x'a50e300ca30302017ba2050c03616263')", "struct<data>[x=int[123],y=text[abc]]")
-        t.chkQuery("struct<data>.bad_name()", "ct_err:unknown_name:struct<data>.bad_name")
+        t.chk("""struct<data>.from_gtv(gtv.from_json('[123,"abc"]'))""", "struct<data>[x=int[123],y=text[abc]]")
+        t.chk("""struct<data>.from_gtv_pretty(gtv.from_json('{"x":123,"y":"abc"}'))""", "struct<data>[x=int[123],y=text[abc]]")
+        t.chk("struct<data>.from_bytes(x'a50e300ca30302017ba2050c03616263')", "struct<data>[x=int[123],y=text[abc]]")
+        t.chk("struct<data>.bad_name()", "ct_err:unknown_name:struct<data>.bad_name")
     }
 
     @Test fun testSystemEntity() {
@@ -153,7 +153,7 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         t.gtv = true
         t.def("entity user { name; }")
         t.def("struct data { a: struct<$innerType>?; }")
-        t.chkQueryEx("$def query q() = $query;", "q", listOf(), exp)
+        t.chkFull("$def query q() = $query;", "q", listOf(), exp)
     }
 
     @Test fun testToStructEntityRtExpr() {
@@ -298,6 +298,81 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         chkOp("val s = $expr; create user(name = 'Alice', s);", "ct_err:[attr_missing:rating][attr_implic_unknown:1:struct<user>]")
         chkOp("val s = $expr; create user(s = s);", "ct_err:attr_unknown_name:s")
         chkOp("val s = $expr; create admin(s);", "ct_err:[attr_missing:name,root][attr_implic_unknown:0:struct<user>]")
+    }
+
+    @Test fun testMutableBasic() {
+        initMutable()
+        chkMutableBasic("my_entity")
+        chkMutableBasic("my_object")
+    }
+
+    private fun initMutable() {
+        tstCtx.useSql = true
+        def("entity my_entity { x: text = 'abc'; y: integer = 123; }")
+        def("object my_object { x: text = 'abc'; y: integer = 123; }")
+        insert("c0.my_entity", "x,y", "0,'abc',123")
+    }
+
+    private fun chkMutableBasic(type: String) {
+        chkType("struct<mutable $type>", "OK")
+        chk("_type_of(struct<mutable $type>())", "text[struct<mutable $type>]")
+
+        chk("struct<mutable $type>()", "struct<mutable $type>[x=text[abc],y=int[123]]")
+        chk("struct<mutable $type>('xyz',987)", "struct<mutable $type>[x=text[xyz],y=int[987]]")
+
+        chkEx("{ val s = struct<mutable $type>(); return s; }", "struct<mutable $type>[x=text[abc],y=int[123]]")
+        chkEx("{ val s = struct<mutable $type>(); s.x = 'xyz'; return s; }", "struct<mutable $type>[x=text[xyz],y=int[123]]")
+        chkEx("{ val s = struct<mutable $type>(); s.y = 987; return s; }", "struct<mutable $type>[x=text[abc],y=int[987]]")
+    }
+
+    @Test fun testMutableToStruct() {
+        initMutable()
+        chkMutableToStruct("my_entity", "(my_entity@{})")
+        chkMutableToStruct("my_object", "my_object")
+    }
+
+    private fun chkMutableToStruct(type: String, expr: String) {
+        chk("_type_of($expr.to_struct())", "text[struct<$type>]")
+        chk("_type_of($expr.to_mutable_struct())", "text[struct<mutable $type>]")
+        chk("_type_of($expr.to_struct().to_immutable())", "ct_err:unknown_member:[struct<$type>]:to_immutable")
+        chk("_type_of($expr.to_struct().to_mutable())", "text[struct<mutable $type>]")
+        chk("_type_of($expr.to_mutable_struct().to_immutable())", "text[struct<$type>]")
+        chk("_type_of($expr.to_mutable_struct().to_mutable())", "ct_err:unknown_member:[struct<mutable $type>]:to_mutable")
+
+        chk("$expr.to_struct()", "struct<$type>[x=text[abc],y=int[123]]")
+        chk("$expr.to_mutable_struct()", "struct<mutable $type>[x=text[abc],y=int[123]]")
+        chk("$expr.to_struct().to_mutable()", "struct<mutable $type>[x=text[abc],y=int[123]]")
+        chk("$expr.to_mutable_struct().to_immutable()", "struct<$type>[x=text[abc],y=int[123]]")
+        chk("$expr.to_struct().to_immutable()", "ct_err:unknown_member:[struct<$type>]:to_immutable")
+        chk("$expr.to_mutable_struct().to_mutable()", "ct_err:unknown_member:[struct<mutable $type>]:to_mutable")
+
+        chkEx("{ val s = $expr.to_struct(); return s.to_mutable() === s; }",
+                "ct_err:binop_operand_type:===:[struct<mutable $type>]:[struct<$type>]")
+        chkEx("{ val s = $expr.to_mutable_struct(); return s.to_immutable() === s; }",
+                "ct_err:binop_operand_type:===:[struct<$type>]:[struct<mutable $type>]")
+    }
+
+    @Test fun testMutableToStructDbExpr() {
+        initMutable()
+
+        chk("_type_of((e: my_entity) @ {} ( e.to_struct() ))", "text[struct<my_entity>]")
+        chk("_type_of((e: my_entity) @ {} ( e.to_mutable_struct() ))", "text[struct<mutable my_entity>]")
+        chk("(e: my_entity) @ {} ( e.to_struct() )", "struct<my_entity>[x=text[abc],y=int[123]]")
+        chk("(e: my_entity) @ {} ( e.to_mutable_struct() )", "struct<mutable my_entity>[x=text[abc],y=int[123]]")
+
+        chkEx("{ val s = (e: my_entity) @{} ( e.to_struct() ); s.x = 'xyz'; return s; }", "ct_err:update_attr_not_mutable:x")
+
+        chkEx("{ val s = (e: my_entity) @{} ( e.to_mutable_struct() ); s.x = 'xyz'; return s; }",
+                "struct<mutable my_entity>[x=text[xyz],y=int[123]]")
+    }
+
+    @Test fun testMutableCreate() {
+        initMutable()
+        tst.strictToString = false
+        chk("my_entity @* {} ( $, _=.x, _=.y )", "[(my_entity[0],abc,123)]")
+        chkOp("val s = struct<mutable my_entity>('xyz',987); print(create my_entity(s));")
+        chkOut("my_entity[1]")
+        chk("my_entity @* {} ( $, _=.x, _=.y )", "[(my_entity[0],abc,123), (my_entity[1],xyz,987)]")
     }
 
     private fun chkType(typeCode: String, expected: String) {

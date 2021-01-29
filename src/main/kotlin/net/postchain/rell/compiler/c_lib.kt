@@ -366,13 +366,15 @@ object C_LibFunctions {
 
     private fun getEntityFns(type: R_EntityType): C_MemberFuncTable {
         return typeMemFuncBuilder(type)
-                .add("to_struct", C_SysFn_Entity_ToStruct(type))
+                .add("to_struct", C_SysFn_Entity_ToStruct(type, false))
+                .add("to_mutable_struct", C_SysFn_Entity_ToStruct(type, true))
                 .build()
     }
 
     private fun getObjectFns(type: R_ObjectType): C_MemberFuncTable {
         return C_MemberFuncBuilder()
-                .add("to_struct", C_SysFn_Object_ToStruct(type))
+                .add("to_struct", C_SysFn_Object_ToStruct(type, false))
+                .add("to_mutable_struct", C_SysFn_Object_ToStruct(type, true))
                 .build()
     }
 
@@ -548,8 +550,15 @@ object C_LibFunctions {
 
         val b = typeMemFuncBuilder(type)
 
-        if (struct.operation != null) {
-            b.add("to_operation", R_OperationType, listOf(), R_SysFn_General.Struct_ToOperation)
+        val mirrorStructs = struct.mirrorStructs
+        if (mirrorStructs?.operation != null) {
+            b.add("to_operation", R_OperationType, listOf(), R_SysFn_Struct.ToOperation)
+        }
+
+        if (struct == mirrorStructs?.immutable) {
+            b.add("to_mutable", mirrorStructs.mutable.type, listOf(), R_SysFn_Struct.ToMutable)
+        } else if (struct == mirrorStructs?.mutable) {
+            b.add("to_immutable", mirrorStructs.immutable.type, listOf(), R_SysFn_Struct.ToImmutable)
         }
 
         b.add("toBytes", listOf(), mToBytes, depError("to_bytes"))
@@ -929,12 +938,18 @@ private sealed class C_SysFn_Common_ToStruct: C_SpecialSysMemberFunction() {
     }
 }
 
-private class C_SysFn_Entity_ToStruct(private val entityType: R_EntityType): C_SysFn_Common_ToStruct() {
-    override fun compile0(member: C_MemberRef): V_Expr = V_EntityToStructExpr(member, entityType)
+private class C_SysFn_Entity_ToStruct(
+        private val entityType: R_EntityType,
+        private val mutable: Boolean
+): C_SysFn_Common_ToStruct() {
+    override fun compile0(member: C_MemberRef): V_Expr = V_EntityToStructExpr(member, entityType, mutable)
 }
 
-private class C_SysFn_Object_ToStruct(private val objectType: R_ObjectType): C_SysFn_Common_ToStruct() {
-    override fun compile0(member: C_MemberRef): V_Expr = V_ObjectToStructExpr(member.pos, objectType)
+private class C_SysFn_Object_ToStruct(
+        private val objectType: R_ObjectType,
+        private val mutable: Boolean
+): C_SysFn_Common_ToStruct() {
+    override fun compile0(member: C_MemberRef): V_Expr = V_ObjectToStructExpr(member.pos, objectType, mutable)
 }
 
 private class C_SysFunction_Invalid(private val type: R_Type): C_GlobalFormalParamsFuncBody(R_CtErrorType) {

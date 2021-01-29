@@ -90,7 +90,7 @@ object C_ArgTypeMatcher_MirrorStructOperation: C_ArgTypeMatcher() {
     override fun getTypeHint() = C_TypeHint.NONE
 
     override fun match(type: R_Type): C_ArgTypeMatch? {
-        val direct = type is R_StructType && type.struct.operation != null
+        val direct = type is R_StructType && type.struct.mirrorStructs?.operation != null
         return if (direct) C_ArgTypeMatch_Direct else null
     }
 }
@@ -101,7 +101,7 @@ object C_ArgTypeMatcher_ListOfMirrorStructOperations: C_ArgTypeMatcher() {
     override fun match(type: R_Type): C_ArgTypeMatch? {
         if (type !is R_ListType) return null
         val elemType = type.elementType
-        val direct = elemType is R_StructType && elemType.struct.operation != null
+        val direct = elemType is R_StructType && elemType.struct.mirrorStructs?.operation != null
         return if (direct) C_ArgTypeMatch_Direct else null
     }
 }

@@ -291,3 +291,24 @@ Details:
 - Attributes of struct<OP> are not mutable.
 - Attributes of struct<OP> have same default values as the parameters of OP.
 - Member function struct<OP>.to_operation() converts the structure to the "operation" type.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+13. Language: Type struct<mutable T>
+
+In addition to type struct<T> (where "T" is an entity, object or operation), there is type struct<mutable T>:
+
+- struct<T>: all attributes are not mutable
+- struct<mutable T>: has same attributes as struct<T>, but all attributes are mutable
+
+To obtain a struct<mutable T> from an entity or an object, use member function .to_mutable_struct():
+
+    val u = user @ { .name == 'Bob' };
+    val s = u.to_mutable_struct();              // returns struct<mutable user>
+
+Conversion between struct<T> and struct<mutable T> is done via .to_mutable() and .to_immutable() member functions:
+
+    val s = u.to_struct();
+    val mut = s.to_mutable();
+    val imm = mut.to_immutable();
+
+The functions create a mutable or immutable copy of a structure.

@@ -346,6 +346,6 @@ class ModuleDirTest: BaseRellTest(false) {
     }
 
     private fun chkImp(imp: String, code: String, exp: String) {
-        chkQueryEx("$imp query q() = $code;", exp)
+        chkFull("$imp query q() = $code;", exp)
     }
 }

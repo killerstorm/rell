@@ -394,6 +394,6 @@ class AbstractModuleTest: BaseRellTest() {
     }
 
     private fun chkOverFn(defs: String, expr: String, expected: String) {
-        chkQueryEx("$defs query q() = $expr;", expected)
+        chkFull("$defs query q() = $expr;", expected)
     }
 }

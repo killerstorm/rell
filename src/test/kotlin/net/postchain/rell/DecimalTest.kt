@@ -13,7 +13,7 @@ import java.math.BigInteger
 
 class DecimalTest: BaseRellTest(false) {
     @Test fun testType() {
-        chkQueryEx("query q(a: decimal) = _type_of(a);", listOf(Rt_DecimalValue.ZERO), "text[decimal]")
+        chkFull("query q(a: decimal) = _type_of(a);", listOf(Rt_DecimalValue.ZERO), "text[decimal]")
         chk("_type_of(decimal(0))", "text[decimal]")
     }
 
@@ -442,9 +442,9 @@ class DecimalTest: BaseRellTest(false) {
 
             val expr = "data @{} ( @sum .v )"
             if (case.expected != null) {
-                tst.chkQuery(expr, "dec[${case.expected}]")
+                tst.chk(expr, "dec[${case.expected}]")
             } else {
-                tst.chkQuery(expr, "rt_err:sqlerr:0")
+                tst.chk(expr, "rt_err:sqlerr:0")
             }
         }
     }

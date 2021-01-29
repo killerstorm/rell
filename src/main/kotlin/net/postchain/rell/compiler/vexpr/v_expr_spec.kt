@@ -185,10 +185,12 @@ private class V_ObjectAttrExpr(pos: S_Pos, private val rObject: R_ObjectDefiniti
 
 class V_EntityToStructExpr(
         private val memberRef: C_MemberRef,
-        private val entityType: R_EntityType
+        private val entityType: R_EntityType,
+        private val mutable: Boolean
 ): V_Expr(memberRef.base.pos) {
     private val isDb = isDb(memberRef.base)
-    private val structType = entityType.rEntity.mirrorStruct.type
+    private val struct = entityType.rEntity.mirrorStructs.getStruct(mutable)
+    private val structType = struct.type
     private val resultType = C_Utils.effectiveMemberType(structType, memberRef.safe)
 
     override fun type() = resultType
@@ -222,15 +224,15 @@ class V_EntityToStructExpr(
         val dbExprs = rEntity.attributes.map {
             C_EntityAttrRef.create(rEntity, it.value).createDbContextAttrExpr(dbEntityExpr)
         }
-        return R_DbAtWhatValue_Complex(dbExprs, R_DbAtWhatCombiner_ToStruct(entityType.rEntity))
+        return R_DbAtWhatValue_Complex(dbExprs, R_DbAtWhatCombiner_ToStruct(struct))
     }
 }
 
-class V_ObjectToStructExpr(pos: S_Pos, private val objectType: R_ObjectType): V_Expr(pos) {
-    private val structType = objectType.rObject.rEntity.mirrorStruct.type
-    private val resultType = structType
+class V_ObjectToStructExpr(pos: S_Pos, private val objectType: R_ObjectType, private val mutable: Boolean): V_Expr(pos) {
+    private val struct = objectType.rObject.rEntity.mirrorStructs.getStruct(mutable)
+    private val structType = struct.type
 
-    override fun type() = resultType
+    override fun type() = structType
     override fun isDb() = false
 
     override fun toRExpr0(): R_Expr {
@@ -245,14 +247,13 @@ class V_ObjectToStructExpr(pos: S_Pos, private val objectType: R_ObjectType): V_
         val dbExprs = rEntity.attributes.map {
             C_EntityAttrRef.create(rEntity, it.value).createDbContextAttrExpr(dbEntityExpr)
         }
-        return R_DbAtWhatValue_Complex(dbExprs, R_DbAtWhatCombiner_ToStruct(objectType.rObject.rEntity))
+        return R_DbAtWhatValue_Complex(dbExprs, R_DbAtWhatCombiner_ToStruct(struct))
     }
 }
 
-private class R_DbAtWhatCombiner_ToStruct(private val rEntity: R_EntityDefinition): R_DbAtWhatCombiner() {
+private class R_DbAtWhatCombiner_ToStruct(private val rStruct: R_Struct): R_DbAtWhatCombiner() {
     override fun combine(values: List<Rt_Value>): Rt_Value {
-        val struct = rEntity.mirrorStruct
-        val attrs = struct.attributesList
+        val attrs = rStruct.attributesList
 
         if (values.size != attrs.size) {
             throw Rt_Error("to_struct:values_size:${attrs.size}:${values.size}",
@@ -260,6 +261,6 @@ private class R_DbAtWhatCombiner_ToStruct(private val rEntity: R_EntityDefinitio
         }
 
         val attrValues = values.toMutableList()
-        return Rt_StructValue(struct.type, attrValues)
+        return Rt_StructValue(rStruct.type, attrValues)
     }
 }

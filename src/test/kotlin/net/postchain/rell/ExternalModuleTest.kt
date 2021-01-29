@@ -414,7 +414,7 @@ class ExternalModuleTest: BaseRellTest() {
         }
 
         t.insert("c$chainId.$entityName", columns, values)
-        t.chkQuery("$moduleName.$entityName @ {} ( _=$entityName, _=.name )", "($moduleName:$entityName[1],text[$value])")
+        t.chk("$moduleName.$entityName @ {} ( _=$entityName, _=.name )", "($moduleName:$entityName[1],text[$value])")
 
         tst.dropTables = false
     }

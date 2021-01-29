@@ -148,8 +148,11 @@ object S_Grammar : Grammar<S_RellFile>() {
     private val virtualType by ( VIRTUAL * -LT * typeRef * -GT ) map { (kw, type) -> S_VirtualType(kw.pos, type) }
     private val operationType by ( OPERATION ) map { S_OperationType(it.pos) }
 
-    private val mirrorStructType by ( STRUCT * -LT * typeRef * -GT ) map {
-        (kw, paramType) -> S_MirrorStructType(kw.pos, paramType)
+    private val mirrorStructType0 by STRUCT * -LT * optional(MUTABLE) * typeRef * -GT
+
+    private val mirrorStructType by mirrorStructType0 map {
+        (kw, mutable, paramType) ->
+        S_MirrorStructType(kw.pos, mutable != null, paramType)
     }
 
     private val baseType by (
@@ -434,9 +437,9 @@ object S_Grammar : Grammar<S_RellFile>() {
         S_MapExpr(kw.pos, keyValueTypes, args)
     }
 
-    private val mirrorStructExpr by ( STRUCT * -LT * type * -GT ) map {
-        (kw, type) ->
-        S_MirrorStructExpr(kw.pos, type)
+    private val mirrorStructExpr by mirrorStructType0 map {
+        (kw, mutable, type) ->
+        S_MirrorStructExpr(kw.pos, mutable != null, type)
     }
 
     private val createExprArg by ( optional(-optional(DOT) * name * -ASSIGN) * expressionRef) map {

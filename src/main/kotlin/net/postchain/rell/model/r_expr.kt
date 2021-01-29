@@ -773,13 +773,13 @@ class R_TypeAdapter_Nullable(private val dstType: R_Type, private val innerAdapt
     }
 }
 
-class R_OperationExpr(private val op: R_OperationDefinition, args: List<R_Expr>): R_Expr(op.mirrorStruct.type) {
+class R_OperationExpr(private val op: R_OperationDefinition, args: List<R_Expr>): R_Expr(op.mirrorStructs.immutable.type) {
     private val args = args.toImmList()
 
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         val rtArgs = args.map { it.evaluate(frame) }
         val attrValues = rtArgs.toMutableList()
-        return Rt_StructValue(op.mirrorStruct.type, attrValues)
+        return Rt_StructValue(op.mirrorStructs.immutable.type, attrValues)
     }
 }
 

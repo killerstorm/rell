@@ -23,14 +23,16 @@ sealed class S_Type(val pos: S_Pos) {
         return ctx.msgCtx.consumeError { compile0(ctx) }
     }
 
-    open fun compileMirrorStructType(ctx: C_NamespaceContext): R_StructType? {
+    open fun compileMirrorStructType(ctx: C_NamespaceContext, mutable: Boolean): R_StructType? {
         val rParamType = compileOpt(ctx)
-        return if (rParamType == null) null else compileMirrorStructType0(rParamType)
+        return if (rParamType == null) null else compileMirrorStructType0(rParamType, mutable)
     }
 
-    protected fun compileMirrorStructType0(rParamType: R_Type): R_StructType {
+    protected fun compileMirrorStructType0(rParamType: R_Type, mutable: Boolean): R_StructType {
         return if (rParamType is R_EntityType) {
-            rParamType.rEntity.mirrorStruct.type
+            val rEntity = rParamType.rEntity
+            val rStruct = rEntity.mirrorStructs.getStruct(mutable)
+            rStruct.type
         } else {
             throw C_Error.more(pos, "type:struct:bad_type:$rParamType", "Invalid struct parameter type: $rParamType")
         }
@@ -40,7 +42,7 @@ sealed class S_Type(val pos: S_Pos) {
 class S_NameType(val names: List<S_Name>): S_Type(names[0].pos) {
     override fun compile0(ctx: C_NamespaceContext): R_Type = ctx.getType(names)
 
-    override fun compileMirrorStructType(ctx: C_NamespaceContext): R_StructType? {
+    override fun compileMirrorStructType(ctx: C_NamespaceContext, mutable: Boolean): R_StructType? {
         var rParamType = ctx.getTypeOpt(names)
 
         if (rParamType == null) {
@@ -51,15 +53,16 @@ class S_NameType(val names: List<S_Name>): S_Type(names[0].pos) {
         }
 
         if (rParamType != null) {
-            return compileMirrorStructType0(rParamType)
+            return compileMirrorStructType0(rParamType, mutable)
         }
 
         val rOp = ctx.getOperationOpt(names)
         if (rOp != null) {
-            return rOp.mirrorStruct.type
+            val rStruct = rOp.mirrorStructs.getStruct(mutable)
+            return rStruct.type
         }
 
-        return super.compileMirrorStructType(ctx) // Reports compilation error.
+        return super.compileMirrorStructType(ctx, mutable) // Reports compilation error.
     }
 }
 
@@ -172,8 +175,8 @@ class S_OperationType(pos: S_Pos): S_Type(pos) {
     }
 }
 
-class S_MirrorStructType(pos: S_Pos, val paramType: S_Type): S_Type(pos) {
+class S_MirrorStructType(pos: S_Pos, val mutable: Boolean, val paramType: S_Type): S_Type(pos) {
     override fun compile0(ctx: C_NamespaceContext): R_Type {
-        return paramType.compileMirrorStructType(ctx) ?: R_CtErrorType
+        return paramType.compileMirrorStructType(ctx, mutable) ?: R_CtErrorType
     }
 }

@@ -104,15 +104,15 @@ class ObjectTest: BaseRellTest() {
         def("object foo { x: integer = 123; }")
         tst.gtv = true
         chk("foo", "ct_err:result_nogtv:q:foo")
-        chkQueryEx("query q() { return foo; }", "ct_err:result_nogtv:q:foo")
+        chkFull("query q() { return foo; }", "ct_err:result_nogtv:q:foo")
     }
 
     @Test fun testForwardReference() {
         def("function f(): integer = foo.x;")
         def("query q() = foo.x;")
         def("object foo { x: integer = 123; }")
-        chkQueryEx("", "int[123]")
-        chkFnEx("", "int[123]")
+        chkFull("", "int[123]")
+        chkFnFull("", "int[123]")
     }
 
     @Test fun testForwardReferenceErr() {

@@ -196,14 +196,14 @@ class S_CreateExpr(pos: S_Pos, val entityName: List<S_Name>, val exprs: List<S_N
         ctx.checkDbUpdateAllowed(startPos)
 
         val entity = ctx.nsCtx.getEntity(entityName)
-        val structType = entity.mirrorStruct.type
-
         val args = C_Argument.compile(ctx, entity.attributes, exprs)
 
-        val vExpr = if (args.size == 1 && args[0].name == null && structType.isAssignableFrom(args[0].vExpr.type())) {
-            compileStruct(entity, args[0].vExpr, structType)
-        } else {
-            compileRegular(ctx, entity, args)
+        var vExpr = compileStruct(entity, args, entity.mirrorStructs.immutable)
+        if (vExpr == null) {
+            vExpr = compileStruct(entity, args, entity.mirrorStructs.mutable)
+        }
+        if (vExpr == null) {
+            vExpr = compileRegular(ctx, entity, args)
         }
 
         return C_VExpr(vExpr)
@@ -221,7 +221,13 @@ class S_CreateExpr(pos: S_Pos, val entityName: List<S_Name>, val exprs: List<S_N
         return V_RExpr(startPos, rExpr, attrs.exprFacts)
     }
 
-    private fun compileStruct(entity: R_EntityDefinition, vExpr: V_Expr, structType: R_StructType): V_Expr {
+    private fun compileStruct(entity: R_EntityDefinition, args: List<C_Argument>, struct: R_Struct): V_Expr? {
+        if (args.size != 1 || args[0].name != null) return null
+
+        val vExpr = args[0].vExpr
+        val structType = struct.type
+        if (!structType.isAssignableFrom(vExpr.type())) return null
+
         val rStructExpr = vExpr.toRExpr()
         val rExpr = R_StructCreateExpr(entity, structType, rStructExpr)
         val exprFacts = C_ExprVarFacts.forSubExpressions(listOf(vExpr))
@@ -723,9 +729,9 @@ class S_TypeExpr(val type: S_Type): S_Expr(type.pos) {
     }
 }
 
-class S_MirrorStructExpr(pos: S_Pos, val type: S_Type): S_Expr(pos) {
+class S_MirrorStructExpr(pos: S_Pos, val mutable: Boolean, val type: S_Type): S_Expr(pos) {
     override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
-        val structType = type.compileMirrorStructType(ctx.nsCtx)
+        val structType = type.compileMirrorStructType(ctx.nsCtx, mutable)
         structType ?: return C_Utils.errorExpr(startPos)
         val ns = C_LibFunctions.makeStructNamespace(structType.struct)
         return C_MirrorStructExpr(startPos, structType.struct, ns)

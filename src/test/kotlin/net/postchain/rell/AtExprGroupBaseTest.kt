@@ -384,6 +384,6 @@ abstract class AtExprGroupBaseTest: BaseRellTest() {
         t.def("$impDefKw data { v: $type; }")
         val valueList = if (values.isEmpty()) listOf() else values.split(" ").map { "v = $it" }
         impCreateObjs(t, "data", *valueList.toTypedArray())
-        t.chkQuery(code, exp)
+        t.chk(code, exp)
     }
 }

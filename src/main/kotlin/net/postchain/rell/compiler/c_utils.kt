@@ -109,12 +109,12 @@ class C_FormalParameter(
         return V_RExpr(exprGetterPosValue.pos, rExpr)
     }
 
-    fun createMirrorAttr(index: Int): R_Attribute {
+    fun createMirrorAttr(index: Int, mutable: Boolean): R_Attribute {
         return R_Attribute(
                 index,
                 name.str,
                 type ?: R_CtErrorType,
-                mutable = false,
+                mutable = mutable,
                 exprGetter = exprGetterPosValue?.value
         )
     }
@@ -257,31 +257,32 @@ object C_Utils {
             sqlMapping: R_EntitySqlMapping,
             externalEntity: R_ExternalEntity?
     ): R_EntityDefinition {
-        val rStruct = createMirrorStruct(appCtx, names, defType)
-        return R_EntityDefinition(names, mountName, flags, sqlMapping, externalEntity, rStruct)
+        val mirrorStructs = createMirrorStructs(appCtx, names, defType)
+        return R_EntityDefinition(names, mountName, flags, sqlMapping, externalEntity, mirrorStructs)
     }
 
-    fun createMirrorStruct(
+    fun createMirrorStructs(
             appCtx: C_AppContext,
             names: R_DefinitionNames,
             defType: C_DefinitionType,
             operation: R_MountName? = null
-    ): R_Struct {
-        val structName = "struct<${names.appLevelName}>"
-        val structMetaGtv = mapOf(
-                "type" to "struct".toGtv(),
-                "definition_type" to defType.name.toGtv(),
-                "definition" to names.appLevelName.toGtv()
-        ).toGtv()
-        val rStruct = R_Struct(structName, structMetaGtv, operation = operation)
-        appCtx.defsAdder.addStruct(rStruct)
-        return rStruct
+    ): R_MirrorStructs {
+        val res = R_MirrorStructs(names, defType.name, operation)
+        appCtx.defsAdder.addStruct(res.immutable)
+        appCtx.defsAdder.addStruct(res.mutable)
+        return res
     }
 
     fun setEntityBody(entity: R_EntityDefinition, body: R_EntityBody) {
-        val structAttrs = body.attributes.mapValues { it.value.copy(mutable = false) }
         entity.setBody(body)
-        entity.mirrorStruct.setAttributes(structAttrs)
+        setEntityMirrorStructAttrs(body, entity, false)
+        setEntityMirrorStructAttrs(body, entity, true)
+    }
+
+    private fun setEntityMirrorStructAttrs(body: R_EntityBody, entity: R_EntityDefinition, mutable: Boolean) {
+        val struct = entity.mirrorStructs.getStruct(mutable)
+        val structAttrs = body.attributes.mapValues { it.value.copy(mutable = mutable) }
+        struct.setAttributes(structAttrs)
     }
 
     fun createSysQuery(executor: C_CompilerExecutor, simpleName: String, type: R_Type, fn: R_SysFunction): R_QueryDefinition {

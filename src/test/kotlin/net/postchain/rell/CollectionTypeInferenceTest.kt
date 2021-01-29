@@ -20,37 +20,37 @@ class CollectionTypeInferenceTest: BaseRellTest(false) {
     }
 
     @Test fun testStructInitializers() {
-        chkQueryEx("struct s { x: list<integer> = []; } query q() = s();", "s[x=list<integer>[]]")
-        chkQueryEx("struct s { x: list<integer> = list(); } query q() = s();", "s[x=list<integer>[]]")
-        chkQueryEx("struct s { x: set<integer> = set(); } query q() = s();", "s[x=set<integer>[]]")
-        chkQueryEx("struct s { x: map<integer,text> = [:]; } query q() = s();", "s[x=map<integer,text>[]]")
-        chkQueryEx("struct s { x: map<integer,text> = map(); } query q() = s();", "s[x=map<integer,text>[]]")
+        chkFull("struct s { x: list<integer> = []; } query q() = s();", "s[x=list<integer>[]]")
+        chkFull("struct s { x: list<integer> = list(); } query q() = s();", "s[x=list<integer>[]]")
+        chkFull("struct s { x: set<integer> = set(); } query q() = s();", "s[x=set<integer>[]]")
+        chkFull("struct s { x: map<integer,text> = [:]; } query q() = s();", "s[x=map<integer,text>[]]")
+        chkFull("struct s { x: map<integer,text> = map(); } query q() = s();", "s[x=map<integer,text>[]]")
 
-        chkQueryEx("struct s { x: list<integer>? = []; } query q() = s();", "s[x=list<integer>[]]")
-        chkQueryEx("struct s { x: list<integer>? = list(); } query q() = s();", "s[x=list<integer>[]]")
-        chkQueryEx("struct s { x: set<integer>? = set(); } query q() = s();", "s[x=set<integer>[]]")
-        chkQueryEx("struct s { x: map<integer,text>? = [:]; } query q() = s();", "s[x=map<integer,text>[]]")
-        chkQueryEx("struct s { x: map<integer,text>? = map(); } query q() = s();", "s[x=map<integer,text>[]]")
+        chkFull("struct s { x: list<integer>? = []; } query q() = s();", "s[x=list<integer>[]]")
+        chkFull("struct s { x: list<integer>? = list(); } query q() = s();", "s[x=list<integer>[]]")
+        chkFull("struct s { x: set<integer>? = set(); } query q() = s();", "s[x=set<integer>[]]")
+        chkFull("struct s { x: map<integer,text>? = [:]; } query q() = s();", "s[x=map<integer,text>[]]")
+        chkFull("struct s { x: map<integer,text>? = map(); } query q() = s();", "s[x=map<integer,text>[]]")
     }
 
     @Test fun testStructConstrutor() {
-        chkQueryEx("struct s { x: list<integer>; } query q() = s(x = []);", "s[x=list<integer>[]]")
-        chkQueryEx("struct s { x: list<integer>; } query q() = s(x = list());", "s[x=list<integer>[]]")
-        chkQueryEx("struct s { x: list<integer>; } query q() = s([]);", "s[x=list<integer>[]]")
-        chkQueryEx("struct s { x: list<integer>; } query q() = s(list());", "s[x=list<integer>[]]")
+        chkFull("struct s { x: list<integer>; } query q() = s(x = []);", "s[x=list<integer>[]]")
+        chkFull("struct s { x: list<integer>; } query q() = s(x = list());", "s[x=list<integer>[]]")
+        chkFull("struct s { x: list<integer>; } query q() = s([]);", "s[x=list<integer>[]]")
+        chkFull("struct s { x: list<integer>; } query q() = s(list());", "s[x=list<integer>[]]")
 
-        chkQueryEx("struct s { x: set<integer>; } query q() = s(x = set());", "s[x=set<integer>[]]")
-        chkQueryEx("struct s { x: set<integer>; } query q() = s(set());", "s[x=set<integer>[]]")
+        chkFull("struct s { x: set<integer>; } query q() = s(x = set());", "s[x=set<integer>[]]")
+        chkFull("struct s { x: set<integer>; } query q() = s(set());", "s[x=set<integer>[]]")
 
-        chkQueryEx("struct s { x: map<integer,text>; } query q() = s(x = [:]);", "s[x=map<integer,text>[]]")
-        chkQueryEx("struct s { x: map<integer,text>; } query q() = s(x = map());", "s[x=map<integer,text>[]]")
-        chkQueryEx("struct s { x: map<integer,text>; } query q() = s([:]);", "s[x=map<integer,text>[]]")
-        chkQueryEx("struct s { x: map<integer,text>; } query q() = s(map());", "s[x=map<integer,text>[]]")
+        chkFull("struct s { x: map<integer,text>; } query q() = s(x = [:]);", "s[x=map<integer,text>[]]")
+        chkFull("struct s { x: map<integer,text>; } query q() = s(x = map());", "s[x=map<integer,text>[]]")
+        chkFull("struct s { x: map<integer,text>; } query q() = s([:]);", "s[x=map<integer,text>[]]")
+        chkFull("struct s { x: map<integer,text>; } query q() = s(map());", "s[x=map<integer,text>[]]")
 
-        chkQueryEx("struct s { x: list<integer>?; } query q() = s(x = []);", "s[x=list<integer>[]]")
-        chkQueryEx("struct s { x: list<integer>?; } query q() = s(x = list());", "s[x=list<integer>[]]")
-        chkQueryEx("struct s { x: list<integer>?; } query q() = s([]);", "s[x=list<integer>[]]")
-        chkQueryEx("struct s { x: list<integer>?; } query q() = s(list());", "s[x=list<integer>[]]")
+        chkFull("struct s { x: list<integer>?; } query q() = s(x = []);", "s[x=list<integer>[]]")
+        chkFull("struct s { x: list<integer>?; } query q() = s(x = list());", "s[x=list<integer>[]]")
+        chkFull("struct s { x: list<integer>?; } query q() = s([]);", "s[x=list<integer>[]]")
+        chkFull("struct s { x: list<integer>?; } query q() = s(list());", "s[x=list<integer>[]]")
     }
 
     @Test fun testStructAssignment() {
@@ -68,7 +68,7 @@ class CollectionTypeInferenceTest: BaseRellTest(false) {
     }
 
     private fun chkStructAssignment(type: String, init: String, value: String, exp: String) {
-        chkQueryEx("struct s { mutable x: $type = $init; } query q() { val v = s(); v.x = $value; return v; }", exp)
+        chkFull("struct s { mutable x: $type = $init; } query q() { val v = s(); v.x = $value; return v; }", exp)
     }
 
     @Test fun testFunctionArgumentsCall() {
@@ -80,24 +80,24 @@ class CollectionTypeInferenceTest: BaseRellTest(false) {
     }
 
     private fun chkFunctionArgumentsCall(type: String, value: String, exp: String) {
-        chkQueryEx("function f(x: $type) = $type(x); query q() = f($value);", exp)
-        chkQueryEx("function f(x: $type) = $type(x); query q() = f(x = $value);", exp)
-        chkQueryEx("function f(x: $type?) = $type(x!!); query q() = f($value);", exp)
-        chkQueryEx("function f(x: $type?) = $type(x!!); query q() = f(x = $value);", exp)
+        chkFull("function f(x: $type) = $type(x); query q() = f($value);", exp)
+        chkFull("function f(x: $type) = $type(x); query q() = f(x = $value);", exp)
+        chkFull("function f(x: $type?) = $type(x!!); query q() = f($value);", exp)
+        chkFull("function f(x: $type?) = $type(x!!); query q() = f(x = $value);", exp)
     }
 
     @Test fun testFunctionArgumentsDefaults() {
-        chkQueryEx("function f(x: list<integer> = []) = list(x); query q() = f();", "list<integer>[]")
-        chkQueryEx("function f(x: list<integer> = list()) = list(x); query q() = f();", "list<integer>[]")
-        chkQueryEx("function f(x: set<integer> = set()) = set(x); query q() = f();", "set<integer>[]")
-        chkQueryEx("function f(x: map<integer,text> = [:]) = map(x); query q() = f();", "map<integer,text>[]")
-        chkQueryEx("function f(x: map<integer,text> = map()) = map(x); query q() = f();", "map<integer,text>[]")
+        chkFull("function f(x: list<integer> = []) = list(x); query q() = f();", "list<integer>[]")
+        chkFull("function f(x: list<integer> = list()) = list(x); query q() = f();", "list<integer>[]")
+        chkFull("function f(x: set<integer> = set()) = set(x); query q() = f();", "set<integer>[]")
+        chkFull("function f(x: map<integer,text> = [:]) = map(x); query q() = f();", "map<integer,text>[]")
+        chkFull("function f(x: map<integer,text> = map()) = map(x); query q() = f();", "map<integer,text>[]")
 
-        chkQueryEx("function f(x: list<integer>? = []) = list(x!!); query q() = f();", "list<integer>[]")
-        chkQueryEx("function f(x: list<integer>? = list()) = list(x!!); query q() = f();", "list<integer>[]")
-        chkQueryEx("function f(x: set<integer>? = set()) = set(x!!); query q() = f();", "set<integer>[]")
-        chkQueryEx("function f(x: map<integer,text>? = [:]) = map(x!!); query q() = f();", "map<integer,text>[]")
-        chkQueryEx("function f(x: map<integer,text>? = map()) = map(x!!); query q() = f();", "map<integer,text>[]")
+        chkFull("function f(x: list<integer>? = []) = list(x!!); query q() = f();", "list<integer>[]")
+        chkFull("function f(x: list<integer>? = list()) = list(x!!); query q() = f();", "list<integer>[]")
+        chkFull("function f(x: set<integer>? = set()) = set(x!!); query q() = f();", "set<integer>[]")
+        chkFull("function f(x: map<integer,text>? = [:]) = map(x!!); query q() = f();", "map<integer,text>[]")
+        chkFull("function f(x: map<integer,text>? = map()) = map(x!!); query q() = f();", "map<integer,text>[]")
     }
 
     @Test fun testFunctionReturnType() {
@@ -109,10 +109,10 @@ class CollectionTypeInferenceTest: BaseRellTest(false) {
     }
 
     private fun chkFunctionReturnType(type: String, value: String, exp: String) {
-        chkQueryEx("function f(): $type = $value; query q() = f();", exp)
-        chkQueryEx("function f(): $type? = $value; query q() = f();", exp)
-        chkQueryEx("function f(): $type { return $value; } query q() = f();", exp)
-        chkQueryEx("function f(): $type? { return $value; } query q() = f();", exp)
+        chkFull("function f(): $type = $value; query q() = f();", exp)
+        chkFull("function f(): $type? = $value; query q() = f();", exp)
+        chkFull("function f(): $type { return $value; } query q() = f();", exp)
+        chkFull("function f(): $type? { return $value; } query q() = f();", exp)
     }
 
     @Test fun testQueryReturnType() {
@@ -124,10 +124,10 @@ class CollectionTypeInferenceTest: BaseRellTest(false) {
     }
 
     private fun chkQueryReturnType(type: String, value: String, exp: String) {
-        chkQueryEx("query q(): $type = $value;", exp)
-        chkQueryEx("query q(): $type? = $value;", exp)
-        chkQueryEx("query q(): $type { return $value; }", exp)
-        chkQueryEx("query q(): $type? { return $value; }", exp)
+        chkFull("query q(): $type = $value;", exp)
+        chkFull("query q(): $type? = $value;", exp)
+        chkFull("query q(): $type { return $value; }", exp)
+        chkFull("query q(): $type? { return $value; }", exp)
     }
 
     @Test fun testListElementAssignment() {

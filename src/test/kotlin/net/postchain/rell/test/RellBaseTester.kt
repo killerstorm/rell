@@ -161,6 +161,10 @@ abstract class RellBaseTester(
         lastInserts = inserts
     }
 
+    abstract fun chkEx(code: String, expected: String)
+
+    fun chk(expr: String, expected: String) = chkEx("= $expr;", expected)
+
     fun chkData(expected: List<String>) {
         expectedData.clear()
         chkDataNew(expected)

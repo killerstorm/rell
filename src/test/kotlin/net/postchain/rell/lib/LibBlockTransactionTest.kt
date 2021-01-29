@@ -197,27 +197,27 @@ class LibBlockTransactionTest: BaseRellTest() {
 
         var t = createChainIdTester(333, 111, 444, BLOCK_INSERTS_333)
 
-        t.chkQuery(expr, "[(transaction[444],0xfade,0x1234,0xedaf,block[111],222,0xdeadbeef,1500000000000)]")
-        t.chkQuery("(b: block, t: transaction) @* {}", "[(b=block[111],t=transaction[444])]")
+        t.chk(expr, "[(transaction[444],0xfade,0x1234,0xedaf,block[111],222,0xdeadbeef,1500000000000)]")
+        t.chk("(b: block, t: transaction) @* {}", "[(b=block[111],t=transaction[444])]")
 
-        t.chkQuery("foo @* {} (_=foo,_=.b,_=.t)", "[(foo[1],block[111],transaction[444])]")
-        t.chkQuery("foo @* {} (_=.value)", "[0]")
+        t.chk("foo @* {} (_=foo,_=.b,_=.t)", "[(foo[1],block[111],transaction[444])]")
+        t.chk("foo @* {} (_=.value)", "[0]")
         t.chkOp("update foo @* { .b.block_height >= 0, .t.tx_hash != x'' } ( value = 100 );")
-        t.chkQuery("foo @* {} (_=.value)", "[100]")
+        t.chk("foo @* {} (_=.value)", "[100]")
         t.chkOp("delete foo @* { .b.block_height >= 0, .t.tx_hash != x'' };")
-        t.chkQuery("foo @* {} (_=.value)", "[]")
+        t.chk("foo @* {} (_=.value)", "[]")
 
         t = createChainIdTester(555, 1, 2, BLOCK_INSERTS_555)
 
-        t.chkQuery(expr, "[(transaction[2],0xceed,0x4321,0xfeed,block[1],35,0xfeebdaed,1400000000000)]")
-        t.chkQuery("(b: block, t: transaction) @* {}", "[(b=block[1],t=transaction[2])]")
+        t.chk(expr, "[(transaction[2],0xceed,0x4321,0xfeed,block[1],35,0xfeebdaed,1400000000000)]")
+        t.chk("(b: block, t: transaction) @* {}", "[(b=block[1],t=transaction[2])]")
 
-        t.chkQuery("foo @* {} (_=foo,_=.b,_=.t)", "[(foo[1],block[1],transaction[2])]")
-        t.chkQuery("foo @* {} (_=.value)", "[0]")
+        t.chk("foo @* {} (_=foo,_=.b,_=.t)", "[(foo[1],block[1],transaction[2])]")
+        t.chk("foo @* {} (_=.value)", "[0]")
         t.chkOp("update foo @* { .b.block_height >= 0, .t.tx_hash != x'' } ( value = 100 );")
-        t.chkQuery("foo @* {} (_=.value)", "[100]")
+        t.chk("foo @* {} (_=.value)", "[100]")
         t.chkOp("delete foo @* { .b.block_height >= 0, .t.tx_hash != x'' };")
-        t.chkQuery("foo @* {} (_=.value)", "[]")
+        t.chk("foo @* {} (_=.value)", "[]")
     }
 
     @Test fun textGtv() {

@@ -98,10 +98,10 @@ class StackTraceTest: BaseRellTest(false) {
         file("lib.rell", "abstract module; import err; abstract function g() { err.err(); }")
         file("imp.rell", "module; import lib; import err; override function lib.g() { err.err(); }")
 
-        chkQueryEx("import lib; query q() { lib.g(); return 0; }", "req_err:null")
+        chkFull("import lib; query q() { lib.g(); return 0; }", "req_err:null")
         chkStack("err:err(err.rell:1)", "lib:g(lib.rell:1)", ":q(main.rell:1)")
 
-        chkQueryEx("import lib; import imp; query q() { lib.g(); return 0; }", "req_err:null")
+        chkFull("import lib; import imp; query q() { lib.g(); return 0; }", "req_err:null")
         chkStack("err:err(err.rell:1)", "imp:lib.g(imp.rell:1)", ":q(main.rell:1)")
     }
 
@@ -203,7 +203,7 @@ class StackTraceTest: BaseRellTest(false) {
         """)
 
         t.def("import mid;")
-        t.chkQueryEx("query q() { mid.g(); return 0; }", "q", listOf(), error)
+        t.chkFull("query q() { mid.g(); return 0; }", "q", listOf(), error)
         t.chkStack("lib:f(lib.rell:$line)", "mid:g(mid.rell:4)", ":q(main.rell:2)")
     }
 }

@@ -5,6 +5,7 @@
 package net.postchain.rell
 
 import net.postchain.rell.test.BaseRellTest
+import net.postchain.rell.test.QueryTester
 import org.junit.Test
 
 class RedDbExprTest: BaseRellTest() {
@@ -267,11 +268,11 @@ class RedDbExprTest: BaseRellTest() {
         insert("c0.user", "name,id,value1,value2", "1,'Bob',0,100,200")
     }
 
-    private fun chkExpr(params: String, expr: String, tester: (QueryChecker) -> Unit) {
+    private fun chkExpr(params: String, expr: String, tester: (QueryTester) -> Unit) {
         chkArgs(params, "= user @* {} ( $expr );", tester)
     }
 
-    private fun chk(q: QueryChecker, arg: Any?, expected: String, out: String? = null) {
+    private fun chk(q: QueryTester, arg: Any?, expected: String, out: String? = null) {
         q.chk(arg, expected)
 
         if (out != null) {

@@ -261,9 +261,12 @@ class AppGtvMetaTest: BaseRellTest(false) {
 
     @Test fun testTypeMirrorStruct() {
         initTypes()
-        chkMetaType("struct<lib.user>", """{"type":"struct","definition_type":"ENTITY","definition":"lib:user"}""")
-        chkMetaType("struct<lib.state>", """{"type":"struct","definition_type":"OBJECT","definition":"lib:state"}""")
-        chkMetaType("struct<lib.op>", """{"type":"struct","definition_type":"OPERATION","definition":"lib:op"}""")
+        chkMetaType("struct<lib.user>", """{"type":"struct","definition_type":"ENTITY","definition":"lib:user","mutable":0}""")
+        chkMetaType("struct<lib.state>", """{"type":"struct","definition_type":"OBJECT","definition":"lib:state","mutable":0}""")
+        chkMetaType("struct<lib.op>", """{"type":"struct","definition_type":"OPERATION","definition":"lib:op","mutable":0}""")
+        chkMetaType("struct<mutable lib.user>", """{"type":"struct","definition_type":"ENTITY","definition":"lib:user","mutable":1}""")
+        chkMetaType("struct<mutable lib.state>", """{"type":"struct","definition_type":"OBJECT","definition":"lib:state","mutable":1}""")
+        chkMetaType("struct<mutable lib.op>", """{"type":"struct","definition_type":"OPERATION","definition":"lib:op","mutable":1}""")
     }
 
     private fun initTypes() {
@@ -306,6 +309,6 @@ class AppGtvMetaTest: BaseRellTest(false) {
     private fun chkMeta(code: String, expected: String) {
         tst.strictToString = false
         val expected2 = GtvTestUtils.encodeGtvStr(GtvTestUtils.decodeGtvStr(expected))
-        chkQueryEx(code, "rell.get_app_structure", listOf(), expected2)
+        chkFull(code, "rell.get_app_structure", listOf(), expected2)
     }
 }

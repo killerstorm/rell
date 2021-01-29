@@ -167,10 +167,10 @@ class IncrementTest: BaseRellTest(false) {
     }
 
     @Test fun testOperandParameter() {
-        chkQueryEx("function f(x: integer): integer { x++; return x; }", "ct_err:expr_assign_val:x")
-        chkQueryEx("function f(x: integer): integer { x--; return x; }", "ct_err:expr_assign_val:x")
-        chkQueryEx("function f(x: integer): integer { ++x; return x; }", "ct_err:expr_assign_val:x")
-        chkQueryEx("function f(x: integer): integer { --x; return x; }", "ct_err:expr_assign_val:x")
+        chkFull("function f(x: integer): integer { x++; return x; }", "ct_err:expr_assign_val:x")
+        chkFull("function f(x: integer): integer { x--; return x; }", "ct_err:expr_assign_val:x")
+        chkFull("function f(x: integer): integer { ++x; return x; }", "ct_err:expr_assign_val:x")
+        chkFull("function f(x: integer): integer { --x; return x; }", "ct_err:expr_assign_val:x")
     }
 
     @Test fun testSafeAccess() {

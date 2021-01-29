@@ -278,7 +278,7 @@ class WhenTest: BaseRellTest(false) {
         val fnCode = "function f(a: $type): $retType $code"
         for (case in cases) {
             val fullCode = "$fnCode query q() = f(${case.first});"
-            chkQueryEx(fullCode, case.second)
+            chkFull(fullCode, case.second)
         }
     }
 

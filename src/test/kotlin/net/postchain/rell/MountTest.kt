@@ -91,7 +91,7 @@ class MountTest: BaseRellTest() {
     }
 
     @Test fun testQuery() {
-        chkQueryEx("@mount('foo.bar') query some() = 123;", "foo.bar", listOf(), "int[123]")
+        chkFull("@mount('foo.bar') query some() = 123;", "foo.bar", listOf(), "int[123]")
     }
 
     @Test fun testEmptyMount() {
@@ -421,7 +421,7 @@ class MountTest: BaseRellTest() {
 
     private fun chkMountConflict(imp: String, code: String, exp: String) {
         val t = prepareMountConflict(imp)
-        t.chkQueryEx("query q() = $code;", "q", listOf(), exp)
+        t.chkFull("query q() = $code;", "q", listOf(), exp)
     }
 
     private fun chkMountConflictErr(imp: String, exp: String) {

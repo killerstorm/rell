@@ -109,7 +109,7 @@ sealed class R_MountedRoutineDefinition(names: R_DefinitionNames, val mountName:
 class R_OperationDefinition(
         names: R_DefinitionNames,
         mountName: R_MountName,
-        val mirrorStruct: R_Struct
+        val mirrorStructs: R_MirrorStructs
 ): R_MountedRoutineDefinition(names, mountName) {
     private val internals = C_LateInit(C_CompilerPass.EXPRESSIONS, ERROR_INTERNALS)
 

@@ -8,6 +8,7 @@ import net.postchain.rell.runtime.*
 
 abstract class BaseRellTest(useSql: Boolean = true, gtv: Boolean = false): BaseTesterTest(useSql) {
     final override val tst = RellCodeTester(tstCtx, entityDefs(), objInserts(), gtv = gtv)
+
     val repl by lazy { tst.createRepl() }
 
     open fun entityDefs(): List<String> = listOf()
@@ -16,99 +17,35 @@ abstract class BaseRellTest(useSql: Boolean = true, gtv: Boolean = false): BaseT
     fun chk(code: String, arg: Long, expected: String) = chkEx("= $code ;", arg, expected)
     fun chk(code: String, arg1: Long, arg2: Long, expected: String) = chkEx("= $code ;", arg1, arg2, expected)
 
-    final override fun chkEx(code: String, expected: String) = chkFull("query q() $code", listOf(), expected)
+    fun chkEx(code: String, arg: Long, expected: String) = tst.chkEx(code, listOf(arg), expected)
+    fun chkEx(code: String, arg1: Long, arg2: Long, expected: String) = tst.chkEx(code, listOf(arg1, arg2), expected)
+    fun chkEx(code: String, arg: Boolean, expected: String) = tst.chkEx(code, listOf(arg), expected)
 
-    fun chkEx(code: String, arg: Long, expected: String) {
-        chkFull("query q(a: integer) $code", listOf(Rt_IntValue(arg)), expected)
-    }
-
-    fun chkEx(code: String, arg1: Long, arg2: Long, expected: String) {
-        chkFull("query q(a: integer, b: integer) $code", listOf(Rt_IntValue(arg1), Rt_IntValue(arg2)), expected)
-    }
-
-    fun chkEx(code: String, arg: Boolean, expected: String) {
-        chkFull("query q(a: boolean) $code", listOf(Rt_BooleanValue(arg)), expected)
-    }
-
-    fun chkArgs(header: String, code: String, tester: (QueryChecker) -> Unit) {
+    fun chkArgs(header: String, code: String, tester: (QueryTester) -> Unit) {
         val fullCode = "query q($header) $code"
-        val checker = QueryChecker(fullCode)
+        val checker = QueryTester(tst, fullCode)
         tester(checker)
     }
 
-    fun chkFull(code: String, args: List<Rt_Value>, expected: String) {
-        tst.chkQueryEx(code, "q", args, expected)
-    }
+    fun chkFull(code: String, expected: String) =  tst.chkFull(code, expected)
+    fun chkFull(code: String, args: List<Rt_Value>, expected: String) = tst.chkFull(code, args, expected)
+    fun chkFull(code: String, name: String, args: List<Rt_Value>, expected: String) = tst.chkFull(code, name, args, expected)
 
-    fun chkQueryEx(code: String, expected: String) {
-        tst.chkQueryEx(code, "q", listOf(), expected)
-    }
+    fun chkFull(code: String, arg: Long?, expected: String) = chkFull(code, listOf(rtVal(arg)), expected)
+    fun chkFull(code: String, arg1: Long?, arg2: Long?, expected: String) = chkFull(code, listOf(rtVal(arg1), rtVal(arg2)), expected)
+    fun chkFull(code: String, arg: String?, expected: String) = chkFull(code, listOf(rtVal(arg)), expected)
+    fun chkFull(code: String, arg: Boolean?, expected: String) = chkFull(code, listOf(rtVal(arg)), expected)
 
-    fun chkQueryEx(code: String, args: List<Rt_Value>, expected: String) {
-        chkQueryEx(code, "q", args, expected)
-    }
-
-    fun chkQueryEx(code: String, name: String, args: List<Rt_Value>, expected: String) {
-        tst.chkQueryEx(code, name, args, expected)
-    }
-
-    fun chkQueryEx(code: String, arg: Long?, expected: String) = chkQueryEx(code, listOf(rtVal(arg)), expected)
-    fun chkQueryEx(code: String, arg1: Long?, arg2: Long?, expected: String) = chkQueryEx(code, listOf(rtVal(arg1), rtVal(arg2)), expected)
-    fun chkQueryEx(code: String, arg: String?, expected: String) = chkQueryEx(code, listOf(rtVal(arg)), expected)
-    fun chkQueryEx(code: String, arg: Boolean?, expected: String) = chkQueryEx(code, listOf(rtVal(arg)), expected)
-
-    fun chkFn(code: String, expected: String) {
-        val modCode = "function f() $code"
-        chkFnEx(modCode, expected)
-    }
+    fun chkFn(code: String, expected: String) = tst.chkFn(code, expected)
+    fun chkFnFull(code: String, expected: String) = tst.chkFnFull(code, expected)
 
     fun chkOp(code: String, expected: String = "OK") = tst.chkOp(code, expected)
     fun chkOpFull(code: String, expected: String = "OK", name: String = "o") = tst.chkOpEx(code, name, expected)
 
-    fun chkFnEx(code: String, expected: String) = tst.chkFnEx(code, expected)
-
-    fun chkData(vararg expected: String) = tst.chkData(*expected)
-    fun chkDataNew(vararg expected: String) = tst.chkDataNew(*expected)
-    fun chkDataRaw(vararg expected: String) = tst.chkDataRaw(*expected)
-
     fun chkWarn(vararg  expected: String) = tst.chkWarn(*expected)
-
     fun chkStack(vararg expected: String) = tst.chkStack(*expected)
 
     private fun rtVal(v: Long?) = if (v == null) Rt_NullValue else Rt_IntValue(v)
     private fun rtVal(v: String?) = if (v == null) Rt_NullValue else Rt_TextValue(v)
     private fun rtVal(v: Boolean?) = if (v == null) Rt_NullValue else Rt_BooleanValue(v)
-
-    inner class QueryChecker(private val code: String) {
-        fun chk(arg: Any?, expected: String): QueryChecker {
-            chk0(expected, arg)
-            return this
-        }
-
-        fun chk(arg1: Any?, arg2: Any?, expected: String): QueryChecker {
-            chk0(expected, arg1, arg2)
-            return this
-        }
-
-        fun out(vararg expected: String): QueryChecker {
-            chkOut(*expected)
-            return this
-        }
-
-        private fun chk0(expected: String, vararg args: Any?) {
-            val rtArgs = args.map { argToRt(it) }.toList()
-            chkFull(code, rtArgs, expected)
-        }
-
-        private fun argToRt(arg: Any?): Rt_Value {
-            return when (arg) {
-                is Boolean -> Rt_BooleanValue(arg)
-                is Int -> Rt_IntValue(arg.toLong())
-                is Long -> Rt_IntValue(arg)
-                is String -> Rt_TextValue(arg)
-                null -> Rt_NullValue
-                else -> throw IllegalArgumentException(arg.javaClass.canonicalName)
-            }
-        }
-    }
 }
