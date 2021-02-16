@@ -27,6 +27,7 @@ class ListVsMap<K> private constructor(private val entries: List<Map.Entry<K, *>
 }
 
 fun <T> immListOf(vararg values: T): List<T> = ImmutableList.copyOf(values)
+fun <T> immSetOf(): Set<T> = ImmutableSet.of()
 fun <T> immSetOf(vararg values: T): Set<T> = ImmutableSet.copyOf(values)
 fun <K, V> immMapOf(vararg entries: Pair<K, V>): Map<K, V> = mapOf(*entries).toImmMap()
 

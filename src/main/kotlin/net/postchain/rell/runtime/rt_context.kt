@@ -256,19 +256,6 @@ class Rt_AppContext(
     private var objsInit: SqlObjectsInit? = null
     private var objsInited = false
 
-    fun createRootFrame(defPos: R_DefinitionPos, sqlExec: SqlExecutor, modsAllowed: Boolean): Rt_CallFrame {
-        val exeCtx = Rt_ExecutionContext(this, sqlExec)
-        val defCtx = Rt_DefinitionContext(exeCtx, modsAllowed, defPos)
-
-        val containerUid = R_ContainerUid(0, "<init>", app.uid)
-        val fnUid = R_FnUid(0, "<init>", containerUid)
-        val blockUid = R_FrameBlockUid(0, "<init>", fnUid)
-        val rFrameBlock = R_FrameBlock(null, blockUid, 0, 0)
-        val rFrame = R_CallFrame(0, rFrameBlock, false)
-
-        return rFrame.createRtFrame(defCtx, null, null)
-    }
-
     fun objectsInitialization(objsInit: SqlObjectsInit, code: () -> Unit) {
         check(this.objsInit == null)
         check(!objsInited)
@@ -301,7 +288,7 @@ class Rt_CallContext(val defCtx: Rt_DefinitionContext) {
     val chainCtx = globalCtx.chainCtx
 }
 
-class Rt_DefinitionContext(val exeCtx: Rt_ExecutionContext, val dbUpdateAllowed: Boolean, val pos: R_DefinitionPos) {
+class Rt_DefinitionContext(val exeCtx: Rt_ExecutionContext, val dbUpdateAllowed: Boolean, val defId: R_DefinitionId) {
     val appCtx = exeCtx.appCtx
     val globalCtx = appCtx.globalCtx
     val sqlCtx = appCtx.sqlCtx

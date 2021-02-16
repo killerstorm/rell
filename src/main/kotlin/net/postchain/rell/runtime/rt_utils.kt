@@ -9,7 +9,8 @@ import net.postchain.base.BlockchainRid
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
 import net.postchain.rell.compiler.C_Constants
-import net.postchain.rell.model.R_StackPos
+import net.postchain.rell.compiler.C_LateGetter
+import net.postchain.rell.model.*
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.sql.SqlManager
 import java.math.BigDecimal
@@ -202,6 +203,18 @@ object Rt_Utils {
             throw Rt_Error(code, msg)
         }
         return value
+    }
+
+    fun evaluateInNewFrame(
+            frame: Rt_CallFrame,
+            expr: R_Expr,
+            filePos: R_FilePos?,
+            rFrameGetter: C_LateGetter<R_CallFrame>
+    ): Rt_Value {
+        val caller = if (filePos == null) null else R_FunctionDefinition.createFrameCaller(frame, filePos)
+        val rSubFrame = rFrameGetter.get()
+        val subFrame = R_FunctionDefinition.createCallFrame(frame.defCtx, caller, rSubFrame)
+        return expr.evaluate(subFrame)
     }
 }
 

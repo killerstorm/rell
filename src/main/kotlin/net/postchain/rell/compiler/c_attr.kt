@@ -16,9 +16,15 @@ import net.postchain.rell.model.*
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 
+class C_CreateContext(exprCtx: C_ExprContext, val initFrameGetter: C_LateGetter<R_CallFrame>, val filePos: R_FilePos) {
+    val msgCtx = exprCtx.msgCtx
+}
+
+class C_CreateAttributes(val rAttrs: List<R_CreateExprAttr>, val exprFacts: C_ExprVarFacts)
+
 object C_AttributeResolver {
     fun resolveCreate(
-            ctx: C_ExprContext,
+            ctx: C_CreateContext,
             attributes: Map<String, R_Attribute>,
             args: List<C_Argument>,
             pos: S_Pos
@@ -39,7 +45,7 @@ object C_AttributeResolver {
             R_CreateExprAttr_Specified(it.value, rExpr)
         }
 
-        val attrExprsDef = attrExprs + matchDefaultExprs(attributes, attrExprs)
+        val attrExprsDef = attrExprs + matchDefaultExprs(ctx, attributes, attrExprs)
         checkMissingAttrs(attributes, attrExprsDef, pos)
 
         for ((arg, attr) in matchedAttrs) {
@@ -64,9 +70,15 @@ object C_AttributeResolver {
         return matchImplicitAttrs(msgCtx, attributes, args, explicitAttrs, false)
     }
 
-    private fun matchDefaultExprs(attributes: Map<String, R_Attribute>, attrExprs: List<R_CreateExprAttr>): List<R_CreateExprAttr> {
+    private fun matchDefaultExprs(
+            ctx: C_CreateContext,
+            attributes: Map<String, R_Attribute>,
+            attrExprs: List<R_CreateExprAttr>
+    ): List<R_CreateExprAttr> {
         val provided = attrExprs.map { it.attr.name }.toSet()
-        return attributes.values.filter { it.hasExpr && it.name !in provided }.map { R_CreateExprAttr_Default(it) }
+        return attributes.values
+                .filter { it.hasExpr && it.name !in provided }
+                .map { R_CreateExprAttr_Default(it, ctx.initFrameGetter, ctx.filePos) }
     }
 
     private fun checkMissingAttrs(attributes: Map<String, R_Attribute>, attrs: List<R_CreateExprAttr>, pos: S_Pos) {
@@ -287,5 +299,3 @@ class C_Argument(val index: Int, val name: S_Name?, val sExpr: S_Expr, val vExpr
         }
     }
 }
-
-class C_CreateAttributes(val rAttrs: List<R_CreateExprAttr>, val exprFacts: C_ExprVarFacts)

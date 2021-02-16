@@ -29,7 +29,7 @@ object S_UnaryOp_Plus: S_UnaryOp("+") {
         // Cannot simply return "expr", because then expressions like "(+x)++" or "(+x) = 123" will be allowed.
         val vOp = V_UnaryOp_Plus(type)
         val varFacts = C_ExprVarFacts.of(postFacts = expr.varFacts().postFacts)
-        return V_UnaryExpr(startPos, vOp, expr, varFacts)
+        return V_UnaryExpr(ctx, startPos, vOp, expr, varFacts)
     }
 }
 
@@ -47,7 +47,7 @@ object S_UnaryOp_Minus: S_UnaryOp("-") {
         }
 
         val varFacts = C_ExprVarFacts.of(postFacts = expr.varFacts().postFacts)
-        return V_UnaryExpr(startPos, vOp, expr, varFacts)
+        return V_UnaryExpr(ctx, startPos, vOp, expr, varFacts)
     }
 }
 
@@ -65,13 +65,13 @@ object S_UnaryOp_Not: S_UnaryOp("not") {
                 postFacts = varFacts.postFacts
         )
 
-        return V_UnaryExpr(startPos, V_UnaryOp_Not(), expr, resVarFacts)
+        return V_UnaryExpr(ctx, startPos, V_UnaryOp_Not(), expr, resVarFacts)
     }
 }
 
 class S_UnaryOp_IncDec(val inc: Boolean, val post: Boolean): S_UnaryOp(if (inc) "++" else "--") {
     override fun compile(ctx: C_ExprContext, startPos: S_Pos, opPos: S_Pos, expr: V_Expr): V_Expr {
-        val dst = expr.destination(ctx)
+        val dst = expr.destination()
         val dstType = dst.effectiveType()
 
         val ops = if (R_IntegerType.isAssignableFrom(dstType)) {
@@ -89,7 +89,7 @@ class S_UnaryOp_IncDec(val inc: Boolean, val post: Boolean): S_UnaryOp(if (inc) 
 
         val resType = dst.resultType(expr.type())
         val varFacts = C_ExprVarFacts.of(postFacts = expr.varFacts().postFacts)
-        return V_IncDecExpr(startPos, dst, resType, idOp.srcExpr, op, post, varFacts)
+        return V_IncDecExpr(ctx, startPos, dst, resType, idOp.srcExpr, op, post, varFacts)
     }
 
     companion object {
@@ -116,7 +116,7 @@ object S_UnaryOp_NotNull: S_UnaryOp("!!") {
 
         val preFacts = value.varFacts().postFacts
         val varFacts = C_ExprVarFacts.forNullCast(preFacts, value)
-        return V_UnaryExpr(startPos, V_UnaryOp_NotNull(valueType), expr, varFacts)
+        return V_UnaryExpr(ctx, startPos, V_UnaryOp_NotNull(valueType), expr, varFacts)
     }
 }
 
@@ -130,7 +130,7 @@ object S_UnaryOp_IsNull: S_UnaryOp("??") {
 
         val preFacts = value.varFacts()
         val varFacts = C_ExprVarFacts.forNullCheck(value, false).update(postFacts = preFacts.postFacts)
-        return V_UnaryExpr(startPos, V_UnaryOp_IsNull(), expr, varFacts)
+        return V_UnaryExpr(ctx, startPos, V_UnaryOp_IsNull(), expr, varFacts)
     }
 }
 

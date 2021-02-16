@@ -17,7 +17,7 @@ class ReplStatementTest: BaseRellTest(false) {
     @Test fun testVal() {
         repl.chk("val x = 123; print(x);", "OUT:123", "RES:unit")
 
-        repl.chk("val x = 123;", "CTE:<console>:var_dupname:x")
+        repl.chk("val x = 123;", "CTE:<console>:block:name_conflict:x")
         repl.chk("x", "RES:int[123]")
 
         repl.chk("val y = 456;")

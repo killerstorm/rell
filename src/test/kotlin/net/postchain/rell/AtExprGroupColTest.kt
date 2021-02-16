@@ -1,17 +1,9 @@
 package net.postchain.rell
 
-import net.postchain.rell.test.RellCodeTester
 import org.junit.Test
 
 class AtExprGroupColTest: AtExprGroupBaseTest() {
-    override val impDefKw = "struct"
-    override fun impFrom(name: String) = "get_$name()"
-    override fun impRtErr(code: String) = "rt_err:$code"
-
-    override fun impCreateObjs(t: RellCodeTester, name: String, vararg objs: String) {
-        val values = objs.joinToString(", ") { "$name($it)" }
-        t.def("function get_$name(): list<$name> = [$values];")
-    }
+    override fun impKind() = AtExprTestKind_Col
 
     @Test fun testDefaultSorting() {
         initDataCountries()

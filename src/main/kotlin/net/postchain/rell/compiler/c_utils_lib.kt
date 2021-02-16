@@ -171,7 +171,7 @@ class C_GlobalFuncBuilder: C_FuncBuilder<C_GlobalFuncBuilder, C_GlobalFuncCaseCt
     }
 
     override fun makeFunc(cases: List<C_FuncCase<C_GlobalFuncCaseCtx>>): C_GlobalFunction {
-        return C_SysGlobalFunction(cases)
+        return C_RegularSysGlobalFunction(cases)
     }
 
     fun build(): C_GlobalFuncTable {

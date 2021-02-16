@@ -21,9 +21,10 @@ data class C_LoopUid(val id: Long, val fn: R_FnUid)
 class C_GlobalContext(val compilerOptions: C_CompilerOptions, val sourceDir: C_SourceDir, modules: Set<R_ModuleName>) {
     val modules = modules.toImmSet()
 
-    private val appUidGen = C_UidGen { id, _ -> R_AppUid(id) }
-
-    fun nextAppUid() = appUidGen.next("")
+    companion object {
+        private val appUidGen = C_UidGen { id, _ -> R_AppUid(id) }
+        fun nextAppUid(): R_AppUid = synchronized(appUidGen) { appUidGen.next("") }
+    }
 }
 
 class C_MessageContext(val globalCtx: C_GlobalContext) {
@@ -332,7 +333,7 @@ enum class C_DefinitionType {
     fun isEntityLike() = this == ENTITY || this == OBJECT
 }
 
-class C_DefinitionContext(val mntCtx: C_MountContext, val definitionType: C_DefinitionType){
+class C_DefinitionContext(val mntCtx: C_MountContext, val definitionType: C_DefinitionType, val defId: R_DefinitionId) {
     val nsCtx = mntCtx.nsCtx
     val modCtx = nsCtx.modCtx
     val appCtx = modCtx.appCtx
@@ -340,14 +341,24 @@ class C_DefinitionContext(val mntCtx: C_MountContext, val definitionType: C_Defi
     val globalCtx = modCtx.globalCtx
     val executor = modCtx.executor
 
-    val defExprCtx: C_ExprContext
+    val initExprCtx: C_ExprContext
+
+    private val initFrameCtx: C_FrameContext
+
+    private val initFrameLate = C_LateInit(C_CompilerPass.FRAMES, R_CallFrame.ERROR)
+    val initFrameGetter = initFrameLate.getter
 
     init {
-        val fnCtx = C_FunctionContext(this, "${mntCtx.mountName}.<def>", null, TypedKeyMap())
-        val frameCtx = C_FrameContext.create(fnCtx)
-        val blkCtx = C_OwnerBlockContext.createRoot(frameCtx, false, C_BlockScope.EMPTY)
-        val nameCtx = C_NameContext.createBlock(blkCtx)
-        defExprCtx = C_ExprContext(blkCtx, nameCtx, C_VarFactsContext.EMPTY)
+        val fnCtx = C_FunctionContext(this, "${mntCtx.mountName}.<init>", null, TypedKeyMap())
+        initFrameCtx = C_FrameContext.create(fnCtx)
+        val blkCtx = initFrameCtx.rootBlkCtx
+        val nameCtx = C_NameContext.createBlock()
+        initExprCtx = C_ExprContext.createRoot(blkCtx, nameCtx)
+
+        executor.onPass(C_CompilerPass.FRAMES) {
+            val cFrame = initFrameCtx.makeCallFrame(false)
+            initFrameLate.set(cFrame.rFrame)
+        }
     }
 
     fun checkDbUpdateAllowed(pos: S_Pos) {

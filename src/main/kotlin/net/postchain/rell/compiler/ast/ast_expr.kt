@@ -20,7 +20,7 @@ abstract class S_Expr(val startPos: S_Pos) {
     }
 
     fun compileSafe(ctx: C_ExprContext, typeHint: C_TypeHint = C_TypeHint.NONE): C_Expr {
-        return compileOpt(ctx, typeHint) ?: C_Utils.errorExpr(startPos)
+        return compileOpt(ctx, typeHint) ?: C_Utils.errorExpr(ctx, startPos)
     }
 
     fun compileWithFacts(ctx: C_ExprContext, facts: C_VarFacts, typeHint: C_TypeHint = C_TypeHint.NONE): C_Expr {
@@ -31,16 +31,21 @@ abstract class S_Expr(val startPos: S_Pos) {
     fun compile(ctx: C_StmtContext, typeHint: C_TypeHint = C_TypeHint.NONE) = compile(ctx.exprCtx, typeHint)
     fun compileOpt(ctx: C_StmtContext, typeHint: C_TypeHint = C_TypeHint.NONE) = compileOpt(ctx.exprCtx, typeHint)
 
-    open fun compileFrom(ctx: C_ExprContext, atPos: S_Pos, subValues: MutableList<V_Expr>): C_AtFrom {
+    open fun compileNestedAt(ctx: C_ExprContext, parentAtCtx: C_DbAtContext): C_MaybeNestedAt {
+        return C_MaybeNestedAt_No(compile(ctx))
+    }
+
+    open fun compileFrom(ctx: C_ExprContext, fromCtx: C_AtFromContext, subValues: MutableList<V_Expr>): C_AtFrom {
         val item = compileFromItem(ctx)
         return when (item) {
             is C_AtFromItem_Entity -> {
-                val cEntity = C_AtEntity(item.pos, item.entity, item.alias, false, 0)
-                C_AtFrom_Entities(ctx, listOf(cEntity))
+                val atEntityId = ctx.appCtx.nextAtEntityId(fromCtx.atExprId)
+                val cEntity = C_AtEntity(item.pos, item.entity, item.alias.str, false, atEntityId)
+                C_AtFrom_Entities(ctx, listOf(cEntity), fromCtx.parentAtCtx)
             }
             is C_AtFromItem_Iterable -> {
                 subValues.add(item.vExpr)
-                C_AtFrom_Iterable(ctx, atPos, null, item)
+                C_AtFrom_Iterable(ctx, fromCtx.atPos, null, item)
             }
         }
     }
@@ -75,7 +80,7 @@ sealed class S_LiteralExpr(pos: S_Pos): S_Expr(pos) {
 
     final override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
         val v = value()
-        return V_RExpr.makeExpr(startPos, R_ConstantExpr(v))
+        return V_RExpr.makeExpr(ctx, startPos, R_ConstantExpr(v))
     }
 }
 
@@ -113,7 +118,7 @@ class S_SubscriptExpr(val opPos: S_Pos, val base: S_Expr, val expr: S_Expr): S_E
 
         val kind = compileSubscriptKind(ctx, effectiveType)
         if (kind == null) {
-            return C_Utils.errorExpr(opPos)
+            return C_Utils.errorExpr(ctx, opPos)
         }
 
         C_Errors.check(ctx.msgCtx, baseType !is R_NullableType, opPos, "expr_subscript_null", "Cannot apply '[]' on nullable value")
@@ -122,7 +127,7 @@ class S_SubscriptExpr(val opPos: S_Pos, val base: S_Expr, val expr: S_Expr): S_E
         val postFacts = vBase.varFacts().postFacts.and(vExpr.varFacts().postFacts)
         val exprFacts = C_ExprVarFacts.of(postFacts = postFacts)
 
-        val vResExpr = kind.compile(vBase, vExpr, exprFacts)
+        val vResExpr = kind.compile(ctx, vBase, vExpr, exprFacts)
         return C_VExpr(vResExpr)
     }
 
@@ -164,29 +169,29 @@ class S_SubscriptExpr(val opPos: S_Pos, val base: S_Expr, val expr: S_Expr): S_E
     }
 
     private inner abstract class Subscript(val keyType: R_Type) {
-        abstract fun compile(base: V_Expr, key: V_Expr, varFacts: C_ExprVarFacts): V_Expr
+        abstract fun compile(ctx: C_ExprContext, base: V_Expr, key: V_Expr, varFacts: C_ExprVarFacts): V_Expr
     }
 
     private inner class Subscript_Common(keyType: R_Type, val kind: V_CommonSubscriptKind): Subscript(keyType) {
-        override fun compile(base: V_Expr, key: V_Expr, varFacts: C_ExprVarFacts): V_Expr {
-            return V_CommonSubscriptExpr(startPos, base, varFacts, key, kind)
+        override fun compile(ctx: C_ExprContext, base: V_Expr, key: V_Expr, varFacts: C_ExprVarFacts): V_Expr {
+            return V_CommonSubscriptExpr(ctx, startPos, base, varFacts, key, kind)
         }
     }
 
     private inner class Subscript_Tuple(private val baseType: R_TupleType): Subscript(R_IntegerType) {
-        override fun compile(base: V_Expr, key: V_Expr, varFacts: C_ExprVarFacts): V_Expr {
+        override fun compile(ctx: C_ExprContext, base: V_Expr, key: V_Expr, varFacts: C_ExprVarFacts): V_Expr {
             val index = compileTuple0(key, baseType)
             val resType = baseType.fields[index].type
-            return V_TupleSubscriptExpr(startPos, base, varFacts, V_TupleSubscriptKind_Simple, resType, index)
+            return V_TupleSubscriptExpr(ctx, startPos, base, varFacts, V_TupleSubscriptKind_Simple, resType, index)
         }
     }
 
     private inner class Subscript_VirtualTuple(private val baseType: R_VirtualTupleType): Subscript(R_IntegerType) {
-        override fun compile(base: V_Expr, key: V_Expr, varFacts: C_ExprVarFacts): V_Expr {
+        override fun compile(ctx: C_ExprContext, base: V_Expr, key: V_Expr, varFacts: C_ExprVarFacts): V_Expr {
             val index = compileTuple0(key, baseType.innerType)
             val fieldType = baseType.innerType.fields[index].type
             val resType = S_VirtualType.virtualMemberType(fieldType)
-            return V_TupleSubscriptExpr(startPos, base, varFacts, V_TupleSubscriptKind_Virtual, resType, index)
+            return V_TupleSubscriptExpr(ctx, startPos, base, varFacts, V_TupleSubscriptKind_Virtual, resType, index)
         }
     }
 }
@@ -198,9 +203,9 @@ class S_CreateExpr(pos: S_Pos, val entityName: List<S_Name>, val exprs: List<S_N
         val entity = ctx.nsCtx.getEntity(entityName)
         val args = C_Argument.compile(ctx, entity.attributes, exprs)
 
-        var vExpr = compileStruct(entity, args, entity.mirrorStructs.immutable)
+        var vExpr = compileStruct(ctx, entity, args, entity.mirrorStructs.immutable)
         if (vExpr == null) {
-            vExpr = compileStruct(entity, args, entity.mirrorStructs.mutable)
+            vExpr = compileStruct(ctx, entity, args, entity.mirrorStructs.mutable)
         }
         if (vExpr == null) {
             vExpr = compileRegular(ctx, entity, args)
@@ -210,7 +215,8 @@ class S_CreateExpr(pos: S_Pos, val entityName: List<S_Name>, val exprs: List<S_N
     }
 
     private fun compileRegular(ctx: C_ExprContext, entity: R_EntityDefinition, args: List<C_Argument>): V_Expr {
-        val attrs = C_AttributeResolver.resolveCreate(ctx, entity.attributes, args, startPos)
+        val createCtx = C_CreateContext(ctx, entity.initFrameGetter, startPos.toFilePos())
+        val attrs = C_AttributeResolver.resolveCreate(createCtx, entity.attributes, args, startPos)
 
         C_Errors.check(entity.flags.canCreate, startPos) {
             val entityNameStr = C_Utils.nameStr(entityName)
@@ -218,10 +224,10 @@ class S_CreateExpr(pos: S_Pos, val entityName: List<S_Name>, val exprs: List<S_N
         }
 
         val rExpr = R_RegularCreateExpr(entity, attrs.rAttrs)
-        return V_RExpr(startPos, rExpr, attrs.exprFacts)
+        return V_RExpr(ctx, startPos, rExpr, attrs.exprFacts)
     }
 
-    private fun compileStruct(entity: R_EntityDefinition, args: List<C_Argument>, struct: R_Struct): V_Expr? {
+    private fun compileStruct(ctx: C_ExprContext, entity: R_EntityDefinition, args: List<C_Argument>, struct: R_Struct): V_Expr? {
         if (args.size != 1 || args[0].name != null) return null
 
         val vExpr = args[0].vExpr
@@ -231,7 +237,7 @@ class S_CreateExpr(pos: S_Pos, val entityName: List<S_Name>, val exprs: List<S_N
         val rStructExpr = vExpr.toRExpr()
         val rExpr = R_StructCreateExpr(entity, structType, rStructExpr)
         val exprFacts = C_ExprVarFacts.forSubExpressions(listOf(vExpr))
-        return V_RExpr(startPos, rExpr, exprFacts)
+        return V_RExpr(ctx, startPos, rExpr, exprFacts)
     }
 }
 
@@ -261,11 +267,11 @@ class S_TupleExpr(startPos: S_Pos, val fields: List<S_TupleExprField>): S_Expr(s
         checkNameConflicts(ctx, pairs, "field")
 
         val vExprs = pairs.map { (_, expr) -> expr.compileSafe(ctx).value() }
-        val vExpr = compile0(pairs, vExprs)
+        val vExpr = compile0(ctx, pairs, vExprs)
         return C_VExpr(vExpr)
     }
 
-    private fun compile0(pairs: List<Pair<S_Name?, S_Expr>>, vExprs: List<V_Expr>): V_Expr {
+    private fun compile0(ctx: C_ExprContext, pairs: List<Pair<S_Name?, S_Expr>>, vExprs: List<V_Expr>): V_Expr {
         for ((i, vExpr) in vExprs.withIndex()) {
             C_Utils.checkUnitType(pairs[i].second.startPos, vExpr.type(), "expr_tuple_unit", "Type of expression is unit")
         }
@@ -274,10 +280,10 @@ class S_TupleExpr(startPos: S_Pos, val fields: List<S_TupleExprField>): S_Expr(s
         val type = R_TupleType(fields)
 
         val varFacts = C_ExprVarFacts.forSubExpressions(vExprs)
-        return V_TupleExpr(startPos, type, vExprs, varFacts)
+        return V_TupleExpr(ctx, startPos, type, vExprs, varFacts)
     }
 
-    override fun compileFrom(ctx: C_ExprContext, atPos: S_Pos, subValues: MutableList<V_Expr>): C_AtFrom {
+    override fun compileFrom(ctx: C_ExprContext, fromCtx: C_AtFromContext, subValues: MutableList<V_Expr>): C_AtFrom {
         val pairs = fields.map {
             when (it) {
                 is S_TupleExprField_NameColonExpr -> Pair(it.name, it.expr)
@@ -286,21 +292,6 @@ class S_TupleExpr(startPos: S_Pos, val fields: List<S_TupleExprField>): S_Expr(s
                     Pair(it.name, it.expr)
                 }
                 is S_TupleExprField_Expr -> Pair(null, it.expr)
-            }
-        }
-
-        val dupAliases = checkNameConflicts(ctx, pairs, "alias")
-
-        val localVarConflictAliases = mutableSetOf<String>()
-
-        for (pair in pairs) {
-            val alias = pair.first
-            if (alias != null) {
-                val localVar = ctx.nameCtx.resolveNameLocalValue(alias.str)
-                if (localVar != null) {
-                    localVarConflictAliases.add(alias.str)
-                    ctx.msgCtx.error(alias.pos, "expr_at_conflict_alias:${alias.str}", "Name conflict: '${alias.str}'")
-                }
             }
         }
 
@@ -323,25 +314,17 @@ class S_TupleExpr(startPos: S_Pos, val fields: List<S_TupleExprField>): S_Expr(s
                         "Only one collection is allowed in at-expression")
             }
             val alias = pairs[0].first
-            val actualAlias = if (alias == null || alias.str in localVarConflictAliases) null else alias
-            return C_AtFrom_Iterable(ctx, atPos, actualAlias, iterables[0])
+            return C_AtFrom_Iterable(ctx, fromCtx.atPos, alias, iterables[0])
         }
 
         val cEntities = entities.mapIndexed { i, item ->
-            val explicitAlias = pairs[i].first?.str
+            val explicitAlias = pairs[i].first
             val alias = explicitAlias ?: item.alias
-            C_AtEntity(item.pos, item.entity, alias, explicitAlias != null, i)
+            val atEntityId = ctx.appCtx.nextAtEntityId(fromCtx.atExprId)
+            C_AtEntity(item.pos, item.entity, alias.str, explicitAlias != null, atEntityId)
         }
 
-        val names = mutableSetOf<String>()
-        for ((i, entity) in cEntities.withIndex()) {
-            if (!names.add(entity.alias) && entity.alias !in dupAliases) {
-                val pos = pairs[i].first?.pos ?: pairs[i].second.startPos
-                ctx.msgCtx.error(pos, "at_dup_alias:${entity.alias}", "Duplicate entity alias: ${entity.alias}")
-            }
-        }
-
-        return C_AtFrom_Entities(ctx, cEntities)
+        return C_AtFrom_Entities(ctx, cEntities, fromCtx.parentAtCtx)
     }
 
     private fun <T: C_AtFromItem> processFromItem(ctx: C_ExprContext, item: T, targets: MutableList<T>, opposites: List<*>) {
@@ -382,7 +365,7 @@ class S_IfExpr(pos: S_Pos, val cond: S_Expr, val trueExpr: S_Expr, val falseExpr
         val falseType = cFalse.type()
         val resType = C_Types.commonType(trueType, falseType, startPos, "expr_if_restype", "Incompatible types of if branches")
 
-        val vExpr = V_IfExpr(startPos, resType, cCond, cTrue, cFalse, resFacts)
+        val vExpr = V_IfExpr(ctx, startPos, resType, cCond, cTrue, cFalse, resFacts)
         return C_VExpr(vExpr)
     }
 
@@ -393,7 +376,7 @@ class S_IfExpr(pos: S_Pos, val cond: S_Expr, val trueExpr: S_Expr, val falseExpr
 
         val cTrue0 = trueExpr.compileWithFacts(ctx, trueFacts, typeHint).value()
         val cFalse0 = falseExpr.compileWithFacts(ctx, falseFacts, typeHint).value()
-        val (cTrue, cFalse) = C_BinOp_Common.promoteNumeric(cTrue0, cFalse0)
+        val (cTrue, cFalse) = C_BinOp_Common.promoteNumeric(ctx, cTrue0, cFalse0)
 
         val truePostFacts = trueFacts.and(cTrue.varFacts().postFacts)
         val falsePostFacts = falseFacts.and(cFalse.varFacts().postFacts)
@@ -414,7 +397,7 @@ class S_ListLiteralExpr(pos: S_Pos, val exprs: List<S_Expr>): S_Expr(pos) {
         val rExprs = values.map { it.toRExpr() }
         val rExpr = compile0(rExprs, typeHint)
         val exprFacts = C_ExprVarFacts.forSubExpressions(values)
-        return V_RExpr.makeExpr(startPos, rExpr, exprFacts)
+        return V_RExpr.makeExpr(ctx, startPos, rExpr, exprFacts)
     }
 
     private fun compile0(rExprs: List<R_Expr>, typeHint: C_TypeHint): R_Expr {
@@ -457,7 +440,7 @@ class S_MapLiteralExpr(startPos: S_Pos, val entries: List<Pair<S_Expr, S_Expr>>)
         val values = valueEntries.flatMap { (key, value) -> listOf(key, value) }
         val exprFacts = C_ExprVarFacts.forSubExpressions(values)
 
-        return V_RExpr.makeExpr(startPos, rExpr, exprFacts)
+        return V_RExpr.makeExpr(ctx, startPos, rExpr, exprFacts)
     }
 
     private fun compile0(ctx: C_ExprContext, typeHint: C_TypeHint, rEntries: List<Pair<R_Expr, R_Expr>>): R_Expr {
@@ -529,7 +512,7 @@ sealed class S_CollectionExpr(pos: S_Pos, val type: S_Type?, val args: List<S_Ex
         val rArgs = values.map { it.toRExpr() }
         val rExpr = compileConstructor0(ctx, typeHint, rArgs)
         val exprFacts = C_ExprVarFacts.forSubExpressions(values)
-        return V_RExpr.makeExpr(startPos, rExpr, exprFacts)
+        return V_RExpr.makeExpr(ctx, startPos, rExpr, exprFacts)
     }
 
     private fun compileConstructor0(ctx: C_ExprContext, typeHint: C_TypeHint, rArgs: List<R_Expr>): R_Expr {
@@ -648,7 +631,7 @@ class S_MapExpr(pos: S_Pos, val keyValueTypes: Pair<S_Type, S_Type>?, val args: 
         val rArgs = values.map { it.toRExpr() }
         val rExpr = compileConstructor0(ctx, typeHint, rArgs)
         val exprFacts = C_ExprVarFacts.forSubExpressions(values)
-        return V_RExpr.makeExpr(startPos, rExpr, exprFacts)
+        return V_RExpr.makeExpr(ctx, startPos, rExpr, exprFacts)
     }
 
     private fun compileConstructor0(ctx: C_ExprContext, typeHint: C_TypeHint, rArgs: List<R_Expr>): R_Expr {
@@ -732,7 +715,7 @@ class S_TypeExpr(val type: S_Type): S_Expr(type.pos) {
 class S_MirrorStructExpr(pos: S_Pos, val mutable: Boolean, val type: S_Type): S_Expr(pos) {
     override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
         val structType = type.compileMirrorStructType(ctx.nsCtx, mutable)
-        structType ?: return C_Utils.errorExpr(startPos)
+        structType ?: return C_Utils.errorExpr(ctx, startPos)
         val ns = C_LibFunctions.makeStructNamespace(structType.struct)
         return C_MirrorStructExpr(startPos, structType.struct, ns)
     }

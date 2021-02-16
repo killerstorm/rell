@@ -213,7 +213,7 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
 class S_AtExprWhere(val exprs: List<S_Expr>) {
     fun compile(ctx: C_ExprContext, subValues: MutableList<V_Expr>): V_Expr? {
         val whereExprs = exprs.withIndex().map { (idx, expr) -> compileWhereExpr(ctx, idx, expr, subValues) }
-        return makeWhere(whereExprs)
+        return makeWhere(ctx, whereExprs)
     }
 
     private fun compileWhereExpr(ctx: C_ExprContext, idx: Int, expr: S_Expr, subValues: MutableList<V_Expr>): V_Expr {
@@ -235,7 +235,7 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
         if (attrs.isEmpty()) {
             ctx.msgCtx.error(expr.startPos, "at_where_type:$idx:$type",
                     "No attribute matches type of where-expression #${idx + 1}: $type")
-            return C_Utils.errorVExpr(expr.startPos)
+            return C_Utils.errorVExpr(ctx, expr.startPos)
         } else if (attrs.size > 1) {
             throw C_Errors.errMultipleAttrs(expr.startPos, attrs, "at_attr_type_ambig:$idx:$type",
                     "Multiple attributes match type of where-expression #${idx+1} ($type)")
@@ -243,10 +243,10 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
 
         val attr = attrs[0]
         val attrExpr = attr.compile(expr.startPos)
-        return C_Utils.makeVBinaryExprEq(expr.startPos, attrExpr, vExpr)
+        return C_Utils.makeVBinaryExprEq(ctx, expr.startPos, attrExpr, vExpr)
     }
 
-    private fun makeWhere(compiledExprs: List<V_Expr>): V_Expr? {
+    private fun makeWhere(ctx: C_ExprContext, compiledExprs: List<V_Expr>): V_Expr? {
         for (value in compiledExprs) {
             check(value.type() in listOf(R_BooleanType, R_CtErrorType))
         }
@@ -256,7 +256,7 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
         }
 
         return CommonUtils.foldSimple(compiledExprs) { left, right ->
-            C_BinOp_And.compile(left, right) ?: C_Utils.errorVExpr(left.pos)
+            C_BinOp_And.compile(ctx, left, right) ?: C_Utils.errorVExpr(ctx, left.pos)
         }
     }
 }
@@ -271,43 +271,44 @@ class S_AtExpr(
         val offset: S_Expr?
 ): S_Expr(from.startPos) {
     override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
-        val details = compileDetails(ctx)
-
-        val valueType = details.res.type
-
-        val type = if (cardinality.many) {
-            R_ListType(valueType)
-        } else if (cardinality.zero) {
-            C_Types.toNullable(valueType)
-        } else {
-            valueType
-        }
-
-        val vExpr = details.base.from.compile(startPos, type, cardinality, details)
+        val (cFrom, cDetails) = compileInternal(ctx, null)
+        val vExpr = cFrom.compile(cDetails)
         return C_VExpr(vExpr)
     }
 
-    private fun compileDetails(ctx: C_ExprContext): C_AtDetails {
+    override fun compileNestedAt(ctx: C_ExprContext, parentAtCtx: C_DbAtContext): C_MaybeNestedAt {
+        val (cFrom, cDetails) = compileInternal(ctx, parentAtCtx)
+        return cFrom.compileNested(cDetails)
+    }
+
+    private fun compileInternal(ctx: C_ExprContext, parentAtCtx: C_DbAtContext?): Pair<C_AtFrom, C_AtDetails> {
         val subValues = mutableListOf<V_Expr>()
 
-        val cFrom = from.compileFrom(ctx, atPos, subValues)
+        val atExprId = ctx.appCtx.nextAtExprId()
+        val fromCtx = C_AtFromContext(atPos, atExprId, parentAtCtx)
+        val cFrom = from.compileFrom(ctx, fromCtx, subValues)
 
-        val atCtx = cFrom.innerExprCtx()
-        val vWhere = where.compile(atCtx, subValues)
+        val cDetails = compileDetails(ctx, cFrom, subValues)
+        return Pair(cFrom, cDetails)
+    }
 
-        val cWhat = what.compile(atCtx, cFrom, subValues)
-        val resType = calcResultType(cWhat.fields)
+    private fun compileDetails(ctx: C_ExprContext, cFrom: C_AtFrom, subValues: MutableList<V_Expr>): C_AtDetails {
+        val innerCtx = cFrom.innerExprCtx()
+        val vWhere = where.compile(innerCtx, subValues)
+
+        val cWhat = what.compile(innerCtx, cFrom, subValues)
+        val cResult = compileAtResult(cWhat.allFields)
 
         val vLimit = compileLimitOffset(limit, "limit", ctx, subValues)
         val vOffset = compileLimitOffset(offset, "offset", ctx, subValues)
 
-        val base = C_AtExprBase(cFrom, cWhat, vWhere)
+        val base = C_AtExprBase(cWhat, vWhere)
         val facts = C_ExprVarFacts.forSubExpressions(subValues)
 
-        return C_AtDetails(base, vLimit, vOffset, resType, facts)
+        return C_AtDetails(startPos, atPos, cardinality, base, vLimit, vOffset, cResult, facts)
     }
 
-    private fun calcResultType(whatFields: List<C_AtWhatField>): C_AtExprResult {
+    private fun compileAtResult(whatFields: List<C_AtWhatField>): C_AtExprResult {
         val selFieldsIndexes = whatFields.withIndex().filter { !it.value.flags.omit }.map { it.index }.toImmList()
         val selFields = selFieldsIndexes.map { whatFields[it] }
 
@@ -319,19 +320,20 @@ class S_AtExpr(
         val hasAggregateFields = whatFields.any { !(it.summarization?.isGroup() ?: true) }
 
         var rowDecoder: R_AtExprRowDecoder
-        var resultType: R_Type
+        var recordType: R_Type
 
         if (selFields.size == 1 && selFields[0].name == null) {
             rowDecoder = R_AtExprRowDecoder_Simple
-            resultType = selFields[0].resultType
+            recordType = selFields[0].resultType
         } else {
             val tupleFields = selFields.map { R_TupleField(it.name, it.resultType) }
             val type = R_TupleType(tupleFields)
             rowDecoder = R_AtExprRowDecoder_Tuple(type)
-            resultType = type
+            recordType = type
         }
 
-        return C_AtExprResult(resultType, rowDecoder, selFieldsIndexes, groupFieldsIndexes, hasAggregateFields)
+        val resultType = C_AtExprResult.calcResultType(recordType, cardinality)
+        return C_AtExprResult(recordType, resultType, rowDecoder, selFieldsIndexes, groupFieldsIndexes, hasAggregateFields)
     }
 
     private fun compileLimitOffset(sExpr: S_Expr?, msg: String, ctx: C_ExprContext, subValues: MutableList<V_Expr>): V_Expr? {
@@ -339,7 +341,8 @@ class S_AtExpr(
             return null
         }
 
-        val vExpr = sExpr.compile(ctx).value()
+        val subCtx = ctx.update(dbAtCtx = null)
+        val vExpr = sExpr.compile(subCtx).value()
         subValues.add(vExpr)
 
         val type = vExpr.type()

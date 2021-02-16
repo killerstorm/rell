@@ -72,6 +72,9 @@ class UpdateDeleteExprTest: BaseRellTest() {
 
         chkOp("val u = user @* { .name == 'Trudy' }; update u ( score += 123 );")
         chkData("user(101,Bob,579)", "user(102,Alice,801)")
+
+        chkOp("val u = set(user @* {}); update u ( score += 123 );")
+        chkData("user(101,Bob,702)", "user(102,Alice,924)")
     }
 
     @Test fun testDeleteCollection() {

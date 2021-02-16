@@ -11,6 +11,22 @@ import net.postchain.rell.utils.toImmMap
 import net.postchain.rell.utils.toImmSet
 import org.apache.commons.collections4.SetUtils
 import java.util.*
+import java.util.concurrent.atomic.AtomicLong
+
+private object C_InternalAppUtils {
+    private val AT_EXPR_ID_SEQ = AtomicLong(0)
+    private val AT_ENTITY_ID_SEQ = AtomicLong(0)
+
+    fun nextAtExprId(): R_AtExprId {
+        val id = AT_EXPR_ID_SEQ.getAndIncrement()
+        return R_AtExprId(id)
+    }
+
+    fun nextAtEntityId(exprId: R_AtExprId): R_AtEntityId {
+        val id = AT_ENTITY_ID_SEQ.getAndIncrement()
+        return R_AtEntityId(exprId, id)
+    }
+}
 
 class C_AppContext(
         val msgCtx: C_MessageContext,
@@ -20,7 +36,7 @@ class C_AppContext(
 ) {
     val globalCtx = msgCtx.globalCtx
 
-    val appUid = globalCtx.nextAppUid()
+    val appUid = C_GlobalContext.nextAppUid()
     private val containerUidGen = C_UidGen { id, name -> R_ContainerUid(id, name, appUid) }
 
     private val defsBuilder = C_AppDefsBuilder(executor)
@@ -69,6 +85,9 @@ class C_AppContext(
     }
 
     fun nextContainerUid(name: String) = containerUidGen.next(name)
+
+    fun nextAtExprId() = C_InternalAppUtils.nextAtExprId()
+    fun nextAtEntityId(exprId: R_AtExprId) = C_InternalAppUtils.nextAtEntityId(exprId)
 
     fun getApp(): R_App? {
         executor.checkPass(C_CompilerPass.FINISH)

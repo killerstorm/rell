@@ -72,7 +72,7 @@ class C_BlockCodeBuilder(ctx: C_StmtContext, private val repl: Boolean, hasGuard
     private val rStmts = mutableListOf<R_Statement>()
     private var returnAlways = false
     private var deadCode = false
-    private var beforeGuardBlock = hasGuardBlock
+    private var insideGuardBlock = hasGuardBlock
     private var afterGuardBlock = false
     private val blkVarFacts = C_BlockVarFacts(this.ctx.exprCtx.factsCtx)
     private var build = false
@@ -80,7 +80,7 @@ class C_BlockCodeBuilder(ctx: C_StmtContext, private val repl: Boolean, hasGuard
     fun add(stmt: S_Statement) {
         check(!build)
 
-        val subExprCtx = ctx.exprCtx.update(factsCtx = blkVarFacts.subContext(), insideGuardBlock = beforeGuardBlock)
+        val subExprCtx = ctx.exprCtx.update(factsCtx = blkVarFacts.subContext(), insideGuardBlock = insideGuardBlock)
 
         val subCtx = ctx.update(
                 exprCtx = subExprCtx,
@@ -96,7 +96,7 @@ class C_BlockCodeBuilder(ctx: C_StmtContext, private val repl: Boolean, hasGuard
         rStmts.add(cStmt.rStmt)
 
         if (cStmt.guardBlock) {
-            beforeGuardBlock = false
+            insideGuardBlock = false
             afterGuardBlock = true
         }
 

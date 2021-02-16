@@ -10,10 +10,9 @@ import net.postchain.rell.runtime.Rt_BooleanValue
 import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_NullValue
 import net.postchain.rell.runtime.Rt_Value
-import net.postchain.rell.sql.SqlConstants
 import net.postchain.rell.utils.CommonUtils
-import net.postchain.rell.utils.toImmList
-import java.util.regex.Pattern
+import net.postchain.rell.utils.immSetOf
+import net.postchain.rell.utils.toImmSet
 
 sealed class Db_BinaryOp(val code: String, val sql: String) {
     open fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value? = null
@@ -26,7 +25,7 @@ sealed class Db_BinaryOp(val code: String, val sql: String) {
         if (leftValue != null && rightValue != null) {
             val resValue = evaluate(leftValue, rightValue)
             if (resValue != null) {
-                return RedDb_ConstantExpr(type, resValue)
+                return RedDb_ConstantExpr(resValue)
             }
         }
 
@@ -65,14 +64,14 @@ sealed class Db_BinaryOp_AndOr(code: String, sql: String, private val shortCircu
         val leftValue = redLeft.constantValue()
         if (leftValue != null) {
             val v = leftValue.asBoolean()
-            return if (v == shortCircuitValue) RedDb_ConstantExpr(type, leftValue) else right.toRedExpr(frame)
+            return if (v == shortCircuitValue) RedDb_ConstantExpr(leftValue) else right.toRedExpr(frame)
         }
 
         val redRight = right.toRedExpr(frame)
         val rightValue = redRight.constantValue()
         if (rightValue != null) {
             val v = rightValue.asBoolean()
-            return if (v == shortCircuitValue) RedDb_ConstantExpr(type, rightValue) else redLeft
+            return if (v == shortCircuitValue) RedDb_ConstantExpr(rightValue) else redLeft
         }
 
         val redExpr = RedDb_BinaryExpr(this, redLeft, redRight)
@@ -88,9 +87,24 @@ object Db_UnaryOp_Minus_Integer: Db_UnaryOp("-", "-")
 object Db_UnaryOp_Minus_Decimal: Db_UnaryOp("-", "-")
 object Db_UnaryOp_Not: Db_UnaryOp("not", "NOT")
 
-sealed class Db_Expr(val type: R_Type) {
+abstract class Db_Expr(val type: R_Type, directSubExprs: List<Db_Expr>, atExprId: R_AtExprId? = null) {
+    private val refAtExprIds: Set<R_AtExprId>
+
+    init {
+        val subSets = (directSubExprs.map { it.refAtExprIds } + listOf(listOfNotNull(atExprId).toSet()))
+                .filter { it.isNotEmpty() }
+        refAtExprIds = when {
+            subSets.isEmpty() -> immSetOf()
+            subSets.size == 1 -> subSets.first()
+            else -> subSets.flatMap { it }.toImmSet()
+        }
+    }
+
     open fun constantValue(): Rt_Value? = null
     abstract fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr
+
+    // TODO Actually needed only during compilation; better design would be to split Db_Expr into CT-only and post-CT parts
+    fun referencedAtExprIds(): Set<R_AtExprId> = refAtExprIds
 }
 
 abstract class RedDb_Expr {
@@ -98,24 +112,26 @@ abstract class RedDb_Expr {
     abstract fun toSql(ctx: SqlGenContext, bld: SqlBuilder)
 }
 
-class Db_InterpretedExpr(val expr: R_Expr): Db_Expr(expr.type) {
+class Db_InterpretedExpr(val expr: R_Expr): Db_Expr(expr.type, listOf()) {
     override fun constantValue() = expr.constantValue()
 
     override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
         val value = expr.evaluate(frame)
-        return RedDb_ConstantExpr(type, value)
+        return RedDb_ConstantExpr(value)
     }
 }
 
-private class RedDb_ConstantExpr(val type: R_Type, val value: Rt_Value): RedDb_Expr() {
+private class RedDb_ConstantExpr(val value: Rt_Value): RedDb_Expr() {
     override fun constantValue() = value
 
     override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
-        bld.append(type, value)
+        bld.append(value)
     }
 }
 
-class Db_BinaryExpr(type: R_Type, val op: Db_BinaryOp, val left: Db_Expr, val right: Db_Expr): Db_Expr(type) {
+class Db_BinaryExpr(type: R_Type, val op: Db_BinaryOp, val left: Db_Expr, val right: Db_Expr)
+    : Db_Expr(type, listOf(left, right))
+{
     override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
         val redLeft = left.toRedExpr(frame)
         return op.toRedExpr(frame, type, redLeft, right)
@@ -134,7 +150,7 @@ private class RedDb_BinaryExpr(val op: Db_BinaryOp, val left: RedDb_Expr, val ri
     }
 }
 
-class Db_UnaryExpr(type: R_Type, val op: Db_UnaryOp, val expr: Db_Expr): Db_Expr(type) {
+class Db_UnaryExpr(type: R_Type, val op: Db_UnaryOp, val expr: Db_Expr): Db_Expr(type, listOf(expr)) {
     override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
         val redExpr = expr.toRedExpr(frame)
         return RedDb_UnaryExpr(op, redExpr)
@@ -151,7 +167,7 @@ class Db_UnaryExpr(type: R_Type, val op: Db_UnaryOp, val expr: Db_Expr): Db_Expr
     }
 }
 
-class Db_IsNullExpr(val expr: Db_Expr, val isNull: Boolean): Db_Expr(R_BooleanType) {
+class Db_IsNullExpr(val expr: Db_Expr, val isNull: Boolean): Db_Expr(R_BooleanType, listOf(expr)) {
     override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
         val redExpr = expr.toRedExpr(frame)
         return RedDb_IsNullExpr(redExpr, isNull)
@@ -167,7 +183,9 @@ class Db_IsNullExpr(val expr: Db_Expr, val isNull: Boolean): Db_Expr(R_BooleanTy
     }
 }
 
-sealed class Db_TableExpr(val rEntity: R_EntityDefinition): Db_Expr(rEntity.type) {
+sealed class Db_TableExpr(val rEntity: R_EntityDefinition, directSubExprs: List<Db_Expr>, atExprId: R_AtExprId?)
+    : Db_Expr(rEntity.type, directSubExprs, atExprId)
+{
     abstract fun alias(ctx: SqlGenContext): SqlTableAlias
 
     final override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
@@ -183,18 +201,20 @@ sealed class Db_TableExpr(val rEntity: R_EntityDefinition): Db_Expr(rEntity.type
     }
 }
 
-class Db_EntityExpr(val entity: R_DbAtEntity): Db_TableExpr(entity.rEntity) {
+class Db_EntityExpr(val entity: R_DbAtEntity): Db_TableExpr(entity.rEntity, listOf(), entity.id.exprId) {
     override fun alias(ctx: SqlGenContext) = ctx.getEntityAlias(entity)
 }
 
-class Db_RelExpr(val base: Db_TableExpr, val attr: R_Attribute, targetEntity: R_EntityDefinition): Db_TableExpr(targetEntity) {
+class Db_RelExpr(val base: Db_TableExpr, val attr: R_Attribute, targetEntity: R_EntityDefinition)
+    : Db_TableExpr(targetEntity, listOf(base), null)
+{
     override fun alias(ctx: SqlGenContext): SqlTableAlias {
         val baseAlias = base.alias(ctx)
         return ctx.getRelAlias(baseAlias, attr, rEntity)
     }
 }
 
-class Db_AttrExpr(val base: Db_TableExpr, val attr: R_Attribute): Db_Expr(attr.type) {
+class Db_AttrExpr(val base: Db_TableExpr, val attr: R_Attribute): Db_Expr(attr.type, listOf(base)) {
     override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
         val redExpr = RedDb_AttrExpr(base, attr)
         return RedDb_Utils.wrapDecimalExpr(type, redExpr)
@@ -208,7 +228,7 @@ class Db_AttrExpr(val base: Db_TableExpr, val attr: R_Attribute): Db_Expr(attr.t
     }
 }
 
-class Db_RowidExpr(val base: Db_TableExpr): Db_Expr(C_EntityAttrRef.ROWID_TYPE) {
+class Db_RowidExpr(val base: Db_TableExpr): Db_Expr(C_EntityAttrRef.ROWID_TYPE, listOf(base)) {
     override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
         return RedDb_RowidExpr(base)
     }
@@ -222,44 +242,32 @@ class Db_RowidExpr(val base: Db_TableExpr): Db_Expr(C_EntityAttrRef.ROWID_TYPE) 
     }
 }
 
-class Db_ParameterExpr(type: R_Type, val index: Int): Db_Expr(type) {
+class Db_CollectionInterpretedExpr(val expr: R_Expr): Db_Expr(expr.type, listOf()) {
     override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
-        return RedDb_ParameterExpr(type, index)
+        val value = expr.evaluate(frame)
+        val collection = value.asCollection()
+        return RedDb_CollectionConstantExpr(collection)
     }
 
-    private class RedDb_ParameterExpr(val type: R_Type, val index: Int): RedDb_Expr() {
+    private class RedDb_CollectionConstantExpr(val value: Collection<Rt_Value>): RedDb_Expr() {
         override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
-            val value = ctx.getParameter(index)
-            bld.append(type, value)
-        }
-    }
-}
-
-class Db_ArrayParameterExpr(type: R_Type, val elementType: R_Type, val index: Int): Db_Expr(type) {
-    override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
-        return RedDb_ArrayParameterExpr(elementType, index)
-    }
-
-    private class RedDb_ArrayParameterExpr(val elementType: R_Type, val index: Int): RedDb_Expr() {
-        override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
-            val value = ctx.getParameter(index)
             bld.append("(")
-            bld.append(value.asCollection(), ",") {
-                bld.append(elementType, it)
+            bld.append(value, ",") {
+                bld.append(it)
             }
             bld.append(")")
         }
     }
 }
 
-class Db_InExpr(val keyExpr: Db_Expr, val exprs: List<Db_Expr>): Db_Expr(R_BooleanType) {
+class Db_InExpr(val keyExpr: Db_Expr, val exprs: List<Db_Expr>): Db_Expr(R_BooleanType, listOf(keyExpr) + exprs) {
     override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
         val redKeyExpr = keyExpr.toRedExpr(frame)
         val redExprs = toRedExprs(frame, redKeyExpr, exprs)
         return if (redExprs != null) {
             RedDb_Utils.makeRedDbInExpr(redKeyExpr, redExprs)
         } else {
-            RedDb_ConstantExpr(R_BooleanType, Rt_BooleanValue(true))
+            RedDb_ConstantExpr(Rt_BooleanValue(true))
         }
     }
 
@@ -300,7 +308,9 @@ private class RedDb_InExpr(val keyExpr: RedDb_Expr, val exprs: List<RedDb_Expr>)
 
 class Db_WhenCase(val conds: List<Db_Expr>, val expr: Db_Expr)
 
-class Db_WhenExpr(type: R_Type, val keyExpr: Db_Expr?, val cases: List<Db_WhenCase>, val elseExpr: Db_Expr): Db_Expr(type) {
+class Db_WhenExpr(type: R_Type, val keyExpr: Db_Expr?, val cases: List<Db_WhenCase>, val elseExpr: Db_Expr)
+    : Db_Expr(type, listOfNotNull(keyExpr) + cases.flatMap { it.conds + listOf(it.expr) } + listOf(elseExpr))
+{
     override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
         val redKeyExpr = keyExpr?.toRedExpr(frame)
 
@@ -408,11 +418,11 @@ private class RedDb_WhenExpr(val cases: List<RedDb_WhenCase>, val elseExpr: RedD
     }
 }
 
-class Db_ElvisExpr(type: R_Type, val left: R_Expr, val right: Db_Expr): Db_Expr(type) {
+class Db_ElvisExpr(type: R_Type, val left: R_Expr, val right: Db_Expr): Db_Expr(type, listOf(right)) {
     override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
         val leftValue = left.evaluate(frame)
         if (leftValue != Rt_NullValue) {
-            return RedDb_ConstantExpr(type, leftValue)
+            return RedDb_ConstantExpr(leftValue)
         }
 
         val redRight = right.toRedExpr(frame)
@@ -420,162 +430,7 @@ class Db_ElvisExpr(type: R_Type, val left: R_Expr, val right: Db_Expr): Db_Expr(
     }
 }
 
-abstract class Db_SysFunction(val name: String) {
-    abstract fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<RedDb_Expr>)
-}
-
-abstract class Db_SysFn_Simple(name: String, val sql: String): Db_SysFunction(name) {
-    override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<RedDb_Expr>) {
-        bld.append(sql)
-        bld.append("(")
-        bld.append(args, ", ") {
-            it.toSql(ctx, bld)
-        }
-        bld.append(")")
-    }
-}
-
-abstract class Db_SysFn_Template(name: String, private val arity: Int, template: String): Db_SysFunction(name) {
-    private val fragments: List<Pair<String?, Int?>>
-
-    init {
-        val pat = Pattern.compile("#\\d")
-        val m = pat.matcher(template)
-
-        val list = mutableListOf<Pair<String?, Int?>>()
-        var i = 0
-
-        while (m.find()) {
-            val start = m.start()
-            val end = m.end()
-            if (i < start) list.add(Pair(template.substring(i, start), null))
-            val v = m.group().substring(1).toInt()
-            list.add(Pair(null, v))
-            i = end
-        }
-
-        if (i < template.length) list.add(Pair(template.substring(i), null))
-
-        fragments = list.toImmList()
-    }
-
-    override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<RedDb_Expr>) {
-        check(args.size == arity)
-        for (f in fragments) {
-            if (f.first != null) bld.append(f.first!!)
-            if (f.second != null) args[f.second!!].toSql(ctx, bld)
-        }
-    }
-}
-
-abstract class Db_SysFn_Cast(name: String, val type: String): Db_SysFunction(name) {
-    override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<RedDb_Expr>) {
-        check(args.size == 1)
-        bld.append("((")
-        args[0].toSql(ctx, bld)
-        bld.append(")::$type)")
-    }
-}
-
-object Db_SysFn_Int_ToText: Db_SysFn_Cast("int.to_text", "TEXT")
-
-object Db_SysFn_Abs_Integer: Db_SysFn_Simple("abs", "ABS")
-object Db_SysFn_Abs_Decimal: Db_SysFn_Simple("abs", "ABS")
-object Db_SysFn_Min_Integer: Db_SysFn_Simple("min", "LEAST")
-object Db_SysFn_Min_Decimal: Db_SysFn_Simple("min", "LEAST")
-object Db_SysFn_Max_Integer: Db_SysFn_Simple("max", "GREATEST")
-object Db_SysFn_Max_Decimal: Db_SysFn_Simple("max", "GREATEST")
-
-object Db_SysFn_Sign: Db_SysFn_Simple("sign", "SIGN")
-
-object Db_SysFn_Text_CharAt: Db_SysFn_Template("text.char_at", 2, "ASCII(${SqlConstants.FN_TEXT_GETCHAR}(#0, (#1)::INT))")
-object Db_SysFn_Text_Contains: Db_SysFn_Template("text.contains", 2, "(STRPOS(#0, #1) > 0)")
-object Db_SysFn_Text_Empty: Db_SysFn_Template("text.empty", 1, "(LENGTH(#0) = 0)")
-object Db_SysFn_Text_EndsWith: Db_SysFn_Template("text.ends_with", 2, "(RIGHT(#0, LENGTH(#1)) = #1)")
-object Db_SysFn_Text_IndexOf: Db_SysFn_Template("text.index_of", 2, "(STRPOS(#0, #1) - 1)")
-object Db_SysFn_Text_Like: Db_SysFn_Template("text.like", 2, "((#0) LIKE (#1))")
-object Db_SysFn_Text_LowerCase: Db_SysFn_Simple("text.lower_case", "LOWER")
-object Db_SysFn_Text_Replace: Db_SysFn_Template("text.replace", 3, "REPLACE(#0, #1, #2)")
-object Db_SysFn_Text_Size: Db_SysFn_Simple("text.size", "LENGTH")
-object Db_SysFn_Text_StartsWith: Db_SysFn_Template("text.starts_with", 2, "(LEFT(#0, LENGTH(#1)) = #1)")
-object Db_SysFn_Text_Sub_1: Db_SysFn_Template("text.sub/1", 2, "${SqlConstants.FN_TEXT_SUBSTR1}(#0, (#1)::INT)")
-object Db_SysFn_Text_Sub_2: Db_SysFn_Template("text.sub/2", 3, "${SqlConstants.FN_TEXT_SUBSTR2}(#0, (#1)::INT, (#2)::INT)")
-object Db_SysFn_Text_Subscript: Db_SysFn_Template("text.[]", 2, "${SqlConstants.FN_TEXT_GETCHAR}(#0, (#1)::INT)")
-//object Db_SysFn_Text_Trim: Db_SysFn_Template("text.trim", 1, "TRIM(#0, ' '||CHR(9)||CHR(10)||CHR(13))")
-object Db_SysFn_Text_UpperCase: Db_SysFn_Simple("text.upper_case", "UPPER")
-
-object Db_SysFn_ByteArray_Empty: Db_SysFn_Template("byte_array.empty", 1, "(LENGTH(#0) = 0)")
-object Db_SysFn_ByteArray_Size: Db_SysFn_Template("byte_array.size", 1, "LENGTH(#0)")
-object Db_SysFn_ByteArray_Sub_1: Db_SysFn_Template("byte_array.sub/1", 2, "${SqlConstants.FN_BYTEA_SUBSTR1}(#0, (#1)::INT)")
-object Db_SysFn_ByteArray_Sub_2: Db_SysFn_Template("byte_array.sub/2", 3, "${SqlConstants.FN_BYTEA_SUBSTR2}(#0, (#1)::INT, (#2)::INT)")
-object Db_SysFn_ByteArray_Subscript: Db_SysFn_Template("byte_array.[]", 2, "GET_BYTE(#0, (#1)::INT)")
-object Db_SysFn_ByteArray_ToHex: Db_SysFn_Template("byte_array.to_hex", 1, "ENCODE(#0, 'HEX')")
-object Db_SysFn_ByteArray_ToBase64: Db_SysFn_Template("byte_array.to_base64", 1, "ENCODE(#0, 'BASE64')")
-
-object Db_SysFn_Json: Db_SysFn_Cast("json", "JSONB")
-object Db_SysFn_Json_ToText: Db_SysFn_Cast("json.to_text", "TEXT")
-
-object Db_SysFn_ToText: Db_SysFn_Cast("to_text", "TEXT")
-
-object Db_SysFn_Aggregation_Sum: Db_SysFn_Template("sum", 1, "COALESCE(SUM(#0),0)")
-object Db_SysFn_Aggregation_Min: Db_SysFn_Simple("min", "MIN")
-object Db_SysFn_Aggregation_Max: Db_SysFn_Simple("max", "MAX")
-
-object Db_SysFn_Decimal {
-    object FromInteger: Db_SysFn_Cast("decimal(integer)", C_Constants.DECIMAL_SQL_TYPE_STR)
-    object FromText: Db_SysFn_Cast("decimal(text)", C_Constants.DECIMAL_SQL_TYPE_STR)
-
-    object Ceil: Db_SysFn_Simple("decimal.ceil", "CEIL")
-    object Floor: Db_SysFn_Simple("decimal.floor", "FLOOR")
-
-    object Round: Db_SysFunction("decimal.round") {
-        override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<RedDb_Expr>) {
-            check(args.size == 1 || args.size == 2)
-            bld.append("ROUND(")
-            args[0].toSql(ctx, bld)
-            if (args.size == 2) {
-                // Argument #2 has to be casted to INT, PostgreSQL doesn't allow BIGINT.
-                bld.append(", (")
-                args[1].toSql(ctx, bld)
-                bld.append(")::INT")
-            }
-            bld.append(")")
-        }
-    }
-
-    object Pow: Db_SysFn_Simple("decimal.pow", "POW")
-    object Sign: Db_SysFn_Simple("decimal.sign", "SIGN")
-    object Sqrt: Db_SysFn_Simple("decimal.sqrt", "SQRT")
-
-    object ToInteger: Db_SysFunction("decimal.to_integer") {
-        override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<RedDb_Expr>) {
-            check(args.size == 1)
-            bld.append("TRUNC(")
-            args[0].toSql(ctx, bld)
-            bld.append(")::BIGINT")
-        }
-    }
-
-    object ToText: Db_SysFunction("decimal.to_text") {
-        override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<RedDb_Expr>) {
-            // Using regexp to remove trailing zeros.
-            check(args.size == 1)
-            bld.append("REGEXP_REPLACE(")
-            args[0].toSql(ctx, bld)
-            // Clever regexp: can handle special cases like "0.0", "0.000000", etc.
-            bld.append(" :: TEXT, '(([.][0-9]*[1-9])(0+)\$)|([.]0+\$)', '\\2')")
-        }
-    }
-}
-
-object Db_SysFn_Nop: Db_SysFunction("NOP") {
-    override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<RedDb_Expr>) {
-        check(args.size == 1)
-        args[0].toSql(ctx, bld)
-    }
-}
-
-class Db_CallExpr(type: R_Type, val fn: Db_SysFunction, val args: List<Db_Expr>): Db_Expr(type) {
+class Db_CallExpr(type: R_Type, val fn: Db_SysFunction, val args: List<Db_Expr>): Db_Expr(type, args) {
     override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
         val redArgs = args.map { it.toRedExpr(frame) }
         val redExpr = RedDb_CallExpr(fn, redArgs)
@@ -587,6 +442,22 @@ class Db_CallExpr(type: R_Type, val fn: Db_SysFunction, val args: List<Db_Expr>)
     }
 }
 
+class Db_ExistsExpr(val subExpr: Db_Expr, val not: Boolean): Db_Expr(R_BooleanType, listOf(subExpr)) {
+    override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
+        val redSubExpr = subExpr.toRedExpr(frame)
+        return RedDb_ExistsExpr(not, redSubExpr)
+    }
+
+    private class RedDb_ExistsExpr(val not: Boolean, val subExpr: RedDb_Expr): RedDb_Expr() {
+        override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
+            if (not) bld.append("NOT ")
+            bld.append("EXISTS(")
+            subExpr.toSql(ctx, bld)
+            bld.append(")")
+        }
+    }
+}
+
 object RedDb_Utils {
     fun makeRedDbBinaryExprChain(op: Db_BinaryOp, exprs: List<RedDb_Expr>): RedDb_Expr {
         return CommonUtils.foldSimple(exprs) { left, right -> RedDb_BinaryExpr(op, left, right) }
@@ -594,7 +465,7 @@ object RedDb_Utils {
 
     fun makeRedDbInExpr(left: RedDb_Expr, right: List<RedDb_Expr>): RedDb_Expr {
         return if (right.isEmpty()) {
-            RedDb_ConstantExpr(R_BooleanType, Rt_BooleanValue(false))
+            RedDb_ConstantExpr(Rt_BooleanValue(false))
         } else if (right.size == 1) {
             RedDb_BinaryExpr(Db_BinaryOp_Eq, left, right[0])
         } else {

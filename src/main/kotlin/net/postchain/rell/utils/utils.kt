@@ -204,4 +204,6 @@ class ThreadLocalContext<T>(private val defaultValue: T? = null) {
 
 typealias Getter<T> = () -> T
 
-data class Nullable<T>(val value: T?)
+data class Nullable<T>(val value: T? = null)
+
+fun <T> Nullable<T>?.orElse(other: T?): T? = if (this != null) this.value else other

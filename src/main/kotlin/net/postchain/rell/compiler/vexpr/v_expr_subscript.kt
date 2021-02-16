@@ -61,20 +61,22 @@ object V_TupleSubscriptKind_Virtual: V_TupleSubscriptKind() {
 }
 
 sealed class V_SubscriptExpr(
+        exprCtx: C_ExprContext,
         pos: S_Pos,
         protected val baseExpr: V_Expr,
         protected val varFacts: C_ExprVarFacts
-): V_Expr(pos) {
+): V_Expr(exprCtx, pos) {
     final override fun varFacts() = varFacts
 }
 
 class V_CommonSubscriptExpr(
+        exprCtx: C_ExprContext,
         pos: S_Pos,
         baseExpr: V_Expr,
         varFacts: C_ExprVarFacts,
         private val keyExpr: V_Expr,
         private val kind: V_CommonSubscriptKind
-): V_SubscriptExpr(pos, baseExpr, varFacts) {
+): V_SubscriptExpr(exprCtx, pos, baseExpr, varFacts) {
     private val isDb = isDb(baseExpr) || isDb(keyExpr)
 
     override fun type() = kind.resType
@@ -86,13 +88,13 @@ class V_CommonSubscriptExpr(
         return kind.compileR(pos, rBase, rKey)
     }
 
-    override fun toDbExpr0(msgCtx: C_MessageContext): Db_Expr {
-        val dbBase = baseExpr.toDbExpr(msgCtx)
-        val dbKey = keyExpr.toDbExpr(msgCtx)
+    override fun toDbExpr0(): Db_Expr {
+        val dbBase = baseExpr.toDbExpr()
+        val dbKey = keyExpr.toDbExpr()
         return kind.compileDb(pos, dbBase, dbKey)
     }
 
-    override fun destination(ctx: C_ExprContext): C_Destination {
+    override fun destination(): C_Destination {
         val rBase = baseExpr.toRExpr()
         val rKey = keyExpr.toRExpr()
         val dstExpr = kind.compileDestination(pos, rBase, rKey)
@@ -106,13 +108,14 @@ class V_CommonSubscriptExpr(
 }
 
 class V_TupleSubscriptExpr(
+        exprCtx: C_ExprContext,
         pos: S_Pos,
         baseExpr: V_Expr,
         varFacts: C_ExprVarFacts,
         private val kind: V_TupleSubscriptKind,
         private val resType: R_Type,
         private val index: Int
-): V_SubscriptExpr(pos, baseExpr, varFacts) {
+): V_SubscriptExpr(exprCtx, pos, baseExpr, varFacts) {
     private val isDb = isDb(baseExpr)
 
     override fun type() = resType

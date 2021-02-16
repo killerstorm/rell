@@ -6,6 +6,7 @@ package net.postchain.rell.model
 
 import net.postchain.gtv.Gtv
 import net.postchain.rell.compiler.C_CompilerPass
+import net.postchain.rell.compiler.C_LateGetter
 import net.postchain.rell.compiler.C_LateInit
 import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_EnumValue
@@ -39,24 +40,25 @@ class R_ExternalEntity(val chain: R_ExternalChainRef, val metaCheck: Boolean)
 
 class R_EntityDefinition(
         names: R_DefinitionNames,
+        initFrameGetter: C_LateGetter<R_CallFrame>,
         val mountName: R_MountName,
         val flags: R_EntityFlags,
         val sqlMapping: R_EntitySqlMapping,
         val external: R_ExternalEntity?,
         val mirrorStructs: R_MirrorStructs
-): R_Definition(names) {
+): R_Definition(names, initFrameGetter) {
     val metaName = mountName.str()
 
     val type = R_EntityType(this)
 
-    private val body = C_LateInit(C_CompilerPass.MEMBERS, ERROR_BODY)
+    private val bodyLate = C_LateInit(C_CompilerPass.MEMBERS, ERROR_BODY)
 
-    val keys: List<R_Key> get() = body.get().keys
-    val indexes: List<R_Index> get() = body.get().indexes
-    val attributes: Map<String, R_Attribute> get() = body.get().attributes
+    val keys: List<R_Key> get() = bodyLate.get().keys
+    val indexes: List<R_Index> get() = bodyLate.get().indexes
+    val attributes: Map<String, R_Attribute> get() = bodyLate.get().attributes
 
     fun setBody(body: R_EntityBody) {
-        this.body.set(body)
+        bodyLate.set(body)
     }
 
     fun attribute(name: String): R_Attribute {
@@ -86,14 +88,14 @@ class R_EntityDefinition(
     }
 }
 
-class R_ObjectDefinition(names: R_DefinitionNames, val rEntity: R_EntityDefinition): R_Definition(names) {
+class R_ObjectDefinition(names: R_DefinitionNames, val rEntity: R_EntityDefinition): R_Definition(names, rEntity.initFrameGetter) {
     val type = R_ObjectType(this)
 
     fun insert(frame: Rt_CallFrame) {
-        val createAttrs = rEntity.attributes.values.map { R_CreateExprAttr_Default(it) }
-        val createValues = createAttrs.map { it.attr to it.expr().evaluate(frame) }
+        val createAttrs = rEntity.attributes.values.map { R_CreateExprAttr_Default(it, initFrameGetter, null) }
+        val createValues = createAttrs.map { it.attr to it.evaluate(frame) }
         val sql = R_CreateExpr.buildSql(frame.defCtx.sqlCtx, rEntity, createValues, "0")
-        sql.execute(frame)
+        sql.execute(frame.sqlExec)
     }
 
     override fun toMetaGtv() = rEntity.toMetaGtv(false)
@@ -101,7 +103,12 @@ class R_ObjectDefinition(names: R_DefinitionNames, val rEntity: R_EntityDefiniti
 
 class R_StructFlags(val typeFlags: R_TypeFlags, val cyclic: Boolean, val infinite: Boolean)
 
-class R_Struct(val name: String, val typeMetaGtv: Gtv, val mirrorStructs: R_MirrorStructs?) {
+class R_Struct(
+        val name: String,
+        val typeMetaGtv: Gtv,
+        val initFrameGetter: C_LateGetter<R_CallFrame>,
+        val mirrorStructs: R_MirrorStructs?
+) {
     private val bodyLate = C_LateInit(C_CompilerPass.MEMBERS, DEFAULT_BODY)
     private val flagsLate = C_LateInit(C_CompilerPass.APPDEFS, DEFAULT_STRUCT_FLAGS)
 
@@ -146,13 +153,23 @@ class R_Struct(val name: String, val typeMetaGtv: Gtv, val mirrorStructs: R_Mirr
     }
 }
 
-class R_MirrorStructs(names: R_DefinitionNames, defType: String, val operation: R_MountName?) {
-    val immutable = createStruct(names, defType, false)
-    val mutable = createStruct(names, defType, true)
+class R_MirrorStructs(
+        names: R_DefinitionNames,
+        initFrameGetter: C_LateGetter<R_CallFrame>,
+        defType: String,
+        val operation: R_MountName?
+) {
+    val immutable = createStruct(names, initFrameGetter, defType, false)
+    val mutable = createStruct(names, initFrameGetter, defType, true)
 
     fun getStruct(mutable: Boolean) = if (mutable) this.mutable else this.immutable
 
-    private fun createStruct(names: R_DefinitionNames, defType: String, mutable: Boolean): R_Struct {
+    private fun createStruct(
+            names: R_DefinitionNames,
+            initFrameGetter: C_LateGetter<R_CallFrame>,
+            defType: String,
+            mutable: Boolean
+    ): R_Struct {
         val mutableStr = if (mutable) "mutable " else ""
         val structName = "struct<$mutableStr${names.appLevelName}>"
         val structMetaGtv = mapOf(
@@ -161,11 +178,11 @@ class R_MirrorStructs(names: R_DefinitionNames, defType: String, val operation: 
                 "definition" to names.appLevelName.toGtv(),
                 "mutable" to mutable.toGtv()
         ).toGtv()
-        return R_Struct(structName, structMetaGtv, mirrorStructs = this)
+        return R_Struct(structName, structMetaGtv, initFrameGetter, mirrorStructs = this)
     }
 }
 
-class R_StructDefinition(names: R_DefinitionNames, val struct: R_Struct): R_Definition(names) {
+class R_StructDefinition(names: R_DefinitionNames, val struct: R_Struct): R_Definition(names, struct.initFrameGetter) {
     val type = struct.type
 
     override fun toMetaGtv() = struct.toMetaGtv()
@@ -176,7 +193,11 @@ class R_EnumAttr(val name: String, val value: Int) {
     fun toMetaGtv() = mapOf<String, Gtv>().toGtv()
 }
 
-class R_EnumDefinition(names: R_DefinitionNames, val attrs: List<R_EnumAttr>): R_Definition(names) {
+class R_EnumDefinition(
+        names: R_DefinitionNames,
+        initFrameGetter: C_LateGetter<R_CallFrame>,
+        val attrs: List<R_EnumAttr>
+): R_Definition(names, initFrameGetter) {
     val type = R_EnumType(this)
 
     private val attrMap = attrs.map { Pair(it.name, it) }.toMap()

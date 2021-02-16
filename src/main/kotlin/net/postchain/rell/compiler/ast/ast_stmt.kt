@@ -79,19 +79,20 @@ class S_SimpleVarDeclarator(private val attrHeader: S_AttrHeader): S_VarDeclarat
         }
 
         val rVarType = rType ?: rExprType ?: R_CtErrorType
-        val cVar = ctx.blkCtx.addLocalVar(name, rVarType, mutable)
+        val cVarRef = ctx.blkCtx.addLocalVar(name, rVarType, mutable, false)
 
+        val varUid = cVarRef.target.uid
         val facts = if (rExprType != null) {
-            val inited = mapOf(cVar.uid to C_VarFact.YES)
-            val nulled = C_VarFacts.varTypeToNulled(cVar.uid, rVarType, rExprType)
+            val inited = mapOf(varUid to C_VarFact.YES)
+            val nulled = C_VarFacts.varTypeToNulled(varUid, rVarType, rExprType)
             C_VarFacts.of(inited = inited, nulled = nulled)
         } else {
-            val inited = mapOf(cVar.uid to C_VarFact.NO)
+            val inited = mapOf(varUid to C_VarFact.NO)
             C_VarFacts.of(inited = inited)
         }
         varFacts.putFacts(facts)
 
-        return R_SimpleVarDeclarator(cVar.ptr, rVarType, typeAdapter)
+        return R_SimpleVarDeclarator(cVarRef.ptr, rVarType, typeAdapter)
     }
 
     override fun discoverVars(vars: MutableSet<String>) {
@@ -442,7 +443,7 @@ class S_WhileStatement(pos: S_Pos, val expr: S_Expr, val stmt: S_Statement): S_S
             for (name in modVars) {
                 val localVar = ctx.blkCtx.lookupLocalVar(name)
                 if (localVar != null) {
-                    res.add(localVar)
+                    res.add(localVar.target)
                 }
             }
 

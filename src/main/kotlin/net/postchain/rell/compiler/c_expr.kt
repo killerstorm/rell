@@ -8,36 +8,53 @@ import net.postchain.rell.compiler.ast.C_BinOp
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_NameExprPair
 import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.compiler.vexpr.*
+import net.postchain.rell.compiler.vexpr.V_AtAttrExpr
+import net.postchain.rell.compiler.vexpr.V_Expr
+import net.postchain.rell.compiler.vexpr.V_ObjectExpr
+import net.postchain.rell.compiler.vexpr.V_RExpr
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_EnumValue
+import net.postchain.rell.utils.Nullable
+import net.postchain.rell.utils.orElse
 
 sealed class C_ExprContextAttr(val type: R_Type) {
     abstract fun compile(pos: S_Pos): V_Expr
 }
 
 class C_ExprContextAttr_DbAtEntity(
-        private val entity: C_AtEntity,
-        private val attrRef: C_EntityAttrRef
+        private val exprCtx: C_ExprContext,
+        private val atEntity: C_AtEntity,
+        private val attrRef: C_EntityAttrRef,
+        private val outerAtExpr: Boolean
 ): C_ExprContextAttr(attrRef.type()) {
-    override fun compile(pos: S_Pos) = V_AtAttrExpr(pos, entity.compile(), attrRef)
-    override fun toString() = "${entity.alias}.${attrRef.name}"
+    override fun compile(pos: S_Pos): V_Expr {
+        if (outerAtExpr) {
+            val attrName = attrRef.name
+            val qName = "${atEntity.alias}.$attrName"
+            exprCtx.msgCtx.error(pos, "at_expr:attr:belongs_to_outer:${atEntity.alias}:$attrName",
+                    "Attribute '$attrName' belongs to an outer at-expression, fully qualified name is required ($qName)")
+        }
+        return V_AtAttrExpr(exprCtx, pos, atEntity, attrRef)
+    }
+
+    override fun toString() = "${atEntity.alias}.${attrRef.name}"
 }
 
 class C_ExprContextAttr_ColAtMember(
-        private val ctx: C_ExprContext,
+        private val exprCtx: C_ExprContext,
         private val memberValue: C_MemberValue,
         private val memberRef: C_MemberRef
 ): C_ExprContextAttr(memberValue.type()) {
-    override fun compile(pos: S_Pos) = memberValue.compile(ctx, memberRef)
+    override fun compile(pos: S_Pos) = memberValue.compile(exprCtx, memberRef)
     override fun toString() = ".${memberRef.name}"
 }
 
-class C_ExprContext(
+class C_ExprContext private constructor(
         val blkCtx: C_BlockContext,
         val nameCtx: C_NameContext,
         val factsCtx: C_VarFactsContext,
-        val insideGuardBlock: Boolean = false
+        val dbAtCtx: C_DbAtContext?,
+        val insideGuardBlock: Boolean
 ) {
     val defCtx = blkCtx.defCtx
     val nsCtx = defCtx.nsCtx
@@ -45,24 +62,35 @@ class C_ExprContext(
     val appCtx = defCtx.appCtx
     val msgCtx = nsCtx.msgCtx
     val executor = defCtx.executor
-    val nsValueCtx = C_NamespaceValueContext(defCtx)
+    val nsValueCtx = C_NamespaceValueContext(this)
+
+    fun makeAtEntity(rEntity: R_EntityDefinition, atExprId: R_AtExprId) = R_DbAtEntity(rEntity, appCtx.nextAtEntityId(atExprId))
 
     fun update(
             blkCtx: C_BlockContext? = null,
             nameCtx: C_NameContext? = null,
             factsCtx: C_VarFactsContext? = null,
+            dbAtCtx: Nullable<C_DbAtContext>? = null,
             insideGuardBlock: Boolean? = null
     ): C_ExprContext {
         val blkCtx2 = blkCtx ?: this.blkCtx
         val nameCtx2 = nameCtx ?: this.nameCtx
         val factsCtx2 = factsCtx ?: this.factsCtx
+        val dbAtCtx2 = dbAtCtx.orElse(this.dbAtCtx)
         val insideGuardBlock2 = this.insideGuardBlock || (insideGuardBlock ?: false)
         return if (
                 blkCtx2 == this.blkCtx
                 && nameCtx2 == this.nameCtx
                 && factsCtx2 == this.factsCtx
+                && dbAtCtx2 == this.dbAtCtx
                 && insideGuardBlock2 == this.insideGuardBlock
-        ) this else C_ExprContext(blkCtx2, nameCtx2, factsCtx2, insideGuardBlock2)
+        ) this else C_ExprContext(
+                blkCtx = blkCtx2,
+                nameCtx = nameCtx2,
+                factsCtx = factsCtx2,
+                dbAtCtx = dbAtCtx2,
+                insideGuardBlock = insideGuardBlock2
+        )
     }
 
     fun updateFacts(facts: C_VarFactsAccess): C_ExprContext {
@@ -76,6 +104,16 @@ class C_ExprContext(
             msgCtx.error(pos, "no_db_update:guard", "Database modifications are not allowed inside or before a guard block")
         }
     }
+
+    companion object {
+        fun createRoot(blkCtx: C_BlockContext, nameCtx: C_NameContext) = C_ExprContext(
+                blkCtx = blkCtx,
+                nameCtx = nameCtx,
+                factsCtx = C_VarFactsContext.EMPTY,
+                insideGuardBlock = false,
+                dbAtCtx = null
+        )
+    }
 }
 
 class C_StmtContext private constructor(
@@ -85,6 +123,7 @@ class C_StmtContext private constructor(
         val afterGuardBlock: Boolean = false,
         val topLevel: Boolean = false
 ) {
+    val appCtx = blkCtx.appCtx
     val fnCtx = blkCtx.fnCtx
     val defCtx = fnCtx.defCtx
     val nsCtx = defCtx.nsCtx
@@ -134,18 +173,13 @@ class C_StmtContext private constructor(
 
     companion object {
         fun createRoot(blkCtx: C_BlockContext): C_StmtContext {
-            val exprCtx = C_ExprContext(blkCtx, blkCtx.nameCtx, C_VarFactsContext.EMPTY)
+            val exprCtx = C_ExprContext.createRoot(blkCtx, blkCtx.nameCtx)
             return C_StmtContext(blkCtx, exprCtx, loop = null, topLevel = true)
         }
     }
 }
 
 sealed class C_NameContext {
-    abstract fun hasPlaceholder(): Boolean
-    abstract fun resolvePlaceholder(pos: S_Pos): V_Expr
-    abstract fun resolveNameLocalValue(name: String): C_LocalVar?
-
-    protected abstract fun findDefinitionByAlias(alias: S_Name): C_NameResolution?
     abstract fun findAttributesByName(name: S_Name): List<C_ExprContextAttr>
     abstract fun findAttributesByType(type: R_Type): List<C_ExprContextAttr>
 
@@ -164,99 +198,25 @@ sealed class C_NameContext {
         return attr.compile(name.pos)
     }
 
-    fun resolveNameValue(ctx: C_ExprContext, name: S_Name): C_NameResolution? {
-        val nameStr = name.str
-
-        val entity = findDefinitionByAlias(name)
-        val loc = resolveNameLocalValue(nameStr)
-        val glob = ctx.nsCtx.getValueOpt(name)
-
-        if (entity != null && loc != null) {
-            throw C_Errors.errNameConflictAliasLocal(name)
-        }
-
-        if (entity != null) return entity
-        if (loc != null) return C_NameResolution_Local(name, ctx, loc)
-        if (glob != null) return C_NameResolution_Value(name, ctx.nsValueCtx, glob)
-
-        return null
-    }
-
-    fun resolveName(ctx: C_ExprContext, name: S_Name): C_Expr {
-        val value = resolveNameValue(ctx, name)
-        val valueExpr = value?.toExpr()
-        val fn = ctx.nsCtx.getFunctionOpt(listOf(name))
-        val fnExpr = if (fn == null) null else C_FunctionExpr(name, fn)
-        val expr = C_ValueFunctionExpr.create(name, valueExpr, fnExpr)
-        return expr ?: throw C_Errors.errUnknownName(name)
-    }
-
     companion object {
-        fun createBlock(blkCtx: C_BlockContext): C_NameContext {
-            return C_BlockNameContext(blkCtx)
+        fun createBlock(): C_NameContext {
+            return C_BlockNameContext()
         }
 
-        fun createAt(blkCtx: C_BlockContext, from: C_AtFrom): C_NameContext {
-            return C_AtNameContext(blkCtx, from)
+        fun createAt(from: C_AtFrom): C_NameContext {
+            return C_AtNameContext(from)
         }
     }
 }
 
-private class C_BlockNameContext(private val blkCtx: C_BlockContext): C_NameContext() {
-    override fun resolveNameLocalValue(name: String) = blkCtx.lookupLocalVar(name)
-    override fun hasPlaceholder() = false
-    override fun resolvePlaceholder(pos: S_Pos) = throw C_Error.stop(pos, "expr:dollar:no_at", "Not in at-expression")
-    override fun findDefinitionByAlias(alias: S_Name) = null
+private class C_BlockNameContext: C_NameContext() {
     override fun findAttributesByName(name: S_Name) = listOf<C_ExprContextAttr>()
     override fun findAttributesByType(type: R_Type) = listOf<C_ExprContextAttr>()
 }
 
-private class C_AtNameContext(private val blkCtx: C_BlockContext, private val from: C_AtFrom): C_NameContext() {
-    override fun resolveNameLocalValue(name: String) = blkCtx.lookupLocalVar(name)
-    override fun hasPlaceholder() = from.hasPlaceholder()
-    override fun resolvePlaceholder(pos: S_Pos) = from.resolvePlaceholder(pos)
-    override fun findDefinitionByAlias(alias: S_Name) = from.findDefinitionByAlias(alias)
+private class C_AtNameContext(private val from: C_AtFrom): C_NameContext() {
     override fun findAttributesByName(name: S_Name) = from.findAttributesByName(name)
     override fun findAttributesByType(type: R_Type) = from.findAttributesByType(type)
-}
-
-sealed class C_NameResolution(val name: S_Name) {
-    abstract fun toExpr(): C_Expr
-}
-
-class C_NameResolution_Entity(name: S_Name, private val entity: C_AtEntity): C_NameResolution(name) {
-    override fun toExpr(): C_Expr {
-        val vExpr = createVExpr(entity, name.pos)
-        return C_VExpr(vExpr)
-    }
-
-    companion object {
-        fun createVExpr(entity: C_AtEntity, pos: S_Pos): V_Expr {
-            val rAtEntity = entity.compile()
-            return V_AtEntityExpr(pos, rAtEntity)
-        }
-    }
-}
-
-class C_NameResolution_Local(
-        name: S_Name,
-        private val ctx: C_ExprContext,
-        private val localVar: C_LocalVar
-): C_NameResolution(name) {
-    override fun toExpr(): C_Expr {
-        val nulled = ctx.factsCtx.nulled(localVar.uid)
-        val smartType = if (localVar.type is R_NullableType && nulled == C_VarFact.NO) localVar.type.valueType else null
-        val vExpr = V_LocalVarExpr(ctx, name, localVar, nulled, smartType)
-        return C_VExpr(vExpr)
-    }
-}
-
-private class C_NameResolution_Value(
-        name: S_Name,
-        private val ctx: C_NamespaceValueContext,
-        private val value: C_DefRef<C_NamespaceValue>
-): C_NameResolution(name) {
-    override fun toExpr(): C_Expr = C_NamespaceValueExpr(ctx, listOf(name), value)
 }
 
 class C_AssignOp(val pos: S_Pos, val code: String, val rOp: R_BinaryOp, val dbOp: Db_BinaryOp?)
@@ -265,24 +225,39 @@ abstract class C_Destination {
     abstract fun type(): R_Type
     open fun effectiveType(): R_Type = type()
     open fun resultType(srcType: R_Type): R_Type = srcType
-    abstract fun compileAssignStatement(srcExpr: R_Expr, op: C_AssignOp?): R_Statement
-    abstract fun compileAssignExpr(startPos: S_Pos, resType: R_Type, srcExpr: R_Expr, op: C_AssignOp, post: Boolean): R_Expr
+
+    abstract fun compileAssignStatement(ctx: C_ExprContext, srcExpr: R_Expr, op: C_AssignOp?): R_Statement
+
+    abstract fun compileAssignExpr(
+            ctx: C_ExprContext,
+            startPos: S_Pos,
+            resType: R_Type,
+            srcExpr: R_Expr,
+            op: C_AssignOp,
+            post: Boolean
+    ): R_Expr
 }
 
 class C_SimpleDestination(private val rDstExpr: R_DestinationExpr): C_Destination() {
     override fun type() = rDstExpr.type
 
-    override fun compileAssignStatement(srcExpr: R_Expr, op: C_AssignOp?): R_Statement {
+    override fun compileAssignStatement(ctx: C_ExprContext, srcExpr: R_Expr, op: C_AssignOp?): R_Statement {
         return R_AssignStatement(rDstExpr, srcExpr, op?.rOp)
     }
 
-    override fun compileAssignExpr(startPos: S_Pos, resType: R_Type, srcExpr: R_Expr, op: C_AssignOp, post: Boolean): R_Expr {
+    override fun compileAssignExpr(
+            ctx: C_ExprContext,
+            startPos: S_Pos,
+            resType: R_Type,
+            srcExpr: R_Expr,
+            op: C_AssignOp,
+            post: Boolean
+    ): R_Expr {
         return R_AssignExpr(resType, op.rOp, rDstExpr, srcExpr, post)
     }
 }
 
 class C_EntityAttrDestination(
-        private val msgCtx: C_MessageContext,
         private val base: V_Expr,
         private val rEntity: R_EntityDefinition,
         private val attr: R_Attribute
@@ -290,52 +265,103 @@ class C_EntityAttrDestination(
     override fun type() = attr.type
     override fun resultType(srcType: R_Type) = R_UnitType
 
-    override fun compileAssignStatement(srcExpr: R_Expr, op: C_AssignOp?): R_Statement {
+    override fun compileAssignStatement(ctx: C_ExprContext, srcExpr: R_Expr, op: C_AssignOp?): R_Statement {
         if (op != null && op.dbOp == null) {
-            C_BinOp.errTypeMismatch(msgCtx, op.pos, op.code, attr.type, srcExpr.type)
+            C_BinOp.errTypeMismatch(ctx.msgCtx, op.pos, op.code, attr.type, srcExpr.type)
             return C_Utils.ERROR_STATEMENT
         }
 
-        val atEntity = R_DbAtEntity(rEntity, 0)
+        val metaName = "${rEntity.appLevelName}.${attr.name}="
+
+        val lambdaBlkCtx = ctx.blkCtx.createSubContext("<$metaName:lambda>")
+        val lambdaCtx = ctx.update(blkCtx = lambdaBlkCtx)
+        val baseVar = lambdaBlkCtx.newLocalVar("<$metaName:base>", base.type(), false, false)
+        val srcVar = lambdaBlkCtx.newLocalVar("<$metaName:src>", srcExpr.type, false, false)
+
+        val cLambdaB = C_LambdaBlock.builder(lambdaCtx, rEntity.type)
+        val fromBlkCtx = cLambdaB.innerBlkCtx.createSubContext("<$metaName:from>")
+        val rFromBlock = fromBlkCtx.buildBlock().rBlock
+        val cLambda = cLambdaB.build()
+
+        val atEntity = ctx.makeAtEntity(rEntity, ctx.appCtx.nextAtExprId())
         val whereLeft = Db_EntityExpr(atEntity)
-        val whereRight = Db_ParameterExpr(atEntity.rEntity.type, 0)
+        val whereRight = cLambda.compileVarDbExpr(rFromBlock.uid)
         val where = C_Utils.makeDbBinaryExprEq(whereLeft, whereRight)
 
-        val rBase = base.toRExpr()
-        val rTarget = R_UpdateTarget_Expr_One(atEntity, where, rBase)
-        val dbExpr = Db_InterpretedExpr(srcExpr)
-        val rWhat = R_UpdateStatementWhat(attr, dbExpr, op?.dbOp)
-        return R_UpdateStatement(rTarget, listOf(rWhat))
+        val rBaseVarExpr = baseVar.toRef(lambdaBlkCtx.blockUid).toRExpr()
+        val rTarget = R_UpdateTarget_Expr_One(atEntity, where, rBaseVarExpr, cLambda.rLambda)
+
+        val dbSrcVarExpr = srcVar.toRef(rFromBlock.uid).toDbExpr()
+        val rWhat = R_UpdateStatementWhat(attr, dbSrcVarExpr, op?.dbOp)
+        val rUpdateStmt = R_UpdateStatement(rTarget, rFromBlock, listOf(rWhat))
+
+        val rBaseExpr = base.toRExpr()
+        val lambdaArgs = listOf(
+                rBaseExpr to baseVar.toRef(lambdaBlkCtx.blockUid).ptr,
+                srcExpr to srcVar.toRef(lambdaBlkCtx.blockUid).ptr
+        )
+
+        val rSubBlock = lambdaBlkCtx.buildBlock().rBlock
+        return R_LambdaStatement(lambdaArgs, rSubBlock, rUpdateStmt)
     }
 
-    override fun compileAssignExpr(startPos: S_Pos, resType: R_Type, srcExpr: R_Expr, op: C_AssignOp, post: Boolean): R_Expr {
-        val rStmt = compileAssignStatement(srcExpr, op)
+    override fun compileAssignExpr(
+            ctx: C_ExprContext,
+            startPos: S_Pos,
+            resType: R_Type,
+            srcExpr: R_Expr,
+            op: C_AssignOp,
+            post: Boolean
+    ): R_Expr {
+        val rStmt = compileAssignStatement(ctx, srcExpr, op)
         return R_StatementExpr(rStmt)
     }
 }
 
 class C_ObjectAttrDestination(
-        private val msgCtx: C_MessageContext,
         private val rObject: R_ObjectDefinition,
         private val attr: R_Attribute
 ): C_Destination() {
     override fun type() = attr.type
     override fun resultType(srcType: R_Type) = R_UnitType
 
-    override fun compileAssignStatement(srcExpr: R_Expr, op: C_AssignOp?): R_Statement {
+    override fun compileAssignStatement(ctx: C_ExprContext, srcExpr: R_Expr, op: C_AssignOp?): R_Statement {
         if (op != null && op.dbOp == null) {
-            C_BinOp.errTypeMismatch(msgCtx, op.pos, op.code, attr.type, srcExpr.type)
+            C_BinOp.errTypeMismatch(ctx.msgCtx, op.pos, op.code, attr.type, srcExpr.type)
             return C_Utils.ERROR_STATEMENT
         }
 
-        val rTarget = R_UpdateTarget_Object(rObject)
-        val dbExpr = Db_InterpretedExpr(srcExpr)
-        val rWhat = R_UpdateStatementWhat(attr, dbExpr, op?.dbOp)
-        return R_UpdateStatement(rTarget, listOf(rWhat))
+        val metaName = "${rObject.appLevelName}.${attr.name}="
+
+        val lambdaBlkCtx = ctx.blkCtx.createSubContext("<$metaName:lambda>")
+        val srcVar = lambdaBlkCtx.newLocalVar("<$metaName:src>", srcExpr.type, false, false)
+
+        val fromBlkCtx = lambdaBlkCtx.createSubContext("<$metaName:from>")
+        val rFromBlock = fromBlkCtx.buildBlock().rBlock
+        val rLambdaBlock = lambdaBlkCtx.buildBlock().rBlock
+
+        val rAtEntity = ctx.makeAtEntity(rObject.rEntity, ctx.appCtx.nextAtExprId())
+        val rTarget = R_UpdateTarget_Object(rAtEntity)
+        val dbSrcVarExpr = srcVar.toRef(rFromBlock.uid).toDbExpr()
+        val rWhat = R_UpdateStatementWhat(attr, dbSrcVarExpr, op?.dbOp)
+        val rUpdateStmt = R_UpdateStatement(rTarget, rFromBlock, listOf(rWhat))
+
+        val lambdaArgs = listOf(
+                srcExpr to srcVar.toRef(rLambdaBlock.uid).ptr
+        )
+
+        return R_LambdaStatement(lambdaArgs, rLambdaBlock, rUpdateStmt)
     }
 
-    override fun compileAssignExpr(startPos: S_Pos, resType: R_Type, srcExpr: R_Expr, op: C_AssignOp, post: Boolean): R_Expr {
-        val rStmt = compileAssignStatement(srcExpr, op)
+    override fun compileAssignExpr(
+            ctx: C_ExprContext,
+            startPos: S_Pos,
+            resType: R_Type,
+            srcExpr: R_Expr,
+            op: C_AssignOp,
+            post: Boolean
+    ): R_Expr {
+        val rStmt = compileAssignStatement(ctx, srcExpr, op)
         return R_StatementExpr(rStmt)
     }
 }
@@ -364,7 +390,7 @@ abstract class C_Expr {
 
         val type = value().type() // May fail with "not a value" - that's OK.
         if (type == R_CtErrorType) {
-            return C_Utils.errorExpr(pos)
+            return C_Utils.errorExpr(ctx, pos)
         } else {
             val typeStr = type.toStrictString()
             throw C_Error.stop(pos, "expr_call_nofn:$typeStr", "Not a function: value of type $typeStr")
@@ -429,7 +455,7 @@ sealed class C_StructExpr(
     }
 
     final override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_NameExprPair>): C_Expr {
-        return C_StructGlobalFunction.compileCall(struct, ctx, startPos, args)
+        return C_StructGlobalFunction.compileCall(ctx, struct, startPos, args)
     }
 }
 
@@ -457,8 +483,8 @@ class C_MirrorStructExpr(pos: S_Pos, struct: R_Struct, private val ns: C_Namespa
     }
 }
 
-class C_ObjectExpr(name: List<S_Name>, rObject: R_ObjectDefinition): C_Expr() {
-    private val vExpr = V_ObjectExpr(name, rObject)
+class C_ObjectExpr(exprCtx: C_ExprContext, name: List<S_Name>, rObject: R_ObjectDefinition): C_Expr() {
+    private val vExpr = V_ObjectExpr(exprCtx, name, rObject)
 
     override fun kind() = C_ExprKind.OBJECT
     override fun startPos() = vExpr.pos
@@ -474,13 +500,13 @@ class C_EnumExpr(private val msgCtx: C_MessageContext, private val name: List<S_
     override fun startPos() = name[0].pos
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
-        val valueExpr = memberValue(memberName)
+        val valueExpr = memberValue(ctx, memberName)
         val fnExpr = memberFn(memberName)
         val expr = C_ValueFunctionExpr.create(memberName, valueExpr, fnExpr)
         return expr ?: throw C_Errors.errUnknownName(name, memberName)
     }
 
-    private fun memberValue(memberName: S_Name): C_Expr? {
+    private fun memberValue(ctx: C_ExprContext, memberName: S_Name): C_Expr? {
         val attr = rEnum.attr(memberName.str)
         if (attr == null) {
             return null
@@ -488,7 +514,7 @@ class C_EnumExpr(private val msgCtx: C_MessageContext, private val name: List<S_
 
         val rValue = Rt_EnumValue(rEnum.type, attr)
         val rExpr = R_ConstantExpr(rValue)
-        return V_RExpr.makeExpr(startPos(), rExpr)
+        return V_RExpr.makeExpr(ctx, startPos(), rExpr)
     }
 
     private fun memberFn(memberName: S_Name): C_Expr? {

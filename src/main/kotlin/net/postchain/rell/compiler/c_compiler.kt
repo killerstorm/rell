@@ -26,6 +26,7 @@ enum class C_CompilerPass {
     ABSTRACT,
     APPDEFS,
     EXPRESSIONS,
+    FRAMES,
     VALIDATION,
     APPLICATION,
     FINISH
@@ -162,11 +163,12 @@ class C_SystemDefs private constructor(
 }
 
 // Instantiated in Eclipse IDE, change parameters carefully.
-class C_CompilerOptions(val gtv: Boolean, val deprecatedError: Boolean, val ide: Boolean) {
+class C_CompilerOptions(val gtv: Boolean, val deprecatedError: Boolean, val ide: Boolean, val blockCheck: Boolean) {
     class Builder {
         private var gtv = DEFAULT.gtv
         private var deprecatedError = DEFAULT.deprecatedError
         private var ide = DEFAULT.ide
+        private var blockCheck = DEFAULT.blockCheck
 
         @Suppress("UNUSED") fun gtv(v: Boolean): Builder {
             gtv = v
@@ -183,11 +185,16 @@ class C_CompilerOptions(val gtv: Boolean, val deprecatedError: Boolean, val ide:
             return this
         }
 
-        fun build() = C_CompilerOptions(gtv = gtv, deprecatedError = deprecatedError, ide = ide)
+        @Suppress("UNUSED") fun blockCheck(v: Boolean): Builder {
+            blockCheck = v
+            return this
+        }
+
+        fun build() = C_CompilerOptions(gtv = gtv, deprecatedError = deprecatedError, ide = ide, blockCheck = blockCheck)
     }
 
     companion object {
-        @JvmField val DEFAULT = C_CompilerOptions(gtv = true, deprecatedError = false, ide = false)
+        @JvmField val DEFAULT = C_CompilerOptions(gtv = true, deprecatedError = false, ide = false, blockCheck = false)
 
         @JvmStatic fun builder() = Builder()
     }

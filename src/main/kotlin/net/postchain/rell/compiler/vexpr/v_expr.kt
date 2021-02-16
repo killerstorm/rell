@@ -1,45 +1,50 @@
 package net.postchain.rell.compiler.vexpr
 
 import net.postchain.rell.compiler.*
-import net.postchain.rell.compiler.ast.S_Expr
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_TupleValue
 import net.postchain.rell.runtime.Rt_Value
 
-abstract class V_Expr(val pos: S_Pos) {
+abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
+    protected val msgCtx = exprCtx.msgCtx
+
     abstract fun type(): R_Type
     protected abstract fun isDb(): Boolean
     protected abstract fun toRExpr0(): R_Expr
-    protected open fun toDbExpr0(msgCtx: C_MessageContext): Db_Expr = throw C_Errors.errExprDbNotAllowed(pos)
+    protected open fun toDbExpr0(): Db_Expr = throw C_Errors.errExprDbNotAllowed(pos)
 
     protected fun isDb(vExpr: V_Expr) = vExpr.isDb()
 
     fun dependsOnAtVariable() = isDb() //TODO support for collection-at
 
     fun toRExpr(): R_Expr {
-        val rExpr = toRExpr0()
+        var rExpr = toRExpr0()
         val filePos = pos.toFilePos()
-        return R_StackTraceExpr(rExpr, filePos)
+        rExpr = R_StackTraceExpr(rExpr, filePos)
+        if (exprCtx.globalCtx.compilerOptions.blockCheck) {
+            rExpr = R_BlockCheckExpr(rExpr, exprCtx.blkCtx.blockUid)
+        }
+        return rExpr
     }
 
-    fun toDbExpr(msgCtx: C_MessageContext): Db_Expr {
+    fun toDbExpr(): Db_Expr {
         if (isDb()) {
-            return toDbExpr0(msgCtx)
+            return toDbExpr0()
         }
         val rExpr = toRExpr()
         return C_Utils.toDbExpr(pos, rExpr)
     }
 
-    open fun toDbExprWhat(exprCtx: C_ExprContext, field: C_AtWhatField): R_DbAtWhatValue {
-        var dbExpr = toDbExpr(exprCtx.msgCtx)
+    open fun toDbExprWhat(field: C_AtWhatField): Db_AtWhatValue {
+        var dbExpr = toDbExpr()
 
         if (field.summarization != null) {
             dbExpr = field.summarization.compileDb(exprCtx.nsCtx, dbExpr)
         }
 
-        return R_DbAtWhatValue_Simple(dbExpr, field.resultType)
+        return Db_AtWhatValue_Simple(dbExpr, field.resultType)
     }
 
     open fun constantValue(): Rt_Value? = null
@@ -48,7 +53,7 @@ abstract class V_Expr(val pos: S_Pos) {
 
     open fun asNullable(): V_Expr = this
 
-    open fun destination(ctx: C_ExprContext): C_Destination {
+    open fun destination(): C_Destination {
         throw C_Errors.errBadDestination(pos)
     }
 
@@ -62,8 +67,8 @@ abstract class V_Expr(val pos: S_Pos) {
 
         val expr = C_ValueFunctionExpr.create(memberName, valueExpr, fnExpr)
         if (expr == null) {
-            C_Errors.errUnknownMember(ctx.msgCtx, effectiveBaseType, memberName)
-            return C_Utils.errorExpr(pos)
+            C_Errors.errUnknownMember(msgCtx, effectiveBaseType, memberName)
+            return C_Utils.errorExpr(ctx, pos)
         }
 
         C_MemberResolver.checkNullAccess(baseType, memberName, safe)
@@ -75,13 +80,14 @@ abstract class V_Expr(val pos: S_Pos) {
 }
 
 class V_IfExpr(
+        exprCtx: C_ExprContext,
         pos: S_Pos,
         private val resType: R_Type,
         private val cond: V_Expr,
         private val trueExpr: V_Expr,
         private val falseExpr: V_Expr,
         private val varFacts: C_ExprVarFacts
-): V_Expr(pos) {
+): V_Expr(exprCtx, pos) {
     private val isDb = isDb(cond) || isDb(trueExpr) || isDb(falseExpr)
 
     override fun type() = resType
@@ -95,21 +101,22 @@ class V_IfExpr(
         return R_IfExpr(resType, rCond, rTrue, rFalse)
     }
 
-    override fun toDbExpr0(msgCtx: C_MessageContext): Db_Expr {
-        val dbCond = cond.toDbExpr(msgCtx)
-        val dbTrue = trueExpr.toDbExpr(msgCtx)
-        val dbFalse = falseExpr.toDbExpr(msgCtx)
+    override fun toDbExpr0(): Db_Expr {
+        val dbCond = cond.toDbExpr()
+        val dbTrue = trueExpr.toDbExpr()
+        val dbFalse = falseExpr.toDbExpr()
         val cases = listOf(Db_WhenCase(listOf(dbCond), dbTrue))
         return Db_WhenExpr(resType, null, cases, dbFalse)
     }
 }
 
 class V_TupleExpr(
+        exprCtx: C_ExprContext,
         pos: S_Pos,
         private val type: R_TupleType,
         private val exprs: List<V_Expr>,
         private val varFacts: C_ExprVarFacts
-): V_Expr(pos) {
+): V_Expr(exprCtx, pos) {
     private val isDb = exprs.any { isDb(it) }
 
     override fun type() = type
@@ -129,9 +136,10 @@ class V_TupleExpr(
 }
 
 class V_ToTextExpr(
+        exprCtx: C_ExprContext,
         private val expr: V_Expr,
         private val varFacts: C_ExprVarFacts
-): V_Expr(expr.pos) {
+): V_Expr(exprCtx, expr.pos) {
     private val isDb = isDb(expr)
 
     override fun type() = R_TextType
@@ -144,7 +152,7 @@ class V_ToTextExpr(
         return C_Utils.createSysCallExpr(R_TextType, R_SysFn_Any.ToText, listOf(rExpr), pos, type.toTextFunction)
     }
 
-    override fun toDbExpr0(msgCtx: C_MessageContext): Db_Expr {
+    override fun toDbExpr0(): Db_Expr {
         val type = expr.type()
         val dbFn = getDbToStringFunction(type)
         return if (dbFn == null) {
@@ -152,7 +160,7 @@ class V_ToTextExpr(
             msgCtx.error(pos, "expr:to_text:nosql:$typeStr", "Value of type $typeStr cannot be converted to text in SQL")
             C_Utils.errorDbExpr(R_TextType)
         } else {
-            val dbExpr = expr.toDbExpr(msgCtx)
+            val dbExpr = expr.toDbExpr()
             Db_CallExpr(R_TextType, dbFn, listOf(dbExpr))
         }
     }
@@ -174,9 +182,10 @@ class V_ToTextExpr(
 }
 
 class V_IntegerToDecimalExpr(
+        exprCtx: C_ExprContext,
         private val expr: V_Expr,
         private val varFacts: C_ExprVarFacts
-): V_Expr(expr.pos) {
+): V_Expr(exprCtx, expr.pos) {
     private val isDb = isDb(expr)
 
     override fun type() = R_DecimalType
@@ -188,8 +197,8 @@ class V_IntegerToDecimalExpr(
         return C_Utils.createSysCallExpr(R_DecimalType, R_SysFn_Decimal.FromInteger, listOf(rExpr), expr.pos, "decimal")
     }
 
-    override fun toDbExpr0(msgCtx: C_MessageContext): Db_Expr {
-        val dbExpr = expr.toDbExpr(msgCtx)
+    override fun toDbExpr0(): Db_Expr {
+        val dbExpr = expr.toDbExpr()
         return Db_CallExpr(R_DecimalType, Db_SysFn_Decimal.FromInteger, listOf(dbExpr))
     }
 
@@ -200,20 +209,24 @@ class V_IntegerToDecimalExpr(
     }
 }
 
-class V_AtEntityExpr(pos: S_Pos, private val rAtEntity: R_DbAtEntity): V_Expr(pos) {
-    override fun type() = rAtEntity.rEntity.type
+class V_AtEntityExpr(exprCtx: C_ExprContext, pos: S_Pos, private val cAtEntity: C_AtEntity): V_Expr(exprCtx, pos) {
+    override fun type() = cAtEntity.rEntity.type
     override fun isDb() = true
     override fun varFacts() = C_ExprVarFacts.EMPTY
 
     override fun toRExpr0() = throw C_Errors.errExprDbNotAllowed(pos)
-    override fun toDbExpr0(msgCtx: C_MessageContext) = Db_EntityExpr(rAtEntity)
+
+    override fun toDbExpr0(): Db_Expr {
+        val rAtEntity = cAtEntity.toRAtEntityValidated(exprCtx, pos)
+        return Db_EntityExpr(rAtEntity)
+    }
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
-        val entity = rAtEntity.rEntity
+        val entity = cAtEntity.rEntity
         val entityType = entity.type
 
         val attrRef = C_EntityAttrRef.resolveByName(entity, memberName.str)
-        val attrExpr = if (attrRef == null) null else C_VExpr(V_AtAttrExpr(pos, rAtEntity, attrRef))
+        val attrExpr = if (attrRef == null) null else C_VExpr(V_AtAttrExpr(ctx, pos, cAtEntity, attrRef))
 
         val memberRef = C_MemberRef(pos, this, memberName, safe)
         val fnExpr = C_MemberResolver.functionForType(entityType, memberRef)
@@ -223,56 +236,54 @@ class V_AtEntityExpr(pos: S_Pos, private val rAtEntity: R_DbAtEntity): V_Expr(po
     }
 }
 
-class V_AtAttrExpr(pos: S_Pos, private val rAtEntity: R_DbAtEntity, private val attrRef: C_EntityAttrRef): V_Expr(pos) {
+class V_AtAttrExpr(
+        exprCtx: C_ExprContext,
+        pos: S_Pos,
+        private val cAtEntity: C_AtEntity,
+        private val attrRef: C_EntityAttrRef
+): V_Expr(exprCtx, pos) {
     override fun type() = attrRef.type()
     override fun isDb() = true
     override fun varFacts() = C_ExprVarFacts.EMPTY
 
     override fun toRExpr0() = throw C_Errors.errExprDbNotAllowed(pos)
 
-    override fun toDbExpr0(msgCtx: C_MessageContext): Db_Expr {
+    override fun toDbExpr0(): Db_Expr {
+        val rAtEntity = cAtEntity.toRAtEntityValidated(exprCtx, pos)
         val dbEntityExpr = Db_EntityExpr(rAtEntity)
         return attrRef.createDbContextAttrExpr(dbEntityExpr)
     }
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
-        val dbExpr = toDbExpr0(ctx.msgCtx)
-        val vExpr = V_DbExpr.create(pos, dbExpr)
+        val dbExpr = toDbExpr0()
+        val vExpr = V_DbExpr.create(ctx, pos, dbExpr)
         return vExpr.member(ctx, memberName, safe)
     }
 
     override fun implicitWhatName() = attrRef.name
 }
 
-class V_AtPlaceholderExpr(pos: S_Pos, private val type: R_Type, private val varPtr: R_VarPtr): V_Expr(pos) {
-    override fun type() = type
-    override fun isDb() = false
-    override fun varFacts() = C_ExprVarFacts.EMPTY
-    override fun toRExpr0() = R_VarExpr(type, varPtr, C_Constants.AT_PLACEHOLDER)
-    override fun isAtExprItem() = true
-}
-
 class V_SysGlobalCaseCallExpr(
-        private val ctx: C_ExprContext,
+        exprCtx: C_ExprContext,
         private val caseCtx: C_GlobalFuncCaseCtx,
         private val match: C_GlobalFuncCaseMatch,
         args: List<V_Expr>
-): V_Expr(caseCtx.fullName.pos) {
+): V_Expr(exprCtx, caseCtx.fullName.pos) {
     private val isDb = match.canBeDb && args.any { isDb(it) }
 
     override fun type() = match.resType
     override fun isDb() = isDb
     override fun varFacts() = match.varFacts()
-    override fun toRExpr0() = match.compileCall(ctx, caseCtx)
-    override fun toDbExpr0(msgCtx: C_MessageContext) = match.compileCallDb(ctx, caseCtx)
+    override fun toRExpr0() = match.compileCall(exprCtx, caseCtx)
+    override fun toDbExpr0() = match.compileCallDb(exprCtx, caseCtx)
 }
 
 class V_SysMemberCaseCallExpr(
-        private val ctx: C_ExprContext,
+        exprCtx: C_ExprContext,
         private val caseCtx: C_MemberFuncCaseCtx,
         private val match: C_MemberFuncCaseMatch,
         args: List<V_Expr>
-): V_Expr(caseCtx.fullName.pos) {
+): V_Expr(exprCtx, caseCtx.fullName.pos) {
     private val isDb = isDb(caseCtx.member.base) || args.any { isDb(it) }
     private val resType = C_Utils.effectiveMemberType(match.resType, caseCtx.member.safe)
     private val varFacts = caseCtx.member.base.varFacts().and(match.varFacts())
@@ -280,15 +291,15 @@ class V_SysMemberCaseCallExpr(
     override fun type() = resType
     override fun isDb() = isDb
     override fun varFacts() = varFacts
-    override fun toRExpr0() = match.compileCall(ctx, caseCtx)
-    override fun toDbExpr0(msgCtx: C_MessageContext) = match.compileCallDb(ctx, caseCtx)
+    override fun toRExpr0() = match.compileCall(exprCtx, caseCtx)
+    override fun toDbExpr0() = match.compileCallDb(exprCtx, caseCtx)
 }
 
 class V_SysMemberPropertyExpr(
-        private val ctx: C_ExprContext,
+        exprCtx: C_ExprContext,
         private val caseCtx: C_MemberFuncCaseCtx,
         private val prop: C_SysMemberFormalParamsFuncBody
-): V_Expr(caseCtx.fullName.pos) {
+): V_Expr(exprCtx, caseCtx.fullName.pos) {
     private val isDb = isDb(caseCtx.member.base)
     private val resType = C_Utils.effectiveMemberType(prop.resType, caseCtx.member.safe)
     private val varFacts = caseCtx.member.base.varFacts()
@@ -296,6 +307,6 @@ class V_SysMemberPropertyExpr(
     override fun type() = resType
     override fun isDb() = isDb
     override fun varFacts() = varFacts
-    override fun toRExpr0() = prop.compileCall(ctx, caseCtx, listOf())
-    override fun toDbExpr0(msgCtx: C_MessageContext) = prop.compileCallDb(ctx, caseCtx, listOf())
+    override fun toRExpr0() = prop.compileCall(exprCtx, caseCtx, listOf())
+    override fun toDbExpr0() = prop.compileCallDb(exprCtx, caseCtx, listOf())
 }

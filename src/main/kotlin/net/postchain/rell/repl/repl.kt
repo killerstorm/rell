@@ -62,7 +62,7 @@ class R_ReplCode(private val frame: R_CallFrame, stmts: List<R_Statement>) {
     private val stmts = stmts.toImmList()
 
     fun execute(exeCtx: Rt_ExecutionContext, oldState: Rt_ReplCodeState): Rt_ReplCodeState {
-        val rtDefCtx = Rt_DefinitionContext(exeCtx, false, R_DefinitionPos("", "<console>"))
+        val rtDefCtx = Rt_DefinitionContext(exeCtx, false, R_DefinitionId("", "<console>"))
         val rtFrame = frame.createRtFrame(rtDefCtx, null, oldState.frameState)
 
         R_BlockStatement.executeStatements(rtFrame, stmts)

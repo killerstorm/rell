@@ -37,10 +37,8 @@ object C_LibFunctions {
             .add("requireNotEmpty", C_SysFn_Require_Nullable, depError("require_not_empty"))
             .add("require_not_empty", C_SysFn_Require_Collection)
             .add("require_not_empty", C_SysFn_Require_Nullable)
-            .add("exists", C_SysFn_Exists_Collection(false))
-            .add("exists", C_SysFn_Exists_Nullable(false))
-            .add("empty", C_SysFn_Exists_Collection(true))
-            .add("empty", C_SysFn_Exists_Nullable(true))
+            .add("exists", C_SysFn_Exists(false))
+            .add("empty", C_SysFn_Exists(true))
 
             .add("integer", R_IntegerType, listOf(R_TextType), R_SysFn_Integer.FromText)
             .add("integer", R_IntegerType, listOf(R_TextType, R_IntegerType), R_SysFn_Integer.FromText)
@@ -832,7 +830,7 @@ private object C_SysFn_Require_Nullable: C_GlobalSpecialFuncCase() {
     }
 }
 
-private object C_SysFn_Require_Collection: C_GlobalSpecialFuncCase() {
+object C_SysFn_Require_Collection: C_GlobalSpecialFuncCase() {
     override fun match(args: List<V_Expr>): C_GlobalFuncCaseMatch? {
         if (args.size < 1 || args.size > 2) return null
 
@@ -871,52 +869,6 @@ private object C_SysFn_Require_Collection: C_GlobalSpecialFuncCase() {
     }
 }
 
-private class C_SysFn_Exists_Nullable(private val not: Boolean): C_GlobalSpecialFuncCase() {
-    override fun match(args: List<V_Expr>): C_GlobalFuncCaseMatch? {
-        if (args.size != 1) return null
-
-        val expr = args[0].asNullable()
-        val exprType = expr.type()
-        if (exprType !is R_NullableType) return null
-
-        return CaseMatch(not, args, R_RequireCondition_Nullable)
-    }
-
-    class CaseMatch(
-            private val not: Boolean,
-            private val args: List<V_Expr>,
-            private val condition: R_RequireCondition
-    ): C_GlobalFuncCaseMatch(R_BooleanType) {
-        override fun varFacts(): C_ExprVarFacts {
-            check(args.size == 1)
-            val arg = args[0]
-            val preFacts = C_ExprVarFacts.forSubExpressions(args)
-            return preFacts.and(C_ExprVarFacts.forNullCheck(arg, not))
-        }
-
-        override fun compileCall(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): R_Expr {
-            check(args.size == 1)
-            val fn = R_SysFn_General.Exists(condition, not)
-            val rArgs = args.map { it.toRExpr() }
-            return C_Utils.createSysCallExpr(R_BooleanType, fn, rArgs, caseCtx.fullName)
-        }
-    }
-}
-
-private class C_SysFn_Exists_Collection(private val not: Boolean): C_GlobalSpecialFuncCase() {
-    override fun match(args: List<V_Expr>): C_GlobalFuncCaseMatch? {
-        if (args.size != 1) return null
-
-        val expr = args[0].asNullable()
-        val exprType = expr.type()
-
-        val (_, condition) = C_SysFn_Require_Collection.getCondition(exprType)
-        if (condition == null) return null
-
-        return C_SysFn_Exists_Nullable.CaseMatch(not, args, condition)
-    }
-}
-
 private object C_SysFn_Text_Format: C_MemberSpecialFuncCase() {
     override fun match(args: List<V_Expr>): C_MemberFuncCaseMatch? {
         val body = C_SysMemberFormalParamsFuncBody(R_TextType, R_SysFn_Text_Format)
@@ -925,7 +877,7 @@ private object C_SysFn_Text_Format: C_MemberSpecialFuncCase() {
 }
 
 private sealed class C_SysFn_Common_ToStruct: C_SpecialSysMemberFunction() {
-    protected abstract fun compile0(member: C_MemberRef): V_Expr
+    protected abstract fun compile0(ctx: C_ExprContext, member: C_MemberRef): V_Expr
 
     final override fun compileCall(ctx: C_ExprContext, member: C_MemberRef, args: List<V_Expr>): C_Expr {
         if (args.isNotEmpty()) {
@@ -933,7 +885,7 @@ private sealed class C_SysFn_Common_ToStruct: C_SpecialSysMemberFunction() {
             C_FuncMatchUtils.errNoMatch(ctx, member.pos, member.qualifiedName(), argTypes)
         }
 
-        val vExpr = compile0(member)
+        val vExpr = compile0(ctx, member)
         return C_VExpr(vExpr)
     }
 }
@@ -942,14 +894,14 @@ private class C_SysFn_Entity_ToStruct(
         private val entityType: R_EntityType,
         private val mutable: Boolean
 ): C_SysFn_Common_ToStruct() {
-    override fun compile0(member: C_MemberRef): V_Expr = V_EntityToStructExpr(member, entityType, mutable)
+    override fun compile0(ctx: C_ExprContext, member: C_MemberRef): V_Expr = V_EntityToStructExpr(ctx, member, entityType, mutable)
 }
 
 private class C_SysFn_Object_ToStruct(
         private val objectType: R_ObjectType,
         private val mutable: Boolean
 ): C_SysFn_Common_ToStruct() {
-    override fun compile0(member: C_MemberRef): V_Expr = V_ObjectToStructExpr(member.pos, objectType, mutable)
+    override fun compile0(ctx: C_ExprContext, member: C_MemberRef): V_Expr = V_ObjectToStructExpr(ctx, member.pos, objectType, mutable)
 }
 
 private class C_SysFunction_Invalid(private val type: R_Type): C_GlobalFormalParamsFuncBody(R_CtErrorType) {

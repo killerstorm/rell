@@ -13,10 +13,7 @@ import net.postchain.base.data.PostgreSQLDatabaseAccess
 import net.postchain.base.data.SQLDatabaseAccess
 import net.postchain.core.EContext
 import net.postchain.rell.model.*
-import net.postchain.rell.runtime.Rt_ExecutionContext
-import net.postchain.rell.runtime.Rt_Messages
-import net.postchain.rell.runtime.Rt_StackTraceError
-import net.postchain.rell.runtime.Rt_Utils
+import net.postchain.rell.runtime.*
 import net.postchain.rell.utils.PostchainUtils
 import net.postchain.rell.utils.toImmSet
 
@@ -126,6 +123,14 @@ class SqlInit private constructor(
         if (allowed) {
             logger.info(s)
         }
+    }
+}
+
+object SqlInitUtils {
+    fun createEntityInitFrame(exeCtx: Rt_ExecutionContext, rEntity: R_EntityDefinition, modsAllowed: Boolean): Rt_CallFrame {
+        val defCtx = Rt_DefinitionContext(exeCtx, modsAllowed, rEntity.defId)
+        val rInitFrame = rEntity.initFrameGetter.get()
+        return rInitFrame.createRtFrame(defCtx, null, null)
     }
 }
 
@@ -355,7 +360,11 @@ private class SqlEntityIniter private constructor(
         initCtx.step(ORD_TABLES, "Add meta attributes for $entityName: $attrsStr", SqlStepAction_ExecSql(metaSql))
     }
 
-    private fun makeCreateExprAttrs(entity: R_EntityDefinition, newAttrs: List<String>, existingRecs: Boolean): List<R_CreateExprAttr> {
+    private fun makeCreateExprAttrs(
+            entity: R_EntityDefinition,
+            newAttrs: List<String>,
+            existingRecs: Boolean
+    ): List<R_CreateExprAttr> {
         val res = mutableListOf<R_CreateExprAttr>()
 
         val keys = entity.keys.flatMap { it.attribs }.toSet()
@@ -366,7 +375,7 @@ private class SqlEntityIniter private constructor(
         for (name in newAttrs) {
             val attr = entity.attributes.getValue(name)
             if (attr.expr != null || !existingRecs) {
-                res.add(R_CreateExprAttr_Default(attr))
+                res.add(R_CreateExprAttr_Default(attr, entity.initFrameGetter, null))
             } else {
                 initCtx.msgs.error("meta:attr:new_no_def_value:${entity.metaName}:$name",
                         "New attribute '$name' of entity $entityName has no default value")
@@ -456,9 +465,9 @@ private class SqlStepAction_AddColumns_AlterTable(
         private val existingRecs: Boolean
 ): SqlStepAction() {
     override fun run(ctx: SqlStepCtx) {
-        val sql = R_CreateExpr.buildAddColumnsSql(ctx.sqlCtx, entity, attrs, existingRecs)
-        val frame = ctx.exeCtx.appCtx.createRootFrame(entity.pos, ctx.sqlExec, true)
-        sql.execute(frame)
+        val frame = SqlInitUtils.createEntityInitFrame(ctx.exeCtx, entity, true)
+        val sql = R_CreateExpr.buildAddColumnsSql(frame, entity, attrs, existingRecs)
+        sql.execute(frame.sqlExec)
     }
 }
 

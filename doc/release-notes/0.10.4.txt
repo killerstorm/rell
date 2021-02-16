@@ -312,3 +312,29 @@ Conversion between struct<T> and struct<mutable T> is done via .to_mutable() and
     val imm = mut.to_immutable();
 
 The functions create a mutable or immutable copy of a structure.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+14. Language: Nested at-expressions under exists() and empty() functions
+
+Nested at-expressions passed as an argument to functions exists() and empty() can access entities of an outer
+at-expression:
+
+    user @* {
+        not exists( company @* { company.city == user.city } )
+    }
+
+This allows to execute database queries that used to be impossible in earlier versions of Rell. Only independent
+nested at-expressions were supported, and they were translated and executed as independent SQL queries.
+
+Now the whole at-expression is translated to a single SQL query, which may look like this:
+
+    SELECT U."name" FROM "c0.user" U WHERE NOT EXISTS( SELECT C."rowid" FROM "c0.company" C WHERE C."city" = U."city" )
+
+Same functionality can be used within "update" and "delete" statements as well:
+
+    delete user @* { not exists( company @* { company.city == user.city } ) } ;
+
+Details:
+
+- A nested expression must use the "@*" operator (and not "@+", "@?" or "@").
+- Function "empty(X)" is equivalent to "not exists(X)" and is translated to "NOT EXISTS()" SQL expression.

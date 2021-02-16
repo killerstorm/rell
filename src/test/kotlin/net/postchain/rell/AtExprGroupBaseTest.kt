@@ -1,17 +1,9 @@
 package net.postchain.rell
 
-import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.test.RellCodeTester
 import org.junit.Test
 
-abstract class AtExprGroupBaseTest: BaseRellTest() {
-    protected abstract val impDefKw: String
-    protected abstract fun impFrom(name: String): String
-    protected abstract fun impRtErr(code: String): String
-    protected abstract fun impCreateObjs(t: RellCodeTester, name: String, vararg objs: String)
-
-    private fun impCreateObjs(name: String, vararg objs: String) = impCreateObjs(tst, name, *objs)
-
+abstract class AtExprGroupBaseTest: AtExprBaseTest() {
     protected val fromData = impFrom("data")
 
     protected fun initDataCountries() {

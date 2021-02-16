@@ -117,14 +117,12 @@ class S_FormalParameter(val attr: S_AttrHeader, val expr: S_Expr?) {
             S_PosValue(expr.startPos, exprLate.getter)
         }
 
-        return C_FormalParameter(name, type, exprGetterPosValue)
+        return C_FormalParameter(name, type, defCtx.initFrameGetter, exprGetterPosValue)
     }
 
     private fun compileExpr(defCtx: C_DefinitionContext, attrType: R_Type?): R_Expr {
-        val cExpr = expr!!.compileOpt(defCtx.defExprCtx, C_TypeHint.ofType(attrType))
-        if (cExpr == null) {
-            return C_Utils.ERROR_EXPR
-        }
+        val cExpr = expr!!.compileOpt(defCtx.initExprCtx, C_TypeHint.ofType(attrType))
+        cExpr ?: return C_Utils.ERROR_EXPR
 
         val rExpr = cExpr.value().toRExpr()
         if (attrType != null) {
@@ -286,16 +284,27 @@ class S_EntityDefinition(
             R_EntitySqlMapping_External(mountName, extChainRef)
         }
 
+        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.ENTITY, names.defId)
+
         val rExternalEntity = if (extChainRef == null) null else R_ExternalEntity(extChainRef, true)
 
-        val rEntity = C_Utils.createEntity(ctx.appCtx, C_DefinitionType.ENTITY, names, mountName, rFlags, rMapping, rExternalEntity)
+        val rEntity = C_Utils.createEntity(
+                ctx.appCtx,
+                C_DefinitionType.ENTITY,
+                names,
+                defCtx.initFrameGetter,
+                mountName,
+                rFlags,
+                rMapping,
+                rExternalEntity
+        )
 
         ctx.appCtx.defsAdder.addEntity(C_Entity(name.pos, rEntity))
         ctx.nsBuilder.addEntity(name, rEntity)
         ctx.mntBuilder.addEntity(name.pos, rEntity)
 
         ctx.executor.onPass(C_CompilerPass.MEMBERS) {
-            membersPass(ctx, extChain, rEntity, body)
+            membersPass(defCtx, extChain, rEntity, body)
         }
     }
 
@@ -376,16 +385,14 @@ class S_EntityDefinition(
         )
     }
 
-    private fun membersPass(ctx: C_MountContext, extChain: C_ExternalChain?, rEntity: R_EntityDefinition, clauses: List<S_RelClause>) {
-        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.ENTITY)
-
+    private fun membersPass(defCtx: C_DefinitionContext, extChain: C_ExternalChain?, rEntity: R_EntityDefinition, clauses: List<S_RelClause>) {
         val sysAttrs = mutableListOf<C_SysAttribute>()
 
         if (rEntity.flags.log) {
-            val sysDefs = extChain?.sysDefs ?: ctx.modCtx.sysDefs
+            val sysDefs = extChain?.sysDefs ?: defCtx.modCtx.sysDefs
             val txType = sysDefs.transactionEntity.type
             val expr = if (extChain == null) {
-                val nsValueCtx = C_NamespaceValueContext(defCtx)
+                val nsValueCtx = C_NamespaceValueContext(defCtx.initExprCtx)
                 C_Ns_OpContext.transactionExpr(nsValueCtx, name.pos)
             } else {
                 C_Utils.errorRExpr(txType, "Trying to initialize transaction for external entity '${rEntity.appLevelName}'")
@@ -443,7 +450,19 @@ class S_ObjectDefinition(
         val mountName = ctx.mountName(modTarget, name)
         val sqlMapping = R_EntitySqlMapping_Regular(mountName)
 
-        val rEntity = C_Utils.createEntity(ctx.appCtx, C_DefinitionType.OBJECT, names, mountName, entityFlags, sqlMapping, null)
+        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.OBJECT, names.defId)
+
+        val rEntity = C_Utils.createEntity(
+                ctx.appCtx,
+                C_DefinitionType.OBJECT,
+                names,
+                defCtx.initFrameGetter,
+                mountName,
+                entityFlags,
+                sqlMapping,
+                null
+        )
+
         val rObject = R_ObjectDefinition(names, rEntity)
 
         ctx.appCtx.defsAdder.addObject(rObject)
@@ -451,12 +470,11 @@ class S_ObjectDefinition(
         ctx.mntBuilder.addObject(name, rObject)
 
         ctx.executor.onPass(C_CompilerPass.MEMBERS) {
-            membersPass(ctx, rObject)
+            membersPass(defCtx, rObject)
         }
     }
 
-    private fun membersPass(ctx: C_MountContext, rObject: R_ObjectDefinition) {
-        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.OBJECT)
+    private fun membersPass(defCtx: C_DefinitionContext, rObject: R_ObjectDefinition) {
         val entCtx = C_EntityContext(defCtx, name.str, false, listOf())
 
         for (attr in attrs) {
@@ -493,18 +511,20 @@ class S_StructDefinition(
         modifiers.compile(ctx, modTarget)
 
         val names = ctx.nsCtx.defNames(name.str)
-        val rStruct = R_Struct(names.appLevelName, names.appLevelName.toGtv(), mirrorStructs = null)
+        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.STRUCT, names.defId)
+
+        val rStruct = R_Struct(names.appLevelName, names.appLevelName.toGtv(), defCtx.initFrameGetter, mirrorStructs = null)
         val rStructDef = R_StructDefinition(names, rStruct)
+
         ctx.appCtx.defsAdder.addStruct(rStruct)
         ctx.nsBuilder.addStruct(name, rStructDef)
 
         ctx.executor.onPass(C_CompilerPass.MEMBERS) {
-            membersPass(ctx, rStruct)
+            membersPass(defCtx, rStructDef)
         }
     }
 
-    private fun membersPass(ctx: C_MountContext, rStruct: R_Struct) {
-        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.STRUCT)
+    private fun membersPass(defCtx: C_DefinitionContext, rStructDef: R_StructDefinition) {
         val entCtx = C_EntityContext(defCtx, name.str, false, listOf())
 
         for (attr in attrs) {
@@ -512,7 +532,7 @@ class S_StructDefinition(
         }
 
         val attributes = entCtx.createStructBody()
-        rStruct.setAttributes(attributes)
+        rStructDef.struct.setAttributes(attributes)
     }
 
     override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
@@ -546,7 +566,7 @@ class S_EnumDefinition(
         }
 
         val names = ctx.nsCtx.defNames(name.str)
-        val rEnum = R_EnumDefinition(names, rAttrs.toList())
+        val rEnum = R_EnumDefinition(names, R_CallFrame.NONE_INIT_FRAME_GETTER, rAttrs.toList())
         ctx.nsBuilder.addEnum(name, rEnum)
     }
 
@@ -574,9 +594,11 @@ class S_OperationDefinition(
         val names = ctx.nsCtx.defNames(name.str)
         val mountName = ctx.mountName(modTarget, name)
 
-        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.OPERATION)
-        val mirrorStructs = C_Utils.createMirrorStructs(ctx.appCtx, names, defCtx.definitionType, operation = mountName)
-        val rOperation = R_OperationDefinition(names, mountName, mirrorStructs)
+        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.OPERATION, names.defId)
+        val mirrorStructs = C_Utils.createMirrorStructs(
+                ctx.appCtx, names, defCtx.initFrameGetter, defCtx.definitionType, operation = mountName)
+
+        val rOperation = R_OperationDefinition(names, defCtx.initFrameGetter, mountName, mirrorStructs)
         val cOperation = C_OperationGlobalFunction(rOperation)
 
         ctx.appCtx.defsAdder.addOperation(rOperation)
@@ -654,8 +676,8 @@ class S_QueryDefinition(
         val names = ctx.nsCtx.defNames(name.str)
         val mountName = ctx.mountName(modTarget, name)
 
-        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.QUERY)
-        val rQuery = R_QueryDefinition(names, mountName)
+        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.QUERY, names.defId)
+        val rQuery = R_QueryDefinition(names, defCtx.initFrameGetter, mountName)
         val cQuery = C_QueryGlobalFunction(rQuery)
 
         ctx.appCtx.defsAdder.addQuery(rQuery)
@@ -743,7 +765,7 @@ abstract class S_FunctionBody {
         val cBody = compileFunction0(ctx, actParams.stmtCtx)
         val callFrame = frameCtx.makeCallFrame(cBody.guardBlock)
         val rRetType = fnCtx.actualReturnType()
-        return R_FunctionBody(ctx.defNames.pos, rRetType, actParams.rParams, cBody.rStmt, callFrame.rFrame)
+        return R_FunctionBody(rRetType, actParams.rParams, cBody.rStmt, callFrame.rFrame)
     }
 }
 
@@ -840,19 +862,21 @@ class S_FunctionDefinition(
             ctx.msgCtx.error(name.pos, "fn:no_body:$qName", "Function '$qName' must have a body (it is not abstract)")
         }
 
-        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.FUNCTION)
+
+        val defNames = definitionNames(ctx)
+        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.FUNCTION, defNames.defId)
 
         if (abstract) {
-            compileAbstract(defCtx, name)
+            compileAbstract(defCtx, name, defNames)
         } else if (override) {
             compileOverride(defCtx)
         } else {
-            compileRegular(defCtx, name)
+            compileRegular(defCtx, name, defNames)
         }
     }
 
-    private fun compileRegular(defCtx: C_DefinitionContext, name: S_Name) {
-        val rFn = compileDefinition0(defCtx.mntCtx)
+    private fun compileRegular(defCtx: C_DefinitionContext, name: S_Name, defNames: R_DefinitionNames) {
+        val rFn = R_FunctionDefinition(defNames, defCtx.initFrameGetter)
         val cFn = C_UserGlobalFunction(rFn, null)
         defCtx.mntCtx.nsBuilder.addFunction(name, cFn)
 
@@ -867,11 +891,6 @@ class S_FunctionDefinition(
     private fun definitionNames(ctx: C_MountContext): R_DefinitionNames {
         val qName = qualifiedName.map { it.str }
         return ctx.nsCtx.defNames(qName)
-    }
-
-    private fun compileDefinition0(ctx: C_MountContext): R_FunctionDefinition {
-        val names = definitionNames(ctx)
-        return R_FunctionDefinition(names)
     }
 
     private fun compileRegularHeader(defCtx: C_DefinitionContext, cFn: C_UserGlobalFunction): C_UserFunctionHeader {
@@ -891,7 +910,7 @@ class S_FunctionDefinition(
         }
     }
 
-    private fun compileAbstract(defCtx: C_DefinitionContext, name: S_Name) {
+    private fun compileAbstract(defCtx: C_DefinitionContext, name: S_Name, defNames: R_DefinitionNames) {
         if (!defCtx.modCtx.abstract) {
             val mName = defCtx.modCtx.moduleName.str()
             val qName = C_Utils.nameStr(qualifiedName)
@@ -900,7 +919,7 @@ class S_FunctionDefinition(
         }
 
         val mntCtx = defCtx.mntCtx
-        val rFn = compileDefinition0(mntCtx)
+        val rFn = R_FunctionDefinition(defNames, defCtx.initFrameGetter)
 
         val descriptor = C_AbstractDescriptor(name.pos, rFn, body != null)
         mntCtx.fileCtx.addAbstractFunction(descriptor)
@@ -1318,9 +1337,9 @@ class C_FormalParameters(list: List<C_FormalParameter>): C_FunctionParametersHin
             if (!names.add(nameStr)) {
                 frameCtx.msgCtx.error(name.pos, "dup_param_name:$nameStr", "Duplicate parameter: '$nameStr'")
             } else if (type != null) {
-                val cVar = blkCtx.addLocalVar(name, type, false)
-                inited[cVar.uid] = C_VarFact.YES
-                val rVarParam = param.createVarParam(type, cVar.ptr)
+                val cVarRef = blkCtx.addLocalVar(name, type, false, false)
+                inited[cVarRef.target.uid] = C_VarFact.YES
+                val rVarParam = param.createVarParam(type, cVarRef.ptr)
                 rParams.add(rVarParam)
             }
         }

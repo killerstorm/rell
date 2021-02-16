@@ -144,13 +144,13 @@ class S_WhenConditionExpr(val exprs: List<S_Expr>): S_WhenCondition() {
             if (attr != null) {
                 val value = Rt_EnumValue(valueType, attr)
                 val rExpr = R_ConstantExpr(value)
-                return V_RExpr(expr.startPos, rExpr)
+                return V_RExpr(ctx, expr.startPos, rExpr)
             }
         }
 
         val cExpr = expr.compileOpt(ctx)
         if (cExpr == null) {
-            return C_Utils.errorVExpr(expr.startPos, valueType ?: R_CtErrorType)
+            return C_Utils.errorVExpr(ctx, expr.startPos, valueType ?: R_CtErrorType)
         }
 
         val cValue = cExpr.value()
@@ -190,7 +190,7 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
 
         val chooserDetails = compileChooserDetails(ctx, expr, conds)?.toVDetails()
         if (chooserDetails == null) {
-            return C_Utils.errorExpr(startPos)
+            return C_Utils.errorExpr(ctx, startPos)
         }
 
         val missingElseReported = !chooserDetails.full
@@ -201,7 +201,7 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
         val (resType, valueExprs) = compileExprs(ctx, chooserDetails.caseFacts)
 
         val resFacts = C_ExprVarFacts.of(postFacts = chooserDetails.keyPostFacts)
-        val vResExpr = V_WhenExpr(startPos, chooserDetails, valueExprs, resType, resFacts)
+        val vResExpr = V_WhenExpr(ctx, startPos, chooserDetails, valueExprs, resType, resFacts)
         return C_VExpr(vResExpr)
     }
 
@@ -210,7 +210,7 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
             case.expr.compileWithFacts(ctx, caseFacts[i]).value()
         }
 
-        val cValues = C_BinOp_Common.promoteNumeric(cValuesRaw)
+        val cValues = C_BinOp_Common.promoteNumeric(ctx, cValuesRaw)
 
         val type = cValues.withIndex().fold(cValues[0].type()) { t, (i, value) ->
             C_Types.commonType(t, value.type(), cases[i].expr.startPos, "expr_when_incompatible_type",

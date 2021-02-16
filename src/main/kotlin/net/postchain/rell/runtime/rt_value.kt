@@ -315,6 +315,10 @@ object Rt_NullValue: Rt_Value() {
 }
 
 class Rt_ListValue(private val type: R_Type, private val elements: MutableList<Rt_Value>): Rt_Value() {
+    init {
+        check(type is R_ListType) { "wrong type: $type" }
+    }
+
     override fun type() = type
     override fun valueType() = Rt_ValueType.LIST
     override fun asCollection() = elements
@@ -382,6 +386,10 @@ class Rt_VirtualListValue(
 }
 
 class Rt_SetValue(private val type: R_Type, private val elements: MutableSet<Rt_Value>): Rt_Value() {
+    init {
+        check(type is R_SetType) { "wrong type: $type" }
+    }
+
     override fun type() = type
     override fun valueType() = Rt_ValueType.SET
     override fun asCollection() = elements

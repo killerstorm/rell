@@ -162,20 +162,20 @@ class CompilerErrorsTest: BaseRellTest(false) {
         chkStmt("val x: BAD; max(x); $badExpr2;", "ct_err:[unknown_type:BAD][$badError2]")
         chkStmt("val x: BAD = 123; max(x); $badExpr2;", "ct_err:[unknown_type:BAD][$badError2]")
 
-        chkStmt("val x = 123; val x; max(x); $badExpr2;", "ct_err:[unknown_name_type:x][var_dupname:x][$err3][$badError2]")
-        chkStmt("val x = 123; val x: BAD; max(x); $badExpr2;", "ct_err:[var_dupname:x][unknown_type:BAD][$err3][$badError2]")
-        chkStmt("val x = 123; val x = $badExpr1; max(x); $badExpr2;", "ct_err:[var_dupname:x][$badError1][$err3][$badError2]")
+        chkStmt("val x = 123; val x; max(x); $badExpr2;", "ct_err:[block:name_conflict:x][unknown_name_type:x][$err3][$badError2]")
+        chkStmt("val x = 123; val x: BAD; max(x); $badExpr2;", "ct_err:[block:name_conflict:x][unknown_type:BAD][$err3][$badError2]")
+        chkStmt("val x = 123; val x = $badExpr1; max(x); $badExpr2;", "ct_err:[block:name_conflict:x][$badError1][$err3][$badError2]")
         chkStmt("val x = 123; val x: BAD = $badExpr1; max(x); $badExpr2;",
-                "ct_err:[var_dupname:x][unknown_type:BAD][$badError1][$err3][$badError2]")
+                "ct_err:[block:name_conflict:x][unknown_type:BAD][$badError1][$err3][$badError2]")
 
-        chkStmt("val x; val x = 123; max(x); $badExpr2;", "ct_err:[unknown_name_type:x][var_dupname:x][$badError2]")
-        chkStmt("val x; val x: integer; max(x); $badExpr2;", "ct_err:[unknown_name_type:x][var_dupname:x][$badError2]")
-        chkStmt("val x: BAD; val x = 123; max(x); $badExpr2;", "ct_err:[unknown_type:BAD][var_dupname:x][$badError2]")
-        chkStmt("val x = $badExpr1; val x = 123; max(x); $badExpr2;", "ct_err:[$badError1][var_dupname:x][$badError2]")
+        chkStmt("val x; val x = 123; max(x); $badExpr2;", "ct_err:[unknown_name_type:x][block:name_conflict:x][$badError2]")
+        chkStmt("val x; val x: integer; max(x); $badExpr2;", "ct_err:[unknown_name_type:x][block:name_conflict:x][$badError2]")
+        chkStmt("val x: BAD; val x = 123; max(x); $badExpr2;", "ct_err:[unknown_type:BAD][block:name_conflict:x][$badError2]")
+        chkStmt("val x = $badExpr1; val x = 123; max(x); $badExpr2;", "ct_err:[$badError1][block:name_conflict:x][$badError2]")
         chkStmt("val x: BAD = $badExpr1; val x = 123; max(x); $badExpr2;",
-                "ct_err:[unknown_type:BAD][$badError1][var_dupname:x][$badError2]")
+                "ct_err:[unknown_type:BAD][$badError1][block:name_conflict:x][$badError2]")
 
-        chkStmt("val x = 1; val x = 2; val y = $badExpr1;", "ct_err:[var_dupname:x][$badError1]")
+        chkStmt("val x = 1; val x = 2; val y = $badExpr1;", "ct_err:[block:name_conflict:x][$badError1]")
     }
 
     @Test fun testStmtVarDeclaratorTuple() {
@@ -201,21 +201,21 @@ class CompilerErrorsTest: BaseRellTest(false) {
                 "ct_err:[var_tuple_wrongsize:2:3:(integer,integer,integer)][unknown_type:A][unknown_type:B]")
 
         chkStmt("val x = 1; val y = 2; val (x: A, y: B) = ($badExpr1, $badExpr2);",
-                "ct_err:[var_dupname:x][unknown_type:A][var_dupname:y][unknown_type:B][$badError1][$badError2]")
+                "ct_err:[block:name_conflict:x][unknown_type:A][block:name_conflict:y][unknown_type:B][$badError1][$badError2]")
     }
 
     @Test fun testStmtUpdate() {
         def("entity data { mutable i: integer; mutable j: integer; }")
         val un = "unknown_name"
 
-        chkStmt("update (a: data, a: data) @* { P, Q } ( X, Y );", "ct_err:[at_dup_alias:a][$un:P][$un:Q][$un:X][$un:Y]")
+        chkStmt("update (a: data, a: data) @* { P, Q } ( X, Y );", "ct_err:[block:name_conflict:a][$un:P][$un:Q][$un:X][$un:Y]")
         chkStmt("update data @* {} ( i += true, j += 'hello' );",
                 "ct_err:[binop_operand_type:+=:[integer]:[boolean]][binop_operand_type:+=:[integer]:[text]]")
         chkStmt("update data @* { X } ( i = $badExpr1, j = $badExpr2 );", "ct_err:[$un:X][$badError1][$badError2]")
         chkStmt("update data @* { X } ( i += $badExpr1, j += $badExpr2 );", "ct_err:[$un:X][$badError1][$badError2]")
 
         chkStmt("val a = 1; val b = 2; update (a: data, b: data) @* { X } ( Y );",
-                "ct_err:[expr_at_conflict_alias:a][expr_at_conflict_alias:b][$un:X][$un:Y]")
+                "ct_err:[block:name_conflict:a][block:name_conflict:b][$un:X][$un:Y]")
 
         chkStmt("update 123 ( $badExpr1 );", "ct_err:[stmt_update_expr_type:integer][$badError1]")
         chkStmt("update ($badExpr1) ( $badExpr2 );", "ct_err:[$badError1][$badError2]")
@@ -305,18 +305,18 @@ class CompilerErrorsTest: BaseRellTest(false) {
         def("entity user { address: text; }")
         val un = "unknown_name"
 
-        chk("(user: user, user) @* { Y } ( Z )", "ct_err:[at_dup_alias:user][$un:Y][$un:Z]")
-        chk("(a: user, a: user) @* { Y } ( Z )", "ct_err:[expr_tuple_dupname:a][$un:Y][$un:Z]")
+        chk("(user: user, user) @* { Y } ( Z )", "ct_err:[$un:Y][$un:Z]")
+        chk("(a: user, a: user) @* { Y } ( Z )", "ct_err:[block:name_conflict:a][$un:Y][$un:Z]")
 
         chkEx("{ val u = 123; return (u: user) @ { u.address == 'Street' }; }",
-                "ct_err:[expr_at_conflict_alias:u][expr_name_entity_local:u]")
+                "ct_err:[block:name_conflict:u][unknown_member:[integer]:address]")
         chkEx("{ val a = 1; val b = 2; return (a: user, b: user) @* { $badExpr1 } ( $badExpr2 ); }",
-                "ct_err:[expr_at_conflict_alias:a][expr_at_conflict_alias:b][expr_call_argtypes:abs:byte_array][expr_call_argtypes:min:]")
+                "ct_err:[block:name_conflict:a][block:name_conflict:b][expr_call_argtypes:abs:byte_array][expr_call_argtypes:min:]")
 
         chkCompile("query q() { val a = 123; val b = 456; return (a: user, b: user) @* { X } ( Y ); }",
-                "ct_err:[expr_at_conflict_alias:a][expr_at_conflict_alias:b][$un:X][$un:Y]")
+                "ct_err:[block:name_conflict:a][block:name_conflict:b][$un:X][$un:Y]")
         chkCompile("query q() { val a = 123; val b = 456; return (a: $badExpr1, b: $badExpr2) @* { X } ( Y ); }",
-                "ct_err:[expr_at_conflict_alias:a][$badError1][expr_at_conflict_alias:b][$badError2][$un:X][$un:Y]")
+                "ct_err:[block:name_conflict:a][$badError1][$badError2][$un:X][$un:Y]")
     }
 
     @Test fun testExprTuple() {

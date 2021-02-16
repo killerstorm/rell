@@ -1,7 +1,7 @@
 package net.postchain.rell.compiler.vexpr
 
+import net.postchain.rell.compiler.C_ExprContext
 import net.postchain.rell.compiler.C_ExprVarFacts
-import net.postchain.rell.compiler.C_MessageContext
 import net.postchain.rell.compiler.C_Utils
 import net.postchain.rell.compiler.C_VarFacts
 import net.postchain.rell.compiler.ast.S_Pos
@@ -45,12 +45,13 @@ class V_WhenChooserDetails(
 }
 
 class V_WhenExpr(
+        exprCtx: C_ExprContext,
         pos: S_Pos,
         private val chooserDetails: V_WhenChooserDetails,
         private val valueExprs: List<V_Expr>,
         private val resType: R_Type,
         private val resVarFacts: C_ExprVarFacts
-): V_Expr(pos) {
+): V_Expr(exprCtx, pos) {
     private val isDb = (listOfNotNull(chooserDetails.keyExpr) + chooserDetails.variableCases.map { it.value }).any { isDb(it) }
             || valueExprs.any { isDb(it) }
 
@@ -64,17 +65,17 @@ class V_WhenExpr(
         return R_WhenExpr(resType, rChooser, rExprs)
     }
 
-    override fun toDbExpr0(msgCtx: C_MessageContext): Db_Expr {
+    override fun toDbExpr0(): Db_Expr {
         val caseCondMap = mutableMapOf<Int, MutableList<Db_Expr>>()
         for (case in chooserDetails.variableCases) caseCondMap[case.index] = mutableListOf()
-        for (case in chooserDetails.variableCases) caseCondMap.getValue(case.index).add(case.value.toDbExpr(msgCtx))
+        for (case in chooserDetails.variableCases) caseCondMap.getValue(case.index).add(case.value.toDbExpr())
 
-        val keyExpr = chooserDetails.keyExpr?.toDbExpr(msgCtx)
+        val keyExpr = chooserDetails.keyExpr?.toDbExpr()
 
         val caseExprs = caseCondMap.keys.sorted().map { idx ->
             val conds = caseCondMap.getValue(idx)
             val value = valueExprs[idx]
-            Db_WhenCase(conds, value.toDbExpr(msgCtx))
+            Db_WhenCase(conds, value.toDbExpr())
         }
 
         val elseIdx = chooserDetails.elseCase
@@ -85,7 +86,7 @@ class V_WhenExpr(
             return C_Utils.errorDbExpr(resType)
         }
 
-        val elseExpr = valueExprs[elseIdx.index].toDbExpr(msgCtx)
+        val elseExpr = valueExprs[elseIdx.index].toDbExpr()
         return Db_WhenExpr(resType, keyExpr, caseExprs, elseExpr)
     }
 }

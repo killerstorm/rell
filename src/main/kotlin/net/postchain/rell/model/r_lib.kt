@@ -675,7 +675,7 @@ object R_SysFn_General {
         }
 
         private fun logStr(ctx: Rt_CallContext, str: String): String {
-            val pos = R_StackPos(ctx.defCtx.pos, filePos)
+            val pos = R_StackPos(ctx.defCtx.defId, filePos)
             val posStr = "[$pos]"
             return if (str.isEmpty()) posStr else "$posStr $str"
         }

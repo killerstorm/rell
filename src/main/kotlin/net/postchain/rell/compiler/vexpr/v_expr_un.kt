@@ -40,11 +40,12 @@ class V_UnaryOp_IsNull: V_UnaryOp(R_BooleanType) {
 }
 
 class V_UnaryExpr(
+        exprCtx: C_ExprContext,
         pos: S_Pos,
         private val op: V_UnaryOp,
         private val expr: V_Expr,
         private val varFacts: C_ExprVarFacts
-): V_Expr(pos) {
+): V_Expr(exprCtx, pos) {
     private val isDb = isDb(expr)
 
     override fun type() = op.resType
@@ -56,8 +57,8 @@ class V_UnaryExpr(
         return op.compileR(pos, rExpr)
     }
 
-    override fun toDbExpr0(msgCtx: C_MessageContext): Db_Expr {
-        val dbExpr = expr.toDbExpr(msgCtx)
+    override fun toDbExpr0(): Db_Expr {
+        val dbExpr = expr.toDbExpr()
         return op.compileDb(pos, dbExpr)
     }
 
@@ -71,6 +72,7 @@ class V_UnaryExpr(
 }
 
 class V_IncDecExpr(
+        exprCtx: C_ExprContext,
         pos: S_Pos,
         private val destination: C_Destination,
         private val resType: R_Type,
@@ -78,9 +80,9 @@ class V_IncDecExpr(
         private val op: C_AssignOp,
         private val post: Boolean,
         private val varFacts: C_ExprVarFacts
-): V_Expr(pos) {
+): V_Expr(exprCtx, pos) {
     override fun type() = resType
     override fun isDb() = false
     override fun varFacts() = varFacts
-    override fun toRExpr0() = destination.compileAssignExpr(pos, resType, srcExpr, op, post)
+    override fun toRExpr0() = destination.compileAssignExpr(exprCtx, pos, resType, srcExpr, op, post)
 }

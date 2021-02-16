@@ -243,7 +243,8 @@ class C_NamespaceBuilder {
     }
 }
 
-class C_NamespaceValueContext(val defCtx: C_DefinitionContext) {
+class C_NamespaceValueContext(val exprCtx: C_ExprContext) {
+    val defCtx = exprCtx.defCtx
     val globalCtx = defCtx.globalCtx
     val msgCtx = defCtx.msgCtx
     val modCtx = defCtx.modCtx
@@ -258,7 +259,7 @@ abstract class C_NamespaceValue_RExpr: C_NamespaceValue() {
 
     override final fun toExpr(ctx: C_NamespaceValueContext, name: List<S_Name>): C_Expr {
         val rExpr = toExpr0(ctx, name)
-        return V_RExpr.makeExpr(name[0].pos, rExpr)
+        return V_RExpr.makeExpr(ctx.exprCtx, name[0].pos, rExpr)
     }
 }
 
@@ -295,7 +296,7 @@ class C_NamespaceValue_Namespace(private val nsProxy: C_DefProxy<C_Namespace>): 
 
 class C_NamespaceValue_Object(val rObject: R_ObjectDefinition): C_NamespaceValue() {
     override fun toExpr(ctx: C_NamespaceValueContext, name: List<S_Name>): C_Expr {
-        return C_ObjectExpr(name, rObject)
+        return C_ObjectExpr(ctx.exprCtx, name, rObject)
     }
 }
 

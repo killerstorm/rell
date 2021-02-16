@@ -45,12 +45,12 @@ class AtExprCollectionTest: BaseRellTest(false) {
     @Test fun testPlaceholderError() {
         tst.strictToString = false
 
-        chk("[1,2,3,4,5] @* { $++ }", "ct_err:expr_bad_dst")
-        chk("[1,2,3,4,5] @* {} ( $++ )", "ct_err:expr_bad_dst")
+        chk("[1,2,3,4,5] @* { $++ }", "ct_err:expr_assign_val:$")
+        chk("[1,2,3,4,5] @* {} ( $++ )", "ct_err:expr_assign_val:$")
 
         chk("[1,2,3] @* {} ([4,5,6] @* {})", "[[4, 5, 6], [4, 5, 6], [4, 5, 6]]")
-        chk("[1,2,3] @* {} ([4,5,6] @* {} ( $ ))", "ct_err:expr:placeholder:ambiguous")
-        chk("[1,2,3] @* {exists([4,5,6] @* { $ > 0 })}", "ct_err:expr:placeholder:ambiguous")
+        chk("[1,2,3] @* {} ([4,5,6] @* {} ( $ ))", "ct_err:name:ambiguous:$")
+        chk("[1,2,3] @* {exists([4,5,6] @* { $ > 0 })}", "ct_err:name:ambiguous:$")
     }
 
     @Test fun testPlaceholderMixed() {
@@ -59,12 +59,12 @@ class AtExprCollectionTest: BaseRellTest(false) {
         def("entity user { name; }")
         insert("c0.user", "name", "100,'Bob'", "101,'Alice'")
 
-        chk("user @* {} ([123] @ {} ( $ ))", "ct_err:expr:placeholder:ambiguous")
-        chk("[123] @ {} (user @* {} ( $ ))", "ct_err:expr:placeholder:ambiguous")
+        chk("user @* {} ([123] @ {} ( $ ))", "ct_err:name:ambiguous:$")
+        chk("[123] @ {} (user @* {} ( $ ))", "ct_err:name:ambiguous:$")
         chk("(x: user) @* {} ([123] @ {} ( $ ))", "[123, 123]")
         chk("(x: [123]) @ {} (user @* {} ( $ ))", "[user[100], user[101]]")
-        chk("user @* {} ((x: [123]) @ {} ( $ ))", "ct_err:expr:placeholder:none")
-        chk("[123] @ {} ((x: user) @* {} ( $ ))", "ct_err:expr:placeholder:alias")
+        //chk("user @* {} ((x: [123]) @ {} ( $ ))", "ct_err:expr:placeholder:none")
+        chk("[123] @ {} ((x: user) @* {} ( $ ))", "[123, 123]")
     }
 
     @Test fun testCardinality() {
@@ -103,10 +103,10 @@ class AtExprCollectionTest: BaseRellTest(false) {
     }
 
     @Test fun testFromAliasConflict() {
-        chk("(x: [1,2,3], x: [4,5,6]) @* {}", "ct_err:[expr_tuple_dupname:x][at:from:many_iterables:2]")
-        chk("(x: [1,2,3]) @* {} ((x: [4,5,6]) @* {})", "ct_err:expr_at_conflict_alias:x")
-        chk("(x: [1,2,3]) @* {((x: [4,5,6]) @* {}).empty()}", "ct_err:expr_at_conflict_alias:x")
-        chkEx("{ val x = 'Hello'; return (x: [1,2,3]) @* {}; }", "ct_err:expr_at_conflict_alias:x")
+        chk("(x: [1,2,3], x: [4,5,6]) @* {}", "ct_err:at:from:many_iterables:2")
+        chk("(x: [1,2,3]) @* {} ((x: [4,5,6]) @* {})", "ct_err:block:name_conflict:x")
+        chk("(x: [1,2,3]) @* {((x: [4,5,6]) @* {}).empty()}", "ct_err:block:name_conflict:x")
+        chkEx("{ val x = 'Hello'; return (x: [1,2,3]) @* {}; }", "ct_err:block:name_conflict:x")
     }
 
     @Test fun testFromQualifiedName() {
@@ -444,14 +444,31 @@ class AtExprCollectionTest: BaseRellTest(false) {
     }
 
     @Test fun testNestedAttributes() {
+        initUsersCompanies()
+        chk("users() @* {} ( companies() @* {} ( .name ) )", "[[Apple, Amazon], [Apple, Amazon]]")
+        chk("companies() @* {} ( users() @* {} ( .name ) )", "[[Bob, Alice], [Bob, Alice]]")
+    }
+
+    @Test fun testNestedPlaceholder() {
+        initUsersCompanies()
+        val exp = "[[(pos=Dev,city=Cupertino), (pos=Dev,city=Seattle)], [(pos=QA,city=Cupertino), (pos=QA,city=Seattle)]]"
+        chk("(u: users()) @* {} ( (c: companies()) @* {} ( u.pos, c.city ) )", exp)
+        chk("(u: users()) @* {} ( (c: companies()) @* {} ( $.pos, c.city ) )", "ct_err:expr:placeholder:none")
+        chk("(u: users()) @* {} ( (c: companies()) @* {} ( u.pos, $.city ) )", "ct_err:expr:placeholder:none")
+        chk("users() @* {} ( (c: companies()) @* {} ( $.pos, c.city ) )", exp)
+        chk("users() @* {} ( (c: companies()) @* {} ( $.city, c.pos ) )",
+                "ct_err:[unknown_member:[user]:city][unknown_member:[company]:pos]")
+        chk("(u: users()) @* {} ( companies() @* {} ( u.pos, $.city ) )", exp)
+        chk("(u: users()) @* {} ( companies() @* {} ( u.city, $.pos ) )",
+                "ct_err:[unknown_member:[user]:city][unknown_member:[company]:pos]")
+    }
+
+    private fun initUsersCompanies() {
         tst.strictToString = false
         def("struct user { name; pos: text; }")
         def("struct company { name; city: text; }")
         def("function users() = [user(name = 'Bob', pos = 'Dev'), user(name = 'Alice', pos = 'QA')];")
         def("function companies() = [company(name = 'Apple', city = 'Cupertino'), company(name = 'Amazon', city = 'Seattle')];")
-
-        chk("users() @* {} ( companies() @* {} ( .name ) )", "[[Apple, Amazon], [Apple, Amazon]]")
-        chk("companies() @* {} ( users() @* {} ( .name ) )", "[[Bob, Alice], [Bob, Alice]]")
     }
 
     @Test fun testUseAsParamDefaultValue() {
@@ -459,13 +476,13 @@ class AtExprCollectionTest: BaseRellTest(false) {
         def("function f1(x: list<integer> = [1,2,3] @* {}) = list(x);")
         def("function f2(x: list<integer> = [1,2,3] @* {} ($*$)) = list(x);")
         def("function f3(x: list<integer> = (a:[1,2,3]) @* {} (a*a)) = list(x);")
-        chkCompile("", "ct_err:[expr:at:bad_context][expr:at:bad_context][expr:at:bad_context]")
-        //chk("f1()", "...")
-        //chk("f2()", "...")
-        //chk("f3()", "...")
+        chk("f1()", "[1, 2, 3]")
+        chk("f2()", "[1, 4, 9]")
+        chk("f3()", "[1, 4, 9]")
     }
 
     @Test fun testUseAsStructAttrDefaultValue() {
+        tst.strictToString = false
         def("""
             struct foo {
                 x: list<integer> = [1,2,3] @* {};
@@ -473,10 +490,9 @@ class AtExprCollectionTest: BaseRellTest(false) {
                 z: list<integer> = (a:[1,2,3]) @* {} (a*a);
             }
         """)
-        chkCompile("", "ct_err:[expr:at:bad_context][expr:at:bad_context][expr:at:bad_context]")
-        //chk("foo().x", "")
-        //chk("foo().y", "")
-        //chk("foo().z", "")
+        chk("foo().x", "[1, 2, 3]")
+        chk("foo().y", "[1, 4, 9]")
+        chk("foo().z", "[1, 4, 9]")
     }
 
     @Test fun testUseAsEntityAttrDefaultValue() {
@@ -488,11 +504,10 @@ class AtExprCollectionTest: BaseRellTest(false) {
                 z: integer = ((a:[1,2,3]) @* {} (a*a))[2];
             }
         """)
-        chkCompile("", "ct_err:[expr:at:bad_context][expr:at:bad_context][expr:at:bad_context]")
-        //chkOp("create foo();")
-        //chk("(foo @ {}).x", "")
-        //chk("(foo @ {}).y", "")
-        //chk("(foo @ {}).z", "")
+        chkOp("create foo();")
+        chk("(foo @ {}).x", "int[3]")
+        chk("(foo @ {}).y", "int[9]")
+        chk("(foo @ {}).z", "int[9]")
     }
 
     @Test fun testUseAsObjectAttrDefaultValue() {
@@ -504,10 +519,9 @@ class AtExprCollectionTest: BaseRellTest(false) {
                 z: integer = ((a:[1,2,3]) @* {} (a*a))[2];
             }
         """)
-        chkCompile("", "ct_err:[expr:at:bad_context][expr:at:bad_context][expr:at:bad_context]")
-        //chk("foo.x", "")
-        //chk("foo.y", "")
-        //chk("foo.z", "")
+        chk("foo.x", "int[3]")
+        chk("foo.y", "int[9]")
+        chk("foo.z", "int[9]")
     }
 
     @Test fun testChainCollection() {

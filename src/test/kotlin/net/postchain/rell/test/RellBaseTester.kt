@@ -99,12 +99,21 @@ abstract class RellBaseTester(
 
     private val expectedData = mutableListOf<String>()
 
-    protected fun compilerOptions() = C_CompilerOptions(gtv = gtv, deprecatedError = deprecatedError, ide = false)
+    protected fun compilerOptions() = C_CompilerOptions(
+            gtv = gtv,
+            deprecatedError = deprecatedError,
+            ide = false,
+            blockCheck = true
+    )
+
+    fun def(defs: List<String>) {
+        checkNotInited()
+        defs0.addAll(defs)
+        this.defs = defs0
+    }
 
     fun def(def: String) {
-        checkNotInited()
-        defs0.add(def)
-        defs = defs0
+        def(listOf(def))
     }
 
     fun insert(table: String, columns: String, vararg rows: String) {

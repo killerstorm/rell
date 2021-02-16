@@ -278,9 +278,8 @@ class R_ColAtExpr(
         val where: R_Expr,
         val summarization: R_ColAtSummarization,
         cardinality: R_AtCardinality,
-        limit: R_Expr?,
-        offset: R_Expr?
-): R_AtExpr(type, cardinality, limit, offset) {
+        extras: R_AtExprExtras
+): R_AtExpr(type, cardinality, extras) {
     private val rowComparator = RowComparator.create(what.sorting)
     private val hasSorting = rowComparator != null
 

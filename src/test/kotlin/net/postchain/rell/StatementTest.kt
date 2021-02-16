@@ -35,12 +35,12 @@ class StatementTest: BaseRellTest() {
     }
 
     @Test fun testNameConflict() {
-        chkEx("{ val x = 123; val x = 456; return 0; }", "ct_err:var_dupname:x")
-        chkEx("{ val x = 123; var x = 456; return 0; }", "ct_err:var_dupname:x")
-        chkEx("{ var x = 123; val x = 456; return 0; }", "ct_err:var_dupname:x")
-        chkEx("{ var x = 123; var x = 456; return 0; }", "ct_err:var_dupname:x")
-        chkEx("{ val x = 123; { val x = 456; } return 789; }", "ct_err:var_dupname:x")
-        chkEx("{ val x = 123; if (2 > 1) { val x = 456; } return 789; }", "ct_err:var_dupname:x")
+        chkEx("{ val x = 123; val x = 456; return 0; }", "ct_err:block:name_conflict:x")
+        chkEx("{ val x = 123; var x = 456; return 0; }", "ct_err:block:name_conflict:x")
+        chkEx("{ var x = 123; val x = 456; return 0; }", "ct_err:block:name_conflict:x")
+        chkEx("{ var x = 123; var x = 456; return 0; }", "ct_err:block:name_conflict:x")
+        chkEx("{ val x = 123; { val x = 456; } return 789; }", "ct_err:block:name_conflict:x")
+        chkEx("{ val x = 123; if (2 > 1) { val x = 456; } return 789; }", "ct_err:block:name_conflict:x")
 
         chkEx("{ { val x = 123; } val x = 456; return x; }", "int[456]")
         chkEx("{ { val x = 123; } return x; }", "ct_err:unknown_name:x")

@@ -1,19 +1,9 @@
 package net.postchain.rell
 
-import net.postchain.rell.test.RellCodeTester
 import org.junit.Test
 
 class AtExprGroupDbTest: AtExprGroupBaseTest() {
-    override val impDefKw = "entity"
-    override fun impFrom(name: String) = name
-    override fun impRtErr(code: String) = "rt_err:sqlerr:0"
-
-    override fun impCreateObjs(t: RellCodeTester, name: String, vararg objs: String) {
-        if (objs.isNotEmpty()) {
-            val code = objs.joinToString(" ") { "create $name($it);" }
-            t.chkOp(code)
-        }
-    }
+    override fun impKind() = AtExprTestKind_Db
 
     override fun testSumOverflowInteger() {
         super.testSumOverflowInteger()

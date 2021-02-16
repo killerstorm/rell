@@ -23,6 +23,17 @@ class UpdateDeleteTest: BaseRellTest() {
         createCitiesAndPersons()
         chkOp("update person @ { .name == 'James' } ( score = .score + 50 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,150)", "person(5,Mike,1,Grand St,7,250)")
+
+        chkOp("var x = 33; update person @ { .name == 'James' } ( score = .score + x );")
+        chkDataCommon("person(4,James,3,Evergreen Ave,5,183)", "person(5,Mike,1,Grand St,7,250)")
+
+        chkOp("var x = 33; update person @ { .name == 'James' } ( score = .score + (x++) ); print(x);")
+        chkDataCommon("person(4,James,3,Evergreen Ave,5,216)", "person(5,Mike,1,Grand St,7,250)")
+        chkOut("34")
+
+        chkOp("var x = 33; update person @ { .name == 'James' } ( score = .score + (++x) ); print(x);")
+        chkDataCommon("person(4,James,3,Evergreen Ave,5,250)", "person(5,Mike,1,Grand St,7,250)")
+        chkOut("34")
     }
 
     @Test fun testUpdatePersonMultiplyScore() {
@@ -291,20 +302,19 @@ class UpdateDeleteTest: BaseRellTest() {
         chkOp("update (p: person) @ { .name == 'James' } ( .score = 123 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,123)", "person(5,Mike,1,Grand St,7,250)")
 
-        chkOp("val p = 123; update (p: person) @ { .name == 'James' } ( .score = 123 );",
-                "ct_err:expr_at_conflict_alias:p")
+        chkOp("val p = 123; update (p: person) @ { .name == 'James' } ( .score = 123 );", "ct_err:block:name_conflict:p")
 
         chkOp("update (person, p: person) @ { person.name == 'James' } ( .score = 456 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,456)", "person(5,Mike,1,Grand St,7,250)")
 
         chkOp("val p = 123; update (person, p: person) @ { person.name == 'James' } ( .score = 789 );",
-                "ct_err:expr_at_conflict_alias:p")
+                "ct_err:block:name_conflict:p")
     }
 
     @Test fun testDeleteNameConflictAliasVsLocal() {
         createCitiesAndPersons()
-        chkOp("val p = 123; delete (p: person) @ { .name == 'James' };", "ct_err:expr_at_conflict_alias:p")
-        chkOp("val p = 123; delete (person, p: person) @ { person.name == 'James' };", "ct_err:expr_at_conflict_alias:p")
+        chkOp("val p = 123; delete (p: person) @ { .name == 'James' };", "ct_err:block:name_conflict:p")
+        chkOp("val p = 123; delete (person, p: person) @ { person.name == 'James' };", "ct_err:block:name_conflict:p")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,250)")
     }
 
@@ -432,6 +442,51 @@ class UpdateDeleteTest: BaseRellTest() {
         resetData()
         chkEx("{ val p = ${person("Mike")}; p.score += 123; return 0; }", "ct_err:no_db_update:query")
         chkDataCommon(james(100), mike(250))
+    }
+
+    @Test fun testUpdateShortSyntaxComplexSource() {
+        fun james(score: Int) = "person(4,James,3,Evergreen Ave,5,$score)"
+        fun mike(score: Int) = "person(5,Mike,1,Grand St,7,$score)"
+        fun person(name: String) = "person @ { .name == '$name' }"
+
+        def(entityDefs())
+        def("function f(x: integer) = x*x;")
+
+        createCitiesAndPersons()
+        chkDataCommon(james(100), mike(250))
+
+        resetChkOp("val x = 33; val p = ${person("James")}; p.score = x;")
+        chkDataCommon(james(33), mike(250))
+
+        resetChkOp("val x = 33; val p = ${person("James")}; p.score += x;")
+        chkDataCommon(james(100+33), mike(250))
+
+        resetChkOp("var x = 33; val p = ${person("James")}; p.score = x++; print(x);")
+        chkDataCommon(james(33), mike(250))
+        chkOut("34")
+
+        resetChkOp("var x = 33; val p = ${person("James")}; p.score += x++; print(x);")
+        chkDataCommon(james(100+33), mike(250))
+        chkOut("34")
+
+        resetChkOp("var x = 33; val p = ${person("James")}; p.score = ++x; print(x);")
+        chkDataCommon(james(34), mike(250))
+        chkOut("34")
+
+        resetChkOp("var x = 33; val p = ${person("James")}; p.score += ++x; print(x);")
+        chkDataCommon(james(100+34), mike(250))
+        chkOut("34")
+
+        resetChkOp("val x = 33; val p = ${person("James")}; p.score *= f(x);")
+        chkDataCommon(james(100*33*33), mike(250))
+
+        resetChkOp("var x = 33; val p = ${person("James")}; p.score *= f(x++); print(x);")
+        chkDataCommon(james(100*33*33), mike(250))
+        chkOut("34")
+
+        resetChkOp("var x = 33; val p = ${person("James")}; p.score *= f(++x); print(x);")
+        chkDataCommon(james(100*34*34), mike(250))
+        chkOut("34")
     }
 
     @Test fun testUpdateShortSyntaxNullable() {

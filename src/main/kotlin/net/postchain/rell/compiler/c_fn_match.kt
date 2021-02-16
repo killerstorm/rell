@@ -107,23 +107,23 @@ object C_ArgTypeMatcher_ListOfMirrorStructOperations: C_ArgTypeMatcher() {
 }
 
 sealed class C_ArgTypeMatch {
-    abstract fun effectiveArg(arg: V_Expr): V_Expr
+    abstract fun effectiveArg(ctx: C_ExprContext, arg: V_Expr): V_Expr
 }
 
 object C_ArgTypeMatch_Direct: C_ArgTypeMatch() {
-    override fun effectiveArg(arg: V_Expr) = arg
+    override fun effectiveArg(ctx: C_ExprContext, arg: V_Expr) = arg
 }
 
 object C_ArgTypeMatch_IntegerToDecimal: C_ArgTypeMatch() {
-    override fun effectiveArg(arg: V_Expr) = C_Utils.integerToDecimalPromotion(arg)
+    override fun effectiveArg(ctx: C_ExprContext, arg: V_Expr) = C_Utils.integerToDecimalPromotion(ctx, arg)
 }
 
 class C_ArgsTypesMatch(private val match: List<C_ArgTypeMatch>) {
     val size = match.size
 
-    fun effectiveArgs(args: List<V_Expr>): List<V_Expr> {
+    fun effectiveArgs(ctx: C_ExprContext, args: List<V_Expr>): List<V_Expr> {
         check(args.size == match.size) { "${args.size} != ${match.size}" }
-        return args.mapIndexed { i, arg -> match[i].effectiveArg(arg) }
+        return args.mapIndexed { i, arg -> match[i].effectiveArg(ctx, arg) }
     }
 
     companion object {
@@ -246,7 +246,7 @@ abstract class C_BasicGlobalFuncCaseMatch(resType: R_Type, private val args: Lis
     }
 
     final override fun compileCallDb(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): Db_Expr {
-        return compileCallDb(ctx, caseCtx, args, this::compileCallDbExpr)
+        return compileCallDb(caseCtx, args, this::compileCallDbExpr)
     }
 
     companion object {
@@ -261,12 +261,11 @@ abstract class C_BasicGlobalFuncCaseMatch(resType: R_Type, private val args: Lis
         }
 
         fun compileCallDb(
-                ctx: C_ExprContext,
                 caseCtx: C_GlobalFuncCaseCtx,
                 args: List<V_Expr>,
                 dbFactory: (C_GlobalFuncCaseCtx, List<Db_Expr>) -> Db_Expr
         ): Db_Expr {
-            val dbArgs = args.map { it.toDbExpr(ctx.msgCtx) }
+            val dbArgs = args.map { it.toDbExpr() }
             val dbExpr = dbFactory(caseCtx, dbArgs)
             return dbExpr
         }
@@ -301,14 +300,14 @@ class C_FormalParamsFuncCaseMatch<CtxT: C_FuncCaseCtx>(
     }
 
     override fun compileCall(ctx: C_ExprContext, caseCtx: CtxT): R_Expr {
-        val effArgs = paramsMatch.effectiveArgs(args)
+        val effArgs = paramsMatch.effectiveArgs(ctx, args)
         val rArgs = effArgs.map { it.toRExpr() }
         return body.compileCall(ctx, caseCtx, rArgs)
     }
 
     override fun compileCallDb(ctx: C_ExprContext, caseCtx: CtxT): Db_Expr {
-        val effArgs = paramsMatch.effectiveArgs(args)
-        val dbArgs = effArgs.map { it.toDbExpr(ctx.msgCtx) }
+        val effArgs = paramsMatch.effectiveArgs(ctx, args)
+        val dbArgs = effArgs.map { it.toDbExpr() }
         return body.compileCallDb(ctx, caseCtx, dbArgs)
     }
 }
@@ -318,6 +317,6 @@ object C_FuncMatchUtils {
         if (args.any { it == R_CtErrorType }) return
         val argsStrShort = args.joinToString(",") { it.toStrictString() }
         val argsStr = args.joinToString { it.toStrictString() }
-        ctx.msgCtx.error(pos, "expr_call_argtypes:$name:$argsStrShort", "Function $name undefined for arguments ($argsStr)")
+        ctx.msgCtx.error(pos, "expr_call_argtypes:$name:$argsStrShort", "Function '$name' undefined for arguments ($argsStr)")
     }
 }

@@ -173,7 +173,8 @@ class IdeCodeSnippet(
             val options = C_CompilerOptions(
                     gtv = optionsMap.getValue("gtv") as Boolean,
                     deprecatedError = optionsMap.getValue("deprecatedError") as Boolean,
-                    ide = (optionsMap["ide"] as Boolean?) ?: false
+                    ide = (optionsMap["ide"] as Boolean?) ?: false,
+                    blockCheck = true
             )
 
             val messagesRaw = obj.getValue("messages") as List<Any>

@@ -178,7 +178,7 @@ class C_EntityContext(
         val late = C_LateInit(C_CompilerPass.EXPRESSIONS, C_Utils.errorRExpr(exprType))
 
         defCtx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
-            val rExpr0 = expr.compile(defCtx.defExprCtx, C_TypeHint.ofType(exprType)).value().toRExpr()
+            val rExpr0 = expr.compile(defCtx.initExprCtx, C_TypeHint.ofType(exprType)).value().toRExpr()
             val adapter = C_Types.adaptSafe(msgCtx, exprType, rExpr0.type, name.pos, "attr_type:$name",
                     "Default value type mismatch for '$name'")
             val rExpr = adapter.adaptExpr(rExpr0)

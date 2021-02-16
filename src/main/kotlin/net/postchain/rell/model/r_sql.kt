@@ -66,7 +66,7 @@ class R_EntitySqlMapping_External(private val mountName: R_MountName, private va
         return res
     }
 
-    override fun extraWhereExpr(atEntity: R_DbAtEntity): Db_Expr? {
+    override fun extraWhereExpr(atEntity: R_DbAtEntity): Db_Expr {
         check(atEntity.rEntity.sqlMapping == this)
         val txAttr = atEntity.rEntity.attribute("transaction")
         val txEntity = (txAttr.type as R_EntityType).rEntity
@@ -130,7 +130,7 @@ class R_EntitySqlMapping_Transaction(chain: R_ExternalChainRef?): R_EntitySqlMap
 class R_EntitySqlMapping_Block(chain: R_ExternalChainRef?): R_EntitySqlMapping_TxBlk("block_iid", chain) {
     override fun table(chainMapping: Rt_ChainSqlMapping) = chainMapping.blocksTable
 
-    override fun extraWhereExpr0(entity: R_EntityDefinition, entityExpr: Db_EntityExpr, chain: R_ExternalChainRef?): Db_Expr? {
+    override fun extraWhereExpr0(entity: R_EntityDefinition, entityExpr: Db_EntityExpr, chain: R_ExternalChainRef?): Db_Expr {
         val timestampAttr = entity.attribute("timestamp")
         val timestampExpr = Db_AttrExpr(entityExpr, timestampAttr)
         val timestampIsNotNullExpr = Db_IsNullExpr(timestampExpr, false)

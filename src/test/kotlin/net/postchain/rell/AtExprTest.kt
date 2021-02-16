@@ -58,7 +58,7 @@ class AtExprTest: BaseRellTest() {
         chkEx("{ val lastName = 'Gates'; return user @ { lastName }; }", "user[40]")
         chkEx("{ val name = 'Microsoft'; return company @ { name }; }", "company[400]")
         chkEx("{ val name = 'Bill'; return user @ { name }; }",
-                "ct_err:at_where:var_manyattrs_name:0:name:text:user.firstName,user.lastName")
+                "ct_err:at_where:var_manyattrs_type:0:name:text:user.firstName,user.lastName")
         chkEx("{ val name = 12345; return company @ { name }; }", "ct_err:at_where:var_noattrs:0:name:integer")
         chkEx("{ val company = company @ { .name == 'Facebook' }; return user @ { company }; }", "user[10]")
     }
@@ -99,9 +99,9 @@ class AtExprTest: BaseRellTest() {
         chkEx("{ $base val name = 'Bob'; return (foo_owner, bar_owner) @* { name }; }",
                 "ct_err:at_where:var_manyattrs_nametype:0:name:text:foo_owner.name,bar_owner.name")
         chkEx("{ $base val garbage = foo1; return (foo_owner, bar_owner) @* { garbage }; }",
-                "ct_err:at_where:var_manyattrs_name:0:garbage:foo:foo_owner.stuff,foo_owner.foo,bar_owner.foo")
+                "ct_err:at_where:var_manyattrs_type:0:garbage:foo:foo_owner.stuff,foo_owner.foo,bar_owner.foo")
         chkEx("{ $base val garbage = bar1; return (foo_owner, bar_owner) @* { garbage }; }",
-                "ct_err:at_where:var_manyattrs_name:0:garbage:bar:foo_owner.bar,bar_owner.stuff,bar_owner.bar")
+                "ct_err:at_where:var_manyattrs_type:0:garbage:bar:foo_owner.bar,bar_owner.stuff,bar_owner.bar")
 
         chkEx("{ $base val stuff = foo1; return (foo_owner, bar_owner) @* { stuff }; }",
                 "list<(foo_owner:foo_owner,bar_owner:bar_owner)>[(foo_owner[4],bar_owner[6]),(foo_owner[4],bar_owner[7])]")
@@ -119,10 +119,11 @@ class AtExprTest: BaseRellTest() {
     }
 
     @Test fun testMultipleEntitiesBadAlias() {
-        chk("(user: company, user) @ {}", "ct_err:at_dup_alias:user")
-        chk("(user, user) @ {}", "ct_err:at_dup_alias:user")
-        chk("(u: user, u: user) @ {}", "ct_err:expr_tuple_dupname:u")
-        chk("(user, u: user, user) @ {}", "ct_err:at_dup_alias:user")
+        chk("(user: company, user) @ {}", "rt_err:at:wrong_count:40")
+        chk("(user, user) @ {}", "rt_err:at:wrong_count:64")
+        chk("(u: user, u: user) @ {}", "ct_err:block:name_conflict:u")
+        chk("(u: user, u: company) @ {}", "ct_err:block:name_conflict:u")
+        chk("(user, u: user, user) @ {}", "rt_err:at:wrong_count:512")
     }
 
     @Test fun testMultipleEntitiesSimple() {
@@ -157,25 +158,9 @@ class AtExprTest: BaseRellTest() {
                 "list<text>[text[Mark],text[Steve],text[Steve],text[Jeff],text[Bill],text[Paul],text[Sergey],text[Larry]]")
     }
 
-    @Test fun testNameResolutionAliasVsLocalAttr() {
-        // Alias vs. attr: no conflict.
-        chk("user @* { .firstName == 'Mark' }", "list<user>[user[10]]")
-        chk("(firstName: user) @* { firstName == 'Mark' }", "ct_err:binop_operand_type:==:[user]:[text]")
-        chk("(firstName: user) @* { .firstName == 'Mark' }", "list<user>[user[10]]")
-        chk("(firstName: user) @* { firstName.firstName == 'Mark' }", "list<user>[user[10]]")
-
-        // Alias vs. local: error.
-        chkEx("{ val u = 'Bill'; return user @ { .firstName == u }; }", "user[40]")
-        chkEx("{ val u = 'Bill'; return (u: user) @ { .firstName == u }; }",
-                "ct_err:[expr_at_conflict_alias:u][expr_name_entity_local:u]")
-        chkEx("{ val u = 'Bill'; return (u: user) @ { .firstName == 'Bill' }; }", "ct_err:expr_at_conflict_alias:u")
-        chkEx("{ val u = 'Bill'; return (u: user) @ { u.firstName == 'Mark' }; }",
-                "ct_err:[expr_at_conflict_alias:u][expr_name_entity_local:u]")
-    }
-
     @Test fun testNameResolutionEntityVsLocal() {
         chkEx("{ val user = 'Bill'; return user @ { .firstName == 'Bill' }; }", "user[40]")
-        chkEx("{ val user = 'Bill'; return user @ { .firstName == user }; }", "ct_err:expr_name_entity_local:user")
+        chkEx("{ val user = 'Bill'; return user @ { .firstName == user }; }", "ct_err:name:ambiguous:user")
     }
 
     @Test fun testAttributeAmbiguityName() {
@@ -222,16 +207,17 @@ class AtExprTest: BaseRellTest() {
         chkEx("{ $base return single @ { tgt2 }; }", "single[1]")
 
         // Ambiguity between attributes of the same entity.
-        chkEx("{ $base return double @ { tgt1 }; }", "ct_err:at_where:var_manyattrs_name:0:tgt1:target:double.t1,double.t2")
-        chkEx("{ $base return double @ { .t1 == tgt1, tgt2 }; }", "ct_err:at_where:var_manyattrs_name:1:tgt2:target:double.t1,double.t2")
+        chkEx("{ $base return double @ { tgt1 }; }", "ct_err:at_where:var_manyattrs_type:0:tgt1:target:double.t1,double.t2")
+        chkEx("{ $base return double @ { .t1 == tgt1, tgt2 }; }", "ct_err:at_where:var_manyattrs_type:1:tgt2:target:double.t1,double.t2")
         chkEx("{ $base return double @ { .t1 == tgt1, .t2 == tgt2 }; }", "double[0]")
         chkEx("{ $base return double @ { .t1 == tgt3, .t2 == tgt1 }; }", "double[2]")
 
         // Ambiguity between attributes of different entities.
-        chkEx("{ $base return (s1: single, s2: single) @ { tgt1 }; }", "ct_err:at_where:var_manyattrs_name:0:tgt1:target:s1.t,s2.t")
+        chkEx("{ $base return (s1: single, s2: single) @ { tgt1 }; }", "ct_err:at_where:var_manyattrs_type:0:tgt1:target:s1.t,s2.t")
         chkEx("{ $base return (s1: single, s2: single) @ { tgt1, tgt2 }; }",
-                "ct_err:[at_where:var_manyattrs_name:0:tgt1:target:s1.t,s2.t][at_where:var_manyattrs_name:1:tgt2:target:s1.t,s2.t]")
-        chkEx("{ $base return (s1: single, s2: single) @ { s1.t == tgt1, tgt2 }; }", "ct_err:at_where:var_manyattrs_name:1:tgt2:target:s1.t,s2.t")
+                "ct_err:[at_where:var_manyattrs_type:0:tgt1:target:s1.t,s2.t][at_where:var_manyattrs_type:1:tgt2:target:s1.t,s2.t]")
+        chkEx("{ $base return (s1: single, s2: single) @ { s1.t == tgt1, tgt2 }; }",
+                "ct_err:at_where:var_manyattrs_type:1:tgt2:target:s1.t,s2.t")
         chkEx("{ $base return (s1: single, s2: single) @ { s1.t == tgt1, s2.t == tgt2 }; }", "(s1=single[0],s2=single[1])")
     }
 
@@ -635,11 +621,10 @@ class AtExprTest: BaseRellTest() {
     }
 
     @Test fun testIndependentEntityFieldExpression() {
-        val code = """
-            { val u = user @ { .firstName == 'Paul' };
-              return user @ { .company == u.company, .firstName != 'Paul' } ( .firstName );
-            }
-        """.trimIndent()
+        val code = """{
+            val u = user @ { .firstName == 'Paul' };
+            return user @ { .company == u.company, .firstName != 'Paul' } ( .firstName );
+        }"""
         chkEx(code, "text[Bill]")
     }
 
@@ -736,19 +721,20 @@ class AtExprTest: BaseRellTest() {
         chk("user @* { $.firstName == 'Steve' }", "[user[20], user[21]]")
         chk("user @* { $.firstName == 'Steve' } ( $.lastName )", "[Jobs, Wozniak]")
 
-        chk("(user, company) @* {} ( $ )", "ct_err:expr:placeholder:multiple_entities:2")
-        chk("(user, company) @* { $.firstName == 'Steve' }", "ct_err:expr:placeholder:multiple_entities:2")
+        chk("(user, company) @* {} ( $ )", "ct_err:name:ambiguous:$")
+        chk("(user, company) @* { $.firstName == 'Steve' }", "ct_err:name:ambiguous:$")
 
-        chk("(u: user) @* { .firstName == 'Steve' } ( $ )", "ct_err:expr:placeholder:alias")
-        chk("(u: user, c: company) @* { u.firstName == 'Steve' } ( $ )", "ct_err:expr:placeholder:multiple_entities:2")
-        chk("(u: user, company) @* { u.firstName == 'Steve' } ( $ )", "ct_err:expr:placeholder:multiple_entities:2")
-        chk("(user, c: company) @* { user.firstName == 'Steve' } ( $ )", "ct_err:expr:placeholder:multiple_entities:2")
+        chk("(u: user) @* { .firstName == 'Steve' } ( $ )", "ct_err:expr:placeholder:none")
+        chk("(u: user, c: company) @* { u.firstName == 'Steve' } ( $ )", "ct_err:expr:placeholder:none")
+        chk("(u: user, company) @* { u.firstName == 'Steve' } ( $ )", "ct_err:name:ambiguous:$")
+        chk("(user, c: company) @* { user.firstName == 'Steve' } ( $ )", "ct_err:name:ambiguous:$")
+        chk("(user, company) @* { user.firstName == 'Steve' } ( $ )", "ct_err:name:ambiguous:$")
     }
 
     @Test fun testPlaceholderAmbiguity() {
         tst.strictToString = false
-        chk("company @* {} ( .name + (user @* {} ( $ )).size() )", "ct_err:expr:placeholder:ambiguous")
-        chk("company @* {} ( .name + ((u: user) @* {} ( $ )).size() )", "ct_err:expr:placeholder:alias")
+        chk("company @* {} ( .name + (user @* {} ( $ )).size() )", "ct_err:name:ambiguous:$")
+        chk("company @* {} ( .name + ((u: user) @* {} ( $ )).size() )", "ct_err:at:entity:outer:company")
         chk("(c: company) @* {} ( .name + (user @* {} ( $ )).size() )", "[Facebook8, Apple8, Amazon8, Microsoft8, Google8]")
     }
 

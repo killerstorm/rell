@@ -9,10 +9,12 @@ import net.postchain.rell.utils.toImmList
 import org.apache.commons.lang3.StringUtils
 import java.util.*
 
-class R_DefinitionPos(val module: String, val definition: String) {
+class R_DefinitionId(val module: String, val definition: String) {
     override fun toString() = appLevelName(module, definition)
 
     companion object {
+        val ERROR = R_DefinitionId("<error>", "<error>")
+
         fun appLevelName(module: String, definition: String) = "$module:$definition"
     }
 }
@@ -21,7 +23,7 @@ class R_FilePos(val file: String, val line: Int) {
     override fun toString() = "$file:$line"
 }
 
-class R_StackPos(val def: R_DefinitionPos, val file: R_FilePos) {
+class R_StackPos(val def: R_DefinitionId, val file: R_FilePos) {
     override fun toString() = "$def($file)"
 }
 

@@ -260,3 +260,22 @@ class R_GuardStatement(private val subStmt: R_Statement): R_Statement() {
         return res
     }
 }
+
+class R_LambdaStatement(
+        private val args: List<Pair<R_Expr, R_VarPtr>>,
+        private val block: R_FrameBlock,
+        private val stmt: R_Statement
+): R_Statement() {
+    override fun execute(frame: Rt_CallFrame): R_StatementResult? {
+        val values = args.map { it to it.first.evaluate(frame) }
+
+        val res = frame.block(block) {
+            for ((arg, value) in values) {
+                frame.set(arg.second, arg.first.type, value, false)
+            }
+            stmt.execute(frame)
+        }
+
+        return res
+    }
+}

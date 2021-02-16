@@ -17,7 +17,6 @@ import net.postchain.rell.compiler.vexpr.V_IntegerToDecimalExpr
 import net.postchain.rell.compiler.vexpr.V_RExpr
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Error
-import net.postchain.rell.runtime.toGtv
 import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.ThreadLocalContext
 import net.postchain.rell.utils.toImmList
@@ -91,6 +90,7 @@ object C_Constants {
 class C_FormalParameter(
         val name: S_Name,
         val type: R_Type?,
+        private val initFrameGetter: C_LateGetter<R_CallFrame>,
         private val exprGetterPosValue: S_PosValue<C_LateGetter<R_Expr>>?
 ) {
     val hasExpr: Boolean get() = exprGetterPosValue != null
@@ -102,11 +102,11 @@ class C_FormalParameter(
         return R_VarParam(name.str, type, ptr)
     }
 
-    fun createDefaultValueExpr(): V_Expr {
+    fun createDefaultValueExpr(ctx: C_ExprContext, callPos: S_Pos): V_Expr {
         check(exprGetterPosValue != null)
         val actType = type ?: R_CtErrorType
-        val rExpr = R_DefaultValueExpr(actType, exprGetterPosValue.value)
-        return V_RExpr(exprGetterPosValue.pos, rExpr)
+        val rExpr = R_DefaultValueExpr(actType, callPos.toFilePos(), initFrameGetter, exprGetterPosValue.value)
+        return V_RExpr(ctx, exprGetterPosValue.pos, rExpr)
     }
 
     fun createMirrorAttr(index: Int, mutable: Boolean): R_Attribute {
@@ -149,9 +149,9 @@ object C_Utils {
         return CommonUtils.foldSimple(exprs) { left, right -> makeDbBinaryExpr(type, rOp, dbOp, left, right) }
     }
 
-    fun makeVBinaryExprEq(pos: S_Pos, left: V_Expr, right: V_Expr): V_Expr {
+    fun makeVBinaryExprEq(ctx: C_ExprContext, pos: S_Pos, left: V_Expr, right: V_Expr): V_Expr {
         val vOp = C_BinOp_EqNe.createVOp(true, left.type())
-        return V_BinaryExpr(pos, vOp, left, right, C_ExprVarFacts.EMPTY)
+        return V_BinaryExpr(ctx, pos, vOp, left, right, C_ExprVarFacts.EMPTY)
     }
 
     fun effectiveMemberType(formalType: R_Type, safe: Boolean): R_Type {
@@ -236,7 +236,16 @@ object C_Utils {
         )
 
         val externalEntity = if (chain == null) null else R_ExternalEntity(chain, false)
-        val entity = createEntity(appCtx, C_DefinitionType.ENTITY, names, mountName, flags, sqlMapping, externalEntity)
+
+        val entity = createEntity(
+                appCtx,
+                C_DefinitionType.ENTITY,
+                names,
+                R_CallFrame.NONE_INIT_FRAME_GETTER,
+                mountName,
+                flags,
+                sqlMapping, externalEntity
+        )
 
         val rAttrs = attrs.mapIndexed { i, attr -> attr.compile(i) }
         val rAttrMap = rAttrs.map { it.name to it }.toMap()
@@ -252,22 +261,24 @@ object C_Utils {
             appCtx: C_AppContext,
             defType: C_DefinitionType,
             names: R_DefinitionNames,
+            initFrameGetter: C_LateGetter<R_CallFrame>,
             mountName: R_MountName,
             flags: R_EntityFlags,
             sqlMapping: R_EntitySqlMapping,
             externalEntity: R_ExternalEntity?
     ): R_EntityDefinition {
-        val mirrorStructs = createMirrorStructs(appCtx, names, defType)
-        return R_EntityDefinition(names, mountName, flags, sqlMapping, externalEntity, mirrorStructs)
+        val mirrorStructs = createMirrorStructs(appCtx, names, initFrameGetter, defType)
+        return R_EntityDefinition(names, initFrameGetter, mountName, flags, sqlMapping, externalEntity, mirrorStructs)
     }
 
     fun createMirrorStructs(
             appCtx: C_AppContext,
             names: R_DefinitionNames,
+            initFrameGetter: C_LateGetter<R_CallFrame>,
             defType: C_DefinitionType,
             operation: R_MountName? = null
     ): R_MirrorStructs {
-        val res = R_MirrorStructs(names, defType.name, operation)
+        val res = R_MirrorStructs(names, initFrameGetter, defType.name, operation)
         appCtx.defsAdder.addStruct(res.immutable)
         appCtx.defsAdder.addStruct(res.mutable)
         return res
@@ -290,7 +301,7 @@ object C_Utils {
         val names = createDefNames(moduleName, null, null, listOf(simpleName))
 
         val mountName = R_MountName(moduleName.parts + R_Name.of(simpleName))
-        val query = R_QueryDefinition(names, mountName)
+        val query = R_QueryDefinition(names, R_CallFrame.NONE_INIT_FRAME_GETTER, mountName)
 
         executor.onPass(C_CompilerPass.EXPRESSIONS) {
             val body = R_SysQueryBody(type, listOf(), fn)
@@ -347,23 +358,23 @@ object C_Utils {
         return Db_InterpretedExpr(rExpr)
     }
 
-    fun errorVExpr(pos: S_Pos, type: R_Type = R_CtErrorType, msg: String = "Compilation error"): V_Expr {
+    fun errorVExpr(ctx: C_ExprContext, pos: S_Pos, type: R_Type = R_CtErrorType, msg: String = "Compilation error"): V_Expr {
         val rExpr = errorRExpr(type, msg)
-        return V_RExpr(pos, rExpr)
+        return V_RExpr(ctx, pos, rExpr)
     }
 
-    fun errorExpr(pos: S_Pos, type: R_Type = R_CtErrorType, msg: String = "Compilation error"): C_Expr {
-        val value = errorVExpr(pos, type, msg)
+    fun errorExpr(ctx: C_ExprContext, pos: S_Pos, type: R_Type = R_CtErrorType, msg: String = "Compilation error"): C_Expr {
+        val value = errorVExpr(ctx, pos, type, msg)
         return C_VExpr(value)
     }
 
-    fun integerToDecimalPromotion(vExpr: V_Expr): V_Expr {
+    fun integerToDecimalPromotion(ctx: C_ExprContext, vExpr: V_Expr): V_Expr {
         val type = vExpr.type()
         if (type == R_DecimalType) {
             return vExpr
         }
         check(type == R_IntegerType) { "Expected $R_DecimalType, but was $type" }
-        return V_IntegerToDecimalExpr(vExpr, vExpr.varFacts())
+        return V_IntegerToDecimalExpr(ctx, vExpr, vExpr.varFacts())
     }
 
     fun fullName(namespacePath: String?, name: String): String {
@@ -387,7 +398,7 @@ object C_Utils {
     fun appLevelName(module: C_ModuleKey, path: List<S_Name>): String {
         val moduleName = module.keyStr()
         val qualifiedName = nameStr(path)
-        return R_DefinitionPos.appLevelName(moduleName, qualifiedName)
+        return R_DefinitionId.appLevelName(moduleName, qualifiedName)
     }
 }
 
@@ -456,200 +467,6 @@ object C_Parser {
     }
 
     fun currentFile() = currentFileLocal.get()
-}
-
-object C_Errors {
-    fun errTypeMismatch(pos: S_Pos, srcType: R_Type, dstType: R_Type, errCode: String, errMsg: String): C_Error {
-        return C_Error.stop(pos, "$errCode:[${dstType.toStrictString()}]:[${srcType.toStrictString()}]",
-                "$errMsg: ${srcType.toStrictString()} instead of ${dstType.toStrictString()}")
-    }
-
-    fun errTypeMismatch(msgCtx: C_MessageContext, pos: S_Pos, srcType: R_Type, dstType: R_Type, errCode: String, errMsg: String) {
-        if (srcType != R_CtErrorType && dstType != R_CtErrorType) {
-            val srcTypeStr = srcType.toStrictString()
-            val dstTypeStr = dstType.toStrictString()
-            msgCtx.error(pos, "$errCode:[$dstTypeStr]:[$srcTypeStr]", "$errMsg: $srcTypeStr instead of $dstTypeStr")
-        }
-    }
-
-    fun errMultipleAttrs(pos: S_Pos, attrs: List<C_ExprContextAttr>, errCode: String, errMsg: String): C_Error {
-        return C_Error.stop(pos, "$errCode:${attrs.joinToString(",")}", "$errMsg: ${attrs.joinToString()}")
-    }
-
-    fun errUnknownName(baseType: R_Type, name: S_Name): C_Error {
-        val baseName = baseType.name
-        return C_Error.stop(name.pos, "unknown_name:$baseName.${name.str}", "Unknown name: '$baseName.${name.str}'")
-    }
-
-    fun errUnknownName(baseName: List<S_Name>, name: S_Name): C_Error {
-        val fullName = baseName + listOf(name)
-        val nameStr = C_Utils.nameStr(fullName)
-        return errUnknownName(name.pos, nameStr)
-    }
-
-    fun errUnknownName(name: S_Name): C_Error {
-        return errUnknownName(name.pos, name.str)
-    }
-
-    fun errUnknownName(pos: S_Pos, str: String): C_Error {
-        return C_Error.stop(pos, "unknown_name:$str", "Unknown name: '$str'")
-    }
-
-    fun errUnknownAttr(name: S_Name): C_Error {
-        val nameStr = name.str
-        return C_Error.stop(name.pos, "expr_attr_unknown:$nameStr", "Unknown attribute: '$nameStr'")
-    }
-
-    fun errUnknownFunction(name: S_Name): C_Error {
-        return C_Error.stop(name.pos, "unknown_fn:${name.str}", "Unknown function: '${name.str}'")
-    }
-
-    fun errUnknownMember(type: R_Type, name: S_Name): C_Error {
-        return C_Error.stop(name.pos, "unknown_member:[${type.toStrictString()}]:${name.str}",
-                "Type ${type.toStrictString()} has no member '${name.str}'")
-    }
-
-    fun errUnknownMember(msgCtx: C_MessageContext, type: R_Type, name: S_Name) {
-        if (type != R_CtErrorType) {
-            msgCtx.error(name.pos, "unknown_member:[${type.toStrictString()}]:${name.str}",
-                    "Type ${type.toStrictString()} has no member '${name.str}'")
-        }
-    }
-
-    fun errFunctionNoSql(pos: S_Pos, name: String): C_Error {
-        return C_Error.stop(pos, "expr_call_nosql:$name", "Function '$name' cannot be converted to SQL")
-    }
-
-    fun errBadDestination(pos: S_Pos): C_Error {
-        return C_Error.stop(pos, "expr_bad_dst", "Invalid assignment destination")
-    }
-
-    fun errBadDestination(name: S_Name): C_Error {
-        return C_Error.stop(name.pos, "expr_bad_dst:${name.str}", "Cannot modify '${name.str}'")
-    }
-
-    fun errAttrNotMutable(pos: S_Pos, name: String): C_Error {
-        return C_Error.stop(pos, "update_attr_not_mutable:$name", "Attribute '$name' is not mutable")
-    }
-
-    fun errExprNoDb(pos: S_Pos, type: R_Type): C_Error {
-        val typeStr = type.toStrictString()
-        return C_Error.stop(pos, "expr_nosql:$typeStr", "Value of type $typeStr cannot be converted to SQL")
-    }
-
-    fun errExprDbNotAllowed(pos: S_Pos): C_Error {
-        return C_Error.stop(pos, "expr_sqlnotallowed", "Database expression not allowed here")
-    }
-
-    fun errCannotUpdate(msgCtx: C_MessageContext, pos: S_Pos, name: String) {
-        msgCtx.error(pos, "stmt_update_cant:$name", "Not allowed to update objects of entity '$name'")
-    }
-
-    fun errCannotDelete(pos: S_Pos, name: String): C_Error {
-        return C_Error.stop(pos, "stmt_delete_cant:$name", "Not allowed to delete objects of entity '$name'")
-    }
-
-    fun errNameConflictAliasLocal(name: S_Name): C_Error {
-        val nameStr = name.str
-        throw C_Error.stop(name.pos, "expr_name_entity_local:$nameStr",
-                "Name '$nameStr' is ambiguous: can be entity alias or local variable")
-    }
-
-    fun errNameConflict(name: S_Name, otherType: C_DeclarationType, otherPos: S_Pos?): C_PosCodeMsg {
-        val baseCode = "name_conflict"
-        val baseMsg = "Name conflict"
-        val codeMsg = if (otherPos != null) {
-            val code = "$baseCode:user:${name.str}:$otherType:$otherPos"
-            val msg = "$baseMsg: ${otherType.msg} '${name.str}' defined at ${otherPos.strLine()}"
-            C_CodeMsg(code, msg)
-        } else {
-            C_CodeMsg("$baseCode:sys:${name.str}:$otherType", "$baseMsg: system ${otherType.msg} '${name.str}'")
-        }
-        return C_PosCodeMsg(name.pos, codeMsg)
-    }
-
-    fun errMountConflict(
-            chain: String?,
-            mountName: R_MountName,
-            def: R_Definition,
-            pos: S_Pos,
-            otherEntry: C_MntEntry
-    ): C_Error {
-        val baseCode = "mnt_conflict"
-        val commonCode = "[${def.appLevelName}]:$mountName:${otherEntry.type}:[${otherEntry.def.appLevelName}]"
-        val baseMsg = "Mount name conflict" + if (chain == null) "" else "(external chain '$chain')"
-        val otherNameMsg = otherEntry.def.simpleName
-
-        val code: String
-        val msg: String
-
-        if (otherEntry.pos != null) {
-            code = "$baseCode:user:$commonCode:${otherEntry.pos}"
-            msg = "$baseMsg: ${otherEntry.type.msg} '$otherNameMsg' has mount name '$mountName' " +
-                    "(defined at ${otherEntry.pos.strLine()})"
-        } else {
-            code = "$baseCode:sys:$commonCode"
-            msg = "$baseMsg: system ${otherEntry.type.msg} '$otherNameMsg' has mount name '$mountName'"
-        }
-
-        return C_Error.stop(pos, code, msg)
-    }
-
-    fun errMountConflictSystem(mountName: R_MountName, def: R_Definition, pos: S_Pos): C_Error {
-        val code = "mnt_conflict:sys:[${def.appLevelName}]:$mountName"
-        val msg = "Mount name conflict: '$mountName' is a system mount name"
-        return C_Error.stop(pos, code, msg)
-    }
-
-    fun errDuplicateAttribute(msgCtx: C_MessageContext, name: S_Name) {
-        msgCtx.error(name.pos, "dup_attr:$name", "Duplicate attribute: '$name'")
-    }
-
-    fun errAttributeTypeUnknown(msgCtx: C_MessageContext, name: S_Name) {
-        msgCtx.error(name.pos, "unknown_name_type:${name.str}",
-                "Cannot infer type for '${name.str}'; specify type explicitly")
-    }
-
-    fun check(b: Boolean, pos: S_Pos, code: String, msg: String) {
-        if (!b) {
-            throw C_Error.stop(pos, code, msg)
-        }
-    }
-
-    fun check(b: Boolean, pos: S_Pos, codeMsgSupplier: () -> Pair<String, String>) {
-        if (!b) {
-            val (code, msg) = codeMsgSupplier()
-            throw C_Error.stop(pos, code, msg)
-        }
-    }
-
-    fun check(ctx: C_MessageContext, b: Boolean, pos: S_Pos, code: String, msg: String) {
-        if (!b) {
-            ctx.error(pos, code, msg)
-        }
-    }
-
-    fun check(ctx: C_MessageContext, b: Boolean, pos: S_Pos, codeMsgSupplier: () -> Pair<String, String>) {
-        if (!b) {
-            val (code, msg) = codeMsgSupplier()
-            ctx.error(pos, code, msg)
-        }
-    }
-
-    fun <T> checkNotNull(value: T?, pos: S_Pos, code: String, msg: String): T {
-        if (value == null) {
-            throw C_Error.stop(pos, code, msg)
-        }
-        return value
-    }
-
-    fun <T> checkNotNull(value: T?, pos: S_Pos, codeMsgSupplier: () -> Pair<String, String>): T {
-        if (value == null) {
-            val (code, msg) = codeMsgSupplier()
-            throw C_Error.stop(pos, code, msg)
-        }
-        return value
-    }
 }
 
 object C_GraphUtils {
@@ -895,8 +712,9 @@ class C_LateInit<T>(val pass: C_CompilerPass, fallback: T) {
 
     fun set(value: T) {
         ctx.checkPass(pass, pass)
-        check(this.value == null)
+        check(this.value == null) { "value already set" }
         this.value = value
+        fallback = null
     }
 
     fun get(): T {

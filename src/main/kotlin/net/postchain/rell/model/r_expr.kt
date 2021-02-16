@@ -4,9 +4,7 @@
 
 package net.postchain.rell.model
 
-import net.postchain.rell.compiler.C_EntityAttrRef
 import net.postchain.rell.compiler.C_LateGetter
-import net.postchain.rell.compiler.C_Utils
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlGen
 import net.postchain.rell.utils.toImmList
@@ -103,88 +101,6 @@ class R_ConstantExpr(val value: Rt_Value): R_Expr(value.type()) {
         fun makeInt(v: Long) = R_ConstantExpr(Rt_IntValue(v))
         fun makeText(v: String) = R_ConstantExpr(Rt_TextValue(v))
         fun makeBytes(v: ByteArray) = R_ConstantExpr(Rt_ByteArrayValue(v))
-    }
-}
-
-class R_MemberExpr(val base: R_Expr, val safe: Boolean, val calculator: R_MemberCalculator)
-    : R_Expr(C_Utils.effectiveMemberType(calculator.type, safe))
-{
-    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        val baseValue = base.evaluate(frame)
-        if (safe && baseValue == Rt_NullValue) {
-            return Rt_NullValue
-        }
-        check(baseValue != Rt_NullValue)
-        check(baseValue != Rt_UnitValue)
-        val value = calculator.calculate(frame, baseValue)
-        return value
-    }
-}
-
-sealed class R_MemberCalculator(val type: R_Type) {
-    abstract fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value
-}
-
-class R_MemberCalculator_TupleAttr(type: R_Type, val attrIndex: Int): R_MemberCalculator(type) {
-    override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
-        val values = baseValue.asTuple()
-        return values[attrIndex]
-    }
-}
-
-class R_MemberCalculator_VirtualTupleAttr(type: R_Type, val fieldIndex: Int): R_MemberCalculator(type) {
-    override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
-        val tuple = baseValue.asVirtualTuple()
-        val res = tuple.get(fieldIndex)
-        return res
-    }
-}
-
-class R_MemberCalculator_StructAttr(val attr: R_Attribute): R_MemberCalculator(attr.type) {
-    override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
-        val structValue = baseValue.asStruct()
-        return structValue.get(attr.index)
-    }
-}
-
-class R_MemberCalculator_VirtualStructAttr(type: R_Type, val attr: R_Attribute): R_MemberCalculator(type) {
-    override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
-        val structValue = baseValue.asVirtualStruct()
-        return structValue.get(attr.index)
-    }
-}
-
-class R_MemberCalculator_DataAttribute(type: R_Type, val atBase: R_DbAtExprBase): R_MemberCalculator(type) {
-    override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
-        val list = atBase.execute(frame, listOf(baseValue), null, null)
-
-        if (list.size != 1) {
-            val msg = if (list.size == 0) {
-                "Object not found in the database: $baseValue (was deleted?)"
-            } else {
-                "Found more than one object $baseValue in the database: ${list.size}"
-            }
-            throw Rt_Error("expr_entity_attr_count:${list.size}", msg)
-        }
-
-        check(list[0].size == 1)
-        val res = list[0][0]
-        return res
-    }
-}
-
-class R_MemberCalculator_SysFn(type: R_Type, val fn: R_SysFunction, val args: List<R_Expr>): R_MemberCalculator(type) {
-    override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
-        val vArgs = args.map { it.evaluate(frame) }
-        val vFullArgs = listOf(baseValue) + vArgs
-        return fn.call(frame.defCtx.callCtx, vFullArgs)
-    }
-}
-
-object R_MemberCalculator_Rowid: R_MemberCalculator(C_EntityAttrRef.ROWID_TYPE) {
-    override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
-        val id = baseValue.asObjectId()
-        return Rt_RowidValue(id)
     }
 }
 
@@ -484,15 +400,21 @@ object R_RequireCondition_Map: R_RequireCondition() {
 }
 
 sealed class R_CreateExprAttr(val attr: R_Attribute) {
-    abstract fun expr(): R_Expr
+    abstract fun evaluate(frame: Rt_CallFrame): Rt_Value
 }
 
 class R_CreateExprAttr_Specified(attr: R_Attribute, private val expr: R_Expr): R_CreateExprAttr(attr) {
-    override fun expr() = expr
+    override fun evaluate(frame: Rt_CallFrame) = expr.evaluate(frame)
 }
 
-class R_CreateExprAttr_Default(attr: R_Attribute): R_CreateExprAttr(attr) {
-    override fun expr() = attr.expr!!
+class R_CreateExprAttr_Default(
+        attr: R_Attribute,
+        private val initFrameGetter: C_LateGetter<R_CallFrame>,
+        private val createFilePos: R_FilePos?
+): R_CreateExprAttr(attr) {
+    override fun evaluate(frame: Rt_CallFrame): Rt_Value {
+        return Rt_Utils.evaluateInNewFrame(frame, attr.expr!!, createFilePos, initFrameGetter)
+    }
 }
 
 sealed class R_CreateExpr(val rEntity: R_EntityDefinition): R_Expr(rEntity.type) {
@@ -507,7 +429,7 @@ sealed class R_CreateExpr(val rEntity: R_EntityDefinition): R_Expr(rEntity.type)
         val rowidFunc = sqlCtx.mainChainMapping.rowidFunction
         val rtSql = buildSql(sqlCtx, rEntity, values, "\"$rowidFunc\"()")
         val rtSel = SqlSelect(rtSql, listOf(type))
-        val res = rtSel.execute(frame)
+        val res = rtSel.execute(frame.sqlExec)
 
         check(res.size == 1)
         check(res[0].size == 1)
@@ -541,7 +463,7 @@ sealed class R_CreateExpr(val rEntity: R_EntityDefinition): R_Expr(rEntity.type)
             b.append(rowidExpr)
             b.append(values, "") { pair ->
                 b.append(", ")
-                b.append(pair.first.type, pair.second)
+                b.append(pair.second)
             }
             b.append(")")
 
@@ -552,11 +474,12 @@ sealed class R_CreateExpr(val rEntity: R_EntityDefinition): R_Expr(rEntity.type)
         }
 
         fun buildAddColumnsSql(
-                sqlCtx: Rt_SqlContext,
+                frame: Rt_CallFrame,
                 rEntity: R_EntityDefinition,
                 attrs: List<R_CreateExprAttr>,
                 existingRecs: Boolean
         ): ParameterizedSql {
+            val sqlCtx = frame.defCtx.sqlCtx
             val table = rEntity.sqlMapping.table(sqlCtx)
 
             val b = SqlBuilder()
@@ -572,9 +495,10 @@ sealed class R_CreateExpr(val rEntity: R_EntityDefinition): R_Expr(rEntity.type)
                 b.appendName(table)
                 b.append(" SET ")
                 b.append(attrs, ", ") { attr ->
+                    val value = attr.evaluate(frame)
                     b.appendName(attr.attr.sqlMapping)
                     b.append(" = ")
-                    b.append(attr.expr())
+                    b.append(value)
                 }
                 b.append(";\n")
 
@@ -601,7 +525,7 @@ sealed class R_CreateExpr(val rEntity: R_EntityDefinition): R_Expr(rEntity.type)
 class R_RegularCreateExpr(rEntity: R_EntityDefinition, val attrs: List<R_CreateExprAttr>): R_CreateExpr(rEntity) {
     override fun evaluateValues(frame: Rt_CallFrame): List<Pair<R_Attribute, Rt_Value>> {
         return attrs.map {
-            val value = it.expr().evaluate(frame)
+            val value = it.evaluate(frame)
             it.attr to value
         }
     }
@@ -627,7 +551,7 @@ class R_StructExpr(private val struct: R_Struct, private val attrs: List<R_Creat
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         val values = MutableList<Rt_Value>(attrs.size) { Rt_UnitValue }
         for (attr in attrs) {
-            val value = attr.expr().evaluate(frame)
+            val value = attr.evaluate(frame)
             values[attr.attr.index] = value
         }
         return Rt_StructValue(struct.type, values)
@@ -640,14 +564,14 @@ class R_ObjectExpr(val objType: R_ObjectType): R_Expr(objType) {
     }
 }
 
-class R_ObjectAttrExpr(type: R_Type, val rObject: R_ObjectDefinition, val atBase: R_DbAtExprBase): R_Expr(type) {
+class R_ObjectAttrExpr(type: R_Type, val rObject: R_ObjectDefinition, val atBase: Db_AtExprBase): R_Expr(type) {
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        var records = atBase.execute(frame, listOf(), null, null)
+        var records = atBase.execute(frame, null, null)
 
         if (records.isEmpty()) {
             val forced = frame.defCtx.appCtx.forceObjectInit(rObject)
             if (forced) {
-                records = atBase.execute(frame, listOf(), null, null)
+                records = atBase.execute(frame, null, null)
             }
         }
 
@@ -783,10 +707,22 @@ class R_OperationExpr(private val op: R_OperationDefinition, args: List<R_Expr>)
     }
 }
 
-class R_DefaultValueExpr(type: R_Type, private val exprGetter: C_LateGetter<R_Expr>): R_Expr(type) {
+class R_DefaultValueExpr(
+        type: R_Type,
+        private val callFilePos: R_FilePos,
+        private val initFrameGetter: C_LateGetter<R_CallFrame>,
+        private val exprGetter: C_LateGetter<R_Expr>
+): R_Expr(type) {
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         val expr = exprGetter.get()
-        val res = expr.evaluate(frame)
+        val res = Rt_Utils.evaluateInNewFrame(frame, expr, callFilePos, initFrameGetter)
         return res
+    }
+}
+
+class R_BlockCheckExpr(private val expr: R_Expr, private val blockUid: R_FrameBlockUid): R_Expr(expr.type) {
+    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
+        frame.checkBlock(blockUid)
+        return expr.evaluate(frame)
     }
 }
