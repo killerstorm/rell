@@ -59,7 +59,7 @@ class R_MemberCalculator_DataAttribute(
 ): R_MemberCalculator(type) {
     override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
         val list = lambda.execute(frame, baseValue) {
-            atBase.execute(frame, null, null)
+            atBase.execute(frame, Rt_AtExprExtras.NULL)
         }
 
         if (list.size != 1) {

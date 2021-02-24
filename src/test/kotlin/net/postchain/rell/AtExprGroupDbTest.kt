@@ -3,7 +3,7 @@ package net.postchain.rell
 import org.junit.Test
 
 class AtExprGroupDbTest: AtExprGroupBaseTest() {
-    override fun impKind() = AtExprTestKind_Db
+    override fun impKind() = AtExprTestKind_Db()
 
     override fun testSumOverflowInteger() {
         super.testSumOverflowInteger()

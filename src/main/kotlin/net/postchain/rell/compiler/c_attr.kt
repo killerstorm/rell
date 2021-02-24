@@ -100,7 +100,7 @@ object C_AttributeResolver {
         val matchedAttrs = matchImplicitAttrs(msgCtx, entity.attributes, args, explicitAttrs, true)
 
         val unmatched = Sets.difference(args.toSet(), matchedAttrs.keys)
-        if (unmatched.isNotEmpty() && !errWatcher.hasNewErrors() && !args.any { it.vExpr.type() == R_CtErrorType }) {
+        if (unmatched.isNotEmpty() && !errWatcher.hasNewErrors() && !args.any { it.vExpr.type().isError() }) {
             val pos = unmatched.first().vExpr.pos
             msgCtx.error(pos, "update:unmatched_args", "Not all arguments matched to attributes")
         }
@@ -248,7 +248,7 @@ object C_AttributeResolver {
                         "Multiple attributes match expression #${idx + 1}: ${byType.joinToString(", ") { it.name }}"
         }
 
-        if (type != R_CtErrorType) {
+        if (type.isNotError()) {
             msgCtx.error(expr.startPos, "attr_implic_unknown:$idx:$type",
                     "Cannot find attribute for expression #${idx + 1} of type ${type.toStrictString()}")
         }

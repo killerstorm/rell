@@ -3,11 +3,17 @@ package net.postchain.rell
 import org.junit.Test
 
 class AtExprCommonDbTest: AtExprCommonBaseTest() {
-    override fun impKind() = AtExprTestKind_Db
+    override fun impKind() = AtExprTestKind_Db()
 
     @Test fun testImplicitTupleFieldNameDb() {
         initDataUserCompany()
         chk("user @* {} ( user.name, user.pos )", "[(name=Bob,pos=Dev), (name=Alice,pos=Tester)]")
+    }
+
+    @Test fun testAliasMatchByLocal_Db() {
+        initDataUserCompany()
+        chkEx("{ val user = $fromUser@*{}[0]; return $fromUser@*{ user } ( .name ); }",
+                "ct_err:[at_where:var_noattrs:0:user:user][name:ambiguous:user]")
     }
 
     @Test fun testAttrMatchByTypeConstExpr() {
@@ -63,5 +69,20 @@ class AtExprCommonDbTest: AtExprCommonBaseTest() {
         chk("(company: user) @* { (company @? {} limit 1) != null } ( .name )", "[Bob, Alice, Trudy]")
         chk("(company: user) @* { (company @? { company.city != '?' } limit 1) != null } ( .name )",
                 "ct_err:[at:entity:outer:company][name:ambiguous:company]")
+    }
+
+    @Test fun testNestedAttributesDirect_Db() {
+        initDataUserCompanyCity()
+
+        chk("$fromUser @* {} ( _=.name, $fromCompany @ {} (.user_attr) limit 1 )",
+                "ct_err:[at:entity:outer:user][at_expr:attr:belongs_to_outer:user_attr:user]")
+
+        chk("(u:$fromUser) @* {} ( $fromCompany @ {} (u.name) limit 1 )", "ct_err:at:entity:outer:u")
+
+        chkNestedAttributes("$fromUser @* {} ( _=.name, $fromCompany @ {} (.user_attr) limit 1 )",
+                "ct_err:[at:entity:outer:user][at_expr:attr:belongs_to_outer:user_attr:user]",
+                "ct_err:[at:entity:outer:user][at_expr:attr:belongs_to_outer:user_attr:user]",
+                "ct_err:[at:entity:outer:user][at_expr:attr:belongs_to_outer:user_attr:user]"
+        )
     }
 }

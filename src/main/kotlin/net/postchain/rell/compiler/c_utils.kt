@@ -25,7 +25,9 @@ import org.jooq.impl.SQLDataType
 import java.math.BigDecimal
 import java.util.*
 
-class C_CodeMsg(val code: String, val msg: String)
+class C_CodeMsg(val code: String, val msg: String) {
+    override fun toString() = code
+}
 
 class C_PosCodeMsg(val pos: S_Pos, val code: String, val msg: String) {
     constructor(pos: S_Pos, codeMsg: C_CodeMsg): this(pos, codeMsg.code, codeMsg.msg)
@@ -124,10 +126,10 @@ object C_Utils {
     val ERROR_EXPR = errorRExpr(R_CtErrorType)
     val ERROR_STATEMENT = R_ExprStatement(ERROR_EXPR)
 
-    fun toDbExpr(pos: S_Pos, rExpr: R_Expr): Db_Expr {
+    fun toDbExpr(errPos: S_Pos, rExpr: R_Expr): Db_Expr {
         val type = rExpr.type
         if (!type.sqlAdapter.isSqlCompatible()) {
-            throw C_Errors.errExprNoDb(pos, type)
+            throw C_Errors.errExprNoDb(errPos, type)
         }
         return Db_InterpretedExpr(rExpr)
     }
@@ -331,17 +333,17 @@ object C_Utils {
         return R_DefinitionNames(modName, fullNamespacePath, simpleName)
     }
 
-    fun createSysCallExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, name: S_String): R_Expr {
-        return createSysCallExpr(type, fn, args, name.pos, name.str)
-    }
-
     fun createSysCallExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, qualifiedName: List<S_Name>): R_Expr {
         val nameStr = nameStr(qualifiedName)
         return createSysCallExpr(type, fn, args, qualifiedName[0].pos, nameStr)
     }
 
-    fun createSysCallExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, pos: S_Pos?, nameStr: String): R_Expr {
-        val rCallExpr = R_SysCallExpr(type, fn, args, nameStr)
+    fun createSysCallExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, caseCtx: C_FuncCaseCtx): R_Expr {
+        return createSysCallExpr(type, fn, args, caseCtx.linkPos, caseCtx.qualifiedNameMsg())
+    }
+
+    fun createSysCallExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, pos: S_Pos?, nameMsg: String): R_Expr {
+        val rCallExpr = R_SysCallExpr(type, fn, args, nameMsg)
         return if (pos == null) rCallExpr else {
             val filePos = pos.toFilePos()
             R_StackTraceExpr(rCallExpr, filePos)

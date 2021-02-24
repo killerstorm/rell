@@ -9,7 +9,7 @@ import net.postchain.rell.compiler.vexpr.*
 import net.postchain.rell.model.*
 import java.util.*
 
-enum class S_BinaryOp(private val code: String, val op: C_BinOp) {
+enum class S_BinaryOp(val code: String, val op: C_BinOp) {
     EQ("==", C_BinOp_Eq),
     NE("!=", C_BinOp_Ne),
     LE("<=", C_BinOp_Le),
@@ -60,16 +60,6 @@ enum class S_BinaryOp(private val code: String, val op: C_BinOp) {
     }
 
     fun precedence(): Int = PRECEDENCE_MAP.getValue(this)
-
-    fun compile(ctx: C_ExprContext, pos: S_Pos, left: V_Expr, right: V_Expr): V_Expr {
-        val value = op.compile(ctx, left, right)
-        return if (value != null) {
-            value
-        } else {
-            C_BinOp.errTypeMismatch(ctx.msgCtx, pos, code, left.type(), right.type())
-            C_Utils.errorVExpr(ctx, pos)
-        }
-    }
 }
 
 enum class S_AssignOpCode(val op: S_AssignOp) {
@@ -177,6 +167,7 @@ class S_AssignOp_Op(val code: String, val op: C_BinOp_Common): S_AssignOp() {
 
 sealed class C_BinOp {
     abstract fun compile(ctx: C_ExprContext, left: V_Expr, right: V_Expr): V_Expr?
+    open fun compileRight(ctx: C_ExprContext, sExpr: S_Expr): V_Expr = sExpr.compile(ctx).value()
     open fun rightVarFacts(left: V_Expr): C_VarFacts = C_VarFacts.EMPTY
 
     protected open fun compileExprVarFacts(left: V_Expr, right: V_Expr): C_ExprVarFacts {
@@ -186,7 +177,7 @@ sealed class C_BinOp {
 
     companion object {
         fun errTypeMismatch(msgCtx: C_MessageContext, pos: S_Pos, op: String, leftType: R_Type, rightType: R_Type) {
-            if (leftType != R_CtErrorType && rightType != R_CtErrorType) {
+            if (leftType.isNotError() && rightType.isNotError()) {
                 msgCtx.error(pos, "binop_operand_type:$op:[$leftType]:[$rightType]",
                         "Wrong operand types for '$op': $leftType, $rightType")
             }
@@ -283,11 +274,6 @@ sealed class C_BinOp_EqNe(private val eq: Boolean): C_BinOp_Common() {
         fun checkTypes(left: R_Type, right: R_Type): Boolean {
             val op = C_BinOp_Eq.compileOp(left, right)
             return op != null
-        }
-
-        fun checkTypesDb(left: R_Type, right: R_Type): Boolean {
-            val op = C_BinOp_Eq.compileOp(left, right)
-            return op?.dbOp != null
         }
 
         private fun calcCommonType(left: R_Type, right: R_Type): R_Type? {
@@ -523,31 +509,40 @@ object C_BinOp_In: C_BinOp() {
         return V_BinaryExpr(ctx, left.pos, op, left, right, varFacts)
     }
 
-    private fun compileOp(left: R_Type, right: R_Type): V_BinaryOp? {
-        val pair = matchOp(right)
-        if (pair == null) {
-            return null
+    override fun compileRight(ctx: C_ExprContext, sExpr: S_Expr): V_Expr {
+        val atCtx = ctx.atCtx
+        val cExpr = if (atCtx != null) {
+            sExpr.compileNestedAt(ctx, atCtx)
+        } else {
+            sExpr.compile(ctx)
         }
-
-        val (rOp, elemType) = pair
-        if (left != elemType) {
-            return null
-        }
-
-        return V_BinaryOp.of(R_BooleanType, rOp, null)
+        return cExpr.value()
     }
 
-    private fun matchOp(right: R_Type): Pair<R_BinaryOp, R_Type>? {
+    private fun compileOp(left: R_Type, right: R_Type): V_BinaryOp? {
+        val m = matchOp(right)
+        m ?: return null
+
+        if (left != m.elemType) {
+            return null
+        }
+
+        return V_BinaryOp.of(R_BooleanType, m.rOp, m.dbOp)
+    }
+
+    private fun matchOp(right: R_Type): OpMatch? {
         return when (right) {
-            is R_CollectionType -> Pair(R_BinaryOp_In_Collection, right.elementType)
-            is R_VirtualListType -> Pair(R_BinaryOp_In_VirtualList, R_IntegerType)
-            is R_VirtualSetType -> Pair(R_BinaryOp_In_VirtualSet, S_VirtualType.virtualMemberType(right.innerType.elementType))
-            is R_MapType -> Pair(R_BinaryOp_In_Map, right.keyType)
-            is R_VirtualMapType -> Pair(R_BinaryOp_In_Map, right.innerType.keyType)
-            is R_RangeType -> Pair(R_BinaryOp_In_Range, R_IntegerType)
+            is R_CollectionType -> OpMatch(right.elementType, R_BinaryOp_In_Collection, Db_BinaryOp_In)
+            is R_VirtualListType -> OpMatch(R_IntegerType, R_BinaryOp_In_VirtualList)
+            is R_VirtualSetType -> OpMatch(S_VirtualType.virtualMemberType(right.innerType.elementType), R_BinaryOp_In_VirtualSet)
+            is R_MapType -> OpMatch(right.keyType, R_BinaryOp_In_Map)
+            is R_VirtualMapType -> OpMatch(right.innerType.keyType, R_BinaryOp_In_Map)
+            is R_RangeType -> OpMatch(R_IntegerType, R_BinaryOp_In_Range)
             else -> null
         }
     }
+
+    private class OpMatch(val elemType: R_Type, val rOp: R_BinaryOp, val dbOp: Db_BinaryOp? = null)
 }
 
 object C_BinOp_Elvis: C_BinOp() {
@@ -604,6 +599,7 @@ class S_BinaryExpr(val head: S_Expr, val tail: List<S_BinaryExprTail>): S_Expr(h
 
     private abstract class BinExprNode {
         abstract fun compile(ctx: C_ExprContext): V_Expr
+        open fun compileRight(ctx: C_ExprContext, op: C_BinOp): V_Expr = compile(ctx)
     }
 
     private class TermBinExprNode(private val expr: S_Expr): BinExprNode() {
@@ -612,6 +608,10 @@ class S_BinaryExpr(val head: S_Expr, val tail: List<S_BinaryExprTail>): S_Expr(h
             C_Utils.checkUnitType(expr.startPos, res.value().type(), "expr_operand_unit",
                     "Operand expression returns nothing")
             return res.value()
+        }
+
+        override fun compileRight(ctx: C_ExprContext, op: C_BinOp): V_Expr {
+            return op.compileRight(ctx, expr)
         }
     }
 
@@ -623,12 +623,19 @@ class S_BinaryExpr(val head: S_Expr, val tail: List<S_BinaryExprTail>): S_Expr(h
         override fun compile(ctx: C_ExprContext): V_Expr {
             val leftValue = left.compile(ctx)
 
-            val op = sOp.value
-            val rightFacts = op.op.rightVarFacts(leftValue)
+            val op = sOp.value.op
+            val rightFacts = op.rightVarFacts(leftValue)
             val rightCtx = ctx.updateFacts(rightFacts)
-            val rightValue = right.compile(rightCtx)
+            val rightValue = right.compileRight(rightCtx, op)
 
-            return op.compile(ctx, sOp.pos, leftValue, rightValue)
+            val value = op.compile(ctx, leftValue, rightValue)
+            return if (value != null) {
+                value
+            } else {
+                val pos = sOp.pos
+                C_BinOp.errTypeMismatch(ctx.msgCtx, pos, sOp.value.code, leftValue.type(), rightValue.type())
+                C_Utils.errorVExpr(ctx, pos)
+            }
         }
     }
 }

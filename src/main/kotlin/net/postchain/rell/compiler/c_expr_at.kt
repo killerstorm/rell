@@ -3,24 +3,22 @@ package net.postchain.rell.compiler
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_PosValue
+import net.postchain.rell.compiler.vexpr.V_AtAttrExpr
 import net.postchain.rell.compiler.vexpr.V_DbExpr
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_RExpr
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.Nullable
+import net.postchain.rell.utils.chainToIterable
+import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmList
-import org.apache.commons.lang3.StringUtils
 
-class C_DbAtContext(
-        val parent: C_DbAtContext?,
+class C_AtContext(
+        val parent: C_AtContext?,
         val atExprId: R_AtExprId,
-        val from: C_AtFrom_Entities
+        val dbAt: Boolean
 )
-
-sealed class C_MaybeNestedAt
-class C_MaybeNestedAt_Yes(val vExpr: V_Expr): C_MaybeNestedAt()
-class C_MaybeNestedAt_No(val cExpr: C_Expr): C_MaybeNestedAt()
 
 class C_AtEntity(
         val pos: S_Pos,
@@ -43,43 +41,43 @@ class C_AtEntity(
 
     fun toRAtEntityValidated(ctx: C_ExprContext, pos: S_Pos): R_DbAtEntity {
         if (!isValidAccess(ctx)) {
-            ctx.msgCtx.error(pos, "at:entity:outer:$alias", "Cannot access an entity which belongs to an unrelated at-expression")
+            ctx.msgCtx.error(pos, "at:entity:outer:$alias",
+                    "Cannot access entity '${rEntity.moduleLevelName}' as it belongs to an unrelated at-expression")
         }
         return rAtEntity
     }
 
     private fun isValidAccess(ctx: C_ExprContext): Boolean {
-        var dbAtCtx = ctx.dbAtCtx
-        while (dbAtCtx != null) {
-            if (dbAtCtx.atExprId == atExprId) {
-                return true
-            }
-            dbAtCtx = dbAtCtx.parent
-        }
-        return false
+        return chainToIterable(ctx.atCtx) { it.parent }.any { it.atExprId == atExprId }
     }
 }
 
-class C_AtFromContext(val atPos: S_Pos, val atExprId: R_AtExprId, val parentAtCtx: C_DbAtContext?)
+class C_AtFromContext(val pos: S_Pos, val atExprId: R_AtExprId, val parentAtCtx: C_AtContext?)
 
-sealed class C_AtFrom(protected val outerExprCtx: C_ExprContext) {
-    protected val innerBlkCtx = outerExprCtx.blkCtx.createSubContext("@")
+sealed class C_AtFrom(
+        protected val outerExprCtx: C_ExprContext,
+        fromCtx: C_AtFromContext
+) {
+    val atExprId = fromCtx.atExprId
+
+    protected val parentAtCtx = fromCtx.parentAtCtx
+    protected val innerBlkCtx = outerExprCtx.blkCtx.createSubContext("@", atFrom = this)
+
+    val innerAtCtx = C_AtContext(fromCtx.parentAtCtx, atExprId, this is C_AtFrom_Entities)
 
     abstract fun innerExprCtx(): C_ExprContext
     abstract fun makeDefaultWhat(): C_AtWhat
-    abstract fun findEntityByAlias(alias: S_Name): C_AtEntity?
-    abstract fun findAttributesByName(name: S_Name): List<C_ExprContextAttr>
-    abstract fun findAttributesByType(type: R_Type): List<C_ExprContextAttr>
+    abstract fun findAttributesByName(name: String): List<C_AtFromContextAttr>
+    abstract fun findAttributesByType(type: R_Type): List<C_AtFromContextAttr>
 
     abstract fun compile(details: C_AtDetails): V_Expr
-    abstract fun compileNested(details: C_AtDetails): C_MaybeNestedAt
 }
 
 class C_AtFrom_Entities(
         outerExprCtx: C_ExprContext,
-        entities: List<C_AtEntity>,
-        private val parentAtCtx: C_DbAtContext?
-): C_AtFrom(outerExprCtx) {
+        fromCtx: C_AtFromContext,
+        entities: List<C_AtEntity>
+): C_AtFrom(outerExprCtx, fromCtx) {
     val entities = entities.toImmList()
 
     private val msgCtx = outerExprCtx.msgCtx
@@ -90,16 +88,9 @@ class C_AtFrom_Entities(
         check(entities.isNotEmpty())
 
         val atExprIds = entities.map { it.atExprId }.toSet()
-        check(atExprIds.size == 1) { "Multiple AtExprIds: $atExprIds" }
-        val atExprId = atExprIds.first()
+        checkEquals(setOf(atExprId), atExprIds)
 
-        val dbAtCtx = C_DbAtContext(parentAtCtx, atExprId, this)
-
-        innerExprCtx = outerExprCtx.update(
-                blkCtx = innerBlkCtx,
-                nameCtx = C_NameContext.createAt(this),
-                dbAtCtx = Nullable(dbAtCtx)
-        )
+        innerExprCtx = outerExprCtx.update(blkCtx = innerBlkCtx, atCtx = Nullable(innerAtCtx))
 
         val ph = entities.any { !it.explicitAlias }
         for (entity in entities) {
@@ -123,89 +114,65 @@ class C_AtFrom_Entities(
         return C_AtWhat(fields)
     }
 
-    override fun findEntityByAlias(alias: S_Name): C_AtEntity? {
-        //TODO use a lookup table
-        val res = entities.find { it.alias == alias.str }
-        return res
-    }
-
-    override fun findAttributesByName(name: S_Name): List<C_ExprContextAttr> {
+    override fun findAttributesByName(name: String): List<C_AtFromContextAttr> {
         return findContextAttrs { rEntity ->
-            val attrRef = C_EntityAttrRef.resolveByName(rEntity, name.str)
+            val attrRef = C_EntityAttrRef.resolveByName(rEntity, name)
             if (attrRef == null) listOf() else listOf(attrRef)
         }
     }
 
-    override fun findAttributesByType(type: R_Type): List<C_ExprContextAttr> {
+    override fun findAttributesByType(type: R_Type): List<C_AtFromContextAttr> {
         return findContextAttrs { rEntity ->
             C_EntityAttrRef.resolveByType(rEntity, type)
         }
     }
 
-    private fun findContextAttrs(resolver: (R_EntityDefinition) -> List<C_EntityAttrRef>): List<C_ExprContextAttr> {
-        val attrs = mutableListOf<C_ExprContextAttr>()
+    private fun findContextAttrs(resolver: (R_EntityDefinition) -> List<C_EntityAttrRef>): List<C_AtFromContextAttr> {
+        val attrs = mutableListOf<C_AtFromContextAttr>()
 
-        var from: C_AtFrom_Entities? = this
-        while (from != null) {
-            from.findContextAttrs0(from !== this, resolver, attrs)
-            from = from.parentAtCtx?.from
-        }
-
-        return attrs.toImmList()
-    }
-
-    private fun findContextAttrs0(
-            outer: Boolean,
-            resolver: (R_EntityDefinition) -> List<C_EntityAttrRef>,
-            attrs: MutableList<C_ExprContextAttr>
-    ) {
         //TODO take other kinds of fields into account
         //TODO fail when there is more than one match
         //TODO use a table lookup
         for (entity in entities) {
             val entityAttrs = resolver(entity.rEntity)
-            val ctxAttrs = entityAttrs.map { C_ExprContextAttr_DbAtEntity(innerExprCtx, entity, it, outer) }
+            val ctxAttrs = entityAttrs.map { C_AtFromContextAttr_DbAtEntity(entity, it) }
             attrs.addAll(ctxAttrs)
         }
+
+        return attrs.toImmList()
     }
 
     override fun compile(details: C_AtDetails): V_Expr {
-        val rFrom = entities.map { it.toRAtEntity() }
-        return if (parentAtCtx != null) {
-            compileNested(details, rFrom)
+        val dbBase = compileBase(details)
+        val extras = compileExtras(details)
+
+        if (parentAtCtx?.dbAt != true) {
+            return compileTop(details, dbBase, extras)
+        }
+
+        val dependent = isOuterDependent(dbBase)
+        return if (dependent || details.cardinality == R_AtCardinality.ZERO_MANY) {
+            compileNested(details, dbBase, extras)
         } else {
-            compileTop(details, rFrom)
+            compileTop(details, dbBase, extras)
         }
     }
 
-    override fun compileNested(details: C_AtDetails): C_MaybeNestedAt {
-        val vExpr = compile(details)
-        return C_MaybeNestedAt_Yes(vExpr)
+    private fun isOuterDependent(dbBase: Db_AtExprBase): Boolean {
+        val dbExprs = dbBase.directSubExprs()
+        val exprIds = dbExprs.flatMap { it.referencedAtExprIds() }.toSet()
+        return chainToIterable(parentAtCtx) { it.parent }.any { exprIds.contains(it.atExprId) }
     }
 
-    private fun compileTop(details: C_AtDetails, rFrom: List<R_DbAtEntity>): V_Expr {
-        val rWhat = details.base.what.materialFields.map {
-            val whatValue = it.expr.toDbExprWhat(it)
-            val rFlags = it.flags.compile()
-            Db_AtWhatField(rFlags, whatValue)
-        }
-
-        val dbWhere = details.base.where?.toDbExpr()
-        val rBase = Db_AtExprBase(rFrom, rWhat, dbWhere)
-
-        val rLimit = details.limit?.toRExpr()
-        val rOffset = details.offset?.toRExpr()
-        val extras = R_AtExprExtras(rLimit, rOffset)
-
+    private fun compileTop(details: C_AtDetails, dbBase: Db_AtExprBase, extras: R_AtExprExtras): V_Expr {
         val cBlock = innerBlkCtx.buildBlock()
         val rowDecoder = details.res.rowDecoder
         val internals = R_DbAtExprInternals(cBlock.rBlock, rowDecoder)
-
-        val rExpr = R_DbAtExpr(details.res.resultType, rBase, details.cardinality, extras, internals)
+        val rExpr = R_DbAtExpr(details.res.resultType, dbBase, details.cardinality, extras, internals)
         return V_RExpr(outerExprCtx, details.startPos, rExpr, details.exprFacts)
     }
 
-    private fun compileNested(details: C_AtDetails, rFrom: List<R_DbAtEntity>): V_Expr {
+    private fun compileNested(details: C_AtDetails, dbBase: Db_AtExprBase, extras: R_AtExprExtras): V_Expr {
         var resultType = details.res.resultType
         if (details.cardinality != R_AtCardinality.ZERO_MANY) {
             msgCtx.error(details.cardinalityPos, "at_expr:nested:cardinality:${details.cardinality}",
@@ -214,6 +181,16 @@ class C_AtFrom_Entities(
             resultType = C_AtExprResult.calcResultType(details.res.recordType, R_AtCardinality.ZERO_MANY)
         }
 
+        val extras = compileExtras(details)
+        val cBlock = innerBlkCtx.buildBlock()
+
+        val dbExpr = Db_NestedAtExpr(resultType, dbBase, extras, cBlock.rBlock)
+        return V_DbExpr.create(outerExprCtx, details.startPos, dbExpr, details.exprFacts)
+    }
+
+    private fun compileBase(details: C_AtDetails): Db_AtExprBase {
+        val rFrom = entities.map { it.toRAtEntity() }
+
         val dbWhat = details.base.what.materialFields.map {
             val whatValue = it.expr.toDbExprWhat(it)
             val rFlags = it.flags.compile()
@@ -221,22 +198,13 @@ class C_AtFrom_Entities(
         }
 
         val dbWhere = details.base.where?.toDbExpr()
-        val dbBase = Db_AtExprBase(rFrom, dbWhat, dbWhere)
-
-        checkNoLimitOffset(details.limit, "limit")
-        checkNoLimitOffset(details.offset, "offset")
-
-        val cBlock = innerBlkCtx.buildBlock()
-
-        val dbExpr = Db_NestedAtExpr(resultType, dbBase, cBlock.rBlock)
-        return V_DbExpr.create(outerExprCtx, details.startPos, dbExpr, details.exprFacts)
+        return Db_AtExprBase(rFrom, dbWhat, dbWhere)
     }
 
-    private fun checkNoLimitOffset(expr: V_Expr?, word: String) {
-        if (expr != null) {
-            val cap = StringUtils.capitalize(word)
-            msgCtx.error(expr.pos, "at_expr:nested:$word", "$cap not allowed for a nested at-expression")
-        }
+    private fun compileExtras(details: C_AtDetails): R_AtExprExtras {
+        val rLimit = details.limit?.toRExpr()
+        val rOffset = details.offset?.toRExpr()
+        return R_AtExprExtras(rLimit, rOffset)
     }
 
     fun compileUpdate(): R_FrameBlock {
@@ -247,16 +215,17 @@ class C_AtFrom_Entities(
 
 class C_AtFrom_Iterable(
         outerExprCtx: C_ExprContext,
-        private val pos: S_Pos,
+        fromCtx: C_AtFromContext,
         alias: S_Name?,
         private val item: C_AtFromItem_Iterable
-): C_AtFrom(outerExprCtx) {
+): C_AtFrom(outerExprCtx, fromCtx) {
+    private val pos = fromCtx.pos
     private val innerExprCtx: C_ExprContext
     private val placeholderVar: C_LocalVar
     private val varPtr: R_VarPtr
 
     init {
-        placeholderVar = innerBlkCtx.newLocalVar(alias?.str ?: C_Constants.AT_PLACEHOLDER, item.elemType, false, true)
+        placeholderVar = innerBlkCtx.newLocalVar(alias?.str ?: C_Constants.AT_PLACEHOLDER, item.elemType, false, atExprId)
         val phEntry = C_BlockEntry_Var(placeholderVar)
 
         if (alias == null) {
@@ -268,11 +237,7 @@ class C_AtFrom_Iterable(
         varPtr = placeholderVar.toRef(innerBlkCtx.blockUid).ptr
 
         val factsCtx = outerExprCtx.factsCtx.sub(C_VarFacts.of(inited = mapOf(placeholderVar.uid to C_VarFact.YES)))
-        innerExprCtx = outerExprCtx.update(
-                blkCtx = innerBlkCtx,
-                nameCtx = C_NameContext.createAt(this),
-                factsCtx = factsCtx
-        )
+        innerExprCtx = outerExprCtx.update(blkCtx = innerBlkCtx, factsCtx = factsCtx, atCtx = Nullable(innerAtCtx))
     }
 
     override fun innerExprCtx() = innerExprCtx
@@ -283,26 +248,20 @@ class C_AtFrom_Iterable(
         return C_AtWhat(listOf(field))
     }
 
-    override fun findEntityByAlias(alias: S_Name): C_AtEntity? {
-        // The alias is added to the inner block scope.
-        return null
+    override fun findAttributesByName(name: String): List<C_AtFromContextAttr> {
+        val memValue = C_MemberResolver.findMemberValueForTypeByName(item.elemType, name)
+        memValue ?: return listOf()
+        return listOf(C_AtFromContextAttr_ColAtMember(placeholderVar, memValue))
     }
 
-    override fun findAttributesByName(name: S_Name): List<C_ExprContextAttr> {
-        val memValue = C_MemberResolver.findMemberValueForType(item.elemType, name.str)
-        memValue ?: return listOf()
-        val base = compilePlaceholderRef(name.pos)
-        val memRef = C_MemberRef(name.pos, base, name, false)
-        return listOf(C_ExprContextAttr_ColAtMember(innerExprCtx, memValue, memRef))
+    override fun findAttributesByType(type: R_Type): List<C_AtFromContextAttr> {
+        val memValues = C_MemberResolver.findMemberValuesForTypeByType(item.elemType, type)
+        return memValues.map { C_AtFromContextAttr_ColAtMember(placeholderVar, it) }
     }
 
     private fun compilePlaceholderRef(pos: S_Pos): V_Expr {
         val entry: C_BlockEntry = C_BlockEntry_Var(placeholderVar)
         return entry.compile(innerExprCtx, pos)
-    }
-
-    override fun findAttributesByType(type: R_Type): List<C_ExprContextAttr> {
-        return listOf()
     }
 
     override fun compile(details: C_AtDetails): V_Expr {
@@ -332,11 +291,6 @@ class C_AtFrom_Iterable(
         )
 
         return V_RExpr(outerExprCtx, details.startPos, rExpr, details.exprFacts)
-    }
-
-    override fun compileNested(details: C_AtDetails): C_MaybeNestedAt {
-        val vExpr = compile(details)
-        return C_MaybeNestedAt_No(C_VExpr(vExpr))
     }
 
     private fun compileWhat(details: C_AtDetails): R_ColAtWhat {
@@ -566,5 +520,70 @@ class C_AtSummarization_Aggregate_MinMax(
     override fun compileDb0(): Db_SysFunction? {
         // Postgres doesn't support MIN/MAX for BOOLEAN and BYTEA.
         return if (rCmpType == null || valueType == R_BooleanType || valueType == R_ByteArrayType) null else dbFn
+    }
+}
+
+class C_ExprContextAttr(private val fromAttr: C_AtFromContextAttr, private val outerAtExpr: Boolean) {
+    val type = fromAttr.type
+
+    fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr {
+        if (outerAtExpr) {
+            val attrName = attrNameMsg(false)
+            val ownerTypeName = fromAttr.ownerTypeName()
+            ctx.msgCtx.error(pos, "at_expr:attr:belongs_to_outer:${attrName.code}:$ownerTypeName",
+                    "Attribute '${attrName.msg}' belongs to an outer at-expression, fully qualified name is required")
+        }
+        return fromAttr.compile(ctx, pos)
+    }
+
+    fun attrNameMsg(qualified: Boolean): C_CodeMsg = fromAttr.attrNameMsg(qualified)
+    override fun toString() = attrNameMsg(true).code
+}
+
+sealed class C_AtFromContextAttr(val type: R_Type) {
+    abstract fun attrNameMsg(qualified: Boolean): C_CodeMsg
+    abstract fun ownerTypeName(): String
+    abstract fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr
+
+    final override fun toString() = attrNameMsg(true).code
+}
+
+private class C_AtFromContextAttr_DbAtEntity(
+        private val atEntity: C_AtEntity,
+        private val attrRef: C_EntityAttrRef
+): C_AtFromContextAttr(attrRef.type()) {
+    override fun attrNameMsg(qualified: Boolean): C_CodeMsg {
+        var name = attrRef.attrName
+        if (qualified) name = "${atEntity.alias}.$name"
+        return C_CodeMsg(name, name)
+    }
+
+    override fun ownerTypeName() = atEntity.rEntity.type.name
+    override fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr = V_AtAttrExpr(ctx, pos, atEntity, attrRef)
+}
+
+private class C_AtFromContextAttr_ColAtMember(
+        private val itemVar: C_LocalVar,
+        private val memberValue: C_MemberValue
+): C_AtFromContextAttr(memberValue.type()) {
+    override fun attrNameMsg(qualified: Boolean): C_CodeMsg {
+        val memberName = memberValue.memberName()
+        val base = if (itemVar.name != "$") itemVar.name else itemVar.type.name
+        val code = memberName(memberName, base, qualified)
+        val msg = memberName(memberName, base, qualified)
+        return C_CodeMsg(code, msg)
+    }
+
+    private fun memberName(memberName: C_MemberName, base: String, qualified: Boolean): String {
+        return if (qualified) memberName.qualifiedName(base) else memberName.simpleName()
+    }
+
+    override fun ownerTypeName() = itemVar.type.name
+
+    override fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr {
+        val blockEntry: C_BlockEntry = C_BlockEntry_Var(itemVar)
+        val base = blockEntry.compile(ctx, pos)
+        val memLink = C_MemberLink(base, false, pos)
+        return memberValue.compile(ctx, memLink)
     }
 }

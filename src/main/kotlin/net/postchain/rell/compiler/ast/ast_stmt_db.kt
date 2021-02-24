@@ -12,7 +12,12 @@ import net.postchain.rell.utils.toImmList
 class C_UpdateTarget(val rTarget: R_UpdateTarget, val cFrom: C_AtFrom_Entities)
 
 sealed class S_UpdateTarget {
-    abstract fun compile(ctx: C_ExprContext, atExprId: R_AtExprId, subValues: MutableList<V_Expr>): C_UpdateTarget?
+    abstract fun compile(
+            ctx: C_ExprContext,
+            stmtPos: S_Pos,
+            atExprId: R_AtExprId,
+            subValues: MutableList<V_Expr>
+    ): C_UpdateTarget?
 }
 
 class S_UpdateTarget_Simple(
@@ -20,15 +25,22 @@ class S_UpdateTarget_Simple(
         val from: List<S_AtExprFrom>,
         val where: S_AtExprWhere
 ): S_UpdateTarget() {
-    override fun compile(ctx: C_ExprContext, atExprId: R_AtExprId, subValues: MutableList<V_Expr>): C_UpdateTarget {
+    override fun compile(
+            ctx: C_ExprContext,
+            stmtPos: S_Pos,
+            atExprId: R_AtExprId,
+            subValues: MutableList<V_Expr>
+    ): C_UpdateTarget {
         val cAtEntities = compileFromEntities(ctx, atExprId, from)
         val rAtEntities = cAtEntities.map { it.toRAtEntity() }
         val entity = rAtEntities[0]
         val extraEntities = rAtEntities.subList(1, rAtEntities.size)
 
-        val cFrom = C_AtFrom_Entities(ctx, cAtEntities, null)
+        val fromCtx = C_AtFromContext(stmtPos, atExprId, null)
+        val cFrom = C_AtFrom_Entities(ctx, fromCtx, cAtEntities)
+
         val atCtx = cFrom.innerExprCtx()
-        val dbWhere = where.compile(atCtx, subValues)?.toDbExpr()
+        val dbWhere = where.compile(atCtx, cFrom.atExprId, subValues)?.toDbExpr()
 
         val rTarget: R_UpdateTarget = R_UpdateTarget_Simple(entity, extraEntities, cardinality, dbWhere)
         return C_UpdateTarget(rTarget, cFrom)
@@ -49,82 +61,93 @@ class S_UpdateTarget_Simple(
 }
 
 class S_UpdateTarget_Expr(val expr: S_Expr): S_UpdateTarget() {
-    override fun compile(ctx: C_ExprContext, atExprId: R_AtExprId, subValues: MutableList<V_Expr>): C_UpdateTarget? {
+    override fun compile(
+            ctx: C_ExprContext,
+            stmtPos: S_Pos,
+            atExprId: R_AtExprId,
+            subValues: MutableList<V_Expr>
+    ): C_UpdateTarget? {
         val cExpr = expr.compile(ctx)
         val cValue = cExpr.value()
         subValues.add(cValue)
-        return compileTarget(ctx, atExprId, cValue)
+
+        val vExpr = cExpr.value()
+        val rExpr = vExpr.toRExpr()
+
+        val targetCtx = C_TargetContext(ctx, stmtPos, atExprId, rExpr)
+        return compileTarget(targetCtx)
     }
 
-    private fun compileTarget(ctx: C_ExprContext, atExprId: R_AtExprId, vExpr: V_Expr): C_UpdateTarget? {
-        val rExpr = vExpr.toRExpr()
-        val type = rExpr.type
+    private fun compileTarget(targetCtx: C_TargetContext): C_UpdateTarget? {
+        val type = targetCtx.rExpr.type
         return if (type is R_EntityType) {
-            compileTargetEntity(ctx, atExprId, rExpr, type.rEntity)
+            compileTargetEntity(targetCtx, type.rEntity)
         } else if (type is R_NullableType && type.valueType is R_EntityType) {
-            compileTargetEntity(ctx, atExprId, rExpr, type.valueType.rEntity)
+            compileTargetEntity(targetCtx, type.valueType.rEntity)
         } else if (type is R_ObjectType) {
-            compileTargetObject(ctx, atExprId, type.rObject)
+            compileTargetObject(targetCtx, type.rObject)
         } else if (type is R_SetType && type.elementType is R_EntityType) {
-            compileTargetCollection(ctx, atExprId, rExpr, type.elementType, true)
+            compileTargetCollection(targetCtx, type.elementType, true)
         } else if (type is R_ListType && type.elementType is R_EntityType) {
-            compileTargetCollection(ctx, atExprId, rExpr, type.elementType, false)
+            compileTargetCollection(targetCtx, type.elementType, false)
         } else {
-            if (type != R_CtErrorType) {
-                ctx.msgCtx.error(expr.startPos, "stmt_update_expr_type:${type.toStrictString()}",
+            if (type.isNotError()) {
+                targetCtx.exprCtx.msgCtx.error(expr.startPos, "stmt_update_expr_type:${type.toStrictString()}",
                         "Invalid expression type: ${type.toStrictString()}; must be an entity or a collection of an entity")
             }
             null
         }
     }
 
-    private fun compileTargetEntity(ctx: C_ExprContext, atExprId: R_AtExprId, rExpr: R_Expr, rEntity: R_EntityDefinition): C_UpdateTarget {
-        val rAtEntity = ctx.makeAtEntity(rEntity, atExprId)
+    private fun compileTargetEntity(tCtx: C_TargetContext, rEntity: R_EntityDefinition): C_UpdateTarget {
+        val rAtEntity = tCtx.exprCtx.makeAtEntity(rEntity, tCtx.atExprId)
         val whereLeft = Db_EntityExpr(rAtEntity)
 
-        val cLambdaB = C_LambdaBlock.builder(ctx, rEntity.type)
-        val cFrom = compileFrom(cLambdaB.innerExprCtx, rAtEntity)
+        val cLambdaB = C_LambdaBlock.builder(tCtx.exprCtx, rEntity.type)
+        val cFrom = compileFrom(cLambdaB.innerExprCtx, tCtx.stmtPos, rAtEntity)
         val cLambda = cLambdaB.build()
 
         val whereRight = cLambda.compileVarDbExpr(cFrom.innerExprCtx().blkCtx.blockUid)
         val where = C_Utils.makeDbBinaryExprEq(whereLeft, whereRight)
-        val rTarget = R_UpdateTarget_Expr_One(rAtEntity, where, rExpr, cLambda.rLambda)
+        val rTarget = R_UpdateTarget_Expr_One(rAtEntity, where, tCtx.rExpr, cLambda.rLambda)
 
         return C_UpdateTarget(rTarget, cFrom)
     }
 
-    private fun compileTargetObject(ctx: C_ExprContext, atExprId: R_AtExprId, rObject: R_ObjectDefinition): C_UpdateTarget {
-        val rAtEntity = ctx.makeAtEntity(rObject.rEntity, atExprId)
+    private fun compileTargetObject(tCtx: C_TargetContext, rObject: R_ObjectDefinition): C_UpdateTarget {
+        val rAtEntity = tCtx.exprCtx.makeAtEntity(rObject.rEntity, tCtx.atExprId)
         val rTarget = R_UpdateTarget_Object(rAtEntity)
-        val cFrom = compileFrom(ctx, rAtEntity)
+        val cFrom = compileFrom(tCtx.exprCtx, tCtx.stmtPos, rAtEntity)
         return C_UpdateTarget(rTarget, cFrom)
     }
 
-    private fun compileTargetCollection(
-            ctx: C_ExprContext,
-            atExprId: R_AtExprId,
-            rExpr: R_Expr,
-            entityType: R_EntityType,
-            set: Boolean
-    ): C_UpdateTarget {
-        val rAtEntity = ctx.makeAtEntity(entityType.rEntity, atExprId)
+    private fun compileTargetCollection(tCtx: C_TargetContext, entityType: R_EntityType, set: Boolean): C_UpdateTarget {
+        val rAtEntity = tCtx.exprCtx.makeAtEntity(entityType.rEntity, tCtx.atExprId)
         val listType: R_Type = R_ListType(entityType)
 
-        val cLambdaB = C_LambdaBlock.builder(ctx, listType)
-        val cFrom = compileFrom(cLambdaB.innerExprCtx, rAtEntity)
+        val cLambdaB = C_LambdaBlock.builder(tCtx.exprCtx, listType)
+        val cFrom = compileFrom(cLambdaB.innerExprCtx, tCtx.stmtPos, rAtEntity)
         val cLambda = cLambdaB.build()
 
         val whereLeft = Db_EntityExpr(rAtEntity)
         val whereRight = Db_CollectionInterpretedExpr(cLambda.compileVarRExpr(cFrom.innerExprCtx().blkCtx.blockUid))
         val where = Db_BinaryExpr(R_BooleanType, Db_BinaryOp_In, whereLeft, whereRight)
-        val rTarget = R_UpdateTarget_Expr_Many(rAtEntity, where, rExpr, cLambda.rLambda, set, listType)
+        val rTarget = R_UpdateTarget_Expr_Many(rAtEntity, where, tCtx.rExpr, cLambda.rLambda, set, listType)
         return C_UpdateTarget(rTarget, cFrom)
     }
 
-    private fun compileFrom(ctx: C_ExprContext, rAtEntity: R_DbAtEntity): C_AtFrom_Entities {
+    private fun compileFrom(ctx: C_ExprContext, stmtPos: S_Pos, rAtEntity: R_DbAtEntity): C_AtFrom_Entities {
         val cEntity = C_AtEntity(expr.startPos, rAtEntity.rEntity, rAtEntity.rEntity.simpleName, false, rAtEntity.id)
-        return C_AtFrom_Entities(ctx, listOf(cEntity), null)
+        val fromCtx = C_AtFromContext(stmtPos, cEntity.atExprId, null)
+        return C_AtFrom_Entities(ctx, fromCtx, listOf(cEntity))
     }
+
+    private class C_TargetContext(
+            val exprCtx: C_ExprContext,
+            val stmtPos: S_Pos,
+            val atExprId: R_AtExprId,
+            val rExpr: R_Expr
+    )
 }
 
 class S_UpdateWhat(val pos: S_Pos, val name: S_Name?, val op: S_AssignOpCode?, val expr: S_Expr)
@@ -135,7 +158,7 @@ class S_UpdateStatement(pos: S_Pos, val target: S_UpdateTarget, val what: List<S
 
         val atExprId = ctx.appCtx.nextAtExprId()
         val subValues = mutableListOf<V_Expr>()
-        val cTarget = target.compile(ctx.exprCtx, atExprId, subValues)
+        val cTarget = target.compile(ctx.exprCtx, pos, atExprId, subValues)
 
         if (cTarget == null) {
             what.forEach { it.expr.compileSafe(ctx.exprCtx) }
@@ -185,7 +208,7 @@ class S_DeleteStatement(pos: S_Pos, val target: S_UpdateTarget): S_Statement(pos
 
         val atExprId = ctx.appCtx.nextAtExprId()
         val subValues = mutableListOf<V_Expr>()
-        val cTarget = target.compile(ctx.exprCtx, atExprId, subValues)
+        val cTarget = target.compile(ctx.exprCtx, pos, atExprId, subValues)
         cTarget ?: return C_Statement.ERROR
 
         val rEntity = cTarget.rTarget.entity().rEntity

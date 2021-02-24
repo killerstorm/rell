@@ -190,7 +190,7 @@ sealed class R_BaseUpdateStatement(val target: R_UpdateTarget, val fromBlock: R_
     protected fun translateWhere(ctx: SqlGenContext, redWhere: RedDb_Expr?): ParameterizedSql? {
         return if (redWhere == null) null else {
             val b = SqlBuilder()
-            redWhere.toSql(ctx, b)
+            redWhere.toSql(ctx, b, false)
             b.build()
         }
     }
@@ -286,7 +286,7 @@ class R_UpdateStatement(
                 b.append(whatExpr.op.sql)
                 b.append(" ")
             }
-            redExpr.toSql(ctx, b)
+            redExpr.toSql(ctx, b, false)
         }
         return b.build()
     }

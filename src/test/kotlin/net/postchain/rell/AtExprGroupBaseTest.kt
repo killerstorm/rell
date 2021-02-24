@@ -8,9 +8,7 @@ abstract class AtExprGroupBaseTest: AtExprBaseTest() {
 
     protected fun initDataCountries() {
         tst.strictToString = false
-
-        def("$impDefKw data { name; region: text; language: text; gdp: integer; }")
-
+        impDefType("data", "name", "region:text", "language:text", "gdp:integer")
         impCreateObjs("data",
                 "name = 'Germany', region = 'EMEA', language = 'German', gdp = 3863",
                 "name = 'Austria', region = 'EMEA', language = 'German', gdp = 447",
@@ -373,7 +371,7 @@ abstract class AtExprGroupBaseTest: AtExprBaseTest() {
         t.strictToString = tst.strictToString
         tst.defs.forEach { t.def(it) }
         t.insert(tst.inserts)
-        t.def("$impDefKw data { v: $type; }")
+        impKind.impDefType(t, "data", "v:$type")
         val valueList = if (values.isEmpty()) listOf() else values.split(" ").map { "v = $it" }
         impCreateObjs(t, "data", *valueList.toTypedArray())
         t.chk(code, exp)

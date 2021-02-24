@@ -1,0 +1,45 @@
+module;
+
+enum property_type {
+        integer,
+        text,
+        indx,
+        byte_array,
+        interface,
+        structure,
+        account,
+        boolean,
+        id,
+        _enum,
+        _set
+}
+
+enum mutation_type {
+        readonly,
+        dapp,
+        owner,
+        public
+}
+
+entity interface {
+        key name: text, brid;
+        brid: byte_array;
+        mutable description: text;
+}
+
+entity interface_property {
+        index interface;
+        key name, interface;
+        name: text;
+        type: property_type;
+        mutation: mutation_type;
+        optional: boolean;
+        static: boolean;
+        encoded_prop: byte_array;
+}
+
+function get_interface_properties(interface_name: text): list<interface_property> {
+        return interface_property @* {
+                .interface == interface @ { .name == interface_name }
+        };
+}

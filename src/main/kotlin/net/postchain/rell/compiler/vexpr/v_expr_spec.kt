@@ -7,6 +7,7 @@ import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Error
 import net.postchain.rell.runtime.Rt_StructValue
 import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.utils.toImmSet
 
 class V_RExpr(
         exprCtx: C_ExprContext,
@@ -35,8 +36,11 @@ class V_DbExpr private constructor(
         private val dbExpr: Db_Expr,
         private val varFacts: C_ExprVarFacts
 ): V_Expr(exprCtx, pos) {
+    private val atDependencies = dbExpr.referencedAtExprIds()
+
     override fun type() = dbExpr.type
     override fun isDb() = true
+    override fun atDependencies() = atDependencies
     override fun toRExpr0() = throw C_Errors.errExprDbNotAllowed(pos)
     override fun toDbExpr0() = dbExpr
     override fun constantValue() = dbExpr.constantValue()
@@ -46,7 +50,7 @@ class V_DbExpr private constructor(
         if (dbExpr is Db_TableExpr) {
             val attrRef = C_EntityAttrRef.resolveByName(dbExpr.rEntity, memberName.str)
             attrRef ?: throw C_Errors.errUnknownMember(dbExpr.type, memberName)
-            return attrRef.createDbMemberExpr(ctx, dbExpr, pos, memberName)
+            return attrRef.createDbMemberExpr(ctx, dbExpr, pos, memberName.pos)
         }
         return super.member(ctx, memberName, safe)
     }
@@ -74,10 +78,16 @@ class V_LocalVarExpr(
         private val nulled: C_VarFact,
         private val smartType: R_Type?
 ): V_Expr(exprCtx, pos) {
+    private val atDependencies = listOfNotNull(varRef.target.atExprId).toImmSet()
+
     override fun type() = smartType ?: varRef.target.type
     override fun isDb() = false
     override fun toDbExpr0() = C_Utils.toDbExpr(pos, toRExpr())
     override fun varId() = varRef.target.uid
+
+    override fun atDependencies() = atDependencies
+    override fun isAtExprItem() = varRef.target.atExprId != null
+    override fun implicitAtWhereAttrName() = varRef.target.name
 
     override fun toRExpr0(): R_Expr {
         checkInitialized()
@@ -110,8 +120,6 @@ class V_LocalVarExpr(
         val effectiveType = smartType ?: varRef.target.type
         return C_LocalVarDestination(effectiveType)
     }
-
-    override fun isAtExprItem() = varRef.target.atItem
 
     private fun checkInitialized() {
         if (exprCtx.factsCtx.inited(varRef.target.uid) != C_VarFact.YES) {
@@ -161,7 +169,7 @@ class V_ObjectExpr(
         val attr = rObject.rEntity.attributes[memberName.str]
         val attrExpr = if (attr == null) null else C_VExpr(V_ObjectAttrExpr(ctx, memberName.pos, rObject, attr))
 
-        val memberRef = C_MemberRef(pos, this, memberName, safe)
+        val memberRef = C_MemberRef(this, memberName, safe)
         val fnExpr = C_MemberResolver.functionForType(rObject.type, memberRef)
 
         val cExpr = C_ValueFunctionExpr.create(memberName, attrExpr, fnExpr)
@@ -214,23 +222,25 @@ private class V_ObjectAttrExpr(
 
 class V_EntityToStructExpr(
         exprCtx: C_ExprContext,
-        private val memberRef: C_MemberRef,
+        private val memberLink: C_MemberLink,
         private val entityType: R_EntityType,
         mutable: Boolean
-): V_Expr(exprCtx, memberRef.base.pos) {
-    private val isDb = isDb(memberRef.base)
+): V_Expr(exprCtx, memberLink.base.pos) {
+    private val isDb = isDb(memberLink.base)
+    private val atDependencies = memberLink.base.atDependencies()
     private val struct = entityType.rEntity.mirrorStructs.getStruct(mutable)
     private val structType = struct.type
-    private val resultType = C_Utils.effectiveMemberType(structType, memberRef.safe)
+    private val resultType = C_Utils.effectiveMemberType(structType, memberLink.safe)
 
     override fun type() = resultType
     override fun isDb() = isDb
+    override fun atDependencies() = atDependencies
 
     override fun toRExpr0(): R_Expr {
         val atEntity = exprCtx.makeAtEntity(entityType.rEntity, exprCtx.appCtx.nextAtExprId())
         val whatValue = createWhatValue(Db_EntityExpr(atEntity))
         val whatField = Db_AtWhatField(R_AtWhatFieldFlags.DEFAULT, whatValue)
-        return V_EntityAttrExpr.createRExpr(exprCtx, memberRef.base, atEntity, whatField, memberRef.safe, structType)
+        return V_EntityAttrExpr.createRExpr(exprCtx, memberLink.base, atEntity, whatField, memberLink.safe, structType)
     }
 
     override fun toDbExprWhat(field: C_AtWhatField): Db_AtWhatValue {
@@ -239,7 +249,7 @@ class V_EntityToStructExpr(
         checkFlag(exprCtx, flags.group, "group", "group")
         checkFlag(exprCtx, flags.aggregate, "aggregate", "aggregate")
 
-        val dbEntityExpr = memberRef.base.toDbExpr() as Db_TableExpr
+        val dbEntityExpr = memberLink.base.toDbExpr() as Db_TableExpr
         return createWhatValue(dbEntityExpr)
     }
 

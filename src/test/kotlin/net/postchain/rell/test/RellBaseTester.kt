@@ -30,6 +30,7 @@ abstract class RellBaseTester(
     var errMsgPos = false
     var gtv = gtv
     var deprecatedError = false
+    var atAttrShadowing = C_CompilerOptions.DEFAULT.atAttrShadowing
     var blockchainRid = "DEADBEEF"
 
     var defs: List<String> = entityDefs
@@ -71,6 +72,8 @@ abstract class RellBaseTester(
 
             appProto = app
             inited = true
+
+            postInit()
         } else if (inserts != lastInserts) {
             tstCtx.sqlMgr().transaction { sqlExec ->
                 if (!lastInserts.isEmpty()) {
@@ -79,6 +82,8 @@ abstract class RellBaseTester(
                 initSqlInserts(sqlExec)
             }
         }
+
+        tstCtx.resetSqlCounter()
     }
 
     private fun initCompile(code: String): R_App {
@@ -103,7 +108,8 @@ abstract class RellBaseTester(
             gtv = gtv,
             deprecatedError = deprecatedError,
             ide = false,
-            blockCheck = true
+            blockCheck = true,
+            atAttrShadowing = atAttrShadowing
     )
 
     fun def(defs: List<String>) {
@@ -156,6 +162,7 @@ abstract class RellBaseTester(
     }
 
     protected abstract fun initSqlReset(exec: SqlExecutor, moduleCode: String, app: R_App)
+    protected open fun postInit() { }
 
     fun createSourceDir(code: String): C_SourceDir {
         val files = files(code)

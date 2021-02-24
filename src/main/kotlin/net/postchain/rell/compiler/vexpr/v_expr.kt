@@ -6,6 +6,9 @@ import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_TupleValue
 import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.utils.immListOf
+import net.postchain.rell.utils.immSetOf
+import net.postchain.rell.utils.toImmSet
 
 abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
     protected val msgCtx = exprCtx.msgCtx
@@ -17,7 +20,10 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
 
     protected fun isDb(vExpr: V_Expr) = vExpr.isDb()
 
-    fun dependsOnAtVariable() = isDb() //TODO support for collection-at
+    open fun atDependencies(): Set<R_AtExprId> = immSetOf()
+    open fun isAtExprItem(): Boolean = false
+    open fun implicitAtWhereAttrName(): String? = null
+    open fun implicitAtWhatAttrName(): String? = null
 
     fun toRExpr(): R_Expr {
         var rExpr = toRExpr0()
@@ -61,7 +67,7 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
         val baseType = type()
         val effectiveBaseType = if (baseType is R_NullableType) baseType.valueType else baseType
 
-        val memberRef = C_MemberRef(pos, this, memberName, safe)
+        val memberRef = C_MemberRef(this, memberName, safe)
         val valueExpr = C_MemberResolver.valueForType(ctx, effectiveBaseType, memberRef)
         val fnExpr = C_MemberResolver.functionForType(effectiveBaseType, memberRef)
 
@@ -74,9 +80,6 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
         C_MemberResolver.checkNullAccess(baseType, memberName, safe)
         return expr
     }
-
-    open fun isAtExprItem(): Boolean = false
-    open fun implicitWhatName(): String? = null
 }
 
 class V_IfExpr(
@@ -88,10 +91,18 @@ class V_IfExpr(
         private val falseExpr: V_Expr,
         private val varFacts: C_ExprVarFacts
 ): V_Expr(exprCtx, pos) {
-    private val isDb = isDb(cond) || isDb(trueExpr) || isDb(falseExpr)
+    private val isDb: Boolean
+    private val atDependencies: Set<R_AtExprId>
+
+    init {
+        val exprs = immListOf(cond, trueExpr, falseExpr)
+        isDb = exprs.any { isDb(it) }
+        atDependencies = exprs.flatMap { it.atDependencies() }.toImmSet()
+    }
 
     override fun type() = resType
     override fun isDb() = isDb
+    override fun atDependencies() = atDependencies
     override fun varFacts() = varFacts
 
     override fun toRExpr0(): R_Expr {
@@ -118,9 +129,11 @@ class V_TupleExpr(
         private val varFacts: C_ExprVarFacts
 ): V_Expr(exprCtx, pos) {
     private val isDb = exprs.any { isDb(it) }
+    private val atDependencies = exprs.flatMap { it.atDependencies() }.toImmSet()
 
     override fun type() = type
     override fun isDb() = isDb
+    override fun atDependencies() = atDependencies
     override fun varFacts() = varFacts
 
     override fun toRExpr0(): R_Expr {
@@ -141,9 +154,11 @@ class V_ToTextExpr(
         private val varFacts: C_ExprVarFacts
 ): V_Expr(exprCtx, expr.pos) {
     private val isDb = isDb(expr)
+    private val atDependencies = expr.atDependencies()
 
     override fun type() = R_TextType
     override fun isDb() = isDb
+    override fun atDependencies() = atDependencies
     override fun varFacts() = varFacts
 
     override fun toRExpr0(): R_Expr {
@@ -187,9 +202,11 @@ class V_IntegerToDecimalExpr(
         private val varFacts: C_ExprVarFacts
 ): V_Expr(exprCtx, expr.pos) {
     private val isDb = isDb(expr)
+    private val atDependencies = expr.atDependencies()
 
     override fun type() = R_DecimalType
     override fun isDb() = isDb
+    override fun atDependencies() = atDependencies
     override fun varFacts() = varFacts
 
     override fun toRExpr0(): R_Expr {
@@ -210,9 +227,15 @@ class V_IntegerToDecimalExpr(
 }
 
 class V_AtEntityExpr(exprCtx: C_ExprContext, pos: S_Pos, private val cAtEntity: C_AtEntity): V_Expr(exprCtx, pos) {
+    private val atDependencies = immSetOf(cAtEntity.atExprId)
+
     override fun type() = cAtEntity.rEntity.type
     override fun isDb() = true
     override fun varFacts() = C_ExprVarFacts.EMPTY
+
+    override fun atDependencies() = atDependencies
+    override fun isAtExprItem() = true
+    override fun implicitAtWhereAttrName() = cAtEntity.alias
 
     override fun toRExpr0() = throw C_Errors.errExprDbNotAllowed(pos)
 
@@ -228,7 +251,7 @@ class V_AtEntityExpr(exprCtx: C_ExprContext, pos: S_Pos, private val cAtEntity: 
         val attrRef = C_EntityAttrRef.resolveByName(entity, memberName.str)
         val attrExpr = if (attrRef == null) null else C_VExpr(V_AtAttrExpr(ctx, pos, cAtEntity, attrRef))
 
-        val memberRef = C_MemberRef(pos, this, memberName, safe)
+        val memberRef = C_MemberRef(this, memberName, safe)
         val fnExpr = C_MemberResolver.functionForType(entityType, memberRef)
 
         val cExpr = C_ValueFunctionExpr.create(memberName, attrExpr, fnExpr)
@@ -242,9 +265,15 @@ class V_AtAttrExpr(
         private val cAtEntity: C_AtEntity,
         private val attrRef: C_EntityAttrRef
 ): V_Expr(exprCtx, pos) {
+    private val atDependencies = immSetOf(cAtEntity.atExprId)
+
     override fun type() = attrRef.type()
     override fun isDb() = true
+    override fun atDependencies() = atDependencies
     override fun varFacts() = C_ExprVarFacts.EMPTY
+
+    override fun implicitAtWhereAttrName() = attrRef.attrName
+    override fun implicitAtWhatAttrName() = attrRef.attrName
 
     override fun toRExpr0() = throw C_Errors.errExprDbNotAllowed(pos)
 
@@ -259,8 +288,6 @@ class V_AtAttrExpr(
         val vExpr = V_DbExpr.create(ctx, pos, dbExpr)
         return vExpr.member(ctx, memberName, safe)
     }
-
-    override fun implicitWhatName() = attrRef.name
 }
 
 class V_SysGlobalCaseCallExpr(
@@ -268,11 +295,13 @@ class V_SysGlobalCaseCallExpr(
         private val caseCtx: C_GlobalFuncCaseCtx,
         private val match: C_GlobalFuncCaseMatch,
         args: List<V_Expr>
-): V_Expr(exprCtx, caseCtx.fullName.pos) {
+): V_Expr(exprCtx, caseCtx.linkPos) {
     private val isDb = match.canBeDb && args.any { isDb(it) }
+    private val atDependencies = args.flatMap { it.atDependencies() }.toImmSet()
 
     override fun type() = match.resType
     override fun isDb() = isDb
+    override fun atDependencies() = atDependencies
     override fun varFacts() = match.varFacts()
     override fun toRExpr0() = match.compileCall(exprCtx, caseCtx)
     override fun toDbExpr0() = match.compileCallDb(exprCtx, caseCtx)
@@ -283,13 +312,21 @@ class V_SysMemberCaseCallExpr(
         private val caseCtx: C_MemberFuncCaseCtx,
         private val match: C_MemberFuncCaseMatch,
         args: List<V_Expr>
-): V_Expr(exprCtx, caseCtx.fullName.pos) {
-    private val isDb = isDb(caseCtx.member.base) || args.any { isDb(it) }
+): V_Expr(exprCtx, caseCtx.member.base.pos) {
+    private val isDb: Boolean
+    private val atDependencies: Set<R_AtExprId>
     private val resType = C_Utils.effectiveMemberType(match.resType, caseCtx.member.safe)
     private val varFacts = caseCtx.member.base.varFacts().and(match.varFacts())
 
+    init {
+        val exprs = listOf(caseCtx.member.base) + args
+        isDb = exprs.any { isDb(it) }
+        atDependencies = exprs.flatMap { it.atDependencies() }.toImmSet()
+    }
+
     override fun type() = resType
     override fun isDb() = isDb
+    override fun atDependencies() = atDependencies
     override fun varFacts() = varFacts
     override fun toRExpr0() = match.compileCall(exprCtx, caseCtx)
     override fun toDbExpr0() = match.compileCallDb(exprCtx, caseCtx)
@@ -299,14 +336,17 @@ class V_SysMemberPropertyExpr(
         exprCtx: C_ExprContext,
         private val caseCtx: C_MemberFuncCaseCtx,
         private val prop: C_SysMemberFormalParamsFuncBody
-): V_Expr(exprCtx, caseCtx.fullName.pos) {
+): V_Expr(exprCtx, caseCtx.member.base.pos) {
     private val isDb = isDb(caseCtx.member.base)
+    private val atDependencies = caseCtx.member.base.atDependencies()
     private val resType = C_Utils.effectiveMemberType(prop.resType, caseCtx.member.safe)
     private val varFacts = caseCtx.member.base.varFacts()
 
     override fun type() = resType
     override fun isDb() = isDb
+    override fun atDependencies() = atDependencies
     override fun varFacts() = varFacts
     override fun toRExpr0() = prop.compileCall(exprCtx, caseCtx, listOf())
     override fun toDbExpr0() = prop.compileCallDb(exprCtx, caseCtx, listOf())
+    override fun implicitAtWhatAttrName() = if (caseCtx.member.base.isAtExprItem()) caseCtx.memberName else null
 }

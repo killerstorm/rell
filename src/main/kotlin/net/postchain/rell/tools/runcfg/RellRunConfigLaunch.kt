@@ -12,6 +12,7 @@ import net.postchain.config.node.NodeConfigurationProviderFactory
 import net.postchain.core.NODE_ID_TODO
 import net.postchain.core.UserMistake
 import net.postchain.devtools.PostchainTestNode
+import net.postchain.rell.compiler.C_CompilerOptions
 import net.postchain.rell.utils.RellBaseCliArgs
 import net.postchain.rell.utils.RellCliLogUtils
 import net.postchain.rell.utils.RellCliUtils
@@ -48,7 +49,7 @@ private fun main0(args: RellRunConfigLaunchArgs) {
     // Make sure that all sources compile before trying to start a node.
     for (chain in rellAppConf.config.chains) {
         val modules = chain.modules.toList()
-        RellCliUtils.compileApp(rellAppConf.sourceDir, modules, true)
+        RellCliUtils.compileApp(rellAppConf.sourceDir, modules, true, C_CompilerOptions.DEFAULT)
     }
 
     val nodeConf = startPostchainNode(rellAppConf)

@@ -4,6 +4,7 @@ import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_VirtualType
 import net.postchain.rell.model.*
+import net.postchain.rell.utils.toImmSet
 
 sealed class V_CommonSubscriptKind(val resType: R_Type) {
     abstract fun compileR(pos: S_Pos, rBase: R_Expr, rKey: R_Expr): R_Expr
@@ -78,9 +79,11 @@ class V_CommonSubscriptExpr(
         private val kind: V_CommonSubscriptKind
 ): V_SubscriptExpr(exprCtx, pos, baseExpr, varFacts) {
     private val isDb = isDb(baseExpr) || isDb(keyExpr)
+    private val atDependencies = listOf(baseExpr, keyExpr).flatMap { it.atDependencies() }.toImmSet()
 
     override fun type() = kind.resType
     override fun isDb() = isDb
+    override fun atDependencies() = atDependencies
 
     override fun toRExpr0(): R_Expr {
         val rBase = baseExpr.toRExpr()
@@ -117,9 +120,11 @@ class V_TupleSubscriptExpr(
         private val index: Int
 ): V_SubscriptExpr(exprCtx, pos, baseExpr, varFacts) {
     private val isDb = isDb(baseExpr)
+    private val atDependencies = baseExpr.atDependencies()
 
     override fun type() = resType
     override fun isDb() = isDb
+    override fun atDependencies() = atDependencies
 
     override fun toRExpr0(): R_Expr {
         val rBase = baseExpr.toRExpr()

@@ -351,9 +351,7 @@ class C_DefinitionContext(val mntCtx: C_MountContext, val definitionType: C_Defi
     init {
         val fnCtx = C_FunctionContext(this, "${mntCtx.mountName}.<init>", null, TypedKeyMap())
         initFrameCtx = C_FrameContext.create(fnCtx)
-        val blkCtx = initFrameCtx.rootBlkCtx
-        val nameCtx = C_NameContext.createBlock()
-        initExprCtx = C_ExprContext.createRoot(blkCtx, nameCtx)
+        initExprCtx = C_ExprContext.createRoot(initFrameCtx.rootBlkCtx)
 
         executor.onPass(C_CompilerPass.FRAMES) {
             val cFrame = initFrameCtx.makeCallFrame(false)
@@ -420,9 +418,9 @@ class C_FunctionContext(
 
             override fun match(pos: S_Pos, type: R_Type) {
                 val t = impType
-                if (t == null || t == R_CtErrorType) {
+                if (t == null || t.isError()) {
                     impType = type
-                } else if (type == R_CtErrorType) {
+                } else if (type.isError()) {
                     // Do nothing.
                 } else if (t == R_UnitType) {
                     if (type != R_UnitType) {
@@ -442,7 +440,7 @@ class C_FunctionContext(
             override fun getRetType() = expType
 
             override fun match(pos: S_Pos, type: R_Type) {
-                if (type != R_CtErrorType && expType != R_CtErrorType) {
+                if (type.isNotError() && expType.isNotError()) {
                     val m = if (expType == R_UnitType) type == R_UnitType else expType.isAssignableFrom(type)
                     if (!m) {
                         throw errRetTypeMiss(pos, expType, type)

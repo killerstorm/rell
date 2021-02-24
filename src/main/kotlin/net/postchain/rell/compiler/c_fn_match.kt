@@ -6,7 +6,6 @@ package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.compiler.ast.S_String
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
 import net.postchain.rell.utils.toImmList
@@ -148,18 +147,17 @@ class C_ArgsTypesMatch(private val match: List<C_ArgTypeMatch>) {
     }
 }
 
-sealed class C_FuncCaseCtx {
-    abstract val fullName: S_String
+sealed class C_FuncCaseCtx(val linkPos: S_Pos) {
+    abstract fun qualifiedNameMsg(): String
 }
 
-class C_GlobalFuncCaseCtx(name: S_Name): C_FuncCaseCtx() {
-    override val fullName = S_String(name)
-
-    fun filePos() = fullName.pos.toFilePos()
+class C_GlobalFuncCaseCtx(private val name: S_Name): C_FuncCaseCtx(name.pos) {
+    override fun qualifiedNameMsg() = name.str
+    fun filePos() = linkPos.toFilePos()
 }
 
-class C_MemberFuncCaseCtx(val member: C_MemberRef): C_FuncCaseCtx() {
-    override val fullName = S_String(member.name.pos, member.qualifiedName())
+class C_MemberFuncCaseCtx(val member: C_MemberLink, val memberName: String): C_FuncCaseCtx(member.linkPos) {
+    override fun qualifiedNameMsg() = "${member.base.type().toStrictString()}.$memberName"
 }
 
 abstract class C_FuncCase<CtxT: C_FuncCaseCtx> {
@@ -188,8 +186,7 @@ abstract class C_FuncCaseMatch<CtxT: C_FuncCaseCtx>(val resType: R_Type) {
     abstract fun compileCall(ctx: C_ExprContext, caseCtx: CtxT): R_Expr
 
     open fun compileCallDb(ctx: C_ExprContext, caseCtx: CtxT): Db_Expr {
-        val name = caseCtx.fullName
-        throw C_Errors.errFunctionNoSql(name.pos, name.str)
+        throw C_Errors.errFunctionNoSql(caseCtx.linkPos, caseCtx.qualifiedNameMsg())
     }
 }
 
@@ -221,11 +218,10 @@ class C_DeprecatedFuncCase<CtxT: C_FuncCaseCtx>(
         }
 
         private fun deprecatedMessage(ctx: C_ExprContext, caseCtx: CtxT) {
-            val name = caseCtx.fullName
             C_DefProxy.deprecatedMessage(
                     ctx.msgCtx,
-                    name.pos,
-                    name.str,
+                    caseCtx.linkPos,
+                    caseCtx.qualifiedNameMsg(),
                     C_DefProxyDeprecation(C_DeclarationType.FUNCTION, deprecated)
             )
         }
@@ -236,7 +232,7 @@ abstract class C_BasicGlobalFuncCaseMatch(resType: R_Type, private val args: Lis
     abstract fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr
 
     open fun compileCallDbExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<Db_Expr>): Db_Expr {
-        throw C_Errors.errFunctionNoSql(caseCtx.fullName.pos, caseCtx.fullName.str)
+        throw C_Errors.errFunctionNoSql(caseCtx.linkPos, caseCtx.qualifiedNameMsg())
     }
 
     final override fun varFacts() = C_ExprVarFacts.forSubExpressions(args)
@@ -314,7 +310,7 @@ class C_FormalParamsFuncCaseMatch<CtxT: C_FuncCaseCtx>(
 
 object C_FuncMatchUtils {
     fun errNoMatch(ctx: C_ExprContext, pos: S_Pos, name: String, args: List<R_Type>) {
-        if (args.any { it == R_CtErrorType }) return
+        if (args.any { it.isError() }) return
         val argsStrShort = args.joinToString(",") { it.toStrictString() }
         val argsStr = args.joinToString { it.toStrictString() }
         ctx.msgCtx.error(pos, "expr_call_argtypes:$name:$argsStrShort", "Function '$name' undefined for arguments ($argsStr)")

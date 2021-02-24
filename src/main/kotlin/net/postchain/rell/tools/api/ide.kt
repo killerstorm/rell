@@ -135,7 +135,8 @@ class IdeCodeSnippet(
         val opts = mapOf<String, Any>(
                 "gtv"  to options.gtv,
                 "deprecatedError" to options.deprecatedError,
-                "ide" to options.ide
+                "ide" to options.ide,
+                "atAttrShadowing" to options.atAttrShadowing.name
         )
 
         val msgs = messages.map { it.serialize() }
@@ -174,7 +175,9 @@ class IdeCodeSnippet(
                     gtv = optionsMap.getValue("gtv") as Boolean,
                     deprecatedError = optionsMap.getValue("deprecatedError") as Boolean,
                     ide = (optionsMap["ide"] as Boolean?) ?: false,
-                    blockCheck = true
+                    blockCheck = true,
+                    atAttrShadowing = (optionsMap["atAttrShadowing"] as String?)
+                            ?.let { C_AtAttrShadowing.valueOf(it) } ?: C_AtAttrShadowing.DEFAULT
             )
 
             val messagesRaw = obj.getValue("messages") as List<Any>

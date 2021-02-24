@@ -3,7 +3,7 @@ package net.postchain.rell
 import org.junit.Test
 
 class AtExprGroupColTest: AtExprGroupBaseTest() {
-    override fun impKind() = AtExprTestKind_Col
+    override fun impKind() = AtExprTestKind_Col_Struct()
 
     @Test fun testDefaultSorting() {
         initDataCountries()

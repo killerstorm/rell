@@ -60,8 +60,7 @@ class AtExprExistsTest: BaseRellTest() {
         chk("user @* { exists(company @* {}) } ( .name )", "[Bob, Alice, Trudy, John]")
         chk("user @* { exists(company @* { company.city == 'London' }) } ( .name )", "[Bob, Alice, Trudy, John]")
         chk("user @* { exists(company @* { company.city == 'Berlin' }) } ( .name )", "[]")
-        chk("user @* { exists(company @* { .city == 'London' }) } ( .name )",
-                "ct_err:at_attr_name_ambig:city:company.city,user.city")
+        chk("user @* { exists(company @* { .city == 'London' }) } ( .name )", "[Bob, Alice, Trudy, John]")
     }
 
     @Test fun testBasicUserCompany() {
@@ -95,15 +94,15 @@ class AtExprExistsTest: BaseRellTest() {
                 "[Bob, Trudy]")
 
         chk("user @* { exists( membership @* { .user.name == .name, .group.name == 'admin' } ) } ( .name )",
-                "ct_err:at_expr:attr:belongs_to_outer:user:name")
+                "ct_err:at_expr:attr:belongs_to_outer:name:user")
 
         chk("user @* { exists( membership @* { .user == user, .group.name == 'admin' } ) } ( .name )", "[Bob, Trudy]")
 
         chk("(u: user) @* { exists( (m: membership) @* { .user.name == .name, .group.name == 'admin' } ) } ( .name )",
-                "ct_err:at_expr:attr:belongs_to_outer:u:name")
+                "ct_err:at_expr:attr:belongs_to_outer:name:user")
 
         chk("(u: user) @* { exists( (m: membership) @* { m.user.name == .name, m.group.name == 'admin' } ) } ( .name )",
-                "ct_err:at_expr:attr:belongs_to_outer:u:name")
+                "ct_err:at_expr:attr:belongs_to_outer:name:user")
 
         chk("(u: user) @* { exists( (m: membership) @* { m.user.name == u.name, m.group.name == 'admin' } ) } ( .name )",
                 "[Bob, Trudy]")
@@ -111,8 +110,7 @@ class AtExprExistsTest: BaseRellTest() {
         chk("(u: user) @* { exists( (m: membership) @* { m.user == u, m.group.name == 'admin' } ) } ( .name )",
                 "[Bob, Trudy]")
 
-        chk("user @* { exists( group @* { .name == 'admin' } ) } ( .name )",
-                "ct_err:at_attr_name_ambig:name:group.name,user.name")
+        chk("user @* { exists( group @* { .name == 'admin' } ) } ( .name )", "[Bob, Alice, Trudy, John]")
         chk("user @* { exists( group @* { group.name == 'admin' } ) } ( .name )", "[Bob, Alice, Trudy, John]")
         chk("user @* { exists( group @* { user.name == 'Bob' } ) } ( .name )", "[Bob]")
     }
@@ -148,7 +146,7 @@ class AtExprExistsTest: BaseRellTest() {
                 "ct_err:expr_novalue:type")
         chk("(u: user) @* { exists( membership @* { .user == $, .group.name == 'tester' } ) } ( .name )",
                 "ct_err:binop_operand_type:==:[user]:[membership]")
-        chk("user @* { exists( (m: membership) @* { .user == $, .group.name == 'admin' } ) } ( .name )", "[Bob, Trudy]")
+        chk("user @* { exists( (m: membership) @* { .user == user, .group.name == 'admin' } ) } ( .name )", "[Bob, Trudy]")
     }
 
     @Test fun testAliasConflict() {
@@ -187,25 +185,32 @@ class AtExprExistsTest: BaseRellTest() {
 
     @Test fun testLimitOffset() {
         initDataUserCompany()
-        chk("(u: user) @* {exists( (c: company) @* { c.city == u.city } limit 1 )}", "ct_err:at_expr:nested:limit")
-        chk("(u: user) @* {exists( (c: company) @* { c.city == u.city } offset 1 )}", "ct_err:at_expr:nested:offset")
-        chk("(u: user) @* {exists( (c: company) @* { c.city == u.city } limit 1 offset 1 )}",
-                "ct_err:[at_expr:nested:limit][at_expr:nested:offset]")
-        chk("(u: user) @* {exists( (c: company) @* { c.city == u.city } limit u.name.size() )}", "ct_err:at_expr:nested:limit")
-        chk("(u: user) @* {exists( (c: company) @* { c.city == u.city } offset u.name.size() )}", "ct_err:at_expr:nested:offset")
+        def("function f(x: integer) = x * x;")
+
+        chk("(u: user) @* {exists( (c: company) @* { c.city == u.city } limit 1 )}", "[user[100], user[101]]")
+        chk("(u: user) @* {exists( (c: company) @* { c.city == u.city } offset 1 )}", "[user[101]]")
+        chk("(u: user) @* {exists( (c: company) @* { c.city == u.city } limit 1 offset 1 )}", "[user[101]]")
+        chk("(u: user) @* {exists( (c: company) @* { c.city == u.city } limit 0 )}", "[]")
+        chk("(u: user) @* {exists( (c: company) @* { c.city == u.city } offset 2 )}", "[]")
+        chk("(u: user) @* {exists( (c: company) @* { c.city == u.city } limit u.name.size() )}", "ct_err:expr_sqlnotallowed")
+        chk("(u: user) @* {exists( (c: company) @* { c.city == u.city } offset u.name.size() )}", "ct_err:expr_sqlnotallowed")
+
+        chk("(u: user) @* {exists( (c: company) @* { c.city == u.city } limit f(0) )}", "[]")
+        chk("(u: user) @* {exists( (c: company) @* { c.city == u.city } offset f(2) )}", "[]")
+        chk("(u: user) @* {exists( (c: company) @* { c.city == u.city } limit f(1) )}", "[user[100], user[101]]")
+        chk("(u: user) @* {exists( (c: company) @* { c.city == u.city } offset f(1) )}", "[user[101]]")
     }
 
     @Test fun testLimitOffsetComplex() {
         initDataUserCompany()
 
-        chk("(u: user) @* {exists( company @*{} limit ((u2:user)@{u2!=u}(u2.name.size())) )}",
-                "ct_err:[at_expr:nested:limit][at:entity:outer:u]")
+        chk("(u: user) @* {exists( company @*{} limit ((u2:user)@{u2!=u}(u2.name.size())) )}", "ct_err:at:entity:outer:u")
+        chk("(u: user) @* {exists( company @*{} offset ((u2:user)@{u2!=u}(u2.name.size())) )}", "ct_err:at:entity:outer:u")
 
-        chk("(u: user) @* {exists( company @*{} offset ((u2:user)@{u2!=u}(u2.name.size())) )}",
-                "ct_err:[at_expr:nested:offset][at:entity:outer:u]")
+        chk("(u: user) @* {exists( company @*{} limit ((u2:user)@{u2.name=='Bob'}(u2.name.size())) )}",
+                "[user[100], user[101], user[102], user[103]]")
 
-        chk("(u: user) @* {exists( company @*{} limit ((u2:user)@{}(u2.name.size())) )}", "ct_err:at_expr:nested:limit")
-        chk("(u: user) @* {exists( company @*{} offset ((u2:user)@{}(u2.name.size())) )}", "ct_err:at_expr:nested:offset")
+        chk("(u: user) @* {exists( company @*{} offset ((u2:user)@{u2.name=='Alice'}(u2.name.size())) )}", "[]")
     }
 
     @Test fun testWhatPartInNestedAtExpr() {
@@ -224,9 +229,9 @@ class AtExprExistsTest: BaseRellTest() {
                 "[user[100], user[101]]")
     }
 
-    /*@Test*/ fun testWhatPartInNestedExprToStruct() {
+    @Test fun testWhatPartInNestedExprToStruct() {
         initDataUserCompany()
-        chk("(u: user) @* { exists( (c: company) @* { c.city == u.city } ( c.to_struct() ) ) }", "*error*")
+        chk("(u: user) @* { exists( (c: company) @* { c.city == u.city } ( c.to_struct() ) ) }", "[user[100], user[101]]")
     }
 
     @Test fun testRtExprWithinNestedAt() {
@@ -240,10 +245,31 @@ class AtExprExistsTest: BaseRellTest() {
 
     @Test fun testCardinality() {
         initDataUserCompany()
-        chk("(u: user) @* { exists( (c: company) @* { c.city == u.city } ) }", "[user[100], user[101]]")
-        chk("(u: user) @* { exists( (c: company) @+ { c.city == u.city } ) }", "ct_err:at_expr:nested:cardinality:ONE_MANY")
-        chk("(u: user) @* { exists( (c: company) @? { c.city == u.city } ) }", "ct_err:at_expr:nested:cardinality:ZERO_ONE")
-        chk("(u: user) @* { exists( (c: company) @ { c.city == u.city } ) }", "ct_err:at_expr:nested:cardinality:ONE")
+
+        chkCardinality("@* { c.city == u.city }", "[Bob, Alice]")
+        chkCardinality("@+ { c.city == u.city }", "ct_err:at_expr:nested:cardinality:ONE_MANY")
+        chkCardinality("@? { c.city == u.city }", "ct_err:at_expr:nested:cardinality:ZERO_ONE")
+        chkCardinality("@  { c.city == u.city }", "ct_err:at_expr:nested:cardinality:ONE")
+
+        chkCardinality("@* { c.city == 'London' }", "[Bob, Alice, Trudy, John]")
+        chkCardinality("@* { c.city != 'London' }", "[Bob, Alice, Trudy, John]")
+        chkCardinality("@* { c.city == 'Berlin' }", "[]")
+
+        chkCardinality("@+ { c.city == 'London' }", "[Bob, Alice, Trudy, John]")
+        chkCardinality("@+ { c.city != 'London' }", "[Bob, Alice, Trudy, John]")
+        chkCardinality("@+ { c.city == 'Berlin' }", "rt_err:at:wrong_count:0")
+
+        chkCardinality("@? { c.city == 'London' }", "[Bob, Alice, Trudy, John]")
+        chkCardinality("@? { c.city != 'London' }", "rt_err:at:wrong_count:3")
+        chkCardinality("@? { c.city == 'Berlin' }", "[]")
+
+        chkCardinality("@  { c.city == 'London' }", "ct_err:expr_call_argtypes:exists:company")
+        chkCardinality("@  { c.city != 'London' }", "ct_err:expr_call_argtypes:exists:company")
+        chkCardinality("@  { c.city == 'Berlin' }", "ct_err:expr_call_argtypes:exists:company")
+    }
+
+    private fun chkCardinality(expr: String, expected: String) {
+        chk("(u: user) @* { exists( (c: company) $expr ) } (.name)", expected)
     }
 
     @Test fun testMixedCollectionAndDbAt() {
@@ -251,10 +277,10 @@ class AtExprExistsTest: BaseRellTest() {
         def("function companies() = list(set(list(company@*{})));")
         initDataUserCompany()
 
-        chk("(u:user) @* { exists( (c:companies()) @* {} ) } ( .name )", "[Bob, Alice, Trudy, John]")
-        chk("(u:user) @* { exists( (c:companies()) @* { c.city == u.city } ) } ( .name )", "ct_err:expr_sqlnotallowed")
-        chk("(u:users()) @* { exists( (c:company) @* {} ) } ( .name )", "[Bob, Alice, Trudy, John]")
-        chk("(u:users()) @* { exists( (c:company) @* { c.city == u.city } ) } ( .name )", "[Bob, Alice]")
+        chk("(u:user) @* {exists( (c:companies()) @* {} )} ( .name )", "[Bob, Alice, Trudy, John]")
+        chk("(u:user) @* {exists( (c:companies()) @* { c.city == u.city } )} ( .name )", "ct_err:expr_sqlnotallowed")
+        chk("(u:users()) @* {exists( (c:company) @* {} )} ( .name )", "[Bob, Alice, Trudy, John]")
+        chk("(u:users()) @* {exists( (c:company) @* { c.city == u.city } )} ( .name )", "[Bob, Alice]")
     }
 
     @Test fun testOuterEntityAliasMatch() {
@@ -281,10 +307,10 @@ class AtExprExistsTest: BaseRellTest() {
         chk("(foo_user: user) @* { exists( data3 @* { foo_user } ) } ( .name )", "[Alice]")
         chk("(bar_user: user) @* { exists( data3 @* { bar_user } ) } ( .name )", "[Trudy]")
 
-        chk("data1 @* {exists( user @* { user } )}", "ct_err:at_expr:attr:belongs_to_outer:data1:user")
-        chk("data1 @* {exists( user @* { .user == user } )}", "ct_err:at_expr:attr:belongs_to_outer:data1:user")
+        chk("data1 @* {exists( user @* { user } )}", "ct_err:at_where:type:0:[boolean]:[user]")
+        chk("data1 @* {exists( user @* { .user == user } )}", "ct_err:at_expr:attr:belongs_to_outer:user:data1")
         chk("data1 @* {exists( user @* { data1.user == user } )}", "[data1[200], data1[201]]")
-        chk("data1 @* {exists( (foo_user: user) @* { foo_user } )}", "ct_err:at_expr:attr:belongs_to_outer:data1:user")
+        chk("data1 @* {exists( (foo_user: user) @* { foo_user } )}", "ct_err:at_where:type:0:[boolean]:[user]")
         chk("data1 @* {exists( (foo_user: user) @* { data1.user == foo_user } )}", "[data1[200], data1[201]]")
     }
 
@@ -398,7 +424,22 @@ class AtExprExistsTest: BaseRellTest() {
         chkUpdateDelete("(u1:user) @* {exists( (u2:user) @* { u1 < u2, u1.city == u2.city } )}", "Trudy")
     }
 
+    @Test fun testUpdateDeletePlaceholder() {
+        initDataUserCompany()
+        chkUpdateDelete("user @* {exists( company @* { $.city == user.city } )}", "ct_err:name:ambiguous:$")
+        chkUpdateDelete("(u:user) @* {exists( (c:company) @* { $.city == u.city } )}", "ct_err:expr:placeholder:none")
+        chkUpdateDelete("(u:user) @* {exists( company @* { $.city == u.city } )}", "Bob,Alice")
+        chkUpdateDelete("(u:user) @* {exists( (c:company) @* { c.city == u.city } )}", "Bob,Alice")
+        chkUpdateDelete("user @* {exists( (c:company) @* { c.city == $.city } )}", "ct_err:at_expr:placeholder:belongs_to_outer")
+    }
+
     private fun chkUpdateDelete(code: String, exp: String) {
+        if (exp.startsWith("ct_err:")) {
+            chkOp("update $code ( .score += 1 );", exp)
+            chkOp("delete $code;", exp)
+            return
+        }
+
         val expUsers = exp.split(",").filter { it != "" }.toList()
         resetDataUserCompany()
 
@@ -446,7 +487,7 @@ class AtExprExistsTest: BaseRellTest() {
         chkOp("delete (u:user) @* { ((u:user)@?{})?? };", "ct_err:block:name_conflict:u")
     }
 
-    @Test fun testUpdateDeleteOuterReference() {
+    @Test fun testUpdateDeleteOuterReferenceNoExists() {
         initDataUserCompany()
         chkOp("update user @* { (company @? { company.city == user.city }) ?? } ( .score += 1);", "ct_err:at:entity:outer:user")
         chkOp("delete user @* { (company @? { company.city == user.city }) ?? };", "ct_err:at:entity:outer:user")

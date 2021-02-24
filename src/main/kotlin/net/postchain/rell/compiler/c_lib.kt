@@ -6,7 +6,6 @@ package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.compiler.ast.S_String
 import net.postchain.rell.compiler.ast.S_VirtualType
 import net.postchain.rell.compiler.vexpr.V_EntityToStructExpr
 import net.postchain.rell.compiler.vexpr.V_Expr
@@ -331,6 +330,8 @@ object C_LibFunctions {
     fun getEnumPropertyOpt(name: String): C_SysMemberFormalParamsFuncBody? {
         return ENUM_PROPS[name]
     }
+
+    fun getEnumProperties() = ENUM_PROPS
 
     private fun getTypeMemberFunctions(type: R_Type): C_MemberFuncTable {
         return when (type) {
@@ -696,10 +697,9 @@ private class C_SysFn_Print(private val log: Boolean): C_GlobalSpecialFuncCase()
 
     private inner class CaseMatch(args: List<V_Expr>): C_BasicGlobalFuncCaseMatch(R_UnitType, args) {
         override fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
-            val fullName = caseCtx.fullName
             val filePos = caseCtx.filePos()
             val rFn = R_SysFn_General.Print(log, filePos)
-            return C_Utils.createSysCallExpr(R_UnitType, rFn, args, fullName)
+            return C_Utils.createSysCallExpr(R_UnitType, rFn, args, caseCtx)
         }
     }
 }
@@ -722,7 +722,7 @@ private object C_SysFn_TypeOf: C_GlobalSpecialFuncCase() {
 
         override fun compileCallDbExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<Db_Expr>): Db_Expr {
             val rExpr = R_ConstantExpr.makeText(str)
-            return C_Utils.toDbExpr(caseCtx.fullName.pos, rExpr)
+            return C_Utils.toDbExpr(caseCtx.linkPos, rExpr)
         }
     }
 }
@@ -742,7 +742,7 @@ private class C_SysFn_Nullable(private val baseType: R_Type?): C_GlobalSpecialFu
     private inner class CaseMatch(resType: R_Type, args: List<V_Expr>): C_BasicGlobalFuncCaseMatch(resType, args) {
         override fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
             check(args.size == 1)
-            return C_Utils.createSysCallExpr(resType, R_SysFn_Internal.Nop, args, caseCtx.fullName)
+            return C_Utils.createSysCallExpr(resType, R_SysFn_Internal.Nop, args, caseCtx)
         }
     }
 }
@@ -756,7 +756,7 @@ private object C_SysFn_Crash: C_GlobalSpecialFuncCase() {
     private class CaseMatch(args: List<V_Expr>): C_BasicGlobalFuncCaseMatch(R_UnitType, args) {
         override fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
             check(args.size == 1)
-            return C_Utils.createSysCallExpr(R_UnitType, R_SysFn_Internal.Crash, args, caseCtx.fullName)
+            return C_Utils.createSysCallExpr(R_UnitType, R_SysFn_Internal.Crash, args, caseCtx)
         }
     }
 }
@@ -771,7 +771,7 @@ private object C_SysFn_Nop: C_GlobalSpecialFuncCase() {
     private class CaseMatch(resType: R_Type, args: List<V_Expr>): C_BasicGlobalFuncCaseMatch(resType, args) {
         override fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
             check(args.size == 1)
-            return C_Utils.createSysCallExpr(resType, R_SysFn_Internal.Nop, args, caseCtx.fullName)
+            return C_Utils.createSysCallExpr(resType, R_SysFn_Internal.Nop, args, caseCtx)
         }
     }
 }
@@ -877,15 +877,16 @@ private object C_SysFn_Text_Format: C_MemberSpecialFuncCase() {
 }
 
 private sealed class C_SysFn_Common_ToStruct: C_SpecialSysMemberFunction() {
-    protected abstract fun compile0(ctx: C_ExprContext, member: C_MemberRef): V_Expr
+    protected abstract fun compile0(ctx: C_ExprContext, member: C_MemberLink): V_Expr
 
-    final override fun compileCall(ctx: C_ExprContext, member: C_MemberRef, args: List<V_Expr>): C_Expr {
+    final override fun compileCall(ctx: C_ExprContext, callCtx: C_MemberFuncCaseCtx, args: List<V_Expr>): C_Expr {
         if (args.isNotEmpty()) {
+            val member = callCtx.member
             val argTypes = args.map { it.type() }
-            C_FuncMatchUtils.errNoMatch(ctx, member.pos, member.qualifiedName(), argTypes)
+            C_FuncMatchUtils.errNoMatch(ctx, member.linkPos, callCtx.qualifiedNameMsg(), argTypes)
         }
 
-        val vExpr = compile0(ctx, member)
+        val vExpr = compile0(ctx, callCtx.member)
         return C_VExpr(vExpr)
     }
 }
@@ -894,31 +895,36 @@ private class C_SysFn_Entity_ToStruct(
         private val entityType: R_EntityType,
         private val mutable: Boolean
 ): C_SysFn_Common_ToStruct() {
-    override fun compile0(ctx: C_ExprContext, member: C_MemberRef): V_Expr = V_EntityToStructExpr(ctx, member, entityType, mutable)
+    override fun compile0(ctx: C_ExprContext, member: C_MemberLink): V_Expr {
+        return V_EntityToStructExpr(ctx, member, entityType, mutable)
+    }
 }
 
 private class C_SysFn_Object_ToStruct(
         private val objectType: R_ObjectType,
         private val mutable: Boolean
 ): C_SysFn_Common_ToStruct() {
-    override fun compile0(ctx: C_ExprContext, member: C_MemberRef): V_Expr = V_ObjectToStructExpr(ctx, member.pos, objectType, mutable)
+    override fun compile0(ctx: C_ExprContext, member: C_MemberLink): V_Expr {
+        return V_ObjectToStructExpr(ctx, member.base.pos, objectType, mutable)
+    }
 }
 
 private class C_SysFunction_Invalid(private val type: R_Type): C_GlobalFormalParamsFuncBody(R_CtErrorType) {
     override fun varFacts(caseCtx: C_GlobalFuncCaseCtx, args: List<V_Expr>) = C_ExprVarFacts.EMPTY
 
     override fun compileCall(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
-        throw err(caseCtx.fullName)
+        throw err(caseCtx)
     }
 
     override fun compileCallDb(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx, args: List<Db_Expr>): Db_Expr {
-        throw err(caseCtx.fullName)
+        throw err(caseCtx)
     }
 
-    private fun err(fullName: S_String): C_Error {
+    private fun err(caseCtx: C_GlobalFuncCaseCtx): C_Error {
         val typeStr = type.name
-        val nameStr = fullName.str
-        return C_Error.stop(fullName.pos, "fn:invalid:$typeStr:$nameStr", "Function '$nameStr' not available for type '$typeStr'")
+        val nameStr = caseCtx.qualifiedNameMsg()
+        return C_Error.stop(caseCtx.linkPos, "fn:invalid:$typeStr:$nameStr",
+                "Function '$nameStr' not available for type '$typeStr'")
     }
 }
 
@@ -927,9 +933,9 @@ private class C_SysMemberFunction_Invalid(private val type: R_Type): C_MemberFor
 
     override fun compileCall(ctx: C_ExprContext, caseCtx: C_MemberFuncCaseCtx, args: List<R_Expr>): R_Expr {
         val typeStr = type.name
-        val member = caseCtx.member
-        val name = member.qualifiedName()
-        throw C_Error.stop(member.name.pos, "fn:invalid:$typeStr:$name", "Function '$name' not available for type '$typeStr'")
+        val name = caseCtx.qualifiedNameMsg()
+        throw C_Error.stop(caseCtx.member.linkPos, "fn:invalid:$typeStr:$name",
+                "Function '$name' not available for type '$typeStr'")
     }
 }
 

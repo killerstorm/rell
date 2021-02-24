@@ -14,7 +14,7 @@ abstract class Db_SysFn_Simple(name: String, val sql: String): Db_SysFunction(na
         bld.append(sql)
         bld.append("(")
         bld.append(args, ", ") {
-            it.toSql(ctx, bld)
+            it.toSql(ctx, bld, false)
         }
         bld.append(")")
     }
@@ -48,7 +48,7 @@ abstract class Db_SysFn_Template(name: String, private val arity: Int, template:
         check(args.size == arity)
         for (f in fragments) {
             if (f.first != null) bld.append(f.first!!)
-            if (f.second != null) args[f.second!!].toSql(ctx, bld)
+            if (f.second != null) args[f.second!!].toSql(ctx, bld, false)
         }
     }
 }
@@ -56,9 +56,9 @@ abstract class Db_SysFn_Template(name: String, private val arity: Int, template:
 abstract class Db_SysFn_Cast(name: String, val type: String): Db_SysFunction(name) {
     override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<RedDb_Expr>) {
         check(args.size == 1)
-        bld.append("((")
-        args[0].toSql(ctx, bld)
-        bld.append(")::$type)")
+        bld.append("(")
+        args[0].toSql(ctx, bld, true)
+        bld.append("::$type)")
     }
 }
 
@@ -117,12 +117,12 @@ object Db_SysFn_Decimal {
         override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<RedDb_Expr>) {
             check(args.size == 1 || args.size == 2)
             bld.append("ROUND(")
-            args[0].toSql(ctx, bld)
+            args[0].toSql(ctx, bld, false)
             if (args.size == 2) {
                 // Argument #2 has to be casted to INT, PostgreSQL doesn't allow BIGINT.
-                bld.append(", (")
-                args[1].toSql(ctx, bld)
-                bld.append(")::INT")
+                bld.append(", ")
+                args[1].toSql(ctx, bld, true)
+                bld.append("::INT")
             }
             bld.append(")")
         }
@@ -136,7 +136,7 @@ object Db_SysFn_Decimal {
         override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<RedDb_Expr>) {
             check(args.size == 1)
             bld.append("TRUNC(")
-            args[0].toSql(ctx, bld)
+            args[0].toSql(ctx, bld, false)
             bld.append(")::BIGINT")
         }
     }
@@ -146,7 +146,7 @@ object Db_SysFn_Decimal {
             // Using regexp to remove trailing zeros.
             check(args.size == 1)
             bld.append("REGEXP_REPLACE(")
-            args[0].toSql(ctx, bld)
+            args[0].toSql(ctx, bld, true)
             // Clever regexp: can handle special cases like "0.0", "0.000000", etc.
             bld.append(" :: TEXT, '(([.][0-9]*[1-9])(0+)\$)|([.]0+\$)', '\\2')")
         }
@@ -156,6 +156,6 @@ object Db_SysFn_Decimal {
 object Db_SysFn_Nop: Db_SysFunction("NOP") {
     override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<RedDb_Expr>) {
         check(args.size == 1)
-        args[0].toSql(ctx, bld)
+        args[0].toSql(ctx, bld, true)
     }
 }

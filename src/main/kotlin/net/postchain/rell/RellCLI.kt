@@ -8,6 +8,8 @@ import net.postchain.StorageBuilder
 import net.postchain.base.BlockchainRid
 import net.postchain.config.app.AppConfig
 import net.postchain.gtv.GtvNull
+import net.postchain.rell.compiler.C_AtAttrShadowing
+import net.postchain.rell.compiler.C_CompilerOptions
 import net.postchain.rell.compiler.C_MapSourceDir
 import net.postchain.rell.compiler.C_SourceDir
 import net.postchain.rell.model.*
@@ -41,6 +43,9 @@ private fun main0(args: RellCliArgs) {
         exitProcess(0)
     }
 
+    val extraOptions = args.extraOptions.map { parseExtraOptionCli(it) }.toImmList()
+    val compilerOptions = getCompilerOptions(extraOptions)
+
     if (args.dbUrl != null && args.dbProperties != null) {
         throw RellCliErr("Both database URL and properties specified")
     }
@@ -59,7 +64,7 @@ private fun main0(args: RellCliArgs) {
     val (entryModule, entryRoutine) = parseEntryPoint(args)
 
     if (args.batch || (entryModule != null && entryRoutine != null)) {
-        val app = RellCliUtils.compileApp(args.sourceDir, entryModule, args.quiet)
+        val app = RellCliUtils.compileApp(args.sourceDir, entryModule, args.quiet, compilerOptions)
         val module = if (entryModule == null) null else app.moduleMap[entryModule]
         if (module != null && module.test) {
             runTests(args, app, module, entryRoutine)
@@ -67,16 +72,22 @@ private fun main0(args: RellCliArgs) {
             runApp(args, dbSpecified, entryModule, entryRoutine, app)
         }
     } else if (entryModule != null) {
-        val app = RellCliUtils.compileApp(args.sourceDir, entryModule, args.quiet)
+        val app = RellCliUtils.compileApp(args.sourceDir, entryModule, args.quiet, compilerOptions)
         val module = app.moduleMap[entryModule]
         if (module != null && module.test) {
             runTests(args, app, module, entryRoutine)
         } else {
-            runRepl(args, entryModule, dbSpecified)
+            runRepl(args, entryModule, dbSpecified, compilerOptions)
         }
     } else {
-        runRepl(args, entryModule, dbSpecified)
+        runRepl(args, entryModule, dbSpecified, compilerOptions)
     }
+}
+
+private fun getCompilerOptions(extraOpts: List<ExtraOption>): C_CompilerOptions {
+    val b = C_CompilerOptions.builder()
+    extraOpts.forEach { it.toCompilerOption(b) }
+    return b.build()
 }
 
 private fun runApp(
@@ -116,7 +127,7 @@ private fun runTests(args: RellCliArgs, app: R_App, module: R_Module, entryRouti
     }
 }
 
-private fun runRepl(args: RellCliArgs, moduleName: R_ModuleName?, useSql: Boolean) {
+private fun runRepl(args: RellCliArgs, moduleName: R_ModuleName?, useSql: Boolean, compilerOptions: C_CompilerOptions) {
     runWithSqlManager(args, false) { sqlMgr ->
         if (args.resetdb) {
             sqlMgr.transaction { sqlExec ->
@@ -126,7 +137,7 @@ private fun runRepl(args: RellCliArgs, moduleName: R_ModuleName?, useSql: Boolea
 
         val globalCtx = createGlobalCtx(args, null)
         val sourceDir = RellCliUtils.createSourceDir(args.sourceDir)
-        ReplShell.start(sourceDir, moduleName, globalCtx, sqlMgr, useSql)
+        ReplShell.start(sourceDir, moduleName, globalCtx, sqlMgr, useSql, compilerOptions)
     }
 }
 
@@ -330,6 +341,41 @@ private fun resultToString(res: Rt_Value, json: Boolean): String {
     }
 }
 
+private fun parseExtraOptionCli(s: String): ExtraOption {
+    return try {
+        parseExtraOption(s)
+    } catch (e: Throwable) {
+        throw RellCliErr("Invalid extra option value: '$s'")
+    }
+}
+
+private fun parseExtraOption(s: String): ExtraOption {
+    val parts = s.split(":")
+    require(parts.isNotEmpty())
+    val opt = parts[0]
+    val params = parts.subList(1, parts.size)
+    return when (opt) {
+        "AtAttrShadowing" -> {
+            require(params.size == 1)
+            val p = params[0]
+            require(p == p.toLowerCase())
+            val v = C_AtAttrShadowing.valueOf(p.toUpperCase())
+            ExtraOption_AtAttrShadowing(v)
+        }
+        else -> throw IllegalArgumentException()
+    }
+}
+
+private sealed class ExtraOption {
+    abstract fun toCompilerOption(b: C_CompilerOptions.Builder)
+}
+
+private class ExtraOption_AtAttrShadowing(val v: C_AtAttrShadowing): ExtraOption() {
+    override fun toCompilerOption(b: C_CompilerOptions.Builder) {
+        b.atAttrShadowing(v)
+    }
+}
+
 private class RellAppLauncher(
         private val app: R_App,
         private val args: RellCliArgs,
@@ -448,6 +494,9 @@ private class RellCliArgs: RellBaseCliArgs() {
 
     @CommandLine.Option(names = ["--batch"], description = ["Run in non-interactive mode (do not start shell)"])
     var batch = false
+
+    @CommandLine.Option(names = ["-X"], paramLabel = "OPTION", description = ["Extra compiler/interpreter option"])
+    var extraOptions: List<String> = ArrayList()
 
     @CommandLine.Parameters(index = "0", arity = "0..1", paramLabel = "MODULE", description = ["Module name"])
     var module: String? = null

@@ -1337,7 +1337,7 @@ class C_FormalParameters(list: List<C_FormalParameter>): C_FunctionParametersHin
             if (!names.add(nameStr)) {
                 frameCtx.msgCtx.error(name.pos, "dup_param_name:$nameStr", "Duplicate parameter: '$nameStr'")
             } else if (type != null) {
-                val cVarRef = blkCtx.addLocalVar(name, type, false, false)
+                val cVarRef = blkCtx.addLocalVar(name, type, false, null)
                 inited[cVarRef.target.uid] = C_VarFact.YES
                 val rVarParam = param.createVarParam(type, cVarRef.ptr)
                 rParams.add(rVarParam)

@@ -162,13 +162,31 @@ class C_SystemDefs private constructor(
     }
 }
 
+enum class C_AtAttrShadowing {
+    FULL,
+    PARTIAL,
+    NONE,
+    ;
+
+    companion object {
+        val DEFAULT = FULL
+    }
+}
+
 // Instantiated in Eclipse IDE, change parameters carefully.
-class C_CompilerOptions(val gtv: Boolean, val deprecatedError: Boolean, val ide: Boolean, val blockCheck: Boolean) {
+class C_CompilerOptions(
+        val gtv: Boolean,
+        val deprecatedError: Boolean,
+        val ide: Boolean,
+        val blockCheck: Boolean,
+        val atAttrShadowing: C_AtAttrShadowing
+) {
     class Builder {
         private var gtv = DEFAULT.gtv
         private var deprecatedError = DEFAULT.deprecatedError
         private var ide = DEFAULT.ide
         private var blockCheck = DEFAULT.blockCheck
+        private var atAttrShadowing = DEFAULT.atAttrShadowing
 
         @Suppress("UNUSED") fun gtv(v: Boolean): Builder {
             gtv = v
@@ -190,11 +208,28 @@ class C_CompilerOptions(val gtv: Boolean, val deprecatedError: Boolean, val ide:
             return this
         }
 
-        fun build() = C_CompilerOptions(gtv = gtv, deprecatedError = deprecatedError, ide = ide, blockCheck = blockCheck)
+        @Suppress("UNUSED") fun atAttrShadowing(v: C_AtAttrShadowing): Builder {
+            atAttrShadowing = v
+            return this
+        }
+
+        fun build() = C_CompilerOptions(
+                gtv = gtv,
+                deprecatedError = deprecatedError,
+                ide = ide,
+                blockCheck = blockCheck,
+                atAttrShadowing = atAttrShadowing
+        )
     }
 
     companion object {
-        @JvmField val DEFAULT = C_CompilerOptions(gtv = true, deprecatedError = false, ide = false, blockCheck = false)
+        @JvmField val DEFAULT = C_CompilerOptions(
+                gtv = true,
+                deprecatedError = false,
+                ide = false,
+                blockCheck = false,
+                atAttrShadowing = C_AtAttrShadowing.DEFAULT
+        )
 
         @JvmStatic fun builder() = Builder()
     }

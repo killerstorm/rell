@@ -64,23 +64,12 @@ class R_AtWhatFieldFlags(val omit: Boolean, val sort: R_AtWhatSort?, val group: 
     }
 }
 
-class R_AtExprExtras(
-        val limit: R_Expr?,
-        val offset: R_Expr?
-)
-
-class R_DbAtExprInternals(
-        val block: R_FrameBlock,
-        val rowDecoder: R_AtExprRowDecoder
-)
-
-abstract class R_AtExpr(
-        type: R_Type,
-        val cardinality: R_AtCardinality,
-        private val extras: R_AtExprExtras
-): R_Expr(type) {
-    protected fun evalLimit(frame: Rt_CallFrame): Long? = evalLimitOffset(frame, extras.limit, "limit")
-    protected fun evalOffset(frame: Rt_CallFrame): Long? = evalLimitOffset(frame, extras.offset, "offset")
+class R_AtExprExtras(private val limit: R_Expr?, private val offset: R_Expr?) {
+    fun evaluate(frame: Rt_CallFrame): Rt_AtExprExtras {
+        val limitVal = evalLimitOffset(frame, limit, "limit")
+        val offsetVal = if (limitVal != null && limitVal <= 0L) null else evalLimitOffset(frame, offset, "offset")
+        return Rt_AtExprExtras(limitVal, offsetVal)
+    }
 
     private fun evalLimitOffset(frame: Rt_CallFrame, expr: R_Expr?, part: String): Long? {
         if (expr == null) {
@@ -98,7 +87,24 @@ abstract class R_AtExpr(
 
         return v
     }
+}
 
+class Rt_AtExprExtras(val limit: Long?, val offset: Long?) {
+    companion object {
+        val NULL = Rt_AtExprExtras(null, null)
+    }
+}
+
+class R_DbAtExprInternals(
+        val block: R_FrameBlock,
+        val rowDecoder: R_AtExprRowDecoder
+)
+
+abstract class R_AtExpr(
+        type: R_Type,
+        val cardinality: R_AtCardinality,
+        protected val extras: R_AtExprExtras
+): R_Expr(type) {
     protected fun evalResult(list: MutableList<Rt_Value>): Rt_Value {
         if (cardinality.many) {
             return Rt_ListValue(type, list)
@@ -128,11 +134,10 @@ class R_DbAtExpr(
         private val internals: R_DbAtExprInternals
 ): R_AtExpr(type, cardinality, extras) {
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        val limit = evalLimit(frame)
-        val offset = evalOffset(frame)
+        val extraVals = extras.evaluate(frame)
 
         val records = frame.block(internals.block) {
-            base.execute(frame, limit, offset)
+            base.execute(frame, extraVals)
         }
         checkCount(cardinality, records.count(), "records")
 

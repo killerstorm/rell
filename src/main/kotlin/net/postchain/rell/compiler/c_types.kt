@@ -45,7 +45,7 @@ private class C_TypeHint_Map(private val keyValueTypes: R_MapKeyValueTypes): C_T
 
 object C_Types {
     fun match(dstType: R_Type, srcType: R_Type, errPos: S_Pos, errCode: String, errMsg: String) {
-        if (dstType != R_CtErrorType && srcType != R_CtErrorType && !dstType.isAssignableFrom(srcType)) {
+        if (dstType.isNotError() && srcType.isNotError() && !dstType.isAssignableFrom(srcType)) {
             throw C_Errors.errTypeMismatch(errPos, srcType, dstType, errCode, errMsg)
         }
     }

@@ -566,12 +566,12 @@ class R_ObjectExpr(val objType: R_ObjectType): R_Expr(objType) {
 
 class R_ObjectAttrExpr(type: R_Type, val rObject: R_ObjectDefinition, val atBase: Db_AtExprBase): R_Expr(type) {
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        var records = atBase.execute(frame, null, null)
+        var records = atBase.execute(frame, Rt_AtExprExtras.NULL)
 
         if (records.isEmpty()) {
             val forced = frame.defCtx.appCtx.forceObjectInit(rObject)
             if (forced) {
-                records = atBase.execute(frame, null, null)
+                records = atBase.execute(frame, Rt_AtExprExtras.NULL)
             }
         }
 

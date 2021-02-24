@@ -79,7 +79,7 @@ class S_SimpleVarDeclarator(private val attrHeader: S_AttrHeader): S_VarDeclarat
         }
 
         val rVarType = rType ?: rExprType ?: R_CtErrorType
-        val cVarRef = ctx.blkCtx.addLocalVar(name, rVarType, mutable, false)
+        val cVarRef = ctx.blkCtx.addLocalVar(name, rVarType, mutable, null)
 
         val varUid = cVarRef.target.uid
         val facts = if (rExprType != null) {
@@ -127,7 +127,7 @@ class S_TupleVarDeclarator(val pos: S_Pos, val subDeclarators: List<S_VarDeclara
                 if (it < n2) rExprType.fields[it].type else R_CtErrorType
             }
         } else {
-            if (rExprType != R_CtErrorType) {
+            if (rExprType.isNotError()) {
                 ctx.msgCtx.error(pos, "var_notuple:$rExprType", "Expression must return a tuple, but it returns '$rExprType'")
             }
             subDeclarators.map { R_CtErrorType }

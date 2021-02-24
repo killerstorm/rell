@@ -13,7 +13,7 @@ sealed class S_UnaryOp(val code: String) {
     abstract fun compile(ctx: C_ExprContext, startPos: S_Pos, opPos: S_Pos, expr: V_Expr): V_Expr
 
     fun errTypeMismatch(ctx: C_ExprContext, pos: S_Pos, type: R_Type) {
-        if (type != R_CtErrorType) {
+        if (type.isNotError()) {
             ctx.msgCtx.error(pos, "unop_operand_type:$code:[$type]", "Wrong operand type for '$code': $type")
         }
     }

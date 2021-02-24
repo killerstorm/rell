@@ -106,7 +106,7 @@ class C_DefProxy<T> private constructor(
         fun deprecatedMessage(
                 msgCtx: C_MessageContext,
                 pos: S_Pos,
-                name: String,
+                nameMsg: String,
                 deprecation: C_DefProxyDeprecation
         ) {
             val type = deprecation.type
@@ -115,8 +115,8 @@ class C_DefProxy<T> private constructor(
             val typeStr = StringUtils.capitalize(type.msg)
             val depCode = deprecated.detailsCode()
             val depStr = deprecated.detailsMessage()
-            val code = "deprecated:$type:$name$depCode"
-            val msg = "$typeStr '$name' is deprecated$depStr"
+            val code = "deprecated:$type:$nameMsg$depCode"
+            val msg = "$typeStr '$nameMsg' is deprecated$depStr"
 
             val error = deprecated.error || msgCtx.globalCtx.compilerOptions.deprecatedError
             val msgType = if (error) C_MessageType.ERROR else C_MessageType.WARNING

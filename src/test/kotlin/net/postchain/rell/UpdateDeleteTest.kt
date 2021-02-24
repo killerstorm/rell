@@ -4,6 +4,7 @@
 
 package net.postchain.rell
 
+import net.postchain.rell.compiler.C_AtAttrShadowing
 import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 
@@ -55,6 +56,7 @@ class UpdateDeleteTest: BaseRellTest() {
     }
 
     @Test fun testUpdateMutable() {
+        tst.atAttrShadowing = C_AtAttrShadowing.FULL
         def("entity city { name: text; }")
         def("entity person { name: text; home: city; mutable work: city; base: integer; mutable score: integer; }")
 

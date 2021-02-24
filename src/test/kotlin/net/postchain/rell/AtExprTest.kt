@@ -734,7 +734,8 @@ class AtExprTest: BaseRellTest() {
     @Test fun testPlaceholderAmbiguity() {
         tst.strictToString = false
         chk("company @* {} ( .name + (user @* {} ( $ )).size() )", "ct_err:name:ambiguous:$")
-        chk("company @* {} ( .name + ((u: user) @* {} ( $ )).size() )", "ct_err:at:entity:outer:company")
+        chk("company @* {} ( .name + ((u: user) @* {} ( $ )).size() )",
+                "ct_err:[at:entity:outer:company][at_expr:placeholder:belongs_to_outer]")
         chk("(c: company) @* {} ( .name + (user @* {} ( $ )).size() )", "[Facebook8, Apple8, Amazon8, Microsoft8, Google8]")
     }
 

@@ -21,10 +21,10 @@ class R_SysCallExpr(
         type: R_Type,
         private val fn: R_SysFunction,
         args: List<R_Expr>,
-        private val name: String?
+        private val nameMsg: String?
 ): R_CallExpr(type, args) {
     override fun call(frame: Rt_CallFrame, values: List<Rt_Value>): Rt_Value {
-        val res = if (name == null) {
+        val res = if (nameMsg == null) {
             call0(frame, values)
         } else try {
             call0(frame, values)
@@ -44,7 +44,7 @@ class R_SysCallExpr(
 
     private fun decorate(msg: String?): String {
         val msg2 = StringUtils.defaultIfBlank(msg, "error")
-        return "System function '$name': $msg2"
+        return "System function '$nameMsg': $msg2"
     }
 
     private fun call0(frame: Rt_CallFrame, values: List<Rt_Value>): Rt_Value {

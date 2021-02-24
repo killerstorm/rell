@@ -2,7 +2,6 @@ package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.model.R_CtErrorType
 import net.postchain.rell.model.R_Definition
 import net.postchain.rell.model.R_MountName
 import net.postchain.rell.model.R_Type
@@ -14,7 +13,7 @@ object C_Errors {
     }
 
     fun errTypeMismatch(msgCtx: C_MessageContext, pos: S_Pos, srcType: R_Type, dstType: R_Type, errCode: String, errMsg: String) {
-        if (srcType != R_CtErrorType && dstType != R_CtErrorType) {
+        if (srcType.isNotError() && dstType.isNotError()) {
             val srcTypeStr = srcType.toStrictString()
             val dstTypeStr = dstType.toStrictString()
             msgCtx.error(pos, "$errCode:[$dstTypeStr]:[$srcTypeStr]", "$errMsg: $srcTypeStr instead of $dstTypeStr")
@@ -22,7 +21,10 @@ object C_Errors {
     }
 
     fun errMultipleAttrs(pos: S_Pos, attrs: List<C_ExprContextAttr>, errCode: String, errMsg: String): C_Error {
-        return C_Error.stop(pos, "$errCode:${attrs.joinToString(",")}", "$errMsg: ${attrs.joinToString()}")
+        val attrNames = attrs.map { it.attrNameMsg(true) }
+        val attrsCode = attrNames.joinToString(",") { it.code }
+        val attrsText = attrNames.joinToString(", ") { it.msg }
+        return C_Error.stop(pos, "$errCode:$attrsCode", "$errMsg: $attrsText")
     }
 
     fun errUnknownName(baseType: R_Type, name: S_Name): C_Error {
@@ -59,7 +61,7 @@ object C_Errors {
     }
 
     fun errUnknownMember(msgCtx: C_MessageContext, type: R_Type, name: S_Name) {
-        if (type != R_CtErrorType) {
+        if (type.isNotError()) {
             msgCtx.error(name.pos, "unknown_member:[${type.toStrictString()}]:${name.str}",
                     "Type ${type.toStrictString()} has no member '${name.str}'")
         }
@@ -79,7 +81,11 @@ object C_Errors {
     }
 
     fun errBadDestination(name: S_Name): C_Error {
-        return C_Error.stop(name.pos, "expr_bad_dst:${name.str}", "Cannot modify '${name.str}'")
+        return errBadDestination(name.pos, name.str)
+    }
+
+    fun errBadDestination(pos: S_Pos, name: String): C_Error {
+        return C_Error.stop(pos, "expr_bad_dst:$name", "Cannot modify '$name'")
     }
 
     fun errAttrNotMutable(pos: S_Pos, name: String): C_Error {

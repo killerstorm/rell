@@ -560,7 +560,7 @@ class Rt_StructValue(private val type: R_StructType, private val attributes: Mut
     override fun equals(other: Any?) = other is Rt_StructValue && attributes == other.attributes
     override fun hashCode() = type.hashCode() * 31 + attributes.hashCode()
 
-    override fun toString() = toString(type.struct, attributes)
+    override fun toString() = toString(type, type.struct, attributes)
     override fun toStrictString(showTupleFieldNames: Boolean) = toStrictString(type, type.struct, attributes)
 
     fun get(index: Int): Rt_Value {
@@ -572,13 +572,13 @@ class Rt_StructValue(private val type: R_StructType, private val attributes: Mut
     }
 
     companion object {
-        fun toString(struct: R_Struct, attributes: List<out Rt_Value?>): String {
+        fun toString(type: R_Type, struct: R_Struct, attributes: List<out Rt_Value?>): String {
             val attrs = attributes.withIndex().joinToString(",") { (i, attr) ->
                 val n = struct.attributesList[i].name
                 val v = attr?.toString()
                 "$n=$v"
             }
-            return "${struct.name}{$attrs}"
+            return "${type.name}{$attrs}"
         }
 
         fun toStrictString(type: R_Type, struct: R_Struct, attributes: List<out Rt_Value?>): String {
@@ -607,7 +607,7 @@ class Rt_VirtualStructValue(
     override fun equals(other: Any?) = other is Rt_VirtualStructValue && attributes == other.attributes
     override fun hashCode() = type.hashCode() * 31 + attributes.hashCode()
 
-    override fun toString() = Rt_StructValue.toString(type.innerType.struct, attributes)
+    override fun toString() = Rt_StructValue.toString(type, type.innerType.struct, attributes)
     override fun toStrictString(showTupleFieldNames: Boolean) =
             Rt_StructValue.toStrictString(type, type.innerType.struct, attributes)
 

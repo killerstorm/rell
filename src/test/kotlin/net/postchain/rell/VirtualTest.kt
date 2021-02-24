@@ -1390,28 +1390,30 @@ class VirtualTest: BaseGtxTest(false) {
         chkFull("query q(x: $type) $body", args, expected)
     }
 
-    private fun argToGtv(args: String) = GtvTestUtils.decodeGtvStr(args)
+    companion object {
+        fun argToGtv(args: String) = GtvTestUtils.decodeGtvStr(args)
 
-    private fun argToGtv(args: String, paths: String): Gtv {
-        val gtv = GtvTestUtils.decodeGtvStr(args)
-        return argToGtv(gtv, paths)
-    }
+        fun argToGtv(args: String, paths: String): Gtv {
+            val gtv = GtvTestUtils.decodeGtvStr(args)
+            return argToGtv(gtv, paths)
+        }
 
-    private fun argToGtv(gtv: Gtv, paths: String): Gtv {
-        val pathsSet = GtvTestUtils.decodeGtvStr(paths).asArray()
-                .map { t ->
-                    val ints = t.asArray()
-                            .map { if (it is GtvInteger) it.asInteger().toInt() else it.asString() }
-                            .toTypedArray()
-                    GtvPathFactory.buildFromArrayOfPointers(ints)
-                }
-                .toSet()
+        fun argToGtv(gtv: Gtv, paths: String): Gtv {
+            val pathsSet = GtvTestUtils.decodeGtvStr(paths).asArray()
+                    .map { t ->
+                        val ints = t.asArray()
+                                .map { if (it is GtvInteger) it.asInteger().toInt() else it.asString() }
+                                .toTypedArray()
+                        GtvPathFactory.buildFromArrayOfPointers(ints)
+                    }
+                    .toSet()
 
-        val gtvPaths = GtvPathSet(pathsSet)
+            val gtvPaths = GtvPathSet(pathsSet)
 
-        val calculator = GtvMerkleHashCalculator(PostchainUtils.cryptoSystem)
-        val merkleProofTree = gtv.generateProof(gtvPaths, calculator)
-        val proofGtv = merkleProofTree.serializeToGtv()
-        return proofGtv
+            val calculator = GtvMerkleHashCalculator(PostchainUtils.cryptoSystem)
+            val merkleProofTree = gtv.generateProof(gtvPaths, calculator)
+            val proofGtv = merkleProofTree.serializeToGtv()
+            return proofGtv
+        }
     }
 }

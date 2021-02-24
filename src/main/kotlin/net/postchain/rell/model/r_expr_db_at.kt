@@ -67,8 +67,8 @@ class Db_AtExprBase(
 
     fun directSubExprs(): List<Db_Expr> = listOfNotNull(where) + what.flatMap { it.value.exprs() }
 
-    fun execute(frame: Rt_CallFrame, limit: Long?, offset: Long?): List<List<Rt_Value>> {
-        val rtSql = buildSql(frame, limit, offset)
+    fun execute(frame: Rt_CallFrame, extras: Rt_AtExprExtras): List<List<Rt_Value>> {
+        val rtSql = buildSql(frame, extras)
         val select = SqlSelect(rtSql, resultTypes)
         val records = select.execute(frame.sqlExec) { combineRow(it) }
         return records
@@ -90,33 +90,31 @@ class Db_AtExprBase(
         return res.toImmList()
     }
 
-    private fun buildSql(frame: Rt_CallFrame, limit: Long?, offset: Long?): ParameterizedSql {
+    private fun buildSql(frame: Rt_CallFrame, extras: Rt_AtExprExtras): ParameterizedSql {
         val ctx = SqlGenContext.create(frame, from)
         val b = SqlBuilder()
-        buildSql0(ctx, b, frame)
-
-        appendClause(b, "LIMIT", limit)
-        appendClause(b, "OFFSET", offset)
+        buildSql0(ctx, b, frame, extras)
         return b.build()
     }
 
-    fun buildNestedSql(ctx: SqlGenContext, b: SqlBuilder, frame: Rt_CallFrame) {
+    fun buildNestedSql(ctx: SqlGenContext, b: SqlBuilder, frame: Rt_CallFrame, extras: Rt_AtExprExtras) {
         ctx.addFromEntities(from)
-        buildSql0(ctx, b, frame)
+        buildSql0(ctx, b, frame, extras)
     }
 
-    private fun buildSql0(ctx: SqlGenContext, b: SqlBuilder, frame: Rt_CallFrame) {
+    private fun buildSql0(ctx: SqlGenContext, b: SqlBuilder, frame: Rt_CallFrame, extras: Rt_AtExprExtras) {
         val sqlParts = AtExprSqlParts(frame, ctx)
         appendClause(b, "SELECT", sqlParts.whatSqls)
-        appendClause(b, "FROM", sqlParts.fromSqls)
-        appendClause(b, "WHERE", sqlParts.whereSql)
-        appendClause(b, "GROUP BY", sqlParts.groupBySqls)
-        appendClause(b, "ORDER BY", sqlParts.orderBySqls)
+        appendClause(b, " FROM", sqlParts.fromSqls)
+        appendClause(b, " WHERE", sqlParts.whereSql)
+        appendClause(b, " GROUP BY", sqlParts.groupBySqls)
+        appendClause(b, " ORDER BY", sqlParts.orderBySqls)
+        appendClause(b, " LIMIT", extras.limit)
+        appendClause(b, " OFFSET", extras.offset)
     }
 
     private fun appendClause(b: SqlBuilder, clause: String, sqls: List<ParameterizedSql>) {
         if (sqls.isNotEmpty()) {
-            b.appendSep(" ")
             b.append("$clause ")
             b.append(sqls, ", ") {
                 b.append(it)
@@ -223,7 +221,7 @@ class Db_AtExprBase(
         }
 
         private fun translateExpr(ctx: SqlGenContext, redExpr: RedDb_Expr): ParameterizedSql {
-            return ParameterizedSql.generate { redExpr.toSql(ctx, it) }
+            return ParameterizedSql.generate { redExpr.toSql(ctx, it, false) }
         }
 
         private fun getOrderByElements(redWhat: List<RedWhatField>): List<OrderByElement> {
@@ -260,7 +258,7 @@ class Db_AtExprBase(
 
     private class OrderByElement_Expr(val redExpr: RedDb_Expr, val sort: R_AtWhatSort): OrderByElement() {
         override fun toSql(ctx: SqlGenContext, b: SqlBuilder) {
-            redExpr.toSql(ctx, b)
+            redExpr.toSql(ctx, b, false)
             if (!sort.asc) {
                 b.append(" DESC")
             }
@@ -278,6 +276,7 @@ class Db_AtExprBase(
 class Db_NestedAtExpr(
         type: R_Type,
         private val base: Db_AtExprBase,
+        private val extras: R_AtExprExtras,
         private val block: R_FrameBlock
 ): Db_Expr(type, base.directSubExprs()) {
     override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
@@ -285,9 +284,10 @@ class Db_NestedAtExpr(
     }
 
     private inner class RedDb_NestedAtExpr(private val frame: Rt_CallFrame): RedDb_Expr() {
-        override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
+        override fun toSql0(ctx: SqlGenContext, bld: SqlBuilder) {
+            val rtExtras = extras.evaluate(frame)
             frame.block(block) {
-                base.buildNestedSql(ctx, bld, frame)
+                base.buildNestedSql(ctx, bld, frame, rtExtras)
             }
         }
     }

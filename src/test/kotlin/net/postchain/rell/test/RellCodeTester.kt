@@ -52,6 +52,7 @@ class RellCodeTester(
     var chainRid: String? = null
 
     private val chainDependencies = mutableMapOf<String, TestChainDependency>()
+    private val postInitOps = mutableListOf<String>()
 
     private var rtErrStack = listOf<R_StackPos>()
 
@@ -98,6 +99,17 @@ class RellCodeTester(
     }
 
     fun chainDependencies() = chainDependencies.mapValues { (_, v) -> Pair(v.rid, v.height) }.toImmMap()
+
+    fun postInitOp(code: String) {
+        checkNotInited()
+        postInitOps.add(code)
+    }
+
+    override fun postInit() {
+        for (code in postInitOps) {
+            chkOp(code, "OK")
+        }
+    }
 
     override fun chkEx(code: String, expected: String) {
         val queryCode = "query q() $code"
@@ -326,6 +338,14 @@ class RellCodeTester(
             "OK"
         }
         assertEquals(expected, actual)
+    }
+
+    fun resetSqlCtr() {
+        tstCtx.resetSqlCounter()
+    }
+
+    fun chkSql(expected: Int) {
+        assertEquals(expected, tstCtx.sqlCounter())
     }
 
     fun createRepl(): RellReplTester {

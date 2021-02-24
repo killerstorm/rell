@@ -320,21 +320,62 @@ Nested at-expressions passed as an argument to functions exists() and empty() ca
 at-expression:
 
     user @* {
-        not exists( company @* { company.city == user.city } )
+        exists( company @* { .city == user.city } )
     }
 
-This allows to execute database queries that used to be impossible in earlier versions of Rell. Only independent
+This allows to execute database queries which used to be impossible in earlier versions of Rell. Only independent
 nested at-expressions were supported, and they were translated and executed as independent SQL queries.
 
 Now the whole at-expression is translated to a single SQL query, which may look like this:
 
-    SELECT U."name" FROM "c0.user" U WHERE NOT EXISTS( SELECT C."rowid" FROM "c0.company" C WHERE C."city" = U."city" )
+    SELECT U."name" FROM "c0.user" U WHERE EXISTS( SELECT C."rowid" FROM "c0.company" C WHERE C."city" = U."city" )
 
 Same functionality can be used within "update" and "delete" statements as well:
 
-    delete user @* { not exists( company @* { company.city == user.city } ) } ;
+    delete user @* { not exists( company @* { .city == user.city } ) } ;
 
-Details:
+* Note on cardinality *
 
-- A nested expression must use the "@*" operator (and not "@+", "@?" or "@").
+A nested at-expression shall use operator "@*", because it is not possible to check the number of records selected with
+a nested SQL query. However, operators "@+", "@?" or "@" are still allowed, but using them causes a nested expression
+to be executed independently, not as an SQL sub-query. Thus, outer entities cannot be accessed, and the code may become
+considerably slower (the nested expression will load the entire result set into memory to execute exists(), as there is
+no optimization of that special case yet).
+
+* Attributes matching in where-part *
+
+Expressions like ".attribute == outer_entity.attribute" can be shortened to just "outer_entity.attribute" in the
+where-part of a nested expression:
+
+    user @* {
+        exists( company @* { user.city } )
+    }
+
+An attribute of a nested entity is matched by the name and type of the outer attribute.
+
+* More details *
+
 - Function "empty(X)" is equivalent to "not exists(X)" and is translated to "NOT EXISTS()" SQL expression.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+15. Language: Nested at-expressions for the "in" operator
+
+Similarly to the exists() and empty() functions, operator "in" now supports nested at-expressions:
+
+    user @* {
+        .city in company @* {} ( company.city )
+    }
+
+Such nested expressions can access entities of a parent at-expression and are translated to nested SELECT queries
+when executed. For example, the expression
+
+    user @* {
+        .city in company @* { user.industry } ( company.city )
+    }
+
+is translated to an SQL query like:
+
+    SELECT U."rowid" FROM "c0.user" U
+    WHERE U."city" IN (SELECT C."city" FROM "c0.company" C WHERE C."industry" = U."industry")
+
+Same notes regarding cardinality and attributes matching as for empty() and exists() apply.

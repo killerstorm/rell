@@ -47,9 +47,11 @@ class V_UnaryExpr(
         private val varFacts: C_ExprVarFacts
 ): V_Expr(exprCtx, pos) {
     private val isDb = isDb(expr)
+    private val atDependencies = expr.atDependencies()
 
     override fun type() = op.resType
     override fun isDb() = isDb
+    override fun atDependencies() = atDependencies
     override fun varFacts() = varFacts
 
     override fun toRExpr0(): R_Expr {

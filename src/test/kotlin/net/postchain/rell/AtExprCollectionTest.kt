@@ -63,8 +63,8 @@ class AtExprCollectionTest: BaseRellTest(false) {
         chk("[123] @ {} (user @* {} ( $ ))", "ct_err:name:ambiguous:$")
         chk("(x: user) @* {} ([123] @ {} ( $ ))", "[123, 123]")
         chk("(x: [123]) @ {} (user @* {} ( $ ))", "[user[100], user[101]]")
-        //chk("user @* {} ((x: [123]) @ {} ( $ ))", "ct_err:expr:placeholder:none")
-        chk("[123] @ {} ((x: user) @* {} ( $ ))", "[123, 123]")
+        chk("user @* {} ((x: [123]) @ {} ( $ ))", "ct_err:[at_expr:placeholder:belongs_to_outer][expr_sqlnotallowed]")
+        chk("[123] @ {} ((x: user) @* {} ( $ ))", "ct_err:at_expr:placeholder:belongs_to_outer")
     }
 
     @Test fun testCardinality() {
@@ -202,10 +202,10 @@ class AtExprCollectionTest: BaseRellTest(false) {
         def("struct user { name: text; score: integer; }")
         def("function from() = [user('Bob',123), user('Alice',score=456)];")
 
-        chk("from() @* { 'Bob' }", "ct_err:at_where_type:0:text")
-        chk("from() @* { 'Alice' }", "ct_err:at_where_type:0:text")
-        chk("from() @* { 123 }", "ct_err:at_where_type:0:integer")
-        chk("from() @* { 456 }", "ct_err:at_where_type:0:integer")
+        chk("from() @* { 'Bob' }", "[user{name=Bob,score=123}]")
+        chk("from() @* { 'Alice' }", "[user{name=Alice,score=456}]")
+        chk("from() @* { 123 }", "[user{name=Bob,score=123}]")
+        chk("from() @* { 456 }", "[user{name=Alice,score=456}]")
     }
 
     @Test fun testWhatDefault() {
@@ -439,14 +439,8 @@ class AtExprCollectionTest: BaseRellTest(false) {
         chk("(x:[1,2,3]) @* {} ( (y:[4,5,6]) @* {} ( x, y ) )", "[[(1,4), (1,5), (1,6)], [(2,4), (2,5), (2,6)], [(3,4), (3,5), (3,6)]]")
         chk("(x:[1,2,3]) @* {} ( [4,5,6] @* {} ( x, $ ) )", "[[(1,4), (1,5), (1,6)], [(2,4), (2,5), (2,6)], [(3,4), (3,5), (3,6)]]")
         chk("(x:[1,2,3]) @* {} ( [4,5,6] @* {} ( $, x ) )", "[[(4,1), (5,1), (6,1)], [(4,2), (5,2), (6,2)], [(4,3), (5,3), (6,3)]]")
-        chk("[1,2,3] @* {} ( (y:[4,5,6]) @* {} ( $, y ) )", "[[(1,4), (1,5), (1,6)], [(2,4), (2,5), (2,6)], [(3,4), (3,5), (3,6)]]")
-        chk("[1,2,3] @* {} ( (y:[4,5,6]) @* {} ( y, $ ) )", "[[(4,1), (5,1), (6,1)], [(4,2), (5,2), (6,2)], [(4,3), (5,3), (6,3)]]")
-    }
-
-    @Test fun testNestedAttributes() {
-        initUsersCompanies()
-        chk("users() @* {} ( companies() @* {} ( .name ) )", "[[Apple, Amazon], [Apple, Amazon]]")
-        chk("companies() @* {} ( users() @* {} ( .name ) )", "[[Bob, Alice], [Bob, Alice]]")
+        chk("[1,2,3] @* {} ( (y:[4,5,6]) @* {} ( $, y ) )", "ct_err:at_expr:placeholder:belongs_to_outer")
+        chk("[1,2,3] @* {} ( (y:[4,5,6]) @* {} ( y, $ ) )", "ct_err:at_expr:placeholder:belongs_to_outer")
     }
 
     @Test fun testNestedPlaceholder() {
@@ -455,9 +449,9 @@ class AtExprCollectionTest: BaseRellTest(false) {
         chk("(u: users()) @* {} ( (c: companies()) @* {} ( u.pos, c.city ) )", exp)
         chk("(u: users()) @* {} ( (c: companies()) @* {} ( $.pos, c.city ) )", "ct_err:expr:placeholder:none")
         chk("(u: users()) @* {} ( (c: companies()) @* {} ( u.pos, $.city ) )", "ct_err:expr:placeholder:none")
-        chk("users() @* {} ( (c: companies()) @* {} ( $.pos, c.city ) )", exp)
+        chk("users() @* {} ( (c: companies()) @* {} ( $.pos, c.city ) )", "ct_err:at_expr:placeholder:belongs_to_outer")
         chk("users() @* {} ( (c: companies()) @* {} ( $.city, c.pos ) )",
-                "ct_err:[unknown_member:[user]:city][unknown_member:[company]:pos]")
+                "ct_err:[at_expr:placeholder:belongs_to_outer][unknown_member:[user]:city][unknown_member:[company]:pos]")
         chk("(u: users()) @* {} ( companies() @* {} ( u.pos, $.city ) )", exp)
         chk("(u: users()) @* {} ( companies() @* {} ( u.city, $.pos ) )",
                 "ct_err:[unknown_member:[user]:city][unknown_member:[company]:pos]")

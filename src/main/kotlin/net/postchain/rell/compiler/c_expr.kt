@@ -8,7 +8,6 @@ import net.postchain.rell.compiler.ast.C_BinOp
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_NameExprPair
 import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.compiler.vexpr.V_AtAttrExpr
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_ObjectExpr
 import net.postchain.rell.compiler.vexpr.V_RExpr
@@ -17,43 +16,10 @@ import net.postchain.rell.runtime.Rt_EnumValue
 import net.postchain.rell.utils.Nullable
 import net.postchain.rell.utils.orElse
 
-sealed class C_ExprContextAttr(val type: R_Type) {
-    abstract fun compile(pos: S_Pos): V_Expr
-}
-
-class C_ExprContextAttr_DbAtEntity(
-        private val exprCtx: C_ExprContext,
-        private val atEntity: C_AtEntity,
-        private val attrRef: C_EntityAttrRef,
-        private val outerAtExpr: Boolean
-): C_ExprContextAttr(attrRef.type()) {
-    override fun compile(pos: S_Pos): V_Expr {
-        if (outerAtExpr) {
-            val attrName = attrRef.name
-            val qName = "${atEntity.alias}.$attrName"
-            exprCtx.msgCtx.error(pos, "at_expr:attr:belongs_to_outer:${atEntity.alias}:$attrName",
-                    "Attribute '$attrName' belongs to an outer at-expression, fully qualified name is required ($qName)")
-        }
-        return V_AtAttrExpr(exprCtx, pos, atEntity, attrRef)
-    }
-
-    override fun toString() = "${atEntity.alias}.${attrRef.name}"
-}
-
-class C_ExprContextAttr_ColAtMember(
-        private val exprCtx: C_ExprContext,
-        private val memberValue: C_MemberValue,
-        private val memberRef: C_MemberRef
-): C_ExprContextAttr(memberValue.type()) {
-    override fun compile(pos: S_Pos) = memberValue.compile(exprCtx, memberRef)
-    override fun toString() = ".${memberRef.name}"
-}
-
 class C_ExprContext private constructor(
         val blkCtx: C_BlockContext,
-        val nameCtx: C_NameContext,
         val factsCtx: C_VarFactsContext,
-        val dbAtCtx: C_DbAtContext?,
+        val atCtx: C_AtContext?,
         val insideGuardBlock: Boolean
 ) {
     val defCtx = blkCtx.defCtx
@@ -68,27 +34,23 @@ class C_ExprContext private constructor(
 
     fun update(
             blkCtx: C_BlockContext? = null,
-            nameCtx: C_NameContext? = null,
             factsCtx: C_VarFactsContext? = null,
-            dbAtCtx: Nullable<C_DbAtContext>? = null,
+            atCtx: Nullable<C_AtContext>? = null,
             insideGuardBlock: Boolean? = null
     ): C_ExprContext {
         val blkCtx2 = blkCtx ?: this.blkCtx
-        val nameCtx2 = nameCtx ?: this.nameCtx
         val factsCtx2 = factsCtx ?: this.factsCtx
-        val dbAtCtx2 = dbAtCtx.orElse(this.dbAtCtx)
+        val atCtx2 = atCtx.orElse(this.atCtx)
         val insideGuardBlock2 = this.insideGuardBlock || (insideGuardBlock ?: false)
         return if (
                 blkCtx2 == this.blkCtx
-                && nameCtx2 == this.nameCtx
                 && factsCtx2 == this.factsCtx
-                && dbAtCtx2 == this.dbAtCtx
+                && atCtx2 == this.atCtx
                 && insideGuardBlock2 == this.insideGuardBlock
         ) this else C_ExprContext(
                 blkCtx = blkCtx2,
-                nameCtx = nameCtx2,
                 factsCtx = factsCtx2,
-                dbAtCtx = dbAtCtx2,
+                atCtx = atCtx2,
                 insideGuardBlock = insideGuardBlock2
         )
     }
@@ -105,13 +67,30 @@ class C_ExprContext private constructor(
         }
     }
 
+    fun findWhereAttributesByName(name: String) = blkCtx.lookupAtAttributesByName(name, false)
+    fun findWhereAttributesByType(type: R_Type) = blkCtx.lookupAtAttributesByType(type)
+
+    fun resolveAttr(name: S_Name): V_Expr {
+        val attrs = blkCtx.lookupAtAttributesByName(name.str, true)
+
+        if (attrs.isEmpty()) {
+            throw C_Errors.errUnknownAttr(name)
+        } else if (attrs.size > 1) {
+            val nameStr = name.str
+            throw C_Errors.errMultipleAttrs(name.pos, attrs, "at_attr_name_ambig:$nameStr",
+                    "Multiple attributes with name '$nameStr'")
+        }
+
+        val attr = attrs[0]
+        return attr.compile(this, name.pos)
+    }
+
     companion object {
-        fun createRoot(blkCtx: C_BlockContext, nameCtx: C_NameContext) = C_ExprContext(
+        fun createRoot(blkCtx: C_BlockContext) = C_ExprContext(
                 blkCtx = blkCtx,
-                nameCtx = nameCtx,
                 factsCtx = C_VarFactsContext.EMPTY,
                 insideGuardBlock = false,
-                dbAtCtx = null
+                atCtx = null
         )
     }
 }
@@ -162,7 +141,7 @@ class C_StmtContext private constructor(
 
     fun subBlock(loop: C_LoopUid?): Pair<C_StmtContext, C_OwnerBlockContext> {
         val subBlkCtx = blkCtx.createSubContext("blk")
-        val subExprCtx = exprCtx.update(blkCtx = subBlkCtx, nameCtx = subBlkCtx.nameCtx)
+        val subExprCtx = exprCtx.update(blkCtx = subBlkCtx)
         val subCtx = update(blkCtx = subBlkCtx, exprCtx = subExprCtx, loop = loop, topLevel = subBlkCtx.isTopLevelBlock())
         return Pair(subCtx, subBlkCtx)
     }
@@ -173,50 +152,10 @@ class C_StmtContext private constructor(
 
     companion object {
         fun createRoot(blkCtx: C_BlockContext): C_StmtContext {
-            val exprCtx = C_ExprContext.createRoot(blkCtx, blkCtx.nameCtx)
+            val exprCtx = C_ExprContext.createRoot(blkCtx)
             return C_StmtContext(blkCtx, exprCtx, loop = null, topLevel = true)
         }
     }
-}
-
-sealed class C_NameContext {
-    abstract fun findAttributesByName(name: S_Name): List<C_ExprContextAttr>
-    abstract fun findAttributesByType(type: R_Type): List<C_ExprContextAttr>
-
-    fun resolveAttr(name: S_Name): V_Expr {
-        val attrs = findAttributesByName(name)
-
-        if (attrs.isEmpty()) {
-            throw C_Errors.errUnknownAttr(name)
-        } else if (attrs.size > 1) {
-            val nameStr = name.str
-            throw C_Errors.errMultipleAttrs(name.pos, attrs, "at_attr_name_ambig:$nameStr",
-                    "Multiple attributes with name '$nameStr'")
-        }
-
-        val attr = attrs[0]
-        return attr.compile(name.pos)
-    }
-
-    companion object {
-        fun createBlock(): C_NameContext {
-            return C_BlockNameContext()
-        }
-
-        fun createAt(from: C_AtFrom): C_NameContext {
-            return C_AtNameContext(from)
-        }
-    }
-}
-
-private class C_BlockNameContext: C_NameContext() {
-    override fun findAttributesByName(name: S_Name) = listOf<C_ExprContextAttr>()
-    override fun findAttributesByType(type: R_Type) = listOf<C_ExprContextAttr>()
-}
-
-private class C_AtNameContext(private val from: C_AtFrom): C_NameContext() {
-    override fun findAttributesByName(name: S_Name) = from.findAttributesByName(name)
-    override fun findAttributesByType(type: R_Type) = from.findAttributesByType(type)
 }
 
 class C_AssignOp(val pos: S_Pos, val code: String, val rOp: R_BinaryOp, val dbOp: Db_BinaryOp?)
@@ -275,8 +214,8 @@ class C_EntityAttrDestination(
 
         val lambdaBlkCtx = ctx.blkCtx.createSubContext("<$metaName:lambda>")
         val lambdaCtx = ctx.update(blkCtx = lambdaBlkCtx)
-        val baseVar = lambdaBlkCtx.newLocalVar("<$metaName:base>", base.type(), false, false)
-        val srcVar = lambdaBlkCtx.newLocalVar("<$metaName:src>", srcExpr.type, false, false)
+        val baseVar = lambdaBlkCtx.newLocalVar("<$metaName:base>", base.type(), false, null)
+        val srcVar = lambdaBlkCtx.newLocalVar("<$metaName:src>", srcExpr.type, false, null)
 
         val cLambdaB = C_LambdaBlock.builder(lambdaCtx, rEntity.type)
         val fromBlkCtx = cLambdaB.innerBlkCtx.createSubContext("<$metaName:from>")
@@ -334,7 +273,7 @@ class C_ObjectAttrDestination(
         val metaName = "${rObject.appLevelName}.${attr.name}="
 
         val lambdaBlkCtx = ctx.blkCtx.createSubContext("<$metaName:lambda>")
-        val srcVar = lambdaBlkCtx.newLocalVar("<$metaName:src>", srcExpr.type, false, false)
+        val srcVar = lambdaBlkCtx.newLocalVar("<$metaName:src>", srcExpr.type, false, null)
 
         val fromBlkCtx = lambdaBlkCtx.createSubContext("<$metaName:from>")
         val rFromBlock = fromBlkCtx.buildBlock().rBlock

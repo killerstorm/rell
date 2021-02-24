@@ -6,12 +6,14 @@ package net.postchain.rell.test
 
 import net.postchain.base.data.PostgreSQLDatabaseAccess
 import net.postchain.base.data.SQLDatabaseAccess
-import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.runtime.Rt_SqlManager
 import net.postchain.rell.sql.*
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.PostchainUtils
 import java.io.Closeable
 import java.sql.Connection
+import java.sql.PreparedStatement
+import java.sql.ResultSet
 
 class RellTestContext(useSql: Boolean = true): Closeable {
     class BlockBuilder(private val chainId: Long) {
@@ -41,6 +43,7 @@ class RellTestContext(useSql: Boolean = true): Closeable {
     private var destroyed = false
     private var sqlResource: AutoCloseable? = null
     private var sqlMgr: SqlManager? = null
+    private val sqlStats = TestSqlStats()
 
     var sqlLogging = false
 
@@ -68,7 +71,7 @@ class RellTestContext(useSql: Boolean = true): Closeable {
         try {
             conn.autoCommit = true
 
-            val sqlMgr = Rt_SqlManager(ConnectionSqlManager(conn, sqlLogging), true)
+            val sqlMgr = Rt_SqlManager(TestSqlManager(ConnectionSqlManager(conn, sqlLogging), sqlStats), true)
 
             sqlMgr.transaction { sqlExec ->
                 SqlUtils.dropAll(sqlExec, true)
@@ -141,5 +144,44 @@ class RellTestContext(useSql: Boolean = true): Closeable {
     fun sqlMgr(): SqlManager {
         init()
         return if (useSql) sqlMgr!! else NoConnSqlManager
+    }
+
+    fun resetSqlCounter() {
+        sqlStats.count = 0
+    }
+
+    fun sqlCounter() = sqlStats.count
+
+    private class TestSqlStats {
+        var count = 0
+    }
+
+    private class TestSqlManager(private val mgr: SqlManager, private val stats: TestSqlStats): SqlManager() {
+        override val hasConnection = mgr.hasConnection
+
+        override fun <T> execute0(tx: Boolean, code: (SqlExecutor) -> T): T {
+            return mgr.execute(tx) { sqlExec ->
+                code(TestSqlExecutor(sqlExec))
+            }
+        }
+
+        private inner class TestSqlExecutor(private val exec: SqlExecutor): SqlExecutor() {
+            override fun <T> connection(code: (Connection) -> T): T = exec.connection(code)
+
+            override fun execute(sql: String) {
+                stats.count++
+                exec.execute(sql)
+            }
+
+            override fun execute(sql: String, preparator: (PreparedStatement) -> Unit) {
+                stats.count++
+                exec.execute(sql, preparator)
+            }
+
+            override fun executeQuery(sql: String, preparator: (PreparedStatement) -> Unit, consumer: (ResultSet) -> Unit) {
+                stats.count++
+                exec.executeQuery(sql, preparator, consumer)
+            }
+        }
     }
 }

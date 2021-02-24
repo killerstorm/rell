@@ -10,6 +10,7 @@ import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_DecimalValue
 import net.postchain.rell.runtime.Rt_IntValue
 import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.immSetOf
 import net.postchain.rell.utils.toImmList
 
 class S_AtExprFrom(val alias: S_Name?, val entityName: List<S_Name>)
@@ -26,7 +27,7 @@ class S_AtExprWhat_Default: S_AtExprWhat() {
 
 class S_AtExprWhat_Simple(val path: List<S_Name>): S_AtExprWhat() {
     override fun compile(ctx: C_ExprContext, from: C_AtFrom, subValues: MutableList<V_Expr>): C_AtWhat {
-        val vAttrExpr = ctx.nameCtx.resolveAttr(path[0])
+        val vAttrExpr = ctx.resolveAttr(path[0])
         var expr: C_Expr = C_VExpr(vAttrExpr)
         for (step in path.subList(1, path.size)) {
             expr = expr.member(ctx, step, false)
@@ -126,7 +127,7 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
                 nameExplicit = true
             }
         } else if (!omit && (cSummarization == null || cSummarization.isGroup())) {
-            name = vExpr.implicitWhatName()
+            name = vExpr.implicitAtWhatAttrName()
         }
 
         return WhatField(vExpr, namePos, name, nameExplicit, flags, cSummarization)
@@ -211,53 +212,127 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
 }
 
 class S_AtExprWhere(val exprs: List<S_Expr>) {
-    fun compile(ctx: C_ExprContext, subValues: MutableList<V_Expr>): V_Expr? {
-        val whereExprs = exprs.withIndex().map { (idx, expr) -> compileWhereExpr(ctx, idx, expr, subValues) }
+    fun compile(ctx: C_ExprContext, atExprId: R_AtExprId, subValues: MutableList<V_Expr>): V_Expr? {
+        val whereExprs = exprs.withIndex().map { (idx, expr) -> compileWhereExpr(ctx, atExprId, idx, expr, subValues) }
         return makeWhere(ctx, whereExprs)
     }
 
-    private fun compileWhereExpr(ctx: C_ExprContext, idx: Int, expr: S_Expr, subValues: MutableList<V_Expr>): V_Expr {
-        val cExpr = expr.compileWhere(ctx, idx)
+    private fun compileWhereExpr(
+            ctx: C_ExprContext,
+            atExprId: R_AtExprId,
+            idx: Int,
+            expr: S_Expr,
+            subValues: MutableList<V_Expr>
+    ): V_Expr {
+        val cExpr = expr.compileSafe(ctx)
         val vExpr = cExpr.value()
         subValues.add(vExpr)
 
+        val type = vExpr.type()
+        if (type.isError()) {
+            return vExpr
+        }
+
+        val dependsOnThisAtExpr = vExpr.atDependencies() == immSetOf(atExprId)
+        val attrName = vExpr.implicitAtWhereAttrName()
+
+        return if (!dependsOnThisAtExpr && attrName != null) {
+            compileWhereExprName(ctx, idx, vExpr, attrName, type)
+        } else {
+            compileWhereExprNoName(ctx, idx, vExpr, dependsOnThisAtExpr)
+        }
+    }
+
+    private fun compileWhereExprNoName(ctx: C_ExprContext, idx: Int, vExpr: V_Expr, dependsOnThisAtExpr: Boolean): V_Expr {
         val type = vExpr.type()
         if (type == R_BooleanType || type == R_CtErrorType) {
             return vExpr
         }
 
-        if (vExpr.dependsOnAtVariable()) {
+        if (dependsOnThisAtExpr) {
             throw C_Errors.errTypeMismatch(vExpr.pos, type, R_BooleanType, "at_where:type:$idx",
-                    "Wrong type of where-expression #${idx+1}")
+                    "Wrong type of ${whereExprMsg(idx)}")
         }
 
         val attrs = S_AtExpr.findWhereContextAttrsByType(ctx, type)
         if (attrs.isEmpty()) {
-            ctx.msgCtx.error(expr.startPos, "at_where_type:$idx:$type",
-                    "No attribute matches type of where-expression #${idx + 1}: $type")
-            return C_Utils.errorVExpr(ctx, expr.startPos)
+            ctx.msgCtx.error(vExpr.pos, "at_where_type:$idx:$type",
+                    "No attribute matches type of ${whereExprMsg(idx)} ($type)")
+            return C_Utils.errorVExpr(ctx, vExpr.pos)
         } else if (attrs.size > 1) {
-            throw C_Errors.errMultipleAttrs(expr.startPos, attrs, "at_attr_type_ambig:$idx:$type",
-                    "Multiple attributes match type of where-expression #${idx+1} ($type)")
+            throw C_Errors.errMultipleAttrs(vExpr.pos, attrs, "at_attr_type_ambig:$idx:$type",
+                    "Multiple attributes match type of ${whereExprMsg(idx)} ($type)")
         }
 
         val attr = attrs[0]
-        val attrExpr = attr.compile(expr.startPos)
-        return C_Utils.makeVBinaryExprEq(ctx, expr.startPos, attrExpr, vExpr)
+        val attrExpr = attr.compile(ctx, vExpr.pos)
+        return C_Utils.makeVBinaryExprEq(ctx, vExpr.pos, attrExpr, vExpr)
+    }
+
+    private fun compileWhereExprName(ctx: C_ExprContext, idx: Int, vExpr: V_Expr, name: String, type: R_Type): V_Expr {
+        val entityAttrs = ctx.findWhereAttributesByName(name)
+        if (entityAttrs.isEmpty() && type == R_BooleanType) {
+            return vExpr
+        }
+
+        val entityAttr = ctx.msgCtx.consumeError {
+            matchWhereAttribute(ctx, idx, vExpr.pos, name, entityAttrs, type)
+        }
+        entityAttr ?: return C_Utils.errorVExpr(ctx, vExpr.pos)
+
+        val entityAttrExpr = entityAttr.compile(ctx, vExpr.pos)
+        return C_Utils.makeVBinaryExprEq(ctx, vExpr.pos, entityAttrExpr, vExpr)
+    }
+
+    private fun matchWhereAttribute(
+            ctx: C_ExprContext,
+            idx: Int,
+            exprPos: S_Pos,
+            name: String,
+            entityAttrsByName: List<C_ExprContextAttr>,
+            varType: R_Type
+    ): C_ExprContextAttr {
+        val entityAttrsByType = if (entityAttrsByName.isNotEmpty()) {
+            entityAttrsByName.filter { it.type == varType }
+        } else {
+            S_AtExpr.findWhereContextAttrsByType(ctx, varType)
+        }
+
+        if (entityAttrsByType.isEmpty()) {
+            throw C_Error.more(exprPos, "at_where:var_noattrs:$idx:$name:$varType",
+                    "No attribute matches name '$name' or type $varType")
+        } else if (entityAttrsByType.size > 1) {
+            if (entityAttrsByName.isEmpty()) {
+                throw C_Errors.errMultipleAttrs(
+                        exprPos,
+                        entityAttrsByType,
+                        "at_where:var_manyattrs_type:$idx:$name:$varType",
+                        "Multiple attributes match expression type $varType"
+                )
+            } else {
+                throw C_Errors.errMultipleAttrs(
+                        exprPos,
+                        entityAttrsByType,
+                        "at_where:var_manyattrs_nametype:$idx:$name:$varType",
+                        "Multiple attributes match name '$name' and type $varType"
+                )
+            }
+        }
+
+        return entityAttrsByType[0]
     }
 
     private fun makeWhere(ctx: C_ExprContext, compiledExprs: List<V_Expr>): V_Expr? {
-        for (value in compiledExprs) {
-            check(value.type() in listOf(R_BooleanType, R_CtErrorType))
+        return if (compiledExprs.isEmpty()) null else {
+            CommonUtils.foldSimple(compiledExprs) { left, right ->
+                C_BinOp_And.compile(ctx, left, right) ?: C_Utils.errorVExpr(ctx, left.pos)
+            }
         }
+    }
 
-        if (compiledExprs.isEmpty()) {
-            return null
-        }
-
-        return CommonUtils.foldSimple(compiledExprs) { left, right ->
-            C_BinOp_And.compile(ctx, left, right) ?: C_Utils.errorVExpr(ctx, left.pos)
-        }
+    private fun whereExprMsg(idx: Int): String {
+        val idxMsg = if (exprs.size == 1) "" else " #${idx + 1}"
+        return "where-expression$idxMsg"
     }
 }
 
@@ -271,30 +346,33 @@ class S_AtExpr(
         val offset: S_Expr?
 ): S_Expr(from.startPos) {
     override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
-        val (cFrom, cDetails) = compileInternal(ctx, null)
-        val vExpr = cFrom.compile(cDetails)
-        return C_VExpr(vExpr)
+        return compileInternal(ctx, null)
     }
 
-    override fun compileNestedAt(ctx: C_ExprContext, parentAtCtx: C_DbAtContext): C_MaybeNestedAt {
-        val (cFrom, cDetails) = compileInternal(ctx, parentAtCtx)
-        return cFrom.compileNested(cDetails)
+    override fun compileNestedAt(ctx: C_ExprContext, parentAtCtx: C_AtContext): C_Expr {
+        return compileInternal(ctx, parentAtCtx)
     }
 
-    private fun compileInternal(ctx: C_ExprContext, parentAtCtx: C_DbAtContext?): Pair<C_AtFrom, C_AtDetails> {
+    private fun compileInternal(ctx: C_ExprContext, parentAtCtx: C_AtContext?): C_Expr {
         val subValues = mutableListOf<V_Expr>()
 
         val atExprId = ctx.appCtx.nextAtExprId()
         val fromCtx = C_AtFromContext(atPos, atExprId, parentAtCtx)
         val cFrom = from.compileFrom(ctx, fromCtx, subValues)
 
-        val cDetails = compileDetails(ctx, cFrom, subValues)
-        return Pair(cFrom, cDetails)
+        val cDetails = compileDetails(ctx, atExprId, cFrom, subValues)
+        val vExpr = cFrom.compile(cDetails)
+        return C_VExpr(vExpr)
     }
 
-    private fun compileDetails(ctx: C_ExprContext, cFrom: C_AtFrom, subValues: MutableList<V_Expr>): C_AtDetails {
+    private fun compileDetails(
+            ctx: C_ExprContext,
+            atExprId: R_AtExprId,
+            cFrom: C_AtFrom,
+            subValues: MutableList<V_Expr>
+    ): C_AtDetails {
         val innerCtx = cFrom.innerExprCtx()
-        val vWhere = where.compile(innerCtx, subValues)
+        val vWhere = where.compile(innerCtx, atExprId, subValues)
 
         val cWhat = what.compile(innerCtx, cFrom, subValues)
         val cResult = compileAtResult(cWhat.allFields)
@@ -341,7 +419,7 @@ class S_AtExpr(
             return null
         }
 
-        val subCtx = ctx.update(dbAtCtx = null)
+        val subCtx = ctx.update(atCtx = null)
         val vExpr = sExpr.compile(subCtx).value()
         subValues.add(vExpr)
 
@@ -356,7 +434,7 @@ class S_AtExpr(
             return if (type == R_BooleanType) {
                 listOf()
             } else {
-                ctx.nameCtx.findAttributesByType(type)
+                ctx.findWhereAttributesByType(type)
             }
         }
     }

@@ -31,21 +31,17 @@ abstract class S_Expr(val startPos: S_Pos) {
     fun compile(ctx: C_StmtContext, typeHint: C_TypeHint = C_TypeHint.NONE) = compile(ctx.exprCtx, typeHint)
     fun compileOpt(ctx: C_StmtContext, typeHint: C_TypeHint = C_TypeHint.NONE) = compileOpt(ctx.exprCtx, typeHint)
 
-    open fun compileNestedAt(ctx: C_ExprContext, parentAtCtx: C_DbAtContext): C_MaybeNestedAt {
-        return C_MaybeNestedAt_No(compile(ctx))
-    }
-
     open fun compileFrom(ctx: C_ExprContext, fromCtx: C_AtFromContext, subValues: MutableList<V_Expr>): C_AtFrom {
         val item = compileFromItem(ctx)
         return when (item) {
             is C_AtFromItem_Entity -> {
                 val atEntityId = ctx.appCtx.nextAtEntityId(fromCtx.atExprId)
                 val cEntity = C_AtEntity(item.pos, item.entity, item.alias.str, false, atEntityId)
-                C_AtFrom_Entities(ctx, listOf(cEntity), fromCtx.parentAtCtx)
+                C_AtFrom_Entities(ctx, fromCtx, listOf(cEntity))
             }
             is C_AtFromItem_Iterable -> {
                 subValues.add(item.vExpr)
-                C_AtFrom_Iterable(ctx, fromCtx.atPos, null, item)
+                C_AtFrom_Iterable(ctx, fromCtx, null, item)
             }
         }
     }
@@ -69,7 +65,7 @@ abstract class S_Expr(val startPos: S_Pos) {
         }
     }
 
-    open fun compileWhere(ctx: C_ExprContext, idx: Int): C_Expr = compileSafe(ctx)
+    open fun compileNestedAt(ctx: C_ExprContext, parentAtCtx: C_AtContext): C_Expr = compileSafe(ctx)
 
     open fun asName(): S_Name? = null
     open fun constantValue(): Rt_Value? = null
@@ -243,6 +239,7 @@ class S_CreateExpr(pos: S_Pos, val entityName: List<S_Name>, val exprs: List<S_N
 
 class S_ParenthesesExpr(startPos: S_Pos, val expr: S_Expr): S_Expr(startPos) {
     override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint) = expr.compile(ctx, typeHint)
+    override fun compileNestedAt(ctx: C_ExprContext, parentAtCtx: C_AtContext) = expr.compileNestedAt(ctx, parentAtCtx)
     override fun compileFromItem(ctx: C_ExprContext) = expr.compileFromItem(ctx)
 }
 
@@ -309,12 +306,12 @@ class S_TupleExpr(startPos: S_Pos, val fields: List<S_TupleExprField>): S_Expr(s
 
         if (entities.isEmpty()) {
             subValues.addAll(iterables.map { it.vExpr })
-            if (iterables.size > 1 && iterables.any { it.vExpr.type() != R_CtErrorType }) {
+            if (iterables.size > 1 && iterables.any { it.vExpr.type().isNotError() }) {
                 ctx.msgCtx.error(iterables[1].pos, "at:from:many_iterables:${iterables.size}",
                         "Only one collection is allowed in at-expression")
             }
             val alias = pairs[0].first
-            return C_AtFrom_Iterable(ctx, fromCtx.atPos, alias, iterables[0])
+            return C_AtFrom_Iterable(ctx, fromCtx, alias, iterables[0])
         }
 
         val cEntities = entities.mapIndexed { i, item ->
@@ -324,7 +321,7 @@ class S_TupleExpr(startPos: S_Pos, val fields: List<S_TupleExprField>): S_Expr(s
             C_AtEntity(item.pos, item.entity, alias.str, explicitAlias != null, atEntityId)
         }
 
-        return C_AtFrom_Entities(ctx, cEntities, fromCtx.parentAtCtx)
+        return C_AtFrom_Entities(ctx, fromCtx, cEntities)
     }
 
     private fun <T: C_AtFromItem> processFromItem(ctx: C_ExprContext, item: T, targets: MutableList<T>, opposites: List<*>) {

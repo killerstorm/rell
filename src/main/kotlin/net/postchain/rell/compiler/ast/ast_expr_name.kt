@@ -5,9 +5,7 @@
 package net.postchain.rell.compiler.ast
 
 import net.postchain.rell.compiler.*
-import net.postchain.rell.model.R_BooleanType
 import net.postchain.rell.model.R_NullableType
-import net.postchain.rell.model.R_Type
 import net.postchain.rell.utils.toImmList
 
 class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
@@ -34,64 +32,6 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
         }
     }
 
-    override fun compileWhere(ctx: C_ExprContext, idx: Int): C_Expr {
-        val loc = ctx.blkCtx.lookupEntry(name.str)
-        loc ?: return compileSafe(ctx)
-
-        val vExpr = loc.compile(ctx, name.pos)
-        val locType = vExpr.type()
-
-        val entityAttrs = ctx.nameCtx.findAttributesByName(name)
-        if (entityAttrs.isEmpty() && locType == R_BooleanType) {
-            return compileSafe(ctx)
-        }
-
-        val entityAttr = ctx.msgCtx.consumeError {
-            matchAttribute(ctx, idx, entityAttrs, locType)
-        }
-        entityAttr ?: return C_Utils.errorExpr(ctx, startPos)
-
-        val entityAttrExpr = entityAttr.compile(startPos)
-        val vResExpr = C_Utils.makeVBinaryExprEq(ctx, startPos, entityAttrExpr, vExpr)
-        return C_VExpr(vResExpr)
-    }
-
-    private fun matchAttribute(
-            ctx: C_ExprContext,
-            idx: Int,
-            entityAttrsByName: List<C_ExprContextAttr>,
-            varType: R_Type
-    ): C_ExprContextAttr {
-        val entityAttrsByType = if (!entityAttrsByName.isEmpty()) {
-            entityAttrsByName.filter { C_BinOp_EqNe.checkTypesDb(it.type, varType) }
-        } else {
-            S_AtExpr.findWhereContextAttrsByType(ctx, varType)
-        }
-
-        if (entityAttrsByType.isEmpty()) {
-            throw C_Error.more(name.pos, "at_where:var_noattrs:$idx:${name.str}:$varType",
-                    "No attribute matches variable '${name.str}' by name or type ($varType)")
-        } else if (entityAttrsByType.size > 1) {
-            if (entityAttrsByName.isEmpty()) {
-                throw C_Errors.errMultipleAttrs(
-                        name.pos,
-                        entityAttrsByType,
-                        "at_where:var_manyattrs_type:$idx:${name.str}:$varType",
-                        "Multiple attributes match variable '${name.str}' by type ($varType)"
-                )
-            } else {
-                throw C_Errors.errMultipleAttrs(
-                        name.pos,
-                        entityAttrsByType,
-                        "at_where:var_manyattrs_nametype:$idx:${name.str}:$varType",
-                        "Multiple attributes match variable '${name.str}' by name and type ($varType)"
-                )
-            }
-        }
-
-        return entityAttrsByType[0]
-    }
-
     override fun compileFromItem(ctx: C_ExprContext): C_AtFromItem {
         val entity = ctx.nsCtx.getEntityOpt(listOf(name))
         if (entity != null) {
@@ -103,7 +43,7 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
 
 class S_AttrExpr(pos: S_Pos, val name: S_Name): S_Expr(pos) {
     override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
-        val vExpr = ctx.nameCtx.resolveAttr(name)
+        val vExpr = ctx.resolveAttr(name)
         return C_VExpr(vExpr)
     }
 }

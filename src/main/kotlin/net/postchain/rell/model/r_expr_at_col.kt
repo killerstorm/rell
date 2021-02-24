@@ -81,14 +81,12 @@ class R_ColAtSummarization_All(private val what: R_ColAtWhat): R_ColAtSummarizat
     override fun newSummarizer(): R_ColAtSummarizer = R_ColAtSummarizer_All(what)
 }
 
-class R_ColAtLimits(val limit: Long?, val offset: Long?)
-
 sealed class R_ColAtSummarizer {
-    abstract fun newLimiter(limits: R_ColAtLimits, sorting: Boolean): R_ColAtLimiter
+    abstract fun newLimiter(limits: Rt_AtExprExtras, sorting: Boolean): R_ColAtLimiter
     abstract fun addRecord(values: List<Rt_Value>)
     abstract fun getResult(): List<List<Rt_Value>>
 
-    protected fun newLimiter0(limits: R_ColAtLimits, early: Boolean): R_ColAtLimiter {
+    protected fun newLimiter0(limits: Rt_AtExprExtras, early: Boolean): R_ColAtLimiter {
         if (limits.limit == null && limits.offset == null) return R_ColAtLimiter_None
         val limit = limits.limit ?: Long.MAX_VALUE
         val offset = limits.offset ?: 0L
@@ -99,7 +97,7 @@ sealed class R_ColAtSummarizer {
 private class R_ColAtSummarizer_None(private val fieldCount: Int): R_ColAtSummarizer() {
     val res = mutableListOf<List<Rt_Value>>()
 
-    override fun newLimiter(limits: R_ColAtLimits, sorting: Boolean) = newLimiter0(limits, !sorting)
+    override fun newLimiter(limits: Rt_AtExprExtras, sorting: Boolean) = newLimiter0(limits, !sorting)
 
     override fun addRecord(values: List<Rt_Value>) {
         check(values.size == fieldCount)
@@ -116,7 +114,7 @@ private class R_ColAtSummarizer_Group(what: R_ColAtWhat): R_ColAtSummarizer() {
     private val groupFields = what.groupFields
     private val map = mutableMapOf<List<Rt_Value>, R_ColAtRowAggregator>()
 
-    override fun newLimiter(limits: R_ColAtLimits, sorting: Boolean) = newLimiter0(limits, false)
+    override fun newLimiter(limits: Rt_AtExprExtras, sorting: Boolean) = newLimiter0(limits, false)
 
     override fun addRecord(values: List<Rt_Value>) {
         check(values.size == fields.size)
@@ -134,7 +132,7 @@ private class R_ColAtSummarizer_All(what: R_ColAtWhat): R_ColAtSummarizer() {
     private val fields = what.fields
     private val aggregator = R_ColAtRowAggregator(what.fields)
 
-    override fun newLimiter(limits: R_ColAtLimits, sorting: Boolean) = newLimiter0(limits, false)
+    override fun newLimiter(limits: Rt_AtExprExtras, sorting: Boolean) = newLimiter0(limits, false)
 
     override fun addRecord(values: List<Rt_Value>) {
         check(values.size == fields.size)
@@ -290,16 +288,13 @@ class R_ColAtExpr(
     }
 
     private fun evalList(frame: Rt_CallFrame): MutableList<Rt_Value> {
-        val limit = evalLimit(frame)
-        if (limit != null && limit <= 0L) return mutableListOf()
+        val rtExtras = extras.evaluate(frame)
+        if (rtExtras.limit != null && rtExtras.limit <= 0L) return mutableListOf()
 
         val iterable = from.evaluate(frame)
-        val offset = evalOffset(frame)
-
         val summarizer = summarization.newSummarizer()
 
-        val limits = R_ColAtLimits(limit, offset)
-        val limiter = summarizer.newLimiter(limits, hasSorting)
+        val limiter = summarizer.newLimiter(rtExtras, hasSorting)
 
         frame.block(block) {
             for (item in iterable) {

@@ -4,13 +4,13 @@
 
 package net.postchain.rell.repl
 
-import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.compiler.*
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlInit
 import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.sql.SqlManager
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 
@@ -73,6 +73,7 @@ class R_ReplCode(private val frame: R_CallFrame, stmts: List<R_Statement>) {
 }
 
 class ReplInterpreter private constructor(
+        compilerOptions: C_CompilerOptions,
         private val sourceDir: C_SourceDir,
         private val module: R_ModuleName?,
         private val rtGlobalCtx: Rt_GlobalContext,
@@ -81,7 +82,7 @@ class ReplInterpreter private constructor(
         private val useSql: Boolean
 ) {
     private val commands = ControlCommands()
-    private val cGlobalCtx = C_GlobalContext(C_CompilerOptions.DEFAULT, sourceDir, if (module != null) setOf(module) else setOf())
+    private val cGlobalCtx = C_GlobalContext(compilerOptions, sourceDir, if (module != null) setOf(module) else setOf())
 
     private var defsState = C_ReplDefsState.EMPTY
     private var codeState = ReplCodeState.EMPTY
@@ -269,6 +270,7 @@ class ReplInterpreter private constructor(
         )
 
         fun create(
+                compilerOptions: C_CompilerOptions,
                 sourceDir: C_SourceDir,
                 module: R_ModuleName?,
                 rtGlobalCtx: Rt_GlobalContext,
@@ -276,7 +278,7 @@ class ReplInterpreter private constructor(
                 outChannel: ReplOutputChannel,
                 useSql: Boolean
         ): ReplInterpreter? {
-            val interpreter = ReplInterpreter(sourceDir, module, rtGlobalCtx, sqlMgr, outChannel, useSql)
+            val interpreter = ReplInterpreter(compilerOptions, sourceDir, module, rtGlobalCtx, sqlMgr, outChannel, useSql)
             val init = interpreter.executeCode("", true) // Make sure the module can be found and has no errors.
             return if (init) interpreter else null
         }

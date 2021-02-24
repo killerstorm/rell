@@ -23,20 +23,35 @@ object RellCliUtils: KLogging() {
         return C_DiskSourceDir(file.absoluteFile)
     }
 
-    fun compileApp(sourceDir: String?, moduleName: R_ModuleName?, quiet: Boolean = false): R_App {
+    fun compileApp(
+            sourceDir: String?,
+            moduleName: R_ModuleName?,
+            quiet: Boolean = false,
+            compilerOptions: C_CompilerOptions
+    ): R_App {
         val cSourceDir = createSourceDir(sourceDir)
         val modules = listOf(moduleName).filterNotNull()
-        val res = compileApp(cSourceDir, modules, quiet)
+        val res = compileApp(cSourceDir, modules, quiet, compilerOptions)
         return res
     }
 
-    fun compileApp(sourceDir: C_SourceDir, modules: List<R_ModuleName>, quiet: Boolean): R_App {
-        val res = compile(sourceDir, modules, quiet)
+    fun compileApp(
+            sourceDir: C_SourceDir,
+            modules: List<R_ModuleName>,
+            quiet: Boolean,
+            compilerOptions: C_CompilerOptions
+    ): R_App {
+        val res = compile(sourceDir, modules, quiet, compilerOptions)
         return res.app!!
     }
 
-    fun compile(sourceDir: C_SourceDir, modules: List<R_ModuleName>, quiet: Boolean): C_CompilationResult {
-        val res = compile0(sourceDir, modules)
+    fun compile(
+            sourceDir: C_SourceDir,
+            modules: List<R_ModuleName>,
+            quiet: Boolean,
+            compilerOptions: C_CompilerOptions
+    ): C_CompilationResult {
+        val res = compile0(compilerOptions, sourceDir, modules)
 
         val warnCnt = res.warnings.size
         val errCnt = res.errors.size
@@ -65,9 +80,13 @@ object RellCliUtils: KLogging() {
         return res
     }
 
-    private fun compile0(sourceDir: C_SourceDir, modules: List<R_ModuleName>): C_CompilationResult {
+    private fun compile0(
+            compilerOptions: C_CompilerOptions,
+            sourceDir: C_SourceDir,
+            modules: List<R_ModuleName>
+    ): C_CompilationResult {
         try {
-            val res = C_Compiler.compile(sourceDir, modules)
+            val res = C_Compiler.compile(sourceDir, modules, compilerOptions)
             return res
         } catch (e: C_CommonError) {
             System.err.println(errMsg(e.msg))

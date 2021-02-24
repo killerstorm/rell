@@ -108,8 +108,18 @@ abstract class Db_Expr(val type: R_Type, directSubExprs: List<Db_Expr>, atExprId
 }
 
 abstract class RedDb_Expr {
+    protected open fun needsEnclosing() = true
+
     open fun constantValue(): Rt_Value? = null
-    abstract fun toSql(ctx: SqlGenContext, bld: SqlBuilder)
+
+    protected abstract fun toSql0(ctx: SqlGenContext, bld: SqlBuilder)
+
+    fun toSql(ctx: SqlGenContext, bld: SqlBuilder, enclose: Boolean) {
+        val reallyEnclose = enclose && needsEnclosing()
+        if (reallyEnclose) bld.append("(")
+        toSql0(ctx, bld)
+        if (reallyEnclose) bld.append(")")
+    }
 }
 
 class Db_InterpretedExpr(val expr: R_Expr): Db_Expr(expr.type, listOf()) {
@@ -122,9 +132,10 @@ class Db_InterpretedExpr(val expr: R_Expr): Db_Expr(expr.type, listOf()) {
 }
 
 private class RedDb_ConstantExpr(val value: Rt_Value): RedDb_Expr() {
+    override fun needsEnclosing() = false
     override fun constantValue() = value
 
-    override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
+    override fun toSql0(ctx: SqlGenContext, bld: SqlBuilder) {
         bld.append(value)
     }
 }
@@ -139,14 +150,12 @@ class Db_BinaryExpr(type: R_Type, val op: Db_BinaryOp, val left: Db_Expr, val ri
 }
 
 private class RedDb_BinaryExpr(val op: Db_BinaryOp, val left: RedDb_Expr, val right: RedDb_Expr): RedDb_Expr() {
-    override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
-        bld.append("(")
-        left.toSql(ctx, bld)
+    override fun toSql0(ctx: SqlGenContext, bld: SqlBuilder) {
+        left.toSql(ctx, bld, true)
         bld.append(" ")
         bld.append(op.sql)
         bld.append(" ")
-        right.toSql(ctx, bld)
-        bld.append(")")
+        right.toSql(ctx, bld, true)
     }
 }
 
@@ -157,12 +166,10 @@ class Db_UnaryExpr(type: R_Type, val op: Db_UnaryOp, val expr: Db_Expr): Db_Expr
     }
 
     private class RedDb_UnaryExpr(val op: Db_UnaryOp, val expr: RedDb_Expr): RedDb_Expr() {
-        override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
-            bld.append("(")
+        override fun toSql0(ctx: SqlGenContext, bld: SqlBuilder) {
             bld.append(op.sql)
             bld.append(" ")
-            expr.toSql(ctx, bld)
-            bld.append(")")
+            expr.toSql(ctx, bld, true)
         }
     }
 }
@@ -174,11 +181,9 @@ class Db_IsNullExpr(val expr: Db_Expr, val isNull: Boolean): Db_Expr(R_BooleanTy
     }
 
     private class RedDb_IsNullExpr(val expr: RedDb_Expr, val isNull: Boolean): RedDb_Expr() {
-        override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
-            bld.append("(")
-            expr.toSql(ctx, bld)
+        override fun toSql0(ctx: SqlGenContext, bld: SqlBuilder) {
+            expr.toSql(ctx, bld, true)
             bld.append(if (isNull) " IS NULL" else " IS NOT NULL")
-            bld.append(")")
         }
     }
 }
@@ -193,7 +198,9 @@ sealed class Db_TableExpr(val rEntity: R_EntityDefinition, directSubExprs: List<
     }
 
     private class RedDb_TableExpr(val tableExpr: Db_TableExpr): RedDb_Expr() {
-        override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
+        override fun needsEnclosing() = false
+
+        override fun toSql0(ctx: SqlGenContext, bld: SqlBuilder) {
             val alias = tableExpr.alias(ctx)
             val rowidCol = tableExpr.rEntity.sqlMapping.rowidColumn()
             bld.appendColumn(alias, rowidCol)
@@ -221,7 +228,9 @@ class Db_AttrExpr(val base: Db_TableExpr, val attr: R_Attribute): Db_Expr(attr.t
     }
 
     private class RedDb_AttrExpr(val base: Db_TableExpr, val attr: R_Attribute): RedDb_Expr() {
-        override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
+        override fun needsEnclosing() = false
+
+        override fun toSql0(ctx: SqlGenContext, bld: SqlBuilder) {
             val alias = base.alias(ctx)
             bld.appendColumn(alias, attr.sqlMapping)
         }
@@ -234,7 +243,9 @@ class Db_RowidExpr(val base: Db_TableExpr): Db_Expr(C_EntityAttrRef.ROWID_TYPE, 
     }
 
     private class RedDb_RowidExpr(val base: Db_TableExpr): RedDb_Expr() {
-        override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
+        override fun needsEnclosing() = false
+
+        override fun toSql0(ctx: SqlGenContext, bld: SqlBuilder) {
             val alias = base.alias(ctx)
             val col = alias.entity.sqlMapping.rowidColumn()
             bld.appendColumn(alias, col)
@@ -250,7 +261,9 @@ class Db_CollectionInterpretedExpr(val expr: R_Expr): Db_Expr(expr.type, listOf(
     }
 
     private class RedDb_CollectionConstantExpr(val value: Collection<Rt_Value>): RedDb_Expr() {
-        override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
+        override fun needsEnclosing() = false
+
+        override fun toSql0(ctx: SqlGenContext, bld: SqlBuilder) {
             bld.append("(")
             bld.append(value, ",") {
                 bld.append(it)
@@ -294,14 +307,12 @@ class Db_InExpr(val keyExpr: Db_Expr, val exprs: List<Db_Expr>): Db_Expr(R_Boole
 }
 
 private class RedDb_InExpr(val keyExpr: RedDb_Expr, val exprs: List<RedDb_Expr>): RedDb_Expr() {
-    override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
-        bld.append("(")
-        keyExpr.toSql(ctx, bld)
+    override fun toSql0(ctx: SqlGenContext, bld: SqlBuilder) {
+        keyExpr.toSql(ctx, bld, true)
         bld.append(" IN (")
         bld.append(exprs, ", ") { expr ->
-            expr.toSql(ctx, bld)
+            expr.toSql(ctx, bld, false)
         }
-        bld.append(")")
         bld.append(")")
     }
 }
@@ -401,18 +412,20 @@ class Db_WhenExpr(type: R_Type, val keyExpr: Db_Expr?, val cases: List<Db_WhenCa
 private class RedDb_WhenCase(val cond: RedDb_Expr, val expr: RedDb_Expr)
 
 private class RedDb_WhenExpr(val cases: List<RedDb_WhenCase>, val elseExpr: RedDb_Expr): RedDb_Expr() {
-    override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
+    override fun needsEnclosing() = false
+
+    override fun toSql0(ctx: SqlGenContext, bld: SqlBuilder) {
         bld.append("CASE")
 
         for (case in cases) {
             bld.append(" WHEN ")
-            case.cond.toSql(ctx, bld)
+            case.cond.toSql(ctx, bld, false)
             bld.append(" THEN ")
-            case.expr.toSql(ctx, bld)
+            case.expr.toSql(ctx, bld, false)
         }
 
         bld.append(" ELSE ")
-        elseExpr.toSql(ctx, bld)
+        elseExpr.toSql(ctx, bld, false)
 
         bld.append(" END")
     }
@@ -438,7 +451,8 @@ class Db_CallExpr(type: R_Type, val fn: Db_SysFunction, val args: List<Db_Expr>)
     }
 
     private class RedDb_CallExpr(val fn: Db_SysFunction, val args: List<RedDb_Expr>): RedDb_Expr() {
-        override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) = fn.toSql(ctx, bld, args)
+        override fun needsEnclosing() = false
+        override fun toSql0(ctx: SqlGenContext, bld: SqlBuilder) = fn.toSql(ctx, bld, args)
     }
 }
 
@@ -449,10 +463,12 @@ class Db_ExistsExpr(val subExpr: Db_Expr, val not: Boolean): Db_Expr(R_BooleanTy
     }
 
     private class RedDb_ExistsExpr(val not: Boolean, val subExpr: RedDb_Expr): RedDb_Expr() {
-        override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
+        override fun needsEnclosing() = false
+
+        override fun toSql0(ctx: SqlGenContext, bld: SqlBuilder) {
             if (not) bld.append("NOT ")
             bld.append("EXISTS(")
-            subExpr.toSql(ctx, bld)
+            subExpr.toSql(ctx, bld, false)
             bld.append(")")
         }
     }
@@ -482,11 +498,12 @@ object RedDb_Utils {
     }
 
     private class RedDb_DecimalRoundExpr(private val expr: RedDb_Expr): RedDb_Expr() {
+        override fun needsEnclosing() = false
         override fun constantValue(): Rt_Value? = expr.constantValue()
 
-        override fun toSql(ctx: SqlGenContext, bld: SqlBuilder) {
+        override fun toSql0(ctx: SqlGenContext, bld: SqlBuilder) {
             bld.append("ROUND(")
-            expr.toSql(ctx, bld)
+            expr.toSql(ctx, bld, false)
             bld.append(", ${C_Constants.DECIMAL_FRAC_DIGITS})")
         }
     }

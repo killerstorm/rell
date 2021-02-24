@@ -4,6 +4,7 @@
 
 package net.postchain.rell.test
 
+import net.postchain.rell.compiler.C_CompilerOptions
 import net.postchain.rell.compiler.C_MapSourceDir
 import net.postchain.rell.compiler.C_Message
 import net.postchain.rell.model.R_ModuleName
@@ -53,7 +54,8 @@ class RellReplTester(
 
     fun chk(code: String, vararg expected: String) {
         if (repl == null) {
-            repl = ReplInterpreter.create(sourceDir, module, replGlobalCtx, sqlMgr, outChannel, useSql)
+            val cOpts = C_CompilerOptions.DEFAULT
+            repl = ReplInterpreter.create(cOpts, sourceDir, module, replGlobalCtx, sqlMgr, outChannel, useSql)
         }
         repl?.execute(code)
         outChannel.chk(*expected)

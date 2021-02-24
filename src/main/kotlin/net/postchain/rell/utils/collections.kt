@@ -8,6 +8,8 @@ import com.google.common.collect.*
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
 import net.postchain.rell.runtime.toGtv
+import org.apache.commons.collections4.IterableUtils
+import java.util.*
 
 class ListVsMap<K> private constructor(private val entries: List<Map.Entry<K, *>>) {
     fun <W> listToMap(list: List<W>): Map<K, W> {
@@ -22,6 +24,27 @@ class ListVsMap<K> private constructor(private val entries: List<Map.Entry<K, *>
             val list = entries.map { it.value }.toImmList()
             val listVsMap = ListVsMap(entries)
             return Pair(list, listVsMap)
+        }
+    }
+}
+
+fun <T> chainToIterable(head: T?, nextGetter: (T) -> T?): Iterable<T> {
+    return if (head == null) IterableUtils.emptyIterable() else ChainIterable(head, nextGetter)
+}
+
+private class ChainIterable<T>(private val head: T, private val nextGetter: (T) -> T?): Iterable<T> {
+    override fun iterator(): Iterator<T> = ChainIterator()
+
+    private inner class ChainIterator: Iterator<T> {
+        private var current: T? = head
+
+        override fun hasNext() = current != null
+
+        override fun next(): T {
+            val cur = current
+            cur ?: throw NoSuchElementException()
+            current = nextGetter(cur)
+            return cur
         }
     }
 }
