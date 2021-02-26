@@ -255,6 +255,14 @@ class ExpressionTest: BaseRellTest(false) {
         chk("123 in map<integer,text>()", "boolean[false]")
         chk("123 in map<text,integer>()", "ct_err:binop_operand_type:in:[integer]:[map<text,integer>]")
         chk("'Hello' in map<integer,text>()", "ct_err:binop_operand_type:in:[text]:[map<integer,text>]")
+
+        chk("123 not in [123, 456]", "boolean[false]")
+        chk("456 not in [123, 456]", "boolean[false]")
+        chk("789 not in [123, 456]", "boolean[true]")
+        chk("123 not in list<integer>()", "boolean[true]")
+        chk("123 not in [123:'Bob',456:'Alice']", "boolean[false]")
+        chk("789 not in [123:'Bob',456:'Alice']", "boolean[true]")
+        chk("123 not in map<integer,text>()", "boolean[true]")
     }
 
     @Test fun testNamespace() {

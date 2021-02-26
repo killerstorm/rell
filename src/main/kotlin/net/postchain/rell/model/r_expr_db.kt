@@ -58,6 +58,7 @@ object Db_BinaryOp_Mod_Integer: Db_BinaryOp("%", "%")
 object Db_BinaryOp_Mod_Decimal: Db_BinaryOp("%", "%")
 object Db_BinaryOp_Concat: Db_BinaryOp("+", "||")
 object Db_BinaryOp_In: Db_BinaryOp("in", "IN")
+object Db_BinaryOp_NotIn: Db_BinaryOp("not_in", "NOT IN")
 
 sealed class Db_BinaryOp_AndOr(code: String, sql: String, private val shortCircuitValue: Boolean): Db_BinaryOp(code, sql) {
     final override fun toRedExpr(frame: Rt_CallFrame, type: R_Type, redLeft: RedDb_Expr, right: Db_Expr): RedDb_Expr {
@@ -273,14 +274,16 @@ class Db_CollectionInterpretedExpr(val expr: R_Expr): Db_Expr(expr.type, listOf(
     }
 }
 
-class Db_InExpr(val keyExpr: Db_Expr, val exprs: List<Db_Expr>): Db_Expr(R_BooleanType, listOf(keyExpr) + exprs) {
+class Db_InExpr(val keyExpr: Db_Expr, val exprs: List<Db_Expr>, val not: Boolean)
+    : Db_Expr(R_BooleanType, listOf(keyExpr) + exprs)
+{
     override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
         val redKeyExpr = keyExpr.toRedExpr(frame)
         val redExprs = toRedExprs(frame, redKeyExpr, exprs)
         return if (redExprs != null) {
-            RedDb_Utils.makeRedDbInExpr(redKeyExpr, redExprs)
+            RedDb_Utils.makeRedDbInExpr(redKeyExpr, redExprs, not)
         } else {
-            RedDb_ConstantExpr(Rt_BooleanValue(true))
+            RedDb_ConstantExpr(Rt_BooleanValue(!not))
         }
     }
 
@@ -306,128 +309,15 @@ class Db_InExpr(val keyExpr: Db_Expr, val exprs: List<Db_Expr>): Db_Expr(R_Boole
     }
 }
 
-private class RedDb_InExpr(val keyExpr: RedDb_Expr, val exprs: List<RedDb_Expr>): RedDb_Expr() {
+private class RedDb_InExpr(val keyExpr: RedDb_Expr, val exprs: List<RedDb_Expr>, val not: Boolean): RedDb_Expr() {
     override fun toSql0(ctx: SqlGenContext, bld: SqlBuilder) {
         keyExpr.toSql(ctx, bld, true)
+        if (not) bld.append(" NOT")
         bld.append(" IN (")
-        bld.append(exprs, ", ") { expr ->
+        bld.append(exprs, ",") { expr ->
             expr.toSql(ctx, bld, false)
         }
         bld.append(")")
-    }
-}
-
-class Db_WhenCase(val conds: List<Db_Expr>, val expr: Db_Expr)
-
-class Db_WhenExpr(type: R_Type, val keyExpr: Db_Expr?, val cases: List<Db_WhenCase>, val elseExpr: Db_Expr)
-    : Db_Expr(type, listOfNotNull(keyExpr) + cases.flatMap { it.conds + listOf(it.expr) } + listOf(elseExpr))
-{
-    override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
-        val redKeyExpr = keyExpr?.toRedExpr(frame)
-
-        val internalCases = mutableListOf<Pair<RedDb_Expr, Db_Expr>>()
-        val matchedCase = if (redKeyExpr != null) {
-            makeRedCasesKeyed(frame, redKeyExpr, internalCases)
-        } else {
-            makeRedCasesGeneral(frame, internalCases)
-        }
-
-        if (matchedCase != null) {
-            val redExpr = matchedCase.expr.toRedExpr(frame)
-            return redExpr
-        }
-
-        val redCases = internalCases.map { (redCond, expr) ->
-            val redExpr = expr.toRedExpr(frame)
-            RedDb_WhenCase(redCond, redExpr)
-        }
-
-        val redElse = elseExpr.toRedExpr(frame)
-        if (redCases.isEmpty()) {
-            return redElse
-        }
-
-        return RedDb_WhenExpr(redCases, redElse)
-    }
-
-    private fun makeRedCasesKeyed(
-            frame: Rt_CallFrame,
-            redKeyExpr: RedDb_Expr,
-            resCases: MutableList<Pair<RedDb_Expr, Db_Expr>>
-    ): Db_WhenCase? {
-        for (case in cases) {
-            val matched = makeRedCaseKeyed(frame, redKeyExpr, case, resCases)
-            if (matched) {
-                return case
-            }
-        }
-        return null
-    }
-
-    private fun makeRedCaseKeyed(
-            frame: Rt_CallFrame,
-            redKeyExpr: RedDb_Expr,
-            case: Db_WhenCase,
-            resCases: MutableList<Pair<RedDb_Expr, Db_Expr>>
-    ): Boolean {
-        val redConds = Db_InExpr.toRedExprs(frame, redKeyExpr, case.conds)
-
-        if (redConds == null) {
-            return true
-        }
-
-        if (!redConds.isEmpty()) {
-            val redCond = RedDb_Utils.makeRedDbInExpr(redKeyExpr, redConds)
-            resCases.add(Pair(redCond, case.expr))
-        }
-
-        return false
-    }
-
-    private fun makeRedCasesGeneral(frame: Rt_CallFrame, resCases: MutableList<Pair<RedDb_Expr, Db_Expr>>): Db_WhenCase? {
-        for (case in cases) {
-            val redConds = mutableListOf<RedDb_Expr>()
-            for (cond in case.conds) {
-                val redCond = cond.toRedExpr(frame)
-                val condValue = redCond.constantValue()
-                if (condValue != null) {
-                    if (condValue.asBoolean()) {
-                        return case
-                    }
-                } else {
-                    redConds.add(redCond)
-                }
-            }
-
-            if (!redConds.isEmpty()) {
-                val redCond = RedDb_Utils.makeRedDbBinaryExprChain(Db_BinaryOp_Or, redConds)
-                resCases.add(Pair(redCond, case.expr))
-            }
-        }
-
-        return null
-    }
-}
-
-private class RedDb_WhenCase(val cond: RedDb_Expr, val expr: RedDb_Expr)
-
-private class RedDb_WhenExpr(val cases: List<RedDb_WhenCase>, val elseExpr: RedDb_Expr): RedDb_Expr() {
-    override fun needsEnclosing() = false
-
-    override fun toSql0(ctx: SqlGenContext, bld: SqlBuilder) {
-        bld.append("CASE")
-
-        for (case in cases) {
-            bld.append(" WHEN ")
-            case.cond.toSql(ctx, bld, false)
-            bld.append(" THEN ")
-            case.expr.toSql(ctx, bld, false)
-        }
-
-        bld.append(" ELSE ")
-        elseExpr.toSql(ctx, bld, false)
-
-        bld.append(" END")
     }
 }
 
@@ -474,18 +364,53 @@ class Db_ExistsExpr(val subExpr: Db_Expr, val not: Boolean): Db_Expr(R_BooleanTy
     }
 }
 
+class Db_InCollectionExpr(val left: Db_Expr, val right: R_Expr, val not: Boolean): Db_Expr(R_BooleanType, listOf(left)) {
+    override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
+        val redLeft = left.toRedExpr(frame)
+
+        val rightValue = right.evaluate(frame).asCollection()
+        if (rightValue.isEmpty()) {
+            return RedDb_ConstantExpr(Rt_BooleanValue(not))
+        }
+
+        val leftValue = redLeft.constantValue()
+        if (leftValue != null && leftValue in rightValue) {
+            return RedDb_ConstantExpr(Rt_BooleanValue(!not))
+        }
+
+        return RedDb_InCollectionExpr(redLeft, rightValue, not)
+    }
+
+    private class RedDb_InCollectionExpr(
+            val left: RedDb_Expr,
+            val rightValue: Collection<Rt_Value>,
+            val not: Boolean
+    ): RedDb_Expr() {
+        override fun toSql0(ctx: SqlGenContext, bld: SqlBuilder) {
+            left.toSql(ctx, bld, true)
+            if (not) bld.append(" NOT")
+            bld.append(" IN (")
+            bld.append(rightValue, ",") {
+                bld.append(it)
+            }
+            bld.append(")")
+        }
+    }
+}
+
 object RedDb_Utils {
     fun makeRedDbBinaryExprChain(op: Db_BinaryOp, exprs: List<RedDb_Expr>): RedDb_Expr {
         return CommonUtils.foldSimple(exprs) { left, right -> RedDb_BinaryExpr(op, left, right) }
     }
 
-    fun makeRedDbInExpr(left: RedDb_Expr, right: List<RedDb_Expr>): RedDb_Expr {
+    fun makeRedDbInExpr(left: RedDb_Expr, right: List<RedDb_Expr>, not: Boolean): RedDb_Expr {
         return if (right.isEmpty()) {
-            RedDb_ConstantExpr(Rt_BooleanValue(false))
+            RedDb_ConstantExpr(Rt_BooleanValue(not))
         } else if (right.size == 1) {
-            RedDb_BinaryExpr(Db_BinaryOp_Eq, left, right[0])
+            val op = if (not) Db_BinaryOp_Ne else Db_BinaryOp_Eq
+            RedDb_BinaryExpr(op, left, right[0])
         } else {
-            RedDb_InExpr(left, right)
+            RedDb_InExpr(left, right, not)
         }
     }
 

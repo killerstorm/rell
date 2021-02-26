@@ -282,6 +282,7 @@ object S_Grammar : Grammar<S_RellFile>() {
             or ( OR mapNode { S_BinaryOp.OR } )
 
             or ( IN mapNode { S_BinaryOp.IN } )
+            or ( -NOT * IN mapNode { S_BinaryOp.NOT_IN } )
             or ( ELVIS mapNode { S_BinaryOp.ELVIS } )
     )
 

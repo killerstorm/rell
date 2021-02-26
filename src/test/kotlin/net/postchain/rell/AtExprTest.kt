@@ -534,10 +534,14 @@ class AtExprTest: BaseRellTest() {
 
     @Test fun testCollectionLiteralExpr() {
         chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + [1,2,3])", "(text[Gates],text[[1, 2, 3]])")
-        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + [.firstName,.lastName])", "ct_err:expr_sqlnotallowed")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + [.firstName,.lastName])", "ct_err:expr:to_text:nosql:list<text>")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, [1,2,3])", "ct_err:expr_nosql:list<integer>")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, [.firstName,.lastName])", "ct_err:expr_sqlnotallowed")
 
         chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + [123:'Hello'])", "(text[Gates],text[{123=Hello}])")
         chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + [.firstName:.lastName])", "ct_err:expr_sqlnotallowed")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, [123:'Hello'])", "ct_err:expr_nosql:map<integer,text>")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, [.firstName:.lastName])", "ct_err:expr_sqlnotallowed")
     }
 
     @Test fun testCollectionConstructorExpr() {

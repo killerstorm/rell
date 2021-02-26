@@ -379,3 +379,35 @@ is translated to an SQL query like:
     WHERE U."city" IN (SELECT C."city" FROM "c0.company" C WHERE C."industry" = U."industry")
 
 Same notes regarding cardinality and attributes matching as for empty() and exists() apply.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+16. Language: Operator "in" for collections supports database expressions
+
+Example:
+
+    user @* { .city in ['London', 'Paris', 'Berlin'] }
+
+The right-hand side operand can be an arbitrary list or set expression, not necessarily a constant one:
+
+    user @* { .city in get_list_of_cities() }
+
+Entity attributes can be used in a list literal as well:
+
+    user @* { 'London' in [.home_city, .work_city] }
+
+Note. The number of values that can be used in a single database query is limited, the current limit is 32767. If a
+collection passed to operator "in" contains more elements than that, the at-expression will fail at run-time.
+(The limit is for the total number of values in one at-expression, not for each individual "in" operator.)
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+17. Language: Binary operator "not in"
+
+One can now write:
+
+    X not in Y
+
+instead of
+
+    not (X in Y)
+
+The new notation is supposed to be more readable when X and Y are complex expressions.

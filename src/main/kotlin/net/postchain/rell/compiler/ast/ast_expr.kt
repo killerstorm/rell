@@ -390,33 +390,32 @@ class S_IfExpr(pos: S_Pos, val cond: S_Expr, val trueExpr: S_Expr, val falseExpr
 
 class S_ListLiteralExpr(pos: S_Pos, val exprs: List<S_Expr>): S_Expr(pos) {
     override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
-        val values = exprs.map { it.compile(ctx).value() }
-        val rExprs = values.map { it.toRExpr() }
-        val rExpr = compile0(rExprs, typeHint)
-        val exprFacts = C_ExprVarFacts.forSubExpressions(values)
-        return V_RExpr.makeExpr(ctx, startPos, rExpr, exprFacts)
+        val vExprs = exprs.map { it.compile(ctx).value() }
+        val listType = compileType(vExprs, typeHint)
+        val varFacts = C_ExprVarFacts.forSubExpressions(vExprs)
+        val vExpr = V_ListLiteralExpr(ctx, startPos, vExprs, listType, varFacts)
+        return C_VExpr(vExpr)
     }
 
-    private fun compile0(rExprs: List<R_Expr>, typeHint: C_TypeHint): R_Expr {
-        for ((i, rExpr) in rExprs.withIndex()) {
-            C_Utils.checkUnitType(exprs[i].startPos, rExpr.type, "expr_list_unit", "Element expression returns nothing")
+    private fun compileType(vExprs: List<V_Expr>, typeHint: C_TypeHint): R_ListType {
+        for (vExpr in vExprs) {
+            C_Utils.checkUnitType(vExpr.pos, vExpr.type(), "expr_list_unit", "Element expression returns nothing")
         }
 
         val hintElemType = typeHint.getListElementType()
-        val rElemType = compileElementType(rExprs, hintElemType)
-        val rListType = R_ListType(rElemType)
-        return R_ListLiteralExpr(rListType, rExprs)
+        val rElemType = compileElementType(vExprs, hintElemType)
+        return R_ListType(rElemType)
     }
 
-    private fun compileElementType(rExprs: List<R_Expr>, hintElemType: R_Type?): R_Type {
-        if (rExprs.isEmpty()) {
+    private fun compileElementType(vExprs: List<V_Expr>, hintElemType: R_Type?): R_Type {
+        if (vExprs.isEmpty()) {
             return C_Errors.checkNotNull(hintElemType, startPos, "expr_list_no_type",
                     "Cannot determine the type of the list; use list<T>() syntax to specify the type")
         }
 
-        var rType = rExprs[0].type
-        for ((i, rExpr) in rExprs.withIndex()) {
-            rType = C_Types.commonType(rType, rExpr.type, exprs[i].startPos, "expr_list_itemtype", "Wrong list item type")
+        var rType = vExprs[0].type()
+        for ((i, vExpr) in vExprs.withIndex()) {
+            rType = C_Types.commonType(rType, vExpr.type(), exprs[i].startPos, "expr_list_itemtype", "Wrong list item type")
         }
 
         if (hintElemType != null) {

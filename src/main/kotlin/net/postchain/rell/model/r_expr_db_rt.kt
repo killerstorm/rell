@@ -4,10 +4,7 @@
 
 package net.postchain.rell.model
 
-import net.postchain.rell.runtime.Rt_CallFrame
-import net.postchain.rell.runtime.Rt_IntValue
-import net.postchain.rell.runtime.Rt_SqlContext
-import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
@@ -178,6 +175,11 @@ class ParameterizedSql(val sql: String, params: List<Rt_Value>) {
     }
 
     private fun calcArgs(): SqlArgs {
+        // Was experimentally discovered that passing more than 32767 parameters causes PSQL driver to fail and the
+        // connection becomes invalid afterwards. Not allowing this to happen.
+        val maxParams = 32767
+        Rt_Utils.check(params.size <= maxParams) {
+            "sql:too_many_params:${params.size}" to "SQL query is too big (${params.size} parameters)" }
         return SqlArgs(params)
     }
 

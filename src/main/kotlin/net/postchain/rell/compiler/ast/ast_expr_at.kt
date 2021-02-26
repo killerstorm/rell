@@ -272,6 +272,10 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
     private fun compileWhereExprName(ctx: C_ExprContext, idx: Int, vExpr: V_Expr, name: String, type: R_Type): V_Expr {
         val entityAttrs = ctx.findWhereAttributesByName(name)
         if (entityAttrs.isEmpty() && type == R_BooleanType) {
+            val msg = "No context attribute matches name '$name', but the expression is accepted" +
+                    ", because its type is ${R_BooleanType.name}" +
+                    " (suggestion: write <expression> == true for clarity)"
+            ctx.msgCtx.warning(vExpr.pos, "at:where:name_boolean_no_attr:$name", msg)
             return vExpr
         }
 

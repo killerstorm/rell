@@ -97,6 +97,11 @@ object C_Errors {
         return C_Error.stop(pos, "expr_nosql:$typeStr", "Value of type $typeStr cannot be converted to SQL")
     }
 
+    fun errExprNoDb(msgCtx: C_MessageContext, pos: S_Pos, type: R_Type) {
+        val typeStr = type.toStrictString()
+        msgCtx.error(pos, "expr_nosql:$typeStr", "Value of type $typeStr cannot be converted to SQL")
+    }
+
     fun errExprDbNotAllowed(pos: S_Pos): C_Error {
         return C_Error.stop(pos, "expr_sqlnotallowed", "Database expression not allowed here")
     }

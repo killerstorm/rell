@@ -491,8 +491,8 @@ abstract class AtExprCommonBaseTest: AtExprBaseTest() {
     @Test fun testWhereImplicitBooleanSimpleAttr() {
         initWhereImplicitBoolean()
 
-        chk("${impFrom("data1")} @* { .b     } (.id.s)", "[A1]")
-        chk("${impFrom("data1")} @* { not .b } (.id.s)", "[A0]")
+        chk("${impFrom("data1")} @* { .b      } (.id.s)", "[A1]")
+        chk("${impFrom("data1")} @* { not .b  } (.id.s)", "[A0]")
 
         chk("${impFrom("data2")} @* { .b1          } (.id.s)", "[B1]")
         chk("${impFrom("data2")} @* { .b1 == true  } (.id.s)", "[B1]")
@@ -513,20 +513,22 @@ abstract class AtExprCommonBaseTest: AtExprBaseTest() {
     @Test fun testWhereImplicitBooleanNestedExists() {
         initWhereImplicitBoolean()
 
-        fun f(o: String, d: String, w: String, e: String) =
-                chk("(o:${impFrom(o)}) @* {exists( (i:${impFrom(d)}) @* { $w } )} (.outer_id.s)", e)
+        fun f(o: String, d: String, w: String, e: String, vararg warns: String) {
+            chk("(o:${impFrom(o)}) @* {exists( (i:${impFrom(d)}) @* { $w } )} (.outer_id.s)", e)
+            chkWarn(*warns)
+        }
 
         f("outer0", "data1", "o.b",  "[O0]")
-        f("outer0", "data1", "o.b1", "[]")
-        f("outer0", "data1", "o.b2", "[]")
+        f("outer0", "data1", "o.b1", "[]", "at:where:name_boolean_no_attr:b1")
+        f("outer0", "data1", "o.b2", "[]", "at:where:name_boolean_no_attr:b2")
         f("outer1", "data1", "o.b",  "[O1]")
-        f("outer1", "data1", "o.b1", "[O1]")
-        f("outer1", "data1", "o.b2", "[O1]")
+        f("outer1", "data1", "o.b1", "[O1]", "at:where:name_boolean_no_attr:b1")
+        f("outer1", "data1", "o.b2", "[O1]", "at:where:name_boolean_no_attr:b2")
 
-        f("outer0", "data2", "o.b",  "[]")
+        f("outer0", "data2", "o.b",  "[]", "at:where:name_boolean_no_attr:b")
         f("outer0", "data2", "o.b1", "[O0]")
         f("outer0", "data2", "o.b2", "[O0]")
-        f("outer1", "data2", "o.b",  "[O1]")
+        f("outer1", "data2", "o.b",  "[O1]", "at:where:name_boolean_no_attr:b")
         f("outer1", "data2", "o.b1", "[O1]")
         f("outer1", "data2", "o.b2", "[O1]")
     }
@@ -534,20 +536,22 @@ abstract class AtExprCommonBaseTest: AtExprBaseTest() {
     @Test fun testWhereImplicitBooleanNestedIn() {
         initWhereImplicitBoolean()
 
-        fun f(o: String, d: String, w: String, e: String) =
-                chk("(o:${impFrom(o)}) @* {o.in_id in (i:${impFrom(d)}) @* { $w } (i.in_id)} (.outer_id.s)", e)
+        fun f(o: String, d: String, w: String, e: String, vararg warns: String) {
+            chk("(o:${impFrom(o)}) @* {o.in_id in (i:${impFrom(d)}) @* { $w } (i.in_id)} (.outer_id.s)", e)
+            chkWarn(*warns)
+        }
 
         f("outer0", "data1", "o.b",  "[O0]")
-        f("outer0", "data1", "o.b1", "[]")
-        f("outer0", "data1", "o.b2", "[]")
+        f("outer0", "data1", "o.b1", "[]", "at:where:name_boolean_no_attr:b1")
+        f("outer0", "data1", "o.b2", "[]", "at:where:name_boolean_no_attr:b2")
         f("outer1", "data1", "o.b",  "[O1]")
-        f("outer1", "data1", "o.b1", "[O1]")
-        f("outer1", "data1", "o.b2", "[O1]")
+        f("outer1", "data1", "o.b1", "[O1]", "at:where:name_boolean_no_attr:b1")
+        f("outer1", "data1", "o.b2", "[O1]", "at:where:name_boolean_no_attr:b2")
 
-        f("outer0", "data2", "o.b",  "[]")
+        f("outer0", "data2", "o.b",  "[]", "at:where:name_boolean_no_attr:b")
         f("outer0", "data2", "o.b1", "[O0]")
         f("outer0", "data2", "o.b2", "[O0]")
-        f("outer1", "data2", "o.b",  "[O1]")
+        f("outer1", "data2", "o.b",  "[O1]", "at:where:name_boolean_no_attr:b")
         f("outer1", "data2", "o.b1", "[O1]")
         f("outer1", "data2", "o.b2", "[O1]")
     }

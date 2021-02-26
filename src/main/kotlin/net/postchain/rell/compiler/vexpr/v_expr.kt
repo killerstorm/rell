@@ -8,6 +8,7 @@ import net.postchain.rell.runtime.Rt_TupleValue
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.immSetOf
+import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmSet
 
 abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
@@ -349,4 +350,27 @@ class V_SysMemberPropertyExpr(
     override fun toRExpr0() = prop.compileCall(exprCtx, caseCtx, listOf())
     override fun toDbExpr0() = prop.compileCallDb(exprCtx, caseCtx, listOf())
     override fun implicitAtWhatAttrName() = if (caseCtx.member.base.isAtExprItem()) caseCtx.memberName else null
+}
+
+class V_ListLiteralExpr(
+        exprCtx: C_ExprContext,
+        pos: S_Pos,
+        elems: List<V_Expr>,
+        private val listType: R_ListType,
+        private val varFacts: C_ExprVarFacts
+): V_Expr(exprCtx, pos) {
+    val elems = elems.toImmList()
+
+    private val isDb = elems.any { isDb(it) }
+    private val atDependencies = elems.flatMap { it.atDependencies() }.toImmSet()
+
+    override fun type() = listType
+    override fun isDb() = isDb
+    override fun atDependencies() = atDependencies
+    override fun varFacts() = varFacts
+
+    override fun toRExpr0(): R_Expr {
+        val rExprs = elems.map { it.toRExpr() }
+        return R_ListLiteralExpr(listType, rExprs)
+    }
 }

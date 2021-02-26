@@ -25,7 +25,8 @@ enum class S_BinaryOp(val code: String, val op: C_BinOp) {
     MOD("%", C_BinOp_Mod),
     AND("and", C_BinOp_And),
     OR("or", C_BinOp_Or),
-    IN("in", C_BinOp_In),
+    IN("in", C_BinOp_In(false)),
+    NOT_IN("in", C_BinOp_In(true)),
     ELVIS("?:", C_BinOp_Elvis),
     ;
 
@@ -34,7 +35,7 @@ enum class S_BinaryOp(val code: String, val op: C_BinOp) {
                 listOf(OR),
                 listOf(AND),
                 listOf(EQ, NE, LE, GE, LT, GT, EQ_REF, NE_REF),
-                listOf(IN),
+                listOf(IN, NOT_IN),
                 listOf(ELVIS),
                 listOf(PLUS, MINUS),
                 listOf(MUL, DIV, MOD)
@@ -276,6 +277,11 @@ sealed class C_BinOp_EqNe(private val eq: Boolean): C_BinOp_Common() {
             return op != null
         }
 
+        fun checkTypesDb(left: R_Type, right: R_Type): Boolean {
+            val op = C_BinOp_Eq.compileOp(left, right)
+            return op?.dbOp != null
+        }
+
         private fun calcCommonType(left: R_Type, right: R_Type): R_Type? {
             return if (left is R_NullableType && right !is R_NullableType && right != R_NullType) {
                 null
@@ -495,18 +501,18 @@ object C_BinOp_Or: C_BinOp_Logic(R_BinaryOp_Or, Db_BinaryOp_Or) {
     }
 }
 
-object C_BinOp_In: C_BinOp() {
+class C_BinOp_In(private val not: Boolean): C_BinOp() {
     override fun compile(ctx: C_ExprContext, left: V_Expr, right: V_Expr): V_Expr? {
         val leftType = left.type()
         val rightType = right.type()
 
-        val op = compileOp(leftType, rightType)
-        if (op == null) {
+        val op = matchOp(rightType)
+        if (op == null || leftType != op.elemType) {
             return null
         }
 
         val varFacts = compileExprVarFacts(left, right)
-        return V_BinaryExpr(ctx, left.pos, op, left, right, varFacts)
+        return op.compile(ctx, left, right, varFacts)
     }
 
     override fun compileRight(ctx: C_ExprContext, sExpr: S_Expr): V_Expr {
@@ -519,30 +525,38 @@ object C_BinOp_In: C_BinOp() {
         return cExpr.value()
     }
 
-    private fun compileOp(left: R_Type, right: R_Type): V_BinaryOp? {
-        val m = matchOp(right)
-        m ?: return null
-
-        if (left != m.elemType) {
-            return null
-        }
-
-        return V_BinaryOp.of(R_BooleanType, m.rOp, m.dbOp)
-    }
-
     private fun matchOp(right: R_Type): OpMatch? {
         return when (right) {
-            is R_CollectionType -> OpMatch(right.elementType, R_BinaryOp_In_Collection, Db_BinaryOp_In)
-            is R_VirtualListType -> OpMatch(R_IntegerType, R_BinaryOp_In_VirtualList)
-            is R_VirtualSetType -> OpMatch(S_VirtualType.virtualMemberType(right.innerType.elementType), R_BinaryOp_In_VirtualSet)
-            is R_MapType -> OpMatch(right.keyType, R_BinaryOp_In_Map)
-            is R_VirtualMapType -> OpMatch(right.innerType.keyType, R_BinaryOp_In_Map)
-            is R_RangeType -> OpMatch(R_IntegerType, R_BinaryOp_In_Range)
+            is R_CollectionType -> CollectionOpMatch(right)
+            is R_VirtualListType -> BasicOpMatch(R_IntegerType, R_BinaryOp_In_VirtualList)
+            is R_VirtualSetType -> BasicOpMatch(S_VirtualType.virtualMemberType(right.innerType.elementType), R_BinaryOp_In_VirtualSet)
+            is R_MapType -> BasicOpMatch(right.keyType, R_BinaryOp_In_Map)
+            is R_VirtualMapType -> BasicOpMatch(right.innerType.keyType, R_BinaryOp_In_Map)
+            is R_RangeType -> BasicOpMatch(R_IntegerType, R_BinaryOp_In_Range)
             else -> null
         }
     }
 
-    private class OpMatch(val elemType: R_Type, val rOp: R_BinaryOp, val dbOp: Db_BinaryOp? = null)
+    private abstract class OpMatch(val elemType: R_Type) {
+        abstract fun compile(ctx: C_ExprContext, left: V_Expr, right: V_Expr, varFacts: C_ExprVarFacts): V_Expr
+    }
+
+    private inner class BasicOpMatch(elemType: R_Type, val rOp: R_BinaryOp): OpMatch(elemType) {
+        override fun compile(ctx: C_ExprContext, left: V_Expr, right: V_Expr, varFacts: C_ExprVarFacts): V_Expr {
+            val vOp = V_BinaryOp.of(R_BooleanType, rOp, null)
+            var vExpr: V_Expr = V_BinaryExpr(ctx, left.pos, vOp, left, right, varFacts)
+            if (not) {
+                vExpr = V_UnaryExpr(ctx, vExpr.pos, V_UnaryOp_Not(), vExpr, varFacts)
+            }
+            return vExpr
+        }
+    }
+
+    private inner class CollectionOpMatch(type: R_CollectionType): OpMatch(type.elementType) {
+        override fun compile(ctx: C_ExprContext, left: V_Expr, right: V_Expr, varFacts: C_ExprVarFacts): V_Expr {
+            return V_InCollectionExpr(ctx, elemType, left, right, not, varFacts)
+        }
+    }
 }
 
 object C_BinOp_Elvis: C_BinOp() {
