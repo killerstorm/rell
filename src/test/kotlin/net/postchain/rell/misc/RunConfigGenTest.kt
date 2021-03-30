@@ -6,10 +6,12 @@ package net.postchain.rell.misc
 
 import net.postchain.gtv.GtvDecoder
 import net.postchain.rell.compiler.C_MapSourceDir
+import net.postchain.rell.module.RellVersions
 import net.postchain.rell.test.GtvTestUtils
 import net.postchain.rell.test.RellTestUtils
 import net.postchain.rell.test.unwrap
 import net.postchain.rell.tools.runcfg.RellRunConfigGenerator
+import net.postchain.rell.tools.runcfg.RellRunConfigParams
 import net.postchain.rell.utils.*
 import org.junit.Test
 import kotlin.test.assertEquals
@@ -206,7 +208,7 @@ class RunConfigGenTest {
 
         chkFile(files, "node-config.properties", "x=123")
 
-        chkFile(files, "blockchains/33/brid.txt", "D44732A2C0C545B0CDB44C90F3B05432531283BCB35D5BBA0BAD7A1793B06C90")
+        chkFile(files, "blockchains/33/brid.txt", "B751E252E5E7D5C31F23775511F7EDCF22D2FB6E6E6ACF53C539393642BB82F7")
 
         chkFile(files, "blockchains/33/0.xml", """
             <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -220,7 +222,7 @@ class RunConfigGenTest {
                                         <string>app</string>
                                     </array>
                                 </entry>
-                                <entry key="sources_v${RellTestUtils.RELL_VER}">
+                                <entry key="sources">
                                     <dict>
                                         <entry key="app.rell">
                                             <string>module; import sub;
@@ -230,6 +232,9 @@ class RunConfigGenTest {
                                             <string>module; function sub(){}</string>
                                         </entry>
                                     </dict>
+                                </entry>
+                                <entry key="version">
+                                    <string>${RellTestUtils.RELL_VER}</string>
                                 </entry>
                             </dict>
                         </entry>
@@ -242,10 +247,18 @@ class RunConfigGenTest {
         """)
 
         chkFileBin(files, "blockchains/33/0.gtv",
-                """{"gtx":{"rell":{"modules":["app"],"sources_v0.10":{
-                    "app.rell":"module; import sub;\nfunction main(){}","sub.rell":"module; function sub(){}"}}},
-                    "signers":[]}
-                """.unwrap()
+                """{
+                    "gtx":{
+                        "rell":{
+                            "modules":["app"],
+                            "sources":{
+                                "app.rell":"module; import sub;\nfunction main(){}","sub.rell":"module; function sub(){}"
+                            },
+                            "version":"${RellTestUtils.RELL_VER}"
+                        }
+                    },
+                    "signers":[]
+                }""".unwrap()
         )
 
         assertEquals(setOf<String>(), files.keys)
@@ -391,7 +404,8 @@ class RunConfigGenTest {
     ): MutableMap<String, DirFile> {
         val sourceDir = C_MapSourceDir.of(sourceFiles)
         val configDir = MapGeneralDir(configFiles)
-        val conf = RellRunConfigGenerator.generate(sourceDir, configDir, "run.xml", confText.trimIndent())
+        val params = RellRunConfigParams(sourceDir, configDir, RellVersions.VERSION)
+        val conf = RellRunConfigGenerator.generate(params, "run.xml", confText.trimIndent())
         val files = RellRunConfigGenerator.buildFiles(conf).toMutableMap()
         return files
     }

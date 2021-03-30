@@ -5,9 +5,9 @@
 package net.postchain.rell.tools.runcfg
 
 import net.postchain.gtv.Gtv
-import net.postchain.rell.utils.Bytes32
 import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.module.RELL_VERSION_MODULE_SYSTEM
+import net.postchain.rell.module.RellVersions
+import net.postchain.rell.utils.Bytes32
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 
@@ -160,7 +160,10 @@ object RunConfigParser {
                     elem.check(app == null) { "app specified more than once" }
                     app = parseAppConfig(elem)
                 }
-                "module" -> throw elem.error("module tag is deprecated since Rell $RELL_VERSION_MODULE_SYSTEM, use app instead")
+                "module" -> {
+                    val ver = RellVersions.MODULE_SYSTEM_VERSION_STR
+                    throw elem.error("module tag is deprecated since Rell $ver, use app instead")
+                }
                 "gtv" -> {
                     val gtv = parseChainConfigGtv(elem)
                     gtvs.add(gtv)

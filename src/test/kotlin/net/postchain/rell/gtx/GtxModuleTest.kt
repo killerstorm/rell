@@ -11,7 +11,7 @@ import net.postchain.rell.test.SqlTestUtils
 import org.junit.Test
 import kotlin.test.assertFailsWith
 
-class GtxModuleTest : BaseGtxTest() {
+class GtxModuleTest: BaseGtxTest() {
     private val tablePrefix = "c995511."
 
     private val entityDefs = listOf(

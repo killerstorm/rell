@@ -6,9 +6,9 @@ package net.postchain.rell.tools.grammar
 
 import com.github.h0tk3y.betterParse.combinators.*
 import com.github.h0tk3y.betterParse.grammar.ParserReference
-import net.postchain.rell.module.RELL_VERSION
 import net.postchain.rell.compiler.parser.RellToken
 import net.postchain.rell.compiler.parser.S_Grammar
+import net.postchain.rell.module.RellVersions
 import org.apache.commons.collections4.MapUtils
 
 fun main(args: Array<String>) {
@@ -18,7 +18,7 @@ fun main(args: Array<String>) {
 
     val tokenizer = S_Grammar.tokenizer
 
-    println("    \"version\": \"${RELL_VERSION}\",")
+    println("    \"version\": \"${RellVersions.VERSION_STR}\",")
     println("    \"timestamp\": \"$timestamp\",")
     println("    \"timestampStr\": \"${GrammarUtils.timestampToString(timestamp)}\",")
     println("    \"lex\": {")

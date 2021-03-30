@@ -17,6 +17,7 @@ import net.postchain.gtv.*
 import net.postchain.gtv.gtvml.GtvMLEncoder
 import net.postchain.gtv.gtvml.GtvMLParser
 import net.postchain.gtv.merkle.GtvMerkleHashCalculator
+import org.apache.commons.lang3.StringUtils
 import java.util.*
 import java.util.function.Supplier
 
@@ -199,6 +200,30 @@ class ThreadLocalContext<T>(private val defaultValue: T? = null) {
         val res = local.get()
         check(res != null)
         return res
+    }
+}
+
+class VersionNumber(items: List<Int>): Comparable<VersionNumber> {
+    val items = items.toImmList()
+
+    init {
+        for (v in this.items) require(v >= 0) { "wrong version: ${this.items}" }
+    }
+
+    fun str(): String = items.joinToString(".")
+
+    override fun compareTo(other: VersionNumber) = CommonUtils.compareLists(items, other.items)
+    override fun equals(other: Any?) = other is VersionNumber && items == other.items
+    override fun hashCode() = items.hashCode()
+    override fun toString() = str()
+
+    companion object {
+        fun of(s: String): VersionNumber {
+            require(s.matches(Regex("(0|[1-9][0-9]*)([.](0|[1-9][0-9]*))*")))
+            val parts = StringUtils.splitPreserveAllTokens(s, ".")
+            val items = parts.map { it.toInt() }
+            return VersionNumber(items)
+        }
     }
 }
 

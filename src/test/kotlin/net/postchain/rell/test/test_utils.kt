@@ -6,21 +6,21 @@ package net.postchain.rell.test
 
 import com.google.common.collect.HashMultimap
 import net.postchain.gtv.Gtv
-import net.postchain.rell.utils.CommonUtils
-import net.postchain.rell.utils.PostchainUtils
 import net.postchain.rell.compiler.*
 import net.postchain.rell.model.*
 import net.postchain.rell.module.GtvToRtContext
-import net.postchain.rell.module.RELL_VERSION
+import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.sql.SqlConstants
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.sql.SqlManager
 import net.postchain.rell.sql.SqlUtils
-import net.postchain.rell.utils.toImmMap
 import net.postchain.rell.tools.api.IdeCodeSnippet
 import net.postchain.rell.tools.api.IdeSnippetMessage
+import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.PostchainUtils
+import net.postchain.rell.utils.toImmMap
 import org.apache.commons.configuration2.PropertiesConfiguration
 import org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder
 import org.apache.commons.configuration2.builder.fluent.Parameters
@@ -273,7 +273,7 @@ object GtvTestUtils {
 
 object TestSnippetsRecorder {
     private val ENABLED = false
-    private val SOURCES_FILE: String = System.getProperty("user.home") + "/testsources-$RELL_VERSION.zip"
+    private val SOURCES_FILE: String = System.getProperty("user.home") + "/testsources-${RellVersions.VERSION_STR}.zip"
 
     private val sync = Any()
     private val snippets = mutableListOf<IdeCodeSnippet>()

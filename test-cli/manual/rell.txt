@@ -131,9 +131,8 @@ TEST RESULTS:
 tests.foobar:test_foo OK
 tests.foobar:test_bar FAILED
 
-TESTS:  2
-PASSED: 1
-FAILED: 1
+SUMMARY: 1 FAILED 1 PASSED 2 TOTAL
+
 
 ***** FAILED *****
 

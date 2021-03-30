@@ -94,8 +94,8 @@ class RellCodeTester(
 
     fun chainDependency(name: String, rid: String, height: Long) {
         check(name !in chainDependencies)
-        val ridArray = CommonUtils.hexToBytes(rid)
-        chainDependencies[name] = TestChainDependency(ridArray, height)
+        val bcRid = RellTestUtils.strToBlockchainRid(rid)
+        chainDependencies[name] = TestChainDependency(bcRid, height)
     }
 
     fun chainDependencies() = chainDependencies.mapValues { (_, v) -> Pair(v.rid, v.height) }.toImmMap()
@@ -305,9 +305,9 @@ class RellCodeTester(
 
     private fun createSqlCtx(app: R_App, sqlExec: SqlExecutor): Rt_SqlContext {
         val sqlMapping = createChainSqlMapping()
-        val rtDeps = chainDependencies.mapValues { (_, v) -> Rt_ChainDependency(v.rid) }
+        val rtDeps = chainDependencies.mapValues { (_, v) -> Rt_ChainDependency(v.rid.data) }
 
-        val heightMap = chainDependencies.mapKeys { (_, v) -> ByteArrayKey(v.rid) }.mapValues { (_, v) -> v.height }
+        val heightMap = chainDependencies.mapKeys { (_, v) -> ByteArrayKey(v.rid.data) }.mapValues { (_, v) -> v.height }
         val heightProvider = TestChainHeightProvider(heightMap)
 
         return eval.wrapRt { Rt_SqlContext.create(app, sqlMapping, rtDeps, sqlExec, heightProvider) }
@@ -382,7 +382,7 @@ class RellCodeTester(
         return res
     }
 
-    private class TestChainDependency(val rid: ByteArray, val height: Long)
+    private class TestChainDependency(val rid: BlockchainRid, val height: Long)
 
     private class TestChainHeightProvider(private val map: Map<ByteArrayKey, Long>): Rt_ChainHeightProvider {
         override fun getChainHeight(rid: ByteArrayKey, id: Long): Long? {

@@ -15,13 +15,14 @@ import net.postchain.core.NODE_ID_TODO
 import net.postchain.devtools.PostchainTestNode
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory.gtv
-import net.postchain.rell.utils.RellBaseCliArgs
-import net.postchain.rell.utils.RellCliLogUtils
-import net.postchain.rell.utils.RellCliUtils
 import net.postchain.rell.RellConfigGen
+import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.Rt_LogPrinter
 import net.postchain.rell.runtime.Rt_PrinterFactory
 import net.postchain.rell.sql.SqlInitLogging
+import net.postchain.rell.utils.RellBaseCliArgs
+import net.postchain.rell.utils.RellCliLogUtils
+import net.postchain.rell.utils.RellCliUtils
 import picocli.CommandLine
 import java.io.File
 import java.util.logging.LogManager
@@ -84,6 +85,7 @@ object RunPostchainApp {
                                 gtv("net.postchain.gtx.StandardOpsGTXModule")
                         ),
                         "rell" to gtv(
+                                "version" to gtv(RellVersions.VERSION_STR),
                                 "dbInitLogLevel" to gtv(sqlInitLog.toLong()),
                                 "sqlLog" to gtv(sqlLog),
                                 "combinedPrinterFactoryClass" to gtv(Rt_RellAppPrinterFactory::class.java.name),

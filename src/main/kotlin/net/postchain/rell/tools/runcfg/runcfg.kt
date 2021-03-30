@@ -6,9 +6,10 @@ package net.postchain.rell.tools.runcfg
 
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvEncoder
-import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.compiler.C_DiskSourceDir
 import net.postchain.rell.compiler.C_SourceDir
+import net.postchain.rell.model.R_LangVersion
+import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.utils.*
 import java.io.File
 
@@ -54,26 +55,29 @@ class Rcfg_App(
 
 class Rcfg_ChainConfigGtv(val path: List<String>, val src: String?, val gtv: Gtv?)
 
+class RellRunConfigParams(val sourceDir: C_SourceDir, val configDir: GeneralDir, val sourceVersion: R_LangVersion)
+
 object RellRunConfigGenerator {
-    fun generateCli(sourceDir: File, runConfFile: File): RellPostAppCliConfig {
+    fun generateCli(sourceDir: File, runConfFile: File, sourceVersion: R_LangVersion): RellPostAppCliConfig {
         val cSourceDir = C_DiskSourceDir(sourceDir)
 
         val configDir = runConfFile.absoluteFile.parentFile
         val generalConfigDir = DiskGeneralDir(configDir)
+        val params = RellRunConfigParams(cSourceDir, generalConfigDir, sourceVersion)
 
         val runConfText = runConfFile.readText()
-        val config = generate(cSourceDir, generalConfigDir, runConfFile.path, runConfText)
+        val config = generate(params, runConfFile.path, runConfText)
 
         return RellPostAppCliConfig(cSourceDir, configDir, config)
     }
 
-    fun generate(sourceDir: C_SourceDir, configDir: GeneralDir, confPath: String, confText: String): RellPostAppConfig {
-        val rcfg = readConfig(configDir, confPath, confText)
+    fun generate(params: RellRunConfigParams, confPath: String, confText: String): RellPostAppConfig {
+        val rcfg = readConfig(params.configDir, confPath, confText)
 
-        val nodeConfig = RunConfigNodeConfigGen.generateNodeConfig(rcfg.nodeConfig, configDir)
+        val nodeConfig = RunConfigNodeConfigGen.generateNodeConfig(rcfg.nodeConfig, params.configDir)
 
         val replaceSigners = if (rcfg.nodeConfig.addSigners) nodeConfig.signers else null
-        val chainConfigs = RunConfigChainConfigGen.generateChainsConfigs(sourceDir, configDir, rcfg, replaceSigners)
+        val chainConfigs = RunConfigChainConfigGen.generateChainsConfigs(params, rcfg, replaceSigners)
 
         return RellPostAppConfig(nodeConfig, chainConfigs, wipeDb = rcfg.wipeDb)
     }

@@ -8,7 +8,9 @@ import mu.KLogging
 import net.postchain.common.hexStringToByteArray
 import net.postchain.rell.compiler.*
 import net.postchain.rell.model.R_App
+import net.postchain.rell.model.R_LangVersion
 import net.postchain.rell.model.R_ModuleName
+import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.Rt_RellVersion
 import net.postchain.rell.tools.RellJavaLoggingInit
 import picocli.CommandLine
@@ -160,6 +162,19 @@ object RellCliUtils: KLogging() {
     fun checkModule(s: String): R_ModuleName {
         val res = R_ModuleName.ofOpt(s)
         return res ?: throw RellCliErr("Invalid module name: '$s'")
+    }
+
+    fun checkVersion(s: String?): R_LangVersion {
+        s ?: return RellVersions.VERSION
+        val ver = try {
+            R_LangVersion.of(s)
+        } catch (e: IllegalArgumentException) {
+            throw RellCliErr("Invalid source version: '$s'")
+        }
+        if (ver !in RellVersions.SUPPORTED_VERSIONS) {
+            throw RellCliErr("Source version not supported: $ver")
+        }
+        return ver
     }
 
     fun <T> calc(calc: () -> T, errType: Class<out Throwable>, msg: () -> String): T {

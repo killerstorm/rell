@@ -26,6 +26,7 @@ calc.sum_digits_integer(1000)
 
 import c: repl.company;
 
+\od
 \db-update
 
 -->
@@ -76,6 +77,7 @@ c.company @* {}
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------
 ./rell.sh --db-properties test-cli/config/node-config.properties -d test-cli/src
 
+\od
 import c: repl.company;
 
 c.company @* {}
@@ -93,9 +95,9 @@ u.user @* {}
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------
 ./rell.sh
 
-val l = [(123,'Hello'),(456,'Bye'),(789,'Chiao')];
-val m = [123:'Hello',456:'Bye',789:'Chiao'];
-val m2 = ['Hello':123,'Bye':456,'Chiao':789];
+val l = [(123,'Hello'),(456,'Bye'),(789,'Ciao')];
+val m = [123:'Hello',456:'Bye',789:'Ciao'];
+val m2 = ['Hello':123,'Bye':456,'Ciao':789];
 
 \od
 l

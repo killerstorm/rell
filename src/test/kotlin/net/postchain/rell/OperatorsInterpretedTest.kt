@@ -37,7 +37,7 @@ class OperatorsInterpretedTest: OperatorsBaseTest() {
         val args2 = args.map { it as InterpTstVal }
         val types = args2.map { it.type }
 
-        val chainCtx = Rt_ChainContext(GtvNull, mapOf(), BlockchainRid.EMPTY_RID)
+        val chainCtx = Rt_ChainContext(GtvNull, mapOf(), BlockchainRid.ZERO_RID)
 
         val globalCtx = Rt_GlobalContext(
                 Rt_FailingPrinter,

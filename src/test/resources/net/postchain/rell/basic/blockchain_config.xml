@@ -8,7 +8,7 @@
         -->
         <dict>
             <entry key="name">
-                <string>net.postchain.base.BaseBlockBuildingStrategy</string>
+                <string>net.postchain.devtools.OnDemandBlockBuildingStrategy</string>
             </entry>
         </dict>
     </entry>

@@ -4,11 +4,13 @@
 
 package net.postchain.rell.test
 
+import net.postchain.base.BlockchainRid
 import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlManager
+import net.postchain.rell.utils.CommonUtils
 
 object RellTestUtils {
     val ENCODER_PLAIN = { _: R_Type, v: Rt_Value -> v.toString() }
@@ -17,7 +19,7 @@ object RellTestUtils {
 
     const val MAIN_FILE = "main.rell"
 
-    const val RELL_VER = "0.10"
+    const val RELL_VER = "0.10.4"
 
     fun processApp(code: String, processor: (T_App) -> String): String {
         val sourceDir = C_MapSourceDir.of(MAIN_FILE to code)
@@ -187,6 +189,10 @@ object RellTestUtils {
         TestSnippetsRecorder.record(sourceDir, modules, options, res)
         return res
     }
+
+    fun strToRidHex(s: String) = (s + "00".repeat(32)).substring(0, 64)
+    fun strToRidBytes(s: String) = CommonUtils.hexToBytes(strToRidHex(s))
+    fun strToBlockchainRid(s: String) = BlockchainRid(strToRidBytes(s))
 
     class TestCallResult(val res: String, val stack: List<R_StackPos>)
 }

@@ -13,7 +13,6 @@ import net.postchain.core.NODE_ID_TODO
 import net.postchain.core.UserMistake
 import net.postchain.devtools.PostchainTestNode
 import net.postchain.rell.compiler.C_CompilerOptions
-import net.postchain.rell.utils.RellBaseCliArgs
 import net.postchain.rell.utils.RellCliLogUtils
 import net.postchain.rell.utils.RellCliUtils
 import org.apache.commons.configuration2.PropertiesConfiguration
@@ -28,14 +27,15 @@ private val log = run {
 }
 
 fun main(args: Array<String>) {
-    RellCliUtils.runCli(args, RellRunConfigLaunchArgs()) {
+    RellCliUtils.runCli(args, RellRunConfigLaunchCliArgs()) {
         main0(it)
     }
 }
 
-private fun main0(args: RellRunConfigLaunchArgs) {
+private fun main0(args: RellRunConfigLaunchCliArgs) {
     val runConfigFile = RellCliUtils.checkFile(args.runConfigFile)
     val sourceDir = RellCliUtils.checkDir(args.sourceDir ?: ".").absoluteFile
+    val sourceVer = RellCliUtils.checkVersion(args.sourceVersion)
 
     log.info("STARTING POSTCHAIN APP")
     log.info("    source directory: ${sourceDir.absolutePath}")
@@ -44,7 +44,7 @@ private fun main0(args: RellRunConfigLaunchArgs) {
 
     RellCliUtils.printVersionInfo()
 
-    val rellAppConf = RellRunConfigGenerator.generateCli(sourceDir, runConfigFile)
+    val rellAppConf = RellRunConfigGenerator.generateCli(sourceDir, runConfigFile, sourceVer)
 
     // Make sure that all sources compile before trying to start a node.
     for (chain in rellAppConf.config.chains) {
@@ -115,8 +115,5 @@ private fun getNodeConfig(configDir: File, node: RellPostAppNode): AppConfig {
     return AppConfig(conf)
 }
 
-@CommandLine.Command(name = "RellRunConfigLaunch", description = ["Launch a run config"])
-private class RellRunConfigLaunchArgs: RellBaseCliArgs() {
-    @CommandLine.Parameters(index = "0", paramLabel = "RUN_CONFIG", description = ["Run config file"])
-    var runConfigFile: String = ""
-}
+@CommandLine.Command(name = "RellRunConfigLaunch", description = ["Launch a run.xml config"])
+private class RellRunConfigLaunchCliArgs: RellRunConfigCliArgs()

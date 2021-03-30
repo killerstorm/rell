@@ -411,3 +411,35 @@ instead of
     not (X in Y)
 
 The new notation is supposed to be more readable when X and Y are complex expressions.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+18. Tools: Specifying source code compatibility version in blockchain configuration
+
+In blockchain XML configuration (so-called blockchain.xml format), old key "sources_v0.10" is replaced by a pair of
+new keys: "sources" and "version". Those keys are under the same path, in the "rell" node:
+
+        <entry key="rell">
+            <dict>
+                <entry key="sources">
+                    <dict>
+                        <entry key="user.rell">...</entry>
+                    </dict>
+                </entry>
+                <entry key="version">
+                    <string>0.10.4</string>
+                </entry>
+            </dict>
+        </entry>
+
+The "version" key is mandatory. Its main purpose is to provide backwards compatibility of future versions of Rell in
+case if there are breaking changes. Thus, Rell module written for an older version of Rell will work with a newer version
+of Rell interpreter. Currently, there are no breaking changes, but there can be some in the future.
+
+If an older version number is specified, the code can still use features of newer versions of Rell (assuming a newer
+version of Rell interpreter is used).
+
+More details:
+
+- The old key "sources_v0.10" is still supported, but will not be in newer versions of Rell.
+- Command-line tools, like multigen.sh, have an optional parameter for specifying the version: "--source-version".
+- In Rell 0.10.4 the specified version has no effect, but it must be a valid Rell version.

@@ -9,6 +9,7 @@ import net.postchain.rell.RellConfigGen
 import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.ast.S_RellFile
 import net.postchain.rell.model.R_ModuleName
+import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.Rt_RellVersion
 import net.postchain.rell.runtime.Rt_RellVersionProperty
 import net.postchain.rell.utils.toImmList
@@ -21,7 +22,7 @@ import java.io.File
 
 @Suppress("UNUSED")
 object IdeApi {
-    const val RELL_VERSION = net.postchain.rell.module.RELL_VERSION
+    const val RELL_VERSION = RellVersions.VERSION_STR
 
     @JvmStatic fun parseSourcePath(s: String): C_SourcePath? {
         return C_SourcePath.parseOpt(s)

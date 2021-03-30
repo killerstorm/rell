@@ -7,7 +7,7 @@ package net.postchain.rell.compiler.ast
 import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.parser.RellTokenMatch
 import net.postchain.rell.model.*
-import net.postchain.rell.module.RELL_VERSION_MODULE_SYSTEM
+import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.toGtv
 import net.postchain.rell.tools.api.IdeOutlineNodeType
 import net.postchain.rell.tools.api.IdeOutlineTreeBuilder
@@ -1217,7 +1217,7 @@ class S_ImportDefinition(
 
 class S_IncludeDefinition(val pos: S_Pos): S_Definition(S_Modifiers(listOf())) {
     override fun compile(ctx: C_MountContext) {
-        ctx.msgCtx.error(pos, "include", "Include not supported since Rell $RELL_VERSION_MODULE_SYSTEM")
+        ctx.msgCtx.error(pos, "include", "Include not supported since Rell ${RellVersions.MODULE_SYSTEM_VERSION_STR}")
     }
 
     override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {

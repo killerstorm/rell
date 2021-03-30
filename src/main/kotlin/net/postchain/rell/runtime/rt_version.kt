@@ -5,8 +5,8 @@
 package net.postchain.rell.runtime
 
 import com.google.common.io.Resources
+import net.postchain.rell.module.RellVersions
 import net.postchain.rell.utils.immMapOf
-import net.postchain.rell.module.RELL_VERSION
 import net.postchain.rell.utils.toImmMap
 import java.io.StringReader
 import java.util.*
@@ -66,7 +66,7 @@ class Rt_RellVersion private constructor(
                 ps[prop] = value
             }
 
-            val codeVer = RELL_VERSION
+            val codeVer = RellVersions.VERSION_STR
             val buildVer = ps.getValue(Rt_RellVersionProperty.RELL_VERSION)
             check(buildVer == codeVer) { "Rell version in code = $codeVer, in build = $buildVer" }
 

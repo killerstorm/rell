@@ -7,7 +7,7 @@ package net.postchain.rell.model
 import net.postchain.core.Signature
 import net.postchain.rell.compiler.C_Constants
 import net.postchain.rell.module.GtvToRtContext
-import net.postchain.rell.module.RELL_VERSION
+import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.*
 import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.PostchainUtils
@@ -787,7 +787,7 @@ object R_SysFn_Rell {
     object GetRellVersion: R_SysFunction() {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             check(args.size == 0)
-            return Rt_TextValue(RELL_VERSION)
+            return Rt_TextValue(RellVersions.VERSION_STR)
         }
     }
 

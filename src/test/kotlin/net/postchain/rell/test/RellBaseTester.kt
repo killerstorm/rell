@@ -31,7 +31,7 @@ abstract class RellBaseTester(
     var gtv = gtv
     var deprecatedError = false
     var atAttrShadowing = C_CompilerOptions.DEFAULT.atAttrShadowing
-    var blockchainRid = "DEADBEEF"
+    var blockchainRid = RellTestUtils.strToRidHex("DEADBEEF")
 
     var defs: List<String> = entityDefs
         set(value) {

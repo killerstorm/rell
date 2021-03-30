@@ -6,21 +6,26 @@ package net.postchain.rell.tools.runcfg
 
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory.gtv
-import net.postchain.rell.*
+import net.postchain.rell.RellConfigGen
 import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.module.CONFIG_RELL_SOURCES
-import net.postchain.rell.compiler.C_SourceDir
-import net.postchain.rell.utils.*
+import net.postchain.rell.module.ConfigConstants
+import net.postchain.rell.utils.Bytes32
+import net.postchain.rell.utils.Bytes33
+import net.postchain.rell.utils.PostchainUtils
+import net.postchain.rell.utils.toImmList
 
-class RunConfigChainConfigGen private constructor(private val sourceDir: C_SourceDir, private val configDir: GeneralDir) {
+class RunConfigChainConfigGen private constructor(params: RellRunConfigParams) {
+    private val sourceDir = params.sourceDir
+    private val configDir = params.configDir
+    private val sourceVersion = params.sourceVersion
+
     companion object {
         fun generateChainsConfigs(
-                sourceDir: C_SourceDir,
-                configDir: GeneralDir,
+                params: RellRunConfigParams,
                 runConfig: Rcfg_Run,
                 replaceSigners: Collection<Bytes33>?
         ): List<RellPostAppChain> {
-            val generator = RunConfigChainConfigGen(sourceDir, configDir)
+            val generator = RunConfigChainConfigGen(params)
 
             val res = mutableListOf<RellPostAppChain>()
             val brids = mutableMapOf<Rcfg_Chain, Bytes32>()
@@ -112,7 +117,8 @@ class RunConfigChainConfigGen private constructor(private val sourceDir: C_Sourc
 
         val srcGtv = gtv(
                 "modules" to gtv(listOf(gtv(app.module.str()))),
-                CONFIG_RELL_SOURCES to gtv(sources.files.mapValues { (_, v) -> gtv(v) })
+                ConfigConstants.RELL_SOURCES_KEY to gtv(sources.files.mapValues { (_, v) -> gtv(v) }),
+                ConfigConstants.RELL_VERSION_KEY to gtv(sourceVersion.str())
         )
         b.update(srcGtv, "gtx", "rell")
 

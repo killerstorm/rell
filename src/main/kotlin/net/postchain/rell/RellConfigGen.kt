@@ -13,8 +13,9 @@ import net.postchain.rell.compiler.C_Error
 import net.postchain.rell.compiler.C_SourceDir
 import net.postchain.rell.compiler.C_SourcePath
 import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.module.CONFIG_RELL_FILES
-import net.postchain.rell.module.CONFIG_RELL_SOURCES
+import net.postchain.rell.model.R_LangVersion
+import net.postchain.rell.module.ConfigConstants
+import net.postchain.rell.module.RellVersions
 import net.postchain.rell.utils.*
 import picocli.CommandLine
 import java.io.File
@@ -22,12 +23,12 @@ import java.io.FileOutputStream
 import java.io.OutputStream
 
 fun main(args: Array<String>) {
-    RellCliUtils.runCli(args, RellCfgArgs()) {
+    RellCliUtils.runCli(args, RellCfgCliArgs()) {
         main0(it)
     }
 }
 
-private fun main0(args: RellCfgArgs) {
+private fun main0(args: RellCfgCliArgs) {
     val target = RellCliUtils.getTarget(args.sourceDir, args.module)
 
     val template = if (args.configTemplateFile == null) null else {
@@ -48,7 +49,7 @@ private fun main0(args: RellCfgArgs) {
     }
 }
 
-private fun writeResult(args: RellCfgArgs, os: OutputStream, config: Gtv) {
+private fun writeResult(args: RellCfgCliArgs, os: OutputStream, config: Gtv) {
     val bytes = if (args.binaryOutput) {
         PostchainUtils.gtvToBytes(config)
     } else {
@@ -71,6 +72,7 @@ private fun verifyCfg(b: Boolean, msg: String) {
 
 class RellConfigGen(
         private val sourceDir: C_SourceDir,
+        private val sourceVersion: R_LangVersion,
         private val modules: List<R_ModuleName>,
         private val moduleFiles: List<C_SourcePath>
 ) {
@@ -137,12 +139,16 @@ class RellConfigGen(
             }
         }
 
-        val sourcesDict = getDictByKey(rellDict, CONFIG_RELL_SOURCES)
+        val sourcesDict = getDictByKey(rellDict, ConfigConstants.RELL_SOURCES_KEY)
         for ((name, source) in files) {
             sourcesDict.putString(name, source)
         }
 
-        rellDict.remove(CONFIG_RELL_FILES)
+        if (rellDict.get(ConfigConstants.RELL_VERSION_KEY) == null) {
+            rellDict.putString(ConfigConstants.RELL_VERSION_KEY, sourceVersion.str())
+        }
+
+        rellDict.remove(ConfigConstants.RELL_FILES_KEY)
     }
 
     private fun getDictByKey(dict: DictGtvNode, key: String): DictGtvNode {
@@ -184,7 +190,7 @@ class RellConfigGen(
 
         fun create(sourceDir: C_SourceDir, modules: List<R_ModuleName>): RellConfigGen {
             val cRes = RellCliUtils.compile(sourceDir, modules, true, C_CompilerOptions.DEFAULT)
-            return RellConfigGen(sourceDir, modules, cRes.files)
+            return RellConfigGen(sourceDir, RellVersions.VERSION, modules, cRes.files)
         }
 
         fun configToText(gtvConfig: Gtv): String {
@@ -274,7 +280,7 @@ private class ArrayGtvNode(path: String?, list: List<GtvNode>): GtvNode(path) {
 }
 
 @CommandLine.Command(name = "RellConfigGen", description = ["Generates Rell Postchain configuration"])
-private class RellCfgArgs: RellBaseCliArgs() {
+private class RellCfgCliArgs: RellBaseCliArgs() {
     @CommandLine.Parameters(index = "0", paramLabel = "MODULE", description = ["Module name"])
     var module: String = ""
 

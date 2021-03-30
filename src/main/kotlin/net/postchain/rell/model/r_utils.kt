@@ -5,6 +5,7 @@
 package net.postchain.rell.model
 
 import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.VersionNumber
 import net.postchain.rell.utils.toImmList
 import org.apache.commons.lang3.StringUtils
 import java.util.*
@@ -142,6 +143,26 @@ class R_Name private constructor(val str: String): Comparable<R_Name> {
             val names2 = names.filterNotNull()
             if (names2.size != names.size) return null
             return names2.toImmList()
+        }
+    }
+}
+
+class R_LangVersion(private val ver: VersionNumber): Comparable<R_LangVersion> {
+    init {
+        require(ver.items.size == 3) { "wrong version: $ver" }
+    }
+
+    fun str(): String = ver.str()
+
+    override fun compareTo(other: R_LangVersion) = ver.compareTo(other.ver)
+    override fun equals(other: Any?) = other is R_LangVersion && ver == other.ver
+    override fun hashCode() = ver.hashCode()
+    override fun toString() = ver.toString()
+
+    companion object {
+        fun of(s: String): R_LangVersion {
+            val ver = VersionNumber.of(s)
+            return R_LangVersion(ver)
         }
     }
 }

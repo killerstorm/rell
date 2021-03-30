@@ -1,13 +1,12 @@
 package net.postchain.rell.misc
 
 import net.postchain.base.BaseEContext
-import net.postchain.base.BlockchainRid
 import net.postchain.base.data.PostgreSQLDatabaseAccess
 import net.postchain.base.data.SQLDatabaseAccess
-import net.postchain.common.hexStringToByteArray
 import net.postchain.rell.sql.ConnectionSqlExecutor
 import net.postchain.rell.sql.SqlUtils
 import net.postchain.rell.test.BaseResourcefulTest
+import net.postchain.rell.test.RellTestUtils
 import net.postchain.rell.test.SqlTestUtils
 import net.postchain.rell.utils.PostchainUtils
 import org.junit.Test
@@ -23,17 +22,21 @@ class PostchainTest: BaseResourcefulTest() {
         sqlAccess().initializeApp(con, PostchainUtils.DATABASE_VERSION)
 
         chkTables(con,
+                "blockchain_replicas(blockchain_rid:text,node:text)",
                 "blockchains(blockchain_rid:bytea,chain_iid:int8)",
                 "meta(key:text,value:text)",
-                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp)"
+                "must_sync_until(block_height:int8,chain_iid:int8)",
+                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp without time zone)"
         )
 
         sqlAccess().initializeApp(con, PostchainUtils.DATABASE_VERSION)
 
         chkTables(con,
+                "blockchain_replicas(blockchain_rid:text,node:text)",
                 "blockchains(blockchain_rid:bytea,chain_iid:int8)",
                 "meta(key:text,value:text)",
-                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp)"
+                "must_sync_until(block_height:int8,chain_iid:int8)",
+                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp without time zone)"
         )
     }
 
@@ -44,36 +47,45 @@ class PostchainTest: BaseResourcefulTest() {
         sa.initializeApp(con, PostchainUtils.DATABASE_VERSION)
 
         chkTables(con,
+                "blockchain_replicas(blockchain_rid:text,node:text)",
                 "blockchains(blockchain_rid:bytea,chain_iid:int8)",
                 "meta(key:text,value:text)",
-                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp)"
+                "must_sync_until(block_height:int8,chain_iid:int8)",
+                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp without time zone)"
         )
 
-        sa.initializeBlockchain(BaseEContext(con, 123L, 0, sa), BlockchainRid("CEED".hexStringToByteArray()))
+        val bcRid1 = RellTestUtils.strToBlockchainRid("CEED")
+        sa.initializeBlockchain(BaseEContext(con, 123L, 0, sa), bcRid1)
 
         chkTables(con,
+                "blockchain_replicas(blockchain_rid:text,node:text)",
                 "blockchains(blockchain_rid:bytea,chain_iid:int8)",
                 "c123.blocks(block_header_data:bytea,block_height:int8,block_iid:bigserial,block_rid:bytea,block_witness:bytea,timestamp:int8)",
                 "c123.configurations(configuration_data:bytea,height:int8)",
                 "c123.transactions(block_iid:int8,tx_data:bytea,tx_hash:bytea,tx_iid:bigserial,tx_rid:bytea)",
                 "meta(key:text,value:text)",
-                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp)"
+                "must_sync_until(block_height:int8,chain_iid:int8)",
+                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp without time zone)"
         )
 
         sa.initializeApp(con, PostchainUtils.DATABASE_VERSION)
 
         chkTables(con,
+                "blockchain_replicas(blockchain_rid:text,node:text)",
                 "blockchains(blockchain_rid:bytea,chain_iid:int8)",
                 "c123.blocks(block_header_data:bytea,block_height:int8,block_iid:bigserial,block_rid:bytea,block_witness:bytea,timestamp:int8)",
                 "c123.configurations(configuration_data:bytea,height:int8)",
                 "c123.transactions(block_iid:int8,tx_data:bytea,tx_hash:bytea,tx_iid:bigserial,tx_rid:bytea)",
                 "meta(key:text,value:text)",
-                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp)"
+                "must_sync_until(block_height:int8,chain_iid:int8)",
+                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp without time zone)"
         )
 
-        sa.initializeBlockchain(BaseEContext(con, 456L, 0, sa), BlockchainRid("FEED".hexStringToByteArray()))
+        val bcRid2 = RellTestUtils.strToBlockchainRid("FEED")
+        sa.initializeBlockchain(BaseEContext(con, 456L, 0, sa), bcRid2)
 
         chkTables(con,
+                "blockchain_replicas(blockchain_rid:text,node:text)",
                 "blockchains(blockchain_rid:bytea,chain_iid:int8)",
                 "c123.blocks(block_header_data:bytea,block_height:int8,block_iid:bigserial,block_rid:bytea,block_witness:bytea,timestamp:int8)",
                 "c123.configurations(configuration_data:bytea,height:int8)",
@@ -82,14 +94,15 @@ class PostchainTest: BaseResourcefulTest() {
                 "c456.configurations(configuration_data:bytea,height:int8)",
                 "c456.transactions(block_iid:int8,tx_data:bytea,tx_hash:bytea,tx_iid:bigserial,tx_rid:bytea)",
                 "meta(key:text,value:text)",
-                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp)"
+                "must_sync_until(block_height:int8,chain_iid:int8)",
+                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp without time zone)"
         )
     }
 
     private fun chkTables(con: Connection, vararg expectedTables: String) {
         val dump = SqlTestUtils.dumpTablesStructure(con, true)
         val actual = dump
-                .mapValues { (k, v) -> v.entries.joinToString(",") { it.key + ":" + it.value } }
+                .mapValues { (_, v) -> v.entries.joinToString(",") { it.key + ":" + it.value } }
                 .entries
                 .map { (k, v) -> "$k($v)" }
                 .joinToString(" ")

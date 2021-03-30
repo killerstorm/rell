@@ -23,13 +23,22 @@ import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.utils.*
 import org.apache.commons.lang3.time.FastDateFormat
 
-const val RELL_LANG_VERSION = "0.10"
-const val RELL_VERSION = "0.10.4"
+object RellVersions {
+    const val VERSION_STR = "0.10.4"
+    val VERSION = R_LangVersion.of(VERSION_STR)
 
-const val RELL_VERSION_MODULE_SYSTEM = "0.10.0"
+    val SUPPORTED_VERSIONS = listOf("0.10.0", "0.10.1", "0.10.2", "0.10.3", "0.10.4")
+            .map { R_LangVersion.of(it) }
+            .toImmSet()
 
-const val CONFIG_RELL_FILES = "files_v$RELL_LANG_VERSION"
-const val CONFIG_RELL_SOURCES = "sources_v$RELL_LANG_VERSION"
+    const val MODULE_SYSTEM_VERSION_STR = "0.10.0"
+}
+
+object ConfigConstants {
+    const val RELL_VERSION_KEY = "version"
+    const val RELL_SOURCES_KEY = "sources"
+    const val RELL_FILES_KEY = "files"
+}
 
 private fun convertArgs(ctx: GtvToRtContext, params: List<R_Param>, args: List<Gtv>): List<Rt_Value> {
     return args.mapIndexed { index, arg ->
@@ -335,7 +344,9 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
         val errorHandler = ErrorHandler(combinedPrinter, env.wrapCtErrors, env.wrapRtErrors)
 
         return errorHandler.handleError({ "Module initialization failed" }) {
-            val sourceDir = getSourceDir(rellNode)
+            val sourceCfg = SourceCodeConfig(rellNode)
+            val sourceDir = sourceCfg.dir
+
             val modules = getModuleNames(rellNode)
             val app = compileApp(sourceDir, modules, errorHandler, copyOutput)
 
@@ -461,36 +472,6 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
         return if (names.isNotEmpty()) names else listOf(R_ModuleName.EMPTY)
     }
 
-    private fun getSourceDir(rellNode: Map<String, Gtv>): C_SourceDir {
-        val filesNode = rellNode[CONFIG_RELL_FILES]
-        val sourcesNode = rellNode[CONFIG_RELL_SOURCES]
-
-        if (filesNode == null && sourcesNode == null) {
-            throw UserMistake("Neither files nor sources specified")
-        } else if (filesNode != null && sourcesNode != null) {
-            throw UserMistake("Both files and sources specified")
-        }
-
-        val sourceCodes = if (sourcesNode != null) {
-            sourcesNode.asDict().mapValues { (_, v) -> v.asString() }
-        } else {
-            filesNode!!.asDict().mapValues { (_, v) -> CommonUtils.readFileContent(v.asString()) }
-        }
-
-        val files = sourceCodes
-                .mapKeys { (k, _) -> parseSourcePath(k) }
-                .mapValues { (k, v) -> C_TextSourceFile(k, v) }
-                .toImmMap()
-
-        return C_MapSourceDir(files)
-    }
-
-    private fun parseSourcePath(s: String): C_SourcePath {
-        val path = C_SourcePath.parseOpt(s)
-        return path ?: throw UserMistake("Invalid file path: '$s'")
-    }
-
-
     private fun createChainContext(
             rawConfig: Gtv,
             rellNode: Map<String, Gtv>,
@@ -539,4 +520,101 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
     }
 
     companion object : KLogging()
+}
+
+private class SourceCodeConfig(rellNode: Map<String, Gtv>) {
+    val dir: C_SourceDir
+    val version: R_LangVersion
+
+    init {
+        val ver = getSourceVersion(rellNode)
+        val textSources = getSourceCodes(rellNode, ver, false)
+        val fileSources = getSourceCodes(rellNode, ver, true)
+        val allSources = textSources + fileSources
+
+        if (allSources.isEmpty()) {
+            throw UserMistake("Source code not specified in the configuration")
+        } else if (allSources.size > 1) {
+            val s = allSources.map { it.key }.sorted().joinToString()
+            throw UserMistake("Multiple source code nodes specified in the configuration: $s")
+        }
+
+        val source = allSources.first()
+        if (source.legacy && ver != null) {
+            val verKey = ConfigConstants.RELL_VERSION_KEY
+            throw UserMistake("Keys '${source.key}' and '$verKey' cannot be specified together")
+        }
+
+        val sourcesNode = rellNode.getValue(source.key)
+
+        val fileMap = sourcesNode.asDict()
+                .mapValues { (_, v) ->
+                    val s = v.asString()
+                    if (source.files) CommonUtils.readFileText(s) else s
+                }
+                .mapKeys { (k, _) -> parseSourcePath(k) }
+                .mapValues { (k, v) -> C_TextSourceFile(k, v) }
+                .toImmMap()
+
+        dir = C_MapSourceDir(fileMap)
+        version = source.version
+    }
+
+    private fun getSourceVersion(rellNode: Map<String, Gtv>): R_LangVersion? {
+        val verStr = rellNode[ConfigConstants.RELL_VERSION_KEY]?.asString()
+        verStr ?: return null
+
+        val ver = try {
+            R_LangVersion.of(verStr)
+        } catch (e: IllegalArgumentException) {
+            throw UserMistake("Invalid language version: $verStr")
+        }
+
+        if (ver !in RellVersions.SUPPORTED_VERSIONS) {
+            throw UserMistake("Unsupported language version: $ver")
+        }
+
+        return ver
+    }
+
+    private fun getSourceCodes(rellNode: Map<String, Gtv>, ver: R_LangVersion?, files: Boolean): List<SourceCode> {
+        val res = mutableListOf<SourceCode>()
+
+        val key = if (files) ConfigConstants.RELL_FILES_KEY else ConfigConstants.RELL_SOURCES_KEY
+
+        if (key in rellNode) {
+            val verKey = ConfigConstants.RELL_VERSION_KEY
+            ver ?: throw UserMistake("Configuration key '$key' is specified, but '$verKey' is missing")
+            res.add(SourceCode(key, ver, files, false))
+        }
+
+        val regex = Regex("${key}_v(\\d.*)")
+        val legacy = rellNode.keys
+                .mapNotNull { regex.matchEntire(it) }
+                .map {
+                    val k = it.groupValues[0]
+                    val legacyVer = processLegacySourceKeyVersion(k, it.groupValues[1], key)
+                    SourceCode(k, legacyVer, files, true)
+                }
+        res.addAll(legacy)
+
+        return res.toImmList()
+    }
+
+    private fun processLegacySourceKeyVersion(key: String, s: String, keyPrefix: String): R_LangVersion {
+        return when (s) {
+            "0.10" -> R_LangVersion.of("0.10.4")
+            else -> {
+                val verKey = ConfigConstants.RELL_VERSION_KEY
+                throw UserMistake("Invalid source code key: $key; use '$keyPrefix' and '$verKey' instead")
+            }
+        }
+    }
+
+    private fun parseSourcePath(s: String): C_SourcePath {
+        val path = C_SourcePath.parseOpt(s)
+        return path ?: throw UserMistake("Invalid file path: '$s'")
+    }
+
+    private class SourceCode(val key: String, val version: R_LangVersion, val files: Boolean, val legacy: Boolean)
 }
