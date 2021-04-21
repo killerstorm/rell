@@ -20,6 +20,7 @@ import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.Rt_LogPrinter
 import net.postchain.rell.runtime.Rt_PrinterFactory
 import net.postchain.rell.sql.SqlInitLogging
+import net.postchain.rell.utils.MainRellCliEnv
 import net.postchain.rell.utils.RellBaseCliArgs
 import net.postchain.rell.utils.RellCliLogUtils
 import net.postchain.rell.utils.RellCliUtils
@@ -50,7 +51,7 @@ private fun main0(args: RunPostchainAppArgs) {
 
     RellCliUtils.printVersionInfo()
 
-    val configGen = RellConfigGen.create(target)
+    val configGen = RellConfigGen.create(MainRellCliEnv, target)
 
     val nodeAppConf = AppConfig.fromPropertiesFile(args.nodeConfigFile)
     val nodeConfPro = NodeConfigurationProviderFactory.createProvider(nodeAppConf)

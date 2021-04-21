@@ -4,8 +4,6 @@
 
 package net.postchain.rell.lib
 
-import net.postchain.rell.utils.CommonUtils
-import net.postchain.rell.runtime.Rt_OpContext
 import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 
@@ -70,20 +68,6 @@ class LibTest: BaseRellTest(false) {
         chkEx("{ f(); return 0; }", "int[0]")
         chkOut()
         chkLog("[:f(main.rell:1)] this is f()")
-    }
-
-    @Test fun testIsSigner() {
-        tst.opContext = Rt_OpContext(-1, -1, -1, listOf(CommonUtils.hexToBytes("1234"), CommonUtils.hexToBytes("abcd")))
-
-        chk("is_signer(x'1234')", "boolean[true]")
-        chk("is_signer(x'abcd')", "boolean[true]")
-        chk("is_signer(x'1234abcd')", "boolean[false]")
-        chk("is_signer(x'')", "boolean[false]")
-
-        chk("is_signer()", "ct_err:expr_call_argtypes:is_signer:")
-        chk("is_signer(123)", "ct_err:expr_call_argtypes:is_signer:integer")
-        chk("is_signer('1234')", "ct_err:expr_call_argtypes:is_signer:text")
-        chk("is_signer(x'12', x'34')", "ct_err:expr_call_argtypes:is_signer:byte_array,byte_array")
     }
 
     @Test fun testTypeOf() {

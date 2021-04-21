@@ -185,8 +185,13 @@ object RellTestUtils {
     }
 
     fun compileApp(sourceDir: C_SourceDir, modules: List<R_ModuleName>, options: C_CompilerOptions): C_CompilationResult {
-        val res = C_Compiler.compile(sourceDir, modules, options)
-        TestSnippetsRecorder.record(sourceDir, modules, options, res)
+        val modSel = C_CompilerModuleSelection(modules, listOf())
+        return compileApp(sourceDir, modSel, options)
+    }
+
+    fun compileApp(sourceDir: C_SourceDir, modSel: C_CompilerModuleSelection, options: C_CompilerOptions): C_CompilationResult {
+        val res = C_Compiler.compile(sourceDir, modSel, options)
+        TestSnippetsRecorder.record(sourceDir, modSel, options, res)
         return res
     }
 

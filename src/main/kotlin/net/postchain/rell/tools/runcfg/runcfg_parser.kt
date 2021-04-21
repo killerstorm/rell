@@ -11,8 +11,14 @@ import net.postchain.rell.utils.Bytes32
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 
+class RunConfigParserOptions(
+        val unitTest: Boolean
+)
+
 object RunConfigParser {
-    fun parseConfig(xml: RellXmlElement): Rcfg_Run {
+    private const val TEST_CONFIG_TAG = "test-config"
+
+    fun parseConfig(xml: RellXmlElement, opts: RunConfigParserOptions): Rcfg_Run {
         val root = xml
         root.checkTag("run")
         root.checkNoText()
@@ -23,47 +29,66 @@ object RunConfigParser {
 
         var nodes = false
         var nodeConfig: Rcfg_NodeConfig? = null
+        var testNodeConfig: Rcfg_NodeConfig? = null
         var chains: List<Rcfg_Chain>? = null
+        var tests: List<Rcfg_TestModule>? = null
 
         for (elem in root.elems) {
             when (elem.tag) {
                 "nodes" -> {
                     elem.check(!nodes) { "nodes specified more than once" }
                     nodes = true
-                    nodeConfig = parseNodes(elem)
+                    val p = parseNodes(opts, elem)
+                    nodeConfig = p.first
+                    testNodeConfig = p.second
                 }
                 "chains" -> {
                     elem.check(chains == null) { "chains specified more than once" }
-                    chains = parseChains(elem)
+                    val p = parseChains(elem)
+                    chains = p.first
+                    tests = p.second
                 }
                 else -> throw elem.errorTag()
             }
         }
 
-        root.check(nodeConfig != null) { "node configuration not defined" }
+        root.check(nodeConfig != null || testNodeConfig != null) { "node configuration not defined" }
         root.check(chains != null && !chains.isEmpty()) { "no chains defined" }
 
-        return Rcfg_Run(nodeConfig!!, chains ?: listOf(), wipeDb = wipeDb)
+        return Rcfg_Run(nodeConfig, testNodeConfig, chains ?: listOf(), tests ?: listOf(), wipeDb = wipeDb)
     }
 
-    private fun parseNodes(nodes: RellXmlElement): Rcfg_NodeConfig {
+    private fun parseNodes(opts: RunConfigParserOptions, nodes: RellXmlElement): Pair<Rcfg_NodeConfig?, Rcfg_NodeConfig?> {
         nodes.checkNoText()
         nodes.attrs().checkNoMore()
 
         var config: Rcfg_NodeConfig? = null
+        var testConfig: Rcfg_NodeConfig? = null
 
         for (elem in nodes.elems) {
-            elem.checkTag("config")
-            elem.check(config == null) { "node configuration specified more than once" }
-            config = parseNodeConfig(elem)
+            when (elem.tag) {
+                "config" -> {
+                    elem.check(config == null) { "node configuration specified more than once" }
+                    config = parseNodeConfig(elem)
+                }
+                TEST_CONFIG_TAG -> {
+                    elem.check(testConfig == null) { "test node configuration specified more than once" }
+                    testConfig = parseNodeConfig(elem)
+                }
+                else -> throw elem.errorTag()
+            }
         }
 
-        nodes.check(config != null) { "node configuration not defined" }
+        if (opts.unitTest) {
+            nodes.check(testConfig != null) { "test node configuration not defined ('$TEST_CONFIG_TAG' tag)" }
+        } else {
+            nodes.check(config != null) { "node configuration not defined" }
+        }
 
-        return config!!
+        return Pair(config, testConfig)
     }
 
-    private fun parseNodeConfig(elem: RellXmlElement): Rcfg_NodeConfig? {
+    private fun parseNodeConfig(elem: RellXmlElement): Rcfg_NodeConfig {
         elem.checkNoElems()
 
         val attrs = elem.attrs()
@@ -79,15 +104,25 @@ object RunConfigParser {
         return Rcfg_NodeConfig(src, text, addSigners)
     }
 
-    private fun parseChains(chains: RellXmlElement): List<Rcfg_Chain> {
+    private fun parseChains(chains: RellXmlElement): Pair<List<Rcfg_Chain>, List<Rcfg_TestModule>> {
         chains.checkNoText()
         chains.attrs().checkNoMore()
 
         val ctx = ParseChainsCtx()
         val headers = mutableListOf<ParseChainHeader>()
+        val tests = mutableListOf<Rcfg_TestModule>()
+
         for (elem in chains.elems) {
-            val header = parseChainHeader(ctx, elem)
-            headers.add(header)
+            when (elem.tag) {
+                "chain" -> {
+                    val header = parseChainHeader(ctx, elem)
+                    headers.add(header)
+                }
+                "test" -> {
+                    parseTestModule(elem, tests)
+                }
+                else -> throw elem.errorTag()
+            }
         }
 
         val headersMap = headers.map { it.name to it }.toMap().toImmMap()
@@ -99,11 +134,10 @@ object RunConfigParser {
             resChains[chain.name] = chain
         }
 
-        return resChains.values.toImmList()
+        return Pair(resChains.values.toImmList(), tests.toImmList())
     }
 
     private fun parseChainHeader(ctx: ParseChainsCtx, chain: RellXmlElement): ParseChainHeader {
-        chain.checkTag("chain")
         chain.checkNoText()
 
         val attrs = chain.attrs()
@@ -124,6 +158,7 @@ object RunConfigParser {
     ): Rcfg_Chain {
         val subCtx = ParseChainCtx(header, allChains, parsedChains)
         val configs = mutableListOf<Rcfg_ChainConfig>()
+        val tests = mutableListOf<Rcfg_TestModule>()
 
         for (elem in header.elem.elems) {
             when (elem.tag) {
@@ -131,13 +166,16 @@ object RunConfigParser {
                     val config = parseChainConfig(subCtx, elem)
                     configs.add(config)
                 }
+                "test" -> {
+                    parseTestModule(elem, tests)
+                }
                 else -> throw elem.errorTag()
             }
         }
 
         header.elem.check(configs.any { it.height == 0L }) { "no config for height 0" }
 
-        return Rcfg_Chain(header.name, header.iid, configs)
+        return Rcfg_Chain(header.name, header.iid, configs, tests)
     }
 
     private fun parseChainConfig(ctx: ParseChainCtx, config: RellXmlElement): Rcfg_ChainConfig {
@@ -179,18 +217,26 @@ object RunConfigParser {
         return Rcfg_ChainConfig(height, app, gtvs, addDependencies, dependencies ?: mapOf())
     }
 
+    private fun parseTestModule(elem: RellXmlElement, res: MutableList<Rcfg_TestModule>) {
+        elem.checkNoText()
+        elem.checkNoElems()
+
+        val attrs = elem.attrs()
+        val module = getModuleNameAttr(elem, attrs, "module")
+        attrs.checkNoMore()
+
+        res.add(Rcfg_TestModule(module))
+    }
+
     private fun parseAppConfig(app: RellXmlElement): Rcfg_App {
         app.checkNoText()
 
         val attrs = app.attrs()
-        val moduleStr = attrs.get("module")
+        val module = getModuleNameAttr(app, attrs, "module")
         val addDefaults = attrs.getBooleanOpt("add-defaults") ?: true
         attrs.checkNoMore()
 
-        val module = R_ModuleName.ofOpt(moduleStr)
-        module ?: throw app.error("Invalid module name: '$moduleStr'")
-
-        var args = mutableMapOf<R_ModuleName, Map<String, Gtv>>()
+        val args = mutableMapOf<R_ModuleName, Map<String, Gtv>>()
 
         for (elem in app.elems) {
             when (elem.tag) {
@@ -210,11 +256,8 @@ object RunConfigParser {
         args.checkNoText()
 
         val attrs = args.attrs()
-        val moduleStr = attrs.get("module")
+        val module = getModuleNameAttr(args, attrs, "module")
         attrs.checkNoMore()
-
-        val module = R_ModuleName.ofOpt(moduleStr)
-        module ?: throw args.error("Invalid module name: '${moduleStr}'")
 
         val res = mutableMapOf<String, Gtv>()
 
@@ -313,6 +356,12 @@ object RunConfigParser {
 
         val depChain = ctx.parsedChains.getValue(chain)
         return Rcfg_Dependency(depChain, null)
+    }
+
+    private fun getModuleNameAttr(elem: RellXmlElement, attrs: RellXmlAttrsParser, attr: String): R_ModuleName {
+        val moduleStr = attrs.get(attr)
+        val module = R_ModuleName.ofOpt(moduleStr)
+        return module ?: throw elem.error("Invalid module name: '${moduleStr}'")
     }
 
     private class ParseChainHeader(val name: String, val iid: Long, val elem: RellXmlElement)

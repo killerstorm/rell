@@ -96,7 +96,7 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
             ctx.msgCtx.warning(field.sort.pos, "at:what:sort:deprecated:$ann", "Deprecated sort syntax; use @$ann annotation instead")
         }
 
-        val modifierCtx = C_ModifierContext(ctx.msgCtx, R_MountName.EMPTY)
+        val modifierCtx = C_ModifierContext(ctx.appCtx, R_MountName.EMPTY)
         for (annotation in field.annotations) {
             annotation.compile(modifierCtx, modTarget)
         }

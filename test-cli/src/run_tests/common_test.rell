@@ -1,0 +1,8 @@
+@test module;
+
+import run_tests.test_utils;
+
+function test_common() {
+    log('common test');
+    assert_equals(2 + 2, 4);
+}

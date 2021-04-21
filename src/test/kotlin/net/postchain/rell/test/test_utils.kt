@@ -7,7 +7,10 @@ package net.postchain.rell.test
 import com.google.common.collect.HashMultimap
 import net.postchain.gtv.Gtv
 import net.postchain.rell.compiler.*
-import net.postchain.rell.model.*
+import net.postchain.rell.model.R_App
+import net.postchain.rell.model.R_EntityDefinition
+import net.postchain.rell.model.R_Param
+import net.postchain.rell.model.R_StackPos
 import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
@@ -20,6 +23,7 @@ import net.postchain.rell.tools.api.IdeCodeSnippet
 import net.postchain.rell.tools.api.IdeSnippetMessage
 import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.PostchainUtils
+import net.postchain.rell.utils.RellCliEnv
 import net.postchain.rell.utils.toImmMap
 import org.apache.commons.configuration2.PropertiesConfiguration
 import org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder
@@ -281,7 +285,7 @@ object TestSnippetsRecorder {
 
     fun record(
             sourceDir: C_SourceDir,
-            modules: List<R_ModuleName>,
+            modules: C_CompilerModuleSelection,
             options: C_CompilerOptions,
             res: C_CompilationResult
     ) {
@@ -291,13 +295,13 @@ object TestSnippetsRecorder {
         val messages = res.messages.map { IdeSnippetMessage(it.pos.str(), it.type, it.code, it.text) }
         val parsing = makeParsing(files)
 
-        val snippet = IdeCodeSnippet(files, modules.map { it.str() }, options, messages, parsing)
+        val snippet = IdeCodeSnippet(files, modules, options, messages, parsing)
         addSnippet(snippet)
     }
 
     private fun sourceDirToMap(sourceDir: C_SourceDir): Map<String, String> {
         val map = mutableMapOf<C_SourcePath, String>()
-        sourceDirToMap0(sourceDir, C_SourcePath(), map)
+        sourceDirToMap0(sourceDir, C_SourcePath.EMPTY, map)
         return map.mapKeys { (k, _) -> k.str() }.toImmMap()
     }
 
@@ -376,6 +380,18 @@ object TestSnippetsRecorder {
         println("Test snippets ($count) written to file: $f")
     }
 }
+
+object TestRellCliEnv: RellCliEnv() {
+    override fun print(msg: String, err: Boolean) {
+        println(msg)
+    }
+
+    override fun exit(status: Int): Nothing {
+        throw TestRellCliEnvExitException()
+    }
+}
+
+class TestRellCliEnvExitException: java.lang.RuntimeException()
 
 class RellTestEval {
     private var wrapping = false

@@ -284,8 +284,7 @@ private class RellPostchainModule(
                 repl = false,
                 test = false,
                 replOut = null,
-                sourceDir = sourceDir,
-                modules = modules
+                blockRunnerStrategy = Rt_UnsupportedBlockRunnerStrategy
         )
 
         return Rt_ExecutionContext(appCtx, sqlExec)
@@ -350,7 +349,7 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
             val modules = getModuleNames(rellNode)
             val app = compileApp(sourceDir, modules, errorHandler, copyOutput)
 
-            val chainCtx = createChainContext(config, rellNode, app, blockchainRID)
+            val chainCtx = PostchainUtils.createChainContext(config, app, blockchainRID)
             val chainDeps = getGtxChainDependencies(config)
 
             val modLogPrinter = getModulePrinter(env.logPrinter, Rt_TimestampPrinter(combinedPrinter), copyOutput)
@@ -410,6 +409,14 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
     ): R_App {
         val cResult = C_Compiler.compile(sourceDir, modules)
         val app = processCompilationResult(cResult, errorHandler, copyOutput)
+
+        for (moduleName in modules) {
+            val module = app.moduleMap[moduleName]
+            if (module != null && module.test) {
+                throw UserMistake("Test module specified as a main module: '$moduleName'")
+            }
+        }
+
         return app
     }
 
@@ -470,35 +477,6 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
         }
 
         return if (names.isNotEmpty()) names else listOf(R_ModuleName.EMPTY)
-    }
-
-    private fun createChainContext(
-            rawConfig: Gtv,
-            rellNode: Map<String, Gtv>,
-            rApp: R_App,
-            blockchainRid: BlockchainRid
-    ): Rt_ChainContext {
-        val gtvArgsDict = rellNode["moduleArgs"]?.asDict() ?: mapOf()
-
-        val moduleArgs = mutableMapOf<R_ModuleName, Rt_Value>()
-
-        for (rModule in rApp.modules) {
-            val argsStruct = rModule.moduleArgs
-
-            if (argsStruct != null) {
-                val gtvArgs = gtvArgsDict[rModule.name.str()]
-                if (gtvArgs == null) {
-                    throw UserMistake("No moduleArgs in blockchain configuration for module '${rModule.name}', " +
-                            "but type ${argsStruct.moduleLevelName} defined in the code")
-                }
-
-                val convCtx = GtvToRtContext(true)
-                val rtArgs = argsStruct.type.gtvToRt(convCtx, gtvArgs)
-                moduleArgs[rModule.name] = rtArgs
-            }
-        }
-
-        return Rt_ChainContext(rawConfig, moduleArgs, blockchainRid)
     }
 
     private fun getGtxChainDependencies(data: Gtv): Map<String, ByteArray> {

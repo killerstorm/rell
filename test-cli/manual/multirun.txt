@@ -121,3 +121,44 @@ test-cli/sh/query.sh '{"type":"ent_main_q"}' | jq -r '.error'
 ./multirun.sh -d test-cli/src test-cli/config/run-simple.xml
 
 curl -s "http://localhost:7740/query/iid_1" -X POST -d '{"type":"rell.get_app_structure"}' | python -m json.tool
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./multirun.sh -d test-cli/src test-cli/config/run-tests.xml --test
+
+TEST RESULTS:
+
+foo[1]:run_tests.common_test:test_common OK
+foo[1]:run_tests.foo_10.foo_10_test:test_module_args OK
+foo[1]:run_tests.foo_10.foo_10_test:test_common_module_args OK
+foo[1]:run_tests.foo_10.foo_10_test:test_common_user OK
+foo[1]:run_tests.foo_10.foo_10_test:test_create_data OK
+foo[1]:run_tests.foo_10.foo_10_test:test_common_create_data OK
+foo[1]:run_tests.foo_extra_test:test_foo_extra OK
+bar[2]:run_tests.bar.bar_test:test_module_args OK
+bar[2]:run_tests.bar.bar_test:test_common_module_args OK
+bar[2]:run_tests.bar.bar_test:test_common_user OK
+bar[2]:run_tests.bar.bar_test:test_create_data OK
+bar[2]:run_tests.bar.bar_test:test_common_create_data OK
+bar[2]:run_tests.bar_extra_test:test_bar_extra OK
+bar[2]:run_tests.common_test:test_common OK
+
+SUMMARY: 0 FAILED / 14 PASSED / 14 TOTAL
+
+
+***** OK *****
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./multirun.sh -d test-cli/src test-cli/config/run-tests-generic.xml --test
+
+TEST RESULTS:
+
+A[1]:run_tests.generic.tests:test_get_app_name OK
+A[1]:run_tests.generic.tests:test_add_user OK
+A[1]:run_tests.generic.tests:test_fail FAILED
+B[2]:run_tests.generic.tests:test_get_app_name OK
+B[2]:run_tests.generic.tests:test_add_user OK
+B[2]:run_tests.generic.tests:test_fail FAILED
+
+SUMMARY: 2 FAILED / 4 PASSED / 6 TOTAL
+
+
+***** FAILED *****

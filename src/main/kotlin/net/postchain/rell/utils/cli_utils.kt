@@ -10,8 +10,9 @@ import net.postchain.rell.compiler.*
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_LangVersion
 import net.postchain.rell.model.R_ModuleName
+import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.module.RellVersions
-import net.postchain.rell.runtime.Rt_RellVersion
+import net.postchain.rell.runtime.*
 import net.postchain.rell.tools.RellJavaLoggingInit
 import picocli.CommandLine
 import java.io.File
@@ -32,33 +33,51 @@ object RellCliUtils: KLogging() {
             compilerOptions: C_CompilerOptions
     ): R_App {
         val cSourceDir = createSourceDir(sourceDir)
-        val modules = listOf(moduleName).filterNotNull()
-        val res = compileApp(cSourceDir, modules, quiet, compilerOptions)
+        val modSel = C_CompilerModuleSelection(listOfNotNull(moduleName))
+        val res = compileApp(cSourceDir, modSel, quiet, compilerOptions)
         return res
     }
 
     fun compileApp(
             sourceDir: C_SourceDir,
-            modules: List<R_ModuleName>,
+            modSel: C_CompilerModuleSelection,
             quiet: Boolean,
             compilerOptions: C_CompilerOptions
     ): R_App {
-        val res = compile(sourceDir, modules, quiet, compilerOptions)
+        val res = compile(MainRellCliEnv, sourceDir, modSel, quiet, compilerOptions)
         return res.app!!
     }
 
     fun compile(
+            cliEnv: RellCliEnv,
             sourceDir: C_SourceDir,
-            modules: List<R_ModuleName>,
+            modSel: C_CompilerModuleSelection,
             quiet: Boolean,
             compilerOptions: C_CompilerOptions
     ): C_CompilationResult {
-        val res = compile0(compilerOptions, sourceDir, modules)
+        val res = compile0(compilerOptions, cliEnv, sourceDir, modSel)
+        handleCompilationResult(cliEnv, res, quiet)
+        return res
+    }
 
+    private fun compile0(
+            compilerOptions: C_CompilerOptions,
+            cliEnv: RellCliEnv,
+            sourceDir: C_SourceDir,
+            modSel: C_CompilerModuleSelection
+    ): C_CompilationResult {
+        try {
+            val res = C_Compiler.compile(sourceDir, modSel, compilerOptions)
+            return res
+        } catch (e: C_CommonError) {
+            cliEnv.print(errMsg(e.msg), true)
+            cliEnv.exit(1)
+        }
+    }
+
+    private fun handleCompilationResult(cliEnv: RellCliEnv, res: C_CompilationResult, quiet: Boolean) {
         val warnCnt = res.warnings.size
         val errCnt = res.errors.size
-
-        System.out.flush()
 
         val haveImportantMessages = res.app == null || res.messages.any { !it.type.ignorable }
 
@@ -66,37 +85,25 @@ object RellCliUtils: KLogging() {
             // Print all messages only if not quiet or if compilation failed, so warnings are not suppressed by the
             // quiet flag if there is an error.
             for (message in res.messages) {
-                System.err.println(message)
+                cliEnv.print(message.toString(), true)
             }
-            System.err.println("Errors: $errCnt Warnings: $warnCnt")
+            if (errCnt > 0 || warnCnt > 0) {
+                cliEnv.print("Errors: $errCnt Warnings: $warnCnt", true)
+            }
         }
 
         val app = res.app
         if (app == null) {
-            if (errCnt == 0) System.err.println(errMsg("compilation failed"))
-            exitProcess(1)
+            if (errCnt == 0) {
+                cliEnv.print(errMsg("Compilation failed"), true)
+            }
+            cliEnv.exit(1)
         } else if (errCnt > 0) {
-            exitProcess(1)
-        }
-
-        return res
-    }
-
-    private fun compile0(
-            compilerOptions: C_CompilerOptions,
-            sourceDir: C_SourceDir,
-            modules: List<R_ModuleName>
-    ): C_CompilationResult {
-        try {
-            val res = C_Compiler.compile(sourceDir, modules, compilerOptions)
-            return res
-        } catch (e: C_CommonError) {
-            System.err.println(errMsg(e.msg))
-            exitProcess(1)
+            cliEnv.exit(1)
         }
     }
 
-    private fun errMsg(msg: String) = "${C_MessageType.ERROR.text}: $msg"
+    fun errMsg(msg: String) = "${C_MessageType.ERROR.text}: $msg"
 
     fun getTarget(sourceDir: String?, module: String): RellCliTarget {
         val sourcePath = checkDir(sourceDir ?: ".").absoluteFile
@@ -116,6 +123,23 @@ object RellCliUtils: KLogging() {
             e.printStackTrace()
             exitProcess(3)
         }
+    }
+
+    fun createGlobalContext(chainCtx: Rt_ChainContext, opCtx: Rt_OpContext?, typeCheck: Boolean): Rt_GlobalContext {
+        val pcModuleEnv = RellPostchainModuleEnvironment(
+                outPrinter = Rt_OutPrinter,
+                logPrinter = Rt_LogPrinter(),
+                forceTypeCheck = typeCheck
+        )
+
+        return Rt_GlobalContext(
+                opCtx = opCtx,
+                chainCtx = chainCtx,
+                outPrinter = Rt_OutPrinter,
+                logPrinter = Rt_LogPrinter(),
+                typeCheck = typeCheck,
+                pcModuleEnv = pcModuleEnv
+        )
     }
 
     private fun <T> parseCliArgs(args: Array<String>, argsObj: T): T {
@@ -261,6 +285,22 @@ class RellModuleSources(modules: List<String>, files: Map<String, String>) {
 }
 
 class RellCliTarget(val sourcePath: File, val sourceDir: C_SourceDir, val modules: List<R_ModuleName>)
+
+abstract class RellCliEnv {
+    abstract fun print(msg: String, err: Boolean = false)
+    abstract fun exit(status: Int): Nothing
+}
+
+object MainRellCliEnv: RellCliEnv() {
+    override fun print(msg: String, err: Boolean) {
+        val out = if (err) System.err else System.out
+        out.println(msg)
+    }
+
+    override fun exit(status: Int): Nothing {
+        exitProcess(status)
+    }
+}
 
 abstract class RellBaseCliArgs {
     @CommandLine.Option(names = ["-d", "--source-dir"], paramLabel = "SOURCE_DIR",

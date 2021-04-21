@@ -5,6 +5,7 @@
 package net.postchain.rell.lib
 
 import net.postchain.rell.test.BaseRellTest
+import net.postchain.rell.test.RellCodeTester
 import org.junit.Test
 
 class LibGtvTest: BaseRellTest(false) {
@@ -374,47 +375,13 @@ class LibGtvTest: BaseRellTest(false) {
         chk("state.to_gtv_pretty()", "ct_err:unknown_member:[state]:to_gtv_pretty")
     }
 
-    @Test fun testToFromGtvOperation() {
-        def("operation foo(x: integer, y: text) {}")
+    private fun chkFromGtv(gtv: String, expr: String, expected: String) = chkFromGtv(tst, gtv, expr, expected)
 
-        chk("foo(123,'Hello').to_operation().to_gtv()", """gtv[["foo",[123,"Hello"]]]""")
-        chk("foo(123,'Hello').to_operation().to_gtv_pretty()", """gtv[["foo",[123,"Hello"]]]""")
-
-        chkFromGtv("['foo',[123,'Hello']]", "operation.from_gtv(g)", """op[foo(gtv[123],gtv["Hello"])]""")
-        chkFromGtv("[123,'Hello']", "operation.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("['foo',123,'Hello']", "operation.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("['',[123,'Hello']]", "operation.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("['987',[123,'Hello']]", "operation.from_gtv(g)", "rt_err:from_gtv")
-    }
-
-    @Test fun testToFromGtvGtxTx() {
-        def("operation foo(x: integer, y: text) {}")
-
-        val brid = "00".repeat(32)
-        chk("rell.gtx.tx().to_gtv()", """gtv[[["$brid",[],[]],[]]]""")
-        chk("rell.gtx.tx(foo(123,'Hello')).to_gtv()", """gtv[[["$brid",[["foo",[123,"Hello"]]],[]],[]]]""")
-
-        chkFromGtv("[['$brid',[],[]],[]]", "rell.gtx.tx.from_gtv(g)", """rell.gtx.tx[]""")
-        chkFromGtv("[['$brid',[['foo',[123,'Hello']]],[]],[]]", "rell.gtx.tx.from_gtv(g)",
-                """rell.gtx.tx[op[foo(gtv[123],gtv["Hello"])]]""")
-    }
-
-    @Test fun testToFromGtvGtxBlock() {
-        def("operation foo(x: integer, y: text) {}")
-
-        val brid = "00".repeat(32)
-        chk("rell.gtx.block().to_gtv()", """gtv[[]]""")
-        chk("rell.gtx.block(rell.gtx.tx(foo(123,'Hello'))).to_gtv()",
-                """gtv[[[["$brid",[["foo",[123,"Hello"]]],[]],[]]]]""")
-
-        chkFromGtv("[]", "rell.gtx.block.from_gtv(g)", """rell.gtx.block[]""")
-        chkFromGtv("[[['$brid',[['foo',[123,'Hello']]],[]],[]]]", "rell.gtx.block.from_gtv(g)",
-                """rell.gtx.block[rell.gtx.tx[op[foo(gtv[123],gtv["Hello"])]]]""")
-    }
-
-    private fun chkFromGtv(gtv: String, expr: String, expected: String) {
-        val gtv2 = gtv.replace('\'', '"')
-        val code = """{ val g = gtv.from_json('$gtv2'); return $expr; }"""
-        chkEx(code, expected)
+    companion object {
+        fun chkFromGtv(tst: RellCodeTester, gtv: String, expr: String, expected: String) {
+            val gtv2 = gtv.replace('\'', '"')
+            val code = """{ val g = gtv.from_json('$gtv2'); return $expr; }"""
+            tst.chkEx(code, expected)
+        }
     }
 }

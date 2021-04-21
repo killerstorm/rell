@@ -6,6 +6,7 @@ package net.postchain.rell.compiler.ast
 
 import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.parser.RellTokenMatch
+import net.postchain.rell.lib.C_Lib_OpContext
 import net.postchain.rell.model.*
 import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.toGtv
@@ -223,7 +224,7 @@ class S_Modifiers(val modifiers: List<S_Modifier>) {
     }
 
     fun compile(ctx: C_MountContext, target: C_ModifierTarget) {
-        val modifierCtx = C_ModifierContext(ctx.msgCtx, ctx.mountName)
+        val modifierCtx = C_ModifierContext(ctx.appCtx, ctx.mountName)
         compile(modifierCtx, target)
     }
 }
@@ -245,7 +246,7 @@ class S_EntityDefinition(
         val body: List<S_RelClause>?
 ): S_Definition(modifiers) {
     override fun compile(ctx: C_MountContext) {
-        ctx.checkNotRepl(name.pos, C_DeclarationType.ENTITY)
+        ctx.checkNotReplOrTest(name.pos, C_DeclarationType.ENTITY)
 
         if (deprecatedKwPos != null) {
             ctx.msgCtx.error(deprecatedKwPos, "deprecated_kw:class:entity",
@@ -393,7 +394,7 @@ class S_EntityDefinition(
             val txType = sysDefs.transactionEntity.type
             val expr = if (extChain == null) {
                 val nsValueCtx = C_NamespaceValueContext(defCtx.initExprCtx)
-                C_Ns_OpContext.transactionExpr(nsValueCtx, name.pos)
+                C_Lib_OpContext.transactionExpr(nsValueCtx, name.pos)
             } else {
                 C_Utils.errorRExpr(txType, "Trying to initialize transaction for external entity '${rEntity.appLevelName}'")
             }
@@ -432,7 +433,7 @@ class S_ObjectDefinition(
 ): S_Definition(modifiers) {
     override fun compile(ctx: C_MountContext) {
         ctx.checkNotExternal(name.pos, C_DeclarationType.OBJECT)
-        ctx.checkNotRepl(name.pos, C_DeclarationType.OBJECT)
+        ctx.checkNotReplOrTest(name.pos, C_DeclarationType.OBJECT)
 
         val entityFlags = R_EntityFlags(
                 isObject = true,
@@ -586,7 +587,7 @@ class S_OperationDefinition(
 ): S_Definition(modifiers) {
     override fun compile(ctx: C_MountContext) {
         ctx.checkNotExternal(name.pos, C_DeclarationType.OPERATION)
-        ctx.checkNotRepl(name.pos, C_DeclarationType.OPERATION)
+        ctx.checkNotReplOrTest(name.pos, C_DeclarationType.OPERATION)
 
         val modTarget = C_ModifierTarget(C_ModifierTargetType.OPERATION, name, mount = true)
         modifiers.compile(ctx, modTarget)
@@ -668,7 +669,7 @@ class S_QueryDefinition(
 ): S_Definition(modifiers) {
     override fun compile(ctx: C_MountContext) {
         ctx.checkNotExternal(name.pos, C_DeclarationType.QUERY)
-        ctx.checkNotRepl(name.pos, C_DeclarationType.QUERY)
+        ctx.checkNotReplOrTest(name.pos, C_DeclarationType.QUERY)
 
         val modTarget = C_ModifierTarget(C_ModifierTargetType.QUERY, name, mount = true)
         modifiers.compile(ctx, modTarget)
@@ -1189,7 +1190,7 @@ class S_ImportDefinition(
             ctx.msgCtx.error(pos, "import:module_not_external:$moduleName", "Module '$moduleName' is not external")
         }
 
-        if (module.header.test && !ctx.modCtx.test) {
+        if (module.header.test && !(ctx.modCtx.test || ctx.modCtx.repl)) {
             ctx.msgCtx.error(pos, "import:module_test:$moduleName", "Cannot import a test module '$moduleName' from a non-test module")
         }
 
@@ -1226,8 +1227,8 @@ class S_IncludeDefinition(val pos: S_Pos): S_Definition(S_Modifiers(listOf())) {
 }
 
 class S_ModuleHeader(val modifiers: S_Modifiers, val pos: S_Pos) {
-    fun compile(msgCtx: C_MessageContext, parentMountName: R_MountName): C_ModuleHeader {
-        val modifierCtx = C_ModifierContext(msgCtx, parentMountName)
+    fun compile(appCtx: C_AppContext, parentMountName: R_MountName): C_ModuleHeader {
+        val modifierCtx = C_ModifierContext(appCtx, parentMountName)
 
         val modTarget = C_ModifierTarget(
                 C_ModifierTargetType.MODULE,
@@ -1257,8 +1258,8 @@ class S_ModuleHeader(val modifiers: S_Modifiers, val pos: S_Pos) {
 }
 
 class S_RellFile(val header: S_ModuleHeader?, val definitions: List<S_Definition>): S_Node() {
-    fun compileHeader(msgCtx: C_MessageContext, parentMountName: R_MountName): C_ModuleHeader? {
-        return header?.compile(msgCtx, parentMountName)
+    fun compileHeader(appCtx: C_AppContext, parentMountName: R_MountName): C_ModuleHeader? {
+        return header?.compile(appCtx, parentMountName)
     }
 
     fun compile(path: C_SourcePath, modCtx: C_ModuleContext): C_CompiledRellFile {

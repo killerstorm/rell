@@ -1,0 +1,14 @@
+@mount('foo')
+module;
+
+import run_tests.common;
+
+struct module_args {
+    x: integer;
+}
+
+function get_module_args() = chain_context.args;
+
+operation create_data(value: text) {
+    create common.data(source = 'foo_10', x = chain_context.args.x, y = '?', user = common.get_common_user(), value = value);
+}

@@ -29,7 +29,7 @@ private fun main0(args: RellRunConfigGenCliArgs) {
         f
     }
 
-    val appConfig = RellRunConfigGenerator.generateCli(sourceDir, runConfigFile, sourceVersion)
+    val appConfig = RellRunConfigGenerator.generateCli(sourceDir, runConfigFile, sourceVersion, unitTest = false)
     val files = RellRunConfigGenerator.buildFiles(appConfig.config)
 
     if (args.dryRun) {
@@ -72,6 +72,6 @@ private class RellRunConfigGenCliArgs: RellRunConfigCliArgs() {
     @CommandLine.Option(names = ["-o", "--output-dir"], paramLabel = "OUTPUT_DIR", description = ["Output directory"])
     var outputDir: String? = null
 
-    @CommandLine.Option(names = ["--dry-run"], paramLabel = "DRY_RUN", description = ["Do not create files"])
+    @CommandLine.Option(names = ["--dry-run"], description = ["Do not create files"])
     var dryRun: Boolean = false
 }

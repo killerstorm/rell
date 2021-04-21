@@ -1,0 +1,49 @@
+@test module;
+
+import run_simple;
+import run_common;
+
+function test_sum_digits_int() {
+    assert_eq_str(run_simple.sum_digits_int(0), '0');
+    assert_eq_str(run_simple.sum_digits_int(5), 'cc3');
+    assert_eq_str(run_simple.sum_digits_int(33), 'eebb33a32574');
+}
+
+function test_sum_digits_dec() {
+    assert_eq_str(run_simple.sum_digits_dec(0), '0');
+    assert_eq_str(run_simple.sum_digits_dec(5), 'cc3');
+    assert_eq_str(run_simple.sum_digits_dec(33), 'eebb33a32574');
+}
+
+function test_get_raw_config() {
+    run_simple.get_raw_config();
+}
+
+function test_get_module_args() {
+    val args = run_simple.get_module_args();
+    assert_eq_int(args.x, 123456);
+    assert_eq_str(args.y, 'Hello!');
+}
+
+function test_get_module_args_0() {
+    val args = run_simple.get_module_args_0();
+    assert_eq_int(args.x, 123456);
+    assert_eq_str(args.y, 'Hello!');
+}
+
+function test_get_args_chksum() {
+    assert_eq_int(run_simple.get_args_chksum(), 740736);
+}
+
+function test_get_common_args() {
+    val args = run_common.get_common_args();
+    assert_eq_str(args.message, 'Some common message...');
+}
+
+function assert_eq_int(act: integer, exp: integer) {
+    require(act == exp, 'expected ' + exp + ', was ' + act);
+}
+
+function assert_eq_str(act: text, exp: text) {
+    require(act == exp, 'expected \'' + exp + '\', was \'' + act + '\'');
+}

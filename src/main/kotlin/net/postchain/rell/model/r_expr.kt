@@ -5,6 +5,8 @@
 package net.postchain.rell.model
 
 import net.postchain.rell.compiler.C_LateGetter
+import net.postchain.rell.lib.R_TestOpType
+import net.postchain.rell.lib.Rt_TestOpValue
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlGen
 import net.postchain.rell.utils.toImmList
@@ -697,13 +699,13 @@ class R_TypeAdapter_Nullable(private val dstType: R_Type, private val innerAdapt
     }
 }
 
-class R_OperationExpr(private val op: R_OperationDefinition, args: List<R_Expr>): R_Expr(op.mirrorStructs.immutable.type) {
+class R_OperationExpr(private val op: R_OperationDefinition, args: List<R_Expr>): R_Expr(R_TestOpType) {
     private val args = args.toImmList()
 
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         val rtArgs = args.map { it.evaluate(frame) }
-        val attrValues = rtArgs.toMutableList()
-        return Rt_StructValue(op.mirrorStructs.immutable.type, attrValues)
+        val gtvArgs = rtArgs.map { it.type().rtToGtv(it, false) }
+        return Rt_TestOpValue(op.mountName, gtvArgs)
     }
 }
 

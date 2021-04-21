@@ -4,16 +4,87 @@
 
 package net.postchain.rell.compiler
 
-import net.postchain.rell.model.Db_SysFunction
-import net.postchain.rell.model.R_SysFunction
-import net.postchain.rell.model.R_Type
+import net.postchain.rell.compiler.vexpr.V_Expr
+import net.postchain.rell.model.*
+import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.utils.toImmMap
 import org.apache.commons.collections4.MultiValuedMap
 import org.apache.commons.collections4.multimap.ArrayListValuedHashMap
 
-class C_GlobalFuncTable(private val map: Map<String, C_GlobalFunction>) {
-    companion object {
-        val EMPTY = C_GlobalFuncTable(mapOf())
+object C_LibUtils {
+    fun makeNs(functions: C_GlobalFuncTable, vararg values: Pair<String, C_NamespaceValue>): C_Namespace {
+        return makeNsEx(functions = functions, values = mapOf(*values))
     }
+
+    fun makeNsEx(
+            types: Map<String, R_Type> = mapOf(),
+            namespaces: Map<String, C_Namespace> = mapOf(),
+            values: Map<String, C_NamespaceValue> = mapOf(),
+            functions: C_GlobalFuncTable = C_GlobalFuncTable.EMPTY,
+            parts: List<C_Namespace> = listOf()
+    ): C_Namespace {
+        val b = C_NamespaceBuilder()
+
+        namespaces.forEach { b.addNamespace(it.key, C_DefProxy.create(it.value)) }
+        types.forEach { b.addType(it.key, C_DefProxy.create(it.value)) }
+        values.forEach { b.addValue(it.key, C_DefProxy.create(it.value)) }
+        functions.toMap().forEach { b.addFunction(it.key, C_DefProxy.create(it.value)) }
+
+        namespaces.forEach { b.addValue(it.key, C_DefProxy.create(C_NamespaceValue_Namespace(C_DefProxy.create(it.value)))) }
+
+        for (part in parts) {
+            part.addTo(b)
+        }
+
+        return b.build()
+    }
+
+    private fun <T> addPartValues(dst: MutableMap<String, T>, src: Map<String, T>) {
+        for ((key, value) in src) {
+            check(key !in dst)
+            dst[key] = value
+        }
+    }
+
+    fun makeNsValues(values: Map<String, Rt_Value>): C_Namespace {
+        return makeNsEx(
+                values = values.mapValues { C_NamespaceValue_Value(it.value) }
+        )
+    }
+
+    fun typeMemFuncBuilder(type: R_Type): C_MemberFuncBuilder {
+        val b = C_MemberFuncBuilder()
+
+        if (type is R_VirtualType) {
+            b.add("hash", R_ByteArrayType, listOf(), R_SysFn_Virtual.Hash)
+        } else {
+            b.add("hash", listOf(), memFnToGtv(type, R_ByteArrayType, R_SysFn_Any.Hash(type)))
+        }
+
+        b.add("to_gtv", listOf(), memFnToGtv(type, R_GtvType, R_SysFn_Any.ToGtv(type, false, "to_gtv")))
+        b.add("to_gtv_pretty", listOf(), memFnToGtv(type, R_GtvType, R_SysFn_Any.ToGtv(type, true, "to_gtv_pretty")))
+        return b
+    }
+
+    fun memFnToGtv(type: R_Type, resType: R_Type, fn: R_SysFunction): C_MemberFormalParamsFuncBody {
+        val flags = type.completeFlags()
+        return if (!flags.gtv.toGtv) C_SysMemberFunction_Invalid(type) else C_SysMemberFormalParamsFuncBody(resType, fn)
+    }
+}
+
+private class C_SysMemberFunction_Invalid(private val type: R_Type): C_MemberFormalParamsFuncBody(R_CtErrorType) {
+    override fun varFacts(caseCtx: C_MemberFuncCaseCtx, args: List<V_Expr>) = C_ExprVarFacts.EMPTY
+
+    override fun compileCall(ctx: C_ExprContext, caseCtx: C_MemberFuncCaseCtx, args: List<R_Expr>): R_Expr {
+        val typeStr = type.name
+        val member = caseCtx.member
+        val name = caseCtx.qualifiedNameMsg()
+        throw C_Error.stop(member.linkPos, "fn:invalid:$typeStr:$name", "Function '$name' not available for type '$typeStr'")
+    }
+}
+
+class C_GlobalFuncTable(map: Map<String, C_GlobalFunction>) {
+    private val map = map.toImmMap()
 
     fun get(name: String): C_GlobalFunction? {
         return map[name]
@@ -21,6 +92,14 @@ class C_GlobalFuncTable(private val map: Map<String, C_GlobalFunction>) {
 
     fun toMap(): Map<String, C_GlobalFunction> {
         return map.toMap()
+    }
+
+    fun addTo(b: C_GlobalFuncBuilder) {
+        map.forEach { b.add(it.key, it.value) }
+    }
+
+    companion object {
+        val EMPTY = C_GlobalFuncTable(mapOf())
     }
 }
 
@@ -157,6 +236,76 @@ sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT> {
         if (c) {
             add(name, result, params, rFn, dbFn)
         }
+        return self()
+    }
+
+    fun addZeroMany(
+            name: String,
+            result: R_Type,
+            fixedParams: List<R_Type>,
+            varargParam: R_Type,
+            rFn: R_SysFunction,
+            dbFn: Db_SysFunction? = null,
+            deprecated: C_Deprecated? = null
+    ): BuilderT {
+        addVarArg(name, result, fixedParams, varargParam, true, rFn, dbFn, deprecated)
+        return self()
+    }
+
+    fun addOneMany(
+            name: String,
+            result: R_Type,
+            fixedParams: List<R_Type>,
+            varargParam: R_Type,
+            rFn: R_SysFunction,
+            dbFn: Db_SysFunction? = null,
+            deprecated: C_Deprecated? = null
+    ): BuilderT {
+        addVarArg(name, result, fixedParams, varargParam, false, rFn, dbFn, deprecated)
+        return self()
+    }
+
+    fun addOneMany(
+            name: String,
+            result: R_Type,
+            fixedParams: List<C_ArgTypeMatcher>,
+            varargParam: C_ArgTypeMatcher,
+            rFn: R_SysFunction,
+            dbFn: Db_SysFunction? = null,
+            deprecated: C_Deprecated? = null
+    ): BuilderT {
+        addVarArg(name, result, fixedParams, varargParam, false, rFn, dbFn, deprecated)
+        return self()
+    }
+
+    private fun addVarArg(
+            name: String,
+            result: R_Type,
+            fixedParams: List<R_Type>,
+            varargParam: R_Type,
+            allowZero: Boolean,
+            rFn: R_SysFunction,
+            dbFn: Db_SysFunction? = null,
+            deprecated: C_Deprecated? = null
+    ): BuilderT {
+        val fixedMatchers = fixedParams.map { C_ArgTypeMatcher_Simple(it) }
+        val varargMatcher = C_ArgTypeMatcher_Simple(varargParam)
+        addVarArg(name, result, fixedMatchers, varargMatcher, allowZero, rFn, dbFn, deprecated)
+        return self()
+    }
+
+    private fun addVarArg(
+            name: String,
+            result: R_Type,
+            fixedParams: List<C_ArgTypeMatcher>,
+            varargParam: C_ArgTypeMatcher,
+            allowZero: Boolean,
+            rFn: R_SysFunction,
+            dbFn: Db_SysFunction? = null,
+            deprecated: C_Deprecated? = null
+    ): BuilderT {
+        val argsMatcher = C_ArgsTypesMatcher_VarArg(fixedParams, varargParam, allowZero)
+        addEx(name, result, argsMatcher, rFn, dbFn, deprecated)
         return self()
     }
 }

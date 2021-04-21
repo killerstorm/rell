@@ -8,12 +8,9 @@ import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
 import net.postchain.gtv.GtvString
 import net.postchain.gtv.GtvType
-import net.postchain.rell.compiler.C_CompilerOptions
-import net.postchain.rell.compiler.C_Error
-import net.postchain.rell.compiler.C_SourceDir
-import net.postchain.rell.compiler.C_SourcePath
-import net.postchain.rell.model.R_ModuleName
+import net.postchain.rell.compiler.*
 import net.postchain.rell.model.R_LangVersion
+import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.ConfigConstants
 import net.postchain.rell.module.RellVersions
 import net.postchain.rell.utils.*
@@ -35,7 +32,7 @@ private fun main0(args: RellCfgCliArgs) {
         readFile(File(args.configTemplateFile))
     }
 
-    val configGen = RellConfigGen.create(target)
+    val configGen = RellConfigGen.create(MainRellCliEnv, target)
     val config = configGen.makeConfig(template)
 
     if (args.outputFile != null) {
@@ -184,13 +181,36 @@ class RellConfigGen(
     }
 
     companion object {
-        fun create(target: RellCliTarget): RellConfigGen {
-            return create(target.sourceDir, target.modules)
+        fun create(cliEnv: RellCliEnv, target: RellCliTarget): RellConfigGen {
+            return create(cliEnv, target.sourceDir, target.modules)
         }
 
-        fun create(sourceDir: C_SourceDir, modules: List<R_ModuleName>): RellConfigGen {
-            val cRes = RellCliUtils.compile(sourceDir, modules, true, C_CompilerOptions.DEFAULT)
+        fun create(cliEnv: RellCliEnv, sourceDir: C_SourceDir, modules: List<R_ModuleName>): RellConfigGen {
+            val modSel = C_CompilerModuleSelection(modules)
+            val cRes = RellCliUtils.compile(cliEnv, sourceDir, modSel, true, C_CompilerOptions.DEFAULT)
+            checkCompilationResult(cliEnv, cRes, modules)
             return RellConfigGen(sourceDir, RellVersions.VERSION, modules, cRes.files)
+        }
+
+        private fun checkCompilationResult(cliEnv: RellCliEnv, cRes: C_CompilationResult, modules: List<R_ModuleName>) {
+            val rApp = cRes.app
+            rApp ?: return
+
+            var error = false
+
+            for (moduleName in modules) {
+                val rModule = rApp.moduleMap[moduleName]
+                if (rModule != null) {
+                    if (rModule.test) {
+                        cliEnv.print(RellCliUtils.errMsg("Test module '$moduleName' is specified as a main module"), true)
+                        error = true
+                    }
+                }
+            }
+
+            if (error) {
+                cliEnv.exit(1)
+            }
         }
 
         fun configToText(gtvConfig: Gtv): String {

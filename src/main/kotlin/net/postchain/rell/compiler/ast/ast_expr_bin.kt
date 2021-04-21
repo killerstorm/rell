@@ -258,15 +258,15 @@ sealed class C_BinOp_Common: C_BinOp() {
 }
 
 sealed class C_BinOp_EqNe(private val eq: Boolean): C_BinOp_Common() {
-    override fun compileOp(left: R_Type, right: R_Type): V_BinaryOp? {
+    final override fun compileOp(left: R_Type, right: R_Type): V_BinaryOp? {
         val type = calcCommonType(left, right)
                 ?: calcCommonType(right, left)
         return if (type == null || type is R_ObjectType) null else createVOp(eq, type)
     }
 
-    override fun compileExprVarFacts(left: V_Expr, right: V_Expr) = compileExprVarFacts(eq, left, right)
+    final override fun compileExprVarFacts(left: V_Expr, right: V_Expr) = compileExprVarFacts(eq, left, right)
 
-    override fun adaptLeftRight(ctx: C_ExprContext, left: V_Expr, right: V_Expr): Pair<V_Expr, V_Expr> {
+    final override fun adaptLeftRight(ctx: C_ExprContext, left: V_Expr, right: V_Expr): Pair<V_Expr, V_Expr> {
         val p = adaptOperands(left, right)
         return p ?: super.adaptLeftRight(ctx, left, right)
     }

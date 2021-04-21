@@ -24,9 +24,7 @@ import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.sql.SqlInit
 import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.sql.SqlUtils
-import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.toImmMap
-import net.postchain.rell.utils.toImmSet
 import org.junit.Assert
 import kotlin.test.assertEquals
 
@@ -243,8 +241,8 @@ class RellCodeTester(
         }
     }
 
-    fun createGlobalCtx(): Rt_GlobalContext {
-        val chainContext = createChainContext()
+    fun createGlobalCtx(gtvConfig: Gtv = GtvNull): Rt_GlobalContext {
+        val chainContext = createChainContext(gtvConfig)
 
         val pcModuleEnv = RellPostchainModuleEnvironment(
                 outPrinter = outPrinter,
@@ -266,10 +264,10 @@ class RellCodeTester(
         )
     }
 
-    private fun createChainContext(): Rt_ChainContext {
+    private fun createChainContext(gtvConfig: Gtv = GtvNull): Rt_ChainContext {
         val bcRidHex = chainRid ?: "00".repeat(32)
         val bcRid = BlockchainRid(bcRidHex.hexStringToByteArray())
-        return Rt_ChainContext(GtvNull, mapOf(), bcRid)
+        return Rt_ChainContext(gtvConfig, mapOf(), bcRid)
     }
 
     fun createAppCtx(
@@ -280,6 +278,11 @@ class RellCodeTester(
             test: Boolean
     ): Rt_AppContext {
         val sqlCtx = createSqlCtx(app, sqlExec)
+
+        val modules = app.modules.filter { !it.test && !it.abstract && !it.external }.map { it.name }
+        val keyPair = UnitTestBlockRunner.getTestKeyPair()
+        val blockRunnerStrategy = Rt_DynamicBlockRunnerStrategy(sourceDir, modules, keyPair)
+
         return Rt_AppContext(
                 globalCtx,
                 sqlCtx,
@@ -287,8 +290,7 @@ class RellCodeTester(
                 repl = false,
                 test = test,
                 replOut = null,
-                sourceDir = sourceDir,
-                modules = app.modules.filter { !it.test && !it.abstract && !it.external }.map { it.name }.toImmSet()
+                blockRunnerStrategy = blockRunnerStrategy
         )
     }
 
@@ -350,11 +352,14 @@ class RellCodeTester(
 
     fun createRepl(): RellReplTester {
         val files = files()
-        val globalCtx = createGlobalCtx()
         val moduleNameStr = replModule
         val module = if (moduleNameStr == null) null else R_ModuleName.of(moduleNameStr)
+
+        val sourceDir = C_MapSourceDir.of(files)
+        val globalCtx = createGlobalCtx()
+
         val sqlMgr = tstCtx.sqlMgr()
-        return RellReplTester(files, globalCtx, sqlMgr, module, tstCtx.useSql)
+        return RellReplTester(globalCtx, sourceDir, sqlMgr, module, tstCtx.useSql)
     }
 
     private fun processWithExeCtx(code: String, tx: Boolean, processor: (Rt_ExecutionContext) -> String): String {

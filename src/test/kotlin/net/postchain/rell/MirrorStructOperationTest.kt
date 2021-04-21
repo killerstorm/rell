@@ -92,7 +92,7 @@ class MirrorStructOperationTest: BaseRellTest(false) {
 
     @Test fun testToOperation() {
         def("operation new_user(name, rating: integer) {}")
-        chk("struct<new_user>('Bob',123).to_operation()", "op[new_user(text[Bob],int[123])]")
+        chk("struct<new_user>('Bob',123).to_test_op()", """op[new_user("Bob",123)]""")
     }
 
     @Test fun testMutableBasic() {
@@ -114,8 +114,8 @@ class MirrorStructOperationTest: BaseRellTest(false) {
     @Test fun testMutableToStruct() {
         def("operation new_user(name = 'Bob', rating: integer = 123) {}")
 
-        val expr = "new_user()"
         val op = "new_user"
+        val expr = "struct<$op>()"
 
         chk("_type_of($expr)", "text[struct<$op>]")
         chk("_type_of($expr.to_immutable())", "ct_err:unknown_member:[struct<new_user>]:to_immutable")

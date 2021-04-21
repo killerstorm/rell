@@ -13,15 +13,21 @@ import net.postchain.base.data.SQLDatabaseAccess
 import net.postchain.base.merkle.MerkleHashCalculator
 import net.postchain.common.hexStringToByteArray
 import net.postchain.common.toHex
+import net.postchain.core.UserMistake
 import net.postchain.gtv.*
 import net.postchain.gtv.gtvml.GtvMLEncoder
 import net.postchain.gtv.gtvml.GtvMLParser
 import net.postchain.gtv.merkle.GtvMerkleHashCalculator
+import net.postchain.rell.model.R_App
+import net.postchain.rell.model.R_ModuleName
+import net.postchain.rell.module.GtvToRtContext
+import net.postchain.rell.runtime.Rt_ChainContext
+import net.postchain.rell.runtime.Rt_Value
 import org.apache.commons.lang3.StringUtils
 import java.util.*
 import java.util.function.Supplier
 
-fun <T> checkEquals(expected: T, actual: T) {
+fun <T> checkEquals(actual: T, expected: T) {
     check(expected == actual) { "expected <$expected> actual <$actual>" }
 }
 
@@ -59,6 +65,32 @@ object PostchainUtils {
     fun calcBlockchainRid(config: Gtv): Bytes32 {
         val hash = merkleHash(config)
         return Bytes32(hash)
+    }
+
+    fun createChainContext(rawConfig: Gtv, rApp: R_App, blockchainRid: BlockchainRid): Rt_ChainContext {
+        val gtxNode = rawConfig.asDict().getValue("gtx")
+        val rellNode = gtxNode.asDict().getValue("rell")
+        val gtvArgsDict = rellNode.asDict()["moduleArgs"]?.asDict() ?: mapOf()
+
+        val moduleArgs = mutableMapOf<R_ModuleName, Rt_Value>()
+
+        for (rModule in rApp.modules) {
+            val argsStruct = rModule.moduleArgs
+
+            if (argsStruct != null) {
+                val gtvArgs = gtvArgsDict[rModule.name.str()]
+                if (gtvArgs == null) {
+                    throw UserMistake("No moduleArgs in blockchain configuration for module '${rModule.name}', " +
+                            "but type ${argsStruct.moduleLevelName} defined in the code")
+                }
+
+                val convCtx = GtvToRtContext(true)
+                val rtArgs = argsStruct.type.gtvToRt(convCtx, gtvArgs)
+                moduleArgs[rModule.name] = rtArgs
+            }
+        }
+
+        return Rt_ChainContext(rawConfig, moduleArgs, blockchainRid)
     }
 }
 
@@ -148,6 +180,10 @@ class Bytes33(bytes: ByteArray): FixLenBytes(bytes) {
             return Bytes33(bytes)
         }
     }
+}
+
+class BytesKeyPair(val priv: Bytes32, val pub: Bytes33) {
+    constructor(priv: ByteArray, pub: ByteArray): this(Bytes32(priv), Bytes33(pub))
 }
 
 class LateInit<T> {

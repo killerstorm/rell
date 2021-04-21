@@ -131,7 +131,7 @@ TEST RESULTS:
 tests.foobar:test_foo OK
 tests.foobar:test_bar FAILED
 
-SUMMARY: 1 FAILED 1 PASSED 2 TOTAL
+SUMMARY: 1 FAILED / 1 PASSED / 2 TOTAL
 
 
 ***** FAILED *****
@@ -144,7 +144,46 @@ TEST RESULTS:
 tests.data_test:test_add_user OK
 tests.data_test:test_remove_user OK
 
-SUMMARY: 0 FAILED 2 PASSED 2 TOTAL
+SUMMARY: 0 FAILED / 2 PASSED / 2 TOTAL
 
 
 ***** OK *****
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rell.sh -d test-cli/src --db-properties test-cli/config/node-config.properties --test tests
+
+TEST RESULTS:
+
+tests.calc_test:test_square OK
+tests.calc_test:test_cube OK
+tests.data_test:test_add_user OK
+tests.data_test:test_remove_user OK
+tests.foobar:test_foo OK
+tests.foobar:test_bar FAILED
+
+SUMMARY: 1 FAILED / 5 PASSED / 6 TOTAL
+
+
+***** FAILED *****
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rell.sh -d test-cli/src --db-properties test-cli/config/node-config.properties --test tests.calc_test tests.data_test
+
+TEST RESULTS:
+
+tests.calc_test:test_square OK
+tests.calc_test:test_cube OK
+tests.data_test:test_add_user FAILED
+tests.data_test:test_remove_user FAILED
+
+SUMMARY: 2 FAILED / 2 PASSED / 4 TOTAL
+
+
+***** FAILED *****
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rell.sh -d test-cli/src --test notfound
+ERROR: Module 'notfound' not found
+
+./rell.sh -d test-cli/src --test not.found
+ERROR: Module 'not.found' not found

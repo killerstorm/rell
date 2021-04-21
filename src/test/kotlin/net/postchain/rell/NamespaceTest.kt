@@ -91,6 +91,11 @@ class NamespaceTest: BaseRellTest() {
             [name_conflict:user:bar:OBJECT:main.rell(1:38)]
             [name_conflict:user:bar:ENTITY:main.rell(1:24)]
         """)
+
+        chkCompile("struct foo {} struct foo {}", """ct_err:
+            [name_conflict:user:foo:STRUCT:main.rell(1:22)]
+            [name_conflict:user:foo:STRUCT:main.rell(1:8)]
+        """)
     }
 
     @Test fun testNameConflictMultipart() {

@@ -1,0 +1,22 @@
+@mount('common')
+module;
+
+struct module_args {
+    user: text;
+}
+
+entity data {
+    source: text;
+    x: integer;
+    y: text;
+    user: text;
+    value: text;
+}
+
+function get_module_args() = chain_context.args;
+
+query get_common_user() = chain_context.args.user;
+
+operation create_data(x: integer, y: text, value: text) {
+    create data(source = 'common', x = x, y = y, user = chain_context.args.user, value = value);
+}

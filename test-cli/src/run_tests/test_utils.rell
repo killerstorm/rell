@@ -1,0 +1,20 @@
+@test module;
+
+import run_tests.common;
+
+function assert_no_data() {
+   assert_equals((common.data @* {}).size(), 0);
+}
+
+function assert_one_data(source: text, x: integer, y: text, user: text, value: text) {
+    val datas = common.data @* {};
+    log('datas =', datas);
+    assert_equals(datas.size(), 1);
+
+    val data = datas[0];
+    assert_equals(data.source, source);
+    assert_equals(data.x, x);
+    assert_equals(data.y, y);
+    assert_equals(data.user, user);
+    assert_equals(data.value, value);
+}

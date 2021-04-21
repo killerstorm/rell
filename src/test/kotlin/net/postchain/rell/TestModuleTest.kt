@@ -50,6 +50,28 @@ class TestModuleTest: BaseRellTest(false) {
         chkCompile("import b;", "ct_err:[main.rell:import:module_test:b][b.rell:modifier:module:abstract:test]")
     }
 
+    @Test fun testDirectoryModuleAsTest() {
+        file("some_tests/module.rell", "@test module;")
+        file("some_tests/foo.rell", "function test_foo() { print('foo'); require(true); }")
+        file("some_tests/bar.rell", "function test_bar() { print('bar'); require(true); }")
+        chkTests("some_tests", "test_bar=OK,test_foo=OK")
+        chkOut("bar", "foo")
+    }
+
+    @Test fun testMountName() {
+        file("test.rell", "@mount('mytest') @test module; function test_foo() {}")
+        chkCompile("", "OK") //TODO must fail
+    }
+
+    @Test fun testUnallowedDefinitions() {
+        tst.mainModule("main")
+        chkCompile("@test module; operation op() {}", "ct_err:def_test:OPERATION")
+        chkCompile("@test module; query q() = 123;", "ct_err:def_test:QUERY")
+        chkCompile("@test module; entity user { name; }", "ct_err:def_test:ENTITY")
+        chkCompile("@test module; object state { mutable v: integer = 0; }", "ct_err:def_test:OBJECT")
+        chkCompile("module; operation op() {}", "OK")
+    }
+
     @Test fun testTransactions() {
         tstCtx.useSql = true
 
@@ -66,16 +88,16 @@ class TestModuleTest: BaseRellTest(false) {
 
             function test_add_user() {
                 require( prod.user@*{}(.name) == list<text>(), 'expected_no_users' );
-                val tx = rell.gtx.tx(prod.add_user('Bob'));
+                val tx = rell.test.tx(prod.add_user('Bob'));
                 require( prod.user@*{}(.name) == list<text>(), 'expected_no_users' );
                 tx.run();
                 require( prod.user@*{}(.name) == ['Bob'], 'expected_user_bob' );
             }
 
             function test_remove_user() {
-                rell.gtx.tx([prod.add_user('Bob'), prod.add_user('Alice')]).run();
+                rell.test.tx([prod.add_user('Bob'), prod.add_user('Alice')]).run();
                 require( prod.user@*{}(.name) == ['Bob', 'Alice'], 'expected_users_bob_alice_1' );
-                val tx = rell.gtx.tx(prod.remove_user('Bob'));
+                val tx = rell.test.tx(prod.remove_user('Bob'));
                 require( prod.user@*{}(.name) == ['Bob', 'Alice'], 'expected_users_bob_alice_2' );
                 tx.run();
                 require( prod.user@*{}(.name) == ['Alice'], 'expected_user_alice' );
@@ -85,23 +107,54 @@ class TestModuleTest: BaseRellTest(false) {
         chkTests("tests", "test_add_user=OK,test_remove_user=OK")
     }
 
-    private fun chkTests(module: String, expected: String) {
-        val actual = runTests(module)
+    @Test fun testNamespacedTestFunctions() {
+        file("some_tests.rell", """
+            @test module;
+            function test_foo() { print("foo"); require(true); }
+            namespace ns { function test_bar() { print("bar"); require(true); } }
+        """)
+        chkTests("some_tests", "test_foo=OK")
+        chkOut("foo")
+    }
+
+    @Test fun testImportFromRepl() {
+        file("tests.rell", "@test module; function f() = 123;")
+        repl.chk("import tests;")
+        repl.chk("tests.f()", "RES:int[123]")
+    }
+
+    @Test fun testTestModuleAsParentOfRegularModule() {
+        file("foo/module.rell", "@test module;")
+        file("foo/bar.rell", "module;")
+        file("foo/bar_test.rell", "@test module; function test() {}")
+
+        chkCompile("import foo.bar;", "ct_err:module:parent_is_test:foo.bar:foo")
+        chkCompile("import foo.bar_test;", "ct_err:import:module_test:foo.bar_test")
+        chkTests("foo.bar_test", "test=OK")
+    }
+
+    @Test fun testMountNameOfTestModule() {
+        file("tests.rell", "@test @mount('foo') module; function test() {}")
+        chkTests("tests", "ct_err:tests.rell:ann:mount:test_module")
+    }
+
+    private fun chkTests(testModule: String, expected: String) {
+        val actual = runTests(testModule)
         assertEquals(expected, actual)
     }
 
-    private fun runTests(module: String): String {
-        mainModule(module)
+    private fun runTests(testModule: String): String {
+        mainModule(testModule)
 
         val mainCode = ""
         val sourceDir = tst.createSourceDir(mainCode)
         val globalCtx = tst.createGlobalCtx()
 
         val actual = tst.processApp(mainCode) { app ->
-            val mod = app.modules.find { it.name.str() == module }!!
+            val mod = app.modules.find { it.name.str() == testModule }!!
             val fns = TestRunner.getTestFunctions(mod)
             val res = mutableMapOf<String, String>()
-            for (f in fns) res[f.simpleName] = runTest(globalCtx, sourceDir, app, module, f)
+            for (f in fns) res[f.simpleName] = runTest(globalCtx, sourceDir, app, testModule, f)
             res.entries.joinToString(",")
         }
 

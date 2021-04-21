@@ -171,4 +171,12 @@ class GtxModuleTest: BaseGtxTest() {
             t.chkData("user(100,Bob,123)", "user(101,Alice,123)")
         }
     }
+
+    @Test fun testTestModule() {
+        file("test.rell", "@test module; function f() = 456;")
+        tst.modules = listOf("test")
+        assertFailsWith<UserMistake> {
+            chk("123", "123")
+        }
+    }
 }

@@ -55,7 +55,9 @@ fun <T> immSetOf(vararg values: T): Set<T> = ImmutableSet.copyOf(values)
 fun <K, V> immMapOf(vararg entries: Pair<K, V>): Map<K, V> = mapOf(*entries).toImmMap()
 
 fun <T> Iterable<T>.toImmList(): List<T> = ImmutableList.copyOf(this)
+fun <T> Array<T>.toImmList(): List<T> = ImmutableList.copyOf(this)
 fun <T> Iterable<T>.toImmSet(): Set<T> = ImmutableSet.copyOf(this)
+fun <T> Array<T>.toImmSet(): Set<T> = ImmutableSet.copyOf(this)
 fun <K, V> Map<K, V>.toImmMap(): Map<K, V> = ImmutableMap.copyOf(this)
 fun <K, V> Multimap<K, V>.toImmMultimap(): Multimap<K, V> = ImmutableMultimap.copyOf(this)
 

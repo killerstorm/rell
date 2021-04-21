@@ -6,7 +6,6 @@ package net.postchain.rell
 
 import net.postchain.base.BlockchainRid
 import net.postchain.gtv.GtvNull
-import net.postchain.rell.compiler.C_MapSourceDir
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_EntityDefinition
 import net.postchain.rell.model.R_EntityType
@@ -52,7 +51,7 @@ class OperatorsInterpretedTest: OperatorsBaseTest() {
             val ctx = ValCtx(app)
             val rtArgs = args2.map { it.rt(ctx) }
             val sqlCtx = Rt_SqlContext.createNoExternalChains(app, Rt_ChainSqlMapping(0))
-            val appCtx = Rt_AppContext(globalCtx, sqlCtx, app, false, false, null, C_MapSourceDir.EMPTY, setOf())
+            val appCtx = Rt_AppContext(globalCtx, sqlCtx, app, false, false, null, Rt_UnsupportedBlockRunnerStrategy)
             val exeCtx = Rt_ExecutionContext(appCtx, NoConnSqlExecutor)
             RellTestUtils.callQuery(exeCtx, "q", rtArgs, RellTestUtils.ENCODER_STRICT)
         }

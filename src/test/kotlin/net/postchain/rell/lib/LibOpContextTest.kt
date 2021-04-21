@@ -6,6 +6,7 @@ package net.postchain.rell.lib
 
 import net.postchain.rell.runtime.Rt_OpContext
 import net.postchain.rell.test.BaseRellTest
+import net.postchain.rell.utils.CommonUtils
 import org.junit.Test
 
 class LibOpContextTest: BaseRellTest(false) {
@@ -72,5 +73,31 @@ class LibOpContextTest: BaseRellTest(false) {
     @Test fun testAssignmentValue() {
         chkOp("op_context.last_block_time = 0;", "ct_err:expr_bad_dst")
         chkOp("op_context.transaction = 0;", "ct_err:expr_bad_dst")
+    }
+
+    @Test fun testIsSigner() {
+        tst.opContext = Rt_OpContext(-1, -1, -1, listOf(CommonUtils.hexToBytes("1234"), CommonUtils.hexToBytes("abcd")))
+
+        chk("op_context.is_signer(x'1234')", "boolean[true]")
+        chk("op_context.is_signer(x'abcd')", "boolean[true]")
+        chk("op_context.is_signer(x'1234abcd')", "boolean[false]")
+        chk("op_context.is_signer(x'')", "boolean[false]")
+
+        chk("op_context.is_signer()", "ct_err:expr_call_argtypes:is_signer:")
+        chk("op_context.is_signer(123)", "ct_err:expr_call_argtypes:is_signer:integer")
+        chk("op_context.is_signer('1234')", "ct_err:expr_call_argtypes:is_signer:text")
+        chk("op_context.is_signer(x'12', x'34')", "ct_err:expr_call_argtypes:is_signer:byte_array,byte_array")
+    }
+
+    @Test fun testIsSignerGlobalScope() {
+        tst.opContext = Rt_OpContext(-1, -1, -1, listOf(CommonUtils.hexToBytes("1234"), CommonUtils.hexToBytes("abcd")))
+        chk("is_signer(x'1234')", "boolean[true]")
+        chk("is_signer(x'abcd')", "boolean[true]")
+        chk("is_signer(x'beef')", "boolean[false]")
+    }
+
+    @Test fun testGetSigners() {
+        tst.opContext = Rt_OpContext(-1, -1, -1, listOf(CommonUtils.hexToBytes("1234"), CommonUtils.hexToBytes("abcd")))
+        chk("op_context.get_signers()", "list<byte_array>[byte_array[1234],byte_array[abcd]]")
     }
 }

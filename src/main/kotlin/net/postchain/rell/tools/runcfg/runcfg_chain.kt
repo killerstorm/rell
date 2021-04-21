@@ -9,29 +9,28 @@ import net.postchain.gtv.GtvFactory.gtv
 import net.postchain.rell.RellConfigGen
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.ConfigConstants
-import net.postchain.rell.utils.Bytes32
-import net.postchain.rell.utils.Bytes33
-import net.postchain.rell.utils.PostchainUtils
-import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.*
 
-class RunConfigChainConfigGen private constructor(params: RellRunConfigParams) {
+class RunConfigChainConfigGen private constructor(private val cliEnv: RellCliEnv, params: RellRunConfigParams) {
     private val sourceDir = params.sourceDir
     private val configDir = params.configDir
     private val sourceVersion = params.sourceVersion
 
     companion object {
         fun generateChainsConfigs(
+                cliEnv: RellCliEnv,
                 params: RellRunConfigParams,
                 runConfig: Rcfg_Run,
                 replaceSigners: Collection<Bytes33>?
         ): List<RellPostAppChain> {
-            val generator = RunConfigChainConfigGen(params)
+            val generator = RunConfigChainConfigGen(cliEnv, params)
+            val commonTestModules = runConfig.tests.map { it.module }.toSet()
 
             val res = mutableListOf<RellPostAppChain>()
             val brids = mutableMapOf<Rcfg_Chain, Bytes32>()
 
             for (runChain in runConfig.chains) {
-                val resChain = generator.genChainConfig(runChain, brids, replaceSigners)
+                val resChain = generator.genChainConfig(runChain, brids, replaceSigners, commonTestModules)
                 res.add(resChain)
                 brids[runChain] = resChain.brid
             }
@@ -43,18 +42,23 @@ class RunConfigChainConfigGen private constructor(params: RellRunConfigParams) {
     private fun genChainConfig(
             chain: Rcfg_Chain,
             brids: Map<Rcfg_Chain, Bytes32>,
-            replaceSigners: Collection<Bytes33>?
+            replaceSigners: Collection<Bytes33>?,
+            commonTestModules: Set<R_ModuleName>
     ): RellPostAppChain {
-        val resConfigs = mutableMapOf<Long, Gtv>()
+        val chainTestModules = (commonTestModules + chain.tests.map { it.module }.toSet()).toList()
+
+        val resConfigs = mutableMapOf<Long, RellPostAppChainConfig>()
         val modules = mutableSetOf<R_ModuleName>()
 
         for (config in chain.configs) {
-            val (gtv, module) = genChainConfig0(config, brids, replaceSigners)
-            resConfigs[config.height] = gtv
-            if (module != null) modules.add(module)
+            val resConfig = genChainConfig0(config, brids, replaceSigners, chainTestModules)
+            resConfigs[config.height] = resConfig
+            if (resConfig.appModule != null) modules.add(resConfig.appModule)
         }
 
-        val brid = calcChainBrid(resConfigs)
+        val gtvConfigs = resConfigs.mapValues { it.value.gtvConfig }
+        val brid = calcChainBrid(gtvConfigs)
+
         return RellPostAppChain(chain.name, chain.iid, brid, resConfigs, modules)
     }
 
@@ -66,8 +70,9 @@ class RunConfigChainConfigGen private constructor(params: RellRunConfigParams) {
     private fun genChainConfig0(
             config: Rcfg_ChainConfig,
             brids: Map<Rcfg_Chain, Bytes32>,
-            replaceSigners: Collection<Bytes33>?
-    ): Pair<Gtv, R_ModuleName?> {
+            replaceSigners: Collection<Bytes33>?,
+            testModules: List<R_ModuleName>
+    ): RellPostAppChainConfig {
         val b = RunConfigGtvBuilder()
         var module: R_ModuleName? = null
 
@@ -95,7 +100,7 @@ class RunConfigChainConfigGen private constructor(params: RellRunConfigParams) {
         }
 
         val gtv = b.build()
-        return Pair(gtv, module)
+        return RellPostAppChainConfig(module, testModules, gtv)
     }
 
     private fun genAppConfig(app: Rcfg_App): Pair<Gtv, R_ModuleName> {
@@ -112,7 +117,7 @@ class RunConfigChainConfigGen private constructor(params: RellRunConfigParams) {
             b.update(modulesGtv, "gtx", "modules")
         }
 
-        val configGen = RellConfigGen.create(sourceDir, listOf(app.module))
+        val configGen = RellConfigGen.create(cliEnv, sourceDir, listOf(app.module))
         val sources = configGen.getModuleSources()
 
         val srcGtv = gtv(

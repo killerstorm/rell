@@ -123,7 +123,7 @@ class R_Struct(
         val attrsList = attrs.values.toList()
         attrsList.withIndex().forEach { (idx, attr) -> check(attr.index == idx) }
         val attrMutable = attrs.values.any { it.mutable }
-        bodyLate.set(R_StructBody(attrs, attrsList, attrMutable))
+        bodyLate.set(R_StructBody(attrs, attrsList, attrMutable), true)
     }
 
     fun setFlags(flags: R_StructFlags) {

@@ -246,7 +246,8 @@ object C_Utils {
                 R_CallFrame.NONE_INIT_FRAME_GETTER,
                 mountName,
                 flags,
-                sqlMapping, externalEntity
+                sqlMapping,
+                externalEntity
         )
 
         val rAttrs = attrs.mapIndexed { i, attr -> attr.compile(i) }
@@ -417,7 +418,7 @@ private class C_ErrorParserResult<T>(val error: C_Error, val eof: Boolean): C_Pa
 }
 
 object C_Parser {
-    private val currentFileLocal = ThreadLocalContext(C_SourcePath(listOf("?")))
+    private val currentFileLocal = ThreadLocalContext(C_SourcePath.parse("?"))
 
     fun parse(filePath: C_SourcePath, sourceCode: String): S_RellFile {
         val res = parse0(filePath, sourceCode, S_Grammar)
@@ -712,8 +713,9 @@ class C_LateInit<T>(val pass: C_CompilerPass, fallback: T) {
 
     val getter = C_LateGetter(this)
 
-    fun set(value: T) {
-        ctx.checkPass(pass, pass)
+    fun set(value: T, allowEarly: Boolean = false) {
+        val minPass = if (allowEarly) null else pass
+        ctx.checkPass(minPass, pass)
         check(this.value == null) { "value already set" }
         this.value = value
         fallback = null
