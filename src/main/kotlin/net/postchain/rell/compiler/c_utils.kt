@@ -17,10 +17,8 @@ import net.postchain.rell.compiler.vexpr.V_IntegerToDecimalExpr
 import net.postchain.rell.compiler.vexpr.V_RExpr
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Error
-import net.postchain.rell.utils.CommonUtils
-import net.postchain.rell.utils.ThreadLocalContext
-import net.postchain.rell.utils.toImmList
-import net.postchain.rell.utils.toImmSet
+import net.postchain.rell.runtime.toGtv
+import net.postchain.rell.utils.*
 import org.jooq.impl.SQLDataType
 import java.math.BigDecimal
 import java.util.*
@@ -297,6 +295,22 @@ object C_Utils {
         val struct = entity.mirrorStructs.getStruct(mutable)
         val structAttrs = body.attributes.mapValues { it.value.copy(mutable = mutable) }
         struct.setAttributes(structAttrs)
+    }
+
+    fun createSysStruct(name: String, attrs: List<C_SysAttribute>): R_Struct {
+        val rStruct = R_Struct(
+                name,
+                name.toGtv(),
+                mirrorStructs = null,
+                initFrameGetter = R_CallFrame.NONE_INIT_FRAME_GETTER
+        )
+        val rAttrs = attrs.mapIndexed { i, attr -> attr.name to attr.compile(i) }.toMap().toImmMap()
+        rStruct.setAttributes(rAttrs)
+        return rStruct
+    }
+
+    fun createSysStruct(name: String, vararg attrs: C_SysAttribute): R_Struct {
+        return createSysStruct(name, attrs.toList())
     }
 
     fun createSysQuery(executor: C_CompilerExecutor, simpleName: String, type: R_Type, fn: R_SysFunction): R_QueryDefinition {
@@ -607,7 +621,7 @@ class C_StructsInfo(
         val graph: Map<R_Struct, List<R_Struct>>
 )
 
-object C_StructUtils {
+object C_StructGraphUtils {
     fun buildStructsInfo(structs: Collection<R_Struct>): C_StructsInfo {
         val declaredStructs = structs.toImmSet()
         val infoMap = structs.map { Pair(it, calcStructInfo(declaredStructs, it.type)) }.toMap()

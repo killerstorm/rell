@@ -44,7 +44,7 @@ object C_Lib_Rell_Test {
                     TX_SNAME to R_TestTxType,
                     OP_SNAME to R_TestOpType
             ),
-            parts = listOf(C_Lib_Rell_Test_KeyPairs.NAMESPACE_PART)
+            parts = listOf(C_Lib_Rell_Test_KeyPairs.NAMESPACE)
     )
 }
 

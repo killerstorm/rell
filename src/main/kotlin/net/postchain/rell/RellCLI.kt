@@ -269,7 +269,15 @@ private fun findEntryPoint(app: R_App, moduleName: R_ModuleName, routineName: R_
     val op = module.operations[name] ?: app.operations[mountName]
     if (op != null) {
         val time = System.currentTimeMillis() / 1000
-        eps.add(RellEntryPoint_Operation(op, Rt_OpContext(time, -1, -1, listOf())))
+        val opCtx = Rt_OpContext(
+                lastBlockTime = time,
+                transactionIid = -1,
+                blockHeight = -1,
+                opIndex = -1,
+                signers = listOf(),
+                allOperations = listOf()
+        )
+        eps.add(RellEntryPoint_Operation(op, opCtx))
     }
 
     val q = module.queries[name] ?: app.queries[mountName]

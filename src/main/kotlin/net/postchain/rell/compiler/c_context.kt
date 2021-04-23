@@ -100,6 +100,8 @@ sealed class C_ModuleContext(val modMgr: C_ModuleManager) {
     abstract fun createFileNsAssembler(): C_NsAsm_ComponentAssembler
     abstract fun getModuleDefs(): C_ModuleDefs
     abstract fun getModuleArgsStruct(): R_Struct?
+
+    fun isTestLib(): Boolean = test || repl || globalCtx.compilerOptions.testLib
 }
 
 class C_RegularModuleContext(
@@ -125,7 +127,7 @@ class C_RegularModuleContext(
     init {
         val rootScopeBuilder = C_ScopeBuilder(msgCtx)
 
-        val sysNs = if (test || appCtx.globalCtx.compilerOptions.testLib) sysDefs.testNs else sysDefs.appNs
+        val sysNs = if (isTestLib()) sysDefs.testNs else sysDefs.appNs
         val sysScopeBuilder = rootScopeBuilder.nested { sysNs }
 
         val nsGetter = nsAssembler.futureNs()

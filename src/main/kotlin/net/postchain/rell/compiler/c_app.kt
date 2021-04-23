@@ -187,7 +187,7 @@ class C_AppContext(
     }
 
     private fun processStructs(structs: List<R_Struct>) {
-        val info = C_StructUtils.buildStructsInfo(structs)
+        val info = C_StructGraphUtils.buildStructsInfo(structs)
         val graph = info.graph
         val transGraph = C_GraphUtils.transpose(graph)
 

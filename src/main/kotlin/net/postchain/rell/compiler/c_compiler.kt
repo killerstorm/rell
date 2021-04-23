@@ -7,10 +7,12 @@ package net.postchain.rell.compiler
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_RellFile
+import net.postchain.rell.lib.C_Lib_OpContext
 import net.postchain.rell.model.*
 import net.postchain.rell.repl.ReplCode
 import net.postchain.rell.repl.ReplCodeState
 import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.immMapOf
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 import java.util.*
@@ -86,7 +88,7 @@ class C_SystemDefs private constructor(
     val queries = queries.toImmList()
 
     companion object {
-        private val SYSTEM_TYPES = mapOf(
+        private val SYSTEM_TYPES = immMapOf(
                 "boolean" to typeRef(R_BooleanType),
                 "text" to typeRef(R_TextType),
                 "byte_array" to typeRef(R_ByteArrayType),
@@ -104,6 +106,8 @@ class C_SystemDefs private constructor(
                 "GTXValue" to typeRef(R_GtvType, C_Deprecated("gtv", error = true)),
                 "gtv" to typeRef(R_GtvType)
         )
+
+        private val SYSTEM_STRUCTS = C_Lib_OpContext.GLOBAL_STRUCTS
 
         fun create(appCtx: C_AppContext, stamp: R_AppUid): C_SystemDefs {
             val blockEntity = C_Utils.createBlockEntity(appCtx, null)
@@ -146,11 +150,13 @@ class C_SystemDefs private constructor(
             val sysNamespaces = if (test) C_LibFunctions.TEST_NAMESPACES else C_LibFunctions.APP_NAMESPACES
             val sysFunctions = if (test) C_LibFunctions.TEST_GLOBAL_FNS else C_LibFunctions.APP_GLOBAL_FNS
             val sysTypes = SYSTEM_TYPES
+            val sysStructs = SYSTEM_STRUCTS
 
             val nsBuilder = C_SysNsProtoBuilder()
 
             for ((name, type) in sysTypes) nsBuilder.addType(name, type)
             for (entity in sysEntities) nsBuilder.addEntity(entity.simpleName, entity)
+            for (struct in sysStructs) nsBuilder.addStruct(struct.name, struct)
             for ((name, fn) in sysFunctions) nsBuilder.addFunction(name, fn)
             for ((name, ns) in sysNamespaces) nsBuilder.addNamespace(name, ns)
 

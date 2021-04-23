@@ -36,7 +36,7 @@ object C_LibFunctions {
         b.add("min", R_DecimalType, listOf(R_DecimalType, R_DecimalType), R_SysFn_Math.Min_Decimal, Db_SysFn_Min_Decimal)
         b.add("max", R_IntegerType, listOf(R_IntegerType, R_IntegerType), R_SysFn_Math.Max_Integer, Db_SysFn_Max_Integer)
         b.add("max", R_DecimalType, listOf(R_DecimalType, R_DecimalType), R_SysFn_Math.Max_Decimal, Db_SysFn_Max_Decimal)
-        b.add("is_signer", R_BooleanType, listOf(R_ByteArrayType), R_SysFn_Crypto.IsSigner)
+        b.add("is_signer", R_BooleanType, listOf(R_ByteArrayType), R_SysFn_Crypto.IsSigner, depWarn("op_context.is_signer"))
         b.add("json", R_JsonType, listOf(R_TextType), R_SysFn_Json.FromText, Db_SysFn_Json)
 
         b.add("require", C_SysFn_Require_Boolean)
@@ -322,8 +322,8 @@ object C_LibFunctions {
 
     private fun nsProxy(ns: C_Namespace, deprecated: C_Deprecated? = null) = C_DefProxy.create(ns, deprecated)
 
-    fun getMemberFunctionOpt(type: R_Type, name: String): C_SysMemberFunction? {
-        val table = getTypeMemberFunctions(type)
+    fun getMemberFunctionOpt(ctx: C_ExprContext, type: R_Type, name: String): C_SysMemberFunction? {
+        val table = getTypeMemberFunctions(ctx, type)
         val fn = table.get(name)
         return fn
     }
@@ -334,7 +334,7 @@ object C_LibFunctions {
 
     fun getEnumProperties() = ENUM_PROPS
 
-    private fun getTypeMemberFunctions(type: R_Type): C_MemberFuncTable {
+    private fun getTypeMemberFunctions(ctx: C_ExprContext, type: R_Type): C_MemberFuncTable {
         return when (type) {
             R_BooleanType -> BOOLEAN_FNS
             R_IntegerType -> INTEGER_FNS
@@ -355,7 +355,7 @@ object C_LibFunctions {
             is R_EnumType -> getEnumFns(type)
             is R_TupleType -> getTupleFns(type)
             is R_VirtualTupleType -> getVirtualTupleFns(type)
-            is R_StructType -> getStructFns(type.struct)
+            is R_StructType -> getStructFns(ctx, type.struct)
             is R_VirtualStructType -> getVirtualStructFns(type)
             is R_LibType -> type.getMemberFunctions()
             else -> C_MemberFuncTable(mapOf())
@@ -540,7 +540,7 @@ object C_LibFunctions {
         return if (!flags.gtv.fromGtv) C_SysFunction_Invalid(type) else C_SysGlobalFormalParamsFuncBody(type, fn)
     }
 
-    private fun getStructFns(struct: R_Struct): C_MemberFuncTable {
+    private fun getStructFns(ctx: C_ExprContext, struct: R_Struct): C_MemberFuncTable {
         val type = struct.type
         val mToBytes = C_LibUtils.memFnToGtv(type, R_ByteArrayType, R_SysFn_Struct.ToBytes(struct))
         val mToGtv = C_LibUtils.memFnToGtv(type, R_GtvType, R_SysFn_Struct.ToGtv(struct, false))
@@ -549,7 +549,7 @@ object C_LibFunctions {
         val b = typeMemFuncBuilder(type)
 
         val mirrorStructs = struct.mirrorStructs
-        if (mirrorStructs?.operation != null) {
+        if (mirrorStructs?.operation != null && ctx.modCtx.isTestLib()) {
             b.add("to_test_op", R_TestOpType, listOf(), R_SysFn_Struct.ToTestOp)
         }
 
@@ -875,4 +875,5 @@ private fun matcherColSub(elementType: R_Type): C_ArgTypeMatcher = C_ArgTypeMatc
 private fun matcherMapSub(keyType: R_Type, valueType: R_Type): C_ArgTypeMatcher =
         C_ArgTypeMatcher_MapSub(R_MapKeyValueTypes(keyType, valueType))
 
+private fun depWarn(newName: String) = C_Deprecated(useInstead = newName, error = false)
 private fun depError(newName: String) = C_Deprecated(useInstead = newName, error = true)

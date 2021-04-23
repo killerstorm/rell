@@ -961,7 +961,7 @@ class S_FunctionDefinition(
         val absDescriptor = if (fn == null) null else {
             val desc = fn.getAbstractDescriptor()
             if (desc == null) {
-                val qName = fn.getDefinition()?.appLevelName ?: C_Utils.nameStr(qualifiedName)
+                val qName = fn.getFunctionDefinition()?.appLevelName ?: C_Utils.nameStr(qualifiedName)
                 defCtx.msgCtx.error(qualifiedName[0].pos, "fn:override:not_abstract:[$qName]", "Function is not abstract: '$qName'")
             }
             desc

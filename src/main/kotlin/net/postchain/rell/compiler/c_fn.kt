@@ -21,7 +21,7 @@ class C_FunctionArgs(val valid: Boolean, positional: List<V_Expr>, named: List<P
 }
 
 sealed class C_GlobalFunction {
-    open fun getDefinition(): R_Definition? = null
+    open fun getFunctionDefinition(): R_FunctionDefinition? = null
     open fun getAbstractDescriptor(): C_AbstractDescriptor? = null
 
     abstract fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr
@@ -38,11 +38,9 @@ sealed class C_RegularGlobalFunction: C_GlobalFunction() {
     }
 }
 
-class C_StructGlobalFunction(private val structDef: R_StructDefinition): C_GlobalFunction() {
-    override fun getDefinition() = structDef
-
+class C_StructGlobalFunction(private val struct: R_Struct): C_GlobalFunction() {
     override fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
-        return compileCall(ctx, structDef.struct, name.pos, args)
+        return compileCall(ctx, struct, name.pos, args)
     }
 
     companion object {
@@ -104,7 +102,7 @@ class C_UserGlobalFunction(
         headerLate.set(header)
     }
 
-    override fun getDefinition() = rFunction
+    override fun getFunctionDefinition() = rFunction
     override fun getAbstractDescriptor() = abstract
     override fun getHintParams() = headerLate.get().params
 
@@ -131,8 +129,7 @@ class C_OperationGlobalFunction(val rOp: R_OperationDefinition): C_GlobalFunctio
             return C_Utils.errorExpr(ctx, name.pos, R_TestOpType)
         }
 
-        val modCtx = ctx.defCtx.modCtx
-        if (!(modCtx.test || modCtx.repl || modCtx.globalCtx.compilerOptions.testLib)) {
+        if (!ctx.defCtx.modCtx.isTestLib()) {
             ctx.msgCtx.error(name.pos, "expr:operation_call:no_test:$name",
                     "Operation calls are allowed only in tests or REPL")
         }

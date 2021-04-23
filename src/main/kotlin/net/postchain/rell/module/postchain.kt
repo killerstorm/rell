@@ -155,7 +155,16 @@ private class RellGTXOperation(
     override fun apply(ctx: TxEContext): Boolean {
         handleError {
             val blockHeight = DatabaseAccess.of(ctx).getLastBlockHeight(ctx)
-            val opCtx = Rt_OpContext(ctx.timestamp, ctx.txIID, blockHeight, data.signers.toList())
+
+            val opCtx = Rt_OpContext(
+                    lastBlockTime = ctx.timestamp,
+                    transactionIid = ctx.txIID,
+                    blockHeight = blockHeight,
+                    opIndex = data.opIndex,
+                    signers = data.signers.toList(),
+                    allOperations = data.operations.toList()
+            )
+
             val heightProvider = Rt_TxChainHeightProvider(ctx)
             val exeCtx = module.createExecutionContext(ctx, opCtx, heightProvider)
             gtvToRtCtx.get().finish(exeCtx)

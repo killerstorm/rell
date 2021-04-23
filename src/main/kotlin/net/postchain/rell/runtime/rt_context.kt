@@ -9,12 +9,14 @@ import mu.KLogging
 import net.postchain.base.BlockchainRid
 import net.postchain.core.ByteArrayKey
 import net.postchain.gtv.Gtv
+import net.postchain.gtx.OpData
 import net.postchain.rell.model.*
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.repl.ReplOutputChannel
 import net.postchain.rell.sql.*
 import net.postchain.rell.utils.BytesKeyPair
 import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 
 class Rt_GlobalContext(
@@ -294,7 +296,17 @@ class Rt_DefinitionContext(val exeCtx: Rt_ExecutionContext, val dbUpdateAllowed:
     val callCtx = Rt_CallContext(this)
 }
 
-class Rt_OpContext(val lastBlockTime: Long, val transactionIid: Long, val blockHeight: Long, val signers: List<ByteArray>)
+class Rt_OpContext(
+        val lastBlockTime: Long,
+        val transactionIid: Long,
+        val blockHeight: Long,
+        val opIndex: Int,
+        signers: List<ByteArray>,
+        allOperations: List<OpData>
+) {
+    val signers = signers.toImmList()
+    val allOperations = allOperations.toImmList()
+}
 
 abstract class Rt_BlockRunnerStrategy {
     abstract fun createGtvConfig(): Gtv

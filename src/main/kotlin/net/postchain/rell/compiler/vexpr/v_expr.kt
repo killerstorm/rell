@@ -70,7 +70,7 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
 
         val memberRef = C_MemberRef(this, memberName, safe)
         val valueExpr = C_MemberResolver.valueForType(ctx, effectiveBaseType, memberRef)
-        val fnExpr = C_MemberResolver.functionForType(effectiveBaseType, memberRef)
+        val fnExpr = C_MemberResolver.functionForType(ctx, effectiveBaseType, memberRef)
 
         val expr = C_ValueFunctionExpr.create(memberName, valueExpr, fnExpr)
         if (expr == null) {
@@ -253,7 +253,7 @@ class V_AtEntityExpr(exprCtx: C_ExprContext, pos: S_Pos, private val cAtEntity: 
         val attrExpr = if (attrRef == null) null else C_VExpr(V_AtAttrExpr(ctx, pos, cAtEntity, attrRef))
 
         val memberRef = C_MemberRef(this, memberName, safe)
-        val fnExpr = C_MemberResolver.functionForType(entityType, memberRef)
+        val fnExpr = C_MemberResolver.functionForType(ctx, entityType, memberRef)
 
         val cExpr = C_ValueFunctionExpr.create(memberName, attrExpr, fnExpr)
         return cExpr ?: throw C_Errors.errUnknownMember(entityType, memberName)

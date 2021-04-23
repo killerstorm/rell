@@ -98,9 +98,9 @@ object C_MemberResolver {
         }
     }
 
-    fun functionForType(type: R_Type, ref: C_MemberRef): C_Expr? {
+    fun functionForType(ctx: C_ExprContext, type: R_Type, ref: C_MemberRef): C_Expr? {
         val name = ref.name.str
-        val fn = C_LibFunctions.getMemberFunctionOpt(type, name)
+        val fn = C_LibFunctions.getMemberFunctionOpt(ctx, type, name)
         val link = ref.toLink()
         return if (fn == null) null else C_MemberFunctionExpr(link, fn, name)
     }
@@ -500,7 +500,7 @@ class V_EntityAttrExpr private constructor(
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
         val memberRef = C_MemberRef(this, memberName, safe)
         val valueExpr = createDbMemberExpr(ctx, memberRef)
-        val fnExpr = C_MemberResolver.functionForType(attrInfo.dbExpr.type, memberRef)
+        val fnExpr = C_MemberResolver.functionForType(ctx, attrInfo.dbExpr.type, memberRef)
 
         val res = C_ValueFunctionExpr.create(memberName, valueExpr, fnExpr)
         res ?: throw C_Errors.errUnknownMember(attrInfo.dbExpr.type, memberName)

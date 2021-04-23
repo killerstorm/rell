@@ -2,22 +2,20 @@ package net.postchain.rell.lib.test
 
 import net.postchain.base.secp256k1_derivePubKey
 import net.postchain.common.hexStringToByteArray
-import net.postchain.rell.compiler.C_LibUtils
-import net.postchain.rell.compiler.C_NamespaceValue_Struct
+import net.postchain.rell.compiler.*
 import net.postchain.rell.lib.C_Lib_Rell_Test
-import net.postchain.rell.model.R_Attribute
 import net.postchain.rell.model.R_ByteArrayType
-import net.postchain.rell.model.R_CallFrame
-import net.postchain.rell.model.R_Struct
 import net.postchain.rell.runtime.*
 import net.postchain.rell.utils.BytesKeyPair
-import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 
 object C_Lib_Rell_Test_KeyPairs {
-    private val STRUCT_ATTRS = listOf("pub", "priv").toImmList()
+    private val KEYPAIR_STRUCT = C_Utils.createSysStruct(
+            "${C_Lib_Rell_Test.MODULE}.keypair",
+            C_SysAttribute("pub", R_ByteArrayType),
+            C_SysAttribute("priv", R_ByteArrayType)
+    )
 
-    val KEYPAIR_STRUCT = createKeypairStruct()
     val KEYPAIR_TYPE = KEYPAIR_STRUCT.type
 
     fun structToKeyPair(v: Rt_Value): BytesKeyPair {
@@ -39,24 +37,6 @@ object C_Lib_Rell_Test_KeyPairs {
         return bs
     }
 
-    private fun createKeypairStruct(): R_Struct {
-        val structName = "${C_Lib_Rell_Test.MODULE}.keypair"
-
-        val struct = R_Struct(
-                structName,
-                structName.toGtv(),
-                mirrorStructs = null,
-                initFrameGetter = R_CallFrame.NONE_INIT_FRAME_GETTER
-        )
-
-        val attrs = STRUCT_ATTRS.mapIndexed { i, attr ->
-            attr to R_Attribute(i, attr, R_ByteArrayType, mutable = false, exprGetter = null)
-        }.toMap()
-        struct.setAttributes(attrs)
-
-        return struct
-    }
-
     private val PREDEFINED_KEYPAIRS = createPredefinedKeyPairs()
 
     private val KEYPAIRS_NAMESPACE = C_LibUtils.makeNsValues(
@@ -76,18 +56,17 @@ object C_Lib_Rell_Test_KeyPairs {
             PREDEFINED_KEYPAIRS.mapValues { Rt_ByteArrayValue(it.value.priv.toByteArray()) }
     )
 
-    val NAMESPACE_PART = C_LibUtils.makeNsEx(
-            namespaces = mapOf(
-                    "keypairs" to KEYPAIRS_NAMESPACE,
-                    "pubkeys" to PUBKEYS_NAMESPACE,
-                    "privkeys" to PRIVKEYS_NAMESPACE
-            ),
-            types = mapOf(
-                    "keypair" to KEYPAIR_TYPE
-            ),
-            values = mapOf("keypair" to C_NamespaceValue_Struct(KEYPAIR_STRUCT))
-            //functions = C_GlobalFuncTable(mapOf("keypair" to C_StructGlobalFunction(KEYPAIR_STRUCT)))
-    )
+    val NAMESPACE = createNamespace()
+
+    private fun createNamespace(): C_Namespace {
+        val b = C_SysNsProtoBuilder()
+        b.addNamespace("keypairs", KEYPAIRS_NAMESPACE)
+        b.addNamespace("privkeys", PRIVKEYS_NAMESPACE)
+        b.addNamespace("pubkeys", PUBKEYS_NAMESPACE)
+        b.addStruct("keypair", KEYPAIR_STRUCT)
+        val nsProto = b.build()
+        return C_NsEntry.createNamespace(nsProto.entries)
+    }
 
     private fun createPredefinedKeyPairs(): Map<String, BytesKeyPair> {
         val names = listOf("bob", "alice", "trudy")

@@ -67,9 +67,6 @@ Additionally:
     assert_equals(expected: T, actual: T) - fail (throw an exception) if two values are not equal
     rell.test.assert_equals(expected: T, actual: T) - same
 
-    op_context.get_signers(): list<byte_array> - returns pubkeys of the signers of the current transaction
-    op_context.is_signer(pubkey: byte_array): boolean - checks if the pubkey is a signer (same as the global is_signer())
-
 Example 1. Building and running a block
 
     operation foo(x: integer) { ... }
@@ -376,20 +373,11 @@ A new type struct<operation> defines a struct which has same attributes as the o
         return true;
     }
 
-The type struct<operation> is the result type of Rell operation invocation expression:
-
-    val op: struct<add_user> = add_user('Bob', 123);
-
-the returned value can be used to construct blocks and transactions (in unit tests or REPL):
-
-    val tx = rell.gtx.tx(op);
-    tx.run();
-
 Details:
 
 - Attributes of struct<OP> are not mutable.
 - Attributes of struct<OP> have same default values as the parameters of OP.
-- Member function struct<OP>.to_operation() converts the structure to the "operation" type.
+- Member function struct<OP>.to_test_op() converts the structure to the "rell.test.op" type.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 13. Language: Type struct<mutable T>
@@ -601,3 +589,41 @@ Optionally, one can specify a set of modules to execute:
     ./rell.sh -d rell/src --test foo bar
 
 Then tests defined in the specified modules and all their submodules will be executed.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+21. Library: New Postchain API
+
+New types:
+
+    struct gtx_operation {
+        name: text;
+        args: list<gtv>;
+    }
+
+    struct gtx_transaction_body {
+        blockchain_rid: byte_array;
+        operations: list<gtx_operation>;
+        signers: list<gtv>;
+    }
+
+    struct gtx_transaction {
+       body: gtx_transaction_body;
+       signatures: list<gtv>;
+    }
+
+New functions and properties:
+
+    op_context.op_index: integer
+        Index of the operation being executed in the transaction (0 = first operation).
+
+    op_context.get_signers(): list<byte_array>
+        Returns pubkeys of the signers of the current transaction.
+
+    op_context.is_signer(pubkey: byte_array): boolean
+        Checks if the pubkey is one of the signers of the current transaction (same as the global function is_signer()).
+
+    op_context.get_all_operations(): list<gtx_operation>
+        Returns all operations of the current transaction.
+
+    op_context.emit_event(type: text, data: gtv)
+        Emits an event.

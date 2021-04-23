@@ -11,7 +11,7 @@ import net.postchain.rell.utils.toImmSet
 class C_SysAttribute(
         val name: String,
         val type: R_Type,
-        val mutable: Boolean,
+        val mutable: Boolean = false,
         val expr: R_Expr? = null,
         val sqlMapping: String = name,
         val canSetInCreate: Boolean = true

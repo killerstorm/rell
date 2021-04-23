@@ -4,14 +4,16 @@
 
 package net.postchain.rell.lib
 
+import net.postchain.common.hexStringToByteArray
+import net.postchain.gtx.OpData
 import net.postchain.rell.runtime.Rt_OpContext
 import net.postchain.rell.test.BaseRellTest
-import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.test.GtvTestUtils
 import org.junit.Test
 
 class LibOpContextTest: BaseRellTest(false) {
     @Test fun testLastBlockTime() {
-        tst.opContext = Rt_OpContext(12345, -1, -1, listOf())
+        tst.opContext = opContext(lastBlockTime = 12345)
         chkOp("print(op_context.last_block_time);")
         chkOut("12345")
 
@@ -34,23 +36,33 @@ class LibOpContextTest: BaseRellTest(false) {
     @Test fun testLastBlockTimeAsDefaultValue() {
         tstCtx.useSql = true
         def("entity foo { t: integer = op_context.last_block_time; }")
-        tst.opContext = Rt_OpContext(12345, -1, -1, listOf())
+        tst.opContext = opContext(lastBlockTime = 12345)
 
         chkOp("create foo();")
         chkData("foo(1,12345)")
     }
 
     @Test fun testBlockHeight() {
-        tst.opContext = Rt_OpContext(12345, -1, 98765, listOf())
-        chkOp("print(op_context.block_height);")
-        chkOut("98765")
+        tst.opContext = opContext(lastBlockTime = 12345, blockHeight = 98765)
+        chkOp("print(_type_of(op_context.block_height));")
+        chkOut("integer")
+        chkOp("print(_strict_str(op_context.block_height));")
+        chkOut("int[98765]")
+    }
+
+    @Test fun testOpIndex() {
+        tst.opContext = opContext(opIndex = 12345)
+        chkOp("print(_type_of(op_context.op_index));")
+        chkOut("integer")
+        chkOp("print(_strict_str(op_context.op_index));")
+        chkOut("int[12345]")
     }
 
     @Test fun testTransaction() {
         tstCtx.useSql = true
         tst.chainId = 333
         tst.inserts = LibBlockTransactionTest.BLOCK_INSERTS_333
-        tst.opContext = Rt_OpContext(-1, 444, -1, listOf())
+        tst.opContext = opContext(transactionIid = 444)
 
         chkOp("print(_type_of(op_context.transaction));")
         chkOut("transaction")
@@ -64,7 +76,7 @@ class LibOpContextTest: BaseRellTest(false) {
         def("entity foo { t: transaction = op_context.transaction; }")
         tst.chainId = 333
         tst.inserts = LibBlockTransactionTest.BLOCK_INSERTS_333
-        tst.opContext = Rt_OpContext(-1, 444, -1, listOf())
+        tst.opContext = opContext(transactionIid = 444)
 
         chkOp("create foo();")
         chkData("foo(1,444)")
@@ -76,7 +88,7 @@ class LibOpContextTest: BaseRellTest(false) {
     }
 
     @Test fun testIsSigner() {
-        tst.opContext = Rt_OpContext(-1, -1, -1, listOf(CommonUtils.hexToBytes("1234"), CommonUtils.hexToBytes("abcd")))
+        tst.opContext = opContext(signers = listOf("1234", "abcd"))
 
         chk("op_context.is_signer(x'1234')", "boolean[true]")
         chk("op_context.is_signer(x'abcd')", "boolean[true]")
@@ -90,14 +102,67 @@ class LibOpContextTest: BaseRellTest(false) {
     }
 
     @Test fun testIsSignerGlobalScope() {
-        tst.opContext = Rt_OpContext(-1, -1, -1, listOf(CommonUtils.hexToBytes("1234"), CommonUtils.hexToBytes("abcd")))
+        tst.opContext = opContext(signers = listOf("1234", "abcd"))
         chk("is_signer(x'1234')", "boolean[true]")
         chk("is_signer(x'abcd')", "boolean[true]")
         chk("is_signer(x'beef')", "boolean[false]")
     }
 
     @Test fun testGetSigners() {
-        tst.opContext = Rt_OpContext(-1, -1, -1, listOf(CommonUtils.hexToBytes("1234"), CommonUtils.hexToBytes("abcd")))
+        tst.opContext = opContext(signers = listOf("1234", "abcd"))
+        chk("_type_of(op_context.get_signers())", "text[list<byte_array>]")
         chk("op_context.get_signers()", "list<byte_array>[byte_array[1234],byte_array[abcd]]")
+    }
+
+    @Test fun testGetAllOperations() {
+        tst.opContext = opContext(ops = listOf())
+        chk("_type_of(op_context.get_all_operations())", "text[list<gtx_operation>]")
+        chk("op_context.get_all_operations()", "list<gtx_operation>[]")
+
+        tst.opContext = opContext(ops = listOf("""foo[123,"Bob"]""", """bar["Alice",456]"""))
+        chk("op_context.get_all_operations()",
+                """list<gtx_operation>["""
+                    + """gtx_operation[name=text[foo],args=list<gtv>[gtv[123],gtv["Bob"]]]"""
+                    + ","
+                    + """gtx_operation[name=text[bar],args=list<gtv>[gtv["Alice"],gtv[456]]]"""
+                    + "]"
+        )
+    }
+
+    @Test fun testEmitEvent() {
+        tst.opContext = opContext()
+        chkOp("op_context.emit_event('bob', gtv.from_json('{}'));", "rt_err:not_supported")
+        chkOp("op_context.emit_event();", "ct_err:expr_call_argtypes:emit_event:")
+        chkOp("op_context.emit_event('bob');", "ct_err:expr_call_argtypes:emit_event:text")
+        chkOp("op_context.emit_event('bob', 'alice');", "ct_err:expr_call_argtypes:emit_event:text,text")
+        chkOp("op_context.emit_event('bob', gtv.from_json('{}'), 123);", "ct_err:expr_call_argtypes:emit_event:text,gtv,integer")
+        chkOp("op_context.emit_event('bob', gtv.from_json('{}'), 'alice');", "ct_err:expr_call_argtypes:emit_event:text,gtv,text")
+    }
+
+    private fun opContext(
+            lastBlockTime: Long = -1,
+            transactionIid: Long = -1,
+            blockHeight: Long = -1,
+            opIndex: Int = -1,
+            signers: List<String> = listOf(),
+            ops: List<String> = listOf()
+    ): Rt_OpContext {
+        val signers2 = signers.map { it.hexStringToByteArray() }
+        val ops2 = ops.map { parseOperation(it) }
+        return Rt_OpContext(
+                lastBlockTime = lastBlockTime,
+                transactionIid = transactionIid,
+                blockHeight = blockHeight,
+                opIndex = opIndex,
+                signers = signers2,
+                allOperations = ops2
+        )
+    }
+
+    private fun parseOperation(s: String): OpData {
+        val i = s.indexOf("[")
+        val name = s.substring(0, i)
+        val args = GtvTestUtils.strToGtv(s.substring(i)).asArray().toList().toTypedArray()
+        return OpData(name, args)
     }
 }
