@@ -25,6 +25,13 @@ class LibBlockTransactionTest: BaseRellTest() {
                 .block(1, 35, "FEEBDAED", "8765", 1400000000000)
                 .tx(2, 1, "CEED", "FEED", "4321")
                 .list()
+
+        val BLOCK_INSERTS_CURRENT = RellTestContext.BlockBuilder(333)
+                .block(101, 10, "DEADBEEF", "5678", 1500000000000)
+                .block(102, 20, null, null, null)
+                .tx(201, 101, "CEED", "FEED", "4321")
+                .tx(202, 102, "FADE", "EDAF", "1234")
+                .list()
     }
 
     @Test fun testBlockRead() {
@@ -242,13 +249,24 @@ class LibBlockTransactionTest: BaseRellTest() {
 
     @Test fun testSelectCurrentBlock() {
         tst.chainId = 333
-        tst.inserts = RellTestContext.BlockBuilder(333)
-                .block(1, 10, "DEADBEEF", "5678", 1500000000000)
-                .block(2, 20, null, null, null)
-                .list()
-        chk("block @* {}", "list<block>[block[1]]")
-        chk("block @? { .block_height == 10 }", "block[1]")
-        chk("block @? { .block_height == 20 }", "null")
+        tst.inserts = BLOCK_INSERTS_CURRENT
+
+        chk("block @* {}", "list<block>[block[101],block[102]]")
+        chk("block @? { .block_height == 10 }", "block[101]")
+        chk("block @? { .block_height == 20 }", "block[102]")
+
+        chk("block @? { .block_height == 10 } (.block_rid)", "byte_array[deadbeef]")
+        chk("block @? { .block_height == 10 } (.timestamp)", "int[1500000000000]")
+        chk("block @? { .block_height == 20 } (.block_rid)", "rt_err:sql_null:byte_array")
+        chk("block @? { .block_height == 20 } (.timestamp)", "rt_err:sql_null:integer")
+    }
+
+    @Test fun testSelectCurrentTransaction() {
+        tst.chainId = 333
+        tst.inserts = BLOCK_INSERTS_CURRENT
+        chk("transaction @* {}", "list<transaction>[transaction[201],transaction[202]]")
+        chk("transaction @? { .block.block_height == 10 }", "transaction[201]")
+        chk("transaction @? { .block.block_height == 20 }", "transaction[202]")
     }
 
     private fun createChainIdTester(chainId: Long, blockIid: Long, txIid: Long, inserts: List<String>): RellCodeTester {

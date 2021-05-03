@@ -151,9 +151,12 @@ class S_AttributeClause(val attr: S_AttributeDefinition): S_RelClause() {
     }
 }
 
-enum class S_KeyIndexKind {
-    KEY,
-    INDEX,
+enum class S_KeyIndexKind(nameMsg: String) {
+    KEY("key"),
+    INDEX("index"),
+    ;
+
+    val nameMsg = MsgString(nameMsg)
 }
 
 class S_KeyIndexClause(val pos: S_Pos, val kind: S_KeyIndexKind, val attrs: List<S_AttributeDefinition>): S_RelClause() {
@@ -168,6 +171,10 @@ class S_KeyIndexClause(val pos: S_Pos, val kind: S_KeyIndexKind, val attrs: List
             C_Errors.check(names.add(name.str), name.pos) {
                     "entity_keyindex_dup:${name.str}" to "Duplicate attribute: '${name.str}'"
             }
+        }
+
+        if (attrs.size > 1) {
+            attrs.all { it.checkMultiAttrKeyIndex(ctx.msgCtx, kind) }
         }
 
         val attrNames = attrs.map { it.header.name }
@@ -185,7 +192,25 @@ class S_KeyIndexClause(val pos: S_Pos, val kind: S_KeyIndexKind, val attrs: List
     }
 }
 
-class S_AttributeDefinition(val mutablePos: S_Pos?, val header: S_AttrHeader, val expr: S_Expr?): S_Node()
+class S_AttributeDefinition(val mutablePos: S_Pos?, val header: S_AttrHeader, val expr: S_Expr?): S_Node() {
+    fun checkMultiAttrKeyIndex(msgCtx: C_MessageContext, kind: S_KeyIndexKind): Boolean {
+        return if (mutablePos != null) {
+            errKeyIndexTooComplex(msgCtx, kind, mutablePos, "mutable")
+            false
+        } else if (expr != null) {
+            errKeyIndexTooComplex(msgCtx, kind, expr.startPos, "expr")
+            false
+        } else {
+            true
+        }
+    }
+
+    private fun errKeyIndexTooComplex(msgCtx: C_MessageContext, kind: S_KeyIndexKind, pos: S_Pos, reasonCode: String) {
+        msgCtx.error(pos, "attr:key_index:too_complex:${header.name}:$kind:$reasonCode",
+                "${kind.nameMsg.capital} definition is too complex; write each attribute definition separately " +
+                        "and use only attribute names in the index clause")
+    }
+}
 
 sealed class S_Modifier {
     abstract fun compile(ctx: C_ModifierContext, target: C_ModifierTarget)

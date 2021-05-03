@@ -18,8 +18,8 @@ object Rt_CryptoUtils {
 
     fun ethereumPubkeyFromSignature(r: ByteArray, s: ByteArray, recId: Long, hash: ByteArray): ByteArray {
         check(recId >= 0 && recId <= 100000) { "recId out of range: $recId" }
-        val rVal = BigInteger(r)
-        val sVal = BigInteger(s)
+        val rVal = BigInteger(1, r)
+        val sVal = BigInteger(1, s)
         val sign = EthereumSignature(hash, recId.toInt() + 27, rVal, sVal)
         val pubKey = sign.ecrecover()
         return pubKey

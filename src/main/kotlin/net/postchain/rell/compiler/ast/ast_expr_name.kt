@@ -93,7 +93,7 @@ class S_SafeMemberExpr(val base: S_Expr, val name: S_Name): S_Expr(base.startPos
         val baseValueNullable = baseValue.asNullable()
 
         val baseType = baseValueNullable.type()
-        if (baseType !is R_NullableType) {
+        if (baseType !is R_NullableType && baseType.isNotError()) {
             val typeStr = baseType.toStrictString()
             ctx.msgCtx.error(name.pos, "expr_safemem_type:[$typeStr]", "Wrong type for operator '?.': $typeStr")
         }

@@ -61,7 +61,7 @@ class AtExprInTest: BaseRellTest() {
         chk("user @* { .job in (work@*{}(work.job)) } (.name)", "[Bob, Alice, Trudy, John]")
         chk("user @* { .job in ((w:work)@*{}(work.job)) } (.name)", "ct_err:unknown_name:work.job")
         chk("user @* { .job in ((w:work)@*{}(w.job)) } (.name)", "[Bob, Alice, Trudy, John]")
-        chk("user @* { .job in (work@*{}($.job)) } (.name)", "ct_err:name:ambiguous:$")
+        chk("user @* { .job in (work@*{}($.job)) } (.name)", "[Bob, Alice, Trudy, John]")
         chk("user @* { .job in ((w:work)@*{}(work.job)) } (.name)", "ct_err:unknown_name:work.job")
         chk("(u:user) @* { .job in (work@*{}($.job)) } (.name)", "[Bob, Alice, Trudy, John]")
         chk("(u:user) @* { .job in ((w:work)@*{}($.job)) } (.name)", "ct_err:expr:placeholder:none")

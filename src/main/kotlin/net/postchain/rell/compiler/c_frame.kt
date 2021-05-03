@@ -257,15 +257,21 @@ class C_OwnerBlockContext(
 
     override fun lookupAtPlaceholder(): C_BlockEntryResolution? {
         val entries = findAllValues { blkCtx -> blkCtx.atPlaceholders.map { it to blkCtx } }
-        return if (entries.isEmpty()) null else {
-            val (entry, blkCtx) = entries.first()
-            if (entries.size == 1 && blkCtx.atFromBlock === atFromBlock) {
-                C_BlockEntryResolution_Normal(entry)
-            } else if (entries.size == 1) {
-                C_BlockEntryResolution_OuterPlaceholder(entry)
-            } else {
-                C_BlockEntryResolution_Ambiguous(C_Constants.AT_PLACEHOLDER, entry)
-            }
+        if (entries.isEmpty()) {
+            return null
+        }
+
+        val thisBlockEntries = entries.filter { (_, blkCtx) -> blkCtx.atFromBlock == atFromBlock }
+
+        return if (thisBlockEntries.size == 1) {
+            val (entry, _) = thisBlockEntries.first()
+            C_BlockEntryResolution_Normal(entry)
+        } else if (thisBlockEntries.size > 1) {
+            val (entry, _) = thisBlockEntries.first()
+            C_BlockEntryResolution_Ambiguous(C_Constants.AT_PLACEHOLDER, entry)
+        } else {
+            val (entry, _) = entries.first()
+            C_BlockEntryResolution_OuterPlaceholder(entry)
         }
     }
 

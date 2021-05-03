@@ -1,4 +1,4 @@
-RELEASE NOTES 0.10.4 (202?-??-??)
+RELEASE NOTES 0.10.4 (2021-??-??)
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 1. Tools: Unit tests
@@ -47,7 +47,7 @@ A few things have changed in the test transaction API introduced in Rell 0.10.3:
 
 More specifically, new transaction-building types are:
 
-    rell.test.block - a block, contains as a list of transactions
+    rell.test.block - a block, contains a list of transactions
     rell.test.tx - a transaction, has a list of operations and a list of signers
     rell.test.op - an operation call, which is a (mount) name and a list of arguments (each argument is a gtv)
 
@@ -165,9 +165,11 @@ Functions of rell.test.op:
     .run()                                      - equivalent of .tx().run()
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-3. Library: Support for text and byte_array functions in @-expressions
+3. Library: Support for more text and byte_array operations in at-expressions
 
-Following functions are now supported in @-expressions (they are translated to their SQL equivalents):
+Operator "[]" (subscript) used to work only in interpreted expressions, now it works in SQL expressions as well.
+
+Additionally, following functions are now supported in at-expressions (they are translated to their SQL equivalents):
 
     byte_array.empty()
     byte_array.sub()
@@ -184,14 +186,9 @@ Following functions are now supported in @-expressions (they are translated to t
     text.sub()
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-4. Language: Operator [] for text and byte_array types in @-expressions
+4. Library: Function text.like()
 
-Subscript operator used to work only in interpreted expressions, now it works in SQL expressions as well.
-
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-5. Library: Function text.like()
-
-New function for simple pattern matching which works same way in interpreted expressions and in @-expressions:
+New function for simple pattern matching which works same way in interpreted expressions and in at-expressions:
 
     text.like(pattern): boolean
 
@@ -210,7 +207,7 @@ since "\" is also an escape character in string literals):
     title.like('string\\_with\\_underscores')
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-6. Language: Inference of collection types from return types, variables, attributes, parameters, etc.
+5. Language: Inference of collection types from return types, variables, attributes, parameters, etc.
 
 It is no more necessary to specify the type of an empty collection when assigning it to a known variable or returning
 from a function with a known return type:
@@ -241,9 +238,9 @@ Some places where collection type inference helps to shorten the code:
 - list/map element assignment:          map_of_lists[x] = [];
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-7. Language: Continue statement
+6. Language: Continue statement
 
-Rell now has the continue statement, like many other languages. It can be used in for and while loops.
+Rell now has the continue statement, like many other languages. It can be used in "for" and "while" loops.
 
 for (x in get_list_of_values()) {
     if (x < 0) continue;
@@ -251,7 +248,7 @@ for (x in get_list_of_values()) {
 }
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-8. Language: Offset clause in at-expression
+7. Language: Offset clause in at-expression
 
 In addition to a limit, one can now also specify an offset in an at-expression in order to select a portion of a
 result set:
@@ -264,7 +261,7 @@ record and so on.
 Both limit and offset clauses are optional and can be used together in an arbitrary order.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-9. Language: At-expression for collections
+8. Language: At-expression for collections
 
 At-expressions can be used to filter and transform collections:
 
@@ -290,7 +287,7 @@ At-expressions can be chained:
         @* { $ <= 25 }
         ;
 
-Operations are performed in memory, not in database. If applying "at" to a list of entities, each entity will be
+Operations are performed in memory, not in a database. If applying "at" to a list of entities, each entity will be
 selected from the database individually in order to access its attributes (may be slow):
 
     val all_users = user @* {};                     // Select all users with one SQL query.
@@ -299,31 +296,34 @@ selected from the database individually in order to access its attributes (may b
 Details:
 
 - All kinds of at-operators are supported: "@", "@?", "@*", "@+".
-- Source collection can be a list, a set or a map; the result is always a list (or a single value).
+- Source collection can be a list, a set or a map; the result for "@*" and "@+" is always a list.
 - Where- and what-expressions are not restricted to SQL-compatible ones (e. g. user-defined function calls are allowed).
 - Limit and offset clauses are supported.
 - Annotations @sort, @sort_desc and @omit are supported.
 - Grouping and aggregation is supported (via annotations @group, @sum, @min, @max).
+- Default order is the same as the order of the source collection (entities are not implicitly sorted by rowid).
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-10. Language: Key and index attribute syntax improvements
+9. Language: Key and index attribute syntax improvements
 
-Now one can specify mutability and default value for particular attributes within a key or index clause:
+It is allowed to specify mutability and default value for an attribute directly within a key or index clause:
 
     entity address {
-        index mutable city: text = 'London', mutable street: text = 'Unknown';
+        index mutable city: text = 'London';
     }
 
-In previous versions that code would like like this:
+In earlier versions the code would have to be:
 
     entity address {
         mutable city: text = 'London';
-        mutable street: text = 'Unknown';
-        index city, street;
+        index city;
     }
 
+The new syntax is allowed when there is only one attribute in a key or an index. If there are multiple attributes,
+they shall be defined separately from the index clause, as before.
+
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-11. Language: Types struct<entity> and struct<object>
+10. Language: Types struct<entity> and struct<object>
 
 A new type allows to have a struct which has same attributes as an entity or an object:
 
@@ -349,7 +349,7 @@ Alternatively, 'to_struct()' can be used in an at-expression (in the what-part):
 
     val s = user @ { .name == 'Bob' } ( user.to_struct() );
 
-One can pass a struct<entity> to a create expression instead of specifying individual attributes of the entity:
+One can pass a struct<entity> to a create expression instead of specifying individual attributes of an entity:
 
     create user(s);       // s is struct<user>
 
@@ -359,7 +359,7 @@ Details:
 - Attributes of struct<T> have same default values as the attributes of T.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-12. Language: Type struct<operation>
+11. Language: Type struct<operation>
 
 A new type struct<operation> defines a struct which has same attributes as the operation's parameters:
 
@@ -377,10 +377,10 @@ Details:
 
 - Attributes of struct<OP> are not mutable.
 - Attributes of struct<OP> have same default values as the parameters of OP.
-- Member function struct<OP>.to_test_op() converts the structure to the "rell.test.op" type.
+- Member function struct<OP>.to_test_op() converts a structure to the "rell.test.op" type.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-13. Language: Type struct<mutable T>
+12. Language: Type struct<mutable T>
 
 In addition to type struct<T> (where "T" is an entity, object or operation), there is type struct<mutable T>:
 
@@ -401,7 +401,7 @@ Conversion between struct<T> and struct<mutable T> is done via .to_mutable() and
 The functions create a mutable or immutable copy of a structure.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-14. Language: Nested at-expressions under exists() and empty() functions
+13. Language: Nested at-expressions under exists() and empty() functions
 
 Nested at-expressions passed as an argument to functions exists() and empty() can access entities of an outer
 at-expression:
@@ -445,7 +445,7 @@ An attribute of a nested entity is matched by the name and type of the outer att
 - Function "empty(X)" is equivalent to "not exists(X)" and is translated to "NOT EXISTS()" SQL expression.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-15. Language: Nested at-expressions for the "in" operator
+14. Language: Nested at-expressions for the "in" operator
 
 Similarly to the exists() and empty() functions, operator "in" now supports nested at-expressions:
 
@@ -468,7 +468,7 @@ is translated to an SQL query like:
 Same notes regarding cardinality and attributes matching as for empty() and exists() apply.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-16. Language: Operator "in" for collections supports database expressions
+15. Language: Operator "in" for collections supports database expressions
 
 Example:
 
@@ -487,7 +487,7 @@ collection passed to operator "in" contains more elements than that, the at-expr
 (The limit is for the total number of values in one at-expression, not for each individual "in" operator.)
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-17. Language: Binary operator "not in"
+16. Language: Binary operator "not in"
 
 One can now write:
 
@@ -500,7 +500,7 @@ instead of
 The new notation is supposed to be more readable when X and Y are complex expressions.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-18. Tools: Specifying source code compatibility version in blockchain configuration
+17. Tools: Specifying source code compatibility version in blockchain configuration
 
 In blockchain XML configuration (so-called blockchain.xml format), old key "sources_v0.10" is replaced by a pair of
 new keys: "sources" and "version". Those keys are under the same path, in the "rell" node:
@@ -518,7 +518,7 @@ new keys: "sources" and "version". Those keys are under the same path, in the "r
             </dict>
         </entry>
 
-The "version" key is mandatory. Its main purpose is to provide backwards compatibility of future versions of Rell in
+The "version" key is mandatory. Its main purpose is to provide backward compatibility of future versions of Rell in
 case if there are breaking changes. Thus, Rell module written for an older version of Rell will work with a newer version
 of Rell interpreter. Currently, there are no breaking changes, but there can be some in the future.
 
@@ -527,12 +527,12 @@ version of Rell interpreter is used).
 
 More details:
 
-- The old key "sources_v0.10" is still supported, but will not be in newer versions of Rell.
+- The old key "sources_v0.10" is still supported, but similar keys for newer versions will not be.
 - Command-line tools, like multigen.sh, have an optional parameter for specifying the version: "--source-version".
-- In Rell 0.10.4 the specified version has no effect, but it must be a valid Rell version.
+- In Rell 0.10.4, the specified version has no effect, but it must be a valid Rell version.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-19. Tools: Running unit tests via run.xml
+18. Tools: Running unit tests via run.xml
 
 The multirun.sh utility now has an option "--test", which causes it to run unit tests instead of starting a node:
 
@@ -542,7 +542,7 @@ The advantage of running unit tests via run.xml is that it allows to define modu
 what cannot be done with rell.sh.
 
 By default, all test modules which are submodules of the main module (specified in the <app> tag) are executed.
-If the run.xml file defines more than one chain, tests for all chains are executed.
+If the run.xml file defines more than one chain, tests for each chains are executed.
 
 To allow executing tests that are not in a submodule of the main module, a new tag <test> was introduced:
 
@@ -560,7 +560,7 @@ Example of a complete run.xml file with newly introduced test tags:
     <run>
         <nodes>
             <config src="node-config.properties" />
-            <test-config src="test-node-config.properties" />
+            <test-config src="node-config-test.properties" />
         </nodes>
 
         <chains>
@@ -576,7 +576,7 @@ Example of a complete run.xml file with newly introduced test tags:
     </run>
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-20. Tools: Running all unit tests in a directory tree via the command-line interpreter
+19. Tools: Running all unit tests in a directory tree via the command-line interpreter
 
 Command-line interpreter (rell.sh) has a new option "--test":
 
@@ -591,7 +591,7 @@ Optionally, one can specify a set of modules to execute:
 Then tests defined in the specified modules and all their submodules will be executed.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-21. Library: New Postchain API
+20. Library: New Postchain API
 
 New types:
 
@@ -614,13 +614,14 @@ New types:
 New functions and properties:
 
     op_context.op_index: integer
-        Index of the operation being executed in the transaction (0 = first operation).
+        Index of the operation being executed in the transaction (0 == first operation).
 
     op_context.get_signers(): list<byte_array>
         Returns pubkeys of the signers of the current transaction.
 
     op_context.is_signer(pubkey: byte_array): boolean
-        Checks if the pubkey is one of the signers of the current transaction (same as the global function is_signer()).
+        Checks if the pubkey is one of the signers of the current transaction (same as the global function is_signer();
+        the new function is recommended).
 
     op_context.get_all_operations(): list<gtx_operation>
         Returns all operations of the current transaction.

@@ -268,3 +268,13 @@ typealias Getter<T> = () -> T
 data class Nullable<T>(val value: T? = null)
 
 fun <T> Nullable<T>?.orElse(other: T?): T? = if (this != null) this.value else other
+
+class MsgString(s: String) {
+    val normal = s.toLowerCase()
+    val upper = s.toUpperCase()
+    val capital = StringUtils.capitalize(s)
+
+    override fun equals(other: Any?) = other is MsgString && normal == other.normal
+    override fun hashCode() = normal.hashCode()
+    override fun toString() = normal
+}

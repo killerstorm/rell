@@ -42,6 +42,11 @@ abstract class BaseRellTest(useSql: Boolean = true, gtv: Boolean = false): BaseT
     fun chkOp(code: String, expected: String = "OK") = tst.chkOp(code, expected)
     fun chkOpFull(code: String, expected: String = "OK", name: String = "o") = tst.chkOpEx(code, name, expected)
 
+    fun chkOpOut(code: String, vararg expected: String) {
+        chkOp(code, "OK")
+        chkOut(*expected)
+    }
+
     fun chkWarn(vararg  expected: String) = tst.chkWarn(*expected)
     fun chkStack(vararg expected: String) = tst.chkStack(*expected)
 

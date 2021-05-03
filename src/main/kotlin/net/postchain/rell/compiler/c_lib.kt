@@ -36,7 +36,7 @@ object C_LibFunctions {
         b.add("min", R_DecimalType, listOf(R_DecimalType, R_DecimalType), R_SysFn_Math.Min_Decimal, Db_SysFn_Min_Decimal)
         b.add("max", R_IntegerType, listOf(R_IntegerType, R_IntegerType), R_SysFn_Math.Max_Integer, Db_SysFn_Max_Integer)
         b.add("max", R_DecimalType, listOf(R_DecimalType, R_DecimalType), R_SysFn_Math.Max_Decimal, Db_SysFn_Max_Decimal)
-        b.add("is_signer", R_BooleanType, listOf(R_ByteArrayType), R_SysFn_Crypto.IsSigner, depWarn("op_context.is_signer"))
+        b.add("is_signer", R_BooleanType, listOf(R_ByteArrayType), R_SysFn_Crypto.IsSigner/*, depWarn("op_context.is_signer")*/)
         b.add("json", R_JsonType, listOf(R_TextType), R_SysFn_Json.FromText, Db_SysFn_Json)
 
         b.add("require", C_SysFn_Require_Boolean)

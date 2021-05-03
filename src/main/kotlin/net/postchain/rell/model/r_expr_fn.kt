@@ -45,7 +45,7 @@ class R_SysCallExpr(
                 throw e
             } catch (e: Throwable) {
                 val msg = decorate(name, e.message)
-                throw RuntimeException(msg, e)
+                throw Rt_Error("fn:error:$name:${e.javaClass.canonicalName}", msg)
             }
             return res
         }

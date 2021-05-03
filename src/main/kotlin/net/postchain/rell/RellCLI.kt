@@ -102,9 +102,13 @@ private fun runApp(
         args: RellCliArgs,
         dbSpecified: Boolean,
         entryModule: R_ModuleName?,
-        entryRoutine: R_QualifiedName?, app: R_App
+        entryRoutine: R_QualifiedName?,
+        app: R_App
 ) {
     val launcher = getAppLauncher(app, args, entryModule, entryRoutine)
+    if (launcher == null && !args.resetdb) {
+        return
+    }
 
     runWithSqlManager(args, true) { sqlMgr ->
         val sqlCtx = Rt_SqlContext.createNoExternalChains(app, SQL_MAPPER)

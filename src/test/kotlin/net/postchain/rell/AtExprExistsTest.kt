@@ -141,7 +141,7 @@ class AtExprExistsTest: BaseRellTest() {
         chk("user @* { exists( membership @* { .user == user, .group.name == 'developer' } ) } ( .name )", "[Alice, Trudy]")
         chk("user @* { exists( membership @* { .user == user, .group.name == 'tester' } ) } ( .name )", "[]")
         chk("user @* { exists( membership @* { .user == $, .group.name == 'tester' } ) } ( .name )",
-                "ct_err:[binop_operand_type:==:[user]:[membership]][name:ambiguous:$]")
+                "ct_err:binop_operand_type:==:[user]:[membership]")
         chk("(u: user) @* { exists( membership @* { .user == user, .group.name == 'tester' } ) } ( .name )",
                 "ct_err:expr_novalue:type")
         chk("(u: user) @* { exists( membership @* { .user == $, .group.name == 'tester' } ) } ( .name )",
@@ -426,7 +426,7 @@ class AtExprExistsTest: BaseRellTest() {
 
     @Test fun testUpdateDeletePlaceholder() {
         initDataUserCompany()
-        chkUpdateDelete("user @* {exists( company @* { $.city == user.city } )}", "ct_err:name:ambiguous:$")
+        chkUpdateDelete("user @* {exists( company @* { $.city == user.city } )}", "Bob,Alice")
         chkUpdateDelete("(u:user) @* {exists( (c:company) @* { $.city == u.city } )}", "ct_err:expr:placeholder:none")
         chkUpdateDelete("(u:user) @* {exists( company @* { $.city == u.city } )}", "Bob,Alice")
         chkUpdateDelete("(u:user) @* {exists( (c:company) @* { c.city == u.city } )}", "Bob,Alice")

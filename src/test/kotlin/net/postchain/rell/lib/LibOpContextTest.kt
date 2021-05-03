@@ -67,8 +67,14 @@ class LibOpContextTest: BaseRellTest(false) {
         chkOp("print(_type_of(op_context.transaction));")
         chkOut("transaction")
 
+        chkOp("print(_type_of(op_context.transaction.block));")
+        chkOut("block")
+
         chkOp("print(_strict_str(op_context.transaction));")
         chkOut("transaction[444]")
+
+        chkOp("print(_strict_str(op_context.transaction.block));")
+        chkOut("block[111]")
     }
 
     @Test fun testTransactionAsDefaultValue() {
@@ -80,6 +86,22 @@ class LibOpContextTest: BaseRellTest(false) {
 
         chkOp("create foo();")
         chkData("foo(1,444)")
+    }
+
+    @Test fun testCurrentTransactionBlock() {
+        tstCtx.useSql = true
+        tst.chainId = 333
+        tst.inserts = LibBlockTransactionTest.BLOCK_INSERTS_CURRENT
+        tst.opContext = opContext(transactionIid = 202)
+
+        chkOpOut("print(_strict_str(op_context.transaction));", "transaction[202]")
+        chkOpOut("print(_strict_str(op_context.transaction.tx_rid));", "byte_array[fade]")
+        chkOpOut("print(_strict_str(op_context.transaction.tx_hash));", "byte_array[1234]")
+        chkOpOut("print(_strict_str(op_context.transaction.tx_data));", "byte_array[edaf]")
+        chkOpOut("print(_strict_str(op_context.transaction.block));", "block[102]")
+        chkOpOut("print(_strict_str(op_context.transaction.block.block_height));", "int[20]")
+        chkOp("print(_strict_str(op_context.transaction.block.timestamp));", "rt_err:sql_null:integer")
+        chkOp("print(_strict_str(op_context.transaction.block.block_rid));", "rt_err:sql_null:byte_array")
     }
 
     @Test fun testAssignmentValue() {

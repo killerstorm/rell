@@ -24,12 +24,12 @@ class EntityTest: BaseRellTest(false) {
 
     @Test fun testIndex() {
         chkCompile("entity foo { name; index name; }", "OK")
-        chkCompile("entity foo { name; index name; index name; }", "ct_err:entity_index_dup:name")
+        chkCompile("entity foo { name; index name; index name; }", "ct_err:entity:key_index:dup_attr:INDEX:name")
 
         chkCompile("entity foo { name1: text; name2: text; index name1, name2; }", "OK")
         chkCompile("entity foo { name1: text; name2: text; index name1; index name2; index name1, name2; }", "OK")
         chkCompile("entity foo { name1: text; name2: text; index name1, name2; index name2, name1; }",
-                "ct_err:entity_index_dup:name1,name2")
+                "ct_err:entity:key_index:dup_attr:INDEX:name1,name2")
 
         chkCompile("entity foo { name1: text; name2: text; index name1, name1; }", "ct_err:entity_keyindex_dup:name1")
 
@@ -73,12 +73,12 @@ class EntityTest: BaseRellTest(false) {
 
     @Test fun testKey() {
         chkCompile("entity foo { name; key name; }", "OK")
-        chkCompile("entity foo { name; key name; key name; }", "ct_err:entity_key_dup:name")
+        chkCompile("entity foo { name; key name; key name; }", "ct_err:entity:key_index:dup_attr:KEY:name")
 
         chkCompile("entity foo { name1: text; name2: text; key name1, name2; }", "OK")
         chkCompile("entity foo { name1: text; name2: text; key name1; key name2; key name1, name2; }", "OK")
         chkCompile("entity foo { name1: text; name2: text; key name1, name2; key name2, name1; }",
-                "ct_err:entity_key_dup:name1,name2")
+                "ct_err:entity:key_index:dup_attr:KEY:name1,name2")
 
         chkCompile("entity foo { name1: text; name2: text; key name1, name1; }", "ct_err:entity_keyindex_dup:name1")
 
@@ -314,11 +314,11 @@ class EntityTest: BaseRellTest(false) {
         chkCompile("entity user { x: integer; }", "OK")
 
         chkKeyIndexSyntax("KW x: integer, y: text;", "OK")
-        chkKeyIndexSyntax("KW x: integer = 123, y: text = 'abc';", "OK")
-        chkKeyIndexSyntax("KW mutable x: integer, mutable y: text;", "OK")
-        chkKeyIndexSyntax("KW mutable x: integer = 123, mutable y: text = 'abc';", "OK")
+        chkKeyIndexSyntax("KW x: integer = 123, y: text = 'abc';", "ct_err:attr:key_index:too_complex:x:KW:expr")
+        chkKeyIndexSyntax("KW mutable x: integer, mutable y: text;", "ct_err:attr:key_index:too_complex:x:KW:mutable")
+        chkKeyIndexSyntax("KW mutable x: integer = 123, mutable y: text = 'abc';", "ct_err:attr:key_index:too_complex:x:KW:mutable")
 
-        chkKeyIndexSyntax("KW x: integer, y: text; KW x, y;", "ct_err:entity_KW_dup:x,y")
+        chkKeyIndexSyntax("KW x: integer, y: text; KW x, y;", "ct_err:entity:key_index:dup_attr:KW:x,y")
         chkKeyIndexSyntax("KW x: integer, y: text; KW x;", "OK")
         chkKeyIndexSyntax("KW x: integer, y: text; KW y;", "OK")
 
@@ -344,7 +344,7 @@ class EntityTest: BaseRellTest(false) {
     private fun chkKeyIndexSyntax(body: String, exp: String) {
         for (kw in listOf("key", "index")) {
             val code = "entity data { ${body.replace("KW", kw)} }"
-            val realExp = exp.replace("KW", kw)
+            val realExp = exp.replace("KW", kw.toUpperCase())
             chkCompile(code, realExp)
         }
     }
@@ -442,27 +442,37 @@ class EntityTest: BaseRellTest(false) {
                 "name:text; mutable value:integer; KW name,value")
 
         chkKeyIndex("entity data { name; value: integer; KW mutable name: text, value: integer; }",
-                "ct_err:entity:attr:mutable_not_primary:name")
+                "ct_err:[attr:key_index:too_complex:name:KW:mutable][entity:attr:mutable_not_primary:name]")
         chkKeyIndex("entity data { KW mutable name: text, value: integer; name; value: integer; }",
-                "ct_err:entity:attr:mutable_not_primary:name")
+                "ct_err:[attr:key_index:too_complex:name:KW:mutable][entity:attr:mutable_not_primary:name]")
         chkKeyIndex("entity data { name; value: integer; KW name: text, mutable value: integer; }",
-                "ct_err:entity:attr:mutable_not_primary:value")
+                "ct_err:[attr:key_index:too_complex:value:KW:mutable][entity:attr:mutable_not_primary:value]")
         chkKeyIndex("entity data { KW name: text, mutable value: integer; name; value: integer; }",
-                "ct_err:entity:attr:mutable_not_primary:value")
+                "ct_err:[attr:key_index:too_complex:value:KW:mutable][entity:attr:mutable_not_primary:value]")
     }
 
     @Test fun testEntityDetailsKeyIndexNoPrimary() {
         chkKeyIndex("entity data { KW name, value: integer; }", "name:text; value:integer; KW name,value")
-        chkKeyIndex("entity data { KW mutable name, value: integer; }", "mutable name:text; value:integer; KW name,value")
-        chkKeyIndex("entity data { KW name, mutable value: integer; }", "name:text; mutable value:integer; KW name,value")
-        chkKeyIndex("entity data { KW mutable name, mutable value: integer; }", "mutable name:text; mutable value:integer; KW name,value")
-        chkKeyIndex("entity data { KW name = 'joe', value: integer; }", "name:text=*; value:integer; KW name,value")
-        chkKeyIndex("entity data { KW name, value: integer = 123; }", "name:text; value:integer=*; KW name,value")
-        chkKeyIndex("entity data { KW name = 'joe', value: integer = 123; }", "name:text=*; value:integer=*; KW name,value")
-        chkKeyIndex("entity data { KW mutable name = 'joe', value: integer = 123; }", "mutable name:text=*; value:integer=*; KW name,value")
-        chkKeyIndex("entity data { KW name = 'joe', mutable value: integer = 123; }", "name:text=*; mutable value:integer=*; KW name,value")
+        chkKeyIndex("entity data { KW mutable name, value: integer; }", "ct_err:attr:key_index:too_complex:name:KW:mutable")
+        chkKeyIndex("entity data { KW name, mutable value: integer; }", "ct_err:attr:key_index:too_complex:value:KW:mutable")
+        chkKeyIndex("entity data { KW mutable name, mutable value: integer; }", "ct_err:attr:key_index:too_complex:name:KW:mutable")
+        chkKeyIndex("entity data { KW name = 'joe', value: integer; }", "ct_err:attr:key_index:too_complex:name:KW:expr")
+        chkKeyIndex("entity data { KW name, value: integer = 123; }", "ct_err:attr:key_index:too_complex:value:KW:expr")
+        chkKeyIndex("entity data { KW name = 'joe', value: integer = 123; }", "ct_err:attr:key_index:too_complex:name:KW:expr")
+        chkKeyIndex("entity data { KW mutable name = 'joe', value: integer = 123; }", "ct_err:attr:key_index:too_complex:name:KW:mutable")
+        chkKeyIndex("entity data { KW name = 'joe', mutable value: integer = 123; }", "ct_err:attr:key_index:too_complex:name:KW:expr")
         chkKeyIndex("entity data { KW mutable name = 'joe', mutable value: integer = 123; }",
-                "mutable name:text=*; mutable value:integer=*; KW name,value")
+                "ct_err:attr:key_index:too_complex:name:KW:mutable")
+    }
+
+    @Test fun testEntityDetailsKeyIndexLogTransaction() {
+        chkKeyIndex("@log entity data { KW transaction; }", "transaction:transaction=*; KW transaction")
+
+        chkKeyIndex("@log entity data { account: text; book: text; KW account, transaction; KW account, book, transaction; }",
+                "transaction:transaction=*; account:text; book:text; KW account,transaction; KW account,book,transaction")
+
+        chkKeyIndex("@log entity data { account: text; book: text; KW account, book, transaction; KW account, transaction; }",
+                "transaction:transaction=*; account:text; book:text; KW account,book,transaction; KW account,transaction")
     }
 
     @Test fun testImplicitTypeConflict() {
@@ -479,7 +489,7 @@ class EntityTest: BaseRellTest(false) {
 
     private fun chkEntityKeyIndex0(code: String, exp: String, kw: String) {
         val code2 = code.replace("KW", kw)
-        val exp2 = exp.replace("KW", kw)
+        val exp2 = exp.replace("KW", if (exp.startsWith("ct_err:")) kw.toUpperCase() else kw)
         chkEntity(code2, exp2)
     }
 

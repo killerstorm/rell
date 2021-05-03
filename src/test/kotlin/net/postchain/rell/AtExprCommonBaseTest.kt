@@ -100,8 +100,8 @@ abstract class AtExprCommonBaseTest: AtExprBaseTest() {
 
     @Test fun testNestedPlaceholder() {
         initDataUserCompany()
-        chk("[7] @* {} ( $fromUser @* {} ( $.name, @omit @sort .id ) )", "ct_err:name:ambiguous:$")
-        chk("[7] @* {} ( $fromUser @* {} ( $, .name, @omit @sort .id ) )", "ct_err:name:ambiguous:$")
+        chk("[7] @* {} ( $fromUser @* {} ( $.name, @omit @sort .id ) )", "[[Bob, Alice]]")
+        chk("[7] @* {} ( $fromUser @* {} ( _=$.id, _=.name, @omit @sort .id ) )", "[[(501,Bob), (502,Alice)]]")
         chk("[7] @* {} ( $, $fromUser @* {} ( .name, @omit @sort .id ) )", "[(7,[Bob, Alice])]")
         chk("[7] @* {} ( (u: $fromUser) @* {} ( $.name, @omit @sort .id ) )",
                 "ct_err:[at_expr:placeholder:belongs_to_outer][unknown_member:[integer]:name]")
@@ -113,7 +113,7 @@ abstract class AtExprCommonBaseTest: AtExprBaseTest() {
     @Test fun testNestedPlaceholderExists() {
         initDataUserCompanyCity()
         chk("$fromUser @* {exists( $fromCompany @* {} )} ( .name )", "[Bob, Alice, Trudy]")
-        chk("$fromUser @* {exists( $fromCompany @* { $.name != '*' } )} ( .name )", "ct_err:name:ambiguous:$")
+        chk("$fromUser @* {exists( $fromCompany @* { $.name != '*' } )} ( .name )", "[Bob, Alice, Trudy]")
         chk("(u: $fromUser) @* {exists( (c: $fromCompany) @* { c.city == u.city } )} ( .name )", "[Bob, Alice]")
         chk("(u: $fromUser) @* {exists( (c: $fromCompany) @* { $.city == u.city } )} ( .name )", "ct_err:expr:placeholder:none")
         chk("(u: $fromUser) @* {exists( (c: $fromCompany) @* { c.city == $.city } )} ( .name )", "ct_err:expr:placeholder:none")
@@ -123,10 +123,10 @@ abstract class AtExprCommonBaseTest: AtExprBaseTest() {
 
     @Test fun testNestedPlaceholderIn() {
         initDataUserCompanyCity()
-        chk("$fromUser @* { .city in $fromCompany @* {} ($.city) } ( .name )", "ct_err:name:ambiguous:$")
-        chk("$fromUser @* { .city in $fromCompany @* {} ($.company_attr) } ( .name )", "ct_err:name:ambiguous:$")
+        chk("$fromUser @* { .city in $fromCompany @* {} ($.city) } ( .name )", "[Bob, Alice]")
+        chk("$fromUser @* { .city in $fromCompany @* {} ($.company_attr) } ( .name )", "[]")
         chk("$fromUser @* { .city in $fromCompany @* {} (.company_attr) } ( .name )", "[]")
-        chk("$fromUser @* { .city in $fromCompany @* {$.name != '*'} (.company_attr) } ( .name )", "ct_err:name:ambiguous:$")
+        chk("$fromUser @* { .city in $fromCompany @* {$.name != '*'} (.company_attr) } ( .name )", "[]")
         chk("(u: $fromUser) @* { .city in (c: $fromCompany) @* {} (c.city) } ( .name )", "[Bob, Alice]")
         chk("(u: $fromUser) @* { .city in (c: $fromCompany) @* {} ($.city) } ( .name )", "ct_err:expr:placeholder:none")
         chk("(u: $fromUser) @* { $.city in (c: $fromCompany) @* {} (c.city) } ( .name )", "ct_err:expr:placeholder:none")
@@ -140,7 +140,7 @@ abstract class AtExprCommonBaseTest: AtExprBaseTest() {
         initDataUserCompanyCity()
 
         chk("$fromUser @* {} ( _=.name, $fromCompany @ {} ($.user_attr) limit 1 )",
-                "ct_err:[name:ambiguous:$][unknown_member:[company]:user_attr]")
+                "ct_err:unknown_member:[company]:user_attr")
 
         chk("$fromUser @* {} ( (c:$fromCompany) @ {} (c.name) limit 1 )", "[Adidas, Adidas, Adidas]")
 
@@ -167,7 +167,7 @@ abstract class AtExprCommonBaseTest: AtExprBaseTest() {
         initDataUserCompanyCity()
 
         chk("$fromUser @* {exists( $fromCompany @* {} ($.user_attr) )} ( .name )",
-                "ct_err:[name:ambiguous:$][unknown_member:[company]:user_attr]")
+                "ct_err:unknown_member:[company]:user_attr")
 
         chk("(u:$fromUser) @* {exists( $fromCompany @* {} (u.name) )} ( .name )", "[Bob, Alice, Trudy]")
         chk("(u:$fromUser) @* {exists( (c:$fromCompany) @* {} (c.name) )} ( .name )", "[Bob, Alice, Trudy]")
@@ -202,7 +202,7 @@ abstract class AtExprCommonBaseTest: AtExprBaseTest() {
         initDataUserCompanyCity()
 
         chk("$fromUser @* { .city in $fromCompany @* {} ($.user_attr) } ( .name )",
-                "ct_err:[name:ambiguous:$][unknown_member:[company]:user_attr]")
+                "ct_err:unknown_member:[company]:user_attr")
 
         chk("(u:$fromUser) @* { .city in $fromCompany @* {} (u.user_attr) } ( .name )", "[]")
         chk("(u:$fromUser) @* { .city in $fromCompany @* {} (u.city) } ( .name )", "[Bob, Alice, Trudy]")
