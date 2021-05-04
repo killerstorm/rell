@@ -64,8 +64,8 @@ Additionally:
     rell.test.privkeys.{bob, alice, trudy}: byte_array - same as rell.test.keypairs.X.priv
     rell.test.pubkeys.{bob, alice, trudy}: byte_array - same as rell.test.keypairs.X.pub
 
-    assert_equals(expected: T, actual: T) - fail (throw an exception) if two values are not equal
-    rell.test.assert_equals(expected: T, actual: T) - same
+    assert_equals(actual: T, expected: T) - fail (throw an exception) if two values are not equal
+    rell.test.assert_equals(actual: T, expected: T) - same
 
 Example 1. Building and running a block
 
