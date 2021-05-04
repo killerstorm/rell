@@ -25,6 +25,8 @@ private class C_ParsedRellFile(val path: C_SourcePath, private val ast: S_RellFi
     fun compile(ctx: C_ModuleSourceContext): C_CompiledRellFile {
         return ast?.compile(path, ctx.modCtx) ?: C_CompiledRellFile.empty(path)
     }
+
+    override fun toString() = path.toString()
 }
 
 class C_CompiledRellFile(
@@ -488,8 +490,7 @@ class C_InternalModuleManager(
         val dirModFiles = mutableListOf<C_ParsedRellFile>()
 
         for (name in modSourceDir.files(path)) {
-            val rName = fileNameToRName(name)
-            rName ?: continue
+            if (!name.endsWith(FILE_SUFFIX)) continue
 
             val subPath = path.add(name)
             val ast = modSourceDir.file(subPath)?.orElse(null)
@@ -500,8 +501,11 @@ class C_InternalModuleManager(
             if (name == MODULE_FILE || ast.header == null) {
                 dirModFiles.add(parsed)
             } else {
-                val fileModuleName = moduleName.child(rName)
-                fileModFiles.add(fileModuleName to parsed)
+                val rName = fileNameToRName(name)
+                if (rName != null) {
+                    val fileModuleName = moduleName.child(rName)
+                    fileModFiles.add(fileModuleName to parsed)
+                }
             }
         }
 

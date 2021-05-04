@@ -47,7 +47,7 @@ object RellTestUtils {
         return processor(tApp)
     }
 
-    private fun errsToString(errs: List<C_Message>, errPos: Boolean): String {
+    fun errsToString(errs: List<C_Message>, errPos: Boolean): String {
         val forceFile = errs.any { it.pos.path().str() != "main.rell" }
 
         val errMsgs = errs

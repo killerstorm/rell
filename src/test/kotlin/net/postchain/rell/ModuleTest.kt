@@ -466,6 +466,22 @@ class ModuleTest: BaseRellTest(false) {
         chkCompileTestModules(sourceDir, listOf(), listOf("trouble.conflict"), "cm_err:import:file_dir:trouble.conflict")
     }
 
+    @Test fun testCompileTestModulesStrangeFileNames() {
+        val sourceDir = C_MapSourceDir.of(
+                "app/module.rell" to "module;",
+                "app/123.rell" to "function foo() = 123;",
+                "app/other-strange.name.rell" to "function bar() = 456;",
+                "app/not_a_rell_file.txt" to "Hi!",
+                "app/tests/tests1.rell" to "@test module; import app; function test() { app.foo(); }",
+                "app/tests/tests2.rell" to "@test module; import app; function test() { app.bar(); }"
+        )
+        chkCompileTestModules(sourceDir, listOf(""), listOf(""), "cm_err:import:not_found:")
+        chkCompileTestModules(sourceDir, listOf(), listOf(""), "[[app],[app.tests.tests1],[app.tests.tests2]]")
+        chkCompileTestModules(sourceDir, listOf("app"), listOf(""), "[[app],[app.tests.tests1],[app.tests.tests2]]")
+        chkCompileTestModules(sourceDir, listOf("app"), listOf("app.tests"), "[[app],[app.tests.tests1],[app.tests.tests2]]")
+        chkCompileTestModules(sourceDir, listOf("app"), listOf(), "[[app]]")
+    }
+
     private fun chkCompileTestModules(
             sourceDir: C_SourceDir,
             modules: List<String>,
@@ -485,6 +501,11 @@ class ModuleTest: BaseRellTest(false) {
             RellTestUtils.compileApp(sourceDir, modSel, C_CompilerOptions.DEFAULT)
         } catch (e: C_CommonError) {
             return "cm_err:${e.code}"
+        }
+
+        if (res.errors.isNotEmpty()) {
+            val s = RellTestUtils.errsToString(res.errors, false)
+            return "ct_err:$s"
         }
 
         val app = res.app
