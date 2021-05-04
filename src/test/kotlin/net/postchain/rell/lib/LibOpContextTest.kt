@@ -9,6 +9,7 @@ import net.postchain.gtx.OpData
 import net.postchain.rell.runtime.Rt_OpContext
 import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.test.GtvTestUtils
+import net.postchain.rell.test.RellTestUtils
 import org.junit.Test
 
 class LibOpContextTest: BaseRellTest(false) {
@@ -172,6 +173,7 @@ class LibOpContextTest: BaseRellTest(false) {
         val signers2 = signers.map { it.hexStringToByteArray() }
         val ops2 = ops.map { parseOperation(it) }
         return Rt_OpContext(
+                txCtx = RellTestUtils.Rt_TestTxContext,
                 lastBlockTime = lastBlockTime,
                 transactionIid = transactionIid,
                 blockHeight = blockHeight,

@@ -542,7 +542,7 @@ The advantage of running unit tests via run.xml is that it allows to define modu
 what cannot be done with rell.sh.
 
 By default, all test modules which are submodules of the main module (specified in the <app> tag) are executed.
-If the run.xml file defines more than one chain, tests for each chains are executed.
+If the run.xml file defines more than one chain, tests for each chain are executed.
 
 To allow executing tests that are not in a submodule of the main module, a new tag <test> was introduced:
 

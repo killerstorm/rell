@@ -5,6 +5,7 @@
 package net.postchain.rell.test
 
 import net.postchain.base.BlockchainRid
+import net.postchain.gtv.Gtv
 import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.*
@@ -200,4 +201,10 @@ object RellTestUtils {
     fun strToBlockchainRid(s: String) = BlockchainRid(strToRidBytes(s))
 
     class TestCallResult(val res: String, val stack: List<R_StackPos>)
+
+    object Rt_TestTxContext: Rt_TxContext() {
+        override fun emitEvent(type: String, data: Gtv) {
+            throw Rt_Utils.errNotSupported("not supported in tests")
+        }
+    }
 }

@@ -8,6 +8,7 @@ import com.google.common.collect.Sets
 import mu.KLogging
 import net.postchain.base.BlockchainRid
 import net.postchain.core.ByteArrayKey
+import net.postchain.core.TxEContext
 import net.postchain.gtv.Gtv
 import net.postchain.gtx.OpData
 import net.postchain.rell.model.*
@@ -296,7 +297,18 @@ class Rt_DefinitionContext(val exeCtx: Rt_ExecutionContext, val dbUpdateAllowed:
     val callCtx = Rt_CallContext(this)
 }
 
+abstract class Rt_TxContext {
+    abstract fun emitEvent(type: String, data: Gtv)
+}
+
+class Rt_PostchainTxContext(private val txCtx: TxEContext): Rt_TxContext() {
+    override fun emitEvent(type: String, data: Gtv) {
+        txCtx.emitEvent(type, data)
+    }
+}
+
 class Rt_OpContext(
+        val txCtx: Rt_TxContext,
         val lastBlockTime: Long,
         val transactionIid: Long,
         val blockHeight: Long,

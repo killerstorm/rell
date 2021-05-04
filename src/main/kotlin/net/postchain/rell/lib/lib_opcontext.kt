@@ -144,7 +144,8 @@ object C_Lib_OpContext {
             val opCtx = getOpContext(ctx, "emit_event")
             val type = arg1.asString()
             val data = arg2.asGtv()
-            throw Rt_Utils.errNotSupported("emit_event() not supported yet")
+            opCtx.txCtx.emitEvent(type, data)
+            return Rt_UnitValue
         }
     }
 

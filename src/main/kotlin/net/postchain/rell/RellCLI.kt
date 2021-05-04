@@ -7,6 +7,7 @@ package net.postchain.rell
 import net.postchain.StorageBuilder
 import net.postchain.base.BlockchainRid
 import net.postchain.config.app.AppConfig
+import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
 import net.postchain.rell.compiler.C_AtAttrShadowing
 import net.postchain.rell.compiler.C_CompilerModuleSelection
@@ -274,6 +275,7 @@ private fun findEntryPoint(app: R_App, moduleName: R_ModuleName, routineName: R_
     if (op != null) {
         val time = System.currentTimeMillis() / 1000
         val opCtx = Rt_OpContext(
+                txCtx = Rt_CliTxContext,
                 lastBlockTime = time,
                 transactionIid = -1,
                 blockHeight = -1,
@@ -434,6 +436,12 @@ private class RellAppLauncher(
             exitProcess(1)
         }
         return res
+    }
+}
+
+private object Rt_CliTxContext: Rt_TxContext() {
+    override fun emitEvent(type: String, data: Gtv) {
+        throw Rt_Utils.errNotSupported("Function emit_event() not supported")
     }
 }
 

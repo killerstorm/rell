@@ -7,6 +7,7 @@ package net.postchain.rell
 import net.postchain.rell.lib.LibBlockTransactionTest
 import net.postchain.rell.runtime.Rt_OpContext
 import net.postchain.rell.test.BaseRellTest
+import net.postchain.rell.test.RellTestUtils
 import org.junit.Test
 
 class LogAnnotationTest: BaseRellTest() {
@@ -86,5 +87,5 @@ class LogAnnotationTest: BaseRellTest() {
         chkOp("delete bar @* {};")
     }
 
-    private fun opContext() = Rt_OpContext(-1, 444, -1, -1, listOf(), listOf())
+    private fun opContext() = Rt_OpContext(RellTestUtils.Rt_TestTxContext, -1, 444, -1, -1, listOf(), listOf())
 }

@@ -132,7 +132,7 @@ private class RellGTXOperation(
         private val rOperation: R_OperationDefinition,
         private val errorHandler: ErrorHandler,
         opData: ExtOpData
-) : GTXOperation(opData) {
+): GTXOperation(opData) {
     private val gtvToRtCtx = LateInit<GtvToRtContext>()
     private val args = LateInit<List<Rt_Value>>()
 
@@ -157,6 +157,7 @@ private class RellGTXOperation(
             val blockHeight = DatabaseAccess.of(ctx).getLastBlockHeight(ctx)
 
             val opCtx = Rt_OpContext(
+                    txCtx = Rt_PostchainTxContext(ctx),
                     lastBlockTime = ctx.timestamp,
                     transactionIid = ctx.txIID,
                     blockHeight = blockHeight,
