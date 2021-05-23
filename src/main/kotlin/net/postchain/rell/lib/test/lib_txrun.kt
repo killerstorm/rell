@@ -55,8 +55,34 @@ object UnitTestBlockRunner {
 
             ctx.exeCtx.sqlExec.connection { con ->
                 val eCtx = createEContext(con, bcCtx)
-                processBlock(bcConfig, eCtx, block)
+                withSavepoint(con) {
+                    processBlock(bcConfig, eCtx, block)
+                }
             }
+        }
+    }
+
+    private fun withSavepoint(con: Connection, code: () -> Unit) {
+        if (con.autoCommit) {
+            con.autoCommit = false
+            try {
+                withSavepoint0(con, code)
+            } finally {
+                con.autoCommit = true
+            }
+        } else {
+            withSavepoint0(con, code)
+        }
+    }
+
+    private fun withSavepoint0(con: Connection, code: () -> Unit) {
+        val savepoint = con.setSavepoint("withSavepoint_${System.nanoTime()}")
+        try {
+            code()
+            con.releaseSavepoint(savepoint)
+        } catch (e: Throwable) {
+            con.rollback(savepoint)
+            throw e
         }
     }
 

@@ -41,3 +41,30 @@ function test_common_create_data() {
     tx.run();
     test_utils.assert_one_data('common', -1, 'Test', 'Trudy', 'bar_common_test');
 }
+
+function test_nop() {
+    rell.test.tx()
+        .op(rell.test.op('nop'))
+        .op(common.create_data(-1, 'Test', 'bar_common_test'))
+        .run();
+
+    rell.test.tx()
+        .op(rell.test.op('nop', (123).to_gtv()))
+        .op(common.create_data(-1, 'Test', 'bar_common_test'))
+        .run();
+
+    rell.test.tx()
+        .op(rell.test.op('nop', 'Hello'.to_gtv()))
+        .op(common.create_data(-1, 'Test', 'bar_common_test'))
+        .run();
+
+    rell.test.tx()
+        .nop()
+        .op(common.create_data(-1, 'Test', 'bar_common_test'))
+        .run();
+
+    rell.test.tx()
+        .nop()
+        .op(common.create_data(-1, 'Test', 'bar_common_test'))
+        .run();
+}

@@ -261,6 +261,19 @@ sealed class S_Definition(val modifiers: S_Modifiers): S_Node() {
 
     open fun getImportedModules(moduleName: R_ModuleName, res: MutableSet<R_ModuleName>) {
     }
+
+    protected fun checkSysMountNameConflict(
+            ctx: C_MountContext,
+            pos: S_Pos,
+            declType: C_DeclarationType,
+            mountName: R_MountName,
+            sysDefs: Set<R_MountName>
+    ) {
+        if (mountName in sysDefs) {
+            ctx.msgCtx.error(pos, "mount:conflict:sys:$declType:$mountName",
+                    "Mount name conflict: system ${declType.msg} '$mountName' exists")
+        }
+    }
 }
 
 class S_EntityDefinition(
@@ -619,6 +632,7 @@ class S_OperationDefinition(
 
         val names = ctx.nsCtx.defNames(name.str)
         val mountName = ctx.mountName(modTarget, name)
+        checkSysMountNameConflict(ctx, name.pos, C_DeclarationType.OPERATION, mountName, PostchainUtils.STD_OPS)
 
         val defCtx = C_DefinitionContext(ctx, C_DefinitionType.OPERATION, names.defId)
         val mirrorStructs = C_Utils.createMirrorStructs(
@@ -701,6 +715,7 @@ class S_QueryDefinition(
 
         val names = ctx.nsCtx.defNames(name.str)
         val mountName = ctx.mountName(modTarget, name)
+        checkSysMountNameConflict(ctx, name.pos, C_DeclarationType.QUERY, mountName, PostchainUtils.STD_QUERIES)
 
         val defCtx = C_DefinitionContext(ctx, C_DefinitionType.QUERY, names.defId)
         val rQuery = R_QueryDefinition(names, defCtx.initFrameGetter, mountName)

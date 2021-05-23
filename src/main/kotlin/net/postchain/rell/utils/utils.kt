@@ -18,8 +18,10 @@ import net.postchain.gtv.*
 import net.postchain.gtv.gtvml.GtvMLEncoder
 import net.postchain.gtv.gtvml.GtvMLParser
 import net.postchain.gtv.merkle.GtvMerkleHashCalculator
+import net.postchain.gtx.StandardOpsGTXModule
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_ModuleName
+import net.postchain.rell.model.R_MountName
 import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.runtime.Rt_ChainContext
 import net.postchain.rell.runtime.Rt_Value
@@ -45,6 +47,15 @@ object PostchainUtils {
             .serializeNulls()
             .setPrettyPrinting()
             .create()!!
+
+    val STD_OPS: Set<R_MountName>
+    val STD_QUERIES: Set<R_MountName>
+
+    init {
+        val m = StandardOpsGTXModule()
+        STD_OPS = m.getOperations().map { R_MountName.of(it) }.toImmSet()
+        STD_QUERIES = m.getQueries().map { R_MountName.of(it) }.toImmSet()
+    }
 
     fun gtvToBytes(v: Gtv): ByteArray = GtvEncoder.encodeGtv(v)
     fun bytesToGtv(v: ByteArray): Gtv = GtvFactory.decodeGtv(v)

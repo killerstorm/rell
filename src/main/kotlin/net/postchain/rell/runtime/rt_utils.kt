@@ -21,8 +21,10 @@ import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.sql.SQLException
 
-fun String.toGtv(): Gtv = GtvFactory.gtv(this)
 fun Boolean.toGtv(): Gtv = GtvFactory.gtv(this)
+fun Int.toGtv(): Gtv = GtvFactory.gtv(this.toLong())
+fun Long.toGtv(): Gtv = GtvFactory.gtv(this)
+fun String.toGtv(): Gtv = GtvFactory.gtv(this)
 fun BlockchainRid.toGtv(): Gtv = GtvFactory.gtv(this.data)
 fun List<Gtv>.toGtv(): Gtv = GtvFactory.gtv(this)
 fun Map<String, Gtv>.toGtv(): Gtv = GtvFactory.gtv(this)

@@ -281,6 +281,14 @@ class Rt_AppContext(
 
 class Rt_ExecutionContext(val appCtx: Rt_AppContext, val sqlExec: SqlExecutor) {
     val globalCtx = appCtx.globalCtx
+
+    private var nextNopNonce = 0L
+
+    fun nextNopNonce(): Long {
+        val r = nextNopNonce
+        ++nextNopNonce
+        return r
+    }
 }
 
 class Rt_CallContext(val defCtx: Rt_DefinitionContext) {

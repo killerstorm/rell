@@ -35,6 +35,7 @@ class LibRellTestTxTest: BaseRellTest(false) {
         initTxChain()
         repl.chk("val b = rell.test.block().tx(foo(123));")
         repl.chk("b.run();", "OUT:123", "null")
+        repl.chk("b.run_must_fail();", "null")
     }
 
     @Test fun testBlockTx() {
@@ -215,11 +216,21 @@ class LibRellTestTxTest: BaseRellTest(false) {
         chkEx("{ $code return t1 != t2; }", "boolean[false]")
     }
 
+    @Test fun testTxNop() {
+        chk("rell.test.tx().nop()", "rell.test.tx[op[nop(0)]]")
+        chk("rell.test.tx().nop()", "rell.test.tx[op[nop(0)]]")
+        chk("rell.test.tx().nop().nop()", "rell.test.tx[op[nop(0)],op[nop(1)]]")
+        chk("rell.test.tx().nop(123)", "rell.test.tx[op[nop(123)]]")
+        chk("rell.test.tx().nop('Bob')", "rell.test.tx[op[nop(\"Bob\")]]")
+        chk("rell.test.tx().nop(x'Beef')", "rell.test.tx[op[nop(\"BEEF\")]]")
+    }
+
     @Test fun testTxRun() {
         file("module.rell", "operation foo(x: integer) { print(x); }")
         initTxChain()
         repl.chk("val tx = rell.test.tx().op(foo(123));")
         repl.chk("tx.run();", "OUT:123", "null")
+        repl.chk("tx.run_must_fail();", "null")
     }
 
     @Test fun testOpConstructor() {
@@ -261,8 +272,10 @@ class LibRellTestTxTest: BaseRellTest(false) {
     @Test fun testOpRun() {
         file("module.rell", "operation foo(x: integer) { print(x); }")
         initTxChain()
+
         repl.chk("val op = foo(123);")
         repl.chk("op.run();", "OUT:123", "null")
+        repl.chk("op.run_must_fail();", "null")
     }
 
     @Test fun testOpTypeCompatibility() {
@@ -341,6 +354,66 @@ class LibRellTestTxTest: BaseRellTest(false) {
         repl.chk("val kp = rell.test.keypair(priv = rell.test.privkeys.bob, pub = rell.test.pubkeys.alice);")
         repl.chk("foo(100).sign(kp).run();", "RTE:fn:rell.test.tx.run:fail:net.postchain.core.UserMistake")
         repl.chk(expr, "null")
+    }
+
+    @Test fun testNop() {
+        chk("rell.test.nop()", "op[nop(0)]")
+        chk("rell.test.nop()", "op[nop(0)]")
+        chk("[rell.test.nop(), rell.test.nop(), rell.test.nop()]", "list<rell.test.op>[op[nop(0)],op[nop(1)],op[nop(2)]]")
+        chk("rell.test.nop(123)", """op[nop(123)]""")
+        chk("rell.test.nop('Bob')", """op[nop("Bob")]""")
+        chk("rell.test.nop(x'beef')", """op[nop("BEEF")]""")
+
+        repl.chk("rell.test.nop()", "RES:op[nop(0)]")
+        repl.chk("rell.test.nop()", "RES:op[nop(0)]")
+    }
+
+    @Test fun testNopRun() {
+        file("module.rell", "operation foo(x: integer) { print(x); }")
+        initTxChain()
+
+        val err = "RTE:fn:rell.test.tx.run:fail:net.postchain.core.UserMistake"
+
+        repl.chk("rell.test.tx(foo(123)).run();", "OUT:123", "null")
+        repl.chk("rell.test.tx(rell.test.op('nop')).run();", err)
+        repl.chk("rell.test.tx(rell.test.op('nop'), foo(123)).run();", "OUT:123", "null")
+        repl.chk("rell.test.tx(foo(123), rell.test.op('nop')).run();", "OUT:123", "null")
+        repl.chk("rell.test.tx(rell.test.op('nop'), foo(123), rell.test.op('nop')).run();", err)
+
+        repl.chk("rell.test.tx(foo(321), rell.test.op('nop')).run();", "OUT:321", "null")
+        repl.chk("rell.test.tx(foo(321), rell.test.op('nop'), rell.test.op('nop')).run();", err)
+        repl.chk("rell.test.tx(foo(321), rell.test.op('nop', (456).to_gtv())).run();", "OUT:321", "null")
+        repl.chk("rell.test.tx(foo(321), rell.test.op('nop', 'Hello'.to_gtv())).run();", "OUT:321", "null")
+        repl.chk("rell.test.tx(foo(321), rell.test.op('nop', x'beef'.to_gtv())).run();", "OUT:321", "null")
+        repl.chk("rell.test.tx(foo(321), rell.test.op('nop', (5).to_gtv(), (7).to_gtv())).run();", err)
+    }
+
+    @Test fun testRunMustFail() {
+        file("module.rell", "operation foo(x: integer) { require(x > 0); print(x); }")
+        initTxChain()
+
+        repl.chk("block @? {} ( @sort_desc .block_height ) limit 1", "null")
+
+        repl.chk("foo(123).run();", "OUT:123", "null")
+        repl.chk("block @? {} ( @sort_desc .block_height ) limit 1", "0")
+
+        repl.chk("foo(-1).run();", "RTE:req:null")
+        repl.chk("block @? {} ( @sort_desc .block_height ) limit 1", "0")
+
+        repl.chk("foo(456).run_must_fail();", "OUT:456", "RTE:fn:rell.test.op.run_must_fail:nofail")
+        repl.chk("block @? {} ( @sort_desc .block_height ) limit 1", "1")
+
+        repl.chk("foo(-1).run_must_fail();", "null")
+        repl.chk("block @? {} ( @sort_desc .block_height ) limit 1", "1")
+    }
+
+    @Test fun testDuplicateTx() {
+        file("module.rell", "operation foo(x: integer) { print(x); }")
+        initTxChain()
+        repl.chk("foo(123).run();", "OUT:123", "null")
+        repl.chk("foo(123).run();", "RTE:fn:rell.test.op.run:fail:net.postchain.core.UserMistake")
+        repl.chk("foo(456).run();", "OUT:456", "null")
+        repl.chk("block @* {} ( .block_height )", "[0, 1]")
     }
 
     private fun initSignAndRun() {

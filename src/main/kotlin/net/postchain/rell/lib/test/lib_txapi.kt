@@ -33,6 +33,7 @@ object C_Lib_Rell_Test {
         R_Lib_Block.bindGlobal(b)
         R_Lib_Tx.bindGlobal(b)
         R_Lib_Op.bindGlobal(b)
+        R_Lib_Nop.bindGlobal(b)
         C_Lib_Rell_Test_Assert.FUNCTIONS.addTo(b)
         NAMESPACE_FNS = b.build()
     }
@@ -92,11 +93,14 @@ private class BlockCommonFunctions(
         private val blockGetter: (ctx: Rt_CallContext, self: Rt_Value) -> Rt_TestBlockValue
 ) {
     fun bind(b: C_MemberFuncBuilder) {
-        b.add("run", R_UnitType, listOf(), run)
+        val run = "run"
+        val runFail = "run_must_fail"
+        b.add(run, R_UnitType, listOf(), Run(true, run))
+        b.add(runFail, R_UnitType, listOf(), Run(false, runFail))
     }
 
-    private val run = object: R_SysFunctionEx_1() {
-        private val fnName = "$typeQName.run"
+    private inner class Run(val positive: Boolean, val name: String): R_SysFunctionEx_1() {
+        private val fnName = "$typeQName.$name"
 
         override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
             val block = blockGetter(ctx, arg)
@@ -106,11 +110,19 @@ private class BlockCommonFunctions(
             }
 
             try {
-                UnitTestBlockRunner.runBlock(ctx, block)
-            } catch (e: Rt_BaseError) {
-                throw e
+                try {
+                    UnitTestBlockRunner.runBlock(ctx, block)
+                } catch (e: Rt_BaseError) {
+                    throw e
+                } catch (e: Throwable) {
+                    throw Rt_Error("fn:$fnName:fail:${e.javaClass.canonicalName}", "Block execution failed: $e")
+                }
             } catch (e: Throwable) {
-                throw Rt_Error("fn:$fnName:fail:${e.javaClass.canonicalName}", "Block execution failed: $e")
+                if (positive) throw e else return Rt_UnitValue
+            }
+
+            if (!positive) {
+                throw Rt_Error("fn:$fnName:nofail", "Transaction did not fail")
             }
 
             return Rt_UnitValue
@@ -298,7 +310,14 @@ private object R_Lib_Tx {
         b.addOneMany("op", R_TestTxType, listOf(), R_TestOpType, Op_Ops)
         b.addEx("op", R_TestTxType, listOf(C_ArgTypeMatcher_List(C_ArgTypeMatcher_MirrorStructOperation)), Op_ListOfStructs)
         b.addOneMany("op", R_TestTxType, listOf(), C_ArgTypeMatcher_MirrorStructOperation, Op_Structs)
+
+        b.add("nop", R_TestTxType, listOf(), Nop_NoArgs)
+        b.add("nop", R_TestTxType, listOf(R_IntegerType), Nop_OneArg)
+        b.add("nop", R_TestTxType, listOf(R_TextType), Nop_OneArg)
+        b.add("nop", R_TestTxType, listOf(R_ByteArrayType), Nop_OneArg)
+
         b.add("copy", R_TestTxType, listOf(), Copy)
+
         block.bind(b)
         tx.bind(b)
     }
@@ -376,6 +395,24 @@ private object R_Lib_Tx {
         return self
     }
 
+    private object Nop_NoArgs: R_SysFunctionEx_1() {
+        override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
+            val tx = asTestTx(arg)
+            val op = R_Lib_Nop.callNoArgs(ctx)
+            tx.addOp(op.toRaw())
+            return tx
+        }
+    }
+
+    private object Nop_OneArg: R_SysFunctionEx_2() {
+        override fun call(ctx: Rt_CallContext, arg1: Rt_Value, arg2: Rt_Value): Rt_Value {
+            val tx = asTestTx(arg1)
+            val op = R_Lib_Nop.callOneArg(arg2)
+            tx.addOp(op.toRaw())
+            return tx
+        }
+    }
+
     private object Copy: R_SysFunction_1() {
         override fun call(arg: Rt_Value): Rt_Value {
             val tx = asTestTx(arg)
@@ -442,6 +479,39 @@ private object R_Lib_Op {
             val op = asTestOp(arg).toRaw()
             return Rt_TestTxValue(ctx.chainCtx.blockchainRid, listOf(op), listOf())
         }
+    }
+}
+
+private object R_Lib_Nop {
+    private val MOUNT_NAME = R_MountName.of("nop")
+
+    fun bindGlobal(b: C_GlobalFuncBuilder) {
+        val name = "nop"
+        b.add(name, R_TestOpType, listOf(), NoArgs)
+        b.add(name, R_TestOpType, listOf(R_IntegerType), OneArg)
+        b.add(name, R_TestOpType, listOf(R_TextType), OneArg)
+        b.add(name, R_TestOpType, listOf(R_ByteArrayType), OneArg)
+    }
+
+    fun callNoArgs(ctx: Rt_CallContext): Rt_TestOpValue {
+        val v = ctx.exeCtx.nextNopNonce()
+        val gtv = GtvFactory.gtv(v)
+        return makeValue(gtv)
+    }
+
+    fun callOneArg(arg: Rt_Value): Rt_TestOpValue {
+        val gtv = arg.type().rtToGtv(arg, false)
+        return makeValue(gtv)
+    }
+
+    private fun makeValue(arg: Gtv) = Rt_TestOpValue(MOUNT_NAME, listOf(arg))
+
+    private object NoArgs: R_SysFunctionEx_0() {
+        override fun call(ctx: Rt_CallContext) = callNoArgs(ctx)
+    }
+
+    private object OneArg: R_SysFunction_1() {
+        override fun call(arg: Rt_Value) = callOneArg(arg)
     }
 }
 

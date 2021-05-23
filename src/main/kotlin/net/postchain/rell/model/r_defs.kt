@@ -190,7 +190,9 @@ class R_StructDefinition(names: R_DefinitionNames, val struct: R_Struct): R_Defi
 
 class R_EnumAttr(val name: String, val value: Int) {
     // Currently returning an empty map, in the future there may be some values.
-    fun toMetaGtv() = mapOf<String, Gtv>().toGtv()
+    fun toMetaGtv() = mapOf(
+            "value" to value.toGtv()
+    ).toGtv()
 }
 
 class R_EnumDefinition(

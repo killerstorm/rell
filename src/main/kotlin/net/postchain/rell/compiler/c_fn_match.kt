@@ -80,6 +80,15 @@ class C_ArgTypeMatcher_Simple(val targetType: R_Type): C_ArgTypeMatcher() {
     }
 }
 
+object C_ArgTypeMatcher_Nullable: C_ArgTypeMatcher() {
+    override fun getTypeHint() = C_TypeHint.NONE
+
+    override fun match(type: R_Type): C_ArgTypeMatch? {
+        val direct = type is R_NullableType || type == R_NullType
+        return if (direct) C_ArgTypeMatch_Direct else null
+    }
+}
+
 class C_ArgTypeMatcher_CollectionSub(private val elementType: R_Type): C_ArgTypeMatcher() {
     override fun getTypeHint() = C_TypeHint.collection(elementType)
 

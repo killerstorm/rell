@@ -36,7 +36,7 @@ Each test function will be executed independently of others, and a summary will 
     ***** FAILED *****
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-2. Library: Better API for unit tests
+2. Library: Better API for transactions execution in unit tests
 
 A few things have changed in the test transaction API introduced in Rell 0.10.3:
 
@@ -64,8 +64,13 @@ Additionally:
     rell.test.privkeys.{bob, alice, trudy}: byte_array - same as rell.test.keypairs.X.priv
     rell.test.pubkeys.{bob, alice, trudy}: byte_array - same as rell.test.keypairs.X.pub
 
-    assert_equals(actual: T, expected: T) - fail (throw an exception) if two values are not equal
-    rell.test.assert_equals(actual: T, expected: T) - same
+    rell.test.nop(): rell.test.op - creates a "nop" operation (does nothing and is used to make a transaction unique).
+        The operation has an integer argument, which is incremented with every call of the function, and initially 0.
+
+    rell.test.nop(x: integer): rell.test.op
+    rell.test.nop(x: text): rell.test.op
+    rell.test.nop(x: byte_array): rell.test.op
+        Creates a "nop" operation with a specific argument value.
 
 Example 1. Building and running a block
 
@@ -137,6 +142,7 @@ Functions of rell.test.block:
 
     .copy(): rell.test.block                    - returns a copy of this block builder object
     .run()                                      - run the block
+    .run_must_fail()                            - same as .run(), but throws exception on success, not on failure
 
 Functions of rell.test.tx:
 
@@ -147,6 +153,11 @@ Functions of rell.test.tx:
     .op(op: rell.test.op, ...)                  - add some operation(s) to this transaction builder
     .op(ops: list<rell.test.op>)                - same
 
+    .nop()                                      - same as .op(rell.test.nop())
+    .nop(x: integer)                            - same as .op(rell.test.nop(x))
+    .nop(x: text)                               - same
+    .nop(x: byte_array)                         - same
+
     .sign(keypair: rell.test.keypair, ...)      - add some signer keypair(s)
     .sign(keypairs: list<rell.test.keypair>)    - same
     .sign(privkey: byte_array, ...)             - add some signer private key(s) (a private key must be 32 bytes)
@@ -154,6 +165,7 @@ Functions of rell.test.tx:
 
     .copy(): rell.test.tx                       - returns a copy of this transaction builder object
     .run()                                      - runs a block containing this single transaction
+    .run_must_fail()                            - same as .run(), but throws exception on success, not on failure
 
 Functions of rell.test.op:
 
@@ -163,9 +175,36 @@ Functions of rell.test.op:
     .tx(): rell.test.tx                         - creates a transaction builder object containing this operation
     .sign(...): rell.test.tx                    - equivalent of .tx().sign(...)
     .run()                                      - equivalent of .tx().run()
+    .run_must_fail()                            - eqiovalent of .tx().run_must_fail()
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-3. Library: Support for more text and byte_array operations in at-expressions
+3. Library: Functions assert_* for unit tests
+
+New functions:
+
+    assert_equals(actual: T, expected: T) - fail (throw an exception) if two values are not equal
+    assert_not_equals(actual: T, expected: T) - fail if the values are equal
+
+    assert_true(actual: boolean) - assert that the value is "true"
+    assert_false(actual: boolean) - assert that the value is "false"
+
+    assert_null(actual: T?) - assert that the value is null
+    assert_not_null(actual: T?) - assert that the value is not null
+
+    assert_lt(actual: T, expected: T) - assert less than (actual < expected)
+    assert_gt(actual: T, expected: T) - assert greater than (actual > expected)
+    assert_le(actual: T, expected: T) - assert less or equal (actual <= expected)
+    assert_ge(actual: T, expected: T) - assert greater or equal (actual >= expected)
+
+    assert_gt_lt(actual: T, min: T, max: T) - assert (actual > min) and (actual < max)
+    assert_gt_le(actual: T, min: T, max: T) - assert (actual > min) and (actual <= max)
+    assert_ge_lt(actual: T, min: T, max: T) - assert (actual >= min) and (actual < max)
+    assert_ge_le(actual: T, min: T, max: T) - assert (actual >= min) and (actual <= max)
+
+Same functions are also available in the rell.test namespace.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+4. Library: Support for more text and byte_array operations in at-expressions
 
 Operator "[]" (subscript) used to work only in interpreted expressions, now it works in SQL expressions as well.
 
@@ -186,7 +225,7 @@ Additionally, following functions are now supported in at-expressions (they are 
     text.sub()
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-4. Library: Function text.like()
+5. Library: Function text.like()
 
 New function for simple pattern matching which works same way in interpreted expressions and in at-expressions:
 
@@ -207,7 +246,7 @@ since "\" is also an escape character in string literals):
     title.like('string\\_with\\_underscores')
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-5. Language: Inference of collection types from return types, variables, attributes, parameters, etc.
+6. Language: Inference of collection types from return types, variables, attributes, parameters, etc.
 
 It is no more necessary to specify the type of an empty collection when assigning it to a known variable or returning
 from a function with a known return type:
@@ -238,7 +277,7 @@ Some places where collection type inference helps to shorten the code:
 - list/map element assignment:          map_of_lists[x] = [];
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-6. Language: Continue statement
+7. Language: Continue statement
 
 Rell now has the continue statement, like many other languages. It can be used in "for" and "while" loops.
 
@@ -248,7 +287,7 @@ for (x in get_list_of_values()) {
 }
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-7. Language: Offset clause in at-expression
+8. Language: Offset clause in at-expression
 
 In addition to a limit, one can now also specify an offset in an at-expression in order to select a portion of a
 result set:
@@ -261,7 +300,7 @@ record and so on.
 Both limit and offset clauses are optional and can be used together in an arbitrary order.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-8. Language: At-expression for collections
+9. Language: At-expression for collections
 
 At-expressions can be used to filter and transform collections:
 
@@ -304,7 +343,7 @@ Details:
 - Default order is the same as the order of the source collection (entities are not implicitly sorted by rowid).
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-9. Language: Key and index attribute syntax improvements
+10. Language: Key and index attribute syntax improvements
 
 It is allowed to specify mutability and default value for an attribute directly within a key or index clause:
 
@@ -323,7 +362,7 @@ The new syntax is allowed when there is only one attribute in a key or an index.
 they shall be defined separately from the index clause, as before.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-10. Language: Types struct<entity> and struct<object>
+11. Language: Types struct<entity> and struct<object>
 
 A new type allows to have a struct which has same attributes as an entity or an object:
 
@@ -359,7 +398,7 @@ Details:
 - Attributes of struct<T> have same default values as the attributes of T.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-11. Language: Type struct<operation>
+12. Language: Type struct<operation>
 
 A new type struct<operation> defines a struct which has same attributes as the operation's parameters:
 
@@ -380,7 +419,7 @@ Details:
 - Member function struct<OP>.to_test_op() converts a structure to the "rell.test.op" type.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-12. Language: Type struct<mutable T>
+13. Language: Type struct<mutable T>
 
 In addition to type struct<T> (where "T" is an entity, object or operation), there is type struct<mutable T>:
 
@@ -401,7 +440,7 @@ Conversion between struct<T> and struct<mutable T> is done via .to_mutable() and
 The functions create a mutable or immutable copy of a structure.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-13. Language: Nested at-expressions under exists() and empty() functions
+14. Language: Nested at-expressions under exists() and empty() functions
 
 Nested at-expressions passed as an argument to functions exists() and empty() can access entities of an outer
 at-expression:
@@ -445,7 +484,7 @@ An attribute of a nested entity is matched by the name and type of the outer att
 - Function "empty(X)" is equivalent to "not exists(X)" and is translated to "NOT EXISTS()" SQL expression.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-14. Language: Nested at-expressions for the "in" operator
+15. Language: Nested at-expressions for the "in" operator
 
 Similarly to the exists() and empty() functions, operator "in" now supports nested at-expressions:
 
@@ -468,7 +507,7 @@ is translated to an SQL query like:
 Same notes regarding cardinality and attributes matching as for empty() and exists() apply.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-15. Language: Operator "in" for collections supports database expressions
+16. Language: Operator "in" for collections supports database expressions
 
 Example:
 
@@ -487,7 +526,7 @@ collection passed to operator "in" contains more elements than that, the at-expr
 (The limit is for the total number of values in one at-expression, not for each individual "in" operator.)
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-16. Language: Binary operator "not in"
+17. Language: Binary operator "not in"
 
 One can now write:
 
@@ -500,7 +539,7 @@ instead of
 The new notation is supposed to be more readable when X and Y are complex expressions.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-17. Tools: Specifying source code compatibility version in blockchain configuration
+18. Tools: Specifying source code compatibility version in blockchain configuration
 
 In blockchain XML configuration (so-called blockchain.xml format), old key "sources_v0.10" is replaced by a pair of
 new keys: "sources" and "version". Those keys are under the same path, in the "rell" node:
@@ -532,7 +571,7 @@ More details:
 - In Rell 0.10.4, the specified version has no effect, but it must be a valid Rell version.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-18. Tools: Running unit tests via run.xml
+19. Tools: Running unit tests via run.xml
 
 The multirun.sh utility now has an option "--test", which causes it to run unit tests instead of starting a node:
 
@@ -576,7 +615,7 @@ Example of a complete run.xml file with newly introduced test tags:
     </run>
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-19. Tools: Running all unit tests in a directory tree via the command-line interpreter
+20. Tools: Running all unit tests in a directory tree via the command-line interpreter
 
 Command-line interpreter (rell.sh) has a new option "--test":
 
@@ -591,7 +630,7 @@ Optionally, one can specify a set of modules to execute:
 Then tests defined in the specified modules and all their submodules will be executed.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-20. Library: New Postchain API
+21. Library: New Postchain API
 
 New types:
 

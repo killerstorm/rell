@@ -7,6 +7,7 @@ package net.postchain.rell.compiler.ast
 import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.vexpr.*
 import net.postchain.rell.model.*
+import net.postchain.rell.utils.checkEquals
 import java.util.*
 
 enum class S_BinaryOp(val code: String, val op: C_BinOp) {
@@ -207,8 +208,19 @@ sealed class C_BinOp_Common: C_BinOp() {
         return V_BinaryExpr(ctx, left.pos, op, left, right, exprVarFacts)
     }
 
-    open fun adaptLeftRight(ctx: C_ExprContext, left: V_Expr, right: V_Expr): Pair<V_Expr, V_Expr> {
-        return promoteNumeric(ctx, left, right)
+    fun adaptOperands(ctx: C_ExprContext, operands: List<V_Expr>): List<V_Expr> {
+        val res = adaptOperands0(ctx, operands)
+        checkEquals(res.size, operands.size)
+        return res
+    }
+
+    protected open fun adaptOperands0(ctx: C_ExprContext, operands: List<V_Expr>): List<V_Expr> {
+        return promoteNumeric(ctx, operands)
+    }
+
+    fun adaptLeftRight(ctx: C_ExprContext, left: V_Expr, right: V_Expr): Pair<V_Expr, V_Expr> {
+        val res = adaptOperands(ctx, listOf(left, right))
+        return Pair(res[0], res[1])
     }
 
     open fun adaptRight(ctx: C_ExprContext, leftType: R_Type, right: V_Expr): V_Expr {
@@ -222,16 +234,8 @@ sealed class C_BinOp_Common: C_BinOp() {
 
     companion object {
         fun promoteNumeric(ctx: C_ExprContext, left: V_Expr, right: V_Expr): Pair<V_Expr, V_Expr> {
-            val leftType = left.type()
-            val rightType = right.type()
-
-            if (leftType == R_IntegerType && rightType == R_DecimalType) {
-                return Pair(promoteNumeric(ctx, left), right)
-            } else if (leftType == R_DecimalType && rightType == R_IntegerType) {
-                return Pair(left, promoteNumeric(ctx, right))
-            } else {
-                return Pair(left, right)
-            }
+            val res = promoteNumeric(ctx, listOf(left, right))
+            return Pair(res[0], res[1])
         }
 
         fun promoteNumeric(ctx: C_ExprContext, values: List<V_Expr>): List<V_Expr> {
@@ -266,9 +270,9 @@ sealed class C_BinOp_EqNe(private val eq: Boolean): C_BinOp_Common() {
 
     final override fun compileExprVarFacts(left: V_Expr, right: V_Expr) = compileExprVarFacts(eq, left, right)
 
-    final override fun adaptLeftRight(ctx: C_ExprContext, left: V_Expr, right: V_Expr): Pair<V_Expr, V_Expr> {
-        val p = adaptOperands(left, right)
-        return p ?: super.adaptLeftRight(ctx, left, right)
+    final override fun adaptOperands0(ctx: C_ExprContext, operands: List<V_Expr>): List<V_Expr> {
+        val res = adaptOperands(operands)
+        return res ?: super.adaptOperands0(ctx, operands)
     }
 
     companion object {
@@ -312,19 +316,18 @@ sealed class C_BinOp_EqNe(private val eq: Boolean): C_BinOp_Common() {
             return if (facts.isEmpty()) null else facts
         }
 
-        fun adaptOperands(left: V_Expr, right: V_Expr): Pair<V_Expr, V_Expr>? {
-            val leftType = left.type()
-            val rightType = right.type()
-
-            if (leftType == R_NullType) {
-                val right2 = right.asNullable()
-                return Pair(left, right2)
-            } else if (rightType == R_NullType) {
-                val left2 = left.asNullable()
-                return Pair(left2, right)
+        fun adaptOperands(operands: List<V_Expr>): List<V_Expr>? {
+            val hasNull = operands.any { it.type() == R_NullType }
+            return if (hasNull) {
+                operands.map { it.asNullable() }
             } else {
-                return null
+                null
             }
+        }
+
+        fun adaptOperands(left: V_Expr, right: V_Expr): Pair<V_Expr, V_Expr>? {
+            val res = adaptOperands(listOf(left, right))
+            return if (res == null) null else Pair(res[0], res[1])
         }
 
         fun createVOp(eq: Boolean, type: R_Type): V_BinaryOp {
@@ -360,9 +363,9 @@ sealed class C_BinOp_EqNeRef(val eq: Boolean): C_BinOp_Common() {
 
     override fun compileExprVarFacts(left: V_Expr, right: V_Expr)= C_BinOp_EqNe.compileExprVarFacts(eq, left, right)
 
-    override fun adaptLeftRight(ctx: C_ExprContext, left: V_Expr, right: V_Expr): Pair<V_Expr, V_Expr> {
-        val p = C_BinOp_EqNe.adaptOperands(left, right)
-        return p ?: super.adaptLeftRight(ctx, left, right)
+    override fun adaptOperands0(ctx: C_ExprContext, operands: List<V_Expr>): List<V_Expr> {
+        val res = C_BinOp_EqNe.adaptOperands(operands)
+        return res ?: super.adaptOperands0(ctx, operands)
     }
 }
 
@@ -404,18 +407,17 @@ object C_BinOp_Plus: C_BinOp_Common() {
         }
     }
 
-    override fun adaptLeftRight(ctx: C_ExprContext, left: V_Expr, right: V_Expr): Pair<V_Expr, V_Expr> {
-        val leftType = left.type()
-        val rightType = right.type()
+    override fun adaptOperands0(ctx: C_ExprContext, operands: List<V_Expr>): List<V_Expr> {
+        val types = operands.map { it.type() }
+        val hasText = types.any { it == R_TextType }
+        val hasNotText = types.any { it != R_TextType }
 
-        if (leftType == R_TextType && rightType != R_TextType) {
-            val right2 = adaptToText(ctx, right)
-            return Pair(left, right2)
-        } else if (leftType != R_TextType && rightType == R_TextType) {
-            val left2 = adaptToText(ctx, left)
-            return Pair(left2, right)
+        return if (hasText && hasNotText) {
+            operands.mapIndexed { i, operand ->
+                if (types[i] == R_TextType) operand else adaptToText(ctx, operand)
+            }
         } else {
-            return super.adaptLeftRight(ctx, left, right)
+            super.adaptOperands0(ctx, operands)
         }
     }
 

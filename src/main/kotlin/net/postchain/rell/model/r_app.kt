@@ -170,6 +170,7 @@ class R_OperationDefinition(
 
     override fun toMetaGtv(): Gtv {
         return mapOf(
+                "mount" to mountName.str().toGtv(),
                 "parameters" to params().map { it.toMetaGtv() }.toGtv()
         ).toGtv()
     }
@@ -269,6 +270,7 @@ class R_QueryDefinition(
 
     override fun toMetaGtv(): Gtv {
         return mapOf(
+                "mount" to mountName.str().toGtv(),
                 "type" to type().toMetaGtv(),
                 "parameters" to params().map { it.toMetaGtv() }.toGtv()
         ).toGtv()
