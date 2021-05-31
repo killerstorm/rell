@@ -14,6 +14,7 @@ import net.postchain.rell.model.*
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.sql.SqlManager
 import java.math.BigDecimal
+import java.math.BigInteger
 import java.math.MathContext
 import java.math.RoundingMode
 import java.sql.Connection
@@ -259,7 +260,33 @@ object Rt_DecimalUtils {
             }
         }
 
+        t = stripTrailingZeros(t)
         return t
+    }
+
+    private fun stripTrailingZeros(v: BigDecimal): BigDecimal {
+        val scale = v.scale()
+        if (scale <= 0) {
+            return v
+        }
+
+        var s = scale
+
+        var q = v.unscaledValue()
+        while (s > 0) {
+            val arr = q.divideAndRemainder(BigInteger.TEN)
+            val div = arr[0]
+            val mod = arr[1]
+            if (mod != BigInteger.ZERO) break
+            --s
+            q = div
+        }
+
+        if (s == scale) {
+            return v
+        }
+
+        return BigDecimal(q, s)
     }
 
     fun add(a: BigDecimal, b: BigDecimal): BigDecimal {
