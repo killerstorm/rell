@@ -9,8 +9,10 @@ import net.postchain.rell.RellConfigGen
 import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.ast.S_RellFile
 import net.postchain.rell.model.R_ModuleName
+import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.Rt_RellVersion
 import net.postchain.rell.runtime.Rt_RellVersionProperty
+import net.postchain.rell.utils.RellCliEnv
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 import org.apache.commons.configuration2.PropertiesConfiguration
@@ -21,7 +23,7 @@ import java.io.File
 
 @Suppress("UNUSED")
 object IdeApi {
-    const val RELL_VERSION = net.postchain.rell.module.RELL_VERSION
+    const val RELL_VERSION = RellVersions.VERSION_STR
 
     @JvmStatic fun parseSourcePath(s: String): C_SourcePath? {
         return C_SourcePath.parseOpt(s)
@@ -43,7 +45,7 @@ object IdeApi {
     }
 
     @JvmStatic fun getAppFiles(sourceDir: C_SourceDir, modules: List<R_ModuleName>): Map<String, String> {
-        val configGen = RellConfigGen.create(sourceDir, modules)
+        val configGen = RellConfigGen.create(IdeRellCliEnv, sourceDir, modules)
         val ms = configGen.getModuleSources()
         return ms.files
     }
@@ -80,8 +82,18 @@ object IdeApi {
     }
 
     @JvmStatic fun isValidRellTestFile(text: String): Boolean {
-        val ast = C_Parser.parse(C_SourcePath(), text)
+        val ast = C_Parser.parse(C_SourcePath.EMPTY, text)
         return ast.ideIsTestFile()
+    }
+
+    private object IdeRellCliEnv: RellCliEnv() {
+        override fun print(msg: String, err: Boolean) {
+            println(msg)
+        }
+
+        override fun exit(status: Int): Nothing {
+            throw IllegalStateException("$status")
+        }
     }
 }
 
@@ -121,13 +133,12 @@ class IdeSnippetMessage(
 
 class IdeCodeSnippet(
         files: Map<String, String>,
-        modules: List<String>,
+        @JvmField val modules: C_CompilerModuleSelection,
         @JvmField val options: C_CompilerOptions,
         messages: List<IdeSnippetMessage>,
         parsing: Map<String, List<IdeSnippetMessage>>
 ) {
     @JvmField val files = files.toImmMap()
-    @JvmField val modules = modules.toImmList()
     @JvmField val messages = messages.toImmList()
     @JvmField val parsing = parsing.toImmMap()
 
@@ -136,19 +147,24 @@ class IdeCodeSnippet(
                 "gtv"  to options.gtv,
                 "deprecatedError" to options.deprecatedError,
                 "ide" to options.ide,
-                "atAttrShadowing" to options.atAttrShadowing.name
+                "atAttrShadowing" to options.atAttrShadowing.name,
+                "testLib" to options.testLib
         )
 
-        val msgs = messages.map { it.serialize() }
+        val modulesObj = mapOf(
+                "modules" to modules.modules.map { it.str() },
+                "test_root_modules" to modules.testRootModules.map { it.str() }
+        )
 
-        val prsing = parsing.mapValues { (_, v) -> v.map { it.serialize() } }
+        val messagesObj = messages.map { it.serialize() }
+        val parsingObj = parsing.mapValues { (_, v) -> v.map { it.serialize() } }
 
         val obj = mapOf(
                 "files" to files,
-                "modules" to modules,
+                "modules" to modulesObj,
                 "options" to opts,
-                "messages" to msgs,
-                "parsing" to prsing
+                "messages" to messagesObj,
+                "parsing" to parsingObj
         )
 
         val mapper = ObjectMapper()
@@ -166,8 +182,12 @@ class IdeCodeSnippet(
             val filesRaw = obj.getValue("files") as Map<Any, Any>
             val files = filesRaw.map { (k, v) -> k as String to v as String }.toMap()
 
-            val modulesRaw = obj.getValue("modules") as List<Any>
-            val modules = modulesRaw.map { it as String }
+            val modulesRaw = obj.getValue("modules") as Map<Any, Any>
+            val modulesMap = modulesRaw.map { (k, v) -> k as String to v }.toMap()
+            val modules = C_CompilerModuleSelection(
+                    modules = (modulesMap.getValue("modules") as List<Any>).map { R_ModuleName.of(it as String) },
+                    testRootModules = (modulesMap.getValue("test_root_modules") as List<Any>).map { R_ModuleName.of(it as String) }
+            )
 
             val optionsRaw = obj.getValue("options") as Map<Any, Any>
             val optionsMap = optionsRaw.map { (k, v) -> k as String to v }.toMap()
@@ -177,7 +197,8 @@ class IdeCodeSnippet(
                     ide = (optionsMap["ide"] as Boolean?) ?: false,
                     blockCheck = true,
                     atAttrShadowing = (optionsMap["atAttrShadowing"] as String?)
-                            ?.let { C_AtAttrShadowing.valueOf(it) } ?: C_AtAttrShadowing.DEFAULT
+                            ?.let { C_AtAttrShadowing.valueOf(it) } ?: C_AtAttrShadowing.DEFAULT,
+                    testLib = (optionsMap["testLib"] as Boolean?) ?: false
             )
 
             val messagesRaw = obj.getValue("messages") as List<Any>

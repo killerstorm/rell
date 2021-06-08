@@ -672,7 +672,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
             sqlExec.connection { con ->
                 sqlAccess.initializeApp(con, PostchainUtils.DATABASE_VERSION)
                 val eCtx: EContext = BaseEContext(con, t.chainId, 0, sqlAccess)
-                val bcRid: BlockchainRid = BlockchainRid.EMPTY_RID
+                val bcRid: BlockchainRid = BlockchainRid.ZERO_RID
                 sqlAccess.initializeBlockchain(eCtx, bcRid)
             }
         }

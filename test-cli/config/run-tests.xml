@@ -1,0 +1,51 @@
+<run>
+    <nodes>
+        <config src="node-config.properties" add-signers="true" />
+        <test-config src="node-config.properties" />
+    </nodes>
+
+    <chains>
+        <chain name="foo" iid="1">
+            <config height="0">
+                <app module="run_tests.foo">
+                    <args module="run_tests.foo">
+                        <arg key="x"><int>123</int></arg>
+                    </args>
+                    <args module="run_tests.common">
+                        <arg key="user"><string>Bob</string></arg>
+                    </args>
+                </app>
+            </config>
+
+            <config height="10">
+                <app module="run_tests.foo_10">
+                    <args module="run_tests.foo_10">
+                        <arg key="x"><int>456</int></arg>
+                    </args>
+                    <args module="run_tests.common">
+                        <arg key="user"><string>Alice</string></arg>
+                    </args>
+                </app>
+            </config>
+
+            <test module="run_tests.foo_extra_test" />
+        </chain>
+
+        <chain name="bar" iid="2">
+            <config height="0">
+                <app module="run_tests.bar">
+                    <args module="run_tests.bar">
+                        <arg key="y"><string>Hello</string></arg>
+                    </args>
+                    <args module="run_tests.common">
+                        <arg key="user"><string>Trudy</string></arg>
+                    </args>
+                </app>
+            </config>
+
+            <test module="run_tests.bar_extra_test" />
+        </chain>
+
+        <test module="run_tests.common_test" />
+    </chains>
+</run>

@@ -6,8 +6,14 @@ function test_foo() {
     print('foo end');
 }
 
-function test_bar() {
-    print('bar begin');
+function test_fail_require() {
+    print('test_fail_require begin');
     require(2 + 2 == 5);
-    print('bar end');
+    print('test_fail_require end');
+}
+
+function test_fail_assert_equals() {
+    print('test_fail_assert_equals begin');
+    assert_equals(2 + 2, 5);
+    print('test_fail_assert_equals end');
 }

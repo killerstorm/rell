@@ -130,17 +130,8 @@ class R_EntitySqlMapping_Transaction(chain: R_ExternalChainRef?): R_EntitySqlMap
 class R_EntitySqlMapping_Block(chain: R_ExternalChainRef?): R_EntitySqlMapping_TxBlk("block_iid", chain) {
     override fun table(chainMapping: Rt_ChainSqlMapping) = chainMapping.blocksTable
 
-    override fun extraWhereExpr0(entity: R_EntityDefinition, entityExpr: Db_EntityExpr, chain: R_ExternalChainRef?): Db_Expr {
-        val timestampAttr = entity.attribute("timestamp")
-        val timestampExpr = Db_AttrExpr(entityExpr, timestampAttr)
-        val timestampIsNotNullExpr = Db_IsNullExpr(timestampExpr, false)
-
+    override fun extraWhereExpr0(entity: R_EntityDefinition, entityExpr: Db_EntityExpr, chain: R_ExternalChainRef?): Db_Expr? {
         // Extra WHERE with block height check is needed only for external block/transaction entities.
-        if (chain == null) {
-            return timestampIsNotNullExpr
-        }
-
-        val heightExpr = makeBlockHeightExpr(entity, entityExpr, chain)
-        return Db_BinaryExpr(R_BooleanType, Db_BinaryOp_And, timestampIsNotNullExpr, heightExpr)
+        return if (chain == null) null else makeBlockHeightExpr(entity, entityExpr, chain)
     }
 }

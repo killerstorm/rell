@@ -126,7 +126,7 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         chk("struct<block>(block_height = 123, block_rid = x'beef', timestamp = 456)",
                 "struct<block>[block_height=int[123],block_rid=byte_array[beef],timestamp=int[456]]")
 
-        chk("struct<transaction>()", "ct_err:attr_missing:block,tx_data,tx_hash,tx_rid")
+        chk("struct<transaction>()", "ct_err:attr_missing:tx_rid,tx_hash,tx_data,block")
         chk("struct<transaction>(block = block@{.block_height==10}, tx_data = x'dead', tx_hash = x'beef', tx_rid = x'cafe')",
                 "struct<transaction>[tx_rid=byte_array[cafe],tx_hash=byte_array[beef],tx_data=byte_array[dead],block=block[710]]")
     }

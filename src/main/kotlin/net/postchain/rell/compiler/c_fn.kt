@@ -9,6 +9,7 @@ import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_RExpr
 import net.postchain.rell.compiler.vexpr.V_SysGlobalCaseCallExpr
 import net.postchain.rell.compiler.vexpr.V_SysMemberCaseCallExpr
+import net.postchain.rell.lib.R_TestOpType
 import net.postchain.rell.model.*
 import net.postchain.rell.utils.RecursionAwareCalculator
 import net.postchain.rell.utils.RecursionAwareResult
@@ -20,7 +21,7 @@ class C_FunctionArgs(val valid: Boolean, positional: List<V_Expr>, named: List<P
 }
 
 sealed class C_GlobalFunction {
-    open fun getDefinition(): R_Definition? = null
+    open fun getFunctionDefinition(): R_FunctionDefinition? = null
     open fun getAbstractDescriptor(): C_AbstractDescriptor? = null
 
     abstract fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr
@@ -37,11 +38,9 @@ sealed class C_RegularGlobalFunction: C_GlobalFunction() {
     }
 }
 
-class C_StructGlobalFunction(private val structDef: R_StructDefinition): C_GlobalFunction() {
-    override fun getDefinition() = structDef
-
+class C_StructGlobalFunction(private val struct: R_Struct): C_GlobalFunction() {
     override fun compileCall(ctx: C_ExprContext, name: S_Name, args: List<S_NameExprPair>): C_Expr {
-        return compileCall(ctx, structDef.struct, name.pos, args)
+        return compileCall(ctx, struct, name.pos, args)
     }
 
     companion object {
@@ -103,7 +102,7 @@ class C_UserGlobalFunction(
         headerLate.set(header)
     }
 
-    override fun getDefinition() = rFunction
+    override fun getFunctionDefinition() = rFunction
     override fun getAbstractDescriptor() = abstract
     override fun getHintParams() = headerLate.get().params
 
@@ -126,13 +125,17 @@ class C_OperationGlobalFunction(val rOp: R_OperationDefinition): C_GlobalFunctio
         val cArgs = C_FunctionUtils.compileRegularArgs(ctx, args, header.params)
         val cEffArgs = C_FunctionUtils.checkArgs(ctx, name, header.params, cArgs)
 
-        val vExpr = if (cEffArgs == null) {
-            C_Utils.errorVExpr(ctx, name.pos, rOp.mirrorStructs.immutable.type)
-        } else {
-            val rArgs = cEffArgs.map { it.toRExpr() }
-            V_RExpr(ctx, name.pos, R_OperationExpr(rOp, rArgs))
+        if (cEffArgs == null) {
+            return C_Utils.errorExpr(ctx, name.pos, R_TestOpType)
         }
 
+        if (!ctx.defCtx.modCtx.isTestLib()) {
+            ctx.msgCtx.error(name.pos, "expr:operation_call:no_test:$name",
+                    "Operation calls are allowed only in tests or REPL")
+        }
+
+        val rArgs = cEffArgs.map { it.toRExpr() }
+        val vExpr = V_RExpr(ctx, name.pos, R_OperationExpr(rOp, rArgs))
         return C_VExpr(vExpr)
     }
 }
@@ -437,7 +440,8 @@ class C_SysMemberFormalParamsFuncBody(
     override fun compileCall(ctx: C_ExprContext, caseCtx: C_MemberFuncCaseCtx, args: List<R_Expr>): R_Expr {
         val member = caseCtx.member
         val rBase = member.base.toRExpr()
-        val calculator = R_MemberCalculator_SysFn(resType, rFn, args)
+        val fnName = caseCtx.qualifiedNameMsg()
+        val calculator = R_MemberCalculator_SysFn(resType, rFn, args, fnName)
         return R_MemberExpr(rBase, member.safe, calculator)
     }
 
@@ -478,7 +482,7 @@ class C_RegularSysGlobalFunction(private val cases: List<C_GlobalFuncCase>): C_R
 
     private fun matchCase(ctx: C_ExprContext, name: S_Name, args: List<V_Expr>): C_GlobalFuncCaseMatch? {
         for (case in cases) {
-            val res = case.match(args)
+            val res = case.match(ctx, args)
             if (res != null) {
                 return res
             }
@@ -538,7 +542,7 @@ class C_CasesSysMemberFunction(private val cases: List<C_MemberFuncCase>): C_Sys
             args: List<V_Expr>
     ): C_MemberFuncCaseMatch? {
         for (case in cases) {
-            val res = case.match(args)
+            val res = case.match(ctx, args)
             if (res != null) {
                 return res
             }

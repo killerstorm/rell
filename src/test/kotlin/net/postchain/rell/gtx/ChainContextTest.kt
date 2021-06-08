@@ -10,14 +10,14 @@ import org.junit.Test
 
 class ChainContextTest : BaseGtxTest() {
     @Test fun testRawConfig() {
-        val ver = "v${RellTestUtils.RELL_VER}"
+        val ver = RellTestUtils.RELL_VER
 
         chk("chain_context.raw_config",
-                "{'gtx':{'rell':{'moduleArgs':{},'modules':[''],'sources_$ver':{'main.rell':'query q() = chain_context.raw_config;'}}}}")
+                "{'gtx':{'rell':{'moduleArgs':{},'modules':[''],'sources':{'main.rell':'query q() = chain_context.raw_config;'},'version':'$ver'}}}")
 
         tst.moduleArgs("" to "'bar'")
         chk("chain_context.raw_config",
-                "{'gtx':{'rell':{'moduleArgs':{'':'bar'},'modules':[''],'sources_$ver':{'main.rell':'query q() = chain_context.raw_config;'}}}}")
+                "{'gtx':{'rell':{'moduleArgs':{'':'bar'},'modules':[''],'sources':{'main.rell':'query q() = chain_context.raw_config;'},'version':'$ver'}}}")
     }
 
     @Test fun testModuleArgs() {
@@ -87,6 +87,7 @@ class ChainContextTest : BaseGtxTest() {
     }
 
     @Test fun testBlockchainRid() {
-        chk("chain_context.blockchain_rid", "'DEADBEEF'")
+        val exp = RellTestUtils.strToRidHex("DEADBEEF")
+        chk("chain_context.blockchain_rid", "'$exp'")
     }
 }

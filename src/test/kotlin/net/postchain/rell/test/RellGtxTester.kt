@@ -4,16 +4,13 @@
 
 package net.postchain.rell.test
 
-import net.postchain.base.BaseBlockEContext
-import net.postchain.base.BaseEContext
-import net.postchain.base.BaseTxEContext
-import net.postchain.base.BlockchainRid
+import net.postchain.base.*
 import net.postchain.common.hexStringToByteArray
-import net.postchain.core.EContext
-import net.postchain.core.UserMistake
+import net.postchain.core.*
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
 import net.postchain.gtv.GtvString
+import net.postchain.gtv.GtvType
 import net.postchain.gtx.ExtOpData
 import net.postchain.gtx.GTXModule
 import net.postchain.gtx.GTXSchemaManager
@@ -37,6 +34,7 @@ class RellGtxTester(
     val extraModuleConfig = mutableMapOf<String, String>()
     var nodeId: Int = 3377
     var modules: List<String>? = listOf("")
+    var configTemplate: String = getDefaultConfigTemplate()
 
     private var moduleArgs = mapOf<String, String>()
 
@@ -137,16 +135,23 @@ class RellGtxTester(
 
             val module = eval.wrapCt { createGtxModule(moduleCode) }
 
-            val res = withEContext(true) { ctx ->
-                val blkCtx = BaseBlockEContext(ctx, 0, 0, mapOf())
-                val txCtx = BaseTxEContext(blkCtx, 0)
+            val dummyEventSink = object : TxEventSink {
+                override fun processEmittedEvent(ctxt: TxEContext, type: String, data: Gtv) {
+                    TODO("Not yet implemented")
+                }
+            }
 
+            val res = withEContext(true) { ctx ->
+                val blkCtx = BaseBlockEContext(ctx, 0, 0, System.currentTimeMillis(), mapOf(), dummyEventSink)
                 val bcRid = PostchainUtils.hexToRid(blockchainRid)
                 val opData = ExtOpData(name, 0, args.toTypedArray(), bcRid, arrayOf(), arrayOf())
-                val tx = module.makeTransactor(opData)
-                check(tx.isCorrect())
+                val transactor = module.makeTransactor(opData)
+                check(transactor.isCorrect())
 
-                tx.apply(txCtx)
+                val tx = TransactorTransaction(transactor)
+                val txCtx = BaseTxEContext(blkCtx, 0, tx)
+
+                transactor.apply(txCtx)
             }
 
             check(res)
@@ -194,24 +199,66 @@ class RellGtxTester(
     }
 
     private fun moduleConfig(moduleCode: String): Gtv {
-        val rellMap = mutableMapOf<String, Gtv>()
-
-        val modules = modules
-        if (modules != null) {
-            rellMap["modules"] = GtvFactory.gtv(modules.map { GtvFactory.gtv(it) })
-        }
-
         val sourceCodes = files(moduleCode)
-        rellMap["sources_v${RellTestUtils.RELL_VER}"] = GtvFactory.gtv(sourceCodes.mapValues { (_, v) -> GtvString(v) })
-
-        rellMap["moduleArgs"] = GtvFactory.gtv(moduleArgs.mapValues { (_, v) -> GtvTestUtils.decodeGtvStr(v) })
-
-        val cfgMap = mutableMapOf<String, Gtv>()
-        cfgMap["gtx"] = GtvFactory.gtv(mapOf("rell" to GtvFactory.gtv(rellMap)))
-        for ((key, value) in extraModuleConfig) {
-            cfgMap[key] = GtvTestUtils.decodeGtvStr(value)
-        }
-
-        return GtvFactory.gtv(cfgMap)
+        val parts = ModuleConfigParts(modules, sourceCodes, moduleArgs, extraModuleConfig)
+        val templateGtv = GtvTestUtils.strToGtv(configTemplate)
+        return getModuleConfig(parts, templateGtv)
     }
+
+    private fun getModuleConfig(parts: ModuleConfigParts, template: Gtv): Gtv {
+        val v = makeModuleConfigNode(parts, template, true)
+        return v ?: GtvFactory.gtv(mapOf())
+    }
+
+    private fun makeModuleConfigNode(parts: ModuleConfigParts, tpl: Gtv, root: Boolean): Gtv? {
+        return when (tpl.type) {
+            GtvType.NULL, GtvType.BYTEARRAY, GtvType.INTEGER -> tpl
+            GtvType.ARRAY -> GtvFactory.gtv(tpl.asArray().mapNotNull { makeModuleConfigNode(parts, it, false) })
+            GtvType.DICT -> {
+                val map = tpl.asDict().entries
+                        .map { it.key to makeModuleConfigNode(parts, it.value, false) }
+                        .filter { it.second != null }
+                        .map { it.first to it.second!! }
+                        .toMap().toMutableMap()
+                if (root) {
+                    map.putAll(parts.extraModuleConfig.mapValues { GtvTestUtils.decodeGtvStr(it.value) })
+                }
+                GtvFactory.gtv(map)
+            }
+            GtvType.STRING -> {
+                val s = tpl.asString()
+                when (s) {
+                    "{MODULES}" -> {
+                        if (parts.modules == null) null else GtvFactory.gtv(parts.modules.map { GtvFactory.gtv(it) })
+                    }
+                    "{SOURCES}" -> GtvFactory.gtv(parts.sourceCodes.mapValues { (_, v) -> GtvString(v) })
+                    "{MODULE_ARGS}" -> GtvFactory.gtv(parts.moduleArgs.mapValues { (_, v) -> GtvTestUtils.decodeGtvStr(v) })
+                    else -> tpl
+                }
+            }
+        }
+    }
+
+    private fun getDefaultConfigTemplate(): String {
+        val v = RellTestUtils.RELL_VER
+        return "{'gtx':{'rell':{'modules':'{MODULES}','sources':'{SOURCES}','version':'$v','moduleArgs':'{MODULE_ARGS}'}}}"
+    }
+
+    private class TransactorTransaction(val transactor: Transactor): Transaction {
+        override fun apply(ctx: TxEContext): Boolean = transactor.apply(ctx)
+        override fun isCorrect(): Boolean = transactor.isCorrect()
+        override fun isSpecial(): Boolean = transactor.isSpecial()
+
+        // TODO To properly support following methods, test transactions execution shall be done in a different way.
+        override fun getHash(): ByteArray = TODO()
+        override fun getRID(): ByteArray = TODO()
+        override fun getRawData(): ByteArray = TODO()
+    }
+
+    private class ModuleConfigParts(
+            val modules: List<String>?,
+            val sourceCodes: Map<String, String>,
+            val moduleArgs: Map<String, String>,
+            val extraModuleConfig: Map<String, String>
+    )
 }

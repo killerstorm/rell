@@ -123,7 +123,7 @@ class R_Struct(
         val attrsList = attrs.values.toList()
         attrsList.withIndex().forEach { (idx, attr) -> check(attr.index == idx) }
         val attrMutable = attrs.values.any { it.mutable }
-        bodyLate.set(R_StructBody(attrs, attrsList, attrMutable))
+        bodyLate.set(R_StructBody(attrs, attrsList, attrMutable), true)
     }
 
     fun setFlags(flags: R_StructFlags) {
@@ -190,7 +190,9 @@ class R_StructDefinition(names: R_DefinitionNames, val struct: R_Struct): R_Defi
 
 class R_EnumAttr(val name: String, val value: Int) {
     // Currently returning an empty map, in the future there may be some values.
-    fun toMetaGtv() = mapOf<String, Gtv>().toGtv()
+    fun toMetaGtv() = mapOf(
+            "value" to value.toGtv()
+    ).toGtv()
 }
 
 class R_EnumDefinition(

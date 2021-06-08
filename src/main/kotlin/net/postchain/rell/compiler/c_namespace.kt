@@ -192,6 +192,13 @@ class C_Namespace(
     fun value(name: String) = values[name]
     fun function(name: String) = functions[name]
 
+    fun addTo(b: C_NamespaceBuilder) {
+        namespaces.forEach { b.addNamespace(it.key, it.value) }
+        types.forEach { b.addType(it.key, it.value) }
+        values.forEach { b.addValue(it.key, it.value) }
+        functions.forEach { b.addFunction(it.key, it.value) }
+    }
+
     companion object {
         val EMPTY = C_Namespace(namespaces = mapOf(), types = mapOf(), values = mapOf(), functions = mapOf())
     }
@@ -232,6 +239,11 @@ class C_NamespaceBuilder {
         if (elem.value != null) addDef(values, name, elem.value)
         if (elem.function != null) addDef(functions, name, elem.function)
     }
+
+    fun addNamespace(name: String, ns: C_DefProxy<C_Namespace>) = addDef(namespaces, name, ns)
+    fun addType(name: String, type: C_DefProxy<R_Type>) = addDef(types, name, type)
+    fun addValue(name: String, value: C_DefProxy<C_NamespaceValue>) = addDef(values, name, value)
+    fun addFunction(name: String, function: C_DefProxy<C_GlobalFunction>) = addDef(functions, name, function)
 
     private fun <T> addDef(map: MutableMap<String, C_DefProxy<T>>, name: String, def: C_DefProxy<T>) {
         check(name !in map) { "$name ${map.keys.sorted()}" }

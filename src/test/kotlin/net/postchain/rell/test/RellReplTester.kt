@@ -5,8 +5,8 @@
 package net.postchain.rell.test
 
 import net.postchain.rell.compiler.C_CompilerOptions
-import net.postchain.rell.compiler.C_MapSourceDir
 import net.postchain.rell.compiler.C_Message
+import net.postchain.rell.compiler.C_SourceDir
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.model.R_StackPos
 import net.postchain.rell.module.RellPostchainModuleEnvironment
@@ -20,8 +20,8 @@ import java.util.*
 import kotlin.test.assertEquals
 
 class RellReplTester(
-        files: Map<String, String>,
         globalCtx: Rt_GlobalContext,
+        private val sourceDir: C_SourceDir,
         private val sqlMgr: SqlManager,
         private val module: R_ModuleName?,
         private val useSql: Boolean
@@ -29,7 +29,6 @@ class RellReplTester(
     var outPlainValues = false
 
     private val outChannel = TestReplOutputChannel()
-    private val sourceDir = C_MapSourceDir.of(files)
 
     private val pcModuleEnv = RellPostchainModuleEnvironment(
             outPrinter = outChannel.outPrinter,

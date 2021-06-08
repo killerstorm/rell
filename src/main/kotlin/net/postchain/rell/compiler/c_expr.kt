@@ -23,6 +23,7 @@ class C_ExprContext private constructor(
         val insideGuardBlock: Boolean
 ) {
     val defCtx = blkCtx.defCtx
+    val modCtx = defCtx.modCtx
     val nsCtx = defCtx.nsCtx
     val globalCtx = defCtx.globalCtx
     val appCtx = defCtx.appCtx

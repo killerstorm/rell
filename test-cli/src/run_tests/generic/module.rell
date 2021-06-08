@@ -1,0 +1,16 @@
+module;
+
+struct module_args {
+    app: text;
+}
+
+entity user {
+    name;
+    app: text;
+}
+
+query get_app_name() = chain_context.args.app;
+
+operation add_user(name) {
+    create user(name, app = chain_context.args.app);
+}

@@ -8,12 +8,12 @@ import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.google.common.math.LongMath
 import mu.KLogging
-import net.postchain.base.BlockchainRid
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvVirtual
 import net.postchain.rell.compiler.C_Constants
 import net.postchain.rell.model.*
-import net.postchain.rell.utils.*
+import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.PostchainUtils
 import java.math.BigDecimal
 import java.util.*
 import java.util.regex.Pattern
@@ -23,7 +23,11 @@ abstract class Rt_ValueRef {
     abstract fun set(value: Rt_Value)
 }
 
-enum class Rt_ValueType {
+sealed class Rt_ValueType(val name: String) {
+    final override fun toString() = name
+}
+
+enum class Rt_CoreValueTypes {
     UNIT,
     BOOLEAN,
     INTEGER,
@@ -31,7 +35,7 @@ enum class Rt_ValueType {
     TEXT,
     BYTE_ARRAY,
     ROWID,
-    CLASS,
+    ENTITY,
     NULL,
     COLLECTION,
     LIST,
@@ -45,9 +49,6 @@ enum class Rt_ValueType {
     JSON,
     RANGE,
     GTV,
-    OPERATION,
-    GTX_BLOCK,
-    GTX_TX,
     VIRTUAL,
     VIRTUAL_COLLECTION,
     VIRTUAL_LIST,
@@ -55,44 +56,58 @@ enum class Rt_ValueType {
     VIRTUAL_MAP,
     VIRTUAL_TUPLE,
     VIRTUAL_STRUCT,
+    ;
+
+    fun type(): Rt_ValueType = Rt_CoreValueType(this)
 }
 
-sealed class Rt_Value {
-    abstract fun type(): R_Type
-    abstract fun valueType(): Rt_ValueType
+private class Rt_CoreValueType(coreType: Rt_CoreValueTypes): Rt_ValueType(coreType.name)
 
-    open fun asBoolean(): Boolean = throw errType(Rt_ValueType.BOOLEAN)
-    open fun asInteger(): Long = throw errType(Rt_ValueType.INTEGER)
-    open fun asDecimal(): BigDecimal = throw errType(Rt_ValueType.DECIMAL)
-    open fun asRowid(): Long = throw errType(Rt_ValueType.ROWID)
-    open fun asString(): String = throw errType(Rt_ValueType.TEXT)
-    open fun asByteArray(): ByteArray = throw errType(Rt_ValueType.BYTE_ARRAY)
-    open fun asJsonString(): String = throw errType(Rt_ValueType.JSON)
-    open fun asCollection(): MutableCollection<Rt_Value> = throw errType(Rt_ValueType.COLLECTION)
-    open fun asList(): MutableList<Rt_Value> = throw errType(Rt_ValueType.LIST)
-    open fun asVirtualCollection(): Rt_VirtualCollectionValue = throw errType(Rt_ValueType.VIRTUAL_COLLECTION)
-    open fun asVirtualList(): Rt_VirtualListValue = throw errType(Rt_ValueType.VIRTUAL_LIST)
-    open fun asVirtualSet(): Rt_VirtualSetValue = throw errType(Rt_ValueType.VIRTUAL_SET)
-    open fun asSet(): MutableSet<Rt_Value> = throw errType(Rt_ValueType.SET)
-    open fun asMap(): Map<Rt_Value, Rt_Value> = throw errType(Rt_ValueType.MAP)
-    open fun asMutableMap(): MutableMap<Rt_Value, Rt_Value> = throw errType(Rt_ValueType.MUTABLE_MAP)
-    open fun asTuple(): List<Rt_Value> = throw errType(Rt_ValueType.TUPLE)
-    open fun asVirtualTuple(): Rt_VirtualTupleValue = throw errType(Rt_ValueType.VIRTUAL_TUPLE)
-    open fun asStruct(): Rt_StructValue = throw errType(Rt_ValueType.STRUCT)
-    open fun asVirtual(): Rt_VirtualValue = throw errType(Rt_ValueType.VIRTUAL)
-    open fun asVirtualStruct(): Rt_VirtualStructValue = throw errType(Rt_ValueType.VIRTUAL_STRUCT)
-    open fun asEnum(): R_EnumAttr = throw errType(Rt_ValueType.ENUM)
-    open fun asRange(): Rt_RangeValue = throw errType(Rt_ValueType.RANGE)
-    open fun asObjectId(): Long = throw errType(Rt_ValueType.CLASS)
-    open fun asGtv(): Gtv = throw errType(Rt_ValueType.GTV)
-    open fun asOperation(): Rt_OperationValue = throw errType(Rt_ValueType.OPERATION)
-    open fun asGtxTx(): Rt_GtxTxValue = throw errType(Rt_ValueType.GTX_TX)
-    open fun asGtxBlock(): Rt_GtxBlockValue = throw errType(Rt_ValueType.GTX_BLOCK)
+class Rt_LibValueType private constructor(name: String): Rt_ValueType(name) {
+    init {
+        val v = try { Rt_CoreValueTypes.valueOf(name) } catch (e: java.lang.IllegalArgumentException) { null }
+        check(v == null) { name }
+    }
+
+    companion object {
+        fun of(name: String): Rt_ValueType = Rt_LibValueType(name)
+    }
+}
+
+abstract class Rt_Value {
+    protected abstract val valueType: Rt_ValueType
+
+    abstract fun type(): R_Type
+
+    open fun asBoolean(): Boolean = throw errType(Rt_CoreValueTypes.BOOLEAN)
+    open fun asInteger(): Long = throw errType(Rt_CoreValueTypes.INTEGER)
+    open fun asDecimal(): BigDecimal = throw errType(Rt_CoreValueTypes.DECIMAL)
+    open fun asRowid(): Long = throw errType(Rt_CoreValueTypes.ROWID)
+    open fun asString(): String = throw errType(Rt_CoreValueTypes.TEXT)
+    open fun asByteArray(): ByteArray = throw errType(Rt_CoreValueTypes.BYTE_ARRAY)
+    open fun asJsonString(): String = throw errType(Rt_CoreValueTypes.JSON)
+    open fun asCollection(): MutableCollection<Rt_Value> = throw errType(Rt_CoreValueTypes.COLLECTION)
+    open fun asList(): MutableList<Rt_Value> = throw errType(Rt_CoreValueTypes.LIST)
+    open fun asVirtualCollection(): Rt_VirtualCollectionValue = throw errType(Rt_CoreValueTypes.VIRTUAL_COLLECTION)
+    open fun asVirtualList(): Rt_VirtualListValue = throw errType(Rt_CoreValueTypes.VIRTUAL_LIST)
+    open fun asVirtualSet(): Rt_VirtualSetValue = throw errType(Rt_CoreValueTypes.VIRTUAL_SET)
+    open fun asSet(): MutableSet<Rt_Value> = throw errType(Rt_CoreValueTypes.SET)
+    open fun asMap(): Map<Rt_Value, Rt_Value> = throw errType(Rt_CoreValueTypes.MAP)
+    open fun asMutableMap(): MutableMap<Rt_Value, Rt_Value> = throw errType(Rt_CoreValueTypes.MUTABLE_MAP)
+    open fun asTuple(): List<Rt_Value> = throw errType(Rt_CoreValueTypes.TUPLE)
+    open fun asVirtualTuple(): Rt_VirtualTupleValue = throw errType(Rt_CoreValueTypes.VIRTUAL_TUPLE)
+    open fun asStruct(): Rt_StructValue = throw errType(Rt_CoreValueTypes.STRUCT)
+    open fun asVirtual(): Rt_VirtualValue = throw errType(Rt_CoreValueTypes.VIRTUAL)
+    open fun asVirtualStruct(): Rt_VirtualStructValue = throw errType(Rt_CoreValueTypes.VIRTUAL_STRUCT)
+    open fun asEnum(): R_EnumAttr = throw errType(Rt_CoreValueTypes.ENUM)
+    open fun asRange(): Rt_RangeValue = throw errType(Rt_CoreValueTypes.RANGE)
+    open fun asObjectId(): Long = throw errType(Rt_CoreValueTypes.ENTITY)
+    open fun asGtv(): Gtv = throw errType(Rt_CoreValueTypes.GTV)
     open fun asFormatArg(): Any = toString()
 
     abstract fun toStrictString(showTupleFieldNames: Boolean = true): String
 
-    private fun errType(expected: Rt_ValueType) = Rt_ValueTypeError(expected, valueType())
+    private fun errType(expected: Rt_CoreValueTypes) = Rt_ValueTypeError(expected.type(), valueType)
 }
 
 sealed class Rt_VirtualValue(val gtv: Gtv): Rt_Value() {
@@ -117,15 +132,17 @@ sealed class Rt_VirtualValue(val gtv: Gtv): Rt_Value() {
 }
 
 object Rt_UnitValue: Rt_Value() {
+    override val valueType = Rt_CoreValueTypes.UNIT.type()
+
     override fun type() = R_UnitType
-    override fun valueType() = Rt_ValueType.UNIT
     override fun toStrictString(showTupleFieldNames: Boolean) = "unit"
     override fun toString() = "unit"
 }
 
 class Rt_BooleanValue(val value: Boolean): Rt_Value() {
+    override val valueType = Rt_CoreValueTypes.BOOLEAN.type()
+
     override fun type() = R_BooleanType
-    override fun valueType() = Rt_ValueType.BOOLEAN
     override fun asBoolean() = value
     override fun asFormatArg() = value
     override fun toStrictString(showTupleFieldNames: Boolean) = "boolean[$value]"
@@ -135,8 +152,9 @@ class Rt_BooleanValue(val value: Boolean): Rt_Value() {
 }
 
 class Rt_IntValue(val value: Long): Rt_Value() {
+    override val valueType = Rt_CoreValueTypes.INTEGER.type()
+
     override fun type() = R_IntegerType
-    override fun valueType() = Rt_ValueType.INTEGER
     override fun asInteger() = value
     override fun asFormatArg() = value
     override fun toStrictString(showTupleFieldNames: Boolean) = "int[$value]"
@@ -146,8 +164,9 @@ class Rt_IntValue(val value: Long): Rt_Value() {
 }
 
 class Rt_DecimalValue private constructor(val value: BigDecimal): Rt_Value() {
+    override val valueType = Rt_CoreValueTypes.DECIMAL.type()
+
     override fun type() = R_DecimalType
-    override fun valueType() = Rt_ValueType.DECIMAL
     override fun asDecimal() = value
     override fun asFormatArg() = value
     override fun toStrictString(showTupleFieldNames: Boolean) = "dec[$this]"
@@ -195,8 +214,9 @@ class Rt_DecimalValue private constructor(val value: BigDecimal): Rt_Value() {
 }
 
 class Rt_TextValue(val value: String): Rt_Value() {
+    override val valueType = Rt_CoreValueTypes.TEXT.type()
+
     override fun type() = R_TextType
-    override fun valueType() = Rt_ValueType.TEXT
     override fun asString() = value
     override fun asFormatArg() = value
 
@@ -270,8 +290,9 @@ class Rt_TextValue(val value: String): Rt_Value() {
 }
 
 class Rt_ByteArrayValue(val value: ByteArray): Rt_Value() {
+    override val valueType = Rt_CoreValueTypes.BYTE_ARRAY.type()
+
     override fun type() = R_ByteArrayType
-    override fun valueType() = Rt_ValueType.BYTE_ARRAY
     override fun asByteArray() = value
     override fun asFormatArg() = toString()
     override fun toStrictString(showTupleFieldNames: Boolean) = "byte_array[${CommonUtils.bytesToHex(value)}]"
@@ -285,8 +306,9 @@ class Rt_RowidValue(val value: Long): Rt_Value() {
         check(value >= 0) { "Negative rowid value: $value" }
     }
 
+    override val valueType = Rt_CoreValueTypes.ROWID.type()
+
     override fun type() = R_RowidType
-    override fun valueType() = Rt_ValueType.ROWID
     override fun asRowid() = value
     override fun asFormatArg() = value
     override fun toStrictString(showTupleFieldNames: Boolean) = "rowid[$value]"
@@ -296,8 +318,9 @@ class Rt_RowidValue(val value: Long): Rt_Value() {
 }
 
 class Rt_EntityValue(val type: R_EntityType, val rowid: Long): Rt_Value() {
+    override val valueType = Rt_CoreValueTypes.ENTITY.type()
+
     override fun type() = type
-    override fun valueType() = Rt_ValueType.CLASS
     override fun asObjectId() = rowid
     override fun asFormatArg() = toString()
     override fun toStrictString(showTupleFieldNames: Boolean) = "${type.name}[$rowid]"
@@ -307,8 +330,9 @@ class Rt_EntityValue(val type: R_EntityType, val rowid: Long): Rt_Value() {
 }
 
 object Rt_NullValue: Rt_Value() {
+    override val valueType = Rt_CoreValueTypes.NULL.type()
+
     override fun type() = R_NullType
-    override fun valueType() = Rt_ValueType.NULL
     override fun asFormatArg() = toString()
     override fun toStrictString(showTupleFieldNames: Boolean) = "null"
     override fun toString() = "null"
@@ -319,8 +343,9 @@ class Rt_ListValue(private val type: R_Type, private val elements: MutableList<R
         check(type is R_ListType) { "wrong type: $type" }
     }
 
+    override val valueType = Rt_CoreValueTypes.LIST.type()
+
     override fun type() = type
-    override fun valueType() = Rt_ValueType.LIST
     override fun asCollection() = elements
     override fun asList() = elements
     override fun asFormatArg() = elements
@@ -355,8 +380,9 @@ class Rt_VirtualListValue(
         private val type: R_VirtualListType,
         private val elements: List<Rt_Value?>
 ): Rt_VirtualCollectionValue(gtv) {
+    override val valueType = Rt_CoreValueTypes.VIRTUAL_LIST.type()
+
     override fun type() = type
-    override fun valueType() = Rt_ValueType.VIRTUAL_LIST
     override fun asVirtualCollection() = this
     override fun asVirtualList() = this
     override fun asFormatArg() = elements
@@ -390,8 +416,9 @@ class Rt_SetValue(private val type: R_Type, private val elements: MutableSet<Rt_
         check(type is R_SetType) { "wrong type: $type" }
     }
 
+    override val valueType = Rt_CoreValueTypes.SET.type()
+
     override fun type() = type
-    override fun valueType() = Rt_ValueType.SET
     override fun asCollection() = elements
     override fun asSet() = elements
     override fun asFormatArg() = elements
@@ -411,8 +438,9 @@ class Rt_VirtualSetValue(
         private val type: R_VirtualSetType,
         private val elements: Set<Rt_Value>
 ): Rt_VirtualCollectionValue(gtv) {
+    override val valueType = Rt_CoreValueTypes.VIRTUAL_SET.type()
+
     override fun type() = type
-    override fun valueType() = Rt_ValueType.VIRTUAL_LIST
     override fun asVirtualCollection() = this
     override fun asVirtualSet() = this
     override fun asFormatArg() = elements
@@ -433,8 +461,9 @@ class Rt_VirtualSetValue(
 }
 
 class Rt_MapValue(private val type: R_Type, private val map: MutableMap<Rt_Value, Rt_Value>): Rt_Value() {
+    override val valueType = Rt_CoreValueTypes.MAP.type()
+
     override fun type() = type
-    override fun valueType() = Rt_ValueType.MAP
     override fun asMap() = map
     override fun asMutableMap() = map
     override fun asFormatArg() = map
@@ -458,8 +487,9 @@ class Rt_VirtualMapValue(
         private val type: R_VirtualMapType,
         private val map: Map<Rt_Value, Rt_Value>
 ): Rt_VirtualValue(gtv) {
+    override val valueType = Rt_CoreValueTypes.VIRTUAL_MAP.type()
+
     override fun type() = type
-    override fun valueType() = Rt_ValueType.VIRTUAL_MAP
     override fun asMap() = map
     override fun asFormatArg() = map
     override fun toStrictString(showTupleFieldNames: Boolean) = Rt_MapValue.toStrictString(type, showTupleFieldNames, map)
@@ -477,8 +507,9 @@ class Rt_VirtualMapValue(
 }
 
 class Rt_TupleValue(val type: R_TupleType, val elements: List<Rt_Value>): Rt_Value() {
+    override val valueType = Rt_CoreValueTypes.TUPLE.type()
+
     override fun type() = type
-    override fun valueType() = Rt_ValueType.TUPLE
     override fun asTuple() = elements
     override fun asFormatArg() = toString()
     override fun equals(other: Any?) = other is Rt_TupleValue && elements == other.elements
@@ -526,8 +557,9 @@ class Rt_VirtualTupleValue(
         private val type: R_VirtualTupleType,
         private val elements: List<Rt_Value?>
 ): Rt_VirtualValue(gtv) {
+    override val valueType = Rt_CoreValueTypes.VIRTUAL_TUPLE.type()
+
     override fun type() = type
-    override fun valueType() = Rt_ValueType.VIRTUAL_TUPLE
     override fun asVirtualTuple() = this
     override fun asFormatArg() = toString()
     override fun equals(other: Any?) = other is Rt_VirtualTupleValue && elements == other.elements
@@ -553,8 +585,9 @@ class Rt_VirtualTupleValue(
 }
 
 class Rt_StructValue(private val type: R_StructType, private val attributes: MutableList<Rt_Value>): Rt_Value() {
+    override val valueType = Rt_CoreValueTypes.STRUCT.type()
+
     override fun type() = type
-    override fun valueType() = Rt_ValueType.STRUCT
     override fun asStruct() = this
     override fun asFormatArg() = toString()
     override fun equals(other: Any?) = other is Rt_StructValue && attributes == other.attributes
@@ -600,8 +633,9 @@ class Rt_VirtualStructValue(
         private val type: R_VirtualStructType,
         private val attributes: List<Rt_Value?>
 ): Rt_VirtualValue(gtv) {
+    override val valueType = Rt_CoreValueTypes.VIRTUAL_STRUCT.type()
+
     override fun type() = type
-    override fun valueType() = Rt_ValueType.VIRTUAL_STRUCT
     override fun asVirtualStruct() = this
     override fun asFormatArg() = toString()
     override fun equals(other: Any?) = other is Rt_VirtualStructValue && attributes == other.attributes
@@ -628,8 +662,9 @@ class Rt_VirtualStructValue(
 }
 
 class Rt_EnumValue(private val type: R_EnumType, private val attr: R_EnumAttr): Rt_Value() {
+    override val valueType = Rt_CoreValueTypes.ENUM.type()
+
     override fun type() = type
-    override fun valueType() = Rt_ValueType.ENUM
     override fun asEnum() = attr
     override fun asFormatArg() = attr.name
     override fun equals(other: Any?) = other is Rt_EnumValue && attr == other.attr
@@ -645,15 +680,17 @@ class Rt_EnumValue(private val type: R_EnumType, private val attr: R_EnumAttr): 
 }
 
 class Rt_ObjectValue(private val type: R_ObjectType): Rt_Value() {
+    override val valueType = Rt_CoreValueTypes.OBJECT.type()
+
     override fun type() = type
-    override fun valueType() = Rt_ValueType.OBJECT
     override fun toStrictString(showTupleFieldNames: Boolean) = type.name
     override fun toString() = type.name
 }
 
 class Rt_JsonValue private constructor(private val str: String): Rt_Value() {
+    override val valueType = Rt_CoreValueTypes.JSON.type()
+
     override fun type() = R_JsonType
-    override fun valueType() = Rt_ValueType.JSON
     override fun asJsonString() = str
     override fun asFormatArg() = str
     override fun toString() = str
@@ -686,8 +723,9 @@ class Rt_JsonValue private constructor(private val str: String): Rt_Value() {
 }
 
 class Rt_RangeValue(val start: Long, val end: Long, val step: Long): Rt_Value(), Iterable<Rt_Value>, Comparable<Rt_RangeValue> {
+    override val valueType = Rt_CoreValueTypes.RANGE.type()
+
     override fun type() = R_RangeType
-    override fun valueType() = Rt_ValueType.RANGE
     override fun asRange() = this
     override fun asFormatArg() = toString()
     override fun toString() = "range($start,$end,$step)"
@@ -745,80 +783,24 @@ class Rt_RangeValue(val start: Long, val end: Long, val step: Long): Rt_Value(),
 }
 
 class Rt_GtvValue(val value: Gtv): Rt_Value() {
+    override val valueType = Rt_CoreValueTypes.GTV.type()
+
     override fun type() = R_GtvType
-    override fun valueType() = Rt_ValueType.GTV
     override fun asGtv() = value
 
     override fun toStrictString(showTupleFieldNames: Boolean) = "gtv[$this]"
-
-    override fun toString(): String {
-        try {
-            return PostchainUtils.gtvToJson(value)
-        } catch (e: Exception) {
-            return value.toString() // Fallback, just in case (did not happen).
-        }
-    }
+    override fun toString() = toString(value)
 
     override fun equals(other: Any?) = other is Rt_GtvValue && value == other.value
     override fun hashCode() = value.hashCode()
-}
 
-class Rt_OperationValue(val op: R_MountName, args: List<Rt_Value>): Rt_Value() {
-    val args = args.toImmList()
-
-    override fun type() = R_OperationType
-    override fun valueType() = Rt_ValueType.OPERATION
-    override fun asOperation() = this
-
-    override fun toStrictString(showTupleFieldNames: Boolean): String {
-        val argsStr = args.joinToString(",") { it.toStrictString() }
-        return "op[$op($argsStr)]"
+    companion object {
+        fun toString(value: Gtv): String {
+            return try {
+                PostchainUtils.gtvToJson(value)
+            } catch (e: Exception) {
+                value.toString() // Fallback, just in case (did not happen).
+            }
+        }
     }
-
-    override fun toString(): String {
-        val argsStr = args.joinToString(",")
-        return "$op($argsStr)"
-    }
-
-    override fun equals(other: Any?) = other is Rt_OperationValue && op == other.op && args == other.args
-    override fun hashCode() = Objects.hash(op, args)
-}
-
-class Rt_GtxBlockValue(txs: List<Rt_GtxTxValue>): Rt_Value() {
-    val txs = txs.toImmList()
-
-    override fun type() = R_GtxBlockType
-    override fun valueType() = Rt_ValueType.GTX_BLOCK
-    override fun asGtxBlock() = this
-
-    override fun toStrictString(showTupleFieldNames: Boolean) =
-            "${type().toStrictString()}[${txs.joinToString(",") { it.toStrictString() }}]"
-
-    override fun toString() = "block(${txs.joinToString(",")})"
-
-    override fun equals(other: Any?) = other is Rt_GtxBlockValue && txs == other.txs
-    override fun hashCode() = Objects.hash(txs)
-}
-
-class Rt_GtxTxValue(
-        val blockchainRid: BlockchainRid,
-        ops: List<Rt_OperationValue>,
-        signers: List<Bytes33>,
-        signatures: List<Bytes32>
-): Rt_Value() {
-    val ops = ops.toImmList()
-    val signers = signers.toImmList()
-    val signatures = signatures.toImmList()
-
-    override fun type() = R_GtxTxType
-    override fun valueType() = Rt_ValueType.GTX_TX
-    override fun asGtxTx() = this
-
-    override fun toStrictString(showTupleFieldNames: Boolean) =
-        "${type().toStrictString()}[${ops.joinToString(",") { it.toStrictString() }}]"
-
-    override fun toString() = "tx(${ops.joinToString(",")})"
-
-    override fun equals(other: Any?) = other is Rt_GtxTxValue && ops == other.ops
-    override fun hashCode() = Objects.hash(ops)
 }

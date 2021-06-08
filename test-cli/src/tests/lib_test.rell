@@ -1,0 +1,7 @@
+@test module;
+
+import tests.testlib;
+
+function test_lib() {
+    testlib.helper();
+}

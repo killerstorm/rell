@@ -7,6 +7,7 @@ package net.postchain.rell.model
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
 import net.postchain.rell.compiler.C_Constants
+import net.postchain.rell.compiler.C_MemberFuncTable
 import net.postchain.rell.module.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.utils.CommonUtils
@@ -798,23 +799,6 @@ class R_VirtualStructType(val innerType: R_StructType): R_VirtualType(innerType)
     override fun hashCode() = innerType.hashCode()
 }
 
-object R_OperationType: R_Type("operation") {
-    override fun isReference() = true
-    override fun createGtvConversion() = GtvRtConversion_Operation
-    override fun toStrictString(): String = name
-    override fun toMetaGtv() = name.toGtv()
-}
-
-object R_GtxBlockType: R_Type("rell.gtx.block") {
-    override fun isReference() = true
-    override fun createGtvConversion() = GtvRtConversion_GtxBlock
-    override fun toStrictString(): String = name
-    override fun toMetaGtv() = name.toGtv()
-}
-
-object R_GtxTxType: R_Type("rell.gtx.tx") {
-    override fun isReference() = true
-    override fun createGtvConversion() = GtvRtConversion_GtxTx
-    override fun toStrictString(): String = name
-    override fun toMetaGtv() = name.toGtv()
+abstract class R_LibType(name: String): R_Type(name) {
+    abstract fun getMemberFunctions(): C_MemberFuncTable
 }

@@ -1,9 +1,6 @@
 package net.postchain.rell.compiler
 
-import net.postchain.rell.compiler.ast.S_AttributeDefinition
-import net.postchain.rell.compiler.ast.S_Expr
-import net.postchain.rell.compiler.ast.S_Name
-import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.ast.*
 import net.postchain.rell.model.*
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmSet
@@ -11,7 +8,7 @@ import net.postchain.rell.utils.toImmSet
 class C_SysAttribute(
         val name: String,
         val type: R_Type,
-        val mutable: Boolean,
+        val mutable: Boolean = false,
         val expr: R_Expr? = null,
         val sqlMapping: String = name,
         val canSetInCreate: Boolean = true
@@ -123,7 +120,7 @@ class C_EntityContext(
 ) {
     private val sysAttributes = sysAttributes.toImmList()
 
-    private val msgCtx = defCtx.msgCtx
+    val msgCtx = defCtx.msgCtx
 
     private val sysAttributeNames = sysAttributes.map { it.name }.toImmSet()
     private val userAttributes = mutableMapOf<String, C_AttributeClause>()
@@ -157,7 +154,9 @@ class C_EntityContext(
         }
 
         if (nameStr in sysAttributeNames) {
-            C_Errors.errDuplicateAttribute(msgCtx, attrDef.header.name)
+            if (primary) {
+                C_Errors.errDuplicateAttribute(msgCtx, attrDef.header.name)
+            }
         } else {
             val cAttrClause = userAttributes.computeIfAbsent(nameStr) { C_AttributeClause(defCtx) }
             cAttrClause.addDefinition(cAttrDef, primary)
@@ -190,13 +189,13 @@ class C_EntityContext(
 
     fun addKey(pos: S_Pos, attrs: List<S_Name>) {
         val names = attrs.map { it.str }
-        addUniqueKeyIndex(pos, uniqueKeys, names, "entity_key_dup", "Duplicate key")
+        addUniqueKeyIndex(pos, uniqueKeys, names, S_KeyIndexKind.KEY)
         keys.add(R_Key(names))
     }
 
     fun addIndex(pos: S_Pos, attrs: List<S_Name>) {
         val names = attrs.map { it.str }
-        addUniqueKeyIndex(pos, uniqueIndices, names, "entity_index_dup", "Duplicate index")
+        addUniqueKeyIndex(pos, uniqueIndices, names, S_KeyIndexKind.INDEX)
         indices.add(R_Index(names))
     }
 
@@ -223,14 +222,16 @@ class C_EntityContext(
         return rAttrs.map { it.name to it }.toMap()
     }
 
-    private fun addUniqueKeyIndex(pos: S_Pos, set: MutableSet<Set<String>>, names: List<String>, errCode: String, errMsg: String) {
+    private fun addUniqueKeyIndex(pos: S_Pos, set: MutableSet<Set<String>>, names: List<String>, kind: S_KeyIndexKind) {
         if (defCtx.definitionType == C_DefinitionType.OBJECT) {
-            throw C_Error.stop(pos, "object_keyindex:${entityName}", "Object cannot have key or index")
+            throw C_Error.stop(pos, "object:key_index:${entityName}:$kind", "Object cannot have ${kind.nameMsg.normal}")
         }
 
         val nameSet = names.toSet()
         if (!set.add(nameSet)) {
             val nameLst = names.sorted()
+            val errCode = "entity:key_index:dup_attr:$kind"
+            val errMsg = "Duplicate ${kind.nameMsg.normal}"
             throw C_Error.stop(pos, "$errCode:${nameLst.joinToString(",")}", "$errMsg: ${nameLst.joinToString()}")
         }
     }

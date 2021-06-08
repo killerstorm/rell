@@ -3,22 +3,22 @@
 import tests.data;
 
 function test_add_user() {
-    require( data.user@*{}(.name) == list<text>(), 'expected_no_users' );
+    assert_equals(data.user@*{}(.name), list<text>());
 
-    val tx = rell.gtx.tx(data.add_user('Bob'));
-    require( data.user@*{}(.name) == list<text>(), 'expected_no_users' );
+    val tx = rell.test.tx(data.add_user('Bob'));
+    assert_equals(data.user@*{}(.name), list<text>());
 
     tx.run();
-    require( data.user@*{}(.name) == ['Bob'], 'expected_user_bob' );
+    assert_equals(data.user@*{}(.name), ['Bob']);
 }
 
 function test_remove_user() {
-    rell.gtx.tx([data.add_user('Bob'), data.add_user('Alice')]).run();
-    require( data.user@*{}(.name) == ['Bob', 'Alice'], 'expected_users_bob_alice_1' );
+    rell.test.tx([data.add_user('Bob'), data.add_user('Alice')]).run();
+    assert_equals(data.user@*{}(.name), ['Bob', 'Alice']);
 
-    val tx = rell.gtx.tx(data.remove_user('Bob'));
-    require( data.user@*{}(.name) == ['Bob', 'Alice'], 'expected_users_bob_alice_2' );
+    val tx = rell.test.tx(data.remove_user('Bob'));
+    assert_equals(data.user@*{}(.name), ['Bob', 'Alice']);
 
     tx.run();
-    require( data.user@*{}(.name) == ['Alice'], 'expected_user_alice' );
+    assert_equals(data.user@*{}(.name), ['Alice']);
 }

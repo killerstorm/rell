@@ -4,7 +4,7 @@
 
 package net.postchain.rell
 
-import net.postchain.rell.module.RELL_VERSION
+import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.Rt_BooleanValue
 import net.postchain.rell.runtime.Rt_IntValue
 import net.postchain.rell.runtime.Rt_TextValue
@@ -149,7 +149,7 @@ class QueryTest: BaseRellTest() {
     }
 
     @Test fun testGetRellVersion() {
-        chkFull("", "rell.get_rell_version", listOf(), "text[$RELL_VERSION]")
+        chkFull("", "rell.get_rell_version", listOf(), "text[${RellVersions.VERSION}]")
     }
 
     @Test fun testCallQuery() {

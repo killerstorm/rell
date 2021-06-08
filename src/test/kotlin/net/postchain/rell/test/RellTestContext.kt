@@ -4,6 +4,7 @@
 
 package net.postchain.rell.test
 
+import net.postchain.base.BlockchainRid
 import net.postchain.base.data.PostgreSQLDatabaseAccess
 import net.postchain.base.data.SQLDatabaseAccess
 import net.postchain.rell.runtime.Rt_SqlManager
@@ -53,7 +54,7 @@ class RellTestContext(useSql: Boolean = true): Closeable {
             field = value
         }
 
-    private val blockchains = mutableMapOf<Long, ByteArray>()
+    private val blockchains = mutableMapOf<Long, BlockchainRid>()
     private val inserts = mutableListOf<String>()
 
     fun init() {
@@ -104,7 +105,7 @@ class RellTestContext(useSql: Boolean = true): Closeable {
         if (blockchains.isEmpty()) return
 
         val inserts = blockchains.entries.map { ( chainId, rid ) ->
-            val ridStr = CommonUtils.bytesToHex(rid)
+            val ridStr = rid.toHex()
             """INSERT INTO blockchains(chain_iid, blockchain_rid) VALUES ($chainId, E'\\x$ridStr');"""
         }
 
@@ -118,9 +119,9 @@ class RellTestContext(useSql: Boolean = true): Closeable {
 
     fun blockchain(chainId: Long, rid: String) {
         checkNotInited()
-        val ridArray = CommonUtils.hexToBytes(rid)
+        val bcRid = RellTestUtils.strToBlockchainRid(rid)
         check(chainId !in blockchains)
-        blockchains[chainId] = ridArray
+        blockchains[chainId] = bcRid
     }
 
     fun insert(table: String, columns: String, values: String) {

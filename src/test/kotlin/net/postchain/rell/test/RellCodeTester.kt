@@ -24,9 +24,7 @@ import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.sql.SqlInit
 import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.sql.SqlUtils
-import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.toImmMap
-import net.postchain.rell.utils.toImmSet
 import org.junit.Assert
 import kotlin.test.assertEquals
 
@@ -94,8 +92,8 @@ class RellCodeTester(
 
     fun chainDependency(name: String, rid: String, height: Long) {
         check(name !in chainDependencies)
-        val ridArray = CommonUtils.hexToBytes(rid)
-        chainDependencies[name] = TestChainDependency(ridArray, height)
+        val bcRid = RellTestUtils.strToBlockchainRid(rid)
+        chainDependencies[name] = TestChainDependency(bcRid, height)
     }
 
     fun chainDependencies() = chainDependencies.mapValues { (_, v) -> Pair(v.rid, v.height) }.toImmMap()
@@ -243,8 +241,8 @@ class RellCodeTester(
         }
     }
 
-    fun createGlobalCtx(): Rt_GlobalContext {
-        val chainContext = createChainContext()
+    fun createGlobalCtx(gtvConfig: Gtv = GtvNull): Rt_GlobalContext {
+        val chainContext = createChainContext(gtvConfig)
 
         val pcModuleEnv = RellPostchainModuleEnvironment(
                 outPrinter = outPrinter,
@@ -266,10 +264,10 @@ class RellCodeTester(
         )
     }
 
-    private fun createChainContext(): Rt_ChainContext {
+    private fun createChainContext(gtvConfig: Gtv = GtvNull): Rt_ChainContext {
         val bcRidHex = chainRid ?: "00".repeat(32)
         val bcRid = BlockchainRid(bcRidHex.hexStringToByteArray())
-        return Rt_ChainContext(GtvNull, mapOf(), bcRid)
+        return Rt_ChainContext(gtvConfig, mapOf(), bcRid)
     }
 
     fun createAppCtx(
@@ -280,6 +278,11 @@ class RellCodeTester(
             test: Boolean
     ): Rt_AppContext {
         val sqlCtx = createSqlCtx(app, sqlExec)
+
+        val modules = app.modules.filter { !it.test && !it.abstract && !it.external }.map { it.name }
+        val keyPair = UnitTestBlockRunner.getTestKeyPair()
+        val blockRunnerStrategy = Rt_DynamicBlockRunnerStrategy(sourceDir, modules, keyPair)
+
         return Rt_AppContext(
                 globalCtx,
                 sqlCtx,
@@ -287,8 +290,7 @@ class RellCodeTester(
                 repl = false,
                 test = test,
                 replOut = null,
-                sourceDir = sourceDir,
-                modules = app.modules.filter { !it.test && !it.abstract && !it.external }.map { it.name }.toImmSet()
+                blockRunnerStrategy = blockRunnerStrategy
         )
     }
 
@@ -305,9 +307,9 @@ class RellCodeTester(
 
     private fun createSqlCtx(app: R_App, sqlExec: SqlExecutor): Rt_SqlContext {
         val sqlMapping = createChainSqlMapping()
-        val rtDeps = chainDependencies.mapValues { (_, v) -> Rt_ChainDependency(v.rid) }
+        val rtDeps = chainDependencies.mapValues { (_, v) -> Rt_ChainDependency(v.rid.data) }
 
-        val heightMap = chainDependencies.mapKeys { (_, v) -> ByteArrayKey(v.rid) }.mapValues { (_, v) -> v.height }
+        val heightMap = chainDependencies.mapKeys { (_, v) -> ByteArrayKey(v.rid.data) }.mapValues { (_, v) -> v.height }
         val heightProvider = TestChainHeightProvider(heightMap)
 
         return eval.wrapRt { Rt_SqlContext.create(app, sqlMapping, rtDeps, sqlExec, heightProvider) }
@@ -350,11 +352,14 @@ class RellCodeTester(
 
     fun createRepl(): RellReplTester {
         val files = files()
-        val globalCtx = createGlobalCtx()
         val moduleNameStr = replModule
         val module = if (moduleNameStr == null) null else R_ModuleName.of(moduleNameStr)
+
+        val sourceDir = C_MapSourceDir.of(files)
+        val globalCtx = createGlobalCtx()
+
         val sqlMgr = tstCtx.sqlMgr()
-        return RellReplTester(files, globalCtx, sqlMgr, module, tstCtx.useSql)
+        return RellReplTester(globalCtx, sourceDir, sqlMgr, module, tstCtx.useSql)
     }
 
     private fun processWithExeCtx(code: String, tx: Boolean, processor: (Rt_ExecutionContext) -> String): String {
@@ -382,7 +387,7 @@ class RellCodeTester(
         return res
     }
 
-    private class TestChainDependency(val rid: ByteArray, val height: Long)
+    private class TestChainDependency(val rid: BlockchainRid, val height: Long)
 
     private class TestChainHeightProvider(private val map: Map<ByteArrayKey, Long>): Rt_ChainHeightProvider {
         override fun getChainHeight(rid: ByteArrayKey, id: Long): Long? {

@@ -117,6 +117,7 @@ class AppGtvMetaTest: BaseRellTest(false) {
 
     @Test fun testDefOperation() {
         chkMetaDef("operation op(x: text) {}", "operations", "op", """{
+            "mount":"op",
             "parameters":[
                 {"name":"x", "type":"text"}
             ]
@@ -125,6 +126,7 @@ class AppGtvMetaTest: BaseRellTest(false) {
 
     @Test fun testDefQuery() {
         chkMetaDef("query q(x: text) = x.size();", "queries", "q", """{
+            "mount":"q",
             "type": "integer",
             "parameters":[
                 {"name":"x", "type":"text"}
@@ -145,9 +147,9 @@ class AppGtvMetaTest: BaseRellTest(false) {
     @Test fun testDefEnum() {
         chkMetaDef("enum e {A, B, C}", "enums", "e", """{
             "values":{
-                "A":{},
-                "B":{},
-                "C":{}
+                "A":{"value":0},
+                "B":{"value":1},
+                "C":{"value":2}
             }
         }""")
     }
@@ -294,10 +296,10 @@ class AppGtvMetaTest: BaseRellTest(false) {
             "lib":{
                 "name":"lib",
                 "entities":{"user":{"attributes":{},"indexes":[],"keys":[],"log":0,"mount":"user"}},
-                "operations":{"op":{"parameters":[]}},
+                "operations":{"op":{"mount":"op","parameters":[]}},
                 "structs":{"rec":{"attributes":{}}},
                 "objects":{"state":{"attributes":{},"mount":"state"}},
-                "enums":{"kind":{"values":{"A":{}}}}
+                "enums":{"kind":{"values":{"A":{"value":0}}}}
             }
         }}""")
     }

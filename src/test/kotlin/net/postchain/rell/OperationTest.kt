@@ -66,73 +66,36 @@ class OperationTest: BaseRellTest() {
     }
 
     @Test fun testCallOperation() {
+        tst.testLib = true
         def("operation op(x: integer, y: text) {}")
-        chk("op(123, 'Hello')", "struct<op>[x=int[123],y=text[Hello]]")
+        chk("op(123, 'Hello')", """op[op(123,"Hello")]""")
         chk("op('Hello', 123)", "ct_err:[expr_call_argtype:op:0:x:integer:text][expr_call_argtype:op:1:y:text:integer]")
         chk("op(123, 'Hello', 456)", "ct_err:expr:call:arg_count:op:2:3")
-        chk("op(123+456, 'Hello' + 'World')", "struct<op>[x=int[579],y=text[HelloWorld]]")
-        chk("'' + op(123, 'Hello')", "text[struct<op>{x=123,y=Hello}]")
-        chk("_type_of(op(123, 'Hello'))", "text[struct<op>]")
+        chk("op(123+456, 'Hello' + 'World')", """op[op(579,"HelloWorld")]""")
+        chk("'' + op(123, 'Hello')", """text[op(123,"Hello")]""")
+        chk("_type_of(op(123, 'Hello'))", "text[rell.test.op]")
     }
 
     @Test fun testCallOperationSideEffect() {
+        tst.testLib = true
         def("operation foo(x: integer, y: text) { print('foo'); }")
         def("function f() { print('f'); return 0; }")
         chk("f()", "int[0]")
         chkOut("f")
-        chk("foo(123, 'Hello')", "struct<foo>[x=int[123],y=text[Hello]]")
+        chk("foo(123, 'Hello')", """op[foo(123,"Hello")]""")
         chkOut()
     }
 
-    @Test fun testOperationTypeCompatibility() {
-        def("operation bob(x: integer){}")
-        def("operation alice(x: integer){}")
-        def("operation trudy(t: text){}")
-        chkEx("{ var v = bob(123).to_operation(); v = alice(456).to_operation(); return v; }", "op[alice(int[456])]")
-        chkEx("{ var v = bob(123).to_operation(); v = trudy('Hello').to_operation(); return v; }", "op[trudy(text[Hello])]")
-    }
-
-    @Test fun testOperationTypeExplicit() {
-        def("operation bob(x: integer){}")
-        chkEx("{ var v: operation; v = bob(123); return 0; }", "ct_err:stmt_assign_type:[operation]:[struct<bob>]")
-        chkEx("{ var v: struct<bob>; v = bob(123).to_operation(); return 0; }", "ct_err:stmt_assign_type:[struct<bob>]:[operation]")
-        chkEx("{ var v: operation; v = bob(123).to_operation(); return v; }", "op[bob(int[123])]")
-    }
-
-    @Test fun testOperationTypeOps() {
-        def("operation foo(x: integer, y: text){}")
-        def("operation bar(x: integer, y: text){}")
-        def("function foo_op(x: integer, y: text) = foo(x, y).to_operation();")
-        def("function bar_op(x: integer, y: text) = bar(x, y).to_operation();")
-
-        chk("foo_op(123,'Hello') == foo_op(456,'Bye')", "boolean[false]")
-        chk("foo_op(123,'Hello') == foo_op(123,'Hello')", "boolean[true]")
-        chk("foo_op(123,'Hello') == foo_op(579-456,'Hello')", "boolean[true]")
-        chk("foo_op(123,'Hello') != foo_op(456,'Bye')", "boolean[true]")
-        chk("foo_op(123,'Hello') != foo_op(123,'Hello')", "boolean[false]")
-
-        chk("foo_op(123,'Hello') == bar_op(123,'Hello')", "boolean[false]")
-        chk("foo_op(123,'Hello') != bar_op(123,'Hello')", "boolean[true]")
-
-        chk("foo_op(123,'Hello') < foo_op(123,'Hello')", "ct_err:binop_operand_type:<:[operation]:[operation]")
-        chk("foo_op(123,'Hello') > foo_op(123,'Hello')", "ct_err:binop_operand_type:>:[operation]:[operation]")
-        chk("foo_op(123,'Hello') <= foo_op(123,'Hello')", "ct_err:binop_operand_type:<=:[operation]:[operation]")
-        chk("foo_op(123,'Hello') >= foo_op(123,'Hello')", "ct_err:binop_operand_type:>=:[operation]:[operation]")
-    }
-
-    @Test fun testOperationTypeAsMapKey() {
-        def("operation foo(x: integer, y: text){}")
-        def("operation bar(p: text, q: integer){}")
-        def("function foo_op(x: integer, y: text) = foo(x, y).to_operation();")
-        def("function bar_op(p: text, q: integer) = bar(p, q).to_operation();")
-        chk("[ foo_op(123,'Hello') : 'Bob', bar_op('Bye', 456) : 'Alice' ]",
-                "map<operation,text>[op[foo(int[123],text[Hello])]=text[Bob],op[bar(text[Bye],int[456])]=text[Alice]]")
-    }
-
-    @Test fun testDefautParameters() {
+    @Test fun testCallOperationDefautParameters() {
+        tst.testLib = true
         def("operation foo(x: integer = 123, y: text = 'Hello'){}")
-        chk("foo()", "struct<foo>[x=int[123],y=text[Hello]]")
-        chk("foo(456)", "struct<foo>[x=int[456],y=text[Hello]]")
-        chk("foo(456,'Bye')", "struct<foo>[x=int[456],y=text[Bye]]")
+        chk("foo()", """op[foo(123,"Hello")]""")
+        chk("foo(456)", """op[foo(456,"Hello")]""")
+        chk("foo(456,'Bye')", """op[foo(456,"Bye")]""")
+    }
+
+    @Test fun testCallOperationNoTestLib() {
+        def("operation foo(x: integer){}")
+        chk("foo(123)", "ct_err:expr:operation_call:no_test:foo")
     }
 }

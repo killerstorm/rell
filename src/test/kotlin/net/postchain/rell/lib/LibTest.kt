@@ -4,9 +4,10 @@
 
 package net.postchain.rell.lib
 
-import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.runtime.Rt_OpContext
 import net.postchain.rell.test.BaseRellTest
+import net.postchain.rell.test.RellTestUtils
+import net.postchain.rell.utils.CommonUtils
 import org.junit.Test
 
 class LibTest: BaseRellTest(false) {
@@ -70,20 +71,6 @@ class LibTest: BaseRellTest(false) {
         chkEx("{ f(); return 0; }", "int[0]")
         chkOut()
         chkLog("[:f(main.rell:1)] this is f()")
-    }
-
-    @Test fun testIsSigner() {
-        tst.opContext = Rt_OpContext(-1, -1, -1, listOf(CommonUtils.hexToBytes("1234"), CommonUtils.hexToBytes("abcd")))
-
-        chk("is_signer(x'1234')", "boolean[true]")
-        chk("is_signer(x'abcd')", "boolean[true]")
-        chk("is_signer(x'1234abcd')", "boolean[false]")
-        chk("is_signer(x'')", "boolean[false]")
-
-        chk("is_signer()", "ct_err:expr_call_argtypes:is_signer:")
-        chk("is_signer(123)", "ct_err:expr_call_argtypes:is_signer:integer")
-        chk("is_signer('1234')", "ct_err:expr_call_argtypes:is_signer:text")
-        chk("is_signer(x'12', x'34')", "ct_err:expr_call_argtypes:is_signer:byte_array,byte_array")
     }
 
     @Test fun testTypeOf() {
@@ -315,5 +302,25 @@ class LibTest: BaseRellTest(false) {
     @Test fun testSysQueries() {
         chk("rell.get_rell_version()", "ct_err:unknown_name:rell.get_rell_version")
         chk("rell.get_app_structure()", "ct_err:unknown_name:rell.get_app_structure")
+    }
+
+    @Test fun testGtxOperationType() {
+        chk("gtx_operation(name = 'foo', args = list<gtv>())", "gtx_operation[name=text[foo],args=list<gtv>[]]")
+        chk("gtx_operation()", "ct_err:attr_missing:name,args")
+        chkEx("{ var o: gtx_operation; o = gtx_operation('foo', ['Bob'.to_gtv()]); return o; }",
+                """gtx_operation[name=text[foo],args=list<gtv>[gtv["Bob"]]]""")
+    }
+
+    @Test fun testGtxTransactionBodyType() {
+        chk("gtx_transaction_body(blockchain_rid = x'1234', operations = list<gtx_operation>(), signers = list<gtv>())",
+                "gtx_transaction_body[blockchain_rid=byte_array[1234],operations=list<gtx_operation>[],signers=list<gtv>[]]")
+        chk("gtx_transaction_body()", "ct_err:attr_missing:blockchain_rid,operations,signers")
+    }
+
+    @Test fun testGtxTransactionType() {
+        val expBody = "gtx_transaction_body[blockchain_rid=byte_array[1234],operations=list<gtx_operation>[],signers=list<gtv>[]]"
+        chk("gtx_transaction(body = gtx_transaction_body(blockchain_rid = x'1234', operations = [], signers = []), signatures = [])",
+                "gtx_transaction[body=$expBody,signatures=list<gtv>[]]")
+        chk("gtx_transaction()", "ct_err:attr_missing:body,signatures")
     }
 }

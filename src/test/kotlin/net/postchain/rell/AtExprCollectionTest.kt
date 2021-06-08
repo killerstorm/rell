@@ -49,8 +49,8 @@ class AtExprCollectionTest: BaseRellTest(false) {
         chk("[1,2,3,4,5] @* {} ( $++ )", "ct_err:expr_assign_val:$")
 
         chk("[1,2,3] @* {} ([4,5,6] @* {})", "[[4, 5, 6], [4, 5, 6], [4, 5, 6]]")
-        chk("[1,2,3] @* {} ([4,5,6] @* {} ( $ ))", "ct_err:name:ambiguous:$")
-        chk("[1,2,3] @* {exists([4,5,6] @* { $ > 0 })}", "ct_err:name:ambiguous:$")
+        chk("[1,2,3] @* {} ([4,5,6] @* {} ( $ ))", "[[4, 5, 6], [4, 5, 6], [4, 5, 6]]")
+        chk("[1,2,3] @* {exists([4,5,6] @* { $ > 0 })}", "[1, 2, 3]")
     }
 
     @Test fun testPlaceholderMixed() {
@@ -59,8 +59,8 @@ class AtExprCollectionTest: BaseRellTest(false) {
         def("entity user { name; }")
         insert("c0.user", "name", "100,'Bob'", "101,'Alice'")
 
-        chk("user @* {} ([123] @ {} ( $ ))", "ct_err:name:ambiguous:$")
-        chk("[123] @ {} (user @* {} ( $ ))", "ct_err:name:ambiguous:$")
+        chk("user @* {} ([123] @ {} ( $ ))", "[123, 123]")
+        chk("[123] @ {} (user @* {} ( $ ))", "[user[100], user[101]]")
         chk("(x: user) @* {} ([123] @ {} ( $ ))", "[123, 123]")
         chk("(x: [123]) @ {} (user @* {} ( $ ))", "[user[100], user[101]]")
         chk("user @* {} ((x: [123]) @ {} ( $ ))", "ct_err:[at_expr:placeholder:belongs_to_outer][expr_sqlnotallowed]")
@@ -587,6 +587,20 @@ class AtExprCollectionTest: BaseRellTest(false) {
         chkEx("{ $init; val t = l @* {} ( @group f(c) ) limit 3; return (t, c.v); }", "([1, 4, 9],5)")
         chkEx("{ $init; val t = l @* {} ( @group f(c) ) offset 2; return (t, c.v); }", "([9, 16, 25],5)")
         chkEx("{ $init; val t = l @* {} ( @group f(c) ) offset 2 limit 2; return (t, c.v); }", "([9, 16],5)")
+    }
+
+    @Test fun testImplicitTupleFieldName() {
+        tst.strictToString = false
+        def("struct user { id: integer; name; pos: text; }")
+        def("""function users() = [
+            user(id = 501, name = 'Bob', pos = 'Dev'),
+            user(id = 502, name = 'Alice', pos = 'Tester')
+        ];""")
+
+        chk("users() @* {} ( .name, .pos )", "[(name=Bob,pos=Dev), (name=Alice,pos=Tester)]")
+        chk("users() @* {} ( $.name, $.pos )", "[(name=Bob,pos=Dev), (name=Alice,pos=Tester)]")
+        chk("(u: users()) @* {} ( .name, .pos )", "[(name=Bob,pos=Dev), (name=Alice,pos=Tester)]")
+        chk("(u: users()) @* {} ( u.name, u.pos )", "[(name=Bob,pos=Dev), (name=Alice,pos=Tester)]")
     }
 
     private fun initDataCountries() {

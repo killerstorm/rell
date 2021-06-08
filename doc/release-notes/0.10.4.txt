@@ -1,4 +1,4 @@
-RELEASE NOTES 0.10.4 (202?-??-??)
+RELEASE NOTES 0.10.4 (2021-??-??)
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 1. Tools: Unit tests
@@ -8,11 +8,11 @@ To write unit tests for Rell code, use test modules. A test module is defined us
     @test module;
 
     function test_foo() {
-        require( 2 + 2 == 4 );
+        assert_equals(2 + 2, 4);
     }
 
     function test_bar() {
-        require( 2 + 2 == 5 );
+        assert_equals(2 + 2, 5);
     }
 
 All functions in a test module that start with "test_" (and a function called exactly "test") are test functions and
@@ -20,7 +20,7 @@ will be executed when the test module is run.
 
 To run a test module, use the command-line interpreter:
 
-rell.sh -d my_src_directory my_test_module
+    rell.sh -d my_src_directory --test my_test_module
 
 Each test function will be executed independently of others, and a summary will be printed in the end:
 
@@ -30,18 +30,76 @@ Each test function will be executed independently of others, and a summary will 
     my_test_module:test_foo OK
     my_test_module:test_bar FAILED
 
-    SUMMARY: 1 FAILED 1 PASSED 2 TOTAL
+    SUMMARY: 1 FAILED / 1 PASSED / 2 TOTAL
 
 
     ***** FAILED *****
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-2. Tools: Executing transactions and blocks in unit tests
+2. Library: Better API for transactions execution in unit tests
 
-Blocks and transactions created via functions rell.gtx.block() and rell.gtx.tx() can be executed in unit tests
-in order to invoke operations and modify data.
+A few things have changed in the test transaction API introduced in Rell 0.10.3:
 
-Example. Production module, file data.rell:
+- Types rell.test.block, rell.test.tx and rell.test.op introduced instead of rell.gtx.block and rell.gtx.tx;
+  the namespace rell.gtx removed.
+- The new types are mutable and implement the builder pattern (unlike the old types, which were immutable).
+- Operation call returns rell.test.op instead of the "operation" type (which was removed).
+
+More specifically, new transaction-building types are:
+
+    rell.test.block - a block, contains a list of transactions
+    rell.test.tx - a transaction, has a list of operations and a list of signers
+    rell.test.op - an operation call, which is a (mount) name and a list of arguments (each argument is a gtv)
+
+A struct type for test keypairs (can be used to sign test transactions):
+
+    struct rell.test.keypair {
+        priv: byte_array;           // private key, must be 32 bytes
+        pub: byte_array;            // public key, must be 33 bytes
+    }
+
+Additionally:
+
+    rell.test.keypairs.{bob, alice, trudy}: rell.test.keypair - test keypairs
+    rell.test.privkeys.{bob, alice, trudy}: byte_array - same as rell.test.keypairs.X.priv
+    rell.test.pubkeys.{bob, alice, trudy}: byte_array - same as rell.test.keypairs.X.pub
+
+    rell.test.nop(): rell.test.op - creates a "nop" operation (does nothing and is used to make a transaction unique).
+        The operation has an integer argument, which is incremented with every call of the function, and initially 0.
+
+    rell.test.nop(x: integer): rell.test.op
+    rell.test.nop(x: text): rell.test.op
+    rell.test.nop(x: byte_array): rell.test.op
+        Creates a "nop" operation with a specific argument value.
+
+Example 1. Building and running a block
+
+    operation foo(x: integer) { ... }
+    operation bar(s: text) { ... }
+
+    ...
+
+    val tx1 = rell.test.tx()
+        .op(foo(123))                           // operation call returns rell.test.op
+        .op(bar('ABC'))                         // now the transaction has two operations
+        .sign(rell.test.keypairs.bob)           // signing with the "Bob" test keypair
+        ;
+
+    val tx2 = rell.test.tx()
+        .op(bar('XYZ'))
+        .sign(rell.test.keypairs.bob)
+        .sign(rell.test.keypairs.alice)         // tx2 is signed with both "Bob" and "Alice" keypairs
+        ;
+
+    rell.test.block()
+        .tx(tx1)
+        .tx(tx2)
+        .run()                                  // execute the block consisting of two transactions: tx1 and tx2
+        ;
+
+Example 2. Production and test modules.
+
+Production module (file data.rell):
 
     module;
 
@@ -53,25 +111,104 @@ Example. Production module, file data.rell:
         create user(name);
     }
 
-Test module, file data_test.rell:
+Test module (file data_test.rell):
 
     @test module;
     import data;
 
     function test_add_user() {
-        require( data.user@*{}(.name) == list<text>(), 'expected_no_users' );
+        assert_equals(data.user@*{}(.name), list<text>());
 
-        val tx = rell.gtx.tx(data.add_user('Bob'));
-        require( data.user@*{}(.name) == list<text>(), 'expected_no_users' );
+        val tx = rell.test.tx(data.add_user('Bob'));
+        assert_equals(data.user@*{}(.name), list<text>());
 
         tx.run();
-        require( data.user@*{}(.name) == ['Bob'], 'expected_user_bob' );
+        assert_equals(data.user@*{}(.name), ['Bob']);
     }
 
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-3. Library: Support for text and byte_array functions in @-expressions
 
-Following functions are now supported in @-expressions (they are translated to their SQL equivalents):
+Functions of rell.test.block:
+
+    rell.test.block()                           - create an empty block builder
+    rell.test.block(tx: rell.test.tx, ...)      - create a block builder with some transaction(s)
+    rell.test.block(txs: list<rell.test.tx>)    - same
+    rell.test.block(op: rell.test.op, ...)      - create a block builder with one transaction with some operation(s)
+    rell.test.block(ops: list<rell.test.op>)    - same
+
+    .tx(tx: rell.test.tx, ...)                  - add some transaction(s) to the block
+    .tx(txs: list<rell.test.tx>)                - same
+    .tx(op: rell.test.op, ...)                  - add one transaction with some operation(s) to the block
+    .tx(ops: list<rell.test.op>)                - same
+
+    .copy(): rell.test.block                    - returns a copy of this block builder object
+    .run()                                      - run the block
+    .run_must_fail()                            - same as .run(), but throws exception on success, not on failure
+
+Functions of rell.test.tx:
+
+    rell.test.tx()                              - create an empty transaction builder
+    rell.test.tx(op: rell.test.op, ...)         - create a transaction builder with some operation(s)
+    rell.test.tx(ops: list<rell.test.op>)       - same
+
+    .op(op: rell.test.op, ...)                  - add some operation(s) to this transaction builder
+    .op(ops: list<rell.test.op>)                - same
+
+    .nop()                                      - same as .op(rell.test.nop())
+    .nop(x: integer)                            - same as .op(rell.test.nop(x))
+    .nop(x: text)                               - same
+    .nop(x: byte_array)                         - same
+
+    .sign(keypair: rell.test.keypair, ...)      - add some signer keypair(s)
+    .sign(keypairs: list<rell.test.keypair>)    - same
+    .sign(privkey: byte_array, ...)             - add some signer private key(s) (a private key must be 32 bytes)
+    .sign(privkeys: list<byte_arrays>)          - same
+
+    .copy(): rell.test.tx                       - returns a copy of this transaction builder object
+    .run()                                      - runs a block containing this single transaction
+    .run_must_fail()                            - same as .run(), but throws exception on success, not on failure
+
+Functions of rell.test.op:
+
+    rell.test.op(name: text, arg: gtv, ...)     - creates an operation call object with a given name and arguments
+    rell.test.op(name: text, args: list<gtv>)   - same
+
+    .tx(): rell.test.tx                         - creates a transaction builder object containing this operation
+    .sign(...): rell.test.tx                    - equivalent of .tx().sign(...)
+    .run()                                      - equivalent of .tx().run()
+    .run_must_fail()                            - eqiovalent of .tx().run_must_fail()
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+3. Library: Functions assert_* for unit tests
+
+New functions:
+
+    assert_equals(actual: T, expected: T) - fail (throw an exception) if two values are not equal
+    assert_not_equals(actual: T, expected: T) - fail if the values are equal
+
+    assert_true(actual: boolean) - assert that the value is "true"
+    assert_false(actual: boolean) - assert that the value is "false"
+
+    assert_null(actual: T?) - assert that the value is null
+    assert_not_null(actual: T?) - assert that the value is not null
+
+    assert_lt(actual: T, expected: T) - assert less than (actual < expected)
+    assert_gt(actual: T, expected: T) - assert greater than (actual > expected)
+    assert_le(actual: T, expected: T) - assert less or equal (actual <= expected)
+    assert_ge(actual: T, expected: T) - assert greater or equal (actual >= expected)
+
+    assert_gt_lt(actual: T, min: T, max: T) - assert (actual > min) and (actual < max)
+    assert_gt_le(actual: T, min: T, max: T) - assert (actual > min) and (actual <= max)
+    assert_ge_lt(actual: T, min: T, max: T) - assert (actual >= min) and (actual < max)
+    assert_ge_le(actual: T, min: T, max: T) - assert (actual >= min) and (actual <= max)
+
+Same functions are also available in the rell.test namespace.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+4. Library: Support for more text and byte_array operations in at-expressions
+
+Operator "[]" (subscript) used to work only in interpreted expressions, now it works in SQL expressions as well.
+
+Additionally, following functions are now supported in at-expressions (they are translated to their SQL equivalents):
 
     byte_array.empty()
     byte_array.sub()
@@ -88,14 +225,9 @@ Following functions are now supported in @-expressions (they are translated to t
     text.sub()
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-4. Language: Operator [] for text and byte_array types in @-expressions
-
-Subscript operator used to work only in interpreted expressions, now it works in SQL expressions as well.
-
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 5. Library: Function text.like()
 
-New function for simple pattern matching which works same way in interpreted expressions and in @-expressions:
+New function for simple pattern matching which works same way in interpreted expressions and in at-expressions:
 
     text.like(pattern): boolean
 
@@ -147,7 +279,7 @@ Some places where collection type inference helps to shorten the code:
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 7. Language: Continue statement
 
-Rell now has the continue statement, like many other languages. It can be used in for and while loops.
+Rell now has the continue statement, like many other languages. It can be used in "for" and "while" loops.
 
 for (x in get_list_of_values()) {
     if (x < 0) continue;
@@ -194,7 +326,7 @@ At-expressions can be chained:
         @* { $ <= 25 }
         ;
 
-Operations are performed in memory, not in database. If applying "at" to a list of entities, each entity will be
+Operations are performed in memory, not in a database. If applying "at" to a list of entities, each entity will be
 selected from the database individually in order to access its attributes (may be slow):
 
     val all_users = user @* {};                     // Select all users with one SQL query.
@@ -203,28 +335,31 @@ selected from the database individually in order to access its attributes (may b
 Details:
 
 - All kinds of at-operators are supported: "@", "@?", "@*", "@+".
-- Source collection can be a list, a set or a map; the result is always a list (or a single value).
+- Source collection can be a list, a set or a map; the result for "@*" and "@+" is always a list.
 - Where- and what-expressions are not restricted to SQL-compatible ones (e. g. user-defined function calls are allowed).
 - Limit and offset clauses are supported.
 - Annotations @sort, @sort_desc and @omit are supported.
 - Grouping and aggregation is supported (via annotations @group, @sum, @min, @max).
+- Default order is the same as the order of the source collection (entities are not implicitly sorted by rowid).
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 10. Language: Key and index attribute syntax improvements
 
-Now one can specify mutability and default value for particular attributes within a key or index clause:
+It is allowed to specify mutability and default value for an attribute directly within a key or index clause:
 
     entity address {
-        index mutable city: text = 'London', mutable street: text = 'Unknown';
+        index mutable city: text = 'London';
     }
 
-In previous versions that code would like like this:
+In earlier versions the code would have to be:
 
     entity address {
         mutable city: text = 'London';
-        mutable street: text = 'Unknown';
-        index city, street;
+        index city;
     }
+
+The new syntax is allowed when there is only one attribute in a key or an index. If there are multiple attributes,
+they shall be defined separately from the index clause, as before.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 11. Language: Types struct<entity> and struct<object>
@@ -253,7 +388,7 @@ Alternatively, 'to_struct()' can be used in an at-expression (in the what-part):
 
     val s = user @ { .name == 'Bob' } ( user.to_struct() );
 
-One can pass a struct<entity> to a create expression instead of specifying individual attributes of the entity:
+One can pass a struct<entity> to a create expression instead of specifying individual attributes of an entity:
 
     create user(s);       // s is struct<user>
 
@@ -277,20 +412,11 @@ A new type struct<operation> defines a struct which has same attributes as the o
         return true;
     }
 
-The type struct<operation> is the result type of Rell operation invocation expression:
-
-    val op: struct<add_user> = add_user('Bob', 123);
-
-the returned value can be used to construct blocks and transactions (in unit tests or REPL):
-
-    val tx = rell.gtx.tx(op);
-    tx.run();
-
 Details:
 
 - Attributes of struct<OP> are not mutable.
 - Attributes of struct<OP> have same default values as the parameters of OP.
-- Member function struct<OP>.to_operation() converts the structure to the "operation" type.
+- Member function struct<OP>.to_test_op() converts a structure to the "rell.test.op" type.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 13. Language: Type struct<mutable T>
@@ -411,3 +537,133 @@ instead of
     not (X in Y)
 
 The new notation is supposed to be more readable when X and Y are complex expressions.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+18. Tools: Specifying source code compatibility version in blockchain configuration
+
+In blockchain XML configuration (so-called blockchain.xml format), old key "sources_v0.10" is replaced by a pair of
+new keys: "sources" and "version". Those keys are under the same path, in the "rell" node:
+
+        <entry key="rell">
+            <dict>
+                <entry key="sources">
+                    <dict>
+                        <entry key="user.rell">...</entry>
+                    </dict>
+                </entry>
+                <entry key="version">
+                    <string>0.10.4</string>
+                </entry>
+            </dict>
+        </entry>
+
+The "version" key is mandatory. Its main purpose is to provide backward compatibility of future versions of Rell in
+case if there are breaking changes. Thus, Rell module written for an older version of Rell will work with a newer version
+of Rell interpreter. Currently, there are no breaking changes, but there can be some in the future.
+
+If an older version number is specified, the code can still use features of newer versions of Rell (assuming a newer
+version of Rell interpreter is used).
+
+More details:
+
+- The old key "sources_v0.10" is still supported, but similar keys for newer versions will not be.
+- Command-line tools, like multigen.sh, have an optional parameter for specifying the version: "--source-version".
+- In Rell 0.10.4, the specified version has no effect, but it must be a valid Rell version.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+19. Tools: Running unit tests via run.xml
+
+The multirun.sh utility now has an option "--test", which causes it to run unit tests instead of starting a node:
+
+    ./multirun.sh -d rell/src --test rell/config/run.xml
+
+The advantage of running unit tests via run.xml is that it allows to define module arguments (module_args structs),
+what cannot be done with rell.sh.
+
+By default, all test modules which are submodules of the main module (specified in the <app> tag) are executed.
+If the run.xml file defines more than one chain, tests for each chain are executed.
+
+To allow executing tests that are not in a submodule of the main module, a new tag <test> was introduced:
+
+    <test module="other_tests" />
+
+This will execute tests defined in the specified module and all its submodules. The tag <test> can be a child of
+<chains> or <chain> tags in order to add specific unit tests to all chains or to a single chain only.
+
+It is mandatory to specify an additional test database configuration via a new <test-config> tag to run unit tests.
+Tests wipe the database when they are executed, so it is important to not run them on the same database which is used
+when launching run.xml in a normal (non-test) mode.
+
+Example of a complete run.xml file with newly introduced test tags:
+
+    <run>
+        <nodes>
+            <config src="node-config.properties" />
+            <test-config src="node-config-test.properties" />
+        </nodes>
+
+        <chains>
+            <chain name="foo" iid="1">
+                <config height="0">
+                    <app module="foo.app" />
+                </config>
+                <test module="foo.tests" />
+            </chain>
+
+            <test module="lib.tests" />
+        </chains>
+    </run>
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+20. Tools: Running all unit tests in a directory tree via the command-line interpreter
+
+Command-line interpreter (rell.sh) has a new option "--test":
+
+    ./rell.sh -d rell/src --test
+
+This will execute all test modules defined in the source directory or its subdirectories.
+
+Optionally, one can specify a set of modules to execute:
+
+    ./rell.sh -d rell/src --test foo bar
+
+Then tests defined in the specified modules and all their submodules will be executed.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+21. Library: New Postchain API
+
+New types:
+
+    struct gtx_operation {
+        name: text;
+        args: list<gtv>;
+    }
+
+    struct gtx_transaction_body {
+        blockchain_rid: byte_array;
+        operations: list<gtx_operation>;
+        signers: list<gtv>;
+    }
+
+    struct gtx_transaction {
+       body: gtx_transaction_body;
+       signatures: list<gtv>;
+    }
+
+New functions and properties:
+
+    op_context.op_index: integer
+        Index of the operation being executed in the transaction (0 == first operation).
+
+    op_context.get_signers(): list<byte_array>
+        Returns pubkeys of the signers of the current transaction.
+
+    op_context.is_signer(pubkey: byte_array): boolean
+        Checks if the pubkey is one of the signers of the current transaction (same as the global function is_signer();
+        the new function is recommended).
+
+    op_context.get_all_operations(): list<gtx_operation>
+        Returns all operations of the current transaction.
+
+    op_context.emit_event(type: text, data: gtv)
+        Emits an event.

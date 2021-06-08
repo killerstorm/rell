@@ -7,6 +7,7 @@ package net.postchain.rell
 import net.postchain.rell.lib.LibBlockTransactionTest
 import net.postchain.rell.runtime.Rt_OpContext
 import net.postchain.rell.test.BaseRellTest
+import net.postchain.rell.test.RellTestUtils
 import org.junit.Test
 
 class LogAnnotationTest: BaseRellTest() {
@@ -39,7 +40,7 @@ class LogAnnotationTest: BaseRellTest() {
         def("@log entity foo { x: integer; }")
         tst.chainId = 333
         tst.inserts = LibBlockTransactionTest.BLOCK_INSERTS_333
-        tst.opContext = Rt_OpContext(-1, 444, -1, listOf())
+        tst.opContext = opContext()
 
         chkOp("create foo(x = 123);")
         tst.chkData("foo(1,444,123)")
@@ -68,7 +69,7 @@ class LogAnnotationTest: BaseRellTest() {
         def("@log entity foo { x: integer; }")
         tst.chainId = 333
         tst.inserts = LibBlockTransactionTest.BLOCK_INSERTS_333
-        tst.opContext = Rt_OpContext(-1, 444, -1, listOf())
+        tst.opContext = opContext()
 
         chkOp("create foo(x = 123, transaction@{});", "ct_err:create_attr_cantset:transaction")
         tst.chkData()
@@ -85,4 +86,6 @@ class LogAnnotationTest: BaseRellTest() {
         chkOp("delete foo @* {};", "ct_err:stmt_delete_cant:foo")
         chkOp("delete bar @* {};")
     }
+
+    private fun opContext() = Rt_OpContext(RellTestUtils.Rt_TestTxContext, -1, 444, -1, -1, listOf(), listOf())
 }

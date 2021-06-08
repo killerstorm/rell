@@ -8,6 +8,7 @@ import net.postchain.rell.lib.LibBlockTransactionTest
 import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.test.RellCodeTester
 import net.postchain.rell.test.RellTestContext
+import net.postchain.rell.test.RellTestUtils
 import org.junit.Test
 
 class ExternalTest: BaseRellTest() {
@@ -100,7 +101,9 @@ class ExternalTest: BaseRellTest() {
         initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
         tst.chainDependency("foo", "deadbeef", 1000)
         tst.chainDependency("bar", "deadbeef", 2000)
-        chk("123", "rt_err:external_chain_dup_rid:bar:deadbeef")
+
+        val exp = RellTestUtils.strToRidHex("deadbeef")
+        chk("123", "rt_err:external_chain_dup_rid:bar:$exp")
     }
 
     @Test fun testUnknownChain() {

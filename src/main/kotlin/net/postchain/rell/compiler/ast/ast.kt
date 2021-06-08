@@ -6,8 +6,9 @@ package net.postchain.rell.compiler.ast
 
 import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.parser.RellTokenMatch
+import net.postchain.rell.lib.C_Lib_OpContext
 import net.postchain.rell.model.*
-import net.postchain.rell.module.RELL_VERSION_MODULE_SYSTEM
+import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.toGtv
 import net.postchain.rell.tools.api.IdeOutlineNodeType
 import net.postchain.rell.tools.api.IdeOutlineTreeBuilder
@@ -150,9 +151,12 @@ class S_AttributeClause(val attr: S_AttributeDefinition): S_RelClause() {
     }
 }
 
-enum class S_KeyIndexKind {
-    KEY,
-    INDEX,
+enum class S_KeyIndexKind(nameMsg: String) {
+    KEY("key"),
+    INDEX("index"),
+    ;
+
+    val nameMsg = MsgString(nameMsg)
 }
 
 class S_KeyIndexClause(val pos: S_Pos, val kind: S_KeyIndexKind, val attrs: List<S_AttributeDefinition>): S_RelClause() {
@@ -167,6 +171,10 @@ class S_KeyIndexClause(val pos: S_Pos, val kind: S_KeyIndexKind, val attrs: List
             C_Errors.check(names.add(name.str), name.pos) {
                     "entity_keyindex_dup:${name.str}" to "Duplicate attribute: '${name.str}'"
             }
+        }
+
+        if (attrs.size > 1) {
+            attrs.all { it.checkMultiAttrKeyIndex(ctx.msgCtx, kind) }
         }
 
         val attrNames = attrs.map { it.header.name }
@@ -184,7 +192,25 @@ class S_KeyIndexClause(val pos: S_Pos, val kind: S_KeyIndexKind, val attrs: List
     }
 }
 
-class S_AttributeDefinition(val mutablePos: S_Pos?, val header: S_AttrHeader, val expr: S_Expr?): S_Node()
+class S_AttributeDefinition(val mutablePos: S_Pos?, val header: S_AttrHeader, val expr: S_Expr?): S_Node() {
+    fun checkMultiAttrKeyIndex(msgCtx: C_MessageContext, kind: S_KeyIndexKind): Boolean {
+        return if (mutablePos != null) {
+            errKeyIndexTooComplex(msgCtx, kind, mutablePos, "mutable")
+            false
+        } else if (expr != null) {
+            errKeyIndexTooComplex(msgCtx, kind, expr.startPos, "expr")
+            false
+        } else {
+            true
+        }
+    }
+
+    private fun errKeyIndexTooComplex(msgCtx: C_MessageContext, kind: S_KeyIndexKind, pos: S_Pos, reasonCode: String) {
+        msgCtx.error(pos, "attr:key_index:too_complex:${header.name}:$kind:$reasonCode",
+                "${kind.nameMsg.capital} definition is too complex; write each attribute definition separately " +
+                        "and use only attribute names in the index clause")
+    }
+}
 
 sealed class S_Modifier {
     abstract fun compile(ctx: C_ModifierContext, target: C_ModifierTarget)
@@ -223,7 +249,7 @@ class S_Modifiers(val modifiers: List<S_Modifier>) {
     }
 
     fun compile(ctx: C_MountContext, target: C_ModifierTarget) {
-        val modifierCtx = C_ModifierContext(ctx.msgCtx, ctx.mountName)
+        val modifierCtx = C_ModifierContext(ctx.appCtx, ctx.mountName)
         compile(modifierCtx, target)
     }
 }
@@ -235,6 +261,19 @@ sealed class S_Definition(val modifiers: S_Modifiers): S_Node() {
 
     open fun getImportedModules(moduleName: R_ModuleName, res: MutableSet<R_ModuleName>) {
     }
+
+    protected fun checkSysMountNameConflict(
+            ctx: C_MountContext,
+            pos: S_Pos,
+            declType: C_DeclarationType,
+            mountName: R_MountName,
+            sysDefs: Set<R_MountName>
+    ) {
+        if (mountName in sysDefs) {
+            ctx.msgCtx.error(pos, "mount:conflict:sys:$declType:$mountName",
+                    "Mount name conflict: system ${declType.msg} '$mountName' exists")
+        }
+    }
 }
 
 class S_EntityDefinition(
@@ -245,7 +284,7 @@ class S_EntityDefinition(
         val body: List<S_RelClause>?
 ): S_Definition(modifiers) {
     override fun compile(ctx: C_MountContext) {
-        ctx.checkNotRepl(name.pos, C_DeclarationType.ENTITY)
+        ctx.checkNotReplOrTest(name.pos, C_DeclarationType.ENTITY)
 
         if (deprecatedKwPos != null) {
             ctx.msgCtx.error(deprecatedKwPos, "deprecated_kw:class:entity",
@@ -393,7 +432,7 @@ class S_EntityDefinition(
             val txType = sysDefs.transactionEntity.type
             val expr = if (extChain == null) {
                 val nsValueCtx = C_NamespaceValueContext(defCtx.initExprCtx)
-                C_Ns_OpContext.transactionExpr(nsValueCtx, name.pos)
+                C_Lib_OpContext.transactionExpr(nsValueCtx, name.pos)
             } else {
                 C_Utils.errorRExpr(txType, "Trying to initialize transaction for external entity '${rEntity.appLevelName}'")
             }
@@ -432,7 +471,7 @@ class S_ObjectDefinition(
 ): S_Definition(modifiers) {
     override fun compile(ctx: C_MountContext) {
         ctx.checkNotExternal(name.pos, C_DeclarationType.OBJECT)
-        ctx.checkNotRepl(name.pos, C_DeclarationType.OBJECT)
+        ctx.checkNotReplOrTest(name.pos, C_DeclarationType.OBJECT)
 
         val entityFlags = R_EntityFlags(
                 isObject = true,
@@ -586,13 +625,14 @@ class S_OperationDefinition(
 ): S_Definition(modifiers) {
     override fun compile(ctx: C_MountContext) {
         ctx.checkNotExternal(name.pos, C_DeclarationType.OPERATION)
-        ctx.checkNotRepl(name.pos, C_DeclarationType.OPERATION)
+        ctx.checkNotReplOrTest(name.pos, C_DeclarationType.OPERATION)
 
         val modTarget = C_ModifierTarget(C_ModifierTargetType.OPERATION, name, mount = true)
         modifiers.compile(ctx, modTarget)
 
         val names = ctx.nsCtx.defNames(name.str)
         val mountName = ctx.mountName(modTarget, name)
+        checkSysMountNameConflict(ctx, name.pos, C_DeclarationType.OPERATION, mountName, PostchainUtils.STD_OPS)
 
         val defCtx = C_DefinitionContext(ctx, C_DefinitionType.OPERATION, names.defId)
         val mirrorStructs = C_Utils.createMirrorStructs(
@@ -668,13 +708,14 @@ class S_QueryDefinition(
 ): S_Definition(modifiers) {
     override fun compile(ctx: C_MountContext) {
         ctx.checkNotExternal(name.pos, C_DeclarationType.QUERY)
-        ctx.checkNotRepl(name.pos, C_DeclarationType.QUERY)
+        ctx.checkNotReplOrTest(name.pos, C_DeclarationType.QUERY)
 
         val modTarget = C_ModifierTarget(C_ModifierTargetType.QUERY, name, mount = true)
         modifiers.compile(ctx, modTarget)
 
         val names = ctx.nsCtx.defNames(name.str)
         val mountName = ctx.mountName(modTarget, name)
+        checkSysMountNameConflict(ctx, name.pos, C_DeclarationType.QUERY, mountName, PostchainUtils.STD_QUERIES)
 
         val defCtx = C_DefinitionContext(ctx, C_DefinitionType.QUERY, names.defId)
         val rQuery = R_QueryDefinition(names, defCtx.initFrameGetter, mountName)
@@ -960,7 +1001,7 @@ class S_FunctionDefinition(
         val absDescriptor = if (fn == null) null else {
             val desc = fn.getAbstractDescriptor()
             if (desc == null) {
-                val qName = fn.getDefinition()?.appLevelName ?: C_Utils.nameStr(qualifiedName)
+                val qName = fn.getFunctionDefinition()?.appLevelName ?: C_Utils.nameStr(qualifiedName)
                 defCtx.msgCtx.error(qualifiedName[0].pos, "fn:override:not_abstract:[$qName]", "Function is not abstract: '$qName'")
             }
             desc
@@ -1189,7 +1230,7 @@ class S_ImportDefinition(
             ctx.msgCtx.error(pos, "import:module_not_external:$moduleName", "Module '$moduleName' is not external")
         }
 
-        if (module.header.test && !ctx.modCtx.test) {
+        if (module.header.test && !(ctx.modCtx.test || ctx.modCtx.repl)) {
             ctx.msgCtx.error(pos, "import:module_test:$moduleName", "Cannot import a test module '$moduleName' from a non-test module")
         }
 
@@ -1217,7 +1258,7 @@ class S_ImportDefinition(
 
 class S_IncludeDefinition(val pos: S_Pos): S_Definition(S_Modifiers(listOf())) {
     override fun compile(ctx: C_MountContext) {
-        ctx.msgCtx.error(pos, "include", "Include not supported since Rell $RELL_VERSION_MODULE_SYSTEM")
+        ctx.msgCtx.error(pos, "include", "Include not supported since Rell ${RellVersions.MODULE_SYSTEM_VERSION_STR}")
     }
 
     override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
@@ -1226,8 +1267,8 @@ class S_IncludeDefinition(val pos: S_Pos): S_Definition(S_Modifiers(listOf())) {
 }
 
 class S_ModuleHeader(val modifiers: S_Modifiers, val pos: S_Pos) {
-    fun compile(msgCtx: C_MessageContext, parentMountName: R_MountName): C_ModuleHeader {
-        val modifierCtx = C_ModifierContext(msgCtx, parentMountName)
+    fun compile(appCtx: C_AppContext, parentMountName: R_MountName): C_ModuleHeader {
+        val modifierCtx = C_ModifierContext(appCtx, parentMountName)
 
         val modTarget = C_ModifierTarget(
                 C_ModifierTargetType.MODULE,
@@ -1257,8 +1298,8 @@ class S_ModuleHeader(val modifiers: S_Modifiers, val pos: S_Pos) {
 }
 
 class S_RellFile(val header: S_ModuleHeader?, val definitions: List<S_Definition>): S_Node() {
-    fun compileHeader(msgCtx: C_MessageContext, parentMountName: R_MountName): C_ModuleHeader? {
-        return header?.compile(msgCtx, parentMountName)
+    fun compileHeader(appCtx: C_AppContext, parentMountName: R_MountName): C_ModuleHeader? {
+        return header?.compile(appCtx, parentMountName)
     }
 
     fun compile(path: C_SourcePath, modCtx: C_ModuleContext): C_CompiledRellFile {

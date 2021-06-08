@@ -77,11 +77,16 @@ class R_MemberCalculator_DataAttribute(
     }
 }
 
-class R_MemberCalculator_SysFn(type: R_Type, val fn: R_SysFunction, val args: List<R_Expr>): R_MemberCalculator(type) {
+class R_MemberCalculator_SysFn(
+        type: R_Type,
+        val fn: R_SysFunction,
+        val args: List<R_Expr>,
+        val fnName: String
+): R_MemberCalculator(type) {
     override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
         val vArgs = args.map { it.evaluate(frame) }
         val vFullArgs = listOf(baseValue) + vArgs
-        return fn.call(frame.defCtx.callCtx, vFullArgs)
+        return R_SysCallExpr.callAndCatch(fn, fnName, frame, vFullArgs)
     }
 }
 

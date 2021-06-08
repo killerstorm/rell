@@ -12,15 +12,12 @@ import net.postchain.rell.model.*
 import net.postchain.rell.utils.Getter
 import net.postchain.rell.utils.TypedKeyMap
 import net.postchain.rell.utils.toImmList
-import net.postchain.rell.utils.toImmSet
 import org.apache.commons.lang3.StringUtils
 
 data class C_VarUid(val id: Long, val name: String, val fn: R_FnUid)
 data class C_LoopUid(val id: Long, val fn: R_FnUid)
 
-class C_GlobalContext(val compilerOptions: C_CompilerOptions, val sourceDir: C_SourceDir, modules: Set<R_ModuleName>) {
-    val modules = modules.toImmSet()
-
+class C_GlobalContext(val compilerOptions: C_CompilerOptions, val sourceDir: C_SourceDir) {
     companion object {
         private val appUidGen = C_UidGen { id, _ -> R_AppUid(id) }
         fun nextAppUid(): R_AppUid = synchronized(appUidGen) { appUidGen.next("") }
@@ -77,7 +74,8 @@ class C_MessageContext(val globalCtx: C_GlobalContext) {
     }
 }
 
-sealed class C_ModuleContext(val appCtx: C_AppContext, val modMgr: C_ModuleManager) {
+sealed class C_ModuleContext(val modMgr: C_ModuleManager) {
+    val appCtx = modMgr.appCtx
     val globalCtx = appCtx.globalCtx
     val msgCtx = appCtx.msgCtx
     val executor = appCtx.executor
@@ -102,13 +100,14 @@ sealed class C_ModuleContext(val appCtx: C_AppContext, val modMgr: C_ModuleManag
     abstract fun createFileNsAssembler(): C_NsAsm_ComponentAssembler
     abstract fun getModuleDefs(): C_ModuleDefs
     abstract fun getModuleArgsStruct(): R_Struct?
+
+    fun isTestLib(): Boolean = test || repl || globalCtx.compilerOptions.testLib
 }
 
 class C_RegularModuleContext(
-        appCtx: C_AppContext,
-        private val module: C_Module,
-        modMgr: C_ModuleManager
-): C_ModuleContext(appCtx, modMgr) {
+        modMgr: C_ModuleManager,
+        private val module: C_Module
+): C_ModuleContext(modMgr) {
     private val descriptor = module.descriptor
 
     override val moduleName = descriptor.name
@@ -127,7 +126,10 @@ class C_RegularModuleContext(
 
     init {
         val rootScopeBuilder = C_ScopeBuilder(msgCtx)
-        val sysScopeBuilder = rootScopeBuilder.nested { sysDefs.ns }
+
+        val sysNs = if (isTestLib()) sysDefs.testNs else sysDefs.appNs
+        val sysScopeBuilder = rootScopeBuilder.nested { sysNs }
+
         val nsGetter = nsAssembler.futureNs()
         defsGetter = nsAssembler.futureDefs()
         scopeBuilder = sysScopeBuilder.nested(nsGetter)
@@ -150,7 +152,7 @@ class C_ReplModuleContext(
         moduleName: R_ModuleName,
         replNsGetter: Getter<C_Namespace>,
         componentNsGetter: Getter<C_Namespace>
-): C_ModuleContext(appCtx, modMgr) {
+): C_ModuleContext(modMgr) {
     override val moduleName = moduleName
     override val containerKey = C_ReplContainerKey
     override val abstract = false
@@ -165,7 +167,7 @@ class C_ReplModuleContext(
 
     init {
         var builder = C_ScopeBuilder(msgCtx)
-        builder = builder.nested { sysDefs.ns }
+        builder = builder.nested { sysDefs.testNs }
         builder = builder.nested(replNsGetter)
         scopeBuilder = builder.nested(componentNsGetter)
     }
@@ -299,9 +301,11 @@ class C_MountContext(
         throw C_Error.stop(pos, "def_external:$place:$decType", "$type not allowed in external $place")
     }
 
-    fun checkNotRepl(pos: S_Pos, decType: C_DeclarationType) {
+    fun checkNotReplOrTest(pos: S_Pos, decType: C_DeclarationType) {
         if (modCtx.repl) {
             msgCtx.error(pos, "def_repl:$decType", "Cannot declare ${decType.msg} in REPL")
+        } else if (modCtx.test) {
+            msgCtx.error(pos, "def_test:$decType", "Cannot declare ${decType.msg} in a test module")
         }
     }
 

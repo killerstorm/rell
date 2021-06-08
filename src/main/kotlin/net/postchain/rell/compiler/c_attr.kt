@@ -84,7 +84,13 @@ object C_AttributeResolver {
     private fun checkMissingAttrs(attributes: Map<String, R_Attribute>, attrs: List<R_CreateExprAttr>, pos: S_Pos) {
         val names = attrs.map { it.attr.name }.toSet()
 
-        val missing = (attributes.keys - names).sorted().toList()
+        val missing = attributes
+                .toList()
+                .filter { it.first !in names }
+                .sortedBy { it.second.index }
+                .map { it.first }
+                .toList()
+
         C_Errors.check(missing.isEmpty(), pos) {
             "attr_missing:${missing.joinToString(",")}" to "Attributes not specified: ${missing.joinToString()}"
         }

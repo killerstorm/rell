@@ -7,9 +7,12 @@ package net.postchain.rell.gtx
 import net.postchain.rell.lib.LibBlockTransactionTest
 import net.postchain.rell.test.BaseGtxTest
 import net.postchain.rell.test.RellCodeTester
+import net.postchain.rell.test.RellTestUtils
 import org.junit.Test
 
 class GtxExternalTest: BaseGtxTest() {
+    private val depBcRid = RellTestUtils.strToRidHex("beefdead").toLowerCase()
+
     @Test fun testUnknownChain() {
         def("@external('foo') namespace {}")
         tst.wrapRtErrors = false
@@ -19,8 +22,8 @@ class GtxExternalTest: BaseGtxTest() {
     @Test fun testUnknownChain2() {
         def("@external('foo') namespace {}")
         tst.wrapRtErrors = false
-        tst.extraModuleConfig["dependencies"] = "[['foo','beefdead']]"
-        chk("123", "rt_err:external_chain_no_rid:foo:beefdead")
+        tst.extraModuleConfig["dependencies"] = "[['foo','$depBcRid']]"
+        chk("123", "rt_err:external_chain_no_rid:foo:$depBcRid")
     }
 
     @Test fun testUnknownChain3() {
@@ -35,7 +38,7 @@ class GtxExternalTest: BaseGtxTest() {
 
         def("@external('foo') namespace {}")
         tst.wrapRtErrors = false
-        tst.extraModuleConfig["dependencies"] = "[['foo','beefdead']]"
+        tst.extraModuleConfig["dependencies"] = "[['foo','$depBcRid']]"
         chk("123", "123")
     }
 
@@ -51,7 +54,7 @@ class GtxExternalTest: BaseGtxTest() {
 
         def("@external('foo') namespace { @log entity user {} }")
         tst.wrapRtErrors = false
-        tst.extraModuleConfig["dependencies"] = "[['foo','beefdead']]"
+        tst.extraModuleConfig["dependencies"] = "[['foo','$depBcRid']]"
         chk("123", "rt_err:external_meta_no_entity:foo:user")
     }
 
@@ -69,7 +72,7 @@ class GtxExternalTest: BaseGtxTest() {
 
         def("@external('foo') namespace { @log entity user { name; } }")
         tst.wrapRtErrors = false
-        tst.extraModuleConfig["dependencies"] = "[['foo','beefdead']]"
+        tst.extraModuleConfig["dependencies"] = "[['foo','$depBcRid']]"
         chk("_strict_str(user @{} ( _=user, _=.name ))", "'([foo]:user[15],text[Bob])'")
     }
 }

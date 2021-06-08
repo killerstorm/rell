@@ -169,12 +169,6 @@ class S_VirtualType(pos: S_Pos, val innerType: S_Type): S_Type(pos) {
     }
 }
 
-class S_OperationType(pos: S_Pos): S_Type(pos) {
-    override fun compile0(ctx: C_NamespaceContext): R_Type {
-        return R_OperationType
-    }
-}
-
 class S_MirrorStructType(pos: S_Pos, val mutable: Boolean, val paramType: S_Type): S_Type(pos) {
     override fun compile0(ctx: C_NamespaceContext): R_Type {
         return paramType.compileMirrorStructType(ctx, mutable) ?: R_CtErrorType

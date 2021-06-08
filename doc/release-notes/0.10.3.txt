@@ -69,13 +69,13 @@ val blk = rell.gtx.block(tx);
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 6. Library: types and functions rell.gtx.block, rell.gtx.tx
 
-function rell.gtx.block(): rell.test.block;
-function rell.gtx.block(tx: rell.test.tx): rell.test.block;
-function rell.gtx.block(txs: list<rell.test.tx>): rell.test.block;
+function rell.gtx.block(): rell.gtx.block;
+function rell.gtx.block(tx: rell.gtx.tx): rell.gtx.block;
+function rell.gtx.block(txs: list<rell.gtx.tx>): rell.gtx.block;
 
-function rell.gtx.tx(): rell.test.tx;
-function rell.gtx.tx(op: operation): rell.test.tx;
-function rell.gtx.tx(ops: list<operation>): rell.test.tx;
+function rell.gtx.tx(): rell.gtx.tx;
+function rell.gtx.tx(op: operation): rell.gtx.tx;
+function rell.gtx.tx(ops: list<operation>): rell.gtx.tx;
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 7. REPL: Executing transactions and blocks

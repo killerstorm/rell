@@ -21,13 +21,38 @@ class C_ArgsTypesMatcher_Fixed(matchers: List<C_ArgTypeMatcher>): C_ArgsTypesMat
     override fun match(types: List<R_Type>) = C_ArgsTypesMatch.match(matchers, types)
 }
 
-class C_ArgsTypesMatcher_OneMany(val matcher: C_ArgTypeMatcher): C_ArgsTypesMatcher() {
-    override fun getTypeHint(index: Int) = matcher.getTypeHint()
+class C_ArgsTypesMatcher_VarArg(
+        fixedMatchers: List<C_ArgTypeMatcher>,
+        private val varargMatcher: C_ArgTypeMatcher,
+        private val allowZero: Boolean
+): C_ArgsTypesMatcher() {
+    private val fixedMatchers = fixedMatchers.toImmList()
+
+    override fun getTypeHint(index: Int): C_TypeHint {
+        val matcher = if (index >= fixedMatchers.size) varargMatcher else fixedMatchers[index]
+        return matcher.getTypeHint()
+    }
 
     override fun match(types: List<R_Type>): C_ArgsTypesMatch? {
-        if (types.isEmpty()) return null
-        val matches = types.mapNotNull { matcher.match(it) }
-        return if (matches.size != types.size) null else C_ArgsTypesMatch(matches)
+        if (types.size < fixedMatchers.size || (!allowZero && types.size <= fixedMatchers.size)) {
+            return null
+        }
+
+        val res = mutableListOf<C_ArgTypeMatch>()
+
+        for ((i, matcher) in fixedMatchers.withIndex()) {
+            val match = matcher.match(types[i])
+            match ?: return null
+            res.add(match)
+        }
+
+        for (i in fixedMatchers.size until types.size) {
+            val match = varargMatcher.match(types[i])
+            match ?: return null
+            res.add(match)
+        }
+
+        return C_ArgsTypesMatch(res)
     }
 }
 
@@ -52,6 +77,15 @@ class C_ArgTypeMatcher_Simple(val targetType: R_Type): C_ArgTypeMatcher() {
         } else {
             null
         }
+    }
+}
+
+object C_ArgTypeMatcher_Nullable: C_ArgTypeMatcher() {
+    override fun getTypeHint() = C_TypeHint.NONE
+
+    override fun match(type: R_Type): C_ArgTypeMatch? {
+        val direct = type is R_NullableType || type == R_NullType
+        return if (direct) C_ArgTypeMatch_Direct else null
     }
 }
 
@@ -162,7 +196,7 @@ class C_MemberFuncCaseCtx(val member: C_MemberLink, val memberName: String): C_F
 
 abstract class C_FuncCase<CtxT: C_FuncCaseCtx> {
     abstract fun getParamTypeHint(index: Int): C_TypeHint
-    abstract fun match(args: List<V_Expr>): C_FuncCaseMatch<CtxT>?
+    abstract fun match(ctx: C_ExprContext, args: List<V_Expr>): C_FuncCaseMatch<CtxT>?
 }
 
 typealias C_MemberFuncCase = C_FuncCase<C_MemberFuncCaseCtx>
@@ -196,8 +230,8 @@ class C_DeprecatedFuncCase<CtxT: C_FuncCaseCtx>(
 ): C_FuncCase<CtxT>() {
     override fun getParamTypeHint(index: Int) = case.getParamTypeHint(index)
 
-    override fun match(args: List<V_Expr>): C_FuncCaseMatch<CtxT>? {
-        val match = case.match(args)
+    override fun match(ctx: C_ExprContext, args: List<V_Expr>): C_FuncCaseMatch<CtxT>? {
+        val match = case.match(ctx, args)
         return if (match == null) match else C_DeprecatedFuncCaseMatch(match, deprecated)
     }
 
@@ -274,7 +308,7 @@ class C_FormalParamsFuncCase<CtxT: C_FuncCaseCtx>(
 ): C_FuncCase<CtxT>() {
     override fun getParamTypeHint(index: Int) = matcher.getTypeHint(index)
 
-    override fun match(args: List<V_Expr>): C_FuncCaseMatch<CtxT>? {
+    override fun match(ctx: C_ExprContext, args: List<V_Expr>): C_FuncCaseMatch<CtxT>? {
         val argTypes = args.map { it.type() }
         val paramsMatch = matcher.match(argTypes)
         paramsMatch ?: return null

@@ -16,7 +16,9 @@ import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.toImmMap
 import org.apache.commons.lang3.StringUtils
 
-class C_ModifierContext(val msgCtx: C_MessageContext, val outerMountName: R_MountName)
+class C_ModifierContext(val appCtx: C_AppContext, val outerMountName: R_MountName) {
+    val msgCtx = appCtx.msgCtx
+}
 
 object C_Modifier {
     const val EXTERNAL = "external"
@@ -88,8 +90,17 @@ private object C_Annotation_Mount: C_AnnBase() {
         if (target.mount != null && target.mountAllowed && !target.emptyMountAllowed && mountName.isEmpty()) {
             ctx.msgCtx.error(pos, "ann:mount:empty:${target.type}",
                     "Cannot use empty mount name for ${target.type.description}")
-        } else {
-            C_AnnUtils.processAnnotation(ctx, pos, target, name.str, target.mount, target.mountAllowed, mountName)
+            return
+        }
+
+        C_AnnUtils.processAnnotation(ctx, pos, target, name.str, target.mount, target.mountAllowed, mountName)
+
+        if (target.type == C_ModifierTargetType.MODULE) {
+            ctx.appCtx.executor.onPass(C_CompilerPass.VALIDATION) {
+                if (target.test?.get() == true) {
+                    ctx.msgCtx.error(pos, "ann:mount:test_module", "Mount name not allowed for a test module")
+                }
+            }
         }
     }
 

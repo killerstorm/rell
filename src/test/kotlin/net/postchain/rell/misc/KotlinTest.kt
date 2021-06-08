@@ -29,4 +29,17 @@ class KotlinTest {
         assertEquals(listOf(1, 2, 3, 7), imm)
         assertEquals(listOf(1, 2, 3, 4, 5), mut)
     }
+
+    @Test fun testListPredicateSideEffects() {
+        chkListSideEffects { l, p -> l.firstOrNull(p) }
+        chkListSideEffects { l, p -> l.any(p) }
+        chkListSideEffects { l, p -> l.all { !p(it) } }
+    }
+
+    private fun chkListSideEffects(f: (List<Int>, (Int) -> Boolean) -> Unit) {
+        val t = mutableListOf<Int>()
+        val l = listOf(1, 2, 3)
+        f(l) { t.add(it) }
+        assertEquals(t, listOf(1))
+    }
 }

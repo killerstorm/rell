@@ -167,7 +167,7 @@ class V_ObjectExpr(
         val attrExpr = if (attr == null) null else C_VExpr(V_ObjectAttrExpr(ctx, memberName.pos, rObject, attr))
 
         val memberRef = C_MemberRef(this, memberName, safe)
-        val fnExpr = C_MemberResolver.functionForType(rObject.type, memberRef)
+        val fnExpr = C_MemberResolver.functionForType(ctx, rObject.type, memberRef)
 
         val cExpr = C_ValueFunctionExpr.create(memberName, attrExpr, fnExpr)
         return cExpr ?: throw C_Errors.errUnknownMember(rObject.type, memberName)

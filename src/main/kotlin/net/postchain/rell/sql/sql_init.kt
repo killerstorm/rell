@@ -109,7 +109,7 @@ class SqlInit private constructor(
 
     private fun initPostchain() {
         val chainId = exeCtx.appCtx.sqlCtx.mainChainMapping.chainId
-        val bcRid: BlockchainRid = BlockchainRid.EMPTY_RID
+        val bcRid: BlockchainRid = BlockchainRid.ZERO_RID
 
         val sqlAccess: SQLDatabaseAccess = PostgreSQLDatabaseAccess()
         exeCtx.sqlExec.connection { con ->

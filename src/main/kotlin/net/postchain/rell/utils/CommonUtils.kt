@@ -40,16 +40,16 @@ object CommonUtils {
         return pairs.map { it.first }
     }
 
-    fun readFileContent(filename: String): String {
+    fun readFileText(path: String): String {
         /*
         * FYI: We use Spring convention here when files under resources are labeled with prefix 'classpath:'.
         * */
         val resourcePrefix = "classpath:"
-        return if (filename.startsWith(resourcePrefix)) {
-            javaClass.getResource(filename.substringAfter(resourcePrefix))
+        return if (path.startsWith(resourcePrefix)) {
+            javaClass.getResource(path.substringAfter(resourcePrefix))
                     .readText()
         } else {
-            File(filename).readText()
+            File(path).readText()
         }
     }
 

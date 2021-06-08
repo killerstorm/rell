@@ -6,8 +6,9 @@ package net.postchain.rell.model
 
 import net.postchain.core.Signature
 import net.postchain.rell.compiler.C_Constants
+import net.postchain.rell.lib.Rt_TestOpValue
 import net.postchain.rell.module.GtvToRtContext
-import net.postchain.rell.module.RELL_VERSION
+import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.*
 import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.PostchainUtils
@@ -325,31 +326,6 @@ object R_SysFn_Json {
     }
 }
 
-object R_SysFn_OpContext {
-    abstract class BaseFn(private val name: String): R_SysFunction() {
-        abstract fun call(opCtx: Rt_OpContext): Rt_Value
-
-        final override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
-            check(args.size == 0)
-            val opCtx = ctx.globalCtx.opCtx
-            if (opCtx == null) throw Rt_Error("fn:op_context.$name:noop", "Operation context not available")
-            return call(opCtx)
-        }
-    }
-
-    object LastBlockTime: BaseFn("last_block_time") {
-        override fun call(opCtx: Rt_OpContext) = Rt_IntValue(opCtx.lastBlockTime)
-    }
-
-    class Transaction(private val type: R_EntityType): BaseFn("transaction") {
-        override fun call(opCtx: Rt_OpContext) = Rt_EntityValue(type, opCtx.transactionIid)
-    }
-
-    object BlockHeight: BaseFn("block_height") {
-        override fun call(opCtx: Rt_OpContext) = Rt_IntValue(opCtx.blockHeight)
-    }
-}
-
 object R_SysFn_ChainContext {
     object RawConfig: R_SysFunction() {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
@@ -369,8 +345,8 @@ object R_SysFn_ChainContext {
     class Args(private val moduleName: R_ModuleName): R_SysFunction() {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             check(args.size == 0)
-            val res = ctx.chainCtx.args[moduleName]
-            return res ?: throw Rt_Error("chain_context.args:no_module_args", "No module args")
+            val res = ctx.chainCtx.moduleArgs[moduleName]
+            return res ?: throw Rt_Error("chain_context.args:no_module_args:$moduleName", "No module args for module '$moduleName'")
         }
     }
 }
@@ -469,18 +445,20 @@ object R_SysFn_Struct {
         }
     }
 
-    object ToOperation: R_SysFunction_1() {
-        override fun call(arg: Rt_Value): Rt_Value {
+    object ToTestOp: R_SysFunction_1() {
+        override fun call(arg: Rt_Value): Rt_TestOpValue {
             val v = arg.asStruct()
 
             val structType = v.type()
             val op = Rt_Utils.checkNotNull(structType.struct.mirrorStructs?.operation) {
                 // Must not happen, checking for extra safety.
-                "to_operation:bad_type:${v.type()}" to "Wrong struct type: ${v.type()}"
+                "to_test_op:bad_type:${v.type()}" to "Wrong struct type: ${v.type()}"
             }
 
-            val values = structType.struct.attributesList.map { v.get(it.index) }
-            return Rt_OperationValue(op, values)
+            val rtArgs = structType.struct.attributesList.map { v.get(it.index) }
+            val gtvArgs = rtArgs.map { it.type().rtToGtv(it, false) }
+
+            return Rt_TestOpValue(op, gtvArgs)
         }
     }
 
@@ -787,7 +765,7 @@ object R_SysFn_Rell {
     object GetRellVersion: R_SysFunction() {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             check(args.size == 0)
-            return Rt_TextValue(RELL_VERSION)
+            return Rt_TextValue(RellVersions.VERSION_STR)
         }
     }
 
@@ -823,84 +801,6 @@ object R_SysFn_Rell {
             check(args.size == 0)
             val v = ctx.appCtx.app.toMetaGtv()
             return Rt_GtvValue(v)
-        }
-    }
-}
-
-object R_SysFn_Gtx {
-    object Tx {
-        object New_Empty: R_SysFunctionEx_0() {
-            override fun call(ctx: Rt_CallContext): Rt_Value {
-                val blockchainRid = ctx.globalCtx.chainCtx.blockchainRid
-                return Rt_GtxTxValue(blockchainRid, listOf(), listOf(), listOf())
-            }
-        }
-
-        object New_Ops: R_SysFunction() {
-            override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
-                val ops = args.map { it.asOperation() }
-                return newTx(ctx, ops)
-            }
-        }
-
-        object New_Structs: R_SysFunction() {
-            override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
-                val ops = args.map { R_SysFn_Struct.ToOperation.call(it).asOperation() }
-                return newTx(ctx, ops)
-            }
-        }
-
-        object New_ListOfOps: R_SysFunctionEx_1() {
-            override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
-                val ops = arg.asList().map { it.asOperation() }
-                return newTx(ctx, ops)
-            }
-        }
-
-        object New_ListOfStructs: R_SysFunctionEx_1() {
-            override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
-                val list = arg.asList()
-                val ops = list.map { R_SysFn_Struct.ToOperation.call(it).asOperation() }
-                return newTx(ctx, ops)
-            }
-        }
-
-        object Run: R_SysFunctionEx_1() {
-            override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
-                val tx = arg.asGtxTx()
-                val block = Rt_GtxBlockValue(listOf(tx))
-                return Block.Run.call(ctx, block)
-            }
-        }
-
-        private fun newTx(ctx: Rt_CallContext, ops: List<Rt_OperationValue>): Rt_Value {
-            val blockchainRid = ctx.globalCtx.chainCtx.blockchainRid
-            return Rt_GtxTxValue(blockchainRid, ops, listOf(), listOf())
-        }
-    }
-
-    object Block {
-        object NewEmpty: R_SysFunction_0() {
-            override fun call() = Rt_GtxBlockValue(listOf())
-        }
-
-        object NewOneTx: R_SysFunction_1() {
-            override fun call(arg: Rt_Value) = Rt_GtxBlockValue(listOf(arg.asGtxTx()))
-        }
-
-        object NewListOfTxs: R_SysFunction_1() {
-            override fun call(arg: Rt_Value) = Rt_GtxBlockValue(arg.asList().map { it.asGtxTx() })
-        }
-
-        object Run: R_SysFunctionEx_1() {
-            override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
-                if (!ctx.appCtx.repl && !ctx.appCtx.test) {
-                    throw Rt_Error("fn:block.run:no_repl_test", "Block can be executed only in REPL or test")
-                }
-                val block = arg.asGtxBlock()
-                PostchainBlockRunner.runBlock(ctx, block)
-                return Rt_UnitValue
-            }
         }
     }
 }

@@ -8,13 +8,16 @@ import com.google.common.collect.Sets
 import mu.KLogging
 import net.postchain.base.BlockchainRid
 import net.postchain.core.ByteArrayKey
+import net.postchain.core.TxEContext
 import net.postchain.gtv.Gtv
-import net.postchain.rell.compiler.C_SourceDir
+import net.postchain.gtx.OpData
 import net.postchain.rell.model.*
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.repl.ReplOutputChannel
 import net.postchain.rell.sql.*
+import net.postchain.rell.utils.BytesKeyPair
 import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 
 class Rt_GlobalContext(
@@ -250,8 +253,7 @@ class Rt_AppContext(
         val repl: Boolean,
         val test: Boolean,
         val replOut: ReplOutputChannel?,
-        val sourceDir: C_SourceDir,
-        val modules: Set<R_ModuleName>
+        val blockRunnerStrategy: Rt_BlockRunnerStrategy
 ) {
     private var objsInit: SqlObjectsInit? = null
     private var objsInited = false
@@ -279,6 +281,14 @@ class Rt_AppContext(
 
 class Rt_ExecutionContext(val appCtx: Rt_AppContext, val sqlExec: SqlExecutor) {
     val globalCtx = appCtx.globalCtx
+
+    private var nextNopNonce = 0L
+
+    fun nextNopNonce(): Long {
+        val r = nextNopNonce
+        ++nextNopNonce
+        return r
+    }
 }
 
 class Rt_CallContext(val defCtx: Rt_DefinitionContext) {
@@ -295,8 +305,48 @@ class Rt_DefinitionContext(val exeCtx: Rt_ExecutionContext, val dbUpdateAllowed:
     val callCtx = Rt_CallContext(this)
 }
 
-class Rt_OpContext(val lastBlockTime: Long, val transactionIid: Long, val blockHeight: Long, val signers: List<ByteArray>)
+abstract class Rt_TxContext {
+    abstract fun emitEvent(type: String, data: Gtv)
+}
 
-class Rt_ChainContext(val rawConfig: Gtv, args: Map<R_ModuleName, Rt_Value>, val blockchainRid: BlockchainRid) {
-    val args = args.toImmMap()
+class Rt_PostchainTxContext(private val txCtx: TxEContext): Rt_TxContext() {
+    override fun emitEvent(type: String, data: Gtv) {
+        txCtx.emitEvent(type, data)
+    }
+}
+
+class Rt_OpContext(
+        val txCtx: Rt_TxContext,
+        val lastBlockTime: Long,
+        val transactionIid: Long,
+        val blockHeight: Long,
+        val opIndex: Int,
+        signers: List<ByteArray>,
+        allOperations: List<OpData>
+) {
+    val signers = signers.toImmList()
+    val allOperations = allOperations.toImmList()
+}
+
+abstract class Rt_BlockRunnerStrategy {
+    abstract fun createGtvConfig(): Gtv
+    abstract fun getKeyPair(): BytesKeyPair
+}
+
+class Rt_StaticBlockRunnerStrategy(
+        private val gtvConfig: Gtv,
+        private val keyPair: BytesKeyPair
+): Rt_BlockRunnerStrategy() {
+    override fun createGtvConfig() = gtvConfig
+    override fun getKeyPair() = keyPair
+}
+
+object Rt_UnsupportedBlockRunnerStrategy: Rt_BlockRunnerStrategy() {
+    private val errMsg = "Block execution not supported"
+    override fun createGtvConfig() = throw Rt_Utils.errNotSupported(errMsg)
+    override fun getKeyPair() = throw Rt_Utils.errNotSupported(errMsg)
+}
+
+class Rt_ChainContext(val rawConfig: Gtv, moduleArgs: Map<R_ModuleName, Rt_Value>, val blockchainRid: BlockchainRid) {
+    val moduleArgs = moduleArgs.toImmMap()
 }

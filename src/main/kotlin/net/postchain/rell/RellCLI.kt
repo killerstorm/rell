@@ -7,14 +7,13 @@ package net.postchain.rell
 import net.postchain.StorageBuilder
 import net.postchain.base.BlockchainRid
 import net.postchain.config.app.AppConfig
+import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
 import net.postchain.rell.compiler.C_AtAttrShadowing
+import net.postchain.rell.compiler.C_CompilerModuleSelection
 import net.postchain.rell.compiler.C_CompilerOptions
-import net.postchain.rell.compiler.C_MapSourceDir
-import net.postchain.rell.compiler.C_SourceDir
 import net.postchain.rell.model.*
 import net.postchain.rell.module.GtvToRtContext
-import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.repl.ReplShell
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.*
@@ -56,8 +55,18 @@ private fun main0(args: RellCliArgs) {
         throw RellCliErr("Database connection URL not specified")
     }
 
-    if (args.resetdb && args.module == null && args.batch) {
+    val testModules = args.test
+    if (testModules != null && args.module != null) {
+        throw RellCliErr("Main module must not be specified when $ARG_TEST argument is used")
+    }
+
+    if (args.resetdb && args.module == null && args.batch && testModules == null) {
         resetDatabase(args)
+        return
+    }
+
+    if (testModules != null) {
+        runMultiModuleTests(args, testModules)
         return
     }
 
@@ -67,7 +76,7 @@ private fun main0(args: RellCliArgs) {
         val app = RellCliUtils.compileApp(args.sourceDir, entryModule, args.quiet, compilerOptions)
         val module = if (entryModule == null) null else app.moduleMap[entryModule]
         if (module != null && module.test) {
-            runTests(args, app, module, entryRoutine)
+            runSingleModuleTests(args, app, module, entryRoutine)
         } else {
             runApp(args, dbSpecified, entryModule, entryRoutine, app)
         }
@@ -75,7 +84,7 @@ private fun main0(args: RellCliArgs) {
         val app = RellCliUtils.compileApp(args.sourceDir, entryModule, args.quiet, compilerOptions)
         val module = app.moduleMap[entryModule]
         if (module != null && module.test) {
-            runTests(args, app, module, entryRoutine)
+            runSingleModuleTests(args, app, module, entryRoutine)
         } else {
             runRepl(args, entryModule, dbSpecified, compilerOptions)
         }
@@ -94,9 +103,13 @@ private fun runApp(
         args: RellCliArgs,
         dbSpecified: Boolean,
         entryModule: R_ModuleName?,
-        entryRoutine: R_QualifiedName?, app: R_App
+        entryRoutine: R_QualifiedName?,
+        app: R_App
 ) {
     val launcher = getAppLauncher(app, args, entryModule, entryRoutine)
+    if (launcher == null && !args.resetdb) {
+        return
+    }
 
     runWithSqlManager(args, true) { sqlMgr ->
         val sqlCtx = Rt_SqlContext.createNoExternalChains(app, SQL_MAPPER)
@@ -107,19 +120,43 @@ private fun runApp(
     }
 }
 
-private fun runTests(args: RellCliArgs, app: R_App, module: R_Module, entryRoutine: R_QualifiedName?) {
-    val globalCtx = createGlobalCtx(args, null)
-
-    val sqlCtx = Rt_SqlContext.createNoExternalChains(app, SQL_MAPPER)
-    val sourceDir = RellCliUtils.createSourceDir(args.sourceDir)
-
+private fun runSingleModuleTests(args: RellCliArgs, app: R_App, module: R_Module, entryRoutine: R_QualifiedName?) {
     val fns = TestRunner.getTestFunctions(module)
             .filter { entryRoutine == null || it.names.qualifiedName == entryRoutine.str() }
+    runTests(args, app, fns)
+}
+
+private fun runMultiModuleTests(args: RellCliArgs, modules: List<String>) {
+    val rModules = if (modules.isEmpty()) {
+        listOf(R_ModuleName.EMPTY)
+    } else {
+        modules.map { R_ModuleName.ofOpt(it) ?: throw RellCliErr("Invalid module name: '$it'") }
+    }
+
+    val sourceDir = RellCliUtils.createSourceDir(args.sourceDir)
+    val modSel = C_CompilerModuleSelection(listOf(), rModules)
+    val app = RellCliUtils.compileApp(sourceDir, modSel, args.quiet, C_CompilerOptions.DEFAULT)
+
+    val testFns = TestRunner.getTestFunctions(app)
+    runTests(args, app, testFns)
+}
+
+private fun runTests(args: RellCliArgs, app: R_App, fns: List<R_FunctionDefinition>) {
+    val globalCtx = createGlobalCtx(args, null)
+    val sqlCtx = Rt_SqlContext.createNoExternalChains(app, SQL_MAPPER)
+
+    val sourceDir = RellCliUtils.createSourceDir(args.sourceDir)
+    val keyPair = UnitTestBlockRunner.getTestKeyPair()
+
+    val blockRunnerModules = app.modules.filter { !it.test && !it.abstract && !it.external }.map { it.name }
+    val blockRunnerStrategy = Rt_DynamicBlockRunnerStrategy(sourceDir, blockRunnerModules, keyPair)
 
     var allOk = false
 
     runWithSqlManager(args, true) { sqlMgr ->
-        allOk = TestRunner.runTests(sqlMgr, app, globalCtx, sqlCtx, sourceDir, fns)
+        val testCtx = TestRunnerContext(sqlMgr, globalCtx, sqlCtx, blockRunnerStrategy, app)
+        val cases = fns.map { TestRunnerCase(null, it) }
+        allOk = TestRunner.runTests(testCtx, cases)
     }
 
     if (!allOk) {
@@ -151,7 +188,7 @@ private fun resetDatabase(args: RellCliArgs) {
 }
 
 private fun initDatabase(args: RellCliArgs, app: R_App, sqlMgr: SqlManager, sqlCtx: Rt_SqlContext) {
-    val appCtx = createAppContext(args, app, sqlCtx, null, repl = false, test = false, sourceDir = C_MapSourceDir.EMPTY)
+    val appCtx = createRegularAppContext(args, app, sqlCtx, null)
     SqlUtils.initDatabase(appCtx, sqlMgr, args.resetdb, args.sqlInitLog)
 }
 
@@ -237,7 +274,16 @@ private fun findEntryPoint(app: R_App, moduleName: R_ModuleName, routineName: R_
     val op = module.operations[name] ?: app.operations[mountName]
     if (op != null) {
         val time = System.currentTimeMillis() / 1000
-        eps.add(RellEntryPoint_Operation(op, Rt_OpContext(time, -1, -1, listOf())))
+        val opCtx = Rt_OpContext(
+                txCtx = Rt_CliTxContext,
+                lastBlockTime = time,
+                transactionIid = -1,
+                blockHeight = -1,
+                opIndex = -1,
+                signers = listOf(),
+                allOperations = listOf()
+        )
+        eps.add(RellEntryPoint_Operation(op, opCtx))
     }
 
     val q = module.queries[name] ?: app.queries[mountName]
@@ -259,43 +305,24 @@ private fun findEntryPoint(app: R_App, moduleName: R_ModuleName, routineName: R_
 private fun createGlobalCtx(args: RellCliArgs, opCtx: Rt_OpContext?): Rt_GlobalContext {
     val bcRid = BlockchainRid(ByteArray(32))
     val chainCtx = Rt_ChainContext(GtvNull, mapOf(), bcRid)
-
-    val pcModuleEnv = RellPostchainModuleEnvironment(
-            outPrinter = Rt_OutPrinter,
-            logPrinter = Rt_LogPrinter(),
-            forceTypeCheck = args.typeCheck
-    )
-
-    return Rt_GlobalContext(
-            opCtx = opCtx,
-            chainCtx = chainCtx,
-            outPrinter = Rt_OutPrinter,
-            logPrinter = Rt_LogPrinter(),
-            typeCheck = args.typeCheck,
-            pcModuleEnv = pcModuleEnv
-    )
+    return RellCliUtils.createGlobalContext(chainCtx, opCtx, args.typeCheck)
 }
 
-private fun createAppContext(
+private fun createRegularAppContext(
         args: RellCliArgs,
         app: R_App,
         sqlCtx: Rt_SqlContext,
-        opCtx: Rt_OpContext?,
-        repl: Boolean,
-        test: Boolean,
-        sourceDir: C_SourceDir
+        opCtx: Rt_OpContext?
 ): Rt_AppContext {
     val globalCtx = createGlobalCtx(args, opCtx)
-    val modules = app.moduleMap.keys.toImmSet()
     return Rt_AppContext(
             globalCtx,
             sqlCtx,
             app,
-            repl = repl,
-            test = test,
+            repl = false,
+            test = false,
             replOut = null,
-            sourceDir = sourceDir,
-            modules = modules
+            blockRunnerStrategy = Rt_UnsupportedBlockRunnerStrategy
     )
 }
 
@@ -382,8 +409,7 @@ private class RellAppLauncher(
         private val entryPoint: RellEntryPoint
 ) {
     fun launch(sqlMgr: SqlManager, sqlCtx: Rt_SqlContext) {
-        val appCtx = createAppContext(
-                args, app, sqlCtx, entryPoint.opContext(), repl = false, test = false, sourceDir = C_MapSourceDir.EMPTY)
+        val appCtx = createRegularAppContext(args, app, sqlCtx, entryPoint.opContext())
 
         val rtRes = sqlMgr.execute(entryPoint.transaction) { sqlExec ->
             val exeCtx = Rt_ExecutionContext(appCtx, sqlExec)
@@ -410,6 +436,12 @@ private class RellAppLauncher(
             exitProcess(1)
         }
         return res
+    }
+}
+
+private object Rt_CliTxContext: Rt_TxContext() {
+    override fun emitEvent(type: String, data: Gtv) {
+        throw Rt_Utils.errNotSupported("Function emit_event() not supported")
     }
 }
 
@@ -450,10 +482,12 @@ private class RellEntryPoint_Query(private val q: R_QueryDefinition): RellEntryP
     override fun routine() = q
     override fun opContext() = null
 
-    override fun call(exeCtx: Rt_ExecutionContext, args: List<Rt_Value>): Rt_Value? {
+    override fun call(exeCtx: Rt_ExecutionContext, args: List<Rt_Value>): Rt_Value {
         return q.call(exeCtx, args)
     }
 }
+
+private const val ARG_TEST = "--test"
 
 @CommandLine.Command(name = "rell", description = ["Executes a rell program"])
 private class RellCliArgs: RellBaseCliArgs() {
@@ -464,6 +498,10 @@ private class RellCliArgs: RellBaseCliArgs() {
     @CommandLine.Option(names = ["-p", "--db-properties"], paramLabel = "DB_PROPERTIES",
             description = ["Database connection properties file (same format as node-config.properties)"])
     var dbProperties: String? = null
+
+    @CommandLine.Option(names = [ARG_TEST], paramLabel = "MODULE", arity = "0..*",
+            description = ["Run all unit tests in specified modules and their submodules"])
+    var test: List<String>? = null
 
     @CommandLine.Option(names = ["--resetdb"], description = ["Reset database (drop everything)"])
     var resetdb = false
@@ -501,9 +539,10 @@ private class RellCliArgs: RellBaseCliArgs() {
     @CommandLine.Parameters(index = "0", arity = "0..1", paramLabel = "MODULE", description = ["Module name"])
     var module: String? = null
 
-    @CommandLine.Parameters(index = "1", arity = "0..1", paramLabel = "ENTRY", description = ["Entry point (operation/query/function name)"])
+    @CommandLine.Parameters(index = "1", arity = "0..1", paramLabel = "ENTRY",
+            description = ["Entry point (operation/query/function name)"])
     var entry: String? = null
 
-    @CommandLine.Parameters(index = "2..*", paramLabel = "ARGS", description = ["Call arguments"])
+    @CommandLine.Parameters(index = "2..*", paramLabel = "ARGS", description = ["Entry point arguments"])
     var args: List<String>? = null
 }

@@ -7,6 +7,7 @@ package net.postchain.rell
 import net.postchain.rell.compiler.C_Constants
 import net.postchain.rell.runtime.Rt_DecimalValue
 import net.postchain.rell.test.BaseRellTest
+import net.postchain.rell.test.RellCodeTester
 import net.postchain.rell.utils.toImmList
 import org.junit.Test
 import java.math.BigInteger
@@ -447,6 +448,28 @@ class DecimalTest: BaseRellTest(false) {
                 tst.chk(expr, "rt_err:sqlerr:0")
             }
         }
+    }
+
+    @Test fun testBugEquals() {
+        tstCtx.useSql = true
+        chkBugEquals("42", "42.0", "42")
+        chkBugEquals("42", "42", "42")
+        chkBugEquals("42.0", "42.0", "42")
+        chkBugEquals("42.0", "42", "42")
+        chkBugEquals("42.12340000", "42.1234", "42.1234")
+        chkBugEquals("1000", "1000.0", "1000")
+        chkBugEquals("1000.000", "1000.0", "1000")
+    }
+
+    private fun chkBugEquals(v: String, e: String, e2: String) {
+        val t = RellCodeTester(tstCtx)
+        t.def("entity data { v: decimal; }")
+        t.insert("c0.data", "v", "100,$v")
+
+        t.chk("(data @ {}.v) == $e", "boolean[true]")
+        t.chk("(data @ {} (.v)) == $e", "boolean[true]")
+        t.chk("(data @ {} (.v == $e))", "boolean[true]")
+        t.chk("data @ {}.v", "dec[$e2]")
     }
 
     private fun insertDecimal(id: Int, v: String) {

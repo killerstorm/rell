@@ -51,8 +51,6 @@ class CompilerErrorsTest: BaseRellTest(false) {
                 "ct_err:[$ut:T1][$un:E1][$ut:T2][entity:attr:expr_not_primary:a][$un:E2]")
         chkCompile("entity data { a: T1 = E1; index a: T2 = E2; }",
                 "ct_err:[$ut:T1][$un:E1][$ut:T2][entity:attr:expr_not_primary:a][$un:E2]")
-        chkCompile("entity data { key a: T1 = E1, b: T2 = E2; }", "ct_err:[$ut:T1][$un:E1][$ut:T2][$un:E2]")
-        chkCompile("entity data { index a: T1 = E1, b: T2 = E2; }", "ct_err:[$ut:T1][$un:E1][$ut:T2][$un:E2]")
         chkCompile("entity data { a: T1 = E1; key mutable a: T2 = E2; }",
                 "ct_err:[$ut:T1][$un:E1][entity:attr:mutable_not_primary:a][$ut:T2][entity:attr:expr_not_primary:a][$un:E2]")
         chkCompile("entity data { a: T1 = E1; index mutable a: T2 = E2; }",
@@ -268,6 +266,12 @@ class CompilerErrorsTest: BaseRellTest(false) {
         chk("1 + false + ($badExpr1) + ($badExpr2)", "ct_err:[binop_operand_type:+:[integer]:[boolean]][$badError1][$badError2]")
         chk("false + ($badExpr1) + ($badExpr2)", "ct_err:[$badError1][$badError2]")
         chk("($badExpr1) + ($badExpr2)", "ct_err:[$badError1][$badError2]")
+
+        chk("($badExpr1) ?: ($badExpr2)", "ct_err:[expr_call_argtypes:abs:byte_array][expr_call_argtypes:min:]")
+        chk("($badExpr1) ?: 123", "ct_err:expr_call_argtypes:abs:byte_array")
+        chk("123 ?: ($badExpr2)", "ct_err:expr_call_argtypes:min:")
+
+        chk("($badExpr1)?.foo", "ct_err:expr_call_argtypes:abs:byte_array")
 
         chkCompile("function f(d: data) = d?.x;", "ct_err:expr_safemem_type:[data]")
         chkCompile("function f(d: data) = d?.q;", "ct_err:[expr_safemem_type:[data]][unknown_member:[data]:q]")

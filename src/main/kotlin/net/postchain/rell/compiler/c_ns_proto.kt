@@ -31,6 +31,14 @@ sealed class C_NsDef {
 
     open fun addToDefs(b: C_ModuleDefsBuilder) {
     }
+
+    companion object {
+        fun toNamespaceElement(struct: R_Struct) = C_NamespaceElement.create(
+                type = C_DefProxy.create(struct.type),
+                value = C_NamespaceValue_Struct(struct),
+                function = C_StructGlobalFunction(struct)
+        )
+    }
 }
 
 sealed class C_NsDef_Namespace(private val ns: C_DefProxy<C_Namespace>): C_NsDef() {
@@ -79,15 +87,14 @@ private class C_NsDef_Object(private val obj: R_ObjectDefinition): C_NsDef() {
     }
 }
 
-private class C_NsDef_Struct(private val struct: C_Struct): C_NsDef() {
-    override fun type() = C_DeclarationType.STRUCT
+private sealed class C_NsDef_Struct(private val rStruct: R_Struct): C_NsDef() {
+    final override fun type() = C_DeclarationType.STRUCT
+    final override fun toNamespaceElement() = toNamespaceElement(rStruct)
+}
 
-    override fun toNamespaceElement() = C_NamespaceElement.create(
-            type = C_DefProxy.create(struct.structDef.struct.type),
-            value = C_NamespaceValue_Struct(struct.structDef.struct),
-            function = C_StructGlobalFunction(struct.structDef)
-    )
+private class C_NsDef_SysStruct(private val struct: R_Struct): C_NsDef_Struct(struct)
 
+private class C_NsDef_UserStruct(private val struct: C_Struct): C_NsDef_Struct(struct.structDef.struct) {
     override fun addToDefs(b: C_ModuleDefsBuilder) {
         b.structs.add(struct.structDef.moduleLevelName, struct)
     }
@@ -167,6 +174,10 @@ class C_SysNsProtoBuilder {
         addDef(name, C_NsDef_SysNamespace(ns))
     }
 
+    fun addNamespace(name: String, ns: C_Namespace) {
+        addNamespace(name, C_DefProxy.create(ns))
+    }
+
     fun addType(name: String, type: C_DefProxy<R_Type>) {
         addDef(name, C_NsDef_Type(type))
     }
@@ -174,6 +185,10 @@ class C_SysNsProtoBuilder {
     fun addEntity(name: String, entity: R_EntityDefinition) {
         val entry = addDef(name, C_NsDef_SysEntity(entity))
         entities.add(entry)
+    }
+
+    fun addStruct(name: String, struct: R_Struct) {
+        addDef(name, C_NsDef_SysStruct(struct))
     }
 
     fun addFunction(name: String, fn: C_GlobalFunction) {
@@ -224,7 +239,7 @@ class C_UserNsProtoBuilder(private val assembler: C_NsAsm_ComponentAssembler) {
     }
 
     fun addStruct(name: S_Name, structDef: R_StructDefinition) {
-        addDef(name, C_NsDef_Struct(C_Struct(name, structDef)))
+        addDef(name, C_NsDef_UserStruct(C_Struct(name, structDef)))
     }
 
     fun addEnum(name: S_Name, e: R_EnumDefinition) {

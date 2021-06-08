@@ -31,7 +31,9 @@ abstract class RellBaseTester(
     var gtv = gtv
     var deprecatedError = false
     var atAttrShadowing = C_CompilerOptions.DEFAULT.atAttrShadowing
-    var blockchainRid = "DEADBEEF"
+    var testLib = false
+
+    var blockchainRid = RellTestUtils.strToRidHex("DEADBEEF")
 
     var defs: List<String> = entityDefs
         set(value) {
@@ -109,7 +111,8 @@ abstract class RellBaseTester(
             deprecatedError = deprecatedError,
             ide = false,
             blockCheck = true,
-            atAttrShadowing = atAttrShadowing
+            atAttrShadowing = atAttrShadowing,
+            testLib = testLib
     )
 
     fun def(defs: List<String>) {

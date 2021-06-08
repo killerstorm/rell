@@ -31,6 +31,10 @@ object SqlConstants {
     const val CONFIGURATIONS_TABLE = "configurations"
     const val BLOCKS_TABLE = "blocks"
     const val TRANSACTIONS_TABLE = "transactions"
+    const val EVENTS_TABLE = "events"
+    const val STATES_TABLE = "states"
+    const val EVENT_PAGES_TABLE = "event_pages"
+    const val SNAPSHOT_PAGES_TABLE = "snapshot_pages"
 
     val SYSTEM_OBJECTS = setOf(
             ROWID_GEN,
@@ -39,6 +43,10 @@ object SqlConstants {
             CONFIGURATIONS_TABLE,
             BLOCKS_TABLE,
             TRANSACTIONS_TABLE,
+            EVENTS_TABLE,
+            STATES_TABLE,
+            EVENT_PAGES_TABLE,
+            SNAPSHOT_PAGES_TABLE,
             "meta",
             "peerinfos",
             "gtx_module_version"

@@ -4,7 +4,7 @@
 
 package net.postchain.rell.tools.grammar
 
-import net.postchain.rell.module.RELL_VERSION
+import net.postchain.rell.module.RellVersions
 import org.apache.commons.lang3.StringUtils
 
 fun main(args: Array<String>) {
@@ -113,7 +113,7 @@ object XtextGenUtils {
     fun printHeader() {
         val timestamp = System.currentTimeMillis()
         val timestampStr = GrammarUtils.timestampToString(timestamp)
-        println("// Rell version: $RELL_VERSION")
+        println("// Rell version: ${RellVersions.VERSION_STR}")
         println("// Timestamp: $timestamp ($timestampStr)")
     }
 }

@@ -25,7 +25,7 @@ Postchain log:
 
 curl "http://localhost:7740/query/iid_0" -X POST -d '{"type":"main_q","x":12345}'
 
-{"error":"Query \u0027main_q\u0027 failed: [stack_trace!calc(stack_trace/main.rell:7)] x must be positive, but was 0"}
+{"error":"[stack_trace:calc(stack_trace/main.rell:7)] Query \u0027main_q\u0027 failed: x must be positive, but was 0"}
 
 2019-11-24 13:36:55.124 INFO  net.postchain.rell.Rell - [stack_trace!main_q(stack_trace/main.rell:34)] main start
 2019-11-24 13:36:55.126 INFO  Rell - ERROR Query 'main_q' failed: [stack_trace!calc(stack_trace/main.rell:7)] x must be positive, but was 0
