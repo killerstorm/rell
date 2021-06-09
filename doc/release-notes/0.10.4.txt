@@ -667,3 +667,29 @@ New functions and properties:
 
     op_context.emit_event(type: text, data: gtv)
         Emits an event.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+22. Language: Complex expressions in what-part of at-expression
+
+What-part of a database at-expression is now not limited to expressions that can be directly translated to SQL.
+For instance, it's possible to call a user-defined function to process database values:
+
+    function full_name(first_name: text, last_name: text) = last_name + ', ' + first_name;
+
+    ...
+
+    user @* {} ( full_name(.first_name, .last_name) )
+
+When the expression is being evaluated, attributes "first_name" and "last_name" are read from the database, and then
+the "full_name()" function is executed in the Rell interpreter.
+
+Supported complex expressions are:
+
+- Function call
+- Tuple construction
+- Struct creation
+- List and map literals
+- A combination of the above
+
+However, there is a limitation: sorting, grouping and aggregation cannot be applied to complex what-expressions (because
+for database at-expressions those things are handled on the SQL server, not in the Rell interpreter).

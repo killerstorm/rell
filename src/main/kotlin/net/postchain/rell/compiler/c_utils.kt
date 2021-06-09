@@ -19,6 +19,7 @@ import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Error
 import net.postchain.rell.runtime.toGtv
 import net.postchain.rell.utils.*
+import org.apache.commons.lang3.StringUtils
 import org.jooq.impl.SQLDataType
 import java.math.BigDecimal
 import java.util.*
@@ -87,13 +88,19 @@ object C_Constants {
             .divide(BigDecimal.TEN.pow(DECIMAL_FRAC_DIGITS))
 }
 
+class C_DefaultValue(
+        val pos: S_Pos,
+        val rExprGetter: C_LateGetter<R_Expr>,
+        val rGetter: C_LateGetter<R_DefaultValue>
+)
+
 class C_FormalParameter(
         val name: S_Name,
         val type: R_Type?,
         private val initFrameGetter: C_LateGetter<R_CallFrame>,
-        private val exprGetterPosValue: S_PosValue<C_LateGetter<R_Expr>>?
+        private val defaultValue: C_DefaultValue?
 ) {
-    val hasExpr: Boolean get() = exprGetterPosValue != null
+    val hasExpr: Boolean get() = defaultValue != null
 
     fun nameCode(index: Int) = "$index:${name.str}"
     fun nameMsg(index: Int) = "'${name.str}'"
@@ -103,10 +110,23 @@ class C_FormalParameter(
     }
 
     fun createDefaultValueExpr(ctx: C_ExprContext, callPos: S_Pos): V_Expr {
-        check(exprGetterPosValue != null)
+        check(defaultValue != null)
+
+        val dbModRes = ctx.getDbModificationRestriction()
+        if (dbModRes != null) {
+            ctx.executor.onPass(C_CompilerPass.VALIDATION) {
+                val rDefaultValue = defaultValue.rGetter.get()
+                if (rDefaultValue.isDbModification) {
+                    val code = "${dbModRes.code}:param:$name"
+                    val msg = "${dbModRes.msg} (default value of parameter '$name')"
+                    ctx.msgCtx.error(callPos, code, msg)
+                }
+            }
+        }
+
         val actType = type ?: R_CtErrorType
-        val rExpr = R_DefaultValueExpr(actType, callPos.toFilePos(), initFrameGetter, exprGetterPosValue.value)
-        return V_RExpr(ctx, exprGetterPosValue.pos, rExpr)
+        val rExpr = R_DefaultValueExpr(actType, callPos.toFilePos(), initFrameGetter, defaultValue.rExprGetter)
+        return V_RExpr(ctx, defaultValue.pos, rExpr)
     }
 
     fun createMirrorAttr(index: Int, mutable: Boolean): R_Attribute {
@@ -115,13 +135,14 @@ class C_FormalParameter(
                 name.str,
                 type ?: R_CtErrorType,
                 mutable = mutable,
-                exprGetter = exprGetterPosValue?.value
+                exprGetter = defaultValue?.rGetter
         )
     }
 }
 
 object C_Utils {
-    val ERROR_EXPR = errorRExpr(R_CtErrorType)
+    val ERROR_EXPR = errorRExpr()
+    val ERROR_DB_EXPR = errorDbExpr()
     val ERROR_STATEMENT = R_ExprStatement(ERROR_EXPR)
 
     fun toDbExpr(errPos: S_Pos, rExpr: R_Expr): Db_Expr {
@@ -175,22 +196,22 @@ object C_Utils {
     }
 
     fun checkMapKeyType(ctx: C_NamespaceContext, pos: S_Pos, type: R_Type) {
-        checkMapKeyType0(ctx, pos, type, "expr_map_keytype", "as a map key")
+        checkMapKeyType0(ctx.appCtx, pos, type, "expr_map_keytype", "as a map key")
     }
 
     fun checkSetElementType(ctx: C_NamespaceContext, pos: S_Pos, type: R_Type) {
-        checkMapKeyType0(ctx, pos, type, "expr_set_type", "as a set element")
+        checkMapKeyType0(ctx.appCtx, pos, type, "expr_set_type", "as a set element")
     }
 
-    fun checkGroupValueType(ctx: C_NamespaceContext, pos: S_Pos, type: R_Type) {
-        checkMapKeyType0(ctx, pos, type, "expr_at_group_type", "for grouping")
+    fun checkGroupValueType(appCtx: C_AppContext, pos: S_Pos, type: R_Type) {
+        checkMapKeyType0(appCtx, pos, type, "expr_at_group_type", "for grouping")
     }
 
-    private fun checkMapKeyType0(ctx: C_NamespaceContext, pos: S_Pos, type: R_Type, errCode: String, errMsg: String) {
-        ctx.executor.onPass(C_CompilerPass.VALIDATION) {
+    private fun checkMapKeyType0(appCtx: C_AppContext, pos: S_Pos, type: R_Type, errCode: String, errMsg: String) {
+        appCtx.executor.onPass(C_CompilerPass.VALIDATION) {
             if (type.completeFlags().mutable) {
                 val typeStr = type.toStrictString()
-                ctx.msgCtx.error(pos, "$errCode:$typeStr", "Mutable type cannot be used $errMsg: $typeStr")
+                appCtx.msgCtx.error(pos, "$errCode:$typeStr", "Mutable type cannot be used $errMsg: $typeStr")
             }
         }
     }
@@ -775,4 +796,20 @@ class C_UidGen<T>(private val factory: (Long, String) -> T) {
         val uid = nextUid++
         return factory(uid, name)
     }
+}
+
+sealed class C_Symbol(val code: String) {
+    abstract fun msgNormal(): String
+
+    fun msgCapital(): String = StringUtils.capitalize(msgNormal())
+
+    final override fun toString() = msgNormal()
+}
+
+class C_Symbol_Name(private val name: String): C_Symbol(name) {
+    override fun msgNormal() = "name '$name'"
+}
+
+object C_Symbol_Placeholder: C_Symbol(C_Constants.AT_PLACEHOLDER) {
+    override fun msgNormal() = "symbol '$code'"
 }

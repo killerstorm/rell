@@ -16,24 +16,6 @@ class AtExprCommonDbTest: AtExprCommonBaseTest() {
                 "ct_err:[at_where:var_noattrs:0:user:user][name:ambiguous:user]")
     }
 
-    @Test fun testAttrMatchByTypeConstExpr() {
-        initDataTypes()
-
-        val fromSingle = impFrom("single")
-        chk("$fromSingle @* { 123 } ( .id.s )", "[Bob]")
-        chk("$fromSingle @* { 456 } ( .id.s )", "[Alice]")
-        chk("$fromSingle @* { 'A' } ( .id.s )", "[Bob]")
-        chk("$fromSingle @* { 'B' } ( .id.s )", "[Alice]")
-        chk("$fromSingle @* { false } ( .id.s )", "[]")
-        chk("$fromSingle @* { true } ( .id.s )", "[Bob, Alice]")
-
-        val fromDouble = impFrom("double")
-        chk("$fromDouble @* { 123 } ( .id.s )", "ct_err:at_attr_type_ambig:0:integer:double.i1,double.i2")
-        chk("$fromDouble @* { 'A' } ( .id.s )", "ct_err:at_attr_type_ambig:0:text:double.t1,double.t2")
-        chk("$fromDouble @* { false } ( .id.s )", "[]")
-        chk("$fromDouble @* { true } ( .id.s )", "[Bob, Alice]")
-    }
-
     @Test fun testAttrMatchByTypeComplexExpr() {
         def("function fi(x: integer) = _nop(x);")
         def("function ft(x: text) = _nop(x);")
@@ -67,8 +49,7 @@ class AtExprCommonDbTest: AtExprCommonBaseTest() {
         chk("user @* { ((user: company) @? {} limit 1) != null } ( .name )", "[Bob, Alice, Trudy]")
         chk("user @* { ((user: company) @? { user.city != '?' } limit 1) != null } ( .name )", "ct_err:name:ambiguous:user")
         chk("(company: user) @* { (company @? {} limit 1) != null } ( .name )", "[Bob, Alice, Trudy]")
-        chk("(company: user) @* { (company @? { company.city != '?' } limit 1) != null } ( .name )",
-                "ct_err:[at:entity:outer:company][name:ambiguous:company]")
+        chk("(company: user) @* { (company @? { company.city != '?' } limit 1) != null } ( .name )", "ct_err:name:ambiguous:company")
     }
 
     @Test fun testNestedAttributesDirect_Db() {

@@ -14,7 +14,8 @@ class C_SysAttribute(
         val canSetInCreate: Boolean = true
 ) {
     fun compile(index: Int): R_Attribute {
-        val exprGetter = if (expr == null) null else C_LateInit(C_CompilerPass.EXPRESSIONS, expr).getter
+        val defaultValue = if (expr == null) null else R_DefaultValue(expr, false)
+        val exprGetter = if (defaultValue == null) null else C_LateInit(C_CompilerPass.EXPRESSIONS, defaultValue).getter
         return R_Attribute(
                 index,
                 name,
@@ -33,7 +34,7 @@ class C_AttributeDefinition(
         val explicitType: R_Type?,
         val implicitType: R_Type?,
         val exprPos: S_Pos?,
-        val exprGetter: C_LateGetter<R_Expr>?
+        val exprGetter: C_LateGetter<R_DefaultValue>?
 ) {
     fun compileType(nsCtx: C_NamespaceContext): R_Type {
         val type = explicitType ?: implicitType
@@ -168,20 +169,22 @@ class C_EntityContext(
         }
     }
 
-    private fun processAttrExpr(name: S_Name, expr: S_Expr?, type: R_Type?): C_LateGetter<R_Expr>? {
+    private fun processAttrExpr(name: S_Name, expr: S_Expr?, type: R_Type?): C_LateGetter<R_DefaultValue>? {
         if (expr == null) {
             return null
         }
 
         val exprType = type ?: R_CtErrorType
-        val late = C_LateInit(C_CompilerPass.EXPRESSIONS, C_Utils.errorRExpr(exprType))
+        val errValue = R_DefaultValue(C_Utils.errorRExpr(exprType), false)
+        val late = C_LateInit(C_CompilerPass.EXPRESSIONS, errValue)
 
         defCtx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
-            val rExpr0 = expr.compile(defCtx.initExprCtx, C_TypeHint.ofType(exprType)).value().toRExpr()
+            val vExpr = expr.compile(defCtx.initExprCtx, C_TypeHint.ofType(exprType)).value()
+            val rExpr0 = vExpr.toRExpr()
             val adapter = C_Types.adaptSafe(msgCtx, exprType, rExpr0.type, name.pos, "attr_type:$name",
                     "Default value type mismatch for '$name'")
             val rExpr = adapter.adaptExpr(rExpr0)
-            late.set(rExpr)
+            late.set(R_DefaultValue(rExpr, vExpr.isDbModification()))
         }
 
         return late.getter

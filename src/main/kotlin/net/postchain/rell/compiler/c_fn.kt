@@ -5,10 +5,7 @@
 package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.ast.*
-import net.postchain.rell.compiler.vexpr.V_Expr
-import net.postchain.rell.compiler.vexpr.V_RExpr
-import net.postchain.rell.compiler.vexpr.V_SysGlobalCaseCallExpr
-import net.postchain.rell.compiler.vexpr.V_SysMemberCaseCallExpr
+import net.postchain.rell.compiler.vexpr.*
 import net.postchain.rell.lib.R_TestOpType
 import net.postchain.rell.model.*
 import net.postchain.rell.utils.RecursionAwareCalculator
@@ -48,8 +45,21 @@ class C_StructGlobalFunction(private val struct: R_Struct): C_GlobalFunction() {
             val createCtx = C_CreateContext(ctx, struct.initFrameGetter, fnPos.toFilePos())
             val cArgs = C_Argument.compile(ctx, struct.attributes, args)
             val attrs = C_AttributeResolver.resolveCreate(createCtx, struct.attributes, cArgs, fnPos)
-            val rExpr = R_StructExpr(struct, attrs.rAttrs)
-            return V_RExpr.makeExpr(ctx, fnPos, rExpr, attrs.exprFacts)
+
+            val dbModRes = ctx.getDbModificationRestriction()
+            if (dbModRes != null) {
+                ctx.executor.onPass(C_CompilerPass.VALIDATION) {
+                    val dbModAttr = attrs.implicitAttrs.firstOrNull { it.attr.isExprDbModification }
+                    if (dbModAttr != null) {
+                        val code = "${dbModRes.code}:attr:${dbModAttr.attr.name}"
+                        val msg = "${dbModRes.msg} (default value of attribute '${dbModAttr.attr.name}')"
+                        ctx.msgCtx.error(fnPos, code, msg)
+                    }
+                }
+            }
+
+            val vExpr = V_StructExpr(ctx, fnPos, struct, attrs.explicitAttrs, attrs.implicitAttrs, attrs.exprFacts)
+            return C_VExpr(vExpr)
         }
     }
 }
@@ -389,10 +399,8 @@ object C_FunctionUtils {
             rFunction: R_RoutineDefinition
     ): V_Expr {
         val filePos = name.pos.toFilePos()
-        val rArgs = effArgs.map { it.toRExpr() }
-        val rExpr = R_UserCallExpr(retType, rFunction, rArgs, filePos)
         val exprFacts = C_ExprVarFacts.forSubExpressions(effArgs)
-        return V_RExpr(ctx, name.pos, rExpr, exprFacts)
+        return V_UserFunctionCallExpr(ctx, name.pos, retType, rFunction, effArgs, filePos, exprFacts)
     }
 }
 

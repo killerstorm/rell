@@ -137,7 +137,7 @@ class UserFunctionTest: BaseRellTest(false) {
         chkFnEx(fn, "= user @ { .name.upper_case() == foo('alice') };", "user[2]")
 
         chkFnEx(fn, "= user @ { foo(.name) == 'BOB' };", "ct_err:expr_sqlnotallowed")
-        chkFnEx(fn, "= user @ { .id == 123 } ( foo(.name) );", "ct_err:expr_sqlnotallowed")
+        chkFnEx(fn, "= user @ { .id == 123 } ( foo(.name) );", "text[BOB]")
     }
 
     @Test fun testShortBodyUnitType() {

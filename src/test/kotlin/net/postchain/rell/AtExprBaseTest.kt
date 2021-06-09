@@ -101,10 +101,10 @@ abstract class AtExprBaseTest: BaseRellTest() {
             val attrsStr = attrs.joinToString(" ") { "$it;" }
             val code = "entity $name { $attrsStr }"
             t.def(code)
+            t.def("function get_$name(): list<$name> = list($name @* {});")
         }
 
         override fun impCreateObjs(t: RellCodeTester, name: String, vararg objs: String) {
-            t.def("function get_$name(): list<$name> = list($name @* {});")
             if (objs.isNotEmpty()) {
                 val code = objs.joinToString(" ") { "create $name($it);" }
                 t.postInitOp(code)

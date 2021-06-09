@@ -224,16 +224,16 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         initToStructEntity()
 
         chk("user@{} ( .name, @omit user.to_struct() )", "text[Bob]")
-        chk("user@{} ( @sort user.to_struct() )", "ct_err:to_struct:sort")
-        chk("user@{} ( @sort_desc user.to_struct() )", "ct_err:to_struct:sort")
+        chk("user@{} ( @sort user.to_struct() )", "ct_err:expr:at:sort")
+        chk("user@{} ( @sort_desc user.to_struct() )", "ct_err:expr:at:sort")
 
-        chk("user@{} ( @group user.to_struct() )", "ct_err:to_struct:group")
-        chk("user@{} ( @min user.to_struct() )", "ct_err:[to_struct:aggregate][at:what:aggr:bad_type:MIN:struct<user>]")
-        chk("user@{} ( @max user.to_struct() )", "ct_err:[to_struct:aggregate][at:what:aggr:bad_type:MAX:struct<user>]")
-        chk("user@{} ( @sum user.to_struct() )", "ct_err:[to_struct:aggregate][at:what:aggr:bad_type:SUM:struct<user>]")
-        chk("user@{} ( @group .name, @min user.to_struct() )", "ct_err:[to_struct:aggregate][at:what:aggr:bad_type:MIN:struct<user>]")
-        chk("user@{} ( @group .name, @max user.to_struct() )", "ct_err:[to_struct:aggregate][at:what:aggr:bad_type:MAX:struct<user>]")
-        chk("user@{} ( @group .name, @sum user.to_struct() )", "ct_err:[to_struct:aggregate][at:what:aggr:bad_type:SUM:struct<user>]")
+        chk("user@{} ( @group user.to_struct() )", "ct_err:expr:at:group")
+        chk("user@{} ( @min user.to_struct() )", "ct_err:[expr:at:aggregate][at:what:aggr:bad_type:MIN:struct<user>]")
+        chk("user@{} ( @max user.to_struct() )", "ct_err:[expr:at:aggregate][at:what:aggr:bad_type:MAX:struct<user>]")
+        chk("user@{} ( @sum user.to_struct() )", "ct_err:[expr:at:aggregate][at:what:aggr:bad_type:SUM:struct<user>]")
+        chk("user@{} ( @group .name, @min user.to_struct() )", "ct_err:[expr:at:aggregate][at:what:aggr:bad_type:MIN:struct<user>]")
+        chk("user@{} ( @group .name, @max user.to_struct() )", "ct_err:[expr:at:aggregate][at:what:aggr:bad_type:MAX:struct<user>]")
+        chk("user@{} ( @group .name, @sum user.to_struct() )", "ct_err:[expr:at:aggregate][at:what:aggr:bad_type:SUM:struct<user>]")
     }
 
     @Test fun testToStructEntityCollectionAt() {
@@ -273,7 +273,7 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         chk("_type_of(state.to_struct())", "text[struct<state>]")
         chk("state.to_struct()", "struct<state>[x=int[123],y=text[abc]]")
 
-        chk("user @ {} ( state.to_struct() )", "ct_err:expr_nosql:struct<state>")
+        chk("user @ {} ( state.to_struct() )", "struct<state>[x=int[123],y=text[abc]]")
         chk("(user@*{}) @ {} ( state.to_struct() )", "struct<state>[x=int[123],y=text[abc]]")
 
         chk("_type_of(state.to_struct(123))", "ct_err:expr_call_argtypes:state.to_struct:integer")

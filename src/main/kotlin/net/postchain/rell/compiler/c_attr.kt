@@ -11,16 +11,25 @@ import net.postchain.rell.compiler.ast.S_Expr
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_NameExprPair
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.vexpr.V_CreateExprAttr
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
+import net.postchain.rell.utils.toImmSet
 
 class C_CreateContext(exprCtx: C_ExprContext, val initFrameGetter: C_LateGetter<R_CallFrame>, val filePos: R_FilePos) {
     val msgCtx = exprCtx.msgCtx
 }
 
-class C_CreateAttributes(val rAttrs: List<R_CreateExprAttr>, val exprFacts: C_ExprVarFacts)
+class C_CreateAttributes(
+        explicitAttrs: List<V_CreateExprAttr>,
+        implicitAttrs: List<R_CreateExprAttr>,
+        val exprFacts: C_ExprVarFacts
+) {
+    val explicitAttrs = explicitAttrs.toImmList()
+    val implicitAttrs = implicitAttrs.toImmList()
+}
 
 object C_AttributeResolver {
     fun resolveCreate(
@@ -29,7 +38,7 @@ object C_AttributeResolver {
             args: List<C_Argument>,
             pos: S_Pos
     ): C_CreateAttributes {
-        val rExprMap = args.map { it to it.vExpr.toRExpr() }.toMap().toImmMap()
+        val vExprMap = args.map { it to it.vExpr }.toMap().toImmMap()
 
         val errWatcher = ctx.msgCtx.errorWatcher()
         val matchedAttrs = matchCreateAttrs(ctx.msgCtx, attributes, args)
@@ -40,13 +49,13 @@ object C_AttributeResolver {
             ctx.msgCtx.error(pos, "create:unmatched_args", "Not all arguments matched to attributes")
         }
 
-        val attrExprs = matchedAttrs.map {
-            val rExpr = rExprMap.getValue(it.key)
-            R_CreateExprAttr_Specified(it.value, rExpr)
+        val explicitAttrs = matchedAttrs.map {
+            val vExpr = vExprMap.getValue(it.key)
+            V_CreateExprAttr(it.value, vExpr)
         }
 
-        val attrExprsDef = attrExprs + matchDefaultExprs(ctx, attributes, attrExprs)
-        checkMissingAttrs(attributes, attrExprsDef, pos)
+        val implicitAttrs = matchDefaultExprs(ctx, attributes, explicitAttrs)
+        checkMissingAttrs(attributes, explicitAttrs, implicitAttrs, pos)
 
         for ((arg, attr) in matchedAttrs) {
             val exprPos = arg.vExpr.pos
@@ -57,7 +66,7 @@ object C_AttributeResolver {
         }
 
         val exprFacts = C_ExprVarFacts.forSubExpressions(args.map { it.vExpr })
-        return C_CreateAttributes(attrExprsDef, exprFacts)
+        return C_CreateAttributes(explicitAttrs, implicitAttrs, exprFacts)
     }
 
     private fun matchCreateAttrs(
@@ -73,16 +82,24 @@ object C_AttributeResolver {
     private fun matchDefaultExprs(
             ctx: C_CreateContext,
             attributes: Map<String, R_Attribute>,
-            attrExprs: List<R_CreateExprAttr>
+            attrExprs: List<V_CreateExprAttr>
     ): List<R_CreateExprAttr> {
         val provided = attrExprs.map { it.attr.name }.toSet()
         return attributes.values
                 .filter { it.hasExpr && it.name !in provided }
-                .map { R_CreateExprAttr_Default(it, ctx.initFrameGetter, ctx.filePos) }
+                .map {
+                    val rExpr = R_DefaultAttrValueExpr(it, ctx.initFrameGetter, ctx.filePos)
+                    R_CreateExprAttr(it, rExpr)
+                }
     }
 
-    private fun checkMissingAttrs(attributes: Map<String, R_Attribute>, attrs: List<R_CreateExprAttr>, pos: S_Pos) {
-        val names = attrs.map { it.attr.name }.toSet()
+    private fun checkMissingAttrs(
+            attributes: Map<String, R_Attribute>,
+            explicitAttrs: List<V_CreateExprAttr>,
+            implicitAttrs: List<R_CreateExprAttr>,
+            pos: S_Pos
+    ) {
+        val names = (explicitAttrs.map { it.attr } + implicitAttrs.map { it.attr }).map { it.name }.toImmSet()
 
         val missing = attributes
                 .toList()

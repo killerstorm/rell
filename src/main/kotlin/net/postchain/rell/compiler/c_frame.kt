@@ -6,7 +6,6 @@ package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.compiler.vexpr.V_AtEntityExpr
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_LocalVarExpr
 import net.postchain.rell.model.*
@@ -81,13 +80,13 @@ class C_BlockScope(variables: Map<String, C_LocalVar>) {
 
 sealed class C_BlockEntry {
     abstract fun toLocalVarOpt(): C_LocalVar?
-    abstract fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr
+    abstract fun compile(ctx: C_ExprContext, pos: S_Pos, ambiguous: Boolean): V_Expr
 }
 
 class C_BlockEntry_Var(private val localVar: C_LocalVar): C_BlockEntry() {
     override fun toLocalVarOpt() = localVar
 
-    override fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr {
+    override fun compile(ctx: C_ExprContext, pos: S_Pos, ambiguous: Boolean): V_Expr {
         val varRef = localVar.toRef(ctx.blkCtx.blockUid)
         return varRef.compile(ctx, pos)
     }
@@ -96,8 +95,8 @@ class C_BlockEntry_Var(private val localVar: C_LocalVar): C_BlockEntry() {
 class C_BlockEntry_AtEntity(val atEntity: C_AtEntity): C_BlockEntry() {
     override fun toLocalVarOpt() = null
 
-    override fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr {
-        return V_AtEntityExpr(ctx, pos, atEntity)
+    override fun compile(ctx: C_ExprContext, pos: S_Pos, ambiguous: Boolean): V_Expr {
+        return atEntity.toVExpr(ctx, pos, ambiguous)
     }
 }
 
@@ -195,7 +194,7 @@ sealed class C_BlockEntryResolution {
 
 private class C_BlockEntryResolution_Normal(private val entry: C_BlockEntry): C_BlockEntryResolution() {
     override fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr {
-        return entry.compile(ctx, pos)
+        return entry.compile(ctx, pos, false)
     }
 }
 
@@ -203,14 +202,17 @@ private class C_BlockEntryResolution_OuterPlaceholder(private val entry: C_Block
     override fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr {
         ctx.msgCtx.error(pos, "at_expr:placeholder:belongs_to_outer",
                 "Cannot use a placeholder to access an outer at-expression; use explicit alias")
-        return entry.compile(ctx, pos)
+        return entry.compile(ctx, pos, false)
     }
 }
 
-private class C_BlockEntryResolution_Ambiguous(private val name: String, private val entry: C_BlockEntry): C_BlockEntryResolution() {
+private class C_BlockEntryResolution_Ambiguous(
+        private val symbol: C_Symbol,
+        private val entry: C_BlockEntry
+): C_BlockEntryResolution() {
     override fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr {
-        ctx.msgCtx.error(pos, "name:ambiguous:$name", "Name '$name' is ambiguous")
-        return entry.compile(ctx, pos)
+        ctx.msgCtx.error(pos, "name:ambiguous:${symbol.code}", "${symbol.msgCapital()} is ambiguous")
+        return entry.compile(ctx, pos, true)
     }
 }
 
@@ -250,7 +252,8 @@ class C_OwnerBlockContext(
             return if (entries.size == 1) {
                 C_BlockEntryResolution_Normal(entry)
             } else {
-                C_BlockEntryResolution_Ambiguous(name, entry)
+                val sym = C_Symbol_Name(name)
+                C_BlockEntryResolution_Ambiguous(sym, entry)
             }
         }
     }
@@ -268,7 +271,7 @@ class C_OwnerBlockContext(
             C_BlockEntryResolution_Normal(entry)
         } else if (thisBlockEntries.size > 1) {
             val (entry, _) = thisBlockEntries.first()
-            C_BlockEntryResolution_Ambiguous(C_Constants.AT_PLACEHOLDER, entry)
+            C_BlockEntryResolution_Ambiguous(C_Symbol_Placeholder, entry)
         } else {
             val (entry, _) = entries.first()
             C_BlockEntryResolution_OuterPlaceholder(entry)

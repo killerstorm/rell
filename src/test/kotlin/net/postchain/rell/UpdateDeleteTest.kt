@@ -603,6 +603,56 @@ class UpdateDeleteTest: BaseRellTest() {
         chkOp(code, "rt_err:expr_entity_attr_count:0")
     }
 
+    @Test fun testPlaceholder() {
+        createCitiesAndPersons()
+        chkDataCommon("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,250)")
+
+        chkOp("update person @* { $.name == 'James' } ( .score = $.score + 1 );")
+        chkDataCommon("person(4,James,3,Evergreen Ave,5,101)", "person(5,Mike,1,Grand St,7,250)")
+
+        chkOp("delete person @* { $.name == 'James' };")
+        chkDataCommon("person(5,Mike,1,Grand St,7,250)")
+    }
+
+    @Test fun testPathAssignment() {
+        initPathAssignment()
+
+        chkData("group(300,Foo)", "company(100,Adidas,Boston,300)", "user(200,Bob,100)")
+        resetSqlCtr()
+        chkOp("val u = user @ {}; u.company.city = 'Seattle';")
+        chkSql(3) // TODO Shall be 2, not 3 - to be optimized.
+        chkData("group(300,Foo)", "company(100,Adidas,Seattle,300)", "user(200,Bob,100)")
+
+        resetSqlCtr()
+        chkOp("val u = user @ {}; u.company.group.name = 'Bar';")
+        chkSql(3) // TODO Shall be 2, not 3 - to be optimized.
+        chkData("group(300,Bar)", "company(100,Adidas,Seattle,300)", "user(200,Bob,100)")
+    }
+
+    @Test fun testPathAssignmentNullable() {
+        initPathAssignment()
+
+        chkData("group(300,Foo)", "company(100,Adidas,Boston,300)", "user(200,Bob,100)")
+        chkOp("val u = user @? {}; u.company.city = 'Dallas';", "ct_err:expr_mem_null:company")
+        chkOp("val u = user @? {}; u?.company.city = 'Dallas';", "ct_err:expr_mem_null:city")
+        chkData("group(300,Foo)", "company(100,Adidas,Boston,300)", "user(200,Bob,100)")
+
+        chkOp("val u = user @? {}; u?.company?.city = 'Dallas';")
+        chkData("group(300,Foo)", "company(100,Adidas,Dallas,300)", "user(200,Bob,100)")
+
+        chkOp("val u = user @? { 'Alice' }; u?.company?.city = 'Chicago';")
+        chkData("group(300,Foo)", "company(100,Adidas,Dallas,300)", "user(200,Bob,100)")
+    }
+
+    private fun initPathAssignment() {
+        def("entity group { mutable name; }")
+        def("entity company { mutable name; mutable city: text; mutable group; }")
+        def("entity user { mutable name; mutable company; }")
+        insert("c0.group", "name", "300,'Foo'")
+        insert("c0.company", "name,city,group", "100,'Adidas','Boston',300")
+        insert("c0.user", "name,company", "200,'Bob',100")
+    }
+
     private fun resetChkOp(code: String, expected: String = "OK") {
         resetData()
         chkOp(code, expected)

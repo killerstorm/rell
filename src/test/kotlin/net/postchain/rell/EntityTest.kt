@@ -248,7 +248,7 @@ class EntityTest: BaseRellTest(false) {
         chkEx("{ val u = user @? { 'Alice' }; return u?.rowid; }", "rowid[200]")
         chkEx("{ val u = user @? { 'Trudy' }; return u?.rowid; }", "null")
 
-        chkEx("{ val u = user @ { 'Bob' }; u.rowid = 999; return 0; }", "ct_err:expr_bad_dst:rowid")
+        chkEx("{ val u = user @ { 'Bob' }; u.rowid = 999; return 0; }", "ct_err:update_attr_not_mutable:rowid")
     }
 
     @Test fun testEntityRowidAttrAt() {

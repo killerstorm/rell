@@ -83,6 +83,24 @@ abstract class AtExprCommonBaseTest: AtExprBaseTest() {
         chkEx("{ val c = $fromCompany@*{}[0]; return $fromUser@*{ c } ( .name ); }", "[Bob]")
     }
 
+    @Test fun testAttrMatchByTypeConstExpr() {
+        initDataTypes()
+
+        val fromSingle = impFrom("single")
+        chk("$fromSingle @* { 123 } ( .id.s )", "[Bob]")
+        chk("$fromSingle @* { 456 } ( .id.s )", "[Alice]")
+        chk("$fromSingle @* { 'A' } ( .id.s )", "[Bob]")
+        chk("$fromSingle @* { 'B' } ( .id.s )", "[Alice]")
+        chk("$fromSingle @* { false } ( .id.s )", "[]")
+        chk("$fromSingle @* { true } ( .id.s )", "[Bob, Alice]")
+
+        val fromDouble = impFrom("double")
+        chk("$fromDouble @* { 123 } ( .id.s )", "ct_err:at_attr_type_ambig:0:integer:double.i1,double.i2")
+        chk("$fromDouble @* { 'A' } ( .id.s )", "ct_err:at_attr_type_ambig:0:text:double.t1,double.t2")
+        chk("$fromDouble @* { false } ( .id.s )", "[]")
+        chk("$fromDouble @* { true } ( .id.s )", "[Bob, Alice]")
+    }
+
     @Test fun testImplicitTupleFieldName() {
         initDataUserCompany()
         chk("$fromUser @* {} ( .name, .pos )", "[(name=Bob,pos=Dev), (name=Alice,pos=Tester)]")

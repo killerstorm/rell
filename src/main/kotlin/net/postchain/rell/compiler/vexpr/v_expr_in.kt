@@ -6,7 +6,6 @@ import net.postchain.rell.compiler.C_ExprVarFacts
 import net.postchain.rell.compiler.C_Utils
 import net.postchain.rell.compiler.ast.C_BinOp_EqNe
 import net.postchain.rell.model.*
-import net.postchain.rell.utils.toImmSet
 
 class V_InCollectionExpr(
         exprCtx: C_ExprContext,
@@ -16,12 +15,9 @@ class V_InCollectionExpr(
         private val not: Boolean,
         private val varFacts: C_ExprVarFacts
 ): V_Expr(exprCtx, left.pos) {
-    private val isDb = isDb(left) || isDb(right)
-    private val atDependencies = listOf(left, right).flatMap { it.atDependencies() }.toImmSet()
+    override val exprInfo = V_ExprInfo.make(listOf(left, right))
 
     override fun type() = R_BooleanType
-    override fun isDb() = isDb
-    override fun atDependencies() = atDependencies
     override fun varFacts() = varFacts
 
     override fun toRExpr0(): R_Expr {

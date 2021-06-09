@@ -8,9 +8,9 @@ import net.postchain.rell.compiler.ast.C_BinOp
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_NameExprPair
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.vexpr.V_ConstantExpr
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_ObjectExpr
-import net.postchain.rell.compiler.vexpr.V_RExpr
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_EnumValue
 import net.postchain.rell.utils.Nullable
@@ -61,10 +61,19 @@ class C_ExprContext private constructor(
         return update(factsCtx = this.factsCtx.sub(facts))
     }
 
+    fun getDbModificationRestriction(): C_CodeMsg? {
+        val r = defCtx.getDbModificationRestriction()
+        return r ?: if (insideGuardBlock) {
+            C_CodeMsg("no_db_update:guard", "Database modifications are not allowed inside or before a guard block")
+        } else {
+            null
+        }
+    }
+
     fun checkDbUpdateAllowed(pos: S_Pos) {
-        defCtx.checkDbUpdateAllowed(pos)
-        if (insideGuardBlock) {
-            msgCtx.error(pos, "no_db_update:guard", "Database modifications are not allowed inside or before a guard block")
+        val r = getDbModificationRestriction()
+        if (r != null) {
+            msgCtx.error(pos, r.code, r.msg)
         }
     }
 
@@ -230,7 +239,6 @@ class C_EntityAttrDestination(
 
         val rBaseVarExpr = baseVar.toRef(lambdaBlkCtx.blockUid).toRExpr()
         val rTarget = R_UpdateTarget_Expr_One(atEntity, where, rBaseVarExpr, cLambda.rLambda)
-
         val dbSrcVarExpr = srcVar.toRef(rFromBlock.uid).toDbExpr()
         val rWhat = R_UpdateStatementWhat(attr, dbSrcVarExpr, op?.dbOp)
         val rUpdateStmt = R_UpdateStatement(rTarget, rFromBlock, listOf(rWhat))
@@ -453,8 +461,8 @@ class C_EnumExpr(private val msgCtx: C_MessageContext, private val name: List<S_
         }
 
         val rValue = Rt_EnumValue(rEnum.type, attr)
-        val rExpr = R_ConstantExpr(rValue)
-        return V_RExpr.makeExpr(ctx, startPos(), rExpr)
+        val vExpr = V_ConstantExpr(ctx, startPos(), rValue)
+        return C_VExpr(vExpr)
     }
 
     private fun memberFn(memberName: S_Name): C_Expr? {

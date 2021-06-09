@@ -25,12 +25,13 @@ class R_DbAtEntity(val rEntity: R_EntityDefinition, val id: R_AtEntityId) {
     override fun toString() = "$rEntity:$id"
 
     companion object {
-        fun checkList(entities : List<R_DbAtEntity>) {
+        fun checkList(entities : List<R_DbAtEntity>): R_AtExprId {
             val entityIds = entities.map { it.id }
             check(entityIds.toSet().size == entityIds.size) { "Entities not unique: $entityIds" }
 
             val exprIds = entityIds.map { it.exprId }.toSet()
             check(exprIds.size == 1) { "Entities belong to different expressions: $entityIds" }
+            return exprIds.first()
         }
     }
 }

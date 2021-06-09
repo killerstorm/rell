@@ -4,9 +4,7 @@ import net.postchain.rell.runtime.Rt_CallFrame
 
 class Db_WhenCase(val conds: List<Db_Expr>, val expr: Db_Expr)
 
-class Db_WhenExpr(type: R_Type, val keyExpr: Db_Expr?, val cases: List<Db_WhenCase>, val elseExpr: Db_Expr)
-    : Db_Expr(type, listOfNotNull(keyExpr) + cases.flatMap { it.conds + listOf(it.expr) } + listOf(elseExpr))
-{
+class Db_WhenExpr(type: R_Type, val keyExpr: Db_Expr?, val cases: List<Db_WhenCase>, val elseExpr: Db_Expr): Db_Expr(type) {
     override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
         val redKeyExpr = keyExpr?.toRedExpr(frame)
 

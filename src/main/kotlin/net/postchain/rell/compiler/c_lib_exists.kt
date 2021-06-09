@@ -3,6 +3,7 @@ package net.postchain.rell.compiler
 import net.postchain.rell.compiler.ast.S_Expr
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.vexpr.V_Expr
+import net.postchain.rell.compiler.vexpr.V_ExprInfo
 import net.postchain.rell.model.*
 import net.postchain.rell.utils.checkEquals
 
@@ -61,12 +62,9 @@ private class V_ExistsExpr(
         private val not: Boolean,
         private val varFacts: C_ExprVarFacts
 ): V_Expr(exprCtx, name.pos) {
-    private val isDb = isDb(subExpr)
-    private val atDependencies = subExpr.atDependencies()
+    override val exprInfo = V_ExprInfo.make(subExpr)
 
     override fun type() = R_BooleanType
-    override fun isDb() = isDb
-    override fun atDependencies() = atDependencies
     override fun varFacts() = varFacts
 
     override fun toRExpr0(): R_Expr {

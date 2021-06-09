@@ -165,6 +165,30 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testEntityPathExprComplex() {
+        initEntityPathExprComplex()
+
+        chk("((c: c4) @ { 'c4_1' } ( c )).c3.c2.c1.name", "text[c1_1]")
+        chk("((c: c4) @ { 'c4_2' } ( c )).c3.c2.c1.name", "text[c1_2]")
+
+        chk("((c: c4) @ { 'c4_1' } ( t3 = .c3, t2 = .c3.c2 )).t3.c2.c1.name", "text[c1_1]")
+        chk("((c: c4) @ { 'c4_1' } ( t3 = .c3, t2 = .c3.c2 )).t2.c1.name", "text[c1_1]")
+        chk("((c: c4) @ { 'c4_2' } ( t3 = .c3, t2 = .c3.c2 )).t3.c2.c1.name", "text[c1_2]")
+        chk("((c: c4) @ { 'c4_2' } ( t3 = .c3, t2 = .c3.c2 )).t2.c1.name", "text[c1_2]")
+    }
+
+    @Test fun testEntityPathExprComplexNullable() {
+        def("function data() = c4 @? {} limit 1;")
+        initEntityPathExprComplex()
+
+        chkEx("{ val c = data(); return c.c3; }", "ct_err:expr_mem_null:c3")
+        chkEx("{ val c = data(); return c?.c3; }", "c3[5]")
+        chkEx("{ val c = data(); return c?.c3.c2; }", "ct_err:expr_mem_null:c2")
+        chkEx("{ val c = data(); return c?.c3?.c2; }", "c2[3]")
+        chkEx("{ val c = data(); return c?.c3?.c2.c1; }", "ct_err:expr_mem_null:c1")
+        chkEx("{ val c = data(); return c?.c3?.c2?.c1; }", "c1[1]")
+    }
+
+    private fun initEntityPathExprComplex() {
         tstCtx.useSql = true
         def("entity c1 { name: text; }")
         def("entity c2 { name: text; c1; }")
@@ -180,15 +204,7 @@ class ExpressionTest: BaseRellTest(false) {
             val c3_2 = create c3('c3_2', c2_2);
             val c4_1 = create c4('c4_1', c3_1);
             val c4_2 = create c4('c4_2', c3_2);
-        """.trimIndent())
-
-        chk("((c: c4) @ { 'c4_1' } ( c )).c3.c2.c1.name", "text[c1_1]")
-        chk("((c: c4) @ { 'c4_2' } ( c )).c3.c2.c1.name", "text[c1_2]")
-
-        chk("((c: c4) @ { 'c4_1' } ( t3 = .c3, t2 = .c3.c2 )).t3.c2.c1.name", "text[c1_1]")
-        chk("((c: c4) @ { 'c4_1' } ( t3 = .c3, t2 = .c3.c2 )).t2.c1.name", "text[c1_1]")
-        chk("((c: c4) @ { 'c4_2' } ( t3 = .c3, t2 = .c3.c2 )).t3.c2.c1.name", "text[c1_2]")
-        chk("((c: c4) @ { 'c4_2' } ( t3 = .c3, t2 = .c3.c2 )).t2.c1.name", "text[c1_2]")
+        """)
     }
 
     @Test fun testTuple() {
@@ -211,10 +227,12 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testTupleAt() {
+        tstCtx.useSql = true
         def("entity user { name: text; street: text; house: integer; }")
+        insert("c0.user", "name,street,house", "1,'Bob','Bahnstr.',13")
 
-        chk("user @ {} ( x = (.name,) ) ", "ct_err:expr_sqlnotallowed")
-        chk("user @ {} ( x = (.name, .street, .house) ) ", "ct_err:expr_sqlnotallowed")
+        chk("user @ {} ( x = (.name,) ) ", "(x=(text[Bob]))")
+        chk("user @ {} ( x = (.name, .street, .house) ) ", "(x=(text[Bob],text[Bahnstr.],int[13]))")
     }
 
     @Test fun testList() {

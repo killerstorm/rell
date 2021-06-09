@@ -63,6 +63,8 @@ data class R_AtEntityId(val exprId: R_AtExprId, val id: Long) {
     override fun toString() = "AtEntity[${exprId.toRawString()}:$id]"
 }
 
+class R_DefaultValue(val rExpr: R_Expr, val isDbModification: Boolean)
+
 class R_Attribute(
         val index: Int,
         val name: String,
@@ -70,9 +72,10 @@ class R_Attribute(
         val mutable: Boolean,
         val canSetInCreate: Boolean = true,
         val sqlMapping: String = name,
-        private val exprGetter: C_LateGetter<R_Expr>?
+        private val exprGetter: C_LateGetter<R_DefaultValue>?
 ) {
-    val expr: R_Expr? get() = exprGetter?.get()
+    val expr: R_Expr? get() = exprGetter?.get()?.rExpr
+    val isExprDbModification: Boolean get() = exprGetter?.get()?.isDbModification ?: false
 
     val hasExpr: Boolean get() = exprGetter != null
 

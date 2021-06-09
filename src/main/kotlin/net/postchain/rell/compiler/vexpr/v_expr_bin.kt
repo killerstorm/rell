@@ -6,7 +6,6 @@ import net.postchain.rell.compiler.C_Utils
 import net.postchain.rell.compiler.ast.C_BinOp
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.*
-import net.postchain.rell.utils.toImmSet
 
 class V_BinaryOp(val code: String, val resType: R_Type, val rOp: R_BinaryOp, val dbOp: Db_BinaryOp?) {
     companion object {
@@ -22,12 +21,9 @@ class V_BinaryExpr(
         private val right: V_Expr,
         private val varFacts: C_ExprVarFacts
 ): V_Expr(exprCtx, pos) {
-    private val isDb = isDb(left) || isDb(right)
-    private val atDependencies = listOf(left, right).flatMap { it.atDependencies() }.toImmSet()
+    override val exprInfo = V_ExprInfo.make(listOf(left, right))
 
     override fun type() = op.resType
-    override fun isDb() = isDb
-    override fun atDependencies() = atDependencies
     override fun varFacts() = varFacts
 
     override fun toRExpr0(): R_Expr {
@@ -56,12 +52,9 @@ class V_ElvisExpr(
         private val right: V_Expr,
         private val varFacts: C_ExprVarFacts
 ): V_Expr(exprCtx, pos) {
-    private val isDb = isDb(left) || isDb(right)
-    private val atDependencies = listOf(left, right).flatMap { it.atDependencies() }.toImmSet()
+    override val exprInfo = V_ExprInfo.make(listOf(left, right))
 
     override fun type() = resType
-    override fun isDb() = isDb
-    override fun atDependencies() = atDependencies
     override fun varFacts() = varFacts
 
     override fun toRExpr0(): R_Expr {

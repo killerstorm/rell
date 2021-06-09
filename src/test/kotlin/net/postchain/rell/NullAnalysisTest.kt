@@ -551,6 +551,17 @@ class NullAnalysisTest: BaseRellTest(false) {
         chkEx("{ val x = _nullable_int($v); return user @? { $expr }; }", expected)
     }
 
+    @Test fun testAtExprPlaceholder() {
+        def("function data(): list<integer?> = [123, null, 456, null, 789];")
+        chk("data()", "list<integer?>[int[123],null,int[456],null,int[789]]")
+        chk("data() @* {}", "list<integer?>[int[123],null,int[456],null,int[789]]")
+        chk("data() @* { $ != null }", "list<integer?>[int[123],int[456],int[789]]")
+        chk("data() @* { $ != null } ( $ )", "list<integer?>[int[123],int[456],int[789]]")
+        chk("data() @* {} ( if ($ != null) _type_of($) else '?' )",
+                "list<text>[text[integer],text[?],text[integer],text[?],text[integer]]")
+        chk("data() @* {} ( if ($ != null) $ * $ else 0 )", "list<integer>[int[15129],int[0],int[207936],int[0],int[622521]]")
+    }
+
     // null-dependent: when (x) { null -> }
 
     // contradictory operations:

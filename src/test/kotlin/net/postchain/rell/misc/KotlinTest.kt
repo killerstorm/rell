@@ -42,4 +42,35 @@ class KotlinTest {
         f(l) { t.add(it) }
         assertEquals(t, listOf(1))
     }
+
+    @Test fun testIntRangeStep() {
+        assertEquals(listOf<Int>().indices.step(2).map { it }, listOf())
+        assertEquals(listOf(1).indices.step(2).map { it }, listOf(0))
+        assertEquals(listOf(1,2).indices.step(2).map { it }, listOf(0))
+        assertEquals(listOf(1,2,3).indices.step(2).map { it }, listOf(0, 2))
+        assertEquals(listOf(1,2,3,4).indices.step(2).map { it }, listOf(0, 2))
+    }
+
+    @Test fun testChildClass() {
+        val o = Child(123, 456)
+        assertEquals(o.v, 123)
+        assertEquals(o.q, 0)
+        assertEquals(o.x0, 456)
+        assertEquals(o.x1, 456)
+        assertEquals(o.x2, 456)
+    }
+
+    private abstract class Parent {
+        abstract val v: Int
+        abstract val x0: Int
+        val q: Int = v
+    }
+
+    private class Child(x: Int, y: Int): Parent() {
+        override val v: Int = x
+
+        val x1 = y
+        override val x0 = x1
+        val x2 = x0
+    }
 }

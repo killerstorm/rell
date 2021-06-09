@@ -92,6 +92,8 @@ class OperationTest: BaseRellTest() {
         chk("foo()", """op[foo(123,"Hello")]""")
         chk("foo(456)", """op[foo(456,"Hello")]""")
         chk("foo(456,'Bye')", """op[foo(456,"Bye")]""")
+        chk("foo('Bye')", "ct_err:expr_call_argtype:foo:0:x:integer:text")
+        chk("foo(y = 'Bye')", """op[foo(123,"Bye")]""")
     }
 
     @Test fun testCallOperationNoTestLib() {

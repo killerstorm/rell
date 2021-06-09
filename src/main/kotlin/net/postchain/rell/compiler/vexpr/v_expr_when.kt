@@ -9,7 +9,6 @@ import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
-import net.postchain.rell.utils.toImmSet
 
 class V_WhenChooserDetails(
         val keyExpr: V_Expr?,
@@ -53,18 +52,14 @@ class V_WhenExpr(
         private val resType: R_Type,
         private val resVarFacts: C_ExprVarFacts
 ): V_Expr(exprCtx, pos) {
-    private val isDb: Boolean
-    private val atDependencies: Set<R_AtExprId>
+    override val exprInfo: V_ExprInfo
 
     init {
         val exprs = listOfNotNull(chooserDetails.keyExpr) + chooserDetails.variableCases.map { it.value } + valueExprs
-        isDb = exprs.any { isDb(it) }
-        atDependencies = exprs.flatMap { it.atDependencies() }.toImmSet()
+        exprInfo = V_ExprInfo.make(exprs)
     }
 
     override fun type() = resType
-    override fun isDb() = isDb
-    override fun atDependencies() = atDependencies
     override fun varFacts() = resVarFacts
 
     override fun toRExpr0(): R_Expr {

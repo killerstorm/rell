@@ -12,57 +12,22 @@ class V_RExpr(
         private val rExpr: R_Expr,
         private val exprVarFacts: C_ExprVarFacts = C_ExprVarFacts.EMPTY
 ): V_Expr(exprCtx, pos) {
+    override val exprInfo = V_ExprInfo(false, false)
+
     override fun type() = rExpr.type
-    override fun isDb() = false
     override fun toRExpr0() = rExpr
     override fun toDbExpr0() = C_Utils.toDbExpr(pos, rExpr)
     override fun constantValue() = rExpr.constantValue()
     override fun varFacts() = exprVarFacts
 
     companion object {
-        fun makeExpr(exprCtx: C_ExprContext, pos: S_Pos, rExpr: R_Expr, varFacts: C_ExprVarFacts = C_ExprVarFacts.EMPTY): C_Expr {
+        fun makeExpr(
+                exprCtx: C_ExprContext,
+                pos: S_Pos,
+                rExpr: R_Expr,
+                varFacts: C_ExprVarFacts = C_ExprVarFacts.EMPTY
+        ): C_Expr {
             val vExpr = V_RExpr(exprCtx, pos, rExpr, varFacts)
-            return C_VExpr(vExpr)
-        }
-    }
-}
-
-class V_DbExpr private constructor(
-        exprCtx: C_ExprContext,
-        pos: S_Pos,
-        private val dbExpr: Db_Expr,
-        private val varFacts: C_ExprVarFacts
-): V_Expr(exprCtx, pos) {
-    private val atDependencies = dbExpr.referencedAtExprIds()
-
-    override fun type() = dbExpr.type
-    override fun isDb() = true
-    override fun atDependencies() = atDependencies
-    override fun toRExpr0() = throw C_Errors.errExprDbNotAllowed(pos)
-    override fun toDbExpr0() = dbExpr
-    override fun constantValue() = dbExpr.constantValue()
-    override fun varFacts() = varFacts
-
-    override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
-        if (dbExpr is Db_TableExpr) {
-            val attrRef = C_EntityAttrRef.resolveByName(dbExpr.rEntity, memberName.str)
-            attrRef ?: throw C_Errors.errUnknownMember(dbExpr.type, memberName)
-            return attrRef.createDbMemberExpr(ctx, dbExpr, pos, memberName.pos)
-        }
-        return super.member(ctx, memberName, safe)
-    }
-
-    companion object {
-        fun create(exprCtx: C_ExprContext, pos: S_Pos, dbExpr: Db_Expr, varFacts: C_ExprVarFacts = C_ExprVarFacts.EMPTY): V_Expr {
-            return if (dbExpr is Db_InterpretedExpr) {
-                V_RExpr(exprCtx, pos, dbExpr.expr, varFacts)
-            } else {
-                V_DbExpr(exprCtx, pos, dbExpr, varFacts)
-            }
-        }
-
-        fun createExpr(exprCtx: C_ExprContext, pos: S_Pos, dbExpr: Db_Expr, varFacts: C_ExprVarFacts = C_ExprVarFacts.EMPTY): C_Expr {
-            val vExpr = create(exprCtx, pos, dbExpr, varFacts)
             return C_VExpr(vExpr)
         }
     }
@@ -75,14 +40,12 @@ class V_LocalVarExpr(
         private val nulled: C_VarFact,
         private val smartType: R_Type?
 ): V_Expr(exprCtx, pos) {
-    private val atDependencies = listOfNotNull(varRef.target.atExprId).toImmSet()
+    override val exprInfo = V_ExprInfo(false, false, listOfNotNull(varRef.target.atExprId).toImmSet())
 
     override fun type() = smartType ?: varRef.target.type
-    override fun isDb() = false
     override fun toDbExpr0() = C_Utils.toDbExpr(pos, toRExpr())
     override fun varId() = varRef.target.uid
 
-    override fun atDependencies() = atDependencies
     override fun isAtExprItem() = varRef.target.atExprId != null
     override fun implicitAtWhereAttrName() = varRef.target.name
 
@@ -157,8 +120,9 @@ class V_ObjectExpr(
         name: List<S_Name>,
         private val rObject: R_ObjectDefinition
 ): V_Expr(exprCtx, name[0].pos) {
+    override val exprInfo = V_ExprInfo(false, false)
+
     override fun type() = rObject.type
-    override fun isDb() = false
     override fun toRExpr0() = R_ObjectExpr(rObject.type)
     override fun toDbExpr0() = C_Utils.toDbExpr(pos, toRExpr())
 
@@ -180,8 +144,9 @@ class V_ObjectAttrExpr(
         private val rObject: R_ObjectDefinition,
         private val attr: R_Attribute
 ): V_Expr(exprCtx, pos) {
+    override val exprInfo = V_ExprInfo(false, false)
+
     override fun type() = attr.type
-    override fun isDb() = false
     override fun toRExpr0() = createAccessExpr()
     override fun toDbExpr0() = C_Utils.toDbExpr(pos, toRExpr())
 
@@ -197,7 +162,7 @@ class V_ObjectAttrExpr(
         val rEntity = rObject.rEntity
         val atEntity = exprCtx.makeAtEntity(rEntity, exprCtx.appCtx.nextAtExprId())
         val whatExpr = Db_AttrExpr(Db_EntityExpr(atEntity), attr)
-        val whatValue = Db_AtWhatValue_Simple(whatExpr, whatExpr.type)
+        val whatValue = Db_AtWhatValue_DbExpr(whatExpr, whatExpr.type)
         val whatField = Db_AtWhatField(R_AtWhatFieldFlags.DEFAULT, whatValue)
         return createRExpr(rObject, atEntity, whatField, attr.type)
     }

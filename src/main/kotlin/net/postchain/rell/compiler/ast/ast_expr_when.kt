@@ -1,8 +1,8 @@
 package net.postchain.rell.compiler.ast
 
 import net.postchain.rell.compiler.*
+import net.postchain.rell.compiler.vexpr.V_ConstantExpr
 import net.postchain.rell.compiler.vexpr.V_Expr
-import net.postchain.rell.compiler.vexpr.V_RExpr
 import net.postchain.rell.compiler.vexpr.V_WhenChooserDetails
 import net.postchain.rell.compiler.vexpr.V_WhenExpr
 import net.postchain.rell.model.*
@@ -143,8 +143,7 @@ class S_WhenConditionExpr(val exprs: List<S_Expr>): S_WhenCondition() {
             val attr = valueType.enum.attr(name.str)
             if (attr != null) {
                 val value = Rt_EnumValue(valueType, attr)
-                val rExpr = R_ConstantExpr(value)
-                return V_RExpr(ctx, expr.startPos, rExpr)
+                return V_ConstantExpr(ctx, expr.startPos, value)
             }
         }
 

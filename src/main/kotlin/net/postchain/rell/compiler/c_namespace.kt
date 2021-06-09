@@ -6,6 +6,7 @@ package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.vexpr.V_ConstantExpr
 import net.postchain.rell.compiler.vexpr.V_RExpr
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Value
@@ -275,8 +276,11 @@ abstract class C_NamespaceValue_RExpr: C_NamespaceValue() {
     }
 }
 
-class C_NamespaceValue_Value(private val value: Rt_Value): C_NamespaceValue_RExpr() {
-    override fun toExpr0(ctx: C_NamespaceValueContext, name: List<S_Name>) = R_ConstantExpr(value)
+class C_NamespaceValue_Value(private val value: Rt_Value): C_NamespaceValue() {
+    override fun toExpr(ctx: C_NamespaceValueContext, name: List<S_Name>): C_Expr {
+        val vExpr = V_ConstantExpr(ctx.exprCtx, name[0].pos, value)
+        return C_VExpr(vExpr)
+    }
 }
 
 class C_NamespaceValue_SysFunction(

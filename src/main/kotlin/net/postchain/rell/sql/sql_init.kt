@@ -375,7 +375,8 @@ private class SqlEntityIniter private constructor(
         for (name in newAttrs) {
             val attr = entity.attributes.getValue(name)
             if (attr.expr != null || !existingRecs) {
-                res.add(R_CreateExprAttr_Default(attr, entity.initFrameGetter, null))
+                val expr = R_DefaultAttrValueExpr(attr, entity.initFrameGetter, null)
+                res.add(R_CreateExprAttr(attr, expr))
             } else {
                 initCtx.msgs.error("meta:attr:new_no_def_value:${entity.metaName}:$name",
                         "New attribute '$name' of entity $entityName has no default value")

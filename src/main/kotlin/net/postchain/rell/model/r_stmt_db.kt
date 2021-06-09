@@ -126,7 +126,7 @@ sealed class R_BaseUpdateStatement(val target: R_UpdateTarget, val fromBlock: R_
 
     fun executeSql(frame: Rt_CallFrame, entities: List<R_DbAtEntity>) {
         frame.block(fromBlock) {
-            val ctx = SqlGenContext.create(frame, entities)
+            val ctx = SqlGenContext.createTop(frame, entities)
             val pSql = buildSql(frame, ctx, false)
             pSql.execute(frame.sqlExec)
         }
@@ -135,7 +135,7 @@ sealed class R_BaseUpdateStatement(val target: R_UpdateTarget, val fromBlock: R_
     fun executeSqlCount(frame: Rt_CallFrame, entities: List<R_DbAtEntity>): Int {
         var count = 0
         frame.block(fromBlock) {
-            val ctx = SqlGenContext.create(frame, entities)
+            val ctx = SqlGenContext.createTop(frame, entities)
             val pSql = buildSql(frame, ctx, true)
             pSql.executeQuery(frame.sqlExec) {
                 ++count
@@ -245,7 +245,7 @@ class R_UpdateStatement(
         val whatSql = translateWhat(ctx, redWhat)
         val whereSql = translateWhere(ctx, redWhere)
 
-        val fromInfo = ctx.getFromInfo(ctx.topFromEntities)
+        val fromInfo = ctx.getFromInfo()
         return buildSql0(ctx.sqlCtx, returning, fromInfo, whatSql, whereSql)
     }
 
@@ -296,7 +296,7 @@ class R_DeleteStatement(target: R_UpdateTarget, fromBlock: R_FrameBlock): R_Base
     override fun buildSql(frame: Rt_CallFrame, ctx: SqlGenContext, returning: Boolean): ParameterizedSql {
         val redWhere = target.where()?.toRedExpr(frame)
         val whereSql = translateWhere(ctx, redWhere)
-        val fromInfo = ctx.getFromInfo(ctx.topFromEntities)
+        val fromInfo = ctx.getFromInfo()
         return buildSql0(ctx.sqlCtx, returning, fromInfo, whereSql)
     }
 

@@ -6,12 +6,13 @@ package net.postchain.rell.model
 
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlExecutor
+import net.postchain.rell.utils.chainToIterable
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 
-data class SqlTableAlias(val entity: R_EntityDefinition, val str: String)
+data class SqlTableAlias(val entity: R_EntityDefinition, val exprId: R_AtExprId, val str: String)
 class SqlTableJoin(val attr: R_Attribute, val alias: SqlTableAlias)
 
 class SqlFromInfo(entities: Map<R_AtEntityId, SqlFromEntity>) {
@@ -24,22 +25,31 @@ class SqlFromEntity(val alias: SqlTableAlias, joins: List<SqlFromJoin>) {
 
 class SqlFromJoin(val baseAlias: SqlTableAlias, val attr: String, val alias: SqlTableAlias)
 
-class SqlGenContext private constructor(val sqlCtx: Rt_SqlContext, fromEntities: List<R_DbAtEntity>) {
-    val topFromEntities = fromEntities.toImmList()
-
+private class SqlGenAliasAllocator {
     private var aliasCtr = 0
+
+    fun nextAlias(entity: R_EntityDefinition, exprId: R_AtExprId): SqlTableAlias {
+        val aliasStr = String.format("A%02d", aliasCtr++)
+        return SqlTableAlias(entity, exprId, aliasStr)
+    }
+}
+
+class SqlGenContext private constructor(
+        val sqlCtx: Rt_SqlContext,
+        fromEntities: List<R_DbAtEntity>,
+        private val parent: SqlGenContext?
+) {
+    private val fromEntities = fromEntities.toImmList()
+    private val aliasAllocator: SqlGenAliasAllocator = parent?.aliasAllocator ?: SqlGenAliasAllocator()
+
+    private val atExprId: R_AtExprId
     private val entityAliasMap = mutableMapOf<R_AtEntityId, EntityAliasTbl>()
     private val aliasTableMap = mutableMapOf<SqlTableAlias, EntityAliasTbl>()
 
     init {
-        addFromEntities(fromEntities)
-    }
-
-    fun addFromEntities(fromEntities: List<R_DbAtEntity>) {
-        R_DbAtEntity.checkList(fromEntities)
-
-        for (entity in fromEntities) {
-            val alias = nextAlias(entity.rEntity)
+        atExprId = R_DbAtEntity.checkList(this.fromEntities)
+        for (entity in this.fromEntities) {
+            val alias = aliasAllocator.nextAlias(entity.rEntity, atExprId)
             val tbl = EntityAliasTbl(alias)
             check(alias !in aliasTableMap) { "${aliasTableMap.keys} $alias" }
             aliasTableMap[alias] = tbl
@@ -48,23 +58,29 @@ class SqlGenContext private constructor(val sqlCtx: Rt_SqlContext, fromEntities:
         }
     }
 
+    fun createSub(entities: List<R_DbAtEntity>): SqlGenContext {
+        return SqlGenContext(sqlCtx, entities, this)
+    }
+
     fun getEntityAlias(entity: R_DbAtEntity): SqlTableAlias {
-        val tbl = entityAliasMap.getValue(entity.id)
+        val ctx = getSqlGenCtxForExpr(entity.id.exprId)
+        val tbl = ctx.entityAliasMap.getValue(entity.id)
         return tbl.alias
     }
 
     fun getRelAlias(baseAlias: SqlTableAlias, rel: R_Attribute, targetEntity: R_EntityDefinition): SqlTableAlias {
-        val tbl = aliasTableMap.getValue(baseAlias)
+        val ctx = getSqlGenCtxForExpr(baseAlias.exprId)
+        val tbl = ctx.aliasTableMap.getValue(baseAlias)
         val map = tbl.subAliases.computeIfAbsent(baseAlias) { mutableMapOf() }
         val join = map.computeIfAbsent(rel.name) {
-            val alias = nextAlias(targetEntity)
-            aliasTableMap[alias] = tbl
+            val alias = aliasAllocator.nextAlias(targetEntity, baseAlias.exprId)
+            ctx.aliasTableMap[alias] = tbl
             SqlTableJoin(rel, alias)
         }
         return join.alias
     }
 
-    fun getFromInfo(fromEntities: List<R_DbAtEntity>): SqlFromInfo {
+    fun getFromInfo(): SqlFromInfo {
         val entities = fromEntities.map { rAtEntity ->
             val entityId = rAtEntity.id
             val tbl = entityAliasMap.getValue(entityId)
@@ -76,17 +92,23 @@ class SqlGenContext private constructor(val sqlCtx: Rt_SqlContext, fromEntities:
         return SqlFromInfo(entities)
     }
 
-    private fun nextAlias(entity: R_EntityDefinition) = SqlTableAlias(entity, String.format("A%02d", aliasCtr++))
+    private fun getSqlGenCtxForExpr(exprId: R_AtExprId): SqlGenContext {
+        val iterable = chainToIterable(this) { it.parent }
+        return iterable.firstOrNull { it.atExprId == exprId } ?: throw IllegalArgumentException("$exprId")
+    }
 
     private class EntityAliasTbl(val alias: SqlTableAlias) {
         val subAliases = mutableMapOf<SqlTableAlias, MutableMap<String, SqlTableJoin>>()
     }
 
     companion object {
-        fun create(frame: Rt_CallFrame, entities: List<R_DbAtEntity>): SqlGenContext {
+        fun createTop(frame: Rt_CallFrame, entities: List<R_DbAtEntity>): SqlGenContext {
             val sqlCtx = frame.defCtx.sqlCtx
-            val ctx = SqlGenContext(sqlCtx, entities)
-            return ctx
+            return createTop(sqlCtx, entities)
+        }
+
+        fun createTop(sqlCtx: Rt_SqlContext, entities: List<R_DbAtEntity>): SqlGenContext {
+            return SqlGenContext(sqlCtx, entities, null)
         }
     }
 }

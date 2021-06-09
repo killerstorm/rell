@@ -87,24 +87,64 @@ class TestModuleTest: BaseRellTest(false) {
             import prod;
 
             function test_add_user() {
-                require( prod.user@*{}(.name) == list<text>(), 'expected_no_users' );
+                assert_equals(prod.user@*{}(.name), list<text>());
                 val tx = rell.test.tx(prod.add_user('Bob'));
-                require( prod.user@*{}(.name) == list<text>(), 'expected_no_users' );
+                assert_equals(prod.user@*{}(.name), list<text>());
                 tx.run();
-                require( prod.user@*{}(.name) == ['Bob'], 'expected_user_bob' );
+                assert_equals(prod.user@*{}(.name), ['Bob']);
             }
 
             function test_remove_user() {
                 rell.test.tx([prod.add_user('Bob'), prod.add_user('Alice')]).run();
-                require( prod.user@*{}(.name) == ['Bob', 'Alice'], 'expected_users_bob_alice_1' );
+                assert_equals(prod.user@*{}(.name), ['Bob', 'Alice']);
                 val tx = rell.test.tx(prod.remove_user('Bob'));
-                require( prod.user@*{}(.name) == ['Bob', 'Alice'], 'expected_users_bob_alice_2' );
+                assert_equals(prod.user@*{}(.name), ['Bob', 'Alice']);
                 tx.run();
-                require( prod.user@*{}(.name) == ['Alice'], 'expected_user_alice' );
+                assert_equals(prod.user@*{}(.name), ['Alice']);
             }
         """)
 
         chkTests("tests", "test_add_user=OK,test_remove_user=OK")
+    }
+
+    @Test fun testMultipleBlocks() {
+        tstCtx.useSql = true
+
+        file("prod.rell", """
+            module;
+            entity user { name; }
+            operation add_user(name) { create user(name); }
+        """)
+
+        file("tests.rell", """
+            @test module;
+            import prod;
+
+            function rowid_to_int(r: rowid) = integer.from_gtv(r.to_gtv());
+
+            function test_add_user() {
+                assert_equals(prod.user@*{}(.name), list<text>());
+                assert_equals(block@*{}(.block_height), list<integer>());
+                assert_equals(transaction@*{}(rowid_to_int(.rowid)), list<integer>());
+
+                prod.add_user('Bob').run();
+                assert_equals(prod.user@*{}(.name), ['Bob']);
+                assert_equals(block@*{}(.block_height), [0]);
+                assert_equals(transaction@*{}(rowid_to_int(.rowid)), [1]);
+
+                prod.add_user('Alice').run();
+                assert_equals(prod.user@*{}(.name), ['Bob', 'Alice']);
+                assert_equals(block@*{}(.block_height), [0, 1]);
+                assert_equals(transaction@*{}(rowid_to_int(.rowid)), [1, 2]);
+
+                prod.add_user('Trudy').run();
+                assert_equals(prod.user@*{}(.name), ['Bob', 'Alice', 'Trudy']);
+                assert_equals(block@*{}(.block_height), [0, 1, 2]);
+                assert_equals(transaction@*{}(rowid_to_int(.rowid)), [1, 2, 3]);
+            }
+        """)
+
+        chkTests("tests", "test_add_user=OK")
     }
 
     @Test fun testNamespacedTestFunctions() {

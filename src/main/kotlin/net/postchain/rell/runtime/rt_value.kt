@@ -14,6 +14,7 @@ import net.postchain.rell.compiler.C_Constants
 import net.postchain.rell.model.*
 import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.PostchainUtils
+import net.postchain.rell.utils.checkEquals
 import java.math.BigDecimal
 import java.util.*
 import java.util.regex.Pattern
@@ -507,6 +508,10 @@ class Rt_VirtualMapValue(
 }
 
 class Rt_TupleValue(val type: R_TupleType, val elements: List<Rt_Value>): Rt_Value() {
+    init {
+        checkEquals(elements.size, type.fields.size)
+    }
+
     override val valueType = Rt_CoreValueTypes.TUPLE.type()
 
     override fun type() = type
@@ -602,6 +607,29 @@ class Rt_StructValue(private val type: R_StructType, private val attributes: Mut
 
     fun set(index: Int, value: Rt_Value) {
         attributes[index] = value
+    }
+
+    class Builder(private val type: R_StructType) {
+        private val v0 = Rt_IntValue(0)
+        private val values = MutableList<Rt_Value>(type.struct.attributes.size) { v0 }
+        private var done = false
+
+        fun set(attr: R_Attribute, value: Rt_Value) {
+            check(!done)
+            require(value !== v0)
+            val index = attr.index
+            require(values[index] === v0) { "$index $attr" }
+            values[index] = value
+        }
+
+        fun build(): Rt_Value {
+            check(!done)
+            done = true
+            for (index in values.indices) {
+                require(values[index] !== v0) { index }
+            }
+            return Rt_StructValue(type, values)
+        }
     }
 
     companion object {

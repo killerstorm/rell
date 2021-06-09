@@ -9,6 +9,7 @@ import net.postchain.rell.lib.R_TestOpType
 import net.postchain.rell.lib.Rt_TestOpValue
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlGen
+import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmList
 
 abstract class R_Expr(val type: R_Type) {
@@ -153,25 +154,33 @@ class R_MapLiteralExpr(type: R_MapType, val entries: List<Pair<R_Expr, R_Expr>>)
     }
 }
 
-class R_ListExpr(type: R_Type, val arg: R_Expr?): R_Expr(type) {
-    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
+sealed class R_CollectionKind(val type: R_Type) {
+    abstract fun makeRtValue(col: Collection<Rt_Value>): Rt_Value
+}
+
+class R_CollectionKind_List(type: R_Type): R_CollectionKind(type) {
+    override fun makeRtValue(col: Collection<Rt_Value>): Rt_Value {
         val list = mutableListOf<Rt_Value>()
-        if (arg != null) {
-            val c = arg.evaluate(frame).asCollection()
-            list.addAll(c)
-        }
+        list.addAll(col)
         return Rt_ListValue(type, list)
     }
 }
 
-class R_SetExpr(type: R_Type, val arg: R_Expr?): R_Expr(type) {
-    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
+class R_CollectionKind_Set(type: R_Type): R_CollectionKind(type) {
+    override fun makeRtValue(col: Collection<Rt_Value>): Rt_Value {
         val set = mutableSetOf<Rt_Value>()
-        if (arg != null) {
-            val c = arg.evaluate(frame).asCollection()
-            set.addAll(c)
-        }
+        set.addAll(col)
         return Rt_SetValue(type, set)
+    }
+}
+
+class R_CollectionConstructorExpr(
+        private val kind: R_CollectionKind,
+        private val arg: R_Expr?
+): R_Expr(kind.type) {
+    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
+        val col = if (arg == null) immListOf<Rt_Value>() else arg.evaluate(frame).asCollection()
+        return kind.makeRtValue(col)
     }
 }
 
@@ -401,22 +410,18 @@ object R_RequireCondition_Map: R_RequireCondition() {
     override fun calculate(v: Rt_Value) = if (v != Rt_NullValue && !v.asMap().isEmpty()) v else null
 }
 
-sealed class R_CreateExprAttr(val attr: R_Attribute) {
-    abstract fun evaluate(frame: Rt_CallFrame): Rt_Value
-}
-
-class R_CreateExprAttr_Specified(attr: R_Attribute, private val expr: R_Expr): R_CreateExprAttr(attr) {
-    override fun evaluate(frame: Rt_CallFrame) = expr.evaluate(frame)
-}
-
-class R_CreateExprAttr_Default(
-        attr: R_Attribute,
+class R_DefaultAttrValueExpr(
+        private val attr: R_Attribute,
         private val initFrameGetter: C_LateGetter<R_CallFrame>,
         private val createFilePos: R_FilePos?
-): R_CreateExprAttr(attr) {
-    override fun evaluate(frame: Rt_CallFrame): Rt_Value {
+): R_Expr(attr.type) {
+    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         return Rt_Utils.evaluateInNewFrame(frame, attr.expr!!, createFilePos, initFrameGetter)
     }
+}
+
+class R_CreateExprAttr(val attr: R_Attribute, val expr: R_Expr) {
+    fun evaluate(frame: Rt_CallFrame) = expr.evaluate(frame)
 }
 
 sealed class R_CreateExpr(val rEntity: R_EntityDefinition): R_Expr(rEntity.type) {
@@ -551,12 +556,12 @@ class R_StructExpr(private val struct: R_Struct, private val attrs: List<R_Creat
     }
 
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        val values = MutableList<Rt_Value>(attrs.size) { Rt_UnitValue }
+        val b = Rt_StructValue.Builder(struct.type)
         for (attr in attrs) {
             val value = attr.evaluate(frame)
-            values[attr.attr.index] = value
+            b.set(attr.attr, value)
         }
-        return Rt_StructValue(struct.type, values)
+        return b.build()
     }
 }
 

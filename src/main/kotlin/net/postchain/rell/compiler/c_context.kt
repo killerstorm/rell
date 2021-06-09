@@ -214,6 +214,7 @@ class C_FileContext(val modCtx: C_ModuleContext) {
 
 class C_NamespaceContext(val modCtx: C_ModuleContext, val namespacePath: String?, val scopeBuilder: C_ScopeBuilder) {
     val globalCtx = modCtx.globalCtx
+    val appCtx = modCtx.appCtx
     val msgCtx = modCtx.msgCtx
     val executor = modCtx.executor
 
@@ -363,13 +364,25 @@ class C_DefinitionContext(val mntCtx: C_MountContext, val definitionType: C_Defi
         }
     }
 
+    fun getDbModificationRestriction(): C_CodeMsg? {
+        return when {
+            definitionType == C_DefinitionType.QUERY -> {
+                C_CodeMsg("no_db_update:query", "Database modifications are not allowed in a query")
+            }
+            definitionType == C_DefinitionType.OBJECT -> {
+                C_CodeMsg("no_db_update:object:expr", "Database modifications are not allowed in object attribute expressions")
+            }
+            modCtx.repl -> {
+                C_CodeMsg("no_db_update:repl", "Database modifications are not allowed in REPL")
+            }
+            else -> null
+        }
+    }
+
     fun checkDbUpdateAllowed(pos: S_Pos) {
-        if (definitionType == C_DefinitionType.QUERY) {
-            msgCtx.error(pos, "no_db_update:query", "Database modifications are not allowed in a query")
-        } else if (definitionType == C_DefinitionType.OBJECT) {
-            msgCtx.error(pos, "no_db_update:object:expr", "Database modifications are not allowed in object attribute expressions")
-        } else if (modCtx.repl) {
-            msgCtx.error(pos, "no_db_update:repl", "Database modifications are not allowed in REPL")
+        val r = getDbModificationRestriction()
+        if (r != null) {
+            msgCtx.error(pos, r.code, r.msg)
         }
     }
 }

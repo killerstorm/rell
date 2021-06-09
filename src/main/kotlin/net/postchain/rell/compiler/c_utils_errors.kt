@@ -103,7 +103,7 @@ object C_Errors {
     }
 
     fun errExprDbNotAllowed(pos: S_Pos): C_Error {
-        return C_Error.stop(pos, "expr_sqlnotallowed", "Database expression not allowed here")
+        return C_Error.stop(pos, "expr_sqlnotallowed", "Expression cannot be converted to SQL")
     }
 
     fun errCannotUpdate(msgCtx: C_MessageContext, pos: S_Pos, name: String) {

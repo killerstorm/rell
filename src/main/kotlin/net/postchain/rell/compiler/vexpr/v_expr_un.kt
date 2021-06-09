@@ -46,12 +46,9 @@ class V_UnaryExpr(
         private val expr: V_Expr,
         private val varFacts: C_ExprVarFacts
 ): V_Expr(exprCtx, pos) {
-    private val isDb = isDb(expr)
-    private val atDependencies = expr.atDependencies()
+    override val exprInfo = V_ExprInfo.make(expr)
 
     override fun type() = op.resType
-    override fun isDb() = isDb
-    override fun atDependencies() = atDependencies
     override fun varFacts() = varFacts
 
     override fun toRExpr0(): R_Expr {
@@ -83,8 +80,9 @@ class V_IncDecExpr(
         private val post: Boolean,
         private val varFacts: C_ExprVarFacts
 ): V_Expr(exprCtx, pos) {
+    override val exprInfo = V_ExprInfo(false, false)
+
     override fun type() = resType
-    override fun isDb() = false
     override fun varFacts() = varFacts
     override fun toRExpr0() = destination.compileAssignExpr(exprCtx, pos, resType, srcExpr, op, post)
 }

@@ -6,6 +6,7 @@ package net.postchain.rell.compiler.ast
 
 import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.parser.RellTokenMatch
+import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.lib.C_Lib_OpContext
 import net.postchain.rell.model.*
 import net.postchain.rell.module.RellVersions
@@ -108,31 +109,37 @@ class S_FormalParameter(val attr: S_AttrHeader, val expr: S_Expr?) {
         val name = attr.name
         val type = attr.compileTypeOpt(defCtx.nsCtx)
 
-        val exprGetterPosValue = if (expr == null) null else {
-            val errExpr = C_Utils.errorRExpr(type ?: R_CtErrorType)
-            val exprLate = C_LateInit(C_CompilerPass.EXPRESSIONS, errExpr)
+        val defaultValue = if (expr == null) null else {
+            val errorType = type ?: R_CtErrorType
+            val rErrorExpr = C_Utils.errorRExpr(errorType)
+            val rExprLate = C_LateInit(C_CompilerPass.EXPRESSIONS, rErrorExpr)
+            val rValueLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_DefaultValue(rErrorExpr, false))
+
             defCtx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
-                val rExpr = compileExpr(defCtx, type)
-                exprLate.set(rExpr)
+                val vExpr = compileExpr(defCtx, type, errorType)
+                val rExpr = vExpr.toRExpr()
+                rExprLate.set(rExpr)
+                rValueLate.set(R_DefaultValue(rExpr, vExpr.isDbModification()))
             }
-            S_PosValue(expr.startPos, exprLate.getter)
+
+            C_DefaultValue(expr.startPos, rExprLate.getter, rValueLate.getter)
         }
 
-        return C_FormalParameter(name, type, defCtx.initFrameGetter, exprGetterPosValue)
+        return C_FormalParameter(name, type, defCtx.initFrameGetter, defaultValue)
     }
 
-    private fun compileExpr(defCtx: C_DefinitionContext, attrType: R_Type?): R_Expr {
+    private fun compileExpr(defCtx: C_DefinitionContext, attrType: R_Type?, errorType: R_Type): V_Expr {
         val cExpr = expr!!.compileOpt(defCtx.initExprCtx, C_TypeHint.ofType(attrType))
-        cExpr ?: return C_Utils.ERROR_EXPR
+        cExpr ?: return C_Utils.errorVExpr(defCtx.initExprCtx, expr.startPos, errorType)
 
-        val rExpr = cExpr.value().toRExpr()
+        val vExpr = cExpr.value()
         if (attrType != null) {
-            val type = rExpr.type
+            val type = vExpr.type()
             C_Types.matchOpt(defCtx.msgCtx, attrType, type, expr.startPos, "param_expr_type",
                     "Wrong type of default value of parameter '${attr.name}'")
         }
 
-        return rExpr
+        return vExpr
     }
 }
 

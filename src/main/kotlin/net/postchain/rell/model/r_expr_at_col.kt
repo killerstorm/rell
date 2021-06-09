@@ -283,6 +283,8 @@ class R_ColAtExpr(
 
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         val resList = evalList(frame)
+        checkCount(cardinality, resList.size, "values")
+
         val res = evalResult(resList)
         return res
     }
@@ -321,7 +323,6 @@ class R_ColAtExpr(
         var rows = summarizer.getResult()
         if (rowComparator != null) rows = rows.sortedWith(rowComparator)
         rows = limiter.getResult(rows)
-        checkCount(cardinality, rows.size, "values")
 
         val resList: MutableList<Rt_Value> = ArrayList(rows.size)
         for (rowValues in rows) {
@@ -331,13 +332,6 @@ class R_ColAtExpr(
         }
 
         return resList
-    }
-
-    private fun <T> applyLimitOffset(list: List<T>, limit: Long?, offset: Long?): List<T> {
-        val size = list.size.toLong()
-        val start = if (offset == null) 0 else min(offset, size)
-        val end = if (limit == null) size else min(start + limit, size)
-        return if (start == 0L && end == size) list else list.subList(start.toInt(), end.toInt())
     }
 
     private class RowComparator(private val sorting: List<IndexedValue<Comparator<Rt_Value>>>): Comparator<List<Rt_Value>> {

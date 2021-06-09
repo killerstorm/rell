@@ -184,6 +184,26 @@ class StackTraceTest: BaseRellTest(false) {
         chkSpecificError("val g = gtv.from_json('[{}]');\ninteger.from_gtv(g);", 4, "rt_err:from_gtv")
     }
 
+    @Test fun testDefaultValueExpr() {
+        tst.testLib = true
+        def("function err() { require(false); return 0; }")
+        def("function f(x: integer = err()) = x * x;")
+        def("operation op(x: integer = err()) {}")
+        def("struct rec { x: integer = err(); }")
+
+        chk("f(123)", "int[15129]")
+        chk("f()", "req_err:null")
+        chkStack(":err(main.rell:1)", ":f(main.rell:2)", ":q(main.rell:5)")
+
+        chk("op(123)", "op[op(123)]")
+        chk("op()", "req_err:null")
+        chkStack(":err(main.rell:1)", ":op(main.rell:3)", ":q(main.rell:5)")
+
+        chk("rec(123)", "rec[x=int[123]]")
+        chk("rec()", "req_err:null")
+        chkStack(":err(main.rell:1)", ":rec(main.rell:4)", ":q(main.rell:5)")
+    }
+
     private fun chkSpecificError(code: String, line: Int, error: String) {
         val t = RellCodeTester(tstCtx)
 
