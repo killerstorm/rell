@@ -4,7 +4,7 @@
 
 package net.postchain.rell
 
-import net.postchain.rell.module.RELL_VERSION
+import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.Rt_BooleanValue
 import net.postchain.rell.runtime.Rt_IntValue
 import net.postchain.rell.runtime.Rt_TextValue
@@ -21,10 +21,10 @@ class QueryTest: BaseRellTest() {
     }
 
     @Test fun testResultParameter() {
-        chkQueryEx("query q(a: integer) = a;", listOf(Rt_IntValue(12345)), "int[12345]")
-        chkQueryEx("query q(a: text) = a;", listOf(Rt_TextValue("Hello")), "text[Hello]")
-        chkQueryEx("query q(a: integer, b: text) = a;", listOf(Rt_IntValue(12345), Rt_TextValue("Hello")), "int[12345]")
-        chkQueryEx("query q(a: integer, b: text) = b;", listOf(Rt_IntValue(12345), Rt_TextValue("Hello")), "text[Hello]")
+        chkFull("query q(a: integer) = a;", listOf(Rt_IntValue(12345)), "int[12345]")
+        chkFull("query q(a: text) = a;", listOf(Rt_TextValue("Hello")), "text[Hello]")
+        chkFull("query q(a: integer, b: text) = a;", listOf(Rt_IntValue(12345), Rt_TextValue("Hello")), "int[12345]")
+        chkFull("query q(a: integer, b: text) = b;", listOf(Rt_IntValue(12345), Rt_TextValue("Hello")), "text[Hello]")
     }
 
     @Test fun testReturnLiteral() {
@@ -64,13 +64,13 @@ class QueryTest: BaseRellTest() {
     @Test fun testReturnErr() {
         chkEx("{ return; }", "ct_err:stmt_return_query_novalue")
 
-        chkQueryEx("query q(): integer = 123;", "int[123]")
-        chkQueryEx("query q(): integer = 'Hello';", "ct_err:fn_rettype:[integer]:[text]")
-        chkQueryEx("query q(): text = 123;", "ct_err:fn_rettype:[text]:[integer]")
+        chkFull("query q(): integer = 123;", "int[123]")
+        chkFull("query q(): integer = 'Hello';", "ct_err:fn_rettype:[integer]:[text]")
+        chkFull("query q(): text = 123;", "ct_err:fn_rettype:[text]:[integer]")
 
-        chkQueryEx("query q(): integer { return 123; }", "int[123]")
-        chkQueryEx("query q(): integer { return 'Hello'; }", "ct_err:fn_rettype:[integer]:[text]")
-        chkQueryEx("query q(): text { return 123; }", "ct_err:fn_rettype:[text]:[integer]")
+        chkFull("query q(): integer { return 123; }", "int[123]")
+        chkFull("query q(): integer { return 'Hello'; }", "ct_err:fn_rettype:[integer]:[text]")
+        chkFull("query q(): text { return 123; }", "ct_err:fn_rettype:[text]:[integer]")
 
         chkEx("{ if (1 > 0) return 123; else return 456; }", "int[123]")
         chkEx("{ if (1 > 0) return 123; else return 'Hello'; }", "ct_err:fn_rettype:[integer]:[text]")
@@ -91,17 +91,17 @@ class QueryTest: BaseRellTest() {
 
     @Test fun testWrongNumberOfArguments() {
         val code = "query q(x: integer, y: text) = x;"
-        chkQueryEx(code, listOf(Rt_IntValue(12345), Rt_TextValue("abc")), "int[12345]")
-        chkQueryEx(code, listOf(), "rt_err:fn_wrong_arg_count:q:2:0")
-        chkQueryEx(code, listOf(Rt_IntValue(12345)), "rt_err:fn_wrong_arg_count:q:2:1")
-        chkQueryEx(code, listOf(Rt_IntValue(12345), Rt_TextValue("abc"), Rt_BooleanValue(true)), "rt_err:fn_wrong_arg_count:q:2:3")
+        chkFull(code, listOf(Rt_IntValue(12345), Rt_TextValue("abc")), "int[12345]")
+        chkFull(code, listOf(), "rt_err:fn_wrong_arg_count:q:2:0")
+        chkFull(code, listOf(Rt_IntValue(12345)), "rt_err:fn_wrong_arg_count:q:2:1")
+        chkFull(code, listOf(Rt_IntValue(12345), Rt_TextValue("abc"), Rt_BooleanValue(true)), "rt_err:fn_wrong_arg_count:q:2:3")
     }
 
     @Test fun testWrongArgumentType() {
         val code = "query q(x: integer) = x;"
-        chkQueryEx(code, listOf(Rt_IntValue(12345)), "int[12345]")
-        chkQueryEx(code, listOf(Rt_TextValue("Hello")), "rt_err:fn_wrong_arg_type:q:integer:text")
-        chkQueryEx(code, listOf(Rt_BooleanValue(true)), "rt_err:fn_wrong_arg_type:q:integer:boolean")
+        chkFull(code, listOf(Rt_IntValue(12345)), "int[12345]")
+        chkFull(code, listOf(Rt_TextValue("Hello")), "rt_err:fn_wrong_arg_type:q:integer:text")
+        chkFull(code, listOf(Rt_BooleanValue(true)), "rt_err:fn_wrong_arg_type:q:integer:boolean")
     }
 
     @Test fun testCreateUpdateDelete() {
@@ -149,7 +149,7 @@ class QueryTest: BaseRellTest() {
     }
 
     @Test fun testGetRellVersion() {
-        chkQueryEx("", "rell.get_rell_version", listOf(), "text[$RELL_VERSION]")
+        chkFull("", "rell.get_rell_version", listOf(), "text[${RellVersions.VERSION}]")
     }
 
     @Test fun testCallQuery() {

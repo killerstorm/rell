@@ -66,67 +66,38 @@ class OperationTest: BaseRellTest() {
     }
 
     @Test fun testCallOperation() {
+        tst.testLib = true
         def("operation op(x: integer, y: text) {}")
-        chk("op(123, 'Hello')", "op[op(int[123],text[Hello])]")
+        chk("op(123, 'Hello')", """op[op(123,"Hello")]""")
         chk("op('Hello', 123)", "ct_err:[expr_call_argtype:op:0:x:integer:text][expr_call_argtype:op:1:y:text:integer]")
         chk("op(123, 'Hello', 456)", "ct_err:expr:call:arg_count:op:2:3")
-        chk("op(123+456, 'Hello' + 'World')", "op[op(int[579],text[HelloWorld])]")
-        chk("'' + op(123, 'Hello')", "text[op(123,Hello)]")
-        chk("_type_of(op(123, 'Hello'))", "text[operation]")
+        chk("op(123+456, 'Hello' + 'World')", """op[op(579,"HelloWorld")]""")
+        chk("'' + op(123, 'Hello')", """text[op(123,"Hello")]""")
+        chk("_type_of(op(123, 'Hello'))", "text[rell.test.op]")
     }
 
     @Test fun testCallOperationSideEffect() {
+        tst.testLib = true
         def("operation foo(x: integer, y: text) { print('foo'); }")
         def("function f() { print('f'); return 0; }")
         chk("f()", "int[0]")
         chkOut("f")
-        chk("foo(123, 'Hello')", "op[foo(int[123],text[Hello])]")
+        chk("foo(123, 'Hello')", """op[foo(123,"Hello")]""")
         chkOut()
     }
 
-    @Test fun testOperationTypeCompatibility() {
-        def("operation bob(x: integer){}")
-        def("operation alice(x: integer){}")
-        def("operation trudy(t: text){}")
-        chkEx("{ var v = bob(123); v = alice(456); return v; }", "op[alice(int[456])]")
-        chkEx("{ var v = bob(123); v = trudy('Hello'); return v; }", "op[trudy(text[Hello])]")
-    }
-
-    @Test fun testOperationTypeExplicit() {
-        def("operation bob(x: integer){}")
-        chkEx("{ var v: operation; v = bob(123); return v; }", "op[bob(int[123])]")
-    }
-
-    @Test fun testOperationTypeOps() {
-        def("operation foo(x: integer, y: text){}")
-        def("operation bar(x: integer, y: text){}")
-
-        chk("foo(123,'Hello') == foo(456,'Bye')", "boolean[false]")
-        chk("foo(123,'Hello') == foo(123,'Hello')", "boolean[true]")
-        chk("foo(123,'Hello') == foo(579-456,'Hello')", "boolean[true]")
-        chk("foo(123,'Hello') != foo(456,'Bye')", "boolean[true]")
-        chk("foo(123,'Hello') != foo(123,'Hello')", "boolean[false]")
-
-        chk("foo(123,'Hello') == bar(123,'Hello')", "boolean[false]")
-        chk("foo(123,'Hello') != bar(123,'Hello')", "boolean[true]")
-
-        chk("foo(123,'Hello') < foo(123,'Hello')", "ct_err:binop_operand_type:<:[operation]:[operation]")
-        chk("foo(123,'Hello') > foo(123,'Hello')", "ct_err:binop_operand_type:>:[operation]:[operation]")
-        chk("foo(123,'Hello') <= foo(123,'Hello')", "ct_err:binop_operand_type:<=:[operation]:[operation]")
-        chk("foo(123,'Hello') >= foo(123,'Hello')", "ct_err:binop_operand_type:>=:[operation]:[operation]")
-    }
-
-    @Test fun testOperationTypeAsMapKey() {
-        def("operation foo(x: integer, y: text){}")
-        def("operation bar(p: text, q: integer){}")
-        chk("[ foo(123,'Hello') : 'Bob', bar('Bye', 456) : 'Alice' ]",
-                "map<operation,text>[op[foo(int[123],text[Hello])]=text[Bob],op[bar(text[Bye],int[456])]=text[Alice]]")
-    }
-
-    @Test fun testDefautParameters() {
+    @Test fun testCallOperationDefautParameters() {
+        tst.testLib = true
         def("operation foo(x: integer = 123, y: text = 'Hello'){}")
-        chk("foo()", "op[foo(int[123],text[Hello])]")
-        chk("foo(456)", "op[foo(int[456],text[Hello])]")
-        chk("foo(456,'Bye')", "op[foo(int[456],text[Bye])]")
+        chk("foo()", """op[foo(123,"Hello")]""")
+        chk("foo(456)", """op[foo(456,"Hello")]""")
+        chk("foo(456,'Bye')", """op[foo(456,"Bye")]""")
+        chk("foo('Bye')", "ct_err:expr_call_argtype:foo:0:x:integer:text")
+        chk("foo(y = 'Bye')", """op[foo(123,"Bye")]""")
+    }
+
+    @Test fun testCallOperationNoTestLib() {
+        def("operation foo(x: integer){}")
+        chk("foo(123)", "ct_err:expr:operation_call:no_test:foo")
     }
 }

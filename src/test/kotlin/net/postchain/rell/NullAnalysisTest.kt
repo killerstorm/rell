@@ -104,47 +104,47 @@ class NullAnalysisTest: BaseRellTest(false) {
     }
 
     @Test fun testBooleanExpressions() {
-        chkQueryEx("query q(x: integer?) = x > 5;", 6, "ct_err:binop_operand_type:>:[integer?]:[integer]")
-        chkQueryEx("query q(x: integer?) = x != null;", 5, "boolean[true]")
-        chkQueryEx("query q(x: integer?) = x == null;", 5, "boolean[false]")
+        chkFull("query q(x: integer?) = x > 5;", 6, "ct_err:binop_operand_type:>:[integer?]:[integer]")
+        chkFull("query q(x: integer?) = x != null;", 5, "boolean[true]")
+        chkFull("query q(x: integer?) = x == null;", 5, "boolean[false]")
 
         var q: String
 
         q = "query q(x: integer?) = x != null and x > 5;"
-        chkQueryEx(q, 6, "boolean[true]")
-        chkQueryEx(q, 5, "boolean[false]")
-        chkQueryEx(q, null as Long?, "boolean[false]")
-        chkQueryEx("query q(x: integer?) = x == null and x > 5;", 0, "ct_err:binop_operand_type:>:[integer?]:[integer]")
+        chkFull(q, 6, "boolean[true]")
+        chkFull(q, 5, "boolean[false]")
+        chkFull(q, null as Long?, "boolean[false]")
+        chkFull("query q(x: integer?) = x == null and x > 5;", 0, "ct_err:binop_operand_type:>:[integer?]:[integer]")
 
         q = "query q(x: integer?) = x == null or x > 5;"
-        chkQueryEx(q, 6, "boolean[true]")
-        chkQueryEx(q, 5, "boolean[false]")
-        chkQueryEx(q, null as Long?, "boolean[true]")
-        chkQueryEx("query q(x: integer?) = x != null or x > 5;", 0, "ct_err:binop_operand_type:>:[integer?]:[integer]")
+        chkFull(q, 6, "boolean[true]")
+        chkFull(q, 5, "boolean[false]")
+        chkFull(q, null as Long?, "boolean[true]")
+        chkFull("query q(x: integer?) = x != null or x > 5;", 0, "ct_err:binop_operand_type:>:[integer?]:[integer]")
 
         q = "query q(x: integer?, y: integer?) = x == null or y == null or x > y;"
-        chkQueryEx(q, 6, 5, "boolean[true]")
-        chkQueryEx(q, 5, 6, "boolean[false]")
-        chkQueryEx(q, null as Long?, 5, "boolean[true]")
-        chkQueryEx(q, 5, null as Long?, "boolean[true]")
-        chkQueryEx(q, null as Long?, null as Long?, "boolean[true]")
+        chkFull(q, 6, 5, "boolean[true]")
+        chkFull(q, 5, 6, "boolean[false]")
+        chkFull(q, null as Long?, 5, "boolean[true]")
+        chkFull(q, 5, null as Long?, "boolean[true]")
+        chkFull(q, null as Long?, null as Long?, "boolean[true]")
 
-        chkQueryEx("query q(x: integer?, y: integer?) = x == null or x > y;", 0, 0,
+        chkFull("query q(x: integer?, y: integer?) = x == null or x > y;", 0, 0,
                 "ct_err:binop_operand_type:>:[integer]:[integer?]")
-        chkQueryEx("query q(x: integer?, y: integer?) = y == null or x > y;", 0, 0,
+        chkFull("query q(x: integer?, y: integer?) = y == null or x > y;", 0, 0,
                 "ct_err:binop_operand_type:>:[integer?]:[integer]")
 
         q = "query q(x: integer?) = not (x == null) and x > 5;"
-        chkQueryEx(q, 6, "boolean[true]")
-        chkQueryEx(q, 5, "boolean[false]")
-        chkQueryEx(q, null as Long?, "boolean[false]")
+        chkFull(q, 6, "boolean[true]")
+        chkFull(q, 5, "boolean[false]")
+        chkFull(q, null as Long?, "boolean[false]")
 
         q = "query q(x: integer?, y: integer?) = not (x == null or y == null) and x > y;"
-        chkQueryEx(q, 6, 5, "boolean[true]")
-        chkQueryEx(q, 5, 6, "boolean[false]")
-        chkQueryEx(q, null as Long?, 5, "boolean[false]")
-        chkQueryEx(q, 5, null as Long?, "boolean[false]")
-        chkQueryEx(q, null as Long?, null as Long?, "boolean[false]")
+        chkFull(q, 6, 5, "boolean[true]")
+        chkFull(q, 5, 6, "boolean[false]")
+        chkFull(q, null as Long?, 5, "boolean[false]")
+        chkFull(q, 5, null as Long?, "boolean[false]")
+        chkFull(q, null as Long?, null as Long?, "boolean[false]")
     }
 
     @Test fun testImplicationsOperatorNotNull() {
@@ -230,48 +230,48 @@ class NullAnalysisTest: BaseRellTest(false) {
     }
 
     @Test fun testIfExpr() {
-        chkQueryEx("query q(x: integer?) = x + 1;", 0, "ct_err:binop_operand_type:+:[integer?]:[integer]")
-        chkQueryEx("query q(x: integer?) = if (x == null) x + 1 else 0;", 0, "ct_err:binop_operand_type:+:[integer?]:[integer]")
+        chkFull("query q(x: integer?) = x + 1;", 0, "ct_err:binop_operand_type:+:[integer?]:[integer]")
+        chkFull("query q(x: integer?) = if (x == null) x + 1 else 0;", 0, "ct_err:binop_operand_type:+:[integer?]:[integer]")
 
-        chkQueryEx("query q(x: integer?) = _type_of(x + 1);", 0, "ct_err:binop_operand_type:+:[integer?]:[integer]")
-        chkQueryEx("query q(x: integer?) = _type_of(if (x == null) 0 else x + 1);", 0, "text[integer]")
-        chkQueryEx("query q(x: integer?) = _type_of(if (x == null) null else x + 1);", 0, "text[integer?]")
-        chkQueryEx("query q(x: integer?) = _type_of(if (not x??) 0 else x + 1);", 0, "text[integer]")
-        chkQueryEx("query q(x: integer?) = _type_of(if (not x??) null else x + 1);", 0, "text[integer?]")
-        chkQueryEx("query q(x: integer?) = _type_of(if (x??) x + 1 else 0);", 0, "text[integer]")
-        chkQueryEx("query q(x: integer?) = _type_of(if (x??) x + 1 else null);", 0, "text[integer?]")
+        chkFull("query q(x: integer?) = _type_of(x + 1);", 0, "ct_err:binop_operand_type:+:[integer?]:[integer]")
+        chkFull("query q(x: integer?) = _type_of(if (x == null) 0 else x + 1);", 0, "text[integer]")
+        chkFull("query q(x: integer?) = _type_of(if (x == null) null else x + 1);", 0, "text[integer?]")
+        chkFull("query q(x: integer?) = _type_of(if (not x??) 0 else x + 1);", 0, "text[integer]")
+        chkFull("query q(x: integer?) = _type_of(if (not x??) null else x + 1);", 0, "text[integer?]")
+        chkFull("query q(x: integer?) = _type_of(if (x??) x + 1 else 0);", 0, "text[integer]")
+        chkFull("query q(x: integer?) = _type_of(if (x??) x + 1 else null);", 0, "text[integer?]")
 
         var q = "query q(x: integer?) = if (x == null) 0 else x + 1;"
-        chkQueryEx(q, null as Long?, "int[0]")
-        chkQueryEx(q, 123, "int[124]")
+        chkFull(q, null as Long?, "int[0]")
+        chkFull(q, 123, "int[124]")
 
         q = "query q(x: integer?) = if (x != null) x + 1 else 0;"
-        chkQueryEx(q, null as Long?, "int[0]")
-        chkQueryEx(q, 123, "int[124]")
+        chkFull(q, null as Long?, "int[0]")
+        chkFull(q, 123, "int[124]")
 
-        chkQueryEx("query q(x: integer?, y: integer?) = x + y;", 0, "ct_err:binop_operand_type:+:[integer?]:[integer?]")
-        chkQueryEx("query q(x: integer?, y: integer?) = if (x != null) x + y else 0;", 0,
+        chkFull("query q(x: integer?, y: integer?) = x + y;", 0, "ct_err:binop_operand_type:+:[integer?]:[integer?]")
+        chkFull("query q(x: integer?, y: integer?) = if (x != null) x + y else 0;", 0,
                 "ct_err:binop_operand_type:+:[integer]:[integer?]")
-        chkQueryEx("query q(x: integer?, y: integer?) = if (y != null) x + y else 0;", 0,
+        chkFull("query q(x: integer?, y: integer?) = if (y != null) x + y else 0;", 0,
                 "ct_err:binop_operand_type:+:[integer?]:[integer]")
 
         q = "query q(x: integer?, y: integer?) = if (x != null) if (y != null) x + y else 1 else 0;"
-        chkQueryEx(q, null as Long?, null as Long?, "int[0]")
-        chkQueryEx(q, null as Long?, 456, "int[0]")
-        chkQueryEx(q, 123, null as Long?, "int[1]")
-        chkQueryEx(q, 123, 456, "int[579]")
+        chkFull(q, null as Long?, null as Long?, "int[0]")
+        chkFull(q, null as Long?, 456, "int[0]")
+        chkFull(q, 123, null as Long?, "int[1]")
+        chkFull(q, 123, 456, "int[579]")
 
         q = "query q(x: integer?, y: integer?) = if (x != null and y != null) x + y else 0;"
-        chkQueryEx(q, null as Long?, null as Long?, "int[0]")
-        chkQueryEx(q, null as Long?, 456, "int[0]")
-        chkQueryEx(q, 123, null as Long?, "int[0]")
-        chkQueryEx(q, 123, 456, "int[579]")
+        chkFull(q, null as Long?, null as Long?, "int[0]")
+        chkFull(q, null as Long?, 456, "int[0]")
+        chkFull(q, 123, null as Long?, "int[0]")
+        chkFull(q, 123, 456, "int[579]")
 
         q = "query q(x: integer?, y: integer?) = if (x == null) 0 else if (y == null) 1 else x + y;"
-        chkQueryEx(q, null as Long?, null as Long?, "int[0]")
-        chkQueryEx(q, null as Long?, 456, "int[0]")
-        chkQueryEx(q, 123, null as Long?, "int[1]")
-        chkQueryEx(q, 123, 456, "int[579]")
+        chkFull(q, null as Long?, null as Long?, "int[0]")
+        chkFull(q, null as Long?, 456, "int[0]")
+        chkFull(q, 123, null as Long?, "int[1]")
+        chkFull(q, 123, 456, "int[579]")
     }
 
     @Test fun testWhen() {
@@ -305,30 +305,30 @@ class NullAnalysisTest: BaseRellTest(false) {
     }
 
     @Test fun testWhenExpr() {
-        chkQueryEx("query q(x: integer?) = x + 1;", 0, "ct_err:binop_operand_type:+:[integer?]:[integer]")
+        chkFull("query q(x: integer?) = x + 1;", 0, "ct_err:binop_operand_type:+:[integer?]:[integer]")
 
-        chkQueryEx("query q(x: integer?) = _type_of(x + 1);", 0, "ct_err:binop_operand_type:+:[integer?]:[integer]")
-        chkQueryEx("query q(x: integer?) = _type_of(when { x == null -> 0; else -> x + 1 });", 0, "text[integer]")
-        chkQueryEx("query q(x: integer?) = _type_of(when { x == null -> null; else -> x + 1 });", 0, "text[integer?]")
-        chkQueryEx("query q(x: integer?) = _type_of(when(x) { null -> 0; else -> x + 1 });", 0, "text[integer]")
-        chkQueryEx("query q(x: integer?) = _type_of(when(x) { null -> null; else -> x + 1 });", 0, "text[integer?]")
+        chkFull("query q(x: integer?) = _type_of(x + 1);", 0, "ct_err:binop_operand_type:+:[integer?]:[integer]")
+        chkFull("query q(x: integer?) = _type_of(when { x == null -> 0; else -> x + 1 });", 0, "text[integer]")
+        chkFull("query q(x: integer?) = _type_of(when { x == null -> null; else -> x + 1 });", 0, "text[integer?]")
+        chkFull("query q(x: integer?) = _type_of(when(x) { null -> 0; else -> x + 1 });", 0, "text[integer]")
+        chkFull("query q(x: integer?) = _type_of(when(x) { null -> null; else -> x + 1 });", 0, "text[integer?]")
 
-        chkQueryEx("query q(x: integer?) = when { x == null -> 0; else -> x + 1 };", 123, "int[124]")
-        chkQueryEx("query q(x: integer?) = when { x != null -> x + 1; else -> 0 };", 123, "int[124]")
+        chkFull("query q(x: integer?) = when { x == null -> 0; else -> x + 1 };", 123, "int[124]")
+        chkFull("query q(x: integer?) = when { x != null -> x + 1; else -> 0 };", 123, "int[124]")
 
-        chkQueryEx("query q(x: integer?, y: integer?) = x + y;", 0, "ct_err:binop_operand_type:+:[integer?]:[integer?]")
-        chkQueryEx("query q(x: integer?, y: integer?) = when { x != null -> x + y; else -> 0 };", 0,
+        chkFull("query q(x: integer?, y: integer?) = x + y;", 0, "ct_err:binop_operand_type:+:[integer?]:[integer?]")
+        chkFull("query q(x: integer?, y: integer?) = when { x != null -> x + y; else -> 0 };", 0,
                 "ct_err:binop_operand_type:+:[integer]:[integer?]")
-        chkQueryEx("query q(x: integer?, y: integer?) = when { y != null -> x + y; else -> 0 };", 0,
+        chkFull("query q(x: integer?, y: integer?) = when { y != null -> x + y; else -> 0 };", 0,
                 "ct_err:binop_operand_type:+:[integer?]:[integer]")
 
-        chkQueryEx("query q(x: integer?, y: integer?) = when { x != null -> when { y != null -> x + y; else -> 1 }; else -> 0 };",
+        chkFull("query q(x: integer?, y: integer?) = when { x != null -> when { y != null -> x + y; else -> 1 }; else -> 0 };",
                 123, 456, "int[579]")
 
-        chkQueryEx("query q(x: integer?, y: integer?) = when { x != null and y != null -> x + y; else -> 0 };",
+        chkFull("query q(x: integer?, y: integer?) = when { x != null and y != null -> x + y; else -> 0 };",
                 123, 456, "int[579]")
 
-        chkQueryEx("query q(x: integer?, y: integer?) = when { x == null -> 0; else -> when { y == null -> 1; else -> x + y }};",
+        chkFull("query q(x: integer?, y: integer?) = when { x == null -> 0; else -> when { y == null -> 1; else -> x + y }};",
                 123, 456, "int[579]")
     }
 
@@ -549,6 +549,17 @@ class NullAnalysisTest: BaseRellTest(false) {
 
     private fun chkAtExpr(v: String, expr: String, expected: String) {
         chkEx("{ val x = _nullable_int($v); return user @? { $expr }; }", expected)
+    }
+
+    @Test fun testAtExprPlaceholder() {
+        def("function data(): list<integer?> = [123, null, 456, null, 789];")
+        chk("data()", "list<integer?>[int[123],null,int[456],null,int[789]]")
+        chk("data() @* {}", "list<integer?>[int[123],null,int[456],null,int[789]]")
+        chk("data() @* { $ != null }", "list<integer?>[int[123],int[456],int[789]]")
+        chk("data() @* { $ != null } ( $ )", "list<integer?>[int[123],int[456],int[789]]")
+        chk("data() @* {} ( if ($ != null) _type_of($) else '?' )",
+                "list<text>[text[integer],text[?],text[integer],text[?],text[integer]]")
+        chk("data() @* {} ( if ($ != null) $ * $ else 0 )", "list<integer>[int[15129],int[0],int[207936],int[0],int[622521]]")
     }
 
     // null-dependent: when (x) { null -> }

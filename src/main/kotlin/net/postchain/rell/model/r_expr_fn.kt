@@ -4,8 +4,6 @@
 
 package net.postchain.rell.model
 
-import net.postchain.rell.compiler.C_DefinitionContext
-import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.runtime.*
 import org.apache.commons.lang3.StringUtils
 
@@ -23,39 +21,50 @@ class R_SysCallExpr(
         type: R_Type,
         private val fn: R_SysFunction,
         args: List<R_Expr>,
-        private val name: String?
+        private val nameMsg: String?
 ): R_CallExpr(type, args) {
     override fun call(frame: Rt_CallFrame, values: List<Rt_Value>): Rt_Value {
-        val res = if (name == null) {
-            call0(frame, values)
-        } else try {
-            call0(frame, values)
-        } catch (e: Rt_StackTraceError) {
-            throw e
-        } catch (e: Rt_BaseError) {
-            val msg = decorate(e.message)
-            throw e.updateMessage(msg)
-        } catch (e: Throwable) {
-            val msg = decorate(e.message)
-            throw RuntimeException(msg, e)
+        val res = if (nameMsg == null) {
+            call0(fn, frame, values)
+        } else {
+            callAndCatch(fn, nameMsg, frame, values)
         }
         return res
     }
 
-    private fun decorate(msg: String?): String {
-        val msg2 = StringUtils.defaultIfBlank(msg, "error")
-        return "System function '$name': $msg2"
-    }
+    companion object {
+        fun callAndCatch(fn: R_SysFunction, name: String, frame: Rt_CallFrame, values: List<Rt_Value>): Rt_Value {
+            val res = try {
+                call0(fn, frame, values)
+            } catch (e: Rt_StackTraceError) {
+                throw e
+            } catch (e: Rt_BaseError) {
+                val msg = decorate(name, e.message)
+                throw e.updateMessage(msg)
+            } catch (e: RellInterpreterCrashException) {
+                throw e
+            } catch (e: Throwable) {
+                val msg = decorate(name, e.message)
+                throw Rt_Error("fn:error:$name:${e.javaClass.canonicalName}", msg)
+            }
+            return res
+        }
 
-    private fun call0(frame: Rt_CallFrame, values: List<Rt_Value>): Rt_Value {
-        val res = fn.call(frame.defCtx.callCtx, values)
-        return res
+        private fun decorate(name: String, msg: String?): String {
+            val msg2 = StringUtils.defaultIfBlank(msg, "error")
+            return "System function '$name': $msg2"
+        }
+
+        private fun call0(fn: R_SysFunction, frame: Rt_CallFrame, values: List<Rt_Value>): Rt_Value {
+            val res = fn.call(frame.defCtx.callCtx, values)
+            return res
+        }
     }
 }
 
 class R_UserCallExpr(
         type: R_Type,
-        private val fn: R_Routine,
+        private val fn: R_RoutineDefinition,
         args: List<R_Expr>,
         private val filePos: R_FilePos
 ): R_CallExpr(type, args) {
@@ -115,6 +124,15 @@ abstract class R_SysFunction_4: R_SysFunction() {
     final override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
         check(args.size == 4)
         val res = call(args[0], args[1], args[2], args[3])
+        return res
+    }
+}
+
+abstract class R_SysFunction_N: R_SysFunction() {
+    abstract fun call(args: List<Rt_Value>): Rt_Value
+
+    final override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
+        val res = call(args)
         return res
     }
 }

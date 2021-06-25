@@ -5,11 +5,42 @@
 package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.ast.S_Name
+import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.vexpr.V_Expr
+import net.postchain.rell.compiler.vexpr.V_LocalVarExpr
 import net.postchain.rell.model.*
+import net.postchain.rell.utils.mutableMultimapOf
+import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
+
+class C_LocalVarRef(val target: C_LocalVar, val ptr: R_VarPtr) {
+    fun toRExpr(): R_DestinationExpr = R_VarExpr(target.type, ptr, target.name)
+    fun toDbExpr(): Db_Expr = Db_InterpretedExpr(toRExpr())
+
+    fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr {
+        val nulled = ctx.factsCtx.nulled(target.uid)
+        val smartType = if (target.type is R_NullableType && nulled == C_VarFact.NO) target.type.valueType else null
+        return V_LocalVarExpr(ctx, pos, this, nulled, smartType)
+    }
+}
+
+class C_LocalVar(
+        val name: String,
+        val type: R_Type,
+        val mutable: Boolean,
+        val offset: Int,
+        val uid: C_VarUid,
+        val atExprId: R_AtExprId?
+) {
+    fun toRef(blockUid: R_FrameBlockUid): C_LocalVarRef {
+        val ptr = R_VarPtr(name, blockUid, offset)
+        return C_LocalVarRef(this, ptr)
+    }
+}
 
 class C_FrameContext private constructor(val fnCtx: C_FunctionContext, proto: C_CallFrameProto) {
     val msgCtx = fnCtx.msgCtx
+    val appCtx = fnCtx.appCtx
 
     private val ownerRootBlkCtx = C_OwnerBlockContext.createRoot(this, proto.rootBlockScope)
     val rootBlkCtx: C_BlockContext = ownerRootBlkCtx
@@ -23,7 +54,7 @@ class C_FrameContext private constructor(val fnCtx: C_FunctionContext, proto: C_
 
     fun makeCallFrame(hasGuardBlock: Boolean): C_CallFrame {
         val rootBlock = ownerRootBlkCtx.buildBlock()
-        val rFrame = R_CallFrame(callFrameSize, rootBlock.rBlock, hasGuardBlock)
+        val rFrame = R_CallFrame(fnCtx.defCtx.defId, callFrameSize, rootBlock.rBlock, hasGuardBlock)
         val proto = C_CallFrameProto(rFrame.size, rootBlock.scope)
         return C_CallFrame(rFrame, proto)
     }
@@ -41,20 +72,32 @@ class C_CallFrameProto(val size: Int, val rootBlockScope: C_BlockScope) {
     companion object { val EMPTY = C_CallFrameProto(0, C_BlockScope.EMPTY) }
 }
 
-class C_LocalVar(
-        val name: String,
-        val type: R_Type,
-        val mutable: Boolean,
-        val uid: C_VarUid,
-        val ptr: R_VarPtr
-) {
-    fun toVarExpr(): R_VarExpr = R_VarExpr(type, ptr, name)
-}
-
-class C_BlockScope(entries: Map<String, C_BlockScopeEntry>) {
-    val entries = entries.toImmMap()
+class C_BlockScope(variables: Map<String, C_LocalVar>) {
+    val localVars = variables.toImmMap()
 
     companion object { val EMPTY = C_BlockScope(mapOf()) }
+}
+
+sealed class C_BlockEntry {
+    abstract fun toLocalVarOpt(): C_LocalVar?
+    abstract fun compile(ctx: C_ExprContext, pos: S_Pos, ambiguous: Boolean): V_Expr
+}
+
+class C_BlockEntry_Var(private val localVar: C_LocalVar): C_BlockEntry() {
+    override fun toLocalVarOpt() = localVar
+
+    override fun compile(ctx: C_ExprContext, pos: S_Pos, ambiguous: Boolean): V_Expr {
+        val varRef = localVar.toRef(ctx.blkCtx.blockUid)
+        return varRef.compile(ctx, pos)
+    }
+}
+
+class C_BlockEntry_AtEntity(val atEntity: C_AtEntity): C_BlockEntry() {
+    override fun toLocalVarOpt() = null
+
+    override fun compile(ctx: C_ExprContext, pos: S_Pos, ambiguous: Boolean): V_Expr {
+        return atEntity.toVExpr(ctx, pos, ambiguous)
+    }
 }
 
 class C_BlockScopeBuilder(
@@ -63,121 +106,234 @@ class C_BlockScopeBuilder(
         startOffset: Int,
         proto: C_BlockScope
 ) {
-    private val entries = mutableMapOf<String, C_BlockScopeEntry>()
+    private val explicitEntries = mutableMapOf<String, C_BlockEntry>()
+    private val implicitEntries = mutableMultimapOf<String, C_BlockEntry>()
     private var endOffset = startOffset
     private var build = false
 
     init {
-        for (entry in proto.entries.values) {
-            check(entry.offset >= startOffset)
-            endOffset = Math.max(endOffset, entry.offset + 1)
+        for (entry in proto.localVars.values) {
+            val offset = entry.offset
+            check(offset >= startOffset)
+            endOffset = Math.max(endOffset, offset + 1)
         }
-        entries.putAll(proto.entries)
+        explicitEntries.putAll(proto.localVars.mapValues { C_BlockEntry_Var(it.value) })
     }
 
     fun endOffset() = endOffset
 
-    fun lookup(name: String, lookupBlockUid: R_FrameBlockUid): C_LocalVar? {
-        val local = entries[name]
-        return local?.toLocalVar(lookupBlockUid)
+    fun lookupVar(name: String): C_LocalVar? {
+        val entry = explicitEntries[name]
+        return entry?.toLocalVarOpt()
     }
 
-    fun add(name: S_Name, type: R_Type, mutable: Boolean): C_LocalVar {
+    fun lookupExplicit(name: String): C_BlockEntry? {
+        return explicitEntries[name]
+    }
+
+    fun lookupImplicit(name: String): List<C_BlockEntry> {
+        return implicitEntries.get(name).toImmList()
+    }
+
+    fun newVar(name: String, type: R_Type, mutable: Boolean, atExprId: R_AtExprId?): C_LocalVar {
         check(!build)
-
-        val nameStr = name.str
-        check(nameStr !in entries) { nameStr }
-
         val ofs = endOffset++
-        val varUid = fnCtx.nextVarUid(nameStr)
+        val varUid = fnCtx.nextVarUid(name)
+        return C_LocalVar(name, type, mutable, ofs, varUid, atExprId)
+    }
 
-        val entry = C_BlockScopeEntry(nameStr, type, mutable, ofs, varUid)
-        entries[nameStr] = entry
-
-        val res = entry.toLocalVar(blockUid)
-        return res
+    fun addEntry(name: String, explicit: Boolean, entry: C_BlockEntry) {
+        check(!build)
+        if (explicit) {
+            if (name !in explicitEntries) {
+                explicitEntries[name] = entry
+            }
+        } else {
+            implicitEntries.put(name, entry)
+        }
     }
 
     fun build(): C_BlockScope {
         check(!build)
         build = true
-        return C_BlockScope(entries)
+        val variables = explicitEntries
+                .map { it.key to it.value.toLocalVarOpt() }
+                .filter { it.second != null }
+                .map { it.first to it.second!! }
+                .toMap()
+        return C_BlockScope(variables)
     }
 }
 
-class C_BlockScopeEntry(
-        val name: String,
-        val type: R_Type,
-        val mutable: Boolean,
-        val offset: Int,
-        val varUid: C_VarUid
-) {
-    fun toLocalVar(blockUid: R_FrameBlockUid): C_LocalVar {
-        val ptr = R_VarPtr(name, blockUid, offset)
-        return C_LocalVar(name, type, mutable, varUid, ptr)
-    }
-}
-
-sealed class C_BlockContextState {
-    abstract fun createBlockContext(frameCtx: C_FrameContext): C_BlockContext
-}
-
-private class C_InternalBlockContextState(
-        private val blockUid: R_FrameBlockUid,
-        locals: Map<String, C_BlockScopeEntry>
-): C_BlockContextState() {
-    private val locals = locals.toImmMap()
-
-    override fun createBlockContext(frameCtx: C_FrameContext): C_BlockContext {
-        return C_OwnerBlockContext(frameCtx, null, blockUid, null, C_BlockScope.EMPTY)
-    }
-}
-
-sealed class C_BlockContext(val frameCtx: C_FrameContext, val loop: C_LoopUid?) {
+sealed class C_BlockContext(val frameCtx: C_FrameContext, val blockUid: R_FrameBlockUid) {
+    val appCtx = frameCtx.appCtx
     val fnCtx = frameCtx.fnCtx
     val defCtx = fnCtx.defCtx
     val nsCtx = defCtx.nsCtx
 
-    val nameCtx = C_NameContext.createBlock(nsCtx.nameCtx, this)
-
     abstract fun isTopLevelBlock(): Boolean
-    abstract fun createSubContext(loop: C_LoopUid?, location: String): C_OwnerBlockContext
-    abstract fun lookupLocalVar(name: String): C_LocalVar?
-    abstract fun addLocalVar(name: S_Name, type: R_Type, mutable: Boolean): C_LocalVar
+    abstract fun createSubContext(location: String, atFrom: C_AtFrom? = null): C_OwnerBlockContext
+
+    abstract fun lookupEntry(name: String): C_BlockEntryResolution?
+    abstract fun lookupLocalVar(name: String): C_LocalVarRef?
+    abstract fun lookupAtPlaceholder(): C_BlockEntryResolution?
+    abstract fun lookupAtAttributesByName(name: String, outer: Boolean): List<C_ExprContextAttr>
+    abstract fun lookupAtAttributesByType(type: R_Type): List<C_ExprContextAttr>
+
+    abstract fun addEntry(pos: S_Pos, name: String, explicit: Boolean, entry: C_BlockEntry)
+    abstract fun addLocalVar(name: S_Name, type: R_Type, mutable: Boolean, atExprId: R_AtExprId?): C_LocalVarRef
+    abstract fun addAtPlaceholder(entry: C_BlockEntry)
+    abstract fun newLocalVar(metaName: String, type: R_Type, mutable: Boolean, atExprId: R_AtExprId?): C_LocalVar
 }
 
 class C_FrameBlock(val rBlock: R_FrameBlock, val scope: C_BlockScope)
 
+sealed class C_BlockEntryResolution {
+    abstract fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr
+}
+
+private class C_BlockEntryResolution_Normal(private val entry: C_BlockEntry): C_BlockEntryResolution() {
+    override fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr {
+        return entry.compile(ctx, pos, false)
+    }
+}
+
+private class C_BlockEntryResolution_OuterPlaceholder(private val entry: C_BlockEntry): C_BlockEntryResolution() {
+    override fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr {
+        ctx.msgCtx.error(pos, "at_expr:placeholder:belongs_to_outer",
+                "Cannot use a placeholder to access an outer at-expression; use explicit alias")
+        return entry.compile(ctx, pos, false)
+    }
+}
+
+private class C_BlockEntryResolution_Ambiguous(
+        private val symbol: C_Symbol,
+        private val entry: C_BlockEntry
+): C_BlockEntryResolution() {
+    override fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr {
+        ctx.msgCtx.error(pos, "name:ambiguous:${symbol.code}", "${symbol.msgCapital()} is ambiguous")
+        return entry.compile(ctx, pos, true)
+    }
+}
+
 class C_OwnerBlockContext(
         frameCtx: C_FrameContext,
+        blockUid: R_FrameBlockUid,
         private val parent: C_OwnerBlockContext?,
-        private val blockUid: R_FrameBlockUid,
-        loop: C_LoopUid?,
+        atFrom: C_AtFrom?,
         protoBlockScope: C_BlockScope
-): C_BlockContext(frameCtx, loop) {
+): C_BlockContext(frameCtx, blockUid) {
     private val startOffset: Int = parent?.scopeBuilder?.endOffset() ?: 0
     private val scopeBuilder: C_BlockScopeBuilder = C_BlockScopeBuilder(fnCtx, blockUid, startOffset, protoBlockScope)
+    private val atFromBlock: C_AtFromBlock? = if (atFrom == null) parent?.atFromBlock else C_AtFromBlock(parent?.atFromBlock, atFrom)
+    private val atPlaceholders = mutableListOf<C_BlockEntry>()
     private var build = false
 
     override fun isTopLevelBlock() = parent?.parent == null
 
-    override fun createSubContext(loop: C_LoopUid?, location: String): C_OwnerBlockContext {
-        check(!build)
+    override fun createSubContext(location: String, atFrom: C_AtFrom?): C_OwnerBlockContext {
+        check(!build) { "Block has been built: $blockUid" }
         val blockUid = fnCtx.nextBlockUid(location)
-        return C_OwnerBlockContext(frameCtx, this, blockUid, loop, C_BlockScope.EMPTY)
+        return C_OwnerBlockContext(frameCtx, blockUid, this, atFrom, C_BlockScope.EMPTY)
     }
 
-    override fun lookupLocalVar(name: String): C_LocalVar? {
-        val res = findValue { it.scopeBuilder.lookup(name, blockUid) }
-        return res
+    override fun lookupLocalVar(name: String): C_LocalVarRef? {
+        val localVar = findValue { it.scopeBuilder.lookupVar(name) }
+        return localVar?.toRef(blockUid)
     }
 
-    override fun addLocalVar(name: S_Name, type: R_Type, mutable: Boolean): C_LocalVar {
-        val nameStr = name.str
-        if (lookupLocalVar(nameStr) != null) {
-            throw C_Error(name.pos, "var_dupname:$nameStr", "Duplicate variable: '$nameStr'")
+    override fun lookupEntry(name: String): C_BlockEntryResolution? {
+        val explicit = findValue { it.scopeBuilder.lookupExplicit(name) }
+        val implicit = findAllValues { it.scopeBuilder.lookupImplicit(name) }
+        val entries = listOfNotNull(explicit) + implicit
+
+        return if (entries.isEmpty()) null else {
+            val entry = entries.first()
+            return if (entries.size == 1) {
+                C_BlockEntryResolution_Normal(entry)
+            } else {
+                val sym = C_Symbol_Name(name)
+                C_BlockEntryResolution_Ambiguous(sym, entry)
+            }
         }
-        return scopeBuilder.add(name, type, mutable)
+    }
+
+    override fun lookupAtPlaceholder(): C_BlockEntryResolution? {
+        val entries = findAllValues { blkCtx -> blkCtx.atPlaceholders.map { it to blkCtx } }
+        if (entries.isEmpty()) {
+            return null
+        }
+
+        val thisBlockEntries = entries.filter { (_, blkCtx) -> blkCtx.atFromBlock == atFromBlock }
+
+        return if (thisBlockEntries.size == 1) {
+            val (entry, _) = thisBlockEntries.first()
+            C_BlockEntryResolution_Normal(entry)
+        } else if (thisBlockEntries.size > 1) {
+            val (entry, _) = thisBlockEntries.first()
+            C_BlockEntryResolution_Ambiguous(C_Symbol_Placeholder, entry)
+        } else {
+            val (entry, _) = entries.first()
+            C_BlockEntryResolution_OuterPlaceholder(entry)
+        }
+    }
+
+    override fun lookupAtAttributesByName(name: String, outer: Boolean): List<C_ExprContextAttr> {
+        var block = atFromBlock
+
+        val attrs = mutableListOf<C_ExprContextAttr>()
+
+        while (block != null) {
+            val fromAttrs = block.from.findAttributesByName(name)
+            attrs.addAll(fromAttrs.map { C_ExprContextAttr(it, block !== atFromBlock) })
+
+            block = if (!outer) {
+                null
+            } else when (appCtx.globalCtx.compilerOptions.atAttrShadowing) {
+                C_AtAttrShadowing.NONE -> block.parent
+                C_AtAttrShadowing.FULL -> if (attrs.isNotEmpty()) null else block.parent
+                C_AtAttrShadowing.PARTIAL -> if (block.from.innerAtCtx.parent == null && attrs.isNotEmpty()) null else block.parent
+            }
+        }
+
+        return attrs.toImmList()
+    }
+
+    override fun lookupAtAttributesByType(type: R_Type): List<C_ExprContextAttr> {
+        // Not looking in outer contexts, because matching by type is used in where-part, only direct at-expr is considered.
+        val fromAttrs = atFromBlock?.from?.findAttributesByType(type) ?: listOf()
+        return fromAttrs.map { C_ExprContextAttr(it, false) }
+    }
+
+    override fun addEntry(pos: S_Pos, name: String, explicit: Boolean, entry: C_BlockEntry) {
+        if (explicit && !checkNameConflict(pos, name)) {
+            return
+        }
+        scopeBuilder.addEntry(name, explicit, entry)
+    }
+
+    override fun addLocalVar(name: S_Name, type: R_Type, mutable: Boolean, atExprId: R_AtExprId?): C_LocalVarRef {
+        val localVar = scopeBuilder.newVar(name.str, type, mutable, atExprId)
+        if (checkNameConflict(name.pos, name.str)) {
+            scopeBuilder.addEntry(name.str, true, C_BlockEntry_Var(localVar))
+        }
+        return localVar.toRef(blockUid)
+    }
+
+    private fun checkNameConflict(pos: S_Pos, name: String): Boolean {
+        val entry = findValue { it.scopeBuilder.lookupExplicit(name) }
+        if (entry != null) {
+            frameCtx.msgCtx.error(pos, "block:name_conflict:$name", "Name conflict: '$name' already exists")
+        }
+        return entry == null
+    }
+
+    override fun addAtPlaceholder(entry: C_BlockEntry) {
+        atPlaceholders.add(entry)
+    }
+
+    override fun newLocalVar(metaName: String, type: R_Type, mutable: Boolean, atExprId: R_AtExprId?): C_LocalVar {
+        return scopeBuilder.newVar(metaName, type, mutable, atExprId)
     }
 
     private fun <T> findValue(getter: (C_OwnerBlockContext) -> T?): T? {
@@ -192,6 +348,17 @@ class C_OwnerBlockContext(
         return null
     }
 
+    private fun <T> findAllValues(getter: (C_OwnerBlockContext) -> List<T>): List<T> {
+        var ctx: C_OwnerBlockContext? = this
+        val res = mutableListOf<T>()
+        while (ctx != null) {
+            val values = getter(ctx)
+            res.addAll(values)
+            ctx = ctx.parent
+        }
+        return res.toImmList()
+    }
+
     fun buildBlock(): C_FrameBlock {
         check(!build)
         build = true
@@ -203,12 +370,47 @@ class C_OwnerBlockContext(
         return C_FrameBlock(rBlock, scope)
     }
 
+    private class C_AtFromBlock(val parent: C_AtFromBlock?, val from: C_AtFrom)
+
     companion object {
         fun createRoot(frameCtx: C_FrameContext, protoScope: C_BlockScope): C_OwnerBlockContext {
             val fnCtx = frameCtx.fnCtx
             val name = fnCtx.fnUid.name
             val blockUid = fnCtx.nextBlockUid("root:$name")
-            return C_OwnerBlockContext(frameCtx, null, blockUid, null, protoScope)
+            return C_OwnerBlockContext(frameCtx, blockUid, null, null, protoScope)
         }
+    }
+}
+
+class C_LambdaBlock(
+        val rLambda: R_LambdaBlock,
+        private val localVar: C_LocalVar,
+        val blockUid: R_FrameBlockUid
+) {
+    fun compileVarRExpr(blockUid: R_FrameBlockUid = this.blockUid): R_Expr {
+        val varRef = localVar.toRef(blockUid)
+        return varRef.toRExpr()
+    }
+
+    fun compileVarDbExpr(blockUid: R_FrameBlockUid = this.blockUid): Db_Expr {
+        val rVarExpr = compileVarRExpr(blockUid)
+        return Db_InterpretedExpr(rVarExpr)
+    }
+
+    companion object {
+        fun builder(ctx: C_ExprContext, varType: R_Type) = C_LambdaBlockBuilder(ctx, varType)
+    }
+}
+
+class C_LambdaBlockBuilder(ctx: C_ExprContext, private val varType: R_Type) {
+    val innerBlkCtx = ctx.blkCtx.createSubContext("<lambda>")
+    val innerExprCtx = ctx.update(blkCtx = innerBlkCtx)
+    val localVar = innerBlkCtx.newLocalVar("<lambda>", varType, false, null)
+
+    fun build(): C_LambdaBlock {
+        val cBlock = innerBlkCtx.buildBlock()
+        val varRef = localVar.toRef(innerBlkCtx.blockUid)
+        val rLambda = R_LambdaBlock(cBlock.rBlock, varRef.ptr, varType)
+        return C_LambdaBlock(rLambda, localVar, innerBlkCtx.blockUid)
     }
 }

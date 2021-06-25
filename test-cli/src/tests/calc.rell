@@ -1,0 +1,4 @@
+module;
+
+function square(x: integer) = x * x;
+function cube(x: integer) = x * x * x;

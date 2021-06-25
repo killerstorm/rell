@@ -11,8 +11,8 @@ class LibSetTest: BaseRellTest(false) {
     @Test fun testConstructor() {
         chk("set()", "ct_err:expr_set_notype")
         chk("set<integer>()", "set<integer>[]")
-        chk("set([])", "ct_err:expr_list_empty")
-        chk("set<integer>([])", "ct_err:expr_list_empty")
+        chk("set([])", "ct_err:expr_list_no_type")
+        chk("set<integer>([])", "ct_err:expr_list_no_type")
         chk("set([123])", "set<integer>[int[123]]")
         chk("set([123, 456, 789])", "set<integer>[int[123],int[456],int[789]]")
         chk("set([1, 2, 3, 2, 3, 4, 5])", "set<integer>[int[1],int[2],int[3],int[4],int[5]]")

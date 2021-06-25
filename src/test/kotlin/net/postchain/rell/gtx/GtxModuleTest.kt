@@ -11,7 +11,7 @@ import net.postchain.rell.test.SqlTestUtils
 import org.junit.Test
 import kotlin.test.assertFailsWith
 
-class GtxModuleTest : BaseGtxTest() {
+class GtxModuleTest: BaseGtxTest() {
     private val tablePrefix = "c995511."
 
     private val entityDefs = listOf(
@@ -169,6 +169,14 @@ class GtxModuleTest : BaseGtxTest() {
             val t = RellGtxTester(tstCtx, chainId = 0)
             t.def("entity user { name; mutable score: integer = 123; }")
             t.chkData("user(100,Bob,123)", "user(101,Alice,123)")
+        }
+    }
+
+    @Test fun testTestModule() {
+        file("test.rell", "@test module; function f() = 456;")
+        tst.modules = listOf("test")
+        assertFailsWith<UserMistake> {
+            chk("123", "123")
         }
     }
 }

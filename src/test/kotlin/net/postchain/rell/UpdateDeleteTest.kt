@@ -4,6 +4,7 @@
 
 package net.postchain.rell
 
+import net.postchain.rell.compiler.C_AtAttrShadowing
 import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 
@@ -23,6 +24,17 @@ class UpdateDeleteTest: BaseRellTest() {
         createCitiesAndPersons()
         chkOp("update person @ { .name == 'James' } ( score = .score + 50 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,150)", "person(5,Mike,1,Grand St,7,250)")
+
+        chkOp("var x = 33; update person @ { .name == 'James' } ( score = .score + x );")
+        chkDataCommon("person(4,James,3,Evergreen Ave,5,183)", "person(5,Mike,1,Grand St,7,250)")
+
+        chkOp("var x = 33; update person @ { .name == 'James' } ( score = .score + (x++) ); print(x);")
+        chkDataCommon("person(4,James,3,Evergreen Ave,5,216)", "person(5,Mike,1,Grand St,7,250)")
+        chkOut("34")
+
+        chkOp("var x = 33; update person @ { .name == 'James' } ( score = .score + (++x) ); print(x);")
+        chkDataCommon("person(4,James,3,Evergreen Ave,5,250)", "person(5,Mike,1,Grand St,7,250)")
+        chkOut("34")
     }
 
     @Test fun testUpdatePersonMultiplyScore() {
@@ -44,6 +56,7 @@ class UpdateDeleteTest: BaseRellTest() {
     }
 
     @Test fun testUpdateMutable() {
+        tst.atAttrShadowing = C_AtAttrShadowing.FULL
         def("entity city { name: text; }")
         def("entity person { name: text; home: city; mutable work: city; base: integer; mutable score: integer; }")
 
@@ -291,20 +304,19 @@ class UpdateDeleteTest: BaseRellTest() {
         chkOp("update (p: person) @ { .name == 'James' } ( .score = 123 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,123)", "person(5,Mike,1,Grand St,7,250)")
 
-        chkOp("val p = 123; update (p: person) @ { .name == 'James' } ( .score = 123 );",
-                "ct_err:expr_at_conflict_alias:p")
+        chkOp("val p = 123; update (p: person) @ { .name == 'James' } ( .score = 123 );", "ct_err:block:name_conflict:p")
 
         chkOp("update (person, p: person) @ { person.name == 'James' } ( .score = 456 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,456)", "person(5,Mike,1,Grand St,7,250)")
 
         chkOp("val p = 123; update (person, p: person) @ { person.name == 'James' } ( .score = 789 );",
-                "ct_err:expr_at_conflict_alias:p")
+                "ct_err:block:name_conflict:p")
     }
 
     @Test fun testDeleteNameConflictAliasVsLocal() {
         createCitiesAndPersons()
-        chkOp("val p = 123; delete (p: person) @ { .name == 'James' };", "ct_err:expr_at_conflict_alias:p")
-        chkOp("val p = 123; delete (person, p: person) @ { person.name == 'James' };", "ct_err:expr_at_conflict_alias:p")
+        chkOp("val p = 123; delete (p: person) @ { .name == 'James' };", "ct_err:block:name_conflict:p")
+        chkOp("val p = 123; delete (person, p: person) @ { person.name == 'James' };", "ct_err:block:name_conflict:p")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,250)")
     }
 
@@ -434,6 +446,51 @@ class UpdateDeleteTest: BaseRellTest() {
         chkDataCommon(james(100), mike(250))
     }
 
+    @Test fun testUpdateShortSyntaxComplexSource() {
+        fun james(score: Int) = "person(4,James,3,Evergreen Ave,5,$score)"
+        fun mike(score: Int) = "person(5,Mike,1,Grand St,7,$score)"
+        fun person(name: String) = "person @ { .name == '$name' }"
+
+        def(entityDefs())
+        def("function f(x: integer) = x*x;")
+
+        createCitiesAndPersons()
+        chkDataCommon(james(100), mike(250))
+
+        resetChkOp("val x = 33; val p = ${person("James")}; p.score = x;")
+        chkDataCommon(james(33), mike(250))
+
+        resetChkOp("val x = 33; val p = ${person("James")}; p.score += x;")
+        chkDataCommon(james(100+33), mike(250))
+
+        resetChkOp("var x = 33; val p = ${person("James")}; p.score = x++; print(x);")
+        chkDataCommon(james(33), mike(250))
+        chkOut("34")
+
+        resetChkOp("var x = 33; val p = ${person("James")}; p.score += x++; print(x);")
+        chkDataCommon(james(100+33), mike(250))
+        chkOut("34")
+
+        resetChkOp("var x = 33; val p = ${person("James")}; p.score = ++x; print(x);")
+        chkDataCommon(james(34), mike(250))
+        chkOut("34")
+
+        resetChkOp("var x = 33; val p = ${person("James")}; p.score += ++x; print(x);")
+        chkDataCommon(james(100+34), mike(250))
+        chkOut("34")
+
+        resetChkOp("val x = 33; val p = ${person("James")}; p.score *= f(x);")
+        chkDataCommon(james(100*33*33), mike(250))
+
+        resetChkOp("var x = 33; val p = ${person("James")}; p.score *= f(x++); print(x);")
+        chkDataCommon(james(100*33*33), mike(250))
+        chkOut("34")
+
+        resetChkOp("var x = 33; val p = ${person("James")}; p.score *= f(++x); print(x);")
+        chkDataCommon(james(100*34*34), mike(250))
+        chkOut("34")
+    }
+
     @Test fun testUpdateShortSyntaxNullable() {
         fun james(score: Int) = "person(4,James,3,Evergreen Ave,5,$score)"
         fun mike(score: Int) = "person(5,Mike,1,Grand St,7,$score)"
@@ -544,6 +601,56 @@ class UpdateDeleteTest: BaseRellTest() {
         """.trimIndent()
 
         chkOp(code, "rt_err:expr_entity_attr_count:0")
+    }
+
+    @Test fun testPlaceholder() {
+        createCitiesAndPersons()
+        chkDataCommon("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,250)")
+
+        chkOp("update person @* { $.name == 'James' } ( .score = $.score + 1 );")
+        chkDataCommon("person(4,James,3,Evergreen Ave,5,101)", "person(5,Mike,1,Grand St,7,250)")
+
+        chkOp("delete person @* { $.name == 'James' };")
+        chkDataCommon("person(5,Mike,1,Grand St,7,250)")
+    }
+
+    @Test fun testPathAssignment() {
+        initPathAssignment()
+
+        chkData("group(300,Foo)", "company(100,Adidas,Boston,300)", "user(200,Bob,100)")
+        resetSqlCtr()
+        chkOp("val u = user @ {}; u.company.city = 'Seattle';")
+        chkSql(3) // TODO Shall be 2, not 3 - to be optimized.
+        chkData("group(300,Foo)", "company(100,Adidas,Seattle,300)", "user(200,Bob,100)")
+
+        resetSqlCtr()
+        chkOp("val u = user @ {}; u.company.group.name = 'Bar';")
+        chkSql(3) // TODO Shall be 2, not 3 - to be optimized.
+        chkData("group(300,Bar)", "company(100,Adidas,Seattle,300)", "user(200,Bob,100)")
+    }
+
+    @Test fun testPathAssignmentNullable() {
+        initPathAssignment()
+
+        chkData("group(300,Foo)", "company(100,Adidas,Boston,300)", "user(200,Bob,100)")
+        chkOp("val u = user @? {}; u.company.city = 'Dallas';", "ct_err:expr_mem_null:company")
+        chkOp("val u = user @? {}; u?.company.city = 'Dallas';", "ct_err:expr_mem_null:city")
+        chkData("group(300,Foo)", "company(100,Adidas,Boston,300)", "user(200,Bob,100)")
+
+        chkOp("val u = user @? {}; u?.company?.city = 'Dallas';")
+        chkData("group(300,Foo)", "company(100,Adidas,Dallas,300)", "user(200,Bob,100)")
+
+        chkOp("val u = user @? { 'Alice' }; u?.company?.city = 'Chicago';")
+        chkData("group(300,Foo)", "company(100,Adidas,Dallas,300)", "user(200,Bob,100)")
+    }
+
+    private fun initPathAssignment() {
+        def("entity group { mutable name; }")
+        def("entity company { mutable name; mutable city: text; mutable group; }")
+        def("entity user { mutable name; mutable company; }")
+        insert("c0.group", "name", "300,'Foo'")
+        insert("c0.company", "name,city,group", "100,'Adidas','Boston',300")
+        insert("c0.user", "name,company", "200,'Bob',100")
     }
 
     private fun resetChkOp(code: String, expected: String = "OK") {

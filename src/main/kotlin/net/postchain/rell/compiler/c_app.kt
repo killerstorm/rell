@@ -11,6 +11,22 @@ import net.postchain.rell.utils.toImmMap
 import net.postchain.rell.utils.toImmSet
 import org.apache.commons.collections4.SetUtils
 import java.util.*
+import java.util.concurrent.atomic.AtomicLong
+
+private object C_InternalAppUtils {
+    private val AT_EXPR_ID_SEQ = AtomicLong(0)
+    private val AT_ENTITY_ID_SEQ = AtomicLong(0)
+
+    fun nextAtExprId(): R_AtExprId {
+        val id = AT_EXPR_ID_SEQ.getAndIncrement()
+        return R_AtExprId(id)
+    }
+
+    fun nextAtEntityId(exprId: R_AtExprId): R_AtEntityId {
+        val id = AT_ENTITY_ID_SEQ.getAndIncrement()
+        return R_AtEntityId(exprId, id)
+    }
+}
 
 class C_AppContext(
         val msgCtx: C_MessageContext,
@@ -20,13 +36,13 @@ class C_AppContext(
 ) {
     val globalCtx = msgCtx.globalCtx
 
-    val appUid = globalCtx.nextAppUid()
+    val appUid = C_GlobalContext.nextAppUid()
     private val containerUidGen = C_UidGen { id, name -> R_ContainerUid(id, name, appUid) }
 
     private val defsBuilder = C_AppDefsBuilder(executor)
     val defsAdder: C_AppDefsAdder = defsBuilder
 
-    val sysDefs = oldReplState.sysDefs ?: C_SystemDefs.create(executor, appUid)
+    val sysDefs = oldReplState.sysDefs ?: C_SystemDefs.create(this, appUid)
 
     val functionReturnTypeCalculator = C_FunctionBody.createReturnTypeCalculator()
 
@@ -70,6 +86,9 @@ class C_AppContext(
 
     fun nextContainerUid(name: String) = containerUidGen.next(name)
 
+    fun nextAtExprId() = C_InternalAppUtils.nextAtExprId()
+    fun nextAtEntityId(exprId: R_AtExprId) = C_InternalAppUtils.nextAtEntityId(exprId)
+
     fun getApp(): R_App? {
         executor.checkPass(C_CompilerPass.FINISH)
         val opt = appLate.get()
@@ -94,8 +113,8 @@ class C_AppContext(
     private fun createExternalChain(name: String): C_ExternalChain {
         val ref = R_ExternalChainRef(externalChainsRoot, name, externalChains.size)
 
-        val blockEntity = C_Utils.createBlockEntity(executor, ref)
-        val transactionEntity = C_Utils.createTransactionEntity(executor, ref, blockEntity)
+        val blockEntity = C_Utils.createBlockEntity(this, ref)
+        val transactionEntity = C_Utils.createTransactionEntity(this, ref, blockEntity)
 
         val extSysDefs = C_SystemDefs.create(appUid, blockEntity, transactionEntity, listOf())
         return C_ExternalChain(name, ref, extSysDefs)
@@ -168,7 +187,7 @@ class C_AppContext(
     }
 
     private fun processStructs(structs: List<R_Struct>) {
-        val info = C_StructUtils.buildStructsInfo(structs)
+        val info = C_StructGraphUtils.buildStructsInfo(structs)
         val graph = info.graph
         val transGraph = C_GraphUtils.transpose(graph)
 
@@ -206,12 +225,12 @@ class C_AppContext(
         return C_MntEntry.processMountConflicts(msgCtx, appUid, tables)
     }
 
-    private fun calcTopologicalEntities(entities: List<C_Entity>): List<R_Entity> {
+    private fun calcTopologicalEntities(entities: List<C_Entity>): List<R_EntityDefinition> {
         val declaredEntities = entities.map { it.entity }.toImmSet()
-        val graph = mutableMapOf<R_Entity, Collection<R_Entity>>()
+        val graph = mutableMapOf<R_EntityDefinition, Collection<R_EntityDefinition>>()
 
         for (entity in entities) {
-            val deps = mutableSetOf<R_Entity>()
+            val deps = mutableSetOf<R_EntityDefinition>()
             for (attr in entity.entity.attributes.values) {
                 if (attr.type is R_EntityType && attr.type.rEntity in declaredEntities) {
                     deps.add(attr.type.rEntity)
@@ -230,14 +249,14 @@ class C_AppContext(
             val entity = cycle[0]
             val pos = entityToPos[entity]
             check(pos != null) { entity.appLevelName }
-            throw C_Error(pos, "entity_cycle:$shortStr", "Entity cycle, not allowed: $str")
+            throw C_Error.stop(pos, "entity_cycle:$shortStr", "Entity cycle, not allowed: $str")
         }
 
         val res = C_GraphUtils.topologicalSort(graph)
         return res
     }
 
-    private fun <T: R_MountedRoutine> routinesToMap(list: List<T>): Map<R_MountName, T> {
+    private fun <T: R_MountedRoutineDefinition> routinesToMap(list: List<T>): Map<R_MountName, T> {
         val res = mutableMapOf<R_MountName, T>()
         for (r in list) {
             val name = r.mountName
@@ -251,10 +270,10 @@ class C_AppContext(
 
 class C_AppDefs(
         entities: List<C_Entity>,
-        objects: List<R_Object>,
+        objects: List<R_ObjectDefinition>,
         structs: List<R_Struct>,
-        operations: List<R_Operation>,
-        queries: List<R_Query>
+        operations: List<R_OperationDefinition>,
+        queries: List<R_QueryDefinition>
 ) {
     val entities = entities.toImmList()
     val objects = objects.toImmList()
@@ -267,25 +286,25 @@ class C_AppDefs(
 
 interface C_AppDefsAdder {
     fun addEntity(entity: C_Entity)
-    fun addObject(obj: R_Object)
+    fun addObject(obj: R_ObjectDefinition)
     fun addStruct(struct: R_Struct)
-    fun addOperation(op: R_Operation)
-    fun addQuery(q: R_Query)
+    fun addOperation(op: R_OperationDefinition)
+    fun addQuery(q: R_QueryDefinition)
 }
 
 private class C_AppDefsBuilder(executor: C_CompilerExecutor): C_AppDefsAdder {
-    private val entities = C_AppDefsTableBuilder<C_Entity, R_Entity>(executor) { it.entity }
-    private val objects = C_AppDefsTableBuilder<R_Object, R_Object>(executor) { it }
+    private val entities = C_AppDefsTableBuilder<C_Entity, R_EntityDefinition>(executor) { it.entity }
+    private val objects = C_AppDefsTableBuilder<R_ObjectDefinition, R_ObjectDefinition>(executor) { it }
     private val structs = C_AppDefsTableBuilder<R_Struct, R_Struct>(executor) { it }
-    private val operations = C_AppDefsTableBuilder<R_Operation, R_Operation>(executor) { it }
-    private val queries = C_AppDefsTableBuilder<R_Query, R_Query>(executor) { it }
+    private val operations = C_AppDefsTableBuilder<R_OperationDefinition, R_OperationDefinition>(executor) { it }
+    private val queries = C_AppDefsTableBuilder<R_QueryDefinition, R_QueryDefinition>(executor) { it }
     private var build = false
 
     override fun addEntity(entity: C_Entity) = add(entities, entity)
-    override fun addObject(obj: R_Object) = add(objects, obj)
+    override fun addObject(obj: R_ObjectDefinition) = add(objects, obj)
     override fun addStruct(struct: R_Struct) = add(structs, struct)
-    override fun addOperation(op: R_Operation) = add(operations, op)
-    override fun addQuery(q: R_Query) = add(queries, q)
+    override fun addOperation(op: R_OperationDefinition) = add(operations, op)
+    override fun addQuery(q: R_QueryDefinition) = add(queries, q)
 
     private fun <T, K> add(table: C_AppDefsTableBuilder<T, K>, value: T) {
         check(!build)

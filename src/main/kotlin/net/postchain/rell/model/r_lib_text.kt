@@ -88,6 +88,14 @@ object R_SysFn_Text_Trim: R_SysFn_Text() {
     override fun call(obj: String): Rt_Value = Rt_TextValue(obj.trim())
 }
 
+object R_SysFn_Text_Like: R_SysFn_Text() {
+    override fun call(obj: String, a: Rt_Value): Rt_Value {
+        val pattern = a.asString()
+        val res = Rt_TextValue.like(obj, pattern)
+        return Rt_BooleanValue(res)
+    }
+}
+
 object R_SysFn_Text_Matches: R_SysFn_Text() {
     override fun call(obj: String, a: Rt_Value): Rt_Value {
         val pattern = a.asString()

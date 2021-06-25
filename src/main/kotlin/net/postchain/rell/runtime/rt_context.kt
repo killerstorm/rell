@@ -8,13 +8,16 @@ import com.google.common.collect.Sets
 import mu.KLogging
 import net.postchain.base.BlockchainRid
 import net.postchain.core.ByteArrayKey
+import net.postchain.core.TxEContext
 import net.postchain.gtv.Gtv
-import net.postchain.rell.compiler.C_SourceDir
-import net.postchain.rell.utils.CommonUtils
+import net.postchain.gtx.OpData
 import net.postchain.rell.model.*
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.repl.ReplOutputChannel
 import net.postchain.rell.sql.*
+import net.postchain.rell.utils.BytesKeyPair
+import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 
 class Rt_GlobalContext(
@@ -175,7 +178,7 @@ class Rt_SqlContext private constructor(
             }
         }
 
-        private fun checkMissingEntities(chain: String, extEntities: Map<String, R_Entity>, metaEntities: Map<String, MetaEntity>) {
+        private fun checkMissingEntities(chain: String, extEntities: Map<String, R_EntityDefinition>, metaEntities: Map<String, MetaEntity>) {
             val metaEntityNames = metaEntities.filter { (_, c) -> c.type == MetaEntityType.ENTITY }.keys
             val missingEntities = Sets.difference(extEntities.keys, metaEntityNames)
             if (!missingEntities.isEmpty()) {
@@ -185,7 +188,7 @@ class Rt_SqlContext private constructor(
             }
         }
 
-        private fun checkMissingAttrs(chain: String, extEntity: R_Entity, metaEntity: MetaEntity) {
+        private fun checkMissingAttrs(chain: String, extEntity: R_EntityDefinition, metaEntity: MetaEntity) {
             val metaAttrNames = metaEntity.attrs.keys
             val extAttrNames = extEntity.attributes.keys
             val missingAttrs = Sets.difference(extAttrNames, metaAttrNames)
@@ -197,7 +200,7 @@ class Rt_SqlContext private constructor(
             }
         }
 
-        private fun checkAttrTypes(sqlCtx: Rt_SqlContext, chain: String, extEntity: R_Entity, metaEntity: MetaEntity) {
+        private fun checkAttrTypes(sqlCtx: Rt_SqlContext, chain: String, extEntity: R_EntityDefinition, metaEntity: MetaEntity) {
             for (extAttr in extEntity.attributes.values.sortedBy { it.name }) {
                 val attrName = extAttr.name
                 val metaAttr = metaEntity.attrs.getValue(attrName)
@@ -212,8 +215,8 @@ class Rt_SqlContext private constructor(
             }
         }
 
-        private fun getChainExternalEntities(entities: List<R_Entity>): Map<String, Map<String, R_Entity>> {
-            val res = mutableMapOf<String, MutableMap<String, R_Entity>>()
+        private fun getChainExternalEntities(entities: List<R_EntityDefinition>): Map<String, Map<String, R_EntityDefinition>> {
+            val res = mutableMapOf<String, MutableMap<String, R_EntityDefinition>>()
             for (entity in entities) {
                 if (entity.external != null && entity.external.metaCheck) {
                     val map = res.computeIfAbsent(entity.external.chain.name) { mutableMapOf() }
@@ -248,25 +251,12 @@ class Rt_AppContext(
         val sqlCtx: Rt_SqlContext,
         val app: R_App,
         val repl: Boolean,
+        val test: Boolean,
         val replOut: ReplOutputChannel?,
-        val sourceDir: C_SourceDir,
-        val modules: Set<R_ModuleName>
+        val blockRunnerStrategy: Rt_BlockRunnerStrategy
 ) {
     private var objsInit: SqlObjectsInit? = null
     private var objsInited = false
-
-    fun createRootFrame(defPos: R_DefinitionPos, sqlExec: SqlExecutor): Rt_CallFrame {
-        val exeCtx = Rt_ExecutionContext(this, sqlExec)
-        val defCtx = Rt_DefinitionContext(exeCtx, true, defPos)
-
-        val containerUid = R_ContainerUid(0, "<init>", app.uid)
-        val fnUid = R_FnUid(0, "<init>", containerUid)
-        val blockUid = R_FrameBlockUid(0, "<init>", fnUid)
-        val rFrameBlock = R_FrameBlock(null, blockUid, 0, 0)
-        val rFrame = R_CallFrame(0, rFrameBlock, false)
-
-        return rFrame.createRtFrame(defCtx, null, null)
-    }
 
     fun objectsInitialization(objsInit: SqlObjectsInit, code: () -> Unit) {
         check(this.objsInit == null)
@@ -280,7 +270,7 @@ class Rt_AppContext(
         }
     }
 
-    fun forceObjectInit(obj: R_Object): Boolean {
+    fun forceObjectInit(obj: R_ObjectDefinition): Boolean {
         val ref = objsInit
         return if (ref == null) false else {
             ref.forceObject(obj)
@@ -291,6 +281,14 @@ class Rt_AppContext(
 
 class Rt_ExecutionContext(val appCtx: Rt_AppContext, val sqlExec: SqlExecutor) {
     val globalCtx = appCtx.globalCtx
+
+    private var nextNopNonce = 0L
+
+    fun nextNopNonce(): Long {
+        val r = nextNopNonce
+        ++nextNopNonce
+        return r
+    }
 }
 
 class Rt_CallContext(val defCtx: Rt_DefinitionContext) {
@@ -300,15 +298,55 @@ class Rt_CallContext(val defCtx: Rt_DefinitionContext) {
     val chainCtx = globalCtx.chainCtx
 }
 
-class Rt_DefinitionContext(val exeCtx: Rt_ExecutionContext, val dbUpdateAllowed: Boolean, val pos: R_DefinitionPos) {
+class Rt_DefinitionContext(val exeCtx: Rt_ExecutionContext, val dbUpdateAllowed: Boolean, val defId: R_DefinitionId) {
     val appCtx = exeCtx.appCtx
     val globalCtx = appCtx.globalCtx
     val sqlCtx = appCtx.sqlCtx
     val callCtx = Rt_CallContext(this)
 }
 
-class Rt_OpContext(val lastBlockTime: Long, val transactionIid: Long, val blockHeight: Long, val signers: List<ByteArray>)
+abstract class Rt_TxContext {
+    abstract fun emitEvent(type: String, data: Gtv)
+}
 
-class Rt_ChainContext(val rawConfig: Gtv, args: Map<R_ModuleName, Rt_Value>, val blockchainRid: BlockchainRid) {
-    val args = args.toImmMap()
+class Rt_PostchainTxContext(private val txCtx: TxEContext): Rt_TxContext() {
+    override fun emitEvent(type: String, data: Gtv) {
+        txCtx.emitEvent(type, data)
+    }
+}
+
+class Rt_OpContext(
+        val txCtx: Rt_TxContext,
+        val lastBlockTime: Long,
+        val transactionIid: Long,
+        val blockHeight: Long,
+        val opIndex: Int,
+        signers: List<ByteArray>,
+        allOperations: List<OpData>
+) {
+    val signers = signers.toImmList()
+    val allOperations = allOperations.toImmList()
+}
+
+abstract class Rt_BlockRunnerStrategy {
+    abstract fun createGtvConfig(): Gtv
+    abstract fun getKeyPair(): BytesKeyPair
+}
+
+class Rt_StaticBlockRunnerStrategy(
+        private val gtvConfig: Gtv,
+        private val keyPair: BytesKeyPair
+): Rt_BlockRunnerStrategy() {
+    override fun createGtvConfig() = gtvConfig
+    override fun getKeyPair() = keyPair
+}
+
+object Rt_UnsupportedBlockRunnerStrategy: Rt_BlockRunnerStrategy() {
+    private val errMsg = "Block execution not supported"
+    override fun createGtvConfig() = throw Rt_Utils.errNotSupported(errMsg)
+    override fun getKeyPair() = throw Rt_Utils.errNotSupported(errMsg)
+}
+
+class Rt_ChainContext(val rawConfig: Gtv, moduleArgs: Map<R_ModuleName, Rt_Value>, val blockchainRid: BlockchainRid) {
+    val moduleArgs = moduleArgs.toImmMap()
 }

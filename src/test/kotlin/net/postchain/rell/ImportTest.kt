@@ -560,5 +560,5 @@ class ImportTest: BaseRellTest(false) {
         chkImport("import b.{y.z};", "0", "ct_err:[main.rell:import:name_unresolved:y][b.rell:import:name_unknown:y]")
     }
 
-    private fun chkImport(imp: String, code: String, exp: String) = chkQueryEx("$imp query q() = $code;", exp)
+    private fun chkImport(imp: String, code: String, exp: String) = chkFull("$imp query q() = $code;", exp)
 }

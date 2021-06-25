@@ -4,10 +4,11 @@
 
 package net.postchain.rell.compiler.ast
 
+import net.postchain.rell.compiler.*
+import net.postchain.rell.model.R_DefinitionId
+import net.postchain.rell.repl.*
 import net.postchain.rell.utils.MutableTypedKeyMap
 import net.postchain.rell.utils.TypedKeyMap
-import net.postchain.rell.compiler.*
-import net.postchain.rell.repl.*
 import net.postchain.rell.utils.toImmList
 
 class S_ReplCommand(steps: List<S_ReplStep>, expr: S_Expr?) {
@@ -32,7 +33,8 @@ class S_ReplCommand(steps: List<S_ReplStep>, expr: S_Expr?) {
 
     private fun createContext(mntCtx: C_MountContext, codeState: ReplCodeState): C_ReplCommandContext {
         val stmtVars = discoverStatementVars()
-        val defCtx = C_DefinitionContext(mntCtx, C_DefinitionType.REPL)
+        val defId = R_DefinitionId("", "<REPL>")
+        val defCtx = C_DefinitionContext(mntCtx, C_DefinitionType.REPL, defId)
         val fnCtx = C_FunctionContext(defCtx, "<REPL>", null, stmtVars)
         val frameCtx = C_FrameContext.create(fnCtx, codeState.cState.frameProto)
         return C_ReplCommandContext(frameCtx, codeState)

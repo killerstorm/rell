@@ -601,17 +601,42 @@ class SqlInitTest: BaseContextTest(useSql = true) {
             t.def("entity user { name; company; }")
             t.insert("c0.company", "name", "100,'Apple'")
             t.insert("c0.user", "name,company", "200,'Steve',100")
-            t.chkQuery("company @*{} ( .name )", "list<text>[text[Apple]]")
-            t.chkQuery("user @*{} ( .name )", "list<text>[text[Steve]]")
+            t.chk("company @*{} ( .name )", "list<text>[text[Apple]]")
+            t.chk("user @*{} ( .name )", "list<text>[text[Steve]]")
         }
 
         RellTestContext().use { ctx ->
             val t = RellCodeTester(ctx)
             t.def("entity company { name; boss: user; }")
             t.def("entity user { name; }")
-            t.chkQuery("company @*{} ( .name )", "list<text>[]")
-            t.chkQuery("user @*{} ( .name )", "list<text>[]")
+            t.chk("company @*{} ( .name )", "list<text>[]")
+            t.chk("user @*{} ( .name )", "list<text>[]")
         }
+    }
+
+    @Test fun testSysFunctions() {
+        chkFunctions()
+        chkInit("")
+        chkFunctions(
+                "c0.make_rowid",
+                "rell_bytea_substr1",
+                "rell_bytea_substr2",
+                "rell_text_getchar",
+                "rell_text_substr1",
+                "rell_text_substr2"
+        )
+
+        execSql("DROP FUNCTION rell_bytea_substr2; DROP FUNCTION rell_text_substr1;")
+        chkFunctions("c0.make_rowid", "rell_bytea_substr1", "rell_text_getchar", "rell_text_substr2")
+        chkInit("")
+        chkFunctions(
+                "c0.make_rowid",
+                "rell_bytea_substr1",
+                "rell_bytea_substr2",
+                "rell_text_getchar",
+                "rell_text_substr1",
+                "rell_text_substr2"
+        )
     }
 
     private fun chkInit(code: String, expected: String = "OK", expectedWarnings: String = "") {
@@ -647,7 +672,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
             sqlExec.connection { con ->
                 sqlAccess.initializeApp(con, PostchainUtils.DATABASE_VERSION)
                 val eCtx: EContext = BaseEContext(con, t.chainId, 0, sqlAccess)
-                val bcRid: BlockchainRid = BlockchainRid.EMPTY_RID
+                val bcRid: BlockchainRid = BlockchainRid.ZERO_RID
                 sqlAccess.initializeBlockchain(eCtx, bcRid)
             }
         }
@@ -717,6 +742,13 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         return map
     }
 
+    private fun chkFunctions(vararg expected: String) {
+        val actual = tstCtx.sqlMgr().access { sqlExec ->
+            SqlUtils.getExistingFunctions(sqlExec).sorted()
+        }
+        assertEquals(expected.toList(), actual)
+    }
+
     private fun insert(table: String, columns: String, values: String) {
         val sql = SqlTestUtils.mkins(table, columns, values)
         execSql(sql)
@@ -732,7 +764,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
 
     private fun chk(expr: String, expected: String) {
         val t = createChkTester()
-        t.chkQuery(expr, expected)
+        t.chk(expr, expected)
     }
 
     private fun chkOp(code: String, expected: String) {

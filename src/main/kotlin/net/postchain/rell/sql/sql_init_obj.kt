@@ -4,37 +4,37 @@
 
 package net.postchain.rell.sql
 
-import net.postchain.rell.model.R_Object
+import net.postchain.rell.model.R_ObjectDefinition
 import net.postchain.rell.runtime.Rt_Error
 import net.postchain.rell.runtime.Rt_ExecutionContext
 import java.util.*
 
 class SqlObjectsInit(private val exeCtx: Rt_ExecutionContext) {
     private var addDone = false
-    private val states = mutableMapOf<R_Object, ObjState>()
+    private val states = mutableMapOf<R_ObjectDefinition, ObjState>()
     private val initStack: Deque<ObjState> = ArrayDeque()
 
-    fun addObject(obj: R_Object) {
+    fun addObject(obj: R_ObjectDefinition) {
         check(!addDone)
         check(obj !in states) { "Object already in the map: '${obj.appLevelName}'" }
         states[obj] = ObjState(obj)
     }
 
-    fun initObject(obj: R_Object) {
+    fun initObject(obj: R_ObjectDefinition) {
         addDone = false
         pushState(obj) {
             it.init()
         }
     }
 
-    fun forceObject(obj: R_Object) {
+    fun forceObject(obj: R_ObjectDefinition) {
         addDone = false
         pushState(obj) {
             it.force()
         }
     }
 
-    private fun pushState(obj: R_Object, code: (ObjState) -> Unit) {
+    private fun pushState(obj: R_ObjectDefinition, code: (ObjState) -> Unit) {
         val state = states.getValue(obj)
         initStack.push(state)
         try {
@@ -44,7 +44,7 @@ class SqlObjectsInit(private val exeCtx: Rt_ExecutionContext) {
         }
     }
 
-    private inner class ObjState(val obj: R_Object) {
+    private inner class ObjState(val obj: R_ObjectDefinition) {
         private var started: Boolean = false
         private var finished: Boolean = false
 
@@ -65,7 +65,7 @@ class SqlObjectsInit(private val exeCtx: Rt_ExecutionContext) {
             }
 
             started = true
-            val frame = exeCtx.appCtx.createRootFrame(obj.pos, exeCtx.sqlExec)
+            val frame = SqlInitUtils.createEntityInitFrame(exeCtx, obj.rEntity, false)
             obj.insert(frame)
             finished = true
         }

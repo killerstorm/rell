@@ -8,6 +8,8 @@ import com.google.common.collect.*
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
 import net.postchain.rell.runtime.toGtv
+import org.apache.commons.collections4.IterableUtils
+import java.util.*
 
 class ListVsMap<K> private constructor(private val entries: List<Map.Entry<K, *>>) {
     fun <W> listToMap(list: List<W>): Map<K, W> {
@@ -26,12 +28,36 @@ class ListVsMap<K> private constructor(private val entries: List<Map.Entry<K, *>
     }
 }
 
+fun <T> chainToIterable(head: T?, nextGetter: (T) -> T?): Iterable<T> {
+    return if (head == null) IterableUtils.emptyIterable() else ChainIterable(head, nextGetter)
+}
+
+private class ChainIterable<T>(private val head: T, private val nextGetter: (T) -> T?): Iterable<T> {
+    override fun iterator(): Iterator<T> = ChainIterator()
+
+    private inner class ChainIterator: Iterator<T> {
+        private var current: T? = head
+
+        override fun hasNext() = current != null
+
+        override fun next(): T {
+            val cur = current
+            cur ?: throw NoSuchElementException()
+            current = nextGetter(cur)
+            return cur
+        }
+    }
+}
+
 fun <T> immListOf(vararg values: T): List<T> = ImmutableList.copyOf(values)
+fun <T> immSetOf(): Set<T> = ImmutableSet.of()
 fun <T> immSetOf(vararg values: T): Set<T> = ImmutableSet.copyOf(values)
 fun <K, V> immMapOf(vararg entries: Pair<K, V>): Map<K, V> = mapOf(*entries).toImmMap()
 
 fun <T> Iterable<T>.toImmList(): List<T> = ImmutableList.copyOf(this)
+fun <T> Array<T>.toImmList(): List<T> = ImmutableList.copyOf(this)
 fun <T> Iterable<T>.toImmSet(): Set<T> = ImmutableSet.copyOf(this)
+fun <T> Array<T>.toImmSet(): Set<T> = ImmutableSet.copyOf(this)
 fun <K, V> Map<K, V>.toImmMap(): Map<K, V> = ImmutableMap.copyOf(this)
 fun <K, V> Multimap<K, V>.toImmMultimap(): Multimap<K, V> = ImmutableMultimap.copyOf(this)
 

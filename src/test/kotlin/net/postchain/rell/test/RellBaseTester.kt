@@ -30,7 +30,10 @@ abstract class RellBaseTester(
     var errMsgPos = false
     var gtv = gtv
     var deprecatedError = false
-    var blockchainRid = "DEADBEEF"
+    var atAttrShadowing = C_CompilerOptions.DEFAULT.atAttrShadowing
+    var testLib = false
+
+    var blockchainRid = RellTestUtils.strToRidHex("DEADBEEF")
 
     var defs: List<String> = entityDefs
         set(value) {
@@ -71,6 +74,8 @@ abstract class RellBaseTester(
 
             appProto = app
             inited = true
+
+            postInit()
         } else if (inserts != lastInserts) {
             tstCtx.sqlMgr().transaction { sqlExec ->
                 if (!lastInserts.isEmpty()) {
@@ -79,6 +84,8 @@ abstract class RellBaseTester(
                 initSqlInserts(sqlExec)
             }
         }
+
+        tstCtx.resetSqlCounter()
     }
 
     private fun initCompile(code: String): R_App {
@@ -89,7 +96,7 @@ abstract class RellBaseTester(
 
         if (cRes.errors.isNotEmpty()) {
             val err = cRes.errors[0]
-            throw C_Error(err.pos, err.code, err.text)
+            throw C_Error.other(err.pos, err.code, err.text)
         }
 
         return cRes.app!!
@@ -99,12 +106,23 @@ abstract class RellBaseTester(
 
     private val expectedData = mutableListOf<String>()
 
-    protected fun compilerOptions() = C_CompilerOptions(gtv = gtv, deprecatedError = deprecatedError, ide = false)
+    protected fun compilerOptions() = C_CompilerOptions(
+            gtv = gtv,
+            deprecatedError = deprecatedError,
+            ide = false,
+            blockCheck = true,
+            atAttrShadowing = atAttrShadowing,
+            testLib = testLib
+    )
+
+    fun def(defs: List<String>) {
+        checkNotInited()
+        defs0.addAll(defs)
+        this.defs = defs0
+    }
 
     fun def(def: String) {
-        checkNotInited()
-        defs0.add(def)
-        defs = defs0
+        def(listOf(def))
     }
 
     fun insert(table: String, columns: String, vararg rows: String) {
@@ -147,8 +165,9 @@ abstract class RellBaseTester(
     }
 
     protected abstract fun initSqlReset(exec: SqlExecutor, moduleCode: String, app: R_App)
+    protected open fun postInit() { }
 
-    private fun createSourceDir(code: String): C_SourceDir {
+    fun createSourceDir(code: String): C_SourceDir {
         val files = files(code)
         return C_MapSourceDir.of(files)
     }
@@ -160,6 +179,10 @@ abstract class RellBaseTester(
         }
         lastInserts = inserts
     }
+
+    abstract fun chkEx(code: String, expected: String)
+
+    fun chk(expr: String, expected: String) = chkEx("= $expr;", expected)
 
     fun chkData(expected: List<String>) {
         expectedData.clear()

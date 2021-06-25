@@ -13,3 +13,10 @@ query sum_digits_dec(n: integer) = calc.sum_digits_decimal(n);
 
 query get_raw_config() = chain_context.raw_config;
 query get_module_args() = chain_context.args;
+
+query get_args_chksum() {
+    val args = chain_context.args;
+    return args.x * args.y.size();
+}
+
+function get_module_args_0() = chain_context.args;

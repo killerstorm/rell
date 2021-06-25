@@ -4,9 +4,15 @@
 
 package net.postchain.rell
 
+import net.postchain.rell.compiler.*
+import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.test.RellCodeTester
+import net.postchain.rell.test.RellTestUtils
 import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 class ModuleTest: BaseRellTest(false) {
     @Test fun testForwardTypeReferenceFunction() {
@@ -16,7 +22,7 @@ class ModuleTest: BaseRellTest(false) {
             struct bar { x: foo; }
             query q() = f(foo(123));
         """
-        chkQueryEx(code, "bar[x=foo[p=int[123]]]")
+        chkFull(code, "bar[x=foo[p=int[123]]]")
     }
 
     @Test fun testForwardTypeReferenceOperation() {
@@ -84,7 +90,9 @@ class ModuleTest: BaseRellTest(false) {
         chkCompile("import lib.a; query q() = (a.user@{}).a;", "ct_err:lib/a.rell:unknown_type:ERROR")
         chkCompile("import lib.a; query q() = (a.user@{}).b;", "ct_err:lib/a.rell:unknown_type:ERROR")
         chkCompile("import lib.a; query q() = (a.user@{}).c;", "ct_err:lib/a.rell:unknown_type:ERROR")
-        chkCompile("import lib.a; query q() = (a.user@{}).x;", "ct_err:[main.rell:unknown_member:[lib.a:user]:x][lib/a.rell:unknown_type:ERROR]")
+        chkCompile("import lib.a; query q() = (a.user@{}).x;", "ct_err:lib/a.rell:unknown_type:ERROR")
+        chkCompile("import lib.a; query q() = (a.user@{}).z;",
+                "ct_err:[main.rell:unknown_member:[lib.a:user]:z][lib/a.rell:unknown_type:ERROR]")
         chkCompile("import lib.a; query q() = 123;", "ct_err:lib/a.rell:unknown_type:ERROR")
     }
 
@@ -206,11 +214,11 @@ class ModuleTest: BaseRellTest(false) {
 
     @Test fun testImportNotAtTop() {
         file("lib/a.rell", "module; function f(): integer = 123;")
-        chkQueryEx("query q() = a.f(); import lib.a;", "int[123]")
-        chkQueryEx("function g(): integer = a.f(); import lib.a; query q() = g();", "int[123]")
-        chkQueryEx("namespace foo { function g(): integer = a.f(); import lib.a; } query q() = foo.g();", "int[123]")
-        chkQueryEx("namespace foo { function g(): integer = a.f(); } import lib.a; query q() = foo.g();", "int[123]")
-        chkQueryEx("namespace foo { function g(): integer = a.f(); } query q() = foo.g(); import lib.a;", "int[123]")
+        chkFull("query q() = a.f(); import lib.a;", "int[123]")
+        chkFull("function g(): integer = a.f(); import lib.a; query q() = g();", "int[123]")
+        chkFull("namespace foo { function g(): integer = a.f(); import lib.a; } query q() = foo.g();", "int[123]")
+        chkFull("namespace foo { function g(): integer = a.f(); } import lib.a; query q() = foo.g();", "int[123]")
+        chkFull("namespace foo { function g(): integer = a.f(); } query q() = foo.g(); import lib.a;", "int[123]")
     }
 
     @Test fun testImportSameModuleMultipleTimes() {
@@ -287,17 +295,22 @@ class ModuleTest: BaseRellTest(false) {
         t.file("a/y/module.rell", "function f(): text = 'a.y';")
         t.file("a/b/z/module.rell", "function f(): text = 'a.b.z';")
         t.def("import a.b.c;")
-        t.chkQuery("c.g()", exp)
+        t.chk("c.g()", exp)
     }
 
     @Test fun testImportSelf() {
         file("lib/a.rell", "module; import self: .; function f(): integer = 123; function g(): integer = self.f() * 2;")
         file("lib/b.rell", "module; import lib.a; function p(): integer = a.g() * 3;")
         file("lib/c.rell", "module; import lib.a; import self: .; function q(): integer = self.a.g() * 4;")
-        chkQueryEx("import lib.a; query q() = a.f();", "int[123]")
-        chkQueryEx("import lib.a; query q() = a.g();", "int[246]")
-        chkQueryEx("import lib.b; query q() = b.p();", "int[738]")
-        chkQueryEx("import lib.c; query q() = c.q();", "int[984]")
+        chkFull("import lib.a; query q() = a.f();", "int[123]")
+        chkFull("import lib.a; query q() = a.g();", "int[246]")
+        chkFull("import lib.b; query q() = b.p();", "int[738]")
+        chkFull("import lib.c; query q() = c.q();", "int[984]")
+    }
+
+    @Test fun testImportNoDirectParent() {
+        file("foo/bar/a.rell", "module; function f() = 123;")
+        chkFull("import foo.bar.a; query q() = a.f();", "int[123]")
     }
 
     @Test fun testCannotAccessImporterDefs() {
@@ -314,6 +327,18 @@ class ModuleTest: BaseRellTest(false) {
     @Test fun testSystemDefsNotVisibleFromOutside2() {
         file("a/a1.rell", "struct rec { x: integer = 123; }")
         chkSystemDefsNotVisibleFromOutside()
+    }
+
+    private fun chkSystemDefsNotVisibleFromOutside() {
+        chkFull("import a; query q(): a.rec = a.rec();", "a:rec[x=int[123]]")
+        chkFull("import a; query q(): a.integer = 123;", "ct_err:unknown_type:a.integer")
+        chkFull("import a; query q(): a.boolean = false;", "ct_err:unknown_type:a.boolean")
+        chkFull("import a; query q(): a.text = 'Abc';", "ct_err:unknown_type:a.text")
+        chkFull("import a; query q(): a.byte_array = x'1234';", "ct_err:unknown_type:a.byte_array")
+        chkFull("import a; query q() = a.abs(-123);", "ct_err:unknown_name:a.abs")
+        chkFull("import a; query q() = abs(-123);", "int[123]")
+        chkFull("import a; query q() = a.integer.MIN_VALUE;", "ct_err:unknown_name:a.integer")
+        chkFull("import a; query q() = integer.MIN_VALUE;", "int[-9223372036854775808]")
     }
 
     @Test fun testNameConflictRecoveryInFile() {
@@ -365,7 +390,7 @@ class ModuleTest: BaseRellTest(false) {
         chkCompile("include 'sub/foo'; function g(): integer = f();", "ct_err:[include][unknown_name:f]")
         chkCompile("include 'sub/foo.rell';", "ct_err:include")
         chkCompile("include 'sub/bar';", "ct_err:include")
-        chkQueryEx("import sub; query q() = sub.f();", "int[123]")
+        chkFull("import sub; query q() = sub.f();", "int[123]")
     }
 
     @Test fun testSyntaxErrorBugs() {
@@ -375,19 +400,121 @@ class ModuleTest: BaseRellTest(false) {
         chkCompile("query q() {", "ct_err:syntax")
     }
 
-    private fun chkSystemDefsNotVisibleFromOutside() {
-        chkQueryEx("import a; query q(): a.rec = a.rec();", "a:rec[x=int[123]]")
-        chkQueryEx("import a; query q(): a.integer = 123;", "ct_err:unknown_type:a.integer")
-        chkQueryEx("import a; query q(): a.boolean = false;", "ct_err:unknown_type:a.boolean")
-        chkQueryEx("import a; query q(): a.text = 'Abc';", "ct_err:unknown_type:a.text")
-        chkQueryEx("import a; query q(): a.byte_array = x'1234';", "ct_err:unknown_type:a.byte_array")
-        chkQueryEx("import a; query q() = a.abs(-123);", "ct_err:unknown_name:a.abs")
-        chkQueryEx("import a; query q() = abs(-123);", "int[123]")
-        chkQueryEx("import a; query q() = a.integer.MIN_VALUE;", "ct_err:unknown_name:a.integer")
-        chkQueryEx("import a; query q() = integer.MIN_VALUE;", "int[-9223372036854775808]")
+    @Test fun testCompileTestModules() {
+        val sourceDir = C_MapSourceDir.of(
+                "module.rell" to "query root() = 0;",
+                "part.rell" to "query part() = 0;",
+                "module_test.rell" to "@test module;",
+                "simple.rell" to "module; query simple() = 0;",
+                "simple_test.rell" to "@test module;",
+                "nested/main.rell" to "query nested() = 0;",
+                "nested/helper.rell" to "query helper() = 0;",
+                "nested/test.rell" to "@test module;",
+                "nested/deeper/module.rell" to "query deeper() = 0;",
+                "nested/deeper/deeper_test.rell" to "@test module;",
+                "noparent/tests/foo_test.rell" to "@test module;",
+                "noparent/tests/bar_test.rell" to "@test module;"
+        )
+
+        chkCompileTestModules(sourceDir, listOf(), listOf(), "[]")
+        chkCompileTestModules(sourceDir, listOf(""), listOf(), "[[]]")
+        chkCompileTestModules(sourceDir, listOf("simple"), listOf(), "[[],[simple]]")
+        chkCompileTestModules(sourceDir, listOf("nested"), listOf(), "[[],[nested]]")
+        chkCompileTestModules(sourceDir, listOf("nested.deeper"), listOf(), "[[],[nested],[nested.deeper]]")
+        chkCompileTestModules(sourceDir, listOf(), listOf(""),
+                "[[module_test],[nested.deeper.deeper_test],[nested.test],[noparent.tests.bar_test],[noparent.tests.foo_test],[simple_test]]")
+        chkCompileTestModules(sourceDir, listOf(), listOf("simple"), "[]")
+        chkCompileTestModules(sourceDir, listOf(), listOf("simple_test"), "[[simple_test]]")
+        chkCompileTestModules(sourceDir, listOf(), listOf("nested"), "[[nested.deeper.deeper_test],[nested.test]]")
+        chkCompileTestModules(sourceDir, listOf(), listOf("nested.test"), "[[nested.test]]")
+        chkCompileTestModules(sourceDir, listOf(), listOf("nested.deeper"), "[[nested.deeper.deeper_test]]")
+        chkCompileTestModules(sourceDir, listOf(), listOf("noparent"), "[[noparent.tests.bar_test],[noparent.tests.foo_test]]")
+        chkCompileTestModules(sourceDir, listOf(), listOf("noparent.tests"), "[[noparent.tests.bar_test],[noparent.tests.foo_test]]")
+        chkCompileTestModules(sourceDir, listOf(), listOf("nested", "noparent"),
+                "[[nested.deeper.deeper_test],[nested.test],[noparent.tests.bar_test],[noparent.tests.foo_test]]")
+    }
+
+    @Test fun testCompileTestModulesEmptyDir() {
+        val sourceDir = C_MapSourceDir.of(
+                "empty/blank/none.txt" to ""
+        )
+        chkCompileTestModules(sourceDir, listOf("empty"), listOf(), "cm_err:import:not_found:empty")
+        chkCompileTestModules(sourceDir, listOf("empty.blank"), listOf(), "cm_err:import:not_found:empty.blank")
+        chkCompileTestModules(sourceDir, listOf(), listOf("empty"), "[]")
+        chkCompileTestModules(sourceDir, listOf(), listOf("empty.blank"), "[]")
+    }
+
+    @Test fun testCompileTestModulesUnknownModule() {
+        val sourceDir = C_MapSourceDir.of(
+                "module.rell" to "query root() = 0;"
+        )
+
+        chkCompileTestModules(sourceDir, listOf("unknown"), listOf(), "cm_err:import:not_found:unknown")
+        chkCompileTestModules(sourceDir, listOf(), listOf("unknown"), "cm_err:import:not_found:unknown")
+        chkCompileTestModules(sourceDir, listOf(), listOf("single.unknown"), "cm_err:import:not_found:single.unknown")
+        chkCompileTestModules(sourceDir, listOf(), listOf("nested.unknown"), "cm_err:import:not_found:nested.unknown")
+        chkCompileTestModules(sourceDir, listOf(), listOf("misc.unknown"), "cm_err:import:not_found:misc.unknown")
+        chkCompileTestModules(sourceDir, listOf(), listOf("misc.tests.unknown"), "cm_err:import:not_found:misc.tests.unknown")
+    }
+
+    @Test fun testCompileTestModulesFileDirConflict() {
+        val sourceDir = C_MapSourceDir.of(
+                "trouble/conflict/module.rell" to "module;",
+                "trouble/conflict.rell" to "module;"
+        )
+        chkCompileTestModules(sourceDir, listOf("trouble.conflict"), listOf(), "cm_err:import:file_dir:trouble.conflict")
+        chkCompileTestModules(sourceDir, listOf(), listOf("trouble.conflict"), "cm_err:import:file_dir:trouble.conflict")
+    }
+
+    @Test fun testCompileTestModulesStrangeFileNames() {
+        val sourceDir = C_MapSourceDir.of(
+                "app/module.rell" to "module;",
+                "app/123.rell" to "function foo() = 123;",
+                "app/other-strange.name.rell" to "function bar() = 456;",
+                "app/not_a_rell_file.txt" to "Hi!",
+                "app/tests/tests1.rell" to "@test module; import app; function test() { app.foo(); }",
+                "app/tests/tests2.rell" to "@test module; import app; function test() { app.bar(); }"
+        )
+        chkCompileTestModules(sourceDir, listOf(""), listOf(""), "cm_err:import:not_found:")
+        chkCompileTestModules(sourceDir, listOf(), listOf(""), "[[app],[app.tests.tests1],[app.tests.tests2]]")
+        chkCompileTestModules(sourceDir, listOf("app"), listOf(""), "[[app],[app.tests.tests1],[app.tests.tests2]]")
+        chkCompileTestModules(sourceDir, listOf("app"), listOf("app.tests"), "[[app],[app.tests.tests1],[app.tests.tests2]]")
+        chkCompileTestModules(sourceDir, listOf("app"), listOf(), "[[app]]")
+    }
+
+    private fun chkCompileTestModules(
+            sourceDir: C_SourceDir,
+            modules: List<String>,
+            testModules: List<String>,
+            expected: String
+    ) {
+        val actual = evalCompileAllModules(sourceDir, modules, testModules)
+        assertEquals(expected, actual)
+    }
+
+    private fun evalCompileAllModules(sourceDir: C_SourceDir, modules: List<String>, testModules: List<String>): String {
+        val modules2 = modules.map { R_ModuleName.of(it) }
+        val testModules2 = testModules.map { R_ModuleName.of(it) }
+        val modSel = C_CompilerModuleSelection(modules2, testModules2)
+
+        val res = try {
+            RellTestUtils.compileApp(sourceDir, modSel, C_CompilerOptions.DEFAULT)
+        } catch (e: C_CommonError) {
+            return "cm_err:${e.code}"
+        }
+
+        if (res.errors.isNotEmpty()) {
+            val s = RellTestUtils.errsToString(res.errors, false)
+            return "ct_err:$s"
+        }
+
+        val app = res.app
+        assertNotNull(app)
+        assertTrue(app.valid)
+        return app.modules.map { it.name }.sorted().joinToString(",", "[", "]") { "[$it]" }
     }
 
     private fun chkImp(imp: String, code: String, exp: String) {
-        chkQueryEx("$imp query q() = $code;", exp)
+        chkFull("$imp query q() = $code;", exp)
     }
 }

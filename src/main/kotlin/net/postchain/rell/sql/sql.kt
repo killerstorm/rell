@@ -21,11 +21,20 @@ object SqlConstants {
     const val ROWID_GEN = "rowid_gen"
     const val MAKE_ROWID = "make_rowid"
 
-    const val BLOCKCHAINS_TABLE = "blockchains"
+    const val FN_BYTEA_SUBSTR1 = "rell_bytea_substr1"
+    const val FN_BYTEA_SUBSTR2 = "rell_bytea_substr2"
+    const val FN_TEXT_SUBSTR1 = "rell_text_substr1"
+    const val FN_TEXT_SUBSTR2 = "rell_text_substr2"
+    const val FN_TEXT_GETCHAR = "rell_text_getchar"
 
+    const val BLOCKCHAINS_TABLE = "blockchains"
     const val CONFIGURATIONS_TABLE = "configurations"
     const val BLOCKS_TABLE = "blocks"
     const val TRANSACTIONS_TABLE = "transactions"
+    const val EVENTS_TABLE = "events"
+    const val STATES_TABLE = "states"
+    const val EVENT_PAGES_TABLE = "event_pages"
+    const val SNAPSHOT_PAGES_TABLE = "snapshot_pages"
 
     val SYSTEM_OBJECTS = setOf(
             ROWID_GEN,
@@ -34,6 +43,10 @@ object SqlConstants {
             CONFIGURATIONS_TABLE,
             BLOCKS_TABLE,
             TRANSACTIONS_TABLE,
+            EVENTS_TABLE,
+            STATES_TABLE,
+            EVENT_PAGES_TABLE,
+            SNAPSHOT_PAGES_TABLE,
             "meta",
             "peerinfos",
             "gtx_module_version"
@@ -59,6 +72,8 @@ class SqlConnectionLogger(private val logging: Boolean) {
 }
 
 abstract class SqlManager {
+    abstract val hasConnection: Boolean
+
     private val busy = AtomicBoolean()
 
     protected abstract fun <T> execute0(tx: Boolean, code: (SqlExecutor) -> T): T
@@ -116,6 +131,8 @@ abstract class SqlExecutor {
 }
 
 object NoConnSqlManager: SqlManager() {
+    override val hasConnection = false
+
     override fun <T> execute0(tx: Boolean, code: (SqlExecutor) -> T): T {
         val res = code(NoConnSqlExecutor)
         return res
@@ -137,6 +154,8 @@ object NoConnSqlExecutor: SqlExecutor() {
 }
 
 class ConnectionSqlManager(private val con: Connection, logging: Boolean): SqlManager() {
+    override val hasConnection = true
+
     private val conLogger = SqlConnectionLogger(logging)
     private val sqlExec = ConnectionSqlExecutor(con, conLogger)
 
@@ -235,6 +254,8 @@ class ConnectionSqlExecutor(private val con: Connection, private val conLogger: 
 }
 
 class PostchainStorageSqlManager(private val storage: Storage, logging: Boolean): SqlManager() {
+    override val hasConnection = true
+
     private val conLogger = SqlConnectionLogger(logging)
 
     override fun <T> execute0(tx: Boolean, code: (SqlExecutor) -> T): T {

@@ -4,19 +4,21 @@
 
 package net.postchain.rell.compiler
 
-import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_RellFile
+import net.postchain.rell.lib.C_Lib_OpContext
 import net.postchain.rell.model.*
 import net.postchain.rell.repl.ReplCode
 import net.postchain.rell.repl.ReplCodeState
+import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.immMapOf
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 import java.util.*
 
-class C_Entity(val defPos: S_Pos?, val entity: R_Entity)
-class C_Struct(val name: S_Name, val struct: R_Struct)
+class C_Entity(val defPos: S_Pos?, val entity: R_EntityDefinition)
+class C_Struct(val name: S_Name, val structDef: R_StructDefinition)
 
 enum class C_CompilerPass {
     DEFINITIONS,
@@ -26,6 +28,7 @@ enum class C_CompilerPass {
     ABSTRACT,
     APPDEFS,
     EXPRESSIONS,
+    FRAMES,
     VALIDATION,
     APPLICATION,
     FINISH
@@ -73,21 +76,19 @@ class C_StatementVarsBlock {
 
 class C_SystemDefs private constructor(
         val nsProto: C_SysNsProto,
-        val ns: C_Namespace,
-        val blockEntity: R_Entity,
-        val transactionEntity: R_Entity,
+        val appNs: C_Namespace,
+        val testNs: C_Namespace,
+        val blockEntity: R_EntityDefinition,
+        val transactionEntity: R_EntityDefinition,
         val mntTables: C_MountTables,
-        entities: List<R_Entity>,
-        queries: List<R_Query>
+        entities: List<R_EntityDefinition>,
+        queries: List<R_QueryDefinition>
 ) {
     val entities = entities.toImmList()
     val queries = queries.toImmList()
 
     companion object {
-        private val SYSTEM_NAMESPACES = C_LibFunctions.getSystemNamespaces()
-        private val SYSTEM_FUNCTIONS = C_LibFunctions.getGlobalFunctions()
-
-        private val SYSTEM_TYPES = mapOf(
+        private val SYSTEM_TYPES = immMapOf(
                 "boolean" to typeRef(R_BooleanType),
                 "text" to typeRef(R_TextType),
                 "byte_array" to typeRef(R_ByteArrayType),
@@ -106,10 +107,13 @@ class C_SystemDefs private constructor(
                 "gtv" to typeRef(R_GtvType)
         )
 
-        fun create(executor: C_CompilerExecutor, stamp: R_AppUid): C_SystemDefs {
-            val blockEntity = C_Utils.createBlockEntity(executor, null)
-            val transactionEntity = C_Utils.createTransactionEntity(executor, null, blockEntity)
+        private val SYSTEM_STRUCTS = C_Lib_OpContext.GLOBAL_STRUCTS
 
+        fun create(appCtx: C_AppContext, stamp: R_AppUid): C_SystemDefs {
+            val blockEntity = C_Utils.createBlockEntity(appCtx, null)
+            val transactionEntity = C_Utils.createTransactionEntity(appCtx, null, blockEntity)
+
+            val executor = appCtx.executor
             val queries = listOf(
                     C_Utils.createSysQuery(executor, "get_rell_version", R_TextType, R_SysFn_Rell.GetRellVersion),
                     C_Utils.createSysQuery(executor, "get_postchain_version", R_TextType, R_SysFn_Rell.GetPostchainVersion),
@@ -123,31 +127,36 @@ class C_SystemDefs private constructor(
 
         fun create(
                 stamp: R_AppUid,
-                blockEntity: R_Entity,
-                transactionEntity: R_Entity,
-                queries: List<R_Query>
+                blockEntity: R_EntityDefinition,
+                transactionEntity: R_EntityDefinition,
+                queries: List<R_QueryDefinition>
         ): C_SystemDefs {
             val sysEntities = listOf(blockEntity, transactionEntity)
-            val nsProto = createNsProto(sysEntities, queries)
-            val ns = C_NsEntry.createNamespace(nsProto.entries)
+
+            val nsProto = createNsProto(sysEntities, false)
+            val appNs = C_NsEntry.createNamespace(nsProto.entries)
+            val testNsProto = createNsProto(sysEntities, true)
+            val testNs = C_NsEntry.createNamespace(testNsProto.entries)
 
             val mntBuilder = C_MountTablesBuilder(stamp)
             for (entity in sysEntities) mntBuilder.addEntity(null, entity)
             for (query in queries) mntBuilder.addQuery(query)
             val mntTables = mntBuilder.build()
 
-            return C_SystemDefs(nsProto, ns, blockEntity, transactionEntity, mntTables, sysEntities, queries)
+            return C_SystemDefs(nsProto, appNs, testNs, blockEntity, transactionEntity, mntTables, sysEntities, queries)
         }
 
-        private fun createNsProto(sysEntities: List<R_Entity>, queries: List<R_Query>): C_SysNsProto {
-            val sysNamespaces = SYSTEM_NAMESPACES
+        private fun createNsProto(sysEntities: List<R_EntityDefinition>, test: Boolean): C_SysNsProto {
+            val sysNamespaces = if (test) C_LibFunctions.TEST_NAMESPACES else C_LibFunctions.APP_NAMESPACES
+            val sysFunctions = if (test) C_LibFunctions.TEST_GLOBAL_FNS else C_LibFunctions.APP_GLOBAL_FNS
             val sysTypes = SYSTEM_TYPES
-            val sysFunctions = SYSTEM_FUNCTIONS
+            val sysStructs = SYSTEM_STRUCTS
 
             val nsBuilder = C_SysNsProtoBuilder()
 
             for ((name, type) in sysTypes) nsBuilder.addType(name, type)
             for (entity in sysEntities) nsBuilder.addEntity(entity.simpleName, entity)
+            for (struct in sysStructs) nsBuilder.addStruct(struct.name, struct)
             for ((name, fn) in sysFunctions) nsBuilder.addFunction(name, fn)
             for ((name, ns) in sysNamespaces) nsBuilder.addNamespace(name, ns)
 
@@ -160,12 +169,33 @@ class C_SystemDefs private constructor(
     }
 }
 
+enum class C_AtAttrShadowing {
+    FULL,
+    PARTIAL,
+    NONE,
+    ;
+
+    companion object {
+        val DEFAULT = FULL
+    }
+}
+
 // Instantiated in Eclipse IDE, change parameters carefully.
-class C_CompilerOptions(val gtv: Boolean, val deprecatedError: Boolean, val ide: Boolean) {
+class C_CompilerOptions(
+        val gtv: Boolean,
+        val deprecatedError: Boolean,
+        val ide: Boolean,
+        val blockCheck: Boolean,
+        val atAttrShadowing: C_AtAttrShadowing,
+        val testLib: Boolean
+) {
     class Builder {
         private var gtv = DEFAULT.gtv
         private var deprecatedError = DEFAULT.deprecatedError
         private var ide = DEFAULT.ide
+        private var blockCheck = DEFAULT.blockCheck
+        private var atAttrShadowing = DEFAULT.atAttrShadowing
+        private var testLib = DEFAULT.testLib
 
         @Suppress("UNUSED") fun gtv(v: Boolean): Builder {
             gtv = v
@@ -182,14 +212,46 @@ class C_CompilerOptions(val gtv: Boolean, val deprecatedError: Boolean, val ide:
             return this
         }
 
-        fun build() = C_CompilerOptions(gtv = gtv, deprecatedError = deprecatedError, ide = ide)
+        @Suppress("UNUSED") fun blockCheck(v: Boolean): Builder {
+            blockCheck = v
+            return this
+        }
+
+        @Suppress("UNUSED") fun atAttrShadowing(v: C_AtAttrShadowing): Builder {
+            atAttrShadowing = v
+            return this
+        }
+
+        fun build() = C_CompilerOptions(
+                gtv = gtv,
+                deprecatedError = deprecatedError,
+                ide = ide,
+                blockCheck = blockCheck,
+                atAttrShadowing = atAttrShadowing,
+                testLib = DEFAULT.testLib
+        )
     }
 
     companion object {
-        @JvmField val DEFAULT = C_CompilerOptions(gtv = true, deprecatedError = false, ide = false)
+        @JvmField val DEFAULT = C_CompilerOptions(
+                gtv = true,
+                deprecatedError = false,
+                ide = false,
+                blockCheck = false,
+                atAttrShadowing = C_AtAttrShadowing.DEFAULT,
+                testLib = false
+        )
 
         @JvmStatic fun builder() = Builder()
     }
+}
+
+class C_CompilerModuleSelection(
+        modules: List<R_ModuleName>,
+        testRootModules: List<R_ModuleName> = listOf()
+) {
+    val modules = modules.toImmList()
+    val testRootModules = testRootModules.toImmList()
 }
 
 object C_Compiler {
@@ -198,12 +260,21 @@ object C_Compiler {
             modules: List<R_ModuleName>,
             options: C_CompilerOptions = C_CompilerOptions.DEFAULT
     ): C_CompilationResult {
-        val globalCtx = C_GlobalContext(options, sourceDir, modules.toSet())
+        val modulesSelector = C_CompilerModuleSelection(modules, listOf())
+        return compile(sourceDir, modulesSelector, options)
+    }
+
+    fun compile(
+            sourceDir: C_SourceDir,
+            moduleSelection: C_CompilerModuleSelection,
+            options: C_CompilerOptions
+    ): C_CompilationResult {
+        val globalCtx = C_GlobalContext(options, sourceDir)
         val msgCtx = C_MessageContext(globalCtx)
         val controller = C_CompilerController(msgCtx)
 
         val res = C_LateInit.context(controller.executor) {
-            compile0(sourceDir, msgCtx, controller, modules)
+            compile0(sourceDir, msgCtx, controller, moduleSelection)
         }
 
         return res
@@ -213,22 +284,13 @@ object C_Compiler {
             sourceDir: C_SourceDir,
             msgCtx: C_MessageContext,
             controller: C_CompilerController,
-            modules: List<R_ModuleName>
+            moduleSelection: C_CompilerModuleSelection
     ): C_CompilationResult {
-        val globalCtx = msgCtx.globalCtx
         val appCtx = C_AppContext(msgCtx, controller.executor, false, C_ReplAppState.EMPTY)
-        val modMgr = C_ModuleManager(appCtx, sourceDir, controller.executor, mapOf())
+        val modMgr = C_InternalModuleManager(appCtx, sourceDir, mapOf())
 
         try {
-            for (moduleName in modules) {
-                val module = modMgr.linkModule(moduleName, null)
-
-                val header = module.header
-                if (header.abstractPos != null && !globalCtx.compilerOptions.ide) {
-                    msgCtx.error(header.abstractPos, "module:main_abstract:$moduleName",
-                            "Module '${moduleName.str()}' is abstract, cannot be used as a main module")
-                }
-            }
+            compileModules(modMgr, moduleSelection)
         } catch (e: C_Error) {
             msgCtx.error(e)
         }
@@ -244,6 +306,20 @@ object C_Compiler {
 
         val rApp = if (errors.isEmpty()) app else null
         return C_CompilationResult(rApp, messages, files)
+    }
+
+    private fun compileModules(modMgr: C_InternalModuleManager, modSel: C_CompilerModuleSelection) {
+        modMgr.compileTestModules(modSel.testRootModules)
+
+        for (moduleName in modSel.modules) {
+            val appCtx = modMgr.appCtx
+            val module = modMgr.compileModule(C_ModuleKey(moduleName, null))
+            val header = module.header
+            if (header.abstractPos != null && !appCtx.globalCtx.compilerOptions.ide) {
+                appCtx.msgCtx.error(header.abstractPos, "module:main_abstract:$moduleName",
+                        "Module '${moduleName.str()}' is abstract, cannot be used as a main module")
+            }
+        }
     }
 }
 
@@ -309,7 +385,7 @@ object C_ReplCompiler {
             executor: C_CompilerExecutor,
             oldDefsState: C_ReplDefsState
     ): C_MountContext {
-        val modMgr = C_ModuleManager(appCtx, sourceDir, executor, oldDefsState.appState.modules)
+        val modMgr = C_InternalModuleManager(appCtx, sourceDir, oldDefsState.appState.modules)
 
         val linkedModuleKey = if (moduleName == null) null else C_ModuleKey(moduleName, null)
         val replNsAssembler = appCtx.createReplNsAssembler(linkedModuleKey)
@@ -317,7 +393,7 @@ object C_ReplCompiler {
 
         val modCtx = C_ReplModuleContext(
                 appCtx,
-                modMgr,
+                modMgr.facadeMgr,
                 moduleName ?: R_ModuleName.EMPTY,
                 replNsAssembler.futureNs(),
                 componentNsAssembler.futureNs()

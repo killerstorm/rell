@@ -279,7 +279,7 @@ class ReplDefinitionTest: BaseRellTest(false) {
             function f(): module_args = chain_context.args;
         """)
         repl.chk("import lib;")
-        repl.chk("lib.f()", "RTE:chain_context.args:no_module_args")
+        repl.chk("lib.f()", "RTE:chain_context.args:no_module_args:lib")
     }
 
     @Test fun testModuleArgsLinked() {
@@ -289,6 +289,6 @@ class ReplDefinitionTest: BaseRellTest(false) {
         """)
         tst.replModule = "lib"
         repl.chk("123", "RES:int[123]")
-        repl.chk("f()", "RTE:chain_context.args:no_module_args")
+        repl.chk("f()", "RTE:chain_context.args:no_module_args:lib")
     }
 }

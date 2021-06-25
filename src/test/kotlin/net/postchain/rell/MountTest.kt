@@ -91,7 +91,7 @@ class MountTest: BaseRellTest() {
     }
 
     @Test fun testQuery() {
-        chkQueryEx("@mount('foo.bar') query some() = 123;", "foo.bar", listOf(), "int[123]")
+        chkFull("@mount('foo.bar') query some() = 123;", "foo.bar", listOf(), "int[123]")
     }
 
     @Test fun testEmptyMount() {
@@ -421,7 +421,7 @@ class MountTest: BaseRellTest() {
 
     private fun chkMountConflict(imp: String, code: String, exp: String) {
         val t = prepareMountConflict(imp)
-        t.chkQueryEx("query q() = $code;", "q", listOf(), exp)
+        t.chkFull("query q() = $code;", "q", listOf(), exp)
     }
 
     private fun chkMountConflictErr(imp: String, exp: String) {
@@ -654,5 +654,20 @@ class MountTest: BaseRellTest() {
         chkCompile("@mount('a.b.c') namespace foo { @mount(' ^^.x') query q()=123; }", "ct_err:ann:mount:invalid: ^^.x")
         chkCompile("@mount('a.b.c') namespace foo { @mount('^^ .x') query q()=123; }", "ct_err:ann:mount:invalid:^^ .x")
         chkCompile("@mount('a.b.c') namespace foo { @mount('^^.x') query q()=123; }", "OK")
+    }
+
+    @Test fun testPostchainConflict() {
+        chkCompile("operation nop() {}", "ct_err:mount:conflict:sys:OPERATION:nop")
+        chkCompile("operation nop(x: integer) {}", "ct_err:mount:conflict:sys:OPERATION:nop")
+        chkCompile("operation nop(x: integer, y: text) {}", "ct_err:mount:conflict:sys:OPERATION:nop")
+        chkCompile("operation timeb() {}", "ct_err:mount:conflict:sys:OPERATION:timeb")
+
+        chkCompile("query last_block_info() = 123;", "ct_err:mount:conflict:sys:QUERY:last_block_info")
+        chkCompile("query tx_confirmation_time() = 123;", "ct_err:mount:conflict:sys:QUERY:tx_confirmation_time")
+
+        chkCompile("query nop() = 123;", "OK")
+        chkCompile("query timeb() = 123;", "OK")
+        chkCompile("operation last_block_info() {}", "OK")
+        chkCompile("operation tx_confirmation_time() {}", "OK")
     }
 }

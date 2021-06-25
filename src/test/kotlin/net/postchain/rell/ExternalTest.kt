@@ -8,6 +8,7 @@ import net.postchain.rell.lib.LibBlockTransactionTest
 import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.test.RellCodeTester
 import net.postchain.rell.test.RellTestContext
+import net.postchain.rell.test.RellTestUtils
 import org.junit.Test
 
 class ExternalTest: BaseRellTest() {
@@ -45,7 +46,7 @@ class ExternalTest: BaseRellTest() {
         def("@external('foo') @mount('') namespace bar { @log entity user { name; } }")
         tst.chainDependency("foo", "deadbeef", 1000)
         chk("bar.user @ {} ( _=user, _=.name )", "([foo]:bar.user[1],text[Bob])")
-        chk("user @ {} ( _=user, _=.name )", "ct_err:unknown_entity:user")
+        chk("user @ {} ( _=user, _=.name )", "ct_err:[unknown_name:user][unknown_name:user][expr_attr_unknown:name]")
     }
 
     @Test fun testNamespaceInsideExternal() {
@@ -56,7 +57,7 @@ class ExternalTest: BaseRellTest() {
         def("namespace abc { @external('ext') namespace foo { namespace bar { @log entity user { name; } } } }")
         tst.chainDependency("ext", "deadbeef", 1000)
         chk("abc.foo.bar.user @ {} ( _=user, _=.name )", "([ext]:abc.foo.bar.user[1],text[Bob])")
-        chk("foo.bar.user @ {} ( _=user, _=.name )", "ct_err:unknown_entity:foo.bar.user")
+        chk("foo.bar.user @ {} ( _=user, _=.name )", "ct_err:[unknown_name:foo][unknown_name:user][expr_attr_unknown:name]")
     }
 
     @Test fun testUnallowedDefs() {
@@ -100,7 +101,9 @@ class ExternalTest: BaseRellTest() {
         initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
         tst.chainDependency("foo", "deadbeef", 1000)
         tst.chainDependency("bar", "deadbeef", 2000)
-        chk("123", "rt_err:external_chain_dup_rid:bar:deadbeef")
+
+        val exp = RellTestUtils.strToRidHex("deadbeef")
+        chk("123", "rt_err:external_chain_dup_rid:bar:$exp")
     }
 
     @Test fun testUnknownChain() {
@@ -108,7 +111,7 @@ class ExternalTest: BaseRellTest() {
 
         initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
         tst.chainDependency("foo", "deadbeef", 1000)
-        chkQueryEx("@external('bar') namespace { @log entity user { name; } } query q() = 123;", "rt_err:external_chain_unknown:bar")
+        chkFull("@external('bar') namespace { @log entity user { name; } } query q() = 123;", "rt_err:external_chain_unknown:bar")
     }
 
     @Test fun testReferenceInternalToExternal() {
@@ -188,7 +191,7 @@ class ExternalTest: BaseRellTest() {
             t.insert(LibBlockTransactionTest.BLOCK_INSERTS_333)
             t.insert("c333.company", "name,transaction", "1,'Google',444")
             t.insert("c333.user", "name,company,transaction", "1,'Bob',1,444")
-            t.chkQuery("user @ {} ( _=user, _=.name, _=.company, _=.company.name, _=.transaction )",
+            t.chk("user @ {} ( _=user, _=.name, _=.company, _=.company.name, _=.transaction )",
                     "(user[1],text[Bob],company[1],text[Google],transaction[444])")
         }
         tst.dropTables = false
@@ -223,7 +226,7 @@ class ExternalTest: BaseRellTest() {
             t.def("entity local { user; }")
             t.insert("c0.local", "user", "1,1")
             t.chainDependency("foo", "deadbeef", height)
-            t.chkQuery(code, expected)
+            t.chk(code, expected)
         }
     }
 
@@ -232,7 +235,7 @@ class ExternalTest: BaseRellTest() {
 
         initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
         tst.chainDependency("foo", "deadbeef", 1000)
-        chkQueryEx("@external('foo') namespace {} query q() = 123;", "int[123]") // Empty external block
+        chkFull("@external('foo') namespace {} query q() = 123;", "int[123]") // Empty external block
         chkCompile("@external('') namespace {}", "ct_err:ann:external:invalid:")
     }
 
@@ -473,10 +476,10 @@ class ExternalTest: BaseRellTest() {
             t.def("namespace foo { @external('foo') namespace { entity block; entity transaction; } }")
             t.strictToString = false
             t.chainDependency("foo", "deadbeef", height)
-            t.chkQuery("transaction @* {}", "[]")
-            t.chkQuery("block @* {}", "[]")
-            t.chkQuery("foo.transaction @* {}", expectedTx)
-            t.chkQuery("foo.block @* {}", expectedBlock)
+            t.chk("transaction @* {}", "[]")
+            t.chk("block @* {}", "[]")
+            t.chk("foo.transaction @* {}", expectedTx)
+            t.chk("foo.block @* {}", expectedBlock)
         }
     }
 
@@ -506,7 +509,7 @@ class ExternalTest: BaseRellTest() {
             t.insert("c123.user", "name,transaction", "3,'Calvin',2003")
             t.insert("c123.user", "name,transaction", "4,'Donald',2004")
             t.insert("c123.user", "name,transaction", "5,'Evan',2005")
-            t.chkQuery("(user @* {}).size()", "int[5]")
+            t.chk("(user @* {}).size()", "int[5]")
         }
 
         tst.dropTables = false
@@ -781,7 +784,7 @@ class ExternalTest: BaseRellTest() {
             t.def(externalDefs)
             t.chainId = 333
             t.insert(LibBlockTransactionTest.BLOCK_INSERTS_333)
-            t.chkQuery("123", "int[123]") // Initializes database
+            t.chk("123", "int[123]") // Initializes database
         }
 
         run {
@@ -790,7 +793,7 @@ class ExternalTest: BaseRellTest() {
             t.dropTables = false
             t.strictToString = false
             t.chainDependency("foo", "deadbeef", 1000)
-            t.chkQuery("'OK'", expected)
+            t.chk("'OK'", expected)
         }
     }
 
@@ -802,38 +805,38 @@ class ExternalTest: BaseRellTest() {
 
         tst.chainDependency("foo", "deadbeef", 1000)
 
-        chkQueryEx("@external('foo') @log entity user { name; } query q() = user @ {} ( _=user, _=.name );",
+        chkFull("@external('foo') @log entity user { name; } query q() = user @ {} ( _=user, _=.name );",
                 "rt_err:external_meta_no_entity:foo:user")
 
-        chkQueryEx("@external('foo') namespace foo { namespace bar { @log entity user { name; } } } " +
+        chkFull("@external('foo') namespace foo { namespace bar { @log entity user { name; } } } " +
                 "query q() = foo.bar.user @ {} ( _=user, _=.name );",
                 "([foo]:foo.bar.user[1],text[Bob])")
 
-        chkQueryEx("@external('foo') @mount('foo.bar.user') @log entity admin { name; } " +
+        chkFull("@external('foo') @mount('foo.bar.user') @log entity admin { name; } " +
                 "query q() = admin @ {} ( _=admin, _=.name );",
                 "([foo]:admin[1],text[Bob])")
 
-        chkQueryEx("@external('foo') namespace { @mount('foo.bar.user') @log entity admin { name; } }" +
+        chkFull("@external('foo') namespace { @mount('foo.bar.user') @log entity admin { name; } }" +
                 "query q() = admin @ {} ( _=admin, _=.name );",
                 "([foo]:admin[1],text[Bob])")
 
-        chkQueryEx("@mount('foo.bar.') @external('foo') @log entity user { name; } " +
+        chkFull("@mount('foo.bar.') @external('foo') @log entity user { name; } " +
                 "query q() = user @ {} ( _=user, _=.name );",
                 "([foo]:user[1],text[Bob])")
 
-        chkQueryEx("@mount('foo.bar') @external('foo') namespace { @log entity user { name; } }" +
+        chkFull("@mount('foo.bar') @external('foo') namespace { @log entity user { name; } }" +
                 "query q() = user @ {} ( _=user, _=.name );",
                 "([foo]:user[1],text[Bob])")
 
-        chkQueryEx("@external('foo') @mount('foo.bar') namespace ns { @log entity user { name; } } " +
+        chkFull("@external('foo') @mount('foo.bar') namespace ns { @log entity user { name; } } " +
                 "query q() = ns.user @ {} ( _=user, _=.name );",
                 "([foo]:ns.user[1],text[Bob])")
 
-        chkQueryEx("@mount('junk') @external('foo') namespace { @mount('foo.bar') namespace ns { @log entity user { name; } } } " +
+        chkFull("@mount('junk') @external('foo') namespace { @mount('foo.bar') namespace ns { @log entity user { name; } } } " +
                 "query q() = ns.user @ {} ( _=user, _=.name );",
                 "([foo]:ns.user[1],text[Bob])")
 
-        chkQueryEx("@mount('junk') @external('foo') namespace { @mount('trash') namespace ns { @mount('foo.bar.user') @log entity user { name; } } } " +
+        chkFull("@mount('junk') @external('foo') namespace { @mount('trash') namespace ns { @mount('foo.bar.user') @log entity user { name; } } } " +
                 "query q() = ns.user @ {} ( _=user, _=.name );",
                 "([foo]:ns.user[1],text[Bob])")
     }
@@ -868,7 +871,7 @@ class ExternalTest: BaseRellTest() {
             t.dropTables = resetDatabase
             t.insert(inserts)
             t.insert("c$chainId.$entityName", "name,transaction", "1,'Bob',$txId")
-            t.chkQuery("$entityName @ {} ( _=user, _=.name )", "($entityName[1],text[Bob])")
+            t.chk("$entityName @ {} ( _=user, _=.name )", "($entityName[1],text[Bob])")
         }
         tst.dropTables = false
     }

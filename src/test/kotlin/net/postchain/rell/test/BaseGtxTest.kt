@@ -9,8 +9,6 @@ import net.postchain.gtv.Gtv
 abstract class BaseGtxTest(useSql: Boolean = true): BaseTesterTest(useSql) {
     final override val tst = RellGtxTester(tstCtx)
 
-    final override fun chkEx(code: String, expected: String) = tst.chkQueryEx("query q() $code", "", expected)
-
     fun chkFull(code: String, args: String, expected: String) = tst.chkQueryEx(code, args, expected)
     fun chkFull(code: String, args: Map<String, Gtv>, expected: String) = tst.chkQueryEx(code, args, expected)
     fun chkOpFull(code: String, args: List<Gtv>, expected: String = "OK") = tst.chkOpEx(code, args, expected)

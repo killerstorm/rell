@@ -23,13 +23,22 @@ import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.utils.*
 import org.apache.commons.lang3.time.FastDateFormat
 
-const val RELL_LANG_VERSION = "0.10"
-const val RELL_VERSION = "0.10.3"
+object RellVersions {
+    const val VERSION_STR = "0.10.4"
+    val VERSION = R_LangVersion.of(VERSION_STR)
 
-const val RELL_VERSION_MODULE_SYSTEM = "0.10.0"
+    val SUPPORTED_VERSIONS = listOf("0.10.0", "0.10.1", "0.10.2", "0.10.3", "0.10.4")
+            .map { R_LangVersion.of(it) }
+            .toImmSet()
 
-const val CONFIG_RELL_FILES = "files_v$RELL_LANG_VERSION"
-const val CONFIG_RELL_SOURCES = "sources_v$RELL_LANG_VERSION"
+    const val MODULE_SYSTEM_VERSION_STR = "0.10.0"
+}
+
+object ConfigConstants {
+    const val RELL_VERSION_KEY = "version"
+    const val RELL_SOURCES_KEY = "sources"
+    const val RELL_FILES_KEY = "files"
+}
 
 private fun convertArgs(ctx: GtvToRtContext, params: List<R_Param>, args: List<Gtv>): List<Rt_Value> {
     return args.mapIndexed { index, arg ->
@@ -120,10 +129,10 @@ class Rt_TimestampPrinter(private val printer: Rt_Printer): Rt_Printer {
 
 private class RellGTXOperation(
         private val module: RellPostchainModule,
-        private val rOperation: R_Operation,
+        private val rOperation: R_OperationDefinition,
         private val errorHandler: ErrorHandler,
         opData: ExtOpData
-) : GTXOperation(opData) {
+): GTXOperation(opData) {
     private val gtvToRtCtx = LateInit<GtvToRtContext>()
     private val args = LateInit<List<Rt_Value>>()
 
@@ -146,7 +155,17 @@ private class RellGTXOperation(
     override fun apply(ctx: TxEContext): Boolean {
         handleError {
             val blockHeight = DatabaseAccess.of(ctx).getLastBlockHeight(ctx)
-            val opCtx = Rt_OpContext(ctx.timestamp, ctx.txIID, blockHeight, data.signers.toList())
+
+            val opCtx = Rt_OpContext(
+                    txCtx = Rt_PostchainTxContext(ctx),
+                    lastBlockTime = ctx.timestamp,
+                    transactionIid = ctx.txIID,
+                    blockHeight = blockHeight,
+                    opIndex = data.opIndex,
+                    signers = data.signers.toList(),
+                    allOperations = data.operations.toList()
+            )
+
             val heightProvider = Rt_TxChainHeightProvider(ctx)
             val exeCtx = module.createExecutionContext(ctx, opCtx, heightProvider)
             gtvToRtCtx.get().finish(exeCtx)
@@ -267,11 +286,21 @@ private class RellPostchainModule(
 
         val sqlExec = Rt_SqlExecutor(ConnectionSqlExecutor(eCtx.conn, config.sqlLogging), globalCtx.logSqlErrors)
         val sqlCtx = Rt_SqlContext.create(rApp, sqlMapping, chainDeps, sqlExec, heightProvider)
-        val appCtx = Rt_AppContext(globalCtx, sqlCtx, rApp, false, null, sourceDir, modules)
+
+        val appCtx = Rt_AppContext(
+                globalCtx,
+                sqlCtx,
+                rApp,
+                repl = false,
+                test = false,
+                replOut = null,
+                blockRunnerStrategy = Rt_UnsupportedBlockRunnerStrategy
+        )
+
         return Rt_ExecutionContext(appCtx, sqlExec)
     }
 
-    private fun translateQueryArgs(exeCtx: Rt_ExecutionContext, rQuery: R_Query, gtvArgs: Gtv): List<Rt_Value> {
+    private fun translateQueryArgs(exeCtx: Rt_ExecutionContext, rQuery: R_QueryDefinition, gtvArgs: Gtv): List<Rt_Value> {
         gtvArgs is GtvDictionary
         val params = rQuery.params()
 
@@ -324,11 +353,13 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
         val errorHandler = ErrorHandler(combinedPrinter, env.wrapCtErrors, env.wrapRtErrors)
 
         return errorHandler.handleError({ "Module initialization failed" }) {
-            val sourceDir = getSourceDir(rellNode)
+            val sourceCfg = SourceCodeConfig(rellNode)
+            val sourceDir = sourceCfg.dir
+
             val modules = getModuleNames(rellNode)
             val app = compileApp(sourceDir, modules, errorHandler, copyOutput)
 
-            val chainCtx = createChainContext(config, rellNode, app, blockchainRID)
+            val chainCtx = PostchainUtils.createChainContext(config, app, blockchainRID)
             val chainDeps = getGtxChainDependencies(config)
 
             val modLogPrinter = getModulePrinter(env.logPrinter, Rt_TimestampPrinter(combinedPrinter), copyOutput)
@@ -388,6 +419,14 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
     ): R_App {
         val cResult = C_Compiler.compile(sourceDir, modules)
         val app = processCompilationResult(cResult, errorHandler, copyOutput)
+
+        for (moduleName in modules) {
+            val module = app.moduleMap[moduleName]
+            if (module != null && module.test) {
+                throw UserMistake("Test module specified as a main module: '$moduleName'")
+            }
+        }
+
         return app
     }
 
@@ -431,7 +470,7 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
             UserMistake(error?.text ?: "Compilation error")
         } else if (errors.isNotEmpty()) {
             val error = errors[0]
-            C_Error(error.pos, error.code, error.text)
+            C_Error.other(error.pos, error.code, error.text)
         } else {
             IllegalStateException("Compilation error")
         }
@@ -448,65 +487,6 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
         }
 
         return if (names.isNotEmpty()) names else listOf(R_ModuleName.EMPTY)
-    }
-
-    private fun getSourceDir(rellNode: Map<String, Gtv>): C_SourceDir {
-        val filesNode = rellNode[CONFIG_RELL_FILES]
-        val sourcesNode = rellNode[CONFIG_RELL_SOURCES]
-
-        if (filesNode == null && sourcesNode == null) {
-            throw UserMistake("Neither files nor sources specified")
-        } else if (filesNode != null && sourcesNode != null) {
-            throw UserMistake("Both files and sources specified")
-        }
-
-        val sourceCodes = if (sourcesNode != null) {
-            sourcesNode.asDict().mapValues { (_, v) -> v.asString() }
-        } else {
-            filesNode!!.asDict().mapValues { (_, v) -> CommonUtils.readFileContent(v.asString()) }
-        }
-
-        val files = sourceCodes
-                .mapKeys { (k, _) -> parseSourcePath(k) }
-                .mapValues { (k, v) -> C_TextSourceFile(k, v) }
-                .toImmMap()
-
-        return C_MapSourceDir(files)
-    }
-
-    private fun parseSourcePath(s: String): C_SourcePath {
-        val path = C_SourcePath.parseOpt(s)
-        return path ?: throw UserMistake("Invalid file path: '$s'")
-    }
-
-
-    private fun createChainContext(
-            rawConfig: Gtv,
-            rellNode: Map<String, Gtv>,
-            rApp: R_App,
-            blockchainRid: BlockchainRid
-    ): Rt_ChainContext {
-        val gtvArgsDict = rellNode["moduleArgs"]?.asDict() ?: mapOf()
-
-        val moduleArgs = mutableMapOf<R_ModuleName, Rt_Value>()
-
-        for (rModule in rApp.modules) {
-            val argsStruct = rModule.moduleArgs
-
-            if (argsStruct != null) {
-                val gtvArgs = gtvArgsDict[rModule.name.str()]
-                if (gtvArgs == null) {
-                    throw UserMistake("No moduleArgs in blockchain configuration for module '${rModule.name}', " +
-                            "but type ${argsStruct.moduleLevelName} defined in the code")
-                }
-
-                val convCtx = GtvToRtContext(true)
-                val rtArgs = argsStruct.type.gtvToRt(convCtx, gtvArgs)
-                moduleArgs[rModule.name] = rtArgs
-            }
-        }
-
-        return Rt_ChainContext(rawConfig, moduleArgs, blockchainRid)
     }
 
     private fun getGtxChainDependencies(data: Gtv): Map<String, ByteArray> {
@@ -528,4 +508,101 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
     }
 
     companion object : KLogging()
+}
+
+private class SourceCodeConfig(rellNode: Map<String, Gtv>) {
+    val dir: C_SourceDir
+    val version: R_LangVersion
+
+    init {
+        val ver = getSourceVersion(rellNode)
+        val textSources = getSourceCodes(rellNode, ver, false)
+        val fileSources = getSourceCodes(rellNode, ver, true)
+        val allSources = textSources + fileSources
+
+        if (allSources.isEmpty()) {
+            throw UserMistake("Source code not specified in the configuration")
+        } else if (allSources.size > 1) {
+            val s = allSources.map { it.key }.sorted().joinToString()
+            throw UserMistake("Multiple source code nodes specified in the configuration: $s")
+        }
+
+        val source = allSources.first()
+        if (source.legacy && ver != null) {
+            val verKey = ConfigConstants.RELL_VERSION_KEY
+            throw UserMistake("Keys '${source.key}' and '$verKey' cannot be specified together")
+        }
+
+        val sourcesNode = rellNode.getValue(source.key)
+
+        val fileMap = sourcesNode.asDict()
+                .mapValues { (_, v) ->
+                    val s = v.asString()
+                    if (source.files) CommonUtils.readFileText(s) else s
+                }
+                .mapKeys { (k, _) -> parseSourcePath(k) }
+                .mapValues { (k, v) -> C_TextSourceFile(k, v) }
+                .toImmMap()
+
+        dir = C_MapSourceDir(fileMap)
+        version = source.version
+    }
+
+    private fun getSourceVersion(rellNode: Map<String, Gtv>): R_LangVersion? {
+        val verStr = rellNode[ConfigConstants.RELL_VERSION_KEY]?.asString()
+        verStr ?: return null
+
+        val ver = try {
+            R_LangVersion.of(verStr)
+        } catch (e: IllegalArgumentException) {
+            throw UserMistake("Invalid language version: $verStr")
+        }
+
+        if (ver !in RellVersions.SUPPORTED_VERSIONS) {
+            throw UserMistake("Unsupported language version: $ver")
+        }
+
+        return ver
+    }
+
+    private fun getSourceCodes(rellNode: Map<String, Gtv>, ver: R_LangVersion?, files: Boolean): List<SourceCode> {
+        val res = mutableListOf<SourceCode>()
+
+        val key = if (files) ConfigConstants.RELL_FILES_KEY else ConfigConstants.RELL_SOURCES_KEY
+
+        if (key in rellNode) {
+            val verKey = ConfigConstants.RELL_VERSION_KEY
+            ver ?: throw UserMistake("Configuration key '$key' is specified, but '$verKey' is missing")
+            res.add(SourceCode(key, ver, files, false))
+        }
+
+        val regex = Regex("${key}_v(\\d.*)")
+        val legacy = rellNode.keys
+                .mapNotNull { regex.matchEntire(it) }
+                .map {
+                    val k = it.groupValues[0]
+                    val legacyVer = processLegacySourceKeyVersion(k, it.groupValues[1], key)
+                    SourceCode(k, legacyVer, files, true)
+                }
+        res.addAll(legacy)
+
+        return res.toImmList()
+    }
+
+    private fun processLegacySourceKeyVersion(key: String, s: String, keyPrefix: String): R_LangVersion {
+        return when (s) {
+            "0.10" -> R_LangVersion.of("0.10.4")
+            else -> {
+                val verKey = ConfigConstants.RELL_VERSION_KEY
+                throw UserMistake("Invalid source code key: $key; use '$keyPrefix' and '$verKey' instead")
+            }
+        }
+    }
+
+    private fun parseSourcePath(s: String): C_SourcePath {
+        val path = C_SourcePath.parseOpt(s)
+        return path ?: throw UserMistake("Invalid file path: '$s'")
+    }
+
+    private class SourceCode(val key: String, val version: R_LangVersion, val files: Boolean, val legacy: Boolean)
 }

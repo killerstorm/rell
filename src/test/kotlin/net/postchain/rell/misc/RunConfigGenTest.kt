@@ -6,10 +6,10 @@ package net.postchain.rell.misc
 
 import net.postchain.gtv.GtvDecoder
 import net.postchain.rell.compiler.C_MapSourceDir
-import net.postchain.rell.test.GtvTestUtils
-import net.postchain.rell.test.RellTestUtils
-import net.postchain.rell.test.unwrap
+import net.postchain.rell.module.RellVersions
+import net.postchain.rell.test.*
 import net.postchain.rell.tools.runcfg.RellRunConfigGenerator
+import net.postchain.rell.tools.runcfg.RellRunConfigParams
 import net.postchain.rell.utils.*
 import org.junit.Test
 import kotlin.test.assertEquals
@@ -206,7 +206,7 @@ class RunConfigGenTest {
 
         chkFile(files, "node-config.properties", "x=123")
 
-        chkFile(files, "blockchains/33/brid.txt", "D44732A2C0C545B0CDB44C90F3B05432531283BCB35D5BBA0BAD7A1793B06C90")
+        chkFile(files, "blockchains/33/brid.txt", "B751E252E5E7D5C31F23775511F7EDCF22D2FB6E6E6ACF53C539393642BB82F7")
 
         chkFile(files, "blockchains/33/0.xml", """
             <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -220,7 +220,7 @@ class RunConfigGenTest {
                                         <string>app</string>
                                     </array>
                                 </entry>
-                                <entry key="sources_v${RellTestUtils.RELL_VER}">
+                                <entry key="sources">
                                     <dict>
                                         <entry key="app.rell">
                                             <string>module; import sub;
@@ -230,6 +230,9 @@ class RunConfigGenTest {
                                             <string>module; function sub(){}</string>
                                         </entry>
                                     </dict>
+                                </entry>
+                                <entry key="version">
+                                    <string>${RellTestUtils.RELL_VER}</string>
                                 </entry>
                             </dict>
                         </entry>
@@ -242,13 +245,83 @@ class RunConfigGenTest {
         """)
 
         chkFileBin(files, "blockchains/33/0.gtv",
-                """{"gtx":{"rell":{"modules":["app"],"sources_v0.10":{
-                    "app.rell":"module; import sub;\nfunction main(){}","sub.rell":"module; function sub(){}"}}},
-                    "signers":[]}
-                """.unwrap()
+                """{
+                    "gtx":{
+                        "rell":{
+                            "modules":["app"],
+                            "sources":{
+                                "app.rell":"module; import sub;\nfunction main(){}","sub.rell":"module; function sub(){}"
+                            },
+                            "version":"${RellTestUtils.RELL_VER}"
+                        }
+                    },
+                    "signers":[]
+                }""".unwrap()
         )
 
         assertEquals(setOf<String>(), files.keys)
+    }
+
+    @Test(expected = TestRellCliEnvExitException::class)
+    fun testModuleNotFound() {
+        generate(mapOf(), mapOf(), """
+            <run>
+                <nodes>
+                    <config>x=123</config>
+                </nodes>
+                <chains>
+                    <chain name="user" iid="33">
+                        <config height="0">
+                            <app module="app" />
+                        </config>
+                    </chain>
+                </chains>
+            </run>
+        """)
+    }
+
+    @Test(expected = TestRellCliEnvExitException::class)
+    fun testCompilationError() {
+        val sourceFiles = mapOf(
+                "app.rell" to "module; struct foo { x: unknown; }"
+        )
+
+        generate(sourceFiles, mapOf(), """
+            <run>
+                <nodes>
+                    <config>x=123</config>
+                </nodes>
+                <chains>
+                    <chain name="user" iid="33">
+                        <config height="0">
+                            <app module="app" add-defaults="false"/>
+                        </config>
+                    </chain>
+                </chains>
+            </run>
+        """)
+    }
+
+    @Test(expected = TestRellCliEnvExitException::class)
+    fun testTestModuleAsMainModule() {
+        val sourceFiles = mapOf(
+                "app.rell" to "@test module; struct foo { x: integer; }"
+        )
+
+        generate(sourceFiles, mapOf(), """
+            <run>
+                <nodes>
+                    <config>x=123</config>
+                </nodes>
+                <chains>
+                    <chain name="user" iid="33">
+                        <config height="0">
+                            <app module="app" />
+                        </config>
+                    </chain>
+                </chains>
+            </run>
+        """)
     }
 
     @Test fun testDependenciesChainName() {
@@ -384,6 +457,52 @@ class RunConfigGenTest {
         """.unwrap())
     }
 
+    @Test fun testTestTestConfig() {
+        val sourceFiles = mapOf("app.rell" to "module;")
+
+        val files = generate(sourceFiles, mapOf(), """
+            <run>
+                <nodes>
+                    <config>x=123</config>
+                    <test-config>y=456</test-config>
+                </nodes>
+                <chains>
+                    <chain name="user" iid="33">
+                        <config height="0"/>
+                    </chain>
+                </chains>
+            </run>
+        """)
+
+        chkFile(files, "node-config.properties", "x=123")
+        chkFile(files, "blockchains/33/brid.txt", "F9161BC0ABE91C6ACAB68B4A0B18CCD5763AE5B5798BC522209DDCF6D0302630")
+        chkFileBin(files, "blockchains/33/0.gtv", """{"signers":[]}""")
+    }
+
+    @Test fun testTestTestModules() {
+        val sourceFiles = mapOf("app.rell" to "module;")
+
+        // Must not fail even when test modules don't really exist.
+        val files = generate(sourceFiles, mapOf(), """
+            <run>
+                <nodes>
+                    <config>x=123</config>
+                </nodes>
+                <chains>
+                    <chain name="user" iid="33">
+                        <config height="0"/>
+                        <test module="tests.chain_test" />
+                    </chain>
+                    <test module="tests.common_test" />
+                </chains>
+            </run>
+        """)
+
+        chkFile(files, "node-config.properties", "x=123")
+        chkFile(files, "blockchains/33/brid.txt", "F9161BC0ABE91C6ACAB68B4A0B18CCD5763AE5B5798BC522209DDCF6D0302630")
+        chkFileBin(files, "blockchains/33/0.gtv", """{"signers":[]}""")
+    }
+
     private fun generate(
             sourceFiles: Map<String, String>,
             configFiles: Map<String, String>,
@@ -391,7 +510,8 @@ class RunConfigGenTest {
     ): MutableMap<String, DirFile> {
         val sourceDir = C_MapSourceDir.of(sourceFiles)
         val configDir = MapGeneralDir(configFiles)
-        val conf = RellRunConfigGenerator.generate(sourceDir, configDir, "run.xml", confText.trimIndent())
+        val params = RellRunConfigParams(sourceDir, configDir, RellVersions.VERSION, unitTest = false)
+        val conf = RellRunConfigGenerator.generate(TestRellCliEnv, params, "run.xml", confText.trimIndent())
         val files = RellRunConfigGenerator.buildFiles(conf).toMutableMap()
         return files
     }

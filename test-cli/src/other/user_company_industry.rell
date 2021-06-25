@@ -1,0 +1,13 @@
+module;
+
+entity user {
+    name;
+    city: text;
+    industry: text;
+}
+
+entity company {
+    name;
+    city: text;
+    industry: text;
+}

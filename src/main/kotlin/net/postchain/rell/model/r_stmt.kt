@@ -11,7 +11,8 @@ import net.postchain.rell.runtime.Rt_Value
 
 sealed class R_StatementResult
 class R_StatementResult_Return(val value: Rt_Value?): R_StatementResult()
-class R_StatementResult_Break: R_StatementResult()
+object R_StatementResult_Break: R_StatementResult()
+object R_StatementResult_Continue: R_StatementResult()
 
 abstract class R_Statement {
     abstract fun execute(frame: Rt_CallFrame): R_StatementResult?
@@ -150,8 +151,13 @@ class R_WhileStatement(val expr: R_Expr, val stmt: R_Statement, val frameBlock: 
             }
 
             val res = executeBody(frame)
-            if (res != null) {
-                return if (res is R_StatementResult_Return) res else null
+
+            if (res is R_StatementResult_Return) {
+                return res
+            } else if (res == R_StatementResult_Break) {
+                break
+            } else if (res == R_StatementResult_Continue) {
+                continue
             }
         }
         return null
@@ -207,21 +213,35 @@ class R_ForStatement(
 
     private fun execute0(frame: Rt_CallFrame, list: Iterable<Rt_Value>): R_StatementResult? {
         var first = true
+
         for (item in list) {
             varDeclarator.initialize(frame, item, !first)
             first = false
+
             val res = stmt.execute(frame)
-            if (res != null) {
-                return if (res is R_StatementResult_Return) res else null
+
+            if (res is R_StatementResult_Return) {
+                return res
+            } else if (res == R_StatementResult_Break) {
+                break
+            } else if (res == R_StatementResult_Continue) {
+                continue
             }
         }
+
         return null
     }
 }
 
 class R_BreakStatement: R_Statement() {
     override fun execute(frame: Rt_CallFrame): R_StatementResult? {
-        return R_StatementResult_Break()
+        return R_StatementResult_Break
+    }
+}
+
+class R_ContinueStatement: R_Statement() {
+    override fun execute(frame: Rt_CallFrame): R_StatementResult? {
+        return R_StatementResult_Continue
     }
 }
 
@@ -237,6 +257,25 @@ class R_GuardStatement(private val subStmt: R_Statement): R_Statement() {
     override fun execute(frame: Rt_CallFrame): R_StatementResult? {
         val res = subStmt.execute(frame)
         frame.guardCompleted()
+        return res
+    }
+}
+
+class R_LambdaStatement(
+        private val args: List<Pair<R_Expr, R_VarPtr>>,
+        private val block: R_FrameBlock,
+        private val stmt: R_Statement
+): R_Statement() {
+    override fun execute(frame: Rt_CallFrame): R_StatementResult? {
+        val values = args.map { it to it.first.evaluate(frame) }
+
+        val res = frame.block(block) {
+            for ((arg, value) in values) {
+                frame.set(arg.second, arg.first.type, value, false)
+            }
+            stmt.execute(frame)
+        }
+
         return res
     }
 }

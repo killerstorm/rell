@@ -25,6 +25,13 @@ class LibBlockTransactionTest: BaseRellTest() {
                 .block(1, 35, "FEEBDAED", "8765", 1400000000000)
                 .tx(2, 1, "CEED", "FEED", "4321")
                 .list()
+
+        val BLOCK_INSERTS_CURRENT = RellTestContext.BlockBuilder(333)
+                .block(101, 10, "DEADBEEF", "5678", 1500000000000)
+                .block(102, 20, null, null, null)
+                .tx(201, 101, "CEED", "FEED", "4321")
+                .tx(202, 102, "FADE", "EDAF", "1234")
+                .list()
     }
 
     @Test fun testBlockRead() {
@@ -91,9 +98,9 @@ class LibBlockTransactionTest: BaseRellTest() {
         chkOp("update block@{}( block_rid = x'cafe' );", "ct_err:stmt_update_cant:block")
         chkOp("update block@{}( timestamp = 999 );", "ct_err:stmt_update_cant:block")
 
-        chkOp("update transaction@{}( tx_rid = 'dead' );", "ct_err:stmt_update_cant:transaction")
-        chkOp("update transaction@{}( tx_hash = 'dead' );", "ct_err:stmt_update_cant:transaction")
-        chkOp("update transaction@{}( tx_data = 'dead' );", "ct_err:stmt_update_cant:transaction")
+        chkOp("update transaction@{}( tx_rid = x'dead' );", "ct_err:stmt_update_cant:transaction")
+        chkOp("update transaction@{}( tx_hash = x'dead' );", "ct_err:stmt_update_cant:transaction")
+        chkOp("update transaction@{}( tx_data = x'dead' );", "ct_err:stmt_update_cant:transaction")
         chkOp("update transaction@{}( block = block@{} );", "ct_err:stmt_update_cant:transaction")
 
         chkOp("delete block@{};", "ct_err:stmt_delete_cant:block")
@@ -109,8 +116,8 @@ class LibBlockTransactionTest: BaseRellTest() {
 
         chk("block @* {}", "list<block>[block[111]]")
         chk("transaction @* {}", "list<transaction>[transaction[444]]")
-        chk("blocks @* {}", "ct_err:unknown_entity:blocks")
-        chk("transactions @* {}", "ct_err:unknown_entity:transactions")
+        chk("blocks @* {}", "ct_err:unknown_name:blocks")
+        chk("transactions @* {}", "ct_err:unknown_name:transactions")
     }
 
     @Test fun testBlockRef() {
@@ -197,27 +204,27 @@ class LibBlockTransactionTest: BaseRellTest() {
 
         var t = createChainIdTester(333, 111, 444, BLOCK_INSERTS_333)
 
-        t.chkQuery(expr, "[(transaction[444],0xfade,0x1234,0xedaf,block[111],222,0xdeadbeef,1500000000000)]")
-        t.chkQuery("(b: block, t: transaction) @* {}", "[(b=block[111],t=transaction[444])]")
+        t.chk(expr, "[(transaction[444],0xfade,0x1234,0xedaf,block[111],222,0xdeadbeef,1500000000000)]")
+        t.chk("(b: block, t: transaction) @* {}", "[(b=block[111],t=transaction[444])]")
 
-        t.chkQuery("foo @* {} (_=foo,_=.b,_=.t)", "[(foo[1],block[111],transaction[444])]")
-        t.chkQuery("foo @* {} (_=.value)", "[0]")
+        t.chk("foo @* {} (_=foo,_=.b,_=.t)", "[(foo[1],block[111],transaction[444])]")
+        t.chk("foo @* {} (_=.value)", "[0]")
         t.chkOp("update foo @* { .b.block_height >= 0, .t.tx_hash != x'' } ( value = 100 );")
-        t.chkQuery("foo @* {} (_=.value)", "[100]")
+        t.chk("foo @* {} (_=.value)", "[100]")
         t.chkOp("delete foo @* { .b.block_height >= 0, .t.tx_hash != x'' };")
-        t.chkQuery("foo @* {} (_=.value)", "[]")
+        t.chk("foo @* {} (_=.value)", "[]")
 
         t = createChainIdTester(555, 1, 2, BLOCK_INSERTS_555)
 
-        t.chkQuery(expr, "[(transaction[2],0xceed,0x4321,0xfeed,block[1],35,0xfeebdaed,1400000000000)]")
-        t.chkQuery("(b: block, t: transaction) @* {}", "[(b=block[1],t=transaction[2])]")
+        t.chk(expr, "[(transaction[2],0xceed,0x4321,0xfeed,block[1],35,0xfeebdaed,1400000000000)]")
+        t.chk("(b: block, t: transaction) @* {}", "[(b=block[1],t=transaction[2])]")
 
-        t.chkQuery("foo @* {} (_=foo,_=.b,_=.t)", "[(foo[1],block[1],transaction[2])]")
-        t.chkQuery("foo @* {} (_=.value)", "[0]")
+        t.chk("foo @* {} (_=foo,_=.b,_=.t)", "[(foo[1],block[1],transaction[2])]")
+        t.chk("foo @* {} (_=.value)", "[0]")
         t.chkOp("update foo @* { .b.block_height >= 0, .t.tx_hash != x'' } ( value = 100 );")
-        t.chkQuery("foo @* {} (_=.value)", "[100]")
+        t.chk("foo @* {} (_=.value)", "[100]")
         t.chkOp("delete foo @* { .b.block_height >= 0, .t.tx_hash != x'' };")
-        t.chkQuery("foo @* {} (_=.value)", "[]")
+        t.chk("foo @* {} (_=.value)", "[]")
     }
 
     @Test fun textGtv() {
@@ -242,13 +249,24 @@ class LibBlockTransactionTest: BaseRellTest() {
 
     @Test fun testSelectCurrentBlock() {
         tst.chainId = 333
-        tst.inserts = RellTestContext.BlockBuilder(333)
-                .block(1, 10, "DEADBEEF", "5678", 1500000000000)
-                .block(2, 20, null, null, null)
-                .list()
-        chk("block @* {}", "list<block>[block[1]]")
-        chk("block @? { .block_height == 10 }", "block[1]")
-        chk("block @? { .block_height == 20 }", "null")
+        tst.inserts = BLOCK_INSERTS_CURRENT
+
+        chk("block @* {}", "list<block>[block[101],block[102]]")
+        chk("block @? { .block_height == 10 }", "block[101]")
+        chk("block @? { .block_height == 20 }", "block[102]")
+
+        chk("block @? { .block_height == 10 } (.block_rid)", "byte_array[deadbeef]")
+        chk("block @? { .block_height == 10 } (.timestamp)", "int[1500000000000]")
+        chk("block @? { .block_height == 20 } (.block_rid)", "rt_err:sql_null:byte_array")
+        chk("block @? { .block_height == 20 } (.timestamp)", "rt_err:sql_null:integer")
+    }
+
+    @Test fun testSelectCurrentTransaction() {
+        tst.chainId = 333
+        tst.inserts = BLOCK_INSERTS_CURRENT
+        chk("transaction @* {}", "list<transaction>[transaction[201],transaction[202]]")
+        chk("transaction @? { .block.block_height == 10 }", "transaction[201]")
+        chk("transaction @? { .block.block_height == 20 }", "transaction[202]")
     }
 
     private fun createChainIdTester(chainId: Long, blockIid: Long, txIid: Long, inserts: List<String>): RellCodeTester {

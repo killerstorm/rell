@@ -31,46 +31,9 @@ class AtExprTest: BaseRellTest() {
             Ins.user(51, 500, "Larry", "Page")
     )
 
-    @Test fun testEmptyWhere() {
-        chk("user @* {}", "list<user>[user[10],user[20],user[21],user[30],user[40],user[41],user[50],user[51]]")
-        chk("company @* {}", "list<company>[company[100],company[200],company[300],company[400],company[500]]")
-    }
-
-    @Test fun testNoRecordsFound() {
-        chk("user @ { .lastName == 'Socrates' }", "rt_err:at:wrong_count:0")
-    }
-
-    @Test fun testManyRecordsFound() {
-        chk("user @ { .firstName == 'Steve' }", "rt_err:at:wrong_count:2")
-    }
-
-    @Test fun testFindByObjectReference() {
-        chkEx("{ val corp = company @ { .name == 'Facebook' }; return user @ { .company == corp }; }", "user[10]")
-    }
-
     @Test fun testFindUserWithSameName() {
         chk("(u1: user, u2: user) @* { u1.firstName == u2.firstName, u1 != u2 }",
                 "list<(u1:user,u2:user)>[(user[20],user[21]),(user[21],user[20])]")
-    }
-
-    @Test fun testAttributeByVariableName() {
-        chkEx("{ val firstName = 'Bill'; return user @ { firstName }; }", "user[40]")
-        chkEx("{ val lastName = 'Gates'; return user @ { lastName }; }", "user[40]")
-        chkEx("{ val name = 'Microsoft'; return company @ { name }; }", "company[400]")
-        chkEx("{ val name = 'Bill'; return user @ { name }; }",
-                "ct_err:at_where:var_manyattrs_name:0:name:text:user.firstName,user.lastName")
-        chkEx("{ val name = 12345; return company @ { name }; }", "ct_err:at_where:var_noattrs:0:name:integer")
-        chkEx("{ val company = company @ { .name == 'Facebook' }; return user @ { company }; }", "user[10]")
-    }
-
-    @Test fun testAttributeByExpressionType() {
-        chkEx("{ val corp = company @ { .name == 'Facebook' }; return user @ { corp }; }", "user[10]")
-        chkEx("{ val corp = company @ { .name == 'Microsoft' }; return user @* { corp }; }", "list<user>[user[40],user[41]]")
-    }
-
-    @Test fun testAttributeByExpressionTypeNullable() {
-        chkEx("{ val c = _nullable(company @ { .name == 'Facebook' }); if (c == null) return null; return user @* { c }; }",
-                "list<user>[user[10]]")
     }
 
     @Test fun testAttributeByNameAndType() {
@@ -99,9 +62,9 @@ class AtExprTest: BaseRellTest() {
         chkEx("{ $base val name = 'Bob'; return (foo_owner, bar_owner) @* { name }; }",
                 "ct_err:at_where:var_manyattrs_nametype:0:name:text:foo_owner.name,bar_owner.name")
         chkEx("{ $base val garbage = foo1; return (foo_owner, bar_owner) @* { garbage }; }",
-                "ct_err:at_where:var_manyattrs_name:0:garbage:foo:foo_owner.stuff,foo_owner.foo,bar_owner.foo")
+                "ct_err:at_where:var_manyattrs_type:0:garbage:foo:foo_owner.stuff,foo_owner.foo,bar_owner.foo")
         chkEx("{ $base val garbage = bar1; return (foo_owner, bar_owner) @* { garbage }; }",
-                "ct_err:at_where:var_manyattrs_name:0:garbage:bar:foo_owner.bar,bar_owner.stuff,bar_owner.bar")
+                "ct_err:at_where:var_manyattrs_type:0:garbage:bar:foo_owner.bar,bar_owner.stuff,bar_owner.bar")
 
         chkEx("{ $base val stuff = foo1; return (foo_owner, bar_owner) @* { stuff }; }",
                 "list<(foo_owner:foo_owner,bar_owner:bar_owner)>[(foo_owner[4],bar_owner[6]),(foo_owner[4],bar_owner[7])]")
@@ -113,16 +76,12 @@ class AtExprTest: BaseRellTest() {
                 "list<(foo_owner:foo_owner,bar_owner:bar_owner)>[(foo_owner[4],bar_owner[7]),(foo_owner[5],bar_owner[7])]")
     }
 
-    @Test fun testSingleEntityAlias() {
-        chk("(u: user) @ { u.firstName == 'Bill' }", "user[40]")
-        chk("(u: user) @ { user.firstName == 'Bill' }", "ct_err:unknown_name:user.firstName")
-    }
-
     @Test fun testMultipleEntitiesBadAlias() {
-        chk("(user: company, user) @ {}", "ct_err:at_dup_alias:user")
-        chk("(user, user) @ {}", "ct_err:at_dup_alias:user")
-        chk("(u: user, u: user) @ {}", "ct_err:at_dup_alias:u")
-        chk("(user, u: user, user) @ {}", "ct_err:at_dup_alias:user")
+        chk("(user: company, user) @ {}", "rt_err:at:wrong_count:40")
+        chk("(user, user) @ {}", "rt_err:at:wrong_count:64")
+        chk("(u: user, u: user) @ {}", "ct_err:block:name_conflict:u")
+        chk("(u: user, u: company) @ {}", "ct_err:block:name_conflict:u")
+        chk("(user, u: user, user) @ {}", "rt_err:at:wrong_count:512")
     }
 
     @Test fun testMultipleEntitiesSimple() {
@@ -144,36 +103,9 @@ class AtExprTest: BaseRellTest() {
         chk("(u: user) @ { user.firstName == 'Bill' }", "ct_err:unknown_name:user.firstName")
     }
 
-    @Test fun testNameResolutionLocalVsAttr() {
-        chkEx("{ return user @* { .firstName == 'Mark' }; }", "list<user>[user[10]]")
-        chkEx("{ val firstName = 'Bill'; return user @* { firstName == 'Mark' }; }", "list<user>[]")
-        chkEx("{ val firstName = 'Bill'; return user @* { firstName == firstName }; }",
-                "list<user>[user[10],user[20],user[21],user[30],user[40],user[41],user[50],user[51]]")
-        chkEx("{ val firstName = 'Bill'; return user @ { firstName }; }", "user[40]")
-        chkEx("{ val firstName = 'Bill'; return user @ { .firstName == firstName }; }", "user[40]")
-        chkEx("{ val firstName = 'Bill'; return user @* {} ( firstName ); }",
-                "list<text>[text[Bill],text[Bill],text[Bill],text[Bill],text[Bill],text[Bill],text[Bill],text[Bill]]")
-        chkEx("{ val firstName = 'Bill'; return user @* {} ( .firstName ); }",
-                "list<text>[text[Mark],text[Steve],text[Steve],text[Jeff],text[Bill],text[Paul],text[Sergey],text[Larry]]")
-    }
-
-    @Test fun testNameResolutionAliasVsLocalAttr() {
-        // Alias vs. attr: no conflict.
-        chk("user @* { .firstName == 'Mark' }", "list<user>[user[10]]")
-        chk("(firstName: user) @* { firstName == 'Mark' }", "ct_err:binop_operand_type:==:[user]:[text]")
-        chk("(firstName: user) @* { .firstName == 'Mark' }", "list<user>[user[10]]")
-        chk("(firstName: user) @* { firstName.firstName == 'Mark' }", "list<user>[user[10]]")
-
-        // Alias vs. local: error.
-        chkEx("{ val u = 'Bill'; return user @ { .firstName == u }; }", "user[40]")
-        chkEx("{ val u = 'Bill'; return (u: user) @ { .firstName == u }; }", "ct_err:expr_at_conflict_alias:u")
-        chkEx("{ val u = 'Bill'; return (u: user) @ { .firstName == 'Bill' }; }", "ct_err:expr_at_conflict_alias:u")
-        chkEx("{ val u = 'Bill'; return (u: user) @ { u.firstName == 'Mark' }; }", "ct_err:expr_at_conflict_alias:u")
-    }
-
     @Test fun testNameResolutionEntityVsLocal() {
         chkEx("{ val user = 'Bill'; return user @ { .firstName == 'Bill' }; }", "user[40]")
-        chkEx("{ val user = 'Bill'; return user @ { .firstName == user }; }", "ct_err:expr_name_entity_local:user")
+        chkEx("{ val user = 'Bill'; return user @ { .firstName == user }; }", "ct_err:name:ambiguous:user")
     }
 
     @Test fun testAttributeAmbiguityName() {
@@ -220,15 +152,17 @@ class AtExprTest: BaseRellTest() {
         chkEx("{ $base return single @ { tgt2 }; }", "single[1]")
 
         // Ambiguity between attributes of the same entity.
-        chkEx("{ $base return double @ { tgt1 }; }", "ct_err:at_where:var_manyattrs_name:0:tgt1:target:double.t1,double.t2")
-        chkEx("{ $base return double @ { .t1 == tgt1, tgt2 }; }", "ct_err:at_where:var_manyattrs_name:1:tgt2:target:double.t1,double.t2")
+        chkEx("{ $base return double @ { tgt1 }; }", "ct_err:at_where:var_manyattrs_type:0:tgt1:target:double.t1,double.t2")
+        chkEx("{ $base return double @ { .t1 == tgt1, tgt2 }; }", "ct_err:at_where:var_manyattrs_type:1:tgt2:target:double.t1,double.t2")
         chkEx("{ $base return double @ { .t1 == tgt1, .t2 == tgt2 }; }", "double[0]")
         chkEx("{ $base return double @ { .t1 == tgt3, .t2 == tgt1 }; }", "double[2]")
 
         // Ambiguity between attributes of different entities.
-        chkEx("{ $base return (s1: single, s2: single) @ { tgt1 }; }", "ct_err:at_where:var_manyattrs_name:0:tgt1:target:s1.t,s2.t")
-        chkEx("{ $base return (s1: single, s2: single) @ { tgt1, tgt2 }; }", "ct_err:at_where:var_manyattrs_name:0:tgt1:target:s1.t,s2.t")
-        chkEx("{ $base return (s1: single, s2: single) @ { s1.t == tgt1, tgt2 }; }", "ct_err:at_where:var_manyattrs_name:1:tgt2:target:s1.t,s2.t")
+        chkEx("{ $base return (s1: single, s2: single) @ { tgt1 }; }", "ct_err:at_where:var_manyattrs_type:0:tgt1:target:s1.t,s2.t")
+        chkEx("{ $base return (s1: single, s2: single) @ { tgt1, tgt2 }; }",
+                "ct_err:[at_where:var_manyattrs_type:0:tgt1:target:s1.t,s2.t][at_where:var_manyattrs_type:1:tgt2:target:s1.t,s2.t]")
+        chkEx("{ $base return (s1: single, s2: single) @ { s1.t == tgt1, tgt2 }; }",
+                "ct_err:at_where:var_manyattrs_type:1:tgt2:target:s1.t,s2.t")
         chkEx("{ $base return (s1: single, s2: single) @ { s1.t == tgt1, s2.t == tgt2 }; }", "(s1=single[0],s2=single[1])")
     }
 
@@ -314,29 +248,6 @@ class AtExprTest: BaseRellTest() {
         chk("proxy @* { .ref.f2 == 107 }", "list<proxy>[proxy[1]]")
     }
 
-    @Test fun testNestedAtExpression() {
-        chk("user @* { .company == company @ { .name == 'Facebook' } }", "list<user>[user[10]]")
-        chk("user @* { .company == company @ { .name == 'Apple' } }", "list<user>[user[20],user[21]]")
-        chk("user @* { .company == company @ { .name == 'Amazon' } }", "list<user>[user[30]]")
-        chk("user @* { .company == company @ { .name == 'Microsoft' } }", "list<user>[user[40],user[41]]")
-        chk("user @* { .company == company @ { .name == 'Google' } }", "list<user>[user[50],user[51]]")
-        chk("user @* { company @ { .name == 'Facebook' } }", "list<user>[user[10]]")
-        chk("user @* { company @ { .name == 'Apple' } }", "list<user>[user[20],user[21]]")
-        chk("user @* { company @ { .name == 'Amazon' } }", "list<user>[user[30]]")
-        chk("user @* { company @ { .name == 'Microsoft' } }", "list<user>[user[40],user[41]]")
-        chk("user @* { company @ { .name == 'Google' } }", "list<user>[user[50],user[51]]")
-    }
-
-    @Test fun testFieldSelectionSimple() {
-        chk("user @ { .firstName == 'Bill' }.lastName", "text[Gates]")
-        chk("user @ { .firstName == 'Mark' }.lastName", "text[Zuckerberg]")
-        chk("user @ { .firstName == 'Bill' }.company.name", "text[Microsoft]")
-        chk("user @ { .firstName == 'Mark' }.company.name", "text[Facebook]")
-        chk("user @ { .firstName == 'Mark' }.user.lastName", "ct_err:expr_attr_unknown:user")
-        chk("(u: user) @ { .firstName == 'Mark' }.user.lastName", "ct_err:expr_attr_unknown:user")
-        chk("(u: user) @ { .firstName == 'Mark' }.u.lastName", "ct_err:expr_attr_unknown:u")
-    }
-
     @Test fun testFieldSelectionComplex() {
         chk("user @ { .firstName == 'Bill' } ( .lastName )", "text[Gates]")
         chk("(u: user) @ { .firstName == 'Bill' } ( u.lastName )", "text[Gates]")
@@ -373,134 +284,27 @@ class AtExprTest: BaseRellTest() {
         chk("user @ { .firstName == 'Bill' } ( x = .firstName, y = .lastName )", "(x=text[Bill],y=text[Gates])")
     }
 
-    @Test fun testTupleFieldAccess() {
-        val base = "val t = user @ { .firstName == 'Bill' } ( .firstName, .lastName, companyName = .company.name );"
-        chkEx("{ $base return t.firstName; }", "text[Bill]")
-        chkEx("{ $base return t.lastName; }", "text[Gates]")
-        chkEx("{ $base return t.companyName; }", "text[Microsoft]")
-        chkEx("{ $base return t.foo; }", "ct_err:unknown_member:[(firstName:text,lastName:text,companyName:text)]:foo")
-    }
-
-    @Test fun testLimit() {
-        chk("user @* {} limit 0", "list<user>[]")
-        chk("user @* {} limit 1", "list<user>[user[10]]")
-        chk("user @* {} limit 2", "list<user>[user[10],user[20]]")
-        chk("user @* {} limit 3", "list<user>[user[10],user[20],user[21]]")
-        chk("user @* {} limit 4", "list<user>[user[10],user[20],user[21],user[30]]")
-        chk("user @* {} limit 5", "list<user>[user[10],user[20],user[21],user[30],user[40]]")
-        chk("user @* {} limit 6", "list<user>[user[10],user[20],user[21],user[30],user[40],user[41]]")
-        chk("user @* {} limit 7", "list<user>[user[10],user[20],user[21],user[30],user[40],user[41],user[50]]")
-
-        chk("user @* {} ( .lastName ) limit 0", "list<text>[]")
-        chk("user @* {} ( .lastName ) limit 1", "list<text>[text[Zuckerberg]]")
-        chk("user @* {} ( .lastName ) limit 2", "list<text>[text[Zuckerberg],text[Jobs]]")
-        chk("user @* {} ( .lastName ) limit 3", "list<text>[text[Zuckerberg],text[Jobs],text[Wozniak]]")
-        chk("user @* {} ( .lastName ) limit 4", "list<text>[text[Zuckerberg],text[Jobs],text[Wozniak],text[Bezos]]")
-
-        chk("user @ {} limit 0", "rt_err:at:wrong_count:0")
-        chk("user @ {} limit 1", "user[10]")
-        chk("user @ {} limit 2", "rt_err:at:wrong_count:2")
-        chk("user @? {} limit 0", "null")
-        chk("user @? {} limit 1", "user[10]")
-        chk("user @? {} limit 2", "rt_err:at:wrong_count:2")
-
-        chk("user @ {} limit 'Hello'", "ct_err:expr_at_limit_type:text")
-    }
-
-    @Test fun testCardinalityOne() {
-        chk("user @ { .firstName == 'Chuck' }", "rt_err:at:wrong_count:0")
-        chk("user @ { .firstName == 'Bill' }", "user[40]")
-        chk("user @? { .firstName == 'Chuck' }", "null")
-        chk("user @? { .firstName == 'Bill' }", "user[40]")
-        chk("user @? { .firstName == 'Steve' }", "rt_err:at:wrong_count:2")
-    }
-
-    @Test fun testCardinalityMany() {
-        chk("user @* { .firstName == 'Chuck' }", "list<user>[]")
-        chk("user @* { .firstName == 'Bill' }", "list<user>[user[40]]")
-        chk("user @+ { .firstName == 'Chuck' }", "rt_err:at:wrong_count:0")
-        chk("user @+ { .firstName == 'Bill' }", "list<user>[user[40]]")
-        chk("user @+ { .firstName == 'Steve' }", "list<user>[user[20],user[21]]")
-    }
-
-    @Test fun testSort() {
-        tst.strictToString = false
-
-        chk("'' + user @* {} ( .firstName )", "[Mark, Steve, Steve, Jeff, Bill, Paul, Sergey, Larry]")
-        chk("'' + user @* {} ( @sort .firstName )", "[Bill, Jeff, Larry, Mark, Paul, Sergey, Steve, Steve]")
-        chk("'' + user @* {} ( @sort_desc .firstName )", "[Steve, Steve, Sergey, Paul, Mark, Larry, Jeff, Bill]")
-
-        chk("'' + user @* { .company.name == 'Apple' } ( @sort _=.firstName, sort _=.lastName )", "[(Steve,Jobs), (Steve,Wozniak)]")
-        chk("'' + user @* { .company.name == 'Apple' } ( @sort _=.firstName, -sort _=.lastName )", "[(Steve,Wozniak), (Steve,Jobs)]")
-
-        chk("'' + user @* {} ( @sort _=.company.name, _=.lastName )",
-                "[(Amazon,Bezos), (Apple,Jobs), (Apple,Wozniak), (Facebook,Zuckerberg), (Google,Brin), (Google,Page), " +
-                        "(Microsoft,Gates), (Microsoft,Allen)]")
-
-        chk("'' + user @* {} ( @sort _=.company.name, sort _=.lastName )",
-                "[(Amazon,Bezos), (Apple,Jobs), (Apple,Wozniak), (Facebook,Zuckerberg), (Google,Brin), (Google,Page), " +
-                        "(Microsoft,Allen), (Microsoft,Gates)]")
-
-        chk("'' + user @* {} ( @sort_desc user )",
-                "[user[51], user[50], user[41], user[40], user[30], user[21], user[20], user[10]]")
-
-        chk("'' + user @* {} ( @sort_desc _=.company, _=user )",
-                "[(company[500],user[50]), (company[500],user[51]), (company[400],user[40]), (company[400],user[41]), " +
-                "(company[300],user[30]), (company[200],user[20]), (company[200],user[21]), (company[100],user[10])]")
-    }
-
-    @Test fun testSortAnnotation() {
-        tst.strictToString = false
-
-        chk("user @* {} ( @sort @sort .firstName )", "ct_err:ann:sort:dup")
-        chk("user @* {} ( @sort_desc @sort_desc .firstName )", "ct_err:ann:sort_desc:dup")
-        chk("user @* {} ( @sort @sort_desc .firstName )", "ct_err:ann:sort_desc:dup")
-        chk("user @* {} ( @sort_desc @sort .firstName )", "ct_err:ann:sort:dup")
-
-        chk("'' + user @* {} ( @sort() .firstName )", "[Bill, Jeff, Larry, Mark, Paul, Sergey, Steve, Steve]")
-        chk("user @* {} ( @sort(123) .firstName )", "ct_err:ann:sort:args:1")
-        chk("user @* {} ( @sort('desc') .firstName )", "ct_err:ann:sort:args:1")
-
-        chk("user @* {} ( @sort sort .firstName )", "ct_err:ann:sort:dup")
-        chk("user @* {} ( @sort_desc sort .firstName )", "ct_err:ann:sort_desc:dup")
-        chk("user @* {} ( @sort -sort .firstName )", "ct_err:ann:sort:dup")
-        chk("user @* {} ( @sort_desc -sort .firstName )", "ct_err:ann:sort_desc:dup")
-    }
-
-    @Test fun testSortOld() {
-        tst.strictToString = false
-
-        chk("user @* {} ( .firstName )", "[Mark, Steve, Steve, Jeff, Bill, Paul, Sergey, Larry]")
-
-        chk("user @* {} ( sort .firstName )", "[Bill, Jeff, Larry, Mark, Paul, Sergey, Steve, Steve]")
-        chkWarn("at:what:sort:deprecated:sort")
-
-        chk("user @* {} ( -sort .firstName )", "[Steve, Steve, Sergey, Paul, Mark, Larry, Jeff, Bill]")
-        chkWarn("at:what:sort:deprecated:sort_desc")
-    }
-
-    @Test fun testNullLiteral() {
-        chk("user @ { .firstName == 'Bill' } (_=.lastName, ''+null)", "(text[Gates],text[null])")
-        //chk("user @ { firstName = 'Bill' } (lastName, null)", "(text[Gates],null)")
-    }
-
-    @Test fun testLookupExpr() {
-        chk("user @ { .firstName == 'Bill' } (_=.lastName, 'Hello'[1])", "(text[Gates],text[e])")
-        chk("user @ { .firstName == 'Bill' } (.lastName[2])", "ct_err:expr_sqlnotallowed")
-        chk("user @ { .firstName == 'Bill' } ('HelloWorld'[.lastName.size()])", "ct_err:expr_sqlnotallowed")
-    }
-
-    @Test fun testTupleExpr() {
-        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + (123,'Hello'))", "(text[Gates],text[(123,Hello)])")
-        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + (123,.firstName))", "ct_err:expr_sqlnotallowed")
-    }
-
     @Test fun testCollectionLiteralExpr() {
         chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + [1,2,3])", "(text[Gates],text[[1, 2, 3]])")
-        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + [.firstName,.lastName])", "ct_err:expr_sqlnotallowed")
+
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + [.firstName,.lastName])",
+                "ct_err:expr:to_text:nosql:list<text>")
+
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, [1,2,3])", "(text[Gates],list<integer>[int[1],int[2],int[3]])")
+
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, [.firstName,.lastName])",
+                "(text[Gates],list<text>[text[Bill],text[Gates]])")
 
         chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + [123:'Hello'])", "(text[Gates],text[{123=Hello}])")
-        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + [.firstName:.lastName])", "ct_err:expr_sqlnotallowed")
+
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + [.firstName:.lastName])",
+                "ct_err:expr:to_text:nosql:map<text,text>")
+
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, [123:'Hello'])",
+                "(text[Gates],map<integer,text>[int[123]=text[Hello]])")
+
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, [.firstName:.lastName])",
+                "(text[Gates],map<text,text>[text[Bill]=text[Gates]])")
     }
 
     @Test fun testCollectionConstructorExpr() {
@@ -508,29 +312,9 @@ class AtExprTest: BaseRellTest() {
         chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + set([1,2,3]))", "(text[Gates],text[[1, 2, 3]])")
         chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + map([123:'Hello']))", "(text[Gates],text[{123=Hello}])")
 
-        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + list(.firstName))", "ct_err:expr_sqlnotallowed")
-        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + set(.firstName))", "ct_err:expr_sqlnotallowed")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + list(.firstName))", "ct_err:expr_list_badtype:text")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + set(.firstName))", "ct_err:expr_set_badtype:text")
         chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + map(.firstName))", "ct_err:expr_sqlnotallowed")
-    }
-
-    @Test fun testMultiLocalWhere() {
-        chkEx("{ val x = 123; return user @ { .firstName == 'Bill', x > 10, x > 20, x > 30 }; }", "user[40]")
-    }
-
-    @Test fun testOrBooleanCondition() {
-        chkEx("{ return user @* { .firstName == 'Bill' }; }", "list<user>[user[40]]")
-        chkEx("{ return user @* { .firstName == 'Bob' }; }", "list<user>[]")
-
-        chkEx("{ val anyUser = 'no'; return user @* { .firstName == 'Bob' or anyUser == 'yes' }; }", "list<user>[]")
-        chkEx("{ val anyUser = 'yes'; return user @* { .firstName == 'Bob' or anyUser == 'yes' }; }",
-                "list<user>[user[10],user[20],user[21],user[30],user[40],user[41],user[50],user[51]]")
-        chkEx("{ val anyUser = 'yes'; return user @* { .firstName == 'Bob' or anyUser == 'yes', .company.name != 'Foo' }; }",
-                "list<user>[user[10],user[20],user[21],user[30],user[40],user[41],user[50],user[51]]")
-
-        chkEx("{ val userName = 'Bill'; return user @* { .firstName == userName or userName == '' }; }", "list<user>[user[40]]")
-        chkEx("{ val userName = 'Bob'; return user @* { .firstName == userName or userName == '' }; }", "list<user>[]")
-        chkEx("{ val userName = ''; return user @* { .firstName == userName or userName == '' }; }",
-                "list<user>[user[10],user[20],user[21],user[30],user[40],user[41],user[50],user[51]]")
     }
 
     @Test fun testOrConditionBug() {
@@ -573,23 +357,6 @@ class AtExprTest: BaseRellTest() {
         chkEx("{ val search_role = 'validator'; $ret }", "int[1]")
         chkEx("{ val search_role = 'issuer'; $ret }", "int[1]")
         chkEx("{ val search_role = 'foo'; $ret }", "int[0]")
-    }
-
-    @Test fun testSubscript() {
-        chk("user @* { .firstName == 'Bill' }[0]", "user[40]")
-    }
-
-    @Test fun testNoSqlWhatExpr() {
-        chk("user @* { .firstName == 'Bill' } ( x = (123, 'Hello') )", "ct_err:expr_nosql:(integer,text)")
-    }
-
-    @Test fun testIndependentEntityFieldExpression() {
-        val code = """
-            { val u = user @ { .firstName == 'Paul' };
-              return user @ { .company == u.company, .firstName != 'Paul' } ( .firstName );
-            }
-        """.trimIndent()
-        chkEx(code, "text[Bill]")
     }
 
     @Test fun testWhereDbExpr() {
@@ -653,6 +420,42 @@ class AtExprTest: BaseRellTest() {
         chk("(u: user, c: company) @ {} ( @omit u.name, c.name )", "Apple")
         chk("(u: user, c: company) @ {} ( @omit u.name, name = c.name )", "(name=Apple)")
         chk("(u: user, c: company) @ {} ( @omit u.name, c.name, c )", "(name=Apple,company[1])")
+    }
+
+    @Test fun testPlaceholder() {
+        tst.strictToString = false
+
+        chk("user @* { .firstName == 'Steve' }", "[user[20], user[21]]")
+        chk("user @* { .firstName == 'Steve' } ( $ )", "[user[20], user[21]]")
+        chk("user @* { .firstName == 'Steve' } ( $.lastName )", "[Jobs, Wozniak]")
+        chk("user @* { $.firstName == 'Steve' }", "[user[20], user[21]]")
+        chk("user @* { $.firstName == 'Steve' } ( $.lastName )", "[Jobs, Wozniak]")
+
+        chk("(user, company) @* {} ( $ )", "ct_err:name:ambiguous:$")
+        chk("(user, company) @* { $.firstName == 'Steve' }", "ct_err:name:ambiguous:$")
+
+        chk("(u: user) @* { .firstName == 'Steve' } ( $ )", "ct_err:expr:placeholder:none")
+        chk("(u: user, c: company) @* { u.firstName == 'Steve' } ( $ )", "ct_err:expr:placeholder:none")
+        chk("(u: user, company) @* { u.firstName == 'Steve' } ( $ )", "ct_err:name:ambiguous:$")
+        chk("(user, c: company) @* { user.firstName == 'Steve' } ( $ )", "ct_err:name:ambiguous:$")
+        chk("(user, company) @* { user.firstName == 'Steve' } ( $ )", "ct_err:name:ambiguous:$")
+    }
+
+    @Test fun testTupleExpr() {
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + (123,'Hello'))", "(text[Gates],text[(123,Hello)])")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + (123,.firstName))", "ct_err:expr:to_text:nosql:(integer,text)")
+    }
+
+    @Test fun testNoSqlWhatExpr() {
+        chk("user @* { .firstName == 'Bill' } ( '' + (.firstName, .lastName) )", "ct_err:expr:to_text:nosql:(text,text)")
+    }
+
+    @Test fun testPlaceholderAmbiguity() {
+        tst.strictToString = false
+        chk("company @* {} ( .name + (user @* {} ( $ )).size() )", "[Facebook8, Apple8, Amazon8, Microsoft8, Google8]")
+        chk("company @* {} ( .name + ((u: user) @* {} ( $ )).size() )",
+                "ct_err:[at:entity:outer:company][at_expr:placeholder:belongs_to_outer]")
+        chk("(c: company) @* {} ( .name + (user @* {} ( $ )).size() )", "[Facebook8, Apple8, Amazon8, Microsoft8, Google8]")
     }
 
     private object Ins {

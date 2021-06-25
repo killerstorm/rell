@@ -231,8 +231,10 @@ class StructTest: BaseRellTest(false) {
     private fun chkFlags(code: String, expected: String) {
         val actual = tst.processApp(code) { app ->
             val lst = mutableListOf<String>()
-            val structs = app.modules.flatMap { it.structs.values }
-            for (struct in structs.sortedBy { it.simpleName }) {
+            val structDefs = app.modules.flatMap { it.structs.values }
+            for (structDef in structDefs.sortedBy { it.simpleName }) {
+                val struct = structDef.struct
+
                 val flags = mutableListOf<String>()
                 if (struct.flags.typeFlags.mutable) flags.add("mut")
 
@@ -244,7 +246,7 @@ class StructTest: BaseRellTest(false) {
 
                 if (struct.flags.cyclic) flags.add("cyc")
                 if (struct.flags.infinite) flags.add("inf")
-                lst.add("${struct.simpleName}[${flags.joinToString(",")}]")
+                lst.add("${structDef.simpleName}[${flags.joinToString(",")}]")
             }
             lst.joinToString(",")
         }
@@ -416,6 +418,6 @@ class StructTest: BaseRellTest(false) {
             }
         """.trimIndent()
 
-        chkQueryEx(code, "list<integer>[int[123],int[456],int[789]]")
+        chkFull(code, "list<integer>[int[123],int[456],int[789]]")
     }
 }

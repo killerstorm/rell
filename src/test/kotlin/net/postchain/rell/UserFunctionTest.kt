@@ -137,7 +137,7 @@ class UserFunctionTest: BaseRellTest(false) {
         chkFnEx(fn, "= user @ { .name.upper_case() == foo('alice') };", "user[2]")
 
         chkFnEx(fn, "= user @ { foo(.name) == 'BOB' };", "ct_err:expr_sqlnotallowed")
-        chkFnEx(fn, "= user @ { .id == 123 } ( foo(.name) );", "ct_err:expr_sqlnotallowed")
+        chkFnEx(fn, "= user @ { .id == 123 } ( foo(.name) );", "text[BOB]")
     }
 
     @Test fun testShortBodyUnitType() {
@@ -202,10 +202,9 @@ class UserFunctionTest: BaseRellTest(false) {
         chkFn("function f(x: integer) = if (x > 0) f(x - 1) else 0;", "f(0)",
                 "ct_err:[fn_type_recursion:FUNCTION:f][fn_type_recursion:FUNCTION:f]")
         chkFn("function f(x: integer) = if (x > 0) f(x - 1) + 1 else 0;", "f(3)",
-                "ct_err:[fn_type_recursion:FUNCTION:f][binop_operand_type:+:[<error>]:[integer]]")
+                "ct_err:[fn_type_recursion:FUNCTION:f][fn_type_recursion:FUNCTION:f]")
         chkFn("function f(x: integer) { if (x > 0) return f(x - 1); return 0; }", "0", "ct_err:fn_type_recursion:FUNCTION:f")
-        chkFn("function f(x: integer) { if (x > 0) return f(x - 1) + 1; return 0; }", "0",
-                "ct_err:[fn_type_recursion:FUNCTION:f][binop_operand_type:+:[<error>]:[integer]]")
+        chkFn("function f(x: integer) { if (x > 0) return f(x - 1) + 1; return 0; }", "0", "ct_err:fn_type_recursion:FUNCTION:f")
     }
 
     @Test fun testInferReturnTypeIndirectRecursion() {
@@ -348,7 +347,7 @@ class UserFunctionTest: BaseRellTest(false) {
 
     private fun chkFnEx(fnCode: String, queryCode: String, expected: String) {
         val code = "$fnCode query q() $queryCode"
-        tst.chkQueryEx(code, "q", listOf(), expected)
+        tst.chkFull(code, "q", listOf(), expected)
     }
 
     private fun chkFnOp(fnCode: String, callCode: String, expected: String = "OK") {

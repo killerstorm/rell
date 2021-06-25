@@ -5,7 +5,9 @@
 package net.postchain.rell.compiler
 
 import com.google.common.collect.Multimap
-import net.postchain.rell.*
+import net.postchain.rell.C_RecursionSafeCalculator
+import net.postchain.rell.C_RecursionSafeContext
+import net.postchain.rell.C_RecursionSafeResult
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.utils.*
 import java.util.*
@@ -307,7 +309,7 @@ private class C_NsImp_ImportResolver(
     }
 
     private fun errRecursion(name: S_Name): C_Error {
-        return C_Error(name.pos, "import:recursion:${name.str}", "Name '${name.str}' is a recursive definition")
+        return C_Error.stop(name.pos, "import:recursion:${name.str}", "Name '${name.str}' is a recursive definition")
     }
 
     fun resolveNamespaceByPath(module: C_ModuleKey, path: List<S_Name>): C_NsImp_Result<C_NsAsm_Namespace> {
@@ -343,14 +345,14 @@ private class C_NsImp_ImportResolver(
             def = res2.value
             if (def == null) {
                 return C_RecursionSafeResult.error {
-                    C_Error(it.pos, "import:name_unresolved:${it.str}", "Cannot resolve name '${it.str}'")
+                    C_Error.stop(it.pos, "import:name_unresolved:${it.str}", "Cannot resolve name '${it.str}'")
                 }
             }
         }
 
         if (def !is C_NsAsm_Def_Namespace) {
             return C_RecursionSafeResult.error {
-                C_Error(it.pos, "import:not_ns:${it.str}", "Name '${it.str}' is not a namespace")
+                C_Error.stop(it.pos, "import:not_ns:${it.str}", "Name '${it.str}' is not a namespace")
             }
         }
 
@@ -391,13 +393,13 @@ private class C_NsImp_ImportResolver(
     private fun errExactUnresolved(imp: C_NsAsm_ExactImport): C_Error {
         val fullName = C_Utils.appLevelName(imp.module, imp.path + imp.name)
         val code = "import:exact:unresolved:$fullName"
-        return C_Error(imp.name.pos, code, "Cannot resolve import: '$fullName'")
+        return C_Error.stop(imp.name.pos, code, "Cannot resolve import: '$fullName'")
     }
 
     private fun errExactRecursion(imp: C_NsAsm_ExactImport): C_Error {
         val fullName = C_Utils.appLevelName(imp.module, imp.path + imp.name)
         val code = "import:exact:recursion:$fullName"
-        return C_Error(imp.name.pos, code, "Recursive import: '$fullName' points to itself")
+        return C_Error.stop(imp.name.pos, code, "Recursive import: '$fullName' points to itself")
     }
 
     private fun resolveExactImportDirect(imp: C_NsAsm_ExactImport): C_NsImp_Result<C_NsAsm_Def> {
@@ -448,11 +450,11 @@ private class C_NsImp_ImportResolver(
 
         if (defs.isEmpty()) {
             return C_RecursionSafeResult.error {
-                C_Error(it.pos, "import:name_unknown:${it.str}", "Unknown name: '${it.str}'")
+                C_Error.stop(it.pos, "import:name_unknown:${it.str}", "Unknown name: '${it.str}'")
             }
         } else if (defs.size >= 2) {
             return C_RecursionSafeResult.error {
-                C_Error(it.pos, "import:name_ambig:${it.str}", "Name '${it.str}' is ambiguous")
+                C_Error.stop(it.pos, "import:name_ambig:${it.str}", "Name '${it.str}' is ambiguous")
             }
         }
 

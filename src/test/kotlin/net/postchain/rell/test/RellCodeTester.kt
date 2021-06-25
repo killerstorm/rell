@@ -15,8 +15,8 @@ import net.postchain.core.EContext
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
 import net.postchain.rell.compiler.C_MapSourceDir
-import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.compiler.C_MessageType
+import net.postchain.rell.compiler.C_SourceDir
 import net.postchain.rell.model.*
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.runtime.*
@@ -50,6 +50,7 @@ class RellCodeTester(
     var chainRid: String? = null
 
     private val chainDependencies = mutableMapOf<String, TestChainDependency>()
+    private val postInitOps = mutableListOf<String>()
 
     private var rtErrStack = listOf<R_StackPos>()
 
@@ -91,18 +92,49 @@ class RellCodeTester(
 
     fun chainDependency(name: String, rid: String, height: Long) {
         check(name !in chainDependencies)
-        val ridArray = CommonUtils.hexToBytes(rid)
-        chainDependencies[name] = TestChainDependency(ridArray, height)
+        val bcRid = RellTestUtils.strToBlockchainRid(rid)
+        chainDependencies[name] = TestChainDependency(bcRid, height)
     }
 
     fun chainDependencies() = chainDependencies.mapValues { (_, v) -> Pair(v.rid, v.height) }.toImmMap()
 
-    fun chkQuery(bodyCode: String, expected: String) {
-        val queryCode = "query q() = $bodyCode;"
-        chkQueryEx(queryCode, "q", listOf(), expected)
+    fun postInitOp(code: String) {
+        checkNotInited()
+        postInitOps.add(code)
     }
 
-    fun chkQueryEx(code: String, name: String, args: List<Rt_Value>, expected: String) {
+    override fun postInit() {
+        for (code in postInitOps) {
+            chkOp(code, "OK")
+        }
+    }
+
+    override fun chkEx(code: String, expected: String) {
+        val queryCode = "query q() $code"
+        chkFull(queryCode, "q", listOf(), expected)
+    }
+
+    fun chkEx(code: String, args: List<Any>, expected: String) {
+        val args2 = args.map { v ->
+            when (v) {
+                is Boolean -> "boolean" to Rt_BooleanValue(v)
+                is Long -> "integer" to Rt_IntValue(v)
+                else -> throw IllegalArgumentException(v.javaClass.name)
+            }
+        }
+
+        val params = args2.mapIndexed { i, v ->
+            val argName = ('a' + i).toString()
+            "$argName: ${v.first}"
+        }.joinToString(", ")
+
+        chkFull("query q($params) $code", args2.map { it.second }, expected)
+    }
+
+    fun chkFull(code: String, expected: String) = chkFull(code, listOf(), expected)
+    fun chkFull(code: String, args: List<Rt_Value>, expected: String) = chkFull(code, "q", args, expected)
+
+    fun chkFull(code: String, name: String, args: List<Rt_Value>, expected: String) {
         val actual = callQuery(code, name, args)
         checkResult(expected, actual)
     }
@@ -142,7 +174,9 @@ class RellCodeTester(
         checkResult(expected, actual)
     }
 
-    fun chkFnEx(code: String, expected: String) {
+    fun chkFn(code: String, expected: String) = chkFnFull("function f() $code", expected)
+
+    fun chkFnFull(code: String, expected: String) {
         val actual = callFn(code)
         checkResult(expected, actual)
     }
@@ -207,8 +241,8 @@ class RellCodeTester(
         }
     }
 
-    fun createGlobalCtx(): Rt_GlobalContext {
-        val chainContext = createChainContext()
+    fun createGlobalCtx(gtvConfig: Gtv = GtvNull): Rt_GlobalContext {
+        val chainContext = createChainContext(gtvConfig)
 
         val pcModuleEnv = RellPostchainModuleEnvironment(
                 outPrinter = outPrinter,
@@ -230,27 +264,52 @@ class RellCodeTester(
         )
     }
 
-    private fun createChainContext(): Rt_ChainContext {
+    private fun createChainContext(gtvConfig: Gtv = GtvNull): Rt_ChainContext {
         val bcRidHex = chainRid ?: "00".repeat(32)
         val bcRid = BlockchainRid(bcRidHex.hexStringToByteArray())
-        return Rt_ChainContext(GtvNull, mapOf(), bcRid)
+        return Rt_ChainContext(gtvConfig, mapOf(), bcRid)
     }
 
-    fun createAppCtx(globalCtx: Rt_GlobalContext, sqlExec: SqlExecutor, app: R_App): Rt_AppContext {
+    fun createAppCtx(
+            globalCtx: Rt_GlobalContext,
+            sqlExec: SqlExecutor,
+            app: R_App,
+            sourceDir: C_SourceDir,
+            test: Boolean
+    ): Rt_AppContext {
         val sqlCtx = createSqlCtx(app, sqlExec)
-        return Rt_AppContext(globalCtx, sqlCtx, app, false, null, C_MapSourceDir.EMPTY, setOf())
+
+        val modules = app.modules.filter { !it.test && !it.abstract && !it.external }.map { it.name }
+        val keyPair = UnitTestBlockRunner.getTestKeyPair()
+        val blockRunnerStrategy = Rt_DynamicBlockRunnerStrategy(sourceDir, modules, keyPair)
+
+        return Rt_AppContext(
+                globalCtx,
+                sqlCtx,
+                app,
+                repl = false,
+                test = test,
+                replOut = null,
+                blockRunnerStrategy = blockRunnerStrategy
+        )
     }
 
-    fun createExeCtx(globalCtx: Rt_GlobalContext, sqlExec: SqlExecutor, app: R_App): Rt_ExecutionContext {
-        val appCtx = createAppCtx(globalCtx, sqlExec, app)
+    fun createExeCtx(
+            globalCtx: Rt_GlobalContext,
+            sqlExec: SqlExecutor,
+            app: R_App,
+            sourceDir: C_SourceDir = C_MapSourceDir.EMPTY,
+            test: Boolean = false
+    ): Rt_ExecutionContext {
+        val appCtx = createAppCtx(globalCtx, sqlExec, app, sourceDir, test)
         return Rt_ExecutionContext(appCtx, sqlExec)
     }
 
     private fun createSqlCtx(app: R_App, sqlExec: SqlExecutor): Rt_SqlContext {
         val sqlMapping = createChainSqlMapping()
-        val rtDeps = chainDependencies.mapValues { (_, v) -> Rt_ChainDependency(v.rid) }
+        val rtDeps = chainDependencies.mapValues { (_, v) -> Rt_ChainDependency(v.rid.data) }
 
-        val heightMap = chainDependencies.mapKeys { (_, v) -> ByteArrayKey(v.rid) }.mapValues { (_, v) -> v.height }
+        val heightMap = chainDependencies.mapKeys { (_, v) -> ByteArrayKey(v.rid.data) }.mapValues { (_, v) -> v.height }
         val heightProvider = TestChainHeightProvider(heightMap)
 
         return eval.wrapRt { Rt_SqlContext.create(app, sqlMapping, rtDeps, sqlExec, heightProvider) }
@@ -283,13 +342,24 @@ class RellCodeTester(
         assertEquals(expected, actual)
     }
 
+    fun resetSqlCtr() {
+        tstCtx.resetSqlCounter()
+    }
+
+    fun chkSql(expected: Int) {
+        assertEquals(expected, tstCtx.sqlCounter())
+    }
+
     fun createRepl(): RellReplTester {
         val files = files()
-        val globalCtx = createGlobalCtx()
         val moduleNameStr = replModule
         val module = if (moduleNameStr == null) null else R_ModuleName.of(moduleNameStr)
+
+        val sourceDir = C_MapSourceDir.of(files)
+        val globalCtx = createGlobalCtx()
+
         val sqlMgr = tstCtx.sqlMgr()
-        return RellReplTester(files, globalCtx, sqlMgr, module, tstCtx.useSql)
+        return RellReplTester(globalCtx, sourceDir, sqlMgr, module, tstCtx.useSql)
     }
 
     private fun processWithExeCtx(code: String, tx: Boolean, processor: (Rt_ExecutionContext) -> String): String {
@@ -309,7 +379,7 @@ class RellCodeTester(
         val res = processApp(code) { app ->
             RellTestUtils.catchRtErr {
                 val appCtx = tstCtx.sqlMgr().access { sqlExec ->
-                    createAppCtx(globalCtx, sqlExec, app)
+                    createAppCtx(globalCtx, sqlExec, app, C_MapSourceDir.EMPTY, false)
                 }
                 processor(appCtx)
             }
@@ -317,7 +387,7 @@ class RellCodeTester(
         return res
     }
 
-    private class TestChainDependency(val rid: ByteArray, val height: Long)
+    private class TestChainDependency(val rid: BlockchainRid, val height: Long)
 
     private class TestChainHeightProvider(private val map: Map<ByteArrayKey, Long>): Rt_ChainHeightProvider {
         override fun getChainHeight(rid: ByteArrayKey, id: Long): Long? {

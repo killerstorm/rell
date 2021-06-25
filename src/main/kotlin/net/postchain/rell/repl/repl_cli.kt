@@ -5,7 +5,7 @@
 package net.postchain.rell.repl
 
 import com.google.common.base.Throwables
-import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.compiler.C_CompilerOptions
 import net.postchain.rell.compiler.C_Message
 import net.postchain.rell.compiler.C_Parser
 import net.postchain.rell.compiler.C_SourceDir
@@ -14,6 +14,7 @@ import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.model.R_StackPos
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlManager
+import net.postchain.rell.utils.CommonUtils
 import org.apache.commons.lang3.StringUtils
 import org.jline.reader.*
 import org.jline.terminal.TerminalBuilder
@@ -25,9 +26,10 @@ object ReplShell {
             moduleName: R_ModuleName?,
             globalCtx: Rt_GlobalContext,
             sqlMgr: SqlManager,
-            useSql: Boolean
+            useSql: Boolean,
+            compilerOptions: C_CompilerOptions
     ) {
-        val repl = ReplInterpreter.create(sourceDir, moduleName, globalCtx, sqlMgr, CliReplOutputChannel, useSql)
+        val repl = ReplInterpreter.create(compilerOptions, sourceDir, moduleName, globalCtx, sqlMgr, CliReplOutputChannel, useSql)
         if (repl == null) {
             return
         }

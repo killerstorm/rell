@@ -98,7 +98,7 @@ class OperatorsDbTest: OperatorsBaseTest() {
             "$field${idx+1}"
         }
         val expr2 = replaceParams(expr, params)
-        return tst.compileModule("query q() = optest @ { $expr2 };")
+        return tst.compileModule("query q() = optest @ {} ( $expr2 );")
     }
 
     private fun replaceParams(expr: String, params: List<String>): String {

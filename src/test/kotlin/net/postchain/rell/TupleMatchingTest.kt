@@ -32,7 +32,8 @@ class TupleMatchingTest: BaseRellTest(false) {
     @Test fun testTypeMismatch() {
         chkEx("{ val (x, y) = (123, 'Hello', true); return 0; }", "ct_err:var_tuple_wrongsize:2:3:(integer,text,boolean)")
         chkEx("{ val (x, y, z) = (123, 'Hello'); return 0; }", "ct_err:var_tuple_wrongsize:3:2:(integer,text)")
-        chkEx("{ val (x: integer, y: text) = ('Hello', 123); return 0; }", "ct_err:stmt_var_type:x:[integer]:[text]")
+        chkEx("{ val (x: integer, y: text) = ('Hello', 123); return 0; }",
+                "ct_err:[stmt_var_type:x:[integer]:[text]][stmt_var_type:y:[text]:[integer]]")
         chkEx("{ val (x, y: text) = ('Hello', 123); return 0; }", "ct_err:stmt_var_type:y:[text]:[integer]")
         chkEx("{ val (x: integer, y) = ('Hello', 123); return 0; }", "ct_err:stmt_var_type:x:[integer]:[text]")
         chkEx("{ val (x, y) = ('Hello', 123); return x; }", "text[Hello]")
@@ -42,10 +43,11 @@ class TupleMatchingTest: BaseRellTest(false) {
         chkEx("{ val (x, (y, z)) = ('Hello', (123, true)); return x; }", "text[Hello]")
         chkEx("{ val (x, (y, z)) = ('Hello', (123, true)); return y; }", "int[123]")
         chkEx("{ val (x, (y, z)) = ('Hello', (123, true)); return z; }", "boolean[true]")
-        chkEx("{ val (x, (y, z)) = ('Hello', 123, true); return 0; }", "ct_err:var_tuple_wrongsize:2:3:(text,integer,boolean)")
+        chkEx("{ val (x, (y, z)) = ('Hello', 123, true); return 0; }",
+                "ct_err:[var_tuple_wrongsize:2:3:(text,integer,boolean)][var_notuple:integer]")
         chkEx("{ val (x, (y, z)) = (('Hello', 123), true); return 0; }", "ct_err:var_notuple:boolean")
         chkEx("{ val (x, (y, z)) = ('Hello', (123,), true); return 0; }",
-                "ct_err:var_tuple_wrongsize:2:3:(text,(integer),boolean)")
+                "ct_err:[var_tuple_wrongsize:2:3:(text,(integer),boolean)][var_tuple_wrongsize:2:1:(integer)]")
         chkEx("{ val (x, (y, z)) = ('Hello', 123); return 0; }", "ct_err:var_notuple:integer")
         chkEx("{ val (x: text, (y, z)) = ('Hello', (123, true)); return x; }", "text[Hello]")
         chkEx("{ val (x: text, (y: integer, z)) = ('Hello', (123, true)); return x; }", "text[Hello]")
@@ -91,6 +93,6 @@ class TupleMatchingTest: BaseRellTest(false) {
         chkEx("{ for (x in $map) { print(x); } return 7; }", "int[7]")
         chkOut("(123,Hello)", "(456,Bye)")
 
-        chkEx("{ for ((x) in $map) { print(x,y); } return 7; }", "ct_err:var_tuple_wrongsize:1:2:(integer,text)")
+        chkEx("{ for ((x) in $map) { print(x); } return 7; }", "ct_err:var_tuple_wrongsize:1:2:(integer,text)")
     }
 }

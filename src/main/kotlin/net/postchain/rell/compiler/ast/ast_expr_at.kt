@@ -5,45 +5,36 @@
 package net.postchain.rell.compiler.ast
 
 import net.postchain.rell.compiler.*
+import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
+import net.postchain.rell.runtime.Rt_DecimalValue
+import net.postchain.rell.runtime.Rt_IntValue
+import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.immSetOf
 import net.postchain.rell.utils.toImmList
 
 class S_AtExprFrom(val alias: S_Name?, val entityName: List<S_Name>)
 
-class C_AtWhatField(val name: String?, val expr: Db_Expr, val flags: R_AtWhatFlags)
-
-class C_AtWhat(fields: List<C_AtWhatField>) {
-    val fields = fields.toImmList()
-}
-
-class S_AtExprWhatSort(val pos: S_Pos, val asc: Boolean) {
-    val rSort = if (asc) R_AtWhatSort.ASC else R_AtWhatSort.DESC
-}
-
 sealed class S_AtExprWhat {
-    abstract fun compile(ctx: C_ExprContext, from: List<C_AtEntity>, subValues: MutableList<C_Value>): C_AtWhat
+    abstract fun compile(ctx: C_ExprContext, from: C_AtFrom, subValues: MutableList<V_Expr>): C_AtWhat
 }
 
 class S_AtExprWhat_Default: S_AtExprWhat() {
-    override fun compile(ctx: C_ExprContext, from: List<C_AtEntity>, subValues: MutableList<C_Value>): C_AtWhat {
-        val fields = from.map {
-            val name = if (from.size == 1) null else it.alias
-            val expr = it.compileExpr()
-            C_AtWhatField(name, expr, R_AtWhatFlags.DEFAULT)
-        }
-        return C_AtWhat(fields)
+    override fun compile(ctx: C_ExprContext, from: C_AtFrom, subValues: MutableList<V_Expr>): C_AtWhat {
+        return from.makeDefaultWhat()
     }
 }
 
 class S_AtExprWhat_Simple(val path: List<S_Name>): S_AtExprWhat() {
-    override fun compile(ctx: C_ExprContext, from: List<C_AtEntity>, subValues: MutableList<C_Value>): C_AtWhat {
-        var expr = ctx.nameCtx.resolveAttr(path[0])
+    override fun compile(ctx: C_ExprContext, from: C_AtFrom, subValues: MutableList<V_Expr>): C_AtWhat {
+        val vAttrExpr = ctx.resolveAttr(path[0])
+        var expr: C_Expr = C_VExpr(vAttrExpr)
         for (step in path.subList(1, path.size)) {
             expr = expr.member(ctx, step, false)
         }
 
-        val dbExpr = expr.value().toDbExpr()
-        val fields = listOf(C_AtWhatField(null, dbExpr, R_AtWhatFlags.DEFAULT))
+        val vExpr = expr.value()
+        val fields = listOf(C_AtWhatField(null, vExpr.type(), vExpr, C_AtWhatFieldFlags.DEFAULT, null))
         return C_AtWhat(fields)
     }
 }
@@ -52,22 +43,25 @@ class S_AtExprWhatComplexField(
         val attr: S_Name?,
         val expr: S_Expr,
         val annotations: List<S_Annotation>,
-        val sort: S_AtExprWhatSort?
+        val sort: S_PosValue<R_AtWhatSort>?
 )
 
 class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExprWhat() {
-    override fun compile(ctx: C_ExprContext, from: List<C_AtEntity>, subValues: MutableList<C_Value>): C_AtWhat {
+    override fun compile(ctx: C_ExprContext, from: C_AtFrom, subValues: MutableList<V_Expr>): C_AtWhat {
         val procFields = processFields(ctx)
-        subValues.addAll(procFields.map { it.value })
+        subValues.addAll(procFields.map { it.vExpr })
 
-        val selFields = procFields.filter { it.flags.select }
+        val selFields = procFields.filter { !it.flags.omit }
         if (selFields.isEmpty()) {
             ctx.msgCtx.error(fields[0].expr.startPos, "at:no_fields", "All fields are excluded from the result")
         }
 
+        val hasGroup = procFields.any { it.summarization?.isGroup() ?: false }
+
         val cFields = procFields.map { field ->
-            val name = if (field.flags.select && (field.nameExplicit || selFields.size > 1)) field.name else null
-            C_AtWhatField(name, field.dbExpr, field.flags)
+            val name = if (!field.flags.omit && (field.nameExplicit || selFields.size > 1)) field.name else null
+            val resultType = field.summarization?.getResultType(hasGroup) ?: field.vExpr.type()
+            C_AtWhatField(name, resultType, field.vExpr, field.flags, field.summarization)
         }
 
         return C_AtWhat(cFields)
@@ -76,13 +70,16 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
     private fun processFields(ctx: C_ExprContext): List<WhatField> {
         val procFields = fields.map { processField(ctx, it) }
 
-        val (aggrFields, noAggrFields) = procFields.withIndex().partition { it.value.flags.group || it.value.flags.aggregation }
+        val (aggrFields, noAggrFields) = procFields.withIndex().partition {
+            it.value.summarization != null || it.value.flags.aggregate != null
+        }
+
         if (aggrFields.isNotEmpty()) {
             for ((i, field) in noAggrFields) {
                 val code = "at:what:no_aggr:$i"
-                val anns = C_AtAggregation.values().joinToString(", ") { "@${it.annotation}" }
+                val anns = C_AtSummarizationKind.values().joinToString(", ") { "@${it.annotation}" }
                 val msg = "Either none or all what-expressions must be annotated with one of: $anns"
-                ctx.msgCtx.error(field.value.pos, code, msg)
+                ctx.msgCtx.error(field.vExpr.pos, code, msg)
             }
         }
 
@@ -94,29 +91,29 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
         val modTarget = C_ModifierTarget(C_ModifierTargetType.EXPRESSION, null)
 
         if (field.sort != null) {
-            modTarget.sort?.set(field.sort.rSort)
-            val ann = if (field.sort.asc) C_Modifier.SORT else C_Modifier.SORT_DESC
+            modTarget.sort?.set(field.sort)
+            val ann = if (field.sort.value.asc) C_Modifier.SORT else C_Modifier.SORT_DESC
             ctx.msgCtx.warning(field.sort.pos, "at:what:sort:deprecated:$ann", "Deprecated sort syntax; use @$ann annotation instead")
         }
 
-        val modifierCtx = C_ModifierContext(ctx.msgCtx, R_MountName.EMPTY)
+        val modifierCtx = C_ModifierContext(ctx.appCtx, R_MountName.EMPTY)
         for (annotation in field.annotations) {
             annotation.compile(modifierCtx, modTarget)
         }
 
         val omit = modTarget.omit?.get() ?: false
         val sort = modTarget.sort?.get()
-        val aggregation = modTarget.aggregation?.get()
+        val summ = modTarget.summarization?.get()
 
-        val flags = R_AtWhatFlags(
-                select = !omit,
+        val flags = C_AtWhatFieldFlags(
+                omit = omit,
                 sort = sort,
-                group = aggregation == C_AtAggregation.GROUP,
-                aggregation = aggregation != null
+                group = if (summ?.value == C_AtSummarizationKind.GROUP) summ.pos else null,
+                aggregate = if (summ != null && summ.value != C_AtSummarizationKind.GROUP) summ.pos else null
         )
 
-        val value = field.expr.compile(ctx).value()
-        val dbExpr = compileWhatExpr(ctx, value, aggregation)
+        val vExpr = field.expr.compileSafe(ctx).value()
+        val cSummarization = compileSummarization(ctx, vExpr, summ?.value)
 
         var namePos: S_Pos = field.expr.startPos
         var name: String? = null
@@ -129,29 +126,52 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
                 name = attr.str
                 nameExplicit = true
             }
-        } else if (!omit) {
-            name = dbExpr.implicitName()
+        } else if (!omit && (cSummarization == null || cSummarization.isGroup())) {
+            name = vExpr.implicitAtWhatAttrName()
         }
 
-        return WhatField(value, dbExpr, namePos, name, nameExplicit, flags)
+        return WhatField(vExpr, namePos, name, nameExplicit, flags, cSummarization)
     }
 
-    private fun compileWhatExpr(ctx: C_ExprContext, value: C_Value, aggregation: C_AtAggregation?): Db_Expr {
-        val dbExpr = value.toDbExpr()
-        if (aggregation == null || aggregation.aggrFn == null) {
-            return dbExpr
+    private fun compileSummarization(ctx: C_ExprContext, vExpr: V_Expr, ann: C_AtSummarizationKind?): C_AtSummarization? {
+        ann ?: return null
+
+        val type = vExpr.type()
+        val pos = C_AtSummarizationPos(vExpr.pos, ann)
+
+        val cSummarization = when (ann) {
+            C_AtSummarizationKind.GROUP -> C_AtSummarization_Group(pos, type)
+            C_AtSummarizationKind.SUM -> compileSummarizationSum(pos, type)
+            C_AtSummarizationKind.MIN -> compileSummarizationMinMax(pos, type, R_CmpOp_Le, Db_SysFn_Aggregation_Min)
+            C_AtSummarizationKind.MAX -> compileSummarizationMinMax(pos, type, R_CmpOp_Ge, Db_SysFn_Aggregation_Max)
         }
 
-        val fn = aggregation.aggrFn
-
-        if (!fn.typeChecker(dbExpr.type)) {
-            val code = "at:what:aggr:bad_type:$aggregation:${dbExpr.type.toStrictString()}"
-            val msg = "Invalid type of ${aggregation} expression: ${dbExpr.type}"
-            ctx.msgCtx.error(value.pos, code, msg)
+        if (cSummarization == null) {
+            C_AtSummarization.typeError(ctx.msgCtx, type, pos)
         }
 
-        val aggrDbExpr = Db_CallExpr(dbExpr.type, fn.sysFn, listOf(dbExpr))
-        return aggrDbExpr
+        return cSummarization
+    }
+
+    private fun compileSummarizationSum(pos: C_AtSummarizationPos, type: R_Type): C_AtSummarization? {
+        return when (type) {
+            R_IntegerType -> C_AtSummarization_Aggregate_Sum(pos, type, R_BinaryOp_Add_Integer, Rt_IntValue(0))
+            R_DecimalType -> C_AtSummarization_Aggregate_Sum(pos, type, R_BinaryOp_Add_Decimal, Rt_DecimalValue.ZERO)
+            else -> null
+        }
+    }
+
+    private fun compileSummarizationMinMax(
+            pos: C_AtSummarizationPos,
+            type: R_Type,
+            cmpOp: R_CmpOp,
+            dbFn: Db_SysFunction
+    ): C_AtSummarization? {
+        val rCmpType = R_CmpType.forAtMinMaxType(type)
+        val rComparator = if (type is R_NullableType) null else type.comparator()
+        return if (rCmpType == null && rComparator == null) null else {
+            C_AtSummarization_Aggregate_MinMax(pos, type, cmpOp, rCmpType, rComparator, dbFn)
+        }
     }
 
     private fun processNameConflicts(ctx: C_ExprContext, procFields: List<WhatField>): List<WhatField> {
@@ -171,239 +191,255 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
     }
 
     private class WhatField(
-            val value: C_Value,
-            val dbExpr: Db_Expr,
+            val vExpr: V_Expr,
             val namePos: S_Pos,
             val name: String?,
             val nameExplicit: Boolean,
-            val flags: R_AtWhatFlags
+            val flags: C_AtWhatFieldFlags,
+            val summarization: C_AtSummarization?
     ) {
         fun updateName(newName: String?): WhatField {
             return WhatField(
-                    value = value,
-                    dbExpr = dbExpr,
+                    vExpr = vExpr,
                     namePos = namePos,
                     name = newName,
                     nameExplicit = nameExplicit,
-                    flags = flags
+                    flags = flags,
+                    summarization = summarization
             )
         }
     }
 }
 
 class S_AtExprWhere(val exprs: List<S_Expr>) {
-    fun compile(ctx: C_ExprContext, subValues: MutableList<C_Value>): Db_Expr? {
-        val whereExprs = exprs.withIndex().map { (idx, expr) -> compileWhereExpr(ctx, idx, expr, subValues) }
-        val dbWhere = makeWhere(whereExprs)
-        return dbWhere
+    fun compile(ctx: C_ExprContext, atExprId: R_AtExprId, subValues: MutableList<V_Expr>): V_Expr? {
+        val whereExprs = exprs.withIndex().map { (idx, expr) -> compileWhereExpr(ctx, atExprId, idx, expr, subValues) }
+        return makeWhere(ctx, whereExprs)
     }
 
-    private fun compileWhereExpr(ctx: C_ExprContext, idx: Int, expr: S_Expr, subValues: MutableList<C_Value>): C_Expr {
-        val cExpr = expr.compileWhere(ctx, idx)
-        val cValue = cExpr.value()
-        subValues.add(cValue)
+    private fun compileWhereExpr(
+            ctx: C_ExprContext,
+            atExprId: R_AtExprId,
+            idx: Int,
+            expr: S_Expr,
+            subValues: MutableList<V_Expr>
+    ): V_Expr {
+        val cExpr = expr.compileSafe(ctx)
+        val vExpr = cExpr.value()
+        subValues.add(vExpr)
 
-        val type = cValue.type()
-        if (type == R_BooleanType) {
-            return cExpr
+        val type = vExpr.type()
+        if (type.isError()) {
+            return vExpr
         }
 
-        if (cValue.isDb()) {
-            throw C_Errors.errTypeMismatch(cValue.pos, type, R_BooleanType, "at_where:type:$idx",
-                    "Wrong type of where-expression #${idx+1}")
+        val dependsOnThisAtExpr = vExpr.atDependencies() == immSetOf(atExprId)
+        val attrName = vExpr.implicitAtWhereAttrName()
+
+        return if (!dependsOnThisAtExpr && attrName != null) {
+            compileWhereExprName(ctx, idx, vExpr, attrName, type)
+        } else {
+            compileWhereExprNoName(ctx, idx, vExpr, dependsOnThisAtExpr)
+        }
+    }
+
+    private fun compileWhereExprNoName(ctx: C_ExprContext, idx: Int, vExpr: V_Expr, dependsOnThisAtExpr: Boolean): V_Expr {
+        val type = vExpr.type()
+        if (type == R_BooleanType || type == R_CtErrorType) {
+            return vExpr
         }
 
-        val dbExpr = cValue.toDbExpr()
+        if (dependsOnThisAtExpr) {
+            throw C_Errors.errTypeMismatch(vExpr.pos, type, R_BooleanType, "at_where:type:$idx",
+                    "Wrong type of ${whereExprMsg(idx)}")
+        }
 
         val attrs = S_AtExpr.findWhereContextAttrsByType(ctx, type)
         if (attrs.isEmpty()) {
-            throw C_Error(expr.startPos, "at_where_type:$idx:$type", "No attribute matches type of where-expression #${idx + 1}: $type")
+            ctx.msgCtx.error(vExpr.pos, "at_where_type:$idx:$type",
+                    "No attribute matches type of ${whereExprMsg(idx)} ($type)")
+            return C_Utils.errorVExpr(ctx, vExpr.pos)
         } else if (attrs.size > 1) {
-            throw C_Errors.errMultipleAttrs(expr.startPos, attrs, "at_attr_type_ambig:$idx:$type",
-                    "Multiple attributes match type of where-expression #${idx+1} ($type)")
+            throw C_Errors.errMultipleAttrs(vExpr.pos, attrs, "at_attr_type_ambig:$idx:$type",
+                    "Multiple attributes match type of ${whereExprMsg(idx)} ($type)")
         }
 
         val attr = attrs[0]
-        val attrExpr = attr.compile()
-
-        val dbEqExpr = C_Utils.makeDbBinaryExprEq(attrExpr, dbExpr)
-        return C_DbValue.createExpr(expr.startPos, dbEqExpr)
+        val attrExpr = attr.compile(ctx, vExpr.pos)
+        return C_Utils.makeVBinaryExprEq(ctx, vExpr.pos, attrExpr, vExpr)
     }
 
-    private fun makeWhere(compiledExprs: List<C_Expr>): Db_Expr? {
-        val compiledValues = compiledExprs.map { it.value() }
-        for (value in compiledValues) {
-            check(value.type() == R_BooleanType)
+    private fun compileWhereExprName(ctx: C_ExprContext, idx: Int, vExpr: V_Expr, name: String, type: R_Type): V_Expr {
+        val entityAttrs = ctx.findWhereAttributesByName(name)
+        if (entityAttrs.isEmpty() && type == R_BooleanType) {
+            val msg = "No context attribute matches name '$name', but the expression is accepted" +
+                    ", because its type is ${R_BooleanType.name}" +
+                    " (suggestion: write <expression> == true for clarity)"
+            ctx.msgCtx.warning(vExpr.pos, "at:where:name_boolean_no_attr:$name", msg)
+            return vExpr
         }
 
-        val dbExprs = compiledValues.filter { it.isDb() }.map { it.toDbExpr() }
-        val rExprs = compiledValues.filter { !it.isDb() }.map { it.toRExpr() }
-
-        val dbTree = exprsToTree(dbExprs)
-        val rTree = exprsToTree(rExprs)
-
-        val dbRTree = if (rTree == null) null else {
-            val pos = compiledValues.first { !it.isDb() }.pos
-            C_Utils.toDbExpr(pos, rTree)
+        val entityAttr = ctx.msgCtx.consumeError {
+            matchWhereAttribute(ctx, idx, vExpr.pos, name, entityAttrs, type)
         }
+        entityAttr ?: return C_Utils.errorVExpr(ctx, vExpr.pos)
 
-        if (dbTree != null && dbRTree != null) {
-            return C_Utils.makeDbBinaryExpr(R_BooleanType, R_BinaryOp_And, Db_BinaryOp_And, dbTree, dbRTree)
-        } else if (dbTree != null) {
-            return dbTree
-        } else if (dbRTree != null) {
-            return dbRTree
+        val entityAttrExpr = entityAttr.compile(ctx, vExpr.pos)
+        return C_Utils.makeVBinaryExprEq(ctx, vExpr.pos, entityAttrExpr, vExpr)
+    }
+
+    private fun matchWhereAttribute(
+            ctx: C_ExprContext,
+            idx: Int,
+            exprPos: S_Pos,
+            name: String,
+            entityAttrsByName: List<C_ExprContextAttr>,
+            varType: R_Type
+    ): C_ExprContextAttr {
+        val entityAttrsByType = if (entityAttrsByName.isNotEmpty()) {
+            entityAttrsByName.filter { it.type == varType }
         } else {
-            return null
+            S_AtExpr.findWhereContextAttrsByType(ctx, varType)
+        }
+
+        if (entityAttrsByType.isEmpty()) {
+            throw C_Error.more(exprPos, "at_where:var_noattrs:$idx:$name:$varType",
+                    "No attribute matches name '$name' or type $varType")
+        } else if (entityAttrsByType.size > 1) {
+            if (entityAttrsByName.isEmpty()) {
+                throw C_Errors.errMultipleAttrs(
+                        exprPos,
+                        entityAttrsByType,
+                        "at_where:var_manyattrs_type:$idx:$name:$varType",
+                        "Multiple attributes match expression type $varType"
+                )
+            } else {
+                throw C_Errors.errMultipleAttrs(
+                        exprPos,
+                        entityAttrsByType,
+                        "at_where:var_manyattrs_nametype:$idx:$name:$varType",
+                        "Multiple attributes match name '$name' and type $varType"
+                )
+            }
+        }
+
+        return entityAttrsByType[0]
+    }
+
+    private fun makeWhere(ctx: C_ExprContext, compiledExprs: List<V_Expr>): V_Expr? {
+        return if (compiledExprs.isEmpty()) null else {
+            CommonUtils.foldSimple(compiledExprs) { left, right ->
+                C_BinOp_And.compile(ctx, left, right) ?: C_Utils.errorVExpr(ctx, left.pos)
+            }
         }
     }
 
-    private fun exprsToTree(exprs: List<Db_Expr>): Db_Expr? {
-        return if (exprs.isEmpty()) {
-            null
-        } else {
-            C_Utils.makeDbBinaryExprChain(R_BooleanType, R_BinaryOp_And, Db_BinaryOp_And, exprs)
-        }
+    private fun whereExprMsg(idx: Int): String {
+        val idxMsg = if (exprs.size == 1) "" else " #${idx + 1}"
+        return "where-expression$idxMsg"
     }
-
-    private fun exprsToTree(exprs: List<R_Expr>): R_Expr? {
-        if (exprs.isEmpty()) {
-            return null
-        }
-
-        var left = exprs[0]
-        for (right in exprs.subList(1, exprs.size)) {
-            left = R_BinaryExpr(R_BooleanType, R_BinaryOp_And, left, right)
-        }
-
-        return left
-    }
-}
-
-enum class S_AtCardinality(val rCardinality: R_AtCardinality) {
-    ZERO_ONE(R_AtCardinality.ZERO_ONE),
-    ONE(R_AtCardinality.ONE),
-    ZERO_MANY(R_AtCardinality.ZERO_MANY),
-    ONE_MANY(R_AtCardinality.ONE_MANY),
 }
 
 class S_AtExpr(
-        startPos: S_Pos,
-        val cardinality: S_AtCardinality,
-        val from: List<S_AtExprFrom>,
+        val from: S_Expr,
+        val atPos: S_Pos,
+        val cardinality: R_AtCardinality,
         val where: S_AtExprWhere,
         val what: S_AtExprWhat,
-        val limit: S_Expr?
-): S_Expr(startPos) {
-    override fun compile(ctx: C_ExprContext): C_Expr {
-        val base = compileBase(ctx)
-
-        val type = if (cardinality.rCardinality.many) {
-            R_ListType(base.resType.type)
-        } else if (cardinality.rCardinality.zero) {
-            R_NullableType(base.resType.type)
-        } else {
-            base.resType.type
-        }
-
-        var rExpr = R_AtExpr(type, base.rBase, cardinality.rCardinality, base.limit, base.resType.rowDecoder)
-        return C_RValue.makeExpr(startPos, rExpr, base.exprFacts)
+        val limit: S_Expr?,
+        val offset: S_Expr?
+): S_Expr(from.startPos) {
+    override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
+        return compileInternal(ctx, null)
     }
 
-    private fun compileBase(ctx: C_ExprContext): AtBase {
-        val subValues = mutableListOf<C_Value>()
+    override fun compileNestedAt(ctx: C_ExprContext, parentAtCtx: C_AtContext): C_Expr {
+        return compileInternal(ctx, parentAtCtx)
+    }
 
-        val cFrom = compileFrom(ctx, from)
-        val rFrom = cFrom.map { it.compile() }
+    private fun compileInternal(ctx: C_ExprContext, parentAtCtx: C_AtContext?): C_Expr {
+        val subValues = mutableListOf<V_Expr>()
 
-        val dbCtx = ctx.update(nameCtx = C_NameContext.createAt(ctx.nameCtx, cFrom))
-        val dbWhere = where.compile(dbCtx, subValues)
+        val atExprId = ctx.appCtx.nextAtExprId()
+        val fromCtx = C_AtFromContext(atPos, atExprId, parentAtCtx)
+        val cFrom = from.compileFrom(ctx, fromCtx, subValues)
 
-        val cWhat = what.compile(dbCtx, cFrom, subValues)
-        val resType = calcResultType(cWhat.fields)
+        val cDetails = compileDetails(ctx, atExprId, cFrom, subValues)
+        val vExpr = cFrom.compile(cDetails)
+        return C_VExpr(vExpr)
+    }
 
-        val rWhat = cWhat.fields.filter { !it.flags.ignore }.map { R_AtWhatField(it.expr, it.flags) }
+    private fun compileDetails(
+            ctx: C_ExprContext,
+            atExprId: R_AtExprId,
+            cFrom: C_AtFrom,
+            subValues: MutableList<V_Expr>
+    ): C_AtDetails {
+        val innerCtx = cFrom.innerExprCtx()
+        val vWhere = where.compile(innerCtx, atExprId, subValues)
 
-        val rLimit = compileLimit(ctx, subValues)
+        val cWhat = what.compile(innerCtx, cFrom, subValues)
+        val cResult = compileAtResult(cWhat.allFields)
 
-        val base = R_AtExprBase(rFrom, rWhat, dbWhere)
+        val vLimit = compileLimitOffset(limit, "limit", ctx, subValues)
+        val vOffset = compileLimitOffset(offset, "offset", ctx, subValues)
+
+        val base = C_AtExprBase(cWhat, vWhere)
         val facts = C_ExprVarFacts.forSubExpressions(subValues)
 
-        return AtBase(base, rLimit, resType, facts)
+        return C_AtDetails(startPos, atPos, cardinality, base, vLimit, vOffset, cResult, facts)
     }
 
-    private fun calcResultType(whatFields: List<C_AtWhatField>): AtResultType {
-        val selFields = whatFields.filter { it.flags.select }
+    private fun compileAtResult(whatFields: List<C_AtWhatField>): C_AtExprResult {
+        val selFieldsIndexes = whatFields.withIndex().filter { !it.value.flags.omit }.map { it.index }.toImmList()
+        val selFields = selFieldsIndexes.map { whatFields[it] }
+
+        val groupFieldsIndexes = whatFields.withIndex()
+                .filter { it.value.summarization?.isGroup() ?: false }
+                .map { it.index }
+                .toImmList()
+
+        val hasAggregateFields = whatFields.any { !(it.summarization?.isGroup() ?: true) }
+
+        var rowDecoder: R_AtExprRowDecoder
+        var recordType: R_Type
+
         if (selFields.size == 1 && selFields[0].name == null) {
-            val type = selFields[0].expr.type
-            return AtResultType(type, R_AtExprRowType_Simple)
+            rowDecoder = R_AtExprRowDecoder_Simple
+            recordType = selFields[0].resultType
         } else {
-            val tupleFields = selFields.map { R_TupleField(it.name, it.expr.type) }
+            val tupleFields = selFields.map { R_TupleField(it.name, it.resultType) }
             val type = R_TupleType(tupleFields)
-            return AtResultType(type, R_AtExprRowType_Tuple(type))
+            rowDecoder = R_AtExprRowDecoder_Tuple(type)
+            recordType = type
         }
+
+        val resultType = C_AtExprResult.calcResultType(recordType, cardinality)
+        return C_AtExprResult(recordType, resultType, rowDecoder, selFieldsIndexes, groupFieldsIndexes, hasAggregateFields)
     }
 
-    private fun compileLimit(ctx: C_ExprContext, subValues: MutableList<C_Value>): R_Expr? {
-        if (limit == null) {
+    private fun compileLimitOffset(sExpr: S_Expr?, msg: String, ctx: C_ExprContext, subValues: MutableList<V_Expr>): V_Expr? {
+        if (sExpr == null) {
             return null
         }
 
-        val cValue = limit.compile(ctx).value()
-        subValues.add(cValue)
+        val subCtx = ctx.update(atCtx = null)
+        val vExpr = sExpr.compile(subCtx).value()
+        subValues.add(vExpr)
 
-        val type = cValue.type()
-        if (type != R_IntegerType) {
-            throw C_Error(limit.startPos, "expr_at_limit_type:${type.toStrictString()}",
-                    "Wrong limit type: ${type.toStrictString()} instead of ${R_IntegerType.toStrictString()}")
-        }
+        val type = vExpr.type()
+        C_Types.match(R_IntegerType, type, sExpr.startPos, "expr_at_${msg}_type", "Wrong $msg type")
 
-        return cValue.toRExpr()
+        return vExpr
     }
 
-    private class AtResultType(val type: R_Type, val rowDecoder: R_AtExprRowType)
-
     companion object {
-        fun compileFrom(ctx: C_ExprContext, from: List<S_AtExprFrom>): List<C_AtEntity> {
-            val cFrom = from.mapIndexed { i, f -> compileFromEntity(ctx, i, f) }
-
-            val names = mutableSetOf<String>()
-            for ((alias, entity) in cFrom) {
-                if (!names.add(entity.alias)) {
-                    throw C_Error(alias.pos, "at_dup_alias:${entity.alias}", "Duplicate entity alias: ${entity.alias}")
-                }
-            }
-
-            return cFrom.map { ( _, entity ) -> entity }
-        }
-
-        private fun compileFromEntity(ctx: C_ExprContext, idx: Int, from: S_AtExprFrom): Pair<S_Name, C_AtEntity> {
-            if (from.alias != null) {
-                val name = from.alias
-                val localVar = ctx.nameCtx.resolveNameLocalValue(name.str)
-                if (localVar != null) {
-                    throw C_Error(name.pos, "expr_at_conflict_alias:${name.str}", "Name conflict: '${name.str}'")
-                }
-            }
-
-            val alias = from.alias ?: from.entityName[from.entityName.size - 1]
-            val entity = ctx.nsCtx.getEntity(from.entityName)
-            return Pair(alias, C_AtEntity(entity, alias.str, idx))
-        }
-
         fun findWhereContextAttrsByType(ctx: C_ExprContext, type: R_Type): List<C_ExprContextAttr> {
             return if (type == R_BooleanType) {
                 listOf()
             } else {
-                ctx.nameCtx.findAttributesByType(type)
+                ctx.findWhereAttributesByType(type)
             }
         }
-
-        private class AtBase(
-                val rBase: R_AtExprBase,
-                val limit: R_Expr?,
-                val resType: AtResultType,
-                val exprFacts: C_ExprVarFacts
-        )
     }
 }

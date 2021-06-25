@@ -1,0 +1,17 @@
+module;
+
+entity user {
+    name;
+}
+
+function do_init() {
+    log('init start');
+    create user('Bob');
+    create user('Alice');
+    log('init end');
+    return true;
+}
+
+object init {
+    done: boolean = do_init();
+}

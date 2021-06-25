@@ -4,6 +4,7 @@
 
 package net.postchain.rell.misc
 
+import net.postchain.rell.compiler.C_CompilerModuleSelection
 import net.postchain.rell.compiler.C_CompilerOptions
 import net.postchain.rell.compiler.C_DiskSourceDir
 import net.postchain.rell.model.R_ModuleName
@@ -26,13 +27,45 @@ class CliSnippetsTest {
     @Test fun testAbstr() = chkModule("abstr.main")
     @Test fun testStackTrace() = chkModule("stack_trace")
 
+    @Test fun testRunTests() {
+        chkTestModules("run_tests.bar", "run_tests.bar_extra_test", "run_tests.common_test")
+        chkTestModules("run_tests.foo", "run_tests.foo_extra_test", "run_tests.common_test")
+        chkTestModules("run_tests.foo_10")
+        chkTestModules("run_tests.generic")
+
+        chkModule("run_tests.bar.bar_test")
+        chkModule("run_tests.foo.foo_test")
+        chkModule("run_tests.foo_10.foo_10_test")
+        chkModule("run_tests.generic.tests")
+        chkModule("run_tests.bar_extra_test")
+        chkModule("run_tests.foo_extra_test")
+        chkModule("run_tests.common_test")
+    }
+
+    @Test fun testTests() {
+        chkTestModules("tests")
+        chkModule("tests.calc_test")
+        chkModule("tests.data_test")
+        chkModule("tests.lib_test")
+        chkModule("tests.foobar")
+    }
+
     private fun chkModule(module: String) {
+        val modules = listOf(R_ModuleName.of(module))
+        val modSel = C_CompilerModuleSelection(modules, listOf())
+        chkModules(modSel)
+    }
+
+    private fun chkTestModules(vararg modules: String) {
+        val modNames = modules.map { R_ModuleName.of(it) }
+        val modSel = C_CompilerModuleSelection(listOf(), modNames)
+        chkModules(modSel)
+    }
+
+    private fun chkModules(modSel: C_CompilerModuleSelection) {
         val dir = File("test-cli/src")
         val sourceDir = C_DiskSourceDir(dir)
-
-        val modules = listOf(R_ModuleName.of(module))
-        val res = RellTestUtils.compileApp(sourceDir, modules, C_CompilerOptions.DEFAULT)
-
+        val res = RellTestUtils.compileApp(sourceDir, modSel, C_CompilerOptions.DEFAULT)
         assertEquals(0, res.messages.size, res.messages.toString())
     }
 }

@@ -4,31 +4,51 @@
 
 package net.postchain.rell.compiler
 
-import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.compiler.ast.S_RellFile
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 import org.apache.commons.lang3.StringUtils
 import java.io.File
 
-data class C_SourcePath(val parts: List<String> = listOf()): Comparable<C_SourcePath> {
+class C_SourcePath private constructor(parts: List<String>): Comparable<C_SourcePath> {
+    val parts = parts.toImmList()
+
     private val str = parts.joinToString("/")
 
     fun add(path: C_SourcePath) = C_SourcePath(parts + path.parts)
-    fun add(part: String) = C_SourcePath(parts + part)
+
+    fun add(part: String): C_SourcePath {
+        if (!validate(part)) {
+            throw errBadPath(part)
+        }
+        return C_SourcePath(parts + part)
+    }
+
     fun parent() = C_SourcePath(parts.subList(0, parts.size - 1))
     fun str() = str
 
     override fun compareTo(other: C_SourcePath) = CommonUtils.compareLists(parts, other.parts)
-    override fun toString() = str()
-
     override fun equals(other: Any?) = other is C_SourcePath && parts == other.parts
     override fun hashCode() = parts.hashCode()
+    override fun toString() = str()
 
     companion object {
+        val EMPTY = C_SourcePath(listOf())
+
+        fun of(): C_SourcePath = EMPTY
+
+        fun of(parts: List<String>): C_SourcePath {
+            if (!validate(parts)) {
+                val str = parts.joinToString("/")
+                throw errBadPath(str)
+            }
+            return C_SourcePath(parts)
+        }
+
         fun parse(path: String): C_SourcePath {
             val res = parseOpt(path)
-            return res ?: throw C_CommonError("invalid_path:$path", "Invalid path: '$path'")
+            return res ?: throw errBadPath(path)
         }
 
         fun parseOpt(path: String): C_SourcePath? {
@@ -37,13 +57,23 @@ data class C_SourcePath(val parts: List<String> = listOf()): Comparable<C_Source
                 return null
             }
 
-            for (part in parts) {
-                if (part == "" || part == "." || part == "..") {
-                    return null
-                }
+            if (!validate(parts)) {
+                return null
             }
 
             return C_SourcePath(parts)
+        }
+
+        private fun validate(parts: List<String>): Boolean {
+            return parts.all { validate(it) }
+        }
+
+        private fun validate(part: String): Boolean {
+            return part != "" && part != "." && part != ".."
+        }
+
+        private fun errBadPath(str: String): C_CommonError {
+            return C_CommonError("invalid_path:$str", "Invalid path: '$str'")
         }
     }
 }

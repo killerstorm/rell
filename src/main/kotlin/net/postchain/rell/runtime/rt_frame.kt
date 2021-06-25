@@ -8,12 +8,12 @@ import net.postchain.rell.model.*
 import net.postchain.rell.utils.toImmList
 import java.util.*
 
-class Rt_ParentFrame(val frame: Rt_CallFrame, val pos: R_StackPos)
+class Rt_FrameCaller(val frame: Rt_CallFrame, val pos: R_StackPos)
 
 class Rt_CallFrame(
         val defCtx: Rt_DefinitionContext,
         private val rFrame: R_CallFrame,
-        private val caller: Rt_ParentFrame?,
+        private val caller: Rt_FrameCaller?,
         state: Rt_CallFrameState?,
         hasGuardBlock: Boolean
 ) {
@@ -37,7 +37,7 @@ class Rt_CallFrame(
 
     fun <T> block(block: R_FrameBlock, code: () -> T): T {
         val oldBlock = curBlock
-        check(block.parentUid == oldBlock.uid)
+        check(block.parentUid == oldBlock.uid) { "expected current block ${block.parentUid}, was ${oldBlock.uid}" }
         check(block.offset + block.size <= values.size)
 
         for (i in 0 until block.size) {
@@ -79,7 +79,7 @@ class Rt_CallFrame(
 
     private fun checkPtr(ptr: R_VarPtr): Int {
         val block = curBlock
-        check(ptr.blockUid == block.uid) { "ptr = $ptr, block.id = ${block.uid}" }
+        check(ptr.blockUid == block.uid) { "wrong var block: var_ptr = $ptr, cur_block = ${block.uid}" }
         val offset = ptr.offset
         check(offset >= 0)
         check(offset < block.offset + block.size)
@@ -89,7 +89,7 @@ class Rt_CallFrame(
     fun stackTrace(lastPos: R_FilePos): List<R_StackPos> {
         val res = mutableListOf<R_StackPos>()
 
-        res.add(R_StackPos(defCtx.pos, lastPos))
+        res.add(R_StackPos(defCtx.defId, lastPos))
 
         var frame: Rt_CallFrame? = this
         while (frame != null) {
@@ -120,6 +120,10 @@ class Rt_CallFrame(
         } else if (beforeGuardBlock) {
             throw Rt_Error("no_db_update:guard", "Database modifications are not allowed inside or before a guard block")
         }
+    }
+
+    fun checkBlock(block: R_FrameBlockUid) {
+        check(block == curBlock.uid) { "wrong block: expected $block was ${curBlock.uid}" }
     }
 }
 

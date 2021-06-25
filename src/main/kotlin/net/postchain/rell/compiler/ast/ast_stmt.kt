@@ -4,10 +4,10 @@
 
 package net.postchain.rell.compiler.ast
 
-import net.postchain.rell.utils.MutableTypedKeyMap
-import net.postchain.rell.utils.TypedKey
 import net.postchain.rell.compiler.*
 import net.postchain.rell.model.*
+import net.postchain.rell.utils.MutableTypedKeyMap
+import net.postchain.rell.utils.TypedKey
 
 abstract class S_Statement(val pos: S_Pos) {
     private val modifiedVars = TypedKey<Set<String>>()
@@ -57,42 +57,42 @@ class S_SimpleVarDeclarator(private val attrHeader: S_AttrHeader): S_VarDeclarat
     override fun compile(ctx: C_StmtContext, mutable: Boolean, rExprType: R_Type?, varFacts: C_MutableVarFacts): R_VarDeclarator {
         val name = attrHeader.name
 
-        if (name.str == "_") {
-            if (attrHeader.hasExplicitType()) {
-                throw C_Error(name.pos, "var_wildcard_type", "Name '${name.str}' is a wildcard, it cannot have a type")
-            }
-            return R_WildcardVarDeclarator
-        }
-
         val rType = if (attrHeader.hasExplicitType() || rExprType == null) attrHeader.compileType(ctx.nsCtx) else null
 
         if (rType == null && rExprType == null) {
-            throw C_Error(name.pos, "stmt_var_notypeexpr:${name.str}", "Neither type nor expression specified for '${name.str}'")
+            ctx.msgCtx.error(name.pos, "stmt_var_notypeexpr:${name.str}", "Neither type nor expression specified for '${name.str}'")
         } else if (rExprType != null) {
             C_Utils.checkUnitType(name.pos, rExprType, "stmt_var_unit:${name.str}", "Expression for '${name.str}' returns nothing")
         }
 
         val typeAdapter = if (rExprType != null && rType != null) {
-            S_Type.adapt(rType, rExprType, name.pos, "stmt_var_type:${name.str}", "Type mismatch for '${name.str}'")
+            C_Types.adaptSafe(ctx.msgCtx, rType, rExprType, name.pos, "stmt_var_type:${name.str}", "Type mismatch for '${name.str}'")
         } else {
             R_TypeAdapter_Direct
         }
 
-        val rVarType = rType ?: rExprType!!
-        val cVar = ctx.blkCtx.addLocalVar(name, rVarType, mutable)
-
-        val facts = if (rExprType != null) {
-            val inited = mapOf(cVar.uid to C_VarFact.YES)
-            val nulled = C_VarFacts.varTypeToNulled(cVar.uid, rVarType, rExprType)
-            C_VarFacts.of(inited = inited, nulled = nulled)
-        } else {
-            val inited = mapOf(cVar.uid to C_VarFact.NO)
-            C_VarFacts.of(inited = inited)
+        if (name.str == "_") {
+            if (attrHeader.hasExplicitType()) {
+                ctx.msgCtx.error(name.pos, "var_wildcard_type", "Name '${name.str}' is a wildcard, it cannot have a type")
+            }
+            return R_WildcardVarDeclarator
         }
 
+        val rVarType = rType ?: rExprType ?: R_CtErrorType
+        val cVarRef = ctx.blkCtx.addLocalVar(name, rVarType, mutable, null)
+
+        val varUid = cVarRef.target.uid
+        val facts = if (rExprType != null) {
+            val inited = mapOf(varUid to C_VarFact.YES)
+            val nulled = C_VarFacts.varTypeToNulled(varUid, rVarType, rExprType)
+            C_VarFacts.of(inited = inited, nulled = nulled)
+        } else {
+            val inited = mapOf(varUid to C_VarFact.NO)
+            C_VarFacts.of(inited = inited)
+        }
         varFacts.putFacts(facts)
 
-        return R_SimpleVarDeclarator(cVar.ptr, rVarType, typeAdapter)
+        return R_SimpleVarDeclarator(cVarRef.ptr, rVarType, typeAdapter)
     }
 
     override fun discoverVars(vars: MutableSet<String>) {
@@ -116,19 +116,25 @@ class S_TupleVarDeclarator(val pos: S_Pos, val subDeclarators: List<S_VarDeclara
             return subDeclarators.map { it.compile(ctx, mutable, null, varFacts) }
         }
 
-        if (rExprType !is R_TupleType) {
-            throw C_Error(pos, "var_notuple:$rExprType", "Expression must return a tuple, but it returns '$rExprType'")
-        }
-
-        val n1 = subDeclarators.size
-        val n2 = rExprType.fields.size
-        if (n1 != n2) {
-            throw C_Error(pos, "var_tuple_wrongsize:$n1:$n2:$rExprType",
-                    "Expression returns a tuple of $n2 element(s) instead of $n1 element(s): $rExprType")
+        val fieldTypes = if (rExprType is R_TupleType) {
+            val n1 = subDeclarators.size
+            val n2 = rExprType.fields.size
+            if (n1 != n2) {
+                ctx.msgCtx.error(pos, "var_tuple_wrongsize:$n1:$n2:$rExprType",
+                        "Expression returns a tuple of $n2 element(s) instead of $n1 element(s): $rExprType")
+            }
+            subDeclarators.indices.map {
+                if (it < n2) rExprType.fields[it].type else R_CtErrorType
+            }
+        } else {
+            if (rExprType.isNotError()) {
+                ctx.msgCtx.error(pos, "var_notuple:$rExprType", "Expression must return a tuple, but it returns '$rExprType'")
+            }
+            subDeclarators.map { R_CtErrorType }
         }
 
         return subDeclarators.withIndex().map { (i, subDeclarator) ->
-            subDeclarator.compile(ctx, mutable, rExprType.fields[i].type, varFacts)
+            subDeclarator.compile(ctx, mutable, fieldTypes[i], varFacts)
         }
     }
 
@@ -146,14 +152,13 @@ class S_VarStatement(
         val mutable: Boolean
 ): S_Statement(pos) {
     override fun compile0(ctx: C_StmtContext, repl: Boolean): C_Statement {
-        val cValue = expr?.compile(ctx)?.value()
+        val cValue = expr?.compileSafe(ctx.exprCtx)?.value()
         val rExpr = cValue?.toRExpr()
 
         val varFacts = C_MutableVarFacts()
         varFacts.putFacts(cValue?.varFacts()?.postFacts ?: C_VarFacts.EMPTY)
 
-        var rDeclarator = declarator.compile(ctx, mutable, rExpr?.type, varFacts)
-
+        val rDeclarator = declarator.compile(ctx, mutable, rExpr?.type, varFacts)
         val rStmt = R_VarStatement(rDeclarator, rExpr)
         return C_Statement(rStmt, false, varFacts.toVarFacts())
     }
@@ -172,7 +177,7 @@ class S_ReturnStatement(pos: S_Pos, val expr: S_Expr?): S_Statement(pos) {
     }
 
     private fun compileInternal(ctx: C_StmtContext): R_Statement {
-        val cExpr = expr?.compile(ctx)
+        val cExpr = expr?.compile(ctx, C_TypeHint.ofType(ctx.fnCtx.explicitReturnType))
         val rExpr = cExpr?.value()?.toRExpr()
         if (rExpr != null) {
             C_Utils.checkUnitType(pos, rExpr.type, "stmt_return_unit", "Expression returns nothing")
@@ -207,7 +212,7 @@ class S_ReturnStatement(pos: S_Pos, val expr: S_Expr?): S_Statement(pos) {
 
 class S_BlockStatement(pos: S_Pos, val stmts: List<S_Statement>): S_Statement(pos) {
     override fun compile0(ctx: C_StmtContext, repl: Boolean): C_Statement {
-        val (subCtx, subBlkCtx) = ctx.subBlock(ctx.blkCtx.loop)
+        val (subCtx, subBlkCtx) = ctx.subBlock(ctx.loop)
 
         val hasGuardBlock = stmts.any { it is S_GuardStatement }
 
@@ -259,7 +264,10 @@ class S_ExprStatement(val expr: S_Expr): S_Statement(expr.startPos) {
 class S_AssignStatement(val dstExpr: S_Expr, val op: S_PosValue<S_AssignOpCode>, val srcExpr: S_Expr): S_Statement(dstExpr.startPos) {
     override fun compile0(ctx: C_StmtContext, repl: Boolean): C_Statement {
         val cDstExpr = dstExpr.compileOpt(ctx)
-        val cSrcExpr = srcExpr.compileOpt(ctx)
+
+        val typeHint = C_TypeHint.ofType(cDstExpr?.value()?.type())
+        val cSrcExpr = srcExpr.compileOpt(ctx, typeHint)
+
         if (cDstExpr == null || cSrcExpr == null) {
             return C_Statement.EMPTY
         }
@@ -284,10 +292,10 @@ class S_IfStatement(pos: S_Pos, val expr: S_Expr, val trueStmt: S_Statement, val
         if (cExpr != null) {
             val value = cExpr.value()
             rExpr = value.toRExpr()
-            S_Type.matchOpt(ctx.msgCtx, R_BooleanType, rExpr.type, expr.startPos, "stmt_if_expr_type", "Wrong type of if-expression")
+            C_Types.matchOpt(ctx.msgCtx, R_BooleanType, rExpr.type, expr.startPos, "stmt_if_expr_type", "Wrong type of if-expression")
             exprVarFacts = value.varFacts()
         } else {
-            rExpr = C_Utils.crashExpr(R_BooleanType)
+            rExpr = C_Utils.errorRExpr(R_BooleanType)
             exprVarFacts = C_ExprVarFacts.EMPTY
         }
 
@@ -384,7 +392,7 @@ class S_WhileStatement(pos: S_Pos, val expr: S_Expr, val stmt: S_Statement): S_S
         }
 
         val rExpr = loop.condExpr
-        S_Type.matchOpt(ctx.msgCtx, R_BooleanType, rExpr.type, expr.startPos, "stmt_while_expr_type", "Wrong type of while-expression")
+        C_Types.matchOpt(ctx.msgCtx, R_BooleanType, rExpr.type, expr.startPos, "stmt_while_expr_type", "Wrong type of while-expression")
 
         val loopUid = ctx.fnCtx.nextLoopUid()
         val (loopCtx, loopBlkCtx) = loop.condCtx.subBlock(loopUid)
@@ -435,7 +443,7 @@ class S_WhileStatement(pos: S_Pos, val expr: S_Expr, val stmt: S_Statement): S_S
             for (name in modVars) {
                 val localVar = ctx.blkCtx.lookupLocalVar(name)
                 if (localVar != null) {
-                    res.add(localVar)
+                    res.add(localVar.target)
                 }
             }
 
@@ -567,10 +575,20 @@ class S_ForStatement(pos: S_Pos, val declarator: S_VarDeclarator, val expr: S_Ex
 
 class S_BreakStatement(pos: S_Pos): S_Statement(pos) {
     override fun compile0(ctx: C_StmtContext, repl: Boolean): C_Statement {
-        if (ctx.blkCtx.loop == null) {
-            throw C_Error(pos, "stmt_break_noloop", "Break without a loop")
+        if (ctx.loop == null) {
+            throw C_Error.more(pos, "stmt_break_noloop", "Break without a loop")
         }
         val rStmt = R_BreakStatement()
+        return C_Statement(rStmt, false)
+    }
+}
+
+class S_ContinueStatement(pos: S_Pos): S_Statement(pos) {
+    override fun compile0(ctx: C_StmtContext, repl: Boolean): C_Statement {
+        if (ctx.loop == null) {
+            throw C_Error.more(pos, "stmt_continue_noloop", "Continue without a loop")
+        }
+        val rStmt = R_ContinueStatement()
         return C_Statement(rStmt, false)
     }
 }

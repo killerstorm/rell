@@ -18,8 +18,8 @@ class ReplTxTest: BaseRellTest(true) {
         initStuff()
 
         repl.chk("val op = foo(123);")
-        repl.chk("op", "RES:op[foo(int[123])]")
-        repl.chk("val tx = rell.gtx.tx(op);")
+        repl.chk("op", "RES:op[foo(123)]")
+        repl.chk("val tx = rell.test.tx(op);")
         repl.chk("tx.run();", "OUT:x=123", "RES:unit")
     }
 
@@ -27,10 +27,19 @@ class ReplTxTest: BaseRellTest(true) {
         file("module.rell", "operation foo(x: integer) { print('x='+x); }")
         initStuff()
 
-        repl.chk("val tx1 = rell.gtx.tx(foo(123));")
-        repl.chk("val tx2 = rell.gtx.tx(foo(456));")
-        repl.chk("val blk = rell.gtx.block([tx1, tx2]);")
+        repl.chk("val tx1 = rell.test.tx(foo(123));")
+        repl.chk("val tx2 = rell.test.tx(foo(456));")
+        repl.chk("val blk = rell.test.block([tx1, tx2]);")
         repl.chk("blk.run();", "OUT:x=123", "OUT:x=456", "RES:unit")
+    }
+
+    @Test fun testCallOpByDynamicName() {
+        file("module.rell", "operation foo(x: integer) { print('x='+x); }")
+        initStuff()
+
+        repl.chk("val op = rell.test.op('foo', [(123).to_gtv()]);")
+        repl.chk("val tx = rell.test.tx(op);")
+        repl.chk("tx.run();", "OUT:x=123", "RES:unit")
     }
 
     @Test fun testMultipleBlocks() {
@@ -40,23 +49,24 @@ class ReplTxTest: BaseRellTest(true) {
         """)
         initStuff()
 
-        repl.chk("rell.gtx.tx(foo(123)).run();", "OUT:foo(123)", "RES:unit")
+        repl.chk("rell.test.tx(foo(123)).run();", "OUT:foo(123)", "RES:unit")
         repl.chk("block@*{}", "RES:list<block>[block[1]]")
         repl.chk("transaction@*{}", "RES:list<transaction>[transaction[1]]")
 
-        repl.chk("rell.gtx.tx(bar(456)).run();", "OUT:bar(456)", "RES:unit")
+        repl.chk("rell.test.tx(bar(456)).run();", "OUT:bar(456)", "RES:unit")
         repl.chk("block@*{}", "RES:list<block>[block[1],block[2]]")
         repl.chk("transaction@*{}", "RES:list<transaction>[transaction[1],transaction[2]]")
 
-        repl.chk("rell.gtx.tx(foo(789)).run();", "OUT:foo(789)", "RES:unit")
+        repl.chk("rell.test.tx(foo(789)).run();", "OUT:foo(789)", "RES:unit")
         repl.chk("block@*{}", "RES:list<block>[block[1],block[2],block[3]]")
         repl.chk("transaction@*{}", "RES:list<transaction>[transaction[1],transaction[2],transaction[3]]")
     }
 
     @Test fun testNoRepl() {
+        tst.testLib = true
         file("module.rell", "module;")
         def("operation foo(x: integer){}")
-        chkEx("{ rell.gtx.tx(foo(123)).run(); return 0; }", "rt_err:fn:block.run:no_repl")
+        chkEx("{ rell.test.tx(foo(123)).run(); return 0; }", "rt_err:fn:rell.test.tx.run:no_repl_test")
     }
 
     @Test fun testImportedOperations() {
@@ -66,8 +76,8 @@ class ReplTxTest: BaseRellTest(true) {
         initStuff()
 
         repl.chk("import a;")
-        repl.chk("rell.gtx.tx(a.foo(123)).run();", "OUT:foo:123", "RES:unit")
+        repl.chk("rell.test.tx(a.foo(123)).run();", "OUT:foo:123", "RES:unit")
         repl.chk("import b;")
-        repl.chk("rell.gtx.tx(b.bar(456)).run();", "OUT:bar:456", "RES:unit")
+        repl.chk("rell.test.tx(b.bar(456)).run();", "OUT:bar:456", "RES:unit")
     }
 }

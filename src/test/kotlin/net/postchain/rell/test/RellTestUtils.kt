@@ -4,11 +4,14 @@
 
 package net.postchain.rell.test
 
+import net.postchain.base.BlockchainRid
+import net.postchain.gtv.Gtv
 import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlManager
+import net.postchain.rell.utils.CommonUtils
 
 object RellTestUtils {
     val ENCODER_PLAIN = { _: R_Type, v: Rt_Value -> v.toString() }
@@ -17,7 +20,7 @@ object RellTestUtils {
 
     const val MAIN_FILE = "main.rell"
 
-    const val RELL_VER = "0.10"
+    const val RELL_VER = "0.10.4"
 
     fun processApp(code: String, processor: (T_App) -> String): String {
         val sourceDir = C_MapSourceDir.of(MAIN_FILE to code)
@@ -44,7 +47,7 @@ object RellTestUtils {
         return processor(tApp)
     }
 
-    private fun errsToString(errs: List<C_Message>, errPos: Boolean): String {
+    fun errsToString(errs: List<C_Message>, errPos: Boolean): String {
         val forceFile = errs.any { it.pos.path().str() != "main.rell" }
 
         val errMsgs = errs
@@ -119,7 +122,7 @@ object RellTestUtils {
         return res
     }
 
-    private fun findFn(app: R_App, name: String): R_Function {
+    private fun findFn(app: R_App, name: String): R_FunctionDefinition {
         for (module in app.modules) {
             val fn = module.functions[name]
             if (fn != null) return fn
@@ -183,10 +186,25 @@ object RellTestUtils {
     }
 
     fun compileApp(sourceDir: C_SourceDir, modules: List<R_ModuleName>, options: C_CompilerOptions): C_CompilationResult {
-        val res = C_Compiler.compile(sourceDir, modules, options)
-        TestSnippetsRecorder.record(sourceDir, modules, options, res)
+        val modSel = C_CompilerModuleSelection(modules, listOf())
+        return compileApp(sourceDir, modSel, options)
+    }
+
+    fun compileApp(sourceDir: C_SourceDir, modSel: C_CompilerModuleSelection, options: C_CompilerOptions): C_CompilationResult {
+        val res = C_Compiler.compile(sourceDir, modSel, options)
+        TestSnippetsRecorder.record(sourceDir, modSel, options, res)
         return res
     }
 
+    fun strToRidHex(s: String) = (s + "00".repeat(32)).substring(0, 64)
+    fun strToRidBytes(s: String) = CommonUtils.hexToBytes(strToRidHex(s))
+    fun strToBlockchainRid(s: String) = BlockchainRid(strToRidBytes(s))
+
     class TestCallResult(val res: String, val stack: List<R_StackPos>)
+
+    object Rt_TestTxContext: Rt_TxContext() {
+        override fun emitEvent(type: String, data: Gtv) {
+            throw Rt_Utils.errNotSupported("not supported in tests")
+        }
+    }
 }

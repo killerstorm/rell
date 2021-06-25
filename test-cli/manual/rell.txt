@@ -104,12 +104,12 @@ ERROR System function 'abs': Integer overflow: -9223372036854775808
 	at stack_trace!error(stack_trace/errors.rell:6)
 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------
-./rell.sh --db-properties test-cli/config/node-config.properties -d test-cli/src -- stack_trace.entities ent_main
+./rell.sh --resetdb --db-properties test-cli/config/node-config.properties -d test-cli/src -- stack_trace.entities ent_main
 ERROR No records found
 	at stack_trace.entities!ent_main(stack_trace/entities.rell:6)
 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------
-./rell.sh --db-url $(test-cli/sh/jdbc_url.sh test-cli/config/node-config.properties) -d test-cli/src -- stack_trace.entities ent_main
+./rell.sh --resetdb --db-url $(test-cli/sh/jdbc_url.sh test-cli/config/node-config.properties) -d test-cli/src -- stack_trace.entities ent_main
 ERROR No records found
 	at stack_trace.entities!ent_main(stack_trace/entities.rell:6)
 
@@ -120,5 +120,73 @@ ERROR No records found
 ./rell.sh --json -d test-cli/src calc rell.get_build_details
 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------
-./rell.sh -d test-cli/src mod rell.get_app_structure | python -m json.tool
-./rell.sh -d test-cli/src app_structure rell.get_app_structure | python -m json.tool
+./rell.sh -d test-cli/src mod rell.get_app_structure | python3 -m json.tool
+./rell.sh -d test-cli/src app_structure rell.get_app_structure | python3 -m json.tool
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rell.sh -d test-cli/src tests.foobar
+
+TEST RESULTS:
+
+tests.foobar:test_foo OK
+tests.foobar:test_fail_require FAILED
+tests.foobar:test_fail_assert_equals FAILED
+
+SUMMARY: 2 FAILED / 1 PASSED / 3 TOTAL
+
+
+***** FAILED *****
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rell.sh -d test-cli/src --db-properties test-cli/config/node-config.properties tests.data_test
+
+TEST RESULTS:
+
+tests.data_test:test_add_user OK
+tests.data_test:test_remove_user OK
+
+SUMMARY: 0 FAILED / 2 PASSED / 2 TOTAL
+
+
+***** OK *****
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rell.sh -d test-cli/src --db-properties test-cli/config/node-config.properties --test tests
+
+TEST RESULTS:
+
+tests.calc_test:test_square OK
+tests.calc_test:test_cube OK
+tests.data_test:test_add_user OK
+tests.data_test:test_remove_user OK
+tests.foobar:test_foo OK
+tests.foobar:test_fail_require FAILED
+tests.foobar:test_fail_assert_equals FAILED
+tests.lib_test:test_lib OK
+
+SUMMARY: 2 FAILED / 6 PASSED / 8 TOTAL
+
+
+***** FAILED *****
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rell.sh -d test-cli/src --db-properties test-cli/config/node-config.properties --test tests.calc_test tests.data_test
+
+TEST RESULTS:
+
+tests.calc_test:test_square OK
+tests.calc_test:test_cube OK
+tests.data_test:test_add_user OK
+tests.data_test:test_remove_user OK
+
+SUMMARY: 0 FAILED / 4 PASSED / 4 TOTAL
+
+
+***** FAILED *****
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./rell.sh -d test-cli/src --test notfound
+ERROR: Module 'notfound' not found
+
+./rell.sh -d test-cli/src --test not.found
+ERROR: Module 'not.found' not found

@@ -243,7 +243,7 @@ class VirtualTest: BaseGtxTest(false) {
         def("struct sub { q: integer; p: sub2; }")
         def("struct sub2 { r: integer; }")
 
-        var args = argToGtv("[123,'Hello',[456,[789]]]", "[[0],[1],[2]]")
+        val args = argToGtv("[123,'Hello',[456,[789]]]", "[[0],[1],[2]]")
 
         chkVirtual("virtual<rec>?", "_type_of(x)", args, "'virtual<rec>?'")
         chkVirtual("virtual<rec>?", "_type_of(x.to_full())", args, "ct_err:expr_mem_null:to_full")
@@ -959,8 +959,8 @@ class VirtualTest: BaseGtxTest(false) {
 
         chkVirtual(type, "_type_of(x[0])", args, "'integer'")
         chkVirtual(type, "_type_of(x[1])", args, "'text'")
-        chkVirtual(type, "_type_of(x[-1])", args, "ct_err:expr_lookup:tuple:index:-1:2")
-        chkVirtual(type, "_type_of(x[2])", args, "ct_err:expr_lookup:tuple:index:2:2")
+        chkVirtual(type, "_type_of(x[-1])", args, "ct_err:expr_subscript:tuple:index:-1:2")
+        chkVirtual(type, "_type_of(x[2])", args, "ct_err:expr_subscript:tuple:index:2:2")
     }
 
     @Test fun testTupleValue() {
@@ -973,8 +973,8 @@ class VirtualTest: BaseGtxTest(false) {
         chkVirtual(type, "_strict_str(x.b)", args, "'text[Hello]'")
         chkVirtual(type, "_strict_str(x[0])", args, "'int[123]'")
         chkVirtual(type, "_strict_str(x[1])", args, "'text[Hello]'")
-        chkVirtual(type, "_strict_str(x[-1])", args, "ct_err:expr_lookup:tuple:index:-1:2")
-        chkVirtual(type, "_strict_str(x[2])", args, "ct_err:expr_lookup:tuple:index:2:2")
+        chkVirtual(type, "_strict_str(x[-1])", args, "ct_err:expr_subscript:tuple:index:-1:2")
+        chkVirtual(type, "_strict_str(x[2])", args, "ct_err:expr_subscript:tuple:index:2:2")
 
         args = argToGtv("[123,'Hello']", "[[0]]")
         chkVirtual(type, "_strict_str(x)", args, "'virtual(a=int[123],b=null)'")
@@ -1390,28 +1390,30 @@ class VirtualTest: BaseGtxTest(false) {
         chkFull("query q(x: $type) $body", args, expected)
     }
 
-    private fun argToGtv(args: String) = GtvTestUtils.decodeGtvStr(args)
+    companion object {
+        fun argToGtv(args: String) = GtvTestUtils.decodeGtvStr(args)
 
-    private fun argToGtv(args: String, paths: String): Gtv {
-        val gtv = GtvTestUtils.decodeGtvStr(args)
-        return argToGtv(gtv, paths)
-    }
+        fun argToGtv(args: String, paths: String): Gtv {
+            val gtv = GtvTestUtils.decodeGtvStr(args)
+            return argToGtv(gtv, paths)
+        }
 
-    private fun argToGtv(gtv: Gtv, paths: String): Gtv {
-        val pathsSet = GtvTestUtils.decodeGtvStr(paths).asArray()
-                .map { t ->
-                    val ints = t.asArray()
-                            .map { if (it is GtvInteger) it.asInteger().toInt() else it.asString() }
-                            .toTypedArray()
-                    GtvPathFactory.buildFromArrayOfPointers(ints)
-                }
-                .toSet()
+        fun argToGtv(gtv: Gtv, paths: String): Gtv {
+            val pathsSet = GtvTestUtils.decodeGtvStr(paths).asArray()
+                    .map { t ->
+                        val ints = t.asArray()
+                                .map { if (it is GtvInteger) it.asInteger().toInt() else it.asString() }
+                                .toTypedArray()
+                        GtvPathFactory.buildFromArrayOfPointers(ints)
+                    }
+                    .toSet()
 
-        val gtvPaths = GtvPathSet(pathsSet)
+            val gtvPaths = GtvPathSet(pathsSet)
 
-        val calculator = GtvMerkleHashCalculator(PostchainUtils.cryptoSystem)
-        val merkleProofTree = gtv.generateProof(gtvPaths, calculator)
-        val proofGtv = merkleProofTree.serializeToGtv()
-        return proofGtv
+            val calculator = GtvMerkleHashCalculator(PostchainUtils.cryptoSystem)
+            val merkleProofTree = gtv.generateProof(gtvPaths, calculator)
+            val proofGtv = merkleProofTree.serializeToGtv()
+            return proofGtv
+        }
     }
 }

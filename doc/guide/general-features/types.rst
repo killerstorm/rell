@@ -26,7 +26,7 @@ A real number of up to 20 digits after the decimal point and up to 131072 digits
 .. code-block:: rell
 
   val approx_pi : decimal = 3.14159;
-  val scientific_value : decimal = 55.77e-5;    
+  val scientific_value : decimal = 55.77e-5;
 
 text
 ~~~~
@@ -273,7 +273,7 @@ Creating collections:
     // map
     val m1 = [ 'Bob' : 123, 'Alice' : 456 ];
     val m2 = map<text, integer>();
-    
+
 
 decimal
 ~~~~~~~
@@ -431,4 +431,4 @@ assigned to a variable of type ``A`` (or passed as a parameter of type
 
 --------------
 
-*Rell v0.10.2*
+*Rell v0.10.4*

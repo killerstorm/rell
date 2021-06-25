@@ -9,10 +9,12 @@ import net.postchain.base.BlockchainRid
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
 import net.postchain.rell.compiler.C_Constants
-import net.postchain.rell.model.R_StackPos
+import net.postchain.rell.compiler.C_LateGetter
+import net.postchain.rell.model.*
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.sql.SqlManager
 import java.math.BigDecimal
+import java.math.BigInteger
 import java.math.MathContext
 import java.math.RoundingMode
 import java.sql.Connection
@@ -20,8 +22,10 @@ import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.sql.SQLException
 
-fun String.toGtv(): Gtv = GtvFactory.gtv(this)
 fun Boolean.toGtv(): Gtv = GtvFactory.gtv(this)
+fun Int.toGtv(): Gtv = GtvFactory.gtv(this.toLong())
+fun Long.toGtv(): Gtv = GtvFactory.gtv(this)
+fun String.toGtv(): Gtv = GtvFactory.gtv(this)
 fun BlockchainRid.toGtv(): Gtv = GtvFactory.gtv(this.data)
 fun List<Gtv>.toGtv(): Gtv = GtvFactory.gtv(this)
 fun Map<String, Gtv>.toGtv(): Gtv = GtvFactory.gtv(this)
@@ -80,6 +84,8 @@ class Rt_TupleComparator(private val elemComparators: List<Comparator<Rt_Value>>
 }
 
 class Rt_SqlManager(private val sqlMgr: SqlManager, private val logErrors: Boolean): SqlManager() {
+    override val hasConnection = sqlMgr.hasConnection
+
     override fun <T> execute0(tx: Boolean, code: (SqlExecutor) -> T): T {
         val res = sqlMgr.execute(tx) { sqlExec ->
             val sqlExec2 = Rt_SqlExecutor(sqlExec, logErrors)
@@ -186,6 +192,33 @@ object Rt_Utils {
     fun appendStackTrace(msg: String, stack: List<R_StackPos>): String {
         return if (stack.isEmpty()) msg else (msg + "\n" + stack.joinToString("\n") { "\tat $it" })
     }
+
+    fun check(b: Boolean, msgProvider: () -> Pair<String, String>) {
+        if (!b) {
+            val (code, msg) = msgProvider()
+            throw Rt_Error(code, msg)
+        }
+    }
+
+    fun <T> checkNotNull(value: T?, msgProvider: () -> Pair<String, String>): T {
+        if (value == null) {
+            val (code, msg) = msgProvider()
+            throw Rt_Error(code, msg)
+        }
+        return value
+    }
+
+    fun evaluateInNewFrame(
+            frame: Rt_CallFrame,
+            expr: R_Expr,
+            filePos: R_FilePos?,
+            rFrameGetter: C_LateGetter<R_CallFrame>
+    ): Rt_Value {
+        val caller = if (filePos == null) null else R_FunctionDefinition.createFrameCaller(frame, filePos)
+        val rSubFrame = rFrameGetter.get()
+        val subFrame = R_FunctionDefinition.createCallFrame(frame.defCtx, caller, rSubFrame)
+        return expr.evaluate(subFrame)
+    }
 }
 
 object Rt_DecimalUtils {
@@ -227,7 +260,33 @@ object Rt_DecimalUtils {
             }
         }
 
+        t = stripTrailingZeros(t)
         return t
+    }
+
+    private fun stripTrailingZeros(v: BigDecimal): BigDecimal {
+        val scale = v.scale()
+        if (scale <= 0) {
+            return v
+        }
+
+        var s = scale
+
+        var q = v.unscaledValue()
+        while (s > 0) {
+            val arr = q.divideAndRemainder(BigInteger.TEN)
+            val div = arr[0]
+            val mod = arr[1]
+            if (mod != BigInteger.ZERO) break
+            --s
+            q = div
+        }
+
+        if (s == scale) {
+            return v
+        }
+
+        return BigDecimal(q, s)
     }
 
     fun add(a: BigDecimal, b: BigDecimal): BigDecimal {

@@ -59,7 +59,7 @@ class TypeTest: BaseRellTest() {
     }
 
     @Test fun testExplicitUnitType() {
-        chkQueryEx("entity foo { x: unit; } query q() = 0;", listOf(), "ct_err:unknown_type:unit")
+        chkFull("entity foo { x: unit; } query q() = 0;", listOf(), "ct_err:unknown_type:unit")
         chkEx("{ var x: unit; return 123; }", "ct_err:unknown_type:unit")
     }
 
@@ -107,10 +107,10 @@ class TypeTest: BaseRellTest() {
     }
 
     @Test fun testEntityAttributeTypeErr() {
-        chkQueryEx("entity foo { x: (integer); } query q() = 0;", listOf(), "ct_err:entity_attr_type:x:(integer)")
-        chkQueryEx("entity foo { x: (integer, text); } query q() = 0;", listOf(), "ct_err:entity_attr_type:x:(integer,text)")
-        chkQueryEx("entity foo { x: range; } query q() = 0;", listOf(), "ct_err:entity_attr_type:x:range")
-        chkQueryEx("entity foo { x: list<integer>; } query q() = 0;", listOf(), "ct_err:entity_attr_type:x:list<integer>")
+        chkFull("entity foo { x: (integer); } query q() = 0;", listOf(), "ct_err:entity_attr_type:x:(integer)")
+        chkFull("entity foo { x: (integer, text); } query q() = 0;", listOf(), "ct_err:entity_attr_type:x:(integer,text)")
+        chkFull("entity foo { x: range; } query q() = 0;", listOf(), "ct_err:entity_attr_type:x:range")
+        chkFull("entity foo { x: list<integer>; } query q() = 0;", listOf(), "ct_err:entity_attr_type:x:list<integer>")
     }
 
     @Test fun testRowid() {
@@ -147,38 +147,38 @@ class TypeTest: BaseRellTest() {
         def("struct foo { x: integer = 123; }")
         def("namespace ns { struct bar { y: integer = 456; } }")
 
-        chkQueryEx("function f(foo): text = _type_of(foo); query q() = f(foo());", "text[foo]")
-        chkQueryEx("function f(foo): foo = foo; query q() = f(foo());", "foo[x=int[123]]")
-        chkQueryEx("function f(foo?): text = _type_of(foo); query q() = f(foo());", "text[foo?]")
-        chkQueryEx("function f(foo?): foo? = foo; query q() = f(foo());", "foo[x=int[123]]")
+        chkFull("function f(foo): text = _type_of(foo); query q() = f(foo());", "text[foo]")
+        chkFull("function f(foo): foo = foo; query q() = f(foo());", "foo[x=int[123]]")
+        chkFull("function f(foo?): text = _type_of(foo); query q() = f(foo());", "text[foo?]")
+        chkFull("function f(foo?): foo? = foo; query q() = f(foo());", "foo[x=int[123]]")
 
-        chkQueryEx("function f(ns.bar): text = _type_of(bar); query q() = f(ns.bar());", "text[ns.bar]")
-        chkQueryEx("function f(ns.bar): ns.bar = bar; query q() = f(ns.bar());", "ns.bar[y=int[456]]")
-        chkQueryEx("function f(ns.bar?): text = _type_of(bar); query q() = f(ns.bar());", "text[ns.bar?]")
-        chkQueryEx("function f(ns.bar?): ns.bar? = bar; query q() = f(ns.bar());", "ns.bar[y=int[456]]")
+        chkFull("function f(ns.bar): text = _type_of(bar); query q() = f(ns.bar());", "text[ns.bar]")
+        chkFull("function f(ns.bar): ns.bar = bar; query q() = f(ns.bar());", "ns.bar[y=int[456]]")
+        chkFull("function f(ns.bar?): text = _type_of(bar); query q() = f(ns.bar());", "text[ns.bar?]")
+        chkFull("function f(ns.bar?): ns.bar? = bar; query q() = f(ns.bar());", "ns.bar[y=int[456]]")
 
-        chkQueryEx("function f(foo: integer): text = _type_of(foo); query q() = f(789);", "text[integer]")
-        chkQueryEx("function f(foo: integer): integer = foo; query q() = f(789);", "int[789]")
-        chkQueryEx("function f(foo: ns.bar): text = _type_of(foo); query q() = f(ns.bar());", "text[ns.bar]")
-        chkQueryEx("function f(foo: ns.bar): ns.bar = foo; query q() = f(ns.bar());", "ns.bar[y=int[456]]")
+        chkFull("function f(foo: integer): text = _type_of(foo); query q() = f(789);", "text[integer]")
+        chkFull("function f(foo: integer): integer = foo; query q() = f(789);", "int[789]")
+        chkFull("function f(foo: ns.bar): text = _type_of(foo); query q() = f(ns.bar());", "text[ns.bar]")
+        chkFull("function f(foo: ns.bar): ns.bar = foo; query q() = f(ns.bar());", "ns.bar[y=int[456]]")
     }
 
     @Test fun testInferNameStructAttr() {
         def("struct foo { x: integer = 123; }")
         def("namespace ns { struct bar { y: integer = 456; } }")
 
-        chkQueryEx("struct rec { foo; } query q() = _type_of(rec(foo()).foo);", "text[foo]")
-        chkQueryEx("struct rec { foo; } query q() = rec(foo()).foo;", "foo[x=int[123]]")
-        chkQueryEx("struct rec { foo?; } query q() = _type_of(rec(foo()).foo);", "text[foo?]")
-        chkQueryEx("struct rec { foo?; } query q() = rec(foo()).foo;", "foo[x=int[123]]")
+        chkFull("struct rec { foo; } query q() = _type_of(rec(foo()).foo);", "text[foo]")
+        chkFull("struct rec { foo; } query q() = rec(foo()).foo;", "foo[x=int[123]]")
+        chkFull("struct rec { foo?; } query q() = _type_of(rec(foo()).foo);", "text[foo?]")
+        chkFull("struct rec { foo?; } query q() = rec(foo()).foo;", "foo[x=int[123]]")
 
-        chkQueryEx("struct rec { ns.bar; } query q() = _type_of(rec(ns.bar()).bar);", "text[ns.bar]")
-        chkQueryEx("struct rec { ns.bar; } query q() = rec(ns.bar()).bar;", "ns.bar[y=int[456]]")
-        chkQueryEx("struct rec { ns.bar?; } query q() = _type_of(rec(ns.bar()).bar);", "text[ns.bar?]")
-        chkQueryEx("struct rec { ns.bar?; } query q() = rec(ns.bar()).bar;", "ns.bar[y=int[456]]")
+        chkFull("struct rec { ns.bar; } query q() = _type_of(rec(ns.bar()).bar);", "text[ns.bar]")
+        chkFull("struct rec { ns.bar; } query q() = rec(ns.bar()).bar;", "ns.bar[y=int[456]]")
+        chkFull("struct rec { ns.bar?; } query q() = _type_of(rec(ns.bar()).bar);", "text[ns.bar?]")
+        chkFull("struct rec { ns.bar?; } query q() = rec(ns.bar()).bar;", "ns.bar[y=int[456]]")
 
-        chkQueryEx("struct rec { foo: integer; } query q() = _type_of(rec(789).foo);", "text[integer]")
-        chkQueryEx("struct rec { foo: integer; } query q() = rec(789).foo;", "int[789]")
+        chkFull("struct rec { foo: integer; } query q() = _type_of(rec(789).foo);", "text[integer]")
+        chkFull("struct rec { foo: integer; } query q() = rec(789).foo;", "int[789]")
     }
 
     @Test fun testInferNameEntityAttr() {
@@ -194,7 +194,7 @@ class TypeTest: BaseRellTest() {
         chk("_type_of((mixed@{}).bar)", "text[ns.bar]")
 
         chkCompile("entity bad { foo; index foo; }", "OK")
-        chkCompile("entity bad { ns.bar; index ns.bar; }", "ct_err:entity_keyindex_def:bar")
+        chkCompile("entity bad { ns.bar; index ns.bar; }", "OK")
         chkCompile("entity bad { ns.bar; index bar; }", "OK")
     }
 }

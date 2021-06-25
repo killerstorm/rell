@@ -4,11 +4,13 @@
 
 package net.postchain.rell.compiler
 
-import net.postchain.rell.utils.LateGetter
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.vexpr.V_ConstantExpr
+import net.postchain.rell.compiler.vexpr.V_RExpr
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.utils.LateGetter
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 import org.apache.commons.lang3.StringUtils
@@ -105,7 +107,7 @@ class C_DefProxy<T> private constructor(
         fun deprecatedMessage(
                 msgCtx: C_MessageContext,
                 pos: S_Pos,
-                name: String,
+                nameMsg: String,
                 deprecation: C_DefProxyDeprecation
         ) {
             val type = deprecation.type
@@ -114,8 +116,8 @@ class C_DefProxy<T> private constructor(
             val typeStr = StringUtils.capitalize(type.msg)
             val depCode = deprecated.detailsCode()
             val depStr = deprecated.detailsMessage()
-            val code = "deprecated:$type:$name$depCode"
-            val msg = "$typeStr '$name' is deprecated$depStr"
+            val code = "deprecated:$type:$nameMsg$depCode"
+            val msg = "$typeStr '$nameMsg' is deprecated$depStr"
 
             val error = deprecated.error || msgCtx.globalCtx.compilerOptions.deprecatedError
             val msgType = if (error) C_MessageType.ERROR else C_MessageType.WARNING
@@ -191,6 +193,13 @@ class C_Namespace(
     fun value(name: String) = values[name]
     fun function(name: String) = functions[name]
 
+    fun addTo(b: C_NamespaceBuilder) {
+        namespaces.forEach { b.addNamespace(it.key, it.value) }
+        types.forEach { b.addType(it.key, it.value) }
+        values.forEach { b.addValue(it.key, it.value) }
+        functions.forEach { b.addFunction(it.key, it.value) }
+    }
+
     companion object {
         val EMPTY = C_Namespace(namespaces = mapOf(), types = mapOf(), values = mapOf(), functions = mapOf())
     }
@@ -232,6 +241,11 @@ class C_NamespaceBuilder {
         if (elem.function != null) addDef(functions, name, elem.function)
     }
 
+    fun addNamespace(name: String, ns: C_DefProxy<C_Namespace>) = addDef(namespaces, name, ns)
+    fun addType(name: String, type: C_DefProxy<R_Type>) = addDef(types, name, type)
+    fun addValue(name: String, value: C_DefProxy<C_NamespaceValue>) = addDef(values, name, value)
+    fun addFunction(name: String, function: C_DefProxy<C_GlobalFunction>) = addDef(functions, name, function)
+
     private fun <T> addDef(map: MutableMap<String, C_DefProxy<T>>, name: String, def: C_DefProxy<T>) {
         check(name !in map) { "$name ${map.keys.sorted()}" }
         map[name] = def
@@ -242,7 +256,8 @@ class C_NamespaceBuilder {
     }
 }
 
-class C_NamespaceValueContext(val defCtx: C_DefinitionContext) {
+class C_NamespaceValueContext(val exprCtx: C_ExprContext) {
+    val defCtx = exprCtx.defCtx
     val globalCtx = defCtx.globalCtx
     val msgCtx = defCtx.msgCtx
     val modCtx = defCtx.modCtx
@@ -257,12 +272,15 @@ abstract class C_NamespaceValue_RExpr: C_NamespaceValue() {
 
     override final fun toExpr(ctx: C_NamespaceValueContext, name: List<S_Name>): C_Expr {
         val rExpr = toExpr0(ctx, name)
-        return C_RValue.makeExpr(name[0].pos, rExpr)
+        return V_RExpr.makeExpr(ctx.exprCtx, name[0].pos, rExpr)
     }
 }
 
-class C_NamespaceValue_Value(private val value: Rt_Value): C_NamespaceValue_RExpr() {
-    override fun toExpr0(ctx: C_NamespaceValueContext, name: List<S_Name>) = R_ConstantExpr(value)
+class C_NamespaceValue_Value(private val value: Rt_Value): C_NamespaceValue() {
+    override fun toExpr(ctx: C_NamespaceValueContext, name: List<S_Name>): C_Expr {
+        val vExpr = V_ConstantExpr(ctx.exprCtx, name[0].pos, value)
+        return C_VExpr(vExpr)
+    }
 }
 
 class C_NamespaceValue_SysFunction(
@@ -281,7 +299,7 @@ class C_NamespaceValue_Entity(private val typeProxy: C_DefProxy<R_Type>): C_Name
     }
 }
 
-class C_NamespaceValue_Enum(private val rEnum: R_Enum): C_NamespaceValue() {
+class C_NamespaceValue_Enum(private val rEnum: R_EnumDefinition): C_NamespaceValue() {
     override fun toExpr(ctx: C_NamespaceValueContext, name: List<S_Name>) = C_EnumExpr(ctx.msgCtx, name, rEnum)
 }
 
@@ -292,22 +310,17 @@ class C_NamespaceValue_Namespace(private val nsProxy: C_DefProxy<C_Namespace>): 
     }
 }
 
-class C_NamespaceValue_Object(private val rObject: R_Object): C_NamespaceValue() {
+class C_NamespaceValue_Object(val rObject: R_ObjectDefinition): C_NamespaceValue() {
     override fun toExpr(ctx: C_NamespaceValueContext, name: List<S_Name>): C_Expr {
-        return C_ObjectExpr(name, rObject)
+        return C_ObjectExpr(ctx.exprCtx, name, rObject)
     }
 }
 
 class C_NamespaceValue_Struct(private val struct: R_Struct): C_NamespaceValue() {
     override fun toExpr(ctx: C_NamespaceValueContext, name: List<S_Name>): C_Expr {
-        val nsProxy = C_LibFunctions.makeStructNamespace(struct)
+        val ns = C_LibFunctions.makeStructNamespace(struct)
+        val nsProxy = C_DefProxy.create(ns)
         val nsRef = C_NamespaceRef.create(ctx.msgCtx, name, nsProxy)
-        return C_StructExpr(name, struct, nsRef)
-    }
-}
-
-class C_NamespaceValue_Type(private val type: R_Type): C_NamespaceValue() {
-    override fun toExpr(ctx: C_NamespaceValueContext, name: List<S_Name>): C_Expr {
-        return C_TypeExpr(name[0].pos, type)
+        return C_NamespaceStructExpr(name, struct, nsRef)
     }
 }

@@ -7,6 +7,7 @@ package net.postchain.rell.sql
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_SqlContext
+import net.postchain.rell.utils.toImmMap
 import org.jooq.Constraint
 import org.jooq.CreateTableColumnStep
 import org.jooq.DataType
@@ -24,6 +25,56 @@ object SqlGen {
 
     val DSL_CTX = DSL.using(SQLDialect.POSTGRES)
 
+    val RELL_SYS_FUNCTIONS = mapOf(
+            genFunctionSubstr1(SqlConstants.FN_BYTEA_SUBSTR1, "BYTEA"),
+            genFunctionSubstr2(SqlConstants.FN_BYTEA_SUBSTR2, "BYTEA"),
+            genFunctionSubstr1(SqlConstants.FN_TEXT_SUBSTR1, "TEXT"),
+            genFunctionSubstr2(SqlConstants.FN_TEXT_SUBSTR2, "TEXT"),
+            genFunctionTextGetChar(SqlConstants.FN_TEXT_GETCHAR)
+    ).toImmMap()
+
+    private fun genFunctionSubstr1(name: String, type: String): Pair<String, String> {
+        return name to """
+                CREATE FUNCTION "$name"(v $type, i INT) RETURNS $type AS $$
+                DECLARE n INT;
+                BEGIN
+                    IF i < 0 THEN RAISE EXCEPTION '$name: i = %', i; END IF;
+                    n := LENGTH(v);
+                    IF i > n THEN RAISE EXCEPTION '$name: i = %, n = %', i, n; END IF;
+                    RETURN SUBSTR(v, i + 1);
+                END;
+                $$ LANGUAGE PLPGSQL IMMUTABLE;
+            """.trimIndent()
+    }
+
+    private fun genFunctionSubstr2(name: String, type: String): Pair<String, String> {
+        return name to """
+                CREATE FUNCTION "$name"(v $type, i INT, j INT) RETURNS $type AS $$
+                DECLARE n INT;
+                BEGIN
+                    IF i < 0 OR j < i THEN RAISE EXCEPTION '$name: i = %, j = %', i, j; END IF;
+                    n := LENGTH(v);
+                    IF j > n THEN RAISE EXCEPTION '$name: i = %, j = %, n = %', i, j, n; END IF;
+                    RETURN SUBSTR(v, i + 1, j - i);
+                END;
+                $$ LANGUAGE PLPGSQL IMMUTABLE;
+            """.trimIndent()
+    }
+
+    private fun genFunctionTextGetChar(name: String): Pair<String, String> {
+        return name to """
+                CREATE FUNCTION "$name"(v TEXT, i INT) RETURNS TEXT AS $$
+                DECLARE n INT;
+                BEGIN
+                    IF i < 0 THEN RAISE EXCEPTION '$name: i = %', i; END IF;
+                    n := LENGTH(v);
+                    IF i >= n THEN RAISE EXCEPTION '$name: i = %, n = %', i, n; END IF;
+                    RETURN SUBSTR(v, i + 1, 1);
+                END;
+                $$ LANGUAGE PLPGSQL IMMUTABLE;
+            """.trimIndent()
+    }
+
     fun genRowidSql(chainMapping: Rt_ChainSqlMapping): String {
         val table = chainMapping.rowidTable
         val func = chainMapping.rowidFunction
@@ -36,17 +87,17 @@ object SqlGen {
         """.trimIndent()
     }
 
-    fun genEntity(sqlCtx: Rt_SqlContext, rEntity: R_Entity): String {
+    fun genEntity(sqlCtx: Rt_SqlContext, rEntity: R_EntityDefinition): String {
         val tableName = rEntity.sqlMapping.table(sqlCtx)
         return genEntity(sqlCtx, rEntity, tableName)
     }
 
-    fun genEntity(sqlCtx: Rt_SqlContext, rEntity: R_Entity, tableName: String): String {
+    fun genEntity(sqlCtx: Rt_SqlContext, rEntity: R_EntityDefinition, tableName: String): String {
         val mapping = rEntity.sqlMapping
         val rowid = mapping.rowidColumn()
         val attrs = rEntity.attributes.values
 
-        val t = SqlGen.DSL_CTX.createTable(tableName)
+        val t = DSL_CTX.createTable(tableName)
 
         val constraints = mutableListOf<Constraint>()
         constraints.add(constraint("PK_" + tableName).primaryKey(rowid))
@@ -70,7 +121,7 @@ object SqlGen {
                 val attrName = index.attribs[0]
                 indexSql = """CREATE INDEX "$indexName" ON "$tableName" USING gin ("${attrName}" jsonb_path_ops)"""
             } else {
-                indexSql = (SqlGen.DSL_CTX.createIndex(indexName).on(tableName, *index.attribs.toTypedArray())).toString();
+                indexSql = (DSL_CTX.createIndex(indexName).on(tableName, *index.attribs.toTypedArray())).toString();
             }
             ddl += indexSql + ";\n";
         }
@@ -78,7 +129,7 @@ object SqlGen {
         return ddl
     }
 
-    private fun genAttrColumns(attrs: Collection<R_Attrib>, step: CreateTableColumnStep): CreateTableColumnStep {
+    private fun genAttrColumns(attrs: Collection<R_Attribute>, step: CreateTableColumnStep): CreateTableColumnStep {
         var q = step
         for (attr in attrs) {
             q = q.column(attr.sqlMapping, getSqlType(attr.type))
@@ -86,7 +137,7 @@ object SqlGen {
         return q
     }
 
-    private fun genAttrConstraints(sqlCtx: Rt_SqlContext, sqlTable: String, attrs: Collection<R_Attrib>): List<Constraint> {
+    private fun genAttrConstraints(sqlCtx: Rt_SqlContext, sqlTable: String, attrs: Collection<R_Attribute>): List<Constraint> {
         val constraints = mutableListOf<Constraint>()
 
         for (attr in attrs) {
@@ -103,13 +154,13 @@ object SqlGen {
         return constraints
     }
 
-    fun genAddColumnSql(table: String, attr: R_Attrib, nullable: Boolean): String {
+    fun genAddColumnSql(table: String, attr: R_Attribute, nullable: Boolean): String {
         val type = getSqlType(attr.type).nullable(nullable)
         val b = DSL_CTX.alterTable(table).addColumn(attr.sqlMapping, type)
         return b.toString()
     }
 
-    fun genAddAttrConstraintsSql(sqlCtx: Rt_SqlContext, table: String, attrs: List<R_Attrib>): String {
+    fun genAddAttrConstraintsSql(sqlCtx: Rt_SqlContext, table: String, attrs: List<R_Attribute>): String {
         val constraints = genAttrConstraints(sqlCtx, table, attrs)
         if (constraints.isEmpty()) {
             return ""

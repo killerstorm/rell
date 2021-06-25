@@ -10,11 +10,8 @@ import net.postchain.config.node.NodeConfigurationProviderFactory
 import net.postchain.core.UserMistake
 import net.postchain.devtools.TestLauncher
 import net.postchain.gtv.gtvml.GtvMLEncoder
-import net.postchain.rell.*
-import net.postchain.rell.utils.PostchainUtils
-import net.postchain.rell.utils.RellBaseCliArgs
-import net.postchain.rell.utils.RellCliLogUtils
-import net.postchain.rell.utils.RellCliUtils
+import net.postchain.rell.RellConfigGen
+import net.postchain.rell.utils.*
 import picocli.CommandLine
 import java.io.File
 
@@ -43,7 +40,7 @@ private fun main0(args: RunPostchainTestArgs) {
 
     RellCliUtils.printVersionInfo()
 
-    val configGen = RellConfigGen.create(target)
+    val configGen = RellConfigGen.create(MainRellCliEnv, target)
 
     val nodeAppConf = AppConfig.fromPropertiesFile(args.nodeConfigFile)
     val nodeConfPro = NodeConfigurationProviderFactory.createProvider(nodeAppConf)

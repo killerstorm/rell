@@ -35,12 +35,12 @@ class StatementTest: BaseRellTest() {
     }
 
     @Test fun testNameConflict() {
-        chkEx("{ val x = 123; val x = 456; return 0; }", "ct_err:var_dupname:x")
-        chkEx("{ val x = 123; var x = 456; return 0; }", "ct_err:var_dupname:x")
-        chkEx("{ var x = 123; val x = 456; return 0; }", "ct_err:var_dupname:x")
-        chkEx("{ var x = 123; var x = 456; return 0; }", "ct_err:var_dupname:x")
-        chkEx("{ val x = 123; { val x = 456; } return 789; }", "ct_err:var_dupname:x")
-        chkEx("{ val x = 123; if (2 > 1) { val x = 456; } return 789; }", "ct_err:var_dupname:x")
+        chkEx("{ val x = 123; val x = 456; return 0; }", "ct_err:block:name_conflict:x")
+        chkEx("{ val x = 123; var x = 456; return 0; }", "ct_err:block:name_conflict:x")
+        chkEx("{ var x = 123; val x = 456; return 0; }", "ct_err:block:name_conflict:x")
+        chkEx("{ var x = 123; var x = 456; return 0; }", "ct_err:block:name_conflict:x")
+        chkEx("{ val x = 123; { val x = 456; } return 789; }", "ct_err:block:name_conflict:x")
+        chkEx("{ val x = 123; if (2 > 1) { val x = 456; } return 789; }", "ct_err:block:name_conflict:x")
 
         chkEx("{ { val x = 123; } val x = 456; return x; }", "int[456]")
         chkEx("{ { val x = 123; } return x; }", "ct_err:unknown_name:x")
@@ -99,6 +99,27 @@ class StatementTest: BaseRellTest() {
         chkEx(code, "text[01234]")
     }
 
+    @Test fun testWhileContinue() {
+        tst.strictToString = false
+
+        val code = """{
+            val res = list<text>();
+
+            var i = 0;
+            while (i < 6) {
+                res.add('i=' + i);
+                val r = i % 3;
+                ++i;
+                if (r == 0) continue;
+                res.add('r=' + r);
+            }
+
+            return res;
+        }""".trimIndent()
+
+        chkEx(code, "[i=0, i=1, r=1, i=2, r=2, i=3, i=4, r=1, i=5, r=2]")
+    }
+
     @Test fun testWhileBreakComplex() {
         val code = """{
             var s = '';
@@ -122,6 +143,11 @@ class StatementTest: BaseRellTest() {
     @Test fun testBreakWithoutLoop() {
         chkEx("{ break; return 123; }", "ct_err:stmt_break_noloop")
         chkEx("{ if (2 > 1) break; return 123; }", "ct_err:stmt_break_noloop")
+    }
+
+    @Test fun testContinueWithoutLoop() {
+        chkEx("{ continue; return 123; }", "ct_err:stmt_continue_noloop")
+        chkEx("{ if (2 > 1) continue; return 123; }", "ct_err:stmt_continue_noloop")
     }
 
     @Test fun testFor() {
@@ -157,6 +183,23 @@ class StatementTest: BaseRellTest() {
         }""".trimIndent()
 
         chkEx(code, "text[Bob,Alice]")
+    }
+
+    @Test fun testForContinue() {
+        tst.strictToString = false
+
+        val code = """{
+            val res = list<text>();
+            for (i in range(6)) {
+                res.add('i=' + i);
+                val r = i % 3;
+                if (r == 0) continue;
+                res.add('r=' + r);
+            }
+            return res;
+        }""".trimIndent()
+
+        chkEx(code, "[i=0, i=1, r=1, i=2, r=2, i=3, i=4, r=1, i=5, r=2]")
     }
 
     @Test fun testForReturn() {

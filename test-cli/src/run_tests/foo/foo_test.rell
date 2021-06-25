@@ -1,0 +1,43 @@
+@test module;
+
+import run_tests.foo;
+import run_tests.common;
+import run_tests.test_utils;
+
+function test_module_args() {
+    val args = foo.get_module_args();
+    log('args =', args);
+    assert_equals(args.x, 123);
+}
+
+function test_common_module_args() {
+    val args = common.get_module_args();
+    log('args =', args);
+    assert_equals(args.user, 'Bob');
+}
+
+function test_common_user() {
+    val user = common.get_common_user();
+    log('user =', user);
+    assert_equals(user, 'Bob');
+}
+
+function test_create_data() {
+    test_utils.assert_no_data();
+
+    val tx = rell.test.tx(foo.create_data('foo_test'));
+    test_utils.assert_no_data();
+
+    tx.run();
+    test_utils.assert_one_data('foo', 123, '?', 'Bob', 'foo_test');
+}
+
+function test_common_create_data() {
+    test_utils.assert_no_data();
+
+    val tx = rell.test.tx(common.create_data(-111, '?', 'foo_common_test'));
+    test_utils.assert_no_data();
+
+    tx.run();
+    test_utils.assert_one_data('common', -111, '?', 'Bob', 'foo_common_test');
+}

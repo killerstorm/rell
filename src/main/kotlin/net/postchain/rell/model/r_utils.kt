@@ -5,14 +5,17 @@
 package net.postchain.rell.model
 
 import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.VersionNumber
 import net.postchain.rell.utils.toImmList
 import org.apache.commons.lang3.StringUtils
 import java.util.*
 
-class R_DefinitionPos(val module: String, val definition: String) {
+class R_DefinitionId(val module: String, val definition: String) {
     override fun toString() = appLevelName(module, definition)
 
     companion object {
+        val ERROR = R_DefinitionId("<error>", "<error>")
+
         fun appLevelName(module: String, definition: String) = "$module:$definition"
     }
 }
@@ -21,7 +24,7 @@ class R_FilePos(val file: String, val line: Int) {
     override fun toString() = "$file:$line"
 }
 
-class R_StackPos(val def: R_DefinitionPos, val file: R_FilePos) {
+class R_StackPos(val def: R_DefinitionId, val file: R_FilePos) {
     override fun toString() = "$def($file)"
 }
 
@@ -110,8 +113,8 @@ class R_Name private constructor(val str: String): Comparable<R_Name> {
     override fun hashCode() = str.hashCode()
 
     companion object {
-        fun isNameStart(c: Char) = Character.isJavaIdentifierStart(c)
-        fun isNamePart(c: Char) = Character.isJavaIdentifierPart(c)
+        fun isNameStart(c: Char) = c == '_' || c in 'A'..'Z' || c in 'a'..'z'
+        fun isNamePart(c: Char) = isNameStart(c) || c in '0'..'9'
 
         fun isValid(s: String): Boolean {
             if (s.isEmpty()) return false
@@ -140,6 +143,26 @@ class R_Name private constructor(val str: String): Comparable<R_Name> {
             val names2 = names.filterNotNull()
             if (names2.size != names.size) return null
             return names2.toImmList()
+        }
+    }
+}
+
+class R_LangVersion(private val ver: VersionNumber): Comparable<R_LangVersion> {
+    init {
+        require(ver.items.size == 3) { "wrong version: $ver" }
+    }
+
+    fun str(): String = ver.str()
+
+    override fun compareTo(other: R_LangVersion) = ver.compareTo(other.ver)
+    override fun equals(other: Any?) = other is R_LangVersion && ver == other.ver
+    override fun hashCode() = ver.hashCode()
+    override fun toString() = ver.toString()
+
+    companion object {
+        fun of(s: String): R_LangVersion {
+            val ver = VersionNumber.of(s)
+            return R_LangVersion(ver)
         }
     }
 }

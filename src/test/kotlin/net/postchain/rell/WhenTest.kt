@@ -187,7 +187,7 @@ class WhenTest: BaseRellTest(false) {
         chkWhen("boolean", "{ when(a) { false -> return 'A'; true -> return 'B'; } }",
                 "false" to "text[A]", "true" to "text[B]")
         chkWhen("boolean", "{ when(a) { false -> return 'A'; true -> return 'B'; else -> return 'C'; } return ''; }",
-                "false" to "ct_err:when_else_allvalues:boolean")
+                "false" to "ct_err:[when_else_allvalues:boolean][stmt_deadcode]")
         chkWhen("boolean", "{ when(a) { false -> return 'A'; } }", "false" to "ct_err:fun_noreturn:f")
         chkWhen("boolean", "{ when(a) { true -> return 'A'; } }", "false" to "ct_err:fun_noreturn:f")
     }
@@ -195,7 +195,7 @@ class WhenTest: BaseRellTest(false) {
     @Test fun testStmtFullCoverageEnum() {
         def("enum E { A, B, C }")
         chkWhen("E", "{ when(a) { A -> return 'A'; B -> return 'B'; C -> return 'C'; else -> return '?'; } return ''; }",
-                "E.A" to "ct_err:when_else_allvalues:E")
+                "E.A" to "ct_err:[when_else_allvalues:E][stmt_deadcode]")
         chkWhen("E", "{ when(a) { A -> return 'A'; B -> return 'B'; C -> return 'C'; } }",
                 "E.A" to "text[A]", "E.B" to "text[B]", "E.C" to "text[C]")
         chkWhen("E", "{ when(a) { A -> return 'A'; B -> return 'B'; } }", "E.A" to "ct_err:fun_noreturn:f")
@@ -278,7 +278,7 @@ class WhenTest: BaseRellTest(false) {
         val fnCode = "function f(a: $type): $retType $code"
         for (case in cases) {
             val fullCode = "$fnCode query q() = f(${case.first});"
-            chkQueryEx(fullCode, case.second)
+            chkFull(fullCode, case.second)
         }
     }
 

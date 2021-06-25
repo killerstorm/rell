@@ -55,6 +55,10 @@ class Rt_ChainSqlMapping(val chainId: Long) {
     val rowidTable = fullName(SqlConstants.ROWID_GEN)
     val rowidFunction = fullName(SqlConstants.MAKE_ROWID)
     val blocksTable = fullName(SqlConstants.BLOCKS_TABLE)
+    val eventsTable = fullName(SqlConstants.EVENTS_TABLE)
+    val statesTable = fullName(SqlConstants.STATES_TABLE)
+    val eventPagesTable = fullName(SqlConstants.EVENT_PAGES_TABLE)
+    val snapshotsTable = fullName(SqlConstants.SNAPSHOT_PAGES_TABLE)
     val transactionsTable = fullName(SqlConstants.TRANSACTIONS_TABLE)
     val metaEntitiesTable = fullName("sys.classes")
     val metaAttributesTable = fullName("sys.attributes")
@@ -76,6 +80,10 @@ class Rt_ChainSqlMapping(val chainId: Long) {
     fun systemTables() = listOf(
             blocksTable,
             transactionsTable,
+            eventsTable,
+            statesTable,
+            eventPagesTable,
+            snapshotsTable,
             fullName(SqlConstants.CONFIGURATIONS_TABLE),
             fullName("gtx_module_version")
     )

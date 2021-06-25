@@ -123,31 +123,31 @@ class C_MountTablesBuilder(private val stamp: R_AppUid) {
         }
     }
 
-    fun addEntity(namePos: S_Pos?, rEntity: R_Entity) {
+    fun addEntity(namePos: S_Pos?, rEntity: R_EntityDefinition) {
         addEntity0(C_DeclarationType.ENTITY, namePos, rEntity, rEntity)
     }
 
-    fun addObject(name: S_Name, rObject: R_Object) {
+    fun addObject(name: S_Name, rObject: R_ObjectDefinition) {
         addEntity0(C_DeclarationType.OBJECT, name.pos, rObject, rObject.rEntity)
     }
 
-    private fun addEntity0(type: C_DeclarationType, namePos: S_Pos?, def: R_Definition, rEntity: R_Entity) {
+    private fun addEntity0(type: C_DeclarationType, namePos: S_Pos?, def: R_Definition, rEntity: R_EntityDefinition) {
         val chain = rEntity.external?.chain?.name ?: ""
         val b = chainBuilder(chain)
         b.entities.add(type, def, namePos, rEntity.mountName)
     }
 
-    fun addOperation(name: S_Name, o: R_Operation) {
+    fun addOperation(name: S_Name, o: R_OperationDefinition) {
         val b = chainBuilder("")
         b.operations.add(C_DeclarationType.OPERATION, o, name.pos, o.mountName)
     }
 
-    fun addQuery(name: S_Name, q: R_Query) {
+    fun addQuery(name: S_Name, q: R_QueryDefinition) {
         val b = chainBuilder("")
         b.queries.add(C_DeclarationType.QUERY, q, name.pos, q.mountName)
     }
 
-    fun addQuery(q: R_Query) {
+    fun addQuery(q: R_QueryDefinition) {
         val b = chainBuilder("")
         b.queries.add(C_DeclarationType.QUERY, q, null, q.mountName)
     }

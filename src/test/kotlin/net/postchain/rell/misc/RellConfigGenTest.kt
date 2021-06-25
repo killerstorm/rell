@@ -5,96 +5,97 @@
 package net.postchain.rell.misc
 
 import net.postchain.gtv.GtvFactory
-import net.postchain.rell.utils.PostchainUtils
 import net.postchain.rell.RellConfigGen
-import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.compiler.C_Compiler
 import net.postchain.rell.compiler.C_MapSourceDir
+import net.postchain.rell.model.R_ModuleName
+import net.postchain.rell.module.RellVersions
 import net.postchain.rell.test.GtvTestUtils
 import net.postchain.rell.test.RellTestUtils
+import net.postchain.rell.utils.PostchainUtils
 import org.junit.Test
 import kotlin.test.assertEquals
 
 class RellConfigGenTest {
-    private val ver = "v${RellTestUtils.RELL_VER}"
+    private val ver = RellTestUtils.RELL_VER
 
     @Test fun testNoTemplateSingleFile() {
         val files = mapOf("main.rell" to "entity foo {}")
-        chkCfg(files, null, "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
+        chkCfg(files, null, "{'gtx':{'rell':{'modules':[''],'sources':{'main.rell':'entity foo {}'},'version':'$ver'}}}")
     }
 
     @Test fun testNoTemplateMultipleFiles() {
         val files = mapOf("main.rell" to "entity user {}", "foo.rell" to "module; entity foo {}", "bar.rell" to "module; entity bar {}")
-        chkCfg(files, null, "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity user {}'}}}}")
+        chkCfg(files, null, "{'gtx':{'rell':{'modules':[''],'sources':{'main.rell':'entity user {}'},'version':'$ver'}}}")
     }
 
     @Test fun testNoTemplateImportedModules() {
         val files = mapOf("main.rell" to "import foo;", "foo.rell" to "module; import bar;", "bar.rell" to "module; entity bar {}")
         val expFiles = "{'bar.rell':'module; entity bar {}','foo.rell':'module; import bar;','main.rell':'import foo;'}"
-        chkCfg(files, null, "{'gtx':{'rell':{'modules':[''],'sources_$ver':$expFiles}}}")
+        chkCfg(files, null, "{'gtx':{'rell':{'modules':[''],'sources':$expFiles,'version':'$ver'}}}")
     }
 
     @Test fun testTemplate() {
         val files = mapOf("main.rell" to "entity foo {}")
 
-        chkCfg(files, "{}", "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
+        chkCfg(files, "{}", "{'gtx':{'rell':{'modules':[''],'sources':{'main.rell':'entity foo {}'},'version':'$ver'}}}")
 
         chkCfg(files, "{'foo':'bar'}",
-                "{'foo':'bar','gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
+                "{'foo':'bar','gtx':{'rell':{'modules':[''],'sources':{'main.rell':'entity foo {}'},'version':'$ver'}}}")
 
         chkCfg(files, "{'gtx':{}}",
-                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
+                "{'gtx':{'rell':{'modules':[''],'sources':{'main.rell':'entity foo {}'},'version':'$ver'}}}")
 
         chkCfg(files, "{'gtx':{'foo':'bar'}}",
-                "{'gtx':{'foo':'bar','rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
+                "{'gtx':{'foo':'bar','rell':{'modules':[''],'sources':{'main.rell':'entity foo {}'},'version':'$ver'}}}")
 
         chkCfg(files, "{'gtx':{'rell':{}}}",
-                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
+                "{'gtx':{'rell':{'modules':[''],'sources':{'main.rell':'entity foo {}'},'version':'$ver'}}}")
 
         chkCfg(files, "{'gtx':{'rell':{'foo':'bar'}}}",
-                "{'gtx':{'rell':{'foo':'bar','modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
+                "{'gtx':{'rell':{'foo':'bar','modules':[''],'sources':{'main.rell':'entity foo {}'},'version':'$ver'}}}")
 
         chkCfg(files, "{'gtx':{'rell':{'modules':['junk','trash','garbage']}}}",
-                "{'gtx':{'rell':{'modules':['junk','trash','garbage',''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
+                "{'gtx':{'rell':{'modules':['junk','trash','garbage',''],'sources':{'main.rell':'entity foo {}'},'version':'$ver'}}}")
 
         chkCfg(files, "{'gtx':{'rell':{'modules':['','','']}}}",
-                "{'gtx':{'rell':{'modules':['','',''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
+                "{'gtx':{'rell':{'modules':['','',''],'sources':{'main.rell':'entity foo {}'},'version':'$ver'}}}")
 
         chkCfg(files, "{'gtx':{'rell':{'modules':['']}}}",
-                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
+                "{'gtx':{'rell':{'modules':[''],'sources':{'main.rell':'entity foo {}'},'version':'$ver'}}}")
 
         chkCfg(files, "{'gtx':{'rell':{'modules':[]}}}",
-                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
+                "{'gtx':{'rell':{'modules':[''],'sources':{'main.rell':'entity foo {}'},'version':'$ver'}}}")
 
-        chkCfg(files, "{'gtx':{'rell':{'sources_$ver':{}}}}",
-                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
+        chkCfg(files, "{'gtx':{'rell':{'sources':{},'version':'$ver'}}}",
+                "{'gtx':{'rell':{'modules':[''],'sources':{'main.rell':'entity foo {}'},'version':'$ver'}}}")
 
-        chkCfg(files, "{'gtx':{'rell':{'sources_$ver':{'garbage.rell':'garbage'}}}}",
-                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'garbage.rell':'garbage','main.rell':'entity foo {}'}}}}")
+        chkCfg(files, "{'gtx':{'rell':{'sources':{'garbage.rell':'garbage'},'version':'$ver'}}}",
+                "{'gtx':{'rell':{'modules':[''],'sources':{'garbage.rell':'garbage','main.rell':'entity foo {}'},'version':'$ver'}}}")
 
-        chkCfg(files, "{'gtx':{'rell':{'sources_$ver':{'main.rell':'garbage'}}}}",
-                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
+        chkCfg(files, "{'gtx':{'rell':{'sources':{'main.rell':'garbage'},'version':'$ver'}}}",
+                "{'gtx':{'rell':{'modules':[''],'sources':{'main.rell':'entity foo {}'},'version':'$ver'}}}")
     }
 
     @Test fun testTemplateXml() {
         val files = mapOf("main.rell" to "entity foo {}")
 
-        chkCfg0(files, "<dict/>", "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
-        chkCfg0(files, "<dict></dict>", "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
+        chkCfg0(files, "<dict/>", "{'gtx':{'rell':{'modules':[''],'sources':{'main.rell':'entity foo {}'},'version':'$ver'}}}")
+        chkCfg0(files, "<dict></dict>", "{'gtx':{'rell':{'modules':[''],'sources':{'main.rell':'entity foo {}'},'version':'$ver'}}}")
 
         val header = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>"""
 
         chkCfg0(files, """$header<dict></dict>""",
-                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
+                "{'gtx':{'rell':{'modules':[''],'sources':{'main.rell':'entity foo {}'},'version':'$ver'}}}")
 
         chkCfg0(files, """$header<dict/>""",
-                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
+                "{'gtx':{'rell':{'modules':[''],'sources':{'main.rell':'entity foo {}'},'version':'$ver'}}}")
 
         chkCfg0(files, """$header<dict><entry key="gtx"><dict/></entry></dict>""",
-                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
+                "{'gtx':{'rell':{'modules':[''],'sources':{'main.rell':'entity foo {}'},'version':'$ver'}}}")
 
         chkCfg0(files, """$header<dict><entry key="gtx"><dict></dict></entry></dict>""",
-                "{'gtx':{'rell':{'modules':[''],'sources_$ver':{'main.rell':'entity foo {}'}}}}")
+                "{'gtx':{'rell':{'modules':[''],'sources':{'main.rell':'entity foo {}'},'version':'$ver'}}}")
     }
 
     private fun chkCfg(files: Map<String, String>, templateJson: String?, expectedJson: String) {
@@ -111,7 +112,7 @@ class RellConfigGenTest {
         check(cRes.app != null)
 
         val templateGtv = if (templateXml == null) GtvFactory.gtv(mapOf()) else PostchainUtils.xmlToGtv(templateXml)
-        val configGen = RellConfigGen(sourceDir, modules, cRes.files)
+        val configGen = RellConfigGen(sourceDir, RellVersions.VERSION, modules, cRes.files)
 
         val actualGtv = configGen.makeConfig(templateGtv)
         val actualXml = RellConfigGen.configToText(actualGtv)

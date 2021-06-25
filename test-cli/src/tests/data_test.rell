@@ -1,0 +1,24 @@
+@test module;
+
+import tests.data;
+
+function test_add_user() {
+    assert_equals(data.user@*{}(.name), list<text>());
+
+    val tx = rell.test.tx(data.add_user('Bob'));
+    assert_equals(data.user@*{}(.name), list<text>());
+
+    tx.run();
+    assert_equals(data.user@*{}(.name), ['Bob']);
+}
+
+function test_remove_user() {
+    rell.test.tx([data.add_user('Bob'), data.add_user('Alice')]).run();
+    assert_equals(data.user@*{}(.name), ['Bob', 'Alice']);
+
+    val tx = rell.test.tx(data.remove_user('Bob'));
+    assert_equals(data.user@*{}(.name), ['Bob', 'Alice']);
+
+    tx.run();
+    assert_equals(data.user@*{}(.name), ['Alice']);
+}

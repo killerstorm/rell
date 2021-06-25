@@ -4,11 +4,9 @@
 
 package net.postchain.rell.compiler
 
-import net.postchain.rell.utils.Getter
 import net.postchain.rell.compiler.ast.S_Name
-import net.postchain.rell.model.R_Entity
-import net.postchain.rell.model.R_EntityType
-import net.postchain.rell.model.R_Type
+import net.postchain.rell.model.*
+import net.postchain.rell.utils.Getter
 
 class C_ScopeBuilder {
     private val msgCtx: C_MessageContext
@@ -53,13 +51,32 @@ class C_Scope(
         return getQualifiedDef(qName, GeneralNs::type)
     }
 
-    fun getEntity(name: List<S_Name>): R_Entity {
+    fun getEntity(name: List<S_Name>): R_EntityDefinition {
+        val entity = getEntityOpt(name)
+        if (entity == null) {
+            val nameStr = C_Utils.nameStr(name)
+            throw C_Error.stop(name[0].pos, "unknown_entity:$nameStr", "Unknown entity: '$nameStr'")
+        }
+        return entity
+    }
+
+    fun getEntityOpt(name: List<S_Name>): R_EntityDefinition? {
         val type = getTypeOpt(name)
+        if (type == null) {
+            return null
+        }
+
         if (type !is R_EntityType) {
             val nameStr = C_Utils.nameStr(name)
-            throw C_Error(name[0].pos, "unknown_entity:$nameStr", "Unknown entity: '$nameStr'")
+            throw C_Error.stop(name[0].pos, "unknown_entity:$nameStr", "Unknown entity: '$nameStr'")
         }
+
         return type.rEntity
+    }
+
+    fun getObjectOpt(name: List<S_Name>): R_ObjectDefinition? {
+        val value = getQualifiedDef(name, GeneralNs::value)
+        return (value?.getDef() as? C_NamespaceValue_Object)?.rObject
     }
 
     fun getValueOpt(name: S_Name): C_DefRef<C_NamespaceValue>? {
@@ -69,6 +86,11 @@ class C_Scope(
 
     fun getFunctionOpt(qName: List<S_Name>): C_DefRef<C_GlobalFunction>? {
         return getQualifiedDef(qName, GeneralNs::function)
+    }
+
+    fun getOperationOpt(qName: List<S_Name>): R_OperationDefinition? {
+        val def = getQualifiedDef(qName, GeneralNs::function)
+        return (def?.getDef() as? C_OperationGlobalFunction)?.rOp
     }
 
     private fun <T> getQualifiedDef(qName: List<S_Name>, getter: (GeneralNs, S_Name) -> C_DefRef<T>?): C_DefRef<T>? {

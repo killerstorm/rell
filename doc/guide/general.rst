@@ -13,4 +13,4 @@ General Language Features
 
 --------------
 
-*Rell v0.10.2*
+*Rell v0.10.4*

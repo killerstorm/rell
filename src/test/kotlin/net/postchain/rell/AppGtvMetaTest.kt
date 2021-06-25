@@ -117,6 +117,7 @@ class AppGtvMetaTest: BaseRellTest(false) {
 
     @Test fun testDefOperation() {
         chkMetaDef("operation op(x: text) {}", "operations", "op", """{
+            "mount":"op",
             "parameters":[
                 {"name":"x", "type":"text"}
             ]
@@ -125,6 +126,7 @@ class AppGtvMetaTest: BaseRellTest(false) {
 
     @Test fun testDefQuery() {
         chkMetaDef("query q(x: text) = x.size();", "queries", "q", """{
+            "mount":"q",
             "type": "integer",
             "parameters":[
                 {"name":"x", "type":"text"}
@@ -145,9 +147,9 @@ class AppGtvMetaTest: BaseRellTest(false) {
     @Test fun testDefEnum() {
         chkMetaDef("enum e {A, B, C}", "enums", "e", """{
             "values":{
-                "A":{},
-                "B":{},
-                "C":{}
+                "A":{"value":0},
+                "B":{"value":1},
+                "C":{"value":2}
             }
         }""")
     }
@@ -259,11 +261,23 @@ class AppGtvMetaTest: BaseRellTest(false) {
         }""")
     }
 
+    @Test fun testTypeMirrorStruct() {
+        initTypes()
+        chkMetaType("struct<lib.user>", """{"type":"struct","definition_type":"ENTITY","definition":"lib:user","mutable":0}""")
+        chkMetaType("struct<lib.state>", """{"type":"struct","definition_type":"OBJECT","definition":"lib:state","mutable":0}""")
+        chkMetaType("struct<lib.op>", """{"type":"struct","definition_type":"OPERATION","definition":"lib:op","mutable":0}""")
+        chkMetaType("struct<mutable lib.user>", """{"type":"struct","definition_type":"ENTITY","definition":"lib:user","mutable":1}""")
+        chkMetaType("struct<mutable lib.state>", """{"type":"struct","definition_type":"OBJECT","definition":"lib:state","mutable":1}""")
+        chkMetaType("struct<mutable lib.op>", """{"type":"struct","definition_type":"OPERATION","definition":"lib:op","mutable":1}""")
+    }
+
     private fun initTypes() {
         file("lib.rell", """module;
             entity user {}
+            object state {}
             struct rec {}
             enum kind { A }
+            operation op() {}
         """)
         def("import lib;")
     }
@@ -282,8 +296,10 @@ class AppGtvMetaTest: BaseRellTest(false) {
             "lib":{
                 "name":"lib",
                 "entities":{"user":{"attributes":{},"indexes":[],"keys":[],"log":0,"mount":"user"}},
+                "operations":{"op":{"mount":"op","parameters":[]}},
                 "structs":{"rec":{"attributes":{}}},
-                "enums":{"kind":{"values":{"A":{}}}}
+                "objects":{"state":{"attributes":{},"mount":"state"}},
+                "enums":{"kind":{"values":{"A":{"value":0}}}}
             }
         }}""")
     }
@@ -295,6 +311,6 @@ class AppGtvMetaTest: BaseRellTest(false) {
     private fun chkMeta(code: String, expected: String) {
         tst.strictToString = false
         val expected2 = GtvTestUtils.encodeGtvStr(GtvTestUtils.decodeGtvStr(expected))
-        chkQueryEx(code, "rell.get_app_structure", listOf(), expected2)
+        chkFull(code, "rell.get_app_structure", listOf(), expected2)
     }
 }

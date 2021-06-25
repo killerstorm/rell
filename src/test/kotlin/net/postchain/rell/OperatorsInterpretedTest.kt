@@ -6,9 +6,8 @@ package net.postchain.rell
 
 import net.postchain.base.BlockchainRid
 import net.postchain.gtv.GtvNull
-import net.postchain.rell.compiler.C_MapSourceDir
 import net.postchain.rell.model.R_App
-import net.postchain.rell.model.R_Entity
+import net.postchain.rell.model.R_EntityDefinition
 import net.postchain.rell.model.R_EntityType
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.runtime.*
@@ -37,7 +36,7 @@ class OperatorsInterpretedTest: OperatorsBaseTest() {
         val args2 = args.map { it as InterpTstVal }
         val types = args2.map { it.type }
 
-        val chainCtx = Rt_ChainContext(GtvNull, mapOf(), BlockchainRid.EMPTY_RID)
+        val chainCtx = Rt_ChainContext(GtvNull, mapOf(), BlockchainRid.ZERO_RID)
 
         val globalCtx = Rt_GlobalContext(
                 Rt_FailingPrinter,
@@ -52,7 +51,7 @@ class OperatorsInterpretedTest: OperatorsBaseTest() {
             val ctx = ValCtx(app)
             val rtArgs = args2.map { it.rt(ctx) }
             val sqlCtx = Rt_SqlContext.createNoExternalChains(app, Rt_ChainSqlMapping(0))
-            val appCtx = Rt_AppContext(globalCtx, sqlCtx, app, false, null, C_MapSourceDir.EMPTY, setOf())
+            val appCtx = Rt_AppContext(globalCtx, sqlCtx, app, false, false, null, Rt_UnsupportedBlockRunnerStrategy)
             val exeCtx = Rt_ExecutionContext(appCtx, NoConnSqlExecutor)
             RellTestUtils.callQuery(exeCtx, "q", rtArgs, RellTestUtils.ENCODER_STRICT)
         }
@@ -142,7 +141,7 @@ class OperatorsInterpretedTest: OperatorsBaseTest() {
                 return Rt_EntityValue(t, id)
             }
 
-            private fun findEntity(app: R_App, name: String): R_Entity {
+            private fun findEntity(app: R_App, name: String): R_EntityDefinition {
                 for (module in app.modules) {
                     val c = module.entities[name]
                     if (c != null) return c

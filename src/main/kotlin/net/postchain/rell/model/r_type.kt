@@ -7,6 +7,7 @@ package net.postchain.rell.model
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
 import net.postchain.rell.compiler.C_Constants
+import net.postchain.rell.compiler.C_MemberFuncTable
 import net.postchain.rell.module.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.utils.CommonUtils
@@ -19,6 +20,8 @@ import org.postgresql.util.PGobject
 import org.spongycastle.util.Arrays
 import java.sql.PreparedStatement
 import java.sql.ResultSet
+import java.util.*
+import kotlin.Comparator
 
 class R_GtvCompatibility(val fromGtv: Boolean, val toGtv: Boolean)
 
@@ -50,7 +53,7 @@ sealed class R_TypeSqlAdapter {
     abstract fun isSqlCompatible(): Boolean
     abstract fun toSqlValue(value: Rt_Value): Any
     abstract fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value)
-    abstract fun fromSql(rs: ResultSet, idx: Int): Rt_Value
+    abstract fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value
     abstract fun metaName(sqlCtx: Rt_SqlContext): String
 }
 
@@ -65,7 +68,7 @@ private class R_TypeSqlAdapter_None(private val type: R_Type): R_TypeSqlAdapter(
         throw Rt_Utils.errNotSupported("Type cannot be converted to SQL: ${type.toStrictString()}")
     }
 
-    override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+    override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
         throw Rt_Utils.errNotSupported("Type cannot be converted from SQL: ${type.toStrictString()}")
     }
 
@@ -75,17 +78,29 @@ private class R_TypeSqlAdapter_None(private val type: R_Type): R_TypeSqlAdapter(
 }
 
 private abstract class R_TypeSqlAdapter_Some: R_TypeSqlAdapter() {
-    final override fun isSqlCompatible() = true
+    override fun isSqlCompatible() = true
 
-    protected fun checkSqlNull(suspect: Boolean, rs: ResultSet, type: R_Type) {
+    protected fun checkSqlNull(suspect: Boolean, rs: ResultSet, type: R_Type, nullable: Boolean): Rt_Value? {
         if (suspect && rs.wasNull()) {
-            throw errSqlNull(type)
+            if (nullable) {
+                return Rt_NullValue
+            } else {
+                throw errSqlNull(type)
+            }
+        } else {
+            return null
         }
     }
 
-    protected fun checkSqlNull(value: Any?, type: R_Type) {
+    protected fun checkSqlNull(value: Any?, type: R_Type, nullable: Boolean): Rt_Value? {
         if (value == null) {
-            throw errSqlNull(type)
+            if (nullable) {
+                return Rt_NullValue
+            } else {
+                throw errSqlNull(type)
+            }
+        } else {
+            return null
         }
     }
 
@@ -105,6 +120,10 @@ sealed class R_Type(val name: String) {
     open fun isReference(): Boolean = false
     open fun defaultValue(): Rt_Value? = null
     open fun comparator(): Comparator<Rt_Value>? = null
+
+    open fun isError(): Boolean = false
+    fun isNotError() = !isError()
+
     protected open fun isDirectMutable(): Boolean = false
     protected open fun isDirectVirtualable(): Boolean = true
 
@@ -150,6 +169,10 @@ sealed class R_Type(val name: String) {
                 return b
             } else if (b == R_CtErrorType) {
                 return a
+            } else if (a.isError()) {
+                return b
+            } else if (b.isError()) {
+                return a
             }
 
             if (a.isAssignableFrom(b)) {
@@ -165,11 +188,20 @@ sealed class R_Type(val name: String) {
 }
 
 object R_CtErrorType: R_Type("<error>") {
-    override fun createGtvConversion() = GtvRtConversion_None
+    override fun createGtvConversion(): GtvRtConversion = GtvRtConversion_Null
+    override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_CtError
+    override fun isError() = true
     override fun toStrictString() = "<error>"
-    override fun isAssignableFrom(type: R_Type): Boolean = true
-    override open fun calcCommonType(other: R_Type): R_Type? = other
+    override fun isAssignableFrom(type: R_Type) = true
+    override fun calcCommonType(other: R_Type) = other
     override fun toMetaGtv(): Gtv = throw UnsupportedOperationException()
+
+    private object R_TypeSqlAdapter_CtError: R_TypeSqlAdapter_Some() {
+        override fun toSqlValue(value: Rt_Value) = throw Rt_Utils.errNotSupported("Error")
+        override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = throw Rt_Utils.errNotSupported("Error")
+        override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean) = throw Rt_Utils.errNotSupported("Error")
+        override fun metaName(sqlCtx: Rt_SqlContext) = throw Rt_Utils.errNotSupported("Error")
+    }
 }
 
 sealed class R_PrimitiveType(name: String, val sqlType: DataType<*>): R_Type(name) {
@@ -201,10 +233,9 @@ object R_BooleanType: R_PrimitiveType("boolean", SQLDataType.BOOLEAN) {
             stmt.setBoolean(idx, value.asBoolean())
         }
 
-        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+        override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
             val v = rs.getBoolean(idx)
-            checkSqlNull(!v, rs, R_BooleanType)
-            return Rt_BooleanValue(v)
+            return checkSqlNull(!v, rs, R_BooleanType, nullable) ?: Rt_BooleanValue(v)
         }
     }
 }
@@ -223,10 +254,9 @@ object R_TextType: R_PrimitiveType("text", PostgresDataType.TEXT) {
             stmt.setString(idx, value.asString())
         }
 
-        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+        override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
             val v = rs.getString(idx)
-            checkSqlNull(v, R_TextType)
-            return Rt_TextValue(v)
+            return checkSqlNull(v, R_TextType, nullable) ?: Rt_TextValue(v)
         }
     }
 }
@@ -246,10 +276,9 @@ object R_IntegerType: R_PrimitiveType("integer", SQLDataType.BIGINT) {
             stmt.setLong(idx, value.asInteger())
         }
 
-        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+        override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
             val v = rs.getLong(idx)
-            checkSqlNull(v == 0L, rs, R_IntegerType)
-            return Rt_IntValue(v)
+            return checkSqlNull(v == 0L, rs, R_IntegerType, nullable) ?: Rt_IntValue(v)
         }
     }
 }
@@ -277,10 +306,9 @@ object R_DecimalType: R_PrimitiveType("decimal", C_Constants.DECIMAL_SQL_TYPE) {
             stmt.setBigDecimal(idx, value.asDecimal())
         }
 
-        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+        override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
             val v = rs.getBigDecimal(idx)
-            checkSqlNull(v, R_DecimalType)
-            return Rt_DecimalValue.of(v)
+            return checkSqlNull(v, R_DecimalType, nullable) ?: Rt_DecimalValue.of(v)
         }
     }
 }
@@ -297,10 +325,9 @@ object R_ByteArrayType: R_PrimitiveType("byte_array", PostgresDataType.BYTEA) {
         override fun toSqlValue(value: Rt_Value) = value.asByteArray()
         override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = stmt.setBytes(idx, value.asByteArray())
 
-        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+        override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
             val v = rs.getBytes(idx)
-            checkSqlNull(v, R_ByteArrayType)
-            return Rt_ByteArrayValue(v)
+            return checkSqlNull(v, R_ByteArrayType, nullable) ?: Rt_ByteArrayValue(v)
         }
     }
 }
@@ -320,10 +347,9 @@ object R_RowidType: R_PrimitiveType("rowid", SQLDataType.BIGINT) {
             stmt.setLong(idx, value.asRowid())
         }
 
-        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+        override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
             val v = rs.getLong(idx)
-            checkSqlNull(v == 0L, rs, R_RowidType)
-            return Rt_RowidValue(v)
+            return checkSqlNull(v == 0L, rs, R_RowidType, nullable) ?: Rt_RowidValue(v)
         }
     }
 }
@@ -370,10 +396,9 @@ object R_JsonType: R_PrimitiveType("json", JSON_SQL_DATA_TYPE) {
             stmt.setObject(idx, obj)
         }
 
-        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+        override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
             val str = rs.getString(idx)
-            checkSqlNull(str, R_JsonType)
-            return Rt_JsonValue.parse(str)
+            return checkSqlNull(str, R_JsonType, nullable) ?: Rt_JsonValue.parse(str)
         }
     }
 }
@@ -387,7 +412,7 @@ object R_NullType: R_Type("null") {
     override fun toMetaGtv() = "null".toGtv()
 }
 
-class R_EntityType(val rEntity: R_Entity): R_Type(rEntity.appLevelName) {
+class R_EntityType(val rEntity: R_EntityDefinition): R_Type(rEntity.appLevelName) {
     override fun comparator() = Rt_Comparator.create { it.asObjectId() }
     override fun fromCli(s: String): Rt_Value = Rt_EntityValue(this, s.toLong())
     override fun toStrictString(): String = name
@@ -403,10 +428,9 @@ class R_EntityType(val rEntity: R_Entity): R_Type(rEntity.appLevelName) {
         override fun toSqlValue(value: Rt_Value) = value.asObjectId()
         override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = stmt.setLong(idx, value.asObjectId())
 
-        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+        override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
             val v = rs.getLong(idx)
-            checkSqlNull(v == 0L, rs, type)
-            return Rt_EntityValue(type, v)
+            return checkSqlNull(v == 0L, rs, type, nullable) ?: Rt_EntityValue(type, v)
         }
 
         override fun metaName(sqlCtx: Rt_SqlContext): String {
@@ -418,7 +442,7 @@ class R_EntityType(val rEntity: R_Entity): R_Type(rEntity.appLevelName) {
     }
 }
 
-class R_ObjectType(val rObject: R_Object): R_Type(rObject.appLevelName) {
+class R_ObjectType(val rObject: R_ObjectDefinition): R_Type(rObject.appLevelName) {
     override fun isDirectVirtualable() = false
     override fun equals(other: Any?): Boolean = other is R_ObjectType && other.rObject == rObject
     override fun hashCode(): Int = rObject.hashCode()
@@ -427,7 +451,7 @@ class R_ObjectType(val rObject: R_Object): R_Type(rObject.appLevelName) {
     override fun toMetaGtv() = rObject.appLevelName.toGtv()
 }
 
-class R_StructType(val struct: R_Struct): R_Type(struct.appLevelName) {
+class R_StructType(val struct: R_Struct): R_Type(struct.name) {
     override fun isReference() = true
     override fun isDirectMutable() = struct.isDirectlyMutable()
     override fun completeFlags() = struct.flags.typeFlags
@@ -436,10 +460,10 @@ class R_StructType(val struct: R_Struct): R_Type(struct.appLevelName) {
     override fun createGtvConversion() = GtvRtConversion_Struct(struct)
 
     override fun toStrictString(): String = name
-    override fun toMetaGtv() = struct.appLevelName.toGtv()
+    override fun toMetaGtv() = struct.typeMetaGtv
 }
 
-class R_EnumType(val enum: R_Enum): R_Type(enum.appLevelName) {
+class R_EnumType(val enum: R_EnumDefinition): R_Type(enum.appLevelName) {
     override fun comparator() = Rt_Comparator.create { it.asEnum().value }
 
     override fun fromCli(s: String): Rt_Value {
@@ -459,12 +483,14 @@ class R_EnumType(val enum: R_Enum): R_Type(enum.appLevelName) {
         override fun toSqlValue(value: Rt_Value) = value.asEnum().value
         override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = stmt.setInt(idx, value.asEnum().value)
 
-        override fun fromSql(rs: ResultSet, idx: Int): Rt_Value {
+        override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
             val v = rs.getInt(idx).toLong()
-            checkSqlNull(v == 0L, rs, type)
-            val attr = type.enum.attr(v)
-            requireNotNull(attr) { "$type: $v" }
-            return Rt_EnumValue(type, attr)
+            val res = checkSqlNull(v == 0L, rs, type, nullable)
+            return if (res != null) res else {
+                val attr = type.enum.attr(v)
+                requireNotNull(attr) { "$type: $v" }
+                Rt_EnumValue(type, attr)
+            }
         }
 
         override fun metaName(sqlCtx: Rt_SqlContext): String {
@@ -481,6 +507,7 @@ class R_NullableType(val valueType: R_Type): R_Type(valueType.name + "?") {
     }
 
     override fun isReference() = valueType.isReference()
+    override fun isError() = valueType.isError()
     override fun isDirectMutable() = false
 
     override fun defaultValue() = Rt_NullValue
@@ -513,11 +540,27 @@ class R_NullableType(val valueType: R_Type): R_Type(valueType.name + "?") {
     }
 
     override fun createGtvConversion() = GtvRtConversion_Nullable(this)
+    override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Nullable()
 
     override fun toMetaGtv() = mapOf(
             "type" to "nullable".toGtv(),
             "value" to valueType.toMetaGtv()
     ).toGtv()
+
+    private inner class R_TypeSqlAdapter_Nullable: R_TypeSqlAdapter_Some() {
+        override fun isSqlCompatible() = false
+        override fun metaName(sqlCtx: Rt_SqlContext) = throw Rt_Utils.errNotSupported("Nullable entity attributes are not supported")
+
+        override fun toSqlValue(value: Rt_Value) = valueType.sqlAdapter.toSqlValue(value)
+
+        override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
+            stmt.setBoolean(idx, value.asBoolean())
+        }
+
+        override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
+            return valueType.sqlAdapter.fromSql(rs, idx, true)
+        }
+    }
 }
 
 // TODO: make this more elaborate
@@ -529,7 +572,10 @@ class R_ClosureType(name: String): R_Type(name) {
 }
 
 sealed class R_CollectionType(val elementType: R_Type, val baseName: String): R_Type("$baseName<${elementType.toStrictString()}>") {
+    private val isError = elementType.isError()
+
     final override fun isReference() = true
+    final override fun isError() = isError
     final override fun isDirectMutable() = true
     final override fun componentTypes() = listOf(elementType)
     final override fun toStrictString() = name
@@ -545,6 +591,7 @@ class R_ListType(elementType: R_Type): R_CollectionType(elementType, "list") {
 
     override fun fromCli(s: String): Rt_Value = Rt_ListValue(this, s.split(",").map { elementType.fromCli(it) }.toMutableList())
     override fun equals(other: Any?): Boolean = other is R_ListType && elementType == other.elementType
+    override fun hashCode() = Objects.hash(elementType.hashCode(), 33)
     override fun createGtvConversion() = GtvRtConversion_List(this)
 
     override fun comparator(): Comparator<Rt_Value>? {
@@ -558,19 +605,31 @@ class R_SetType(elementType: R_Type): R_CollectionType(elementType, "set") {
 
     override fun fromCli(s: String): Rt_Value = Rt_SetValue(this, s.split(",").map { elementType.fromCli(it) }.toMutableSet())
     override fun equals(other: Any?): Boolean = other is R_SetType && elementType == other.elementType
+    override fun hashCode() = Objects.hash(elementType.hashCode(), 55)
     override fun createGtvConversion() = GtvRtConversion_Set(this)
 }
 
-class R_MapType(val keyType: R_Type, val valueType: R_Type): R_Type("map<${keyType.toStrictString()},${valueType.toStrictString()}>") {
+class R_MapKeyValueTypes(val key: R_Type, val value: R_Type)
+
+class R_MapType(val keyValueTypes: R_MapKeyValueTypes): R_Type("map<${keyValueTypes.key.toStrictString()},${keyValueTypes.value.toStrictString()}>") {
+    constructor(keyType: R_Type, valueType: R_Type): this(R_MapKeyValueTypes(keyType, valueType))
+
+    val keyType = keyValueTypes.key
+    val valueType = keyValueTypes.value
     val virtualType = R_VirtualMapType(this)
 
+    private val isError = keyType.isError() || valueType.isError()
+
     override fun isReference() = true
+    override fun isError() = isError
     override fun isDirectMutable() = true
     override fun isDirectVirtualable() = keyType == R_TextType
 
     override fun toStrictString() = name
     override fun componentTypes() = listOf(keyType, valueType)
+
     override fun equals(other: Any?) = other is R_MapType && keyType == other.keyType && valueType == other.valueType
+    override fun hashCode() = Objects.hash(keyType, valueType, 77)
 
     override fun fromCli(s: String): Rt_Value {
         val map = s.split(",").associate {
@@ -595,7 +654,9 @@ class R_TupleField(val name: String?, val type: R_Type) {
     }
 
     override fun toString(): String = toStrictString()
+
     override fun equals(other: Any?): Boolean = other is R_TupleField && name == other.name && type == other.type
+    override fun hashCode() = Objects.hash(name, type)
 
     fun toMetaGtv() = mapOf(
             "name" to (name?.toGtv() ?: GtvNull),
@@ -606,11 +667,16 @@ class R_TupleField(val name: String?, val type: R_Type) {
 class R_TupleType(val fields: List<R_TupleField>): R_Type("(${fields.joinToString(",") { it.toStrictString() }})") {
     val virtualType = R_VirtualTupleType(this)
 
+    private val isError = fields.any { it.type.isError() }
+
     override fun isReference() = true
+    override fun isError() = isError
     override fun isDirectMutable() = false
 
     override fun toStrictString() = name
+
     override fun equals(other: Any?): Boolean = other is R_TupleType && fields == other.fields
+    override fun hashCode() = fields.hashCode()
 
     override fun componentTypes() = fields.map { it.type }.toList()
 
@@ -635,7 +701,7 @@ class R_TupleType(val fields: List<R_TupleField>): R_Type("(${fields.joinToStrin
         val resFields = fields.mapIndexed { i, field ->
             val otherField = other.fields[i]
             if (field.name != otherField.name) return null
-            val type = R_Type.commonTypeOpt(field.type, otherField.type)
+            val type = commonTypeOpt(field.type, otherField.type)
             if (type == null) return null
             R_TupleField(field.name, type)
         }
@@ -659,6 +725,13 @@ class R_TupleType(val fields: List<R_TupleField>): R_Type("(${fields.joinToStrin
             "type" to "tuple".toGtv(),
             "fields" to fields.map { it.toMetaGtv() }.toGtv()
     ).toGtv()
+
+    companion object {
+        fun create(vararg fields: Pair<String, R_Type>): R_TupleType {
+            val fieldsList = fields.map { R_TupleField(it.first, it.second) }
+            return R_TupleType(fieldsList)
+        }
+    }
 }
 
 object R_RangeType: R_Type("range") {
@@ -678,8 +751,12 @@ object R_GtvType: R_Type("gtv") {
 }
 
 sealed class R_VirtualType(private val innerType: R_Type): R_Type("virtual<${innerType.name}>") {
+    private val isError = innerType.isError()
+
     final override fun isReference() = true
+    final override fun isError() = isError
     final override fun toStrictString() = name
+
     final override fun toMetaGtv() = mapOf(
             "type" to "virtual".toGtv(),
             "value" to innerType.toMetaGtv()
@@ -693,47 +770,35 @@ sealed class R_VirtualCollectionType(innerType: R_Type): R_VirtualType(innerType
 class R_VirtualListType(val innerType: R_ListType): R_VirtualCollectionType(innerType) {
     override fun createGtvConversion() = GtvRtConversion_VirtualList(this)
     override fun equals(other: Any?): Boolean = other is R_VirtualListType && innerType == other.innerType
+    override fun hashCode() = innerType.hashCode()
     override fun elementType() = innerType.elementType
 }
 
 class R_VirtualSetType(val innerType: R_SetType): R_VirtualCollectionType(innerType) {
     override fun createGtvConversion() = GtvRtConversion_VirtualSet(this)
     override fun equals(other: Any?): Boolean = other is R_VirtualSetType && innerType == other.innerType
+    override fun hashCode() = innerType.hashCode()
     override fun elementType() = innerType.elementType
 }
 
 class R_VirtualMapType(val innerType: R_MapType): R_VirtualType(innerType) {
     override fun createGtvConversion() = GtvRtConversion_VirtualMap(this)
     override fun equals(other: Any?): Boolean = other is R_VirtualMapType && innerType == other.innerType
+    override fun hashCode() = innerType.hashCode()
 }
 
 class R_VirtualTupleType(val innerType: R_TupleType): R_VirtualType(innerType) {
     override fun createGtvConversion() = GtvRtConversion_VirtualTuple(this)
     override fun equals(other: Any?): Boolean = other is R_VirtualTupleType && innerType == other.innerType
+    override fun hashCode() = innerType.hashCode()
 }
 
 class R_VirtualStructType(val innerType: R_StructType): R_VirtualType(innerType) {
     override fun createGtvConversion() = GtvRtConversion_VirtualStruct(this)
     override fun equals(other: Any?): Boolean = other is R_VirtualStructType && innerType == other.innerType
+    override fun hashCode() = innerType.hashCode()
 }
 
-object R_OperationType: R_Type("operation") {
-    override fun isReference() = true
-    override fun createGtvConversion() = GtvRtConversion_Operation
-    override fun toStrictString(): String = name
-    override fun toMetaGtv() = name.toGtv()
-}
-
-object R_GtxBlockType: R_Type("rell.gtx.block") {
-    override fun isReference() = true
-    override fun createGtvConversion() = GtvRtConversion_GtxBlock
-    override fun toStrictString(): String = name
-    override fun toMetaGtv() = name.toGtv()
-}
-
-object R_GtxTxType: R_Type("rell.gtx.tx") {
-    override fun isReference() = true
-    override fun createGtvConversion() = GtvRtConversion_GtxTx
-    override fun toStrictString(): String = name
-    override fun toMetaGtv() = name.toGtv()
+abstract class R_LibType(name: String): R_Type(name) {
+    abstract fun getMemberFunctions(): C_MemberFuncTable
 }

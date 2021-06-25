@@ -11,7 +11,7 @@ import org.junit.Test
 class ReplSqlTest: BaseRellTest(true) {
     @Test fun testEntityDeclare() {
         repl.chk("entity user { name; }", "CTE:<console>:def_repl:ENTITY")
-        repl.chk("user @* {}", "CTE:<console>:unknown_entity:user")
+        repl.chk("user @* {}", "CTE:<console>:unknown_name:user")
     }
 
     @Test fun testEntityModule() {

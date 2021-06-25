@@ -4,10 +4,13 @@
 
 package net.postchain.rell.lib
 
+import com.google.common.io.Resources
 import net.postchain.base.secp256k1_derivePubKey
 import net.postchain.base.secp256k1_sign
-import net.postchain.rell.utils.CommonUtils
+import net.postchain.gtv.Gtv
 import net.postchain.rell.test.BaseRellTest
+import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.PostchainUtils
 import org.junit.Test
 
 class LibCryptoTest: BaseRellTest(false) {
@@ -54,6 +57,36 @@ class LibCryptoTest: BaseRellTest(false) {
             )""",
             "byte_array[f117f07ef53a4c90e1d6573c62ceeb5caebeb94c68ecd5d4c088f1e2395ed4438193b2b00c56fa62494f5bfb180c437ff301d8eb6993034bf0d8bc4a0a93bf0d]"
         )
+    }
+
+    @Test fun testEthEcrecoverWeb3Cases() {
+        val url = Resources.getResource(javaClass, "/eth_ecrecover_testcases.json")
+        val text = Resources.toString(url, Charsets.UTF_8)
+        val gtv = PostchainUtils.jsonToGtv(text)
+
+        fun getBytes(v: Gtv, k: String): String {
+            val w = v.asDict().getValue(k)
+            val s = w.asString()
+            check(s.matches(Regex("0x[0-9A-Fa-f]+"))) { s }
+            return s.substring(2)
+        }
+
+        for (obj in gtv.asArray()) {
+            val r = getBytes(obj, "r")
+            val s = getBytes(obj, "s")
+            val h = getBytes(obj, "h")
+            val v = getBytes(obj, "v")
+            val res = obj.asDict().getValue("res").asString()
+            val recId = Integer.parseInt(v, 16) - 27
+
+            val expected = if (res == "error") {
+                "rt_err:fn:error:eth_ecrecover:java.lang.IllegalArgumentException"
+            } else {
+                "byte_array[${res.substring(2).toLowerCase()}]"
+            }
+
+            chk("keccak256(eth_ecrecover(x'$r', x'$s', $recId, x'$h')).sub(12)", expected)
+        }
     }
 
     @Test fun testVerifySignatureErr() {
@@ -138,6 +171,6 @@ class LibCryptoTest: BaseRellTest(false) {
         insert("c0.cls", "x", "2,456")
         chk("(cls@{123}).hash()", "0x6ccd14b5a877874ddc7ca52bd3aeded5543b73a354779224bbb86b0fd315b418")
         chk("(cls@{456}).hash()", "0x4317338211726f61b281d62f0683fd55e355011b6e7495cf56f9e03059a3bc0a")
-        chk("obj.hash()", "ct_err:unknown_name:obj.hash")
+        chk("obj.hash()", "ct_err:unknown_member:[obj]:hash")
     }
 }

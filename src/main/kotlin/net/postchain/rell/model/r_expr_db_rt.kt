@@ -4,101 +4,118 @@
 
 package net.postchain.rell.model
 
-import net.postchain.rell.runtime.Rt_CallFrame
-import net.postchain.rell.runtime.Rt_SqlContext
-import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.runtime.*
+import net.postchain.rell.sql.SqlExecutor
+import net.postchain.rell.utils.chainToIterable
+import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmMap
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 
-data class SqlTableAlias(val entity: R_Entity, val str: String)
-class SqlTableJoin(val attr: R_Attrib, val alias: SqlTableAlias)
+data class SqlTableAlias(val entity: R_EntityDefinition, val exprId: R_AtExprId, val str: String)
+class SqlTableJoin(val attr: R_Attribute, val alias: SqlTableAlias)
 
-class SqlFromInfo(val entities: List<SqlFromEntity>)
-class SqlFromEntity(val alias: SqlTableAlias, val joins: List<SqlFromJoin>)
+class SqlFromInfo(entities: Map<R_AtEntityId, SqlFromEntity>) {
+    val entities = entities.toImmMap()
+}
+
+class SqlFromEntity(val alias: SqlTableAlias, joins: List<SqlFromJoin>) {
+    val joins = joins.toImmList()
+}
+
 class SqlFromJoin(val baseAlias: SqlTableAlias, val attr: String, val alias: SqlTableAlias)
+
+private class SqlGenAliasAllocator {
+    private var aliasCtr = 0
+
+    fun nextAlias(entity: R_EntityDefinition, exprId: R_AtExprId): SqlTableAlias {
+        val aliasStr = String.format("A%02d", aliasCtr++)
+        return SqlTableAlias(entity, exprId, aliasStr)
+    }
+}
 
 class SqlGenContext private constructor(
         val sqlCtx: Rt_SqlContext,
-        entities: List<R_AtEntity>,
-        private val parameters: List<Rt_Value>
+        fromEntities: List<R_DbAtEntity>,
+        private val parent: SqlGenContext?
 ) {
-    private var aliasCtr = 0
-    private val entityAliasMap = mutableMapOf<R_AtEntity, EntityAliasTbl>()
+    private val fromEntities = fromEntities.toImmList()
+    private val aliasAllocator: SqlGenAliasAllocator = parent?.aliasAllocator ?: SqlGenAliasAllocator()
+
+    private val atExprId: R_AtExprId
+    private val entityAliasMap = mutableMapOf<R_AtEntityId, EntityAliasTbl>()
     private val aliasTableMap = mutableMapOf<SqlTableAlias, EntityAliasTbl>()
 
     init {
-        entities.withIndex().forEach { (i, entity) -> check(entity.index == i) }
-        for (entity in entities) {
-            getEntityAlias(entity)
+        atExprId = R_DbAtEntity.checkList(this.fromEntities)
+        for (entity in this.fromEntities) {
+            val alias = aliasAllocator.nextAlias(entity.rEntity, atExprId)
+            val tbl = EntityAliasTbl(alias)
+            check(alias !in aliasTableMap) { "${aliasTableMap.keys} $alias" }
+            aliasTableMap[alias] = tbl
+            check(entity.id !in entityAliasMap) { "${entityAliasMap.keys} ${entity.id}" }
+            entityAliasMap[entity.id] = tbl
         }
     }
 
-    fun getParameter(index: Int): Rt_Value {
-        return parameters[index]
+    fun createSub(entities: List<R_DbAtEntity>): SqlGenContext {
+        return SqlGenContext(sqlCtx, entities, this)
     }
 
-    fun getEntityAlias(cls: R_AtEntity): SqlTableAlias {
-        val tbl = entityAliasMap.computeIfAbsent(cls) {
-            val tbl = EntityAliasTbl(nextAlias(cls.rEntity))
-            aliasTableMap[tbl.alias] = tbl
-            tbl
-        }
+    fun getEntityAlias(entity: R_DbAtEntity): SqlTableAlias {
+        val ctx = getSqlGenCtxForExpr(entity.id.exprId)
+        val tbl = ctx.entityAliasMap.getValue(entity.id)
         return tbl.alias
     }
 
-    fun getRelAlias(baseAlias: SqlTableAlias, rel: R_Attrib, entity: R_Entity): SqlTableAlias {
-        val tbl = aliasTableMap.getValue(baseAlias)
+    fun getRelAlias(baseAlias: SqlTableAlias, rel: R_Attribute, targetEntity: R_EntityDefinition): SqlTableAlias {
+        val ctx = getSqlGenCtxForExpr(baseAlias.exprId)
+        val tbl = ctx.aliasTableMap.getValue(baseAlias)
         val map = tbl.subAliases.computeIfAbsent(baseAlias) { mutableMapOf() }
         val join = map.computeIfAbsent(rel.name) {
-            val alias = nextAlias(entity)
-            aliasTableMap[alias] = tbl
+            val alias = aliasAllocator.nextAlias(targetEntity, baseAlias.exprId)
+            ctx.aliasTableMap[alias] = tbl
             SqlTableJoin(rel, alias)
         }
         return join.alias
     }
 
     fun getFromInfo(): SqlFromInfo {
-        val entities = entityAliasMap.entries.map { (_, tbl) ->
+        val entities = fromEntities.map { rAtEntity ->
+            val entityId = rAtEntity.id
+            val tbl = entityAliasMap.getValue(entityId)
             val joins = tbl.subAliases.entries.flatMap { (alias, map) ->
                 map.values.map { tblJoin -> SqlFromJoin(alias, tblJoin.attr.sqlMapping, tblJoin.alias) }
             }
-            SqlFromEntity(tbl.alias, joins)
-        }
+            entityId to SqlFromEntity(tbl.alias, joins)
+        }.toMap()
         return SqlFromInfo(entities)
     }
 
-    private fun nextAlias(entity: R_Entity) = SqlTableAlias(entity, String.format("A%02d", aliasCtr++))
+    private fun getSqlGenCtxForExpr(exprId: R_AtExprId): SqlGenContext {
+        val iterable = chainToIterable(this) { it.parent }
+        return iterable.firstOrNull { it.atExprId == exprId } ?: throw IllegalArgumentException("$exprId")
+    }
 
     private class EntityAliasTbl(val alias: SqlTableAlias) {
         val subAliases = mutableMapOf<SqlTableAlias, MutableMap<String, SqlTableJoin>>()
     }
 
     companion object {
-        fun create(frame: Rt_CallFrame, entities: List<R_AtEntity>, parameters: List<Rt_Value>): SqlGenContext {
+        fun createTop(frame: Rt_CallFrame, entities: List<R_DbAtEntity>): SqlGenContext {
             val sqlCtx = frame.defCtx.sqlCtx
-            return SqlGenContext(sqlCtx, entities, parameters)
+            return createTop(sqlCtx, entities)
+        }
+
+        fun createTop(sqlCtx: Rt_SqlContext, entities: List<R_DbAtEntity>): SqlGenContext {
+            return SqlGenContext(sqlCtx, entities, null)
         }
     }
 }
 
-sealed class SqlParam {
-    abstract fun type(): R_Type
-    abstract fun evaluate(frame: Rt_CallFrame): Rt_Value
-}
-
-class SqlParam_Expr(private val expr: R_Expr): SqlParam() {
-    override fun type() = expr.type
-    override fun evaluate(frame: Rt_CallFrame) = expr.evaluate(frame)
-}
-
-class SqlParam_Value(private val type: R_Type, private val value: Rt_Value): SqlParam() {
-    override fun type() = type
-    override fun evaluate(frame: Rt_CallFrame) = value
-}
-
 class SqlBuilder {
     private val sqlBuf = StringBuilder()
-    private val paramsBuf = mutableListOf<SqlParam>()
+    private val paramsBuf = mutableListOf<Rt_Value>()
 
     fun isEmpty(): Boolean {
         return sqlBuf.isEmpty() && paramsBuf.isEmpty()
@@ -133,14 +150,14 @@ class SqlBuilder {
         sqlBuf.append(sql)
     }
 
-    fun append(param: R_Expr) {
+    fun append(param: Long) {
         sqlBuf.append("?")
-        paramsBuf.add(SqlParam_Expr(param))
+        paramsBuf.add(Rt_IntValue(param))
     }
 
-    fun append(type: R_Type, value: Rt_Value) {
+    fun append(value: Rt_Value) {
         sqlBuf.append("?")
-        paramsBuf.add(SqlParam_Value(type, value))
+        paramsBuf.add(value)
     }
 
     fun append(buf: SqlBuilder) {
@@ -159,64 +176,74 @@ class SqlBuilder {
         }
     }
 
-    fun listBuilder(sep: String = ", "): SqlListBuilder = SqlListBuilder(this, sep)
-
     fun build(): ParameterizedSql = ParameterizedSql(sqlBuf.toString(), paramsBuf.toList())
 }
 
-class SqlListBuilder(private val builder: SqlBuilder, private val sep: String) {
-    private var first = true
+class ParameterizedSql(val sql: String, params: List<Rt_Value>) {
+    val params = params.toImmList()
 
-    fun nextItem() {
-        if (!first) {
-            builder.append(sep)
-        }
-        first = false
-    }
-}
+    constructor(): this("", listOf())
 
-class ParameterizedSql(val sql: String, val params: List<SqlParam>) {
-    fun execute(frame: Rt_CallFrame) {
-        val args = calcArgs(frame)
-        val sqlExec = frame.sqlExec
+    fun isEmpty() = sql.isEmpty() && params.isEmpty()
+
+    fun execute(sqlExec: SqlExecutor) {
+        val args = calcArgs()
         sqlExec.execute(sql, args::bind)
     }
 
-    fun executeQuery(frame: Rt_CallFrame, consumer: (ResultSet) -> Unit) {
-        val args = calcArgs(frame)
-        val sqlExec = frame.sqlExec
+    fun executeQuery(sqlExec: SqlExecutor, consumer: (ResultSet) -> Unit) {
+        val args = calcArgs()
         sqlExec.executeQuery(sql, args::bind, consumer)
     }
 
-    private fun calcArgs(frame: Rt_CallFrame): SqlArgs {
-        val types = params.map { it.type() }
-        val values = params.map { it.evaluate(frame) }
-        return SqlArgs(types, values)
+    private fun calcArgs(): SqlArgs {
+        // Was experimentally discovered that passing more than 32767 parameters causes PSQL driver to fail and the
+        // connection becomes invalid afterwards. Not allowing this to happen.
+        val maxParams = 32767
+        Rt_Utils.check(params.size <= maxParams) {
+            "sql:too_many_params:${params.size}" to "SQL query is too big (${params.size} parameters)" }
+        return SqlArgs(params)
+    }
+
+    companion object {
+        fun generate(generator: (SqlBuilder) -> Unit): ParameterizedSql {
+            val b = SqlBuilder()
+            generator(b)
+            return b.build()
+        }
     }
 }
 
-class SqlArgs(val types: List<R_Type>, val values: List<Rt_Value>) {
+class SqlArgs(values: List<Rt_Value>) {
+    private val values = values.toImmList()
+
     fun bind(stmt: PreparedStatement) {
-        for (i in values.indices) {
-            val type = types[i]
-            val arg = values[i]
-            type.sqlAdapter.toSql(stmt, i + 1, arg)
+        for ((i, value) in values.withIndex()) {
+            val type = value.type()
+            type.sqlAdapter.toSql(stmt, i + 1, value)
         }
     }
 }
 
 class SqlSelect(val pSql: ParameterizedSql, val resultTypes: List<R_Type>) {
-    fun execute(frame: Rt_CallFrame): List<Array<Rt_Value>> {
-        val result = mutableListOf<Array<Rt_Value>>()
+    fun execute(sqlExec: SqlExecutor): List<List<Rt_Value>> {
+        return execute(sqlExec) { it }
+    }
 
-        pSql.executeQuery(frame) { rs ->
+    fun execute(sqlExec: SqlExecutor, transformer: (List<Rt_Value>) -> List<Rt_Value>): List<List<Rt_Value>> {
+        val result = mutableListOf<List<Rt_Value>>()
+
+        pSql.executeQuery(sqlExec) { rs ->
             val list = mutableListOf<Rt_Value>()
             for (i in resultTypes.indices) {
                 val type = resultTypes[i]
-                val value = type.sqlAdapter.fromSql(rs, i + 1)
+                val value = type.sqlAdapter.fromSql(rs, i + 1, false)
                 list.add(value)
             }
-            result.add(list.toTypedArray())
+
+            val row = list.toImmList()
+            val transRow = transformer(row)
+            result.add(transRow)
         }
 
         return result

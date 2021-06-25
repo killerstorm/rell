@@ -33,7 +33,7 @@ class CreateTest: BaseRellTest() {
             create city ( 'New York' );
             create city ( 'San Francisco' );
             create city ( 'Los Angeles' );
-        """.trimIndent())
+        """)
         chkDataNew("city(1,New York)", "city(2,San Francisco)", "city(3,Los Angeles)")
 
         chkOp("create person ( name = 'James', city @ { 'Los Angeles' }, street = 'Evergreen Ave', house = 5, score = 100 );")
@@ -114,10 +114,98 @@ class CreateTest: BaseRellTest() {
         chkData("person(1)")
     }
 
+    @Test fun testWrongAttributes() {
+        def("entity person { name; rating: integer; }")
+        chkOp("create person(true);", "ct_err:[attr_missing:name,rating][attr_implic_unknown:0:boolean]")
+        chkOp("create person('Bob', true);", "ct_err:[attr_missing:rating][attr_implic_unknown:1:boolean]")
+        chkOp("create person(true, 'Bob');", "ct_err:[attr_missing:rating][attr_implic_unknown:0:boolean]")
+        chkOp("create person('Bob', 123, true);", "ct_err:attr_implic_unknown:2:boolean")
+    }
+
     @Test fun testBugAttrExpr() {
         tst.def("operation o(){ create user(); }")
         tst.def("entity user { name = 'Bob'; }")
         chkOpFull("")
         chkData("user(1,Bob)")
+    }
+
+    @Test fun testAsDefaultValueEntity() {
+        def("entity tag {}")
+        def("entity data { t: tag = create tag(); }")
+
+        chkCompile("", "OK")
+        chk("create data()", "ct_err:no_db_update:query")
+
+        chk("data @* {} ( data, _=.t)", "list<(data,tag)>[]")
+        chkOp("create data();")
+        chk("data @* {} ( data, _=.t)", "list<(data,tag)>[(data[2],tag[1])]")
+    }
+
+    @Test fun testAsDefaultValueStruct() {
+        def("entity tag { x: integer; }")
+        def("struct data { t: tag = create tag(123); }")
+        def("struct data2 { t: tag = create tag(struct<tag>(456)); }")
+
+        chkCompile("", "OK")
+        chk("data()", "ct_err:no_db_update:query:attr:t")
+        chk("data2()", "ct_err:no_db_update:query:attr:t")
+
+        chk("tag @* {}", "list<tag>[]")
+        chkOp("print(data());")
+        chkOut("data{t=tag[1]}")
+        chk("tag @* {}", "list<tag>[tag[1]]")
+
+        chkOp("print(data2());")
+        chkOut("data2{t=tag[2]}")
+        chk("tag @* {}", "list<tag>[tag[1],tag[2]]")
+    }
+
+    @Test fun testAsDefaultValueFunction() {
+        def("entity tag {}")
+        def("function f(t: tag = create tag()) { return t; }")
+
+        chkCompile("", "OK")
+        chk("f()", "ct_err:no_db_update:query:param:t")
+
+        chk("tag @* {}", "list<tag>[]")
+        chkOp("print(f());")
+        chkOut("tag[1]")
+        chk("tag @* {}", "list<tag>[tag[1]]")
+    }
+
+    @Test fun testAsDefaultValueQuery() {
+        def("entity tag {}")
+        chkCompile("query f(t: tag = create tag()) { return t; }", "ct_err:no_db_update:query")
+    }
+
+    @Test fun testAsDefaultValueMirrorEntity() {
+        def("entity tag {}")
+        def("entity data { t: tag = create tag(); }")
+
+        chkCompile("", "OK")
+        chk("struct<data>()", "ct_err:no_db_update:query:attr:t")
+
+        chk("tag @* {}", "list<tag>[]")
+        chkOp("struct<data>();")
+        chk("tag @* {}", "list<tag>[tag[1]]")
+    }
+
+    @Test fun testAsDefaultValueMirrorObject() {
+        def("entity tag {}")
+        chkCompile("object data { t: tag = create tag(); }", "ct_err:no_db_update:object:expr")
+    }
+
+    @Test fun testAsDefaultValueMirrorOperation() {
+        tst.testLib = true
+        def("entity tag {}")
+        def("operation f(t: tag = create tag()) {}")
+
+        chkCompile("", "OK")
+        chk("f()", "ct_err:no_db_update:query:param:t")
+
+        chk("tag @* {}", "list<tag>[]")
+        chkOp("print(f());")
+        chkOut("f(1)")
+        chk("tag @* {}", "list<tag>[tag[1]]")
     }
 }

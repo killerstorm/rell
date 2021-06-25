@@ -165,6 +165,30 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testEntityPathExprComplex() {
+        initEntityPathExprComplex()
+
+        chk("((c: c4) @ { 'c4_1' } ( c )).c3.c2.c1.name", "text[c1_1]")
+        chk("((c: c4) @ { 'c4_2' } ( c )).c3.c2.c1.name", "text[c1_2]")
+
+        chk("((c: c4) @ { 'c4_1' } ( t3 = .c3, t2 = .c3.c2 )).t3.c2.c1.name", "text[c1_1]")
+        chk("((c: c4) @ { 'c4_1' } ( t3 = .c3, t2 = .c3.c2 )).t2.c1.name", "text[c1_1]")
+        chk("((c: c4) @ { 'c4_2' } ( t3 = .c3, t2 = .c3.c2 )).t3.c2.c1.name", "text[c1_2]")
+        chk("((c: c4) @ { 'c4_2' } ( t3 = .c3, t2 = .c3.c2 )).t2.c1.name", "text[c1_2]")
+    }
+
+    @Test fun testEntityPathExprComplexNullable() {
+        def("function data() = c4 @? {} limit 1;")
+        initEntityPathExprComplex()
+
+        chkEx("{ val c = data(); return c.c3; }", "ct_err:expr_mem_null:c3")
+        chkEx("{ val c = data(); return c?.c3; }", "c3[5]")
+        chkEx("{ val c = data(); return c?.c3.c2; }", "ct_err:expr_mem_null:c2")
+        chkEx("{ val c = data(); return c?.c3?.c2; }", "c2[3]")
+        chkEx("{ val c = data(); return c?.c3?.c2.c1; }", "ct_err:expr_mem_null:c1")
+        chkEx("{ val c = data(); return c?.c3?.c2?.c1; }", "c1[1]")
+    }
+
+    private fun initEntityPathExprComplex() {
         tstCtx.useSql = true
         def("entity c1 { name: text; }")
         def("entity c2 { name: text; c1; }")
@@ -180,15 +204,7 @@ class ExpressionTest: BaseRellTest(false) {
             val c3_2 = create c3('c3_2', c2_2);
             val c4_1 = create c4('c4_1', c3_1);
             val c4_2 = create c4('c4_2', c3_2);
-        """.trimIndent())
-
-        chk("((c: c4) @ { 'c4_1' } ( c )).c3.c2.c1.name", "text[c1_1]")
-        chk("((c: c4) @ { 'c4_2' } ( c )).c3.c2.c1.name", "text[c1_2]")
-
-        chk("((c: c4) @ { 'c4_1' } ( t3 = .c3, t2 = .c3.c2 )).t3.c2.c1.name", "text[c1_1]")
-        chk("((c: c4) @ { 'c4_1' } ( t3 = .c3, t2 = .c3.c2 )).t2.c1.name", "text[c1_1]")
-        chk("((c: c4) @ { 'c4_2' } ( t3 = .c3, t2 = .c3.c2 )).t3.c2.c1.name", "text[c1_2]")
-        chk("((c: c4) @ { 'c4_2' } ( t3 = .c3, t2 = .c3.c2 )).t2.c1.name", "text[c1_2]")
+        """)
     }
 
     @Test fun testTuple() {
@@ -211,10 +227,12 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testTupleAt() {
+        tstCtx.useSql = true
         def("entity user { name: text; street: text; house: integer; }")
+        insert("c0.user", "name,street,house", "1,'Bob','Bahnstr.',13")
 
-        chk("user @ {} ( x = (.name,) ) ", "ct_err:expr_sqlnotallowed")
-        chk("user @ {} ( x = (.name, .street, .house) ) ", "ct_err:expr_sqlnotallowed")
+        chk("user @ {} ( x = (.name,) ) ", "(x=(text[Bob]))")
+        chk("user @ {} ( x = (.name, .street, .house) ) ", "(x=(text[Bob],text[Bahnstr.],int[13]))")
     }
 
     @Test fun testList() {
@@ -255,6 +273,14 @@ class ExpressionTest: BaseRellTest(false) {
         chk("123 in map<integer,text>()", "boolean[false]")
         chk("123 in map<text,integer>()", "ct_err:binop_operand_type:in:[integer]:[map<text,integer>]")
         chk("'Hello' in map<integer,text>()", "ct_err:binop_operand_type:in:[text]:[map<integer,text>]")
+
+        chk("123 not in [123, 456]", "boolean[false]")
+        chk("456 not in [123, 456]", "boolean[false]")
+        chk("789 not in [123, 456]", "boolean[true]")
+        chk("123 not in list<integer>()", "boolean[true]")
+        chk("123 not in [123:'Bob',456:'Alice']", "boolean[false]")
+        chk("789 not in [123:'Bob',456:'Alice']", "boolean[true]")
+        chk("123 not in map<integer,text>()", "boolean[true]")
     }
 
     @Test fun testNamespace() {
@@ -564,18 +590,18 @@ class ExpressionTest: BaseRellTest(false) {
         chkEx("{ val t = (x = 123, y = 'Hello'); return t[0]; }", "int[123]")
         chkEx("{ val t = (x = 123, y = 'Hello'); return t[1]; }", "text[Hello]")
 
-        chkEx("{ val t = (123, 'Hello'); return t[-1]; }", "ct_err:expr_lookup:tuple:index:-1:2")
-        chkEx("{ val t = (123, 'Hello'); return t[2]; }", "ct_err:expr_lookup:tuple:index:2:2")
+        chkEx("{ val t = (123, 'Hello'); return t[-1]; }", "ct_err:expr_subscript:tuple:index:-1:2")
+        chkEx("{ val t = (123, 'Hello'); return t[2]; }", "ct_err:expr_subscript:tuple:index:2:2")
         chkEx("{ val t = (123, 'Hello'); return t[+1]; }", "text[Hello]")
         chkEx("{ val t = (123, 'Hello'); return t[-0]; }", "int[123]")
-        chkEx("{ val t = (123, 'Hello'); return t[0+1]; }", "ct_err:expr_lookup:tuple:no_const")
-        chkEx("{ val t = (123, 'Hello'); val i = 0; return t[i]; }", "ct_err:expr_lookup:tuple:no_const")
+        chkEx("{ val t = (123, 'Hello'); return t[0+1]; }", "ct_err:expr_subscript:tuple:no_const")
+        chkEx("{ val t = (123, 'Hello'); val i = 0; return t[i]; }", "ct_err:expr_subscript:tuple:no_const")
 
-        chkEx("{ val t = (123, 'Hello'); return t[true]; }", "ct_err:expr_lookup_keytype:[integer]:[boolean]")
-        chkEx("{ val t = (123, 'Hello'); return t['Bob']; }", "ct_err:expr_lookup_keytype:[integer]:[text]")
+        chkEx("{ val t = (123, 'Hello'); return t[true]; }", "ct_err:expr_subscript_keytype:[integer]:[boolean]")
+        chkEx("{ val t = (123, 'Hello'); return t['Bob']; }", "ct_err:expr_subscript_keytype:[integer]:[text]")
 
-        chkEx("{ val t = _nullable((123, 'Hello')); return t[0]; }", "ct_err:expr_lookup_null")
-        chkEx("{ val t = _nullable((123, 'Hello')); return t[1]; }", "ct_err:expr_lookup_null")
+        chkEx("{ val t = _nullable((123, 'Hello')); return t[0]; }", "ct_err:expr_subscript_null")
+        chkEx("{ val t = _nullable((123, 'Hello')); return t[1]; }", "ct_err:expr_subscript_null")
         chkEx("{ val t = _nullable((123, 'Hello')); return t!![0]; }", "int[123]")
         chkEx("{ val t = _nullable((123, 'Hello')); return t!![1]; }", "text[Hello]")
     }
