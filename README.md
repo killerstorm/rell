@@ -18,7 +18,7 @@ Simplest way to build:
     ```  
     Switch to the right tag:  
     ```
-    git checkout ver-3.3.0
+    git checkout ver-3.3.3
     ```
 2. Build `postchain2`:  
     ```
@@ -34,7 +34,7 @@ Simplest way to build:
 Run `rell.sh`:
 
 ```
-Rell 0.10.2 (2020-02-26T14:16:46+0000)
+Rell 0.10.4 (2021-06-25T08:30:27+0000)
 Type '\q' to quit or '\?' for help.
 >>> 2+2
 4
@@ -109,7 +109,7 @@ To run unit tests in IntelliJ, select the `net.postchain.rell` package (or an in
 
 ## Copyright & License information
 
-Copyright (c) 2017-2020 ChromaWay AB. All rights reserved.
+Copyright (c) 2017-2021 ChromaWay AB. All rights reserved.
 
 This software can used either under terms of commercial license
 obtained from ChromaWay AB, or, alternatively, under the terms

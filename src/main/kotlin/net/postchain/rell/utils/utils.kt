@@ -34,7 +34,7 @@ fun <T> checkEquals(actual: T, expected: T) {
 }
 
 object PostchainUtils {
-    val DATABASE_VERSION = 1
+    val DATABASE_VERSION = 2
 
     val cryptoSystem: CryptoSystem = SECP256K1CryptoSystem()
 

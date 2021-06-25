@@ -129,9 +129,10 @@ ERROR No records found
 TEST RESULTS:
 
 tests.foobar:test_foo OK
-tests.foobar:test_bar FAILED
+tests.foobar:test_fail_require FAILED
+tests.foobar:test_fail_assert_equals FAILED
 
-SUMMARY: 1 FAILED / 1 PASSED / 2 TOTAL
+SUMMARY: 2 FAILED / 1 PASSED / 3 TOTAL
 
 
 ***** FAILED *****
@@ -159,9 +160,11 @@ tests.calc_test:test_cube OK
 tests.data_test:test_add_user OK
 tests.data_test:test_remove_user OK
 tests.foobar:test_foo OK
-tests.foobar:test_bar FAILED
+tests.foobar:test_fail_require FAILED
+tests.foobar:test_fail_assert_equals FAILED
+tests.lib_test:test_lib OK
 
-SUMMARY: 1 FAILED / 5 PASSED / 6 TOTAL
+SUMMARY: 2 FAILED / 6 PASSED / 8 TOTAL
 
 
 ***** FAILED *****
@@ -173,10 +176,10 @@ TEST RESULTS:
 
 tests.calc_test:test_square OK
 tests.calc_test:test_cube OK
-tests.data_test:test_add_user FAILED
-tests.data_test:test_remove_user FAILED
+tests.data_test:test_add_user OK
+tests.data_test:test_remove_user OK
 
-SUMMARY: 2 FAILED / 2 PASSED / 4 TOTAL
+SUMMARY: 0 FAILED / 4 PASSED / 4 TOTAL
 
 
 ***** FAILED *****
