@@ -4,11 +4,6 @@
 Module 'not_found' not found
 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------
-./rell.sh -d test-cli/src syntax_error
-
-syntax_error/module.rell(1:1) ERROR: Syntax error
-
-----------------------------------------------------------------------------------------------------------------------------------------------------------------
 ./rell.sh -d test-cli/src compilation_error
 
 compilation_error.rell(2:10) ERROR: Return type mismatch: text instead of integer

@@ -273,4 +273,4 @@ Can specify an arbitrary expression returning an entity, a nullable entity or a 
 
 --------------
 
-*Rell v0.10.4*
+*Rell v0.10.5*
