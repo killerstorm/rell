@@ -24,10 +24,10 @@ import net.postchain.rell.utils.*
 import org.apache.commons.lang3.time.FastDateFormat
 
 object RellVersions {
-    const val VERSION_STR = "0.10.4"
+    const val VERSION_STR = "0.10.5"
     val VERSION = R_LangVersion.of(VERSION_STR)
 
-    val SUPPORTED_VERSIONS = listOf("0.10.0", "0.10.1", "0.10.2", "0.10.3", "0.10.4")
+    val SUPPORTED_VERSIONS = listOf("0.10.0", "0.10.1", "0.10.2", "0.10.3", "0.10.4", "0.10.5")
             .map { R_LangVersion.of(it) }
             .toImmSet()
 

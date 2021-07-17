@@ -6,8 +6,9 @@ package net.postchain.rell.runtime
 
 import mu.KLogging
 import net.postchain.core.ByteArrayKey
-import net.postchain.rell.model.*
+import net.postchain.rell.model.R_MountName
 import net.postchain.rell.sql.SqlConstants
+import net.postchain.rell.utils.toImmSet
 
 class Rt_ChainDependency(val rid: ByteArray)
 
@@ -50,20 +51,24 @@ interface Rt_PrinterFactory {
 }
 
 class Rt_ChainSqlMapping(val chainId: Long) {
-    private val prefix = "c" + chainId + "."
+    private val prefix = "c$chainId."
+    private val systemPrefix = "${prefix}sys."
 
     val rowidTable = fullName(SqlConstants.ROWID_GEN)
     val rowidFunction = fullName(SqlConstants.MAKE_ROWID)
     val blocksTable = fullName(SqlConstants.BLOCKS_TABLE)
-    val eventsTable = fullName(SqlConstants.EVENTS_TABLE)
-    val statesTable = fullName(SqlConstants.STATES_TABLE)
-    val eventPagesTable = fullName(SqlConstants.EVENT_PAGES_TABLE)
-    val snapshotsTable = fullName(SqlConstants.SNAPSHOT_PAGES_TABLE)
     val transactionsTable = fullName(SqlConstants.TRANSACTIONS_TABLE)
     val metaEntitiesTable = fullName("sys.classes")
     val metaAttributesTable = fullName("sys.attributes")
 
     val tableSqlFilter = "$prefix%"
+
+    private val baseSystemTables: Set<String>
+
+    init {
+        val sysTables = setOf(blocksTable, transactionsTable) + SqlConstants.SYSTEM_CHAIN_TABLES.map { fullName(it) }
+        baseSystemTables = sysTables.toImmSet()
+    }
 
     fun fullName(baseName: String): String {
         return prefix + baseName
@@ -77,16 +82,9 @@ class Rt_ChainSqlMapping(val chainId: Long) {
         return table.startsWith(prefix) && table != rowidTable && table != rowidFunction
     }
 
-    fun systemTables() = listOf(
-            blocksTable,
-            transactionsTable,
-            eventsTable,
-            statesTable,
-            eventPagesTable,
-            snapshotsTable,
-            fullName(SqlConstants.CONFIGURATIONS_TABLE),
-            fullName("gtx_module_version")
-    )
+    fun isSystemTable(table: String): Boolean {
+        return table.startsWith(systemPrefix) || table in baseSystemTables
+    }
 }
 
 interface Rt_ChainHeightProvider {

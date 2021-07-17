@@ -153,7 +153,7 @@ object SqlMeta {
         val metaTables = metaData.keys.map { mapping.fullName(it) }.toSet()
         val missingTables = metaTables.filter { it !in tables }
 
-        val dataTables = tables.keys - metaTables(mapping) - mapping.systemTables()
+        val dataTables = (tables.keys - metaTables(mapping)).filter { !mapping.isSystemTable(it) }
         val missingEntities = dataTables.filter { it !in metaTables }
 
         msgs.errorIfNotEmpty(missingTables, "meta:no_data_tables", "Missing tables for existing metadata entities")

@@ -8,6 +8,8 @@ import net.postchain.base.Storage
 import net.postchain.base.withReadConnection
 import net.postchain.base.withWriteConnection
 import net.postchain.rell.runtime.Rt_Error
+import net.postchain.rell.utils.immSetOf
+import net.postchain.rell.utils.toImmSet
 import org.jooq.tools.jdbc.MockConnection
 import java.io.Closeable
 import java.sql.Connection
@@ -28,31 +30,32 @@ object SqlConstants {
     const val FN_TEXT_GETCHAR = "rell_text_getchar"
 
     const val BLOCKCHAINS_TABLE = "blockchains"
-    const val CONFIGURATIONS_TABLE = "configurations"
     const val BLOCKS_TABLE = "blocks"
     const val TRANSACTIONS_TABLE = "transactions"
-    const val EVENTS_TABLE = "events"
-    const val STATES_TABLE = "states"
-    const val EVENT_PAGES_TABLE = "event_pages"
-    const val SNAPSHOT_PAGES_TABLE = "snapshot_pages"
 
-    val SYSTEM_OBJECTS = setOf(
-            ROWID_GEN,
-            MAKE_ROWID,
-            BLOCKCHAINS_TABLE,
-            CONFIGURATIONS_TABLE,
-            BLOCKS_TABLE,
-            TRANSACTIONS_TABLE,
-            EVENTS_TABLE,
-            STATES_TABLE,
-            EVENT_PAGES_TABLE,
-            SNAPSHOT_PAGES_TABLE,
-            "meta",
-            "peerinfos",
+    // Reserved chain-specific (starting with prefix cN.) tables used by Postchain.
+    val SYSTEM_CHAIN_TABLES = immSetOf(
+            "events",
+            "states",
+            "event_pages",
+            "snapshot_pages",
+            "configurations",
             "gtx_module_version"
     )
 
-    val SYSTEM_APP_TABLES = setOf(
+    private val SYSTEM_OBJECTS_0 = immSetOf(
+            ROWID_GEN,
+            MAKE_ROWID,
+            BLOCKCHAINS_TABLE,
+            BLOCKS_TABLE,
+            TRANSACTIONS_TABLE,
+            "meta",
+            "peerinfos"
+    )
+
+    val SYSTEM_OBJECTS = (SYSTEM_OBJECTS_0 + SYSTEM_CHAIN_TABLES).toImmSet()
+
+    val SYSTEM_APP_TABLES = immSetOf(
             BLOCKCHAINS_TABLE,
             "meta",
             "peerinfos"
