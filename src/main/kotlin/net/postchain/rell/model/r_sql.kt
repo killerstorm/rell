@@ -79,8 +79,8 @@ class R_EntitySqlMapping_External(private val mountName: R_MountName, private va
         val chainMapping = sqlCtx.linkedChain(chain).sqlMapping
         val tbl = table(chainMapping)
         val rowid = rowidColumn()
-        val blkTbl = chainMapping.fullName(SqlConstants.BLOCKS_TABLE)
-        val txTbl = chainMapping.fullName(SqlConstants.TRANSACTIONS_TABLE)
+        val blkTbl = chainMapping.blocksTable
+        val txTbl = chainMapping.transactionsTable
 
         val height = sqlCtx.linkedChain(chain).height
 

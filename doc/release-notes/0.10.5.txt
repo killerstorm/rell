@@ -1,0 +1,9 @@
+RELEASE NOTES 0.10.5 (2021-07-17)
+
+A minor update to revert the object attribute expression restrictions added in 0.10.4. The restrictions did not allow
+to do any database modifications in such expressions, but turned out that some existing Rell code depended on that
+possibility and used it to perform initialization.
+
+In the future, a new way to perform initialization shall be introduced (via a special init operation). Then, database
+modifications in object attribute expressions will be prohibited, but they will keep working in the compatibility mode
+(when the source code version is 0.10.5 or older).

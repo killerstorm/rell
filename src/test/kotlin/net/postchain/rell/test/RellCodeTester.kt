@@ -78,8 +78,10 @@ class RellCodeTester(
     }
 
     fun createInitGlobalCtx(): Rt_GlobalContext {
+        val compilerOptions = compilerOptions()
         val chainCtx = createChainContext()
         return Rt_GlobalContext(
+                compilerOptions,
                 Rt_FailingPrinter,
                 Rt_FailingPrinter,
                 null,
@@ -242,6 +244,7 @@ class RellCodeTester(
     }
 
     fun createGlobalCtx(gtvConfig: Gtv = GtvNull): Rt_GlobalContext {
+        val compilerOptions = compilerOptions()
         val chainContext = createChainContext(gtvConfig)
 
         val pcModuleEnv = RellPostchainModuleEnvironment(
@@ -253,6 +256,7 @@ class RellCodeTester(
         )
 
         return Rt_GlobalContext(
+                compilerOptions,
                 outPrinter,
                 logPrinter,
                 opContext,

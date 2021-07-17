@@ -887,6 +887,11 @@ class S_FunctionDefinition(
         val body: S_FunctionBody?
 ): S_Definition(modifiers) {
     override fun compile(ctx: C_MountContext) {
+        if (qualifiedName.isEmpty()) {
+            // May happen in Eclipse while the user is coding a new function.
+            return
+        }
+
         val name = qualifiedName.last()
         ctx.checkNotExternal(name.pos, C_DeclarationType.FUNCTION)
 
@@ -909,7 +914,6 @@ class S_FunctionDefinition(
         if (!abstract && body == null) {
             ctx.msgCtx.error(name.pos, "fn:no_body:$qName", "Function '$qName' must have a body (it is not abstract)")
         }
-
 
         val defNames = definitionNames(ctx)
         val defCtx = C_DefinitionContext(ctx, C_DefinitionType.FUNCTION, defNames.defId)

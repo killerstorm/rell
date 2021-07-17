@@ -10,6 +10,7 @@ import net.postchain.rell.runtime.Rt_BooleanValue
 import net.postchain.rell.runtime.Rt_EnumValue
 import net.postchain.rell.runtime.Rt_NullValue
 import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 
@@ -210,6 +211,10 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
         }
 
         val cValues = C_BinOp_Common.promoteNumeric(ctx, cValuesRaw)
+
+        if (cValues.isEmpty()) {
+            return Pair(R_CtErrorType, immListOf())
+        }
 
         val type = cValues.withIndex().fold(cValues[0].type()) { t, (i, value) ->
             C_Types.commonType(t, value.type(), cases[i].expr.startPos, "expr_when_incompatible_type",

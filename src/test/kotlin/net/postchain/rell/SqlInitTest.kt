@@ -160,6 +160,20 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         chkAll("", "", "c0.user(name:text,rowid:int8)")
     }
 
+    @Test fun testTableNoMetaEntity2() {
+        chkInit("")
+        chkAll("", "", "")
+
+        execSql("""CREATE TABLE "c0.foobar"("rowid" BIGINT NOT NULL PRIMARY KEY, "value" BIGINT NOT NULL);""")
+        chkInit("", "rt_err:meta:no_meta_entities:c0.foobar")
+
+        execSql("""DROP TABLE "c0.foobar";""")
+        chkInit("")
+
+        execSql("""CREATE TABLE "c0.sys.foobar"("rowid" BIGINT NOT NULL PRIMARY KEY, "value" BIGINT NOT NULL);""")
+        chkInit("")
+    }
+
     @Test fun testTableNoMetaTables() {
         tstCtx.init() // drop all tables
 

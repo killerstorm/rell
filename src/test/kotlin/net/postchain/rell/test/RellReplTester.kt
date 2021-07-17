@@ -39,6 +39,7 @@ class RellReplTester(
     )
 
     private val replGlobalCtx = Rt_GlobalContext(
+            globalCtx.compilerOptions,
             outChannel.outPrinter,
             outChannel.logPrinter,
             globalCtx.opCtx,

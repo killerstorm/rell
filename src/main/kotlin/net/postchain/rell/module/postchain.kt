@@ -24,10 +24,10 @@ import net.postchain.rell.utils.*
 import org.apache.commons.lang3.time.FastDateFormat
 
 object RellVersions {
-    const val VERSION_STR = "0.10.4"
+    const val VERSION_STR = "0.10.5"
     val VERSION = R_LangVersion.of(VERSION_STR)
 
-    val SUPPORTED_VERSIONS = listOf("0.10.0", "0.10.1", "0.10.2", "0.10.3", "0.10.4")
+    val SUPPORTED_VERSIONS = listOf("0.10.0", "0.10.1", "0.10.2", "0.10.3", "0.10.4", "0.10.5")
             .map { R_LangVersion.of(it) }
             .toImmSet()
 
@@ -167,7 +167,7 @@ private class RellGTXOperation(
             )
 
             val heightProvider = Rt_TxChainHeightProvider(ctx)
-            val exeCtx = module.createExecutionContext(ctx, opCtx, heightProvider)
+            val exeCtx = module.createExecutionContext(ctx, opCtx, heightProvider, module.config.compilerOptions)
             gtvToRtCtx.get().finish(exeCtx)
             rOperation.call(exeCtx, args.get())
         }
@@ -194,7 +194,8 @@ private class RellGTXOperation(
 private class RellModuleConfig(
         val sqlLogging: Boolean,
         val typeCheck: Boolean,
-        val dbInitLogLevel: Int
+        val dbInitLogLevel: Int,
+        val compilerOptions: C_CompilerOptions
 )
 
 private class RellPostchainModule(
@@ -206,9 +207,7 @@ private class RellPostchainModule(
         private val outPrinter: Rt_Printer,
         private val logPrinter: Rt_Printer,
         private val errorHandler: ErrorHandler,
-        private val sourceDir: C_SourceDir,
-        private val modules: Set<R_ModuleName>,
-        private val config: RellModuleConfig
+        val config: RellModuleConfig
 ) : GTXModule {
     private val operationNames = rApp.operations.keys.map { it.str() }.toImmSet()
     private val queryNames = rApp.queries.keys.map { it.str() }.toImmSet()
@@ -224,7 +223,7 @@ private class RellPostchainModule(
     override fun initializeDB(ctx: EContext) {
         errorHandler.handleError({ "Database initialization failed" }) {
             val heightProvider = Rt_ConstantChainHeightProvider(-1)
-            val exeCtx = createExecutionContext(ctx, null, heightProvider)
+            val exeCtx = createExecutionContext(ctx, null, heightProvider, config.compilerOptions)
             val initLogging = SqlInitLogging.ofLevel(config.dbInitLogLevel)
             SqlInit.init(exeCtx, false, initLogging)
         }
@@ -248,7 +247,7 @@ private class RellPostchainModule(
 
         val heightProvider = Rt_ConstantChainHeightProvider(Long.MAX_VALUE)
 
-        val exeCtx = createExecutionContext(ctx, null, heightProvider)
+        val exeCtx = createExecutionContext(ctx, null, heightProvider, config.compilerOptions)
         val rtArgs = translateQueryArgs(exeCtx, rQuery, args)
         val rtResult = rQuery.call(exeCtx, rtArgs)
 
@@ -269,11 +268,13 @@ private class RellPostchainModule(
     fun createExecutionContext(
             eCtx: EContext,
             opCtx: Rt_OpContext?,
-            heightProvider: Rt_ChainHeightProvider
+            heightProvider: Rt_ChainHeightProvider,
+            compilerOptions: C_CompilerOptions
     ): Rt_ExecutionContext {
         val sqlMapping = Rt_ChainSqlMapping(eCtx.chainID)
 
         val globalCtx = Rt_GlobalContext(
+                compilerOptions = compilerOptions,
                 opCtx = opCtx,
                 outPrinter = outPrinter,
                 logPrinter = logPrinter,
@@ -357,7 +358,8 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
             val sourceDir = sourceCfg.dir
 
             val modules = getModuleNames(rellNode)
-            val app = compileApp(sourceDir, modules, errorHandler, copyOutput)
+            val compilerOptions = C_CompilerOptions.forLangVersion(sourceCfg.version)
+            val app = compileApp(sourceDir, modules, compilerOptions, errorHandler, copyOutput)
 
             val chainCtx = PostchainUtils.createChainContext(config, app, blockchainRID)
             val chainDeps = getGtxChainDependencies(config)
@@ -372,7 +374,8 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
             val moduleConfig = RellModuleConfig(
                     sqlLogging = sqlLogging,
                     typeCheck = typeCheck,
-                    dbInitLogLevel = dbInitLogLevel
+                    dbInitLogLevel = dbInitLogLevel,
+                    compilerOptions = compilerOptions
             )
 
             RellPostchainModule(
@@ -384,9 +387,7 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
                     logPrinter = modLogPrinter,
                     outPrinter = modOutPrinter,
                     errorHandler = errorHandler,
-                    config = moduleConfig,
-                    sourceDir = sourceDir,
-                    modules = modules.toSet()
+                    config = moduleConfig
             )
         }
     }
@@ -414,10 +415,11 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
     private fun compileApp(
             sourceDir: C_SourceDir,
             modules: List<R_ModuleName>,
+            compilerOptions: C_CompilerOptions,
             errorHandler: ErrorHandler,
             copyOutput: Boolean
     ): R_App {
-        val cResult = C_Compiler.compile(sourceDir, modules)
+        val cResult = C_Compiler.compile(sourceDir, modules, compilerOptions)
         val app = processCompilationResult(cResult, errorHandler, copyOutput)
 
         for (moduleName in modules) {

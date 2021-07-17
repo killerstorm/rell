@@ -116,7 +116,7 @@ class ReplInterpreter private constructor(
             return false
         }
 
-        executeCatch {
+        return executeCatch {
             val rtAppCtx = createRtAppContext(rtGlobalCtx, success.app)
             sqlUpdate(rtAppCtx, forceSqlUpdate)
 
@@ -126,8 +126,6 @@ class ReplInterpreter private constructor(
                 defsState = success.defsState
             }
         }
-
-        return true
     }
 
     private fun compile(code: String): C_ReplSuccess? {
@@ -145,9 +143,10 @@ class ReplInterpreter private constructor(
         return cRes.success
     }
 
-    private fun executeCatch(code: () -> Unit) {
+    private fun executeCatch(code: () -> Unit): Boolean {
         try {
             code()
+            return true
         } catch (e: Rt_StackTraceError) {
             outChannel.printRuntimeError(e, e.stack)
         } catch (e: Rt_BaseError) {
@@ -155,6 +154,7 @@ class ReplInterpreter private constructor(
         } catch (e: Throwable) {
             outChannel.printPlatformRuntimeError(e)
         }
+        return false
     }
 
     private fun createRtAppContext(globalCtx: Rt_GlobalContext, app: R_App): Rt_AppContext {

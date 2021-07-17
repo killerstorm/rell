@@ -143,13 +143,7 @@ class IdeCodeSnippet(
     @JvmField val parsing = parsing.toImmMap()
 
     fun serialize(): String {
-        val opts = mapOf<String, Any>(
-                "gtv"  to options.gtv,
-                "deprecatedError" to options.deprecatedError,
-                "ide" to options.ide,
-                "atAttrShadowing" to options.atAttrShadowing.name,
-                "testLib" to options.testLib
-        )
+        val opts = options.toPojoMap()
 
         val modulesObj = mapOf(
                 "modules" to modules.modules.map { it.str() },
@@ -191,15 +185,7 @@ class IdeCodeSnippet(
 
             val optionsRaw = obj.getValue("options") as Map<Any, Any>
             val optionsMap = optionsRaw.map { (k, v) -> k as String to v }.toMap()
-            val options = C_CompilerOptions(
-                    gtv = optionsMap.getValue("gtv") as Boolean,
-                    deprecatedError = optionsMap.getValue("deprecatedError") as Boolean,
-                    ide = (optionsMap["ide"] as Boolean?) ?: false,
-                    blockCheck = true,
-                    atAttrShadowing = (optionsMap["atAttrShadowing"] as String?)
-                            ?.let { C_AtAttrShadowing.valueOf(it) } ?: C_AtAttrShadowing.DEFAULT,
-                    testLib = (optionsMap["testLib"] as Boolean?) ?: false
-            )
+            val options = C_CompilerOptions.fromPojoMap(optionsMap)
 
             val messagesRaw = obj.getValue("messages") as List<Any>
             val messages = messagesRaw.map { IdeSnippetMessage.deserialize(it) }

@@ -65,7 +65,8 @@ class SqlObjectsInit(private val exeCtx: Rt_ExecutionContext) {
             }
 
             started = true
-            val frame = SqlInitUtils.createEntityInitFrame(exeCtx, obj.rEntity, false)
+            val modsAllowed = exeCtx.globalCtx.compilerOptions.allowDbModificationsInObjectExprs
+            val frame = SqlInitUtils.createEntityInitFrame(exeCtx, obj.rEntity, modsAllowed)
             obj.insert(frame)
             finished = true
         }

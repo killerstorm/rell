@@ -369,7 +369,7 @@ class C_DefinitionContext(val mntCtx: C_MountContext, val definitionType: C_Defi
             definitionType == C_DefinitionType.QUERY -> {
                 C_CodeMsg("no_db_update:query", "Database modifications are not allowed in a query")
             }
-            definitionType == C_DefinitionType.OBJECT -> {
+            definitionType == C_DefinitionType.OBJECT && !globalCtx.compilerOptions.allowDbModificationsInObjectExprs -> {
                 C_CodeMsg("no_db_update:object:expr", "Database modifications are not allowed in object attribute expressions")
             }
             modCtx.repl -> {
