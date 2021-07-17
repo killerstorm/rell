@@ -44,6 +44,7 @@ private fun main0(args: RellCliArgs) {
 
     val extraOptions = args.extraOptions.map { parseExtraOptionCli(it) }.toImmList()
     val compilerOptions = getCompilerOptions(extraOptions)
+    val argsEx = RellCliArgsEx(args, compilerOptions)
 
     if (args.dbUrl != null && args.dbProperties != null) {
         throw RellCliErr("Both database URL and properties specified")
@@ -66,7 +67,7 @@ private fun main0(args: RellCliArgs) {
     }
 
     if (testModules != null) {
-        runMultiModuleTests(args, testModules)
+        runMultiModuleTests(argsEx, testModules)
         return
     }
 
@@ -76,20 +77,20 @@ private fun main0(args: RellCliArgs) {
         val app = RellCliUtils.compileApp(args.sourceDir, entryModule, args.quiet, compilerOptions)
         val module = if (entryModule == null) null else app.moduleMap[entryModule]
         if (module != null && module.test) {
-            runSingleModuleTests(args, app, module, entryRoutine)
+            runSingleModuleTests(argsEx, app, module, entryRoutine)
         } else {
-            runApp(args, dbSpecified, entryModule, entryRoutine, app)
+            runApp(argsEx, dbSpecified, entryModule, entryRoutine, app)
         }
     } else if (entryModule != null) {
         val app = RellCliUtils.compileApp(args.sourceDir, entryModule, args.quiet, compilerOptions)
         val module = app.moduleMap[entryModule]
         if (module != null && module.test) {
-            runSingleModuleTests(args, app, module, entryRoutine)
+            runSingleModuleTests(argsEx, app, module, entryRoutine)
         } else {
-            runRepl(args, entryModule, dbSpecified, compilerOptions)
+            runRepl(argsEx, entryModule, dbSpecified)
         }
     } else {
-        runRepl(args, entryModule, dbSpecified, compilerOptions)
+        runRepl(argsEx, entryModule, dbSpecified)
     }
 }
 
@@ -100,18 +101,18 @@ private fun getCompilerOptions(extraOpts: List<ExtraOption>): C_CompilerOptions 
 }
 
 private fun runApp(
-        args: RellCliArgs,
+        args: RellCliArgsEx,
         dbSpecified: Boolean,
         entryModule: R_ModuleName?,
         entryRoutine: R_QualifiedName?,
         app: R_App
 ) {
     val launcher = getAppLauncher(app, args, entryModule, entryRoutine)
-    if (launcher == null && !args.resetdb) {
+    if (launcher == null && !args.raw.resetdb) {
         return
     }
 
-    runWithSqlManager(args, true) { sqlMgr ->
+    runWithSqlManager(args.raw, true) { sqlMgr ->
         val sqlCtx = Rt_SqlContext.createNoExternalChains(app, SQL_MAPPER)
         if (dbSpecified) {
             initDatabase(args, app, sqlMgr, sqlCtx)
@@ -120,32 +121,32 @@ private fun runApp(
     }
 }
 
-private fun runSingleModuleTests(args: RellCliArgs, app: R_App, module: R_Module, entryRoutine: R_QualifiedName?) {
+private fun runSingleModuleTests(args: RellCliArgsEx, app: R_App, module: R_Module, entryRoutine: R_QualifiedName?) {
     val fns = TestRunner.getTestFunctions(module)
             .filter { entryRoutine == null || it.names.qualifiedName == entryRoutine.str() }
     runTests(args, app, fns)
 }
 
-private fun runMultiModuleTests(args: RellCliArgs, modules: List<String>) {
+private fun runMultiModuleTests(args: RellCliArgsEx, modules: List<String>) {
     val rModules = if (modules.isEmpty()) {
         listOf(R_ModuleName.EMPTY)
     } else {
         modules.map { R_ModuleName.ofOpt(it) ?: throw RellCliErr("Invalid module name: '$it'") }
     }
 
-    val sourceDir = RellCliUtils.createSourceDir(args.sourceDir)
+    val sourceDir = RellCliUtils.createSourceDir(args.raw.sourceDir)
     val modSel = C_CompilerModuleSelection(listOf(), rModules)
-    val app = RellCliUtils.compileApp(sourceDir, modSel, args.quiet, C_CompilerOptions.DEFAULT)
+    val app = RellCliUtils.compileApp(sourceDir, modSel, args.raw.quiet, C_CompilerOptions.DEFAULT)
 
     val testFns = TestRunner.getTestFunctions(app)
     runTests(args, app, testFns)
 }
 
-private fun runTests(args: RellCliArgs, app: R_App, fns: List<R_FunctionDefinition>) {
+private fun runTests(args: RellCliArgsEx, app: R_App, fns: List<R_FunctionDefinition>) {
     val globalCtx = createGlobalCtx(args, null)
     val sqlCtx = Rt_SqlContext.createNoExternalChains(app, SQL_MAPPER)
 
-    val sourceDir = RellCliUtils.createSourceDir(args.sourceDir)
+    val sourceDir = RellCliUtils.createSourceDir(args.raw.sourceDir)
     val keyPair = UnitTestBlockRunner.getTestKeyPair()
 
     val blockRunnerModules = app.modules.filter { !it.test && !it.abstract && !it.external }.map { it.name }
@@ -153,7 +154,7 @@ private fun runTests(args: RellCliArgs, app: R_App, fns: List<R_FunctionDefiniti
 
     var allOk = false
 
-    runWithSqlManager(args, true) { sqlMgr ->
+    runWithSqlManager(args.raw, true) { sqlMgr ->
         val testCtx = TestRunnerContext(sqlMgr, globalCtx, sqlCtx, blockRunnerStrategy, app)
         val cases = fns.map { TestRunnerCase(null, it) }
         allOk = TestRunner.runTests(testCtx, cases)
@@ -164,17 +165,17 @@ private fun runTests(args: RellCliArgs, app: R_App, fns: List<R_FunctionDefiniti
     }
 }
 
-private fun runRepl(args: RellCliArgs, moduleName: R_ModuleName?, useSql: Boolean, compilerOptions: C_CompilerOptions) {
-    runWithSqlManager(args, false) { sqlMgr ->
-        if (args.resetdb) {
+private fun runRepl(args: RellCliArgsEx, moduleName: R_ModuleName?, useSql: Boolean) {
+    runWithSqlManager(args.raw, false) { sqlMgr ->
+        if (args.raw.resetdb) {
             sqlMgr.transaction { sqlExec ->
                 SqlUtils.dropAll(sqlExec, true)
             }
         }
 
         val globalCtx = createGlobalCtx(args, null)
-        val sourceDir = RellCliUtils.createSourceDir(args.sourceDir)
-        ReplShell.start(sourceDir, moduleName, globalCtx, sqlMgr, useSql, compilerOptions)
+        val sourceDir = RellCliUtils.createSourceDir(args.raw.sourceDir)
+        ReplShell.start(sourceDir, moduleName, globalCtx, sqlMgr, useSql, args.compilerOptions)
     }
 }
 
@@ -187,9 +188,9 @@ private fun resetDatabase(args: RellCliArgs) {
     println("Database cleared")
 }
 
-private fun initDatabase(args: RellCliArgs, app: R_App, sqlMgr: SqlManager, sqlCtx: Rt_SqlContext) {
+private fun initDatabase(args: RellCliArgsEx, app: R_App, sqlMgr: SqlManager, sqlCtx: Rt_SqlContext) {
     val appCtx = createRegularAppContext(args, app, sqlCtx, null)
-    SqlUtils.initDatabase(appCtx, sqlMgr, args.resetdb, args.sqlInitLog)
+    SqlUtils.initDatabase(appCtx, sqlMgr, args.raw.resetdb, args.raw.sqlInitLog)
 }
 
 private fun parseEntryPoint(args: RellCliArgs): Pair<R_ModuleName?, R_QualifiedName?> {
@@ -214,7 +215,7 @@ private fun parseEntryPoint(args: RellCliArgs): Pair<R_ModuleName?, R_QualifiedN
 
 private fun getAppLauncher(
         app: R_App,
-        args: RellCliArgs,
+        args: RellCliArgsEx,
         entryModule: R_ModuleName?,
         entryRoutine: R_QualifiedName?
 ): RellAppLauncher? {
@@ -302,14 +303,8 @@ private fun findEntryPoint(app: R_App, moduleName: R_ModuleName, routineName: R_
     return ep
 }
 
-private fun createGlobalCtx(args: RellCliArgs, opCtx: Rt_OpContext?): Rt_GlobalContext {
-    val bcRid = BlockchainRid(ByteArray(32))
-    val chainCtx = Rt_ChainContext(GtvNull, mapOf(), bcRid)
-    return RellCliUtils.createGlobalContext(chainCtx, opCtx, args.typeCheck)
-}
-
 private fun createRegularAppContext(
-        args: RellCliArgs,
+        args: RellCliArgsEx,
         app: R_App,
         sqlCtx: Rt_SqlContext,
         opCtx: Rt_OpContext?
@@ -324,6 +319,12 @@ private fun createRegularAppContext(
             replOut = null,
             blockRunnerStrategy = Rt_UnsupportedBlockRunnerStrategy
     )
+}
+
+private fun createGlobalCtx(args: RellCliArgsEx, opCtx: Rt_OpContext?): Rt_GlobalContext {
+    val bcRid = BlockchainRid(ByteArray(32))
+    val chainCtx = Rt_ChainContext(GtvNull, mapOf(), bcRid)
+    return RellCliUtils.createGlobalContext(chainCtx, opCtx, args.raw.typeCheck, args.compilerOptions)
 }
 
 private fun parseArgs(entryPoint: RellEntryPoint, gtvCtx: GtvToRtContext, args: List<String>, json: Boolean): List<Rt_Value> {
@@ -405,7 +406,7 @@ private class ExtraOption_AtAttrShadowing(val v: C_AtAttrShadowing): ExtraOption
 
 private class RellAppLauncher(
         private val app: R_App,
-        private val args: RellCliArgs,
+        private val args: RellCliArgsEx,
         private val entryPoint: RellEntryPoint
 ) {
     fun launch(sqlMgr: SqlManager, sqlCtx: Rt_SqlContext) {
@@ -415,14 +416,14 @@ private class RellAppLauncher(
             val exeCtx = Rt_ExecutionContext(appCtx, sqlExec)
 
             val gtvCtx = GtvToRtContext(true)
-            val rtArgs = parseArgs(entryPoint, gtvCtx, args.args ?: listOf(), args.json || args.jsonArgs)
+            val rtArgs = parseArgs(entryPoint, gtvCtx, args.raw.args ?: listOf(), args.raw.json || args.raw.jsonArgs)
             gtvCtx.finish(exeCtx)
 
             callEntryPoint(exeCtx, rtArgs)
         }
 
         if (rtRes != null && rtRes != Rt_UnitValue) {
-            val strRes = resultToString(rtRes, args.jsonResult || args.json)
+            val strRes = resultToString(rtRes, args.raw.jsonResult || args.raw.json)
             println(strRes)
         }
     }
@@ -488,6 +489,8 @@ private class RellEntryPoint_Query(private val q: R_QueryDefinition): RellEntryP
 }
 
 private const val ARG_TEST = "--test"
+
+private class RellCliArgsEx(val raw: RellCliArgs, val compilerOptions: C_CompilerOptions)
 
 @CommandLine.Command(name = "rell", description = ["Executes a rell program"])
 private class RellCliArgs: RellBaseCliArgs() {

@@ -32,6 +32,7 @@ abstract class RellBaseTester(
     var deprecatedError = false
     var atAttrShadowing = C_CompilerOptions.DEFAULT.atAttrShadowing
     var testLib = false
+    var allowDbModificationsInObjectExprs = C_CompilerOptions.DEFAULT.allowDbModificationsInObjectExprs
 
     var blockchainRid = RellTestUtils.strToRidHex("DEADBEEF")
 
@@ -112,7 +113,8 @@ abstract class RellBaseTester(
             ide = false,
             blockCheck = true,
             atAttrShadowing = atAttrShadowing,
-            testLib = testLib
+            testLib = testLib,
+            allowDbModificationsInObjectExprs = allowDbModificationsInObjectExprs
     )
 
     fun def(defs: List<String>) {

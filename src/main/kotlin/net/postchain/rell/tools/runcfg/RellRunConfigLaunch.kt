@@ -121,6 +121,8 @@ private fun startPostchainNode(rellAppConf: RellPostAppCliConfig): NodeConfig {
 }
 
 private fun runTests(args: CommonArgs) {
+    val compilerOptions = C_CompilerOptions.forLangVersion(args.sourceVer)
+
     val rellAppConf = generateRunConfig(args, true)
     val testNodeConfig = rellAppConf.config.testNode
     testNodeConfig ?: throw RellCliErr("Test database configuration not specified in run.xml")
@@ -137,7 +139,7 @@ private fun runTests(args: CommonArgs) {
             val modules = listOf(config.appModule)
             val testModules = (modules.toSet() + config.testModules.toSet()).toList()
             val modSel = C_CompilerModuleSelection(modules, testModules)
-            val rApp = RellCliUtils.compileApp(rellAppConf.sourceDir, modSel, true, C_CompilerOptions.DEFAULT)
+            val rApp = RellCliUtils.compileApp(rellAppConf.sourceDir, modSel, true, compilerOptions)
             TestChain(chain, rApp, config.gtvConfig)
         }
     }
@@ -153,7 +155,7 @@ private fun runTests(args: CommonArgs) {
 
             val chainRid = BlockchainRid(tChain.chain.brid.toByteArray())
             val chainCtx = PostchainUtils.createChainContext(tChain.gtvConfig, tChain.rApp, chainRid)
-            val globalCtx = RellCliUtils.createGlobalContext(chainCtx, null, true)
+            val globalCtx = RellCliUtils.createGlobalContext(chainCtx, null, true, compilerOptions)
 
             val testCtx = TestRunnerContext(sqlMgr, globalCtx, sqlCtx, blockRunnerStrategy, tChain.rApp)
             val fns = TestRunner.getTestFunctions(tChain.rApp)

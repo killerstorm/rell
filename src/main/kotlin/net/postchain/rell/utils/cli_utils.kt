@@ -125,7 +125,12 @@ object RellCliUtils: KLogging() {
         }
     }
 
-    fun createGlobalContext(chainCtx: Rt_ChainContext, opCtx: Rt_OpContext?, typeCheck: Boolean): Rt_GlobalContext {
+    fun createGlobalContext(
+            chainCtx: Rt_ChainContext,
+            opCtx: Rt_OpContext?,
+            typeCheck: Boolean,
+            compilerOptions: C_CompilerOptions
+    ): Rt_GlobalContext {
         val pcModuleEnv = RellPostchainModuleEnvironment(
                 outPrinter = Rt_OutPrinter,
                 logPrinter = Rt_LogPrinter(),
@@ -133,6 +138,7 @@ object RellCliUtils: KLogging() {
         )
 
         return Rt_GlobalContext(
+                compilerOptions = compilerOptions,
                 opCtx = opCtx,
                 chainCtx = chainCtx,
                 outPrinter = Rt_OutPrinter,

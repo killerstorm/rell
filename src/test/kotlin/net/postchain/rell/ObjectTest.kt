@@ -228,26 +228,61 @@ class ObjectTest: BaseRellTest() {
         chkOut("123", "456")
     }
 
-    @Test fun testInitSideEffectsDirect() {
+    @Test fun testInitSideEffectsDirectCreateAllowed() {
+        def("entity data { v: integer; }")
+        def("object state { mutable d: data = create data(123); }")
+        chk("state.d", "data[1]")
+        chk("state.d.v", "int[123]")
+    }
+
+    @Test fun testInitSideEffectsDirectCreateUnallowed() {
+        tst.allowDbModificationsInObjectExprs = false
         def("entity data { v: integer; }")
         chkCompile("object state { mutable d: data = create data(123); }", "ct_err:no_db_update:object:expr")
     }
 
-    @Test fun testInitSideEffectsIndirectCreate() {
+    @Test fun testInitSideEffectsIndirectCreateAllowed() {
+        def("entity data { mutable v: integer; }")
+        def("function f(v: integer): integer { create data(v); return v*v; }")
+        def("object state { mutable d: integer = f(123); }")
+        chk("state.d", "int[15129]")
+        chk("data @* {}", "list<data>[data[1]]")
+    }
+
+    @Test fun testInitSideEffectsIndirectCreateUnallowed() {
+        tst.allowDbModificationsInObjectExprs = false
         def("entity data { mutable v: integer; }")
         def("function f(v: integer): integer { create data(v); return v*v; }")
         def("object state { mutable d: integer = f(123); }")
         tst.chkInit("rt_err:no_db_update:def")
     }
 
-    @Test fun testInitSideEffectsIndirectUpdate() {
+    @Test fun testInitSideEffectsIndirectUpdateAllowed() {
+        def("object helper { mutable v: integer = 123; }")
+        def("function f(v: integer): integer { update helper ( .v += v ); return v*v; }")
+        def("object state { mutable d: integer = f(456); }")
+        chk("helper.v", "int[579]")
+        chk("state.d", "int[207936]")
+    }
+
+    @Test fun testInitSideEffectsIndirectUpdateUnallowed() {
+        tst.allowDbModificationsInObjectExprs = false
         def("entity data { mutable v: integer; }")
         def("function f(v: integer): integer { update data @*{} ( .v += v ); return v*v; }")
         def("object state { mutable d: integer = f(123); }")
         tst.chkInit("rt_err:no_db_update:def")
     }
 
-    @Test fun testInitSideEffectsIndirectDelete() {
+    @Test fun testInitSideEffectsIndirectDeleteAllowed() {
+        def("entity data { mutable v: integer; }")
+        def("function f(v: integer): integer { delete data @*{}; return v*v; }")
+        def("object state { mutable d: integer = f(123); }")
+        insert("c0.data", "v", "1,456")
+        chk("data @* {}", "list<data>[data[1]]")
+    }
+
+    @Test fun testInitSideEffectsIndirectDeleteUnallowed() {
+        tst.allowDbModificationsInObjectExprs = false
         def("entity data { mutable v: integer; }")
         def("function f(v: integer): integer { delete data @*{}; return v*v; }")
         def("object state { mutable d: integer = f(123); }")

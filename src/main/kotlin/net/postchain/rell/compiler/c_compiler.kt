@@ -187,8 +187,54 @@ class C_CompilerOptions(
         val ide: Boolean,
         val blockCheck: Boolean,
         val atAttrShadowing: C_AtAttrShadowing,
-        val testLib: Boolean
+        val testLib: Boolean,
+        val allowDbModificationsInObjectExprs: Boolean
 ) {
+    fun toPojoMap(): Map<String, Any> {
+        return immMapOf(
+                "gtv"  to gtv,
+                "deprecatedError" to deprecatedError,
+                "ide" to ide,
+                "atAttrShadowing" to atAttrShadowing.name,
+                "testLib" to testLib,
+                "allowDbModificationsInObjectExprs" to allowDbModificationsInObjectExprs
+        )
+    }
+
+    companion object {
+        @JvmField val DEFAULT = C_CompilerOptions(
+                gtv = true,
+                deprecatedError = false,
+                ide = false,
+                blockCheck = false,
+                atAttrShadowing = C_AtAttrShadowing.DEFAULT,
+                testLib = false,
+                allowDbModificationsInObjectExprs = true
+        )
+
+        @JvmStatic fun builder() = Builder()
+
+        @JvmStatic fun fromPojoMap(map: Map<String, Any>): C_CompilerOptions {
+            return C_CompilerOptions(
+                    blockCheck = true,
+                    gtv = map.getValue("gtv") as Boolean,
+                    deprecatedError = map.getValue("deprecatedError") as Boolean,
+                    atAttrShadowing = (map["atAttrShadowing"] as String?)
+                            ?.let { C_AtAttrShadowing.valueOf(it) } ?: DEFAULT.atAttrShadowing,
+                    ide = getBoolOpt(map, "ide", DEFAULT.ide),
+                    testLib = getBoolOpt(map, "testLib", DEFAULT.testLib),
+                    allowDbModificationsInObjectExprs =
+                            getBoolOpt(map, "allowDbModificationsInObjectExprs", DEFAULT.allowDbModificationsInObjectExprs)
+            )
+        }
+
+        fun forLangVersion(version: R_LangVersion): C_CompilerOptions {
+            return DEFAULT // No version-specific options yet.
+        }
+
+        private fun getBoolOpt(map: Map<String, Any>, key: String, def: Boolean): Boolean = (map[key] as Boolean?) ?: def
+    }
+
     class Builder {
         private var gtv = DEFAULT.gtv
         private var deprecatedError = DEFAULT.deprecatedError
@@ -196,6 +242,7 @@ class C_CompilerOptions(
         private var blockCheck = DEFAULT.blockCheck
         private var atAttrShadowing = DEFAULT.atAttrShadowing
         private var testLib = DEFAULT.testLib
+        private var allowDbModificationsInObjectExprs = DEFAULT.allowDbModificationsInObjectExprs
 
         @Suppress("UNUSED") fun gtv(v: Boolean): Builder {
             gtv = v
@@ -222,27 +269,20 @@ class C_CompilerOptions(
             return this
         }
 
+        @Suppress("UNUSED") fun allowDbModificationsInObjectExprs(v: Boolean): Builder {
+            allowDbModificationsInObjectExprs = v
+            return this
+        }
+
         fun build() = C_CompilerOptions(
                 gtv = gtv,
                 deprecatedError = deprecatedError,
                 ide = ide,
                 blockCheck = blockCheck,
                 atAttrShadowing = atAttrShadowing,
-                testLib = DEFAULT.testLib
+                testLib = testLib,
+                allowDbModificationsInObjectExprs = allowDbModificationsInObjectExprs
         )
-    }
-
-    companion object {
-        @JvmField val DEFAULT = C_CompilerOptions(
-                gtv = true,
-                deprecatedError = false,
-                ide = false,
-                blockCheck = false,
-                atAttrShadowing = C_AtAttrShadowing.DEFAULT,
-                testLib = false
-        )
-
-        @JvmStatic fun builder() = Builder()
     }
 }
 

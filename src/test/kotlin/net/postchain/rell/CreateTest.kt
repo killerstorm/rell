@@ -192,7 +192,14 @@ class CreateTest: BaseRellTest() {
 
     @Test fun testAsDefaultValueMirrorObject() {
         def("entity tag {}")
-        chkCompile("object data { t: tag = create tag(); }", "ct_err:no_db_update:object:expr")
+        def("object data { t: tag = create tag(); }")
+
+        chkCompile("", "OK")
+        chk("struct<data>()", "ct_err:no_db_update:query:attr:t")
+
+        chk("tag @* {}", "list<tag>[tag[1]]")
+        chkOp("struct<data>();")
+        chk("tag @* {}", "list<tag>[tag[1],tag[2]]")
     }
 
     @Test fun testAsDefaultValueMirrorOperation() {
