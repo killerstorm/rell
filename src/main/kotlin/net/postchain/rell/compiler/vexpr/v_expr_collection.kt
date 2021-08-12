@@ -21,7 +21,7 @@ class V_ListLiteralExpr(
 ): V_Expr(exprCtx, pos) {
     val elems = elems.toImmList()
 
-    override val exprInfo = V_ExprInfo.make(elems)
+    override val exprInfo = V_ExprInfo.make(elems, canBeDbExpr = false)
 
     override fun type() = listType
     override fun varFacts() = varFacts
@@ -31,13 +31,13 @@ class V_ListLiteralExpr(
         return R_ListLiteralExpr(listType, rExprs)
     }
 
-    override fun toDbExprWhat(): C_DbAtWhatValue {
+    override fun toDbExprWhat0(): C_DbAtWhatValue {
         val evaluator = object: Db_ComplexAtWhatEvaluator() {
             override fun evaluate(frame: Rt_CallFrame, values: List<Rt_Value>): Rt_Value {
                 return Rt_ListValue(listType, values.toMutableList())
             }
         }
-        return V_Utils.createAtWhatValueComplex(elems, evaluator)
+        return V_AtUtils.createAtWhatValueComplex(elems, evaluator)
     }
 }
 
@@ -50,7 +50,7 @@ class V_MapLiteralExpr(
 ): V_Expr(exprCtx, pos) {
     val entries = entries.toImmList()
 
-    override val exprInfo = V_ExprInfo.make(entries.flatMap { it.toList() })
+    override val exprInfo = V_ExprInfo.make(entries.flatMap { it.toList() }, canBeDbExpr = false)
 
     override fun type() = mapType
     override fun varFacts() = varFacts
@@ -60,7 +60,7 @@ class V_MapLiteralExpr(
         return R_MapLiteralExpr(mapType, rEntries)
     }
 
-    override fun toDbExprWhat(): C_DbAtWhatValue {
+    override fun toDbExprWhat0(): C_DbAtWhatValue {
         val vExprs = entries.flatMap { it.toList() }
 
         val evaluator = object: Db_ComplexAtWhatEvaluator() {
@@ -71,7 +71,7 @@ class V_MapLiteralExpr(
             }
         }
 
-        return V_Utils.createAtWhatValueComplex(vExprs, evaluator)
+        return V_AtUtils.createAtWhatValueComplex(vExprs, evaluator)
     }
 }
 
@@ -82,7 +82,7 @@ class V_CollectionConstructorExpr(
         private val arg: V_Expr?,
         private val varFacts: C_ExprVarFacts
 ): V_Expr(exprCtx, pos) {
-    override val exprInfo = V_ExprInfo.make(listOfNotNull(arg))
+    override val exprInfo = V_ExprInfo.make(listOfNotNull(arg), canBeDbExpr = false)
 
     override fun type() = kind.type
     override fun varFacts() = varFacts
@@ -92,7 +92,7 @@ class V_CollectionConstructorExpr(
         return R_CollectionConstructorExpr(kind, rArg)
     }
 
-    override fun toDbExprWhat(): C_DbAtWhatValue {
+    override fun toDbExprWhat0(): C_DbAtWhatValue {
         val evaluator = object: Db_ComplexAtWhatEvaluator() {
             override fun evaluate(frame: Rt_CallFrame, values: List<Rt_Value>): Rt_Value {
                 val col = values.firstOrNull()?.asCollection() ?: immListOf<Rt_Value>()
@@ -101,6 +101,6 @@ class V_CollectionConstructorExpr(
         }
 
         val args = listOfNotNull(arg)
-        return V_Utils.createAtWhatValueComplex(args, evaluator)
+        return V_AtUtils.createAtWhatValueComplex(args, evaluator)
     }
 }

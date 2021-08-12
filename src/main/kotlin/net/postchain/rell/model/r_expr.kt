@@ -5,12 +5,10 @@
 package net.postchain.rell.model
 
 import net.postchain.rell.compiler.C_LateGetter
-import net.postchain.rell.lib.R_TestOpType
-import net.postchain.rell.lib.Rt_TestOpValue
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlGen
+import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.immListOf
-import net.postchain.rell.utils.toImmList
 
 abstract class R_Expr(val type: R_Type) {
     protected abstract fun evaluate0(frame: Rt_CallFrame): Rt_Value
@@ -27,7 +25,7 @@ abstract class R_Expr(val type: R_Type) {
         fun typeCheck(frame: Rt_CallFrame, type: R_Type, value: Rt_Value) {
             if (frame.defCtx.globalCtx.typeCheck) {
                 val resType = value.type()
-                check(type.isAssignableFrom(resType)) {
+                check(type == R_UnitType || type.isAssignableFrom(resType)) {
                     "${R_Expr::class.java.simpleName}: expected ${type.name}, actual ${resType.name}"
                 }
             }
@@ -410,7 +408,7 @@ object R_RequireCondition_Map: R_RequireCondition() {
     override fun calculate(v: Rt_Value) = if (v != Rt_NullValue && !v.asMap().isEmpty()) v else null
 }
 
-class R_DefaultAttrValueExpr(
+class R_AttributeDefaultValueExpr(
         private val attr: R_Attribute,
         private val initFrameGetter: C_LateGetter<R_CallFrame>,
         private val createFilePos: R_FilePos?
@@ -438,8 +436,8 @@ sealed class R_CreateExpr(val rEntity: R_EntityDefinition): R_Expr(rEntity.type)
         val rtSel = SqlSelect(rtSql, listOf(type))
         val res = rtSel.execute(frame.sqlExec)
 
-        check(res.size == 1)
-        check(res[0].size == 1)
+        checkEquals(res.size, 1)
+        checkEquals(res[0].size, 1)
         return res[0][0]
     }
 
@@ -551,7 +549,7 @@ class R_StructCreateExpr(
 
 class R_StructExpr(private val struct: R_Struct, private val attrs: List<R_CreateExprAttr>): R_Expr(struct.type) {
     init {
-        check(attrs.size == struct.attributesList.size)
+        checkEquals(attrs.size, struct.attributesList.size)
         check(attrs.map { it.attr.index }.toSet() == struct.attributesList.indices.toSet())
     }
 
@@ -592,8 +590,8 @@ class R_ObjectAttrExpr(type: R_Type, val rObject: R_ObjectDefinition, val atBase
             throw Rt_Error("obj_multirec:$name:$count", "Multiple records for object '$name' in database: $count")
         }
 
-        var record = records[0]
-        check(record.size == 1)
+        val record = records[0]
+        checkEquals(record.size, 1)
         val value = record[0]
         return value
     }
@@ -660,28 +658,16 @@ class R_TypeAdapterExpr(type: R_Type, private val expr: R_Expr, private val adap
 
 sealed class R_TypeAdapter {
     abstract fun adaptValue(value: Rt_Value): Rt_Value
-    abstract fun adaptExpr(expr: R_Expr): R_Expr
-    abstract fun adaptExpr(expr: Db_Expr): Db_Expr
 }
 
 object R_TypeAdapter_Direct: R_TypeAdapter() {
     override fun adaptValue(value: Rt_Value) = value
-    override fun adaptExpr(expr: R_Expr) = expr
-    override fun adaptExpr(expr: Db_Expr) = expr
 }
 
 object R_TypeAdapter_IntegerToDecimal: R_TypeAdapter() {
     override fun adaptValue(value: Rt_Value): Rt_Value {
         val r = R_SysFn_Decimal.FromInteger.call(value)
         return r
-    }
-
-    override fun adaptExpr(expr: R_Expr): R_Expr {
-        return R_TypeAdapterExpr(R_DecimalType, expr, this)
-    }
-
-    override fun adaptExpr(expr: Db_Expr): Db_Expr {
-        return Db_CallExpr(R_DecimalType, Db_SysFn_Decimal.FromInteger, listOf(expr))
     }
 }
 
@@ -693,28 +679,9 @@ class R_TypeAdapter_Nullable(private val dstType: R_Type, private val innerAdapt
             innerAdapter.adaptValue(value)
         }
     }
-
-    override fun adaptExpr(expr: R_Expr): R_Expr {
-        return R_TypeAdapterExpr(dstType, expr, this)
-    }
-
-    override fun adaptExpr(expr: Db_Expr): Db_Expr {
-        // Not completely right, but Db_Exprs do not support nullable anyway.
-        return Db_CallExpr(R_DecimalType, Db_SysFn_Decimal.FromInteger, listOf(expr))
-    }
 }
 
-class R_OperationExpr(private val op: R_OperationDefinition, args: List<R_Expr>): R_Expr(R_TestOpType) {
-    private val args = args.toImmList()
-
-    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        val rtArgs = args.map { it.evaluate(frame) }
-        val gtvArgs = rtArgs.map { it.type().rtToGtv(it, false) }
-        return Rt_TestOpValue(op.mountName, gtvArgs)
-    }
-}
-
-class R_DefaultValueExpr(
+class R_ArgumentDefaultValueExpr(
         type: R_Type,
         private val callFilePos: R_FilePos,
         private val initFrameGetter: C_LateGetter<R_CallFrame>,

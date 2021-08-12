@@ -265,6 +265,11 @@ abstract class RellBaseTester(
     fun chkOut(vararg expected: String) = outPrinter0.chk(*expected)
     fun chkLog(vararg expected: String) = logPrinter0.chk(*expected)
 
+    fun chkExOut(code: String, expected: String, vararg expectedOut: String) {
+        chkEx(code, expected)
+        chkOut(*expectedOut)
+    }
+
     fun compileModule(code: String): String {
         val moduleCode = moduleCode(code)
         return processApp(moduleCode) { "OK" }

@@ -169,4 +169,21 @@ class QueryTest: BaseRellTest() {
         chk("foo(456)", "text[456,Hello]")
         chk("foo(456,'Bye')", "text[456,Bye]")
     }
+
+    @Test fun testReturnTypeIntegerToDecimal() {
+        chkFull("query q(x: integer): decimal = x;", 123, "dec[123]")
+        chkFull("query q(x: integer): decimal { return x; }", 123, "dec[123]")
+
+        chkFull("query q(x: integer): decimal? = x;", 123, "dec[123]")
+        chkFull("query q(x: integer): decimal? { return x; }", 123, "dec[123]")
+        chkFull("query q(x: integer): decimal? = null;", 123, "null")
+        chkFull("query q(x: integer): decimal? { return null; }", 123, "null")
+
+        chkFull("query q(x: integer?): decimal? = x;", 123, "dec[123]")
+        chkFull("query q(x: integer?): decimal? { return x; }", 123, "dec[123]")
+        chkFull("query q(x: integer?): decimal? = x;", null as Long?, "null")
+        chkFull("query q(x: integer?): decimal? { return x; }", null as Long?, "null")
+        chkFull("query q(x: integer?): decimal? = null;", 123, "null")
+        chkFull("query q(x: integer?): decimal? { return null; }", 123, "null")
+    }
 }

@@ -6,11 +6,11 @@ package net.postchain.rell.model
 
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
-import net.postchain.rell.compiler.C_Constants
-import net.postchain.rell.compiler.C_MemberFuncTable
+import net.postchain.rell.compiler.*
 import net.postchain.rell.module.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.toImmList
 import org.jooq.DataType
 import org.jooq.SQLDialect
 import org.jooq.impl.DefaultDataType
@@ -21,7 +21,6 @@ import org.spongycastle.util.Arrays
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.util.*
-import kotlin.Comparator
 
 class R_GtvCompatibility(val fromGtv: Boolean, val toGtv: Boolean)
 
@@ -156,9 +155,9 @@ sealed class R_Type(val name: String) {
     open fun isAssignableFrom(type: R_Type): Boolean = type == this
     protected open fun calcCommonType(other: R_Type): R_Type? = null
 
-    open fun getTypeAdapter(sourceType: R_Type): R_TypeAdapter? {
+    open fun getTypeAdapter(sourceType: R_Type): C_TypeAdapter? {
         val assignable = isAssignableFrom(sourceType)
-        return if (assignable) R_TypeAdapter_Direct else null
+        return if (assignable) C_TypeAdapter_Direct else null
     }
 
     abstract fun toMetaGtv(): Gtv
@@ -291,9 +290,9 @@ object R_DecimalType: R_PrimitiveType("decimal", C_Constants.DECIMAL_SQL_TYPE) {
     override fun createGtvConversion() = GtvRtConversion_Decimal
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Decimal
 
-    override fun getTypeAdapter(sourceType: R_Type): R_TypeAdapter? {
+    override fun getTypeAdapter(sourceType: R_Type): C_TypeAdapter? {
         return if (sourceType == R_IntegerType) {
-            R_TypeAdapter_IntegerToDecimal
+            C_TypeAdapter_IntegerToDecimal
         } else {
             super.getTypeAdapter(sourceType)
         }
@@ -406,7 +405,7 @@ object R_JsonType: R_PrimitiveType("json", JSON_SQL_DATA_TYPE) {
 object R_NullType: R_Type("null") {
     override fun defaultValue() = Rt_NullValue
     override fun comparator() = Rt_Comparator.create { 0 }
-    override fun calcCommonType(other: R_Type): R_Type? = R_NullableType(other)
+    override fun calcCommonType(other: R_Type): R_Type = R_NullableType(other)
     override fun createGtvConversion() = GtvRtConversion_Null
     override fun toStrictString() = "null"
     override fun toMetaGtv() = "null".toGtv()
@@ -499,7 +498,7 @@ class R_EnumType(val enum: R_EnumDefinition): R_Type(enum.appLevelName) {
     }
 }
 
-class R_NullableType(val valueType: R_Type): R_Type(valueType.name + "?") {
+class R_NullableType(val valueType: R_Type): R_Type(calcName(valueType)) {
     init {
         check(valueType != R_NullType)
         check(valueType != R_UnitType)
@@ -525,7 +524,7 @@ class R_NullableType(val valueType: R_Type): R_Type(valueType.name + "?") {
                 || valueType.isAssignableFrom(type)
     }
 
-    override fun getTypeAdapter(sourceType: R_Type): R_TypeAdapter? {
+    override fun getTypeAdapter(sourceType: R_Type): C_TypeAdapter? {
         var adapter = super.getTypeAdapter(sourceType)
         if (adapter != null) {
             return adapter
@@ -533,7 +532,7 @@ class R_NullableType(val valueType: R_Type): R_Type(valueType.name + "?") {
 
         if (sourceType is R_NullableType) {
             adapter = valueType.getTypeAdapter(sourceType.valueType)
-            return if (adapter == null) null else R_TypeAdapter_Nullable(this, adapter)
+            return if (adapter == null) null else C_TypeAdapter_Nullable(this, adapter)
         } else {
             return valueType.getTypeAdapter(sourceType)
         }
@@ -546,6 +545,15 @@ class R_NullableType(val valueType: R_Type): R_Type(valueType.name + "?") {
             "type" to "nullable".toGtv(),
             "value" to valueType.toMetaGtv()
     ).toGtv()
+
+    companion object {
+        private fun calcName(valueType: R_Type): String {
+            return when (valueType) {
+                is R_FunctionType -> "(${valueType.name})?"
+                else -> "${valueType.name}?"
+            }
+        }
+    }
 
     private inner class R_TypeSqlAdapter_Nullable: R_TypeSqlAdapter_Some() {
         override fun isSqlCompatible() = false
@@ -561,14 +569,6 @@ class R_NullableType(val valueType: R_Type): R_Type(valueType.name + "?") {
             return valueType.sqlAdapter.fromSql(rs, idx, true)
         }
     }
-}
-
-// TODO: make this more elaborate
-class R_ClosureType(name: String): R_Type(name) {
-    override fun isDirectVirtualable() = false
-    override fun createGtvConversion() = GtvRtConversion_None
-    override fun toStrictString() = TODO()
-    override fun toMetaGtv() = TODO()
 }
 
 sealed class R_CollectionType(val elementType: R_Type, val baseName: String): R_Type("$baseName<${elementType.toStrictString()}>") {
@@ -664,7 +664,8 @@ class R_TupleField(val name: String?, val type: R_Type) {
     ).toGtv()
 }
 
-class R_TupleType(val fields: List<R_TupleField>): R_Type("(${fields.joinToString(",") { it.toStrictString() }})") {
+class R_TupleType(fields: List<R_TupleField>): R_Type(calcName(fields)) {
+    val fields = fields.toImmList()
     val virtualType = R_VirtualTupleType(this)
 
     private val isError = fields.any { it.type.isError() }
@@ -727,6 +728,12 @@ class R_TupleType(val fields: List<R_TupleField>): R_Type("(${fields.joinToStrin
     ).toGtv()
 
     companion object {
+        private fun calcName(fields: List<R_TupleField>): String {
+            val fieldsStr = fields.joinToString(",") { it.toStrictString() }
+            val comma = if (fields.size == 1 && fields[0].name == null) "," else ""
+            return "($fieldsStr$comma)"
+        }
+
         fun create(vararg fields: Pair<String, R_Type>): R_TupleType {
             val fieldsList = fields.map { R_TupleField(it.first, it.second) }
             return R_TupleType(fieldsList)
@@ -797,6 +804,48 @@ class R_VirtualStructType(val innerType: R_StructType): R_VirtualType(innerType)
     override fun createGtvConversion() = GtvRtConversion_VirtualStruct(this)
     override fun equals(other: Any?): Boolean = other is R_VirtualStructType && innerType == other.innerType
     override fun hashCode() = innerType.hashCode()
+}
+
+class R_FunctionType(params: List<R_Type>, val result: R_Type): R_Type(calcName(params, result)) {
+    val params = params.toImmList()
+
+    val callParameters by lazy { C_FunctionCallParameters.fromTypes(this.params) }
+
+    private val isError = result.isError() || params.any { it.isError() }
+
+    fun matchesParameters(callParams: List<C_FunctionCallParameter>): Boolean {
+        return params.size == callParams.size && callParams.all { it.type == params[it.index] }
+    }
+
+    override fun isDirectVirtualable() = false
+    override fun isReference() = true
+    override fun isError() = isError
+    override fun createGtvConversion() = GtvRtConversion_None
+
+    override fun isAssignableFrom(type: R_Type): Boolean {
+        return type is R_FunctionType
+                && params.size == type.params.size
+                && (result == R_UnitType || result.isAssignableFrom(type.result))
+                && params.indices.all { type.params[it].isAssignableFrom(params[it]) }
+    }
+
+    override fun toStrictString(): String = name
+
+    override fun toMetaGtv() = mapOf(
+            "type" to "function".toGtv(),
+            "params" to params.map { it.toMetaGtv() }.toGtv(),
+            "result" to result.toMetaGtv()
+    ).toGtv()
+
+    override fun equals(other: Any?) = other is R_FunctionType && params == other.params && result == other.result
+    override fun hashCode() = Objects.hash(params, result)
+
+    companion object {
+        private fun calcName(params: List<R_Type>, result: R_Type): String {
+            val paramsStr = params.joinToString(",") { it.name }
+            return "($paramsStr)->${result.name}"
+        }
+    }
 }
 
 abstract class R_LibType(name: String): R_Type(name) {

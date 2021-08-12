@@ -29,7 +29,7 @@ object C_Lib_Rell_Test {
     private val NAMESPACE_FNS: C_GlobalFuncTable
 
     init {
-        val b = C_GlobalFuncBuilder()
+        val b = C_GlobalFuncBuilder("rell.test")
         R_Lib_Block.bindGlobal(b)
         R_Lib_Tx.bindGlobal(b)
         R_Lib_Op.bindGlobal(b)

@@ -239,6 +239,14 @@ class AppGtvMetaTest: BaseRellTest(false) {
         }}""")
     }
 
+    @Test fun testTypeFunction() {
+        initTypes()
+        chkMetaType("() -> integer", """{"params":[],"result":"integer","type":"function"}""")
+        chkMetaType("(integer) -> text", """{"params":["integer"],"result":"text","type":"function"}""")
+        chkMetaType("(integer,boolean,decimal) -> text",
+                """{"params":["integer","boolean","decimal"],"result":"text","type":"function"}""")
+    }
+
     @Test fun testTypeComplex() {
         initTypes()
 

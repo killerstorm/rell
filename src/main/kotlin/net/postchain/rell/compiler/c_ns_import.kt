@@ -50,7 +50,7 @@ object C_NsImp_ImportsProcessor {
             preModules: Map<C_ModuleKey, C_NsImp_Namespace>
     ): C_NsImp_Namespace {
         val impList = process0(msgCtx, mapOf(), preModules, listOf(ns))
-        check(impList.size == 1)
+        checkEquals(impList.size, 1)
         return impList[0]
     }
 

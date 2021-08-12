@@ -4,10 +4,7 @@
 
 package net.postchain.rell.lib
 
-import net.postchain.rell.runtime.Rt_OpContext
 import net.postchain.rell.test.BaseRellTest
-import net.postchain.rell.test.RellTestUtils
-import net.postchain.rell.utils.CommonUtils
 import org.junit.Test
 
 class LibTest: BaseRellTest(false) {
@@ -104,8 +101,8 @@ class LibTest: BaseRellTest(false) {
         def("entity user { name: text; }")
         insert("c0.user", "name", "1,'Bob'")
         chk("user @{} ( _type_of(.name) )", "text[text]")
-        chk("user @{} ( .name.matches('Bob') )", "ct_err:expr_call_nosql:text.matches")
         chk("user @{} ( _type_of(.name).matches('text') )", "boolean[true]")
+        chk("user @{} ( .name.matches('Bob') )", "boolean[true]")
     }
 
     @Test fun testStrictStr() {
@@ -244,7 +241,7 @@ class LibTest: BaseRellTest(false) {
         chk("x'1234'.toList()", "ct_err:deprecated:FUNCTION:byte_array.toList:to_list")
 
         chk("(123).hex()", "ct_err:deprecated:FUNCTION:integer.hex:to_hex")
-        chk("integer.parseHex('1234')", "ct_err:deprecated:FUNCTION:parseHex:from_hex")
+        chk("integer.parseHex('1234')", "ct_err:deprecated:FUNCTION:integer.parseHex:from_hex")
 
         chk("'Hello'.len()", "ct_err:deprecated:FUNCTION:text.len:size")
         chk("'Hello'.upperCase()", "ct_err:deprecated:FUNCTION:text.upperCase:upper_case")
@@ -280,15 +277,15 @@ class LibTest: BaseRellTest(false) {
         tst.deprecatedError = true
         def("struct rec { x: integer; }")
 
-        chk("gtv.fromBytes(x'1234')", "ct_err:deprecated:FUNCTION:fromBytes:from_bytes")
-        chk("gtv.fromJSON('{}')", "ct_err:deprecated:FUNCTION:fromJSON:from_json")
-        chk("gtv.fromJSON(json('{}'))", "ct_err:deprecated:FUNCTION:fromJSON:from_json")
+        chk("gtv.fromBytes(x'1234')", "ct_err:deprecated:FUNCTION:gtv.fromBytes:from_bytes")
+        chk("gtv.fromJSON('{}')", "ct_err:deprecated:FUNCTION:gtv.fromJSON:from_json")
+        chk("gtv.fromJSON(json('{}'))", "ct_err:deprecated:FUNCTION:gtv.fromJSON:from_json")
         chk("rec(5).to_gtv().toBytes()", "ct_err:deprecated:FUNCTION:gtv.toBytes:to_bytes")
         chk("rec(5).to_gtv().toJSON()", "ct_err:deprecated:FUNCTION:gtv.toJSON:to_json")
 
-        chk("rec.fromBytes(x'1234')", "ct_err:deprecated:FUNCTION:fromBytes:from_bytes")
-        chk("rec.fromGTXValue(gtv.from_bytes(x'1234'))", "ct_err:deprecated:FUNCTION:fromGTXValue:from_gtv")
-        chk("rec.fromPrettyGTXValue(gtv.from_bytes(x'1234'))", "ct_err:deprecated:FUNCTION:fromPrettyGTXValue:from_gtv_pretty")
+        chk("rec.fromBytes(x'1234')", "ct_err:deprecated:FUNCTION:rec.fromBytes:from_bytes")
+        chk("rec.fromGTXValue(gtv.from_bytes(x'1234'))", "ct_err:deprecated:FUNCTION:rec.fromGTXValue:from_gtv")
+        chk("rec.fromPrettyGTXValue(gtv.from_bytes(x'1234'))", "ct_err:deprecated:FUNCTION:rec.fromPrettyGTXValue:from_gtv_pretty")
         chk("rec(5).toBytes()", "ct_err:deprecated:FUNCTION:rec.toBytes:to_bytes")
         chk("rec(5).toGTXValue()", "ct_err:deprecated:FUNCTION:rec.toGTXValue:to_gtv")
         chk("rec(5).toPrettyGTXValue()", "ct_err:deprecated:FUNCTION:rec.toPrettyGTXValue:to_gtv_pretty")

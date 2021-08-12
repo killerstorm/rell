@@ -5,7 +5,6 @@
 package net.postchain.rell.compiler
 
 import com.google.common.math.IntMath
-import net.postchain.rell.compiler.ast.C_FormalParameters
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.*
@@ -49,6 +48,10 @@ class C_MessageContext(val globalCtx: C_GlobalContext) {
         error(error.pos, error.code, error.msg)
     }
 
+    fun error(pos: S_Pos, codeMsg: C_CodeMsg) {
+        error(pos, codeMsg.code, codeMsg.msg)
+    }
+
     fun messages() = messages.toImmList()
 
     fun <T> consumeError(code: () -> T): T? {
@@ -61,6 +64,7 @@ class C_MessageContext(val globalCtx: C_GlobalContext) {
     }
 
     fun errorWatcher() = C_ErrorWatcher()
+    fun firstErrorReporter() = C_FirstErrorReporter(this)
 
     inner class C_ErrorWatcher {
         private var lastErrorCount = errorCount
@@ -71,6 +75,19 @@ class C_MessageContext(val globalCtx: C_GlobalContext) {
             lastErrorCount = count
             return res
         }
+    }
+
+    class C_FirstErrorReporter(private val msgCtx: C_MessageContext) {
+        private var reported = false
+
+        fun error(pos: S_Pos, code: String, msg: String) {
+            if (!reported) {
+                reported = true
+                msgCtx.error(pos, code, msg)
+            }
+        }
+
+        fun error(pos: S_Pos, codeMsg: C_CodeMsg) = error(pos, codeMsg.code, codeMsg.msg)
     }
 }
 
@@ -412,15 +429,15 @@ class C_FunctionContext(
     fun nextVarUid(name: String) = varUidGen.next(name)
     fun nextLoopUid() = loopUidGen.next("")
 
-    fun matchReturnType(pos: S_Pos, type: R_Type) {
-        retTypeTracker.match(pos, type)
+    fun matchReturnType(pos: S_Pos, type: R_Type): C_TypeAdapter {
+        return retTypeTracker.match(pos, type)
     }
 
     fun actualReturnType(): R_Type = retTypeTracker.getRetType()
 
     private sealed class RetTypeTracker {
         abstract fun getRetType(): R_Type
-        abstract fun match(pos: S_Pos, type: R_Type)
+        abstract fun match(pos: S_Pos, type: R_Type): C_TypeAdapter
 
         class Implicit: RetTypeTracker() {
             private var impType: R_Type? = null
@@ -433,7 +450,7 @@ class C_FunctionContext(
                 return res
             }
 
-            override fun match(pos: S_Pos, type: R_Type) {
+            override fun match(pos: S_Pos, type: R_Type): C_TypeAdapter  {
                 val t = impType
                 if (t == null || t.isError()) {
                     impType = type
@@ -450,18 +467,24 @@ class C_FunctionContext(
                     }
                     impType = comType
                 }
+                return C_TypeAdapter_Direct
             }
         }
 
         class Explicit(val expType: R_Type): RetTypeTracker() {
             override fun getRetType() = expType
 
-            override fun match(pos: S_Pos, type: R_Type) {
-                if (type.isNotError() && expType.isNotError()) {
-                    val m = if (expType == R_UnitType) type == R_UnitType else expType.isAssignableFrom(type)
-                    if (!m) {
+            override fun match(pos: S_Pos, type: R_Type): C_TypeAdapter  {
+                return if (type.isError() || expType.isError()) C_TypeAdapter_Direct else {
+                    val m = if (expType == R_UnitType) {
+                        if (type == R_UnitType) C_TypeAdapter_Direct else null
+                    } else {
+                        expType.getTypeAdapter(type)
+                    }
+                    if (m == null) {
                         throw errRetTypeMiss(pos, expType, type)
                     }
+                    m ?: C_TypeAdapter_Direct
                 }
             }
         }

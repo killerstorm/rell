@@ -9,12 +9,11 @@ import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
 import net.postchain.rell.runtime.toGtv
 import org.apache.commons.collections4.IterableUtils
-import java.util.*
 
 class ListVsMap<K> private constructor(private val entries: List<Map.Entry<K, *>>) {
     fun <W> listToMap(list: List<W>): Map<K, W> {
         val copy = list.toImmList()
-        check(copy.size == entries.size)
+        checkEquals(copy.size, entries.size)
         return entries.mapIndexed { i, e -> e.key to copy[i] }.toMap().toImmMap()
     }
 

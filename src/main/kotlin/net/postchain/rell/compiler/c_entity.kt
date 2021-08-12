@@ -135,8 +135,8 @@ class C_EntityContext(
         val name = attrDef.header.name
         val nameStr = name.str
 
-        val explicitType = attrDef.header.type?.compile(defCtx.nsCtx)
-        val implicitType = if (explicitType != null) null else defCtx.nsCtx.getTypeOpt(listOf(name))
+        val explicitType = attrDef.header.compileExplicitType(defCtx.nsCtx)
+        val implicitType = if (explicitType != null) null else attrDef.header.compileImplicitType(defCtx.nsCtx)
 
         val exprPos = attrDef.expr?.startPos
         val exprGetter = processAttrExpr(name, attrDef.expr, explicitType ?: implicitType)
@@ -183,8 +183,8 @@ class C_EntityContext(
             val rExpr0 = vExpr.toRExpr()
             val adapter = C_Types.adaptSafe(msgCtx, exprType, rExpr0.type, name.pos, "attr_type:$name",
                     "Default value type mismatch for '$name'")
-            val rExpr = adapter.adaptExpr(rExpr0)
-            late.set(R_DefaultValue(rExpr, vExpr.isDbModification()))
+            val rExpr = adapter.adaptExprR(rExpr0)
+            late.set(R_DefaultValue(rExpr, vExpr.hasDbModifications()))
         }
 
         return late.getter

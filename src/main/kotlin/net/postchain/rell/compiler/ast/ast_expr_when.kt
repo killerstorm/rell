@@ -137,7 +137,7 @@ class S_WhenConditionExpr(val exprs: List<S_Expr>): S_WhenCondition() {
     }
 
     private fun compileExpr(ctx: C_ExprContext, keyType: R_Type?, expr: S_Expr): V_Expr {
-        val valueType = if (keyType is R_NullableType) keyType.valueType else keyType
+        val valueType = if (keyType == null) null else C_Types.removeNullable(keyType)
         val name = expr.asName()
 
         if (valueType is R_EnumType && name != null) {

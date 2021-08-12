@@ -12,7 +12,7 @@ class V_RExpr(
         private val rExpr: R_Expr,
         private val exprVarFacts: C_ExprVarFacts = C_ExprVarFacts.EMPTY
 ): V_Expr(exprCtx, pos) {
-    override val exprInfo = V_ExprInfo(false, false)
+    override val exprInfo = V_ExprInfo()
 
     override fun type() = rExpr.type
     override fun toRExpr0() = rExpr
@@ -40,7 +40,7 @@ class V_LocalVarExpr(
         private val nulled: C_VarFact,
         private val smartType: R_Type?
 ): V_Expr(exprCtx, pos) {
-    override val exprInfo = V_ExprInfo(false, false, listOfNotNull(varRef.target.atExprId).toImmSet())
+    override val exprInfo = V_ExprInfo(dependsOnAtExprs = listOfNotNull(varRef.target.atExprId).toImmSet())
 
     override fun type() = smartType ?: varRef.target.type
     override fun toDbExpr0() = C_Utils.toDbExpr(pos, toRExpr())
@@ -120,7 +120,7 @@ class V_ObjectExpr(
         name: List<S_Name>,
         private val rObject: R_ObjectDefinition
 ): V_Expr(exprCtx, name[0].pos) {
-    override val exprInfo = V_ExprInfo(false, false)
+    override val exprInfo = V_ExprInfo()
 
     override fun type() = rObject.type
     override fun toRExpr0() = R_ObjectExpr(rObject.type)
@@ -144,7 +144,7 @@ class V_ObjectAttrExpr(
         private val rObject: R_ObjectDefinition,
         private val attr: R_Attribute
 ): V_Expr(exprCtx, pos) {
-    override val exprInfo = V_ExprInfo(false, false)
+    override val exprInfo = V_ExprInfo()
 
     override fun type() = attr.type
     override fun toRExpr0() = createAccessExpr()

@@ -58,11 +58,6 @@ class TypeTest: BaseRellTest() {
         chkData("""foo(1,{"a": 999, "b": [5, 4, 3, 2, 1]})""")
     }
 
-    @Test fun testExplicitUnitType() {
-        chkFull("entity foo { x: unit; } query q() = 0;", listOf(), "ct_err:unknown_type:unit")
-        chkEx("{ var x: unit; return 123; }", "ct_err:unknown_type:unit")
-    }
-
     @Test fun testTuple() {
         chkEx("{ var x: (integer, text); x = (123, 'Hello'); return x; }", "(int[123],text[Hello])");
 
@@ -74,6 +69,13 @@ class TypeTest: BaseRellTest() {
 
         chkEx("{ var x: (a: integer, b: text) = (a=1,b=''); var y: (p: integer, q: text) = (p=2,q=''); y = x; return 0; }",
                 "ct_err:stmt_assign_type:[(p:integer,q:text)]:[(a:integer,b:text)]");
+    }
+
+    @Test fun testTupleSingleField() {
+        chkEx("{ var x: (integer); return _type_of(x); }", "text[integer]")
+        chkEx("{ var x: (integer)?; return _type_of(x); }", "text[integer?]")
+        chkEx("{ var x: (integer,); return _type_of(x); }", "text[(integer,)]")
+        chkEx("{ var x: (integer,)?; return _type_of(x); }", "text[(integer,)?]")
     }
 
     @Test fun testRange() {
@@ -107,7 +109,7 @@ class TypeTest: BaseRellTest() {
     }
 
     @Test fun testEntityAttributeTypeErr() {
-        chkFull("entity foo { x: (integer); } query q() = 0;", listOf(), "ct_err:entity_attr_type:x:(integer)")
+        chkFull("entity foo { x: (integer,); } query q() = 0;", listOf(), "ct_err:entity_attr_type:x:(integer,)")
         chkFull("entity foo { x: (integer, text); } query q() = 0;", listOf(), "ct_err:entity_attr_type:x:(integer,text)")
         chkFull("entity foo { x: range; } query q() = 0;", listOf(), "ct_err:entity_attr_type:x:range")
         chkFull("entity foo { x: list<integer>; } query q() = 0;", listOf(), "ct_err:entity_attr_type:x:list<integer>")
@@ -196,5 +198,40 @@ class TypeTest: BaseRellTest() {
         chkCompile("entity bad { foo; index foo; }", "OK")
         chkCompile("entity bad { ns.bar; index ns.bar; }", "OK")
         chkCompile("entity bad { ns.bar; index bar; }", "OK")
+    }
+
+    @Test fun testUnitType() {
+        chkCompile("function f(): unit {}", "OK")
+        chkCompile("function f(): unit = print(123);", "OK")
+        chkCompile("function f(): unit = 123;", "ct_err:fn_rettype:[unit]:[integer]")
+        chkCompile("function f(): unit { print(123); }", "OK")
+        chkCompile("function f(): unit { return print(123); }", "ct_err:stmt_return_unit")
+        chkCompile("function f(): unit { return 123; }", "ct_err:fn_rettype:[unit]:[integer]")
+
+        chkCompile("function f() { var x: unit; }", "ct_err:type:attr_var:unit:x")
+        chkCompile("function f() { var (x: unit, y: unit); }", "ct_err:[type:attr_var:unit:x][type:attr_var:unit:y]")
+
+        chkCompile("function f(x: unit) {}", "ct_err:type:attr_var:unit:x")
+        chkCompile("function f(unit) {}", "ct_err:type:attr_var:unit:unit")
+        chkCompile("query q(x: unit) = 0;", "ct_err:type:attr_var:unit:x")
+        chkCompile("operation op(x: unit) {}", "ct_err:type:attr_var:unit:x")
+        chkCompile("struct s { x: unit; }", "ct_err:type:attr_var:unit:x")
+        chkCompile("struct s { unit; }", "ct_err:type:attr_var:unit:unit")
+        chkCompile("object o { x: unit; }", "ct_err:[object_attr_novalue:o:x][type:attr_var:unit:x]")
+        chkCompile("entity e { x: unit; }", "ct_err:type:attr_var:unit:x")
+        chkCompile("entity e { unit; }", "ct_err:type:attr_var:unit:unit")
+        chkCompile("entity e { key x: unit; }", "ct_err:type:attr_var:unit:x")
+        chkCompile("entity e { index x: unit; }", "ct_err:type:attr_var:unit:x")
+        chkCompile("entity e { key unit; }", "ct_err:type:attr_var:unit:unit")
+        chkCompile("entity e { index unit; }", "ct_err:type:attr_var:unit:unit")
+
+        chkCompile("function g(x: (unit) -> integer) {}", "ct_err:type:fntype_param:unit:?")
+        chkCompile("function g(x: (integer,unit)) {}", "ct_err:type:tuple_field:unit:?")
+        chkCompile("function g(x: (a:integer,b:unit)) {}", "ct_err:type:tuple_field:unit:b")
+        chkCompile("function g(x: list<unit>) {}", "ct_err:type:list:elem:unit:?")
+        chkCompile("function g(x: set<unit>) {}", "ct_err:type:set:elem:unit:?")
+        chkCompile("function g(x: map<integer,unit>) {}", "ct_err:type:map_elem:unit:?")
+        chkCompile("function g(x: map<unit,integer>) {}", "ct_err:type:map_elem:unit:?")
+        chkCompile("function g(x: virtual<unit>) {}", "ct_err:type:virtual:bad_inner_type:unit")
     }
 }

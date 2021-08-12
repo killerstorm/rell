@@ -5,6 +5,7 @@ import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
+import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.immListOf
 
 object C_Lib_OpContext {
@@ -34,7 +35,7 @@ object C_Lib_OpContext {
     private val GET_SIGNERS_RETURN_TYPE: R_Type = R_ListType(R_ByteArrayType)
     private val GET_ALL_OPERATIONS_RETURN_TYPE: R_Type = R_ListType(GTX_OPERATION_STRUCT.type)
 
-    private val NAMESPACE_FNS = C_GlobalFuncBuilder()
+    private val NAMESPACE_FNS = C_GlobalFuncBuilder(NAME)
             .add("get_signers", GET_SIGNERS_RETURN_TYPE, listOf(), GetSigners)
             .add("is_signer", R_BooleanType, listOf(R_ByteArrayType), R_SysFn_Crypto.IsSigner)
             .add("get_all_operations", GET_ALL_OPERATIONS_RETURN_TYPE, listOf(), GetAllOperations)
@@ -95,7 +96,7 @@ object C_Lib_OpContext {
         abstract fun call(opCtx: Rt_OpContext): Rt_Value
 
         final override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
-            check(args.size == 0)
+            checkEquals(args.size, 0)
             val opCtx = getOpContext(ctx, name)
             return call(opCtx)
         }

@@ -72,8 +72,18 @@ object C_Errors {
     }
 
     fun errSysFunctionNamedArg(msgCtx: C_MessageContext, fnName: String, arg: S_Name) {
-        msgCtx.error(arg.pos, "expr:call:sys_global_named_arg:$arg",
-                "Named arguments not supported for function '$fnName'")
+        val msg = msgSysFunctionNamedArg(fnName, arg)
+        msgCtx.error(arg.pos, msg)
+    }
+
+    fun msgSysFunctionNamedArg(fnName: String, arg: S_Name): C_CodeMsg {
+        return C_CodeMsg("expr:call:sys_global_named_arg:$arg", "Named arguments not supported for function '$fnName'")
+    }
+
+    fun errNamedArgsNotSupported(msgCtx: C_MessageContext, fn: String?, arg: S_Name) {
+        val fnCode = fn ?: ""
+        val fnMsg = if (fn == null) "this function" else "function '$fn'"
+        msgCtx.error(arg.pos, "expr:call:named_args_not_allowed:$fnCode:$arg", "Named arguments not supported for $fnMsg")
     }
 
     fun errBadDestination(pos: S_Pos): C_Error {
@@ -89,7 +99,11 @@ object C_Errors {
     }
 
     fun errAttrNotMutable(pos: S_Pos, name: String): C_Error {
-        return C_Error.stop(pos, "update_attr_not_mutable:$name", "Attribute '$name' is not mutable")
+        return C_Error.stop(pos, msgAttrNotMutable(name))
+    }
+
+    fun msgAttrNotMutable(name: String): C_CodeMsg {
+        return C_CodeMsg("update_attr_not_mutable:$name", "Attribute '$name' is not mutable")
     }
 
     fun errExprNoDb(pos: S_Pos, type: R_Type): C_Error {
@@ -177,6 +191,18 @@ object C_Errors {
 
     fun errAtPlaceholderNotDefined(pos: S_Pos): C_Error {
         return C_Error.stop(pos, "expr:placeholder:none", "Placeholder not defined")
+    }
+
+    fun msgPartialCallNotAllowed(fnName: String?): C_CodeMsg {
+        val fnCode = fnName ?: "?"
+        val fnMsg = if (fnName == null) "this function" else "function '$fnName'"
+        return C_CodeMsg("expr:call:partial_not_supported:$fnCode", "Partial application not supported for $fnMsg")
+    }
+
+    fun msgPartialCallAmbiguous(fnName: String?): C_CodeMsg {
+        val fnCode = fnName ?: "?"
+        val fnMsg = if (fnName == null) "the function" else "function '$fnName'"
+        return C_CodeMsg("expr:call:partial_ambiguous:$fnCode", "Cannot determine which variant of $fnMsg to use")
     }
 
     fun check(b: Boolean, pos: S_Pos, code: String, msg: String) {

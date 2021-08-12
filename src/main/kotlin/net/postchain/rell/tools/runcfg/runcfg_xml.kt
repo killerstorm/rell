@@ -6,6 +6,7 @@ package net.postchain.rell.tools.runcfg
 
 import net.postchain.rell.utils.GeneralDir
 import net.postchain.rell.utils.RellCliErr
+import net.postchain.rell.utils.checkEquals
 import org.w3c.dom.Document
 import org.w3c.dom.Element
 import org.w3c.dom.Node
@@ -98,7 +99,7 @@ object RellXmlParser {
 object RellXmlIncluder {
     fun includeFiles(xml: RellXmlElement, includeDir: GeneralDir): RellXmlElement {
         val list = processElement(xml, true, includeDir)
-        check(list.size == 1)
+        checkEquals(list.size, 1)
         return list[0]
     }
 

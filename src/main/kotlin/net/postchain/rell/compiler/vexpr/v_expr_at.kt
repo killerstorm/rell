@@ -14,7 +14,7 @@ class V_AtEntityExpr(
         private val cAtEntity: C_AtEntity,
         private val ambiguous: Boolean
 ): V_Expr(exprCtx, pos) {
-    override val exprInfo = V_ExprInfo(true, false, immSetOf(cAtEntity.atExprId))
+    override val exprInfo = V_ExprInfo(dependsOnDbAtEntity = true, dependsOnAtExprs = immSetOf(cAtEntity.atExprId))
 
     override fun type() = cAtEntity.rEntity.type
     override fun varFacts() = C_ExprVarFacts.EMPTY
@@ -51,7 +51,7 @@ class V_AtAttrExpr(
         private val entityAmbiguous: Boolean,
         private val attrRef: C_EntityAttrRef
 ): V_Expr(exprCtx, pos) {
-    override val exprInfo = V_ExprInfo(true, false, immSetOf(cAtEntity.atExprId))
+    override val exprInfo = V_ExprInfo(dependsOnDbAtEntity = true, dependsOnAtExprs = immSetOf(cAtEntity.atExprId))
 
     override fun type() = attrRef.type()
     override fun varFacts() = C_ExprVarFacts.EMPTY
@@ -76,8 +76,10 @@ class V_AtExprBase(
     private val from = from.toImmList()
     private val what = what.toImmList()
 
-    private val refAtExprIds = (what.map { it.expr } + listOfNotNull(where)).flatMap { it.atDependencies() }.toImmSet()
+    private val innerExprs = (what.map { it.expr } + listOfNotNull(where)).toImmList()
+    private val refAtExprIds = innerExprs.flatMap { it.dependsOnAtExprs() }.toImmSet()
 
+    fun innerExprs() = innerExprs
     fun referencedAtExprIds(): Set<R_AtExprId> = refAtExprIds
 
     fun toDbBase(ctx: C_ExprContext): Db_AtExprBase {
@@ -96,7 +98,7 @@ class V_NestedAtExpr(
         private val rBlock: R_FrameBlock,
         private val varFacts: C_ExprVarFacts
 ): V_Expr(exprCtx, pos) {
-    override val exprInfo = V_ExprInfo(true, false, vBase.referencedAtExprIds())
+    override val exprInfo = V_ExprInfo.make(vBase.innerExprs(), dependsOnDbAtEntity = true)
 
     override fun type() = resultType
     override fun toRExpr0() = throw C_Errors.errExprDbNotAllowed(pos)
@@ -107,4 +109,43 @@ class V_NestedAtExpr(
     }
 
     override fun varFacts() = varFacts
+}
+
+object V_AtUtils {
+    fun createAtWhatValueComplex(vExprs: List<V_Expr>, evaluator: Db_ComplexAtWhatEvaluator): C_DbAtWhatValue {
+        val items = mutableListOf<Pair<Boolean, Int>>()
+        val dbExprs = mutableListOf<Db_AtWhatValue>()
+        val rExprs = mutableListOf<R_Expr>()
+
+        for (vExpr in vExprs) {
+            if (vExpr.dependsOnDbAtEntity()) {
+                items.add(true to dbExprs.size)
+                dbExprs.add(vExpr.toDbExprWhat().toDbWhatSub())
+            } else {
+                items.add(false to rExprs.size)
+                rExprs.add(vExpr.toRExpr())
+            }
+        }
+
+        val dbWhatValue = Db_AtWhatValue_Complex(dbExprs, rExprs, items, evaluator)
+        return C_DbAtWhatValue_Other(dbWhatValue)
+    }
+
+    fun hasWhatModifiers(field: C_AtWhatField): Boolean {
+        val flags = field.flags
+        return flags.sort != null || flags.group != null || flags.aggregate != null
+    }
+
+    fun checkNoWhatModifiers(msgCtx: C_MessageContext, field: C_AtWhatField) {
+        val flags = field.flags
+        checkWhatFlag(msgCtx, flags.sort?.pos, "sort", "sort")
+        checkWhatFlag(msgCtx, flags.group, "group", "group")
+        checkWhatFlag(msgCtx, flags.aggregate, "aggregate", "aggregate")
+    }
+
+    private fun checkWhatFlag(msgCtx: C_MessageContext, flagPos: S_Pos?, code: String, msg: String) {
+        if (flagPos != null) {
+            msgCtx.error(flagPos, "expr:at:$code", "Cannot $msg this expression")
+        }
+    }
 }

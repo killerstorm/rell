@@ -2,6 +2,7 @@ package net.postchain.rell.model
 
 import com.google.common.collect.Iterables
 import net.postchain.rell.runtime.*
+import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmList
 import kotlin.math.min
 
@@ -100,7 +101,7 @@ private class R_ColAtSummarizer_None(private val fieldCount: Int): R_ColAtSummar
     override fun newLimiter(limits: Rt_AtExprExtras, sorting: Boolean) = newLimiter0(limits, !sorting)
 
     override fun addRecord(values: List<Rt_Value>) {
-        check(values.size == fieldCount)
+        checkEquals(values.size, fieldCount)
         res.add(values)
     }
 
@@ -117,7 +118,7 @@ private class R_ColAtSummarizer_Group(what: R_ColAtWhat): R_ColAtSummarizer() {
     override fun newLimiter(limits: Rt_AtExprExtras, sorting: Boolean) = newLimiter0(limits, false)
 
     override fun addRecord(values: List<Rt_Value>) {
-        check(values.size == fields.size)
+        checkEquals(values.size, fields.size)
         val key = groupFields.map { values[it] }
         val aggregator = map.computeIfAbsent(key) { R_ColAtRowAggregator(fields) }
         aggregator.update(values)
@@ -135,7 +136,7 @@ private class R_ColAtSummarizer_All(what: R_ColAtWhat): R_ColAtSummarizer() {
     override fun newLimiter(limits: Rt_AtExprExtras, sorting: Boolean) = newLimiter0(limits, false)
 
     override fun addRecord(values: List<Rt_Value>) {
-        check(values.size == fields.size)
+        checkEquals(values.size, fields.size)
         aggregator.update(values)
     }
 
@@ -173,7 +174,7 @@ private class R_ColAtValueSummarizer_Group: R_ColAtValueSummarizer() {
         if (v == null) {
             lastValue = value
         } else {
-            check(value == v)
+            checkEquals(value, v)
         }
     }
 
@@ -225,7 +226,7 @@ class R_ColAtLimiter_Early(private val limit: Long, private val offset: Long): R
 
     override fun getResult(list: List<List<Rt_Value>>): List<List<Rt_Value>> {
         val actSize = list.size.toLong()
-        check(actSize == size) { "Expected $size, was $actSize" }
+        checkEquals(actSize, size)
         return list
     }
 }

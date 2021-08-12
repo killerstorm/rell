@@ -6,6 +6,7 @@ import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Value
 
 sealed class V_UnaryOp(val resType: R_Type) {
+    open fun canBeDbExpr(): Boolean = true
     abstract fun compileR(pos: S_Pos, expr: R_Expr): R_Expr
     abstract fun compileDb(pos: S_Pos, expr: Db_Expr): Db_Expr
     open fun evaluate(value: Rt_Value): Rt_Value? = null
@@ -30,11 +31,13 @@ class V_UnaryOp_Not: V_UnaryOp(R_BooleanType) {
 }
 
 class V_UnaryOp_NotNull(resType: R_Type): V_UnaryOp(resType) {
+    override fun canBeDbExpr() = false
     override fun compileR(pos: S_Pos, expr: R_Expr) = R_NotNullExpr(resType, expr)
     override fun compileDb(pos: S_Pos, expr: Db_Expr) = throw C_Error.stop(pos, "expr:is_null:nodb", "Not supported for SQL")
 }
 
 class V_UnaryOp_IsNull: V_UnaryOp(R_BooleanType) {
+    override fun canBeDbExpr() = false
     override fun compileR(pos: S_Pos, expr: R_Expr) = R_BinaryExpr(R_BooleanType, R_BinaryOp_Ne, expr, R_ConstantExpr.makeNull())
     override fun compileDb(pos: S_Pos, expr: Db_Expr) = throw C_Error.stop(pos, "expr:is_null:nodb", "Not supported for SQL")
 }
@@ -46,7 +49,7 @@ class V_UnaryExpr(
         private val expr: V_Expr,
         private val varFacts: C_ExprVarFacts
 ): V_Expr(exprCtx, pos) {
-    override val exprInfo = V_ExprInfo.make(expr)
+    override val exprInfo = V_ExprInfo.make(expr, canBeDbExpr = op.canBeDbExpr())
 
     override fun type() = op.resType
     override fun varFacts() = varFacts
@@ -80,7 +83,7 @@ class V_IncDecExpr(
         private val post: Boolean,
         private val varFacts: C_ExprVarFacts
 ): V_Expr(exprCtx, pos) {
-    override val exprInfo = V_ExprInfo(false, false)
+    override val exprInfo = V_ExprInfo()
 
     override fun type() = resType
     override fun varFacts() = varFacts

@@ -233,7 +233,7 @@ class LibBlockTransactionTest: BaseRellTest() {
         tst.inserts = BLOCK_INSERTS_333
         chk("transaction @ {}", "transaction[444]")
         chk("r(transaction @ {})", "r[t=transaction[444]]")
-        chkEx("{ val r = r(transaction @ {}); return r.to_gtv_pretty(); }", "ct_err:fn:invalid:r:r.to_gtv_pretty")
+        chkEx("{ val r = r(transaction @ {}); return r.to_gtv_pretty(); }", "ct_err:fn:invalid:r:to_gtv_pretty")
         chk("""r.from_gtv_pretty(gtv.from_json('{"t":444}'))""", "ct_err:fn:invalid:r:from_gtv_pretty")
     }
 

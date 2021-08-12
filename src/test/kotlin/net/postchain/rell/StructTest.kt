@@ -420,4 +420,13 @@ class StructTest: BaseRellTest(false) {
 
         chkFull(code, "list<integer>[int[123],int[456],int[789]]")
     }
+
+    @Test fun testAttributeDefaultValueTypePromotion() {
+        def("struct s { x: decimal = 123; }")
+        chk("s()", "s[x=dec[123]]")
+        chk("s(456)", "ct_err:attr_implic_unknown:0:integer") // maybe not right
+        chk("s(x = 456)", "s[x=dec[456]]")
+        chk("s(456.0)", "s[x=dec[456]]")
+        chk("s(x = 456.0)", "s[x=dec[456]]")
+    }
 }

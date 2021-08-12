@@ -49,93 +49,34 @@ class S_EmptyStatement(pos: S_Pos): S_Statement(pos) {
 }
 
 sealed class S_VarDeclarator {
-    abstract fun compile(ctx: C_StmtContext, mutable: Boolean, rExprType: R_Type?, varFacts: C_MutableVarFacts): R_VarDeclarator
     abstract fun discoverVars(vars: MutableSet<String>)
+    abstract fun compile(ctx: C_StmtContext): C_VarDeclarator
 }
 
 class S_SimpleVarDeclarator(private val attrHeader: S_AttrHeader): S_VarDeclarator() {
-    override fun compile(ctx: C_StmtContext, mutable: Boolean, rExprType: R_Type?, varFacts: C_MutableVarFacts): R_VarDeclarator {
-        val name = attrHeader.name
-
-        val rType = if (attrHeader.hasExplicitType() || rExprType == null) attrHeader.compileType(ctx.nsCtx) else null
-
-        if (rType == null && rExprType == null) {
-            ctx.msgCtx.error(name.pos, "stmt_var_notypeexpr:${name.str}", "Neither type nor expression specified for '${name.str}'")
-        } else if (rExprType != null) {
-            C_Utils.checkUnitType(name.pos, rExprType, "stmt_var_unit:${name.str}", "Expression for '${name.str}' returns nothing")
-        }
-
-        val typeAdapter = if (rExprType != null && rType != null) {
-            C_Types.adaptSafe(ctx.msgCtx, rType, rExprType, name.pos, "stmt_var_type:${name.str}", "Type mismatch for '${name.str}'")
-        } else {
-            R_TypeAdapter_Direct
-        }
-
-        if (name.str == "_") {
-            if (attrHeader.hasExplicitType()) {
-                ctx.msgCtx.error(name.pos, "var_wildcard_type", "Name '${name.str}' is a wildcard, it cannot have a type")
-            }
-            return R_WildcardVarDeclarator
-        }
-
-        val rVarType = rType ?: rExprType ?: R_CtErrorType
-        val cVarRef = ctx.blkCtx.addLocalVar(name, rVarType, mutable, null)
-
-        val varUid = cVarRef.target.uid
-        val facts = if (rExprType != null) {
-            val inited = mapOf(varUid to C_VarFact.YES)
-            val nulled = C_VarFacts.varTypeToNulled(varUid, rVarType, rExprType)
-            C_VarFacts.of(inited = inited, nulled = nulled)
-        } else {
-            val inited = mapOf(varUid to C_VarFact.NO)
-            C_VarFacts.of(inited = inited)
-        }
-        varFacts.putFacts(facts)
-
-        return R_SimpleVarDeclarator(cVarRef.ptr, rVarType, typeAdapter)
-    }
-
     override fun discoverVars(vars: MutableSet<String>) {
         vars.add(attrHeader.name.str)
+    }
+
+    override fun compile(ctx: C_StmtContext): C_VarDeclarator {
+        val explicitType = attrHeader.compileExplicitType(ctx.nsCtx)
+
+        val name = attrHeader.name
+        return if (name.str == "_") {
+            if (explicitType != null) {
+                ctx.msgCtx.error(name.pos, "var_wildcard_type", "Name '${name.str}' is a wildcard, it cannot have a type")
+            }
+            C_WildcardVarDeclarator(ctx, name, explicitType != null)
+        } else {
+            C_SimpleVarDeclarator(ctx, attrHeader, explicitType)
+        }
     }
 }
 
 class S_TupleVarDeclarator(val pos: S_Pos, val subDeclarators: List<S_VarDeclarator>): S_VarDeclarator() {
-    override fun compile(ctx: C_StmtContext, mutable: Boolean, rExprType: R_Type?, varFacts: C_MutableVarFacts): R_VarDeclarator {
-        val rSubDeclarators = compileSub(ctx, mutable, rExprType, varFacts)
-        return R_TupleVarDeclarator(rSubDeclarators)
-    }
-
-    private fun compileSub(
-            ctx: C_StmtContext,
-            mutable: Boolean,
-            rExprType: R_Type?,
-            varFacts: C_MutableVarFacts
-    ): List<R_VarDeclarator> {
-        if (rExprType == null) {
-            return subDeclarators.map { it.compile(ctx, mutable, null, varFacts) }
-        }
-
-        val fieldTypes = if (rExprType is R_TupleType) {
-            val n1 = subDeclarators.size
-            val n2 = rExprType.fields.size
-            if (n1 != n2) {
-                ctx.msgCtx.error(pos, "var_tuple_wrongsize:$n1:$n2:$rExprType",
-                        "Expression returns a tuple of $n2 element(s) instead of $n1 element(s): $rExprType")
-            }
-            subDeclarators.indices.map {
-                if (it < n2) rExprType.fields[it].type else R_CtErrorType
-            }
-        } else {
-            if (rExprType.isNotError()) {
-                ctx.msgCtx.error(pos, "var_notuple:$rExprType", "Expression must return a tuple, but it returns '$rExprType'")
-            }
-            subDeclarators.map { R_CtErrorType }
-        }
-
-        return subDeclarators.withIndex().map { (i, subDeclarator) ->
-            subDeclarator.compile(ctx, mutable, fieldTypes[i], varFacts)
-        }
+    override fun compile(ctx: C_StmtContext): C_VarDeclarator {
+        val cSubDeclarators = subDeclarators.map { it.compile(ctx) }
+        return C_TupleVarDeclarator(ctx, pos, cSubDeclarators)
     }
 
     override fun discoverVars(vars: MutableSet<String>) {
@@ -152,14 +93,18 @@ class S_VarStatement(
         val mutable: Boolean
 ): S_Statement(pos) {
     override fun compile0(ctx: C_StmtContext, repl: Boolean): C_Statement {
-        val cValue = expr?.compileSafe(ctx.exprCtx)?.value()
+        val cDeclarator = declarator.compile(ctx)
+
+        val typeHint = cDeclarator.getTypeHint()
+        val cValue = expr?.compileSafe(ctx.exprCtx, typeHint)?.value()
         val rExpr = cValue?.toRExpr()
 
         val varFacts = C_MutableVarFacts()
         varFacts.putFacts(cValue?.varFacts()?.postFacts ?: C_VarFacts.EMPTY)
 
-        val rDeclarator = declarator.compile(ctx, mutable, rExpr?.type, varFacts)
+        val rDeclarator = cDeclarator.compile(mutable, rExpr?.type, varFacts)
         val rStmt = R_VarStatement(rDeclarator, rExpr)
+
         return C_Statement(rStmt, false, varFacts.toVarFacts())
     }
 
@@ -178,32 +123,38 @@ class S_ReturnStatement(pos: S_Pos, val expr: S_Expr?): S_Statement(pos) {
 
     private fun compileInternal(ctx: C_StmtContext): R_Statement {
         val cExpr = expr?.compile(ctx, C_TypeHint.ofType(ctx.fnCtx.explicitReturnType))
-        val rExpr = cExpr?.value()?.toRExpr()
-        if (rExpr != null) {
-            C_Utils.checkUnitType(pos, rExpr.type, "stmt_return_unit", "Expression returns nothing")
+        var vExpr = cExpr?.value()
+
+        if (vExpr != null) {
+            C_Utils.checkUnitType(pos, vExpr.type(), "stmt_return_unit", "Expression returns nothing")
         }
 
         val defType = ctx.defCtx.definitionType
 
         when (defType) {
             C_DefinitionType.OPERATION -> {
-                if (rExpr != null) {
+                if (vExpr != null) {
                     ctx.msgCtx.error(pos, "stmt_return_op_value", "Operation must return nothing")
                 }
             }
             C_DefinitionType.FUNCTION, C_DefinitionType.QUERY -> {
-                if (defType == C_DefinitionType.QUERY && rExpr == null) {
+                if (defType == C_DefinitionType.QUERY && vExpr == null) {
                     ctx.msgCtx.error(pos, "stmt_return_query_novalue", "Query must return a value")
                 }
 
-                val rRetType = if (rExpr == null) R_UnitType else rExpr.type
-                ctx.fnCtx.matchReturnType(pos, rRetType)
+                val rRetType = if (vExpr == null) R_UnitType else vExpr.type()
+                val adapter = ctx.fnCtx.matchReturnType(pos, rRetType)
+
+                if (vExpr != null) {
+                    vExpr = adapter.adaptExpr(ctx.exprCtx, vExpr)
+                }
             }
             else -> {
                 ctx.msgCtx.error(pos, "stmt_return_disallowed:$defType", "Return is not allowed here")
             }
         }
 
+        val rExpr = vExpr?.toRExpr()
         return R_ReturnStatement(rExpr)
     }
 
@@ -512,7 +463,8 @@ class S_ForStatement(pos: S_Pos, val declarator: S_VarDeclarator, val expr: S_Ex
         val (loopCtx, loopBlkCtx) = loop.condCtx.subBlock(loopUid)
 
         val mutVarFacts = C_MutableVarFacts()
-        val rDeclarator = declarator.compile(loopCtx, false, itemType, mutVarFacts)
+        val cDeclarator = declarator.compile(loopCtx)
+        val rDeclarator = cDeclarator.compile(false, itemType, mutVarFacts)
         val iterFactsCtx = loopCtx.updateFacts(mutVarFacts.toVarFacts())
 
         val bodyCtx = iterFactsCtx.updateFacts(loop.condFacts.postFacts)

@@ -68,9 +68,12 @@ abstract class S_Node {
     }
 }
 
-class S_PosValue<T>(val pos: S_Pos, val value: T) {
+data class S_PosValue<T>(val pos: S_Pos, val value: T) {
     constructor(t: RellTokenMatch, value: T): this(t.pos, value)
 }
+
+data class S_NameValue<T>(val name: S_Name, val value: T)
+data class S_NameOptValue<T>(val name: S_Name?, val value: T)
 
 class S_Name(val pos: S_Pos, val str: String): S_Node() {
     val rName = R_Name.of(str)
@@ -83,63 +86,78 @@ class S_String(val pos: S_Pos, val str: String): S_Node() {
     override fun toString() = str
 }
 
-class S_AttrHeader(val name: S_Name, val type: S_Type?): S_Node() {
-    fun hasExplicitType() = type != null
-
-    fun compileTypeOpt(ctx: C_NamespaceContext): R_Type? {
-        if (type != null) {
-            return type.compileOpt(ctx)
+class S_AttrHeader(val name: S_Name, private val type: S_Type?): S_Node() {
+    fun compileExplicitType(ctx: C_NamespaceContext): R_Type? {
+        return if (type == null) null else {
+            val rType = type.compileOpt(ctx) ?: R_CtErrorType
+            checkUnitType(ctx, type.pos, rType)
         }
+    }
 
+    fun compileImplicitType(ctx: C_NamespaceContext): R_Type? {
         val rType = ctx.getTypeOpt(listOf(name))
-        if (rType == null) {
-            C_Errors.errAttributeTypeUnknown(ctx.msgCtx, name)
-        }
-
-        return rType
+        return if (rType == null) null else checkUnitType(ctx, name.pos, rType)
     }
 
     fun compileType(ctx: C_NamespaceContext): R_Type {
-        return compileTypeOpt(ctx) ?: R_CtErrorType
+        val rExplicitType = compileExplicitType(ctx)
+        if (rExplicitType != null) {
+            return rExplicitType
+        }
+
+        val rImplicitType = compileImplicitType(ctx)
+        return if (rImplicitType != null) rImplicitType else {
+            C_Errors.errAttributeTypeUnknown(ctx.msgCtx, name)
+            R_CtErrorType
+        }
+    }
+
+    private fun checkUnitType(ctx: C_NamespaceContext, pos: S_Pos, rType: R_Type): R_Type {
+        return C_Types.checkNotUnit(ctx.msgCtx, pos, rType, name.str) { "attr_var" to "attribute or variable" }
     }
 }
 
 class S_FormalParameter(val attr: S_AttrHeader, val expr: S_Expr?) {
-    fun compile(defCtx: C_DefinitionContext): C_FormalParameter {
+    fun compile(defCtx: C_DefinitionContext, index: Int): C_FormalParameter {
         val name = attr.name
-        val type = attr.compileTypeOpt(defCtx.nsCtx)
+        val type = attr.compileType(defCtx.nsCtx)
 
         val defaultValue = if (expr == null) null else {
-            val errorType = type ?: R_CtErrorType
-            val rErrorExpr = C_Utils.errorRExpr(errorType)
+            val rErrorExpr = C_Utils.errorRExpr(type)
             val rExprLate = C_LateInit(C_CompilerPass.EXPRESSIONS, rErrorExpr)
             val rValueLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_DefaultValue(rErrorExpr, false))
 
             defCtx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
-                val vExpr = compileExpr(defCtx, type, errorType)
+                val vExpr = compileExpr(defCtx, type)
                 val rExpr = vExpr.toRExpr()
                 rExprLate.set(rExpr)
-                rValueLate.set(R_DefaultValue(rExpr, vExpr.isDbModification()))
+                rValueLate.set(R_DefaultValue(rExpr, vExpr.hasDbModifications()))
             }
 
-            C_DefaultValue(expr.startPos, rExprLate.getter, rValueLate.getter)
+            C_ParameterDefaultValue(expr.startPos, name.str, rExprLate.getter, defCtx.initFrameGetter, rValueLate.getter)
         }
 
-        return C_FormalParameter(name, type, defCtx.initFrameGetter, defaultValue)
+        return C_FormalParameter(name, type, index, defaultValue)
     }
 
-    private fun compileExpr(defCtx: C_DefinitionContext, attrType: R_Type?, errorType: R_Type): V_Expr {
-        val cExpr = expr!!.compileOpt(defCtx.initExprCtx, C_TypeHint.ofType(attrType))
-        cExpr ?: return C_Utils.errorVExpr(defCtx.initExprCtx, expr.startPos, errorType)
+    private fun compileExpr(defCtx: C_DefinitionContext, paramType: R_Type): V_Expr {
+        val exprCtx = defCtx.initExprCtx
+        val cExpr = expr!!.compileOpt(exprCtx, C_TypeHint.ofType(paramType))
+        cExpr ?: return C_Utils.errorVExpr(exprCtx, expr.startPos, paramType)
 
         val vExpr = cExpr.value()
-        if (attrType != null) {
-            val type = vExpr.type()
-            C_Types.matchOpt(defCtx.msgCtx, attrType, type, expr.startPos, "param_expr_type",
-                    "Wrong type of default value of parameter '${attr.name}'")
-        }
 
-        return vExpr
+        return if (paramType.isError()) vExpr else {
+            val valueType = vExpr.type()
+            val matcher: C_ArgTypeMatcher = C_ArgTypeMatcher_Simple(paramType)
+            val m = matcher.match(valueType)
+            if (m != null) m.adaptExpr(exprCtx, vExpr) else {
+                val code = "def:param:type:${attr.name}:${paramType.toStrictString()}:${valueType.toStrictString()}"
+                val msg = "Wrong type of default value of parameter '${attr.name}': $valueType instead of $paramType"
+                defCtx.msgCtx.error(expr.startPos, code, msg)
+                vExpr
+            }
+        }
     }
 }
 
@@ -676,7 +694,7 @@ class S_OperationDefinition(
     private fun compileMirrorStructAttrs(mirrorStructs: R_MirrorStructs, forParams: C_FormalParameters, mutable: Boolean) {
         val struct = mirrorStructs.getStruct(mutable)
         val attrs = forParams.list
-                .mapIndexed { i, param -> param.createMirrorAttr(i, mutable) }
+                .map { it.createMirrorAttr(mutable) }
                 .map { it.name to it }
                 .toMap().toImmMap()
         struct.setAttributes(attrs)
@@ -761,27 +779,12 @@ class S_QueryDefinition(
     }
 
     private fun checkGtvResult(msgCtx: C_MessageContext, rType: R_Type) {
-        checkGtvCompatibility(msgCtx, name.pos, rType, false, "result_nogtv:${name.str}", "Return type of query '${name.str}'")
+        C_Utils.checkGtvCompatibility(msgCtx, name.pos, rType, false, "result_nogtv:${name.str}",
+                "Return type of query '${name.str}'")
     }
 
     override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
         b.node(this, name, IdeOutlineNodeType.QUERY)
-    }
-}
-
-private fun checkGtvCompatibility(
-        msgCtx: C_MessageContext,
-        pos: S_Pos,
-        type: R_Type,
-        from: Boolean,
-        errCode: String,
-        errMsg: String
-) {
-    val flags = type.completeFlags()
-    val flag = if (from) flags.gtv.fromGtv else flags.gtv.toGtv
-    if (!flag) {
-        val fullMsg = "$errMsg is not Gtv-compatible: ${type.toStrictString()}"
-        msgCtx.error(pos, "$errCode:${type.toStrictString()}", fullMsg)
     }
 }
 
@@ -824,15 +827,25 @@ class S_FunctionBodyShort(val expr: S_Expr): S_FunctionBody() {
 
     override fun compileQuery0(bodyCtx: C_FunctionBodyContext, stmtCtx: C_StmtContext): C_Statement {
         val cExpr = expr.compile(stmtCtx, C_TypeHint.ofType(bodyCtx.explicitRetType))
-        val rExpr = cExpr.value().toRExpr()
-        C_Utils.checkUnitType(bodyCtx.namePos, rExpr.type, "query_exprtype_unit", "Query expressions returns nothing")
-        stmtCtx.fnCtx.matchReturnType(bodyCtx.namePos, rExpr.type)
+        val vExpr = cExpr.value()
+
+        val type = vExpr.type()
+        C_Utils.checkUnitType(bodyCtx.namePos, type, "query_exprtype_unit", "Query expressions returns nothing")
+
+        val adapter = stmtCtx.fnCtx.matchReturnType(bodyCtx.namePos, type)
+        val vExpr2 = adapter.adaptExpr(stmtCtx.exprCtx, vExpr)
+
+        val rExpr = vExpr2.toRExpr()
         return C_Statement(R_ReturnStatement(rExpr), true)
     }
 
     override fun compileFunction0(bodyCtx: C_FunctionBodyContext, stmtCtx: C_StmtContext): C_Statement {
-        val rExpr = expr.compile(stmtCtx, C_TypeHint.ofType(bodyCtx.explicitRetType)).value().toRExpr()
-        stmtCtx.fnCtx.matchReturnType(bodyCtx.namePos, rExpr.type)
+        val vExpr = expr.compile(stmtCtx, C_TypeHint.ofType(bodyCtx.explicitRetType)).value()
+        val type = vExpr.type()
+
+        val adapter = stmtCtx.fnCtx.matchReturnType(bodyCtx.namePos, type)
+        val vExpr2 = adapter.adaptExpr(stmtCtx.exprCtx, vExpr)
+        val rExpr = vExpr2.toRExpr()
 
         return if (rExpr.type != R_UnitType) {
             C_Statement(R_ReturnStatement(rExpr), true)
@@ -1067,7 +1080,7 @@ class S_FunctionDefinition(
         for (i in 0 until min(overParams.size, absParams.size)) {
             val absParam = absParams[i]
             val overParam = overParams[i]
-            if (absParam.type != null && overParam.type != null && overParam.type != absParam.type) {
+            if (absParam.type.isNotError() && overParam.type.isNotError() && overParam.type != absParam.type) {
                 val code = "fn:override:param_type:$i:${absParam.name.str}"
                 val msg = "Parameter '${absParam.name.str}' (${i+1}) type missmatch "
                 val err = C_Errors.errTypeMismatch(overParam.name.pos, overParam.type, absParam.type, code, msg)
@@ -1362,79 +1375,4 @@ class S_RellFile(val header: S_ModuleHeader?, val definitions: List<S_Definition
             return C_MountContext(fileCtx, nsCtx, modCtx.extChain, nsBuilder, mountName)
         }
     }
-}
-
-class C_FormalParameters(list: List<C_FormalParameter>): C_FunctionParametersHints {
-    val list = list.toImmList()
-    val map = list.map { it.name.str to it }.toMap().toImmMap()
-
-    override fun getTypeHint(index: Int, name: String?): C_TypeHint {
-        val byName = if (name != null) map[name]?.type else null
-        val byIndex = if (index < list.size) list[index].type else null
-        return C_TypeHint.ofType(byName ?: byIndex)
-    }
-
-    fun compile(frameCtx: C_FrameContext): C_ActualParameters {
-        val inited = mutableMapOf<C_VarUid, C_VarFact>()
-        val names = mutableSetOf<String>()
-        val rParams = mutableListOf<R_VarParam>()
-
-        val blkCtx = frameCtx.rootBlkCtx
-
-        for (param in list) {
-            val name = param.name
-            val nameStr = name.str
-            val type = param.type
-
-            if (!names.add(nameStr)) {
-                frameCtx.msgCtx.error(name.pos, "dup_param_name:$nameStr", "Duplicate parameter: '$nameStr'")
-            } else if (type != null) {
-                val cVarRef = blkCtx.addLocalVar(name, type, false, null)
-                inited[cVarRef.target.uid] = C_VarFact.YES
-                val rVarParam = param.createVarParam(type, cVarRef.ptr)
-                rParams.add(rVarParam)
-            }
-        }
-
-        val varFacts = C_VarFacts.of(inited = inited.toMap())
-
-        val stmtCtx = C_StmtContext.createRoot(blkCtx)
-                .updateFacts(varFacts)
-
-        return C_ActualParameters(stmtCtx, rParams)
-    }
-
-    companion object {
-        val EMPTY = C_FormalParameters(listOf())
-
-        fun compile(defCtx: C_DefinitionContext, params: List<S_FormalParameter>, gtv: Boolean): C_FormalParameters {
-            val cParams = mutableListOf<C_FormalParameter>()
-
-            for (param in params) {
-                val cParam = param.compile(defCtx)
-                cParams.add(cParam)
-            }
-
-            if (gtv && defCtx.globalCtx.compilerOptions.gtv && cParams.isNotEmpty()) {
-                defCtx.executor.onPass(C_CompilerPass.VALIDATION) {
-                    for (cExtParam in cParams) {
-                        checkGtvParam(defCtx.msgCtx, cExtParam)
-                    }
-                }
-            }
-
-            return C_FormalParameters(cParams)
-        }
-
-        private fun checkGtvParam(msgCtx: C_MessageContext, param: C_FormalParameter) {
-            if (param.type != null) {
-                val nameStr = param.name.str
-                checkGtvCompatibility(msgCtx, param.name.pos, param.type, true, "param_nogtv:$nameStr", "Type of parameter '$nameStr'")
-            }
-        }
-    }
-}
-
-class C_ActualParameters(val stmtCtx: C_StmtContext, rParams: List<R_VarParam>) {
-    val rParams = rParams.toImmList()
 }

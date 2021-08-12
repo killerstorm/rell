@@ -233,7 +233,7 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
             return vExpr
         }
 
-        val dependsOnThisAtExpr = vExpr.atDependencies() == immSetOf(atExprId)
+        val dependsOnThisAtExpr = vExpr.dependsOnAtExprs() == immSetOf(atExprId)
         val attrName = vExpr.implicitAtWhereAttrName()
 
         return if (!dependsOnThisAtExpr && attrName != null) {

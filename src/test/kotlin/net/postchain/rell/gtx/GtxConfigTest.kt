@@ -55,14 +55,6 @@ class GtxConfigTest: BaseGtxTest() {
         chkConfig("'files_v0.10':FILES,'version':'0.10.4'", msg.format("files_v0.10"))
     }
 
-    @Test fun testSourcesOK() {
-        chkVersion("0.10.0", "OK")
-        chkVersion("0.10.1", "OK")
-        chkVersion("0.10.2", "OK")
-        chkVersion("0.10.3", "OK")
-        chkVersion("0.10.4", "OK")
-    }
-
     @Test fun testSourcesWithoutVersion() {
         val msg = "ERR:Configuration key '%s' is specified, but 'version' is missing"
         chkConfig("'sources':SOURCES", msg.format("sources"))
@@ -74,12 +66,21 @@ class GtxConfigTest: BaseGtxTest() {
                 "ERR:Multiple source code nodes specified in the configuration: files, sources")
     }
 
+    @Test fun testSourcesOK() {
+        chkVersion("0.10.0", "OK")
+        chkVersion("0.10.1", "OK")
+        chkVersion("0.10.2", "OK")
+        chkVersion("0.10.3", "OK")
+        chkVersion("0.10.4", "OK")
+        chkVersion("0.10.5", "OK")
+    }
+
     @Test fun testSourcesWithVersionOutOfRange() {
         val msg = "ERR:Unsupported language version"
         chkVersion("0.9.0", "$msg: 0.9.0")
         chkVersion("0.9.1", "$msg: 0.9.1")
         chkVersion("0.9.999", "$msg: 0.9.999")
-        chkVersion("0.10.5", "$msg: 0.10.5")
+        chkVersion("0.10.7", "$msg: 0.10.7")
         chkVersion("0.11.0", "$msg: 0.11.0")
         chkVersion("1.0.0", "$msg: 1.0.0")
     }

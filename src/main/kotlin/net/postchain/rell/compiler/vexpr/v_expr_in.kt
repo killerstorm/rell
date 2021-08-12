@@ -38,7 +38,7 @@ class V_InCollectionExpr(
             return C_Utils.errorDbExpr(R_BooleanType)
         }
 
-        return if (isDb(right)) {
+        return if (right.dependsOnDbAtEntity()) {
             if (right is V_ListLiteralExpr) {
                 val dbRights = right.elems.map { it.toDbExpr() }
                 Db_InExpr(dbLeft, dbRights, not)

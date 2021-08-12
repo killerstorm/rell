@@ -4,8 +4,8 @@
 
 package net.postchain.rell.compiler
 
+import net.postchain.rell.compiler.ast.S_CallArgument
 import net.postchain.rell.compiler.ast.S_Name
-import net.postchain.rell.compiler.ast.S_NameExprPair
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_VirtualType
 import net.postchain.rell.compiler.vexpr.V_EntityAttrExpr
@@ -42,7 +42,10 @@ private class C_MemberValue_BasicAttr(private val attr: C_MemberAttr): C_MemberV
     override fun memberName() = attr.memberName()
 
     override fun compile(ctx: C_ExprContext, link: C_MemberLink): V_Expr {
-        return makeMemberExpr(ctx, link, attr)
+        val fieldType = attr.type
+        val effectiveType = C_Utils.effectiveMemberType(fieldType, link.safe)
+        val exprFacts = C_ExprVarFacts.of(postFacts = link.base.varFacts().postFacts)
+        return V_MemberAttrExpr(ctx, link, attr, effectiveType, exprFacts)
     }
 }
 
@@ -66,7 +69,11 @@ private class C_MemberValue_EnumAttr(
 
     override fun compile(ctx: C_ExprContext, link: C_MemberLink): V_Expr {
         val caseCtx = C_MemberFuncCaseCtx(link, propName)
-        return V_SysMemberPropertyExpr(ctx, caseCtx, prop)
+        var res = prop.compileCall(ctx, caseCtx, listOf())
+        if (caseCtx.member.base.isAtExprItem()) {
+            res = V_SysMemberPropertyExpr(ctx, res, propName)
+        }
+        return res
     }
 }
 
@@ -323,6 +330,14 @@ private class V_MemberAttrExpr(
         val rDstExpr = memberAttr.destination(memberLink.linkPos, rBase)
         return C_SimpleDestination(rDstExpr)
     }
+
+    override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_CallArgument>, resTypeHint: C_TypeHint): V_Expr {
+        if (memberLink.safe && memberAttr.type !is R_NullableType && type == R_NullableType(memberAttr.type)) {
+            return callCommon(ctx, pos, args, resTypeHint, memberAttr.type, true)
+        } else {
+            return super.call(ctx, pos, args, resTypeHint)
+        }
+    }
 }
 
 sealed class C_EntityAttrRef(val rEntity: R_EntityDefinition, val attrName: String) {
@@ -401,20 +416,30 @@ private class C_MemberFunctionExpr(
 ): C_Expr() {
     override fun kind() = C_ExprKind.FUNCTION
     override fun startPos() = memberLink.base.pos
+    override fun isCallable() = true
 
-    override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_NameExprPair>): C_Expr {
-        val cArgs = C_FunctionUtils.compileRegularArgs(ctx, args, fn.getParamsHints())
-        if (!cArgs.named.isEmpty()) {
-            val arg = cArgs.named[0]
-            ctx.msgCtx.error(arg.first.pos, "expr:call:sys_member_fn_named_arg:${arg.first}",
-                    "Named arguments not supported for this function")
-            return C_Utils.errorExpr(ctx, pos)
-        } else if (!cArgs.valid) {
-            return C_Utils.errorExpr(ctx, pos)
+    override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_CallArgument>, resTypeHint: C_TypeHint): C_Expr {
+        val callTarget = C_FunctionCallTarget_MemberFunction(ctx)
+        val vExpr = C_FunctionCallArgsUtils.compileCall(ctx, args, resTypeHint, callTarget)
+        vExpr ?: return C_Utils.errorExpr(ctx, pos)
+        return C_VExpr(vExpr)
+    }
+
+    private inner class C_FunctionCallTarget_MemberFunction(val ctx: C_ExprContext): C_FunctionCallTarget() {
+        override fun retType() = null
+        override fun typeHints() = fn.getParamsHints()
+
+        override fun compileFull(args: C_FullCallArguments): V_Expr? {
+            val vArgs = args.compileSimpleArgs(fnName)
+            vArgs ?: return null
+            val callCtx = C_MemberFuncCaseCtx(memberLink, fnName)
+            return fn.compileCallFull(ctx, callCtx, vArgs)
         }
 
-        val callCtx = C_MemberFuncCaseCtx(memberLink, fnName)
-        return fn.compileCall(ctx, callCtx, cArgs.positional)
+        override fun compilePartial(args: C_PartialCallArguments, resTypeHint: R_FunctionType?): V_Expr? {
+            val callCtx = C_MemberFuncCaseCtx(memberLink, fnName)
+            return fn.compileCallPartial(ctx, callCtx, args, resTypeHint)
+        }
     }
 }
 
@@ -422,11 +447,4 @@ private fun makeDbAttrExpr(base: Db_TableExpr, attr: R_Attribute): Db_Expr {
     val resultType = attr.type
     val resultEntity = (resultType as? R_EntityType)?.rEntity
     return if (resultEntity == null) Db_AttrExpr(base, attr) else Db_RelExpr(base, attr, resultEntity)
-}
-
-private fun makeMemberExpr(ctx: C_ExprContext, link: C_MemberLink, memAttr: C_MemberAttr): V_Expr {
-    val fieldType = memAttr.type
-    val effectiveType = C_Utils.effectiveMemberType(fieldType, link.safe)
-    val exprFacts = C_ExprVarFacts.of(postFacts = link.base.varFacts().postFacts)
-    return V_MemberAttrExpr(ctx, link, memAttr, effectiveType, exprFacts)
 }

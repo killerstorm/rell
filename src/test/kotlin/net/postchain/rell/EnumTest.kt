@@ -180,7 +180,7 @@ class EnumTest: BaseRellTest() {
         chk("user @ { .foo.value == 1 } ( .name )", "text[Alice]")
         chk("user @ { .foo.value == 2 } ( .name )", "text[Trudy]")
 
-        chk("user @ { 'Bob' } ( .foo.name )", "ct_err:expr_call_nosql:foo.name")
+        chk("user @ { 'Bob' } ( .foo.name )", "text[A]")
     }
 
     @Test fun testNullable() {

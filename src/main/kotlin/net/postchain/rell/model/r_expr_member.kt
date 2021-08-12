@@ -1,8 +1,8 @@
 package net.postchain.rell.model
 
-import net.postchain.rell.compiler.C_EntityAttrRef
 import net.postchain.rell.compiler.C_Utils
 import net.postchain.rell.runtime.*
+import net.postchain.rell.utils.checkEquals
 
 class R_MemberExpr(val base: R_Expr, val safe: Boolean, val calculator: R_MemberCalculator)
 : R_Expr(C_Utils.effectiveMemberType(calculator.type, safe))
@@ -71,28 +71,8 @@ class R_MemberCalculator_DataAttribute(
             throw Rt_Error("expr_entity_attr_count:${list.size}", msg)
         }
 
-        check(list[0].size == 1)
+        checkEquals(list[0].size, 1)
         val res = list[0][0]
         return res
-    }
-}
-
-class R_MemberCalculator_SysFn(
-        type: R_Type,
-        val fn: R_SysFunction,
-        val args: List<R_Expr>,
-        val fnName: String
-): R_MemberCalculator(type) {
-    override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
-        val vArgs = args.map { it.evaluate(frame) }
-        val vFullArgs = listOf(baseValue) + vArgs
-        return R_SysCallExpr.callAndCatch(fn, fnName, frame, vFullArgs)
-    }
-}
-
-object R_MemberCalculator_Rowid: R_MemberCalculator(C_EntityAttrRef.ROWID_TYPE) {
-    override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
-        val id = baseValue.asObjectId()
-        return Rt_RowidValue(id)
     }
 }

@@ -607,9 +607,17 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testNamedArgumentsInSysFunctions() {
-        chk("abs(x=123)", "ct_err:expr:call:sys_global_named_arg:x")
+        chk("abs(x=123)", "ct_err:expr:call:named_args_not_allowed:abs:x")
         chk("abs(123)", "int[123]")
-        chk("'hello'.sub(start=3)", "ct_err:expr:call:sys_member_fn_named_arg:start")
+        chk("'hello'.sub(start=3)", "ct_err:expr:call:named_args_not_allowed:sub:start")
         chk("'hello'.sub(3)", "text[lo]")
+    }
+
+    @Test fun testTypeOfSideEffects() {
+        def("function f(i: integer) { print('f:'+i); return i; }")
+        chk("f(123)", "int[123]")
+        chkOut("f:123")
+        chk("_type_of(f(123))", "text[integer]")
+        chkOut()
     }
 }

@@ -48,15 +48,15 @@ class S_UpdateTarget_Simple(
 
     private fun compileFromEntities(ctx: C_ExprContext, atExprId: R_AtExprId, from: List<S_AtExprFrom>): List<C_AtEntity> {
         val cFrom = from.map { f -> compileFromEntity(ctx, atExprId, f) }
-        return cFrom.map { ( _, entity ) -> entity }
+        return cFrom.map { (_, entity) -> entity }
     }
 
-    private fun compileFromEntity(ctx: C_ExprContext, atExprId: R_AtExprId, from: S_AtExprFrom): Pair<S_Name, C_AtEntity> {
+    private fun compileFromEntity(ctx: C_ExprContext, atExprId: R_AtExprId, from: S_AtExprFrom): S_NameValue<C_AtEntity> {
         val explicitAlias = from.alias
         val alias = explicitAlias ?: from.entityName[from.entityName.size - 1]
         val entity = ctx.nsCtx.getEntity(from.entityName)
         val atEntityId = ctx.appCtx.nextAtEntityId(atExprId)
-        return Pair(alias, C_AtEntity(alias.pos, entity, alias.str, explicitAlias != null, atEntityId))
+        return S_NameValue(alias, C_AtEntity(alias.pos, entity, alias.str, explicitAlias != null, atEntityId))
     }
 }
 
@@ -186,7 +186,8 @@ class S_UpdateStatement(pos: S_Pos, val target: S_UpdateTarget, val what: List<S
     ): List<R_UpdateStatementWhat> {
         val args = what.mapIndexed { i, w ->
             val vExpr = w.expr.compileSafe(ctx).value()
-            C_Argument(i, w.name, w.expr, vExpr)
+            val exprName = w.expr.asName()?.str
+            C_AttrArgument(i, w.name, vExpr, exprName)
         }
         subValues.addAll(args.map { it.vExpr })
 

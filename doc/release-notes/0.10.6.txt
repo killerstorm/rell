@@ -1,0 +1,164 @@
+RELEASE NOTES 0.10.6 (2021-??-??)
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+1. Language: Function type
+
+A type for using a function as a value:
+
+    () -> boolean
+    (integer) -> text
+    (byte_array, decimal) -> integer
+
+Can be used, for example, to pass a function to another function:
+
+    function filter(values: list<integer>, predicate: (integer) -> boolean): list<integer> {
+        return values @* { predicate($) };
+    }
+
+If the referenced function returns nothing, the result type of the function type must be "unit":
+
+    (integer) -> unit
+
+To create a value of a function type, this version also introduces the partial function application feature. In the
+future, lambda expressions (or anonymous functions) will be supported as well.
+
+* Types compatibility *
+
+One function type can be assigned to another function type if:
+
+    - the number of parameters is the same
+    - the result type of the target is unit or can be assigned from the result type of the source
+    - each parameter of the target can be assigned to corresponding parameter of the source
+
+For example:
+
+    val f: (integer?, text) -> boolean;
+    val g: (integer, text) -> unit = f;
+
+The assignment of "f" (source) to "g" (target) works, because the result type of "g" is unit (so the result type of "f"
+doesn't matter), and "f" accepts "integer?" as the first parameter, while "g" accepts just "integer", so any value
+passed to "g" is accepted by "f". The opposite will not work:
+
+    val f: (integer) -> text;
+    val g: (integer?) -> text = f;   // Compilation error: incompatible types.
+
+In this case, "f" cannot be assigned to "g", because one is allowed to pass null to "g", while "f" doesn't accept
+nulls.
+
+* Nullable function type *
+
+To make a function type nullable, enclose it in parentheses:
+
+    ((integer) -> text)?
+
+Without parentheses, the "?" symbol makes the result type nullable, not the function type:
+
+    (integer) -> text?
+
+* Breaking change: single-element tuple syntax *
+
+In order to support the nullable function type syntax with parentheses, the syntax for single-element tuple had to be
+changed. In the new version, type (T) is equivalent to just T, while in previous versions it meant a tuple with a
+single element of type T.
+
+However, if a field name is specified, the type is still a tuple: (a:T).
+
+To use a single-element tuple type without a field name, a comma has to be added in the end: (T,).
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+2. Language: Partial function application
+
+Using a wildcard symbol "*", it's possible to create a reference to a function, i. e. to obtain a value of a function
+type that allows to call the function:
+
+    function f(x: integer, y: integer) = x * y;
+
+    val g = f(*);               // Type of "g" is (integer, integer) -> integer
+    g(123, 456);                // Invocation of f(123, 456) via "g".
+
+More generally, the f(*) notation is a partial application of a function. It allows to specify values for some
+parameters and wildcards ("*") for others, returning a value of a function type accepting the parameters for which
+wildcards were specified:
+
+    val g = f(123, *);          // Type of "g" is (integer) -> integer
+    g(456);                     // Calls f(123, 456).
+
+    val h = f(*, 456);          // Type of "h" is (integer) -> integer
+    h(123);                     // Calls f(123, 456).
+
+* Details of partial application syntax *
+
+1. If a wildcard symbol "*" is specified for at least one parameter, all unspecified parameters that don't have default
+   values are also considered wildcards. Thus, expressions
+
+        f(x = *)
+        f(x = *, y = *)
+        f(*)
+
+   return the same value of type (integer, integer) -> integer.
+
+2. Wildcard symbol "*" specified as the last parameter without a name has a special meaning. It doesn't correspond to
+   a particular parameter of the function, but just specifies that the call expression is a partial application. Thus,
+   it's not necessary to specify "*" for each parameter of a function, it's enough to just write f(*), regardless of
+   the number of parameters "f" has (even if it's zero).
+
+   Restriction: if wildcard without a name is specified as the last parameter, there must be no other wildcard
+   parameters, because otherwise the last wildcard parameter isn't needed (as the call is already a partial application)
+   and may be confusing.
+
+3. Parameters that have default values and aren't explicitly specified as wildcards are bound to their default values.
+   The default values are calculated at the moment of partial application. Consider a function:
+
+        function p(x: integer, y: integer = 1) = x * y;
+
+   Following expressions return the same value of type (integer) -> integer:
+
+        p(*)
+        p(x = *)
+        p(x = *, y = 1)
+
+   The code to include both parameters into a function type, i. e. to get (integer, integer) -> integer:
+
+        p(y = *)
+        p(x = *, y = *)
+
+   Note, for instance, that rules 1 and 2 imply that for a single-parameter function with a default value:
+
+        function r(x: integer = 123): integer { ... }
+
+   - r(*) returns () -> integer (as the last unnamed "*" isn't assigned to a particular parameter)
+   - r(x = *) returns (integer) -> integer
+
+4. Order of named wildcard parameters matters. Consider a function:
+
+        function f(x: integer, y: text, z: boolean): decimal { ... }
+
+   - f(*) is equivalent to f(x = *, y = *, z = *) and returns (integer, text, boolean) -> decimal
+   - f(z = *, y = *, x = *) returns (boolean, text, integer) -> decimal
+   - f(y = *) is equivalent to f(y = *, x = *, z = *) and returns (text, integer, boolean) -> decimal
+   - f(*, z = *) is equivalent to f(x = *, z = *, y = *) and returns (integer, boolean, text) -> decimal
+
+* Partial application of system functions *
+
+Most of system library functions can be partially-applied to turn them into function values.
+
+However, some library functions are overloaded, for instance:
+
+    abs(integer): integer
+    abs(decimal): decimal
+
+To partially-apply an overloaded function, the type of the function value has to be known:
+
+    val f: (integer) -> integer = abs(*);   // The type of variable "f" allows to determine which "abs" to use.
+
+Member functions (i. e. methods of types "text", "list<T>", etc.) can be partially-applied too:
+
+    val l = [5, 6, 7];
+    val f = l.size(*);          // Type of "f" is () -> integer.
+    print(f());                 // Prints 3.
+
+    l.add(8);
+    l.add(9);
+    print(f());                 // Prints 5.
+
+Some system functions don't support partial application: print(), log(), require(), text.format() and a few more.

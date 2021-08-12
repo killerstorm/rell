@@ -95,7 +95,7 @@ object S_AssignOp_Eq: S_AssignOp() {
         val rSrcExpr = srcValue.toRExpr()
 
         val adapter = C_Types.adapt(dstType, rSrcExpr.type, pos, "stmt_assign_type", "Assignment type mismatch")
-        val rSrcAdapterExpr = adapter.adaptExpr(rSrcExpr)
+        val rSrcAdapterExpr = adapter.adaptExprR(rSrcExpr)
         val rStmt = dstExpr.compileAssignStatement(ctx, rSrcAdapterExpr, null)
 
         val varFacts = compileVarFacts(dstValue, dstExpr, srcValue, rSrcExpr.type)
@@ -122,7 +122,7 @@ object S_AssignOp_Eq: S_AssignOp() {
             C_Errors.errTypeMismatch(ctx.msgCtx, pos, expr.type, attr.type, "stmt_assign_type", "Type mismatch for '$name'")
             C_Utils.errorDbExpr(attr.type)
         } else {
-            adapter.adaptExpr(expr)
+            adapter.adaptExprDb(expr)
         }
         return R_UpdateStatementWhat(attr, expr2, null)
     }
@@ -252,11 +252,8 @@ sealed class C_BinOp_Common: C_BinOp() {
 
         private fun promoteNumeric(ctx: C_ExprContext, value: V_Expr): V_Expr {
             val type = value.type()
-            return if (type != R_IntegerType) {
-                value
-            } else {
-                C_Utils.integerToDecimalPromotion(ctx, value)
-            }
+            val adapter = if (type != R_IntegerType) C_TypeAdapter_Direct else C_TypeAdapter_IntegerToDecimal
+            return adapter.adaptExpr(ctx, value)
         }
     }
 }

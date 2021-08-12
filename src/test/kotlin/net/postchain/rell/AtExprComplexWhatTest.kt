@@ -285,6 +285,113 @@ class AtExprComplexWhatTest: BaseRellTest() {
         )
     }
 
+    @Test fun testFunctionArgumentsOrder() {
+        def("function f(x: integer, y: text, z: decimal) = 'f:'+x+','+y+','+z;")
+        def("function g(x: integer = 77, y: text = 'Z', z: decimal = 8.9) = 'g:'+x+','+y+','+z;")
+        initData()
+
+        chkSel("f(.i, .t, .d)", "text", "text[f:111,A,1.1],text[f:222,B,2.2],text[f:333,C,3.3]")
+        chkSel("f(x = .i, y = .t, z = .d)", "text", "text[f:111,A,1.1],text[f:222,B,2.2],text[f:333,C,3.3]")
+        chkSel("f(x = .i, z = .d, y = .t)", "text", "text[f:111,A,1.1],text[f:222,B,2.2],text[f:333,C,3.3]")
+        chkSel("f(y = .t, x = .i, z = .d)", "text", "text[f:111,A,1.1],text[f:222,B,2.2],text[f:333,C,3.3]")
+        chkSel("f(y = .t, z = .d, x = .i)", "text", "text[f:111,A,1.1],text[f:222,B,2.2],text[f:333,C,3.3]")
+        chkSel("f(z = .d, x = .i, y = .t)", "text", "text[f:111,A,1.1],text[f:222,B,2.2],text[f:333,C,3.3]")
+        chkSel("f(z = .d, y = .t, x = .i)", "text", "text[f:111,A,1.1],text[f:222,B,2.2],text[f:333,C,3.3]")
+
+        chkSel("g()", "text", "text[g:77,Z,8.9],text[g:77,Z,8.9],text[g:77,Z,8.9]")
+
+        chkSel("g(x = .i)", "text", "text[g:111,Z,8.9],text[g:222,Z,8.9],text[g:333,Z,8.9]")
+        chkSel("g(y = .t)", "text", "text[g:77,A,8.9],text[g:77,B,8.9],text[g:77,C,8.9]")
+        chkSel("g(z = .d)", "text", "text[g:77,Z,1.1],text[g:77,Z,2.2],text[g:77,Z,3.3]")
+
+        chkSel("g(x = .i, y = .t)", "text", "text[g:111,A,8.9],text[g:222,B,8.9],text[g:333,C,8.9]")
+        chkSel("g(y = .t, x = .i)", "text", "text[g:111,A,8.9],text[g:222,B,8.9],text[g:333,C,8.9]")
+        chkSel("g(x = .i, z = .d)", "text", "text[g:111,Z,1.1],text[g:222,Z,2.2],text[g:333,Z,3.3]")
+        chkSel("g(z = .d, x = .i)", "text", "text[g:111,Z,1.1],text[g:222,Z,2.2],text[g:333,Z,3.3]")
+        chkSel("g(y = .t, z = .d)", "text", "text[g:77,A,1.1],text[g:77,B,2.2],text[g:77,C,3.3]")
+        chkSel("g(z = .d, y = .t)", "text", "text[g:77,A,1.1],text[g:77,B,2.2],text[g:77,C,3.3]")
+
+        chkSel("g(x = .i, y = .t, z = .d)", "text", "text[g:111,A,1.1],text[g:222,B,2.2],text[g:333,C,3.3]")
+        chkSel("g(y = .t, z = .d, x = .i)", "text", "text[g:111,A,1.1],text[g:222,B,2.2],text[g:333,C,3.3]")
+    }
+
+    @Test fun testFunctionArgumentsSideEffects() {
+        def("function si(i: integer) { print(i); return i; }")
+        def("function st(t: text) { print(t); return t; }")
+        def("function f(data, i: integer, t: text) { val r = 'f:'+i+','+t; print(r); return r; }")
+        initData()
+
+        chkSel("f(data, i = si(.i), t = st(.t))", "text", "text[f:111,A]", "text[f:222,B]", "text[f:333,C]")
+        chkOut("111", "A", "f:111,A", "222", "B", "f:222,B", "333", "C", "f:333,C")
+
+        chkSel("f(data, t = st(.t), i = si(.i))", "text", "text[f:111,A]", "text[f:222,B]", "text[f:333,C]")
+        chkOut("A", "111", "f:111,A", "B", "222", "f:222,B", "C", "333", "f:333,C")
+
+        chkSel("f(data, i = si(77), t = st(.t))", "text", "text[f:77,A]", "text[f:77,B]", "text[f:77,C]")
+        chkOut("77", "A", "f:77,A", "B", "f:77,B", "C", "f:77,C")
+
+        chkSel("f(data, t = st(.t), i = si(77))", "text", "text[f:77,A]", "text[f:77,B]", "text[f:77,C]")
+        chkOut("77", "A", "f:77,A", "B", "f:77,B", "C", "f:77,C")
+
+        chkSel("f(data, i = si(.i), t = st('Z'))", "text", "text[f:111,Z]", "text[f:222,Z]", "text[f:333,Z]")
+        chkOut("Z", "111", "f:111,Z", "222", "f:222,Z", "333", "f:333,Z")
+
+        chkSel("f(data, t = st('Z'), i = si(.i))", "text", "text[f:111,Z]", "text[f:222,Z]", "text[f:333,Z]")
+        chkOut("Z", "111", "f:111,Z", "222", "f:222,Z", "333", "f:333,Z")
+
+        chkSel("f(data, i = si(77), t = st('Z'))", "text", "text[f:77,Z]", "text[f:77,Z]", "text[f:77,Z]")
+        chkOut("77", "Z", "f:77,Z", "f:77,Z", "f:77,Z")
+
+        chk("data @* { .i == 444 } ( f(data, i = si(77), t = st('Z')) )", "list<text>[]")
+        chkOut()
+
+        chk("data @* { .i == 333 } ( f(data, i = si(77), t = st('Z')) )", "list<text>[text[f:77,Z]]")
+        chkOut("77", "Z", "f:77,Z")
+    }
+
+    @Test fun testFunctionArgumentsSideEffectsDefaultValues() {
+        def("function si(i: integer) { print(i); return i; }")
+        def("function st(t: text) { print(t); return t; }")
+        def("function f(data, i: integer = si(99), t: text = st('Y')) { val r = 'f:'+i+','+t; print(r); return r; }")
+        initData()
+
+        chkSel("f(data)", "text", "text[f:99,Y]", "text[f:99,Y]", "text[f:99,Y]")
+        chkOut("99", "Y", "f:99,Y", "f:99,Y", "f:99,Y")
+
+        chkSel("f(data, i = si(.i))", "text", "text[f:111,Y]", "text[f:222,Y]", "text[f:333,Y]")
+        chkOut("Y", "111", "f:111,Y", "222", "f:222,Y", "333", "f:333,Y")
+
+        chkSel("f(data, i = si(77))", "text", "text[f:77,Y]", "text[f:77,Y]", "text[f:77,Y]")
+        chkOut("77", "Y", "f:77,Y", "f:77,Y", "f:77,Y")
+
+        chkSel("f(data, t = st(.t))", "text", "text[f:99,A]", "text[f:99,B]", "text[f:99,C]")
+        chkOut("99", "A", "f:99,A", "B", "f:99,B", "C", "f:99,C")
+
+        chkSel("f(data, t = st('Z'))", "text", "text[f:99,Z]", "text[f:99,Z]", "text[f:99,Z]")
+        chkOut("Z", "99", "f:99,Z", "f:99,Z", "f:99,Z")
+
+        chk("data @* { .i == 444 } ( f(data, i = si(77)) )", "list<text>[]")
+        chkOut()
+
+        chk("data @* { .i == 333 } ( f(data, i = si(77)) )", "list<text>[text[f:77,Y]]")
+        chkOut("77", "Y", "f:77,Y")
+    }
+
+    @Test fun testCallOperation() {
+        tst.testLib = true
+        def("operation op(i: integer, t: text) {}")
+        initData()
+        chkSel("op(.i, .t)", "rell.test.op", """op[op(111,"A")]""", """op[op(222,"B")]""", """op[op(333,"C")]""")
+    }
+
+    @Test fun testTypeOf() {
+        initData()
+        chk("data @ {} ( _type_of(.i) ) limit 1", "text[integer]")
+        chk("data @ {} ( _type_of(.d) ) limit 1", "text[decimal]")
+        chk("data @ {} ( _type_of(.t) ) limit 1", "text[text]")
+        chk("data @ {} ( _type_of(.ba) ) limit 1", "text[byte_array]")
+    }
+
     private fun chkSel(what: String, type: String, vararg values: String) {
         val values2 = values.joinToString(",")
         val exp = "list<$type>[$values2]"

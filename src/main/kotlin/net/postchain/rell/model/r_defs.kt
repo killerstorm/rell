@@ -12,6 +12,7 @@ import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_EnumValue
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.runtime.toGtv
+import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toGtv
 
 sealed class R_KeyIndex(val attribs: List<String>) {
@@ -93,7 +94,7 @@ class R_ObjectDefinition(names: R_DefinitionNames, val rEntity: R_EntityDefiniti
 
     fun insert(frame: Rt_CallFrame) {
         val createAttrs = rEntity.attributes.values.map {
-            val expr = R_DefaultAttrValueExpr(it, initFrameGetter, null)
+            val expr = R_AttributeDefaultValueExpr(it, initFrameGetter, null)
             R_CreateExprAttr(it, expr)
         }
         val createValues = createAttrs.map { it.attr to it.evaluate(frame) }
@@ -124,7 +125,7 @@ class R_Struct(
 
     fun setAttributes(attrs: Map<String, R_Attribute>) {
         val attrsList = attrs.values.toList()
-        attrsList.withIndex().forEach { (idx, attr) -> check(attr.index == idx) }
+        attrsList.withIndex().forEach { (idx, attr) -> checkEquals(attr.index, idx) }
         val attrMutable = attrs.values.any { it.mutable }
         bodyLate.set(R_StructBody(attrs, attrsList, attrMutable), true)
     }

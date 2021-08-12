@@ -15,7 +15,7 @@ class V_EntityToStructExpr(
     private val resultType = C_Utils.effectiveMemberType(structType, memberLink.safe)
     private val cLambda = V_EntityAttrExpr.createLambda(exprCtx, entityType.rEntity)
 
-    override val exprInfo = V_ExprInfo.make(memberLink.base)
+    override val exprInfo = V_ExprInfo.make(memberLink.base, canBeDbExpr = false)
 
     override fun type() = resultType
 
@@ -27,7 +27,7 @@ class V_EntityToStructExpr(
         return V_EntityAttrExpr.createRExpr(memberLink.base, atEntity, whatField, memberLink.safe, structType, cLambda)
     }
 
-    override fun toDbExprWhat(): C_DbAtWhatValue {
+    override fun toDbExprWhat0(): C_DbAtWhatValue {
         val dbEntityExpr = memberLink.base.toDbExpr() as Db_TableExpr
         return createWhatValue(dbEntityExpr)
     }
@@ -51,7 +51,7 @@ class V_ObjectToStructExpr(
     private val struct = objectType.rObject.rEntity.mirrorStructs.getStruct(mutable)
     private val structType = struct.type
 
-    override val exprInfo = V_ExprInfo(false, false)
+    override val exprInfo = V_ExprInfo()
 
     override fun type() = structType
 

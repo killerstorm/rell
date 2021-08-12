@@ -562,6 +562,15 @@ class NullAnalysisTest: BaseRellTest(false) {
         chk("data() @* {} ( if ($ != null) $ * $ else 0 )", "list<integer>[int[15129],int[0],int[207936],int[0],int[622521]]")
     }
 
+    @Test fun testOperationCall() {
+        tst.testLib = true
+        tst.strictToString = false
+        def("operation op(x: integer) {}")
+        chkEx("{ val x = _nullable_int(123); return _type_of(x); }", "integer?")
+        chkEx("{ val x = _nullable_int(123); op(x); return _type_of(x); }", "ct_err:expr_call_argtype:op:0:x:integer:integer?")
+        chkEx("{ val x = _nullable_int(123); op(x!!); return _type_of(x); }", "integer")
+    }
+
     // null-dependent: when (x) { null -> }
 
     // contradictory operations:

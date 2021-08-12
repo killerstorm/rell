@@ -112,13 +112,13 @@ class Db_AtWhatValue_Complex(
         private var rValues: List<Rt_Value>? = null
 
         override fun combine(dbValues: List<Rt_Value>): Rt_Value {
-            val dbValues2 = combineValues(subCombiners, dbValues)
-
             var rVals = rValues
             if (rVals == null) {
                 rVals = rExprs.map { it.evaluate(frame) }
                 rValues = rVals
             }
+
+            val dbValues2 = combineValues(subCombiners, dbValues)
 
             val allValues = items.map { (db, i) ->
                 val selValues = if (db) dbValues2 else rVals

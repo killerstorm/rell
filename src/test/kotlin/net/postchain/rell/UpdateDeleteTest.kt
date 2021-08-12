@@ -577,6 +577,26 @@ class UpdateDeleteTest: BaseRellTest() {
         chkOp("update person @ { .name == 'James' } ( --.score );", "ct_err:expr_bad_dst")
     }
 
+    @Test fun testUpdateTypePromotion() {
+        def("entity data { mutable x: decimal; }")
+        insert("c0.data", "x", "1,123")
+
+        chkOp("update data @* {} ( 456 );", "ct_err:attr_implic_unknown:0:integer")
+        chk("data @* {} ( _=.x )", "list<decimal>[dec[123]]")
+
+        chkOp("update data @* {} ( x = 456 );")
+        chk("data @* {} ( _=.x )", "list<decimal>[dec[456]]")
+
+        chkOp("update data @* {} ( x = 789.0 );")
+        chk("data @* {} ( _=.x )", "list<decimal>[dec[789]]")
+
+        chkOp("val d = data @{}; d.x = 987;")
+        chk("data @* {} ( _=.x )", "list<decimal>[dec[987]]")
+
+        chkOp("val d = data @{}; d.x = 654.0;")
+        chk("data @* {} ( _=.x )", "list<decimal>[dec[654]]")
+    }
+
     @Test fun testBugGamePlayerSubExpr() {
         def("entity user { name; mutable games_total: integer; mutable games_won: integer; }")
         def("entity game { player_1: user; player_2: user; }")

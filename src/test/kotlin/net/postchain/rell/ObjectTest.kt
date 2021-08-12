@@ -334,4 +334,9 @@ class ObjectTest: BaseRellTest() {
         chkEx("{ foo.x = 50; return 0; }", "ct_err:no_db_update:query")
         chkEx("{ foo.x += 50; return 0; }", "ct_err:no_db_update:query")
     }
+
+    @Test fun testAttributeValueTypePromotion() {
+        def("object state { mutable x: decimal = 123; }")
+        chk("state.x", "dec[123]")
+    }
 }

@@ -10,6 +10,7 @@ import net.postchain.rell.compiler.C_LateGetter
 import net.postchain.rell.compiler.C_LateInit
 import net.postchain.rell.compiler.C_Utils
 import net.postchain.rell.runtime.*
+import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 
@@ -380,7 +381,7 @@ private fun checkCallArgs(routine: R_RoutineDefinition, params: List<R_Param>, a
 }
 
 private fun processArgs(params: List<R_VarParam>, args: List<Rt_Value>, frame: Rt_CallFrame) {
-    check(args.size == params.size)
+    checkEquals(args.size, params.size)
     for (i in params.indices) {
         val param = params[i]
         val arg = args[i]
@@ -442,7 +443,7 @@ class R_AppSqlDefs(
     val topologicalEntities = topologicalEntities.toImmList()
 
     init {
-        check(this.topologicalEntities.size == this.entities.size) { "${this.topologicalEntities.size} != ${this.entities.size}" }
+        checkEquals(this.topologicalEntities.size, this.entities.size)
     }
 
     fun same(other: R_AppSqlDefs): Boolean {
@@ -476,7 +477,7 @@ class R_App(
     init {
         for ((i, c) in externalChains.withIndex()) {
             check(c.root === externalChainsRoot)
-            check(c.index == i)
+            checkEquals(c.index, i)
         }
     }
 

@@ -364,6 +364,18 @@ abstract class AtExprBasicBaseTest: AtExprBaseTest() {
         chk("(u:$fromUser) @* { .lastName == 'Jobs' } ( u.company.rowid, u.firstName )", "[(200,firstName=Steve)]")
     }
 
+    @Test fun testFunctionCallInWhere() {
+        tst.strictToString = false
+        initDataUserCompany()
+
+        chk("$fromUser @* { .firstName.starts_with('S') } ( .rowid )", "[20, 21, 50]")
+        chk("$fromUser @* { .lastName.starts_with('B') } ( .rowid )", "[30, 50]")
+        chk("$fromUser @* { .firstName.size() < .lastName.size() } ( .rowid )", "[10, 21, 30, 40, 41]")
+
+        chk("$fromUser @* { min(.firstName.size(), .lastName.size()) == 5 } ( .rowid )", "[21]")
+        chk("$fromUser @* { max(.firstName.size(), .lastName.size()) == 5 } ( .rowid )", "[20, 30, 40, 41, 51]")
+    }
+
     private object Ins {
         fun company(id: Int, name: String): String = SqlTestUtils.mkins("c0.company", "name", "$id, '$name'")
 

@@ -12,6 +12,7 @@ import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.*
 import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.PostchainUtils
+import net.postchain.rell.utils.checkEquals
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.math.MathContext
@@ -329,14 +330,14 @@ object R_SysFn_Json {
 object R_SysFn_ChainContext {
     object RawConfig: R_SysFunction() {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
-            check(args.size == 0)
+            checkEquals(args.size, 0)
             return Rt_GtvValue(ctx.chainCtx.rawConfig)
         }
     }
 
     object BlockchainRid: R_SysFunction() {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
-            check(args.size == 0)
+            checkEquals(args.size, 0)
             val bcRid = ctx.chainCtx.blockchainRid
             return Rt_ByteArrayValue(bcRid.data)
         }
@@ -344,7 +345,7 @@ object R_SysFn_ChainContext {
 
     class Args(private val moduleName: R_ModuleName): R_SysFunction() {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
-            check(args.size == 0)
+            checkEquals(args.size, 0)
             val res = ctx.chainCtx.moduleArgs[moduleName]
             return res ?: throw Rt_Error("chain_context.args:no_module_args:$moduleName", "No module args for module '$moduleName'")
         }
@@ -418,7 +419,7 @@ object R_SysFn_Struct {
 
     class FromBytes(private val struct: R_Struct): R_SysFunction() {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
-            check(args.size == 1)
+            checkEquals(args.size, 1)
             val arg = args[0]
             val bytes = arg.asByteArray()
             return Rt_Utils.wrapErr("fn:struct:from_bytes") {
@@ -433,7 +434,7 @@ object R_SysFn_Struct {
 
     class FromGtv(private val struct: R_Struct, private val pretty: Boolean): R_SysFunction() {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
-            check(args.size == 1)
+            checkEquals(args.size, 1)
             val arg = args[0]
             val gtv = arg.asGtv()
             return Rt_Utils.wrapErr("fn:struct:from_gtv:$pretty") {
@@ -588,7 +589,7 @@ object R_SysFn_Any {
 
     class FromGtv(val type: R_Type, val pretty: Boolean, val name: String): R_SysFunction() {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
-            check(args.size == 1)
+            checkEquals(args.size, 1)
             val gtv = args[0].asGtv()
             val res = try {
                 val gtvCtx = GtvToRtContext(pretty)
@@ -731,7 +732,7 @@ object R_SysFn_Crypto {
 
     object IsSigner: R_SysFunction() {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
-            check(args.size == 1)
+            checkEquals(args.size, 1)
             val a = args[0].asByteArray()
             val opCtx = ctx.globalCtx.opCtx
             val r = if (opCtx == null) false else opCtx.signers.any { Arrays.equals(it, a) }
@@ -764,14 +765,14 @@ object R_SysFn_Crypto {
 object R_SysFn_Rell {
     object GetRellVersion: R_SysFunction() {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
-            check(args.size == 0)
+            checkEquals(args.size, 0)
             return Rt_TextValue(RellVersions.VERSION_STR)
         }
     }
 
     object GetPostchainVersion: R_SysFunction() {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
-            check(args.size == 0)
+            checkEquals(args.size, 0)
             val ver = ctx.globalCtx.rellVersion()
             val postchainVer = ver.properties.getValue(Rt_RellVersionProperty.POSTCHAIN_VERSION)
             return Rt_TextValue(postchainVer)
@@ -780,7 +781,7 @@ object R_SysFn_Rell {
 
     object GetBuild: R_SysFunction() {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
-            check(args.size == 0)
+            checkEquals(args.size, 0)
             val ver = ctx.globalCtx.rellVersion()
             return Rt_TextValue(ver.buildDescriptor)
         }
@@ -790,7 +791,7 @@ object R_SysFn_Rell {
         val TYPE = R_MapType(R_TextType, R_TextType)
 
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
-            check(args.size == 0)
+            checkEquals(args.size, 0)
             val ver = ctx.globalCtx.rellVersion()
             return Rt_MapValue(TYPE, ver.rtProperties.toMutableMap())
         }
@@ -798,7 +799,7 @@ object R_SysFn_Rell {
 
     object GetAppStructure: R_SysFunction() {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
-            check(args.size == 0)
+            checkEquals(args.size, 0)
             val v = ctx.appCtx.app.toMetaGtv()
             return Rt_GtvValue(v)
         }

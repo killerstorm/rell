@@ -15,6 +15,7 @@ import net.postchain.rell.model.*
 import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.PostchainUtils
 import net.postchain.rell.utils.checkEquals
+import net.postchain.rell.utils.toImmList
 import java.math.BigDecimal
 import java.util.*
 import java.util.regex.Pattern
@@ -50,6 +51,7 @@ enum class Rt_CoreValueTypes {
     JSON,
     RANGE,
     GTV,
+    FUNCTION,
     VIRTUAL,
     VIRTUAL_COLLECTION,
     VIRTUAL_LIST,
@@ -104,6 +106,7 @@ abstract class Rt_Value {
     open fun asRange(): Rt_RangeValue = throw errType(Rt_CoreValueTypes.RANGE)
     open fun asObjectId(): Long = throw errType(Rt_CoreValueTypes.ENTITY)
     open fun asGtv(): Gtv = throw errType(Rt_CoreValueTypes.GTV)
+    open fun asFunction(): Rt_FunctionValue = throw errType(Rt_CoreValueTypes.FUNCTION)
     open fun asFormatArg(): Any = toString()
 
     abstract fun toStrictString(showTupleFieldNames: Boolean = true): String
@@ -830,5 +833,54 @@ class Rt_GtvValue(val value: Gtv): Rt_Value() {
                 value.toString() // Fallback, just in case (did not happen).
             }
         }
+    }
+}
+
+class Rt_FunctionValue(
+        private val type: R_Type,
+        private val mapping: R_PartialCallMapping,
+        private val target: Rt_FunctionCallTarget,
+        exprValues: List<Rt_Value>
+): Rt_Value() {
+    private val exprValues = let {
+        checkEquals(exprValues.size, mapping.exprCount)
+        exprValues.toImmList()
+    }
+
+    override val valueType = Rt_CoreValueTypes.FUNCTION.type()
+
+    override fun type() = type
+    override fun asFunction() = this
+
+    override fun toStrictString(showTupleFieldNames: Boolean): String {
+        val argsStr = mapping.args.joinToString(",") { if (it.wild) "*" else exprValues[it.index].toStrictString() }
+        return "fn[${target.toStrictString()}($argsStr)]"
+    }
+
+    override fun toString() = "$target(*)"
+
+    fun call(frame: Rt_CallFrame, args: List<Rt_Value>, callerFilePos: R_FilePos): Rt_Value {
+        checkEquals(args.size, mapping.wildCount)
+        val combinedArgs = mapping.args.map { if (it.wild) args[it.index] else exprValues[it.index] }
+        return target.call(frame, combinedArgs, callerFilePos)
+    }
+
+    fun combine(newType: R_Type, newMapping: R_PartialCallMapping, newArgs: List<Rt_Value>): Rt_Value {
+        checkEquals(newMapping.args.size, mapping.wildCount)
+        checkEquals(newArgs.size, newMapping.exprCount)
+
+        val resExprValues = exprValues + newArgs
+
+        val resArgMappings = mapping.args.map { m1 ->
+            if (m1.wild) {
+                val m2 = newMapping.args[m1.index]
+                if (m2.wild) m2 else R_PartialArgMapping(false, mapping.exprCount + m2.index)
+            } else {
+                m1
+            }
+        }
+
+        val resMapping = R_PartialCallMapping(resExprValues.size, newMapping.wildCount, resArgMappings)
+        return Rt_FunctionValue(newType, resMapping, target, resExprValues)
     }
 }

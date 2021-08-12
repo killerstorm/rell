@@ -25,7 +25,7 @@ class TupleMatchingTest: BaseRellTest(false) {
         chkEx("{ val (i: integer) = (123); return 0; }", "ct_err:var_notuple:integer")
         chkEx("{ val (i: integer) = (123,); return i; }", "int[123]")
         chkEx("{ val (i: integer) = 123; return 0; }", "ct_err:var_notuple:integer")
-        chkEx("{ val i: integer = (123,); return 0; }", "ct_err:stmt_var_type:i:[integer]:[(integer)]")
+        chkEx("{ val i: integer = (123,); return 0; }", "ct_err:stmt_var_type:i:[integer]:[(integer,)]")
         chkEx("{ val i: integer = 123; return i; }", "int[123]")
     }
 
@@ -47,7 +47,7 @@ class TupleMatchingTest: BaseRellTest(false) {
                 "ct_err:[var_tuple_wrongsize:2:3:(text,integer,boolean)][var_notuple:integer]")
         chkEx("{ val (x, (y, z)) = (('Hello', 123), true); return 0; }", "ct_err:var_notuple:boolean")
         chkEx("{ val (x, (y, z)) = ('Hello', (123,), true); return 0; }",
-                "ct_err:[var_tuple_wrongsize:2:3:(text,(integer),boolean)][var_tuple_wrongsize:2:1:(integer)]")
+                "ct_err:[var_tuple_wrongsize:2:3:(text,(integer,),boolean)][var_tuple_wrongsize:2:1:(integer,)]")
         chkEx("{ val (x, (y, z)) = ('Hello', 123); return 0; }", "ct_err:var_notuple:integer")
         chkEx("{ val (x: text, (y, z)) = ('Hello', (123, true)); return x; }", "text[Hello]")
         chkEx("{ val (x: text, (y: integer, z)) = ('Hello', (123, true)); return x; }", "text[Hello]")

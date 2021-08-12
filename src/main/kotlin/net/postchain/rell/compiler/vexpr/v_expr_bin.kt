@@ -21,7 +21,7 @@ class V_BinaryExpr(
         private val right: V_Expr,
         private val varFacts: C_ExprVarFacts
 ): V_Expr(exprCtx, pos) {
-    override val exprInfo = V_ExprInfo.make(listOf(left, right))
+    override val exprInfo = V_ExprInfo.make(listOf(left, right), canBeDbExpr = op.dbOp != null)
 
     override fun type() = op.resType
     override fun varFacts() = varFacts

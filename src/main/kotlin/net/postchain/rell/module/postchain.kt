@@ -24,10 +24,10 @@ import net.postchain.rell.utils.*
 import org.apache.commons.lang3.time.FastDateFormat
 
 object RellVersions {
-    const val VERSION_STR = "0.10.5"
+    const val VERSION_STR = "0.10.6"
     val VERSION = R_LangVersion.of(VERSION_STR)
 
-    val SUPPORTED_VERSIONS = listOf("0.10.0", "0.10.1", "0.10.2", "0.10.3", "0.10.4", "0.10.5")
+    val SUPPORTED_VERSIONS = listOf("0.10.0", "0.10.1", "0.10.2", "0.10.3", "0.10.4", "0.10.5", "0.10.6")
             .map { R_LangVersion.of(it) }
             .toImmSet()
 
@@ -499,7 +499,7 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
 
         for (entry in gtvDeps.asArray()) {
             val entryArray = entry.asArray()
-            check(entryArray.size == 2)
+            checkEquals(entryArray.size, 2)
             val name = entryArray[0].asString()
             val rid = entryArray[1].asByteArray(true)
             check(name !in deps)

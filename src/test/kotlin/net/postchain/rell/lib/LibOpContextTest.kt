@@ -162,31 +162,33 @@ class LibOpContextTest: BaseRellTest(false) {
         chkOp("op_context.emit_event('bob', gtv.from_json('{}'), 'alice');", "ct_err:expr_call_argtypes:emit_event:text,gtv,text")
     }
 
-    private fun opContext(
-            lastBlockTime: Long = -1,
-            transactionIid: Long = -1,
-            blockHeight: Long = -1,
-            opIndex: Int = -1,
-            signers: List<String> = listOf(),
-            ops: List<String> = listOf()
-    ): Rt_OpContext {
-        val signers2 = signers.map { it.hexStringToByteArray() }
-        val ops2 = ops.map { parseOperation(it) }
-        return Rt_OpContext(
-                txCtx = RellTestUtils.Rt_TestTxContext,
-                lastBlockTime = lastBlockTime,
-                transactionIid = transactionIid,
-                blockHeight = blockHeight,
-                opIndex = opIndex,
-                signers = signers2,
-                allOperations = ops2
-        )
-    }
+    companion object {
+        private fun opContext(
+                lastBlockTime: Long = -1,
+                transactionIid: Long = -1,
+                blockHeight: Long = -1,
+                opIndex: Int = -1,
+                signers: List<String> = listOf(),
+                ops: List<String> = listOf()
+        ): Rt_OpContext {
+            val signers2 = signers.map { it.hexStringToByteArray() }
+            val ops2 = ops.map { parseOperation(it) }
+            return Rt_OpContext(
+                    txCtx = RellTestUtils.Rt_TestTxContext,
+                    lastBlockTime = lastBlockTime,
+                    transactionIid = transactionIid,
+                    blockHeight = blockHeight,
+                    opIndex = opIndex,
+                    signers = signers2,
+                    allOperations = ops2
+            )
+        }
 
-    private fun parseOperation(s: String): OpData {
-        val i = s.indexOf("[")
-        val name = s.substring(0, i)
-        val args = GtvTestUtils.strToGtv(s.substring(i)).asArray().toList().toTypedArray()
-        return OpData(name, args)
+        private fun parseOperation(s: String): OpData {
+            val i = s.indexOf("[")
+            val name = s.substring(0, i)
+            val args = GtvTestUtils.strToGtv(s.substring(i)).asArray().toList().toTypedArray()
+            return OpData(name, args)
+        }
     }
 }

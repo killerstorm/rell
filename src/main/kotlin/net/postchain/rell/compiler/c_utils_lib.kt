@@ -5,6 +5,8 @@
 package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.vexpr.V_Expr
+import net.postchain.rell.compiler.vexpr.V_FunctionCallTarget
+import net.postchain.rell.compiler.vexpr.V_SysSpecialGlobalCaseCallExpr
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.toImmMap
@@ -53,7 +55,7 @@ object C_LibUtils {
     }
 
     fun typeMemFuncBuilder(type: R_Type): C_MemberFuncBuilder {
-        val b = C_MemberFuncBuilder()
+        val b = C_MemberFuncBuilder(type.name)
 
         if (type is R_VirtualType) {
             b.add("hash", R_ByteArrayType, listOf(), R_SysFn_Virtual.Hash)
@@ -72,14 +74,27 @@ object C_LibUtils {
     }
 }
 
-private class C_SysMemberFunction_Invalid(private val type: R_Type): C_MemberFormalParamsFuncBody(R_CtErrorType) {
-    override fun varFacts(caseCtx: C_MemberFuncCaseCtx, args: List<V_Expr>) = C_ExprVarFacts.EMPTY
+private class C_SysMemberFunction_Invalid(private val ownerType: R_Type): C_MemberFormalParamsFuncBody(R_CtErrorType) {
+    override fun effectiveResType(caseCtx: C_MemberFuncCaseCtx, type: R_Type): R_Type {
+        return C_Utils.effectiveMemberType(type, caseCtx.member.safe)
+    }
 
-    override fun compileCall(ctx: C_ExprContext, caseCtx: C_MemberFuncCaseCtx, args: List<R_Expr>): R_Expr {
-        val typeStr = type.name
+    override fun makeCallTarget(caseCtx: C_MemberFuncCaseCtx): V_FunctionCallTarget {
+        val typeStr = ownerType.name
         val member = caseCtx.member
-        val name = caseCtx.qualifiedNameMsg()
+        val name = caseCtx.simpleNameMsg()
         throw C_Error.stop(member.linkPos, "fn:invalid:$typeStr:$name", "Function '$name' not available for type '$typeStr'")
+    }
+}
+
+abstract class C_SpecialGlobalFuncCaseMatch(resType: R_Type): C_GlobalFuncCaseMatch(resType) {
+    abstract fun varFacts(): C_ExprVarFacts
+    abstract fun subExprs(): List<V_Expr>
+
+    abstract fun compileCallR(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): R_Expr
+
+    override fun compileCall(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): V_Expr {
+        return V_SysSpecialGlobalCaseCallExpr(ctx, caseCtx, this)
     }
 }
 
@@ -109,12 +124,12 @@ class C_MemberFuncTable(private val map: Map<String, C_SysMemberFunction>) {
     }
 }
 
-sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT> {
+sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT>(private val namespace: String?) {
     private val caseMap: MultiValuedMap<String, C_FuncCase<CaseCtxT>> = ArrayListValuedHashMap()
     private val fnMap = mutableMapOf<String, FuncT>()
 
     protected abstract fun makeBody(result: R_Type, rFn: R_SysFunction, dbFn: Db_SysFunction?): C_FormalParamsFuncBody<CaseCtxT>
-    protected abstract fun makeFunc(cases: List<C_FuncCase<CaseCtxT>>): FuncT
+    protected abstract fun makeFunc(simpleName: String, fullName: String, cases: List<C_FuncCase<CaseCtxT>>): FuncT
 
     protected fun addCase(name: String, case: C_FuncCase<CaseCtxT>, deprecated: C_Deprecated?) {
         val case2 = if (deprecated == null) case else makeDeprecatedCase(case, deprecated)
@@ -125,7 +140,8 @@ sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT> {
         val res = mutableMapOf<String, FuncT>()
         for (name in caseMap.keySet().sorted()) {
             val cases = caseMap[name]
-            res[name] = makeFunc(cases.toList())
+            val fullName = if (namespace == null) name else "$namespace.$name"
+            res[name] = makeFunc(name, fullName, cases.toList())
         }
         for (name in fnMap.keys) {
             check(name !in res) { name }
@@ -310,7 +326,9 @@ sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT> {
     }
 }
 
-class C_GlobalFuncBuilder: C_FuncBuilder<C_GlobalFuncBuilder, C_GlobalFuncCaseCtx, C_GlobalFunction>() {
+class C_GlobalFuncBuilder(
+        namespace: String?
+): C_FuncBuilder<C_GlobalFuncBuilder, C_GlobalFuncCaseCtx, C_GlobalFunction>(namespace) {
     override fun makeBody(
             result: R_Type,
             rFn: R_SysFunction,
@@ -319,8 +337,8 @@ class C_GlobalFuncBuilder: C_FuncBuilder<C_GlobalFuncBuilder, C_GlobalFuncCaseCt
         return C_SysGlobalFormalParamsFuncBody(result, rFn, dbFn)
     }
 
-    override fun makeFunc(cases: List<C_FuncCase<C_GlobalFuncCaseCtx>>): C_GlobalFunction {
-        return C_RegularSysGlobalFunction(cases)
+    override fun makeFunc(simpleName: String, fullName: String, cases: List<C_FuncCase<C_GlobalFuncCaseCtx>>): C_GlobalFunction {
+        return C_RegularSysGlobalFunction(simpleName, fullName, cases)
     }
 
     fun build(): C_GlobalFuncTable {
@@ -329,7 +347,9 @@ class C_GlobalFuncBuilder: C_FuncBuilder<C_GlobalFuncBuilder, C_GlobalFuncCaseCt
     }
 }
 
-class C_MemberFuncBuilder: C_FuncBuilder<C_MemberFuncBuilder, C_MemberFuncCaseCtx, C_SysMemberFunction>() {
+class C_MemberFuncBuilder(
+        namespace: String
+): C_FuncBuilder<C_MemberFuncBuilder, C_MemberFuncCaseCtx, C_SysMemberFunction>(namespace) {
     override fun makeBody(
             result: R_Type,
             rFn: R_SysFunction,
@@ -338,7 +358,7 @@ class C_MemberFuncBuilder: C_FuncBuilder<C_MemberFuncBuilder, C_MemberFuncCaseCt
         return C_SysMemberFormalParamsFuncBody(result, rFn, dbFn)
     }
 
-    override fun makeFunc(cases: List<C_FuncCase<C_MemberFuncCaseCtx>>): C_SysMemberFunction {
+    override fun makeFunc(simpleName: String, fullName: String, cases: List<C_FuncCase<C_MemberFuncCaseCtx>>): C_SysMemberFunction {
         return C_CasesSysMemberFunction(cases)
     }
 

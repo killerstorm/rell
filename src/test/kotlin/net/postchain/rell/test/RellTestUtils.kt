@@ -20,7 +20,7 @@ object RellTestUtils {
 
     const val MAIN_FILE = "main.rell"
 
-    const val RELL_VER = "0.10.4"
+    const val RELL_VER = "0.10.6"
 
     fun processApp(code: String, processor: (T_App) -> String): String {
         val sourceDir = C_MapSourceDir.of(MAIN_FILE to code)

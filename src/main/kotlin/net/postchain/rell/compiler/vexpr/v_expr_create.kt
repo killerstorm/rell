@@ -5,7 +5,6 @@ import net.postchain.rell.compiler.C_ExprContext
 import net.postchain.rell.compiler.C_ExprVarFacts
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.*
-import net.postchain.rell.utils.toImmSet
 
 sealed class V_CreateExpr(
         exprCtx: C_ExprContext,
@@ -26,7 +25,11 @@ class V_RegularCreateExpr(
         varFacts: C_ExprVarFacts,
         private val attrs: C_CreateAttributes
 ): V_CreateExpr(exprCtx, pos, entity, varFacts) {
-    override val exprInfo = V_ExprInfo(false, true, attrs.explicitAttrs.flatMap { it.expr.atDependencies() }.toImmSet())
+    override val exprInfo = V_ExprInfo.make(
+            attrs.explicitAttrs.map { it.expr },
+            hasDbModifications = true,
+            canBeDbExpr = false
+    )
 
     override fun toRExpr0(): R_Expr {
         val rAttrs = attrs.implicitAttrs + attrs.explicitAttrs.map { it.toRAttr() }
@@ -42,7 +45,7 @@ class V_StructCreateExpr(
         private val structType: R_StructType,
         private val structExpr: V_Expr
 ): V_CreateExpr(exprCtx, pos, entity, varFacts) {
-    override val exprInfo = V_ExprInfo(false, true, structExpr.atDependencies())
+    override val exprInfo = V_ExprInfo.make(listOf(structExpr), hasDbModifications = true, canBeDbExpr = false)
 
     override fun toRExpr0(): R_Expr {
         val rStructExpr = structExpr.toRExpr()

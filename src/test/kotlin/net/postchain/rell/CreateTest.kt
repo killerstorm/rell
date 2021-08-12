@@ -163,14 +163,22 @@ class CreateTest: BaseRellTest() {
     @Test fun testAsDefaultValueFunction() {
         def("entity tag {}")
         def("function f(t: tag = create tag()) { return t; }")
+        def("function g(t: tag = f()) { return t; }")
 
         chkCompile("", "OK")
         chk("f()", "ct_err:no_db_update:query:param:t")
+        chk("f(*)", "ct_err:no_db_update:query:param:t")
+        //chk("g()", "ct_err:no_db_update:query:param:t")
+        //chk("g(*)", "ct_err:no_db_update:query:param:t")
 
         chk("tag @* {}", "list<tag>[]")
         chkOp("print(f());")
         chkOut("tag[1]")
         chk("tag @* {}", "list<tag>[tag[1]]")
+
+        chkOp("print(g());")
+        chkOut("tag[2]")
+        chk("tag @* {}", "list<tag>[tag[1],tag[2]]")
     }
 
     @Test fun testAsDefaultValueQuery() {
@@ -214,5 +222,24 @@ class CreateTest: BaseRellTest() {
         chkOp("print(f());")
         chkOut("f(1)")
         chk("tag @* {}", "list<tag>[tag[1]]")
+    }
+
+    @Test fun testAttributeDefaultValueTypePromotion() {
+        def("entity data { x: decimal = 123; }")
+
+        chk("data @* {} ( _=.x )", "list<decimal>[]")
+
+        chkOp("create data();")
+        chk("data @* {} ( _=.x )", "list<decimal>[dec[123]]")
+
+        chkOp("create data(456);", "ct_err:attr_implic_unknown:0:integer")
+        chkOp("create data(x = 456);")
+        chk("data @* {} ( _=.x )", "list<decimal>[dec[123],dec[456]]")
+
+        chkOp("create data(789.0);")
+        chk("data @* {} ( _=.x )", "list<decimal>[dec[123],dec[456],dec[789]]")
+
+        chkOp("create data(x = 987.0);")
+        chk("data @* {} ( _=.x )", "list<decimal>[dec[123],dec[456],dec[789],dec[987]]")
     }
 }

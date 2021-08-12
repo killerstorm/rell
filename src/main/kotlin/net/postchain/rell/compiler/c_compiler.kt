@@ -89,6 +89,7 @@ class C_SystemDefs private constructor(
 
     companion object {
         private val SYSTEM_TYPES = immMapOf(
+                "unit" to typeRef(R_UnitType),
                 "boolean" to typeRef(R_BooleanType),
                 "text" to typeRef(R_TextType),
                 "byte_array" to typeRef(R_ByteArrayType),

@@ -21,10 +21,7 @@ import net.postchain.rell.sql.SqlManager
 import net.postchain.rell.sql.SqlUtils
 import net.postchain.rell.tools.api.IdeCodeSnippet
 import net.postchain.rell.tools.api.IdeSnippetMessage
-import net.postchain.rell.utils.CommonUtils
-import net.postchain.rell.utils.PostchainUtils
-import net.postchain.rell.utils.RellCliEnv
-import net.postchain.rell.utils.toImmMap
+import net.postchain.rell.utils.*
 import org.apache.commons.configuration2.PropertiesConfiguration
 import org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder
 import org.apache.commons.configuration2.builder.fluent.Parameters
@@ -244,7 +241,7 @@ object GtvTestUtils {
     }
 
     fun decodeGtvOpArgs(params: List<R_Param>, args: List<Gtv>): List<Rt_Value> {
-        check(params.size == args.size)
+        checkEquals(args.size, params.size)
         val ctx = GtvToRtContext(false)
         return args.mapIndexed { i, gtv ->
             params[i].type.gtvToRt(ctx, gtv)
@@ -256,7 +253,7 @@ object GtvTestUtils {
     }
 
     private fun decodeGtvArgs(params: List<R_Param>, args: List<String>, pretty: Boolean): List<Rt_Value> {
-        check(params.size == args.size)
+        checkEquals(args.size, params.size)
         val ctx = GtvToRtContext(pretty)
         return args.mapIndexed { i, arg ->
             val gtv = decodeGtvStr(arg)

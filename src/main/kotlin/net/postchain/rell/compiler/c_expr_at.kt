@@ -4,7 +4,7 @@ import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_PosValue
 import net.postchain.rell.compiler.vexpr.V_Expr
-import net.postchain.rell.compiler.vexpr.V_Utils
+import net.postchain.rell.compiler.vexpr.V_AtUtils
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.toImmList
@@ -82,7 +82,7 @@ class C_AtWhatField(
     fun isIgnored() = flags.omit && flags.sort == null && summarization == null
 
     fun compile(ctx: C_ExprContext): Db_AtWhatField {
-        val cWhatValue = if (expr.isDb() || V_Utils.hasWhatModifiers(this)) {
+        val cWhatValue = if (expr.dependsOnDbAtEntity() || V_AtUtils.hasWhatModifiers(this)) {
             expr.toDbExprWhat()
         } else {
             val rExpr = expr.toRExpr()

@@ -583,8 +583,8 @@ private class C_NsAsm_InternalAppAssembler(
             impModules: Map<C_ModuleKey, C_NsImp_Namespace>,
             resModules: Map<C_ModuleKey, C_Namespace>
     ): Map<C_ModuleKey, C_NsAsm_Module> {
-        check(rawModules.keys == impModules.keys)
-        check(rawModules.keys == resModules.keys)
+        checkEquals(impModules.keys, rawModules.keys)
+        checkEquals(resModules.keys, rawModules.keys)
         check(Sets.intersection(rawModules.keys, preModules.keys).isEmpty())
 
         val oldModules = preModules.mapValues { (_, v) -> v.asmModule }

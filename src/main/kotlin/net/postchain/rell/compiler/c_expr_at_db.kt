@@ -212,7 +212,7 @@ class C_DbAtWhatValue_Simple(private val dbExpr: Db_Expr): C_DbAtWhatValue() {
 
 class C_DbAtWhatValue_Other(private val dbWhatValue: Db_AtWhatValue): C_DbAtWhatValue() {
     override fun toDbWhatTop(appCtx: C_AppContext, field: C_AtWhatField): Db_AtWhatValue {
-        V_Utils.checkNoWhatModifiers(appCtx.msgCtx, field)
+        V_AtUtils.checkNoWhatModifiers(appCtx.msgCtx, field)
         return dbWhatValue
     }
 

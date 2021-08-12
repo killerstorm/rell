@@ -103,8 +103,8 @@ class LibCryptoTest: BaseRellTest(false) {
         def("struct rec_nogtv { m: range; }")
         chk("rec(123,'Hello').hash()", "0x74443c7de4d4fee6f6f4d9b0aa5d4749dbfb0965b422e578802701b9ac2e063a")
         chk("rec(456,'Bye').hash()", "0x7758916e7f9f1a9e0a84351f402dbc9c906492879a9d71dc4ff1f5b7d67bdf53")
-        chk("rec_nogtv(range(10)).hash()", "ct_err:fn:invalid:rec_nogtv:rec_nogtv.hash")
-        chk("rec_nogtv(range(10)).hash()", "ct_err:fn:invalid:rec_nogtv:rec_nogtv.hash")
+        chk("rec_nogtv(range(10)).hash()", "ct_err:fn:invalid:rec_nogtv:hash")
+        chk("rec_nogtv(range(10)).hash()", "ct_err:fn:invalid:rec_nogtv:hash")
         chk("rec(123,'Hello').to_gtv().hash()", "0x74443c7de4d4fee6f6f4d9b0aa5d4749dbfb0965b422e578802701b9ac2e063a")
         chk("rec(456,'Bye').to_gtv().hash()", "0x7758916e7f9f1a9e0a84351f402dbc9c906492879a9d71dc4ff1f5b7d67bdf53")
     }

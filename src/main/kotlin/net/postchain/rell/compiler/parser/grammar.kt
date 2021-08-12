@@ -132,10 +132,18 @@ object S_Grammar : Grammar<S_RellFile>() {
 
     private val nameType by qualifiedName map { S_NameType(it) }
 
-    private val tupleField by ( optional(name * -COLON) * typeRef) map { (name, type) -> Pair(name, type) }
+    private val tupleTypeField by ( optional(name * -COLON) * typeRef ) map { (name, type) -> S_NameOptValue(name, type) }
 
-    private val tupleType by ( LPAR * separatedTerms(tupleField, COMMA, false) * -RPAR) map { (pos, fields) ->
-        S_TupleType(pos.pos, fields)
+    private val tupleTypeTail by -COMMA * separatedTerms(tupleTypeField, COMMA, true)
+
+    private val tupleType by ( LPAR * tupleTypeField * optional(tupleTypeTail) * -RPAR) map {
+        (pos, head, tail) ->
+        if (tail == null && head.name == null) {
+            head.value
+        } else {
+            val fields = listOf(head) + (tail ?: listOf())
+            S_TupleType(pos.pos, fields)
+        }
     }
 
     private val listType by ( LIST * -LT * typeRef * -GT) map { (kw, type) -> S_ListType(kw.pos, type) }
@@ -154,7 +162,7 @@ object S_Grammar : Grammar<S_RellFile>() {
         S_MirrorStructType(kw.pos, mutable != null, paramType)
     }
 
-    private val baseType by (
+    private val primaryType by (
             nameType
             or tupleType
             or listType
@@ -164,11 +172,27 @@ object S_Grammar : Grammar<S_RellFile>() {
             or mirrorStructType
     )
 
-    private val type: Parser<S_Type> by ( baseType * zeroOrMore(QUESTION) ) map { (base, nulls) ->
+    private val basicType by primaryType * zeroOrMore(QUESTION) map { (base, nulls) ->
         var res = base
         for (n in nulls) res = S_NullableType(n.pos, res)
         res
     }
+
+    private val complexNullableType by LPAR * typeRef * -RPAR * -QUESTION map {
+        (pos, type) ->
+        S_NullableType(pos.pos, type)
+    }
+
+    private val functionType by LPAR * separatedTerms(typeRef, COMMA, true) * -RPAR * -ARROW * typeRef map {
+        (pos, params, res) ->
+        S_FunctionType(pos.pos, params, res)
+    }
+
+    private val type: Parser<S_Type> by (
+            complexNullableType
+            or functionType
+            or basicType
+    )
 
     private val annotationArgs by ( -LPAR * separatedTerms(parser(S_Grammar::literalExpr), COMMA, true ) * -RPAR)
 
@@ -440,17 +464,21 @@ object S_Grammar : Grammar<S_RellFile>() {
         (kw, mutable, type) ->
         S_MirrorStructExpr(kw.pos, mutable != null, type)
     }
+    private val callArgValue by (
+            ( MUL map { S_CallArgumentValue_Wildcard(it.pos) } )
+            or ( expressionRef map { S_CallArgumentValue_Expr(it) } )
+    )
 
-    private val createExprArg by ( optional(-optional(DOT) * name * -ASSIGN) * expressionRef) map {
-        (name, expr) ->
-        S_NameExprPair(name, expr)
+    private val createExprArg by ( optional(-optional(DOT) * name * -ASSIGN) * callArgValue) map {
+        (name, value) ->
+        S_CallArgument(name, value)
     }
 
     private val createExprArgs by ( -LPAR * separatedTerms(createExprArg, COMMA, true) * -RPAR)
 
     private val createExpr by (CREATE * qualifiedName * createExprArgs) map {
-        (kw, entityName, exprs) ->
-        S_CreateExpr(kw.pos, entityName, exprs)
+        (kw, entityName, args) ->
+        S_CreateExpr(kw.pos, entityName, args)
     }
 
     private val virtualTypeExpr by virtualType map { S_TypeExpr(it) }
@@ -471,9 +499,9 @@ object S_Grammar : Grammar<S_RellFile>() {
             or virtualTypeExpr
     )
 
-    private val callArg by ( optional(name * -ASSIGN) * expressionRef) map {
-        (name, expr) ->
-        S_NameExprPair(name, expr)
+    private val callArg by ( optional(name * -ASSIGN) * callArgValue) map {
+        (name, value) ->
+        S_CallArgument(name, value)
     }
 
     private val callArgs by ( -LPAR * separatedTerms(callArg, COMMA, true) * -RPAR)
@@ -851,8 +879,8 @@ private class BaseExprTail_Subscript(val pos: S_Pos, val expr: S_Expr): BaseExpr
     override fun toExpr(base: S_Expr) = S_SubscriptExpr(pos, base, expr)
 }
 
-private class BaseExprTail_Call(val args: List<S_NameExprPair>): BaseExprTail() {
-    override fun toExpr(base: S_Expr) = S_StructOrCallExpr(base, args)
+private class BaseExprTail_Call(val args: List<S_CallArgument>): BaseExprTail() {
+    override fun toExpr(base: S_Expr) = S_CallExpr(base, args)
 }
 
 private class BaseExprTail_NotNull(val pos: S_Pos): BaseExprTail() {

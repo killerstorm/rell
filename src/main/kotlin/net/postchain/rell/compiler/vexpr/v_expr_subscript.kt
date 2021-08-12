@@ -7,12 +7,17 @@ import net.postchain.rell.model.*
 
 sealed class V_CommonSubscriptKind(val resType: R_Type) {
     abstract fun compileR(pos: S_Pos, rBase: R_Expr, rKey: R_Expr): R_Expr
+
+    open fun canBeDbExpr() = false
     open fun compileDb(pos: S_Pos, dbBase: Db_Expr, dbKey: Db_Expr): Db_Expr = throw C_Errors.errExprDbNotAllowed(pos)
+
     open fun compileDestination(pos: S_Pos, rBase: R_Expr, rKey: R_Expr): R_DestinationExpr? = null
 }
 
 object V_CommonSubscriptKind_Text: V_CommonSubscriptKind(R_TextType) {
     override fun compileR(pos: S_Pos, rBase: R_Expr, rKey: R_Expr) = R_TextSubscriptExpr(rBase, rKey)
+
+    override fun canBeDbExpr() = true
 
     override fun compileDb(pos: S_Pos, dbBase: Db_Expr, dbKey: Db_Expr): Db_Expr {
         return Db_CallExpr(R_TextType, Db_SysFn_Text_Subscript, listOf(dbBase, dbKey))
@@ -21,6 +26,8 @@ object V_CommonSubscriptKind_Text: V_CommonSubscriptKind(R_TextType) {
 
 object V_CommonSubscriptKind_ByteArray: V_CommonSubscriptKind(R_IntegerType) {
     override fun compileR(pos: S_Pos, rBase: R_Expr, rKey: R_Expr) = R_ByteArraySubscriptExpr(rBase, rKey)
+
+    override fun canBeDbExpr() = true
 
     override fun compileDb(pos: S_Pos, dbBase: Db_Expr, dbKey: Db_Expr): Db_Expr {
         return Db_CallExpr(R_IntegerType, Db_SysFn_ByteArray_Subscript, listOf(dbBase, dbKey))
@@ -77,7 +84,7 @@ class V_CommonSubscriptExpr(
         private val keyExpr: V_Expr,
         private val kind: V_CommonSubscriptKind
 ): V_SubscriptExpr(exprCtx, pos, baseExpr, varFacts) {
-    override val exprInfo = V_ExprInfo.make(listOf(baseExpr, keyExpr))
+    override val exprInfo = V_ExprInfo.make(listOf(baseExpr, keyExpr), canBeDbExpr = kind.canBeDbExpr())
 
     override fun type() = kind.resType
 
@@ -115,7 +122,7 @@ class V_TupleSubscriptExpr(
         private val resType: R_Type,
         private val index: Int
 ): V_SubscriptExpr(exprCtx, pos, baseExpr, varFacts) {
-    override val exprInfo = V_ExprInfo.make(baseExpr)
+    override val exprInfo = V_ExprInfo.make(baseExpr, canBeDbExpr = false)
 
     override fun type() = resType
 

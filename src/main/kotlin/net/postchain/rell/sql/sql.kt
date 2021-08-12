@@ -8,6 +8,7 @@ import net.postchain.base.Storage
 import net.postchain.base.withReadConnection
 import net.postchain.base.withWriteConnection
 import net.postchain.rell.runtime.Rt_Error
+import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.immSetOf
 import net.postchain.rell.utils.toImmSet
 import org.jooq.tools.jdbc.MockConnection
@@ -213,7 +214,7 @@ class ConnectionSqlExecutor(private val con: Connection, private val conLogger: 
     override fun <T> connection(code: (Connection) -> T): T {
         val autoCommit = con.autoCommit
         val res = code(con)
-        check(con.autoCommit == autoCommit)
+        checkEquals(con.autoCommit, autoCommit)
         return res
     }
 
@@ -251,7 +252,7 @@ class ConnectionSqlExecutor(private val con: Connection, private val conLogger: 
         conLogger.log(sql)
         val autoCommit = con.autoCommit
         val res = code(con)
-        check(con.autoCommit == autoCommit)
+        checkEquals(con.autoCommit, autoCommit)
         return res
     }
 }
@@ -275,10 +276,10 @@ class PostchainStorageSqlManager(private val storage: Storage, logging: Boolean)
     }
 
     private fun <T> executeWithConnection(con: Connection, autoCommit: Boolean, code: (SqlExecutor) -> T): T {
-        check(con.autoCommit == autoCommit)
+        checkEquals(con.autoCommit, autoCommit)
         val sqlExec = ConnectionSqlExecutor(con, conLogger)
         val res = code(sqlExec)
-        check(con.autoCommit == autoCommit)
+        checkEquals(con.autoCommit, autoCommit)
         return res
     }
 }

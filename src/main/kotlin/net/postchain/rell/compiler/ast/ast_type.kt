@@ -74,7 +74,7 @@ class S_NullableType(pos: S_Pos, val valueType: S_Type): S_Type(pos) {
     }
 }
 
-class S_TupleType(pos: S_Pos, val fields: List<Pair<S_Name?, S_Type>>): S_Type(pos) {
+class S_TupleType(pos: S_Pos, val fields: List<S_NameOptValue<S_Type>>): S_Type(pos) {
     override fun compile0(ctx: C_NamespaceContext): R_Type {
         val names = mutableSetOf<String>()
         for ((name, _) in fields) {
@@ -84,36 +84,51 @@ class S_TupleType(pos: S_Pos, val fields: List<Pair<S_Name?, S_Type>>): S_Type(p
             }
         }
 
-        val rFields = fields.map { (name, type) -> R_TupleField(name?.str, type.compile(ctx)) }
+        val rFields = fields.map { (name, type) ->
+            val rType = C_Types.checkNotUnit(ctx.msgCtx, type.pos, type.compile(ctx), name?.str) {
+                "tuple_field" to "tuple field"
+            }
+            R_TupleField(name?.str, rType)
+        }
+
         return R_TupleType(rFields)
     }
 }
 
-class S_ListType(pos: S_Pos, val element: S_Type): S_Type(pos) {
-    override fun compile0(ctx: C_NamespaceContext): R_Type {
-        val rElement = element.compile(ctx)
-        C_Utils.checkUnitType(pos, rElement, "type_list_unit", "Invalid list element type")
-        return R_ListType(rElement)
+sealed class S_CollectionType(pos: S_Pos, private val element: S_Type): S_Type(pos) {
+    protected fun compileElementType(ctx: C_NamespaceContext, collectionKind: String): R_Type {
+        val rElementType0 = element.compile(ctx)
+        return C_Types.checkNotUnit(ctx.msgCtx, element.pos, rElementType0, null) {
+            "$collectionKind:elem" to "$collectionKind element"
+        }
     }
 }
 
-class S_SetType(pos: S_Pos, val element: S_Type): S_Type(pos) {
+class S_ListType(pos: S_Pos, element: S_Type): S_CollectionType(pos, element) {
     override fun compile0(ctx: C_NamespaceContext): R_Type {
-        val rElement = element.compile(ctx)
-        C_Utils.checkUnitType(pos, rElement, "type_set_unit", "Invalid set element type")
-        C_Utils.checkSetElementType(ctx, pos, rElement)
-        return R_SetType(rElement)
+        val rElementType = compileElementType(ctx, "list")
+        return R_ListType(rElementType)
+    }
+}
+
+class S_SetType(pos: S_Pos, element: S_Type): S_CollectionType(pos, element) {
+    override fun compile0(ctx: C_NamespaceContext): R_Type {
+        val rElementType = compileElementType(ctx, "set")
+        C_Utils.checkSetElementType(ctx, pos, rElementType)
+        return R_SetType(rElementType)
     }
 }
 
 class S_MapType(pos: S_Pos, val key: S_Type, val value: S_Type): S_Type(pos) {
     override fun compile0(ctx: C_NamespaceContext): R_Type {
-        val rKey = key.compile(ctx)
-        val rValue = value.compile(ctx)
-        C_Utils.checkUnitType(pos, rKey, "type_map_key_unit", "Invalid map key type")
-        C_Utils.checkUnitType(pos, rValue, "type_map_value_unit", "Invalid map value type")
+        val rKey = compileElementType(ctx, key)
+        val rValue = compileElementType(ctx, value)
         C_Utils.checkMapKeyType(ctx, pos, rKey)
         return R_MapType(R_MapKeyValueTypes(rKey, rValue))
+    }
+
+    private fun compileElementType(ctx: C_NamespaceContext, type: S_Type): R_Type {
+        return C_Types.checkNotUnit(ctx.msgCtx, type.pos, type.compile(ctx), null) { "map_elem" to "map element" }
     }
 }
 
@@ -172,5 +187,16 @@ class S_VirtualType(pos: S_Pos, val innerType: S_Type): S_Type(pos) {
 class S_MirrorStructType(pos: S_Pos, val mutable: Boolean, val paramType: S_Type): S_Type(pos) {
     override fun compile0(ctx: C_NamespaceContext): R_Type {
         return paramType.compileMirrorStructType(ctx, mutable) ?: R_CtErrorType
+    }
+}
+
+class S_FunctionType(pos: S_Pos, val params: List<S_Type>, val result: S_Type): S_Type(pos) {
+    override fun compile0(ctx: C_NamespaceContext): R_Type {
+        val rParams = params.map {
+            C_Types.checkNotUnit(ctx.msgCtx, it.pos, it.compile(ctx), null) { "fntype_param" to "parameter" }
+        }
+
+        val rResult = result.compile(ctx)
+        return R_FunctionType(rParams, rResult)
     }
 }

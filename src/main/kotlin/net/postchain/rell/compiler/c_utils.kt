@@ -13,7 +13,6 @@ import net.postchain.rell.compiler.parser.RellTokenizerState
 import net.postchain.rell.compiler.parser.S_Grammar
 import net.postchain.rell.compiler.vexpr.V_BinaryExpr
 import net.postchain.rell.compiler.vexpr.V_Expr
-import net.postchain.rell.compiler.vexpr.V_IntegerToDecimalExpr
 import net.postchain.rell.compiler.vexpr.V_RExpr
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Error
@@ -25,6 +24,8 @@ import java.math.BigDecimal
 import java.util.*
 
 class C_CodeMsg(val code: String, val msg: String) {
+    fun toPair() = code to msg
+
     override fun toString() = code
 }
 
@@ -45,9 +46,12 @@ class C_Error: RuntimeException {
         this.errMsg = errMsg
     }
 
+    private constructor(pos: S_Pos, codeMsg: C_CodeMsg): this(pos, codeMsg.code, codeMsg.msg)
+
     companion object {
         fun more(pos: S_Pos, code: String, errMsg: String) = C_Error(pos, code, errMsg)
         fun stop(pos: S_Pos, code: String, errMsg: String) = C_Error(pos, code, errMsg)
+        fun stop(pos: S_Pos, codeMsg: C_CodeMsg) = C_Error(pos, codeMsg)
         fun other(pos: S_Pos, code: String, errMsg: String) = C_Error(pos, code, errMsg)
     }
 }
@@ -88,55 +92,28 @@ object C_Constants {
             .divide(BigDecimal.TEN.pow(DECIMAL_FRAC_DIGITS))
 }
 
-class C_DefaultValue(
-        val pos: S_Pos,
-        val rExprGetter: C_LateGetter<R_Expr>,
-        val rGetter: C_LateGetter<R_DefaultValue>
-)
-
-class C_FormalParameter(
-        val name: S_Name,
-        val type: R_Type?,
+class C_ParameterDefaultValue(
+        private val pos: S_Pos,
+        private val paramName: String,
+        private val rExprGetter: C_LateGetter<R_Expr>,
         private val initFrameGetter: C_LateGetter<R_CallFrame>,
-        private val defaultValue: C_DefaultValue?
+        val rGetter: C_LateGetter<R_DefaultValue>
 ) {
-    val hasExpr: Boolean get() = defaultValue != null
-
-    fun nameCode(index: Int) = "$index:${name.str}"
-    fun nameMsg(index: Int) = "'${name.str}'"
-
-    fun createVarParam(type: R_Type, ptr: R_VarPtr): R_VarParam {
-        return R_VarParam(name.str, type, ptr)
-    }
-
-    fun createDefaultValueExpr(ctx: C_ExprContext, callPos: S_Pos): V_Expr {
-        check(defaultValue != null)
-
+    fun createArgumentExpr(ctx: C_ExprContext, callPos: S_Pos, paramType: R_Type): V_Expr {
         val dbModRes = ctx.getDbModificationRestriction()
         if (dbModRes != null) {
             ctx.executor.onPass(C_CompilerPass.VALIDATION) {
-                val rDefaultValue = defaultValue.rGetter.get()
+                val rDefaultValue = rGetter.get()
                 if (rDefaultValue.isDbModification) {
-                    val code = "${dbModRes.code}:param:$name"
-                    val msg = "${dbModRes.msg} (default value of parameter '$name')"
+                    val code = "${dbModRes.code}:param:$paramName"
+                    val msg = "${dbModRes.msg} (default value of parameter '$paramName')"
                     ctx.msgCtx.error(callPos, code, msg)
                 }
             }
         }
 
-        val actType = type ?: R_CtErrorType
-        val rExpr = R_DefaultValueExpr(actType, callPos.toFilePos(), initFrameGetter, defaultValue.rExprGetter)
-        return V_RExpr(ctx, defaultValue.pos, rExpr)
-    }
-
-    fun createMirrorAttr(index: Int, mutable: Boolean): R_Attribute {
-        return R_Attribute(
-                index,
-                name.str,
-                type ?: R_CtErrorType,
-                mutable = mutable,
-                exprGetter = defaultValue?.rGetter
-        )
+        val rExpr: R_Expr = R_ArgumentDefaultValueExpr(paramType, callPos.toFilePos(), initFrameGetter, rExprGetter)
+        return V_RExpr(ctx, pos, rExpr)
     }
 }
 
@@ -379,7 +356,7 @@ object C_Utils {
     }
 
     fun createSysCallExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, pos: S_Pos?, nameMsg: String): R_Expr {
-        val rCallExpr = R_SysCallExpr(type, fn, args, nameMsg)
+        val rCallExpr = R_SysFunctionCallExpr(type, fn, args, nameMsg)
         return if (pos == null) rCallExpr else {
             val filePos = pos.toFilePos()
             R_StackTraceExpr(rCallExpr, filePos)
@@ -406,17 +383,8 @@ object C_Utils {
         return C_VExpr(value)
     }
 
-    fun integerToDecimalPromotion(ctx: C_ExprContext, vExpr: V_Expr): V_Expr {
-        val type = vExpr.type()
-        if (type == R_DecimalType) {
-            return vExpr
-        }
-        check(type == R_IntegerType) { "Expected $R_DecimalType, but was $type" }
-        return V_IntegerToDecimalExpr(ctx, vExpr, vExpr.varFacts())
-    }
-
     fun fullName(namespacePath: String?, name: String): String {
-        return if (namespacePath == null) name else (namespacePath + "." + name)
+        return if (namespacePath == null) name else "$namespacePath.$name"
     }
 
     fun nameStr(name: List<S_Name>): String = name.joinToString(".") { it.str }
@@ -437,6 +405,22 @@ object C_Utils {
         val moduleName = module.keyStr()
         val qualifiedName = nameStr(path)
         return R_DefinitionId.appLevelName(moduleName, qualifiedName)
+    }
+
+    fun checkGtvCompatibility(
+            msgCtx: C_MessageContext,
+            pos: S_Pos,
+            type: R_Type,
+            from: Boolean,
+            errCode: String,
+            errMsg: String
+    ) {
+        val flags = type.completeFlags()
+        val flag = if (from) flags.gtv.fromGtv else flags.gtv.toGtv
+        if (!flag) {
+            val fullMsg = "$errMsg is not Gtv-compatible: ${type.toStrictString()}"
+            msgCtx.error(pos, "$errCode:${type.toStrictString()}", fullMsg)
+        }
     }
 }
 
