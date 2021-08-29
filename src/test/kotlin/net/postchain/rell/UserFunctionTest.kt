@@ -95,7 +95,7 @@ class UserFunctionTest: BaseRellTest(false) {
                     return x * f(x - 1);
                 }
             }
-        """.trimIndent()
+        """
 
         chkFn(fn, "f(0)", "int[1]")
         chkFn(fn, "f(1)", "int[1]")
@@ -120,7 +120,7 @@ class UserFunctionTest: BaseRellTest(false) {
                 print('bar', n);
                 if (n > 0) foo(n - 1);
             }
-        """.trimIndent()
+        """
 
         chkFnEx(fn, "{ foo(5); return 0; }", "int[0]")
         chkOut("foo 5", "bar 4", "foo 3", "bar 2", "foo 1", "bar 0")

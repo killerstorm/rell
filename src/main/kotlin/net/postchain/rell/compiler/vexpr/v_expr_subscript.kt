@@ -70,23 +70,17 @@ object V_TupleSubscriptKind_Virtual: V_TupleSubscriptKind() {
 sealed class V_SubscriptExpr(
         exprCtx: C_ExprContext,
         pos: S_Pos,
-        protected val baseExpr: V_Expr,
-        protected val varFacts: C_ExprVarFacts
-): V_Expr(exprCtx, pos) {
-    final override fun varFacts() = varFacts
-}
+        protected val baseExpr: V_Expr
+): V_Expr(exprCtx, pos)
 
 class V_CommonSubscriptExpr(
         exprCtx: C_ExprContext,
         pos: S_Pos,
         baseExpr: V_Expr,
-        varFacts: C_ExprVarFacts,
         private val keyExpr: V_Expr,
         private val kind: V_CommonSubscriptKind
-): V_SubscriptExpr(exprCtx, pos, baseExpr, varFacts) {
-    override val exprInfo = V_ExprInfo.make(listOf(baseExpr, keyExpr), canBeDbExpr = kind.canBeDbExpr())
-
-    override fun type() = kind.resType
+): V_SubscriptExpr(exprCtx, pos, baseExpr) {
+    override fun exprInfo0() = V_ExprInfo.simple(kind.resType, baseExpr, keyExpr, canBeDbExpr = kind.canBeDbExpr())
 
     override fun toRExpr0(): R_Expr {
         val rBase = baseExpr.toRExpr()
@@ -105,7 +99,7 @@ class V_CommonSubscriptExpr(
         val rKey = keyExpr.toRExpr()
         val dstExpr = kind.compileDestination(pos, rBase, rKey)
         if (dstExpr == null) {
-            val baseType = baseExpr.type()
+            val baseType = baseExpr.type
             val type = baseType.toStrictString()
             throw C_Error.stop(pos, "expr_immutable:$type", "Value of type '$type' cannot be modified")
         }
@@ -117,14 +111,11 @@ class V_TupleSubscriptExpr(
         exprCtx: C_ExprContext,
         pos: S_Pos,
         baseExpr: V_Expr,
-        varFacts: C_ExprVarFacts,
         private val kind: V_TupleSubscriptKind,
         private val resType: R_Type,
         private val index: Int
-): V_SubscriptExpr(exprCtx, pos, baseExpr, varFacts) {
-    override val exprInfo = V_ExprInfo.make(baseExpr, canBeDbExpr = false)
-
-    override fun type() = resType
+): V_SubscriptExpr(exprCtx, pos, baseExpr) {
+    override fun exprInfo0() = V_ExprInfo.simple(resType, baseExpr, canBeDbExpr = false)
 
     override fun toRExpr0(): R_Expr {
         val rBase = baseExpr.toRExpr()

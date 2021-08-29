@@ -10,6 +10,7 @@ import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_Printer
 import net.postchain.rell.sql.SqlExecutor
+import net.postchain.rell.utils.immMapOf
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 import java.util.*
@@ -33,6 +34,7 @@ abstract class RellBaseTester(
     var atAttrShadowing = C_CompilerOptions.DEFAULT.atAttrShadowing
     var testLib = false
     var allowDbModificationsInObjectExprs = C_CompilerOptions.DEFAULT.allowDbModificationsInObjectExprs
+    var compatibilityVer = C_CompilerOptions.DEFAULT.compatibility
 
     var blockchainRid = RellTestUtils.strToRidHex("DEADBEEF")
 
@@ -61,6 +63,7 @@ abstract class RellBaseTester(
     val logPrinter: Rt_Printer = logPrinter0
 
     private var mainModules: List<String>? = null
+    private var testModules: List<String>? = null
 
     fun init() {
         tstCtx.init()
@@ -91,9 +94,10 @@ abstract class RellBaseTester(
 
     private fun initCompile(code: String): R_App {
         val sourceDir = createSourceDir(code)
-        val modules = mainModules()
         val options = compilerOptions()
-        val cRes = RellTestUtils.compileApp(sourceDir, modules, options)
+        val modSel = C_CompilerModuleSelection(mainModules(), testModules())
+
+        val cRes = RellTestUtils.compileApp(sourceDir, modSel, options)
 
         if (cRes.errors.isNotEmpty()) {
             val err = cRes.errors[0]
@@ -114,7 +118,8 @@ abstract class RellBaseTester(
             blockCheck = true,
             atAttrShadowing = atAttrShadowing,
             testLib = testLib,
-            allowDbModificationsInObjectExprs = allowDbModificationsInObjectExprs
+            allowDbModificationsInObjectExprs = allowDbModificationsInObjectExprs,
+            compatibility = compatibilityVer
     )
 
     fun def(defs: List<String>) {
@@ -153,7 +158,21 @@ abstract class RellBaseTester(
         mainModules = modules.toList().toImmList()
     }
 
+    fun testModules(vararg modules: String) {
+        checkNotInited()
+        testModules = modules.toList().toImmList()
+    }
+
     protected fun mainModules() = (mainModules ?: listOf("")).map { R_ModuleName.of(it) }
+    protected fun testModules() = (testModules ?: listOf()).map { R_ModuleName.of(it) }
+
+    private var moduleArgs = immMapOf<String, String>()
+
+    fun moduleArgs(vararg args: Pair<String, String>) {
+        moduleArgs = args.toMap().toImmMap()
+    }
+
+    fun getModuleArgs() = moduleArgs
 
     protected fun checkNotInited() {
         check(!inited)
@@ -166,12 +185,12 @@ abstract class RellBaseTester(
         }
     }
 
-    protected abstract fun initSqlReset(exec: SqlExecutor, moduleCode: String, app: R_App)
+    protected abstract fun initSqlReset(sqlExec: SqlExecutor, moduleCode: String, app: R_App)
     protected open fun postInit() { }
 
     fun createSourceDir(code: String): C_SourceDir {
         val files = files(code)
-        return C_MapSourceDir.of(files)
+        return C_SourceDir.mapDirOf(files)
     }
 
     private fun initSqlInserts(sqlExec: SqlExecutor) {
@@ -278,18 +297,20 @@ abstract class RellBaseTester(
     fun compileAppEx(code: String): R_App {
         val moduleCode = moduleCode(code)
         var res: R_App? = null
-        processApp(moduleCode) {
+        val s = processApp(moduleCode) {
             res = it
             "OK"
         }
+        assertEquals("OK", s)
         return res!!
     }
 
     fun processApp(code: String, processor: (R_App) -> String): String {
         messages.clear()
         val sourceDir = createSourceDir(code)
-        val modules = mainModules()
-        return RellTestUtils.processApp(sourceDir, errMsgPos, compilerOptions(), messages, modules) {
+        val mainMods = mainModules()
+        val testMods = testModules()
+        return RellTestUtils.processApp(sourceDir, errMsgPos, compilerOptions(), messages, mainMods, testMods) {
             processor(it.rApp)
         }
     }

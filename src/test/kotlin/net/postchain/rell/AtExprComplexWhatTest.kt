@@ -331,10 +331,10 @@ class AtExprComplexWhatTest: BaseRellTest() {
         chkOut("77", "A", "f:77,A", "B", "f:77,B", "C", "f:77,C")
 
         chkSel("f(data, t = st(.t), i = si(77))", "text", "text[f:77,A]", "text[f:77,B]", "text[f:77,C]")
-        chkOut("77", "A", "f:77,A", "B", "f:77,B", "C", "f:77,C")
+        chkOut("A", "77", "f:77,A", "B", "f:77,B", "C", "f:77,C")
 
         chkSel("f(data, i = si(.i), t = st('Z'))", "text", "text[f:111,Z]", "text[f:222,Z]", "text[f:333,Z]")
-        chkOut("Z", "111", "f:111,Z", "222", "f:222,Z", "333", "f:333,Z")
+        chkOut("111", "Z", "f:111,Z", "222", "f:222,Z", "333", "f:333,Z")
 
         chkSel("f(data, t = st('Z'), i = si(.i))", "text", "text[f:111,Z]", "text[f:222,Z]", "text[f:333,Z]")
         chkOut("Z", "111", "f:111,Z", "222", "f:222,Z", "333", "f:333,Z")
@@ -359,13 +359,13 @@ class AtExprComplexWhatTest: BaseRellTest() {
         chkOut("99", "Y", "f:99,Y", "f:99,Y", "f:99,Y")
 
         chkSel("f(data, i = si(.i))", "text", "text[f:111,Y]", "text[f:222,Y]", "text[f:333,Y]")
-        chkOut("Y", "111", "f:111,Y", "222", "f:222,Y", "333", "f:333,Y")
+        chkOut("111", "Y", "f:111,Y", "222", "f:222,Y", "333", "f:333,Y")
 
         chkSel("f(data, i = si(77))", "text", "text[f:77,Y]", "text[f:77,Y]", "text[f:77,Y]")
         chkOut("77", "Y", "f:77,Y", "f:77,Y", "f:77,Y")
 
         chkSel("f(data, t = st(.t))", "text", "text[f:99,A]", "text[f:99,B]", "text[f:99,C]")
-        chkOut("99", "A", "f:99,A", "B", "f:99,B", "C", "f:99,C")
+        chkOut("A", "99", "f:99,A", "B", "f:99,B", "C", "f:99,C")
 
         chkSel("f(data, t = st('Z'))", "text", "text[f:99,Z]", "text[f:99,Z]", "text[f:99,Z]")
         chkOut("Z", "99", "f:99,Z", "f:99,Z", "f:99,Z")
@@ -390,6 +390,32 @@ class AtExprComplexWhatTest: BaseRellTest() {
         chk("data @ {} ( _type_of(.d) ) limit 1", "text[decimal]")
         chk("data @ {} ( _type_of(.t) ) limit 1", "text[text]")
         chk("data @ {} ( _type_of(.ba) ) limit 1", "text[byte_array]")
+    }
+
+    @Test fun testNullSafeMemberFunction() {
+        def("function ft(t: text, b: boolean) { print(t); return if (b) t else null; }")
+        def("function fi(i: integer) { print(i); return i; }")
+        initData()
+
+        chk("data @ {} ( ft(.t, true)?.sub(fi(.i - 111), fi(.i - 110)) ) limit 1", "text[A]")
+        chkOut("A", "0", "1")
+        chk("data @ {} ( ft(.t, false)?.sub(fi(.i - 111), fi(.i - 110)) ) limit 1", "null")
+        chkOut("A")
+
+        chk("data @ {} ( ft('hello', true)?.sub(fi(.i - 111), fi(.i - 110)) ) limit 1", "text[h]")
+        chkOut("hello", "0", "1")
+        chk("data @ {} ( ft('hello', false)?.sub(fi(.i - 111), fi(.i - 110)) ) limit 1", "null")
+        chkOut("hello")
+
+        chk("data @ {} ( ft(.t, true)?.char_at(fi(.i - 111), *) ) limit 1", "fn[text.char_at(int[0])]")
+        chkOut("A", "0")
+        chk("data @ {} ( ft(.t, false)?.char_at(fi(.i - 111), *) ) limit 1", "null")
+        chkOut("A")
+
+        chk("data @ {} ( ft('hello', true)?.char_at(fi(.i - 111), *) ) limit 1", "fn[text.char_at(int[0])]")
+        chkOut("hello", "0")
+        chk("data @ {} ( ft('hello', false)?.char_at(fi(.i - 111), *) ) limit 1", "null")
+        chkOut("hello")
     }
 
     private fun chkSel(what: String, type: String, vararg values: String) {

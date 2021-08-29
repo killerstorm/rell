@@ -4,6 +4,7 @@
 
 package net.postchain.rell.lib
 
+import net.postchain.rell.model.R_LangVersion
 import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 
@@ -217,5 +218,21 @@ class LibMapTest: BaseRellTest(false) {
         chkEx("{ return [[123] : 'Hello']; }", "ct_err:expr_map_keytype:list<integer>")
         chkEx("{ var x: map<list<integer>,text>; return 0; }", "ct_err:expr_map_keytype:list<integer>")
         chkEx("{ return map<list<integer>,text>(); }", "ct_err:expr_map_keytype:list<integer>")
+    }
+
+    @Test fun testAsForAndAtItem() {
+        chkEx("{ for (x in [123:'hello']) return _type_of(x); return null; }", "text[(integer,text)]")
+        chkEx("{ for (x in [123:'hello']) return x; return null; }", "(int[123],text[hello])")
+
+        chk("[123:'hello'] @{} ( _type_of($) )", "text[(integer,text)]")
+        chk("[123:'hello'] @{} ( $ )", "(int[123],text[hello])")
+
+        tst.compatibilityVer = R_LangVersion.of("0.10.5")
+
+        chkEx("{ for (x in [123:'hello']) return _type_of(x); return null; }", "text[(integer,text)]")
+        chkEx("{ for (x in [123:'hello']) return x; return null; }", "(int[123],text[hello])")
+
+        chk("[123:'hello'] @{} ( _type_of($) )", "text[(k:integer,v:text)]")
+        chk("[123:'hello'] @{} ( $ )", "(k=int[123],v=text[hello])")
     }
 }

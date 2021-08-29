@@ -101,7 +101,7 @@ private class C_NsRes_InternalMaker {
     }
 
     private fun <T> mergeDefs(elems: List<C_NamespaceElement>, getter: (C_NamespaceElement) -> C_DefProxy<T>?): C_DefProxy<T>? {
-        val defs = elems.map(getter).filterNotNull()
+        val defs = elems.mapNotNull(getter)
         return if (defs.isEmpty()) {
             null
         } else if (defs.size == 1) {

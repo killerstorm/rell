@@ -5,12 +5,43 @@ import net.postchain.rell.runtime.*
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmList
 
+sealed class Rt_AtWhatItem {
+    abstract fun value(): Rt_Value
+}
+
+class Rt_AtWhatItem_Value(private val value: Rt_Value): Rt_AtWhatItem() {
+    override fun value() = value
+}
+
+class Rt_AtWhatItem_RExpr(private val frame: Rt_CallFrame, private val rExpr: R_Expr): Rt_AtWhatItem() {
+    private val valueLazy: Rt_Value by lazy {
+        rExpr.evaluate(frame)
+    }
+
+    override fun value() = valueLazy
+}
+
+class Rt_AtWhatItem_Evaluator(
+        private val evaluator: Db_ComplexAtWhatEvaluator,
+        private val frame: Rt_CallFrame,
+        values: List<Rt_AtWhatItem>
+): Rt_AtWhatItem() {
+    private val values = values.toImmList()
+
+    private val resultLazy: Rt_Value by lazy {
+        evaluator.evaluate(frame, values)
+    }
+
+    override fun value() = resultLazy
+}
+
+
 abstract class Rt_AtWhatCombiner(val dbValueCount: Int) {
-    abstract fun combine(dbValues: List<Rt_Value>): Rt_Value
+    abstract fun combine(dbValues: List<Rt_Value>): Rt_AtWhatItem
 
     companion object {
-        fun combineValues(combiners: List<Rt_AtWhatCombiner>, row: List<Rt_Value>): List<Rt_Value> {
-            val res: MutableList<Rt_Value> = ArrayList(combiners.size)
+        fun combineValues(combiners: List<Rt_AtWhatCombiner>, row: List<Rt_Value>): List<Rt_AtWhatItem> {
+            val res: MutableList<Rt_AtWhatItem> = ArrayList(combiners.size)
 
             var pos = 0
             for (combiner in combiners) {
@@ -39,16 +70,11 @@ class Db_AtWhatValue_RExpr(private val expr: R_Expr): Db_AtWhatValue() {
     override fun combiner(frame: Rt_CallFrame): Rt_AtWhatCombiner = Rt_AtWhatCombiner_RExpr(frame)
 
     private inner class Rt_AtWhatCombiner_RExpr(private val frame: Rt_CallFrame): Rt_AtWhatCombiner(0) {
-        private var value: Rt_Value? = null
+        private val result: Rt_AtWhatItem = Rt_AtWhatItem_RExpr(frame, expr)
 
-        override fun combine(dbValues: List<Rt_Value>): Rt_Value {
+        override fun combine(dbValues: List<Rt_Value>): Rt_AtWhatItem {
             checkEquals(dbValues.size, 0)
-            var v = value
-            if (v == null) {
-                v = expr.evaluate(frame)
-                value = v
-            }
-            return v
+            return result
         }
     }
 }
@@ -64,15 +90,15 @@ class Db_AtWhatValue_DbExpr(private val expr: Db_Expr, private val resultType: R
     override fun combiner(frame: Rt_CallFrame): Rt_AtWhatCombiner = Rt_AtWhatCombiner_Simple
 
     private object Rt_AtWhatCombiner_Simple: Rt_AtWhatCombiner(1) {
-        override fun combine(dbValues: List<Rt_Value>): Rt_Value {
+        override fun combine(dbValues: List<Rt_Value>): Rt_AtWhatItem {
             checkEquals(dbValues.size, 1)
-            return dbValues[0]
+            return Rt_AtWhatItem_Value(dbValues[0])
         }
     }
 }
 
 abstract class Db_ComplexAtWhatEvaluator {
-    abstract fun evaluate(frame: Rt_CallFrame, values: List<Rt_Value>): Rt_Value
+    abstract fun evaluate(frame: Rt_CallFrame, values: List<Rt_AtWhatItem>): Rt_Value
 }
 
 class Db_AtWhatValue_Complex(
@@ -109,23 +135,22 @@ class Db_AtWhatValue_Complex(
             private val subCombiners: List<Rt_AtWhatCombiner>,
             dbValueCount: Int
     ): Rt_AtWhatCombiner(dbValueCount) {
-        private var rValues: List<Rt_Value>? = null
+        private var rValues: List<Rt_AtWhatItem>? = null
 
-        override fun combine(dbValues: List<Rt_Value>): Rt_Value {
+        override fun combine(dbValues: List<Rt_Value>): Rt_AtWhatItem {
             var rVals = rValues
             if (rVals == null) {
-                rVals = rExprs.map { it.evaluate(frame) }
+                rVals = rExprs.map { Rt_AtWhatItem_RExpr(frame, it) }.toImmList()
                 rValues = rVals
             }
 
             val dbValues2 = combineValues(subCombiners, dbValues)
 
             val allValues = items.map { (db, i) ->
-                val selValues = if (db) dbValues2 else rVals
-                selValues[i]
+                if (db) dbValues2[i] else rVals[i]
             }
 
-            return evaluator.evaluate(frame, allValues)
+            return Rt_AtWhatItem_Evaluator(evaluator, frame, allValues)
         }
     }
 }
@@ -142,7 +167,7 @@ class Db_AtWhatValue_ToStruct(private val rStruct: R_Struct, exprs: List<Db_Expr
     override fun combiner(frame: Rt_CallFrame): Rt_AtWhatCombiner = Rt_AtWhatCombiner_ToStruct()
 
     private inner class Rt_AtWhatCombiner_ToStruct: Rt_AtWhatCombiner(exprs.size) {
-        override fun combine(dbValues: List<Rt_Value>): Rt_Value {
+        override fun combine(dbValues: List<Rt_Value>): Rt_AtWhatItem {
             val attrs = rStruct.attributesList
 
             if (dbValues.size != attrs.size) {
@@ -151,7 +176,8 @@ class Db_AtWhatValue_ToStruct(private val rStruct: R_Struct, exprs: List<Db_Expr
             }
 
             val attrValues = dbValues.toMutableList()
-            return Rt_StructValue(rStruct.type, attrValues)
+            val resValue = Rt_StructValue(rStruct.type, attrValues)
+            return Rt_AtWhatItem_Value(resValue)
         }
     }
 }
@@ -206,21 +232,11 @@ class RedDb_AtExprBase(from: List<R_DbAtEntity>, private val where: RedDb_Expr?,
     }
 
     private inner class AtExprSqlParts(ctx: SqlGenContext) {
-        val whereSql: ParameterizedSql?
-        val whatSqls: List<ParameterizedSql>
-        val groupBySqls: List<ParameterizedSql>
-        val orderBySqls: List<ParameterizedSql>
-        val fromSqls: List<ParameterizedSql>
-
-        init {
-            whereSql = translateWhere(ctx, where)
-            whatSqls = translateWhat(ctx, what)
-            groupBySqls = translateGroupBy(ctx, what)
-            orderBySqls = translateOrderBy(ctx, what)
-
-            val fromInfo = ctx.getFromInfo()
-            fromSqls = translateFrom(ctx, fromInfo)
-        }
+        val whereSql = translateWhere(ctx, where)
+        val whatSqls = translateWhat(ctx, what)
+        val groupBySqls = translateGroupBy(ctx, what)
+        val orderBySqls = translateOrderBy(ctx, what)
+        val fromSqls = translateFrom(ctx, ctx.getFromInfo())
 
         private fun translateFrom(ctx: SqlGenContext, fromInfo: SqlFromInfo): List<ParameterizedSql> {
             return fromInfo.entities.values.map { translateFromItem(ctx.sqlCtx, it) }
@@ -370,7 +386,10 @@ class Db_AtExprBase(
         val rtSql = redBase.buildSql(frame, extras)
         val select = SqlSelect(rtSql, resultTypes)
         val combiners = selWhat.map { it.value.combiner(frame) }
-        val records = select.execute(frame.sqlExec) { Rt_AtWhatCombiner.combineValues(combiners, it) }
+        val records = select.execute(frame.sqlExec) {
+            val items = Rt_AtWhatCombiner.combineValues(combiners, it)
+            items.map { it.value() }
+        }
         return records
     }
 }

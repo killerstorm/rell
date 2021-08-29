@@ -21,21 +21,21 @@ sealed class S_UnaryOp(val code: String) {
 
 object S_UnaryOp_Plus: S_UnaryOp("+") {
     override fun compile(ctx: C_ExprContext, startPos: S_Pos, opPos: S_Pos, expr: V_Expr): V_Expr {
-        val type = expr.type()
+        val type = expr.type
         if (type != R_IntegerType && type != R_DecimalType) {
             errTypeMismatch(ctx, opPos, type)
         }
 
         // Cannot simply return "expr", because then expressions like "(+x)++" or "(+x) = 123" will be allowed.
         val vOp = V_UnaryOp_Plus(type)
-        val varFacts = C_ExprVarFacts.of(postFacts = expr.varFacts().postFacts)
+        val varFacts = C_ExprVarFacts.forSubExpressions(expr)
         return V_UnaryExpr(ctx, startPos, vOp, expr, varFacts)
     }
 }
 
 object S_UnaryOp_Minus: S_UnaryOp("-") {
     override fun compile(ctx: C_ExprContext, startPos: S_Pos, opPos: S_Pos, expr: V_Expr): V_Expr {
-        val type = expr.type()
+        val type = expr.type
 
         val vOp = when (type) {
             R_IntegerType -> V_UnaryOp_Minus(type, R_UnaryOp_Minus_Integer, Db_UnaryOp_Minus_Integer)
@@ -46,19 +46,19 @@ object S_UnaryOp_Minus: S_UnaryOp("-") {
             }
         }
 
-        val varFacts = C_ExprVarFacts.of(postFacts = expr.varFacts().postFacts)
+        val varFacts = C_ExprVarFacts.forSubExpressions(expr)
         return V_UnaryExpr(ctx, startPos, vOp, expr, varFacts)
     }
 }
 
 object S_UnaryOp_Not: S_UnaryOp("not") {
     override fun compile(ctx: C_ExprContext, startPos: S_Pos, opPos: S_Pos, expr: V_Expr): V_Expr {
-        val type = expr.type()
+        val type = expr.type
         if (type != R_BooleanType) {
             errTypeMismatch(ctx, opPos, type)
         }
 
-        val varFacts = expr.varFacts()
+        val varFacts = expr.varFacts
         val resVarFacts = C_ExprVarFacts.of(
                 trueFacts = varFacts.falseFacts,
                 falseFacts = varFacts.trueFacts,
@@ -84,17 +84,16 @@ class S_UnaryOp_IncDec(val inc: Boolean, val post: Boolean): S_UnaryOp(if (inc) 
             Pair(INTEGER_INCREMENT, INTEGER_DECREMENT) // Fake ops for recovery.
         }
 
-        val idOp = if (inc) ops.first else ops.second
-        val op = C_AssignOp(opPos, idOp.op, idOp.rOp, idOp.dbOp)
+        val incDecOp = if (inc) ops.first else ops.second
+        val op = C_AssignOp(opPos, incDecOp.op, incDecOp.rOp, incDecOp.dbOp)
 
-        val resType = dst.resultType(expr.type())
-        val varFacts = C_ExprVarFacts.of(postFacts = expr.varFacts().postFacts)
-        return V_IncDecExpr(ctx, startPos, dst, resType, idOp.srcExpr, op, post, varFacts)
+        val resType = dst.resultType(expr.type)
+        return V_IncDecExpr(ctx, startPos, resType, dst, expr, incDecOp.srcExpr, op, post)
     }
 
     companion object {
-        private val INTEGER_ONE = R_ConstantExpr.makeInt(1)
-        private val DECIMAL_ONE = R_ConstantExpr(Rt_DecimalValue.of(1))
+        private val INTEGER_ONE = R_ConstantValueExpr.makeInt(1)
+        private val DECIMAL_ONE = R_ConstantValueExpr(Rt_DecimalValue.of(1))
 
         private val INTEGER_INCREMENT = C_IncDecOp("++", R_BinaryOp_Add_Integer, Db_BinaryOp_Add_Integer, INTEGER_ONE)
         private val INTEGER_DECREMENT = C_IncDecOp("--", R_BinaryOp_Sub_Integer, Db_BinaryOp_Sub_Integer, INTEGER_ONE)
@@ -108,13 +107,13 @@ class S_UnaryOp_IncDec(val inc: Boolean, val post: Boolean): S_UnaryOp(if (inc) 
 object S_UnaryOp_NotNull: S_UnaryOp("!!") {
     override fun compile(ctx: C_ExprContext, startPos: S_Pos, opPos: S_Pos, expr: V_Expr): V_Expr {
         val value = expr.asNullable()
-        val type = value.type()
+        val type = value.type
         val valueType = if (type is R_NullableType) type.valueType else {
             errTypeMismatch(ctx, opPos, type)
             type
         }
 
-        val preFacts = value.varFacts().postFacts
+        val preFacts = value.varFacts.postFacts
         val varFacts = C_ExprVarFacts.forNullCast(preFacts, value)
         return V_UnaryExpr(ctx, startPos, V_UnaryOp_NotNull(valueType), expr, varFacts)
     }
@@ -123,12 +122,12 @@ object S_UnaryOp_NotNull: S_UnaryOp("!!") {
 object S_UnaryOp_IsNull: S_UnaryOp("??") {
     override fun compile(ctx: C_ExprContext, startPos: S_Pos, opPos: S_Pos, expr: V_Expr): V_Expr {
         val value = expr.asNullable()
-        val type = value.type()
+        val type = value.type
         if (type !is R_NullableType) {
             errTypeMismatch(ctx, opPos, type)
         }
 
-        val preFacts = value.varFacts()
+        val preFacts = value.varFacts
         val varFacts = C_ExprVarFacts.forNullCheck(value, false).update(postFacts = preFacts.postFacts)
         return V_UnaryExpr(ctx, startPos, V_UnaryOp_IsNull(), expr, varFacts)
     }
@@ -138,7 +137,7 @@ class S_UnaryExpr(startPos: S_Pos, val op: S_PosValue<S_UnaryOp>, val expr: S_Ex
     override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
         val cExpr = expr.compile(ctx)
         val vExpr = cExpr.value()
-        checkUnitType(vExpr.type())
+        checkUnitType(vExpr.type)
         val vResExpr = op.value.compile(ctx, startPos, op.pos, vExpr)
         return C_VExpr(vResExpr)
     }

@@ -100,7 +100,7 @@ class S_VarStatement(
         val rExpr = cValue?.toRExpr()
 
         val varFacts = C_MutableVarFacts()
-        varFacts.putFacts(cValue?.varFacts()?.postFacts ?: C_VarFacts.EMPTY)
+        varFacts.putFacts(cValue?.varFacts?.postFacts ?: C_VarFacts.EMPTY)
 
         val rDeclarator = cDeclarator.compile(mutable, rExpr?.type, varFacts)
         val rStmt = R_VarStatement(rDeclarator, rExpr)
@@ -126,7 +126,7 @@ class S_ReturnStatement(pos: S_Pos, val expr: S_Expr?): S_Statement(pos) {
         var vExpr = cExpr?.value()
 
         if (vExpr != null) {
-            C_Utils.checkUnitType(pos, vExpr.type(), "stmt_return_unit", "Expression returns nothing")
+            C_Utils.checkUnitType(pos, vExpr.type, "stmt_return_unit", "Expression returns nothing")
         }
 
         val defType = ctx.defCtx.definitionType
@@ -142,7 +142,7 @@ class S_ReturnStatement(pos: S_Pos, val expr: S_Expr?): S_Statement(pos) {
                     ctx.msgCtx.error(pos, "stmt_return_query_novalue", "Query must return a value")
                 }
 
-                val rRetType = if (vExpr == null) R_UnitType else vExpr.type()
+                val rRetType = if (vExpr == null) R_UnitType else vExpr.type
                 val adapter = ctx.fnCtx.matchReturnType(pos, rRetType)
 
                 if (vExpr != null) {
@@ -207,7 +207,7 @@ class S_ExprStatement(val expr: S_Expr): S_Statement(expr.startPos) {
         val rExpr = value.toRExpr()
         val rStmt = if (repl) R_ReplExprStatement(rExpr) else R_ExprStatement(rExpr)
 
-        val varFacts = value.varFacts().postFacts
+        val varFacts = value.varFacts.postFacts
         return C_Statement(rStmt, false, varFacts)
     }
 }
@@ -216,7 +216,7 @@ class S_AssignStatement(val dstExpr: S_Expr, val op: S_PosValue<S_AssignOpCode>,
     override fun compile0(ctx: C_StmtContext, repl: Boolean): C_Statement {
         val cDstExpr = dstExpr.compileOpt(ctx)
 
-        val typeHint = C_TypeHint.ofType(cDstExpr?.value()?.type())
+        val typeHint = C_TypeHint.ofType(cDstExpr?.value()?.type)
         val cSrcExpr = srcExpr.compileOpt(ctx, typeHint)
 
         if (cDstExpr == null || cSrcExpr == null) {
@@ -244,7 +244,7 @@ class S_IfStatement(pos: S_Pos, val expr: S_Expr, val trueStmt: S_Statement, val
             val value = cExpr.value()
             rExpr = value.toRExpr()
             C_Types.matchOpt(ctx.msgCtx, R_BooleanType, rExpr.type, expr.startPos, "stmt_if_expr_type", "Wrong type of if-expression")
-            exprVarFacts = value.varFacts()
+            exprVarFacts = value.varFacts
         } else {
             rExpr = C_Utils.errorRExpr(R_BooleanType)
             exprVarFacts = C_ExprVarFacts.EMPTY
@@ -380,7 +380,7 @@ class S_WhileStatement(pos: S_Pos, val expr: S_Expr, val stmt: S_Statement): S_S
             }
 
             val condValue = condExpr.value()
-            val condFacts = condValue.varFacts()
+            val condFacts = condValue.varFacts
             val postFacts = calcPostFacts(condFacts.postFacts, modifiedVars)
 
             val rExpr = condValue.toRExpr()
@@ -453,8 +453,11 @@ class S_ForStatement(pos: S_Pos, val declarator: S_VarDeclarator, val expr: S_Ex
 
         val rExpr = loop.condExpr
         val exprType = rExpr.type
-        val (itemType, iterator) = compileForIterator(ctx, exprType)
-        if (itemType == null || iterator == null) {
+
+        val cIterator = C_ForIterator.compile(ctx.exprCtx, exprType, true)
+        if (cIterator == null) {
+            ctx.msgCtx.error(expr.startPos, "stmt_for_expr_type:[${exprType.toStrictString()}]",
+                    "Wrong type of for-expression: ${exprType.toStrictString()}")
             stmt.compile(ctx)
             return C_Statement.ERROR
         }
@@ -464,7 +467,7 @@ class S_ForStatement(pos: S_Pos, val declarator: S_VarDeclarator, val expr: S_Ex
 
         val mutVarFacts = C_MutableVarFacts()
         val cDeclarator = declarator.compile(loopCtx)
-        val rDeclarator = cDeclarator.compile(false, itemType, mutVarFacts)
+        val rDeclarator = cDeclarator.compile(false, cIterator.itemType, mutVarFacts)
         val iterFactsCtx = loopCtx.updateFacts(mutVarFacts.toVarFacts())
 
         val bodyCtx = iterFactsCtx.updateFacts(loop.condFacts.postFacts)
@@ -472,39 +475,10 @@ class S_ForStatement(pos: S_Pos, val declarator: S_VarDeclarator, val expr: S_Ex
         val rBodyStmt = cBodyStmt.rStmt
 
         val cBlock = loopBlkCtx.buildBlock()
-        val rStmt = R_ForStatement(rDeclarator, rExpr, iterator, rBodyStmt, cBlock.rBlock)
+        val rStmt = R_ForStatement(rDeclarator, rExpr, cIterator.rIterator, rBodyStmt, cBlock.rBlock)
 
         val varFacts = loop.postFacts.and(S_WhileStatement.calcVarFacts(ctx, cBodyStmt))
         return C_Statement(rStmt, false, varFacts)
-    }
-
-    private fun compileForIterator(ctx: C_StmtContext, exprType: R_Type): Pair<R_Type?, R_ForIterator?> {
-        return when (exprType) {
-            is R_CollectionType -> Pair(exprType.elementType, R_ForIterator_Collection)
-            is R_VirtualCollectionType -> Pair(
-                    S_VirtualType.virtualMemberType(exprType.elementType()),
-                    R_ForIterator_VirtualCollection
-            )
-            is R_MapType -> {
-                val keyField = R_TupleField(null, exprType.keyType)
-                val valueField = R_TupleField(null, exprType.valueType)
-                val itemType = R_TupleType(listOf(keyField, valueField))
-                return Pair(itemType, R_ForIterator_Map(itemType))
-            }
-            is R_VirtualMapType -> {
-                val mapType = exprType.innerType
-                val keyField = R_TupleField(null, S_VirtualType.virtualMemberType(mapType.keyType))
-                val valueField = R_TupleField(null, S_VirtualType.virtualMemberType(mapType.valueType))
-                val itemType = R_TupleType(listOf(keyField, valueField))
-                return Pair(itemType, R_ForIterator_Map(itemType))
-            }
-            is R_RangeType -> Pair(R_IntegerType, R_ForIterator_Range)
-            else -> {
-                ctx.msgCtx.error(expr.startPos, "stmt_for_expr_type:[${exprType.toStrictString()}]",
-                        "Wrong type of for-expression: ${exprType.toStrictString()}")
-                return Pair(null, null)
-            }
-        }
     }
 
     override fun discoverVars0(map: MutableTypedKeyMap): C_StatementVars {

@@ -30,8 +30,7 @@ abstract class C_FunctionCallTarget_Regular(
         val vTarget = createVTarget()
         val vCallArgs = args.compileComplexArgs(callInfo)
         vCallArgs ?: return null
-        val exprFacts = C_ExprVarFacts.forSubExpressions(vCallArgs.exprs)
-        return V_FullFunctionCallExpr(ctx, callInfo.callPos, callInfo.callPos, retType, vTarget, vCallArgs, exprFacts)
+        return V_FullFunctionCallExpr(ctx, callInfo.callPos, callInfo.callPos, retType, vTarget, vCallArgs)
     }
 
     override fun compilePartial(args: C_PartialCallArguments, resTypeHint: R_FunctionType?): V_Expr? {
@@ -41,8 +40,7 @@ abstract class C_FunctionCallTarget_Regular(
         val fnType = R_FunctionType(effArgs.wildArgs, retType)
         val target = createVTarget()
         val mapping = effArgs.toRMapping()
-        val exprFacts = C_ExprVarFacts.forSubExpressions(effArgs.exprArgs)
-        return V_PartialFunctionCallExpr(ctx, callInfo.callPos, fnType, target, effArgs.exprArgs, mapping, exprFacts)
+        return V_PartialFunctionCallExpr(ctx, callInfo.callPos, fnType, target, effArgs.exprArgs, mapping)
     }
 }
 

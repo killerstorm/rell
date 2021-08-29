@@ -6,6 +6,7 @@ package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.vexpr.V_Expr
+import net.postchain.rell.compiler.vexpr.V_GlobalConstantRestriction
 import net.postchain.rell.compiler.vexpr.V_SysBasicGlobalCaseCallExpr
 import net.postchain.rell.model.*
 import net.postchain.rell.utils.checkEquals
@@ -184,7 +185,7 @@ class C_GlobalFuncCaseCtx(
 
 class C_MemberFuncCaseCtx(val member: C_MemberLink, val memberName: String): C_FuncCaseCtx(member.linkPos) {
     private val fullName by lazy {
-        val baseType = C_Types.removeNullable(member.base.type())
+        val baseType = C_Types.removeNullable(member.base.type)
         "${baseType.toStrictString()}.$memberName"
     }
 
@@ -268,8 +269,13 @@ class C_DeprecatedFuncCase<CtxT: C_FuncCaseCtx>(
     }
 }
 
-abstract class C_BasicGlobalFuncCaseMatch(resType: R_Type, private val args: List<V_Expr>): C_GlobalFuncCaseMatch(resType) {
+abstract class C_BasicGlobalFuncCaseMatch(resType: R_Type, args: List<V_Expr>): C_GlobalFuncCaseMatch(resType) {
+    val args = args.toImmList()
+
     open val canBeDb = false
+
+    open fun globalConstantRestriction(caseCtx: C_GlobalFuncCaseCtx): V_GlobalConstantRestriction? =
+            V_GlobalConstantRestriction("fn:${caseCtx.qualifiedNameMsg()}", "function '${caseCtx.qualifiedNameMsg()}'")
 
     abstract fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr
 
@@ -278,7 +284,7 @@ abstract class C_BasicGlobalFuncCaseMatch(resType: R_Type, private val args: Lis
     }
 
     final override fun compileCall(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): V_Expr {
-        return V_SysBasicGlobalCaseCallExpr(ctx, caseCtx, this, args)
+        return V_SysBasicGlobalCaseCallExpr(ctx, caseCtx, this)
     }
 
     fun compileCallR(caseCtx: C_GlobalFuncCaseCtx): R_Expr {
@@ -299,7 +305,7 @@ class C_FormalParamsFuncCase<CtxT: C_FuncCaseCtx>(
     override fun getParamTypeHint(index: Int) = matcher.getTypeHint(index)
 
     override fun match(ctx: C_ExprContext, args: List<V_Expr>): C_FuncCaseMatch<CtxT>? {
-        val argTypes = args.map { it.type() }
+        val argTypes = args.map { it.type }
         val paramsMatch = matcher.match(argTypes)
         paramsMatch ?: return null
         return C_FormalParamsFuncCaseMatch(body, args, paramsMatch)

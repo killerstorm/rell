@@ -6,6 +6,8 @@ package net.postchain.rell.test
 
 import com.google.common.collect.HashMultimap
 import net.postchain.gtv.Gtv
+import net.postchain.gtv.GtvFactory
+import net.postchain.gtv.GtvType
 import net.postchain.rell.compiler.*
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_EntityDefinition
@@ -269,6 +271,25 @@ object GtvTestUtils {
     fun strToGtv(s: String): Gtv {
         val s2 = s.replace('\'', '"')
         return decodeGtvStr(s2)
+    }
+
+    fun merge(v1: Gtv, v2: Gtv): Gtv {
+        checkEquals(v2.type, v1.type)
+        return when (v1.type) {
+            GtvType.ARRAY -> GtvFactory.gtv(v1.asArray().toList() + v2.asArray().toList())
+            GtvType.DICT -> {
+                val m1 = v1.asDict()
+                val m2 = v2.asDict()
+                val m = (m1.keys + m2.keys).toSet().map {
+                    val x1 = m1[it]
+                    val x2 = m2[it]
+                    val x = if (x1 == null) x2 else if (x2 == null) x1 else merge(x1, x2)
+                    it to x!!
+                }.toMap()
+                GtvFactory.gtv(m)
+            }
+            else -> v2
+        }
     }
 }
 

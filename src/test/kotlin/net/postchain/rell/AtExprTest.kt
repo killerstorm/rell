@@ -57,7 +57,7 @@ class AtExprTest: BaseRellTest() {
             val foo2 = foo @ { .name == 'Foo-2' };
             val bar1 = bar @ { .name == 'Bar-1' };
             val bar2 = bar @ { .name == 'Bar-2' };
-        """.trimIndent()
+        """
 
         chkEx("{ $base val name = 'Bob'; return (foo_owner, bar_owner) @* { name }; }",
                 "ct_err:at_where:var_manyattrs_nametype:0:name:text:foo_owner.name,bar_owner.name")
@@ -145,7 +145,7 @@ class AtExprTest: BaseRellTest() {
             val tgt1 = target @ { .name == 'A' };
             val tgt2 = target @ { .name == 'B' };
             val tgt3 = target @ { .name == 'C' };
-        """.trimIndent()
+        """
 
         // Correct code.
         chkEx("{ $base return single @ { tgt1 }; }", "single[0]")
@@ -200,7 +200,7 @@ class AtExprTest: BaseRellTest() {
                 index i2: integer, i3: integer;
                 f1: integer;
                 f2: integer;
-        }""".trimIndent())
+        }""")
         def("entity proxy { ref: testee; }")
 
         tst.inserts = listOf()
@@ -288,7 +288,7 @@ class AtExprTest: BaseRellTest() {
         chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + [1,2,3])", "(text[Gates],text[[1, 2, 3]])")
 
         chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + [.firstName,.lastName])",
-                "ct_err:expr:to_text:nosql:list<text>")
+                "ct_err:expr_sqlnotallowed")
 
         chk("user @ { .firstName == 'Bill' } (_=.lastName, [1,2,3])", "(text[Gates],list<integer>[int[1],int[2],int[3]])")
 
@@ -298,7 +298,7 @@ class AtExprTest: BaseRellTest() {
         chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + [123:'Hello'])", "(text[Gates],text[{123=Hello}])")
 
         chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + [.firstName:.lastName])",
-                "ct_err:expr:to_text:nosql:map<text,text>")
+                "ct_err:expr_sqlnotallowed")
 
         chk("user @ { .firstName == 'Bill' } (_=.lastName, [123:'Hello'])",
                 "(text[Gates],map<integer,text>[int[123]=text[Hello]])")
@@ -314,7 +314,7 @@ class AtExprTest: BaseRellTest() {
 
         chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + list(.firstName))", "ct_err:expr_list_badtype:text")
         chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + set(.firstName))", "ct_err:expr_set_badtype:text")
-        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + map(.firstName))", "ct_err:expr_sqlnotallowed")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + map(.firstName))", "ct_err:expr_map_badtype:text")
     }
 
     @Test fun testOrConditionBug() {
@@ -330,13 +330,13 @@ class AtExprTest: BaseRellTest() {
                 mutable deleted: boolean;
                 mutable aux_data: json;
             }
-        """.trimIndent())
+        """)
 
         tst.inserts = listOf("""
             INSERT INTO "c0.user_account"(rowid, name, login, role, password_hash, deleted, pubkey, aux_data, tuid, created_by)
             VALUES (0, 'name1', 'test1@mail.io', 'issuer', 'test', false, '123', '{}', '12345', '1231234'),
             (1, 'name2', 'test2@mail.io', 'validator', '2test', false, '2123', '{}', '212345', '21231234');
-        """.trimIndent())
+        """)
 
         val ret = """
             val res = user_account @* {
@@ -351,7 +351,7 @@ class AtExprTest: BaseRellTest() {
                 .aux_data
             );
             return res.size();
-        """.trimIndent()
+        """
 
         chkEx("{ val search_role = ''; $ret }", "int[2]")
         chkEx("{ val search_role = 'validator'; $ret }", "int[1]")
@@ -443,11 +443,11 @@ class AtExprTest: BaseRellTest() {
 
     @Test fun testTupleExpr() {
         chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + (123,'Hello'))", "(text[Gates],text[(123,Hello)])")
-        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + (123,.firstName))", "ct_err:expr:to_text:nosql:(integer,text)")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + (123,.firstName))", "ct_err:expr_sqlnotallowed")
     }
 
     @Test fun testNoSqlWhatExpr() {
-        chk("user @* { .firstName == 'Bill' } ( '' + (.firstName, .lastName) )", "ct_err:expr:to_text:nosql:(text,text)")
+        chk("user @* { .firstName == 'Bill' } ( '' + (.firstName, .lastName) )", "ct_err:expr_sqlnotallowed")
     }
 
     @Test fun testPlaceholderAmbiguity() {

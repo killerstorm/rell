@@ -55,8 +55,8 @@ class Bytes {
     fun toByteArray() = bytes.clone()
     fun toHex() = bytes.toHex()
 
-    override fun equals(other: Any?) = other is Bytes && Arrays.equals(bytes, other.bytes)
-    override fun hashCode() = Arrays.hashCode(bytes)
+    override fun equals(other: Any?) = other === this || (other is Bytes && Arrays.equals(bytes, other.bytes))
+    override fun hashCode() = bytes.contentHashCode()
     override fun toString() = bytes.toHex()
 
     companion object {
@@ -66,12 +66,10 @@ class Bytes {
 }
 
 abstract class FixLenBytes(bytes: ByteArray) {
-    private val bytes: ByteArray
-
-    init {
+    private val bytes: ByteArray = let {
         val size = size()
         check(bytes.size == size) { "Wrong size: ${bytes.size} instead of $size" }
-        this.bytes = bytes.clone()
+        bytes.clone()
     }
 
     abstract fun size(): Int
@@ -80,7 +78,8 @@ abstract class FixLenBytes(bytes: ByteArray) {
     fun toHex() = bytes.toHex()
     fun toGtv(): Gtv = GtvFactory.gtv(bytes.clone())
 
-    override fun equals(other: Any?) = other is FixLenBytes && javaClass == other.javaClass && Arrays.equals(bytes, other.bytes)
+    override fun equals(other: Any?) = other === this
+            || (other is FixLenBytes && javaClass == other.javaClass && bytes.contentEquals(other.bytes))
     override fun hashCode() = Arrays.hashCode(bytes)
     override fun toString() = bytes.toHex()
 }
@@ -174,7 +173,7 @@ class VersionNumber(items: List<Int>): Comparable<VersionNumber> {
     fun str(): String = items.joinToString(".")
 
     override fun compareTo(other: VersionNumber) = CommonUtils.compareLists(items, other.items)
-    override fun equals(other: Any?) = other is VersionNumber && items == other.items
+    override fun equals(other: Any?) = other === this || (other is VersionNumber && items == other.items)
     override fun hashCode() = items.hashCode()
     override fun toString() = str()
 

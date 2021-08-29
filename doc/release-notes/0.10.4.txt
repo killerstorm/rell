@@ -315,8 +315,8 @@ Special symbol "$" is used to access the current item in where- and what-parts. 
 Transforming a map:
 
     val m = ['France':33, 'Italy':39, 'Germany':49];
-    val keys = m @* {} ( $.k );
-    val values = m @* {} ( $.v );
+    val keys = m @* {} ( $[0] );
+    val values = m @* {} ( $[1] );
 
 At-expressions can be chained:
 

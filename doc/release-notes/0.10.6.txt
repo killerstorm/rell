@@ -1,5 +1,15 @@
 RELEASE NOTES 0.10.6 (2021-??-??)
 
+Breaking changes:
+
+i. Map item type in collection-at. When iterating over a map<K, V> using a collection-at, the type of an item used to be
+   (k:K, v:V), and from now it will be (K, V). This way, the type of the item is the same as in for-loop.
+   Applications deployed with older versions of Rell will run in compatibility mode and will not break after Rell
+   binaries upgrade.
+
+ii. Restrictions on "module_args". The "module_args" struct now must satisfy same restrictions as global constants: it
+    must be immutable and not contain database-related components (like entities).
+
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 1. Language: Function type
 
@@ -162,3 +172,39 @@ Member functions (i. e. methods of types "text", "list<T>", etc.) can be partial
     print(f());                 // Prints 5.
 
 Some system functions don't support partial application: print(), log(), require(), text.format() and a few more.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+3. Language: Global constants
+
+Syntax is similar to local variables:
+
+    val MAGIC_NUMBER = 123;
+    val ADMIN_USER = 'Bob';
+
+    function f() {
+        print(MAGIC_NUMBER);
+        print(ADMIN_USER);
+    }
+
+There are restrictions on types and expressions used in global constants:
+
+- Type must be immutable. Thus, collections (list, set, map) are not allowed, as well as structs with mutable
+  attributes.
+- Type cannot be an entity or contain an entity, as global constants must not depend on the state of the database.
+- Expression cannot access the database, so database at-expressions and some API are not allowed.
+- Expression cannot call user-defined functions (because the compiler does not restrict what a function can do).
+
+When the expression is simple enough, the value of a global constant is evaluated at compile-time. Otherwise, it is
+evaluated on application start.
+
+It is recommended to use upper-case naming for global constants, though lowercase letters are allowed too.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+4. Language: Collection-at supports same source expressions as for-loop
+
+In particular, it is possible to iterate over a range with collection-at
+
+    val l = range(5) @* {};     // Returns list<integer>: [0, 1, 2, 3, 4]
+
+Additionally, the type of map item is now (K, V) for both for-loop and collection-at. In previous versions it used
+to be (K, V) for for-loop and (k:K, v:V) for collection-at.

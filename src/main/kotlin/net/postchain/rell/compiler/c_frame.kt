@@ -8,6 +8,7 @@ import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_LocalVarExpr
+import net.postchain.rell.compiler.vexpr.V_SmartNullableExpr
 import net.postchain.rell.model.*
 import net.postchain.rell.utils.mutableMultimapOf
 import net.postchain.rell.utils.toImmList
@@ -18,9 +19,28 @@ class C_LocalVarRef(val target: C_LocalVar, val ptr: R_VarPtr) {
     fun toDbExpr(): Db_Expr = Db_InterpretedExpr(toRExpr())
 
     fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr {
-        val nulled = ctx.factsCtx.nulled(target.uid)
-        val smartType = if (target.type is R_NullableType && nulled == C_VarFact.NO) target.type.valueType else null
-        return V_LocalVarExpr(ctx, pos, this, nulled, smartType)
+        val vExpr = V_LocalVarExpr(ctx, pos, this)
+        return smartNullable(ctx, vExpr, target.type, target.uid, target.name, SMART_KIND)
+    }
+
+    companion object {
+        private val SMART_KIND = C_CodeMsg("var", "Variable")
+
+        fun smartNullable(
+                ctx: C_ExprContext,
+                vExpr: V_Expr,
+                formalType: R_Type,
+                varUid: C_VarUid,
+                varName: String,
+                varKind: C_CodeMsg
+        ): V_Expr {
+            val nulled = ctx.factsCtx.nulled(varUid)
+            val smartType = if (formalType is R_NullableType && nulled == C_VarFact.NO) formalType.valueType else null
+
+            return if (nulled == C_VarFact.MAYBE && smartType == null) vExpr else {
+                V_SmartNullableExpr(ctx, vExpr, nulled == C_VarFact.YES, smartType, varName, varKind)
+            }
+        }
     }
 }
 
@@ -108,15 +128,19 @@ class C_BlockScopeBuilder(
 ) {
     private val explicitEntries = mutableMapOf<String, C_BlockEntry>()
     private val implicitEntries = mutableMultimapOf<String, C_BlockEntry>()
-    private var endOffset = startOffset
-    private var build = false
+    private var done = false
 
-    init {
+    private var endOffset: Int = let {
+        var resOfs = startOffset
         for (entry in proto.localVars.values) {
             val offset = entry.offset
             check(offset >= startOffset)
-            endOffset = Math.max(endOffset, offset + 1)
+            resOfs = Math.max(resOfs, offset + 1)
         }
+        resOfs
+    }
+
+    init {
         explicitEntries.putAll(proto.localVars.mapValues { C_BlockEntry_Var(it.value) })
     }
 
@@ -136,14 +160,14 @@ class C_BlockScopeBuilder(
     }
 
     fun newVar(name: String, type: R_Type, mutable: Boolean, atExprId: R_AtExprId?): C_LocalVar {
-        check(!build)
+        check(!done)
         val ofs = endOffset++
         val varUid = fnCtx.nextVarUid(name)
         return C_LocalVar(name, type, mutable, ofs, varUid, atExprId)
     }
 
     fun addEntry(name: String, explicit: Boolean, entry: C_BlockEntry) {
-        check(!build)
+        check(!done)
         if (explicit) {
             if (name !in explicitEntries) {
                 explicitEntries[name] = entry
@@ -154,8 +178,8 @@ class C_BlockScopeBuilder(
     }
 
     fun build(): C_BlockScope {
-        check(!build)
-        build = true
+        check(!done)
+        done = true
         val variables = explicitEntries
                 .map { it.key to it.value.toLocalVarOpt() }
                 .filter { it.second != null }

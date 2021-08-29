@@ -165,17 +165,46 @@ class TestModuleTest: BaseRellTest(false) {
 
     @Test fun testTestModuleAsParentOfRegularModule() {
         file("foo/module.rell", "@test module;")
-        file("foo/bar.rell", "module;")
-        file("foo/bar_test.rell", "@test module; function test() {}")
+        file("foo/a.rell", "module;")
+        file("foo/a_test.rell", "@test module; function test() {}")
+        file("foo/b/module.rell", "module;")
+        file("foo/c/empty.rell", "")
 
-        chkCompile("import foo.bar;", "ct_err:module:parent_is_test:foo.bar:foo")
-        chkCompile("import foo.bar_test;", "ct_err:import:module_test:foo.bar_test")
-        chkTests("foo.bar_test", "test=OK")
+        chkCompile("import foo.a;", "ct_err:foo/a.rell:module:parent_is_test:foo.a:foo")
+        chkCompile("import foo.b;", "ct_err:foo/b/module.rell:module:parent_is_test:foo.b:foo")
+        chkCompile("import foo.c;", "OK") // Empty file - nowhere to report an error
+        chkCompile("import foo.a_test;", "ct_err:import:module_test:foo.a_test")
+
+        chkTests("foo.a_test", "test=OK")
     }
 
     @Test fun testMountNameOfTestModule() {
         file("tests.rell", "@test @mount('foo') module; function test() {}")
         chkTests("tests", "ct_err:tests.rell:ann:mount:test_module")
+    }
+
+    @Test fun testModuleArgs() {
+        file("app.rell", """module;
+            struct module_args { x: integer; }
+            function f() = chain_context.args;
+            query q() = chain_context.args;
+            operation op() { print('o:' + chain_context.args); }
+        """)
+
+        file("test.rell", """@test module;
+            import app;
+            function test() {
+                print('f:' + app.f());
+                print('q:' + app.q());
+                app.op().run();
+            }
+        """)
+
+        tstCtx.useSql = true
+        tst.moduleArgs("app" to "{'x':123}")
+
+        chkTests("test", "test=OK")
+        chkOut("f:app:module_args{x=123}", "q:app:module_args{x=123}", "o:app:module_args{x=123}")
     }
 
     private fun chkTests(testModule: String, expected: String) {
@@ -201,8 +230,15 @@ class TestModuleTest: BaseRellTest(false) {
         return actual
     }
 
-    private fun runTest(globalCtx: Rt_GlobalContext, sourceDir: C_SourceDir, app: R_App, module: String, f: R_FunctionDefinition): String {
+    private fun runTest(
+            globalCtx: Rt_GlobalContext,
+            sourceDir: C_SourceDir,
+            app: R_App,
+            module: String,
+            f: R_FunctionDefinition
+    ): String {
         val tester = RellCodeTester(tstCtx)
+        tester.moduleArgs(*tst.getModuleArgs().toList().toTypedArray())
         for ((path, text) in tst.files()) tester.file(path, text)
         tester.mainModule(module)
         tester.init()

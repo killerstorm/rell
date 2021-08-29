@@ -486,16 +486,16 @@ class NullAnalysisTest: BaseRellTest(false) {
         chkWarn()
 
         chkEx("{ val x: rec? = rec(123); return $expr; }", resNotNull)
-        chkWarn("expr_var_null:never:x")
+        chkWarn("expr:smartnull:var:never:x")
 
         chkEx("{ val x: rec? = null; return $expr; }", resNull)
-        chkWarn("expr_var_null:always:x")
+        chkWarn("expr:smartnull:var:always:x")
 
         chkEx("{ val x = f(rec(123)); if (x == null) return null; return $expr; }", resNotNull)
-        chkWarn("expr_var_null:never:x")
+        chkWarn("expr:smartnull:var:never:x")
 
         chkEx("{ val x = f(null); if (x != null) return null; return $expr; }", resNull)
-        chkWarn("expr_var_null:always:x")
+        chkWarn("expr:smartnull:var:always:x")
     }
 
     @Test fun testDefiniteFactOperatorNotNull() {
@@ -512,23 +512,20 @@ class NullAnalysisTest: BaseRellTest(false) {
         chkWarn()
 
         chkEx("{ val x: integer? = 123; return $expr; }", "int[123]")
-        chkWarn("expr_var_null:never:x")
+        chkWarn("expr:smartnull:var:never:x")
 
         chkEx("{ val x: integer? = null; return $expr; }", rtErr)
-        chkWarn("expr_var_null:always:x")
+        chkWarn("expr:smartnull:var:always:x")
 
         chkEx("{ val x = _nullable(123); if (x == null) return 0; return $expr; }", "int[123]")
-        chkWarn("expr_var_null:never:x")
+        chkWarn("expr:smartnull:var:never:x")
 
         chkEx("{ val x = _nullable_int(null); if (x != null) return 0; return $expr; }", rtErr)
-        chkWarn("expr_var_null:always:x")
+        chkWarn("expr:smartnull:var:always:x")
     }
 
     @Test fun testAtExpr() {
-        tstCtx.useSql = true
-        def("entity user { name; score: integer; }")
-        insert("c0.user", "name,score", "33,'Bob',1000")
-
+        initEntity()
         chkAtExpr("123", "if (x == null) true else .score >= x", "user[33]")
         chkAtExpr("123", "if (x != null) .score >= x else true", "user[33]")
         chkAtExpr("123", "when { x == null -> true; else -> .score >= x }", "user[33]")
@@ -545,6 +542,12 @@ class NullAnalysisTest: BaseRellTest(false) {
         chkAtExpr("123", "x == null or .score >= x", "user[33]")
         chkAtExpr("123", ".score >= (x ?: 0)", "user[33]")
         chkAtExpr("123", ".score >= (x ?: .score)", "user[33]")
+    }
+
+    private fun initEntity() {
+        tstCtx.useSql = true
+        def("entity user { name; score: integer; }")
+        insert("c0.user", "name,score", "33,'Bob',1000")
     }
 
     private fun chkAtExpr(v: String, expr: String, expected: String) {
@@ -569,6 +572,62 @@ class NullAnalysisTest: BaseRellTest(false) {
         chkEx("{ val x = _nullable_int(123); return _type_of(x); }", "integer?")
         chkEx("{ val x = _nullable_int(123); op(x); return _type_of(x); }", "ct_err:expr_call_argtype:op:0:x:integer:integer?")
         chkEx("{ val x = _nullable_int(123); op(x!!); return _type_of(x); }", "integer")
+    }
+
+    @Test fun testEntityAttr() {
+        initEntity()
+        def("function f(x: integer) = user @ { .score >= x };")
+        chkEx("{ val x = _nullable_int(10); print(f(x?:0).name); return _type_of(x); }", "text[integer?]")
+        chkEx("{ val x = _nullable_int(10); print(f(x!!).name); return _type_of(x); }", "text[integer]")
+    }
+
+    @Test fun testEntityToStruct() {
+        initEntity()
+        def("function f(x: integer) = user @ { .score >= x };")
+        chkEx("{ val x = _nullable_int(10); print(f(x?:0).to_struct()); return _type_of(x); }", "text[integer?]")
+        chkEx("{ val x = _nullable_int(10); print(f(x!!).to_struct()); return _type_of(x); }", "text[integer]")
+    }
+
+    @Test fun testEntityCreate() {
+        initEntity()
+        val base = "val x = _nullable_int(10);"
+
+        chkOpOut("$base create user(name = 'Alice', score = x?:0); print(_type_of(x));", "integer?")
+        chkOpOut("$base create user(name = 'Alice', score = x!!); print(_type_of(x));", "integer")
+        chkOpOut("$base create user('Alice', x?:0); print(_type_of(x));", "integer?")
+        chkOpOut("$base create user('Alice', x!!); print(_type_of(x));", "integer")
+
+        chkOpOut("$base create user(struct<user>(name = 'Alice', score = x?:0)); print(_type_of(x));", "integer?")
+        chkOpOut("$base create user(struct<user>(name = 'Alice', score = x!!)); print(_type_of(x));", "integer")
+        chkOpOut("$base create user(struct<user>('Alice', x?:0)); print(_type_of(x));", "integer?")
+        chkOpOut("$base create user(struct<user>('Alice', x!!)); print(_type_of(x));", "integer")
+    }
+
+    @Test fun testEnumAttr() {
+        def("enum colors { red, green, blue }")
+        def("function f(x: integer) = colors.value(x);")
+        chkEx("{ val x = _nullable_int(1); print(f(x?:0).value); return _type_of(x); }", "text[integer?]")
+        chkEx("{ val x = _nullable_int(1); print(f(x?:0).name); return _type_of(x); }", "text[integer?]")
+        chkEx("{ val x = _nullable_int(1); print(f(x!!).value); return _type_of(x); }", "text[integer]")
+        chkEx("{ val x = _nullable_int(1); print(f(x!!).name); return _type_of(x); }", "text[integer]")
+    }
+
+    @Test fun testStructConstructor() {
+        def("struct s { a: integer; }")
+        val base = "val x = _nullable_int(10);"
+        chkEx("{ $base print(s(a = x?:0)); return _type_of(x); }", "text[integer?]")
+        chkEx("{ $base print(s(a = x!!)); return _type_of(x); }", "text[integer]")
+        chkEx("{ $base print(s(x?:0)); return _type_of(x); }", "text[integer?]")
+        chkEx("{ $base print(s(x!!)); return _type_of(x); }", "text[integer]")
+    }
+
+    @Test fun testIncDecExpr() {
+        def("struct s { mutable a: integer; }")
+        val base = "val x = _nullable_int(10);"
+        chkEx("{ $base print(s(a = x?:0).a++); return _type_of(x); }", "text[integer?]")
+        chkEx("{ $base print(s(a = x!!).a++); return _type_of(x); }", "text[integer]")
+        chkEx("{ $base print(++s(a = x?:0).a); return _type_of(x); }", "text[integer?]")
+        chkEx("{ $base print(++s(a = x!!).a); return _type_of(x); }", "text[integer]")
     }
 
     // null-dependent: when (x) { null -> }

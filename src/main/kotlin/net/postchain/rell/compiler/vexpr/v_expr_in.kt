@@ -2,7 +2,6 @@ package net.postchain.rell.compiler.vexpr
 
 import net.postchain.rell.compiler.C_Errors
 import net.postchain.rell.compiler.C_ExprContext
-import net.postchain.rell.compiler.C_ExprVarFacts
 import net.postchain.rell.compiler.C_Utils
 import net.postchain.rell.compiler.ast.C_BinOp_EqNe
 import net.postchain.rell.model.*
@@ -12,13 +11,9 @@ class V_InCollectionExpr(
         private val elemType: R_Type,
         private val left: V_Expr,
         private val right: V_Expr,
-        private val not: Boolean,
-        private val varFacts: C_ExprVarFacts
+        private val not: Boolean
 ): V_Expr(exprCtx, left.pos) {
-    override val exprInfo = V_ExprInfo.make(listOf(left, right))
-
-    override fun type() = R_BooleanType
-    override fun varFacts() = varFacts
+    override fun exprInfo0() = V_ExprInfo.simple(R_BooleanType, left, right)
 
     override fun toRExpr0(): R_Expr {
         val rLeft = left.toRExpr()
@@ -38,7 +33,7 @@ class V_InCollectionExpr(
             return C_Utils.errorDbExpr(R_BooleanType)
         }
 
-        return if (right.dependsOnDbAtEntity()) {
+        return if (right.info.dependsOnDbAtEntity) {
             if (right is V_ListLiteralExpr) {
                 val dbRights = right.elems.map { it.toDbExpr() }
                 Db_InExpr(dbLeft, dbRights, not)

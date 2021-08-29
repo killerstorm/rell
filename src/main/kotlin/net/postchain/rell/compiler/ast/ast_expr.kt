@@ -46,20 +46,17 @@ abstract class S_Expr(val startPos: S_Pos) {
 
     open fun compileFromItem(ctx: C_ExprContext): C_AtFromItem {
         val cExpr = compileSafe(ctx)
-        val cValue = cExpr.value()
-        val type = cValue.type()
-        return when (type) {
-            is R_CollectionType -> C_AtFromItem_Collection(startPos, cValue, type.elementType)
-            is R_MapType -> {
-                val tupleType = R_TupleType.create("k" to type.keyType, "v" to type.valueType)
-                C_AtFromItem_Map(startPos, cValue, tupleType)
-            }
-            is R_CtErrorType -> C_AtFromItem_Collection(startPos, cValue, type)
-            else -> {
-                val s = type.toStrictString()
-                ctx.msgCtx.error(startPos, "at:from:bad_type:$s", "Invalid type for at-expression: $s")
-                C_AtFromItem_Collection(startPos, cValue, type)
-            }
+        val vExpr = cExpr.value()
+
+        val type = vExpr.type
+        val cIterator = C_ForIterator.compile(ctx, type, false)
+
+        return if (cIterator == null) {
+            val s = type.toStrictString()
+            ctx.msgCtx.error(startPos, "at:from:bad_type:$s", "Invalid type for at-expression: $s")
+            C_AtFromItem_Iterable(startPos, vExpr, type, R_ForIterator_Collection)
+        } else {
+            C_AtFromItem_Iterable(startPos, vExpr, cIterator.itemType, cIterator.rIterator)
         }
     }
 
@@ -74,7 +71,7 @@ sealed class S_LiteralExpr(pos: S_Pos): S_Expr(pos) {
 
     final override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
         val v = value()
-        val vExpr = V_ConstantExpr(ctx, startPos, v)
+        val vExpr = V_ConstantValueExpr(ctx, startPos, v)
         return C_VExpr(vExpr)
     }
 }
@@ -108,7 +105,7 @@ class S_SubscriptExpr(val opPos: S_Pos, val base: S_Expr, val expr: S_Expr): S_E
         val vBase = base.compile(ctx).value()
         val vExpr = expr.compile(ctx).value()
 
-        val baseType = vBase.type()
+        val baseType = vBase.type
         val effectiveType = C_Types.removeNullable(baseType)
 
         val kind = compileSubscriptKind(ctx, effectiveType)
@@ -117,12 +114,9 @@ class S_SubscriptExpr(val opPos: S_Pos, val base: S_Expr, val expr: S_Expr): S_E
         }
 
         C_Errors.check(ctx.msgCtx, baseType !is R_NullableType, opPos, "expr_subscript_null", "Cannot apply '[]' on nullable value")
-        C_Types.match(kind.keyType, vExpr.type(), expr.startPos, "expr_subscript_keytype", "Invalid subscript key type")
+        C_Types.match(kind.keyType, vExpr.type, expr.startPos, "expr_subscript_keytype", "Invalid subscript key type")
 
-        val postFacts = vBase.varFacts().postFacts.and(vExpr.varFacts().postFacts)
-        val exprFacts = C_ExprVarFacts.of(postFacts = postFacts)
-
-        val vResExpr = kind.compile(ctx, vBase, vExpr, exprFacts)
+        val vResExpr = kind.compile(ctx, vBase, vExpr)
         return C_VExpr(vResExpr)
     }
 
@@ -151,7 +145,11 @@ class S_SubscriptExpr(val opPos: S_Pos, val base: S_Expr, val expr: S_Expr): S_E
     }
 
     private fun compileTuple0(vExpr: V_Expr, baseType: R_TupleType): Int {
-        val indexZ = C_Utils.evaluate(expr.startPos) { vExpr.constantValue()?.asInteger() }
+        val indexZ = C_Utils.evaluate(expr.startPos) {
+            val value = vExpr.constantValue(V_ConstantValueEvalContext())
+            value?.asInteger()
+        }
+
         val index = C_Errors.checkNotNull(indexZ, expr.startPos, "expr_subscript:tuple:no_const",
                 "Subscript key for a tuple must be a constant value, not an expression")
 
@@ -164,29 +162,29 @@ class S_SubscriptExpr(val opPos: S_Pos, val base: S_Expr, val expr: S_Expr): S_E
     }
 
     private inner abstract class Subscript(val keyType: R_Type) {
-        abstract fun compile(ctx: C_ExprContext, base: V_Expr, key: V_Expr, varFacts: C_ExprVarFacts): V_Expr
+        abstract fun compile(ctx: C_ExprContext, base: V_Expr, key: V_Expr): V_Expr
     }
 
     private inner class Subscript_Common(keyType: R_Type, val kind: V_CommonSubscriptKind): Subscript(keyType) {
-        override fun compile(ctx: C_ExprContext, base: V_Expr, key: V_Expr, varFacts: C_ExprVarFacts): V_Expr {
-            return V_CommonSubscriptExpr(ctx, startPos, base, varFacts, key, kind)
+        override fun compile(ctx: C_ExprContext, base: V_Expr, key: V_Expr): V_Expr {
+            return V_CommonSubscriptExpr(ctx, startPos, base, key, kind)
         }
     }
 
     private inner class Subscript_Tuple(private val baseType: R_TupleType): Subscript(R_IntegerType) {
-        override fun compile(ctx: C_ExprContext, base: V_Expr, key: V_Expr, varFacts: C_ExprVarFacts): V_Expr {
+        override fun compile(ctx: C_ExprContext, base: V_Expr, key: V_Expr): V_Expr {
             val index = compileTuple0(key, baseType)
             val resType = baseType.fields[index].type
-            return V_TupleSubscriptExpr(ctx, startPos, base, varFacts, V_TupleSubscriptKind_Simple, resType, index)
+            return V_TupleSubscriptExpr(ctx, startPos, base, V_TupleSubscriptKind_Simple, resType, index)
         }
     }
 
     private inner class Subscript_VirtualTuple(private val baseType: R_VirtualTupleType): Subscript(R_IntegerType) {
-        override fun compile(ctx: C_ExprContext, base: V_Expr, key: V_Expr, varFacts: C_ExprVarFacts): V_Expr {
+        override fun compile(ctx: C_ExprContext, base: V_Expr, key: V_Expr): V_Expr {
             val index = compileTuple0(key, baseType.innerType)
             val fieldType = baseType.innerType.fields[index].type
             val resType = S_VirtualType.virtualMemberType(fieldType)
-            return V_TupleSubscriptExpr(ctx, startPos, base, varFacts, V_TupleSubscriptKind_Virtual, resType, index)
+            return V_TupleSubscriptExpr(ctx, startPos, base, V_TupleSubscriptKind_Virtual, resType, index)
         }
     }
 }
@@ -220,7 +218,7 @@ class S_CreateExpr(pos: S_Pos, val entityName: List<S_Name>, val args: List<S_Ca
             "expr_create_cant:$entityNameStr" to "Not allowed to create instances of entity '$entityNameStr'"
         }
 
-        return V_RegularCreateExpr(ctx, startPos, entity, attrs.exprFacts, attrs)
+        return V_RegularCreateExpr(ctx, startPos, entity, attrs)
     }
 
     private fun compileStruct(
@@ -238,9 +236,8 @@ class S_CreateExpr(pos: S_Pos, val entityName: List<S_Name>, val args: List<S_Ca
             is C_CallArgumentValue_Expr -> {
                 val vExpr = arg.value.vExpr
                 val structType = struct.type
-                if (!structType.isAssignableFrom(vExpr.type())) null else {
-                    val exprFacts = C_ExprVarFacts.forSubExpressions(listOf(vExpr))
-                    V_StructCreateExpr(ctx, startPos, entity, exprFacts, structType, vExpr)
+                if (!structType.isAssignableFrom(vExpr.type)) null else {
+                    V_StructCreateExpr(ctx, startPos, entity, structType, vExpr)
                 }
             }
         }
@@ -284,14 +281,12 @@ class S_TupleExpr(startPos: S_Pos, val fields: List<S_TupleExprField>): S_Expr(s
 
     private fun compile0(ctx: C_ExprContext, pairs: List<S_NameOptValue<S_Expr>>, vExprs: List<V_Expr>): V_Expr {
         for ((i, vExpr) in vExprs.withIndex()) {
-            C_Utils.checkUnitType(pairs[i].value.startPos, vExpr.type(), "expr_tuple_unit", "Type of expression is unit")
+            C_Utils.checkUnitType(pairs[i].value.startPos, vExpr.type, "expr_tuple_unit", "Type of expression is unit")
         }
 
-        val fields = vExprs.mapIndexed { i, vExpr -> R_TupleField(pairs[i].name?.str, vExpr.type()) }
+        val fields = vExprs.mapIndexed { i, vExpr -> R_TupleField(pairs[i].name?.str, vExpr.type) }
         val type = R_TupleType(fields)
-
-        val varFacts = C_ExprVarFacts.forSubExpressions(vExprs)
-        return V_TupleExpr(ctx, startPos, type, vExprs, varFacts)
+        return V_TupleExpr(ctx, startPos, type, vExprs)
     }
 
     override fun compileFrom(ctx: C_ExprContext, fromCtx: C_AtFromContext, subValues: MutableList<V_Expr>): C_AtFrom {
@@ -320,7 +315,7 @@ class S_TupleExpr(startPos: S_Pos, val fields: List<S_TupleExprField>): S_Expr(s
 
         if (entities.isEmpty()) {
             subValues.addAll(iterables.map { it.vExpr })
-            if (iterables.size > 1 && iterables.any { it.vExpr.type().isNotError() }) {
+            if (iterables.size > 1 && iterables.any { it.vExpr.type.isNotError() }) {
                 ctx.msgCtx.error(iterables[1].pos, "at:from:many_iterables:${iterables.size}",
                         "Only one collection is allowed in at-expression")
             }
@@ -368,12 +363,12 @@ class S_IfExpr(pos: S_Pos, val cond: S_Expr, val trueExpr: S_Expr, val falseExpr
         val cCond = cond.compile(ctx).value()
         val (cTrue, cFalse, resFacts) = compileTrueFalse(ctx, cCond, typeHint)
 
-        C_Types.match(R_BooleanType, cCond.type(), cond.startPos, "expr_if_cond_type", "Wrong type of condition expression")
+        C_Types.match(R_BooleanType, cCond.type, cond.startPos, "expr_if_cond_type", "Wrong type of condition expression")
         checkUnitType(trueExpr, cTrue)
         checkUnitType(falseExpr, cFalse)
 
-        val trueType = cTrue.type()
-        val falseType = cFalse.type()
+        val trueType = cTrue.type
+        val falseType = cFalse.type
         val resType = C_Types.commonType(trueType, falseType, startPos, "expr_if_restype", "Incompatible types of if branches")
 
         val vExpr = V_IfExpr(ctx, startPos, resType, cCond, cTrue, cFalse, resFacts)
@@ -381,7 +376,7 @@ class S_IfExpr(pos: S_Pos, val cond: S_Expr, val trueExpr: S_Expr, val falseExpr
     }
 
     private fun compileTrueFalse(ctx: C_ExprContext, cCond: V_Expr, typeHint: C_TypeHint): Triple<V_Expr, V_Expr, C_ExprVarFacts> {
-        val condFacts = cCond.varFacts()
+        val condFacts = cCond.varFacts
         val trueFacts = condFacts.postFacts.and(condFacts.trueFacts)
         val falseFacts = condFacts.postFacts.and(condFacts.falseFacts)
 
@@ -389,8 +384,8 @@ class S_IfExpr(pos: S_Pos, val cond: S_Expr, val trueExpr: S_Expr, val falseExpr
         val cFalse0 = falseExpr.compileWithFacts(ctx, falseFacts, typeHint).value()
         val (cTrue, cFalse) = C_BinOp_Common.promoteNumeric(ctx, cTrue0, cFalse0)
 
-        val truePostFacts = trueFacts.and(cTrue.varFacts().postFacts)
-        val falsePostFacts = falseFacts.and(cFalse.varFacts().postFacts)
+        val truePostFacts = trueFacts.and(cTrue.varFacts.postFacts)
+        val falsePostFacts = falseFacts.and(cFalse.varFacts.postFacts)
         val resPostFacts = condFacts.postFacts.and(C_VarFacts.forBranches(ctx, listOf(truePostFacts, falsePostFacts)))
         val resFacts = C_ExprVarFacts.of(postFacts = resPostFacts)
 
@@ -398,7 +393,7 @@ class S_IfExpr(pos: S_Pos, val cond: S_Expr, val trueExpr: S_Expr, val falseExpr
     }
 
     private fun checkUnitType(expr: S_Expr, vExpr: V_Expr) {
-        C_Utils.checkUnitType(expr.startPos, vExpr.type(), "expr_if_unit", "Expression returns nothing")
+        C_Utils.checkUnitType(expr.startPos, vExpr.type, "expr_if_unit", "Expression returns nothing")
     }
 }
 
@@ -406,14 +401,13 @@ class S_ListLiteralExpr(pos: S_Pos, val exprs: List<S_Expr>): S_Expr(pos) {
     override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
         val vExprs = exprs.map { it.compile(ctx).value() }
         val listType = compileType(vExprs, typeHint)
-        val varFacts = C_ExprVarFacts.forSubExpressions(vExprs)
-        val vExpr = V_ListLiteralExpr(ctx, startPos, vExprs, listType, varFacts)
+        val vExpr = V_ListLiteralExpr(ctx, startPos, vExprs, listType)
         return C_VExpr(vExpr)
     }
 
     private fun compileType(vExprs: List<V_Expr>, typeHint: C_TypeHint): R_ListType {
         for (vExpr in vExprs) {
-            C_Utils.checkUnitType(vExpr.pos, vExpr.type(), "expr_list_unit", "Element expression returns nothing")
+            C_Utils.checkUnitType(vExpr.pos, vExpr.type, "expr_list_unit", "Element expression returns nothing")
         }
 
         val hintElemType = typeHint.getListElementType()
@@ -427,9 +421,9 @@ class S_ListLiteralExpr(pos: S_Pos, val exprs: List<S_Expr>): S_Expr(pos) {
                     "Cannot determine the type of the list; use list<T>() syntax to specify the type")
         }
 
-        var rType = vExprs[0].type()
+        var rType = vExprs[0].type
         for ((i, vExpr) in vExprs.withIndex()) {
-            rType = C_Types.commonType(rType, vExpr.type(), exprs[i].startPos, "expr_list_itemtype", "Wrong list item type")
+            rType = C_Types.commonType(rType, vExpr.type, exprs[i].startPos, "expr_list_itemtype", "Wrong list item type")
         }
 
         if (hintElemType != null) {
@@ -444,18 +438,14 @@ class S_MapLiteralExpr(startPos: S_Pos, val entries: List<Pair<S_Expr, S_Expr>>)
     override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
         val valueEntries = entries.map { (key, value) -> Pair(key.compile(ctx).value(), value.compile(ctx).value()) }
         val mapType = compileType(ctx, typeHint, valueEntries)
-
-        val values = valueEntries.flatMap { (key, value) -> listOf(key, value) }
-        val exprFacts = C_ExprVarFacts.forSubExpressions(values)
-
-        val vExpr = V_MapLiteralExpr(ctx, startPos, valueEntries, mapType, exprFacts)
+        val vExpr = V_MapLiteralExpr(ctx, startPos, valueEntries, mapType)
         return C_VExpr(vExpr)
     }
 
     private fun compileType(ctx: C_ExprContext, typeHint: C_TypeHint, vEntries: List<Pair<V_Expr, V_Expr>>): R_MapType {
         for ((i, vEntry) in vEntries.withIndex()) {
-            val keyType = vEntry.first.type()
-            val valueType = vEntry.second.type()
+            val keyType = vEntry.first.type
+            val valueType = vEntry.second.type
             val keyExpr = entries[i].first
             val valueExpr = entries[i].second
             C_Utils.checkUnitType(keyExpr.startPos, keyType, "expr_map_key_unit", "Key expression returns nothing")
@@ -474,13 +464,13 @@ class S_MapLiteralExpr(startPos: S_Pos, val entries: List<Pair<S_Expr, S_Expr>>)
                     "Cannot determine type of the map; use map<K,V>() syntax to specify the type")
         }
 
-        var rTypes = R_MapKeyValueTypes(vEntries[0].first.type(), vEntries[0].second.type())
+        var rTypes = R_MapKeyValueTypes(vEntries[0].first.type, vEntries[0].second.type)
 
         for ((i, kv) in vEntries.withIndex()) {
             val (vKey, vValue) = kv
-            val rKeyType = C_Types.commonType(rTypes.key, vKey.type(), entries[i].first.startPos, "expr_map_keytype",
+            val rKeyType = C_Types.commonType(rTypes.key, vKey.type, entries[i].first.startPos, "expr_map_keytype",
                     "Wrong map entry key type")
-            val rValueType = C_Types.commonType(rTypes.value, vValue.type(), entries[i].second.startPos, "expr_map_valuetype",
+            val rValueType = C_Types.commonType(rTypes.value, vValue.type, entries[i].second.startPos, "expr_map_valuetype",
                     "Wrong map entry value type")
             rTypes = R_MapKeyValueTypes(rKeyType, rValueType)
         }
@@ -497,9 +487,9 @@ sealed class S_CollectionExpr(pos: S_Pos, val type: S_Type?, val args: List<S_Ex
     abstract fun elementTypeFromTypeHint(typeHint: C_TypeHint): R_Type?
     abstract fun makeKind(rElementType: R_Type): R_CollectionKind
 
-    fun makeExpr(ctx: C_ExprContext, rElementType: R_Type, vArg: V_Expr?, exprFacts: C_ExprVarFacts): V_Expr {
+    fun makeExpr(ctx: C_ExprContext, rElementType: R_Type, vArg: V_Expr?): V_Expr {
         val kind = makeKind(rElementType)
-        return V_CollectionConstructorExpr(ctx, startPos, kind, vArg, exprFacts)
+        return V_CollectionConstructorExpr(ctx, startPos, kind, vArg)
     }
 
     open fun checkType(ctx: C_ExprContext, rType: R_Type) {
@@ -527,13 +517,12 @@ sealed class S_CollectionExpr(pos: S_Pos, val type: S_Type?, val args: List<S_Ex
     }
 
     private fun compileConstructor0(ctx: C_ExprContext, typeHint: C_TypeHint, vArgs: List<V_Expr>): V_Expr {
-        val exprFacts = C_ExprVarFacts.forSubExpressions(vArgs)
         val rType = compileType(ctx)
         if (vArgs.size == 0) {
-            return compileConstructorNoArgs(ctx, typeHint, rType, exprFacts)
+            return compileConstructorNoArgs(ctx, typeHint, rType)
         } else if (vArgs.size == 1) {
             val vArg = vArgs[0]
-            return compileConstructorOneArg(ctx, rType, vArg, exprFacts)
+            return compileConstructorOneArg(ctx, rType, vArg)
         } else {
             throw C_Error.more(startPos, "expr_${colType}_argcnt:${vArgs.size}",
                     "Wrong number of arguments for $colType<>: ${vArgs.size}")
@@ -543,21 +532,19 @@ sealed class S_CollectionExpr(pos: S_Pos, val type: S_Type?, val args: List<S_Ex
     private fun compileConstructorNoArgs(
             ctx: C_ExprContext,
             typeHint: C_TypeHint,
-            rType: R_Type?,
-            exprFacts: C_ExprVarFacts
+            rType: R_Type?
     ): V_Expr {
         val elemType = rType ?: elementTypeFromTypeHint(typeHint)
         val rTypeReq = requireType(elemType)
-        return makeExpr(ctx, rTypeReq, null, exprFacts)
+        return makeExpr(ctx, rTypeReq, null)
     }
 
     private fun compileConstructorOneArg(
             ctx: C_ExprContext,
             rType: R_Type?,
-            vArg: V_Expr,
-            exprFacts: C_ExprVarFacts
+            vArg: V_Expr
     ): V_Expr {
-        val rArgType = vArg.type()
+        val rArgType = vArg.type
         if (rArgType !is R_CollectionType) {
             throw C_Error.more(startPos, "expr_${colType}_badtype:$rArgType",
                     "Wrong argument type for $colType<>: ${rArgType.toStrictString()}")
@@ -575,7 +562,7 @@ sealed class S_CollectionExpr(pos: S_Pos, val type: S_Type?, val args: List<S_Ex
             checkType(ctx, rArgType.elementType)
         }
 
-        return makeExpr(ctx, rElementType, vArg, exprFacts)
+        return makeExpr(ctx, rElementType, vArg)
     }
 
     private fun compileType(ctx: C_ExprContext): R_Type? {
@@ -639,35 +626,32 @@ class S_MapExpr(pos: S_Pos, val keyValueTypes: Pair<S_Type, S_Type>?, val args: 
     }
 
     private fun compileConstructor(ctx: C_ExprContext, typeHint: C_TypeHint, args: List<S_Expr>): C_Expr {
-        val values = args.map { it.compile(ctx).value() }
-        val rArgs = values.map { it.toRExpr() }
-        val rExpr = compileConstructor0(ctx, typeHint, rArgs)
-        val exprFacts = C_ExprVarFacts.forSubExpressions(values)
-        return V_RExpr.makeExpr(ctx, startPos, rExpr, exprFacts)
-    }
+        val vArgs = args.map { it.compile(ctx).value() }
 
-    private fun compileConstructor0(ctx: C_ExprContext, typeHint: C_TypeHint, rArgs: List<R_Expr>): R_Expr {
         val rKeyValueTypes = compileTypes(ctx)
-        if (rArgs.size == 0) {
-            return compileConstructorNoArgs(rKeyValueTypes, typeHint)
-        } else if (rArgs.size == 1) {
-            val rArg = rArgs[0]
-            return compileConstructorOneArg(rKeyValueTypes, rArg)
+
+        val vExpr = if (vArgs.isEmpty()) {
+            val rMapType = compileConstructorMapTypeNoArgs(rKeyValueTypes, typeHint)
+            V_MapConstructorExpr(ctx, startPos, rMapType, null)
+        } else if (vArgs.size == 1) {
+            val vArg = vArgs[0]
+            val rArgType = vArg.type
+            val rMapType = compileConstructorMapTypeOneArg(rKeyValueTypes, rArgType)
+            V_MapConstructorExpr(ctx, startPos, rMapType, vArg)
         } else {
-            throw C_Error.more(startPos, "expr_map_argcnt:${rArgs.size}", "Wrong number of arguments for map<>: ${rArgs.size}")
+            throw C_Error.more(startPos, "expr_map_argcnt:${vArgs.size}", "Wrong number of arguments for map<>: ${vArgs.size}")
         }
+
+        return C_VExpr(vExpr)
     }
 
-    private fun compileConstructorNoArgs(rKeyValueType: R_MapKeyValueTypes?, typeHint: C_TypeHint): R_Expr {
+    private fun compileConstructorMapTypeNoArgs(rKeyValueType: R_MapKeyValueTypes?, typeHint: C_TypeHint): R_Type {
         val hintKeyValueTypes = typeHint.getMapKeyValueTypes()
         val rKeyValueTypes = requireTypes(rKeyValueType ?: hintKeyValueTypes)
-        val rMapType = R_MapType(rKeyValueTypes)
-        return R_MapExpr(rMapType, null)
+        return R_MapType(rKeyValueTypes)
     }
 
-    private fun compileConstructorOneArg(rKeyValueTypes: R_MapKeyValueTypes?, rArg: R_Expr): R_Expr {
-        val rArgType = rArg.type
-
+    private fun compileConstructorMapTypeOneArg(rKeyValueTypes: R_MapKeyValueTypes?, rArgType: R_Type): R_Type {
         if (rArgType !is R_MapType) {
             throw C_Error.more(startPos, "expr_map_badtype:${rArgType.toStrictString()}",
                     "Wrong argument type for map<>: ${rArgType.toStrictString()}")
@@ -689,8 +673,7 @@ class S_MapExpr(pos: S_Pos, val keyValueTypes: Pair<S_Type, S_Type>?, val args: 
                 "Value type mismatch for map<>"
         )
 
-        val rMapType = R_MapType(R_MapKeyValueTypes(rActualKeyType, rActualValueType))
-        return R_MapExpr(rMapType, rArg)
+        return R_MapType(R_MapKeyValueTypes(rActualKeyType, rActualValueType))
     }
 
     private fun compileTypes(ctx: C_ExprContext): R_MapKeyValueTypes? {
@@ -746,6 +729,7 @@ class S_MirrorStructExpr(pos: S_Pos, val mutable: Boolean, val type: S_Type): S_
     override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
         val structType = type.compileMirrorStructType(ctx.nsCtx, mutable)
         structType ?: return C_Utils.errorExpr(ctx, startPos)
+
         val ns = C_LibFunctions.makeStructNamespace(structType.struct)
         return C_MirrorStructExpr(startPos, structType.struct, ns)
     }

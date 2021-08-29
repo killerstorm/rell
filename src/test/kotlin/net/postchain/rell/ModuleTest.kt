@@ -4,7 +4,10 @@
 
 package net.postchain.rell
 
-import net.postchain.rell.compiler.*
+import net.postchain.rell.compiler.C_CommonError
+import net.postchain.rell.compiler.C_CompilerModuleSelection
+import net.postchain.rell.compiler.C_CompilerOptions
+import net.postchain.rell.compiler.C_SourceDir
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.test.RellCodeTester
@@ -401,7 +404,7 @@ class ModuleTest: BaseRellTest(false) {
     }
 
     @Test fun testCompileTestModules() {
-        val sourceDir = C_MapSourceDir.of(
+        val sourceDir = C_SourceDir.mapDirOf(
                 "module.rell" to "query root() = 0;",
                 "part.rell" to "query part() = 0;",
                 "module_test.rell" to "@test module;",
@@ -435,7 +438,7 @@ class ModuleTest: BaseRellTest(false) {
     }
 
     @Test fun testCompileTestModulesEmptyDir() {
-        val sourceDir = C_MapSourceDir.of(
+        val sourceDir = C_SourceDir.mapDirOf(
                 "empty/blank/none.txt" to ""
         )
         chkCompileTestModules(sourceDir, listOf("empty"), listOf(), "cm_err:import:not_found:empty")
@@ -445,7 +448,7 @@ class ModuleTest: BaseRellTest(false) {
     }
 
     @Test fun testCompileTestModulesUnknownModule() {
-        val sourceDir = C_MapSourceDir.of(
+        val sourceDir = C_SourceDir.mapDirOf(
                 "module.rell" to "query root() = 0;"
         )
 
@@ -458,7 +461,7 @@ class ModuleTest: BaseRellTest(false) {
     }
 
     @Test fun testCompileTestModulesFileDirConflict() {
-        val sourceDir = C_MapSourceDir.of(
+        val sourceDir = C_SourceDir.mapDirOf(
                 "trouble/conflict/module.rell" to "module;",
                 "trouble/conflict.rell" to "module;"
         )
@@ -467,7 +470,7 @@ class ModuleTest: BaseRellTest(false) {
     }
 
     @Test fun testCompileTestModulesStrangeFileNames() {
-        val sourceDir = C_MapSourceDir.of(
+        val sourceDir = C_SourceDir.mapDirOf(
                 "app/module.rell" to "module;",
                 "app/123.rell" to "function foo() = 123;",
                 "app/other-strange.name.rell" to "function bar() = 456;",
@@ -512,6 +515,72 @@ class ModuleTest: BaseRellTest(false) {
         assertNotNull(app)
         assertTrue(app.valid)
         return app.modules.map { it.name }.sorted().joinToString(",", "[", "]") { "[$it]" }
+    }
+
+    @Test fun testParentModuleOfMainModule() {
+        file("module.rell", "module; function f_root() {}")
+        file("a/module.rell", "module; function f_a() {}")
+        file("a/b/module.rell", "module; function f_b() {}")
+        file("a/b/c/module.rell", "module; function f_c() {}")
+        mainModule("a.b.c")
+        chkAppFns("f_a", "f_b", "f_c", "f_root")
+    }
+
+    @Test fun testParentModuleOfImportedModule() {
+        file("module.rell", "module; function f_root() {}")
+        file("a/module.rell", "module; function f_a() {}")
+        file("a/b/module.rell", "module; function f_b() {}")
+        file("a/b/c/module.rell", "module; function f_c() {}")
+        file("entry.rell", "module; import a.b.c;")
+        mainModule("entry")
+        chkAppFns("f_a", "f_b", "f_c", "f_root")
+    }
+
+    @Test fun testParentModuleOfUnreferencedModule() {
+        file("module.rell", "module; function f_root() {}")
+        file("a/module.rell", "module; function f_a() {}")
+        file("a/b/module.rell", "module; function f_b() {}")
+        file("a/b/c/module.rell", "module; function f_c() {}")
+        chkAppFns("f_root")
+    }
+
+    @Test fun testParentModuleOfTestModule() {
+        file("module.rell", "module; function f_root() {}")
+        file("a/module.rell", "module; function f_a() {}")
+        file("a/b/module.rell", "module; function f_b() {}")
+        file("a/b/c/module.rell", "@test module; function f_c() {}")
+        tst.testModules("a.b.c")
+        chkAppFns("f_c", "f_root")
+    }
+
+    @Test fun testParentModuleOfTestModule2() {
+        file("module.rell", "@test module; function f_root() {}")
+        file("a/module.rell", "@test module; function f_a() {}")
+        file("a/b/module.rell", "@test module; function f_b() {}")
+        file("a/b/c/module.rell", "@test module; function f_c() {}")
+        tst.testModules("a.b.c")
+        chkAppFns("f_c", "f_root")
+    }
+
+    @Test fun testFileModuleAsTestModule() {
+        file("foo/bar.rell", "@test module; function foo_bar_f() {}")
+        tst.testModules("foo.bar")
+        chkAppFns("foo_bar_f")
+    }
+
+    @Test fun testRegularModuleAsTestModule() {
+        file("a/b/c.rell", "module; function c_f() {}")
+        file("a/b/d.rell", "@test module; function d_f() {}")
+        file("a/b/e/module.rell", "module; function e_f() {}")
+        file("a/b/f/module.rell", "@test module; function f_f() {}")
+        tst.testModules("a")
+        chkAppFns("d_f", "f_f")
+    }
+
+    private fun chkAppFns(vararg expected: String) {
+        val rApp = tst.compileAppEx("")
+        val fns = rApp.modules.flatMap { it.functions.values.map { it.simpleName } }.sorted()
+        assertEquals(listOf(*expected), fns)
     }
 
     private fun chkImp(imp: String, code: String, exp: String) {

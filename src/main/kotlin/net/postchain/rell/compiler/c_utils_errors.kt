@@ -3,6 +3,7 @@ package net.postchain.rell.compiler
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.R_Definition
+import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.model.R_MountName
 import net.postchain.rell.model.R_Type
 
@@ -193,6 +194,16 @@ object C_Errors {
         return C_Error.stop(pos, "expr:placeholder:none", "Placeholder not defined")
     }
 
+    fun errOverrideMissing(msgCtx: C_MessageContext, pos: S_Pos, name: String, defPos: S_Pos) {
+        var code = "override:missing:[$name]"
+        var msg = "No override for abstract function '$name'"
+        if (defPos != pos) {
+            code += ":[${defPos.strLine()}]"
+            msg += " (defined at ${defPos.strLine()})"
+        }
+        msgCtx.error(pos, code, msg)
+    }
+
     fun msgPartialCallNotAllowed(fnName: String?): C_CodeMsg {
         val fnCode = fnName ?: "?"
         val fnMsg = if (fnName == null) "this function" else "function '$fnName'"
@@ -203,6 +214,10 @@ object C_Errors {
         val fnCode = fnName ?: "?"
         val fnMsg = if (fnName == null) "the function" else "function '$fnName'"
         return C_CodeMsg("expr:call:partial_ambiguous:$fnCode", "Cannot determine which variant of $fnMsg to use")
+    }
+
+    fun msgModuleNotFound(name: R_ModuleName): C_CodeMsg {
+        return C_CodeMsg("import:not_found:$name", "Module '$name' not found")
     }
 
     fun check(b: Boolean, pos: S_Pos, code: String, msg: String) {

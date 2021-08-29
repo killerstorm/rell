@@ -164,13 +164,19 @@ object SqlUtils {
         println("Database: [$database], schema: [$schema]")
     }
 
-    fun initDatabase(appCtx: Rt_AppContext, sqlMgr: SqlManager, dropTables: Boolean, sqlInitLog: Boolean) {
+    fun initDatabase(
+            appCtx: Rt_AppContext,
+            sqlCtx: Rt_SqlContext,
+            sqlMgr: SqlManager,
+            dropTables: Boolean,
+            sqlInitLog: Boolean
+    ) {
         sqlMgr.transaction { sqlExec ->
             if (dropTables) {
                 dropAll(sqlExec, true)
             }
 
-            val exeCtx = Rt_ExecutionContext(appCtx, sqlExec)
+            val exeCtx = Rt_ExecutionContext(appCtx, null, sqlCtx, sqlExec)
             val initLogging = SqlInitLogging.ofLevel(if (sqlInitLog) SqlInitLogging.LOG_ALL else SqlInitLogging.LOG_NONE)
             SqlInit.init(exeCtx, true, initLogging)
         }

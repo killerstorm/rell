@@ -146,7 +146,7 @@ class RedDbExprTest: BaseRellTest() {
                 .value2 -> fi(504, 'R4');
                 else -> fi(505, 'R5')
             }
-        """.trimIndent()
+        """
 
         chkExpr("a: integer", expr) { q ->
             chk(q, 25, "[501]", "A,C1,R1")
@@ -166,7 +166,7 @@ class RedDbExprTest: BaseRellTest() {
                 .value2, fi(133, 'C2') -> fi(502, 'R2');
                 else -> fi(503, 'R3')
             }
-        """.trimIndent()
+        """
 
         chkExpr("a: integer", expr) { q ->
             chk(q, 25, "[501]", "A,C1,R1")
@@ -188,7 +188,7 @@ class RedDbExprTest: BaseRellTest() {
                 .value2 -> fi(504, 'R4');
                 else -> fi(505, 'R5')
             }
-        """.trimIndent()
+        """
 
         chkExpr("a: integer", expr) { q ->
             chk(q, 25, "[501]", "A,C1,C3,R1,R2,R3,R4,R5")
@@ -208,7 +208,7 @@ class RedDbExprTest: BaseRellTest() {
                 .value2, fi(133, 'C2') -> fi(502, 'R2');
                 else -> fi(503, 'R3')
             }
-        """.trimIndent()
+        """
 
         chkExpr("a: integer", expr) { q ->
             chk(q, 25, "[501]", "A,C1,C2,R1,R2,R3")
@@ -230,7 +230,7 @@ class RedDbExprTest: BaseRellTest() {
                 fi(a, 'A4') > .value2 -> fi(504, 'R4');
                 else -> fi(505, 'R5')
             }
-        """.trimIndent()
+        """
 
         chkExpr("a: integer", expr) { q ->
             chk(q, 25, "[501]", "A1,C1,R1")
@@ -250,7 +250,7 @@ class RedDbExprTest: BaseRellTest() {
                 fi(a, 'A3') > .value2, fi(a, 'A4') == fi(133, 'C2') -> fi(502, 'R2');
                 else -> fi(503, 'R3')
             }
-        """.trimIndent()
+        """
 
         chkExpr("a: integer", expr) { q ->
             chk(q, 25, "[501]", "A1,C1,R1")

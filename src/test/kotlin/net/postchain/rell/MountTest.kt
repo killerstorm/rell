@@ -177,7 +177,7 @@ class MountTest: BaseRellTest() {
         def("""
             @mount('foo') namespace ns { object obj1 { x: integer = 123; } }
             @mount('bar') namespace ns { object obj2 { y: integer = 456; } }
-        """.trimIndent())
+        """)
         chkDataRaw("c0.bar.obj2(0,456)", "c0.foo.obj1(0,123)")
     }
 
@@ -189,7 +189,7 @@ class MountTest: BaseRellTest() {
             namespace ns1 { object obj3 { x: integer = 333; } }
             @mount('alice') namespace ns2 { object obj4 { x: integer = 444; } }
             @mount('') namespace ns3 { object obj5 { x: integer = 555; } }
-        """.trimIndent())
+        """)
         def("import lib;")
         chkDataRaw("c0.alice.obj4(0,444)", "c0.bob(0,222)", "c0.foo.bar.ns1.obj3(0,333)", "c0.foo.bar.obj1(0,111)", "c0.obj5(0,555)")
     }

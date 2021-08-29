@@ -6,10 +6,7 @@ package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_VirtualType
-import net.postchain.rell.compiler.vexpr.V_EntityToStructExpr
-import net.postchain.rell.compiler.vexpr.V_Expr
-import net.postchain.rell.compiler.vexpr.V_FunctionCallTarget
-import net.postchain.rell.compiler.vexpr.V_ObjectToStructExpr
+import net.postchain.rell.compiler.vexpr.*
 import net.postchain.rell.lib.C_Lib_OpContext
 import net.postchain.rell.lib.C_Lib_Rell_Test
 import net.postchain.rell.lib.R_TestOpType
@@ -27,8 +24,8 @@ object C_LibFunctions {
     val APP_GLOBAL_FNS = createGlobalFunctions(false)
     val TEST_GLOBAL_FNS = createGlobalFunctions(true)
 
-    private fun createGlobalFunctions(test: Boolean): Map<String, C_GlobalFunction> {
-        val b = C_GlobalFuncBuilder(null)
+    private fun createCommonGlobalFunctions(): C_GlobalFuncTable {
+        val b = C_GlobalFuncBuilder(null, pure = true)
 
         b.add("unit", R_UnitType, listOf(), R_SysFn_General.Unit)
 
@@ -38,7 +35,7 @@ object C_LibFunctions {
         b.add("min", R_DecimalType, listOf(R_DecimalType, R_DecimalType), R_SysFn_Math.Min_Decimal, Db_SysFn_Min_Decimal)
         b.add("max", R_IntegerType, listOf(R_IntegerType, R_IntegerType), R_SysFn_Math.Max_Integer, Db_SysFn_Max_Integer)
         b.add("max", R_DecimalType, listOf(R_DecimalType, R_DecimalType), R_SysFn_Math.Max_Decimal, Db_SysFn_Max_Decimal)
-        b.add("is_signer", R_BooleanType, listOf(R_ByteArrayType), R_SysFn_Crypto.IsSigner/*, depWarn("op_context.is_signer")*/)
+
         b.add("json", R_JsonType, listOf(R_TextType), R_SysFn_Json.FromText, Db_SysFn_Json)
 
         b.add("require", C_SysFn_Require_Boolean)
@@ -65,22 +62,40 @@ object C_LibFunctions {
         b.add("range", R_RangeType, listOf(R_IntegerType, R_IntegerType), R_SysFn_General.Range)
         b.add("range", R_RangeType, listOf(R_IntegerType, R_IntegerType, R_IntegerType), R_SysFn_General.Range)
 
-        b.add("print", C_SysFn_Print(false))
-        b.add("log", C_SysFn_Print(true))
-
         b.add("verify_signature", R_BooleanType, listOf(R_ByteArrayType, R_ByteArrayType, R_ByteArrayType), R_SysFn_Crypto.VerifySignature)
         b.add("sha256", R_ByteArrayType, listOf(R_ByteArrayType), R_SysFn_ByteArray.Sha256)
         b.add("keccak256", R_ByteArrayType, listOf(R_ByteArrayType), R_SysFn_Crypto.Keccak256)
         b.add("eth_ecrecover", R_ByteArrayType, listOf(R_ByteArrayType, R_ByteArrayType, R_IntegerType, R_ByteArrayType), R_SysFn_Crypto.EthEcRecover)
+
+        return b.build()
+    }
+
+    private fun createInternalGlobalFunctions(): C_GlobalFuncTable {
+        val b = C_GlobalFuncBuilder(null, pure = true)
 
         b.add("_crash", C_SysFn_Crash)
         b.add("_type_of", C_SysFn_TypeOf)
         b.add("_nullable", C_SysFn_Nullable(null))
         b.add("_nullable_int", C_SysFn_Nullable(R_IntegerType))
         b.add("_nullable_text", C_SysFn_Nullable(R_TextType))
-        b.add("_nop", C_SysFn_Nop)
+        b.add("_nop", C_SysFn_Nop(false))
+        b.add("_nop_print", C_SysFn_Nop(true))
         b.addEx("_strict_str", R_TextType, listOf(C_ArgTypeMatcher_Any), R_SysFn_Internal.StrictStr)
         b.add("_int_to_rowid", R_RowidType, listOf(R_IntegerType), R_SysFn_Internal.IntToRowid)
+
+        return b.build()
+    }
+
+    private fun createGlobalFunctions(test: Boolean): Map<String, C_GlobalFunction> {
+        val b = C_GlobalFuncBuilder(null)
+
+        createCommonGlobalFunctions().addTo(b)
+        createInternalGlobalFunctions().addTo(b)
+
+        b.add("is_signer", R_BooleanType, listOf(R_ByteArrayType), R_SysFn_Crypto.IsSigner/*, depWarn("op_context.is_signer")*/)
+
+        b.add("print", C_SysFn_Print(false))
+        b.add("log", C_SysFn_Print(true))
 
         if (test) {
             C_Lib_Rell_Test_Assert.FUNCTIONS.addTo(b)
@@ -89,15 +104,15 @@ object C_LibFunctions {
         return b.build().toMap().toImmMap()
     }
 
-    private val BOOLEAN_FNS = typeMemFuncBuilder(R_BooleanType)
+    private val BOOLEAN_FNS = typeMemFuncBuilder(R_BooleanType, pure = true)
             .build()
 
-    private val BOOLEAN_NAMESPACE_FNS = typeGlobalFuncBuilder(R_BooleanType)
+    private val BOOLEAN_NAMESPACE_FNS = typeGlobalFuncBuilder(R_BooleanType, pure = true)
             .build()
 
     private val BOOLEAN_NAMESPACE = C_LibUtils.makeNs(BOOLEAN_NAMESPACE_FNS)
 
-    private val INTEGER_FNS = typeMemFuncBuilder(R_IntegerType)
+    private val INTEGER_FNS = typeMemFuncBuilder(R_IntegerType, pure = true)
             .add("abs", R_IntegerType, listOf(), R_SysFn_Math.Abs_Integer, Db_SysFn_Abs_Integer)
             .add("min", R_IntegerType, listOf(R_IntegerType), R_SysFn_Math.Min_Integer, Db_SysFn_Min_Integer)
             .add("min", R_DecimalType, listOf(R_DecimalType), R_SysFn_Integer.Min_Decimal, Db_SysFn_Min_Decimal)
@@ -114,7 +129,7 @@ object C_LibFunctions {
             .add("sign", R_IntegerType, listOf(), R_SysFn_Integer.Sign, Db_SysFn_Sign)
             .build()
 
-    private val INTEGER_NAMESPACE_FNS = typeGlobalFuncBuilder(R_IntegerType)
+    private val INTEGER_NAMESPACE_FNS = typeGlobalFuncBuilder(R_IntegerType, pure = true)
             .add("parseHex", R_IntegerType, listOf(R_TextType), R_SysFn_Integer.FromHex, depError("from_hex"))
             .add("from_text", R_IntegerType, listOf(R_TextType), R_SysFn_Integer.FromText)
             .add("from_text", R_IntegerType, listOf(R_TextType, R_IntegerType), R_SysFn_Integer.FromText)
@@ -127,7 +142,7 @@ object C_LibFunctions {
             stdConstValue("MAX_VALUE", Long.MAX_VALUE)
     )
 
-    private val DECIMAL_FNS = typeMemFuncBuilder(R_DecimalType)
+    private val DECIMAL_FNS = typeMemFuncBuilder(R_DecimalType, pure = true)
             .add("abs", R_DecimalType, listOf(), R_SysFn_Math.Abs_Decimal, Db_SysFn_Abs_Decimal)
             .add("ceil", R_DecimalType, listOf(), R_SysFn_Decimal.Ceil, Db_SysFn_Decimal.Ceil)
             .add("floor", R_DecimalType, listOf(), R_SysFn_Decimal.Floor, Db_SysFn_Decimal.Floor)
@@ -144,7 +159,7 @@ object C_LibFunctions {
             .add("to_text", R_TextType, listOf(R_BooleanType), R_SysFn_Decimal.ToText)
             .build()
 
-    private val DECIMAL_NAMESPACE_FNS = typeGlobalFuncBuilder(R_DecimalType)
+    private val DECIMAL_NAMESPACE_FNS = typeGlobalFuncBuilder(R_DecimalType, pure = true)
             .add("from_text", R_DecimalType, listOf(R_TextType), R_SysFn_Decimal.FromText)
             .build()
 
@@ -165,7 +180,7 @@ object C_LibFunctions {
 
     private val ROWID_NAMESPACE = C_LibUtils.makeNs(ROWID_NAMESPACE_FNS)
 
-    private val GTV_NAMESPACE_FNS = C_GlobalFuncBuilder("gtv")
+    private val GTV_NAMESPACE_FNS = C_GlobalFuncBuilder("gtv", pure = true)
             .add("fromBytes", R_GtvType, listOf(R_ByteArrayType), R_SysFn_Gtv.FromBytes, depError("from_bytes"))
             .add("from_bytes", R_GtvType, listOf(R_ByteArrayType), R_SysFn_Gtv.FromBytes)
             .add("fromJSON", R_GtvType, listOf(R_TextType), R_SysFn_Gtv.FromJson_Text, depError("from_json"))
@@ -176,7 +191,7 @@ object C_LibFunctions {
 
     private val GTV_NAMESPACE = C_LibUtils.makeNs(GTV_NAMESPACE_FNS)
 
-    private val GTV_FNS = typeMemFuncBuilder(R_GtvType)
+    private val GTV_FNS = typeMemFuncBuilder(R_GtvType, pure = true)
             .add("toBytes", R_ByteArrayType, listOf(), R_SysFn_Gtv.ToBytes, depError("to_bytes"))
             .add("to_bytes", R_ByteArrayType, listOf(), R_SysFn_Gtv.ToBytes)
             .add("toJSON", R_JsonType, listOf(), R_SysFn_Gtv.ToJson, depError("to_json"))
@@ -190,14 +205,14 @@ object C_LibFunctions {
             "args" to C_NsValue_ChainContext_Args
     )
 
-    private val TEXT_NAMESPACE_FNS = typeGlobalFuncBuilder(R_TextType)
+    private val TEXT_NAMESPACE_FNS = typeGlobalFuncBuilder(R_TextType, pure = true)
             .add("from_bytes", R_TextType, listOf(R_ByteArrayType), R_SysFn_Text_FromBytes_1)
             .add("from_bytes", R_TextType, listOf(R_ByteArrayType, R_BooleanType), R_SysFn_Text_FromBytes)
             .build()
 
     private val TEXT_NAMESPACE = C_LibUtils.makeNs(TEXT_NAMESPACE_FNS)
 
-    private val TEXT_FNS = typeMemFuncBuilder(R_TextType)
+    private val TEXT_FNS = typeMemFuncBuilder(R_TextType, pure = true)
             .add("empty", R_BooleanType, listOf(), R_SysFn_Text_Empty, Db_SysFn_Text_Empty)
             .add("size", R_IntegerType, listOf(), R_SysFn_Text_Size, Db_SysFn_Text_Size)
             .add("len", R_IntegerType, listOf(), R_SysFn_Text_Size, Db_SysFn_Text_Size, depError("size"))
@@ -234,7 +249,7 @@ object C_LibFunctions {
             .add("to_bytes", R_ByteArrayType, listOf(), R_SysFn_Text_ToBytes)
             .build()
 
-    private val BYTEARRAY_NAMESPACE_FNS = typeGlobalFuncBuilder(R_ByteArrayType)
+    private val BYTEARRAY_NAMESPACE_FNS = typeGlobalFuncBuilder(R_ByteArrayType, pure = true)
             .add("from_list", R_ByteArrayType, listOf(R_ListType(R_IntegerType)), R_SysFn_ByteArray.FromList)
             .add("from_hex", R_ByteArrayType, listOf(R_TextType), R_SysFn_ByteArray.FromHex)
             .add("from_base64", R_ByteArrayType, listOf(R_TextType), R_SysFn_ByteArray.FromBase64)
@@ -242,7 +257,7 @@ object C_LibFunctions {
 
     private val BYTEARRAY_NAMESPACE = C_LibUtils.makeNs(BYTEARRAY_NAMESPACE_FNS)
 
-    private val BYTEARRAY_FNS = typeMemFuncBuilder(R_ByteArrayType)
+    private val BYTEARRAY_FNS = typeMemFuncBuilder(R_ByteArrayType, pure = true)
             .add("empty", R_BooleanType, listOf(), R_SysFn_ByteArray.Empty, Db_SysFn_ByteArray_Empty)
             .add("size", R_IntegerType, listOf(), R_SysFn_ByteArray.Size, Db_SysFn_ByteArray_Size)
             .add("len", R_IntegerType, listOf(), R_SysFn_ByteArray.Size, Db_SysFn_ByteArray_Size, depError("size"))
@@ -256,24 +271,24 @@ object C_LibFunctions {
             .add("sha256", R_ByteArrayType, listOf(), R_SysFn_ByteArray.Sha256)
             .build()
 
-    private val JSON_NAMESPACE_FNS = typeGlobalFuncBuilder(R_JsonType)
+    private val JSON_NAMESPACE_FNS = typeGlobalFuncBuilder(R_JsonType, pure = true)
             .build()
 
     private val JSON_NAMESPACE = C_LibUtils.makeNs(JSON_NAMESPACE_FNS)
 
-    private val JSON_FNS = typeMemFuncBuilder(R_JsonType)
+    private val JSON_FNS = typeMemFuncBuilder(R_JsonType, pure = true)
             .add("str", R_TextType, listOf(), R_SysFn_Json.ToText, Db_SysFn_Json_ToText)
             .add("to_text", R_TextType, listOf(), R_SysFn_Json.ToText, Db_SysFn_Json_ToText)
             .build()
 
-    private val RANGE_NAMESPACE_FNS = typeGlobalFuncBuilder(R_RangeType)
+    private val RANGE_NAMESPACE_FNS = typeGlobalFuncBuilder(R_RangeType, pure = true)
             .build()
 
     private val RANGE_NAMESPACE = C_LibUtils.makeNs(RANGE_NAMESPACE_FNS)
 
     private val ENUM_PROPS = immMapOf(
-            "name" to C_SysMemberFormalParamsFuncBody(R_TextType, R_SysFn_Enum.Name),
-            "value" to C_SysMemberFormalParamsFuncBody(R_IntegerType, R_SysFn_Enum.Value, Db_SysFn_Nop)
+            "name" to C_SysMemberProperty(R_TextType, R_SysFn_Enum.Name, pure = true),
+            "value" to C_SysMemberProperty(R_IntegerType, R_SysFn_Enum.Value, Db_SysFn_Nop, pure = true)
     )
 
     private val RELL_NAMESPACE_FNS = C_GlobalFuncBuilder("rell")
@@ -330,7 +345,7 @@ object C_LibFunctions {
         return fn
     }
 
-    fun getEnumPropertyOpt(name: String): C_SysMemberFormalParamsFuncBody? {
+    fun getEnumPropertyOpt(name: String): C_SysMemberProperty? {
         return ENUM_PROPS[name]
     }
 
@@ -365,26 +380,26 @@ object C_LibFunctions {
     }
 
     private fun getEntityFns(type: R_EntityType): C_MemberFuncTable {
-        return typeMemFuncBuilder(type)
+        return typeMemFuncBuilder(type, pure = false)
                 .add("to_struct", C_SysFn_Entity_ToStruct(type, false))
                 .add("to_mutable_struct", C_SysFn_Entity_ToStruct(type, true))
                 .build()
     }
 
     private fun getObjectFns(type: R_ObjectType): C_MemberFuncTable {
-        return C_MemberFuncBuilder(type.name)
+        return C_MemberFuncBuilder(type.name, pure = false)
                 .add("to_struct", C_SysFn_Object_ToStruct(type, false))
                 .add("to_mutable_struct", C_SysFn_Object_ToStruct(type, true))
                 .build()
     }
 
     private fun getEnumFns(type: R_EnumType): C_MemberFuncTable {
-        return typeMemFuncBuilder(type)
+        return typeMemFuncBuilder(type, pure = true)
                 .build()
     }
 
     private fun getTupleFns(type: R_TupleType): C_MemberFuncTable {
-        return typeMemFuncBuilder(type)
+        return typeMemFuncBuilder(type, pure = true)
                 .build()
     }
 
@@ -398,7 +413,7 @@ object C_LibFunctions {
         val elemType = listType.elementType
         val comparator = elemType.comparator()
         val comparator2 = comparator ?: Comparator { _, _ -> 0 }
-        return typeMemFuncBuilder(listType)
+        return typeMemFuncBuilder(listType, pure = true)
                 .add("str", R_TextType, listOf(), R_SysFn_Any.ToText)
                 .add("to_text", R_TextType, listOf(), R_SysFn_Any.ToText)
                 .add("empty", R_BooleanType, listOf(), R_SysFn_Collection_Empty)
@@ -432,7 +447,7 @@ object C_LibFunctions {
 
     private fun getVirtualListFns(type: R_VirtualListType): C_MemberFuncTable {
         val elemType = type.innerType.elementType
-        return typeMemFuncBuilder(type)
+        return typeMemFuncBuilder(type, pure = true)
                 .add("str", R_TextType, listOf(), R_SysFn_Any.ToText)
                 .add("to_text", R_TextType, listOf(), R_SysFn_Any.ToText)
                 .add("empty", R_BooleanType, listOf(), R_SysFn_VirtualCollection_Empty)
@@ -443,7 +458,7 @@ object C_LibFunctions {
     }
 
     private fun getVirtualSetFns(type: R_VirtualSetType): C_MemberFuncTable {
-        return typeMemFuncBuilder(type)
+        return typeMemFuncBuilder(type, pure = true)
                 .add("str", R_TextType, listOf(), R_SysFn_Any.ToText)
                 .add("to_text", R_TextType, listOf(), R_SysFn_Any.ToText)
                 .add("empty", R_BooleanType, listOf(), R_SysFn_VirtualCollection_Empty)
@@ -457,7 +472,7 @@ object C_LibFunctions {
         val listType = R_ListType(elemType)
         val comparator = elemType.comparator()
         val comparator2 = comparator ?: Comparator { _, _ -> 0 }
-        return typeMemFuncBuilder(setType)
+        return typeMemFuncBuilder(setType, pure = true)
                 .add("str", R_TextType, listOf(), R_SysFn_Any.ToText)
                 .add("to_text", R_TextType, listOf(), R_SysFn_Any.ToText)
                 .add("empty", R_BooleanType, listOf(), R_SysFn_Collection_Empty)
@@ -482,7 +497,7 @@ object C_LibFunctions {
         val valueType = mapType.valueType
         val keySetType = R_SetType(keyType)
         val valueListType = R_ListType(valueType)
-        return typeMemFuncBuilder(mapType)
+        return typeMemFuncBuilder(mapType, pure = true)
                 .add("str", R_TextType, listOf(), R_SysFn_Any.ToText)
                 .add("to_text", R_TextType, listOf(), R_SysFn_Any.ToText)
                 .add("empty", R_BooleanType, listOf(), R_SysFn_Map_Empty)
@@ -506,7 +521,7 @@ object C_LibFunctions {
         val valueType = mapType.valueType
         val keySetType = R_SetType(keyType)
         val valueListType = R_ListType(S_VirtualType.virtualMemberType(valueType))
-        return typeMemFuncBuilder(type)
+        return typeMemFuncBuilder(type, pure = true)
                 .add("str", R_TextType, listOf(), R_SysFn_Any.ToText)
                 .add("to_text", R_TextType, listOf(), R_SysFn_Any.ToText)
                 .add("empty", R_BooleanType, listOf(), R_SysFn_Map_Empty)
@@ -525,7 +540,7 @@ object C_LibFunctions {
         val mFromGtv = globalFnFromGtv(type, R_SysFn_Struct.FromGtv(struct, false))
         val mFromGtvPretty = globalFnFromGtv(type, R_SysFn_Struct.FromGtv(struct, true))
 
-        val fns = C_GlobalFuncBuilder(struct.type.name)
+        val fns = C_GlobalFuncBuilder(struct.type.name, pure = true)
                 .add("fromBytes", listOf(R_ByteArrayType), mFromBytes, depError("from_bytes"))
                 .add("from_bytes", listOf(R_ByteArrayType), mFromBytes)
                 .add("fromGTXValue", listOf(R_GtvType), mFromGtv, depError("from_gtv"))
@@ -539,7 +554,11 @@ object C_LibFunctions {
 
     private fun globalFnFromGtv(type: R_Type, fn: R_SysFunction): C_GlobalFormalParamsFuncBody {
         val flags = type.completeFlags()
-        return if (!flags.gtv.fromGtv) C_SysFunction_Invalid(type) else C_SysGlobalFormalParamsFuncBody(type, fn)
+        return if (!flags.gtv.fromGtv) {
+            C_SysFunction_Invalid(type)
+        } else {
+            C_SysGlobalFormalParamsFuncBody(type, fn, pure = flags.pure)
+        }
     }
 
     private fun getStructFns(ctx: C_ExprContext, struct: R_Struct): C_MemberFuncTable {
@@ -556,13 +575,14 @@ object C_LibFunctions {
         }
 
         if (struct == mirrorStructs?.immutable) {
-            b.add("to_mutable", mirrorStructs.mutable.type, listOf(), R_SysFn_Struct.ToMutable)
+            b.add("to_mutable", mirrorStructs.mutable.type, listOf(), R_SysFn_Struct.ToMutable, pure = true)
         } else if (struct == mirrorStructs?.mutable) {
-            b.add("to_immutable", mirrorStructs.immutable.type, listOf(), R_SysFn_Struct.ToImmutable)
+            b.add("to_immutable", mirrorStructs.immutable.type, listOf(), R_SysFn_Struct.ToImmutable, pure = true)
         }
 
         b.add("toBytes", listOf(), mToBytes, depError("to_bytes"))
         b.add("to_bytes", listOf(), mToBytes)
+
         b.add("toGTXValue", listOf(), mToGtv, depError("to_gtv"))
         b.add("toPrettyGTXValue", listOf(), mToGtvPretty, depError("to_gtv_pretty"))
 
@@ -570,13 +590,13 @@ object C_LibFunctions {
     }
 
     private fun getVirtualStructFns(type: R_VirtualStructType): C_MemberFuncTable {
-        return typeMemFuncBuilder(type)
+        return typeMemFuncBuilder(type, pure = true)
                 .add("to_full", type.innerType, listOf(), R_SysFn_Virtual.ToFull)
                 .build()
     }
 
     fun getTypeStaticFunction(type: R_Type, name: String): C_GlobalFunction? {
-        val b = typeGlobalFuncBuilder(type)
+        val b = typeGlobalFuncBuilder(type, pure = true)
         when (type) {
             is R_EnumType -> getEnumStaticFns(b, type.enum)
         }
@@ -592,8 +612,8 @@ object C_LibFunctions {
         b.add("value", type, listOf(R_IntegerType), R_SysFn_Enum.Value_Int(enum))
     }
 
-    private fun typeGlobalFuncBuilder(type: R_Type): C_GlobalFuncBuilder {
-        val b = C_GlobalFuncBuilder(type.name)
+    private fun typeGlobalFuncBuilder(type: R_Type, pure: Boolean = false): C_GlobalFuncBuilder {
+        val b = C_GlobalFuncBuilder(type.name, pure = pure)
 
         b.add("from_gtv", listOf(R_GtvType), globalFnFromGtv(type, R_SysFn_Any.FromGtv(type, false, "from_gtv")))
 
@@ -605,11 +625,13 @@ object C_LibFunctions {
         return b
     }
 
-    private fun typeMemFuncBuilder(type: R_Type): C_MemberFuncBuilder = C_LibUtils.typeMemFuncBuilder(type)
+    private fun typeMemFuncBuilder(type: R_Type, pure: Boolean = false): C_MemberFuncBuilder {
+        return C_LibUtils.typeMemFuncBuilder(type, pure = pure)
+    }
 }
 
-private object C_NsValue_ChainContext_Args: C_NamespaceValue_RExpr() {
-    override fun toExpr0(ctx: C_NamespaceValueContext, name: List<S_Name>): R_Expr {
+private object C_NsValue_ChainContext_Args: C_NamespaceValue_VExpr() {
+    override fun toExpr0(ctx: C_NamespaceValueContext, name: List<S_Name>): V_Expr {
         val struct = ctx.modCtx.getModuleArgsStruct()
         if (struct == null) {
             val nameStr = C_Utils.nameStr(name)
@@ -618,7 +640,9 @@ private object C_NsValue_ChainContext_Args: C_NamespaceValue_RExpr() {
         }
 
         val moduleName = ctx.modCtx.moduleName
-        return C_Utils.createSysCallExpr(struct.type, R_SysFn_ChainContext.Args(moduleName), listOf(), name)
+        val rFn = R_SysFn_ChainContext.Args(moduleName)
+
+        return C_Utils.createSysGlobalPropExpr(ctx.exprCtx, struct.type, rFn, name, pure = true)
     }
 }
 
@@ -632,7 +656,7 @@ private class C_SysFn_Print(private val log: Boolean): C_GlobalSpecialFuncCase()
         override fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
             val filePos = caseCtx.filePos()
             val rFn = R_SysFn_General.Print(log, filePos)
-            return C_Utils.createSysCallExpr(R_UnitType, rFn, args, caseCtx)
+            return C_Utils.createSysCallRExpr(R_UnitType, rFn, args, caseCtx)
         }
     }
 }
@@ -640,19 +664,21 @@ private class C_SysFn_Print(private val log: Boolean): C_GlobalSpecialFuncCase()
 private object C_SysFn_TypeOf: C_GlobalSpecialFuncCase() {
     override fun match(ctx: C_ExprContext, args: List<V_Expr>): C_GlobalFuncCaseMatch? {
         if (args.size != 1) return null
-        val type = args[0].type()
+        val type = args[0].type
         val str = type.toStrictString()
         return CaseMatch(str)
     }
 
     private class CaseMatch(private val str: String): C_BasicGlobalFuncCaseMatch(R_TextType, listOf()) {
+        override fun globalConstantRestriction(caseCtx: C_GlobalFuncCaseCtx) = null
+
         override fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
-            val rExpr = R_ConstantExpr.makeText(str)
+            val rExpr = R_ConstantValueExpr.makeText(str)
             return rExpr
         }
 
         override fun compileCallDbExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<Db_Expr>): Db_Expr {
-            val rExpr = R_ConstantExpr.makeText(str)
+            val rExpr = R_ConstantValueExpr.makeText(str)
             return C_Utils.toDbExpr(caseCtx.linkPos, rExpr)
         }
     }
@@ -662,7 +688,7 @@ private class C_SysFn_Nullable(private val baseType: R_Type?): C_GlobalSpecialFu
     override fun match(ctx: C_ExprContext, args: List<V_Expr>): C_GlobalFuncCaseMatch? {
         if (args.size != 1) return null
 
-        val type = args[0].type()
+        val type = args[0].type
         if (baseType == null && type == R_NullType) return null
         if (baseType != null && !R_NullableType(baseType).isAssignableFrom(type)) return null
 
@@ -671,9 +697,11 @@ private class C_SysFn_Nullable(private val baseType: R_Type?): C_GlobalSpecialFu
     }
 
     private inner class CaseMatch(resType: R_Type, args: List<V_Expr>): C_BasicGlobalFuncCaseMatch(resType, args) {
+        override fun globalConstantRestriction(caseCtx: C_GlobalFuncCaseCtx) = null
+
         override fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
             checkEquals(args.size, 1)
-            return C_Utils.createSysCallExpr(resType, R_SysFn_Internal.Nop, args, caseCtx)
+            return C_Utils.createSysCallRExpr(resType, R_SysFn_Internal.Nop(false), args, caseCtx)
         }
     }
 }
@@ -687,22 +715,25 @@ private object C_SysFn_Crash: C_GlobalSpecialFuncCase() {
     private class CaseMatch(args: List<V_Expr>): C_BasicGlobalFuncCaseMatch(R_UnitType, args) {
         override fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
             checkEquals(args.size, 1)
-            return C_Utils.createSysCallExpr(R_UnitType, R_SysFn_Internal.Crash, args, caseCtx)
+            return C_Utils.createSysCallRExpr(R_UnitType, R_SysFn_Internal.Crash, args, caseCtx)
         }
     }
 }
 
-private object C_SysFn_Nop: C_GlobalSpecialFuncCase() {
+private class C_SysFn_Nop(private val print: Boolean): C_GlobalSpecialFuncCase() {
     override fun match(ctx: C_ExprContext, args: List<V_Expr>): C_GlobalFuncCaseMatch? {
         if (args.size != 1) return null
-        val resType = args[0].type()
+        val resType = args[0].type
         return CaseMatch(resType, args)
     }
 
-    private class CaseMatch(resType: R_Type, args: List<V_Expr>): C_BasicGlobalFuncCaseMatch(resType, args) {
+    private inner class CaseMatch(resType: R_Type, args: List<V_Expr>): C_BasicGlobalFuncCaseMatch(resType, args) {
+        // Internal function, used in compiler unit tests, must be allowed for constants.
+        override fun globalConstantRestriction(caseCtx: C_GlobalFuncCaseCtx) = null
+
         override fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
             checkEquals(args.size, 1)
-            return C_Utils.createSysCallExpr(resType, R_SysFn_Internal.Nop, args, caseCtx)
+            return C_Utils.createSysCallRExpr(resType, R_SysFn_Internal.Nop(print), args, caseCtx)
         }
     }
 }
@@ -711,16 +742,18 @@ private object C_SysFn_Require_Boolean: C_GlobalSpecialFuncCase() {
     override fun match(ctx: C_ExprContext, args: List<V_Expr>): C_GlobalFuncCaseMatch? {
         if (args.size < 1 || args.size > 2) return null
 
-        val exprType = args[0].type()
+        val exprType = args[0].type
         if (!R_BooleanType.isAssignableFrom(exprType)) return null
 
-        val msgType = if (args.size < 2) null else args[1].type()
+        val msgType = if (args.size < 2) null else args[1].type
         if (msgType != null && !R_TextType.isAssignableFrom(msgType)) return null
 
         return CaseMatch(args)
     }
 
     private class CaseMatch(args: List<V_Expr>): C_BasicGlobalFuncCaseMatch(R_UnitType, args) {
+        override fun globalConstantRestriction(ctx: C_GlobalFuncCaseCtx) = null
+
         override fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
             val rExpr = args[0]
             val rMsgExpr = if (args.size < 2) null else args[1]
@@ -734,13 +767,13 @@ private object C_SysFn_Require_Nullable: C_GlobalSpecialFuncCase() {
         if (args.size < 1 || args.size > 2) return null
 
         val expr = args[0].asNullable()
-        val exprType = expr.type()
+        val exprType = expr.type
         if (exprType !is R_NullableType) return null
 
         val msg = if (args.size < 2) null else args[1]
-        if (msg != null && !R_TextType.isAssignableFrom(msg.type())) return null
+        if (msg != null && !R_TextType.isAssignableFrom(msg.type)) return null
 
-        val preFacts = expr.varFacts().postFacts
+        val preFacts = expr.varFacts.postFacts
         val varFacts = C_ExprVarFacts.forNullCast(preFacts, expr)
         return CaseMatch(args, exprType.valueType, varFacts)
     }
@@ -752,6 +785,7 @@ private object C_SysFn_Require_Nullable: C_GlobalSpecialFuncCase() {
     ): C_SpecialGlobalFuncCaseMatch(valueType) {
         override fun varFacts() = varFacts
         override fun subExprs() = args
+        override fun globalConstantRestriction(caseCtx: C_GlobalFuncCaseCtx): V_GlobalConstantRestriction? = null
 
         override fun compileCallR(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): R_Expr {
             val exprValue = args[0]
@@ -766,10 +800,10 @@ object C_SysFn_Require_Collection: C_GlobalSpecialFuncCase() {
     override fun match(ctx: C_ExprContext, args: List<V_Expr>): C_GlobalFuncCaseMatch? {
         if (args.size < 1 || args.size > 2) return null
 
-        val msgType = if (args.size < 2) null else args[1].type()
+        val msgType = if (args.size < 2) null else args[1].type
         if (msgType != null && !R_TextType.isAssignableFrom(msgType)) return null
 
-        val exprType = args[0].type()
+        val exprType = args[0].type
         val (valueType, condition) = getCondition(exprType)
         return if (condition == null) null else CaseMatch(valueType, args, condition)
     }
@@ -793,6 +827,8 @@ object C_SysFn_Require_Collection: C_GlobalSpecialFuncCase() {
             args: List<V_Expr>,
             private val condition: R_RequireCondition
     ): C_BasicGlobalFuncCaseMatch(resType, args) {
+        override fun globalConstantRestriction(caseCtx: C_GlobalFuncCaseCtx) = null
+
         override fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
             val rExpr = args[0]
             val rMsgExpr = if (args.size < 2) null else args[1]
@@ -803,7 +839,7 @@ object C_SysFn_Require_Collection: C_GlobalSpecialFuncCase() {
 
 private object C_SysFn_Text_Format: C_MemberSpecialFuncCase() {
     override fun match(ctx: C_ExprContext, args: List<V_Expr>): C_MemberFuncCaseMatch {
-        val body = C_SysMemberFormalParamsFuncBody(R_TextType, R_SysFn_Text_Format)
+        val body = C_SysMemberFormalParamsFuncBody(R_TextType, R_SysFn_Text_Format, pure = true)
         return C_FormalParamsFuncCaseMatch(body, args)
     }
 }
@@ -814,7 +850,7 @@ private sealed class C_SysFn_Common_ToStruct: C_SpecialSysMemberFunction() {
     final override fun compileCallFull(ctx: C_ExprContext, callCtx: C_MemberFuncCaseCtx, args: List<V_Expr>): V_Expr {
         if (args.isNotEmpty()) {
             val member = callCtx.member
-            val argTypes = args.map { it.type() }
+            val argTypes = args.map { it.type }
             C_FuncMatchUtils.errNoMatch(ctx, member.linkPos, callCtx.qualifiedNameMsg(), argTypes)
         }
         return compile0(ctx, callCtx.member)
@@ -864,11 +900,16 @@ private fun stdConstValue(name: String, value: Long) = stdConstValue(name, Rt_In
 private fun stdConstValue(name: String, value: BigDecimal) = stdConstValue(name, Rt_DecimalValue.of(value))
 
 private fun stdConstValue(name: String, value: Rt_Value): Pair<String, C_NamespaceValue> {
-    return Pair(name, C_NamespaceValue_Value(value))
+    return Pair(name, C_NamespaceValue_RtValue(value))
 }
 
-private fun stdFnValue(name: String, type: R_Type, fn: R_SysFunction): Pair<String, C_NamespaceValue> {
-    return Pair(name, C_NamespaceValue_SysFunction(type, fn))
+private fun stdFnValue(
+        name: String,
+        type: R_Type,
+        fn: R_SysFunction,
+        pure: Boolean = false
+): Pair<String, C_NamespaceValue> {
+    return Pair(name, C_NamespaceValue_SysFunction(type, fn, pure = pure))
 }
 
 private fun matcher(type: R_Type): C_ArgTypeMatcher = C_ArgTypeMatcher_Simple(type)

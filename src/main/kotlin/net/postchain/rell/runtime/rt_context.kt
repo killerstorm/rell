@@ -16,17 +16,12 @@ import net.postchain.rell.model.*
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.repl.ReplOutputChannel
 import net.postchain.rell.sql.*
-import net.postchain.rell.utils.BytesKeyPair
-import net.postchain.rell.utils.CommonUtils
-import net.postchain.rell.utils.toImmList
-import net.postchain.rell.utils.toImmMap
+import net.postchain.rell.utils.*
 
 class Rt_GlobalContext(
         val compilerOptions: C_CompilerOptions,
         val outPrinter: Rt_Printer,
         val logPrinter: Rt_Printer,
-        val opCtx: Rt_OpContext?,
-        val chainCtx: Rt_ChainContext,
         val pcModuleEnv: RellPostchainModuleEnvironment,
         val logSqlErrors: Boolean = false,
         val sqlUpdatePortionSize: Int = 1000, // Experimental maximum is 2^15
@@ -39,20 +34,39 @@ class Rt_GlobalContext(
     }
 }
 
-class Rt_SqlContext private constructor(
-        app: R_App,
-        val mainChainMapping: Rt_ChainSqlMapping,
-        private val linkedExternalChains: List<Rt_ExternalChain>
-) {
+abstract class Rt_SqlContext(app: R_App) {
     val appDefs = app.sqlDefs
+
+    abstract fun mainChainMapping(): Rt_ChainSqlMapping
+    abstract fun linkedChain(chain: R_ExternalChainRef): Rt_ExternalChain
+    abstract fun chainMapping(externalChain: R_ExternalChainRef?): Rt_ChainSqlMapping
+}
+
+class Rt_NullSqlContext private constructor(app: R_App): Rt_SqlContext(app) {
+    override fun mainChainMapping() = throw UnsupportedOperationException()
+    override fun linkedChain(chain: R_ExternalChainRef) = throw UnsupportedOperationException()
+    override fun chainMapping(externalChain: R_ExternalChainRef?) = throw UnsupportedOperationException()
+
+    companion object {
+        fun create(app: R_App): Rt_SqlContext = Rt_NullSqlContext(app)
+    }
+}
+
+class Rt_RegularSqlContext private constructor(
+        app: R_App,
+        private val mainChainMapping: Rt_ChainSqlMapping,
+        private val linkedExternalChains: List<Rt_ExternalChain>
+): Rt_SqlContext(app) {
     private val externalChainsRoot = app.externalChainsRoot
 
-    fun linkedChain(chain: R_ExternalChainRef): Rt_ExternalChain {
+    override fun mainChainMapping() = mainChainMapping
+
+    override fun linkedChain(chain: R_ExternalChainRef): Rt_ExternalChain {
         check(chain.root === externalChainsRoot)
         return linkedExternalChains[chain.index]
     }
 
-    fun chainMapping(externalChain: R_ExternalChainRef?): Rt_ChainSqlMapping {
+    override fun chainMapping(externalChain: R_ExternalChainRef?): Rt_ChainSqlMapping {
         return if (externalChain == null) mainChainMapping else linkedChain(externalChain).sqlMapping
     }
 
@@ -60,7 +74,7 @@ class Rt_SqlContext private constructor(
         fun createNoExternalChains(app: R_App, mainChainMapping: Rt_ChainSqlMapping): Rt_SqlContext {
             require(app.valid)
             require(app.externalChains.isEmpty()) { "App uses external chains" }
-            return Rt_SqlContext(app, mainChainMapping, listOf())
+            return Rt_RegularSqlContext(app, mainChainMapping, listOf())
         }
 
         fun create(
@@ -73,7 +87,7 @@ class Rt_SqlContext private constructor(
             require(app.valid)
             val externalChains = getExternalChains(sqlExec, chainDependencies, heightProvider)
             val linkedExternalChains = calcLinkedExternalChains(app, externalChains)
-            val sqlCtx = Rt_SqlContext(app, mainChainMapping, linkedExternalChains)
+            val sqlCtx = Rt_RegularSqlContext(app, mainChainMapping, linkedExternalChains)
             checkExternalMetaInfo(sqlCtx, externalChains, sqlExec)
             return sqlCtx
         }
@@ -250,15 +264,22 @@ class Rt_SqlContext private constructor(
 
 class Rt_AppContext(
         val globalCtx: Rt_GlobalContext,
-        val sqlCtx: Rt_SqlContext,
+        val chainCtx: Rt_ChainContext,
         val app: R_App,
         val repl: Boolean,
         val test: Boolean,
         val replOut: ReplOutputChannel?,
-        val blockRunnerStrategy: Rt_BlockRunnerStrategy
+        val blockRunnerStrategy: Rt_BlockRunnerStrategy,
+        globalConstantStates: List<Rt_GlobalConstantState> = immListOf()
 ) {
     private var objsInit: SqlObjectsInit? = null
     private var objsInited = false
+
+    private val globalConstants = Rt_GlobalConstants(this, globalConstantStates)
+
+    init {
+        globalConstants.initialize()
+    }
 
     fun objectsInitialization(objsInit: SqlObjectsInit, code: () -> Unit) {
         check(this.objsInit == null)
@@ -279,9 +300,108 @@ class Rt_AppContext(
             true
         }
     }
+
+    fun getGlobalConstant(constId: R_GlobalConstantId): Rt_Value {
+        return globalConstants.getValue(constId)
+    }
+
+    fun dumpGlobalConstants(): List<Rt_GlobalConstantState> {
+        return globalConstants.dump()
+    }
 }
 
-class Rt_ExecutionContext(val appCtx: Rt_AppContext, val sqlExec: SqlExecutor) {
+class Rt_GlobalConstantState(val constId: R_GlobalConstantId, val value: Rt_Value)
+
+private class Rt_GlobalConstants(private val appCtx: Rt_AppContext, oldStates: List<Rt_GlobalConstantState>) {
+    private val slots = appCtx.app.constants.map { ConstantSlot(it.constId) }.toImmList()
+
+    private var inited = false
+    private var initExeCtx: Rt_ExecutionContext? = null
+
+    init {
+        check(oldStates.size <= slots.size)
+        for (i in oldStates.indices) {
+            slots[i].restore(oldStates[i])
+        }
+    }
+
+    fun initialize() {
+        check(!inited)
+        check(initExeCtx == null)
+        inited = true
+
+        val sqlCtx = Rt_NullSqlContext.create(appCtx.app)
+        initExeCtx = Rt_ExecutionContext(appCtx, null, sqlCtx, NoConnSqlExecutor)
+
+        try {
+            for (c in appCtx.app.constants) {
+                val slot = getSlot(c.constId)
+                slot.getValue()
+            }
+        } finally {
+            initExeCtx = null
+        }
+    }
+
+    fun getValue(constId: R_GlobalConstantId): Rt_Value {
+        val slot = getSlot(constId)
+        return slot.getValue()
+    }
+
+    fun dump(): List<Rt_GlobalConstantState> {
+        return slots.map { it.dump() }.toImmList()
+    }
+
+    private fun getSlot(constId: R_GlobalConstantId): ConstantSlot {
+        val slot = slots[constId.index]
+        checkEquals(slot.constId, constId)
+        return slot
+    }
+
+    private inner class ConstantSlot(val constId: R_GlobalConstantId) {
+        private var value: Rt_Value? = null
+        private var initing = false
+
+        fun restore(state: Rt_GlobalConstantState) {
+            check(value == null)
+            check(!initing)
+            checkEquals(state.constId, constId)
+            value = state.value
+        }
+
+        fun dump() = Rt_GlobalConstantState(constId, value!!)
+
+        fun getValue(): Rt_Value {
+            val v = value
+            if (v != null) {
+                return v
+            }
+
+            Rt_Utils.check(!initing) {
+                "const:recursion:${constId.toErrCodeString()}" to "Constant has recursive expression: ${constId.appLevelName}"
+            }
+            initing = true
+
+            val exeCtx = checkNotNull(initExeCtx) { constId }
+
+            val c = appCtx.app.constants[constId.index]
+            checkEquals(c.constId, constId)
+
+            val v2 = c.evaluate(exeCtx)
+            value = v2
+            initing = false
+
+            return v2
+        }
+    }
+}
+
+class Rt_ExecutionContext(
+        val appCtx: Rt_AppContext,
+        val opCtx: Rt_OpContext?,
+        val sqlCtx: Rt_SqlContext,
+        val sqlExec: SqlExecutor
+) {
     val globalCtx = appCtx.globalCtx
 
     private var nextNopNonce = 0L
@@ -296,14 +416,15 @@ class Rt_ExecutionContext(val appCtx: Rt_AppContext, val sqlExec: SqlExecutor) {
 class Rt_CallContext(val defCtx: Rt_DefinitionContext) {
     val exeCtx = defCtx.exeCtx
     val appCtx = exeCtx.appCtx
+    val sqlCtx = exeCtx.sqlCtx
     val globalCtx = appCtx.globalCtx
-    val chainCtx = globalCtx.chainCtx
+    val chainCtx = appCtx.chainCtx
 }
 
 class Rt_DefinitionContext(val exeCtx: Rt_ExecutionContext, val dbUpdateAllowed: Boolean, val defId: R_DefinitionId) {
     val appCtx = exeCtx.appCtx
     val globalCtx = appCtx.globalCtx
-    val sqlCtx = appCtx.sqlCtx
+    val sqlCtx = exeCtx.sqlCtx
     val callCtx = Rt_CallContext(this)
 }
 

@@ -8,7 +8,7 @@ import net.postchain.rell.compiler.ast.C_BinOp
 import net.postchain.rell.compiler.ast.S_CallArgument
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.compiler.vexpr.V_ConstantExpr
+import net.postchain.rell.compiler.vexpr.V_ConstantValueExpr
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_ObjectExpr
 import net.postchain.rell.model.*
@@ -224,7 +224,7 @@ class C_EntityAttrDestination(
 
         val lambdaBlkCtx = ctx.blkCtx.createSubContext("<$metaName:lambda>")
         val lambdaCtx = ctx.update(blkCtx = lambdaBlkCtx)
-        val baseVar = lambdaBlkCtx.newLocalVar("<$metaName:base>", base.type(), false, null)
+        val baseVar = lambdaBlkCtx.newLocalVar("<$metaName:base>", base.type, false, null)
         val srcVar = lambdaBlkCtx.newLocalVar("<$metaName:src>", srcExpr.type, false, null)
 
         val cLambdaB = C_LambdaBlock.builder(lambdaCtx, rEntity.type)
@@ -352,7 +352,7 @@ class C_VExpr(private val vExpr: V_Expr): C_Expr() {
     override fun kind() = C_ExprKind.VALUE
     override fun startPos() = vExpr.pos
     override fun value() = vExpr
-    override fun isCallable() = vExpr.type() is R_FunctionType
+    override fun isCallable() = vExpr.type is R_FunctionType
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
         return vExpr.member(ctx, memberName, safe)
@@ -460,7 +460,7 @@ class C_EnumExpr(private val msgCtx: C_MessageContext, private val name: List<S_
         }
 
         val rValue = Rt_EnumValue(rEnum.type, attr)
-        val vExpr = V_ConstantExpr(ctx, startPos(), rValue)
+        val vExpr = V_ConstantValueExpr(ctx, startPos(), rValue)
         return C_VExpr(vExpr)
     }
 

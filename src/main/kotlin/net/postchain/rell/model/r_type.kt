@@ -24,25 +24,33 @@ import java.util.*
 
 class R_GtvCompatibility(val fromGtv: Boolean, val toGtv: Boolean)
 
-class R_TypeFlags(val mutable: Boolean, val gtv: R_GtvCompatibility, val virtualable: Boolean) {
+class R_TypeFlags(
+        val mutable: Boolean,
+        val gtv: R_GtvCompatibility,
+        val virtualable: Boolean,
+        val pure: Boolean
+) {
     companion object {
         fun combine(flags: Collection<R_TypeFlags>): R_TypeFlags {
             var mutable = false
             var fromGtv = true
             var toGtv = true
             var virtualable = true
+            var pure = true
 
             for (f in flags) {
-                mutable = mutable or f.mutable
-                fromGtv = fromGtv and f.gtv.fromGtv
-                toGtv = toGtv and f.gtv.toGtv
-                virtualable = virtualable and f.virtualable
+                mutable = mutable || f.mutable
+                fromGtv = fromGtv && f.gtv.fromGtv
+                toGtv = toGtv && f.gtv.toGtv
+                virtualable = virtualable && f.virtualable
+                pure = pure && f.pure
             }
 
             return R_TypeFlags(
                     mutable = mutable,
                     gtv = R_GtvCompatibility(fromGtv, toGtv),
-                    virtualable = virtualable
+                    virtualable = virtualable,
+                    pure = pure
             )
         }
     }
@@ -125,10 +133,16 @@ sealed class R_Type(val name: String) {
 
     protected open fun isDirectMutable(): Boolean = false
     protected open fun isDirectVirtualable(): Boolean = true
+    protected open fun isDirectPure(): Boolean = true
 
     fun directFlags(): R_TypeFlags {
         val gtvConv = gtvConversion
-        return R_TypeFlags(isDirectMutable(), gtvConv.directCompatibility(), isDirectVirtualable())
+        return R_TypeFlags(
+                mutable = isDirectMutable(),
+                gtv = gtvConv.directCompatibility(),
+                virtualable = isDirectVirtualable(),
+                pure = isDirectPure()
+        )
     }
 
     open fun completeFlags(): R_TypeFlags {
@@ -418,6 +432,8 @@ class R_EntityType(val rEntity: R_EntityDefinition): R_Type(rEntity.appLevelName
     override fun equals(other: Any?): Boolean = other is R_EntityType && other.rEntity == rEntity
     override fun hashCode(): Int = rEntity.hashCode()
 
+    override fun isDirectPure() = false
+
     override fun createGtvConversion() = GtvRtConversion_Entity(this)
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Entity(this)
 
@@ -443,7 +459,8 @@ class R_EntityType(val rEntity: R_EntityDefinition): R_Type(rEntity.appLevelName
 
 class R_ObjectType(val rObject: R_ObjectDefinition): R_Type(rObject.appLevelName) {
     override fun isDirectVirtualable() = false
-    override fun equals(other: Any?): Boolean = other is R_ObjectType && other.rObject == rObject
+    override fun isDirectPure() = false
+    override fun equals(other: Any?): Boolean = other === this || (other is R_ObjectType && other.rObject == rObject)
     override fun hashCode(): Int = rObject.hashCode()
     override fun createGtvConversion() = GtvRtConversion_None
     override fun toStrictString(): String = name
@@ -453,6 +470,7 @@ class R_ObjectType(val rObject: R_ObjectDefinition): R_Type(rObject.appLevelName
 class R_StructType(val struct: R_Struct): R_Type(struct.name) {
     override fun isReference() = true
     override fun isDirectMutable() = struct.isDirectlyMutable()
+    override fun isDirectPure() = true
     override fun completeFlags() = struct.flags.typeFlags
 
     override fun componentTypes() = struct.attributesList.map { it.type }.toList()
@@ -471,8 +489,9 @@ class R_EnumType(val enum: R_EnumDefinition): R_Type(enum.appLevelName) {
         return Rt_EnumValue(this, attr)
     }
 
-    override fun createGtvConversion() = GtvRtConversion_Enum(enum)
+    override fun isDirectPure() = true
 
+    override fun createGtvConversion() = GtvRtConversion_Enum(enum)
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Enum(this)
 
     override fun toStrictString() = name
@@ -508,13 +527,14 @@ class R_NullableType(val valueType: R_Type): R_Type(calcName(valueType)) {
     override fun isReference() = valueType.isReference()
     override fun isError() = valueType.isError()
     override fun isDirectMutable() = false
+    override fun isDirectPure() = true
 
     override fun defaultValue() = Rt_NullValue
     override fun comparator() = valueType.comparator()
     override fun fromCli(s: String): Rt_Value = if (s == "null") Rt_NullValue else valueType.fromCli(s)
     override fun toStrictString() = name
     override fun componentTypes() = listOf(valueType)
-    override fun equals(other: Any?) = other is R_NullableType && valueType == other.valueType
+    override fun equals(other: Any?) = other === this || (other is R_NullableType && valueType == other.valueType)
     override fun hashCode() = valueType.hashCode()
 
     override fun isAssignableFrom(type: R_Type): Boolean {
@@ -590,7 +610,7 @@ class R_ListType(elementType: R_Type): R_CollectionType(elementType, "list") {
     val virtualType = R_VirtualListType(this)
 
     override fun fromCli(s: String): Rt_Value = Rt_ListValue(this, s.split(",").map { elementType.fromCli(it) }.toMutableList())
-    override fun equals(other: Any?): Boolean = other is R_ListType && elementType == other.elementType
+    override fun equals(other: Any?): Boolean = other === this || (other is R_ListType && elementType == other.elementType)
     override fun hashCode() = Objects.hash(elementType.hashCode(), 33)
     override fun createGtvConversion() = GtvRtConversion_List(this)
 
@@ -604,7 +624,7 @@ class R_SetType(elementType: R_Type): R_CollectionType(elementType, "set") {
     val virtualType = R_VirtualSetType(this)
 
     override fun fromCli(s: String): Rt_Value = Rt_SetValue(this, s.split(",").map { elementType.fromCli(it) }.toMutableSet())
-    override fun equals(other: Any?): Boolean = other is R_SetType && elementType == other.elementType
+    override fun equals(other: Any?): Boolean = other === this || (other is R_SetType && elementType == other.elementType)
     override fun hashCode() = Objects.hash(elementType.hashCode(), 55)
     override fun createGtvConversion() = GtvRtConversion_Set(this)
 }
@@ -628,13 +648,13 @@ class R_MapType(val keyValueTypes: R_MapKeyValueTypes): R_Type("map<${keyValueTy
     override fun toStrictString() = name
     override fun componentTypes() = listOf(keyType, valueType)
 
-    override fun equals(other: Any?) = other is R_MapType && keyType == other.keyType && valueType == other.valueType
+    override fun equals(other: Any?) = other === this || (other is R_MapType && keyType == other.keyType && valueType == other.valueType)
     override fun hashCode() = Objects.hash(keyType, valueType, 77)
 
     override fun fromCli(s: String): Rt_Value {
         val map = s.split(",").associate {
             val (k, v) = it.split("=")
-            Pair(keyType.fromCli(k), valueType.fromCli(v))
+            keyType.fromCli(k) to valueType.fromCli(v)
         }
         return Rt_MapValue(this, map.toMutableMap())
     }
@@ -655,7 +675,7 @@ class R_TupleField(val name: String?, val type: R_Type) {
 
     override fun toString(): String = toStrictString()
 
-    override fun equals(other: Any?): Boolean = other is R_TupleField && name == other.name && type == other.type
+    override fun equals(other: Any?): Boolean = other === this || (other is R_TupleField && name == other.name && type == other.type)
     override fun hashCode() = Objects.hash(name, type)
 
     fun toMetaGtv() = mapOf(
@@ -673,10 +693,11 @@ class R_TupleType(fields: List<R_TupleField>): R_Type(calcName(fields)) {
     override fun isReference() = true
     override fun isError() = isError
     override fun isDirectMutable() = false
+    override fun isDirectPure() = true
 
     override fun toStrictString() = name
 
-    override fun equals(other: Any?): Boolean = other is R_TupleType && fields == other.fields
+    override fun equals(other: Any?): Boolean = other === this || (other is R_TupleType && fields == other.fields)
     override fun hashCode() = fields.hashCode()
 
     override fun componentTypes() = fields.map { it.type }.toList()
@@ -734,7 +755,7 @@ class R_TupleType(fields: List<R_TupleField>): R_Type(calcName(fields)) {
             return "($fieldsStr$comma)"
         }
 
-        fun create(vararg fields: Pair<String, R_Type>): R_TupleType {
+        fun create(vararg fields: Pair<String?, R_Type>): R_TupleType {
             val fieldsList = fields.map { R_TupleField(it.first, it.second) }
             return R_TupleType(fieldsList)
         }
@@ -743,6 +764,7 @@ class R_TupleType(fields: List<R_TupleField>): R_Type(calcName(fields)) {
 
 object R_RangeType: R_Type("range") {
     override fun isDirectVirtualable() = false
+    override fun isDirectPure() = true
     override fun isReference() = true
     override fun comparator() = Rt_Comparator.create { it.asRange() }
     override fun createGtvConversion() = GtvRtConversion_None
@@ -752,6 +774,7 @@ object R_RangeType: R_Type("range") {
 
 object R_GtvType: R_Type("gtv") {
     override fun isReference() = true
+    override fun isDirectPure() = true
     override fun createGtvConversion() = GtvRtConversion_Gtv
     override fun toStrictString() = name
     override fun toMetaGtv() = name.toGtv()
@@ -763,6 +786,7 @@ sealed class R_VirtualType(private val innerType: R_Type): R_Type("virtual<${inn
     final override fun isReference() = true
     final override fun isError() = isError
     final override fun toStrictString() = name
+    final override fun isDirectPure() = false    // Maybe it's actually pure.
 
     final override fun toMetaGtv() = mapOf(
             "type" to "virtual".toGtv(),
@@ -776,33 +800,33 @@ sealed class R_VirtualCollectionType(innerType: R_Type): R_VirtualType(innerType
 
 class R_VirtualListType(val innerType: R_ListType): R_VirtualCollectionType(innerType) {
     override fun createGtvConversion() = GtvRtConversion_VirtualList(this)
-    override fun equals(other: Any?): Boolean = other is R_VirtualListType && innerType == other.innerType
+    override fun equals(other: Any?): Boolean = other === this || (other is R_VirtualListType && innerType == other.innerType)
     override fun hashCode() = innerType.hashCode()
     override fun elementType() = innerType.elementType
 }
 
 class R_VirtualSetType(val innerType: R_SetType): R_VirtualCollectionType(innerType) {
     override fun createGtvConversion() = GtvRtConversion_VirtualSet(this)
-    override fun equals(other: Any?): Boolean = other is R_VirtualSetType && innerType == other.innerType
+    override fun equals(other: Any?): Boolean = other === this || (other is R_VirtualSetType && innerType == other.innerType)
     override fun hashCode() = innerType.hashCode()
     override fun elementType() = innerType.elementType
 }
 
 class R_VirtualMapType(val innerType: R_MapType): R_VirtualType(innerType) {
     override fun createGtvConversion() = GtvRtConversion_VirtualMap(this)
-    override fun equals(other: Any?): Boolean = other is R_VirtualMapType && innerType == other.innerType
+    override fun equals(other: Any?): Boolean = other === this || (other is R_VirtualMapType && innerType == other.innerType)
     override fun hashCode() = innerType.hashCode()
 }
 
 class R_VirtualTupleType(val innerType: R_TupleType): R_VirtualType(innerType) {
     override fun createGtvConversion() = GtvRtConversion_VirtualTuple(this)
-    override fun equals(other: Any?): Boolean = other is R_VirtualTupleType && innerType == other.innerType
+    override fun equals(other: Any?): Boolean = other === this || (other is R_VirtualTupleType && innerType == other.innerType)
     override fun hashCode() = innerType.hashCode()
 }
 
 class R_VirtualStructType(val innerType: R_StructType): R_VirtualType(innerType) {
     override fun createGtvConversion() = GtvRtConversion_VirtualStruct(this)
-    override fun equals(other: Any?): Boolean = other is R_VirtualStructType && innerType == other.innerType
+    override fun equals(other: Any?): Boolean = other === this || (other is R_VirtualStructType && innerType == other.innerType)
     override fun hashCode() = innerType.hashCode()
 }
 
@@ -818,6 +842,7 @@ class R_FunctionType(params: List<R_Type>, val result: R_Type): R_Type(calcName(
     }
 
     override fun isDirectVirtualable() = false
+    override fun isDirectPure() = false
     override fun isReference() = true
     override fun isError() = isError
     override fun createGtvConversion() = GtvRtConversion_None
@@ -837,7 +862,7 @@ class R_FunctionType(params: List<R_Type>, val result: R_Type): R_Type(calcName(
             "result" to result.toMetaGtv()
     ).toGtv()
 
-    override fun equals(other: Any?) = other is R_FunctionType && params == other.params && result == other.result
+    override fun equals(other: Any?) = other === this || (other is R_FunctionType && params == other.params && result == other.result)
     override fun hashCode() = Objects.hash(params, result)
 
     companion object {

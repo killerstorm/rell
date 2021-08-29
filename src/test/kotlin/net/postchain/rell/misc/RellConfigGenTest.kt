@@ -7,7 +7,7 @@ package net.postchain.rell.misc
 import net.postchain.gtv.GtvFactory
 import net.postchain.rell.RellConfigGen
 import net.postchain.rell.compiler.C_Compiler
-import net.postchain.rell.compiler.C_MapSourceDir
+import net.postchain.rell.compiler.C_SourceDir
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.RellVersions
 import net.postchain.rell.test.GtvTestUtils
@@ -104,7 +104,7 @@ class RellConfigGenTest {
     }
 
     private fun chkCfg0(files: Map<String, String>, templateXml: String?, expectedJson: String) {
-        val sourceDir = C_MapSourceDir.of(files)
+        val sourceDir = C_SourceDir.mapDirOf(files)
         val modules = listOf(R_ModuleName.EMPTY)
         val cRes = C_Compiler.compile(sourceDir, modules)
 

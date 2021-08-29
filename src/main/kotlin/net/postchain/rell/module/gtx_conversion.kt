@@ -15,8 +15,8 @@ import net.postchain.rell.utils.checkEquals
 import org.apache.commons.collections4.MultiValuedMap
 import org.apache.commons.collections4.multimap.HashSetValuedHashMap
 
-val GTV_QUERY_PRETTY = true
-val GTV_OPERATION_PRETTY = false
+const val GTV_QUERY_PRETTY = true
+const val GTV_OPERATION_PRETTY = false
 
 class GtvToRtContext(val pretty: Boolean) {
     private val objectIds: MultiValuedMap<R_EntityDefinition, Long> = HashSetValuedHashMap()
@@ -28,7 +28,7 @@ class GtvToRtContext(val pretty: Boolean) {
     fun finish(exeCtx: Rt_ExecutionContext) {
         for (rEntities in objectIds.keySet()) {
             val rowids = objectIds.get(rEntities)
-            checkRowids(exeCtx.sqlExec, exeCtx.appCtx.sqlCtx, rEntities, rowids)
+            checkRowids(exeCtx.sqlExec, exeCtx.sqlCtx, rEntities, rowids)
         }
     }
 

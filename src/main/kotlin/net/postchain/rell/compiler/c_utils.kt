@@ -11,9 +11,7 @@ import net.postchain.rell.compiler.ast.*
 import net.postchain.rell.compiler.parser.RellTokenizerError
 import net.postchain.rell.compiler.parser.RellTokenizerState
 import net.postchain.rell.compiler.parser.S_Grammar
-import net.postchain.rell.compiler.vexpr.V_BinaryExpr
-import net.postchain.rell.compiler.vexpr.V_Expr
-import net.postchain.rell.compiler.vexpr.V_RExpr
+import net.postchain.rell.compiler.vexpr.*
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Error
 import net.postchain.rell.runtime.toGtv
@@ -33,7 +31,9 @@ class C_PosCodeMsg(val pos: S_Pos, val code: String, val msg: String) {
     constructor(pos: S_Pos, codeMsg: C_CodeMsg): this(pos, codeMsg.code, codeMsg.msg)
 }
 
-class C_CommonError(val code: String, val msg: String): RuntimeException(msg)
+class C_CommonError(val code: String, val msg: String): RuntimeException(msg) {
+    constructor(codeMsg: C_CodeMsg): this(codeMsg.code, codeMsg.msg)
+}
 
 class C_Error: RuntimeException {
     val pos: S_Pos
@@ -112,8 +112,7 @@ class C_ParameterDefaultValue(
             }
         }
 
-        val rExpr: R_Expr = R_ArgumentDefaultValueExpr(paramType, callPos.toFilePos(), initFrameGetter, rExprGetter)
-        return V_RExpr(ctx, pos, rExpr)
+        return V_ParameterDefaultValueExpr(ctx, pos, paramType, callPos.toFilePos(), initFrameGetter, rExprGetter)
     }
 }
 
@@ -148,7 +147,7 @@ object C_Utils {
     }
 
     fun makeVBinaryExprEq(ctx: C_ExprContext, pos: S_Pos, left: V_Expr, right: V_Expr): V_Expr {
-        val vOp = C_BinOp_EqNe.createVOp(true, left.type())
+        val vOp = C_BinOp_EqNe.createVOp(true, left.type)
         return V_BinaryExpr(ctx, pos, vOp, left, right, C_ExprVarFacts.EMPTY)
     }
 
@@ -346,26 +345,48 @@ object C_Utils {
         return R_DefinitionNames(modName, fullNamespacePath, simpleName)
     }
 
-    fun createSysCallExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, qualifiedName: List<S_Name>): R_Expr {
+    fun createSysCallRExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, qualifiedName: List<S_Name>): R_Expr {
         val nameStr = nameStr(qualifiedName)
-        return createSysCallExpr(type, fn, args, qualifiedName[0].pos, nameStr)
+        return createSysCallRExpr(type, fn, args, qualifiedName[0].pos, nameStr)
     }
 
-    fun createSysCallExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, caseCtx: C_FuncCaseCtx): R_Expr {
-        return createSysCallExpr(type, fn, args, caseCtx.linkPos, caseCtx.qualifiedNameMsg())
+    fun createSysCallRExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, caseCtx: C_FuncCaseCtx): R_Expr {
+        return createSysCallRExpr(type, fn, args, caseCtx.linkPos, caseCtx.qualifiedNameMsg())
     }
 
-    fun createSysCallExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, pos: S_Pos?, nameMsg: String): R_Expr {
-        val rCallExpr = R_SysFunctionCallExpr(type, fn, args, nameMsg)
-        return if (pos == null) rCallExpr else {
-            val filePos = pos.toFilePos()
-            R_StackTraceExpr(rCallExpr, filePos)
-        }
+    fun createSysCallRExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, pos: S_Pos, nameMsg: String): R_Expr {
+        val rCallTarget: R_FunctionCallTarget = R_FunctionCallTarget_SysGlobalFunction(fn, nameMsg)
+        val filePos = pos.toFilePos()
+        val rCallExpr: R_Expr = R_FullFunctionCallExpr(type, rCallTarget, filePos, listOf(), args, args.indices.toList())
+        return R_StackTraceExpr(rCallExpr, filePos)
+    }
+
+    fun createSysGlobalPropExpr(
+            exprCtx: C_ExprContext,
+            type: R_Type,
+            fn: R_SysFunction,
+            qualifiedName: List<S_Name>,
+            pure: Boolean
+    ): V_Expr {
+        val nameStr = nameStr(qualifiedName)
+        return createSysGlobalPropExpr(exprCtx, type, fn, qualifiedName[0].pos, nameStr, pure)
+    }
+
+    fun createSysGlobalPropExpr(
+            exprCtx: C_ExprContext,
+            type: R_Type,
+            fn: R_SysFunction,
+            pos: S_Pos,
+            nameMsg: String,
+            pure: Boolean
+    ): V_Expr {
+        val desc = V_SysFunctionTargetDescriptor(type, fn, null, nameMsg, pure = pure, synth = true)
+        val vCallTarget: V_FunctionCallTarget = V_FunctionCallTarget_SysGlobalFunction(desc)
+        return V_FullFunctionCallExpr(exprCtx, pos, pos, type, vCallTarget, V_FunctionCallArgs.EMPTY)
     }
 
     fun errorRExpr(type: R_Type = R_CtErrorType, msg: String = "Compilation error"): R_Expr {
-        val arg = R_ConstantExpr.makeText(msg)
-        return createSysCallExpr(type, R_SysFn_Internal.Crash, listOf(arg), null, "error")
+        return R_ErrorExpr(type, msg)
     }
 
     fun errorDbExpr(type: R_Type = R_CtErrorType, msg: String = "Compilation error"): Db_Expr {
@@ -374,8 +395,7 @@ object C_Utils {
     }
 
     fun errorVExpr(ctx: C_ExprContext, pos: S_Pos, type: R_Type = R_CtErrorType, msg: String = "Compilation error"): V_Expr {
-        val rExpr = errorRExpr(type, msg)
-        return V_RExpr(ctx, pos, rExpr)
+        return V_ErrorExpr(ctx, pos, type, msg)
     }
 
     fun errorExpr(ctx: C_ExprContext, pos: S_Pos, type: R_Type = R_CtErrorType, msg: String = "Compilation error"): C_Expr {
@@ -492,17 +512,29 @@ object C_Parser {
 }
 
 object C_GraphUtils {
-    /** Returns some, not all cycles (at least one cycle for each cyclic vertex). */
     fun <T> findCycles(graph: Map<T, Collection<T>>): List<List<T>> {
-        class VertEntry<T>(val vert: T, val enter: Boolean, val parent: VertEntry<T>?)
+        val graphEx = graph.mapValues { vert ->
+            vert.value.map { 0 to it }.toImmList()
+        }
 
-        val queue = LinkedList<VertEntry<T>>()
-        val visiting = mutableSetOf<T>()
-        val visited = mutableSetOf<T>()
-        val cycles = mutableListOf<List<T>>()
+        val cyclesEx = findCyclesEx(graphEx)
+
+        return cyclesEx.map { cycle ->
+            cycle.map { it.second }.toImmList()
+        }.toImmList()
+    }
+
+    /** Returns some, not all cycles (at least one cycle for each cyclic vertex). */
+    fun <V, E> findCyclesEx(graph: Map<V, Collection<Pair<E, V>>>): List<List<Pair<E, V>>> {
+        class VertEntry<E, V>(val vert: V, val edge: E?, val enter: Boolean, val parent: VertEntry<E, V>?)
+
+        val queue = LinkedList<VertEntry<E, V>>()
+        val visiting = mutableSetOf<V>()
+        val visited = mutableSetOf<V>()
+        val cycles = mutableListOf<List<Pair<E, V>>>()
 
         for (vert in graph.keys) {
-            queue.add(VertEntry(vert, true, null))
+            queue.add(VertEntry(vert, null, true, null))
         }
 
         while (!queue.isEmpty()) {
@@ -517,9 +549,9 @@ object C_GraphUtils {
                 continue
             } else if (entry.vert in visiting) {
                 var cycleEntry = entry
-                val cycle = mutableListOf<T>()
+                val cycle = mutableListOf<Pair<E, V>>()
                 while (true) {
-                    cycle.add(cycleEntry.vert)
+                    cycle.add(cycleEntry.edge!! to cycleEntry.vert)
                     cycleEntry = cycleEntry.parent
                     check(cycleEntry != null)
                     if (cycleEntry.vert == entry.vert) break
@@ -528,15 +560,15 @@ object C_GraphUtils {
                 continue
             }
 
-            queue.addFirst(VertEntry(entry.vert, false, entry.parent))
+            queue.addFirst(VertEntry(entry.vert, entry.edge, false, entry.parent))
             visiting.add(entry.vert)
 
-            for (adjVert in graph.getValue(entry.vert)) {
-                queue.addFirst(VertEntry(adjVert, true, entry))
+            for ((adjEdge, adjVert) in graph.getValue(entry.vert)) {
+                queue.addFirst(VertEntry(adjVert, adjEdge, true, entry))
             }
         }
 
-        return cycles.toList()
+        return cycles.toImmList()
     }
 
     fun <T> topologicalSort(graph: Map<T, Collection<T>>): List<T> {
@@ -594,7 +626,8 @@ object C_GraphUtils {
 
         for (vert in graph.keys) {
             for (adjVert in graph.getValue(vert)) {
-                mut.getValue(adjVert).add(vert)
+                val set = mut.computeIfAbsent(adjVert) { mutableSetOf() }
+                set.add(vert)
             }
         }
 
@@ -616,51 +649,6 @@ object C_GraphUtils {
 
         return visited.toList()
     }
-}
-
-class C_StructsInfo(
-        val mutable: Set<R_Struct>,
-        val nonVirtualable: Set<R_Struct>,
-        val nonGtvFrom: Set<R_Struct>,
-        val nonGtvTo: Set<R_Struct>,
-        val graph: Map<R_Struct, List<R_Struct>>
-)
-
-object C_StructGraphUtils {
-    fun buildStructsInfo(structs: Collection<R_Struct>): C_StructsInfo {
-        val declaredStructs = structs.toImmSet()
-        val infoMap = structs.map { Pair(it, calcStructInfo(declaredStructs, it.type)) }.toMap()
-        val graph = infoMap.mapValues { (_, v) -> v.dependencies.toList() }
-        val mutable = infoMap.filter { (_, v) -> v.directFlags.mutable }.keys
-        val nonVirtualable = infoMap.filter { (_, v) -> !v.directFlags.virtualable }.keys
-        val nonGtvFrom = infoMap.filter { (_, v) -> !v.directFlags.gtv.fromGtv }.keys
-        val nonGtvTo = infoMap.filter { (_, v) -> !v.directFlags.gtv.toGtv }.keys
-        return C_StructsInfo(mutable, nonVirtualable, nonGtvFrom, nonGtvTo, graph)
-    }
-
-    private fun calcStructInfo(declaredStructs: Set<R_Struct>, type: R_Type): StructInfo {
-        val flags = mutableListOf(type.directFlags())
-        val deps = mutableSetOf<R_Struct>()
-
-        for (subType in type.componentTypes()) {
-            val subStruct = discoverStructInfo(declaredStructs, subType)
-            flags.add(subStruct.directFlags)
-            deps.addAll(subStruct.dependencies)
-        }
-
-        val resFlags = R_TypeFlags.combine(flags)
-        return StructInfo(resFlags, deps.toImmSet())
-    }
-
-    private fun discoverStructInfo(declaredStructs: Set<R_Struct>, type: R_Type): StructInfo {
-        // Taking into account only structs declared in this app (not those compiled elsewhere).
-        if (type is R_StructType && type.struct in declaredStructs) {
-            return StructInfo(type.directFlags(), setOf(type.struct))
-        }
-        return calcStructInfo(declaredStructs, type)
-    }
-
-    private class StructInfo(val directFlags: R_TypeFlags, val dependencies: Set<R_Struct>)
 }
 
 private class C_LateInitContext(executor: C_CompilerExecutor) {
@@ -713,8 +701,24 @@ private class C_LateInitContext(executor: C_CompilerExecutor) {
     }
 }
 
-class C_LateGetter<T>(private val init: C_LateInit<T>) {
-    fun get() = init.get()
+sealed class C_LateGetter<T> {
+    abstract fun get(): T
+
+    fun <R> transform(transformer: (T) -> R): C_LateGetter<R> = C_TransformingLateGetter(this, transformer)
+}
+
+private class C_DirectLateGetter<T>(private val init: C_LateInit<T>): C_LateGetter<T>() {
+    override fun get() = init.get()
+}
+
+private class C_TransformingLateGetter<T, R>(
+        private val getter: C_LateGetter<T>,
+        private val transformer: (T) -> R
+): C_LateGetter<R>() {
+    override fun get(): R {
+        val value = getter.get()
+        return transformer(value)
+    }
 }
 
 class C_LateInit<T>(val pass: C_CompilerPass, fallback: T) {
@@ -730,7 +734,7 @@ class C_LateInit<T>(val pass: C_CompilerPass, fallback: T) {
         }
     }
 
-    val getter = C_LateGetter(this)
+    val getter: C_LateGetter<T> = C_DirectLateGetter(this)
 
     fun set(value: T, allowEarly: Boolean = false) {
         val minPass = if (allowEarly) null else pass
@@ -796,4 +800,31 @@ class C_Symbol_Name(private val name: String): C_Symbol(name) {
 
 object C_Symbol_Placeholder: C_Symbol(C_Constants.AT_PLACEHOLDER) {
     override fun msgNormal() = "symbol '$code'"
+}
+
+class C_ValidationExecutor(private val manager: C_ValidationManager) {
+    fun onValidation(code: () -> Unit) {
+        manager.onValidation(code)
+    }
+}
+
+class C_ValidationManager(private val msgCtx: C_MessageContext) {
+    val executor = C_ValidationExecutor(this)
+
+    private val queue = queueOf<() -> Unit>()
+    private var done = false
+
+    fun onValidation(code: () -> Unit) {
+        check(!done)
+        queue.add(code)
+    }
+
+    fun execute() {
+        check(!done)
+        done = true
+
+        for (code in queue) {
+            msgCtx.consumeError(code)
+        }
+    }
 }

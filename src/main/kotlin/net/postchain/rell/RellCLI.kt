@@ -5,10 +5,8 @@
 package net.postchain.rell
 
 import net.postchain.StorageBuilder
-import net.postchain.base.BlockchainRid
 import net.postchain.config.app.AppConfig
 import net.postchain.gtv.Gtv
-import net.postchain.gtv.GtvNull
 import net.postchain.rell.compiler.C_AtAttrShadowing
 import net.postchain.rell.compiler.C_CompilerModuleSelection
 import net.postchain.rell.compiler.C_CompilerOptions
@@ -66,6 +64,8 @@ private fun main0(args: RellCliArgs) {
         return
     }
 
+    val globalCtx = createGlobalCtx(argsEx)
+
     if (testModules != null) {
         runMultiModuleTests(argsEx, testModules)
         return
@@ -79,7 +79,7 @@ private fun main0(args: RellCliArgs) {
         if (module != null && module.test) {
             runSingleModuleTests(argsEx, app, module, entryRoutine)
         } else {
-            runApp(argsEx, dbSpecified, entryModule, entryRoutine, app)
+            runApp(globalCtx, args, dbSpecified, entryModule, entryRoutine, app)
         }
     } else if (entryModule != null) {
         val app = RellCliUtils.compileApp(args.sourceDir, entryModule, args.quiet, compilerOptions)
@@ -101,23 +101,26 @@ private fun getCompilerOptions(extraOpts: List<ExtraOption>): C_CompilerOptions 
 }
 
 private fun runApp(
-        args: RellCliArgsEx,
+        globalCtx: Rt_GlobalContext,
+        args: RellCliArgs,
         dbSpecified: Boolean,
         entryModule: R_ModuleName?,
         entryRoutine: R_QualifiedName?,
         app: R_App
 ) {
-    val launcher = getAppLauncher(app, args, entryModule, entryRoutine)
-    if (launcher == null && !args.raw.resetdb) {
+    val launcher = getAppLauncher(args, app, entryModule, entryRoutine)
+    if (launcher == null && !args.resetdb) {
         return
     }
 
-    runWithSqlManager(args.raw, true) { sqlMgr ->
-        val sqlCtx = Rt_SqlContext.createNoExternalChains(app, SQL_MAPPER)
+    val appCtx = createRegularAppContext(globalCtx, app)
+
+    runWithSqlManager(args, true) { sqlMgr ->
+        val sqlCtx = Rt_RegularSqlContext.createNoExternalChains(app, SQL_MAPPER)
         if (dbSpecified) {
-            initDatabase(args, app, sqlMgr, sqlCtx)
+            initDatabase(appCtx, args, sqlMgr, sqlCtx)
         }
-        launcher?.launch(sqlMgr, sqlCtx)
+        launcher?.launch(appCtx, sqlMgr, sqlCtx)
     }
 }
 
@@ -143,8 +146,10 @@ private fun runMultiModuleTests(args: RellCliArgsEx, modules: List<String>) {
 }
 
 private fun runTests(args: RellCliArgsEx, app: R_App, fns: List<R_FunctionDefinition>) {
-    val globalCtx = createGlobalCtx(args, null)
-    val sqlCtx = Rt_SqlContext.createNoExternalChains(app, SQL_MAPPER)
+    val globalCtx = createGlobalCtx(args)
+    val chainCtx = RellCliUtils.createChainContext()
+
+    val sqlCtx = Rt_RegularSqlContext.createNoExternalChains(app, SQL_MAPPER)
 
     val sourceDir = RellCliUtils.createSourceDir(args.raw.sourceDir)
     val keyPair = UnitTestBlockRunner.getTestKeyPair()
@@ -155,7 +160,7 @@ private fun runTests(args: RellCliArgsEx, app: R_App, fns: List<R_FunctionDefini
     var allOk = false
 
     runWithSqlManager(args.raw, true) { sqlMgr ->
-        val testCtx = TestRunnerContext(sqlMgr, globalCtx, sqlCtx, blockRunnerStrategy, app)
+        val testCtx = TestRunnerContext(sqlCtx, sqlMgr, globalCtx, chainCtx, blockRunnerStrategy, app)
         val cases = fns.map { TestRunnerCase(null, it) }
         allOk = TestRunner.runTests(testCtx, cases)
     }
@@ -173,7 +178,7 @@ private fun runRepl(args: RellCliArgsEx, moduleName: R_ModuleName?, useSql: Bool
             }
         }
 
-        val globalCtx = createGlobalCtx(args, null)
+        val globalCtx = createGlobalCtx(args)
         val sourceDir = RellCliUtils.createSourceDir(args.raw.sourceDir)
         ReplShell.start(sourceDir, moduleName, globalCtx, sqlMgr, useSql, args.compilerOptions)
     }
@@ -188,9 +193,13 @@ private fun resetDatabase(args: RellCliArgs) {
     println("Database cleared")
 }
 
-private fun initDatabase(args: RellCliArgsEx, app: R_App, sqlMgr: SqlManager, sqlCtx: Rt_SqlContext) {
-    val appCtx = createRegularAppContext(args, app, sqlCtx, null)
-    SqlUtils.initDatabase(appCtx, sqlMgr, args.raw.resetdb, args.raw.sqlInitLog)
+private fun initDatabase(
+        appCtx: Rt_AppContext,
+        args: RellCliArgs,
+        sqlMgr: SqlManager,
+        sqlCtx: Rt_SqlContext
+) {
+    SqlUtils.initDatabase(appCtx, sqlCtx, sqlMgr, args.resetdb, args.sqlInitLog)
 }
 
 private fun parseEntryPoint(args: RellCliArgs): Pair<R_ModuleName?, R_QualifiedName?> {
@@ -214,14 +223,14 @@ private fun parseEntryPoint(args: RellCliArgs): Pair<R_ModuleName?, R_QualifiedN
 }
 
 private fun getAppLauncher(
+        args: RellCliArgs,
         app: R_App,
-        args: RellCliArgsEx,
         entryModule: R_ModuleName?,
         entryRoutine: R_QualifiedName?
 ): RellAppLauncher? {
     if (entryModule == null || entryRoutine == null) return null
     val entryPoint = findEntryPoint(app, entryModule, entryRoutine)
-    return RellAppLauncher(app, args, entryPoint)
+    return RellAppLauncher(args, entryPoint)
 }
 
 private fun runWithSqlManager(args: RellCliArgs, logSqlErrors: Boolean, code: (SqlManager) -> Unit) {
@@ -303,16 +312,11 @@ private fun findEntryPoint(app: R_App, moduleName: R_ModuleName, routineName: R_
     return ep
 }
 
-private fun createRegularAppContext(
-        args: RellCliArgsEx,
-        app: R_App,
-        sqlCtx: Rt_SqlContext,
-        opCtx: Rt_OpContext?
-): Rt_AppContext {
-    val globalCtx = createGlobalCtx(args, opCtx)
+private fun createRegularAppContext(globalCtx: Rt_GlobalContext, app: R_App): Rt_AppContext {
+    val chainCtx = RellCliUtils.createChainContext()
     return Rt_AppContext(
             globalCtx,
-            sqlCtx,
+            chainCtx,
             app,
             repl = false,
             test = false,
@@ -321,10 +325,8 @@ private fun createRegularAppContext(
     )
 }
 
-private fun createGlobalCtx(args: RellCliArgsEx, opCtx: Rt_OpContext?): Rt_GlobalContext {
-    val bcRid = BlockchainRid(ByteArray(32))
-    val chainCtx = Rt_ChainContext(GtvNull, mapOf(), bcRid)
-    return RellCliUtils.createGlobalContext(chainCtx, opCtx, args.raw.typeCheck, args.compilerOptions)
+private fun createGlobalCtx(args: RellCliArgsEx): Rt_GlobalContext {
+    return RellCliUtils.createGlobalContext(args.raw.typeCheck, args.compilerOptions)
 }
 
 private fun parseArgs(entryPoint: RellEntryPoint, gtvCtx: GtvToRtContext, args: List<String>, json: Boolean): List<Rt_Value> {
@@ -405,25 +407,24 @@ private class ExtraOption_AtAttrShadowing(val v: C_AtAttrShadowing): ExtraOption
 }
 
 private class RellAppLauncher(
-        private val app: R_App,
-        private val args: RellCliArgsEx,
+        private val args: RellCliArgs,
         private val entryPoint: RellEntryPoint
 ) {
-    fun launch(sqlMgr: SqlManager, sqlCtx: Rt_SqlContext) {
-        val appCtx = createRegularAppContext(args, app, sqlCtx, entryPoint.opContext())
+    fun launch(appCtx: Rt_AppContext, sqlMgr: SqlManager, sqlCtx: Rt_SqlContext) {
+        val opCtx = entryPoint.opContext()
 
         val rtRes = sqlMgr.execute(entryPoint.transaction) { sqlExec ->
-            val exeCtx = Rt_ExecutionContext(appCtx, sqlExec)
+            val exeCtx = Rt_ExecutionContext(appCtx, opCtx, sqlCtx, sqlExec)
 
             val gtvCtx = GtvToRtContext(true)
-            val rtArgs = parseArgs(entryPoint, gtvCtx, args.raw.args ?: listOf(), args.raw.json || args.raw.jsonArgs)
+            val rtArgs = parseArgs(entryPoint, gtvCtx, args.args ?: listOf(), args.json || args.jsonArgs)
             gtvCtx.finish(exeCtx)
 
             callEntryPoint(exeCtx, rtArgs)
         }
 
         if (rtRes != null && rtRes != Rt_UnitValue) {
-            val strRes = resultToString(rtRes, args.raw.jsonResult || args.raw.json)
+            val strRes = resultToString(rtRes, args.jsonResult || args.json)
             println(strRes)
         }
     }
@@ -460,7 +461,7 @@ private class RellEntryPoint_Function(private val f: R_FunctionDefinition): Rell
     override fun routine() = f
     override fun opContext() = null
 
-    override fun call(exeCtx: Rt_ExecutionContext, args: List<Rt_Value>): Rt_Value? {
+    override fun call(exeCtx: Rt_ExecutionContext, args: List<Rt_Value>): Rt_Value {
         return f.callTop(exeCtx, args, true)
     }
 }

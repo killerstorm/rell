@@ -46,12 +46,12 @@ class C_StructGlobalFunction(private val struct: R_Struct): C_GlobalFunction() {
                 }
             }
 
-            return V_StructExpr(ctx, fnPos, struct, attrs.explicitAttrs, attrs.implicitAttrs, attrs.exprFacts)
+            return V_StructExpr(ctx, fnPos, struct, attrs.explicitAttrs, attrs.implicitAttrs)
         }
     }
 }
 
-sealed class C_FunctionHeader(val explicitType: R_Type?, val params: C_FormalParameters, val body: C_FunctionBody?) {
+abstract class C_FunctionHeader(val explicitType: R_Type?, val body: C_FunctionBody?) {
     abstract val declarationType: C_DeclarationType
 
     fun returnType(): R_Type {
@@ -61,16 +61,10 @@ sealed class C_FunctionHeader(val explicitType: R_Type?, val params: C_FormalPar
 
 class C_UserFunctionHeader(
         explicitType: R_Type?,
-        params: C_FormalParameters,
+        val params: C_FormalParameters,
         val fnBody: C_UserFunctionBody?
-): C_FunctionHeader(explicitType, params, fnBody) {
+): C_FunctionHeader(explicitType, fnBody) {
     override val declarationType = C_DeclarationType.FUNCTION
-
-    fun functionType(): R_Type {
-        val retType = returnType()
-        val paramTypes = params.list.map { it.type }
-        return R_FunctionType(paramTypes, retType)
-    }
 
     companion object {
         val ERROR = C_UserFunctionHeader(null, C_FormalParameters.EMPTY, null)
@@ -85,9 +79,9 @@ class C_OperationFunctionHeader(val params: C_FormalParameters) {
 
 class C_QueryFunctionHeader(
         explicitType: R_Type?,
-        params: C_FormalParameters,
+        val params: C_FormalParameters,
         val queryBody: C_QueryFunctionBody?
-): C_FunctionHeader(explicitType, params, queryBody) {
+): C_FunctionHeader(explicitType, queryBody) {
     override val declarationType = C_DeclarationType.QUERY
 
     companion object {
@@ -194,29 +188,24 @@ sealed class C_FunctionBody(bodyCtx: C_FunctionBodyContext) {
     }
 }
 
-sealed class C_CommonFunctionBody<T>(bodyCtx: C_FunctionBodyContext, sBody: S_FunctionBody): C_FunctionBody(bodyCtx) {
-    private var state: BodyState<T> = BodyState.StartState(bodyCtx, sBody)
-
-    protected abstract fun getErrorBody(): T
-    protected abstract fun getReturnType(body: T): R_Type
-    protected abstract fun compileBody(ctx: C_FunctionBodyContext, sBody: S_FunctionBody): T
-
-    final override fun calculateReturnType(): R_Type {
-        val s = state
-        return when (s) {
-            is BodyState.StartState -> calculateReturnType0(s)
-            is BodyState.EndState -> getReturnType(s.rBody)
-        }
+abstract class C_CommonFunctionBody<T>(protected val bodyCtx: C_FunctionBodyContext): C_FunctionBody(bodyCtx) {
+    private val compileLazy: T by lazy {
+        doCompile()
     }
 
-    private fun calculateReturnType0(s: BodyState.StartState<T>): R_Type {
-        s.bodyCtx.executor.checkPass(C_CompilerPass.EXPRESSIONS)
+    protected abstract fun returnsValue(): Boolean
+    protected abstract fun getErrorBody(): T
+    protected abstract fun getReturnType(body: T): R_Type
+    protected abstract fun compileBody(): T
 
-        if (!s.sBody.returnsValue()) {
+    final override fun calculateReturnType(): R_Type {
+        bodyCtx.executor.checkPass(C_CompilerPass.EXPRESSIONS)
+
+        if (!returnsValue()) {
             return R_UnitType
         }
 
-        val rBody = doCompile(s)
+        val rBody = compileLazy
         val rType = getReturnType(rBody)
         return rType
     }
@@ -225,47 +214,38 @@ sealed class C_CommonFunctionBody<T>(bodyCtx: C_FunctionBodyContext, sBody: S_Fu
         // Needed to put the type calculation result to the cache. If this is not done, in case of a recursion,
         // subsequently getting the return type will calculate it and emit an extra compilation error (recursion).
         returnType()
-
-        val s = state
-        val res = when (s) {
-            is BodyState.StartState -> doCompile(s)
-            is BodyState.EndState -> s.rBody
-        }
-
-        return res
+        return compileLazy
     }
 
-    private fun doCompile(s: BodyState.StartState<T>): T {
-        check(state === s)
-        s.bodyCtx.executor.checkPass(C_CompilerPass.EXPRESSIONS)
+    private fun doCompile(): T {
+        bodyCtx.executor.checkPass(C_CompilerPass.EXPRESSIONS)
 
-        var res = getErrorBody()
-
-        try {
-            res = compileBody(s.bodyCtx, s.sBody)
-        } finally {
-            state = BodyState.EndState(res)
+        val res = bodyCtx.appCtx.msgCtx.consumeError {
+            compileBody()
         }
 
-        return res
-    }
-
-    private sealed class BodyState<T> {
-        class StartState<T>(val bodyCtx: C_FunctionBodyContext, val sBody: S_FunctionBody): BodyState<T>()
-        class EndState<T>(val rBody: T): BodyState<T>()
+        return res ?: getErrorBody()
     }
 }
 
-class C_UserFunctionBody(bodyCtx: C_FunctionBodyContext, sBody: S_FunctionBody): C_CommonFunctionBody<R_FunctionBody>(bodyCtx, sBody) {
+class C_UserFunctionBody(
+        bodyCtx: C_FunctionBodyContext,
+        private val sBody: S_FunctionBody
+): C_CommonFunctionBody<R_FunctionBody>(bodyCtx) {
+    override fun returnsValue() = sBody.returnsValue()
     override fun getErrorBody() = R_FunctionBody.ERROR
     override fun getReturnType(body: R_FunctionBody) = body.type
-    override fun compileBody(ctx: C_FunctionBodyContext, sBody: S_FunctionBody) = sBody.compileFunction(ctx)
+    override fun compileBody() = sBody.compileFunction(bodyCtx)
 }
 
-class C_QueryFunctionBody(bodyCtx: C_FunctionBodyContext, sBody: S_FunctionBody): C_CommonFunctionBody<R_QueryBody>(bodyCtx, sBody) {
+class C_QueryFunctionBody(
+        bodyCtx: C_FunctionBodyContext,
+        private val sBody: S_FunctionBody
+): C_CommonFunctionBody<R_QueryBody>(bodyCtx) {
+    override fun returnsValue() = sBody.returnsValue()
     override fun getErrorBody() = R_UserQueryBody.ERROR
     override fun getReturnType(body: R_QueryBody) = body.retType
-    override fun compileBody(ctx: C_FunctionBodyContext, sBody: S_FunctionBody) = sBody.compileQuery(ctx)
+    override fun compileBody() = sBody.compileQuery(bodyCtx)
 }
 
 class C_FormalParameter(

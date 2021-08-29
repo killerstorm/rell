@@ -6,8 +6,8 @@ package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.compiler.vexpr.V_ConstantExpr
-import net.postchain.rell.compiler.vexpr.V_RExpr
+import net.postchain.rell.compiler.vexpr.V_ConstantValueExpr
+import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.LateGetter
@@ -40,7 +40,8 @@ enum class C_DeclarationType(val msg: String) {
     FUNCTION("function"),
     OPERATION("operation"),
     QUERY("query"),
-    IMPORT("import")
+    IMPORT("import"),
+    CONSTANT("constant"),
     ;
 
     val capitalizedMsg = StringUtils.capitalize(msg)
@@ -267,28 +268,28 @@ abstract class C_NamespaceValue {
     abstract fun toExpr(ctx: C_NamespaceValueContext, name: List<S_Name>): C_Expr
 }
 
-abstract class C_NamespaceValue_RExpr: C_NamespaceValue() {
-    abstract fun toExpr0(ctx: C_NamespaceValueContext, name: List<S_Name>): R_Expr
+abstract class C_NamespaceValue_VExpr: C_NamespaceValue() {
+    protected abstract fun toExpr0(ctx: C_NamespaceValueContext, name: List<S_Name>): V_Expr
 
-    override final fun toExpr(ctx: C_NamespaceValueContext, name: List<S_Name>): C_Expr {
-        val rExpr = toExpr0(ctx, name)
-        return V_RExpr.makeExpr(ctx.exprCtx, name[0].pos, rExpr)
+    final override fun toExpr(ctx: C_NamespaceValueContext, name: List<S_Name>): C_Expr {
+        val vExpr = toExpr0(ctx, name)
+        return C_VExpr(vExpr)
     }
 }
 
-class C_NamespaceValue_Value(private val value: Rt_Value): C_NamespaceValue() {
-    override fun toExpr(ctx: C_NamespaceValueContext, name: List<S_Name>): C_Expr {
-        val vExpr = V_ConstantExpr(ctx.exprCtx, name[0].pos, value)
-        return C_VExpr(vExpr)
+class C_NamespaceValue_RtValue(private val value: Rt_Value): C_NamespaceValue_VExpr() {
+    override fun toExpr0(ctx: C_NamespaceValueContext, name: List<S_Name>): V_Expr {
+        return V_ConstantValueExpr(ctx.exprCtx, name[0].pos, value)
     }
 }
 
 class C_NamespaceValue_SysFunction(
         private val resultType: R_Type,
-        private val fn: R_SysFunction
-): C_NamespaceValue_RExpr() {
-    override fun toExpr0(ctx: C_NamespaceValueContext, name: List<S_Name>): R_Expr {
-        return C_Utils.createSysCallExpr(resultType, fn, listOf(), name)
+        private val fn: R_SysFunction,
+        private val pure: Boolean
+): C_NamespaceValue_VExpr() {
+    override fun toExpr0(ctx: C_NamespaceValueContext, name: List<S_Name>): V_Expr {
+        return C_Utils.createSysGlobalPropExpr(ctx.exprCtx, resultType, fn, name, pure = pure)
     }
 }
 
@@ -322,5 +323,11 @@ class C_NamespaceValue_Struct(private val struct: R_Struct): C_NamespaceValue() 
         val nsProxy = C_DefProxy.create(ns)
         val nsRef = C_NamespaceRef.create(ctx.msgCtx, name, nsProxy)
         return C_NamespaceStructExpr(name, struct, nsRef)
+    }
+}
+
+class C_NamespaceValue_GlobalConstant(private val cDef: C_GlobalConstantDefinition): C_NamespaceValue_VExpr() {
+    override fun toExpr0(ctx: C_NamespaceValueContext, name: List<S_Name>): V_Expr {
+        return cDef.compileRead(ctx.exprCtx, name.last())
     }
 }

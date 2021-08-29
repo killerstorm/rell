@@ -4,46 +4,20 @@ import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.*
+import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmSet
-
-class V_RExpr(
-        exprCtx: C_ExprContext,
-        pos: S_Pos,
-        private val rExpr: R_Expr,
-        private val exprVarFacts: C_ExprVarFacts = C_ExprVarFacts.EMPTY
-): V_Expr(exprCtx, pos) {
-    override val exprInfo = V_ExprInfo()
-
-    override fun type() = rExpr.type
-    override fun toRExpr0() = rExpr
-    override fun toDbExpr0() = C_Utils.toDbExpr(pos, rExpr)
-    override fun constantValue() = rExpr.constantValue()
-    override fun varFacts() = exprVarFacts
-
-    companion object {
-        fun makeExpr(
-                exprCtx: C_ExprContext,
-                pos: S_Pos,
-                rExpr: R_Expr,
-                varFacts: C_ExprVarFacts = C_ExprVarFacts.EMPTY
-        ): C_Expr {
-            val vExpr = V_RExpr(exprCtx, pos, rExpr, varFacts)
-            return C_VExpr(vExpr)
-        }
-    }
-}
 
 class V_LocalVarExpr(
         exprCtx: C_ExprContext,
         pos: S_Pos,
-        private val varRef: C_LocalVarRef,
-        private val nulled: C_VarFact,
-        private val smartType: R_Type?
+        private val varRef: C_LocalVarRef
 ): V_Expr(exprCtx, pos) {
-    override val exprInfo = V_ExprInfo(dependsOnAtExprs = listOfNotNull(varRef.target.atExprId).toImmSet())
+    override fun exprInfo0() = V_ExprInfo(
+            varRef.target.type,
+            immListOf(),
+            dependsOnAtExprs = listOfNotNull(varRef.target.atExprId).toImmSet()
+    )
 
-    override fun type() = smartType ?: varRef.target.type
-    override fun toDbExpr0() = C_Utils.toDbExpr(pos, toRExpr())
     override fun varId() = varRef.target.uid
 
     override fun isAtExprItem() = varRef.target.atExprId != null
@@ -51,23 +25,7 @@ class V_LocalVarExpr(
 
     override fun toRExpr0(): R_Expr {
         checkInitialized()
-        var rExpr: R_Expr = varRef.toRExpr()
-        if (smartType != null) {
-            rExpr = R_NotNullExpr(smartType, rExpr)
-        }
-        return rExpr
-    }
-
-    override fun asNullable(): V_Expr {
-        if (varRef.target.type !is R_NullableType || nulled == C_VarFact.MAYBE) {
-            return this
-        }
-
-        val (freq, msg) = if (nulled == C_VarFact.YES) Pair("always", "is always") else Pair("never", "cannot be")
-        val name = varRef.target.name
-        msgCtx.warning(pos, "expr_var_null:$freq:$name", "Variable '$name' $msg null at this location")
-
-        return V_LocalVarExpr(exprCtx, pos, varRef, nulled, null)
+        return varRef.toRExpr()
     }
 
     override fun destination(): C_Destination {
@@ -77,8 +35,7 @@ class V_LocalVarExpr(
                 throw C_Error.stop(pos, "expr_assign_val:$name", "Value of '$name' cannot be changed")
             }
         }
-        val effectiveType = smartType ?: varRef.target.type
-        return C_LocalVarDestination(effectiveType)
+        return C_LocalVarDestination()
     }
 
     private fun checkInitialized() {
@@ -88,9 +45,9 @@ class V_LocalVarExpr(
         }
     }
 
-    private inner class C_LocalVarDestination(private val effectiveType: R_Type): C_Destination() {
+    private inner class C_LocalVarDestination: C_Destination() {
         override fun type() = varRef.target.type
-        override fun effectiveType() = effectiveType
+        override fun effectiveType() = varRef.target.type
 
         override fun compileAssignStatement(ctx: C_ExprContext, srcExpr: R_Expr, op: C_AssignOp?): R_Statement {
             if (op != null) {
@@ -115,14 +72,71 @@ class V_LocalVarExpr(
     }
 }
 
+class V_SmartNullableExpr(
+        exprCtx: C_ExprContext,
+        private val subExpr: V_Expr,
+        private val nulled: Boolean,
+        private val smartType: R_Type?,
+        private val name: String,
+        private val kind: C_CodeMsg
+): V_Expr(exprCtx, subExpr.pos) {
+    override fun exprInfo0() = V_ExprInfo.simple(smartType ?: subExpr.type, subExpr)
+
+    override fun toDbExpr0() = subExpr.toDbExpr()
+    override fun varId() = subExpr.varId()
+
+    override fun isAtExprItem() = subExpr.isAtExprItem()
+    override fun implicitAtWhereAttrName() = subExpr.implicitAtWhereAttrName()
+
+    override fun toRExpr0(): R_Expr {
+        val rExpr = subExpr.toRExpr()
+        return if (smartType == null) rExpr else R_NotNullExpr(smartType, rExpr)
+    }
+
+    override fun asNullable(): V_Expr {
+        val (freq, msg) = if (nulled) Pair("always", "is always") else Pair("never", "cannot be")
+        msgCtx.warning(pos, "expr:smartnull:${kind.code}:$freq:$name", "${kind.msg} '$name' $msg null at this location")
+        return subExpr
+    }
+
+    override fun destination(): C_Destination {
+        val dst = subExpr.destination()
+        return if (smartType == null) dst else C_SmartNullableDestination(dst, smartType)
+    }
+
+    private class C_SmartNullableDestination(
+            val destination: C_Destination,
+            val effectiveType: R_Type
+    ): C_Destination() {
+        override fun type() = destination.type()
+        override fun effectiveType() = effectiveType
+
+        override fun compileAssignExpr(
+                ctx: C_ExprContext,
+                startPos: S_Pos,
+                resType: R_Type,
+                srcExpr: R_Expr,
+                op: C_AssignOp,
+                post: Boolean
+        ): R_Expr {
+            return destination.compileAssignExpr(ctx, startPos, resType, srcExpr, op, post)
+        }
+
+        override fun compileAssignStatement(ctx: C_ExprContext, srcExpr: R_Expr, op: C_AssignOp?): R_Statement {
+            return destination.compileAssignStatement(ctx, srcExpr, op)
+        }
+    }
+}
+
 class V_ObjectExpr(
         exprCtx: C_ExprContext,
         name: List<S_Name>,
         private val rObject: R_ObjectDefinition
 ): V_Expr(exprCtx, name[0].pos) {
-    override val exprInfo = V_ExprInfo()
+    override fun exprInfo0() = V_ExprInfo.simple(rObject.type)
 
-    override fun type() = rObject.type
+    override fun globalConstantRestriction() = V_GlobalConstantRestriction("object", null)
+
     override fun toRExpr0() = R_ObjectExpr(rObject.type)
     override fun toDbExpr0() = C_Utils.toDbExpr(pos, toRExpr())
 
@@ -144,9 +158,10 @@ class V_ObjectAttrExpr(
         private val rObject: R_ObjectDefinition,
         private val attr: R_Attribute
 ): V_Expr(exprCtx, pos) {
-    override val exprInfo = V_ExprInfo()
+    override fun exprInfo0() = V_ExprInfo.simple(attr.type)
 
-    override fun type() = attr.type
+    override fun globalConstantRestriction() = V_GlobalConstantRestriction("object_attr", null)
+
     override fun toRExpr0() = createAccessExpr()
     override fun toDbExpr0() = C_Utils.toDbExpr(pos, toRExpr())
 

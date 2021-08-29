@@ -5,10 +5,11 @@
 package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.vexpr.V_Expr
-import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.model.R_NullType
 import net.postchain.rell.model.R_NullableType
 import net.postchain.rell.model.R_Type
+import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 
 enum class C_VarFact {
@@ -302,10 +303,6 @@ class C_ExprVarFacts private constructor(
         return C_ExprVarFacts(trueFacts2, falseFacts2, postFacts2)
     }
 
-    fun copyPostFacts(): C_ExprVarFacts {
-        return if (trueFacts.isEmpty() && falseFacts.isEmpty()) this else of(postFacts = postFacts)
-    }
-
     fun update(
             trueFacts: C_VarFacts? = null,
             falseFacts: C_VarFacts? = null,
@@ -355,8 +352,12 @@ class C_ExprVarFacts private constructor(
             return of(postFacts = varFacts)
         }
 
+        fun forSubExpressions(vararg values: V_Expr): C_ExprVarFacts {
+            return forSubExpressions(values.toImmList())
+        }
+
         fun forSubExpressions(values: List<V_Expr>): C_ExprVarFacts {
-            val postFacts = values.fold(C_VarFacts.EMPTY) { facts, value -> facts.and(value.varFacts().postFacts) }
+            val postFacts = values.fold(C_VarFacts.EMPTY) { facts, value -> facts.and(value.varFacts.postFacts) }
             return of(postFacts = postFacts)
         }
     }

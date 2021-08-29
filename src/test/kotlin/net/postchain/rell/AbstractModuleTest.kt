@@ -35,6 +35,7 @@ class AbstractModuleTest: BaseRellTest() {
         file("bad.rell", "module; import lib;")
         file("mid.rell", "abstract module; import lib;")
         file("imp.rell", "module; import lib; override function lib.f(): integer = 123;")
+
         chkCompile("import lib;", "ct_err:override:missing:[lib:f]:[lib.rell:1]")
         chkCompile("import bad;", "ct_err:bad.rell:override:missing:[lib:f]:[lib.rell:1]")
         chkCompile("import mid;", "ct_err:override:missing:[lib:f]:[lib.rell:1]")

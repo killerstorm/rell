@@ -198,7 +198,7 @@ class LibBlockTransactionTest: BaseRellTest() {
                 _=.block.block_rid,
                 _=.block.timestamp
             )
-        """.trimIndent()
+        """
 
         chk(expr, "[]") // Does database initialization
 

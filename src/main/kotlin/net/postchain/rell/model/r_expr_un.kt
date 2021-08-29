@@ -45,12 +45,4 @@ class R_UnaryExpr(type: R_Type, val op: R_UnaryOp, val expr: R_Expr): R_Expr(typ
         val resValue = op.evaluate(operand)
         return resValue
     }
-
-    override fun constantValue(): Rt_Value? {
-        val v = expr.constantValue()
-        if (v == null) return null
-
-        val res = op.evaluate(v)
-        return res
-    }
 }

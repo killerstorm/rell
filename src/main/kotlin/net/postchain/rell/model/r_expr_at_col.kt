@@ -1,7 +1,9 @@
 package net.postchain.rell.model
 
-import com.google.common.collect.Iterables
-import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.Rt_CallFrame
+import net.postchain.rell.runtime.Rt_Error
+import net.postchain.rell.runtime.Rt_NullValue
+import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmList
 import kotlin.math.min
@@ -47,22 +49,33 @@ class R_ColAtFieldSummarization_Aggregate_MinMax(
 
 class R_ColAtWhatField(val expr: R_Expr, val flags: R_AtWhatFieldFlags, val summarization: R_ColAtFieldSummarization)
 
-class R_ColAtWhat(
-        fields: List<R_ColAtWhatField>,
+class R_ColAtWhatExtras(
+        val fieldCount: Int,
         selectedFields: List<Int>,
         groupFields: List<Int>,
         sorting: List<IndexedValue<Comparator<Rt_Value>>>,
         val rowDecoder: R_AtExprRowDecoder
 ) {
-    val fields = fields.toImmList()
     val selectedFields = selectedFields.toImmList()
     val groupFields = groupFields.toImmList()
     val sorting = sorting.toImmList()
 
     init {
-        selectedFields.forEach { check(it in fields.indices) }
-        groupFields.forEach { check(it in fields.indices) }
-        sorting.forEach { check(it.index in fields.indices) }
+        val fieldIndices = 0 until fieldCount
+        selectedFields.forEach { check(it in fieldIndices) }
+        groupFields.forEach { check(it in fieldIndices) }
+        sorting.forEach { check(it.index in fieldIndices) }
+    }
+}
+
+class R_ColAtWhat(
+        fields: List<R_ColAtWhatField>,
+        val extras: R_ColAtWhatExtras
+) {
+    val fields = fields.toImmList()
+
+    init {
+        checkEquals(extras.fieldCount, fields.size)
     }
 }
 
@@ -112,7 +125,7 @@ private class R_ColAtSummarizer_None(private val fieldCount: Int): R_ColAtSummar
 
 private class R_ColAtSummarizer_Group(what: R_ColAtWhat): R_ColAtSummarizer() {
     private val fields = what.fields
-    private val groupFields = what.groupFields
+    private val groupFields = what.extras.groupFields
     private val map = mutableMapOf<List<Rt_Value>, R_ColAtRowAggregator>()
 
     override fun newLimiter(limits: Rt_AtExprExtras, sorting: Boolean) = newLimiter0(limits, false)
@@ -243,28 +256,10 @@ class R_ColAtLimiter_Late(private val limit: Long, private val offset: Long): R_
     }
 }
 
-sealed class R_ColAtFrom(private val expr: R_Expr) {
-    protected abstract fun evaluate0(value: Rt_Value): Iterable<Rt_Value>
-
+class R_ColAtFrom(private val iterator: R_ForIterator, private val expr: R_Expr) {
     fun evaluate(frame: Rt_CallFrame): Iterable<Rt_Value> {
         val value = expr.evaluate(frame)
-        return evaluate0(value)
-    }
-}
-
-class R_ColAtFrom_Collection(expr: R_Expr): R_ColAtFrom(expr) {
-    override fun evaluate0(value: Rt_Value): Iterable<Rt_Value> {
-        return value.asCollection()
-    }
-}
-
-class R_ColAtFrom_Map(expr: R_Expr, private val tupleType: R_TupleType): R_ColAtFrom(expr) {
-    override fun evaluate0(value: Rt_Value): Iterable<Rt_Value> {
-        val map = value.asMap()
-        return Iterables.transform(map.entries) {
-            val entry = it!!
-            Rt_TupleValue(tupleType, listOf(entry.key, entry.value))
-        }
+        return iterator.list(value)
     }
 }
 
@@ -279,7 +274,7 @@ class R_ColAtExpr(
         cardinality: R_AtCardinality,
         extras: R_AtExprExtras
 ): R_AtExpr(type, cardinality, extras) {
-    private val rowComparator = RowComparator.create(what.sorting)
+    private val rowComparator = RowComparator.create(what.extras.sorting)
     private val hasSorting = rowComparator != null
 
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
@@ -327,8 +322,8 @@ class R_ColAtExpr(
 
         val resList: MutableList<Rt_Value> = ArrayList(rows.size)
         for (rowValues in rows) {
-            val selValues = what.selectedFields.map { rowValues[it] }
-            val value = what.rowDecoder.decode(selValues)
+            val selValues = what.extras.selectedFields.map { rowValues[it] }
+            val value = what.extras.rowDecoder.decode(selValues)
             resList.add(value)
         }
 

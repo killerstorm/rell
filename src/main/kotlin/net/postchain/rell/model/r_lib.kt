@@ -734,7 +734,7 @@ object R_SysFn_Crypto {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             checkEquals(args.size, 1)
             val a = args[0].asByteArray()
-            val opCtx = ctx.globalCtx.opCtx
+            val opCtx = ctx.exeCtx.opCtx
             val r = if (opCtx == null) false else opCtx.signers.any { Arrays.equals(it, a) }
             return Rt_BooleanValue(r)
         }
@@ -814,8 +814,11 @@ object R_SysFn_Internal {
         }
     }
 
-    object Nop: R_SysFunction_1() {
-        override fun call(arg: Rt_Value): Rt_Value {
+    class Nop(private val print: Boolean): R_SysFunctionEx_1() {
+        override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
+            if (print) {
+                ctx.globalCtx.outPrinter.print(arg.toString())
+            }
             return arg
         }
     }

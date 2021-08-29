@@ -22,9 +22,7 @@ abstract class Db_SysFn_Simple(name: String, val sql: String): Db_SysFunction(na
 }
 
 abstract class Db_SysFn_Template(name: String, private val arity: Int, template: String): Db_SysFunction(name) {
-    private val fragments: List<Pair<String?, Int?>>
-
-    init {
+    private val fragments: List<Pair<String?, Int?>> = let {
         val pat = Pattern.compile("#\\d")
         val m = pat.matcher(template)
 
@@ -42,7 +40,7 @@ abstract class Db_SysFn_Template(name: String, private val arity: Int, template:
 
         if (i < template.length) list.add(Pair(template.substring(i), null))
 
-        fragments = list.toImmList()
+        list.toImmList()
     }
 
     override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<RedDb_Expr>) {

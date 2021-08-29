@@ -37,26 +37,25 @@ class OperatorsInterpretedTest: OperatorsBaseTest() {
         val args2 = args.map { it as InterpTstVal }
         val types = args2.map { it.type }
 
-        val chainCtx = Rt_ChainContext(GtvNull, mapOf(), BlockchainRid.ZERO_RID)
-
         val globalCtx = Rt_GlobalContext(
                 C_CompilerOptions.DEFAULT,
                 Rt_FailingPrinter,
                 Rt_FailingPrinter,
-                null,
-                chainCtx,
                 typeCheck = true,
                 pcModuleEnv = RellPostchainModuleEnvironment.DEFAULT
         )
 
+        val chainCtx = Rt_ChainContext(GtvNull, mapOf(), BlockchainRid.ZERO_RID)
+
         val res = processExpr0(expr2, types) { app ->
             val ctx = ValCtx(app)
             val rtArgs = args2.map { it.rt(ctx) }
-            val sqlCtx = Rt_SqlContext.createNoExternalChains(app, Rt_ChainSqlMapping(0))
-            val appCtx = Rt_AppContext(globalCtx, sqlCtx, app, false, false, null, Rt_UnsupportedBlockRunnerStrategy)
-            val exeCtx = Rt_ExecutionContext(appCtx, NoConnSqlExecutor)
+            val sqlCtx = Rt_RegularSqlContext.createNoExternalChains(app, Rt_ChainSqlMapping(0))
+            val appCtx = Rt_AppContext(globalCtx, chainCtx, app, false, false, null, Rt_UnsupportedBlockRunnerStrategy)
+            val exeCtx = Rt_ExecutionContext(appCtx, null, sqlCtx, NoConnSqlExecutor)
             RellTestUtils.callQuery(exeCtx, "q", rtArgs, RellTestUtils.ENCODER_STRICT)
         }
+
         return res
     }
 
@@ -83,7 +82,7 @@ class OperatorsInterpretedTest: OperatorsBaseTest() {
             entity company { name: text; }
             entity user { name: text; company; }
             query q($params) = $expr;
-        """.trimIndent()
+        """
 
         val res = RellTestUtils.processApp(code, processor = { block(it.rApp) })
         return res

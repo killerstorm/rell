@@ -6,7 +6,7 @@ package net.postchain.rell.misc
 
 import net.postchain.rell.compiler.C_CompilerModuleSelection
 import net.postchain.rell.compiler.C_CompilerOptions
-import net.postchain.rell.compiler.C_DiskSourceDir
+import net.postchain.rell.compiler.C_SourceDir
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.test.RellTestUtils
 import org.junit.Test
@@ -64,7 +64,7 @@ class CliSnippetsTest {
 
     private fun chkModules(modSel: C_CompilerModuleSelection) {
         val dir = File("test-cli/src")
-        val sourceDir = C_DiskSourceDir(dir)
+        val sourceDir = C_SourceDir.diskDir(dir)
         val res = RellTestUtils.compileApp(sourceDir, modSel, C_CompilerOptions.DEFAULT)
         assertEquals(0, res.messages.size, res.messages.toString())
     }

@@ -5,79 +5,40 @@
 package net.postchain.rell.compiler.ast
 
 import net.postchain.rell.compiler.*
-import net.postchain.rell.model.R_DefinitionId
-import net.postchain.rell.repl.*
-import net.postchain.rell.utils.MutableTypedKeyMap
-import net.postchain.rell.utils.TypedKeyMap
+import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmSet
 
 class S_ReplCommand(steps: List<S_ReplStep>, expr: S_Expr?) {
-    private val defs = steps.map { it.definition() }.filterNotNull().toImmList()
+    private val defs = steps.mapNotNull { it.definition() }.toImmList()
+    private val stmts = (steps.mapNotNull { it.statement() } + listOfNotNull(expr).map { S_ExprStatement(it) }).toImmList()
 
-    private val stmts: List<S_Statement>
+    fun compile(
+            msgCtx: C_MessageContext,
+            sourceDir: C_SourceDir,
+            currentModuleName: R_ModuleName?,
+            preModules: Map<C_ModuleKey, C_PrecompiledModule>
+    ): C_ExtReplCommand {
+        val preModuleNames = preModules.map { it.key.name }.toImmSet()
+        val modLdr = C_ModuleLoader(msgCtx, sourceDir, preModuleNames)
 
-    init {
-        val list = steps.map { it.statement() }.filterNotNull().toMutableList()
-        if (expr != null) {
-            list.add(S_ExprStatement(expr))
+        if (currentModuleName != null) {
+            modLdr.loadModule(currentModuleName)
         }
-        stmts = list.toImmList()
-    }
 
-    fun compile(mntCtx: C_MountContext, codeState: ReplCodeState): C_LateGetter<ReplCode> {
-        val ctx = createContext(mntCtx, codeState)
-        compileDefs(ctx)
-        compileStatements(ctx)
-        return ctx.commandGetter
-    }
+        val srcCtx = modLdr.readerCtx.createModuleSourceContext(currentModuleName ?: R_ModuleName.EMPTY)
+        val midMembers = defs.mapNotNull { it.compile(srcCtx) }
+        val midModules = modLdr.getLoadedModules()
 
-    private fun createContext(mntCtx: C_MountContext, codeState: ReplCodeState): C_ReplCommandContext {
-        val stmtVars = discoverStatementVars()
-        val defId = R_DefinitionId("", "<REPL>")
-        val defCtx = C_DefinitionContext(mntCtx, C_DefinitionType.REPL, defId)
-        val fnCtx = C_FunctionContext(defCtx, "<REPL>", null, stmtVars)
-        val frameCtx = C_FrameContext.create(fnCtx, codeState.cState.frameProto)
-        return C_ReplCommandContext(frameCtx, codeState)
-    }
-
-    private fun compileStatements(ctx: C_ReplCommandContext) {
-        val stmtCtx = C_StmtContext.createRoot(ctx.frameCtx.rootBlkCtx)
-
-        ctx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
-            val builder = C_BlockCodeBuilder(stmtCtx, true, false, ctx.codeState.cState.blockCodeProto)
-            compileBlock(builder)
-            val blockCode = builder.build()
-            val replCode = createReplCode(ctx, blockCode)
-            ctx.setCommand(replCode)
+        val midCompiler = C_MidModuleCompiler(msgCtx, midModules)
+        if (currentModuleName != null) {
+            midCompiler.compileModule(currentModuleName, null)
         }
-    }
 
-    private fun createReplCode(ctx: C_ReplCommandContext, blockCode: C_BlockCode): ReplCode {
-        val callFrame = ctx.frameCtx.makeCallFrame(false)
-        val rCommand = R_ReplCode(callFrame.rFrame, blockCode.rStmts)
-        val blockCodeProto = blockCode.createProto()
-        val cState = C_ReplCodeState(callFrame.proto, blockCodeProto)
-        return ReplCode(rCommand, cState, ctx.codeState.rtState)
-    }
+        val extMembers = midCompiler.compileMembers(midMembers)
+        val extModules = midCompiler.getExtModules()
 
-    private fun discoverStatementVars(): TypedKeyMap {
-        val map = MutableTypedKeyMap()
-        for (stmt in stmts) {
-            stmt.discoverVars(map)
-        }
-        return map.immutableCopy()
-    }
-
-    private fun compileDefs(ctx: C_ReplCommandContext) {
-        for (def in defs) {
-            def.compile(ctx.mntCtx)
-        }
-    }
-
-    private fun compileBlock(builder: C_BlockCodeBuilder) {
-        for (stmt in stmts) {
-            builder.add(stmt)
-        }
+        return C_ExtReplCommand(extModules, extMembers, currentModuleName, stmts, preModules)
     }
 }
 

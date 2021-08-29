@@ -209,7 +209,7 @@ class R_BinaryExpr(type: R_Type, val op: R_BinaryOp, val left: R_Expr, val right
 sealed class R_BinaryOp_Arith_Integer(code: String): R_BinaryOp(code) {
     abstract fun evaluate(left: Long, right: Long): Long
 
-    override final fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value {
+    final override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value {
         val leftVal = left.asInteger()
         val rightVal = right.asInteger()
 

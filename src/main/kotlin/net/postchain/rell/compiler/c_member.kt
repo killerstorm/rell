@@ -8,10 +8,7 @@ import net.postchain.rell.compiler.ast.S_CallArgument
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_VirtualType
-import net.postchain.rell.compiler.vexpr.V_EntityAttrExpr
-import net.postchain.rell.compiler.vexpr.V_Expr
-import net.postchain.rell.compiler.vexpr.V_ExprInfo
-import net.postchain.rell.compiler.vexpr.V_SysMemberPropertyExpr
+import net.postchain.rell.compiler.vexpr.*
 import net.postchain.rell.model.*
 import net.postchain.rell.utils.toImmList
 
@@ -44,8 +41,7 @@ private class C_MemberValue_BasicAttr(private val attr: C_MemberAttr): C_MemberV
     override fun compile(ctx: C_ExprContext, link: C_MemberLink): V_Expr {
         val fieldType = attr.type
         val effectiveType = C_Utils.effectiveMemberType(fieldType, link.safe)
-        val exprFacts = C_ExprVarFacts.of(postFacts = link.base.varFacts().postFacts)
-        return V_MemberAttrExpr(ctx, link, attr, effectiveType, exprFacts)
+        return V_MemberAttrExpr(ctx, link, attr, effectiveType)
     }
 }
 
@@ -54,25 +50,36 @@ private class C_MemberValue_EntityAttr(private val attr: C_EntityAttrRef): C_Mem
     override fun memberName() = C_MemberName_Name(attr.attrName)
 
     override fun compile(ctx: C_ExprContext, link: C_MemberLink): V_Expr {
-        C_MemberResolver.checkNullAccess(link.base.type(), link.safe, link.linkPos, attr.attrName)
+        C_MemberResolver.checkNullAccess(link.base.type, link.safe, link.linkPos, attr.attrName)
         val resultType = C_Utils.effectiveMemberType(attr.type(), link.safe)
-        return V_EntityAttrExpr(ctx, link, attr, resultType, C_ExprVarFacts.EMPTY)
+        return V_EntityAttrExpr(ctx, link, attr, resultType)
     }
 }
 
 private class C_MemberValue_EnumAttr(
-        private val prop: C_SysMemberFormalParamsFuncBody,
+        private val prop: C_SysMemberProperty,
         private val propName: String
 ): C_MemberValue() {
-    override fun type() = prop.resType
+    override fun type() = prop.type
     override fun memberName() = C_MemberName_Name(propName)
 
     override fun compile(ctx: C_ExprContext, link: C_MemberLink): V_Expr {
         val caseCtx = C_MemberFuncCaseCtx(link, propName)
-        var res = prop.compileCall(ctx, caseCtx, listOf())
+
+        val pos = caseCtx.linkPos
+        val effResType = C_Utils.effectiveMemberType(prop.type, link.safe)
+
+        val fullName = caseCtx.qualifiedNameMsg()
+        val desc = V_SysFunctionTargetDescriptor(prop.type, prop.rFn, prop.dbFn, fullName, pure = prop.pure, synth = true)
+        val callTarget = V_FunctionCallTarget_SysMemberFunction(desc, caseCtx.member)
+
+        var res: V_Expr = V_FullFunctionCallExpr(ctx, pos, pos, effResType, callTarget, V_FunctionCallArgs.EMPTY)
+
         if (caseCtx.member.base.isAtExprItem()) {
+            // Wrap just to add implicit what-expr name.
             res = V_SysMemberPropertyExpr(ctx, res, propName)
         }
+
         return res
     }
 }
@@ -220,7 +227,7 @@ object C_MemberResolver {
 
         override fun findByType0(memberType: R_Type): List<C_MemberValue> {
             return C_LibFunctions.getEnumProperties()
-                    .filter { it.value.resType == memberType }
+                    .filter { it.value.type == memberType }
                     .map { C_MemberValue_EnumAttr(it.value, it.key) }
                     .toImmList()
         }
@@ -295,12 +302,9 @@ private class V_MemberAttrExpr(
         exprCtx: C_ExprContext,
         private val memberLink: C_MemberLink,
         private val memberAttr: C_MemberAttr,
-        private val type: R_Type,
-        private val varFacts: C_ExprVarFacts
+        private val resType: R_Type
 ): V_Expr(exprCtx, memberLink.base.pos) {
-    override val exprInfo = V_ExprInfo.make(memberLink.base)
-
-    override fun type() = type
+    override fun exprInfo0() = V_ExprInfo.simple(resType, memberLink.base)
 
     override fun implicitAtWhereAttrName(): String? {
         val isAt = memberLink.base.isAtExprItem()
@@ -323,8 +327,6 @@ private class V_MemberAttrExpr(
         return C_Utils.toDbExpr(memberLink.linkPos, rExpr)
     }
 
-    override fun varFacts() = varFacts
-
     override fun destination(): C_Destination {
         val rBase = memberLink.base.toRExpr()
         val rDstExpr = memberAttr.destination(memberLink.linkPos, rBase)
@@ -332,7 +334,7 @@ private class V_MemberAttrExpr(
     }
 
     override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_CallArgument>, resTypeHint: C_TypeHint): V_Expr {
-        if (memberLink.safe && memberAttr.type !is R_NullableType && type == R_NullableType(memberAttr.type)) {
+        if (memberLink.safe && memberAttr.type !is R_NullableType && resType == R_NullableType(memberAttr.type)) {
             return callCommon(ctx, pos, args, resTypeHint, memberAttr.type, true)
         } else {
             return super.call(ctx, pos, args, resTypeHint)

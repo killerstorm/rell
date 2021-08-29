@@ -1,10 +1,7 @@
 package net.postchain.rell.compiler.ast
 
 import net.postchain.rell.compiler.*
-import net.postchain.rell.compiler.vexpr.V_ConstantExpr
-import net.postchain.rell.compiler.vexpr.V_Expr
-import net.postchain.rell.compiler.vexpr.V_WhenChooserDetails
-import net.postchain.rell.compiler.vexpr.V_WhenExpr
+import net.postchain.rell.compiler.vexpr.*
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_BooleanValue
 import net.postchain.rell.runtime.Rt_EnumValue
@@ -47,17 +44,15 @@ class C_WhenChooserDetails(b: C_WhenChooserDetailsBuilder) {
 }
 
 class C_WhenChooser(details: C_WhenChooserDetails) {
-    val rChooser: R_WhenChooser
-
     val bodyExprCtx = details.bodyExprCtx
     val keyPostFacts = details.keyPostFacts
     val full = details.full
     val caseFacts = details.caseFacts
     val elseFacts = details.elseFacts
 
-    init {
+    val rChooser = let {
         val vDetails = details.toVDetails()
-        rChooser = vDetails.makeChooser()
+        vDetails.makeChooser()
     }
 }
 
@@ -118,15 +113,17 @@ class S_WhenConditionExpr(val exprs: List<S_Expr>): S_WhenCondition() {
     }
 
     private fun evaluateConstantValue(vExpr: V_Expr): Rt_Value? {
-        return C_Utils.evaluate(vExpr.pos) { vExpr.constantValue() }
+        return C_Utils.evaluate(vExpr.pos) {
+            vExpr.constantValue(V_ConstantValueEvalContext())
+        }
     }
 
     private fun getVarFacts(keyVarUid: C_VarUid?, keyType: R_Type?, vExpr: V_Expr): C_ExprVarFacts {
         if (keyType == null) {
-            return vExpr.varFacts()
+            return vExpr.varFacts
         }
 
-        val type = vExpr.type()
+        val type = vExpr.type
         if (keyVarUid != null && type == R_NullType) {
             val trueFacts = C_VarFacts.of(nulled = mapOf(keyVarUid to C_VarFact.YES))
             val falseFacts = C_VarFacts.of(nulled = mapOf(keyVarUid to C_VarFact.NO))
@@ -144,7 +141,7 @@ class S_WhenConditionExpr(val exprs: List<S_Expr>): S_WhenCondition() {
             val attr = valueType.enum.attr(name.str)
             if (attr != null) {
                 val value = Rt_EnumValue(valueType, attr)
-                return V_ConstantExpr(ctx, expr.startPos, value)
+                return V_ConstantValueExpr(ctx, expr.startPos, value)
             }
         }
 
@@ -216,14 +213,14 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
             return Pair(R_CtErrorType, immListOf())
         }
 
-        val type = cValues.withIndex().fold(cValues[0].type()) { t, (i, value) ->
-            C_Types.commonType(t, value.type(), cases[i].expr.startPos, "expr_when_incompatible_type",
+        val type = cValues.withIndex().fold(cValues[0].type) { t, (i, value) ->
+            C_Types.commonType(t, value.type, cases[i].expr.startPos, "expr_when_incompatible_type",
                     "When case expressions have incompatible types")
         }
 
         for (cValue in cValues) {
-            val type = cValue.type()
-            C_Utils.checkUnitType(ctx.msgCtx, cValue.pos, type, "when_exprtype_unit", "Expression returns nothing")
+            val valueType = cValue.type
+            C_Utils.checkUnitType(ctx.msgCtx, cValue.pos, valueType, "when_exprtype_unit", "Expression returns nothing")
         }
 
         return Pair(type, cValues)
@@ -257,8 +254,8 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
             }
 
             val keyVarId = keyValue?.varId()
-            val keyType = keyValue?.type()
-            val keyPostFacts = keyValue?.varFacts()?.postFacts ?: C_VarFacts.EMPTY
+            val keyType = keyValue?.type
+            val keyPostFacts = keyValue?.varFacts?.postFacts ?: C_VarFacts.EMPTY
 
             if (keyType == R_NullType) {
                 ctx.msgCtx.error(expr!!.startPos, "when_expr_type:null", "Cannot use null as when expression")
@@ -282,12 +279,12 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
 
             if (keyValue == null) {
                 for (case in builder.variableCases) {
-                    C_Types.match(R_BooleanType, case.value.type(), case.value.pos, "when_case_type", "Type mismatch")
+                    C_Types.match(R_BooleanType, case.value.type, case.value.pos, "when_case_type", "Type mismatch")
                 }
             } else {
-                val keyType = keyValue.type()
+                val keyType = keyValue.type
                 for (case in builder.variableCases) {
-                    val caseType = case.value.type()
+                    val caseType = case.value.type
                     C_Errors.check(checkCaseType(keyType, caseType), case.value.pos) {
                         "when_case_type:$keyType:$caseType" to "Type mismatch: $caseType instead of $keyType"
                     }
@@ -301,7 +298,7 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
                 return builder.elseCase != null
             }
 
-            val keyType = keyValue.type()
+            val keyType = keyValue.type
             val allValues = allTypeValues(keyType)
             val allValuesCovered = !allValues.isEmpty() && allValues == builder.constantCases.keys
 

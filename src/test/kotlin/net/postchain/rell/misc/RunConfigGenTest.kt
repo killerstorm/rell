@@ -5,7 +5,7 @@
 package net.postchain.rell.misc
 
 import net.postchain.gtv.GtvDecoder
-import net.postchain.rell.compiler.C_MapSourceDir
+import net.postchain.rell.compiler.C_SourceDir
 import net.postchain.rell.module.RellVersions
 import net.postchain.rell.test.*
 import net.postchain.rell.tools.runcfg.RellRunConfigGenerator
@@ -508,7 +508,7 @@ class RunConfigGenTest {
             configFiles: Map<String, String>,
             confText: String
     ): MutableMap<String, DirFile> {
-        val sourceDir = C_MapSourceDir.of(sourceFiles)
+        val sourceDir = C_SourceDir.mapDirOf(sourceFiles)
         val configDir = MapGeneralDir(configFiles)
         val params = RellRunConfigParams(sourceDir, configDir, RellVersions.VERSION, unitTest = false)
         val conf = RellRunConfigGenerator.generate(TestRellCliEnv, params, "run.xml", confText.trimIndent())

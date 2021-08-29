@@ -14,11 +14,9 @@ abstract class C_FormalParamsFuncBody<CtxT: C_FuncCaseCtx>(val resType: R_Type) 
         val effResType = effectiveResType(caseCtx, resType)
 
         val callTarget = makeCallTarget(caseCtx)
+        val callArgs = V_FunctionCallArgs.positional(args)
 
-        val callArgs = V_FunctionCallArgs(args, args.indices.toList())
-        val varFacts = C_ExprVarFacts.forSubExpressions(callTarget.vExprs() + args)
-
-        return V_FullFunctionCallExpr(ctx, pos, pos, effResType, callTarget, callArgs, varFacts)
+        return V_FullFunctionCallExpr(ctx, pos, pos, effResType, callTarget, callArgs)
     }
 }
 
@@ -28,26 +26,32 @@ typealias C_MemberFormalParamsFuncBody = C_FormalParamsFuncBody<C_MemberFuncCase
 class C_SysGlobalFormalParamsFuncBody(
         resType: R_Type,
         private val rFn: R_SysFunction,
-        private val dbFn: Db_SysFunction? = null
+        private val dbFn: Db_SysFunction? = null,
+        private val pure: Boolean
 ): C_GlobalFormalParamsFuncBody(resType) {
     override fun effectiveResType(caseCtx: C_GlobalFuncCaseCtx, type: R_Type) = type
 
     override fun makeCallTarget(caseCtx: C_GlobalFuncCaseCtx): V_FunctionCallTarget {
-        return V_FunctionCallTarget_SysGlobalFunction(resType, rFn, dbFn, caseCtx.qualifiedNameMsg())
+        val fullName = caseCtx.qualifiedNameMsg()
+        val desc = V_SysFunctionTargetDescriptor(resType, rFn, dbFn, fullName, pure)
+        return V_FunctionCallTarget_SysGlobalFunction(desc)
     }
 }
 
 class C_SysMemberFormalParamsFuncBody(
         resType: R_Type,
         private val rFn: R_SysFunction,
-        private val dbFn: Db_SysFunction? = null
+        private val dbFn: Db_SysFunction? = null,
+        private val pure: Boolean
 ): C_MemberFormalParamsFuncBody(resType) {
     override fun effectiveResType(caseCtx: C_MemberFuncCaseCtx, type: R_Type): R_Type {
         return C_Utils.effectiveMemberType(type, caseCtx.member.safe)
     }
 
     override fun makeCallTarget(caseCtx: C_MemberFuncCaseCtx): V_FunctionCallTarget {
-        return V_FunctionCallTarget_SysMemberFunction(resType, caseCtx.member, rFn, dbFn, caseCtx.qualifiedNameMsg())
+        val fullName = caseCtx.qualifiedNameMsg()
+        val desc = V_SysFunctionTargetDescriptor(resType, rFn, dbFn, fullName, pure)
+        return V_FunctionCallTarget_SysMemberFunction(desc, caseCtx.member)
     }
 }
 
@@ -65,8 +69,7 @@ class C_PartialCallTarget_SysFunction<CtxT: C_FuncCaseCtx>(
         val fnType = R_FunctionType(args.wildArgs, body.resType)
         val effType = body.effectiveResType(caseCtx, fnType)
         val mapping = args.toRMapping()
-        val exprFacts = C_ExprVarFacts.forSubExpressions(callTarget.vExprs() + args.exprArgs)
-        return V_PartialFunctionCallExpr(ctx, callPos, effType, callTarget, args.exprArgs, mapping, exprFacts)
+        return V_PartialFunctionCallExpr(ctx, callPos, effType, callTarget, args.exprArgs, mapping)
     }
 }
 
@@ -112,7 +115,7 @@ class C_RegularSysGlobalFunction(
             }
         }
 
-        val argTypes = args.map { it.type() }
+        val argTypes = args.map { it.type }
         C_FuncMatchUtils.errNoMatch(ctx, name.pos, name.str, argTypes)
         return null
     }
@@ -256,7 +259,7 @@ class C_CasesSysMemberFunction(
         }
 
         val qName = callCtx.qualifiedNameMsg()
-        val argTypes = args.map { it.type() }
+        val argTypes = args.map { it.type }
         C_FuncMatchUtils.errNoMatch(ctx, callCtx.member.linkPos, qName, argTypes)
         return null
     }
@@ -274,3 +277,10 @@ class C_CasesSysMemberFunction(
 abstract class C_SpecialSysMemberFunction: C_SysMemberFunction() {
     override fun getParamsHints(): C_CallTypeHints = C_CallTypeHints_None
 }
+
+class C_SysMemberProperty(
+        val type: R_Type,
+        val rFn: R_SysFunction,
+        val dbFn: Db_SysFunction? = null,
+        val pure: Boolean
+)

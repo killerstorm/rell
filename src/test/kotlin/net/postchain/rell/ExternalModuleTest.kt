@@ -4,7 +4,6 @@
 
 package net.postchain.rell
 
-import net.postchain.common.toHex
 import net.postchain.rell.lib.LibBlockTransactionTest
 import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.test.RellCodeTester
@@ -422,14 +421,7 @@ class ExternalModuleTest: BaseRellTest() {
     private fun initChain(iChain: Int) {
         val chainId = calcChainId(iChain)
         val inserts = chainInserts(iChain, chainId)
-
-        val t = RellCodeTester(tst.tstCtx)
-        for ((path, code) in tst.files()) t.file(path, code)
-        for ((alias, chain) in tst.chainDependencies()) t.chainDependency(alias, chain.first.toHex(), chain.second)
-        t.chainId = chainId
-        t.dropTables = false
-        t.insert(inserts)
-        t.init()
+        initExternalChain(tst, chainId, inserts)
     }
 
     private fun chainInserts(iChain: Int, chainId: Long): List<String> {
@@ -449,8 +441,20 @@ class ExternalModuleTest: BaseRellTest() {
         return b.list()
     }
 
-    private fun calcChainId(iChain: Int) = 1100L + iChain
-    private fun calcChainRid(iChain: Int) = "1D${calcChainId(iChain)}"
-    private fun calcBlockId(iChain: Int, iBlock: Int) = 220000L + iChain * 100 + iBlock
-    private fun calcTxId(iChain: Int, iTx: Int) = 330000L + iChain * 100 + iTx
+    companion object {
+        fun initExternalChain(tst: RellCodeTester, chainId: Long, inserts: List<String>) {
+            val t = RellCodeTester(tst.tstCtx)
+            for ((path, code) in tst.files()) t.file(path, code)
+            for ((alias, chain) in tst.chainDependencies()) t.chainDependency(alias, chain.first.toHex(), chain.second)
+            t.chainId = chainId
+            t.dropTables = false
+            t.insert(inserts)
+            t.init()
+        }
+
+        private fun calcChainId(iChain: Int) = 1100L + iChain
+        private fun calcChainRid(iChain: Int) = "1D${calcChainId(iChain)}"
+        private fun calcBlockId(iChain: Int, iBlock: Int) = 220000L + iChain * 100 + iBlock
+        private fun calcTxId(iChain: Int, iTx: Int) = 330000L + iChain * 100 + iTx
+    }
 }

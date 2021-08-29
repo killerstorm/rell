@@ -36,6 +36,14 @@ class C_AppContext(
 ) {
     val globalCtx = msgCtx.globalCtx
 
+    val valExec = let {
+        val valMgr = C_ValidationManager(msgCtx)
+        executor.onPass(C_CompilerPass.VALIDATION) {
+            valMgr.execute()
+        }
+        valMgr.executor
+    }
+
     val appUid = C_GlobalContext.nextAppUid()
     private val containerUidGen = C_UidGen { id, name -> R_ContainerUid(id, name, appUid) }
 
@@ -54,6 +62,9 @@ class C_AppContext(
 
     private val externalChainsRoot = R_ExternalChainsRoot()
     private val externalChains = mutableMapOf<String, C_ExternalChain>()
+
+    private val allConstants = oldReplState.constants.toMutableList()
+    private val newConstants = mutableListOf<C_GlobalConstantDefinition>()
 
     private val appLate = C_LateInit(C_CompilerPass.APPLICATION, Optional.empty<R_App>())
     private val nsAsmAppLate = C_LateInit(C_CompilerPass.NAMESPACES, C_NsAsm_App.EMPTY)
@@ -75,7 +86,12 @@ class C_AppContext(
         executor.onPass(C_CompilerPass.APPDEFS) {
             val appDefs = defsBuilder.build()
             appDefsLate.set(appDefs)
-            processStructs(appDefs.structs)
+            C_StructGraphUtils.processStructs(appDefs.structs)
+        }
+
+        executor.onPass(C_CompilerPass.VALIDATION) {
+            val cs = newConstants.toImmList()
+            C_GlobalConstantDefinition.validateConstants(msgCtx, cs)
         }
 
         executor.onPass(C_CompilerPass.APPLICATION) {
@@ -88,6 +104,18 @@ class C_AppContext(
 
     fun nextAtExprId() = C_InternalAppUtils.nextAtExprId()
     fun nextAtEntityId(exprId: R_AtExprId) = C_InternalAppUtils.nextAtEntityId(exprId)
+
+    fun addConstant(
+            moduleKey: R_ModuleKey,
+            names: R_DefinitionNames,
+            maker: (R_GlobalConstantId) -> C_GlobalConstantDefinition
+    ): C_GlobalConstantDefinition {
+        val id = R_GlobalConstantId(allConstants.size, appUid, moduleKey, names.appLevelName, names.qualifiedName)
+        val cDef = maker(id)
+        allConstants.add(cDef.rDef)
+        newConstants.add(cDef)
+        return cDef
+    }
 
     fun getApp(): R_App? {
         executor.checkPass(C_CompilerPass.FINISH)
@@ -153,6 +181,7 @@ class C_AppContext(
                 modules = modules.map { it.rModule },
                 operations = appOperationsMap,
                 queries = appQueriesMap,
+                constants = allConstants.toImmList(),
                 externalChainsRoot = externalChainsRoot,
                 externalChains = externalChains.values.map { it.ref },
                 sqlDefs = sqlDefs
@@ -169,46 +198,28 @@ class C_AppContext(
 
         val modules = modulesBuilder.commit()
 
-        val newPrecompiledModules = modules.map { module ->
+        val newPrecompiledModules = modules
+                .mapNotNull { module ->
                     val ns = asmApp.modules[module.module.key]
                     if (ns == null) null else {
                         val preModule = C_PrecompiledModule(module.module, ns)
-                        Pair(module.module.key, preModule)
+                        module.module.key to preModule
                     }
-                }.filterNotNull()
+                }
                 .toMap()
                 .toImmMap()
 
         val stateModules = oldReplState.modules.toMutableMap()
         stateModules.putAllAbsent(newPrecompiledModules)
 
-        val newReplState = C_ReplAppState(asmApp.newReplState, stateModules, sysDefs, app.sqlDefs, mntTables)
+        val newReplState = C_ReplAppState(asmApp.newReplState, stateModules, sysDefs, app.sqlDefs, mntTables, allConstants)
         newReplStateLate.set(newReplState)
-    }
-
-    private fun processStructs(structs: List<R_Struct>) {
-        val info = C_StructGraphUtils.buildStructsInfo(structs)
-        val graph = info.graph
-        val transGraph = C_GraphUtils.transpose(graph)
-
-        val cyclicStructs = C_GraphUtils.findCyclicVertices(graph).toSet()
-        val infiniteStructs = C_GraphUtils.closure(transGraph, cyclicStructs).toSet()
-        val mutableStructs = C_GraphUtils.closure(transGraph, info.mutable).toSet()
-        val nonVirtualableStructs = C_GraphUtils.closure(transGraph, info.nonVirtualable).toSet()
-        val nonGtvFromStructs = C_GraphUtils.closure(transGraph, info.nonGtvFrom).toSet()
-        val nonGtvToStructs = C_GraphUtils.closure(transGraph, info.nonGtvTo).toSet()
-
-        for (struct in structs) {
-            val gtv = R_GtvCompatibility(struct !in nonGtvFromStructs, struct !in nonGtvToStructs)
-            val typeFlags = R_TypeFlags(struct in mutableStructs, gtv, struct !in nonVirtualableStructs)
-            val flags = R_StructFlags(typeFlags, struct in cyclicStructs, struct in infiniteStructs)
-            struct.setFlags(flags)
-        }
     }
 
     private fun createAppMounts(): C_MountTables {
         val builder = C_MountTablesBuilder(appUid)
         builder.add(sysDefs.mntTables)
+
         for (extChain in externalChains.values) {
             builder.add(extChain.sysDefs.mntTables)
         }

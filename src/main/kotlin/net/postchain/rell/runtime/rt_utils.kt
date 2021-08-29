@@ -166,7 +166,7 @@ class Rt_Messages(private val logger: KLogger) {
         }
 
         val code = errors.map { it.code }.joinToString(",")
-        val msg = errors.map { it.message }.filterNotNull().joinToString("\n")
+        val msg = errors.mapNotNull { it.message }.joinToString("\n")
         throw Rt_Error(code, msg)
     }
 
@@ -209,14 +209,15 @@ object Rt_Utils {
     }
 
     fun evaluateInNewFrame(
-            frame: Rt_CallFrame,
+            defCtx: Rt_DefinitionContext,
+            frame: Rt_CallFrame?,
             expr: R_Expr,
             filePos: R_FilePos?,
             rFrameGetter: C_LateGetter<R_CallFrame>
     ): Rt_Value {
-        val caller = if (filePos == null) null else R_FunctionDefinition.createFrameCaller(frame, filePos)
+        val caller = if (filePos == null || frame == null) null else R_FunctionDefinition.createFrameCaller(frame, filePos)
         val rSubFrame = rFrameGetter.get()
-        val subFrame = R_FunctionDefinition.createCallFrame(frame.defCtx, caller, rSubFrame)
+        val subFrame = R_FunctionDefinition.createCallFrame(defCtx, caller, rSubFrame)
         return expr.evaluate(subFrame)
     }
 }

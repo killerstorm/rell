@@ -5,7 +5,9 @@
 package net.postchain.rell.utils
 
 import mu.KLogging
+import net.postchain.base.BlockchainRid
 import net.postchain.common.hexStringToByteArray
+import net.postchain.gtv.GtvNull
 import net.postchain.rell.compiler.*
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_LangVersion
@@ -23,7 +25,7 @@ import kotlin.system.exitProcess
 object RellCliUtils: KLogging() {
     fun createSourceDir(sourceDirPath: String?): C_SourceDir {
         val file = if (sourceDirPath == null) File(".") else File(sourceDirPath)
-        return C_DiskSourceDir(file.absoluteFile)
+        return C_SourceDir.diskDir(file.absoluteFile)
     }
 
     fun compileApp(
@@ -107,7 +109,7 @@ object RellCliUtils: KLogging() {
 
     fun getTarget(sourceDir: String?, module: String): RellCliTarget {
         val sourcePath = checkDir(sourceDir ?: ".").absoluteFile
-        val cSourceDir = C_DiskSourceDir(sourcePath)
+        val cSourceDir = C_SourceDir.diskDir(sourcePath)
         val moduleName = checkModule(module)
         return RellCliTarget(sourcePath, cSourceDir, listOf(moduleName))
     }
@@ -126,8 +128,6 @@ object RellCliUtils: KLogging() {
     }
 
     fun createGlobalContext(
-            chainCtx: Rt_ChainContext,
-            opCtx: Rt_OpContext?,
             typeCheck: Boolean,
             compilerOptions: C_CompilerOptions
     ): Rt_GlobalContext {
@@ -139,13 +139,16 @@ object RellCliUtils: KLogging() {
 
         return Rt_GlobalContext(
                 compilerOptions = compilerOptions,
-                opCtx = opCtx,
-                chainCtx = chainCtx,
                 outPrinter = Rt_OutPrinter,
                 logPrinter = Rt_LogPrinter(),
                 typeCheck = typeCheck,
                 pcModuleEnv = pcModuleEnv
         )
+    }
+
+    fun createChainContext(): Rt_ChainContext {
+        val bcRid = BlockchainRid(ByteArray(32))
+        return Rt_ChainContext(GtvNull, immMapOf(), bcRid)
     }
 
     private fun <T> parseCliArgs(args: Array<String>, argsObj: T): T {

@@ -36,8 +36,6 @@ class RellGtxTester(
     var modules: List<String>? = listOf("")
     var configTemplate: String = getDefaultConfigTemplate()
 
-    private var moduleArgs = mapOf<String, String>()
-
     init {
         super.chainId = chainId
     }
@@ -54,10 +52,6 @@ class RellGtxTester(
             GTXSchemaManager.initializeDB(ctx)
             gtxModule.initializeDB(ctx)
         }
-    }
-
-    fun moduleArgs(vararg args: Pair<String, String>) {
-        moduleArgs = args.toMap()
     }
 
     override fun chkEx(code: String, expected: String) {
@@ -192,15 +186,16 @@ class RellGtxTester(
         )
         val factory = RellPostchainModuleFactory(env)
 
-        val moduleCfg = moduleConfig(moduleCode)
+        val moduleCfg = getModuleConfig(moduleCode)
         val bcRid = PostchainUtils.hexToRid(blockchainRid)
         val module = factory.makeModule(moduleCfg, bcRid)
         return module
     }
 
-    private fun moduleConfig(moduleCode: String): Gtv {
+    fun getModuleConfig(moduleCode: String): Gtv {
         val sourceCodes = files(moduleCode)
-        val parts = ModuleConfigParts(modules, sourceCodes, moduleArgs, extraModuleConfig)
+        val modArgs = getModuleArgs()
+        val parts = ModuleConfigParts(modules, sourceCodes, modArgs, extraModuleConfig)
         val templateGtv = GtvTestUtils.strToGtv(configTemplate)
         return getModuleConfig(parts, templateGtv)
     }
@@ -232,7 +227,7 @@ class RellGtxTester(
                         if (parts.modules == null) null else GtvFactory.gtv(parts.modules.map { GtvFactory.gtv(it) })
                     }
                     "{SOURCES}" -> GtvFactory.gtv(parts.sourceCodes.mapValues { (_, v) -> GtvString(v) })
-                    "{MODULE_ARGS}" -> GtvFactory.gtv(parts.moduleArgs.mapValues { (_, v) -> GtvTestUtils.decodeGtvStr(v) })
+                    "{MODULE_ARGS}" -> moduleArgsToGtv(parts.moduleArgs)
                     else -> tpl
                 }
             }
@@ -261,4 +256,10 @@ class RellGtxTester(
             val moduleArgs: Map<String, String>,
             val extraModuleConfig: Map<String, String>
     )
+
+    companion object {
+        fun moduleArgsToGtv(moduleArgs: Map<String, String>): Gtv {
+            return GtvFactory.gtv(moduleArgs.mapValues { (_, v) -> GtvTestUtils.decodeGtvStr(v) })
+        }
+    }
 }

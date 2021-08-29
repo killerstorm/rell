@@ -3,6 +3,7 @@ package net.postchain.rell.lib
 import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.utils.checkEquals
@@ -44,51 +45,42 @@ object C_Lib_OpContext {
 
     val NAMESPACE = C_LibUtils.makeNs(
             NAMESPACE_FNS,
-            "last_block_time" to Value_LastBlockTime,
-            "block_height" to Value_BlockHeight,
+            "last_block_time" to BaseNsValue(R_IntegerType, LastBlockTime),
+            "block_height" to BaseNsValue(R_IntegerType, BlockHeight),
             "transaction" to Value_Transaction,
-            "op_index" to Value_OpIndex
+            "op_index" to BaseNsValue(R_IntegerType, OpIndex)
     )
 
     private val TRANSACTION_FN = "$NAME.transaction"
 
-    fun transactionExpr(ctx: C_NamespaceValueContext, pos: S_Pos): R_Expr {
+    fun transactionRExpr(ctx: C_NamespaceValueContext, pos: S_Pos): R_Expr {
         val type = ctx.modCtx.sysDefs.transactionEntity.type
-        return C_Utils.createSysCallExpr(type, Transaction(type), listOf(), pos, TRANSACTION_FN)
+        return C_Utils.createSysCallRExpr(type, Transaction(type), listOf(), pos, TRANSACTION_FN)
+    }
+
+    private fun transactionExpr(ctx: C_NamespaceValueContext, pos: S_Pos): V_Expr {
+        val type = ctx.modCtx.sysDefs.transactionEntity.type
+        return C_Utils.createSysGlobalPropExpr(ctx.exprCtx, type, Transaction(type), pos, TRANSACTION_FN, pure = false)
     }
 
     private fun checkCtx(ctx: C_NamespaceValueContext, name: List<S_Name>) {
         val dt = ctx.defCtx.definitionType
         if (dt != C_DefinitionType.OPERATION && dt != C_DefinitionType.FUNCTION && dt != C_DefinitionType.ENTITY) {
-            throw C_Error.stop(name[0].pos, "op_ctx_noop", "Can access '$NAME' only in an operation, function or entity")
+            ctx.msgCtx.error(name[0].pos, "op_ctx_noop", "Can access '$NAME' only in an operation, function or entity")
         }
     }
 
-    private object Value_LastBlockTime: C_NamespaceValue_RExpr() {
-        override fun toExpr0(ctx: C_NamespaceValueContext, name: List<S_Name>): R_Expr {
+    private class BaseNsValue(val resType: R_Type, val rFn: R_SysFunction): C_NamespaceValue_VExpr() {
+        override fun toExpr0(ctx: C_NamespaceValueContext, name: List<S_Name>): V_Expr {
             checkCtx(ctx, name)
-            return C_Utils.createSysCallExpr(R_IntegerType, LastBlockTime, listOf(), name)
+            return C_Utils.createSysGlobalPropExpr(ctx.exprCtx, resType, rFn, name, pure = false)
         }
     }
 
-    private object Value_BlockHeight: C_NamespaceValue_RExpr() {
-        override fun toExpr0(ctx: C_NamespaceValueContext, name: List<S_Name>): R_Expr {
-            checkCtx(ctx, name)
-            return C_Utils.createSysCallExpr(R_IntegerType, BlockHeight, listOf(), name)
-        }
-    }
-
-    private object Value_Transaction: C_NamespaceValue_RExpr() {
-        override fun toExpr0(ctx: C_NamespaceValueContext, name: List<S_Name>): R_Expr {
+    private object Value_Transaction: C_NamespaceValue_VExpr() {
+        override fun toExpr0(ctx: C_NamespaceValueContext, name: List<S_Name>): V_Expr {
             checkCtx(ctx, name)
             return transactionExpr(ctx, name[0].pos)
-        }
-    }
-
-    private object Value_OpIndex: C_NamespaceValue_RExpr() {
-        override fun toExpr0(ctx: C_NamespaceValueContext, name: List<S_Name>): R_Expr {
-            checkCtx(ctx, name)
-            return C_Utils.createSysCallExpr(R_IntegerType, OpIndex, listOf(), name)
         }
     }
 
@@ -151,7 +143,7 @@ object C_Lib_OpContext {
     }
 
     private fun getOpContext(ctx: Rt_CallContext, fnName: String): Rt_OpContext {
-        val opCtx = ctx.globalCtx.opCtx
+        val opCtx = ctx.exeCtx.opCtx
         return opCtx ?: throw Rt_Error("fn:op_context.$fnName:noop", "Operation context not available")
     }
 }

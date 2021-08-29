@@ -23,7 +23,7 @@ object RellTestUtils {
     const val RELL_VER = "0.10.6"
 
     fun processApp(code: String, processor: (T_App) -> String): String {
-        val sourceDir = C_MapSourceDir.of(MAIN_FILE to code)
+        val sourceDir = C_SourceDir.mapDirOf(MAIN_FILE to code)
         return processApp(sourceDir, processor = processor)
     }
 
@@ -33,9 +33,11 @@ object RellTestUtils {
             options: C_CompilerOptions = C_CompilerOptions.DEFAULT,
             outMessages: MutableList<C_Message>? = null,
             modules: List<R_ModuleName> = listOf(R_ModuleName.EMPTY),
+            testModules: List<R_ModuleName> = listOf(),
             processor: (T_App) -> String
     ): String {
-        val cRes = compileApp(sourceDir, modules, options)
+        val modSel = C_CompilerModuleSelection(modules, testModules)
+        val cRes = compileApp(sourceDir, modSel, options)
         outMessages?.addAll(cRes.messages)
 
         if (!cRes.errors.isEmpty()) {
@@ -162,6 +164,8 @@ object RellTestUtils {
 
     fun <T> callOpGeneric(
             appCtx: Rt_AppContext,
+            opCtx: Rt_OpContext?,
+            sqlCtx: Rt_SqlContext,
             sqlMgr: SqlManager,
             name: String,
             args: List<T>,
@@ -178,7 +182,7 @@ object RellTestUtils {
 
         return catchRtErr {
             sqlMgr.transaction { sqlExec ->
-                val exeCtx = Rt_ExecutionContext(appCtx, sqlExec)
+                val exeCtx = Rt_ExecutionContext(appCtx, opCtx, sqlCtx, sqlExec)
                 op.call(exeCtx, rtArgs!!)
                 "OK"
             }

@@ -80,7 +80,7 @@ class GtxModuleTest: BaseGtxTest() {
                 for (locCity in cities) persons.add_all(person @* { person.city.name == locCity }.name);
                 return persons;
             }
-        """.trimIndent()
+        """
 
         chkFull(query, "cities:[]", "[]")
         chkFull(query, "cities:['New York']", "['Alice']")
@@ -119,7 +119,7 @@ class GtxModuleTest: BaseGtxTest() {
                 for (locCity in cities) persons.add_all(person @* { person.city.name == locCity }.name);
                 return persons;
             }
-        """.trimIndent()
+        """
         chkFull(query, "cities:['New York']", "['Alice']")
         assertFailsWith<UserMistake> {
             chkFull(query, "cities:['New York','New York']", "")

@@ -231,16 +231,12 @@ private class C_NsAsm_InternalReplAssembler(
     val comAsm = C_NsAsm_InternalComponentAssembler(nsLinker, nsKey, stamp)
     private var componentAdded = false
 
-    private val nsGetter: Getter<C_Namespace>
-
-    init {
-        if (linkedModule != null) {
-            val linkedContainer = C_ModuleContainerKey.of(linkedModule)
-            val linkedNsKey = C_NsAsm_NamespaceKey(linkedContainer, R_QualifiedName.EMPTY)
-            nsGetter = nsLinker.getLink(linkedNsKey)
-        } else {
-            nsGetter = { C_Namespace.EMPTY }
-        }
+    private val nsGetter: Getter<C_Namespace> = if (linkedModule != null) {
+        val linkedContainer = C_ModuleContainerKey.of(linkedModule)
+        val linkedNsKey = C_NsAsm_NamespaceKey(linkedContainer, R_QualifiedName.EMPTY)
+        nsLinker.getLink(linkedNsKey)
+    } else {
+        { C_Namespace.EMPTY }
     }
 
     override fun futureNs() = nsGetter
@@ -327,7 +323,7 @@ class C_NsAsm_RawNamespace(
     }
 
     fun filterByStamp(stamp: R_AppUid): C_NsAsm_RawNamespace {
-        val resEntries = entries.map { it.filterByStamp(stamp) }.filterNotNull()
+        val resEntries = entries.mapNotNull { it.filterByStamp(stamp) }
         val resWildcards = wildcardImports.filter { it.stamp == stamp}
         return C_NsAsm_RawNamespace(resEntries, resWildcards)
     }
@@ -517,6 +513,7 @@ private class C_NsAsm_InternalAppAssembler(
     override fun addModule(moduleKey: C_ModuleKey, sysNsProto: C_SysNsProto, exportSysEntities: Boolean): C_NsAsm_ModuleAssembler {
         checkCanModify()
         check(moduleKey !in moduleAsms) { moduleKey }
+        check(moduleKey !in preModules) { moduleKey }
 
         val containerKey = C_ModuleContainerKey.of(moduleKey)
         val nsKey = C_NsAsm_NamespaceKey(containerKey)
@@ -585,7 +582,7 @@ private class C_NsAsm_InternalAppAssembler(
     ): Map<C_ModuleKey, C_NsAsm_Module> {
         checkEquals(impModules.keys, rawModules.keys)
         checkEquals(resModules.keys, rawModules.keys)
-        check(Sets.intersection(rawModules.keys, preModules.keys).isEmpty())
+        checkEquals(Sets.intersection(rawModules.keys, preModules.keys), setOf<C_ModuleKey>())
 
         val oldModules = preModules.mapValues { (_, v) -> v.asmModule }
         val newModules = rawModules.mapValues { (k, v) -> C_NsAsm_Module(v.rawNs, impModules.getValue(k), resModules.getValue(k)) }
@@ -608,12 +605,10 @@ private class C_NsAsm_ConflictsProcessor(
         sysNsProto: C_SysNsProto,
         private val stamp: R_AppUid
 ) {
-    private val sysDefs: Map<String, C_DeclarationType>
-
-    init {
+    private val sysDefs: Map<String, C_DeclarationType> = let {
         val mutSysDefs = mutableMapOf<String, C_DeclarationType>()
         for (entry in sysNsProto.entries) if (entry.name !in mutSysDefs) mutSysDefs[entry.name] = entry.def.type()
-        sysDefs = mutSysDefs.toImmMap()
+        mutSysDefs.toImmMap()
     }
 
     private val errors = mutableSetOf<S_Pos>()

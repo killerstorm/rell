@@ -11,15 +11,24 @@ import net.postchain.rell.sql.SqlInit
 import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.sql.SqlManager
 import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.RellCliUtils
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 
-class C_ReplCodeState(val frameProto: C_CallFrameProto, val blockCodeProto: C_BlockCodeProto) {
+class C_ReplCodeState(
+        val frameProto: C_CallFrameProto,
+        val blockCodeProto: C_BlockCodeProto
+) {
     companion object { val EMPTY = C_ReplCodeState(C_CallFrameProto.EMPTY, C_BlockCodeProto.EMPTY) }
 }
 
-class Rt_ReplCodeState(val frameState: Rt_CallFrameState) {
-    companion object { val EMPTY = Rt_ReplCodeState(Rt_CallFrameState.EMPTY) }
+class Rt_ReplCodeState(
+        val frameState: Rt_CallFrameState,
+        globalConstants: List<Rt_GlobalConstantState>
+) {
+    val globalConstants = globalConstants.toImmList()
+
+    companion object { val EMPTY = Rt_ReplCodeState(Rt_CallFrameState.EMPTY, listOf()) }
 }
 
 class ReplCodeState(val cState: C_ReplCodeState, val rtState: Rt_ReplCodeState) {
@@ -68,7 +77,9 @@ class R_ReplCode(private val frame: R_CallFrame, stmts: List<R_Statement>) {
         R_BlockStatement.executeStatements(rtFrame, stmts)
 
         val newFrameState = rtFrame.dumpState()
-        return Rt_ReplCodeState(newFrameState)
+        val newConstantStates = exeCtx.appCtx.dumpGlobalConstants()
+
+        return Rt_ReplCodeState(newFrameState, newConstantStates)
     }
 }
 
@@ -117,11 +128,12 @@ class ReplInterpreter private constructor(
         }
 
         return executeCatch {
+            val sqlCtx = Rt_RegularSqlContext.createNoExternalChains(success.app, Rt_ChainSqlMapping(0))
             val rtAppCtx = createRtAppContext(rtGlobalCtx, success.app)
-            sqlUpdate(rtAppCtx, forceSqlUpdate)
+            sqlUpdate(rtAppCtx, sqlCtx, forceSqlUpdate)
 
             sqlMgr.access { sqlExec ->
-                val exeCtx = Rt_ExecutionContext(rtAppCtx, sqlExec)
+                val exeCtx = Rt_ExecutionContext(rtAppCtx, null, sqlCtx, sqlExec)
                 codeState = success.code.execute(exeCtx)
                 defsState = success.defsState
             }
@@ -158,37 +170,40 @@ class ReplInterpreter private constructor(
     }
 
     private fun createRtAppContext(globalCtx: Rt_GlobalContext, app: R_App): Rt_AppContext {
-        val sqlCtx = Rt_SqlContext.createNoExternalChains(app, Rt_ChainSqlMapping(0))
-
         val modules = (listOfNotNull(module).toSet() + defsState.appState.modules.keys.map { it.name }).toList()
+
+        val chainCtx = RellCliUtils.createChainContext()
 
         val keyPair = UnitTestBlockRunner.getTestKeyPair()
         val blockRunnerStrategy = Rt_DynamicBlockRunnerStrategy(sourceDir, modules, keyPair)
 
         return Rt_AppContext(
                 globalCtx,
-                sqlCtx,
+                chainCtx,
                 app,
                 repl = true,
                 test = false,
                 replOut = outChannel,
-                blockRunnerStrategy = blockRunnerStrategy
+                blockRunnerStrategy = blockRunnerStrategy,
+                globalConstantStates = codeState.rtState.globalConstants
         )
     }
 
-    private fun sqlUpdate(appCtx: Rt_AppContext, force: Boolean) {
+    private fun sqlUpdate(appCtx: Rt_AppContext, sqlCtx: Rt_SqlContext, force: Boolean) {
         if (!sqlUpdateAuto && !force) {
             return
         }
 
         val lastDefs = lastUpdateSqlDefs
-        if (useSql && (lastDefs == null || !appCtx.sqlCtx.appDefs.same(lastDefs))) {
+        val appDefs = sqlCtx.appDefs
+
+        if (useSql && (lastDefs == null || !appDefs.same(lastDefs))) {
             val logging = if (force) SQL_INIT_LOGGING_FORCE else SQL_INIT_LOGGING_AUTO
             sqlMgr.transaction { sqlExec ->
-                val exeCtx = Rt_ExecutionContext(appCtx, sqlExec)
+                val exeCtx = Rt_ExecutionContext(appCtx, null, sqlCtx, sqlExec)
                 SqlInit.init(exeCtx, true, logging)
             }
-            lastUpdateSqlDefs = appCtx.sqlCtx.appDefs
+            lastUpdateSqlDefs = appDefs
         }
     }
 
@@ -214,7 +229,7 @@ class ReplInterpreter private constructor(
             for (cmd in map.keys.sorted()) {
                 val ctrl = map.getValue(cmd)
                 val alias = aliases[ctrl]
-                var help = if (alias == null) ctrl.help else "Same as '$alias'."
+                val help = if (alias == null) ctrl.help else "Same as '$alias'."
                 aliases.putIfAbsent(ctrl, cmd)
                 table.add(listOf(cmd, help))
             }

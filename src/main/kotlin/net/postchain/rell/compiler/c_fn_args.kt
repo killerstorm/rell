@@ -124,7 +124,7 @@ private object C_CallArgsAdapter_Full: C_CallArgsAdapter<V_Expr>() {
             param: C_FunctionCallParameter,
             arg: V_Expr
     ): V_Expr {
-        val argType = arg.type()
+        val argType = arg.type
         val m = matchArgType(ctx, callInfo, param, argType)
         return if (m == null) arg else m.adaptExpr(ctx, arg)
     }
@@ -142,7 +142,7 @@ private object C_CallArgsAdapter_Partial: C_CallArgsAdapter<C_PartialCallArgumen
         return when (arg) {
             is C_PartialCallArgument_Wildcard -> arg
             is C_PartialCallArgument_Expr -> {
-                val argType = arg.vExpr.type()
+                val argType = arg.vExpr.type
                 val m = matchArgType(ctx, callInfo, param, argType)
                 return if (m == null) arg else C_PartialCallArgument_Expr(m.adaptExpr(ctx, arg.vExpr))
             }
@@ -406,7 +406,7 @@ private object C_ArgsListProcessor {
         return args.map {
             val fnArg = when (it.value) {
                 is C_CallArgumentValue_Expr -> {
-                    val type = it.value.vExpr.type()
+                    val type = it.value.vExpr.type
                     if (!C_Utils.checkUnitType(ctx.msgCtx, it.value.pos, type, "expr_arg_unit", "Argument expression returns nothing")) {
                         failFlag.setTrue()
                     }

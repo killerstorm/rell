@@ -148,7 +148,7 @@ object SqlMeta {
             metaData: Map<String, MetaEntity>,
             msgs: Rt_Messages
     ) {
-        val mapping = sqlCtx.mainChainMapping
+        val mapping = sqlCtx.mainChainMapping()
 
         val metaTables = metaData.keys.map { mapping.fullName(it) }.toSet()
         val missingTables = metaTables.filter { it !in tables }
@@ -193,15 +193,16 @@ object SqlMeta {
 
     fun genMetaTablesCreate(sqlCtx: Rt_SqlContext): List<String> {
         val sqls = mutableListOf<String>()
-        sqls += String.format(CREATE_TABLE_META_ENTITIES, sqlCtx.mainChainMapping.metaEntitiesTable)
-        sqls += String.format(CREATE_TABLE_META_ATTRIBUTES, sqlCtx.mainChainMapping.metaAttributesTable)
+        val mainChainMapping = sqlCtx.mainChainMapping()
+        sqls += String.format(CREATE_TABLE_META_ENTITIES, mainChainMapping.metaEntitiesTable)
+        sqls += String.format(CREATE_TABLE_META_ATTRIBUTES, mainChainMapping.metaAttributesTable)
         return sqls
     }
 
     fun genMetaEntityInserts(sqlCtx: Rt_SqlContext, classId: Int, entity: R_EntityDefinition, entityType: MetaEntityType): List<String> {
         val sqls = mutableListOf<String>()
 
-        val entityTable = DSL.table(DSL.name(sqlCtx.mainChainMapping.metaEntitiesTable))
+        val entityTable = DSL.table(DSL.name(sqlCtx.mainChainMapping().metaEntitiesTable))
 
         sqls += SqlGen.DSL_CTX.insertInto(entityTable,
                 DSL.field("id"),
@@ -223,7 +224,7 @@ object SqlMeta {
     fun genMetaAttrsInserts(sqlCtx: Rt_SqlContext, classId: Int, attrs: Collection<R_Attribute>): List<String> {
         val sqls = mutableListOf<String>()
 
-        val attrTable = DSL.table(DSL.name(sqlCtx.mainChainMapping.metaAttributesTable))
+        val attrTable = DSL.table(DSL.name(sqlCtx.mainChainMapping().metaAttributesTable))
 
         for (attr in attrs) {
             sqls += SqlGen.DSL_CTX.insertInto(attrTable,

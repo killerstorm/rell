@@ -39,7 +39,7 @@ class R_EntitySqlMapping_Regular(private val mountName: R_MountName): R_EntitySq
     override fun autoCreateTable() = true
     override fun isSystemEntity() = false
 
-    override fun table(sqlCtx: Rt_SqlContext) = table(sqlCtx.mainChainMapping)
+    override fun table(sqlCtx: Rt_SqlContext) = table(sqlCtx.mainChainMapping())
     override fun table(chainMapping: Rt_ChainSqlMapping) = chainMapping.fullName(mountName)
 
     override fun extraWhereExpr(atEntity: R_DbAtEntity) = null

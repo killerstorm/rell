@@ -26,16 +26,14 @@ object C_Lib_Rell_Test {
     const val TX_TYPE_QNAME = "$MODULE.$TX_SNAME"
     const val OP_TYPE_QNAME = "$MODULE.$OP_SNAME"
 
-    private val NAMESPACE_FNS: C_GlobalFuncTable
-
-    init {
+    private val NAMESPACE_FNS: C_GlobalFuncTable = let {
         val b = C_GlobalFuncBuilder("rell.test")
         R_Lib_Block.bindGlobal(b)
         R_Lib_Tx.bindGlobal(b)
         R_Lib_Op.bindGlobal(b)
         R_Lib_Nop.bindGlobal(b)
         C_Lib_Rell_Test_Assert.FUNCTIONS.addTo(b)
-        NAMESPACE_FNS = b.build()
+        b.build()
     }
 
     val NAMESPACE = C_LibUtils.makeNsEx(
@@ -51,6 +49,8 @@ object C_Lib_Rell_Test {
 
 private object R_TestBlockType: R_LibType(C_Lib_Rell_Test.BLOCK_TYPE_QNAME) {
     override fun isReference() = true
+    override fun isDirectMutable() = true
+    override fun isDirectPure() = false
     override fun createGtvConversion() = GtvRtConversion_None
     override fun toStrictString(): String = name
     override fun toMetaGtv() = name.toGtv()
@@ -64,6 +64,8 @@ private object R_TestBlockType: R_LibType(C_Lib_Rell_Test.BLOCK_TYPE_QNAME) {
 
 private object R_TestTxType: R_LibType(C_Lib_Rell_Test.TX_TYPE_QNAME) {
     override fun isReference() = true
+    override fun isDirectMutable() = true
+    override fun isDirectPure() = false
     override fun createGtvConversion() = GtvRtConversion_None
     override fun toStrictString(): String = name
     override fun toMetaGtv() = name.toGtv()
@@ -77,6 +79,7 @@ private object R_TestTxType: R_LibType(C_Lib_Rell_Test.TX_TYPE_QNAME) {
 
 object R_TestOpType: R_LibType(C_Lib_Rell_Test.OP_TYPE_QNAME) {
     override fun isReference() = true
+    override fun isDirectPure() = false
     override fun createGtvConversion(): GtvRtConversion = GtvRtConversion_None
     override fun toStrictString(): String = name
     override fun toMetaGtv() = name.toGtv()
@@ -330,8 +333,7 @@ private object R_Lib_Tx {
     }
 
     private object New_ListOfOps: R_SysFunctionEx_1() {
-        override fun call(
-                ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
+        override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
             val ops = arg.asList().map { asTestOp(it).toRaw() }
             return newTx(ctx, ops)
         }
@@ -353,7 +355,7 @@ private object R_Lib_Tx {
     }
 
     private fun newTx(ctx: Rt_CallContext, ops: List<RawTestOpValue>): Rt_Value {
-        val blockchainRid = ctx.globalCtx.chainCtx.blockchainRid
+        val blockchainRid = ctx.chainCtx.blockchainRid
         return Rt_TestTxValue(blockchainRid, ops, listOf())
     }
 
@@ -529,7 +531,7 @@ class Rt_TestBlockValue(txs: List<RawTestTxValue>): Rt_Value() {
 
     override fun toString() = "block(${txs.joinToString(",")})"
 
-    override fun equals(other: Any?) = other is Rt_TestBlockValue && txs == other.txs
+    override fun equals(other: Any?) = other === this || (other is Rt_TestBlockValue && txs == other.txs)
     override fun hashCode() = Objects.hash(txs)
 
     fun txs() = txs.toImmList()
@@ -558,8 +560,8 @@ class Rt_TestTxValue(
     override fun toStrictString(showTupleFieldNames: Boolean) = toStrictString(ops, signers)
     override fun toString() = toString(ops)
 
-    override fun equals(other: Any?) = other is Rt_TestTxValue && ops == other.ops
-    override fun hashCode() = Objects.hash(ops)
+    override fun equals(other: Any?) = other === this || (other is Rt_TestTxValue && ops == other.ops && signers == other.signers)
+    override fun hashCode() = Objects.hash(ops, signers)
 
     fun addOp(op: RawTestOpValue) {
         ops.add(op)
@@ -600,7 +602,7 @@ class Rt_TestOpValue(private val name: R_MountName, args: List<Gtv>): Rt_Value()
     override fun toStrictString(showTupleFieldNames: Boolean) = toStrictString(name, args)
     override fun toString() = toString(name, args)
 
-    override fun equals(other: Any?) = other is Rt_TestOpValue && name == other.name && args == other.args
+    override fun equals(other: Any?) = other === this || (other is Rt_TestOpValue && name == other.name && args == other.args)
     override fun hashCode() = Objects.hash(name, args)
 
     fun toRaw() = RawTestOpValue(name, args)

@@ -9,7 +9,6 @@ import net.postchain.base.data.PostgreSQLDatabaseAccess
 import net.postchain.base.data.SQLDatabaseAccess
 import net.postchain.rell.runtime.Rt_SqlManager
 import net.postchain.rell.sql.*
-import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.PostchainUtils
 import java.io.Closeable
 import java.sql.Connection
@@ -27,14 +26,14 @@ class RellTestContext(useSql: Boolean = true): Closeable {
             val headerStr = if (header == null) "NULL" else """E'\\x$header'"""
             val timestampStr = if (timestamp == null) "NULL" else """$timestamp"""
             val s = """INSERT INTO "c$chainId.blocks"(block_iid,block_height,block_rid,block_header_data,block_witness,timestamp)
-                VALUES($iid,$height,$ridStr,$headerStr,NULL,$timestampStr);""".trimIndent()
+                VALUES($iid,$height,$ridStr,$headerStr,NULL,$timestampStr);"""
             list.add(s)
             return this
         }
 
         fun tx(iid: Long, block: Long, rid: String, data: String, hash: String): BlockBuilder {
             val s = """INSERT INTO "c$chainId.transactions"(tx_iid,tx_rid,tx_data,tx_hash,block_iid)
-                VALUES($iid,E'\\x$rid',E'\\x$data',E'\\x$hash',$block);""".trimIndent()
+                VALUES($iid,E'\\x$rid',E'\\x$data',E'\\x$hash',$block);"""
             list.add(s)
             return this
         }

@@ -20,23 +20,33 @@ private class TestResult_Fail(val error: Throwable): TestResult() {
 }
 
 class TestRunnerContext(
-        val sqlMgr: SqlManager,
-        val globalCtx: Rt_GlobalContext,
         val sqlCtx: Rt_SqlContext,
-        val blockRunnerStrategy: Rt_BlockRunnerStrategy,
-        val app: R_App
-)
+        val sqlMgr: SqlManager,
+        private val globalCtx: Rt_GlobalContext,
+        private val chainCtx: Rt_ChainContext,
+        private val blockRunnerStrategy: Rt_BlockRunnerStrategy,
+        private val app: R_App
+) {
+    fun createAppContext(): Rt_AppContext = Rt_AppContext(
+            globalCtx,
+            chainCtx,
+            app,
+            repl = false,
+            test = true,
+            replOut = null,
+            blockRunnerStrategy = blockRunnerStrategy
+    )
+
+}
 
 class TestRunnerChain(val name: String, val iid: Long) {
     override fun toString() = "$name[$iid]"
 }
 
 class TestRunnerCase(chain: TestRunnerChain?, val fn: R_FunctionDefinition) {
-    val name: String
-
-    init {
+    val name = let {
         val f = fn.appLevelName
-        name = if (chain == null) f else "$chain:$f"
+        if (chain == null) f else "$chain:$f"
     }
 
     override fun toString(): String {
@@ -91,27 +101,19 @@ object TestRunner {
     }
 
     private fun runTestCase(testCtx: TestRunnerContext, case: TestRunnerCase): TestResult {
-        val appCtx = Rt_AppContext(
-                testCtx.globalCtx,
-                testCtx.sqlCtx,
-                testCtx.app,
-                repl = false,
-                test = true,
-                replOut = null,
-                blockRunnerStrategy = testCtx.blockRunnerStrategy
-        )
-
         val caseName = case.name
 
         println(PRINT_SEPARATOR)
         println("TEST $caseName")
 
+        val appCtx = testCtx.createAppContext()
+
         if (testCtx.sqlMgr.hasConnection) {
-            SqlUtils.initDatabase(appCtx, testCtx.sqlMgr, true, false)
+            SqlUtils.initDatabase(appCtx, testCtx.sqlCtx, testCtx.sqlMgr, dropTables = true, sqlInitLog = false)
         }
 
         return testCtx.sqlMgr.transaction { sqlExec ->
-            val exeCtx = Rt_ExecutionContext(appCtx, sqlExec)
+            val exeCtx = Rt_ExecutionContext(appCtx, null, testCtx.sqlCtx, sqlExec)
             try {
                 case.fn.callTop(exeCtx, listOf())
                 println("OK $caseName")

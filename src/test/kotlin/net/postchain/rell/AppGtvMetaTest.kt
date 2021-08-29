@@ -161,6 +161,12 @@ class AppGtvMetaTest: BaseRellTest(false) {
         }""")
     }
 
+    @Test fun testDefConstant() {
+        chkMetaDef("val X = 123;", "constants", "X", """{"type":"integer","value":123}""")
+        chkMetaDef("val X: integer? = 123;", "constants", "X", """{"type":{"type":"nullable","value":"integer"},"value":123}""")
+        chkMetaDef("val X = abs(123);", "constants", "X", """{"type":"integer"}""")
+    }
+
     @Test fun testTypeSimple() {
         initTypes()
         chkMetaType("integer", """ "integer" """)

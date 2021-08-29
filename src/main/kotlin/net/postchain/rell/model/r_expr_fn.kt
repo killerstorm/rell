@@ -47,21 +47,7 @@ object R_SysFunctionUtils {
     }
 }
 
-class R_SysFunctionCallExpr(
-        type: R_Type,
-        private val fn: R_SysFunction,
-        args: List<R_Expr>,
-        private val nameMsg: String?
-): R_Expr(type) {
-    private val args = args.toImmList()
-
-    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        val values = args.map { it.evaluate(frame) }
-        return R_SysFunctionUtils.call(fn, nameMsg, frame, values)
-    }
-}
-
-class R_RegularFunctionCallExpr(
+class R_FullFunctionCallExpr(
         type: R_Type,
         private val target: R_FunctionCallTarget,
         private val callPos: R_FilePos,
@@ -102,7 +88,7 @@ class R_PartialCallMapping(val exprCount: Int, val wildCount: Int, args: List<R_
     }
 }
 
-class R_PartialCallExpr(
+class R_PartialFunctionCallExpr(
         type: R_Type,
         private val target: R_FunctionCallTarget,
         private val mapping: R_PartialCallMapping,

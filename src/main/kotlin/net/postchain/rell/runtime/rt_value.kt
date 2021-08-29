@@ -175,7 +175,7 @@ class Rt_DecimalValue private constructor(val value: BigDecimal): Rt_Value() {
     override fun asFormatArg() = value
     override fun toStrictString(showTupleFieldNames: Boolean) = "dec[$this]"
     override fun toString() = Rt_DecimalUtils.toString(value)
-    override fun equals(other: Any?) = other is Rt_DecimalValue && value == other.value
+    override fun equals(other: Any?) = other === this || (other is Rt_DecimalValue && value == other.value)
     override fun hashCode() = value.hashCode()
 
     companion object : KLogging() {
@@ -230,7 +230,7 @@ class Rt_TextValue(val value: String): Rt_Value() {
     }
 
     override fun toString(): String = value
-    override fun equals(other: Any?) = other is Rt_TextValue && value == other.value
+    override fun equals(other: Any?) = other === this || (other is Rt_TextValue && value == other.value)
     override fun hashCode() = value.hashCode()
 
     companion object {
@@ -301,7 +301,7 @@ class Rt_ByteArrayValue(val value: ByteArray): Rt_Value() {
     override fun asFormatArg() = toString()
     override fun toStrictString(showTupleFieldNames: Boolean) = "byte_array[${CommonUtils.bytesToHex(value)}]"
     override fun toString() = "0x" + CommonUtils.bytesToHex(value)
-    override fun equals(other: Any?) = other is Rt_ByteArrayValue && Arrays.equals(value, other.value)
+    override fun equals(other: Any?) = other === this || (other is Rt_ByteArrayValue && value.contentEquals(other.value))
     override fun hashCode() = Arrays.hashCode(value)
 }
 
@@ -329,7 +329,7 @@ class Rt_EntityValue(val type: R_EntityType, val rowid: Long): Rt_Value() {
     override fun asFormatArg() = toString()
     override fun toStrictString(showTupleFieldNames: Boolean) = "${type.name}[$rowid]"
     override fun toString() = toStrictString()
-    override fun equals(other: Any?) = other is Rt_EntityValue && type == other.type && rowid == other.rowid
+    override fun equals(other: Any?) = other === this || (other is Rt_EntityValue && type == other.type && rowid == other.rowid)
     override fun hashCode() = Objects.hash(type, rowid)
 }
 
@@ -356,7 +356,7 @@ class Rt_ListValue(private val type: R_Type, private val elements: MutableList<R
 
     override fun toStrictString(showTupleFieldNames: Boolean) = toStrictString(type, elements)
     override fun toString() = elements.toString()
-    override fun equals(other: Any?) = other is Rt_ListValue && elements == other.elements
+    override fun equals(other: Any?) = other === this || (other is Rt_ListValue && elements == other.elements)
     override fun hashCode() = elements.hashCode()
 
     companion object {
@@ -392,7 +392,7 @@ class Rt_VirtualListValue(
     override fun asFormatArg() = elements
     override fun toStrictString(showTupleFieldNames: Boolean) = Rt_ListValue.toStrictString(type, elements)
     override fun toString() = elements.toString()
-    override fun equals(other: Any?) = other is Rt_VirtualListValue && elements == other.elements
+    override fun equals(other: Any?) = other === this || (other is Rt_VirtualListValue && elements == other.elements)
     override fun hashCode() = elements.hashCode()
 
     override fun toFull0(): Rt_Value {
@@ -428,7 +428,7 @@ class Rt_SetValue(private val type: R_Type, private val elements: MutableSet<Rt_
     override fun asFormatArg() = elements
     override fun toStrictString(showTupleFieldNames: Boolean) = toStrictString(type, elements, showTupleFieldNames)
     override fun toString() = elements.toString()
-    override fun equals(other: Any?) = other is Rt_SetValue && elements == other.elements
+    override fun equals(other: Any?) = other === this || (other is Rt_SetValue && elements == other.elements)
     override fun hashCode() = elements.hashCode()
 
     companion object {
@@ -450,7 +450,7 @@ class Rt_VirtualSetValue(
     override fun asFormatArg() = elements
     override fun toStrictString(showTupleFieldNames: Boolean) = Rt_SetValue.toStrictString(type, elements, showTupleFieldNames)
     override fun toString() = elements.toString()
-    override fun equals(other: Any?) = other is Rt_VirtualSetValue && elements == other.elements
+    override fun equals(other: Any?) = other === this || (other is Rt_VirtualSetValue && elements == other.elements)
     override fun hashCode() = elements.hashCode()
 
     override fun toFull0(): Rt_Value {
@@ -473,7 +473,7 @@ class Rt_MapValue(private val type: R_Type, private val map: MutableMap<Rt_Value
     override fun asFormatArg() = map
     override fun toStrictString(showTupleFieldNames: Boolean) = toStrictString(type, showTupleFieldNames, map)
     override fun toString() = map.toString()
-    override fun equals(other: Any?) = other is Rt_MapValue && map == other.map
+    override fun equals(other: Any?) = other === this || (other is Rt_MapValue && map == other.map)
     override fun hashCode() = map.hashCode()
 
     companion object {
@@ -498,7 +498,7 @@ class Rt_VirtualMapValue(
     override fun asFormatArg() = map
     override fun toStrictString(showTupleFieldNames: Boolean) = Rt_MapValue.toStrictString(type, showTupleFieldNames, map)
     override fun toString() = map.toString()
-    override fun equals(other: Any?) = other is Rt_VirtualMapValue && map == other.map
+    override fun equals(other: Any?) = other === this || (other is Rt_VirtualMapValue && map == other.map)
     override fun hashCode() = map.hashCode()
 
     override fun toFull0(): Rt_Value {
@@ -520,7 +520,7 @@ class Rt_TupleValue(val type: R_TupleType, val elements: List<Rt_Value>): Rt_Val
     override fun type() = type
     override fun asTuple() = elements
     override fun asFormatArg() = toString()
-    override fun equals(other: Any?) = other is Rt_TupleValue && elements == other.elements
+    override fun equals(other: Any?) = other === this || (other is Rt_TupleValue && elements == other.elements)
     override fun hashCode() = elements.hashCode()
 
     override fun toString() = toString("", type, elements)
@@ -570,7 +570,7 @@ class Rt_VirtualTupleValue(
     override fun type() = type
     override fun asVirtualTuple() = this
     override fun asFormatArg() = toString()
-    override fun equals(other: Any?) = other is Rt_VirtualTupleValue && elements == other.elements
+    override fun equals(other: Any?) = other === this || (other is Rt_VirtualTupleValue && elements == other.elements)
     override fun hashCode() = elements.hashCode()
 
     override fun toString() = Rt_TupleValue.toString("virtual", type.innerType, elements)
@@ -598,7 +598,7 @@ class Rt_StructValue(private val type: R_StructType, private val attributes: Mut
     override fun type() = type
     override fun asStruct() = this
     override fun asFormatArg() = toString()
-    override fun equals(other: Any?) = other is Rt_StructValue && attributes == other.attributes
+    override fun equals(other: Any?) = other === this || (other is Rt_StructValue && attributes == other.attributes)
     override fun hashCode() = type.hashCode() * 31 + attributes.hashCode()
 
     override fun toString() = toString(type, type.struct, attributes)
@@ -669,7 +669,7 @@ class Rt_VirtualStructValue(
     override fun type() = type
     override fun asVirtualStruct() = this
     override fun asFormatArg() = toString()
-    override fun equals(other: Any?) = other is Rt_VirtualStructValue && attributes == other.attributes
+    override fun equals(other: Any?) = other === this || (other is Rt_VirtualStructValue && attributes == other.attributes)
     override fun hashCode() = type.hashCode() * 31 + attributes.hashCode()
 
     override fun toString() = Rt_StructValue.toString(type, type.innerType.struct, attributes)
@@ -726,7 +726,7 @@ class Rt_JsonValue private constructor(private val str: String): Rt_Value() {
     override fun asFormatArg() = str
     override fun toString() = str
     override fun toStrictString(showTupleFieldNames: Boolean) = "json[$str]"
-    override fun equals(other: Any?) = other is Rt_JsonValue && str == other.str
+    override fun equals(other: Any?) = other === this || (other is Rt_JsonValue && str == other.str)
     override fun hashCode() = str.hashCode()
 
     companion object {
@@ -822,7 +822,7 @@ class Rt_GtvValue(val value: Gtv): Rt_Value() {
     override fun toStrictString(showTupleFieldNames: Boolean) = "gtv[$this]"
     override fun toString() = toString(value)
 
-    override fun equals(other: Any?) = other is Rt_GtvValue && value == other.value
+    override fun equals(other: Any?) = other === this || (other is Rt_GtvValue && value == other.value)
     override fun hashCode() = value.hashCode()
 
     companion object {

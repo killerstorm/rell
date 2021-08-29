@@ -42,8 +42,6 @@ class RellReplTester(
             globalCtx.compilerOptions,
             outChannel.outPrinter,
             outChannel.logPrinter,
-            globalCtx.opCtx,
-            globalCtx.chainCtx,
             pcModuleEnv = pcModuleEnv,
             logSqlErrors = globalCtx.logSqlErrors,
             sqlUpdatePortionSize = globalCtx.sqlUpdatePortionSize,

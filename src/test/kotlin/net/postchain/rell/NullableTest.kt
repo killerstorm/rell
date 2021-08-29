@@ -711,7 +711,7 @@ class NullableTest: BaseRellTest(false) {
             val ap = create company(name = 'Apple');
             create user(name = 'Bob', ms);
             create user(name = 'Alice', ap);
-        """.trimIndent())
+        """)
 
         chkEx("{ val u = user@{.name=='Bob'}; return u.company.name; }", "text[Microsoft]")
         chkEx("{ val u = user@?{.name=='Bob'}; return u.company.name; }", "ct_err:expr_mem_null:company")
@@ -726,5 +726,19 @@ class NullableTest: BaseRellTest(false) {
 
         chkEx("{ return user@{.company.name=='Microsoft'}(.name); }", "text[Bob]")
         chkEx("{ return user@{.company?.name=='Microsoft'}(.name); }", "ct_err:expr_safemem_type:[company]")
+    }
+
+    @Test fun testSpecOpSafeSideEffects() {
+        def("function ft(v: text?) { print(v); return v; }")
+        def("function fi(v: integer) { print(v); return v; }")
+
+        chk("_type_of(ft('hello'))", "text[text?]")
+        chkOut()
+
+        chk("ft('hello')?.sub(fi(1), fi(3))", "text[el]")
+        chkOut("hello", "1", "3")
+
+        chk("ft(null)?.sub(fi(1), fi(3))", "null")
+        chkOut("null")
     }
 }

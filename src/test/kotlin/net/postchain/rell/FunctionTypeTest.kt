@@ -293,8 +293,9 @@ class FunctionTypeTest: BaseRellTest(false) {
         chkCompile("function t(x: map<(integer)->text,boolean>) {}", "OK")
         chkCompile("function t(x: map<decimal,(integer)->text>) {}", "OK")
 
-        chkEx("{ val s = set<(integer)->integer>(); s.add(f(*)); s.add(f(*)); return s.size(); }", "int[2]")
-        chkEx("{ val m = map<(integer)->integer,text>(); m[f(*)]='A'; m[f(*)] = 'B'; return m.size(); }", "int[2]")
+        chk("[f(*), f(*), f(*)].size()", "int[3]")
+        chk("set([f(*), f(*), f(*)]).size()", "int[3]")
+        chk("[f(*):1,f(*):2,f(*):3].size()", "int[3]")
     }
 
     @Test fun testReturnUnit() {

@@ -2,10 +2,7 @@ package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.ast.*
 import net.postchain.rell.compiler.vexpr.V_Expr
-import net.postchain.rell.model.R_CtErrorType
-import net.postchain.rell.model.R_DefinitionNames
-import net.postchain.rell.model.R_Type
-import net.postchain.rell.model.R_UnitType
+import net.postchain.rell.model.*
 
 object C_FunctionUtils {
     fun compileFunctionHeader(
@@ -45,6 +42,25 @@ object C_FunctionUtils {
         return C_QueryFunctionHeader(rRetType, cParams, cBody)
     }
 
+    fun compileGlobalConstantHeader(
+            defCtx: C_DefinitionContext,
+            simpleName: S_Name,
+            defNames: R_DefinitionNames,
+            explicitType: S_Type?,
+            expr: S_Expr,
+            constId: R_GlobalConstantId
+    ): C_GlobalConstantFunctionHeader {
+        val explicitRetType = if (explicitType == null) null else {
+            val type = (explicitType.compileOpt(defCtx.nsCtx) ?: R_CtErrorType)
+            C_Types.checkNotUnit(defCtx.msgCtx, explicitType.pos, type, simpleName.str) { "def:const" to "global constant" }
+            type
+        }
+
+        val bodyCtx = C_FunctionBodyContext(defCtx, simpleName.pos, defNames, explicitRetType, C_FormalParameters.EMPTY)
+        val body = C_GlobalConstantFunctionBody(bodyCtx, expr, constId)
+        return C_GlobalConstantFunctionHeader(explicitRetType, body)
+    }
+
     fun compileRegularCall(
             ctx: C_ExprContext,
             callInfo: C_FunctionCallInfo,
@@ -69,11 +85,11 @@ object C_FunctionUtils {
         if (retTypeRes.recursion) {
             val nameStr = name.str
             ctx.msgCtx.error(name.pos, "fn_type_recursion:$decType:$nameStr",
-                    "${decType.capitalizedMsg} '$nameStr' is recursive, cannot infer the return type; specify return type explicitly")
+                    "${decType.capitalizedMsg} '$nameStr' is recursive, cannot infer the type; specify type explicitly")
         } else if (retTypeRes.stackOverflow) {
             val nameStr = name.str
             ctx.msgCtx.error(name.pos, "fn_type_stackoverflow:$decType:$nameStr",
-                    "Cannot infer return type for ${decType.msg} '$nameStr': call chain is too long; specify return type explicitly")
+                    "Cannot infer type for ${decType.msg} '$nameStr': call chain is too long; specify type explicitly")
         }
 
         return retTypeRes.value

@@ -25,7 +25,7 @@ class C_SysFn_Exists(private val not: Boolean): C_SpecialSysGlobalFunction() {
         val vArg = cArg.value()
         val condition = compileCondition(vArg)
         if (condition == null) {
-            C_FuncMatchUtils.errNoMatch(ctx, name.pos, name.str, listOf(vArg.type()))
+            C_FuncMatchUtils.errNoMatch(ctx, name.pos, name.str, listOf(vArg.type))
             return C_Utils.errorVExpr(ctx, name.pos, R_BooleanType)
         }
 
@@ -36,7 +36,7 @@ class C_SysFn_Exists(private val not: Boolean): C_SpecialSysGlobalFunction() {
     }
 
     private fun compileCondition(arg: V_Expr): R_RequireCondition? {
-        val argType = arg.type()
+        val argType = arg.type
 
         val (_, condition) = C_SysFn_Require_Collection.getCondition(argType)
         if (condition != null) {
@@ -44,7 +44,7 @@ class C_SysFn_Exists(private val not: Boolean): C_SpecialSysGlobalFunction() {
         }
 
         val argN = arg.asNullable()
-        val argTypeN = argN.type()
+        val argTypeN = argN.type
         if (argTypeN is R_NullableType) {
             return R_RequireCondition_Nullable
         }
@@ -59,17 +59,15 @@ private class V_ExistsExpr(
         private val subExpr: V_Expr,
         private val condition: R_RequireCondition,
         private val not: Boolean,
-        private val varFacts: C_ExprVarFacts
+        private val resVarFacts: C_ExprVarFacts
 ): V_Expr(exprCtx, name.pos) {
-    override val exprInfo = V_ExprInfo.make(subExpr)
-
-    override fun type() = R_BooleanType
-    override fun varFacts() = varFacts
+    override fun exprInfo0() = V_ExprInfo.simple(R_BooleanType, subExpr)
+    override fun varFacts0() = resVarFacts
 
     override fun toRExpr0(): R_Expr {
         val fn = R_SysFn_General.Exists(condition, not)
         val rArgs = listOf(subExpr.toRExpr())
-        return C_Utils.createSysCallExpr(R_BooleanType, fn, rArgs, listOf(name))
+        return C_Utils.createSysCallRExpr(R_BooleanType, fn, rArgs, listOf(name))
     }
 
     override fun toDbExpr0(): Db_Expr {

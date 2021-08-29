@@ -9,6 +9,7 @@ import com.google.common.collect.Multimap
 import com.google.common.collect.Sets
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.vexpr.V_AttributeDefaultValueExpr
 import net.postchain.rell.compiler.vexpr.V_CreateExprAttr
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
@@ -22,8 +23,7 @@ class C_CreateContext(val exprCtx: C_ExprContext, val initFrameGetter: C_LateGet
 
 class C_CreateAttributes(
         explicitAttrs: List<V_CreateExprAttr>,
-        implicitAttrs: List<R_CreateExprAttr>,
-        val exprFacts: C_ExprVarFacts
+        implicitAttrs: List<V_CreateExprAttr>
 ) {
     val explicitAttrs = explicitAttrs.toImmList()
     val implicitAttrs = implicitAttrs.toImmList()
@@ -53,7 +53,7 @@ object C_AttributeResolver {
             V_CreateExprAttr(it.attr, it.vExpr)
         }
 
-        val implicitAttrs = matchDefaultExprs(ctx, attributes, explicitAttrs)
+        val implicitAttrs = matchDefaultExprs(ctx, pos, attributes, explicitAttrs)
         checkMissingAttrs(attributes, explicitAttrs, implicitAttrs, pos)
 
         for ((arg, attrMatch) in matchedAttrs) {
@@ -64,8 +64,7 @@ object C_AttributeResolver {
             }
         }
 
-        val exprFacts = C_ExprVarFacts.forSubExpressions(args.map { it.vExpr })
-        return C_CreateAttributes(explicitAttrs, implicitAttrs, exprFacts)
+        return C_CreateAttributes(explicitAttrs, implicitAttrs)
     }
 
     private fun matchCreateAttrs(
@@ -80,22 +79,23 @@ object C_AttributeResolver {
 
     private fun matchDefaultExprs(
             ctx: C_CreateContext,
+            pos: S_Pos,
             attributes: Map<String, R_Attribute>,
             attrExprs: List<V_CreateExprAttr>
-    ): List<R_CreateExprAttr> {
+    ): List<V_CreateExprAttr> {
         val provided = attrExprs.map { it.attr.name }.toSet()
         return attributes.values
                 .filter { it.hasExpr && it.name !in provided }
                 .map {
-                    val rExpr = R_AttributeDefaultValueExpr(it, ctx.initFrameGetter, ctx.filePos)
-                    R_CreateExprAttr(it, rExpr)
+                    val vExpr = V_AttributeDefaultValueExpr(ctx.exprCtx, pos, it, ctx.filePos, ctx.initFrameGetter)
+                    V_CreateExprAttr(it, vExpr)
                 }
     }
 
     private fun checkMissingAttrs(
             attributes: Map<String, R_Attribute>,
             explicitAttrs: List<V_CreateExprAttr>,
-            implicitAttrs: List<R_CreateExprAttr>,
+            implicitAttrs: List<V_CreateExprAttr>,
             pos: S_Pos
     ) {
         val names = (explicitAttrs.map { it.attr } + implicitAttrs.map { it.attr }).map { it.name }.toImmSet()
@@ -122,7 +122,7 @@ object C_AttributeResolver {
         val matchedAttrs = matchImplicitAttrs(msgCtx, entity.attributes, args, explicitAttrs, true)
 
         val unmatched = Sets.difference(args.toSet(), matchedAttrs.keys)
-        if (unmatched.isNotEmpty() && !errWatcher.hasNewErrors() && !args.any { it.vExpr.type().isError() }) {
+        if (unmatched.isNotEmpty() && !errWatcher.hasNewErrors() && !args.any { it.vExpr.type.isError() }) {
             val pos = unmatched.first().vExpr.pos
             msgCtx.error(pos, "update:unmatched_args", "Not all arguments matched to attributes")
         }
@@ -167,7 +167,7 @@ object C_AttributeResolver {
         return explicitAttrs.mapValues {
             val (arg, attrMatch) = it
             val vExpr = arg.vExpr
-            val type = vExpr.type()
+            val type = vExpr.type
 
             val matcher = C_ArgTypeMatcher_Simple(attrMatch.attr.type)
             val m = matcher.match(type)
@@ -215,7 +215,7 @@ object C_AttributeResolver {
 
         for (arg in args) {
             if (arg.name == null) {
-                val type = arg.vExpr.type()
+                val type = arg.vExpr.type
                 val attr = implicitMatch(msgCtx, attrs, arg, type, mutableOnly)
                 if (attr != null) {
                     res[arg] = C_AttrMatch(attr, arg.vExpr)

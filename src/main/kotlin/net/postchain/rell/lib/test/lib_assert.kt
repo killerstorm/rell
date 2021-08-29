@@ -63,10 +63,10 @@ private object C_FuncCase_AssertNotNull: C_GlobalSpecialFuncCase() {
         if (args.size != 1) return null
 
         val expr = args[0]
-        val type = expr.type()
+        val type = expr.type
         if (type !is R_NullableType) return null
 
-        val preFacts = expr.varFacts().postFacts
+        val preFacts = expr.varFacts.postFacts
         val varFacts = C_ExprVarFacts.forNullCast(preFacts, expr)
         return CaseMatch(expr, varFacts)
     }
@@ -80,7 +80,7 @@ private object C_FuncCase_AssertNotNull: C_GlobalSpecialFuncCase() {
 
         override fun compileCallR(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): R_Expr {
             val rActual = actual.toRExpr()
-            return R_SysFunctionCallExpr(resType, R_Fns.AssertNotNull, listOf(rActual), caseCtx.qualifiedNameMsg())
+            return C_Utils.createSysCallRExpr(resType, R_Fns.AssertNotNull, listOf(rActual), caseCtx)
         }
     }
 }
@@ -92,8 +92,8 @@ private class C_FuncCase_AssertEquals(private val positive: Boolean): C_GlobalSp
         val cOp = C_BinOp_Eq
         val (actual, expected) = cOp.adaptLeftRight(ctx, args[0], args[1])
 
-        var actualType = actual.type()
-        var expectedType = expected.type()
+        var actualType = actual.type
+        var expectedType = expected.type
         if (actualType is R_NullableType && expectedType == actualType.valueType) {
             expectedType = actualType
         } else if (expectedType is R_NullableType && actualType == expectedType.valueType) {
@@ -132,7 +132,7 @@ private class C_FuncCase_AssertCompare(private val op: C_BinOp_Cmp): C_GlobalSpe
         if (args.size != 2) return null
 
         val (left, right) = op.adaptLeftRight(ctx, args[0], args[1])
-        val vOp = op.compileOp(left.type(), right.type())
+        val vOp = op.compileOp(left.type, right.type)
         vOp ?: return null
 
         return CaseMatch(left, right, vOp)
@@ -166,8 +166,8 @@ private class C_FuncCase_AssertRange(
         val expected1 = adapted[1]
         val expected2 = adapted[2]
 
-        val vOp1 = op1.compileOp(actual.type(), expected1.type())
-        val vOp2 = op2.compileOp(actual.type(), expected2.type())
+        val vOp1 = op1.compileOp(actual.type, expected1.type)
+        val vOp2 = op2.compileOp(actual.type, expected2.type)
         vOp1 ?: return null
         vOp2 ?: return null
 
