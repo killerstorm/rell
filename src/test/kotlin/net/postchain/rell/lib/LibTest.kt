@@ -224,6 +224,12 @@ class LibTest: BaseRellTest(false) {
         chkCompile("function f(v: GTXValue){}", "ct_err:deprecated:TYPE:GTXValue:gtv")
         chkCompile("struct rec { v: list<GTXValue>; }", "ct_err:deprecated:TYPE:GTXValue:gtv")
         chkCompile("function f() { GTXValue.from_bytes(x''); }", "ct_err:deprecated:NAMESPACE:GTXValue:gtv")
+
+        chkWarn()
+        chk("is_signer(x'1234')", "boolean[false]")
+        chkWarn("deprecated:FUNCTION:is_signer:op_context.is_signer")
+        chk("op_context.is_signer(x'1234')", "boolean[false]")
+        chkWarn()
     }
 
     @Test fun testDeprecatedFunctions() {

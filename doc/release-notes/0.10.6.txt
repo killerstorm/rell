@@ -208,3 +208,10 @@ In particular, it is possible to iterate over a range with collection-at
 
 Additionally, the type of map item is now (K, V) for both for-loop and collection-at. In previous versions it used
 to be (K, V) for for-loop and (k:K, v:V) for collection-at.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+5. Language: null.to_gtv()
+
+A new expression to get the Gtv-equivalent of null:
+
+    val z: gtv = null.to_gtv();

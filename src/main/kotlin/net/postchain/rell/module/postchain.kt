@@ -321,10 +321,13 @@ class RellPostchainModuleEnvironment(
         val logPrinter: Rt_Printer = Rt_LogPrinter(),
         val wrapCtErrors: Boolean = true,
         val wrapRtErrors: Boolean = true,
-        val forceTypeCheck: Boolean = false
+        val forceTypeCheck: Boolean = false,
+        val dbInitLogLevel: Int = DEFAULT_DB_INIT_LOG_LEVEL
 ) {
     companion object {
         val DEFAULT = RellPostchainModuleEnvironment()
+
+        const val DEFAULT_DB_INIT_LOG_LEVEL = SqlInitLogging.LOG_STEP_COMPLEX
 
         private val THREAD_LOCAL = ThreadLocalContext(DEFAULT)
 
@@ -365,7 +368,7 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
 
             val sqlLogging = rellNode["sqlLog"]?.asBoolean() ?: false
             val typeCheck = env.forceTypeCheck || (rellNode["typeCheck"]?.asBoolean() ?: false)
-            val dbInitLogLevel = rellNode["dbInitLogLevel"]?.asInteger()?.toInt() ?: SqlInitLogging.LOG_STEP_COMPLEX
+            val dbInitLogLevel = rellNode["dbInitLogLevel"]?.asInteger()?.toInt() ?: env.dbInitLogLevel
 
             val moduleConfig = RellModuleConfig(
                     sqlLogging = sqlLogging,

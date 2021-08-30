@@ -15,6 +15,7 @@ import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.*
+import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.tools.RellJavaLoggingInit
 import picocli.CommandLine
 import java.io.File
@@ -129,12 +130,20 @@ object RellCliUtils: KLogging() {
 
     fun createGlobalContext(
             typeCheck: Boolean,
-            compilerOptions: C_CompilerOptions
+            compilerOptions: C_CompilerOptions,
+            runXmlTest: Boolean
     ): Rt_GlobalContext {
+        // There was a request to suppress SqlInit logging for unit tests (when run from Eclipse).
+        val dbInitLogLevel = when {
+            runXmlTest -> SqlInitLogging.LOG_NONE
+            else -> RellPostchainModuleEnvironment.DEFAULT_DB_INIT_LOG_LEVEL
+        }
+
         val pcModuleEnv = RellPostchainModuleEnvironment(
                 outPrinter = Rt_OutPrinter,
                 logPrinter = Rt_LogPrinter(),
-                forceTypeCheck = typeCheck
+                forceTypeCheck = typeCheck,
+                dbInitLogLevel = dbInitLogLevel
         )
 
         return Rt_GlobalContext(

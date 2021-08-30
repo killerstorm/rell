@@ -92,7 +92,7 @@ object C_LibFunctions {
         createCommonGlobalFunctions().addTo(b)
         createInternalGlobalFunctions().addTo(b)
 
-        b.add("is_signer", R_BooleanType, listOf(R_ByteArrayType), R_SysFn_Crypto.IsSigner/*, depWarn("op_context.is_signer")*/)
+        b.add("is_signer", R_BooleanType, listOf(R_ByteArrayType), R_SysFn_Crypto.IsSigner, depWarn("op_context.is_signer"))
 
         b.add("print", C_SysFn_Print(false))
         b.add("log", C_SysFn_Print(true))
@@ -286,6 +286,10 @@ object C_LibFunctions {
 
     private val RANGE_NAMESPACE = C_LibUtils.makeNs(RANGE_NAMESPACE_FNS)
 
+    private val NULL_FNS = typeMemFuncBuilder(R_NullType, pure = true)
+            .add("to_gtv", R_GtvType, listOf(), R_SysFn_Any.ToGtv(R_NullType, false, "to_gtv"))
+            .build()
+
     private val ENUM_PROPS = immMapOf(
             "name" to C_SysMemberProperty(R_TextType, R_SysFn_Enum.Name, pure = true),
             "value" to C_SysMemberProperty(R_IntegerType, R_SysFn_Enum.Value, Db_SysFn_Nop, pure = true)
@@ -361,6 +365,7 @@ object C_LibFunctions {
             R_RowidType -> ROWID_FNS
             R_JsonType -> JSON_FNS
             R_GtvType -> GTV_FNS
+            R_NullType -> NULL_FNS
             is R_ListType -> getListFns(type)
             is R_VirtualListType -> getVirtualListFns(type)
             is R_VirtualSetType -> getVirtualSetFns(type)

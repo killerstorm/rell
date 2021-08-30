@@ -30,13 +30,13 @@ class SqlInitLogging(
         val allOther: Boolean = false
 ) {
     companion object {
-        val LOG_NONE = 0
-        val LOG_HEADER = 1000
-        val LOG_STEP_COMPLEX = 2000
-        val LOG_STEP_SIMPLE = 3000
-        val LOG_PLAN_COMPLEX = 4000
-        val LOG_PLAN_SIMPLE = 5000
-        val LOG_ALL = Integer.MAX_VALUE
+        const val LOG_NONE = 0
+        const val LOG_HEADER = 1000
+        const val LOG_STEP_COMPLEX = 2000
+        const val LOG_STEP_SIMPLE = 3000
+        const val LOG_PLAN_COMPLEX = 4000
+        const val LOG_PLAN_SIMPLE = 5000
+        const val LOG_ALL = Integer.MAX_VALUE
 
         fun ofLevel(level: Int) = SqlInitLogging(
                 header = level >= LOG_HEADER,

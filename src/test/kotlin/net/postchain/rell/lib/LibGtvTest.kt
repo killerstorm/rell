@@ -375,6 +375,12 @@ class LibGtvTest: BaseRellTest(false) {
         chk("state.to_gtv_pretty()", "ct_err:unknown_member:[state]:to_gtv_pretty")
     }
 
+    @Test fun testToGtvNull() {
+        chk("null.to_gtv()", "gtv[null]")
+        chk("null.to_gtv_prety()", "ct_err:unknown_member:[null]:to_gtv_prety")
+        chk("integer.from_gtv(null.to_gtv())", "rt_err:from_gtv")
+    }
+
     private fun chkFromGtv(gtv: String, expr: String, expected: String) = chkFromGtv(tst, gtv, expr, expected)
 
     companion object {

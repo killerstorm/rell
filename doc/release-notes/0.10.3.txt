@@ -176,5 +176,35 @@ A function to calculate Ethererum public key from a signature and a hash:
 
     eth_ecrecover(r: byte_array, s: byte_array, rec_id: integer, hash: byte_array): byte_array
 
-Does almost the same as the ecrecover() function from Solidity, but returns a 64-byte public key, not a 20-byte address
-(which is last 20 bytes of keccak256() of the public key). Also, parameters are in a different order.
+Does almost the same as the ecrecover() function from Solidity, though is not its strict equivalent. Used to recover
+the address associated with the public key from an elliptic curve signature. How exactly the Rell function differs:
+
+- takes rec_id instead of v, where rec_id = v - 27
+- other parameters (r, s, hash) are the same, but in different order
+- returns a 64-byte public key, not a 20-byte address; the address is last 20 bytes of keccak256() of the public key
+
+Example: a Node.js script which uses the ecrecover() equivalent from the Ethereum Web3 library:
+
+    const Web3 = require('web3');
+    const web3 = new Web3();
+
+    var r = '0xcf722a47bcf1da61967ccc6405e31db4d37bce153255a6937e5cceb222caead0';
+    var s = '0xcf722a47bcf1da61967ccc6405e31db4d37bce153255a6937e5cceb222caead0';
+    var h = '0x53d7b11e61a8059aa4bc3248d24b2936436c9796dfe7f18e414c181004f79427';
+    var v = '0x1c';
+
+    var address = web3.eth.accounts.recover({'r':r,'s':s,'messageHash':h,'v':v});
+    console.log(address);
+    // prints 0x5b0c087542D5C1E66Df0041e179c4201675B1614
+
+Rell equivalent of the script (note: "v" is an integer, while for Web3 it is a 0x-prefixed hex string):
+
+    val r = x'cf722a47bcf1da61967ccc6405e31db4d37bce153255a6937e5cceb222caead0';
+    val s = x'cf722a47bcf1da61967ccc6405e31db4d37bce153255a6937e5cceb222caead0';
+    val h = x'53d7b11e61a8059aa4bc3248d24b2936436c9796dfe7f18e414c181004f79427';
+    val v = 0x1c;
+
+    val pubkey = eth_ecrecover(r, s, v - 27, h);
+    val address = keccak256(pubkey).sub(12);
+    print(address);
+    // prints 0x5b0c087542d5c1e66df0041e179c4201675b1614

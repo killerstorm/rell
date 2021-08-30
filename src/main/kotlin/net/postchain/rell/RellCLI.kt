@@ -326,7 +326,7 @@ private fun createRegularAppContext(globalCtx: Rt_GlobalContext, app: R_App): Rt
 }
 
 private fun createGlobalCtx(args: RellCliArgsEx): Rt_GlobalContext {
-    return RellCliUtils.createGlobalContext(args.raw.typeCheck, args.compilerOptions)
+    return RellCliUtils.createGlobalContext(args.raw.typeCheck, args.compilerOptions, false)
 }
 
 private fun parseArgs(entryPoint: RellEntryPoint, gtvCtx: GtvToRtContext, args: List<String>, json: Boolean): List<Rt_Value> {

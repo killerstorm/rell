@@ -153,7 +153,7 @@ private fun runTests(args: CommonArgs) {
             val sqlCtx = Rt_RegularSqlContext.createNoExternalChains(tChain.rApp, Rt_ChainSqlMapping(tChain.chain.iid))
             val blockRunnerStrategy = Rt_StaticBlockRunnerStrategy(tChain.gtvConfig, keyPair)
 
-            val globalCtx = RellCliUtils.createGlobalContext(true, compilerOptions)
+            val globalCtx = RellCliUtils.createGlobalContext(true, compilerOptions, true)
 
             val chainRid = BlockchainRid(tChain.chain.brid.toByteArray())
             val chainCtx = PostchainUtils.createChainContext(tChain.gtvConfig, tChain.rApp, chainRid)
