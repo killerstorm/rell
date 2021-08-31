@@ -114,10 +114,11 @@ class C_SystemDefs private constructor(
                     C_Utils.createSysQuery(executor, "get_app_structure", R_GtvType, R_SysFn_Rell.GetAppStructure)
             )
 
-            return create(stamp, blockEntity, transactionEntity, queries)
+            return create(appCtx.globalCtx, stamp, blockEntity, transactionEntity, queries)
         }
 
         fun create(
+                globalCtx: C_GlobalContext,
                 stamp: R_AppUid,
                 blockEntity: R_EntityDefinition,
                 transactionEntity: R_EntityDefinition,
@@ -125,9 +126,9 @@ class C_SystemDefs private constructor(
         ): C_SystemDefs {
             val sysEntities = listOf(blockEntity, transactionEntity)
 
-            val nsProto = createNsProto(sysEntities, false)
+            val nsProto = createNsProto(globalCtx, sysEntities, false)
             val appNs = C_NsEntry.createNamespace(nsProto.entries)
-            val testNsProto = createNsProto(sysEntities, true)
+            val testNsProto = createNsProto(globalCtx, sysEntities, true)
             val testNs = C_NsEntry.createNamespace(testNsProto.entries)
 
             val mntBuilder = C_MountTablesBuilder(stamp)
@@ -138,9 +139,14 @@ class C_SystemDefs private constructor(
             return C_SystemDefs(nsProto, appNs, testNs, blockEntity, transactionEntity, mntTables, sysEntities, queries)
         }
 
-        private fun createNsProto(sysEntities: List<R_EntityDefinition>, test: Boolean): C_SysNsProto {
-            val sysNamespaces = if (test) C_LibFunctions.TEST_NAMESPACES else C_LibFunctions.APP_NAMESPACES
-            val sysFunctions = if (test) C_LibFunctions.TEST_GLOBAL_FNS else C_LibFunctions.APP_GLOBAL_FNS
+        private fun createNsProto(
+                globalCtx: C_GlobalContext,
+                sysEntities: List<R_EntityDefinition>,
+                test: Boolean
+        ): C_SysNsProto {
+            val libFns = globalCtx.libFunctions
+            val sysNamespaces = if (test) libFns.TEST_NAMESPACES else libFns.APP_NAMESPACES
+            val sysFunctions = if (test) libFns.testGlobalFunctions else libFns.appGlobalFunctions
             val sysTypes = SYSTEM_TYPES
             val sysStructs = SYSTEM_STRUCTS
 
@@ -180,6 +186,7 @@ class C_CompilerOptions(
         val blockCheck: Boolean,
         val atAttrShadowing: C_AtAttrShadowing,
         val testLib: Boolean,
+        val hiddenLib: Boolean,
         val allowDbModificationsInObjectExprs: Boolean,
         val compatibility: R_LangVersion?
 ) {
@@ -190,6 +197,7 @@ class C_CompilerOptions(
                 "ide" to ide,
                 "atAttrShadowing" to atAttrShadowing.name,
                 "testLib" to testLib,
+                "hiddenLib" to hiddenLib,
                 "allowDbModificationsInObjectExprs" to allowDbModificationsInObjectExprs
         )
         if (compatibility != null) {
@@ -206,11 +214,14 @@ class C_CompilerOptions(
                 blockCheck = false,
                 atAttrShadowing = C_AtAttrShadowing.DEFAULT,
                 testLib = false,
+                hiddenLib = false,
                 allowDbModificationsInObjectExprs = true,
                 compatibility = null
         )
 
         @JvmStatic fun builder() = Builder()
+
+        @JvmStatic fun builder(options: C_CompilerOptions) = Builder(options)
 
         @JvmStatic fun fromPojoMap(map: Map<String, Any>): C_CompilerOptions {
             return C_CompilerOptions(
@@ -221,6 +232,7 @@ class C_CompilerOptions(
                             ?.let { C_AtAttrShadowing.valueOf(it) } ?: DEFAULT.atAttrShadowing,
                     ide = getBoolOpt(map, "ide", DEFAULT.ide),
                     testLib = getBoolOpt(map, "testLib", DEFAULT.testLib),
+                    hiddenLib = getBoolOpt(map, "hiddenLib", DEFAULT.hiddenLib),
                     allowDbModificationsInObjectExprs =
                             getBoolOpt(map, "allowDbModificationsInObjectExprs", DEFAULT.allowDbModificationsInObjectExprs),
                     compatibility = (map["compatibility"] as String?)?.let { R_LangVersion.of(it) }
@@ -241,6 +253,7 @@ class C_CompilerOptions(
         private var blockCheck = proto.blockCheck
         private var atAttrShadowing = proto.atAttrShadowing
         private var testLib = proto.testLib
+        private var hiddenLib = proto.hiddenLib
         private var allowDbModificationsInObjectExprs = proto.allowDbModificationsInObjectExprs
         private var compatibility = proto.compatibility
 
@@ -269,6 +282,11 @@ class C_CompilerOptions(
             return this
         }
 
+        @Suppress("UNUSED") fun hiddenLib(v: Boolean): Builder {
+            hiddenLib = v
+            return this
+        }
+
         @Suppress("UNUSED") fun allowDbModificationsInObjectExprs(v: Boolean): Builder {
             allowDbModificationsInObjectExprs = v
             return this
@@ -286,6 +304,7 @@ class C_CompilerOptions(
                 blockCheck = blockCheck,
                 atAttrShadowing = atAttrShadowing,
                 testLib = testLib,
+                hiddenLib = hiddenLib,
                 allowDbModificationsInObjectExprs = allowDbModificationsInObjectExprs,
                 compatibility = compatibility
         )

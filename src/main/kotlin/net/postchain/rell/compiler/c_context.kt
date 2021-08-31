@@ -19,6 +19,10 @@ data class C_VarUid(val id: Long, val name: String, val fn: R_FnUid)
 data class C_LoopUid(val id: Long, val fn: R_FnUid)
 
 class C_GlobalContext(val compilerOptions: C_CompilerOptions, val sourceDir: C_SourceDir) {
+    val libFunctions: C_LibFunctions by lazy {
+        C_LibFunctions(compilerOptions)
+    }
+
     companion object {
         private val appUidGen = C_UidGen { id, _ -> R_AppUid(id) }
         fun nextAppUid(): R_AppUid = synchronized(appUidGen) { appUidGen.next("") }

@@ -182,7 +182,8 @@ class RellGtxTester(
                 logPrinter = logPrinter,
                 wrapCtErrors = false,
                 wrapRtErrors = wrapRtErrors,
-                forceTypeCheck = true
+                forceTypeCheck = true,
+                hiddenLib = hiddenLib
         )
         val factory = RellPostchainModuleFactory(env)
 

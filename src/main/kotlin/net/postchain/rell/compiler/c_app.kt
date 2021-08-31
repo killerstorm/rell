@@ -144,7 +144,7 @@ class C_AppContext(
         val blockEntity = C_Utils.createBlockEntity(this, ref)
         val transactionEntity = C_Utils.createTransactionEntity(this, ref, blockEntity)
 
-        val extSysDefs = C_SystemDefs.create(appUid, blockEntity, transactionEntity, listOf())
+        val extSysDefs = C_SystemDefs.create(globalCtx, appUid, blockEntity, transactionEntity, listOf())
         return C_ExternalChain(name, ref, extSysDefs)
     }
 

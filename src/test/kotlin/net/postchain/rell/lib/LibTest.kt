@@ -326,4 +326,17 @@ class LibTest: BaseRellTest(false) {
                 "gtx_transaction[body=$expBody,signatures=list<gtv>[]]")
         chk("gtx_transaction()", "ct_err:attr_missing:body,signatures")
     }
+
+    @Test fun testHiddenLib() {
+        chk("_type_of(123)", "text[integer]")
+        chk("_nullable(123)", "int[123]")
+        chk("_nullable_int(123)", "int[123]")
+        chk("_crash('hello')", "ct_err:query_exprtype_unit")
+
+        tst.hiddenLib = false
+        chk("_type_of(123)", "ct_err:unknown_name:_type_of")
+        chk("_nullable(123)", "ct_err:unknown_name:_nullable")
+        chk("_nullable_int(123)", "ct_err:unknown_name:_nullable_int")
+        chk("_crash('hello')", "ct_err:unknown_name:_crash")
+    }
 }

@@ -4,7 +4,6 @@
 
 package net.postchain.rell.model
 
-import net.postchain.core.Signature
 import net.postchain.rell.compiler.C_Constants
 import net.postchain.rell.lib.Rt_TestOpValue
 import net.postchain.rell.module.GtvToRtContext
@@ -209,13 +208,6 @@ object R_SysFn_Decimal {
 object R_SysFn_ByteArray {
     abstract class MemFn: R_SysFunction_Generic<ByteArray>() {
         override fun extract(v: Rt_Value): ByteArray = v.asByteArray()
-    }
-
-    object Sha256: MemFn() {
-        override fun call(obj: ByteArray): Rt_Value {
-            val md = MessageDigest.getInstance("SHA-256")
-            return Rt_ByteArrayValue(md.digest(obj))
-        }
     }
 
     object Empty: MemFn() {
@@ -714,50 +706,6 @@ object R_SysFn_Math {
             val a2 = arg2.asDecimal()
             val r = a1.max(a2)
             return Rt_DecimalValue.of(r)
-        }
-    }
-}
-
-object R_SysFn_Crypto {
-    object EthEcRecover: R_SysFunction_4() {
-        override fun call(arg1: Rt_Value, arg2: Rt_Value, arg3: Rt_Value, arg4: Rt_Value): Rt_Value {
-            val r = arg1.asByteArray()
-            val s = arg2.asByteArray()
-            val recId = arg3.asInteger()
-            val hash = arg4.asByteArray()
-            val res = Rt_CryptoUtils.ethereumPubkeyFromSignature(r, s, recId, hash)
-            return Rt_ByteArrayValue(res)
-        }
-    }
-
-    object IsSigner: R_SysFunction() {
-        override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
-            checkEquals(args.size, 1)
-            val a = args[0].asByteArray()
-            val opCtx = ctx.exeCtx.opCtx
-            val r = if (opCtx == null) false else opCtx.signers.any { Arrays.equals(it, a) }
-            return Rt_BooleanValue(r)
-        }
-    }
-
-    object Keccak256: R_SysFunction_1() {
-        override fun call(arg: Rt_Value): Rt_Value {
-            val ba = arg.asByteArray()
-            val res = Rt_CryptoUtils.keccak256(ba)
-            return Rt_ByteArrayValue(res)
-        }
-    }
-
-    object VerifySignature: R_SysFunction_3() {
-        override fun call(arg1: Rt_Value, arg2: Rt_Value, arg3: Rt_Value): Rt_Value {
-            val digest = arg1.asByteArray()
-            val res = try {
-                val signature = Signature(arg2.asByteArray(), arg3.asByteArray())
-                PostchainUtils.cryptoSystem.verifyDigest(digest, signature)
-            } catch (e: Exception) {
-                throw Rt_Error("verify_signature", e.message ?: "")
-            }
-            return Rt_BooleanValue(res)
         }
     }
 }

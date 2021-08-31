@@ -86,38 +86,38 @@ private class C_MemberValue_EnumAttr(
 
 object C_MemberResolver {
     fun valueForType(ctx: C_ExprContext, type: R_Type, ref: C_MemberRef): C_Expr? {
-        val member = findMemberValueForTypeByName(type, ref.name.str)
+        val member = findMemberValueForTypeByName(ctx.globalCtx, type, ref.name.str)
         member ?: return null
         val link = ref.toLink()
         val vExpr = member.compile(ctx, link)
         return C_VExpr(vExpr)
     }
 
-    fun findMemberValueForTypeByName(type: R_Type, name: String): C_MemberValue? {
-        val resolver = getTypeMemberResolver(type)
+    fun findMemberValueForTypeByName(globalCtx: C_GlobalContext, type: R_Type, name: String): C_MemberValue? {
+        val resolver = getTypeMemberResolver(globalCtx, type)
         return resolver?.findByName(name)
     }
 
-    fun findMemberValuesForTypeByType(type: R_Type, memberType: R_Type): List<C_MemberValue> {
-        val resolver = getTypeMemberResolver(type)
+    fun findMemberValuesForTypeByType(globalCtx: C_GlobalContext, type: R_Type, memberType: R_Type): List<C_MemberValue> {
+        val resolver = getTypeMemberResolver(globalCtx, type)
         return resolver?.findByType(memberType) ?: listOf()
     }
 
-    private fun getTypeMemberResolver(type: R_Type): C_TypeMemberResolver<*>? {
+    private fun getTypeMemberResolver(globalCtx: C_GlobalContext, type: R_Type): C_TypeMemberResolver<*>? {
         return when (type) {
             is R_TupleType -> C_TypeMemberResolver_Tuple(type)
             is R_VirtualTupleType -> C_TypeMemberResolver_VirtualTuple(type)
             is R_StructType -> C_TypeMemberResolver_Struct(type)
             is R_VirtualStructType -> C_TypeMemberResolver_VirtualStruct(type)
             is R_EntityType -> C_TypeMemberResolver_Entity(type)
-            is R_EnumType -> C_TypeMemberResolver_Enum()
+            is R_EnumType -> C_TypeMemberResolver_Enum(globalCtx)
             else -> null
         }
     }
 
     fun functionForType(ctx: C_ExprContext, type: R_Type, ref: C_MemberRef): C_Expr? {
         val name = ref.name.str
-        val fn = C_LibFunctions.getMemberFunctionOpt(ctx, type, name)
+        val fn = ctx.globalCtx.libFunctions.getMemberFunctionOpt(ctx, type, name)
         val link = ref.toLink()
         return if (fn == null) null else C_MemberFunctionExpr(link, fn, name)
     }
@@ -217,16 +217,16 @@ object C_MemberResolver {
         override fun findByType0(memberType: R_Type) = C_EntityAttrRef.resolveByType(type.rEntity, memberType)
     }
 
-    private class C_TypeMemberResolver_Enum: C_TypeMemberResolver<C_MemberValue>() {
+    private class C_TypeMemberResolver_Enum(val globalCtx: C_GlobalContext): C_TypeMemberResolver<C_MemberValue>() {
         override fun toMemberValue(member: C_MemberValue) = member
 
         override fun findByName0(name: String): C_MemberValue? {
-            val prop = C_LibFunctions.getEnumPropertyOpt(name)
+            val prop = globalCtx.libFunctions.getEnumPropertyOpt(name)
             return if (prop == null) null else C_MemberValue_EnumAttr(prop, name)
         }
 
         override fun findByType0(memberType: R_Type): List<C_MemberValue> {
-            return C_LibFunctions.getEnumProperties()
+            return globalCtx.libFunctions.getEnumProperties()
                     .filter { it.value.type == memberType }
                     .map { C_MemberValue_EnumAttr(it.value, it.key) }
                     .toImmList()

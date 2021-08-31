@@ -45,13 +45,13 @@ class C_AtFrom_Iterable(
     }
 
     override fun findAttributesByName(name: String): List<C_AtFromContextAttr> {
-        val memValue = C_MemberResolver.findMemberValueForTypeByName(item.elemType, name)
+        val memValue = C_MemberResolver.findMemberValueForTypeByName(outerExprCtx.globalCtx, item.elemType, name)
         memValue ?: return listOf()
         return listOf(C_AtFromContextAttr_ColAtMember(placeholderVar, memValue))
     }
 
     override fun findAttributesByType(type: R_Type): List<C_AtFromContextAttr> {
-        val memValues = C_MemberResolver.findMemberValuesForTypeByType(item.elemType, type)
+        val memValues = C_MemberResolver.findMemberValuesForTypeByType(outerExprCtx.globalCtx, item.elemType, type)
         return memValues.map { C_AtFromContextAttr_ColAtMember(placeholderVar, it) }
     }
 

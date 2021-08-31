@@ -8,9 +8,10 @@ import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.immListOf
+import java.util.*
 
 object C_Lib_OpContext {
-    val NAME = "op_context"
+    const val NAMESPACE_NAME = "op_context"
 
     private val GTX_OPERATION_STRUCT = C_Utils.createSysStruct(
             "gtx_operation",
@@ -36,9 +37,9 @@ object C_Lib_OpContext {
     private val GET_SIGNERS_RETURN_TYPE: R_Type = R_ListType(R_ByteArrayType)
     private val GET_ALL_OPERATIONS_RETURN_TYPE: R_Type = R_ListType(GTX_OPERATION_STRUCT.type)
 
-    private val NAMESPACE_FNS = C_GlobalFuncBuilder(NAME)
+    private val NAMESPACE_FNS = C_GlobalFuncBuilder(NAMESPACE_NAME)
             .add("get_signers", GET_SIGNERS_RETURN_TYPE, listOf(), GetSigners)
-            .add("is_signer", R_BooleanType, listOf(R_ByteArrayType), R_SysFn_Crypto.IsSigner)
+            .add("is_signer", R_BooleanType, listOf(R_ByteArrayType), IsSigner)
             .add("get_all_operations", GET_ALL_OPERATIONS_RETURN_TYPE, listOf(), GetAllOperations)
             .add("emit_event", R_UnitType, listOf(R_TextType, R_GtvType), EmitEvent)
             .build()
@@ -51,7 +52,9 @@ object C_Lib_OpContext {
             "op_index" to BaseNsValue(R_IntegerType, OpIndex)
     )
 
-    private val TRANSACTION_FN = "$NAME.transaction"
+    val FN_IS_SIGNER: R_SysFunction = IsSigner
+
+    private val TRANSACTION_FN = "$NAMESPACE_NAME.transaction"
 
     fun transactionRExpr(ctx: C_NamespaceValueContext, pos: S_Pos): R_Expr {
         val type = ctx.modCtx.sysDefs.transactionEntity.type
@@ -66,7 +69,7 @@ object C_Lib_OpContext {
     private fun checkCtx(ctx: C_NamespaceValueContext, name: List<S_Name>) {
         val dt = ctx.defCtx.definitionType
         if (dt != C_DefinitionType.OPERATION && dt != C_DefinitionType.FUNCTION && dt != C_DefinitionType.ENTITY) {
-            ctx.msgCtx.error(name[0].pos, "op_ctx_noop", "Can access '$NAME' only in an operation, function or entity")
+            ctx.msgCtx.error(name[0].pos, "op_ctx_noop", "Can access '$NAMESPACE_NAME' only in an operation, function or entity")
         }
     }
 
@@ -115,6 +118,16 @@ object C_Lib_OpContext {
             val opCtx = getOpContext(ctx, "get_signers")
             val elements = opCtx.signers.map { Rt_ByteArrayValue(it) as Rt_Value }.toMutableList()
             return Rt_ListValue(GET_SIGNERS_RETURN_TYPE, elements)
+        }
+    }
+
+    private object IsSigner: R_SysFunction() {
+        override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
+            checkEquals(args.size, 1)
+            val a = args[0].asByteArray()
+            val opCtx = ctx.exeCtx.opCtx
+            val r = if (opCtx == null) false else opCtx.signers.any { Arrays.equals(it, a) }
+            return Rt_BooleanValue(r)
         }
     }
 

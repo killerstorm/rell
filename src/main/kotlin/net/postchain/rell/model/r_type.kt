@@ -755,7 +755,12 @@ class R_TupleType(fields: List<R_TupleField>): R_Type(calcName(fields)) {
             return "($fieldsStr$comma)"
         }
 
-        fun create(vararg fields: Pair<String?, R_Type>): R_TupleType {
+        fun create(vararg fields: R_Type): R_TupleType {
+            val fieldsList = fields.map { R_TupleField(null, it) }
+            return R_TupleType(fieldsList)
+        }
+
+        fun createNamed(vararg fields: Pair<String?, R_Type>): R_TupleType {
             val fieldsList = fields.map { R_TupleField(it.first, it.second) }
             return R_TupleType(fieldsList)
         }

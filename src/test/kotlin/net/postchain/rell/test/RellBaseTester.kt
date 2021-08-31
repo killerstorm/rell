@@ -33,6 +33,7 @@ abstract class RellBaseTester(
     var deprecatedError = false
     var atAttrShadowing = C_CompilerOptions.DEFAULT.atAttrShadowing
     var testLib = false
+    var hiddenLib = true
     var allowDbModificationsInObjectExprs = C_CompilerOptions.DEFAULT.allowDbModificationsInObjectExprs
     var compatibilityVer = C_CompilerOptions.DEFAULT.compatibility
 
@@ -118,6 +119,7 @@ abstract class RellBaseTester(
             blockCheck = true,
             atAttrShadowing = atAttrShadowing,
             testLib = testLib,
+            hiddenLib = hiddenLib,
             allowDbModificationsInObjectExprs = allowDbModificationsInObjectExprs,
             compatibility = compatibilityVer
     )

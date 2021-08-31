@@ -319,7 +319,7 @@ class C_NamespaceValue_Object(val rObject: R_ObjectDefinition): C_NamespaceValue
 
 class C_NamespaceValue_Struct(private val struct: R_Struct): C_NamespaceValue() {
     override fun toExpr(ctx: C_NamespaceValueContext, name: List<S_Name>): C_Expr {
-        val ns = C_LibFunctions.makeStructNamespace(struct)
+        val ns = ctx.globalCtx.libFunctions.makeStructNamespace(struct)
         val nsProxy = C_DefProxy.create(ns)
         val nsRef = C_NamespaceRef.create(ctx.msgCtx, name, nsProxy)
         return C_NamespaceStructExpr(name, struct, nsRef)

@@ -215,3 +215,41 @@ to be (K, V) for for-loop and (k:K, v:V) for collection-at.
 A new expression to get the Gtv-equivalent of null:
 
     val z: gtv = null.to_gtv();
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+6. Library: New cryptographic functions
+
+A new namespace "crypto" added for cryptographic functions. Old functions are available via the new namespace:
+
+    sha256()
+    keccak256()
+    verify_signature()
+    eth_ecrecover()
+
+Those functions can be called as global functions too, but supposedly this way will be deprecated in the future.
+
+New function to calculate a public key from a private key:
+
+    crypto.privkey_to_pubkey(privkey: byte_array, compress: boolean = false): byte_array
+
+Takes a 32-byte private key and returns either a 65-byte (compressed = false) or 33-byte (compressed = true) public key.
+Note: when compressed = false, the returned public key is 65-bytes, while the public key returned by eth_ecrecover() is
+64-bytes. The 65-bytes key = byte 0x04 + 64-bytes key.
+
+New function to calculate an Ethereum signature (an opposite to eth_ecrecover() to some extent):
+
+    crypto.eth_sign(hash: byte_array, privkey: byte_array): (byte_array, byte_array, integer)
+
+Takes a hash (byte array of arbitrary size) and a private key (32 bytes) and returns values "r", "s" and "rec_id"
+accepted by eth_ecrecover().
+
+Example: calculating a signature with eth_sign() and recovering the public key with eth_ecrecover()
+
+    val privkey = x'000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f';
+    val pubkey = crypto.privkey_to_pubkey(privkey);
+
+    val hash = 'Hello'.to_bytes();
+    val (r, s, rec_id) = crypto.eth_sign(hash, privkey);
+
+    val recovered_pubkey = x'04' + crypto.eth_ecrecover(r, s, rec_id, hash);
+    require(recovered_pubkey == pubkey);

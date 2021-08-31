@@ -322,7 +322,8 @@ class RellPostchainModuleEnvironment(
         val wrapCtErrors: Boolean = true,
         val wrapRtErrors: Boolean = true,
         val forceTypeCheck: Boolean = false,
-        val dbInitLogLevel: Int = DEFAULT_DB_INIT_LOG_LEVEL
+        val dbInitLogLevel: Int = DEFAULT_DB_INIT_LOG_LEVEL,
+        val hiddenLib: Boolean = false
 ) {
     companion object {
         val DEFAULT = RellPostchainModuleEnvironment()
@@ -357,7 +358,7 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
             val sourceDir = sourceCfg.dir
 
             val modules = getModuleNames(rellNode)
-            val compilerOptions = C_CompilerOptions.forLangVersion(sourceCfg.version)
+            val compilerOptions = getCompilerOptions(sourceCfg.version)
             val app = compileApp(sourceDir, modules, compilerOptions, errorHandler, copyOutput)
 
             val chainCtx = PostchainUtils.createChainContext(config, app, blockchainRID)
@@ -388,6 +389,11 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
                     config = moduleConfig
             )
         }
+    }
+
+    private fun getCompilerOptions(langVersion: R_LangVersion): C_CompilerOptions {
+        val opts = C_CompilerOptions.forLangVersion(langVersion)
+        return C_CompilerOptions.builder(opts).hiddenLib(env.hiddenLib).build()
     }
 
     private fun getModulePrinter(basePrinter: Rt_Printer, combinedPrinter: Rt_Printer, copy: Boolean): Rt_Printer {

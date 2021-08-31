@@ -251,10 +251,10 @@ class C_ForIterator(val itemType: R_Type, val rIterator: R_ForIterator) {
             val opts = ctx.globalCtx.compilerOptions
 
             val itemType = if (loop || opts.compatibility == null || opts.compatibility >= LANG_VER_UNNAMED_MAP_FIELDS) {
-                R_TupleType.create(null to keyType, null to valueType)
+                R_TupleType.create(keyType, valueType)
             } else {
                 // Map element type used to be (k:K,v:V) for collection-at in 0.10.5 and earlier.
-                R_TupleType.create("k" to keyType, "v" to valueType)
+                R_TupleType.createNamed("k" to keyType, "v" to valueType)
             }
 
             return C_ForIterator(itemType, R_ForIterator_Map(itemType))

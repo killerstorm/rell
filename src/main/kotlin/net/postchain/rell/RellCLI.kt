@@ -392,6 +392,10 @@ private fun parseExtraOption(s: String): ExtraOption {
             val v = C_AtAttrShadowing.valueOf(p.toUpperCase())
             ExtraOption_AtAttrShadowing(v)
         }
+        "HiddenLib" -> {
+            require(params.size == 0)
+            ExtraOption_HiddenLib
+        }
         else -> throw IllegalArgumentException()
     }
 }
@@ -403,6 +407,12 @@ private sealed class ExtraOption {
 private class ExtraOption_AtAttrShadowing(val v: C_AtAttrShadowing): ExtraOption() {
     override fun toCompilerOption(b: C_CompilerOptions.Builder) {
         b.atAttrShadowing(v)
+    }
+}
+
+private object ExtraOption_HiddenLib: ExtraOption() {
+    override fun toCompilerOption(b: C_CompilerOptions.Builder) {
+        b.hiddenLib(true)
     }
 }
 

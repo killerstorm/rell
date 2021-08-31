@@ -730,7 +730,7 @@ class S_MirrorStructExpr(pos: S_Pos, val mutable: Boolean, val type: S_Type): S_
         val structType = type.compileMirrorStructType(ctx.nsCtx, mutable)
         structType ?: return C_Utils.errorExpr(ctx, startPos)
 
-        val ns = C_LibFunctions.makeStructNamespace(structType.struct)
+        val ns = ctx.globalCtx.libFunctions.makeStructNamespace(structType.struct)
         return C_MirrorStructExpr(startPos, structType.struct, ns)
     }
 }

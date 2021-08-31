@@ -677,7 +677,7 @@ class VirtualTest: BaseGtxTest(false) {
 
     @Test fun testSetType() {
         val type = "virtual<set<integer>>"
-        var args = argToGtv("[123,456]", "[[0],[1]]")
+        val args = argToGtv("[123,456]", "[[0],[1]]")
         chkVirtual(type, "_type_of(x)", args, "'virtual<set<integer>>'")
         chkVirtual(type, "_type_of(x.empty())", args, "'boolean'")
         chkVirtual(type, "_type_of(x.size())", args, "'integer'")
@@ -887,7 +887,7 @@ class VirtualTest: BaseGtxTest(false) {
         tst.wrapRtErrors = false
         val type = "virtual<map<text, integer>>"
 
-        var args = argToGtv("{'Hello':123,'Bye':456}", "[['Hello'],['Bye']]")
+        val args = argToGtv("{'Hello':123,'Bye':456}", "[['Hello'],['Bye']]")
         chkVirtualEx(type, "{ x['Hello'] = 123; return 0; }", args, "ct_err:expr_immutable:virtual<map<text,integer>>")
         chkVirtualEx(type, "{ x['Hello'] += 123; return 0; }", args, "ct_err:expr_immutable:virtual<map<text,integer>>")
 

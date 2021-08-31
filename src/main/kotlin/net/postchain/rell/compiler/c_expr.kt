@@ -448,7 +448,7 @@ class C_EnumExpr(private val msgCtx: C_MessageContext, private val name: List<S_
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
         val valueExpr = memberValue(ctx, memberName)
-        val fnExpr = memberFn(memberName)
+        val fnExpr = memberFn(ctx, memberName)
         val expr = C_ValueFunctionExpr.create(memberName, valueExpr, fnExpr)
         return expr ?: throw C_Errors.errUnknownName(name, memberName)
     }
@@ -464,8 +464,8 @@ class C_EnumExpr(private val msgCtx: C_MessageContext, private val name: List<S_
         return C_VExpr(vExpr)
     }
 
-    private fun memberFn(memberName: S_Name): C_Expr? {
-        val fn = C_LibFunctions.getTypeStaticFunction(rEnum.type, memberName.str)
+    private fun memberFn(ctx: C_ExprContext, memberName: S_Name): C_Expr? {
+        val fn = ctx.globalCtx.libFunctions.getTypeStaticFunction(rEnum.type, memberName.str)
         return if (fn == null) null else {
             val fnRef = C_DefRef(msgCtx, name + memberName, C_DefProxy.create(fn))
             C_FunctionExpr(memberName, fnRef)
@@ -491,7 +491,7 @@ class C_TypeNameExpr(private val pos: S_Pos, private val typeRef: C_DefRef<R_Typ
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
         val type = typeRef.getDef()
-        val fn = C_LibFunctions.getTypeStaticFunction(type, memberName.str)
+        val fn = ctx.globalCtx.libFunctions.getTypeStaticFunction(type, memberName.str)
         if (fn == null) throw C_Errors.errUnknownName(type, memberName)
         val fnRef = typeRef.sub(memberName, C_DefProxy.create(fn))
         return C_FunctionExpr(memberName, fnRef)
@@ -503,7 +503,7 @@ class C_TypeExpr(private val pos: S_Pos, private val type: R_Type): C_Expr() {
     override fun startPos() = pos
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
-        val fn = C_LibFunctions.getTypeStaticFunction(type, memberName.str)
+        val fn = ctx.globalCtx.libFunctions.getTypeStaticFunction(type, memberName.str)
         if (fn == null) throw C_Errors.errUnknownName(type, memberName)
         val fnRef = C_DefRef(ctx.msgCtx, listOf(memberName), C_DefProxy.create(fn))
         return C_FunctionExpr(memberName, fnRef)
