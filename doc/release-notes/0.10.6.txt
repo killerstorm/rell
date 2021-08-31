@@ -253,3 +253,38 @@ Example: calculating a signature with eth_sign() and recovering the public key w
 
     val recovered_pubkey = x'04' + crypto.eth_ecrecover(r, s, rec_id, hash);
     require(recovered_pubkey == pubkey);
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+7. Tools: Run.xml gtv merging modes
+
+New "merge" attribute added for <array>, <dict> and <entry> tags that can be specified under <gtv> in a run.xml file:
+
+    <gtv path="signers">
+        <array merge="replace">
+            <bytea>0350fe40766bc0ce8d08b3f5b810e49a8352fdd458606bd5fafe5acdcdc8ff3f57</bytea>
+        </array>
+    </gtv>
+
+    <gtv path="foo/bar">
+        <dict merge="replace">
+            <entry key="A">
+                <int>1</int>
+            </entry>
+        </array>
+    </gtv>
+
+Merge modes for arrays:
+- replace: result array = new array
+- append: result array = old array + new array (default mode)
+- prepend: result array = new array + old array
+
+Merge modes for dicts:
+- replace: old entries are discarded
+- keep-old: use old entry value on key conflict
+- keep-new: use new entry value on key conflict (default mode)
+- strict: error on key conflict
+
+Allowed merge modes for individual dict entries:
+- keep-old
+- keep-new (default)
+- strict

@@ -72,7 +72,7 @@ class Rcfg_App(
         val addDefaults: Boolean
 )
 
-class Rcfg_ChainConfigGtv(val path: List<String>, val src: String?, val gtv: Gtv?)
+class Rcfg_ChainConfigGtv(val path: List<String>, val src: String?, val gtv: Rcfg_Gtv?)
 
 class RellRunConfigParams(
         val sourceDir: C_SourceDir,

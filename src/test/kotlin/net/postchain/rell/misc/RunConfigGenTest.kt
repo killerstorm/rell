@@ -503,6 +503,257 @@ class RunConfigGenTest {
         chkFileBin(files, "blockchains/33/0.gtv", """{"signers":[]}""")
     }
 
+    @Test fun testGtvMergeArray() {
+        chkGtvMerge(
+                """<array><int>1</int><int>2</int><int>3</int></array>""",
+                """<array><int>4</int><int>5</int><int>6</int></array>""",
+                """
+                            <array>
+                                <int>1</int>
+                                <int>2</int>
+                                <int>3</int>
+                                <int>4</int>
+                                <int>5</int>
+                                <int>6</int>
+                            </array>"""
+        )
+
+        chkGtvMerge(
+                """<array><int>1</int><int>2</int><int>3</int></array>""",
+                """<array merge="replace"><int>4</int><int>5</int><int>6</int></array>""",
+                """
+                            <array>
+                                <int>4</int>
+                                <int>5</int>
+                                <int>6</int>
+                            </array>"""
+        )
+
+        chkGtvMerge(
+                """<array><int>1</int><int>2</int><int>3</int></array>""",
+                """<array merge="append"><int>4</int><int>5</int><int>6</int></array>""",
+                """
+                            <array>
+                                <int>1</int>
+                                <int>2</int>
+                                <int>3</int>
+                                <int>4</int>
+                                <int>5</int>
+                                <int>6</int>
+                            </array>"""
+        )
+
+        chkGtvMerge(
+                """<array><int>1</int><int>2</int><int>3</int></array>""",
+                """<array merge="prepend"><int>4</int><int>5</int><int>6</int></array>""",
+                """
+                            <array>
+                                <int>4</int>
+                                <int>5</int>
+                                <int>6</int>
+                                <int>1</int>
+                                <int>2</int>
+                                <int>3</int>
+                            </array>"""
+        )
+    }
+
+    @Test fun testGtvMergeDict() {
+        chkGtvMerge(
+                """<dict><entry key="A"><int>1</int></entry><entry key="B"><int>2</int></entry></dict>""",
+                """<dict><entry key="C"><int>3</int></entry><entry key="D"><int>4</int></entry></dict>""",
+                """
+                            <dict>
+                                <entry key="A">
+                                    <int>1</int>
+                                </entry>
+                                <entry key="B">
+                                    <int>2</int>
+                                </entry>
+                                <entry key="C">
+                                    <int>3</int>
+                                </entry>
+                                <entry key="D">
+                                    <int>4</int>
+                                </entry>
+                            </dict>"""
+        )
+
+        chkGtvMerge(
+                """<dict><entry key="A"><int>1</int></entry><entry key="B"><int>2</int></entry></dict>""",
+                """<dict><entry key="B"><int>3</int></entry><entry key="C"><int>4</int></entry></dict>""",
+                """
+                            <dict>
+                                <entry key="A">
+                                    <int>1</int>
+                                </entry>
+                                <entry key="B">
+                                    <int>3</int>
+                                </entry>
+                                <entry key="C">
+                                    <int>4</int>
+                                </entry>
+                            </dict>"""
+        )
+
+        chkGtvMerge(
+                """<dict><entry key="A"><int>1</int></entry><entry key="B"><int>2</int></entry></dict>""",
+                """<dict merge="replace"><entry key="B"><int>3</int></entry><entry key="C"><int>4</int></entry></dict>""",
+                """
+                            <dict>
+                                <entry key="B">
+                                    <int>3</int>
+                                </entry>
+                                <entry key="C">
+                                    <int>4</int>
+                                </entry>
+                            </dict>"""
+        )
+
+        chkGtvMerge(
+                """<dict><entry key="A"><int>1</int></entry><entry key="B"><int>2</int></entry></dict>""",
+                """<dict merge="keep-old"><entry key="B"><int>3</int></entry><entry key="C"><int>4</int></entry></dict>""",
+                """
+                            <dict>
+                                <entry key="A">
+                                    <int>1</int>
+                                </entry>
+                                <entry key="B">
+                                    <int>2</int>
+                                </entry>
+                                <entry key="C">
+                                    <int>4</int>
+                                </entry>
+                            </dict>"""
+        )
+
+        chkGtvMerge(
+                """<dict><entry key="A"><int>1</int></entry><entry key="B"><int>2</int></entry></dict>""",
+                """<dict merge="keep-new"><entry key="B"><int>3</int></entry><entry key="C"><int>4</int></entry></dict>""",
+                """
+                            <dict>
+                                <entry key="A">
+                                    <int>1</int>
+                                </entry>
+                                <entry key="B">
+                                    <int>3</int>
+                                </entry>
+                                <entry key="C">
+                                    <int>4</int>
+                                </entry>
+                            </dict>"""
+        )
+    }
+
+    @Test(expected = IllegalStateException::class)
+    fun testGtvMergeDictStrict() {
+        chkGtvMerge(
+                """<dict><entry key="A"><int>1</int></entry><entry key="B"><int>2</int></entry></dict>""",
+                """<dict merge="strict"><entry key="B"><int>3</int></entry><entry key="C"><int>4</int></entry></dict>""",
+                ""
+        )
+    }
+
+    @Test fun testGtvMergeDictEntry() {
+        chkGtvMerge(
+                """<dict><entry key="A"><int>1</int></entry><entry key="B"><int>2</int></entry></dict>""",
+                """<dict><entry key="A"><int>3</int></entry><entry key="B"><int>4</int></entry></dict>""",
+                """
+                            <dict>
+                                <entry key="A">
+                                    <int>3</int>
+                                </entry>
+                                <entry key="B">
+                                    <int>4</int>
+                                </entry>
+                            </dict>"""
+        )
+
+        chkGtvMerge(
+                """<dict><entry key="A"><int>1</int></entry><entry key="B"><int>2</int></entry></dict>""",
+                """<dict><entry key="A" merge="keep-old"><int>3</int></entry><entry key="B"><int>4</int></entry></dict>""",
+                """
+                            <dict>
+                                <entry key="A">
+                                    <int>1</int>
+                                </entry>
+                                <entry key="B">
+                                    <int>4</int>
+                                </entry>
+                            </dict>"""
+        )
+
+        chkGtvMerge(
+                """<dict><entry key="A"><int>1</int></entry><entry key="B"><int>2</int></entry></dict>""",
+                """<dict><entry key="A" merge="keep-new"><int>3</int></entry><entry key="B"><int>4</int></entry></dict>""",
+                """
+                            <dict>
+                                <entry key="A">
+                                    <int>3</int>
+                                </entry>
+                                <entry key="B">
+                                    <int>4</int>
+                                </entry>
+                            </dict>"""
+        )
+
+        chkGtvMerge(
+                """<dict><entry key="A"><int>1</int></entry><entry key="B"><int>2</int></entry></dict>""",
+                """<dict merge="keep-old"><entry key="A" merge="keep-new"><int>3</int></entry><entry key="B"><int>4</int></entry></dict>""",
+                """
+                            <dict>
+                                <entry key="A">
+                                    <int>3</int>
+                                </entry>
+                                <entry key="B">
+                                    <int>2</int>
+                                </entry>
+                            </dict>"""
+        )
+    }
+
+    @Test(expected = IllegalStateException::class)
+    fun testGtvMergeDictEntryStrict() {
+        chkGtvMerge(
+                """<dict><entry key="A"><int>1</int></entry><entry key="B"><int>2</int></entry></dict>""",
+                """<dict><entry key="A" merge="strict"><int>3</int></entry><entry key="B"><int>4</int></entry></dict>""",
+                ""
+        )
+    }
+
+    private fun chkGtvMerge(gtv1: String, gtv2: String, expected: String) {
+        val files = generate(mapOf(), mapOf(), """
+            <run>
+                <nodes>
+                    <config add-signers="false">x=y</config>
+                </nodes>
+                <chains>
+                    <chain name="user" iid="33">
+                        <config height="0">
+                            <gtv path="foo/bar">$gtv1</gtv>
+                            <gtv path="foo/bar">$gtv2</gtv>
+                        </config>
+                    </chain>
+                </chains>
+            </run>
+        """)
+
+        chkFile(files, "blockchains/33/0.xml", """
+            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <dict>
+                <entry key="foo">
+                    <dict>
+                        <entry key="bar">$expected
+                        </entry>
+                    </dict>
+                </entry>
+                <entry key="signers">
+                    <array/>
+                </entry>
+            </dict>
+        """)
+    }
+
     private fun generate(
             sourceFiles: Map<String, String>,
             configFiles: Map<String, String>,

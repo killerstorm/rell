@@ -278,7 +278,7 @@ object RunConfigParser {
         val key = attrs.getNoBlank("key")
         attrs.checkNoMore()
 
-        val gtv = RunConfigGtvParser.parseNestedGtv(elem)
+        val gtv = RunConfigGtvParser.parseGtvRaw(elem)
         return Pair(key, gtv)
     }
 
@@ -297,7 +297,7 @@ object RunConfigParser {
 
         attrs.checkNoMore()
 
-        val gtv = if (gtvElem.elems.isEmpty()) null else RunConfigGtvParser.parseNestedGtv(gtvElem)
+        val gtv = if (gtvElem.elems.isEmpty()) null else RunConfigGtvParser.parseGtv(gtvElem)
 
         gtvElem.check(src != null || gtv != null) { "neither 'src' nor nested element specified" }
         gtvElem.check(src == null || gtv == null) { "both 'src' and nested element specified" }
