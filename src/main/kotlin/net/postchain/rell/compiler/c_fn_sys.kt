@@ -7,13 +7,13 @@ import net.postchain.rell.model.*
 abstract class C_FormalParamsFuncBody<CtxT: C_FuncCaseCtx>(val resType: R_Type) {
     abstract fun effectiveResType(caseCtx: CtxT, type: R_Type): R_Type
 
-    abstract fun makeCallTarget(caseCtx: CtxT): V_FunctionCallTarget
+    abstract fun makeCallTarget(ctx: C_ExprContext, caseCtx: CtxT): V_FunctionCallTarget
 
     fun compileCall(ctx: C_ExprContext, caseCtx: CtxT, args: List<V_Expr>): V_Expr {
         val pos = caseCtx.linkPos
         val effResType = effectiveResType(caseCtx, resType)
 
-        val callTarget = makeCallTarget(caseCtx)
+        val callTarget = makeCallTarget(ctx, caseCtx)
         val callArgs = V_FunctionCallArgs.positional(args)
 
         return V_FullFunctionCallExpr(ctx, pos, pos, effResType, callTarget, callArgs)
@@ -25,14 +25,14 @@ typealias C_MemberFormalParamsFuncBody = C_FormalParamsFuncBody<C_MemberFuncCase
 
 class C_SysGlobalFormalParamsFuncBody(
         resType: R_Type,
-        private val rFn: R_SysFunction,
-        private val dbFn: Db_SysFunction? = null,
+        private val cFn: C_SysFunction,
         private val pure: Boolean
 ): C_GlobalFormalParamsFuncBody(resType) {
     override fun effectiveResType(caseCtx: C_GlobalFuncCaseCtx, type: R_Type) = type
 
-    override fun makeCallTarget(caseCtx: C_GlobalFuncCaseCtx): V_FunctionCallTarget {
+    override fun makeCallTarget(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): V_FunctionCallTarget {
         val fullName = caseCtx.qualifiedNameMsg()
+        val (rFn, dbFn) = cFn.compileCall(ctx, caseCtx.linkPos)
         val desc = V_SysFunctionTargetDescriptor(resType, rFn, dbFn, fullName, pure)
         return V_FunctionCallTarget_SysGlobalFunction(desc)
     }
@@ -40,16 +40,16 @@ class C_SysGlobalFormalParamsFuncBody(
 
 class C_SysMemberFormalParamsFuncBody(
         resType: R_Type,
-        private val rFn: R_SysFunction,
-        private val dbFn: Db_SysFunction? = null,
+        private val cFn: C_SysFunction,
         private val pure: Boolean
 ): C_MemberFormalParamsFuncBody(resType) {
     override fun effectiveResType(caseCtx: C_MemberFuncCaseCtx, type: R_Type): R_Type {
         return C_Utils.effectiveMemberType(type, caseCtx.member.safe)
     }
 
-    override fun makeCallTarget(caseCtx: C_MemberFuncCaseCtx): V_FunctionCallTarget {
+    override fun makeCallTarget(ctx: C_ExprContext, caseCtx: C_MemberFuncCaseCtx): V_FunctionCallTarget {
         val fullName = caseCtx.qualifiedNameMsg()
+        val (rFn, dbFn) = cFn.compileCall(ctx, caseCtx.linkPos)
         val desc = V_SysFunctionTargetDescriptor(resType, rFn, dbFn, fullName, pure)
         return V_FunctionCallTarget_SysMemberFunction(desc, caseCtx.member)
     }
@@ -65,7 +65,7 @@ class C_PartialCallTarget_SysFunction<CtxT: C_FuncCaseCtx>(
     }
 
     override fun compileCall(ctx: C_ExprContext, args: C_EffectivePartialArguments): V_Expr {
-        val callTarget = body.makeCallTarget(caseCtx)
+        val callTarget = body.makeCallTarget(ctx, caseCtx)
         val fnType = R_FunctionType(args.wildArgs, body.resType)
         val effType = body.effectiveResType(caseCtx, fnType)
         val mapping = args.toRMapping()

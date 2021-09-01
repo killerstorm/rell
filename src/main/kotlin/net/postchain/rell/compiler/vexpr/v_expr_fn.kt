@@ -221,7 +221,7 @@ class V_FunctionCallTarget_FunctionValue(
 
 class V_SysFunctionTargetDescriptor(
         val resType: R_Type,
-        val fn: R_SysFunction,
+        val rFn: R_SysFunction,
         val dbFn: Db_SysFunction?,
         val fullName: String,
         val pure: Boolean,
@@ -247,7 +247,7 @@ class V_FunctionCallTarget_SysGlobalFunction(
         desc: V_SysFunctionTargetDescriptor
 ): V_FunctionCallTarget_SysFunction(desc) {
     override fun vExprs() = immListOf<V_Expr>()
-    override fun toRTarget(): R_FunctionCallTarget = R_FunctionCallTarget_SysGlobalFunction(desc.fn, desc.fullName)
+    override fun toRTarget(): R_FunctionCallTarget = R_FunctionCallTarget_SysGlobalFunction(desc.rFn, desc.fullName)
 
     override fun toDbExpr(pos: S_Pos, dbArgs: List<Db_Expr>): Db_Expr {
         if (desc.dbFn == null) {
@@ -264,7 +264,7 @@ class V_FunctionCallTarget_SysMemberFunction(
     override fun vExprs() = immListOf(member.base)
 
     override fun toRTarget(): R_FunctionCallTarget {
-        return R_FunctionCallTarget_SysMemberFunction(member.safe, desc.fn, desc.fullName)
+        return R_FunctionCallTarget_SysMemberFunction(member.safe, desc.rFn, desc.fullName)
     }
 
     override fun toDbExpr(pos: S_Pos, dbArgs: List<Db_Expr>): Db_Expr {

@@ -38,10 +38,10 @@ object C_Lib_OpContext {
     private val GET_ALL_OPERATIONS_RETURN_TYPE: R_Type = R_ListType(GTX_OPERATION_STRUCT.type)
 
     private val NAMESPACE_FNS = C_GlobalFuncBuilder(NAMESPACE_NAME)
-            .add("get_signers", GET_SIGNERS_RETURN_TYPE, listOf(), GetSigners)
-            .add("is_signer", R_BooleanType, listOf(R_ByteArrayType), IsSigner)
-            .add("get_all_operations", GET_ALL_OPERATIONS_RETURN_TYPE, listOf(), GetAllOperations)
-            .add("emit_event", R_UnitType, listOf(R_TextType, R_GtvType), EmitEvent)
+            .add("get_signers", GET_SIGNERS_RETURN_TYPE, listOf(), wrapFn(GetSigners))
+            .add("is_signer", R_BooleanType, listOf(R_ByteArrayType), wrapFn(IsSigner))
+            .add("get_all_operations", GET_ALL_OPERATIONS_RETURN_TYPE, listOf(), wrapFn(GetAllOperations))
+            .add("emit_event", R_UnitType, listOf(R_TextType, R_GtvType), wrapFn(EmitEvent))
             .build()
 
     val NAMESPACE = C_LibUtils.makeNs(
@@ -52,7 +52,7 @@ object C_Lib_OpContext {
             "op_index" to BaseNsValue(R_IntegerType, OpIndex)
     )
 
-    val FN_IS_SIGNER: R_SysFunction = IsSigner
+    val FN_IS_SIGNER: C_SysFunction = wrapFn(IsSigner)
 
     private val TRANSACTION_FN = "$NAMESPACE_NAME.transaction"
 
@@ -67,9 +67,20 @@ object C_Lib_OpContext {
     }
 
     private fun checkCtx(ctx: C_NamespaceValueContext, name: List<S_Name>) {
+        checkCtx(ctx.exprCtx, name[0].pos)
+    }
+
+    private fun checkCtx(ctx: C_ExprContext, pos: S_Pos) {
         val dt = ctx.defCtx.definitionType
         if (dt != C_DefinitionType.OPERATION && dt != C_DefinitionType.FUNCTION && dt != C_DefinitionType.ENTITY) {
-            ctx.msgCtx.error(name[0].pos, "op_ctx_noop", "Can access '$NAMESPACE_NAME' only in an operation, function or entity")
+            ctx.msgCtx.error(pos, "op_ctx_noop", "Can access '$NAMESPACE_NAME' only in an operation, function or entity")
+        }
+    }
+
+    private fun wrapFn(rFn: R_SysFunction): C_SysFunction {
+        val cFn = C_SysFunction.direct(rFn)
+        return C_SysFunction.validating(cFn) { ctx, pos ->
+            checkCtx(ctx, pos)
         }
     }
 

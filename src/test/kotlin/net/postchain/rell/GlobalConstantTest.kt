@@ -338,17 +338,17 @@ class GlobalConstantTest: BaseRellTest(false) {
         chkConstErr("op_context.transaction",
                 "ct_err:[def:const:bad_type:not_pure:0::X:transaction][def:const:bad_expr:0::X:fn:prop:op_context.transaction][op_ctx_noop]")
 
-        chkConstErr("op_context.is_signer(x'1234')", "ct_err:def:const:bad_expr:0::X:fn:sys:op_context.is_signer")
-        chkConstErr("is_signer(x'1234')", "ct_err:def:const:bad_expr:0::X:fn:sys:is_signer")
+        chkConstErr("op_context.is_signer(x'1234')", "ct_err:[def:const:bad_expr:0::X:fn:sys:op_context.is_signer][op_ctx_noop]")
+        chkConstErr("is_signer(x'1234')", "ct_err:[def:const:bad_expr:0::X:fn:sys:is_signer][op_ctx_noop]")
 
         chkConstErr("op_context.get_signers()",
-                "ct_err:[def:const:bad_type:mutable:0::X:list<byte_array>][def:const:bad_expr:0::X:fn:sys:op_context.get_signers]")
+                "ct_err:[def:const:bad_type:mutable:0::X:list<byte_array>][def:const:bad_expr:0::X:fn:sys:op_context.get_signers][op_ctx_noop]")
 
         chkConstErr("op_context.get_all_operations()",
-                "ct_err:[def:const:bad_type:mutable:0::X:list<gtx_operation>][def:const:bad_expr:0::X:fn:sys:op_context.get_all_operations]")
+                "ct_err:[def:const:bad_type:mutable:0::X:list<gtx_operation>][def:const:bad_expr:0::X:fn:sys:op_context.get_all_operations][op_ctx_noop]")
 
         chkConstErr("op_context.emit_event('', gtv.from_json('{}'))",
-                "ct_err:[type:def:const:unit:X][def:const:bad_expr:0::X:fn:sys:op_context.emit_event]")
+                "ct_err:[type:def:const:unit:X][def:const:bad_expr:0::X:fn:sys:op_context.emit_event][op_ctx_noop]")
     }
 
     @Test fun testExprStruct() {

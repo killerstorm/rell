@@ -225,19 +225,19 @@ class C_TupleVarDeclarator(
 
 class C_ForIterator(val itemType: R_Type, val rIterator: R_ForIterator) {
     companion object {
-        fun compile(ctx: C_ExprContext, exprType: R_Type, loop: Boolean): C_ForIterator? {
+        fun compile(ctx: C_ExprContext, exprType: R_Type, atExpr: Boolean): C_ForIterator? {
             return when (exprType) {
                 is R_CollectionType -> C_ForIterator(exprType.elementType, R_ForIterator_Collection)
                 is R_VirtualCollectionType -> C_ForIterator(
                         S_VirtualType.virtualMemberType(exprType.elementType()),
                         R_ForIterator_VirtualCollection
                 )
-                is R_MapType -> makeMapIterator(ctx, exprType.keyType, exprType.valueType, loop)
+                is R_MapType -> makeMapIterator(ctx, exprType.keyType, exprType.valueType, atExpr)
                 is R_VirtualMapType -> {
                     val mapType = exprType.innerType
                     val keyType = S_VirtualType.virtualMemberType(mapType.keyType)
                     val valueType = S_VirtualType.virtualMemberType(mapType.valueType)
-                    makeMapIterator(ctx, keyType, valueType, loop)
+                    makeMapIterator(ctx, keyType, valueType, atExpr)
                 }
                 is R_RangeType -> C_ForIterator(R_IntegerType, R_ForIterator_Range)
                 is R_CtErrorType -> C_ForIterator(exprType, R_ForIterator_Collection)
@@ -247,14 +247,19 @@ class C_ForIterator(val itemType: R_Type, val rIterator: R_ForIterator) {
 
         private val LANG_VER_UNNAMED_MAP_FIELDS = R_LangVersion.of("0.10.6")
 
-        private fun makeMapIterator(ctx: C_ExprContext, keyType: R_Type, valueType: R_Type, loop: Boolean): C_ForIterator {
+        private fun makeMapIterator(
+                ctx: C_ExprContext,
+                keyType: R_Type,
+                valueType: R_Type,
+                atExpr: Boolean
+        ): C_ForIterator {
             val opts = ctx.globalCtx.compilerOptions
 
-            val itemType = if (loop || opts.compatibility == null || opts.compatibility >= LANG_VER_UNNAMED_MAP_FIELDS) {
-                R_TupleType.create(keyType, valueType)
-            } else {
+            val itemType = if (atExpr && opts.compatibility != null && opts.compatibility < LANG_VER_UNNAMED_MAP_FIELDS) {
                 // Map element type used to be (k:K,v:V) for collection-at in 0.10.5 and earlier.
                 R_TupleType.createNamed("k" to keyType, "v" to valueType)
+            } else {
+                R_TupleType.create(keyType, valueType)
             }
 
             return C_ForIterator(itemType, R_ForIterator_Map(itemType))

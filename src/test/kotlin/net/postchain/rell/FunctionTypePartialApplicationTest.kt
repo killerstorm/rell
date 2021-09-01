@@ -225,7 +225,7 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
         chk("integer.from_hex(*)", "fn[integer.from_hex(*)]")
         chk("decimal.from_text(*)", "fn[decimal.from_text(*)]")
         chk("gtv.from_bytes(*)", "fn[gtv.from_bytes(*)]")
-        chk("op_context.is_signer(*)", "fn[op_context.is_signer(*)]")
+        chkFn("= op_context.is_signer(*);", "fn[op_context.is_signer(*)]")
 
         chk("list<integer>.from_gtv(*)", "fn[list<integer>.from_gtv(*)]")
         chk("set<integer>.from_gtv(*)", "fn[set<integer>.from_gtv(*)]")

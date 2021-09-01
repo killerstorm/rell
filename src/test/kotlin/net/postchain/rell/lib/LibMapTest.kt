@@ -34,6 +34,15 @@ class LibMapTest: BaseRellTest(false) {
         chk("map<integer,text>(['Bob':123,'Alice':456,'Trudy':789])", "ct_err:expr_map_key_typemiss:integer:text")
         chk("map<integer,integer>(['Bob':123,'Alice':456,'Trudy':789])", "ct_err:expr_map_key_typemiss:integer:text")
         chk("map<text,text>(['Bob':123,'Alice':456,'Trudy':789])", "ct_err:expr_map_value_typemiss:text:integer")
+
+        chk("map(range(5))", "ct_err:expr_map_badtype:range")
+        chk("map([('Bob',123),('Alice',456),('Trudy',789)])", exp)
+        chk("map([(x='Bob',y=123),(x='Alice',y=456),(x='Trudy',y=789)])", exp)
+        chk("map([('Bob',y=123),('Alice',y=456),('Trudy',y=789)])", exp)
+        chk("map([('Bob',123,true),('Alice',456,false)])", "ct_err:expr_map_badtype:list<(text,integer,boolean)>")
+
+        chk("map([('Bob',123),('Bob',456)])", "rt_err:map:new:iterator:dupkey:text[Bob]")
+        chk("map([('Bob',123),('Bob',123)])", "rt_err:map:new:iterator:dupkey:text[Bob]")
     }
 
     @Test fun testEmpty() {

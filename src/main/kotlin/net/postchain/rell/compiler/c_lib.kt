@@ -823,7 +823,8 @@ object C_SysFn_Require_Collection: C_GlobalSpecialFuncCase() {
 
 private object C_SysFn_Text_Format: C_MemberSpecialFuncCase() {
     override fun match(ctx: C_ExprContext, args: List<V_Expr>): C_MemberFuncCaseMatch {
-        val body = C_SysMemberFormalParamsFuncBody(R_TextType, R_SysFn_Text_Format, pure = true)
+        val cFn = C_SysFunction.direct(R_SysFn_Text_Format)
+        val body = C_SysMemberFormalParamsFuncBody(R_TextType, cFn, pure = true)
         return C_FormalParamsFuncCaseMatch(body, args)
     }
 }
@@ -872,7 +873,7 @@ private class C_SysFn_Object_ToStruct(
 private class C_SysFunction_Invalid(private val ownerType: R_Type): C_GlobalFormalParamsFuncBody(R_CtErrorType) {
     override fun effectiveResType(caseCtx: C_GlobalFuncCaseCtx, type: R_Type) = type
 
-    override fun makeCallTarget(caseCtx: C_GlobalFuncCaseCtx): V_FunctionCallTarget {
+    override fun makeCallTarget(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): V_FunctionCallTarget {
         val typeStr = ownerType.name
         val nameStr = caseCtx.simpleNameMsg()
         throw C_Error.stop(caseCtx.linkPos, "fn:invalid:$typeStr:$nameStr",
@@ -900,7 +901,8 @@ private fun globalFnFromGtv(type: R_Type, fn: R_SysFunction): C_GlobalFormalPara
     return if (!flags.gtv.fromGtv) {
         C_SysFunction_Invalid(type)
     } else {
-        C_SysGlobalFormalParamsFuncBody(type, fn, pure = flags.pure)
+        val cFn = C_SysFunction.direct(fn)
+        C_SysGlobalFormalParamsFuncBody(type, cFn, pure = flags.pure)
     }
 }
 

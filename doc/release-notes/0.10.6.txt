@@ -200,14 +200,40 @@ evaluated on application start.
 It is recommended to use upper-case naming for global constants, though lowercase letters are allowed too.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-4. Language: Collection-at supports same source expressions as for-loop
+4. Language: Iterable values
 
-In particular, it is possible to iterate over a range with collection-at
+Iterable value - a new concept for uniform sequences processing. The compiler has an internal type iterable<T>, which
+cannot be used explicitly in code, but different types can be used as iterable<T>:
 
-    val l = range(5) @* {};     // Returns list<integer>: [0, 1, 2, 3, 4]
+    range: iterable<integer>
+    list<T>: iterable<T>
+    set<T>: iterable<T>
+    map<K,V>: iterable<(K,V)>
 
-Additionally, the type of map item is now (K, V) for both for-loop and collection-at. In previous versions it used
-to be (K, V) for for-loop and (k:K, v:V) for collection-at.
+    virtual<list<T>>: iterable<T>
+    virtual<set<T>>: iterable<T>
+    virtual<map<K,V>>: iterable<(K,V)>
+
+Iterable values types can be used:
+
+    - in "for" statement: for (x in range(10)) { ... }
+    - in collection-at expression: [1,2,3] @* {} ( ... )
+    - in list/set/map constructor: set([1,2,3])
+
+Practical implication: "range" type can be used in collection-at and list/set/map constructor:
+
+    val squares = range(10) @* {} ( $ * $ );
+    val naturals = set(range(1, 10));
+
+For map<K,V> type, a new constructor accepting iterable<(K,V)> was added, which allows to turn a collection of tuples
+into a map:
+
+    val tuples = [(1,'A'), (2,'B'), (3,'C')];
+    val m = map(tuples);                        // "m" is map<integer,text>
+
+And a map can be turned into a list of tuples:
+
+    val l = list(m);                            // "l" is list<(integer,text)>
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 5. Language: null.to_gtv()

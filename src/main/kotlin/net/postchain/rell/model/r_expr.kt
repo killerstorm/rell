@@ -140,11 +140,11 @@ class R_MapLiteralExpr(type: R_MapType, private val entries: List<Pair<R_Expr, R
 }
 
 sealed class R_CollectionKind(val type: R_Type) {
-    abstract fun makeRtValue(col: Collection<Rt_Value>): Rt_Value
+    abstract fun makeRtValue(col: Iterable<Rt_Value>): Rt_Value
 }
 
 class R_CollectionKind_List(type: R_Type): R_CollectionKind(type) {
-    override fun makeRtValue(col: Collection<Rt_Value>): Rt_Value {
+    override fun makeRtValue(col: Iterable<Rt_Value>): Rt_Value {
         val list = mutableListOf<Rt_Value>()
         list.addAll(col)
         return Rt_ListValue(type, list)
@@ -152,29 +152,63 @@ class R_CollectionKind_List(type: R_Type): R_CollectionKind(type) {
 }
 
 class R_CollectionKind_Set(type: R_Type): R_CollectionKind(type) {
-    override fun makeRtValue(col: Collection<Rt_Value>): Rt_Value {
+    override fun makeRtValue(col: Iterable<Rt_Value>): Rt_Value {
         val set = mutableSetOf<Rt_Value>()
         set.addAll(col)
         return Rt_SetValue(type, set)
     }
 }
 
-class R_CollectionConstructorExpr(
-        private val kind: R_CollectionKind,
-        private val arg: R_Expr?
+class R_EmptyCollectionConstructorExpr(
+        private val kind: R_CollectionKind
 ): R_Expr(kind.type) {
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        val col = if (arg == null) immListOf<Rt_Value>() else arg.evaluate(frame).asCollection()
-        return kind.makeRtValue(col)
+        return kind.makeRtValue(immListOf())
     }
 }
 
-class R_MapConstructorExpr(type: R_Type, val arg: R_Expr?): R_Expr(type) {
+class R_CopyCollectionConstructorExpr(
+        private val kind: R_CollectionKind,
+        private val arg: R_Expr,
+        private val rIterator: R_ForIterator
+): R_Expr(kind.type) {
+    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
+        val value = arg.evaluate(frame)
+        val iterable = rIterator.list(value)
+        return kind.makeRtValue(iterable)
+    }
+}
+
+class R_EmptyMapConstructorExpr(type: R_Type): R_Expr(type) {
+    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
+        return Rt_MapValue(type, mutableMapOf())
+    }
+}
+
+class R_MapCopyMapConstructorExpr(type: R_Type, private val arg: R_Expr): R_Expr(type) {
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         val map = mutableMapOf<Rt_Value, Rt_Value>()
-        if (arg != null) {
-            val m = arg.evaluate(frame).asMap()
-            map.putAll(m)
+        val m = arg.evaluate(frame).asMap()
+        map.putAll(m)
+        return Rt_MapValue(type, map)
+    }
+}
+
+class R_IteratorCopyMapConstructorExpr(
+        type: R_Type,
+        private val arg: R_Expr,
+        private val rIterator: R_ForIterator
+): R_Expr(type) {
+    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
+        val map = mutableMapOf<Rt_Value, Rt_Value>()
+        val value = arg.evaluate(frame)
+        val iterable = rIterator.list(value)
+        for (item in iterable) {
+            val tuple = item.asTuple()
+            val k = tuple.get(0)
+            val v = tuple.get(1)
+            val v0 = map.put(k, v)
+            Rt_Utils.check(v0 == null) { "map:new:iterator:dupkey:${k.toStrictString()}" to "Duplicate key: $k" }
         }
         return Rt_MapValue(type, map)
     }

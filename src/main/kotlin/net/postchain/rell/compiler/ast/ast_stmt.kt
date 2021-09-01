@@ -454,7 +454,7 @@ class S_ForStatement(pos: S_Pos, val declarator: S_VarDeclarator, val expr: S_Ex
         val rExpr = loop.condExpr
         val exprType = rExpr.type
 
-        val cIterator = C_ForIterator.compile(ctx.exprCtx, exprType, true)
+        val cIterator = C_ForIterator.compile(ctx.exprCtx, exprType, false)
         if (cIterator == null) {
             ctx.msgCtx.error(expr.startPos, "stmt_for_expr_type:[${exprType.toStrictString()}]",
                     "Wrong type of for-expression: ${exprType.toStrictString()}")

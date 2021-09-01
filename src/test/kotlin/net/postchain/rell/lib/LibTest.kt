@@ -226,9 +226,9 @@ class LibTest: BaseRellTest(false) {
         chkCompile("function f() { GTXValue.from_bytes(x''); }", "ct_err:deprecated:NAMESPACE:GTXValue:gtv")
 
         chkWarn()
-        chk("is_signer(x'1234')", "boolean[false]")
+        chkFn("= is_signer(x'1234');", "boolean[false]")
         chkWarn("deprecated:FUNCTION:is_signer:op_context.is_signer")
-        chk("op_context.is_signer(x'1234')", "boolean[false]")
+        chkFn("= op_context.is_signer(x'1234');", "boolean[false]")
         chkWarn()
     }
 

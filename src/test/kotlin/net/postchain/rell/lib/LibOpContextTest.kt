@@ -113,37 +113,37 @@ class LibOpContextTest: BaseRellTest(false) {
     @Test fun testIsSigner() {
         tst.opContext = opContext(signers = listOf("1234", "abcd"))
 
-        chk("op_context.is_signer(x'1234')", "boolean[true]")
-        chk("op_context.is_signer(x'abcd')", "boolean[true]")
-        chk("op_context.is_signer(x'1234abcd')", "boolean[false]")
-        chk("op_context.is_signer(x'')", "boolean[false]")
+        chkFn("= op_context.is_signer(x'1234');", "boolean[true]")
+        chkFn("= op_context.is_signer(x'abcd');", "boolean[true]")
+        chkFn("= op_context.is_signer(x'1234abcd');", "boolean[false]")
+        chkFn("= op_context.is_signer(x'');", "boolean[false]")
 
-        chk("op_context.is_signer()", "ct_err:expr_call_argtypes:is_signer:")
-        chk("op_context.is_signer(123)", "ct_err:expr_call_argtypes:is_signer:integer")
-        chk("op_context.is_signer('1234')", "ct_err:expr_call_argtypes:is_signer:text")
-        chk("op_context.is_signer(x'12', x'34')", "ct_err:expr_call_argtypes:is_signer:byte_array,byte_array")
+        chkFn("= op_context.is_signer();", "ct_err:expr_call_argtypes:is_signer:")
+        chkFn("= op_context.is_signer(123);", "ct_err:expr_call_argtypes:is_signer:integer")
+        chkFn("= op_context.is_signer('1234');", "ct_err:expr_call_argtypes:is_signer:text")
+        chkFn("= op_context.is_signer(x'12', x'34');", "ct_err:expr_call_argtypes:is_signer:byte_array,byte_array")
     }
 
     @Test fun testIsSignerGlobalScope() {
         tst.opContext = opContext(signers = listOf("1234", "abcd"))
-        chk("is_signer(x'1234')", "boolean[true]")
-        chk("is_signer(x'abcd')", "boolean[true]")
-        chk("is_signer(x'beef')", "boolean[false]")
+        chkFn("= is_signer(x'1234');", "boolean[true]")
+        chkFn("= is_signer(x'abcd');", "boolean[true]")
+        chkFn("= is_signer(x'beef');", "boolean[false]")
     }
 
     @Test fun testGetSigners() {
         tst.opContext = opContext(signers = listOf("1234", "abcd"))
-        chk("_type_of(op_context.get_signers())", "text[list<byte_array>]")
-        chk("op_context.get_signers()", "list<byte_array>[byte_array[1234],byte_array[abcd]]")
+        chkFn("= _type_of(op_context.get_signers());", "text[list<byte_array>]")
+        chkFn("= op_context.get_signers();", "list<byte_array>[byte_array[1234],byte_array[abcd]]")
     }
 
     @Test fun testGetAllOperations() {
         tst.opContext = opContext(ops = listOf())
-        chk("_type_of(op_context.get_all_operations())", "text[list<gtx_operation>]")
-        chk("op_context.get_all_operations()", "list<gtx_operation>[]")
+        chkFn("= _type_of(op_context.get_all_operations());", "text[list<gtx_operation>]")
+        chkFn("= op_context.get_all_operations();", "list<gtx_operation>[]")
 
         tst.opContext = opContext(ops = listOf("""foo[123,"Bob"]""", """bar["Alice",456]"""))
-        chk("op_context.get_all_operations()",
+        chkFn("= op_context.get_all_operations();",
                 """list<gtx_operation>["""
                     + """gtx_operation[name=text[foo],args=list<gtv>[gtv[123],gtv["Bob"]]]"""
                     + ","
@@ -160,6 +160,14 @@ class LibOpContextTest: BaseRellTest(false) {
         chkOp("op_context.emit_event('bob', 'alice');", "ct_err:expr_call_argtypes:emit_event:text,text")
         chkOp("op_context.emit_event('bob', gtv.from_json('{}'), 123);", "ct_err:expr_call_argtypes:emit_event:text,gtv,integer")
         chkOp("op_context.emit_event('bob', gtv.from_json('{}'), 'alice');", "ct_err:expr_call_argtypes:emit_event:text,gtv,text")
+    }
+
+    @Test fun testCallFucntionsFromQuery() {
+        chk("op_context.get_signers()", "ct_err:op_ctx_noop")
+        chk("op_context.is_signer(x'1234')", "ct_err:op_ctx_noop")
+        chk("op_context.get_all_operations()", "ct_err:op_ctx_noop")
+        chk("op_context.emit_event('foo', null.to_gtv())", "ct_err:[query_exprtype_unit][op_ctx_noop]")
+        chk("is_signer(x'1234')", "ct_err:op_ctx_noop")
     }
 
     companion object {

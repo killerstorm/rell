@@ -17,6 +17,10 @@ class LibSetTest: BaseRellTest(false) {
         chk("set([123, 456, 789])", "set<integer>[int[123],int[456],int[789]]")
         chk("set([1, 2, 3, 2, 3, 4, 5])", "set<integer>[int[1],int[2],int[3],int[4],int[5]]")
         chk("set(list([123, 456, 789]))", "set<integer>[int[123],int[456],int[789]]")
+        chk("set(range(5))", "set<integer>[int[0],int[1],int[2],int[3],int[4]]")
+        chk("set([1:'A',2:'B'])", "set<(integer,text)>[(int[1],text[A]),(int[2],text[B])]")
+        chk("set<list<integer>>()", "ct_err:expr_set_type:list<integer>")
+        chk("set([[123]])", "ct_err:expr_set_type:list<integer>")
     }
 
     @Test fun testEmpty() {
