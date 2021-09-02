@@ -29,6 +29,8 @@ class LibListTest: BaseRellTest(false) {
         chk("list(set(['Hello']))", "list<text>[text[Hello]]")
         chk("list<integer>(set<text>())", "ct_err:expr_list_typemiss:integer:text")
         chk("list<integer>(set(['Hello']))", "ct_err:expr_list_typemiss:integer:text")
+        chk("list(range(5))", "list<integer>[int[0],int[1],int[2],int[3],int[4]]")
+        chk("list([1:'A',2:'B'])", "list<(integer,text)>[(int[1],text[A]),(int[2],text[B])]")
     }
 
     @Test fun testEmpty() {

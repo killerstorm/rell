@@ -187,14 +187,62 @@ abstract class AtExprGroupBaseTest: AtExprBaseTest() {
     @Test fun testNoGroup() {
         initDataCountries()
 
+        chk("_type_of($fromData @* {} ( @sum .gdp ))", "list<integer>")
+        chk("_type_of($fromData @* {} ( @min .gdp ))", "list<integer?>")
+        chk("_type_of($fromData @* {} ( @max .gdp ))", "list<integer?>")
+        chk("_type_of($fromData @* {} ( @min .gdp, @max .gdp ))", "list<(integer?,integer?)>")
+        chk("_type_of($fromData @* {} ( @sum .gdp, @min .gdp, @max .gdp ))", "list<(integer,integer?,integer?)>")
+
+        chk("_type_of($fromData @+ {} ( @sum .gdp ))", "list<integer>")
+        chk("_type_of($fromData @+ {} ( @min .gdp ))", "list<integer?>")
+        chk("_type_of($fromData @+ {} ( @max .gdp ))", "list<integer?>")
+        chk("_type_of($fromData @+ {} ( @min .gdp, @max .gdp ))", "list<(integer?,integer?)>")
+        chk("_type_of($fromData @+ {} ( @sum .gdp, @min .gdp, @max .gdp ))", "list<(integer,integer?,integer?)>")
+
+        chk("_type_of($fromData @ {} ( @sum .gdp ))", "integer")
+        chk("_type_of($fromData @ {} ( @min .gdp ))", "integer?")
+        chk("_type_of($fromData @ {} ( @max .gdp ))", "integer?")
+        chk("_type_of($fromData @ {} ( @min .gdp, @max .gdp ))", "(integer?,integer?)")
+        chk("_type_of($fromData @ {} ( @sum .gdp, @min .gdp, @max .gdp ))", "(integer,integer?,integer?)")
+
+        chk("_type_of($fromData @? {} ( @sum .gdp ))", "integer?")
+        chk("_type_of($fromData @? {} ( @min .gdp ))", "integer?")
+        chk("_type_of($fromData @? {} ( @max .gdp ))", "integer?")
+        chk("_type_of($fromData @? {} ( @min .gdp, @max .gdp ))", "(integer?,integer?)?")
+        chk("_type_of($fromData @? {} ( @sum .gdp, @min .gdp, @max .gdp ))", "(integer,integer?,integer?)?")
+
         chk("$fromData @* {} ( @sum 0 )", "[0]")
         chk("$fromData @* {} ( @sum 1 )", "[6]")
         chk("$fromData @* {} ( @sum .gdp )", "[43906]")
         chk("$fromData @* {} ( @min 0, @max 0 )", "[(0,0)]")
         chk("$fromData @* {} ( @min .gdp, @max .gdp )", "[(447,21439)]")
-
-        chk("$fromData @ {} ( @sum .gdp, @min .gdp, @max .gdp )", "(43906,447,21439)")
         chk("$fromData @* {} ( @sum .gdp, @min .gdp, @max .gdp )", "[(43906,447,21439)]")
+        chk("$fromData @* { .name == 'X' } ( @sum .gdp, @min .gdp, @max .gdp )", "[(0,null,null)]")
+
+        chk("$fromData @+ {} ( @sum 0 )", "[0]")
+        chk("$fromData @+ {} ( @sum 1 )", "[6]")
+        chk("$fromData @+ {} ( @sum .gdp )", "[43906]")
+        chk("$fromData @+ {} ( @min 0, @max 0 )", "[(0,0)]")
+        chk("$fromData @+ {} ( @min .gdp, @max .gdp )", "[(447,21439)]")
+        chk("$fromData @+ {} ( @sum .gdp, @min .gdp, @max .gdp )", "[(43906,447,21439)]")
+        chk("$fromData @+ { .name == 'X' } ( @sum .gdp, @min .gdp, @max .gdp )", "[(0,null,null)]")
+
+        chk("$fromData @ {} ( @sum 0 )", "0")
+        chk("$fromData @ {} ( @sum 1 )", "6")
+        chk("$fromData @ {} ( @sum .gdp )", "43906")
+        chk("$fromData @ {} ( @min 0, @max 0 )", "(0,0)")
+        chk("$fromData @ {} ( @min .gdp, @max .gdp )", "(447,21439)")
+        chk("$fromData @ {} ( @sum .gdp, @min .gdp, @max .gdp )", "(43906,447,21439)")
+        chk("$fromData @ { .name == 'X' } ( @sum .gdp, @min .gdp, @max .gdp )", "(0,null,null)")
+
+        chk("$fromData @? {} ( @sum 0 )", "0")
+        chk("$fromData @? {} ( @sum 1 )", "6")
+        chk("$fromData @? {} ( @sum .gdp )", "43906")
+        chk("$fromData @? {} ( @min 0, @max 0 )", "(0,0)")
+        chk("$fromData @? {} ( @min .gdp, @max .gdp )", "(447,21439)")
+        chk("$fromData @? {} ( @sum .gdp, @min .gdp, @max .gdp )", "(43906,447,21439)")
+        chk("$fromData @? { .name == 'X' } ( @sum .gdp, @min .gdp, @max .gdp )", "(0,null,null)")
+
         chk("$fromData @* {} ( @sort @group _=.region, @sum .gdp )", "[(AMER,22713), (APAC,14140), (EMEA,7053)]")
 
         chk("$fromData @* {} ( _=.name, @sum .gdp )", "ct_err:at:what:no_aggr:0")

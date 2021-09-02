@@ -26,7 +26,7 @@ class V_WhenChooserDetails(
 
     fun makeChooser(): R_WhenChooser {
         if (keyExpr == null) {
-            val keyExpr = R_ConstantExpr.makeBool(true)
+            val keyExpr = R_ConstantValueExpr.makeBool(true)
             val caseExprs = variableCases.map { IndexedValue(it.index, it.value.toRExpr()) }
             return R_IterativeWhenChooser(keyExpr, caseExprs, elseCase?.index)
         }
@@ -52,15 +52,12 @@ class V_WhenExpr(
         private val resType: R_Type,
         private val resVarFacts: C_ExprVarFacts
 ): V_Expr(exprCtx, pos) {
-    override val exprInfo: V_ExprInfo
-
-    init {
-        val exprs = listOfNotNull(chooserDetails.keyExpr) + chooserDetails.variableCases.map { it.value } + valueExprs
-        exprInfo = V_ExprInfo.make(exprs)
+    override fun exprInfo0(): V_ExprInfo {
+        val subExprs = listOfNotNull(chooserDetails.keyExpr) + chooserDetails.variableCases.map { it.value } + valueExprs
+        return V_ExprInfo.simple(resType, subExprs)
     }
 
-    override fun type() = resType
-    override fun varFacts() = resVarFacts
+    override fun varFacts0() = resVarFacts
 
     override fun toRExpr0(): R_Expr {
         val rChooser = chooserDetails.makeChooser()

@@ -132,6 +132,50 @@ class StructTest: BaseRellTest(false) {
         chkEx("{ val r: foo? = nop(null); r!!.x = 456; return r; }", "rt_err:null_value")
     }
 
+    @Test fun testConstructUnderAt() {
+        tstCtx.useSql = true
+        def("entity user { name; value: integer; } struct foo { x: integer; }")
+        chkOp("create user('Bob', 123); create user('Alice', 456);")
+        chk("user @ { .value == foo(x = 123).x }(.name)", "text[Bob]")
+        chk("user @ { .value == foo(x = 456).x }(.name)", "text[Alice]")
+    }
+
+    @Test fun testConstructEvaluationOrder() {
+        def("function f(v: text) { print(v); return v; }")
+        def("struct s { a: text = f('a0'); b: text; c: text = f('c0'); d: text; e: text = f('e0'); }")
+
+        chk("s(b = f('b'), d = f('d'))", "s[a=text[a0],b=text[b],c=text[c0],d=text[d],e=text[e0]]")
+        chkOut("b", "d", "a0", "c0", "e0")
+
+        chk("s(d = f('d'), b = f('b'))", "s[a=text[a0],b=text[b],c=text[c0],d=text[d],e=text[e0]]")
+        chkOut("d", "b", "a0", "c0", "e0")
+
+        chk("s(e = f('e'), b = f('b'), a = f('a'), d = f('d'))", "s[a=text[a],b=text[b],c=text[c0],d=text[d],e=text[e]]")
+        chkOut("e", "b", "a", "d", "c0")
+    }
+
+    @Test fun testConstructEvaluationOrderUnderAt() {
+        tstCtx.useSql = true
+        def("function f(v: text) { print(v); return v; }")
+        def("struct s { a: text = f('a0'); b: text; c: text = f('c0'); d: text; e: text = f('e0'); }")
+        def("entity data { a: text; b: text; c: text; d: text; e: text;  }")
+        insert("c0.data", "a,b,c,d,e", "100,'A','B','C','D','E'")
+
+        chk("data @ {} ( s(a = f(.a), b = f(.b), c = f(.c), d = f(.d), e = f(.e)) )",
+                "s[a=text[A],b=text[B],c=text[C],d=text[D],e=text[E]]")
+        chkOut("A", "B", "C", "D", "E")
+
+        chk("data @ {} ( s(b = f(.b), d = f(.d)) )", "s[a=text[a0],b=text[B],c=text[c0],d=text[D],e=text[e0]]")
+        chkOut("B", "D", "a0", "c0", "e0")
+
+        chk("data @ {} ( s(d = f(.d), b = f(.b)) )", "s[a=text[a0],b=text[B],c=text[c0],d=text[D],e=text[e0]]")
+        chkOut("D", "B", "a0", "c0", "e0")
+
+        chk("data @ {} ( s(e = f(.e), b = f(.b), a = f(.a), d = f(.d)) )",
+                "s[a=text[A],b=text[B],c=text[c0],d=text[D],e=text[E]]")
+        chkOut("E", "B", "A", "D", "c0")
+    }
+
     @Test fun testAttributeOfNullableStruct2() {
         def("struct foo { b: bar?; } struct bar { mutable x: integer; }")
         chkEx("{ val r: foo? = _nullable(foo(bar(123))); return r?.b?.x; }", "int[123]")
@@ -145,14 +189,6 @@ class StructTest: BaseRellTest(false) {
         chkEx("{ val r: foo? = _nullable(foo(bar(123))); r?.b?.x += 456; return r; }", "foo[b=bar[x=int[579]]]")
         chkEx("{ val r: foo? = _nullable(foo(null)); r?.b?.x += 456; return r; }", "foo[b=null]")
         chkEx("{ val r: foo? = null; r?.b?.x += 456; return r; }", "null")
-    }
-
-    @Test fun testConstructUnderAt() {
-        tstCtx.useSql = true
-        def("entity user { name; value: integer; } struct foo { x: integer; }")
-        chkOp("create user('Bob', 123); create user('Alice', 456);")
-        chk("user @ { .value == foo(x = 123).x }(.name)", "text[Bob]")
-        chk("user @ { .value == foo(x = 456).x }(.name)", "text[Alice]")
     }
 
     @Test fun testAccessUnderAt() {
@@ -320,12 +356,12 @@ class StructTest: BaseRellTest(false) {
 
         chkEx("""{ val l = ['Hello']; val f = foo(123, [bar(l, true)]);
                 l.add('Bye');
-                return f == foo(123, [bar(['Hello'], true)]); }""".trimIndent(),
+                return f == foo(123, [bar(['Hello'], true)]); }""",
                 "boolean[false]")
 
         chkEx("""{ val l = ['Hello']; val f = foo(123, [bar(l, true)]);
                 l.add('Bye');
-                return f == foo(123, [bar(['Hello', 'Bye'], true)]); }""".trimIndent(),
+                return f == foo(123, [bar(['Hello', 'Bye'], true)]); }""",
                 "boolean[true]")
     }
 
@@ -344,7 +380,7 @@ class StructTest: BaseRellTest(false) {
                 left = node(left = null, right = null, 123)
             );
             return p == q;
-        }""".trimIndent(), "boolean[true]")
+        }""", "boolean[true]")
 
         chkEx("""{
             val p = node(
@@ -358,7 +394,7 @@ class StructTest: BaseRellTest(false) {
                 left = node(left = null, right = null, 789)
             );
             return p == q;
-        }""".trimIndent(), "boolean[false]")
+        }""", "boolean[false]")
     }
 
     @Test fun testRefEq() {
@@ -416,8 +452,17 @@ class StructTest: BaseRellTest(false) {
                 val chain = list_to_chain([123, 456, 789]);
                 return chain_to_list(chain);
             }
-        """.trimIndent()
+        """
 
         chkFull(code, "list<integer>[int[123],int[456],int[789]]")
+    }
+
+    @Test fun testAttributeDefaultValueTypePromotion() {
+        def("struct s { x: decimal = 123; }")
+        chk("s()", "s[x=dec[123]]")
+        chk("s(456)", "ct_err:attr_implic_unknown:0:integer") // maybe not right
+        chk("s(x = 456)", "s[x=dec[456]]")
+        chk("s(456.0)", "s[x=dec[456]]")
+        chk("s(x = 456.0)", "s[x=dec[456]]")
     }
 }

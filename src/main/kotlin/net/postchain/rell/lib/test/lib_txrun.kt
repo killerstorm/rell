@@ -126,8 +126,8 @@ object UnitTestBlockRunner {
     }
 
     private fun getBlockchainContext(ctx: Rt_CallContext): BlockchainContext {
-        val bcRid = ctx.globalCtx.chainCtx.blockchainRid
-        val chainId = ctx.appCtx.sqlCtx.mainChainMapping.chainId
+        val bcRid = ctx.chainCtx.blockchainRid
+        val chainId = ctx.sqlCtx.mainChainMapping().chainId
         val nodeId = 0
         val nodeRid = "13".repeat(32).hexStringToByteArray()
         return BaseBlockchainContext(bcRid, nodeId, chainId, nodeRid)

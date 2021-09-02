@@ -5,10 +5,10 @@
 package net.postchain.rell.compiler
 
 import net.postchain.rell.compiler.ast.C_BinOp
+import net.postchain.rell.compiler.ast.S_CallArgument
 import net.postchain.rell.compiler.ast.S_Name
-import net.postchain.rell.compiler.ast.S_NameExprPair
 import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.compiler.vexpr.V_ConstantExpr
+import net.postchain.rell.compiler.vexpr.V_ConstantValueExpr
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_ObjectExpr
 import net.postchain.rell.model.*
@@ -224,7 +224,7 @@ class C_EntityAttrDestination(
 
         val lambdaBlkCtx = ctx.blkCtx.createSubContext("<$metaName:lambda>")
         val lambdaCtx = ctx.update(blkCtx = lambdaBlkCtx)
-        val baseVar = lambdaBlkCtx.newLocalVar("<$metaName:base>", base.type(), false, null)
+        val baseVar = lambdaBlkCtx.newLocalVar("<$metaName:base>", base.type, false, null)
         val srcVar = lambdaBlkCtx.newLocalVar("<$metaName:src>", srcExpr.type, false, null)
 
         val cLambdaB = C_LambdaBlock.builder(lambdaCtx, rEntity.type)
@@ -327,22 +327,18 @@ enum class C_ExprKind(val code: String) {
 abstract class C_Expr {
     abstract fun kind(): C_ExprKind
     abstract fun startPos(): S_Pos
+
     open fun value(): V_Expr = throw errNoValue()
+    open fun isCallable() = false
 
     open fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
         throw errNoValue()
     }
 
-    open fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_NameExprPair>): C_Expr {
-        args.forEach { it.expr.compileSafe(ctx) }
-
-        val type = value().type() // May fail with "not a value" - that's OK.
-        if (type == R_CtErrorType) {
-            return C_Utils.errorExpr(ctx, pos)
-        } else {
-            val typeStr = type.toStrictString()
-            throw C_Error.stop(pos, "expr_call_nofn:$typeStr", "Not a function: value of type $typeStr")
-        }
+    open fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_CallArgument>, resTypeHint: C_TypeHint): C_Expr {
+        val vExpr = value() // May fail with "not a value" - that's OK.
+        val vResExpr = vExpr.call(ctx, pos, args, resTypeHint)
+        return C_VExpr(vResExpr)
     }
 
     private fun errNoValue(): C_Error {
@@ -356,6 +352,7 @@ class C_VExpr(private val vExpr: V_Expr): C_Expr() {
     override fun kind() = C_ExprKind.VALUE
     override fun startPos() = vExpr.pos
     override fun value() = vExpr
+    override fun isCallable() = vExpr.type is R_FunctionType
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
         return vExpr.member(ctx, memberName, safe)
@@ -392,6 +389,7 @@ sealed class C_StructExpr(
 ): C_Expr() {
     final override fun kind() = C_ExprKind.STRUCT
     final override fun startPos() = startPos
+    final override fun isCallable() = true
 
     protected abstract val baseName: String
 
@@ -402,8 +400,9 @@ sealed class C_StructExpr(
         return fnExpr ?: throw C_Errors.errUnknownName(startPos, "$baseName.$memberName")
     }
 
-    final override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_NameExprPair>): C_Expr {
-        return C_StructGlobalFunction.compileCall(ctx, struct, startPos, args)
+    final override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_CallArgument>, resTypeHint: C_TypeHint): C_Expr {
+        val vExpr = C_StructGlobalFunction.compileCall(ctx, struct, startPos, args)
+        return C_VExpr(vExpr)
     }
 }
 
@@ -449,7 +448,7 @@ class C_EnumExpr(private val msgCtx: C_MessageContext, private val name: List<S_
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
         val valueExpr = memberValue(ctx, memberName)
-        val fnExpr = memberFn(memberName)
+        val fnExpr = memberFn(ctx, memberName)
         val expr = C_ValueFunctionExpr.create(memberName, valueExpr, fnExpr)
         return expr ?: throw C_Errors.errUnknownName(name, memberName)
     }
@@ -461,12 +460,12 @@ class C_EnumExpr(private val msgCtx: C_MessageContext, private val name: List<S_
         }
 
         val rValue = Rt_EnumValue(rEnum.type, attr)
-        val vExpr = V_ConstantExpr(ctx, startPos(), rValue)
+        val vExpr = V_ConstantValueExpr(ctx, startPos(), rValue)
         return C_VExpr(vExpr)
     }
 
-    private fun memberFn(memberName: S_Name): C_Expr? {
-        val fn = C_LibFunctions.getTypeStaticFunction(rEnum.type, memberName.str)
+    private fun memberFn(ctx: C_ExprContext, memberName: S_Name): C_Expr? {
+        val fn = ctx.globalCtx.libFunctions.getTypeStaticFunction(rEnum.type, memberName.str)
         return if (fn == null) null else {
             val fnRef = C_DefRef(msgCtx, name + memberName, C_DefProxy.create(fn))
             C_FunctionExpr(memberName, fnRef)
@@ -477,10 +476,12 @@ class C_EnumExpr(private val msgCtx: C_MessageContext, private val name: List<S_
 class C_FunctionExpr(private val name: S_Name, private val fnRef: C_DefRef<C_GlobalFunction>): C_Expr() {
     override fun kind() = C_ExprKind.FUNCTION
     override fun startPos() = name.pos
+    override fun isCallable() = true
 
-    override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_NameExprPair>): C_Expr {
+    override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_CallArgument>, resTypeHint: C_TypeHint): C_Expr {
         val fn = fnRef.getDef()
-        return fn.compileCall(ctx, name, args)
+        val vExpr = fn.compileCall(ctx, name, args, resTypeHint)
+        return C_VExpr(vExpr)
     }
 }
 
@@ -490,7 +491,7 @@ class C_TypeNameExpr(private val pos: S_Pos, private val typeRef: C_DefRef<R_Typ
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
         val type = typeRef.getDef()
-        val fn = C_LibFunctions.getTypeStaticFunction(type, memberName.str)
+        val fn = ctx.globalCtx.libFunctions.getTypeStaticFunction(type, memberName.str)
         if (fn == null) throw C_Errors.errUnknownName(type, memberName)
         val fnRef = typeRef.sub(memberName, C_DefProxy.create(fn))
         return C_FunctionExpr(memberName, fnRef)
@@ -502,7 +503,7 @@ class C_TypeExpr(private val pos: S_Pos, private val type: R_Type): C_Expr() {
     override fun startPos() = pos
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
-        val fn = C_LibFunctions.getTypeStaticFunction(type, memberName.str)
+        val fn = ctx.globalCtx.libFunctions.getTypeStaticFunction(type, memberName.str)
         if (fn == null) throw C_Errors.errUnknownName(type, memberName)
         val fnRef = C_DefRef(ctx.msgCtx, listOf(memberName), C_DefProxy.create(fn))
         return C_FunctionExpr(memberName, fnRef)
@@ -517,15 +518,19 @@ class C_ValueFunctionExpr private constructor(
     override fun kind() = C_ExprKind.VALUE
     override fun startPos() = name.pos
     override fun value() = valueExpr.value()
+    override fun isCallable() = true
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean) = valueExpr.member(ctx, memberName, safe)
-    override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_NameExprPair>) = fnExpr.call(ctx, pos, args)
+
+    override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_CallArgument>, resTypeHint: C_TypeHint): C_Expr {
+        return fnExpr.call(ctx, pos, args, resTypeHint)
+    }
 
     companion object {
         fun create(name: S_Name, valueExpr: C_Expr?, fnExpr: C_Expr?): C_Expr? {
-            if (valueExpr != null && fnExpr != null) {
-                return C_ValueFunctionExpr(name, valueExpr, fnExpr)
-            } else if (valueExpr != null) {
+            if (valueExpr != null && (valueExpr.isCallable() || fnExpr == null)) {
                 return valueExpr
+            } else if (valueExpr != null && fnExpr != null) {
+                return C_ValueFunctionExpr(name, valueExpr, fnExpr)
             } else {
                 return fnExpr
             }
@@ -543,5 +548,8 @@ class C_NamespaceValueExpr(
     override fun startPos() = name.last().pos
     override fun value() = expr().value()
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean) = expr().member(ctx, memberName, safe)
-    override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_NameExprPair>) = expr().call(ctx, pos, args)
+
+    override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_CallArgument>, resTypeHint: C_TypeHint): C_Expr {
+        return expr().call(ctx, pos, args, resTypeHint)
+    }
 }

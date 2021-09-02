@@ -42,12 +42,11 @@ class SqlGenContext private constructor(
     private val fromEntities = fromEntities.toImmList()
     private val aliasAllocator: SqlGenAliasAllocator = parent?.aliasAllocator ?: SqlGenAliasAllocator()
 
-    private val atExprId: R_AtExprId
+    private val atExprId = R_DbAtEntity.checkList(this.fromEntities)
     private val entityAliasMap = mutableMapOf<R_AtEntityId, EntityAliasTbl>()
     private val aliasTableMap = mutableMapOf<SqlTableAlias, EntityAliasTbl>()
 
     init {
-        atExprId = R_DbAtEntity.checkList(this.fromEntities)
         for (entity in this.fromEntities) {
             val alias = aliasAllocator.nextAlias(entity.rEntity, atExprId)
             val tbl = EntityAliasTbl(alias)

@@ -5,19 +5,24 @@
 package net.postchain.rell.compiler
 
 import com.google.common.math.IntMath
-import net.postchain.rell.compiler.ast.C_FormalParameters
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.ast.S_RellFile
 import net.postchain.rell.model.*
 import net.postchain.rell.utils.Getter
 import net.postchain.rell.utils.TypedKeyMap
 import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmMap
 import org.apache.commons.lang3.StringUtils
 
 data class C_VarUid(val id: Long, val name: String, val fn: R_FnUid)
 data class C_LoopUid(val id: Long, val fn: R_FnUid)
 
 class C_GlobalContext(val compilerOptions: C_CompilerOptions, val sourceDir: C_SourceDir) {
+    val libFunctions: C_LibFunctions by lazy {
+        C_LibFunctions(compilerOptions)
+    }
+
     companion object {
         private val appUidGen = C_UidGen { id, _ -> R_AppUid(id) }
         fun nextAppUid(): R_AppUid = synchronized(appUidGen) { appUidGen.next("") }
@@ -49,6 +54,10 @@ class C_MessageContext(val globalCtx: C_GlobalContext) {
         error(error.pos, error.code, error.msg)
     }
 
+    fun error(pos: S_Pos, codeMsg: C_CodeMsg) {
+        error(pos, codeMsg.code, codeMsg.msg)
+    }
+
     fun messages() = messages.toImmList()
 
     fun <T> consumeError(code: () -> T): T? {
@@ -61,6 +70,7 @@ class C_MessageContext(val globalCtx: C_GlobalContext) {
     }
 
     fun errorWatcher() = C_ErrorWatcher()
+    fun firstErrorReporter() = C_FirstErrorReporter(this)
 
     inner class C_ErrorWatcher {
         private var lastErrorCount = errorCount
@@ -72,67 +82,102 @@ class C_MessageContext(val globalCtx: C_GlobalContext) {
             return res
         }
     }
+
+    class C_FirstErrorReporter(private val msgCtx: C_MessageContext) {
+        private var reported = false
+
+        fun error(pos: S_Pos, code: String, msg: String) {
+            if (!reported) {
+                reported = true
+                msgCtx.error(pos, code, msg)
+            }
+        }
+
+        fun error(pos: S_Pos, codeMsg: C_CodeMsg) = error(pos, codeMsg.code, codeMsg.msg)
+    }
 }
 
-sealed class C_ModuleContext(val modMgr: C_ModuleManager) {
-    val appCtx = modMgr.appCtx
+class C_ModuleProvider(modules: Map<C_ModuleKey, C_Module>, preModules: Map<C_ModuleKey, C_PrecompiledModule>) {
+    private val modules = modules.toImmMap()
+    private val preModules = preModules.toImmMap()
+
+    fun getModule(name: R_ModuleName, extChain: C_ExternalChain?): C_ModuleDescriptor? {
+        val key = C_ModuleKey(name, extChain)
+        return preModules[key]?.descriptor ?: modules[key]?.descriptor
+    }
+}
+
+sealed class C_ModuleContext(
+        val appCtx: C_AppContext,
+        private val modProvider: C_ModuleProvider,
+        val moduleName: R_ModuleName,
+        val extChain: C_ExternalChain?
+) {
     val globalCtx = appCtx.globalCtx
     val msgCtx = appCtx.msgCtx
     val executor = appCtx.executor
 
-    abstract val moduleName: R_ModuleName
     abstract val containerKey: C_ContainerKey
     abstract val abstract: Boolean
     abstract val external: Boolean
     abstract val test: Boolean
     abstract val mountName: R_MountName
-    abstract val extChain: C_ExternalChain?
     abstract val sysDefs: C_SystemDefs
     abstract val repl: Boolean
 
     abstract val scopeBuilder: C_ScopeBuilder
 
+    val rModuleKey = R_ModuleKey(moduleName, extChain?.name)
+
     private val containerUid: R_ContainerUid by lazy { appCtx.nextContainerUid(containerKey.keyStr()) }
     private val fnUidGen = C_UidGen { id, name -> R_FnUid(id, name, containerUid) }
 
+    private val constFnUid: R_FnUid by lazy {
+        nextFnUid("<const>")
+    }
+
+    private val constUidGen: C_UidGen<C_VarUid> = let {
+        C_UidGen { id, name -> C_VarUid(id, name, constFnUid) }
+    }
+
     fun nextFnUid(name: String) = fnUidGen.next(name)
+    fun nextConstVarUid(name: String) = constUidGen.next(name)
+
+    fun isTestLib(): Boolean = test || repl || globalCtx.compilerOptions.testLib
+
+    fun getModule(name: R_ModuleName, extChain: C_ExternalChain?): C_ModuleDescriptor? {
+        return modProvider.getModule(name, extChain)
+    }
 
     abstract fun createFileNsAssembler(): C_NsAsm_ComponentAssembler
     abstract fun getModuleDefs(): C_ModuleDefs
     abstract fun getModuleArgsStruct(): R_Struct?
-
-    fun isTestLib(): Boolean = test || repl || globalCtx.compilerOptions.testLib
 }
 
 class C_RegularModuleContext(
-        modMgr: C_ModuleManager,
+        appCtx: C_AppContext,
+        modProvider: C_ModuleProvider,
         private val module: C_Module
-): C_ModuleContext(modMgr) {
+): C_ModuleContext(appCtx, modProvider, module.descriptor.name, module.descriptor.extChain) {
     private val descriptor = module.descriptor
 
-    override val moduleName = descriptor.name
     override val containerKey = descriptor.containerKey
     override val abstract = descriptor.header.abstract
     override val external = descriptor.header.external
     override val test = descriptor.header.test
     override val mountName = descriptor.header.mountName
-    override val extChain = descriptor.extChain
     override val sysDefs = extChain?.sysDefs ?: appCtx.sysDefs
     override val repl = false
 
     private val nsAssembler = appCtx.createModuleNsAssembler(descriptor.key, sysDefs, external)
-    private val defsGetter: C_LateGetter<C_ModuleDefs>
-    override val scopeBuilder: C_ScopeBuilder
+    private val defsGetter = nsAssembler.futureDefs()
 
-    init {
-        val rootScopeBuilder = C_ScopeBuilder(msgCtx)
-
+    override val scopeBuilder: C_ScopeBuilder = let {
         val sysNs = if (isTestLib()) sysDefs.testNs else sysDefs.appNs
+        val rootScopeBuilder = C_ScopeBuilder(msgCtx)
         val sysScopeBuilder = rootScopeBuilder.nested { sysNs }
-
         val nsGetter = nsAssembler.futureNs()
-        defsGetter = nsAssembler.futureDefs()
-        scopeBuilder = sysScopeBuilder.nested(nsGetter)
+        sysScopeBuilder.nested(nsGetter)
     }
 
     override fun createFileNsAssembler() = nsAssembler.addComponent()
@@ -148,28 +193,24 @@ class C_RegularModuleContext(
 
 class C_ReplModuleContext(
         appCtx: C_AppContext,
-        modMgr: C_ModuleManager,
+        modProvider: C_ModuleProvider,
         moduleName: R_ModuleName,
         replNsGetter: Getter<C_Namespace>,
         componentNsGetter: Getter<C_Namespace>
-): C_ModuleContext(modMgr) {
-    override val moduleName = moduleName
+): C_ModuleContext(appCtx, modProvider, moduleName, null) {
     override val containerKey = C_ReplContainerKey
     override val abstract = false
     override val external = false
     override val test = false
     override val mountName = R_MountName.EMPTY
-    override val extChain = null
     override val sysDefs = appCtx.sysDefs
     override val repl = true
 
-    override val scopeBuilder: C_ScopeBuilder
-
-    init {
+    override val scopeBuilder: C_ScopeBuilder = let {
         var builder = C_ScopeBuilder(msgCtx)
         builder = builder.nested { sysDefs.testNs }
         builder = builder.nested(replNsGetter)
-        scopeBuilder = builder.nested(componentNsGetter)
+        builder.nested(componentNsGetter)
     }
 
     override fun createFileNsAssembler() = throw UnsupportedOperationException()
@@ -186,6 +227,12 @@ class C_FileContext(val modCtx: C_ModuleContext) {
     private val imports = C_ListBuilder<C_ImportDescriptor>()
     private val abstracts = C_ListBuilder<C_AbstractDescriptor>()
     private val overrides = C_ListBuilder<C_OverrideDescriptor>()
+
+    fun createMountContext(): C_MountContext {
+        val mountName = modCtx.mountName
+        val nsAssembler = modCtx.createFileNsAssembler()
+        return S_RellFile.createMountContext(this, mountName, nsAssembler)
+    }
 
     fun addImport(d: C_ImportDescriptor) {
         executor.checkPass(C_CompilerPass.DEFINITIONS)
@@ -311,13 +358,13 @@ class C_MountContext(
     }
 
     fun mountName(modTarget: C_ModifierTarget, simpleName: S_Name): R_MountName {
-        return mountName(modTarget, listOf(simpleName))
+        val mountAnn = modTarget.mount?.get()
+        return mountName(mountAnn, listOf(simpleName))
     }
 
-    fun mountName(modTarget: C_ModifierTarget, fullName: List<S_Name>): R_MountName {
-        val explicit = modTarget.mount?.get()
-        if (explicit != null) {
-            return explicit
+    fun mountName(mountAnn: C_MountAnnotation?, fullName: List<S_Name>): R_MountName {
+        if (mountAnn != null) {
+            return mountAnn.calculateMountName(msgCtx, mountName)
         }
 
         val path = mountName.parts + fullName.map { it.rName }
@@ -332,6 +379,7 @@ enum class C_DefinitionType {
     QUERY,
     OPERATION,
     FUNCTION,
+    CONSTANT,
     REPL,
     ;
 
@@ -346,22 +394,19 @@ class C_DefinitionContext(val mntCtx: C_MountContext, val definitionType: C_Defi
     val globalCtx = modCtx.globalCtx
     val executor = modCtx.executor
 
-    val initExprCtx: C_ExprContext
-
-    private val initFrameCtx: C_FrameContext
-
     private val initFrameLate = C_LateInit(C_CompilerPass.FRAMES, R_CallFrame.ERROR)
     val initFrameGetter = initFrameLate.getter
 
-    init {
+    val initExprCtx: C_ExprContext = let {
         val fnCtx = C_FunctionContext(this, "${mntCtx.mountName}.<init>", null, TypedKeyMap())
-        initFrameCtx = C_FrameContext.create(fnCtx)
-        initExprCtx = C_ExprContext.createRoot(initFrameCtx.rootBlkCtx)
+        val initFrameCtx = C_FrameContext.create(fnCtx)
 
         executor.onPass(C_CompilerPass.FRAMES) {
             val cFrame = initFrameCtx.makeCallFrame(false)
             initFrameLate.set(cFrame.rFrame)
         }
+
+        C_ExprContext.createRoot(initFrameCtx.rootBlkCtx)
     }
 
     fun getDbModificationRestriction(): C_CodeMsg? {
@@ -412,15 +457,15 @@ class C_FunctionContext(
     fun nextVarUid(name: String) = varUidGen.next(name)
     fun nextLoopUid() = loopUidGen.next("")
 
-    fun matchReturnType(pos: S_Pos, type: R_Type) {
-        retTypeTracker.match(pos, type)
+    fun matchReturnType(pos: S_Pos, type: R_Type): C_TypeAdapter {
+        return retTypeTracker.match(pos, type)
     }
 
     fun actualReturnType(): R_Type = retTypeTracker.getRetType()
 
     private sealed class RetTypeTracker {
         abstract fun getRetType(): R_Type
-        abstract fun match(pos: S_Pos, type: R_Type)
+        abstract fun match(pos: S_Pos, type: R_Type): C_TypeAdapter
 
         class Implicit: RetTypeTracker() {
             private var impType: R_Type? = null
@@ -433,7 +478,7 @@ class C_FunctionContext(
                 return res
             }
 
-            override fun match(pos: S_Pos, type: R_Type) {
+            override fun match(pos: S_Pos, type: R_Type): C_TypeAdapter  {
                 val t = impType
                 if (t == null || t.isError()) {
                     impType = type
@@ -450,18 +495,24 @@ class C_FunctionContext(
                     }
                     impType = comType
                 }
+                return C_TypeAdapter_Direct
             }
         }
 
         class Explicit(val expType: R_Type): RetTypeTracker() {
             override fun getRetType() = expType
 
-            override fun match(pos: S_Pos, type: R_Type) {
-                if (type.isNotError() && expType.isNotError()) {
-                    val m = if (expType == R_UnitType) type == R_UnitType else expType.isAssignableFrom(type)
-                    if (!m) {
+            override fun match(pos: S_Pos, type: R_Type): C_TypeAdapter  {
+                return if (type.isError() || expType.isError()) C_TypeAdapter_Direct else {
+                    val m = if (expType == R_UnitType) {
+                        if (type == R_UnitType) C_TypeAdapter_Direct else null
+                    } else {
+                        expType.getTypeAdapter(type)
+                    }
+                    if (m == null) {
                         throw errRetTypeMiss(pos, expType, type)
                     }
+                    m ?: C_TypeAdapter_Direct
                 }
             }
         }

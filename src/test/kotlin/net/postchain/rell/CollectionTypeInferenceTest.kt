@@ -4,7 +4,7 @@ import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 
 class CollectionTypeInferenceTest: BaseRellTest(false) {
-    @Test fun testLocalVariables() {
+    @Test fun testLocalVariableAssignment() {
         chkEx("{ val x: list<integer>; x = []; return x; }", "list<integer>[]")
         chkEx("{ val x: list<integer>; x = list(); return x; }", "list<integer>[]")
         chkEx("{ var x: list<integer>; x = []; return x; }", "list<integer>[]")
@@ -17,6 +17,38 @@ class CollectionTypeInferenceTest: BaseRellTest(false) {
         chkEx("{ val x: map<integer,text>; x = map(); return x; }", "map<integer,text>[]")
         chkEx("{ var x: map<integer,text>; x = [:]; return x; }", "map<integer,text>[]")
         chkEx("{ var x: map<integer,text>; x = map(); return x; }", "map<integer,text>[]")
+    }
+
+    @Test fun testLocalVariableInitialization() {
+        chkEx("{ val x: list<integer> = []; return x; }", "list<integer>[]")
+        chkEx("{ val x: list<integer> = list(); return x; }", "list<integer>[]")
+        chkEx("{ var x: list<integer> = []; return x; }", "list<integer>[]")
+        chkEx("{ var x: list<integer> = list(); return x; }", "list<integer>[]")
+
+        chkEx("{ val x: set<integer> = set(); return x; }", "set<integer>[]")
+        chkEx("{ var x: set<integer> = set(); return x; }", "set<integer>[]")
+
+        chkEx("{ val x: map<integer,text> = [:]; return x; }", "map<integer,text>[]")
+        chkEx("{ val x: map<integer,text> = map(); return x; }", "map<integer,text>[]")
+        chkEx("{ var x: map<integer,text> = [:]; return x; }", "map<integer,text>[]")
+        chkEx("{ var x: map<integer,text> = map(); return x; }", "map<integer,text>[]")
+    }
+
+    @Test fun testLocalVariableInitializationComplex() {
+        chkEx("{ val (x: list<integer>, y: set<text>) = ([], set()); return x; }", "list<integer>[]")
+        chkEx("{ val (x: list<integer>, y: set<text>) = ([], set()); return y; }", "set<text>[]")
+
+        chkEx("{ val (x: list<integer>, y) = ([], 0); return x; }", "list<integer>[]")
+        chkEx("{ val (x, y: set<text>) = (0, set()); return y; }", "set<text>[]")
+
+        val init = "val (x: list<integer>, (y: set<text>, z: map<decimal,boolean>)) = ([], (set(), [:]));"
+        chkEx("{ $init return x; }", "list<integer>[]")
+        chkEx("{ $init return y; }", "set<text>[]")
+        chkEx("{ $init return z; }", "map<decimal,boolean>[]")
+
+        chkEx("{ val (x: list<integer>, (y, z)) = ([], (0, 1)); return x; }", "list<integer>[]")
+        chkEx("{ val (x, (y: set<text>, z)) = (0, (set(), 1)); return y; }", "set<text>[]")
+        chkEx("{ val (x, (y, z: map<decimal,boolean>)) = (0, (1, [:])); return z; }", "map<decimal,boolean>[]")
     }
 
     @Test fun testStructInitializers() {

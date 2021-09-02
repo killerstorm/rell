@@ -5,6 +5,7 @@
 package net.postchain.rell.model
 
 import net.postchain.rell.runtime.*
+import net.postchain.rell.utils.checkEquals
 
 enum class R_AtCardinality(val zero: Boolean, val many: Boolean) {
     ZERO_ONE(true, false),
@@ -42,7 +43,7 @@ sealed class R_AtExprRowDecoder {
 
 object R_AtExprRowDecoder_Simple: R_AtExprRowDecoder() {
     override fun decode(row: List<Rt_Value>): Rt_Value {
-        check(row.size == 1) { "row.size == ${row.size}" }
+        checkEquals(row.size, 1)
         return row[0]
     }
 }

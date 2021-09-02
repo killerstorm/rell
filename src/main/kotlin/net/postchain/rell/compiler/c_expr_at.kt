@@ -3,8 +3,9 @@ package net.postchain.rell.compiler
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_PosValue
+import net.postchain.rell.compiler.vexpr.V_ColAtFrom
+import net.postchain.rell.compiler.vexpr.V_DbAtWhat
 import net.postchain.rell.compiler.vexpr.V_Expr
-import net.postchain.rell.compiler.vexpr.V_Utils
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.toImmList
@@ -29,7 +30,7 @@ abstract class C_AtFrom(
     val innerAtCtx = C_AtContext(fromCtx.parentAtCtx, atExprId, this is C_AtFrom_Entities)
 
     abstract fun innerExprCtx(): C_ExprContext
-    abstract fun makeDefaultWhat(): C_AtWhat
+    abstract fun makeDefaultWhat(): V_DbAtWhat
     abstract fun findAttributesByName(name: String): List<C_AtFromContextAttr>
     abstract fun findAttributesByType(type: R_Type): List<C_AtFromContextAttr>
 
@@ -40,69 +41,19 @@ sealed class C_AtFromItem(val pos: S_Pos)
 
 class C_AtFromItem_Entity(pos: S_Pos, val alias: S_Name, val entity: R_EntityDefinition): C_AtFromItem(pos)
 
-sealed class C_AtFromItem_Iterable(pos: S_Pos, val vExpr: V_Expr, val elemType: R_Type): C_AtFromItem(pos) {
-    protected abstract fun compile0(rExpr: R_Expr): R_ColAtFrom
-
-    fun compile(): R_ColAtFrom {
-        val rExpr = vExpr.toRExpr()
-        return compile0(rExpr)
+class C_AtFromItem_Iterable(
+        pos: S_Pos,
+        val vExpr: V_Expr,
+        val elemType: R_Type,
+        val rIterator: R_ForIterator
+): C_AtFromItem(pos) {
+    fun compile(): V_ColAtFrom {
+        return V_ColAtFrom(rIterator, vExpr)
     }
-}
-
-class C_AtFromItem_Collection(pos: S_Pos, vExpr: V_Expr, elemType: R_Type): C_AtFromItem_Iterable(pos, vExpr, elemType) {
-    override fun compile0(rExpr: R_Expr): R_ColAtFrom = R_ColAtFrom_Collection(rExpr)
-}
-
-class C_AtFromItem_Map(pos: S_Pos, vExpr: V_Expr, private val tupleType: R_TupleType)
-    : C_AtFromItem_Iterable(pos, vExpr, tupleType)
-{
-    override fun compile0(rExpr: R_Expr): R_ColAtFrom = R_ColAtFrom_Map(rExpr, tupleType)
-}
-
-class C_AtWhatFieldFlags(
-        val omit: Boolean,
-        val sort: S_PosValue<R_AtWhatSort>?,
-        val group: S_Pos?,
-        val aggregate: S_Pos?
-) {
-    fun compile() = R_AtWhatFieldFlags(omit = omit, sort = sort?.value, group = group != null, aggregate = aggregate != null)
-
-    companion object {
-        val DEFAULT = C_AtWhatFieldFlags(omit = false, sort = null, group = null, aggregate = null)
-    }
-}
-
-class C_AtWhatField(
-        val name: String?,
-        val resultType: R_Type,
-        val expr: V_Expr,
-        val flags: C_AtWhatFieldFlags,
-        val summarization: C_AtSummarization?
-) {
-    fun isIgnored() = flags.omit && flags.sort == null && summarization == null
-
-    fun compile(ctx: C_ExprContext): Db_AtWhatField {
-        val cWhatValue = if (expr.isDb() || V_Utils.hasWhatModifiers(this)) {
-            expr.toDbExprWhat()
-        } else {
-            val rExpr = expr.toRExpr()
-            val dbWhatValue = Db_AtWhatValue_RExpr(rExpr)
-            C_DbAtWhatValue_Other(dbWhatValue)
-        }
-
-        val dbWhatValue = cWhatValue.toDbWhatTop(ctx.appCtx, this)
-        val rFlags = flags.compile()
-        return Db_AtWhatField(rFlags, dbWhatValue)
-    }
-}
-
-class C_AtWhat(allFields: List<C_AtWhatField>) {
-    val allFields = allFields.toImmList()
-    val materialFields = allFields.filter { !it.isIgnored() }
 }
 
 class C_AtExprBase(
-        val what: C_AtWhat,
+        val what: V_DbAtWhat,
         val where: V_Expr?
 )
 
@@ -132,8 +83,7 @@ class C_AtExprResult(
 
 class C_AtDetails(
         val startPos: S_Pos,
-        val cardinalityPos: S_Pos,
-        val cardinality: R_AtCardinality,
+        val cardinality: S_PosValue<R_AtCardinality>,
         val base: C_AtExprBase,
         val limit: V_Expr?,
         val offset: V_Expr?,

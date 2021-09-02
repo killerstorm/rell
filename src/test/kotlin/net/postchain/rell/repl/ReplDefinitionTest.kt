@@ -121,6 +121,20 @@ class ReplDefinitionTest: BaseRellTest(false) {
         repl.chk("import q;")
     }
 
+    @Test fun testImportParent() {
+        file("foo/module.rell", "module;")
+        file("foo/bar/module.rell", "module;")
+        repl.chk("import foo;")
+        repl.chk("import foo.bar;")
+    }
+
+    @Test fun testImportParentIsTest() {
+        file("foo/module.rell", "@test module;")
+        file("foo/bar/module.rell", "module;")
+        repl.chk("import foo;")
+        repl.chk("import foo.bar;", "CTE:foo/bar/module.rell:module:parent_is_test:foo.bar:foo")
+    }
+
     @Test fun testFunctionsComplex() {
         repl.chk("f(123)", "CTE:<console>:unknown_name:f")
         repl.chk("function f(x: integer): integer = x * x;")
@@ -190,14 +204,23 @@ class ReplDefinitionTest: BaseRellTest(false) {
     @Test fun testMountConflict() {
         file("u.rell", "module; entity user { name; }")
         file("c.rell", "module; entity company { name; }")
+        file("op.rell", "module; operation op1() {}")
         tstCtx.useSql = true
+
         repl.chk("import u;")
         repl.chk("entity user { name; };",
                 "CTE:<console>:def_repl:ENTITY",
                 "CTE:<console>:mnt_conflict:user:[user]:user:ENTITY:[u:user]:u.rell(1:16)"
         )
+
         repl.chk("entity company { name; }", "CTE:<console>:def_repl:ENTITY")
         repl.chk("import c;")
+
+        repl.chk("import op;")
+        repl.chk("operation op1() {}",
+                "CTE:<console>:def_repl:OPERATION",
+                "CTE:<console>:mnt_conflict:user:[op1]:op1:OPERATION:[op:op1]:op.rell(1:19)"
+        )
     }
 
     @Test fun testMountConflict2() {
@@ -290,5 +313,27 @@ class ReplDefinitionTest: BaseRellTest(false) {
         tst.replModule = "lib"
         repl.chk("123", "RES:int[123]")
         repl.chk("f()", "RTE:chain_context.args:no_module_args:lib")
+    }
+
+    @Test fun testImportConstants() {
+        file("a.rell", "module; val X = _nop_print(123);")
+        file("b.rell", "module; val Y = _nop_print(456);")
+        file("c.rell", "module; val Z = _nop_print(789);")
+
+        repl.chk("import a;", "OUT:123")
+        repl.chk("a.X", "RES:int[123]")
+
+        repl.chk("import b;", "OUT:456")
+        repl.chk("b.Y", "RES:int[456]")
+
+        repl.chk("import c;", "OUT:789")
+        repl.chk("c.Z", "RES:int[789]")
+
+        repl.chk("a.X", "RES:int[123]")
+        repl.chk("b.Y", "RES:int[456]")
+        repl.chk("c.Z", "RES:int[789]")
+
+        repl.chk("import t: a;")
+        repl.chk("t.X", "RES:int[123]")
     }
 }

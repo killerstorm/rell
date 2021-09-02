@@ -332,9 +332,9 @@ class LibGtvTest: BaseRellTest(false) {
         def("struct no_gtv { r: range; }")
 
         chk("rec(123,'Hello').to_gtv()", """gtv[[123,"Hello"]]""")
-        chk("no_gtv(range(10)).to_gtv()", "ct_err:fn:invalid:no_gtv:no_gtv.to_gtv")
+        chk("no_gtv(range(10)).to_gtv()", "ct_err:fn:invalid:no_gtv:to_gtv")
         chk("rec(123,'Hello').to_gtv_pretty()", """gtv[{"x":123,"y":"Hello"}]""")
-        chk("no_gtv(range(10)).to_gtv_pretty()", "ct_err:fn:invalid:no_gtv:no_gtv.to_gtv_pretty")
+        chk("no_gtv(range(10)).to_gtv_pretty()", "ct_err:fn:invalid:no_gtv:to_gtv_pretty")
 
         chkFromGtv("[123,'Hello']", "rec.from_gtv(g)", "rec[x=int[123],y=text[Hello]]")
         chkFromGtv("[]", "rec.from_gtv(g)", "gtv_err:struct_size:rec:2:0")
@@ -373,6 +373,12 @@ class LibGtvTest: BaseRellTest(false) {
 
         chk("state.to_gtv()", "ct_err:unknown_member:[state]:to_gtv")
         chk("state.to_gtv_pretty()", "ct_err:unknown_member:[state]:to_gtv_pretty")
+    }
+
+    @Test fun testToGtvNull() {
+        chk("null.to_gtv()", "gtv[null]")
+        chk("null.to_gtv_prety()", "ct_err:unknown_member:[null]:to_gtv_prety")
+        chk("integer.from_gtv(null.to_gtv())", "rt_err:from_gtv")
     }
 
     private fun chkFromGtv(gtv: String, expr: String, expected: String) = chkFromGtv(tst, gtv, expr, expected)

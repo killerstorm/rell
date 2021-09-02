@@ -4,7 +4,6 @@
 
 package net.postchain.rell.tools.api
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import net.postchain.rell.RellConfigGen
 import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.ast.S_RellFile
@@ -14,34 +13,39 @@ import net.postchain.rell.runtime.Rt_RellVersion
 import net.postchain.rell.runtime.Rt_RellVersionProperty
 import net.postchain.rell.utils.RellCliEnv
 import net.postchain.rell.utils.toImmList
-import net.postchain.rell.utils.toImmMap
 import org.apache.commons.configuration2.PropertiesConfiguration
 import org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder
 import org.apache.commons.configuration2.builder.fluent.Parameters
 import org.apache.commons.configuration2.convert.DefaultListDelimiterHandler
 import java.io.File
 
+class IdeModuleInfo(
+        @JvmField val name: R_ModuleName,
+        @JvmField val directory: Boolean
+)
+
 @Suppress("UNUSED")
 object IdeApi {
     const val RELL_VERSION = RellVersions.VERSION_STR
-
-    @JvmStatic fun parseSourcePath(s: String): C_SourcePath? {
-        return C_SourcePath.parseOpt(s)
-    }
 
     @JvmStatic fun parseModuleName(s: String): R_ModuleName? {
         return R_ModuleName.ofOpt(s)
     }
 
     @JvmStatic fun getModuleInfo(path: C_SourcePath, ast: S_RellFile): IdeModuleInfo? {
-        val (moduleName, directory) = C_ModuleManager.getModuleInfo(path, ast)
+        val (moduleName, directory) = C_ModuleUtils.getModuleInfo(path, ast)
         return if (moduleName == null) null else IdeModuleInfo(moduleName, directory)
     }
 
     @JvmStatic fun getImportedModules(moduleName: R_ModuleName, ast: S_RellFile): List<R_ModuleName> {
         val res = mutableSetOf<R_ModuleName>()
-        ast.getImportedModules(moduleName, res)
+        ast.ideGetImportedModules(moduleName, res)
         return res.toImmList()
+    }
+
+    private object IdeRellCliEnv: RellCliEnv() {
+        override fun print(msg: String, err: Boolean) = println(msg)
+        override fun exit(status: Int): Nothing = throw IllegalStateException("$status")
     }
 
     @JvmStatic fun getAppFiles(sourceDir: C_SourceDir, modules: List<R_ModuleName>): Map<String, String> {
@@ -85,117 +89,22 @@ object IdeApi {
         val ast = C_Parser.parse(C_SourcePath.EMPTY, text)
         return ast.ideIsTestFile()
     }
-
-    private object IdeRellCliEnv: RellCliEnv() {
-        override fun print(msg: String, err: Boolean) {
-            println(msg)
-        }
-
-        override fun exit(status: Int): Nothing {
-            throw IllegalStateException("$status")
-        }
-    }
 }
 
-class IdeModuleInfo(
-        @JvmField val name: R_ModuleName,
-        @JvmField val directory: Boolean
-)
+@Suppress("UNUSED")
+object IdeDirApi {
+    @JvmField
+    val EMPTY_DIR: C_SourceDir = C_SourceDir.EMPTY
 
-class IdeSnippetMessage(
-        @JvmField val pos: String,
-        @JvmField val type: C_MessageType,
-        @JvmField val code: String,
-        @JvmField val text: String
-) {
-    fun serialize(): Any {
-        return mapOf(
-                "pos" to pos,
-                "type" to type.name,
-                "code" to code,
-                "text" to text
-        )
-    }
+    @JvmStatic
+    fun mapDir(files: Map<C_SourcePath, C_SourceFile>): C_SourceDir = C_SourceDir.mapDir(files)
 
-    companion object {
-        fun deserialize(obj: Any): IdeSnippetMessage {
-            val raw = obj as Map<Any, Any>
-            val map = raw.map { (k, v) -> k as String to v as String }.toMap()
-            return IdeSnippetMessage(
-                    map.getValue("pos"),
-                    C_MessageType.valueOf(map.getValue("type")),
-                    map.getValue("code"),
-                    map.getValue("text")
-            )
-        }
-    }
-}
+    @JvmStatic
+    fun mapDirOf(files: Map<String, String>): C_SourceDir = C_SourceDir.mapDirOf(files)
 
-class IdeCodeSnippet(
-        files: Map<String, String>,
-        @JvmField val modules: C_CompilerModuleSelection,
-        @JvmField val options: C_CompilerOptions,
-        messages: List<IdeSnippetMessage>,
-        parsing: Map<String, List<IdeSnippetMessage>>
-) {
-    @JvmField val files = files.toImmMap()
-    @JvmField val messages = messages.toImmList()
-    @JvmField val parsing = parsing.toImmMap()
+    @JvmStatic
+    fun diskDir(dir: File): C_SourceDir = C_SourceDir.diskDir(dir)
 
-    fun serialize(): String {
-        val opts = options.toPojoMap()
-
-        val modulesObj = mapOf(
-                "modules" to modules.modules.map { it.str() },
-                "test_root_modules" to modules.testRootModules.map { it.str() }
-        )
-
-        val messagesObj = messages.map { it.serialize() }
-        val parsingObj = parsing.mapValues { (_, v) -> v.map { it.serialize() } }
-
-        val obj = mapOf(
-                "files" to files,
-                "modules" to modulesObj,
-                "options" to opts,
-                "messages" to messagesObj,
-                "parsing" to parsingObj
-        )
-
-        val mapper = ObjectMapper()
-        val res = mapper.writeValueAsString(obj)
-        return res
-    }
-
-    companion object {
-        @JvmStatic fun deserialize(s: String): IdeCodeSnippet {
-            val mapper = ObjectMapper()
-            val any = mapper.readValue(s, Any::class.java)
-
-            val obj = any as Map<String, Any>
-
-            val filesRaw = obj.getValue("files") as Map<Any, Any>
-            val files = filesRaw.map { (k, v) -> k as String to v as String }.toMap()
-
-            val modulesRaw = obj.getValue("modules") as Map<Any, Any>
-            val modulesMap = modulesRaw.map { (k, v) -> k as String to v }.toMap()
-            val modules = C_CompilerModuleSelection(
-                    modules = (modulesMap.getValue("modules") as List<Any>).map { R_ModuleName.of(it as String) },
-                    testRootModules = (modulesMap.getValue("test_root_modules") as List<Any>).map { R_ModuleName.of(it as String) }
-            )
-
-            val optionsRaw = obj.getValue("options") as Map<Any, Any>
-            val optionsMap = optionsRaw.map { (k, v) -> k as String to v }.toMap()
-            val options = C_CompilerOptions.fromPojoMap(optionsMap)
-
-            val messagesRaw = obj.getValue("messages") as List<Any>
-            val messages = messagesRaw.map { IdeSnippetMessage.deserialize(it) }
-
-            val parsingRaw = obj.getValue("parsing") as Map<Any, Any>
-            val parsing = parsingRaw.map { (k, v) ->
-                k as String to (v as List<Any>).map { IdeSnippetMessage.deserialize(it) }
-            }.toMap()
-
-            return IdeCodeSnippet(files, modules, options, messages, parsing)
-        }
-    }
+    @JvmStatic
+    fun parseSourcePath(s: String): C_SourcePath? = C_SourcePath.parseOpt(s)
 }

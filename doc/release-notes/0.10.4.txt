@@ -315,8 +315,8 @@ Special symbol "$" is used to access the current item in where- and what-parts. 
 Transforming a map:
 
     val m = ['France':33, 'Italy':39, 'Germany':49];
-    val keys = m @* {} ( $.k );
-    val values = m @* {} ( $.v );
+    val keys = m @* {} ( $[0] );
+    val values = m @* {} ( $[1] );
 
 At-expressions can be chained:
 
@@ -666,7 +666,10 @@ New functions and properties:
         Returns all operations of the current transaction.
 
     op_context.emit_event(type: text, data: gtv)
-        Emits an event.
+        A way for code in Rell to communicate to Postchain components. In Postchain, there can be a set of event
+        processors that are invoked in the end of every transaction (when all operations in the transaction have been
+        executed). The "type" parameter specifies which event processor to invoke, and "data" is the value to pass to
+        the processor. (There are no processors available at the time of writing, they are supposed to be added later.)
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 22. Language: Complex expressions in what-part of at-expression

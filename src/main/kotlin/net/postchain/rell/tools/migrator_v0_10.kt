@@ -4,9 +4,10 @@
 
 package net.postchain.rell.tools
 
+import net.postchain.rell.compiler.parser.S_Grammar
 import net.postchain.rell.utils.RellCliLogUtils
 import net.postchain.rell.utils.RellCliUtils
-import net.postchain.rell.compiler.parser.S_Grammar
+import net.postchain.rell.utils.checkEquals
 import picocli.CommandLine
 import java.io.File
 import java.nio.file.Files
@@ -95,7 +96,7 @@ private fun replaceTokens(text: String): Pair<String, Int> {
     var res = text
     for (rep in replaces.sortedBy { it.pos }.reversed()) {
         val t = res.substring(rep.pos, rep.pos + rep.oldStr.length)
-        check(t == rep.oldStr)
+        checkEquals(t, rep.oldStr)
         res = res.substring(0, rep.pos) + rep.newStr + res.substring(rep.pos + rep.oldStr.length)
     }
 

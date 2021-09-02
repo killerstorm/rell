@@ -70,10 +70,24 @@ object C_AbstractCompiler {
     fun compile(msgCtx: C_MessageContext, modules: List<C_ModuleDescriptor>) {
         val conflictsProcessor = C_OverrideConflictsProcessor(msgCtx)
         val actualOverrides = conflictsProcessor.processApp(modules)
+        processMissingOverrides(msgCtx, modules, actualOverrides)
+    }
 
+    private fun processMissingOverrides(
+            msgCtx: C_MessageContext,
+            modules: List<C_ModuleDescriptor>,
+            actualOverrides: Set<C_AbstractDescriptor>
+    ) {
         val missingOverridesProcessor = C_MissingOverridesProcessor(msgCtx, actualOverrides)
+
         for (module in modules) {
             missingOverridesProcessor.processModule(module)
+        }
+
+        if (!msgCtx.globalCtx.compilerOptions.ide) {
+            for (module in modules) {
+                missingOverridesProcessor.processModuleExtra(module)
+            }
         }
     }
 }
@@ -167,15 +181,15 @@ private class C_OverrideConflictsProcessor(private val msgCtx: C_MessageContext)
 
         val res = mutableListOf<C_OverrideEntry>()
 
-        for (entries in grouped.values) {
-            if (entries.size >= 2) {
-                for (entry in entries) {
+        for (groupEntries in grouped.values) {
+            if (groupEntries.size >= 2) {
+                for (entry in groupEntries) {
                     if (!errorOverrides.add(entry.override) && appLevel) continue
-                    val otherEntry = entries.first { it !== entry }
+                    val otherEntry = groupEntries.first { it !== entry }
                     processConflict(entry, otherEntry)
                 }
             }
-            res.add(entries[0])
+            res.add(groupEntries[0])
         }
 
         return res
@@ -243,7 +257,11 @@ private class C_MissingOverridesProcessor(
     fun processModule(module: C_ModuleDescriptor) {
         if (!module.header.abstract) {
             processNonAbstractModule(module)
-        } else if (!globalCtx.compilerOptions.ide) {
+        }
+    }
+
+    fun processModuleExtra(module: C_ModuleDescriptor) {
+        if (module.header.abstract) {
             for (file in module.importsDescriptor().files) {
                 processFileExtra(file)
             }
@@ -263,10 +281,10 @@ private class C_MissingOverridesProcessor(
         val res = mutableSetOf<C_AbstractDescriptor>()
 
         for (file in module.importsDescriptor().files) {
-            res.addAll(file.overrides.map { it.abstract() }.filterNotNull())
+            res.addAll(file.overrides.mapNotNull { it.abstract() })
 
             for ((_, impFile) in getImportedFiles(file, false)) {
-                res.addAll(impFile.overrides.map { it.abstract() }.filterNotNull())
+                res.addAll(impFile.overrides.mapNotNull { it.abstract() })
             }
         }
 
@@ -286,9 +304,7 @@ private class C_MissingOverridesProcessor(
     private fun processMissingOverride(import: C_ImportDescriptor, abstract: C_AbstractDescriptor) {
         val fName = abstract.functionName()
         val fPos = abstract.functionPos()
-        val code = "override:missing:[$fName]:[${fPos.strLine()}]"
-        val msg = "No override for abstract function '$fName' (defined at ${fPos.strLine()})"
-        msgCtx.error(import.pos, code, msg)
+        C_Errors.errOverrideMissing(msgCtx, import.pos, fName, fPos)
         errorAbstracts.add(abstract)
     }
 
@@ -317,7 +333,7 @@ private class C_MissingOverridesProcessor(
             if (!abstract.hasDefaultBody && abstract !in actualOverrides && abstract !in errorAbstracts) {
                 val fName = abstract.functionName()
                 val fPos = abstract.functionPos()
-                msgCtx.error(fPos, "override:missing:[$fName]", "No override for abstract function '$fName'")
+                C_Errors.errOverrideMissing(msgCtx, fPos, fName, fPos)
             }
         }
     }
@@ -344,6 +360,7 @@ private object C_AbstractUtils {
         if (abstractOnly && !import.module.header.abstract) return
 
         res.add(import.module.importsDescriptor())
+
         val importsDesc = import.module.importsDescriptor()
         for (file in importsDesc.files) {
             for (subImport in file.imports) {

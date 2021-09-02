@@ -15,9 +15,9 @@ class V_EntityToStructExpr(
     private val resultType = C_Utils.effectiveMemberType(structType, memberLink.safe)
     private val cLambda = V_EntityAttrExpr.createLambda(exprCtx, entityType.rEntity)
 
-    override val exprInfo = V_ExprInfo.make(memberLink.base)
+    override fun exprInfo0() = V_ExprInfo.simple(resultType, memberLink.base, canBeDbExpr = false)
 
-    override fun type() = resultType
+    override fun globalConstantRestriction() = V_GlobalConstantRestriction("entity_to_struct", null)
 
     override fun toRExpr0(): R_Expr {
         val atEntity = exprCtx.makeAtEntity(entityType.rEntity, exprCtx.appCtx.nextAtExprId())
@@ -27,7 +27,7 @@ class V_EntityToStructExpr(
         return V_EntityAttrExpr.createRExpr(memberLink.base, atEntity, whatField, memberLink.safe, structType, cLambda)
     }
 
-    override fun toDbExprWhat(): C_DbAtWhatValue {
+    override fun toDbExprWhat0(): C_DbAtWhatValue {
         val dbEntityExpr = memberLink.base.toDbExpr() as Db_TableExpr
         return createWhatValue(dbEntityExpr)
     }
@@ -51,9 +51,9 @@ class V_ObjectToStructExpr(
     private val struct = objectType.rObject.rEntity.mirrorStructs.getStruct(mutable)
     private val structType = struct.type
 
-    override val exprInfo = V_ExprInfo(false, false)
+    override fun exprInfo0() = V_ExprInfo.simple(structType)
 
-    override fun type() = structType
+    override fun globalConstantRestriction() = V_GlobalConstantRestriction("object_to_struct", null)
 
     override fun toRExpr0(): R_Expr {
         val atEntity = exprCtx.makeAtEntity(objectType.rObject.rEntity, exprCtx.appCtx.nextAtExprId())

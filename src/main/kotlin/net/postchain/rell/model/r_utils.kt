@@ -35,6 +35,7 @@ sealed class R_GenericQualifiedName<T: R_GenericQualifiedName<T>>(parts: List<R_
 
     fun str() = str
     fun isEmpty() = parts.isEmpty()
+    fun size() = parts.size
 
     fun startsWith(qName: T): Boolean {
         val prefParts = qName.parts
@@ -46,7 +47,7 @@ sealed class R_GenericQualifiedName<T: R_GenericQualifiedName<T>>(parts: List<R_
     }
 
     fun parent(): T {
-        check(!parts.isEmpty()) { "Trying to get a parent name of an empty name" }
+        check(parts.isNotEmpty()) { "Trying to get a parent name of an empty name" }
         return create(parts.subList(0, parts.size - 1))
     }
 
@@ -61,7 +62,9 @@ sealed class R_GenericQualifiedName<T: R_GenericQualifiedName<T>>(parts: List<R_
     }
 
     final override fun toString() = str()
-    final override fun equals(other: Any?) = other is R_GenericQualifiedName<*> && javaClass == other.javaClass && parts == other.parts
+
+    final override fun equals(other: Any?) = other === this
+            || (other is R_GenericQualifiedName<*> && javaClass == other.javaClass && parts == other.parts)
     final override fun hashCode() = Objects.hash(javaClass, parts)
 }
 
@@ -109,7 +112,7 @@ class R_MountName(parts: List<R_Name>): R_GenericQualifiedName<R_MountName>(part
 class R_Name private constructor(val str: String): Comparable<R_Name> {
     override fun compareTo(other: R_Name) = str.compareTo(other.str)
     override fun toString() = str
-    override fun equals(other: Any?) = other is R_Name && str == other.str
+    override fun equals(other: Any?) = other === this || (other is R_Name && str == other.str)
     override fun hashCode() = str.hashCode()
 
     companion object {
@@ -155,7 +158,7 @@ class R_LangVersion(private val ver: VersionNumber): Comparable<R_LangVersion> {
     fun str(): String = ver.str()
 
     override fun compareTo(other: R_LangVersion) = ver.compareTo(other.ver)
-    override fun equals(other: Any?) = other is R_LangVersion && ver == other.ver
+    override fun equals(other: Any?) = other === this || (other is R_LangVersion && ver == other.ver)
     override fun hashCode() = ver.hashCode()
     override fun toString() = ver.toString()
 

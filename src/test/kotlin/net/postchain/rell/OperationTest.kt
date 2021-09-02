@@ -70,7 +70,7 @@ class OperationTest: BaseRellTest() {
         def("operation op(x: integer, y: text) {}")
         chk("op(123, 'Hello')", """op[op(123,"Hello")]""")
         chk("op('Hello', 123)", "ct_err:[expr_call_argtype:op:0:x:integer:text][expr_call_argtype:op:1:y:text:integer]")
-        chk("op(123, 'Hello', 456)", "ct_err:expr:call:arg_count:op:2:3")
+        chk("op(123, 'Hello', 456)", "ct_err:expr:call:too_many_args:op:2:3")
         chk("op(123+456, 'Hello' + 'World')", """op[op(579,"HelloWorld")]""")
         chk("'' + op(123, 'Hello')", """text[op(123,"Hello")]""")
         chk("_type_of(op(123, 'Hello'))", "text[rell.test.op]")

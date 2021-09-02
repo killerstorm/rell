@@ -11,12 +11,12 @@ import net.postchain.gtv.merkle.proof.toGtvVirtual
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlExecutor
-import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.checkEquals
 import org.apache.commons.collections4.MultiValuedMap
 import org.apache.commons.collections4.multimap.HashSetValuedHashMap
 
-val GTV_QUERY_PRETTY = true
-val GTV_OPERATION_PRETTY = false
+const val GTV_QUERY_PRETTY = true
+const val GTV_OPERATION_PRETTY = false
 
 class GtvToRtContext(val pretty: Boolean) {
     private val objectIds: MultiValuedMap<R_EntityDefinition, Long> = HashSetValuedHashMap()
@@ -28,7 +28,7 @@ class GtvToRtContext(val pretty: Boolean) {
     fun finish(exeCtx: Rt_ExecutionContext) {
         for (rEntities in objectIds.keySet()) {
             val rowids = objectIds.get(rEntities)
-            checkRowids(exeCtx.sqlExec, exeCtx.appCtx.sqlCtx, rEntities, rowids)
+            checkRowids(exeCtx.sqlExec, exeCtx.sqlCtx, rEntities, rowids)
         }
     }
 
@@ -72,7 +72,7 @@ object GtvRtConversion_Null: GtvRtConversion() {
     override fun directCompatibility() = R_GtvCompatibility(true, true)
 
     override fun rtToGtv(rt: Rt_Value, pretty: Boolean): Gtv {
-        check(rt == Rt_NullValue)
+        checkEquals(rt, Rt_NullValue)
         return GtvNull
     }
 
@@ -365,7 +365,7 @@ class GtvRtConversion_Tuple(val type: R_TupleType): GtvRtConversion() {
 
     private fun rtToGtvPretty(rt: Rt_Value): Gtv {
         val rtFields = rt.asTuple()
-        check(rtFields.size == type.fields.size)
+        checkEquals(rtFields.size, type.fields.size)
         val gtv = rtFields.mapIndexed { i, rtField ->
             val field = type.fields[i]
             Pair(field.name!!, field.type.rtToGtv(rtField, true))
@@ -375,7 +375,7 @@ class GtvRtConversion_Tuple(val type: R_TupleType): GtvRtConversion() {
 
     private fun rtToGtvCompact(rt: Rt_Value): Gtv {
         val rtFields = rt.asTuple()
-        check(rtFields.size == type.fields.size)
+        checkEquals(rtFields.size, type.fields.size)
         val gtvFields = rtFields.mapIndexed { i, rtField ->
             type.fields[i].type.rtToGtv(rtField, false)
         }.toTypedArray()

@@ -5,6 +5,7 @@
 package net.postchain.rell.runtime
 
 import net.postchain.rell.model.*
+import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmList
 import java.util.*
 
@@ -103,7 +104,7 @@ class Rt_CallFrame(
     }
 
     fun dumpState(): Rt_CallFrameState {
-        check(curBlock.uid == rFrame.rootBlock.uid)
+        checkEquals(curBlock.uid, rFrame.rootBlock.uid)
         val valuesList = values.map { Optional.ofNullable(it) }.toList()
         return Rt_CallFrameState(valuesList)
     }

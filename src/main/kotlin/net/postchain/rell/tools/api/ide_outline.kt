@@ -20,6 +20,7 @@ enum class IdeOutlineNodeType {
     OPERATION,
     QUERY,
     IMPORT,
+    CONSTANT,
 }
 
 interface IdeOutlineTreeBuilder {

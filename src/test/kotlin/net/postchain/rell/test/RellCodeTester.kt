@@ -14,10 +14,10 @@ import net.postchain.core.ByteArrayKey
 import net.postchain.core.EContext
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
-import net.postchain.rell.compiler.C_MapSourceDir
 import net.postchain.rell.compiler.C_MessageType
 import net.postchain.rell.compiler.C_SourceDir
 import net.postchain.rell.model.*
+import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlExecutor
@@ -79,13 +79,10 @@ class RellCodeTester(
 
     fun createInitGlobalCtx(): Rt_GlobalContext {
         val compilerOptions = compilerOptions()
-        val chainCtx = createChainContext()
         return Rt_GlobalContext(
                 compilerOptions,
                 Rt_FailingPrinter,
                 Rt_FailingPrinter,
-                null,
-                chainCtx,
                 logSqlErrors = true,
                 typeCheck = true,
                 pcModuleEnv = RellPostchainModuleEnvironment.DEFAULT
@@ -238,14 +235,13 @@ class RellCodeTester(
     private fun <T> callOp0(code: String, name: String, args: List<T>, decoder: (List<R_Param>, List<T>) -> List<Rt_Value>): String {
         init()
         val moduleCode = moduleCode(code)
-        return processWithAppCtx(moduleCode) { appCtx ->
-            RellTestUtils.callOpGeneric(appCtx, tstCtx.sqlMgr(), name, args, decoder)
+        return processWithAppSqlCtx(moduleCode) { appCtx, sqlCtx ->
+            RellTestUtils.callOpGeneric(appCtx, opContext, sqlCtx, tstCtx.sqlMgr(), name, args, decoder)
         }
     }
 
-    fun createGlobalCtx(gtvConfig: Gtv = GtvNull): Rt_GlobalContext {
+    fun createGlobalCtx(): Rt_GlobalContext {
         val compilerOptions = compilerOptions()
-        val chainContext = createChainContext(gtvConfig)
 
         val pcModuleEnv = RellPostchainModuleEnvironment(
                 outPrinter = outPrinter,
@@ -259,8 +255,6 @@ class RellCodeTester(
                 compilerOptions,
                 outPrinter,
                 logPrinter,
-                opContext,
-                chainContext,
                 pcModuleEnv = pcModuleEnv,
                 logSqlErrors = true,
                 sqlUpdatePortionSize = sqlUpdatePortionSize,
@@ -268,45 +262,63 @@ class RellCodeTester(
         )
     }
 
-    private fun createChainContext(gtvConfig: Gtv = GtvNull): Rt_ChainContext {
+    private fun createChainContext(app: R_App, gtvConfig: Gtv = GtvNull): Rt_ChainContext {
         val bcRidHex = chainRid ?: "00".repeat(32)
         val bcRid = BlockchainRid(bcRidHex.hexStringToByteArray())
-        return Rt_ChainContext(gtvConfig, mapOf(), bcRid)
+        val modArgsVals = getModuleArgsValues(app)
+        return Rt_ChainContext(gtvConfig, modArgsVals, bcRid)
+    }
+
+    private fun getModuleArgsValues(app: R_App): Map<R_ModuleName, Rt_Value> {
+        val modArgs = getModuleArgs()
+        return modArgs.map {
+            val modName = R_ModuleName.of(it.key)
+            val module = app.moduleMap.getValue(modName)
+            val struct = module.moduleArgs!!
+            val gtv = GtvTestUtils.strToGtv(it.value)
+            val value = struct.type.gtvToRt(GtvToRtContext(pretty = true), gtv)
+            modName to value
+        }.toMap().toImmMap()
     }
 
     fun createAppCtx(
             globalCtx: Rt_GlobalContext,
-            sqlExec: SqlExecutor,
             app: R_App,
             sourceDir: C_SourceDir,
             test: Boolean
     ): Rt_AppContext {
-        val sqlCtx = createSqlCtx(app, sqlExec)
-
-        val modules = app.modules.filter { !it.test && !it.abstract && !it.external }.map { it.name }
-        val keyPair = UnitTestBlockRunner.getTestKeyPair()
-        val blockRunnerStrategy = Rt_DynamicBlockRunnerStrategy(sourceDir, modules, keyPair)
+        val chainCtx = createChainContext(app, GtvNull)
+        val blkRunStrategy = createBlockRunnerStrategy(app, sourceDir)
 
         return Rt_AppContext(
                 globalCtx,
-                sqlCtx,
+                chainCtx,
                 app,
                 repl = false,
                 test = test,
                 replOut = null,
-                blockRunnerStrategy = blockRunnerStrategy
+                blockRunnerStrategy = blkRunStrategy
         )
+    }
+
+    private fun createBlockRunnerStrategy(app: R_App, sourceDir: C_SourceDir): Rt_BlockRunnerStrategy {
+        val modules = app.modules.filter { !it.test && !it.abstract && !it.external }.map { it.name }
+        val keyPair = UnitTestBlockRunner.getTestKeyPair()
+        val modArgs = getModuleArgs()
+        val s = Rt_DynamicBlockRunnerStrategy(sourceDir, modules, keyPair)
+        return Rt_TestBlockRunnerStrategy(s, modArgs)
     }
 
     fun createExeCtx(
             globalCtx: Rt_GlobalContext,
             sqlExec: SqlExecutor,
             app: R_App,
-            sourceDir: C_SourceDir = C_MapSourceDir.EMPTY,
+            sourceDir: C_SourceDir = C_SourceDir.EMPTY,
             test: Boolean = false
     ): Rt_ExecutionContext {
-        val appCtx = createAppCtx(globalCtx, sqlExec, app, sourceDir, test)
-        return Rt_ExecutionContext(appCtx, sqlExec)
+        val appCtx = createAppCtx(globalCtx, app, sourceDir, test)
+        val sqlCtx = createSqlCtx(app, sqlExec)
+        return Rt_ExecutionContext(appCtx, opContext, sqlCtx, sqlExec)
     }
 
     private fun createSqlCtx(app: R_App, sqlExec: SqlExecutor): Rt_SqlContext {
@@ -316,7 +328,9 @@ class RellCodeTester(
         val heightMap = chainDependencies.mapKeys { (_, v) -> ByteArrayKey(v.rid.data) }.mapValues { (_, v) -> v.height }
         val heightProvider = TestChainHeightProvider(heightMap)
 
-        return eval.wrapRt { Rt_SqlContext.create(app, sqlMapping, rtDeps, sqlExec, heightProvider) }
+        return eval.wrapRt {
+            Rt_RegularSqlContext.create(app, sqlMapping, rtDeps, sqlExec, heightProvider)
+        }
     }
 
     fun chkWarn(vararg msgs: String) {
@@ -359,7 +373,7 @@ class RellCodeTester(
         val moduleNameStr = replModule
         val module = if (moduleNameStr == null) null else R_ModuleName.of(moduleNameStr)
 
-        val sourceDir = C_MapSourceDir.of(files)
+        val sourceDir = C_SourceDir.mapDirOf(files)
         val globalCtx = createGlobalCtx()
 
         val sqlMgr = tstCtx.sqlMgr()
@@ -378,14 +392,16 @@ class RellCodeTester(
         }
     }
 
-    private fun processWithAppCtx(code: String, processor: (Rt_AppContext) -> String): String {
+    private fun processWithAppSqlCtx(code: String, processor: (Rt_AppContext, Rt_SqlContext) -> String): String {
         val globalCtx = createGlobalCtx()
         val res = processApp(code) { app ->
             RellTestUtils.catchRtErr {
-                val appCtx = tstCtx.sqlMgr().access { sqlExec ->
-                    createAppCtx(globalCtx, sqlExec, app, C_MapSourceDir.EMPTY, false)
+                val (appCtx, sqlCtx) = tstCtx.sqlMgr().access { sqlExec ->
+                    val appCtx0 = createAppCtx(globalCtx, app, C_SourceDir.EMPTY, false)
+                    val sqlCtx0 = createSqlCtx(app, sqlExec)
+                    Pair(appCtx0, sqlCtx0)
                 }
-                processor(appCtx)
+                processor(appCtx, sqlCtx)
             }
         }
         return res
@@ -398,5 +414,26 @@ class RellCodeTester(
             val height = map[rid]
             return height
         }
+    }
+
+    private class Rt_TestBlockRunnerStrategy(
+            private val s: Rt_BlockRunnerStrategy,
+            modArgs: Map<String, String>
+    ): Rt_BlockRunnerStrategy() {
+        private val modArgs = modArgs.toImmMap()
+
+        override fun createGtvConfig(): Gtv {
+            val gtv = s.createGtvConfig()
+            val gtv2 = mapOf(
+                    "gtx" to mapOf(
+                            "rell" to mapOf(
+                                    "moduleArgs" to RellGtxTester.moduleArgsToGtv(modArgs)
+                            ).toGtv()
+                    ).toGtv()
+            ).toGtv()
+            return GtvTestUtils.merge(gtv, gtv2)
+        }
+
+        override fun getKeyPair() = s.getKeyPair()
     }
 }

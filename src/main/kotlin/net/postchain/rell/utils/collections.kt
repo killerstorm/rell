@@ -14,7 +14,7 @@ import java.util.*
 class ListVsMap<K> private constructor(private val entries: List<Map.Entry<K, *>>) {
     fun <W> listToMap(list: List<W>): Map<K, W> {
         val copy = list.toImmList()
-        check(copy.size == entries.size)
+        checkEquals(copy.size, entries.size)
         return entries.mapIndexed { i, e -> e.key to copy[i] }.toMap().toImmMap()
     }
 
@@ -59,7 +59,18 @@ fun <T> Array<T>.toImmList(): List<T> = ImmutableList.copyOf(this)
 fun <T> Iterable<T>.toImmSet(): Set<T> = ImmutableSet.copyOf(this)
 fun <T> Array<T>.toImmSet(): Set<T> = ImmutableSet.copyOf(this)
 fun <K, V> Map<K, V>.toImmMap(): Map<K, V> = ImmutableMap.copyOf(this)
+
+fun <K, V> immMultimapOf(): Multimap<K, V> = ImmutableMultimap.of()
+fun <K, V> mutableMultimapOf(): Multimap<K, V> = LinkedListMultimap.create()
 fun <K, V> Multimap<K, V>.toImmMultimap(): Multimap<K, V> = ImmutableMultimap.copyOf(this)
+
+fun <K, V> Iterable<Pair<K, V>>.toImmMultimap(): Multimap<K, V> {
+    val m = mutableMultimapOf<K, V>()
+    for ((k, v) in this) {
+        m.put(k, v)
+    }
+    return m.toImmMultimap()
+}
 
 fun <K, V> Map<K, Iterable<V>>.toImmMultimap(): Multimap<K, V> {
     val map = mutableMultimapOf<K, V>()
@@ -77,8 +88,7 @@ fun <K, V> MutableMap<K, V>.putAllAbsent(map: Map<K, V>) {
     }
 }
 
-fun <K, V> immMultimapOf(): Multimap<K, V> = ImmutableMultimap.of()
-fun <K, V> mutableMultimapOf(): Multimap<K, V> = LinkedListMultimap.create()
+fun <T> queueOf(): Queue<T> = ArrayDeque()
 
 // Needs to be in a different file than List<Gtv>.toGtv() because of a name conflict...
 fun List<String>.toGtv(): Gtv = GtvFactory.gtv(this.map { it.toGtv() })

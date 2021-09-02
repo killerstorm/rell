@@ -155,23 +155,29 @@ class AtExprCollectionTest: BaseRellTest(false) {
     @Test fun testFromMap() {
         tst.strictToString = false
 
-        chk("_type_of(['Bob':123] @ {})", "(k:text,v:integer)")
-        chk("_type_of(['Bob':123] @ {} ( $) )", "(k:text,v:integer)")
-        chk("_type_of(['Bob':123] @ {} ( .k ))", "text")
-        chk("_type_of(['Bob':123] @ {} ( .v ))", "integer")
-        chk("_type_of(['Bob':123] @* {})", "list<(k:text,v:integer)>")
-        chk("_type_of(['Bob':123] @* {} ( $ ))", "list<(k:text,v:integer)>")
-        chk("_type_of(['Bob':123] @* {} ( .k ))", "list<text>")
-        chk("_type_of(['Bob':123] @* {} ( .v ))", "list<integer>")
+        chk("_type_of(['Bob':123] @ {})", "(text,integer)")
+        chk("_type_of(['Bob':123] @ {} ( $ ) )", "(text,integer)")
+        chk("_type_of(['Bob':123] @ {} ( $[0] ))", "text")
+        chk("_type_of(['Bob':123] @ {} ( $[1] ))", "integer")
+        chk("_type_of(['Bob':123] @* {})", "list<(text,integer)>")
+        chk("_type_of(['Bob':123] @* {} ( $ ))", "list<(text,integer)>")
+        chk("_type_of(['Bob':123] @* {} ( $[0] ))", "list<text>")
+        chk("_type_of(['Bob':123] @* {} ( $[1] ))", "list<integer>")
 
-        chk("['Bob':123, 'Alice':456] @* {}", "[(k=Bob,v=123), (k=Alice,v=456)]")
+        chk("['Bob':123, 'Alice':456] @* {}", "[(Bob,123), (Alice,456)]")
         chk("map<text,integer>() @* {}", "[]")
 
-        chk("['Bob':123, 'Alice':456] @* {} ( .k )", "[Bob, Alice]")
-        chk("['Bob':123, 'Alice':456] @* {} ( .v )", "[123, 456]")
-        chk("['Bob':123, 'Alice':456] @* {} ( .k, .v )", "[(k=Bob,v=123), (k=Alice,v=456)]")
-        chk("['Bob':123, 'Alice':456] @* {} ( .k + .v )", "[Bob123, Alice456]")
-        chk("['Bob':123, 'Alice':456] @* {} ( _=.k, _=.v )", "[(Bob,123), (Alice,456)]")
+        chk("['Bob':123, 'Alice':456] @* {} ( $[0] )", "[Bob, Alice]")
+        chk("['Bob':123, 'Alice':456] @* {} ( $[1] )", "[123, 456]")
+        chk("['Bob':123, 'Alice':456] @* {} ( $[0], $[1] )", "[(Bob,123), (Alice,456)]")
+        chk("['Bob':123, 'Alice':456] @* {} ( $[0] + $[1] )", "[Bob123, Alice456]")
+        chk("['Bob':123, 'Alice':456] @* {} ( k=$[0], v=$[1] )", "[(k=Bob,v=123), (k=Alice,v=456)]")
+    }
+
+    @Test fun testFromRange() {
+        tst.strictToString = false
+        chk("range(5) @* {}", "[0, 1, 2, 3, 4]")
+        chk("range(1, 17, 3) @* {}", "[1, 4, 7, 10, 13, 16]")
     }
 
     @Test fun testFromForms() {

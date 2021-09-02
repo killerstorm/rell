@@ -20,10 +20,7 @@ import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.Rt_LogPrinter
 import net.postchain.rell.runtime.Rt_PrinterFactory
 import net.postchain.rell.sql.SqlInitLogging
-import net.postchain.rell.utils.MainRellCliEnv
-import net.postchain.rell.utils.RellBaseCliArgs
-import net.postchain.rell.utils.RellCliLogUtils
-import net.postchain.rell.utils.RellCliUtils
+import net.postchain.rell.utils.*
 import picocli.CommandLine
 import java.io.File
 import java.util.logging.LogManager
@@ -97,7 +94,7 @@ object RunPostchainApp {
     }
 
     fun calcPubKey(privKey: String): String {
-        check(privKey.length == 64)
+        checkEquals(privKey.length, 64)
         val privKeyBytes = privKey.hexStringToByteArray()
         val pubKeyBytes = secp256k1_derivePubKey(privKeyBytes)
         return pubKeyBytes.toHex()

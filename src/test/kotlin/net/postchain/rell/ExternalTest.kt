@@ -544,10 +544,10 @@ class ExternalTest: BaseRellTest() {
         fun chkStructType(type: String) {
             chkType(type)
 
-            val err1 = "ct_err:fn:invalid:$type:$type"
-            chkCompile("function f(x: $type) { x.to_bytes(); }", "$err1.to_bytes")
-            chkCompile("function f(x: $type) { x.to_gtv(); }", "$err1.to_gtv")
-            chkCompile("function f(x: $type) { x.to_gtv_pretty(); }", "$err1.to_gtv_pretty")
+            val err1 = "ct_err:fn:invalid:$type"
+            chkCompile("function f(x: $type) { x.to_bytes(); }", "$err1:to_bytes")
+            chkCompile("function f(x: $type) { x.to_gtv(); }", "$err1:to_gtv")
+            chkCompile("function f(x: $type) { x.to_gtv_pretty(); }", "$err1:to_gtv_pretty")
 
             val err2 = "ct_err:fn:invalid:$type"
             chkCompile("function f() { $type.from_bytes(x''); }", "$err2:from_bytes")

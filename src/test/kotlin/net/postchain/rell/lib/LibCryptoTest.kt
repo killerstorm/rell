@@ -7,11 +7,15 @@ package net.postchain.rell.lib
 import com.google.common.io.Resources
 import net.postchain.base.secp256k1_derivePubKey
 import net.postchain.base.secp256k1_sign
+import net.postchain.common.toHex
 import net.postchain.gtv.Gtv
 import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.PostchainUtils
+import net.postchain.rell.utils.checkEquals
 import org.junit.Test
+import java.math.BigInteger
+import java.security.MessageDigest
 
 class LibCryptoTest: BaseRellTest(false) {
     @Test fun testVerifySignature() {
@@ -89,6 +93,50 @@ class LibCryptoTest: BaseRellTest(false) {
         }
     }
 
+    @Test fun testEthSignViaEthEcrecover() {
+        tst.testLib = true
+        def("""
+            function test(privkey: byte_array) {
+                assert_equals(privkey.size(), 32);
+
+                val pubkey = crypto.privkey_to_pubkey(privkey);
+                assert_equals(pubkey.size(), 65);
+
+                val msg = 'Hello'.to_bytes();
+                val (r, s, rec_id) = crypto.eth_sign(msg, privkey);
+                assert_equals(r.size(), 32);
+                assert_equals(s.size(), 32);
+
+                val recovered = crypto.eth_ecrecover(r, s, rec_id, msg);
+                assert_equals(x'04' + recovered, pubkey);
+            }
+        """)
+
+        for (i in 0 until 500) {
+            val md = MessageDigest.getInstance("SHA-256")
+            val privKey = md.digest(BigInteger.valueOf(i.toLong()).toByteArray())
+            checkEquals(privKey.size, 32)
+
+            val code = "{ test(x'${privKey.toHex()}'); return 0; }"
+            chkEx(code, "int[0]")
+        }
+    }
+
+    @Test fun testPrivKeyToPubKey() {
+        val privKey = ByteArray(32) { it.toByte() }.toHex()
+
+        chk("crypto.privkey_to_pubkey(x'$privKey').size()", "int[65]")
+        chk("crypto.privkey_to_pubkey(x'$privKey')",
+                "byte_array[046d6caac248af96f6afa7f904f550253a0f3ef3f5aa2fe6838a95b216691468e2487e6222a6664e079c8edf7518defd562dbeda1e7593dfd7f0be285880a24dab]")
+
+        chk("crypto.privkey_to_pubkey(x'$privKey', false).size()", "int[65]")
+        chk("crypto.privkey_to_pubkey(x'$privKey', false)",
+                "byte_array[046d6caac248af96f6afa7f904f550253a0f3ef3f5aa2fe6838a95b216691468e2487e6222a6664e079c8edf7518defd562dbeda1e7593dfd7f0be285880a24dab]")
+
+        chk("crypto.privkey_to_pubkey(x'$privKey', true).size()", "int[33]")
+        chk("crypto.privkey_to_pubkey(x'$privKey', true)", "byte_array[036d6caac248af96f6afa7f904f550253a0f3ef3f5aa2fe6838a95b216691468e2]")
+    }
+
     @Test fun testVerifySignatureErr() {
         chk("verify_signature(x'0123', x'4567', x'89AB')", "rt_err:verify_signature")
     }
@@ -103,8 +151,8 @@ class LibCryptoTest: BaseRellTest(false) {
         def("struct rec_nogtv { m: range; }")
         chk("rec(123,'Hello').hash()", "0x74443c7de4d4fee6f6f4d9b0aa5d4749dbfb0965b422e578802701b9ac2e063a")
         chk("rec(456,'Bye').hash()", "0x7758916e7f9f1a9e0a84351f402dbc9c906492879a9d71dc4ff1f5b7d67bdf53")
-        chk("rec_nogtv(range(10)).hash()", "ct_err:fn:invalid:rec_nogtv:rec_nogtv.hash")
-        chk("rec_nogtv(range(10)).hash()", "ct_err:fn:invalid:rec_nogtv:rec_nogtv.hash")
+        chk("rec_nogtv(range(10)).hash()", "ct_err:fn:invalid:rec_nogtv:hash")
+        chk("rec_nogtv(range(10)).hash()", "ct_err:fn:invalid:rec_nogtv:hash")
         chk("rec(123,'Hello').to_gtv().hash()", "0x74443c7de4d4fee6f6f4d9b0aa5d4749dbfb0965b422e578802701b9ac2e063a")
         chk("rec(456,'Bye').to_gtv().hash()", "0x7758916e7f9f1a9e0a84351f402dbc9c906492879a9d71dc4ff1f5b7d67bdf53")
     }

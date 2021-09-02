@@ -207,7 +207,7 @@ class UpdateDeleteExprTest: BaseRellTest() {
                 if (u.score != exp) return 'score:' + u;
             }
             return 'OK';
-        }""".trimIndent()
+        }"""
         chkEx(code, "text[OK]")
     }
 
@@ -249,7 +249,7 @@ class UpdateDeleteExprTest: BaseRellTest() {
             create user(name = 'Alice', company = 'Amazon', score = 200);
             create company(name = 'Google', score = 250);
             create company(name = 'Amazon', score = 525);
-        """.trimIndent())
+        """)
     }
 
     private fun insUser(id: Int, name: String, score: Int): String =

@@ -5,6 +5,9 @@
 package net.postchain.rell.compiler.ast
 
 import net.postchain.rell.compiler.*
+import net.postchain.rell.compiler.vexpr.V_AtWhatFieldFlags
+import net.postchain.rell.compiler.vexpr.V_DbAtWhat
+import net.postchain.rell.compiler.vexpr.V_DbAtWhatField
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_DecimalValue
@@ -16,17 +19,17 @@ import net.postchain.rell.utils.toImmList
 class S_AtExprFrom(val alias: S_Name?, val entityName: List<S_Name>)
 
 sealed class S_AtExprWhat {
-    abstract fun compile(ctx: C_ExprContext, from: C_AtFrom, subValues: MutableList<V_Expr>): C_AtWhat
+    abstract fun compile(ctx: C_ExprContext, from: C_AtFrom, subValues: MutableList<V_Expr>): V_DbAtWhat
 }
 
 class S_AtExprWhat_Default: S_AtExprWhat() {
-    override fun compile(ctx: C_ExprContext, from: C_AtFrom, subValues: MutableList<V_Expr>): C_AtWhat {
+    override fun compile(ctx: C_ExprContext, from: C_AtFrom, subValues: MutableList<V_Expr>): V_DbAtWhat {
         return from.makeDefaultWhat()
     }
 }
 
 class S_AtExprWhat_Simple(val path: List<S_Name>): S_AtExprWhat() {
-    override fun compile(ctx: C_ExprContext, from: C_AtFrom, subValues: MutableList<V_Expr>): C_AtWhat {
+    override fun compile(ctx: C_ExprContext, from: C_AtFrom, subValues: MutableList<V_Expr>): V_DbAtWhat {
         val vAttrExpr = ctx.resolveAttr(path[0])
         var expr: C_Expr = C_VExpr(vAttrExpr)
         for (step in path.subList(1, path.size)) {
@@ -34,8 +37,8 @@ class S_AtExprWhat_Simple(val path: List<S_Name>): S_AtExprWhat() {
         }
 
         val vExpr = expr.value()
-        val fields = listOf(C_AtWhatField(null, vExpr.type(), vExpr, C_AtWhatFieldFlags.DEFAULT, null))
-        return C_AtWhat(fields)
+        val fields = listOf(V_DbAtWhatField(ctx.appCtx, null, vExpr.type, vExpr, V_AtWhatFieldFlags.DEFAULT, null))
+        return V_DbAtWhat(fields)
     }
 }
 
@@ -47,7 +50,7 @@ class S_AtExprWhatComplexField(
 )
 
 class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExprWhat() {
-    override fun compile(ctx: C_ExprContext, from: C_AtFrom, subValues: MutableList<V_Expr>): C_AtWhat {
+    override fun compile(ctx: C_ExprContext, from: C_AtFrom, subValues: MutableList<V_Expr>): V_DbAtWhat {
         val procFields = processFields(ctx)
         subValues.addAll(procFields.map { it.vExpr })
 
@@ -60,11 +63,11 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
 
         val cFields = procFields.map { field ->
             val name = if (!field.flags.omit && (field.nameExplicit || selFields.size > 1)) field.name else null
-            val resultType = field.summarization?.getResultType(hasGroup) ?: field.vExpr.type()
-            C_AtWhatField(name, resultType, field.vExpr, field.flags, field.summarization)
+            val resultType = field.summarization?.getResultType(hasGroup) ?: field.vExpr.type
+            V_DbAtWhatField(ctx.appCtx, name, resultType, field.vExpr, field.flags, field.summarization)
         }
 
-        return C_AtWhat(cFields)
+        return V_DbAtWhat(cFields)
     }
 
     private fun processFields(ctx: C_ExprContext): List<WhatField> {
@@ -96,7 +99,7 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
             ctx.msgCtx.warning(field.sort.pos, "at:what:sort:deprecated:$ann", "Deprecated sort syntax; use @$ann annotation instead")
         }
 
-        val modifierCtx = C_ModifierContext(ctx.appCtx, R_MountName.EMPTY)
+        val modifierCtx = C_ModifierContext(ctx.msgCtx, ctx.appCtx.valExec)
         for (annotation in field.annotations) {
             annotation.compile(modifierCtx, modTarget)
         }
@@ -105,7 +108,7 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
         val sort = modTarget.sort?.get()
         val summ = modTarget.summarization?.get()
 
-        val flags = C_AtWhatFieldFlags(
+        val flags = V_AtWhatFieldFlags(
                 omit = omit,
                 sort = sort,
                 group = if (summ?.value == C_AtSummarizationKind.GROUP) summ.pos else null,
@@ -136,7 +139,7 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
     private fun compileSummarization(ctx: C_ExprContext, vExpr: V_Expr, ann: C_AtSummarizationKind?): C_AtSummarization? {
         ann ?: return null
 
-        val type = vExpr.type()
+        val type = vExpr.type
         val pos = C_AtSummarizationPos(vExpr.pos, ann)
 
         val cSummarization = when (ann) {
@@ -195,7 +198,7 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
             val namePos: S_Pos,
             val name: String?,
             val nameExplicit: Boolean,
-            val flags: C_AtWhatFieldFlags,
+            val flags: V_AtWhatFieldFlags,
             val summarization: C_AtSummarization?
     ) {
         fun updateName(newName: String?): WhatField {
@@ -228,12 +231,12 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
         val vExpr = cExpr.value()
         subValues.add(vExpr)
 
-        val type = vExpr.type()
+        val type = vExpr.type
         if (type.isError()) {
             return vExpr
         }
 
-        val dependsOnThisAtExpr = vExpr.atDependencies() == immSetOf(atExprId)
+        val dependsOnThisAtExpr = vExpr.info.dependsOnAtExprs == immSetOf(atExprId)
         val attrName = vExpr.implicitAtWhereAttrName()
 
         return if (!dependsOnThisAtExpr && attrName != null) {
@@ -244,7 +247,7 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
     }
 
     private fun compileWhereExprNoName(ctx: C_ExprContext, idx: Int, vExpr: V_Expr, dependsOnThisAtExpr: Boolean): V_Expr {
-        val type = vExpr.type()
+        val type = vExpr.type
         if (type == R_BooleanType || type == R_CtErrorType) {
             return vExpr
         }
@@ -342,8 +345,7 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
 
 class S_AtExpr(
         val from: S_Expr,
-        val atPos: S_Pos,
-        val cardinality: R_AtCardinality,
+        val cardinality: S_PosValue<R_AtCardinality>,
         val where: S_AtExprWhere,
         val what: S_AtExprWhat,
         val limit: S_Expr?,
@@ -361,7 +363,7 @@ class S_AtExpr(
         val subValues = mutableListOf<V_Expr>()
 
         val atExprId = ctx.appCtx.nextAtExprId()
-        val fromCtx = C_AtFromContext(atPos, atExprId, parentAtCtx)
+        val fromCtx = C_AtFromContext(cardinality.pos, atExprId, parentAtCtx)
         val cFrom = from.compileFrom(ctx, fromCtx, subValues)
 
         val cDetails = compileDetails(ctx, atExprId, cFrom, subValues)
@@ -387,10 +389,10 @@ class S_AtExpr(
         val base = C_AtExprBase(cWhat, vWhere)
         val facts = C_ExprVarFacts.forSubExpressions(subValues)
 
-        return C_AtDetails(startPos, atPos, cardinality, base, vLimit, vOffset, cResult, facts)
+        return C_AtDetails(startPos, cardinality, base, vLimit, vOffset, cResult, facts)
     }
 
-    private fun compileAtResult(whatFields: List<C_AtWhatField>): C_AtExprResult {
+    private fun compileAtResult(whatFields: List<V_DbAtWhatField>): C_AtExprResult {
         val selFieldsIndexes = whatFields.withIndex().filter { !it.value.flags.omit }.map { it.index }.toImmList()
         val selFields = selFieldsIndexes.map { whatFields[it] }
 
@@ -401,8 +403,8 @@ class S_AtExpr(
 
         val hasAggregateFields = whatFields.any { !(it.summarization?.isGroup() ?: true) }
 
-        var rowDecoder: R_AtExprRowDecoder
-        var recordType: R_Type
+        val rowDecoder: R_AtExprRowDecoder
+        val recordType: R_Type
 
         if (selFields.size == 1 && selFields[0].name == null) {
             rowDecoder = R_AtExprRowDecoder_Simple
@@ -414,8 +416,16 @@ class S_AtExpr(
             recordType = type
         }
 
-        val resultType = C_AtExprResult.calcResultType(recordType, cardinality)
-        return C_AtExprResult(recordType, resultType, rowDecoder, selFieldsIndexes, groupFieldsIndexes, hasAggregateFields)
+        val resultType = C_AtExprResult.calcResultType(recordType, cardinality.value)
+
+        return C_AtExprResult(
+                recordType,
+                resultType,
+                rowDecoder,
+                selFieldsIndexes,
+                groupFieldsIndexes,
+                hasAggregateFields
+        )
     }
 
     private fun compileLimitOffset(sExpr: S_Expr?, msg: String, ctx: C_ExprContext, subValues: MutableList<V_Expr>): V_Expr? {
@@ -427,9 +437,7 @@ class S_AtExpr(
         val vExpr = sExpr.compile(subCtx).value()
         subValues.add(vExpr)
 
-        val type = vExpr.type()
-        C_Types.match(R_IntegerType, type, sExpr.startPos, "expr_at_${msg}_type", "Wrong $msg type")
-
+        C_Types.match(R_IntegerType, vExpr.type, sExpr.startPos, "expr_at_${msg}_type", "Wrong $msg type")
         return vExpr
     }
 

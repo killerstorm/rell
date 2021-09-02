@@ -29,7 +29,7 @@ class C_SourcePath private constructor(parts: List<String>): Comparable<C_Source
     fun str() = str
 
     override fun compareTo(other: C_SourcePath) = CommonUtils.compareLists(parts, other.parts)
-    override fun equals(other: Any?) = other is C_SourcePath && parts == other.parts
+    override fun equals(other: Any?) = other === this || (other is C_SourcePath && parts == other.parts)
     override fun hashCode() = parts.hashCode()
     override fun toString() = str()
 
@@ -88,6 +88,34 @@ abstract class C_SourceDir {
     abstract fun file(path: C_SourcePath): C_SourceFile?
     abstract fun dirs(path: C_SourcePath): List<String>
     abstract fun files(path: C_SourcePath): List<String>
+
+    companion object {
+        @JvmField
+        val EMPTY: C_SourceDir = C_MapSourceDir(mapOf())
+
+        fun mapDir(files: Map<C_SourcePath, C_SourceFile>): C_SourceDir {
+            return C_CachedSourceDir(C_MapSourceDir(files))
+        }
+
+        @JvmStatic
+        fun mapDirOf(files: Map<String, String>): C_SourceDir {
+            val files2 = files
+                    .mapKeys { (k, _) -> C_SourcePath.parse(k) }
+                    .mapValues { (k, v) -> C_TextSourceFile(k, v) }
+            return mapDir(files2)
+        }
+
+        @JvmStatic
+        fun mapDirOf(vararg files: Pair<String, String>): C_SourceDir {
+            val files2 = mapOf(*files)
+            return mapDirOf(files2)
+        }
+
+        @JvmStatic
+        fun diskDir(dir: File): C_SourceDir {
+            return C_CachedSourceDir(C_DiskSourceDir(dir))
+        }
+    }
 }
 
 class C_TextSourceFile(private val path: C_SourcePath, private val text: String): C_SourceFile() {
@@ -98,7 +126,7 @@ class C_TextSourceFile(private val path: C_SourcePath, private val text: String)
     override fun readText() = text
 }
 
-class C_MapSourceDir(files: Map<C_SourcePath, C_SourceFile>): C_SourceDir() {
+private class C_MapSourceDir(files: Map<C_SourcePath, C_SourceFile>): C_SourceDir() {
     private val root = buildTree(files)
 
     override fun dir(path: C_SourcePath): Boolean {
@@ -142,23 +170,6 @@ class C_MapSourceDir(files: Map<C_SourcePath, C_SourceFile>): C_SourceDir() {
     private class DirNode(val dirs: Map<String, DirNode>, val files: Map<String, C_SourceFile>)
 
     companion object {
-        @JvmField
-        val EMPTY: C_SourceDir = C_MapSourceDir(mapOf())
-
-        @JvmStatic
-        fun of(files: Map<String, String>): C_SourceDir {
-            val files2 = files
-                    .mapKeys { (k, _) -> C_SourcePath.parse(k) }
-                    .mapValues { (k, v) -> C_TextSourceFile(k, v) }
-            return C_MapSourceDir(files2)
-        }
-
-        @JvmStatic
-        fun of(vararg files: Pair<String, String>): C_SourceDir {
-            val files2 = mapOf(*files)
-            return of(files2)
-        }
-
         private fun buildTree(map: Map<C_SourcePath, C_SourceFile>): DirNode {
             for (path in map.keys) {
                 check(!path.parts.isEmpty())
@@ -187,7 +198,7 @@ class C_MapSourceDir(files: Map<C_SourcePath, C_SourceFile>): C_SourceDir() {
     }
 }
 
-class C_DiskSourceDir(private val dir: File): C_SourceDir() {
+private class C_DiskSourceDir(private val dir: File): C_SourceDir() {
     override fun dir(path: C_SourcePath): Boolean {
         val file = toFile(path)
         return file.isDirectory
@@ -227,7 +238,7 @@ class C_DiskSourceDir(private val dir: File): C_SourceDir() {
     }
 }
 
-class C_CachedSourceDir(private val sourceDir: C_SourceDir): C_SourceDir() {
+private class C_CachedSourceDir(private val sourceDir: C_SourceDir): C_SourceDir() {
     private val cache = mutableMapOf<C_SourcePath, CacheEntry>()
 
     override fun dir(path: C_SourcePath): Boolean {

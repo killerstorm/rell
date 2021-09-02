@@ -1,0 +1,313 @@
+RELEASE NOTES 0.10.6 (2021-09-02)
+
+Breaking changes:
+
+i.   Single-element tuple syntax. In the new version, type (T) is equivalent to just T, while in previous versions it
+     meant a tuple with a single element of type T. But if a field name is specified, the type is still a tuple: (a:T).
+     To use a single-element tuple type without a field name, a comma has to be added in the end: (T,).
+
+ii.  Map item type in collection-at. When iterating over a map<K, V> using a collection-at, the type of an item used
+     to be (k:K, v:V), and from now it will be (K, V). This way, the type of the item is the same as in for-loop.
+     Applications deployed with older versions of Rell will run in compatibility mode and will not break after Rell
+     binaries upgrade.
+
+iii. Restrictions on "module_args". The "module_args" struct now must satisfy same restrictions as global constants: it
+     must be immutable and not contain database-related components (like entities).
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+1. Language: Function type
+
+A type for using a function as a value:
+
+    () -> boolean
+    (integer) -> text
+    (byte_array, decimal) -> integer
+
+Can be used, for example, to pass a function to another function:
+
+    function filter(values: list<integer>, predicate: (integer) -> boolean): list<integer> {
+        return values @* { predicate($) };
+    }
+
+If the referenced function returns nothing, the result type of the function type must be "unit":
+
+    (integer) -> unit
+
+To create a value of a function type, this version also introduces the partial function application feature. In the
+future, lambda expressions (or anonymous functions) will be supported as well.
+
+* Types compatibility *
+
+One function type can be assigned to another function type if:
+
+    - the number of parameters is the same
+    - the result type of the target is unit or can be assigned from the result type of the source
+    - each parameter of the target can be assigned to corresponding parameter of the source
+
+For example:
+
+    val f: (integer?, text) -> boolean;
+    val g: (integer, text) -> unit = f;
+
+The assignment of "f" (source) to "g" (target) works, because the result type of "g" is unit (so the result type of "f"
+doesn't matter), and "f" accepts "integer?" as the first parameter, while "g" accepts just "integer", so any value
+passed to "g" is accepted by "f". The opposite will not work:
+
+    val f: (integer) -> text;
+    val g: (integer?) -> text = f;   // Compilation error: incompatible types.
+
+In this case, "f" cannot be assigned to "g", because one is allowed to pass null to "g", while "f" doesn't accept
+nulls.
+
+* Nullable function type *
+
+To make a function type nullable, enclose it in parentheses:
+
+    ((integer) -> text)?
+
+Without parentheses, the "?" symbol makes the result type nullable, not the function type:
+
+    (integer) -> text?
+
+In order to support the nullable function type syntax with parentheses, the syntax for single-element tuple had to be
+changed: type (T) is now equivalent to T and (T)? is equivalent to T?, while a single-element tuple is (T,).
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+2. Language: Partial function application
+
+Using a wildcard symbol "*", it's possible to create a reference to a function, i. e. to obtain a value of a function
+type that allows to call the function:
+
+    function f(x: integer, y: integer) = x * y;
+
+    val g = f(*);               // Type of "g" is (integer, integer) -> integer
+    g(123, 456);                // Invocation of f(123, 456) via "g".
+
+More generally, the f(*) notation is a partial application of a function. It allows to specify values for some
+parameters and wildcards ("*") for others, returning a value of a function type accepting the parameters for which
+wildcards were specified:
+
+    val g = f(123, *);          // Type of "g" is (integer) -> integer
+    g(456);                     // Calls f(123, 456).
+
+    val h = f(*, 456);          // Type of "h" is (integer) -> integer
+    h(123);                     // Calls f(123, 456).
+
+* Details of partial application syntax *
+
+1. If a wildcard symbol "*" is specified for at least one parameter, all unspecified parameters that don't have default
+   values are also considered wildcards. Thus, expressions
+
+        f(x = *)
+        f(x = *, y = *)
+        f(*)
+
+   return the same value of type (integer, integer) -> integer.
+
+2. Wildcard symbol "*" specified as the last parameter without a name has a special meaning. It doesn't correspond to
+   a particular parameter of the function, but just specifies that the call expression is a partial application. Thus,
+   it's not necessary to specify "*" for each parameter of a function, it's enough to just write f(*), regardless of
+   the number of parameters "f" has (even if it's zero).
+
+   Restriction: if wildcard without a name is specified as the last parameter, there must be no other wildcard
+   parameters, because otherwise the last wildcard parameter isn't needed (as the call is already a partial application)
+   and may be confusing.
+
+3. Parameters that have default values and aren't explicitly specified as wildcards are bound to their default values.
+   The default values are calculated at the moment of partial application. Consider a function:
+
+        function p(x: integer, y: integer = 1) = x * y;
+
+   Following expressions return the same value of type (integer) -> integer:
+
+        p(*)
+        p(x = *)
+        p(x = *, y = 1)
+
+   The code to include both parameters into a function type, i. e. to get (integer, integer) -> integer:
+
+        p(y = *)
+        p(x = *, y = *)
+
+   Note, for instance, that rules 1 and 2 imply that for a single-parameter function with a default value:
+
+        function r(x: integer = 123): integer { ... }
+
+   - r(*) returns () -> integer (as the last unnamed "*" isn't assigned to a particular parameter)
+   - r(x = *) returns (integer) -> integer
+
+4. Order of named wildcard parameters matters. Consider a function:
+
+        function f(x: integer, y: text, z: boolean): decimal { ... }
+
+   - f(*) is equivalent to f(x = *, y = *, z = *) and returns (integer, text, boolean) -> decimal
+   - f(z = *, y = *, x = *) returns (boolean, text, integer) -> decimal
+   - f(y = *) is equivalent to f(y = *, x = *, z = *) and returns (text, integer, boolean) -> decimal
+   - f(*, z = *) is equivalent to f(x = *, z = *, y = *) and returns (integer, boolean, text) -> decimal
+
+* Partial application of system functions *
+
+Most of system library functions can be partially-applied to turn them into function values.
+
+However, some library functions are overloaded, for instance:
+
+    abs(integer): integer
+    abs(decimal): decimal
+
+To partially-apply an overloaded function, the type of the function value has to be known:
+
+    val f: (integer) -> integer = abs(*);   // The type of variable "f" allows to determine which "abs" to use.
+
+Member functions (i. e. methods of types "text", "list<T>", etc.) can be partially-applied too:
+
+    val l = [5, 6, 7];
+    val f = l.size(*);          // Type of "f" is () -> integer.
+    print(f());                 // Prints 3.
+
+    l.add(8);
+    l.add(9);
+    print(f());                 // Prints 5.
+
+Some system functions don't support partial application: print(), log(), require(), text.format() and a few more.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+3. Language: Global constants
+
+Syntax is similar to local variables:
+
+    val MAGIC_NUMBER = 123;
+    val ADMIN_USER = 'Bob';
+
+    function f() {
+        print(MAGIC_NUMBER);
+        print(ADMIN_USER);
+    }
+
+There are restrictions on types and expressions used in global constants:
+
+- Type must be immutable. Thus, collections (list, set, map) are not allowed, as well as structs with mutable
+  attributes.
+- Type cannot be an entity or contain an entity, as global constants must not depend on the state of the database.
+- Expression cannot access the database, so database at-expressions and some APIs are not allowed.
+- Expression cannot call user-defined functions (because the compiler does not restrict what a function can do).
+
+When the expression is simple enough, the value of a global constant is evaluated at compile-time. Otherwise, it is
+evaluated on application start.
+
+It is recommended to use upper-case naming for global constants, though lowercase letters are allowed too.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+4. Language: Iterable values
+
+Iterable value is a new concept for uniform sequences processing. The compiler has an internal type iterable<T>, which
+cannot be used explicitly in code, but different types can be used as iterable<T>:
+
+    range: iterable<integer>
+    list<T>: iterable<T>
+    set<T>: iterable<T>
+    map<K,V>: iterable<(K,V)>
+
+    virtual<list<T>>: iterable<T>
+    virtual<set<T>>: iterable<T>
+    virtual<map<K,V>>: iterable<(K,V)>
+
+Iterable types can be used:
+
+    - in "for" statement: for (x in range(10)) { ... }
+    - in collection-at expression: [1,2,3] @* {} ( ... )
+    - in list/set/map constructor: set([1,2,3])
+
+Practical implication: "range" type can be used in collection-at and list/set/map constructor:
+
+    val squares = range(10) @* {} ( $ * $ );
+    val naturals = set(range(1, 10));
+
+For map<K,V> type, a new constructor accepting iterable<(K,V)> was added, which allows to turn a collection of tuples
+into a map:
+
+    val tuples = [(1,'A'), (2,'B'), (3,'C')];
+    val m = map(tuples);                        // "m" is map<integer,text>
+
+And a map can be turned into a list of tuples:
+
+    val l = list(m);                            // "l" is list<(integer,text)>
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+5. Language: null.to_gtv()
+
+A new expression to get the Gtv-equivalent of null:
+
+    val z: gtv = null.to_gtv();
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+6. Library: New cryptographic functions
+
+A new namespace "crypto" added for cryptographic functions. Old functions are available via the new namespace:
+
+    sha256()
+    keccak256()
+    verify_signature()
+    eth_ecrecover()
+
+Those functions can be called as global functions too, but supposedly this way will be deprecated in the future.
+
+New function to calculate a public key from a private key:
+
+    crypto.privkey_to_pubkey(privkey: byte_array, compress: boolean = false): byte_array
+
+Takes a 32-byte private key and returns either a 65-byte (compressed = false) or 33-byte (compressed = true) public key.
+Note: when compressed = false, the returned public key is 65-bytes, while the public key returned by eth_ecrecover() is
+64-bytes. The 65-bytes key = byte 0x04 + 64-bytes key.
+
+New function to calculate an Ethereum signature (an opposite to eth_ecrecover() to some extent):
+
+    crypto.eth_sign(hash: byte_array, privkey: byte_array): (byte_array, byte_array, integer)
+
+Takes a hash (byte array of arbitrary size) and a private key (32 bytes) and returns values "r", "s" and "rec_id"
+accepted by eth_ecrecover().
+
+Example: calculating a signature with eth_sign() and recovering the public key with eth_ecrecover()
+
+    val privkey = x'000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f';
+    val pubkey = crypto.privkey_to_pubkey(privkey);
+
+    val hash = 'Hello'.to_bytes();
+    val (r, s, rec_id) = crypto.eth_sign(hash, privkey);
+
+    val recovered_pubkey = x'04' + crypto.eth_ecrecover(r, s, rec_id, hash);
+    require(recovered_pubkey == pubkey);
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+7. Tools: Run.xml gtv merging modes
+
+New "merge" attribute added for <array>, <dict> and <entry> tags that can be specified under <gtv> in a run.xml file:
+
+    <gtv path="signers">
+        <array merge="replace">
+            <bytea>0350fe40766bc0ce8d08b3f5b810e49a8352fdd458606bd5fafe5acdcdc8ff3f57</bytea>
+        </array>
+    </gtv>
+
+    <gtv path="foo/bar">
+        <dict merge="replace">
+            <entry key="A">
+                <int>1</int>
+            </entry>
+        </array>
+    </gtv>
+
+Merge modes for arrays:
+- replace: result array = new array
+- append: result array = old array + new array (default mode)
+- prepend: result array = new array + old array
+
+Merge modes for dicts:
+- replace: old entries are discarded
+- keep-old: use old entry value on key conflict
+- keep-new: use new entry value on key conflict (default mode)
+- strict: error on key conflict
+
+Allowed merge modes for dict entries:
+- keep-old
+- keep-new (default)
+- strict

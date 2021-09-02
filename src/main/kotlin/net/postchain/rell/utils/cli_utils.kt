@@ -5,7 +5,9 @@
 package net.postchain.rell.utils
 
 import mu.KLogging
+import net.postchain.base.BlockchainRid
 import net.postchain.common.hexStringToByteArray
+import net.postchain.gtv.GtvNull
 import net.postchain.rell.compiler.*
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_LangVersion
@@ -13,6 +15,7 @@ import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.*
+import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.tools.RellJavaLoggingInit
 import picocli.CommandLine
 import java.io.File
@@ -23,7 +26,7 @@ import kotlin.system.exitProcess
 object RellCliUtils: KLogging() {
     fun createSourceDir(sourceDirPath: String?): C_SourceDir {
         val file = if (sourceDirPath == null) File(".") else File(sourceDirPath)
-        return C_DiskSourceDir(file.absoluteFile)
+        return C_SourceDir.diskDir(file.absoluteFile)
     }
 
     fun compileApp(
@@ -107,7 +110,7 @@ object RellCliUtils: KLogging() {
 
     fun getTarget(sourceDir: String?, module: String): RellCliTarget {
         val sourcePath = checkDir(sourceDir ?: ".").absoluteFile
-        val cSourceDir = C_DiskSourceDir(sourcePath)
+        val cSourceDir = C_SourceDir.diskDir(sourcePath)
         val moduleName = checkModule(module)
         return RellCliTarget(sourcePath, cSourceDir, listOf(moduleName))
     }
@@ -126,26 +129,35 @@ object RellCliUtils: KLogging() {
     }
 
     fun createGlobalContext(
-            chainCtx: Rt_ChainContext,
-            opCtx: Rt_OpContext?,
             typeCheck: Boolean,
-            compilerOptions: C_CompilerOptions
+            compilerOptions: C_CompilerOptions,
+            runXmlTest: Boolean
     ): Rt_GlobalContext {
+        // There was a request to suppress SqlInit logging for unit tests (when run from Eclipse).
+        val dbInitLogLevel = when {
+            runXmlTest -> SqlInitLogging.LOG_NONE
+            else -> RellPostchainModuleEnvironment.DEFAULT_DB_INIT_LOG_LEVEL
+        }
+
         val pcModuleEnv = RellPostchainModuleEnvironment(
                 outPrinter = Rt_OutPrinter,
                 logPrinter = Rt_LogPrinter(),
-                forceTypeCheck = typeCheck
+                forceTypeCheck = typeCheck,
+                dbInitLogLevel = dbInitLogLevel
         )
 
         return Rt_GlobalContext(
                 compilerOptions = compilerOptions,
-                opCtx = opCtx,
-                chainCtx = chainCtx,
                 outPrinter = Rt_OutPrinter,
                 logPrinter = Rt_LogPrinter(),
                 typeCheck = typeCheck,
                 pcModuleEnv = pcModuleEnv
         )
+    }
+
+    fun createChainContext(): Rt_ChainContext {
+        val bcRid = BlockchainRid(ByteArray(32))
+        return Rt_ChainContext(GtvNull, immMapOf(), bcRid)
     }
 
     private fun <T> parseCliArgs(args: Array<String>, argsObj: T): T {

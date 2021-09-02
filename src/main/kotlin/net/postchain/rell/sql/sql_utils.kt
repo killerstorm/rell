@@ -10,6 +10,7 @@ import net.postchain.rell.runtime.Rt_AppContext
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_ExecutionContext
 import net.postchain.rell.runtime.Rt_SqlContext
+import net.postchain.rell.utils.checkEquals
 import org.apache.http.client.utils.URLEncodedUtils
 import java.net.URI
 import java.sql.Connection
@@ -155,21 +156,27 @@ object SqlUtils {
         var database: String? = null
         var schema: String? = null
         sqlExec.executeQuery("SELECT CURRENT_DATABASE(), CURRENT_SCHEMA();", {}) { rs ->
-            check(database == null)
-            check(schema == null)
+            checkEquals(database, null)
+            checkEquals(schema, null)
             database = rs.getString(1)
             schema = rs.getString(2)
         }
         println("Database: [$database], schema: [$schema]")
     }
 
-    fun initDatabase(appCtx: Rt_AppContext, sqlMgr: SqlManager, dropTables: Boolean, sqlInitLog: Boolean) {
+    fun initDatabase(
+            appCtx: Rt_AppContext,
+            sqlCtx: Rt_SqlContext,
+            sqlMgr: SqlManager,
+            dropTables: Boolean,
+            sqlInitLog: Boolean
+    ) {
         sqlMgr.transaction { sqlExec ->
             if (dropTables) {
                 dropAll(sqlExec, true)
             }
 
-            val exeCtx = Rt_ExecutionContext(appCtx, sqlExec)
+            val exeCtx = Rt_ExecutionContext(appCtx, null, sqlCtx, sqlExec)
             val initLogging = SqlInitLogging.ofLevel(if (sqlInitLog) SqlInitLogging.LOG_ALL else SqlInitLogging.LOG_NONE)
             SqlInit.init(exeCtx, true, initLogging)
         }

@@ -6,7 +6,6 @@ package net.postchain.rell.tools.runcfg
 
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvEncoder
-import net.postchain.rell.compiler.C_DiskSourceDir
 import net.postchain.rell.compiler.C_SourceDir
 import net.postchain.rell.model.R_LangVersion
 import net.postchain.rell.model.R_ModuleName
@@ -73,7 +72,7 @@ class Rcfg_App(
         val addDefaults: Boolean
 )
 
-class Rcfg_ChainConfigGtv(val path: List<String>, val src: String?, val gtv: Gtv?)
+class Rcfg_ChainConfigGtv(val path: List<String>, val src: String?, val gtv: Rcfg_Gtv?)
 
 class RellRunConfigParams(
         val sourceDir: C_SourceDir,
@@ -89,7 +88,7 @@ object RellRunConfigGenerator {
             sourceVersion: R_LangVersion,
             unitTest: Boolean
     ): RellPostAppCliConfig {
-        val cSourceDir = C_DiskSourceDir(sourceDir)
+        val cSourceDir = C_SourceDir.diskDir(sourceDir)
 
         val configDir = runConfFile.absoluteFile.parentFile
         val generalConfigDir = DiskGeneralDir(configDir)

@@ -161,6 +161,12 @@ class AppGtvMetaTest: BaseRellTest(false) {
         }""")
     }
 
+    @Test fun testDefConstant() {
+        chkMetaDef("val X = 123;", "constants", "X", """{"type":"integer","value":123}""")
+        chkMetaDef("val X: integer? = 123;", "constants", "X", """{"type":{"type":"nullable","value":"integer"},"value":123}""")
+        chkMetaDef("val X = abs(123);", "constants", "X", """{"type":"integer"}""")
+    }
+
     @Test fun testTypeSimple() {
         initTypes()
         chkMetaType("integer", """ "integer" """)
@@ -237,6 +243,14 @@ class AppGtvMetaTest: BaseRellTest(false) {
                 {"name":null,"type":"text"}
             ]
         }}""")
+    }
+
+    @Test fun testTypeFunction() {
+        initTypes()
+        chkMetaType("() -> integer", """{"params":[],"result":"integer","type":"function"}""")
+        chkMetaType("(integer) -> text", """{"params":["integer"],"result":"text","type":"function"}""")
+        chkMetaType("(integer,boolean,decimal) -> text",
+                """{"params":["integer","boolean","decimal"],"result":"text","type":"function"}""")
     }
 
     @Test fun testTypeComplex() {

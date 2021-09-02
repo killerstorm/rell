@@ -4,10 +4,12 @@
 
 package net.postchain.rell.model
 
+import com.google.common.collect.Iterables
 import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_StackTraceError
 import net.postchain.rell.runtime.Rt_TupleValue
 import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.utils.immListOf
 
 sealed class R_StatementResult
 class R_StatementResult_Return(val value: Rt_Value?): R_StatementResult()
@@ -184,7 +186,11 @@ object R_ForIterator_VirtualCollection: R_ForIterator() {
 
 class R_ForIterator_Map(private val tupleType: R_TupleType): R_ForIterator() {
     override fun list(v: Rt_Value): Iterable<Rt_Value> {
-        return v.asMap().entries.map { Rt_TupleValue(tupleType, listOf(it.key, it.value)) }
+        val map = v.asMap()
+        return Iterables.transform(map.entries) {
+            val entry = it!!
+            Rt_TupleValue(tupleType, immListOf(entry.key, entry.value))
+        }
     }
 }
 

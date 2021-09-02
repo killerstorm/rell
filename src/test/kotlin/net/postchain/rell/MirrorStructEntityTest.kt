@@ -187,7 +187,7 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         chk("user@{} (s = user.to_struct())", "(s=struct<user>[name=text[Bob],rating=int[123]])")
 
         chk("user@{} (user.to_struct().name)", "ct_err:expr_sqlnotallowed")
-        chk("user@{} ('' + user.to_struct())", "ct_err:expr:to_text:nosql:struct<user>")
+        chk("user@{} ('' + user.to_struct())", "ct_err:expr_sqlnotallowed")
         chk("user@{} (user.to_struct() == struct<user>('Bob',123))", "ct_err:expr_sqlnotallowed")
 
         chk("user @ { user.to_struct() }", "ct_err:at_where:type:0:[boolean]:[struct<user>]")
@@ -373,6 +373,15 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         chkOp("val s = struct<mutable my_entity>('xyz',987); print(create my_entity(s));")
         chkOut("my_entity[1]")
         chk("my_entity @* {} ( $, _=.x, _=.y )", "[(my_entity[0],abc,123), (my_entity[1],xyz,987)]")
+    }
+
+    @Test fun testLogEntity() {
+        tstCtx.useSql = true
+        def("@log entity user { name; value: integer = 123; }")
+
+        chk("struct<user>('Bob')", "ct_err:attr_missing:transaction")
+        chk("struct<user>('Bob', transaction @ {})", "rt_err:at:wrong_count:0")
+        chk("struct<user>(transaction @ {})", "ct_err:attr_missing:name")
     }
 
     private fun chkType(typeCode: String, expected: String) {

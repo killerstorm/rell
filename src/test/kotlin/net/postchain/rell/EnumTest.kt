@@ -180,7 +180,7 @@ class EnumTest: BaseRellTest() {
         chk("user @ { .foo.value == 1 } ( .name )", "text[Alice]")
         chk("user @ { .foo.value == 2 } ( .name )", "text[Trudy]")
 
-        chk("user @ { 'Bob' } ( .foo.name )", "ct_err:expr_call_nosql:foo.name")
+        chk("user @ { 'Bob' } ( .foo.name )", "text[A]")
     }
 
     @Test fun testNullable() {
@@ -200,5 +200,8 @@ class EnumTest: BaseRellTest() {
         chkEx("{ val f: foo? = nop(null); return f?.name; }", "null")
         chkEx("{ val f: foo? = nop(null); return f!!.name; }", "rt_err:null_value")
         chkEx("{ val f: foo? = nop(null); return f ?: foo.C; }", "foo[C]")
+
+        chkEx("{ val f: foo? = nop(foo.A); return _type_of(f?.name); }", "text[text?]")
+        chkEx("{ val f: foo? = nop(foo.A); return _type_of(f?.value); }", "text[integer?]")
     }
 }

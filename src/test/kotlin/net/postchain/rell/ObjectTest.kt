@@ -141,7 +141,7 @@ class ObjectTest: BaseRellTest() {
             function f2(): integer = o2.x;
             function f3(): integer = o3.x;
             function f4(): integer = o4.x;
-        """.trimIndent())
+        """)
         tst.chkInit("rt_err:obj:init_cycle:o1,o3,o2,o4,o1")
     }
 
@@ -157,7 +157,7 @@ class ObjectTest: BaseRellTest() {
             function f2(): integer = a2.o2.x;
             function f3(): integer = a3.o3.x;
             function f4(): integer = a4.o4.x;
-        """.trimIndent())
+        """)
         def("import a1; import a2; import a3; import a4;")
 
         chk("a1.o1.x", "int[234]")
@@ -178,7 +178,7 @@ class ObjectTest: BaseRellTest() {
             function f2(): integer = a2.o2.x;
             function f3(): integer = a3.o3.x;
             function f4(): integer = a4.o4.x;
-        """.trimIndent())
+        """)
         def("import a1; import a2; import a3; import a4;")
         tst.chkInit("rt_err:obj:init_cycle:a1:o1,a3:o3,a2:o2,a4:o4,a1:o1")
     }
@@ -221,7 +221,7 @@ class ObjectTest: BaseRellTest() {
             print(foo.x);
             update foo (x = 456);
             print(foo.x);
-        """.trimIndent())
+        """)
 
         chkData("foo(0,456)")
         chk("foo.x", "int[456]")
@@ -333,5 +333,10 @@ class ObjectTest: BaseRellTest() {
 
         chkEx("{ foo.x = 50; return 0; }", "ct_err:no_db_update:query")
         chkEx("{ foo.x += 50; return 0; }", "ct_err:no_db_update:query")
+    }
+
+    @Test fun testAttributeValueTypePromotion() {
+        def("object state { mutable x: decimal = 123; }")
+        chk("state.x", "dec[123]")
     }
 }

@@ -87,8 +87,12 @@ class RunConfigChainConfigGen private constructor(private val cliEnv: RellCliEnv
             b.update(actualGtv, *chainGtv.path.toTypedArray())
         }
 
-        val signersGtv = gtv((replaceSigners ?: listOf()).map { gtv(it.toByteArray()) })
-        b.update(signersGtv, replaceSigners != null, "signers")
+        val signersGtv = let {
+            val elems = (replaceSigners ?: listOf()).map { Rcfg_Gtv.decode(gtv(it.toByteArray())) }
+            val merge = if (replaceSigners != null) Rcfg_Gtv_ArrayMerge.REPLACE else Rcfg_Gtv_ArrayMerge.APPEND
+            Rcfg_Gtv_Array(elems, merge)
+        }
+        b.update(signersGtv, "signers")
 
         if (config.addDependencies && !config.dependencies.isEmpty()) {
             val deps = config.dependencies.map { (k, v) ->
@@ -136,14 +140,15 @@ class RunConfigChainConfigGen private constructor(private val cliEnv: RellCliEnv
         return Pair(gtv, app.module)
     }
 
-    private fun genChainGtv(chainGtv: Rcfg_ChainConfigGtv): Gtv {
+    private fun genChainGtv(chainGtv: Rcfg_ChainConfigGtv): Rcfg_Gtv {
         return if (chainGtv.gtv != null) {
             chainGtv.gtv
         } else if (chainGtv.src != null) {
-            val xml = configDir.readText(chainGtv.src)
-            PostchainUtils.xmlToGtv(xml)
+            val text = configDir.readText(chainGtv.src)
+            val elem = RellXmlParser.parse(chainGtv.src, text)
+            return RunConfigGtvParser.parseGtvNode(elem, mergeAllowed = true)
         } else {
-            gtv(mapOf())
+            Rcfg_Gtv_Dict(mapOf(), Rcfg_Gtv_DictMerge.KEEP_NEW)
         }
     }
 }

@@ -184,26 +184,6 @@ class StackTraceTest: BaseRellTest(false) {
         chkSpecificError("val g = gtv.from_json('[{}]');\ninteger.from_gtv(g);", 4, "rt_err:from_gtv")
     }
 
-    @Test fun testDefaultValueExpr() {
-        tst.testLib = true
-        def("function err() { require(false); return 0; }")
-        def("function f(x: integer = err()) = x * x;")
-        def("operation op(x: integer = err()) {}")
-        def("struct rec { x: integer = err(); }")
-
-        chk("f(123)", "int[15129]")
-        chk("f()", "req_err:null")
-        chkStack(":err(main.rell:1)", ":f(main.rell:2)", ":q(main.rell:5)")
-
-        chk("op(123)", "op[op(123)]")
-        chk("op()", "req_err:null")
-        chkStack(":err(main.rell:1)", ":op(main.rell:3)", ":q(main.rell:5)")
-
-        chk("rec(123)", "rec[x=int[123]]")
-        chk("rec()", "req_err:null")
-        chkStack(":err(main.rell:1)", ":rec(main.rell:4)", ":q(main.rell:5)")
-    }
-
     private fun chkSpecificError(code: String, line: Int, error: String) {
         val t = RellCodeTester(tstCtx)
 
@@ -225,5 +205,41 @@ class StackTraceTest: BaseRellTest(false) {
         t.def("import mid;")
         t.chkFull("query q() { mid.g(); return 0; }", "q", listOf(), error)
         t.chkStack("lib:f(lib.rell:$line)", "mid:g(mid.rell:4)", ":q(main.rell:2)")
+    }
+
+    @Test fun testDefaultValueExpr() {
+        tst.testLib = true
+        def("function err() { require(false); return 0; }")
+        def("function f(x: integer = err()) = x * x;")
+        def("operation op(x: integer = err()) {}")
+        def("struct rec { x: integer = err(); }")
+
+        chk("f(123)", "int[15129]")
+        chk("f()", "req_err:null")
+        chkStack(":err(main.rell:1)", ":f(main.rell:2)", ":q(main.rell:5)")
+
+        chk("op(123)", "op[op(123)]")
+        chk("op()", "req_err:null")
+        chkStack(":err(main.rell:1)", ":op(main.rell:3)", ":q(main.rell:5)")
+
+        chk("rec(123)", "rec[x=int[123]]")
+        chk("rec()", "req_err:null")
+        chkStack(":err(main.rell:1)", ":rec(main.rell:4)", ":q(main.rell:5)")
+    }
+
+    @Test fun testFunctionType() {
+        def("""function h(x: integer) {
+            require(false);
+            return 0;
+        }""")
+        def("""function g(x: integer) {
+            return h(x);
+        }""")
+        def("""function f(x: integer, p: (integer) -> integer) {
+            return p(x);
+        }""")
+
+        chk("f(123, g(*))", "req_err:null")
+        chkStack(":h(main.rell:2)", ":g(main.rell:6)", ":f(main.rell:9)", ":q(main.rell:11)")
     }
 }

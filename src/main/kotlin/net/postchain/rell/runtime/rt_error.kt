@@ -14,13 +14,16 @@ sealed class Rt_BaseError: RuntimeException {
 
 class Rt_Error: Rt_BaseError {
     val code: String
+    val msg: String
 
     constructor(code: String, msg: String): super(msg) {
         this.code = code
+        this.msg = msg
     }
 
     constructor(code: String, msg: String, cause: Throwable): super(msg, cause) {
         this.code = code
+        this.msg = msg
     }
 
     override fun updateMessage(msg: String) = Rt_Error(code, msg, this)

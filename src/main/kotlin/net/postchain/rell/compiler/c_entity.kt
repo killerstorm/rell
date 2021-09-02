@@ -3,6 +3,7 @@ package net.postchain.rell.compiler
 import net.postchain.rell.compiler.ast.*
 import net.postchain.rell.model.*
 import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmMap
 import net.postchain.rell.utils.toImmSet
 
 class C_SysAttribute(
@@ -27,6 +28,11 @@ class C_SysAttribute(
         )
     }
 }
+
+class C_CompiledAttribute(
+        val cDef: C_AttributeDefinition?,
+        val rAttr: R_Attribute
+)
 
 class C_AttributeDefinition(
         val name: S_Name,
@@ -64,7 +70,7 @@ class C_AttributeClause(private val defCtx: C_DefinitionContext) {
         defs.add(def)
     }
 
-    fun compile(index: Int): R_Attribute {
+    fun compile(index: Int): C_CompiledAttribute {
         val priDef = primaryDef ?: defs.first()
 
         val rType = priDef.compileType(defCtx.nsCtx)
@@ -82,7 +88,7 @@ class C_AttributeClause(private val defCtx: C_DefinitionContext) {
                 exprGetter = priDef.exprGetter
         )
 
-        return rAttr
+        return C_CompiledAttribute(priDef, rAttr)
     }
 
     private fun checkSecondaryAttr(def: C_AttributeDefinition, rPrimaryType: R_Type) {
@@ -135,8 +141,8 @@ class C_EntityContext(
         val name = attrDef.header.name
         val nameStr = name.str
 
-        val explicitType = attrDef.header.type?.compile(defCtx.nsCtx)
-        val implicitType = if (explicitType != null) null else defCtx.nsCtx.getTypeOpt(listOf(name))
+        val explicitType = attrDef.header.compileExplicitType(defCtx.nsCtx)
+        val implicitType = if (explicitType != null) null else attrDef.header.compileImplicitType(defCtx.nsCtx)
 
         val exprPos = attrDef.expr?.startPos
         val exprGetter = processAttrExpr(name, attrDef.expr, explicitType ?: implicitType)
@@ -179,12 +185,13 @@ class C_EntityContext(
         val late = C_LateInit(C_CompilerPass.EXPRESSIONS, errValue)
 
         defCtx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
-            val vExpr = expr.compile(defCtx.initExprCtx, C_TypeHint.ofType(exprType)).value()
-            val rExpr0 = vExpr.toRExpr()
-            val adapter = C_Types.adaptSafe(msgCtx, exprType, rExpr0.type, name.pos, "attr_type:$name",
+            val exprCtx = defCtx.initExprCtx
+            val vExpr0 = expr.compile(exprCtx, C_TypeHint.ofType(exprType)).value()
+            val adapter = C_Types.adaptSafe(msgCtx, exprType, vExpr0.type, name.pos, "attr_type:$name",
                     "Default value type mismatch for '$name'")
-            val rExpr = adapter.adaptExpr(rExpr0)
-            late.set(R_DefaultValue(rExpr, vExpr.isDbModification()))
+            val vExpr = adapter.adaptExpr(exprCtx, vExpr0)
+            val rExpr = vExpr.toRExpr()
+            late.set(R_DefaultValue(rExpr, vExpr0.info.hasDbModifications))
         }
 
         return late.getter
@@ -203,26 +210,28 @@ class C_EntityContext(
     }
 
     fun createEntityBody(): R_EntityBody {
-        val rAttributes = compileAttributes()
+        val cAttributes = compileAttributes()
+        val rAttributes = cAttributes.mapValues { it.value.rAttr }
         return R_EntityBody(keys.toList(), indices.toList(), rAttributes)
     }
 
-    fun createStructBody(): Map<String, R_Attribute> {
+    fun createStructBody(): Map<String, C_CompiledAttribute> {
         return compileAttributes()
     }
 
-    private fun compileAttributes(): Map<String, R_Attribute> {
-        val rAttrs = mutableListOf<R_Attribute>()
+    private fun compileAttributes(): Map<String, C_CompiledAttribute> {
+        val cAttrs = mutableListOf<C_CompiledAttribute>()
 
         for (attr in sysAttributes) {
-            rAttrs.add(attr.compile(rAttrs.size))
+            val rAttr = attr.compile(cAttrs.size)
+            cAttrs.add(C_CompiledAttribute(null, rAttr))
         }
 
         for (attr in userAttributes.values) {
-            rAttrs.add(attr.compile(rAttrs.size))
+            cAttrs.add(attr.compile(cAttrs.size))
         }
 
-        return rAttrs.map { it.name to it }.toMap()
+        return cAttrs.map { it.rAttr.name to it }.toMap().toImmMap()
     }
 
     private fun addUniqueKeyIndex(pos: S_Pos, set: MutableSet<Set<String>>, names: List<String>, kind: S_KeyIndexKind) {

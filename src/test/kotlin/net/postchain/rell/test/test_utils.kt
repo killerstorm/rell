@@ -6,6 +6,8 @@ package net.postchain.rell.test
 
 import com.google.common.collect.HashMultimap
 import net.postchain.gtv.Gtv
+import net.postchain.gtv.GtvFactory
+import net.postchain.gtv.GtvType
 import net.postchain.rell.compiler.*
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_EntityDefinition
@@ -21,10 +23,7 @@ import net.postchain.rell.sql.SqlManager
 import net.postchain.rell.sql.SqlUtils
 import net.postchain.rell.tools.api.IdeCodeSnippet
 import net.postchain.rell.tools.api.IdeSnippetMessage
-import net.postchain.rell.utils.CommonUtils
-import net.postchain.rell.utils.PostchainUtils
-import net.postchain.rell.utils.RellCliEnv
-import net.postchain.rell.utils.toImmMap
+import net.postchain.rell.utils.*
 import org.apache.commons.configuration2.PropertiesConfiguration
 import org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder
 import org.apache.commons.configuration2.builder.fluent.Parameters
@@ -244,7 +243,7 @@ object GtvTestUtils {
     }
 
     fun decodeGtvOpArgs(params: List<R_Param>, args: List<Gtv>): List<Rt_Value> {
-        check(params.size == args.size)
+        checkEquals(args.size, params.size)
         val ctx = GtvToRtContext(false)
         return args.mapIndexed { i, gtv ->
             params[i].type.gtvToRt(ctx, gtv)
@@ -256,7 +255,7 @@ object GtvTestUtils {
     }
 
     private fun decodeGtvArgs(params: List<R_Param>, args: List<String>, pretty: Boolean): List<Rt_Value> {
-        check(params.size == args.size)
+        checkEquals(args.size, params.size)
         val ctx = GtvToRtContext(pretty)
         return args.mapIndexed { i, arg ->
             val gtv = decodeGtvStr(arg)
@@ -272,6 +271,25 @@ object GtvTestUtils {
     fun strToGtv(s: String): Gtv {
         val s2 = s.replace('\'', '"')
         return decodeGtvStr(s2)
+    }
+
+    fun merge(v1: Gtv, v2: Gtv): Gtv {
+        checkEquals(v2.type, v1.type)
+        return when (v1.type) {
+            GtvType.ARRAY -> GtvFactory.gtv(v1.asArray().toList() + v2.asArray().toList())
+            GtvType.DICT -> {
+                val m1 = v1.asDict()
+                val m2 = v2.asDict()
+                val m = (m1.keys + m2.keys).toSet().map {
+                    val x1 = m1[it]
+                    val x2 = m2[it]
+                    val x = if (x1 == null) x2 else if (x2 == null) x1 else merge(x1, x2)
+                    it to x!!
+                }.toMap()
+                GtvFactory.gtv(m)
+            }
+            else -> v2
+        }
     }
 }
 

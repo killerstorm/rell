@@ -8,11 +8,12 @@ import net.postchain.gtv.Gtv
 import net.postchain.rell.compiler.C_CompilerPass
 import net.postchain.rell.compiler.C_LateGetter
 import net.postchain.rell.compiler.C_LateInit
-import net.postchain.rell.runtime.Rt_CallFrame
-import net.postchain.rell.runtime.Rt_EnumValue
-import net.postchain.rell.runtime.Rt_Value
-import net.postchain.rell.runtime.toGtv
+import net.postchain.rell.compiler.C_Utils
+import net.postchain.rell.runtime.*
+import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toGtv
+import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmMap
 
 sealed class R_KeyIndex(val attribs: List<String>) {
     fun toMetaGtv(): Gtv {
@@ -34,7 +35,15 @@ class R_EntityFlags(
         val log: Boolean
 )
 
-class R_EntityBody(val keys: List<R_Key>, val indexes: List<R_Index>, val attributes: Map<String, R_Attribute>)
+class R_EntityBody(
+        keys: List<R_Key>,
+        indexes: List<R_Index>,
+        attributes: Map<String, R_Attribute>
+) {
+    val keys = keys.toImmList()
+    val indexes = indexes.toImmList()
+    val attributes = attributes.toImmMap()
+}
 
 class R_ExternalEntity(val chain: R_ExternalChainRef, val metaCheck: Boolean)
 
@@ -93,7 +102,7 @@ class R_ObjectDefinition(names: R_DefinitionNames, val rEntity: R_EntityDefiniti
 
     fun insert(frame: Rt_CallFrame) {
         val createAttrs = rEntity.attributes.values.map {
-            val expr = R_DefaultAttrValueExpr(it, initFrameGetter, null)
+            val expr = R_AttributeDefaultValueExpr(it, null, initFrameGetter)
             R_CreateExprAttr(it, expr)
         }
         val createValues = createAttrs.map { it.attr to it.evaluate(frame) }
@@ -104,7 +113,11 @@ class R_ObjectDefinition(names: R_DefinitionNames, val rEntity: R_EntityDefiniti
     override fun toMetaGtv() = rEntity.toMetaGtv(false)
 }
 
-class R_StructFlags(val typeFlags: R_TypeFlags, val cyclic: Boolean, val infinite: Boolean)
+class R_StructFlags(
+        val typeFlags: R_TypeFlags,
+        val cyclic: Boolean,
+        val infinite: Boolean
+)
 
 class R_Struct(
         val name: String,
@@ -112,8 +125,8 @@ class R_Struct(
         val initFrameGetter: C_LateGetter<R_CallFrame>,
         val mirrorStructs: R_MirrorStructs?
 ) {
-    private val bodyLate = C_LateInit(C_CompilerPass.MEMBERS, DEFAULT_BODY)
-    private val flagsLate = C_LateInit(C_CompilerPass.APPDEFS, DEFAULT_STRUCT_FLAGS)
+    private val bodyLate = C_LateInit(C_CompilerPass.MEMBERS, ERROR_BODY)
+    private val flagsLate = C_LateInit(C_CompilerPass.APPDEFS, ERROR_STRUCT_FLAGS)
 
     val attributes: Map<String, R_Attribute> get() = bodyLate.get().attrMap
     val attributesList: List<R_Attribute> get() = bodyLate.get().attrList
@@ -124,7 +137,7 @@ class R_Struct(
 
     fun setAttributes(attrs: Map<String, R_Attribute>) {
         val attrsList = attrs.values.toList()
-        attrsList.withIndex().forEach { (idx, attr) -> check(attr.index == idx) }
+        attrsList.withIndex().forEach { (idx, attr) -> checkEquals(attr.index, idx) }
         val attrMutable = attrs.values.any { it.mutable }
         bodyLate.set(R_StructBody(attrs, attrsList, attrMutable), true)
     }
@@ -150,9 +163,16 @@ class R_Struct(
     )
 
     companion object {
-        private val DEFAULT_BODY = R_StructBody(attrMap = mapOf(), attrList = listOf(), attrMutable = false)
-        private val DEFAULT_TYPE_FLAGS = R_TypeFlags(mutable = false, gtv = R_GtvCompatibility(true, true), virtualable = true)
-        private val DEFAULT_STRUCT_FLAGS = R_StructFlags(typeFlags = DEFAULT_TYPE_FLAGS, cyclic = false, infinite = false)
+        private val ERROR_BODY = R_StructBody(attrMap = mapOf(), attrList = listOf(), attrMutable = false)
+
+        private val ERROR_TYPE_FLAGS = R_TypeFlags(
+                mutable = false,
+                gtv = R_GtvCompatibility(true, true),
+                virtualable = true,
+                pure = true
+        )
+
+        private val ERROR_STRUCT_FLAGS = R_StructFlags(typeFlags = ERROR_TYPE_FLAGS, cyclic = false, infinite = false)
     }
 }
 
@@ -175,12 +195,14 @@ class R_MirrorStructs(
     ): R_Struct {
         val mutableStr = if (mutable) "mutable " else ""
         val structName = "struct<$mutableStr${names.appLevelName}>"
+
         val structMetaGtv = mapOf(
                 "type" to "struct".toGtv(),
                 "definition_type" to defType.toGtv(),
                 "definition" to names.appLevelName.toGtv(),
                 "mutable" to mutable.toGtv()
         ).toGtv()
+
         return R_Struct(structName, structMetaGtv, initFrameGetter, mirrorStructs = this)
     }
 }
@@ -227,5 +249,69 @@ class R_EnumDefinition(
         return mapOf(
                 "values" to attrMap.mapValues { it.value.toMetaGtv() }.toGtv()
         ).toGtv()
+    }
+}
+
+class R_GlobalConstantId(
+        val index: Int,
+        val app: R_AppUid,
+        val module: R_ModuleKey,
+        val appLevelName: String,
+        private val moduleLevelName: String
+) {
+    fun toErrCodeString() = "$index:$module:$moduleLevelName"
+
+    // not overriding equals() and hashCode() on purpose
+    override fun toString() = "$index:$app:$module:$moduleLevelName"
+}
+
+class R_GlobalConstantBody(val type: R_Type, val expr: R_Expr, val value: Rt_Value?) {
+    companion object {
+        val ERROR = R_GlobalConstantBody(R_CtErrorType, C_Utils.errorRExpr(), null)
+    }
+}
+
+class R_GlobalConstantDefinition(
+        names: R_DefinitionNames,
+        initFrameGetter: C_LateGetter<R_CallFrame>,
+        val constId: R_GlobalConstantId,
+        private val filePos: R_FilePos,
+        private val bodyGetter: C_LateGetter<R_GlobalConstantBody>
+): R_Definition(names, initFrameGetter) {
+    fun evaluate(exeCtx: Rt_ExecutionContext): Rt_Value {
+        val body = bodyGetter.get()
+        return if (body.value != null) {
+            body.value
+        } else {
+            val defCtx = Rt_DefinitionContext(exeCtx, false, defId)
+            Rt_Utils.evaluateInNewFrame(defCtx, null, body.expr, filePos, initFrameGetter)
+        }
+    }
+
+    override fun toMetaGtv(): Gtv {
+        val body = bodyGetter.get()
+        val map = mutableMapOf(
+                "type" to body.type.toMetaGtv()
+        )
+
+        val gtv = valueToGtv(body)
+        if (gtv != null) {
+            map["value"] = gtv
+        }
+
+        return map.toGtv()
+    }
+
+    private fun valueToGtv(body: R_GlobalConstantBody): Gtv? {
+        body.value ?: return null
+
+        val type = body.value.type()
+        if (!type.completeFlags().gtv.toGtv) return null
+
+        return try {
+            type.rtToGtv(body.value, true)
+        } catch (e: Throwable) {
+            null
+        }
     }
 }

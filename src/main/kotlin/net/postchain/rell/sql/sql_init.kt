@@ -30,13 +30,13 @@ class SqlInitLogging(
         val allOther: Boolean = false
 ) {
     companion object {
-        val LOG_NONE = 0
-        val LOG_HEADER = 1000
-        val LOG_STEP_COMPLEX = 2000
-        val LOG_STEP_SIMPLE = 3000
-        val LOG_PLAN_COMPLEX = 4000
-        val LOG_PLAN_SIMPLE = 5000
-        val LOG_ALL = Integer.MAX_VALUE
+        const val LOG_NONE = 0
+        const val LOG_HEADER = 1000
+        const val LOG_STEP_COMPLEX = 2000
+        const val LOG_STEP_SIMPLE = 3000
+        const val LOG_PLAN_COMPLEX = 4000
+        const val LOG_PLAN_SIMPLE = 5000
+        const val LOG_ALL = Integer.MAX_VALUE
 
         fun ofLevel(level: Int) = SqlInitLogging(
                 header = level >= LOG_HEADER,
@@ -55,7 +55,7 @@ class SqlInit private constructor(
         private val initPostchain: Boolean,
         private val logging: SqlInitLogging
 ) {
-    private val sqlCtx = exeCtx.appCtx.sqlCtx
+    private val sqlCtx = exeCtx.sqlCtx
 
     private val initCtx = SqlInitCtx(logger, logging, SqlObjectsInit(exeCtx))
 
@@ -67,7 +67,7 @@ class SqlInit private constructor(
     }
 
     private fun init(): List<String> {
-        log(logging.header, "Initializing database (chain_iid = ${sqlCtx.mainChainMapping.chainId})")
+        log(logging.header, "Initializing database (chain_iid = ${sqlCtx.mainChainMapping().chainId})")
 
         val dbEmpty = SqlInitPlanner.plan(exeCtx, initCtx)
         initCtx.checkErrors()
@@ -108,7 +108,7 @@ class SqlInit private constructor(
     }
 
     private fun initPostchain() {
-        val chainId = exeCtx.appCtx.sqlCtx.mainChainMapping.chainId
+        val chainId = exeCtx.sqlCtx.mainChainMapping().chainId
         val bcRid: BlockchainRid = BlockchainRid.ZERO_RID
 
         val sqlAccess: SQLDatabaseAccess = PostgreSQLDatabaseAccess()
@@ -135,8 +135,8 @@ object SqlInitUtils {
 }
 
 private class SqlInitPlanner private constructor(private val exeCtx: Rt_ExecutionContext, private val initCtx: SqlInitCtx) {
-    private val sqlCtx = exeCtx.appCtx.sqlCtx
-    private val mapping = sqlCtx.mainChainMapping
+    private val sqlCtx = exeCtx.sqlCtx
+    private val mapping = sqlCtx.mainChainMapping()
 
     companion object {
         fun plan(exeCtx: Rt_ExecutionContext, initCtx: SqlInitCtx): Boolean {
@@ -195,7 +195,7 @@ private class SqlEntityIniter private constructor(
         private val metaData: Map<String, MetaEntity>,
         private val sqlTables: Map<String, SqlTable>
 ) {
-    private val sqlCtx = exeCtx.appCtx.sqlCtx
+    private val sqlCtx = exeCtx.sqlCtx
 
     private var nextMetaEntityId = 1 + (metaData.values.map { it.id }.max() ?: -1)
 
@@ -375,7 +375,7 @@ private class SqlEntityIniter private constructor(
         for (name in newAttrs) {
             val attr = entity.attributes.getValue(name)
             if (attr.expr != null || !existingRecs) {
-                val expr = R_DefaultAttrValueExpr(attr, entity.initFrameGetter, null)
+                val expr = R_AttributeDefaultValueExpr(attr, null, entity.initFrameGetter)
                 res.add(R_CreateExprAttr(attr, expr))
             } else {
                 initCtx.msgs.error("meta:attr:new_no_def_value:${entity.metaName}:$name",
@@ -427,7 +427,7 @@ private class SqlInitStep(val order: Int, val order2: Int, val title: String, va
 }
 
 private class SqlStepCtx(val logger: KLogger, val exeCtx: Rt_ExecutionContext, val objsInit: SqlObjectsInit) {
-    val sqlCtx = exeCtx.appCtx.sqlCtx
+    val sqlCtx = exeCtx.sqlCtx
     val sqlExec = exeCtx.sqlExec
 }
 

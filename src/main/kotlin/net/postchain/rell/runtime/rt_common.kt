@@ -63,11 +63,9 @@ class Rt_ChainSqlMapping(val chainId: Long) {
 
     val tableSqlFilter = "$prefix%"
 
-    private val baseSystemTables: Set<String>
-
-    init {
+    private val baseSystemTables: Set<String> = let {
         val sysTables = setOf(blocksTable, transactionsTable) + SqlConstants.SYSTEM_CHAIN_TABLES.map { fullName(it) }
-        baseSystemTables = sysTables.toImmSet()
+        sysTables.toImmSet()
     }
 
     fun fullName(baseName: String): String {

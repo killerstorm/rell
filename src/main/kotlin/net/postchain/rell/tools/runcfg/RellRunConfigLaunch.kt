@@ -19,7 +19,7 @@ import net.postchain.rell.compiler.C_CompilerOptions
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_LangVersion
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
-import net.postchain.rell.runtime.Rt_SqlContext
+import net.postchain.rell.runtime.Rt_RegularSqlContext
 import net.postchain.rell.runtime.Rt_StaticBlockRunnerStrategy
 import net.postchain.rell.sql.PostchainStorageSqlManager
 import net.postchain.rell.utils.*
@@ -150,14 +150,15 @@ private fun runTests(args: CommonArgs) {
         val sqlMgr = PostchainStorageSqlManager(storage, false)
 
         for (tChain in tChains) {
-            val sqlCtx = Rt_SqlContext.createNoExternalChains(tChain.rApp, Rt_ChainSqlMapping(tChain.chain.iid))
+            val sqlCtx = Rt_RegularSqlContext.createNoExternalChains(tChain.rApp, Rt_ChainSqlMapping(tChain.chain.iid))
             val blockRunnerStrategy = Rt_StaticBlockRunnerStrategy(tChain.gtvConfig, keyPair)
+
+            val globalCtx = RellCliUtils.createGlobalContext(true, compilerOptions, true)
 
             val chainRid = BlockchainRid(tChain.chain.brid.toByteArray())
             val chainCtx = PostchainUtils.createChainContext(tChain.gtvConfig, tChain.rApp, chainRid)
-            val globalCtx = RellCliUtils.createGlobalContext(chainCtx, null, true, compilerOptions)
 
-            val testCtx = TestRunnerContext(sqlMgr, globalCtx, sqlCtx, blockRunnerStrategy, tChain.rApp)
+            val testCtx = TestRunnerContext(sqlCtx, sqlMgr, globalCtx, chainCtx, blockRunnerStrategy, tChain.rApp)
             val fns = TestRunner.getTestFunctions(tChain.rApp)
 
             val tc = TestRunnerChain(tChain.chain.name, tChain.chain.iid)

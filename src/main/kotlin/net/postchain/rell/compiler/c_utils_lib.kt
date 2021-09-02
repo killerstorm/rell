@@ -4,7 +4,11 @@
 
 package net.postchain.rell.compiler
 
+import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.vexpr.V_Expr
+import net.postchain.rell.compiler.vexpr.V_FunctionCallTarget
+import net.postchain.rell.compiler.vexpr.V_GlobalConstantRestriction
+import net.postchain.rell.compiler.vexpr.V_SysSpecialGlobalCaseCallExpr
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.toImmMap
@@ -39,48 +43,92 @@ object C_LibUtils {
         return b.build()
     }
 
-    private fun <T> addPartValues(dst: MutableMap<String, T>, src: Map<String, T>) {
-        for ((key, value) in src) {
-            check(key !in dst)
-            dst[key] = value
-        }
-    }
-
     fun makeNsValues(values: Map<String, Rt_Value>): C_Namespace {
         return makeNsEx(
-                values = values.mapValues { C_NamespaceValue_Value(it.value) }
+                values = values.mapValues { C_NamespaceValue_RtValue(it.value) }
         )
     }
 
-    fun typeMemFuncBuilder(type: R_Type): C_MemberFuncBuilder {
-        val b = C_MemberFuncBuilder()
+    fun typeMemFuncBuilder(type: R_Type, pure: Boolean = false): C_MemberFuncBuilder {
+        val b = C_MemberFuncBuilder(type.name, pure = pure)
 
         if (type is R_VirtualType) {
-            b.add("hash", R_ByteArrayType, listOf(), R_SysFn_Virtual.Hash)
+            b.add("hash", R_ByteArrayType, listOf(), R_SysFn_Virtual.Hash, pure = true)
         } else {
             b.add("hash", listOf(), memFnToGtv(type, R_ByteArrayType, R_SysFn_Any.Hash(type)))
         }
 
         b.add("to_gtv", listOf(), memFnToGtv(type, R_GtvType, R_SysFn_Any.ToGtv(type, false, "to_gtv")))
         b.add("to_gtv_pretty", listOf(), memFnToGtv(type, R_GtvType, R_SysFn_Any.ToGtv(type, true, "to_gtv_pretty")))
+
         return b
     }
 
     fun memFnToGtv(type: R_Type, resType: R_Type, fn: R_SysFunction): C_MemberFormalParamsFuncBody {
         val flags = type.completeFlags()
-        return if (!flags.gtv.toGtv) C_SysMemberFunction_Invalid(type) else C_SysMemberFormalParamsFuncBody(resType, fn)
+        return if (!flags.gtv.toGtv) {
+            C_SysMemberFunction_Invalid(type)
+        } else {
+            val cFn = C_SysFunction.direct(fn)
+            C_SysMemberFormalParamsFuncBody(resType, cFn, pure = true)
+        }
     }
 }
 
-private class C_SysMemberFunction_Invalid(private val type: R_Type): C_MemberFormalParamsFuncBody(R_CtErrorType) {
-    override fun varFacts(caseCtx: C_MemberFuncCaseCtx, args: List<V_Expr>) = C_ExprVarFacts.EMPTY
+abstract class C_SysFunction {
+    abstract fun compileCall(ctx: C_ExprContext, callPos: S_Pos): Pair<R_SysFunction, Db_SysFunction?>
 
-    override fun compileCall(ctx: C_ExprContext, caseCtx: C_MemberFuncCaseCtx, args: List<R_Expr>): R_Expr {
-        val typeStr = type.name
+    companion object {
+        fun direct(rFn: R_SysFunction, dbFn: Db_SysFunction? = null): C_SysFunction = C_SysFunction_Direct(rFn, dbFn)
+
+        fun validating(cFn: C_SysFunction, validator: (C_ExprContext, S_Pos) -> Unit): C_SysFunction {
+            return C_SysFunction_Validating(cFn, validator)
+        }
+    }
+}
+
+private class C_SysFunction_Direct(
+        private val rFn: R_SysFunction,
+        private val dbFn: Db_SysFunction?
+): C_SysFunction() {
+    override fun compileCall(ctx: C_ExprContext, callPos: S_Pos) = Pair(rFn, dbFn)
+}
+
+private class C_SysFunction_Validating(
+        private val cFn: C_SysFunction,
+        private val validator: (C_ExprContext, S_Pos) -> Unit
+): C_SysFunction() {
+    override fun compileCall(ctx: C_ExprContext, callPos: S_Pos): Pair<R_SysFunction, Db_SysFunction?> {
+        validator(ctx, callPos)
+        return cFn.compileCall(ctx, callPos)
+    }
+}
+
+private class C_SysMemberFunction_Invalid(private val ownerType: R_Type): C_MemberFormalParamsFuncBody(R_CtErrorType) {
+    override fun effectiveResType(caseCtx: C_MemberFuncCaseCtx, type: R_Type): R_Type {
+        return C_Utils.effectiveMemberType(type, caseCtx.member.safe)
+    }
+
+    override fun makeCallTarget(ctx: C_ExprContext, caseCtx: C_MemberFuncCaseCtx): V_FunctionCallTarget {
+        val typeStr = ownerType.name
         val member = caseCtx.member
-        val name = caseCtx.qualifiedNameMsg()
+        val name = caseCtx.simpleNameMsg()
         throw C_Error.stop(member.linkPos, "fn:invalid:$typeStr:$name", "Function '$name' not available for type '$typeStr'")
     }
+}
+
+abstract class C_SpecialGlobalFuncCaseMatch(resType: R_Type): C_GlobalFuncCaseMatch(resType) {
+    abstract fun varFacts(): C_ExprVarFacts
+    abstract fun subExprs(): List<V_Expr>
+
+    abstract fun compileCallR(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): R_Expr
+
+    final override fun compileCall(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): V_Expr {
+        return V_SysSpecialGlobalCaseCallExpr(ctx, caseCtx, this)
+    }
+
+    open fun globalConstantRestriction(caseCtx: C_GlobalFuncCaseCtx): V_GlobalConstantRestriction? =
+            V_GlobalConstantRestriction("fn:${caseCtx.qualifiedNameMsg()}", "function '${caseCtx.qualifiedNameMsg()}'")
 }
 
 class C_GlobalFuncTable(map: Map<String, C_GlobalFunction>) {
@@ -109,12 +157,15 @@ class C_MemberFuncTable(private val map: Map<String, C_SysMemberFunction>) {
     }
 }
 
-sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT> {
+sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT>(
+        private val namespace: String?,
+        private val defaultPure: Boolean
+) {
     private val caseMap: MultiValuedMap<String, C_FuncCase<CaseCtxT>> = ArrayListValuedHashMap()
     private val fnMap = mutableMapOf<String, FuncT>()
 
-    protected abstract fun makeBody(result: R_Type, rFn: R_SysFunction, dbFn: Db_SysFunction?): C_FormalParamsFuncBody<CaseCtxT>
-    protected abstract fun makeFunc(cases: List<C_FuncCase<CaseCtxT>>): FuncT
+    protected abstract fun makeBody(result: R_Type, fn: C_SysFunction, pure: Boolean): C_FormalParamsFuncBody<CaseCtxT>
+    protected abstract fun makeFunc(simpleName: String, fullName: String, cases: List<C_FuncCase<CaseCtxT>>): FuncT
 
     protected fun addCase(name: String, case: C_FuncCase<CaseCtxT>, deprecated: C_Deprecated?) {
         val case2 = if (deprecated == null) case else makeDeprecatedCase(case, deprecated)
@@ -123,14 +174,18 @@ sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT> {
 
     protected fun buildMap(): Map<String, FuncT> {
         val res = mutableMapOf<String, FuncT>()
+
         for (name in caseMap.keySet().sorted()) {
             val cases = caseMap[name]
-            res[name] = makeFunc(cases.toList())
+            val fullName = if (namespace == null) name else "$namespace.$name"
+            res[name] = makeFunc(name, fullName, cases.toList())
         }
+
         for (name in fnMap.keys) {
             check(name !in res) { name }
             res[name] = fnMap.getValue(name)
         }
+
         return res.toMap()
     }
 
@@ -155,8 +210,9 @@ sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT> {
             result: R_Type,
             params: List<C_ArgTypeMatcher>,
             rFn: R_SysFunction,
-            deprecated: C_Deprecated
-    ): BuilderT = addEx(name, result, params, rFn, null, deprecated)
+            deprecated: C_Deprecated,
+            pure: Boolean = defaultPure
+    ): BuilderT = addEx(name, result, params, rFn, null, deprecated = deprecated, pure = pure)
 
     fun addEx(
             name: String,
@@ -164,8 +220,9 @@ sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT> {
             params: List<C_ArgTypeMatcher>,
             rFn: R_SysFunction,
             dbFn: Db_SysFunction? = null,
-            deprecated: C_Deprecated? = null
-    ): BuilderT = addEx(name, result, C_ArgsTypesMatcher_Fixed(params), rFn, dbFn, deprecated)
+            deprecated: C_Deprecated? = null,
+            pure: Boolean = defaultPure
+    ): BuilderT = addEx(name, result, C_ArgsTypesMatcher_Fixed(params), rFn, dbFn, deprecated = deprecated, pure = pure)
 
     fun addEx(
             name: String,
@@ -173,9 +230,23 @@ sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT> {
             matcher: C_ArgsTypesMatcher,
             rFn: R_SysFunction,
             dbFn: Db_SysFunction? = null,
-            deprecated: C_Deprecated? = null
+            deprecated: C_Deprecated? = null,
+            pure: Boolean = defaultPure
     ): BuilderT {
-        val body = makeBody(result, rFn, dbFn)
+        val cFn = C_SysFunction.direct(rFn, dbFn)
+        addEx(name, result, matcher, cFn, deprecated, pure = pure)
+        return self()
+    }
+
+    fun addEx(
+            name: String,
+            result: R_Type,
+            matcher: C_ArgsTypesMatcher,
+            cFn: C_SysFunction,
+            deprecated: C_Deprecated? = null,
+            pure: Boolean = defaultPure
+    ): BuilderT {
+        val body = makeBody(result, cFn, pure)
         val case = makeCase(matcher, body)
         addCase(name, case, deprecated)
         return self()
@@ -186,8 +257,9 @@ sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT> {
             result: R_Type,
             params: List<R_Type>,
             rFn: R_SysFunction,
-            deprecated: C_Deprecated
-    ): BuilderT = add(name, result, params, rFn, null, deprecated)
+            deprecated: C_Deprecated,
+            pure: Boolean = defaultPure
+    ): BuilderT = add(name, result, params, rFn, null, deprecated = deprecated, pure = pure)
 
     fun add(
             name: String,
@@ -195,10 +267,25 @@ sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT> {
             params: List<R_Type>,
             rFn: R_SysFunction,
             dbFn: Db_SysFunction? = null,
-            deprecated: C_Deprecated? = null
+            deprecated: C_Deprecated? = null,
+            pure: Boolean = defaultPure
     ): BuilderT {
         val matchers = params.map { C_ArgTypeMatcher_Simple(it) }
-        addEx(name, result, matchers, rFn, dbFn, deprecated)
+        addEx(name, result, matchers, rFn, dbFn, deprecated = deprecated, pure = pure)
+        return self()
+    }
+
+    fun add(
+            name: String,
+            result: R_Type,
+            params: List<R_Type>,
+            cFn: C_SysFunction,
+            deprecated: C_Deprecated? = null,
+            pure: Boolean = defaultPure
+    ): BuilderT {
+        val matchers = params.map { C_ArgTypeMatcher_Simple(it) }
+        val matcher = C_ArgsTypesMatcher_Fixed(matchers)
+        addEx(name, result, matcher, cFn, deprecated = deprecated, pure = pure)
         return self()
     }
 
@@ -210,16 +297,21 @@ sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT> {
     ): BuilderT {
         val matchers = params.map { C_ArgTypeMatcher_Simple(it) }
         val case = makeCase(matchers, body)
-        addCase(name, case, deprecated)
+        addCase(name, case, deprecated = deprecated)
         return self()
     }
 
-    fun add(name: String, case: C_FuncCase<CaseCtxT>, deprecated: C_Deprecated? = null): BuilderT {
-        addCase(name, case, deprecated)
+    fun add(
+            name: String,
+            case: C_FuncCase<CaseCtxT>,
+            deprecated: C_Deprecated? = null
+    ): BuilderT {
+        addCase(name, case, deprecated = deprecated)
         return self()
     }
 
     fun add(name: String, fn: FuncT): BuilderT {
+        check(name !in caseMap.keySet()) { "Duplicate function: '$name'" }
         check(name !in fnMap) { "Duplicate function: '$name'" }
         fnMap[name] = fn
         return self()
@@ -231,10 +323,11 @@ sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT> {
             result: R_Type,
             params: List<R_Type>,
             rFn: R_SysFunction,
-            dbFn: Db_SysFunction? = null
+            dbFn: Db_SysFunction? = null,
+            pure: Boolean = defaultPure
     ): BuilderT {
         if (c) {
-            add(name, result, params, rFn, dbFn)
+            add(name, result, params, rFn, dbFn, pure = pure)
         }
         return self()
     }
@@ -246,9 +339,10 @@ sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT> {
             varargParam: R_Type,
             rFn: R_SysFunction,
             dbFn: Db_SysFunction? = null,
-            deprecated: C_Deprecated? = null
+            deprecated: C_Deprecated? = null,
+            pure: Boolean = defaultPure
     ): BuilderT {
-        addVarArg(name, result, fixedParams, varargParam, true, rFn, dbFn, deprecated)
+        addVarArg(name, result, fixedParams, varargParam, true, rFn, dbFn, deprecated = deprecated, pure = pure)
         return self()
     }
 
@@ -259,9 +353,10 @@ sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT> {
             varargParam: R_Type,
             rFn: R_SysFunction,
             dbFn: Db_SysFunction? = null,
-            deprecated: C_Deprecated? = null
+            deprecated: C_Deprecated? = null,
+            pure: Boolean = defaultPure
     ): BuilderT {
-        addVarArg(name, result, fixedParams, varargParam, false, rFn, dbFn, deprecated)
+        addVarArg(name, result, fixedParams, varargParam, false, rFn, dbFn, deprecated = deprecated, pure = pure)
         return self()
     }
 
@@ -272,9 +367,10 @@ sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT> {
             varargParam: C_ArgTypeMatcher,
             rFn: R_SysFunction,
             dbFn: Db_SysFunction? = null,
-            deprecated: C_Deprecated? = null
+            deprecated: C_Deprecated? = null,
+            pure: Boolean = defaultPure
     ): BuilderT {
-        addVarArg(name, result, fixedParams, varargParam, false, rFn, dbFn, deprecated)
+        addVarArg(name, result, fixedParams, varargParam, false, rFn, dbFn, deprecated = deprecated, pure = pure)
         return self()
     }
 
@@ -286,11 +382,12 @@ sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT> {
             allowZero: Boolean,
             rFn: R_SysFunction,
             dbFn: Db_SysFunction? = null,
-            deprecated: C_Deprecated? = null
+            deprecated: C_Deprecated? = null,
+            pure: Boolean = defaultPure
     ): BuilderT {
         val fixedMatchers = fixedParams.map { C_ArgTypeMatcher_Simple(it) }
         val varargMatcher = C_ArgTypeMatcher_Simple(varargParam)
-        addVarArg(name, result, fixedMatchers, varargMatcher, allowZero, rFn, dbFn, deprecated)
+        addVarArg(name, result, fixedMatchers, varargMatcher, allowZero, rFn, dbFn, deprecated = deprecated, pure = pure)
         return self()
     }
 
@@ -302,25 +399,28 @@ sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT> {
             allowZero: Boolean,
             rFn: R_SysFunction,
             dbFn: Db_SysFunction? = null,
-            deprecated: C_Deprecated? = null
+            deprecated: C_Deprecated? = null,
+            pure: Boolean = defaultPure
     ): BuilderT {
         val argsMatcher = C_ArgsTypesMatcher_VarArg(fixedParams, varargParam, allowZero)
-        addEx(name, result, argsMatcher, rFn, dbFn, deprecated)
+        addEx(name, result, argsMatcher, rFn, dbFn, deprecated = deprecated, pure = pure)
         return self()
     }
 }
 
-class C_GlobalFuncBuilder: C_FuncBuilder<C_GlobalFuncBuilder, C_GlobalFuncCaseCtx, C_GlobalFunction>() {
-    override fun makeBody(
-            result: R_Type,
-            rFn: R_SysFunction,
-            dbFn: Db_SysFunction?
-    ): C_FormalParamsFuncBody<C_GlobalFuncCaseCtx> {
-        return C_SysGlobalFormalParamsFuncBody(result, rFn, dbFn)
+class C_GlobalFuncBuilder(
+        namespace: String?,
+        pure: Boolean = false
+): C_FuncBuilder<C_GlobalFuncBuilder, C_GlobalFuncCaseCtx, C_GlobalFunction>(
+        namespace,
+        pure
+) {
+    override fun makeBody(result: R_Type, cFn: C_SysFunction, pure: Boolean): C_FormalParamsFuncBody<C_GlobalFuncCaseCtx> {
+        return C_SysGlobalFormalParamsFuncBody(result, cFn, pure = pure)
     }
 
-    override fun makeFunc(cases: List<C_FuncCase<C_GlobalFuncCaseCtx>>): C_GlobalFunction {
-        return C_RegularSysGlobalFunction(cases)
+    override fun makeFunc(simpleName: String, fullName: String, cases: List<C_FuncCase<C_GlobalFuncCaseCtx>>): C_GlobalFunction {
+        return C_RegularSysGlobalFunction(simpleName, fullName, cases)
     }
 
     fun build(): C_GlobalFuncTable {
@@ -329,16 +429,18 @@ class C_GlobalFuncBuilder: C_FuncBuilder<C_GlobalFuncBuilder, C_GlobalFuncCaseCt
     }
 }
 
-class C_MemberFuncBuilder: C_FuncBuilder<C_MemberFuncBuilder, C_MemberFuncCaseCtx, C_SysMemberFunction>() {
-    override fun makeBody(
-            result: R_Type,
-            rFn: R_SysFunction,
-            dbFn: Db_SysFunction?
-    ): C_FormalParamsFuncBody<C_MemberFuncCaseCtx> {
-        return C_SysMemberFormalParamsFuncBody(result, rFn, dbFn)
+class C_MemberFuncBuilder(
+        namespace: String,
+        pure: Boolean = false
+): C_FuncBuilder<C_MemberFuncBuilder, C_MemberFuncCaseCtx, C_SysMemberFunction>(
+        namespace,
+        pure
+) {
+    override fun makeBody(result: R_Type, cFn: C_SysFunction, pure: Boolean): C_FormalParamsFuncBody<C_MemberFuncCaseCtx> {
+        return C_SysMemberFormalParamsFuncBody(result, cFn, pure = pure)
     }
 
-    override fun makeFunc(cases: List<C_FuncCase<C_MemberFuncCaseCtx>>): C_SysMemberFunction {
+    override fun makeFunc(simpleName: String, fullName: String, cases: List<C_FuncCase<C_MemberFuncCaseCtx>>): C_SysMemberFunction {
         return C_CasesSysMemberFunction(cases)
     }
 

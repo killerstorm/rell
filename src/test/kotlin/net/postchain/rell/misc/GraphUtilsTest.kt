@@ -191,6 +191,18 @@ class GraphUtilsTest {
         assertEquals(exp, closure.sorted().toString())
     }
 
+    @Test fun testParentLinksToChildrenCollections() {
+        val graph = mutableMapOf(
+                "B" to listOf("A"),
+                "C" to listOf("B"),
+                "D" to listOf("B"),
+                "E" to listOf()
+        )
+
+        val graph2 = C_GraphUtils.transpose(graph)
+        assertEquals("{A=[B],B=[C,D],C=[],D=[],E=[]}", graphToString(graph2))
+    }
+
     private fun graphToString(graph: Map<String, Collection<String>>): String {
         return "{" + graph.keys.sorted().joinToString(",") {
             "" + it + "=[" + graph[it]!!.sorted().joinToString(",") + "]"

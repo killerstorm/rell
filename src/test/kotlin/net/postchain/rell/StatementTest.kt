@@ -79,7 +79,7 @@ class StatementTest: BaseRellTest() {
                 i = i + 1;
             }
             return s;
-        }""".trimIndent()
+        }"""
 
         chkEx(code, "text[01234]")
     }
@@ -94,7 +94,7 @@ class StatementTest: BaseRellTest() {
                 if (i >= 5) break;
             }
             return s;
-        }""".trimIndent()
+        }"""
 
         chkEx(code, "text[01234]")
     }
@@ -115,7 +115,7 @@ class StatementTest: BaseRellTest() {
             }
 
             return res;
-        }""".trimIndent()
+        }"""
 
         chkEx(code, "[i=0, i=1, r=1, i=2, r=2, i=3, i=4, r=1, i=5, r=2]")
     }
@@ -135,7 +135,7 @@ class StatementTest: BaseRellTest() {
                 if (i >= 3) break;
             }
             return s;
-        }""".trimIndent()
+        }"""
 
         chkEx(code, "text[0,0 0,1 0,2 0,3 0,4 1,0 1,1 1,2 1,3 1,4 2,0 2,1 2,2 2,3 2,4 ]")
     }
@@ -161,7 +161,7 @@ class StatementTest: BaseRellTest() {
                 s = s + name;
             }
             return s;
-        }""".trimIndent()
+        }"""
 
         chkEx(code, "text[Bob,Alice,Trudy]")
     }
@@ -180,7 +180,7 @@ class StatementTest: BaseRellTest() {
                 if (n >= 2) break;
             }
             return s;
-        }""".trimIndent()
+        }"""
 
         chkEx(code, "text[Bob,Alice]")
     }
@@ -197,7 +197,7 @@ class StatementTest: BaseRellTest() {
                 res.add('r=' + r);
             }
             return res;
-        }""".trimIndent()
+        }"""
 
         chkEx(code, "[i=0, i=1, r=1, i=2, r=2, i=3, i=4, r=1, i=5, r=2]")
     }
@@ -212,7 +212,7 @@ class StatementTest: BaseRellTest() {
                 if (i == 3) return 123;
             }
             return 456;
-        }""".trimIndent()
+        }"""
 
         chkEx(code, "int[123]")
         chkOut("0", "1", "2", "3")
@@ -298,7 +298,7 @@ class StatementTest: BaseRellTest() {
                 for (i in range(5)) x.add(i);
                 return x;
             }
-        """.trimIndent()
+        """
         chkFull("$code query q() { val p = list<integer>(); f(p)[2] = 777; return ''+p; }", listOf(), "text[[0, 1, 777, 3, 4]]")
     }
 
@@ -315,7 +315,7 @@ class StatementTest: BaseRellTest() {
                 p[x][y] = 777;
                 return ''+p;
             }
-        """.trimIndent()
+        """
 
         chkFull(code, listOf(Rt_IntValue(0), Rt_IntValue(0)), "text[[[777, 1, 2], [10, 11, 12], [20, 21, 22]]]")
         chkFull(code, listOf(Rt_IntValue(1), Rt_IntValue(1)), "text[[[0, 1, 2], [10, 777, 12], [20, 21, 22]]]")
@@ -326,7 +326,7 @@ class StatementTest: BaseRellTest() {
         val code = """
             function f(x: integer): map<integer, text> = [x:'Bob',x*2:'Alice'];
             query q(i: integer)
-        """.trimIndent()
+        """
 
         chkFull("$code = f(123);", listOf(Rt_IntValue(0)), "map<integer,text>[int[123]=text[Bob],int[246]=text[Alice]]")
         chkFull("$code = f(123).values();", listOf(Rt_IntValue(0)), "list<text>[text[Bob],text[Alice]]")

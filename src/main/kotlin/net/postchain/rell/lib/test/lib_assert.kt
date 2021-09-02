@@ -6,9 +6,10 @@ import net.postchain.rell.compiler.vexpr.V_BinaryOp
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
+import net.postchain.rell.utils.immListOf
 
 object C_Lib_Rell_Test_Assert {
-    val FUNCTIONS = C_GlobalFuncBuilder()
+    val FUNCTIONS = C_GlobalFuncBuilder("rell.test")
             .add("assert_equals", C_FuncCase_AssertEquals(true))
             .add("assert_not_equals", C_FuncCase_AssertEquals(false))
             .add("assert_true", R_UnitType, listOf(R_BooleanType), R_Fns.AssertBoolean(true))
@@ -57,17 +58,15 @@ private object R_Fns {
     }
 }
 
-private object C_FuncCase_AssertNotNull: C_GlobalFuncCase() {
-    override fun getParamTypeHint(index: Int) = C_TypeHint.NONE
-
+private object C_FuncCase_AssertNotNull: C_GlobalSpecialFuncCase() {
     override fun match(ctx: C_ExprContext, args: List<V_Expr>): C_GlobalFuncCaseMatch? {
         if (args.size != 1) return null
 
         val expr = args[0]
-        val type = expr.type()
+        val type = expr.type
         if (type !is R_NullableType) return null
 
-        val preFacts = expr.varFacts().postFacts
+        val preFacts = expr.varFacts.postFacts
         val varFacts = C_ExprVarFacts.forNullCast(preFacts, expr)
         return CaseMatch(expr, varFacts)
     }
@@ -75,27 +74,26 @@ private object C_FuncCase_AssertNotNull: C_GlobalFuncCase() {
     private class CaseMatch(
             val actual: V_Expr,
             val varFacts: C_ExprVarFacts
-    ): C_GlobalFuncCaseMatch(R_UnitType) {
+    ): C_SpecialGlobalFuncCaseMatch(R_UnitType) {
         override fun varFacts() = varFacts
+        override fun subExprs() = immListOf(actual)
 
-        override fun compileCall(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): R_Expr {
+        override fun compileCallR(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): R_Expr {
             val rActual = actual.toRExpr()
-            return R_SysCallExpr(resType, R_Fns.AssertNotNull, listOf(rActual), caseCtx.qualifiedNameMsg())
+            return C_Utils.createSysCallRExpr(resType, R_Fns.AssertNotNull, listOf(rActual), caseCtx)
         }
     }
 }
 
-private class C_FuncCase_AssertEquals(private val positive: Boolean): C_GlobalFuncCase() {
-    override fun getParamTypeHint(index: Int) = C_TypeHint.NONE
-
+private class C_FuncCase_AssertEquals(private val positive: Boolean): C_GlobalSpecialFuncCase() {
     override fun match(ctx: C_ExprContext, args: List<V_Expr>): C_GlobalFuncCaseMatch? {
         if (args.size != 2) return null
 
         val cOp = C_BinOp_Eq
         val (actual, expected) = cOp.adaptLeftRight(ctx, args[0], args[1])
 
-        var actualType = actual.type()
-        var expectedType = expected.type()
+        var actualType = actual.type
+        var expectedType = expected.type
         if (actualType is R_NullableType && expectedType == actualType.valueType) {
             expectedType = actualType
         } else if (expectedType is R_NullableType && actualType == expectedType.valueType) {
@@ -113,10 +111,11 @@ private class C_FuncCase_AssertEquals(private val positive: Boolean): C_GlobalFu
             val expected: V_Expr,
             val vOp: V_BinaryOp,
             val positive: Boolean
-    ): C_GlobalFuncCaseMatch(R_UnitType) {
+    ): C_SpecialGlobalFuncCaseMatch(R_UnitType) {
         override fun varFacts() = C_ExprVarFacts.forSubExpressions(listOf(actual, expected))
+        override fun subExprs() = immListOf(actual, expected)
 
-        override fun compileCall(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): R_Expr {
+        override fun compileCallR(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): R_Expr {
             val rActual = actual.toRExpr()
             val rExpected = expected.toRExpr()
             return if (positive) {
@@ -128,14 +127,12 @@ private class C_FuncCase_AssertEquals(private val positive: Boolean): C_GlobalFu
     }
 }
 
-private class C_FuncCase_AssertCompare(private val op: C_BinOp_Cmp): C_GlobalFuncCase() {
-    override fun getParamTypeHint(index: Int) = C_TypeHint.NONE
-
+private class C_FuncCase_AssertCompare(private val op: C_BinOp_Cmp): C_GlobalSpecialFuncCase() {
     override fun match(ctx: C_ExprContext, args: List<V_Expr>): C_GlobalFuncCaseMatch? {
         if (args.size != 2) return null
 
         val (left, right) = op.adaptLeftRight(ctx, args[0], args[1])
-        val vOp = op.compileOp(left.type(), right.type())
+        val vOp = op.compileOp(left.type, right.type)
         vOp ?: return null
 
         return CaseMatch(left, right, vOp)
@@ -145,10 +142,11 @@ private class C_FuncCase_AssertCompare(private val op: C_BinOp_Cmp): C_GlobalFun
             val left: V_Expr,
             val right: V_Expr,
             val vOp: V_BinaryOp
-    ): C_GlobalFuncCaseMatch(R_UnitType) {
+    ): C_SpecialGlobalFuncCaseMatch(R_UnitType) {
         override fun varFacts() = C_ExprVarFacts.forSubExpressions(listOf(left, right))
+        override fun subExprs() = immListOf(left, right)
 
-        override fun compileCall(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): R_Expr {
+        override fun compileCallR(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): R_Expr {
             val rLeft = left.toRExpr()
             val rRight = right.toRExpr()
             return R_AssertCompareExpr(rLeft, rRight, vOp.rOp)
@@ -156,9 +154,10 @@ private class C_FuncCase_AssertCompare(private val op: C_BinOp_Cmp): C_GlobalFun
     }
 }
 
-private class C_FuncCase_AssertRange(private val op1: C_BinOp_Cmp, private val op2: C_BinOp_Cmp): C_GlobalFuncCase() {
-    override fun getParamTypeHint(index: Int) = C_TypeHint.NONE
-
+private class C_FuncCase_AssertRange(
+        private val op1: C_BinOp_Cmp,
+        private val op2: C_BinOp_Cmp
+): C_GlobalSpecialFuncCase() {
     override fun match(ctx: C_ExprContext, args: List<V_Expr>): C_GlobalFuncCaseMatch? {
         if (args.size != 3) return null
 
@@ -167,8 +166,8 @@ private class C_FuncCase_AssertRange(private val op1: C_BinOp_Cmp, private val o
         val expected1 = adapted[1]
         val expected2 = adapted[2]
 
-        val vOp1 = op1.compileOp(actual.type(), expected1.type())
-        val vOp2 = op2.compileOp(actual.type(), expected2.type())
+        val vOp1 = op1.compileOp(actual.type, expected1.type)
+        val vOp2 = op2.compileOp(actual.type, expected2.type)
         vOp1 ?: return null
         vOp2 ?: return null
 
@@ -181,10 +180,11 @@ private class C_FuncCase_AssertRange(private val op1: C_BinOp_Cmp, private val o
             val expected2: V_Expr,
             val vOp1: V_BinaryOp,
             val vOp2: V_BinaryOp
-    ): C_GlobalFuncCaseMatch(R_UnitType) {
+    ): C_SpecialGlobalFuncCaseMatch(R_UnitType) {
         override fun varFacts() = C_ExprVarFacts.forSubExpressions(listOf(actual, expected1, expected2))
+        override fun subExprs() = immListOf(actual, expected1, expected2)
 
-        override fun compileCall(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): R_Expr {
+        override fun compileCallR(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): R_Expr {
             val rActual = actual.toRExpr()
             val rExpected1 = expected1.toRExpr()
             val rExpected2 = expected2.toRExpr()

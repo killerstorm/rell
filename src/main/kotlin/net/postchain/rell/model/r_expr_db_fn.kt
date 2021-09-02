@@ -2,6 +2,7 @@ package net.postchain.rell.model
 
 import net.postchain.rell.compiler.C_Constants
 import net.postchain.rell.sql.SqlConstants
+import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmList
 import java.util.regex.Pattern
 
@@ -21,9 +22,7 @@ abstract class Db_SysFn_Simple(name: String, val sql: String): Db_SysFunction(na
 }
 
 abstract class Db_SysFn_Template(name: String, private val arity: Int, template: String): Db_SysFunction(name) {
-    private val fragments: List<Pair<String?, Int?>>
-
-    init {
+    private val fragments: List<Pair<String?, Int?>> = let {
         val pat = Pattern.compile("#\\d")
         val m = pat.matcher(template)
 
@@ -41,11 +40,11 @@ abstract class Db_SysFn_Template(name: String, private val arity: Int, template:
 
         if (i < template.length) list.add(Pair(template.substring(i), null))
 
-        fragments = list.toImmList()
+        list.toImmList()
     }
 
     override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<RedDb_Expr>) {
-        check(args.size == arity)
+        checkEquals(args.size, arity)
         for (f in fragments) {
             if (f.first != null) bld.append(f.first!!)
             if (f.second != null) args[f.second!!].toSql(ctx, bld, false)
@@ -55,7 +54,7 @@ abstract class Db_SysFn_Template(name: String, private val arity: Int, template:
 
 abstract class Db_SysFn_Cast(name: String, val type: String): Db_SysFunction(name) {
     override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<RedDb_Expr>) {
-        check(args.size == 1)
+        checkEquals(args.size, 1)
         bld.append("(")
         args[0].toSql(ctx, bld, true)
         bld.append("::$type)")
@@ -134,7 +133,7 @@ object Db_SysFn_Decimal {
 
     object ToInteger: Db_SysFunction("decimal.to_integer") {
         override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<RedDb_Expr>) {
-            check(args.size == 1)
+            checkEquals(args.size, 1)
             bld.append("TRUNC(")
             args[0].toSql(ctx, bld, false)
             bld.append(")::BIGINT")
@@ -144,7 +143,7 @@ object Db_SysFn_Decimal {
     object ToText: Db_SysFunction("decimal.to_text") {
         override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<RedDb_Expr>) {
             // Using regexp to remove trailing zeros.
-            check(args.size == 1)
+            checkEquals(args.size, 1)
             bld.append("REGEXP_REPLACE(")
             args[0].toSql(ctx, bld, true)
             // Clever regexp: can handle special cases like "0.0", "0.000000", etc.
@@ -155,7 +154,7 @@ object Db_SysFn_Decimal {
 
 object Db_SysFn_Nop: Db_SysFunction("NOP") {
     override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, args: List<RedDb_Expr>) {
-        check(args.size == 1)
+        checkEquals(args.size, 1)
         args[0].toSql(ctx, bld, true)
     }
 }

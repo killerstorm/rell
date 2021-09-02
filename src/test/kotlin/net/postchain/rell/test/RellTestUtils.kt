@@ -14,28 +14,32 @@ import net.postchain.rell.sql.SqlManager
 import net.postchain.rell.utils.CommonUtils
 
 object RellTestUtils {
+    const val MAIN_FILE = "main.rell"
+
+    const val RELL_VER = "0.10.6"
+
+    val DEFAULT_COMPILER_OPTIONS = C_CompilerOptions.builder().hiddenLib(true).build()
+
     val ENCODER_PLAIN = { _: R_Type, v: Rt_Value -> v.toString() }
     val ENCODER_STRICT = { _: R_Type, v: Rt_Value -> v.toStrictString() }
     val ENCODER_GTV = { t: R_Type, v: Rt_Value -> GtvTestUtils.encodeGtvStr(t.rtToGtv(v, true)) }
 
-    const val MAIN_FILE = "main.rell"
-
-    const val RELL_VER = "0.10.4"
-
     fun processApp(code: String, processor: (T_App) -> String): String {
-        val sourceDir = C_MapSourceDir.of(MAIN_FILE to code)
+        val sourceDir = C_SourceDir.mapDirOf(MAIN_FILE to code)
         return processApp(sourceDir, processor = processor)
     }
 
     fun processApp(
             sourceDir: C_SourceDir,
             errPos: Boolean = false,
-            options: C_CompilerOptions = C_CompilerOptions.DEFAULT,
+            options: C_CompilerOptions = DEFAULT_COMPILER_OPTIONS,
             outMessages: MutableList<C_Message>? = null,
             modules: List<R_ModuleName> = listOf(R_ModuleName.EMPTY),
+            testModules: List<R_ModuleName> = listOf(),
             processor: (T_App) -> String
     ): String {
-        val cRes = compileApp(sourceDir, modules, options)
+        val modSel = C_CompilerModuleSelection(modules, testModules)
+        val cRes = compileApp(sourceDir, modSel, options)
         outMessages?.addAll(cRes.messages)
 
         if (!cRes.errors.isEmpty()) {
@@ -162,6 +166,8 @@ object RellTestUtils {
 
     fun <T> callOpGeneric(
             appCtx: Rt_AppContext,
+            opCtx: Rt_OpContext?,
+            sqlCtx: Rt_SqlContext,
             sqlMgr: SqlManager,
             name: String,
             args: List<T>,
@@ -178,7 +184,7 @@ object RellTestUtils {
 
         return catchRtErr {
             sqlMgr.transaction { sqlExec ->
-                val exeCtx = Rt_ExecutionContext(appCtx, sqlExec)
+                val exeCtx = Rt_ExecutionContext(appCtx, opCtx, sqlCtx, sqlExec)
                 op.call(exeCtx, rtArgs!!)
                 "OK"
             }

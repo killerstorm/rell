@@ -51,16 +51,14 @@ class ChainContextTest : BaseGtxTest() {
     }
 
     @Test fun testModuleArgsNoStruct() {
+        chkCompile("entity module_args {}", "OK")
         chk("chain_context.args", "ct_err:expr_chainctx_args_norec")
     }
 
     @Test fun testModuleArgsStruct() {
-        chkCompile("struct module_args {}", "OK")
-        chkCompile("struct module_args { x: map<text, integer>; }", "OK")
-        chkCompile("struct module_args { x: range; }", "ct_err:module_args_nogtv")
-        chkCompile("struct module_args { x: (a: integer, text); }", "OK")
-        chkCompile("entity module_args {}", "OK")
-        chkCompile("struct module_args { x: virtual<list<integer>>; }", "OK")
+        def("struct module_args { x: integer; y: text; }")
+        tst.moduleArgs("" to "[123,'Hello']")
+        chk("chain_context.args", "{'x':123,'y':'Hello'}")
     }
 
     @Test fun testModuleArgsMultiModule() {
@@ -84,6 +82,38 @@ class ChainContextTest : BaseGtxTest() {
 
         tst.moduleArgs("lib.a" to "{x:'Hello'}", "lib.b" to "{'y':123}", "lib.d" to "{'z':456.789}")
         chkUserMistake("", "Module initialization failed: No moduleArgs in blockchain configuration for module 'lib.c'")
+    }
+
+    @Test fun testModuleArgsAttrTypes() {
+        chkCompile("struct module_args { x: integer; }", "OK")
+        chkCompile("struct module_args { mutable x: integer; }", "ct_err:module_args:attr:mutable:module_args:x")
+
+        chkCompile("struct module_args { x: list<integer>; }", "ct_err:module_args:attr:mutable_type:module_args:x")
+        chkCompile("struct module_args { x: set<integer>; }", "ct_err:module_args:attr:mutable_type:module_args:x")
+        chkCompile("struct module_args { x: map<text, integer>; }", "ct_err:module_args:attr:mutable_type:module_args:x")
+
+        chkCompile("struct module_args { x: (a: integer, text); }", "OK")
+        chkCompile("struct module_args { x: range; }", "ct_err:module_args:attr:no_gtv:module_args:x")
+        chkCompile("struct module_args { x: virtual<list<integer>>; }", "ct_err:module_args:attr:not_pure:module_args:x")
+
+        chkCompile("entity user { name; } struct module_args { u: user; }", "ct_err:module_args:attr:not_pure:module_args:u")
+        chkCompile("entity user { name; } struct module_args { u: user?; }", "ct_err:module_args:attr:not_pure:module_args:u")
+        chkCompile("entity user { name; } struct module_args { u: (user, text)?; }",
+                "ct_err:module_args:attr:not_pure:module_args:u")
+
+        chkCompile("entity user { name; } struct module_args { u: struct<user>; }", "OK")
+        chkCompile("entity user { name; } struct module_args { u: struct<mutable user>; }",
+                "ct_err:module_args:attr:mutable_type:module_args:u")
+
+        chkCompile("entity user { name; } entity ref { u: user; } struct module_args { r: struct<ref>; }",
+                "ct_err:module_args:attr:not_pure:module_args:r")
+        chkCompile("entity user { name; } entity ref { u: user; } struct module_args { r: struct<mutable ref>; }",
+                "ct_err:module_args:attr:mutable_type:module_args:r")
+
+        chkCompile("entity user { name; } struct s { u: user?; } struct module_args { s: s; }",
+                "ct_err:module_args:attr:not_pure:module_args:s")
+
+        chkCompile("struct module_args { p: (integer) -> text; }", "ct_err:module_args:attr:no_gtv:module_args:p")
     }
 
     @Test fun testBlockchainRid() {

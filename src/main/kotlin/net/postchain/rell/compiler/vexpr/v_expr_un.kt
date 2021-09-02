@@ -6,6 +6,7 @@ import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Value
 
 sealed class V_UnaryOp(val resType: R_Type) {
+    open fun canBeDbExpr(): Boolean = true
     abstract fun compileR(pos: S_Pos, expr: R_Expr): R_Expr
     abstract fun compileDb(pos: S_Pos, expr: Db_Expr): Db_Expr
     open fun evaluate(value: Rt_Value): Rt_Value? = null
@@ -30,12 +31,14 @@ class V_UnaryOp_Not: V_UnaryOp(R_BooleanType) {
 }
 
 class V_UnaryOp_NotNull(resType: R_Type): V_UnaryOp(resType) {
+    override fun canBeDbExpr() = false
     override fun compileR(pos: S_Pos, expr: R_Expr) = R_NotNullExpr(resType, expr)
     override fun compileDb(pos: S_Pos, expr: Db_Expr) = throw C_Error.stop(pos, "expr:is_null:nodb", "Not supported for SQL")
 }
 
 class V_UnaryOp_IsNull: V_UnaryOp(R_BooleanType) {
-    override fun compileR(pos: S_Pos, expr: R_Expr) = R_BinaryExpr(R_BooleanType, R_BinaryOp_Ne, expr, R_ConstantExpr.makeNull())
+    override fun canBeDbExpr() = false
+    override fun compileR(pos: S_Pos, expr: R_Expr) = R_BinaryExpr(R_BooleanType, R_BinaryOp_Ne, expr, R_ConstantValueExpr.makeNull())
     override fun compileDb(pos: S_Pos, expr: Db_Expr) = throw C_Error.stop(pos, "expr:is_null:nodb", "Not supported for SQL")
 }
 
@@ -44,12 +47,10 @@ class V_UnaryExpr(
         pos: S_Pos,
         private val op: V_UnaryOp,
         private val expr: V_Expr,
-        private val varFacts: C_ExprVarFacts
+        private val resVarFacts: C_ExprVarFacts
 ): V_Expr(exprCtx, pos) {
-    override val exprInfo = V_ExprInfo.make(expr)
-
-    override fun type() = op.resType
-    override fun varFacts() = varFacts
+    override fun exprInfo0() = V_ExprInfo.simple(op.resType, expr, canBeDbExpr = op.canBeDbExpr())
+    override fun varFacts0() = resVarFacts
 
     override fun toRExpr0(): R_Expr {
         val rExpr = expr.toRExpr()
@@ -61,10 +62,9 @@ class V_UnaryExpr(
         return op.compileDb(pos, dbExpr)
     }
 
-    override fun constantValue(): Rt_Value? {
-        val v = expr.constantValue()
+    override fun constantValue(ctx: V_ConstantValueEvalContext): Rt_Value? {
+        val v = expr.constantValue(ctx)
         if (v == null) return null
-
         val res = op.evaluate(v)
         return res
     }
@@ -73,16 +73,14 @@ class V_UnaryExpr(
 class V_IncDecExpr(
         exprCtx: C_ExprContext,
         pos: S_Pos,
-        private val destination: C_Destination,
         private val resType: R_Type,
+        private val destination: C_Destination,
+        private val dstExpr: V_Expr,
         private val srcExpr: R_Expr,
         private val op: C_AssignOp,
-        private val post: Boolean,
-        private val varFacts: C_ExprVarFacts
+        private val post: Boolean
 ): V_Expr(exprCtx, pos) {
-    override val exprInfo = V_ExprInfo(false, false)
+    override fun exprInfo0() = V_ExprInfo.simple(resType, dstExpr)
 
-    override fun type() = resType
-    override fun varFacts() = varFacts
     override fun toRExpr0() = destination.compileAssignExpr(exprCtx, pos, resType, srcExpr, op, post)
 }

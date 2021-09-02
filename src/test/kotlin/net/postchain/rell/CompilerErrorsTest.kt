@@ -81,9 +81,9 @@ class CompilerErrorsTest: BaseRellTest(false) {
         chkCompile("function m() { foo(123, false, 'Hello'); }", "ct_err:$typeErr")
         chkCompile("function m() { foo(123, 0, 'Hello'); }", "ct_err:$typeErr")
 
-        chkCompile("function m() { foo(); }", "ct_err:[$typeErr][expr:call:missing_args:foo:x,y,z]")
-        chkCompile("function m() { foo(123, 'Hello'); }", "ct_err:[$typeErr][expr:call:missing_args:foo:z]")
-        chkCompile("function m() { foo(123, null, 'Hello', false); }", "ct_err:[$typeErr][expr:call:arg_count:foo:3:4]")
+        chkCompile("function m() { foo(); }", "ct_err:[$typeErr][expr:call:missing_args:foo:0:x,1:y,2:z]")
+        chkCompile("function m() { foo(123, 'Hello'); }", "ct_err:[$typeErr][expr:call:missing_args:foo:2:z]")
+        chkCompile("function m() { foo(123, null, 'Hello', false); }", "ct_err:[$typeErr][expr:call:too_many_args:foo:3:4]")
 
         chkCompile("function m() { foo('Bye', null, 'Hello'); }", "ct_err:[$typeErr][expr_call_argtype:foo:0:x:integer:text]")
         chkCompile("function m() { foo(123, null, 456); }", "ct_err:[$typeErr][expr_call_argtype:foo:2:z:text:integer]")
@@ -180,7 +180,7 @@ class CompilerErrorsTest: BaseRellTest(false) {
         val err3 = "unknown_name:u"
 
         chkStmt("val (x, y) = ($badExpr1, $badExpr2); max(u);", "ct_err:[$badError1][$badError2][$err3]")
-        chkStmt("val (x, y) = ($badExpr1,); max(u);", "ct_err:[var_tuple_wrongsize:2:1:(<error>)][$badError1][$err3]")
+        chkStmt("val (x, y) = ($badExpr1,); max(u);", "ct_err:[var_tuple_wrongsize:2:1:(<error>,)][$badError1][$err3]")
         chkStmt("val (x, y) = ($badExpr1, $badExpr2, 123); max(u);",
                 "ct_err:[var_tuple_wrongsize:2:3:(<error>,<error>,integer)][$badError1][$badError2][$err3]")
 
@@ -339,7 +339,7 @@ class CompilerErrorsTest: BaseRellTest(false) {
         chk("($badExpr1)($badExpr2)", "ct_err:[$badError1][$badError2]")
 
         chk("g($badExpr1)", "ct_err:$badError1")
-        chk("g($badExpr1, $badExpr2)", "ct_err:[expr:call:arg_count:g:1:2][$badError1][$badError2]")
+        chk("g($badExpr1, $badExpr2)", "ct_err:[expr:call:too_many_args:g:1:2][$badError1][$badError2]")
         chk("g($badExpr1) + 123", "ct_err:[$badError1][binop_operand_type:+:[boolean]:[integer]]")
 
         chk("'hello'.sub($badExpr1, $badExpr2)", "ct_err:[$badError1][$badError2]")

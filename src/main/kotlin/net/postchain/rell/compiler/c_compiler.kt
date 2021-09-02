@@ -4,21 +4,12 @@
 
 package net.postchain.rell.compiler
 
-import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.compiler.ast.S_RellFile
 import net.postchain.rell.lib.C_Lib_OpContext
 import net.postchain.rell.model.*
-import net.postchain.rell.repl.ReplCode
-import net.postchain.rell.repl.ReplCodeState
-import net.postchain.rell.utils.CommonUtils
-import net.postchain.rell.utils.immMapOf
-import net.postchain.rell.utils.toImmList
-import net.postchain.rell.utils.toImmMap
-import java.util.*
+import net.postchain.rell.utils.*
 
 class C_Entity(val defPos: S_Pos?, val entity: R_EntityDefinition)
-class C_Struct(val name: S_Name, val structDef: R_StructDefinition)
 
 enum class C_CompilerPass {
     DEFINITIONS,
@@ -89,6 +80,7 @@ class C_SystemDefs private constructor(
 
     companion object {
         private val SYSTEM_TYPES = immMapOf(
+                "unit" to typeRef(R_UnitType),
                 "boolean" to typeRef(R_BooleanType),
                 "text" to typeRef(R_TextType),
                 "byte_array" to typeRef(R_ByteArrayType),
@@ -122,10 +114,11 @@ class C_SystemDefs private constructor(
                     C_Utils.createSysQuery(executor, "get_app_structure", R_GtvType, R_SysFn_Rell.GetAppStructure)
             )
 
-            return create(stamp, blockEntity, transactionEntity, queries)
+            return create(appCtx.globalCtx, stamp, blockEntity, transactionEntity, queries)
         }
 
         fun create(
+                globalCtx: C_GlobalContext,
                 stamp: R_AppUid,
                 blockEntity: R_EntityDefinition,
                 transactionEntity: R_EntityDefinition,
@@ -133,9 +126,9 @@ class C_SystemDefs private constructor(
         ): C_SystemDefs {
             val sysEntities = listOf(blockEntity, transactionEntity)
 
-            val nsProto = createNsProto(sysEntities, false)
+            val nsProto = createNsProto(globalCtx, sysEntities, false)
             val appNs = C_NsEntry.createNamespace(nsProto.entries)
-            val testNsProto = createNsProto(sysEntities, true)
+            val testNsProto = createNsProto(globalCtx, sysEntities, true)
             val testNs = C_NsEntry.createNamespace(testNsProto.entries)
 
             val mntBuilder = C_MountTablesBuilder(stamp)
@@ -146,9 +139,14 @@ class C_SystemDefs private constructor(
             return C_SystemDefs(nsProto, appNs, testNs, blockEntity, transactionEntity, mntTables, sysEntities, queries)
         }
 
-        private fun createNsProto(sysEntities: List<R_EntityDefinition>, test: Boolean): C_SysNsProto {
-            val sysNamespaces = if (test) C_LibFunctions.TEST_NAMESPACES else C_LibFunctions.APP_NAMESPACES
-            val sysFunctions = if (test) C_LibFunctions.TEST_GLOBAL_FNS else C_LibFunctions.APP_GLOBAL_FNS
+        private fun createNsProto(
+                globalCtx: C_GlobalContext,
+                sysEntities: List<R_EntityDefinition>,
+                test: Boolean
+        ): C_SysNsProto {
+            val libFns = globalCtx.libFunctions
+            val sysNamespaces = if (test) libFns.TEST_NAMESPACES else libFns.APP_NAMESPACES
+            val sysFunctions = if (test) libFns.testGlobalFunctions else libFns.appGlobalFunctions
             val sysTypes = SYSTEM_TYPES
             val sysStructs = SYSTEM_STRUCTS
 
@@ -188,17 +186,24 @@ class C_CompilerOptions(
         val blockCheck: Boolean,
         val atAttrShadowing: C_AtAttrShadowing,
         val testLib: Boolean,
-        val allowDbModificationsInObjectExprs: Boolean
+        val hiddenLib: Boolean,
+        val allowDbModificationsInObjectExprs: Boolean,
+        val compatibility: R_LangVersion?
 ) {
     fun toPojoMap(): Map<String, Any> {
-        return immMapOf(
+        val map = mutableMapOf(
                 "gtv"  to gtv,
                 "deprecatedError" to deprecatedError,
                 "ide" to ide,
                 "atAttrShadowing" to atAttrShadowing.name,
                 "testLib" to testLib,
+                "hiddenLib" to hiddenLib,
                 "allowDbModificationsInObjectExprs" to allowDbModificationsInObjectExprs
         )
+        if (compatibility != null) {
+            map["compatibility"] = compatibility.str()
+        }
+        return map.toImmMap()
     }
 
     companion object {
@@ -209,10 +214,14 @@ class C_CompilerOptions(
                 blockCheck = false,
                 atAttrShadowing = C_AtAttrShadowing.DEFAULT,
                 testLib = false,
-                allowDbModificationsInObjectExprs = true
+                hiddenLib = false,
+                allowDbModificationsInObjectExprs = true,
+                compatibility = null
         )
 
         @JvmStatic fun builder() = Builder()
+
+        @JvmStatic fun builder(options: C_CompilerOptions) = Builder(options)
 
         @JvmStatic fun fromPojoMap(map: Map<String, Any>): C_CompilerOptions {
             return C_CompilerOptions(
@@ -223,26 +232,30 @@ class C_CompilerOptions(
                             ?.let { C_AtAttrShadowing.valueOf(it) } ?: DEFAULT.atAttrShadowing,
                     ide = getBoolOpt(map, "ide", DEFAULT.ide),
                     testLib = getBoolOpt(map, "testLib", DEFAULT.testLib),
+                    hiddenLib = getBoolOpt(map, "hiddenLib", DEFAULT.hiddenLib),
                     allowDbModificationsInObjectExprs =
-                            getBoolOpt(map, "allowDbModificationsInObjectExprs", DEFAULT.allowDbModificationsInObjectExprs)
+                            getBoolOpt(map, "allowDbModificationsInObjectExprs", DEFAULT.allowDbModificationsInObjectExprs),
+                    compatibility = (map["compatibility"] as String?)?.let { R_LangVersion.of(it) }
             )
         }
 
         fun forLangVersion(version: R_LangVersion): C_CompilerOptions {
-            return DEFAULT // No version-specific options yet.
+            return Builder().compatibility(version).build()
         }
 
         private fun getBoolOpt(map: Map<String, Any>, key: String, def: Boolean): Boolean = (map[key] as Boolean?) ?: def
     }
 
-    class Builder {
-        private var gtv = DEFAULT.gtv
-        private var deprecatedError = DEFAULT.deprecatedError
-        private var ide = DEFAULT.ide
-        private var blockCheck = DEFAULT.blockCheck
-        private var atAttrShadowing = DEFAULT.atAttrShadowing
-        private var testLib = DEFAULT.testLib
-        private var allowDbModificationsInObjectExprs = DEFAULT.allowDbModificationsInObjectExprs
+    class Builder(proto: C_CompilerOptions = DEFAULT) {
+        private var gtv = proto.gtv
+        private var deprecatedError = proto.deprecatedError
+        private var ide = proto.ide
+        private var blockCheck = proto.blockCheck
+        private var atAttrShadowing = proto.atAttrShadowing
+        private var testLib = proto.testLib
+        private var hiddenLib = proto.hiddenLib
+        private var allowDbModificationsInObjectExprs = proto.allowDbModificationsInObjectExprs
+        private var compatibility = proto.compatibility
 
         @Suppress("UNUSED") fun gtv(v: Boolean): Builder {
             gtv = v
@@ -269,8 +282,18 @@ class C_CompilerOptions(
             return this
         }
 
+        @Suppress("UNUSED") fun hiddenLib(v: Boolean): Builder {
+            hiddenLib = v
+            return this
+        }
+
         @Suppress("UNUSED") fun allowDbModificationsInObjectExprs(v: Boolean): Builder {
             allowDbModificationsInObjectExprs = v
+            return this
+        }
+
+        @Suppress("UNUSED") fun compatibility(v: R_LangVersion): Builder {
+            compatibility = v
             return this
         }
 
@@ -281,7 +304,9 @@ class C_CompilerOptions(
                 blockCheck = blockCheck,
                 atAttrShadowing = atAttrShadowing,
                 testLib = testLib,
-                allowDbModificationsInObjectExprs = allowDbModificationsInObjectExprs
+                hiddenLib = hiddenLib,
+                allowDbModificationsInObjectExprs = allowDbModificationsInObjectExprs,
+                compatibility = compatibility
         )
     }
 }
@@ -300,8 +325,8 @@ object C_Compiler {
             modules: List<R_ModuleName>,
             options: C_CompilerOptions = C_CompilerOptions.DEFAULT
     ): C_CompilationResult {
-        val modulesSelector = C_CompilerModuleSelection(modules, listOf())
-        return compile(sourceDir, modulesSelector, options)
+        val modSel = C_CompilerModuleSelection(modules, listOf())
+        return compile(sourceDir, modSel, options)
     }
 
     fun compile(
@@ -326,144 +351,100 @@ object C_Compiler {
             controller: C_CompilerController,
             moduleSelection: C_CompilerModuleSelection
     ): C_CompilationResult {
-        val appCtx = C_AppContext(msgCtx, controller.executor, false, C_ReplAppState.EMPTY)
-        val modMgr = C_InternalModuleManager(appCtx, sourceDir, mapOf())
+        val extModules = msgCtx.consumeError {
+            compileMidModules(msgCtx, sourceDir, moduleSelection)
+        } ?: immListOf()
 
-        try {
-            compileModules(modMgr, moduleSelection)
-        } catch (e: C_Error) {
-            msgCtx.error(e)
+        val appCtx = C_AppContext(msgCtx, controller.executor, false, C_ReplAppState.EMPTY)
+
+        msgCtx.consumeError {
+            val extCompiler = C_ExtModuleCompiler(appCtx, extModules, immMapOf())
+            extCompiler.compileModules()
         }
+
+        val files = extModules.flatMap { it.midModule.filePaths() }.toImmList()
 
         controller.run()
 
         val app = appCtx.getApp()
 
-        val messages = CommonUtils.sortedByCopy(appCtx.msgCtx.messages()) { ComparablePos(it.pos) }
+        val messages = CommonUtils.sortedByCopy(msgCtx.messages()) { C_ComparablePos(it.pos) }
         val errors = messages.filter { it.type == C_MessageType.ERROR }
-
-        val files = modMgr.moduleFiles()
 
         val rApp = if (errors.isEmpty()) app else null
         return C_CompilationResult(rApp, messages, files)
     }
 
-    private fun compileModules(modMgr: C_InternalModuleManager, modSel: C_CompilerModuleSelection) {
-        modMgr.compileTestModules(modSel.testRootModules)
+    private fun compileMidModules(
+            msgCtx: C_MessageContext,
+            sourceDir: C_SourceDir,
+            modSel: C_CompilerModuleSelection
+    ): List<C_ExtModule> {
+        val midModules = loadMidModules(msgCtx, sourceDir, modSel)
+
+        checkMainModules(msgCtx, modSel, midModules)
+
+        val testModules = midModules.filter { it.header != null && it.header.test }
+        val selModules = (modSel.modules + testModules.map { it.moduleName })
+
+        val midCompiler = C_MidModuleCompiler(msgCtx, midModules)
+        for (moduleName in selModules) {
+            midCompiler.compileModule(moduleName, null)
+        }
+
+        return midCompiler.getExtModules()
+    }
+
+    private fun loadMidModules(
+            msgCtx: C_MessageContext,
+            sourceDir: C_SourceDir,
+            modSel: C_CompilerModuleSelection
+    ): List<C_MidModule> {
+        val modLdr = C_ModuleLoader(msgCtx, sourceDir, immSetOf())
+
+        for (moduleName in modSel.testRootModules) {
+            modLdr.loadTestModules(moduleName)
+        }
 
         for (moduleName in modSel.modules) {
-            val appCtx = modMgr.appCtx
-            val module = modMgr.compileModule(C_ModuleKey(moduleName, null))
-            val header = module.header
-            if (header.abstractPos != null && !appCtx.globalCtx.compilerOptions.ide) {
-                appCtx.msgCtx.error(header.abstractPos, "module:main_abstract:$moduleName",
+            modLdr.loadModule(moduleName)
+        }
+
+        return modLdr.getLoadedModules()
+    }
+
+    private fun checkMainModules(
+            msgCtx: C_MessageContext,
+            modSel: C_CompilerModuleSelection,
+            midModules: List<C_MidModule>
+    ) {
+        val midModulesMap = midModules.associateBy { it.moduleName }
+
+        for (moduleName in modSel.modules) {
+            val midModule = midModulesMap[moduleName]
+            midModule ?: throw C_CommonError(C_Errors.msgModuleNotFound(moduleName))
+
+            val absPos = midModule.header?.abstract
+            if (absPos != null && !msgCtx.globalCtx.compilerOptions.ide) {
+                msgCtx.error(absPos, "module:main_abstract:$moduleName",
                         "Module '${moduleName.str()}' is abstract, cannot be used as a main module")
             }
         }
     }
 }
 
-object C_ReplCompiler {
-    fun compile(
-            sourceDir: C_SourceDir,
-            linkedModule: R_ModuleName?,
-            code: String,
-            globalCtx: C_GlobalContext,
-            oldDefsState: C_ReplDefsState,
-            oldCodeState: ReplCodeState
-    ): C_ReplResult {
-        val msgCtx = C_MessageContext(globalCtx)
-        val controller = C_CompilerController(msgCtx)
-        val res = C_LateInit.context(controller.executor) {
-            compile0(sourceDir, linkedModule, msgCtx, controller, code, oldDefsState, oldCodeState)
-        }
-        return res
-    }
-
-    private fun compile0(
-            sourceDir: C_SourceDir,
-            linkedModule: R_ModuleName?,
-            msgCtx: C_MessageContext,
-            controller: C_CompilerController,
-            code: String,
-            oldDefsState: C_ReplDefsState,
-            oldCodeState: ReplCodeState
-    ): C_ReplResult {
-        val executor = controller.executor
-        val appCtx = C_AppContext(msgCtx, executor, true, oldDefsState.appState)
-        val replCtx = createReplContext(appCtx, sourceDir, linkedModule, executor, oldDefsState)
-
-        val codeGetter = msgCtx.consumeError {
-            if (linkedModule != null) {
-                replCtx.modCtx.modMgr.linkModule(linkedModule, null)
-            }
-
-            val ast = C_Parser.parseRepl(code)
-            ast.compile(replCtx, oldCodeState)
-        }
-
-        controller.run()
-
-        val app = appCtx.getApp()
-        val messages = CommonUtils.sortedByCopy(msgCtx.messages()) { ComparablePos(it.pos) }
-        val errors = messages.filter { it.type == C_MessageType.ERROR }
-
-        val success = if (app == null || codeGetter == null || !errors.isEmpty()) null else {
-            val cCode = codeGetter.get()
-            val newAppState = appCtx.getNewReplState()
-            val newState = C_ReplDefsState(newAppState)
-            C_ReplSuccess(app, newState, cCode)
-        }
-
-        return C_ReplResult(success, messages)
-    }
-
-    private fun createReplContext(
-            appCtx: C_AppContext,
-            sourceDir: C_SourceDir,
-            moduleName: R_ModuleName?,
-            executor: C_CompilerExecutor,
-            oldDefsState: C_ReplDefsState
-    ): C_MountContext {
-        val modMgr = C_InternalModuleManager(appCtx, sourceDir, oldDefsState.appState.modules)
-
-        val linkedModuleKey = if (moduleName == null) null else C_ModuleKey(moduleName, null)
-        val replNsAssembler = appCtx.createReplNsAssembler(linkedModuleKey)
-        val componentNsAssembler = replNsAssembler.addComponent()
-
-        val modCtx = C_ReplModuleContext(
-                appCtx,
-                modMgr.facadeMgr,
-                moduleName ?: R_ModuleName.EMPTY,
-                replNsAssembler.futureNs(),
-                componentNsAssembler.futureNs()
-        )
-
-        val fileCtx = C_FileContext(modCtx)
-
-        val mntCtx = S_RellFile.createMountContext(fileCtx, R_MountName.EMPTY, componentNsAssembler)
-
-        executor.onPass(C_CompilerPass.MODULES) {
-            val mntTables = fileCtx.mntBuilder.build()
-            appCtx.addExtraMountTables(mntTables)
-        }
-
-        return mntCtx
-    }
-}
-
-private class ComparablePos(sPos: S_Pos): Comparable<ComparablePos> {
+class C_ComparablePos(sPos: S_Pos): Comparable<C_ComparablePos> {
     private val path: C_SourcePath = sPos.path()
     private val pos = sPos.pos()
 
-    override fun compareTo(other: ComparablePos): Int {
+    override fun compareTo(other: C_ComparablePos): Int {
         var d = path.compareTo(other.path)
         if (d == 0) d = pos.compareTo(other.pos)
         return d
     }
 }
 
-sealed class C_AbstractResult(messages: List<C_Message>) {
+abstract class C_AbstractResult(messages: List<C_Message>) {
     val messages = messages.toImmList()
     val warnings = this.messages.filter { it.type == C_MessageType.WARNING }.toImmList()
     val errors = this.messages.filter { it.type == C_MessageType.ERROR }.toImmList()
@@ -473,34 +454,11 @@ class C_CompilationResult(val app: R_App?, messages: List<C_Message>, files: Lis
     val files = files.toImmList()
 }
 
-class C_ReplAppState(
-        val nsAsmState: C_NsAsm_ReplState,
-        modules: Map<C_ModuleKey, C_PrecompiledModule>,
-        val sysDefs: C_SystemDefs?,
-        val sqlDefs: R_AppSqlDefs,
-        val mntTables: C_MountTables
-) {
-    val modules = modules.toImmMap()
-
-    companion object {
-        val EMPTY = C_ReplAppState(C_NsAsm_ReplState.EMPTY, mapOf(), null, R_AppSqlDefs.EMPTY, C_MountTables.EMPTY)
-    }
-}
-
-class C_ReplDefsState(val appState: C_ReplAppState) {
-    companion object {
-        val EMPTY = C_ReplDefsState(C_ReplAppState.EMPTY)
-    }
-}
-
-class C_ReplSuccess(val app: R_App, val defsState: C_ReplDefsState, val code: ReplCode)
-class C_ReplResult(val success: C_ReplSuccess?, messages: List<C_Message>): C_AbstractResult(messages)
-
 abstract class C_CompilerExecutor {
     abstract fun checkPass(minPass: C_CompilerPass?, maxPass: C_CompilerPass?)
     fun checkPass(pass: C_CompilerPass) = checkPass(pass, pass)
 
-    abstract fun onPass(pass: C_CompilerPass, soft: Boolean = false, code: () -> Unit)
+    abstract fun onPass(pass: C_CompilerPass, code: () -> Unit)
 
     companion object {
         fun checkPass(currentPass: C_CompilerPass, minPass: C_CompilerPass?, maxPass: C_CompilerPass?) {
@@ -517,7 +475,7 @@ abstract class C_CompilerExecutor {
 class C_CompilerController(private val msgCtx: C_MessageContext) {
     val executor: C_CompilerExecutor = ExecutorImpl()
 
-    private val passes = C_CompilerPass.values().map { Pair(it, ArrayDeque<C_PassTask>() as Queue<C_PassTask>) }.toMap()
+    private val passes = C_CompilerPass.values().map { it to queueOf<C_PassTask>() }.toMap()
     private var currentPass = C_CompilerPass.values()[0]
 
     private var runCalled = false
@@ -536,9 +494,8 @@ class C_CompilerController(private val msgCtx: C_MessageContext) {
         }
     }
 
-    private fun onPass0(pass: C_CompilerPass, soft: Boolean, code: () -> Unit) {
-        val valid = if (soft) currentPass <= pass else currentPass < pass
-        check(valid) { "currentPass: $currentPass targetPass: $pass" }
+    private fun onPass0(pass: C_CompilerPass, code: () -> Unit) {
+        check(currentPass < pass) { "currentPass: $currentPass targetPass: $pass" }
 
         val nextPass = currentPass.next()
 
@@ -550,7 +507,7 @@ class C_CompilerController(private val msgCtx: C_MessageContext) {
             // - entity 0 adds code to pass A, that code adds code to pass B
             // - entity 1 adds code to pass B directly
             // -> on pass B entity 0 must be executed before entity 1
-            val task = C_PassTask { executor.onPass(pass, false, code) }
+            val task = C_PassTask { executor.onPass(pass, code) }
             passes.getValue(nextPass).add(task)
         }
     }
@@ -566,8 +523,8 @@ class C_CompilerController(private val msgCtx: C_MessageContext) {
             checkPass(currentPass, minPass, maxPass)
         }
 
-        override fun onPass(pass: C_CompilerPass, soft: Boolean, code: () -> Unit) {
-            onPass0(pass, soft, code)
+        override fun onPass(pass: C_CompilerPass, code: () -> Unit) {
+            onPass0(pass, code)
         }
     }
 }

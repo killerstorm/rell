@@ -66,7 +66,7 @@ class UpdateDeleteTest: BaseRellTest() {
                 val dallas = create city('Dallas');
                 create person(name = 'Mike', home = boston, work = seattle, base = 100, score = 300);
                 create person(name = 'Bob', home = seattle, work = dallas, base = 200, score = 500);
-        """.trimIndent())
+        """)
 
         chkData(
                 "city(1,Boston)",
@@ -247,7 +247,7 @@ class UpdateDeleteTest: BaseRellTest() {
             update person @ { .name == 'James' } ( score += 1000 );
             val x = 1 / 0;
             update person @ { .name == 'Mike' } ( score += 500 );
-        """.trimIndent(), "rt_err:expr:/:div0:1")
+        """, "rt_err:expr:/:div0:1")
 
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,250)")
 
@@ -255,14 +255,14 @@ class UpdateDeleteTest: BaseRellTest() {
             update person @ { .name == 'James' } ( score += 1000 );
             update person @ { .name == 'Mike' } ( score += 500 );
             val x = 1 / 0;
-        """.trimIndent(), "rt_err:expr:/:div0:1")
+        """, "rt_err:expr:/:div0:1")
 
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,250)")
 
         chkOp("""
             update person @ { .name == 'James' } ( score += 1000 );
             update person @ { .name == 'Mike' } ( score += 500 );
-        """.trimIndent())
+        """)
 
         chkDataCommon("person(4,James,3,Evergreen Ave,5,1100)", "person(5,Mike,1,Grand St,7,750)")
     }
@@ -278,7 +278,7 @@ class UpdateDeleteTest: BaseRellTest() {
             print(person @* {} ( .name, .score ));
             update person @* {} ( score /= 2 );
             print(person @* {} ( .name, .score ));
-        """.trimIndent())
+        """)
 
         chkOut(
                 "[(name=James,score=100), (name=Mike,score=250)]",
@@ -577,6 +577,26 @@ class UpdateDeleteTest: BaseRellTest() {
         chkOp("update person @ { .name == 'James' } ( --.score );", "ct_err:expr_bad_dst")
     }
 
+    @Test fun testUpdateTypePromotion() {
+        def("entity data { mutable x: decimal; }")
+        insert("c0.data", "x", "1,123")
+
+        chkOp("update data @* {} ( 456 );", "ct_err:attr_implic_unknown:0:integer")
+        chk("data @* {} ( _=.x )", "list<decimal>[dec[123]]")
+
+        chkOp("update data @* {} ( x = 456 );")
+        chk("data @* {} ( _=.x )", "list<decimal>[dec[456]]")
+
+        chkOp("update data @* {} ( x = 789.0 );")
+        chk("data @* {} ( _=.x )", "list<decimal>[dec[789]]")
+
+        chkOp("val d = data @{}; d.x = 987;")
+        chk("data @* {} ( _=.x )", "list<decimal>[dec[987]]")
+
+        chkOp("val d = data @{}; d.x = 654.0;")
+        chk("data @* {} ( _=.x )", "list<decimal>[dec[654]]")
+    }
+
     @Test fun testBugGamePlayerSubExpr() {
         def("entity user { name; mutable games_total: integer; mutable games_won: integer; }")
         def("entity game { player_1: user; player_2: user; }")
@@ -588,7 +608,7 @@ class UpdateDeleteTest: BaseRellTest() {
             val the_game = game @ {};
             val the_user = user @ { .name == 'Bob' };
             update user @ { the_game.player_1 == user } ( games_won += 1, games_total += 1 );
-        """.trimIndent())
+        """)
     }
 
     @Test fun testDeleteAndAccess() {
@@ -598,7 +618,7 @@ class UpdateDeleteTest: BaseRellTest() {
             val u = person @ { .name == 'James' };
             delete u;
             print(u.score);
-        """.trimIndent()
+        """
 
         chkOp(code, "rt_err:expr_entity_attr_count:0")
     }

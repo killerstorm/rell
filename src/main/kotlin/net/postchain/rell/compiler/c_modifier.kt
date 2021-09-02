@@ -16,8 +16,8 @@ import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.toImmMap
 import org.apache.commons.lang3.StringUtils
 
-class C_ModifierContext(val appCtx: C_AppContext, val outerMountName: R_MountName) {
-    val msgCtx = appCtx.msgCtx
+class C_ModifierContext(val msgCtx: C_MessageContext, private val valExec: C_ValidationExecutor) {
+    fun onValidation(code: () -> Unit) = valExec.onValidation(code)
 }
 
 object C_Modifier {
@@ -27,9 +27,7 @@ object C_Modifier {
     const val SORT_DESC = "sort_desc"
     const val TEST = "test"
 
-    private val ANNOTATIONS: Map<String, C_AnnBase>
-
-    init {
+    private val ANNOTATIONS: Map<String, C_AnnBase> = let {
         val anns = mutableMapOf(
                 EXTERNAL to C_Annotation_External,
                 "log" to C_Annotation_Log,
@@ -45,7 +43,7 @@ object C_Modifier {
             anns[s.annotation] = C_Annotation_Summarization(s)
         }
 
-        ANNOTATIONS = anns.toImmMap()
+        anns.toImmMap()
     }
 
     fun compileAnnotation(ctx: C_ModifierContext, name: S_Name, args: List<Rt_Value>, target: C_ModifierTarget) {
@@ -74,6 +72,111 @@ object C_Modifier {
     }
 }
 
+class C_MountPath private constructor(
+        private val str: String,
+        private val up: Int?,
+        private val path: List<R_Name>,
+        private val tail: Boolean
+) {
+    fun apply(
+            msgCtx: C_MessageContext,
+            target: C_MountAnnotationTarget,
+            parentMountName: R_MountName
+    ): R_MountName? {
+        var base = listOf<R_Name>()
+        if (up != null) {
+            if (up > parentMountName.parts.size) {
+                msgCtx.error(target.pos, "ann:mount:up:${parentMountName.parts.size}:$up",
+                        "Cannot go up by $up on current mount path '$parentMountName'")
+                return null
+            }
+            base = parentMountName.parts.subList(0, parentMountName.parts.size - up)
+        }
+
+        if (!target.emptyMountAllowed && up != null && path.isEmpty() && !tail) {
+            msgCtx.error(target.pos, "ann:mount:invalid:$str:${target.type}",
+                    "Mount path '$str' is invalid for ${target.type.description}")
+            return null
+        }
+
+        val combined = base + path
+        if (!tail) {
+            return R_MountName(combined)
+        }
+
+        if (target.name == null) {
+            msgCtx.error(target.pos, "ann:mount:tail:no_name:$str:${target.type}",
+                    "Mount path '$str' is invalid for ${target.type.description}")
+            return null
+        }
+
+        val full = combined + target.name
+        return R_MountName(full)
+    }
+
+    override fun toString() = str
+
+    companion object {
+        fun parse(s: String): C_MountPath? {
+            var parts = StringUtils.splitPreserveAllTokens(s, '.').toList()
+            if (parts.isEmpty()) return C_MountPath(s, null, listOf(), false)
+
+            var up: Int? = null
+            if (parts[0] == "") {
+                up = 0
+                parts = parts.subList(1, parts.size)
+            } else if (parts[0].matches(Regex("\\^+"))) {
+                up = parts[0].length
+                parts = parts.subList(1, parts.size)
+            }
+
+            var tail = false
+            if (parts.isNotEmpty() && parts[parts.size - 1] == "") {
+                tail = true
+                parts = parts.subList(0, parts.size - 1)
+            }
+
+            val path = mutableListOf<R_Name>()
+            for (part in parts) {
+                val rName = R_Name.ofOpt(part)
+                if (rName == null) return null
+                path.add(rName)
+            }
+
+            if (up != null && up == 0 && path.isEmpty()) {
+                return null
+            }
+
+            return C_MountPath(s, up, path, tail)
+        }
+    }
+}
+
+class C_MountAnnotationTarget(
+        val pos: S_Pos,
+        val type: C_ModifierTargetType,
+        val name: R_Name?,
+        val emptyMountAllowed: Boolean
+)
+
+class C_MountAnnotation(
+        private val target: C_MountAnnotationTarget,
+        private val path: C_MountPath
+) {
+    fun calculateMountName(msgCtx: C_MessageContext, parentMountName: R_MountName): R_MountName {
+        val mountName = path.apply(msgCtx, target, parentMountName)
+        mountName ?: return parentMountName
+
+        if (!target.emptyMountAllowed && mountName.isEmpty()) {
+            msgCtx.error(target.pos, "ann:mount:empty:${target.type}",
+                    "Cannot use empty mount name for ${target.type.description}")
+            return parentMountName
+        }
+
+        return mountName
+    }
+}
+
 private object C_Annotation_Mount: C_AnnBase() {
     override fun compile(ctx: C_ModifierContext, name: S_Name, args: List<Rt_Value>, target: C_ModifierTarget) {
         val pos = name.pos
@@ -82,21 +185,12 @@ private object C_Annotation_Mount: C_AnnBase() {
             return
         }
 
-        val mountName = applyMountPath(ctx.msgCtx, pos, ctx.outerMountName, target, mountPath)
-        if (mountName == null) {
-            return
-        }
-
-        if (target.mount != null && target.mountAllowed && !target.emptyMountAllowed && mountName.isEmpty()) {
-            ctx.msgCtx.error(pos, "ann:mount:empty:${target.type}",
-                    "Cannot use empty mount name for ${target.type.description}")
-            return
-        }
-
-        C_AnnUtils.processAnnotation(ctx, pos, target, name.str, target.mount, target.mountAllowed, mountName)
+        val mountTarget = C_MountAnnotationTarget(name.pos, target.type, target.name?.rName, target.emptyMountAllowed)
+        val mountAnn = C_MountAnnotation(mountTarget, mountPath)
+        C_AnnUtils.processAnnotation(ctx, pos, target, name.str, target.mount, target.mountAllowed, mountAnn)
 
         if (target.type == C_ModifierTargetType.MODULE) {
-            ctx.appCtx.executor.onPass(C_CompilerPass.VALIDATION) {
+            ctx.onValidation {
                 if (target.test?.get() == true) {
                     ctx.msgCtx.error(pos, "ann:mount:test_module", "Mount name not allowed for a test module")
                 }
@@ -110,85 +204,12 @@ private object C_Annotation_Mount: C_AnnBase() {
             return null
         }
 
-        val res = parsePath(str)
+        val res = C_MountPath.parse(str)
         if (res == null) {
             ctx.msgCtx.error(pos, "ann:mount:invalid:$str", "Invalid mount name: '$str'")
         }
         return res
     }
-
-    private fun parsePath(s: String): C_MountPath? {
-        var parts = StringUtils.splitPreserveAllTokens(s, '.').toList()
-        if (parts.isEmpty()) return C_MountPath(s, null, listOf(), false)
-
-        var up: Int? = null
-        if (parts[0] == "") {
-            up = 0
-            parts = parts.subList(1, parts.size)
-        } else if (parts[0].matches(Regex("\\^+"))) {
-            up = parts[0].length
-            parts = parts.subList(1, parts.size)
-        }
-
-        var tail = false
-        if (parts.isNotEmpty() && parts[parts.size - 1] == "") {
-            tail = true
-            parts = parts.subList(0, parts.size - 1)
-        }
-
-        val path = mutableListOf<R_Name>()
-        for (part in parts) {
-            val rName = R_Name.ofOpt(part)
-            if (rName == null) return null
-            path.add(rName)
-        }
-
-        if (up != null && up == 0 && path.isEmpty()) {
-            return null
-        }
-
-        return C_MountPath(s, up, path, tail)
-    }
-
-    private fun applyMountPath(
-            msgCtx: C_MessageContext,
-            pos: S_Pos,
-            mountName: R_MountName,
-            target: C_ModifierTarget,
-            mountPath: C_MountPath
-    ): R_MountName? {
-        var base = listOf<R_Name>()
-        if (mountPath.up != null) {
-            if (mountPath.up > mountName.parts.size) {
-                msgCtx.error(pos, "ann:mount:up:${mountName.parts.size}:${mountPath.up}",
-                        "Cannot go up by ${mountPath.up} on current mount path '$mountName'")
-                return null
-            }
-            base = mountName.parts.subList(0, mountName.parts.size - mountPath.up)
-        }
-
-        if (!target.emptyMountAllowed && mountPath.up != null && mountPath.path.isEmpty() && !mountPath.tail) {
-            msgCtx.error(pos, "ann:mount:invalid:${mountPath.str}:${target.type}",
-                    "Mount path '${mountPath.str}' is invalid for ${target.type.description}")
-            return null
-        }
-
-        val combined = base + mountPath.path
-        if (!mountPath.tail) {
-            return R_MountName(combined)
-        }
-
-        if (target.name == null) {
-            msgCtx.error(pos, "ann:mount:tail:no_name:${mountPath.str}:${target.type}",
-                    "Mount path '${mountPath.str}' is invalid for ${target.type.description}")
-            return null
-        }
-
-        val full = combined + target.name.rName
-        return R_MountName(full)
-    }
-
-    private class C_MountPath(val str: String, val up: Int?, val path: List<R_Name>, val tail: Boolean)
 }
 
 private sealed class C_AnnBase {
@@ -348,7 +369,8 @@ enum class C_ModifierTargetType {
     OPERATION(C_DeclarationType.OPERATION),
     QUERY(C_DeclarationType.QUERY),
     IMPORT(C_DeclarationType.IMPORT),
-    EXPRESSION("expression")
+    CONSTANT(C_DeclarationType.CONSTANT),
+    EXPRESSION("expression"),
     ;
 
     val description: String
@@ -382,7 +404,7 @@ class C_ModifierTarget(
     val externalChain = C_ModifierValue.opt<C_ExternalAnnotation>(externalChain)
     val externalModule = C_ModifierValue.opt<Boolean>(externalModule)
     val log = C_ModifierValue.opt<Boolean>(log)
-    val mount = C_ModifierValue.opt<R_MountName>(mount)
+    val mount = C_ModifierValue.opt<C_MountAnnotation>(mount)
     val override = C_ModifierValue.opt<Boolean>(override)
     val test = C_ModifierValue.opt<Boolean>(test)
 
@@ -393,6 +415,11 @@ class C_ModifierTarget(
     fun externalChain(mntCtx: C_MountContext): C_ExternalChain? {
         val ann = externalChain?.get()
         return if (ann == null) mntCtx.extChain else mntCtx.appCtx.addExternalChain(ann.chain)
+    }
+
+    fun externalChain(ctxExtChain: C_ExtChainName?): C_ExtChainName? {
+        val ann = externalChain?.get()
+        return if (ann == null) ctxExtChain else C_ExtChainName(ann.chain)
     }
 
     fun checkAbstractTest(msgCtx: C_MessageContext, pos: S_Pos, otherValue: C_ModifierValue<Boolean>?) {

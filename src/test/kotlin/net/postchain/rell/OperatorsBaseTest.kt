@@ -724,6 +724,14 @@ abstract class OperatorsBaseTest: BaseResourcefulTest() {
         chkExpr("#0.char_at(#1)", errRt("fn:text.char_at:index:5:5"), vText("Hello"), vInt(5))
         chkExpr("#0.char_at(#1)", errRt("fn:text.char_at:index:5:-1"), vText("Hello"), vInt(-1))
         chkExpr("#0.char_at(#1)", "int[32]", vText("Hello World"), vInt(5))
+
+        chkExpr("#0.char_at(0)", "int[72]", vText("Hello"))
+        chkExpr("#0.char_at(1)", "int[101]", vText("Hello"))
+        chkExpr("#0.char_at(2)", "int[108]", vText("Hello"))
+        chkExpr("#0.char_at(3)", "int[108]", vText("Hello"))
+        chkExpr("#0.char_at(4)", "int[111]", vText("Hello"))
+        chkExpr("#0.char_at(5)", errRt("fn:text.char_at:index:5:5"), vText("Hello"))
+        chkExpr("#0.char_at(-1)", errRt("fn:text.char_at:index:5:-1"), vText("Hello"))
     }
 
     @Test fun testLibTextContains() {

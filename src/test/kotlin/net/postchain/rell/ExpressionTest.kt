@@ -125,7 +125,7 @@ class ExpressionTest: BaseRellTest(false) {
             create user('Mark', facebook);
             create user('Jeff', amazon);
             create user('Bill', microsoft);
-        """.trimIndent())
+        """)
 
         chkEx("{ val u = user @ { 'Mark' }; return u.company.name; }", "text[Facebook]")
         chkEx("{ val u = user @ { 'Jeff' }; return u.company.name; }", "text[Amazon]")
@@ -144,7 +144,7 @@ class ExpressionTest: BaseRellTest(false) {
         chkOp("""
             val microsoft = create company('Microsoft');
             create user('Bill', microsoft);
-        """.trimIndent())
+        """)
 
         chk("((u: user) @ { 'Bill' } ( u )).company.name.size()", "int[9]")
         chk("((u: user) @ { 'Bill' } ( u )).company.name.upper_case()", "text[MICROSOFT]")
@@ -315,7 +315,7 @@ class ExpressionTest: BaseRellTest(false) {
             create user(id = 1, name1 = 'Bill', name2 = 'Gates', v1 = 111, v2 = 222);
             create user(id = 2, name1 = 'Mark', name2 = 'Zuckerberg', v1 = 333, v2 = 444);
             create user(id = 3, name1 = 'Steve', name2 = 'Wozniak', v1 = 555, v2 = 666);
-        """.trimIndent())
+        """)
 
         chkEx("{ return user @* {} (.id+0, (.name1 + .name2).size()); }", "[(1,9), (2,14), (3,12)]")
         chkEx("{ return user @* {} (.id+0, (.name1 + .name2).upper_case().lower_case().size()); }", "[(1,9), (2,14), (3,12)]")
@@ -459,7 +459,7 @@ class ExpressionTest: BaseRellTest(false) {
                return v;
             }
             query q(a: boolean) = if (a) f('Yes', 123) else f('No', 456);
-        """.trimIndent()
+        """
 
         chkFull(code, listOf(Rt_BooleanValue(true)), "int[123]")
         chkOut("Yes")
@@ -594,7 +594,7 @@ class ExpressionTest: BaseRellTest(false) {
         chkEx("{ val t = (123, 'Hello'); return t[2]; }", "ct_err:expr_subscript:tuple:index:2:2")
         chkEx("{ val t = (123, 'Hello'); return t[+1]; }", "text[Hello]")
         chkEx("{ val t = (123, 'Hello'); return t[-0]; }", "int[123]")
-        chkEx("{ val t = (123, 'Hello'); return t[0+1]; }", "ct_err:expr_subscript:tuple:no_const")
+        chkEx("{ val t = (123, 'Hello'); return t[0+1]; }", "text[Hello]")
         chkEx("{ val t = (123, 'Hello'); val i = 0; return t[i]; }", "ct_err:expr_subscript:tuple:no_const")
 
         chkEx("{ val t = (123, 'Hello'); return t[true]; }", "ct_err:expr_subscript_keytype:[integer]:[boolean]")
@@ -607,9 +607,24 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testNamedArgumentsInSysFunctions() {
-        chk("abs(x=123)", "ct_err:expr:call:sys_global_named_arg:x")
+        chk("abs(x=123)", "ct_err:expr:call:named_args_not_allowed:abs:x")
         chk("abs(123)", "int[123]")
-        chk("'hello'.sub(start=3)", "ct_err:expr:call:sys_member_fn_named_arg:start")
+        chk("'hello'.sub(start=3)", "ct_err:expr:call:named_args_not_allowed:sub:start")
         chk("'hello'.sub(3)", "text[lo]")
+    }
+
+    @Test fun testTypeOfSideEffects() {
+        def("function f(i: integer) { print('f:'+i); return i; }")
+        chk("f(123)", "int[123]")
+        chkOut("f:123")
+        chk("_type_of(f(123))", "text[integer]")
+        chkOut()
+    }
+
+    @Test fun testConstantValueEvaluationError() {
+        chk("(123,'hello',true)[0]", "int[123]")
+        chk("(123,'hello',true)[1/0]", "ct_err:eval_fail:expr:/:div0:1")
+        chk("when(0) { 0 -> 123; else -> 456 }", "int[123]")
+        chk("when(0) { 1/0 -> 123; else -> 456 }", "ct_err:eval_fail:expr:/:div0:1")
     }
 }

@@ -8,16 +8,14 @@ class V_EntityAttrExpr(
         exprCtx: C_ExprContext,
         private val memberLink: C_MemberLink,
         private val attrRef: C_EntityAttrRef,
-        private val resultType: R_Type,
-        private val varFacts: C_ExprVarFacts
+        private val resultType: R_Type
 ): V_Expr(exprCtx, memberLink.base.pos) {
-    override val exprInfo = V_ExprInfo.make(memberLink.base)
-
     private val path = toPath()
     private val cLambda = createLambda(exprCtx, path.first().attrRef.rEntity)
 
-    override fun type() = resultType
-    override fun varFacts() = varFacts
+    override fun exprInfo0() = V_ExprInfo.simple(resultType, memberLink.base)
+
+    override fun globalConstantRestriction() = V_GlobalConstantRestriction("entity_attr", null)
 
     override fun implicitAtWhereAttrName(): String? {
         return if (memberLink.base.isAtExprItem()) attrRef.attrName else null

@@ -33,7 +33,7 @@ class VirtualTest: BaseGtxTest(false) {
         chkAllowedType("virtual<(a:integer,b:text)>", "OK")
         chkAllowedType("virtual<(a:integer,text)>", "OK")
         chkAllowedType("virtual<(integer,b:text)>", "OK")
-        chkAllowedType("virtual<(integer)>", "OK")
+        chkAllowedType("virtual<(integer,)>", "OK")
         chkAllowedType("virtual<list<map<text,(rec,integer)>>>", "OK")
         chkAllowedType("virtual<list<integer?>>", "OK")
         chkAllowedType("virtual<list<gtv>>", "OK")
@@ -66,6 +66,9 @@ class VirtualTest: BaseGtxTest(false) {
         chkAllowedType("virtual<list<map<integer,text>>>", "ct_err:type:virtual:bad_inner_type:list<map<integer,text>>")
         chkAllowedType("virtual<list<map<integer,(rec,integer)>>>",
                 "ct_err:type:virtual:bad_inner_type:list<map<integer,(rec,integer)>>")
+
+        chkAllowedType("virtual<(integer)->text>", "ct_err:type:virtual:bad_inner_type:(integer)->text")
+        chkAllowedType("virtual<list<(integer)->text>>", "ct_err:type:virtual:bad_inner_type:list<(integer)->text>")
     }
 
     private fun chkAllowedType(type: String, expected: String) {
@@ -98,8 +101,8 @@ class VirtualTest: BaseGtxTest(false) {
         chkVirtual("virtual<rec>", "_type_of(x.s.p.to_full())", virArgs, "'sub2'")
         chkVirtual("virtual<rec>", "_type_of(x.s.p.r)", virArgs, "'integer'")
 
-        chkVirtual("virtual<rec>", "x.to_gtv()", virArgs, "ct_err:fn:invalid:virtual<rec>:virtual<rec>.to_gtv")
-        chkVirtual("virtual<rec>", "x.s.to_gtv()", virArgs, "ct_err:fn:invalid:virtual<sub>:virtual<sub>.to_gtv")
+        chkVirtual("virtual<rec>", "x.to_gtv()", virArgs, "ct_err:fn:invalid:virtual<rec>:to_gtv")
+        chkVirtual("virtual<rec>", "x.s.to_gtv()", virArgs, "ct_err:fn:invalid:virtual<sub>:to_gtv")
         chkVirtual("virtual<rec>", "x.s.to_full().to_gtv()", virArgs, "[456,[789]]")
 
         chkVirtual("virtual<rec>?", "_type_of(x)", virArgs, "'virtual<rec>?'")
@@ -674,7 +677,7 @@ class VirtualTest: BaseGtxTest(false) {
 
     @Test fun testSetType() {
         val type = "virtual<set<integer>>"
-        var args = argToGtv("[123,456]", "[[0],[1]]")
+        val args = argToGtv("[123,456]", "[[0],[1]]")
         chkVirtual(type, "_type_of(x)", args, "'virtual<set<integer>>'")
         chkVirtual(type, "_type_of(x.empty())", args, "'boolean'")
         chkVirtual(type, "_type_of(x.size())", args, "'integer'")
@@ -884,7 +887,7 @@ class VirtualTest: BaseGtxTest(false) {
         tst.wrapRtErrors = false
         val type = "virtual<map<text, integer>>"
 
-        var args = argToGtv("{'Hello':123,'Bye':456}", "[['Hello'],['Bye']]")
+        val args = argToGtv("{'Hello':123,'Bye':456}", "[['Hello'],['Bye']]")
         chkVirtualEx(type, "{ x['Hello'] = 123; return 0; }", args, "ct_err:expr_immutable:virtual<map<text,integer>>")
         chkVirtualEx(type, "{ x['Hello'] += 123; return 0; }", args, "ct_err:expr_immutable:virtual<map<text,integer>>")
 
@@ -1099,22 +1102,18 @@ class VirtualTest: BaseGtxTest(false) {
         def("struct ind3 { p: map<text,ind2>; }")
         def("struct cycle { mutable next: cycle?; v: ind3; }")
 
-        chkCompile("function f(a: virtual<rec>) { a.to_gtv(); }", "ct_err:fn:invalid:virtual<rec>:virtual<rec>.to_gtv")
-        chkCompile("function f(a: virtual<list<integer>>) { a.to_gtv(); }",
-                "ct_err:fn:invalid:virtual<list<integer>>:virtual<list<integer>>.to_gtv")
-        chkCompile("function f(a: virtual<map<text,integer>>) { a.to_gtv(); }",
-                "ct_err:fn:invalid:virtual<map<text,integer>>:virtual<map<text,integer>>.to_gtv")
-        chkCompile("function f(a: virtual<(integer,text)>) { a.to_gtv(); }",
-                "ct_err:fn:invalid:virtual<(integer,text)>:virtual<(integer,text)>.to_gtv")
-        chkCompile("function f(a: virtual<rec>) { a.to_gtv_pretty(); }",
-                "ct_err:fn:invalid:virtual<rec>:virtual<rec>.to_gtv_pretty")
+        chkCompile("function f(a: virtual<rec>) { a.to_gtv(); }", "ct_err:fn:invalid:virtual<rec>:to_gtv")
+        chkCompile("function f(a: virtual<list<integer>>) { a.to_gtv(); }", "ct_err:fn:invalid:virtual<list<integer>>:to_gtv")
+        chkCompile("function f(a: virtual<map<text,integer>>) { a.to_gtv(); }", "ct_err:fn:invalid:virtual<map<text,integer>>:to_gtv")
+        chkCompile("function f(a: virtual<(integer,text)>) { a.to_gtv(); }", "ct_err:fn:invalid:virtual<(integer,text)>:to_gtv")
+        chkCompile("function f(a: virtual<rec>) { a.to_gtv_pretty(); }", "ct_err:fn:invalid:virtual<rec>:to_gtv_pretty")
 
-        chkCompile("function f(a: vir) { a.to_gtv(); }", "ct_err:fn:invalid:vir:vir.to_gtv")
-        chkCompile("function f(a: ind1) { a.to_gtv(); }", "ct_err:fn:invalid:ind1:ind1.to_gtv")
-        chkCompile("function f(a: ind2) { a.to_gtv(); }", "ct_err:fn:invalid:ind2:ind2.to_gtv")
-        chkCompile("function f(a: ind3) { a.to_gtv(); }", "ct_err:fn:invalid:ind3:ind3.to_gtv")
+        chkCompile("function f(a: vir) { a.to_gtv(); }", "ct_err:fn:invalid:vir:to_gtv")
+        chkCompile("function f(a: ind1) { a.to_gtv(); }", "ct_err:fn:invalid:ind1:to_gtv")
+        chkCompile("function f(a: ind2) { a.to_gtv(); }", "ct_err:fn:invalid:ind2:to_gtv")
+        chkCompile("function f(a: ind3) { a.to_gtv(); }", "ct_err:fn:invalid:ind3:to_gtv")
         chkCompile("function f(a: (integer,map<text,list<ind3>>)) { a.to_gtv(); }",
-                "ct_err:fn:invalid:(integer,map<text,list<ind3>>):(integer,map<text,list<ind3>>).to_gtv")
+                "ct_err:fn:invalid:(integer,map<text,list<ind3>>):to_gtv")
 
         chkCompile("query q() = list<virtual<rec>>();", "ct_err:result_nogtv:q:list<virtual<rec>>")
         chkCompile("query q() = list<virtual<list<integer>>>();", "ct_err:result_nogtv:q:list<virtual<list<integer>>>")

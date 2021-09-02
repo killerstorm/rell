@@ -336,7 +336,7 @@ class NullPropagationTest: BaseRellTest(false) {
         chkEx("{ var x = _nullable(123); when (x!!) { else -> x = _nullable(456); } return _type_of(x); }", "integer?")
 
         //chkEx("{ var x = _nullable(123); when (x!!) { else -> x = null; } return x != null; }", "false")
-        //chkWarn("expr_var_null:always:x")
+        //chkWarn("expr:smartnull:var:always:x")
 
         chkEx("{ var x = _nullable(123); when { 1>0-> x = 456; } return _type_of(x); }", "integer?")
         chkEx("{ var x = _nullable(123); when { 1>0-> {} else-> x = 456; } return _type_of(x); }", "integer?")

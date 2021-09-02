@@ -147,6 +147,16 @@ private class C_NsDef_Query(private val cQuery: C_QueryGlobalFunction): C_NsDef(
     }
 }
 
+private class C_NsDef_GlobalConstant(private val cDef: C_GlobalConstantDefinition): C_NsDef() {
+    override fun type() = C_DeclarationType.CONSTANT
+    override fun toNamespaceElement() = C_NamespaceElement.create(value = C_NamespaceValue_GlobalConstant(cDef))
+
+    override fun addToDefs(b: C_ModuleDefsBuilder) {
+        val rDef = cDef.rDef
+        b.constants.add(rDef.moduleLevelName, rDef)
+    }
+}
+
 class C_SysNsProto(entries: List<C_NsEntry>, entities: List<C_NsEntry>) {
     val entries = entries.toImmList()
     val entities = entities.toImmList()
@@ -238,8 +248,8 @@ class C_UserNsProtoBuilder(private val assembler: C_NsAsm_ComponentAssembler) {
         addDef(name, C_NsDef_Object(obj))
     }
 
-    fun addStruct(name: S_Name, structDef: R_StructDefinition) {
-        addDef(name, C_NsDef_UserStruct(C_Struct(name, structDef)))
+    fun addStruct(cStruct: C_Struct) {
+        addDef(cStruct.name, C_NsDef_UserStruct(cStruct))
     }
 
     fun addEnum(name: S_Name, e: R_EnumDefinition) {
@@ -256,5 +266,9 @@ class C_UserNsProtoBuilder(private val assembler: C_NsAsm_ComponentAssembler) {
 
     fun addQuery(name: S_Name, query: C_QueryGlobalFunction) {
         addDef(name, C_NsDef_Query(query))
+    }
+
+    fun addConstant(name: S_Name, c: C_GlobalConstantDefinition) {
+        addDef(name, C_NsDef_GlobalConstant(c))
     }
 }
