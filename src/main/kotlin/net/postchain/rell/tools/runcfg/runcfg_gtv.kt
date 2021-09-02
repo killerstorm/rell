@@ -197,11 +197,11 @@ object RunConfigGtvParser {
     private fun parseTopGtv(elem: RellXmlElement, mergeAllowed: Boolean): Rcfg_Gtv {
         elem.checkNoText()
         elem.check(elem.elems.size == 1) { "expected exactly one nested element, but found ${elem.elems.size}" }
-        val res = parseGtv0(elem.elems[0], mergeAllowed)
+        val res = parseGtvNode(elem.elems[0], mergeAllowed)
         return res
     }
 
-    private fun parseGtv0(elem: RellXmlElement, mergeAllowed: Boolean): Rcfg_Gtv {
+    fun parseGtvNode(elem: RellXmlElement, mergeAllowed: Boolean): Rcfg_Gtv {
         return when (elem.tag) {
             "null" -> {
                 elem.attrs().checkNoMore()
@@ -240,7 +240,7 @@ object RunConfigGtvParser {
 
         elem.checkNoText()
 
-        val values = elem.elems.map { parseGtv0(it, mergeAllowed) }
+        val values = elem.elems.map { parseGtvNode(it, mergeAllowed) }
         return Rcfg_Gtv_Array(values, merge ?: Rcfg_Gtv_ArrayMerge.APPEND)
     }
 

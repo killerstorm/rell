@@ -754,6 +754,53 @@ class RunConfigGenTest {
         """)
     }
 
+    @Test fun testGtvFromFile() {
+        val configFiles = mapOf("part.xml" to """
+            <dict>
+                <entry key="a"><int>123</int></entry>
+                <entry key="b"><int>456</int></entry>
+            </dict>
+        """)
+
+        val files = generate(mapOf(), configFiles, """
+            <run>
+                <nodes>
+                    <config add-signers="false">x=y</config>
+                </nodes>
+                <chains>
+                    <chain name="user" iid="33">
+                        <config height="0">
+                            <gtv path="foo/bar" src="part.xml"/>
+                        </config>
+                    </chain>
+                </chains>
+            </run>
+        """)
+
+        chkFile(files, "blockchains/33/0.xml", """
+            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <dict>
+                <entry key="foo">
+                    <dict>
+                        <entry key="bar">
+                            <dict>
+                                <entry key="a">
+                                    <int>123</int>
+                                </entry>
+                                <entry key="b">
+                                    <int>456</int>
+                                </entry>
+                            </dict>
+                        </entry>
+                    </dict>
+                </entry>
+                <entry key="signers">
+                    <array/>
+                </entry>
+            </dict>
+        """)
+    }
+
     private fun generate(
             sourceFiles: Map<String, String>,
             configFiles: Map<String, String>,

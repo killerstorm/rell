@@ -1,14 +1,18 @@
-RELEASE NOTES 0.10.6 (2021-??-??)
+RELEASE NOTES 0.10.6 (2021-09-02)
 
 Breaking changes:
 
-i. Map item type in collection-at. When iterating over a map<K, V> using a collection-at, the type of an item used to be
-   (k:K, v:V), and from now it will be (K, V). This way, the type of the item is the same as in for-loop.
-   Applications deployed with older versions of Rell will run in compatibility mode and will not break after Rell
-   binaries upgrade.
+i.   Single-element tuple syntax. In the new version, type (T) is equivalent to just T, while in previous versions it
+     meant a tuple with a single element of type T. But if a field name is specified, the type is still a tuple: (a:T).
+     To use a single-element tuple type without a field name, a comma has to be added in the end: (T,).
 
-ii. Restrictions on "module_args". The "module_args" struct now must satisfy same restrictions as global constants: it
-    must be immutable and not contain database-related components (like entities).
+ii.  Map item type in collection-at. When iterating over a map<K, V> using a collection-at, the type of an item used
+     to be (k:K, v:V), and from now it will be (K, V). This way, the type of the item is the same as in for-loop.
+     Applications deployed with older versions of Rell will run in compatibility mode and will not break after Rell
+     binaries upgrade.
+
+iii. Restrictions on "module_args". The "module_args" struct now must satisfy same restrictions as global constants: it
+     must be immutable and not contain database-related components (like entities).
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 1. Language: Function type
@@ -65,15 +69,8 @@ Without parentheses, the "?" symbol makes the result type nullable, not the func
 
     (integer) -> text?
 
-* Breaking change: single-element tuple syntax *
-
 In order to support the nullable function type syntax with parentheses, the syntax for single-element tuple had to be
-changed. In the new version, type (T) is equivalent to just T, while in previous versions it meant a tuple with a
-single element of type T.
-
-However, if a field name is specified, the type is still a tuple: (a:T).
-
-To use a single-element tuple type without a field name, a comma has to be added in the end: (T,).
+changed: type (T) is now equivalent to T and (T)? is equivalent to T?, while a single-element tuple is (T,).
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 2. Language: Partial function application
@@ -191,7 +188,7 @@ There are restrictions on types and expressions used in global constants:
 - Type must be immutable. Thus, collections (list, set, map) are not allowed, as well as structs with mutable
   attributes.
 - Type cannot be an entity or contain an entity, as global constants must not depend on the state of the database.
-- Expression cannot access the database, so database at-expressions and some API are not allowed.
+- Expression cannot access the database, so database at-expressions and some APIs are not allowed.
 - Expression cannot call user-defined functions (because the compiler does not restrict what a function can do).
 
 When the expression is simple enough, the value of a global constant is evaluated at compile-time. Otherwise, it is
@@ -202,7 +199,7 @@ It is recommended to use upper-case naming for global constants, though lowercas
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 4. Language: Iterable values
 
-Iterable value - a new concept for uniform sequences processing. The compiler has an internal type iterable<T>, which
+Iterable value is a new concept for uniform sequences processing. The compiler has an internal type iterable<T>, which
 cannot be used explicitly in code, but different types can be used as iterable<T>:
 
     range: iterable<integer>
@@ -214,7 +211,7 @@ cannot be used explicitly in code, but different types can be used as iterable<T
     virtual<set<T>>: iterable<T>
     virtual<map<K,V>>: iterable<(K,V)>
 
-Iterable values types can be used:
+Iterable types can be used:
 
     - in "for" statement: for (x in range(10)) { ... }
     - in collection-at expression: [1,2,3] @* {} ( ... )
@@ -310,7 +307,7 @@ Merge modes for dicts:
 - keep-new: use new entry value on key conflict (default mode)
 - strict: error on key conflict
 
-Allowed merge modes for individual dict entries:
+Allowed merge modes for dict entries:
 - keep-old
 - keep-new (default)
 - strict
