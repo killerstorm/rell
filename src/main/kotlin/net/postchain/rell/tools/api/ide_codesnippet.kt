@@ -1,9 +1,13 @@
+/*
+ * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.tools.api
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import net.postchain.rell.compiler.C_CompilerModuleSelection
-import net.postchain.rell.compiler.C_CompilerOptions
-import net.postchain.rell.compiler.C_MessageType
+import net.postchain.rell.compiler.base.core.C_CompilerModuleSelection
+import net.postchain.rell.compiler.base.core.C_CompilerOptions
+import net.postchain.rell.compiler.base.utils.C_MessageType
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap

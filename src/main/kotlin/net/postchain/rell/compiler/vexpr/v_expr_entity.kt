@@ -1,7 +1,15 @@
+/*
+ * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.compiler.vexpr
 
-import net.postchain.rell.compiler.*
+import net.postchain.rell.compiler.base.core.C_LambdaBlock
+import net.postchain.rell.compiler.base.expr.*
+import net.postchain.rell.compiler.base.utils.C_Errors
+import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.model.*
+import net.postchain.rell.model.expr.*
 import net.postchain.rell.utils.toImmList
 
 class V_EntityAttrExpr(

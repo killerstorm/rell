@@ -5,8 +5,11 @@
 package net.postchain.rell.tools.api
 
 import net.postchain.rell.RellConfigGen
-import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.ast.S_RellFile
+import net.postchain.rell.compiler.base.core.C_Compiler
+import net.postchain.rell.compiler.base.core.C_CompilerOptions
+import net.postchain.rell.compiler.base.module.C_ModuleUtils
+import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.Rt_RellVersion

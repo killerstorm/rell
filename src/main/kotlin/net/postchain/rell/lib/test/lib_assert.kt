@@ -1,10 +1,24 @@
+/*
+ * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.lib.test
 
-import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.ast.*
+import net.postchain.rell.compiler.base.expr.C_ExprContext
+import net.postchain.rell.compiler.base.expr.C_ExprVarFacts
+import net.postchain.rell.compiler.base.fn.C_ArgTypeMatcher_Nullable
+import net.postchain.rell.compiler.base.fn.C_GlobalFuncCaseCtx
+import net.postchain.rell.compiler.base.fn.C_GlobalFuncCaseMatch
+import net.postchain.rell.compiler.base.fn.C_GlobalSpecialFuncCase
+import net.postchain.rell.compiler.base.utils.C_GlobalFuncBuilder
+import net.postchain.rell.compiler.base.utils.C_SpecialGlobalFuncCaseMatch
+import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.compiler.vexpr.V_BinaryOp
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
+import net.postchain.rell.model.expr.R_BinaryOp
+import net.postchain.rell.model.expr.R_Expr
 import net.postchain.rell.runtime.*
 import net.postchain.rell.utils.immListOf
 

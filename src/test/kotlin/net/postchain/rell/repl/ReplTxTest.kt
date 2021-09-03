@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.repl
 
 import net.postchain.rell.test.BaseRellTest

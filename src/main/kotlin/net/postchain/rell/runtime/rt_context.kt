@@ -11,7 +11,7 @@ import net.postchain.core.ByteArrayKey
 import net.postchain.core.TxEContext
 import net.postchain.gtv.Gtv
 import net.postchain.gtx.OpData
-import net.postchain.rell.compiler.C_CompilerOptions
+import net.postchain.rell.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.model.*
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.repl.ReplOutputChannel

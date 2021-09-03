@@ -7,9 +7,11 @@ package net.postchain.rell
 import net.postchain.StorageBuilder
 import net.postchain.config.app.AppConfig
 import net.postchain.gtv.Gtv
-import net.postchain.rell.compiler.C_AtAttrShadowing
-import net.postchain.rell.compiler.C_CompilerModuleSelection
-import net.postchain.rell.compiler.C_CompilerOptions
+import net.postchain.rell.compiler.base.core.C_AtAttrShadowing
+import net.postchain.rell.compiler.base.core.C_CompilerModuleSelection
+import net.postchain.rell.compiler.base.core.C_CompilerOptions
+import net.postchain.rell.lib.test.Rt_DynamicBlockRunnerStrategy
+import net.postchain.rell.lib.test.UnitTestBlockRunner
 import net.postchain.rell.model.*
 import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.repl.ReplShell

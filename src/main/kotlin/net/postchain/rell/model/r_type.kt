@@ -6,7 +6,14 @@ package net.postchain.rell.model
 
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
-import net.postchain.rell.compiler.*
+import net.postchain.rell.compiler.base.core.C_TypeAdapter
+import net.postchain.rell.compiler.base.core.C_TypeAdapter_Direct
+import net.postchain.rell.compiler.base.core.C_TypeAdapter_IntegerToDecimal
+import net.postchain.rell.compiler.base.core.C_TypeAdapter_Nullable
+import net.postchain.rell.compiler.base.fn.C_FunctionCallParameter
+import net.postchain.rell.compiler.base.fn.C_FunctionCallParameters
+import net.postchain.rell.compiler.base.utils.C_Constants
+import net.postchain.rell.compiler.base.utils.C_MemberFuncTable
 import net.postchain.rell.module.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.utils.CommonUtils

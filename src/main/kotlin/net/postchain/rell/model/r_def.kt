@@ -5,10 +5,14 @@
 package net.postchain.rell.model
 
 import net.postchain.gtv.Gtv
-import net.postchain.rell.compiler.C_CompilerPass
-import net.postchain.rell.compiler.C_LateGetter
-import net.postchain.rell.compiler.C_LateInit
-import net.postchain.rell.compiler.C_Utils
+import net.postchain.rell.compiler.base.core.C_CompilerPass
+import net.postchain.rell.compiler.base.utils.C_LateGetter
+import net.postchain.rell.compiler.base.utils.C_LateInit
+import net.postchain.rell.compiler.base.utils.C_Utils
+import net.postchain.rell.model.expr.R_AttributeDefaultValueExpr
+import net.postchain.rell.model.expr.R_CreateExpr
+import net.postchain.rell.model.expr.R_CreateExprAttr
+import net.postchain.rell.model.expr.R_Expr
 import net.postchain.rell.runtime.*
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toGtv

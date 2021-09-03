@@ -5,10 +5,10 @@
 package net.postchain.rell.repl
 
 import com.google.common.base.Throwables
-import net.postchain.rell.compiler.C_CompilerOptions
-import net.postchain.rell.compiler.C_Message
-import net.postchain.rell.compiler.C_Parser
-import net.postchain.rell.compiler.C_SourceDir
+import net.postchain.rell.compiler.base.core.C_CompilerOptions
+import net.postchain.rell.compiler.base.utils.C_Message
+import net.postchain.rell.compiler.base.utils.C_Parser
+import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.model.R_StackPos

@@ -10,8 +10,11 @@ import com.google.common.math.LongMath
 import mu.KLogging
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvVirtual
-import net.postchain.rell.compiler.C_Constants
+import net.postchain.rell.compiler.base.utils.C_Constants
 import net.postchain.rell.model.*
+import net.postchain.rell.model.expr.R_PartialArgMapping
+import net.postchain.rell.model.expr.R_PartialCallMapping
+import net.postchain.rell.model.expr.Rt_FunctionCallTarget
 import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.PostchainUtils
 import net.postchain.rell.utils.checkEquals

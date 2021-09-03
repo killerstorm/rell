@@ -13,10 +13,10 @@ import com.github.h0tk3y.betterParse.parser.ErrorResult
 import com.github.h0tk3y.betterParse.parser.ParseResult
 import com.github.h0tk3y.betterParse.parser.Parsed
 import com.github.h0tk3y.betterParse.parser.Parser
-import net.postchain.rell.compiler.C_Parser
+import net.postchain.rell.compiler.base.utils.C_Parser
 import net.postchain.rell.compiler.ast.*
-import net.postchain.rell.model.R_AtCardinality
-import net.postchain.rell.model.R_AtWhatSort
+import net.postchain.rell.model.expr.R_AtCardinality
+import net.postchain.rell.model.expr.R_AtWhatSort
 import kotlin.reflect.KProperty
 
 object S_Grammar : Grammar<S_RellFile>() {

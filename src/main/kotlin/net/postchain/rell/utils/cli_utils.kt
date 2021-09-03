@@ -8,7 +8,13 @@ import mu.KLogging
 import net.postchain.base.BlockchainRid
 import net.postchain.common.hexStringToByteArray
 import net.postchain.gtv.GtvNull
-import net.postchain.rell.compiler.*
+import net.postchain.rell.compiler.base.core.C_CompilationResult
+import net.postchain.rell.compiler.base.core.C_Compiler
+import net.postchain.rell.compiler.base.core.C_CompilerModuleSelection
+import net.postchain.rell.compiler.base.core.C_CompilerOptions
+import net.postchain.rell.compiler.base.utils.C_CommonError
+import net.postchain.rell.compiler.base.utils.C_MessageType
+import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_LangVersion
 import net.postchain.rell.model.R_ModuleName

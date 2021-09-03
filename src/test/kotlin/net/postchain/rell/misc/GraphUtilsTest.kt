@@ -4,7 +4,7 @@
 
 package net.postchain.rell.misc
 
-import net.postchain.rell.compiler.C_GraphUtils
+import net.postchain.rell.compiler.base.utils.C_GraphUtils
 import org.junit.Test
 import kotlin.test.assertEquals
 

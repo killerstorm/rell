@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.utils
 
 import net.postchain.rell.model.R_App

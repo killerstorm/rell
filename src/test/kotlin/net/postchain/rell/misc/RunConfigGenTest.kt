@@ -5,7 +5,7 @@
 package net.postchain.rell.misc
 
 import net.postchain.gtv.GtvDecoder
-import net.postchain.rell.compiler.C_SourceDir
+import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.module.RellVersions
 import net.postchain.rell.test.*
 import net.postchain.rell.tools.runcfg.RellRunConfigGenerator
@@ -206,7 +206,7 @@ class RunConfigGenTest {
 
         chkFile(files, "node-config.properties", "x=123")
 
-        chkFile(files, "blockchains/33/brid.txt", "70BCD94C9E50637CA79DF3A032C8C3A1637F07FEB74FA5B62E7BC96A8BA692DC")
+        chkFile(files, "blockchains/33/brid.txt", "1DC0FF6AB67FF1C32AD5984597E4A619A046327A66E487E02133DAD083E09AB8")
 
         chkFile(files, "blockchains/33/0.xml", """
             <?xml version="1.0" encoding="UTF-8" standalone="yes"?>

@@ -1,10 +1,16 @@
+/*
+ * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.model
 
 import net.postchain.gtv.Gtv
-import net.postchain.rell.compiler.C_CompilerPass
-import net.postchain.rell.compiler.C_LateGetter
-import net.postchain.rell.compiler.C_LateInit
-import net.postchain.rell.compiler.C_Utils
+import net.postchain.rell.compiler.base.core.C_CompilerPass
+import net.postchain.rell.compiler.base.utils.C_LateGetter
+import net.postchain.rell.compiler.base.utils.C_LateInit
+import net.postchain.rell.compiler.base.utils.C_Utils
+import net.postchain.rell.model.stmt.R_Statement
+import net.postchain.rell.model.stmt.R_StatementResult_Return
 import net.postchain.rell.runtime.*
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmList

@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.gtx
 
 import net.postchain.core.UserMistake
@@ -73,6 +77,8 @@ class GtxConfigTest: BaseGtxTest() {
         chkVersion("0.10.3", "OK")
         chkVersion("0.10.4", "OK")
         chkVersion("0.10.5", "OK")
+        chkVersion("0.10.6", "OK")
+        chkVersion("0.10.7", "OK")
     }
 
     @Test fun testSourcesWithVersionOutOfRange() {
@@ -80,7 +86,7 @@ class GtxConfigTest: BaseGtxTest() {
         chkVersion("0.9.0", "$msg: 0.9.0")
         chkVersion("0.9.1", "$msg: 0.9.1")
         chkVersion("0.9.999", "$msg: 0.9.999")
-        chkVersion("0.10.7", "$msg: 0.10.7")
+        chkVersion("0.10.8", "$msg: 0.10.8")
         chkVersion("0.11.0", "$msg: 0.11.0")
         chkVersion("1.0.0", "$msg: 1.0.0")
     }

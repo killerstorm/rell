@@ -4,6 +4,7 @@
 
 package net.postchain.rell.model
 
+import net.postchain.rell.model.expr.*
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_SqlContext
 import net.postchain.rell.sql.SqlConstants

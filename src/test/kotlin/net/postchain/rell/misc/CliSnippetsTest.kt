@@ -4,9 +4,9 @@
 
 package net.postchain.rell.misc
 
-import net.postchain.rell.compiler.C_CompilerModuleSelection
-import net.postchain.rell.compiler.C_CompilerOptions
-import net.postchain.rell.compiler.C_SourceDir
+import net.postchain.rell.compiler.base.core.C_CompilerModuleSelection
+import net.postchain.rell.compiler.base.core.C_CompilerOptions
+import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.test.RellTestUtils
 import org.junit.Test

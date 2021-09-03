@@ -1,9 +1,13 @@
+/*
+ * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.lib
 
 import net.postchain.base.CURVE_PARAMS
 import net.postchain.core.Signature
-import net.postchain.rell.compiler.C_GlobalFuncBuilder
-import net.postchain.rell.compiler.C_LibUtils
+import net.postchain.rell.compiler.base.utils.C_GlobalFuncBuilder
+import net.postchain.rell.compiler.base.utils.C_LibUtils
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.utils.PostchainUtils

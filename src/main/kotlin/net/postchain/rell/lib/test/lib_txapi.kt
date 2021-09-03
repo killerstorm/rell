@@ -1,13 +1,18 @@
-package net.postchain.rell.lib
+/*
+ * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ */
+
+package net.postchain.rell.lib.test
 
 import net.postchain.base.BlockchainRid
 import net.postchain.base.secp256k1_derivePubKey
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
-import net.postchain.rell.compiler.*
-import net.postchain.rell.lib.test.C_Lib_Rell_Test_Assert
-import net.postchain.rell.lib.test.C_Lib_Rell_Test_KeyPairs
+import net.postchain.rell.compiler.base.fn.C_ArgTypeMatcher_List
+import net.postchain.rell.compiler.base.fn.C_ArgTypeMatcher_MirrorStructOperation
+import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.model.*
+import net.postchain.rell.model.lib.R_SysFn_Struct
 import net.postchain.rell.module.GtvRtConversion
 import net.postchain.rell.module.GtvRtConversion_None
 import net.postchain.rell.runtime.*

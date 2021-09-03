@@ -8,7 +8,7 @@ import com.github.h0tk3y.betterParse.lexer.TokenMatch
 import com.github.h0tk3y.betterParse.lexer.Tokenizer
 import com.github.h0tk3y.betterParse.utils.cached
 import net.postchain.rell.utils.CommonUtils
-import net.postchain.rell.compiler.C_Parser
+import net.postchain.rell.compiler.base.utils.C_Parser
 import net.postchain.rell.compiler.ast.S_BasicPos
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
