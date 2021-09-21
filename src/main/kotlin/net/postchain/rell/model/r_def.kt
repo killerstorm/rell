@@ -5,11 +5,17 @@
 package net.postchain.rell.model
 
 import net.postchain.gtv.Gtv
-import net.postchain.rell.compiler.C_CompilerPass
-import net.postchain.rell.compiler.C_LateGetter
-import net.postchain.rell.compiler.C_LateInit
-import net.postchain.rell.compiler.C_Utils
+import net.postchain.rell.compiler.base.core.C_CompilerPass
+import net.postchain.rell.compiler.base.utils.C_LateGetter
+import net.postchain.rell.compiler.base.utils.C_LateInit
+import net.postchain.rell.compiler.base.utils.C_Utils
+import net.postchain.rell.model.expr.R_AttributeDefaultValueExpr
+import net.postchain.rell.model.expr.R_CreateExpr
+import net.postchain.rell.model.expr.R_CreateExprAttr
+import net.postchain.rell.model.expr.R_Expr
 import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.utils.Rt_Utils
+import net.postchain.rell.runtime.utils.toGtv
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toGtv
 import net.postchain.rell.utils.toImmList
@@ -48,14 +54,13 @@ class R_EntityBody(
 class R_ExternalEntity(val chain: R_ExternalChainRef, val metaCheck: Boolean)
 
 class R_EntityDefinition(
-        names: R_DefinitionNames,
-        initFrameGetter: C_LateGetter<R_CallFrame>,
+        base: R_DefinitionBase,
         val mountName: R_MountName,
         val flags: R_EntityFlags,
         val sqlMapping: R_EntitySqlMapping,
         val external: R_ExternalEntity?,
         val mirrorStructs: R_MirrorStructs
-): R_Definition(names, initFrameGetter) {
+): R_Definition(base) {
     val metaName = mountName.str()
 
     val type = R_EntityType(this)
@@ -97,7 +102,7 @@ class R_EntityDefinition(
     }
 }
 
-class R_ObjectDefinition(names: R_DefinitionNames, val rEntity: R_EntityDefinition): R_Definition(names, rEntity.initFrameGetter) {
+class R_ObjectDefinition(base: R_DefinitionBase, val rEntity: R_EntityDefinition): R_Definition(base) {
     val type = R_ObjectType(this)
 
     fun insert(frame: Rt_CallFrame) {
@@ -177,37 +182,35 @@ class R_Struct(
 }
 
 class R_MirrorStructs(
-        names: R_DefinitionNames,
-        initFrameGetter: C_LateGetter<R_CallFrame>,
+        defBase: R_DefinitionBase,
         defType: String,
         val operation: R_MountName?
 ) {
-    val immutable = createStruct(names, initFrameGetter, defType, false)
-    val mutable = createStruct(names, initFrameGetter, defType, true)
+    val immutable = createStruct(defBase, defType, false)
+    val mutable = createStruct(defBase, defType, true)
 
     fun getStruct(mutable: Boolean) = if (mutable) this.mutable else this.immutable
 
     private fun createStruct(
-            names: R_DefinitionNames,
-            initFrameGetter: C_LateGetter<R_CallFrame>,
+            defBase: R_DefinitionBase,
             defType: String,
             mutable: Boolean
     ): R_Struct {
         val mutableStr = if (mutable) "mutable " else ""
-        val structName = "struct<$mutableStr${names.appLevelName}>"
+        val structName = "struct<$mutableStr${defBase.names.appLevelName}>"
 
         val structMetaGtv = mapOf(
                 "type" to "struct".toGtv(),
                 "definition_type" to defType.toGtv(),
-                "definition" to names.appLevelName.toGtv(),
+                "definition" to defBase.names.appLevelName.toGtv(),
                 "mutable" to mutable.toGtv()
         ).toGtv()
 
-        return R_Struct(structName, structMetaGtv, initFrameGetter, mirrorStructs = this)
+        return R_Struct(structName, structMetaGtv, defBase.initFrameGetter, mirrorStructs = this)
     }
 }
 
-class R_StructDefinition(names: R_DefinitionNames, val struct: R_Struct): R_Definition(names, struct.initFrameGetter) {
+class R_StructDefinition(base: R_DefinitionBase, val struct: R_Struct): R_Definition(base) {
     val type = struct.type
 
     override fun toMetaGtv() = struct.toMetaGtv()
@@ -221,10 +224,9 @@ class R_EnumAttr(val name: String, val value: Int) {
 }
 
 class R_EnumDefinition(
-        names: R_DefinitionNames,
-        initFrameGetter: C_LateGetter<R_CallFrame>,
+        base: R_DefinitionBase,
         val attrs: List<R_EnumAttr>
-): R_Definition(names, initFrameGetter) {
+): R_Definition(base) {
     val type = R_EnumType(this)
 
     private val attrMap = attrs.map { Pair(it.name, it) }.toMap()
@@ -259,10 +261,11 @@ class R_GlobalConstantId(
         val appLevelName: String,
         private val moduleLevelName: String
 ) {
-    fun toErrCodeString() = "$index:$module:$moduleLevelName"
+    fun strCode() = "$index:$module:$moduleLevelName"
+
+    override fun toString() = "$index:$app:$module:$moduleLevelName"
 
     // not overriding equals() and hashCode() on purpose
-    override fun toString() = "$index:$app:$module:$moduleLevelName"
 }
 
 class R_GlobalConstantBody(val type: R_Type, val expr: R_Expr, val value: Rt_Value?) {
@@ -272,12 +275,11 @@ class R_GlobalConstantBody(val type: R_Type, val expr: R_Expr, val value: Rt_Val
 }
 
 class R_GlobalConstantDefinition(
-        names: R_DefinitionNames,
-        initFrameGetter: C_LateGetter<R_CallFrame>,
+        base: R_DefinitionBase,
         val constId: R_GlobalConstantId,
         private val filePos: R_FilePos,
         private val bodyGetter: C_LateGetter<R_GlobalConstantBody>
-): R_Definition(names, initFrameGetter) {
+): R_Definition(base) {
     fun evaluate(exeCtx: Rt_ExecutionContext): Rt_Value {
         val body = bodyGetter.get()
         return if (body.value != null) {

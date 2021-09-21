@@ -11,10 +11,12 @@ import net.postchain.core.ByteArrayKey
 import net.postchain.core.TxEContext
 import net.postchain.gtv.Gtv
 import net.postchain.gtx.OpData
-import net.postchain.rell.compiler.C_CompilerOptions
+import net.postchain.rell.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.model.*
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.repl.ReplOutputChannel
+import net.postchain.rell.runtime.utils.Rt_Messages
+import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.sql.*
 import net.postchain.rell.utils.*
 
@@ -378,7 +380,7 @@ private class Rt_GlobalConstants(private val appCtx: Rt_AppContext, oldStates: L
             }
 
             Rt_Utils.check(!initing) {
-                "const:recursion:${constId.toErrCodeString()}" to "Constant has recursive expression: ${constId.appLevelName}"
+                "const:recursion:${constId.strCode()}" to "Constant has recursive expression: ${constId.appLevelName}"
             }
             initing = true
 

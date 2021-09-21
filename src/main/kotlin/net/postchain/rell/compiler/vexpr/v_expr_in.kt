@@ -1,10 +1,15 @@
+/*
+ * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.compiler.vexpr
 
-import net.postchain.rell.compiler.C_Errors
-import net.postchain.rell.compiler.C_ExprContext
-import net.postchain.rell.compiler.C_Utils
+import net.postchain.rell.compiler.base.utils.C_Errors
+import net.postchain.rell.compiler.base.expr.C_ExprContext
+import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.compiler.ast.C_BinOp_EqNe
 import net.postchain.rell.model.*
+import net.postchain.rell.model.expr.*
 
 class V_InCollectionExpr(
         exprCtx: C_ExprContext,

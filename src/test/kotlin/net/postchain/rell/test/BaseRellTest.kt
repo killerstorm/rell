@@ -53,6 +53,8 @@ abstract class BaseRellTest(useSql: Boolean = true, gtv: Boolean = false): BaseT
     fun resetSqlCtr() = tst.resetSqlCtr()
     fun chkSql(expected: Int) = tst.chkSql(expected)
 
+    fun chkTests(testModule: String, expected: String) = tst.chkTests(testModule, expected)
+
     private fun rtVal(v: Long?) = if (v == null) Rt_NullValue else Rt_IntValue(v)
     private fun rtVal(v: String?) = if (v == null) Rt_NullValue else Rt_TextValue(v)
     private fun rtVal(v: Boolean?) = if (v == null) Rt_NullValue else Rt_BooleanValue(v)

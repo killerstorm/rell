@@ -2,7 +2,7 @@
  * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
  */
 
-package net.postchain.rell.runtime
+package net.postchain.rell.lib.test
 
 import net.postchain.base.BaseBlockchainConfigurationData
 import net.postchain.base.BaseBlockchainContext
@@ -20,11 +20,12 @@ import net.postchain.gtv.GtvDictionary
 import net.postchain.gtx.GTXBlockchainConfigurationFactory
 import net.postchain.gtx.GTXDataBuilder
 import net.postchain.rell.RellConfigGen
-import net.postchain.rell.compiler.C_SourceDir
-import net.postchain.rell.lib.RawTestTxValue
-import net.postchain.rell.lib.Rt_TestBlockValue
+import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.RellPostchainModuleEnvironment
+import net.postchain.rell.runtime.Rt_BlockRunnerStrategy
+import net.postchain.rell.runtime.Rt_CallContext
+import net.postchain.rell.runtime.Rt_Error
 import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.tools.RunPostchainApp
 import net.postchain.rell.utils.*

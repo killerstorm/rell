@@ -1,10 +1,27 @@
+/*
+ * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.compiler.vexpr
 
-import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.ast.S_CallArgument
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.base.core.C_TypeHint
+import net.postchain.rell.compiler.base.core.C_Types
+import net.postchain.rell.compiler.base.core.C_VarUid
+import net.postchain.rell.compiler.base.expr.*
+import net.postchain.rell.compiler.base.fn.C_FunctionCallInfo
+import net.postchain.rell.compiler.base.fn.C_FunctionCallTarget_FunctionType
+import net.postchain.rell.compiler.base.fn.C_FunctionUtils
+import net.postchain.rell.compiler.base.utils.C_Error
+import net.postchain.rell.compiler.base.utils.C_Errors
+import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.model.*
+import net.postchain.rell.model.expr.Db_Expr
+import net.postchain.rell.model.expr.R_BlockCheckExpr
+import net.postchain.rell.model.expr.R_Expr
+import net.postchain.rell.model.expr.R_StackTraceExpr
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.immSetOf
 import net.postchain.rell.utils.toImmList
@@ -186,7 +203,7 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
         if (type == R_CtErrorType) {
             return C_Utils.errorVExpr(ctx, pos)
         } else {
-            val typeStr = type.toStrictString()
+            val typeStr = type.strCode()
             throw C_Error.stop(pos, "expr_call_nofn:$typeStr", "Not a function: value of type $typeStr")
         }
     }

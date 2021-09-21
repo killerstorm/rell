@@ -77,11 +77,6 @@ class Rt_StackTraceError private constructor(
 
     companion object {
         fun <T> trackStack(frame: Rt_CallFrame, filePos: R_FilePos, code: () -> T): T {
-            val defPos = frame.defCtx.defId
-            if (defPos == null) {
-                return code()
-            }
-
             try {
                 return code()
             } catch (e: Rt_StackTraceError) {

@@ -8,12 +8,12 @@ import com.github.h0tk3y.betterParse.lexer.TokenMatch
 import com.github.h0tk3y.betterParse.lexer.Tokenizer
 import com.github.h0tk3y.betterParse.utils.cached
 import net.postchain.rell.utils.CommonUtils
-import net.postchain.rell.compiler.C_Parser
+import net.postchain.rell.compiler.base.utils.C_Parser
 import net.postchain.rell.compiler.ast.S_BasicPos
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.R_Name
-import net.postchain.rell.runtime.Rt_DecimalUtils
+import net.postchain.rell.runtime.utils.Rt_DecimalUtils
 import net.postchain.rell.runtime.Rt_DecimalValue
 import net.postchain.rell.runtime.Rt_Value
 import java.io.InputStream

@@ -5,14 +5,14 @@
 package net.postchain.rell.repl
 
 import net.postchain.gtv.Gtv
-import net.postchain.rell.utils.PostchainUtils
-import net.postchain.rell.compiler.C_Message
+import net.postchain.rell.compiler.base.utils.C_Message
 import net.postchain.rell.model.R_CollectionType
 import net.postchain.rell.model.R_MapType
 import net.postchain.rell.model.R_StackPos
 import net.postchain.rell.runtime.Rt_BaseError
 import net.postchain.rell.runtime.Rt_UnitValue
 import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.utils.PostchainUtils
 
 interface ReplOutputChannel {
     fun printCompilerError(code: String, msg: String)
@@ -45,25 +45,25 @@ object ReplValueFormatter {
     }
 
     private fun formatDefault(v: Rt_Value): String? {
-        return if (v == Rt_UnitValue) null else v.toString()
+        return if (v == Rt_UnitValue) null else v.str()
     }
 
-    private fun formatStrict(v: Rt_Value): String? {
-        return v.toStrictString()
+    private fun formatStrict(v: Rt_Value): String {
+        return v.strCode()
     }
 
     private fun formatOneItemPerLine(v: Rt_Value): String? {
         if (v == Rt_UnitValue) return null
         val type = v.type()
         return when (type) {
-            is R_CollectionType -> collectionToLines(v.asCollection())
-            is R_MapType -> collectionToLines(v.asMap().entries)
-            else -> v.toString()
+            is R_CollectionType -> collectionToLines(v.asCollection()) { it.str() }
+            is R_MapType -> collectionToLines(v.asMap().entries) { "${it.key.str()}=${it.value.str()}" }
+            else -> v.str()
         }
     }
 
-    private fun collectionToLines(c: Collection<*>): String? {
-        return if (c.isEmpty()) null else c.joinToString("\n")
+    private fun <T> collectionToLines(c: Collection<T>, stringifier: (T) -> String): String? {
+        return if (c.isEmpty()) null else c.joinToString("\n") { stringifier(it) }
     }
 
     private fun formatGtvJson(v: Rt_Value): String? {

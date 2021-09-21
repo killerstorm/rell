@@ -146,6 +146,7 @@ SUMMARY: 0 FAILED / 14 PASSED / 14 TOTAL
 
 
 ***** OK *****
+
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------
 ./multirun.sh -d test-cli/src test-cli/config/run-tests-generic.xml --test
 
@@ -162,3 +163,29 @@ SUMMARY: 2 FAILED / 4 PASSED / 6 TOTAL
 
 
 ***** FAILED *****
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./multirun.sh -d test-cli/src test-cli/config/run-extend.xml --test
+
+TEST foo[1]:extend.test:test
+2021-09-18 14:56:13.970 INFO  SQLDatabaseAccess - Meta table does not exist! Assume database does not exist and create it (version: 2).
+[f]
+OK foo[1]:extend.test:test
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./multirun.sh -d test-cli/src test-cli/config/run-extend-g.xml --test
+
+TEST foo[1]:extend.test:test
+2021-09-18 14:56:24.026 INFO  SQLDatabaseAccess - Meta table does not exist! Assume database does not exist and create it (version: 2).
+[g, f]
+OK foo[1]:extend.test:test
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+./multirun.sh -d test-cli/src test-cli/config/run-extend-h.xml --test
+
+TEST foo[1]:extend.test:test
+2021-09-18 14:56:31.150 INFO  SQLDatabaseAccess - Meta table does not exist! Assume database does not exist and create it (version: 2).
+[h, f]
+OK foo[1]:extend.test:test
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------

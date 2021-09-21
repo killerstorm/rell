@@ -7,8 +7,8 @@ package net.postchain.rell.gtx
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvByteArray
 import net.postchain.gtv.GtvString
-import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.test.BaseRellTest
+import net.postchain.rell.utils.CommonUtils
 import org.junit.Test
 import kotlin.test.assertEquals
 
@@ -146,7 +146,7 @@ class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
 
         chkArg("set<integer>", "[1,2,3]", "set<integer>[int[1],int[2],int[3]]")
         chkArg("set<integer>", "[]", "set<integer>[]")
-        chkArg("set<integer>", "[1,2,1]", "gtv_err:set_dup:1")
+        chkArg("set<integer>", "[1,2,1]", "gtv_err:set_dup:int[1]")
         chkArg("set<integer>", """["Hello"]""", "gtv_err:type:integer:STRING")
         chkArg("set<integer>", "{}", "gtv_err:type:array:DICT")
 

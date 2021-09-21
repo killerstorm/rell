@@ -31,12 +31,12 @@ fun main(args: Array<String>) {
     println("        },")
     println("        \"keywords\": {")
     for (t in tokenizer.tkKeywords.values.sortedBy { it.token.pattern }) {
-        println("            \"${t.token.pattern}\" : \"${t.name}\",")
+        println("            \"${t.token.pattern}\": \"${t.name}\",")
     }
     println("        },")
     println("        \"delims\": {")
     for (t in tokenizer.tkDelims.sortedBy { it.token.pattern }) {
-        println("            \"${t.token.pattern}\" : \"${t.name}\",")
+        println("            \"${t.token.pattern}\": \"${t.name}\",")
     }
     println("        },")
     println("    },")

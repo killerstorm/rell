@@ -8,6 +8,8 @@ import java.io.File
 import javax.xml.bind.DatatypeConverter
 
 object CommonUtils {
+    val IS_UNIT_TEST: Boolean = Thread.currentThread().stackTrace.any { it.className == "org.junit.runner.JUnitCore" }
+
     fun bytesToHex(bytes: ByteArray): String = DatatypeConverter.printHexBinary(bytes).toLowerCase()
     fun hexToBytes(hex: String): ByteArray = DatatypeConverter.parseHexBinary(hex)
 
@@ -109,5 +111,9 @@ object CommonUtils {
                     .mapIndexed { i, cell -> if (i == row.size - 1) cell else cell.padEnd(widths[i]) }
                     .joinToString("   ")
         }
+    }
+
+    fun failIfUnitTest() {
+        check(!IS_UNIT_TEST)
     }
 }

@@ -161,6 +161,8 @@ class ThreadLocalContext<T>(private val defaultValue: T? = null) {
         check(res != null)
         return res
     }
+
+    fun getOpt(): T? = local.get()
 }
 
 class VersionNumber(items: List<Int>): Comparable<VersionNumber> {
@@ -190,7 +192,7 @@ class VersionNumber(items: List<Int>): Comparable<VersionNumber> {
 class MsgString(s: String) {
     val normal = s.toLowerCase()
     val upper = s.toUpperCase()
-    val capital = StringUtils.capitalize(s)
+    val capital = s.capitalize()
 
     override fun equals(other: Any?) = other is MsgString && normal == other.normal
     override fun hashCode() = normal.hashCode()

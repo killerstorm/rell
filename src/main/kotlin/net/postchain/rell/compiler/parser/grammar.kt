@@ -13,11 +13,18 @@ import com.github.h0tk3y.betterParse.parser.ErrorResult
 import com.github.h0tk3y.betterParse.parser.ParseResult
 import com.github.h0tk3y.betterParse.parser.Parsed
 import com.github.h0tk3y.betterParse.parser.Parser
-import net.postchain.rell.compiler.C_Parser
 import net.postchain.rell.compiler.ast.*
-import net.postchain.rell.model.R_AtCardinality
-import net.postchain.rell.model.R_AtWhatSort
+import net.postchain.rell.compiler.base.utils.C_Parser
+import net.postchain.rell.compiler.parser.S_Grammar.getValue
+import net.postchain.rell.compiler.parser.S_Grammar.provideDelegate
+import net.postchain.rell.model.expr.R_AtCardinality
+import net.postchain.rell.model.expr.R_AtWhatSort
 import kotlin.reflect.KProperty
+
+object S_Keywords {
+    const val ABSTRACT = "abstract"
+    const val OVERRIDE = "override"
+}
 
 object S_Grammar : Grammar<S_RellFile>() {
     private val rellTokens = arrayListOf<RellToken>()
@@ -70,7 +77,7 @@ object S_Grammar : Grammar<S_RellFile>() {
     private val DIV_ASSIGN by relltok("/=")
     private val MOD_ASSIGN by relltok("%=")
 
-    private val ABSTRACT by relltok("abstract")
+    private val ABSTRACT by relltok(S_Keywords.ABSTRACT)
     private val BREAK by relltok("break")
     private val CLASS by relltok("class")
     private val CONTINUE by relltok("continue")
@@ -99,7 +106,7 @@ object S_Grammar : Grammar<S_RellFile>() {
     private val OBJECT by relltok("object")
     private val OFFSET by relltok("offset")
     private val OPERATION by relltok("operation")
-    private val OVERRIDE by relltok("override")
+    private val OVERRIDE by relltok(S_Keywords.OVERRIDE)
     private val QUERY by relltok("query")
     private val RECORD by relltok("record")
     private val RETURN by relltok("return")
@@ -124,7 +131,7 @@ object S_Grammar : Grammar<S_RellFile>() {
 
     private val name by (ID) map { RellTokenizer.decodeName(it.pos, it.text) }
 
-    private val qualifiedName by separatedTerms(name, DOT, false)
+    private val qualifiedName by separatedTerms(name, DOT, false) map { S_QualifiedName(it) }
 
     private val typeRef by parser(this::type)
     private val expressionRef by parser(this::expression)
@@ -194,7 +201,16 @@ object S_Grammar : Grammar<S_RellFile>() {
             or basicType
     )
 
-    private val annotationArgs by ( -LPAR * separatedTerms(parser(S_Grammar::literalExpr), COMMA, true ) * -RPAR)
+    private val annotationArgValue by parser(S_Grammar::literalExpr) map {
+        S_AnnotationArg_Value(it)
+    }
+
+    private val annotationArgName by qualifiedName map {
+        S_AnnotationArg_Name(it)
+    }
+
+    private val annotationArg by annotationArgValue or annotationArgName
+    private val annotationArgs by ( -LPAR * separatedTerms(annotationArg, COMMA, true ) * -RPAR)
 
     private val annotationNameName by name
     private val annotationNameSort by SORT map { S_Name(it.pos, it.text) }
@@ -206,8 +222,8 @@ object S_Grammar : Grammar<S_RellFile>() {
     }
 
     private val keywordModifier by (
-            ( ABSTRACT map { S_KeywordModifier_Abstract(S_String(it)) } )
-            or ( OVERRIDE map { S_KeywordModifier_Override(S_String(it)) } )
+            ( ABSTRACT map { S_KeywordModifier(S_Name(it.pos, it.text), S_KeywordModifierKind.ABSTRACT) } )
+            or ( OVERRIDE map { S_KeywordModifier(S_Name(it.pos, it.text), S_KeywordModifierKind.OVERRIDE) } )
     )
 
     private val modifier: Parser<S_Modifier> by keywordModifier or annotation
@@ -215,14 +231,13 @@ object S_Grammar : Grammar<S_RellFile>() {
     private val nameTypeAttrHeader by name * -COLON * type map { (name, type) -> S_AttrHeader(name, type) }
 
     private val anonAttrHeader by qualifiedName * optional(QUESTION) map {
-        (names, nullable) ->
-        if (names.size == 1 && nullable == null) {
-            S_AttrHeader(names[0], null)
+        (name, nullable) ->
+        if (name.parts.size == 1 && nullable == null) {
+            S_AttrHeader(name.last, null)
         } else {
-            val name = names.last()
-            val type = S_NameType(names)
+            val type = S_NameType(name)
             val resultType = if (nullable == null) type else S_NullableType(nullable.pos, type)
-            S_AttrHeader(name, resultType)
+            S_AttrHeader(name.last, resultType)
         }
     }
 
@@ -372,7 +387,7 @@ object S_Grammar : Grammar<S_RellFile>() {
         }
     }
 
-    private val atExprFromSingle by qualifiedName map { S_PosValue(it[0].pos, listOf(S_AtExprFrom(null, it))) }
+    private val atExprFromSingle by qualifiedName map { S_PosValue(it.pos, listOf(S_AtExprFrom(null, it))) }
 
     private val atExprFromItem by ( optional( name * -COLON) * qualifiedName) map {
         ( alias, entityName ) ->
@@ -405,7 +420,8 @@ object S_Grammar : Grammar<S_RellFile>() {
 
     private val atExprWhatComplexItem by ( zeroOrMore(annotation) * optional(atExprWhatSort) * optional(atExprWhatName) * expressionRef) map {
         (annotations, sort, name, expr) ->
-        S_AtExprWhatComplexField(name, expr, annotations, sort)
+        val modifiers = S_Modifiers(annotations.map { it })
+        S_AtExprWhatComplexField(name, expr, modifiers, sort)
     }
 
     private val atExprWhatComplex by ( -LPAR * separatedTerms(atExprWhatComplexItem, COMMA, false) * -RPAR) map {
@@ -750,12 +766,12 @@ object S_Grammar : Grammar<S_RellFile>() {
         annotatedDef { S_QueryDefinition(kw.pos, it, name, params, type, body) }
     }
 
-    private val functionDef by ( FUNCTION * qualifiedName * formalParameters * optional(-COLON * type) * functionBody ) map {
+    private val functionDef by ( FUNCTION * optional(qualifiedName) * formalParameters * optional(-COLON * type) * functionBody ) map {
         (kw, name, params, type, body) ->
         annotatedDef { S_FunctionDefinition(kw.pos, it, name, params, type, body) }
     }
 
-    private val namespaceDef by ( NAMESPACE * separatedTerms(name, DOT, true) * -LCURL * zeroOrMore(parser(this::annotatedDef)) * -RCURL ) map {
+    private val namespaceDef by ( NAMESPACE * optional(qualifiedName) * -LCURL * zeroOrMore(parser(this::annotatedDef)) * -RCURL ) map {
         (kw, name, defs) ->
         annotatedDef { S_NamespaceDefinition(kw.pos, it, name, defs) }
     }

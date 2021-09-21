@@ -8,7 +8,10 @@ import com.google.common.collect.HashMultimap
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
 import net.postchain.gtv.GtvType
-import net.postchain.rell.compiler.*
+import net.postchain.rell.compiler.base.core.C_CompilationResult
+import net.postchain.rell.compiler.base.core.C_CompilerModuleSelection
+import net.postchain.rell.compiler.base.core.C_CompilerOptions
+import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_EntityDefinition
 import net.postchain.rell.model.R_Param

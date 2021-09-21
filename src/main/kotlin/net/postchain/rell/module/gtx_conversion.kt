@@ -10,6 +10,7 @@ import net.postchain.gtv.merkle.proof.GtvMerkleProofTreeFactory
 import net.postchain.gtv.merkle.proof.toGtvVirtual
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.utils.Rt_DecimalUtils
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.utils.checkEquals
 import org.apache.commons.collections4.MultiValuedMap
@@ -303,7 +304,7 @@ class GtvRtConversion_Set(type: R_SetType): GtvRtConversion_Collection(type) {
             val set = mutableSetOf<Rt_Value>()
             for (elem in elements) {
                 if (!set.add(elem)) {
-                    throw GtvRtUtils.errGtv("set_dup:$elem", "Duplicate set element: $elem")
+                    throw GtvRtUtils.errGtv("set_dup:${elem.strCode()}", "Duplicate set element: ${elem.str()}")
                 }
             }
             return set
@@ -339,7 +340,7 @@ class GtvRtConversion_Map(val type: R_MapType): GtvRtConversion() {
             for (gtvEntry in GtvRtUtils.gtvToArray(gtv)) {
                 val (key, value) = gtvToRtEntry(ctx, gtvEntry)
                 if (key in tmp) {
-                    throw GtvRtUtils.errGtv("map_dup_key:$key", "Map duplicate key: $key")
+                    throw GtvRtUtils.errGtv("map_dup_key:${key.strCode()}", "Map duplicate key: ${key.str()}")
                 }
                 tmp[key] = value
             }

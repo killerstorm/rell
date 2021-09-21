@@ -6,22 +6,30 @@ package net.postchain.rell.test
 
 import net.postchain.base.BlockchainRid
 import net.postchain.gtv.Gtv
-import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.base.core.C_CompilationResult
+import net.postchain.rell.compiler.base.core.C_Compiler
+import net.postchain.rell.compiler.base.core.C_CompilerModuleSelection
+import net.postchain.rell.compiler.base.core.C_CompilerOptions
+import net.postchain.rell.compiler.base.utils.C_Error
+import net.postchain.rell.compiler.base.utils.C_Message
+import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.sql.SqlManager
 import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.immListOf
 
 object RellTestUtils {
     const val MAIN_FILE = "main.rell"
 
-    const val RELL_VER = "0.10.6"
+    const val RELL_VER = "0.10.7"
 
     val DEFAULT_COMPILER_OPTIONS = C_CompilerOptions.builder().hiddenLib(true).build()
 
-    val ENCODER_PLAIN = { _: R_Type, v: Rt_Value -> v.toString() }
-    val ENCODER_STRICT = { _: R_Type, v: Rt_Value -> v.toStrictString() }
+    val ENCODER_PLAIN = { _: R_Type, v: Rt_Value -> v.str() }
+    val ENCODER_STRICT = { _: R_Type, v: Rt_Value -> v.strCode() }
     val ENCODER_GTV = { t: R_Type, v: Rt_Value -> GtvTestUtils.encodeGtvStr(t.rtToGtv(v, true)) }
 
     fun processApp(code: String, processor: (T_App) -> String): String {
@@ -96,15 +104,25 @@ object RellTestUtils {
     }
 
     fun <T> catchRtErr0(block: () -> T): Pair<TestCallResult?, T?> {
-        try {
+        return try {
             val res = block()
-            return Pair(null, res)
-        } catch (e: Rt_StackTraceError) {
-            val err = rtErrToString(e.realCause)
-            return Pair(TestCallResult(err, e.stack), null)
+            Pair(null, res)
         } catch (e: Throwable) {
-            val err = rtErrToString(e)
-            return Pair(TestCallResult(err, listOf()), null)
+            val res = rtErrToResult(e)
+            Pair(res, null)
+        }
+    }
+
+    fun rtErrToResult(e: Throwable): TestCallResult {
+        return when (e) {
+            is Rt_StackTraceError -> {
+                val err = rtErrToString(e.realCause)
+                TestCallResult(err, e.stack)
+            }
+            else -> {
+                val err = rtErrToString(e)
+                TestCallResult(err, immListOf())
+            }
         }
     }
 
@@ -121,7 +139,7 @@ object RellTestUtils {
         val fn = findFn(exeCtx.appCtx.app, name)
         val res = catchRtErr {
             val v = fn.callTop(exeCtx, args)
-            if (strict) v.toStrictString() else v.toString()
+            if (strict) v.strCode() else v.toString()
         }
         return res
     }

@@ -1,8 +1,20 @@
+/*
+ * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.compiler.vexpr
 
-import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.base.core.C_TypeAdapter
+import net.postchain.rell.compiler.base.core.C_VarUid
+import net.postchain.rell.compiler.base.def.C_GlobalConstantFunctionHeader
+import net.postchain.rell.compiler.base.expr.C_DbAtWhatValue
+import net.postchain.rell.compiler.base.expr.C_DbAtWhatValue_Complex
+import net.postchain.rell.compiler.base.expr.C_ExprContext
+import net.postchain.rell.compiler.base.expr.C_ExprVarFacts
+import net.postchain.rell.compiler.base.utils.C_LateGetter
 import net.postchain.rell.model.*
+import net.postchain.rell.model.expr.*
 import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_StructValue
 import net.postchain.rell.runtime.Rt_TupleValue

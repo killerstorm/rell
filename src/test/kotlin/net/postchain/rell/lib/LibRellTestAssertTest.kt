@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.lib
 
 import net.postchain.rell.test.BaseRellTest
@@ -117,7 +121,7 @@ class LibRellTestAssertTest: BaseRellTest(false) {
     }
 
     @Test fun testAssertNull() {
-        chkAssert("assert_null(_nullable_int(123))", "rt_err:assert_null:123")
+        chkAssert("assert_null(_nullable_int(123))", "rt_err:assert_null:int[123]")
         chkAssert("assert_null(_nullable_int(null))", "int[0]")
         chkAssert("assert_null(123)", "ct_err:expr_call_argtypes:assert_null:integer")
         chkAssert("assert_null(null)", "int[0]")

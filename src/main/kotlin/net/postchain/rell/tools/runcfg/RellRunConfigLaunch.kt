@@ -14,8 +14,8 @@ import net.postchain.core.NODE_ID_TODO
 import net.postchain.core.UserMistake
 import net.postchain.devtools.PostchainTestNode
 import net.postchain.gtv.Gtv
-import net.postchain.rell.compiler.C_CompilerModuleSelection
-import net.postchain.rell.compiler.C_CompilerOptions
+import net.postchain.rell.compiler.base.core.C_CompilerModuleSelection
+import net.postchain.rell.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_LangVersion
 import net.postchain.rell.runtime.Rt_ChainSqlMapping

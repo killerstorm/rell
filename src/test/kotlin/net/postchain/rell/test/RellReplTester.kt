@@ -4,8 +4,8 @@
 
 package net.postchain.rell.test
 
-import net.postchain.rell.compiler.C_Message
-import net.postchain.rell.compiler.C_SourceDir
+import net.postchain.rell.compiler.base.utils.C_Message
+import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.model.R_StackPos
 import net.postchain.rell.module.RellPostchainModuleEnvironment
@@ -98,7 +98,7 @@ class RellReplTester(
                 val s = ReplValueFormatter.format(value, format)
                 output.add(s ?: "null")
             } else {
-                val s = value.toStrictString()
+                val s = value.strCode()
                 output.add("RES:$s")
             }
         }

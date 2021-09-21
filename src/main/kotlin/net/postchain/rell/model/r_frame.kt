@@ -1,7 +1,11 @@
+/*
+ * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.model
 
-import net.postchain.rell.compiler.C_CompilerPass
-import net.postchain.rell.compiler.C_LateInit
+import net.postchain.rell.compiler.base.core.C_CompilerPass
+import net.postchain.rell.compiler.base.utils.C_LateInit
 import net.postchain.rell.runtime.*
 
 data class R_VarPtr(val name: String, val blockUid: R_FrameBlockUid, val offset: Int) {

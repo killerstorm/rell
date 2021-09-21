@@ -1,8 +1,21 @@
+/*
+ * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.compiler.vexpr
 
-import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.base.expr.C_DbAtWhatValue
+import net.postchain.rell.compiler.base.expr.C_DbAtWhatValue_Complex
+import net.postchain.rell.compiler.base.expr.C_ExprContext
+import net.postchain.rell.compiler.base.expr.C_MemberLink
+import net.postchain.rell.compiler.base.fn.C_BasicGlobalFuncCaseMatch
+import net.postchain.rell.compiler.base.fn.C_GlobalFuncCaseCtx
+import net.postchain.rell.compiler.base.utils.C_Errors
+import net.postchain.rell.compiler.base.utils.C_LateGetter
+import net.postchain.rell.compiler.base.utils.C_SpecialGlobalFuncCaseMatch
 import net.postchain.rell.model.*
+import net.postchain.rell.model.expr.*
 import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_NullValue
 import net.postchain.rell.runtime.Rt_Value
@@ -190,12 +203,38 @@ sealed class V_FunctionCallTarget {
     open fun globalConstantRestriction(): V_GlobalConstantRestriction? = null
 }
 
-class V_FunctionCallTarget_UserFunction(
+class V_FunctionCallTarget_RegularUserFunction(
         private val fn: R_RoutineDefinition
 ): V_FunctionCallTarget() {
     override fun vExprs() = immListOf<V_Expr>()
-    override fun toRTarget(): R_FunctionCallTarget = R_FunctionCallTarget_UserFunction(fn)
+    override fun toRTarget(): R_FunctionCallTarget = R_FunctionCallTarget_RegularUserFunction(fn)
     override fun globalConstantRestriction() = V_GlobalConstantRestriction("fn:${fn.appLevelName}", "user function call")
+}
+
+class V_FunctionCallTarget_AbstractUserFunction(
+        private val baseFn: R_FunctionDefinition,
+        private val overrideGetter: C_LateGetter<R_FunctionBase>
+): V_FunctionCallTarget() {
+    override fun vExprs() = immListOf<V_Expr>()
+
+    override fun toRTarget(): R_FunctionCallTarget {
+        return R_FunctionCallTarget_AbstractUserFunction(baseFn, overrideGetter)
+    }
+
+    override fun globalConstantRestriction() = V_GlobalConstantRestriction("fn:${baseFn.appLevelName}", "user function call")
+}
+
+class V_FunctionCallTarget_ExtendableUserFunction(
+        private val baseFn: R_FunctionDefinition,
+        private val descriptor: R_ExtendableFunctionDescriptor
+): V_FunctionCallTarget() {
+    override fun vExprs() = immListOf<V_Expr>()
+
+    override fun toRTarget(): R_FunctionCallTarget {
+        return R_FunctionCallTarget_ExtendableUserFunction(baseFn, descriptor)
+    }
+
+    override fun globalConstantRestriction() = V_GlobalConstantRestriction("fn:${baseFn.appLevelName}", "user function call")
 }
 
 class V_FunctionCallTarget_Operation(

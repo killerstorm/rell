@@ -1,9 +1,13 @@
+/*
+ * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.test.tools
 
-import net.postchain.rell.compiler.C_Compiler
-import net.postchain.rell.compiler.C_CompilerModuleSelection
-import net.postchain.rell.compiler.C_CompilerOptions
-import net.postchain.rell.compiler.C_SourceDir
+import net.postchain.rell.compiler.base.core.C_Compiler
+import net.postchain.rell.compiler.base.core.C_CompilerModuleSelection
+import net.postchain.rell.compiler.base.core.C_CompilerOptions
+import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.model.R_LangVersion
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.utils.checkEquals

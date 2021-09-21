@@ -1,11 +1,20 @@
+/*
+ * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.lib.test
 
 import net.postchain.base.secp256k1_derivePubKey
 import net.postchain.common.hexStringToByteArray
-import net.postchain.rell.compiler.*
-import net.postchain.rell.lib.C_Lib_Rell_Test
+import net.postchain.rell.compiler.base.def.C_SysAttribute
+import net.postchain.rell.compiler.base.namespace.C_Namespace
+import net.postchain.rell.compiler.base.namespace.C_NsEntry
+import net.postchain.rell.compiler.base.namespace.C_SysNsProtoBuilder
+import net.postchain.rell.compiler.base.utils.C_LibUtils
+import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.model.R_ByteArrayType
 import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.utils.BytesKeyPair
 import net.postchain.rell.utils.toImmMap
 

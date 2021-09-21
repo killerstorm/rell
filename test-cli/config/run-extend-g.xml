@@ -1,0 +1,15 @@
+<run>
+    <nodes>
+        <config src="node-config.properties" add-signers="true" />
+        <test-config src="node-config.properties" />
+    </nodes>
+
+    <chains>
+        <chain name="foo" iid="1">
+            <config height="0">
+                <app module="extend.g"/>
+            </config>
+            <test module="extend.test" />
+        </chain>
+    </chains>
+</run>

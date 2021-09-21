@@ -7,7 +7,7 @@ package net.postchain.rell.test
 import net.postchain.base.BlockchainRid
 import net.postchain.base.data.PostgreSQLDatabaseAccess
 import net.postchain.base.data.SQLDatabaseAccess
-import net.postchain.rell.runtime.Rt_SqlManager
+import net.postchain.rell.runtime.utils.Rt_SqlManager
 import net.postchain.rell.sql.*
 import net.postchain.rell.utils.PostchainUtils
 import java.io.Closeable

@@ -8,7 +8,12 @@ import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
 import net.postchain.gtv.GtvString
 import net.postchain.gtv.GtvType
-import net.postchain.rell.compiler.*
+import net.postchain.rell.compiler.base.core.C_CompilationResult
+import net.postchain.rell.compiler.base.core.C_CompilerModuleSelection
+import net.postchain.rell.compiler.base.core.C_CompilerOptions
+import net.postchain.rell.compiler.base.utils.C_Error
+import net.postchain.rell.compiler.base.utils.C_SourceDir
+import net.postchain.rell.compiler.base.utils.C_SourcePath
 import net.postchain.rell.model.R_LangVersion
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.ConfigConstants

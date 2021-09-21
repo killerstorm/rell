@@ -6,7 +6,7 @@ package net.postchain.rell.tools.runcfg
 
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvEncoder
-import net.postchain.rell.compiler.C_SourceDir
+import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.model.R_LangVersion
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.utils.*

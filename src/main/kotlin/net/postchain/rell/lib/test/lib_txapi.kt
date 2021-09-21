@@ -1,16 +1,23 @@
-package net.postchain.rell.lib
+/*
+ * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ */
+
+package net.postchain.rell.lib.test
 
 import net.postchain.base.BlockchainRid
 import net.postchain.base.secp256k1_derivePubKey
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
-import net.postchain.rell.compiler.*
-import net.postchain.rell.lib.test.C_Lib_Rell_Test_Assert
-import net.postchain.rell.lib.test.C_Lib_Rell_Test_KeyPairs
+import net.postchain.rell.compiler.base.fn.C_ArgTypeMatcher_List
+import net.postchain.rell.compiler.base.fn.C_ArgTypeMatcher_MirrorStructOperation
+import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.model.*
+import net.postchain.rell.model.lib.R_SysFn_Struct
 import net.postchain.rell.module.GtvRtConversion
 import net.postchain.rell.module.GtvRtConversion_None
 import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.utils.Rt_Utils
+import net.postchain.rell.runtime.utils.toGtv
 import net.postchain.rell.utils.BytesKeyPair
 import net.postchain.rell.utils.toImmList
 import java.util.*
@@ -52,7 +59,7 @@ private object R_TestBlockType: R_LibType(C_Lib_Rell_Test.BLOCK_TYPE_QNAME) {
     override fun isDirectMutable() = true
     override fun isDirectPure() = false
     override fun createGtvConversion() = GtvRtConversion_None
-    override fun toStrictString(): String = name
+    override fun strCode(): String = name
     override fun toMetaGtv() = name.toGtv()
 
     override fun getMemberFunctions(): C_MemberFuncTable {
@@ -67,7 +74,7 @@ private object R_TestTxType: R_LibType(C_Lib_Rell_Test.TX_TYPE_QNAME) {
     override fun isDirectMutable() = true
     override fun isDirectPure() = false
     override fun createGtvConversion() = GtvRtConversion_None
-    override fun toStrictString(): String = name
+    override fun strCode(): String = name
     override fun toMetaGtv() = name.toGtv()
 
     override fun getMemberFunctions(): C_MemberFuncTable {
@@ -81,7 +88,7 @@ object R_TestOpType: R_LibType(C_Lib_Rell_Test.OP_TYPE_QNAME) {
     override fun isReference() = true
     override fun isDirectPure() = false
     override fun createGtvConversion(): GtvRtConversion = GtvRtConversion_None
-    override fun toStrictString(): String = name
+    override fun strCode(): String = name
     override fun toMetaGtv() = name.toGtv()
 
     override fun getMemberFunctions(): C_MemberFuncTable {
@@ -524,12 +531,12 @@ class Rt_TestBlockValue(txs: List<RawTestTxValue>): Rt_Value() {
 
     override fun type(): R_Type = R_TestBlockType
 
-    override fun toStrictString(showTupleFieldNames: Boolean): String {
-        val txsStr = txs.joinToString(",") { Rt_TestTxValue.toStrictString(it.ops, it.signers) }
+    override fun strCode(showTupleFieldNames: Boolean): String {
+        val txsStr = txs.joinToString(",") { Rt_TestTxValue.strCode(it.ops, it.signers) }
         return "${C_Lib_Rell_Test.BLOCK_TYPE_QNAME}[$txsStr]"
     }
 
-    override fun toString() = "block(${txs.joinToString(",")})"
+    override fun str() = "block(${txs.joinToString(",")})"
 
     override fun equals(other: Any?) = other === this || (other is Rt_TestBlockValue && txs == other.txs)
     override fun hashCode() = Objects.hash(txs)
@@ -557,8 +564,8 @@ class Rt_TestTxValue(
 
     override fun type(): R_Type = R_TestTxType
 
-    override fun toStrictString(showTupleFieldNames: Boolean) = toStrictString(ops, signers)
-    override fun toString() = toString(ops)
+    override fun str() = toString(ops)
+    override fun strCode(showTupleFieldNames: Boolean) = strCode(ops, signers)
 
     override fun equals(other: Any?) = other === this || (other is Rt_TestTxValue && ops == other.ops && signers == other.signers)
     override fun hashCode() = Objects.hash(ops, signers)
@@ -578,8 +585,8 @@ class Rt_TestTxValue(
     companion object {
         private val VALUE_TYPE = Rt_LibValueType.of("TEST_TX")
 
-        fun toStrictString(ops: List<RawTestOpValue>, signers: List<BytesKeyPair>): String {
-            val opsList = ops.map { Rt_TestOpValue.toStrictString(it.name, it.args) }
+        fun strCode(ops: List<RawTestOpValue>, signers: List<BytesKeyPair>): String {
+            val opsList = ops.map { Rt_TestOpValue.strCode(it.name, it.args) }
             val signersList = signers.map { it.pub.toHex().substring(0, 6).toLowerCase()}
             val innerStr = (opsList + signersList).joinToString(",")
             return "${C_Lib_Rell_Test.TX_TYPE_QNAME}[$innerStr]"
@@ -599,8 +606,8 @@ class Rt_TestOpValue(private val name: R_MountName, args: List<Gtv>): Rt_Value()
 
     override fun type(): R_Type = R_TestOpType
 
-    override fun toStrictString(showTupleFieldNames: Boolean) = toStrictString(name, args)
-    override fun toString() = toString(name, args)
+    override fun str() = toString(name, args)
+    override fun strCode(showTupleFieldNames: Boolean) = strCode(name, args)
 
     override fun equals(other: Any?) = other === this || (other is Rt_TestOpValue && name == other.name && args == other.args)
     override fun hashCode() = Objects.hash(name, args)
@@ -610,7 +617,7 @@ class Rt_TestOpValue(private val name: R_MountName, args: List<Gtv>): Rt_Value()
     companion object {
         private val VALUE_TYPE = Rt_LibValueType.of("TEST_OP")
 
-        fun toStrictString(name: R_MountName, args: List<Gtv>): String {
+        fun strCode(name: R_MountName, args: List<Gtv>): String {
             val argsStr = args.joinToString(",") { Rt_GtvValue.toString(it) }
             return "op[$name($argsStr)]"
         }

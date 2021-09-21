@@ -5,7 +5,7 @@
 
     <groupId>net.postchain.rell</groupId>
     <artifactId>rellr</artifactId>
-    <version>0.10.6</version>
+    <version>0.10.7</version>
     <packaging>jar</packaging>
 
     <name>rellr</name>

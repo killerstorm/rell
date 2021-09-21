@@ -1,9 +1,24 @@
+/*
+ * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.compiler.vexpr
 
-import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.model.*
+import net.postchain.rell.compiler.ast.S_QualifiedName
+import net.postchain.rell.compiler.base.core.C_LocalVarRef
+import net.postchain.rell.compiler.base.expr.*
+import net.postchain.rell.compiler.base.utils.C_CodeMsg
+import net.postchain.rell.compiler.base.utils.C_Error
+import net.postchain.rell.compiler.base.utils.C_Errors
+import net.postchain.rell.compiler.base.utils.C_Utils
+import net.postchain.rell.model.R_Attribute
+import net.postchain.rell.model.R_ObjectDefinition
+import net.postchain.rell.model.R_Type
+import net.postchain.rell.model.expr.*
+import net.postchain.rell.model.stmt.R_AssignStatement
+import net.postchain.rell.model.stmt.R_Statement
 import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmSet
 
@@ -130,9 +145,9 @@ class V_SmartNullableExpr(
 
 class V_ObjectExpr(
         exprCtx: C_ExprContext,
-        name: List<S_Name>,
+        name: S_QualifiedName,
         private val rObject: R_ObjectDefinition
-): V_Expr(exprCtx, name[0].pos) {
+): V_Expr(exprCtx, name.pos) {
     override fun exprInfo0() = V_ExprInfo.simple(rObject.type)
 
     override fun globalConstantRestriction() = V_GlobalConstantRestriction("object", null)

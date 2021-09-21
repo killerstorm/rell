@@ -7,7 +7,7 @@ package net.postchain.rell.utils
 import com.google.common.collect.*
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
-import net.postchain.rell.runtime.toGtv
+import net.postchain.rell.runtime.utils.toGtv
 import org.apache.commons.collections4.IterableUtils
 import java.util.*
 

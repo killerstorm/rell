@@ -1,0 +1,5 @@
+module;
+
+@extendable function f() = ['f'];
+
+@extendable function is_bad_value(x: integer): boolean;

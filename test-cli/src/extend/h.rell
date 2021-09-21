@@ -1,0 +1,3 @@
+module;
+import ^.lib;
+@extend(lib.f) function h() = ['h'];

@@ -1,9 +1,18 @@
+/*
+ * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.compiler.vexpr
 
-import net.postchain.rell.compiler.*
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_VirtualType
+import net.postchain.rell.compiler.base.expr.C_Destination
+import net.postchain.rell.compiler.base.expr.C_ExprContext
+import net.postchain.rell.compiler.base.expr.C_SimpleDestination
+import net.postchain.rell.compiler.base.utils.C_Error
+import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.model.*
+import net.postchain.rell.model.expr.*
 
 sealed class V_CommonSubscriptKind(val resType: R_Type) {
     abstract fun compileR(pos: S_Pos, rBase: R_Expr, rKey: R_Expr): R_Expr
@@ -100,7 +109,7 @@ class V_CommonSubscriptExpr(
         val dstExpr = kind.compileDestination(pos, rBase, rKey)
         if (dstExpr == null) {
             val baseType = baseExpr.type
-            val type = baseType.toStrictString()
+            val type = baseType.strCode()
             throw C_Error.stop(pos, "expr_immutable:$type", "Value of type '$type' cannot be modified")
         }
         return C_SimpleDestination(dstExpr)

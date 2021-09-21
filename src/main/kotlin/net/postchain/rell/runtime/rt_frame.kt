@@ -5,6 +5,7 @@
 package net.postchain.rell.runtime
 
 import net.postchain.rell.model.*
+import net.postchain.rell.model.expr.R_Expr
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmList
 import java.util.*

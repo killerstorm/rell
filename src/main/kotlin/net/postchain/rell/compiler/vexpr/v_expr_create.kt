@@ -1,9 +1,16 @@
+/*
+ * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.compiler.vexpr
 
-import net.postchain.rell.compiler.C_CreateAttributes
-import net.postchain.rell.compiler.C_ExprContext
+import net.postchain.rell.compiler.base.expr.C_CreateAttributes
+import net.postchain.rell.compiler.base.expr.C_ExprContext
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.*
+import net.postchain.rell.model.expr.R_Expr
+import net.postchain.rell.model.expr.R_RegularCreateExpr
+import net.postchain.rell.model.expr.R_StructCreateExpr
 
 sealed class V_CreateExpr(
         exprCtx: C_ExprContext,

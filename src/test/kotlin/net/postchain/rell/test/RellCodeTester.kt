@@ -14,17 +14,20 @@ import net.postchain.core.ByteArrayKey
 import net.postchain.core.EContext
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
-import net.postchain.rell.compiler.C_MessageType
-import net.postchain.rell.compiler.C_SourceDir
+import net.postchain.rell.compiler.base.utils.C_MessageType
+import net.postchain.rell.compiler.base.utils.C_SourceDir
+import net.postchain.rell.lib.test.Rt_DynamicBlockRunnerStrategy
+import net.postchain.rell.lib.test.UnitTestBlockRunner
 import net.postchain.rell.model.*
 import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.utils.toGtv
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.sql.SqlInit
 import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.sql.SqlUtils
-import net.postchain.rell.utils.toImmMap
+import net.postchain.rell.utils.*
 import org.junit.Assert
 import kotlin.test.assertEquals
 
@@ -153,7 +156,7 @@ class RellCodeTester(
         val queryCode = "query q() $bodyCode"
         val moduleCode = moduleCode(queryCode)
         val actual = processApp(moduleCode) { module ->
-            module.queries.getValue(R_MountName.of("q")).type().toStrictString()
+            module.queries.getValue(R_MountName.of("q")).type().strCode()
         }
         checkResult(expected, actual)
     }
@@ -207,9 +210,11 @@ class RellCodeTester(
 
             val moduleCode = moduleCode(code)
 
-            val encoder = if (gtvResult) RellTestUtils.ENCODER_GTV
-            else if (strictToString) RellTestUtils.ENCODER_STRICT
-            else RellTestUtils.ENCODER_PLAIN
+            val encoder = when {
+                gtvResult -> RellTestUtils.ENCODER_GTV
+                strictToString -> RellTestUtils.ENCODER_STRICT
+                else -> RellTestUtils.ENCODER_PLAIN
+            }
 
             processWithExeCtx(moduleCode, false) { appCtx ->
                 RellTestUtils.callQueryGeneric(eval, appCtx, name, args, decoder, encoder)
@@ -237,6 +242,134 @@ class RellCodeTester(
         val moduleCode = moduleCode(code)
         return processWithAppSqlCtx(moduleCode) { appCtx, sqlCtx ->
             RellTestUtils.callOpGeneric(appCtx, opContext, sqlCtx, tstCtx.sqlMgr(), name, args, decoder)
+        }
+    }
+
+    fun chkWarn(vararg msgs: String) {
+        val actual = messages.filter { it.type == C_MessageType.WARNING }.map { it.code }.toSet()
+        val expected = msgs.toSet()
+        if (actual != expected) {
+            val diffAct = Sets.difference(actual, expected)
+            val diffExp = Sets.difference(expected, actual)
+            val list = mutableListOf<String>()
+            if (!diffExp.isEmpty()) list.add("missing: $diffExp")
+            if (!diffAct.isEmpty()) list.add("extra: $diffAct")
+            val msg = list.joinToString()
+            Assert.fail(msg)
+        }
+    }
+
+    fun chkStack(vararg expected: String) {
+        val actual = rtErrStack.map { it.toString() }
+        assertEquals(expected.toList(), actual)
+    }
+
+    fun chkInit(expected: String) {
+        val actual = RellTestUtils.catchRtErr {
+            init()
+            "OK"
+        }
+        assertEquals(expected, actual)
+    }
+
+    fun resetSqlCtr() {
+        tstCtx.resetSqlCounter()
+    }
+
+    fun chkSql(expected: Int) {
+        assertEquals(expected, tstCtx.sqlCounter())
+    }
+
+    fun createRepl(): RellReplTester {
+        val files = files()
+        val moduleNameStr = replModule
+        val module = if (moduleNameStr == null) null else R_ModuleName.of(moduleNameStr)
+
+        val sourceDir = C_SourceDir.mapDirOf(files)
+        val globalCtx = createGlobalCtx()
+
+        val sqlMgr = tstCtx.sqlMgr()
+        return RellReplTester(globalCtx, sourceDir, sqlMgr, module, tstCtx.useSql)
+    }
+
+    private fun processWithExeCtx(code: String, tx: Boolean, processor: (Rt_ExecutionContext) -> String): String {
+        val globalCtx = createGlobalCtx()
+        return processApp(code) { app ->
+            RellTestUtils.catchRtErr {
+                tstCtx.sqlMgr().execute(tx) { sqlExec ->
+                    val exeCtx = createExeCtx(globalCtx, sqlExec, app)
+                    processor(exeCtx)
+                }
+            }
+        }
+    }
+
+    private fun processWithAppSqlCtx(code: String, processor: (Rt_AppContext, Rt_SqlContext) -> String): String {
+        val globalCtx = createGlobalCtx()
+        val res = processApp(code) { app ->
+            RellTestUtils.catchRtErr {
+                val (appCtx, sqlCtx) = tstCtx.sqlMgr().access { sqlExec ->
+                    val appCtx0 = createAppCtx(globalCtx, app, C_SourceDir.EMPTY, false)
+                    val sqlCtx0 = createSqlCtx(app, sqlExec)
+                    Pair(appCtx0, sqlCtx0)
+                }
+                processor(appCtx, sqlCtx)
+            }
+        }
+        return res
+    }
+
+    fun chkTests(testModule: String, expected: String) {
+        testModules(testModule) // Side effect, not good.
+        val actual = runTests()
+        assertEquals(expected, actual)
+    }
+
+    private fun runTests(): String {
+        val res = processWithTestRunnerCtx { testRunnerCtx ->
+            val testFns = TestRunner.getTestFunctions(testRunnerCtx.app)
+                    .map { TestRunnerCase(TestRunnerChain("foo", 123), it) }
+                    .toImmList()
+
+            val testRes = TestRunnerResults()
+            TestRunner.runTests(testRunnerCtx, testFns, testRes)
+
+            val resList = testRes.getResults()
+            val resMap = resList
+                    .map {
+                        val err = it.res.error
+                        it.case.fn.moduleLevelName to (if(err == null) "OK" else RellTestUtils.rtErrToResult(err).res)
+                    }.toMap().toImmMap()
+
+            resMap.entries.joinToString(",")
+        }
+
+        return res
+    }
+
+    private fun processWithTestRunnerCtx(processor: (TestRunnerContext) -> String): String {
+        val globalCtx = createGlobalCtx()
+        val moduleCode = moduleCode("")
+
+        return processApp(moduleCode) { app ->
+            val sqlCtx = tstCtx.sqlMgr().access { sqlExec ->
+                createSqlCtx(app, sqlExec)
+            }
+
+            val chainCtx = createChainContext(app)
+            val sourceDir = createSourceDir(moduleCode)
+            val blkRunStrategy = createBlockRunnerStrategy(app, sourceDir)
+
+            val testRunnerCtx = TestRunnerContext(
+                    sqlCtx = sqlCtx,
+                    sqlMgr = tstCtx.sqlMgr(),
+                    globalCtx = globalCtx,
+                    chainCtx = chainCtx,
+                    blockRunnerStrategy = blkRunStrategy,
+                    app = app
+            )
+
+            processor(testRunnerCtx)
         }
     }
 
@@ -331,80 +464,6 @@ class RellCodeTester(
         return eval.wrapRt {
             Rt_RegularSqlContext.create(app, sqlMapping, rtDeps, sqlExec, heightProvider)
         }
-    }
-
-    fun chkWarn(vararg msgs: String) {
-        val actual = messages.filter { it.type == C_MessageType.WARNING }.map { it.code }.toSet()
-        val expected = msgs.toSet()
-        if (actual != expected) {
-            val diffAct = Sets.difference(actual, expected)
-            val diffExp = Sets.difference(expected, actual)
-            val list = mutableListOf<String>()
-            if (!diffExp.isEmpty()) list.add("missing: $diffExp")
-            if (!diffAct.isEmpty()) list.add("extra: $diffAct")
-            val msg = list.joinToString()
-            Assert.fail(msg)
-        }
-    }
-
-    fun chkStack(vararg expected: String) {
-        val actual = rtErrStack.map { it.toString() }
-        assertEquals(expected.toList(), actual)
-    }
-
-    fun chkInit(expected: String) {
-        val actual = RellTestUtils.catchRtErr {
-            init()
-            "OK"
-        }
-        assertEquals(expected, actual)
-    }
-
-    fun resetSqlCtr() {
-        tstCtx.resetSqlCounter()
-    }
-
-    fun chkSql(expected: Int) {
-        assertEquals(expected, tstCtx.sqlCounter())
-    }
-
-    fun createRepl(): RellReplTester {
-        val files = files()
-        val moduleNameStr = replModule
-        val module = if (moduleNameStr == null) null else R_ModuleName.of(moduleNameStr)
-
-        val sourceDir = C_SourceDir.mapDirOf(files)
-        val globalCtx = createGlobalCtx()
-
-        val sqlMgr = tstCtx.sqlMgr()
-        return RellReplTester(globalCtx, sourceDir, sqlMgr, module, tstCtx.useSql)
-    }
-
-    private fun processWithExeCtx(code: String, tx: Boolean, processor: (Rt_ExecutionContext) -> String): String {
-        val globalCtx = createGlobalCtx()
-        return processApp(code) { app ->
-            RellTestUtils.catchRtErr {
-                tstCtx.sqlMgr().execute(tx) { sqlExec ->
-                    val exeCtx = createExeCtx(globalCtx, sqlExec, app)
-                    processor(exeCtx)
-                }
-            }
-        }
-    }
-
-    private fun processWithAppSqlCtx(code: String, processor: (Rt_AppContext, Rt_SqlContext) -> String): String {
-        val globalCtx = createGlobalCtx()
-        val res = processApp(code) { app ->
-            RellTestUtils.catchRtErr {
-                val (appCtx, sqlCtx) = tstCtx.sqlMgr().access { sqlExec ->
-                    val appCtx0 = createAppCtx(globalCtx, app, C_SourceDir.EMPTY, false)
-                    val sqlCtx0 = createSqlCtx(app, sqlExec)
-                    Pair(appCtx0, sqlCtx0)
-                }
-                processor(appCtx, sqlCtx)
-            }
-        }
-        return res
     }
 
     private class TestChainDependency(val rid: BlockchainRid, val height: Long)

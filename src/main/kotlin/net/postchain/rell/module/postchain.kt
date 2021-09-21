@@ -14,9 +14,14 @@ import net.postchain.gtx.ExtOpData
 import net.postchain.gtx.GTXModule
 import net.postchain.gtx.GTXModuleFactory
 import net.postchain.gtx.GTXOperation
-import net.postchain.rell.compiler.*
+import net.postchain.rell.compiler.base.core.C_CompilationResult
+import net.postchain.rell.compiler.base.core.C_Compiler
+import net.postchain.rell.compiler.base.core.C_CompilerOptions
+import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.utils.Rt_SqlExecutor
+import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.sql.ConnectionSqlExecutor
 import net.postchain.rell.sql.SqlInit
 import net.postchain.rell.sql.SqlInitLogging
@@ -24,10 +29,10 @@ import net.postchain.rell.utils.*
 import org.apache.commons.lang3.time.FastDateFormat
 
 object RellVersions {
-    const val VERSION_STR = "0.10.6"
+    const val VERSION_STR = "0.10.7"
     val VERSION = R_LangVersion.of(VERSION_STR)
 
-    val SUPPORTED_VERSIONS = listOf("0.10.0", "0.10.1", "0.10.2", "0.10.3", "0.10.4", "0.10.5", "0.10.6")
+    val SUPPORTED_VERSIONS = listOf("0.10.0", "0.10.1", "0.10.2", "0.10.3", "0.10.4", "0.10.5", "0.10.6", "0.10.7")
             .map { R_LangVersion.of(it) }
             .toImmSet()
 
