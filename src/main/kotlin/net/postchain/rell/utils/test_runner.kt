@@ -14,14 +14,8 @@ import net.postchain.rell.sql.SqlUtils
 
 private val PRINT_SEPARATOR = "-".repeat(72)
 
-sealed class TestResult
-
-object TestResult_OK: TestResult() {
-    override fun toString() = "OK"
-}
-
-class TestResult_Fail(val error: Throwable): TestResult() {
-    override fun toString() = "FAILED"
+class TestResult(val error: Throwable?) {
+    override fun toString() = if (error == null) "OK" else "FAILED"
 }
 
 class TestRunnerContext(
@@ -58,37 +52,57 @@ class TestRunnerCase(chain: TestRunnerChain?, val fn: R_FunctionDefinition) {
     }
 }
 
+class TestCaseResult(val case: TestRunnerCase, val res: TestResult)
+
 class TestRunnerResults {
-    private val results = mutableListOf<Pair<TestRunnerCase, TestResult>>()
+    private val results = mutableListOf<TestCaseResult>()
 
     fun add(case: TestRunnerCase, value: TestResult) {
-        results.add(case to value)
+        results.add(TestCaseResult(case, value))
     }
 
     fun getResults() = results.toImmList()
 
     fun print(): Boolean {
-        println()
-        println(PRINT_SEPARATOR)
-        println("TEST RESULTS:\n")
+        val (okTests, failedTests) = results.partition { it.res.error == null }
 
-        if (results.isNotEmpty()) {
-            for ((name, r) in results) {
-                println("$name $r")
-            }
+        if (failedTests.isNotEmpty()) {
             println()
+            println(PRINT_SEPARATOR)
+            println("FAILED TESTS:")
+            for (r in failedTests) {
+                println()
+                println(r.case.name)
+                printException(r.res.error!!)
+            }
         }
 
-        val nTests = results.size
-        val nOk = results.count { it.second is TestResult_OK }
-        val nFailed = nTests - nOk
+        println()
+        println(PRINT_SEPARATOR)
+        println("TEST RESULTS:")
 
-        println("SUMMARY: $nFailed FAILED / $nOk PASSED / $nTests TOTAL\n")
+        printResults(okTests)
+        printResults(failedTests)
+
+        val nTests = results.size
+        val nOk = okTests.size
+        val nFailed = failedTests.size
+
+        println("\nSUMMARY: $nFailed FAILED / $nOk PASSED / $nTests TOTAL\n")
 
         val allOk = nFailed == 0
         println("\n***** ${if (allOk) "OK" else "FAILED"} *****")
 
         return allOk
+    }
+
+    private fun printResults(list: List<TestCaseResult>) {
+        if (list.isNotEmpty()) {
+            println()
+            for (r in list) {
+                println("${r.res} ${r.case}")
+            }
+        }
     }
 }
 
@@ -135,17 +149,24 @@ object TestRunner {
             try {
                 case.fn.callTop(exeCtx, listOf())
                 println("OK $caseName")
-                TestResult_OK
-            } catch (e: Rt_StackTraceError) {
-                val msg = Rt_Utils.appendStackTrace("Error: ${e.message}", e.stack)
-                System.out.println(msg)
-                println("FAILED $caseName")
-                TestResult_Fail(e)
+                TestResult(null)
             } catch (e: Throwable) {
-                e.printStackTrace(System.out)
-                println("FAILED $caseName")
-                TestResult_Fail(e)
+                printException(e)
+                println("FAILED ${case.name}")
+                TestResult(e)
             }
+        }
+    }
+}
+
+private fun printException(e: Throwable) {
+    when (e) {
+        is Rt_StackTraceError -> {
+            val msg = Rt_Utils.appendStackTrace("Error: ${e.message}", e.stack)
+            System.out.println(msg)
+        }
+        else -> {
+            e.printStackTrace(System.out)
         }
     }
 }

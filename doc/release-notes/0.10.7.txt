@@ -1,4 +1,4 @@
-RELEASE NOTES 0.10.7 (2021-??-??)
+RELEASE NOTES 0.10.7 (2021-09-21)
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 1. Language: Extendable functions
@@ -94,3 +94,38 @@ app.rell:
     query is_good_value(x: integer) {
         return not lib.is_bad_value(x);
     }
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+2. Tools: Improved unit tests output
+
+(1) In the summary part, passed and failed tests are listed separately, making it easier to see which tests failed.
+(2) A list of all failed tests and exception stack traces is printed before the summary.
+
+Example of output:
+
+    ------------------------------------------------------------------------
+    FAILED TESTS:
+
+    A[1]:run_tests.generic.tests:test_fail
+    Error: expected <X> but was <A>
+        at run_tests.generic.tests:test_fail(run_tests/generic/tests.rell:28)
+
+    B[2]:run_tests.generic.tests:test_fail
+    Error: expected <X> but was <B>
+        at run_tests.generic.tests:test_fail(run_tests/generic/tests.rell:28)
+
+    ------------------------------------------------------------------------
+    TEST RESULTS:
+
+    OK A[1]:run_tests.generic.tests:test_get_app_name
+    OK A[1]:run_tests.generic.tests:test_add_user
+    OK B[2]:run_tests.generic.tests:test_get_app_name
+    OK B[2]:run_tests.generic.tests:test_add_user
+
+    FAILED A[1]:run_tests.generic.tests:test_fail
+    FAILED B[2]:run_tests.generic.tests:test_fail
+
+    SUMMARY: 2 FAILED / 4 PASSED / 6 TOTAL
+
+
+    ***** FAILED *****

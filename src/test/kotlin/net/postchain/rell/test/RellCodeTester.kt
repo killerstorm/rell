@@ -337,10 +337,8 @@ class RellCodeTester(
             val resList = testRes.getResults()
             val resMap = resList
                     .map {
-                        it.first.fn.moduleLevelName to when (val res = it.second) {
-                            is TestResult_OK -> "OK"
-                            is TestResult_Fail -> RellTestUtils.rtErrToResult(res.error).res
-                        }
+                        val err = it.res.error
+                        it.case.fn.moduleLevelName to (if(err == null) "OK" else RellTestUtils.rtErrToResult(err).res)
                     }.toMap().toImmMap()
 
             resMap.entries.joinToString(",")
