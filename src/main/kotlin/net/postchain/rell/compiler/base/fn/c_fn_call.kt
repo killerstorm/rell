@@ -28,14 +28,15 @@ abstract class C_FunctionCallTarget {
 
 abstract class C_FunctionCallTarget_Regular(
         private val ctx: C_ExprContext,
-        private val callInfo: C_FunctionCallInfo
+        private val callInfo: C_FunctionCallInfo,
+        private val retType: R_Type?
 ): C_FunctionCallTarget() {
     protected abstract fun createVTarget(): V_FunctionCallTarget
 
-    override fun typeHints() = callInfo.params.typeHints
+    final override fun retType() = retType
+    final override fun typeHints() = callInfo.params.typeHints
 
-    override fun compileFull(args: C_FullCallArguments): V_Expr? {
-        val retType = retType()
+    final override fun compileFull(args: C_FullCallArguments): V_Expr? {
         retType ?: return null
         val vTarget = createVTarget()
         val vCallArgs = args.compileComplexArgs(callInfo)
@@ -43,11 +44,10 @@ abstract class C_FunctionCallTarget_Regular(
         return V_FullFunctionCallExpr(ctx, callInfo.callPos, callInfo.callPos, retType, vTarget, vCallArgs)
     }
 
-    override fun compilePartial(args: C_PartialCallArguments, resTypeHint: R_FunctionType?): V_Expr? {
-        val retType = retType() ?: R_CtErrorType
+    final override fun compilePartial(args: C_PartialCallArguments, resTypeHint: R_FunctionType?): V_Expr? {
         val effArgs = args.compileEffectiveArgs(callInfo)
         effArgs ?: return null
-        val fnType = R_FunctionType(effArgs.wildArgs, retType)
+        val fnType = R_FunctionType(effArgs.wildArgs, retType ?: R_CtErrorType)
         val target = createVTarget()
         val mapping = effArgs.toRMapping()
         return V_PartialFunctionCallExpr(ctx, callInfo.callPos, fnType, target, effArgs.exprArgs, mapping)
@@ -60,10 +60,7 @@ class C_FunctionCallTarget_FunctionType(
         private val fnExpr: V_Expr,
         fnType: R_FunctionType,
         private val safe: Boolean
-): C_FunctionCallTarget_Regular(ctx, callInfo) {
-    private val resType = C_Utils.effectiveMemberType(fnType.result, safe)
-
-    override fun retType() = resType
+): C_FunctionCallTarget_Regular(ctx, callInfo, C_Utils.effectiveMemberType(fnType.result, safe)) {
     override fun createVTarget(): V_FunctionCallTarget = V_FunctionCallTarget_FunctionValue(fnExpr, safe)
 }
 

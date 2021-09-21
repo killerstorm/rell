@@ -613,6 +613,12 @@ class ExpressionTest: BaseRellTest(false) {
         chk("'hello'.sub(3)", "text[lo]")
     }
 
+    @Test fun testTypeOfUnit() {
+        def("function f() {}")
+        chk("_type_of(print())", "text[unit]")
+        chk("_type_of(f())", "text[unit]")
+    }
+
     @Test fun testTypeOfSideEffects() {
         def("function f(i: integer) { print('f:'+i); return i; }")
         chk("f(123)", "int[123]")

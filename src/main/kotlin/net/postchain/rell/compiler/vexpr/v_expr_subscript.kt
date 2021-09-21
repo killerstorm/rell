@@ -109,7 +109,7 @@ class V_CommonSubscriptExpr(
         val dstExpr = kind.compileDestination(pos, rBase, rKey)
         if (dstExpr == null) {
             val baseType = baseExpr.type
-            val type = baseType.toStrictString()
+            val type = baseType.strCode()
             throw C_Error.stop(pos, "expr_immutable:$type", "Value of type '$type' cannot be modified")
         }
         return C_SimpleDestination(dstExpr)

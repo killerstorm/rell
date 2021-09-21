@@ -1,1 +1,96 @@
 RELEASE NOTES 0.10.7 (2021-??-??)
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+1. Language: Extendable functions
+
+Extendable functions is a more flexible and powerful alternative to abstract functions:
+
+    @extendable function f(x: integer) {
+        print('f', x);
+    }
+
+An arbitrary number of extensions can be defined for an extendable function:
+
+    @extend(f) function g(x: integer) {
+        print('g', x);
+    }
+
+    @extend(f) function h(x: integer) {
+        print('h', x);
+    }
+
+Function "f" is a base function, functions "g" and "h" are extension functions.
+
+When the base function is called, all its extension functions are executed, and the base function itself is executed
+in the end. However, this behavior depends on the return type.
+
+
+* Return types *
+
+Extendable functions support a limited set of return types:
+
+1. unit:
+   - all extensions are executed
+   - base function is always executed in the end
+
+2. boolean:
+   - extensions are executed one by one, until some of them returns "true"
+   - base function is executed if all extensions returned "false"
+   - the result of the last executed function is returned to the caller
+
+3. T?: similar to boolean - extensions are executed until the first non-null result, which is returned to the caller
+
+4. list<T>:
+   - all extensions are executed
+   - the base function is executed in the end
+   - the concatenation of all lists is returned to the caller
+
+5. map<K, V>: similar to list<T>, the union of all maps is returned to the caller, but fails if there is a key conflict
+
+
+* More details *
+
+1. A base function doesn't need to have a body. When no extensions defined, returns a default value, depending on the
+   type: false, null, empty list, empty map.
+
+2. For an extension to work, its module must be directly or indirectly imported from the main module of the application.
+
+3. The order in which extensions are executed is deterministic and is defined by the order of module imports and
+   definitions within each module. First, extensions defined in the main module are executed, then extensions defined
+   in modules directly imported from the main module and so on (order of imports matters).
+
+4. Nameless functions. An extension function doesn't need to have a name:
+
+    @extend(f) function(x: integer) {
+        print('nameless', x);
+    }
+
+
+* Sample *
+
+In real programs, base and extension functions are supposed to be defined in different modules.
+
+lib.rell:
+
+    module;
+    @extendable function is_bad_value(x: integer): boolean;
+
+ext.rell:
+
+    module;
+    import lib;
+
+    @extend(lib.is_bad_value) function(x: integer): boolean {
+        return x < 0;
+    }
+
+app.rell:
+
+    module;
+
+    import lib;
+    import ext; // Linking the extension.
+
+    query is_good_value(x: integer) {
+        return not lib.is_bad_value(x);
+    }

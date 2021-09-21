@@ -295,7 +295,7 @@ class UpdateDeleteTest: BaseRellTest() {
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,10)")
 
         chkOp("val score = 'Hello'; update person @ { .name == 'Mike' } ( score );",
-                "ct_err:attr_bad_type:0:score:integer:text")
+                "ct_err:[attr_bad_type:0:score:integer:text][stmt_assign_type:[integer]:[text]]") // TODO must be one error
     }
 
     @Test fun testUpdateNameConflictAliasVsLocal() {
@@ -595,6 +595,12 @@ class UpdateDeleteTest: BaseRellTest() {
 
         chkOp("val d = data @{}; d.x = 654.0;")
         chk("data @* {} ( _=.x )", "list<decimal>[dec[654]]")
+
+        chkOp("val x = 321; update data @* {} ( x );", "OK")
+        chk("data @* {} ( _=.x )", "list<decimal>[dec[321]]")
+
+        chkOp("update data @* {} ( x += 123 );", "OK")
+        chk("data @* {} ( _=.x )", "list<decimal>[dec[444]]")
     }
 
     @Test fun testBugGamePlayerSubExpr() {

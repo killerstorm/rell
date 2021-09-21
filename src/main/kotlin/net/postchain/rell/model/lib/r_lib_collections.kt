@@ -190,7 +190,7 @@ object R_SysFn_Map_Get: R_SysFn_Map() {
     override fun call(obj: Map<Rt_Value, Rt_Value>, a: Rt_Value): Rt_Value {
         val r = obj[a]
         if (r == null) {
-            throw Rt_Error("fn:map.get:novalue:${a.toStrictString()}", "Key not in map: $a")
+            throw Rt_Error("fn:map.get:novalue:${a.strCode()}", "Key not in map: ${a.str()}")
         }
         return r
     }
@@ -225,7 +225,7 @@ object R_SysFn_MutableMap_Remove: R_SysFn_MutableMap() {
     override fun call(obj: MutableMap<Rt_Value, Rt_Value>, a: Rt_Value): Rt_Value {
         val v = obj.remove(a)
         if (v == null) {
-            throw Rt_Error("fn:map.remove:novalue:${a.toStrictString()}", "Key not in map: $a")
+            throw Rt_Error("fn:map.remove:novalue:${a.strCode()}", "Key not in map: ${a.str()}")
         }
         return v
     }

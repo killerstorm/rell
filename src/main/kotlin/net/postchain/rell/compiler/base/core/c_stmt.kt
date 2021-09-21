@@ -8,6 +8,7 @@ import net.postchain.rell.compiler.ast.*
 import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.base.utils.C_Utils
+import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.model.*
 import net.postchain.rell.model.stmt.*
 import net.postchain.rell.utils.toImmList
@@ -70,7 +71,12 @@ class C_BlockCodeProto(val varFacts: C_VarFacts) {
     companion object { val EMPTY = C_BlockCodeProto(C_VarFacts.EMPTY) }
 }
 
-class C_BlockCodeBuilder(ctx: C_StmtContext, private val repl: Boolean, hasGuardBlock: Boolean, proto: C_BlockCodeProto) {
+class C_BlockCodeBuilder(
+        ctx: C_StmtContext,
+        private val repl: Boolean,
+        hasGuardBlock: Boolean,
+        proto: C_BlockCodeProto
+) {
     private val ctx = ctx.updateFacts(proto.varFacts)
     private val rStmts = mutableListOf<R_Statement>()
     private var returnAlways = false
@@ -150,11 +156,15 @@ class C_SimpleVarDeclarator(
         if (rType == null && rExprType == null) {
             ctx.msgCtx.error(name.pos, "stmt_var_notypeexpr:${name.str}", "Neither type nor expression specified for '${name.str}'")
         } else if (rExprType != null) {
-            C_Utils.checkUnitType(name.pos, rExprType, "stmt_var_unit:${name.str}", "Expression for '${name.str}' returns nothing")
+            C_Utils.checkUnitType(name.pos, rExprType) {
+                "stmt_var_unit:${name.str}" toCodeMsg "Expression for '${name.str}' returns nothing"
+            }
         }
 
         val typeAdapter = if (rExprType != null && rType != null) {
-            C_Types.adaptSafe(ctx.msgCtx, rType, rExprType, name.pos, "stmt_var_type:${name.str}", "Type mismatch for '${name.str}'")
+            C_Types.adaptSafe(ctx.msgCtx, rType, rExprType, name.pos) {
+                "stmt_var_type:${name.str}" toCodeMsg "Type mismatch for '${name.str}'"
+            }
         } else {
             C_TypeAdapter_Direct
         }
@@ -208,15 +218,16 @@ class C_TupleVarDeclarator(
             val n1 = subDeclarators.size
             val n2 = rExprType.fields.size
             if (n1 != n2) {
-                ctx.msgCtx.error(pos, "var_tuple_wrongsize:$n1:$n2:$rExprType",
-                        "Expression returns a tuple of $n2 element(s) instead of $n1 element(s): $rExprType")
+                ctx.msgCtx.error(pos, "var_tuple_wrongsize:$n1:$n2:${rExprType.strCode()}",
+                        "Expression returns a tuple of $n2 element(s) instead of $n1 element(s): ${rExprType.str()}")
             }
             subDeclarators.indices.map {
                 if (it < n2) rExprType.fields[it].type else R_CtErrorType
             }
         } else {
             if (rExprType.isNotError()) {
-                ctx.msgCtx.error(pos, "var_notuple:$rExprType", "Expression must return a tuple, but it returns '$rExprType'")
+                ctx.msgCtx.error(pos, "var_notuple:${rExprType.strCode()}",
+                        "Expression must return a tuple, but it returns '${rExprType.str()}'")
             }
             subDeclarators.map { R_CtErrorType }
         }

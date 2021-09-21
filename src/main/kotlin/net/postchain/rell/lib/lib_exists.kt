@@ -6,6 +6,7 @@ package net.postchain.rell.lib
 
 import net.postchain.rell.compiler.ast.S_Expr
 import net.postchain.rell.compiler.ast.S_Name
+import net.postchain.rell.compiler.ast.S_QualifiedName
 import net.postchain.rell.compiler.base.expr.C_ExprContext
 import net.postchain.rell.compiler.base.expr.C_ExprVarFacts
 import net.postchain.rell.compiler.base.fn.C_FuncMatchUtils
@@ -13,7 +14,8 @@ import net.postchain.rell.compiler.base.fn.C_SpecialSysGlobalFunction
 import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_ExprInfo
-import net.postchain.rell.model.*
+import net.postchain.rell.model.R_BooleanType
+import net.postchain.rell.model.R_NullableType
 import net.postchain.rell.model.expr.*
 import net.postchain.rell.model.lib.R_SysFn_General
 import net.postchain.rell.utils.checkEquals
@@ -78,7 +80,7 @@ private class V_ExistsExpr(
     override fun toRExpr0(): R_Expr {
         val fn = R_SysFn_General.Exists(condition, not)
         val rArgs = listOf(subExpr.toRExpr())
-        return C_Utils.createSysCallRExpr(R_BooleanType, fn, rArgs, listOf(name))
+        return C_Utils.createSysCallRExpr(R_BooleanType, fn, rArgs, S_QualifiedName(name))
     }
 
     override fun toDbExpr0(): Db_Expr {

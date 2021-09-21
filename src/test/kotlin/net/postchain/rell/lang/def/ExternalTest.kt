@@ -77,12 +77,12 @@ class ExternalTest: BaseRellTest() {
         chkCompile("@external('foo') namespace { operation o(){} }", "ct_err:def_external:namespace:OPERATION")
         chkCompile("@external('foo') namespace { query q() = 123; }", "ct_err:def_external:namespace:QUERY")
 
-        chkCompile("@external('foo') object state { mutable x: integer = 123; }", "ct_err:ann:external:unary:target_type:OBJECT")
-        chkCompile("@external('foo') struct r { x: integer; }", "ct_err:ann:external:unary:target_type:STRUCT")
-        chkCompile("@external('foo') enum e { A, B, C }", "ct_err:ann:external:unary:target_type:ENUM")
-        chkCompile("@external('foo') function f(){}", "ct_err:ann:external:unary:target_type:FUNCTION")
-        chkCompile("@external('foo') operation o(){}", "ct_err:ann:external:unary:target_type:OPERATION")
-        chkCompile("@external('foo') query q() = 123;", "ct_err:ann:external:unary:target_type:QUERY")
+        chkCompile("@external('foo') object state { mutable x: integer = 123; }", "ct_err:modifier:invalid:ann:external")
+        chkCompile("@external('foo') struct r { x: integer; }", "ct_err:modifier:invalid:ann:external")
+        chkCompile("@external('foo') enum e { A, B, C }", "ct_err:modifier:invalid:ann:external")
+        chkCompile("@external('foo') function f(){}", "ct_err:modifier:invalid:ann:external")
+        chkCompile("@external('foo') operation o(){}", "ct_err:modifier:invalid:ann:external")
+        chkCompile("@external('foo') query q() = 123;", "ct_err:modifier:invalid:ann:external")
     }
 
     @Test fun testNoLog() {
@@ -237,6 +237,10 @@ class ExternalTest: BaseRellTest() {
         tst.chainDependency("foo", "deadbeef", 1000)
         chkFull("@external('foo') namespace {} query q() = 123;", "int[123]") // Empty external block
         chkCompile("@external('') namespace {}", "ct_err:ann:external:invalid:")
+
+        chkCompile("@external(0) namespace {}", "ct_err:ann:external:arg_type:integer")
+        chkCompile("@external(foo) namespace {}", "ct_err:ann:arg:name_not_value:foo")
+        chkCompile("@external(foo.bar) namespace {}", "ct_err:ann:arg:name_not_value:foo.bar")
     }
 
     @Test fun testTxImplicitTransactionBlockTypes() {
@@ -302,9 +306,9 @@ class ExternalTest: BaseRellTest() {
         chkCompile("@external('foo') namespace { entity foo; }", "ct_err:def_entity_hdr_name:foo")
         chkCompile("namespace abc { @external('foo') namespace { entity foo; } }", "ct_err:def_entity_hdr_name:foo")
 
-        chkCompile("namespace abc { @external('foo') namespace { @log entity transaction; } }", "ct_err:ann:log:not_allowed:ENTITY:transaction")
-        chkCompile("namespace abc { @external('foo') namespace { @log entity block; } }", "ct_err:ann:log:not_allowed:ENTITY:block")
-        chkCompile("namespace abc { @external('foo') namespace { @aaa entity block; } }", "ct_err:ann:invalid:aaa")
+        chkCompile("namespace abc { @external('foo') namespace { @log entity transaction; } }", "ct_err:def_entity_hdr:modifier:ann:log")
+        chkCompile("namespace abc { @external('foo') namespace { @log entity block; } }", "ct_err:def_entity_hdr:modifier:ann:log")
+        chkCompile("namespace abc { @external('foo') namespace { @aaa entity block; } }", "ct_err:modifier:invalid:ann:aaa")
         chkCompile("namespace abc { @external('foo') namespace { entity transaction(log); } }", "ct_err:def_entity_hdr_annotations:transaction")
         chkCompile("namespace abc { @external('foo') namespace { entity block(log); } }", "ct_err:def_entity_hdr_annotations:block")
         chkCompile("namespace abc { @external('foo') namespace { entity block(aaa); } }", "ct_err:def_entity_hdr_annotations:block")
@@ -341,15 +345,15 @@ class ExternalTest: BaseRellTest() {
         tst.chainDependency("foo", "deadbeef", 1000)
         initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
 
-        chkCompile("@external('foo') namespace ns { @mount('') entity transaction; }", "ct_err:ann:mount:not_allowed:ENTITY:transaction")
-        chkCompile("@external('foo') namespace ns { @mount('') entity block; }", "ct_err:ann:mount:not_allowed:ENTITY:block")
-        chkCompile("@external('foo') namespace ns { @mount('bar') entity transaction; }", "ct_err:ann:mount:not_allowed:ENTITY:transaction")
-        chkCompile("@external('foo') namespace ns { @mount('bar') entity block; }", "ct_err:ann:mount:not_allowed:ENTITY:block")
+        chkCompile("@external('foo') namespace ns { @mount('') entity transaction; }", "ct_err:def_entity_hdr:modifier:ann:mount")
+        chkCompile("@external('foo') namespace ns { @mount('') entity block; }", "ct_err:def_entity_hdr:modifier:ann:mount")
+        chkCompile("@external('foo') namespace ns { @mount('bar') entity transaction; }", "ct_err:def_entity_hdr:modifier:ann:mount")
+        chkCompile("@external('foo') namespace ns { @mount('bar') entity block; }", "ct_err:def_entity_hdr:modifier:ann:mount")
 
-        chkCompile("namespace ns { @external('foo') @mount('') entity transaction; }", "ct_err:ann:mount:not_allowed:ENTITY:transaction")
-        chkCompile("namespace ns { @external('foo') @mount('') entity block; }", "ct_err:ann:mount:not_allowed:ENTITY:block")
-        chkCompile("namespace ns { @external('foo') @mount('bar') entity transaction; }", "ct_err:ann:mount:not_allowed:ENTITY:transaction")
-        chkCompile("namespace ns { @external('foo') @mount('bar') entity block; }", "ct_err:ann:mount:not_allowed:ENTITY:block")
+        chkCompile("namespace ns { @external('foo') @mount('') entity transaction; }", "ct_err:def_entity_hdr:modifier:ann:mount")
+        chkCompile("namespace ns { @external('foo') @mount('') entity block; }", "ct_err:def_entity_hdr:modifier:ann:mount")
+        chkCompile("namespace ns { @external('foo') @mount('bar') entity transaction; }", "ct_err:def_entity_hdr:modifier:ann:mount")
+        chkCompile("namespace ns { @external('foo') @mount('bar') entity block; }", "ct_err:def_entity_hdr:modifier:ann:mount")
 
         def("namespace ns1 { @mount('bar') @external('foo') namespace { entity transaction; entity block; } }")
         def("@mount('bar') namespace ns2 { @external('foo') namespace { entity transaction; entity block; } }")

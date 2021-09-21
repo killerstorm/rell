@@ -6,9 +6,7 @@ package net.postchain.rell.compiler.base.namespace
 
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.base.core.C_Entity
-import net.postchain.rell.compiler.base.def.C_GlobalConstantDefinition
-import net.postchain.rell.compiler.base.def.C_Struct
-import net.postchain.rell.compiler.base.fn.*
+import net.postchain.rell.compiler.base.def.*
 import net.postchain.rell.compiler.base.module.C_ModuleDefsBuilder
 import net.postchain.rell.compiler.base.module.C_ModuleKey
 import net.postchain.rell.model.*

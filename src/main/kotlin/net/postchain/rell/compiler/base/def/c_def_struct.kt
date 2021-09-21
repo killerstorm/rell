@@ -26,7 +26,7 @@ object C_StructUtils {
 
         val attrsGtv = validateModuleArgsAttrs(msgCtx, s) { cAttr ->
             if (cAttr.rAttr.type.completeFlags().gtv.fromGtv) null else {
-                C_CodeMsg("module_args:attr:no_gtv", "has a non-Gtv-compatible type (${cAttr.rAttr.type})")
+                C_CodeMsg("module_args:attr:no_gtv", "has a non-Gtv-compatible type (${cAttr.rAttr.type.str()})")
             }
         }
 
@@ -43,7 +43,7 @@ object C_StructUtils {
             if (cAttr.rAttr.mutable) {
                 C_CodeMsg("module_args:attr:mutable", "is mutable")
             } else if (cAttr.rAttr.type.completeFlags().mutable) {
-                C_CodeMsg("module_args:attr:mutable_type", "has a mutable type (${cAttr.rAttr.type})")
+                C_CodeMsg("module_args:attr:mutable_type", "has a mutable type (${cAttr.rAttr.type.str()})")
             } else {
                 null
             }
@@ -60,7 +60,7 @@ object C_StructUtils {
 
         val attrsPure = validateModuleArgsAttrs(msgCtx, s) { cAttr ->
             if (cAttr.rAttr.type.completeFlags().pure) null else {
-                C_CodeMsg("module_args:attr:not_pure", "has a bad type (${cAttr.rAttr.type})")
+                C_CodeMsg("module_args:attr:not_pure", "has a bad type (${cAttr.rAttr.type.str()})")
             }
         }
 
@@ -108,15 +108,17 @@ object C_StructGraphUtils {
     fun processStructs(structs: List<R_Struct>) {
         val info = buildStructsInfo(structs)
         val graph = info.graph
+
         val transGraph = C_GraphUtils.transpose(graph)
+        val transGraphFn: (R_Struct) -> Collection<R_Struct> = transGraph::getValue
 
         val cyclicStructs = C_GraphUtils.findCyclicVertices(graph).toSet()
-        val infiniteStructs = C_GraphUtils.closure(transGraph, cyclicStructs).toSet()
-        val mutableStructs = C_GraphUtils.closure(transGraph, info.mutable).toSet()
-        val nonVirtualStructs = C_GraphUtils.closure(transGraph, info.nonVirtualable).toSet()
-        val nonPureStructs = C_GraphUtils.closure(transGraph, info.nonPure).toSet()
-        val nonGtvFromStructs = C_GraphUtils.closure(transGraph, info.nonGtvFrom).toSet()
-        val nonGtvToStructs = C_GraphUtils.closure(transGraph, info.nonGtvTo).toSet()
+        val infiniteStructs = C_GraphUtils.closure(cyclicStructs, transGraphFn).toSet()
+        val mutableStructs = C_GraphUtils.closure(info.mutable, transGraphFn).toSet()
+        val nonVirtualStructs = C_GraphUtils.closure(info.nonVirtualable, transGraphFn).toSet()
+        val nonPureStructs = C_GraphUtils.closure(info.nonPure, transGraphFn).toSet()
+        val nonGtvFromStructs = C_GraphUtils.closure(info.nonGtvFrom, transGraphFn).toSet()
+        val nonGtvToStructs = C_GraphUtils.closure(info.nonGtvTo, transGraphFn).toSet()
 
         for (struct in structs) {
             val gtv = R_GtvCompatibility(struct !in nonGtvFromStructs, struct !in nonGtvToStructs)

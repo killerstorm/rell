@@ -15,9 +15,9 @@ import kotlin.test.assertEquals
 
 class MountTest: BaseRellTest() {
     @Test fun testInvalidAnnotation() {
-        chkCompile("@foo entity user { x: integer; }", "ct_err:ann:invalid:foo")
-        chkCompile("@foo struct rec { x: integer; }", "ct_err:ann:invalid:foo")
-        chkCompile("@foo function f(){}", "ct_err:ann:invalid:foo")
+        chkCompile("@foo entity user { x: integer; }", "ct_err:modifier:invalid:ann:foo")
+        chkCompile("@foo struct rec { x: integer; }", "ct_err:modifier:invalid:ann:foo")
+        chkCompile("@foo function f(){}", "ct_err:modifier:invalid:ann:foo")
     }
 
     @Test fun testAllowedDefinitions() {
@@ -31,10 +31,10 @@ class MountTest: BaseRellTest() {
         chkCompile("@mount('foo') namespace ns {}", "OK")
         chkCompile("@mount('foo') @external('bar') namespace {}", "OK")
 
-        chkCompile("@mount('foo') struct rec { x: integer; }", "ct_err:ann:mount:target_type:STRUCT")
-        chkCompile("@mount('foo') enum en { A, B, C }", "ct_err:ann:mount:target_type:ENUM")
-        chkCompile("@mount('foo') function f(){}", "ct_err:ann:mount:target_type:FUNCTION")
-        chkCompile("@mount('foo') import sub;", "ct_err:ann:mount:target_type:IMPORT")
+        chkCompile("@mount('foo') struct rec { x: integer; }", "ct_err:modifier:invalid:ann:mount")
+        chkCompile("@mount('foo') enum en { A, B, C }", "ct_err:modifier:invalid:ann:mount")
+        chkCompile("@mount('foo') function f(){}", "ct_err:modifier:invalid:ann:mount")
+        chkCompile("@mount('foo') import sub;", "ct_err:modifier:invalid:ann:mount")
     }
 
     @Test fun testWrongArguments() {
@@ -46,6 +46,7 @@ class MountTest: BaseRellTest() {
         chkCompile("@mount('hello', 'world') query q() = 123;", "ct_err:ann:mount:arg_count:2")
         chkCompile("@mount('hello', 123) query q() = 123;", "ct_err:ann:mount:arg_count:2")
         chkCompile("@mount('hello') query q() = 123;", "OK")
+        chkCompile("@mount(foo.bar) query q() = 123;", "ct_err:ann:arg:name_not_value:foo.bar")
 
         chkCompile("@mount('') query q() = 123;", "ct_err:ann:mount:empty:QUERY")
         chkCompile("@mount('foo') query q() = 123;", "OK")

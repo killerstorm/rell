@@ -6,6 +6,7 @@ package net.postchain.rell.compiler.base.core
 
 import net.postchain.rell.compiler.ast.S_RellFile
 import net.postchain.rell.compiler.ast.S_Statement
+import net.postchain.rell.compiler.base.def.C_FunctionExtensionsTable
 import net.postchain.rell.compiler.base.def.C_MountTables
 import net.postchain.rell.compiler.base.expr.C_StmtContext
 import net.postchain.rell.compiler.base.module.*
@@ -172,7 +173,8 @@ class C_ReplAppState(
         val sysDefs: C_SystemDefs?,
         val sqlDefs: R_AppSqlDefs,
         val mntTables: C_MountTables,
-        constants: List<R_GlobalConstantDefinition>
+        constants: List<R_GlobalConstantDefinition>,
+        val functionExtensions: C_FunctionExtensionsTable
 ) {
     val modules = modules.toImmMap()
     val constants = constants.toImmList()
@@ -184,7 +186,8 @@ class C_ReplAppState(
                 null,
                 R_AppSqlDefs.EMPTY,
                 C_MountTables.EMPTY,
-                listOf()
+                listOf(),
+                C_FunctionExtensionsTable(immListOf())
         )
     }
 }

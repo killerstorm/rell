@@ -4,6 +4,8 @@
 
 package net.postchain.rell.misc
 
+import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.toImmSet
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
@@ -42,6 +44,13 @@ class KotlinTest {
         val l = listOf(1, 2, 3)
         f(l) { t.add(it) }
         assertEquals(t, listOf(1))
+    }
+
+    @Test fun testListPlusNullable() {
+        fun f(x: Int): Int? = if (x < 0) null else x
+        assertEquals(listOf(5, 6, 7), listOf(5, 6) + 7)
+        assertEquals(listOf(5, 6, 7), listOf(5, 6) + f(7))
+        assertEquals(listOf(5, 6, null), listOf(5, 6) + f(-7))
     }
 
     @Test fun testIntRangeStep() {
@@ -152,5 +161,45 @@ class KotlinTest {
 
         // assertEquals("f(a=123,b=[],c=987)", f(123, 456)) // error
         // assertEquals("f(a=123,b=[A, B],c=987)", f(123, "A", 456)) // error
+    }
+
+    @Test fun testIsUnitTest() {
+        assertEquals(true, CommonUtils.IS_UNIT_TEST)
+    }
+
+    @Test fun testSetOrder() {
+        assertEquals("[1, 2, 3, 4, 5]", listOf(1, 2, 3, 4, 5).toImmSet().toString())
+        assertEquals("[1, 4, 3, 2, 5]", listOf(1, 4, 3, 2, 5).toImmSet().toString())
+        assertEquals("[5, 4, 3, 2, 1]", listOf(5, 4, 3, 2, 1).toImmSet().toString())
+
+        assertEquals("[1, 2]", listOf(1, 1, 1, 2, 2, 2).toImmSet().toString())
+        assertEquals("[2, 1]", listOf(2, 2, 2, 1, 1, 1).toImmSet().toString())
+        assertEquals("[1, 2]", listOf(1, 2, 1, 2, 1, 2).toImmSet().toString())
+        assertEquals("[2, 1]", listOf(2, 1, 2, 1, 2, 1).toImmSet().toString())
+
+        assertEquals("[1, 2, 3]", listOf(1, 1, 1, 2, 2, 2, 3, 3, 3).toImmSet().toString())
+        assertEquals("[3, 2, 1]", listOf(3, 3, 3, 2, 2, 2, 1, 1, 1).toImmSet().toString())
+        assertEquals("[1, 2, 3]", listOf(1, 2, 3, 1, 2, 3, 1, 2, 3).toImmSet().toString())
+        assertEquals("[3, 2, 1]", listOf(3, 2, 1, 3, 2, 1, 3, 2, 1).toImmSet().toString())
+        assertEquals("[1, 2, 3]", listOf(1, 2, 3, 3, 1, 2, 2, 3, 1).toImmSet().toString())
+        assertEquals("[3, 1, 2]", listOf(3, 1, 2, 1, 2, 3, 2, 3, 1).toImmSet().toString())
+        assertEquals("[2, 3, 1]", listOf(2, 3, 1, 3, 1, 2, 1, 2, 3).toImmSet().toString())
+    }
+
+    @Test fun testGenericNullable() {
+        class A<T>(val v: T)
+        class B<T:Any>(val v: T)
+
+        val a1 = A(123)
+        assertEquals(123, a1.v)
+
+        val a2 = A<Int?>(null)
+        assertEquals(null, a2.v)
+
+        val b1 = B(123)
+        assertEquals(123, b1.v)
+
+        // Compilation error
+        //val b2 = B<Int?>(123)
     }
 }

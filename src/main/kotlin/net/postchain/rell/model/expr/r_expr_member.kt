@@ -71,9 +71,9 @@ class R_MemberCalculator_DataAttribute(
 
         if (list.size != 1) {
             val msg = if (list.isEmpty()) {
-                "Object not found in the database: $baseValue (was deleted?)"
+                "Object not found in the database: ${baseValue.str()} (was deleted?)"
             } else {
-                "Found more than one object $baseValue in the database: ${list.size}"
+                "Found more than one object ${baseValue.str()} in the database: ${list.size}"
             }
             throw Rt_Error("expr_entity_attr_count:${list.size}", msg)
         }

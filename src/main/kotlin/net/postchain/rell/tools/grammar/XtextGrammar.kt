@@ -6,11 +6,10 @@ package net.postchain.rell.tools.grammar
 
 import com.github.h0tk3y.betterParse.combinators.*
 import com.github.h0tk3y.betterParse.grammar.ParserReference
-import net.postchain.rell.utils.LateInit
 import net.postchain.rell.compiler.parser.RellToken
 import net.postchain.rell.compiler.parser.S_Grammar
+import net.postchain.rell.utils.LateInit
 import org.apache.commons.collections4.MapUtils
-import org.apache.commons.lang3.StringUtils
 
 fun main(args: Array<String>) {
     XtextGenUtils.printHeader()
@@ -213,7 +212,7 @@ private object XtextNontermGen {
     }
 
     private fun createTokenType(name: String): String {
-        val tail = if (name !in specialTokens) "" else StringUtils.capitalize(name.toLowerCase())
+        val tail = if (name !in specialTokens) "" else name.toLowerCase().capitalize()
         val type = "token$tail"
         if (type !in actions) {
             val token = if (name in specialTokens) name else null

@@ -8,7 +8,10 @@ import net.postchain.rell.compiler.base.core.*
 import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.utils.C_Error
 import net.postchain.rell.compiler.base.utils.C_Utils
-import net.postchain.rell.model.*
+import net.postchain.rell.compiler.base.utils.toCodeMsg
+import net.postchain.rell.model.R_BooleanType
+import net.postchain.rell.model.R_NullableType
+import net.postchain.rell.model.R_UnitType
 import net.postchain.rell.model.expr.R_Expr
 import net.postchain.rell.model.stmt.*
 import net.postchain.rell.utils.MutableTypedKeyMap
@@ -131,7 +134,7 @@ class S_ReturnStatement(pos: S_Pos, val expr: S_Expr?): S_Statement(pos) {
         var vExpr = cExpr?.value()
 
         if (vExpr != null) {
-            C_Utils.checkUnitType(pos, vExpr.type, "stmt_return_unit", "Expression returns nothing")
+            C_Utils.checkUnitType(pos, vExpr.type) { "stmt_return_unit" toCodeMsg "Expression returns nothing" }
         }
 
         val defType = ctx.defCtx.definitionType
@@ -248,7 +251,9 @@ class S_IfStatement(pos: S_Pos, val expr: S_Expr, val trueStmt: S_Statement, val
         if (cExpr != null) {
             val value = cExpr.value()
             rExpr = value.toRExpr()
-            C_Types.matchOpt(ctx.msgCtx, R_BooleanType, rExpr.type, expr.startPos, "stmt_if_expr_type", "Wrong type of if-expression")
+            C_Types.matchOpt(ctx.msgCtx, R_BooleanType, rExpr.type, expr.startPos) {
+                "stmt_if_expr_type" toCodeMsg "Wrong type of if-expression"
+            }
             exprVarFacts = value.varFacts
         } else {
             rExpr = C_Utils.errorRExpr(R_BooleanType)
@@ -348,7 +353,10 @@ class S_WhileStatement(pos: S_Pos, val expr: S_Expr, val stmt: S_Statement): S_S
         }
 
         val rExpr = loop.condExpr
-        C_Types.matchOpt(ctx.msgCtx, R_BooleanType, rExpr.type, expr.startPos, "stmt_while_expr_type", "Wrong type of while-expression")
+
+        C_Types.matchOpt(ctx.msgCtx, R_BooleanType, rExpr.type, expr.startPos) {
+            "stmt_while_expr_type" toCodeMsg "Wrong type of while-expression"
+        }
 
         val loopUid = ctx.fnCtx.nextLoopUid()
         val (loopCtx, loopBlkCtx) = loop.condCtx.subBlock(loopUid)
@@ -461,8 +469,8 @@ class S_ForStatement(pos: S_Pos, val declarator: S_VarDeclarator, val expr: S_Ex
 
         val cIterator = C_ForIterator.compile(ctx.exprCtx, exprType, false)
         if (cIterator == null) {
-            ctx.msgCtx.error(expr.startPos, "stmt_for_expr_type:[${exprType.toStrictString()}]",
-                    "Wrong type of for-expression: ${exprType.toStrictString()}")
+            ctx.msgCtx.error(expr.startPos, "stmt_for_expr_type:[${exprType.strCode()}]",
+                    "Wrong type of for-expression: ${exprType.strCode()}")
             stmt.compile(ctx)
             return C_Statement.ERROR
         }

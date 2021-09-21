@@ -7,21 +7,22 @@ package net.postchain.rell.compiler.ast
 import net.postchain.rell.compiler.base.core.*
 import net.postchain.rell.compiler.base.def.*
 import net.postchain.rell.compiler.base.fn.C_FunctionUtils
+import net.postchain.rell.compiler.base.modifier.C_ModifierFields
+import net.postchain.rell.compiler.base.modifier.C_ModifierTargetType
+import net.postchain.rell.compiler.base.modifier.C_ModifierValue
+import net.postchain.rell.compiler.base.modifier.C_ModifierValues
 import net.postchain.rell.compiler.base.module.C_MidModuleMember
 import net.postchain.rell.compiler.base.module.C_MidModuleMember_Basic
 import net.postchain.rell.compiler.base.module.C_MidModuleMember_Namespace
 import net.postchain.rell.compiler.base.module.C_ModuleSourceContext
 import net.postchain.rell.compiler.base.namespace.C_DeclarationType
 import net.postchain.rell.compiler.base.namespace.C_NamespaceValueContext
-import net.postchain.rell.compiler.base.utils.C_Constants
-import net.postchain.rell.compiler.base.utils.C_Errors
-import net.postchain.rell.compiler.base.utils.C_LateInit
-import net.postchain.rell.compiler.base.utils.C_Utils
+import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.compiler.vexpr.V_ConstantValueEvalContext
 import net.postchain.rell.lib.C_Lib_OpContext
 import net.postchain.rell.model.*
 import net.postchain.rell.module.RellVersions
-import net.postchain.rell.runtime.toGtv
+import net.postchain.rell.runtime.utils.toGtv
 import net.postchain.rell.tools.api.IdeOutlineNodeType
 import net.postchain.rell.tools.api.IdeOutlineTreeBuilder
 import net.postchain.rell.utils.MsgString
@@ -38,7 +39,7 @@ class S_AttrHeader(val name: S_Name, private val type: S_Type?): S_Node() {
     }
 
     fun compileImplicitType(ctx: C_NamespaceContext): R_Type? {
-        val rType = ctx.getTypeOpt(listOf(name))
+        val rType = ctx.getTypeOpt(S_QualifiedName(name))
         return if (rType == null) null else checkUnitType(ctx, name.pos, rType)
     }
 
@@ -56,7 +57,7 @@ class S_AttrHeader(val name: S_Name, private val type: S_Type?): S_Node() {
     }
 
     private fun checkUnitType(ctx: C_NamespaceContext, pos: S_Pos, rType: R_Type): R_Type {
-        return C_Types.checkNotUnit(ctx.msgCtx, pos, rType, name.str) { "attr_var" to "attribute or variable" }
+        return C_Types.checkNotUnit(ctx.msgCtx, pos, rType, name.str) { "attr_var" toCodeMsg "attribute or variable" }
     }
 }
 
@@ -93,7 +94,7 @@ class S_KeyIndexClause(val pos: S_Pos, val kind: S_KeyIndexKind, val attrs: List
         for (attr in attrs) {
             val name = attr.header.name
             C_Errors.check(names.add(name.str), name.pos) {
-                "entity_keyindex_dup:${name.str}" to "Duplicate attribute: '${name.str}'"
+                "entity_keyindex_dup:${name.str}" toCodeMsg "Duplicate attribute: '${name.str}'"
             }
         }
 
@@ -189,27 +190,30 @@ class S_EntityDefinition(
             return
         }
 
-        val modTarget = C_ModifierTarget(C_ModifierTargetType.ENTITY, name, externalChain = true, mount = true, log = true)
-        modifiers.compile(ctx, modTarget)
+        val mods = C_ModifierValues(C_ModifierTargetType.ENTITY, name)
+        val modExternal = mods.field(C_ModifierFields.EXTERNAL_CHAIN)
+        val modMount = mods.field(C_ModifierFields.MOUNT)
+        val modLog = mods.field(C_ModifierFields.LOG)
+        modifiers.compile(ctx, mods)
 
-        val extChain = modTarget.externalChain(ctx)
+        val extChain = ctx.externalChain(modExternal)
         val extChainRef = extChain?.ref
         val external = extChainRef != null || ctx.modCtx.external
-        val rFlags = compileFlags(ctx, external, modTarget)
+        val rFlags = compileFlags(ctx, external, modLog.hasValue())
 
-        val names = ctx.nsCtx.defNames(name.str, extChain)
+        val names = ctx.nsCtx.defNames(name, extChain)
 
         C_Errors.check(!external || !ctx.mountName.isEmpty() || name.str !in HEADER_ENTITIES, name.pos) {
-            "def_entity_external_unallowed:${name.str}" to
-                    "External entity '${name.str}' can be declared only without body (as entity header)"
+            "def_entity_external_unallowed:${name.str}" toCodeMsg
+            "External entity '${name.str}' can be declared only without body (as entity header)"
         }
 
         C_Errors.check(!external || rFlags.log, name.pos) {
-            "def_entity_external_nolog:${names.simpleName}" to
-                    "External entity '${names.simpleName}' must have '${C_Constants.LOG_ANNOTATION}' annotation"
+            "def_entity_external_nolog:${names.simpleName}" toCodeMsg
+            "External entity '${names.simpleName}' must have '${C_Constants.LOG_ANNOTATION}' annotation"
         }
 
-        val mountName = ctx.mountName(modTarget, name)
+        val mountName = ctx.mountName(modMount, name)
         val rMapping = if (extChainRef == null) {
             R_EntitySqlMapping_Regular(mountName)
         } else {
@@ -217,14 +221,14 @@ class S_EntityDefinition(
         }
 
         val defCtx = C_DefinitionContext(ctx, C_DefinitionType.ENTITY, names.defId)
+        val defBase = R_DefinitionBase(names, defCtx.initFrameGetter)
 
         val rExternalEntity = if (extChainRef == null) null else R_ExternalEntity(extChainRef, true)
 
         val rEntity = C_Utils.createEntity(
                 ctx.appCtx,
                 C_DefinitionType.ENTITY,
-                names,
-                defCtx.initFrameGetter,
+                defBase,
                 mountName,
                 rFlags,
                 rMapping,
@@ -243,18 +247,16 @@ class S_EntityDefinition(
     private fun compileHeader(ctx: C_MountContext) {
         var err = false
 
-        val modTarget = C_ModifierTarget(
-                C_ModifierTargetType.ENTITY,
-                name,
-                externalChain = true,
-                mount = true,
-                mountAllowed = false,
-                log = true,
-                logAllowed = false
-        )
-        modifiers.compile(ctx, modTarget)
+        val mods = C_ModifierValues(C_ModifierTargetType.ENTITY, name)
+        val modExternal = mods.field(C_ModifierFields.EXTERNAL_CHAIN)
+        val modMount = mods.field(C_ModifierFields.MOUNT)
+        val modLog = mods.field(C_ModifierFields.LOG)
+        modifiers.compile(ctx, mods)
 
-        if (!annotations.isEmpty()) {
+        checkHeaderNoModifier(ctx, modMount)
+        checkHeaderNoModifier(ctx, modLog)
+
+        if (annotations.isNotEmpty()) {
             ctx.msgCtx.error(name.pos, "def_entity_hdr_annotations:${name.str}",
                     "Annotations not allowed for entity header '${name.str}'")
             err = true
@@ -268,7 +270,7 @@ class S_EntityDefinition(
             err = true
         }
 
-        val extChain = modTarget.externalChain(ctx)
+        val extChain = ctx.externalChain(modExternal)
         if (extChain == null && !ctx.modCtx.external) {
             ctx.msgCtx.error(name.pos, "def_entity_hdr_noexternal:${name.str}",
                     "Entity header must be declared as external")
@@ -284,9 +286,19 @@ class S_EntityDefinition(
         ctx.nsBuilder.addEntity(name, rEntity, addToModule = false)
     }
 
-    private fun compileFlags(ctx: C_MountContext, external: Boolean, modTarget: C_ModifierTarget): R_EntityFlags {
+    private fun checkHeaderNoModifier(ctx: C_MountContext, modValue: C_ModifierValue<*>) {
+        val link = modValue.modLink()
+        if (link != null) {
+            val codeMsg = link.key.codeMsg()
+            val code = "def_entity_hdr:modifier:${codeMsg.code}"
+            val msg = "${codeMsg.msg.capitalize()} not allowed for an entity header"
+            ctx.msgCtx.error(link.pos, code, msg)
+        }
+    }
+
+    private fun compileFlags(ctx: C_MountContext, external: Boolean, modLog: Boolean): R_EntityFlags {
         val set = mutableSetOf<String>()
-        var log = modTarget.log?.get() ?: false
+        var log = modLog
 
         if (log) {
             set.add(C_Constants.LOG_ANNOTATION)
@@ -376,27 +388,28 @@ class S_ObjectDefinition(
                 log = false
         )
 
-        val modTarget = C_ModifierTarget(C_ModifierTargetType.OBJECT, name, mount = true)
-        modifiers.compile(ctx, modTarget)
+        val mods = C_ModifierValues(C_ModifierTargetType.OBJECT, name)
+        val modMount = mods.field(C_ModifierFields.MOUNT)
+        modifiers.compile(ctx, mods)
 
-        val names = ctx.nsCtx.defNames(name.str)
-        val mountName = ctx.mountName(modTarget, name)
+        val names = ctx.nsCtx.defNames(name)
+        val mountName = ctx.mountName(modMount, name)
         val sqlMapping = R_EntitySqlMapping_Regular(mountName)
 
         val defCtx = C_DefinitionContext(ctx, C_DefinitionType.OBJECT, names.defId)
+        val defBase = R_DefinitionBase(names, defCtx.initFrameGetter)
 
         val rEntity = C_Utils.createEntity(
                 ctx.appCtx,
                 C_DefinitionType.OBJECT,
-                names,
-                defCtx.initFrameGetter,
+                defBase,
                 mountName,
                 entityFlags,
                 sqlMapping,
                 null
         )
 
-        val rObject = R_ObjectDefinition(names, rEntity)
+        val rObject = R_ObjectDefinition(defBase, rEntity)
 
         ctx.appCtx.defsAdder.addObject(rObject)
         ctx.nsBuilder.addObject(name, rObject)
@@ -441,14 +454,15 @@ class S_StructDefinition(
 
         ctx.checkNotExternal(name.pos, C_DeclarationType.STRUCT)
 
-        val modTarget = C_ModifierTarget(C_ModifierTargetType.STRUCT, name)
-        modifiers.compile(ctx, modTarget)
+        val mods = C_ModifierValues(C_ModifierTargetType.STRUCT, name)
+        modifiers.compile(ctx, mods)
 
-        val names = ctx.nsCtx.defNames(name.str)
+        val names = ctx.nsCtx.defNames(name)
         val defCtx = C_DefinitionContext(ctx, C_DefinitionType.STRUCT, names.defId)
+        val defBase = R_DefinitionBase(names, defCtx.initFrameGetter)
 
-        val rStruct = R_Struct(names.appLevelName, names.appLevelName.toGtv(), defCtx.initFrameGetter, mirrorStructs = null)
-        val rStructDef = R_StructDefinition(names, rStruct)
+        val rStruct = R_Struct(names.appLevelName, names.appLevelName.toGtv(), defBase.initFrameGetter, mirrorStructs = null)
+        val rStructDef = R_StructDefinition(defBase, rStruct)
 
         val attrsLate = C_LateInit<List<C_CompiledAttribute>>(C_CompilerPass.MEMBERS, immListOf())
         val cStruct = C_Struct(name, rStructDef, attrsLate.getter)
@@ -496,8 +510,8 @@ class S_EnumDefinition(
     override fun compileBasic(ctx: C_MountContext) {
         ctx.checkNotExternal(name.pos, C_DeclarationType.ENUM)
 
-        val modTarget = C_ModifierTarget(C_ModifierTargetType.ENUM, name)
-        modifiers.compile(ctx, modTarget)
+        val mods = C_ModifierValues(C_ModifierTargetType.ENUM, name)
+        modifiers.compile(ctx, mods)
 
         val set = mutableSetOf<String>()
         val rAttrs = mutableListOf<R_EnumAttr>()
@@ -510,8 +524,10 @@ class S_EnumDefinition(
             }
         }
 
-        val names = ctx.nsCtx.defNames(name.str)
-        val rEnum = R_EnumDefinition(names, R_CallFrame.NONE_INIT_FRAME_GETTER, rAttrs.toList())
+        val names = ctx.nsCtx.defNames(name)
+        val defBase = R_DefinitionBase(names, R_CallFrame.NONE_INIT_FRAME_GETTER)
+
+        val rEnum = R_EnumDefinition(defBase, rAttrs.toList())
         ctx.nsBuilder.addEnum(name, rEnum)
     }
 
@@ -526,12 +542,12 @@ class S_EnumDefinition(
 class S_NamespaceDefinition(
         pos: S_Pos,
         modifiers: S_Modifiers,
-        val fullName: List<S_Name>,
+        val qualifiedName: S_QualifiedName?,
         val definitions: List<S_Definition>
 ): S_Definition(pos, modifiers) {
     override fun compile(ctx: C_ModuleSourceContext): C_MidModuleMember {
         val midMembers = definitions.mapNotNull { it.compile(ctx) }
-        return C_MidModuleMember_Namespace(modifiers, fullName, midMembers)
+        return C_MidModuleMember_Namespace(modifiers, qualifiedName, midMembers)
     }
 
     override fun ideGetImportedModules(moduleName: R_ModuleName, res: MutableSet<R_ModuleName>) {
@@ -542,7 +558,9 @@ class S_NamespaceDefinition(
 
     override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
         var sub = b
-        for (name in fullName) sub = sub.node(this, name, IdeOutlineNodeType.NAMESPACE)
+        for (name in qualifiedName?.parts ?: immListOf()) {
+            sub = sub.node(this, name, IdeOutlineNodeType.NAMESPACE)
+        }
         for (def in definitions) {
             def.ideBuildOutlineTree(sub)
         }
@@ -568,10 +586,10 @@ class S_GlobalConstantDefinition(
         val expr: S_Expr
 ): S_BasicDefinition(pos, modifiers) {
     override fun compileBasic(ctx: C_MountContext) {
-        val modTarget = C_ModifierTarget(C_ModifierTargetType.CONSTANT, name)
-        modifiers.compile(ctx, modTarget)
+        val mods = C_ModifierValues(C_ModifierTargetType.CONSTANT, name)
+        modifiers.compile(ctx, mods)
 
-        val names = ctx.nsCtx.defNames(name.str)
+        val names = ctx.nsCtx.defNames(name)
         val defCtx = C_DefinitionContext(ctx, C_DefinitionType.CONSTANT, names.defId)
         val errorExpr = C_Utils.errorVExpr(defCtx.initExprCtx, expr.startPos)
 
@@ -581,7 +599,8 @@ class S_GlobalConstantDefinition(
 
         val cDef = ctx.appCtx.addConstant(ctx.modCtx.rModuleKey, names) { constId ->
             val filePos = name.pos.toFilePos()
-            val rDef = R_GlobalConstantDefinition(names, defCtx.initFrameGetter, constId, filePos, bodyLate.getter)
+            val defBase = R_DefinitionBase(names, defCtx.initFrameGetter)
+            val rDef = R_GlobalConstantDefinition(defBase, constId, filePos, bodyLate.getter)
             val typePos = type?.pos ?: name.pos
             val varUid = ctx.modCtx.nextConstVarUid(names.qualifiedName)
             C_GlobalConstantDefinition(rDef, typePos, varUid, headerLate.getter, exprLate.getter)

@@ -8,7 +8,7 @@ import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 import kotlin.test.assertTrue
 
-class UserFunctionTest: BaseRellTest(false) {
+class FunctionTest: BaseRellTest(false) {
     @Test fun testSimple() {
         chkFn("function f(): integer = 123;", "f()", "int[123]")
         chkFn("function f(): integer { return 123; }", "f()", "int[123]")
@@ -472,6 +472,14 @@ class UserFunctionTest: BaseRellTest(false) {
     private fun chkArgsEvalOrder(expr: String, vararg outs: String) {
         chk(expr, "int[0]")
         chkOut(*outs)
+    }
+
+    @Test fun testNamelessFunction() {
+        chkCompile("function(x: integer) {}", "ct_err:fn:no_name")
+        chkCompile("abstract function(x: integer) {}", "ct_err:[fn:abstract:non_abstract_module::function#0][fn:no_name]")
+        chkCompile("override function(x: integer) {}", "ct_err:fn:no_name")
+        chkCompile("@extendable function(x: integer) {}", "ct_err:fn:no_name")
+        chkCompile("@extend(f) function(x: integer) {}", "ct_err:[fn:extend:not_extendable:f][fn:extend:not_found:f]")
     }
 
     private fun chkFn(fnCode: String, callCode: String, expected: String) {

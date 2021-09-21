@@ -6,7 +6,7 @@ package net.postchain.rell.compiler.base.module
 
 import net.postchain.rell.compiler.ast.S_RellFile
 import net.postchain.rell.compiler.base.core.C_MessageContext
-import net.postchain.rell.compiler.base.core.C_ModifierContext
+import net.postchain.rell.compiler.base.modifier.C_ModifierContext
 import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.model.R_Name
@@ -51,11 +51,10 @@ object C_ModuleUtils {
 
 class C_ModuleReaderContext(
         val msgCtx: C_MessageContext,
-        private val valExec: C_ValidationExecutor,
         private val importLoader: C_ImportModuleLoader
 ) {
     fun createModuleSourceContext(moduleName: R_ModuleName): C_ModuleSourceContext {
-        return C_ModuleSourceContext(msgCtx, valExec, importLoader, moduleName)
+        return C_ModuleSourceContext(msgCtx, importLoader, moduleName)
     }
 }
 
@@ -354,7 +353,6 @@ private class C_ModuleDirTree(
 
 class C_ModuleSourceContext(
         val msgCtx: C_MessageContext,
-        val valExec: C_ValidationExecutor,
         private val importLoader: C_ImportModuleLoader,
         val moduleName: R_ModuleName
 ) {
@@ -367,7 +365,7 @@ sealed class C_ModuleSource(protected val ctx: C_ModuleSourceContext) {
     val moduleName = ctx.moduleName
 
     private val compiledHeader by lazy {
-        val modifierCtx = C_ModifierContext(ctx.msgCtx, ctx.valExec)
+        val modifierCtx = C_ModifierContext(ctx.msgCtx)
         compileHeader0(modifierCtx)
     }
 

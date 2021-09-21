@@ -6,6 +6,7 @@ package net.postchain.rell.lib
 
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.ast.S_QualifiedName
 import net.postchain.rell.compiler.base.core.C_DefinitionType
 import net.postchain.rell.compiler.base.def.C_SysAttribute
 import net.postchain.rell.compiler.base.expr.C_ExprContext
@@ -79,8 +80,8 @@ object C_Lib_OpContext {
         return C_Utils.createSysGlobalPropExpr(ctx.exprCtx, type, Transaction(type), pos, TRANSACTION_FN, pure = false)
     }
 
-    private fun checkCtx(ctx: C_NamespaceValueContext, name: List<S_Name>) {
-        checkCtx(ctx.exprCtx, name[0].pos)
+    private fun checkCtx(ctx: C_NamespaceValueContext, name: S_QualifiedName) {
+        checkCtx(ctx.exprCtx, name.pos)
     }
 
     private fun checkCtx(ctx: C_ExprContext, pos: S_Pos) {
@@ -98,16 +99,16 @@ object C_Lib_OpContext {
     }
 
     private class BaseNsValue(val resType: R_Type, val rFn: R_SysFunction): C_NamespaceValue_VExpr() {
-        override fun toExpr0(ctx: C_NamespaceValueContext, name: List<S_Name>): V_Expr {
+        override fun toExpr0(ctx: C_NamespaceValueContext, name: S_QualifiedName): V_Expr {
             checkCtx(ctx, name)
             return C_Utils.createSysGlobalPropExpr(ctx.exprCtx, resType, rFn, name, pure = false)
         }
     }
 
     private object Value_Transaction: C_NamespaceValue_VExpr() {
-        override fun toExpr0(ctx: C_NamespaceValueContext, name: List<S_Name>): V_Expr {
+        override fun toExpr0(ctx: C_NamespaceValueContext, name: S_QualifiedName): V_Expr {
             checkCtx(ctx, name)
-            return transactionExpr(ctx, name[0].pos)
+            return transactionExpr(ctx, name.pos)
         }
     }
 

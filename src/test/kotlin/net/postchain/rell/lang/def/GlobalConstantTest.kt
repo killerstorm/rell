@@ -188,7 +188,7 @@ class GlobalConstantTest: BaseRellTest(false) {
     @Test fun testCompileTimeConstantWhenConflict() {
         def("val X = 123;")
         def("val Y = 123;")
-        chk("when (_nop(123)) { X -> 100; Y -> 200; else -> 300; }", "ct_err:when_expr_dupvalue:123")
+        chk("when (_nop(123)) { X -> 100; Y -> 200; else -> 300; }", "ct_err:when_expr_dupvalue:int[123]")
     }
 
     @Test fun testExternalModule() {

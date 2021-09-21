@@ -381,4 +381,19 @@ class FunctionTypeTest: BaseRellTest(false) {
         def("function h(x: integer): (decimal) -> text = g(x, *);")
         chkEx("{ val p: (integer) -> (decimal) -> text = h(*); return p(123)(45.6); }", "text[f:5608.8]")
     }
+
+    @Test fun testRecursiveToString() {
+        def("function f(l: list<()->text>) = 'Hello';")
+        def("""
+            function g(): () -> text {
+                val l = list<()->text>();
+                val p = f(l, *);
+                l.add(p);
+                return p;
+            }
+        """)
+
+        chk("'' + g()", "text[f(*)]")
+        chk("_strict_str(g())", "text[fn[f(list<()->text>[fn[...]])]]")
+    }
 }

@@ -18,8 +18,8 @@ class MirrorStructOperationTest: BaseRellTest(false) {
         chk("struct<new_user>()", "ct_err:attr_missing:name,rating")
         chk("struct<new_user>('Bob')", "ct_err:attr_missing:rating")
         chk("struct<new_user>(123)", "ct_err:attr_missing:name")
-        chk("struct<new_user>(rating = 'Bob')", "ct_err:attr_bad_type:0:rating:integer:text")
-        chk("struct<new_user>(name = 123)", "ct_err:attr_bad_type:0:name:text:integer")
+        chk("struct<new_user>(rating = 'Bob')", "ct_err:[attr_missing:name][attr_bad_type:0:rating:integer:text]")
+        chk("struct<new_user>(name = 123)", "ct_err:[attr_missing:rating][attr_bad_type:0:name:text:integer]")
     }
 
     @Test fun testConstructorDefaultValues() {

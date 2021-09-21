@@ -5,7 +5,6 @@
 package net.postchain.rell.compiler.base.core
 
 import net.postchain.rell.compiler.base.def.*
-import net.postchain.rell.compiler.base.fn.C_FunctionBody
 import net.postchain.rell.compiler.base.module.C_CompiledModule
 import net.postchain.rell.compiler.base.module.C_ModuleDescriptor
 import net.postchain.rell.compiler.base.module.C_ModuleKey
@@ -47,14 +46,6 @@ class C_AppContext(
 ) {
     val globalCtx = msgCtx.globalCtx
 
-    val valExec = let {
-        val valMgr = C_ValidationManager(msgCtx)
-        executor.onPass(C_CompilerPass.VALIDATION) {
-            valMgr.execute()
-        }
-        valMgr.executor
-    }
-
     val appUid = C_GlobalContext.nextAppUid()
     private val containerUidGen = C_UidGen { id, name -> R_ContainerUid(id, name, appUid) }
 
@@ -65,6 +56,8 @@ class C_AppContext(
 
     val functionReturnTypeCalculator = C_FunctionBody.createReturnTypeCalculator()
 
+    val extendableFunctionCompiler = C_ExtendableFunctionCompiler(oldReplState.functionExtensions)
+
     private val appDefsLate = C_LateInit(C_CompilerPass.APPDEFS, C_AppDefs.EMPTY)
 
     private val nsAssembler = C_NsAsm_AppAssembler.create(msgCtx, appUid, oldReplState.modules)
@@ -74,8 +67,8 @@ class C_AppContext(
     private val externalChainsRoot = R_ExternalChainsRoot()
     private val externalChains = mutableMapOf<String, C_ExternalChain>()
 
-    private val allConstants = oldReplState.constants.toMutableList()
-    private val newConstants = mutableListOf<C_GlobalConstantDefinition>()
+    private val allConstants = C_ListBuilder(oldReplState.constants)
+    private val newConstants = C_ListBuilder<C_GlobalConstantDefinition>()
 
     private val appLate = C_LateInit(C_CompilerPass.APPLICATION, Optional.empty<R_App>())
     private val nsAsmAppLate = C_LateInit(C_CompilerPass.NAMESPACES, C_NsAsm_App.EMPTY)
@@ -101,7 +94,7 @@ class C_AppContext(
         }
 
         executor.onPass(C_CompilerPass.VALIDATION) {
-            val cs = newConstants.toImmList()
+            val cs = newConstants.commit()
             C_GlobalConstantDefinition.validateConstants(msgCtx, cs)
         }
 
@@ -169,6 +162,10 @@ class C_AppContext(
         extraMountTables.add(mntTables)
     }
 
+    private val functionExtTableLazy: C_FunctionExtensionsTable by lazy {
+        extendableFunctionCompiler.compileExtensions()
+    }
+
     private fun createApp(): R_App {
         val appDefs = appDefsLate.get()
         val topologicalEntities = calcTopologicalEntities(appDefs.entities)
@@ -177,7 +174,9 @@ class C_AppContext(
         val appQueriesMap = routinesToMap(sysDefs.queries + appDefs.queries)
 
         val valid = !msgCtx.messages().any { !it.type.ignorable }
+
         val modules = modulesBuilder.commit()
+        val rModules = modules.map { it.rModule }.toImmList()
 
         val oldSqlDefs = oldReplState.sqlDefs
         val sqlDefs = R_AppSqlDefs(
@@ -186,13 +185,16 @@ class C_AppContext(
                 topologicalEntities = oldSqlDefs.topologicalEntities + topologicalEntities
         )
 
+        val rFnExtTable = functionExtTableLazy.toR()
+
         val rApp = R_App(
                 valid = valid,
                 uid = appUid,
-                modules = modules.map { it.rModule },
+                modules = rModules,
                 operations = appOperationsMap,
                 queries = appQueriesMap,
-                constants = allConstants.toImmList(),
+                constants = allConstants.commit(),
+                functionExtensions = rFnExtTable,
                 externalChainsRoot = externalChainsRoot,
                 externalChains = externalChains.values.map { it.ref },
                 sqlDefs = sqlDefs
@@ -223,7 +225,16 @@ class C_AppContext(
         val stateModules = oldReplState.modules.toMutableMap()
         stateModules.putAllAbsent(newPrecompiledModules)
 
-        val newReplState = C_ReplAppState(asmApp.newReplState, stateModules, sysDefs, app.sqlDefs, mntTables, allConstants)
+        val newReplState = C_ReplAppState(
+                asmApp.newReplState,
+                stateModules,
+                sysDefs,
+                app.sqlDefs,
+                mntTables,
+                allConstants.commit(),
+                functionExtTableLazy
+        )
+
         newReplStateLate.set(newReplState)
     }
 

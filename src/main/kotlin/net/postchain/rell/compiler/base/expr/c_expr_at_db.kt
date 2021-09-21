@@ -9,9 +9,11 @@ import net.postchain.rell.compiler.base.core.C_AppContext
 import net.postchain.rell.compiler.base.core.C_BlockEntry_AtEntity
 import net.postchain.rell.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.compiler.vexpr.*
-import net.postchain.rell.model.*
+import net.postchain.rell.model.R_AtEntityId
+import net.postchain.rell.model.R_EntityDefinition
+import net.postchain.rell.model.R_FrameBlock
+import net.postchain.rell.model.R_Type
 import net.postchain.rell.model.expr.*
-import net.postchain.rell.utils.Nullable
 import net.postchain.rell.utils.chainToIterable
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmList
@@ -57,7 +59,7 @@ class C_AtFrom_Entities(
 
     private val msgCtx = outerExprCtx.msgCtx
 
-    private val innerExprCtx = outerExprCtx.update(blkCtx = innerBlkCtx, atCtx = Nullable(innerAtCtx))
+    private val innerExprCtx = outerExprCtx.update(blkCtx = innerBlkCtx, atCtx = innerAtCtx)
 
     init {
         check(entities.isNotEmpty())

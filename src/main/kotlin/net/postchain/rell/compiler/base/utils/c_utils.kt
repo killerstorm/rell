@@ -24,18 +24,21 @@ import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
 import net.postchain.rell.model.stmt.R_ExprStatement
 import net.postchain.rell.runtime.Rt_Error
-import net.postchain.rell.runtime.toGtv
+import net.postchain.rell.runtime.utils.toGtv
 import net.postchain.rell.utils.*
-import org.apache.commons.lang3.StringUtils
 import org.jooq.impl.SQLDataType
 import java.math.BigDecimal
 import java.util.*
+
+typealias C_CodeMsgSupplier = () -> C_CodeMsg
 
 class C_CodeMsg(val code: String, val msg: String) {
     fun toPair() = code to msg
 
     override fun toString() = code
 }
+
+public infix fun String.toCodeMsg(that: String): C_CodeMsg = C_CodeMsg(this, that)
 
 class C_PosCodeMsg(val pos: S_Pos, val code: String, val msg: String) {
     constructor(pos: S_Pos, codeMsg: C_CodeMsg): this(pos, codeMsg.code, codeMsg.msg)
@@ -169,13 +172,14 @@ object C_Utils {
         }
     }
 
-    fun checkUnitType(pos: S_Pos, type: R_Type, errCode: String, errMsg: String) {
-        C_Errors.check(type != R_UnitType, pos, errCode, errMsg)
+    fun checkUnitType(pos: S_Pos, type: R_Type, errSupplier: C_CodeMsgSupplier) {
+        C_Errors.check(type != R_UnitType, pos, errSupplier)
     }
 
-    fun checkUnitType(msgCtx: C_MessageContext, pos: S_Pos, type: R_Type, errCode: String, errMsg: String): Boolean {
+    fun checkUnitType(msgCtx: C_MessageContext, pos: S_Pos, type: R_Type, errSupplier: C_CodeMsgSupplier): Boolean {
         if (type == R_UnitType) {
-            msgCtx.error(pos, errCode, errMsg)
+            val codeMsg = errSupplier()
+            msgCtx.error(pos, codeMsg)
             return false
         }
         return true
@@ -196,7 +200,7 @@ object C_Utils {
     private fun checkMapKeyType0(appCtx: C_AppContext, pos: S_Pos, type: R_Type, errCode: String, errMsg: String) {
         appCtx.executor.onPass(C_CompilerPass.VALIDATION) {
             if (type.completeFlags().mutable) {
-                val typeStr = type.toStrictString()
+                val typeStr = type.strCode()
                 appCtx.msgCtx.error(pos, "$errCode:$typeStr", "Mutable type cannot be used $errMsg: $typeStr")
             }
         }
@@ -230,7 +234,10 @@ object C_Utils {
             sqlMapping: R_EntitySqlMapping,
             attrs: List<C_SysAttribute>
     ): R_EntityDefinition {
-        val names = createDefNames(R_ModuleName.EMPTY, chain, null, listOf(simpleName))
+        val moduleKey = R_ModuleKey(R_ModuleName.EMPTY, chain?.name)
+        val names = createDefNames(moduleKey, C_RawQualifiedName.of(simpleName))
+        val defBase = R_DefinitionBase(names, R_CallFrame.NONE_INIT_FRAME_GETTER)
+
         val mountName = R_MountName.of(simpleName)
 
         val flags = R_EntityFlags(
@@ -247,8 +254,7 @@ object C_Utils {
         val entity = createEntity(
                 appCtx,
                 C_DefinitionType.ENTITY,
-                names,
-                R_CallFrame.NONE_INIT_FRAME_GETTER,
+                defBase,
                 mountName,
                 flags,
                 sqlMapping,
@@ -268,25 +274,23 @@ object C_Utils {
     fun createEntity(
             appCtx: C_AppContext,
             defType: C_DefinitionType,
-            names: R_DefinitionNames,
-            initFrameGetter: C_LateGetter<R_CallFrame>,
+            defBase: R_DefinitionBase,
             mountName: R_MountName,
             flags: R_EntityFlags,
             sqlMapping: R_EntitySqlMapping,
             externalEntity: R_ExternalEntity?
     ): R_EntityDefinition {
-        val mirrorStructs = createMirrorStructs(appCtx, names, initFrameGetter, defType)
-        return R_EntityDefinition(names, initFrameGetter, mountName, flags, sqlMapping, externalEntity, mirrorStructs)
+        val mirrorStructs = createMirrorStructs(appCtx, defBase, defType)
+        return R_EntityDefinition(defBase, mountName, flags, sqlMapping, externalEntity, mirrorStructs)
     }
 
     fun createMirrorStructs(
             appCtx: C_AppContext,
-            names: R_DefinitionNames,
-            initFrameGetter: C_LateGetter<R_CallFrame>,
+            defBase: R_DefinitionBase,
             defType: C_DefinitionType,
             operation: R_MountName? = null
     ): R_MirrorStructs {
-        val res = R_MirrorStructs(names, initFrameGetter, defType.name, operation)
+        val res = R_MirrorStructs(defBase, defType.name, operation)
         appCtx.defsAdder.addStruct(res.immutable)
         appCtx.defsAdder.addStruct(res.mutable)
         return res
@@ -320,12 +324,17 @@ object C_Utils {
         return createSysStruct(name, attrs.toList())
     }
 
+    private val RELL_MODULE_NAME = R_ModuleName.of("rell")
+
     fun createSysQuery(executor: C_CompilerExecutor, simpleName: String, type: R_Type, fn: R_SysFunction): R_QueryDefinition {
-        val moduleName = R_ModuleName.of("rell")
-        val names = createDefNames(moduleName, null, null, listOf(simpleName))
+        val moduleName = RELL_MODULE_NAME
+        val moduleKey = R_ModuleKey(moduleName, null)
+        val names = createDefNames(moduleKey, C_RawQualifiedName.of(simpleName))
 
         val mountName = R_MountName(moduleName.parts + R_Name.of(simpleName))
-        val query = R_QueryDefinition(names, R_CallFrame.NONE_INIT_FRAME_GETTER, mountName)
+
+        val defBase = R_DefinitionBase(names, R_CallFrame.NONE_INIT_FRAME_GETTER)
+        val query = R_QueryDefinition(defBase, mountName)
 
         executor.onPass(C_CompilerPass.EXPRESSIONS) {
             val body = R_SysQueryBody(type, listOf(), fn)
@@ -335,29 +344,17 @@ object C_Utils {
         return query
     }
 
-    fun createDefNames(
-            moduleName: R_ModuleName,
-            extChain: R_ExternalChainRef?,
-            namespacePath: String?,
-            qualifiedName: List<String>
-    ): R_DefinitionNames {
-        check(qualifiedName.isNotEmpty())
-
-        val fullNamespacePath = if (qualifiedName.size == 1) namespacePath else {
-            fullName(namespacePath, qualifiedName.subList(0, qualifiedName.size - 1).joinToString("."))
-        }
-
-        val simpleName = qualifiedName.last()
-
-        var modName = moduleName.str()
-        if (extChain != null) modName += "[${extChain.name}]"
-
-        return R_DefinitionNames(modName, fullNamespacePath, simpleName)
+    fun createDefNames(module: R_ModuleKey, qualifiedName: C_RawQualifiedName): R_DefinitionNames {
+        val moduleStr = module.str()
+        val qualifiedNameStr = qualifiedName.str()
+        val simpleName = qualifiedName.last
+        val defId = R_DefinitionId(moduleStr, qualifiedNameStr)
+        return R_DefinitionNames(moduleStr, qualifiedNameStr, simpleName, defId)
     }
 
-    fun createSysCallRExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, qualifiedName: List<S_Name>): R_Expr {
-        val nameStr = nameStr(qualifiedName)
-        return createSysCallRExpr(type, fn, args, qualifiedName[0].pos, nameStr)
+    fun createSysCallRExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, qualifiedName: S_QualifiedName): R_Expr {
+        val nameStr = qualifiedName.str()
+        return createSysCallRExpr(type, fn, args, qualifiedName.pos, nameStr)
     }
 
     fun createSysCallRExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, caseCtx: C_FuncCaseCtx): R_Expr {
@@ -375,11 +372,11 @@ object C_Utils {
             exprCtx: C_ExprContext,
             type: R_Type,
             fn: R_SysFunction,
-            qualifiedName: List<S_Name>,
+            qualifiedName: S_QualifiedName,
             pure: Boolean
     ): V_Expr {
-        val nameStr = nameStr(qualifiedName)
-        return createSysGlobalPropExpr(exprCtx, type, fn, qualifiedName[0].pos, nameStr, pure)
+        val nameStr = qualifiedName.str()
+        return createSysGlobalPropExpr(exprCtx, type, fn, qualifiedName.pos, nameStr, pure)
     }
 
     fun createSysGlobalPropExpr(
@@ -417,9 +414,6 @@ object C_Utils {
         return if (namespacePath == null) name else "$namespacePath.$name"
     }
 
-    fun nameStr(name: List<S_Name>): String = name.joinToString(".") { it.str }
-    fun namePosStr(name: List<S_Name>): S_String = S_String(name[0].pos, nameStr(name))
-
     fun <T> evaluate(pos: S_Pos, code: () -> T): T {
         try {
             val v = code()
@@ -431,10 +425,10 @@ object C_Utils {
         }
     }
 
-    fun appLevelName(module: C_ModuleKey, path: List<S_Name>): String {
+    fun appLevelName(module: C_ModuleKey, name: S_QualifiedName): String {
         val moduleName = module.keyStr()
-        val qualifiedName = nameStr(path)
-        return R_DefinitionId.appLevelName(moduleName, qualifiedName)
+        val nameStr = name.str()
+        return R_DefinitionId.appLevelName(moduleName, nameStr)
     }
 
     fun checkGtvCompatibility(
@@ -448,8 +442,8 @@ object C_Utils {
         val flags = type.completeFlags()
         val flag = if (from) flags.gtv.fromGtv else flags.gtv.toGtv
         if (!flag) {
-            val fullMsg = "$errMsg is not Gtv-compatible: ${type.toStrictString()}"
-            msgCtx.error(pos, "$errCode:${type.toStrictString()}", fullMsg)
+            val fullMsg = "$errMsg is not Gtv-compatible: ${type.strCode()}"
+            msgCtx.error(pos, "$errCode:${type.strCode()}", fullMsg)
         }
     }
 }
@@ -644,14 +638,15 @@ object C_GraphUtils {
         return mut.mapValues { (_, v) -> v.toList() }.toMap()
     }
 
-    fun <T> closure(graph: Map<T, Collection<T>>, vertices: Collection<T>): Collection<T> {
+    fun <T> closure(vertices: Collection<T>, graph: (T) -> Collection<T>): Collection<T> {
         val queue = LinkedList(vertices)
         val visited = mutableSetOf<T>()
 
         while (!queue.isEmpty()) {
             val vert = queue.remove()
             if (visited.add(vert)) {
-                for (adjVert in graph.getValue(vert)) {
+                val adjVerts = graph(vert)
+                for (adjVert in adjVerts) {
                     queue.add(adjVert)
                 }
             }
@@ -767,12 +762,23 @@ class C_LateInit<T>(val pass: C_CompilerPass, fallback: T) {
         fun <T> context(executor: C_CompilerExecutor, code: () -> T): T {
             return C_LateInitContext.runInContext(executor, code)
         }
+
+        fun checkPass(minPass: C_CompilerPass?, maxPass: C_CompilerPass?) {
+            val ctx = C_LateInitContext.getContext()
+            ctx.checkPass(minPass, maxPass)
+        }
+
+        fun checkPass(pass: C_CompilerPass) {
+            checkPass(pass, pass)
+        }
     }
 }
 
-class C_ListBuilder<T> {
-    private val list = mutableListOf<T>()
+class C_ListBuilder<T>(proto: List<T> = immListOf()) {
+    private val list = proto.toMutableList()
     private var commit: List<T>? = null
+
+    val size: Int get() = list.size
 
     fun add(value: T) {
         check(commit == null)
@@ -799,7 +805,7 @@ class C_UidGen<T>(private val factory: (Long, String) -> T) {
 sealed class C_Symbol(val code: String) {
     abstract fun msgNormal(): String
 
-    fun msgCapital(): String = StringUtils.capitalize(msgNormal())
+    fun msgCapital(): String = msgNormal().capitalize()
 
     final override fun toString() = msgNormal()
 }
@@ -810,31 +816,4 @@ class C_Symbol_Name(private val name: String): C_Symbol(name) {
 
 object C_Symbol_Placeholder: C_Symbol(C_Constants.AT_PLACEHOLDER) {
     override fun msgNormal() = "symbol '$code'"
-}
-
-class C_ValidationExecutor(private val manager: C_ValidationManager) {
-    fun onValidation(code: () -> Unit) {
-        manager.onValidation(code)
-    }
-}
-
-class C_ValidationManager(private val msgCtx: C_MessageContext) {
-    val executor = C_ValidationExecutor(this)
-
-    private val queue = queueOf<() -> Unit>()
-    private var done = false
-
-    fun onValidation(code: () -> Unit) {
-        check(!done)
-        queue.add(code)
-    }
-
-    fun execute() {
-        check(!done)
-        done = true
-
-        for (code in queue) {
-            msgCtx.consumeError(code)
-        }
-    }
 }

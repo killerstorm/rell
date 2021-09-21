@@ -162,8 +162,8 @@ class EntityTest: BaseRellTest(false) {
     @Test fun testAnnotations() {
         chkCompile("@log entity user {}", "OK")
         chkCompile("entity user (foo) {}", "ct_err:entity_ann_bad:foo")
-        chkCompile("@foo entity user {}", "ct_err:ann:invalid:foo")
-        chkCompile("@log @log entity user {}", "ct_err:ann:log:dup")
+        chkCompile("@foo entity user {}", "ct_err:modifier:invalid:ann:foo")
+        chkCompile("@log @log entity user {}", "ct_err:modifier:dup:ann:log")
         chkCompile("entity user (log, log) {}", "ct_err:entity_ann_dup:log")
 
         val a1 = tst.compileAppEx("entity user {}")
@@ -512,7 +512,7 @@ class EntityTest: BaseRellTest(false) {
     private fun attrToString(a: R_Attribute): String {
         val mut = if (a.mutable) "mutable " else ""
         val expr = if (a.expr != null) "=*" else ""
-        return "$mut${a.name}:${a.type}$expr"
+        return "$mut${a.name}:${a.type.str()}$expr"
     }
 
     private fun createTablePrefixTester(chainId: Long, rowid: Long, company: String, user: String): RellCodeTester {

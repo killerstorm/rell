@@ -203,7 +203,7 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
         if (type == R_CtErrorType) {
             return C_Utils.errorVExpr(ctx, pos)
         } else {
-            val typeStr = type.toStrictString()
+            val typeStr = type.strCode()
             throw C_Error.stop(pos, "expr_call_nofn:$typeStr", "Not a function: value of type $typeStr")
         }
     }

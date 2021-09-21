@@ -7,68 +7,96 @@ package net.postchain.rell.compiler.base.def
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.C_CompilerPass
 import net.postchain.rell.compiler.base.core.C_MessageContext
-import net.postchain.rell.compiler.base.fn.C_UserFunctionBody
-import net.postchain.rell.compiler.base.fn.C_UserFunctionHeader
+import net.postchain.rell.compiler.base.expr.C_ExprContext
+import net.postchain.rell.compiler.base.fn.C_FunctionCallInfo
+import net.postchain.rell.compiler.base.fn.C_FunctionCallTarget
+import net.postchain.rell.compiler.base.fn.C_FunctionCallTarget_Regular
 import net.postchain.rell.compiler.base.module.*
 import net.postchain.rell.compiler.base.utils.C_Errors
+import net.postchain.rell.compiler.base.utils.C_LateGetter
 import net.postchain.rell.compiler.base.utils.C_LateInit
+import net.postchain.rell.compiler.vexpr.V_FunctionCallTarget
+import net.postchain.rell.compiler.vexpr.V_FunctionCallTarget_AbstractUserFunction
+import net.postchain.rell.model.R_FunctionBase
 import net.postchain.rell.model.R_FunctionDefinition
 import net.postchain.rell.model.R_ModuleName
+import net.postchain.rell.model.R_Type
 import net.postchain.rell.utils.Nullable
+import net.postchain.rell.utils.One
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmSet
 
-class C_AbstractDescriptor(private val fnPos: S_Pos, private val rFunction: R_FunctionDefinition, val hasDefaultBody: Boolean) {
-    private val headerLate = C_LateInit(C_CompilerPass.MEMBERS, Nullable<C_UserFunctionHeader>())
-    private val overrideBodyLate = C_LateInit(C_CompilerPass.ABSTRACT, Nullable<C_UserFunctionBody>())
+class C_AbstractUserGlobalFunction(
+        fnPos: S_Pos,
+        rFunction: R_FunctionDefinition,
+        hasDefaultBody: Boolean,
+        private val rFnBase: R_FunctionBase
+): C_UserGlobalFunction(rFunction) {
+    val descriptor = C_AbstractFunctionDescriptor(fnPos, rFunction, hasDefaultBody, headerGetter)
+
+    private val rOverrideLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_FunctionBase())
+
+    override fun getAbstractDescriptor() = descriptor
+
+    override fun compileCallTarget(ctx: C_ExprContext, callInfo: C_FunctionCallInfo, retType: R_Type?): C_FunctionCallTarget {
+        return C_FunctionCallTarget_AbstractUserFunction(ctx, callInfo, retType, rFunction, rOverrideLate.getter)
+    }
+
+    fun compileOverride() {
+        val actualFnBase = descriptor.getOverride() ?: rFnBase
+        rOverrideLate.set(actualFnBase)
+    }
+}
+
+private class C_FunctionCallTarget_AbstractUserFunction(
+        ctx: C_ExprContext,
+        callInfo: C_FunctionCallInfo,
+        retType: R_Type?,
+        private val rBaseFunction: R_FunctionDefinition,
+        private val overrideGetter: C_LateGetter<R_FunctionBase>
+): C_FunctionCallTarget_Regular(ctx, callInfo, retType) {
+    override fun createVTarget(): V_FunctionCallTarget {
+        return V_FunctionCallTarget_AbstractUserFunction(rBaseFunction, overrideGetter)
+    }
+}
+
+class C_AbstractFunctionDescriptor(
+        private val fnPos: S_Pos,
+        private val rFunction: R_FunctionDefinition,
+        val hasDefaultBody: Boolean,
+        private val headerGetter: C_LateGetter<C_UserFunctionHeader>
+) {
+    private val overrideFnBaseLate = C_LateInit(C_CompilerPass.ABSTRACT, One<R_FunctionBase?>(null))
 
     fun functionPos() = fnPos
     fun functionName() = rFunction.appLevelName
 
-    fun header(): C_UserFunctionHeader = headerLate.get().value ?: C_UserFunctionHeader.ERROR
+    fun header() = headerGetter.get()
 
-    fun setHeader(header: C_UserFunctionHeader) {
-        headerLate.set(Nullable(header))
+    fun setOverride(overrideFnBase: R_FunctionBase) {
+        overrideFnBaseLate.set(One(overrideFnBase))
     }
 
-    fun setOverride(overrideBody: C_UserFunctionBody) {
-        overrideBodyLate.set(Nullable(overrideBody))
-    }
-
-    fun bind() {
-        val overrideBody = overrideBodyLate.get().value
-        val header = headerLate.get().value
-        val actualBody = overrideBody ?: header?.fnBody
-        if (actualBody != null) {
-            val rBody = actualBody.compile()
-            rFunction.setBody(rBody)
-        }
+    fun getOverride(): R_FunctionBase? {
+        return overrideFnBaseLate.get().value
     }
 }
 
-class C_OverrideDescriptor(val fnPos: S_Pos) {
-    private val abstractLate = C_LateInit(C_CompilerPass.MEMBERS, Nullable<C_AbstractDescriptor>())
-    private val bodyLate = C_LateInit(C_CompilerPass.MEMBERS, Nullable<C_UserFunctionBody>())
+class C_OverrideFunctionDescriptor(val fnPos: S_Pos, private val rFnBase: R_FunctionBase) {
+    private val abstractLate = C_LateInit(C_CompilerPass.MEMBERS, Nullable<C_AbstractFunctionDescriptor>())
     private var bind = false
 
     fun abstract() = abstractLate.get().value
 
-    fun setAbstract(abstract: C_AbstractDescriptor?) {
+    fun setAbstract(abstract: C_AbstractFunctionDescriptor?) {
         abstractLate.set(Nullable(abstract))
     }
 
-    fun setBody(body: C_UserFunctionBody) {
-        bodyLate.set(Nullable(body))
-    }
-
-    fun bind(): C_AbstractDescriptor? {
+    fun bind(): C_AbstractFunctionDescriptor? {
         check(!bind)
         bind = true
         val abstract = abstractLate.get().value
-        val body = bodyLate.get().value
-        if (abstract != null && body != null) {
-            abstract.setOverride(body)
-        }
+        abstract?.setOverride(rFnBase)
         return abstract
     }
 }
@@ -83,7 +111,7 @@ object C_AbstractCompiler {
     private fun processMissingOverrides(
             msgCtx: C_MessageContext,
             modules: List<C_ModuleDescriptor>,
-            actualOverrides: Set<C_AbstractDescriptor>
+            actualOverrides: Set<C_AbstractFunctionDescriptor>
     ) {
         val missingOverridesProcessor = C_MissingOverridesProcessor(msgCtx, actualOverrides)
 
@@ -101,9 +129,9 @@ object C_AbstractCompiler {
 
 private class C_OverrideConflictsProcessor(private val msgCtx: C_MessageContext) {
     private val errorLocations = mutableSetOf<C_OverrideLocation>()
-    private val errorOverrides = mutableSetOf<C_OverrideDescriptor>()
+    private val errorOverrides = mutableSetOf<C_OverrideFunctionDescriptor>()
 
-    fun processApp(modules: List<C_ModuleDescriptor>): Set<C_AbstractDescriptor> {
+    fun processApp(modules: List<C_ModuleDescriptor>): Set<C_AbstractFunctionDescriptor> {
         val entries = mutableListOf<C_OverrideEntry>()
         for (module in modules) {
             val importsDescriptor = module.importsDescriptor()
@@ -112,7 +140,7 @@ private class C_OverrideConflictsProcessor(private val msgCtx: C_MessageContext)
 
         val goodEntries = processConflicts(entries, true)
 
-        val res = mutableSetOf<C_AbstractDescriptor>()
+        val res = mutableSetOf<C_AbstractFunctionDescriptor>()
         for (entry in goodEntries) {
             val abstract = entry.override.bind()
             if (abstract != null) res.add(abstract)
@@ -210,7 +238,7 @@ private class C_OverrideConflictsProcessor(private val msgCtx: C_MessageContext)
     }
 
     private fun processConflictLocation(
-            abstract: C_AbstractDescriptor,
+            abstract: C_AbstractFunctionDescriptor,
             location: C_OverrideLocation,
             otherLocation: C_OverrideLocation
     ) {
@@ -248,18 +276,18 @@ private class C_OverrideConflictsProcessor(private val msgCtx: C_MessageContext)
     private class C_OverrideLocation(val import: C_ImportDescriptor?, val fnModule: R_ModuleName, val fnPos: S_Pos)
 
     private class C_OverrideEntry(
-            val abstract: C_AbstractDescriptor,
-            val override: C_OverrideDescriptor,
+            val abstract: C_AbstractFunctionDescriptor,
+            val override: C_OverrideFunctionDescriptor,
             val locations: List<C_OverrideLocation>
     )
 }
 
 private class C_MissingOverridesProcessor(
         private val msgCtx: C_MessageContext,
-        private val actualOverrides: Set<C_AbstractDescriptor>
+        private val actualOverrides: Set<C_AbstractFunctionDescriptor>
 ) {
     private val globalCtx = msgCtx.globalCtx
-    private val errorAbstracts = mutableSetOf<C_AbstractDescriptor>()
+    private val errorAbstracts = mutableSetOf<C_AbstractFunctionDescriptor>()
 
     fun processModule(module: C_ModuleDescriptor) {
         if (!module.header.abstract) {
@@ -284,8 +312,8 @@ private class C_MissingOverridesProcessor(
         }
     }
 
-    private fun collectAllOverrides(module: C_ModuleDescriptor): Set<C_AbstractDescriptor> {
-        val res = mutableSetOf<C_AbstractDescriptor>()
+    private fun collectAllOverrides(module: C_ModuleDescriptor): Set<C_AbstractFunctionDescriptor> {
+        val res = mutableSetOf<C_AbstractFunctionDescriptor>()
 
         for (file in module.importsDescriptor().files) {
             res.addAll(file.overrides.mapNotNull { it.abstract() })
@@ -298,7 +326,7 @@ private class C_MissingOverridesProcessor(
         return res.toImmSet()
     }
 
-    private fun processFile(file: C_FileImportsDescriptor, allOverrides: Set<C_AbstractDescriptor>) {
+    private fun processFile(file: C_FileImportsDescriptor, allOverrides: Set<C_AbstractFunctionDescriptor>) {
         for ((import, impFile) in getImportedFiles(file, true)) {
             for (abstract in impFile.abstracts) {
                 if (!abstract.hasDefaultBody && abstract !in allOverrides) {
@@ -308,7 +336,7 @@ private class C_MissingOverridesProcessor(
         }
     }
 
-    private fun processMissingOverride(import: C_ImportDescriptor, abstract: C_AbstractDescriptor) {
+    private fun processMissingOverride(import: C_ImportDescriptor, abstract: C_AbstractFunctionDescriptor) {
         val fName = abstract.functionName()
         val fPos = abstract.functionPos()
         C_Errors.errOverrideMissing(msgCtx, import.pos, fName, fPos)

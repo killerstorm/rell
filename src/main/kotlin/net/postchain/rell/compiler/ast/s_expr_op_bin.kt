@@ -8,6 +8,7 @@ import net.postchain.rell.compiler.base.core.*
 import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.base.utils.C_Utils
+import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.compiler.vexpr.*
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
@@ -101,7 +102,7 @@ object S_AssignOp_Eq: S_AssignOp() {
         val dstType = destination.type()
         val srcType = srcExpr.type
 
-        val adapter = C_Types.adapt(dstType, srcType, pos, "stmt_assign_type", "Assignment type mismatch")
+        val adapter = C_Types.adapt(dstType, srcType, pos) { "stmt_assign_type" toCodeMsg "Assignment type mismatch" }
         val srcAdapterExpr = adapter.adaptExpr(ctx, srcExpr)
         val rSrcAdapterExpr = srcAdapterExpr.toRExpr()
 
@@ -128,7 +129,9 @@ object S_AssignOp_Eq: S_AssignOp() {
         val adapter = attr.type.getTypeAdapter(expr.type)
         val expr2 = if (adapter == null) {
             val name = attr.name
-            C_Errors.errTypeMismatch(ctx.msgCtx, pos, expr.type, attr.type, "stmt_assign_type", "Type mismatch for '$name'")
+            C_Errors.errTypeMismatch(ctx.msgCtx, pos, expr.type, attr.type) {
+                "stmt_assign_type" toCodeMsg "Type mismatch for '$name'"
+            }
             C_Utils.errorDbExpr(attr.type)
         } else {
             adapter.adaptExprDb(expr)
@@ -188,8 +191,8 @@ sealed class C_BinOp {
     companion object {
         fun errTypeMismatch(msgCtx: C_MessageContext, pos: S_Pos, op: String, leftType: R_Type, rightType: R_Type) {
             if (leftType.isNotError() && rightType.isNotError()) {
-                msgCtx.error(pos, "binop_operand_type:$op:[$leftType]:[$rightType]",
-                        "Wrong operand types for '$op': $leftType, $rightType")
+                msgCtx.error(pos, "binop_operand_type:$op:[${leftType.strCode()}]:[${rightType.strCode()}]",
+                        "Wrong operand types for '$op': ${leftType.str()}, ${rightType.str()}")
             }
         }
     }
@@ -644,7 +647,9 @@ class S_BinaryExpr(val head: S_Expr, val tail: List<S_BinaryExprTail>): S_Expr(h
         override fun compile(ctx: C_ExprContext): V_Expr {
             val cExpr = expr.compile(ctx)
             val vExpr = cExpr.value()
-            C_Utils.checkUnitType(expr.startPos, vExpr.type, "expr_operand_unit", "Operand expression returns nothing")
+            C_Utils.checkUnitType(expr.startPos, vExpr.type) {
+                "expr_operand_unit" toCodeMsg "Operand expression returns nothing"
+            }
             return vExpr
         }
 

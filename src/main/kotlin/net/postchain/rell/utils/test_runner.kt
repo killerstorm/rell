@@ -8,6 +8,7 @@ import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_FunctionDefinition
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.sql.SqlManager
 import net.postchain.rell.sql.SqlUtils
 
@@ -15,11 +16,11 @@ private val PRINT_SEPARATOR = "-".repeat(72)
 
 sealed class TestResult
 
-private object TestResult_OK: TestResult() {
+object TestResult_OK: TestResult() {
     override fun toString() = "OK"
 }
 
-private class TestResult_Fail(val error: Throwable): TestResult() {
+class TestResult_Fail(val error: Throwable): TestResult() {
     override fun toString() = "FAILED"
 }
 
@@ -29,7 +30,7 @@ class TestRunnerContext(
         private val globalCtx: Rt_GlobalContext,
         private val chainCtx: Rt_ChainContext,
         private val blockRunnerStrategy: Rt_BlockRunnerStrategy,
-        private val app: R_App
+        val app: R_App
 ) {
     fun createAppContext(): Rt_AppContext = Rt_AppContext(
             globalCtx,
@@ -40,7 +41,6 @@ class TestRunnerContext(
             replOut = null,
             blockRunnerStrategy = blockRunnerStrategy
     )
-
 }
 
 class TestRunnerChain(val name: String, val iid: Long) {
@@ -64,6 +64,8 @@ class TestRunnerResults {
     fun add(case: TestRunnerCase, value: TestResult) {
         results.add(case to value)
     }
+
+    fun getResults() = results.toImmList()
 
     fun print(): Boolean {
         println()
@@ -91,6 +93,18 @@ class TestRunnerResults {
 }
 
 object TestRunner {
+    fun getTestFunctions(app: R_App): List<R_FunctionDefinition> {
+        val modules = app.modules.filter { it.test }.sortedBy { it.name }
+        val fns = modules.flatMap { getTestFunctions(it) }
+        return fns
+    }
+
+    fun getTestFunctions(module: R_Module): List<R_FunctionDefinition> {
+        return module.functions.values
+                .filter { it.moduleLevelName == "test" || it.moduleLevelName.startsWith("test_") }
+                .filter { it.params().isEmpty() }
+    }
+
     fun runTests(testCtx: TestRunnerContext, cases: List<TestRunnerCase>): Boolean {
         val testRes = TestRunnerResults()
         runTests(testCtx, cases, testRes)
@@ -133,17 +147,5 @@ object TestRunner {
                 TestResult_Fail(e)
             }
         }
-    }
-
-    fun getTestFunctions(app: R_App): List<R_FunctionDefinition> {
-        val modules = app.modules.filter { it.test }.sortedBy { it.name }
-        val fns = modules.flatMap { getTestFunctions(it) }
-        return fns
-    }
-
-    fun getTestFunctions(module: R_Module): List<R_FunctionDefinition> {
-        return module.functions.values
-                .filter { it.moduleLevelName == "test" || it.moduleLevelName.startsWith("test_") }
-                .filter { it.params().isEmpty() }
     }
 }

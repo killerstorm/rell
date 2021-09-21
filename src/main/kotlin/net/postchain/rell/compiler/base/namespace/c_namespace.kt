@@ -6,20 +6,19 @@ package net.postchain.rell.compiler.base.namespace
 
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.compiler.base.def.C_GlobalConstantDefinition
+import net.postchain.rell.compiler.ast.S_QualifiedName
 import net.postchain.rell.compiler.base.core.C_MessageContext
+import net.postchain.rell.compiler.base.def.C_GlobalConstantDefinition
+import net.postchain.rell.compiler.base.def.C_GlobalFunction
+import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.utils.C_MessageType
 import net.postchain.rell.compiler.base.utils.C_Utils
-import net.postchain.rell.compiler.base.expr.*
-import net.postchain.rell.compiler.base.fn.C_GlobalFunction
 import net.postchain.rell.compiler.vexpr.V_ConstantValueExpr
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.LateGetter
-import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
-import org.apache.commons.lang3.StringUtils
 import java.util.function.Supplier
 
 class C_Deprecated(
@@ -50,7 +49,7 @@ enum class C_DeclarationType(val msg: String) {
     CONSTANT("constant"),
     ;
 
-    val capitalizedMsg = StringUtils.capitalize(msg)
+    val capitalizedMsg = msg.capitalize()
 }
 
 class C_DefProxyDeprecation(val type: C_DeclarationType, val deprecated: C_Deprecated)
@@ -60,17 +59,17 @@ class C_DefProxy<T> private constructor(
         private val ambiguous: Boolean = false,
         private val deprecation: C_DefProxyDeprecation? = null
 ) {
-    fun getDef(msgCtx: C_MessageContext, name: List<S_Name>): T {
+    fun getDef(msgCtx: C_MessageContext, name: S_QualifiedName): T {
         val res = supplier.get()
 
         if (ambiguous) {
-            val lastName = name.last()
-            val qName = C_Utils.nameStr(name)
+            val lastName = name.last
+            val qName = name.str()
             msgCtx.error(lastName.pos, "name:ambig:$qName", "Name '$qName' is ambiguous")
         }
 
         if (deprecation != null) {
-            val simpleName = name.last()
+            val simpleName = name.last
             deprecatedMessage(msgCtx, simpleName.pos, simpleName.str, deprecation)
         }
 
@@ -120,7 +119,7 @@ class C_DefProxy<T> private constructor(
             val type = deprecation.type
             val deprecated = deprecation.deprecated
 
-            val typeStr = StringUtils.capitalize(type.msg)
+            val typeStr = type.msg.capitalize()
             val depCode = deprecated.detailsCode()
             val depStr = deprecated.detailsMessage()
             val code = "deprecated:$type:$nameMsg$depCode"
@@ -136,21 +135,15 @@ class C_DefProxy<T> private constructor(
 
 class C_DefRef<T>(
         val msgCtx: C_MessageContext,
-        name: List<S_Name>,
+        val name: S_QualifiedName,
         val proxy: C_DefProxy<T>
 ) {
-    val name = name.toImmList()
-
-    init {
-        check(this.name.isNotEmpty())
-    }
-
     fun getDef(): T {
         val res = proxy.getDef(msgCtx, name)
         return res
     }
 
-    fun <R> sub(subName: S_Name, subProxy: C_DefProxy<R>) = C_DefRef(msgCtx, name + subName, subProxy)
+    fun <R> sub(subName: S_Name, subProxy: C_DefProxy<R>) = C_DefRef(msgCtx, name.add(subName), subProxy)
 }
 
 class C_NamespaceRef(
@@ -169,17 +162,17 @@ class C_NamespaceRef(
     }
 
     private fun <T> wrap(name: S_Name, proxy: C_DefProxy<T>?): C_DefRef<T>? {
-        return if (proxy == null) null else C_DefRef(msgCtx, path + name, proxy)
+        return if (proxy == null) null else C_DefRef(msgCtx, S_QualifiedName(path + name), proxy)
     }
 
     companion object {
-        fun create(msgCtx: C_MessageContext, path: List<S_Name>, proxy: C_DefProxy<C_Namespace>): C_NamespaceRef {
-            return C_NamespaceRef(msgCtx, path, proxy.getDef(msgCtx, path))
+        fun create(msgCtx: C_MessageContext, name: S_QualifiedName, proxy: C_DefProxy<C_Namespace>): C_NamespaceRef {
+            return C_NamespaceRef(msgCtx, name.parts, proxy.getDef(msgCtx, name))
         }
 
         fun create(ref: C_DefRef<C_Namespace>): C_NamespaceRef {
             val ns = ref.getDef()
-            return C_NamespaceRef(ref.msgCtx, ref.name, ns)
+            return C_NamespaceRef(ref.msgCtx, ref.name.parts, ns)
         }
     }
 }
@@ -271,21 +264,21 @@ class C_NamespaceValueContext(val exprCtx: C_ExprContext) {
 }
 
 abstract class C_NamespaceValue {
-    abstract fun toExpr(ctx: C_NamespaceValueContext, name: List<S_Name>): C_Expr
+    abstract fun toExpr(ctx: C_NamespaceValueContext, name: S_QualifiedName): C_Expr
 }
 
 abstract class C_NamespaceValue_VExpr: C_NamespaceValue() {
-    protected abstract fun toExpr0(ctx: C_NamespaceValueContext, name: List<S_Name>): V_Expr
+    protected abstract fun toExpr0(ctx: C_NamespaceValueContext, name: S_QualifiedName): V_Expr
 
-    final override fun toExpr(ctx: C_NamespaceValueContext, name: List<S_Name>): C_Expr {
+    final override fun toExpr(ctx: C_NamespaceValueContext, name: S_QualifiedName): C_Expr {
         val vExpr = toExpr0(ctx, name)
         return C_VExpr(vExpr)
     }
 }
 
 class C_NamespaceValue_RtValue(private val value: Rt_Value): C_NamespaceValue_VExpr() {
-    override fun toExpr0(ctx: C_NamespaceValueContext, name: List<S_Name>): V_Expr {
-        return V_ConstantValueExpr(ctx.exprCtx, name[0].pos, value)
+    override fun toExpr0(ctx: C_NamespaceValueContext, name: S_QualifiedName): V_Expr {
+        return V_ConstantValueExpr(ctx.exprCtx, name.pos, value)
     }
 }
 
@@ -294,37 +287,37 @@ class C_NamespaceValue_SysFunction(
         private val fn: R_SysFunction,
         private val pure: Boolean
 ): C_NamespaceValue_VExpr() {
-    override fun toExpr0(ctx: C_NamespaceValueContext, name: List<S_Name>): V_Expr {
+    override fun toExpr0(ctx: C_NamespaceValueContext, name: S_QualifiedName): V_Expr {
         return C_Utils.createSysGlobalPropExpr(ctx.exprCtx, resultType, fn, name, pure = pure)
     }
 }
 
 class C_NamespaceValue_Entity(private val typeProxy: C_DefProxy<R_Type>): C_NamespaceValue() {
-    override fun toExpr(ctx: C_NamespaceValueContext, name: List<S_Name>): C_Expr {
+    override fun toExpr(ctx: C_NamespaceValueContext, name: S_QualifiedName): C_Expr {
         val typeRef = C_DefRef(ctx.msgCtx, name, typeProxy)
-        return C_TypeNameExpr(name.last().pos, typeRef)
+        return C_TypeNameExpr(name.last.pos, typeRef)
     }
 }
 
 class C_NamespaceValue_Enum(private val rEnum: R_EnumDefinition): C_NamespaceValue() {
-    override fun toExpr(ctx: C_NamespaceValueContext, name: List<S_Name>) = C_EnumExpr(ctx.msgCtx, name, rEnum)
+    override fun toExpr(ctx: C_NamespaceValueContext, name: S_QualifiedName) = C_EnumExpr(ctx.msgCtx, name, rEnum)
 }
 
 class C_NamespaceValue_Namespace(private val nsProxy: C_DefProxy<C_Namespace>): C_NamespaceValue() {
-    override fun toExpr(ctx: C_NamespaceValueContext, name: List<S_Name>): C_Expr {
+    override fun toExpr(ctx: C_NamespaceValueContext, name: S_QualifiedName): C_Expr {
         val nsRef = C_NamespaceRef.create(ctx.msgCtx, name, nsProxy)
         return C_NamespaceExpr(name, nsRef)
     }
 }
 
 class C_NamespaceValue_Object(val rObject: R_ObjectDefinition): C_NamespaceValue() {
-    override fun toExpr(ctx: C_NamespaceValueContext, name: List<S_Name>): C_Expr {
+    override fun toExpr(ctx: C_NamespaceValueContext, name: S_QualifiedName): C_Expr {
         return C_ObjectExpr(ctx.exprCtx, name, rObject)
     }
 }
 
 class C_NamespaceValue_Struct(private val struct: R_Struct): C_NamespaceValue() {
-    override fun toExpr(ctx: C_NamespaceValueContext, name: List<S_Name>): C_Expr {
+    override fun toExpr(ctx: C_NamespaceValueContext, name: S_QualifiedName): C_Expr {
         val ns = ctx.globalCtx.libFunctions.makeStructNamespace(struct)
         val nsProxy = C_DefProxy.create(ns)
         val nsRef = C_NamespaceRef.create(ctx.msgCtx, name, nsProxy)
@@ -333,7 +326,7 @@ class C_NamespaceValue_Struct(private val struct: R_Struct): C_NamespaceValue() 
 }
 
 class C_NamespaceValue_GlobalConstant(private val cDef: C_GlobalConstantDefinition): C_NamespaceValue_VExpr() {
-    override fun toExpr0(ctx: C_NamespaceValueContext, name: List<S_Name>): V_Expr {
-        return cDef.compileRead(ctx.exprCtx, name.last())
+    override fun toExpr0(ctx: C_NamespaceValueContext, name: S_QualifiedName): V_Expr {
+        return cDef.compileRead(ctx.exprCtx, name.last)
     }
 }

@@ -12,11 +12,12 @@ import net.postchain.rell.compiler.base.core.C_LocalVar
 import net.postchain.rell.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.compiler.base.utils.C_Constants
 import net.postchain.rell.compiler.vexpr.*
-import net.postchain.rell.model.*
+import net.postchain.rell.model.R_Type
+import net.postchain.rell.model.R_VarParam
+import net.postchain.rell.model.R_VarPtr
 import net.postchain.rell.model.expr.R_ColAtFieldSummarization_None
 import net.postchain.rell.model.expr.R_ColAtWhatExtras
 import net.postchain.rell.runtime.Rt_Value
-import net.postchain.rell.utils.Nullable
 import net.postchain.rell.utils.toImmList
 
 
@@ -44,7 +45,7 @@ class C_AtFrom_Iterable(
 
     private val innerExprCtx: C_ExprContext = let {
         val factsCtx = outerExprCtx.factsCtx.sub(C_VarFacts.of(inited = mapOf(placeholderVar.uid to C_VarFact.YES)))
-        outerExprCtx.update(blkCtx = innerBlkCtx, factsCtx = factsCtx, atCtx = Nullable(innerAtCtx))
+        outerExprCtx.update(blkCtx = innerBlkCtx, factsCtx = factsCtx, atCtx = innerAtCtx)
     }
 
     override fun innerExprCtx() = innerExprCtx
@@ -120,7 +121,8 @@ class C_AtFrom_Iterable(
                         var comparator = type.comparator()
                         if (comparator != null && !sort.value.asc) comparator = comparator.reversed()
                         if (comparator != null) IndexedValue(i, comparator) else {
-                            innerExprCtx.msgCtx.error(sort.pos, "at:expr:sort:type:${type}", "Type ${type} is not sortable")
+                            innerExprCtx.msgCtx.error(sort.pos, "at:expr:sort:type:${type.strCode()}",
+                                    "Type ${type.str()} is not sortable")
                             null
                         }
                     }

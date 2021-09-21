@@ -4,13 +4,10 @@
 
 package net.postchain.rell.compiler.base.expr
 
-import net.postchain.rell.compiler.ast.C_BinOp
-import net.postchain.rell.compiler.ast.S_CallArgument
-import net.postchain.rell.compiler.ast.S_Name
-import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.ast.*
 import net.postchain.rell.compiler.base.core.*
-import net.postchain.rell.compiler.base.fn.C_GlobalFunction
-import net.postchain.rell.compiler.base.fn.C_StructGlobalFunction
+import net.postchain.rell.compiler.base.def.C_GlobalFunction
+import net.postchain.rell.compiler.base.def.C_StructGlobalFunction
 import net.postchain.rell.compiler.base.namespace.*
 import net.postchain.rell.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.compiler.base.utils.C_Error
@@ -23,8 +20,6 @@ import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
 import net.postchain.rell.model.stmt.*
 import net.postchain.rell.runtime.Rt_EnumValue
-import net.postchain.rell.utils.Nullable
-import net.postchain.rell.utils.orElse
 
 class C_ExprContext private constructor(
         val blkCtx: C_BlockContext,
@@ -44,24 +39,21 @@ class C_ExprContext private constructor(
     fun makeAtEntity(rEntity: R_EntityDefinition, atExprId: R_AtExprId) = R_DbAtEntity(rEntity, appCtx.nextAtEntityId(atExprId))
 
     fun update(
-            blkCtx: C_BlockContext? = null,
-            factsCtx: C_VarFactsContext? = null,
-            atCtx: Nullable<C_AtContext>? = null,
-            insideGuardBlock: Boolean? = null
+            blkCtx: C_BlockContext = this.blkCtx,
+            factsCtx: C_VarFactsContext = this.factsCtx,
+            atCtx: C_AtContext? = this.atCtx,
+            insideGuardBlock: Boolean = this.insideGuardBlock
     ): C_ExprContext {
-        val blkCtx2 = blkCtx ?: this.blkCtx
-        val factsCtx2 = factsCtx ?: this.factsCtx
-        val atCtx2 = atCtx.orElse(this.atCtx)
-        val insideGuardBlock2 = this.insideGuardBlock || (insideGuardBlock ?: false)
+        val insideGuardBlock2 = insideGuardBlock || this.insideGuardBlock
         return if (
-                blkCtx2 == this.blkCtx
-                && factsCtx2 == this.factsCtx
-                && atCtx2 == this.atCtx
+                blkCtx === this.blkCtx
+                && factsCtx === this.factsCtx
+                && atCtx === this.atCtx
                 && insideGuardBlock2 == this.insideGuardBlock
         ) this else C_ExprContext(
-                blkCtx = blkCtx2,
-                factsCtx = factsCtx2,
-                atCtx = atCtx2,
+                blkCtx = blkCtx,
+                factsCtx = factsCtx,
+                atCtx = atCtx,
                 insideGuardBlock = insideGuardBlock2
         )
     }
@@ -369,9 +361,9 @@ class C_VExpr(private val vExpr: V_Expr): C_Expr() {
     }
 }
 
-class C_NamespaceExpr(private val name: List<S_Name>, private val nsRef: C_NamespaceRef): C_Expr() {
+class C_NamespaceExpr(private val name: S_QualifiedName, private val nsRef: C_NamespaceRef): C_Expr() {
     override fun kind() = C_ExprKind.NAMESPACE
-    override fun startPos() = name[0].pos
+    override fun startPos() = name.pos
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
         val valueExpr = memberValue(ctx.nsValueCtx, memberName)
@@ -385,7 +377,7 @@ class C_NamespaceExpr(private val name: List<S_Name>, private val nsRef: C_Names
 
     private fun memberValue(ctx: C_NamespaceValueContext, memberName: S_Name): C_Expr? {
         val valueRef = nsRef.value(memberName)
-        val valueExpr = valueRef?.getDef()?.toExpr(ctx, name + listOf(memberName))
+        val valueExpr = valueRef?.getDef()?.toExpr(ctx, name.add(memberName))
         if (valueExpr != null) return valueExpr
 
         val typeRef = nsRef.type(memberName)
@@ -417,11 +409,11 @@ sealed class C_StructExpr(
 }
 
 class C_NamespaceStructExpr(
-        name: List<S_Name>,
+        name: S_QualifiedName,
         struct: R_Struct,
         private val nsRef: C_NamespaceRef
-): C_StructExpr(name[0].pos, struct) {
-    override val baseName = C_Utils.nameStr(name)
+): C_StructExpr(name.pos, struct) {
+    override val baseName = name.str()
 
     override fun memberFunction(ctx: C_ExprContext, memberName: S_Name): C_Expr? {
         val fnRef = nsRef.function(memberName)
@@ -435,12 +427,12 @@ class C_MirrorStructExpr(pos: S_Pos, struct: R_Struct, private val ns: C_Namespa
     override fun memberFunction(ctx: C_ExprContext, memberName: S_Name): C_Expr? {
         val fnProxy = ns.function(memberName.str)
         fnProxy ?: return null
-        val fnRef = C_DefRef(ctx.msgCtx, listOf(memberName), fnProxy)
+        val fnRef = C_DefRef(ctx.msgCtx, S_QualifiedName(memberName), fnProxy)
         return C_FunctionExpr(memberName, fnRef)
     }
 }
 
-class C_ObjectExpr(exprCtx: C_ExprContext, name: List<S_Name>, rObject: R_ObjectDefinition): C_Expr() {
+class C_ObjectExpr(exprCtx: C_ExprContext, name: S_QualifiedName, rObject: R_ObjectDefinition): C_Expr() {
     private val vExpr = V_ObjectExpr(exprCtx, name, rObject)
 
     override fun kind() = C_ExprKind.OBJECT
@@ -452,9 +444,13 @@ class C_ObjectExpr(exprCtx: C_ExprContext, name: List<S_Name>, rObject: R_Object
     }
 }
 
-class C_EnumExpr(private val msgCtx: C_MessageContext, private val name: List<S_Name>, private val rEnum: R_EnumDefinition): C_Expr() {
+class C_EnumExpr(
+        private val msgCtx: C_MessageContext,
+        private val name: S_QualifiedName,
+        private val rEnum: R_EnumDefinition
+): C_Expr() {
     override fun kind() = C_ExprKind.ENUM
-    override fun startPos() = name[0].pos
+    override fun startPos() = name.pos
 
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
         val valueExpr = memberValue(ctx, memberName)
@@ -477,7 +473,7 @@ class C_EnumExpr(private val msgCtx: C_MessageContext, private val name: List<S_
     private fun memberFn(ctx: C_ExprContext, memberName: S_Name): C_Expr? {
         val fn = ctx.globalCtx.libFunctions.getTypeStaticFunction(rEnum.type, memberName.str)
         return if (fn == null) null else {
-            val fnRef = C_DefRef(msgCtx, name + memberName, C_DefProxy.create(fn))
+            val fnRef = C_DefRef(msgCtx, name.add(memberName), C_DefProxy.create(fn))
             C_FunctionExpr(memberName, fnRef)
         }
     }
@@ -515,7 +511,7 @@ class C_TypeExpr(private val pos: S_Pos, private val type: R_Type): C_Expr() {
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
         val fn = ctx.globalCtx.libFunctions.getTypeStaticFunction(type, memberName.str)
         if (fn == null) throw C_Errors.errUnknownName(type, memberName)
-        val fnRef = C_DefRef(ctx.msgCtx, listOf(memberName), C_DefProxy.create(fn))
+        val fnRef = C_DefRef(ctx.msgCtx, S_QualifiedName(memberName), C_DefProxy.create(fn))
         return C_FunctionExpr(memberName, fnRef)
     }
 }
@@ -550,12 +546,12 @@ class C_ValueFunctionExpr private constructor(
 
 class C_NamespaceValueExpr(
         private val ctx: C_NamespaceValueContext,
-        private val name: List<S_Name>,
+        private val name: S_QualifiedName,
         private val value: C_DefRef<C_NamespaceValue>
 ): C_Expr() {
     private fun expr(): C_Expr = value.getDef().toExpr(ctx, name)
     override fun kind() = expr().kind()
-    override fun startPos() = name.last().pos
+    override fun startPos() = name.pos
     override fun value() = expr().value()
     override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean) = expr().member(ctx, memberName, safe)
 

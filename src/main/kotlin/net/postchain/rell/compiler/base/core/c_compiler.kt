@@ -408,15 +408,15 @@ object C_Compiler {
     ): List<C_MidModule> {
         val modLdr = C_ModuleLoader(msgCtx, sourceDir, immSetOf())
 
-        for (moduleName in modSel.testRootModules) {
-            modLdr.loadTestModules(moduleName)
-        }
-
         for (moduleName in modSel.modules) {
             modLdr.loadModule(moduleName)
         }
 
-        return modLdr.getLoadedModules()
+        for (moduleName in modSel.testRootModules) {
+            modLdr.loadTestModules(moduleName)
+        }
+
+        return modLdr.finish()
     }
 
     private fun checkMainModules(

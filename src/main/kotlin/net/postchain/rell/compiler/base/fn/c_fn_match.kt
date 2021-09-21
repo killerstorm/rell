@@ -199,7 +199,7 @@ class C_GlobalFuncCaseCtx(
 class C_MemberFuncCaseCtx(val member: C_MemberLink, val memberName: String): C_FuncCaseCtx(member.linkPos) {
     private val fullName by lazy {
         val baseType = C_Types.removeNullable(member.base.type)
-        "${baseType.toStrictString()}.$memberName"
+        "${baseType.strCode()}.$memberName"
     }
 
     override fun simpleNameMsg() = memberName
@@ -350,8 +350,8 @@ class C_FormalParamsFuncCaseMatch<CtxT: C_FuncCaseCtx>(
 object C_FuncMatchUtils {
     fun errNoMatch(ctx: C_ExprContext, pos: S_Pos, name: String, args: List<R_Type>) {
         if (args.any { it.isError() }) return
-        val argsStrShort = args.joinToString(",") { it.toStrictString() }
-        val argsStr = args.joinToString { it.toStrictString() }
+        val argsStrShort = args.joinToString(",") { it.strCode() }
+        val argsStr = args.joinToString { it.strCode() }
         ctx.msgCtx.error(pos, "expr_call_argtypes:$name:$argsStrShort", "Function '$name' undefined for arguments ($argsStr)")
     }
 }

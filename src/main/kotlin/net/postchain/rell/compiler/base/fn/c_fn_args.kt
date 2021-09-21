@@ -17,11 +17,12 @@ import net.postchain.rell.compiler.base.expr.C_CallArgumentValue_Wildcard
 import net.postchain.rell.compiler.base.expr.C_ExprContext
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.base.utils.C_Utils
+import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_FunctionCallArgs
+import net.postchain.rell.model.R_Type
 import net.postchain.rell.model.expr.R_PartialArgMapping
 import net.postchain.rell.model.expr.R_PartialCallMapping
-import net.postchain.rell.model.R_Type
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmList
 import org.apache.commons.lang3.mutable.MutableBoolean
@@ -119,8 +120,8 @@ private sealed class C_CallArgsAdapter<ArgT> {
             if (m == null && argType.isNotError()) {
                 val paramName = param.nameCodeMsg()
                 val fnNameCode = callInfo.functionName ?: "?"
-                val code = "expr_call_argtype:$fnNameCode:${paramName.code}:${paramType.toStrictString()}:${argType.toStrictString()}"
-                val msg = "Wrong argument type for parameter ${paramName.msg}: $argType instead of $paramType"
+                val code = "expr_call_argtype:$fnNameCode:${paramName.code}:${paramType.strCode()}:${argType.strCode()}"
+                val msg = "Wrong argument type for parameter ${paramName.msg}: ${argType.str()} instead of ${paramType.str()}"
                 ctx.msgCtx.error(callInfo.callPos, code, msg)
             }
             m
@@ -420,7 +421,10 @@ private object C_ArgsListProcessor {
             val fnArg = when (it.value) {
                 is C_CallArgumentValue_Expr -> {
                     val type = it.value.vExpr.type
-                    if (!C_Utils.checkUnitType(ctx.msgCtx, it.value.pos, type, "expr_arg_unit", "Argument expression returns nothing")) {
+                    val unitOk = C_Utils.checkUnitType(ctx.msgCtx, it.value.pos, type) {
+                        "expr_arg_unit" toCodeMsg "Argument expression returns nothing"
+                    }
+                    if (!unitOk) {
                         failFlag.setTrue()
                     }
                     C_FunctionCallArgument_Expr(it.value.vExpr)

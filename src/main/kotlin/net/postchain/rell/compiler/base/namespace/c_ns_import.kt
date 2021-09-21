@@ -6,6 +6,7 @@ package net.postchain.rell.compiler.base.namespace
 
 import com.google.common.collect.Multimap
 import net.postchain.rell.compiler.ast.S_Name
+import net.postchain.rell.compiler.ast.S_QualifiedName
 import net.postchain.rell.compiler.base.core.C_MessageContext
 import net.postchain.rell.compiler.base.module.C_ModuleKey
 import net.postchain.rell.compiler.base.utils.*
@@ -391,13 +392,13 @@ private class C_NsImp_ImportResolver(
     }
 
     private fun errExactUnresolved(imp: C_NsAsm_ExactImport): C_Error {
-        val fullName = C_Utils.appLevelName(imp.module, imp.path + imp.name)
+        val fullName = C_Utils.appLevelName(imp.module, S_QualifiedName(imp.path + imp.name))
         val code = "import:exact:unresolved:$fullName"
         return C_Error.stop(imp.name.pos, code, "Cannot resolve import: '$fullName'")
     }
 
     private fun errExactRecursion(imp: C_NsAsm_ExactImport): C_Error {
-        val fullName = C_Utils.appLevelName(imp.module, imp.path + imp.name)
+        val fullName = C_Utils.appLevelName(imp.module, S_QualifiedName(imp.path + imp.name))
         val code = "import:exact:recursion:$fullName"
         return C_Error.stop(imp.name.pos, code, "Recursive import: '$fullName' points to itself")
     }

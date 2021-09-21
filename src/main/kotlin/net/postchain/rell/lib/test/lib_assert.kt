@@ -16,7 +16,10 @@ import net.postchain.rell.compiler.base.utils.C_SpecialGlobalFuncCaseMatch
 import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.compiler.vexpr.V_BinaryOp
 import net.postchain.rell.compiler.vexpr.V_Expr
-import net.postchain.rell.model.*
+import net.postchain.rell.model.R_BooleanType
+import net.postchain.rell.model.R_NullableType
+import net.postchain.rell.model.R_SysFunction_1
+import net.postchain.rell.model.R_UnitType
 import net.postchain.rell.model.expr.R_BinaryOp
 import net.postchain.rell.model.expr.R_Expr
 import net.postchain.rell.runtime.*
@@ -56,7 +59,7 @@ private object R_Fns {
     object AssertNull: R_SysFunction_1() {
         override fun call(arg: Rt_Value): Rt_Value {
             if (arg != Rt_NullValue) {
-                throw Rt_Error("assert_null:$arg", "expected null but was <$arg>")
+                throw Rt_Error("assert_null:${arg.strCode()}", "expected null but was <${arg.str()}>")
             }
             return Rt_UnitValue
         }
@@ -217,8 +220,8 @@ private class R_AssertEqualsExpr(
         val expectedValue = expected.evaluate(frame)
         val equalsValue = op.evaluate(actualValue, expectedValue)
         if (!equalsValue.asBoolean()) {
-            val code = "assert_equals:${actualValue.toStrictString()}:${expectedValue.toStrictString()}"
-            throw Rt_Error(code, "expected <$expectedValue> but was <$actualValue>")
+            val code = "assert_equals:${actualValue.strCode()}:${expectedValue.strCode()}"
+            throw Rt_Error(code, "expected <${expectedValue.str()}> but was <${actualValue.str()}>")
         }
         return Rt_UnitValue
     }
@@ -234,8 +237,8 @@ private class R_AssertNotEqualsExpr(
         val expectedValue = expected.evaluate(frame)
         val equalsValue = op.evaluate(actualValue, expectedValue)
         if (equalsValue.asBoolean()) {
-            val code = "assert_not_equals:${actualValue.toStrictString()}"
-            throw Rt_Error(code, "expected not <$actualValue>")
+            val code = "assert_not_equals:${actualValue.strCode()}"
+            throw Rt_Error(code, "expected not <${actualValue.str()}>")
         }
         return Rt_UnitValue
     }
@@ -257,8 +260,8 @@ private class R_AssertCompareExpr(
             val expectedValue = expectedExpr.evaluate(frame)
             val resValue = op.evaluate(actualValue, expectedValue)
             if (!resValue.asBoolean()) {
-                val code = "assert_compare:${op.code}:${actualValue.toStrictString()}:${expectedValue.toStrictString()}"
-                throw Rt_Error(code, "comparison failed: $actualValue ${op.code} $expectedValue")
+                val code = "assert_compare:${op.code}:${actualValue.strCode()}:${expectedValue.strCode()}"
+                throw Rt_Error(code, "comparison failed: ${actualValue.str()} ${op.code} ${expectedValue.str()}")
             }
         }
     }

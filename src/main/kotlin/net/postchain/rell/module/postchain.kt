@@ -20,6 +20,8 @@ import net.postchain.rell.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.utils.Rt_SqlExecutor
+import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.sql.ConnectionSqlExecutor
 import net.postchain.rell.sql.SqlInit
 import net.postchain.rell.sql.SqlInitLogging

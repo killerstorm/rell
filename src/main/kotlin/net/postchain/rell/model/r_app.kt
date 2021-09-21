@@ -7,20 +7,33 @@ package net.postchain.rell.model
 import net.postchain.gtv.Gtv
 import net.postchain.rell.compiler.base.utils.C_LateGetter
 import net.postchain.rell.model.expr.R_Expr
-import net.postchain.rell.runtime.toGtv
+import net.postchain.rell.model.expr.R_FunctionExtensions
+import net.postchain.rell.model.expr.R_FunctionExtensionsTable
+import net.postchain.rell.runtime.utils.toGtv
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 
-class R_DefinitionNames(val module: String, val namespace: String?, val simpleName: String) {
-    val qualifiedName = if (namespace == null) simpleName else "$namespace.$simpleName"
+class R_DefinitionNames(
+        val module: String,
+        val qualifiedName: String,
+        val simpleName: String,
+        val defId: R_DefinitionId
+) {
     val appLevelName = if (module.isEmpty()) qualifiedName else R_DefinitionId.appLevelName(module, qualifiedName)
-    val defId = R_DefinitionId(module, qualifiedName)
 
     override fun toString() = appLevelName
 }
 
-abstract class R_Definition(val names: R_DefinitionNames, val initFrameGetter: C_LateGetter<R_CallFrame>) {
+class R_DefinitionBase(
+        val names: R_DefinitionNames,
+        val initFrameGetter: C_LateGetter<R_CallFrame>
+)
+
+abstract class R_Definition(base: R_DefinitionBase) {
+    val names = base.names
+    val initFrameGetter = base.initFrameGetter
+
     val simpleName = names.simpleName
     val moduleLevelName = names.qualifiedName
     val appLevelName = names.appLevelName
@@ -101,7 +114,8 @@ class R_Attribute(
 }
 
 data class R_ModuleKey(val name: R_ModuleName, val externalChain: String?) {
-    override fun toString() = if (externalChain == null) name.toString() else "$name[$externalChain]"
+    fun str() = if (externalChain == null) name.toString() else "$name[$externalChain]"
+    override fun toString() = str()
 }
 
 class R_Module(
@@ -118,6 +132,7 @@ class R_Module(
         val queries: Map<String, R_QueryDefinition>,
         val functions: Map<String, R_FunctionDefinition>,
         val constants: Map<String, R_GlobalConstantDefinition>,
+        val imports: Set<R_ModuleName>,
         val moduleArgs: R_StructDefinition?
 ) {
     val key = R_ModuleKey(name, externalChain)
@@ -183,6 +198,7 @@ class R_App(
         operations: Map<R_MountName, R_OperationDefinition>,
         queries: Map<R_MountName, R_QueryDefinition>,
         constants: List<R_GlobalConstantDefinition>,
+        val functionExtensions: R_FunctionExtensionsTable,
         val externalChainsRoot: R_ExternalChainsRoot,
         externalChains: List<R_ExternalChainRef>,
         val sqlDefs: R_AppSqlDefs

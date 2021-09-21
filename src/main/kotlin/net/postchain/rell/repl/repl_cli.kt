@@ -13,6 +13,7 @@ import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.model.R_StackPos
 import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.sql.SqlManager
 import net.postchain.rell.utils.CommonUtils
 import org.apache.commons.lang3.StringUtils

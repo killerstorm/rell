@@ -465,4 +465,19 @@ class StructTest: BaseRellTest(false) {
         chk("s(456.0)", "s[x=dec[456]]")
         chk("s(x = 456.0)", "s[x=dec[456]]")
     }
+
+    @Test fun testRecursiveToString() {
+        def("struct s { a: integer; mutable next: s?; }")
+        def("""
+            function f(): s {
+                val s1 = s(a = 123, next = null);
+                val s2 = s(a = 456, next = s1);
+                s1.next = s2;
+                return s1;
+            }
+        """)
+
+        chk("'' + f()", "text[s{a=123,next=s{a=456,next=s{...}}}]")
+        chk("_strict_str(f())", "text[s[a=int[123],next=s[a=int[456],next=s[...]]]]")
+    }
 }

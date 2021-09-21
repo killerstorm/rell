@@ -5,6 +5,7 @@
 package net.postchain.rell.compiler.base.utils
 
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.base.def.C_GlobalFunction
 import net.postchain.rell.compiler.base.expr.C_ExprVarFacts
 import net.postchain.rell.compiler.base.expr.C_ExprContext
 import net.postchain.rell.compiler.base.fn.*

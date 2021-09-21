@@ -14,6 +14,7 @@ import net.postchain.rell.compiler.base.utils.C_LibUtils
 import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.model.R_ByteArrayType
 import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.utils.BytesKeyPair
 import net.postchain.rell.utils.toImmMap
 

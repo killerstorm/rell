@@ -6,6 +6,7 @@ package net.postchain.rell.model.expr
 
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.utils.chainToIterable
 import net.postchain.rell.utils.toImmList

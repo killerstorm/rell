@@ -6,12 +6,12 @@ package net.postchain.rell.model
 
 import net.postchain.gtv.Gtv
 import net.postchain.rell.compiler.base.core.C_CompilerPass
-import net.postchain.rell.compiler.base.utils.C_LateGetter
 import net.postchain.rell.compiler.base.utils.C_LateInit
 import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.model.stmt.R_Statement
 import net.postchain.rell.model.stmt.R_StatementResult_Return
 import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.utils.toGtv
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmList
 
@@ -26,26 +26,21 @@ class R_VarParam(val name: String, val type: R_Type, val ptr: R_VarPtr) {
     fun toParam() = R_Param(name, type)
 }
 
-sealed class R_RoutineDefinition(
-        names: R_DefinitionNames,
-        initFrameGetter: C_LateGetter<R_CallFrame>
-): R_Definition(names, initFrameGetter) {
+sealed class R_RoutineDefinition(base: R_DefinitionBase): R_Definition(base) {
     abstract fun params(): List<R_Param>
     abstract fun call(frame: Rt_CallFrame, args: List<Rt_Value>, callerFilePos: R_FilePos): Rt_Value
 }
 
 sealed class R_MountedRoutineDefinition(
-        names: R_DefinitionNames,
-        initFrameGetter: C_LateGetter<R_CallFrame>,
+        base: R_DefinitionBase,
         val mountName: R_MountName
-): R_RoutineDefinition(names, initFrameGetter)
+): R_RoutineDefinition(base)
 
 class R_OperationDefinition(
-        names: R_DefinitionNames,
-        initFrameGetter: C_LateGetter<R_CallFrame>,
+        base: R_DefinitionBase,
         mountName: R_MountName,
         val mirrorStructs: R_MirrorStructs
-): R_MountedRoutineDefinition(names, initFrameGetter, mountName) {
+): R_MountedRoutineDefinition(base, mountName) {
     private val internals = C_LateInit(C_CompilerPass.EXPRESSIONS, ERROR_INTERNALS)
 
     fun setInternals(varParams: List<R_VarParam>, body: R_Statement, frame: R_CallFrame) {
@@ -151,10 +146,9 @@ class R_SysQueryBody(retType: R_Type, params: List<R_Param>, private val fn: R_S
 }
 
 class R_QueryDefinition(
-        names: R_DefinitionNames,
-        initFrameGetter: C_LateGetter<R_CallFrame>,
+        base: R_DefinitionBase,
         mountName: R_MountName
-): R_MountedRoutineDefinition(names, initFrameGetter, mountName) {
+): R_MountedRoutineDefinition(base, mountName) {
     private val bodyLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_UserQueryBody.ERROR)
 
     fun setBody(body: R_QueryBody) {
@@ -180,7 +174,7 @@ class R_QueryDefinition(
         val caller = Rt_FrameCaller(frame, callerStackPos)
 
         val defCtx = frame.defCtx
-        val subDefCtx = Rt_DefinitionContext(defCtx.exeCtx, false, names.defId)
+        val subDefCtx = Rt_DefinitionContext(defCtx.exeCtx, false, defId)
         val res = body.call(subDefCtx, args, caller)
         return res
     }
@@ -212,26 +206,23 @@ class R_FunctionBody(
     }
 }
 
-class R_FunctionDefinition(
-        names: R_DefinitionNames,
-        initFrameGetter: C_LateGetter<R_CallFrame>
-): R_RoutineDefinition(names, initFrameGetter) {
+class R_FunctionBase {
     private val bodyLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_FunctionBody.ERROR)
 
     fun setBody(body: R_FunctionBody) {
         bodyLate.set(body)
     }
 
-    override fun params() = bodyLate.get().params
+    fun getBody() = bodyLate.get()
 
-    fun callTop(exeCtx: Rt_ExecutionContext, args: List<Rt_Value>, dbUpdateAllowed: Boolean = false): Rt_Value {
+    fun callTop(exeCtx: Rt_ExecutionContext, args: List<Rt_Value>, dbUpdateAllowed: Boolean): Rt_Value {
         val body = bodyLate.get()
         val defCtx = Rt_DefinitionContext(exeCtx, dbUpdateAllowed, body.frame.defId)
         val res = call0(defCtx, args, null)
         return res
     }
 
-    override fun call(frame: Rt_CallFrame, args: List<Rt_Value>, callerFilePos: R_FilePos): Rt_Value {
+    fun call(frame: Rt_CallFrame, args: List<Rt_Value>, callerFilePos: R_FilePos): Rt_Value {
         val caller = createFrameCaller(frame, callerFilePos)
         return call0(frame.defCtx, args, caller)
     }
@@ -245,14 +236,6 @@ class R_FunctionDefinition(
 
         val retVal = if (res is R_StatementResult_Return) res.value else null
         return retVal ?: Rt_UnitValue
-    }
-
-    override fun toMetaGtv(): Gtv {
-        val body = bodyLate.get()
-        return mapOf(
-                "type" to body.type.toMetaGtv(),
-                "parameters" to params().map { it.toMetaGtv() }.toGtv()
-        ).toGtv()
     }
 
     companion object {
@@ -274,6 +257,29 @@ class R_FunctionDefinition(
     }
 }
 
+class R_FunctionDefinition(
+        base: R_DefinitionBase,
+        private val fnBase: R_FunctionBase
+): R_RoutineDefinition(base) {
+    override fun params() = fnBase.getBody().params
+
+    fun callTop(exeCtx: Rt_ExecutionContext, args: List<Rt_Value>, dbUpdateAllowed: Boolean = false): Rt_Value {
+        return fnBase.callTop(exeCtx, args, dbUpdateAllowed)
+    }
+
+    override fun call(frame: Rt_CallFrame, args: List<Rt_Value>, callerFilePos: R_FilePos): Rt_Value {
+        return fnBase.call(frame, args, callerFilePos)
+    }
+
+    override fun toMetaGtv(): Gtv {
+        val body = fnBase.getBody()
+        return mapOf(
+                "type" to body.type.toMetaGtv(),
+                "parameters" to params().map { it.toMetaGtv() }.toGtv()
+        ).toGtv()
+    }
+}
+
 private fun checkCallArgs(routine: R_RoutineDefinition, params: List<R_Param>, args: List<Rt_Value>) {
     val name = routine.appLevelName
 
@@ -286,9 +292,9 @@ private fun checkCallArgs(routine: R_RoutineDefinition, params: List<R_Param>, a
         val param = params[i]
         val argType = args[i].type()
         if (!param.type.isAssignableFrom(argType)) {
-            throw Rt_Error("fn_wrong_arg_type:$name:${param.type.toStrictString()}:${argType.toStrictString()}",
+            throw Rt_Error("fn_wrong_arg_type:$name:${param.type.strCode()}:${argType.strCode()}",
                     "Wrong type of argument ${param.name} for '$name': " +
-                            "${argType.toStrictString()} instead of ${param.type.toStrictString()}")
+                            "${argType.strCode()} instead of ${param.type.strCode()}")
         }
     }
 }

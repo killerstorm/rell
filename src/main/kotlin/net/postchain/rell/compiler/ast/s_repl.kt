@@ -34,7 +34,7 @@ class S_ReplCommand(steps: List<S_ReplStep>, expr: S_Expr?) {
 
         val srcCtx = modLdr.readerCtx.createModuleSourceContext(currentModuleName ?: R_ModuleName.EMPTY)
         val midMembers = defs.mapNotNull { it.compile(srcCtx) }
-        val midModules = modLdr.getLoadedModules()
+        val midModules = modLdr.finish()
 
         val midCompiler = C_MidModuleCompiler(msgCtx, midModules)
         if (currentModuleName != null) {

@@ -98,7 +98,7 @@ class RellReplTester(
                 val s = ReplValueFormatter.format(value, format)
                 output.add(s ?: "null")
             } else {
-                val s = value.toStrictString()
+                val s = value.strCode()
                 output.add("RES:$s")
             }
         }

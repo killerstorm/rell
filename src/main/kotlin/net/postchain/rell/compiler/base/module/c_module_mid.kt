@@ -5,10 +5,9 @@
 package net.postchain.rell.compiler.base.module
 
 import net.postchain.rell.compiler.ast.*
-import net.postchain.rell.compiler.base.core.*
+import net.postchain.rell.compiler.base.core.C_MessageContext
+import net.postchain.rell.compiler.base.modifier.*
 import net.postchain.rell.compiler.base.utils.C_SourcePath
-import net.postchain.rell.compiler.base.utils.C_ValidationExecutor
-import net.postchain.rell.compiler.base.utils.C_ValidationManager
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.model.R_MountName
 import net.postchain.rell.utils.CommonUtils
@@ -18,23 +17,28 @@ import net.postchain.rell.utils.toImmMap
 
 class C_MidModuleContext(
         val msgCtx: C_MessageContext,
-        valExec: C_ValidationExecutor,
         val modImporter: C_MidModuleImporter,
         val extChain: C_ExtChainName?
 ) {
-    val modifierCtx = C_ModifierContext(msgCtx, valExec)
+    val modifierCtx = C_ModifierContext(msgCtx)
 }
 
-class C_MidMemberContext(val modCtx: C_MidModuleContext, val extChain: C_ExtChainName?)
+class C_MidMemberContext(val modCtx: C_MidModuleContext, val extChain: C_ExtChainName?) {
+    fun externalChain(modExternal: C_ModifierValue<C_ExtChainName>): C_ExtChainName? {
+        val v = modExternal.value()
+        return v ?: extChain
+    }
+}
 
 class C_MidModuleHeader(
         val pos: S_Pos,
-        val mount: C_MountAnnotation?,
+        private val rawMount: C_RawMountAnnotationValue?,
         val abstract: S_Pos?,
         val external: Boolean,
         val test: Boolean
 ) {
     fun compile(msgCtx: C_MessageContext, parentMountName: R_MountName): C_ModuleHeader {
+        val mount = rawMount?.process(true)
         val mountName = mount?.calculateMountName(msgCtx, parentMountName) ?: parentMountName
         return C_ModuleHeader(mountName, abstract = abstract != null, external = external, test = test)
     }
@@ -44,7 +48,8 @@ class C_MidModule(
         val moduleName: R_ModuleName,
         val parentName: R_ModuleName?,
         val header: C_MidModuleHeader?,
-        files: List<C_MidModuleFile>
+        files: List<C_MidModuleFile>,
+        val isTestDependency: Boolean
 ) {
     private val files = files.toImmList()
 
@@ -104,10 +109,11 @@ class C_MidModuleMember_Import(
         private val moduleName: R_ModuleName
 ): C_MidModuleMember() {
     override fun compile(ctx: C_MidMemberContext): C_ExtModuleMember {
-        val modTarget = C_ModifierTarget(C_ModifierTargetType.IMPORT, null, externalChain = true)
-        modifiers.compile(ctx.modCtx.modifierCtx, modTarget)
+        val mods = C_ModifierValues(C_ModifierTargetType.IMPORT, null)
+        val modExternal = mods.field(C_ModifierFields.EXTERNAL_CHAIN)
+        modifiers.compile(ctx.modCtx.modifierCtx, mods)
 
-        val extChainName = modTarget.externalChain(ctx.extChain)
+        val extChainName = ctx.externalChain(modExternal)
         ctx.modCtx.modImporter.importModule(moduleName, extChainName)
 
         return C_ExtModuleMember_Import(importDef, target, moduleName, extChainName)
@@ -116,30 +122,24 @@ class C_MidModuleMember_Import(
 
 class C_MidModuleMember_Namespace(
         private val modifiers: S_Modifiers,
-        fullName: List<S_Name>,
+        private val qualifiedName: S_QualifiedName?,
         members: List<C_MidModuleMember>
 ): C_MidModuleMember() {
-    private val fullName = fullName.toImmList()
     private val members = members.toImmList()
 
     override fun compile(ctx: C_MidMemberContext): C_ExtModuleMember {
-        val modTarget = C_ModifierTarget(
-                C_ModifierTargetType.NAMESPACE,
-                name = fullName.lastOrNull(),
-                externalChain = true,
-                mount = true,
-                emptyMountAllowed = true
-        )
+        val mods = C_ModifierValues(C_ModifierTargetType.NAMESPACE, name = qualifiedName?.last)
+        val modExternal = mods.field(C_ModifierFields.EXTERNAL_CHAIN)
+        val modMount = mods.field(C_ModifierFields.MOUNT)
+        modifiers.compile(ctx.modCtx.modifierCtx, mods)
 
-        modifiers.compile(ctx.modCtx.modifierCtx, modTarget)
-
-        val mount = modTarget.mount?.get()
-        val extChainName = modTarget.externalChain(ctx.extChain)
+        val mount = modMount.value()?.process(true)
+        val extChainName = ctx.externalChain(modExternal)
 
         val subCtx = C_MidMemberContext(ctx.modCtx, extChainName)
         val subMembers = members.map { it.compile(subCtx) }
 
-        return C_ExtModuleMember_Namespace(fullName, subMembers, mount, extChainName)
+        return C_ExtModuleMember_Namespace(qualifiedName, subMembers, mount, extChainName)
     }
 }
 
@@ -147,9 +147,6 @@ class C_MidModuleCompiler(
         private val msgCtx: C_MessageContext,
         midModules: List<C_MidModule>
 ) {
-    private val valMgr = C_ValidationManager(msgCtx)
-    private val valExec = valMgr.executor
-
     private val midModulesMap = midModules.associateBy { it.moduleName }.toImmMap()
 
     private val modImporter = C_MidModuleImporter_Impl()
@@ -168,7 +165,7 @@ class C_MidModuleCompiler(
     fun compileMembers(members: List<C_MidModuleMember>): List<C_ExtModuleMember> {
         check(!done)
 
-        val modCtx = C_MidModuleContext(msgCtx, valExec, modImporter, null)
+        val modCtx = C_MidModuleContext(msgCtx, modImporter, null)
         val memCtx = C_MidMemberContext(modCtx, null)
         val res = members.map { it.compile(memCtx) }.toImmList()
 
@@ -211,16 +208,13 @@ class C_MidModuleCompiler(
     }
 
     private fun processModule(midModule: C_MidModule, extChain: C_ExtChainName?) {
-        val midCtx = C_MidModuleContext(msgCtx, valExec, modImporter, extChain)
+        val midCtx = C_MidModuleContext(msgCtx, modImporter, extChain)
         val extModule = midModule.compile(midCtx)
         extModules.add(extModule)
     }
 
     fun getExtModules(): List<C_ExtModule> {
-        if (!done) {
-            done = true
-            valMgr.execute()
-        }
+        done = true
         return extModules.toImmList()
     }
 

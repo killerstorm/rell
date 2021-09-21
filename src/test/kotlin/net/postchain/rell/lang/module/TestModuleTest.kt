@@ -4,16 +4,8 @@
 
 package net.postchain.rell.lang.module
 
-import net.postchain.rell.compiler.base.utils.C_SourceDir
-import net.postchain.rell.model.R_App
-import net.postchain.rell.model.R_FunctionDefinition
-import net.postchain.rell.runtime.Rt_GlobalContext
 import net.postchain.rell.test.BaseRellTest
-import net.postchain.rell.test.RellCodeTester
-import net.postchain.rell.test.RellTestUtils
-import net.postchain.rell.utils.TestRunner
 import org.junit.Test
-import kotlin.test.assertEquals
 
 class TestModuleTest: BaseRellTest(false) {
     @Test fun testRunTests() {
@@ -50,8 +42,8 @@ class TestModuleTest: BaseRellTest(false) {
     @Test fun testAbstractTestModule() {
         file("a.rell", "abstract @test module;")
         file("b.rell", "@test abstract module;")
-        chkCompile("import a;", "ct_err:[main.rell:import:module_test:a][a.rell:modifier:module:abstract:test]")
-        chkCompile("import b;", "ct_err:[main.rell:import:module_test:b][b.rell:modifier:module:abstract:test]")
+        chkCompile("import a;", "ct_err:[main.rell:import:module_test:a][a.rell:modifier:bad_combination:kw:abstract,ann:test]")
+        chkCompile("import b;", "ct_err:[main.rell:import:module_test:b][b.rell:modifier:bad_combination:ann:test,kw:abstract]")
     }
 
     @Test fun testDirectoryModuleAsTest() {
@@ -184,7 +176,7 @@ class TestModuleTest: BaseRellTest(false) {
 
     @Test fun testMountNameOfTestModule() {
         file("tests.rell", "@test @mount('foo') module; function test() {}")
-        chkTests("tests", "ct_err:tests.rell:ann:mount:test_module")
+        chkTests("tests", "ct_err:tests.rell:modifier:bad_combination:ann:test,ann:mount")
     }
 
     @Test fun testModuleArgs() {
@@ -209,50 +201,5 @@ class TestModuleTest: BaseRellTest(false) {
 
         chkTests("test", "test=OK")
         chkOut("f:app:module_args{x=123}", "q:app:module_args{x=123}", "o:app:module_args{x=123}")
-    }
-
-    private fun chkTests(testModule: String, expected: String) {
-        val actual = runTests(testModule)
-        assertEquals(expected, actual)
-    }
-
-    private fun runTests(testModule: String): String {
-        mainModule(testModule)
-
-        val mainCode = ""
-        val sourceDir = tst.createSourceDir(mainCode)
-        val globalCtx = tst.createGlobalCtx()
-
-        val actual = tst.processApp(mainCode) { app ->
-            val mod = app.modules.find { it.name.str() == testModule }!!
-            val fns = TestRunner.getTestFunctions(mod)
-            val res = mutableMapOf<String, String>()
-            for (f in fns) res[f.simpleName] = runTest(globalCtx, sourceDir, app, testModule, f)
-            res.entries.joinToString(",")
-        }
-
-        return actual
-    }
-
-    private fun runTest(
-            globalCtx: Rt_GlobalContext,
-            sourceDir: C_SourceDir,
-            app: R_App,
-            module: String,
-            f: R_FunctionDefinition
-    ): String {
-        val tester = RellCodeTester(tstCtx)
-        tester.moduleArgs(*tst.getModuleArgs().toList().toTypedArray())
-        for ((path, text) in tst.files()) tester.file(path, text)
-        tester.mainModule(module)
-        tester.init()
-
-        return RellTestUtils.catchRtErr {
-            tstCtx.sqlMgr().execute(false) { sqlExec ->
-                val exeCtx = tester.createExeCtx(globalCtx, sqlExec, app, sourceDir, true)
-                f.callTop(exeCtx, listOf())
-                "OK"
-            }
-        }
     }
 }

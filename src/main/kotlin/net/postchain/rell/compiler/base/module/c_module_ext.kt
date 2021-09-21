@@ -6,10 +6,12 @@ package net.postchain.rell.compiler.base.module
 
 import net.postchain.rell.compiler.ast.S_BasicDefinition
 import net.postchain.rell.compiler.ast.S_ImportTarget
-import net.postchain.rell.compiler.ast.S_Name
+import net.postchain.rell.compiler.ast.S_QualifiedName
 import net.postchain.rell.compiler.base.core.*
+import net.postchain.rell.compiler.base.modifier.C_MountAnnotationValue
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.base.utils.C_LateInit
+import net.postchain.rell.compiler.base.utils.C_QualifiedName
 import net.postchain.rell.compiler.base.utils.C_SourcePath
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.model.R_MountName
@@ -102,12 +104,11 @@ class C_ExtModuleMember_Import(
 }
 
 class C_ExtModuleMember_Namespace(
-        fullName: List<S_Name>,
+        private val qualifiedName: S_QualifiedName?,
         members: List<C_ExtModuleMember>,
-        private val mount: C_MountAnnotation?,
+        private val mount: C_MountAnnotationValue?,
         private val extChainName: C_ExtChainName?
 ): C_ExtModuleMember() {
-    private val fullName = fullName.toImmList()
     private val members = members.toImmList()
 
     override fun compile0(mntCtx: C_MountContext) {
@@ -119,21 +120,20 @@ class C_ExtModuleMember_Namespace(
 
     private fun createSubMountContext(mntCtx: C_MountContext): C_MountContext {
         val extChain = extChainName?.toExtChain(mntCtx.appCtx)
-        val subMountName = mntCtx.mountName(mount, fullName)
+        val subMountName = mntCtx.mountName(mount, qualifiedName)
 
-        if (fullName.isEmpty()) {
+        if (qualifiedName == null) {
             return C_MountContext(mntCtx.fileCtx, mntCtx.nsCtx, extChain, mntCtx.nsBuilder, subMountName)
         }
 
         var nsBuilder = mntCtx.nsBuilder
         var nsCtx = mntCtx.nsCtx
 
-        for (name in fullName) {
+        for (name in qualifiedName.parts) {
             nsBuilder = nsBuilder.addNamespace(name, true)
-
-            val names = nsCtx.defNames(name.str)
+            val nsQualifiedName = nsCtx.namespaceName?.add(name.rName) ?: C_QualifiedName.of(name.rName)
             val subScopeBuilder = nsCtx.scopeBuilder.nested(nsBuilder.futureNs())
-            nsCtx = C_NamespaceContext(mntCtx.modCtx, names.qualifiedName, subScopeBuilder)
+            nsCtx = C_NamespaceContext(mntCtx.modCtx, nsQualifiedName, subScopeBuilder)
         }
 
         return C_MountContext(mntCtx.fileCtx, nsCtx, extChain, nsBuilder, subMountName)
@@ -213,7 +213,12 @@ private class C_ModuleBasis(
     fun compile(appCtx: C_AppContext, modProvider: C_ModuleProvider) {
         checkParentModule(appCtx.msgCtx, modProvider)
 
-        val modCtx = C_RegularModuleContext(appCtx, modProvider, module)
+        val modCtx = C_RegularModuleContext(
+                appCtx,
+                modProvider,
+                module,
+                isTestDependency = extModule.midModule.isTestDependency
+        )
 
         val compiledFiles = extModule.compileFiles(modCtx)
 

@@ -5,7 +5,6 @@
 package net.postchain.rell.tools.grammar
 
 import net.postchain.rell.module.RellVersions
-import org.apache.commons.lang3.StringUtils
 
 fun main(args: Array<String>) {
     XtextGenUtils.printHeader()
@@ -82,7 +81,7 @@ sealed class XtextAction {
 
 class XtextAction_Token(private val name: String?): XtextAction() {
     override fun generate(type: String): List<String> {
-        val tail = if (name == null) "" else StringUtils.capitalize(name.toLowerCase())
+        val tail = if (name == null) "" else name.toLowerCase().capitalize()
         println("                Object a = RellcUtils.token$tail(obj);")
         return listOf("a")
     }

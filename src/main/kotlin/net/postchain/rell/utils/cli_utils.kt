@@ -122,6 +122,8 @@ object RellCliUtils: KLogging() {
     }
 
     fun <T> runCli(args: Array<String>, argsObj: T, body: (T) -> Unit) {
+        CommonUtils.failIfUnitTest() // Make sure unit test check works
+
         val argsEx = parseCliArgs(args, argsObj)
         try {
             body(argsEx)

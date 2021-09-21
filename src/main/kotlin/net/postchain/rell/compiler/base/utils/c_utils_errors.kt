@@ -6,6 +6,7 @@ package net.postchain.rell.compiler.base.utils
 
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.ast.S_QualifiedName
 import net.postchain.rell.compiler.base.core.C_MessageContext
 import net.postchain.rell.compiler.base.def.C_MntEntry
 import net.postchain.rell.compiler.base.expr.C_ExprContextAttr
@@ -17,15 +18,19 @@ import net.postchain.rell.model.R_Type
 
 object C_Errors {
     fun errTypeMismatch(pos: S_Pos, srcType: R_Type, dstType: R_Type, errCode: String, errMsg: String): C_Error {
-        return C_Error.stop(pos, "$errCode:[${dstType.toStrictString()}]:[${srcType.toStrictString()}]",
-                "$errMsg: ${srcType.toStrictString()} instead of ${dstType.toStrictString()}")
+        val code = "$errCode:[${dstType.strCode()}]:[${srcType.strCode()}]"
+        val msg = "$errMsg: ${srcType.str()} instead of ${dstType.str()}"
+        return C_Error.stop(pos, code, msg)
     }
 
-    fun errTypeMismatch(msgCtx: C_MessageContext, pos: S_Pos, srcType: R_Type, dstType: R_Type, errCode: String, errMsg: String) {
+    fun errTypeMismatch(pos: S_Pos, srcType: R_Type, dstType: R_Type, errSupplier: C_CodeMsgSupplier): C_Error {
+        val errCodeMsg = errSupplier()
+        return errTypeMismatch(pos, srcType, dstType, errCodeMsg.code, errCodeMsg.msg)
+    }
+
+    fun errTypeMismatch(msgCtx: C_MessageContext, pos: S_Pos, srcType: R_Type, dstType: R_Type, errSupplier: C_CodeMsgSupplier) {
         if (srcType.isNotError() && dstType.isNotError()) {
-            val srcTypeStr = srcType.toStrictString()
-            val dstTypeStr = dstType.toStrictString()
-            msgCtx.error(pos, "$errCode:[$dstTypeStr]:[$srcTypeStr]", "$errMsg: $srcTypeStr instead of $dstTypeStr")
+            msgCtx.error(errTypeMismatch(pos, srcType, dstType, errSupplier))
         }
     }
 
@@ -41,9 +46,8 @@ object C_Errors {
         return C_Error.stop(name.pos, "unknown_name:$baseName.${name.str}", "Unknown name: '$baseName.${name.str}'")
     }
 
-    fun errUnknownName(baseName: List<S_Name>, name: S_Name): C_Error {
-        val fullName = baseName + listOf(name)
-        val nameStr = C_Utils.nameStr(fullName)
+    fun errUnknownName(baseName: S_QualifiedName, name: S_Name): C_Error {
+        val nameStr = baseName.add(name).str()
         return errUnknownName(name.pos, nameStr)
     }
 
@@ -65,14 +69,14 @@ object C_Errors {
     }
 
     fun errUnknownMember(type: R_Type, name: S_Name): C_Error {
-        return C_Error.stop(name.pos, "unknown_member:[${type.toStrictString()}]:${name.str}",
-                "Type ${type.toStrictString()} has no member '${name.str}'")
+        return C_Error.stop(name.pos, "unknown_member:[${type.strCode()}]:${name.str}",
+                "Type ${type.strCode()} has no member '${name.str}'")
     }
 
     fun errUnknownMember(msgCtx: C_MessageContext, type: R_Type, name: S_Name) {
         if (type.isNotError()) {
-            msgCtx.error(name.pos, "unknown_member:[${type.toStrictString()}]:${name.str}",
-                    "Type ${type.toStrictString()} has no member '${name.str}'")
+            msgCtx.error(name.pos, "unknown_member:[${type.strCode()}]:${name.str}",
+                    "Type ${type.strCode()} has no member '${name.str}'")
         }
     }
 
@@ -116,12 +120,12 @@ object C_Errors {
     }
 
     fun errExprNoDb(pos: S_Pos, type: R_Type): C_Error {
-        val typeStr = type.toStrictString()
+        val typeStr = type.strCode()
         return C_Error.stop(pos, "expr_nosql:$typeStr", "Value of type $typeStr cannot be converted to SQL")
     }
 
     fun errExprNoDb(msgCtx: C_MessageContext, pos: S_Pos, type: R_Type) {
-        val typeStr = type.toStrictString()
+        val typeStr = type.strCode()
         msgCtx.error(pos, "expr_nosql:$typeStr", "Value of type $typeStr cannot be converted to SQL")
     }
 
@@ -228,43 +232,25 @@ object C_Errors {
         return C_CodeMsg("import:not_found:$name", "Module '$name' not found")
     }
 
-    fun check(b: Boolean, pos: S_Pos, code: String, msg: String) {
+    fun check(b: Boolean, pos: S_Pos, errSupplier: C_CodeMsgSupplier) {
         if (!b) {
-            throw C_Error.stop(pos, code, msg)
+            val codeMsg = errSupplier()
+            throw C_Error.stop(pos, codeMsg)
         }
     }
 
-    fun check(b: Boolean, pos: S_Pos, codeMsgSupplier: () -> Pair<String, String>) {
+    fun check(ctx: C_MessageContext, b: Boolean, pos: S_Pos, errSupplier: C_CodeMsgSupplier): Boolean {
         if (!b) {
-            val (code, msg) = codeMsgSupplier()
-            throw C_Error.stop(pos, code, msg)
+            val codeMsg = errSupplier()
+            ctx.error(pos, codeMsg)
         }
+        return b
     }
 
-    fun check(ctx: C_MessageContext, b: Boolean, pos: S_Pos, code: String, msg: String) {
-        if (!b) {
-            ctx.error(pos, code, msg)
-        }
-    }
-
-    fun check(ctx: C_MessageContext, b: Boolean, pos: S_Pos, codeMsgSupplier: () -> Pair<String, String>) {
-        if (!b) {
-            val (code, msg) = codeMsgSupplier()
-            ctx.error(pos, code, msg)
-        }
-    }
-
-    fun <T> checkNotNull(value: T?, pos: S_Pos, code: String, msg: String): T {
+    fun <T> checkNotNull(value: T?, pos: S_Pos, errSupplier: C_CodeMsgSupplier): T {
         if (value == null) {
-            throw C_Error.stop(pos, code, msg)
-        }
-        return value
-    }
-
-    fun <T> checkNotNull(value: T?, pos: S_Pos, codeMsgSupplier: () -> Pair<String, String>): T {
-        if (value == null) {
-            val (code, msg) = codeMsgSupplier()
-            throw C_Error.stop(pos, code, msg)
+            val codeMsg = errSupplier()
+            throw C_Error.stop(pos, codeMsg)
         }
         return value
     }

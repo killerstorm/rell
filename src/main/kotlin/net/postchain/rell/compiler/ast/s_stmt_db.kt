@@ -60,7 +60,7 @@ class S_UpdateTarget_Simple(
 
     private fun compileFromEntity(ctx: C_ExprContext, atExprId: R_AtExprId, from: S_AtExprFrom): S_NameValue<C_AtEntity> {
         val explicitAlias = from.alias
-        val alias = explicitAlias ?: from.entityName[from.entityName.size - 1]
+        val alias = explicitAlias ?: from.entityName.last
         val entity = ctx.nsCtx.getEntity(from.entityName)
         val atEntityId = ctx.appCtx.nextAtEntityId(atExprId)
         return S_NameValue(alias, C_AtEntity(alias.pos, entity, alias.str, explicitAlias != null, atEntityId))
@@ -99,8 +99,8 @@ class S_UpdateTarget_Expr(val expr: S_Expr): S_UpdateTarget() {
             compileTargetCollection(targetCtx, type.elementType, false)
         } else {
             if (type.isNotError()) {
-                targetCtx.exprCtx.msgCtx.error(expr.startPos, "stmt_update_expr_type:${type.toStrictString()}",
-                        "Invalid expression type: ${type.toStrictString()}; must be an entity or a collection of an entity")
+                targetCtx.exprCtx.msgCtx.error(expr.startPos, "stmt_update_expr_type:${type.strCode()}",
+                        "Invalid expression type: ${type.strCode()}; must be an entity or a collection of an entity")
             }
             null
         }
@@ -198,7 +198,7 @@ class S_UpdateStatement(pos: S_Pos, val target: S_UpdateTarget, val what: List<S
         }
         subValues.addAll(args.map { it.vExpr })
 
-        val attrs = C_AttributeResolver.resolveUpdate(ctx.msgCtx, entity, args)
+        val attrs = C_AttributeResolver.resolveUpdate(ctx, entity, args)
 
         val updAttrs = attrs.mapNotNull { (arg, attr) ->
             val w = what[arg.index]

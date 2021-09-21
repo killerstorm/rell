@@ -6,6 +6,7 @@ package net.postchain.rell.compiler.base.fn
 
 import net.postchain.rell.compiler.ast.*
 import net.postchain.rell.compiler.base.core.C_TypeHint
+import net.postchain.rell.compiler.base.def.C_GlobalFunction
 import net.postchain.rell.compiler.base.expr.C_CallTypeHints
 import net.postchain.rell.compiler.base.expr.C_CallTypeHints_None
 import net.postchain.rell.compiler.base.expr.C_ExprContext

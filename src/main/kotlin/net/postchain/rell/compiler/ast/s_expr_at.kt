@@ -4,11 +4,14 @@
 
 package net.postchain.rell.compiler.ast
 
-import net.postchain.rell.compiler.base.core.*
+import net.postchain.rell.compiler.base.core.C_TypeHint
+import net.postchain.rell.compiler.base.core.C_Types
 import net.postchain.rell.compiler.base.expr.*
+import net.postchain.rell.compiler.base.modifier.*
 import net.postchain.rell.compiler.base.utils.C_Error
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.base.utils.C_Utils
+import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.compiler.vexpr.V_AtWhatFieldFlags
 import net.postchain.rell.compiler.vexpr.V_DbAtWhat
 import net.postchain.rell.compiler.vexpr.V_DbAtWhatField
@@ -21,7 +24,7 @@ import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.immSetOf
 import net.postchain.rell.utils.toImmList
 
-class S_AtExprFrom(val alias: S_Name?, val entityName: List<S_Name>)
+class S_AtExprFrom(val alias: S_Name?, val entityName: S_QualifiedName)
 
 sealed class S_AtExprWhat {
     abstract fun compile(ctx: C_ExprContext, from: C_AtFrom, subValues: MutableList<V_Expr>): V_DbAtWhat
@@ -50,7 +53,7 @@ class S_AtExprWhat_Simple(val path: List<S_Name>): S_AtExprWhat() {
 class S_AtExprWhatComplexField(
         val attr: S_Name?,
         val expr: S_Expr,
-        val annotations: List<S_Annotation>,
+        val modifiers: S_Modifiers,
         val sort: S_PosValue<R_AtWhatSort>?
 )
 
@@ -96,22 +99,28 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
     }
 
     private fun processField(ctx: C_ExprContext, field: S_AtExprWhatComplexField): WhatField {
-        val modTarget = C_ModifierTarget(C_ModifierTargetType.EXPRESSION, null)
+        val mods = C_ModifierValues(C_ModifierTargetType.EXPRESSION, null)
+        val modOmit = mods.field(C_ModifierFields.OMIT)
+        val modSort = mods.field(C_ModifierFields.SORT)
+        val modSumm = mods.field(C_ModifierFields.SUMMARIZATION)
+
+        val modifierCtx = C_ModifierContext(ctx.msgCtx)
+        field.modifiers.compile(modifierCtx, mods)
+
+        val omit = modOmit.hasValue()
+        val sort = modSort.posValue() ?: field.sort
+        val summ = modSumm.posValue()
 
         if (field.sort != null) {
-            modTarget.sort?.set(field.sort)
-            val ann = if (field.sort.value.asc) C_Modifier.SORT else C_Modifier.SORT_DESC
-            ctx.msgCtx.warning(field.sort.pos, "at:what:sort:deprecated:$ann", "Deprecated sort syntax; use @$ann annotation instead")
-        }
+            val ann = if (field.sort.value.asc) C_Annotations.SORT else C_Annotations.SORT_DESC
+            ctx.msgCtx.warning(field.sort.pos, "at:what:sort:deprecated:$ann",
+                    "Deprecated sort syntax; use @$ann annotation instead")
 
-        val modifierCtx = C_ModifierContext(ctx.msgCtx, ctx.appCtx.valExec)
-        for (annotation in field.annotations) {
-            annotation.compile(modifierCtx, modTarget)
+            if (modSort.value() != null) {
+                ctx.msgCtx.error(field.sort.pos, "at:what:sort:specified_by_kw_and_ann",
+                        "Sorting is specified by annotation and keyword at the same time")
+            }
         }
-
-        val omit = modTarget.omit?.get() ?: false
-        val sort = modTarget.sort?.get()
-        val summ = modTarget.summarization?.get()
 
         val flags = V_AtWhatFieldFlags(
                 omit = omit,
@@ -264,12 +273,12 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
 
         val attrs = S_AtExpr.findWhereContextAttrsByType(ctx, type)
         if (attrs.isEmpty()) {
-            ctx.msgCtx.error(vExpr.pos, "at_where_type:$idx:$type",
-                    "No attribute matches type of ${whereExprMsg(idx)} ($type)")
+            ctx.msgCtx.error(vExpr.pos, "at_where_type:$idx:${type.strCode()}",
+                    "No attribute matches type of ${whereExprMsg(idx)} (${type.str()})")
             return C_Utils.errorVExpr(ctx, vExpr.pos)
         } else if (attrs.size > 1) {
-            throw C_Errors.errMultipleAttrs(vExpr.pos, attrs, "at_attr_type_ambig:$idx:$type",
-                    "Multiple attributes match type of ${whereExprMsg(idx)} ($type)")
+            throw C_Errors.errMultipleAttrs(vExpr.pos, attrs, "at_attr_type_ambig:$idx:${type.strCode()}",
+                    "Multiple attributes match type of ${whereExprMsg(idx)} (${type.str()})")
         }
 
         val attr = attrs[0]
@@ -311,22 +320,22 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
         }
 
         if (entityAttrsByType.isEmpty()) {
-            throw C_Error.more(exprPos, "at_where:var_noattrs:$idx:$name:$varType",
-                    "No attribute matches name '$name' or type $varType")
+            throw C_Error.more(exprPos, "at_where:var_noattrs:$idx:$name:${varType.strCode()}",
+                    "No attribute matches name '$name' or type ${varType.str()}")
         } else if (entityAttrsByType.size > 1) {
             if (entityAttrsByName.isEmpty()) {
                 throw C_Errors.errMultipleAttrs(
                         exprPos,
                         entityAttrsByType,
-                        "at_where:var_manyattrs_type:$idx:$name:$varType",
-                        "Multiple attributes match expression type $varType"
+                        "at_where:var_manyattrs_type:$idx:$name:${varType.strCode()}",
+                        "Multiple attributes match expression type ${varType.str()}"
                 )
             } else {
                 throw C_Errors.errMultipleAttrs(
                         exprPos,
                         entityAttrsByType,
-                        "at_where:var_manyattrs_nametype:$idx:$name:$varType",
-                        "Multiple attributes match name '$name' and type $varType"
+                        "at_where:var_manyattrs_nametype:$idx:$name:${varType.strCode()}",
+                        "Multiple attributes match name '$name' and type ${varType.str()}"
                 )
             }
         }
@@ -442,7 +451,7 @@ class S_AtExpr(
         val vExpr = sExpr.compile(subCtx).value()
         subValues.add(vExpr)
 
-        C_Types.match(R_IntegerType, vExpr.type, sExpr.startPos, "expr_at_${msg}_type", "Wrong $msg type")
+        C_Types.match(R_IntegerType, vExpr.type, sExpr.startPos) { "expr_at_${msg}_type" toCodeMsg "Wrong $msg type" }
         return vExpr
     }
 

@@ -4,7 +4,7 @@
 
 package net.postchain.rell.lang.misc
 
-import net.postchain.rell.runtime.RellInterpreterCrashException
+import net.postchain.rell.runtime.utils.RellInterpreterCrashException
 import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.test.RellCodeTester
 import org.junit.Test

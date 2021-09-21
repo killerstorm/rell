@@ -13,7 +13,7 @@ import net.postchain.rell.compiler.ast.S_BasicPos
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.R_Name
-import net.postchain.rell.runtime.Rt_DecimalUtils
+import net.postchain.rell.runtime.utils.Rt_DecimalUtils
 import net.postchain.rell.runtime.Rt_DecimalValue
 import net.postchain.rell.runtime.Rt_Value
 import java.io.InputStream

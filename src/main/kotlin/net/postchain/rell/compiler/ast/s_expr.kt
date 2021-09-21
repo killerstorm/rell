@@ -8,10 +8,7 @@ import net.postchain.rell.compiler.base.core.C_ForIterator
 import net.postchain.rell.compiler.base.core.C_TypeHint
 import net.postchain.rell.compiler.base.core.C_Types
 import net.postchain.rell.compiler.base.expr.*
-import net.postchain.rell.compiler.base.utils.C_CodeMsg
-import net.postchain.rell.compiler.base.utils.C_Error
-import net.postchain.rell.compiler.base.utils.C_Errors
-import net.postchain.rell.compiler.base.utils.C_Utils
+import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.compiler.vexpr.*
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.R_CollectionKind
@@ -63,7 +60,7 @@ abstract class S_Expr(val startPos: S_Pos) {
         val cIterator = C_ForIterator.compile(ctx, type, true)
 
         return if (cIterator == null) {
-            val s = type.toStrictString()
+            val s = type.strCode()
             ctx.msgCtx.error(startPos, "at:from:bad_type:$s", "Invalid type for at-expression: $s")
             C_AtFromItem_Iterable(startPos, vExpr, type, R_ForIterator_Collection)
         } else {
@@ -124,8 +121,13 @@ class S_SubscriptExpr(val opPos: S_Pos, val base: S_Expr, val expr: S_Expr): S_E
             return C_Utils.errorExpr(ctx, opPos)
         }
 
-        C_Errors.check(ctx.msgCtx, baseType !is R_NullableType, opPos, "expr_subscript_null", "Cannot apply '[]' on nullable value")
-        C_Types.match(kind.keyType, vExpr.type, expr.startPos, "expr_subscript_keytype", "Invalid subscript key type")
+        C_Errors.check(ctx.msgCtx, baseType !is R_NullableType, opPos) {
+            "expr_subscript_null" toCodeMsg "Cannot apply '[]' on nullable value"
+        }
+
+        C_Types.match(kind.keyType, vExpr.type, expr.startPos) {
+            "expr_subscript_keytype" toCodeMsg "Invalid subscript key type"
+        }
 
         val vResExpr = kind.compile(ctx, vBase, vExpr)
         return C_VExpr(vResExpr)
@@ -148,7 +150,7 @@ class S_SubscriptExpr(val opPos: S_Pos, val base: S_Expr, val expr: S_Expr): S_E
             is R_TupleType -> Subscript_Tuple(baseType)
             is R_VirtualTupleType -> Subscript_VirtualTuple(baseType)
             else -> {
-                val typeStr = baseType.toStrictString()
+                val typeStr = baseType.strCode()
                 ctx.msgCtx.error(opPos, "expr_subscript_base:$typeStr", "Operator '[]' undefined for type $typeStr")
                 null
             }
@@ -161,12 +163,15 @@ class S_SubscriptExpr(val opPos: S_Pos, val base: S_Expr, val expr: S_Expr): S_E
             value?.asInteger()
         }
 
-        val index = C_Errors.checkNotNull(indexZ, expr.startPos, "expr_subscript:tuple:no_const",
-                "Subscript key for a tuple must be a constant value, not an expression")
+        val index = C_Errors.checkNotNull(indexZ, expr.startPos) {
+            "expr_subscript:tuple:no_const" toCodeMsg
+            "Subscript key for a tuple must be a constant value, not an expression"
+        }
 
         val fields = baseType.fields
         C_Errors.check(index >= 0 && index < fields.size, expr.startPos) {
-            "expr_subscript:tuple:index:$index:${fields.size}" to "Index out of bounds, must be from 0 to ${fields.size - 1}"
+            "expr_subscript:tuple:index:$index:${fields.size}" toCodeMsg
+            "Index out of bounds, must be from 0 to ${fields.size - 1}"
         }
 
         return index.toInt()
@@ -200,7 +205,7 @@ class S_SubscriptExpr(val opPos: S_Pos, val base: S_Expr, val expr: S_Expr): S_E
     }
 }
 
-class S_CreateExpr(pos: S_Pos, val entityName: List<S_Name>, val args: List<S_CallArgument>): S_Expr(pos) {
+class S_CreateExpr(pos: S_Pos, val entityName: S_QualifiedName, val args: List<S_CallArgument>): S_Expr(pos) {
     override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
         ctx.checkDbUpdateAllowed(startPos)
 
@@ -225,8 +230,8 @@ class S_CreateExpr(pos: S_Pos, val entityName: List<S_Name>, val args: List<S_Ca
         val attrs = C_AttributeResolver.resolveCreate(createCtx, entity.attributes, attrArgs, startPos)
 
         C_Errors.check(entity.flags.canCreate, startPos) {
-            val entityNameStr = C_Utils.nameStr(entityName)
-            "expr_create_cant:$entityNameStr" to "Not allowed to create instances of entity '$entityNameStr'"
+            val entityNameStr = entityName.str()
+            "expr_create_cant:$entityNameStr" toCodeMsg "Not allowed to create instances of entity '$entityNameStr'"
         }
 
         return V_RegularCreateExpr(ctx, startPos, entity, attrs)
@@ -292,7 +297,9 @@ class S_TupleExpr(startPos: S_Pos, val fields: List<S_TupleExprField>): S_Expr(s
 
     private fun compile0(ctx: C_ExprContext, pairs: List<S_NameOptValue<S_Expr>>, vExprs: List<V_Expr>): V_Expr {
         for ((i, vExpr) in vExprs.withIndex()) {
-            C_Utils.checkUnitType(pairs[i].value.startPos, vExpr.type, "expr_tuple_unit", "Type of expression is unit")
+            C_Utils.checkUnitType(pairs[i].value.startPos, vExpr.type) {
+                "expr_tuple_unit" toCodeMsg "Type of expression is unit"
+            }
         }
 
         val fields = vExprs.mapIndexed { i, vExpr -> R_TupleField(pairs[i].name?.str, vExpr.type) }
@@ -374,13 +381,19 @@ class S_IfExpr(pos: S_Pos, val cond: S_Expr, val trueExpr: S_Expr, val falseExpr
         val cCond = cond.compile(ctx).value()
         val (cTrue, cFalse, resFacts) = compileTrueFalse(ctx, cCond, typeHint)
 
-        C_Types.match(R_BooleanType, cCond.type, cond.startPos, "expr_if_cond_type", "Wrong type of condition expression")
+        C_Types.match(R_BooleanType, cCond.type, cond.startPos) {
+            "expr_if_cond_type" toCodeMsg "Wrong type of condition expression"
+        }
+
         checkUnitType(trueExpr, cTrue)
         checkUnitType(falseExpr, cFalse)
 
         val trueType = cTrue.type
         val falseType = cFalse.type
-        val resType = C_Types.commonType(trueType, falseType, startPos, "expr_if_restype", "Incompatible types of if branches")
+
+        val resType = C_Types.commonType(trueType, falseType, startPos) {
+            "expr_if_restype" toCodeMsg "Incompatible types of if branches"
+        }
 
         val vExpr = V_IfExpr(ctx, startPos, resType, cCond, cTrue, cFalse, resFacts)
         return C_VExpr(vExpr)
@@ -404,7 +417,7 @@ class S_IfExpr(pos: S_Pos, val cond: S_Expr, val trueExpr: S_Expr, val falseExpr
     }
 
     private fun checkUnitType(expr: S_Expr, vExpr: V_Expr) {
-        C_Utils.checkUnitType(expr.startPos, vExpr.type, "expr_if_unit", "Expression returns nothing")
+        C_Utils.checkUnitType(expr.startPos, vExpr.type) { "expr_if_unit" toCodeMsg "Expression returns nothing" }
     }
 }
 
@@ -418,7 +431,7 @@ class S_ListLiteralExpr(pos: S_Pos, val exprs: List<S_Expr>): S_Expr(pos) {
 
     private fun compileType(vExprs: List<V_Expr>, typeHint: C_TypeHint): R_ListType {
         for (vExpr in vExprs) {
-            C_Utils.checkUnitType(vExpr.pos, vExpr.type, "expr_list_unit", "Element expression returns nothing")
+            C_Utils.checkUnitType(vExpr.pos, vExpr.type) { "expr_list_unit" toCodeMsg "Element expression returns nothing" }
         }
 
         val hintElemType = typeHint.getListElementType()
@@ -428,13 +441,17 @@ class S_ListLiteralExpr(pos: S_Pos, val exprs: List<S_Expr>): S_Expr(pos) {
 
     private fun compileElementType(vExprs: List<V_Expr>, hintElemType: R_Type?): R_Type {
         if (vExprs.isEmpty()) {
-            return C_Errors.checkNotNull(hintElemType, startPos, "expr_list_no_type",
-                    "Cannot determine the type of the list; use list<T>() syntax to specify the type")
+            return C_Errors.checkNotNull(hintElemType, startPos) {
+                "expr_list_no_type" toCodeMsg
+                "Cannot determine the type of the list; use list<T>() syntax to specify the type"
+            }
         }
 
         var rType = vExprs[0].type
         for ((i, vExpr) in vExprs.withIndex()) {
-            rType = C_Types.commonType(rType, vExpr.type, exprs[i].startPos, "expr_list_itemtype", "Wrong list item type")
+            rType = C_Types.commonType(rType, vExpr.type, exprs[i].startPos) {
+                "expr_list_itemtype" toCodeMsg "Wrong list item type"
+            }
         }
 
         if (hintElemType != null) {
@@ -459,8 +476,8 @@ class S_MapLiteralExpr(startPos: S_Pos, val entries: List<Pair<S_Expr, S_Expr>>)
             val valueType = vEntry.second.type
             val keyExpr = entries[i].first
             val valueExpr = entries[i].second
-            C_Utils.checkUnitType(keyExpr.startPos, keyType, "expr_map_key_unit", "Key expression returns nothing")
-            C_Utils.checkUnitType(valueExpr.startPos, valueType, "expr_map_value_unit", "Value expression returns nothing")
+            C_Utils.checkUnitType(keyExpr.startPos, keyType) { "expr_map_key_unit" toCodeMsg "Key expression returns nothing" }
+            C_Utils.checkUnitType(valueExpr.startPos, valueType) { "expr_map_value_unit" toCodeMsg "Value expression returns nothing" }
             C_Utils.checkMapKeyType(ctx.nsCtx, valueExpr.startPos, keyType)
         }
 
@@ -471,18 +488,22 @@ class S_MapLiteralExpr(startPos: S_Pos, val entries: List<Pair<S_Expr, S_Expr>>)
 
     private fun compileKeyValueTypes(vEntries: List<Pair<V_Expr, V_Expr>>, hintTypes: R_MapKeyValueTypes?): R_MapKeyValueTypes {
         if (vEntries.isEmpty()) {
-            return C_Errors.checkNotNull(hintTypes, startPos, "expr_map_notype",
-                    "Cannot determine type of the map; use map<K,V>() syntax to specify the type")
+            return C_Errors.checkNotNull(hintTypes, startPos) {
+                "expr_map_notype" toCodeMsg
+                "Cannot determine type of the map; use map<K,V>() syntax to specify the type"
+            }
         }
 
         var rTypes = R_MapKeyValueTypes(vEntries[0].first.type, vEntries[0].second.type)
 
         for ((i, kv) in vEntries.withIndex()) {
             val (vKey, vValue) = kv
-            val rKeyType = C_Types.commonType(rTypes.key, vKey.type, entries[i].first.startPos, "expr_map_keytype",
-                    "Wrong map entry key type")
-            val rValueType = C_Types.commonType(rTypes.value, vValue.type, entries[i].second.startPos, "expr_map_valuetype",
-                    "Wrong map entry value type")
+            val rKeyType = C_Types.commonType(rTypes.key, vKey.type, entries[i].first.startPos) {
+                "expr_map_keytype" toCodeMsg "Wrong map entry key type"
+            }
+            val rValueType = C_Types.commonType(rTypes.value, vValue.type, entries[i].second.startPos) {
+                "expr_map_valuetype" toCodeMsg "Wrong map entry value type"
+            }
             rTypes = R_MapKeyValueTypes(rKeyType, rValueType)
         }
 
@@ -555,8 +576,8 @@ sealed class S_CollectionExpr(pos: S_Pos, val type: S_Type?, val args: List<S_Ex
         val cIterator = C_ForIterator.compile(ctx, rArgType, false)
 
         if (cIterator == null) {
-            throw C_Error.more(startPos, "expr_${colType}_badtype:$rArgType",
-                    "Wrong argument type for $colType<>: ${rArgType.toStrictString()}")
+            throw C_Error.more(startPos, "expr_${colType}_badtype:${rArgType.strCode()}",
+                    "Wrong argument type for $colType<>: ${rArgType.strCode()}")
         }
 
         val rElementType = checkElementType(
@@ -585,7 +606,7 @@ sealed class S_CollectionExpr(pos: S_Pos, val type: S_Type?, val args: List<S_Ex
 
     private fun requireType(rType: R_Type?): R_Type {
         return C_Errors.checkNotNull(rType, startPos) {
-            "expr_${colType}_notype" to "Element type not specified for $colType"
+            "expr_${colType}_notype" toCodeMsg "Element type not specified for $colType"
         }
     }
 
@@ -596,8 +617,8 @@ sealed class S_CollectionExpr(pos: S_Pos, val type: S_Type?, val args: List<S_Ex
             }
 
             C_Errors.check(declaredType.isAssignableFrom(argumentType), pos) {
-                    "$errCode:${declaredType.toStrictString()}:${argumentType.toStrictString()}" to
-                    "$errMsg: ${argumentType.toStrictString()} instead of ${declaredType.toStrictString()}"
+                "$errCode:${declaredType.strCode()}:${argumentType.strCode()}" toCodeMsg
+                "$errMsg: ${argumentType.strCode()} instead of ${declaredType.strCode()}"
             }
 
             return declaredType
@@ -673,8 +694,8 @@ class S_MapExpr(pos: S_Pos, val keyValueTypes: Pair<S_Type, S_Type>?, val args: 
             }
         }
 
-        throw C_Error.more(startPos, "expr_map_badtype:${rArgType.toStrictString()}",
-                "Wrong argument type for map<>: ${rArgType.toStrictString()}")
+        throw C_Error.more(startPos, "expr_map_badtype:${rArgType.strCode()}",
+                "Wrong argument type for map<>: ${rArgType.strCode()}")
     }
 
     private fun compileConstructorOneArgMap(
@@ -739,7 +760,9 @@ class S_MapExpr(pos: S_Pos, val keyValueTypes: Pair<S_Type, S_Type>?, val args: 
     }
 
     private fun requireTypes(rKeyValueTypes: R_MapKeyValueTypes?): R_MapKeyValueTypes {
-        return C_Errors.checkNotNull(rKeyValueTypes, startPos, "expr_map_notype", "Key/value types not specified for map")
+        return C_Errors.checkNotNull(rKeyValueTypes, startPos) {
+            "expr_map_notype" toCodeMsg "Key/value types not specified for map"
+        }
     }
 }
 

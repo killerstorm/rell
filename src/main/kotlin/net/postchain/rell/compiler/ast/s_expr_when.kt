@@ -10,6 +10,7 @@ import net.postchain.rell.compiler.base.core.C_VarUid
 import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.base.utils.C_Utils
+import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.compiler.vexpr.*
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_BooleanValue
@@ -112,7 +113,7 @@ class S_WhenConditionExpr(val exprs: List<S_Expr>): S_WhenCondition() {
             val value = evaluateConstantValue(vExpr)
             if (value != null) {
                 if (value in builder.constantCases) {
-                    ctx.msgCtx.error(expr.startPos, "when_expr_dupvalue:$value", "Value already used")
+                    ctx.msgCtx.error(expr.startPos, "when_expr_dupvalue:${value.strCode()}", "Value already used")
                 }
                 builder.constantCases[value] = idx
             }
@@ -223,13 +224,16 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
         }
 
         val type = cValues.withIndex().fold(cValues[0].type) { t, (i, value) ->
-            C_Types.commonType(t, value.type, cases[i].expr.startPos, "expr_when_incompatible_type",
-                    "When case expressions have incompatible types")
+            C_Types.commonType(t, value.type, cases[i].expr.startPos) {
+                "expr_when_incompatible_type" toCodeMsg "When case expressions have incompatible types"
+            }
         }
 
         for (cValue in cValues) {
             val valueType = cValue.type
-            C_Utils.checkUnitType(ctx.msgCtx, cValue.pos, valueType, "when_exprtype_unit", "Expression returns nothing")
+            C_Utils.checkUnitType(ctx.msgCtx, cValue.pos, valueType) {
+                "when_exprtype_unit" toCodeMsg "Expression returns nothing"
+            }
         }
 
         return Pair(type, cValues)
@@ -288,14 +292,15 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
 
             if (keyValue == null) {
                 for (case in builder.variableCases) {
-                    C_Types.match(R_BooleanType, case.value.type, case.value.pos, "when_case_type", "Type mismatch")
+                    C_Types.match(R_BooleanType, case.value.type, case.value.pos) { "when_case_type" toCodeMsg "Type mismatch" }
                 }
             } else {
                 val keyType = keyValue.type
                 for (case in builder.variableCases) {
                     val caseType = case.value.type
                     C_Errors.check(checkCaseType(keyType, caseType), case.value.pos) {
-                        "when_case_type:$keyType:$caseType" to "Type mismatch: $caseType instead of $keyType"
+                        "when_case_type:${keyType.strCode()}:${caseType.strCode()}" toCodeMsg
+                        "Type mismatch: ${caseType.str()} instead of ${keyType.str()}"
                     }
                 }
             }
@@ -312,8 +317,8 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
             val allValuesCovered = !allValues.isEmpty() && allValues == builder.constantCases.keys
 
             if (allValuesCovered && builder.elseCase != null) {
-                ctx.msgCtx.error(builder.elseCase!!.value, "when_else_allvalues:$keyType",
-                        "No values of type '$keyType' left for the else case")
+                ctx.msgCtx.error(builder.elseCase!!.value, "when_else_allvalues:${keyType.strCode()}",
+                        "No values of type '${keyType.str()}' left for the else case")
             }
 
             return allValuesCovered || builder.elseCase != null

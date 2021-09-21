@@ -8,9 +8,9 @@ import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_PosValue
 import net.postchain.rell.compiler.base.core.C_AppContext
-import net.postchain.rell.compiler.base.core.C_AtSummarizationKind
 import net.postchain.rell.compiler.base.core.C_MessageContext
 import net.postchain.rell.compiler.base.core.C_Types
+import net.postchain.rell.compiler.base.modifier.C_AtSummarizationKind
 import net.postchain.rell.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.compiler.vexpr.V_ColAtFrom
@@ -113,8 +113,8 @@ sealed class C_AtSummarization(protected val pos: C_AtSummarizationPos, protecte
 
     companion object {
         fun typeError(msgCtx: C_MessageContext, type: R_Type, pos: C_AtSummarizationPos) {
-            val code = "at:what:aggr:bad_type:${pos.ann}:${type.toStrictString()}"
-            val msg = "Invalid type of @${pos.ann.annotation} expression: ${type.toStrictString()}"
+            val code = "at:what:aggr:bad_type:${pos.ann}:${type.strCode()}"
+            val msg = "Invalid type of @${pos.ann.annotation} expression: ${type.strCode()}"
             msgCtx.error(pos.exprPos, code, msg)
         }
     }

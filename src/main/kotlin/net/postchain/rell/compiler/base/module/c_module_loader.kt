@@ -8,7 +8,6 @@ import net.postchain.rell.compiler.base.core.C_MessageContext
 import net.postchain.rell.compiler.base.utils.C_CommonError
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.base.utils.C_SourceDir
-import net.postchain.rell.compiler.base.utils.C_ValidationManager
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.utils.queueOf
 import net.postchain.rell.utils.toImmList
@@ -27,23 +26,21 @@ class C_ModuleLoader(
 ) {
     private val preModuleNames = preModuleNames.toImmSet()
 
-    private val valMgr = C_ValidationManager(msgCtx)
-
-    val readerCtx = C_ModuleReaderContext(msgCtx, valMgr.executor, C_ImportModuleLoader(this))
+    val readerCtx = C_ModuleReaderContext(msgCtx, C_ImportModuleLoader(this))
     private val moduleReader = C_ModuleReader(readerCtx, sourceDir)
 
     private val testLoader = C_TestModuleLoader(moduleReader, this::loadTestModule)
 
     private val loadedModules = mutableMapOf<R_ModuleName, C_ModuleState>()
     private val moduleQueue = queueOf<C_ModuleState>()
+    private var loadingTestModules = false // Looks like a hack (depends on methods invocation order), but fine.
 
     private val midModules = mutableListOf<C_MidModule>()
     private var done = false
 
-    fun getLoadedModules(): List<C_MidModule> {
+    fun finish(): List<C_MidModule> {
         check(!done)
         done = true
-        valMgr.execute()
         return midModules.toImmList()
     }
 
@@ -69,6 +66,7 @@ class C_ModuleLoader(
 
     fun loadTestModules(rootModule: R_ModuleName) {
         check(!done)
+        loadingTestModules = true
         testLoader.compileTestModules(rootModule)
         loadQueuedModules()
     }
@@ -139,7 +137,7 @@ class C_ModuleLoader(
             val parentName = if (header != null && header.test) null else findParentModule(moduleName)
 
             val midFiles = source.compile()
-            val midModule = C_MidModule(moduleName, parentName, header, midFiles)
+            val midModule = C_MidModule(moduleName, parentName, header, midFiles, isTestDependency = loadingTestModules)
 
             midModules.add(midModule)
 

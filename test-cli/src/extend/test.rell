@@ -1,0 +1,8 @@
+@test module;
+import ^.lib;
+import ^.g;
+import ^.h;
+
+function test() {
+    print(lib.f());
+}

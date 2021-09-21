@@ -136,7 +136,7 @@ object C_MemberResolver {
     fun checkNullAccess(type: R_Type, safe: Boolean, linkPos: S_Pos, memberNameMsg: String) {
         if (!safe && type is R_NullableType) {
             throw C_Error.stop(linkPos, "expr_mem_null:$memberNameMsg",
-                    "Cannot access member '$memberNameMsg' of nullable type $type")
+                    "Cannot access member '$memberNameMsg' of nullable type ${type.str()}")
         }
     }
 

@@ -9,17 +9,17 @@ import net.postchain.rell.compiler.base.core.C_DefinitionContext
 import net.postchain.rell.compiler.base.core.C_FunctionBodyContext
 import net.postchain.rell.compiler.base.core.C_TypeHint
 import net.postchain.rell.compiler.base.core.C_Types
-import net.postchain.rell.compiler.base.def.C_GlobalConstantFunctionBody
-import net.postchain.rell.compiler.base.def.C_GlobalConstantFunctionHeader
+import net.postchain.rell.compiler.base.def.*
 import net.postchain.rell.compiler.base.expr.C_ExprContext
 import net.postchain.rell.compiler.base.utils.C_Utils
+import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
 
 object C_FunctionUtils {
     fun compileFunctionHeader(
             defCtx: C_DefinitionContext,
-            simpleName: S_Name,
+            fnPos: S_Pos,
             defNames: R_DefinitionNames,
             params: List<S_FormalParameter>,
             retType: S_Type?,
@@ -32,7 +32,7 @@ object C_FunctionUtils {
         val cParams = C_FormalParameters.compile(defCtx, params, false)
 
         val cBody = if (body == null) null else {
-            val bodyCtx = C_FunctionBodyContext(defCtx, simpleName.pos, defNames, rRetType, cParams)
+            val bodyCtx = C_FunctionBodyContext(defCtx, fnPos, defNames, rRetType, cParams)
             C_UserFunctionBody(bodyCtx, body)
         }
 
@@ -64,7 +64,9 @@ object C_FunctionUtils {
     ): C_GlobalConstantFunctionHeader {
         val explicitRetType = if (explicitType == null) null else {
             val type = (explicitType.compileOpt(defCtx.nsCtx) ?: R_CtErrorType)
-            C_Types.checkNotUnit(defCtx.msgCtx, explicitType.pos, type, simpleName.str) { "def:const" to "global constant" }
+            C_Types.checkNotUnit(defCtx.msgCtx, explicitType.pos, type, simpleName.str) {
+                "def:const" toCodeMsg "global constant"
+            }
             type
         }
 
@@ -81,7 +83,7 @@ object C_FunctionUtils {
             resTypeHint: C_TypeHint
     ): V_Expr {
         val res = C_FunctionCallArgsUtils.compileCall(ctx, args, resTypeHint, callTarget)
-        return res ?: return C_Utils.errorVExpr(ctx, callInfo.callPos, callTarget.retType() ?: R_CtErrorType)
+        return res ?: C_Utils.errorVExpr(ctx, callInfo.callPos, callTarget.retType() ?: R_CtErrorType)
     }
 
     fun compileReturnType(ctx: C_ExprContext, name: S_Name, header: C_FunctionHeader): R_Type? {

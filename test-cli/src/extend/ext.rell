@@ -1,0 +1,7 @@
+module;
+
+import ^.lib;
+
+@extend(lib.is_bad_value) function(x: integer): boolean {
+    return x < 0;
+}

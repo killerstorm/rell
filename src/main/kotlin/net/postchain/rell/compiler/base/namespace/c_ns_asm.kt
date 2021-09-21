@@ -176,13 +176,13 @@ private class C_NsAsm_InternalComponentAssembler(
         entries.add(C_NsAsm_MutableEntry(name, type, def, identity, nsKey.container, stamp))
     }
 
-    final override fun addDef(name: S_Name, def: C_NsDef) {
+    override fun addDef(name: S_Name, def: C_NsDef) {
         val type = def.type()
         val def2 = C_NsAsm_RawDef_Simple(def)
         addEntry(name, type, C_NsAsm_MutableDef_Simple(def2), C_NsAsm_Identity_Def(def2))
     }
 
-    final override fun addNamespace(name: S_Name, merge: Boolean): C_NsAsm_ComponentAssembler {
+    override fun addNamespace(name: S_Name, merge: Boolean): C_NsAsm_ComponentAssembler {
         checkCanModify()
         val asm = createSubAssembler(name)
         val def = C_NsAsm_MutableDef_Namespace(asm, merge)
@@ -190,7 +190,7 @@ private class C_NsAsm_InternalComponentAssembler(
         return asm
     }
 
-    final override fun addModuleImport(alias: S_Name, module: C_ModuleKey) {
+    override fun addModuleImport(alias: S_Name, module: C_ModuleKey) {
         checkCanModify()
         val asm = createSubAssembler(alias)
         asm.addWildcardImport(module, listOf())
@@ -205,14 +205,14 @@ private class C_NsAsm_InternalComponentAssembler(
         return C_NsAsm_InternalComponentAssembler(nsLinker, subNsKey, stamp)
     }
 
-    final override fun addExactImport(alias: S_Name, module: C_ModuleKey, path: List<S_Name>, name: S_Name) {
+    override fun addExactImport(alias: S_Name, module: C_ModuleKey, path: List<S_Name>, name: S_Name) {
         val imp = C_NsAsm_ExactImport(module, path, name)
         val def = C_NsAsm_RawDef_ExactImport(imp)
         val mutDef = C_NsAsm_MutableDef_Simple(def)
         addEntry(alias, C_DeclarationType.IMPORT, mutDef, C_NsAsm_Identity_ExactImport(imp))
     }
 
-    final override fun addWildcardImport(module: C_ModuleKey, path: List<S_Name>) {
+    override fun addWildcardImport(module: C_ModuleKey, path: List<S_Name>) {
         checkCanModify()
         wildcardImports.add(C_NsAsm_RawWildcardImport(module, path, stamp))
     }
@@ -482,7 +482,7 @@ private class C_NsAsm_InternalModuleAssembler(
         val sysEntries = if (exportSysEntities) sysNsProto.entities else listOf()
         val conflictsProcessor = C_NsAsm_ConflictsProcessor(msgCtx, sysNsProto, stamp)
 
-        var componentNss = components.map {
+        val componentNss = components.map {
             val rawNs = it.assemble()
             conflictsProcessor.mergeAndProcess(rawNs)
         }

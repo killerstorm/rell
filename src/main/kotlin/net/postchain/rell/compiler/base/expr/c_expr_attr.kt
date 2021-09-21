@@ -14,6 +14,7 @@ import net.postchain.rell.compiler.base.fn.C_ArgTypeMatcher_Simple
 import net.postchain.rell.compiler.base.utils.C_Error
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.base.utils.C_LateGetter
+import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.compiler.vexpr.V_AttributeDefaultValueExpr
 import net.postchain.rell.compiler.vexpr.V_CreateExprAttr
 import net.postchain.rell.compiler.vexpr.V_Expr
@@ -65,7 +66,7 @@ object C_AttributeResolver {
             val exprPos = arg.vExpr.pos
             C_Errors.check(attrMatch.attr.canSetInCreate, exprPos) {
                 val name = attrMatch.attr.name
-                "create_attr_cantset:$name" to "Cannot set value of system attribute '$name'"
+                "create_attr_cantset:$name" toCodeMsg "Cannot set value of system attribute '$name'"
             }
         }
 
@@ -79,7 +80,7 @@ object C_AttributeResolver {
     ): Map<C_AttrArgument, C_AttrMatch> {
         val explicitAttrs = matchExplicitAttrs(ctx.msgCtx, attributes, args, false)
         val explicitAttrs2 = checkExplicitExprTypes(ctx, explicitAttrs)
-        return matchImplicitAttrs(ctx.msgCtx, attributes, args, explicitAttrs2, false)
+        return matchImplicitAttrs(ctx, attributes, args, explicitAttrs2, false)
     }
 
     private fun matchDefaultExprs(
@@ -113,23 +114,23 @@ object C_AttributeResolver {
                 .toList()
 
         C_Errors.check(missing.isEmpty(), pos) {
-            "attr_missing:${missing.joinToString(",")}" to "Attributes not specified: ${missing.joinToString()}"
+            "attr_missing:${missing.joinToString(",")}" toCodeMsg "Attributes not specified: ${missing.joinToString()}"
         }
     }
 
     fun resolveUpdate(
-            msgCtx: C_MessageContext,
+            ctx: C_ExprContext,
             entity: R_EntityDefinition,
             args: List<C_AttrArgument>
     ): Map<C_AttrArgument, R_Attribute> {
-        val errWatcher = msgCtx.errorWatcher()
-        val explicitAttrs = matchExplicitAttrs(msgCtx, entity.attributes, args, entity.flags.canUpdate)
-        val matchedAttrs = matchImplicitAttrs(msgCtx, entity.attributes, args, explicitAttrs, true)
+        val errWatcher = ctx.msgCtx.errorWatcher()
+        val explicitAttrs = matchExplicitAttrs(ctx.msgCtx, entity.attributes, args, entity.flags.canUpdate)
+        val matchedAttrs = matchImplicitAttrs(ctx, entity.attributes, args, explicitAttrs, true)
 
         val unmatched = Sets.difference(args.toSet(), matchedAttrs.keys)
         if (unmatched.isNotEmpty() && !errWatcher.hasNewErrors() && !args.any { it.vExpr.type.isError() }) {
             val pos = unmatched.first().vExpr.pos
-            msgCtx.error(pos, "update:unmatched_args", "Not all arguments matched to attributes")
+            ctx.msgCtx.error(pos, "update:unmatched_args", "Not all arguments matched to attributes")
         }
 
         return matchedAttrs.mapValues { it.value.attr }
@@ -149,10 +150,12 @@ object C_AttributeResolver {
             name ?: continue
 
             val attrZ = attrs[name.str]
-            val attr = C_Errors.checkNotNull(attrZ, name.pos) { "attr_unknown_name:${name.str}" to "Unknown attribute: '${name.str}'" }
+            val attr = C_Errors.checkNotNull(attrZ, name.pos) {
+                "attr_unknown_name:${name.str}" toCodeMsg "Unknown attribute: '${name.str}'"
+            }
 
             C_Errors.check(explicitNames.add(name.str), name.pos) {
-                "attr_dup_name:${name.str}" to "Attribute already specified: '${name.str}'"
+                "attr_dup_name:${name.str}" toCodeMsg "Attribute already specified: '${name.str}'"
             }
 
             if (mutableOnly && !attr.mutable) {
@@ -189,13 +192,13 @@ object C_AttributeResolver {
     }
 
     private fun matchImplicitAttrs(
-            msgCtx: C_MessageContext,
+            ctx: C_ExprContext,
             attrs: Map<String, R_Attribute>,
             args: List<C_AttrArgument>,
             explicitExprs: Map<C_AttrArgument, C_AttrMatch>,
             mutableOnly: Boolean
     ) : Map<C_AttrArgument, C_AttrMatch> {
-        val implicitAttrs = matchImplicitAttrs0(msgCtx, attrs, args, mutableOnly)
+        val implicitAttrs = matchImplicitAttrs0(ctx, attrs, args, mutableOnly)
         val res = combineMatchedExprs(explicitExprs, implicitAttrs)
         return res
     }
@@ -211,7 +214,7 @@ object C_AttributeResolver {
     }
 
     private fun matchImplicitAttrs0(
-            msgCtx: C_MessageContext,
+            ctx: C_ExprContext,
             attrs: Map<String, R_Attribute>,
             args: List<C_AttrArgument>,
             mutableOnly: Boolean
@@ -221,9 +224,9 @@ object C_AttributeResolver {
         for (arg in args) {
             if (arg.name == null) {
                 val type = arg.vExpr.type
-                val attr = implicitMatch(msgCtx, attrs, arg, type, mutableOnly)
-                if (attr != null) {
-                    res[arg] = C_AttrMatch(attr, arg.vExpr)
+                val attrMatch = implicitMatch(ctx, attrs, arg, mutableOnly)
+                if (attrMatch != null) {
+                    res[arg] = attrMatch
                 }
             }
         }
@@ -239,8 +242,8 @@ object C_AttributeResolver {
         for ((arg, attrMatch) in implicitAttrs) {
             val name = attrMatch.attr.name
             C_Errors.check(name !in explicitNames, arg.vExpr.pos) {
-                "attr_implic_explic:${arg.index}:$name" to
-                        "Expression #${arg.index + 1} matches attribute '$name' which is already specified"
+                "attr_implic_explic:${arg.index}:$name" toCodeMsg
+                "Expression #${arg.index + 1} matches attribute '$name' which is already specified"
             }
         }
     }
@@ -264,39 +267,46 @@ object C_AttributeResolver {
     }
 
     private fun implicitMatch(
-            msgCtx: C_MessageContext,
+            ctx: C_ExprContext,
             attributes: Map<String, R_Attribute>,
             arg: C_AttrArgument,
-            type: R_Type,
             mutableOnly: Boolean
-    ): R_Attribute? {
+    ): C_AttrMatch? {
         val argIndex = arg.index
         val exprPos = arg.vExpr.pos
+        val exprType = arg.vExpr.type
 
         val byName = if (arg.exprImplicitName == null) null else attributes[arg.exprImplicitName]
+
         if (byName != null) {
-            if (!byName.type.isAssignableFrom(type)) {
-                errWrongType(msgCtx, exprPos, argIndex, byName, type)
+            val adapter = byName.type.getTypeAdapter(exprType)
+            val vExpr = if (adapter != null) {
+                adapter.adaptExpr(ctx, arg.vExpr)
+            } else {
+                errWrongType(ctx.msgCtx, exprPos, argIndex, byName, exprType)
+                arg.vExpr
             }
+
             if (mutableOnly && !byName.mutable) {
-                msgCtx.error(exprPos, C_Errors.msgAttrNotMutable(byName.name))
+                ctx.msgCtx.error(exprPos, C_Errors.msgAttrNotMutable(byName.name))
             }
-            return byName
+
+            return C_AttrMatch(byName, vExpr)
         }
 
-        val byType = implicitMatchByType(attributes, type, mutableOnly)
+        val byType = implicitMatchByType(attributes, exprType, mutableOnly)
         if (byType.size == 1) {
-            return byType[0]
+            return C_AttrMatch(byType[0], arg.vExpr)
         }
 
         C_Errors.check(byType.isEmpty(), exprPos) {
-            "attr_implic_multi:$argIndex:${byType.joinToString(",") { it.name }}" to
-                    "Multiple attributes match expression #${argIndex + 1}: ${byType.joinToString(", ") { it.name }}"
+            "attr_implic_multi:$argIndex:${byType.joinToString(",") { it.name }}" toCodeMsg
+            "Multiple attributes match expression #${argIndex + 1}: ${byType.joinToString(", ") { it.name }}"
         }
 
-        if (type.isNotError()) {
-            msgCtx.error(exprPos, "attr_implic_unknown:$argIndex:$type",
-                    "Cannot find attribute for expression #${argIndex + 1} of type ${type.toStrictString()}")
+        if (exprType.isNotError()) {
+            ctx.msgCtx.error(exprPos, "attr_implic_unknown:$argIndex:${exprType.strCode()}",
+                    "Cannot find attribute for expression #${argIndex + 1} of type ${exprType.str()}")
         }
 
         return null
@@ -308,8 +318,8 @@ object C_AttributeResolver {
 
     private fun errWrongType(msgCtx: C_MessageContext, pos: S_Pos, idx: Int, attr: R_Attribute, exprType: R_Type) {
         if (attr.type.isError() || exprType.isError()) return
-        val code = "attr_bad_type:$idx:${attr.name}:${attr.type.toStrictString()}:${exprType.toStrictString()}"
-        val msg = "Attribute type mismatch for '${attr.name}': ${exprType} instead of ${attr.type}"
-        throw C_Error.stop(pos, code, msg)
+        val code = "attr_bad_type:$idx:${attr.name}:${attr.type.strCode()}:${exprType.strCode()}"
+        val msg = "Attribute type mismatch for '${attr.name}': ${exprType.str()} instead of ${attr.type.str()}"
+        msgCtx.error(pos, code, msg)
     }
 }

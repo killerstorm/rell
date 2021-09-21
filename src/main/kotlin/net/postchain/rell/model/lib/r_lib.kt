@@ -11,6 +11,9 @@ import net.postchain.rell.model.expr.R_RequireCondition
 import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.utils.RellInterpreterCrashException
+import net.postchain.rell.runtime.utils.Rt_DecimalUtils
+import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.PostchainUtils
 import net.postchain.rell.utils.checkEquals
@@ -564,7 +567,7 @@ object R_SysFn_Any {
 
     object ToText: R_SysFunction_1() {
         override fun call(arg: Rt_Value): Rt_Value {
-            val a = arg.toString()
+            val a = arg.str()
             return Rt_TextValue(a)
         }
     }
@@ -634,7 +637,7 @@ object R_SysFn_General {
                 if (!buf.isEmpty()) {
                     buf.append(" ")
                 }
-                buf.append(arg)
+                buf.append(arg.str())
             }
 
             val str = buf.toString()
@@ -758,7 +761,7 @@ object R_SysFn_Rell {
 object R_SysFn_Internal {
     object StrictStr: R_SysFunction_1() {
         override fun call(arg: Rt_Value): Rt_Value {
-            val s = arg.toStrictString()
+            val s = arg.strCode()
             return Rt_TextValue(s)
         }
     }
@@ -766,7 +769,7 @@ object R_SysFn_Internal {
     class Nop(private val print: Boolean): R_SysFunctionEx_1() {
         override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
             if (print) {
-                ctx.globalCtx.outPrinter.print(arg.toString())
+                ctx.globalCtx.outPrinter.print(arg.str())
             }
             return arg
         }

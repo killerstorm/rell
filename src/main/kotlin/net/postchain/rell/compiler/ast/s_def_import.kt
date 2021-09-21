@@ -10,6 +10,7 @@ import net.postchain.rell.compiler.base.namespace.C_UserNsProtoBuilder
 import net.postchain.rell.compiler.base.utils.C_CommonError
 import net.postchain.rell.compiler.base.utils.C_Error
 import net.postchain.rell.compiler.base.utils.C_Errors
+import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.tools.api.IdeOutlineNodeType
 import net.postchain.rell.tools.api.IdeOutlineTreeBuilder
@@ -21,13 +22,13 @@ class S_ImportModulePath(val relative: S_RelativeImportModulePath?, val path: Li
         val rPath = path.map { it.rName }
 
         if (relative == null) {
-            C_Errors.check(path.isNotEmpty(), importPos, "import:no_path", "Module not specified")
+            C_Errors.check(path.isNotEmpty(), importPos) { "import:no_path" toCodeMsg "Module not specified" }
             return R_ModuleName(rPath)
         }
 
         C_Errors.check(relative.ups <= currentModule.parts.size, relative.pos) {
-            "import:up:${currentModule.parts.size}:${relative.ups}" to
-                    "Cannot go up by ${relative.ups}, current module is '${currentModule}'"
+            "import:up:${currentModule.parts.size}:${relative.ups}" toCodeMsg
+            "Cannot go up by ${relative.ups}, current module is '${currentModule}'"
         }
 
         val base = currentModule.parts.subList(0, currentModule.parts.size - relative.ups)
@@ -59,16 +60,15 @@ class S_DefaultImportTarget: S_ImportTarget() {
     }
 }
 
-class S_ExactImportTargetItem(val alias: S_Name?, val name: List<S_Name>, val wildcard: Boolean) {
+class S_ExactImportTargetItem(val alias: S_Name?, val name: S_QualifiedName, val wildcard: Boolean) {
     fun addToNamespace(nsBuilder: C_UserNsProtoBuilder, module: C_ModuleKey) {
-        check(name.isNotEmpty())
         if (wildcard) {
             val nsBuilder2 = if (alias == null) nsBuilder else nsBuilder.addNamespace(alias, false)
-            nsBuilder2.addWildcardImport(module, name)
+            nsBuilder2.addWildcardImport(module, name.parts)
         } else {
-            val lastName = name.last()
+            val lastName = name.last
             val realAlias = alias ?: lastName
-            nsBuilder.addExactImport(realAlias, module, name.subList(0, name.size - 1), lastName)
+            nsBuilder.addExactImport(realAlias, module, name.parts.subList(0, name.parts.size - 1), lastName)
         }
     }
 }

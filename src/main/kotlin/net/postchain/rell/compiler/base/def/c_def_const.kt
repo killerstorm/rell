@@ -9,14 +9,9 @@ import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.*
 import net.postchain.rell.compiler.base.expr.C_ExprContext
-import net.postchain.rell.compiler.base.fn.C_CommonFunctionBody
-import net.postchain.rell.compiler.base.fn.C_FunctionHeader
 import net.postchain.rell.compiler.base.fn.C_FunctionUtils
 import net.postchain.rell.compiler.base.namespace.C_DeclarationType
-import net.postchain.rell.compiler.base.utils.C_CodeMsg
-import net.postchain.rell.compiler.base.utils.C_GraphUtils
-import net.postchain.rell.compiler.base.utils.C_LateGetter
-import net.postchain.rell.compiler.base.utils.C_Utils
+import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.compiler.vexpr.V_ConstantValueEvalContext
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_GlobalConstantExpr
@@ -61,13 +56,15 @@ class C_GlobalConstantDefinition(
 
                 val flags = type.completeFlags()
                 if (flags.mutable) {
+                    val code = "def:const:bad_type:mutable:${c.rDef.constId.strCode()}:${type.strCode()}"
                     var msg = "Global constant cannot have a mutable type"
-                    if (header.explicitType == null) msg = "$msg: $type"
-                    msgCtx.error(c.typePos, "def:const:bad_type:mutable:${c.rDef.constId.toErrCodeString()}:$type", msg)
+                    if (header.explicitType == null) msg = "$msg: ${type.str()}"
+                    msgCtx.error(c.typePos, code, msg)
                 } else if (!flags.pure) {
+                    val code = "def:const:bad_type:not_pure:${c.rDef.constId.strCode()}:${type.strCode()}"
                     var msg = "Bad type for a global constant"
-                    if (header.explicitType == null) msg = "$msg: $type"
-                    msgCtx.error(c.typePos, "def:const:bad_type:not_pure:${c.rDef.constId.toErrCodeString()}:$type", msg)
+                    if (header.explicitType == null) msg = "$msg: ${type.str()}"
+                    msgCtx.error(c.typePos, code, msg)
                 }
             }
         }
@@ -79,7 +76,7 @@ class C_GlobalConstantDefinition(
                     if (r == null) true else {
                         var msg = "Bad expression for a global constant"
                         if (r.msg != null) msg = "$msg: ${r.msg}"
-                        msgCtx.error(it.pos, "def:const:bad_expr:${c.rDef.constId.toErrCodeString()}:${r.code}", msg)
+                        msgCtx.error(it.pos, "def:const:bad_expr:${c.rDef.constId.strCode()}:${r.code}", msg)
                         true
                     }
                 }
@@ -103,7 +100,7 @@ class C_GlobalConstantDefinition(
 
             for (cycle in cycles) {
                 for ((edge, tgtId) in cycle) {
-                    val code = "def:const:cycle:${edge.srcId.toErrCodeString()}:${tgtId.toErrCodeString()}"
+                    val code = "def:const:cycle:${edge.srcId.strCode()}:${tgtId.strCode()}"
                     val msg = "Global constant expression is recursive"
                     msgCtx.error(edge.tgtExpr.pos, code, msg)
                 }
@@ -144,12 +141,13 @@ class C_GlobalConstantFunctionBody(
 
         return if (bodyCtx.explicitRetType == null) {
             C_Types.checkNotUnit(bodyCtx.defCtx.msgCtx, sExpr.startPos, actualType, bodyCtx.defNames.simpleName) {
-                "def:const" to "global constant"
+                "def:const" toCodeMsg "global constant"
             }
             vExpr
         } else {
-            val adapter = C_Types.adapt(bodyCtx.explicitRetType, actualType, sExpr.startPos,
-                    "def:const_expr_type", "Expression type mismatch")
+            val adapter = C_Types.adapt(bodyCtx.explicitRetType, actualType, sExpr.startPos) {
+                "def:const_expr_type" toCodeMsg "Expression type mismatch"
+            }
             adapter.adaptExpr(exprCtx, vExpr)
         }
     }

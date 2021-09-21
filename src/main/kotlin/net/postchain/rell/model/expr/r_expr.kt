@@ -10,6 +10,8 @@ import net.postchain.rell.model.lib.R_SysFn_Decimal
 import net.postchain.rell.model.stmt.R_ForIterator
 import net.postchain.rell.model.stmt.R_Statement
 import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.utils.RellInterpreterCrashException
+import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.sql.SqlGen
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.immListOf
@@ -135,7 +137,7 @@ class R_MapLiteralExpr(type: R_MapType, private val entries: List<Pair<R_Expr, R
             val key = keyExpr.evaluate(frame)
             val value = valueExpr.evaluate(frame)
             if (key in map) {
-                throw Rt_Error("expr_map_dupkey:${key.toStrictString()}", "Duplicate map key: $key")
+                throw Rt_Error("expr_map_dupkey:${key.strCode()}", "Duplicate map key: ${key.str()}")
             }
             map.put(key, value)
         }
@@ -212,7 +214,7 @@ class R_IteratorCopyMapConstructorExpr(
             val k = tuple.get(0)
             val v = tuple.get(1)
             val v0 = map.put(k, v)
-            Rt_Utils.check(v0 == null) { "map:new:iterator:dupkey:${k.toStrictString()}" to "Duplicate key: $k" }
+            Rt_Utils.check(v0 == null) { "map:new:iterator:dupkey:${k.strCode()}" to "Duplicate key: ${k.str()}" }
         }
         return Rt_MapValue(type, map)
     }
@@ -270,7 +272,7 @@ class R_MapSubscriptExpr(type: R_Type, val base: R_Expr, val expr: R_Expr): R_De
         fun getValue(map: Map<Rt_Value, Rt_Value>, key: Rt_Value): Rt_Value {
             val value = map[key]
             if (value == null) {
-                throw Rt_Error("fn_map_get_novalue:${key.toStrictString()}", "Key not in map: $key")
+                throw Rt_Error("fn_map_get_novalue:${key.strCode()}", "Key not in map: ${key.str()}")
             }
             return value
         }

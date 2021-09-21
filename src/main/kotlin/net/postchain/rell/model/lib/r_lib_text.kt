@@ -6,6 +6,7 @@ package net.postchain.rell.model.lib
 
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.utils.Rt_Utils
 import java.nio.ByteBuffer
 import java.util.*
 import java.util.regex.Pattern

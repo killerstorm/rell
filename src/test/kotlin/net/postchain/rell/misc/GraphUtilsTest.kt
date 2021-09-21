@@ -187,7 +187,7 @@ class GraphUtilsTest {
     }
 
     private fun chkClosure(graph: Map<String, List<String>>, verts: List<String>, exp: String) {
-        val closure = C_GraphUtils.closure(graph, verts)
+        val closure = C_GraphUtils.closure(verts) { graph.getValue(it) }
         assertEquals(exp, closure.sorted().toString())
     }
 

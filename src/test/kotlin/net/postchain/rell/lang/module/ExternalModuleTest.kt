@@ -325,11 +325,11 @@ class ExternalModuleTest: BaseRellTest() {
 
     @Test fun testWrongAnnotation() {
         file("ext.rell", "@external module;")
-        chkModuleFull("@external('foo') module;", "ct_err:ext.rell:ann:external:unary:target_type:MODULE")
-        chkCompile("@external import ext;", "ct_err:ann:external:nullary:target_type:IMPORT")
-        chkCompile("@external @log entity user { name; }", "ct_err:ann:external:nullary:target_type:ENTITY")
-        chkCompile("@external namespace {}", "ct_err:ann:external:nullary:target_type:NAMESPACE")
-        chkCompile("@external namespace bar {}", "ct_err:ann:external:nullary:target_type:NAMESPACE")
+        chkModuleFull("@external('foo') module;", "ct_err:ext.rell:ann:external:args:1")
+        chkCompile("@external import ext;", "ct_err:ann:external:arg_count:0")
+        chkCompile("@external @log entity user { name; }", "ct_err:ann:external:arg_count:0")
+        chkCompile("@external namespace {}", "ct_err:ann:external:arg_count:0")
+        chkCompile("@external namespace bar {}", "ct_err:ann:external:arg_count:0")
     }
 
     @Test fun testSystemDefsAccess() {

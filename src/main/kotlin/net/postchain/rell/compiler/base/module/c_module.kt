@@ -18,6 +18,7 @@ import net.postchain.rell.model.*
 import net.postchain.rell.utils.immMapOf
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
+import net.postchain.rell.utils.toImmSet
 import java.util.*
 
 class C_ModuleHeader(
@@ -65,8 +66,8 @@ class C_ModuleImportsDescriptor(val key: C_ContainerKey, val name: R_ModuleName,
 
 class C_FileImportsDescriptor(
         imports: List<C_ImportDescriptor>,
-        abstracts: List<C_AbstractDescriptor>,
-        overrides: List<C_OverrideDescriptor>
+        abstracts: List<C_AbstractFunctionDescriptor>,
+        overrides: List<C_OverrideFunctionDescriptor>
 ) {
     val imports = imports.toImmList()
     val abstracts = abstracts.toImmList()
@@ -114,6 +115,7 @@ class C_ModuleDescriptor(
     val extChain = key.extChain
 
     val containerKey = C_ModuleContainerKey.of(key)
+    val rModuleKey = R_ModuleKey(name, extChain?.name)
 
     fun importsDescriptor() = importsDescriptorGetter.get()
 }
@@ -171,6 +173,10 @@ class C_ModuleCompiler private constructor(private val modCtx: C_ModuleContext) 
 
         val modName = modCtx.moduleName
 
+        val fileImports = files.map { it.importsDescriptor }
+        val importedModules = fileImports.flatMap { it.imports.map { i -> i.module.name } }.toImmSet()
+        val moduleImports = C_ModuleImportsDescriptor(modCtx.containerKey, modName, fileImports)
+
         val rModule = R_Module(
                 modName,
                 abstract = modCtx.abstract,
@@ -185,11 +191,9 @@ class C_ModuleCompiler private constructor(private val modCtx: C_ModuleContext) 
                 queries = defs.queries,
                 functions = defs.functions,
                 constants = defs.constants,
+                imports = importedModules,
                 moduleArgs = moduleArgs?.structDef
         )
-
-        val fileImports = files.map { it.importsDescriptor }
-        val moduleImports = C_ModuleImportsDescriptor(modCtx.containerKey, modName, fileImports)
 
         val contents = C_ModuleContents(modMounts, defs)
         return C_CompiledModule(rModule, contents, moduleImports)

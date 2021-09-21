@@ -6,6 +6,8 @@ package net.postchain.rell.compiler.base.core
 
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.expr.C_ExprContext
+import net.postchain.rell.compiler.base.utils.C_CodeMsgSupplier
+import net.postchain.rell.compiler.base.utils.C_Error
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_TypeAdapterExpr
@@ -115,36 +117,43 @@ class C_TypeAdapter_Nullable(private val dstType: R_Type, private val innerAdapt
 }
 
 object C_Types {
-    fun match(dstType: R_Type, srcType: R_Type, errPos: S_Pos, errCode: String, errMsg: String) {
-        if (dstType.isNotError() && srcType.isNotError() && !dstType.isAssignableFrom(srcType)) {
-            throw C_Errors.errTypeMismatch(errPos, srcType, dstType, errCode, errMsg)
+    fun match(dstType: R_Type, srcType: R_Type, errPos: S_Pos, errSupplier: C_CodeMsgSupplier) {
+        val err = match0(dstType, srcType, errPos, errSupplier)
+        if (err != null) {
+            throw err
         }
     }
 
-    fun matchOpt(msgCtx: C_MessageContext, dstType: R_Type, srcType: R_Type, errPos: S_Pos, errCode: String, errMsg: String): Boolean {
-        return msgCtx.consumeError { match(dstType, srcType, errPos, errCode, errMsg); true } ?: false
+    fun matchOpt(
+            msgCtx: C_MessageContext,
+            dstType: R_Type,
+            srcType: R_Type,
+            errPos: S_Pos,
+            errSupplier: C_CodeMsgSupplier
+    ): Boolean {
+        val err = match0(dstType, srcType, errPos, errSupplier)
+        return if (err != null) {
+            msgCtx.error(err)
+            false
+        } else {
+            true
+        }
     }
 
-    fun adapt(dstType: R_Type, srcType: R_Type, errPos: S_Pos, errCode: String, errMsg: String): C_TypeAdapter {
+    private fun match0(dstType: R_Type, srcType: R_Type, errPos: S_Pos, errSupplier: C_CodeMsgSupplier): C_Error? {
+        return if (dstType.isNotError() && srcType.isNotError() && !dstType.isAssignableFrom(srcType)) {
+            C_Errors.errTypeMismatch(errPos, srcType, dstType, errSupplier)
+        } else {
+            null
+        }
+    }
+
+    fun adapt(dstType: R_Type, srcType: R_Type, errPos: S_Pos, errSupplier: C_CodeMsgSupplier): C_TypeAdapter {
         val adapter = dstType.getTypeAdapter(srcType)
         if (adapter == null) {
-            throw C_Errors.errTypeMismatch(errPos, srcType, dstType, errCode, errMsg)
+            throw C_Errors.errTypeMismatch(errPos, srcType, dstType, errSupplier)
         }
         return adapter
-    }
-
-    fun checkNotUnit(
-            msgCtx: C_MessageContext,
-            pos: S_Pos,
-            type: R_Type,
-            name: String?,
-            codeMsgFn: () -> Pair<String, String>
-    ): R_Type {
-        if (type != R_UnitType) return type
-        val codeMsg = codeMsgFn()
-        val nameCode = name ?: "?"
-        msgCtx.error(pos, "type:${codeMsg.first}:unit:$nameCode", "Type of ${codeMsg.second} cannot be $type")
-        return R_CtErrorType
     }
 
     fun adaptSafe(
@@ -152,19 +161,32 @@ object C_Types {
             dstType: R_Type,
             srcType: R_Type,
             errPos: S_Pos,
-            errCode: String,
-            errMsg: String
+            errSupplier: C_CodeMsgSupplier
     ): C_TypeAdapter {
         val adapter = dstType.getTypeAdapter(srcType)
         return if (adapter != null) adapter else {
-            C_Errors.errTypeMismatch(msgCtx, errPos, srcType, dstType, errCode, errMsg)
+            C_Errors.errTypeMismatch(msgCtx, errPos, srcType, dstType, errSupplier)
             C_TypeAdapter_Direct
         }
     }
 
-    fun commonType(a: R_Type, b: R_Type, errPos: S_Pos, errCode: String, errMsg: String): R_Type {
+    fun checkNotUnit(
+            msgCtx: C_MessageContext,
+            pos: S_Pos,
+            type: R_Type,
+            name: String?,
+            kindSupplier: C_CodeMsgSupplier
+    ): R_Type {
+        if (type != R_UnitType) return type
+        val kind = kindSupplier()
+        val nameCode = name ?: "?"
+        msgCtx.error(pos, "type:${kind.code}:unit:$nameCode", "Type of ${kind.msg} cannot be ${type.str()}")
+        return R_CtErrorType
+    }
+
+    fun commonType(a: R_Type, b: R_Type, errPos: S_Pos, errSupplier: C_CodeMsgSupplier): R_Type {
         val res = commonTypeOpt(a, b)
-        return res ?: throw C_Errors.errTypeMismatch(errPos, b, a, errCode, errMsg)
+        return res ?: throw C_Errors.errTypeMismatch(errPos, b, a, errSupplier)
     }
 
     fun commonTypeOpt(a: R_Type, b: R_Type): R_Type? {

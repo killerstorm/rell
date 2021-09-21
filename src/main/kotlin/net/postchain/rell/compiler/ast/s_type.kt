@@ -10,6 +10,7 @@ import net.postchain.rell.compiler.base.core.C_Types
 import net.postchain.rell.compiler.base.expr.C_ExprContext
 import net.postchain.rell.compiler.base.utils.C_Error
 import net.postchain.rell.compiler.base.utils.C_Utils
+import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.model.*
 
 sealed class S_Type(val pos: S_Pos) {
@@ -39,19 +40,20 @@ sealed class S_Type(val pos: S_Pos) {
             val rStruct = rEntity.mirrorStructs.getStruct(mutable)
             rStruct.type
         } else {
-            throw C_Error.more(pos, "type:struct:bad_type:$rParamType", "Invalid struct parameter type: $rParamType")
+            throw C_Error.more(pos, "type:struct:bad_type:${rParamType.strCode()}",
+                    "Invalid struct parameter type: ${rParamType.str()}")
         }
     }
 }
 
-class S_NameType(val names: List<S_Name>): S_Type(names[0].pos) {
-    override fun compile0(ctx: C_NamespaceContext): R_Type = ctx.getType(names)
+class S_NameType(val name: S_QualifiedName): S_Type(name.pos) {
+    override fun compile0(ctx: C_NamespaceContext): R_Type = ctx.getType(name)
 
     override fun compileMirrorStructType(ctx: C_NamespaceContext, mutable: Boolean): R_StructType? {
-        var rParamType = ctx.getTypeOpt(names)
+        var rParamType = ctx.getTypeOpt(name)
 
         if (rParamType == null) {
-            val obj = ctx.getObjectOpt(names)
+            val obj = ctx.getObjectOpt(name)
             if (obj != null) {
                 rParamType = obj.rEntity.type
             }
@@ -61,7 +63,7 @@ class S_NameType(val names: List<S_Name>): S_Type(names[0].pos) {
             return compileMirrorStructType0(rParamType, mutable)
         }
 
-        val rOp = ctx.getOperationOpt(names)
+        val rOp = ctx.getOperationOpt(name)
         if (rOp != null) {
             val rStruct = rOp.mirrorStructs.getStruct(mutable)
             return rStruct.type
@@ -91,7 +93,7 @@ class S_TupleType(pos: S_Pos, val fields: List<S_NameOptValue<S_Type>>): S_Type(
 
         val rFields = fields.map { (name, type) ->
             val rType = C_Types.checkNotUnit(ctx.msgCtx, type.pos, type.compile(ctx), name?.str) {
-                "tuple_field" to "tuple field"
+                "tuple_field" toCodeMsg "tuple field"
             }
             R_TupleField(name?.str, rType)
         }
@@ -104,7 +106,7 @@ sealed class S_CollectionType(pos: S_Pos, private val element: S_Type): S_Type(p
     protected fun compileElementType(ctx: C_NamespaceContext, collectionKind: String): R_Type {
         val rElementType0 = element.compile(ctx)
         return C_Types.checkNotUnit(ctx.msgCtx, element.pos, rElementType0, null) {
-            "$collectionKind:elem" to "$collectionKind element"
+            "$collectionKind:elem" toCodeMsg "$collectionKind element"
         }
     }
 }
@@ -133,7 +135,7 @@ class S_MapType(pos: S_Pos, val key: S_Type, val value: S_Type): S_Type(pos) {
     }
 
     private fun compileElementType(ctx: C_NamespaceContext, type: S_Type): R_Type {
-        return C_Types.checkNotUnit(ctx.msgCtx, type.pos, type.compile(ctx), null) { "map_elem" to "map element" }
+        return C_Types.checkNotUnit(ctx.msgCtx, type.pos, type.compile(ctx), null) { "map_elem" toCodeMsg "map element" }
     }
 }
 
@@ -198,7 +200,7 @@ class S_MirrorStructType(pos: S_Pos, val mutable: Boolean, val paramType: S_Type
 class S_FunctionType(pos: S_Pos, val params: List<S_Type>, val result: S_Type): S_Type(pos) {
     override fun compile0(ctx: C_NamespaceContext): R_Type {
         val rParams = params.map {
-            C_Types.checkNotUnit(ctx.msgCtx, it.pos, it.compile(ctx), null) { "fntype_param" to "parameter" }
+            C_Types.checkNotUnit(ctx.msgCtx, it.pos, it.compile(ctx), null) { "fntype_param" toCodeMsg "parameter" }
         }
 
         val rResult = result.compile(ctx)

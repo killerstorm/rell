@@ -265,19 +265,19 @@ abstract class AtExprBasicBaseTest: AtExprBaseTest() {
         tst.strictToString = false
         initDataUserCompany()
 
-        chk("$fromUser @* {} ( @sort @sort .firstName )", "ct_err:ann:sort:dup")
-        chk("$fromUser @* {} ( @sort_desc @sort_desc .firstName )", "ct_err:ann:sort_desc:dup")
-        chk("$fromUser @* {} ( @sort @sort_desc .firstName )", "ct_err:ann:sort_desc:dup")
-        chk("$fromUser @* {} ( @sort_desc @sort .firstName )", "ct_err:ann:sort:dup")
+        chk("$fromUser @* {} ( @sort @sort .firstName )", "ct_err:modifier:dup:ann:sort")
+        chk("$fromUser @* {} ( @sort_desc @sort_desc .firstName )", "ct_err:modifier:dup:ann:sort_desc")
+        chk("$fromUser @* {} ( @sort @sort_desc .firstName )", "ct_err:modifier:bad_combination:ann:sort,ann:sort_desc")
+        chk("$fromUser @* {} ( @sort_desc @sort .firstName )", "ct_err:modifier:bad_combination:ann:sort_desc,ann:sort")
 
         chk("'' + $fromUser @* {} ( @sort() .firstName )", "[Bill, Jeff, Larry, Mark, Paul, Sergey, Steve, Steve]")
         chk("$fromUser @* {} ( @sort(123) .firstName )", "ct_err:ann:sort:args:1")
         chk("$fromUser @* {} ( @sort('desc') .firstName )", "ct_err:ann:sort:args:1")
 
-        chk("$fromUser @* {} ( @sort sort .firstName )", "ct_err:ann:sort:dup")
-        chk("$fromUser @* {} ( @sort_desc sort .firstName )", "ct_err:ann:sort_desc:dup")
-        chk("$fromUser @* {} ( @sort -sort .firstName )", "ct_err:ann:sort:dup")
-        chk("$fromUser @* {} ( @sort_desc -sort .firstName )", "ct_err:ann:sort_desc:dup")
+        chk("$fromUser @* {} ( @sort sort .firstName )", "ct_err:at:what:sort:specified_by_kw_and_ann")
+        chk("$fromUser @* {} ( @sort_desc sort .firstName )", "ct_err:at:what:sort:specified_by_kw_and_ann")
+        chk("$fromUser @* {} ( @sort -sort .firstName )", "ct_err:at:what:sort:specified_by_kw_and_ann")
+        chk("$fromUser @* {} ( @sort_desc -sort .firstName )", "ct_err:at:what:sort:specified_by_kw_and_ann")
     }
 
     @Test fun testSortOld() {

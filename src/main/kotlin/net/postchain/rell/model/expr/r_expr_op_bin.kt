@@ -7,6 +7,7 @@ package net.postchain.rell.model.expr
 import com.google.common.math.LongMath
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.utils.Rt_DecimalUtils
 import java.math.BigDecimal
 
 sealed class R_CmpOp(val code: String, val checker: (Int) -> Boolean) {

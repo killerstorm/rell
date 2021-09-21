@@ -80,29 +80,31 @@ class WhenTest: BaseRellTest(false) {
     }
 
     @Test fun testExprDuplicateConstantValue() {
-        chkWhen("integer", "= when(a) { 0 -> 'A'; 0 -> 'B'; else -> 'C' };", "0" to "ct_err:when_expr_dupvalue:0")
-        chkWhen("integer", "= when(a) { 0 -> 'A'; 0 -> 'A'; else -> 'C' };", "0" to "ct_err:when_expr_dupvalue:0")
-        chkWhen("integer", "= when(a) { 0 -> 'A'; 1 -> 'B'; 0 -> 'C'; else -> 'D' };", "0" to "ct_err:when_expr_dupvalue:0")
-        chkWhen("integer", "= when(a) { 0 -> 'A'; 1 -> 'B'; 2, 0 -> 'C'; else -> 'D' };", "0" to "ct_err:when_expr_dupvalue:0")
+        chkWhen("integer", "= when(a) { 0 -> 'A'; 0 -> 'B'; else -> 'C' };", "0" to "ct_err:when_expr_dupvalue:int[0]")
+        chkWhen("integer", "= when(a) { 0 -> 'A'; 0 -> 'A'; else -> 'C' };", "0" to "ct_err:when_expr_dupvalue:int[0]")
+        chkWhen("integer", "= when(a) { 0 -> 'A'; 1 -> 'B'; 0 -> 'C'; else -> 'D' };", "0" to "ct_err:when_expr_dupvalue:int[0]")
+        chkWhen("integer", "= when(a) { 0 -> 'A'; 1 -> 'B'; 2, 0 -> 'C'; else -> 'D' };", "0" to "ct_err:when_expr_dupvalue:int[0]")
 
-        chkWhen("integer", "= when(a) { -1 -> 'A'; -1 -> 'B'; else -> '?'; };", "0" to "ct_err:when_expr_dupvalue:-1")
-        chkWhen("integer", "= when(a) { -1 -> 'A'; 5 -> 'B'; -1 -> 'C'; else -> '?'; };", "0" to "ct_err:when_expr_dupvalue:-1")
-        chkWhen("integer", "= when(a) { -1, -1 -> 'A'; else -> '?'; };", "0" to "ct_err:when_expr_dupvalue:-1")
+        chkWhen("integer", "= when(a) { -1 -> 'A'; -1 -> 'B'; else -> '?'; };", "0" to "ct_err:when_expr_dupvalue:int[-1]")
+        chkWhen("integer", "= when(a) { -1 -> 'A'; 5 -> 'B'; -1 -> 'C'; else -> '?'; };", "0" to "ct_err:when_expr_dupvalue:int[-1]")
+        chkWhen("integer", "= when(a) { -1, -1 -> 'A'; else -> '?'; };", "0" to "ct_err:when_expr_dupvalue:int[-1]")
 
-        chkWhen("boolean", "= when(a) { true -> 'A'; true -> 'B'; else -> 'C' };", "true" to "ct_err:when_expr_dupvalue:true")
-        chkWhen("boolean", "= when(a) { false -> 'A'; false -> 'A'; else -> 'C' };", "false" to "ct_err:when_expr_dupvalue:false")
+        chkWhen("boolean", "= when(a) { true -> 'A'; true -> 'B'; else -> 'C' };",
+                "true" to "ct_err:when_expr_dupvalue:boolean[true]")
+        chkWhen("boolean", "= when(a) { false -> 'A'; false -> 'A'; else -> 'C' };",
+                "false" to "ct_err:when_expr_dupvalue:boolean[false]")
 
         chkWhen("text", "= when(a) { 'Hello' -> 'A'; 'Bye' -> 'B'; 'Hello' -> 'C'; else -> 'D' };",
-                "'Hello'" to "ct_err:when_expr_dupvalue:Hello")
+                "'Hello'" to "ct_err:when_expr_dupvalue:text[Hello]")
 
         chkWhen("(integer,text)", "= when(a) { (123,'Hello') -> 'A'; (123,'Hello') -> 'B'; else -> 'C' };",
-                "(123,'Hello')" to "ct_err:when_expr_dupvalue:(123,Hello)")
+                "(123,'Hello')" to "ct_err:when_expr_dupvalue:(int[123],text[Hello])")
 
         chkWhen("integer?", "= when(a) { 123 -> 'A'; null -> 'B'; 456 -> 'C'; null -> 'D'; else -> 'E'; };",
                 "123" to "ct_err:when_expr_dupvalue:null")
 
         chkWhen("integer", "{ val t = 123; return when(a) { t -> 'A'; 1 -> 'B'; 2 -> 'C'; 1 -> 'D'; else -> 'E'; }; }",
-                "0" to "ct_err:when_expr_dupvalue:1")
+                "0" to "ct_err:when_expr_dupvalue:int[1]")
     }
 
     @Test fun testExprFullCoverageBoolean() {
@@ -122,7 +124,7 @@ class WhenTest: BaseRellTest(false) {
         chkWhen("E", "= when(a) { A -> 'A'; C -> 'C'; D -> 'D'; };", "E.A" to "ct_err:when_no_else")
         chkWhen("E", "= when(a) { A -> 'A'; B -> 'B'; D -> 'D'; };", "E.A" to "ct_err:when_no_else")
         chkWhen("E", "= when(a) { A -> 'A'; B -> 'B'; C -> 'C'; };", "E.A" to "ct_err:when_no_else")
-        chkWhen("E", "= when(a) { A -> 'A'; E.A -> 'B'; else -> '?'; };", "E.A" to "ct_err:when_expr_dupvalue:A")
+        chkWhen("E", "= when(a) { A -> 'A'; E.A -> 'B'; else -> '?'; };", "E.A" to "ct_err:when_expr_dupvalue:E[A]")
     }
 
     @Test fun testFullCoverageNullableBoolean() {
@@ -237,7 +239,7 @@ class WhenTest: BaseRellTest(false) {
                 "1" to "text[Yes]", "2" to "text[No]", "3" to "text[No]", "4" to "text[Yes]", "5" to "text[?]",
                 "6" to "text[Yes]")
 
-        chkWhenAt("when (.x) { 1 -> .s1; 2 -> .s2; 1 -> .s1; else -> '?'; }", "1" to "ct_err:when_expr_dupvalue:1")
+        chkWhenAt("when (.x) { 1 -> .s1; 2 -> .s2; 1 -> .s1; else -> '?'; }", "1" to "ct_err:when_expr_dupvalue:int[1]")
     }
 
     @Test fun testAtExprNoParameter() {
@@ -267,7 +269,7 @@ class WhenTest: BaseRellTest(false) {
         chkWhenAt("when(.x) { B -> 'B'; C -> 'C'; }", "E.A" to "ct_err:when_no_else")
         chkWhenAt("when(.x) { A -> 'A'; C -> 'C'; }", "E.A" to "ct_err:when_no_else")
         chkWhenAt("when(.x) { A -> 'A'; B -> 'B'; }", "E.A" to "ct_err:when_no_else")
-        chkWhenAt("when(.x) { A -> 'A'; E.A -> 'B'; else -> '?'; }", "E.A" to "ct_err:when_expr_dupvalue:A")
+        chkWhenAt("when(.x) { A -> 'A'; E.A -> 'B'; else -> '?'; }", "E.A" to "ct_err:when_expr_dupvalue:E[A]")
     }
 
     private fun chkWhen(type: String, code: String, vararg cases: Pair<String, String>) {

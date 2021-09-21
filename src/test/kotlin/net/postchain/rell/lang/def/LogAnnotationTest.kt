@@ -30,7 +30,7 @@ class LogAnnotationTest: BaseRellTest() {
         chkCompile("@log entity foo { x: integer; transaction: integer; }", "ct_err:dup_attr:transaction")
         chkCompile("@log entity foo { x: integer; transaction; }", "ct_err:dup_attr:transaction")
 
-        chkCompile("@log @log entity foo { x: integer; }", "ct_err:ann:log:dup")
+        chkCompile("@log @log entity foo { x: integer; }", "ct_err:modifier:dup:ann:log")
 
         chkCompile("@log() entity foo { x: integer; }", "OK")
         chkCompile("@log(123) entity foo { x: integer; }", "ct_err:ann:log:args:1")

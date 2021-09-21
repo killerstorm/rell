@@ -16,6 +16,8 @@ import net.postchain.rell.model.*
 import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.repl.ReplShell
 import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.utils.Rt_SqlManager
+import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.sql.*
 import net.postchain.rell.utils.*
 import picocli.CommandLine
@@ -345,7 +347,7 @@ private fun parseArg(gtvCtx: GtvToRtContext, param: R_Param, arg: String, json: 
 
     if (json) {
         if (!type.completeFlags().gtv.fromGtv) {
-            throw RellCliErr("Parameter '${param.name}' of type ${type.toStrictString()} cannot be converted from Gtv")
+            throw RellCliErr("Parameter '${param.name}' of type ${type.strCode()} cannot be converted from Gtv")
         }
         val gtv = PostchainUtils.jsonToGtv(arg)
         return type.gtvToRt(gtvCtx, gtv)
@@ -354,9 +356,9 @@ private fun parseArg(gtvCtx: GtvToRtContext, param: R_Param, arg: String, json: 
     try {
         return type.fromCli(arg)
     } catch (e: UnsupportedOperationException) {
-        throw RellCliErr("Parameter '${param.name}' has unsupported type: ${type.toStrictString()}")
+        throw RellCliErr("Parameter '${param.name}' has unsupported type: ${type.strCode()}")
     } catch (e: Exception) {
-        throw RellCliErr("Invalid value for type ${type.toStrictString()}: '$arg'")
+        throw RellCliErr("Invalid value for type ${type.strCode()}: '$arg'")
     }
 }
 
@@ -364,7 +366,7 @@ private fun resultToString(res: Rt_Value, json: Boolean): String {
     return if (json) {
         val type = res.type()
         if (!type.completeFlags().gtv.toGtv) {
-            throw RellCliErr("Result of type '${type.toStrictString()}' cannot be converted to Gtv")
+            throw RellCliErr("Result of type '${type.strCode()}' cannot be converted to Gtv")
         }
         val gtv = type.rtToGtv(res, true)
         PostchainUtils.gtvToJson(gtv)

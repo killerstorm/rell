@@ -7,6 +7,7 @@ package net.postchain.rell.compiler.ast
 import net.postchain.rell.compiler.base.core.C_TypeHint
 import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.utils.C_Utils
+import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.compiler.vexpr.*
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
@@ -17,7 +18,8 @@ sealed class S_UnaryOp(val code: String) {
 
     fun errTypeMismatch(ctx: C_ExprContext, pos: S_Pos, type: R_Type) {
         if (type.isNotError()) {
-            ctx.msgCtx.error(pos, "unop_operand_type:$code:[$type]", "Wrong operand type for '$code': $type")
+            ctx.msgCtx.error(pos, "unop_operand_type:$code:[${type.strCode()}]",
+                    "Wrong operand type for '$code': ${type.str()}")
         }
     }
 }
@@ -83,7 +85,8 @@ class S_UnaryOp_IncDec(val inc: Boolean, val post: Boolean): S_UnaryOp(if (inc) 
             Pair(DECIMAL_INCREMENT, DECIMAL_DECREMENT)
         } else {
             val opCode = if (inc) "++" else "--"
-            ctx.msgCtx.error(opPos, "expr_incdec_type:$opCode:$dstType", "Bad operand type for '$opCode': $dstType")
+            ctx.msgCtx.error(opPos, "expr_incdec_type:$opCode:${dstType.strCode()}",
+                    "Bad operand type for '$opCode': ${dstType.str()}")
             Pair(INTEGER_INCREMENT, INTEGER_DECREMENT) // Fake ops for recovery.
         }
 
@@ -145,6 +148,7 @@ class S_UnaryExpr(startPos: S_Pos, val op: S_PosValue<S_UnaryOp>, val expr: S_Ex
         return C_VExpr(vResExpr)
     }
 
-    private fun checkUnitType(type: R_Type) = C_Utils.checkUnitType(op.pos, type, "expr_operand_unit",
-            "Operand of '${op.value.code}' returns nothing")
+    private fun checkUnitType(type: R_Type) = C_Utils.checkUnitType(op.pos, type) {
+        "expr_operand_unit" toCodeMsg "Operand of '${op.value.code}' returns nothing"
+    }
 }

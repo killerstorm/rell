@@ -149,23 +149,23 @@ abstract class AtExprGroupBaseTest: AtExprBaseTest() {
 
     @Test fun testAnnotationConflicts() {
         initDataCountries()
-        chk("$fromData @* {} ( @group @group _=.region )", "ct_err:ann:group:dup")
-        chk("$fromData @* {} ( @group @max _=.region )", "ct_err:ann:max:dup")
-        chk("$fromData @* {} ( @min @max _=.region )", "ct_err:ann:max:dup")
+        chk("$fromData @* {} ( @group @group _=.region )", "ct_err:modifier:dup:ann:group")
+        chk("$fromData @* {} ( @group @max _=.region )", "ct_err:modifier:bad_combination:ann:group,ann:max")
+        chk("$fromData @* {} ( @min @max _=.region )", "ct_err:modifier:bad_combination:ann:min,ann:max")
         chk("$fromData @* {} ( @sort @group _=.region )", "[AMER, APAC, EMEA]")
         chk("$fromData @* {} ( @min _=.region )", "[AMER]")
     }
 
     @Test fun testAnnotationsOnWrongTargets() {
-        chkCompile("@group entity user {}", "ct_err:ann:group:target_type:ENTITY")
-        chkCompile("@min entity user {}", "ct_err:ann:min:target_type:ENTITY")
-        chkCompile("@max entity user {}", "ct_err:ann:max:target_type:ENTITY")
-        chkCompile("@sum entity user {}", "ct_err:ann:sum:target_type:ENTITY")
+        chkCompile("@group entity user {}", "ct_err:modifier:invalid:ann:group")
+        chkCompile("@min entity user {}", "ct_err:modifier:invalid:ann:min")
+        chkCompile("@max entity user {}", "ct_err:modifier:invalid:ann:max")
+        chkCompile("@sum entity user {}", "ct_err:modifier:invalid:ann:sum")
 
-        chkCompile("@group namespace ns {}", "ct_err:ann:group:target_type:NAMESPACE")
-        chkCompile("@min namespace ns {}", "ct_err:ann:min:target_type:NAMESPACE")
-        chkCompile("@max namespace ns {}", "ct_err:ann:max:target_type:NAMESPACE")
-        chkCompile("@sum namespace ns {}", "ct_err:ann:sum:target_type:NAMESPACE")
+        chkCompile("@group namespace ns {}", "ct_err:modifier:invalid:ann:group")
+        chkCompile("@min namespace ns {}", "ct_err:modifier:invalid:ann:min")
+        chkCompile("@max namespace ns {}", "ct_err:modifier:invalid:ann:max")
+        chkCompile("@sum namespace ns {}", "ct_err:modifier:invalid:ann:sum")
     }
 
     @Test fun testTupleFieldNames() {

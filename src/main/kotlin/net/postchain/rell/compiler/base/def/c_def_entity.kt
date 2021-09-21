@@ -101,8 +101,10 @@ class C_AttributeClause(private val defCtx: C_DefinitionContext) {
 
     private fun checkSecondaryAttr(def: C_AttributeDefinition, rPrimaryType: R_Type) {
         if (def.explicitType != null && def.explicitType != rPrimaryType) {
-            C_Errors.errTypeMismatch(msgCtx, def.name.pos, def.explicitType, rPrimaryType, "entity:attr:type_diff",
-                    "Type of attribute '${def.name}' differs from the primary definition")
+            C_Errors.errTypeMismatch(msgCtx, def.name.pos, def.explicitType, rPrimaryType) {
+                "entity:attr:type_diff" toCodeMsg
+                "Type of attribute '${def.name}' differs from the primary definition"
+            }
         }
 
         checkAttrType(def, def.explicitType)
@@ -121,7 +123,7 @@ class C_AttributeClause(private val defCtx: C_DefinitionContext) {
     private fun checkAttrType(attr: C_AttributeDefinition, type: R_Type?) {
         if (defCtx.definitionType.isEntityLike() && type != null && !type.sqlAdapter.isSqlCompatible()) {
             val name = attr.name
-            val typeStr = type.toStrictString()
+            val typeStr = type.strCode()
             msgCtx.error(name.pos, "entity_attr_type:$name:$typeStr", "Attribute '$name' has unallowed type: $typeStr")
         }
     }
@@ -195,8 +197,9 @@ class C_EntityContext(
         defCtx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
             val exprCtx = defCtx.initExprCtx
             val vExpr0 = expr.compile(exprCtx, C_TypeHint.ofType(exprType)).value()
-            val adapter = C_Types.adaptSafe(msgCtx, exprType, vExpr0.type, name.pos, "attr_type:$name",
-                    "Default value type mismatch for '$name'")
+            val adapter = C_Types.adaptSafe(msgCtx, exprType, vExpr0.type, name.pos) {
+                "attr_type:$name" toCodeMsg "Default value type mismatch for '$name'"
+            }
             val vExpr = adapter.adaptExpr(exprCtx, vExpr0)
             val rExpr = vExpr.toRExpr()
             late.set(R_DefaultValue(rExpr, vExpr0.info.hasDbModifications))

@@ -7,23 +7,24 @@ package net.postchain.rell.compiler.base.core
 import com.google.common.math.IntMath
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.ast.S_QualifiedName
 import net.postchain.rell.compiler.ast.S_RellFile
-import net.postchain.rell.compiler.base.def.C_AbstractDescriptor
+import net.postchain.rell.compiler.base.def.C_AbstractFunctionDescriptor
+import net.postchain.rell.compiler.base.def.C_GlobalFunction
 import net.postchain.rell.compiler.base.def.C_MountTablesBuilder
-import net.postchain.rell.compiler.base.def.C_OverrideDescriptor
+import net.postchain.rell.compiler.base.def.C_OverrideFunctionDescriptor
 import net.postchain.rell.compiler.base.expr.C_ExprContext
 import net.postchain.rell.compiler.base.fn.C_FormalParameters
-import net.postchain.rell.compiler.base.fn.C_GlobalFunction
+import net.postchain.rell.compiler.base.modifier.C_ModifierValue
+import net.postchain.rell.compiler.base.modifier.C_MountAnnotationValue
+import net.postchain.rell.compiler.base.modifier.C_RawMountAnnotationValue
 import net.postchain.rell.compiler.base.module.*
 import net.postchain.rell.compiler.base.namespace.*
 import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.lib.C_LibFunctions
 import net.postchain.rell.model.*
-import net.postchain.rell.utils.Getter
-import net.postchain.rell.utils.TypedKeyMap
-import net.postchain.rell.utils.toImmList
-import net.postchain.rell.utils.toImmMap
-import org.apache.commons.lang3.StringUtils
+import net.postchain.rell.utils.*
+import org.apache.commons.lang3.mutable.MutableLong
 
 data class C_VarUid(val id: Long, val name: String, val fn: R_FnUid)
 data class C_LoopUid(val id: Long, val fn: R_FnUid)
@@ -121,13 +122,13 @@ sealed class C_ModuleContext(
         val appCtx: C_AppContext,
         private val modProvider: C_ModuleProvider,
         val moduleName: R_ModuleName,
-        val extChain: C_ExternalChain?
+        val extChain: C_ExternalChain?,
+        val containerKey: C_ContainerKey
 ) {
     val globalCtx = appCtx.globalCtx
     val msgCtx = appCtx.msgCtx
     val executor = appCtx.executor
 
-    abstract val containerKey: C_ContainerKey
     abstract val abstract: Boolean
     abstract val external: Boolean
     abstract val test: Boolean
@@ -137,21 +138,27 @@ sealed class C_ModuleContext(
 
     abstract val scopeBuilder: C_ScopeBuilder
 
+    open val isTestDependency: Boolean = false
+
     val rModuleKey = R_ModuleKey(moduleName, extChain?.name)
 
-    private val containerUid: R_ContainerUid by lazy { appCtx.nextContainerUid(containerKey.keyStr()) }
+    private val containerUid = appCtx.nextContainerUid(containerKey.keyStr())
     private val fnUidGen = C_UidGen { id, name -> R_FnUid(id, name, containerUid) }
 
-    private val constFnUid: R_FnUid by lazy {
-        nextFnUid("<const>")
-    }
+    private val constFnUid = nextFnUid("<const>")
+    private val constUidGen = C_UidGen { id, name -> C_VarUid(id, name, constFnUid) }
 
-    private val constUidGen: C_UidGen<C_VarUid> = let {
-        C_UidGen { id, name -> C_VarUid(id, name, constFnUid) }
-    }
+    private val namelessFunctionIds = mutableMapOf<R_QualifiedName, MutableLong>()
 
     fun nextFnUid(name: String) = fnUidGen.next(name)
     fun nextConstVarUid(name: String) = constUidGen.next(name)
+
+    fun nextNamelessFunctionId(namespace: R_QualifiedName): Long {
+        val idCtr = namelessFunctionIds.computeIfAbsent(namespace) { MutableLong(0) }
+        val res = idCtr.toLong()
+        idCtr.increment()
+        return res
+    }
 
     fun isTestLib(): Boolean = test || repl || globalCtx.compilerOptions.testLib
 
@@ -167,11 +174,17 @@ sealed class C_ModuleContext(
 class C_RegularModuleContext(
         appCtx: C_AppContext,
         modProvider: C_ModuleProvider,
-        private val module: C_Module
-): C_ModuleContext(appCtx, modProvider, module.descriptor.name, module.descriptor.extChain) {
+        private val module: C_Module,
+        override val isTestDependency: Boolean
+): C_ModuleContext(
+        appCtx,
+        modProvider,
+        module.descriptor.name,
+        module.descriptor.extChain,
+        module.descriptor.containerKey
+) {
     private val descriptor = module.descriptor
 
-    override val containerKey = descriptor.containerKey
     override val abstract = descriptor.header.abstract
     override val external = descriptor.header.external
     override val test = descriptor.header.test
@@ -207,8 +220,7 @@ class C_ReplModuleContext(
         moduleName: R_ModuleName,
         replNsGetter: Getter<C_Namespace>,
         componentNsGetter: Getter<C_Namespace>
-): C_ModuleContext(appCtx, modProvider, moduleName, null) {
-    override val containerKey = C_ReplContainerKey
+): C_ModuleContext(appCtx, modProvider, moduleName, null, C_ReplContainerKey) {
     override val abstract = false
     override val external = false
     override val test = false
@@ -235,8 +247,8 @@ class C_FileContext(val modCtx: C_ModuleContext) {
     val mntBuilder = C_MountTablesBuilder(appCtx.appUid)
 
     private val imports = C_ListBuilder<C_ImportDescriptor>()
-    private val abstracts = C_ListBuilder<C_AbstractDescriptor>()
-    private val overrides = C_ListBuilder<C_OverrideDescriptor>()
+    private val abstracts = C_ListBuilder<C_AbstractFunctionDescriptor>()
+    private val overrides = C_ListBuilder<C_OverrideFunctionDescriptor>()
 
     fun createMountContext(): C_MountContext {
         val mountName = modCtx.mountName
@@ -249,12 +261,12 @@ class C_FileContext(val modCtx: C_ModuleContext) {
         imports.add(d)
     }
 
-    fun addAbstractFunction(d: C_AbstractDescriptor) {
+    fun addAbstractFunction(d: C_AbstractFunctionDescriptor) {
         executor.checkPass(C_CompilerPass.DEFINITIONS)
         abstracts.add(d)
     }
 
-    fun addOverrideFunction(d: C_OverrideDescriptor) {
+    fun addOverrideFunction(d: C_OverrideFunctionDescriptor) {
         executor.checkPass(C_CompilerPass.DEFINITIONS)
         overrides.add(d)
     }
@@ -269,58 +281,72 @@ class C_FileContext(val modCtx: C_ModuleContext) {
     }
 }
 
-class C_NamespaceContext(val modCtx: C_ModuleContext, val namespacePath: String?, val scopeBuilder: C_ScopeBuilder) {
+class C_NamespaceContext(
+        val modCtx: C_ModuleContext,
+        val namespaceName: C_QualifiedName?,
+        val scopeBuilder: C_ScopeBuilder
+) {
     val globalCtx = modCtx.globalCtx
     val appCtx = modCtx.appCtx
     val msgCtx = modCtx.msgCtx
     val executor = modCtx.executor
 
+    val rNamespaceName = namespaceName?.toRName() ?: R_QualifiedName.EMPTY
+    private val rawNamespaceName = namespaceName?.toCRawName()
+
     private val scope = scopeBuilder.scope()
 
-    fun defNames(qualifiedName: List<String>, extChain: C_ExternalChain? = null): R_DefinitionNames {
-        return C_Utils.createDefNames(modCtx.moduleName, extChain?.ref, namespacePath, qualifiedName)
+    fun defNames(qualifiedName: C_RawQualifiedName, extChain: C_ExternalChain? = null): R_DefinitionNames {
+        val moduleKey = modCtx.rModuleKey.copy(externalChain = extChain?.name)
+        val fullName = rawNamespaceName?.add(qualifiedName) ?: qualifiedName
+        return C_Utils.createDefNames(moduleKey, fullName)
     }
 
-    fun defNames(simpleName: String, extChain: C_ExternalChain? = null): R_DefinitionNames {
-        return defNames(listOf(simpleName), extChain)
+    fun defNames(qualifiedName: S_QualifiedName, extChain: C_ExternalChain? = null): R_DefinitionNames {
+        val cQualifiedName = C_RawQualifiedName.of(qualifiedName)
+        return defNames(cQualifiedName, extChain)
     }
 
-    fun getType(name: List<S_Name>): R_Type {
+    fun defNames(simpleName: S_Name, extChain: C_ExternalChain? = null): R_DefinitionNames {
+        return defNames(S_QualifiedName(simpleName), extChain)
+    }
+
+    fun getType(name: S_QualifiedName): R_Type {
         executor.checkPass(C_CompilerPass.MEMBERS, null)
         return scope.getType(name)
     }
 
-    fun getTypeOpt(name: List<S_Name>): R_Type? {
+    fun getTypeOpt(name: S_QualifiedName): R_Type? {
         executor.checkPass(C_CompilerPass.MEMBERS, null)
         return scope.getTypeOpt(name)
     }
 
-    fun getEntity(name: List<S_Name>): R_EntityDefinition {
+    fun getEntity(name: S_QualifiedName): R_EntityDefinition {
         executor.checkPass(C_CompilerPass.MEMBERS, null)
         return scope.getEntity(name)
     }
 
-    fun getEntityOpt(name: List<S_Name>): R_EntityDefinition? {
+    fun getEntityOpt(name: S_QualifiedName): R_EntityDefinition? {
         executor.checkPass(C_CompilerPass.MEMBERS, null)
         return scope.getEntityOpt(name)
     }
 
-    fun getObjectOpt(name: List<S_Name>): R_ObjectDefinition? {
+    fun getObjectOpt(name: S_QualifiedName): R_ObjectDefinition? {
         executor.checkPass(C_CompilerPass.MEMBERS, null)
         return scope.getObjectOpt(name)
     }
 
-    fun getValueOpt(name: S_Name): C_DefRef<C_NamespaceValue>? {
+    fun getValueOpt(name: S_QualifiedName): C_DefRef<C_NamespaceValue>? {
         executor.checkPass(C_CompilerPass.EXPRESSIONS, null)
         return scope.getValueOpt(name)
     }
 
-    fun getFunctionOpt(qName: List<S_Name>): C_DefRef<C_GlobalFunction>? {
+    fun getFunctionOpt(name: S_QualifiedName): C_DefRef<C_GlobalFunction>? {
         executor.checkPass(C_CompilerPass.MEMBERS, null)
-        return scope.getFunctionOpt(qName)
+        return scope.getFunctionOpt(name)
     }
 
-    fun getOperationOpt(name: List<S_Name>): R_OperationDefinition? {
+    fun getOperationOpt(name: S_QualifiedName): R_OperationDefinition? {
         executor.checkPass(C_CompilerPass.MEMBERS, null)
         return scope.getOperationOpt(name)
     }
@@ -355,30 +381,51 @@ class C_MountContext(
     }
 
     private fun failExternal(pos: S_Pos, decType: C_DeclarationType, place: String) {
-        val type = StringUtils.capitalize(decType.msg)
+        val type = decType.msg.capitalize()
         throw C_Error.stop(pos, "def_external:$place:$decType", "$type not allowed in external $place")
     }
 
     fun checkNotReplOrTest(pos: S_Pos, decType: C_DeclarationType) {
-        if (modCtx.repl) {
-            msgCtx.error(pos, "def_repl:$decType", "Cannot declare ${decType.msg} in REPL")
-        } else if (modCtx.test) {
-            msgCtx.error(pos, "def_test:$decType", "Cannot declare ${decType.msg} in a test module")
+        checkNotReplOrTest(pos) { decType.name toCodeMsg decType.msg }
+    }
+
+    fun checkNotReplOrTest(pos: S_Pos, declSupplier: C_CodeMsgSupplier): Boolean {
+        return checkNotTest(pos, declSupplier) && checkNotRepl(pos, declSupplier)
+    }
+
+    fun checkNotTest(pos: S_Pos, declSupplier: C_CodeMsgSupplier): Boolean {
+        return C_Errors.check(modCtx.msgCtx, !modCtx.test, pos) {
+            val codeMsg = declSupplier()
+            "def_test:${codeMsg.code}" toCodeMsg "Cannot declare ${codeMsg.msg} in a test module"
         }
     }
 
-    fun mountName(modTarget: C_ModifierTarget, simpleName: S_Name): R_MountName {
-        val mountAnn = modTarget.mount?.get()
-        return mountName(mountAnn, listOf(simpleName))
+    fun checkNotRepl(pos: S_Pos, declSupplier: C_CodeMsgSupplier): Boolean {
+        return C_Errors.check(modCtx.msgCtx, !modCtx.repl, pos) {
+            val codeMsg = declSupplier()
+            "def_repl:${codeMsg.code}" toCodeMsg "Cannot declare ${codeMsg.msg} in REPL"
+        }
     }
 
-    fun mountName(mountAnn: C_MountAnnotation?, fullName: List<S_Name>): R_MountName {
+    fun mountName(modMount: C_ModifierValue<C_RawMountAnnotationValue>, simpleName: S_Name): R_MountName {
+        val mountValue = modMount.value()?.process(false)
+        return mountName(mountValue, S_QualifiedName(simpleName))
+    }
+
+    fun mountName(mountAnn: C_MountAnnotationValue?, qualifiedName: S_QualifiedName?): R_MountName {
         if (mountAnn != null) {
             return mountAnn.calculateMountName(msgCtx, mountName)
         }
 
-        val path = mountName.parts + fullName.map { it.rName }
+        val namePath = qualifiedName?.parts?.map { it.rName } ?: immListOf()
+        val path = mountName.parts + namePath
+
         return R_MountName(path)
+    }
+
+    fun externalChain(modExternal: C_ModifierValue<C_ExtChainName>): C_ExternalChain? {
+        val ann = modExternal.value()
+        return if (ann == null) extChain else appCtx.addExternalChain(ann.name)
     }
 }
 
@@ -519,10 +566,7 @@ class C_FunctionContext(
                     } else {
                         expType.getTypeAdapter(type)
                     }
-                    if (m == null) {
-                        throw errRetTypeMiss(pos, expType, type)
-                    }
-                    m ?: C_TypeAdapter_Direct
+                    m ?: throw errRetTypeMiss(pos, expType, type)
                 }
             }
         }

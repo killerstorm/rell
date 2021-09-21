@@ -167,40 +167,53 @@ class AbstractModuleTest: BaseRellTest() {
     @Test fun testOverrideWrongSignature() {
         file("lib.rell", "abstract module; abstract function f(x: text, y: boolean): integer;")
         chkCompile("import lib; override function lib.f(x: text, y: boolean): integer = 123;", "OK")
-        chkCompile("import lib; override function lib.f(x: text, y: boolean): text = 'Hello';", "ct_err:fn:override:ret_type:[integer]:[text]")
-        chkCompile("import lib; override function lib.f(x: text, y: boolean): integer? = 123;", "ct_err:fn:override:ret_type:[integer]:[integer?]")
-        chkCompile("import lib; override function lib.f(x: text, y: boolean) {}", "ct_err:fn:override:ret_type:[integer]:[unit]")
-        chkCompile("import lib; override function lib.f(x: integer, y: boolean): integer = 123;", "ct_err:fn:override:param_type:0:x:[text]:[integer]")
-        chkCompile("import lib; override function lib.f(x: text?, y: boolean): integer = 123;", "ct_err:fn:override:param_type:0:x:[text]:[text?]")
-        chkCompile("import lib; override function lib.f(x: text, y: boolean?): integer = 123;", "ct_err:fn:override:param_type:1:y:[boolean]:[boolean?]")
-        chkCompile("import lib; override function lib.f(x: text, y: integer): integer = 123;", "ct_err:fn:override:param_type:1:y:[boolean]:[integer]")
+        chkCompile("import lib; override function lib.f(x: text, y: boolean): text = 'Hello';",
+                "ct_err:fn:override:ret_type:lib.f:[integer]:[text]")
+        chkCompile("import lib; override function lib.f(x: text, y: boolean): integer? = 123;",
+                "ct_err:fn:override:ret_type:lib.f:[integer]:[integer?]")
+        chkCompile("import lib; override function lib.f(x: text, y: boolean) {}",
+                "ct_err:fn:override:ret_type:lib.f:[integer]:[unit]")
+        chkCompile("import lib; override function lib.f(x: integer, y: boolean): integer = 123;",
+                "ct_err:fn:override:param_type:lib.f:0:x:[text]:[integer]")
+        chkCompile("import lib; override function lib.f(x: text?, y: boolean): integer = 123;",
+                "ct_err:fn:override:param_type:lib.f:0:x:[text]:[text?]")
+        chkCompile("import lib; override function lib.f(x: text, y: boolean?): integer = 123;",
+                "ct_err:fn:override:param_type:lib.f:1:y:[boolean]:[boolean?]")
+        chkCompile("import lib; override function lib.f(x: text, y: integer): integer = 123;",
+                "ct_err:fn:override:param_type:lib.f:1:y:[boolean]:[integer]")
     }
 
     @Test fun testOverrideWrongSignature2() {
         file("lib.rell", "abstract module; abstract function g(x: text, y: boolean);")
         chkCompile("import lib; override function lib.g(x: text, y: boolean) {}", "OK")
-        chkCompile("import lib; override function lib.g(x: text, y: boolean): integer = 123;", "ct_err:fn:override:ret_type:[unit]:[integer]")
-        chkCompile("import lib; override function lib.g(x: text, y: boolean): text = 'Hello';", "ct_err:fn:override:ret_type:[unit]:[text]")
+        chkCompile("import lib; override function lib.g(x: text, y: boolean): integer = 123;",
+                "ct_err:fn:override:ret_type:lib.g:[unit]:[integer]")
+        chkCompile("import lib; override function lib.g(x: text, y: boolean): text = 'Hello';",
+                "ct_err:fn:override:ret_type:lib.g:[unit]:[text]")
     }
 
     @Test fun testOverrideWrongSignature3() {
         file("lib.rell", "abstract module; abstract function h(x: text, y: boolean): integer?;")
         chkCompile("import lib; override function lib.h(x: text, y: boolean): integer? = 123;", "OK")
         chkCompile("import lib; override function lib.h(x: text, y: boolean): integer = 123;", "OK")
-        chkCompile("import lib; override function lib.h(x: text, y: boolean): text = 'Hello';", "ct_err:fn:override:ret_type:[integer?]:[text]")
-        chkCompile("import lib; override function lib.h(x: text, y: boolean) {}", "ct_err:fn:override:ret_type:[integer?]:[unit]")
+        chkCompile("import lib; override function lib.h(x: text, y: boolean): text = 'Hello';",
+                "ct_err:fn:override:ret_type:lib.h:[integer?]:[text]")
+        chkCompile("import lib; override function lib.h(x: text, y: boolean) {}",
+                "ct_err:fn:override:ret_type:lib.h:[integer?]:[unit]")
     }
 
     @Test fun testOverrideWrongSignature4() {
         file("lib.rell", "abstract module; abstract function p(x: text?, y: boolean?);")
 
         chkCompile("import lib; override function lib.p(x: text?, y: boolean?) {}", "OK")
-        chkCompile("import lib; override function lib.p(x: text, y: boolean?) {}", "ct_err:fn:override:param_type:0:x:[text?]:[text]")
-        chkCompile("import lib; override function lib.p(x: text?, y: boolean) {}", "ct_err:fn:override:param_type:1:y:[boolean?]:[boolean]")
+        chkCompile("import lib; override function lib.p(x: text, y: boolean?) {}",
+                "ct_err:fn:override:param_type:lib.p:0:x:[text?]:[text]")
+        chkCompile("import lib; override function lib.p(x: text?, y: boolean) {}",
+                "ct_err:fn:override:param_type:lib.p:1:y:[boolean?]:[boolean]")
 
         chkCompile("import lib; override function lib.p(x: text, y: boolean) {}", """ct_err:
-            [fn:override:param_type:0:x:[text?]:[text]]
-            [fn:override:param_type:1:y:[boolean?]:[boolean]]
+            [fn:override:param_type:lib.p:0:x:[text?]:[text]]
+            [fn:override:param_type:lib.p:1:y:[boolean?]:[boolean]]
         """)
     }
 
@@ -211,13 +224,13 @@ class AbstractModuleTest: BaseRellTest() {
         chkCompile("import lib; override function lib.h(y: text, x: boolean): text = '';", "OK")
 
         chkCompile("import lib; override function lib.h(y: boolean, x: text): text = '';", """ct_err:
-            [fn:override:param_type:0:x:[text]:[boolean]]
-            [fn:override:param_type:1:y:[boolean]:[text]]
+            [fn:override:param_type:lib.h:0:x:[text]:[boolean]]
+            [fn:override:param_type:lib.h:1:y:[boolean]:[text]]
         """)
 
         chkCompile("import lib; override function lib.h(x: boolean, y: text): text = '';", """ct_err:
-            [fn:override:param_type:0:x:[text]:[boolean]]
-            [fn:override:param_type:1:y:[boolean]:[text]]
+            [fn:override:param_type:lib.h:0:x:[text]:[boolean]]
+            [fn:override:param_type:lib.h:1:y:[boolean]:[text]]
         """)
 
         chkOverFn("import lib; override function lib.h(y: text, x: boolean): text = '' + x;", "lib.h('X', true)", "text[true]")
@@ -236,6 +249,24 @@ class AbstractModuleTest: BaseRellTest() {
             [override:conflict:[lib:f]:[import:imp1:imp1:imp1.rell:1]:[import:imp2:imp2:imp2.rell:1]]
             [override:conflict:[lib:f]:[import:imp2:imp2:imp2.rell:1]:[import:imp1:imp1:imp1.rell:1]]
         """)
+    }
+
+    @Test fun testOverrideImportSpecific() {
+        file("lib.rell", "abstract module; abstract function f(): integer = 123;")
+        file("lib2.rell", "abstract module; abstract function f(): integer; function g() = 123;")
+        file("imp.rell", "module; import lib; override function lib.f(): integer = 456; function g() = 789;")
+
+        chkOverFn("import lib;", "lib.f()", "int[123]")
+        chkOverFn("import lib; import imp;", "lib.f()", "int[456]")
+        chkOverFn("import lib; import imp.*;", "lib.f()", "int[456]")
+        chkOverFn("import lib; import imp.{g};", "lib.f()", "int[456]")
+
+        chkOverFn("import lib2;", "lib2.f()", "ct_err:override:missing:[lib2:f]:[lib2.rell:1]")
+        chkOverFn("import lib2;", "lib2.g()", "ct_err:override:missing:[lib2:f]:[lib2.rell:1]")
+        chkOverFn("import lib2.*;", "f()", "ct_err:override:missing:[lib2:f]:[lib2.rell:1]")
+        chkOverFn("import lib2.*;", "g()", "ct_err:override:missing:[lib2:f]:[lib2.rell:1]")
+        chkOverFn("import lib2.{f};", "f()", "ct_err:override:missing:[lib2:f]:[lib2.rell:1]")
+        chkOverFn("import lib2.{g};", "g()", "ct_err:override:missing:[lib2:f]:[lib2.rell:1]")
     }
 
     @Test fun testOverrideInSameModule() {
@@ -301,40 +332,42 @@ class AbstractModuleTest: BaseRellTest() {
 
     @Test fun testAbstractWrongDef() {
         file("lib.rell", "module;")
-        chkCompile("abstract entity user {}", "ct_err:modifier:target_type:abstract:ENTITY")
-        chkCompile("abstract object state {}", "ct_err:modifier:target_type:abstract:OBJECT")
-        chkCompile("abstract operation op() {}", "ct_err:modifier:target_type:abstract:OPERATION")
-        chkCompile("abstract query q() = 123;", "ct_err:modifier:target_type:abstract:QUERY")
-        chkCompile("abstract struct rec {}", "ct_err:modifier:target_type:abstract:STRUCT")
-        chkCompile("abstract import lib;", "ct_err:modifier:target_type:abstract:IMPORT")
+        chkCompile("abstract entity user {}", "ct_err:modifier:invalid:kw:abstract")
+        chkCompile("abstract object state {}", "ct_err:modifier:invalid:kw:abstract")
+        chkCompile("abstract operation op() {}", "ct_err:modifier:invalid:kw:abstract")
+        chkCompile("abstract query q() = 123;", "ct_err:modifier:invalid:kw:abstract")
+        chkCompile("abstract struct rec {}", "ct_err:modifier:invalid:kw:abstract")
+        chkCompile("abstract import lib;", "ct_err:modifier:invalid:kw:abstract")
     }
 
     @Test fun testOverrideWrongDef() {
         file("lib.rell", "module;")
         file("wrong.rell", "override module;")
-        chkCompile("override entity user {}", "ct_err:modifier:target_type:override:ENTITY")
-        chkCompile("override object state {}", "ct_err:modifier:target_type:override:OBJECT")
-        chkCompile("override operation op() {}", "ct_err:modifier:target_type:override:OPERATION")
-        chkCompile("override query q() = 123;", "ct_err:modifier:target_type:override:QUERY")
-        chkCompile("override struct rec {}", "ct_err:modifier:target_type:override:STRUCT")
-        chkCompile("override import lib;", "ct_err:modifier:target_type:override:IMPORT")
-        chkCompile("import wrong;", "ct_err:wrong.rell:modifier:target_type:override:MODULE")
+        chkCompile("override entity user {}", "ct_err:modifier:invalid:kw:override")
+        chkCompile("override object state {}", "ct_err:modifier:invalid:kw:override")
+        chkCompile("override operation op() {}", "ct_err:modifier:invalid:kw:override")
+        chkCompile("override query q() = 123;", "ct_err:modifier:invalid:kw:override")
+        chkCompile("override struct rec {}", "ct_err:modifier:invalid:kw:override")
+        chkCompile("override import lib;", "ct_err:modifier:invalid:kw:override")
+        chkCompile("import wrong;", "ct_err:wrong.rell:modifier:invalid:kw:override")
     }
 
     @Test fun testModifierDuplicate() {
         file("lib.rell", "abstract module; abstract function f(): integer;")
         file("wrong.rell", "abstract abstract module;")
-        chkCompile("import wrong;", "ct_err:wrong.rell:modifier:dup:abstract")
-        chkCompile("import lib; override override function lib.f(): integer = 123;", "ct_err:modifier:dup:override")
-        chkCompile("abstract override function f(): integer = 123;", "ct_err:[fn:abstract:non_abstract_module::f][fn:abstract_override:f]")
-        chkCompile("override abstract function f(): integer = 123;", "ct_err:[fn:abstract:non_abstract_module::f][fn:abstract_override:f]")
+        chkCompile("import wrong;", "ct_err:wrong.rell:modifier:dup:kw:abstract")
+        chkCompile("import lib; override override function lib.f(): integer = 123;", "ct_err:modifier:dup:kw:override")
+        chkCompile("abstract override function f(): integer = 123;",
+                "ct_err:[modifier:bad_combination:kw:abstract,kw:override][fn:abstract:non_abstract_module::f]")
+        chkCompile("override abstract function f(): integer = 123;",
+                "ct_err:[modifier:bad_combination:kw:override,kw:abstract][fn:abstract:non_abstract_module::f]")
     }
 
     @Test fun testAbstractInRegularModule() {
         file("lib1.rell", "module; abstract function f(): integer;")
         file("lib2.rell", "module; abstract function f(): integer = 123;")
-        chkCompile("import lib1;", "ct_err:lib1.rell:fn:abstract:non_abstract_module:lib1:f")
-        chkCompile("import lib2;", "ct_err:lib2.rell:fn:abstract:non_abstract_module:lib2:f")
+        chkCompile("import lib1;", "ct_err:lib1.rell:fn:abstract:non_abstract_module:lib1:lib1:f")
+        chkCompile("import lib2;", "ct_err:lib2.rell:fn:abstract:non_abstract_module:lib2:lib2:f")
         chkCompile("abstract function f(): integer;", "ct_err:fn:abstract:non_abstract_module::f")
     }
 
@@ -363,16 +396,17 @@ class AbstractModuleTest: BaseRellTest() {
         file("lib.rell", "abstract module; abstract function f(): integer;")
         file("wrong.rell", "abstract module; function f(): integer;")
 
-        chkCompile("import wrong;", "ct_err:wrong.rell:fn:no_body:f")
+        chkCompile("import wrong;", "ct_err:wrong.rell:fn:no_body:wrong:f")
         chkCompile("import lib; override function lib.f(): integer;", "ct_err:fn:no_body:lib.f")
 
         chkCompile("import lib; function lib.f(): integer;", """ct_err:
             [override:missing:[lib:f]:[lib.rell:1]]
-            [fn:qname_no_override:lib.f]
             [fn:no_body:lib.f]
+            [fn:qname_no_override:lib.f]
         """)
 
         chkCompile("function f(): integer;", "ct_err:fn:no_body:f")
+        chkCompile("import lib; override function lib.f(): integer;", "ct_err:fn:no_body:lib.f")
     }
 
     @Test fun testDefaultBodyCompilationError() {
@@ -382,16 +416,40 @@ class AbstractModuleTest: BaseRellTest() {
 
     @Test fun testAbstractReturnTypeNotSpecified() {
         file("lib.rell", "abstract module; abstract function f();")
-        chkCompile("import lib; override function lib.f(): integer { return 123; }", "ct_err:fn:override:ret_type:[unit]:[integer]")
-        chkCompile("import lib; override function lib.f() { return 123; }", "ct_err:fn:override:ret_type:[unit]:[integer]") // To be fixed.
+        chkCompile("import lib; override function lib.f(): integer { return 123; }",
+                "ct_err:fn:override:ret_type:lib.f:[unit]:[integer]")
+        chkCompile("import lib; override function lib.f() { return 123; }",
+                "ct_err:fn:override:ret_type:lib.f:[unit]:[integer]")
         chkCompile("import lib; override function lib.f() {}", "OK")
     }
 
     @Test fun testOverrideReturnTypeNotSpecified() {
         file("lib.rell", "abstract module; abstract function f(): integer;")
-        chkCompile("import lib; override function lib.f() { return 'Hello'; }", "ct_err:fn:override:ret_type:[integer]:[text]") // To be fixed.
+        chkCompile("import lib; override function lib.f() { return 'Hello'; }",
+                "ct_err:fn:override:ret_type:lib.f:[integer]:[text]")
         def("import lib; override function lib.f() { return 123; }")
         chk("lib.f()", "int[123]")
+    }
+
+    @Test fun testStackTrace() {
+        file("lib.rell", "abstract module; abstract function f(x: integer): integer;")
+        file("imp.rell", "module; import lib; override function lib.f(x: integer) { require(x > 0); return 123; }")
+        def("import lib;")
+        def("import imp;")
+
+        chk("lib.f(1)", "int[123]")
+        chk("lib.f(0)", "req_err:null")
+        chkStack("imp:lib.f(imp.rell:1)", ":q(main.rell:3)")
+    }
+
+    @Test fun testDefaultParameterValues() {
+        file("lib.rell", "abstract module; abstract function f(x: integer = 123): text = 'lib:'+x;")
+        file("imp.rell", "module; import lib; override function lib.f(x: integer = 456) = 'ext:'+x;")
+
+        chkFull("import lib; query q() = lib.f();", "text[lib:123]")
+        chkFull("import lib; query q() = lib.f(456);", "text[lib:456]")
+        chkFull("import lib; import imp; query q() = lib.f();", "text[ext:123]")
+        chkFull("import lib; import imp; query q() = lib.f(789);", "text[ext:789]")
     }
 
     private fun chkOverFn(defs: String, expr: String, expected: String) {

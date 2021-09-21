@@ -4,9 +4,12 @@
 
 package net.postchain.rell.lib
 
+import net.postchain.rell.compiler.ast.S_Expr
 import net.postchain.rell.compiler.ast.S_Name
+import net.postchain.rell.compiler.ast.S_QualifiedName
 import net.postchain.rell.compiler.ast.S_VirtualType
 import net.postchain.rell.compiler.base.core.C_CompilerOptions
+import net.postchain.rell.compiler.base.def.C_GlobalFunction
 import net.postchain.rell.compiler.base.expr.C_ExprContext
 import net.postchain.rell.compiler.base.expr.C_ExprVarFacts
 import net.postchain.rell.compiler.base.expr.C_MemberLink
@@ -22,6 +25,7 @@ import net.postchain.rell.model.expr.*
 import net.postchain.rell.model.lib.*
 import net.postchain.rell.runtime.Rt_DecimalValue
 import net.postchain.rell.runtime.Rt_IntValue
+import net.postchain.rell.runtime.Rt_TextValue
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.immMapOf
@@ -624,11 +628,11 @@ private object C_StaticLib {
 }
 
 private object C_NsValue_ChainContext_Args: C_NamespaceValue_VExpr() {
-    override fun toExpr0(ctx: C_NamespaceValueContext, name: List<S_Name>): V_Expr {
+    override fun toExpr0(ctx: C_NamespaceValueContext, name: S_QualifiedName): V_Expr {
         val struct = ctx.modCtx.getModuleArgsStruct()
         if (struct == null) {
-            val nameStr = C_Utils.nameStr(name)
-            throw C_Error.stop(name[0].pos, "expr_chainctx_args_norec",
+            val nameStr = name.str()
+            throw C_Error.stop(name.pos, "expr_chainctx_args_norec",
                     "To use '$nameStr', define a struct '${C_Constants.MODULE_ARGS_STRUCT}'")
         }
 
@@ -654,26 +658,21 @@ private class C_SysFn_Print(private val log: Boolean): C_GlobalSpecialFuncCase()
     }
 }
 
-private object C_SysFn_TypeOf: C_GlobalSpecialFuncCase() {
-    override fun match(ctx: C_ExprContext, args: List<V_Expr>): C_GlobalFuncCaseMatch? {
-        if (args.size != 1) return null
-        val type = args[0].type
-        val str = type.toStrictString()
-        return CaseMatch(str)
-    }
+private object C_SysFn_TypeOf: C_SpecialSysGlobalFunction() {
+    override fun paramCount() = 1
 
-    private class CaseMatch(private val str: String): C_BasicGlobalFuncCaseMatch(R_TextType, listOf()) {
-        override fun globalConstantRestriction(caseCtx: C_GlobalFuncCaseCtx) = null
+    override fun compileCall0(ctx: C_ExprContext, name: S_Name, args: List<S_Expr>): V_Expr {
+        checkEquals(1, args.size)
 
-        override fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
-            val rExpr = R_ConstantValueExpr.makeText(str)
-            return rExpr
-        }
+        val arg = args[0]
+        val cArg = arg.compile(ctx)
+        val vArg = cArg.value()
 
-        override fun compileCallDbExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<Db_Expr>): Db_Expr {
-            val rExpr = R_ConstantValueExpr.makeText(str)
-            return C_Utils.toDbExpr(caseCtx.linkPos, rExpr)
-        }
+        val type = vArg.type
+        val str = type.strCode()
+        val value = Rt_TextValue(str)
+
+        return V_ConstantValueExpr(ctx, name.pos, value)
     }
 }
 

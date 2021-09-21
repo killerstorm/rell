@@ -9,6 +9,8 @@ import net.postchain.rell.compiler.parser.RellTokenMatch
 import net.postchain.rell.model.R_FilePos
 import net.postchain.rell.model.R_Name
 import net.postchain.rell.utils.ThreadLocalContext
+import net.postchain.rell.utils.immListOf
+import net.postchain.rell.utils.toImmList
 import java.util.*
 import java.util.function.Supplier
 
@@ -74,6 +76,24 @@ data class S_NameOptValue<T>(val name: S_Name?, val value: T)
 class S_Name(val pos: S_Pos, val str: String): S_Node() {
     val rName = R_Name.of(str)
     override fun toString() = str
+}
+
+class S_QualifiedName(parts: List<S_Name>): S_Node() {
+    val parts = parts.toImmList()
+
+    init {
+        check(this.parts.isNotEmpty())
+    }
+
+    val pos = this.parts.first().pos
+    val last = this.parts.last()
+
+    constructor(name: S_Name): this(immListOf(name))
+
+    fun add(name: S_Name) = S_QualifiedName(parts + name)
+
+    fun str() = parts.joinToString(".")
+    override fun toString() = str()
 }
 
 class S_String(val pos: S_Pos, val str: String): S_Node() {
