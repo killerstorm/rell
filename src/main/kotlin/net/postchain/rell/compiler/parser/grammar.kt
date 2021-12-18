@@ -15,8 +15,6 @@ import com.github.h0tk3y.betterParse.parser.Parsed
 import com.github.h0tk3y.betterParse.parser.Parser
 import net.postchain.rell.compiler.ast.*
 import net.postchain.rell.compiler.base.utils.C_Parser
-import net.postchain.rell.compiler.parser.S_Grammar.getValue
-import net.postchain.rell.compiler.parser.S_Grammar.provideDelegate
 import net.postchain.rell.model.expr.R_AtCardinality
 import net.postchain.rell.model.expr.R_AtWhatSort
 import kotlin.reflect.KProperty

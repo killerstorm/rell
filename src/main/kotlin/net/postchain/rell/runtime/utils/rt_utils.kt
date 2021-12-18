@@ -5,7 +5,7 @@
 package net.postchain.rell.runtime.utils
 
 import mu.KLogger
-import net.postchain.base.BlockchainRid
+import net.postchain.core.BlockchainRid
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
 import net.postchain.rell.compiler.base.utils.C_LateGetter

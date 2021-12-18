@@ -11,7 +11,7 @@ import net.postchain.rell.compiler.parser.S_Grammar
 import net.postchain.rell.module.RellVersions
 import org.apache.commons.collections4.MapUtils
 
-fun main(args: Array<String>) {
+fun main() {
     val timestamp = System.currentTimeMillis()
 
     println("var RELL_GRAMMAR = {")

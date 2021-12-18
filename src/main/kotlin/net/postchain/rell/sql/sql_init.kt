@@ -8,9 +8,9 @@ import com.google.common.collect.Sets
 import mu.KLogger
 import mu.KLogging
 import net.postchain.base.BaseEContext
-import net.postchain.base.BlockchainRid
 import net.postchain.base.data.PostgreSQLDatabaseAccess
 import net.postchain.base.data.SQLDatabaseAccess
+import net.postchain.core.BlockchainRid
 import net.postchain.core.EContext
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.R_AttributeDefaultValueExpr

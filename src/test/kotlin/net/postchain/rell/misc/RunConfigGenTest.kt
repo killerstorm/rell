@@ -206,7 +206,7 @@ class RunConfigGenTest {
 
         chkFile(files, "node-config.properties", "x=123")
 
-        chkFile(files, "blockchains/33/brid.txt", "1DC0FF6AB67FF1C32AD5984597E4A619A046327A66E487E02133DAD083E09AB8")
+        chkFile(files, "blockchains/33/brid.txt", "F86A2BD7F585D6F32AC27DFA4A8B1A16FC9604E1988EAED8C0B4C0D5619173E9")
 
         chkFile(files, "blockchains/33/0.xml", """
             <?xml version="1.0" encoding="UTF-8" standalone="yes"?>

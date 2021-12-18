@@ -6,7 +6,7 @@ package net.postchain.rell.tools.grammar
 
 import net.postchain.rell.module.RellVersions
 
-fun main(args: Array<String>) {
+fun main() {
     XtextGenUtils.printHeader()
 
     println("package net.postchain.rellide.lang.compiler;\n")
