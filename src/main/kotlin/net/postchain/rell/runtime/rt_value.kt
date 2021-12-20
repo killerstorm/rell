@@ -306,7 +306,7 @@ class Rt_TextValue(val value: String): Rt_Value() {
     }
 }
 
-class Rt_ByteArrayValue(val value: ByteArray): Rt_Value() {
+class Rt_ByteArrayValue(private val value: ByteArray): Rt_Value() {
     override val valueType = Rt_CoreValueTypes.BYTE_ARRAY.type()
 
     override fun type() = R_ByteArrayType

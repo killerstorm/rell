@@ -61,8 +61,18 @@ class LibByteArrayTest: BaseRellTest(false) {
         chk("x'0123ABCD'[3]", "int[205]")
         chk("x'0123ABCD'[4]", "rt_err:expr_bytearray_subscript_index:4:4")
         chk("x'0123ABCD'[-1]", "rt_err:expr_bytearray_subscript_index:4:-1")
-
         chkEx("{ val x = x'0123ABCD'; x[1] = 123; return x; }", "ct_err:expr_immutable:byte_array")
+    }
+
+    @Test fun testSubscriptValues() {
+        chk("x'007F80FF'[0]", "int[0]")
+        chk("x'007F80FF'[1]", "int[127]")
+        chk("x'007F80FF'[2]", "int[128]")
+        chk("x'007F80FF'[3]", "int[255]")
+
+        for (x in 0 .. 255) {
+            chk("byte_array.from_list([$x])[0]", "int[$x]")
+        }
     }
 
     @Test fun testSub() {
@@ -132,5 +142,14 @@ class LibByteArrayTest: BaseRellTest(false) {
         chk("byte_array.from_base64()", "ct_err:expr_call_argtypes:from_base64:")
         chk("byte_array.from_base64(1234)", "ct_err:expr_call_argtypes:from_base64:integer")
         chk("byte_array.from_base64(true)", "ct_err:expr_call_argtypes:from_base64:boolean")
+    }
+
+    @Test fun testIterable() {
+        chk("_type_of(x'05000F80' @* {})", "text[list<integer>]")
+        chk("x'05000F80' @* {}", "list<integer>[int[5],int[0],int[15],int[128]]")
+
+        chkEx("{ for (x in x'05000F80') return _type_of(x); return '?'; }", "text[integer]")
+        chkEx("{ val l = list<integer>(); for (x in x'05000F80') l.add(x); return l; }",
+                "list<integer>[int[5],int[0],int[15],int[128]]")
     }
 }

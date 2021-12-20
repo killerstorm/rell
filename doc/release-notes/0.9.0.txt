@@ -167,6 +167,20 @@ verify_signature(message: byte_array, pubkey: pubkey, signature: byte_array): bo
     Returns true if the given signature is a result of signing the message with a private key corresponding to the
     given public key.
 
+    The signature is not in a DER format, but simply a 64-byte value which is a concatenation of two 32-byte values
+    "r" and "s".
+
+    Example:
+
+    val pubkey = x'036d6caac248af96f6afa7f904f550253a0f3ef3f5aa2fe6838a95b216691468e2';
+    // = crypto.privkey_to_pubkey(x'000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F', true)
+
+    val message = x'DEADBEEF';
+    val signature = x'8ac02f17b508815fa9495177395925e41fd7db595ad35e54a56be6284e5b8e0824a3bd0e056dcfded7f8073d509b2b674607a06571abebdcb0bd27b12372aff2';
+
+    val ok = crypto.verify_signature(message, pubkey, signature);
+    print(ok); // prints "true"
+
 T.hash(): byte_array
 
     Equivalent of T.to_gtv().hash(). Returns a cryptographic hash of a value. Exists for all types that have to_gtv().

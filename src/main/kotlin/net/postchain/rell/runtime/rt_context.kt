@@ -6,7 +6,7 @@ package net.postchain.rell.runtime
 
 import com.google.common.collect.Sets
 import mu.KLogging
-import net.postchain.base.BlockchainRid
+import net.postchain.core.BlockchainRid
 import net.postchain.core.ByteArrayKey
 import net.postchain.core.TxEContext
 import net.postchain.gtv.Gtv

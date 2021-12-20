@@ -1401,7 +1401,10 @@ class VirtualTest: BaseGtxTest(false) {
             val pathsSet = GtvTestUtils.decodeGtvStr(paths).asArray()
                     .map { t ->
                         val ints = t.asArray()
-                                .map { if (it is GtvInteger) it.asInteger().toInt() else it.asString() }
+                                .map {
+                                    val v: Any = if (it is GtvInteger) it.asInteger().toInt() else it.asString()
+                                    v
+                                }
                                 .toTypedArray()
                         GtvPathFactory.buildFromArrayOfPointers(ints)
                     }

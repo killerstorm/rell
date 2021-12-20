@@ -12,17 +12,14 @@ import net.postchain.rell.compiler.base.def.C_QueryGlobalFunction
 import net.postchain.rell.compiler.base.fn.C_FormalParameters
 import net.postchain.rell.compiler.base.fn.C_FunctionUtils
 import net.postchain.rell.compiler.base.modifier.C_ModifierFields
-import net.postchain.rell.compiler.base.modifier.C_ModifierValues
 import net.postchain.rell.compiler.base.modifier.C_ModifierTargetType
+import net.postchain.rell.compiler.base.modifier.C_ModifierValues
 import net.postchain.rell.compiler.base.namespace.C_DeclarationType
 import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.model.*
 import net.postchain.rell.tools.api.IdeOutlineNodeType
 import net.postchain.rell.tools.api.IdeOutlineTreeBuilder
-import net.postchain.rell.utils.MutableTypedKeyMap
-import net.postchain.rell.utils.PostchainUtils
-import net.postchain.rell.utils.TypedKeyMap
-import net.postchain.rell.utils.toImmMap
+import net.postchain.rell.utils.*
 
 class S_OperationDefinition(
         pos: S_Pos,
@@ -78,11 +75,31 @@ class S_OperationDefinition(
 
     private fun compileMirrorStructAttrs(mirrorStructs: R_MirrorStructs, forParams: C_FormalParameters, mutable: Boolean) {
         val struct = mirrorStructs.getStruct(mutable)
-        val attrs = forParams.list
-                .map { it.createMirrorAttr(mutable) }
-                .map { it.name to it }
-                .toMap().toImmMap()
-        struct.setAttributes(attrs)
+
+        val attrMapMut = mutableMapOf<String, R_Attribute>()
+        val attrNames = forParams.list.map { it.name.str }.toImmSet()
+
+        for (param in forParams.list) {
+            val attr = param.createMirrorAttr(mutable)
+            var name = attr.name
+            if (name in attrMapMut) {
+                // A workaround to handle parameter name conflict (multiple parameters with same name).
+                // Without it, there would be less struct attributes than parameters, what violates R_Struct's contract
+                // (see MirrorStructOperationTest.testBugParameterNameConflict).
+                var ctr = 0
+                while (true) {
+                    name = "${attr.name}__$ctr"
+                    if (name !in attrMapMut && name !in attrNames) {
+                        break
+                    }
+                    ctr += 1
+                }
+            }
+            attrMapMut[name] = attr
+        }
+
+        val attrMap = attrMapMut.toImmMap()
+        struct.setAttributes(attrMap)
     }
 
     private fun compileBody(defCtx: C_DefinitionContext, rOperation: R_OperationDefinition, header: C_OperationFunctionHeader) {

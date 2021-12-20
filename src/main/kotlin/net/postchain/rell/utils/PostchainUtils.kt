@@ -5,12 +5,12 @@
 package net.postchain.rell.utils
 
 import com.google.gson.GsonBuilder
-import net.postchain.base.BlockchainRid
 import net.postchain.base.CryptoSystem
 import net.postchain.base.SECP256K1CryptoSystem
 import net.postchain.base.data.PostgreSQLDatabaseAccess
 import net.postchain.base.data.SQLDatabaseAccess
 import net.postchain.base.merkle.MerkleHashCalculator
+import net.postchain.core.BlockchainRid
 import net.postchain.core.UserMistake
 import net.postchain.gtv.*
 import net.postchain.gtv.gtvml.GtvMLEncoder

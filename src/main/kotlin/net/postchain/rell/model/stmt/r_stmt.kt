@@ -7,10 +7,7 @@ package net.postchain.rell.model.stmt
 import com.google.common.collect.Iterables
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
-import net.postchain.rell.runtime.Rt_CallFrame
-import net.postchain.rell.runtime.Rt_StackTraceError
-import net.postchain.rell.runtime.Rt_TupleValue
-import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.runtime.*
 import net.postchain.rell.utils.immListOf
 
 sealed class R_StatementResult
@@ -176,6 +173,18 @@ class R_WhileStatement(val expr: R_Expr, val stmt: R_Statement, val frameBlock: 
 
 sealed class R_ForIterator {
     abstract fun list(v: Rt_Value): Iterable<Rt_Value>
+}
+
+object R_ForIterator_ByteArray: R_ForIterator() {
+    override fun list(v: Rt_Value): Iterable<Rt_Value> {
+        val array = v.asByteArray()
+        val res = Iterables.transform(array.asIterable()) {
+            val signed = it!!.toInt()
+            val unsigned = if (signed >= 0) signed else (signed + 256)
+            Rt_IntValue(unsigned.toLong())
+        }
+        return res
+    }
 }
 
 object R_ForIterator_Collection: R_ForIterator() {

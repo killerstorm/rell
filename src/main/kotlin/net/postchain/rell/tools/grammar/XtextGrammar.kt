@@ -11,7 +11,7 @@ import net.postchain.rell.compiler.parser.S_Grammar
 import net.postchain.rell.utils.LateInit
 import org.apache.commons.collections4.MapUtils
 
-fun main(args: Array<String>) {
+fun main() {
     XtextGenUtils.printHeader()
 
     println("grammar net.postchain.rellide.xtext.Rell hidden(WS, ML_COMMENT, SL_COMMENT)\n")

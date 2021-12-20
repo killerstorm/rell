@@ -321,7 +321,7 @@ class R_ByteArraySubscriptExpr(val base: R_Expr, val expr: R_Expr): R_Expr(R_Int
 
         val i = index.toInt()
         val v = array[i].toLong()
-        val res = if (v > 0) v else v + 256
+        val res = if (v >= 0) v else v + 256
         return Rt_IntValue(res)
     }
 }
