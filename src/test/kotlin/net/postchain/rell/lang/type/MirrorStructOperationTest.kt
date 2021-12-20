@@ -132,4 +132,8 @@ class MirrorStructOperationTest: BaseRellTest(false) {
         chk("$expr.to_mutable().to_immutable()", "struct<$op>[name=text[Bob],rating=int[123]]")
         chk("$expr.to_immutable()", "ct_err:unknown_member:[struct<new_user>]:to_immutable")
     }
+
+    @Test fun testBugParameterNameConflict() {
+        chkCompile("operation op(x: integer, x: text) {}", "ct_err:dup_param_name:x")
+    }
 }

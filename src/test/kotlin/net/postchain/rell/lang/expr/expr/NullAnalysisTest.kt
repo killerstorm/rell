@@ -630,6 +630,20 @@ class NullAnalysisTest: BaseRellTest(false) {
         chkEx("{ $base print(++s(a = x!!).a); return _type_of(x); }", "text[integer]")
     }
 
+    /*@Test*/ fun testBugConditionalAssignmentInLoop() {
+        val code = """
+            function test_bug() {
+                var t: integer? = null;
+                for (x in [1,2,3]) {
+                    if (x != 0) t = x;
+                }
+                return t??;
+            }
+        """
+        chkCompile(code, "OK")
+        chkWarn()
+    }
+
     // null-dependent: when (x) { null -> }
 
     // contradictory operations:

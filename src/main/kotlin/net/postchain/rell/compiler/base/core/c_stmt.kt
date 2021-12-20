@@ -242,6 +242,7 @@ class C_ForIterator(val itemType: R_Type, val rIterator: R_ForIterator) {
     companion object {
         fun compile(ctx: C_ExprContext, exprType: R_Type, atExpr: Boolean): C_ForIterator? {
             return when (exprType) {
+                is R_ByteArrayType -> C_ForIterator(R_IntegerType, R_ForIterator_ByteArray)
                 is R_CollectionType -> C_ForIterator(exprType.elementType, R_ForIterator_Collection)
                 is R_VirtualCollectionType -> C_ForIterator(
                         S_VirtualType.virtualMemberType(exprType.elementType()),
