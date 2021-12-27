@@ -5,21 +5,15 @@
 package net.postchain.rell.compiler.base.fn
 
 import net.postchain.rell.compiler.ast.S_CallArgument
-import net.postchain.rell.compiler.ast.S_Name
-import net.postchain.rell.compiler.ast.S_NameValue
 import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.compiler.base.core.C_TypeAdapter
-import net.postchain.rell.compiler.base.core.C_TypeAdapter_Direct
-import net.postchain.rell.compiler.base.core.C_TypeHint
-import net.postchain.rell.compiler.base.expr.C_CallArgument
-import net.postchain.rell.compiler.base.expr.C_CallArgumentValue_Expr
-import net.postchain.rell.compiler.base.expr.C_CallArgumentValue_Wildcard
-import net.postchain.rell.compiler.base.expr.C_ExprContext
+import net.postchain.rell.compiler.base.core.*
+import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_FunctionCallArgs
+import net.postchain.rell.model.R_Name
 import net.postchain.rell.model.R_Type
 import net.postchain.rell.model.expr.R_PartialArgMapping
 import net.postchain.rell.model.expr.R_PartialCallMapping
@@ -43,7 +37,7 @@ class C_EffectivePartialArguments(
 }
 
 sealed class C_FullCallArguments(protected val ctx: C_ExprContext) {
-    abstract fun compileSimpleArgs(functionName: String): List<V_Expr>?
+    abstract fun compileSimpleArgs(functionName: R_Name): List<V_Expr>?
     abstract fun compileComplexArgs(callInfo: C_FunctionCallInfo): V_FunctionCallArgs?
 }
 
@@ -59,7 +53,9 @@ object C_FunctionCallArgsUtils {
             resTypeHint: C_TypeHint,
             target: C_FunctionCallTarget
     ): V_Expr? {
-        val cArgs = C_CallArgument.compileArguments(ctx, args, target.typeHints())
+        val ideInfoProvider = C_CallArgumentIdeInfoProvider_Argument(target)
+        val cArgs = C_CallArgument.compileArguments(ctx, args, target.typeHints(), ideInfoProvider)
+
         return when (val fnCallArgs = C_ArgsListProcessor.processArgs(ctx, cArgs)) {
             null -> null
             is C_InternalCallArguments_Full -> {
@@ -75,7 +71,7 @@ object C_FunctionCallArgsUtils {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-private class C_GenericCallArg<T>(val index: Int, val name: S_Name?, val valuePos: S_Pos, val value: T) {
+private class C_GenericCallArg<T>(val index: Int, val name: C_Name?, val valuePos: S_Pos, val value: T) {
     constructor(arg: C_CallArgument, value: T): this(arg.index, arg.name, arg.value.pos, value)
     constructor(arg: C_GenericCallArg<*>, value: T): this(arg.index, arg.name, arg.valuePos, value)
 }
@@ -83,13 +79,13 @@ private class C_GenericCallArg<T>(val index: Int, val name: S_Name?, val valuePo
 private class C_GenericCallArgs<T>(
         mixed: List<T>,
         positional: List<C_GenericCallArg<T>>,
-        named: List<S_NameValue<C_GenericCallArg<T>>>
+        named: List<C_NameValue<C_GenericCallArg<T>>>
 ) {
     val mixed = mixed.toImmList()
     val positional = positional.toImmList()
     val named = named.toImmList()
 
-    fun checkNoNamedArgs(ctx: C_ExprContext, fnName: String?) {
+    fun checkNoNamedArgs(ctx: C_ExprContext, fnName: R_Name?) {
         val arg = named.firstOrNull()
         if (arg != null) {
             C_Errors.errNamedArgsNotSupported(ctx.msgCtx, fnName, arg.name)
@@ -168,7 +164,7 @@ private class C_FullCallArguments_Impl(
         ctx: C_ExprContext,
         private val args: C_InternalCallArguments_Full
 ): C_FullCallArguments(ctx) {
-    override fun compileSimpleArgs(functionName: String): List<V_Expr> {
+    override fun compileSimpleArgs(functionName: R_Name): List<V_Expr> {
         return args.compileSimplePositionalArgs(ctx, functionName)
     }
 
@@ -199,7 +195,7 @@ private sealed class C_InternalCallArguments
 private class C_InternalCallArguments_Full(
         private val genArgs: C_GenericCallArgs<V_Expr>
 ): C_InternalCallArguments() {
-    fun compileSimplePositionalArgs(ctx: C_ExprContext, fnName: String?): List<V_Expr> {
+    fun compileSimplePositionalArgs(ctx: C_ExprContext, fnName: R_Name?): List<V_Expr> {
         genArgs.checkNoNamedArgs(ctx, fnName)
         return genArgs.mixed
     }
@@ -359,17 +355,18 @@ private class C_EffectiveArgsBinder<ArgT>(
             ctx: C_ExprContext,
             callInfo: C_FunctionCallInfo,
             res: MutableList<IndexedValue<ArgT>?>,
-            name: S_Name,
+            name: C_Name,
             arg: ArgT,
             argIndex: Int
     ) {
-        val fnNameCode = callInfo.functionNameCode()
-        val i = callInfo.params.list.indexOfFirst { it.name == name.str }
+        val i = callInfo.params.list.indexOfFirst { it.name == name.rName }
         if (i < 0) {
+            val fnNameCode = callInfo.functionNameCode()
             val fnMsg = if (callInfo.functionName == null) "Function" else "Function '${callInfo.functionName}'"
             val msg = "$fnMsg has no parameter '$name'"
             ctx.msgCtx.error(name.pos, "expr:call:unknown_named_arg:$fnNameCode:$name", msg)
         } else if (res[i] != null) {
+            val fnNameCode = callInfo.functionNameCode()
             ctx.msgCtx.error(name.pos, "expr:call:named_arg_already_specified:$fnNameCode:$name",
                     "Value for parameter '$name' specified more than once")
         } else {
@@ -492,7 +489,7 @@ private object C_ArgsListProcessor {
         val mixed = mutableListOf<T>()
         val positional = mutableListOf<C_GenericCallArg<T>>()
         val namedNames = mutableSetOf<String>()
-        val named = mutableListOf<S_NameValue<C_GenericCallArg<T>>>()
+        val named = mutableListOf<C_NameValue<C_GenericCallArg<T>>>()
 
         val errPositionalAfterNamed = ctx.msgCtx.firstErrorReporter()
 
@@ -513,7 +510,7 @@ private object C_ArgsListProcessor {
                     ctx.msgCtx.error(name.pos, "expr:call:named_arg_dup:$name",
                             "Named argument '$name' specified more than once")
                 } else {
-                    named.add(S_NameValue(name, arg))
+                    named.add(C_NameValue(name, arg))
                 }
             }
         }

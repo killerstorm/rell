@@ -4,9 +4,9 @@
 
 package net.postchain.rell.lang.module
 
-import net.postchain.rell.compiler.base.utils.C_CommonError
 import net.postchain.rell.compiler.base.core.C_CompilerModuleSelection
 import net.postchain.rell.compiler.base.core.C_CompilerOptions
+import net.postchain.rell.compiler.base.utils.C_CommonError
 import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.test.BaseRellTest
@@ -90,13 +90,13 @@ class ModuleTest: BaseRellTest(false) {
 
     @Test fun testImportCompilationError2() {
         file("lib/a.rell", "module; entity user { a: integer; b: text; c: boolean; x: ERROR; }")
-        chkCompile("import lib.a; query q() = (a.user@{}).a;", "ct_err:lib/a.rell:unknown_type:ERROR")
-        chkCompile("import lib.a; query q() = (a.user@{}).b;", "ct_err:lib/a.rell:unknown_type:ERROR")
-        chkCompile("import lib.a; query q() = (a.user@{}).c;", "ct_err:lib/a.rell:unknown_type:ERROR")
-        chkCompile("import lib.a; query q() = (a.user@{}).x;", "ct_err:lib/a.rell:unknown_type:ERROR")
+        chkCompile("import lib.a; query q() = (a.user@{}).a;", "ct_err:lib/a.rell:unknown_def:type:ERROR")
+        chkCompile("import lib.a; query q() = (a.user@{}).b;", "ct_err:lib/a.rell:unknown_def:type:ERROR")
+        chkCompile("import lib.a; query q() = (a.user@{}).c;", "ct_err:lib/a.rell:unknown_def:type:ERROR")
+        chkCompile("import lib.a; query q() = (a.user@{}).x;", "ct_err:lib/a.rell:unknown_def:type:ERROR")
         chkCompile("import lib.a; query q() = (a.user@{}).z;",
-                "ct_err:[main.rell:unknown_member:[lib.a:user]:z][lib/a.rell:unknown_type:ERROR]")
-        chkCompile("import lib.a; query q() = 123;", "ct_err:lib/a.rell:unknown_type:ERROR")
+                "ct_err:[main.rell:unknown_member:[lib.a:user]:z][lib/a.rell:unknown_def:type:ERROR]")
+        chkCompile("import lib.a; query q() = 123;", "ct_err:lib/a.rell:unknown_def:type:ERROR")
     }
 
     @Test fun testImportAliasConflict() {
@@ -334,10 +334,10 @@ class ModuleTest: BaseRellTest(false) {
 
     private fun chkSystemDefsNotVisibleFromOutside() {
         chkFull("import a; query q(): a.rec = a.rec();", "a:rec[x=int[123]]")
-        chkFull("import a; query q(): a.integer = 123;", "ct_err:unknown_type:a.integer")
-        chkFull("import a; query q(): a.boolean = false;", "ct_err:unknown_type:a.boolean")
-        chkFull("import a; query q(): a.text = 'Abc';", "ct_err:unknown_type:a.text")
-        chkFull("import a; query q(): a.byte_array = x'1234';", "ct_err:unknown_type:a.byte_array")
+        chkFull("import a; query q(): a.integer = 123;", "ct_err:unknown_def:type:a.integer")
+        chkFull("import a; query q(): a.boolean = false;", "ct_err:unknown_def:type:a.boolean")
+        chkFull("import a; query q(): a.text = 'Abc';", "ct_err:unknown_def:type:a.text")
+        chkFull("import a; query q(): a.byte_array = x'1234';", "ct_err:unknown_def:type:a.byte_array")
         chkFull("import a; query q() = a.abs(-123);", "ct_err:unknown_name:a.abs")
         chkFull("import a; query q() = abs(-123);", "int[123]")
         chkFull("import a; query q() = a.integer.MIN_VALUE;", "ct_err:unknown_name:a.integer")

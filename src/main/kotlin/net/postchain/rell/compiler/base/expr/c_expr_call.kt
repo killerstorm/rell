@@ -5,65 +5,58 @@
 package net.postchain.rell.compiler.base.expr
 
 import net.postchain.rell.compiler.ast.S_CallArgument
-import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.compiler.base.utils.C_CodeMsg
+import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.core.C_TypeHint
-import net.postchain.rell.compiler.base.utils.C_Utils
+import net.postchain.rell.compiler.base.fn.C_FunctionCallTarget
+import net.postchain.rell.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.R_Attribute
+import net.postchain.rell.model.R_Name
+import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmMap
 
 interface C_CallTypeHints {
-    fun getTypeHint(index: Int?, name: String?): C_TypeHint
+    fun getTypeHint(index: Int?, name: R_Name?): C_TypeHint
 }
 
 object C_CallTypeHints_None: C_CallTypeHints {
-    override fun getTypeHint(index: Int?, name: String?) = C_TypeHint.NONE
+    override fun getTypeHint(index: Int?, name: R_Name?) = C_TypeHint.NONE
 }
 
 sealed class C_CallArgumentValue(val pos: S_Pos)
-class C_CallArgumentValue_Expr(pos: S_Pos, val vExpr: V_Expr, val implicitName: String?): C_CallArgumentValue(pos)
+class C_CallArgumentValue_Expr(pos: S_Pos, val vExpr: V_Expr, val implicitName: R_Name?): C_CallArgumentValue(pos)
 class C_CallArgumentValue_Wildcard(pos: S_Pos): C_CallArgumentValue(pos)
 
-class C_CallArgument(val index: Int, val name: S_Name?, val value: C_CallArgumentValue) {
+class C_CallArgument(val index: Int, val name: C_Name?, val value: C_CallArgumentValue) {
     companion object {
         fun compileAttributes(
                 ctx: C_ExprContext,
                 args: List<S_CallArgument>,
-                attrs: Map<String, R_Attribute>
+                attrs: Map<R_Name, R_Attribute>
         ): List<C_CallArgument> {
-            return compileArguments(ctx, args, C_AttrsTypeHints(attrs))
+            val typeHints = C_AttrsTypeHints(attrs)
+            val ideInfoProvider = C_CallArgumentIdeInfoProvider_Attribute(attrs)
+            return compileArguments(ctx, args, typeHints, ideInfoProvider)
         }
 
         fun compileArguments(
                 ctx: C_ExprContext,
                 args: List<S_CallArgument>,
-                typeHints: C_CallTypeHints
+                typeHints: C_CallTypeHints,
+                ideInfoProvider: C_CallArgumentIdeInfoProvider
         ): List<C_CallArgument> {
             val res = mutableListOf<C_CallArgument>()
             var positional = true
 
             for ((index, arg) in args.withIndex()) {
                 if (arg.name != null) positional = false
-                val cArg = compileArg(ctx, arg, index, positional, typeHints)
+                val cArg = arg.compile(ctx, index, positional, typeHints, ideInfoProvider)
                 res.add(cArg)
             }
 
             return res.toImmList()
-        }
-
-        private fun compileArg(
-                ctx: C_ExprContext,
-                arg: S_CallArgument,
-                index: Int,
-                positional: Boolean,
-                typeHints: C_CallTypeHints
-        ): C_CallArgument {
-            val hintIndex = if (positional) index else null
-            val typeHint = typeHints.getTypeHint(hintIndex, arg.name?.str)
-            val argValue = arg.value.compile(ctx, typeHint)
-            return C_CallArgument(index, arg.name, argValue)
         }
 
         fun toAttrArguments(ctx: C_ExprContext, callArgs: List<C_CallArgument>, place: C_CodeMsg): List<C_AttrArgument> {
@@ -82,7 +75,7 @@ class C_CallArgument(val index: Int, val name: S_Name?, val value: C_CallArgumen
                             ctx.msgCtx.error(it.value.pos, code, msg)
                         }
                         if (it.name == null) null else {
-                            val vExpr = C_Utils.errorVExpr(ctx, it.value.pos)
+                            val vExpr = C_ExprUtils.errorVExpr(ctx, it.value.pos)
                             C_AttrArgument(it.index, it.name, vExpr, null)
                         }
                     }
@@ -91,8 +84,8 @@ class C_CallArgument(val index: Int, val name: S_Name?, val value: C_CallArgumen
         }
     }
 
-    private class C_AttrsTypeHints(private val attrs: Map<String, R_Attribute>): C_CallTypeHints {
-        override fun getTypeHint(index: Int?, name: String?): C_TypeHint {
+    private class C_AttrsTypeHints(private val attrs: Map<R_Name, R_Attribute>): C_CallTypeHints {
+        override fun getTypeHint(index: Int?, name: R_Name?): C_TypeHint {
             val attr = if (name != null) {
                 attrs[name]
             } else if (attrs.size == 1) {
@@ -102,5 +95,33 @@ class C_CallArgument(val index: Int, val name: S_Name?, val value: C_CallArgumen
             }
             return C_TypeHint.ofType(attr?.type)
         }
+    }
+}
+
+sealed class C_CallArgumentIdeInfoProvider {
+    abstract fun getIdeInfo(name: R_Name): IdeSymbolInfo
+}
+
+object C_CallArgumentIdeInfoProvider_Unknown: C_CallArgumentIdeInfoProvider() {
+    override fun getIdeInfo(name: R_Name) = IdeSymbolInfo.UNKNOWN
+}
+
+class C_CallArgumentIdeInfoProvider_Argument(
+        private val target: C_FunctionCallTarget
+): C_CallArgumentIdeInfoProvider() {
+    override fun getIdeInfo(name: R_Name): IdeSymbolInfo {
+        val param = target.hasParameter(name)
+        return if (param) IdeSymbolInfo.EXPR_CALL_ARG else IdeSymbolInfo.UNKNOWN
+    }
+}
+
+class C_CallArgumentIdeInfoProvider_Attribute(
+        attributes: Map<R_Name, R_Attribute>
+): C_CallArgumentIdeInfoProvider() {
+    private val attributes = attributes.toImmMap()
+
+    override fun getIdeInfo(name: R_Name): IdeSymbolInfo {
+        val attr = attributes[name]
+        return attr?.ideInfo ?: IdeSymbolInfo.UNKNOWN
     }
 }

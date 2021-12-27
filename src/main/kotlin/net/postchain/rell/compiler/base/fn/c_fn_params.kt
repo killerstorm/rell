@@ -5,38 +5,42 @@
 package net.postchain.rell.compiler.base.fn
 
 import net.postchain.rell.compiler.ast.S_FormalParameter
-import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.base.core.*
+import net.postchain.rell.compiler.base.def.C_AttrUtils
 import net.postchain.rell.compiler.base.expr.C_StmtContext
 import net.postchain.rell.compiler.base.expr.C_VarFact
 import net.postchain.rell.compiler.base.expr.C_VarFacts
 import net.postchain.rell.compiler.base.utils.C_ParameterDefaultValue
 import net.postchain.rell.compiler.base.utils.C_Utils
-import net.postchain.rell.model.R_Attribute
-import net.postchain.rell.model.R_Type
-import net.postchain.rell.model.R_VarParam
-import net.postchain.rell.model.R_VarPtr
+import net.postchain.rell.model.*
+import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 
 class C_FormalParameter(
-        val name: S_Name,
+        val name: C_Name,
         val type: R_Type,
+        val ideInfo: IdeSymbolInfo,
         private val index: Int,
         private val defaultValue: C_ParameterDefaultValue?
 ) {
-    fun toCallParameter() = C_FunctionCallParameter(name.str, type, index, defaultValue)
+    fun toCallParameter() = C_FunctionCallParameter(name.rName, type, index, defaultValue)
 
     fun createVarParam(ptr: R_VarPtr): R_VarParam {
         return R_VarParam(name.str, type, ptr)
     }
 
     fun createMirrorAttr(mutable: Boolean): R_Attribute {
+        val keyIndexKind: R_KeyIndexKind? = null
+        val ideInfo = C_AttrUtils.getIdeSymbolInfo(false, mutable, keyIndexKind)
+
         return R_Attribute(
                 index,
-                name.str,
+                name.rName,
                 type,
                 mutable = mutable,
+                keyIndexKind = keyIndexKind,
+                ideInfo = ideInfo,
                 exprGetter = defaultValue?.rGetter
         )
     }
@@ -65,7 +69,7 @@ class C_FormalParameters(list: List<C_FormalParameter>) {
             if (!names.add(nameStr)) {
                 frameCtx.msgCtx.error(name.pos, "dup_param_name:$nameStr", "Duplicate parameter: '$nameStr'")
             } else if (param.type.isNotError()) {
-                val cVarRef = blkCtx.addLocalVar(name, param.type, false, null)
+                val cVarRef = blkCtx.addLocalVar(name, param.type, false, null, param.ideInfo)
                 inited[cVarRef.target.uid] = C_VarFact.YES
                 val rVarParam = param.createVarParam(cVarRef.ptr)
                 rParams.add(rVarParam)

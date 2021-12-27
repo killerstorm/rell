@@ -46,6 +46,13 @@ class C_SourcePath private constructor(parts: List<String>): Comparable<C_Source
             return C_SourcePath(parts)
         }
 
+        fun ofOpt(parts: List<String>): C_SourcePath? {
+            if (!validate(parts)) {
+                return null
+            }
+            return C_SourcePath(parts)
+        }
+
         fun parse(path: String): C_SourcePath {
             val res = parseOpt(path)
             return res ?: throw errBadPath(path)

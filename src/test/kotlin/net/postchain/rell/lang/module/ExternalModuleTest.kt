@@ -340,7 +340,7 @@ class ExternalModuleTest: BaseRellTest() {
 
         chk("_type_of(ext.transaction@{})", "[A]:transaction")
         chk("_type_of(ext.block@{})", "[A]:block")
-        chkEx("{ val x: ext.integer = 123; return 0; }", "ct_err:unknown_type:ext.integer")
+        chkEx("{ val x: ext.integer = 123; return 0; }", "ct_err:unknown_def:type:ext.integer")
         chk("ext.integer('123')", "ct_err:unknown_name:ext.integer")
         chk("ext.max(123, 456)", "ct_err:unknown_name:ext.max")
     }

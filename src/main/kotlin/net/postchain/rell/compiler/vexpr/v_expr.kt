@@ -5,8 +5,8 @@
 package net.postchain.rell.compiler.vexpr
 
 import net.postchain.rell.compiler.ast.S_CallArgument
-import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.core.C_TypeHint
 import net.postchain.rell.compiler.base.core.C_Types
 import net.postchain.rell.compiler.base.core.C_VarUid
@@ -16,13 +16,13 @@ import net.postchain.rell.compiler.base.fn.C_FunctionCallTarget_FunctionType
 import net.postchain.rell.compiler.base.fn.C_FunctionUtils
 import net.postchain.rell.compiler.base.utils.C_Error
 import net.postchain.rell.compiler.base.utils.C_Errors
-import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.Db_Expr
 import net.postchain.rell.model.expr.R_BlockCheckExpr
 import net.postchain.rell.model.expr.R_Expr
 import net.postchain.rell.model.expr.R_StackTraceExpr
 import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.immSetOf
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmSet
@@ -132,7 +132,7 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
             return toDbExpr0()
         }
         val rExpr = toRExpr()
-        return C_Utils.toDbExpr(pos, rExpr)
+        return C_ExprUtils.toDbExpr(pos, rExpr)
     }
 
     fun toDbExprWhat(): C_DbAtWhatValue {
@@ -156,23 +156,23 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
         throw C_Errors.errBadDestination(pos)
     }
 
-    open fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
+    open fun member(ctx: C_ExprContext, memberName: C_Name, safe: Boolean, exprHint: C_ExprHint): C_ExprMember {
         val memberRef = C_MemberRef(this, memberName, safe)
 
         val baseType = type
         val effectiveBaseType = C_Types.removeNullable(baseType)
 
-        val valueExpr = C_MemberResolver.valueForType(ctx, effectiveBaseType, memberRef)
-        val fnExpr = C_MemberResolver.functionForType(ctx, effectiveBaseType, memberRef)
+        val valueMember = C_MemberResolver.valueForType(ctx, effectiveBaseType, memberRef)
+        val fnMember = C_MemberResolver.functionForType(ctx, effectiveBaseType, memberRef)
 
-        val expr = C_ValueFunctionExpr.create(memberName, valueExpr, fnExpr)
-        if (expr == null) {
+        val res = C_ExprUtils.valueFunctionExprMember(valueMember, fnMember, exprHint)
+        if (res == null) {
             C_Errors.errUnknownMember(ctx.msgCtx, effectiveBaseType, memberName)
-            return C_Utils.errorExpr(ctx, pos)
+            return C_ExprMember(C_ExprUtils.errorExpr(ctx, memberName.pos), IdeSymbolInfo.UNKNOWN)
         }
 
-        C_MemberResolver.checkNullAccess(baseType, memberName, safe)
-        return expr
+        C_MemberResolver.checkNullAccess(ctx.msgCtx, baseType, memberName, safe)
+        return res
     }
 
     open fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_CallArgument>, resTypeHint: C_TypeHint): V_Expr {
@@ -194,14 +194,14 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
         }
 
         // Validate args.
-        args.forEach {
+        args.forEachIndexed { index, arg ->
             ctx.msgCtx.consumeError {
-                it.value.compile(ctx, C_TypeHint.NONE)
+                arg.compile(ctx, index, true, C_CallTypeHints_None, C_CallArgumentIdeInfoProvider_Unknown)
             }
         }
 
         if (type == R_CtErrorType) {
-            return C_Utils.errorVExpr(ctx, pos)
+            return C_ExprUtils.errorVExpr(ctx, pos)
         } else {
             val typeStr = type.strCode()
             throw C_Error.stop(pos, "expr_call_nofn:$typeStr", "Not a function: value of type $typeStr")
@@ -234,8 +234,8 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
     open fun constantValue(ctx: V_ConstantValueEvalContext): Rt_Value? = null
 
     open fun isAtExprItem(): Boolean = false
-    open fun implicitAtWhereAttrName(): String? = null
-    open fun implicitAtWhatAttrName(): String? = null
+    open fun implicitAtWhereAttrName(): R_Name? = null
+    open fun implicitAtWhatAttrName(): R_Name? = null
     open fun varId(): C_VarUid? = null
     open fun globalConstantId(): R_GlobalConstantId? = null
     open fun globalConstantRestriction(): V_GlobalConstantRestriction? = null

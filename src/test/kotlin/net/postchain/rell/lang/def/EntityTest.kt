@@ -351,7 +351,6 @@ class EntityTest: BaseRellTest(false) {
 
     @Test fun testEntityDetails() {
         chkEntity("entity data { name; score: integer; }", "name:text; score:integer")
-
         chkEntity("entity data { name; }", "name:text")
         chkEntity("entity data { name: text; }", "name:text")
         chkEntity("entity data { mutable name; }", "mutable name:text")

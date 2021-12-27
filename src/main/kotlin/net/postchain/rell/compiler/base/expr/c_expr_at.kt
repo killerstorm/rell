@@ -4,11 +4,11 @@
 
 package net.postchain.rell.compiler.base.expr
 
-import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_PosValue
 import net.postchain.rell.compiler.base.core.C_AppContext
 import net.postchain.rell.compiler.base.core.C_MessageContext
+import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.core.C_Types
 import net.postchain.rell.compiler.base.modifier.C_AtSummarizationKind
 import net.postchain.rell.compiler.base.utils.C_CodeMsg
@@ -20,6 +20,7 @@ import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
 import net.postchain.rell.model.stmt.R_ForIterator
 import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.toImmList
 
 class C_AtContext(
@@ -43,7 +44,7 @@ abstract class C_AtFrom(
 
     abstract fun innerExprCtx(): C_ExprContext
     abstract fun makeDefaultWhat(): V_DbAtWhat
-    abstract fun findAttributesByName(name: String): List<C_AtFromContextAttr>
+    abstract fun findAttributesByName(name: R_Name): List<C_AtFromContextAttr>
     abstract fun findAttributesByType(type: R_Type): List<C_AtFromContextAttr>
 
     abstract fun compile(details: C_AtDetails): V_Expr
@@ -51,7 +52,7 @@ abstract class C_AtFrom(
 
 sealed class C_AtFromItem(val pos: S_Pos)
 
-class C_AtFromItem_Entity(pos: S_Pos, val alias: S_Name, val entity: R_EntityDefinition): C_AtFromItem(pos)
+class C_AtFromItem_Entity(pos: S_Pos, val alias: C_Name, val entity: R_EntityDefinition): C_AtFromItem(pos)
 
 class C_AtFromItem_Iterable(
         pos: S_Pos,
@@ -191,6 +192,8 @@ class C_AtSummarization_Aggregate_MinMax(
 class C_ExprContextAttr(private val fromAttr: C_AtFromContextAttr, private val outerAtExpr: Boolean) {
     val type = fromAttr.type
 
+    fun ideSymbolInfo() = fromAttr.ideSymbolInfo()
+
     fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr {
         if (outerAtExpr) {
             val attrName = attrNameMsg(false)
@@ -208,6 +211,7 @@ class C_ExprContextAttr(private val fromAttr: C_AtFromContextAttr, private val o
 abstract class C_AtFromContextAttr(val type: R_Type) {
     abstract fun attrNameMsg(qualified: Boolean): C_CodeMsg
     abstract fun ownerTypeName(): String
+    abstract fun ideSymbolInfo(): IdeSymbolInfo
     abstract fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr
 
     final override fun toString() = attrNameMsg(true).code

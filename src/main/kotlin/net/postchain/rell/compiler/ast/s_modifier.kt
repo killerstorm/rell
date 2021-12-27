@@ -5,6 +5,7 @@
 package net.postchain.rell.compiler.ast
 
 import net.postchain.rell.compiler.base.core.C_MountContext
+import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.modifier.*
 import net.postchain.rell.compiler.parser.S_Keywords
 
@@ -13,7 +14,7 @@ sealed class S_Modifier(val pos: S_Pos) {
     open fun ideIsTestFile(): Boolean = false
 }
 
-class S_KeywordModifier(val kw: S_Name, val kind: S_KeywordModifierKind): S_Modifier(kw.pos) {
+class S_KeywordModifier(private val kw: C_Name, private val kind: S_KeywordModifierKind): S_Modifier(kw.pos) {
     override fun compile(ctx: C_ModifierContext, modValues: C_FixedModifierValues) {
         modValues.compileKeyword(ctx, kw, kind)
     }
@@ -47,7 +48,10 @@ class S_Annotation(val name: S_Name, val args: List<S_AnnotationArg>): S_Modifie
         modValues.compileAnnotation(ctx, name, cArgs)
     }
 
-    override fun ideIsTestFile() = name.str == C_Annotations.TEST
+    override fun ideIsTestFile(): Boolean {
+        val rName = name.getRNameSpecial()
+        return rName.str == C_Annotations.TEST
+    }
 }
 
 class S_Modifiers(val modifiers: List<S_Modifier>) {
@@ -61,7 +65,7 @@ class S_Modifiers(val modifiers: List<S_Modifier>) {
     }
 
     fun compile(ctx: C_MountContext, modValues: C_ModifierValues) {
-        val modifierCtx = C_ModifierContext(ctx.msgCtx)
+        val modifierCtx = C_ModifierContext(ctx.msgCtx, ctx.nsCtx.symCtx)
         compile(modifierCtx, modValues)
     }
 }

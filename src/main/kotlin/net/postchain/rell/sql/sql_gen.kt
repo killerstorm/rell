@@ -107,7 +107,8 @@ object SqlGen {
         q = genAttrColumns(attrs, q)
 
         for ((kidx, key) in rEntity.keys.withIndex()) {
-            constraints.add(constraint("K_${tableName}_${kidx}").unique(*key.attribs.toTypedArray()))
+            val attribs = key.attribs.map { it.str }
+            constraints.add(constraint("K_${tableName}_${kidx}").unique(*attribs.toTypedArray()))
         }
 
         var ddl = q.constraints(*constraints.toTypedArray()).toString() + ";\n"
@@ -117,11 +118,12 @@ object SqlGen {
         for ((iidx, index) in rEntity.indexes.withIndex()) {
             val indexName = "IDX_${tableName}_${iidx}"
             val indexSql : String
-            if (index.attribs.size == 1 && jsonAttribSet.contains(index.attribs[0])) {
+            if (index.attribs.size == 1 && jsonAttribSet.contains(index.attribs[0].str)) {
                 val attrName = index.attribs[0]
                 indexSql = """CREATE INDEX "$indexName" ON "$tableName" USING gin ("${attrName}" jsonb_path_ops)"""
             } else {
-                indexSql = (DSL_CTX.createIndex(indexName).on(tableName, *index.attribs.toTypedArray())).toString();
+                val attribs = index.attribs.map { it.str }
+                indexSql = (DSL_CTX.createIndex(indexName).on(tableName, *attribs.toTypedArray())).toString();
             }
             ddl += indexSql + ";\n";
         }

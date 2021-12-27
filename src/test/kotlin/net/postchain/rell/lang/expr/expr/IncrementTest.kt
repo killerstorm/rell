@@ -214,10 +214,10 @@ class IncrementTest: BaseRellTest(false) {
         insert("c0.user", "x", "1,123")
         val init = "val u: user? = user@?{}"
 
-        chkOp("$init; val y = u.x++;", "ct_err:expr_mem_null:x")
-        chkOp("$init; val y = u.x--;", "ct_err:expr_mem_null:x")
-        chkOp("$init; val y = ++u.x;", "ct_err:expr_mem_null:x")
-        chkOp("$init; val y = --u.x;", "ct_err:expr_mem_null:x")
+        chkOp("$init; val y = u.x++;", "ct_err:[stmt_var_unit:y][expr_mem_null:x]")
+        chkOp("$init; val y = u.x--;", "ct_err:[stmt_var_unit:y][expr_mem_null:x]")
+        chkOp("$init; val y = ++u.x;", "ct_err:[stmt_var_unit:y][expr_mem_null:x]")
+        chkOp("$init; val y = --u.x;", "ct_err:[stmt_var_unit:y][expr_mem_null:x]")
 
         chkOp("$init; print(u?.x++);", "ct_err:expr_arg_unit")
         chkOp("$init; print(u?.x--);", "ct_err:expr_arg_unit")

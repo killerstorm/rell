@@ -5,7 +5,6 @@
 package net.postchain.rell.compiler.base.namespace
 
 import net.postchain.rell.compiler.base.module.C_ModuleKey
-import net.postchain.rell.utils.LateGetter
 import net.postchain.rell.utils.LateInit
 import net.postchain.rell.utils.ListVsMap
 import net.postchain.rell.utils.toImmList
@@ -32,25 +31,25 @@ object C_NsRes_ResultMaker {
 }
 
 private class C_NsRes_InternalMaker {
-    private val nsMap = mutableMapOf<C_NsImp_Namespace, LateGetter<C_Namespace>>()
+    private val nsMap = mutableMapOf<C_NsImp_Namespace, C_Namespace>()
 
     fun makeModule(ns: C_NsImp_Namespace): C_Namespace {
-        val getter = makeNamespace(ns)
-        val resNs = getter.get()
-        return resNs
+        val res = makeNamespace(ns)
+        return res
     }
 
-    private fun makeNamespace(ns: C_NsImp_Namespace): LateGetter<C_Namespace> {
-        val getter = nsMap[ns]
-        if (getter != null) return getter
+    private fun makeNamespace(ns: C_NsImp_Namespace): C_Namespace {
+        val lateNs = nsMap[ns]
+        if (lateNs != null) return lateNs
 
         val init = LateInit<C_Namespace>()
-        nsMap[ns] = init.getter
+        val lateNs2 = C_Namespace.makeLate(init.getter)
+        nsMap[ns] = lateNs2
 
         val resNs = makeNamespace0(ns)
         init.set(resNs)
 
-        return init.getter
+        return lateNs2
     }
 
     private fun makeNamespace0(ns: C_NsImp_Namespace): C_Namespace {
@@ -85,8 +84,8 @@ private class C_NsRes_InternalMaker {
             is C_NsImp_Def_Simple -> def.elem
             is C_NsImp_Def_Namespace -> {
                 val impNs = def.ns()
-                val nsGetter = makeNamespace(impNs)
-                val nsProxy = C_DefProxy.createGetter(nsGetter)
+                val ns = makeNamespace(impNs)
+                val nsProxy = C_DefProxy.create(ns, def.ideInfo)
                 C_NsDef_UserNamespace(nsProxy).toNamespaceElement()
             }
         }

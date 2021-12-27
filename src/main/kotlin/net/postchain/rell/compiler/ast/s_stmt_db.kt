@@ -5,15 +5,17 @@
 package net.postchain.rell.compiler.ast
 
 import net.postchain.rell.compiler.base.core.C_LambdaBlock
+import net.postchain.rell.compiler.base.core.C_NameValue
 import net.postchain.rell.compiler.base.core.C_Statement
 import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.utils.C_Error
 import net.postchain.rell.compiler.base.utils.C_Errors
-import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
 import net.postchain.rell.model.stmt.*
+import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.toImmList
 
 class C_UpdateTarget(val rTarget: R_UpdateTarget, val cFrom: C_AtFrom_Entities)
@@ -28,9 +30,9 @@ sealed class S_UpdateTarget {
 }
 
 class S_UpdateTarget_Simple(
-        val cardinality: R_AtCardinality,
-        val from: List<S_AtExprFrom>,
-        val where: S_AtExprWhere
+        private val cardinality: R_AtCardinality,
+        private val from: List<S_AtExprFrom>,
+        private val where: S_AtExprWhere
 ): S_UpdateTarget() {
     override fun compile(
             ctx: C_ExprContext,
@@ -58,16 +60,22 @@ class S_UpdateTarget_Simple(
         return cFrom.map { (_, entity) -> entity }
     }
 
-    private fun compileFromEntity(ctx: C_ExprContext, atExprId: R_AtExprId, from: S_AtExprFrom): S_NameValue<C_AtEntity> {
-        val explicitAlias = from.alias
-        val alias = explicitAlias ?: from.entityName.last
-        val entity = ctx.nsCtx.getEntity(from.entityName)
+    private fun compileFromEntity(ctx: C_ExprContext, atExprId: R_AtExprId, from: S_AtExprFrom): C_NameValue<C_AtEntity> {
+        val explicitAlias = from.alias?.compile(ctx, IdeSymbolInfo(IdeSymbolKind.LOC_AT_ALIAS))
+
+        val entityNameHand = from.entityName.compile(ctx.symCtx)
+        val entity = ctx.nsCtx.getEntity(entityNameHand)
+
+        val entityName = entityNameHand.qName
+        val alias = explicitAlias ?: entityName.last
+
         val atEntityId = ctx.appCtx.nextAtEntityId(atExprId)
-        return S_NameValue(alias, C_AtEntity(alias.pos, entity, alias.str, explicitAlias != null, atEntityId))
+        val atEntity = C_AtEntity(alias.pos, entity, alias.rName, explicitAlias != null, atEntityId)
+        return C_NameValue(alias, atEntity)
     }
 }
 
-class S_UpdateTarget_Expr(val expr: S_Expr): S_UpdateTarget() {
+class S_UpdateTarget_Expr(private val expr: S_Expr): S_UpdateTarget() {
     override fun compile(
             ctx: C_ExprContext,
             stmtPos: S_Pos,
@@ -115,7 +123,7 @@ class S_UpdateTarget_Expr(val expr: S_Expr): S_UpdateTarget() {
         val cLambda = cLambdaB.build()
 
         val whereRight = cLambda.compileVarDbExpr(cFrom.innerExprCtx().blkCtx.blockUid)
-        val where = C_Utils.makeDbBinaryExprEq(whereLeft, whereRight)
+        val where = C_ExprUtils.makeDbBinaryExprEq(whereLeft, whereRight)
         val rTarget = R_UpdateTarget_Expr_One(rAtEntity, where, tCtx.rExpr, cLambda.rLambda)
 
         return C_UpdateTarget(rTarget, cFrom)
@@ -144,7 +152,7 @@ class S_UpdateTarget_Expr(val expr: S_Expr): S_UpdateTarget() {
     }
 
     private fun compileFrom(ctx: C_ExprContext, stmtPos: S_Pos, rAtEntity: R_DbAtEntity): C_AtFrom_Entities {
-        val cEntity = C_AtEntity(expr.startPos, rAtEntity.rEntity, rAtEntity.rEntity.simpleName, false, rAtEntity.id)
+        val cEntity = C_AtEntity(expr.startPos, rAtEntity.rEntity, rAtEntity.rEntity.rName, false, rAtEntity.id)
         val fromCtx = C_AtFromContext(stmtPos, cEntity.atExprId, null)
         return C_AtFrom_Entities(ctx, fromCtx, listOf(cEntity))
     }
@@ -191,11 +199,22 @@ class S_UpdateStatement(pos: S_Pos, val target: S_UpdateTarget, val what: List<S
             entity: R_EntityDefinition,
             subValues: MutableList<V_Expr>
     ): List<R_UpdateStatementWhat> {
+        val ideInfoProvider = C_CallArgumentIdeInfoProvider_Attribute(entity.attributes)
+
         val args = what.mapIndexed { i, w ->
-            val vExpr = w.expr.compileSafe(ctx).value()
-            val exprName = w.expr.asName()?.str
-            C_AttrArgument(i, w.name, vExpr, exprName)
+            val nameHand = w.name?.compile(ctx)
+            if (nameHand != null) {
+                val ideInfo = ideInfoProvider.getIdeInfo(nameHand.rName)
+                nameHand.setIdeInfo(ideInfo)
+            }
+
+            val cExpr = w.expr.compileSafe(ctx)
+            val vExpr = cExpr.value()
+            val exprName = cExpr.implicitMatchName()
+
+            C_AttrArgument(i, nameHand?.name, vExpr, exprName)
         }
+
         subValues.addAll(args.map { it.vExpr })
 
         val attrs = C_AttributeResolver.resolveUpdate(ctx, entity, args)

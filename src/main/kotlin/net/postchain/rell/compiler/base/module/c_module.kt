@@ -109,13 +109,13 @@ object C_ReplContainerKey: C_ContainerKey() {
 class C_ModuleDescriptor(
         val key: C_ModuleKey,
         val header: C_ModuleHeader,
+        val directory: Boolean,
         private val importsDescriptorGetter: C_LateGetter<C_ModuleImportsDescriptor>
 ) {
     val name = key.name
     val extChain = key.extChain
 
     val containerKey = C_ModuleContainerKey.of(key)
-    val rModuleKey = R_ModuleKey(name, extChain?.name)
 
     fun importsDescriptor() = importsDescriptorGetter.get()
 }
@@ -179,6 +179,7 @@ class C_ModuleCompiler private constructor(private val modCtx: C_ModuleContext) 
 
         val rModule = R_Module(
                 modName,
+                directory = modCtx.directory,
                 abstract = modCtx.abstract,
                 external = modCtx.external,
                 externalChain = modCtx.extChain?.name,

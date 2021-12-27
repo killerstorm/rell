@@ -4,7 +4,7 @@
 
 package net.postchain.rell.compiler.base.modifier
 
-import net.postchain.rell.compiler.ast.S_Name
+import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.module.C_ExtChainName
 
 object C_Annotation_External {
@@ -17,7 +17,7 @@ object C_Annotation_External {
             return if (chain == null) null else C_ExtChainName(chain)
         }
 
-        private fun processArgs(ctx: C_ModifierContext, name: S_Name, args: List<C_AnnotationArg>): String? {
+        private fun processArgs(ctx: C_ModifierContext, name: C_Name, args: List<C_AnnotationArg>): String? {
             val str = C_AnnUtils.checkArgsOneString(ctx, name, args)
             if (str != null && str.isEmpty()) {
                 ctx.msgCtx.error(name.pos, "ann:external:invalid:$str", "Invalid external chain name: '$str'")

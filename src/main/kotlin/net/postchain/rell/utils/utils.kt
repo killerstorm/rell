@@ -142,6 +142,24 @@ class LateSetter<T>(private val init: LateInit<T>) {
     fun set(value: T) = init.set(value)
 }
 
+sealed class LazyString {
+    abstract val value: String
+    final override fun toString() = value
+
+    companion object {
+        fun of(value: String): LazyString = ValueLazyString(value)
+        fun of(fn: () -> String): LazyString = FnLazyString(fn)
+    }
+}
+
+private class ValueLazyString(override val value: String): LazyString()
+
+private class FnLazyString(private val fn: () -> String): LazyString() {
+    override val value by lazy {
+        fn()
+    }
+}
+
 class ThreadLocalContext<T>(private val defaultValue: T? = null) {
     private val local = ThreadLocal.withInitial<T> { defaultValue }
 

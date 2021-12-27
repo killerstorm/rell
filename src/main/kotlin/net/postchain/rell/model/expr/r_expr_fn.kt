@@ -9,12 +9,13 @@ import net.postchain.rell.model.R_SysFunction
 import net.postchain.rell.model.R_Type
 import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.RellInterpreterCrashException
+import net.postchain.rell.utils.LazyString
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmList
 import org.apache.commons.lang3.StringUtils
 
 object R_SysFunctionUtils {
-    fun call(fn: R_SysFunction, nameMsg: String?, frame: Rt_CallFrame, values: List<Rt_Value>): Rt_Value {
+    fun call(fn: R_SysFunction, nameMsg: LazyString?, frame: Rt_CallFrame, values: List<Rt_Value>): Rt_Value {
         return if (nameMsg == null) {
             call0(fn, frame, values)
         } else {
@@ -27,18 +28,18 @@ object R_SysFunctionUtils {
         return res
     }
 
-    fun callAndCatch(fn: R_SysFunction, name: String, frame: Rt_CallFrame, values: List<Rt_Value>): Rt_Value {
+    fun callAndCatch(fn: R_SysFunction, name: LazyString, frame: Rt_CallFrame, values: List<Rt_Value>): Rt_Value {
         val res = try {
             call0(fn, frame, values)
         } catch (e: Rt_StackTraceError) {
             throw e
         } catch (e: Rt_BaseError) {
-            val msg = decorate(name, e.message)
+            val msg = decorate(name.value, e.message)
             throw e.updateMessage(msg)
         } catch (e: RellInterpreterCrashException) {
             throw e
         } catch (e: Throwable) {
-            val msg = decorate(name, e.message)
+            val msg = decorate(name.value, e.message)
             throw Rt_Error("fn:error:$name:${e.javaClass.canonicalName}", msg)
         }
         return res

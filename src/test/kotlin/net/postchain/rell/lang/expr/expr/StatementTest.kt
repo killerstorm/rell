@@ -34,6 +34,13 @@ class StatementTest: BaseRellTest() {
         chkEx("{ var x = unit(); return 123; }", "ct_err:stmt_var_unit:x")
     }
 
+    @Test fun testVarValUnderscore() {
+        chkCompile("function f(){ var _; }", "ct_err:unknown_name_type:_")
+        chkCompile("function f(){ val _; }", "ct_err:unknown_name_type:_")
+        chkCompile("struct _ {} function f(){ var _; }", "ct_err:unknown_name_type:_")
+        chkCompile("struct _ {} function f(){ val _; }", "ct_err:unknown_name_type:_")
+    }
+
     @Test fun testNameConflict() {
         chkEx("{ val x = 123; val x = 456; return 0; }", "ct_err:block:name_conflict:x")
         chkEx("{ val x = 123; var x = 456; return 0; }", "ct_err:block:name_conflict:x")
@@ -467,5 +474,29 @@ class StatementTest: BaseRellTest() {
         val n = 20000
         for (i in 0 until n) def("function f_$i(): integer = $i;")
         chk("f_${n-1}()", "int[${n-1}]")
+    }
+
+    @Test fun testTypeFormsVar() {
+        def("namespace ns { struct data { x: integer; } }")
+        chkEx("{ var x: integer; return _type_of(x); }", "text[integer]")
+        chkEx("{ var x; return _type_of(x); }", "ct_err:unknown_name_type:x")
+        chkEx("{ var integer; return _type_of(integer); }", "text[integer]")
+        chkEx("{ var x = 123; return _type_of(x); }", "text[integer]")
+        chkEx("{ var ns.data; return _type_of(data); }", "text[ns.data]")
+        chkEx("{ var integer = 'hello'; return _type_of(integer); }", "text[text]")
+    }
+
+    @Test fun testTypeFormsStruct() {
+        def("namespace ns { struct data { x: integer; } }")
+        chkTypeFormsStruct("struct s { x: integer; }", "z.x", "text[integer]")
+        chkTypeFormsStruct("struct s { x; }", "z.x", "ct_err:unknown_name_type:x")
+        chkTypeFormsStruct("struct s { integer; }", "z.integer", "text[integer]")
+        chkTypeFormsStruct("struct s { x = 123; }", "z.x", "ct_err:unknown_name_type:x")
+        chkTypeFormsStruct("struct s { ns.data; }", "z.data", "text[ns.data]")
+        chkTypeFormsStruct("struct s { integer = 'hello'; }", "z.integer", "ct_err:attr_type:integer:[integer]:[text]")
+    }
+
+    private fun chkTypeFormsStruct(def: String, expr: String, expected: String) {
+        chkFull("$def query q() { var z: s; return _type_of($expr); }", expected)
     }
 }

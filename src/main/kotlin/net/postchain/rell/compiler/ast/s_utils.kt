@@ -4,10 +4,15 @@
 
 package net.postchain.rell.compiler.ast
 
+import net.postchain.rell.compiler.base.core.*
+import net.postchain.rell.compiler.base.expr.C_ExprContext
+import net.postchain.rell.compiler.base.expr.C_StmtContext
+import net.postchain.rell.compiler.base.modifier.C_ModifierContext
 import net.postchain.rell.compiler.base.utils.C_SourcePath
 import net.postchain.rell.compiler.parser.RellTokenMatch
 import net.postchain.rell.model.R_FilePos
 import net.postchain.rell.model.R_Name
+import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.ThreadLocalContext
 import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmList
@@ -70,11 +75,39 @@ data class S_PosValue<T>(val pos: S_Pos, val value: T) {
     override fun toString() = value.toString()
 }
 
-data class S_NameValue<T>(val name: S_Name, val value: T)
 data class S_NameOptValue<T>(val name: S_Name?, val value: T)
 
-class S_Name(val pos: S_Pos, val str: String): S_Node() {
-    val rName = R_Name.of(str)
+class S_Name(val pos: S_Pos, private val str: String): S_Node() {
+    private val rName = R_Name.of(str)
+
+    fun compile(ctx: C_SymbolContext): C_NameHandle {
+        return ctx.addName(this, rName)
+    }
+
+    fun compile(ctx: C_ModifierContext) = compile(ctx.symCtx)
+    fun compile(ctx: C_MountContext) = compile(ctx.symCtx)
+    fun compile(ctx: C_NamespaceContext) = compile(ctx.symCtx)
+    fun compile(ctx: C_DefinitionContext) = compile(ctx.symCtx)
+    fun compile(ctx: C_ExprContext) = compile(ctx.symCtx)
+
+    fun compile(ctx: C_SymbolContext, ideInfo: IdeSymbolInfo): C_Name {
+        val hand = ctx.addName(this, rName)
+        hand.setIdeInfo(ideInfo)
+        return hand.name
+    }
+
+    fun compile(ctx: C_NamespaceContext, ideInfo: IdeSymbolInfo) = compile(ctx.symCtx, ideInfo)
+    fun compile(ctx: C_MountContext, ideInfo: IdeSymbolInfo) = compile(ctx.nsCtx.symCtx, ideInfo)
+    fun compile(ctx: C_DefinitionContext, ideInfo: IdeSymbolInfo) = compile(ctx.symCtx, ideInfo)
+    fun compile(ctx: C_StmtContext, ideInfo: IdeSymbolInfo) = compile(ctx.symCtx, ideInfo)
+    fun compile(ctx: C_ExprContext, ideInfo: IdeSymbolInfo) = compile(ctx.symCtx, ideInfo)
+
+    fun getRNameSpecial(): R_Name {
+        // This method shall be called only in special cases. Whenever possible, one of compile(...) methods must be
+        // used in order to add the name to the context and attach IDE meta-information to the name.
+        return rName
+    }
+
     override fun toString() = str
 }
 
@@ -94,10 +127,12 @@ class S_QualifiedName(parts: List<S_Name>): S_Node() {
 
     fun str() = parts.joinToString(".")
     override fun toString() = str()
-}
 
-class S_String(val pos: S_Pos, val str: String): S_Node() {
-    constructor(name: S_Name): this(name.pos, name.str)
-    constructor(t: RellTokenMatch): this(t.pos, t.text)
-    override fun toString() = str
+    fun compile(ctx: C_SymbolContext) = C_QualifiedNameHandle(parts.map { it.compile(ctx) })
+    fun compile(ctx: C_ExprContext) = compile(ctx.symCtx)
+    fun compile(ctx: C_MountContext) = compile(ctx.symCtx)
+    fun compile(ctx: C_NamespaceContext) = compile(ctx.symCtx)
+    fun compile(ctx: C_DefinitionContext) = compile(ctx.symCtx)
+
+    fun compile(ctx: C_SymbolContext, ideInfo: IdeSymbolInfo) = C_QualifiedName(parts.map { it.compile(ctx, ideInfo) })
 }

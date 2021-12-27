@@ -7,8 +7,9 @@ package net.postchain.rell.compiler.vexpr
 import net.postchain.rell.compiler.base.core.C_LambdaBlock
 import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.utils.C_Errors
-import net.postchain.rell.compiler.base.utils.C_Utils
-import net.postchain.rell.model.*
+import net.postchain.rell.model.R_EntityDefinition
+import net.postchain.rell.model.R_Name
+import net.postchain.rell.model.R_Type
 import net.postchain.rell.model.expr.*
 import net.postchain.rell.utils.toImmList
 
@@ -25,11 +26,11 @@ class V_EntityAttrExpr(
 
     override fun globalConstantRestriction() = V_GlobalConstantRestriction("entity_attr", null)
 
-    override fun implicitAtWhereAttrName(): String? {
+    override fun implicitAtWhereAttrName(): R_Name? {
         return if (memberLink.base.isAtExprItem()) attrRef.attrName else null
     }
 
-    override fun implicitAtWhatAttrName(): String? {
+    override fun implicitAtWhatAttrName(): R_Name? {
         return if (memberLink.base.isAtExprItem()) attrRef.attrName else null
     }
 
@@ -59,7 +60,7 @@ class V_EntityAttrExpr(
         var dbExpr: Db_Expr = Db_EntityExpr(atEntity)
         for (step in path) {
             val dbTableExpr = asTableExpr(dbExpr)
-            dbTableExpr ?: return C_Utils.errorDbExpr(resultType)
+            dbTableExpr ?: return C_ExprUtils.errorDbExpr(resultType)
             dbExpr = step.attrRef.createDbMemberExpr(exprCtx, dbTableExpr)
         }
         return dbExpr
@@ -68,14 +69,14 @@ class V_EntityAttrExpr(
     override fun toDbExpr0(): Db_Expr {
         val dbBase = memberLink.base.toDbExpr()
         val dbBaseTable = asTableExpr(dbBase)
-        dbBaseTable ?: return C_Utils.errorDbExpr(attrRef.type())
+        dbBaseTable ?: return C_ExprUtils.errorDbExpr(attrRef.type())
         return attrRef.createDbMemberExpr(exprCtx, dbBaseTable)
     }
 
     override fun destination(): C_Destination {
         val attr = attrRef.attribute()
         if (attr == null || !attr.mutable) {
-            throw C_Errors.errAttrNotMutable(memberLink.linkPos, attrRef.attrName)
+            throw C_Errors.errAttrNotMutable(memberLink.linkPos, attrRef.attrName.str)
         }
         exprCtx.checkDbUpdateAllowed(pos)
         return C_EntityAttrDestination(memberLink.base, attrRef.rEntity, attr)
@@ -106,7 +107,7 @@ class V_EntityAttrExpr(
         ): R_Expr {
             val whereLeft = Db_EntityExpr(atEntity)
             val whereRight = cLambda.compileVarDbExpr()
-            val where = C_Utils.makeDbBinaryExprEq(whereLeft, whereRight)
+            val where = C_ExprUtils.makeDbBinaryExprEq(whereLeft, whereRight)
 
             val what = listOf(whatField)
 

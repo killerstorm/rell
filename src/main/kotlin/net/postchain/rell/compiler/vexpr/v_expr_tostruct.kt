@@ -7,7 +7,8 @@ package net.postchain.rell.compiler.vexpr
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.utils.C_Utils
-import net.postchain.rell.model.*
+import net.postchain.rell.model.R_EntityType
+import net.postchain.rell.model.R_ObjectType
 import net.postchain.rell.model.expr.*
 
 class V_EntityToStructExpr(
@@ -40,8 +41,8 @@ class V_EntityToStructExpr(
 
     private fun createWhatValue(dbEntityExpr: Db_TableExpr): C_DbAtWhatValue {
         val rEntity = entityType.rEntity
-        val dbExprs = rEntity.attributes.map {
-            C_EntityAttrRef.create(rEntity, it.value).createDbContextAttrExpr(dbEntityExpr)
+        val dbExprs = rEntity.attributes.values.map {
+            C_EntityAttrRef.create(rEntity, it).createDbContextAttrExpr(dbEntityExpr)
         }
         val dbWhatValue = Db_AtWhatValue_ToStruct(struct, dbExprs)
         return C_DbAtWhatValue_Other(dbWhatValue)
@@ -70,8 +71,8 @@ class V_ObjectToStructExpr(
 
     private fun createWhatValue(dbEntityExpr: Db_TableExpr): Db_AtWhatValue {
         val rEntity = objectType.rObject.rEntity
-        val dbExprs = rEntity.attributes.map {
-            C_EntityAttrRef.create(rEntity, it.value).createDbContextAttrExpr(dbEntityExpr)
+        val dbExprs = rEntity.attributes.values.map {
+            C_EntityAttrRef.create(rEntity, it).createDbContextAttrExpr(dbEntityExpr)
         }
         return Db_AtWhatValue_ToStruct(struct, dbExprs)
     }

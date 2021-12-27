@@ -7,9 +7,9 @@ package net.postchain.rell.compiler.base.expr
 import com.google.common.collect.LinkedHashMultimap
 import com.google.common.collect.Multimap
 import com.google.common.collect.Sets
-import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.C_MessageContext
+import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.fn.C_ArgTypeMatcher_Simple
 import net.postchain.rell.compiler.base.utils.C_Error
 import net.postchain.rell.compiler.base.utils.C_Errors
@@ -35,14 +35,14 @@ class C_CreateAttributes(
     val implicitAttrs = implicitAttrs.toImmList()
 }
 
-class C_AttrArgument(val index: Int, val name: S_Name?, val vExpr: V_Expr, val exprImplicitName: String?)
+class C_AttrArgument(val index: Int, val name: C_Name?, val vExpr: V_Expr, val exprImplicitName: R_Name?)
 
 class C_AttrMatch(val attr: R_Attribute, val vExpr: V_Expr)
 
 object C_AttributeResolver {
     fun resolveCreate(
             ctx: C_CreateContext,
-            attributes: Map<String, R_Attribute>,
+            attributes: Map<R_Name, R_Attribute>,
             args: List<C_AttrArgument>,
             pos: S_Pos
     ): C_CreateAttributes {
@@ -75,7 +75,7 @@ object C_AttributeResolver {
 
     private fun matchCreateAttrs(
             ctx: C_ExprContext,
-            attributes: Map<String, R_Attribute>,
+            attributes: Map<R_Name, R_Attribute>,
             args: List<C_AttrArgument>
     ): Map<C_AttrArgument, C_AttrMatch> {
         val explicitAttrs = matchExplicitAttrs(ctx.msgCtx, attributes, args, false)
@@ -86,7 +86,7 @@ object C_AttributeResolver {
     private fun matchDefaultExprs(
             ctx: C_CreateContext,
             pos: S_Pos,
-            attributes: Map<String, R_Attribute>,
+            attributes: Map<*, R_Attribute>,
             attrExprs: List<V_CreateExprAttr>
     ): List<V_CreateExprAttr> {
         val provided = attrExprs.map { it.attr.name }.toSet()
@@ -99,12 +99,12 @@ object C_AttributeResolver {
     }
 
     private fun checkMissingAttrs(
-            attributes: Map<String, R_Attribute>,
+            attributes: Map<R_Name, R_Attribute>,
             explicitAttrs: List<V_CreateExprAttr>,
             implicitAttrs: List<V_CreateExprAttr>,
             pos: S_Pos
     ) {
-        val names = (explicitAttrs.map { it.attr } + implicitAttrs.map { it.attr }).map { it.name }.toImmSet()
+        val names = (explicitAttrs.map { it.attr } + implicitAttrs.map { it.attr }).map { it.rName }.toImmSet()
 
         val missing = attributes
                 .toList()
@@ -138,28 +138,28 @@ object C_AttributeResolver {
 
     private fun matchExplicitAttrs(
             msgCtx: C_MessageContext,
-            attrs: Map<String, R_Attribute>,
+            attrs: Map<R_Name, R_Attribute>,
             args: List<C_AttrArgument>,
             mutableOnly: Boolean
     ): Map<C_AttrArgument, C_AttrMatch> {
-        val explicitNames = mutableSetOf<String>()
+        val explicitNames = mutableSetOf<R_Name>()
         val explicitExprs = mutableMapOf<C_AttrArgument, C_AttrMatch>()
 
         for (arg in args) {
             val name = arg.name
             name ?: continue
 
-            val attrZ = attrs[name.str]
+            val attrZ = attrs[name.rName]
             val attr = C_Errors.checkNotNull(attrZ, name.pos) {
-                "attr_unknown_name:${name.str}" toCodeMsg "Unknown attribute: '${name.str}'"
+                "attr_unknown_name:$name" toCodeMsg "Unknown attribute: '$name'"
             }
 
-            C_Errors.check(explicitNames.add(name.str), name.pos) {
-                "attr_dup_name:${name.str}" toCodeMsg "Attribute already specified: '${name.str}'"
+            C_Errors.check(explicitNames.add(name.rName), name.pos) {
+                "attr_dup_name:$name" toCodeMsg "Attribute already specified: '$name'"
             }
 
             if (mutableOnly && !attr.mutable) {
-                msgCtx.error(name.pos, "update_attr_not_mutable:${name.str}", "Attribute is not mutable: '${name.str}'")
+                msgCtx.error(name.pos, "update_attr_not_mutable:$name", "Attribute is not mutable: '$name'")
             }
 
             explicitExprs[arg] = C_AttrMatch(attr, arg.vExpr)
@@ -193,7 +193,7 @@ object C_AttributeResolver {
 
     private fun matchImplicitAttrs(
             ctx: C_ExprContext,
-            attrs: Map<String, R_Attribute>,
+            attrs: Map<R_Name, R_Attribute>,
             args: List<C_AttrArgument>,
             explicitExprs: Map<C_AttrArgument, C_AttrMatch>,
             mutableOnly: Boolean
@@ -215,7 +215,7 @@ object C_AttributeResolver {
 
     private fun matchImplicitAttrs0(
             ctx: C_ExprContext,
-            attrs: Map<String, R_Attribute>,
+            attrs: Map<R_Name, R_Attribute>,
             args: List<C_AttrArgument>,
             mutableOnly: Boolean
     ): Map<C_AttrArgument, C_AttrMatch> {
@@ -223,7 +223,6 @@ object C_AttributeResolver {
 
         for (arg in args) {
             if (arg.name == null) {
-                val type = arg.vExpr.type
                 val attrMatch = implicitMatch(ctx, attrs, arg, mutableOnly)
                 if (attrMatch != null) {
                     res[arg] = attrMatch
@@ -268,7 +267,7 @@ object C_AttributeResolver {
 
     private fun implicitMatch(
             ctx: C_ExprContext,
-            attributes: Map<String, R_Attribute>,
+            attributes: Map<R_Name, R_Attribute>,
             arg: C_AttrArgument,
             mutableOnly: Boolean
     ): C_AttrMatch? {
@@ -312,8 +311,8 @@ object C_AttributeResolver {
         return null
     }
 
-    private fun implicitMatchByType(attributes: Map<String, R_Attribute>, type: R_Type, mutableOnly: Boolean): List<R_Attribute> {
-        return attributes.values.filter{ it.type.isAssignableFrom(type) && (!mutableOnly || it.mutable) }.toList()
+    private fun implicitMatchByType(attributes: Map<R_Name, R_Attribute>, type: R_Type, mutableOnly: Boolean): List<R_Attribute> {
+        return attributes.values.filter { it.type.isAssignableFrom(type) && (!mutableOnly || it.mutable) }.toList()
     }
 
     private fun errWrongType(msgCtx: C_MessageContext, pos: S_Pos, idx: Int, attr: R_Attribute, exprType: R_Type) {

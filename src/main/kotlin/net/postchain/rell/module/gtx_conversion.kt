@@ -369,7 +369,7 @@ class GtvRtConversion_Tuple(val type: R_TupleType): GtvRtConversion() {
         checkEquals(rtFields.size, type.fields.size)
         val gtv = rtFields.mapIndexed { i, rtField ->
             val field = type.fields[i]
-            Pair(field.name!!, field.type.rtToGtv(rtField, true))
+            Pair(field.name!!.str, field.type.rtToGtv(rtField, true))
         }.toMap()
         return GtvFactory.gtv(gtv)
     }
@@ -397,10 +397,10 @@ class GtvRtConversion_Tuple(val type: R_TupleType): GtvRtConversion() {
 
         val rtFields = type.fields.mapIndexed { _, field ->
             val key = field.name!!
-            if (key !in gtvFields) {
+            if (key.str !in gtvFields) {
                 throw GtvRtUtils.errGtv("tuple_nokey:$key", "Key missing in Gtv dictionary: '$key'")
             }
-            val gtvField = gtvFields.getValue(key)
+            val gtvField = gtvFields.getValue(key.str)
             field.type.gtvToRt(ctx, gtvField)
         }
 

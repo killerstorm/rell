@@ -17,7 +17,9 @@ import net.postchain.rell.compiler.base.utils.C_MemberFuncTable
 import net.postchain.rell.module.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.*
+import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.LazyString
 import net.postchain.rell.utils.toImmList
 import org.jooq.DataType
 import org.jooq.SQLDialect
@@ -130,6 +132,7 @@ private abstract class R_TypeSqlAdapter_Primitive(private val name: String): R_T
 
 sealed class R_Type(val name: String) {
     val toTextFunction = "$name.to_text"
+    val toTextFunctionLazy = LazyString.of(toTextFunction)
 
     private val gtvConversion by lazy { createGtvConversion() }
     val sqlAdapter = createSqlAdapter()
@@ -685,7 +688,7 @@ class R_MapType(
     ).toGtv()
 }
 
-class R_TupleField(val name: String?, val type: R_Type) {
+class R_TupleField(val name: R_Name?, val type: R_Type, val ideInfo: IdeSymbolInfo) {
     fun str(): String = strCode()
 
     fun strCode(): String {
@@ -701,7 +704,7 @@ class R_TupleField(val name: String?, val type: R_Type) {
     override fun hashCode() = Objects.hash(name, type)
 
     fun toMetaGtv() = mapOf(
-            "name" to (name?.toGtv() ?: GtvNull),
+            "name" to (name?.str?.toGtv() ?: GtvNull),
             "type" to type.toMetaGtv()
     ).toGtv()
 }
@@ -745,9 +748,18 @@ class R_TupleType(fields: List<R_TupleField>): R_Type(calcName(fields)) {
         val resFields = fields.mapIndexed { i, field ->
             val otherField = other.fields[i]
             if (field.name != otherField.name) return null
+
             val type = commonTypeOpt(field.type, otherField.type)
             if (type == null) return null
-            R_TupleField(field.name, type)
+
+            when {
+                type == field.type -> field
+                type == otherField.type -> otherField
+                else -> {
+                    val ideInfo = IdeSymbolInfo.MEM_TUPLE_FIELD
+                    R_TupleField(field.name, type, ideInfo)
+                }
+            }
         }
 
         return R_TupleType(resFields)
@@ -778,12 +790,15 @@ class R_TupleType(fields: List<R_TupleField>): R_Type(calcName(fields)) {
         }
 
         fun create(vararg fields: R_Type): R_TupleType {
-            val fieldsList = fields.map { R_TupleField(null, it) }
+            val fieldsList = fields.map { R_TupleField(null, it, IdeSymbolInfo.MEM_TUPLE_FIELD) }
             return R_TupleType(fieldsList)
         }
 
         fun createNamed(vararg fields: Pair<String?, R_Type>): R_TupleType {
-            val fieldsList = fields.map { R_TupleField(it.first, it.second) }
+            val fieldsList = fields.map {
+                val name = it.first?.let { s -> R_Name.of(s) }
+                R_TupleField(name, it.second, IdeSymbolInfo.MEM_TUPLE_FIELD)
+            }
             return R_TupleType(fieldsList)
         }
     }

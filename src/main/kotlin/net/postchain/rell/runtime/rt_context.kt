@@ -196,7 +196,11 @@ class Rt_RegularSqlContext private constructor(
             }
         }
 
-        private fun checkMissingEntities(chain: String, extEntities: Map<String, R_EntityDefinition>, metaEntities: Map<String, MetaEntity>) {
+        private fun checkMissingEntities(
+                chain: String,
+                extEntities: Map<String, R_EntityDefinition>,
+                metaEntities: Map<String, MetaEntity>
+        ) {
             val metaEntityNames = metaEntities.filter { (_, c) -> c.type == MetaEntityType.ENTITY }.keys
             val missingEntities = Sets.difference(extEntities.keys, metaEntityNames)
             if (!missingEntities.isEmpty()) {
@@ -208,7 +212,7 @@ class Rt_RegularSqlContext private constructor(
 
         private fun checkMissingAttrs(chain: String, extEntity: R_EntityDefinition, metaEntity: MetaEntity) {
             val metaAttrNames = metaEntity.attrs.keys
-            val extAttrNames = extEntity.attributes.keys
+            val extAttrNames = extEntity.strAttributes.keys
             val missingAttrs = Sets.difference(extAttrNames, metaAttrNames)
             if (!missingAttrs.isEmpty()) {
                 val entityName = extEntity.appLevelName

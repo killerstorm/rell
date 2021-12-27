@@ -90,7 +90,7 @@ class CreateTest: BaseRellTest() {
     }
 
     @Test fun testErr() {
-        chkOp("create foo(x = 123);", "ct_err:unknown_entity:foo")
+        chkOp("create foo(x = 123);", "ct_err:unknown_def:entity:foo")
 
         chkOp("create city(foo = 123);", "ct_err:attr_unknown_name:foo")
 

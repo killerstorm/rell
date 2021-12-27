@@ -4,8 +4,11 @@
 
 package net.postchain.rell.model.expr
 
-import net.postchain.rell.compiler.base.utils.C_Utils
-import net.postchain.rell.model.*
+import net.postchain.rell.compiler.base.expr.C_ExprUtils
+import net.postchain.rell.model.R_BooleanType
+import net.postchain.rell.model.R_FrameBlock
+import net.postchain.rell.model.R_Struct
+import net.postchain.rell.model.R_Type
 import net.postchain.rell.runtime.*
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmList
@@ -380,7 +383,7 @@ class Db_AtExprBase(
         val expr = if (validExprs.isEmpty()) {
             null
         } else {
-            C_Utils.makeDbBinaryExprChain(R_BooleanType, R_BinaryOp_And, Db_BinaryOp_And, validExprs)
+            C_ExprUtils.makeDbBinaryExprChain(R_BooleanType, R_BinaryOp_And, Db_BinaryOp_And, validExprs)
         }
 
         return expr?.toRedExpr(frame)

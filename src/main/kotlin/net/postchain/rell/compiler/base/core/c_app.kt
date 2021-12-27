@@ -60,7 +60,7 @@ class C_AppContext(
 
     private val appDefsLate = C_LateInit(C_CompilerPass.APPDEFS, C_AppDefs.EMPTY)
 
-    private val nsAssembler = C_NsAsm_AppAssembler.create(msgCtx, appUid, oldReplState.modules)
+    private val nsAssembler = C_NsAsm_AppAssembler.create(executor, msgCtx, appUid, oldReplState.modules)
     private val modulesBuilder = C_ListBuilder<C_AppModule>()
     private val extraMountTables = C_ListBuilder<C_MountTables>()
 

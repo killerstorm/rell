@@ -51,21 +51,21 @@ class ObjectTest: BaseRellTest() {
 
     @Test fun testUseAsType() {
         def("object foo { x: integer = 123; }")
-        chkCompile("function g(f: foo){}", "ct_err:unknown_type:foo")
-        chkCompile("function g(): foo {}", "ct_err:[fun_noreturn:g][unknown_type:foo]")
-        chkCompile("function g() { var f: foo; }", "ct_err:unknown_type:foo")
-        chkCompile("entity bar { f: foo; }", "ct_err:unknown_type:foo")
-        chkCompile("function g() { var l: list<foo>; }", "ct_err:unknown_type:foo")
-        chkCompile("function g() { var l: set<foo>; }", "ct_err:unknown_type:foo")
-        chkCompile("function g() { var l: map<integer, foo>; }", "ct_err:unknown_type:foo")
-        chkCompile("function g() { var l: map<foo, integer>; }", "ct_err:unknown_type:foo")
+        chkCompile("function g(f: foo){}", "ct_err:unknown_def:type:foo")
+        chkCompile("function g(): foo {}", "ct_err:[fun_noreturn:g][unknown_def:type:foo]")
+        chkCompile("function g() { var f: foo; }", "ct_err:unknown_def:type:foo")
+        chkCompile("entity bar { f: foo; }", "ct_err:unknown_def:type:foo")
+        chkCompile("function g() { var l: list<foo>; }", "ct_err:unknown_def:type:foo")
+        chkCompile("function g() { var l: set<foo>; }", "ct_err:unknown_def:type:foo")
+        chkCompile("function g() { var l: map<integer, foo>; }", "ct_err:unknown_def:type:foo")
+        chkCompile("function g() { var l: map<foo, integer>; }", "ct_err:unknown_def:type:foo")
         chkCompile("struct bar { foo; }", "ct_err:unknown_name_type:foo")
     }
 
     @Test fun testCreateDelete() {
         def("object foo { x: integer = 123; }")
-        chkOp("create foo(x=123);", "ct_err:unknown_entity:foo")
-        chkOp("delete foo @* {};", "ct_err:unknown_entity:foo")
+        chkOp("create foo(x=123);", "ct_err:unknown_def:entity:foo")
+        chkOp("delete foo @* {};", "ct_err:unknown_def:entity:foo")
         chkOp("delete foo;", "ct_err:stmt_delete_obj:foo")
     }
 

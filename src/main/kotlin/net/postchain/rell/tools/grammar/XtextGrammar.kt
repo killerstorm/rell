@@ -91,25 +91,27 @@ private object XtextNontermGen {
     }
 
     private fun convertNonterm(name: String): XtextExpr {
+        val xName = nontermNameToXtext(name)
+
         if (name !in xNonterms) {
             val parser = kParsers.getValue(name)
             val gram = GramExprGen.createGramExpr(parser)
 
-            val xNt = XtextNonterm(name)
+            val xNt = XtextNonterm(xName)
             xNonterms[name] = xNt
-            xNt.prods.set(convertProds(name, gram))
+            xNt.prods.set(convertProds(xName, gram))
         }
 
-        return XtextExpr_Symbol(name)
+        return XtextExpr_Symbol(xName)
     }
 
-    private fun convertProds(nonterm: String, gram: GramExpr): List<XtextProd> {
+    private fun convertProds(xNonterm: String, gram: GramExpr): List<XtextProd> {
         val subs = if (gram is GramExpr_Or) gram.subs else listOf(gram)
-        return subs.mapIndexed { i, sub -> convertProd(nonterm, sub, i, subs.size) }
+        return subs.mapIndexed { i, sub -> convertProd(xNonterm, sub, i, subs.size) }
     }
 
-    private fun convertProd(nonterm: String, gram: GramExpr, index: Int, count: Int): XtextProd {
-        val type = if (count == 1) nonterm else "${nonterm}_$index"
+    private fun convertProd(xNonterm: String, gram: GramExpr, index: Int, count: Int): XtextProd {
+        val type = if (count == 1) xNonterm else "${xNonterm}_$index"
 
         val (inner, transform) = if (gram is GramExpr_Map) {
             Pair(gram.sub, gram.transform)
@@ -190,7 +192,7 @@ private object XtextNontermGen {
         }
 
         if (name !in xTokenNonterms) {
-            val ntName = "tk$name"
+            val ntName = termNameToXtext("tk$name")
             check(ntName !in xNonterms)
             val expr = convertToken0(name)
             val type = createTokenType(name)
@@ -213,7 +215,7 @@ private object XtextNontermGen {
 
     private fun createTokenType(name: String): String {
         val tail = if (name !in specialTokens) "" else name.toLowerCase().capitalize()
-        val type = "token$tail"
+        val type = nontermNameToXtext("token$tail")
         if (type !in actions) {
             val token = if (name in specialTokens) name else null
             actions[type] = XtextActionEx(XtextAction_Token(token), null)
@@ -275,6 +277,14 @@ private object GramExprGen {
             else -> throw IllegalStateException(parser::class.java.simpleName)
         }
     }
+}
+
+private fun nontermNameToXtext(name: String): String {
+    return "X_" + name.capitalize()
+}
+
+private fun termNameToXtext(name: String): String {
+    return "X_$name"
 }
 
 private class XtextNonterm(val name: String) {

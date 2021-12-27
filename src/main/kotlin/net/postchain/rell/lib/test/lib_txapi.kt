@@ -20,6 +20,7 @@ import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.runtime.utils.toGtv
 import net.postchain.rell.utils.BytesKeyPair
 import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmSet
 import java.util.*
 
 object C_Lib_Rell_Test {
@@ -34,7 +35,10 @@ object C_Lib_Rell_Test {
     const val OP_TYPE_QNAME = "$MODULE.$OP_SNAME"
 
     private val NAMESPACE_FNS: C_GlobalFuncTable = let {
-        val b = C_GlobalFuncBuilder("rell.test")
+        val b = C_GlobalFuncBuilder(
+                "rell.test",
+                typeNames = listOf(BLOCK_SNAME, TX_SNAME, OP_SNAME).map { R_Name.of(it) }.toImmSet()
+        )
         R_Lib_Block.bindGlobal(b)
         R_Lib_Tx.bindGlobal(b)
         R_Lib_Op.bindGlobal(b)

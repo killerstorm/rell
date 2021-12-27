@@ -4,16 +4,21 @@
 
 package net.postchain.rell.compiler.base.core
 
-import net.postchain.rell.compiler.ast.S_Name
-import net.postchain.rell.compiler.ast.S_QualifiedName
 import net.postchain.rell.compiler.base.def.C_GlobalFunction
-import net.postchain.rell.compiler.base.def.C_OperationGlobalFunction
 import net.postchain.rell.compiler.base.namespace.*
+import net.postchain.rell.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.compiler.base.utils.C_Error
-import net.postchain.rell.compiler.base.utils.C_Errors
+import net.postchain.rell.compiler.base.utils.C_LateInit
 import net.postchain.rell.compiler.base.utils.toCodeMsg
-import net.postchain.rell.model.*
+import net.postchain.rell.model.R_EntityDefinition
+import net.postchain.rell.model.R_ObjectDefinition
+import net.postchain.rell.model.R_OperationDefinition
+import net.postchain.rell.model.R_Type
+import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.Getter
+import net.postchain.rell.utils.checkEquals
+import net.postchain.rell.utils.immListOf
+import net.postchain.rell.utils.toImmList
 
 class C_ScopeBuilder {
     private val msgCtx: C_MessageContext
@@ -33,91 +38,223 @@ class C_ScopeBuilder {
     fun scope() = scope
 }
 
+class C_DefResolution<T>(
+        private val def: T,
+        private val defRef: C_DefRef<*>,
+        private val qNameHand: C_QualifiedNameHandle,
+        ideInfos: List<IdeSymbolInfo>
+) {
+    val qName = qNameHand.qName
+
+    private val ideInfos = let {
+        val l = ideInfos.toImmList()
+        checkEquals(l.size, qName.parts.size)
+        l
+    }
+
+    fun getDef(): T {
+        defRef.getDef() // Check access.
+        for ((i, nameHand) in qNameHand.parts.withIndex()) {
+            nameHand.setIdeInfo(ideInfos[i])
+        }
+        return def
+    }
+}
+
+sealed class C_ScopeDefSelector<T> {
+    companion object {
+        val TYPE: C_ScopeDefSelector<R_Type> = C_ScopeDefSelector_Type
+        val ENTITY: C_ScopeDefSelector<R_EntityDefinition> = C_ScopeDefSelector_Entity
+        val OBJECT: C_ScopeDefSelector<R_ObjectDefinition> = C_ScopeDefSelector_Object
+        val VALUE: C_ScopeDefSelector<C_NamespaceValue> = C_ScopeDefSelector_Value
+        val FUNCTION: C_ScopeDefSelector<C_GlobalFunction> = C_ScopeDefSelector_Function
+        val OPERATION: C_ScopeDefSelector<R_OperationDefinition> = C_ScopeDefSelector_Operation
+    }
+}
+
+private sealed class C_PrivateScopeDefSelector<T>(val kind: C_CodeMsg): C_ScopeDefSelector<T>() {
+    abstract fun getQualifiedDef(
+            rootNs: C_ScopeNs,
+            qNameHand: C_QualifiedNameHandle,
+            setUnknownInfo: Boolean
+    ): C_DefResolution<T>?
+}
+
+private sealed class C_GenericScopeDefSelector<T, P>(
+        private val pass: C_CompilerPass,
+        kind: C_CodeMsg,
+        private val transformer: C_DefTransformer<P, T>
+): C_PrivateScopeDefSelector<T>(kind) {
+    protected abstract fun getDef(ns: C_ScopeNs, name: C_Name): C_DefRef<P>?
+
+    final override fun getQualifiedDef(
+            rootNs: C_ScopeNs,
+            qNameHand: C_QualifiedNameHandle,
+            setUnknownInfo: Boolean
+    ): C_DefResolution<T>? {
+        C_LateInit.checkPass(pass, null)
+
+        val ideInfos = mutableListOf<IdeSymbolInfo>()
+        val defRef = resolveDef(rootNs, qNameHand, ideInfos)
+
+        if (defRef == null) {
+            if (setUnknownInfo) {
+                for ((i, ideInfo) in ideInfos.withIndex()) qNameHand.parts[i].setIdeInfo(ideInfo)
+                for (i in ideInfos.size until qNameHand.parts.size) qNameHand.parts[i].setIdeInfo(IdeSymbolInfo.UNKNOWN)
+            }
+            return null
+        }
+
+        val res = defRef.toResolution(qNameHand, ideInfos, transformer)
+        return res
+    }
+
+    private fun resolveDef(
+            rootNs: C_ScopeNs,
+            qNameHand: C_QualifiedNameHandle,
+            ideInfos: MutableList<IdeSymbolInfo>
+    ): C_DefRef<P>? {
+        var ns = rootNs
+
+        for (nameHand in qNameHand.parentParts()) {
+            val pair = ns.sub(nameHand.name)
+            if (pair == null) return null
+            ideInfos.add(pair.second)
+            ns = pair.first
+        }
+
+        val defRef = getDef(ns, qNameHand.last.name)
+        if (defRef != null) {
+            ideInfos.add(defRef.ideSymbolInfo())
+        }
+
+        return defRef
+    }
+}
+
+private object C_ScopeDefSelector_Type: C_GenericScopeDefSelector<R_Type, R_Type>(
+        C_CompilerPass.MEMBERS,
+        "type" toCodeMsg "type",
+        C_DefTransformer_None()
+) {
+    override fun getDef(ns: C_ScopeNs, name: C_Name) = ns.type(name)
+}
+
+private object C_ScopeDefSelector_Entity: C_GenericScopeDefSelector<R_EntityDefinition, R_Type>(
+        C_CompilerPass.MEMBERS,
+        "entity" toCodeMsg "entity",
+        C_DefTransformer_Entity
+) {
+    override fun getDef(ns: C_ScopeNs, name: C_Name) = ns.type(name)
+}
+
+private object C_ScopeDefSelector_Value: C_GenericScopeDefSelector<C_NamespaceValue, C_NamespaceValue>(
+        C_CompilerPass.EXPRESSIONS,
+        "value" toCodeMsg "name",
+        C_DefTransformer_None()
+) {
+    override fun getDef(ns: C_ScopeNs, name: C_Name) = ns.value(name)
+}
+
+private object C_ScopeDefSelector_Object: C_GenericScopeDefSelector<R_ObjectDefinition, C_NamespaceValue>(
+        C_CompilerPass.MEMBERS,
+        "object" toCodeMsg "object",
+        C_DefTransformer_Object
+) {
+    override fun getDef(ns: C_ScopeNs, name: C_Name) = ns.value(name)
+}
+
+private object C_ScopeDefSelector_Function: C_GenericScopeDefSelector<C_GlobalFunction, C_GlobalFunction>(
+        C_CompilerPass.MEMBERS,
+        "function" toCodeMsg "function",
+        C_DefTransformer_None()
+) {
+    override fun getDef(ns: C_ScopeNs, name: C_Name) = ns.function(name)
+}
+
+private object C_ScopeDefSelector_Operation: C_GenericScopeDefSelector<R_OperationDefinition, C_GlobalFunction>(
+        C_CompilerPass.MEMBERS,
+        "operation" toCodeMsg "operation",
+        C_DefTransformer_Operation
+) {
+    override fun getDef(ns: C_ScopeNs, name: C_Name) = ns.function(name)
+}
+
+private interface C_ScopeNsAdapter {
+    fun <T> lookup(getter: (C_NamespaceRef) -> C_DefRef<T>?): C_DefRef<T>?
+}
+
+private abstract class C_ScopeNs(qName: List<C_Name>) {
+    private val qName = qName.toImmList()
+
+    abstract fun type(name: C_Name): C_DefRef<R_Type>?
+    abstract fun namespace(name: C_Name): C_DefRef<C_Namespace>?
+    abstract fun value(name: C_Name): C_DefRef<C_NamespaceValue>?
+    abstract fun function(name: C_Name): C_DefRef<C_GlobalFunction>?
+
+    fun sub(name: C_Name): Pair<C_ScopeNs, IdeSymbolInfo>? {
+        val subRef = namespace(name)
+        return if (subRef == null) null else {
+            val subNsRef = C_NamespaceRef.create(subRef)
+            val ideInfo = subRef.ideSymbolInfo()
+            Pair(C_SubScopeNs(qName + name, subNsRef), ideInfo)
+        }
+    }
+}
+
+private class C_RootScopeNs(private val scope: C_ScopeNsAdapter): C_ScopeNs(immListOf()) {
+    override fun type(name: C_Name) = scope.lookup { it.type(name) }
+    override fun namespace(name: C_Name) = scope.lookup { it.namespace(name) }
+    override fun value(name: C_Name) = scope.lookup { it.value(name) }
+    override fun function(name: C_Name) = scope.lookup { it.function(name) }
+}
+
+private class C_SubScopeNs(qName: List<C_Name>, private val nsRef: C_NamespaceRef): C_ScopeNs(qName) {
+    override fun type(name: C_Name) = nsRef.type(name)
+    override fun namespace(name: C_Name) = nsRef.namespace(name)
+    override fun value(name: C_Name) = nsRef.value(name)
+    override fun function(name: C_Name) = nsRef.function(name)
+}
+
 class C_Scope(
         private val msgCtx: C_MessageContext,
         private val parent: C_Scope?,
         private val nsGetter: Getter<C_Namespace>
 ) {
-    private val rootNsRef: C_NamespaceRef by lazy { C_NamespaceRef(msgCtx, listOf(), nsGetter()) }
+    private val rootNsRef: C_NamespaceRef by lazy {
+        C_NamespaceRef(msgCtx, listOf(), nsGetter())
+    }
 
-    fun getType(name: S_QualifiedName): R_Type {
-        val typeZ = getTypeOpt(name)
-        val type = C_Errors.checkNotNull(typeZ, name.pos) {
-            val nameStr = name.str()
-            "unknown_type:$nameStr" toCodeMsg "Unknown type: '$nameStr'"
+    private val rootScopeNs: C_ScopeNs = C_RootScopeNs(C_ScopeNsAdapterImpl())
+
+    fun <T> getDefOpt(
+            nameHand: C_QualifiedNameHandle,
+            selector: C_ScopeDefSelector<T>,
+            setUnknownInfo: Boolean
+    ): C_DefResolution<T>? {
+        val selector0 = when (selector) {
+            is C_PrivateScopeDefSelector<T> -> selector
         }
-        return type
+        val res = selector0.getQualifiedDef(rootScopeNs, nameHand, setUnknownInfo)
+        return res
     }
 
-    fun getTypeOpt(name: S_QualifiedName): R_Type? {
-        val typeDef = getTypeDefOpt(name)
-        return typeDef?.getDef()
-    }
-
-    private fun getTypeDefOpt(qName: S_QualifiedName): C_DefRef<R_Type>? {
-        return getQualifiedDef(qName, GeneralNs::type)
-    }
-
-    fun getEntity(name: S_QualifiedName): R_EntityDefinition {
-        val entity = getEntityOpt(name)
-        if (entity == null) {
-            val nameStr = name.str()
-            throw C_Error.stop(name.pos, "unknown_entity:$nameStr", "Unknown entity: '$nameStr'")
-        }
-        return entity
-    }
-
-    fun getEntityOpt(name: S_QualifiedName): R_EntityDefinition? {
-        val type = getTypeOpt(name)
-        if (type == null) {
-            return null
+    fun <T> getDef(nameHand: C_QualifiedNameHandle, selector: C_ScopeDefSelector<T>): T {
+        val selector0 = when (selector) {
+            is C_PrivateScopeDefSelector<T> -> selector
         }
 
-        if (type !is R_EntityType) {
-            val nameStr = name.str()
-            throw C_Error.stop(name.pos, "unknown_entity:$nameStr", "Unknown entity: '$nameStr'")
+        val res = selector0.getQualifiedDef(rootScopeNs, nameHand, true)
+        if (res == null) {
+            val code = "unknown_def:${selector0.kind.code}:$nameHand"
+            val msg = "Unknown ${selector0.kind.msg}: '$nameHand'"
+            throw C_Error.stop(nameHand.pos, code, msg)
         }
 
-        return type.rEntity
+        return res.getDef()
     }
 
-    fun getObjectOpt(name: S_QualifiedName): R_ObjectDefinition? {
-        val value = getQualifiedDef(name, GeneralNs::value)
-        return (value?.getDef() as? C_NamespaceValue_Object)?.rObject
-    }
-
-    fun getValueOpt(qName: S_QualifiedName): C_DefRef<C_NamespaceValue>? {
-        return getQualifiedDef(qName, GeneralNs::value)
-    }
-
-    fun getFunctionOpt(qName: S_QualifiedName): C_DefRef<C_GlobalFunction>? {
-        return getQualifiedDef(qName, GeneralNs::function)
-    }
-
-    fun getOperationOpt(qName: S_QualifiedName): R_OperationDefinition? {
-        val def = getQualifiedDef(qName, GeneralNs::function)
-        return (def?.getDef() as? C_OperationGlobalFunction)?.rOp
-    }
-
-    private fun <T> getQualifiedDef(qName: S_QualifiedName, getter: (GeneralNs, S_Name) -> C_DefRef<T>?): C_DefRef<T>? {
-        val (ns, lastName) = processQualifiedName(qName)
-        return if (ns == null) null else getter(ns, lastName)
-    }
-
-    private fun processQualifiedName(qName: S_QualifiedName): Pair<GeneralNs?, S_Name> {
-        val lastName = qName.last
-
-        var ns: GeneralNs = RootGeneralNs()
-        for (i in 0 .. qName.parts.size - 2) {
-            val ns2 = ns.sub(qName.parts[i])
-            if (ns2 == null) return Pair(null, lastName)
-            ns = ns2
-        }
-
-        return Pair(ns, lastName)
-    }
-
-    private fun <T> getDefOpt(getter: (C_NamespaceRef) -> C_DefRef<T>?): C_DefRef<T>? {
+    private fun <T> lookup0(getter: (C_NamespaceRef) -> C_DefRef<T>?): C_DefRef<T>? {
         var scope: C_Scope? = this
         while (scope != null) {
             val def = getter(scope.rootNsRef)
@@ -127,32 +264,7 @@ class C_Scope(
         return null
     }
 
-    private abstract inner class GeneralNs(private val qName: List<S_Name>) {
-        abstract fun type(name: S_Name): C_DefRef<R_Type>?
-        abstract fun namespace(name: S_Name): C_DefRef<C_Namespace>?
-        abstract fun value(name: S_Name): C_DefRef<C_NamespaceValue>?
-        abstract fun function(name: S_Name): C_DefRef<C_GlobalFunction>?
-
-        fun sub(name: S_Name): GeneralNs? {
-            val subRef = namespace(name)
-            return if (subRef == null) null else {
-                val subNsRef = C_NamespaceRef.create(subRef)
-                SubGeneralNs(qName + name, subNsRef)
-            }
-        }
-    }
-
-    private inner class SubGeneralNs(qName: List<S_Name>, private val nsRef: C_NamespaceRef): GeneralNs(qName) {
-        override fun type(name: S_Name) = nsRef.type(name)
-        override fun namespace(name: S_Name) = nsRef.namespace(name)
-        override fun value(name: S_Name) = nsRef.value(name)
-        override fun function(name: S_Name) = nsRef.function(name)
-    }
-
-    private inner class RootGeneralNs: GeneralNs(listOf()) {
-        override fun type(name: S_Name) = getDefOpt { it.type(name) }
-        override fun namespace(name: S_Name) = getDefOpt { it.namespace(name) }
-        override fun value(name: S_Name) = getDefOpt { it.value(name) }
-        override fun function(name: S_Name) = getDefOpt { it.function(name) }
+    private inner class C_ScopeNsAdapterImpl: C_ScopeNsAdapter {
+        override fun <T> lookup(getter: (C_NamespaceRef) -> C_DefRef<T>?) = lookup0(getter)
     }
 }
