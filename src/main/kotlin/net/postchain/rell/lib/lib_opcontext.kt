@@ -4,12 +4,12 @@
 
 package net.postchain.rell.lib
 
-import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.compiler.ast.S_QualifiedName
 import net.postchain.rell.compiler.base.core.C_DefinitionType
+import net.postchain.rell.compiler.base.core.C_QualifiedName
 import net.postchain.rell.compiler.base.def.C_SysAttribute
 import net.postchain.rell.compiler.base.expr.C_ExprContext
+import net.postchain.rell.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.compiler.base.namespace.C_NamespaceValueContext
 import net.postchain.rell.compiler.base.namespace.C_NamespaceValue_VExpr
 import net.postchain.rell.compiler.base.utils.C_GlobalFuncBuilder
@@ -20,12 +20,17 @@ import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.R_Expr
 import net.postchain.rell.runtime.*
+import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.tools.api.IdeSymbolKind
+import net.postchain.rell.utils.LazyString
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.immListOf
 import java.util.*
 
 object C_Lib_OpContext {
     const val NAMESPACE_NAME = "op_context"
+
+    val NAMESPACE_QNAME = R_QualifiedName.of(NAMESPACE_NAME)
 
     private val GTX_OPERATION_STRUCT = C_Utils.createSysStruct(
             "gtx_operation",
@@ -68,19 +73,21 @@ object C_Lib_OpContext {
 
     val FN_IS_SIGNER: C_SysFunction = wrapFn(IsSigner)
 
-    private val TRANSACTION_FN = "$NAMESPACE_NAME.transaction"
+    private val TRANSACTION_FN_QNAME = NAMESPACE_QNAME.child("transaction")
+    private val TRANSACTION_FN = TRANSACTION_FN_QNAME.str()
+    private val TRANSACTION_FN_LAZY = LazyString.of(TRANSACTION_FN)
 
     fun transactionRExpr(ctx: C_NamespaceValueContext, pos: S_Pos): R_Expr {
         val type = ctx.modCtx.sysDefs.transactionEntity.type
-        return C_Utils.createSysCallRExpr(type, Transaction(type), listOf(), pos, TRANSACTION_FN)
+        return C_ExprUtils.createSysCallRExpr(type, Transaction(type), listOf(), pos, TRANSACTION_FN_LAZY)
     }
 
     private fun transactionExpr(ctx: C_NamespaceValueContext, pos: S_Pos): V_Expr {
         val type = ctx.modCtx.sysDefs.transactionEntity.type
-        return C_Utils.createSysGlobalPropExpr(ctx.exprCtx, type, Transaction(type), pos, TRANSACTION_FN, pure = false)
+        return C_ExprUtils.createSysGlobalPropExpr(ctx.exprCtx, type, Transaction(type), pos, TRANSACTION_FN, pure = false)
     }
 
-    private fun checkCtx(ctx: C_NamespaceValueContext, name: S_QualifiedName) {
+    private fun checkCtx(ctx: C_NamespaceValueContext, name: C_QualifiedName) {
         checkCtx(ctx.exprCtx, name.pos)
     }
 
@@ -98,15 +105,17 @@ object C_Lib_OpContext {
         }
     }
 
-    private class BaseNsValue(val resType: R_Type, val rFn: R_SysFunction): C_NamespaceValue_VExpr() {
-        override fun toExpr0(ctx: C_NamespaceValueContext, name: S_QualifiedName): V_Expr {
+    private class BaseNsValue(val resType: R_Type, val rFn: R_SysFunction)
+        : C_NamespaceValue_VExpr(IdeSymbolInfo(IdeSymbolKind.MEM_SYS_PROPERTY))
+    {
+        override fun toExpr0(ctx: C_NamespaceValueContext, name: C_QualifiedName): V_Expr {
             checkCtx(ctx, name)
-            return C_Utils.createSysGlobalPropExpr(ctx.exprCtx, resType, rFn, name, pure = false)
+            return C_ExprUtils.createSysGlobalPropExpr(ctx.exprCtx, resType, rFn, name, pure = false)
         }
     }
 
-    private object Value_Transaction: C_NamespaceValue_VExpr() {
-        override fun toExpr0(ctx: C_NamespaceValueContext, name: S_QualifiedName): V_Expr {
+    private object Value_Transaction: C_NamespaceValue_VExpr(IdeSymbolInfo(IdeSymbolKind.MEM_SYS_PROPERTY)) {
+        override fun toExpr0(ctx: C_NamespaceValueContext, name: C_QualifiedName): V_Expr {
             checkCtx(ctx, name)
             return transactionExpr(ctx, name.pos)
         }

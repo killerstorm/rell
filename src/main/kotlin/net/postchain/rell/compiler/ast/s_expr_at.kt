@@ -4,13 +4,11 @@
 
 package net.postchain.rell.compiler.ast
 
-import net.postchain.rell.compiler.base.core.C_TypeHint
 import net.postchain.rell.compiler.base.core.C_Types
 import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.modifier.*
 import net.postchain.rell.compiler.base.utils.C_Error
 import net.postchain.rell.compiler.base.utils.C_Errors
-import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.compiler.vexpr.V_AtWhatFieldFlags
 import net.postchain.rell.compiler.vexpr.V_DbAtWhat
@@ -20,6 +18,8 @@ import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
 import net.postchain.rell.runtime.Rt_DecimalValue
 import net.postchain.rell.runtime.Rt_IntValue
+import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.immSetOf
 import net.postchain.rell.utils.toImmList
@@ -41,7 +41,7 @@ class S_AtExprWhat_Simple(val path: List<S_Name>): S_AtExprWhat() {
         val vAttrExpr = ctx.resolveAttr(path[0])
         var expr: C_Expr = C_VExpr(vAttrExpr)
         for (step in path.subList(1, path.size)) {
-            expr = expr.member(ctx, step, false)
+            expr = expr.member(ctx, step, false, C_ExprHint.DEFAULT)
         }
 
         val vExpr = expr.value()
@@ -53,8 +53,7 @@ class S_AtExprWhat_Simple(val path: List<S_Name>): S_AtExprWhat() {
 class S_AtExprWhatComplexField(
         val attr: S_Name?,
         val expr: S_Expr,
-        val modifiers: S_Modifiers,
-        val sort: S_PosValue<R_AtWhatSort>?
+        val modifiers: S_Modifiers
 )
 
 class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExprWhat() {
@@ -104,23 +103,12 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
         val modSort = mods.field(C_ModifierFields.SORT)
         val modSumm = mods.field(C_ModifierFields.SUMMARIZATION)
 
-        val modifierCtx = C_ModifierContext(ctx.msgCtx)
+        val modifierCtx = C_ModifierContext(ctx.msgCtx, ctx.symCtx)
         field.modifiers.compile(modifierCtx, mods)
 
         val omit = modOmit.hasValue()
-        val sort = modSort.posValue() ?: field.sort
+        val sort = modSort.posValue()
         val summ = modSumm.posValue()
-
-        if (field.sort != null) {
-            val ann = if (field.sort.value.asc) C_Annotations.SORT else C_Annotations.SORT_DESC
-            ctx.msgCtx.warning(field.sort.pos, "at:what:sort:deprecated:$ann",
-                    "Deprecated sort syntax; use @$ann annotation instead")
-
-            if (modSort.value() != null) {
-                ctx.msgCtx.error(field.sort.pos, "at:what:sort:specified_by_kw_and_ann",
-                        "Sorting is specified by annotation and keyword at the same time")
-            }
-        }
 
         val flags = V_AtWhatFieldFlags(
                 omit = omit,
@@ -133,14 +121,15 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
         val cSummarization = compileSummarization(ctx, vExpr, summ?.value)
 
         var namePos: S_Pos = field.expr.startPos
-        var name: String? = null
+        var name: R_Name? = null
         var nameExplicit = false
 
         val attr = field.attr
         if (attr != null) {
-            if (attr.str != "_") {
-                namePos = attr.pos
-                name = attr.str
+            val cAttr = attr.compile(ctx, IdeSymbolInfo(IdeSymbolKind.MEM_TUPLE_ATTR))
+            if (cAttr.str != "_") {
+                namePos = cAttr.pos
+                name = cAttr.rName
                 nameExplicit = true
             }
         } else if (!omit && (cSummarization == null || cSummarization.isGroup())) {
@@ -193,7 +182,7 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
 
     private fun processNameConflicts(ctx: C_ExprContext, procFields: List<WhatField>): List<WhatField> {
         val res = mutableListOf<WhatField>()
-        val names = mutableSetOf<String>()
+        val names = mutableSetOf<R_Name>()
 
         for (f in procFields) {
             var name = f.name
@@ -210,12 +199,12 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
     private class WhatField(
             val vExpr: V_Expr,
             val namePos: S_Pos,
-            val name: String?,
+            val name: R_Name?,
             val nameExplicit: Boolean,
             val flags: V_AtWhatFieldFlags,
             val summarization: C_AtSummarization?
     ) {
-        fun updateName(newName: String?): WhatField {
+        fun updateName(newName: R_Name?): WhatField {
             return WhatField(
                     vExpr = vExpr,
                     namePos = namePos,
@@ -275,7 +264,7 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
         if (attrs.isEmpty()) {
             ctx.msgCtx.error(vExpr.pos, "at_where_type:$idx:${type.strCode()}",
                     "No attribute matches type of ${whereExprMsg(idx)} (${type.str()})")
-            return C_Utils.errorVExpr(ctx, vExpr.pos)
+            return C_ExprUtils.errorVExpr(ctx, vExpr.pos)
         } else if (attrs.size > 1) {
             throw C_Errors.errMultipleAttrs(vExpr.pos, attrs, "at_attr_type_ambig:$idx:${type.strCode()}",
                     "Multiple attributes match type of ${whereExprMsg(idx)} (${type.str()})")
@@ -283,10 +272,10 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
 
         val attr = attrs[0]
         val attrExpr = attr.compile(ctx, vExpr.pos)
-        return C_Utils.makeVBinaryExprEq(ctx, vExpr.pos, attrExpr, vExpr)
+        return C_ExprUtils.makeVBinaryExprEq(ctx, vExpr.pos, attrExpr, vExpr)
     }
 
-    private fun compileWhereExprName(ctx: C_ExprContext, idx: Int, vExpr: V_Expr, name: String, type: R_Type): V_Expr {
+    private fun compileWhereExprName(ctx: C_ExprContext, idx: Int, vExpr: V_Expr, name: R_Name, type: R_Type): V_Expr {
         val entityAttrs = ctx.findWhereAttributesByName(name)
         if (entityAttrs.isEmpty() && type == R_BooleanType) {
             val msg = "No context attribute matches name '$name', but the expression is accepted" +
@@ -299,17 +288,17 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
         val entityAttr = ctx.msgCtx.consumeError {
             matchWhereAttribute(ctx, idx, vExpr.pos, name, entityAttrs, type)
         }
-        entityAttr ?: return C_Utils.errorVExpr(ctx, vExpr.pos)
+        entityAttr ?: return C_ExprUtils.errorVExpr(ctx, vExpr.pos)
 
         val entityAttrExpr = entityAttr.compile(ctx, vExpr.pos)
-        return C_Utils.makeVBinaryExprEq(ctx, vExpr.pos, entityAttrExpr, vExpr)
+        return C_ExprUtils.makeVBinaryExprEq(ctx, vExpr.pos, entityAttrExpr, vExpr)
     }
 
     private fun matchWhereAttribute(
             ctx: C_ExprContext,
             idx: Int,
             exprPos: S_Pos,
-            name: String,
+            name: R_Name,
             entityAttrsByName: List<C_ExprContextAttr>,
             varType: R_Type
     ): C_ExprContextAttr {
@@ -346,7 +335,7 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
     private fun makeWhere(ctx: C_ExprContext, compiledExprs: List<V_Expr>): V_Expr? {
         return if (compiledExprs.isEmpty()) null else {
             CommonUtils.foldSimple(compiledExprs) { left, right ->
-                C_BinOp_And.compile(ctx, left, right) ?: C_Utils.errorVExpr(ctx, left.pos)
+                C_BinOp_And.compile(ctx, left, right) ?: C_ExprUtils.errorVExpr(ctx, left.pos)
             }
         }
     }
@@ -365,7 +354,7 @@ class S_AtExpr(
         val limit: S_Expr?,
         val offset: S_Expr?
 ): S_Expr(from.startPos) {
-    override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
+    override fun compile(ctx: C_ExprContext, hint: C_ExprHint): C_Expr {
         return compileInternal(ctx, null)
     }
 
@@ -424,7 +413,7 @@ class S_AtExpr(
             rowDecoder = R_AtExprRowDecoder_Simple
             recordType = selFields[0].resultType
         } else {
-            val tupleFields = selFields.map { R_TupleField(it.name, it.resultType) }
+            val tupleFields = selFields.map { R_TupleField(it.name, it.resultType, IdeSymbolInfo.MEM_TUPLE_FIELD) }
             val type = R_TupleType(tupleFields)
             rowDecoder = R_AtExprRowDecoder_Tuple(type)
             recordType = type

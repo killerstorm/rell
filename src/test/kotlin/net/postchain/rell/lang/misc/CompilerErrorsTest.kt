@@ -14,17 +14,18 @@ class CompilerErrorsTest: BaseRellTest(false) {
     private val badError2 = "expr_call_argtypes:min:"
 
     @Test fun testTypeTuple() {
-        chkStmt("val x: (text,BAD1,rowid,BAD2); val z = $badExpr1;", "ct_err:[unknown_type:BAD1][unknown_type:BAD2][$badError1]")
-        chkStmt("val x: (text,(BAD1,rowid),BAD2); val z = $badExpr1;", "ct_err:[unknown_type:BAD1][unknown_type:BAD2][$badError1]")
-        chkStmt("val x: (text,(BAD1,(rowid,BAD2))); val z = $badExpr1;", "ct_err:[unknown_type:BAD1][unknown_type:BAD2][$badError1]")
+        val ut = "unknown_def:type"
+        chkStmt("val x: (text,BAD1,rowid,BAD2); val z = $badExpr1;", "ct_err:[$ut:BAD1][$ut:BAD2][$badError1]")
+        chkStmt("val x: (text,(BAD1,rowid),BAD2); val z = $badExpr1;", "ct_err:[$ut:BAD1][$ut:BAD2][$badError1]")
+        chkStmt("val x: (text,(BAD1,(rowid,BAD2))); val z = $badExpr1;", "ct_err:[$ut:BAD1][$ut:BAD2][$badError1]")
     }
 
     @Test fun testTypeMap() {
-        chkStmt("val x: map<BAD1,text>; val z = $badExpr1;", "ct_err:[unknown_type:BAD1][$badError1]")
-        chkStmt("val x: map<text,BAD2>; val z = $badExpr1;", "ct_err:[unknown_type:BAD2][$badError1]")
-        chkStmt("val x: map<BAD1,BAD2>; val z = $badExpr1;", "ct_err:[unknown_type:BAD1][unknown_type:BAD2][$badError1]")
-        chkStmt("val x: (text,(BAD1,rowid),BAD2); val z = $badExpr1;", "ct_err:[unknown_type:BAD1][unknown_type:BAD2][$badError1]")
-        chkStmt("val x: (text,(BAD1,(rowid,BAD2))); val z = $badExpr1;", "ct_err:[unknown_type:BAD1][unknown_type:BAD2][$badError1]")
+        chkStmt("val x: map<BAD1,text>; val z = $badExpr1;", "ct_err:[unknown_def:type:BAD1][$badError1]")
+        chkStmt("val x: map<text,BAD2>; val z = $badExpr1;", "ct_err:[unknown_def:type:BAD2][$badError1]")
+        chkStmt("val x: map<BAD1,BAD2>; val z = $badExpr1;", "ct_err:[unknown_def:type:BAD1][unknown_def:type:BAD2][$badError1]")
+        chkStmt("val x: (text,(BAD1,rowid),BAD2); val z = $badExpr1;", "ct_err:[unknown_def:type:BAD1][unknown_def:type:BAD2][$badError1]")
+        chkStmt("val x: (text,(BAD1,(rowid,BAD2))); val z = $badExpr1;", "ct_err:[unknown_def:type:BAD1][unknown_def:type:BAD2][$badError1]")
     }
 
     @Test fun testDefAttrBadType() {
@@ -35,16 +36,16 @@ class CompilerErrorsTest: BaseRellTest(false) {
 
     private fun chkDefAttrBadType(kw: String) {
         chkCompile("$kw test { x: BAD1 = 0; y: BAD2 = 0; z: integer = $badExpr1; }",
-                "ct_err:[unknown_type:BAD1][unknown_type:BAD2][$badError1]")
+                "ct_err:[unknown_def:type:BAD1][unknown_def:type:BAD2][$badError1]")
         chkCompile("$kw test { x: BAD1 = $badExpr2; y: BAD2 = 0; z: integer = $badExpr1; }",
-                "ct_err:[unknown_type:BAD1][$badError2][unknown_type:BAD2][$badError1]")
+                "ct_err:[unknown_def:type:BAD1][$badError2][unknown_def:type:BAD2][$badError1]")
         chkCompile("$kw test { x: BAD1 = 0; y: BAD2 = $badExpr2; z: integer = $badExpr1; }",
-                "ct_err:[unknown_type:BAD1][unknown_type:BAD2][$badError2][$badError1]")
+                "ct_err:[unknown_def:type:BAD1][unknown_def:type:BAD2][$badError2][$badError1]")
     }
 
     @Test fun testDefEntity() {
         val un = "unknown_name"
-        val ut = "unknown_type"
+        val ut = "unknown_def:type"
 
         chkCompile("entity data { a: T1 = E1; a: T2 = E2; }", "ct_err:[$ut:T1][$un:E1][dup_attr:a][$ut:T2][$un:E2]")
         chkCompile("entity data { a: T1 = E1; key a: T2 = E2; }",
@@ -66,7 +67,7 @@ class CompilerErrorsTest: BaseRellTest(false) {
 
     @Test fun testDefFunctionParamBadType() {
         def("function foo(x: integer, y: UNKNOWN_TYPE, z: text) {}")
-        chkDefFunctionParamBadType("unknown_type:UNKNOWN_TYPE")
+        chkDefFunctionParamBadType("unknown_def:type:UNKNOWN_TYPE")
     }
 
     @Test fun testDefFunctionParamNoType() {
@@ -138,40 +139,40 @@ class CompilerErrorsTest: BaseRellTest(false) {
     }
 
     @Test fun testStmtVarType() {
-        chkStmt("val x: BAD; $badExpr1;", "ct_err:[unknown_type:BAD][$badError1]")
-        chkStmt("val x: BAD1; val y: BAD2; $badExpr1;", "ct_err:[unknown_type:BAD1][unknown_type:BAD2][$badError1]")
-        chkStmt("val x: BAD = 123; $badExpr1;", "ct_err:[unknown_type:BAD][$badError1]")
-        chkStmt("val x: BAD = $badExpr2; $badExpr1;", "ct_err:[unknown_type:BAD][$badError2][$badError1]")
-        chkStmt("val x: BAD; $badExpr1;", "ct_err:[unknown_type:BAD][$badError1]")
-        chkStmt("val x: BAD = 123; max(x); $badExpr1;", "ct_err:[unknown_type:BAD][$badError1]")
-        chkStmt("val x: BAD = $badExpr2; max(x); $badExpr1;", "ct_err:[unknown_type:BAD][$badError2][$badError1]")
+        chkStmt("val x: BAD; $badExpr1;", "ct_err:[unknown_def:type:BAD][$badError1]")
+        chkStmt("val x: BAD1; val y: BAD2; $badExpr1;", "ct_err:[unknown_def:type:BAD1][unknown_def:type:BAD2][$badError1]")
+        chkStmt("val x: BAD = 123; $badExpr1;", "ct_err:[unknown_def:type:BAD][$badError1]")
+        chkStmt("val x: BAD = $badExpr2; $badExpr1;", "ct_err:[unknown_def:type:BAD][$badError2][$badError1]")
+        chkStmt("val x: BAD; $badExpr1;", "ct_err:[unknown_def:type:BAD][$badError1]")
+        chkStmt("val x: BAD = 123; max(x); $badExpr1;", "ct_err:[unknown_def:type:BAD][$badError1]")
+        chkStmt("val x: BAD = $badExpr2; max(x); $badExpr1;", "ct_err:[unknown_def:type:BAD][$badError2][$badError1]")
     }
 
     @Test fun testStmtVarDeclaratorSimple() {
         val err3 = "expr_call_argtypes:max:integer"
 
         chkStmt("val _; $badExpr2;", "ct_err:[unknown_name_type:_][$badError2]")
-        chkStmt("val _: BAD; $badExpr2;", "ct_err:[var_wildcard_type][unknown_type:BAD][$badError2]")
+        chkStmt("val _: BAD; $badExpr2;", "ct_err:[var_wildcard_type][unknown_def:type:BAD][$badError2]")
         chkStmt("val _ = $badExpr1; $badExpr2;", "ct_err:[$badError1][$badError2]")
-        chkStmt("val _: BAD = $badExpr1; $badExpr2;", "ct_err:[var_wildcard_type][unknown_type:BAD][$badError1][$badError2]")
+        chkStmt("val _: BAD = $badExpr1; $badExpr2;", "ct_err:[var_wildcard_type][unknown_def:type:BAD][$badError1][$badError2]")
 
         chkStmt("val x = $badExpr1; max(x); $badExpr2;", "ct_err:[$badError1][$badError2]")
         chkStmt("val x; max(x); $badExpr2;", "ct_err:[unknown_name_type:x][$badError2]")
-        chkStmt("val x: BAD; max(x); $badExpr2;", "ct_err:[unknown_type:BAD][$badError2]")
-        chkStmt("val x: BAD = 123; max(x); $badExpr2;", "ct_err:[unknown_type:BAD][$badError2]")
+        chkStmt("val x: BAD; max(x); $badExpr2;", "ct_err:[unknown_def:type:BAD][$badError2]")
+        chkStmt("val x: BAD = 123; max(x); $badExpr2;", "ct_err:[unknown_def:type:BAD][$badError2]")
 
         chkStmt("val x = 123; val x; max(x); $badExpr2;", "ct_err:[block:name_conflict:x][unknown_name_type:x][$err3][$badError2]")
-        chkStmt("val x = 123; val x: BAD; max(x); $badExpr2;", "ct_err:[block:name_conflict:x][unknown_type:BAD][$err3][$badError2]")
+        chkStmt("val x = 123; val x: BAD; max(x); $badExpr2;", "ct_err:[block:name_conflict:x][unknown_def:type:BAD][$err3][$badError2]")
         chkStmt("val x = 123; val x = $badExpr1; max(x); $badExpr2;", "ct_err:[block:name_conflict:x][$badError1][$err3][$badError2]")
         chkStmt("val x = 123; val x: BAD = $badExpr1; max(x); $badExpr2;",
-                "ct_err:[block:name_conflict:x][unknown_type:BAD][$badError1][$err3][$badError2]")
+                "ct_err:[block:name_conflict:x][unknown_def:type:BAD][$badError1][$err3][$badError2]")
 
         chkStmt("val x; val x = 123; max(x); $badExpr2;", "ct_err:[unknown_name_type:x][block:name_conflict:x][$badError2]")
         chkStmt("val x; val x: integer; max(x); $badExpr2;", "ct_err:[unknown_name_type:x][block:name_conflict:x][$badError2]")
-        chkStmt("val x: BAD; val x = 123; max(x); $badExpr2;", "ct_err:[unknown_type:BAD][block:name_conflict:x][$badError2]")
+        chkStmt("val x: BAD; val x = 123; max(x); $badExpr2;", "ct_err:[unknown_def:type:BAD][block:name_conflict:x][$badError2]")
         chkStmt("val x = $badExpr1; val x = 123; max(x); $badExpr2;", "ct_err:[$badError1][block:name_conflict:x][$badError2]")
         chkStmt("val x: BAD = $badExpr1; val x = 123; max(x); $badExpr2;",
-                "ct_err:[unknown_type:BAD][$badError1][block:name_conflict:x][$badError2]")
+                "ct_err:[unknown_def:type:BAD][$badError1][block:name_conflict:x][$badError2]")
 
         chkStmt("val x = 1; val x = 2; val y = $badExpr1;", "ct_err:[block:name_conflict:x][$badError1]")
     }
@@ -194,12 +195,12 @@ class CompilerErrorsTest: BaseRellTest(false) {
         chkStmt("val (x, (y, z)) = ($badExpr1, ($badExpr2, 123, 456)); max(u);",
                 "ct_err:[var_tuple_wrongsize:2:3:(<error>,integer,integer)][$badError1][$badError2][$err3]")
 
-        chkStmt("val (x: A, y: B) = $badExpr1;", "ct_err:[unknown_type:A][unknown_type:B][$badError1]")
+        chkStmt("val (x: A, y: B) = $badExpr1;", "ct_err:[unknown_def:type:A][unknown_def:type:B][$badError1]")
         chkStmt("val (x: A, y: B) = (1, 2, 3);",
-                "ct_err:[var_tuple_wrongsize:2:3:(integer,integer,integer)][unknown_type:A][unknown_type:B]")
+                "ct_err:[var_tuple_wrongsize:2:3:(integer,integer,integer)][unknown_def:type:A][unknown_def:type:B]")
 
         chkStmt("val x = 1; val y = 2; val (x: A, y: B) = ($badExpr1, $badExpr2);",
-                "ct_err:[block:name_conflict:x][unknown_type:A][block:name_conflict:y][unknown_type:B][$badError1][$badError2]")
+                "ct_err:[block:name_conflict:x][unknown_def:type:A][block:name_conflict:y][unknown_def:type:B][$badError1][$badError2]")
     }
 
     @Test fun testStmtUpdate() {
@@ -363,6 +364,14 @@ class CompilerErrorsTest: BaseRellTest(false) {
 
         chkCompile("query q(x: boolean) = when (x) { true -> 0; false -> $badExpr1; else -> $badExpr2 };",
                 "ct_err:[$badError1][when_else_allvalues:boolean][$badError2]")
+    }
+
+    @Test fun testExprMember() {
+        chk("$badExpr1.foo", "ct_err:$badError1")
+        chk("$badExpr1.foo()", "ct_err:$badError1")
+        chk("$badExpr1.foo.bar", "ct_err:$badError1")
+        chk("$badExpr1.foo.bar()", "ct_err:$badError1")
+        chk("$badExpr1.foo($badExpr2)", "ct_err:[$badError1][$badError2]")
     }
 
     private fun chkStmt(code: String, expected: String) = chkCompile("function f() { $code }", expected)

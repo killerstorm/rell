@@ -9,6 +9,7 @@ import net.postchain.rell.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.compiler.base.utils.C_Error
 import net.postchain.rell.compiler.base.utils.C_Message
 import net.postchain.rell.compiler.base.utils.C_SourceDir
+import net.postchain.rell.compiler.base.utils.C_SourcePath
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
@@ -116,7 +117,8 @@ abstract class RellBaseTester(
 
     private val expectedData = mutableListOf<String>()
 
-    protected fun compilerOptions() = C_CompilerOptions(
+    fun compilerOptions() = C_CompilerOptions(
+            compatibility = compatibilityVer,
             gtv = gtv,
             deprecatedError = deprecatedError,
             ide = false,
@@ -125,7 +127,7 @@ abstract class RellBaseTester(
             testLib = testLib,
             hiddenLib = hiddenLib,
             allowDbModificationsInObjectExprs = allowDbModificationsInObjectExprs,
-            compatibility = compatibilityVer
+            symbolInfoFile = C_SourcePath.parse(RellTestUtils.MAIN_FILE)
     )
 
     fun def(defs: List<String>) {

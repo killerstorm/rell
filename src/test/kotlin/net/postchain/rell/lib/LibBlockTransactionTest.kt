@@ -89,10 +89,14 @@ class LibBlockTransactionTest: BaseRellTest() {
         tst.inserts = BLOCK_INSERTS_333
         tst.chainId = 333
 
-        chkOp("create block(block_height = 123, block_rid = x'deadbeef', timestamp = 456);", "ct_err:expr_create_cant:block")
-        chkOp("create transaction(tx_rid = x'dead', tx_hash = x'beef', tx_data = x'cafe', block = block@{});", "ct_err:expr_create_cant:transaction")
-        chkOp("create blocks(block_height = 123, block_rid = x'deadbeef', timestamp = 456);", "ct_err:unknown_entity:blocks")
-        chkOp("create transactions(tx_rid = x'dead', tx_hash = x'beef', tx_data = x'cafe', block = block@{});", "ct_err:unknown_entity:transactions")
+        chkOp("create block(block_height = 123, block_rid = x'deadbeef', timestamp = 456);",
+                "ct_err:expr_create_cant:block")
+        chkOp("create transaction(tx_rid = x'dead', tx_hash = x'beef', tx_data = x'cafe', block = block@{});",
+                "ct_err:expr_create_cant:transaction")
+        chkOp("create blocks(block_height = 123, block_rid = x'deadbeef', timestamp = 456);",
+                "ct_err:unknown_def:entity:blocks")
+        chkOp("create transactions(tx_rid = x'dead', tx_hash = x'beef', tx_data = x'cafe', block = block@{});",
+                "ct_err:unknown_def:entity:transactions")
 
         chkOp("update block@{}( block_height = 999 );", "ct_err:stmt_update_cant:block")
         chkOp("update block@{}( block_rid = x'cafe' );", "ct_err:stmt_update_cant:block")

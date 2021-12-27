@@ -9,6 +9,8 @@ import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.*
 import net.postchain.rell.compiler.base.expr.C_ExprContext
+import net.postchain.rell.compiler.base.expr.C_ExprHint
+import net.postchain.rell.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.compiler.base.fn.C_FunctionUtils
 import net.postchain.rell.compiler.base.namespace.C_DeclarationType
 import net.postchain.rell.compiler.base.utils.*
@@ -32,7 +34,7 @@ class C_GlobalConstantDefinition(
         private val headerGetter: C_LateGetter<C_GlobalConstantFunctionHeader>,
         private val exprGetter: C_LateGetter<V_Expr>
 ) {
-    fun compileRead(exprCtx: C_ExprContext, name: S_Name): V_Expr {
+    fun compileRead(exprCtx: C_ExprContext, name: C_Name): V_Expr {
         val header = headerGetter.get()
         val type = C_FunctionUtils.compileReturnType(exprCtx, name, header) ?: R_CtErrorType
         val vExpr = V_GlobalConstantExpr(exprCtx, name.pos, type, varUid, rDef.constId, header)
@@ -128,14 +130,14 @@ class C_GlobalConstantFunctionBody(
     private var constantValue0: One<Rt_Value?>? = null
 
     override fun returnsValue() = true
-    override fun getErrorBody() = C_Utils.errorVExpr(bodyCtx.defCtx.initExprCtx, sExpr.startPos)
+    override fun getErrorBody() = C_ExprUtils.errorVExpr(bodyCtx.defCtx.initExprCtx, sExpr.startPos)
     override fun getReturnType(body: V_Expr) = body.type
 
     override fun compileBody(): V_Expr {
         val exprCtx = bodyCtx.defCtx.initExprCtx
 
-        val typeHint = C_TypeHint.ofType(bodyCtx.explicitRetType)
-        val vExpr = sExpr.compile(exprCtx, typeHint).value()
+        val exprHint = C_ExprHint.ofType(bodyCtx.explicitRetType)
+        val vExpr = sExpr.compile(exprCtx, exprHint).value()
 
         val actualType = vExpr.type
 

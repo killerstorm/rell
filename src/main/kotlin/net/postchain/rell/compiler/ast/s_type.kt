@@ -12,6 +12,7 @@ import net.postchain.rell.compiler.base.utils.C_Error
 import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.model.*
+import net.postchain.rell.tools.api.IdeSymbolInfo
 
 sealed class S_Type(val pos: S_Pos) {
     protected abstract fun compile0(ctx: C_NamespaceContext): R_Type
@@ -46,15 +47,21 @@ sealed class S_Type(val pos: S_Pos) {
     }
 }
 
-class S_NameType(val name: S_QualifiedName): S_Type(name.pos) {
-    override fun compile0(ctx: C_NamespaceContext): R_Type = ctx.getType(name)
+class S_NameType(private val name: S_QualifiedName): S_Type(name.pos) {
+    override fun compile0(ctx: C_NamespaceContext): R_Type {
+        val nameHand = name.compile(ctx)
+        return ctx.getType(nameHand)
+    }
 
     override fun compileMirrorStructType(ctx: C_NamespaceContext, mutable: Boolean): R_StructType? {
-        var rParamType = ctx.getTypeOpt(name)
+        val nameHand = name.compile(ctx)
+        val typeRes = ctx.getTypeOpt(nameHand)
+        var rParamType = typeRes?.getDef()
 
         if (rParamType == null) {
-            val obj = ctx.getObjectOpt(name)
-            if (obj != null) {
+            val objRes = ctx.getObjectOpt(nameHand)
+            if (objRes != null) {
+                val obj = objRes.getDef()
                 rParamType = obj.rEntity.type
             }
         }
@@ -63,13 +70,15 @@ class S_NameType(val name: S_QualifiedName): S_Type(name.pos) {
             return compileMirrorStructType0(rParamType, mutable)
         }
 
-        val rOp = ctx.getOperationOpt(name)
+        val opRes = ctx.getOperationOpt(nameHand)
+        val rOp = opRes?.getDef()
         if (rOp != null) {
             val rStruct = rOp.mirrorStructs.getStruct(mutable)
             return rStruct.type
         }
 
-        return super.compileMirrorStructType(ctx, mutable) // Reports compilation error.
+        rParamType = ctx.getType(nameHand) // Must throw an exception, as type has been already checked.
+        return compileMirrorStructType0(rParamType, mutable)
     }
 }
 
@@ -81,21 +90,20 @@ class S_NullableType(pos: S_Pos, val valueType: S_Type): S_Type(pos) {
     }
 }
 
-class S_TupleType(pos: S_Pos, val fields: List<S_NameOptValue<S_Type>>): S_Type(pos) {
+class S_TupleType(pos: S_Pos, private val fields: List<S_NameOptValue<S_Type>>): S_Type(pos) {
     override fun compile0(ctx: C_NamespaceContext): R_Type {
         val names = mutableSetOf<String>()
-        for ((name, _) in fields) {
-            val nameStr = name?.str
-            if (nameStr != null && !names.add(nameStr)) {
-                throw C_Error.stop(name.pos, "type_tuple_dupname:$nameStr", "Duplicate field: '$nameStr'")
-            }
-        }
 
         val rFields = fields.map { (name, type) ->
-            val rType = C_Types.checkNotUnit(ctx.msgCtx, type.pos, type.compile(ctx), name?.str) {
+            val ideInfo = IdeSymbolInfo.MEM_TUPLE_FIELD
+            val cName = name?.compile(ctx, ideInfo)
+            if (cName != null && !names.add(cName.str)) {
+                throw C_Error.stop(cName.pos, "type_tuple_dupname:$cName", "Duplicate field: '$cName'")
+            }
+            val rType = C_Types.checkNotUnit(ctx.msgCtx, type.pos, type.compile(ctx), cName?.str) {
                 "tuple_field" toCodeMsg "tuple field"
             }
-            R_TupleField(name?.str, rType)
+            R_TupleField(cName?.rName, rType, ideInfo)
         }
 
         return R_TupleType(rFields)

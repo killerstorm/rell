@@ -4,16 +4,17 @@
 
 package net.postchain.rell.compiler.vexpr
 
-import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_PosValue
 import net.postchain.rell.compiler.base.core.C_AppContext
 import net.postchain.rell.compiler.base.core.C_MessageContext
+import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
 import net.postchain.rell.model.stmt.R_ForIterator
+import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.*
 
 class V_AtEntityExpr(
@@ -39,18 +40,31 @@ class V_AtEntityExpr(
         return Db_EntityExpr(rAtEntity)
     }
 
-    override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
+    override fun member(ctx: C_ExprContext, memberName: C_Name, safe: Boolean, exprHint: C_ExprHint): C_ExprMember {
         val entity = cAtEntity.rEntity
-        val entityType = entity.type
+        val valueMember = memberValue(ctx, memberName, entity)
+        val fnMember = memberFunction(ctx, memberName, safe, entity)
 
-        val attrRef = C_EntityAttrRef.resolveByName(entity, memberName.str)
-        val attrExpr = if (attrRef == null) null else C_VExpr(V_AtAttrExpr(ctx, pos, cAtEntity, ambiguous, attrRef))
+        val res = C_ExprUtils.valueFunctionExprMember(valueMember, fnMember, exprHint)
+        if (res == null) {
+            C_Errors.errUnknownMember(ctx.msgCtx, entity.type, memberName)
+            return C_ExprMember(C_ExprUtils.errorExpr(ctx, memberName.pos), IdeSymbolInfo.UNKNOWN)
+        }
 
+        return res
+    }
+
+    private fun memberValue(ctx: C_ExprContext, memberName: C_Name, entity: R_EntityDefinition): C_ExprMember? {
+        val attrRef = C_EntityAttrRef.resolveByName(entity, memberName.rName)
+        attrRef ?: return null
+        val attrExpr = C_VExpr(V_AtAttrExpr(ctx, pos, cAtEntity, ambiguous, attrRef))
+        return C_ExprMember(attrExpr, attrRef.ideSymbolInfo())
+    }
+
+    private fun memberFunction(ctx: C_ExprContext, memberName: C_Name, safe: Boolean, entity: R_EntityDefinition): C_ExprMember? {
         val memberRef = C_MemberRef(this, memberName, safe)
-        val fnExpr = C_MemberResolver.functionForType(ctx, entityType, memberRef)
-
-        val cExpr = C_ValueFunctionExpr.create(memberName, attrExpr, fnExpr)
-        return cExpr ?: throw C_Errors.errUnknownMember(entityType, memberName)
+        val res = C_MemberResolver.functionForType(ctx, entity.type, memberRef)
+        return res
     }
 }
 
@@ -95,7 +109,7 @@ class V_AtWhatFieldFlags(
 
 class V_DbAtWhatField(
         private val appCtx: C_AppContext,
-        val name: String?,
+        val name: R_Name?,
         val resultType: R_Type,
         val expr: V_Expr,
         val flags: V_AtWhatFieldFlags,

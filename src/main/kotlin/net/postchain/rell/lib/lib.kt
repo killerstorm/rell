@@ -5,12 +5,14 @@
 package net.postchain.rell.lib
 
 import net.postchain.rell.compiler.ast.S_Expr
-import net.postchain.rell.compiler.ast.S_Name
-import net.postchain.rell.compiler.ast.S_QualifiedName
 import net.postchain.rell.compiler.ast.S_VirtualType
 import net.postchain.rell.compiler.base.core.C_CompilerOptions
+import net.postchain.rell.compiler.base.core.C_Name
+import net.postchain.rell.compiler.base.core.C_QualifiedName
+import net.postchain.rell.compiler.base.core.C_SystemDefs
 import net.postchain.rell.compiler.base.def.C_GlobalFunction
 import net.postchain.rell.compiler.base.expr.C_ExprContext
+import net.postchain.rell.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.compiler.base.expr.C_ExprVarFacts
 import net.postchain.rell.compiler.base.expr.C_MemberLink
 import net.postchain.rell.compiler.base.fn.*
@@ -27,6 +29,8 @@ import net.postchain.rell.runtime.Rt_DecimalValue
 import net.postchain.rell.runtime.Rt_IntValue
 import net.postchain.rell.runtime.Rt_TextValue
 import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.immMapOf
 import net.postchain.rell.utils.toImmMap
@@ -37,7 +41,7 @@ class C_LibFunctions(private val opts: C_CompilerOptions) {
     val testGlobalFunctions = createGlobalFunctions(true)
 
     private fun createCommonGlobalFunctions(): C_GlobalFuncTable {
-        val b = C_GlobalFuncBuilder(null, pure = true)
+        val b = C_GlobalFuncBuilder(null, pure = true, typeNames = C_SystemDefs.SYSTEM_TYPES.keys)
 
         b.add("unit", R_UnitType, listOf(), R_SysFn_General.Unit)
 
@@ -96,7 +100,7 @@ class C_LibFunctions(private val opts: C_CompilerOptions) {
         return b.build()
     }
 
-    private fun createGlobalFunctions(test: Boolean): Map<String, C_GlobalFunction> {
+    private fun createGlobalFunctions(test: Boolean): Map<R_Name, C_GlobalFunction> {
         val b = C_GlobalFuncBuilder(null)
 
         createCommonGlobalFunctions().addTo(b)
@@ -121,7 +125,7 @@ class C_LibFunctions(private val opts: C_CompilerOptions) {
     val APP_NAMESPACES = createSysNamespaces(false)
     val TEST_NAMESPACES = createSysNamespaces(true)
 
-    private fun createSysNamespaces(test: Boolean): Map<String, C_DefProxy<C_Namespace>> {
+    private fun createSysNamespaces(test: Boolean): Map<R_Name, C_DefProxy<C_Namespace>> {
         val res = mutableMapOf(
                 "boolean" to nsProxy(C_StaticLib.BOOLEAN_NAMESPACE),
                 "byte_array" to nsProxy(C_StaticLib.BYTEARRAY_NAMESPACE),
@@ -143,7 +147,14 @@ class C_LibFunctions(private val opts: C_CompilerOptions) {
             res[C_Lib_OpContext.NAMESPACE_NAME] = nsProxy(C_Lib_OpContext.NAMESPACE)
         }
 
-        return res.toImmMap()
+        return res
+                .mapKeys {
+                    R_Name.of(it.key)
+                }
+                .mapValues {
+                    if (it.key !in C_SystemDefs.SYSTEM_TYPES) it.value else it.value.update(ideInfo = IdeSymbolInfo.DEF_TYPE)
+                }
+                .toImmMap()
     }
 
     private fun createRellNamespace(test: Boolean): C_Namespace {
@@ -158,15 +169,17 @@ class C_LibFunctions(private val opts: C_CompilerOptions) {
         )
     }
 
-    private fun nsProxy(ns: C_Namespace, deprecated: C_Deprecated? = null) = C_DefProxy.create(ns, deprecated)
+    private fun nsProxy(ns: C_Namespace, deprecated: C_Deprecated? = null): C_DefProxy<C_Namespace> {
+        return C_DefProxy.create(ns, deprecated = deprecated)
+    }
 
-    fun getMemberFunctionOpt(ctx: C_ExprContext, type: R_Type, name: String): C_SysMemberFunction? {
+    fun getMemberFunctionOpt(ctx: C_ExprContext, type: R_Type, name: R_Name): C_SysMemberFunction? {
         val table = getTypeMemberFunctions(ctx, type)
         val fn = table.get(name)
         return fn
     }
 
-    fun getEnumPropertyOpt(name: String): C_SysMemberProperty? {
+    fun getEnumPropertyOpt(name: R_Name): C_SysMemberProperty? {
         return C_StaticLib.ENUM_PROPS[name]
     }
 
@@ -408,7 +421,7 @@ class C_LibFunctions(private val opts: C_CompilerOptions) {
                 .build()
     }
 
-    fun getTypeStaticFunction(type: R_Type, name: String): C_GlobalFunction? {
+    fun getTypeStaticFunction(type: R_Type, name: R_Name): C_GlobalFunction? {
         val b = typeGlobalFuncBuilder(type, pure = true)
         when (type) {
             is R_EnumType -> getEnumStaticFns(b, type.enum)
@@ -616,7 +629,7 @@ private object C_StaticLib {
     val ENUM_PROPS = immMapOf(
             "name" to C_SysMemberProperty(R_TextType, R_SysFn_Enum.Name, pure = true),
             "value" to C_SysMemberProperty(R_IntegerType, R_SysFn_Enum.Value, Db_SysFn_Nop, pure = true)
-    )
+    ).mapKeys { R_Name.of(it.key) }.toImmMap()
 
     val RELL_NAMESPACE_FNS = C_GlobalFuncBuilder("rell")
 //            .add("get_rell_version", R_TextType, listOf(), R_SysFn_Rell.GetRellVersion)
@@ -627,8 +640,8 @@ private object C_StaticLib {
             .build()
 }
 
-private object C_NsValue_ChainContext_Args: C_NamespaceValue_VExpr() {
-    override fun toExpr0(ctx: C_NamespaceValueContext, name: S_QualifiedName): V_Expr {
+private object C_NsValue_ChainContext_Args: C_NamespaceValue_VExpr(IdeSymbolInfo(IdeSymbolKind.DEF_CONSTANT)) {
+    override fun toExpr0(ctx: C_NamespaceValueContext, name: C_QualifiedName): V_Expr {
         val struct = ctx.modCtx.getModuleArgsStruct()
         if (struct == null) {
             val nameStr = name.str()
@@ -639,7 +652,7 @@ private object C_NsValue_ChainContext_Args: C_NamespaceValue_VExpr() {
         val moduleName = ctx.modCtx.moduleName
         val rFn = R_SysFn_ChainContext.Args(moduleName)
 
-        return C_Utils.createSysGlobalPropExpr(ctx.exprCtx, struct.type, rFn, name, pure = true)
+        return C_ExprUtils.createSysGlobalPropExpr(ctx.exprCtx, struct.type, rFn, name, pure = true)
     }
 }
 
@@ -653,15 +666,15 @@ private class C_SysFn_Print(private val log: Boolean): C_GlobalSpecialFuncCase()
         override fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
             val filePos = caseCtx.filePos()
             val rFn = R_SysFn_General.Print(log, filePos)
-            return C_Utils.createSysCallRExpr(R_UnitType, rFn, args, caseCtx)
+            return C_ExprUtils.createSysCallRExpr(R_UnitType, rFn, args, caseCtx)
         }
     }
 }
 
-private object C_SysFn_TypeOf: C_SpecialSysGlobalFunction() {
+private object C_SysFn_TypeOf: C_SpecialSysGlobalFunction(IdeSymbolInfo.DEF_FUNCTION_SYSTEM) {
     override fun paramCount() = 1
 
-    override fun compileCall0(ctx: C_ExprContext, name: S_Name, args: List<S_Expr>): V_Expr {
+    override fun compileCall0(ctx: C_ExprContext, name: C_Name, args: List<S_Expr>): V_Expr {
         checkEquals(1, args.size)
 
         val arg = args[0]
@@ -693,7 +706,7 @@ private class C_SysFn_Nullable(private val baseType: R_Type?): C_GlobalSpecialFu
 
         override fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
             checkEquals(args.size, 1)
-            return C_Utils.createSysCallRExpr(resType, R_SysFn_Internal.Nop(false), args, caseCtx)
+            return C_ExprUtils.createSysCallRExpr(resType, R_SysFn_Internal.Nop(false), args, caseCtx)
         }
     }
 }
@@ -707,7 +720,7 @@ private object C_SysFn_Crash: C_GlobalSpecialFuncCase() {
     private class CaseMatch(args: List<V_Expr>): C_BasicGlobalFuncCaseMatch(R_UnitType, args) {
         override fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
             checkEquals(args.size, 1)
-            return C_Utils.createSysCallRExpr(R_UnitType, R_SysFn_Internal.Crash, args, caseCtx)
+            return C_ExprUtils.createSysCallRExpr(R_UnitType, R_SysFn_Internal.Crash, args, caseCtx)
         }
     }
 }
@@ -725,7 +738,7 @@ private class C_SysFn_Nop(private val print: Boolean): C_GlobalSpecialFuncCase()
 
         override fun compileCallExpr(caseCtx: C_GlobalFuncCaseCtx, args: List<R_Expr>): R_Expr {
             checkEquals(args.size, 1)
-            return C_Utils.createSysCallRExpr(resType, R_SysFn_Internal.Nop(print), args, caseCtx)
+            return C_ExprUtils.createSysCallRExpr(resType, R_SysFn_Internal.Nop(print), args, caseCtx)
         }
     }
 }
@@ -918,7 +931,8 @@ private fun stdConstValue(name: String, value: Long) = stdConstValue(name, Rt_In
 private fun stdConstValue(name: String, value: BigDecimal) = stdConstValue(name, Rt_DecimalValue.of(value))
 
 private fun stdConstValue(name: String, value: Rt_Value): Pair<String, C_NamespaceValue> {
-    return Pair(name, C_NamespaceValue_RtValue(value))
+    val ideInfo = IdeSymbolInfo(IdeSymbolKind.DEF_CONSTANT)
+    return Pair(name, C_NamespaceValue_RtValue(ideInfo, value))
 }
 
 private fun stdFnValue(
@@ -927,7 +941,8 @@ private fun stdFnValue(
         fn: R_SysFunction,
         pure: Boolean = false
 ): Pair<String, C_NamespaceValue> {
-    return Pair(name, C_NamespaceValue_SysFunction(type, fn, pure = pure))
+    val ideInfo = IdeSymbolInfo(IdeSymbolKind.DEF_CONSTANT)
+    return Pair(name, C_NamespaceValue_SysFunction(ideInfo, type, fn, pure = pure))
 }
 
 private fun matcher(type: R_Type): C_ArgTypeMatcher = C_ArgTypeMatcher_Simple(type)

@@ -4,13 +4,16 @@
 
 package net.postchain.rell.compiler.base.core
 
-import net.postchain.rell.compiler.ast.*
+import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.ast.S_Statement
+import net.postchain.rell.compiler.ast.S_VirtualType
+import net.postchain.rell.compiler.base.def.C_AttrHeader
 import net.postchain.rell.compiler.base.expr.*
-import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.model.*
 import net.postchain.rell.model.stmt.*
+import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.toImmList
 
 class C_Statement(
@@ -38,7 +41,7 @@ class C_Statement(
 
     companion object {
         val EMPTY = C_Statement(R_EmptyStatement, false)
-        val ERROR = C_Statement(C_Utils.ERROR_STATEMENT, false)
+        val ERROR = C_Statement(C_ExprUtils.ERROR_STATEMENT, false)
 
         fun empty(varFacts: C_VarFacts): C_Statement {
             return if (varFacts.isEmpty()) EMPTY else C_Statement(R_EmptyStatement, false, varFacts)
@@ -122,55 +125,55 @@ class C_BlockCodeBuilder(
     }
 }
 
-sealed class C_VarDeclarator(protected val ctx: C_StmtContext) {
+sealed class C_VarDeclarator(protected val ctx: C_StmtContext, protected val mutable: Boolean) {
     abstract fun getTypeHint(): C_TypeHint
-    abstract fun compile(mutable: Boolean, rExprType: R_Type?, varFacts: C_MutableVarFacts): R_VarDeclarator
+    abstract fun compile(rExprType: R_Type?, varFacts: C_MutableVarFacts): R_VarDeclarator
 }
 
 class C_WildcardVarDeclarator(
         ctx: C_StmtContext,
-        private val name: S_Name,
+        mutable: Boolean,
+        private val name: C_Name,
         private val explicitType: Boolean
-): C_VarDeclarator(ctx) {
+): C_VarDeclarator(ctx, mutable) {
     override fun getTypeHint() = C_TypeHint.NONE
 
-    override fun compile(mutable: Boolean, rExprType: R_Type?, varFacts: C_MutableVarFacts): R_VarDeclarator {
-        if (!explicitType && rExprType == null) {
-            C_Errors.errAttributeTypeUnknown(ctx.msgCtx, name)
-        }
+    override fun compile(rExprType: R_Type?, varFacts: C_MutableVarFacts): R_VarDeclarator {
         return R_WildcardVarDeclarator
     }
 }
 
 class C_SimpleVarDeclarator(
         ctx: C_StmtContext,
-        private val attrHeader: S_AttrHeader,
-        private val explicitType: R_Type?
-): C_VarDeclarator(ctx) {
+        mutable: Boolean,
+        private val attrHeader: C_AttrHeader,
+        private val name: C_Name,
+        private val explicitType: R_Type?,
+        private val ideInfo: IdeSymbolInfo
+): C_VarDeclarator(ctx, mutable) {
     override fun getTypeHint() = C_TypeHint.ofType(explicitType)
 
-    override fun compile(mutable: Boolean, rExprType: R_Type?, varFacts: C_MutableVarFacts): R_VarDeclarator {
-        val name = attrHeader.name
-        val rType = explicitType ?: (if (rExprType == null) attrHeader.compileType(ctx.nsCtx) else null)
+    override fun compile(rExprType: R_Type?, varFacts: C_MutableVarFacts): R_VarDeclarator {
+        val rType = explicitType ?: (if (rExprType == null) attrHeader.type else null)
 
         if (rType == null && rExprType == null) {
-            ctx.msgCtx.error(name.pos, "stmt_var_notypeexpr:${name.str}", "Neither type nor expression specified for '${name.str}'")
+            ctx.msgCtx.error(name.pos, "stmt_var_notypeexpr:$name", "Neither type nor expression specified for '$name'")
         } else if (rExprType != null) {
             C_Utils.checkUnitType(name.pos, rExprType) {
-                "stmt_var_unit:${name.str}" toCodeMsg "Expression for '${name.str}' returns nothing"
+                "stmt_var_unit:$name" toCodeMsg "Expression for '$name' returns nothing"
             }
         }
 
         val typeAdapter = if (rExprType != null && rType != null) {
             C_Types.adaptSafe(ctx.msgCtx, rType, rExprType, name.pos) {
-                "stmt_var_type:${name.str}" toCodeMsg "Type mismatch for '${name.str}'"
+                "stmt_var_type:$name" toCodeMsg "Type mismatch for '$name'"
             }
         } else {
             C_TypeAdapter_Direct
         }
 
         val rVarType = rType ?: rExprType ?: R_CtErrorType
-        val cVarRef = ctx.blkCtx.addLocalVar(name, rVarType, mutable, null)
+        val cVarRef = ctx.blkCtx.addLocalVar(name, rVarType, mutable, null, ideInfo)
 
         varFacts.putFacts(calcVarFacts(rExprType, rVarType, cVarRef.target.uid))
 
@@ -192,26 +195,23 @@ class C_SimpleVarDeclarator(
 
 class C_TupleVarDeclarator(
         ctx: C_StmtContext,
+        mutable: Boolean,
         private val pos: S_Pos,
         subDeclarators: List<C_VarDeclarator>
-): C_VarDeclarator(ctx) {
+): C_VarDeclarator(ctx, mutable) {
     private val subDeclarators = subDeclarators.toImmList()
     private val typeHint = C_TypeHint.tuple(subDeclarators.map { it.getTypeHint() })
 
     override fun getTypeHint() = typeHint
 
-    override fun compile(mutable: Boolean, rExprType: R_Type?, varFacts: C_MutableVarFacts): R_VarDeclarator {
-        val rSubDeclarators = compileSub(mutable, rExprType, varFacts)
+    override fun compile(rExprType: R_Type?, varFacts: C_MutableVarFacts): R_VarDeclarator {
+        val rSubDeclarators = compileSub(rExprType, varFacts)
         return R_TupleVarDeclarator(rSubDeclarators)
     }
 
-    private fun compileSub(
-            mutable: Boolean,
-            rExprType: R_Type?,
-            varFacts: C_MutableVarFacts
-    ): List<R_VarDeclarator> {
+    private fun compileSub(rExprType: R_Type?, varFacts: C_MutableVarFacts): List<R_VarDeclarator> {
         if (rExprType == null) {
-            return subDeclarators.map { it.compile(mutable, null, varFacts) }
+            return subDeclarators.map { it.compile(null, varFacts) }
         }
 
         val fieldTypes = if (rExprType is R_TupleType) {
@@ -233,7 +233,7 @@ class C_TupleVarDeclarator(
         }
 
         return subDeclarators.withIndex().map { (i, subDeclarator) ->
-            subDeclarator.compile(mutable, fieldTypes[i], varFacts)
+            subDeclarator.compile(fieldTypes[i], varFacts)
         }
     }
 }

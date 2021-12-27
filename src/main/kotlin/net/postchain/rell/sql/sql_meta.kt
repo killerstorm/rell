@@ -7,8 +7,8 @@ package net.postchain.rell.sql
 import net.postchain.rell.model.R_Attribute
 import net.postchain.rell.model.R_EntityDefinition
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
-import net.postchain.rell.runtime.utils.Rt_Messages
 import net.postchain.rell.runtime.Rt_SqlContext
+import net.postchain.rell.runtime.utils.Rt_Messages
 import org.jooq.conf.ParamType
 import org.jooq.impl.DSL
 

@@ -242,14 +242,14 @@ abstract class AtExprBasicBaseTest: AtExprBaseTest() {
         chk("'' + $fromUser @* {} ( @sort .firstName )", "[Bill, Jeff, Larry, Mark, Paul, Sergey, Steve, Steve]")
         chk("'' + $fromUser @* {} ( @sort_desc .firstName )", "[Steve, Steve, Sergey, Paul, Mark, Larry, Jeff, Bill]")
 
-        chk("'' + $fromUser @* { .company.name == 'Apple' } ( @sort _=.firstName, sort _=.lastName )", "[(Steve,Jobs), (Steve,Wozniak)]")
-        chk("'' + $fromUser @* { .company.name == 'Apple' } ( @sort _=.firstName, -sort _=.lastName )", "[(Steve,Wozniak), (Steve,Jobs)]")
+        chk("'' + $fromUser @* { .company.name == 'Apple' } ( @sort _=.firstName, @sort _=.lastName )", "[(Steve,Jobs), (Steve,Wozniak)]")
+        chk("'' + $fromUser @* { .company.name == 'Apple' } ( @sort _=.firstName, @sort_desc _=.lastName )", "[(Steve,Wozniak), (Steve,Jobs)]")
 
         chk("'' + $fromUser @* {} ( @sort _=.company.name, _=.lastName )",
                 "[(Amazon,Bezos), (Apple,Jobs), (Apple,Wozniak), (Facebook,Zuckerberg), (Google,Brin), (Google,Page), " +
                         "(Microsoft,Gates), (Microsoft,Allen)]")
 
-        chk("'' + $fromUser @* {} ( @sort _=.company.name, sort _=.lastName )",
+        chk("'' + $fromUser @* {} ( @sort _=.company.name, @sort _=.lastName )",
                 "[(Amazon,Bezos), (Apple,Jobs), (Apple,Wozniak), (Facebook,Zuckerberg), (Google,Brin), (Google,Page), " +
                         "(Microsoft,Allen), (Microsoft,Gates)]")
 
@@ -273,24 +273,6 @@ abstract class AtExprBasicBaseTest: AtExprBaseTest() {
         chk("'' + $fromUser @* {} ( @sort() .firstName )", "[Bill, Jeff, Larry, Mark, Paul, Sergey, Steve, Steve]")
         chk("$fromUser @* {} ( @sort(123) .firstName )", "ct_err:ann:sort:args:1")
         chk("$fromUser @* {} ( @sort('desc') .firstName )", "ct_err:ann:sort:args:1")
-
-        chk("$fromUser @* {} ( @sort sort .firstName )", "ct_err:at:what:sort:specified_by_kw_and_ann")
-        chk("$fromUser @* {} ( @sort_desc sort .firstName )", "ct_err:at:what:sort:specified_by_kw_and_ann")
-        chk("$fromUser @* {} ( @sort -sort .firstName )", "ct_err:at:what:sort:specified_by_kw_and_ann")
-        chk("$fromUser @* {} ( @sort_desc -sort .firstName )", "ct_err:at:what:sort:specified_by_kw_and_ann")
-    }
-
-    @Test fun testSortOld() {
-        tst.strictToString = false
-        initDataUserCompany()
-
-        chk("$fromUser @* {} ( .firstName )", "[Mark, Steve, Steve, Jeff, Bill, Paul, Sergey, Larry]")
-
-        chk("$fromUser @* {} ( sort .firstName )", "[Bill, Jeff, Larry, Mark, Paul, Sergey, Steve, Steve]")
-        chkWarn("at:what:sort:deprecated:sort")
-
-        chk("$fromUser @* {} ( -sort .firstName )", "[Steve, Steve, Sergey, Paul, Mark, Larry, Jeff, Bill]")
-        chkWarn("at:what:sort:deprecated:sort_desc")
     }
 
     @Test fun testNullLiteral() {

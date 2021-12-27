@@ -29,8 +29,8 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         chkType("struct<integer>", "ct_err:type:struct:bad_type:integer")
 
         chkType("struct<my_struct>", "ct_err:type:struct:bad_type:my_struct")
-        chkType("struct<my_function>", "ct_err:unknown_type:my_function")
-        chkType("struct<my_query>", "ct_err:unknown_type:my_query")
+        chkType("struct<my_function>", "ct_err:unknown_def:type:my_function")
+        chkType("struct<my_query>", "ct_err:unknown_def:type:my_query")
         chkType("struct<my_enum>", "ct_err:type:struct:bad_type:my_enum")
         chkType("struct<my_entity?>", "ct_err:type:struct:bad_type:my_entity?")
 

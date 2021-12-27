@@ -19,6 +19,7 @@ import net.postchain.rell.model.expr.*
 import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_NullValue
 import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.utils.LazyString
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmList
@@ -62,7 +63,7 @@ class V_SysSpecialGlobalCaseCallExpr(
 class V_SysMemberPropertyExpr(
         exprCtx: C_ExprContext,
         private val expr: V_Expr,
-        private val propName: String
+        private val propName: R_Name
 ): V_Expr(exprCtx, expr.pos) {
     override fun exprInfo0() = V_ExprInfo.simple(expr.type, expr)
 
@@ -262,7 +263,7 @@ class V_SysFunctionTargetDescriptor(
         val resType: R_Type,
         val rFn: R_SysFunction,
         val dbFn: Db_SysFunction?,
-        val fullName: String,
+        val fullName: LazyString,
         val pure: Boolean,
         val synth: Boolean = false
 )
@@ -274,7 +275,7 @@ abstract class V_FunctionCallTarget_SysFunction(
 
     final override fun globalConstantRestriction(): V_GlobalConstantRestriction? {
         return if (desc.pure) null else {
-            val name = desc.fullName
+            val name = desc.fullName.value
             val code = if (desc.synth) "fn:prop:$name" else "fn:sys:$name"
             val msg = if (desc.synth) null else "function '$name'"
             V_GlobalConstantRestriction(code, msg)
@@ -290,7 +291,7 @@ class V_FunctionCallTarget_SysGlobalFunction(
 
     override fun toDbExpr(pos: S_Pos, dbArgs: List<Db_Expr>): Db_Expr {
         if (desc.dbFn == null) {
-            throw C_Errors.errFunctionNoSql(pos, desc.fullName)
+            throw C_Errors.errFunctionNoSql(pos, desc.fullName.value)
         }
         return Db_CallExpr(desc.resType, desc.dbFn, dbArgs)
     }
@@ -308,7 +309,7 @@ class V_FunctionCallTarget_SysMemberFunction(
 
     override fun toDbExpr(pos: S_Pos, dbArgs: List<Db_Expr>): Db_Expr {
         if (desc.dbFn == null) {
-            throw C_Errors.errFunctionNoSql(pos, desc.fullName)
+            throw C_Errors.errFunctionNoSql(pos, desc.fullName.value)
         }
 
         val dbBase = member.base.toDbExpr()

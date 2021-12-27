@@ -5,6 +5,8 @@
 package net.postchain.rell.compiler.ast
 
 import net.postchain.rell.compiler.base.core.*
+import net.postchain.rell.compiler.base.expr.C_ExprHint
+import net.postchain.rell.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.compiler.base.expr.C_StmtContext
 import net.postchain.rell.compiler.base.fn.C_ArgTypeMatcher
 import net.postchain.rell.compiler.base.fn.C_ArgTypeMatcher_Simple
@@ -14,36 +16,41 @@ import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
 import net.postchain.rell.model.stmt.R_ExprStatement
 import net.postchain.rell.model.stmt.R_ReturnStatement
+import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.MutableTypedKeyMap
 import net.postchain.rell.utils.TypedKeyMap
 
-class S_FormalParameter(val attr: S_AttrHeader, val expr: S_Expr?) {
+class S_FormalParameter(private val attr: S_AttrHeader, private val expr: S_Expr?) {
     fun compile(defCtx: C_DefinitionContext, index: Int): C_FormalParameter {
-        val name = attr.name
-        val type = attr.compileType(defCtx.nsCtx)
+        val ideInfo = IdeSymbolInfo(IdeSymbolKind.LOC_PARAMETER)
+        val attrHeader = attr.compile(defCtx.nsCtx, false, ideInfo)
+
+        val name = attrHeader.name
+        val type = attrHeader.type ?: R_CtErrorType
 
         val defaultValue = if (expr == null) null else {
-            val rErrorExpr = C_Utils.errorRExpr(type)
+            val rErrorExpr = C_ExprUtils.errorRExpr(type)
             val rExprLate = C_LateInit(C_CompilerPass.EXPRESSIONS, rErrorExpr)
             val rValueLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_DefaultValue(rErrorExpr, false))
 
             defCtx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
-                val vExpr = compileExpr(defCtx, type)
+                val vExpr = compileExpr(defCtx, name.rName, type)
                 val rExpr = vExpr.toRExpr()
                 rExprLate.set(rExpr)
                 rValueLate.set(R_DefaultValue(rExpr, vExpr.info.hasDbModifications))
             }
 
-            C_ParameterDefaultValue(expr.startPos, name.str, rExprLate.getter, defCtx.initFrameGetter, rValueLate.getter)
+            C_ParameterDefaultValue(expr.startPos, name.rName, rExprLate.getter, defCtx.initFrameGetter, rValueLate.getter)
         }
 
-        return C_FormalParameter(name, type, index, defaultValue)
+        return C_FormalParameter(name, type, ideInfo, index, defaultValue)
     }
 
-    private fun compileExpr(defCtx: C_DefinitionContext, paramType: R_Type): V_Expr {
+    private fun compileExpr(defCtx: C_DefinitionContext, paramName: R_Name, paramType: R_Type): V_Expr {
         val exprCtx = defCtx.initExprCtx
-        val cExpr = expr!!.compileOpt(exprCtx, C_TypeHint.ofType(paramType))
-        cExpr ?: return C_Utils.errorVExpr(exprCtx, expr.startPos, paramType)
+        val cExpr = expr!!.compileOpt(exprCtx, C_ExprHint.ofType(paramType))
+        cExpr ?: return C_ExprUtils.errorVExpr(exprCtx, expr.startPos, paramType)
 
         val vExpr = cExpr.value()
 
@@ -52,8 +59,8 @@ class S_FormalParameter(val attr: S_AttrHeader, val expr: S_Expr?) {
             val matcher: C_ArgTypeMatcher = C_ArgTypeMatcher_Simple(paramType)
             val m = matcher.match(valueType)
             if (m != null) m.adaptExpr(exprCtx, vExpr) else {
-                val code = "def:param:type:${attr.name}:${paramType.strCode()}:${valueType.strCode()}"
-                val msg = "Wrong type of default value of parameter '${attr.name}': ${valueType.str()} instead of ${paramType.str()}"
+                val code = "def:param:type:$paramName:${paramType.strCode()}:${valueType.strCode()}"
+                val msg = "Wrong type of default value of parameter '$paramName': ${valueType.str()} instead of ${paramType.str()}"
                 defCtx.msgCtx.error(expr.startPos, code, msg)
                 vExpr
             }
@@ -99,7 +106,7 @@ class S_FunctionBodyShort(val expr: S_Expr): S_FunctionBody() {
     override fun returnsValue() = true
 
     override fun compileQuery0(bodyCtx: C_FunctionBodyContext, stmtCtx: C_StmtContext): C_Statement {
-        val cExpr = expr.compile(stmtCtx, C_TypeHint.ofType(bodyCtx.explicitRetType))
+        val cExpr = expr.compile(stmtCtx, C_ExprHint.ofType(bodyCtx.explicitRetType))
         val vExpr = cExpr.value()
 
         val type = vExpr.type
@@ -113,7 +120,7 @@ class S_FunctionBodyShort(val expr: S_Expr): S_FunctionBody() {
     }
 
     override fun compileFunction0(bodyCtx: C_FunctionBodyContext, stmtCtx: C_StmtContext): C_Statement {
-        val vExpr = expr.compile(stmtCtx, C_TypeHint.ofType(bodyCtx.explicitRetType)).value()
+        val vExpr = expr.compile(stmtCtx, C_ExprHint.ofType(bodyCtx.explicitRetType)).value()
         val type = vExpr.type
 
         val adapter = stmtCtx.fnCtx.matchReturnType(bodyCtx.namePos, type)

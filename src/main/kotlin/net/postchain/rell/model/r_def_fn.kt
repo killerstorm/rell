@@ -6,8 +6,8 @@ package net.postchain.rell.model
 
 import net.postchain.gtv.Gtv
 import net.postchain.rell.compiler.base.core.C_CompilerPass
+import net.postchain.rell.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.compiler.base.utils.C_LateInit
-import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.model.stmt.R_Statement
 import net.postchain.rell.model.stmt.R_StatementResult_Return
 import net.postchain.rell.runtime.*
@@ -98,7 +98,7 @@ class R_OperationDefinition(
         private val ERROR_INTERNALS = Internals(
                 params = listOf(),
                 varParams = listOf(),
-                body = C_Utils.ERROR_STATEMENT,
+                body = C_ExprUtils.ERROR_STATEMENT,
                 frame = R_CallFrame.ERROR
         )
     }
@@ -134,7 +134,7 @@ class R_UserQueryBody(
     }
 
     companion object {
-        val ERROR: R_QueryBody = R_UserQueryBody(R_CtErrorType, listOf(), C_Utils.ERROR_STATEMENT, R_CallFrame.ERROR)
+        val ERROR: R_QueryBody = R_UserQueryBody(R_CtErrorType, listOf(), C_ExprUtils.ERROR_STATEMENT, R_CallFrame.ERROR)
     }
 }
 
@@ -200,7 +200,7 @@ class R_FunctionBody(
         val ERROR = R_FunctionBody(
                 R_CtErrorType,
                 listOf(),
-                C_Utils.ERROR_STATEMENT,
+                C_ExprUtils.ERROR_STATEMENT,
                 R_CallFrame.ERROR
         )
     }

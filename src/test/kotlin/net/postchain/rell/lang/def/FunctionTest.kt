@@ -271,10 +271,10 @@ class FunctionTest: BaseRellTest(false) {
     }
 
     @Test fun testReturnTypeCtError() {
-        chkCompile("function f(): unknown_type { return 123; }", "ct_err:unknown_type:unknown_type")
-        chkCompile("function f(): unknown_type {}", "ct_err:[fun_noreturn:f][unknown_type:unknown_type]")
+        chkCompile("function f(): unknown_type { return 123; }", "ct_err:unknown_def:type:unknown_type")
+        chkCompile("function f(): unknown_type {}", "ct_err:[fun_noreturn:f][unknown_def:type:unknown_type]")
         chkCompile("function f(): unknown_type { val x: integer = 'Hello'; return 123; }",
-                "ct_err:[unknown_type:unknown_type][stmt_var_type:x:[integer]:[text]]")
+                "ct_err:[unknown_def:type:unknown_type][stmt_var_type:x:[integer]:[text]]")
     }
 
     @Test fun testNamedArguments() {
@@ -479,7 +479,7 @@ class FunctionTest: BaseRellTest(false) {
         chkCompile("abstract function(x: integer) {}", "ct_err:[fn:abstract:non_abstract_module::function#0][fn:no_name]")
         chkCompile("override function(x: integer) {}", "ct_err:fn:no_name")
         chkCompile("@extendable function(x: integer) {}", "ct_err:fn:no_name")
-        chkCompile("@extend(f) function(x: integer) {}", "ct_err:[fn:extend:not_extendable:f][fn:extend:not_found:f]")
+        chkCompile("@extend(f) function(x: integer) {}", "ct_err:fn:extend:not_found:f")
     }
 
     private fun chkFn(fnCode: String, callCode: String, expected: String) {

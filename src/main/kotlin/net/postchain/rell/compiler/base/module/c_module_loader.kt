@@ -5,6 +5,7 @@
 package net.postchain.rell.compiler.base.module
 
 import net.postchain.rell.compiler.base.core.C_MessageContext
+import net.postchain.rell.compiler.base.core.C_SymbolContextProvider
 import net.postchain.rell.compiler.base.utils.C_CommonError
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.base.utils.C_SourceDir
@@ -14,19 +15,20 @@ import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmSet
 
 class C_ImportModuleLoader(private val loader: C_ModuleLoader) {
-    fun loadModule(name: R_ModuleName) {
-        loader.loadModule(name)
+    fun loadModule(name: R_ModuleName): Boolean {
+        return loader.loadModule(name)
     }
 }
 
 class C_ModuleLoader(
         msgCtx: C_MessageContext,
+        symCtxProvider: C_SymbolContextProvider,
         sourceDir: C_SourceDir,
         preModuleNames: Set<R_ModuleName>
 ) {
     private val preModuleNames = preModuleNames.toImmSet()
 
-    val readerCtx = C_ModuleReaderContext(msgCtx, C_ImportModuleLoader(this))
+    val readerCtx = C_ModuleReaderContext(msgCtx, symCtxProvider, C_ImportModuleLoader(this))
     private val moduleReader = C_ModuleReader(readerCtx, sourceDir)
 
     private val testLoader = C_TestModuleLoader(moduleReader, this::loadTestModule)
@@ -44,18 +46,19 @@ class C_ModuleLoader(
         return midModules.toImmList()
     }
 
-    fun loadModule(name: R_ModuleName) {
+    fun loadModule(name: R_ModuleName): Boolean {
         check(!done)
 
         if (isModuleLoaded(name)) {
-            return
+            return true
         }
 
         val source = moduleReader.readModuleSource(name)
-        source ?: return
+        source ?: return false
 
         addModule(name, source)
         loadQueuedModules()
+        return true
     }
 
     private fun addModule(name: R_ModuleName, source: C_ModuleSource) {
@@ -137,7 +140,15 @@ class C_ModuleLoader(
             val parentName = if (header != null && header.test) null else findParentModule(moduleName)
 
             val midFiles = source.compile()
-            val midModule = C_MidModule(moduleName, parentName, header, midFiles, isTestDependency = loadingTestModules)
+
+            val midModule = C_MidModule(
+                    moduleName,
+                    parentName,
+                    header,
+                    midFiles,
+                    isDirectory = source.isDirectory(),
+                    isTestDependency = loadingTestModules
+            )
 
             midModules.add(midModule)
 

@@ -4,7 +4,6 @@
 
 package net.postchain.rell.compiler.ast
 
-import net.postchain.rell.compiler.base.core.C_TypeHint
 import net.postchain.rell.compiler.base.core.C_Types
 import net.postchain.rell.compiler.base.core.C_VarUid
 import net.postchain.rell.compiler.base.expr.*
@@ -123,7 +122,7 @@ class S_WhenConditionExpr(val exprs: List<S_Expr>): S_WhenCondition() {
     }
 
     private fun evaluateConstantValue(vExpr: V_Expr): Rt_Value? {
-        return C_Utils.evaluate(vExpr.pos) {
+        return C_ExprUtils.evaluate(vExpr.pos) {
             vExpr.constantValue(V_ConstantValueEvalContext())
         }
     }
@@ -147,21 +146,17 @@ class S_WhenConditionExpr(val exprs: List<S_Expr>): S_WhenCondition() {
         val valueType = if (keyType == null) null else C_Types.removeNullable(keyType)
         val name = expr.asName()
 
-        if (valueType is R_EnumType && name != null) {
-            val attr = valueType.enum.attr(name.str)
-            if (attr != null) {
-                val value = Rt_EnumValue(valueType, attr)
-                return V_ConstantValueExpr(ctx, expr.startPos, value)
-            }
+        val cExpr = if (valueType is R_EnumType) {
+            expr.compileWhenEnumOpt(ctx, valueType)
+        } else {
+            expr.compileOpt(ctx)
         }
 
-        val cExpr = expr.compileOpt(ctx)
         if (cExpr == null) {
-            return C_Utils.errorVExpr(ctx, expr.startPos, valueType ?: R_CtErrorType)
+            return C_ExprUtils.errorVExpr(ctx, expr.startPos, valueType ?: R_CtErrorType)
         }
 
-        val cValue = cExpr.value()
-        return cValue
+        return cExpr.value()
     }
 }
 
@@ -192,12 +187,12 @@ class S_WhenCondtiionElse(val pos: S_Pos): S_WhenCondition() {
 class S_WhenExprCase(val cond: S_WhenCondition, val expr: S_Expr)
 
 class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>): S_Expr(pos) {
-    override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
+    override fun compile(ctx: C_ExprContext, hint: C_ExprHint): C_Expr {
         val conds = cases.map { it.cond }
 
         val chooserDetails = compileChooserDetails(ctx, expr, conds)?.toVDetails()
         if (chooserDetails == null) {
-            return C_Utils.errorExpr(ctx, startPos)
+            return C_ExprUtils.errorExpr(ctx, startPos)
         }
 
         val missingElseReported = !chooserDetails.full

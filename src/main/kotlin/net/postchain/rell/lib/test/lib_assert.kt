@@ -6,6 +6,7 @@ package net.postchain.rell.lib.test
 
 import net.postchain.rell.compiler.ast.*
 import net.postchain.rell.compiler.base.expr.C_ExprContext
+import net.postchain.rell.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.compiler.base.expr.C_ExprVarFacts
 import net.postchain.rell.compiler.base.fn.C_ArgTypeMatcher_Nullable
 import net.postchain.rell.compiler.base.fn.C_GlobalFuncCaseCtx
@@ -13,7 +14,6 @@ import net.postchain.rell.compiler.base.fn.C_GlobalFuncCaseMatch
 import net.postchain.rell.compiler.base.fn.C_GlobalSpecialFuncCase
 import net.postchain.rell.compiler.base.utils.C_GlobalFuncBuilder
 import net.postchain.rell.compiler.base.utils.C_SpecialGlobalFuncCaseMatch
-import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.compiler.vexpr.V_BinaryOp
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.R_BooleanType
@@ -97,7 +97,7 @@ private object C_FuncCase_AssertNotNull: C_GlobalSpecialFuncCase() {
 
         override fun compileCallR(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): R_Expr {
             val rActual = actual.toRExpr()
-            return C_Utils.createSysCallRExpr(resType, R_Fns.AssertNotNull, listOf(rActual), caseCtx)
+            return C_ExprUtils.createSysCallRExpr(resType, R_Fns.AssertNotNull, listOf(rActual), caseCtx)
         }
     }
 }

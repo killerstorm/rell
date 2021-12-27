@@ -132,7 +132,7 @@ object S_AssignOp_Eq: S_AssignOp() {
             C_Errors.errTypeMismatch(ctx.msgCtx, pos, expr.type, attr.type) {
                 "stmt_assign_type" toCodeMsg "Type mismatch for '$name'"
             }
-            C_Utils.errorDbExpr(attr.type)
+            C_ExprUtils.errorDbExpr(attr.type)
         } else {
             adapter.adaptExprDb(expr)
         }
@@ -444,7 +444,7 @@ object C_BinOp_Plus: C_BinOp_Common() {
         val dbFn = getDbToStringFunction(type)
 
         val resType: R_Type = R_TextType
-        val desc = V_SysFunctionTargetDescriptor(resType, rFn, dbFn, type.toTextFunction, pure = true)
+        val desc = V_SysFunctionTargetDescriptor(resType, rFn, dbFn, type.toTextFunctionLazy, pure = true)
         val vCallTarget: V_FunctionCallTarget = V_FunctionCallTarget_SysGlobalFunction(desc)
 
         val vCallArgs = V_FunctionCallArgs.positional(immListOf(vExpr))
@@ -615,7 +615,7 @@ object C_BinOp_Elvis: C_BinOp() {
 class S_BinaryExprTail(val op: S_PosValue<S_BinaryOp>, val expr: S_Expr)
 
 class S_BinaryExpr(val head: S_Expr, val tail: List<S_BinaryExprTail>): S_Expr(head.startPos) {
-    override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
+    override fun compile(ctx: C_ExprContext, hint: C_ExprHint): C_Expr {
         val queue = LinkedList(tail)
         val tree = buildTree(head, queue, 0)
         val value = tree.compile(ctx)
@@ -677,7 +677,7 @@ class S_BinaryExpr(val head: S_Expr, val tail: List<S_BinaryExprTail>): S_Expr(h
             } else {
                 val pos = sOp.pos
                 C_BinOp.errTypeMismatch(ctx.msgCtx, pos, sOp.value.code, leftValue.type, rightValue.type)
-                C_Utils.errorVExpr(ctx, pos)
+                C_ExprUtils.errorVExpr(ctx, pos)
             }
         }
     }

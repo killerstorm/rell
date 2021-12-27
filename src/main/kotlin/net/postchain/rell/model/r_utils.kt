@@ -55,6 +55,11 @@ sealed class R_GenericQualifiedName<T: R_GenericQualifiedName<T>>(parts: List<R_
         return create(parts + name)
     }
 
+    fun child(name: String): T {
+        val rName = R_Name.of(name)
+        return child(rName)
+    }
+
     protected abstract fun create(parts: List<R_Name>): T
 
     final override fun compareTo(other: T): Int {

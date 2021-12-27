@@ -6,9 +6,9 @@ package net.postchain.rell.model
 
 import net.postchain.gtv.Gtv
 import net.postchain.rell.compiler.base.core.C_CompilerPass
+import net.postchain.rell.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.compiler.base.utils.C_LateGetter
 import net.postchain.rell.compiler.base.utils.C_LateInit
-import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.model.expr.R_AttributeDefaultValueExpr
 import net.postchain.rell.model.expr.R_CreateExpr
 import net.postchain.rell.model.expr.R_CreateExprAttr
@@ -16,21 +16,24 @@ import net.postchain.rell.model.expr.R_Expr
 import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.runtime.utils.toGtv
+import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toGtv
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 
-sealed class R_KeyIndex(val attribs: List<String>) {
+sealed class R_KeyIndex(attribs: List<R_Name>) {
+    val attribs = attribs.toImmList()
+
     fun toMetaGtv(): Gtv {
         return mapOf(
-                "attributes" to attribs.toGtv()
+                "attributes" to attribs.map { it.str }.toGtv()
         ).toGtv()
     }
 }
 
-class R_Key(attribs: List<String>): R_KeyIndex(attribs)
-class R_Index(attribs: List<String>): R_KeyIndex(attribs)
+class R_Key(attribs: List<R_Name>): R_KeyIndex(attribs)
+class R_Index(attribs: List<R_Name>): R_KeyIndex(attribs)
 
 class R_EntityFlags(
         val isObject: Boolean,
@@ -44,7 +47,7 @@ class R_EntityFlags(
 class R_EntityBody(
         keys: List<R_Key>,
         indexes: List<R_Index>,
-        attributes: Map<String, R_Attribute>
+        attributes: Map<R_Name, R_Attribute>
 ) {
     val keys = keys.toImmList()
     val indexes = indexes.toImmList()
@@ -55,6 +58,7 @@ class R_ExternalEntity(val chain: R_ExternalChainRef, val metaCheck: Boolean)
 
 class R_EntityDefinition(
         base: R_DefinitionBase,
+        val rName: R_Name,
         val mountName: R_MountName,
         val flags: R_EntityFlags,
         val sqlMapping: R_EntitySqlMapping,
@@ -69,14 +73,18 @@ class R_EntityDefinition(
 
     val keys: List<R_Key> get() = bodyLate.get().keys
     val indexes: List<R_Index> get() = bodyLate.get().indexes
-    val attributes: Map<String, R_Attribute> get() = bodyLate.get().attributes
+    val attributes: Map<R_Name, R_Attribute> get() = bodyLate.get().attributes
+
+    val strAttributes: Map<String, R_Attribute> by lazy {
+        attributes.mapKeys { it.key.str }.toImmMap()
+    }
 
     fun setBody(body: R_EntityBody) {
         bodyLate.set(body)
     }
 
     fun attribute(name: String): R_Attribute {
-        val attr = attributes[name]
+        val attr = strAttributes[name]
         return attr ?: throw IllegalStateException("Entity '$appLevelName' has no attribute '$name'")
     }
 
@@ -85,7 +93,7 @@ class R_EntityDefinition(
     fun toMetaGtv(full: Boolean): Gtv {
         val map = mutableMapOf(
                 "mount" to mountName.str().toGtv(),
-                "attributes" to attributes.mapValues { it.value.toMetaGtv() }.toGtv()
+                "attributes" to strAttributes.mapValues { it.value.toMetaGtv() }.toGtv()
         )
 
         if (full) {
@@ -133,14 +141,18 @@ class R_Struct(
     private val bodyLate = C_LateInit(C_CompilerPass.MEMBERS, ERROR_BODY)
     private val flagsLate = C_LateInit(C_CompilerPass.APPDEFS, ERROR_STRUCT_FLAGS)
 
-    val attributes: Map<String, R_Attribute> get() = bodyLate.get().attrMap
+    val attributes: Map<R_Name, R_Attribute> get() = bodyLate.get().attrMap
     val attributesList: List<R_Attribute> get() = bodyLate.get().attrList
     val flags: R_StructFlags get() = flagsLate.get()
+
+    val strAttributes: Map<String, R_Attribute> by lazy {
+        attributes.mapKeys { it.key.str }.toImmMap()
+    }
 
     val type = R_StructType(this)
     val virtualType = R_VirtualStructType(type)
 
-    fun setAttributes(attrs: Map<String, R_Attribute>) {
+    fun setAttributes(attrs: Map<R_Name, R_Attribute>) {
         val attrsList = attrs.values.toList()
         attrsList.withIndex().forEach { (idx, attr) -> checkEquals(attr.index, idx) }
         val attrMutable = attrs.values.any { it.mutable }
@@ -155,14 +167,14 @@ class R_Struct(
 
     fun toMetaGtv(): Gtv {
         return mapOf(
-                "attributes" to attributes.mapValues { it.value.toMetaGtv() }.toGtv()
+                "attributes" to strAttributes.mapValues { it.value.toMetaGtv() }.toGtv()
         ).toGtv()
     }
 
     override fun toString() = name
 
     private class R_StructBody(
-            val attrMap: Map<String, R_Attribute>,
+            val attrMap: Map<R_Name, R_Attribute>,
             val attrList: List<R_Attribute>,
             val attrMutable: Boolean
     )
@@ -216,7 +228,7 @@ class R_StructDefinition(base: R_DefinitionBase, val struct: R_Struct): R_Defini
     override fun toMetaGtv() = struct.toMetaGtv()
 }
 
-class R_EnumAttr(val name: String, val value: Int) {
+class R_EnumAttr(val name: String, val value: Int, val ideInfo: IdeSymbolInfo) {
     // Currently returning an empty map, in the future there may be some values.
     fun toMetaGtv() = mapOf(
             "value" to value.toGtv()
@@ -270,7 +282,7 @@ class R_GlobalConstantId(
 
 class R_GlobalConstantBody(val type: R_Type, val expr: R_Expr, val value: Rt_Value?) {
     companion object {
-        val ERROR = R_GlobalConstantBody(R_CtErrorType, C_Utils.errorRExpr(), null)
+        val ERROR = R_GlobalConstantBody(R_CtErrorType, C_ExprUtils.ERROR_R_EXPR, null)
     }
 }
 

@@ -21,6 +21,7 @@ import net.postchain.rell.model.R_FunctionBase
 import net.postchain.rell.model.R_FunctionDefinition
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.model.R_Type
+import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.Nullable
 import net.postchain.rell.utils.One
 import net.postchain.rell.utils.toImmList
@@ -30,8 +31,9 @@ class C_AbstractUserGlobalFunction(
         fnPos: S_Pos,
         rFunction: R_FunctionDefinition,
         hasDefaultBody: Boolean,
-        private val rFnBase: R_FunctionBase
-): C_UserGlobalFunction(rFunction) {
+        private val rFnBase: R_FunctionBase,
+        ideInfo: IdeSymbolInfo
+): C_UserGlobalFunction(rFunction, ideInfo) {
     val descriptor = C_AbstractFunctionDescriptor(fnPos, rFunction, hasDefaultBody, headerGetter)
 
     private val rOverrideLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_FunctionBase())

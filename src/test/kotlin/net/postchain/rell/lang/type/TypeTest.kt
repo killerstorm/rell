@@ -234,4 +234,18 @@ class TypeTest: BaseRellTest() {
         chkCompile("function g(x: map<unit,integer>) {}", "ct_err:type:map_elem:unit:?")
         chkCompile("function g(x: virtual<unit>) {}", "ct_err:type:virtual:bad_inner_type:unit")
     }
+
+    @Test fun testUnitTypeImplicit() {
+        chkCompile("struct data { unit; }", "ct_err:type:attr_var:unit:unit")
+        chkCompile("struct data { unit = 123; }", "ct_err:type:attr_var:unit:unit")
+        chkCompile("struct data { unit: integer; }", "OK")
+
+        chkCompile("function f() { var unit; }", "ct_err:type:attr_var:unit:unit")
+        chkCompile("function f() { var unit = 123; }", "OK")
+        chkCompile("function f() { var unit: integer; }", "OK")
+
+        chkCompile("function f(unit) {}", "ct_err:type:attr_var:unit:unit")
+        chkCompile("function f(unit = 123) {}", "ct_err:type:attr_var:unit:unit")
+        chkCompile("function f(unit: integer) {}", "OK")
+    }
 }

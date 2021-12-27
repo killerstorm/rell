@@ -63,11 +63,13 @@ private fun typeToTransform(type: String): String {
     return "TRANS_" + camelCaseToUpper(type)
 }
 
+// Must use same algorithm as the Xtext code generator.
 private fun camelCaseToUpper(s: String): String {
     val b = StringBuilder(s.length * 2)
-    for (i in 0 until s.length) {
+    for (i in s.indices) {
         val c = s[i]
-        if (Character.isUpperCase(c)) b.append('_')
+        if (Character.isUpperCase(c) && i > 0 && Character.isLowerCase(s[i - 1])) b.append('_')
+        if (c == '_' && i > 0 && Character.isUpperCase(s[i - 1])) continue
         b.append(Character.toUpperCase(c))
     }
     return b.toString()

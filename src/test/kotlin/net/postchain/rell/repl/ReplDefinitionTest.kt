@@ -65,7 +65,7 @@ class ReplDefinitionTest: BaseRellTest(false) {
         repl.chk("lib.f(456)", "RES:int[207936]")
         repl.chk("lib.rec()", "RES:lib:rec[p=text[Hello],q=int[123]]")
 
-        repl.chk("struct dat { r: rec; }", "CTE:<console>:unknown_type:rec")
+        repl.chk("struct dat { r: rec; }", "CTE:<console>:unknown_def:type:rec")
         repl.chk("struct dat { r: lib.rec; }")
         repl.chk("dat(lib.rec('Bye',456))", "RES:dat[r=lib:rec[p=text[Bye],q=int[456]]]")
     }

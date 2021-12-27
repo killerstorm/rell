@@ -9,10 +9,7 @@ import net.postchain.rell.compiler.base.core.C_AppContext
 import net.postchain.rell.compiler.base.core.C_BlockEntry_AtEntity
 import net.postchain.rell.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.compiler.vexpr.*
-import net.postchain.rell.model.R_AtEntityId
-import net.postchain.rell.model.R_EntityDefinition
-import net.postchain.rell.model.R_FrameBlock
-import net.postchain.rell.model.R_Type
+import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
 import net.postchain.rell.utils.chainToIterable
 import net.postchain.rell.utils.checkEquals
@@ -21,7 +18,7 @@ import net.postchain.rell.utils.toImmList
 class C_AtEntity(
         val declPos: S_Pos,
         val rEntity: R_EntityDefinition,
-        val alias: String,
+        val alias: R_Name,
         val explicitAlias: Boolean,
         atEntityId: R_AtEntityId
 ) {
@@ -88,7 +85,7 @@ class C_AtFrom_Entities(
         return V_DbAtWhat(fields)
     }
 
-    override fun findAttributesByName(name: String): List<C_AtFromContextAttr> {
+    override fun findAttributesByName(name: R_Name): List<C_AtFromContextAttr> {
         return findContextAttrs { rEntity ->
             val attrRef = C_EntityAttrRef.resolveByName(rEntity, name)
             if (attrRef == null) listOf() else listOf(attrRef)
@@ -193,12 +190,14 @@ private class C_AtFromContextAttr_DbAtEntity(
         private val attrRef: C_EntityAttrRef
 ): C_AtFromContextAttr(attrRef.type()) {
     override fun attrNameMsg(qualified: Boolean): C_CodeMsg {
-        var name = attrRef.attrName
+        var name = attrRef.attrName.str
         if (qualified) name = "${atEntity.alias}.$name"
         return C_CodeMsg(name, name)
     }
 
     override fun ownerTypeName() = atEntity.rEntity.type.name
+    override fun ideSymbolInfo() = attrRef.ideSymbolInfo()
+
     override fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr = V_AtAttrExpr(ctx, pos, atEntity, false, attrRef)
 }
 

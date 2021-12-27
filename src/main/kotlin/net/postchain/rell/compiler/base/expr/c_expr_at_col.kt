@@ -4,41 +4,47 @@
 
 package net.postchain.rell.compiler.base.expr
 
-import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.C_BlockEntry
 import net.postchain.rell.compiler.base.core.C_BlockEntry_Var
 import net.postchain.rell.compiler.base.core.C_LocalVar
+import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.compiler.base.utils.C_Constants
 import net.postchain.rell.compiler.vexpr.*
+import net.postchain.rell.model.R_Name
 import net.postchain.rell.model.R_Type
 import net.postchain.rell.model.R_VarParam
 import net.postchain.rell.model.R_VarPtr
 import net.postchain.rell.model.expr.R_ColAtFieldSummarization_None
 import net.postchain.rell.model.expr.R_ColAtWhatExtras
 import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.tools.api.IdeSymbolKind
+import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmList
 
 
 class C_AtFrom_Iterable(
         outerExprCtx: C_ExprContext,
         fromCtx: C_AtFromContext,
-        alias: S_Name?,
+        alias: C_Name?,
         private val item: C_AtFromItem_Iterable
 ): C_AtFrom(outerExprCtx, fromCtx) {
     private val pos = fromCtx.pos
+    private val placeholderIdeInfo = IdeSymbolInfo(IdeSymbolKind.LOC_AT_ALIAS)
 
     private val placeholderVar: C_LocalVar = let {
-        innerBlkCtx.newLocalVar(alias?.str ?: C_Constants.AT_PLACEHOLDER, item.elemType, false, atExprId)
+        val metaName = alias?.str ?: C_Constants.AT_PLACEHOLDER
+        innerBlkCtx.newLocalVar(metaName, alias?.rName, item.elemType, false, atExprId)
     }
 
     private val varPtr: R_VarPtr = let {
-        val phEntry = C_BlockEntry_Var(placeholderVar)
+        val phEntry = C_BlockEntry_Var(placeholderVar, placeholderIdeInfo)
         if (alias == null) {
             innerBlkCtx.addAtPlaceholder(phEntry)
         } else {
-            innerBlkCtx.addEntry(alias.pos, alias.str, true, phEntry)
+            innerBlkCtx.addEntry(alias.pos, alias.rName, true, phEntry)
         }
         placeholderVar.toRef(innerBlkCtx.blockUid).ptr
     }
@@ -56,10 +62,10 @@ class C_AtFrom_Iterable(
         return V_DbAtWhat(listOf(field))
     }
 
-    override fun findAttributesByName(name: String): List<C_AtFromContextAttr> {
+    override fun findAttributesByName(name: R_Name): List<C_AtFromContextAttr> {
         val memValue = C_MemberResolver.findMemberValueForTypeByName(outerExprCtx.globalCtx, item.elemType, name)
-        memValue ?: return listOf()
-        return listOf(C_AtFromContextAttr_ColAtMember(placeholderVar, memValue))
+        memValue ?: return immListOf()
+        return immListOf(C_AtFromContextAttr_ColAtMember(placeholderVar, memValue))
     }
 
     override fun findAttributesByType(type: R_Type): List<C_AtFromContextAttr> {
@@ -68,7 +74,7 @@ class C_AtFrom_Iterable(
     }
 
     private fun compilePlaceholderRef(pos: S_Pos): V_Expr {
-        val entry: C_BlockEntry = C_BlockEntry_Var(placeholderVar)
+        val entry: C_BlockEntry = C_BlockEntry_Var(placeholderVar, placeholderIdeInfo)
         return entry.compile(innerExprCtx, pos, false)
     }
 
@@ -148,7 +154,7 @@ private class C_AtFromContextAttr_ColAtMember(
 ): C_AtFromContextAttr(memberValue.type()) {
     override fun attrNameMsg(qualified: Boolean): C_CodeMsg {
         val memberName = memberValue.memberName()
-        val base = if (itemVar.name != "$") itemVar.name else itemVar.type.name
+        val base = if (itemVar.rName != null) itemVar.rName.str else itemVar.type.name
         val code = memberName(memberName, base, qualified)
         val msg = memberName(memberName, base, qualified)
         return C_CodeMsg(code, msg)
@@ -159,9 +165,11 @@ private class C_AtFromContextAttr_ColAtMember(
     }
 
     override fun ownerTypeName() = itemVar.type.name
+    override fun ideSymbolInfo() = memberValue.ideSymbolInfo()
 
     override fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr {
-        val blockEntry: C_BlockEntry = C_BlockEntry_Var(itemVar)
+        val ideInfo = ideSymbolInfo()
+        val blockEntry: C_BlockEntry = C_BlockEntry_Var(itemVar, ideInfo)
         val base = blockEntry.compile(ctx, pos, false)
         val memLink = C_MemberLink(base, false, pos)
         return memberValue.compile(ctx, memLink)

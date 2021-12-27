@@ -4,7 +4,6 @@
 
 package net.postchain.rell.compiler.ast
 
-import net.postchain.rell.compiler.base.core.C_TypeHint
 import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.compiler.base.utils.toCodeMsg
@@ -140,7 +139,7 @@ object S_UnaryOp_IsNull: S_UnaryOp("??") {
 }
 
 class S_UnaryExpr(startPos: S_Pos, val op: S_PosValue<S_UnaryOp>, val expr: S_Expr): S_Expr(startPos) {
-    override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
+    override fun compile(ctx: C_ExprContext, hint: C_ExprHint): C_Expr {
         val cExpr = expr.compile(ctx)
         val vExpr = cExpr.value()
         checkUnitType(vExpr.type)

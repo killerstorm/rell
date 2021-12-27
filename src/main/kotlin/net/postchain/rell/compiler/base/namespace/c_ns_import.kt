@@ -5,15 +5,16 @@
 package net.postchain.rell.compiler.base.namespace
 
 import com.google.common.collect.Multimap
-import net.postchain.rell.compiler.ast.S_Name
-import net.postchain.rell.compiler.ast.S_QualifiedName
 import net.postchain.rell.compiler.base.core.C_MessageContext
+import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.module.C_ModuleKey
 import net.postchain.rell.compiler.base.utils.*
+import net.postchain.rell.model.R_Name
+import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.*
 import java.util.*
 
-class C_NsImp_Namespace(directDefs: Map<String, C_NsImp_Def>, importDefs: Multimap<String, C_NsImp_Def>) {
+class C_NsImp_Namespace(directDefs: Map<R_Name, C_NsImp_Def>, importDefs: Multimap<R_Name, C_NsImp_Def>) {
     val directDefs = directDefs.toImmMap()
     val importDefs = importDefs.toImmMultimap()
 
@@ -24,7 +25,7 @@ sealed class C_NsImp_Def
 
 class C_NsImp_Def_Simple(val elem: C_NamespaceElement): C_NsImp_Def()
 
-class C_NsImp_Def_Namespace(private val getter: LateGetter<C_NsImp_Namespace>): C_NsImp_Def() {
+class C_NsImp_Def_Namespace(private val getter: LateGetter<C_NsImp_Namespace>, val ideInfo: IdeSymbolInfo): C_NsImp_Def() {
     fun ns() = getter.get()
 }
 
@@ -96,7 +97,6 @@ private class C_NsImp_InternalImportsProcessor(
         state.processed = true
 
         processNamespace0(targetNs, state)
-
         return state
     }
 
@@ -133,34 +133,38 @@ private class C_NsImp_InternalImportsProcessor(
         state.initNamespace(resNs)
     }
 
-    private fun processDirectDef(builder: C_NsImp_NamespaceBuilder, name: String, def: C_NsAsm_Def) {
+    private fun processDirectDef(builder: C_NsImp_NamespaceBuilder, name: R_Name, def: C_NsAsm_Def) {
         return when (def) {
             is C_NsAsm_Def_Simple -> {
                 builder.addDirectDef(name, def.elem)
             }
             is C_NsAsm_Def_ExactImport -> {
-                processDirectExactImport(builder, name, def.imp)
+                processDirectExactImport(builder, name, def)
             }
             is C_NsAsm_Def_Namespace -> {
                 val ns = def.ns()
                 val nsState = processNamespace(ns)
                 val nsGetter = nsState.getNamespaceGetter()
-                val nsDef = C_NsImp_Def_Namespace(nsGetter)
+                val ideInfo = def.ideSymbolInfo()
+                val nsDef = C_NsImp_Def_Namespace(nsGetter, ideInfo)
                 builder.addDirectDef(name, nsDef)
             }
         }
     }
 
-    private fun processDirectExactImport(builder: C_NsImp_NamespaceBuilder, name: String, imp: C_NsAsm_ExactImport) {
+    private fun processDirectExactImport(builder: C_NsImp_NamespaceBuilder, name: R_Name, impDef: C_NsAsm_Def_ExactImport) {
+        val imp = impDef.imp
         val res = importResolver.resolveExactImport(imp)
-        val def = res.valueOrReport(msgCtx)
-        return when (def) {
+        impDef.names.setIdeInfo(res.ideInfos)
+
+        val resDef = res.valueOrReport(msgCtx)
+        return when (resDef) {
             null -> {}
             is C_NsAsm_Def_Simple -> {
-                builder.addDirectDef(name, def.elem)
+                builder.addDirectDef(name, resDef.elem)
             }
             is C_NsAsm_Def_Namespace -> {
-                processImportNamespaceDef(builder, name, def)
+                processImportNamespaceDef(builder, name, resDef)
             }
             is C_NsAsm_Def_ExactImport -> {
                 // Must not get here, do nothing instead of throwing.
@@ -168,7 +172,7 @@ private class C_NsImp_InternalImportsProcessor(
         }
     }
 
-    private fun processImportDef(builder: C_NsImp_NamespaceBuilder, name: String, def: C_NsAsm_Def) {
+    private fun processImportDef(builder: C_NsImp_NamespaceBuilder, name: R_Name, def: C_NsAsm_Def) {
         return when (def) {
             is C_NsAsm_Def_Simple -> {
                 builder.addImportDef(name, def.elem)
@@ -187,16 +191,18 @@ private class C_NsImp_InternalImportsProcessor(
         }
     }
 
-    private fun processImportNamespaceDef(builder: C_NsImp_NamespaceBuilder, name: String, def: C_NsAsm_Def_Namespace) {
+    private fun processImportNamespaceDef(builder: C_NsImp_NamespaceBuilder, name: R_Name, def: C_NsAsm_Def_Namespace) {
         val ns = def.ns()
         val nsState = processNamespace(ns)
         val nsGetter = nsState.getNamespaceGetter()
-        val nsDef = C_NsImp_Def_Namespace(nsGetter)
+        val ideInfo = def.ideSymbolInfo()
+        val nsDef = C_NsImp_Def_Namespace(nsGetter, ideInfo)
         builder.addImportDef(name, nsDef)
     }
 
     private fun processDirectWildcardImport(wildcard: C_NsAsm_WildcardImport) {
         val res = importResolver.resolveNamespaceByPath(wildcard.module, wildcard.path)
+        wildcard.names.setIdeInfo(res.ideInfos)
         res.valueOrReport(msgCtx)
     }
 
@@ -217,24 +223,24 @@ private class C_NsImp_InternalImportsProcessor(
 }
 
 private class C_NsImp_NamespaceBuilder {
-    private val directDefs = mutableMapOf<String, C_NsImp_Def>()
-    private val importDefs = mutableMultimapOf<String, C_NsImp_Def>()
+    private val directDefs = mutableMapOf<R_Name, C_NsImp_Def>()
+    private val importDefs = mutableMultimapOf<R_Name, C_NsImp_Def>()
 
-    fun addDirectDef(name: String, def: C_NsImp_Def) {
+    fun addDirectDef(name: R_Name, def: C_NsImp_Def) {
         check(name !in directDefs)
         directDefs[name] = def
     }
 
-    fun addDirectDef(name: String, elem: C_NamespaceElement) {
+    fun addDirectDef(name: R_Name, elem: C_NamespaceElement) {
         val def = C_NsImp_Def_Simple(elem)
         addDirectDef(name, def)
     }
 
-    fun addImportDef(name: String, def: C_NsImp_Def) {
+    fun addImportDef(name: R_Name, def: C_NsImp_Def) {
         importDefs.put(name, def)
     }
 
-    fun addImportDef(name: String, elem: C_NamespaceElement) {
+    fun addImportDef(name: R_Name, elem: C_NamespaceElement) {
         val def = C_NsImp_Def_Simple(elem)
         addImportDef(name, def)
     }
@@ -290,10 +296,10 @@ private class C_NsImp_ImportResolver(
         private val modules: Map<C_ModuleKey, C_NsAsm_Namespace>,
         private val preModules: Map<C_ModuleKey, C_NsAsm_Namespace>
 ) {
-    private data class NsNameKey(val ns: C_NsAsm_Namespace, val name: String)
+    private data class NsNameKey(val ns: C_NsAsm_Namespace, val name: R_Name)
 
-    private val resolveNamespaceByNameCalc: C_RecursionSafeCalculator<NsNameKey, S_Name, C_NsAsm_Namespace>
-    private val resolveDefCalc: C_RecursionSafeCalculator<NsNameKey, S_Name, C_NsAsm_Def>
+    private val resolveNamespaceByNameCalc: C_RecursionSafeCalculator<NsNameKey, C_Name, C_NsImp_NameRes<C_NsAsm_Namespace>>
+    private val resolveDefCalc: C_RecursionSafeCalculator<NsNameKey, C_Name, C_NsImp_NameRes<C_NsAsm_Def>>
 
     init {
         val recCtx = C_RecursionSafeContext()
@@ -309,56 +315,76 @@ private class C_NsImp_ImportResolver(
         )
     }
 
-    private fun errRecursion(name: S_Name): C_Error {
-        return C_Error.stop(name.pos, "import:recursion:${name.str}", "Name '${name.str}' is a recursive definition")
+    private fun errRecursion(name: C_Name): C_Error {
+        return C_Error.stop(name.pos, "import:recursion:$name", "Name '$name' is a recursive definition")
     }
 
-    fun resolveNamespaceByPath(module: C_ModuleKey, path: List<S_Name>): C_NsImp_Result<C_NsAsm_Namespace> {
+    fun resolveNamespaceByPath(module: C_ModuleKey, path: List<C_Name>): C_NsImp_Result<C_NsAsm_Namespace> {
         var ns = preModules[module] ?: modules[module] ?: C_NsAsm_Namespace.EMPTY
+        val ideInfos = mutableListOf<IdeSymbolInfo>()
+
         for (name in path) {
-            val res = resolveNamespaceByName(ns, name.str)
+            val res = resolveNamespaceByName(ns, name.rName)
             if (res.value == null) {
-                return convertResult(name, res)
+                return C_NsImp_Result.error(ideInfos) {
+                    res.error(name)
+                }
             }
-            ns = res.value
+
+            ns = res.value.value
+            ideInfos.add(res.value.ideInfo)
         }
-        return C_NsImp_Result(ns)
+
+        val target = C_NsImp_QNameRes(ns, ideInfos)
+        return C_NsImp_Result(target)
     }
 
-    private fun resolveNamespaceByName(ns: C_NsAsm_Namespace, name: String): C_RecursionSafeResult<S_Name, C_NsAsm_Namespace> {
+    private fun resolveNamespaceByName(
+            ns: C_NsAsm_Namespace,
+            name: R_Name
+    ): C_RecursionSafeResult<C_Name, C_NsImp_NameRes<C_NsAsm_Namespace>> {
         val key = NsNameKey(ns, name)
         val res = resolveNamespaceByNameCalc.calculate(key)
         return res
     }
 
-    private fun resolveNamespaceByName0(ns: C_NsAsm_Namespace, name: String): C_RecursionSafeResult<S_Name, C_NsAsm_Namespace> {
+    private fun resolveNamespaceByName0(
+            ns: C_NsAsm_Namespace,
+            name: R_Name
+    ): C_RecursionSafeResult<C_Name, C_NsImp_NameRes<C_NsAsm_Namespace>> {
         val res = resolveDef(ns, name)
 
-        var def = res.value
-        if (def == null) {
+        var defRes = res.value
+        if (defRes == null) {
             return C_RecursionSafeResult.error {
                 res.error(it)
             }
         }
 
+        var def = defRes.value
         if (def is C_NsAsm_Def_ExactImport) {
             val res2 = resolveExactImport(def.imp)
-            def = res2.value
-            if (def == null) {
+            val def2 = res2.value
+            if (def2 == null) {
                 return C_RecursionSafeResult.error {
-                    C_Error.stop(it.pos, "import:name_unresolved:${it.str}", "Cannot resolve name '${it.str}'")
+                    C_Error.stop(it.pos, "import:name_unresolved:$it", "Cannot resolve name '$it'")
                 }
             }
+
+            def = def2
+            val lastIdeInfo = res2.ideInfos.lastOrNull() ?: IdeSymbolInfo.UNKNOWN
+            defRes = C_NsImp_NameRes(def, lastIdeInfo)
         }
 
         if (def !is C_NsAsm_Def_Namespace) {
             return C_RecursionSafeResult.error {
-                C_Error.stop(it.pos, "import:not_ns:${it.str}", "Name '${it.str}' is not a namespace")
+                C_Error.stop(it.pos, "import:not_ns:$it", "Name '$it' is not a namespace")
             }
         }
 
         val defNs = def.ns()
-        return C_RecursionSafeResult(defNs)
+        val nameRes = C_NsImp_NameRes(defNs, defRes.ideInfo)
+        return C_RecursionSafeResult(nameRes)
     }
 
     fun resolveExactImport(imp: C_NsAsm_ExactImport): C_NsImp_Result<C_NsAsm_Def> {
@@ -374,15 +400,15 @@ private class C_NsImp_ImportResolver(
         while (true) {
             if (!set.add(curImp)) {
                 return if (curImp == imp) {
-                    C_NsImp_Result.error { errExactRecursion(imp) }
+                    C_NsImp_Result.error(res0.ideInfos) { errExactRecursion(imp) }
                 } else {
-                    C_NsImp_Result.error { errExactUnresolved(imp) }
+                    C_NsImp_Result.error(res0.ideInfos) { errExactUnresolved(imp) }
                 }
             }
 
             val res = resolveExactImportDirect(curImp)
             if (res.value == null) {
-                return C_NsImp_Result.error { errExactUnresolved(imp) }
+                return C_NsImp_Result.error(res0.ideInfos) { errExactUnresolved(imp) }
             }
 
             val def = res.value
@@ -392,38 +418,60 @@ private class C_NsImp_ImportResolver(
     }
 
     private fun errExactUnresolved(imp: C_NsAsm_ExactImport): C_Error {
-        val fullName = C_Utils.appLevelName(imp.module, S_QualifiedName(imp.path + imp.name))
+        val fullName = C_Utils.appLevelName(imp.module, imp.qName)
         val code = "import:exact:unresolved:$fullName"
-        return C_Error.stop(imp.name.pos, code, "Cannot resolve import: '$fullName'")
+        return C_Error.stop(imp.qName.last.pos, code, "Cannot resolve import: '$fullName'")
     }
 
     private fun errExactRecursion(imp: C_NsAsm_ExactImport): C_Error {
-        val fullName = C_Utils.appLevelName(imp.module, S_QualifiedName(imp.path + imp.name))
+        val fullName = C_Utils.appLevelName(imp.module, imp.qName)
         val code = "import:exact:recursion:$fullName"
-        return C_Error.stop(imp.name.pos, code, "Recursive import: '$fullName' points to itself")
+        return C_Error.stop(imp.qName.last.pos, code, "Recursive import: '$fullName' points to itself")
     }
 
     private fun resolveExactImportDirect(imp: C_NsAsm_ExactImport): C_NsImp_Result<C_NsAsm_Def> {
-        val nsRes = resolveNamespaceByPath(imp.module, imp.path)
+        val nsRes = resolveNamespaceByPath(imp.module, imp.qName.parentPath())
         val ns = nsRes.value
         if (ns == null) {
             return nsRes.castType()
         }
 
-        val defRes = resolveDef(ns, imp.name.str)
-        return convertResult(imp.name, defRes)
+        val lastName = imp.qName.last
+        val defRes = resolveDef(ns, lastName.rName)
+        return convertResult(lastName, nsRes.ideInfos, defRes)
     }
 
-    private fun resolveDef(ns: C_NsAsm_Namespace, name: String): C_RecursionSafeResult<S_Name, C_NsAsm_Def> {
+    private fun <T> convertResult(
+            name: C_Name,
+            nsIdeInfos: List<IdeSymbolInfo>,
+            heteroRes: C_RecursionSafeResult<C_Name, C_NsImp_NameRes<T>>
+    ): C_NsImp_Result<T> {
+        return if (heteroRes.value != null) {
+            val ideInfos = nsIdeInfos + immListOf(heteroRes.value.ideInfo)
+            C_NsImp_Result(heteroRes.value.value, ideInfos)
+        } else {
+            C_NsImp_Result.error(nsIdeInfos) {
+                heteroRes.error(name)
+            }
+        }
+    }
+
+    private fun resolveDef(
+            ns: C_NsAsm_Namespace,
+            name: R_Name
+    ): C_RecursionSafeResult<C_Name, C_NsImp_NameRes<C_NsAsm_Def>> {
         val key = NsNameKey(ns, name)
         val res = resolveDefCalc.calculate(key)
         return res
     }
 
-    private fun resolveDef0(ns: C_NsAsm_Namespace, name: String): C_RecursionSafeResult<S_Name, C_NsAsm_Def> {
+    private fun resolveDef0(
+            ns: C_NsAsm_Namespace,
+            name: R_Name
+    ): C_RecursionSafeResult<C_Name, C_NsImp_NameRes<C_NsAsm_Def>> {
         val def0 = ns.defs[name]
         if (def0 != null) {
-            return C_RecursionSafeResult(def0)
+            return makeDefResult(def0)
         }
 
         val defs = mutableListOf<C_NsAsm_Def>()
@@ -451,16 +499,25 @@ private class C_NsImp_ImportResolver(
 
         if (defs.isEmpty()) {
             return C_RecursionSafeResult.error {
-                C_Error.stop(it.pos, "import:name_unknown:${it.str}", "Unknown name: '${it.str}'")
+                C_Error.stop(it.pos, "import:name_unknown:$it", "Unknown name: '$it'")
             }
         } else if (defs.size >= 2) {
             return C_RecursionSafeResult.error {
-                C_Error.stop(it.pos, "import:name_ambig:${it.str}", "Name '${it.str}' is ambiguous")
+                C_Error.stop(it.pos, "import:name_ambig:$it", "Name '$it' is ambiguous")
             }
         }
 
         val def = defs[0]
-        return C_RecursionSafeResult(def)
+        return makeDefResult(def)
+    }
+
+    private fun makeDefResult(def: C_NsAsm_Def): C_RecursionSafeResult<C_Name, C_NsImp_NameRes<C_NsAsm_Def>> {
+        val ideInfo = when (def) {
+            is C_NsAsm_Def_Simple -> def.elem.ideInfo()
+            is C_NsAsm_Def_Namespace -> def.ideSymbolInfo()
+            is C_NsAsm_Def_ExactImport -> IdeSymbolInfo.UNKNOWN
+        }
+        return C_RecursionSafeResult(C_NsImp_NameRes(def, ideInfo))
     }
 
     fun namespaceClosure(ns: C_NsAsm_Namespace): List<C_NsAsm_Namespace> {
@@ -480,24 +537,27 @@ private class C_NsImp_ImportResolver(
 
         return set.toImmList()
     }
-
-    private fun <T> convertResult(name: S_Name, heteroRes: C_RecursionSafeResult<S_Name, T>): C_NsImp_Result<T> {
-        return if (heteroRes.value != null) {
-            C_NsImp_Result(heteroRes.value)
-        } else {
-            C_NsImp_Result.error {
-                heteroRes.error(name)
-            }
-        }
-    }
 }
 
-private class C_NsImp_Result<T> private constructor(val value: T?, val error: Getter<C_Error>) {
-    constructor(value: T): this(value, { throw IllegalStateException("error: no error") })
+private class C_NsImp_NameRes<T>(val value: T, val ideInfo: IdeSymbolInfo)
+
+private class C_NsImp_QNameRes<T>(val value: T, ideInfos: List<IdeSymbolInfo>) {
+    val ideInfos = ideInfos.toImmList()
+}
+
+private class C_NsImp_Result<T> private constructor(
+        val value: T?,
+        ideInfos: List<IdeSymbolInfo>,
+        val error: Getter<C_Error>
+) {
+    val ideInfos = ideInfos.toImmList()
+
+    constructor(value: T, ideInfos: List<IdeSymbolInfo>): this(value, ideInfos, { throw IllegalStateException("error: no error") })
+    constructor(target: C_NsImp_QNameRes<T>): this(target.value, target.ideInfos)
 
     fun <R> castType(): C_NsImp_Result<R> {
         check(value == null)
-        return C_NsImp_Result(null, error)
+        return C_NsImp_Result(null, ideInfos, error)
     }
 
     fun valueOrReport(msgCtx: C_MessageContext): T? {
@@ -509,6 +569,6 @@ private class C_NsImp_Result<T> private constructor(val value: T?, val error: Ge
     }
 
     companion object {
-        fun <T> error(error: Getter<C_Error>) = C_NsImp_Result<T>(null, error)
+        fun <T> error(ideInfos: List<IdeSymbolInfo>, error: Getter<C_Error>) = C_NsImp_Result<T>(null, ideInfos, error)
     }
 }

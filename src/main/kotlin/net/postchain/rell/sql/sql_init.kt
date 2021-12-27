@@ -12,11 +12,15 @@ import net.postchain.base.data.PostgreSQLDatabaseAccess
 import net.postchain.base.data.SQLDatabaseAccess
 import net.postchain.core.BlockchainRid
 import net.postchain.core.EContext
-import net.postchain.rell.model.*
+import net.postchain.rell.model.R_EntityDefinition
+import net.postchain.rell.model.R_ObjectDefinition
 import net.postchain.rell.model.expr.R_AttributeDefaultValueExpr
 import net.postchain.rell.model.expr.R_CreateExpr
 import net.postchain.rell.model.expr.R_CreateExprAttr
-import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.Rt_CallFrame
+import net.postchain.rell.runtime.Rt_DefinitionContext
+import net.postchain.rell.runtime.Rt_ExecutionContext
+import net.postchain.rell.runtime.Rt_StackTraceError
 import net.postchain.rell.runtime.utils.Rt_Messages
 import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.utils.PostchainUtils
@@ -277,7 +281,7 @@ private class SqlEntityIniter private constructor(
         checkOldAttrs(entity, metaCls)
         checkSqlIndexes(entity)
 
-        val newAttrs = entity.attributes.keys.filter { it !in metaCls.attrs }
+        val newAttrs = entity.strAttributes.keys.filter { it !in metaCls.attrs }
         if (!newAttrs.isEmpty()) {
             processNewAttrs(entity, metaCls.id, newAttrs)
         }
@@ -299,7 +303,7 @@ private class SqlEntityIniter private constructor(
     }
 
     private fun checkOldAttrs(entity: R_EntityDefinition, metaEntity: MetaEntity) {
-        val oldAttrs = metaEntity.attrs.keys.filter { it !in entity.attributes }.sorted()
+        val oldAttrs = metaEntity.attrs.keys.filter { it !in entity.strAttributes }.sorted()
         if (!oldAttrs.isEmpty()) {
             val codeList = oldAttrs.joinToString(",")
             val msgList = oldAttrs.joinToString(", ")
@@ -316,8 +320,8 @@ private class SqlEntityIniter private constructor(
         val sqlIndexes = table.indexes.filter { !(it.unique && it.cols == listOf(SqlConstants.ROWID_COLUMN)) }
 
         val codeIndexes = mutableListOf<SqlIndex>()
-        codeIndexes.addAll(entity.keys.map { SqlIndex("", true, it.attribs) })
-        codeIndexes.addAll(entity.indexes.map { SqlIndex("", false, it.attribs) })
+        codeIndexes.addAll(entity.keys.map { SqlIndex("", true, it.attribs.map { it.str }) })
+        codeIndexes.addAll(entity.indexes.map { SqlIndex("", false, it.attribs.map { it.str }) })
 
         compareSqlIndexes(entity, "database", sqlIndexes, "code", codeIndexes, true)
         compareSqlIndexes(entity, "database", sqlIndexes, "code", codeIndexes, false)
@@ -360,7 +364,7 @@ private class SqlEntityIniter private constructor(
             initCtx.step(ORD_RECORDS, "Add table columns for $entityName ($details): $attrsStr", action)
         }
 
-        val rAttrs = newAttrs.map { entity.attributes.getValue(it) }
+        val rAttrs = newAttrs.map { entity.strAttributes.getValue(it) }
         val metaSql = SqlMeta.genMetaAttrsInserts(sqlCtx, metaEntityId, rAttrs)
         initCtx.step(ORD_TABLES, "Add meta attributes for $entityName: $attrsStr", SqlStepAction_ExecSql(metaSql))
     }
@@ -372,13 +376,14 @@ private class SqlEntityIniter private constructor(
     ): List<R_CreateExprAttr> {
         val res = mutableListOf<R_CreateExprAttr>()
 
-        val keys = entity.keys.flatMap { it.attribs }.toSet()
-        val indexes = entity.indexes.flatMap { it.attribs }.toSet()
+        val keys = entity.keys.flatMap { it.attribs }.map { it.str }.toSet()
+        val indexes = entity.indexes.flatMap { it.attribs }.map { it.str }.toSet()
 
         val entityName = msgEntityName(entity)
 
         for (name in newAttrs) {
-            val attr = entity.attributes.getValue(name)
+            val attr = entity.strAttributes.getValue(name)
+
             if (attr.expr != null || !existingRecs) {
                 val expr = R_AttributeDefaultValueExpr(attr, null, entity.initFrameGetter)
                 res.add(R_CreateExprAttr(attr, expr))

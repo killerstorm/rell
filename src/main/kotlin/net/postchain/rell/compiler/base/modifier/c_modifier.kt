@@ -6,15 +6,19 @@ package net.postchain.rell.compiler.base.modifier
 
 import net.postchain.rell.compiler.ast.*
 import net.postchain.rell.compiler.base.core.C_MessageContext
+import net.postchain.rell.compiler.base.core.C_Name
+import net.postchain.rell.compiler.base.core.C_SymbolContext
 import net.postchain.rell.compiler.base.namespace.C_DeclarationType
 import net.postchain.rell.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.model.R_Name
 import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.*
 import java.util.*
 
-class C_ModifierContext(val msgCtx: C_MessageContext)
+class C_ModifierContext(val msgCtx: C_MessageContext, val symCtx: C_SymbolContext)
 
 enum class C_ModifierTargetType {
     MODULE(C_DeclarationType.MODULE),
@@ -44,7 +48,7 @@ enum class C_ModifierTargetType {
 
 class C_ModifierTarget(
         val type: C_ModifierTargetType,
-        val name: S_Name?
+        val name: C_Name?
 )
 
 sealed class C_AnnotationArg(val pos: S_Pos) {
@@ -126,7 +130,7 @@ private class C_ModifierValueEntry<T: Any>(private val mod: C_Modifier<T>, priva
 
 class C_ModifierValues(
         type: C_ModifierTargetType,
-        name: S_Name?
+        name: C_Name?
 ) {
     private val target = C_ModifierTarget(type, name)
     private val fields = mutableSetOf<C_ModifierField<*>>()
@@ -153,7 +157,7 @@ class C_ModifierValues(
 }
 
 sealed class C_FixedModifierValues {
-    abstract fun compileKeyword(ctx: C_ModifierContext, kw: S_Name, kind: S_KeywordModifierKind)
+    abstract fun compileKeyword(ctx: C_ModifierContext, kw: C_Name, kind: S_KeywordModifierKind)
     abstract fun compileAnnotation(ctx: C_ModifierContext, name: S_Name, args: List<C_AnnotationArg>)
 }
 
@@ -163,28 +167,36 @@ private class C_FixedModifierValues_Impl(
 ): C_FixedModifierValues() {
     private val mods = mods.toImmMap()
 
-    override fun compileKeyword(ctx: C_ModifierContext, kw: S_Name, kind: S_KeywordModifierKind) {
+    override fun compileKeyword(ctx: C_ModifierContext, kw: C_Name, kind: S_KeywordModifierKind) {
         val key = C_ModifierKey_Keyword.of(kind)
         val link = C_ModifierLink(key, kw, target)
         compile0(ctx, link, immListOf())
     }
 
     override fun compileAnnotation(ctx: C_ModifierContext, name: S_Name, args: List<C_AnnotationArg>) {
-        val key = C_ModifierKey_Annotation.of(name.rName)
-        val link = C_ModifierLink(key, name, target)
-        compile0(ctx, link, args)
+        val nameHand = name.compile(ctx)
+
+        val key = C_ModifierKey_Annotation.of(nameHand.rName)
+        val link = C_ModifierLink(key, nameHand.name, target)
+
+        val ok = compile0(ctx, link, args)
+
+        val ideInfo = if (ok) IdeSymbolInfo(IdeSymbolKind.MOD_ANNOTATION) else IdeSymbolInfo.UNKNOWN
+        nameHand.setIdeInfo(ideInfo)
     }
 
-    private fun compile0(ctx: C_ModifierContext, link: C_ModifierLink, args: List<C_AnnotationArg>) {
+    private fun compile0(ctx: C_ModifierContext, link: C_ModifierLink, args: List<C_AnnotationArg>): Boolean {
         val entry = mods[link.key]
-        if (entry == null) {
-            val codeMsg = link.key.codeMsg()
-            val code = "modifier:invalid:${codeMsg.code}"
-            val msg = "${codeMsg.msg.capitalize()} is invalid"
-            ctx.msgCtx.error(link.pos, code, msg)
-        } else {
+        if (entry != null) {
             entry.compile(ctx, link, args)
+            return true
         }
+
+        val codeMsg = link.key.codeMsg()
+        val code = "modifier:invalid:${codeMsg.code}"
+        val msg = "${codeMsg.msg.capitalize()} is invalid"
+        ctx.msgCtx.error(link.pos, code, msg)
+        return false
     }
 }
 
@@ -229,7 +241,7 @@ class C_ModifierField<T: Any>(mods: List<C_Modifier<T>>) {
     }
 }
 
-class C_ModifierLink(val key: C_ModifierKey, val name: S_Name, val target: C_ModifierTarget) {
+class C_ModifierLink(val key: C_ModifierKey, val name: C_Name, val target: C_ModifierTarget) {
     val pos = name.pos
 }
 

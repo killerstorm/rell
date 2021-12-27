@@ -237,6 +237,16 @@ class AtExprCollectionAttrTest: BaseRellTest(false) {
         chk("data() @* {} ( $?.t )", "[Bob, Alice]")
         chk("data() @* {} ( $?.i, $?.t)", "[(i=123,t=Bob), (i=456,t=Alice)]")
 
+        chk("(a: data()) @* {} ( a.i )", "ct_err:expr_mem_null:i")
+        chk("(a: data()) @* {} ( a.t )", "ct_err:expr_mem_null:t")
+        chk("(a: data()) @* {} ( a.i, a.t)", "ct_err:[expr_mem_null:i][expr_mem_null:t]")
+        chk("(a: data()) @* {} ( a!!.i )", "[123, 456]")
+        chk("(a: data()) @* {} ( a!!.t )", "[Bob, Alice]")
+        chk("(a: data()) @* {} ( a!!.i, a!!.t)", "[(123,Bob), (456,Alice)]")
+        chk("(a: data()) @* {} ( a?.i )", "[123, 456]")
+        chk("(a: data()) @* {} ( a?.t )", "[Bob, Alice]")
+        chk("(a: data()) @* {} ( a?.i, a?.t)", "[(i=123,t=Bob), (i=456,t=Alice)]")
+
         chk("data() @* { 123 }", "ct_err:at_where_type:0:integer")
         chk("data() @* { 'Bob' }", "ct_err:at_where_type:0:text")
         chk("data() @* { .i == 123 }", "ct_err:expr_attr_unknown:i")
