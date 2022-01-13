@@ -11,7 +11,7 @@
     <name>rellr</name>
 
     <properties>
-        <postchain.version>3.4.1</postchain.version>
+        <postchain.version>3.4.2-SNAPSHOT</postchain.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <kotlin.version>1.4.30</kotlin.version>
         <junit.version>4.12</junit.version>
@@ -38,18 +38,27 @@
         </profile>
     </profiles>
 
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>net.postchain</groupId>
+                <artifactId>postchain</artifactId>
+                <version>${postchain.version}</version>
+                <scope>import</scope>
+                <type>pom</type>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
         <dependency>
             <groupId>net.postchain</groupId>
             <artifactId>postchain-base</artifactId>
-            <version>${postchain.version}</version>
             <scope>${rell.postchainScope}</scope>
-            <classifier>jar-with-dependencies</classifier>
         </dependency>
         <dependency>
             <groupId>net.postchain</groupId>
             <artifactId>postchain-devtools</artifactId>
-            <version>${postchain.version}</version>
             <scope>${rell.postchainScope}</scope>
         </dependency>
 
@@ -115,11 +124,7 @@
             <version>3.13.3</version>
         </dependency>
 
-        <dependency>
-            <groupId>io.infinitape</groupId>
-            <artifactId>etherjar-tx</artifactId>
-            <version>0.10.2</version>
-        </dependency>
+
 
         <dependency>
             <groupId>org.jetbrains.kotlin</groupId>
@@ -299,13 +304,31 @@
 
     <repositories>
         <repository>
+            <id>postchain</id>
+            <name>Postchain GitLab Registry</name>
+            <url>https://gitlab.com/api/v4/projects/32294340/packages/maven</url>
+        </repository>
+        <repository>
             <id>jcentral</id>
             <name>bintray</name>
             <url>https://jcenter.bintray.com</url>
         </repository>
         <repository>
             <id>etherjar</id>
-            <url>https://dl.bintray.com/infinitape/etherjar</url>
+            <url>https://maven.emrld.io</url>
         </repository>
     </repositories>
+
+    <distributionManagement>
+        <repository>
+            <id>gitlab-maven</id>
+            <!--suppress UnresolvedMavenProperty -->
+            <url>https://gitlab.com/api/v4/projects/32802097/packages/maven</url>
+        </repository>
+        <snapshotRepository>
+            <id>gitlab-maven</id>
+            <!--suppress UnresolvedMavenProperty -->
+            <url>https://gitlab.com/api/v4/projects/32802097/packages/maven</url>
+        </snapshotRepository>
+    </distributionManagement>
 </project>

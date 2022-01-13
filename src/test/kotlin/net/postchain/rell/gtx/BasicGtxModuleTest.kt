@@ -137,7 +137,7 @@ class BasicGtxModuleTest : IntegrationTest() {
     }
 
     private fun callQuery(node: PostchainTestNode, json: String): String {
-        val blockQueries = node.getBlockchainInstance().getEngine().getBlockQueries()
+        val blockQueries = node.getBlockchainInstance().blockchainEngine.getBlockQueries()
         val actual = blockQueries.query(json).get()
         return actual
     }

@@ -20,7 +20,7 @@ fun main(args: Array<String>) {
     val access = PostchainAccess()
     try {
         val node = access.createNode(configFile)
-        val blockQueries = node.getBlockchainInstance().getEngine().getBlockQueries()
+        val blockQueries = node.getBlockchainInstance().blockchainEngine.getBlockQueries()
         val result = blockQueries.query(requestJson).get()
         println(result)
     } finally {
