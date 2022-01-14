@@ -8,7 +8,7 @@ import java.io.File
 import javax.xml.bind.DatatypeConverter
 
 object CommonUtils {
-    val IS_UNIT_TEST: Boolean = Thread.currentThread().stackTrace.any { it.className == "org.junit.runner.JUnitCore" }
+    val IS_UNIT_TEST: Boolean = Thread.currentThread().stackTrace.any { it.className.startsWith("org.junit.runners") }
 
     fun bytesToHex(bytes: ByteArray): String = DatatypeConverter.printHexBinary(bytes).toLowerCase()
     fun hexToBytes(hex: String): ByteArray = DatatypeConverter.parseHexBinary(hex)
