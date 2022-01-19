@@ -71,9 +71,9 @@ object SqlTestUtils {
         val configFileName = if (localRes != null) localFileName else "config.properties"
         val config = readProperties(configFileName)
 
-        val url = config.getString("database.url")
-        val user = config.getString("database.username")
-        val password = config.getString("database.password")
+        val url = System.getenv("POSTCHAIN_DB_URL") ?: config.getString("database.url")
+        val user = System.getenv("POSTGRES_USER") ?: config.getString("database.username")
+        val password = System.getenv("POSTGRES_PASSWORD") ?: config.getString("database.password")
         return DbConnProps(url, user, password)
     }
 
