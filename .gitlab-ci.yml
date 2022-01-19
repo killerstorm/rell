@@ -4,6 +4,8 @@ deploy:
   stage: deploy
   only:
     - master
+    - dev
+    - /^v0..*/
   script:
     - mvn $MAVEN_CLI_OPTS deploy
 
@@ -11,6 +13,8 @@ build:
   stage: build
   except:
     - master
+    - dev
+    - /^v0..*/
   script:
     - mvn $MAVEN_CLI_OPTS verify
 
