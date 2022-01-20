@@ -4,6 +4,7 @@
 
 package net.postchain.rell.module
 
+import com.vdurmont.semver4j.SemverException
 import mu.KLogging
 import net.postchain.base.BaseBlockBuilderExtension
 import net.postchain.base.data.DatabaseAccess
@@ -26,11 +27,11 @@ import net.postchain.rell.utils.*
 import org.apache.commons.lang3.time.FastDateFormat
 
 object RellVersions {
-    const val VERSION_STR = "0.10.8"
+    const val VERSION_STR = "0.11.0-SNAPSHOT"
     val VERSION = R_LangVersion.of(VERSION_STR)
 
     val SUPPORTED_VERSIONS =
-            listOf("0.10.0", "0.10.1", "0.10.2", "0.10.3", "0.10.4", "0.10.5", "0.10.6", "0.10.7", "0.10.8")
+            listOf("0.10.0", "0.10.1", "0.10.2", "0.10.3", "0.10.4", "0.10.5", "0.10.6", "0.10.7", "0.10.8", "0.11.0-SNAPSHOT")
             .map { R_LangVersion.of(it) }
             .toImmSet()
 
@@ -566,7 +567,7 @@ private class SourceCodeConfig(rellNode: Map<String, Gtv>) {
 
         val ver = try {
             R_LangVersion.of(verStr)
-        } catch (e: IllegalArgumentException) {
+        } catch (e: SemverException) {
             throw UserMistake("Invalid language version: $verStr")
         }
 

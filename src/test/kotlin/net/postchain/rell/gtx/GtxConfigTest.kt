@@ -93,17 +93,18 @@ class GtxConfigTest: BaseGtxTest() {
     }
 
     @Test fun testSourcesWithBadVersion() {
-        val msg = "ERR:Invalid language version"
-        chkVersion("0", "$msg: 0")
-        chkVersion("1", "$msg: 1")
-        chkVersion("hello", "$msg: hello")
-        chkVersion("0.10", "$msg: 0.10")
-        chkVersion("0,10,0", "$msg: 0,10,0")
-        chkVersion("0.10.0.0", "$msg: 0.10.0.0")
-        chkVersion("00.10.0", "$msg: 00.10.0")
-        chkVersion("0.10.00", "$msg: 0.10.00")
-        chkVersion("0.010.0", "$msg: 0.010.0")
-        chkVersion("v0.10.0", "$msg: v0.10.0")
+        val invalid = "ERR:Invalid language version"
+        chkVersion("0", "$invalid: 0")
+        chkVersion("1", "$invalid: 1")
+        chkVersion("hello", "$invalid: hello")
+        chkVersion("0.10", "$invalid: 0.10")
+        chkVersion("0,10,0", "$invalid: 0,10,0")
+        chkVersion("v0.10.0", "$invalid: v0.10.0")
+        val unsupported = "ERR:Unsupported language version"
+        chkVersion("0.10.0.0", "$unsupported: 0.10.0.0")
+        chkVersion("00.10.0", "$unsupported: 00.10.0")
+        chkVersion("0.10.00", "$unsupported: 0.10.00")
+        chkVersion("0.010.0", "$unsupported: 0.010.0")
     }
 
     private fun chkLegacy(version: String, expected: String) {

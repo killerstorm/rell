@@ -151,11 +151,8 @@ class R_Name private constructor(val str: String): Comparable<R_Name> {
 }
 
 class R_LangVersion(private val ver: VersionNumber): Comparable<R_LangVersion> {
-    init {
-        require(ver.items.size == 3) { "wrong version: $ver" }
-    }
 
-    fun str(): String = ver.str()
+    fun str(): String = ver.toString()
 
     override fun compareTo(other: R_LangVersion) = ver.compareTo(other.ver)
     override fun equals(other: Any?) = other === this || (other is R_LangVersion && ver == other.ver)

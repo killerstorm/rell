@@ -4,11 +4,12 @@
 
 package net.postchain.rell.utils
 
+import com.vdurmont.semver4j.Semver
+import com.vdurmont.semver4j.SemverException
 import net.postchain.common.hexStringToByteArray
 import net.postchain.common.toHex
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
-import org.apache.commons.lang3.StringUtils
 import java.util.*
 import java.util.function.Supplier
 
@@ -165,26 +166,16 @@ class ThreadLocalContext<T>(private val defaultValue: T? = null) {
     fun getOpt(): T? = local.get()
 }
 
-class VersionNumber(items: List<Int>): Comparable<VersionNumber> {
-    val items = items.toImmList()
+class VersionNumber(val v: Semver): Comparable<VersionNumber> {
 
-    init {
-        for (v in this.items) require(v >= 0) { "wrong version: ${this.items}" }
-    }
-
-    fun str(): String = items.joinToString(".")
-
-    override fun compareTo(other: VersionNumber) = CommonUtils.compareLists(items, other.items)
-    override fun equals(other: Any?) = other === this || (other is VersionNumber && items == other.items)
-    override fun hashCode() = items.hashCode()
-    override fun toString() = str()
+    override fun compareTo(other: VersionNumber) = v.compareTo(other.v)
+    override fun equals(other: Any?) = (other is VersionNumber) && v == other.v
+    override fun hashCode() = v.hashCode()
+    override fun toString() = v.toString()
 
     companion object {
         fun of(s: String): VersionNumber {
-            require(s.matches(Regex("(0|[1-9][0-9]*)([.](0|[1-9][0-9]*))*")))
-            val parts = StringUtils.splitPreserveAllTokens(s, ".")
-            val items = parts.map { it.toInt() }
-            return VersionNumber(items)
+            return VersionNumber(Semver(s))
         }
     }
 }

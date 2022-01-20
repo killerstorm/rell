@@ -15,6 +15,7 @@ import net.postchain.rell.compiler.base.utils.C_Error
 import net.postchain.rell.compiler.base.utils.C_Message
 import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.model.*
+import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.sql.SqlManager
@@ -24,7 +25,7 @@ import net.postchain.rell.utils.immListOf
 object RellTestUtils {
     const val MAIN_FILE = "main.rell"
 
-    const val RELL_VER = "0.10.8"
+    const val RELL_VER = RellVersions.VERSION_STR
 
     val DEFAULT_COMPILER_OPTIONS = C_CompilerOptions.builder().hiddenLib(true).build()
 
