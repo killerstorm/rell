@@ -10,24 +10,11 @@
 
 ## Build
 
-Simplest way to build:
+To build a distribution archive (w/o running unit tests):
 
-1. Check out the `postchain2` repository:  
-    ```
-    git clone git@bitbucket.org:chromawallet/postchain2.git
-    ```  
-    Switch to the right tag:  
-    ```
-    git checkout ver-3.4.1
-    ```
-2. Build `postchain2`:  
-    ```
-    mvn clean install -DskipTests
-    ```
-3. Build `rellr`:  
-    ```
-    mvn clean package -DskipTests
-    ```
+ ```
+ mvn clean install -DskipTests -Pdistro
+ ```
 
 ## Command Line Interpreter / Shell
 
