@@ -4,14 +4,14 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>net.postchain.rell</groupId>
-    <artifactId>rellr</artifactId>
-    <version>0.10.8</version>
+    <artifactId>rell</artifactId>
+    <version>0.10.8-SNAPSHOT</version>
     <packaging>jar</packaging>
 
-    <name>rellr</name>
+    <name>rell</name>
 
     <properties>
-        <postchain.version>3.4.1</postchain.version>
+        <postchain.version>3.4.2-SNAPSHOT</postchain.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <kotlin.version>1.4.30</kotlin.version>
         <junit.version>4.12</junit.version>
@@ -20,37 +20,54 @@
 
     <profiles>
         <profile>
-            <id>default</id>
-            <activation>
-                <activeByDefault>true</activeByDefault>
-            </activation>
-            <properties>
-                <rell.jarName>${project.artifactId}-${project.version}-jar-with-dependencies</rell.jarName>
-                <rell.postchainScope>provided</rell.postchainScope>
-            </properties>
-        </profile>
-        <profile>
-            <id>console</id>
-            <properties>
-                <rell.jarName>${project.artifactId}-${project.version}-console</rell.jarName>
-                <rell.postchainScope>compile</rell.postchainScope>
-            </properties>
+            <id>distro</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-assembly-plugin</artifactId>
+                        <version>2.6</version>
+                        <executions>
+                            <execution>
+                                <id>make-archive</id>
+                                <phase>install</phase>
+                                <goals>
+                                    <goal>single</goal>
+                                </goals>
+                                <configuration>
+                                    <descriptors>
+                                        <descriptor>src/main/assembly/targz.xml</descriptor>
+                                    </descriptors>
+                                    <classifier>${dist-classifier}</classifier>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
         </profile>
     </profiles>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>net.postchain</groupId>
+                <artifactId>postchain</artifactId>
+                <version>${postchain.version}</version>
+                <scope>import</scope>
+                <type>pom</type>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <dependency>
             <groupId>net.postchain</groupId>
             <artifactId>postchain-base</artifactId>
-            <version>${postchain.version}</version>
-            <scope>${rell.postchainScope}</scope>
-            <classifier>jar-with-dependencies</classifier>
         </dependency>
         <dependency>
             <groupId>net.postchain</groupId>
             <artifactId>postchain-devtools</artifactId>
-            <version>${postchain.version}</version>
-            <scope>${rell.postchainScope}</scope>
         </dependency>
 
         <dependency>
@@ -85,14 +102,19 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-core</artifactId>
-            <version>2.8.7</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>2.8.7</version>
         </dependency>
-
+        <dependency>
+            <groupId>com.fasterxml.jackson.dataformat</groupId>
+            <artifactId>jackson-dataformat-yaml</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.microutils</groupId>
+            <artifactId>kotlin-logging</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.jooq</groupId>
             <artifactId>jooq</artifactId>
@@ -101,7 +123,6 @@
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
-            <version>42.2.5</version>
         </dependency>
 
         <dependency>
@@ -116,26 +137,17 @@
         </dependency>
 
         <dependency>
-            <groupId>io.infinitape</groupId>
-            <artifactId>etherjar-tx</artifactId>
-            <version>0.10.2</version>
-        </dependency>
-
-        <dependency>
             <groupId>org.jetbrains.kotlin</groupId>
-            <artifactId>kotlin-stdlib</artifactId>
-            <version>${kotlin.version}</version>
+            <artifactId>kotlin-stdlib-jdk8</artifactId>
         </dependency>
         <dependency>
             <groupId>org.jetbrains.kotlin</groupId>
             <artifactId>kotlin-reflect</artifactId>
-            <version>${kotlin.version}</version>
         </dependency>
 
         <dependency>
             <groupId>org.jetbrains.kotlin</groupId>
             <artifactId>kotlin-test-junit</artifactId>
-            <version>${kotlin.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -180,56 +192,6 @@
                     <source>11</source>
                     <target>11</target>
                 </configuration>
-            </plugin>
-
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-shade-plugin</artifactId>
-                <version>3.1.1</version>
-                <executions>
-                    <execution>
-                        <id>default</id>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>shade</goal>
-                        </goals>
-                        <configuration>
-                            <finalName>${rell.jarName}</finalName>
-                            <createDependencyReducedPom>false</createDependencyReducedPom>
-                            <filters>
-                                <filter>
-                                    <artifact>*:*</artifact>
-                                    <excludes>
-                                        <exclude>META-INF/*.SF</exclude>
-                                        <exclude>META-INF/*.DSA</exclude>
-                                        <exclude>META-INF/*.RSA</exclude>
-                                    </excludes>
-                                </filter>
-                            </filters>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-assembly-plugin</artifactId>
-                <version>2.6</version>
-                <executions>
-                    <execution>
-                        <id>make-archive</id>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>single</goal>
-                        </goals>
-                        <configuration>
-                            <descriptors>
-                                <descriptor>src/main/assembly/targz.xml</descriptor>
-                            </descriptors>
-                            <classifier>${dist-classifier}</classifier>
-                        </configuration>
-                    </execution>
-                </executions>
             </plugin>
 
             <plugin>
@@ -278,6 +240,21 @@
 
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.2.0</version>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <addClasspath>true</addClasspath>
+                            <classpathPrefix/>
+                            <mainClass>net.postchain.rellr.RellCliKt</mainClass>
+                            <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
                 <version>3.1.1</version>
                 <executions>
@@ -299,13 +276,31 @@
 
     <repositories>
         <repository>
+            <id>postchain</id>
+            <name>Postchain GitLab Registry</name>
+            <url>https://gitlab.com/api/v4/projects/32294340/packages/maven</url>
+        </repository>
+        <repository>
             <id>jcentral</id>
             <name>bintray</name>
             <url>https://jcenter.bintray.com</url>
         </repository>
         <repository>
             <id>etherjar</id>
-            <url>https://dl.bintray.com/infinitape/etherjar</url>
+            <url>https://maven.emrld.io</url>
         </repository>
     </repositories>
+
+    <distributionManagement>
+        <repository>
+            <id>gitlab-maven</id>
+            <!--suppress UnresolvedMavenProperty -->
+            <url>https://gitlab.com/api/v4/projects/32802097/packages/maven</url>
+        </repository>
+        <snapshotRepository>
+            <id>gitlab-maven</id>
+            <!--suppress UnresolvedMavenProperty -->
+            <url>https://gitlab.com/api/v4/projects/32802097/packages/maven</url>
+        </snapshotRepository>
+    </distributionManagement>
 </project>

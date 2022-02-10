@@ -12,6 +12,7 @@ import net.postchain.devtools.PostchainTestNode
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory.gtv
 import net.postchain.gtx.GTXDataBuilder
+import org.junit.After
 import org.junit.Test
 import kotlin.test.assertEquals
 
@@ -137,8 +138,12 @@ class BasicGtxModuleTest : IntegrationTest() {
     }
 
     private fun callQuery(node: PostchainTestNode, json: String): String {
-        val blockQueries = node.getBlockchainInstance().getEngine().getBlockQueries()
+        val blockQueries = node.getBlockchainInstance().blockchainEngine.getBlockQueries()
         val actual = blockQueries.query(json).get()
         return actual
+    }
+
+    @After override fun tearDown() {
+        super.tearDown()
     }
 }

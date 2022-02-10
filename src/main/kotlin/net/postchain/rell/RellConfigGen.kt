@@ -25,6 +25,7 @@ import java.io.FileOutputStream
 import java.io.OutputStream
 
 fun main(args: Array<String>) {
+    RellCliLogUtils.initLogging()
     RellCliUtils.runCli(args, RellCfgCliArgs()) {
         main0(it)
     }

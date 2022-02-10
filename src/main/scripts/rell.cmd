@@ -1,3 +1,4 @@
-@echo off
-IF NOT DEFINED RELL_JAVA SET RELL_JAVA=java
-%RELL_JAVA% -cp "%~dp0lib\*" net.postchain.rell.RellCLIKt %*
+@ECHO OFF
+SETLOCAL
+SET MAIN_CLASS=net.postchain.rell.RellCLIKt
+"%~dp0\javarun.cmd" %*
