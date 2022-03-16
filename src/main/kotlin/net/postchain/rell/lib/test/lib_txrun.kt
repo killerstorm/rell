@@ -143,7 +143,7 @@ object UnitTestBlockRunner {
 
     private fun createEContext(con: Connection, bcCtx: BlockchainContext): EContext {
         val dbAccess: DatabaseAccess = PostgreSQLDatabaseAccess()
-        return BaseEContext(con, bcCtx.chainID, bcCtx.nodeID, dbAccess)
+        return BaseEContext(con, bcCtx.chainID, dbAccess)
     }
 
     fun getTestKeyPair(): BytesKeyPair {

@@ -119,7 +119,7 @@ class SqlInit private constructor(
         val sqlAccess: SQLDatabaseAccess = PostgreSQLDatabaseAccess()
         exeCtx.sqlExec.connection { con ->
             sqlAccess.initializeApp(con, PostchainUtils.DATABASE_VERSION)
-            val eCtx: EContext = BaseEContext(con, chainId, 0, sqlAccess)
+            val eCtx: EContext = BaseEContext(con, chainId, sqlAccess)
             sqlAccess.initializeBlockchain(eCtx, bcRid)
         }
     }

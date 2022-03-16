@@ -11,7 +11,6 @@ import net.postchain.common.hexStringToByteArray
 import net.postchain.common.toHex
 import net.postchain.config.app.AppConfig
 import net.postchain.config.node.NodeConfigurationProviderFactory
-import net.postchain.core.NODE_ID_TODO
 import net.postchain.devtools.PostchainTestNode
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory.gtv
@@ -51,16 +50,15 @@ private fun main0(args: RunPostchainAppArgs) {
     val configGen = RellConfigGen.create(MainRellCliEnv, target)
 
     val nodeAppConf = AppConfig.fromPropertiesFile(args.nodeConfigFile)
-    val nodeConfPro = NodeConfigurationProviderFactory.createProvider(nodeAppConf)
+    val storage = StorageBuilder.buildStorage(nodeAppConf, true)
+
+    val nodeConfPro = NodeConfigurationProviderFactory.createProvider(nodeAppConf) { storage }
 
     val nodeConf = nodeConfPro.getConfiguration()
     val template = RunPostchainApp.genBlockchainConfigTemplate(nodeConf.pubKeyByteArray, args.sqlLog)
     val bcConf = configGen.makeConfig(template)
 
-    // Wiping DB
-    StorageBuilder.buildStorage(nodeAppConf, NODE_ID_TODO, true).close()
-
-    val node = PostchainTestNode(nodeConfPro)
+    val node = PostchainTestNode(nodeConfPro, storage)
     val brid = node.addBlockchain(0, bcConf)
     node.startBlockchain(0)
 

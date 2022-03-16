@@ -74,7 +74,7 @@ class RellCodeTester(
     private fun initSqlCreateSysTables(sqlExec: SqlExecutor) {
         val sqlAccess: SQLDatabaseAccess = PostgreSQLDatabaseAccess()
         sqlExec.connection { con ->
-            val eCtx: EContext = BaseEContext(con, chainId, 0, sqlAccess)
+            val eCtx: EContext = BaseEContext(con, chainId, sqlAccess)
             val bcRid = BlockchainRid(blockchainRid.hexStringToByteArray())
             sqlAccess.initializeBlockchain(eCtx, bcRid)
         }

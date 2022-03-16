@@ -9,7 +9,6 @@ import net.postchain.StorageBuilder
 import net.postchain.config.app.AppConfig
 import net.postchain.config.node.NodeConfig
 import net.postchain.config.node.NodeConfigurationProviderFactory
-import net.postchain.core.NODE_ID_TODO
 import net.postchain.core.BlockchainRid
 import net.postchain.core.UserMistake
 import net.postchain.devtools.PostchainTestNode
@@ -81,13 +80,11 @@ private fun runApp(args: CommonArgs) {
 
 private fun startPostchainNode(rellAppConf: RellPostAppCliConfig): NodeConfig {
     val nodeAppConf = getNodeConfig(rellAppConf, rellAppConf.config.node)
-    val nodeConfPro = NodeConfigurationProviderFactory.createProvider(nodeAppConf)
+    val storage = StorageBuilder.buildStorage(nodeAppConf, rellAppConf.config.wipeDb)
+    val nodeConfPro = NodeConfigurationProviderFactory.createProvider(nodeAppConf) { storage }
     val nodeConf = nodeConfPro.getConfiguration()
 
-    // Wiping DB
-    StorageBuilder.buildStorage(nodeAppConf, NODE_ID_TODO, rellAppConf.config.wipeDb).close()
-
-    val node = PostchainTestNode(nodeConfPro)
+    val node = PostchainTestNode(nodeConfPro, storage)
 
     val chainsSorted = rellAppConf.config.chains.sortedBy { it.iid }
 
@@ -146,7 +143,7 @@ private fun runTests(args: CommonArgs) {
 
     val testRes = TestRunnerResults()
 
-    StorageBuilder.buildStorage(nodeAppConf, 0).use { storage ->
+    StorageBuilder.buildStorage(nodeAppConf).use { storage ->
         val sqlMgr = PostchainStorageSqlManager(storage, false)
 
         for (tChain in tChains) {
@@ -175,7 +172,7 @@ private fun runTests(args: CommonArgs) {
 }
 
 private fun getKeyPair(nodeAppConf: AppConfig): BytesKeyPair {
-    val nodeConf = NodeConfigurationProviderFactory.createProvider(nodeAppConf).getConfiguration()
+    val nodeConf = NodeConfigurationProviderFactory.createProvider(nodeAppConf) { StorageBuilder.buildStorage(nodeAppConf) }.getConfiguration()
     return BytesKeyPair(nodeConf.privKeyByteArray, nodeConf.pubKeyByteArray)
 }
 

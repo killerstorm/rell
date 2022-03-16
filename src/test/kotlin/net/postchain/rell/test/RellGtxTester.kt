@@ -32,7 +32,6 @@ class RellGtxTester(
 ): RellBaseTester(tstCtx, entityDefs, inserts, gtv) {
     var wrapRtErrors = true
     val extraModuleConfig = mutableMapOf<String, String>()
-    var nodeId: Int = 3377
     var modules: List<String>? = listOf("")
     var configTemplate: String = getDefaultConfigTemplate()
 
@@ -47,7 +46,7 @@ class RellGtxTester(
 
         val dbAccess = PostchainUtils.createDatabaseAccess()
         sqlExec.connection { con ->
-            val ctx = BaseEContext(con, chainId, nodeId, dbAccess)
+            val ctx = BaseEContext(con, chainId, dbAccess)
             dbAccess.initializeBlockchain(ctx, bRid)
             GTXSchemaManager.initializeDB(ctx)
             gtxModule.initializeDB(ctx)
@@ -158,7 +157,7 @@ class RellGtxTester(
         val res = tstCtx.sqlMgr().execute(tx) { sqlExec ->
             sqlExec.connection { con ->
                 val dbAccess = PostchainUtils.createDatabaseAccess()
-                val ctx = BaseEContext(con, chainId, nodeId, dbAccess)
+                val ctx = BaseEContext(con, chainId, dbAccess)
                 code(ctx)
             }
         }

@@ -5,6 +5,7 @@
 package net.postchain.rell.tools
 
 import mu.KotlinLogging
+import net.postchain.StorageBuilder
 import net.postchain.config.app.AppConfig
 import net.postchain.config.node.NodeConfigurationProviderFactory
 import net.postchain.core.UserMistake
@@ -43,7 +44,7 @@ private fun main0(args: RunPostchainTestArgs) {
     val configGen = RellConfigGen.create(MainRellCliEnv, target)
 
     val nodeAppConf = AppConfig.fromPropertiesFile(args.nodeConfigFile)
-    val nodeConfPro = NodeConfigurationProviderFactory.createProvider(nodeAppConf)
+    val nodeConfPro = NodeConfigurationProviderFactory.createProvider(nodeAppConf) { StorageBuilder.buildStorage(nodeAppConf) }
     val nodeConf = nodeConfPro.getConfiguration()
     val template = RunPostchainApp.genBlockchainConfigTemplate(nodeConf.pubKeyByteArray, args.sqlLog)
     val bcConf = configGen.makeConfig(template)

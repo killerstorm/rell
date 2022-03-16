@@ -250,7 +250,7 @@ private fun runWithSqlManager(args: RellCliArgs, logSqlErrors: Boolean, code: (S
         }
     } else if (dbProperties != null) {
         val appCfg = AppConfig.fromPropertiesFile(dbProperties)
-        val storage = StorageBuilder.buildStorage(appCfg, 0)
+        val storage = StorageBuilder.buildStorage(appCfg)
         val sqlMgr = PostchainStorageSqlManager(storage, args.sqlLog)
         runWithSqlManager(appCfg.databaseSchema, sqlMgr, logSqlErrors, code)
     } else {
