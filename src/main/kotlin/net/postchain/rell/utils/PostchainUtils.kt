@@ -5,7 +5,6 @@
 package net.postchain.rell.utils
 
 import com.google.gson.GsonBuilder
-import net.postchain.base.CryptoSystem
 import net.postchain.base.SECP256K1CryptoSystem
 import net.postchain.base.data.PostgreSQLDatabaseAccess
 import net.postchain.base.data.SQLDatabaseAccess
@@ -33,7 +32,7 @@ import net.postchain.rell.runtime.Rt_Value
 object PostchainUtils {
     val DATABASE_VERSION = 2
 
-    val cryptoSystem: CryptoSystem = SECP256K1CryptoSystem()
+    val cryptoSystem = SECP256K1CryptoSystem()
 
     private val merkleCalculator: MerkleHashCalculator<Gtv> = GtvMerkleHashCalculator(cryptoSystem)
 

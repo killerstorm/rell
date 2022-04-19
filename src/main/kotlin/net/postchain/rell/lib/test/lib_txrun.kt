@@ -9,7 +9,7 @@ import net.postchain.base.BaseBlockchainContext
 import net.postchain.base.BaseEContext
 import net.postchain.base.data.DatabaseAccess
 import net.postchain.base.data.PostgreSQLDatabaseAccess
-import net.postchain.base.secp256k1_derivePubKey
+import net.postchain.crypto.secp256k1_derivePubKey
 import net.postchain.common.hexStringToByteArray
 import net.postchain.core.BlockchainConfiguration
 import net.postchain.core.BlockchainConfigurationFactory

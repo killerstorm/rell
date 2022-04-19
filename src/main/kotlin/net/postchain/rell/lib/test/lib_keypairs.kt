@@ -4,7 +4,7 @@
 
 package net.postchain.rell.lib.test
 
-import net.postchain.base.secp256k1_derivePubKey
+import net.postchain.crypto.secp256k1_derivePubKey
 import net.postchain.common.hexStringToByteArray
 import net.postchain.rell.compiler.base.def.C_SysAttribute
 import net.postchain.rell.compiler.base.namespace.C_Namespace

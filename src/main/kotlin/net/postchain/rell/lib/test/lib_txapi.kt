@@ -4,7 +4,7 @@
 
 package net.postchain.rell.lib.test
 
-import net.postchain.base.secp256k1_derivePubKey
+import net.postchain.crypto.secp256k1_derivePubKey
 import net.postchain.core.BlockchainRid
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory

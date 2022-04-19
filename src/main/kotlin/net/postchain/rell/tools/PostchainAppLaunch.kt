@@ -6,11 +6,11 @@ package net.postchain.rell.tools
 
 import mu.KotlinLogging
 import net.postchain.StorageBuilder
-import net.postchain.base.secp256k1_derivePubKey
 import net.postchain.common.hexStringToByteArray
 import net.postchain.common.toHex
 import net.postchain.config.app.AppConfig
 import net.postchain.config.node.NodeConfigurationProviderFactory
+import net.postchain.crypto.secp256k1_derivePubKey
 import net.postchain.devtools.PostchainTestNode
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory.gtv

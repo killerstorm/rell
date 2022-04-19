@@ -5,8 +5,8 @@
 package net.postchain.rell.lib
 
 import com.google.common.io.Resources
-import net.postchain.base.secp256k1_derivePubKey
-import net.postchain.base.secp256k1_sign
+import net.postchain.crypto.secp256k1_derivePubKey
+import net.postchain.crypto.secp256k1_sign
 import net.postchain.common.toHex
 import net.postchain.gtv.Gtv
 import net.postchain.rell.test.BaseRellTest
