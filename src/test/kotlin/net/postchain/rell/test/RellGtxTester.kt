@@ -4,7 +4,10 @@
 
 package net.postchain.rell.test
 
-import net.postchain.base.*
+import net.postchain.base.BaseBlockEContext
+import net.postchain.base.BaseEContext
+import net.postchain.base.BaseTxEContext
+import net.postchain.base.TxEventSink
 import net.postchain.common.hexStringToByteArray
 import net.postchain.core.*
 import net.postchain.gtv.Gtv
@@ -207,7 +210,7 @@ class RellGtxTester(
 
     private fun makeModuleConfigNode(parts: ModuleConfigParts, tpl: Gtv, root: Boolean): Gtv? {
         return when (tpl.type) {
-            GtvType.NULL, GtvType.BYTEARRAY, GtvType.INTEGER -> tpl
+            GtvType.NULL, GtvType.BYTEARRAY, GtvType.INTEGER, GtvType.BIGINTEGER -> tpl
             GtvType.ARRAY -> GtvFactory.gtv(tpl.asArray().mapNotNull { makeModuleConfigNode(parts, it, false) })
             GtvType.DICT -> {
                 val map = tpl.asDict().entries

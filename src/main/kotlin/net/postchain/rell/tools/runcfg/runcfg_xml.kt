@@ -14,7 +14,7 @@ import org.xml.sax.InputSource
 import java.io.StringReader
 import javax.xml.parsers.DocumentBuilderFactory
 
-object RellXmlParser {
+class RellXmlParser(private val preserveWhitespace: Boolean = false) {
     fun parse(path: String, text: String, treePath: List<String> = listOf()): RellXmlElement {
         val doc = parseDocument(path, text)
         val res = convertDocument(path, doc, treePath)
@@ -80,7 +80,9 @@ object RellXmlParser {
             }
         }
 
-        val textRaw = textBuf.toString().trim()
+        var textRaw = textBuf.toString()
+        if (elems.isNotEmpty() && textRaw.isBlank()) textRaw = ""
+        if (!preserveWhitespace) textRaw = textRaw.trim()
         val text = if (textRaw.isEmpty()) null else textRaw
 
         return DomNode(attrs, elems, text)
@@ -125,7 +127,7 @@ object RellXmlIncluder {
         text!!
 
         val path = includeDir.absolutePath(src)
-        val xml2 = RellXmlParser.parse(path, text)
+        val xml2 = RellXmlParser().parse(path, text)
 
         val xml3 = includeFiles(xml2, includeDir)
         val res = if (includeRoot) listOf(xml3) else xml3.elems

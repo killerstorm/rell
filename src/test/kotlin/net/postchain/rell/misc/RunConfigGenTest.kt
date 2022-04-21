@@ -801,6 +801,63 @@ class RunConfigGenTest {
         """)
     }
 
+    // Bug: new line at the end of a <string> tag is not preserved.
+    @Test fun testBugIncludeGeneratedConfigGtvXml() {
+        val gtvXml = """
+            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <dict>
+                <entry key="gtx">
+                    <dict>
+                        <entry key="rell">
+                            <dict>
+                                <entry key="modules">
+                                    <array>
+                                        <string></string>
+                                    </array>
+                                </entry>
+                                <entry key="sources">
+                                    <dict>
+                                        <entry key="main.rell">
+                                            <string>
+                                                // New line is important, testing that it's being preserved.
+                                            </string>
+                                        </entry>
+                                    </dict>
+                                </entry>
+                                <entry key="version">
+                                    <string>0.10.8</string>
+                                </entry>
+                            </dict>
+                        </entry>
+                    </dict>
+                </entry>
+                <entry key="signers">
+                    <array/>
+                </entry>
+            </dict>
+        """.trimIndent()
+
+        val configFiles = mapOf("0.xml" to gtvXml)
+        val sourceFiles = mapOf("main.rell" to "//")
+
+        val files = generate(sourceFiles, configFiles, """
+            <run wipe-db="false">
+                <nodes>
+                    <config add-signers="false">#</config>
+                </nodes>
+                <chains>
+                    <chain name="capchap" iid="0">
+                        <config height="0">
+                            <gtv src="0.xml"/>
+                        </config>
+                    </chain>
+                </chains>
+            </run>
+        """)
+
+        chkFile(files, "blockchains/0/0.xml", gtvXml)
+    }
+
     private fun generate(
             sourceFiles: Map<String, String>,
             configFiles: Map<String, String>,
