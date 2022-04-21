@@ -8,6 +8,7 @@ import net.postchain.StorageBuilder
 import net.postchain.config.node.NodeConfigurationProviderFactory
 import net.postchain.devtools.IntegrationTest
 import net.postchain.devtools.PostchainTestNode
+import net.postchain.devtools.utils.configuration.activeChainIds
 import net.postchain.gtv.Gtv
 import net.postchain.rell.utils.PostchainUtils
 import java.io.File
@@ -36,14 +37,11 @@ private class PostchainAccess: IntegrationTest() {
         val preWipeDatabase = true
 
         val appConfig = createAppConfig(nodeIndex, totalNodesCount, DEFAULT_CONFIG_FILE)
-        val storage = StorageBuilder.buildStorage(appConfig, preWipeDatabase)
-        val nodeConfigProvider = NodeConfigurationProviderFactory.createProvider(appConfig) { storage }
-        val nodeConfig = nodeConfigProvider.getConfiguration()
-        nodesNames[nodeConfig.pubKey] = "$nodeIndex"
+        nodesNames[appConfig.pubKey] = "$nodeIndex"
         val blockchainConfig = readBlockchainConfigStub(configFile)
-        val chainId = nodeConfig.activeChainIds.first().toLong()
+        val chainId = appConfig.activeChainIds.first().toLong()
 
-        return PostchainTestNode(nodeConfigProvider, storage)
+        return PostchainTestNode(appConfig, preWipeDatabase)
                 .apply {
                     addBlockchain(chainId, blockchainConfig)
                     startBlockchain()

@@ -44,9 +44,7 @@ private fun main0(args: RunPostchainTestArgs) {
     val configGen = RellConfigGen.create(MainRellCliEnv, target)
 
     val nodeAppConf = AppConfig.fromPropertiesFile(args.nodeConfigFile)
-    val nodeConfPro = NodeConfigurationProviderFactory.createProvider(nodeAppConf) { StorageBuilder.buildStorage(nodeAppConf) }
-    val nodeConf = nodeConfPro.getConfiguration()
-    val template = RunPostchainApp.genBlockchainConfigTemplate(nodeConf.pubKeyByteArray, args.sqlLog)
+    val template = RunPostchainApp.genBlockchainConfigTemplate(nodeAppConf.pubKeyByteArray, args.sqlLog)
     val bcConf = configGen.makeConfig(template)
 
     val tests = File(args.testFile).readText()

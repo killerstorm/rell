@@ -11,7 +11,7 @@ import net.postchain.base.merkle.MerkleHashCalculator
 import net.postchain.core.BlockchainRid
 import net.postchain.core.UserMistake
 import net.postchain.crypto.CryptoSystem
-import net.postchain.crypto.SECP256K1CryptoSystem
+import net.postchain.crypto.Secp256K1CryptoSystem
 import net.postchain.gtv.*
 import net.postchain.gtv.gtvml.GtvMLEncoder
 import net.postchain.gtv.gtvml.GtvMLParser
@@ -27,7 +27,7 @@ import net.postchain.rell.runtime.Rt_Value
 object PostchainUtils {
     val DATABASE_VERSION = 2
 
-    val cryptoSystem: CryptoSystem = SECP256K1CryptoSystem()
+    val cryptoSystem: CryptoSystem = Secp256K1CryptoSystem()
 
     private val merkleCalculator: MerkleHashCalculator<Gtv> = GtvMerkleHashCalculator(cryptoSystem)
 

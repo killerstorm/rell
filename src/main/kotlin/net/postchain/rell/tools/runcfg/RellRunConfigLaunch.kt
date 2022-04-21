@@ -6,9 +6,8 @@ package net.postchain.rell.tools.runcfg
 
 import mu.KotlinLogging
 import net.postchain.StorageBuilder
+import net.postchain.api.rest.infra.RestApiConfig
 import net.postchain.config.app.AppConfig
-import net.postchain.config.node.NodeConfig
-import net.postchain.config.node.NodeConfigurationProviderFactory
 import net.postchain.core.BlockchainRid
 import net.postchain.core.UserMistake
 import net.postchain.devtools.PostchainTestNode
@@ -70,21 +69,18 @@ private fun runApp(args: CommonArgs) {
         RellCliUtils.compileApp(rellAppConf.sourceDir, modSel, true, C_CompilerOptions.DEFAULT)
     }
 
-    val nodeConf = startPostchainNode(rellAppConf)
+    val appConfig = startPostchainNode(rellAppConf)
 
     log.info("")
     log.info("POSTCHAIN APP STARTED")
-    log.info("    REST API port: ${nodeConf.restApiPort}")
+    log.info("    REST API port: ${RestApiConfig.fromAppConfig(appConfig).port}")
     log.info("")
 }
 
-private fun startPostchainNode(rellAppConf: RellPostAppCliConfig): NodeConfig {
+private fun startPostchainNode(rellAppConf: RellPostAppCliConfig): AppConfig {
     val nodeAppConf = getNodeConfig(rellAppConf, rellAppConf.config.node)
-    val storage = StorageBuilder.buildStorage(nodeAppConf, rellAppConf.config.wipeDb)
-    val nodeConfPro = NodeConfigurationProviderFactory.createProvider(nodeAppConf) { storage }
-    val nodeConf = nodeConfPro.getConfiguration()
 
-    val node = PostchainTestNode(nodeConfPro, storage)
+    val node = PostchainTestNode(nodeAppConf, rellAppConf.config.wipeDb)
 
     val chainsSorted = rellAppConf.config.chains.sortedBy { it.iid }
 
@@ -114,7 +110,7 @@ private fun startPostchainNode(rellAppConf: RellPostAppCliConfig): NodeConfig {
         }
     }
 
-    return nodeConf
+    return nodeAppConf
 }
 
 private fun runTests(args: CommonArgs) {
@@ -125,7 +121,7 @@ private fun runTests(args: CommonArgs) {
     testNodeConfig ?: throw RellCliErr("Test database configuration not specified in run.xml")
 
     val nodeAppConf = getNodeConfig(rellAppConf, testNodeConfig)
-    val keyPair = getKeyPair(nodeAppConf)
+    val keyPair = BytesKeyPair(nodeAppConf.privKeyByteArray, nodeAppConf.pubKeyByteArray)
 
     class TestChain(val chain: RellPostAppChain, val rApp: R_App, val gtvConfig: Gtv)
 
@@ -169,11 +165,6 @@ private fun runTests(args: CommonArgs) {
     if (!ok) {
         exitProcess(1)
     }
-}
-
-private fun getKeyPair(nodeAppConf: AppConfig): BytesKeyPair {
-    val nodeConf = NodeConfigurationProviderFactory.createProvider(nodeAppConf) { StorageBuilder.buildStorage(nodeAppConf) }.getConfiguration()
-    return BytesKeyPair(nodeConf.privKeyByteArray, nodeConf.pubKeyByteArray)
 }
 
 private fun generateRunConfig(args: CommonArgs, test: Boolean): RellPostAppCliConfig {
