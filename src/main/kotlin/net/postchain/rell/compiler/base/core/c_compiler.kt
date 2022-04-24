@@ -8,11 +8,13 @@ import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.def.C_MountTables
 import net.postchain.rell.compiler.base.def.C_MountTablesBuilder
 import net.postchain.rell.compiler.base.module.*
-import net.postchain.rell.compiler.base.namespace.*
+import net.postchain.rell.compiler.base.namespace.C_Namespace
+import net.postchain.rell.compiler.base.namespace.C_SysNsProto
+import net.postchain.rell.compiler.base.namespace.C_SysNsProtoBuilder
 import net.postchain.rell.compiler.base.utils.*
-import net.postchain.rell.lib.C_Lib_OpContext
+import net.postchain.rell.lib.C_Lib_SysQueries
+import net.postchain.rell.lib.C_SystemLibraryProvider
 import net.postchain.rell.model.*
-import net.postchain.rell.model.lib.R_SysFn_Rell
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.*
@@ -90,41 +92,10 @@ class C_SystemDefs private constructor(
     val queries = queries.toImmList()
 
     companion object {
-        val SYSTEM_TYPES = immMapOf(
-                "unit" to typeRef(R_UnitType),
-                "boolean" to typeRef(R_BooleanType),
-                "text" to typeRef(R_TextType),
-                "byte_array" to typeRef(R_ByteArrayType),
-                "integer" to typeRef(R_IntegerType),
-                "decimal" to typeRef(R_DecimalType),
-                "rowid" to typeRef(R_RowidType),
-                "pubkey" to typeRef(R_ByteArrayType),
-                "name" to typeRef(R_TextType),
-                "timestamp" to typeRef(R_IntegerType),
-                "signer" to typeRef(R_SignerType),
-                "guid" to typeRef(R_GUIDType),
-                "tuid" to typeRef(R_TextType),
-                "json" to typeRef(R_JsonType),
-                "range" to typeRef(R_RangeType),
-                "GTXValue" to typeRef(R_GtvType, C_Deprecated("gtv", error = true)),
-                "gtv" to typeRef(R_GtvType)
-        ).mapKeys { R_Name.of(it.key) }.toImmMap()
-
-        private val SYSTEM_STRUCTS = C_Lib_OpContext.GLOBAL_STRUCTS
-
         fun create(appCtx: C_AppContext, stamp: R_AppUid): C_SystemDefs {
             val blockEntity = C_Utils.createBlockEntity(appCtx, null)
             val transactionEntity = C_Utils.createTransactionEntity(appCtx, null, blockEntity)
-
-            val executor = appCtx.executor
-            val queries = listOf(
-                    C_Utils.createSysQuery(executor, "get_rell_version", R_TextType, R_SysFn_Rell.GetRellVersion),
-                    C_Utils.createSysQuery(executor, "get_postchain_version", R_TextType, R_SysFn_Rell.GetPostchainVersion),
-                    C_Utils.createSysQuery(executor, "get_build", R_TextType, R_SysFn_Rell.GetBuild),
-                    C_Utils.createSysQuery(executor, "get_build_details", R_SysFn_Rell.GetBuildDetails.TYPE, R_SysFn_Rell.GetBuildDetails),
-                    C_Utils.createSysQuery(executor, "get_app_structure", R_GtvType, R_SysFn_Rell.GetAppStructure)
-            )
-
+            val queries = C_Lib_SysQueries.createQueries(appCtx.executor)
             return create(appCtx.globalCtx, stamp, blockEntity, transactionEntity, queries)
         }
 
@@ -138,9 +109,9 @@ class C_SystemDefs private constructor(
             val sysEntities = listOf(blockEntity, transactionEntity)
 
             val nsProto = createNsProto(globalCtx, sysEntities, false)
-            val appNs = C_NsEntry.createNamespace(nsProto.entries)
+            val appNs = nsProto.toNamespace()
             val testNsProto = createNsProto(globalCtx, sysEntities, true)
-            val testNs = C_NsEntry.createNamespace(testNsProto.entries)
+            val testNs = testNsProto.toNamespace()
 
             val mntBuilder = C_MountTablesBuilder(stamp)
             for (entity in sysEntities) mntBuilder.addEntity(null, entity)
@@ -155,40 +126,16 @@ class C_SystemDefs private constructor(
                 sysEntities: List<R_EntityDefinition>,
                 test: Boolean
         ): C_SysNsProto {
-            val libFns = globalCtx.libFunctions
-            val sysNamespaces = if (test) libFns.TEST_NAMESPACES else libFns.APP_NAMESPACES
-            val sysFunctions = if (test) libFns.testGlobalFunctions else libFns.appGlobalFunctions
-            val sysTypes = SYSTEM_TYPES
-            val sysStructs = SYSTEM_STRUCTS
+            val libNs = C_SystemLibraryProvider.getNsProto(test, globalCtx.compilerOptions.hiddenLib)
 
             val nsBuilder = C_SysNsProtoBuilder()
-
-            for ((name, type) in sysTypes) {
-                nsBuilder.addType(name, type, IdeSymbolInfo(IdeSymbolKind.DEF_TYPE))
-            }
+            nsBuilder.addAll(libNs)
 
             for (entity in sysEntities) {
                 nsBuilder.addEntity(entity.rName, entity, IdeSymbolInfo(IdeSymbolKind.DEF_ENTITY))
             }
 
-            for (struct in sysStructs) {
-                nsBuilder.addStruct(struct.name, struct, IdeSymbolInfo(IdeSymbolKind.DEF_STRUCT))
-            }
-
-            for ((name, fn) in sysFunctions) {
-                nsBuilder.addFunction(name, fn, IdeSymbolInfo.DEF_FUNCTION_SYSTEM)
-            }
-
-            for ((name, ns) in sysNamespaces) {
-                nsBuilder.addNamespace(name, ns)
-            }
-
             return nsBuilder.build()
-        }
-
-        private fun typeRef(type: R_Type, deprecated: C_Deprecated? = null): C_DefProxy<R_Type> {
-            val ideInfo = IdeSymbolInfo(IdeSymbolKind.DEF_TYPE)
-            return C_DefProxy.create(type, ideInfo, deprecated)
         }
     }
 }

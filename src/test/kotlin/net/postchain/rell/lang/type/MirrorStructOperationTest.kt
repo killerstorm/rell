@@ -99,7 +99,7 @@ class MirrorStructOperationTest: BaseRellTest(false) {
         def("operation new_user(name, rating: integer) {}")
         chk("struct<new_user>('Bob',123).to_test_op()", """op[new_user("Bob",123)]""")
         tst.testLib = false
-        chk("struct<new_user>('Bob',123).to_test_op()", "ct_err:unknown_member:[struct<new_user>]:to_test_op")
+        chk("struct<new_user>('Bob',123).to_test_op()", "ct_err:expr:fn:struct:to_test_op:no_test")
     }
 
     @Test fun testMutableBasic() {

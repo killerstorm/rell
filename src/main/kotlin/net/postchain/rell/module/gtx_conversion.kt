@@ -8,9 +8,9 @@ import net.postchain.common.exception.UserMistake
 import net.postchain.gtv.*
 import net.postchain.gtv.merkle.proof.GtvMerkleProofTreeFactory
 import net.postchain.gtv.merkle.proof.toGtvVirtual
+import net.postchain.rell.lib.type.Lib_DecimalMath
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
-import net.postchain.rell.runtime.utils.Rt_DecimalUtils
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.utils.checkEquals
 import org.apache.commons.collections4.MultiValuedMap
@@ -103,7 +103,7 @@ object GtvRtConversion_Integer: GtvRtConversion() {
 
 object GtvRtConversion_Decimal: GtvRtConversion() {
     override fun directCompatibility() = R_GtvCompatibility(true, true)
-    override fun rtToGtv(rt: Rt_Value, pretty: Boolean) = GtvFactory.gtv(Rt_DecimalUtils.toString(rt.asDecimal()))
+    override fun rtToGtv(rt: Rt_Value, pretty: Boolean) = GtvFactory.gtv(Lib_DecimalMath.toString(rt.asDecimal()))
 
     override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
         return if (gtv.type == GtvType.INTEGER) {

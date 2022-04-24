@@ -7,14 +7,15 @@ package net.postchain.rell.compiler.base.expr
 import net.postchain.rell.compiler.ast.S_CallArgument
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_VirtualType
-import net.postchain.rell.compiler.base.core.C_GlobalContext
 import net.postchain.rell.compiler.base.core.C_MessageContext
 import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.core.C_TypeHint
 import net.postchain.rell.compiler.base.fn.*
 import net.postchain.rell.compiler.base.utils.C_Errors
+import net.postchain.rell.compiler.base.utils.C_SysFunctionCtx
 import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.compiler.vexpr.*
+import net.postchain.rell.lib.C_LibMemberFunctions
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
 import net.postchain.rell.tools.api.IdeSymbolInfo
@@ -81,8 +82,10 @@ private class C_MemberValue_EnumProperty(
         val pos = caseCtx.linkPos
         val effResType = C_Utils.effectiveMemberType(prop.type, link.safe)
 
+        val body = prop.fn.compileCall(C_SysFunctionCtx(ctx, caseCtx.linkPos))
+
         val fullName = caseCtx.qualifiedNameMsgLazy()
-        val desc = V_SysFunctionTargetDescriptor(prop.type, prop.rFn, prop.dbFn, fullName, pure = prop.pure, synth = true)
+        val desc = V_SysFunctionTargetDescriptor(prop.type, body.rFn, body.dbFn, fullName, pure = prop.pure, synth = true)
         val callTarget = V_FunctionCallTarget_SysMemberFunction(desc, caseCtx.member)
 
         var res: V_Expr = V_FullFunctionCallExpr(ctx, pos, pos, effResType, callTarget, V_FunctionCallArgs.EMPTY)
@@ -98,7 +101,7 @@ private class C_MemberValue_EnumProperty(
 
 object C_MemberResolver {
     fun valueForType(ctx: C_ExprContext, type: R_Type, ref: C_MemberRef): C_ExprMember? {
-        val member = findMemberValueForTypeByName(ctx.globalCtx, type, ref.name.rName)
+        val member = findMemberValueForTypeByName(type, ref.name.rName)
         member ?: return null
 
         val link = ref.toLink()
@@ -108,31 +111,31 @@ object C_MemberResolver {
         return C_ExprMember(cExpr, ideInfo)
     }
 
-    fun findMemberValueForTypeByName(globalCtx: C_GlobalContext, type: R_Type, name: R_Name): C_MemberValue? {
-        val resolver = getTypeMemberResolver(globalCtx, type)
+    fun findMemberValueForTypeByName(type: R_Type, name: R_Name): C_MemberValue? {
+        val resolver = getTypeMemberResolver(type)
         return resolver?.findByName(name)
     }
 
-    fun findMemberValuesForTypeByType(globalCtx: C_GlobalContext, type: R_Type, memberType: R_Type): List<C_MemberValue> {
-        val resolver = getTypeMemberResolver(globalCtx, type)
+    fun findMemberValuesForTypeByType(type: R_Type, memberType: R_Type): List<C_MemberValue> {
+        val resolver = getTypeMemberResolver(type)
         return resolver?.findByType(memberType) ?: listOf()
     }
 
-    private fun getTypeMemberResolver(globalCtx: C_GlobalContext, type: R_Type): C_TypeMemberResolver<*>? {
+    private fun getTypeMemberResolver(type: R_Type): C_TypeMemberResolver<*>? {
         return when (type) {
             is R_TupleType -> C_TypeMemberResolver_Tuple(type)
             is R_VirtualTupleType -> C_TypeMemberResolver_VirtualTuple(type)
             is R_StructType -> C_TypeMemberResolver_Struct(type)
             is R_VirtualStructType -> C_TypeMemberResolver_VirtualStruct(type)
             is R_EntityType -> C_TypeMemberResolver_Entity(type)
-            is R_EnumType -> C_TypeMemberResolver_Enum(globalCtx)
+            is R_EnumType -> C_TypeMemberResolver_Enum
             else -> null
         }
     }
 
-    fun functionForType(ctx: C_ExprContext, type: R_Type, ref: C_MemberRef): C_ExprMember? {
+    fun functionForType(type: R_Type, ref: C_MemberRef): C_ExprMember? {
         val name = ref.name.rName
-        val fn = ctx.globalCtx.libFunctions.getMemberFunctionOpt(ctx, type, name)
+        val fn = C_LibMemberFunctions.getTypeMemberFunction(type, name)
         fn ?: return null
 
         val link = ref.toLink()
@@ -235,16 +238,16 @@ object C_MemberResolver {
         override fun findByType0(memberType: R_Type) = C_EntityAttrRef.resolveByType(type.rEntity, memberType)
     }
 
-    private class C_TypeMemberResolver_Enum(val globalCtx: C_GlobalContext): C_TypeMemberResolver<C_MemberValue>() {
+    private object C_TypeMemberResolver_Enum: C_TypeMemberResolver<C_MemberValue>() {
         override fun toMemberValue(member: C_MemberValue) = member
 
         override fun findByName0(name: R_Name): C_MemberValue? {
-            val prop = globalCtx.libFunctions.getEnumPropertyOpt(name)
+            val prop = C_LibMemberFunctions.getEnumPropertyOpt(name)
             return if (prop == null) null else C_MemberValue_EnumProperty(prop, name)
         }
 
         override fun findByType0(memberType: R_Type): List<C_MemberValue> {
-            return globalCtx.libFunctions.getEnumProperties()
+            return C_LibMemberFunctions.getEnumProperties()
                     .filter { it.value.type == memberType }
                     .map { C_MemberValue_EnumProperty(it.value, it.key) }
                     .toImmList()

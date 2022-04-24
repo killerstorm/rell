@@ -5,9 +5,9 @@
 package net.postchain.rell.model.expr
 
 import com.google.common.math.LongMath
+import net.postchain.rell.lib.type.Lib_DecimalMath
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
-import net.postchain.rell.runtime.utils.Rt_DecimalUtils
 import java.math.BigDecimal
 
 sealed class R_CmpOp(val code: String, val checker: (Int) -> Boolean) {
@@ -241,7 +241,7 @@ object R_BinaryOp_Add_Integer: R_BinaryOp_Arith_Integer("+") {
 }
 
 object R_BinaryOp_Add_Decimal: R_BinaryOp_Arith_Decimal("+") {
-    override fun evaluate(left: BigDecimal, right: BigDecimal) = Rt_DecimalUtils.add(left, right)
+    override fun evaluate(left: BigDecimal, right: BigDecimal) = Lib_DecimalMath.add(left, right)
 }
 
 object R_BinaryOp_Sub_Integer: R_BinaryOp_Arith_Integer("-") {
@@ -249,7 +249,7 @@ object R_BinaryOp_Sub_Integer: R_BinaryOp_Arith_Integer("-") {
 }
 
 object R_BinaryOp_Sub_Decimal: R_BinaryOp_Arith_Decimal("-") {
-    override fun evaluate(left: BigDecimal, right: BigDecimal) = Rt_DecimalUtils.subtract(left, right)
+    override fun evaluate(left: BigDecimal, right: BigDecimal) = Lib_DecimalMath.subtract(left, right)
 }
 
 object R_BinaryOp_Mul_Integer: R_BinaryOp_Arith_Integer("*") {
@@ -257,7 +257,7 @@ object R_BinaryOp_Mul_Integer: R_BinaryOp_Arith_Integer("*") {
 }
 
 object R_BinaryOp_Mul_Decimal: R_BinaryOp_Arith_Decimal("*") {
-    override fun evaluate(left: BigDecimal, right: BigDecimal) = Rt_DecimalUtils.multiply(left, right)
+    override fun evaluate(left: BigDecimal, right: BigDecimal) = Lib_DecimalMath.multiply(left, right)
 }
 
 object R_BinaryOp_Div_Integer: R_BinaryOp_Arith_Integer("/") {
@@ -274,7 +274,7 @@ object R_BinaryOp_Div_Decimal: R_BinaryOp_Arith_Decimal("/") {
         if (right.signum() == 0) {
             throw Rt_Error("expr:/:div0", "Decimal division by zero: operator '/'")
         }
-        return Rt_DecimalUtils.divide(left, right)
+        return Lib_DecimalMath.divide(left, right)
     }
 }
 
@@ -292,7 +292,7 @@ object R_BinaryOp_Mod_Decimal: R_BinaryOp_Arith_Decimal("%") {
         if (right.signum() == 0) {
             throw Rt_Error("expr:%:div0", "Decimal division by zero: operator '%'")
         }
-        return Rt_DecimalUtils.remainder(left, right)
+        return Lib_DecimalMath.remainder(left, right)
     }
 }
 

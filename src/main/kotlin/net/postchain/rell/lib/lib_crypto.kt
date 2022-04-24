@@ -6,9 +6,14 @@ package net.postchain.rell.lib
 
 import net.postchain.crypto.CURVE_PARAMS
 import net.postchain.crypto.Signature
+import net.postchain.rell.compiler.base.namespace.C_SysNsProtoBuilder
 import net.postchain.rell.compiler.base.utils.C_GlobalFuncBuilder
 import net.postchain.rell.compiler.base.utils.C_LibUtils
-import net.postchain.rell.model.*
+import net.postchain.rell.compiler.base.utils.C_SysFunction
+import net.postchain.rell.model.R_BooleanType
+import net.postchain.rell.model.R_ByteArrayType
+import net.postchain.rell.model.R_IntegerType
+import net.postchain.rell.model.R_TupleType
 import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.utils.PostchainUtils
@@ -23,68 +28,66 @@ import java.security.MessageDigest
 private val SIGNATURE_TYPE = R_TupleType.create(R_ByteArrayType, R_ByteArrayType, R_IntegerType)
 
 object C_Lib_Crypto {
-    const val NAMESPACE_NAME = "crypto"
+    private const val NAMESPACE_NAME = "crypto"
 
-    val GLOBAL_FUNCTIONS = C_GlobalFuncBuilder(null, pure = true)
-            .add("sha256", R_ByteArrayType, listOf(R_ByteArrayType), Sha256)
-            .add("keccak256", R_ByteArrayType, listOf(R_ByteArrayType), Keccak256)
-            .add("verify_signature", R_BooleanType, listOf(R_ByteArrayType, R_ByteArrayType, R_ByteArrayType), VerifySignature)
-            .add("eth_ecrecover", R_ByteArrayType, listOf(R_ByteArrayType, R_ByteArrayType, R_IntegerType, R_ByteArrayType), EthEcRecover)
+    private val GLOBAL_FUNCTIONS = C_GlobalFuncBuilder(null)
+            .add("sha256", R_ByteArrayType, listOf(R_ByteArrayType), CryptoFns.Sha256)
+            .add("keccak256", R_ByteArrayType, listOf(R_ByteArrayType), CryptoFns.Keccak256)
+            .add("verify_signature", R_BooleanType, listOf(R_ByteArrayType, R_ByteArrayType, R_ByteArrayType), CryptoFns.VerifySignature)
+            .add("eth_ecrecover", R_ByteArrayType, listOf(R_ByteArrayType, R_ByteArrayType, R_IntegerType, R_ByteArrayType), CryptoFns.EthEcRecover)
             .build()
 
     private val NAMESPACE_FNS = C_GlobalFuncBuilder(NAMESPACE_NAME)
-            .add("sha256", R_ByteArrayType, listOf(R_ByteArrayType), Sha256)
-            .add("keccak256", R_ByteArrayType, listOf(R_ByteArrayType), Keccak256)
-            .add("verify_signature", R_BooleanType, listOf(R_ByteArrayType, R_ByteArrayType, R_ByteArrayType), VerifySignature)
-            .add("eth_ecrecover", R_ByteArrayType, listOf(R_ByteArrayType, R_ByteArrayType, R_IntegerType, R_ByteArrayType), EthEcRecover)
-            .add("eth_sign", SIGNATURE_TYPE, listOf(R_ByteArrayType, R_ByteArrayType), EthSign)
-            .add("privkey_to_pubkey", R_ByteArrayType, listOf(R_ByteArrayType), PrivKeyToPubKey)
-            .add("privkey_to_pubkey", R_ByteArrayType, listOf(R_ByteArrayType, R_BooleanType), PrivKeyToPubKey)
+            .add("sha256", R_ByteArrayType, listOf(R_ByteArrayType), CryptoFns.Sha256)
+            .add("keccak256", R_ByteArrayType, listOf(R_ByteArrayType), CryptoFns.Keccak256)
+            .add("verify_signature", R_BooleanType, listOf(R_ByteArrayType, R_ByteArrayType, R_ByteArrayType), CryptoFns.VerifySignature)
+            .add("eth_ecrecover", R_ByteArrayType, listOf(R_ByteArrayType, R_ByteArrayType, R_IntegerType, R_ByteArrayType), CryptoFns.EthEcRecover)
+            .add("eth_sign", SIGNATURE_TYPE, listOf(R_ByteArrayType, R_ByteArrayType), CryptoFns.EthSign)
+            .add("privkey_to_pubkey", R_ByteArrayType, listOf(R_ByteArrayType), CryptoFns.PrivKeyToPubKey)
+            .add("privkey_to_pubkey", R_ByteArrayType, listOf(R_ByteArrayType, R_BooleanType), CryptoFns.PrivKeyToPubKey)
             .build()
 
-    val NAMESPACE = C_LibUtils.makeNs(
-            NAMESPACE_FNS
-    )
+    val Sha256 = CryptoFns.Sha256
 
-    val FN_SHA256: R_SysFunction = Sha256
-}
+    fun bind(nsBuilder: C_SysNsProtoBuilder) {
+        C_LibUtils.bindFunctions(nsBuilder, GLOBAL_FUNCTIONS)
 
-private object Sha256: R_SysFunction_1() {
-    override fun call(arg: Rt_Value): Rt_Value {
-        val ba = arg.asByteArray()
-        val md = MessageDigest.getInstance("SHA-256")
-        return Rt_ByteArrayValue(md.digest(ba))
+        val b = C_SysNsProtoBuilder()
+        C_LibUtils.bindFunctions(b, NAMESPACE_FNS)
+        nsBuilder.addNamespace(NAMESPACE_NAME, b.build().toNamespace())
     }
 }
 
-private object Keccak256: R_SysFunction_1() {
-    override fun call(arg: Rt_Value): Rt_Value {
-        val data = arg.asByteArray()
+private object CryptoFns {
+    val Sha256 = C_SysFunction.simple1(pure = true) { a ->
+        val ba = a.asByteArray()
+        val md = MessageDigest.getInstance("SHA-256")
+        Rt_ByteArrayValue(md.digest(ba))
+    }
+
+    val Keccak256 = C_SysFunction.simple1(pure = true) { a ->
+        val data = a.asByteArray()
         val md: MessageDigest = Keccak.Digest256()
         val res = md.digest(data)
-        return Rt_ByteArrayValue(res)
+        Rt_ByteArrayValue(res)
     }
-}
 
-private object VerifySignature: R_SysFunction_3() {
-    override fun call(arg1: Rt_Value, arg2: Rt_Value, arg3: Rt_Value): Rt_Value {
-        val digest = arg1.asByteArray()
+    val VerifySignature = C_SysFunction.simple3(pure = true) { a, b, c ->
+        val digest = a.asByteArray()
         val res = try {
-            val signature = Signature(arg2.asByteArray(), arg3.asByteArray())
+            val signature = Signature(b.asByteArray(), c.asByteArray())
             PostchainUtils.cryptoSystem.verifyDigest(digest, signature)
         } catch (e: Exception) {
             throw Rt_Error("verify_signature", e.message ?: "")
         }
-        return Rt_BooleanValue(res)
+        Rt_BooleanValue(res)
     }
-}
 
-private object EthEcRecover: R_SysFunction_4() {
-    override fun call(arg1: Rt_Value, arg2: Rt_Value, arg3: Rt_Value, arg4: Rt_Value): Rt_Value {
-        val r = arg1.asByteArray()
-        val s = arg2.asByteArray()
-        val recId = arg3.asInteger()
-        val hash = arg4.asByteArray()
+    val EthEcRecover = C_SysFunction.simple4(pure = true) { a, b, c, d ->
+        val r = a.asByteArray()
+        val s = b.asByteArray()
+        val recId = c.asInteger()
+        val hash = d.asByteArray()
 
         check(recId in 0..100000) { "recId out of range: $recId" }
         val rVal = BigInteger(1, r)
@@ -93,14 +96,12 @@ private object EthEcRecover: R_SysFunction_4() {
         val signature = net.postchain.rell.utils.etherjar.Signature(hash, v, rVal, sVal)
         val res = Signer.ecrecover(signature)
 
-        return Rt_ByteArrayValue(res)
+        Rt_ByteArrayValue(res)
     }
-}
 
-private object EthSign: R_SysFunction_2() {
-    override fun call(arg1: Rt_Value, arg2: Rt_Value): Rt_Value {
-        val hash = arg1.asByteArray()
-        val privKey = arg2.asByteArray()
+    val EthSign = C_SysFunction.simple2(pure = true) { a, b ->
+        val hash = a.asByteArray()
+        val privKey = b.asByteArray()
         checkPrivKeySize(privKey, "eth_sign")
 
         val signer = Signer(null)
@@ -115,7 +116,7 @@ private object EthSign: R_SysFunction_2() {
         checkEquals(s.size, 32)
 
         val elems = immListOf(Rt_ByteArrayValue(r), Rt_ByteArrayValue(s), Rt_IntValue(recId.toLong()))
-        return Rt_TupleValue(SIGNATURE_TYPE, elems)
+        Rt_TupleValue(SIGNATURE_TYPE, elems)
     }
 
     private fun bigIntToRS(i: BigInteger): ByteArray {
@@ -131,10 +132,8 @@ private object EthSign: R_SysFunction_2() {
             res
         }
     }
-}
 
-private object PrivKeyToPubKey: R_SysFunction() {
-    override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
+    val PrivKeyToPubKey = C_SysFunction.simple(pure = true) { args ->
         check(args.size == 1 || args.size == 2) { args.size }
 
         val privKey = args[0].asByteArray()
@@ -147,13 +146,13 @@ private object PrivKeyToPubKey: R_SysFunction() {
         val pubKey = q.getEncoded(compress)
 
         checkEquals(pubKey.size, if (compress) 33 else 65)
-        return Rt_ByteArrayValue(pubKey)
+        Rt_ByteArrayValue(pubKey)
     }
-}
 
-private fun checkPrivKeySize(privKey: ByteArray, fn: String) {
-    val expPrivKeySize = 32
-    Rt_Utils.check(privKey.size == expPrivKeySize) {
-        "fn:$fn:privkey_size:${privKey.size}" to "Wrong size of private key: ${privKey.size} instead of $expPrivKeySize"
+    private fun checkPrivKeySize(privKey: ByteArray, fn: String) {
+        val expPrivKeySize = 32
+        Rt_Utils.check(privKey.size == expPrivKeySize) {
+            "fn:$fn:privkey_size:${privKey.size}" to "Wrong size of private key: ${privKey.size} instead of $expPrivKeySize"
+        }
     }
 }

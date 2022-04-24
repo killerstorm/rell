@@ -62,10 +62,7 @@ private class C_NsDef_SysNamespace(ns: C_DefProxy<C_Namespace>): C_NsDef_Namespa
 
 class C_NsDef_UserNamespace(ns: C_DefProxy<C_Namespace>): C_NsDef_Namespace(ns)
 
-private class C_NsDef_Type(
-        ideInfo: IdeSymbolInfo,
-        private val type: C_DefProxy<R_Type>
-): C_NsDef(ideInfo) {
+private class C_NsDef_Type(private val type: C_DefProxy<R_Type>): C_NsDef(type.ideInfo) {
     override fun type() = C_DeclarationType.TYPE
     override fun toNamespaceElement() = C_NamespaceElement(type = type)
 }
@@ -151,23 +148,14 @@ private class C_NsDef_Enum(
     }
 }
 
-private sealed class C_NsDef_Function(
-        ideInfo: IdeSymbolInfo,
-        private val fn: C_GlobalFunction
-): C_NsDef(ideInfo) {
+private sealed class C_NsDef_Function(private val fn: C_GlobalFunction): C_NsDef(fn.ideInfo) {
     final override fun type() = C_DeclarationType.FUNCTION
     final override fun toNamespaceElement() = C_NamespaceElement.create(function = fn)
 }
 
-private class C_NsDef_SysFunction(
-        ideInfo: IdeSymbolInfo,
-        fn: C_GlobalFunction
-): C_NsDef_Function(ideInfo, fn)
+private class C_NsDef_SysFunction(fn: C_GlobalFunction): C_NsDef_Function(fn)
 
-private class C_NsDef_UserFunction(
-        ideInfo: IdeSymbolInfo,
-        private val userFn: C_UserGlobalFunction
-): C_NsDef_Function(ideInfo, userFn) {
+private class C_NsDef_UserFunction(private val userFn: C_UserGlobalFunction): C_NsDef_Function(userFn) {
     override fun addToDefs(b: C_ModuleDefsBuilder) {
         val rFn = userFn.rFunction
         b.functions.add(rFn.moduleLevelName, rFn)
@@ -213,9 +201,18 @@ private class C_NsDef_GlobalConstant(
     }
 }
 
+private class C_NsDef_Property(private val value: C_NamespaceValue): C_NsDef(value.ideInfo) {
+    override fun type() = C_DeclarationType.PROPERTY
+    override fun toNamespaceElement() = C_NamespaceElement.create(value = value)
+}
+
 class C_SysNsProto(entries: List<C_NsEntry>, entities: List<C_NsEntry>) {
     val entries = entries.toImmList()
     val entities = entities.toImmList()
+
+    fun toNamespace(): C_Namespace {
+        return C_NsEntry.createNamespace(entries)
+    }
 }
 
 class C_SysNsProtoBuilder {
@@ -228,6 +225,12 @@ class C_SysNsProtoBuilder {
             check(value)
             field = value
         }
+
+    fun addAll(nsProto: C_SysNsProto) {
+        check(!completed)
+        entries.addAll(nsProto.entries)
+        entities.addAll(nsProto.entities)
+    }
 
     private fun addDef(name: R_Name, def: C_NsDef): C_NsEntry {
         check(!completed)
@@ -245,8 +248,14 @@ class C_SysNsProtoBuilder {
         addNamespace(rName, C_DefProxy.create(ns))
     }
 
-    fun addType(name: R_Name, type: C_DefProxy<R_Type>, ideInfo: IdeSymbolInfo) {
-        addDef(name, C_NsDef_Type(ideInfo, type))
+    fun addType(name: String, type: R_Type) {
+        val rName = R_Name.of(name)
+        val proxy = C_DefProxy.create(type, IdeSymbolInfo.DEF_TYPE)
+        addType(rName, proxy)
+    }
+
+    fun addType(name: R_Name, type: C_DefProxy<R_Type>) {
+        addDef(name, C_NsDef_Type(type))
     }
 
     fun addEntity(name: R_Name, entity: R_EntityDefinition, ideInfo: IdeSymbolInfo) {
@@ -259,8 +268,13 @@ class C_SysNsProtoBuilder {
         addDef(rName, C_NsDef_SysStruct(ideInfo, struct))
     }
 
-    fun addFunction(name: R_Name, fn: C_GlobalFunction, ideInfo: IdeSymbolInfo) {
-        addDef(name, C_NsDef_SysFunction(ideInfo, fn))
+    fun addFunction(name: R_Name, fn: C_GlobalFunction) {
+        addDef(name, C_NsDef_SysFunction(fn))
+    }
+
+    fun addProperty(name: String, value: C_NamespaceValue) {
+        val rName = R_Name.of(name)
+        addDef(rName, C_NsDef_Property(value))
     }
 
     fun build(): C_SysNsProto {
@@ -311,8 +325,8 @@ class C_UserNsProtoBuilder(private val assembler: C_NsAsm_ComponentAssembler) {
         addDef(name, C_NsDef_Enum(ideInfo, e))
     }
 
-    fun addFunction(name: C_Name, fn: C_UserGlobalFunction, ideInfo: IdeSymbolInfo) {
-        addDef(name, C_NsDef_UserFunction(ideInfo, fn))
+    fun addFunction(name: C_Name, fn: C_UserGlobalFunction) {
+        addDef(name, C_NsDef_UserFunction(fn))
     }
 
     fun addOperation(name: C_Name, operation: C_OperationGlobalFunction, ideInfo: IdeSymbolInfo) {

@@ -19,6 +19,7 @@ import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.vexpr.V_ConstantValueExpr
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_ObjectExpr
+import net.postchain.rell.lib.C_LibMemberFunctions
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_EnumValue
 import net.postchain.rell.tools.api.IdeSymbolInfo
@@ -255,7 +256,7 @@ class C_EnumExpr(
 
     override fun member0(ctx: C_ExprContext, memberName: C_Name, safe: Boolean, exprHint: C_ExprHint): C_ExprMember {
         val valueMember = memberValue(ctx, memberName)
-        val fnMember = memberFunction(ctx, memberName)
+        val fnMember = memberFunction(memberName)
 
         val res = C_ExprUtils.valueFunctionExprMember(valueMember, fnMember, exprHint)
         if (res == null) {
@@ -275,8 +276,8 @@ class C_EnumExpr(
         return C_ExprMember(C_VExpr(vExpr), attr.ideInfo)
     }
 
-    private fun memberFunction(ctx: C_ExprContext, memberName: C_Name): C_ExprMember? {
-        val fn = ctx.globalCtx.libFunctions.getTypeStaticFunction(rEnum.type, memberName.rName)
+    private fun memberFunction(memberName: C_Name): C_ExprMember? {
+        val fn = C_LibMemberFunctions.getTypeStaticFunction(rEnum.type, memberName.rName)
         fn ?: return null
         val fnExpr = C_FunctionExpr(memberName, fn)
         return C_ExprMember(fnExpr, fn.ideInfo)
@@ -311,7 +312,7 @@ class C_TypeExpr(private val pos: S_Pos, private val type: R_Type): C_Expr() {
     override fun startPos() = pos
 
     override fun member0(ctx: C_ExprContext, memberName: C_Name, safe: Boolean, exprHint: C_ExprHint): C_ExprMember {
-        val fn = ctx.globalCtx.libFunctions.getTypeStaticFunction(type, memberName.rName)
+        val fn = C_LibMemberFunctions.getTypeStaticFunction(type, memberName.rName)
         if (fn == null) {
             C_Errors.errUnknownName(ctx.msgCtx, type, memberName)
             return C_ExprUtils.errorMember(ctx, memberName.pos)

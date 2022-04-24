@@ -18,11 +18,11 @@ import net.postchain.rell.compiler.base.utils.C_StringQualifiedName
 import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.R_FunctionExtension
-import net.postchain.rell.tools.api.IdeSymbolInfo
-import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.tools.api.IdeOutlineNodeType
 import net.postchain.rell.tools.api.IdeOutlineTreeBuilder
 import net.postchain.rell.utils.toImmList
+import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.tools.api.IdeSymbolKind
 import kotlin.math.min
 
 class S_FunctionDefinition(
@@ -184,7 +184,7 @@ private class C_FunctionCompiler_Regular(base: C_FunctionCompilerBase): C_Functi
 
         if (simpleNameHand != null) {
             simpleNameHand.setIdeInfo(ideInfo)
-            defCtx.mntCtx.nsBuilder.addFunction(simpleNameHand.name, cFn, ideInfo)
+            defCtx.mntCtx.nsBuilder.addFunction(simpleNameHand.name, cFn)
         }
 
         defCtx.executor.onPass(C_CompilerPass.MEMBERS) {
@@ -217,7 +217,7 @@ private class C_FunctionCompiler_Abstract(base: C_FunctionCompilerBase): C_Funct
 
         if (simpleNameHand != null) {
             simpleNameHand.setIdeInfo(ideInfo)
-            defCtx.mntCtx.nsBuilder.addFunction(simpleNameHand.name, cFn, ideInfo)
+            defCtx.mntCtx.nsBuilder.addFunction(simpleNameHand.name, cFn)
         }
 
         defCtx.executor.onPass(C_CompilerPass.MEMBERS) {
@@ -380,7 +380,7 @@ private class C_FunctionCompiler_Extendable(base: C_FunctionCompilerBase): C_Fun
 
         if (simpleNameHand != null) {
             simpleNameHand.setIdeInfo(ideInfo)
-            defCtx.mntCtx.nsBuilder.addFunction(simpleNameHand.name, cFn, ideInfo)
+            defCtx.mntCtx.nsBuilder.addFunction(simpleNameHand.name, cFn)
         }
 
         defCtx.executor.onPass(C_CompilerPass.MEMBERS) {
@@ -422,7 +422,7 @@ private class C_FunctionCompiler_Extend(
 
         if (simpleNameHand != null) {
             simpleNameHand.setIdeInfo(ideInfo)
-            defCtx.mntCtx.nsBuilder.addFunction(simpleNameHand.name, cFn, ideInfo)
+            defCtx.mntCtx.nsBuilder.addFunction(simpleNameHand.name, cFn)
         }
 
         defCtx.executor.onPass(C_CompilerPass.MEMBERS) {

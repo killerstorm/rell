@@ -4,7 +4,7 @@
 
 package net.postchain.rell.lang.type
 
-import net.postchain.rell.compiler.base.utils.C_Constants
+import net.postchain.rell.lib.type.Lib_DecimalMath
 import net.postchain.rell.runtime.Rt_DecimalValue
 import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.test.RellCodeTester
@@ -473,13 +473,13 @@ class DecimalTest: BaseRellTest(false) {
     }
 
     private fun insertDecimal(id: Int, v: String) {
-        tst.insert("c0.data", "v", "$id,'$v' :: ${C_Constants.DECIMAL_SQL_TYPE_STR}")
+        tst.insert("c0.data", "v", "$id,'$v' :: ${Lib_DecimalMath.DECIMAL_SQL_TYPE_STR}")
     }
 
     class DecAddCase(val op: String, val a: String, val b: String, val expected: String?)
 
     class DecVals {
-        val intDigs = C_Constants.DECIMAL_INT_DIGITS
+        val intDigs = Lib_DecimalMath.DECIMAL_INT_DIGITS
         val lim1 = limitMinus(1)
         val lim2 = limitMinus(2)
         val limDiv10 = limitDiv(10)
@@ -490,11 +490,11 @@ class DecimalTest: BaseRellTest(false) {
     }
 
     companion object {
-        val LIMIT = BigInteger.TEN.pow(C_Constants.DECIMAL_INT_DIGITS)
+        val LIMIT = BigInteger.TEN.pow(Lib_DecimalMath.DECIMAL_INT_DIGITS)
 
         fun limitMinus(minus: Long) = "" + (LIMIT - BigInteger.valueOf(minus))
         fun limitDiv(div: Long) = "" + (LIMIT / BigInteger.valueOf(div))
-        fun fracBase(dig: String) = dig.repeat(C_Constants.DECIMAL_FRAC_DIGITS - 2)
+        fun fracBase(dig: String) = dig.repeat(Lib_DecimalMath.DECIMAL_FRAC_DIGITS - 2)
 
         val ADD_TEST_CASES = makeAddCases()
         val SUB_TEST_CASES = makeSubCases()

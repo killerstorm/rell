@@ -148,8 +148,8 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
         val cSummarization = when (ann) {
             C_AtSummarizationKind.GROUP -> C_AtSummarization_Group(pos, type)
             C_AtSummarizationKind.SUM -> compileSummarizationSum(pos, type)
-            C_AtSummarizationKind.MIN -> compileSummarizationMinMax(pos, type, R_CmpOp_Le, Db_SysFn_Aggregation_Min)
-            C_AtSummarizationKind.MAX -> compileSummarizationMinMax(pos, type, R_CmpOp_Ge, Db_SysFn_Aggregation_Max)
+            C_AtSummarizationKind.MIN -> compileSummarizationMinMax(pos, type, R_CmpOp_Le, Db_SysFn_Aggregation.Min)
+            C_AtSummarizationKind.MAX -> compileSummarizationMinMax(pos, type, R_CmpOp_Ge, Db_SysFn_Aggregation.Max)
         }
 
         if (cSummarization == null) {

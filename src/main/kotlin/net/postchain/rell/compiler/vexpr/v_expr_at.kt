@@ -43,7 +43,7 @@ class V_AtEntityExpr(
     override fun member(ctx: C_ExprContext, memberName: C_Name, safe: Boolean, exprHint: C_ExprHint): C_ExprMember {
         val entity = cAtEntity.rEntity
         val valueMember = memberValue(ctx, memberName, entity)
-        val fnMember = memberFunction(ctx, memberName, safe, entity)
+        val fnMember = memberFunction(memberName, safe, entity)
 
         val res = C_ExprUtils.valueFunctionExprMember(valueMember, fnMember, exprHint)
         if (res == null) {
@@ -61,9 +61,9 @@ class V_AtEntityExpr(
         return C_ExprMember(attrExpr, attrRef.ideSymbolInfo())
     }
 
-    private fun memberFunction(ctx: C_ExprContext, memberName: C_Name, safe: Boolean, entity: R_EntityDefinition): C_ExprMember? {
+    private fun memberFunction(memberName: C_Name, safe: Boolean, entity: R_EntityDefinition): C_ExprMember? {
         val memberRef = C_MemberRef(this, memberName, safe)
-        val res = C_MemberResolver.functionForType(ctx, entity.type, memberRef)
+        val res = C_MemberResolver.functionForType(entity.type, memberRef)
         return res
     }
 }

@@ -135,4 +135,9 @@ class IdeSymbolInfoLibTest: BaseIdeSymbolInfoTest() {
         chkExpr("rell.test.pubkeys.alice", *rellTest, "pubkeys:DEF_NAMESPACE", "alice:DEF_CONSTANT")
         chkExpr("rell.test.pubkeys.trudy", *rellTest, "pubkeys:DEF_NAMESPACE", "trudy:DEF_CONSTANT")
     }
+
+    @Test fun testStruct() {
+        file("module.rell", "struct rec { x: integer; } function g() = gtv.from_json('');")
+        chkExpr("rec.from_gtv(g())", "rec:DEF_STRUCT", "from_gtv:DEF_FUNCTION_SYSTEM", "g:DEF_FUNCTION_REGULAR")
+    }
 }

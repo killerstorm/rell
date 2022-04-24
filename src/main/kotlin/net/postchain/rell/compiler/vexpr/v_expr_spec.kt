@@ -157,7 +157,7 @@ class V_ObjectExpr(
 
     override fun member(ctx: C_ExprContext, memberName: C_Name, safe: Boolean, exprHint: C_ExprHint): C_ExprMember {
         val valueMember = memberValue(ctx, memberName)
-        val fnMember = memberFunction(ctx, memberName, safe)
+        val fnMember = memberFunction(memberName, safe)
 
         val res = C_ExprUtils.valueFunctionExprMember(valueMember, fnMember, exprHint)
         if (res == null) {
@@ -175,9 +175,9 @@ class V_ObjectExpr(
         return C_ExprMember(attrExpr, attr.ideInfo)
     }
 
-    private fun memberFunction(ctx: C_ExprContext, memberName: C_Name, safe: Boolean): C_ExprMember? {
+    private fun memberFunction(memberName: C_Name, safe: Boolean): C_ExprMember? {
         val memberRef = C_MemberRef(this, memberName, safe)
-        val res = C_MemberResolver.functionForType(ctx, rObject.type, memberRef)
+        val res = C_MemberResolver.functionForType(rObject.type, memberRef)
         return res
     }
 }

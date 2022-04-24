@@ -13,6 +13,7 @@ import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.utils.C_MessageType
 import net.postchain.rell.compiler.vexpr.V_ConstantValueExpr
 import net.postchain.rell.compiler.vexpr.V_Expr
+import net.postchain.rell.lib.type.C_Lib_Type_Struct
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.tools.api.IdeSymbolInfo
@@ -47,6 +48,7 @@ enum class C_DeclarationType(val msg: String) {
     QUERY("query"),
     IMPORT("import"),
     CONSTANT("constant"),
+    PROPERTY("property"),
     ;
 
     val capitalizedMsg = msg.capitalize()
@@ -213,8 +215,7 @@ class C_NamespaceRef(
     }
 
     companion object {
-        fun create(msgCtx: C_MessageContext, name: C_QualifiedName, proxy: C_DefProxy<C_Namespace>): C_NamespaceRef {
-            val ns = proxy.getDef(msgCtx, name)
+        fun create(msgCtx: C_MessageContext, name: C_QualifiedName, ns: C_Namespace): C_NamespaceRef {
             return C_NamespaceRef(msgCtx, name.parts, ns)
         }
 
@@ -404,7 +405,8 @@ class C_NamespaceValue_Namespace(
         private val nsProxy: C_DefProxy<C_Namespace>
 ): C_NamespaceValue(nsProxy.ideInfo) {
     override fun toExpr(ctx: C_NamespaceValueContext, name: C_QualifiedName): C_Expr {
-        val nsRef = C_NamespaceRef.create(ctx.msgCtx, name, nsProxy)
+        val ns = nsProxy.getDef(ctx.msgCtx, name)
+        val nsRef = C_NamespaceRef.create(ctx.msgCtx, name, ns)
         return C_NamespaceExpr(name, nsRef)
     }
 }
@@ -423,9 +425,8 @@ class C_NamespaceValue_Struct(
         private val struct: R_Struct
 ): C_NamespaceValue(ideInfo) {
     override fun toExpr(ctx: C_NamespaceValueContext, name: C_QualifiedName): C_Expr {
-        val ns = ctx.globalCtx.libFunctions.makeStructNamespace(struct)
-        val nsProxy = C_DefProxy.create(ns)
-        val nsRef = C_NamespaceRef.create(ctx.msgCtx, name, nsProxy)
+        val ns = C_Lib_Type_Struct.getNamespace(struct)
+        val nsRef = C_NamespaceRef.create(ctx.msgCtx, name, ns)
         return C_NamespaceStructExpr(name, struct, nsRef)
     }
 }

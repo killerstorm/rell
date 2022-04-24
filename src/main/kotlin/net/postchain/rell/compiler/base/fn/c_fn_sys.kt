@@ -17,10 +17,13 @@ import net.postchain.rell.compiler.base.expr.C_ExprContext
 import net.postchain.rell.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.base.utils.C_SysFunction
+import net.postchain.rell.compiler.base.utils.C_SysFunctionCtx
 import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.compiler.vexpr.*
-import net.postchain.rell.model.*
-import net.postchain.rell.model.expr.Db_SysFunction
+import net.postchain.rell.model.R_BooleanType
+import net.postchain.rell.model.R_FunctionType
+import net.postchain.rell.model.R_Name
+import net.postchain.rell.model.R_Type
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.LazyString
 
@@ -45,15 +48,14 @@ typealias C_MemberFormalParamsFuncBody = C_FormalParamsFuncBody<C_MemberFuncCase
 
 class C_SysGlobalFormalParamsFuncBody(
         resType: R_Type,
-        private val cFn: C_SysFunction,
-        private val pure: Boolean
+        private val cFn: C_SysFunction
 ): C_GlobalFormalParamsFuncBody(resType) {
     override fun effectiveResType(caseCtx: C_GlobalFuncCaseCtx, type: R_Type) = type
 
     override fun makeCallTarget(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): V_FunctionCallTarget {
         val fullName = caseCtx.qualifiedNameMsgLazy()
-        val (rFn, dbFn) = cFn.compileCall(ctx, caseCtx.linkPos)
-        val desc = V_SysFunctionTargetDescriptor(resType, rFn, dbFn, fullName, pure)
+        val body = cFn.compileCall(C_SysFunctionCtx(ctx, caseCtx.linkPos))
+        val desc = V_SysFunctionTargetDescriptor(resType, body.rFn, body.dbFn, fullName, cFn.pure)
         return V_FunctionCallTarget_SysGlobalFunction(desc)
     }
 }
@@ -61,7 +63,6 @@ class C_SysGlobalFormalParamsFuncBody(
 class C_SysMemberFormalParamsFuncBody(
         resType: R_Type,
         private val cFn: C_SysFunction,
-        private val pure: Boolean
 ): C_MemberFormalParamsFuncBody(resType) {
     override fun effectiveResType(caseCtx: C_MemberFuncCaseCtx, type: R_Type): R_Type {
         return C_Utils.effectiveMemberType(type, caseCtx.member.safe)
@@ -69,8 +70,8 @@ class C_SysMemberFormalParamsFuncBody(
 
     override fun makeCallTarget(ctx: C_ExprContext, caseCtx: C_MemberFuncCaseCtx): V_FunctionCallTarget {
         val fullName = caseCtx.qualifiedNameMsgLazy()
-        val (rFn, dbFn) = cFn.compileCall(ctx, caseCtx.linkPos)
-        val desc = V_SysFunctionTargetDescriptor(resType, rFn, dbFn, fullName, pure)
+        val body = cFn.compileCall(C_SysFunctionCtx(ctx, caseCtx.linkPos))
+        val desc = V_SysFunctionTargetDescriptor(resType, body.rFn, body.dbFn, fullName, cFn.pure)
         return V_FunctionCallTarget_SysMemberFunction(desc, caseCtx.member)
     }
 }
@@ -304,7 +305,6 @@ abstract class C_SpecialSysMemberFunction: C_SysMemberFunction() {
 
 class C_SysMemberProperty(
         val type: R_Type,
-        val rFn: R_SysFunction,
-        val dbFn: Db_SysFunction? = null,
+        val fn: C_SysFunction,
         val pure: Boolean
 )

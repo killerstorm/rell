@@ -10,9 +10,10 @@ import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.compiler.vexpr.*
+import net.postchain.rell.lib.type.C_Lib_Type_Any
+import net.postchain.rell.lib.type.C_Lib_Type_Decimal
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
-import net.postchain.rell.model.lib.R_SysFn_Any
 import net.postchain.rell.model.stmt.R_UpdateStatementWhat
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.immListOf
@@ -440,7 +441,7 @@ object C_BinOp_Plus: C_BinOp_Common() {
 
     private fun adaptToText(ctx: C_ExprContext, vExpr: V_Expr): V_Expr {
         val type = vExpr.type
-        val rFn: R_SysFunction = R_SysFn_Any.ToText
+        val rFn: R_SysFunction = C_Lib_Type_Any.ToText_R
         val dbFn = getDbToStringFunction(type)
 
         val resType: R_Type = R_TextType
@@ -453,9 +454,9 @@ object C_BinOp_Plus: C_BinOp_Common() {
 
     private fun getDbToStringFunction(type: R_Type): Db_SysFunction? {
         return when (type) {
-            R_BooleanType, R_IntegerType, R_RowidType, R_JsonType -> Db_SysFn_ToText
-            R_DecimalType -> Db_SysFn_Decimal.ToText
-            is R_EntityType -> Db_SysFn_ToText
+            R_BooleanType, R_IntegerType, R_RowidType, R_JsonType -> C_Lib_Type_Any.ToText_Db
+            R_DecimalType -> C_Lib_Type_Decimal.ToText_Db
+            is R_EntityType -> C_Lib_Type_Any.ToText_Db
             else -> null
         }
     }

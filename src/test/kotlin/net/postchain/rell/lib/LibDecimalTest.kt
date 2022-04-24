@@ -4,7 +4,7 @@
 
 package net.postchain.rell.lib
 
-import net.postchain.rell.compiler.base.utils.C_Constants
+import net.postchain.rell.lib.type.Lib_DecimalMath
 import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 
@@ -15,7 +15,7 @@ class LibDecimalTest: BaseRellTest(false) {
         chk("decimal.INT_DIGITS", "int[131072]")
         chk("decimal.MIN_VALUE", "dec[0.00000000000000000001]")
 
-        val expMax = "9".repeat(C_Constants.DECIMAL_INT_DIGITS) + "." + "9".repeat(C_Constants.DECIMAL_FRAC_DIGITS)
+        val expMax = "9".repeat(Lib_DecimalMath.DECIMAL_INT_DIGITS) + "." + "9".repeat(Lib_DecimalMath.DECIMAL_FRAC_DIGITS)
         chk("decimal.MAX_VALUE", "dec[$expMax]")
     }
 
@@ -46,8 +46,8 @@ class LibDecimalTest: BaseRellTest(false) {
         chk("decimal('123.456').pow(8)", "dec[53963189778652575.83535123483419320359]")
         chk("decimal('123.456').pow(10)", "dec[822473693827674765061.94409151963591676602]")
 
-        chk("decimal('10').pow(${C_Constants.DECIMAL_INT_DIGITS-1})", "...")
-        chk("decimal('10').pow(${C_Constants.DECIMAL_INT_DIGITS})", "*error*")
+        chk("decimal('10').pow(${Lib_DecimalMath.DECIMAL_INT_DIGITS-1})", "...")
+        chk("decimal('10').pow(${Lib_DecimalMath.DECIMAL_INT_DIGITS})", "*error*")
         chk("decimal.MAX_VALUE.pow(1)", "...")
         chk("decimal.MAX_VALUE.pow(2)", "*error*")
         chk("decimal.MAX_VALUE.pow(100)", "*error*")
@@ -91,7 +91,7 @@ class LibDecimalTest: BaseRellTest(false) {
         chk("decimal('12.34e500').to_text(false)", "text[1234${"0".repeat(498)}]")
         chk("decimal('12.34e500').to_text(true)", "text[1.234E+501]")
 
-        val p = C_Constants.DECIMAL_INT_DIGITS - 3
+        val p = Lib_DecimalMath.DECIMAL_INT_DIGITS - 3
         chk("decimal('123.45678910111213141516e$p').to_text(false)", "text[12345678910111213141516${"0".repeat(p-20)}]")
         chk("decimal('123.45678910111213141516e$p').to_text(true)", "text[1.2345678910111213141516E+${p+2}]")
 
@@ -124,8 +124,8 @@ class LibDecimalTest: BaseRellTest(false) {
         tstCtx.useSql = true
         def("entity user { name; mutable value: decimal; }")
 
-        val expMin = "0." + "0".repeat(C_Constants.DECIMAL_FRAC_DIGITS - 1) + "1"
-        val expMax = "9".repeat(C_Constants.DECIMAL_INT_DIGITS) + "." + "9".repeat(C_Constants.DECIMAL_FRAC_DIGITS)
+        val expMin = "0." + "0".repeat(Lib_DecimalMath.DECIMAL_FRAC_DIGITS - 1) + "1"
+        val expMax = "9".repeat(Lib_DecimalMath.DECIMAL_INT_DIGITS) + "." + "9".repeat(Lib_DecimalMath.DECIMAL_FRAC_DIGITS)
 
         chkOp("{ create user('Bob', decimal.MAX_VALUE); }")
         chk("(user @ { 'Bob' }).value", "dec[$expMax]")

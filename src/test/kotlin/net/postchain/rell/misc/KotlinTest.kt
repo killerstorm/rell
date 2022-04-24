@@ -53,6 +53,13 @@ class KotlinTest {
         assertEquals(listOf(5, 6, null), listOf(5, 6) + f(-7))
     }
 
+    @Test fun testMapPlusMap() {
+        val m1 = mapOf(1 to "A", 2 to "B")
+        val m2 = mapOf(2 to "C", 3 to "D")
+        assertEquals(mapOf(1 to "A", 2 to "C", 3 to "D"), m1 + m2)
+        assertEquals(mapOf(2 to "B", 3 to "D", 1 to "A"), m2 + m1)
+    }
+
     @Test fun testIntRangeStep() {
         assertEquals(listOf<Int>().indices.step(2).map { it }, listOf())
         assertEquals(listOf(1).indices.step(2).map { it }, listOf(0))

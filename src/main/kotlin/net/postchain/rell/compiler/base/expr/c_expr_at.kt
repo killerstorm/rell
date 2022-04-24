@@ -159,7 +159,7 @@ class C_AtSummarization_Aggregate_Sum(
 ): C_AtSummarization_Aggregate(pos, valueType) {
     override fun getResultType(hasGroup: Boolean) = valueType
     override fun compileR(appCtx: C_AppContext) = R_ColAtFieldSummarization_Aggregate_Sum(rOp, zeroValue)
-    override fun compileDb0() = Db_SysFn_Aggregation_Sum
+    override fun compileDb0() = Db_SysFn_Aggregation.Sum
 }
 
 class C_AtSummarization_Aggregate_MinMax(

@@ -11,6 +11,8 @@ import net.postchain.rell.compiler.base.core.C_Types
 import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.compiler.vexpr.*
+import net.postchain.rell.lib.C_LibMemberFunctions
+import net.postchain.rell.lib.type.C_Lib_Type_Struct
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.R_CollectionKind
 import net.postchain.rell.model.expr.R_CollectionKind_List
@@ -855,7 +857,7 @@ class S_MirrorStructExpr(pos: S_Pos, val mutable: Boolean, val type: S_Type): S_
         val structType = type.compileMirrorStructType(ctx.nsCtx, mutable)
         structType ?: return C_ExprUtils.errorExpr(ctx, startPos)
 
-        val ns = ctx.globalCtx.libFunctions.makeStructNamespace(structType.struct)
+        val ns = C_Lib_Type_Struct.getNamespace(structType.struct)
         return C_MirrorStructExpr(startPos, structType.struct, ns)
     }
 }

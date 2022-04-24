@@ -11,6 +11,7 @@ import net.postchain.rell.compiler.base.utils.C_Error
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_TypeAdapterExpr
+import net.postchain.rell.lib.type.C_Lib_Type_Decimal
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
 import net.postchain.rell.utils.toImmList
@@ -89,7 +90,7 @@ object C_TypeAdapter_IntegerToDecimal: C_TypeAdapter() {
     }
 
     override fun adaptExprDb(expr: Db_Expr): Db_Expr {
-        return Db_CallExpr(R_DecimalType, Db_SysFn_Decimal.FromInteger, listOf(expr))
+        return Db_CallExpr(R_DecimalType, C_Lib_Type_Decimal.FromInteger_Db, listOf(expr))
     }
 
     override fun toRAdapter(): R_TypeAdapter = R_TypeAdapter_IntegerToDecimal

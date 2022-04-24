@@ -5,8 +5,8 @@
 package net.postchain.rell.model.expr
 
 import net.postchain.rell.compiler.base.utils.C_LateGetter
+import net.postchain.rell.lib.type.C_Lib_Type_Decimal
 import net.postchain.rell.model.*
-import net.postchain.rell.model.lib.R_SysFn_Decimal
 import net.postchain.rell.model.stmt.R_ForIterator
 import net.postchain.rell.model.stmt.R_Statement
 import net.postchain.rell.runtime.*
@@ -393,48 +393,6 @@ class R_WhenExpr(type: R_Type, val chooser: R_WhenChooser, val exprs: List<R_Exp
     }
 }
 
-class R_RequireExpr(
-        type: R_Type,
-        private val expr: R_Expr,
-        private val msgExpr: R_Expr?,
-        private val condition: R_RequireCondition
-): R_Expr(type) {
-    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        val value = expr.evaluate(frame)
-        val res = condition.calculate(value)
-        if (res != null) {
-            return res
-        }
-
-        val msg = if (msgExpr == null) null else {
-            val msgValue = msgExpr.evaluate(frame)
-            msgValue.asString()
-        }
-
-        throw Rt_RequireError(msg)
-    }
-}
-
-sealed class R_RequireCondition {
-    abstract fun calculate(v: Rt_Value): Rt_Value?
-}
-
-object R_RequireCondition_Boolean: R_RequireCondition() {
-    override fun calculate(v: Rt_Value) = if (v.asBoolean()) Rt_UnitValue else null
-}
-
-object R_RequireCondition_Nullable: R_RequireCondition() {
-    override fun calculate(v: Rt_Value) = if (v != Rt_NullValue) v else null
-}
-
-object R_RequireCondition_Collection: R_RequireCondition() {
-    override fun calculate(v: Rt_Value) = if (v != Rt_NullValue && !v.asCollection().isEmpty()) v else null
-}
-
-object R_RequireCondition_Map: R_RequireCondition() {
-    override fun calculate(v: Rt_Value) = if (v != Rt_NullValue && !v.asMap().isEmpty()) v else null
-}
-
 class R_CreateExprAttr(val attr: R_Attribute, private val expr: R_Expr) {
     fun evaluate(frame: Rt_CallFrame) = expr.evaluate(frame)
 }
@@ -674,7 +632,7 @@ object R_TypeAdapter_Direct: R_TypeAdapter() {
 
 object R_TypeAdapter_IntegerToDecimal: R_TypeAdapter() {
     override fun adaptValue(value: Rt_Value): Rt_Value {
-        val r = R_SysFn_Decimal.FromInteger.call(value)
+        val r = C_Lib_Type_Decimal.calcFromInteger(value)
         return r
     }
 }

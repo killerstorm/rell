@@ -482,6 +482,12 @@ class MountTest: BaseRellTest() {
     }
 
     @Test fun testConflictSystemQuery() {
+        chkCompile("query get_rell_version() = 0;", "OK")
+        chkCompile("query get_postchain_version() = 0;", "OK")
+        chkCompile("query get_build() = 0;", "OK")
+        chkCompile("query get_build_details() = 0;", "OK")
+        chkCompile("query get_app_structure() = 0;", "OK")
+
         chkCompile("@mount('rell.') query get_rell_version() = '123';",
                 "ct_err:mnt_conflict:sys:[get_rell_version]:rell.get_rell_version:QUERY:[rell:get_rell_version]")
         chkCompile("@mount('rell.') query get_postchain_version() = '123';",

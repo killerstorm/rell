@@ -10,12 +10,11 @@ import com.google.common.math.LongMath
 import mu.KLogging
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvVirtual
-import net.postchain.rell.compiler.base.utils.C_Constants
+import net.postchain.rell.lib.type.Lib_DecimalMath
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.R_PartialArgMapping
 import net.postchain.rell.model.expr.R_PartialCallMapping
 import net.postchain.rell.model.expr.Rt_FunctionCallTarget
-import net.postchain.rell.runtime.utils.Rt_DecimalUtils
 import net.postchain.rell.runtime.utils.Rt_ValueRecursionDetector
 import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.PostchainUtils
@@ -187,7 +186,7 @@ class Rt_DecimalValue private constructor(val value: BigDecimal): Rt_Value() {
     override fun asDecimal() = value
     override fun asFormatArg() = value
     override fun strCode(showTupleFieldNames: Boolean) = "dec[${str()}]"
-    override fun str() = Rt_DecimalUtils.toString(value)
+    override fun str() = Lib_DecimalMath.toString(value)
     override fun equals(other: Any?) = other === this || (other is Rt_DecimalValue && value == other.value)
     override fun hashCode() = value.hashCode()
 
@@ -205,13 +204,13 @@ class Rt_DecimalValue private constructor(val value: BigDecimal): Rt_Value() {
         }
 
         fun ofTry(v: BigDecimal): Rt_Value? {
-            val t = Rt_DecimalUtils.scale(v)
+            val t = Lib_DecimalMath.scale(v)
             return if (t == null) null else Rt_DecimalValue(t)
         }
 
         fun of(s: String): Rt_Value {
             val v = try {
-                Rt_DecimalUtils.parse(s)
+                Lib_DecimalMath.parse(s)
             } catch (e: NumberFormatException) {
                 throw Rt_Error("decimal:invalid:$s", "Invalid decimal value: '$s'")
             }
@@ -224,7 +223,7 @@ class Rt_DecimalValue private constructor(val value: BigDecimal): Rt_Value() {
         }
 
         fun errOverflow(code: String, msg: String): Rt_Error {
-            val p = C_Constants.DECIMAL_INT_DIGITS
+            val p = Lib_DecimalMath.DECIMAL_INT_DIGITS
             return Rt_Error(code, "$msg (allowed range is -10^$p..10^$p, exclusive)")
         }
     }

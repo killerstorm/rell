@@ -82,16 +82,6 @@ object C_Constants {
 
     val TRANSACTION_ENTITY_RNAME = R_Name.of(TRANSACTION_ENTITY)
     val BLOCK_ENTITY_RNAME = R_Name.of(BLOCK_ENTITY)
-
-    const val DECIMAL_INT_DIGITS = 131072
-    const val DECIMAL_FRAC_DIGITS = 20
-    const val DECIMAL_SQL_TYPE_STR = "NUMERIC"
-    val DECIMAL_SQL_TYPE = SQLDataType.DECIMAL
-
-    const val DECIMAL_PRECISION = DECIMAL_INT_DIGITS + DECIMAL_FRAC_DIGITS
-    val DECIMAL_MIN_VALUE = BigDecimal.ONE.divide(BigDecimal.TEN.pow(DECIMAL_FRAC_DIGITS))
-    val DECIMAL_MAX_VALUE = BigDecimal.TEN.pow(DECIMAL_PRECISION).subtract(BigDecimal.ONE)
-            .divide(BigDecimal.TEN.pow(DECIMAL_FRAC_DIGITS))
 }
 
 class C_ParameterDefaultValue(

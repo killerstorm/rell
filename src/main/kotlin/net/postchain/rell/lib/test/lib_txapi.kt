@@ -10,9 +10,13 @@ import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
 import net.postchain.rell.compiler.base.fn.C_ArgTypeMatcher_List
 import net.postchain.rell.compiler.base.fn.C_ArgTypeMatcher_MirrorStructOperation
-import net.postchain.rell.compiler.base.utils.*
+import net.postchain.rell.compiler.base.namespace.C_SysNsProtoBuilder
+import net.postchain.rell.compiler.base.utils.C_GlobalFuncBuilder
+import net.postchain.rell.compiler.base.utils.C_LibUtils
+import net.postchain.rell.compiler.base.utils.C_MemberFuncBuilder
+import net.postchain.rell.compiler.base.utils.C_MemberFuncTable
+import net.postchain.rell.lib.type.C_Lib_Type_Struct
 import net.postchain.rell.model.*
-import net.postchain.rell.model.lib.R_SysFn_Struct
 import net.postchain.rell.module.GtvRtConversion
 import net.postchain.rell.module.GtvRtConversion_None
 import net.postchain.rell.runtime.*
@@ -23,7 +27,7 @@ import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmSet
 import java.util.*
 
-object C_Lib_Rell_Test {
+object C_Lib_Test {
     const val MODULE = "rell.test"
 
     const val BLOCK_SNAME = "block"
@@ -34,31 +38,41 @@ object C_Lib_Rell_Test {
     const val TX_TYPE_QNAME = "$MODULE.$TX_SNAME"
     const val OP_TYPE_QNAME = "$MODULE.$OP_SNAME"
 
-    private val NAMESPACE_FNS: C_GlobalFuncTable = let {
-        val b = C_GlobalFuncBuilder(
-                "rell.test",
-                typeNames = listOf(BLOCK_SNAME, TX_SNAME, OP_SNAME).map { R_Name.of(it) }.toImmSet()
+    fun bind(nsBuilder: C_SysNsProtoBuilder) {
+        C_Lib_Test_Assert.bind(nsBuilder)
+    }
+
+    fun bindRell(nsBuilder: C_SysNsProtoBuilder) {
+        val b = C_SysNsProtoBuilder()
+
+        b.addType(BLOCK_SNAME, R_TestBlockType)
+        b.addType(TX_SNAME, R_TestTxType)
+        b.addType(OP_SNAME, R_TestOpType)
+
+        C_Lib_Test_KeyPairs.bind(b)
+        bindFunctions(b)
+
+        nsBuilder.addNamespace("test", b.build().toNamespace())
+    }
+
+    private fun bindFunctions(b: C_SysNsProtoBuilder) {
+        val fb = C_GlobalFuncBuilder(
+            MODULE,
+            typeNames = listOf(BLOCK_SNAME, TX_SNAME, OP_SNAME).map { R_Name.of(it) }.toImmSet()
         )
-        R_Lib_Block.bindGlobal(b)
-        R_Lib_Tx.bindGlobal(b)
-        R_Lib_Op.bindGlobal(b)
-        R_Lib_Nop.bindGlobal(b)
-        C_Lib_Rell_Test_Assert.FUNCTIONS.addTo(b)
-        b.build()
-    }
 
-    val NAMESPACE = C_LibUtils.makeNsEx(
-            functions = NAMESPACE_FNS,
-            types = mapOf(
-                    BLOCK_SNAME to R_TestBlockType,
-                    TX_SNAME to R_TestTxType,
-                    OP_SNAME to R_TestOpType
-            ),
-            parts = listOf(C_Lib_Rell_Test_KeyPairs.NAMESPACE)
-    )
+        C_Lib_Block.bindGlobal(fb)
+        C_Lib_Tx.bindGlobal(fb)
+        C_Lib_Op.bindGlobal(fb)
+        C_Lib_Nop.bindGlobal(fb)
+
+        C_LibUtils.bindFunctions(b, fb.build())
+
+        C_Lib_Test_Assert.bind(b)
+    }
 }
 
-private object R_TestBlockType: R_LibType(C_Lib_Rell_Test.BLOCK_TYPE_QNAME) {
+private object R_TestBlockType: R_Type(C_Lib_Test.BLOCK_TYPE_QNAME) {
     override fun isReference() = true
     override fun isDirectMutable() = true
     override fun isDirectPure() = false
@@ -66,14 +80,14 @@ private object R_TestBlockType: R_LibType(C_Lib_Rell_Test.BLOCK_TYPE_QNAME) {
     override fun strCode(): String = name
     override fun toMetaGtv() = name.toGtv()
 
-    override fun getMemberFunctions(): C_MemberFuncTable {
+    override fun getMemberFunctions0(): C_MemberFuncTable {
         val b = C_LibUtils.typeMemFuncBuilder(this)
-        R_Lib_Block.bindMember(b)
+        C_Lib_Block.bindMember(b)
         return b.build()
     }
 }
 
-private object R_TestTxType: R_LibType(C_Lib_Rell_Test.TX_TYPE_QNAME) {
+private object R_TestTxType: R_Type(C_Lib_Test.TX_TYPE_QNAME) {
     override fun isReference() = true
     override fun isDirectMutable() = true
     override fun isDirectPure() = false
@@ -81,23 +95,23 @@ private object R_TestTxType: R_LibType(C_Lib_Rell_Test.TX_TYPE_QNAME) {
     override fun strCode(): String = name
     override fun toMetaGtv() = name.toGtv()
 
-    override fun getMemberFunctions(): C_MemberFuncTable {
+    override fun getMemberFunctions0(): C_MemberFuncTable {
         val b = C_LibUtils.typeMemFuncBuilder(this)
-        R_Lib_Tx.bindMember(b)
+        C_Lib_Tx.bindMember(b)
         return b.build()
     }
 }
 
-object R_TestOpType: R_LibType(C_Lib_Rell_Test.OP_TYPE_QNAME) {
+object R_TestOpType: R_Type(C_Lib_Test.OP_TYPE_QNAME) {
     override fun isReference() = true
     override fun isDirectPure() = false
     override fun createGtvConversion(): GtvRtConversion = GtvRtConversion_None
     override fun strCode(): String = name
     override fun toMetaGtv() = name.toGtv()
 
-    override fun getMemberFunctions(): C_MemberFuncTable {
+    override fun getMemberFunctions0(): C_MemberFuncTable {
         val b = C_LibUtils.typeMemFuncBuilder(this)
-        R_Lib_Op.bindMember(b)
+        C_Lib_Op.bindMember(b)
         return b.build()
     }
 }
@@ -146,10 +160,10 @@ private class BlockCommonFunctions(
 
 private class TxCommonFunctions(private val txGetter: (ctx: Rt_CallContext, self: Rt_Value) -> Rt_TestTxValue) {
     fun bind(b: C_MemberFuncBuilder) {
-        b.add("sign", R_TestTxType, listOf(R_ListType(C_Lib_Rell_Test_KeyPairs.KEYPAIR_TYPE)), sign_listOfKeyPair)
+        b.add("sign", R_TestTxType, listOf(R_ListType(C_Lib_Test_KeyPairs.KEYPAIR_TYPE)), sign_listOfKeyPair)
         b.add("sign", R_TestTxType, listOf(R_ListType(R_ByteArrayType)), sign_listOfByteArray)
         b.addOneMany("sign", R_TestTxType, listOf(), R_ByteArrayType, sign_byteArrays)
-        b.addOneMany("sign", R_TestTxType, listOf(), C_Lib_Rell_Test_KeyPairs.KEYPAIR_TYPE, sign_keyPairs)
+        b.addOneMany("sign", R_TestTxType, listOf(), C_Lib_Test_KeyPairs.KEYPAIR_TYPE, sign_keyPairs)
     }
 
     private val sign_listOfKeyPair = object: R_SysFunctionEx_2() {
@@ -164,14 +178,14 @@ private class TxCommonFunctions(private val txGetter: (ctx: Rt_CallContext, self
         }
     }
 
-    private val sign_keyPairs = object: R_SysFunction() {
+    private val sign_keyPairs = object: R_SysFunction {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             check(args.isNotEmpty())
             return signByKeyPairs(ctx, args[0], args.subList(1, args.size))
         }
     }
 
-    private val sign_byteArrays = object: R_SysFunction() {
+    private val sign_byteArrays = object: R_SysFunction {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             check(args.size >= 1)
             return signByByteArrays(ctx, args[0], args.subList(1, args.size))
@@ -181,7 +195,7 @@ private class TxCommonFunctions(private val txGetter: (ctx: Rt_CallContext, self
     private fun signByKeyPairs(ctx: Rt_CallContext, self: Rt_Value, keyPairs: List<Rt_Value>): Rt_Value {
         val tx = txGetter(ctx, self)
         for (keyPairValue in keyPairs) {
-            val keyPair = C_Lib_Rell_Test_KeyPairs.structToKeyPair(keyPairValue)
+            val keyPair = C_Lib_Test_KeyPairs.structToKeyPair(keyPairValue)
             tx.sign(keyPair)
         }
         return tx
@@ -213,11 +227,11 @@ private class TxCommonFunctions(private val txGetter: (ctx: Rt_CallContext, self
     }
 }
 
-private object R_Lib_Block {
-    private val common = BlockCommonFunctions(C_Lib_Rell_Test.BLOCK_TYPE_QNAME) { _, v -> asTestBlock(v) }
+private object C_Lib_Block {
+    private val common = BlockCommonFunctions(C_Lib_Test.BLOCK_TYPE_QNAME) { _, v -> asTestBlock(v) }
 
     fun bindGlobal(b: C_GlobalFuncBuilder) {
-        val name = C_Lib_Rell_Test.BLOCK_SNAME
+        val name = C_Lib_Test.BLOCK_SNAME
         b.add(name, R_TestBlockType, listOf(R_ListType(R_TestTxType)), New_ListOfTxs)
         b.addZeroMany(name, R_TestBlockType, listOf(), R_TestTxType, New_Txs)
         b.add(name, R_TestBlockType, listOf(R_ListType(R_TestOpType)), New_ListOfOps)
@@ -246,7 +260,7 @@ private object R_Lib_Block {
         override fun call(ctx: Rt_CallContext, arg: Rt_Value) = newOps(ctx, arg.asList())
     }
 
-    private object New_Ops: R_SysFunction() {
+    private object New_Ops: R_SysFunction {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>) = newOps(ctx, args)
     }
 
@@ -281,7 +295,7 @@ private object R_Lib_Block {
         }
     }
 
-    private object Tx_Ops: R_SysFunction() {
+    private object Tx_Ops: R_SysFunction {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             check(args.isNotEmpty())
             return addOps(ctx, args[0], args.subList(1, args.size))
@@ -304,15 +318,15 @@ private object R_Lib_Block {
     }
 }
 
-private object R_Lib_Tx {
-    private val block = BlockCommonFunctions(C_Lib_Rell_Test.TX_TYPE_QNAME) { _, v ->
+private object C_Lib_Tx {
+    private val block = BlockCommonFunctions(C_Lib_Test.TX_TYPE_QNAME) { _, v ->
         Rt_TestBlockValue(listOf(asTestTx(v).toRaw()))
     }
 
     private val tx = TxCommonFunctions { _, v -> asTestTx(v) }
 
     fun bindGlobal(b: C_GlobalFuncBuilder) {
-        val name = C_Lib_Rell_Test.TX_SNAME
+        val name = C_Lib_Test.TX_SNAME
         b.add(name, R_TestTxType, listOf(R_ListType(R_TestOpType)), New_ListOfOps)
         b.addZeroMany(name, R_TestTxType, listOf(), R_TestOpType, New_Ops)
         b.addEx(name, R_TestTxType, listOf(C_ArgTypeMatcher_List(C_ArgTypeMatcher_MirrorStructOperation)), New_ListOfStructs)
@@ -336,7 +350,7 @@ private object R_Lib_Tx {
         tx.bind(b)
     }
 
-    private object New_Ops: R_SysFunction() {
+    private object New_Ops: R_SysFunction {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             val ops = args.map { asTestOp(it).toRaw() }
             return newTx(ctx, ops)
@@ -350,7 +364,7 @@ private object R_Lib_Tx {
         }
     }
 
-    private object New_Structs: R_SysFunction() {
+    private object New_Structs: R_SysFunction {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             val ops = args.map { structToOp(it) }
             return newTx(ctx, ops)
@@ -411,7 +425,7 @@ private object R_Lib_Tx {
     private object Nop_NoArgs: R_SysFunctionEx_1() {
         override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
             val tx = asTestTx(arg)
-            val op = R_Lib_Nop.callNoArgs(ctx)
+            val op = C_Lib_Nop.callNoArgs(ctx)
             tx.addOp(op.toRaw())
             return tx
         }
@@ -420,7 +434,7 @@ private object R_Lib_Tx {
     private object Nop_OneArg: R_SysFunctionEx_2() {
         override fun call(ctx: Rt_CallContext, arg1: Rt_Value, arg2: Rt_Value): Rt_Value {
             val tx = asTestTx(arg1)
-            val op = R_Lib_Nop.callOneArg(arg2)
+            val op = C_Lib_Nop.callOneArg(arg2)
             tx.addOp(op.toRaw())
             return tx
         }
@@ -433,11 +447,11 @@ private object R_Lib_Tx {
         }
     }
 
-    private fun structToOp(v: Rt_Value): RawTestOpValue = R_SysFn_Struct.ToTestOp.call(v).toRaw()
+    private fun structToOp(v: Rt_Value): RawTestOpValue = C_Lib_Type_Struct.toTestOp(v).toRaw()
 }
 
-private object R_Lib_Op {
-    private val block = BlockCommonFunctions(C_Lib_Rell_Test.OP_TYPE_QNAME) { ctx, v ->
+private object C_Lib_Op {
+    private val block = BlockCommonFunctions(C_Lib_Test.OP_TYPE_QNAME) { ctx, v ->
         Rt_TestBlockValue(listOf(selfToTx(ctx, v).toRaw()))
     }
 
@@ -448,7 +462,7 @@ private object R_Lib_Op {
     }
 
     fun bindGlobal(b: C_GlobalFuncBuilder) {
-        val name = C_Lib_Rell_Test.OP_SNAME
+        val name = C_Lib_Test.OP_SNAME
         b.add(name, R_TestOpType, listOf(R_TextType, R_ListType(R_GtvType)), New_Text_ListOfGtv)
         b.addZeroMany(name, R_TestOpType, listOf(R_TextType), R_GtvType, New_Text_Gtvs)
     }
@@ -480,7 +494,7 @@ private object R_Lib_Op {
 
         val name = R_MountName.ofOpt(nameStr)
         Rt_Utils.check(name != null && !name.isEmpty()) {
-            "${C_Lib_Rell_Test.OP_TYPE_QNAME}:bad_name:$nameStr" to "Bad operation name: '$nameStr'"
+            "${C_Lib_Test.OP_TYPE_QNAME}:bad_name:$nameStr" to "Bad operation name: '$nameStr'"
         }
         name!!
 
@@ -495,7 +509,7 @@ private object R_Lib_Op {
     }
 }
 
-private object R_Lib_Nop {
+private object C_Lib_Nop {
     private val MOUNT_NAME = R_MountName.of("nop")
 
     fun bindGlobal(b: C_GlobalFuncBuilder) {
@@ -537,7 +551,7 @@ class Rt_TestBlockValue(txs: List<RawTestTxValue>): Rt_Value() {
 
     override fun strCode(showTupleFieldNames: Boolean): String {
         val txsStr = txs.joinToString(",") { Rt_TestTxValue.strCode(it.ops, it.signers) }
-        return "${C_Lib_Rell_Test.BLOCK_TYPE_QNAME}[$txsStr]"
+        return "${C_Lib_Test.BLOCK_TYPE_QNAME}[$txsStr]"
     }
 
     override fun str() = "block(${txs.joinToString(",")})"
@@ -593,7 +607,7 @@ class Rt_TestTxValue(
             val opsList = ops.map { Rt_TestOpValue.strCode(it.name, it.args) }
             val signersList = signers.map { it.pub.toHex().substring(0, 6).toLowerCase()}
             val innerStr = (opsList + signersList).joinToString(",")
-            return "${C_Lib_Rell_Test.TX_TYPE_QNAME}[$innerStr]"
+            return "${C_Lib_Test.TX_TYPE_QNAME}[$innerStr]"
         }
 
         fun toString(ops: List<RawTestOpValue>): String {

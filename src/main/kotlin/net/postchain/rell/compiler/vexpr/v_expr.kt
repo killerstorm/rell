@@ -163,7 +163,7 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
         val effectiveBaseType = C_Types.removeNullable(baseType)
 
         val valueMember = C_MemberResolver.valueForType(ctx, effectiveBaseType, memberRef)
-        val fnMember = C_MemberResolver.functionForType(ctx, effectiveBaseType, memberRef)
+        val fnMember = C_MemberResolver.functionForType(effectiveBaseType, memberRef)
 
         val res = C_ExprUtils.valueFunctionExprMember(valueMember, fnMember, exprHint)
         if (res == null) {
