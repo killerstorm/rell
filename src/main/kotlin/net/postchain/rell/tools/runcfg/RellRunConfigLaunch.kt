@@ -8,7 +8,7 @@ import mu.KotlinLogging
 import net.postchain.StorageBuilder
 import net.postchain.api.rest.infra.RestApiConfig
 import net.postchain.config.app.AppConfig
-import net.postchain.core.BlockchainRid
+import net.postchain.common.BlockchainRid
 import net.postchain.core.UserMistake
 import net.postchain.devtools.PostchainTestNode
 import net.postchain.gtv.Gtv

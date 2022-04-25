@@ -4,7 +4,7 @@
 
 package net.postchain.rell.lang.expr.expr
 
-import net.postchain.core.BlockchainRid
+import net.postchain.common.BlockchainRid
 import net.postchain.gtv.GtvNull
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_EntityDefinition

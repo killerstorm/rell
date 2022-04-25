@@ -4,7 +4,7 @@
 
 package net.postchain.rell.test
 
-import net.postchain.core.BlockchainRid
+import net.postchain.common.BlockchainRid
 import net.postchain.gtv.Gtv
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.C_CompilationResult

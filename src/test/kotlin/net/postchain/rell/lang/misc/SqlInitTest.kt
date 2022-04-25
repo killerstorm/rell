@@ -7,7 +7,7 @@ package net.postchain.rell.lang.misc
 import net.postchain.base.BaseEContext
 import net.postchain.base.data.PostgreSQLDatabaseAccess
 import net.postchain.base.data.SQLDatabaseAccess
-import net.postchain.core.BlockchainRid
+import net.postchain.common.BlockchainRid
 import net.postchain.core.EContext
 import net.postchain.rell.sql.SqlInit
 import net.postchain.rell.sql.SqlInitLogging

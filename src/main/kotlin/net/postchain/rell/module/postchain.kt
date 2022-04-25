@@ -8,6 +8,7 @@ import mu.KLogging
 import net.postchain.base.BaseBlockBuilderExtension
 import net.postchain.base.data.DatabaseAccess
 import net.postchain.core.*
+import net.postchain.common.BlockchainRid
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvDictionary
 import net.postchain.gtx.*

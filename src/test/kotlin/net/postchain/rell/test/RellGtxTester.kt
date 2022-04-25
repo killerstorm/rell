@@ -10,6 +10,7 @@ import net.postchain.base.BaseTxEContext
 import net.postchain.base.TxEventSink
 import net.postchain.common.hexStringToByteArray
 import net.postchain.core.*
+import net.postchain.common.BlockchainRid
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
 import net.postchain.gtv.GtvString

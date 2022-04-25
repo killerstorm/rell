@@ -6,7 +6,7 @@ package net.postchain.rell.utils
 
 import mu.KLogging
 import net.postchain.common.hexStringToByteArray
-import net.postchain.core.BlockchainRid
+import net.postchain.common.BlockchainRid
 import net.postchain.gtv.GtvNull
 import net.postchain.rell.compiler.base.core.C_CompilationResult
 import net.postchain.rell.compiler.base.core.C_Compiler

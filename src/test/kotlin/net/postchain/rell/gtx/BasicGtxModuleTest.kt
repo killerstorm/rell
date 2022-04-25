@@ -5,7 +5,7 @@
 package net.postchain.rell.gtx
 
 import net.postchain.base.SECP256K1CryptoSystem
-import net.postchain.core.BlockchainRid
+import net.postchain.common.BlockchainRid
 import net.postchain.devtools.IntegrationTest
 import net.postchain.devtools.KeyPairHelper
 import net.postchain.devtools.PostchainTestNode
