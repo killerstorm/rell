@@ -7,7 +7,6 @@ package net.postchain.rell.utils
 import com.google.gson.GsonBuilder
 import net.postchain.base.data.PostgreSQLDatabaseAccess
 import net.postchain.base.data.SQLDatabaseAccess
-import net.postchain.base.merkle.MerkleHashCalculator
 import net.postchain.common.BlockchainRid
 import net.postchain.core.UserMistake
 import net.postchain.crypto.CryptoSystem
@@ -16,6 +15,7 @@ import net.postchain.gtv.*
 import net.postchain.gtv.gtvml.GtvMLEncoder
 import net.postchain.gtv.gtvml.GtvMLParser
 import net.postchain.gtv.merkle.GtvMerkleHashCalculator
+import net.postchain.gtv.merkle.MerkleHashCalculator
 import net.postchain.gtx.StandardOpsGTXModule
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_ModuleName

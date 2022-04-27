@@ -6,8 +6,8 @@ package net.postchain.rell.lang.type
 
 import net.postchain.gtv.*
 import net.postchain.gtv.merkle.GtvMerkleHashCalculator
-import net.postchain.gtv.path.GtvPathFactory
-import net.postchain.gtv.path.GtvPathSet
+import net.postchain.gtv.merkle.path.GtvPathFactory
+import net.postchain.gtv.merkle.path.GtvPathSet
 import net.postchain.rell.test.BaseGtxTest
 import net.postchain.rell.test.GtvTestUtils
 import net.postchain.rell.utils.PostchainUtils
