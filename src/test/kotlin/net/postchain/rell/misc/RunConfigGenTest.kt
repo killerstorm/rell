@@ -65,7 +65,79 @@ class RunConfigGenTest {
 
         chkFileBin(files, "blockchains/33/0.gtv", """{"signers":["0350FE40766BC0CE8D08B3F5B810E49A8352FDD458606BD5FAFE5ACDCDC8FF3F57"]}""")
 
-        assertEquals(setOf<String>(), files.keys)
+        assertEquals(setOf(), files.keys)
+    }
+
+    @Test fun testNodeConfigIncludeMany() {
+        val configFiles = mapOf(
+            "my-config.properties" to """
+                    include=private.properties
+                    include=public.properties
+                    foo=123
+                    node.0.pubkey=0350fe40766bc0ce8d08b3f5b810e49a8352fdd458606bd5fafe5acdcdc8ff3f57
+                """.trimIndent(),
+            "private.properties" to "private=456\n",
+            "public.properties" to "public=789\n",
+            "other.properties" to "other=101112"
+        )
+
+        val files = generate(mapOf(), configFiles, """
+            <run>
+                <nodes>
+                    <config src="my-config.properties"/>
+                </nodes>
+                <chains>
+                    <chain name="user" iid="33">
+                        <config height="0">
+                        </config>
+                    </chain>
+                </chains>
+            </run>
+        """)
+
+        chkFile(files, "node-config.properties", """
+            include=private.properties
+            include=public.properties
+            foo=123
+            node.0.pubkey=0350fe40766bc0ce8d08b3f5b810e49a8352fdd458606bd5fafe5acdcdc8ff3f57
+        """)
+
+        chkFile(files, "private.properties", "private=456")
+        chkFile(files, "public.properties", "public=789")
+
+        chkFile(files, "blockchains/33/brid.txt")
+        chkFile(files, "blockchains/33/0.xml")
+        chkFile(files, "blockchains/33/0.gtv")
+
+        assertEquals(setOf(), files.keys)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun testNodeConfigIncludeManyCommaSeparated() {
+        val configFiles = mapOf(
+            "my-config.properties" to """
+                    include=private.properties,public.properties
+                    foo=123
+                    node.0.pubkey=0350fe40766bc0ce8d08b3f5b810e49a8352fdd458606bd5fafe5acdcdc8ff3f57
+                """.trimIndent(),
+            "private.properties" to "private=456\n",
+            "public.properties" to "public=789\n",
+            "other.properties" to "other=101112"
+        )
+
+        generate(mapOf(), configFiles, """
+            <run>
+                <nodes>
+                    <config src="my-config.properties"/>
+                </nodes>
+                <chains>
+                    <chain name="user" iid="33">
+                        <config height="0">
+                        </config>
+                    </chain>
+                </chains>
+            </run>
+        """)
     }
 
     @Test fun testAddSignersFalse() {
@@ -871,9 +943,13 @@ class RunConfigGenTest {
         return files
     }
 
-    private fun chkFile(files: MutableMap<String, DirFile>, path: String, expected: String) {
+    private fun chkFile(files: MutableMap<String, DirFile>, path: String): DirFile {
         val actualFile = files.remove(path)
-        assertNotNull(actualFile, "File not found: $path ${files.keys}")
+        return assertNotNull(actualFile, "File not found: $path ${files.keys}")
+    }
+
+    private fun chkFile(files: MutableMap<String, DirFile>, path: String, expected: String) {
+        val actualFile = chkFile(files, path)
         val actual = (actualFile as TextDirFile).text
         assertEquals(expected.trimIndent().trim(), actual.trim())
     }
