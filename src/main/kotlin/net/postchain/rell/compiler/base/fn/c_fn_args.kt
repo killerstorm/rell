@@ -261,7 +261,7 @@ private class C_InternalCallArguments_Partial(
             callInfo: C_FunctionCallInfo,
             args: List<IndexedValue<C_PartialCallArgument>?>
     ): List<IndexedValue<C_PartialCallArgument>> {
-        var nextIndex = (args.mapNotNull { it?.index }.max() ?: -1) + 1
+        var nextIndex = (args.mapNotNull { it?.index }.maxOrNull() ?: -1) + 1
         return callInfo.params.list.mapIndexed { i, param ->
             val arg = args[i]
             if (arg != null) arg else {
@@ -329,7 +329,7 @@ private class C_EffectiveArgsBinder<ArgT>(
             bindNamedArgument(ctx, callInfo, res, name, arg.value, arg.index)
         }
 
-        var defaultIndex = (res.mapNotNull { it?.index }.max() ?: -1) + 1
+        var defaultIndex = (res.mapNotNull { it?.index }.maxOrNull() ?: -1) + 1
 
         for ((i, param) in params.withIndex()) {
             if (res[i] == null) {

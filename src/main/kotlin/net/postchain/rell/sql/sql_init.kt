@@ -202,7 +202,7 @@ private class SqlEntityIniter private constructor(
 ) {
     private val sqlCtx = exeCtx.sqlCtx
 
-    private var nextMetaEntityId = 1 + (metaData.values.map { it.id }.max() ?: -1)
+    private var nextMetaEntityId = 1 + (metaData.values.maxOfOrNull { it.id } ?: -1)
 
     private fun processEntities() {
         val appDefs = sqlCtx.appDefs

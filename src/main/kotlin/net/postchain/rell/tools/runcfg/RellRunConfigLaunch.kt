@@ -127,7 +127,7 @@ private fun runTests(args: CommonArgs) {
 
     val sortedChains = rellAppConf.config.chains.sortedBy { it.iid }
     val tChains = sortedChains.mapNotNull { chain ->
-        val (_, config) = chain.configs.maxBy { it.key }!!
+        val (_, config) = chain.configs.maxByOrNull { it.key }!!
         if (config.appModule == null) null else {
             val modules = listOf(config.appModule)
             val testModules = (modules.toSet() + config.testModules.toSet()).toList()
