@@ -9,13 +9,14 @@ import net.postchain.base.BaseEContext
 import net.postchain.base.BaseTxEContext
 import net.postchain.base.TxEventSink
 import net.postchain.common.hexStringToByteArray
+import net.postchain.common.exception.UserMistake
 import net.postchain.core.*
 import net.postchain.common.BlockchainRid
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
 import net.postchain.gtv.GtvString
 import net.postchain.gtv.GtvType
-import net.postchain.gtx.ExtOpData
+import net.postchain.gtx.data.ExtOpData
 import net.postchain.gtx.GTXModule
 import net.postchain.gtx.GTXSchemaManager
 import net.postchain.rell.model.R_App

@@ -7,10 +7,10 @@ package net.postchain.rell.runtime
 import com.google.common.collect.Sets
 import mu.KLogging
 import net.postchain.common.BlockchainRid
-import net.postchain.core.ByteArrayKey
+import net.postchain.common.data.ByteArrayKey
 import net.postchain.core.TxEContext
 import net.postchain.gtv.Gtv
-import net.postchain.gtx.OpData
+import net.postchain.gtx.data.OpData
 import net.postchain.rell.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.model.*
 import net.postchain.rell.module.RellPostchainModuleEnvironment

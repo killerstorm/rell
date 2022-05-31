@@ -9,7 +9,7 @@ import net.postchain.StorageBuilder
 import net.postchain.api.rest.infra.RestApiConfig
 import net.postchain.config.app.AppConfig
 import net.postchain.common.BlockchainRid
-import net.postchain.core.UserMistake
+import net.postchain.common.exception.UserMistake
 import net.postchain.devtools.PostchainTestNode
 import net.postchain.gtv.Gtv
 import net.postchain.rell.compiler.base.core.C_CompilerModuleSelection

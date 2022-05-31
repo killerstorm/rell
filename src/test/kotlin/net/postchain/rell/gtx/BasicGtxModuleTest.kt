@@ -4,21 +4,21 @@
 
 package net.postchain.rell.gtx
 
-import net.postchain.base.SECP256K1CryptoSystem
+import net.postchain.crypto.Secp256K1CryptoSystem
+import net.postchain.crypto.devtools.KeyPairHelper
 import net.postchain.common.BlockchainRid
 import net.postchain.devtools.IntegrationTest
-import net.postchain.devtools.KeyPairHelper
 import net.postchain.devtools.PostchainTestNode
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory.gtv
-import net.postchain.gtx.GTXDataBuilder
+import net.postchain.gtx.data.GTXDataBuilder
 import org.junit.After
 import org.junit.Test
 import kotlin.test.assertEquals
 
 class BasicGtxModuleTest : IntegrationTest() {
     private var blockchainRid: BlockchainRid? = null
-    private val myCS = SECP256K1CryptoSystem()
+    private val myCS = Secp256K1CryptoSystem()
 
     @Test fun testBuildBlock() {
         val node = setupNode()

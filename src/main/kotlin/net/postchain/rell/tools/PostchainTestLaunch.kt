@@ -8,7 +8,7 @@ import mu.KotlinLogging
 import net.postchain.StorageBuilder
 import net.postchain.config.app.AppConfig
 import net.postchain.config.node.NodeConfigurationProviderFactory
-import net.postchain.core.UserMistake
+import net.postchain.common.exception.UserMistake
 import net.postchain.devtools.TestLauncher
 import net.postchain.gtv.gtvml.GtvMLEncoder
 import net.postchain.rell.RellConfigGen

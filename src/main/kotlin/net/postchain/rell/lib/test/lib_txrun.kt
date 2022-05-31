@@ -18,7 +18,7 @@ import net.postchain.core.EContext
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.mapper.GtvObjectMapper
 import net.postchain.gtx.GTXBlockchainConfigurationFactory
-import net.postchain.gtx.GTXDataBuilder
+import net.postchain.gtx.data.GTXDataBuilder
 import net.postchain.rell.RellConfigGen
 import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.model.R_ModuleName

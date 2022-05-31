@@ -5,7 +5,7 @@
 package net.postchain.rell.lib
 
 import net.postchain.common.hexStringToByteArray
-import net.postchain.gtx.OpData
+import net.postchain.gtx.data.OpData
 import net.postchain.rell.runtime.Rt_OpContext
 import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.test.GtvTestUtils

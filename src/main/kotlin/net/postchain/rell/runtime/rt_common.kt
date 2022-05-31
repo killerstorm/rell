@@ -5,7 +5,7 @@
 package net.postchain.rell.runtime
 
 import mu.KLogging
-import net.postchain.core.ByteArrayKey
+import net.postchain.common.data.ByteArrayKey
 import net.postchain.rell.model.R_MountName
 import net.postchain.rell.sql.SqlConstants
 import net.postchain.rell.utils.toImmSet

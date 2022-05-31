@@ -4,7 +4,7 @@
 
 package net.postchain.rell.gtx
 
-import net.postchain.core.UserMistake
+import net.postchain.common.exception.UserMistake
 import net.postchain.rell.test.BaseGtxTest
 import org.apache.commons.lang3.StringUtils
 import org.junit.Test

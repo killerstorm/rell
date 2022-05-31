@@ -10,7 +10,7 @@ import net.postchain.base.data.PostgreSQLDatabaseAccess
 import net.postchain.base.data.SQLDatabaseAccess
 import net.postchain.common.hexStringToByteArray
 import net.postchain.common.BlockchainRid
-import net.postchain.core.ByteArrayKey
+import net.postchain.common.data.ByteArrayKey
 import net.postchain.core.EContext
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull

@@ -4,7 +4,7 @@
 
 package net.postchain.rell.gtx
 
-import net.postchain.core.UserMistake
+import net.postchain.common.exception.UserMistake
 import net.postchain.rell.test.BaseGtxTest
 import net.postchain.rell.test.RellGtxTester
 import net.postchain.rell.test.SqlTestUtils
