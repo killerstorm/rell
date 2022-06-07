@@ -16,13 +16,11 @@ import net.postchain.rell.compiler.base.namespace.C_DeclarationType
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.base.utils.C_RawQualifiedName
 import net.postchain.rell.compiler.base.utils.toCodeMsg
-import net.postchain.rell.model.R_DefinitionBase
-import net.postchain.rell.model.R_DefinitionNames
-import net.postchain.rell.model.R_FunctionBase
-import net.postchain.rell.model.R_FunctionDefinition
+import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.R_FunctionExtension
 import net.postchain.rell.tools.api.IdeOutlineNodeType
 import net.postchain.rell.tools.api.IdeOutlineTreeBuilder
+import net.postchain.rell.utils.toImmList
 import kotlin.math.min
 
 class S_FunctionDefinition(
@@ -118,6 +116,15 @@ private abstract class C_FunctionCompiler(
         if (header.fnBody != null) {
             val rBody = header.fnBody.compile()
             rFnBase.setBody(rBody)
+            val rHeader = R_FunctionHeader(rBody.type, rBody.params)
+            rFnBase.setHeader(rHeader)
+        } else {
+            // Actually needed only for body-less extendable functions - rell.get_app_structure fails for them
+            // without this special handling (entire "else" part was added).
+            val type = header.returnType()
+            val params = header.params.list.map { R_Param(it.name.str, it.type) }.toImmList()
+            val rHeader = R_FunctionHeader(type, params)
+            rFnBase.setHeader(rHeader)
         }
     }
 

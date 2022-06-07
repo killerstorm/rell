@@ -896,6 +896,16 @@ class FunctionExtendTest: BaseRellTest(false) {
         chkFull("@extend(lib.g) function h(x: integer = 456) = [x + 1]; query q() = h();", "[457]")
     }
 
+    @Test fun testBugNoBodyGetAppStructure() {
+        tst.strictToString = false
+        file("lib.rell", "module; @extendable function f(x: integer): boolean;")
+        def("import lib;")
+        chk("_type_of(lib.f(123))", "boolean")
+        chkFull("", "rell.get_app_structure", listOf(),
+            """{"modules":{"":{"name":""},"lib":{"functions":{"f":{"parameters":[{"name":"x","type":"integer"}],"type":"boolean"}},"name":"lib"}}}"""
+        )
+    }
+
     private fun chkFullOut(code: String, expectedRes: String, vararg expectedOut: String) {
         chkOut()
         chkFull(code, expectedRes)
