@@ -1,11 +1,18 @@
 RELEASE NOTES 0.10.9 (2022-06-07)
 
-1. Tools: multirun.sh --test-filter
+A minor update.
+
+1. Upgrade to Postchain 3.5.0.
+
+2. Tools: multirun.sh --test-filter
 
 Tell multirun.sh which tests to execute with new option --test-filter:
 
     ./multirun.sh -d rell/src --test rell/config/run.xml --test-filter 'test_foo,test_bar,test_special_*'
 
 The new option accepts a comma-separated list of glob patterns, supporting wildcard characters ? and *.
+
 Patterns are compared with: MODULE, MODULE:NAMESPACE.FUNCTION, NAMESPACE.FUNCTION, FUNCTION (i. e. function
 "my_module:ns.test_foo" can be specified via patterns: "test_foo", "ns.test_foo", "my_module:ns.test_foo").
+
+3. Some bugs fixed.

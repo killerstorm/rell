@@ -16,7 +16,9 @@ import net.postchain.core.Transactor
 import net.postchain.core.TxEContext
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvDictionary
-import net.postchain.gtx.*
+import net.postchain.gtx.GTXModule
+import net.postchain.gtx.GTXModuleFactory
+import net.postchain.gtx.GTXOperation
 import net.postchain.gtx.data.ExtOpData
 import net.postchain.gtx.special.GTXSpecialTxExtension
 import net.postchain.rell.compiler.base.core.C_CompilationResult
@@ -34,11 +36,11 @@ import net.postchain.rell.utils.*
 import org.apache.commons.lang3.time.FastDateFormat
 
 object RellVersions {
-    const val VERSION_STR = "0.10.8"
+    const val VERSION_STR = "0.10.9"
     val VERSION = R_LangVersion.of(VERSION_STR)
 
     val SUPPORTED_VERSIONS =
-            listOf("0.10.0", "0.10.1", "0.10.2", "0.10.3", "0.10.4", "0.10.5", "0.10.6", "0.10.7", "0.10.8")
+            listOf("0.10.0", "0.10.1", "0.10.2", "0.10.3", "0.10.4", "0.10.5", "0.10.6", "0.10.7", "0.10.8", "0.10.9")
             .map { R_LangVersion.of(it) }
             .toImmSet()
 
