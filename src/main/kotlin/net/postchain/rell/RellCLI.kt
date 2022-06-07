@@ -129,7 +129,7 @@ private fun runApp(
 }
 
 private fun runSingleModuleTests(args: RellCliArgsEx, app: R_App, module: R_Module, entryRoutine: R_QualifiedName?) {
-    val fns = TestRunner.getTestFunctions(module)
+    val fns = TestRunner.getTestFunctions(module, TestMatcher.ANY)
             .filter { entryRoutine == null || it.names.qualifiedName == entryRoutine.str() }
     runTests(args, app, fns)
 }
@@ -145,7 +145,7 @@ private fun runMultiModuleTests(args: RellCliArgsEx, modules: List<String>) {
     val modSel = C_CompilerModuleSelection(listOf(), rModules)
     val app = RellCliUtils.compileApp(sourceDir, modSel, args.raw.quiet, C_CompilerOptions.DEFAULT)
 
-    val testFns = TestRunner.getTestFunctions(app)
+    val testFns = TestRunner.getTestFunctions(app, TestMatcher.ANY)
     runTests(args, app, testFns)
 }
 

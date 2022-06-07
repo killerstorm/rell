@@ -7,9 +7,9 @@ package net.postchain.rell.tools.runcfg
 import mu.KotlinLogging
 import net.postchain.StorageBuilder
 import net.postchain.api.rest.infra.RestApiConfig
-import net.postchain.config.app.AppConfig
 import net.postchain.common.BlockchainRid
 import net.postchain.common.exception.UserMistake
+import net.postchain.config.app.AppConfig
 import net.postchain.devtools.PostchainTestNode
 import net.postchain.gtv.Gtv
 import net.postchain.rell.compiler.base.core.C_CompilerModuleSelection
@@ -46,7 +46,9 @@ private fun main0(args: RellRunConfigLaunchCliArgs) {
     val commonArgs = CommonArgs(runConfigFile, sourceDir, sourceVer)
 
     if (args.test) {
-        runTests(commonArgs)
+        val filter = args.testFilter
+        val matcher = TestMatcher.make(filter ?: "*")
+        runTests(commonArgs, matcher)
     } else {
         runApp(commonArgs)
     }
@@ -113,7 +115,7 @@ private fun startPostchainNode(rellAppConf: RellPostAppCliConfig): AppConfig {
     return nodeAppConf
 }
 
-private fun runTests(args: CommonArgs) {
+private fun runTests(args: CommonArgs, matcher: TestMatcher) {
     val compilerOptions = C_CompilerOptions.forLangVersion(args.sourceVer)
 
     val rellAppConf = generateRunConfig(args, true)
@@ -152,7 +154,7 @@ private fun runTests(args: CommonArgs) {
             val chainCtx = PostchainUtils.createChainContext(tChain.gtvConfig, tChain.rApp, chainRid)
 
             val testCtx = TestRunnerContext(sqlCtx, sqlMgr, globalCtx, chainCtx, blockRunnerStrategy, tChain.rApp)
-            val fns = TestRunner.getTestFunctions(tChain.rApp)
+            val fns = TestRunner.getTestFunctions(tChain.rApp, matcher)
 
             val tc = TestRunnerChain(tChain.chain.name, tChain.chain.iid)
             val cases = fns.map { TestRunnerCase(tc, it) }
@@ -194,4 +196,9 @@ private class CommonArgs(
 private class RellRunConfigLaunchCliArgs: RellRunConfigCliArgs() {
     @CommandLine.Option(names = ["--test"], description = ["Run unit tests"])
     var test: Boolean = false
+
+    @CommandLine.Option(names = ["--test-filter"],
+        description = ["Filter test modules and functions (supports glob patterns, comma-separated)"]
+    )
+    var testFilter: String? = null
 }
