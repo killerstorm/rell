@@ -217,10 +217,11 @@ private class C_InternalCallArguments_Full(
         if (argsNz.size != args.size) return null
 
         val exprIndexes = argsNz.map { it.index }
-        checkEquals(exprIndexes.sorted(), callInfo.params.list.indices.toList())
+        if (exprIndexes.sorted() != callInfo.params.list.indices.toList()) {
+            return null
+        }
 
         val exprs = argsNz.sortedBy { it.index }.map { it.value }
-
         return if (errWatcher.hasNewErrors()) null else V_FunctionCallArgs(exprs, exprIndexes)
     }
 

@@ -482,6 +482,11 @@ class FunctionTest: BaseRellTest(false) {
         chkCompile("@extend(f) function(x: integer) {}", "ct_err:[fn:extend:not_extendable:f][fn:extend:not_found:f]")
     }
 
+    @Test fun testBugOddNamedArgument() {
+        chkCompile("function foo(a: text, b: text) {} function bar() { foo(a=\"A\", x=\"X\", b=\"B\"); }",
+            "ct_err:expr:call:unknown_named_arg:foo:x")
+    }
+
     private fun chkFn(fnCode: String, callCode: String, expected: String) {
         chkFnEx(fnCode, "= $callCode ;", expected)
     }
