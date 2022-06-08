@@ -10,7 +10,7 @@ import mu.KLogging
 import net.postchain.base.BaseEContext
 import net.postchain.base.data.PostgreSQLDatabaseAccess
 import net.postchain.base.data.SQLDatabaseAccess
-import net.postchain.core.BlockchainRid
+import net.postchain.common.BlockchainRid
 import net.postchain.core.EContext
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.R_AttributeDefaultValueExpr
@@ -119,7 +119,7 @@ class SqlInit private constructor(
         val sqlAccess: SQLDatabaseAccess = PostgreSQLDatabaseAccess()
         exeCtx.sqlExec.connection { con ->
             sqlAccess.initializeApp(con, PostchainUtils.DATABASE_VERSION)
-            val eCtx: EContext = BaseEContext(con, chainId, 0, sqlAccess)
+            val eCtx: EContext = BaseEContext(con, chainId, sqlAccess)
             sqlAccess.initializeBlockchain(eCtx, bcRid)
         }
     }
@@ -202,7 +202,7 @@ private class SqlEntityIniter private constructor(
 ) {
     private val sqlCtx = exeCtx.sqlCtx
 
-    private var nextMetaEntityId = 1 + (metaData.values.map { it.id }.max() ?: -1)
+    private var nextMetaEntityId = 1 + (metaData.values.maxOfOrNull { it.id } ?: -1)
 
     private fun processEntities() {
         val appDefs = sqlCtx.appDefs

@@ -3,6 +3,7 @@
     <id>dist</id>
     <formats>
         <format>tar.gz</format>
+        <format>zip</format>
         <format>dir</format>
     </formats>
     <baseDirectory>postchain-node</baseDirectory>
@@ -10,14 +11,10 @@
     <dependencySets>
         <dependencySet>
             <outputDirectory>./lib</outputDirectory>
-            <useTransitiveDependencies>false</useTransitiveDependencies>
-            <useProjectArtifact>false</useProjectArtifact>
-            <includes>
-                <include>net.postchain:postchain-base:jar:jar-with-dependencies</include>
-                <include>net.postchain:postchain-devtools:jar</include>
-            </includes>
+            <useTransitiveDependencies>true</useTransitiveDependencies>
+            <useProjectArtifact>true</useProjectArtifact>
             <unpack>false</unpack>
-            <scope>provided</scope>
+            <scope>runtime</scope>
             <unpackOptions>
                 <excludes>
                     <!-- jars to exclude here -->
@@ -25,15 +22,6 @@
             </unpackOptions>
         </dependencySet>
     </dependencySets>
-
-    <files>
-        <file>
-            <source>
-                target/${rell.jarName}.jar
-            </source>
-            <outputDirectory>./lib</outputDirectory>
-        </file>
-    </files>
 
     <fileSets>
         <fileSet>

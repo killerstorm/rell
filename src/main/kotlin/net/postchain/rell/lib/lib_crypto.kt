@@ -4,8 +4,8 @@
 
 package net.postchain.rell.lib
 
-import net.postchain.base.CURVE_PARAMS
-import net.postchain.core.Signature
+import net.postchain.crypto.CURVE_PARAMS
+import net.postchain.crypto.Signature
 import net.postchain.rell.compiler.base.utils.C_GlobalFuncBuilder
 import net.postchain.rell.compiler.base.utils.C_LibUtils
 import net.postchain.rell.model.*

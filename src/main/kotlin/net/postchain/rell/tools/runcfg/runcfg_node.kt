@@ -5,6 +5,7 @@
 package net.postchain.rell.tools.runcfg
 
 import net.postchain.rell.utils.*
+import org.apache.commons.configuration2.PropertiesConfiguration
 import java.io.StringReader
 import java.util.*
 import java.util.regex.Pattern
@@ -87,11 +88,14 @@ object RunConfigNodeConfigGen {
     }
 
     private fun getIncludedFiles(text: String): List<String> {
-        val props = Properties()
-        props.load(StringReader(text))
-        val include = props.getProperty("include")
-        val includes = if (include == null) listOf() else include.split(",").toList()
-        return includes
+        val includes = mutableSetOf<String>()
+        val propsReader = PropertiesConfiguration.PropertiesReader(StringReader(text))
+        while (propsReader.nextProperty()) {
+            if (propsReader.propertyName.equals(PropertiesConfiguration.getInclude(), ignoreCase = true)) {
+                includes.add(propsReader.propertyValue)
+            }
+        }
+        return includes.toImmList()
     }
 
     private fun processSigners(path: String?, text: String, res: MutableSet<Bytes33>) {

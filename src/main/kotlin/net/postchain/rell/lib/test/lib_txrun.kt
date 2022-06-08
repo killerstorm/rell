@@ -4,21 +4,21 @@
 
 package net.postchain.rell.lib.test
 
-import net.postchain.base.BaseBlockchainConfigurationData
 import net.postchain.base.BaseBlockchainContext
 import net.postchain.base.BaseEContext
+import net.postchain.base.configuration.BlockchainConfigurationData
 import net.postchain.base.data.DatabaseAccess
 import net.postchain.base.data.PostgreSQLDatabaseAccess
-import net.postchain.base.secp256k1_derivePubKey
+import net.postchain.crypto.secp256k1_derivePubKey
 import net.postchain.common.hexStringToByteArray
 import net.postchain.core.BlockchainConfiguration
 import net.postchain.core.BlockchainConfigurationFactory
 import net.postchain.core.BlockchainContext
 import net.postchain.core.EContext
 import net.postchain.gtv.Gtv
-import net.postchain.gtv.GtvDictionary
+import net.postchain.gtv.mapper.GtvObjectMapper
 import net.postchain.gtx.GTXBlockchainConfigurationFactory
-import net.postchain.gtx.GTXDataBuilder
+import net.postchain.gtx.data.GTXDataBuilder
 import net.postchain.rell.RellConfigGen
 import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.model.R_ModuleName
@@ -50,7 +50,7 @@ object UnitTestBlockRunner {
             val privKey = keyPair.priv.toByteArray()
             val sigMaker = PostchainUtils.cryptoSystem.buildSigMaker(pubKey, privKey)
 
-            val bcData = BaseBlockchainConfigurationData(gtvConfig as GtvDictionary, bcCtx, sigMaker)
+            val bcData = GtvObjectMapper.fromGtv(gtvConfig, BlockchainConfigurationData::class, mapOf("partialContext" to bcCtx, "sigmaker" to sigMaker))
             val bcConfigFactory: BlockchainConfigurationFactory = GTXBlockchainConfigurationFactory()
             val bcConfig = bcConfigFactory.makeBlockchainConfiguration(bcData)
 
@@ -143,7 +143,7 @@ object UnitTestBlockRunner {
 
     private fun createEContext(con: Connection, bcCtx: BlockchainContext): EContext {
         val dbAccess: DatabaseAccess = PostgreSQLDatabaseAccess()
-        return BaseEContext(con, bcCtx.chainID, bcCtx.nodeID, dbAccess)
+        return BaseEContext(con, bcCtx.chainID, dbAccess)
     }
 
     fun getTestKeyPair(): BytesKeyPair {

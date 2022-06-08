@@ -130,7 +130,7 @@ object RellRunConfigGenerator {
             confText: String,
             parserOpts: RunConfigParserOptions
     ): Rcfg_Run {
-        val xml = RellXmlParser.parse(confPath, confText)
+        val xml = RellXmlParser().parse(confPath, confText)
         val fullXml = RellXmlIncluder.includeFiles(xml, configDir)
         val runConfig = RunConfigParser.parseConfig(fullXml, parserOpts)
         return runConfig

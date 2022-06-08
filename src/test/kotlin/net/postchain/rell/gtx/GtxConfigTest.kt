@@ -4,7 +4,7 @@
 
 package net.postchain.rell.gtx
 
-import net.postchain.core.UserMistake
+import net.postchain.common.exception.UserMistake
 import net.postchain.rell.test.BaseGtxTest
 import org.apache.commons.lang3.StringUtils
 import org.junit.Test
@@ -80,6 +80,7 @@ class GtxConfigTest: BaseGtxTest() {
         chkVersion("0.10.6", "OK")
         chkVersion("0.10.7", "OK")
         chkVersion("0.10.8", "OK")
+        chkVersion("0.10.9", "OK")
     }
 
     @Test fun testSourcesWithVersionOutOfRange() {
@@ -87,7 +88,7 @@ class GtxConfigTest: BaseGtxTest() {
         chkVersion("0.9.0", "$msg: 0.9.0")
         chkVersion("0.9.1", "$msg: 0.9.1")
         chkVersion("0.9.999", "$msg: 0.9.999")
-        chkVersion("0.10.9", "$msg: 0.10.9")
+        chkVersion("0.10.10", "$msg: 0.10.10")
         chkVersion("0.11.0", "$msg: 0.11.0")
         chkVersion("1.0.0", "$msg: 1.0.0")
     }

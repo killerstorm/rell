@@ -6,12 +6,10 @@ package net.postchain.rell.tools.runcfg
 
 import mu.KotlinLogging
 import net.postchain.StorageBuilder
+import net.postchain.api.rest.infra.RestApiConfig
+import net.postchain.common.BlockchainRid
+import net.postchain.common.exception.UserMistake
 import net.postchain.config.app.AppConfig
-import net.postchain.config.node.NodeConfig
-import net.postchain.config.node.NodeConfigurationProviderFactory
-import net.postchain.core.NODE_ID_TODO
-import net.postchain.core.BlockchainRid
-import net.postchain.core.UserMistake
 import net.postchain.devtools.PostchainTestNode
 import net.postchain.gtv.Gtv
 import net.postchain.rell.compiler.base.core.C_CompilerModuleSelection
@@ -48,7 +46,9 @@ private fun main0(args: RellRunConfigLaunchCliArgs) {
     val commonArgs = CommonArgs(runConfigFile, sourceDir, sourceVer)
 
     if (args.test) {
-        runTests(commonArgs)
+        val filter = args.testFilter
+        val matcher = TestMatcher.make(filter ?: "*")
+        runTests(commonArgs, matcher)
     } else {
         runApp(commonArgs)
     }
@@ -71,23 +71,18 @@ private fun runApp(args: CommonArgs) {
         RellCliUtils.compileApp(rellAppConf.sourceDir, modSel, true, C_CompilerOptions.DEFAULT)
     }
 
-    val nodeConf = startPostchainNode(rellAppConf)
+    val appConfig = startPostchainNode(rellAppConf)
 
     log.info("")
     log.info("POSTCHAIN APP STARTED")
-    log.info("    REST API port: ${nodeConf.restApiPort}")
+    log.info("    REST API port: ${RestApiConfig.fromAppConfig(appConfig).port}")
     log.info("")
 }
 
-private fun startPostchainNode(rellAppConf: RellPostAppCliConfig): NodeConfig {
+private fun startPostchainNode(rellAppConf: RellPostAppCliConfig): AppConfig {
     val nodeAppConf = getNodeConfig(rellAppConf, rellAppConf.config.node)
-    val nodeConfPro = NodeConfigurationProviderFactory.createProvider(nodeAppConf)
-    val nodeConf = nodeConfPro.getConfiguration()
 
-    // Wiping DB
-    StorageBuilder.buildStorage(nodeAppConf, NODE_ID_TODO, rellAppConf.config.wipeDb).close()
-
-    val node = PostchainTestNode(nodeConfPro)
+    val node = PostchainTestNode(nodeAppConf, rellAppConf.config.wipeDb)
 
     val chainsSorted = rellAppConf.config.chains.sortedBy { it.iid }
 
@@ -117,10 +112,10 @@ private fun startPostchainNode(rellAppConf: RellPostAppCliConfig): NodeConfig {
         }
     }
 
-    return nodeConf
+    return nodeAppConf
 }
 
-private fun runTests(args: CommonArgs) {
+private fun runTests(args: CommonArgs, matcher: TestMatcher) {
     val compilerOptions = C_CompilerOptions.forLangVersion(args.sourceVer)
 
     val rellAppConf = generateRunConfig(args, true)
@@ -128,13 +123,13 @@ private fun runTests(args: CommonArgs) {
     testNodeConfig ?: throw RellCliErr("Test database configuration not specified in run.xml")
 
     val nodeAppConf = getNodeConfig(rellAppConf, testNodeConfig)
-    val keyPair = getKeyPair(nodeAppConf)
+    val keyPair = BytesKeyPair(nodeAppConf.privKeyByteArray, nodeAppConf.pubKeyByteArray)
 
     class TestChain(val chain: RellPostAppChain, val rApp: R_App, val gtvConfig: Gtv)
 
     val sortedChains = rellAppConf.config.chains.sortedBy { it.iid }
     val tChains = sortedChains.mapNotNull { chain ->
-        val (_, config) = chain.configs.maxBy { it.key }!!
+        val (_, config) = chain.configs.maxByOrNull { it.key }!!
         if (config.appModule == null) null else {
             val modules = listOf(config.appModule)
             val testModules = (modules.toSet() + config.testModules.toSet()).toList()
@@ -146,7 +141,7 @@ private fun runTests(args: CommonArgs) {
 
     val testRes = TestRunnerResults()
 
-    StorageBuilder.buildStorage(nodeAppConf, 0).use { storage ->
+    StorageBuilder.buildStorage(nodeAppConf).use { storage ->
         val sqlMgr = PostchainStorageSqlManager(storage, false)
 
         for (tChain in tChains) {
@@ -159,7 +154,7 @@ private fun runTests(args: CommonArgs) {
             val chainCtx = PostchainUtils.createChainContext(tChain.gtvConfig, tChain.rApp, chainRid)
 
             val testCtx = TestRunnerContext(sqlCtx, sqlMgr, globalCtx, chainCtx, blockRunnerStrategy, tChain.rApp)
-            val fns = TestRunner.getTestFunctions(tChain.rApp)
+            val fns = TestRunner.getTestFunctions(tChain.rApp, matcher)
 
             val tc = TestRunnerChain(tChain.chain.name, tChain.chain.iid)
             val cases = fns.map { TestRunnerCase(tc, it) }
@@ -172,11 +167,6 @@ private fun runTests(args: CommonArgs) {
     if (!ok) {
         exitProcess(1)
     }
-}
-
-private fun getKeyPair(nodeAppConf: AppConfig): BytesKeyPair {
-    val nodeConf = NodeConfigurationProviderFactory.createProvider(nodeAppConf).getConfiguration()
-    return BytesKeyPair(nodeConf.privKeyByteArray, nodeConf.pubKeyByteArray)
 }
 
 private fun generateRunConfig(args: CommonArgs, test: Boolean): RellPostAppCliConfig {
@@ -206,4 +196,9 @@ private class CommonArgs(
 private class RellRunConfigLaunchCliArgs: RellRunConfigCliArgs() {
     @CommandLine.Option(names = ["--test"], description = ["Run unit tests"])
     var test: Boolean = false
+
+    @CommandLine.Option(names = ["--test-filter"],
+        description = ["Filter test modules and functions (supports glob patterns, comma-separated)"]
+    )
+    var testFilter: String? = null
 }

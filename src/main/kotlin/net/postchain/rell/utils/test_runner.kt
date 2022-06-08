@@ -5,12 +5,15 @@
 package net.postchain.rell.utils
 
 import net.postchain.rell.model.R_App
+import net.postchain.rell.model.R_DefinitionNames
 import net.postchain.rell.model.R_FunctionDefinition
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.sql.SqlManager
 import net.postchain.rell.sql.SqlUtils
+import org.apache.commons.lang3.StringUtils
+import java.util.regex.Pattern
 
 private val PRINT_SEPARATOR = "-".repeat(72)
 
@@ -107,16 +110,20 @@ class TestRunnerResults {
 }
 
 object TestRunner {
-    fun getTestFunctions(app: R_App): List<R_FunctionDefinition> {
-        val modules = app.modules.filter { it.test }.sortedBy { it.name }
-        val fns = modules.flatMap { getTestFunctions(it) }
+    fun getTestFunctions(app: R_App, matcher: TestMatcher): List<R_FunctionDefinition> {
+        val modules = app.modules
+            .filter { it.test }
+            .sortedBy { it.name }
+
+        val fns = modules.flatMap { getTestFunctions(it, matcher) }
         return fns
     }
 
-    fun getTestFunctions(module: R_Module): List<R_FunctionDefinition> {
+    fun getTestFunctions(module: R_Module, matcher: TestMatcher): List<R_FunctionDefinition> {
         return module.functions.values
-                .filter { it.moduleLevelName == "test" || it.moduleLevelName.startsWith("test_") }
-                .filter { it.params().isEmpty() }
+            .filter { it.moduleLevelName == "test" || it.moduleLevelName.startsWith("test_") }
+            .filter { it.params().isEmpty() }
+            .filter { matcher.matchFunction(it.names) }
     }
 
     fun runTests(testCtx: TestRunnerContext, cases: List<TestRunnerCase>): Boolean {
@@ -167,6 +174,55 @@ private fun printException(e: Throwable) {
         }
         else -> {
             e.printStackTrace(System.out)
+        }
+    }
+}
+
+class TestMatcher private constructor(private val patterns: List<Pattern>) {
+    fun matchFunction(names: R_DefinitionNames): Boolean {
+        if (match(names.simpleName) || match(names.qualifiedName) || match(names.module)) {
+            return true
+        }
+
+        var appLevelName = names.appLevelName
+        if (names.module.isEmpty() && names.appLevelName == names.qualifiedName) {
+            appLevelName = ":$appLevelName"
+        }
+
+        return match(appLevelName)
+    }
+
+    private fun match(s: String): Boolean {
+        return patterns.any { it.matcher(s).matches() }
+    }
+
+    companion object {
+        val ANY = make("*")
+
+        fun make(patterns: String): TestMatcher {
+            val list = patterns.split(",")
+            val patterns2 = list.map { globToPattern(it) }.toImmList()
+            return TestMatcher(patterns2)
+        }
+
+        fun globToPattern(s: String): Pattern {
+            var pat = s
+            val b = StringBuilder()
+
+            while (true) {
+                val i = StringUtils.indexOfAny(pat, "*?")
+                if (i >= 0) {
+                    if (i > 0) b.append(Pattern.quote(pat.substring(0, i)))
+                    b.append(".")
+                    if (pat[i] == '*') b.append("*")
+                    pat = pat.substring(i + 1)
+                } else {
+                    b.append(Pattern.quote(pat))
+                    break
+                }
+            }
+
+            return Pattern.compile(b.toString())
         }
     }
 }

@@ -4,6 +4,9 @@
 
 package net.postchain.rell.lib
 
+import net.postchain.common.exception.TransactionIncorrect
+import net.postchain.common.exception.UserMistake
+import net.postchain.rell.lib.LibGtvTest.Companion.chkFromGtv
 import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 
@@ -356,7 +359,7 @@ class LibRellTestTxTest: BaseRellTest(false) {
         val expr = "data @? {} ( @sort_desc _=.rowid, _=.x, _=.signers ) limit 1"
         repl.chk(expr, "null")
         repl.chk("val kp = rell.test.keypair(priv = rell.test.privkeys.bob, pub = rell.test.pubkeys.alice);")
-        repl.chk("foo(100).sign(kp).run();", "RTE:fn:rell.test.tx.run:fail:net.postchain.core.UserMistake")
+        repl.chk("foo(100).sign(kp).run();", "RTE:fn:rell.test.tx.run:fail:${TransactionIncorrect::class.qualifiedName}")
         repl.chk(expr, "null")
     }
 
@@ -376,7 +379,7 @@ class LibRellTestTxTest: BaseRellTest(false) {
         file("module.rell", "operation foo(x: integer) { print(x); }")
         initTxChain()
 
-        val err = "RTE:fn:rell.test.tx.run:fail:net.postchain.core.UserMistake"
+        val err = "RTE:fn:rell.test.tx.run:fail:${TransactionIncorrect::class.qualifiedName}"
 
         repl.chk("rell.test.tx(foo(123)).run();", "OUT:123", "null")
         repl.chk("rell.test.tx(rell.test.op('nop')).run();", err)
@@ -415,7 +418,7 @@ class LibRellTestTxTest: BaseRellTest(false) {
         file("module.rell", "operation foo(x: integer) { print(x); }")
         initTxChain()
         repl.chk("foo(123).run();", "OUT:123", "null")
-        repl.chk("foo(123).run();", "RTE:fn:rell.test.op.run:fail:net.postchain.core.UserMistake")
+        repl.chk("foo(123).run();", "RTE:fn:rell.test.op.run:fail:${UserMistake::class.qualifiedName}")
         repl.chk("foo(456).run();", "OUT:456", "null")
         repl.chk("block @* {} ( .block_height )", "[0, 1]")
     }

@@ -4,14 +4,19 @@
 
 package net.postchain.rell.test
 
-import net.postchain.base.*
+import net.postchain.base.BaseBlockEContext
+import net.postchain.base.BaseEContext
+import net.postchain.base.BaseTxEContext
+import net.postchain.base.TxEventSink
 import net.postchain.common.hexStringToByteArray
+import net.postchain.common.exception.UserMistake
 import net.postchain.core.*
+import net.postchain.common.BlockchainRid
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
 import net.postchain.gtv.GtvString
 import net.postchain.gtv.GtvType
-import net.postchain.gtx.ExtOpData
+import net.postchain.gtx.data.ExtOpData
 import net.postchain.gtx.GTXModule
 import net.postchain.gtx.GTXSchemaManager
 import net.postchain.rell.model.R_App
@@ -32,7 +37,6 @@ class RellGtxTester(
 ): RellBaseTester(tstCtx, entityDefs, inserts, gtv) {
     var wrapRtErrors = true
     val extraModuleConfig = mutableMapOf<String, String>()
-    var nodeId: Int = 3377
     var modules: List<String>? = listOf("")
     var configTemplate: String = getDefaultConfigTemplate()
 
@@ -47,7 +51,7 @@ class RellGtxTester(
 
         val dbAccess = PostchainUtils.createDatabaseAccess()
         sqlExec.connection { con ->
-            val ctx = BaseEContext(con, chainId, nodeId, dbAccess)
+            val ctx = BaseEContext(con, chainId, dbAccess)
             dbAccess.initializeBlockchain(ctx, bRid)
             GTXSchemaManager.initializeDB(ctx)
             gtxModule.initializeDB(ctx)
@@ -158,7 +162,7 @@ class RellGtxTester(
         val res = tstCtx.sqlMgr().execute(tx) { sqlExec ->
             sqlExec.connection { con ->
                 val dbAccess = PostchainUtils.createDatabaseAccess()
-                val ctx = BaseEContext(con, chainId, nodeId, dbAccess)
+                val ctx = BaseEContext(con, chainId, dbAccess)
                 code(ctx)
             }
         }
@@ -208,7 +212,7 @@ class RellGtxTester(
 
     private fun makeModuleConfigNode(parts: ModuleConfigParts, tpl: Gtv, root: Boolean): Gtv? {
         return when (tpl.type) {
-            GtvType.NULL, GtvType.BYTEARRAY, GtvType.INTEGER -> tpl
+            GtvType.NULL, GtvType.BYTEARRAY, GtvType.INTEGER, GtvType.BIGINTEGER -> tpl
             GtvType.ARRAY -> GtvFactory.gtv(tpl.asArray().mapNotNull { makeModuleConfigNode(parts, it, false) })
             GtvType.DICT -> {
                 val map = tpl.asDict().entries
@@ -232,6 +236,7 @@ class RellGtxTester(
                     else -> tpl
                 }
             }
+            else -> throw IllegalArgumentException("type ${tpl.type} not supported by rell")
         }
     }
 

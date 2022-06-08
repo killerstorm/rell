@@ -6,12 +6,12 @@ package net.postchain.rell.tools
 
 import mu.KotlinLogging
 import net.postchain.StorageBuilder
-import net.postchain.base.secp256k1_derivePubKey
+import net.postchain.api.rest.infra.RestApiConfig
 import net.postchain.common.hexStringToByteArray
 import net.postchain.common.toHex
 import net.postchain.config.app.AppConfig
 import net.postchain.config.node.NodeConfigurationProviderFactory
-import net.postchain.core.NODE_ID_TODO
+import net.postchain.crypto.secp256k1_derivePubKey
 import net.postchain.devtools.PostchainTestNode
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory.gtv
@@ -51,22 +51,16 @@ private fun main0(args: RunPostchainAppArgs) {
     val configGen = RellConfigGen.create(MainRellCliEnv, target)
 
     val nodeAppConf = AppConfig.fromPropertiesFile(args.nodeConfigFile)
-    val nodeConfPro = NodeConfigurationProviderFactory.createProvider(nodeAppConf)
-
-    val nodeConf = nodeConfPro.getConfiguration()
-    val template = RunPostchainApp.genBlockchainConfigTemplate(nodeConf.pubKeyByteArray, args.sqlLog)
+    val template = RunPostchainApp.genBlockchainConfigTemplate(nodeAppConf.pubKeyByteArray, args.sqlLog)
     val bcConf = configGen.makeConfig(template)
 
-    // Wiping DB
-    StorageBuilder.buildStorage(nodeAppConf, NODE_ID_TODO, true).close()
-
-    val node = PostchainTestNode(nodeConfPro)
+    val node = PostchainTestNode(nodeAppConf, true)
     val brid = node.addBlockchain(0, bcConf)
     node.startBlockchain(0)
 
     log.info("")
     log.info("POSTCHAIN APP STARTED")
-    log.info("    REST API port:  ${nodeConf.restApiPort}")
+    log.info("    REST API port:  ${RestApiConfig.fromAppConfig(nodeAppConf).port}")
     log.info("    blockchain RID: ${brid.toHex()}")
     log.info("")
 }

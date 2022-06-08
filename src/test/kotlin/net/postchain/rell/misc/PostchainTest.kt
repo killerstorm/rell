@@ -59,7 +59,7 @@ class PostchainTest: BaseResourcefulTest() {
         )
 
         val bcRid1 = RellTestUtils.strToBlockchainRid("CEED")
-        sa.initializeBlockchain(BaseEContext(con, 123L, 0, sa), bcRid1)
+        sa.initializeBlockchain(BaseEContext(con, 123L, sa), bcRid1)
 
         chkTables(con,
                 "blockchain_replicas(blockchain_rid:text,node:text)",
@@ -86,7 +86,7 @@ class PostchainTest: BaseResourcefulTest() {
         )
 
         val bcRid2 = RellTestUtils.strToBlockchainRid("FEED")
-        sa.initializeBlockchain(BaseEContext(con, 456L, 0, sa), bcRid2)
+        sa.initializeBlockchain(BaseEContext(con, 456L, sa), bcRid2)
 
         chkTables(con,
                 "blockchain_replicas(blockchain_rid:text,node:text)",

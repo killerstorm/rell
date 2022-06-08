@@ -65,7 +65,79 @@ class RunConfigGenTest {
 
         chkFileBin(files, "blockchains/33/0.gtv", """{"signers":["0350FE40766BC0CE8D08B3F5B810E49A8352FDD458606BD5FAFE5ACDCDC8FF3F57"]}""")
 
-        assertEquals(setOf<String>(), files.keys)
+        assertEquals(setOf(), files.keys)
+    }
+
+    @Test fun testNodeConfigIncludeMany() {
+        val configFiles = mapOf(
+            "my-config.properties" to """
+                    include=private.properties
+                    include=public.properties
+                    foo=123
+                    node.0.pubkey=0350fe40766bc0ce8d08b3f5b810e49a8352fdd458606bd5fafe5acdcdc8ff3f57
+                """.trimIndent(),
+            "private.properties" to "private=456\n",
+            "public.properties" to "public=789\n",
+            "other.properties" to "other=101112"
+        )
+
+        val files = generate(mapOf(), configFiles, """
+            <run>
+                <nodes>
+                    <config src="my-config.properties"/>
+                </nodes>
+                <chains>
+                    <chain name="user" iid="33">
+                        <config height="0">
+                        </config>
+                    </chain>
+                </chains>
+            </run>
+        """)
+
+        chkFile(files, "node-config.properties", """
+            include=private.properties
+            include=public.properties
+            foo=123
+            node.0.pubkey=0350fe40766bc0ce8d08b3f5b810e49a8352fdd458606bd5fafe5acdcdc8ff3f57
+        """)
+
+        chkFile(files, "private.properties", "private=456")
+        chkFile(files, "public.properties", "public=789")
+
+        chkFile(files, "blockchains/33/brid.txt")
+        chkFile(files, "blockchains/33/0.xml")
+        chkFile(files, "blockchains/33/0.gtv")
+
+        assertEquals(setOf(), files.keys)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun testNodeConfigIncludeManyCommaSeparated() {
+        val configFiles = mapOf(
+            "my-config.properties" to """
+                    include=private.properties,public.properties
+                    foo=123
+                    node.0.pubkey=0350fe40766bc0ce8d08b3f5b810e49a8352fdd458606bd5fafe5acdcdc8ff3f57
+                """.trimIndent(),
+            "private.properties" to "private=456\n",
+            "public.properties" to "public=789\n",
+            "other.properties" to "other=101112"
+        )
+
+        generate(mapOf(), configFiles, """
+            <run>
+                <nodes>
+                    <config src="my-config.properties"/>
+                </nodes>
+                <chains>
+                    <chain name="user" iid="33">
+                        <config height="0">
+                        </config>
+                    </chain>
+                </chains>
+            </run>
+        """)
     }
 
     @Test fun testAddSignersFalse() {
@@ -206,7 +278,7 @@ class RunConfigGenTest {
 
         chkFile(files, "node-config.properties", "x=123")
 
-        chkFile(files, "blockchains/33/brid.txt", "F86A2BD7F585D6F32AC27DFA4A8B1A16FC9604E1988EAED8C0B4C0D5619173E9")
+        chkFile(files, "blockchains/33/brid.txt", "06B0881DB7DA985F36A9993FCEA1FC31351764DB03250700848A317517C58EFE")
 
         chkFile(files, "blockchains/33/0.xml", """
             <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -801,6 +873,63 @@ class RunConfigGenTest {
         """)
     }
 
+    // Bug: new line at the end of a <string> tag is not preserved.
+    @Test fun testBugIncludeGeneratedConfigGtvXml() {
+        val gtvXml = """
+            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <dict>
+                <entry key="gtx">
+                    <dict>
+                        <entry key="rell">
+                            <dict>
+                                <entry key="modules">
+                                    <array>
+                                        <string></string>
+                                    </array>
+                                </entry>
+                                <entry key="sources">
+                                    <dict>
+                                        <entry key="main.rell">
+                                            <string>
+                                                // New line is important, testing that it's being preserved.
+                                            </string>
+                                        </entry>
+                                    </dict>
+                                </entry>
+                                <entry key="version">
+                                    <string>0.10.8</string>
+                                </entry>
+                            </dict>
+                        </entry>
+                    </dict>
+                </entry>
+                <entry key="signers">
+                    <array/>
+                </entry>
+            </dict>
+        """.trimIndent()
+
+        val configFiles = mapOf("0.xml" to gtvXml)
+        val sourceFiles = mapOf("main.rell" to "//")
+
+        val files = generate(sourceFiles, configFiles, """
+            <run wipe-db="false">
+                <nodes>
+                    <config add-signers="false">#</config>
+                </nodes>
+                <chains>
+                    <chain name="capchap" iid="0">
+                        <config height="0">
+                            <gtv src="0.xml"/>
+                        </config>
+                    </chain>
+                </chains>
+            </run>
+        """)
+
+        chkFile(files, "blockchains/0/0.xml", gtvXml)
+    }
+
     private fun generate(
             sourceFiles: Map<String, String>,
             configFiles: Map<String, String>,
@@ -814,9 +943,13 @@ class RunConfigGenTest {
         return files
     }
 
-    private fun chkFile(files: MutableMap<String, DirFile>, path: String, expected: String) {
+    private fun chkFile(files: MutableMap<String, DirFile>, path: String): DirFile {
         val actualFile = files.remove(path)
-        assertNotNull(actualFile, "File not found: $path ${files.keys}")
+        return assertNotNull(actualFile, "File not found: $path ${files.keys}")
+    }
+
+    private fun chkFile(files: MutableMap<String, DirFile>, path: String, expected: String) {
+        val actualFile = chkFile(files, path)
         val actual = (actualFile as TextDirFile).text
         assertEquals(expected.trimIndent().trim(), actual.trim())
     }

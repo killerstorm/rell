@@ -1,2 +1,2 @@
 #!/bin/bash
-$(dirname $0)/target/rellr-*.*.*-dist/postchain-node/rellcfg.sh "$@"
+exec "$(dirname $0)"/target/rell-*.*.*-dist/postchain-node/rellcfg.sh "$@"

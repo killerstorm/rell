@@ -9,6 +9,7 @@ import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
 import net.postchain.gtv.GtvNull
 import net.postchain.gtv.GtvType
+import net.postchain.gtv.gtvml.GtvMLParser
 import net.postchain.rell.runtime.utils.toGtv
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
@@ -212,7 +213,7 @@ object RunConfigGtvParser {
             "int" -> {
                 elem.attrs().checkNoMore()
                 elem.checkNoElems()
-                val value = elem.parseText { BigInteger(it) }
+                val value = elem.parseText { it.toLong() }
                 Rcfg_Gtv_Term(GtvFactory.gtv(value))
             }
             "string" -> {

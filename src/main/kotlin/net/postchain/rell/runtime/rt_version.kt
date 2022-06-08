@@ -68,10 +68,15 @@ class Rt_RellVersion private constructor(
             }
 
             val codeVer = RellVersions.VERSION_STR
-            val buildVer = ps.getValue(Rt_RellVersionProperty.RELL_VERSION)
+            val buildVer = parseBuildVersion(ps.getValue(Rt_RellVersionProperty.RELL_VERSION))
             check(buildVer == codeVer) { "Rell version in code = $codeVer, in build = $buildVer" }
 
             return ps.toImmMap()
+        }
+
+        private fun parseBuildVersion(s: String): String {
+            // Remove "-SNAPSHOT", etc.
+            return s.substringBefore("-")
         }
 
         private fun getBuildDescriptor(props: Map<Rt_RellVersionProperty, String>): String {
@@ -88,7 +93,7 @@ class Rt_RellVersion private constructor(
 
         private fun getBuildProperties(): Map<String, String>? {
             try {
-                val url = Resources.getResource(Rt_Utils.javaClass, "/rellr-maven.properties")
+                val url = Resources.getResource(Rt_Utils.javaClass, "/rell-maven.properties")
                 val text = Resources.toString(url, Charsets.UTF_8)
                 val props = Properties()
                 props.load(StringReader(text))

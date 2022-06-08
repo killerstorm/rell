@@ -145,7 +145,7 @@ class RunConfigChainConfigGen private constructor(private val cliEnv: RellCliEnv
             chainGtv.gtv
         } else if (chainGtv.src != null) {
             val text = configDir.readText(chainGtv.src)
-            val elem = RellXmlParser.parse(chainGtv.src, text)
+            val elem = RellXmlParser(preserveWhitespace = true).parse(chainGtv.src, text)
             return RunConfigGtvParser.parseGtvNode(elem, mergeAllowed = true)
         } else {
             Rcfg_Gtv_Dict(mapOf(), Rcfg_Gtv_DictMerge.KEEP_NEW)

@@ -8,9 +8,9 @@ import com.google.common.collect.Sets
 import net.postchain.base.BaseEContext
 import net.postchain.base.data.PostgreSQLDatabaseAccess
 import net.postchain.base.data.SQLDatabaseAccess
+import net.postchain.common.BlockchainRid
+import net.postchain.common.data.ByteArrayKey
 import net.postchain.common.hexStringToByteArray
-import net.postchain.core.BlockchainRid
-import net.postchain.core.ByteArrayKey
 import net.postchain.core.EContext
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
@@ -74,7 +74,7 @@ class RellCodeTester(
     private fun initSqlCreateSysTables(sqlExec: SqlExecutor) {
         val sqlAccess: SQLDatabaseAccess = PostgreSQLDatabaseAccess()
         sqlExec.connection { con ->
-            val eCtx: EContext = BaseEContext(con, chainId, 0, sqlAccess)
+            val eCtx: EContext = BaseEContext(con, chainId, sqlAccess)
             val bcRid = BlockchainRid(blockchainRid.hexStringToByteArray())
             sqlAccess.initializeBlockchain(eCtx, bcRid)
         }
@@ -327,7 +327,7 @@ class RellCodeTester(
 
     private fun runTests(): String {
         val res = processWithTestRunnerCtx { testRunnerCtx ->
-            val testFns = TestRunner.getTestFunctions(testRunnerCtx.app)
+            val testFns = TestRunner.getTestFunctions(testRunnerCtx.app, TestMatcher.ANY)
                     .map { TestRunnerCase(TestRunnerChain("foo", 123), it) }
                     .toImmList()
 

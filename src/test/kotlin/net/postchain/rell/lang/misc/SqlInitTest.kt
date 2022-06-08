@@ -7,7 +7,7 @@ package net.postchain.rell.lang.misc
 import net.postchain.base.BaseEContext
 import net.postchain.base.data.PostgreSQLDatabaseAccess
 import net.postchain.base.data.SQLDatabaseAccess
-import net.postchain.core.BlockchainRid
+import net.postchain.common.BlockchainRid
 import net.postchain.core.EContext
 import net.postchain.rell.sql.SqlInit
 import net.postchain.rell.sql.SqlInitLogging
@@ -685,7 +685,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         tstCtx.sqlMgr().transaction { sqlExec ->
             sqlExec.connection { con ->
                 sqlAccess.initializeApp(con, PostchainUtils.DATABASE_VERSION)
-                val eCtx: EContext = BaseEContext(con, t.chainId, 0, sqlAccess)
+                val eCtx: EContext = BaseEContext(con, t.chainId, sqlAccess)
                 val bcRid: BlockchainRid = BlockchainRid.ZERO_RID
                 sqlAccess.initializeBlockchain(eCtx, bcRid)
             }

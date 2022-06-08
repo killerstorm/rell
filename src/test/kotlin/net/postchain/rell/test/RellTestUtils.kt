@@ -4,7 +4,7 @@
 
 package net.postchain.rell.test
 
-import net.postchain.core.BlockchainRid
+import net.postchain.common.BlockchainRid
 import net.postchain.gtv.Gtv
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.C_CompilationResult
@@ -24,7 +24,7 @@ import net.postchain.rell.utils.immListOf
 object RellTestUtils {
     const val MAIN_FILE = "main.rell"
 
-    const val RELL_VER = "0.10.8"
+    const val RELL_VER = "0.10.9"
 
     val DEFAULT_COMPILER_OPTIONS = C_CompilerOptions.builder().hiddenLib(true).build()
 

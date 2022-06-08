@@ -13,6 +13,7 @@ import net.postchain.rell.model.stmt.R_StatementResult_Return
 import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.toGtv
 import net.postchain.rell.utils.checkEquals
+import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmList
 
 class R_Param(val name: String, val type: R_Type) {
@@ -188,6 +189,12 @@ class R_QueryDefinition(
     }
 }
 
+class R_FunctionHeader(val type: R_Type, val params: List<R_Param>) {
+    companion object {
+        val ERROR = R_FunctionHeader(R_CtErrorType, immListOf())
+    }
+}
+
 class R_FunctionBody(
         val type: R_Type,
         val varParams: List<R_VarParam>,
@@ -199,7 +206,7 @@ class R_FunctionBody(
     companion object {
         val ERROR = R_FunctionBody(
                 R_CtErrorType,
-                listOf(),
+                immListOf(),
                 C_Utils.ERROR_STATEMENT,
                 R_CallFrame.ERROR
         )
@@ -207,12 +214,18 @@ class R_FunctionBody(
 }
 
 class R_FunctionBase {
+    private val headerLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_FunctionHeader.ERROR)
     private val bodyLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_FunctionBody.ERROR)
+
+    fun setHeader(header: R_FunctionHeader) {
+        headerLate.set(header)
+    }
 
     fun setBody(body: R_FunctionBody) {
         bodyLate.set(body)
     }
 
+    fun getHeader() = headerLate.get()
     fun getBody() = bodyLate.get()
 
     fun callTop(exeCtx: Rt_ExecutionContext, args: List<Rt_Value>, dbUpdateAllowed: Boolean): Rt_Value {
@@ -272,10 +285,10 @@ class R_FunctionDefinition(
     }
 
     override fun toMetaGtv(): Gtv {
-        val body = fnBase.getBody()
+        val header = fnBase.getHeader()
         return mapOf(
-                "type" to body.type.toMetaGtv(),
-                "parameters" to params().map { it.toMetaGtv() }.toGtv()
+                "type" to header.type.toMetaGtv(),
+                "parameters" to header.params.map { it.toMetaGtv() }.toGtv()
         ).toGtv()
     }
 }

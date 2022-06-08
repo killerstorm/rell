@@ -410,8 +410,8 @@ class C_LibFunctions(private val opts: C_CompilerOptions) {
 
     fun getTypeStaticFunction(type: R_Type, name: String): C_GlobalFunction? {
         val b = typeGlobalFuncBuilder(type, pure = true)
-        when (type) {
-            is R_EnumType -> getEnumStaticFns(b, type.enum)
+        if (type is R_EnumType) {
+            getEnumStaticFns(b, type.enum)
         }
         val fns = b.build()
         val fn = fns.get(name)
