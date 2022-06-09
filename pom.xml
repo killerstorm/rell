@@ -11,7 +11,7 @@
     <name>rell</name>
 
     <properties>
-        <postchain.version>3.5.0</postchain.version>
+        <postchain.version>3.6.0-SNAPSHOT</postchain.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <kotlin.version>1.6.21</kotlin.version>
         <junit.version>4.12</junit.version>
