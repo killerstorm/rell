@@ -234,7 +234,8 @@ private class C_ModuleBasis(
                 appCtx,
                 modProvider,
                 module,
-                isTestDependency = extModule.midModule.isTestDependency
+                selected = extModule.midModule.isSelected,
+                isTestDependency = extModule.midModule.isTestDependency,
         )
 
         val compiledFiles = extModule.compileFiles(modCtx)

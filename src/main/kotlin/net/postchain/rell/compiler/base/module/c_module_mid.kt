@@ -57,7 +57,8 @@ class C_MidModule(
         val header: C_MidModuleHeader?,
         files: List<C_MidModuleFile>,
         val isDirectory: Boolean,
-        val isTestDependency: Boolean
+        val isTestDependency: Boolean,
+        val isSelected: Boolean,
 ) {
     private val files = files.toImmList()
 

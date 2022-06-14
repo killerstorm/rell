@@ -184,6 +184,7 @@ class C_ModuleCompiler private constructor(private val modCtx: C_ModuleContext) 
                 external = modCtx.external,
                 externalChain = modCtx.extChain?.name,
                 test = modCtx.test,
+                selected = modCtx.selected,
                 entities = defs.entities,
                 objects = defs.objects,
                 structs = defs.structs.mapValues { (_, v) -> v.structDef },

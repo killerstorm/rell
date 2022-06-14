@@ -371,7 +371,7 @@ object C_Compiler {
 
         checkMainModules(msgCtx, modSel, midModules)
 
-        val testModules = midModules.filter { it.header != null && it.header.test }
+        val testModules = midModules.filter { it.header != null && it.header.test && it.isSelected }
         val selModules = (modSel.modules + testModules.map { it.moduleName })
 
         val midCompiler = C_MidModuleCompiler(msgCtx, midModules)

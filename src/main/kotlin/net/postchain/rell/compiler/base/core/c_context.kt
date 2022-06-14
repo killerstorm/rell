@@ -93,6 +93,7 @@ sealed class C_ModuleContext(
     abstract val external: Boolean
     abstract val directory: Boolean
     abstract val test: Boolean
+    abstract val selected: Boolean
     abstract val mountName: R_MountName
     abstract val sysDefs: C_SystemDefs
     abstract val repl: Boolean
@@ -136,7 +137,8 @@ class C_RegularModuleContext(
         appCtx: C_AppContext,
         modProvider: C_ModuleProvider,
         private val module: C_Module,
-        override val isTestDependency: Boolean
+        override val selected: Boolean,
+        override val isTestDependency: Boolean,
 ): C_ModuleContext(
         appCtx,
         modProvider,
@@ -187,6 +189,7 @@ class C_ReplModuleContext(
     override val external = false
     override val directory = false
     override val test = false
+    override val selected = true // Doesn't really matter
     override val mountName = R_MountName.EMPTY
     override val sysDefs = appCtx.sysDefs
     override val repl = true
