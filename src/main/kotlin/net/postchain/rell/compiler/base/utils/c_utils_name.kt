@@ -77,6 +77,7 @@ class C_StringQualifiedName private constructor(parts: List<String>): C_GenericQ
         fun of(parts: List<String>): C_StringQualifiedName = ofNames0(parts) { C_StringQualifiedName(it) }
         fun of(name: String): C_StringQualifiedName = ofName0(name) { C_StringQualifiedName(it) }
         fun of(cName: C_QualifiedName): C_StringQualifiedName = of(cName.parts.map { it.str })
+        fun of(parent: R_QualifiedName, name: R_Name): C_StringQualifiedName = of(parent.parts.map { it.str } + listOf(name.str))
     }
 }
 

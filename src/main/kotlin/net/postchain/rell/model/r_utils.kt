@@ -60,6 +60,15 @@ sealed class R_GenericQualifiedName<T: R_GenericQualifiedName<T>>(parts: List<R_
         return child(rName)
     }
 
+    fun child(name: T): T {
+        return when {
+            isEmpty() -> name
+            name.isEmpty() -> self()
+            else -> create(parts + name.parts)
+        }
+    }
+
+    protected abstract fun self(): T
     protected abstract fun create(parts: List<R_Name>): T
 
     final override fun compareTo(other: T): Int {
@@ -85,6 +94,7 @@ private fun <T: R_GenericQualifiedName<T>> qNameOfOpt0(s: String, empty: T, crea
 }
 
 class R_QualifiedName(parts: List<R_Name>): R_GenericQualifiedName<R_QualifiedName>(parts) {
+    override fun self() = this
     override fun create(parts: List<R_Name>) = R_QualifiedName(parts)
 
     companion object {
@@ -95,6 +105,7 @@ class R_QualifiedName(parts: List<R_Name>): R_GenericQualifiedName<R_QualifiedNa
 }
 
 class R_ModuleName(parts: List<R_Name>): R_GenericQualifiedName<R_ModuleName>(parts) {
+    override fun self() = this
     override fun create(parts: List<R_Name>) = R_ModuleName(parts)
 
     companion object {
@@ -105,6 +116,7 @@ class R_ModuleName(parts: List<R_Name>): R_GenericQualifiedName<R_ModuleName>(pa
 }
 
 class R_MountName(parts: List<R_Name>): R_GenericQualifiedName<R_MountName>(parts) {
+    override fun self() = this
     override fun create(parts: List<R_Name>) = R_MountName(parts)
 
     companion object {

@@ -8,14 +8,8 @@ import net.postchain.rell.compiler.base.core.*
 import net.postchain.rell.compiler.base.def.*
 import net.postchain.rell.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.compiler.base.fn.C_FunctionUtils
-import net.postchain.rell.compiler.base.modifier.C_ModifierFields
-import net.postchain.rell.compiler.base.modifier.C_ModifierTargetType
-import net.postchain.rell.compiler.base.modifier.C_ModifierValue
-import net.postchain.rell.compiler.base.modifier.C_ModifierValues
-import net.postchain.rell.compiler.base.module.C_MidModuleMember
-import net.postchain.rell.compiler.base.module.C_MidModuleMember_Basic
-import net.postchain.rell.compiler.base.module.C_MidModuleMember_Namespace
-import net.postchain.rell.compiler.base.module.C_ModuleDefinitionContext
+import net.postchain.rell.compiler.base.modifier.*
+import net.postchain.rell.compiler.base.module.*
 import net.postchain.rell.compiler.base.namespace.C_DeclarationType
 import net.postchain.rell.compiler.base.namespace.C_NamespaceValueContext
 import net.postchain.rell.compiler.base.utils.*
@@ -24,10 +18,10 @@ import net.postchain.rell.lib.C_Lib_OpContext
 import net.postchain.rell.model.*
 import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.utils.toGtv
-import net.postchain.rell.tools.api.IdeSymbolInfo
-import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.tools.api.IdeOutlineNodeType
 import net.postchain.rell.tools.api.IdeOutlineTreeBuilder
+import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
@@ -225,17 +219,19 @@ class S_EntityDefinition(
 
         val extChain = ctx.externalChain(modExternal)
         val extChainRef = extChain?.ref
-        val external = extChainRef != null || ctx.modCtx.external
-        val rFlags = compileFlags(ctx, external, modLog.hasValue())
+        val isExternalChain = extChainRef != null
+        val rFlags = compileFlags(ctx, isExternalChain, modLog.hasValue())
 
         val names = ctx.nsCtx.defNames(cName, extChain)
 
-        C_Errors.check(!external || !ctx.mountName.isEmpty() || cName.str !in HEADER_ENTITIES, cName.pos) {
+        val isExternalChainOrModule = isExternalChain || ctx.modCtx.external
+
+        C_Errors.check(!isExternalChainOrModule || !ctx.mountName.isEmpty() || cName.str !in HEADER_ENTITIES, cName.pos) {
             "def_entity_external_unallowed:$cName" toCodeMsg
             "External entity '$cName' can be declared only without body (as entity header)"
         }
 
-        C_Errors.check(!external || rFlags.log, cName.pos) {
+        C_Errors.check(!isExternalChainOrModule || rFlags.log, cName.pos) {
             "def_entity_external_nolog:${names.simpleName}" toCodeMsg
             "External entity '${names.simpleName}' must have '${C_Constants.LOG_ANNOTATION}' annotation"
         }
@@ -323,7 +319,7 @@ class S_EntityDefinition(
         }
     }
 
-    private fun compileFlags(ctx: C_MountContext, external: Boolean, modLog: Boolean): R_EntityFlags {
+    private fun compileFlags(ctx: C_MountContext, externalChain: Boolean, modLog: Boolean): R_EntityFlags {
         val set = mutableSetOf<String>()
         var log = modLog
 
@@ -355,9 +351,9 @@ class S_EntityDefinition(
 
         return R_EntityFlags(
                 isObject = false,
-                canCreate = !external,
-                canUpdate = !external,
-                canDelete = !log && !external,
+                canCreate = !externalChain,
+                canUpdate = !log && !externalChain && !ctx.modCtx.external,
+                canDelete = !log && !externalChain && !ctx.modCtx.external,
                 gtv = true,
                 log = log
         )
@@ -558,22 +554,22 @@ class S_EnumDefinition(
         modifiers: S_Modifiers,
         val name: S_Name,
         val attrs: List<S_Name>
-): S_BasicDefinition(pos, modifiers) {
-    override fun compileBasic(ctx: C_MountContext) {
-        ctx.checkNotExternal(name.pos, C_DeclarationType.ENUM)
-
+): S_Definition(pos, modifiers) {
+    // TODO Better design: compile external module in two steps, all definitions must be processed same way.
+    override fun compile(ctx: C_ModuleDefinitionContext): C_MidModuleMember {
         val ideInfo = IdeSymbolInfo(IdeSymbolKind.DEF_ENUM)
-        val cName = name.compile(ctx, ideInfo)
+        val cName = name.compile(ctx.symCtx, ideInfo)
 
+        val modifierCtx = C_ModifierContext(ctx.msgCtx, ctx.symCtx)
         val mods = C_ModifierValues(C_ModifierTargetType.ENUM, cName)
-        modifiers.compile(ctx, mods)
+        modifiers.compile(modifierCtx, mods)
 
         val set = mutableSetOf<String>()
         val rAttrs = mutableListOf<R_EnumAttr>()
 
         for (attr in attrs) {
             val attrIdeInfo = IdeSymbolInfo(IdeSymbolKind.MEM_ENUM_ATTR)
-            val cAttrName = attr.compile(ctx, attrIdeInfo)
+            val cAttrName = attr.compile(ctx.symCtx, attrIdeInfo)
             if (set.add(cAttrName.str)) {
                 rAttrs.add(R_EnumAttr(cAttrName.str, rAttrs.size, attrIdeInfo))
             } else {
@@ -581,11 +577,12 @@ class S_EnumDefinition(
             }
         }
 
-        val names = ctx.nsCtx.defNames(cName)
+        val fullName = C_StringQualifiedName.of(ctx.namespaceName, cName.rName)
+        val names = C_Utils.createDefNames(R_ModuleKey(ctx.moduleName, null), fullName)
         val defBase = R_DefinitionBase(names, R_CallFrame.NONE_INIT_FRAME_GETTER)
 
         val rEnum = R_EnumDefinition(defBase, rAttrs.toList())
-        ctx.nsBuilder.addEnum(cName, rEnum, ideInfo)
+        return C_MidModuleMember_Enum(cName, rEnum, ideInfo)
     }
 
     override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
@@ -604,7 +601,8 @@ class S_NamespaceDefinition(
 ): S_Definition(pos, modifiers) {
     override fun compile(ctx: C_ModuleDefinitionContext): C_MidModuleMember {
         val cQualifiedName = qualifiedName?.compile(ctx.symCtx, IdeSymbolInfo(IdeSymbolKind.DEF_NAMESPACE))
-        val midMembers = definitions.mapNotNull { it.compile(ctx) }
+        val subCtx = ctx.namespace(cQualifiedName?.toRName() ?: R_QualifiedName.EMPTY)
+        val midMembers = definitions.mapNotNull { it.compile(subCtx) }
         return C_MidModuleMember_Namespace(modifiers, cQualifiedName, midMembers)
     }
 

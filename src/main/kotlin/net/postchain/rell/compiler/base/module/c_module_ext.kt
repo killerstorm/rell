@@ -12,8 +12,10 @@ import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.base.utils.C_LateInit
 import net.postchain.rell.compiler.base.utils.C_RQualifiedName
 import net.postchain.rell.compiler.base.utils.C_SourcePath
+import net.postchain.rell.model.R_EnumDefinition
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.model.R_MountName
+import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 
@@ -73,6 +75,16 @@ sealed class C_ExtModuleMember {
 class C_ExtModuleMember_Basic(private val def: S_BasicDefinition): C_ExtModuleMember() {
     override fun compile0(mntCtx: C_MountContext) {
         def.compileBasic(mntCtx)
+    }
+}
+
+class C_ExtModuleMember_Enum(
+    private val cName: C_Name,
+    private val rEnum: R_EnumDefinition,
+    private val ideInfo: IdeSymbolInfo,
+): C_ExtModuleMember() {
+    override fun compile0(mntCtx: C_MountContext) {
+        mntCtx.nsBuilder.addEnum(cName, rEnum, ideInfo)
     }
 }
 

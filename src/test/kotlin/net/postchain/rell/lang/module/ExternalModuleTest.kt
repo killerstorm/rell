@@ -4,6 +4,7 @@
 
 package net.postchain.rell.lang.module
 
+import net.postchain.rell.lang.def.ExternalTest
 import net.postchain.rell.lib.LibBlockTransactionTest
 import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.test.RellCodeTester
@@ -317,10 +318,11 @@ class ExternalModuleTest: BaseRellTest() {
         file("lib.rell", "module;")
         chkModule("object state { mutable x: integer = 123; }", "ct_err:ext.rell:def_external:module:OBJECT")
         chkModule("struct r { x: integer; }", "ct_err:ext.rell:def_external:module:STRUCT")
-        chkModule("enum e { A, B, C }", "ct_err:ext.rell:def_external:module:ENUM")
         chkModule("function f(){}", "ct_err:ext.rell:def_external:module:FUNCTION")
         chkModule("operation o(){}", "ct_err:ext.rell:def_external:module:OPERATION")
         chkModule("query q() = 123;", "ct_err:ext.rell:def_external:module:QUERY")
+        chkModule("@log entity user { name; }", "OK")
+        chkModule("enum e { A, B, C }", "OK")
     }
 
     @Test fun testWrongAnnotation() {
@@ -343,6 +345,96 @@ class ExternalModuleTest: BaseRellTest() {
         chkEx("{ val x: ext.integer = 123; return 0; }", "ct_err:unknown_def:type:ext.integer")
         chk("ext.integer('123')", "ct_err:unknown_name:ext.integer")
         chk("ext.max(123, 456)", "ct_err:unknown_name:ext.max")
+    }
+
+    @Test fun testEnum() {
+        file("users.rell", "@external module; enum role { admin, guest } @log entity user { name; role; }")
+        initExternalModule(1, "users", "user", "Bob", "role", "0")
+        initChainDependency(1, "A")
+        initExternalModule(2, "users", "user", "Alice", "role", "1")
+        initChainDependency(2, "B")
+
+        def("import users;")
+        def("@external('A') import users_a: users;")
+        def("@external('B') import users_b: users;")
+
+        chkDataRaw("c1101.user(1,Bob,0,330100)", "c1102.user(1,Alice,1,330200)")
+        chk("_type_of(users.user @{} (.role))", "users:role")
+        chk("_type_of(users_a.user @{} (.role))", "users:role")
+        chk("_type_of(users_b.user @{} (.role))", "users:role")
+        chkEx("{ val x: users.role? = users_a.user @? {} (.role); return x; }", "admin")
+        chkEx("{ val x: users_a.role? = users_b.user @? {} (.role); return x; }", "guest")
+        chkEx("{ val x: users_b.role? = users.user @? {} (.role); return x; }", "null")
+    }
+
+    @Test fun testGtvExternalBlockTransaction() {
+        file("ext.rell", "@external module;")
+
+        tstCtx.blockchain(123, "B123")
+        tst.dropTables = false
+        tst.chainDependency("dep", "B123", 3)
+
+        run {
+            val t = RellCodeTester(tst.tstCtx)
+            t.chainId = 123
+            t.dropTables = true
+            t.insert(ExternalTest.BLOCK_INSERTS_123)
+            t.init()
+        }
+        tst.dropTables = false
+
+        def("@external('dep') import ext;")
+
+        chk("ext.block.from_gtv((1001).to_gtv())", "[dep]:block[1001]")
+        chk("ext.block.from_gtv((1002).to_gtv())", "[dep]:block[1002]")
+        chk("ext.block.from_gtv((1003).to_gtv())", "[dep]:block[1003]")
+        chk("ext.block.from_gtv((1004).to_gtv())", "gtv_err:obj_missing:[[dep]:block]:1004")
+        chk("ext.block.from_gtv((1005).to_gtv())", "gtv_err:obj_missing:[[dep]:block]:1005")
+        chk("ext.block.from_gtv((1000).to_gtv())", "gtv_err:obj_missing:[[dep]:block]:1000")
+        chk("ext.block.from_gtv((1999).to_gtv())", "gtv_err:obj_missing:[[dep]:block]:1999")
+
+        chk("ext.transaction.from_gtv((2001).to_gtv())", "[dep]:transaction[2001]")
+        chk("ext.transaction.from_gtv((2002).to_gtv())", "[dep]:transaction[2002]")
+        chk("ext.transaction.from_gtv((2003).to_gtv())", "[dep]:transaction[2003]")
+        chk("ext.transaction.from_gtv((2004).to_gtv())", "gtv_err:obj_missing:[[dep]:transaction]:2004")
+        chk("ext.transaction.from_gtv((2005).to_gtv())", "gtv_err:obj_missing:[[dep]:transaction]:2005")
+        chk("ext.transaction.from_gtv((2000).to_gtv())", "gtv_err:obj_missing:[[dep]:transaction]:2000")
+        chk("ext.transaction.from_gtv((2999).to_gtv())", "gtv_err:obj_missing:[[dep]:transaction]:2999")
+    }
+
+    @Test fun testStructOfExternalEntity() {
+        tst.strictToString = false
+        file("ext.rell", "@external module; @log entity user { name; }")
+        def("import ext;")
+        def("function f(): struct<ext.user>? = null;")
+        chk("_type_of(f()!!)", "struct<ext:user>")
+    }
+
+    @Test fun testCreateExternalEntityAsRegular() {
+        initBasic()
+        file("ext.rell", "@external module; @log entity user { name; }")
+        insert(LibBlockTransactionTest.BLOCK_INSERTS_0)
+        insert("c0.user", "transaction,name", "100,720,'Bob'")
+
+        def("import ext;")
+        chk("ext.user @* {} ( user, .name )", "[(ext:user[100],name=Bob)]")
+        chkDataRaw("c0.user(100,Bob,720)")
+
+        chkOp("{ create ext.user(name = 'Alice'); }", "rt_err:fn:op_context.transaction:noop")
+        chkOp("{ delete ext.user @ {}; }", "ct_err:stmt_delete_cant:user")
+    }
+
+    @Test fun testCreateExternalEntityAsExternal() {
+        file("ext.rell", "@external module; @log entity user { name; }")
+        initExternalModule(1, "ext", "user", "Bob")
+        initChainDependency(1, "other")
+
+        def("@external('other') import ext;")
+        chk("ext.user @* {} ( user, .name )", "[(ext[other]:user[1],name=Bob)]")
+        chkDataRaw("c1101.user(1,Bob,330100)")
+
+        chkOp("{ create ext.user(name = 'Alice'); }", "ct_err:expr_create_cant:ext.user")
+        chkOp("{ delete ext.user @ {}; }", "ct_err:stmt_delete_cant:user")
     }
 
     private fun chkModule(code: String, expected: String) {

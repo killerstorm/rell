@@ -13,6 +13,7 @@ import net.postchain.rell.compiler.base.modifier.C_ModifierContext
 import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.model.R_Name
+import net.postchain.rell.model.R_QualifiedName
 import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmList
 
@@ -363,20 +364,35 @@ class C_ModuleSourceContext(
 ) {
     fun createDefinitionContext(path: C_SourcePath): C_ModuleDefinitionContext {
         val symCtx = symCtxProvider.getSymbolContext(path)
-        return C_ModuleDefinitionContext(msgCtx, importLoader, moduleName, symCtx)
+        return C_ModuleDefinitionContext.root(msgCtx, importLoader, moduleName, symCtx)
     }
 }
 
-class C_ModuleDefinitionContext(
-        val msgCtx: C_MessageContext,
-        private val importLoader: C_ImportModuleLoader,
-        val moduleName: R_ModuleName,
-        val symCtx: C_SymbolContext
+class C_ModuleDefinitionContext private constructor(
+    val msgCtx: C_MessageContext,
+    private val importLoader: C_ImportModuleLoader,
+    val moduleName: R_ModuleName,
+    val namespaceName: R_QualifiedName,
+    val symCtx: C_SymbolContext
 ) {
-    val modifierCtx = C_ModifierContext(msgCtx, symCtx)
-
     fun loadModule(name: R_ModuleName): Boolean {
         return importLoader.loadModule(name)
+    }
+
+    fun namespace(name: R_QualifiedName): C_ModuleDefinitionContext {
+        val subNamespaceName = namespaceName.child(name)
+        return C_ModuleDefinitionContext(msgCtx, importLoader, moduleName, subNamespaceName, symCtx)
+    }
+
+    companion object {
+        fun root(
+            msgCtx: C_MessageContext,
+            importLoader: C_ImportModuleLoader,
+            moduleName: R_ModuleName,
+            symCtx: C_SymbolContext
+        ): C_ModuleDefinitionContext {
+            return C_ModuleDefinitionContext(msgCtx, importLoader, moduleName, R_QualifiedName.EMPTY, symCtx)
+        }
     }
 }
 

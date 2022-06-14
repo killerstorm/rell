@@ -231,14 +231,34 @@ class LibBlockTransactionTest: BaseRellTest() {
         t.chk("foo @* {} (_=.value)", "[]")
     }
 
-    @Test fun textGtv() {
-        def("struct r { t: transaction; }")
+    @Test fun testGtv() {
+        def("struct blk { v: block; }")
+        def("struct tx { v: transaction; }")
         tst.chainId = 333
         tst.inserts = BLOCK_INSERTS_333
+
+        chk("block @ {}", "block[111]")
+        chk("blk(block @ {})", "blk[v=block[111]]")
+        chk("blk(block @ {}).to_gtv_pretty()", """gtv[{"v":111}]""")
+        chk("""blk.from_gtv_pretty(gtv.from_json('{"v":111}'))""", "blk[v=block[111]]")
+        chk("blk(block @ {}).to_gtv()", """gtv[[111]]""")
+        chk("""blk.from_gtv(gtv.from_json('[111]'))""", "blk[v=block[111]]")
+        chk("(block @ {}).to_gtv()", """gtv[111]""")
+        chk("block.from_gtv(gtv.from_json('111'))", "block[111]")
+
         chk("transaction @ {}", "transaction[444]")
-        chk("r(transaction @ {})", "r[t=transaction[444]]")
-        chkEx("{ val r = r(transaction @ {}); return r.to_gtv_pretty(); }", "ct_err:fn:invalid:r:to_gtv_pretty")
-        chk("""r.from_gtv_pretty(gtv.from_json('{"t":444}'))""", "ct_err:fn:invalid:r:from_gtv_pretty")
+        chk("tx(transaction @ {})", "tx[v=transaction[444]]")
+        chk("tx(transaction @ {}).to_gtv_pretty()", """gtv[{"v":444}]""")
+        chk("""tx.from_gtv_pretty(gtv.from_json('{"v":444}'))""", "tx[v=transaction[444]]")
+        chk("tx(transaction @ {}).to_gtv()", """gtv[[444]]""")
+        chk("""tx.from_gtv(gtv.from_json('[444]'))""", "tx[v=transaction[444]]")
+        chk("(transaction @ {}).to_gtv()", """gtv[444]""")
+        chk("transaction.from_gtv(gtv.from_json('444'))", "transaction[444]")
+
+        chk("block.from_gtv(gtv.from_json('555'))", "gtv_err:obj_missing:[block]:555")
+        chk("transaction.from_gtv(gtv.from_json('555'))", "gtv_err:obj_missing:[transaction]:555")
+        chk("""blk.from_gtv(gtv.from_json('[555]'))""", "gtv_err:obj_missing:[block]:555")
+        chk("""tx.from_gtv(gtv.from_json('[555]'))""", "gtv_err:obj_missing:[transaction]:555")
     }
 
     @Test fun testSelectOrderByTimestamp() {

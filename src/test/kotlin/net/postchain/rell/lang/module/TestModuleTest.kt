@@ -202,4 +202,32 @@ class TestModuleTest: BaseRellTest(false) {
         chkTests("test", "test=OK")
         chkOut("f:app:module_args{x=123}", "q:app:module_args{x=123}", "o:app:module_args{x=123}")
     }
+
+    @Test fun testCreateExternalEntity() {
+        tstCtx.useSql = true
+
+        file("ext.rell", "@external module; @log entity user { name; }")
+
+        file("prod.rell", """
+            module;
+            import ext;
+            operation add_user(name) { create ext.user(name); }
+        """)
+
+        file("tests.rell", """
+            @test module;
+            import prod;
+            import ext;
+
+            function test_add_user() {
+                assert_equals(ext.user@*{}(.name), list<text>());
+                rell.test.tx(prod.add_user('Bob')).run();
+                assert_equals(ext.user@*{}(.name), ['Bob']);
+                rell.test.tx(prod.add_user('Alice')).run();
+                assert_equals(ext.user@*{}(.name), ['Bob', 'Alice']);
+            }
+        """)
+
+        chkTests("tests", "test_add_user=OK")
+    }
 }
