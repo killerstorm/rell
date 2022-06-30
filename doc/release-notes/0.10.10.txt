@@ -1,0 +1,9 @@
+RELEASE NOTES 0.10.10 (2022-??-??)
+
+1. Tools: multirun.sh --test-chain
+
+Tell multirun.sh which chain(s) to execute with new option --test-chain:
+
+    ./multirun.sh -d rell/src --test rell/config/run.xml --test-chain foo
+
+The new option accepts a comma-separated list of chain names.
