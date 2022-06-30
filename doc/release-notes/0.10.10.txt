@@ -1,9 +1,18 @@
-RELEASE NOTES 0.10.10 (2022-??-??)
+RELEASE NOTES 0.10.10 (2022-06-30)
 
-1. Tools: multirun.sh --test-chain
+1. Upgrade to Postchain 3.6.0.
+
+2. Tools: multirun.sh --test-chain
 
 Tell multirun.sh which chain(s) to execute with new option --test-chain:
 
     ./multirun.sh -d rell/src --test rell/config/run.xml --test-chain foo
 
 The new option accepts a comma-separated list of chain names.
+
+3. Language: Old sort syntax removed
+
+The "sort" keyword, which was used to specify sorting in at-expressions, was removed. Now one shall use "@sort" and
+"@sort_desc" annotations. (The old syntax produced a deprecation warning in previous versions.)
+
+4. Some bugs fixed.
