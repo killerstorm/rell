@@ -11,8 +11,10 @@ import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.*
 import net.postchain.rell.compiler.base.modifier.*
 import net.postchain.rell.compiler.base.utils.C_SourcePath
+import net.postchain.rell.model.R_EnumDefinition
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.model.R_MountName
+import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.queueOf
 import net.postchain.rell.utils.toImmList
@@ -55,7 +57,8 @@ class C_MidModule(
         val header: C_MidModuleHeader?,
         files: List<C_MidModuleFile>,
         val isDirectory: Boolean,
-        val isTestDependency: Boolean
+        val isTestDependency: Boolean,
+        val isSelected: Boolean,
 ) {
     private val files = files.toImmList()
 
@@ -94,7 +97,7 @@ class C_MidModuleFile(
     override fun toString() = path.toString()
 }
 
-sealed class C_MidModuleMember() {
+sealed class C_MidModuleMember {
     abstract fun compile(ctx: C_MidMemberContext): C_ExtModuleMember
 }
 
@@ -103,6 +106,16 @@ class C_MidModuleMember_Basic(
 ): C_MidModuleMember() {
     override fun compile(ctx: C_MidMemberContext): C_ExtModuleMember {
         return C_ExtModuleMember_Basic(def)
+    }
+}
+
+class C_MidModuleMember_Enum(
+    private val cName: C_Name,
+    private val rEnum: R_EnumDefinition,
+    private val ideInfo: IdeSymbolInfo,
+): C_MidModuleMember() {
+    override fun compile(ctx: C_MidMemberContext): C_ExtModuleMember {
+        return C_ExtModuleMember_Enum(cName, rEnum, ideInfo)
     }
 }
 

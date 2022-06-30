@@ -12,6 +12,22 @@ import net.postchain.rell.test.RellTestUtils
 import org.junit.Test
 
 class ExternalTest: BaseRellTest() {
+    companion object {
+        val BLOCK_INSERTS_123 = RellTestContext.BlockBuilder(123)
+            .block(1001, 1, "DEAD01", "1001", 1510000000000)
+            .block(1002, 2, "DEAD02", "1002", 1520000000000)
+            .block(1003, 3, "DEAD03", "1003", 1530000000000)
+            .block(1004, 4, "DEAD04", "1004", 1540000000000)
+            .block(1005, 5, "DEAD05", "1005", 1550000000000)
+            .tx(2001, 1001, "BEEF01", "2001", "1234")
+            .tx(2002, 1002, "BEEF02", "2002", "1234")
+            .tx(2003, 1003, "BEEF03", "2003", "1234")
+            .tx(2004, 1004, "BEEF04", "2004", "1234")
+            .tx(2005, 1005, "BEEF05", "2005", "1234")
+            .list()
+
+    }
+
     @Test fun testSimple() {
         tstCtx.blockchain(333, "deadbeef")
 
@@ -72,7 +88,6 @@ class ExternalTest: BaseRellTest() {
         chkCompile("@external('foo') namespace { @external('bar') @log entity user { name; } }", "OK")
         chkCompile("@external('foo') namespace { object state { mutable x: integer = 123; } }", "ct_err:def_external:namespace:OBJECT")
         chkCompile("@external('foo') namespace { struct r { x: integer; } }", "ct_err:def_external:namespace:STRUCT")
-        chkCompile("@external('foo') namespace { enum e { A, B, C } }", "ct_err:def_external:namespace:ENUM")
         chkCompile("@external('foo') namespace { function f(){} }", "ct_err:def_external:namespace:FUNCTION")
         chkCompile("@external('foo') namespace { operation o(){} }", "ct_err:def_external:namespace:OPERATION")
         chkCompile("@external('foo') namespace { query q() = 123; }", "ct_err:def_external:namespace:QUERY")
@@ -83,6 +98,8 @@ class ExternalTest: BaseRellTest() {
         chkCompile("@external('foo') function f(){}", "ct_err:modifier:invalid:ann:external")
         chkCompile("@external('foo') operation o(){}", "ct_err:modifier:invalid:ann:external")
         chkCompile("@external('foo') query q() = 123;", "ct_err:modifier:invalid:ann:external")
+
+        chkCompile("@external('foo') namespace { enum e { A, B, C } }", "OK")
     }
 
     @Test fun testNoLog() {
@@ -488,26 +505,13 @@ class ExternalTest: BaseRellTest() {
     }
 
     @Test fun testGtvExternalEntity() {
-        val blockInserts = RellTestContext.BlockBuilder(123)
-                .block(1001, 1, "DEAD01", "1001", 1510000000000)
-                .block(1002, 2, "DEAD02", "1002", 1520000000000)
-                .block(1003, 3, "DEAD03", "1003", 1530000000000)
-                .block(1004, 4, "DEAD04", "1004", 1540000000000)
-                .block(1005, 5, "DEAD05", "1005", 1550000000000)
-                .tx(2001, 1001, "BEEF01", "2001", "1234")
-                .tx(2002, 1002, "BEEF02", "2002", "1234")
-                .tx(2003, 1003, "BEEF03", "2003", "1234")
-                .tx(2004, 1004, "BEEF04", "2004", "1234")
-                .tx(2005, 1005, "BEEF05", "2005", "1234")
-                .list()
-
         tstCtx.blockchain(123, "deadbeef")
 
         run {
             val t = RellCodeTester(tstCtx)
             t.def("@log entity user { name; }")
             t.chainId = 123
-            t.insert(blockInserts)
+            t.insert(BLOCK_INSERTS_123)
             t.insert("c123.user", "name,transaction", "1,'Alice',2001")
             t.insert("c123.user", "name,transaction", "2,'Bob',2002")
             t.insert("c123.user", "name,transaction", "3,'Calvin',2003")
@@ -536,33 +540,34 @@ class ExternalTest: BaseRellTest() {
         def("struct r_block { b: block; }")
         def("struct r_foo_tx { t: foo.transaction; }")
         def("struct r_foo_block { b: foo.block; }")
-        tst.gtv = true
 
-        fun chkType(type: String, typeStr: String = type) {
-            chkCompile("function nop(x: $type?): $type? = x; query q(): $type { var t: $type? = nop(null); return t!!; }",
-                    "ct_err:result_nogtv:q:$typeStr")
-            chkCompile("query q(x: $type) = 0;", "ct_err:param_nogtv:x:$typeStr")
-            chkCompile("operation o(x: $type) {}", "ct_err:param_nogtv:x:$typeStr")
+        tstCtx.blockchain(333, "deadbeef")
+        tst.chainDependency("foo", "deadbeef", 1000)
+        tst.gtv = true
+        initExternalChain(inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
+
+        fun chkType(type: String) {
+            chkCompile("function nop(x: $type?): $type? = x; query q(): $type { var t: $type? = nop(null); return t!!; }", "OK")
+            chkCompile("query q(x: $type) = 0;", "OK")
+            chkCompile("operation o(x: $type) {}", "OK")
         }
 
         fun chkStructType(type: String) {
             chkType(type)
 
-            val err1 = "ct_err:fn:invalid:$type"
-            chkCompile("function f(x: $type) { x.to_bytes(); }", "$err1:to_bytes")
-            chkCompile("function f(x: $type) { x.to_gtv(); }", "$err1:to_gtv")
-            chkCompile("function f(x: $type) { x.to_gtv_pretty(); }", "$err1:to_gtv_pretty")
+            chkCompile("function f(x: $type) { x.to_bytes(); }", "OK")
+            chkCompile("function f(x: $type) { x.to_gtv(); }", "OK")
+            chkCompile("function f(x: $type) { x.to_gtv_pretty(); }", "OK")
 
-            val err2 = "ct_err:fn:invalid:$type"
-            chkCompile("function f() { $type.from_bytes(x''); }", "$err2:from_bytes")
-            chkCompile("function f() { $type.from_gtv(gtv.from_bytes(x'')); }", "$err2:from_gtv")
-            chkCompile("function f() { $type.from_gtv_pretty(gtv.from_bytes(x'')); }", "$err2:from_gtv_pretty")
+            chkCompile("function f() { $type.from_bytes(x''); }", "OK")
+            chkCompile("function f() { $type.from_gtv(gtv.from_bytes(x'')); }", "OK")
+            chkCompile("function f() { $type.from_gtv_pretty(gtv.from_bytes(x'')); }", "OK")
         }
 
         chkType("transaction")
         chkType("block")
-        chkType("foo.transaction", "[foo]:transaction")
-        chkType("foo.block", "[foo]:block")
+        chkType("foo.transaction")
+        chkType("foo.block")
 
         chkStructType("r_tx")
         chkStructType("r_block")
@@ -858,6 +863,18 @@ class ExternalTest: BaseRellTest() {
             [mnt_conflict:user:[[foo]:ns1.user]:user:ENTITY:[[foo]:ns2.user]:main.rell(3:69)]
             [mnt_conflict:user:[[foo]:ns2.user]:user:ENTITY:[[foo]:ns1.user]:main.rell(2:69)]
         """)
+    }
+
+    @Test fun testEnumInExternalBlock() {
+        tstCtx.blockchain(333, "deadbeef")
+        initExternalChain(333, "foo.bar.user", "namespace foo { namespace bar { @log entity user { name; } } }",
+            inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
+        tst.chainDependency("foo", "deadbeef", 1000)
+        chkFull("@external('foo') namespace { enum color { red, green, blue } } query q() = color.red;", "color[red]")
+    }
+
+    @Test fun testEnumWithExternalAnnotation() {
+        chkFull("@external('foo') enum color { red, green, blue }", "ct_err:modifier:invalid:ann:external")
     }
 
     private fun initExternalChain(

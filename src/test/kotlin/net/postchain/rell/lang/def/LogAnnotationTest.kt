@@ -65,7 +65,7 @@ class LogAnnotationTest: BaseRellTest() {
         chk("foo@{} ( .transaction.block.timestamp )", "int[1500000000000]")
     }
 
-    @Test fun testSysAttributesModify() {
+    @Test fun testAttributesModify() {
         def("@log entity foo { x: integer; }")
         tst.chainId = 333
         tst.inserts = LibBlockTransactionTest.BLOCK_INSERTS_333
@@ -77,7 +77,8 @@ class LogAnnotationTest: BaseRellTest() {
         chkOp("create foo(x = 123);")
         tst.chkData("foo(1,444,123)")
 
-        chkOp("update foo@{} ( transaction = transaction@{} );", "ct_err:update_attr_not_mutable:transaction")
+        chkOp("update foo@{} ( transaction = transaction@{} );", "ct_err:stmt_update_cant:foo")
+        chkOp("update foo@{} ( x = 456 );", "ct_err:stmt_update_cant:foo")
     }
 
     @Test fun testDelete() {

@@ -96,6 +96,7 @@ private object StructFns {
         Rt_ByteArrayValue(bytes)
     }
 
+    //TODO Reuse C_Lib_Type_Any.ToGtv
     fun ToGtv(struct: R_Struct, pretty: Boolean) = C_SysFunction.simple1(pure = true) { a ->
         val gtv = struct.type.rtToGtv(a, pretty)
         Rt_GtvValue(gtv)
@@ -114,6 +115,7 @@ private object StructFns {
         }
     }
 
+    //TODO Reuse C_Lib_Type_Any.FromGtv
     fun FromGtv(struct: R_Struct, pretty: Boolean) = C_SysFunction.context1(
         pure = struct.type.completeFlags().pure
     ) { ctx, a ->

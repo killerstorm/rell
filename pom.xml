@@ -5,13 +5,13 @@
 
     <groupId>net.postchain.rell</groupId>
     <artifactId>rell</artifactId>
-    <version>0.10.10-SNAPSHOT</version>
+    <version>0.10.11-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>rell</name>
 
     <properties>
-        <postchain.version>3.6.0-SNAPSHOT</postchain.version>
+        <postchain.version>3.7.0-SNAPSHOT</postchain.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <kotlin.version>1.6.21</kotlin.version>
         <junit.version>4.12</junit.version>
@@ -112,10 +112,6 @@
         <dependency>
             <groupId>com.fasterxml.jackson.dataformat</groupId>
             <artifactId>jackson-dataformat-yaml</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.github.microutils</groupId>
-            <artifactId>kotlin-logging</artifactId>
         </dependency>
         <dependency>
             <groupId>org.jooq</groupId>

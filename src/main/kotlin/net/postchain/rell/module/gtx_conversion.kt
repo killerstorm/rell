@@ -20,15 +20,15 @@ const val GTV_QUERY_PRETTY = true
 const val GTV_OPERATION_PRETTY = false
 
 class GtvToRtContext(val pretty: Boolean) {
-    private val objectIds: MultiValuedMap<R_EntityDefinition, Long> = HashSetValuedHashMap()
+    private val entityRowids: MultiValuedMap<R_EntityDefinition, Long> = HashSetValuedHashMap()
 
-    fun trackObject(entity: R_EntityDefinition, rowid: Long) {
-        objectIds.put(entity, rowid)
+    fun trackRecord(entity: R_EntityDefinition, rowid: Long) {
+        entityRowids.put(entity, rowid)
     }
 
     fun finish(exeCtx: Rt_ExecutionContext) {
-        for (rEntities in objectIds.keySet()) {
-            val rowids = objectIds.get(rEntities)
+        for (rEntities in entityRowids.keySet()) {
+            val rowids = entityRowids.get(rEntities)
             checkRowids(exeCtx.sqlExec, exeCtx.sqlCtx, rEntities, rowids)
         }
     }
@@ -148,7 +148,7 @@ class GtvRtConversion_Entity(val type: R_EntityType): GtvRtConversion() {
 
     override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
         val rowid = GtvRtUtils.gtvToInteger(gtv)
-        ctx.trackObject(type.rEntity, rowid)
+        ctx.trackRecord(type.rEntity, rowid)
         return Rt_EntityValue(type, rowid)
     }
 }

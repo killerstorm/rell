@@ -47,14 +47,12 @@ object C_Lib_Type_Any {
         pure = type.completeFlags().pure
     ) { ctx, a ->
         val gtv = a.asGtv()
-        val res = try {
-            val gtvCtx = GtvToRtContext(pretty)
-            val rt = type.gtvToRt(gtvCtx, gtv)
-            gtvCtx.finish(ctx.exeCtx)
-            rt
-        } catch (e: Exception) {
-            throw Rt_Error(name, e.message ?: "")
+        //TODO FIXME construct error code only on error
+        Rt_Utils.wrapErr("fn:[$name]:from_gtv:$pretty") {
+            val convCtx = GtvToRtContext(pretty)
+            val res = type.gtvToRt(convCtx, gtv)
+            convCtx.finish(ctx.exeCtx)
+            res
         }
-        res
     }
 }

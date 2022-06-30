@@ -181,7 +181,7 @@ class StackTraceTest: BaseRellTest(false) {
         chkSpecificError("ee.value('Hello');", 3, "rt_err:enum_badname:lib:ee:Hello")
         chkSpecificError("ee.value(123);", 3, "rt_err:enum_badvalue:lib:ee:123")
 
-        chkSpecificError("val g = gtv.from_json('[{}]');\ninteger.from_gtv(g);", 4, "rt_err:from_gtv")
+        chkSpecificError("val g = gtv.from_json('[{}]');\ninteger.from_gtv(g);", 4, "gtv_err:type:integer:ARRAY")
     }
 
     private fun chkSpecificError(code: String, line: Int, error: String) {

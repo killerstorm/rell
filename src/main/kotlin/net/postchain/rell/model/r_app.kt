@@ -140,6 +140,7 @@ class R_Module(
         val external: Boolean,
         val externalChain: String?,
         val test: Boolean,
+        val selected: Boolean,
         val entities: Map<String, R_EntityDefinition>,
         val objects: Map<String, R_ObjectDefinition>,
         val structs: Map<String, R_StructDefinition>,

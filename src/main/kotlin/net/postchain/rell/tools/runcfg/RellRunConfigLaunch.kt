@@ -47,8 +47,9 @@ private fun main0(args: RellRunConfigLaunchCliArgs) {
 
     if (args.test) {
         val filter = args.testFilter
+        val targetChains = args.getTargetChains()
         val matcher = TestMatcher.make(filter ?: "*")
-        runTests(commonArgs, matcher)
+        runTests(commonArgs, matcher, targetChains)
     } else {
         runApp(commonArgs)
     }
@@ -115,7 +116,7 @@ private fun startPostchainNode(rellAppConf: RellPostAppCliConfig): AppConfig {
     return nodeAppConf
 }
 
-private fun runTests(args: CommonArgs, matcher: TestMatcher) {
+private fun runTests(args: CommonArgs, matcher: TestMatcher, targetChains: Collection<String>?) {
     val compilerOptions = C_CompilerOptions.forLangVersion(args.sourceVer)
 
     val rellAppConf = generateRunConfig(args, true)
@@ -127,7 +128,10 @@ private fun runTests(args: CommonArgs, matcher: TestMatcher) {
 
     class TestChain(val chain: RellPostAppChain, val rApp: R_App, val gtvConfig: Gtv)
 
-    val sortedChains = rellAppConf.config.chains.sortedBy { it.iid }
+    val sortedChains = rellAppConf.config.chains
+        .filter { targetChains == null || it.name in targetChains }
+        .sortedBy { it.iid }
+
     val tChains = sortedChains.mapNotNull { chain ->
         val (_, config) = chain.configs.maxByOrNull { it.key }!!
         if (config.appModule == null) null else {
@@ -201,4 +205,14 @@ private class RellRunConfigLaunchCliArgs: RellRunConfigCliArgs() {
         description = ["Filter test modules and functions (supports glob patterns, comma-separated)"]
     )
     var testFilter: String? = null
+
+    @CommandLine.Option(names = ["--test-chain"],
+        description = ["Execute tests only for specified chains (comma-separated list of chain names)"]
+    )
+    var testChain: String? = null
+
+    fun getTargetChains(): Set<String>? {
+        val s = testChain
+        return if (s == null) null else s.split(",").map { it.trim() }.toImmSet()
+    }
 }
